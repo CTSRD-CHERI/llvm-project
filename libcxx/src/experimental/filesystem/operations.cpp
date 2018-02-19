@@ -21,7 +21,34 @@
 #include <sys/stat.h>
 #include <sys/statvfs.h>
 #include <fcntl.h>  /* values for fchmodat */
-#if !defined(UTIME_OMIT)
+
+#if (__APPLE__)
+#if defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__)
+#if __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 101300
+#define _LIBCXX_USE_UTIMENSAT
+#endif
+#elif defined(__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__)
+#if __ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__ >= 110000
+#define _LIBCXX_USE_UTIMENSAT
+#endif
+#elif defined(__ENVIRONMENT_TV_OS_VERSION_MIN_REQUIRED__)
+#if __ENVIRONMENT_TV_OS_VERSION_MIN_REQUIRED__ >= 110000
+#define _LIBCXX_USE_UTIMENSAT
+#endif
+#elif defined(__ENVIRONMENT_WATCH_OS_VERSION_MIN_REQUIRED__)
+#if __ENVIRONMENT_WATCH_OS_VERSION_MIN_REQUIRED__ >= 40000
+#define _LIBCXX_USE_UTIMENSAT
+#endif
+#endif // __ENVIRONMENT_.*_VERSION_MIN_REQUIRED__
+#else
+// We can use the presence of UTIME_OMIT to detect platforms that provide
+// utimensat.
+#if defined(UTIME_OMIT)
+#define _LIBCXX_USE_UTIMENSAT
+#endif
+#endif // __APPLE__
+
+#if !defined(_LIBCXX_USE_UTIMENSAT)
 #include <sys/time.h> // for ::utimes as used in __last_write_time
 #endif
 
@@ -263,18 +290,22 @@ void __copy(const path& from, const path& to, copy_options options,
 bool __copy_file(const path& from, const path& to, copy_options options,
                  std::error_code *ec)
 {
-    if (ec) ec->clear();
+    using StatT = struct ::stat;
+    if (ec)
+      ec->clear();
 
     std::error_code m_ec;
-    auto from_st = detail::posix_stat(from, &m_ec);
+    StatT from_stat;
+    auto from_st = detail::posix_stat(from, from_stat, &m_ec);
     if (not is_regular_file(from_st)) {
-        if (not m_ec)
-            m_ec = make_error_code(errc::not_supported);
-        set_or_throw(m_ec, ec, "copy_file", from, to);
-        return false;
+      if (not m_ec)
+        m_ec = make_error_code(errc::not_supported);
+      set_or_throw(m_ec, ec, "copy_file", from, to);
+      return false;
     }
 
-    auto to_st = detail::posix_stat(to, &m_ec);
+    StatT to_stat;
+    auto to_st = detail::posix_stat(to, to_stat, &m_ec);
     if (!status_known(to_st)) {
         set_or_throw(m_ec, ec, "copy_file", from, to);
         return false;
@@ -284,6 +315,11 @@ bool __copy_file(const path& from, const path& to, copy_options options,
     if (to_exists && !is_regular_file(to_st)) {
         set_or_throw(make_error_code(errc::not_supported), ec, "copy_file", from, to);
         return false;
+    }
+    if (to_exists && detail::stat_equivalent(from_stat, to_stat)) {
+      set_or_throw(make_error_code(errc::file_exists), ec, "copy_file", from,
+                   to);
+      return false;
     }
     if (to_exists && bool(copy_options::skip_existing & options)) {
         return false;
@@ -302,8 +338,9 @@ bool __copy_file(const path& from, const path& to, copy_options options,
         return detail::copy_file_impl(from, to, from_st.permissions(), ec);
     }
     else {
-        set_or_throw(make_error_code(errc::file_exists), ec, "copy", from, to);
-        return false;
+      set_or_throw(make_error_code(errc::file_exists), ec, "copy_file", from,
+                   to);
+      return false;
     }
 
     _LIBCPP_UNREACHABLE();
@@ -443,7 +480,7 @@ bool __equivalent(const path& p1, const path& p2, std::error_code *ec)
     if (!exists(s2))
       return make_unsupported_error();
     if (ec) ec->clear();
-    return (st1.st_dev == st2.st_dev && st1.st_ino == st2.st_ino);
+    return detail::stat_equivalent(st1, st2);
 }
 
 
@@ -550,9 +587,7 @@ void __last_write_time(const path& p, file_time_type new_time,
     using namespace std::chrono;
     std::error_code m_ec;
 
-    // We can use the presence of UTIME_OMIT to detect platforms that do not
-    // provide utimensat.
-#if !defined(UTIME_OMIT)
+#if !defined(_LIBCXX_USE_UTIMENSAT)
     // This implementation has a race condition between determining the
     // last access time and attempting to set it to the same value using
     // ::utimes

@@ -2549,8 +2549,8 @@ static void emitGlobalConstantImpl(const DataLayout &DL, const Constant *CV,
     return emitGlobalConstantFP(CFP, AP);
 
   if (isa<ConstantPointerNull>(CV)) {
-    if (Size > 8)
-      AP.OutStreamer->EmitZeros(Size);
+    if (CV->getType()->isPointerTy() && DL.isFatPointer(CV->getType()))
+      AP.OutStreamer->EmitCheriIntcap(0, Size);
     else
       AP.OutStreamer->EmitIntValue(0, Size);
     return;

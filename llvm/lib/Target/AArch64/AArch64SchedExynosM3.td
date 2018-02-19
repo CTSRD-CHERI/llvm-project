@@ -32,6 +32,8 @@ def ExynosM3Model : SchedMachineModel {
 // Define each kind of processor resource and number available on the Exynos-M3,
 // which has 12 pipelines, each with its own queue with out-of-order dispatch.
 
+let SchedModel = ExynosM3Model in {
+
 def M3UnitA  : ProcResource<2>; // Simple integer
 def M3UnitC  : ProcResource<2>; // Simple and complex integer
 def M3UnitD  : ProcResource<2>; // Integer division (inside C, serialized)
@@ -74,36 +76,32 @@ let Super = M3PipeF2 in {
   def M3UnitNSHF2 : ProcResource<1>; // Vector shuffling
 }
 
-let SchedModel = ExynosM3Model in {
 
-  def M3UnitALU  : ProcResGroup<[M3UnitA,
-                                 M3UnitC]>;
-  def M3UnitFMAC : ProcResGroup<[M3UnitFMAC0,
-                                 M3UnitFMAC1,
-                                 M3UnitFMAC2]>;
-  def M3UnitFADD : ProcResGroup<[M3UnitFADD0,
-                                 M3UnitFADD1,
-                                 M3UnitFADD2]>;
-  def M3UnitFDIV : ProcResGroup<[M3UnitFDIV0,
-                                 M3UnitFDIV1]>;
-  def M3UnitFCVT : ProcResGroup<[M3UnitFCVT0,
-                                 M3UnitFCVT1]>;
-  def M3UnitFST  : ProcResGroup<[M3UnitFST0,
-                                 M3UnitFST1]>;
-  def M3UnitNALU : ProcResGroup<[M3UnitNALU0,
-                                 M3UnitNALU1,
-                                 M3UnitNALU2]>;
-  def M3UnitNCRY : ProcResGroup<[M3UnitNCRY0,
-                                 M3UnitNCRY1]>;
-  def M3UnitNSHT : ProcResGroup<[M3UnitNSHT0,
-                                 M3UnitNSHT1,
-                                 M3UnitNSHT2]>;
-  def M3UnitNSHF : ProcResGroup<[M3UnitNSHF0,
-                                 M3UnitNSHF1,
-                                 M3UnitNSHF2]>;
-}
-
-let SchedModel = ExynosM3Model in {
+def M3UnitALU  : ProcResGroup<[M3UnitA,
+                               M3UnitC]>;
+def M3UnitFMAC : ProcResGroup<[M3UnitFMAC0,
+                               M3UnitFMAC1,
+                               M3UnitFMAC2]>;
+def M3UnitFADD : ProcResGroup<[M3UnitFADD0,
+                               M3UnitFADD1,
+                               M3UnitFADD2]>;
+def M3UnitFDIV : ProcResGroup<[M3UnitFDIV0,
+                               M3UnitFDIV1]>;
+def M3UnitFCVT : ProcResGroup<[M3UnitFCVT0,
+                               M3UnitFCVT1]>;
+def M3UnitFST  : ProcResGroup<[M3UnitFST0,
+                               M3UnitFST1]>;
+def M3UnitNALU : ProcResGroup<[M3UnitNALU0,
+                               M3UnitNALU1,
+                               M3UnitNALU2]>;
+def M3UnitNCRY : ProcResGroup<[M3UnitNCRY0,
+                               M3UnitNCRY1]>;
+def M3UnitNSHT : ProcResGroup<[M3UnitNSHT0,
+                               M3UnitNSHT1,
+                               M3UnitNSHT2]>;
+def M3UnitNSHF : ProcResGroup<[M3UnitNSHF0,
+                               M3UnitNSHF1,
+                               M3UnitNSHF2]>;
 
 //===----------------------------------------------------------------------===//
 // Predicates.
@@ -200,8 +198,8 @@ def : WriteRes<WriteID32, [M3UnitC,
                            M3UnitD]>  { let Latency = 12;
                                         let ResourceCycles = [1, 12]; }
 def : WriteRes<WriteID64, [M3UnitC,
-                           M3UnitD]>  { let Latency = 12;
-                                        let ResourceCycles = [1, 12]; }
+                           M3UnitD]>  { let Latency = 21;
+                                        let ResourceCycles = [1, 21]; }
 def : WriteRes<WriteIM32, [M3UnitC]>  { let Latency = 3; }
 def : WriteRes<WriteIM64, [M3UnitC]>  { let Latency = 4;
                                         let ResourceCycles = [2]; }
@@ -289,6 +287,9 @@ def M3WriteNEOND   : SchedWriteRes<[M3UnitNSHF,
 def M3WriteNEONH   : SchedWriteRes<[M3UnitNALU,
                                     M3UnitS]>     { let Latency = 5;
                                                     let NumMicroOps = 2; }
+def M3WriteNEONI   : SchedWriteRes<[M3UnitNSHF,
+                                    M3UnitS]>     { let Latency = 5;
+                                                    let NumMicroOps = 2; }
 def M3WriteNEONV   : SchedWriteRes<[M3UnitFDIV,
                                     M3UnitFDIV]>  { let Latency = 7;
                                                     let NumMicroOps = 1;
@@ -306,7 +307,7 @@ def M3WriteNEONY   : SchedWriteRes<[M3UnitFSQR,
                                                     let NumMicroOps = 1;
                                                     let ResourceCycles = [26]; }
 def M3WriteNEONZ   : SchedWriteRes<[M3UnitNMSC,
-                                    M3UnitNMSC]>  { let Latency = 4;
+                                    M3UnitNMSC]>  { let Latency = 5;
                                                     let NumMicroOps = 2; }
 def M3WriteFADD2   : SchedWriteRes<[M3UnitFADD]>  { let Latency = 2; }
 def M3WriteFCVT2   : SchedWriteRes<[M3UnitFCVT]>  { let Latency = 2; }
@@ -529,8 +530,9 @@ def : InstRW<[M3WriteFCVT4],  (instregex "^[FU](RECP|RSQRT)Ev1")>;
 def : InstRW<[M3WriteNMSC1],  (instregex "^FRECPXv1")>;
 def : InstRW<[M3WriteFMAC4,
               M3ReadFMAC],    (instregex "^F(RECP|RSQRT)S(16|32|64)")>;
-def : InstRW<[M3WriteNALU1],  (instregex "^FMOV[WX][DS](High)?r")>;
-def : InstRW<[M3WriteNALU1],  (instregex "^FMOV[DS][WX](High)?r")>;
+def : InstRW<[M3WriteNALU1],  (instregex "^FMOV[WX][DS]r")>;
+def : InstRW<[M3WriteNALU1],  (instregex "^FMOV[DS][WX]r")>;
+def : InstRW<[M3WriteNEONI],  (instregex "^FMOV(DX|XD)Highr")>;
 
 // FP load instructions.
 def : InstRW<[WriteVLD],    (instregex "^LDR[DSQ]l")>;
@@ -610,7 +612,7 @@ def : InstRW<[M3WriteNEONA],  (instregex "^FADDP")>;
 def : InstRW<[M3WriteNMSC1],  (instregex "^F(AC|CM)(EQ|GE|GT|LE|LT)v[^1]")>;
 def : InstRW<[M3WriteFCVT3],  (instregex "^FCVT(L|N|XN)v")>;
 def : InstRW<[M3WriteFCVT2],  (instregex "^FCVT[AMNPZ][SU]v")>;
-def : InstRW<[M3WriteFCVT3],  (instregex "^[SU]CVTFv")>;
+def : InstRW<[M3WriteFCVT2],  (instregex "^[SU]CVTFv")>;
 def : InstRW<[M3WriteFDIV10], (instrs FDIVv2f32)>;
 def : InstRW<[M3WriteNEONV],  (instrs FDIVv4f32)>;
 def : InstRW<[M3WriteNEONW],  (instrs FDIVv2f64)>;

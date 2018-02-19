@@ -2145,7 +2145,7 @@ static bool unionHasUniqueObjectRepresentations(const ASTContext &Context,
     if (FieldSize != UnionSize)
       return false;
   }
-  return true;
+  return !RD->field_empty();
 }
 
 static bool isStructEmpty(QualType Ty) {
@@ -2638,6 +2638,11 @@ void ASTContext::adjustExceptionSpec(
            "TypeLoc size mismatch from updating exception specification");
     TSInfo->overrideType(Updated);
   }
+}
+
+bool ASTContext::isParamDestroyedInCallee(QualType T) const {
+  return getTargetInfo().getCXXABI().areArgsDestroyedLeftToRightInCallee() ||
+         T.hasTrivialABIOverride();
 }
 
 /// getComplexType - Return the uniqued reference to the type for a complex

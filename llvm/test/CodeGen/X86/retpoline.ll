@@ -19,7 +19,7 @@ entry:
 ; X64-LABEL: icall_reg:
 ; X64-DAG:   movq %rdi, %[[fp:[^ ]*]]
 ; X64-DAG:   movl %esi, %[[x:[^ ]*]]
-; X64:       movl %[[x]], %edi
+; X64:       movl %esi, %edi
 ; X64:       callq bar
 ; X64-DAG:   movl %[[x]], %edi
 ; X64-DAG:   movq %[[fp]], %r11
@@ -111,7 +111,7 @@ define void @vcall(%struct.Foo* %obj) #0 {
 
 ; X64-LABEL: vcall:
 ; X64:       movq %rdi, %[[obj:[^ ]*]]
-; X64:       movq (%[[obj]]), %[[vptr:[^ ]*]]
+; X64:       movq (%rdi), %[[vptr:[^ ]*]]
 ; X64:       movq 8(%[[vptr]]), %[[fp:[^ ]*]]
 ; X64:       movq %[[fp]], %r11
 ; X64:       callq __llvm_retpoline_r11
@@ -340,10 +340,10 @@ latch:
 ; X86-NEXT:          movl    %edx, (%esp)
 ; X86-NEXT:          retl
 ;
-; X86-LABEL:         .section        .text.__llvm_retpoline_push,{{.*}},__llvm_retpoline_push,comdat
-; X86-NEXT:          .hidden __llvm_retpoline_push
-; X86-NEXT:          .weak   __llvm_retpoline_push
-; X86:       __llvm_retpoline_push:
+; X86-LABEL:         .section        .text.__llvm_retpoline_edi,{{.*}},__llvm_retpoline_edi,comdat
+; X86-NEXT:          .hidden __llvm_retpoline_edi
+; X86-NEXT:          .weak   __llvm_retpoline_edi
+; X86:       __llvm_retpoline_edi:
 ; X86-NEXT:  # {{.*}}                                # %entry
 ; X86-NEXT:          calll   [[CALL_TARGET:.*]]
 ; X86-NEXT:  [[CAPTURE_SPEC:.*]]:                    # Block address taken
@@ -355,11 +355,7 @@ latch:
 ; X86-NEXT:          .p2align        4, 0x90
 ; X86-NEXT:  [[CALL_TARGET]]:                        # Block address taken
 ; X86-NEXT:                                          # %entry
-; X86-NEXT:          addl    $4, %esp
-; X86-NEXT:          pushl   4(%esp)
-; X86-NEXT:          pushl   4(%esp)
-; X86-NEXT:          popl    8(%esp)
-; X86-NEXT:          popl    (%esp)
+; X86-NEXT:          movl    %edi, (%esp)
 ; X86-NEXT:          retl
 
 

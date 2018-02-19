@@ -33,11 +33,15 @@ class AnalysisOrderChecker
                      check::PostStmt<ArraySubscriptExpr>,
                      check::PreStmt<CXXNewExpr>,
                      check::PostStmt<CXXNewExpr>,
+                     check::PreStmt<OffsetOfExpr>,
+                     check::PostStmt<OffsetOfExpr>,
                      check::PreCall,
                      check::PostCall,
                      check::NewAllocator,
                      check::Bind,
-                     check::RegionChanges> {
+                     check::RegionChanges,
+                     check::LiveSymbols> {
+
   bool isCallbackEnabled(AnalyzerOptions &Opts, StringRef CallbackName) const {
     return Opts.getBooleanOption("*", false, this) ||
         Opts.getBooleanOption(CallbackName, false, this);
@@ -89,6 +93,16 @@ public:
       llvm::errs() << "PostStmt<CXXNewExpr>\n";
   }
 
+  void checkPreStmt(const OffsetOfExpr *OOE, CheckerContext &C) const {
+    if (isCallbackEnabled(C, "PreStmtOffsetOfExpr"))
+      llvm::errs() << "PreStmt<OffsetOfExpr>\n";
+  }
+
+  void checkPostStmt(const OffsetOfExpr *OOE, CheckerContext &C) const {
+    if (isCallbackEnabled(C, "PostStmtOffsetOfExpr"))
+      llvm::errs() << "PostStmt<OffsetOfExpr>\n";
+  }
+
   void checkPreCall(const CallEvent &Call, CheckerContext &C) const {
     if (isCallbackEnabled(C, "PreCall")) {
       llvm::errs() << "PreCall";
@@ -116,6 +130,11 @@ public:
   void checkBind(SVal Loc, SVal Val, const Stmt *S, CheckerContext &C) const {
     if (isCallbackEnabled(C, "Bind"))
       llvm::errs() << "Bind\n";
+  }
+
+  void checkLiveSymbols(ProgramStateRef State, SymbolReaper &SymReaper) const {
+    if (isCallbackEnabled(State, "LiveSymbols"))
+      llvm::errs() << "LiveSymbols\n";
   }
 
   ProgramStateRef

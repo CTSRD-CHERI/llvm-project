@@ -92,8 +92,7 @@ generateNumSymbols(int Begin, int End,
 std::vector<std::string> match(const SymbolIndex &I,
                                const FuzzyFindRequest &Req) {
   std::vector<std::string> Matches;
-  auto Ctx = Context::empty();
-  I.fuzzyFind(Ctx, Req, [&](const Symbol &Sym) {
+  I.fuzzyFind(Req, [&](const Symbol &Sym) {
     Matches.push_back(
         (Sym.Scope + (Sym.Scope.empty() ? "" : "::") + Sym.Name).str());
   });
@@ -227,8 +226,8 @@ TEST(MergeTest, Merge) {
   Symbol L, R;
   L.ID = R.ID = SymbolID("hello");
   L.Name = R.Name = "Foo";                    // same in both
-  L.CanonicalDeclaration.FilePath = "left.h"; // differs
-  R.CanonicalDeclaration.FilePath = "right.h";
+  L.CanonicalDeclaration.FileURI = "file:///left.h"; // differs
+  R.CanonicalDeclaration.FileURI = "file:///right.h";
   L.CompletionPlainInsertText = "f00";        // present in left only
   R.CompletionSnippetInsertText = "f0{$1:0}"; // present in right only
   Symbol::Details DetL, DetR;
@@ -241,12 +240,34 @@ TEST(MergeTest, Merge) {
   Symbol::Details Scratch;
   Symbol M = mergeSymbol(L, R, &Scratch);
   EXPECT_EQ(M.Name, "Foo");
-  EXPECT_EQ(M.CanonicalDeclaration.FilePath, "left.h");
+  EXPECT_EQ(M.CanonicalDeclaration.FileURI, "file:///left.h");
   EXPECT_EQ(M.CompletionPlainInsertText, "f00");
   EXPECT_EQ(M.CompletionSnippetInsertText, "f0{$1:0}");
   ASSERT_TRUE(M.Detail);
   EXPECT_EQ(M.Detail->CompletionDetail, "DetL");
   EXPECT_EQ(M.Detail->Documentation, "--doc--");
+}
+
+TEST(MergeTest, PreferSymbolWithDefn) {
+  Symbol L, R;
+  Symbol::Details Scratch;
+
+  L.ID = R.ID = SymbolID("hello");
+  L.CanonicalDeclaration.FileURI = "file:/left.h";
+  R.CanonicalDeclaration.FileURI = "file:/right.h";
+  L.CompletionPlainInsertText = "left-insert";
+  R.CompletionPlainInsertText = "right-insert";
+
+  Symbol M = mergeSymbol(L, R, &Scratch);
+  EXPECT_EQ(M.CanonicalDeclaration.FileURI, "file:/left.h");
+  EXPECT_EQ(M.Definition.FileURI, "");
+  EXPECT_EQ(M.CompletionPlainInsertText, "left-insert");
+
+  R.Definition.FileURI = "file:/right.cpp"; // Now right will be favored.
+  M = mergeSymbol(L, R, &Scratch);
+  EXPECT_EQ(M.CanonicalDeclaration.FileURI, "file:/right.h");
+  EXPECT_EQ(M.Definition.FileURI, "file:/right.cpp");
+  EXPECT_EQ(M.CompletionPlainInsertText, "right-insert");
 }
 
 } // namespace

@@ -19,12 +19,14 @@ add_extra_unittest(ClangdTests
   FuzzyMatchTests.cpp
   IndexTests.cpp
   JSONExprTests.cpp
-  URITests.cpp
-  TestFS.cpp
-  TraceTests.cpp
-  TUSchedulerTests.cpp
   SourceCodeTests.cpp
   SymbolCollectorTests.cpp
+  SyncAPI.cpp
+  TestFS.cpp
+  ThreadingTests.cpp
+  TraceTests.cpp
+  TUSchedulerTests.cpp
+  URITests.cpp
   XRefsTests.cpp
   )
 

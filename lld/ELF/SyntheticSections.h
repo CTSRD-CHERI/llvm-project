@@ -310,7 +310,7 @@ private:
 
 class DynamicReloc {
 public:
-  DynamicReloc(uint32_t Type, const InputSectionBase *InputSec,
+  DynamicReloc(RelType Type, const InputSectionBase *InputSec,
                uint64_t OffsetInSec, bool UseSymVA, Symbol *Sym, int64_t Addend)
       : Type(Type), Sym(Sym), InputSec(InputSec), OffsetInSec(OffsetInSec),
         UseSymVA(UseSymVA), Addend(Addend) {}
@@ -320,7 +320,7 @@ public:
   uint32_t getSymIndex() const;
   const InputSectionBase *getInputSec() const { return InputSec; }
 
-  uint32_t Type;
+  RelType Type;
 
 private:
   Symbol *Sym;
@@ -361,7 +361,9 @@ class RelocationBaseSection : public SyntheticSection {
 public:
   RelocationBaseSection(StringRef Name, uint32_t Type, int32_t DynamicTag,
                         int32_t SizeDynamicTag);
-  void addReloc(uint32_t DynType, InputSectionBase *InputSec,
+  void addReloc(RelType DynType, InputSectionBase *IS, uint64_t OffsetInSec,
+                Symbol *Sym);
+  void addReloc(RelType DynType, InputSectionBase *InputSec,
                 uint64_t OffsetInSec, bool UseSymVA, Symbol *Sym,
                 int64_t Addend, RelExpr Expr, RelType Type);
   void addReloc(const DynamicReloc &Reloc);

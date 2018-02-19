@@ -503,6 +503,7 @@ static void AddNodeIDCustom(FoldingSetNodeID &ID, const SDNode *N) {
   case ISD::ATOMIC_LOAD_ADD:
   case ISD::ATOMIC_LOAD_SUB:
   case ISD::ATOMIC_LOAD_AND:
+  case ISD::ATOMIC_LOAD_CLR:
   case ISD::ATOMIC_LOAD_OR:
   case ISD::ATOMIC_LOAD_XOR:
   case ISD::ATOMIC_LOAD_NAND:
@@ -1088,19 +1089,23 @@ SDValue SelectionDAG::getNOT(const SDLoc &DL, SDValue Val, EVT VT) {
 }
 
 SDValue SelectionDAG::getLogicalNOT(const SDLoc &DL, SDValue Val, EVT VT) {
-  EVT EltVT = VT.getScalarType();
-  SDValue TrueValue;
-  switch (TLI->getBooleanContents(VT)) {
-    case TargetLowering::ZeroOrOneBooleanContent:
-    case TargetLowering::UndefinedBooleanContent:
-      TrueValue = getConstant(1, DL, VT);
-      break;
-    case TargetLowering::ZeroOrNegativeOneBooleanContent:
-      TrueValue = getConstant(APInt::getAllOnesValue(EltVT.getSizeInBits()), DL,
-                              VT);
-      break;
-  }
+  SDValue TrueValue = getBoolConstant(true, DL, VT, VT);
   return getNode(ISD::XOR, DL, VT, Val, TrueValue);
+}
+
+SDValue SelectionDAG::getBoolConstant(bool V, const SDLoc &DL, EVT VT,
+                                      EVT OpVT) {
+  if (!V)
+    return getConstant(0, DL, VT);
+
+  switch (TLI->getBooleanContents(OpVT)) {
+  case TargetLowering::ZeroOrOneBooleanContent:
+  case TargetLowering::UndefinedBooleanContent:
+    return getConstant(1, DL, VT);
+  case TargetLowering::ZeroOrNegativeOneBooleanContent:
+    return getAllOnesConstant(DL, VT);
+  }
+  llvm_unreachable("Unexpected boolean content enum!");
 }
 
 SDValue SelectionDAG::getConstant(uint64_t Val, const SDLoc &DL, EVT VT,
@@ -1659,7 +1664,7 @@ SDValue SelectionDAG::getVectorShuffle(EVT VT, const SDLoc &dl, SDValue N1,
 }
 
 SDValue SelectionDAG::getCommutedVectorShuffle(const ShuffleVectorSDNode &SV) {
-  MVT VT = SV.getSimpleValueType(0);
+  EVT VT = SV.getValueType(0);
   SmallVector<int, 8> MaskVec(SV.getMask().begin(), SV.getMask().end());
   ShuffleVectorSDNode::commuteMask(MaskVec);
 
@@ -1886,19 +1891,15 @@ SDValue SelectionDAG::CreateStackTemporary(EVT VT1, EVT VT2) {
 
 SDValue SelectionDAG::FoldSetCC(EVT VT, SDValue N1, SDValue N2,
                                 ISD::CondCode Cond, const SDLoc &dl) {
+  EVT OpVT = N1.getValueType();
+
   // These setcc operations always fold.
   switch (Cond) {
   default: break;
   case ISD::SETFALSE:
-  case ISD::SETFALSE2: return getConstant(0, dl, VT);
+  case ISD::SETFALSE2: return getBoolConstant(false, dl, VT, OpVT);
   case ISD::SETTRUE:
-  case ISD::SETTRUE2: {
-    TargetLowering::BooleanContent Cnt =
-        TLI->getBooleanContents(N1->getValueType(0));
-    return getConstant(
-        Cnt == TargetLowering::ZeroOrNegativeOneBooleanContent ? -1ULL : 1, dl,
-        VT);
-  }
+  case ISD::SETTRUE2: return getBoolConstant(true, dl, VT, OpVT);
 
   case ISD::SETOEQ:
   case ISD::SETOGT:
@@ -1921,16 +1922,16 @@ SDValue SelectionDAG::FoldSetCC(EVT VT, SDValue N1, SDValue N2,
 
       switch (Cond) {
       default: llvm_unreachable("Unknown integer setcc!");
-      case ISD::SETEQ:  return getConstant(C1 == C2, dl, VT);
-      case ISD::SETNE:  return getConstant(C1 != C2, dl, VT);
-      case ISD::SETULT: return getConstant(C1.ult(C2), dl, VT);
-      case ISD::SETUGT: return getConstant(C1.ugt(C2), dl, VT);
-      case ISD::SETULE: return getConstant(C1.ule(C2), dl, VT);
-      case ISD::SETUGE: return getConstant(C1.uge(C2), dl, VT);
-      case ISD::SETLT:  return getConstant(C1.slt(C2), dl, VT);
-      case ISD::SETGT:  return getConstant(C1.sgt(C2), dl, VT);
-      case ISD::SETLE:  return getConstant(C1.sle(C2), dl, VT);
-      case ISD::SETGE:  return getConstant(C1.sge(C2), dl, VT);
+      case ISD::SETEQ:  return getBoolConstant(C1 == C2, dl, VT, OpVT);
+      case ISD::SETNE:  return getBoolConstant(C1 != C2, dl, VT, OpVT);
+      case ISD::SETULT: return getBoolConstant(C1.ult(C2), dl, VT, OpVT);
+      case ISD::SETUGT: return getBoolConstant(C1.ugt(C2), dl, VT, OpVT);
+      case ISD::SETULE: return getBoolConstant(C1.ule(C2), dl, VT, OpVT);
+      case ISD::SETUGE: return getBoolConstant(C1.uge(C2), dl, VT, OpVT);
+      case ISD::SETLT:  return getBoolConstant(C1.slt(C2), dl, VT, OpVT);
+      case ISD::SETGT:  return getBoolConstant(C1.sgt(C2), dl, VT, OpVT);
+      case ISD::SETLE:  return getBoolConstant(C1.sle(C2), dl, VT, OpVT);
+      case ISD::SETGE:  return getBoolConstant(C1.sge(C2), dl, VT, OpVT);
       }
     }
   }
@@ -1942,41 +1943,54 @@ SDValue SelectionDAG::FoldSetCC(EVT VT, SDValue N1, SDValue N2,
       case ISD::SETEQ:  if (R==APFloat::cmpUnordered)
                           return getUNDEF(VT);
                         LLVM_FALLTHROUGH;
-      case ISD::SETOEQ: return getConstant(R==APFloat::cmpEqual, dl, VT);
+      case ISD::SETOEQ: return getBoolConstant(R==APFloat::cmpEqual, dl, VT,
+                                               OpVT);
       case ISD::SETNE:  if (R==APFloat::cmpUnordered)
                           return getUNDEF(VT);
                         LLVM_FALLTHROUGH;
-      case ISD::SETONE: return getConstant(R==APFloat::cmpGreaterThan ||
-                                           R==APFloat::cmpLessThan, dl, VT);
+      case ISD::SETONE: return getBoolConstant(R==APFloat::cmpGreaterThan ||
+                                               R==APFloat::cmpLessThan, dl, VT,
+                                               OpVT);
       case ISD::SETLT:  if (R==APFloat::cmpUnordered)
                           return getUNDEF(VT);
                         LLVM_FALLTHROUGH;
-      case ISD::SETOLT: return getConstant(R==APFloat::cmpLessThan, dl, VT);
+      case ISD::SETOLT: return getBoolConstant(R==APFloat::cmpLessThan, dl, VT,
+                                               OpVT);
       case ISD::SETGT:  if (R==APFloat::cmpUnordered)
                           return getUNDEF(VT);
                         LLVM_FALLTHROUGH;
-      case ISD::SETOGT: return getConstant(R==APFloat::cmpGreaterThan, dl, VT);
+      case ISD::SETOGT: return getBoolConstant(R==APFloat::cmpGreaterThan, dl,
+                                               VT, OpVT);
       case ISD::SETLE:  if (R==APFloat::cmpUnordered)
                           return getUNDEF(VT);
                         LLVM_FALLTHROUGH;
-      case ISD::SETOLE: return getConstant(R==APFloat::cmpLessThan ||
-                                           R==APFloat::cmpEqual, dl, VT);
+      case ISD::SETOLE: return getBoolConstant(R==APFloat::cmpLessThan ||
+                                               R==APFloat::cmpEqual, dl, VT,
+                                               OpVT);
       case ISD::SETGE:  if (R==APFloat::cmpUnordered)
                           return getUNDEF(VT);
                         LLVM_FALLTHROUGH;
-      case ISD::SETOGE: return getConstant(R==APFloat::cmpGreaterThan ||
-                                           R==APFloat::cmpEqual, dl, VT);
-      case ISD::SETO:   return getConstant(R!=APFloat::cmpUnordered, dl, VT);
-      case ISD::SETUO:  return getConstant(R==APFloat::cmpUnordered, dl, VT);
-      case ISD::SETUEQ: return getConstant(R==APFloat::cmpUnordered ||
-                                           R==APFloat::cmpEqual, dl, VT);
-      case ISD::SETUNE: return getConstant(R!=APFloat::cmpEqual, dl, VT);
-      case ISD::SETULT: return getConstant(R==APFloat::cmpUnordered ||
-                                           R==APFloat::cmpLessThan, dl, VT);
-      case ISD::SETUGT: return getConstant(R==APFloat::cmpGreaterThan ||
-                                           R==APFloat::cmpUnordered, dl, VT);
-      case ISD::SETULE: return getConstant(R!=APFloat::cmpGreaterThan, dl, VT);
-      case ISD::SETUGE: return getConstant(R!=APFloat::cmpLessThan, dl, VT);
+      case ISD::SETOGE: return getBoolConstant(R==APFloat::cmpGreaterThan ||
+                                           R==APFloat::cmpEqual, dl, VT, OpVT);
+      case ISD::SETO:   return getBoolConstant(R!=APFloat::cmpUnordered, dl, VT,
+                                               OpVT);
+      case ISD::SETUO:  return getBoolConstant(R==APFloat::cmpUnordered, dl, VT,
+                                               OpVT);
+      case ISD::SETUEQ: return getBoolConstant(R==APFloat::cmpUnordered ||
+                                               R==APFloat::cmpEqual, dl, VT,
+                                               OpVT);
+      case ISD::SETUNE: return getBoolConstant(R!=APFloat::cmpEqual, dl, VT,
+                                               OpVT);
+      case ISD::SETULT: return getBoolConstant(R==APFloat::cmpUnordered ||
+                                               R==APFloat::cmpLessThan, dl, VT,
+                                               OpVT);
+      case ISD::SETUGT: return getBoolConstant(R==APFloat::cmpGreaterThan ||
+                                               R==APFloat::cmpUnordered, dl, VT,
+                                               OpVT);
+      case ISD::SETULE: return getBoolConstant(R!=APFloat::cmpGreaterThan, dl,
+                                               VT, OpVT);
+      case ISD::SETUGE: return getBoolConstant(R!=APFloat::cmpLessThan, dl, VT,
+                                               OpVT);
       }
     } else {
       // Ensure that the constant occurs on the RHS.
@@ -4472,6 +4486,10 @@ SDValue SelectionDAG::getNode(unsigned Opcode, const SDLoc &DL, EVT VT,
     break;
   }
   case ISD::EXTRACT_VECTOR_ELT:
+    assert(VT.getSizeInBits() >= N1.getValueType().getScalarSizeInBits() &&
+           "The result of EXTRACT_VECTOR_ELT must be at least as wide as the \
+             element type of the vector.");
+
     // EXTRACT_VECTOR_ELT of an UNDEF is an UNDEF.
     if (N1.isUndef())
       return getUNDEF(VT);
@@ -4671,19 +4689,15 @@ SDValue SelectionDAG::getNode(unsigned Opcode, const SDLoc &DL, EVT VT,
       case ISD::FSUB:
       case ISD::FDIV:
       case ISD::FREM:
-      case ISD::SRA:
-        return N1;     // fold op(undef, arg2) -> undef
+        return getUNDEF(VT);     // fold op(undef, arg2) -> undef
       case ISD::UDIV:
       case ISD::SDIV:
       case ISD::UREM:
       case ISD::SREM:
+      case ISD::SRA:
       case ISD::SRL:
       case ISD::SHL:
-        if (!VT.isVector())
-          return getConstant(0, DL, VT);    // fold op(undef, arg2) -> 0
-        // For vectors, we can't easily build an all zero vector, just return
-        // the LHS.
-        return N2;
+        return getConstant(0, DL, VT);    // fold op(undef, arg2) -> 0
       }
     }
   }
@@ -4705,7 +4719,10 @@ SDValue SelectionDAG::getNode(unsigned Opcode, const SDLoc &DL, EVT VT,
     case ISD::SDIV:
     case ISD::UREM:
     case ISD::SREM:
-      return N2;       // fold op(arg1, undef) -> undef
+    case ISD::SRA:
+    case ISD::SRL:
+    case ISD::SHL:
+      return getUNDEF(VT);       // fold op(arg1, undef) -> undef
     case ISD::FADD:
     case ISD::FSUB:
     case ISD::FMUL:
@@ -4716,21 +4733,9 @@ SDValue SelectionDAG::getNode(unsigned Opcode, const SDLoc &DL, EVT VT,
       break;
     case ISD::MUL:
     case ISD::AND:
-    case ISD::SRL:
-    case ISD::SHL:
-      if (!VT.isVector())
-        return getConstant(0, DL, VT);  // fold op(arg1, undef) -> 0
-      // For vectors, we can't easily build an all zero vector, just return
-      // the LHS.
-      return N1;
+      return getConstant(0, DL, VT);  // fold op(arg1, undef) -> 0
     case ISD::OR:
-      if (!VT.isVector())
-        return getConstant(APInt::getAllOnesValue(VT.getSizeInBits()), DL, VT);
-      // For vectors, we can't easily build an all one vector, just return
-      // the LHS.
-      return N1;
-    case ISD::SRA:
-      return N1;
+      return getAllOnesConstant(DL, VT);
     }
   }
 
@@ -5784,6 +5789,7 @@ SDValue SelectionDAG::getAtomic(unsigned Opcode, const SDLoc &dl, EVT MemVT,
   assert((Opcode == ISD::ATOMIC_LOAD_ADD ||
           Opcode == ISD::ATOMIC_LOAD_SUB ||
           Opcode == ISD::ATOMIC_LOAD_AND ||
+          Opcode == ISD::ATOMIC_LOAD_CLR ||
           Opcode == ISD::ATOMIC_LOAD_OR ||
           Opcode == ISD::ATOMIC_LOAD_XOR ||
           Opcode == ISD::ATOMIC_LOAD_NAND ||
@@ -8017,8 +8023,8 @@ unsigned SelectionDAG::InferPtrAlignment(SDValue Ptr) const {
   const GlobalValue *GV;
   int64_t GVOffset = 0;
   if (TLI->isGAPlusOffset(Ptr.getNode(), GV, GVOffset)) {
-    unsigned PtrWidth = getDataLayout().getPointerBaseSizeInBits(GV->getType());
-    KnownBits Known(PtrWidth);
+    unsigned IdxWidth = getDataLayout().getIndexTypeSizeInBits(GV->getType());
+    KnownBits Known(IdxWidth);
     llvm::computeKnownBits(GV, Known, getDataLayout());
     unsigned AlignBits = Known.countMinTrailingZeros();
     unsigned Align = AlignBits ? 1 << std::min(31U, AlignBits) : 0;
