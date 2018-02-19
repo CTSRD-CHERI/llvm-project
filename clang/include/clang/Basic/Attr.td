@@ -534,7 +534,7 @@ def AbiTag : Attr {
 }
 
 def AddressSpace : TypeAttr {
-  let Spellings = [Clang<"address_space">];
+  let Spellings = [Clang<"address_space", 1>];
   let Args = [IntArgument<"AddressSpace">];
   let Documentation = [Undocumented];
 }
@@ -598,18 +598,18 @@ def Artificial : InheritableAttr {
 }
 
 def XRayInstrument : InheritableAttr {
-  let Spellings = [Clang<"xray_always_instrument">,
-                   Clang<"xray_never_instrument">];
+  let Spellings = [Clang<"xray_always_instrument", 1>,
+                   Clang<"xray_never_instrument", 1>];
   let Subjects = SubjectList<[Function, ObjCMethod]>;
   let Accessors = [Accessor<"alwaysXRayInstrument",
-                     [Clang<"xray_always_instrument">]>,
+                     [Clang<"xray_always_instrument", 1>]>,
                    Accessor<"neverXRayInstrument",
-                     [Clang<"xray_never_instrument">]>];
+                     [Clang<"xray_never_instrument", 1>]>];
   let Documentation = [XRayDocs];
 }
 
 def XRayLogArgs : InheritableAttr {
-  let Spellings = [Clang<"xray_log_args">];
+  let Spellings = [Clang<"xray_log_args", 1>];
   let Subjects = SubjectList<[Function, ObjCMethod]>;
   let Args = [UnsignedArgument<"ArgumentCount">];
   let Documentation = [XRayDocs];
@@ -735,7 +735,7 @@ def ExternalSourceSymbol : InheritableAttr {
 }
 
 def Blocks : InheritableAttr {
-  let Spellings = [Clang<"blocks">];
+  let Spellings = [Clang<"blocks", 1>];
   let Args = [EnumArgument<"Type", "BlockType", ["byref"], ["ByRef"]>];
   let Documentation = [Undocumented];
 }
@@ -1072,19 +1072,19 @@ def Final : InheritableAttr {
 }
 
 def MinSize : InheritableAttr {
-  let Spellings = [Clang<"minsize">];
+  let Spellings = [Clang<"minsize", 1>];
   let Subjects = SubjectList<[Function, ObjCMethod], ErrorDiag>;
   let Documentation = [Undocumented];
 }
 
 def FlagEnum : InheritableAttr {
-  let Spellings = [Clang<"flag_enum">];
+  let Spellings = [Clang<"flag_enum", 1>];
   let Subjects = SubjectList<[Enum]>;
   let Documentation = [FlagEnumDocs];
 }
 
 def EnumExtensibility : InheritableAttr {
-  let Spellings = [Clang<"enum_extensibility">];
+  let Spellings = [Clang<"enum_extensibility", 1>];
   let Subjects = SubjectList<[Enum]>;
   let Args = [EnumArgument<"Extensibility", "Kind",
               ["closed", "open"], ["Closed", "Open"]>];
@@ -1169,6 +1169,8 @@ def LayoutVersion : InheritableAttr, TargetSpecificAttr<TargetMicrosoftCXXABI> {
 }
 
 def TrivialABI : InheritableAttr {
+  // This attribute does not have a C [[]] spelling because it requires the
+  // CPlusPlus language option.
   let Spellings = [Clang<"trivial_abi">];
   let Subjects = SubjectList<[CXXRecord]>;
   let Documentation = [TrivialABIDocs];
@@ -1259,13 +1261,13 @@ def Naked : InheritableAttr {
 }
 
 def NeonPolyVectorType : TypeAttr {
-  let Spellings = [Clang<"neon_polyvector_type">];
+  let Spellings = [Clang<"neon_polyvector_type", 1>];
   let Args = [IntArgument<"NumElements">];
   let Documentation = [Undocumented];
 }
 
 def NeonVectorType : TypeAttr {
-  let Spellings = [Clang<"neon_vector_type">];
+  let Spellings = [Clang<"neon_vector_type", 1>];
   let Args = [IntArgument<"NumElements">];
   let Documentation = [Undocumented];
 }
@@ -1277,7 +1279,7 @@ def ReturnsTwice : InheritableAttr {
 }
 
 def DisableTailCalls : InheritableAttr {
-  let Spellings = [Clang<"disable_tail_calls">];
+  let Spellings = [Clang<"disable_tail_calls", 1>];
   let Subjects = SubjectList<[Function, ObjCMethod]>;
   let Documentation = [DisableTailCallsDocs];
 }
@@ -1301,13 +1303,13 @@ def NoDebug : InheritableAttr {
 }
 
 def NoDuplicate : InheritableAttr {
-  let Spellings = [Clang<"noduplicate">];
+  let Spellings = [Clang<"noduplicate", 1>];
   let Subjects = SubjectList<[Function]>;
   let Documentation = [NoDuplicateDocs];
 }
 
 def Convergent : InheritableAttr {
-  let Spellings = [Clang<"convergent">];
+  let Spellings = [Clang<"convergent", 1>];
   let Subjects = SubjectList<[Function]>;
   let Documentation = [ConvergentDocs];
 }
@@ -1409,7 +1411,7 @@ def ReturnsNonNull : InheritableAttr {
 // pass_object_size(N) indicates that the parameter should have
 // __builtin_object_size with Type=N evaluated on the parameter at the callsite.
 def PassObjectSize : InheritableParamAttr {
-  let Spellings = [Clang<"pass_object_size">];
+  let Spellings = [Clang<"pass_object_size", 1>];
   let Args = [IntArgument<"Type">];
   let Subjects = SubjectList<[ParmVar]>;
   let Documentation = [PassObjectSizeDocs];
@@ -1469,7 +1471,7 @@ def NoInstrumentFunction : InheritableAttr {
 }
 
 def NotTailCalled : InheritableAttr {
-  let Spellings = [Clang<"not_tail_called">];
+  let Spellings = [Clang<"not_tail_called", 1>];
   let Subjects = SubjectList<[Function]>;
   let Documentation = [NotTailCalledDocs];
 }
@@ -1632,13 +1634,13 @@ def ObjCBoxable : Attr {
 }
 
 def OptimizeNone : InheritableAttr {
-  let Spellings = [Clang<"optnone">];
+  let Spellings = [Clang<"optnone", 1>];
   let Subjects = SubjectList<[Function, ObjCMethod]>;
   let Documentation = [OptnoneDocs];
 }
 
 def Overloadable : Attr {
-  let Spellings = [Clang<"overloadable">];
+  let Spellings = [Clang<"overloadable", 1>];
   let Subjects = SubjectList<[Function], ErrorDiag>;
   let Documentation = [OverloadableDocs];
 }
@@ -1650,11 +1652,11 @@ def Override : InheritableAttr {
 }
 
 def Ownership : InheritableAttr {
-  let Spellings = [Clang<"ownership_holds">, Clang<"ownership_returns">,
-                   Clang<"ownership_takes">];
-  let Accessors = [Accessor<"isHolds", [Clang<"ownership_holds">]>,
-                   Accessor<"isReturns", [Clang<"ownership_returns">]>,
-                   Accessor<"isTakes", [Clang<"ownership_takes">]>];
+  let Spellings = [Clang<"ownership_holds", 1>, Clang<"ownership_returns", 1>,
+                   Clang<"ownership_takes", 1>];
+  let Accessors = [Accessor<"isHolds", [Clang<"ownership_holds", 1>]>,
+                   Accessor<"isReturns", [Clang<"ownership_returns", 1>]>,
+                   Accessor<"isTakes", [Clang<"ownership_takes", 1>]>];
   let AdditionalMembers = [{
     enum OwnershipKind { Holds, Returns, Takes };
     OwnershipKind getOwnKind() const {
@@ -1753,6 +1755,8 @@ def ReqdWorkGroupSize : InheritableAttr {
 }
 
 def RequireConstantInit : InheritableAttr {
+  // This attribute does not have a C [[]] spelling because it requires the
+  // CPlusPlus language option.
   let Spellings = [Clang<"require_constant_initialization">];
   let Subjects = SubjectList<[GlobalVar], ErrorDiag>;
   let Documentation = [RequireConstantInitDocs];
@@ -1837,23 +1841,23 @@ def StdCall : InheritableAttr {
 }
 
 def SwiftCall : InheritableAttr {
-  let Spellings = [Clang<"swiftcall">];
+  let Spellings = [Clang<"swiftcall", 1>];
 //  let Subjects = SubjectList<[Function]>;
   let Documentation = [SwiftCallDocs];
 }
 
 def SwiftContext : ParameterABIAttr {
-  let Spellings = [Clang<"swift_context">];
+  let Spellings = [Clang<"swift_context", 1>];
   let Documentation = [SwiftContextDocs];
 }
 
 def SwiftErrorResult : ParameterABIAttr {
-  let Spellings = [Clang<"swift_error_result">];
+  let Spellings = [Clang<"swift_error_result", 1>];
   let Documentation = [SwiftErrorResultDocs];
 }
 
 def SwiftIndirectResult : ParameterABIAttr {
-  let Spellings = [Clang<"swift_indirect_result">];
+  let Spellings = [Clang<"swift_indirect_result", 1>];
   let Documentation = [SwiftIndirectResultDocs];
 }
 
@@ -1877,25 +1881,25 @@ def ThisCall : InheritableAttr {
 }
 
 def VectorCall : InheritableAttr {
-  let Spellings = [Clang<"vectorcall">, Keyword<"__vectorcall">,
+  let Spellings = [Clang<"vectorcall", 1>, Keyword<"__vectorcall">,
                    Keyword<"_vectorcall">];
 //  let Subjects = [Function, ObjCMethod];
   let Documentation = [VectorCallDocs];
 }
 
 def Pascal : InheritableAttr {
-  let Spellings = [Clang<"pascal">, Keyword<"__pascal">, Keyword<"_pascal">];
+  let Spellings = [Clang<"pascal", 1>, Keyword<"__pascal">, Keyword<"_pascal">];
 //  let Subjects = [Function, ObjCMethod];
   let Documentation = [Undocumented];
 }
 
 def PreserveMost : InheritableAttr {
-  let Spellings = [Clang<"preserve_most">];
+  let Spellings = [Clang<"preserve_most", 1>];
   let Documentation = [PreserveMostDocs];
 }
 
 def PreserveAll : InheritableAttr {
-  let Spellings = [Clang<"preserve_all">];
+  let Spellings = [Clang<"preserve_all", 1>];
   let Documentation = [PreserveAllDocs];
 }
 
@@ -1971,7 +1975,7 @@ def TransparentUnion : InheritableAttr {
 }
 
 def Unavailable : InheritableAttr {
-  let Spellings = [Clang<"unavailable">];
+  let Spellings = [Clang<"unavailable", 1>];
   let Args = [StringArgument<"Message", 1>,
               EnumArgument<"ImplicitReason", "ImplicitReason",
                 ["", "", "", ""],
@@ -2081,7 +2085,7 @@ def Visibility : InheritableAttr {
 
 def TypeVisibility : InheritableAttr {
   let Clone = 0;
-  let Spellings = [Clang<"type_visibility">];
+  let Spellings = [Clang<"type_visibility", 1>];
   let Args = [EnumArgument<"Visibility", "VisibilityType",
                            ["default", "hidden", "internal", "protected"],
                            ["Default", "Hidden", "Hidden", "Protected"]>];
@@ -2090,6 +2094,9 @@ def TypeVisibility : InheritableAttr {
 }
 
 def VecReturn : InheritableAttr {
+  // This attribute does not have a C [[]] spelling because it only appertains
+  // to C++ struct/class/union.
+  // FIXME: should this attribute have a CPlusPlus language option?
   let Spellings = [Clang<"vecreturn">];
   let Subjects = SubjectList<[CXXRecord], ErrorDiag>;
   let Documentation = [Undocumented];
@@ -2116,7 +2123,7 @@ def Weak : InheritableAttr {
 }
 
 def WeakImport : InheritableAttr {
-  let Spellings = [Clang<"weak_import">];
+  let Spellings = [Clang<"weak_import", 1>];
   let Documentation = [Undocumented];
 }
 
@@ -2129,7 +2136,7 @@ def WeakRef : InheritableAttr {
 }
 
 def LTOVisibilityPublic : InheritableAttr {
-  let Spellings = [Clang<"lto_visibility_public">];
+  let Spellings = [Clang<"lto_visibility_public", 1>];
   let Subjects = SubjectList<[Record]>;
   let Documentation = [LTOVisibilityDocs];
 }
@@ -2159,7 +2166,7 @@ def X86ForceAlignArgPointer : InheritableAttr, TargetSpecificAttr<TargetAnyX86> 
 }
 
 def NoSanitize : InheritableAttr {
-  let Spellings = [Clang<"no_sanitize">];
+  let Spellings = [Clang<"no_sanitize", 1>];
   let Args = [VariadicStringArgument<"Sanitizers">];
   let Subjects = SubjectList<[Function, ObjCMethod, GlobalVar], ErrorDiag>;
   let Documentation = [NoSanitizeDocs];
@@ -2182,7 +2189,7 @@ def NoSanitizeSpecific : InheritableAttr {
   let Spellings = [GCC<"no_address_safety_analysis">,
                    GCC<"no_sanitize_address">,
                    GCC<"no_sanitize_thread">,
-                   Clang<"no_sanitize_memory">];
+                   Clang<"no_sanitize_memory", 1>];
   let Subjects = SubjectList<[Function, GlobalVar], ErrorDiag>;
   let Documentation = [NoSanitizeAddressDocs, NoSanitizeThreadDocs,
                        NoSanitizeMemoryDocs];
@@ -2315,7 +2322,7 @@ def RequiresCapability : InheritableAttr {
 }
 
 def NoThreadSafetyAnalysis : InheritableAttr {
-  let Spellings = [Clang<"no_thread_safety_analysis">];
+  let Spellings = [Clang<"no_thread_safety_analysis", 1>];
   let Subjects = SubjectList<[Function]>;
   let Documentation = [Undocumented];
 }
@@ -2649,7 +2656,7 @@ def InitSeg : Attr {
   let Documentation = [InitSegDocs];
   let AdditionalMembers = [{
   void printPrettyPragma(raw_ostream &OS, const PrintingPolicy &Policy) const {
-    OS << '(' << getSection() << ')';
+    OS << " (" << getSection() << ')';
   }
   }];
 }
@@ -2704,12 +2711,12 @@ def LoopHint : Attr {
     if (SpellingIndex == Pragma_nounroll)
       return;
     else if (SpellingIndex == Pragma_unroll) {
-      OS << getValueString(Policy);
+      OS << ' ' << getValueString(Policy);
       return;
     }
 
     assert(SpellingIndex == Pragma_clang_loop && "Unexpected spelling");
-    OS << getOptionName(option) << getValueString(Policy);
+    OS << ' ' << getOptionName(option) << getValueString(Policy);
   }
 
   // Return a string containing the loop hint argument including the
@@ -2796,37 +2803,37 @@ def OMPDeclareSimdDecl : Attr {
     void printPrettyPragma(raw_ostream & OS, const PrintingPolicy &Policy)
         const {
       if (getBranchState() != BS_Undefined)
-        OS << ConvertBranchStateTyToStr(getBranchState()) << " ";
+        OS << ' ' << ConvertBranchStateTyToStr(getBranchState());
       if (auto *E = getSimdlen()) {
-        OS << "simdlen(";
+        OS << " simdlen(";
         E->printPretty(OS, nullptr, Policy);
-        OS << ") ";
+        OS << ")";
       }
       if (uniforms_size() > 0) {
-        OS << "uniform";
+        OS << " uniform";
         StringRef Sep = "(";
         for (auto *E : uniforms()) {
           OS << Sep;
           E->printPretty(OS, nullptr, Policy);
           Sep = ", ";
         }
-        OS << ") ";
+        OS << ")";
       }
       alignments_iterator NI = alignments_begin();
       for (auto *E : aligneds()) {
-        OS << "aligned(";
+        OS << " aligned(";
         E->printPretty(OS, nullptr, Policy);
         if (*NI) {
           OS << ": ";
           (*NI)->printPretty(OS, nullptr, Policy);
         }
-        OS << ") ";
+        OS << ")";
         ++NI;
       }
       steps_iterator I = steps_begin();
       modifiers_iterator MI = modifiers_begin();
       for (auto *E : linears()) {
-        OS << "linear(";
+        OS << " linear(";
         if (*MI != OMPC_LINEAR_unknown)
           OS << getOpenMPSimpleClauseTypeName(OMPC_linear, *MI) << "(";
         E->printPretty(OS, nullptr, Policy);
@@ -2836,7 +2843,7 @@ def OMPDeclareSimdDecl : Attr {
           OS << ": ";
           (*I)->printPretty(OS, nullptr, Policy);
         }
-        OS << ") ";
+        OS << ")";
         ++I;
         ++MI;
       }
@@ -2857,7 +2864,7 @@ def OMPDeclareTargetDecl : Attr {
     void printPrettyPragma(raw_ostream &OS, const PrintingPolicy &Policy) const {
       // Use fake syntax because it is for testing and debugging purpose only.
       if (getMapType() != MT_To)
-        OS << ConvertMapTypeTyToStr(getMapType()) << " ";
+        OS << ' ' << ConvertMapTypeTyToStr(getMapType());
     }
   }];
 }

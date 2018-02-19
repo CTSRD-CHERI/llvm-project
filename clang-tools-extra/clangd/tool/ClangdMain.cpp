@@ -16,7 +16,9 @@
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/Program.h"
+#include "llvm/Support/Signals.h"
 #include "llvm/Support/raw_ostream.h"
+#include <cstdlib>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -56,13 +58,6 @@ static llvm::cl::opt<unsigned>
     WorkerThreadsCount("j",
                        llvm::cl::desc("Number of async workers used by clangd"),
                        llvm::cl::init(getDefaultAsyncThreadsCount()));
-
-static llvm::cl::opt<bool> EnableSnippets(
-    "enable-snippets",
-    llvm::cl::desc(
-        "Present snippet completions instead of plaintext completions. "
-        "This also enables code pattern results." /* FIXME: should it? */),
-    llvm::cl::init(clangd::CodeCompleteOptions().EnableSnippets));
 
 // FIXME: Flags are the wrong mechanism for user preferences.
 // We should probably read a dotfile or similar.
@@ -123,12 +118,6 @@ static llvm::cl::opt<Path> InputMirrorFile(
         "Mirror all LSP input to the specified file. Useful for debugging."),
     llvm::cl::init(""), llvm::cl::Hidden);
 
-static llvm::cl::opt<Path> TraceFile(
-    "trace",
-    llvm::cl::desc(
-        "Trace internal events and timestamps in chrome://tracing JSON format"),
-    llvm::cl::init(""), llvm::cl::Hidden);
-
 static llvm::cl::opt<bool> EnableIndexBasedCompletion(
     "enable-index-based-completion",
     llvm::cl::desc(
@@ -176,15 +165,18 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  // Setup tracing facilities.
+  // Setup tracing facilities if CLANGD_TRACE is set. In practice enabling a
+  // trace flag in your editor's config is annoying, launching with
+  // `CLANGD_TRACE=trace.json vim` is easier.
   llvm::Optional<llvm::raw_fd_ostream> TraceStream;
   std::unique_ptr<trace::EventTracer> Tracer;
-  if (!TraceFile.empty()) {
+  if (auto *TraceFile = getenv("CLANGD_TRACE")) {
     std::error_code EC;
     TraceStream.emplace(TraceFile, /*ref*/ EC, llvm::sys::fs::F_RW);
     if (EC) {
-      TraceFile.reset();
-      llvm::errs() << "Error while opening trace file: " << EC.message();
+      TraceStream.reset();
+      llvm::errs() << "Error while opening trace file " << TraceFile << ": "
+                   << EC.message();
     } else {
       Tracer = trace::createJSONTracer(*TraceStream, PrettyPrint);
     }
@@ -239,7 +231,6 @@ int main(int argc, char *argv[]) {
   if (EnableIndexBasedCompletion && !YamlSymbolFile.empty())
     StaticIdx = BuildStaticIndex(YamlSymbolFile);
   clangd::CodeCompleteOptions CCOpts;
-  CCOpts.EnableSnippets = EnableSnippets;
   CCOpts.IncludeIneligibleResults = IncludeIneligibleResults;
   CCOpts.Limit = LimitCompletionResult;
   // Initialize and run ClangdLSPServer.

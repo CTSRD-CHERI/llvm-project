@@ -45,6 +45,7 @@
 #include "lld/Common/TargetOptionsCommandFlags.h"
 #include "lld/Common/Threads.h"
 #include "lld/Common/Version.h"
+#include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/Support/CommandLine.h"
@@ -76,7 +77,9 @@ bool elf::link(ArrayRef<const char *> Args, bool CanExitEarly,
       "too many errors emitted, stopping now (use "
       "-error-limit=0 to see all errors)";
   errorHandler().ErrorOS = &Error;
+  errorHandler().ExitEarly = CanExitEarly;
   errorHandler().ColorDiagnostics = Error.has_colors();
+
   InputSections.clear();
   OutputSections.clear();
   Tar = nullptr;
@@ -91,12 +94,12 @@ bool elf::link(ArrayRef<const char *> Args, bool CanExitEarly,
   Symtab = make<SymbolTable>();
   Config->ProgName = Args[0];
 
-  Driver->main(Args, CanExitEarly);
+  Driver->main(Args);
 
   // Exit immediately if we don't need to return to the caller.
   // This saves time because the overhead of calling destructors
   // for all globally-allocated objects is not negligible.
-  if (Config->ExitEarly)
+  if (CanExitEarly)
     exitLld(errorCount() ? 1 : 0);
 
   freeArena();
@@ -308,7 +311,7 @@ static bool hasZOption(opt::InputArgList &Args, StringRef Key) {
   return false;
 }
 
-void LinkerDriver::main(ArrayRef<const char *> ArgsArr, bool CanExitEarly) {
+void LinkerDriver::main(ArrayRef<const char *> ArgsArr) {
   ELFOptTable Parser;
   opt::InputArgList Args = Parser.parse(ArgsArr.slice(1));
 
@@ -345,9 +348,6 @@ void LinkerDriver::main(ArrayRef<const char *> ArgsArr, bool CanExitEarly) {
     return;
   if (Args.hasArg(OPT_version))
     return;
-
-  Config->ExitEarly = CanExitEarly && !Args.hasArg(OPT_full_shutdown);
-  errorHandler().ExitEarly = Config->ExitEarly;
 
   if (const char *Path = getReproduceOption(Args)) {
     // Note that --reproduce is a debug option so you can ignore it
@@ -589,6 +589,16 @@ static int parseInt(StringRef S, opt::Arg *Arg) {
   return V;
 }
 
+// Parse the symbol ordering file and warn for any duplicate entries.
+static std::vector<StringRef> getSymbolOrderingFile(MemoryBufferRef MB) {
+  SetVector<StringRef> Names;
+  for (StringRef S : args::getLines(MB))
+    if (!Names.insert(S) && Config->WarnSymbolOrdering)
+      warn(MB.getBufferIdentifier() + ": duplicate ordered symbol: " + S);
+
+  return Names.takeVector();
+}
+
 // Initializes Config members by the command line options.
 void LinkerDriver::readConfigs(opt::InputArgList &Args) {
   errorHandler().Verbose = Args.hasArg(OPT_verbose);
@@ -677,6 +687,8 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
       Args.hasFlag(OPT_undefined_version, OPT_no_undefined_version, true);
   Config->UnresolvedSymbols = getUnresolvedSymbolPolicy(Args);
   Config->WarnCommon = Args.hasFlag(OPT_warn_common, OPT_no_warn_common, false);
+  Config->WarnSymbolOrdering =
+      Args.hasFlag(OPT_warn_symbol_ordering, OPT_no_warn_symbol_ordering, true);
   Config->ZCombreloc = !hasZOption(Args, "nocombreloc");
   Config->ZExecstack = hasZOption(Args, "execstack");
   Config->ZNocopyreloc = hasZOption(Args, "nocopyreloc");
@@ -767,7 +779,7 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
 
   if (auto *Arg = Args.getLastArg(OPT_symbol_ordering_file))
     if (Optional<MemoryBufferRef> Buffer = readFile(Arg->getValue()))
-      Config->SymbolOrderingFile = args::getLines(*Buffer);
+      Config->SymbolOrderingFile = getSymbolOrderingFile(*Buffer);
 
   // If --retain-symbol-file is used, we'll keep only the symbols listed in
   // the file and discard all others.
@@ -790,12 +802,17 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
       if (Optional<MemoryBufferRef> Buffer = readFile(Arg->getValue()))
         readDynamicList(*Buffer);
 
-    for (auto *Arg : Args.filtered(OPT_export_dynamic_symbol)) {
+    for (auto *Arg : Args.filtered(OPT_export_dynamic_symbol))
       Config->DynamicList.push_back(
           {Arg->getValue(), /*IsExternCpp*/ false, /*HasWildcard*/ false});
-      Config->Undefined.push_back(Arg->getValue());
-    }
   }
+
+  // If --export-dynamic-symbol=foo is given and symbol foo is defined in
+  // an object file in an archive file, that object file should be pulled
+  // out and linked. (It doesn't have to behave like that from technical
+  // point of view, but this is needed for compatibility with GNU.)
+  for (auto *Arg : Args.filtered(OPT_export_dynamic_symbol))
+    Config->Undefined.push_back(Arg->getValue());
 
   for (auto *Arg : Args.filtered(OPT_version_script))
     if (Optional<MemoryBufferRef> Buffer = readFile(Arg->getValue()))
@@ -824,6 +841,11 @@ static void setConfigs(opt::InputArgList &Args) {
       (Config->Is64 || IsX32 || Machine == EM_PPC) && Machine != EM_MIPS;
   Config->Pic = Config->Pie || Config->Shared;
   Config->Wordsize = Config->Is64 ? 8 : 4;
+  // If the output uses REL relocations we must store the dynamic relocation
+  // addends to the output sections. We also store addends for RELA relocations
+  // if --apply-dynamic-relocs is used.
+  // We default to not writing the addends when using RELA relocations since
+  // any standard conforming tool can find it in r_addend.
   Config->WriteAddends = Args.hasFlag(OPT_apply_dynamic_relocs,
                                       OPT_no_apply_dynamic_relocs, false) ||
                          !Config->IsRela;
@@ -962,14 +984,6 @@ static DenseSet<StringRef> getExcludeLibs(opt::InputArgList &Args) {
   return Ret;
 }
 
-static Optional<StringRef> getArchiveName(InputFile *File) {
-  if (isa<ArchiveFile>(File))
-    return File->getName();
-  if (!File->ArchiveName.empty())
-    return File->ArchiveName;
-  return None;
-}
-
 // Handles the -exclude-libs option. If a static library file is specified
 // by the -exclude-libs option, all public symbols from the archive become
 // private unless otherwise specified by version scripts or something.
@@ -977,15 +991,15 @@ static Optional<StringRef> getArchiveName(InputFile *File) {
 //
 // This is not a popular option, but some programs such as bionic libc use it.
 template <class ELFT>
-static void excludeLibs(opt::InputArgList &Args, ArrayRef<InputFile *> Files) {
+static void excludeLibs(opt::InputArgList &Args) {
   DenseSet<StringRef> Libs = getExcludeLibs(Args);
   bool All = Libs.count("ALL");
 
-  for (InputFile *File : Files)
-    if (Optional<StringRef> Archive = getArchiveName(File))
-      if (All || Libs.count(path::filename(*Archive)))
+  for (InputFile *File : ObjectFiles)
+    if (!File->ArchiveName.empty())
+      if (All || Libs.count(path::filename(File->ArchiveName)))
         for (Symbol *Sym : File->getSymbols())
-          if (!Sym->isLocal())
+          if (!Sym->isLocal() && Sym->File == File)
             Sym->VersionId = VER_NDX_LOCAL;
 }
 
@@ -1070,7 +1084,7 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
 
   // Handle the -exclude-libs option.
   if (Args.hasArg(OPT_exclude_libs))
-    excludeLibs<ELFT>(Args, Files);
+    excludeLibs<ELFT>(Args);
 
   // Create ElfHeader early. We need a dummy section in
   // addReservedSymbols to mark the created symbols as not absolute.
@@ -1086,7 +1100,12 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   Script->declareSymbols();
 
   // Apply version scripts.
-  Symtab->scanVersionScript();
+  //
+  // For a relocatable output, version scripts don't make sense, and
+  // parsing a symbol version string (e.g. dropping "@ver1" from a symbol
+  // name "foo@ver1") rather do harm, so we don't call this if -r is given.
+  if (!Config->Relocatable)
+    Symtab->scanVersionScript();
 
   // Create wrapped symbols for -wrap option.
   for (auto *Arg : Args.filtered(OPT_wrap))

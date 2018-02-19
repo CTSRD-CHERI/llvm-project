@@ -262,8 +262,7 @@ DwarfDebug::DwarfDebug(AsmPrinter *A, Module *M)
     : DebugHandlerBase(A), DebugLocs(A->OutStreamer->isVerboseAsm()),
       InfoHolder(A, "info_string", DIEValueAllocator),
       SkeletonHolder(A, "skel_string", DIEValueAllocator),
-      IsDarwin(A->TM.getTargetTriple().isOSDarwin()), AccelNames(), AccelObjC(),
-      AccelNamespace(), AccelTypes() {
+      IsDarwin(A->TM.getTargetTriple().isOSDarwin()) {
   const Triple &TT = Asm->TM.getTargetTriple();
 
   // Make sure we know our "debugger tuning."  The target option takes
@@ -1176,7 +1175,9 @@ void DwarfDebug::beginInstruction(const MachineInstr *MI) {
     return;
 
   // Check if source location changes, but ignore DBG_VALUE and CFI locations.
-  if (MI->isMetaInstruction())
+  // If the instruction is part of the function frame setup code, do not emit
+  // any line record, as there is no correspondence with any user code.
+  if (MI->isMetaInstruction() || MI->getFlag(MachineInstr::FrameSetup))
     return;
   const DebugLoc &DL = MI->getDebugLoc();
   // When we emit a line-0 record, we don't update PrevInstLoc; so look at
@@ -1416,11 +1417,10 @@ void DwarfDebug::emitStringOffsetsTableHeader() {
 template <typename AccelTableT>
 void DwarfDebug::emitAccel(AccelTableT &Accel, MCSection *Section,
                            StringRef TableName) {
-  Accel.finalizeTable(Asm, TableName);
   Asm->OutStreamer->SwitchSection(Section);
 
   // Emit the full data.
-  Accel.emit(Asm, Section->getBeginSymbol());
+  emitAppleAccelTable(Asm, Accel, TableName, Section->getBeginSymbol());
 }
 
 // Emit visible names into a hashed accelerator table section.

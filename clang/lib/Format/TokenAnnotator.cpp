@@ -375,6 +375,10 @@ private:
         //   (aaa) = aaa
         // ];
         //
+        // extensions 123 [
+        //   (aaa) = aaa
+        // ];
+        //
         // or text proto extensions (in options):
         //
         // option (Aaa.options) = {
@@ -383,11 +387,20 @@ private:
         //   }
         // }
         //
-        // In the first case we want to spread the contents inside the square
-        // braces; in the second we want to keep them inline.
+        // or repeated fields (in options):
+        //
+        // option (Aaa.options) = {
+        //   keys: [ 1, 2, 3 ]
+        // }
+        //
+        // In the first and the third case we want to spread the contents inside
+        // the square braces; in the second we want to keep them inline.
         Left->Type = TT_ArrayInitializerLSquare;
         if (!Left->endsSequence(tok::l_square, tok::numeric_constant,
-                                tok::equal)) {
+                                tok::equal) &&
+            !Left->endsSequence(tok::l_square, tok::numeric_constant,
+                                tok::identifier) &&
+            !Left->endsSequence(tok::l_square, tok::colon, TT_SelectorName)) {
           Left->Type = TT_ProtoExtensionLSquare;
           BindingIncrease = 10;
         }
@@ -2331,16 +2344,26 @@ bool TokenAnnotator::spaceRequiredBetween(const AnnotatedLine &Line,
             !Left.Previous->isOneOf(tok::l_paren, tok::coloncolon));
   if (Right.is(tok::star) && Left.is(tok::l_paren))
     return false;
+  const auto SpaceRequiredForArrayInitializerLSquare =
+      [](const FormatToken &LSquareTok, const FormatStyle &Style) {
+        return Style.SpacesInContainerLiterals ||
+               ((Style.Language == FormatStyle::LK_Proto ||
+                 Style.Language == FormatStyle::LK_TextProto) &&
+                !Style.Cpp11BracedListStyle &&
+                LSquareTok.endsSequence(tok::l_square, tok::colon,
+                                        TT_SelectorName));
+      };
   if (Left.is(tok::l_square))
-    return (Left.is(TT_ArrayInitializerLSquare) &&
-            Style.SpacesInContainerLiterals && Right.isNot(tok::r_square)) ||
+    return (Left.is(TT_ArrayInitializerLSquare) && Right.isNot(tok::r_square) &&
+            SpaceRequiredForArrayInitializerLSquare(Left, Style)) ||
            (Left.isOneOf(TT_ArraySubscriptLSquare,
                          TT_StructuredBindingLSquare) &&
             Style.SpacesInSquareBrackets && Right.isNot(tok::r_square));
   if (Right.is(tok::r_square))
     return Right.MatchingParen &&
-           ((Style.SpacesInContainerLiterals &&
-             Right.MatchingParen->is(TT_ArrayInitializerLSquare)) ||
+           ((Right.MatchingParen->is(TT_ArrayInitializerLSquare) &&
+             SpaceRequiredForArrayInitializerLSquare(*Right.MatchingParen,
+                                                     Style)) ||
             (Style.SpacesInSquareBrackets &&
              Right.MatchingParen->isOneOf(TT_ArraySubscriptLSquare,
                                           TT_StructuredBindingLSquare)));
@@ -2425,6 +2448,9 @@ bool TokenAnnotator::spaceRequiredBefore(const AnnotatedLine &Line,
     if (Left.MatchingParen && Left.MatchingParen->is(TT_ProtoExtensionLSquare) &&
         Right.isOneOf(tok::l_brace, tok::less))
       return !Style.Cpp11BracedListStyle;
+    // A percent is probably part of a formatting specification, such as %lld.
+    if (Left.is(tok::percent))
+      return false;
   } else if (Style.Language == FormatStyle::LK_JavaScript) {
     if (Left.is(TT_JsFatArrow))
       return true;
@@ -2476,7 +2502,7 @@ bool TokenAnnotator::spaceRequiredBefore(const AnnotatedLine &Line,
          // (e.g. as "const x of y" in a for loop), or after a destructuring
          // operation (const [x, y] of z, const {a, b} of c).
          (Left.is(Keywords.kw_of) && Left.Previous &&
-          (Left.Previous->Tok.getIdentifierInfo() ||
+          (Left.Previous->Tok.is(tok::identifier) ||
            Left.Previous->isOneOf(tok::r_square, tok::r_brace)))) &&
         (!Left.Previous || !Left.Previous->is(tok::period)))
       return true;

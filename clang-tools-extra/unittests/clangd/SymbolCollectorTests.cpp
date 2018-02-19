@@ -47,6 +47,9 @@ MATCHER_P(Snippet, S, "") {
 }
 MATCHER_P(QName, Name, "") { return (arg.Scope + arg.Name).str() == Name; }
 MATCHER_P(DeclURI, P, "") { return arg.CanonicalDeclaration.FileURI == P; }
+MATCHER_P(IncludeHeader, P, "") {
+  return arg.Detail && arg.Detail->IncludeHeader == P;
+}
 MATCHER_P(DeclRange, Offsets, "") {
   return arg.CanonicalDeclaration.StartOffset == Offsets.first &&
       arg.CanonicalDeclaration.EndOffset == Offsets.second;
@@ -62,41 +65,62 @@ namespace clangd {
 namespace {
 class SymbolIndexActionFactory : public tooling::FrontendActionFactory {
 public:
-  SymbolIndexActionFactory(SymbolCollector::Options COpts)
-      : COpts(std::move(COpts)) {}
+  SymbolIndexActionFactory(SymbolCollector::Options COpts,
+                           CommentHandler *PragmaHandler)
+      : COpts(std::move(COpts)), PragmaHandler(PragmaHandler) {}
 
   clang::FrontendAction *create() override {
+    class WrappedIndexAction : public WrapperFrontendAction {
+    public:
+      WrappedIndexAction(std::shared_ptr<SymbolCollector> C,
+                         const index::IndexingOptions &Opts,
+                         CommentHandler *PragmaHandler)
+          : WrapperFrontendAction(
+                index::createIndexingAction(C, Opts, nullptr)),
+            PragmaHandler(PragmaHandler) {}
+
+      std::unique_ptr<ASTConsumer>
+      CreateASTConsumer(CompilerInstance &CI, StringRef InFile) override {
+        if (PragmaHandler)
+          CI.getPreprocessor().addCommentHandler(PragmaHandler);
+        return WrapperFrontendAction::CreateASTConsumer(CI, InFile);
+      }
+
+    private:
+      index::IndexingOptions IndexOpts;
+      CommentHandler *PragmaHandler;
+    };
     index::IndexingOptions IndexOpts;
     IndexOpts.SystemSymbolFilter =
         index::IndexingOptions::SystemSymbolFilterKind::All;
     IndexOpts.IndexFunctionLocals = false;
     Collector = std::make_shared<SymbolCollector>(COpts);
-    FrontendAction *Action =
-        index::createIndexingAction(Collector, IndexOpts, nullptr).release();
-    return Action;
+    return new WrappedIndexAction(Collector, std::move(IndexOpts),
+                                  PragmaHandler);
   }
 
   std::shared_ptr<SymbolCollector> Collector;
   SymbolCollector::Options COpts;
+  CommentHandler *PragmaHandler;
 };
 
 class SymbolCollectorTest : public ::testing::Test {
 public:
   SymbolCollectorTest()
-      : TestHeaderName(getVirtualTestFilePath("symbol.h").str()),
-        TestFileName(getVirtualTestFilePath("symbol.cc").str()) {
+      : InMemoryFileSystem(new vfs::InMemoryFileSystem),
+        TestHeaderName(testPath("symbol.h")),
+        TestFileName(testPath("symbol.cc")) {
     TestHeaderURI = URI::createFile(TestHeaderName).toString();
     TestFileURI = URI::createFile(TestFileName).toString();
   }
 
   bool runSymbolCollector(StringRef HeaderCode, StringRef MainCode,
                           const std::vector<std::string> &ExtraArgs = {}) {
-    llvm::IntrusiveRefCntPtr<vfs::InMemoryFileSystem> InMemoryFileSystem(
-        new vfs::InMemoryFileSystem);
     llvm::IntrusiveRefCntPtr<FileManager> Files(
         new FileManager(FileSystemOptions(), InMemoryFileSystem));
 
-    auto Factory = llvm::make_unique<SymbolIndexActionFactory>(CollectorOpts);
+    auto Factory = llvm::make_unique<SymbolIndexActionFactory>(
+        CollectorOpts, PragmaHandler.get());
 
     std::vector<std::string> Args = {"symbol_collector", "-fsyntax-only",
                                      "-std=c++11",       "-include",
@@ -117,12 +141,14 @@ public:
   }
 
 protected:
+  llvm::IntrusiveRefCntPtr<vfs::InMemoryFileSystem> InMemoryFileSystem;
   std::string TestHeaderName;
   std::string TestHeaderURI;
   std::string TestFileName;
   std::string TestFileURI;
   SymbolSlab Symbols;
   SymbolCollector::Options CollectorOpts;
+  std::unique_ptr<CommentHandler> PragmaHandler;
 };
 
 TEST_F(SymbolCollectorTest, CollectSymbols) {
@@ -218,9 +244,8 @@ TEST_F(SymbolCollectorTest, SymbolRelativeWithFallback) {
   CollectorOpts.IndexMainFiles = false;
   TestHeaderName = "x.h";
   TestFileName = "x.cpp";
-  TestHeaderURI =
-      URI::createFile(getVirtualTestFilePath(TestHeaderName)).toString();
-  CollectorOpts.FallbackDir = getVirtualTestRoot();
+  TestHeaderURI = URI::createFile(testPath(TestHeaderName)).toString();
+  CollectorOpts.FallbackDir = testRoot();
   runSymbolCollector("class Foo {};", /*Main=*/"");
   EXPECT_THAT(Symbols,
               UnorderedElementsAre(AllOf(QName("Foo"), DeclURI(TestHeaderURI))));
@@ -231,8 +256,8 @@ TEST_F(SymbolCollectorTest, CustomURIScheme) {
   CollectorOpts.IndexMainFiles = false;
   // Use test URI scheme from URITests.cpp
   CollectorOpts.URISchemes.insert(CollectorOpts.URISchemes.begin(), "unittest");
-  TestHeaderName = getVirtualTestFilePath("test-root/x.h").str();
-  TestFileName = getVirtualTestFilePath("test-root/x.cpp").str();
+  TestHeaderName = testPath("test-root/x.h");
+  TestFileName = testPath("test-root/x.cpp");
   runSymbolCollector("class Foo {};", /*Main=*/"");
   EXPECT_THAT(Symbols,
               UnorderedElementsAre(AllOf(QName("Foo"), DeclURI("unittest:x.h"))));
@@ -553,6 +578,46 @@ CompletionSnippetInsertText:    'snippet'
   EXPECT_THAT(ConcatenatedSymbols,
               UnorderedElementsAre(QName("clang::Foo1"),
                                    QName("clang::Foo2")));
+}
+
+TEST_F(SymbolCollectorTest, IncludeHeaderSameAsFileURI) {
+  CollectorOpts.CollectIncludePath = true;
+  runSymbolCollector("class Foo {};", /*Main=*/"");
+  EXPECT_THAT(Symbols,
+              UnorderedElementsAre(AllOf(QName("Foo"), DeclURI(TestHeaderURI),
+                                         IncludeHeader(""))));
+}
+
+#ifndef LLVM_ON_WIN32
+TEST_F(SymbolCollectorTest, CanonicalSTLHeader) {
+  CollectorOpts.CollectIncludePath = true;
+  CanonicalIncludes Includes;
+  addSystemHeadersMapping(&Includes);
+  CollectorOpts.Includes = &Includes;
+  // bits/basic_string.h$ should be mapped to <string>
+  TestHeaderName = "/nasty/bits/basic_string.h";
+  TestFileName = "/nasty/bits/basic_string.cpp";
+  TestHeaderURI = URI::createFile(TestHeaderName).toString();
+  runSymbolCollector("class string {};", /*Main=*/"");
+  EXPECT_THAT(Symbols, UnorderedElementsAre(AllOf(QName("string"),
+                                                  DeclURI(TestHeaderURI),
+                                                  IncludeHeader("<string>"))));
+}
+#endif
+
+TEST_F(SymbolCollectorTest, IWYUPragma) {
+  CollectorOpts.CollectIncludePath = true;
+  CanonicalIncludes Includes;
+  PragmaHandler = collectIWYUHeaderMaps(&Includes);
+  CollectorOpts.Includes = &Includes;
+  const std::string Header = R"(
+    // IWYU pragma: private, include the/good/header.h
+    class Foo {};
+  )";
+  runSymbolCollector(Header, /*Main=*/"");
+  EXPECT_THAT(Symbols, UnorderedElementsAre(
+                           AllOf(QName("Foo"), DeclURI(TestHeaderURI),
+                                 IncludeHeader("\"the/good/header.h\""))));
 }
 
 } // namespace

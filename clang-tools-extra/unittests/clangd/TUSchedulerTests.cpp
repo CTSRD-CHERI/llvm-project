@@ -33,12 +33,9 @@ protected:
                        std::move(Contents)};
   }
 
-  void changeFile(PathRef File, std::string Contents) {
-    Files[File] = Contents;
-  }
+  llvm::StringMap<std::string> Files;
 
 private:
-  llvm::StringMap<std::string> Files;
   MockCompilationDatabase CDB;
 };
 
@@ -47,41 +44,43 @@ TEST_F(TUSchedulerTests, MissingFiles) {
                 /*StorePreamblesInMemory=*/true,
                 /*ASTParsedCallback=*/nullptr);
 
-  auto Added = getVirtualTestFilePath("added.cpp");
-  changeFile(Added, "");
+  auto Added = testPath("added.cpp");
+  Files[Added] = "";
 
-  auto Missing = getVirtualTestFilePath("missing.cpp");
-  changeFile(Missing, "");
+  auto Missing = testPath("missing.cpp");
+  Files[Missing] = "";
 
   S.update(Added, getInputs(Added, ""), ignoreUpdate);
 
   // Assert each operation for missing file is an error (even if it's available
   // in VFS).
-  S.runWithAST(Missing, [&](llvm::Expected<InputsAndAST> AST) {
+  S.runWithAST("", Missing, [&](llvm::Expected<InputsAndAST> AST) {
     ASSERT_FALSE(bool(AST));
     ignoreError(AST.takeError());
   });
-  S.runWithPreamble(Missing, [&](llvm::Expected<InputsAndPreamble> Preamble) {
-    ASSERT_FALSE(bool(Preamble));
-    ignoreError(Preamble.takeError());
-  });
+  S.runWithPreamble("", Missing,
+                    [&](llvm::Expected<InputsAndPreamble> Preamble) {
+                      ASSERT_FALSE(bool(Preamble));
+                      ignoreError(Preamble.takeError());
+                    });
   // remove() shouldn't crash on missing files.
   S.remove(Missing);
 
   // Assert there aren't any errors for added file.
-  S.runWithAST(
-      Added, [&](llvm::Expected<InputsAndAST> AST) { EXPECT_TRUE(bool(AST)); });
-  S.runWithPreamble(Added, [&](llvm::Expected<InputsAndPreamble> Preamble) {
+  S.runWithAST("", Added, [&](llvm::Expected<InputsAndAST> AST) {
+    EXPECT_TRUE(bool(AST));
+  });
+  S.runWithPreamble("", Added, [&](llvm::Expected<InputsAndPreamble> Preamble) {
     EXPECT_TRUE(bool(Preamble));
   });
   S.remove(Added);
 
   // Assert that all operations fail after removing the file.
-  S.runWithAST(Added, [&](llvm::Expected<InputsAndAST> AST) {
+  S.runWithAST("", Added, [&](llvm::Expected<InputsAndAST> AST) {
     ASSERT_FALSE(bool(AST));
     ignoreError(AST.takeError());
   });
-  S.runWithPreamble(Added, [&](llvm::Expected<InputsAndPreamble> Preamble) {
+  S.runWithPreamble("", Added, [&](llvm::Expected<InputsAndPreamble> Preamble) {
     ASSERT_FALSE(bool(Preamble));
     ignoreError(Preamble.takeError());
   });
@@ -106,9 +105,9 @@ TEST_F(TUSchedulerTests, ManyUpdates) {
 
     std::vector<std::string> Files;
     for (int I = 0; I < FilesCount; ++I) {
-      Files.push_back(
-          getVirtualTestFilePath("foo" + std::to_string(I) + ".cpp").str());
-      changeFile(Files.back(), "");
+      std::string Name = "foo" + std::to_string(I) + ".cpp";
+      Files.push_back(testPath(Name));
+      this->Files[Files.back()] = "";
     }
 
     llvm::StringRef Contents1 = R"cpp(int a;)cpp";
@@ -146,24 +145,27 @@ TEST_F(TUSchedulerTests, ManyUpdates) {
 
         {
           WithContextValue WithNonce(NonceKey, ++Nonce);
-          S.runWithAST(File, [Inputs, Nonce, &Mut, &TotalASTReads](
-                                 llvm::Expected<InputsAndAST> AST) {
-            EXPECT_THAT(Context::current().get(NonceKey), Pointee(Nonce));
+          S.runWithAST("CheckAST", File,
+                       [Inputs, Nonce, &Mut,
+                        &TotalASTReads](llvm::Expected<InputsAndAST> AST) {
+                         EXPECT_THAT(Context::current().get(NonceKey),
+                                     Pointee(Nonce));
 
-            ASSERT_TRUE((bool)AST);
-            EXPECT_EQ(AST->Inputs.FS, Inputs.FS);
-            EXPECT_EQ(AST->Inputs.Contents, Inputs.Contents);
+                         ASSERT_TRUE((bool)AST);
+                         EXPECT_EQ(AST->Inputs.FS, Inputs.FS);
+                         EXPECT_EQ(AST->Inputs.Contents, Inputs.Contents);
 
-            std::lock_guard<std::mutex> Lock(Mut);
-            ++TotalASTReads;
-          });
+                         std::lock_guard<std::mutex> Lock(Mut);
+                         ++TotalASTReads;
+                       });
         }
 
         {
           WithContextValue WithNonce(NonceKey, ++Nonce);
           S.runWithPreamble(
-              File, [Inputs, Nonce, &Mut, &TotalPreambleReads](
-                        llvm::Expected<InputsAndPreamble> Preamble) {
+              "CheckPreamble", File,
+              [Inputs, Nonce, &Mut, &TotalPreambleReads](
+                  llvm::Expected<InputsAndPreamble> Preamble) {
                 EXPECT_THAT(Context::current().get(NonceKey), Pointee(Nonce));
 
                 ASSERT_TRUE((bool)Preamble);
