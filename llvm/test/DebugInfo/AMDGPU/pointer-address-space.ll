@@ -43,10 +43,14 @@
 
 ; CHECK:      0x[[LOCAL]]: DW_TAG_pointer_type
 ; CHECK-NEXT:                DW_AT_type
+; XXXAR: The following line is added due to CHERI patches. Upstream?
+; CHECK-NEXT:                DW_AT_byte_size [DW_FORM_data1] (0x04)
 ; CHECK-NEXT:                DW_AT_address_class [DW_FORM_data4] (0x00000002)
 
 ; CHECK:      0x[[PRIVATE]]: DW_TAG_pointer_type
 ; CHECK-NEXT:                  DW_AT_type
+; XXXAR: The following line is added due to CHERI patches. Upstream?
+; CHECK-NEXT:                  DW_AT_byte_size [DW_FORM_data1] (0x04)
 ; CHECK-NEXT:                  DW_AT_address_class [DW_FORM_data4] (0x00000001)
 
 declare void @llvm.dbg.declare(metadata, metadata, metadata)
