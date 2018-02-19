@@ -294,15 +294,18 @@ void HandleArgs(Object &Obj, const Reader &Reader) {
       if (RemovePred(Sec))
         return true;
 
-      // Only keep debug sections and shstrtab. This is much more aggressive
-      // than either GNU binutils or elftoolchain but GDB accepts this just fine
-      if (&Sec == Obj.SectionNames || Sec.Name.startswith(".debug") ||
-          Sec.Name.startswith(".zdebug") || Sec.Name.startswith(".gdb_index") ||
-          Sec.Name.startswith(".line") || Sec.Name.startswith(".stab") ||
-          Sec.Name.startswith(".gnu.linkonce.wi."))
+      // Only keep debug sections and the string + symbol table.
+      // This is much more aggressive than either GNU binutils or elftoolchain
+      // but GDB accepts this just fine
+      if (Obj.SectionNames == &Sec || Obj.SymbolTable == &Sec ||
+          Obj.SymbolTable->getStrTab() == &Sec)
         return false;
+      for (const char *S : {".debug", ".zdebug", ".gdb_index", ".line", ".stab",
+                            ".gnu.linkonce.wi."})
+        if (Sec.Name.startswith(S))
+          return false;
 
-      // remove everything else
+      // Remove everything else.
       return true;
     };
   }
