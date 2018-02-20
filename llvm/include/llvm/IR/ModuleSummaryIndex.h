@@ -158,6 +158,8 @@ struct ValueInfo {
   const GlobalValueSummaryMapTy::value_type *getRef() const {
     return RefAndFlag.getPointer();
   }
+
+  bool isDSOLocal() const;
 };
 
 template <> struct DenseMapInfo<ValueInfo> {
@@ -669,7 +671,6 @@ private:
 
   /// Mapping from type identifiers to summary information for that type
   /// identifier.
-  // FIXME: Add bitcode read/write support for this field.
   std::map<std::string, TypeIdSummary> TypeIdMap;
 
   /// Mapping from original ID to GUID. If original ID can map to multiple
@@ -680,6 +681,13 @@ private:
   /// GVFlags::Live==false are really dead. Otherwise, all values must be
   /// considered live.
   bool WithGlobalValueDeadStripping = false;
+
+  /// Indicates that distributed backend should skip compilation of the
+  /// module. Flag is suppose to be set by distributed ThinLTO indexing
+  /// when it detected that the module is not needed during the final
+  /// linking. As result distributed backend should just output a minimal
+  /// valid object file.
+  bool SkipModuleByDistributedBackend = false;
 
   /// If true then we're performing analysis of IR module, filling summary
   /// accordingly. The value of 'false' means we're reading summary from
@@ -715,6 +723,13 @@ public:
   }
   void setWithGlobalValueDeadStripping() {
     WithGlobalValueDeadStripping = true;
+  }
+
+  bool skipModuleByDistributedBackend() const {
+    return SkipModuleByDistributedBackend;
+  }
+  void setSkipModuleByDistributedBackend() {
+    SkipModuleByDistributedBackend = true;
   }
 
   bool isGlobalValueLive(const GlobalValueSummary *GVS) const {

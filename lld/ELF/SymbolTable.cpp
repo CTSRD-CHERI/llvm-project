@@ -186,7 +186,7 @@ void SymbolTable::applySymbolWrap() {
     // First, make a copy of __real_sym.
     Symbol *Real = nullptr;
     if (W.Real->isDefined()) {
-      Real = (Symbol *)make<SymbolUnion>();
+      Real = reinterpret_cast<Symbol *>(make<SymbolUnion>());
       memcpy(Real, W.Real, sizeof(SymbolUnion));
     }
 
@@ -234,7 +234,7 @@ std::pair<Symbol *, bool> SymbolTable::insert(StringRef Name) {
 
   Symbol *Sym;
   if (IsNew) {
-    Sym = (Symbol *)make<SymbolUnion>();
+    Sym = reinterpret_cast<Symbol *>(make<SymbolUnion>());
     Sym->InVersionScript = false;
     Sym->Visibility = STV_DEFAULT;
     Sym->IsUsedInRegularObj = false;
@@ -531,29 +531,28 @@ Symbol *SymbolTable::find(StringRef Name) {
 }
 
 template <class ELFT>
-Symbol *SymbolTable::addLazyArchive(StringRef Name, ArchiveFile &F,
-                                    const object::Archive::Symbol Sym) {
+void SymbolTable::addLazyArchive(StringRef Name, ArchiveFile &F,
+                                 const object::Archive::Symbol Sym) {
   Symbol *S;
   bool WasInserted;
   std::tie(S, WasInserted) = insert(Name);
   if (WasInserted) {
     replaceSymbol<LazyArchive>(S, F, Sym, Symbol::UnknownType);
-    return S;
+    return;
   }
   if (!S->isUndefined())
-    return S;
+    return;
 
   // An undefined weak will not fetch archive members. See comment on Lazy in
   // Symbols.h for the details.
   if (S->isWeak()) {
     replaceSymbol<LazyArchive>(S, F, Sym, S->Type);
     S->Binding = STB_WEAK;
-    return S;
+    return;
   }
   std::pair<MemoryBufferRef, uint64_t> MBInfo = F.getMember(&Sym);
   if (!MBInfo.first.getBuffer().empty())
     addFile<ELFT>(createObjectFile(MBInfo.first, F.getName(), MBInfo.second));
-  return S;
 }
 
 template <class ELFT>
@@ -569,9 +568,12 @@ void SymbolTable::addLazyObject(StringRef Name, LazyObjFile &Obj) {
     return;
 
   // See comment for addLazyArchive above.
-  if (S->isWeak())
+  if (S->isWeak()) {
     replaceSymbol<LazyObject>(S, Obj, Name, S->Type);
-  else if (InputFile *F = Obj.fetch())
+    S->Binding = STB_WEAK;
+    return;
+  }
+  if (InputFile *F = Obj.fetch())
     addFile<ELFT>(F);
 }
 
@@ -701,7 +703,7 @@ void SymbolTable::assignExactVersion(SymbolVersion Ver, uint16_t VersionId,
   // Get a list of symbols which we need to assign the version to.
   std::vector<Symbol *> Syms = findByVersion(Ver);
   if (Syms.empty()) {
-    if (Config->NoUndefinedVersion)
+    if (!Config->UndefinedVersion)
       error("version script assignment of '" + VersionName + "' to symbol '" +
             Ver.Name + "' failed: symbol not defined");
     return;
@@ -795,16 +797,16 @@ template void SymbolTable::addCombinedLTOObject<ELF32BE>();
 template void SymbolTable::addCombinedLTOObject<ELF64LE>();
 template void SymbolTable::addCombinedLTOObject<ELF64BE>();
 
-template Symbol *
+template void
 SymbolTable::addLazyArchive<ELF32LE>(StringRef, ArchiveFile &,
                                      const object::Archive::Symbol);
-template Symbol *
+template void
 SymbolTable::addLazyArchive<ELF32BE>(StringRef, ArchiveFile &,
                                      const object::Archive::Symbol);
-template Symbol *
+template void
 SymbolTable::addLazyArchive<ELF64LE>(StringRef, ArchiveFile &,
                                      const object::Archive::Symbol);
-template Symbol *
+template void
 SymbolTable::addLazyArchive<ELF64BE>(StringRef, ArchiveFile &,
                                      const object::Archive::Symbol);
 

@@ -91,11 +91,6 @@ private:
 } // anonymous namespace
 
 StringRef elf::getOutputSectionName(InputSectionBase *S) {
-  // ".zdebug_" is a prefix for ZLIB-compressed sections.
-  // Because we decompressed input sections, we want to remove 'z'.
-  if (S->Name.startswith(".zdebug_"))
-    return Saver.save("." + S->Name.substr(2));
-
   if (Config->Relocatable)
     return S->Name;
 
@@ -193,8 +188,7 @@ static Defined *addOptionalRegular(StringRef Name, SectionBase *Sec,
   // TODO: I would like to do this for all targets but that might cause
   // compatibility issues
   if (Val == 0 && CanBeSectionStart) {
-    if (Config->Verbose)
-      message("Treating " + Name + " as a section start symbol");
+    log("Treating " + Name + " as a section start symbol");
     Sym->IsSectionStartSymbol = true;
   }
   return cast<Defined>(Sym);
@@ -507,7 +501,8 @@ template <class ELFT> void Writer<ELFT>::run() {
       Sec->Addr = 0;
   }
 
-  checkNoOverlappingSections();
+  if (Config->CheckSections)
+    checkNoOverlappingSections();
 
   // It does not make sense try to open the file if we have error already.
   if (errorCount())
@@ -883,8 +878,6 @@ void PhdrEntry::add(OutputSection *Sec) {
   p_align = std::max(p_align, Sec->Alignment);
   if (p_type == PT_LOAD)
     Sec->PtLoad = this;
-  if (Sec->LMAExpr)
-    ASectionHasLMA = true;
 }
 
 // The beginning and the ending of .rel[a].plt section are marked
@@ -894,7 +887,7 @@ void PhdrEntry::add(OutputSection *Sec) {
 // need these symbols, since IRELATIVE relocs are resolved through GOT
 // and PLT. For details, see http://www.airs.com/blog/archives/403.
 template <class ELFT> void Writer<ELFT>::addRelIpltSymbols() {
-  if (!Config->Static)
+  if (needsInterpSection())
     return;
   StringRef S = Config->IsRela ? "__rela_iplt_start" : "__rel_iplt_start";
   addOptionalRegular(S, InX::RelaIplt, 0, STV_HIDDEN, STB_WEAK);
@@ -1081,59 +1074,105 @@ findOrphanPos(std::vector<BaseCommand *>::iterator B,
 }
 
 // Builds section order for handling --symbol-ordering-file.
-static DenseMap<SectionBase *, int> buildSectionOrder() {
-  DenseMap<SectionBase *, int> SectionOrder;
+static DenseMap<const InputSectionBase *, int> buildSectionOrder() {
+  DenseMap<const InputSectionBase *, int> SectionOrder;
   if (Config->SymbolOrderingFile.empty())
     return SectionOrder;
+
+  struct SymbolOrderEntry {
+    int Priority;
+    bool Present;
+  };
 
   // Build a map from symbols to their priorities. Symbols that didn't
   // appear in the symbol ordering file have the lowest priority 0.
   // All explicitly mentioned symbols have negative (higher) priorities.
-  DenseMap<StringRef, int> SymbolOrder;
+  DenseMap<StringRef, SymbolOrderEntry> SymbolOrder;
   int Priority = -Config->SymbolOrderingFile.size();
   for (StringRef S : Config->SymbolOrderingFile)
-    SymbolOrder.insert({S, Priority++});
+    SymbolOrder.insert({S, {Priority++, false}});
 
   // Build a map from sections to their priorities.
   for (InputFile *File : ObjectFiles) {
     for (Symbol *Sym : File->getSymbols()) {
-      auto *D = dyn_cast<Defined>(Sym);
-      if (!D || !D->Section)
+      auto It = SymbolOrder.find(Sym->getName());
+      if (It == SymbolOrder.end())
         continue;
-      int &Priority = SectionOrder[D->Section];
-      Priority = std::min(Priority, SymbolOrder.lookup(D->getName()));
+      SymbolOrderEntry &Ent = It->second;
+      Ent.Present = true;
+
+      auto *D = dyn_cast<Defined>(Sym);
+      if (Config->WarnSymbolOrdering) {
+        if (Sym->isUndefined())
+          warn(File->getName() +
+               ": unable to order undefined symbol: " + Sym->getName());
+        else if (Sym->isShared())
+          warn(File->getName() +
+               ": unable to order shared symbol: " + Sym->getName());
+        else if (D && !D->Section)
+          warn(File->getName() +
+               ": unable to order absolute symbol: " + Sym->getName());
+        else if (D && !D->Section->Live)
+          warn(File->getName() +
+               ": unable to order discarded symbol: " + Sym->getName());
+      }
+      if (!D)
+        continue;
+
+      if (auto *Sec = dyn_cast_or_null<InputSectionBase>(D->Section)) {
+        int &Priority = SectionOrder[Sec];
+        Priority = std::min(Priority, Ent.Priority);
+      }
     }
   }
+
+  if (Config->WarnSymbolOrdering)
+    for (auto OrderEntry : SymbolOrder)
+      if (!OrderEntry.second.Present)
+        warn("symbol ordering file: no such symbol: " + OrderEntry.first);
+
   return SectionOrder;
+}
+
+static void sortSection(OutputSection *Sec,
+                        const DenseMap<const InputSectionBase *, int> &Order) {
+  if (!Sec->Live)
+    return;
+  StringRef Name = Sec->Name;
+
+  // Sort input sections by section name suffixes for
+  // __attribute__((init_priority(N))).
+  if (Name == ".init_array" || Name == ".fini_array") {
+    if (!Script->HasSectionsCommand)
+      Sec->sortInitFini();
+    return;
+  }
+
+  // Sort input sections by the special rule for .ctors and .dtors.
+  if (Name == ".ctors" || Name == ".dtors") {
+    if (!Script->HasSectionsCommand)
+      Sec->sortCtorsDtors();
+    return;
+  }
+
+  // Never sort these.
+  if (Name == ".init" || Name == ".fini")
+    return;
+
+  // Sort input sections by priority using the list provided
+  // by --symbol-ordering-file.
+  if (!Order.empty())
+    Sec->sort([&](InputSectionBase *S) { return Order.lookup(S); });
 }
 
 // If no layout was provided by linker script, we want to apply default
 // sorting for special input sections. This also handles --symbol-ordering-file.
 template <class ELFT> void Writer<ELFT>::sortInputSections() {
-  // Sort input sections by priority using the list provided
-  // by --symbol-ordering-file.
-  DenseMap<SectionBase *, int> Order = buildSectionOrder();
-  if (!Order.empty())
-    for (BaseCommand *Base : Script->SectionCommands)
-      if (auto *Sec = dyn_cast<OutputSection>(Base))
-        if (Sec->Live)
-          Sec->sort([&](InputSectionBase *S) { return Order.lookup(S); });
-
-  if (Script->HasSectionsCommand)
-    return;
-
-  // Sort input sections by section name suffixes for
-  // __attribute__((init_priority(N))).
-  if (OutputSection *Sec = findSection(".init_array"))
-    Sec->sortInitFini();
-  if (OutputSection *Sec = findSection(".fini_array"))
-    Sec->sortInitFini();
-
-  // Sort input sections by the special rule for .ctors and .dtors.
-  if (OutputSection *Sec = findSection(".ctors"))
-    Sec->sortCtorsDtors();
-  if (OutputSection *Sec = findSection(".dtors"))
-    Sec->sortCtorsDtors();
+  // Build the order once since it is expensive.
+  DenseMap<const InputSectionBase *, int> Order = buildSectionOrder();
+  for (BaseCommand *Base : Script->SectionCommands)
+    if (auto *Sec = dyn_cast<OutputSection>(Base))
+      sortSection(Sec, Order);
 }
 
 template <class ELFT> void Writer<ELFT>::sortSections() {
@@ -1405,23 +1444,21 @@ static void removeUnusedSyntheticSections() {
     if (!OS || !SS->empty())
       continue;
 
-    std::vector<BaseCommand *>::iterator Empty = OS->SectionCommands.end();
-    for (auto I = OS->SectionCommands.begin(), E = OS->SectionCommands.end();
-         I != E; ++I) {
-      BaseCommand *B = *I;
-      if (auto *ISD = dyn_cast<InputSectionDescription>(B)) {
+    // If we reach here, then SS is an unused synthetic section and we want to
+    // remove it from corresponding input section description of output section.
+    for (BaseCommand *B : OS->SectionCommands)
+      if (auto *ISD = dyn_cast<InputSectionDescription>(B))
         llvm::erase_if(ISD->Sections,
                        [=](InputSection *IS) { return IS == SS; });
-        if (ISD->Sections.empty())
-          Empty = I;
-      }
-    }
-    if (Empty != OS->SectionCommands.end())
-      OS->SectionCommands.erase(Empty);
 
-    // If there are no other sections in the output section, remove it from the
-    // output.
-    if (OS->SectionCommands.empty())
+    // If there are no other alive sections or commands left in the output
+    // section description, we remove it from the output.
+    bool IsEmpty = llvm::all_of(OS->SectionCommands, [](BaseCommand *B) {
+      if (auto *ISD = dyn_cast<InputSectionDescription>(B))
+        return ISD->Sections.empty();
+      return false;
+    });
+    if (IsEmpty)
       OS->Live = false;
   }
 }
@@ -1773,9 +1810,11 @@ template <class ELFT> std::vector<PhdrEntry *> Writer<ELFT>::createPhdrs() {
     // (e.g. executable or writable). There is one phdr for each segment.
     // Therefore, we need to create a new phdr when the next section has
     // different flags or is loaded at a discontiguous address using AT linker
-    // script command.
+    // script command. At the same time, we don't want to create a separate
+    // load segment for the headers, even if the first output section has
+    // an AT attribute.
     uint64_t NewFlags = computeFlags(Sec->getPhdrFlags());
-    if ((Sec->LMAExpr && Load->ASectionHasLMA) ||
+    if ((Sec->LMAExpr && Load->LastSec != Out::ProgramHeaders) ||
         Sec->MemRegion != Load->FirstSec->MemRegion || Flags != NewFlags) {
 
       Load = AddHdr(PT_LOAD, NewFlags);

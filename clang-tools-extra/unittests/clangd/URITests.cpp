@@ -49,7 +49,7 @@ public:
   }
 };
 
-const char *TestScheme::Scheme = "test";
+const char *TestScheme::Scheme = "unittest";
 const char *TestScheme::TestRoot = "/test-root/";
 
 static URISchemeRegistry::Add<TestScheme> X(TestScheme::Scheme, "Test schema");
@@ -72,6 +72,7 @@ URI parseOrDie(llvm::StringRef Uri) {
 TEST(PercentEncodingTest, Encode) {
   EXPECT_EQ(URI("x", /*Authority=*/"", "a/b/c").toString(), "x:a/b/c");
   EXPECT_EQ(URI("x", /*Authority=*/"", "a!b;c~").toString(), "x:a%21b%3bc~");
+  EXPECT_EQ(URI("x", /*Authority=*/"", "a123b").toString(), "x:a123b");
 }
 
 TEST(PercentEncodingTest, Decode) {
@@ -166,7 +167,7 @@ TEST(URITest, Resolve) {
 #else
   EXPECT_EQ(resolveOrDie(parseOrDie("file:/a/b/c")), "/a/b/c");
   EXPECT_EQ(resolveOrDie(parseOrDie("file://auth/a/b/c")), "/a/b/c");
-  EXPECT_EQ(resolveOrDie(parseOrDie("test:a/b/c"), "/dir/test-root/x/y/z"),
+  EXPECT_EQ(resolveOrDie(parseOrDie("unittest:a/b/c"), "/dir/test-root/x/y/z"),
             "/dir/test-root/a/b/c");
   EXPECT_THAT(resolveOrDie(parseOrDie("file://au%3dth/%28x%29/y/%20z")),
               "/(x)/y/ z");
@@ -175,10 +176,10 @@ TEST(URITest, Resolve) {
 }
 
 TEST(URITest, Platform) {
-  auto Path = getVirtualTestFilePath("x");
+  auto Path = testPath("x");
   auto U = URI::create(Path, "file");
   EXPECT_TRUE(static_cast<bool>(U));
-  EXPECT_THAT(resolveOrDie(*U), Path.str());
+  EXPECT_THAT(resolveOrDie(*U), Path);
 }
 
 TEST(URITest, ResolveFailed) {

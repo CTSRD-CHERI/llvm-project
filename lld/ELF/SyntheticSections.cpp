@@ -712,18 +712,18 @@ size_t MipsGotSection::FileGot::getIndexedEntriesNum() const {
 }
 
 MipsGotSection::FileGot &MipsGotSection::getGot(InputFile &F) {
-  if (F.MipsGotIndex == size_t(-1)) {
+  if (!F.MipsGotIndex.hasValue()) {
     Gots.emplace_back();
     Gots.back().File = &F;
     F.MipsGotIndex = Gots.size() - 1;
   }
-  return Gots[F.MipsGotIndex];
+  return Gots[*F.MipsGotIndex];
 }
 
 uint64_t MipsGotSection::getPageEntryOffset(const InputFile &F,
                                             const Symbol &Sym,
                                             int64_t Addend) const {
-  const FileGot &G = Gots[F.MipsGotIndex];
+  const FileGot &G = Gots[*F.MipsGotIndex];
   const OutputSection *OutSec = Sym.getOutputSection();
   uint64_t SecAddr = getMipsPageAddr(OutSec->Addr);
   uint64_t SymAddr = getMipsPageAddr(Sym.getVA(Addend));
@@ -734,36 +734,25 @@ uint64_t MipsGotSection::getPageEntryOffset(const InputFile &F,
 
 uint64_t MipsGotSection::getSymEntryOffset(const InputFile &F, const Symbol &S,
                                            int64_t Addend) const {
-  const FileGot &G = Gots[F.MipsGotIndex];
+  const FileGot &G = Gots[*F.MipsGotIndex];
   Symbol *Sym = const_cast<Symbol *>(&S);
-  if (Sym->isTls()) {
-    auto E = G.Tls.find(Sym);
-    assert(E != G.Tls.end());
-    return E->second * Config->Wordsize;
-  }
-  if (Sym->IsPreemptible) {
-    auto E = G.Global.find(Sym);
-    assert(E != G.Global.end());
-    return E->second * Config->Wordsize;
-  }
-  auto E = G.Local16.find({Sym, Addend});
-  assert(E != G.Local16.end());
-  return E->second * Config->Wordsize;
+  if (Sym->isTls())
+    return G.Tls.find(Sym)->second * Config->Wordsize;
+  if (Sym->IsPreemptible)
+    return G.Global.find(Sym)->second * Config->Wordsize;
+  return G.Local16.find({Sym, Addend})->second * Config->Wordsize;
 }
 
 uint64_t MipsGotSection::getTlsIndexOffset(const InputFile &F) const {
-  const FileGot &G = Gots[F.MipsGotIndex];
-  auto E = G.DynTlsSymbols.find(nullptr);
-  assert(E != G.DynTlsSymbols.end());
-  return E->second * Config->Wordsize;
+  const FileGot &G = Gots[*F.MipsGotIndex];
+  return G.DynTlsSymbols.find(nullptr)->second * Config->Wordsize;
 }
 
 uint64_t MipsGotSection::getGlobalDynOffset(const InputFile &F,
                                             const Symbol &S) const {
-  const FileGot &G = Gots[F.MipsGotIndex];
-  auto E = G.DynTlsSymbols.find(const_cast<Symbol *>(&S));
-  assert(E != G.DynTlsSymbols.end());
-  return E->second * Config->Wordsize;
+  const FileGot &G = Gots[*F.MipsGotIndex];
+  Symbol *Sym = const_cast<Symbol *>(&S);
+  return G.DynTlsSymbols.find(Sym)->second * Config->Wordsize;
 }
 
 const Symbol *MipsGotSection::getFirstGlobalEntry() const {
@@ -998,9 +987,12 @@ bool MipsGotSection::empty() const {
 }
 
 uint64_t MipsGotSection::getGp(const InputFile *F) const {
-  if (!F || F->MipsGotIndex == 0 || F->MipsGotIndex == size_t(-1))
+  // For files without related GOT or files refer a primary GOT
+  // returns "common" _gp value. For secondary GOTs calculate
+  // individual _gp values.
+  if (!F || !F->MipsGotIndex.hasValue() || *F->MipsGotIndex == 0)
     return ElfSym::MipsGp->getVA(0);
-  return this->getVA() + Gots[F->MipsGotIndex].StartIndex * Config->Wordsize +
+  return this->getVA() + Gots[*F->MipsGotIndex].StartIndex * Config->Wordsize +
          0x7ff0;
 }
 
@@ -1378,7 +1370,7 @@ uint64_t DynamicReloc::getOffset() const {
   return InputSec->getOutputSection()->Addr + InputSec->getOffset(OffsetInSec);
 }
 
-int64_t DynamicReloc::getAddend() const {
+int64_t DynamicReloc::computeAddend() const {
   if (UseSymVA)
     return Sym->getVA(Addend);
   if (!OutputSec)
@@ -1399,17 +1391,21 @@ RelocationBaseSection::RelocationBaseSection(StringRef Name, uint32_t Type,
     : SyntheticSection(SHF_ALLOC, Type, Config->Wordsize, Name),
       DynamicTag(DynamicTag), SizeDynamicTag(SizeDynamicTag) {}
 
-void RelocationBaseSection::addReloc(uint32_t DynType,
+void RelocationBaseSection::addReloc(RelType DynType, InputSectionBase *IS,
+                                     uint64_t OffsetInSec, Symbol *Sym) {
+  addReloc({DynType, IS, OffsetInSec, false, Sym, 0});
+}
+
+void RelocationBaseSection::addReloc(RelType DynType,
                                      InputSectionBase *InputSec,
-                                     uint64_t OffsetInSec, bool UseSymVA,
-                                     Symbol *Sym, int64_t Addend, RelExpr Expr,
+                                     uint64_t OffsetInSec, Symbol *Sym,
+                                     int64_t Addend, RelExpr Expr,
                                      RelType Type) {
-  // REL type relocations don't have addend fields unlike RELAs, and
-  // their addends are stored to the section to which they are applied.
-  // So, store addends if we need to.
-  if (!Config->IsRela && UseSymVA)
+  // Write the addends to the relocated address if required. We skip
+  // it if the written value would be zero.
+  if (Config->WriteAddends && (Expr != R_ADDEND || Addend != 0))
     InputSec->Relocations.push_back({Expr, Type, OffsetInSec, Addend, Sym});
-  addReloc({DynType, InputSec, OffsetInSec, UseSymVA, Sym, Addend});
+  addReloc({DynType, InputSec, OffsetInSec, Expr != R_ADDEND, Sym, Addend});
 }
 
 void RelocationBaseSection::addReloc(const DynamicReloc &Reloc) {
@@ -1437,7 +1433,7 @@ template <class ELFT>
 static void encodeDynamicReloc(typename ELFT::Rela *P,
                                const DynamicReloc &Rel) {
   if (Config->IsRela)
-    P->r_addend = Rel.getAddend();
+    P->r_addend = Rel.computeAddend();
   P->r_offset = Rel.getOffset();
   P->setSymbolAndType(Rel.getSymIndex(), Rel.Type, Config->IsMips64EL);
 }
@@ -1451,31 +1447,21 @@ RelocationSection<ELFT>::RelocationSection(StringRef Name, bool Sort)
   this->Entsize = Config->IsRela ? sizeof(Elf_Rela) : sizeof(Elf_Rel);
 }
 
-template <class ELFT, class RelTy>
-static bool compRelocations(const RelTy &A, const RelTy &B) {
-  bool AIsRel = A.getType(Config->IsMips64EL) == Target->RelativeRel;
-  bool BIsRel = B.getType(Config->IsMips64EL) == Target->RelativeRel;
+static bool compRelocations(const DynamicReloc &A, const DynamicReloc &B) {
+  bool AIsRel = A.Type == Target->RelativeRel;
+  bool BIsRel = B.Type == Target->RelativeRel;
   if (AIsRel != BIsRel)
     return AIsRel;
-
-  return A.getSymbol(Config->IsMips64EL) < B.getSymbol(Config->IsMips64EL);
+  return A.getSymIndex() < B.getSymIndex();
 }
 
 template <class ELFT> void RelocationSection<ELFT>::writeTo(uint8_t *Buf) {
-  uint8_t *BufBegin = Buf;
+  if (Sort)
+    std::stable_sort(Relocs.begin(), Relocs.end(), compRelocations);
+
   for (const DynamicReloc &Rel : Relocs) {
     encodeDynamicReloc<ELFT>(reinterpret_cast<Elf_Rela *>(Buf), Rel);
     Buf += Config->IsRela ? sizeof(Elf_Rela) : sizeof(Elf_Rel);
-  }
-
-  if (Sort) {
-    if (Config->IsRela)
-      std::stable_sort((Elf_Rela *)BufBegin,
-                       (Elf_Rela *)BufBegin + Relocs.size(),
-                       compRelocations<ELFT, Elf_Rela>);
-    else
-      std::stable_sort((Elf_Rel *)BufBegin, (Elf_Rel *)BufBegin + Relocs.size(),
-                       compRelocations<ELFT, Elf_Rel>);
   }
 }
 
@@ -2680,11 +2666,11 @@ static MergeSyntheticSection *createMergeSynthetic(StringRef Name,
   return make<MergeNoTailSection>(Name, Type, Flags, Alignment);
 }
 
-// Debug sections may be compressed by zlib. Uncompress if exists.
+// Debug sections may be compressed by zlib. Decompress if exists.
 void elf::decompressSections() {
   parallelForEach(InputSections, [](InputSectionBase *Sec) {
     if (Sec->Live)
-      Sec->maybeUncompress();
+      Sec->maybeDecompress();
   });
 }
 

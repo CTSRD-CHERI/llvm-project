@@ -56,6 +56,7 @@ if (NOT LLDB_DISABLE_PYTHON)
 
   add_subdirectory(scripts)
 endif ()
+
 add_subdirectory(source)
 add_subdirectory(tools)
 
@@ -63,8 +64,8 @@ option(LLDB_INCLUDE_TESTS "Generate build targets for the LLDB unit tests."
   ${LLVM_INCLUDE_TESTS})
 if(LLDB_INCLUDE_TESTS)
   if (TARGET clang)
-    set(LLDB_DEFAULT_TEST_C_COMPILER "${LLVM_BINARY_DIR}/bin/clang${CMAKE_EXECUTABLE_SUFFIX}")
-    set(LLDB_DEFAULT_TEST_CXX_COMPILER "${LLVM_BINARY_DIR}/bin/clang++${CMAKE_EXECUTABLE_SUFFIX}")
+    set(LLDB_DEFAULT_TEST_C_COMPILER "${LLVM_BINARY_DIR}/${CMAKE_CFG_INTDIR}/bin/clang${CMAKE_EXECUTABLE_SUFFIX}")
+    set(LLDB_DEFAULT_TEST_CXX_COMPILER "${LLVM_BINARY_DIR}/${CMAKE_CFG_INTDIR}/bin/clang++${CMAKE_EXECUTABLE_SUFFIX}")
   else()
     set(LLDB_DEFAULT_TEST_C_COMPILER "")
     set(LLDB_DEFAULT_TEST_CXX_COMPILER "")

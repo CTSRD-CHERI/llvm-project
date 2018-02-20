@@ -6,7 +6,7 @@
 
 # RUN: ld.lld -shared -o %t-linux.so %t-linux.o
 # RUN: llvm-readobj -r %t-linux.so | FileCheck -check-prefixes SHARED,SHARED-LINUX %s
-# RUN: llvm-objdump --section=.data -s %t-linux.so | FileCheck -check-prefix DATA-RELA %s
+# RUN: llvm-objdump --section=.data -s %t-linux.so | FileCheck -check-prefix DATA-REL %s
 
 # 32 bits
 # RUN: llvm-mc -filetype=obj -triple=mips-unknown-freebsd %s -o %t-freebsd32.o
@@ -20,7 +20,6 @@
 # RUN: llvm-readobj -r %t-freebsd32.so | FileCheck -check-prefixes SHARED,SHARED-FREEBSD32 %s
 # RUN: llvm-objdump --section=.data -s %t-freebsd32.so | FileCheck -check-prefix DATA-REL %s
 
-# Same now for freebsd MIPS 64 bits where we change input RELA to output REL
 # RUN: llvm-mc -filetype=obj -triple=mips64-unknown-freebsd %s -o %t-freebsd.o
 # RUN: llvm-objdump --section=.data -s %t-freebsd.o | FileCheck -check-prefix DATA-RELA %s
 
@@ -44,8 +43,8 @@
 # SHARED-FREEBSD-NEXT:         0x10000 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE foo 0x0 (real addend unknown)
 # SHARED-FREEBSD32-NEXT: Section (7) .rel.dyn {
 # SHARED-FREEBSD32-NEXT:       0x10000 R_MIPS_REL32 foo 0x0 (real addend unknown)
-# SHARED-LINUX-NEXT:   Section (7) .rela.dyn {
-# SHARED-LINUX-NEXT:           0x10000 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE foo 0x10
+# SHARED-LINUX-NEXT:   Section (7) .rel.dyn {
+# SHARED-LINUX-NEXT:           0x10000 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE foo 0x0 (real addend unknown)
 # SHARED-NEXT:         }
 # SHARED-NEXT: ]
 

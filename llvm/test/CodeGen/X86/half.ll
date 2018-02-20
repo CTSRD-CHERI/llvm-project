@@ -75,7 +75,7 @@ define float @test_extend32(half* %addr) #0 {
 ; CHECK-LIBCALL-LABEL: test_extend32:
 ; CHECK-LIBCALL:       # %bb.0:
 ; CHECK-LIBCALL-NEXT:    movzwl (%rdi), %edi
-; CHECK-LIBCALL-NEXT:    jmp __gnu_h2f_ieee@PLT # TAILCALL
+; CHECK-LIBCALL-NEXT:    jmp __gnu_h2f_ieee # TAILCALL
 ;
 ; BWON-F16C-LABEL: test_extend32:
 ; BWON-F16C:       # %bb.0:
@@ -777,7 +777,7 @@ define void @test_trunc64_vec4(<4 x double> %a, <4 x half>* %p) #0 {
 ; BWON-F16C-NEXT:    callq __truncdfhf2
 ; BWON-F16C-NEXT:    movl %eax, %r15d
 ; BWON-F16C-NEXT:    vmovups {{[0-9]+}}(%rsp), %ymm0 # 32-byte Reload
-; BWON-F16C-NEXT:    # kill: def %xmm0 killed %xmm0 killed %ymm0
+; BWON-F16C-NEXT:    # kill: def $xmm0 killed $xmm0 killed $ymm0
 ; BWON-F16C-NEXT:    vzeroupper
 ; BWON-F16C-NEXT:    callq __truncdfhf2
 ; BWON-F16C-NEXT:    movl %eax, %ebp

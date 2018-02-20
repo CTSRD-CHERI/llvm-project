@@ -28,6 +28,7 @@ def errorlimit : P<"errorlimit",
 def export  : P<"export", "Export a function">;
 // No help text because /failifmismatch is not intended to be used by the user.
 def failifmismatch : P<"failifmismatch", "">;
+def guard   : P<"guard", "Control flow guard">;
 def heap    : P<"heap", "Size of the heap">;
 def ignore : P<"ignore", "Specify warning codes to ignore">;
 def implib  : P<"implib", "Import library name">;
@@ -103,6 +104,9 @@ defm fixed : B<"fixed", "Disable base relocations",
 defm highentropyva : B<"highentropyva",
                        "Enable 64-bit ASLR (default on 64-bit)",
                        "Disable 64-bit ASLR">;
+defm incremental : B<"incremental",
+                     "Keep original import library if contents are unchanged",
+                     "Replace import library file even if contents are unchanged">;
 defm largeaddressaware : B<"largeaddressaware",
                            "Enable large addresses (default on 64-bit)",
                            "Disable large addresses (default on 32-bit)">;
@@ -148,8 +152,6 @@ multiclass QB<string name> {
 
 def functionpadmin : F<"functionpadmin">;
 def ignoreidl : F<"ignoreidl">;
-def incremental : F<"incremental">;
-def no_incremental : F<"incremental:no">;
 def nologo : F<"nologo">;
 def throwingnew : F<"throwingnew">;
 def editandcontinue : F<"editandcontinue">;

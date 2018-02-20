@@ -23,6 +23,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/IPO.h"
 #include "llvm/Transforms/IPO/FunctionAttrs.h"
+#include "llvm/Transforms/IPO/FunctionImport.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
 using namespace llvm;
@@ -169,46 +170,17 @@ void simplifyExternals(Module &M) {
   }
 }
 
-void filterModule(
-    Module *M, function_ref<bool(const GlobalValue *)> ShouldKeepDefinition) {
-  for (Module::alias_iterator I = M->alias_begin(), E = M->alias_end();
-       I != E;) {
-    GlobalAlias *GA = &*I++;
-    if (ShouldKeepDefinition(GA))
-      continue;
+static void
+filterModule(Module *M,
+             function_ref<bool(const GlobalValue *)> ShouldKeepDefinition) {
+  std::vector<GlobalValue *> V;
+  for (GlobalValue &GV : M->global_values())
+    if (!ShouldKeepDefinition(&GV))
+      V.push_back(&GV);
 
-    GlobalObject *GO;
-    if (GA->getValueType()->isFunctionTy())
-      GO = Function::Create(cast<FunctionType>(GA->getValueType()),
-                            GlobalValue::ExternalLinkage, "", M);
-    else
-      GO = new GlobalVariable(
-          *M, GA->getValueType(), false, GlobalValue::ExternalLinkage,
-          nullptr, "", nullptr,
-          GA->getThreadLocalMode(), GA->getType()->getAddressSpace());
-    GO->takeName(GA);
-    GA->replaceAllUsesWith(GO);
-    GA->eraseFromParent();
-  }
-
-  for (Function &F : *M) {
-    if (ShouldKeepDefinition(&F))
-      continue;
-
-    F.deleteBody();
-    F.setComdat(nullptr);
-    F.clearMetadata();
-  }
-
-  for (GlobalVariable &GV : M->globals()) {
-    if (ShouldKeepDefinition(&GV))
-      continue;
-
-    GV.setInitializer(nullptr);
-    GV.setLinkage(GlobalValue::ExternalLinkage);
-    GV.setComdat(nullptr);
-    GV.clearMetadata();
-  }
+  for (GlobalValue *GV : V)
+    if (!convertToDeclaration(*GV))
+      GV->eraseFromParent();
 }
 
 void forEachVirtualFunction(Constant *C, function_ref<void(Function *)> Fn) {
@@ -230,11 +202,11 @@ void splitAndWriteThinLTOBitcode(
   if (ModuleId.empty()) {
     // We couldn't generate a module ID for this module, just write it out as a
     // regular LTO module.
-    WriteBitcodeToFile(&M, OS);
+    WriteBitcodeToFile(M, OS);
     if (ThinLinkOS)
       // We don't have a ThinLTO part, but still write the module to the
       // ThinLinkOS if requested so that the expected output file is produced.
-      WriteBitcodeToFile(&M, *ThinLinkOS);
+      WriteBitcodeToFile(M, *ThinLinkOS);
     return;
   }
 
@@ -287,7 +259,7 @@ void splitAndWriteThinLTOBitcode(
 
   ValueToValueMapTy VMap;
   std::unique_ptr<Module> MergedM(
-      CloneModule(&M, VMap, [&](const GlobalValue *GV) -> bool {
+      CloneModule(M, VMap, [&](const GlobalValue *GV) -> bool {
         if (const auto *C = GV->getComdat())
           if (MergedMComdats.count(C))
             return true;
@@ -298,6 +270,7 @@ void splitAndWriteThinLTOBitcode(
         return false;
       }));
   StripDebugInfo(*MergedM);
+  MergedM->setModuleInlineAsm("");
 
   for (Function &F : *MergedM)
     if (!F.isDeclaration()) {
@@ -401,10 +374,9 @@ void splitAndWriteThinLTOBitcode(
   // be used in the backends, and use that in the minimized bitcode
   // produced for the full link.
   ModuleHash ModHash = {{0}};
-  W.writeModule(&M, /*ShouldPreserveUseListOrder=*/false, &Index,
+  W.writeModule(M, /*ShouldPreserveUseListOrder=*/false, &Index,
                 /*GenerateHash=*/true, &ModHash);
-  W.writeModule(MergedM.get(), /*ShouldPreserveUseListOrder=*/false,
-                &MergedMIndex);
+  W.writeModule(*MergedM, /*ShouldPreserveUseListOrder=*/false, &MergedMIndex);
   W.writeSymtab();
   W.writeStrtab();
   OS << Buffer;
@@ -416,8 +388,8 @@ void splitAndWriteThinLTOBitcode(
     Buffer.clear();
     BitcodeWriter W2(Buffer);
     StripDebugInfo(M);
-    W2.writeThinLinkBitcode(&M, Index, ModHash);
-    W2.writeModule(MergedM.get(), /*ShouldPreserveUseListOrder=*/false,
+    W2.writeThinLinkBitcode(M, Index, ModHash);
+    W2.writeModule(*MergedM, /*ShouldPreserveUseListOrder=*/false,
                    &MergedMIndex);
     W2.writeSymtab();
     W2.writeStrtab();
@@ -450,13 +422,13 @@ void writeThinLTOBitcode(raw_ostream &OS, raw_ostream *ThinLinkOS,
   // be used in the backends, and use that in the minimized bitcode
   // produced for the full link.
   ModuleHash ModHash = {{0}};
-  WriteBitcodeToFile(&M, OS, /*ShouldPreserveUseListOrder=*/false, Index,
+  WriteBitcodeToFile(M, OS, /*ShouldPreserveUseListOrder=*/false, Index,
                      /*GenerateHash=*/true, &ModHash);
   // If a minimized bitcode module was requested for the thin link, only
   // the information that is needed by thin link will be written in the
   // given OS.
   if (ThinLinkOS && Index)
-    WriteThinLinkBitcodeToFile(&M, *ThinLinkOS, *Index, ModHash);
+    WriteThinLinkBitcodeToFile(M, *ThinLinkOS, *Index, ModHash);
 }
 
 class WriteThinLTOBitcode : public ModulePass {

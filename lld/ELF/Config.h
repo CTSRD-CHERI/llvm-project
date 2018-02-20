@@ -89,12 +89,12 @@ struct Configuration {
   llvm::StringRef MapFile;
   llvm::StringRef OutputFile;
   llvm::StringRef OptRemarksFilename;
+  llvm::StringRef ProgName;
   llvm::StringRef SoName;
   llvm::StringRef Sysroot;
   llvm::StringRef ThinLTOCacheDir;
   std::string Rpath;
   std::vector<VersionDefinition> VersionDefinitions;
-  std::vector<llvm::StringRef> Argv;
   std::vector<llvm::StringRef> AuxiliaryList;
   std::vector<llvm::StringRef> FilterList;
   std::vector<llvm::StringRef> SearchPaths;
@@ -113,6 +113,7 @@ struct Configuration {
   bool AsNeeded = false;
   bool Bsymbolic;
   bool BsymbolicFunctions;
+  bool CheckSections;
   bool CompressDebugSections;
   bool DefineCommon;
   bool Demangle = true;
@@ -125,6 +126,7 @@ struct Configuration {
   bool GcSections;
   bool GdbIndex;
   bool GnuHash = false;
+  bool GnuUnique;
   bool HasDynamicList = false;
   bool HasDynSymTab;
   bool ICF;
@@ -132,8 +134,6 @@ struct Configuration {
   bool IgnoreFunctionAddressEquality;
   bool MergeArmExidx;
   bool MipsN32Abi = false;
-  bool NoGnuUnique;
-  bool NoUndefinedVersion;
   bool NoinhibitExec;
   bool Nostdlib;
   bool OFormatBinary;
@@ -141,6 +141,7 @@ struct Configuration {
   bool OptRemarksWithHotness;
   bool Pie;
   bool PrintGcSections;
+  bool PrintIcfSections;
   bool ProcessCapRelocs = false;
   bool Relocatable;
   bool SaveTemps;
@@ -150,10 +151,12 @@ struct Configuration {
   bool SysvHash = false;
   bool Target1Rel;
   bool Trace;
-  bool Verbose;
+  bool UndefinedVersion;
   bool VerboseCapRelocs = false;
   bool WarnCommon;
   bool WarnMissingEntry;
+  bool WarnSymbolOrdering;
+  bool WriteAddends;
   bool ZCombreloc;
   bool ZExecstack;
   bool ZNocopyreloc;
@@ -165,7 +168,6 @@ struct Configuration {
   bool ZRodynamic;
   bool ZText;
   bool ZRetpolineplt;
-  bool ExitEarly;
   bool ZWxneeded;
   DiscardPolicy Discard;
   OrphanHandlingPolicy OrphanHandling;

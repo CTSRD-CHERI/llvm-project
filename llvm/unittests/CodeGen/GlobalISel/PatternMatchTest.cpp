@@ -91,9 +91,9 @@ registers:
   - { id: 3, class: _ }
 body: |
   bb.1:
-    %0(s64) = COPY %x0
-    %1(s64) = COPY %x1
-    %2(s64) = COPY %x2
+    %0(s64) = COPY $x0
+    %1(s64) = COPY $x1
+    %2(s64) = COPY $x2
 )MIR") + Twine(MIRFunc) + Twine("...\n"))
                             .toNullTerminatedStringRef(S);
   std::unique_ptr<MIRParser> MIR;
@@ -201,6 +201,33 @@ TEST(PatternMatchInstr, MatchBinaryOp) {
   match = mi_match(MIBSub->getOperand(0).getReg(), MRI,
                    m_GSub(m_ICst(Cst), m_Reg(Src0)));
   ASSERT_FALSE(match);
+
+  auto MIBFMul = B.buildInstr(TargetOpcode::G_FMUL, s64, Copies[0],
+                              B.buildConstant(s64, 42));
+  // Match and test commutativity for FMUL.
+  match = mi_match(MIBFMul->getOperand(0).getReg(), MRI,
+                   m_GFMul(m_ICst(Cst), m_Reg(Src0)));
+  ASSERT_TRUE(match);
+  ASSERT_EQ(Cst, (uint64_t)42);
+  ASSERT_EQ(Src0, Copies[0]);
+
+  // Build AND %0, %1
+  auto MIBAnd = B.buildAnd(s64, Copies[0], Copies[1]);
+  // Try to match AND.
+  match = mi_match(MIBAnd->getOperand(0).getReg(), MRI,
+                   m_GAnd(m_Reg(Src0), m_Reg(Src1)));
+  ASSERT_TRUE(match);
+  ASSERT_EQ(Src0, Copies[0]);
+  ASSERT_EQ(Src1, Copies[1]);
+
+  // Build OR %0, %1
+  auto MIBOr = B.buildOr(s64, Copies[0], Copies[1]);
+  // Try to match OR.
+  match = mi_match(MIBOr->getOperand(0).getReg(), MRI,
+                   m_GOr(m_Reg(Src0), m_Reg(Src1)));
+  ASSERT_TRUE(match);
+  ASSERT_EQ(Src0, Copies[0]);
+  ASSERT_EQ(Src1, Copies[1]);
 }
 
 TEST(PatternMatchInstr, MatchExtendsTrunc) {
@@ -273,15 +300,23 @@ TEST(PatternMatchInstr, MatchSpecificType) {
   MachineIRBuilder B(*MF);
   MachineRegisterInfo &MRI = MF->getRegInfo();
   B.setInsertPt(*EntryMBB, EntryMBB->end());
+
+  // Try to match a 64bit add.
   LLT s64 = LLT::scalar(64);
   LLT s32 = LLT::scalar(32);
   auto MIBAdd = B.buildAdd(s64, Copies[0], Copies[1]);
-
-  // Try to match a 64bit add.
   ASSERT_FALSE(mi_match(MIBAdd->getOperand(0).getReg(), MRI,
                         m_GAdd(m_SpecificType(s32), m_Reg())));
   ASSERT_TRUE(mi_match(MIBAdd->getOperand(0).getReg(), MRI,
                        m_GAdd(m_SpecificType(s64), m_Reg())));
+
+  // Try to match the destination type of a bitcast.
+  LLT v2s32 = LLT::vector(2, 32);
+  auto MIBCast = B.buildCast(v2s32, Copies[0]);
+  ASSERT_TRUE(
+      mi_match(MIBCast->getOperand(0).getReg(), MRI, m_SpecificType(v2s32)));
+  ASSERT_TRUE(
+      mi_match(MIBCast->getOperand(1).getReg(), MRI, m_SpecificType(s64)));
 }
 
 TEST(PatternMatchInstr, MatchCombinators) {

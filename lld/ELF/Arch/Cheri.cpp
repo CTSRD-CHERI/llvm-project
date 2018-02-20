@@ -248,7 +248,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
   }
 
   // assert(CapabilityOffset >= 0 && "Negative offsets not supported");
-  if (Config->Verbose && CapabilityOffset < 0)
+  if (errorHandler().Verbose && CapabilityOffset < 0)
     message("global capability offset " + Twine(CapabilityOffset) +
             " is less than 0:\n>>> Location: " + Loc.toString() +
             "\n>>> Target: " + Target.verboseToString<ELFT>());
@@ -366,7 +366,7 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &Location,
     }
     // TODO: are there any other cases that can be ignored?
 
-    if (WarnAboutUnknownSize || Config->Verbose) {
+    if (WarnAboutUnknownSize || errorHandler().Verbose) {
       std::string Msg = "could not determine size of cap reloc against " +
                         Reloc.Target.verboseToString<ELFT>() +
                         "\n>>> referenced by " + Location.toString();
@@ -445,7 +445,7 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
     InMemoryCapRelocEntry<E> Entry{LocationVA, TargetVA, TargetOffset,
                                    TargetSize, Permissions};
     memcpy(Buf + Offset, &Entry, sizeof(Entry));
-    //     if (Config->Verbose) {
+    //     if (errorHandler().Verbose) {
     //       errs() << "Added capability reloc: loc=" << utohexstr(LocationVA)
     //              << ", object=" << utohexstr(TargetVA)
     //              << ", offset=" << utohexstr(TargetOffset)
