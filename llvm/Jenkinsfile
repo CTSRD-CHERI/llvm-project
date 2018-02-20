@@ -60,7 +60,7 @@ def doBuild() {
     def lldRepo = null
     String llvmBranch = env.BRANCH_NAME
     String clangBranch = llvmBranch
-    String lldBranch = llvmBranch == 'cap-table' ? 'dev' : llvmBranch
+    String lldBranch = llvmBranch == 'cap-table' ? 'master' : llvmBranch
     stage("Checkout sources") {
         timestamps {
             echo("scm=${scm}")
