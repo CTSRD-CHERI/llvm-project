@@ -9,6 +9,9 @@
 
 #include "SymbolCollector.h"
 #include "../CodeCompletionStrings.h"
+#include "../Logger.h"
+#include "../URI.h"
+#include "CanonicalIncludes.h"
 #include "clang/AST/DeclCXX.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/Basic/SourceManager.h"
@@ -22,14 +25,17 @@ namespace clang {
 namespace clangd {
 
 namespace {
-// Make the Path absolute using the current working directory of the given
-// SourceManager if the Path is not an absolute path. If failed, this combine
-// relative paths with \p FallbackDir to get an absolute path.
+// Returns a URI of \p Path. Firstly, this makes the \p Path absolute using the
+// current working directory of the given SourceManager if the Path is not an
+// absolute path. If failed, this resolves relative paths against \p FallbackDir
+// to get an absolute path. Then, this tries creating an URI for the absolute
+// path with schemes specified in \p Opts. This returns an URI with the first
+// working scheme, if there is any; otherwise, this returns None.
 //
 // The Path can be a path relative to the build directory, or retrieved from
 // the SourceManager.
-std::string makeAbsolutePath(const SourceManager &SM, StringRef Path,
-                             StringRef FallbackDir) {
+llvm::Optional<std::string> toURI(const SourceManager &SM, StringRef Path,
+                                  const SymbolCollector::Options &Opts) {
   llvm::SmallString<128> AbsolutePath(Path);
   if (std::error_code EC =
           SM.getFileManager().getVirtualFileSystem()->makeAbsolute(
@@ -56,11 +62,21 @@ std::string makeAbsolutePath(const SourceManager &SM, StringRef Path,
                               llvm::sys::path::filename(AbsolutePath.str()));
       AbsolutePath = AbsoluteFilename;
     }
-  } else if (!FallbackDir.empty()) {
-    llvm::sys::fs::make_absolute(FallbackDir, AbsolutePath);
+  } else if (!Opts.FallbackDir.empty()) {
+    llvm::sys::fs::make_absolute(Opts.FallbackDir, AbsolutePath);
     llvm::sys::path::remove_dots(AbsolutePath, /*remove_dot_dot=*/true);
   }
-  return AbsolutePath.str();
+
+  std::string ErrMsg;
+  for (const auto &Scheme : Opts.URISchemes) {
+    auto U = URI::create(AbsolutePath, Scheme);
+    if (U)
+      return U->toString();
+    ErrMsg += llvm::toString(U.takeError()) + "\n";
+  }
+  log(llvm::Twine("Failed to create an URI for file ") + AbsolutePath + ": " +
+      ErrMsg);
+  return llvm::None;
 }
 
 // "a::b::c", return {"a::b::", "c"}. Scope is empty if there's no qualifier.
@@ -97,8 +113,8 @@ bool shouldFilterDecl(const NamedDecl *ND, ASTContext *ASTCtx,
   //   * symbols in namespaces or translation unit scopes (e.g. no class
   //     members)
   //   * enum constants in unscoped enum decl (e.g. "red" in "enum {red};")
-  auto InTopLevelScope =
-      hasDeclContext(anyOf(namespaceDecl(), translationUnitDecl()));
+  auto InTopLevelScope = hasDeclContext(
+      anyOf(namespaceDecl(), translationUnitDecl(), linkageSpecDecl()));
   if (match(decl(allOf(Opts.IndexMainFiles
                            ? decl()
                            : decl(unless(isExpansionInMainFile())),
@@ -110,6 +126,88 @@ bool shouldFilterDecl(const NamedDecl *ND, ASTContext *ASTCtx,
     return true;
 
   return false;
+}
+
+// We only collect #include paths for symbols that are suitable for global code
+// completion, except for namespaces since #include path for a namespace is hard
+// to define.
+bool shouldCollectIncludePath(index::SymbolKind Kind) {
+  using SK = index::SymbolKind;
+  switch (Kind) {
+  case SK::Macro:
+  case SK::Enum:
+  case SK::Struct:
+  case SK::Class:
+  case SK::Union:
+  case SK::TypeAlias:
+  case SK::Using:
+  case SK::Function:
+  case SK::Variable:
+  case SK::EnumConstant:
+    return true;
+  default:
+    return false;
+  }
+}
+
+/// Gets a canonical include (<header>  or "header") for header of \p Loc.
+/// Returns None if the header has no canonical include.
+/// FIXME: we should handle .inc files whose symbols are expected be exported by
+/// their containing headers.
+llvm::Optional<std::string>
+getIncludeHeader(const SourceManager &SM, SourceLocation Loc,
+                 const SymbolCollector::Options &Opts) {
+  llvm::StringRef FilePath = SM.getFilename(Loc);
+  if (FilePath.empty())
+    return llvm::None;
+  if (Opts.Includes) {
+    llvm::StringRef Mapped = Opts.Includes->mapHeader(FilePath);
+    if (Mapped != FilePath)
+      return (Mapped.startswith("<") || Mapped.startswith("\""))
+                 ? Mapped.str()
+                 : ("\"" + Mapped + "\"").str();
+  }
+  // If the header path is the same as the file path of the declaration, we skip
+  // storing the #include path; users can use the URI in declaration location to
+  // calculate the #include path.
+  return llvm::None;
+}
+
+// Return the symbol location of the given declaration `D`.
+//
+// For symbols defined inside macros:
+//   * use expansion location, if the symbol is formed via macro concatenation.
+//   * use spelling location, otherwise.
+llvm::Optional<SymbolLocation>
+getSymbolLocation(const NamedDecl &D, SourceManager &SM,
+                  const SymbolCollector::Options &Opts,
+                  const clang::LangOptions& LangOpts,
+                  std::string &FileURIStorage) {
+  SourceLocation SpellingLoc = SM.getSpellingLoc(D.getLocation());
+  if (D.getLocation().isMacroID()) {
+    std::string PrintLoc = SpellingLoc.printToString(SM);
+    if (llvm::StringRef(PrintLoc).startswith("<scratch") ||
+        llvm::StringRef(PrintLoc).startswith("<command line>")) {
+      // We use the expansion location for the following symbols, as spelling
+      // locations of these symbols are not interesting to us:
+      //   * symbols formed via macro concatenation, the spelling location will
+      //     be "<scratch space>"
+      //   * symbols controlled and defined by a compile command-line option
+      //     `-DName=foo`, the spelling location will be "<command line>".
+      SpellingLoc = SM.getExpansionRange(D.getLocation()).first;
+    }
+  }
+
+  auto U = toURI(SM, SM.getFilename(SpellingLoc), Opts);
+  if (!U)
+    return llvm::None;
+  FileURIStorage = std::move(*U);
+  SymbolLocation Result;
+  Result.FileURI = FileURIStorage;
+  Result.StartOffset = SM.getFileOffset(SpellingLoc);
+  Result.EndOffset = Result.StartOffset + clang::Lexer::MeasureTokenLength(
+                                              SpellingLoc, SM, LangOpts);
+  return std::move(Result);
 }
 
 } // namespace
@@ -145,54 +243,96 @@ bool SymbolCollector::handleDeclOccurence(
       return true;
 
     auto ID = SymbolID(USR);
-    if (Symbols.find(ID) != nullptr)
-      return true;
-
-    auto &SM = ND->getASTContext().getSourceManager();
-    std::string FilePath = makeAbsolutePath(
-        SM, SM.getFilename(D->getLocation()), Opts.FallbackDir);
-    SymbolLocation Location = {FilePath, SM.getFileOffset(D->getLocStart()),
-                               SM.getFileOffset(D->getLocEnd())};
-    std::string QName = ND->getQualifiedNameAsString();
-
-    Symbol S;
-    S.ID = std::move(ID);
-    std::tie(S.Scope, S.Name) = splitQualifiedName(QName);
-    S.SymInfo = index::getSymbolInfo(D);
-    S.CanonicalDeclaration = Location;
-
-    // Add completion info.
-    assert(ASTCtx && PP.get() && "ASTContext and Preprocessor must be set.");
-    CodeCompletionResult SymbolCompletion(ND, 0);
-    const auto *CCS = SymbolCompletion.CreateCodeCompletionString(
-        *ASTCtx, *PP, CodeCompletionContext::CCC_Name, *CompletionAllocator,
-        *CompletionTUInfo,
-        /*IncludeBriefComments*/ true);
-    std::string Label;
-    std::string SnippetInsertText;
-    std::string IgnoredLabel;
-    std::string PlainInsertText;
-    getLabelAndInsertText(*CCS, &Label, &SnippetInsertText,
-                          /*EnableSnippets=*/true);
-    getLabelAndInsertText(*CCS, &IgnoredLabel, &PlainInsertText,
-                          /*EnableSnippets=*/false);
-    std::string FilterText = getFilterText(*CCS);
-    std::string Documentation = getDocumentation(*CCS);
-    std::string CompletionDetail = getDetail(*CCS);
-
-    S.CompletionFilterText = FilterText;
-    S.CompletionLabel = Label;
-    S.CompletionPlainInsertText = PlainInsertText;
-    S.CompletionSnippetInsertText = SnippetInsertText;
-    Symbol::Details Detail;
-    Detail.Documentation = Documentation;
-    Detail.CompletionDetail = CompletionDetail;
-    S.Detail = &Detail;
-
-    Symbols.insert(S);
+    const Symbol* BasicSymbol = Symbols.find(ID);
+    if (!BasicSymbol) // Regardless of role, ND is the canonical declaration.
+      BasicSymbol = addDeclaration(*ND, std::move(ID));
+    if (Roles & static_cast<unsigned>(index::SymbolRole::Definition))
+      addDefinition(*cast<NamedDecl>(ASTNode.OrigD), *BasicSymbol);
   }
-
   return true;
+}
+
+const Symbol *SymbolCollector::addDeclaration(const NamedDecl &ND,
+                                              SymbolID ID) {
+  auto &SM = ND.getASTContext().getSourceManager();
+
+  std::string QName;
+  llvm::raw_string_ostream OS(QName);
+  PrintingPolicy Policy(ASTCtx->getLangOpts());
+  // Note that inline namespaces are treated as transparent scopes. This
+  // reflects the way they're most commonly used for lookup. Ideally we'd
+  // include them, but at query time it's hard to find all the inline
+  // namespaces to query: the preamble doesn't have a dedicated list.
+  Policy.SuppressUnwrittenScope = true;
+  ND.printQualifiedName(OS, Policy);
+  OS.flush();
+
+  Symbol S;
+  S.ID = std::move(ID);
+  std::tie(S.Scope, S.Name) = splitQualifiedName(QName);
+  S.SymInfo = index::getSymbolInfo(&ND);
+  std::string FileURI;
+  // FIXME: we may want a different "canonical" heuristic than clang chooses.
+  // Clang seems to choose the first, which may not have the most information.
+  if (auto DeclLoc =
+          getSymbolLocation(ND, SM, Opts, ASTCtx->getLangOpts(), FileURI))
+    S.CanonicalDeclaration = *DeclLoc;
+
+  // Add completion info.
+  // FIXME: we may want to choose a different redecl, or combine from several.
+  assert(ASTCtx && PP.get() && "ASTContext and Preprocessor must be set.");
+  CodeCompletionResult SymbolCompletion(&ND, 0);
+  const auto *CCS = SymbolCompletion.CreateCodeCompletionString(
+      *ASTCtx, *PP, CodeCompletionContext::CCC_Name, *CompletionAllocator,
+      *CompletionTUInfo,
+      /*IncludeBriefComments*/ true);
+  std::string Label;
+  std::string SnippetInsertText;
+  std::string IgnoredLabel;
+  std::string PlainInsertText;
+  getLabelAndInsertText(*CCS, &Label, &SnippetInsertText,
+                        /*EnableSnippets=*/true);
+  getLabelAndInsertText(*CCS, &IgnoredLabel, &PlainInsertText,
+                        /*EnableSnippets=*/false);
+  std::string FilterText = getFilterText(*CCS);
+  std::string Documentation = getDocumentation(*CCS);
+  std::string CompletionDetail = getDetail(*CCS);
+
+  std::string Include;
+  if (Opts.CollectIncludePath && shouldCollectIncludePath(S.SymInfo.Kind)) {
+    // Use the expansion location to get the #include header since this is
+    // where the symbol is exposed.
+    if (auto Header =
+            getIncludeHeader(SM, SM.getExpansionLoc(ND.getLocation()), Opts))
+      Include = std::move(*Header);
+  }
+  S.CompletionFilterText = FilterText;
+  S.CompletionLabel = Label;
+  S.CompletionPlainInsertText = PlainInsertText;
+  S.CompletionSnippetInsertText = SnippetInsertText;
+  Symbol::Details Detail;
+  Detail.Documentation = Documentation;
+  Detail.CompletionDetail = CompletionDetail;
+  Detail.IncludeHeader = Include;
+  S.Detail = &Detail;
+
+  Symbols.insert(S);
+  return Symbols.find(S.ID);
+}
+
+void SymbolCollector::addDefinition(const NamedDecl &ND,
+                                    const Symbol &DeclSym) {
+  if (DeclSym.Definition)
+    return;
+  // If we saw some forward declaration, we end up copying the symbol.
+  // This is not ideal, but avoids duplicating the "is this a definition" check
+  // in clang::index. We should only see one definition.
+  Symbol S = DeclSym;
+  std::string FileURI;
+  if (auto DefLoc = getSymbolLocation(ND, ND.getASTContext().getSourceManager(),
+                                      Opts, ASTCtx->getLangOpts(), FileURI))
+    S.Definition = *DefLoc;
+  Symbols.insert(S);
 }
 
 } // namespace clangd

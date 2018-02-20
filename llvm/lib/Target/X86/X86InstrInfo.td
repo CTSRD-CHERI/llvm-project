@@ -281,6 +281,8 @@ def X86lock_dec  : SDNode<"X86ISD::LDEC",  SDTLockUnaryArithWithFlags,
                           [SDNPHasChain, SDNPMayStore, SDNPMayLoad,
                            SDNPMemOperand]>;
 
+def X86bextr  : SDNode<"X86ISD::BEXTR",  SDTIntBinOp>;
+
 def X86mul_imm : SDNode<"X86ISD::MUL_IMM", SDTIntBinOp>;
 
 def X86WinAlloca : SDNode<"X86ISD::WIN_ALLOCA", SDT_X86WIN_ALLOCA,
@@ -1028,6 +1030,17 @@ def i64immZExt32SExt8 : ImmLeaf<i64, [{
 }]>;
 
 // Helper fragments for loads.
+
+// It's safe to fold a zextload/extload from i1 as a regular i8 load. The
+// upper bits are guaranteed to be zero and we were going to emit a MOV8rm
+// which might get folded during peephole anyway.
+def loadi8 : PatFrag<(ops node:$ptr), (i8 (unindexedload node:$ptr)), [{
+  LoadSDNode *LD = cast<LoadSDNode>(N);
+  ISD::LoadExtType ExtType = LD->getExtensionType();
+  return ExtType == ISD::NON_EXTLOAD || ExtType == ISD::EXTLOAD ||
+         ExtType == ISD::ZEXTLOAD;
+}]>;
+
 // It's always safe to treat a anyext i16 load as a i32 load if the i16 is
 // known to be 32-bit aligned or better. Ditto for i8 to i16.
 def loadi16 : PatFrag<(ops node:$ptr), (i16 (unindexedload node:$ptr)), [{
@@ -1058,7 +1071,6 @@ def loadi32 : PatFrag<(ops node:$ptr), (i32 (unindexedload node:$ptr)), [{
   return false;
 }]>;
 
-def loadi8   : PatFrag<(ops node:$ptr), (i8  (load node:$ptr))>;
 def loadi64  : PatFrag<(ops node:$ptr), (i64 (load node:$ptr))>;
 def loadf32  : PatFrag<(ops node:$ptr), (f32 (load node:$ptr))>;
 def loadf64  : PatFrag<(ops node:$ptr), (f64 (load node:$ptr))>;
@@ -1526,7 +1538,7 @@ let Defs = [EAX] in
 def MOV32ao16 : Ii16<0xA1, RawFrmMemOffs, (outs), (ins offset16_32:$src),
                      "mov{l}\t{$src, %eax|eax, $src}", [], IIC_MOV_MEM>,
                      AdSize16, OpSize32;
-}
+} // mayLoad
 let mayStore = 1 in {
 let Uses = [AL] in
 def MOV8o32a : Ii32<0xA2, RawFrmMemOffs, (outs), (ins offset32_8:$dst),
@@ -1555,8 +1567,7 @@ let Uses = [EAX] in
 def MOV32o16a : Ii16<0xA3, RawFrmMemOffs, (outs), (ins offset16_32:$dst),
                      "mov{l}\t{%eax, $dst|$dst, eax}", [], IIC_MOV_MEM>,
                      OpSize32, AdSize16;
-}
-}
+} // mayStore
 
 // These forms all have full 64-bit absolute addresses in their instructions
 // and use the movabs mnemonic to indicate this specific form.
@@ -1577,7 +1588,7 @@ let Defs = [RAX] in
 def MOV64ao64 : RIi64<0xA1, RawFrmMemOffs, (outs), (ins offset64_64:$src),
                      "movabs{q}\t{$src, %rax|rax, $src}", [], IIC_MOV_MEM>,
                      AdSize64;
-}
+} // mayLoad
 
 let mayStore = 1 in {
 let Uses = [AL] in
@@ -1596,7 +1607,8 @@ let Uses = [RAX] in
 def MOV64o64a : RIi64<0xA3, RawFrmMemOffs, (outs), (ins offset64_64:$dst),
                      "movabs{q}\t{%rax, $dst|$dst, rax}", [], IIC_MOV_MEM>,
                      AdSize64;
-}
+} // mayStore
+} // SchedRW
 } // hasSideEffects = 0
 
 let isCodeGenOnly = 1, ForceDisassemble = 1, hasSideEffects = 0,
@@ -2156,11 +2168,12 @@ def DAS : I<0x2F, RawFrm, (outs), (ins), "das", [], IIC_DAS>,
 
 let SchedRW = [WriteSystem] in {
 // Check Array Index Against Bounds
+// Note: "bound" does not have reversed operands in at&t syntax.
 def BOUNDS16rm : I<0x62, MRMSrcMem, (outs GR16:$dst), (ins i16mem:$src),
-                   "bound\t{$src, $dst|$dst, $src}", [], IIC_BOUND>, OpSize16,
+                   "bound\t$dst, $src", [], IIC_BOUND>, OpSize16,
                    Requires<[Not64BitMode]>;
 def BOUNDS32rm : I<0x62, MRMSrcMem, (outs GR32:$dst), (ins i32mem:$src),
-                   "bound\t{$src, $dst|$dst, $src}", [], IIC_BOUND>, OpSize32,
+                   "bound\t$dst, $src", [], IIC_BOUND>, OpSize32,
                    Requires<[Not64BitMode]>;
 
 // Adjust RPL Field of Segment Selector
@@ -2394,7 +2407,7 @@ def BEXTRMaskXForm : SDNodeXForm<imm, [{
 }]>;
 
 def AndMask64 : ImmLeaf<i64, [{
-  return isMask_64(Imm) && Imm > UINT32_MAX;
+  return isMask_64(Imm) && !isUInt<32>(Imm);
 }]>;
 
 // Use BEXTR for 64-bit 'and' with large immediate 'mask'.
@@ -2526,7 +2539,7 @@ defm BEXTRI64 : tbm_ternary_imm_intr<0x10, GR64, "bextr{q}", i64mem, loadi64,
 
 multiclass tbm_binary_rm<bits<8> opc, Format FormReg, Format FormMem,
                          RegisterClass RC, string OpcodeStr,
-                         X86MemOperand x86memop, PatFrag ld_frag> {
+                         X86MemOperand x86memop> {
 let hasSideEffects = 0 in {
   def rr : I<opc,  FormReg, (outs RC:$dst), (ins RC:$src),
              !strconcat(OpcodeStr,"\t{$src, $dst|$dst, $src}"),
@@ -2541,9 +2554,9 @@ let hasSideEffects = 0 in {
 multiclass tbm_binary_intr<bits<8> opc, string OpcodeStr,
                            Format FormReg, Format FormMem> {
   defm NAME#32 : tbm_binary_rm<opc, FormReg, FormMem, GR32, OpcodeStr#"{l}",
-                               i32mem, loadi32>;
+                               i32mem>;
   defm NAME#64 : tbm_binary_rm<opc, FormReg, FormMem, GR64, OpcodeStr#"{q}",
-                               i64mem, loadi64>, VEX_W;
+                               i64mem>, VEX_W;
 }
 
 defm BLCFILL : tbm_binary_intr<0x01, "blcfill", MRM1r, MRM1m>;
@@ -3159,15 +3172,15 @@ def : InstAlias<"imul{q}\t{$imm, $r|$r, $imm}", (IMUL64rri8 GR64:$r, GR64:$r, i6
 
 // ins aliases. Accept the mnemonic suffix being omitted because it's implicit
 // in the destination.
-def : InstAlias<"ins\t{%dx, $dst|$dst, dx}", (INSB dstidx8:$dst),  0>;
-def : InstAlias<"ins\t{%dx, $dst|$dst, dx}", (INSW dstidx16:$dst),  0>;
-def : InstAlias<"ins\t{%dx, $dst|$dst, dx}", (INSL dstidx32:$dst),  0>;
+def : InstAlias<"ins{b}\t{%dx, $dst|$dst, dx}", (INSB dstidx8:$dst),  0>;
+def : InstAlias<"ins{w}\t{%dx, $dst|$dst, dx}", (INSW dstidx16:$dst),  0>;
+def : InstAlias<"ins{l}\t{%dx, $dst|$dst, dx}", (INSL dstidx32:$dst),  0>;
 
 // outs aliases. Accept the mnemonic suffix being omitted because it's implicit
 // in the source.
-def : InstAlias<"outs\t{$src, %dx|dx, $src}", (OUTSB srcidx8:$src),  0>;
-def : InstAlias<"outs\t{$src, %dx|dx, $src}", (OUTSW srcidx16:$src),  0>;
-def : InstAlias<"outs\t{$src, %dx|dx, $src}", (OUTSL srcidx32:$src),  0>;
+def : InstAlias<"outs{b}\t{$src, %dx|dx, $src}", (OUTSB srcidx8:$src),  0>;
+def : InstAlias<"outs{w}\t{$src, %dx|dx, $src}", (OUTSW srcidx16:$src),  0>;
+def : InstAlias<"outs{l}\t{$src, %dx|dx, $src}", (OUTSL srcidx32:$src),  0>;
 
 // inb %dx -> inb %al, %dx
 def : InstAlias<"inb\t{%dx|dx}", (IN8rr), 0>;

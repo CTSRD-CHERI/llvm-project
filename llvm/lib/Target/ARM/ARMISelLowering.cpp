@@ -524,9 +524,9 @@ ARMTargetLowering::ARMTargetLowering(const TargetMachine &TM,
 
   if (Subtarget->hasFullFP16()) {
     addRegisterClass(MVT::f16, &ARM::HPRRegClass);
-    // Clean up bitcast of incoming arguments if hard float abi is enabled.
-    if (Subtarget->isTargetHardFloat())
-      setOperationAction(ISD::BITCAST, MVT::i16, Custom);
+    setOperationAction(ISD::BITCAST, MVT::i16, Custom);
+    setOperationAction(ISD::BITCAST, MVT::i32, Custom);
+    setOperationAction(ISD::BITCAST, MVT::f16, Custom);
   }
 
   for (MVT VT : MVT::vector_valuetypes()) {
@@ -1042,6 +1042,7 @@ ARMTargetLowering::ARMTargetLowering(const TargetMachine &TM,
     setLibcallName(RTLIB::UNWIND_RESUME, "_Unwind_SjLj_Resume");
 
   setOperationAction(ISD::SETCC,     MVT::i32, Expand);
+  setOperationAction(ISD::SETCC,     MVT::f16, Expand);
   setOperationAction(ISD::SETCC,     MVT::f32, Expand);
   setOperationAction(ISD::SETCC,     MVT::f64, Expand);
   setOperationAction(ISD::SELECT,    MVT::i32, Custom);
@@ -1273,6 +1274,8 @@ const char *ARMTargetLowering::getTargetNodeName(unsigned Opcode) const {
 
   case ARMISD::VMOVRRD:       return "ARMISD::VMOVRRD";
   case ARMISD::VMOVDRR:       return "ARMISD::VMOVDRR";
+  case ARMISD::VMOVhr:        return "ARMISD::VMOVhr";
+  case ARMISD::VMOVrh:        return "ARMISD::VMOVrh";
 
   case ARMISD::EH_SJLJ_SETJMP: return "ARMISD::EH_SJLJ_SETJMP";
   case ARMISD::EH_SJLJ_LONGJMP: return "ARMISD::EH_SJLJ_LONGJMP";
@@ -2489,12 +2492,12 @@ ARMTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
       // t11 f16 = fadd ...
       // t12: i16 = bitcast t11
       //   t13: i32 = zero_extend t12
-      // t14: f32 = bitcast t13
+      // t14: f32 = bitcast t13  <~~~~~~~ Arg
       //
       // to avoid code generation for bitcasts, we simply set Arg to the node
       // that produces the f16 value, t11 in this case.
       //
-      if (Arg.getValueType() == MVT::f32) {
+      if (Arg.getValueType() == MVT::f32 && Arg.getOpcode() == ISD::BITCAST) {
         SDValue ZE = Arg.getOperand(0);
         if (ZE.getOpcode() == ISD::ZERO_EXTEND && ZE.getValueType() == MVT::i32) {
           SDValue BC = ZE.getOperand(0);
@@ -4041,11 +4044,10 @@ static SDValue ConvertBooleanCarryToCarryFlag(SDValue BoolCarry,
   SDLoc DL(BoolCarry);
   EVT CarryVT = BoolCarry.getValueType();
 
-  APInt NegOne = APInt::getAllOnesValue(CarryVT.getScalarSizeInBits());
   // This converts the boolean value carry into the carry flag by doing
-  // ARMISD::ADDC Carry, ~0
-  return DAG.getNode(ARMISD::ADDC, DL, DAG.getVTList(CarryVT, MVT::i32),
-                     BoolCarry, DAG.getConstant(NegOne, DL, CarryVT));
+  // ARMISD::SUBC Carry, 1
+  return DAG.getNode(ARMISD::SUBC, DL, DAG.getVTList(CarryVT, MVT::i32),
+                     BoolCarry, DAG.getConstant(1, DL, CarryVT));
 }
 
 static SDValue ConvertCarryFlagToBooleanCarry(SDValue Flags, EVT VT,
@@ -5051,7 +5053,8 @@ static SDValue CombineVMOVDRRCandidateWithVecOp(const SDNode *BC,
 /// use a VMOVDRR or VMOVRRD node.  This should not be done when the non-i64
 /// operand type is illegal (e.g., v2f32 for a target that doesn't support
 /// vectors), since the legalizer won't know what to do with that.
-static SDValue ExpandBITCAST(SDNode *N, SelectionDAG &DAG) {
+static SDValue ExpandBITCAST(SDNode *N, SelectionDAG &DAG,
+                             const ARMSubtarget *Subtarget) {
   const TargetLowering &TLI = DAG.getTargetLoweringInfo();
   SDLoc dl(N);
   SDValue Op = N->getOperand(0);
@@ -5060,39 +5063,78 @@ static SDValue ExpandBITCAST(SDNode *N, SelectionDAG &DAG) {
   // source or destination of the bit convert.
   EVT SrcVT = Op.getValueType();
   EVT DstVT = N->getValueType(0);
+  const bool HasFullFP16 = Subtarget->hasFullFP16();
 
-  // Half-precision arguments can be passed in like this:
-  //
-  //    t4: f32,ch = CopyFromReg t0, Register:f32 %1
-  //            t8: i32 = bitcast t4
-  //          t9: i16 = truncate t8
-  //        t10: f16 = bitcast t9   <~~~~ SDNode N
-  //
-  // but we want to avoid code generation for the bitcast, so transform this
-  // into:
-  //
-  // t18: f16 = CopyFromReg t0, Register:f32 %0
-  //
-  if (SrcVT == MVT::i16 && DstVT == MVT::f16) {
-     if (Op.getOpcode() != ISD::TRUNCATE)
-        return SDValue();
+  if (SrcVT == MVT::f32 && DstVT == MVT::i32) {
+     // FullFP16: half values are passed in S-registers, and we don't
+     // need any of the bitcast and moves:
+     //
+     // t2: f32,ch = CopyFromReg t0, Register:f32 %0
+     //   t5: i32 = bitcast t2
+     // t18: f16 = ARMISD::VMOVhr t5
+     if (Op.getOpcode() != ISD::CopyFromReg ||
+         Op.getValueType() != MVT::f32)
+       return SDValue();
 
-    SDValue Bitcast = Op.getOperand(0);
-    if (Bitcast.getOpcode() != ISD::BITCAST ||
-        Bitcast.getValueType() != MVT::i32)
-      return SDValue();
+     auto Move = N->use_begin();
+     if (Move->getOpcode() != ARMISD::VMOVhr)
+       return SDValue();
 
-    SDValue Copy = Bitcast.getOperand(0);
-    if (Copy.getOpcode() != ISD::CopyFromReg ||
-        Copy.getValueType() != MVT::f32)
-      return SDValue();
-
-    SDValue Ops[] = { Copy->getOperand(0), Copy->getOperand(1) };
-    return DAG.getNode(ISD::CopyFromReg, SDLoc(Copy), MVT::f16, Ops);
+     SDValue Ops[] = { Op.getOperand(0), Op.getOperand(1) };
+     SDValue Copy = DAG.getNode(ISD::CopyFromReg, SDLoc(Op), MVT::f16, Ops);
+     DAG.ReplaceAllUsesWith(*Move, &Copy);
+     return Copy;
   }
 
-  assert((SrcVT == MVT::i64 || DstVT == MVT::i64) &&
-         "ExpandBITCAST called for non-i64 type");
+  if (SrcVT == MVT::i16 && DstVT == MVT::f16) {
+    if (!HasFullFP16)
+      return SDValue();
+    // SoftFP: read half-precision arguments:
+    //
+    // t2: i32,ch = ... 
+    //        t7: i16 = truncate t2 <~~~~ Op
+    //      t8: f16 = bitcast t7    <~~~~ N
+    //
+    if (Op.getOperand(0).getValueType() == MVT::i32)
+      return DAG.getNode(ARMISD::VMOVhr, SDLoc(Op),
+                         MVT::f16, Op.getOperand(0));
+
+    return SDValue();
+  }
+
+  // Half-precision return values 
+  if (SrcVT == MVT::f16 && DstVT == MVT::i16) {
+    if (!HasFullFP16)
+      return SDValue();
+    //
+    //          t11: f16 = fadd t8, t10
+    //        t12: i16 = bitcast t11       <~~~ SDNode N
+    //      t13: i32 = zero_extend t12
+    //    t16: ch,glue = CopyToReg t0, Register:i32 %r0, t13
+    //  t17: ch = ARMISD::RET_FLAG t16, Register:i32 %r0, t16:1
+    //
+    // transform this into:
+    //
+    //    t20: i32 = ARMISD::VMOVrh t11
+    //  t16: ch,glue = CopyToReg t0, Register:i32 %r0, t20
+    //
+    auto ZeroExtend = N->use_begin();
+    if (N->use_size() != 1 || ZeroExtend->getOpcode() != ISD::ZERO_EXTEND ||
+        ZeroExtend->getValueType(0) != MVT::i32)
+      return SDValue();
+
+    auto Copy = ZeroExtend->use_begin();
+    if (Copy->getOpcode() == ISD::CopyToReg &&
+        Copy->use_begin()->getOpcode() == ARMISD::RET_FLAG) {
+      SDValue Cvt = DAG.getNode(ARMISD::VMOVrh, SDLoc(Op), MVT::i32, Op);
+      DAG.ReplaceAllUsesWith(*ZeroExtend, &Cvt);
+      return Cvt;
+    }
+    return SDValue();
+  }
+
+  if (!(SrcVT == MVT::i64 || DstVT == MVT::i64))
+    return SDValue();
 
   // Turn i64->f64 into VMOVDRR.
   if (SrcVT == MVT::i64 && TLI.isTypeLegal(DstVT)) {
@@ -7620,11 +7662,8 @@ static SDValue LowerADDSUBCARRY(SDValue Op, SelectionDAG &DAG) {
   SDVTList VTs = DAG.getVTList(VT, MVT::i32);
 
   SDValue Carry = Op.getOperand(2);
-  EVT CarryVT = Carry.getValueType();
 
   SDLoc DL(Op);
-
-  APInt NegOne = APInt::getAllOnesValue(CarryVT.getScalarSizeInBits());
 
   SDValue Result;
   if (Op.getOpcode() == ISD::ADDCARRY) {
@@ -7982,7 +8021,7 @@ SDValue ARMTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
   case ISD::EH_SJLJ_SETUP_DISPATCH: return LowerEH_SJLJ_SETUP_DISPATCH(Op, DAG);
   case ISD::INTRINSIC_WO_CHAIN: return LowerINTRINSIC_WO_CHAIN(Op, DAG,
                                                                Subtarget);
-  case ISD::BITCAST:       return ExpandBITCAST(Op.getNode(), DAG);
+  case ISD::BITCAST:       return ExpandBITCAST(Op.getNode(), DAG, Subtarget);
   case ISD::SHL:
   case ISD::SRL:
   case ISD::SRA:           return LowerShift(Op.getNode(), DAG, Subtarget);
@@ -8084,7 +8123,7 @@ void ARMTargetLowering::ReplaceNodeResults(SDNode *N,
     ExpandREAD_REGISTER(N, Results, DAG);
     break;
   case ISD::BITCAST:
-    Res = ExpandBITCAST(N, DAG);
+    Res = ExpandBITCAST(N, DAG, Subtarget);
     break;
   case ISD::SRL:
   case ISD::SRA:
@@ -10211,13 +10250,13 @@ static SDValue PerformAddcSubcCombine(SDNode *N,
                                       const ARMSubtarget *Subtarget) {
   SelectionDAG &DAG(DCI.DAG);
 
-  if (N->getOpcode() == ARMISD::ADDC) {
-    // (ADDC (ADDE 0, 0, C), -1) -> C
+  if (N->getOpcode() == ARMISD::SUBC) {
+    // (SUBC (ADDE 0, 0, C), 1) -> C
     SDValue LHS = N->getOperand(0);
     SDValue RHS = N->getOperand(1);
     if (LHS->getOpcode() == ARMISD::ADDE &&
         isNullConstant(LHS->getOperand(0)) &&
-        isNullConstant(LHS->getOperand(1)) && isAllOnesConstant(RHS)) {
+        isNullConstant(LHS->getOperand(1)) && isOneConstant(RHS)) {
       return DCI.CombineTo(N, SDValue(N, 0), LHS->getOperand(2));
     }
   }
@@ -12450,6 +12489,89 @@ ARMTargetLowering::PerformCMOVCombine(SDNode *N, SelectionDAG &DAG) const {
     }
   }
 
+  if (!VT.isInteger())
+      return SDValue();
+
+  // Materialize a boolean comparison for integers so we can avoid branching.
+  if (isNullConstant(FalseVal)) {
+    if (CC == ARMCC::EQ && isOneConstant(TrueVal)) {
+      if (!Subtarget->isThumb1Only() && Subtarget->hasV5TOps()) {
+        // If x == y then x - y == 0 and ARM's CLZ will return 32, shifting it
+        // right 5 bits will make that 32 be 1, otherwise it will be 0.
+        // CMOV 0, 1, ==, (CMPZ x, y) -> SRL (CTLZ (SUB x, y)), 5
+        SDValue Sub = DAG.getNode(ISD::SUB, dl, VT, LHS, RHS);
+        Res = DAG.getNode(ISD::SRL, dl, VT, DAG.getNode(ISD::CTLZ, dl, VT, Sub),
+                          DAG.getConstant(5, dl, MVT::i32));
+      } else {
+        // CMOV 0, 1, ==, (CMPZ x, y) ->
+        //     (ADDCARRY (SUB x, y), t:0, t:1)
+        // where t = (SUBCARRY 0, (SUB x, y), 0)
+        //
+        // The SUBCARRY computes 0 - (x - y) and this will give a borrow when
+        // x != y. In other words, a carry C == 1 when x == y, C == 0
+        // otherwise.
+        // The final ADDCARRY computes
+        //     x - y + (0 - (x - y)) + C == C
+        SDValue Sub = DAG.getNode(ISD::SUB, dl, VT, LHS, RHS);
+        SDVTList VTs = DAG.getVTList(VT, MVT::i32);
+        SDValue Neg = DAG.getNode(ISD::USUBO, dl, VTs, FalseVal, Sub);
+        // ISD::SUBCARRY returns a borrow but we want the carry here
+        // actually.
+        SDValue Carry =
+            DAG.getNode(ISD::SUB, dl, MVT::i32,
+                        DAG.getConstant(1, dl, MVT::i32), Neg.getValue(1));
+        Res = DAG.getNode(ISD::ADDCARRY, dl, VTs, Sub, Neg, Carry);
+      }
+    } else if (CC == ARMCC::NE && LHS != RHS &&
+               (!Subtarget->isThumb1Only() || isPowerOf2Constant(TrueVal))) {
+      // This seems pointless but will allow us to combine it further below.
+      // CMOV 0, z, !=, (CMPZ x, y) -> CMOV (SUB x, y), z, !=, (CMPZ x, y)
+      SDValue Sub = DAG.getNode(ISD::SUB, dl, VT, LHS, RHS);
+      Res = DAG.getNode(ARMISD::CMOV, dl, VT, Sub, TrueVal, ARMcc,
+                        N->getOperand(3), Cmp);
+    }
+  } else if (isNullConstant(TrueVal)) {
+    if (CC == ARMCC::EQ && LHS != RHS &&
+        (!Subtarget->isThumb1Only() || isPowerOf2Constant(FalseVal))) {
+      // This seems pointless but will allow us to combine it further below
+      // Note that we change == for != as this is the dual for the case above.
+      // CMOV z, 0, ==, (CMPZ x, y) -> CMOV (SUB x, y), z, !=, (CMPZ x, y)
+      SDValue Sub = DAG.getNode(ISD::SUB, dl, VT, LHS, RHS);
+      Res = DAG.getNode(ARMISD::CMOV, dl, VT, Sub, FalseVal,
+                        DAG.getConstant(ARMCC::NE, dl, MVT::i32),
+                        N->getOperand(3), Cmp);
+    }
+  }
+
+  // On Thumb1, the DAG above may be further combined if z is a power of 2
+  // (z == 2 ^ K).
+  // CMOV (SUB x, y), z, !=, (CMPZ x, y) ->
+  //       merge t3, t4
+  // where t1 = (SUBCARRY (SUB x, y), z, 0)
+  //       t2 = (SUBCARRY (SUB x, y), t1:0, t1:1)
+  //       t3 = if K != 0 then (SHL t2:0, K) else t2:0
+  //       t4 = (SUB 1, t2:1)   [ we want a carry, not a borrow ]
+  const APInt *TrueConst;
+  if (Subtarget->isThumb1Only() && CC == ARMCC::NE &&
+      (FalseVal.getOpcode() == ISD::SUB) && (FalseVal.getOperand(0) == LHS) &&
+      (FalseVal.getOperand(1) == RHS) &&
+      (TrueConst = isPowerOf2Constant(TrueVal))) {
+    SDVTList VTs = DAG.getVTList(VT, MVT::i32);
+    unsigned ShiftAmount = TrueConst->logBase2();
+    if (ShiftAmount)
+      TrueVal = DAG.getConstant(1, dl, VT);
+    SDValue Subc = DAG.getNode(ISD::USUBO, dl, VTs, FalseVal, TrueVal);
+    Res = DAG.getNode(ISD::SUBCARRY, dl, VTs, FalseVal, Subc, Subc.getValue(1));
+    // Make it a carry, not a borrow.
+    SDValue Carry = DAG.getNode(
+        ISD::SUB, dl, VT, DAG.getConstant(1, dl, MVT::i32), Res.getValue(1));
+    Res = DAG.getNode(ISD::MERGE_VALUES, dl, VTs, Res, Carry);
+
+    if (ShiftAmount)
+      Res = DAG.getNode(ISD::SHL, dl, VT, Res,
+                        DAG.getConstant(ShiftAmount, dl, MVT::i32));
+  }
+
   if (Res.getNode()) {
     KnownBits Known;
     DAG.computeKnownBits(SDValue(N,0), Known);
@@ -12699,6 +12821,24 @@ bool ARMTargetLowering::isZExtFree(SDValue Val, EVT VT2) const {
   case MVT::i16:
     // 8-bit and 16-bit loads implicitly zero-extend to 32-bits.
     return true;
+  }
+
+  return false;
+}
+
+bool ARMTargetLowering::isFNegFree(EVT VT) const {
+  if (!VT.isSimple())
+    return false;
+
+  // There are quite a few FP16 instructions (e.g. VNMLA, VNMLS, etc.) that
+  // negate values directly (fneg is free). So, we don't want to let the DAG
+  // combiner rewrite fneg into xors and some other instructions.  For f16 and
+  // FullFP16 argument passing, some bitcast nodes may be introduced,
+  // triggering this DAG combine rewrite, so we are avoiding that with this.
+  switch (VT.getSimpleVT().SimpleTy) {
+  default: break;
+  case MVT::f16:
+    return Subtarget->hasFullFP16();
   }
 
   return false;
@@ -13406,8 +13546,14 @@ RCPair ARMTargetLowering::getRegForInlineAsmConstraint(
         return RCPair(0U, &ARM::QPR_8RegClass);
       break;
     case 't':
+      if (VT == MVT::Other)
+        break;
       if (VT == MVT::f32 || VT == MVT::i32)
         return RCPair(0U, &ARM::SPRRegClass);
+      if (VT.getSizeInBits() == 64)
+        return RCPair(0U, &ARM::DPR_VFP2RegClass);
+      if (VT.getSizeInBits() == 128)
+        return RCPair(0U, &ARM::QPR_VFP2RegClass);
       break;
     }
   }
@@ -13800,6 +13946,8 @@ bool ARM::isBitFieldInvertedMask(unsigned v) {
 bool ARMTargetLowering::isFPImmLegal(const APFloat &Imm, EVT VT) const {
   if (!Subtarget->hasVFP3())
     return false;
+  if (VT == MVT::f16 && Subtarget->hasFullFP16())
+    return ARM_AM::getFP16Imm(Imm) != -1;
   if (VT == MVT::f32)
     return ARM_AM::getFP32Imm(Imm) != -1;
   if (VT == MVT::f64 && !Subtarget->isFPOnlySP())

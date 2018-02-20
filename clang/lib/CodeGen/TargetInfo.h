@@ -57,8 +57,7 @@ public:
   /// setTargetAttributes - Provides a convenient hook to handle extra
   /// target-specific attributes for the given global.
   virtual void setTargetAttributes(const Decl *D, llvm::GlobalValue *GV,
-                                   CodeGen::CodeGenModule &M,
-                                   ForDefinition_t IsForDefinition) const {}
+                                   CodeGen::CodeGenModule &M) const {}
 
   /// emitTargetMD - Provides a convenient hook to handle extra
   /// target-specific metadata for the given global.
@@ -222,13 +221,15 @@ public:
                                        llvm::SmallString<32> &Opt) const {}
 
   virtual unsigned getDefaultAS() const {
+#if 0
     // For e.g. AMDGPU this should not return 0 but instead whatever LangAS::Default maps to
     return getABIInfo().getContext().getTargetAddressSpace(LangAS::Default, nullptr);
+#else
+    return 0; // XXXAR: to keep code the same as upstream
+#endif
   }
 
-  virtual unsigned getStackAS() const;
-  
-  virtual unsigned getCHERICapabilityAS() const { 
+  virtual unsigned getCHERICapabilityAS() const {
     assert(0 && "Target does not support capabilities!\n");
     return 0;
   }

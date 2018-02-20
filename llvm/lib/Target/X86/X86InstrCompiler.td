@@ -1471,6 +1471,37 @@ def : Pat<(and GR64:$src, 0xff),
 } // AddedComplexity = 1
 
 
+// Try to use BTS/BTR/BTC for single bit operations on the upper 32-bits.
+
+def BTRXForm : SDNodeXForm<imm, [{
+  // Transformation function: Find the lowest 0.
+  return getI64Imm((uint8_t)N->getAPIntValue().countTrailingOnes(), SDLoc(N));
+}]>;
+
+def BTCBTSXForm : SDNodeXForm<imm, [{
+  // Transformation function: Find the lowest 1.
+  return getI64Imm((uint8_t)N->getAPIntValue().countTrailingZeros(), SDLoc(N));
+}]>;
+
+def BTRMask64 : ImmLeaf<i64, [{
+  return !isUInt<32>(Imm) && !isInt<32>(Imm) && isPowerOf2_64(~Imm);
+}]>;
+
+def BTCBTSMask64 : ImmLeaf<i64, [{
+  return !isInt<32>(Imm) && isPowerOf2_64(Imm);
+}]>;
+
+// For now only do this for optsize.
+let AddedComplexity = 1, Predicates=[OptForSize] in {
+  def : Pat<(and GR64:$src1, BTRMask64:$mask),
+            (BTR64ri8 GR64:$src1, (BTRXForm imm:$mask))>;
+  def : Pat<(or GR64:$src1, BTCBTSMask64:$mask),
+            (BTS64ri8 GR64:$src1, (BTCBTSXForm imm:$mask))>;
+  def : Pat<(xor GR64:$src1, BTCBTSMask64:$mask),
+            (BTC64ri8 GR64:$src1, (BTCBTSXForm imm:$mask))>;
+}
+
+
 // sext_inreg patterns
 def : Pat<(sext_inreg GR32:$src, i16),
           (MOVSX32rr16 (EXTRACT_SUBREG GR32:$src, sub_16bit))>;
@@ -2010,4 +2041,35 @@ def : Pat<(cttz_zero_undef (loadi64 addr:$src)), (BSF64rm addr:$src)>;
 // register-register 16 bit bswap. This maps it to a ROL instruction.
 let Predicates = [HasMOVBE] in {
  def : Pat<(bswap GR16:$src), (ROL16ri GR16:$src, (i8 8))>;
+}
+
+// These patterns are selected by some custom code in X86ISelDAGToDAG.cpp that
+// custom combines and+srl into BEXTR. We use these patterns to avoid a bunch
+// of manual code for folding loads.
+let Predicates = [HasBMI, NoTBM] in {
+  def : Pat<(X86bextr GR32:$src1, (i32 imm:$src2)),
+            (BEXTR32rr GR32:$src1, (MOV32ri imm:$src2))>;
+  def : Pat<(X86bextr (loadi32 addr:$src1), (i32 imm:$src2)),
+            (BEXTR32rm addr:$src1, (MOV32ri imm:$src2))>;
+  def : Pat<(X86bextr GR64:$src1, mov64imm32:$src2),
+            (BEXTR64rr GR64:$src1,
+                       (SUBREG_TO_REG (i64 0),
+                                      (MOV32ri64 mov64imm32:$src2),
+                                      sub_32bit))>;
+  def : Pat<(X86bextr (loadi64 addr:$src1), mov64imm32:$src2),
+            (BEXTR64rm addr:$src1,
+                       (SUBREG_TO_REG (i64 0),
+                                      (MOV32ri64 mov64imm32:$src2),
+                                      sub_32bit))>;
+} // HasBMI, NoTBM
+
+let Predicates = [HasTBM] in {
+  def : Pat<(X86bextr GR32:$src1, (i32 imm:$src2)),
+            (BEXTRI32ri GR32:$src1, imm:$src2)>;
+  def : Pat<(X86bextr (loadi32 addr:$src1), (i32 imm:$src2)),
+            (BEXTRI32mi addr:$src1, imm:$src2)>;
+  def : Pat<(X86bextr GR64:$src1, i64immSExt32:$src2),
+            (BEXTRI64ri GR64:$src1, i64immSExt32:$src2)>;
+  def : Pat<(X86bextr (loadi64 addr:$src1), i64immSExt32:$src2),
+            (BEXTRI64mi addr:$src1, i64immSExt32:$src2)>;
 }

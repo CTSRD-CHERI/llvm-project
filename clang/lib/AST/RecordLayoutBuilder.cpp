@@ -1504,9 +1504,10 @@ void ItaniumRecordLayoutBuilder::LayoutBitField(const FieldDecl *D) {
     FieldAlign = TypeSize;
 
     // If the previous field was not a bitfield, or was a bitfield
-    // with a different storage unit size, we're done with that
-    // storage unit.
-    if (LastBitfieldTypeSize != TypeSize) {
+    // with a different storage unit size, or if this field doesn't fit into
+    // the current storage unit, we're done with that storage unit.
+    if (LastBitfieldTypeSize != TypeSize ||
+        UnfilledBitsInLastUnit < FieldSize) {
       // Also, ignore zero-length bitfields after non-bitfields.
       if (!LastBitfieldTypeSize && !FieldSize)
         FieldAlign = 1;
@@ -1732,8 +1733,8 @@ void ItaniumRecordLayoutBuilder::LayoutField(const FieldDecl *D,
     FieldAlign = Context.getTypeAlignInChars(ATy->getElementType());
   } else if (const ReferenceType *RT = D->getType()->getAs<ReferenceType>()) {
     const TargetInfo &TI = Context.getTargetInfo();
-    unsigned AS = Context.getTargetAddressSpace(
-      RT->getPointeeType().getAddressSpace(), nullptr);
+    unsigned AS =
+        Context.getTargetAddressSpace(RT->getPointeeType().getAddressSpace());
     bool IsCHERICap =
       RT->isCHERICapabilityType(Context) || TI.areAllPointersCapabilities();
     FieldSize = Context.toCharUnitsFromBits(

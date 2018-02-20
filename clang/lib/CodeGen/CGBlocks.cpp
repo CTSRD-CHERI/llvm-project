@@ -93,7 +93,7 @@ static llvm::Constant *buildBlockDescriptor(CodeGenModule &CGM,
   if (CGM.getLangOpts().OpenCL)
     i8p = 
       llvm::Type::getInt8PtrTy(
-           CGM.getLLVMContext(), CGM.getTargetAddressSpace(LangAS::opencl_generic));
+           CGM.getLLVMContext(), CGM.getTargetAddressSpace(LangAS::opencl_constant));
   else
     i8p = CGM.VoidPtrTy;
 
@@ -112,10 +112,10 @@ static llvm::Constant *buildBlockDescriptor(CodeGenModule &CGM,
   // Optional copy/dispose helpers.
   if (blockInfo.NeedsCopyDispose) {
     // copy_func_helper_decl
-    elements.add(llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(buildCopyHelper(CGM, blockInfo), CGM.Int8PtrTy));
+    elements.add(buildCopyHelper(CGM, blockInfo));
 
     // destroy_func_decl
-    elements.add(llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(buildDisposeHelper(CGM, blockInfo), CGM.Int8PtrTy));
+    elements.add(buildDisposeHelper(CGM, blockInfo));
   }
 
   // Signature.  Mandatory ObjC-style method descriptor @encode sequence.
@@ -136,7 +136,7 @@ static llvm::Constant *buildBlockDescriptor(CodeGenModule &CGM,
 
   unsigned AddrSpace = CGM.getTargetCodeGenInfo().getDefaultAS();
   if (C.getLangOpts().OpenCL)
-    AddrSpace = CGM.getTargetAddressSpace(LangAS::opencl_generic);
+    AddrSpace = CGM.getTargetAddressSpace(LangAS::opencl_constant);
 
   llvm::GlobalVariable *global =
     elements.finishAndCreateGlobal("__block_descriptor_tmp",
@@ -745,27 +745,19 @@ void CodeGenFunction::destroyBlockInfos(CGBlockInfo *head) {
 }
 
 /// Emit a block literal expression in the current function.
-llvm::Value *CodeGenFunction::EmitBlockLiteral(const BlockExpr *blockExpr,
-                                               llvm::Function **InvokeF) {
+llvm::Value *CodeGenFunction::EmitBlockLiteral(const BlockExpr *blockExpr) {
   // If the block has no captures, we won't have a pre-computed
   // layout for it.
   if (!blockExpr->getBlockDecl()->hasCaptures()) {
     // The block literal is emitted as a global variable, and the block invoke
     // function has to be extracted from its initializer.
     if (llvm::Constant *Block = CGM.getAddrOfGlobalBlockIfEmitted(blockExpr)) {
-      if (InvokeF) {
-        auto *GV = cast<llvm::GlobalVariable>(
-            cast<llvm::Constant>(Block)->stripPointerCasts());
-        auto *BlockInit = cast<llvm::ConstantStruct>(GV->getInitializer());
-        *InvokeF = cast<llvm::Function>(
-            BlockInit->getAggregateElement(2)->stripPointerCasts());
-      }
       return Block;
     }
     CGBlockInfo blockInfo(blockExpr->getBlockDecl(), CurFn->getName());
     computeBlockInfo(CGM, this, blockInfo);
     blockInfo.BlockExpression = blockExpr;
-    return EmitBlockLiteral(blockInfo, InvokeF);
+    return EmitBlockLiteral(blockInfo);
   }
 
   // Find the block info for this block and take ownership of it.
@@ -774,11 +766,10 @@ llvm::Value *CodeGenFunction::EmitBlockLiteral(const BlockExpr *blockExpr,
                                          blockExpr->getBlockDecl()));
 
   blockInfo->BlockExpression = blockExpr;
-  return EmitBlockLiteral(*blockInfo, InvokeF);
+  return EmitBlockLiteral(*blockInfo);
 }
 
-llvm::Value *CodeGenFunction::EmitBlockLiteral(const CGBlockInfo &blockInfo,
-                                               llvm::Function **InvokeF) {
+llvm::Value *CodeGenFunction::EmitBlockLiteral(const CGBlockInfo &blockInfo) {
   bool IsOpenCL = CGM.getContext().getLangOpts().OpenCL;
   auto GenVoidPtrTy =
       IsOpenCL ? CGM.getOpenCLRuntime().getGenericVoidPointerType() : VoidPtrTy;
@@ -792,9 +783,6 @@ llvm::Value *CodeGenFunction::EmitBlockLiteral(const CGBlockInfo &blockInfo,
   BlockCGF.SanOpts = SanOpts;
   auto *InvokeFn = BlockCGF.GenerateBlockFunction(
       CurGD, blockInfo, LocalDeclMap, isLambdaConv, blockInfo.CanBeGlobal);
-  if (InvokeF)
-    *InvokeF = InvokeFn;
-  // XXXAR: should this be getPointerBitCastOrAddrSpaceCast()?
   auto *blockFn = llvm::ConstantExpr::getPointerCast(InvokeFn, GenVoidPtrTy);
 
   // If there is nothing to capture, we can emit this as a global block.
@@ -1030,6 +1018,11 @@ llvm::Value *CodeGenFunction::EmitBlockLiteral(const CGBlockInfo &blockInfo,
   // unfortunately) to be a pointer to function type.
   llvm::Value *result = Builder.CreatePointerBitCastOrAddrSpaceCast(
       blockAddr.getPointer(), ConvertType(blockInfo.getBlockExpr()->getType()));
+
+  if (IsOpenCL) {
+    CGM.getOpenCLRuntime().recordBlockInfo(blockInfo.BlockExpression, InvokeFn,
+                                           result);
+  }
 
   return result;
 }
@@ -1295,6 +1288,10 @@ static llvm::Constant *buildGlobalBlock(CodeGenModule &CGM,
   llvm::Constant *Result =
       llvm::ConstantExpr::getPointerCast(literal, RequiredType);
   CGM.setAddrOfGlobalBlock(blockInfo.BlockExpression, Result);
+  if (CGM.getContext().getLangOpts().OpenCL)
+    CGM.getOpenCLRuntime().recordBlockInfo(
+        blockInfo.BlockExpression,
+        cast<llvm::Function>(blockFn->stripPointerCasts()), Result);
   return Result;
 }
 
@@ -1322,8 +1319,7 @@ void CodeGenFunction::setBlockContextParameter(const ImplicitParamDecl *D,
 
   // Instead of messing around with LocalDeclMap, just set the value
   // directly as BlockPointer.
-  // XXXAR: possibly CreatePointerCast / CreatePointerBitCastOrAddrSpaceCast?
-  BlockPointer = Builder.CreateBitCast(
+  BlockPointer = Builder.CreatePointerCast(
       arg,
       BlockInfo->StructureType->getPointerTo(
           getContext().getLangOpts().OpenCL
@@ -1488,8 +1484,8 @@ CodeGenFunction::GenerateBlockFunction(GlobalDecl GD,
         const CGBlockInfo::Capture &capture = blockInfo.getCapture(variable);
         if (capture.isConstant()) {
           auto addr = LocalDeclMap.find(variable)->second;
-          DI->EmitDeclareOfAutoVariable(variable, addr.getPointer(),
-                                        Builder);
+          (void)DI->EmitDeclareOfAutoVariable(variable, addr.getPointer(),
+                                              Builder);
           continue;
         }
 
@@ -2101,7 +2097,7 @@ generateByrefCopyHelper(CodeGenFunction &CGF, const BlockByrefInfo &byrefInfo,
 
   CGF.FinishFunction();
 
-  return Fn;
+  return llvm::ConstantExpr::getBitCast(Fn, CGF.Int8PtrTy);
 }
 
 /// Build the copy helper for a __block variable.
@@ -2164,7 +2160,7 @@ generateByrefDisposeHelper(CodeGenFunction &CGF,
 
   CGF.FinishFunction();
 
-  return Fn;
+  return llvm::ConstantExpr::getBitCast(Fn, CGF.Int8PtrTy);
 }
 
 /// Build the dispose helper for a __block variable.
@@ -2419,9 +2415,7 @@ void CodeGenFunction::emitByrefStructureInit(const AutoVarEmission &emission) {
                               const Twine &name) {
     auto fieldAddr = Builder.CreateStructGEP(addr, nextHeaderIndex,
                                              nextHeaderOffset, name);
-    Builder.CreateStore(Builder.CreateBitCast(value,
-                            fieldAddr.getType()->getElementType()),
-                        fieldAddr);
+    Builder.CreateStore(value, fieldAddr);
 
     nextHeaderIndex++;
     nextHeaderOffset += fieldSize;

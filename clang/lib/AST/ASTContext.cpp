@@ -1855,7 +1855,7 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
     case BuiltinType::Id:
 #include "clang/Basic/OpenCLImageTypes.def"
       AS = getTargetAddressSpace(
-          Target->getOpenCLTypeAddrSpace(getOpenCLTypeKind(T)), nullptr);
+          Target->getOpenCLTypeAddrSpace(getOpenCLTypeKind(T)));
       Width = Target->getPointerWidth(AS);
       Align = Target->getPointerAlign(AS);
       break;
@@ -1870,7 +1870,7 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
       Width = Target->getCHERICapabilityWidth();
       Align = Target->getCHERICapabilityAlign();
     } else {
-      AS = getTargetAddressSpace(cast<BlockPointerType>(T)->getPointeeType(), nullptr);
+      AS = getTargetAddressSpace(cast<BlockPointerType>(T)->getPointeeType());
       Width = Target->getPointerWidth(AS);
       Align = Target->getPointerAlign(AS);
     }
@@ -1884,7 +1884,7 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
       Width = Target->getCHERICapabilityWidth();
       Align = Target->getCHERICapabilityAlign();
     } else {
-      AS = getTargetAddressSpace(cast<ReferenceType>(T)->getPointeeType(), nullptr);
+      AS = getTargetAddressSpace(cast<ReferenceType>(T)->getPointeeType());
       Width = Target->getPointerWidth(AS);
       Align = Target->getPointerAlign(AS);
     }
@@ -1904,7 +1904,7 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
       Width = Target->getCHERICapabilityWidth();
       Align = Target->getCHERICapabilityAlign();
     } else {
-      AS = getTargetAddressSpace(PointeeTy, nullptr);
+      AS = getTargetAddressSpace(PointeeTy);
       Width = Target->getPointerWidth(AS);
       Align = Target->getPointerAlign(AS);
     }
@@ -2030,8 +2030,10 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
   break;
 
   case Type::Pipe:
-    Width = Target->getPointerWidth(getTargetAddressSpace(LangAS::opencl_global, nullptr));
-    Align = Target->getPointerAlign(getTargetAddressSpace(LangAS::opencl_global, nullptr));
+    Width =
+        Target->getPointerWidth(getTargetAddressSpace(LangAS::opencl_global));
+    Align =
+        Target->getPointerAlign(getTargetAddressSpace(LangAS::opencl_global));
     break;
   }
 
@@ -2212,7 +2214,7 @@ static bool unionHasUniqueObjectRepresentations(const ASTContext &Context,
     if (FieldSize != UnionSize)
       return false;
   }
-  return true;
+  return !RD->field_empty();
 }
 
 static bool isStructEmpty(QualType Ty) {
@@ -2705,6 +2707,11 @@ void ASTContext::adjustExceptionSpec(
            "TypeLoc size mismatch from updating exception specification");
     TSInfo->overrideType(Updated);
   }
+}
+
+bool ASTContext::isParamDestroyedInCallee(QualType T) const {
+  return getTargetInfo().getCXXABI().areArgsDestroyedLeftToRightInCallee() ||
+         T.hasTrivialABIOverride();
 }
 
 /// getComplexType - Return the uniqued reference to the type for a complex
@@ -5969,7 +5976,7 @@ CharUnits ASTContext::getObjCEncodingTypeSize(QualType type) const {
 bool ASTContext::isMSStaticDataMemberInlineDefinition(const VarDecl *VD) const {
   return getTargetInfo().getCXXABI().isMicrosoft() &&
          VD->isStaticDataMember() &&
-         VD->getType()->isIntegralOrEnumerationType() &&
+         (VD->getType()->isIntegralOrEnumerationType() || VD->isConstexpr()) &&
          !VD->getFirstDecl()->isOutOfLine() && VD->getFirstDecl()->hasInit();
 }
 
@@ -10140,12 +10147,17 @@ uint64_t ASTContext::getTargetNullPointerValue(QualType QT) const {
   return getTargetInfo().getNullPointerValue(AS);
 }
 
-unsigned ASTContext::getTargetAddressSpace(LangAS AS, void *dummy) const {
-  (void)dummy; // Dummy parameter needed to find all calls to getTargetAddressSpace()
-  if (isTargetAddressSpace(AS))
+unsigned ASTContext::getTargetAddressSpace(LangAS AS) const {
+  if (isTargetAddressSpace(AS)) {
+    if (AS == LangAS::cheri_tls)
+      return 0; // XXXAR: CHERI still needs rdhwr29 which is AS0
     return toTargetAddressSpace(AS);
-  else
-    return (*AddrSpaceMap)[(unsigned)AS];
+  }
+  if (getTargetInfo().areAllPointersCapabilities() && AS == LangAS::Default) {
+    // FIXME: hardcoding 200 here is ugly but we don't have TargetCodeGenInfo()
+    return 200; // Hack for CHERI purecap ABI where we want default to mean AS200
+  }
+  return (*AddrSpaceMap)[(unsigned)AS];
 }
 
 // Explicitly instantiate this in case a Redeclarable<T> is used from a TU that

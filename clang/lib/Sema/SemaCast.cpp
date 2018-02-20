@@ -2035,8 +2035,6 @@ static void checkIntToPointerCast(bool CStyle, SourceLocation Loc,
                                   Sema &Self) {
   QualType SrcType = SrcExpr->getType();
   ASTContext &Ctx = Self.getASTContext();
-  unsigned TargetAS = Ctx.getTargetAddressSpace(
-      DestType->getPointeeType().getAddressSpace(), nullptr);
 
   if (DestType->isCHERICapabilityType(Ctx) &&
       !SrcType->isCHERICapabilityType(Ctx) &&
@@ -2051,8 +2049,7 @@ static void checkIntToPointerCast(bool CStyle, SourceLocation Loc,
   if (CStyle && SrcType->isIntegralType(Self.Context) &&
       !SrcType->isBooleanType() && !SrcType->isEnumeralType() &&
       !SrcExpr->isIntegerConstantExpr(Self.Context) &&
-      Self.Context.getTargetInfo().getPointerRange(TargetAS) >
-          Self.Context.getTypeSize(SrcType)) {
+      Ctx.getIntRange(DestType) > Ctx.getIntRange(SrcType)) {
     // Separate between casts to void* and non-void* pointers.
     // Some APIs use (abuse) void* for something like a user context,
     // and often that value is an integer even if it isn't a pointer itself.

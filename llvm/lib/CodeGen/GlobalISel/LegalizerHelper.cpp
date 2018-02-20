@@ -286,11 +286,9 @@ LegalizerHelper::LegalizeResult LegalizerHelper::narrowScalar(MachineInstr &MI,
     int NumParts = SizeOp0 / NarrowSize;
 
     SmallVector<unsigned, 2> DstRegs;
-    for (int i = 0; i < NumParts; ++i) {
-      unsigned Dst = MRI.createGenericVirtualRegister(NarrowTy);
-      MIRBuilder.buildUndef(Dst);
-      DstRegs.push_back(Dst);
-    }
+    for (int i = 0; i < NumParts; ++i)
+      DstRegs.push_back(
+          MIRBuilder.buildUndef(NarrowTy)->getOperand(0).getReg());
     MIRBuilder.buildMerge(MI.getOperand(0).getReg(), DstRegs);
     MI.eraseFromParent();
     return Legalized;
@@ -709,9 +707,12 @@ LegalizerHelper::widenScalar(MachineInstr &MI, unsigned TypeIdx, LLT WideTy) {
     return Legalized;
   }
   case TargetOpcode::G_LOAD: {
-    assert(alignTo(MRI.getType(MI.getOperand(0).getReg()).getSizeInBits(), 8) ==
-               WideTy.getSizeInBits() &&
-           "illegal to increase number of bytes loaded");
+    // For some types like i24, we might try to widen to i32. To properly handle
+    // this we should be using a dedicated extending load, until then avoid
+    // trying to legalize.
+    if (alignTo(MRI.getType(MI.getOperand(0).getReg()).getSizeInBits(), 8) !=
+        WideTy.getSizeInBits())
+      return UnableToLegalize;
 
     unsigned DstExt = MRI.createGenericVirtualRegister(WideTy);
     MIRBuilder.buildLoad(DstExt, MI.getOperand(1).getReg(),
@@ -752,7 +753,6 @@ LegalizerHelper::widenScalar(MachineInstr &MI, unsigned TypeIdx, LLT WideTy) {
     return Legalized;
   }
   case TargetOpcode::G_FCONSTANT: {
-    unsigned DstExt = MRI.createGenericVirtualRegister(WideTy);
     const ConstantFP *CFP = MI.getOperand(1).getFPImm();
     APFloat Val = CFP->getValueAPF();
     LLVMContext &Ctx = MIRBuilder.getMF().getFunction().getContext();
@@ -770,8 +770,8 @@ LegalizerHelper::widenScalar(MachineInstr &MI, unsigned TypeIdx, LLT WideTy) {
     };
     bool LosesInfo;
     Val.convert(*LLT2Sem(WideTy), APFloat::rmTowardZero, &LosesInfo);
-    MIRBuilder.buildFConstant(DstExt, *ConstantFP::get(Ctx, Val));
-    MIRBuilder.buildFPTrunc(MI.getOperand(0).getReg(), DstExt);
+    auto Cst = MIRBuilder.buildFConstant(WideTy, *ConstantFP::get(Ctx, Val));
+    MIRBuilder.buildFPTrunc(MI.getOperand(0).getReg(), Cst);
     MI.eraseFromParent();
     return Legalized;
   }
@@ -966,11 +966,10 @@ LegalizerHelper::lower(MachineInstr &MI, unsigned TypeIdx, LLT Ty) {
     }
     ConstantFP &ZeroForNegation =
         *cast<ConstantFP>(ConstantFP::getZeroValueForNegation(ZeroTy));
-    unsigned Zero = MRI.createGenericVirtualRegister(Ty);
-    MIRBuilder.buildFConstant(Zero, ZeroForNegation);
+    auto Zero = MIRBuilder.buildFConstant(Ty, ZeroForNegation);
     MIRBuilder.buildInstr(TargetOpcode::G_FSUB)
         .addDef(Res)
-        .addUse(Zero)
+        .addUse(Zero->getOperand(0).getReg())
         .addUse(MI.getOperand(1).getReg());
     MI.eraseFromParent();
     return Legalized;

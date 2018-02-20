@@ -6,7 +6,6 @@ add_clang_library(clangDaemon
   ClangdLSPServer.cpp
   ClangdServer.cpp
   ClangdUnit.cpp
-  ClangdUnitStore.cpp
   CodeComplete.cpp
   CodeCompletionStrings.cpp
   CompileArgsCache.cpp
@@ -15,6 +14,7 @@ add_clang_library(clangDaemon
   DraftStore.cpp
   FuzzyMatch.cpp
   GlobalCompilationDatabase.cpp
+  Headers.cpp
   JSONExpr.cpp
   JSONRPCDispatcher.cpp
   Logger.cpp
@@ -26,6 +26,7 @@ add_clang_library(clangDaemon
   TUScheduler.cpp
   URI.cpp
   XRefs.cpp
+  index/CanonicalIncludes.cpp
   index/FileIndex.cpp
   index/Index.cpp
   index/MemIndex.cpp

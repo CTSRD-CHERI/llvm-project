@@ -24,7 +24,7 @@ class MergedIndex : public SymbolIndex {
    //          - find the generating file from each Symbol which is Static-only
    //          - ask Dynamic if it has that file (needs new SymbolIndex method)
    //          - if so, drop the Symbol.
-   bool fuzzyFind(const Context &Ctx, const FuzzyFindRequest &Req,
+   bool fuzzyFind(const FuzzyFindRequest &Req,
                   function_ref<void(const Symbol &)> Callback) const override {
      // We can't step through both sources in parallel. So:
      //  1) query all dynamic symbols, slurping results into a slab
@@ -34,13 +34,12 @@ class MergedIndex : public SymbolIndex {
      //  3) now yield all the dynamic symbols we haven't processed.
      bool More = false; // We'll be incomplete if either source was.
      SymbolSlab::Builder DynB;
-     More |=
-         Dynamic->fuzzyFind(Ctx, Req, [&](const Symbol &S) { DynB.insert(S); });
+     More |= Dynamic->fuzzyFind(Req, [&](const Symbol &S) { DynB.insert(S); });
      SymbolSlab Dyn = std::move(DynB).build();
 
      DenseSet<SymbolID> SeenDynamicSymbols;
      Symbol::Details Scratch;
-     More |= Static->fuzzyFind(Ctx, Req, [&](const Symbol &S) {
+     More |= Static->fuzzyFind(Req, [&](const Symbol &S) {
        auto DynS = Dyn.find(S.ID);
        if (DynS == Dyn.end())
          return Callback(S);
@@ -50,7 +49,7 @@ class MergedIndex : public SymbolIndex {
      for (const Symbol &S : Dyn)
        if (!SeenDynamicSymbols.count(S.ID))
          Callback(S);
-     return !More; // returning true indicates the result is complete.
+     return More;
   }
 
 private:
@@ -61,32 +60,42 @@ private:
 Symbol
 mergeSymbol(const Symbol &L, const Symbol &R, Symbol::Details *Scratch) {
   assert(L.ID == R.ID);
-  Symbol S = L;
-  // For each optional field, fill it from R if missing in L.
-  // (It might be missing in R too, but that's a no-op).
-  if (S.CanonicalDeclaration.FilePath == "")
-    S.CanonicalDeclaration = R.CanonicalDeclaration;
-  if (S.CompletionLabel == "")
-    S.CompletionLabel = R.CompletionLabel;
-  if (S.CompletionFilterText == "")
-    S.CompletionFilterText = R.CompletionFilterText;
-  if (S.CompletionPlainInsertText == "")
-    S.CompletionPlainInsertText = R.CompletionPlainInsertText;
-  if (S.CompletionSnippetInsertText == "")
-    S.CompletionSnippetInsertText = R.CompletionSnippetInsertText;
+  // We prefer information from TUs that saw the definition.
+  // Classes: this is the def itself. Functions: hopefully the header decl.
+  // If both did (or both didn't), continue to prefer L over R.
+  bool PreferR = R.Definition && !L.Definition;
+  Symbol S = PreferR ? R : L;        // The target symbol we're merging into.
+  const Symbol &O = PreferR ? L : R; // The "other" less-preferred symbol.
 
-  if (L.Detail && R.Detail) {
-    // Copy into scratch space so we can merge.
-    *Scratch = *L.Detail;
-    if (Scratch->Documentation == "")
-      Scratch->Documentation = R.Detail->Documentation;
-    if (Scratch->CompletionDetail == "")
-      Scratch->CompletionDetail = R.Detail->CompletionDetail;
-    S.Detail = Scratch;
-  } else if (L.Detail)
-    S.Detail = L.Detail;
-  else if (R.Detail)
-    S.Detail = R.Detail;
+  // For each optional field, fill it from O if missing in S.
+  // (It might be missing in O too, but that's a no-op).
+  if (!S.Definition)
+    S.Definition = O.Definition;
+  if (!S.CanonicalDeclaration)
+    S.CanonicalDeclaration = O.CanonicalDeclaration;
+  if (S.CompletionLabel == "")
+    S.CompletionLabel = O.CompletionLabel;
+  if (S.CompletionFilterText == "")
+    S.CompletionFilterText = O.CompletionFilterText;
+  if (S.CompletionPlainInsertText == "")
+    S.CompletionPlainInsertText = O.CompletionPlainInsertText;
+  if (S.CompletionSnippetInsertText == "")
+    S.CompletionSnippetInsertText = O.CompletionSnippetInsertText;
+
+  if (O.Detail) {
+    if (S.Detail) {
+      // Copy into scratch space so we can merge.
+      *Scratch = *S.Detail;
+      if (Scratch->Documentation == "")
+        Scratch->Documentation = O.Detail->Documentation;
+      if (Scratch->CompletionDetail == "")
+        Scratch->CompletionDetail = O.Detail->CompletionDetail;
+      if (Scratch->IncludeHeader == "")
+        Scratch->IncludeHeader = O.Detail->IncludeHeader;
+      S.Detail = Scratch;
+    } else
+      S.Detail = O.Detail;
+  }
   return S;
 }
 

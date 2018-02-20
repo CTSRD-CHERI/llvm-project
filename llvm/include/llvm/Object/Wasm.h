@@ -41,14 +41,13 @@ public:
     GLOBAL_EXPORT,
   };
 
-  WasmSymbol(StringRef Name, SymbolType Type, uint32_t Section,
-             uint32_t ElementIndex, uint32_t FunctionType = 0)
-      : Name(Name), Type(Type), Section(Section), ElementIndex(ElementIndex),
+  WasmSymbol(StringRef Name, SymbolType Type, uint32_t ElementIndex,
+             uint32_t FunctionType = 0)
+      : Name(Name), Type(Type), ElementIndex(ElementIndex),
         FunctionType(FunctionType) {}
 
   StringRef Name;
   SymbolType Type;
-  uint32_t Section;
   uint32_t Flags = 0;
 
   // Index into either the function or global index space.
@@ -67,21 +66,26 @@ public:
     AltIndex = Index;
   }
 
-  bool isFunction() const {
-    return Type == WasmSymbol::SymbolType::FUNCTION_IMPORT ||
-           Type == WasmSymbol::SymbolType::FUNCTION_EXPORT;
+  bool isTypeFunction() const {
+    return Type == SymbolType::FUNCTION_IMPORT ||
+           Type == SymbolType::FUNCTION_EXPORT;
+  }
+
+  bool isTypeGlobal() const {
+    return Type == SymbolType::GLOBAL_IMPORT ||
+           Type == SymbolType::GLOBAL_EXPORT;
   }
 
 
-  bool isWeak() const {
+  bool isBindingWeak() const {
     return getBinding() == wasm::WASM_SYMBOL_BINDING_WEAK;
   }
 
-  bool isGlobal() const {
+  bool isBindingGlobal() const {
     return getBinding() == wasm::WASM_SYMBOL_BINDING_GLOBAL;
   }
 
-  bool isLocal() const {
+  bool isBindingLocal() const {
     return getBinding() == wasm::WASM_SYMBOL_BINDING_LOCAL;
   }
 
@@ -261,8 +265,8 @@ private:
   wasm::WasmLinkingData LinkingData;
   uint32_t NumImportedGlobals = 0;
   uint32_t NumImportedFunctions = 0;
-  uint32_t ImportSection = 0;
-  uint32_t ExportSection = 0;
+  uint32_t CodeSection = 0;
+  uint32_t DataSection = 0;
 
   StringMap<uint32_t> SymbolMap;
 };

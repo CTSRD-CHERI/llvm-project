@@ -13,9 +13,12 @@
 //
 //===---------------------------------------------------------------------===//
 
+#include "index/CanonicalIncludes.h"
 #include "index/Index.h"
+#include "index/Merge.h"
 #include "index/SymbolCollector.h"
 #include "index/SymbolYAML.h"
+#include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/FrontendActions.h"
 #include "clang/Index/IndexDataConsumer.h"
 #include "clang/Index/IndexingAction.h"
@@ -27,6 +30,7 @@
 #include "llvm/Support/Path.h"
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/ThreadPool.h"
+#include "llvm/Support/YAMLTraits.h"
 
 using namespace llvm;
 using namespace clang::tooling;
@@ -34,6 +38,7 @@ using clang::clangd::SymbolSlab;
 
 namespace clang {
 namespace clangd {
+namespace {
 
 static llvm::cl::opt<std::string> AssumedHeaderDir(
     "assume-header-dir",
@@ -41,7 +46,8 @@ static llvm::cl::opt<std::string> AssumedHeaderDir(
                    "If the absolute path cannot be determined (e.g. an "
                    "in-memory VFS) then the relative path is resolved against "
                    "this directory, which must be absolute. If this flag is "
-                   "not given, such headers will have relative paths."));
+                   "not given, such headers will have relative paths."),
+    llvm::cl::init(""));
 
 class SymbolIndexActionFactory : public tooling::FrontendActionFactory {
 public:
@@ -53,11 +59,19 @@ public:
     class WrappedIndexAction : public WrapperFrontendAction {
     public:
       WrappedIndexAction(std::shared_ptr<SymbolCollector> C,
+                         std::unique_ptr<CanonicalIncludes> Includes,
                          const index::IndexingOptions &Opts,
                          tooling::ExecutionContext *Ctx)
           : WrapperFrontendAction(
                 index::createIndexingAction(C, Opts, nullptr)),
-            Ctx(Ctx), Collector(C) {}
+            Ctx(Ctx), Collector(C), Includes(std::move(Includes)),
+            PragmaHandler(collectIWYUHeaderMaps(this->Includes.get())) {}
+
+      std::unique_ptr<ASTConsumer>
+      CreateASTConsumer(CompilerInstance &CI, StringRef InFile) override {
+        CI.getPreprocessor().addCommentHandler(PragmaHandler.get());
+        return WrapperFrontendAction::CreateASTConsumer(CI, InFile);
+      }
 
       void EndSourceFileAction() override {
         WrapperFrontendAction::EndSourceFileAction();
@@ -74,6 +88,8 @@ public:
     private:
       tooling::ExecutionContext *Ctx;
       std::shared_ptr<SymbolCollector> Collector;
+      std::unique_ptr<CanonicalIncludes> Includes;
+      std::unique_ptr<CommentHandler> PragmaHandler;
     };
 
     index::IndexingOptions IndexOpts;
@@ -82,14 +98,38 @@ public:
     IndexOpts.IndexFunctionLocals = false;
     auto CollectorOpts = SymbolCollector::Options();
     CollectorOpts.FallbackDir = AssumedHeaderDir;
+    CollectorOpts.CollectIncludePath = true;
+    auto Includes = llvm::make_unique<CanonicalIncludes>();
+    addSystemHeadersMapping(Includes.get());
+    CollectorOpts.Includes = Includes.get();
     return new WrappedIndexAction(
-        std::make_shared<SymbolCollector>(std::move(CollectorOpts)), IndexOpts,
-        Ctx);
+        std::make_shared<SymbolCollector>(std::move(CollectorOpts)),
+        std::move(Includes), IndexOpts, Ctx);
   }
 
   tooling::ExecutionContext *Ctx;
 };
 
+// Combine occurrences of the same symbol across translation units.
+SymbolSlab mergeSymbols(tooling::ToolResults *Results) {
+  SymbolSlab::Builder UniqueSymbols;
+  llvm::BumpPtrAllocator Arena;
+  Symbol::Details Scratch;
+  Results->forEachResult([&](llvm::StringRef Key, llvm::StringRef Value) {
+    Arena.Reset();
+    llvm::yaml::Input Yin(Value, &Arena);
+    auto Sym = clang::clangd::SymbolFromYAML(Yin, Arena);
+    clang::clangd::SymbolID ID;
+    Key >> ID;
+    if (const auto *Existing = UniqueSymbols.find(ID))
+      UniqueSymbols.insert(mergeSymbol(*Existing, Sym, &Scratch));
+    else
+      UniqueSymbols.insert(Sym);
+  });
+  return std::move(UniqueSymbols).build();
+}
+
+} // namespace
 } // namespace clangd
 } // namespace clang
 
@@ -114,6 +154,7 @@ int main(int argc, const char **argv) {
     return 1;
   }
 
+  // Map phase: emit symbols found in each translation unit.
   auto Err = Executor->get()->execute(
       llvm::make_unique<clang::clangd::SymbolIndexActionFactory>(
           Executor->get()->getExecutionContext()));
@@ -121,22 +162,11 @@ int main(int argc, const char **argv) {
     llvm::errs() << llvm::toString(std::move(Err)) << "\n";
   }
 
-  // Deduplicate the result by key and keep the longest value.
-  // FIXME(ioeric): Merge occurrences, rather than just dropping all but one.
-  // Definitions and forward declarations have the same key and may both have
-  // information. Usage count will need to be aggregated across occurrences,
-  // too.
-  llvm::StringMap<llvm::StringRef> UniqueSymbols;
-  Executor->get()->getToolResults()->forEachResult(
-      [&UniqueSymbols](llvm::StringRef Key, llvm::StringRef Value) {
-        auto Ret = UniqueSymbols.try_emplace(Key, Value);
-        if (!Ret.second) {
-          // If key already exists, keep the longest value.
-          llvm::StringRef &V = Ret.first->second;
-          V = V.size() < Value.size() ? Value : V;
-        }
-      });
-  for (const auto &Sym : UniqueSymbols)
-    llvm::outs() << Sym.second;
+  // Reduce phase: combine symbols using the ID as a key.
+  auto UniqueSymbols =
+      clang::clangd::mergeSymbols(Executor->get()->getToolResults());
+
+  // Output phase: emit YAML for result symbols.
+  SymbolsToYAML(UniqueSymbols, llvm::outs());
   return 0;
 }

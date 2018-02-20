@@ -551,6 +551,7 @@ getLocationForCaller(const StackFrameContext *SFC,
 
   switch (Source.getKind()) {
   case CFGElement::Statement:
+  case CFGElement::Constructor:
     return PathDiagnosticLocation(Source.castAs<CFGStmt>().getStmt(),
                                   SM, CallerCtx);
   case CFGElement::Initializer: {
@@ -578,8 +579,14 @@ getLocationForCaller(const StackFrameContext *SFC,
     const CFGNewAllocator &Alloc = Source.castAs<CFGNewAllocator>();
     return PathDiagnosticLocation(Alloc.getAllocatorExpr(), SM, CallerCtx);
   }
-  case CFGElement::TemporaryDtor:
-    llvm_unreachable("not yet implemented!");
+  case CFGElement::TemporaryDtor: {
+    // Temporary destructors are for temporaries. They die immediately at around
+    // the location of CXXBindTemporaryExpr. If they are lifetime-extended,
+    // they'd be dealt with via an AutomaticObjectDtor instead.
+    const auto &Dtor = Source.castAs<CFGTemporaryDtor>();
+    return PathDiagnosticLocation::createEnd(Dtor.getBindTemporaryExpr(), SM,
+                                             CallerCtx);
+  }
   case CFGElement::LifetimeEnds:
   case CFGElement::LoopExit:
     llvm_unreachable("CFGElement kind should not be on callsite!");
@@ -742,6 +749,8 @@ const Stmt *PathDiagnosticLocation::getStmt(const ExplodedNode *N) {
     return CEE->getCalleeContext()->getCallSite();
   if (Optional<PostInitializer> PIPP = P.getAs<PostInitializer>())
     return PIPP->getInitializer()->getInit();
+  if (Optional<CallExitBegin> CEB = P.getAs<CallExitBegin>())
+    return CEB->getReturnStmt();
 
   return nullptr;
 }

@@ -502,12 +502,19 @@ void SleepForMillis(int millis) {
 }
 
 u64 NanoTime() {
-  return 0;
+  static LARGE_INTEGER frequency = {0};
+  LARGE_INTEGER counter;
+  if (UNLIKELY(frequency.QuadPart == 0)) {
+    QueryPerformanceFrequency(&frequency);
+    CHECK_NE(frequency.QuadPart, 0);
+  }
+  QueryPerformanceCounter(&counter);
+  counter.QuadPart *= 1000ULL * 1000000ULL;
+  counter.QuadPart /= frequency.QuadPart;
+  return counter.QuadPart;
 }
 
-u64 MonotonicNanoTime() {
-  return 0;
-}
+u64 MonotonicNanoTime() { return NanoTime(); }
 
 void Abort() {
   internal__exit(3);
@@ -756,7 +763,10 @@ uptr internal_ftruncate(fd_t fd, uptr size) {
 }
 
 uptr GetRSS() {
-  return 0;
+  PROCESS_MEMORY_COUNTERS counters;
+  if (!GetProcessMemoryInfo(GetCurrentProcess(), &counters, sizeof(counters)))
+    return 0;
+  return counters.WorkingSetSize;
 }
 
 void *internal_start_thread(void (*func)(void *arg), void *arg) { return 0; }

@@ -288,9 +288,6 @@ inl	(%dx), %eax
 
 //PR15455
 
-// permitted invalid memory forms	
-outs	(%rsi), (%dx) 
-// CHECK: outsw	(%rsi), %dx
 outsb	(%rsi), (%dx)
 // CHECK: outsb	(%rsi), %dx
 outsw	(%rsi), (%dx)
@@ -298,8 +295,6 @@ outsw	(%rsi), (%dx)
 outsl	(%rsi), (%dx)
 // CHECK: outsl	(%rsi), %dx
 
-ins	(%dx), %es:(%rdi)
-// CHECK: insw	%dx, %es:(%rdi)
 insb	(%dx), %es:(%rdi)
 // CHECK: insb	%dx, %es:(%rdi)
 insw	(%dx), %es:(%rdi)
@@ -621,6 +616,11 @@ movl	$12, foo(%rip)
 // CHECK: movl	$12, foo(%rip)
 // CHECK: encoding: [0xc7,0x05,A,A,A,A,0x0c,0x00,0x00,0x00]
 // CHECK:    fixup A - offset: 2, value: foo-8, kind: reloc_riprel_4byte
+
+// rdar://37247000
+movl	$12, 1024(%rip)
+// CHECK: movl	$12, 1024(%rip)
+// CHECK: encoding: [0xc7,0x05,0x00,0x04,0x00,0x00,0x0c,0x00,0x00,0x00]
 
 movq	$12, foo(%rip)
 // CHECK:  movq	$12, foo(%rip)

@@ -49,12 +49,17 @@ enum class ErrorCode {
 };
 
 struct URIForFile {
-  std::string file;
+  URIForFile() = default;
+  explicit URIForFile(std::string AbsPath);
 
-  std::string uri() const { return URI::createFile(file).toString(); }
+  /// Retrieves absolute path to the file.
+  llvm::StringRef file() const { return File; }
+
+  explicit operator bool() const { return !File.empty(); }
+  std::string uri() const { return URI::createFile(File).toString(); }
 
   friend bool operator==(const URIForFile &LHS, const URIForFile &RHS) {
-    return LHS.file == RHS.file;
+    return LHS.File == RHS.File;
   }
 
   friend bool operator!=(const URIForFile &LHS, const URIForFile &RHS) {
@@ -62,8 +67,11 @@ struct URIForFile {
   }
 
   friend bool operator<(const URIForFile &LHS, const URIForFile &RHS) {
-    return LHS.file < RHS.file;
+    return LHS.File < RHS.File;
   }
+
+private:
+  std::string File;
 };
 
 /// Serialize/deserialize \p URIForFile to/from a string URI.
@@ -74,14 +82,15 @@ struct TextDocumentIdentifier {
   /// The text document's URI.
   URIForFile uri;
 };
+json::Expr toJSON(const TextDocumentIdentifier &);
 bool fromJSON(const json::Expr &, TextDocumentIdentifier &);
 
 struct Position {
   /// Line position in a document (zero-based).
-  int line;
+  int line = 0;
 
   /// Character offset on a line in a document (zero-based).
-  int character;
+  int character = 0;
 
   friend bool operator==(const Position &LHS, const Position &RHS) {
     return std::tie(LHS.line, LHS.character) ==
@@ -160,7 +169,7 @@ struct TextDocumentItem {
   std::string languageId;
 
   /// The version number of this document (it will strictly increase after each
-  int version;
+  int version = 0;
 
   /// The content of the opened text document.
   std::string text;
@@ -178,6 +187,51 @@ struct NoParams {};
 inline bool fromJSON(const json::Expr &, NoParams &) { return true; }
 using ShutdownParams = NoParams;
 using ExitParams = NoParams;
+
+struct CompletionItemClientCapabilities {
+  /// Client supports snippets as insert text.
+  bool snippetSupport = false;
+  /// Client supports commit characters on a completion item.
+  bool commitCharacterSupport = false;
+  // Client supports the follow content formats for the documentation property.
+  // The order describes the preferred format of the client.
+  // NOTE: not used by clangd at the moment.
+  // std::vector<MarkupKind> documentationFormat;
+};
+bool fromJSON(const json::Expr &, CompletionItemClientCapabilities &);
+
+struct CompletionClientCapabilities {
+  /// Whether completion supports dynamic registration.
+  bool dynamicRegistration = false;
+  /// The client supports the following `CompletionItem` specific capabilities.
+  CompletionItemClientCapabilities completionItem;
+  // NOTE: not used by clangd at the moment.
+  // llvm::Optional<CompletionItemKindCapabilities> completionItemKind;
+
+  /// The client supports to send additional context information for a
+  /// `textDocument/completion` request.
+  bool contextSupport = false;
+};
+bool fromJSON(const json::Expr &, CompletionClientCapabilities &);
+
+// FIXME: most of the capabilities are missing from this struct. Only the ones
+// used by clangd are currently there.
+struct TextDocumentClientCapabilities {
+  /// Capabilities specific to the `textDocument/completion`
+  CompletionClientCapabilities completion;
+};
+bool fromJSON(const json::Expr &, TextDocumentClientCapabilities &);
+
+struct ClientCapabilities {
+  // Workspace specific client capabilities.
+  // NOTE: not used by clangd at the moment.
+  // WorkspaceClientCapabilities workspace;
+
+  // Text document specific client capabilities.
+  TextDocumentClientCapabilities textDocument;
+};
+
+bool fromJSON(const json::Expr &, ClientCapabilities &);
 
 struct InitializeParams {
   /// The process Id of the parent process that started
@@ -201,8 +255,7 @@ struct InitializeParams {
   // initializationOptions?: any;
 
   /// The capabilities provided by the client (editor or tool)
-  /// Note: Not currently used by clangd
-  // ClientCapabilities capabilities;
+  ClientCapabilities capabilities;
 
   /// The initial trace setting. If omitted trace is disabled ('off').
   llvm::Optional<TraceLevel> trace;
@@ -255,7 +308,7 @@ struct FileEvent {
   /// The file's URI.
   URIForFile uri;
   /// The change type.
-  FileChangeType type;
+  FileChangeType type = FileChangeType::Created;
 };
 bool fromJSON(const json::Expr &, FileEvent &);
 
@@ -267,10 +320,10 @@ bool fromJSON(const json::Expr &, DidChangeWatchedFilesParams &);
 
 struct FormattingOptions {
   /// Size of a tab in spaces.
-  int tabSize;
+  int tabSize = 0;
 
   /// Prefer spaces over tabs.
-  bool insertSpaces;
+  bool insertSpaces = false;
 };
 bool fromJSON(const json::Expr &, FormattingOptions &);
 json::Expr toJSON(const FormattingOptions &);
@@ -317,7 +370,7 @@ struct Diagnostic {
 
   /// The diagnostic's severity. Can be omitted. If omitted it is up to the
   /// client to interpret diagnostics as error, warning, info or hint.
-  int severity;
+  int severity = 0;
 
   /// The diagnostic's code. Can be omitted.
   /// Note: Not currently used by clangd
@@ -372,6 +425,17 @@ struct WorkspaceEdit {
 bool fromJSON(const json::Expr &, WorkspaceEdit &);
 json::Expr toJSON(const WorkspaceEdit &WE);
 
+struct IncludeInsertion {
+  /// The document in which the command was invoked.
+  TextDocumentIdentifier textDocument;
+
+  /// The header to be inserted. This could be either a URI ir a literal string
+  /// quoted with <> or "" that can be #included directly.
+  std::string header;
+};
+bool fromJSON(const json::Expr &, IncludeInsertion &);
+json::Expr toJSON(const IncludeInsertion &II);
+
 /// Exact commands are not specified in the protocol so we define the
 /// ones supported by Clangd here. The protocol specifies the command arguments
 /// to be "any[]" but to make this safer and more manageable, each command we
@@ -383,15 +447,24 @@ json::Expr toJSON(const WorkspaceEdit &WE);
 struct ExecuteCommandParams {
   // Command to apply fix-its. Uses WorkspaceEdit as argument.
   const static llvm::StringLiteral CLANGD_APPLY_FIX_COMMAND;
+  // Command to insert an #include into code.
+  const static llvm::StringLiteral CLANGD_INSERT_HEADER_INCLUDE;
 
   /// The command identifier, e.g. CLANGD_APPLY_FIX_COMMAND
   std::string command;
 
   // Arguments
-
   llvm::Optional<WorkspaceEdit> workspaceEdit;
+
+  llvm::Optional<IncludeInsertion> includeInsertion;
 };
 bool fromJSON(const json::Expr &, ExecuteCommandParams &);
+
+struct Command : public ExecuteCommandParams {
+  std::string title;
+};
+
+json::Expr toJSON(const Command &C);
 
 struct ApplyWorkspaceEditParams {
   WorkspaceEdit edit;
@@ -406,6 +479,27 @@ struct TextDocumentPositionParams {
   Position position;
 };
 bool fromJSON(const json::Expr &, TextDocumentPositionParams &);
+
+enum class MarkupKind {
+  PlainText,
+  Markdown,
+};
+
+struct MarkupContent {
+  MarkupKind kind = MarkupKind::PlainText;
+  std::string value;
+};
+json::Expr toJSON(const MarkupContent &MC);
+
+struct Hover {
+  /// The hover's content
+  MarkupContent contents;
+
+  /// An optional range is a range inside a text document
+  /// that is used to visualize a hover, e.g. by changing the background color.
+  llvm::Optional<Range> range;
+};
+json::Expr toJSON(const Hover &H);
 
 /// The kind of a completion entry.
 enum class CompletionItemKind {
@@ -453,10 +547,13 @@ enum class InsertTextFormat {
 /// user keeps typing.
 /// This is a clangd extension.
 struct CompletionItemScores {
-  float finalScore;  /// The score that items are ranked by.
-                     /// This is filterScore * symbolScore.
-  float filterScore; /// How the partial identifier matched filterText. [0-1]
-  float symbolScore; /// How the symbol fits, ignoring the partial identifier.
+  /// The score that items are ranked by.
+  /// This is filterScore * symbolScore.
+  float finalScore = 0.f;
+  /// How the partial identifier matched filterText. [0-1]
+  float filterScore = 0.f;
+  /// How the symbol fits, ignoring the partial identifier.
+  float symbolScore = 0.f;
 };
 
 struct CompletionItem {
@@ -506,11 +603,9 @@ struct CompletionItem {
   /// themselves.
   std::vector<TextEdit> additionalTextEdits;
 
+  llvm::Optional<Command> command;
   // TODO(krasimir): The following optional fields defined by the language
   // server protocol are unsupported:
-  //
-  // command?: Command - An optional command that is executed *after* inserting
-  //                     this completion.
   //
   // data?: any - A data entry field that is preserved on a completion item
   //              between a completion and a completion resolve request.
@@ -588,13 +683,10 @@ enum class DocumentHighlightKind { Text = 1, Read = 2, Write = 3 };
 /// the background color of its range.
 
 struct DocumentHighlight {
-
   /// The range this highlight applies to.
-
   Range range;
 
   /// The highlight kind, default is DocumentHighlightKind.Text.
-
   DocumentHighlightKind kind = DocumentHighlightKind::Text;
 
   friend bool operator<(const DocumentHighlight &LHS,
