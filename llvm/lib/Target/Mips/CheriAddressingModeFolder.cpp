@@ -293,30 +293,10 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         }
       } else
         AddInst = nullptr;
-      auto InsertPoint = I.first;
       MachineBasicBlock *InsertBlock = I.first->getParent();
-      // If this is a load of a GOT offset and it's in a loop then we want to
-      // try to hoist it out of the loop.
-      if (Offset.isGlobal()) {
-        auto Loop = MLI.getLoopFor(InsertBlock);
-        if (Loop && Loop->getLoopPreheader()) {
-          auto *Preheader = Loop->getLoopPreheader();
-          // If all paths to this block go through the preheader then hoist.
-          // Note: It might be worth doing this recursively and pushing out of
-          // nested loops.
-          if (Preheader->terminators().begin() != Preheader->terminators().end()) {
-            MachineInstr *End = &*Preheader->getFirstTerminator();
-            if (MDT.dominates(Preheader, InsertBlock))
-              if (MDT.dominates(End, I.first)) {
-                InsertBlock = Preheader;
-                InsertPoint = End;
-              }
-          }
-        }
-      }
       auto FirstOperand = I.first->getOperand(0);
       unsigned FirstReg = FirstOperand.getReg();
-      BuildMI(*InsertBlock, InsertPoint, I.first->getDebugLoc(),
+      BuildMI(*InsertBlock, I.first, I.first->getDebugLoc(),
           InstrInfo->get(MipsOpForCHERIOp(I.first->getOpcode())))
         .addReg(FirstReg, getDefRegState(FirstOperand.isDef()))
         .addReg(BaseReg).add(Offset);
