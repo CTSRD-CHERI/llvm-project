@@ -1494,6 +1494,7 @@ void llvm::salvageDebugInfo(Instruction &I) {
     return;
 
   auto &M = *I.getModule();
+  auto &DL = M.getDataLayout();
 
   auto wrapMD = [&](Value *V) {
     return MetadataAsValue::get(I.getContext(), ValueAsMetadata::get(V));
@@ -1521,7 +1522,7 @@ void llvm::salvageDebugInfo(Instruction &I) {
   };
 
   if (auto *CI = dyn_cast<CastInst>(&I)) {
-    if (!CI->isNoopCast(M.getDataLayout()))
+    if (!CI->isNoopCast(DL))
       return;
 
     // No-op casts are irrelevant for debug info.
@@ -1541,6 +1542,7 @@ void llvm::salvageDebugInfo(Instruction &I) {
       for (auto *DII : DbgUsers)
         applyOffset(DII, Offset.getSExtValue());
   } else if (auto *BI = dyn_cast<BinaryOperator>(&I)) {
+    // Rewrite binary operations with constant integer operands.
     auto *ConstInt = dyn_cast<ConstantInt>(I.getOperand(1));
     if (!ConstInt || ConstInt->getBitWidth() > 64)
       return;
@@ -1565,6 +1567,9 @@ void llvm::salvageDebugInfo(Instruction &I) {
         break;
       case Instruction::Or:
         applyOps(DII, {dwarf::DW_OP_constu, Val, dwarf::DW_OP_or});
+        break;
+      case Instruction::And:
+        applyOps(DII, {dwarf::DW_OP_constu, Val, dwarf::DW_OP_and});
         break;
       case Instruction::Xor:
         applyOps(DII, {dwarf::DW_OP_constu, Val, dwarf::DW_OP_xor});

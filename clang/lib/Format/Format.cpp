@@ -715,6 +715,8 @@ FormatStyle getGoogleStyle(FormatStyle::LanguageKind Language) {
       {
           "pb",
           "PB",
+          "proto",
+          "PROTO",
       },
       /*EnclosingFunctionNames=*/
       {},
@@ -1440,7 +1442,9 @@ private:
         "NSAffineTransform",
         "NSArray",
         "NSAttributedString",
+        "NSBundle",
         "NSCache",
+        "NSCalendar",
         "NSCharacterSet",
         "NSCountedSet",
         "NSData",
@@ -1466,6 +1470,7 @@ private:
         "NSMutableString",
         "NSNumber",
         "NSNumberFormatter",
+        "NSObject",
         "NSOrderedSet",
         "NSPoint",
         "NSPointerArray",
@@ -1475,17 +1480,19 @@ private:
         "NSSet",
         "NSSize",
         "NSString",
+        "NSTimeZone",
         "NSUInteger",
         "NSURL",
         "NSURLComponents",
         "NSURLQueryItem",
         "NSUUID",
+        "NSValue",
     };
 
     for (auto &Line : AnnotatedLines) {
-      for (FormatToken *FormatTok = Line->First->Next; FormatTok;
+      for (FormatToken *FormatTok = Line->First; FormatTok;
            FormatTok = FormatTok->Next) {
-        if ((FormatTok->Previous->is(tok::at) &&
+        if ((FormatTok->Previous && FormatTok->Previous->is(tok::at) &&
              (FormatTok->isObjCAtKeyword(tok::objc_interface) ||
               FormatTok->isObjCAtKeyword(tok::objc_implementation) ||
               FormatTok->isObjCAtKeyword(tok::objc_protocol) ||

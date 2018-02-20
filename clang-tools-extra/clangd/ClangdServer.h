@@ -189,22 +189,32 @@ public:
   /// will be used. If \p UsedFS is non-null, it will be overwritten by
   /// vfs::FileSystem used for signature help. This method should only be called
   /// for currently tracked files.
-  llvm::Expected<Tagged<SignatureHelp>>
-  signatureHelp(PathRef File, Position Pos,
-                llvm::Optional<StringRef> OverridenContents = llvm::None,
-                IntrusiveRefCntPtr<vfs::FileSystem> *UsedFS = nullptr);
+  void signatureHelp(
+      PathRef File, Position Pos,
+      UniqueFunction<void(llvm::Expected<Tagged<SignatureHelp>>)> Callback,
+      llvm::Optional<StringRef> OverridenContents = llvm::None,
+      IntrusiveRefCntPtr<vfs::FileSystem> *UsedFS = nullptr);
 
   /// Get definition of symbol at a specified \p Line and \p Column in \p File.
-  llvm::Expected<Tagged<std::vector<Location>>> findDefinitions(PathRef File,
-                                                                Position Pos);
+  void findDefinitions(
+      PathRef File, Position Pos,
+      UniqueFunction<void(llvm::Expected<Tagged<std::vector<Location>>>)>
+          Callback);
 
   /// Helper function that returns a path to the corresponding source file when
   /// given a header file and vice versa.
   llvm::Optional<Path> switchSourceHeader(PathRef Path);
 
   /// Get document highlights for a given position.
-  llvm::Expected<Tagged<std::vector<DocumentHighlight>>>
-  findDocumentHighlights(PathRef File, Position Pos);
+  void findDocumentHighlights(
+      PathRef File, Position Pos,
+      UniqueFunction<
+          void(llvm::Expected<Tagged<std::vector<DocumentHighlight>>>)>
+          Callback);
+
+  /// Get code hover for a given position.
+  void findHover(PathRef File, Position Pos,
+                 UniqueFunction<void(llvm::Expected<Tagged<Hover>>)> Callback);
 
   /// Run formatting for \p Rng inside \p File with content \p Code.
   llvm::Expected<tooling::Replacements> formatRange(StringRef Code,
@@ -221,8 +231,16 @@ public:
 
   /// Rename all occurrences of the symbol at the \p Pos in \p File to
   /// \p NewName.
-  Expected<std::vector<tooling::Replacement>> rename(PathRef File, Position Pos,
-                                                     llvm::StringRef NewName);
+  void rename(PathRef File, Position Pos, llvm::StringRef NewName,
+              UniqueFunction<void(Expected<std::vector<tooling::Replacement>>)>
+                  Callback);
+
+  /// Inserts a new #include of \p Header into \p File, if it's not present.
+  /// \p Header is either an URI that can be resolved to an #include path that
+  /// is suitable to be inserted or a literal string quoted with <> or "" that
+  /// can be #included directly.
+  Expected<tooling::Replacements> insertInclude(PathRef File, StringRef Code,
+                                                StringRef Header);
 
   /// Gets current document contents for \p File. Returns None if \p File is not
   /// currently tracked.
@@ -233,7 +251,7 @@ public:
   /// Only for testing purposes.
   /// Waits until all requests to worker thread are finished and dumps AST for
   /// \p File. \p File must be in the list of added documents.
-  std::string dumpAST(PathRef File);
+  void dumpAST(PathRef File, UniqueFunction<void(std::string)> Callback);
   /// Called when an event occurs for a watched file in the workspace.
   void onFileEvent(const DidChangeWatchedFilesParams &Params);
 

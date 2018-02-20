@@ -152,11 +152,19 @@ struct Symbol {
   /// and have clients resolve full symbol information for a specific candidate
   /// if needed.
   struct Details {
-    // Documentation including comment for the symbol declaration.
+    /// Documentation including comment for the symbol declaration.
     llvm::StringRef Documentation;
-    // This is what goes into the LSP detail field in a completion item. For
-    // example, the result type of a function.
+    /// This is what goes into the LSP detail field in a completion item. For
+    /// example, the result type of a function.
     llvm::StringRef CompletionDetail;
+    /// This can be either a URI of the header to be #include'd for this symbol,
+    /// or a literal header quoted with <> or "" that is suitable to be included
+    /// directly. When this is a URI, the exact #include path needs to be
+    /// calculated according to the URI scheme.
+    ///
+    /// If empty, FileURI in CanonicalDeclaration should be used to calculate
+    /// the #include path.
+    llvm::StringRef IncludeHeader;
   };
 
   // Optional details of the symbol.
@@ -247,8 +255,7 @@ public:
   /// each matched symbol before returning.
   /// If returned Symbols are used outside Callback, they must be deep-copied!
   ///
-  /// Returns true if the result list is complete, false if it was truncated due
-  /// to MaxCandidateCount
+  /// Returns true if there may be more results (limited by MaxCandidateCount).
   virtual bool
   fuzzyFind(const FuzzyFindRequest &Req,
             llvm::function_ref<void(const Symbol &)> Callback) const = 0;

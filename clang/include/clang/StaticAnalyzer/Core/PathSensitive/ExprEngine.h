@@ -55,6 +55,20 @@ public:
     Inline_Minimal = 0x1
   };
 
+  /// Hints for figuring out of a call should be inlined during evalCall().
+  struct EvalCallOptions {
+    /// This call is a constructor or a destructor for which we do not currently
+    /// compute the this-region correctly.
+    bool IsCtorOrDtorWithImproperlyModeledTargetRegion = false;
+    /// This call is a constructor or a destructor for a single element within
+    /// an array, a part of array construction or destruction.
+    bool IsArrayCtorOrDtor = false;
+    /// This call is a constructor or a destructor of a temporary value.
+    bool IsTemporaryCtorOrDtor = false;
+
+    EvalCallOptions() {}
+  };
+
 private:
   AnalysisManager &AMgr;
   
@@ -393,7 +407,7 @@ public:
   void VisitMemberExpr(const MemberExpr *M, ExplodedNode *Pred, 
                            ExplodedNodeSet &Dst);
 
-  /// VisitMemberExpr - Transfer function for builtin atomic expressions
+  /// VisitAtomicExpr - Transfer function for builtin atomic expressions
   void VisitAtomicExpr(const AtomicExpr *E, ExplodedNode *Pred,
                        ExplodedNodeSet &Dst);
 
@@ -434,10 +448,6 @@ public:
                                        ExplodedNode *Pred,
                                        ExplodedNodeSet &Dst);
 
-  void VisitCXXBindTemporaryExpr(const CXXBindTemporaryExpr *BTE,
-                                 ExplodedNodeSet &PreVisit,
-                                 ExplodedNodeSet &Dst);
-
   void VisitCXXCatchStmt(const CXXCatchStmt *CS, ExplodedNode *Pred,
                          ExplodedNodeSet &Dst);
 
@@ -449,7 +459,8 @@ public:
 
   void VisitCXXDestructor(QualType ObjectType, const MemRegion *Dest,
                           const Stmt *S, bool IsBaseDtor,
-                          ExplodedNode *Pred, ExplodedNodeSet &Dst);
+                          ExplodedNode *Pred, ExplodedNodeSet &Dst,
+                          const EvalCallOptions &Options);
 
   void VisitCXXNewAllocatorCall(const CXXNewExpr *CNE,
                                 ExplodedNode *Pred,
@@ -562,18 +573,17 @@ public:
                  ExplodedNode *Pred, ProgramStateRef St, SVal TargetLV, SVal Val,
                  const ProgramPointTag *tag = nullptr);
 
+  /// Return the CFG element corresponding to the worklist element
+  /// that is currently being processed by ExprEngine.
+  CFGElement getCurrentCFGElement() {
+    return (*currBldrCtx->getBlock())[currStmtIdx];
+  }
+
   /// \brief Create a new state in which the call return value is binded to the
   /// call origin expression.
   ProgramStateRef bindReturnValue(const CallEvent &Call,
                                   const LocationContext *LCtx,
                                   ProgramStateRef State);
-
-  struct EvalCallOptions {
-    bool IsConstructorWithImproperlyModeledTargetRegion = false;
-    bool IsArrayConstructorOrDestructor = false;
-
-    EvalCallOptions() {}
-  };
 
   /// Evaluate a call, running pre- and post-call checks and allowing checkers
   /// to be responsible for handling the evaluation of the call itself.
@@ -658,6 +668,17 @@ private:
                                                 const Expr *InitWithAdjustments,
                                                 const Expr *Result = nullptr);
 
+  /// Returns a region representing the first element of a (possibly
+  /// multi-dimensional) array, for the purposes of element construction or
+  /// destruction.
+  ///
+  /// On return, \p Ty will be set to the base type of the array.
+  ///
+  /// If the type is not an array type at all, the original value is returned.
+  /// Otherwise the "IsArray" flag is set.
+  static SVal makeZeroElementRegion(ProgramStateRef State, SVal LValue,
+                                    QualType &Ty, bool &IsArray);
+
   /// For a DeclStmt or CXXInitCtorInitializer, walk backward in the current CFG
   /// block to find the constructor expression that directly constructed into
   /// the storage for this statement. Returns null if the constructor for this
@@ -671,7 +692,21 @@ private:
   /// IsConstructorWithImproperlyModeledTargetRegion flag is set in \p CallOpts.
   const MemRegion *getRegionForConstructedObject(const CXXConstructExpr *CE,
                                                  ExplodedNode *Pred,
+                                                 const ConstructionContext *CC,
                                                  EvalCallOptions &CallOpts);
+
+  /// Store the region of a C++ temporary object corresponding to a
+  /// CXXBindTemporaryExpr for later destruction.
+  static ProgramStateRef addInitializedTemporary(
+      ProgramStateRef State, const CXXBindTemporaryExpr *BTE,
+      const LocationContext *LC, const CXXTempObjectRegion *R);
+
+  /// Check if all initialized temporary regions are clear for the given
+  /// context range (including FromLC, not including ToLC).
+  /// This is useful for assertions.
+  static bool areInitializedTemporariesClear(ProgramStateRef State,
+                                             const LocationContext *FromLC,
+                                             const LocationContext *ToLC);
 
   /// Store the region returned by operator new() so that the constructor
   /// that follows it knew what location to initialize. The value should be

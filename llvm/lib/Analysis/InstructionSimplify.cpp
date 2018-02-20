@@ -1264,9 +1264,10 @@ static Value *SimplifyAShrInst(Value *Op0, Value *Op1, bool isExact,
                                     MaxRecurse))
     return V;
 
-  // all ones >>a X -> all ones
+  // all ones >>a X -> -1
+  // Do not return Op0 because it may contain undef elements if it's a vector.
   if (match(Op0, m_AllOnes()))
-    return Op0;
+    return Constant::getAllOnesValue(Op0->getType());
 
   // (X << A) >> A -> X
   Value *X;
@@ -1783,20 +1784,15 @@ static Value *SimplifyOrInst(Value *Op0, Value *Op1, const SimplifyQuery &Q,
     return C;
 
   // X | undef -> -1
-  if (match(Op1, m_Undef()))
+  // X | -1 = -1
+  // Do not return Op1 because it may contain undef elements if it's a vector.
+  if (match(Op1, m_Undef()) || match(Op1, m_AllOnes()))
     return Constant::getAllOnesValue(Op0->getType());
 
   // X | X = X
-  if (Op0 == Op1)
-    return Op0;
-
   // X | 0 = X
-  if (match(Op1, m_Zero()))
+  if (Op0 == Op1 || match(Op1, m_Zero()))
     return Op0;
-
-  // X | -1 = -1
-  if (match(Op1, m_AllOnes()))
-    return Op1;
 
   // A | ~A  =  ~A | A  =  -1
   if (match(Op0, m_Not(m_Specific(Op1))) ||
@@ -3681,37 +3677,38 @@ static Value *simplifySelectWithICmpCond(Value *CondVal, Value *TrueVal,
 
 /// Given operands for a SelectInst, see if we can fold the result.
 /// If not, this returns null.
-static Value *SimplifySelectInst(Value *CondVal, Value *TrueVal,
-                                 Value *FalseVal, const SimplifyQuery &Q,
-                                 unsigned MaxRecurse) {
-  // select true, X, Y  -> X
-  // select false, X, Y -> Y
-  if (Constant *CB = dyn_cast<Constant>(CondVal)) {
-    if (Constant *CT = dyn_cast<Constant>(TrueVal))
-      if (Constant *CF = dyn_cast<Constant>(FalseVal))
-        return ConstantFoldSelectInstruction(CB, CT, CF);
-    if (CB->isAllOnesValue())
+static Value *SimplifySelectInst(Value *Cond, Value *TrueVal, Value *FalseVal,
+                                 const SimplifyQuery &Q, unsigned MaxRecurse) {
+  if (auto *CondC = dyn_cast<Constant>(Cond)) {
+    if (auto *TrueC = dyn_cast<Constant>(TrueVal))
+      if (auto *FalseC = dyn_cast<Constant>(FalseVal))
+        return ConstantFoldSelectInstruction(CondC, TrueC, FalseC);
+
+    // select undef, X, Y -> X or Y
+    if (isa<UndefValue>(CondC))
+      return isa<Constant>(FalseVal) ? FalseVal : TrueVal;
+
+    // TODO: Vector constants with undef elements don't simplify.
+
+    // select true, X, Y  -> X
+    if (CondC->isAllOnesValue())
       return TrueVal;
-    if (CB->isNullValue())
+    // select false, X, Y -> Y
+    if (CondC->isNullValue())
       return FalseVal;
   }
 
-  // select C, X, X -> X
+  // select ?, X, X -> X
   if (TrueVal == FalseVal)
     return TrueVal;
 
-  if (isa<UndefValue>(CondVal)) {  // select undef, X, Y -> X or Y
-    if (isa<Constant>(FalseVal))
-      return FalseVal;
-    return TrueVal;
-  }
-  if (isa<UndefValue>(TrueVal))   // select C, undef, X -> X
+  if (isa<UndefValue>(TrueVal))   // select ?, undef, X -> X
     return FalseVal;
-  if (isa<UndefValue>(FalseVal))   // select C, X, undef -> X
+  if (isa<UndefValue>(FalseVal))   // select ?, X, undef -> X
     return TrueVal;
 
   if (Value *V =
-          simplifySelectWithICmpCond(CondVal, TrueVal, FalseVal, Q, MaxRecurse))
+          simplifySelectWithICmpCond(Cond, TrueVal, FalseVal, Q, MaxRecurse))
     return V;
 
   return nullptr;

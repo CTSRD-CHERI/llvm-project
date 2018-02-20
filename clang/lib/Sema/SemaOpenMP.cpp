@@ -1025,7 +1025,7 @@ DSAStackTy::DSAVarData DSAStackTy::getTopDSA(ValueDecl *D, bool FromParent) {
         D, [](OpenMPClauseKind C) -> bool { return C == OMPC_firstprivate; },
         MatchesAlways, FromParent);
     if (DVarTemp.CKind == OMPC_firstprivate && DVarTemp.RefExpr)
-      return DVar;
+      return DVarTemp;
 
     DVar.CKind = OMPC_shared;
     return DVar;
@@ -11367,138 +11367,135 @@ Sema::ActOnOpenMPDependClause(OpenMPDependClauseKind DepKind,
       TotalDepCount.setIsUnsigned(/*Val=*/true);
     }
   }
-  if ((DepKind != OMPC_DEPEND_sink && DepKind != OMPC_DEPEND_source) ||
-      DSAStack->getParentOrderedRegionParam()) {
-    for (auto &RefExpr : VarList) {
-      assert(RefExpr && "NULL expr in OpenMP shared clause.");
-      if (isa<DependentScopeDeclRefExpr>(RefExpr)) {
+  for (auto &RefExpr : VarList) {
+    assert(RefExpr && "NULL expr in OpenMP shared clause.");
+    if (isa<DependentScopeDeclRefExpr>(RefExpr)) {
+      // It will be analyzed later.
+      Vars.push_back(RefExpr);
+      continue;
+    }
+
+    SourceLocation ELoc = RefExpr->getExprLoc();
+    auto *SimpleExpr = RefExpr->IgnoreParenCasts();
+    if (DepKind == OMPC_DEPEND_sink) {
+      if (DSAStack->getParentOrderedRegionParam() &&
+          DepCounter >= TotalDepCount) {
+        Diag(ELoc, diag::err_omp_depend_sink_unexpected_expr);
+        continue;
+      }
+      ++DepCounter;
+      // OpenMP  [2.13.9, Summary]
+      // depend(dependence-type : vec), where dependence-type is:
+      // 'sink' and where vec is the iteration vector, which has the form:
+      //  x1 [+- d1], x2 [+- d2 ], . . . , xn [+- dn]
+      // where n is the value specified by the ordered clause in the loop
+      // directive, xi denotes the loop iteration variable of the i-th nested
+      // loop associated with the loop directive, and di is a constant
+      // non-negative integer.
+      if (CurContext->isDependentContext()) {
         // It will be analyzed later.
         Vars.push_back(RefExpr);
         continue;
       }
-
-      SourceLocation ELoc = RefExpr->getExprLoc();
-      auto *SimpleExpr = RefExpr->IgnoreParenCasts();
-      if (DepKind == OMPC_DEPEND_sink) {
-        if (DepCounter >= TotalDepCount) {
-          Diag(ELoc, diag::err_omp_depend_sink_unexpected_expr);
-          continue;
-        }
-        ++DepCounter;
-        // OpenMP  [2.13.9, Summary]
-        // depend(dependence-type : vec), where dependence-type is:
-        // 'sink' and where vec is the iteration vector, which has the form:
-        //  x1 [+- d1], x2 [+- d2 ], . . . , xn [+- dn]
-        // where n is the value specified by the ordered clause in the loop
-        // directive, xi denotes the loop iteration variable of the i-th nested
-        // loop associated with the loop directive, and di is a constant
-        // non-negative integer.
-        if (CurContext->isDependentContext()) {
-          // It will be analyzed later.
-          Vars.push_back(RefExpr);
-          continue;
-        }
-        SimpleExpr = SimpleExpr->IgnoreImplicit();
-        OverloadedOperatorKind OOK = OO_None;
-        SourceLocation OOLoc;
-        Expr *LHS = SimpleExpr;
-        Expr *RHS = nullptr;
-        if (auto *BO = dyn_cast<BinaryOperator>(SimpleExpr)) {
-          OOK = BinaryOperator::getOverloadedOperator(BO->getOpcode());
-          OOLoc = BO->getOperatorLoc();
-          LHS = BO->getLHS()->IgnoreParenImpCasts();
-          RHS = BO->getRHS()->IgnoreParenImpCasts();
-        } else if (auto *OCE = dyn_cast<CXXOperatorCallExpr>(SimpleExpr)) {
-          OOK = OCE->getOperator();
-          OOLoc = OCE->getOperatorLoc();
-          LHS = OCE->getArg(/*Arg=*/0)->IgnoreParenImpCasts();
-          RHS = OCE->getArg(/*Arg=*/1)->IgnoreParenImpCasts();
-        } else if (auto *MCE = dyn_cast<CXXMemberCallExpr>(SimpleExpr)) {
-          OOK = MCE->getMethodDecl()
-                    ->getNameInfo()
-                    .getName()
-                    .getCXXOverloadedOperator();
-          OOLoc = MCE->getCallee()->getExprLoc();
-          LHS = MCE->getImplicitObjectArgument()->IgnoreParenImpCasts();
-          RHS = MCE->getArg(/*Arg=*/0)->IgnoreParenImpCasts();
-        }
-        SourceLocation ELoc;
-        SourceRange ERange;
-        auto Res = getPrivateItem(*this, LHS, ELoc, ERange,
-                                  /*AllowArraySection=*/false);
-        if (Res.second) {
-          // It will be analyzed later.
-          Vars.push_back(RefExpr);
-        }
-        ValueDecl *D = Res.first;
-        if (!D)
-          continue;
-
-        if (OOK != OO_Plus && OOK != OO_Minus && (RHS || OOK != OO_None)) {
-          Diag(OOLoc, diag::err_omp_depend_sink_expected_plus_minus);
-          continue;
-        }
-        if (RHS) {
-          ExprResult RHSRes = VerifyPositiveIntegerConstantInClause(
-              RHS, OMPC_depend, /*StrictlyPositive=*/false);
-          if (RHSRes.isInvalid())
-            continue;
-        }
-        if (!CurContext->isDependentContext() &&
-            DSAStack->getParentOrderedRegionParam() &&
-            DepCounter != DSAStack->isParentLoopControlVariable(D).first) {
-          ValueDecl* VD = DSAStack->getParentLoopControlVariable(
-              DepCounter.getZExtValue());
-          if (VD) {
-            Diag(ELoc, diag::err_omp_depend_sink_expected_loop_iteration)
-                << 1 << VD;
-          } else {
-             Diag(ELoc, diag::err_omp_depend_sink_expected_loop_iteration) << 0;
-          }
-          continue;
-        }
-        OpsOffs.push_back({RHS, OOK});
-      } else {
-        auto *ASE = dyn_cast<ArraySubscriptExpr>(SimpleExpr);
-        if (!RefExpr->IgnoreParenImpCasts()->isLValue() ||
-            (ASE &&
-             !ASE->getBase()
-                  ->getType()
-                  .getNonReferenceType()
-                  ->isPointerType() &&
-             !ASE->getBase()->getType().getNonReferenceType()->isArrayType())) {
-          Diag(ELoc, diag::err_omp_expected_addressable_lvalue_or_array_item)
-              << RefExpr->getSourceRange();
-          continue;
-        }
-        bool Suppress = getDiagnostics().getSuppressAllDiagnostics();
-        getDiagnostics().setSuppressAllDiagnostics(/*Val=*/true);
-        ExprResult Res = CreateBuiltinUnaryOp(ELoc, UO_AddrOf,
-                                              RefExpr->IgnoreParenImpCasts());
-        getDiagnostics().setSuppressAllDiagnostics(Suppress);
-        if (!Res.isUsable() && !isa<OMPArraySectionExpr>(SimpleExpr)) {
-          Diag(ELoc, diag::err_omp_expected_addressable_lvalue_or_array_item)
-              << RefExpr->getSourceRange();
-          continue;
-        }
+      SimpleExpr = SimpleExpr->IgnoreImplicit();
+      OverloadedOperatorKind OOK = OO_None;
+      SourceLocation OOLoc;
+      Expr *LHS = SimpleExpr;
+      Expr *RHS = nullptr;
+      if (auto *BO = dyn_cast<BinaryOperator>(SimpleExpr)) {
+        OOK = BinaryOperator::getOverloadedOperator(BO->getOpcode());
+        OOLoc = BO->getOperatorLoc();
+        LHS = BO->getLHS()->IgnoreParenImpCasts();
+        RHS = BO->getRHS()->IgnoreParenImpCasts();
+      } else if (auto *OCE = dyn_cast<CXXOperatorCallExpr>(SimpleExpr)) {
+        OOK = OCE->getOperator();
+        OOLoc = OCE->getOperatorLoc();
+        LHS = OCE->getArg(/*Arg=*/0)->IgnoreParenImpCasts();
+        RHS = OCE->getArg(/*Arg=*/1)->IgnoreParenImpCasts();
+      } else if (auto *MCE = dyn_cast<CXXMemberCallExpr>(SimpleExpr)) {
+        OOK = MCE->getMethodDecl()
+                  ->getNameInfo()
+                  .getName()
+                  .getCXXOverloadedOperator();
+        OOLoc = MCE->getCallee()->getExprLoc();
+        LHS = MCE->getImplicitObjectArgument()->IgnoreParenImpCasts();
+        RHS = MCE->getArg(/*Arg=*/0)->IgnoreParenImpCasts();
       }
-      Vars.push_back(RefExpr->IgnoreParenImpCasts());
-    }
+      SourceLocation ELoc;
+      SourceRange ERange;
+      auto Res = getPrivateItem(*this, LHS, ELoc, ERange,
+                                /*AllowArraySection=*/false);
+      if (Res.second) {
+        // It will be analyzed later.
+        Vars.push_back(RefExpr);
+      }
+      ValueDecl *D = Res.first;
+      if (!D)
+        continue;
 
-    if (!CurContext->isDependentContext() && DepKind == OMPC_DEPEND_sink &&
-        TotalDepCount > VarList.size() &&
-        DSAStack->getParentOrderedRegionParam() &&
-        DSAStack->getParentLoopControlVariable(VarList.size() + 1)) {
-      Diag(EndLoc, diag::err_omp_depend_sink_expected_loop_iteration) << 1
-          << DSAStack->getParentLoopControlVariable(VarList.size() + 1);
+      if (OOK != OO_Plus && OOK != OO_Minus && (RHS || OOK != OO_None)) {
+        Diag(OOLoc, diag::err_omp_depend_sink_expected_plus_minus);
+        continue;
+      }
+      if (RHS) {
+        ExprResult RHSRes = VerifyPositiveIntegerConstantInClause(
+            RHS, OMPC_depend, /*StrictlyPositive=*/false);
+        if (RHSRes.isInvalid())
+          continue;
+      }
+      if (!CurContext->isDependentContext() &&
+          DSAStack->getParentOrderedRegionParam() &&
+          DepCounter != DSAStack->isParentLoopControlVariable(D).first) {
+        ValueDecl *VD =
+            DSAStack->getParentLoopControlVariable(DepCounter.getZExtValue());
+        if (VD) {
+          Diag(ELoc, diag::err_omp_depend_sink_expected_loop_iteration)
+              << 1 << VD;
+        } else {
+          Diag(ELoc, diag::err_omp_depend_sink_expected_loop_iteration) << 0;
+        }
+        continue;
+      }
+      OpsOffs.push_back({RHS, OOK});
+    } else {
+      auto *ASE = dyn_cast<ArraySubscriptExpr>(SimpleExpr);
+      if (!RefExpr->IgnoreParenImpCasts()->isLValue() ||
+          (ASE &&
+           !ASE->getBase()->getType().getNonReferenceType()->isPointerType() &&
+           !ASE->getBase()->getType().getNonReferenceType()->isArrayType())) {
+        Diag(ELoc, diag::err_omp_expected_addressable_lvalue_or_array_item)
+            << RefExpr->getSourceRange();
+        continue;
+      }
+      bool Suppress = getDiagnostics().getSuppressAllDiagnostics();
+      getDiagnostics().setSuppressAllDiagnostics(/*Val=*/true);
+      ExprResult Res =
+          CreateBuiltinUnaryOp(ELoc, UO_AddrOf, RefExpr->IgnoreParenImpCasts());
+      getDiagnostics().setSuppressAllDiagnostics(Suppress);
+      if (!Res.isUsable() && !isa<OMPArraySectionExpr>(SimpleExpr)) {
+        Diag(ELoc, diag::err_omp_expected_addressable_lvalue_or_array_item)
+            << RefExpr->getSourceRange();
+        continue;
+      }
     }
-    if (DepKind != OMPC_DEPEND_source && DepKind != OMPC_DEPEND_sink &&
-        Vars.empty())
-      return nullptr;
+    Vars.push_back(RefExpr->IgnoreParenImpCasts());
   }
+
+  if (!CurContext->isDependentContext() && DepKind == OMPC_DEPEND_sink &&
+      TotalDepCount > VarList.size() &&
+      DSAStack->getParentOrderedRegionParam() &&
+      DSAStack->getParentLoopControlVariable(VarList.size() + 1)) {
+    Diag(EndLoc, diag::err_omp_depend_sink_expected_loop_iteration)
+        << 1 << DSAStack->getParentLoopControlVariable(VarList.size() + 1);
+  }
+  if (DepKind != OMPC_DEPEND_source && DepKind != OMPC_DEPEND_sink &&
+      Vars.empty())
+    return nullptr;
+
   auto *C = OMPDependClause::Create(Context, StartLoc, LParenLoc, EndLoc,
                                     DepKind, DepLoc, ColonLoc, Vars);
-  if (DepKind == OMPC_DEPEND_sink || DepKind == OMPC_DEPEND_source)
+  if ((DepKind == OMPC_DEPEND_sink || DepKind == OMPC_DEPEND_source) &&
+      DSAStack->isParentOrderedRegion())
     DSAStack->addDoacrossDependClause(C, OpsOffs);
   return C;
 }
@@ -12801,7 +12798,7 @@ static void checkDeclInTargetContext(SourceLocation SL, SourceRange SR,
                                      Sema &SemaRef, Decl *D) {
   if (!D)
     return;
-  Decl *LD = nullptr;
+  const Decl *LD = nullptr;
   if (isa<TagDecl>(D)) {
     LD = cast<TagDecl>(D)->getDefinition();
   } else if (isa<VarDecl>(D)) {
@@ -12817,22 +12814,29 @@ static void checkDeclInTargetContext(SourceLocation SL, SourceRange SR,
         ML->DeclarationMarkedOpenMPDeclareTarget(D, A);
       return;
     }
-
-  } else if (isa<FunctionDecl>(D)) {
+  } else if (auto *F = dyn_cast<FunctionDecl>(D)) {
     const FunctionDecl *FD = nullptr;
-    if (cast<FunctionDecl>(D)->hasBody(FD))
-      LD = const_cast<FunctionDecl *>(FD);
-
-    // If the definition is associated with the current declaration in the
-    // target region (it can be e.g. a lambda) that is legal and we do not need
-    // to do anything else.
-    if (LD == D) {
-      Attr *A = OMPDeclareTargetDeclAttr::CreateImplicit(
-          SemaRef.Context, OMPDeclareTargetDeclAttr::MT_To);
-      D->addAttr(A);
-      if (ASTMutationListener *ML = SemaRef.Context.getASTMutationListener())
-        ML->DeclarationMarkedOpenMPDeclareTarget(D, A);
-      return;
+    if (cast<FunctionDecl>(D)->hasBody(FD)) {
+      LD = FD;
+      // If the definition is associated with the current declaration in the
+      // target region (it can be e.g. a lambda) that is legal and we do not
+      // need to do anything else.
+      if (LD == D) {
+        Attr *A = OMPDeclareTargetDeclAttr::CreateImplicit(
+            SemaRef.Context, OMPDeclareTargetDeclAttr::MT_To);
+        D->addAttr(A);
+        if (ASTMutationListener *ML = SemaRef.Context.getASTMutationListener())
+          ML->DeclarationMarkedOpenMPDeclareTarget(D, A);
+        return;
+      }
+    } else if (F->isFunctionTemplateSpecialization() &&
+               F->getTemplateSpecializationKind() ==
+                   TSK_ImplicitInstantiation) {
+      // Check if the function is implicitly instantiated from the template
+      // defined in the declare target region.
+      const FunctionTemplateDecl *FTD = F->getPrimaryTemplate();
+      if (FTD && FTD->hasAttr<OMPDeclareTargetDeclAttr>())
+        return;
     }
   }
   if (!LD)
@@ -12844,7 +12848,7 @@ static void checkDeclInTargetContext(SourceLocation SL, SourceRange SR,
       SemaRef.Diag(LD->getLocation(), diag::warn_omp_not_in_target_context);
       SemaRef.Diag(SL, diag::note_used_here) << SR;
     } else {
-      DeclContext *DC = LD->getDeclContext();
+      const DeclContext *DC = LD->getDeclContext();
       while (DC) {
         if (isa<FunctionDecl>(DC) &&
             cast<FunctionDecl>(DC)->hasAttr<OMPDeclareTargetDeclAttr>())
@@ -12897,7 +12901,8 @@ void Sema::checkDeclIsAllowedInOpenMPTarget(Expr *E, Decl *D,
     if ((E || !VD->getType()->isIncompleteType()) &&
         !checkValueDeclInTarget(SL, SR, *this, DSAStack, VD)) {
       // Mark decl as declared target to prevent further diagnostic.
-      if (isa<VarDecl>(VD) || isa<FunctionDecl>(VD)) {
+      if (isa<VarDecl>(VD) || isa<FunctionDecl>(VD) ||
+          isa<FunctionTemplateDecl>(VD)) {
         Attr *A = OMPDeclareTargetDeclAttr::CreateImplicit(
             Context, OMPDeclareTargetDeclAttr::MT_To);
         VD->addAttr(A);
@@ -12917,10 +12922,21 @@ void Sema::checkDeclIsAllowedInOpenMPTarget(Expr *E, Decl *D,
       return;
     }
   }
+  if (auto *FTD = dyn_cast<FunctionTemplateDecl>(D)) {
+    if (FTD->hasAttr<OMPDeclareTargetDeclAttr>() &&
+        (FTD->getAttr<OMPDeclareTargetDeclAttr>()->getMapType() ==
+         OMPDeclareTargetDeclAttr::MT_Link)) {
+      assert(IdLoc.isValid() && "Source location is expected");
+      Diag(IdLoc, diag::err_omp_function_in_link_clause);
+      Diag(FTD->getLocation(), diag::note_defined_here) << FTD;
+      return;
+    }
+  }
   if (!E) {
     // Checking declaration inside declare target region.
     if (!D->hasAttr<OMPDeclareTargetDeclAttr>() &&
-        (isa<VarDecl>(D) || isa<FunctionDecl>(D))) {
+        (isa<VarDecl>(D) || isa<FunctionDecl>(D) ||
+         isa<FunctionTemplateDecl>(D))) {
       Attr *A = OMPDeclareTargetDeclAttr::CreateImplicit(
           Context, OMPDeclareTargetDeclAttr::MT_To);
       D->addAttr(A);

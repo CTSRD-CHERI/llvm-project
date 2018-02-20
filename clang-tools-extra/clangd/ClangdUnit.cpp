@@ -34,6 +34,13 @@ using namespace clang;
 
 namespace {
 
+bool compileCommandsAreEqual(const tooling::CompileCommand &LHS,
+                             const tooling::CompileCommand &RHS) {
+  // We don't check for Output, it should not matter to clangd.
+  return LHS.Directory == RHS.Directory && LHS.Filename == RHS.Filename &&
+         llvm::makeArrayRef(LHS.CommandLine).equals(RHS.CommandLine);
+}
+
 template <class T> std::size_t getUsedBytes(const std::vector<T> &Vec) {
   return Vec.capacity() * sizeof(T);
 }
@@ -136,10 +143,16 @@ bool locationInRange(SourceLocation L, CharSourceRange R,
 // Note that clang also uses closed source ranges, which this can't handle!
 Range toRange(CharSourceRange R, const SourceManager &M) {
   // Clang is 1-based, LSP uses 0-based indexes.
-  return {{static_cast<int>(M.getSpellingLineNumber(R.getBegin())) - 1,
-           static_cast<int>(M.getSpellingColumnNumber(R.getBegin())) - 1},
-          {static_cast<int>(M.getSpellingLineNumber(R.getEnd())) - 1,
-           static_cast<int>(M.getSpellingColumnNumber(R.getEnd())) - 1}};
+  Position Begin;
+  Begin.line = static_cast<int>(M.getSpellingLineNumber(R.getBegin())) - 1;
+  Begin.character =
+      static_cast<int>(M.getSpellingColumnNumber(R.getBegin())) - 1;
+
+  Position End;
+  End.line = static_cast<int>(M.getSpellingLineNumber(R.getEnd())) - 1;
+  End.character = static_cast<int>(M.getSpellingColumnNumber(R.getEnd())) - 1;
+
+  return {Begin, End};
 }
 
 // Clang diags have a location (shown as ^) and 0 or more ranges (~~~~).
@@ -411,7 +424,7 @@ CppFile::rebuild(ParseInputs &&Inputs) {
 
   // Compute updated Preamble.
   std::shared_ptr<const PreambleData> NewPreamble =
-      rebuildPreamble(*CI, Inputs.FS, *ContentsBuffer);
+      rebuildPreamble(*CI, Inputs.CompileCommand, Inputs.FS, *ContentsBuffer);
 
   // Remove current AST to avoid wasting memory.
   AST = llvm::None;
@@ -433,10 +446,13 @@ CppFile::rebuild(ParseInputs &&Inputs) {
     Diagnostics.insert(Diagnostics.end(), NewAST->getDiagnostics().begin(),
                        NewAST->getDiagnostics().end());
   }
-  if (ASTCallback && NewAST)
+  if (ASTCallback && NewAST) {
+    trace::Span Tracer("Running ASTCallback");
     ASTCallback(FileName, NewAST.getPointer());
+  }
 
   // Write the results of rebuild into class fields.
+  Command = std::move(Inputs.CompileCommand);
   Preamble = std::move(NewPreamble);
   AST = std::move(NewAST);
   return Diagnostics;
@@ -463,11 +479,12 @@ std::size_t CppFile::getUsedBytes() const {
 
 std::shared_ptr<const PreambleData>
 CppFile::rebuildPreamble(CompilerInvocation &CI,
+                         const tooling::CompileCommand &Command,
                          IntrusiveRefCntPtr<vfs::FileSystem> FS,
                          llvm::MemoryBuffer &ContentsBuffer) const {
   const auto &OldPreamble = this->Preamble;
   auto Bounds = ComputePreambleBounds(*CI.getLangOpts(), &ContentsBuffer, 0);
-  if (OldPreamble &&
+  if (OldPreamble && compileCommandsAreEqual(this->Command, Command) &&
       OldPreamble->Preamble.CanReuse(CI, &ContentsBuffer, Bounds, FS.get())) {
     log("Reusing preamble for file " + Twine(FileName));
     return OldPreamble;
@@ -534,8 +551,11 @@ SourceLocation clangd::getBeginningOfIdentifier(ParsedAST &Unit,
   // token. If so, Take the beginning of this token.
   // (It should be the same identifier because you can't have two adjacent
   // identifiers without another token in between.)
-  SourceLocation PeekBeforeLocation = getMacroArgExpandedLocation(
-      SourceMgr, FE, Position{Pos.line, Pos.character - 1});
+  Position PosCharBehind = Pos;
+  --PosCharBehind.character;
+
+  SourceLocation PeekBeforeLocation =
+      getMacroArgExpandedLocation(SourceMgr, FE, PosCharBehind);
   Token Result;
   if (Lexer::getRawToken(PeekBeforeLocation, Result, SourceMgr,
                          AST.getLangOpts(), false)) {

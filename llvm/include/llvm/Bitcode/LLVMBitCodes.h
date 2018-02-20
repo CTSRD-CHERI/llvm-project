@@ -263,6 +263,11 @@ enum GlobalValueSummarySymtabCodes {
   FS_PERMODULE_RELBF = 19,
   // Index-wide flags
   FS_FLAGS = 20,
+  // Maps type identifier to summary information for that type identifier.
+  // TYPE_ID: [typeid, kind, bitwidth, align, size, bitmask, inlinebits,
+  //           n x (typeid, kind, name, numrba,
+  //                numrba x (numarg, numarg x arg, kind, info, byte, bit))]
+  FS_TYPE_ID = 21,
 };
 
 enum MetadataCodes {
@@ -400,6 +405,20 @@ enum RMWOperations {
 enum OverflowingBinaryOperatorOptionalFlags {
   OBO_NO_UNSIGNED_WRAP = 0,
   OBO_NO_SIGNED_WRAP = 1
+};
+
+/// FastMath Flags
+/// This is a fixed layout derived from the bitcode emitted by LLVM 5.0
+/// intended to decouple the in-memory representation from the serialization.
+enum FastMathMap {
+  UnsafeAlgebra   = (1 << 0), // Legacy
+  NoNaNs          = (1 << 1),
+  NoInfs          = (1 << 2),
+  NoSignedZeros   = (1 << 3),
+  AllowReciprocal = (1 << 4),
+  AllowContract   = (1 << 5),
+  ApproxFunc      = (1 << 6),
+  AllowReassoc    = (1 << 7)
 };
 
 /// PossiblyExactOperatorOptionalFlags - Flags for serializing
