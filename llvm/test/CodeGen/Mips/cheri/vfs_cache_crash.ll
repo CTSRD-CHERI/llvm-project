@@ -1,8 +1,3 @@
-; https://github.com/CTSRD-CHERI/llvm/issues/245
-; Works when targeting x86:
-; RUN: llc -mtriple=x86_64-unknown-linux -O2 %s -o /dev/null
-; But not for CHERI
-; XFAIL: *
 ; RUN: %cheri_purecap_llc -O2 %s -o /dev/null -print-before-all
 
 ; From this reduced C source code (and then reduced the IR):
