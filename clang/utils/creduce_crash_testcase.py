@@ -485,7 +485,7 @@ class Reducer(object):
                 print("Adding '-o -' to the compiler invocation")
                 command += ["-o", "-"]
             # try to remove all unnecessary command line arguments
-            command[0] = self.options.clang_cmd  # replace command with the clang binary
+            command[0] = str(self.options.clang_cmd)  # replace command with the clang binary
             command, real_in_file = self.simplify_crash_command(command, real_in_file.absolute())
             quoted_cmd = quote_cmd(command)
             verbose_print("Test command is", bold(quoted_cmd))
