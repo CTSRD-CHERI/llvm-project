@@ -76,11 +76,13 @@ public:
     return TargetInfo::SystemZBuiltinVaList;
   }
 
-  int getISARevision(const StringRef &Name) const;
+  int getISARevision(StringRef Name) const;
 
   bool isValidCPUName(StringRef Name) const override {
     return getISARevision(Name) != -1;
   }
+
+  void fillValidCPUList(SmallVectorImpl<StringRef> &Values) const override;
 
   bool setCPU(const std::string &Name) override {
     CPU = Name;

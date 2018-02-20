@@ -253,7 +253,11 @@ AArch64TargetLowering::AArch64TargetLowering(const TargetMachine &TM,
   // Variable-sized objects.
   setOperationAction(ISD::STACKSAVE, MVT::Other, Expand);
   setOperationAction(ISD::STACKRESTORE, MVT::Other, Expand);
-  setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::i64, Expand);
+
+  if (Subtarget->isTargetWindows())
+    setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::i64, Custom);
+  else
+    setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::i64, Expand);
 
   // Constant pool entries
   setOperationAction(ISD::ConstantPool, MVT::i64, Custom);
@@ -464,6 +468,10 @@ AArch64TargetLowering::AArch64TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::PREFETCH, MVT::Other, Custom);
 
   setOperationAction(ISD::ATOMIC_CMP_SWAP, MVT::i128, Custom);
+  setOperationAction(ISD::ATOMIC_LOAD_SUB, MVT::i32, Custom);
+  setOperationAction(ISD::ATOMIC_LOAD_SUB, MVT::i64, Custom);
+  setOperationAction(ISD::ATOMIC_LOAD_AND, MVT::i32, Custom);
+  setOperationAction(ISD::ATOMIC_LOAD_AND, MVT::i64, Custom);
 
   // Lower READCYCLECOUNTER using an mrs from PMCCNTR_EL0.
   // This requires the Performance Monitors extension.
@@ -2679,6 +2687,12 @@ SDValue AArch64TargetLowering::LowerOperation(SDValue Op,
   case ISD::VECREDUCE_FMAX:
   case ISD::VECREDUCE_FMIN:
     return LowerVECREDUCE(Op, DAG);
+  case ISD::ATOMIC_LOAD_SUB:
+    return LowerATOMIC_LOAD_SUB(Op, DAG);
+  case ISD::ATOMIC_LOAD_AND:
+    return LowerATOMIC_LOAD_AND(Op, DAG);
+  case ISD::DYNAMIC_STACKALLOC:
+    return LowerDYNAMIC_STACKALLOC(Op, DAG);
   }
 }
 
@@ -4927,7 +4941,8 @@ bool AArch64TargetLowering::isOffsetFoldingLegal(
 bool AArch64TargetLowering::isFPImmLegal(const APFloat &Imm, EVT VT) const {
   // We can materialize #0.0 as fmov $Rd, XZR for 64-bit and 32-bit cases.
   // FIXME: We should be able to handle f128 as well with a clever lowering.
-  if (Imm.isPosZero() && (VT == MVT::f16 || VT == MVT::f64 || VT == MVT::f32)) {
+  if (Imm.isPosZero() && (VT == MVT::f64 || VT == MVT::f32 ||
+                          (VT == MVT::f16 && Subtarget->hasFullFP16()))) {
     DEBUG(dbgs() << "Legal fp imm: materialize 0 using the zero register\n");
     return true;
   }
@@ -5010,7 +5025,6 @@ SDValue AArch64TargetLowering::getSqrtEstimate(SDValue Operand,
         Step = DAG.getNode(AArch64ISD::FRSQRTS, DL, VT, Operand, Step, Flags);
         Estimate = DAG.getNode(ISD::FMUL, DL, VT, Estimate, Step, Flags);
       }
-
       if (!Reciprocal) {
         EVT CCVT = getSetCCResultType(DAG.getDataLayout(), *DAG.getContext(),
                                       VT);
@@ -7376,6 +7390,101 @@ SDValue AArch64TargetLowering::LowerVECREDUCE(SDValue Op,
   }
 }
 
+SDValue AArch64TargetLowering::LowerATOMIC_LOAD_SUB(SDValue Op,
+                                                    SelectionDAG &DAG) const {
+  auto &Subtarget = static_cast<const AArch64Subtarget &>(DAG.getSubtarget());
+  if (!Subtarget.hasLSE())
+    return SDValue();
+
+  // LSE has an atomic load-add instruction, but not a load-sub.
+  SDLoc dl(Op);
+  MVT VT = Op.getSimpleValueType();
+  SDValue RHS = Op.getOperand(2);
+  AtomicSDNode *AN = cast<AtomicSDNode>(Op.getNode());
+  RHS = DAG.getNode(ISD::SUB, dl, VT, DAG.getConstant(0, dl, VT), RHS);
+  return DAG.getAtomic(ISD::ATOMIC_LOAD_ADD, dl, AN->getMemoryVT(),
+                       Op.getOperand(0), Op.getOperand(1), RHS,
+                       AN->getMemOperand());
+}
+
+SDValue AArch64TargetLowering::LowerATOMIC_LOAD_AND(SDValue Op,
+                                                    SelectionDAG &DAG) const {
+  auto &Subtarget = static_cast<const AArch64Subtarget &>(DAG.getSubtarget());
+  if (!Subtarget.hasLSE())
+    return SDValue();
+
+  // LSE has an atomic load-clear instruction, but not a load-and.
+  SDLoc dl(Op);
+  MVT VT = Op.getSimpleValueType();
+  SDValue RHS = Op.getOperand(2);
+  AtomicSDNode *AN = cast<AtomicSDNode>(Op.getNode());
+  RHS = DAG.getNode(ISD::XOR, dl, VT, DAG.getConstant(-1ULL, dl, VT), RHS);
+  return DAG.getAtomic(ISD::ATOMIC_LOAD_CLR, dl, AN->getMemoryVT(),
+                       Op.getOperand(0), Op.getOperand(1), RHS,
+                       AN->getMemOperand());
+}
+
+SDValue AArch64TargetLowering::LowerWindowsDYNAMIC_STACKALLOC(
+    SDValue Op, SDValue Chain, SDValue &Size, SelectionDAG &DAG) const {
+  SDLoc dl(Op);
+  EVT PtrVT = getPointerTy(DAG.getDataLayout());
+  SDValue Callee = DAG.getTargetExternalSymbol("__chkstk", PtrVT, 0);
+
+  const uint32_t *Mask =
+      Subtarget->getRegisterInfo()->getWindowsStackProbePreservedMask();
+
+  Size = DAG.getNode(ISD::SRL, dl, MVT::i64, Size,
+                     DAG.getConstant(4, dl, MVT::i64));
+  Chain = DAG.getCopyToReg(Chain, dl, AArch64::X15, Size, SDValue());
+  Chain =
+      DAG.getNode(AArch64ISD::CALL, dl, DAG.getVTList(MVT::Other, MVT::Glue),
+                  Chain, Callee, DAG.getRegister(AArch64::X15, MVT::i64),
+                  DAG.getRegisterMask(Mask), Chain.getValue(1));
+  // To match the actual intent better, we should read the output from X15 here
+  // again (instead of potentially spilling it to the stack), but rereading Size
+  // from X15 here doesn't work at -O0, since it thinks that X15 is undefined
+  // here.
+
+  Size = DAG.getNode(ISD::SHL, dl, MVT::i64, Size,
+                     DAG.getConstant(4, dl, MVT::i64));
+  return Chain;
+}
+
+SDValue
+AArch64TargetLowering::LowerDYNAMIC_STACKALLOC(SDValue Op,
+                                               SelectionDAG &DAG) const {
+  assert(Subtarget->isTargetWindows() &&
+         "Only Windows alloca probing supported");
+  SDLoc dl(Op);
+  // Get the inputs.
+  SDNode *Node = Op.getNode();
+  SDValue Chain = Op.getOperand(0);
+  SDValue Size = Op.getOperand(1);
+  unsigned Align = cast<ConstantSDNode>(Op.getOperand(2))->getZExtValue();
+  EVT VT = Node->getValueType(0);
+
+  Chain = DAG.getCALLSEQ_START(Chain, 0, 0, dl);
+
+  Chain = LowerWindowsDYNAMIC_STACKALLOC(Op, Chain, Size, DAG);
+
+  SDValue SP = DAG.getCopyFromReg(Chain, dl, AArch64::SP, MVT::i64);
+  Chain = SP.getValue(1);
+  SP = DAG.getNode(ISD::SUB, dl, MVT::i64, SP, Size);
+  Chain = DAG.getCopyToReg(Chain, dl, AArch64::SP, SP);
+
+  if (Align) {
+    SP = DAG.getNode(ISD::AND, dl, VT, SP.getValue(0),
+                     DAG.getConstant(-(uint64_t)Align, dl, VT));
+    Chain = DAG.getCopyToReg(Chain, dl, AArch64::SP, SP);
+  }
+
+  Chain = DAG.getCALLSEQ_END(Chain, DAG.getIntPtrConstant(0, dl, true),
+                             DAG.getIntPtrConstant(0, dl, true), SDValue(), dl);
+
+  SDValue Ops[2] = {SP, Chain};
+  return DAG.getMergeValues(Ops, dl);
+}
+
 /// getTgtMemIntrinsic - Represent NEON load and store intrinsics as
 /// MemIntrinsicNodes.  The associated MachineMemOperands record the alignment
 /// specified in the intrinsic calls.
@@ -8737,7 +8846,8 @@ static SDValue performBitcastCombine(SDNode *N,
   // If the source type has twice the number of elements as our destination
   // type, we know this is an extract of the high or low half of the vector.
   EVT SVT = Source->getValueType(0);
-  if (SVT.getVectorNumElements() != VT.getVectorNumElements() * 2)
+  if (!SVT.isVector() ||
+      SVT.getVectorNumElements() != VT.getVectorNumElements() * 2)
     return SDValue();
 
   DEBUG(dbgs() << "aarch64-lower: bitcast extract_subvector simplification\n");

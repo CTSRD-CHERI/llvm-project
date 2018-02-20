@@ -280,15 +280,16 @@ void DwarfUnit::addSectionOffset(DIE &Die, dwarf::Attribute Attribute,
 
 MD5::MD5Result *DwarfUnit::getMD5AsBytes(const DIFile *File) {
   assert(File);
-  if (File->getChecksumKind() != DIFile::CSK_MD5)
+  Optional<DIFile::ChecksumInfo<StringRef>> Checksum = File->getChecksum();
+  if (!Checksum || Checksum->Kind != DIFile::CSK_MD5)
     return nullptr;
 
   // Convert the string checksum to an MD5Result for the streamer.
   // The verifier validates the checksum so we assume it's okay.
   // An MD5 checksum is 16 bytes.
-  std::string Checksum = fromHex(File->getChecksum());
+  std::string ChecksumString = fromHex(Checksum->Value);
   void *CKMem = Asm->OutStreamer->getContext().allocate(16, 1);
-  memcpy(CKMem, Checksum.data(), 16);
+  memcpy(CKMem, ChecksumString.data(), 16);
   return reinterpret_cast<MD5::MD5Result *>(CKMem);
 }
 
@@ -948,9 +949,24 @@ void DwarfUnit::constructTypeDIE(DIE &Buffer, const DICompositeType *CTy) {
   case dwarf::DW_TAG_enumeration_type:
     constructEnumTypeDIE(Buffer, CTy);
     break;
+  case dwarf::DW_TAG_variant_part:
   case dwarf::DW_TAG_structure_type:
   case dwarf::DW_TAG_union_type:
   case dwarf::DW_TAG_class_type: {
+    // Emit the discriminator for a variant part.
+    DIDerivedType *Discriminator = nullptr;
+    if (Tag == dwarf::DW_TAG_variant_part) {
+      Discriminator = CTy->getDiscriminator();
+      if (Discriminator) {
+        // DWARF says:
+        //    If the variant part has a discriminant, the discriminant is
+        //    represented by a separate debugging information entry which is
+        //    a child of the variant part entry.
+        DIE &DiscMember = constructMemberDIE(Buffer, Discriminator);
+        addDIEEntry(Buffer, dwarf::DW_AT_discr, DiscMember);
+      }
+    }
+
     // Add elements to structure type.
     DINodeArray Elements = CTy->getElements();
     for (const auto *Element : Elements) {
@@ -964,6 +980,18 @@ void DwarfUnit::constructTypeDIE(DIE &Buffer, const DICompositeType *CTy) {
           addType(ElemDie, resolve(DDTy->getBaseType()), dwarf::DW_AT_friend);
         } else if (DDTy->isStaticMember()) {
           getOrCreateStaticMemberDIE(DDTy);
+        } else if (Tag == dwarf::DW_TAG_variant_part) {
+          // When emitting a variant part, wrap each member in
+          // DW_TAG_variant.
+          DIE &Variant = createAndAddDIE(dwarf::DW_TAG_variant, Buffer);
+          if (const ConstantInt *CI =
+              dyn_cast_or_null<ConstantInt>(DDTy->getDiscriminantValue())) {
+            if (isUnsignedDIType(DD, resolve(Discriminator->getBaseType())))
+              addUInt(Variant, dwarf::DW_AT_discr_value, None, CI->getZExtValue());
+            else
+              addSInt(Variant, dwarf::DW_AT_discr_value, None, CI->getSExtValue());
+          }
+          constructMemberDIE(Variant, DDTy);
         } else {
           constructMemberDIE(Buffer, DDTy);
         }
@@ -983,6 +1011,11 @@ void DwarfUnit::constructTypeDIE(DIE &Buffer, const DICompositeType *CTy) {
         if (unsigned PropertyAttributes = Property->getAttributes())
           addUInt(ElemDie, dwarf::DW_AT_APPLE_property_attribute, None,
                   PropertyAttributes);
+      } else if (auto *Composite = dyn_cast<DICompositeType>(Element)) {
+        if (Composite->getTag() == dwarf::DW_TAG_variant_part) {
+          DIE &VariantPart = createAndAddDIE(Composite->getTag(), Buffer);
+          constructTypeDIE(VariantPart, Composite);
+        }
       }
     }
 
@@ -1351,14 +1384,9 @@ void DwarfUnit::constructSubrangeDIE(DIE &Buffer, const DISubrange *SR,
     addUInt(DW_Subrange, dwarf::DW_AT_lower_bound, None, LowerBound);
 
   if (auto *CV = SR->getCount().dyn_cast<DIVariable*>()) {
-    // 'finishVariableDefinition' that creates the types for a variable is
-    // always called _after_ the DIEs for variables are created.
-    auto *CountVarDIE = getDIE(CV);
-    assert(CountVarDIE && "DIE for count is not yet instantiated");
-    addDIEEntry(DW_Subrange, dwarf::DW_AT_count, *CountVarDIE);
+    if (auto *CountVarDIE = getDIE(CV))
+      addDIEEntry(DW_Subrange, dwarf::DW_AT_count, *CountVarDIE);
   } else if (Count != -1)
-    // FIXME: An unbounded array should reference the expression that defines
-    // the array.
     addUInt(DW_Subrange, dwarf::DW_AT_count, None, Count);
 }
 
@@ -1397,6 +1425,15 @@ void DwarfUnit::constructArrayTypeDIE(DIE &Buffer, const DICompositeType *CTy) {
 }
 
 void DwarfUnit::constructEnumTypeDIE(DIE &Buffer, const DICompositeType *CTy) {
+  const DIType *DTy = resolve(CTy->getBaseType());
+  bool IsUnsigned = DTy && isUnsignedDIType(DD, DTy);
+  if (DTy) {
+    if (DD->getDwarfVersion() >= 3)
+      addType(Buffer, DTy);
+    if (DD->getDwarfVersion() >= 4 && (CTy->getFlags() & DINode::FlagFixedEnum))
+      addFlag(Buffer, dwarf::DW_AT_enum_class);
+  }
+
   DINodeArray Elements = CTy->getElements();
 
   // Add enumerators to enumeration type.
@@ -1406,15 +1443,9 @@ void DwarfUnit::constructEnumTypeDIE(DIE &Buffer, const DICompositeType *CTy) {
       DIE &Enumerator = createAndAddDIE(dwarf::DW_TAG_enumerator, Buffer);
       StringRef Name = Enum->getName();
       addString(Enumerator, dwarf::DW_AT_name, Name);
-      int64_t Value = Enum->getValue();
-      addSInt(Enumerator, dwarf::DW_AT_const_value, dwarf::DW_FORM_sdata,
-              Value);
+      auto Value = static_cast<uint64_t>(Enum->getValue());
+      addConstantValue(Enumerator, IsUnsigned, Value);
     }
-  }
-  const DIType *DTy = resolve(CTy->getBaseType());
-  if (DTy) {
-    addType(Buffer, DTy);
-    addFlag(Buffer, dwarf::DW_AT_enum_class);
   }
 }
 
@@ -1432,7 +1463,7 @@ void DwarfUnit::constructContainingTypeDIEs() {
   }
 }
 
-void DwarfUnit::constructMemberDIE(DIE &Buffer, const DIDerivedType *DT) {
+DIE &DwarfUnit::constructMemberDIE(DIE &Buffer, const DIDerivedType *DT) {
   DIE &MemberDie = createAndAddDIE(DT->getTag(), Buffer);
   StringRef Name = DT->getName();
   if (!Name.empty())
@@ -1537,6 +1568,8 @@ void DwarfUnit::constructMemberDIE(DIE &Buffer, const DIDerivedType *DT) {
 
   if (DT->isArtificial())
     addFlag(MemberDie, dwarf::DW_AT_artificial);
+
+  return MemberDie;
 }
 
 DIE *DwarfUnit::getOrCreateStaticMemberDIE(const DIDerivedType *DT) {

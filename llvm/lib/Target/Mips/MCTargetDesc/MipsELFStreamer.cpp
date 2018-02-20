@@ -115,13 +115,17 @@ void MipsELFStreamer::EmitCheriCapability(const MCSymbol *Symbol,
 
 void MipsELFStreamer::EmitCheriIntcap(int64_t Value, unsigned CapSize, SMLoc) {
   assert(CapSize == 32 || CapSize == 16);
-  // TODO: we should probably move the CHERI capability encoding somewhere else.
-  // Maybe to BinaryFormat or Object?
-  EmitIntValue(0, 8);
-  EmitIntValue(Value, 8);
-  if (CapSize == 32) {
+  if (Value == 0) {
+    EmitZeros(CapSize);
+  } else {
+    // TODO: we should probably move the CHERI capability encoding somewhere else.
+    // Maybe to BinaryFormat or Object?
     EmitIntValue(0, 8);
-    EmitIntValue(0, 8);
+    EmitIntValue(Value, 8);
+    if (CapSize == 32) {
+      EmitIntValue(0, 8);
+      EmitIntValue(0, 8);
+    }
   }
 }
 

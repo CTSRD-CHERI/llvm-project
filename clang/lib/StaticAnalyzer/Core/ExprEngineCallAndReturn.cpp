@@ -15,7 +15,6 @@
 #include "PrettyStackTraceLocationContext.h"
 #include "clang/AST/CXXInheritance.h"
 #include "clang/AST/DeclCXX.h"
-#include "clang/AST/ParentMap.h"
 #include "clang/Analysis/Analyses/LiveVariables.h"
 #include "clang/StaticAnalyzer/Core/CheckerManager.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/CallEvent.h"
@@ -331,9 +330,6 @@ void ExprEngine::processCallExit(ExplodedNode *CEBNode) {
     bool isNew;
     ProgramStateRef CEEState = (*I == CEBNode) ? state : (*I)->getState();
 
-    // See if we have any stale C++ allocator values.
-    assert(areCXXNewAllocatorValuesClear(CEEState, calleeCtx, callerCtx));
-
     ExplodedNode *CEENode = G.getNode(Loc, CEEState, false, &isNew);
     CEENode->addPredecessor(*I, G);
     if (!isNew)
@@ -616,15 +612,10 @@ void ExprEngine::conservativeEvalCall(const CallEvent &Call, NodeBuilder &Bldr,
   Bldr.generateNode(Call.getProgramPoint(), State, Pred);
 }
 
-enum CallInlinePolicy {
-  CIP_Allowed,
-  CIP_DisallowedOnce,
-  CIP_DisallowedAlways
-};
-
-static CallInlinePolicy mayInlineCallKind(const CallEvent &Call,
-                                          const ExplodedNode *Pred,
-                                          AnalyzerOptions &Opts) {
+ExprEngine::CallInlinePolicy
+ExprEngine::mayInlineCallKind(const CallEvent &Call, const ExplodedNode *Pred,
+                              AnalyzerOptions &Opts,
+                              const ExprEngine::EvalCallOptions &CallOpts) {
   const LocationContext *CurLC = Pred->getLocationContext();
   const StackFrameContext *CallerSFC = CurLC->getCurrentStackFrame();
   switch (Call.getKind()) {
@@ -644,10 +635,8 @@ static CallInlinePolicy mayInlineCallKind(const CallEvent &Call,
 
     const CXXConstructExpr *CtorExpr = Ctor.getOriginExpr();
 
-    // FIXME: ParentMap is slow and ugly. The callee should provide the
-    // necessary context. Ideally as part of the call event, or maybe as part of
-    // location context.
-    const Stmt *ParentExpr = CurLC->getParentMap().getParent(CtorExpr);
+    auto CC = getCurrentCFGElement().getAs<CFGConstructor>();
+    const Stmt *ParentExpr = CC ? CC->getTriggerStmt() : nullptr;
 
     if (ParentExpr && isa<CXXNewExpr>(ParentExpr) &&
         !Opts.mayInlineCXXAllocator())
@@ -658,18 +647,8 @@ static CallInlinePolicy mayInlineCallKind(const CallEvent &Call,
     // initializers for array fields in default move/copy constructors.
     // We still allow construction into ElementRegion targets when they don't
     // represent array elements.
-    const MemRegion *Target = Ctor.getCXXThisVal().getAsRegion();
-    if (Target && isa<ElementRegion>(Target)) {
-      if (ParentExpr)
-        if (const CXXNewExpr *NewExpr = dyn_cast<CXXNewExpr>(ParentExpr))
-          if (NewExpr->isArray())
-            return CIP_DisallowedOnce;
-
-      if (const TypedValueRegion *TR = dyn_cast<TypedValueRegion>(
-              cast<SubRegion>(Target)->getSuperRegion()))
-        if (TR->getValueType()->isArrayType())
-          return CIP_DisallowedOnce;
-    }
+    if (CallOpts.IsArrayCtorOrDtor)
+      return CIP_DisallowedOnce;
 
     // Inlining constructors requires including initializers in the CFG.
     const AnalysisDeclContext *ADC = CallerSFC->getAnalysisDeclContext();
@@ -685,11 +664,19 @@ static CallInlinePolicy mayInlineCallKind(const CallEvent &Call,
     if (!Opts.mayInlineCXXMemberFunction(CIMK_Destructors))
       return CIP_DisallowedAlways;
 
-    // FIXME: This is a hack. We don't handle temporary destructors
-    // right now, so we shouldn't inline their constructors.
-    if (CtorExpr->getConstructionKind() == CXXConstructExpr::CK_Complete)
-      if (!Target || isa<CXXTempObjectRegion>(Target))
+    if (CtorExpr->getConstructionKind() == CXXConstructExpr::CK_Complete) {
+      // If we don't handle temporary destructors, we shouldn't inline
+      // their constructors.
+      if (CallOpts.IsTemporaryCtorOrDtor &&
+          !Opts.includeTemporaryDtorsInCFG())
         return CIP_DisallowedOnce;
+
+      // If we did not find the correct this-region, it would be pointless
+      // to inline the constructor. Instead we will simply invalidate
+      // the fake temporary target.
+      if (CallOpts.IsCtorOrDtorWithImproperlyModeledTargetRegion)
+        return CIP_DisallowedOnce;
+    }
 
     break;
   }
@@ -702,13 +689,19 @@ static CallInlinePolicy mayInlineCallKind(const CallEvent &Call,
     assert(ADC->getCFGBuildOptions().AddImplicitDtors && "No CFG destructors");
     (void)ADC;
 
-    const CXXDestructorCall &Dtor = cast<CXXDestructorCall>(Call);
-
     // FIXME: We don't handle constructors or destructors for arrays properly.
-    const MemRegion *Target = Dtor.getCXXThisVal().getAsRegion();
-    if (Target && isa<ElementRegion>(Target))
+    if (CallOpts.IsArrayCtorOrDtor)
       return CIP_DisallowedOnce;
 
+    // Allow disabling temporary destructor inlining with a separate option.
+    if (CallOpts.IsTemporaryCtorOrDtor && !Opts.mayInlineCXXTemporaryDtors())
+      return CIP_DisallowedOnce;
+
+    // If we did not find the correct this-region, it would be pointless
+    // to inline the destructor. Instead we will simply invalidate
+    // the fake temporary target.
+    if (CallOpts.IsCtorOrDtorWithImproperlyModeledTargetRegion)
+      return CIP_DisallowedOnce;
     break;
   }
   case CE_CXXAllocator:
@@ -847,7 +840,8 @@ static bool mayInlineDecl(AnalysisDeclContext *CalleeADC,
 }
 
 bool ExprEngine::shouldInlineCall(const CallEvent &Call, const Decl *D,
-                                  const ExplodedNode *Pred) {
+                                  const ExplodedNode *Pred,
+                                  const EvalCallOptions &CallOpts) {
   if (!D)
     return false;
 
@@ -855,14 +849,6 @@ bool ExprEngine::shouldInlineCall(const CallEvent &Call, const Decl *D,
   AnalyzerOptions &Opts = AMgr.options;
   AnalysisDeclContextManager &ADCMgr = AMgr.getAnalysisDeclContextManager();
   AnalysisDeclContext *CalleeADC = ADCMgr.getContext(D);
-
-  // Temporary object destructor processing is currently broken, so we never
-  // inline them.
-  // FIXME: Remove this once temp destructors are working.
-  if (isa<CXXDestructorCall>(Call)) {
-    if ((*currBldrCtx->getBlock())[currStmtIdx].getAs<CFGTemporaryDtor>())
-      return false;
-  }
 
   // The auto-synthesized bodies are essential to inline as they are
   // usually small and commonly used. Note: we should do this check early on to
@@ -894,7 +880,7 @@ bool ExprEngine::shouldInlineCall(const CallEvent &Call, const Decl *D,
   // FIXME: this checks both static and dynamic properties of the call, which
   // means we're redoing a bit of work that could be cached in the function
   // summary.
-  CallInlinePolicy CIP = mayInlineCallKind(Call, Pred, Opts);
+  CallInlinePolicy CIP = mayInlineCallKind(Call, Pred, Opts, CallOpts);
   if (CIP != CIP_Allowed) {
     if (CIP == CIP_DisallowedAlways) {
       assert(!MayInline.hasValue() || MayInline.getValue());
@@ -946,7 +932,8 @@ static bool isTrivialObjectAssignment(const CallEvent &Call) {
 }
 
 void ExprEngine::defaultEvalCall(NodeBuilder &Bldr, ExplodedNode *Pred,
-                                 const CallEvent &CallTemplate) {
+                                 const CallEvent &CallTemplate,
+                                 const EvalCallOptions &CallOpts) {
   // Make sure we have the most recent state attached to the call.
   ProgramStateRef State = Pred->getState();
   CallEventRef<> Call = CallTemplate.cloneWithState(State);
@@ -969,7 +956,7 @@ void ExprEngine::defaultEvalCall(NodeBuilder &Bldr, ExplodedNode *Pred,
   } else {
     RuntimeDefinition RD = Call->getRuntimeDefinition();
     const Decl *D = RD.getDecl();
-    if (shouldInlineCall(*Call, D, Pred)) {
+    if (shouldInlineCall(*Call, D, Pred, CallOpts)) {
       if (RD.mayHaveOtherDefinitions()) {
         AnalyzerOptions &Options = getAnalysisManager().options;
 

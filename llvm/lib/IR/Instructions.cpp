@@ -2473,10 +2473,6 @@ unsigned CastInst::isEliminableCastPair(
       if (!SrcIntPtrTy || DstIntPtrTy != SrcIntPtrTy)
         return 0;
       unsigned PtrSize = SrcIntPtrTy->getScalarSizeInBits();
-      // FIXME: This is probably too conservative for a number of platforms.
-      // FIXME: Remove this once addrspacecast things are in.
-      if (DstTy->getPointerAddressSpace() != SrcTy->getPointerAddressSpace())
-        return 0;
       if (MidSize >= PtrSize)
         return Instruction::BitCast;
       return 0;
@@ -3452,6 +3448,29 @@ ICmpInst::Predicate ICmpInst::getUnsignedPredicate(Predicate pred) {
   }
 }
 
+CmpInst::Predicate CmpInst::getFlippedStrictnessPredicate(Predicate pred) {
+  switch (pred) {
+    default: llvm_unreachable("Unknown or unsupported cmp predicate!");
+    case ICMP_SGT: return ICMP_SGE;
+    case ICMP_SLT: return ICMP_SLE;
+    case ICMP_SGE: return ICMP_SGT;
+    case ICMP_SLE: return ICMP_SLT;
+    case ICMP_UGT: return ICMP_UGE;
+    case ICMP_ULT: return ICMP_ULE;
+    case ICMP_UGE: return ICMP_UGT;
+    case ICMP_ULE: return ICMP_ULT;
+
+    case FCMP_OGT: return FCMP_OGE;
+    case FCMP_OLT: return FCMP_OLE;
+    case FCMP_OGE: return FCMP_OGT;
+    case FCMP_OLE: return FCMP_OLT;
+    case FCMP_UGT: return FCMP_UGE;
+    case FCMP_ULT: return FCMP_ULE;
+    case FCMP_UGE: return FCMP_UGT;
+    case FCMP_ULE: return FCMP_ULT;
+  }
+}
+
 CmpInst::Predicate CmpInst::getSwappedPredicate(Predicate pred) {
   switch (pred) {
     default: llvm_unreachable("Unknown cmp predicate!");
@@ -3479,6 +3498,20 @@ CmpInst::Predicate CmpInst::getSwappedPredicate(Predicate pred) {
     case FCMP_ULT: return FCMP_UGT;
     case FCMP_UGE: return FCMP_ULE;
     case FCMP_ULE: return FCMP_UGE;
+  }
+}
+
+CmpInst::Predicate CmpInst::getNonStrictPredicate(Predicate pred) {
+  switch (pred) {
+  case ICMP_SGT: return ICMP_SGE;
+  case ICMP_SLT: return ICMP_SLE;
+  case ICMP_UGT: return ICMP_UGE;
+  case ICMP_ULT: return ICMP_ULE;
+  case FCMP_OGT: return FCMP_OGE;
+  case FCMP_OLT: return FCMP_OLE;
+  case FCMP_UGT: return FCMP_UGE;
+  case FCMP_ULT: return FCMP_ULE;
+  default: return pred;
   }
 }
 
@@ -3790,8 +3823,7 @@ InsertValueInst *InsertValueInst::cloneImpl() const {
 
 AllocaInst *AllocaInst::cloneImpl() const {
   AllocaInst *Result = new AllocaInst(getAllocatedType(),
-                                      getType()->getPointerAddressSpace(),
-  // XXXAR: UPSTREAM uses getAddressSpace here: getType()->getAddressSpace(),
+                                      getType()->getAddressSpace(),
                                       (Value *)getOperand(0), getAlignment());
   Result->setUsedWithInAlloca(isUsedWithInAlloca());
   Result->setSwiftError(isSwiftError());

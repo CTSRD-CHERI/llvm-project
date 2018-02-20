@@ -876,6 +876,7 @@ bool FastISel::selectXRayCustomEvent(const CallInst *I) {
               TII.get(TargetOpcode::PATCHABLE_EVENT_CALL));
   for (auto &MO : Ops)
     MIB.add(MO);
+
   // Insert the Patchable Event Call instruction, that gets lowered properly.
   return true;
 }
@@ -1236,7 +1237,7 @@ bool FastISel::selectIntrinsicCall(const IntrinsicInst *II) {
           .addImm(0U)
           .addMetadata(DI->getVariable())
           .addMetadata(DI->getExpression());
-    } else if (unsigned Reg = lookUpRegForValue(V)) {
+    } else if (unsigned Reg = getRegForValue(V)) {
       // FIXME: This does not handle register-indirect values at offset 0.
       bool IsIndirect = false;
       BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc, II, IsIndirect, Reg,

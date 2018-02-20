@@ -368,6 +368,11 @@ namespace {
       return CurDAG->getTargetConstant(Imm, DL, MVT::i32);
     }
 
+    /// Return a target constant with the specified value, of type i64.
+    inline SDValue getI64Imm(uint64_t Imm, const SDLoc &DL) {
+      return CurDAG->getTargetConstant(Imm, DL, MVT::i64);
+    }
+
     SDValue getExtractVEXTRACTImmediate(SDNode *N, unsigned VecWidth,
                                         const SDLoc &DL) {
       assert((VecWidth == 128 || VecWidth == 256) && "Unexpected vector width");
@@ -624,6 +629,17 @@ void X86DAGToDAGISel::PreprocessISelDAG() {
   for (SelectionDAG::allnodes_iterator I = CurDAG->allnodes_begin(),
        E = CurDAG->allnodes_end(); I != E; ) {
     SDNode *N = &*I++; // Preincrement iterator to avoid invalidation issues.
+
+    // If this is a target specific AND node with no flag usages, turn it back
+    // into ISD::AND to enable test instruction matching.
+    if (N->getOpcode() == X86ISD::AND && !N->hasAnyUseOfValue(1)) {
+      SDValue Res = CurDAG->getNode(ISD::AND, SDLoc(N), N->getValueType(0),
+                                    N->getOperand(0), N->getOperand(1));
+      --I;
+      CurDAG->ReplaceAllUsesOfValueWith(SDValue(N, 0), Res);
+      ++I;
+      CurDAG->DeleteNode(N);
+    }
 
     if (OptLevel != CodeGenOpt::None &&
         // Only do this when the target can fold the load into the call or
@@ -2416,44 +2432,12 @@ bool X86DAGToDAGISel::matchBEXTRFromAnd(SDNode *Node) {
   if (Shift + MaskSize > NVT.getSizeInBits())
     return false;
 
-  SDValue New = CurDAG->getTargetConstant(Shift | (MaskSize << 8), dl, NVT);
-  unsigned ROpc = NVT == MVT::i64 ? X86::BEXTRI64ri : X86::BEXTRI32ri;
-  unsigned MOpc = NVT == MVT::i64 ? X86::BEXTRI64mi : X86::BEXTRI32mi;
-
-  // BMI requires the immediate to placed in a register.
-  if (!Subtarget->hasTBM()) {
-    ROpc = NVT == MVT::i64 ? X86::BEXTR64rr : X86::BEXTR32rr;
-    MOpc = NVT == MVT::i64 ? X86::BEXTR64rm : X86::BEXTR32rm;
-    New = SDValue(CurDAG->getMachineNode(X86::MOV32ri, dl, NVT, New), 0);
-    if (NVT == MVT::i64) {
-      New =
-          SDValue(CurDAG->getMachineNode(
-                      TargetOpcode::SUBREG_TO_REG, dl, MVT::i64,
-                      CurDAG->getTargetConstant(0, dl, MVT::i64), New,
-                      CurDAG->getTargetConstant(X86::sub_32bit, dl, MVT::i32)),
-                  0);
-    }
-  }
-
-  MachineSDNode *NewNode;
-  SDValue Input = N0->getOperand(0);
-  SDValue Tmp0, Tmp1, Tmp2, Tmp3, Tmp4;
-  if (tryFoldLoad(Node, N0.getNode(), Input, Tmp0, Tmp1, Tmp2, Tmp3, Tmp4)) {
-    SDValue Ops[] = { Tmp0, Tmp1, Tmp2, Tmp3, Tmp4, New, Input.getOperand(0) };
-    SDVTList VTs = CurDAG->getVTList(NVT, MVT::Other);
-    NewNode = CurDAG->getMachineNode(MOpc, dl, VTs, Ops);
-    // Update the chain.
-    ReplaceUses(Input.getValue(1), SDValue(NewNode, 1));
-    // Record the mem-refs
-    MachineSDNode::mmo_iterator MemOp = MF->allocateMemRefsArray(1);
-    MemOp[0] = cast<LoadSDNode>(Input)->getMemOperand();
-    NewNode->setMemRefs(MemOp, MemOp + 1);
-  } else {
-    NewNode = CurDAG->getMachineNode(ROpc, dl, NVT, Input, New);
-  }
-
-  ReplaceUses(SDValue(Node, 0), SDValue(NewNode, 0));
-  CurDAG->RemoveDeadNode(Node);
+  // Create a BEXTR node and run it through selection.
+  SDValue C = CurDAG->getConstant(Shift | (MaskSize << 8), dl, NVT);
+  SDValue New = CurDAG->getNode(X86ISD::BEXTR, dl, NVT,
+                                N0->getOperand(0), C);
+  ReplaceNode(Node, New.getNode());
+  SelectCode(New.getNode());
   return true;
 }
 
@@ -2475,14 +2459,24 @@ bool X86DAGToDAGISel::shrinkAndImmediate(SDNode *And) {
   if (!And1C)
     return false;
 
-  // Bail out if the mask constant is already negative. It can't shrink more.
+  // Bail out if the mask constant is already negative. It's can't shrink more.
+  // If the upper 32 bits of a 64 bit mask are all zeros, we have special isel
+  // patterns to use a 32-bit and instead of a 64-bit and by relying on the
+  // implicit zeroing of 32 bit ops. So we should check if the lower 32 bits
+  // are negative too.
   APInt MaskVal = And1C->getAPIntValue();
   unsigned MaskLZ = MaskVal.countLeadingZeros();
-  if (!MaskLZ)
+  if (!MaskLZ || (VT == MVT::i64 && MaskLZ == 32))
     return false;
 
+  // Don't extend into the upper 32 bits of a 64 bit mask.
+  if (VT == MVT::i64 && MaskLZ >= 32) {
+    MaskLZ -= 32;
+    MaskVal = MaskVal.trunc(32);
+  }
+
   SDValue And0 = And->getOperand(0);
-  APInt HighZeros = APInt::getHighBitsSet(VT.getSizeInBits(), MaskLZ);
+  APInt HighZeros = APInt::getHighBitsSet(MaskVal.getBitWidth(), MaskLZ);
   APInt NegMaskVal = MaskVal | HighZeros;
 
   // If a negative constant would not allow a smaller encoding, there's no need
@@ -2490,6 +2484,12 @@ bool X86DAGToDAGISel::shrinkAndImmediate(SDNode *And) {
   unsigned MinWidth = NegMaskVal.getMinSignedBits();
   if (MinWidth > 32 || (MinWidth > 8 && MaskVal.getMinSignedBits() <= 32))
     return false;
+
+  // Extend masks if we truncated above.
+  if (VT == MVT::i64 && MaskVal.getBitWidth() < 64) {
+    NegMaskVal = NegMaskVal.zext(64);
+    HighZeros = HighZeros.zext(64);
+  }
 
   // The variable operand must be all zeros in the top bits to allow using the
   // new, negative constant as the mask.
@@ -3027,12 +3027,7 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
     return;
   }
 
-  case X86ISD::CMP:
-  case X86ISD::SUB: {
-    // Sometimes a SUB is used to perform comparison.
-    if (Opcode == X86ISD::SUB && Node->hasAnyUseOfValue(0))
-      // This node is not a CMP.
-      break;
+  case X86ISD::CMP: {
     SDValue N0 = Node->getOperand(0);
     SDValue N1 = Node->getOperand(1);
 
@@ -3043,8 +3038,7 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
     // Look for (X86cmp (and $op, $imm), 0) and see if we can convert it to
     // use a smaller encoding.
     // Look past the truncate if CMP is the only use of it.
-    if ((N0.getOpcode() == ISD::AND ||
-         (N0.getResNo() == 0 && N0.getOpcode() == X86ISD::AND)) &&
+    if (N0.getOpcode() == ISD::AND &&
         N0.getNode()->hasOneUse() &&
         N0.getValueType() != MVT::i8 &&
         X86::isZeroNode(N1)) {
@@ -3052,95 +3046,53 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
       if (!C) break;
       uint64_t Mask = C->getZExtValue();
 
-      // For example, convert "testl %eax, $8" to "testb %al, $8"
+      MVT VT;
+      int SubRegOp;
+      unsigned Op;
+
       if (isUInt<8>(Mask) &&
           (!(Mask & 0x80) || hasNoSignedComparisonUses(Node))) {
-        SDValue Imm = CurDAG->getTargetConstant(Mask, dl, MVT::i8);
-        SDValue Reg = N0.getOperand(0);
-
-        // Extract the l-register.
-        SDValue Subreg = CurDAG->getTargetExtractSubreg(X86::sub_8bit, dl,
-                                                        MVT::i8, Reg);
-
-        // Emit a testb.
-        SDNode *NewNode = CurDAG->getMachineNode(X86::TEST8ri, dl, MVT::i32,
-                                                 Subreg, Imm);
-        // Replace SUB|CMP with TEST, since SUB has two outputs while TEST has
-        // one, do not call ReplaceAllUsesWith.
-        ReplaceUses(SDValue(Node, (Opcode == X86ISD::SUB ? 1 : 0)),
-                    SDValue(NewNode, 0));
-        CurDAG->RemoveDeadNode(Node);
-        return;
+        // For example, convert "testl %eax, $8" to "testb %al, $8"
+        VT = MVT::i8;
+        SubRegOp = X86::sub_8bit;
+        Op = X86::TEST8ri;
+      } else if (OptForMinSize && isUInt<16>(Mask) &&
+                 (!(Mask & 0x8000) || hasNoSignedComparisonUses(Node))) {
+        // For example, "testl %eax, $32776" to "testw %ax, $32776".
+        // NOTE: We only want to form TESTW instructions if optimizing for
+        // min size. Otherwise we only save one byte and possibly get a length
+        // changing prefix penalty in the decoders.
+        VT = MVT::i16;
+        SubRegOp = X86::sub_16bit;
+        Op = X86::TEST16ri;
+      } else if (isUInt<32>(Mask) && N0.getValueType() != MVT::i16 &&
+                 (!(Mask & 0x80000000) || hasNoSignedComparisonUses(Node))) {
+        // For example, "testq %rax, $268468232" to "testl %eax, $268468232".
+        // NOTE: We only want to run that transform if N0 is 32 or 64 bits.
+        // Otherwize, we find ourselves in a position where we have to do
+        // promotion. If previous passes did not promote the and, we assume
+        // they had a good reason not to and do not promote here.
+        VT = MVT::i32;
+        SubRegOp = X86::sub_32bit;
+        Op = X86::TEST32ri;
+      } else {
+        // No eligible transformation was found.
+        break;
       }
 
-      // For example, "testl %eax, $2048" to "testb %ah, $8".
-      if (isShiftedUInt<8, 8>(Mask) &&
-          (!(Mask & 0x8000) || hasNoSignedComparisonUses(Node))) {
-        // Shift the immediate right by 8 bits.
-        SDValue ShiftedImm = CurDAG->getTargetConstant(Mask >> 8, dl, MVT::i8);
-        SDValue Reg = N0.getOperand(0);
+      SDValue Imm = CurDAG->getTargetConstant(Mask, dl, VT);
+      SDValue Reg = N0.getOperand(0);
 
-        // Extract the h-register.
-        SDValue Subreg = CurDAG->getTargetExtractSubreg(X86::sub_8bit_hi, dl,
-                                                        MVT::i8, Reg);
+      // Extract the subregister if necessary.
+      if (N0.getValueType() != VT)
+        Reg = CurDAG->getTargetExtractSubreg(SubRegOp, dl, VT, Reg);
 
-        // Emit a testb.  The EXTRACT_SUBREG becomes a COPY that can only
-        // target GR8_NOREX registers, so make sure the register class is
-        // forced.
-        SDNode *NewNode = CurDAG->getMachineNode(X86::TEST8ri_NOREX, dl,
-                                                 MVT::i32, Subreg, ShiftedImm);
-        // Replace SUB|CMP with TEST, since SUB has two outputs while TEST has
-        // one, do not call ReplaceAllUsesWith.
-        ReplaceUses(SDValue(Node, (Opcode == X86ISD::SUB ? 1 : 0)),
-                    SDValue(NewNode, 0));
-        CurDAG->RemoveDeadNode(Node);
-        return;
-      }
-
-      // For example, "testl %eax, $32776" to "testw %ax, $32776".
-      // NOTE: We only want to form TESTW instructions if optimizing for
-      // min size. Otherwise we only save one byte and possibly get a length
-      // changing prefix penalty in the decoders.
-      if (OptForMinSize && isUInt<16>(Mask) && N0.getValueType() != MVT::i16 &&
-          (!(Mask & 0x8000) || hasNoSignedComparisonUses(Node))) {
-        SDValue Imm = CurDAG->getTargetConstant(Mask, dl, MVT::i16);
-        SDValue Reg = N0.getOperand(0);
-
-        // Extract the 16-bit subregister.
-        SDValue Subreg = CurDAG->getTargetExtractSubreg(X86::sub_16bit, dl,
-                                                        MVT::i16, Reg);
-
-        // Emit a testw.
-        SDNode *NewNode = CurDAG->getMachineNode(X86::TEST16ri, dl, MVT::i32,
-                                                 Subreg, Imm);
-        // Replace SUB|CMP with TEST, since SUB has two outputs while TEST has
-        // one, do not call ReplaceAllUsesWith.
-        ReplaceUses(SDValue(Node, (Opcode == X86ISD::SUB ? 1 : 0)),
-                    SDValue(NewNode, 0));
-        CurDAG->RemoveDeadNode(Node);
-        return;
-      }
-
-      // For example, "testq %rax, $268468232" to "testl %eax, $268468232".
-      if (isUInt<32>(Mask) && N0.getValueType() == MVT::i64 &&
-          (!(Mask & 0x80000000) || hasNoSignedComparisonUses(Node))) {
-        SDValue Imm = CurDAG->getTargetConstant(Mask, dl, MVT::i32);
-        SDValue Reg = N0.getOperand(0);
-
-        // Extract the 32-bit subregister.
-        SDValue Subreg = CurDAG->getTargetExtractSubreg(X86::sub_32bit, dl,
-                                                        MVT::i32, Reg);
-
-        // Emit a testl.
-        SDNode *NewNode = CurDAG->getMachineNode(X86::TEST32ri, dl, MVT::i32,
-                                                 Subreg, Imm);
-        // Replace SUB|CMP with TEST, since SUB has two outputs while TEST has
-        // one, do not call ReplaceAllUsesWith.
-        ReplaceUses(SDValue(Node, (Opcode == X86ISD::SUB ? 1 : 0)),
-                    SDValue(NewNode, 0));
-        CurDAG->RemoveDeadNode(Node);
-        return;
-      }
+      // Emit a testl or testw.
+      SDNode *NewNode = CurDAG->getMachineNode(Op, dl, MVT::i32, Reg, Imm);
+      // Replace CMP with TEST.
+      CurDAG->ReplaceAllUsesWith(Node, NewNode);
+      CurDAG->RemoveDeadNode(Node);
+      return;
     }
     break;
   }

@@ -146,6 +146,7 @@ void DAGTypeLegalizer::PromoteIntegerResult(SDNode *N, unsigned ResNo) {
   case ISD::ATOMIC_LOAD_ADD:
   case ISD::ATOMIC_LOAD_SUB:
   case ISD::ATOMIC_LOAD_AND:
+  case ISD::ATOMIC_LOAD_CLR:
   case ISD::ATOMIC_LOAD_OR:
   case ISD::ATOMIC_LOAD_XOR:
   case ISD::ATOMIC_LOAD_NAND:
@@ -1409,6 +1410,7 @@ void DAGTypeLegalizer::ExpandIntegerResult(SDNode *N, unsigned ResNo) {
   case ISD::ATOMIC_LOAD_ADD:
   case ISD::ATOMIC_LOAD_SUB:
   case ISD::ATOMIC_LOAD_AND:
+  case ISD::ATOMIC_LOAD_CLR:
   case ISD::ATOMIC_LOAD_OR:
   case ISD::ATOMIC_LOAD_XOR:
   case ISD::ATOMIC_LOAD_NAND:

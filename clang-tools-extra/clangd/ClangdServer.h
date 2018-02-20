@@ -11,7 +11,6 @@
 #define LLVM_CLANG_TOOLS_EXTRA_CLANGD_CLANGDSERVER_H
 
 #include "ClangdUnit.h"
-#include "ClangdUnitStore.h"
 #include "CodeComplete.h"
 #include "CompileArgsCache.h"
 #include "DraftStore.h"
@@ -26,6 +25,7 @@
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/StringRef.h"
 #include <functional>
+#include <future>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -71,7 +71,7 @@ public:
 
   /// Called by ClangdServer when \p Diagnostics for \p File are ready.
   virtual void
-  onDiagnosticsReady(const Context &Ctx, PathRef File,
+  onDiagnosticsReady(PathRef File,
                      Tagged<std::vector<DiagWithFixIts>> Diagnostics) = 0;
 };
 
@@ -94,8 +94,6 @@ public:
   Tagged<IntrusiveRefCntPtr<vfs::FileSystem>>
   getTaggedFileSystem(PathRef File) override;
 };
-
-class ClangdServer;
 
 /// Provides API to manage ASTs for a collection of C++ files and request
 /// various language features.
@@ -152,34 +150,20 @@ public:
   /// \p File is already tracked. Also schedules parsing of the AST for it on a
   /// separate thread. When the parsing is complete, DiagConsumer passed in
   /// constructor will receive onDiagnosticsReady callback.
-  /// \return A future that will become ready when the rebuild (including
-  /// diagnostics) is finished.
-  /// FIXME: don't return futures here, LSP does not require a response for this
-  /// request.
-  std::future<Context> addDocument(Context Ctx, PathRef File,
-                                   StringRef Contents);
+  void addDocument(PathRef File, StringRef Contents);
+
   /// Remove \p File from list of tracked files, schedule a request to free
   /// resources associated with it.
-  /// \return A future that will become ready when the file is removed and all
-  /// associated resources are freed.
-  /// FIXME: don't return futures here, LSP does not require a response for this
-  /// request.
-  std::future<Context> removeDocument(Context Ctx, PathRef File);
+  void removeDocument(PathRef File);
+
   /// Force \p File to be reparsed using the latest contents.
   /// Will also check if CompileCommand, provided by GlobalCompilationDatabase
   /// for \p File has changed. If it has, will remove currently stored Preamble
   /// and AST and rebuild them from scratch.
-  /// FIXME: don't return futures here, LSP does not require a response for this
-  /// request.
-  std::future<Context> forceReparse(Context Ctx, PathRef File);
+  void forceReparse(PathRef File);
 
-  /// DEPRECATED. Please use a callback-based version, this API is deprecated
-  /// and will soon be removed.
-  ///
   /// Run code completion for \p File at \p Pos.
-  ///
-  /// Request is processed asynchronously. You can use the returned future to
-  /// wait for the results of the async request.
+  /// Request is processed asynchronously.
   ///
   /// If \p OverridenContents is not None, they will used only for code
   /// completion, i.e. no diagnostics update will be scheduled and a draft for
@@ -190,20 +174,13 @@ public:
   /// This method should only be called for currently tracked files. However, it
   /// is safe to call removeDocument for \p File after this method returns, even
   /// while returned future is not yet ready.
-  std::future<std::pair<Context, Tagged<CompletionList>>>
-  codeComplete(Context Ctx, PathRef File, Position Pos,
-               const clangd::CodeCompleteOptions &Opts,
-               llvm::Optional<StringRef> OverridenContents = llvm::None,
-               IntrusiveRefCntPtr<vfs::FileSystem> *UsedFS = nullptr);
-
   /// A version of `codeComplete` that runs \p Callback on the processing thread
   /// when codeComplete results become available.
-  void
-  codeComplete(Context Ctx, PathRef File, Position Pos,
-               const clangd::CodeCompleteOptions &Opts,
-               UniqueFunction<void(Context, Tagged<CompletionList>)> Callback,
-               llvm::Optional<StringRef> OverridenContents = llvm::None,
-               IntrusiveRefCntPtr<vfs::FileSystem> *UsedFS = nullptr);
+  void codeComplete(PathRef File, Position Pos,
+                    const clangd::CodeCompleteOptions &Opts,
+                    UniqueFunction<void(Tagged<CompletionList>)> Callback,
+                    llvm::Optional<StringRef> OverridenContents = llvm::None,
+                    IntrusiveRefCntPtr<vfs::FileSystem> *UsedFS = nullptr);
 
   /// Provide signature help for \p File at \p Pos. If \p OverridenContents is
   /// not None, they will used only for signature help, i.e. no diagnostics
@@ -212,22 +189,32 @@ public:
   /// will be used. If \p UsedFS is non-null, it will be overwritten by
   /// vfs::FileSystem used for signature help. This method should only be called
   /// for currently tracked files.
-  llvm::Expected<Tagged<SignatureHelp>>
-  signatureHelp(const Context &Ctx, PathRef File, Position Pos,
-                llvm::Optional<StringRef> OverridenContents = llvm::None,
-                IntrusiveRefCntPtr<vfs::FileSystem> *UsedFS = nullptr);
+  void signatureHelp(
+      PathRef File, Position Pos,
+      UniqueFunction<void(llvm::Expected<Tagged<SignatureHelp>>)> Callback,
+      llvm::Optional<StringRef> OverridenContents = llvm::None,
+      IntrusiveRefCntPtr<vfs::FileSystem> *UsedFS = nullptr);
 
   /// Get definition of symbol at a specified \p Line and \p Column in \p File.
-  llvm::Expected<Tagged<std::vector<Location>>>
-  findDefinitions(const Context &Ctx, PathRef File, Position Pos);
+  void findDefinitions(
+      PathRef File, Position Pos,
+      UniqueFunction<void(llvm::Expected<Tagged<std::vector<Location>>>)>
+          Callback);
 
   /// Helper function that returns a path to the corresponding source file when
   /// given a header file and vice versa.
   llvm::Optional<Path> switchSourceHeader(PathRef Path);
 
   /// Get document highlights for a given position.
-  llvm::Expected<Tagged<std::vector<DocumentHighlight>>>
-  findDocumentHighlights(const Context &Ctx, PathRef File, Position Pos);
+  void findDocumentHighlights(
+      PathRef File, Position Pos,
+      UniqueFunction<
+          void(llvm::Expected<Tagged<std::vector<DocumentHighlight>>>)>
+          Callback);
+
+  /// Get code hover for a given position.
+  void findHover(PathRef File, Position Pos,
+                 UniqueFunction<void(llvm::Expected<Tagged<Hover>>)> Callback);
 
   /// Run formatting for \p Rng inside \p File with content \p Code.
   llvm::Expected<tooling::Replacements> formatRange(StringRef Code,
@@ -244,9 +231,16 @@ public:
 
   /// Rename all occurrences of the symbol at the \p Pos in \p File to
   /// \p NewName.
-  Expected<std::vector<tooling::Replacement>> rename(const Context &Ctx,
-                                                     PathRef File, Position Pos,
-                                                     llvm::StringRef NewName);
+  void rename(PathRef File, Position Pos, llvm::StringRef NewName,
+              UniqueFunction<void(Expected<std::vector<tooling::Replacement>>)>
+                  Callback);
+
+  /// Inserts a new #include of \p Header into \p File, if it's not present.
+  /// \p Header is either an URI that can be resolved to an #include path that
+  /// is suitable to be inserted or a literal string quoted with <> or "" that
+  /// can be #included directly.
+  Expected<tooling::Replacements> insertInclude(PathRef File, StringRef Code,
+                                                StringRef Header);
 
   /// Gets current document contents for \p File. Returns None if \p File is not
   /// currently tracked.
@@ -257,7 +251,7 @@ public:
   /// Only for testing purposes.
   /// Waits until all requests to worker thread are finished and dumps AST for
   /// \p File. \p File must be in the list of added documents.
-  std::string dumpAST(PathRef File);
+  void dumpAST(PathRef File, UniqueFunction<void(std::string)> Callback);
   /// Called when an event occurs for a watched file in the workspace.
   void onFileEvent(const DidChangeWatchedFilesParams &Params);
 
@@ -270,6 +264,11 @@ public:
   /// FIXME: those metrics might be useful too, we should add them.
   std::vector<std::pair<Path, std::size_t>> getUsedBytesPerFile() const;
 
+  // Blocks the main thread until the server is idle. Only for use in tests.
+  // Returns false if the timeout expires.
+  LLVM_NODISCARD bool
+  blockUntilIdleForTest(llvm::Optional<double> TimeoutSeconds = 10);
+
 private:
   /// FIXME: This stats several files to find a .clang-format file. I/O can be
   /// slow. Think of a way to cache this.
@@ -277,8 +276,8 @@ private:
   formatCode(llvm::StringRef Code, PathRef File,
              ArrayRef<tooling::Range> Ranges);
 
-  std::future<Context>
-  scheduleReparseAndDiags(Context Ctx, PathRef File, VersionedDraft Contents,
+  void
+  scheduleReparseAndDiags(PathRef File, VersionedDraft Contents,
                           Tagged<IntrusiveRefCntPtr<vfs::FileSystem>> TaggedFS);
 
   CompileArgsCache CompileArgs;

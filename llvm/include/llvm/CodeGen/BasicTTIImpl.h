@@ -241,7 +241,7 @@ public:
 
     // Early exit if both a jump table and bit test are not allowed.
     // XXXAR: AS0 hardcoded
-    if (N < 1 || (!IsJTAllowed && DL.getPointerBaseSizeInBits(0u) < N))
+    if (N < 1 || (!IsJTAllowed && DL.getIndexSizeInBits(0u) < N))
       return N;
 
     APInt MaxCaseVal = SI.case_begin()->getCaseValue()->getValue();
@@ -256,7 +256,7 @@ public:
 
     // Check if suitable for a bit test
     // XXXAR: AS0 hardcoded
-    if (N <= DL.getPointerBaseSizeInBits(0u)) {
+    if (N <= DL.getIndexSizeInBits(0u)) {
       SmallPtrSet<const BasicBlock *, 4> Dests;
       for (auto I : SI.cases())
         Dests.insert(I.getCaseSuccessor());
@@ -490,10 +490,12 @@ public:
 
     std::pair<unsigned, MVT> LT = TLI->getTypeLegalizationCost(DL, Ty);
 
-    bool IsFloat = Ty->isFPOrFPVectorTy();
-    // Assume that floating point arithmetic operations cost twice as much as
-    // integer operations.
-    unsigned OpCost = (IsFloat ? 2 : 1);
+    // Assume that the throughput of any integer or floating-point math
+    // operation is the same and maximal (disregarding free operations).
+    // That is, operations with less throughput should have a relative cost
+    // greater than 1. Targets should override this assumption when they can
+    // provide more accurate information.
+    unsigned OpCost = 1;
 
     if (TLI->isOperationLegalOrPromote(ISD, LT.second)) {
       // The operation is legal. Assume it costs 1.

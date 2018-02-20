@@ -682,6 +682,14 @@ GlobalValue *IRLinker::copyGlobalValueProto(const GlobalValue *SGV,
   return NewGV;
 }
 
+static StringRef getTypeNamePrefix(StringRef Name) {
+  size_t DotPos = Name.rfind('.');
+  return (DotPos == 0 || DotPos == StringRef::npos || Name.back() == '.' ||
+          !isdigit(static_cast<unsigned char>(Name[DotPos + 1])))
+             ? Name
+             : Name.substr(0, DotPos);
+}
+
 /// Loop over all of the linked values to compute type mappings.  For example,
 /// if we link "extern Foo *x" and "Foo *x = NULL", then we have two struct
 /// types 'Foo' but one got renamed when the module was loaded into the same
@@ -728,15 +736,12 @@ void IRLinker::computeTypeMapping() {
       continue;
     }
 
-    // Check to see if there is a dot in the name followed by a digit.
-    size_t DotPos = ST->getName().rfind('.');
-    if (DotPos == 0 || DotPos == StringRef::npos ||
-        ST->getName().back() == '.' ||
-        !isdigit(static_cast<unsigned char>(ST->getName()[DotPos + 1])))
+    auto STTypePrefix = getTypeNamePrefix(ST->getName());
+    if (STTypePrefix.size()== ST->getName().size())
       continue;
 
     // Check to see if the destination module has a struct with the prefix name.
-    StructType *DST = DstM.getTypeByName(ST->getName().substr(0, DotPos));
+    StructType *DST = DstM.getTypeByName(STTypePrefix);
     if (!DST)
       continue;
 
@@ -1046,14 +1051,10 @@ void IRLinker::prepareCompileUnitsForImport() {
     ValueMap.MD()[CU->getRawEnumTypes()].reset(nullptr);
     ValueMap.MD()[CU->getRawMacros()].reset(nullptr);
     ValueMap.MD()[CU->getRawRetainedTypes()].reset(nullptr);
-    // If we ever start importing global variable defs, we'll need to
-    // add their DIGlobalVariable to the globals list on the imported
-    // DICompileUnit. Confirm none are imported, and then we can
-    // map the list of global variables to nullptr.
-    assert(none_of(
-               ValuesToLink,
-               [](const GlobalValue *GV) { return isa<GlobalVariable>(GV); }) &&
-           "Unexpected importing of a GlobalVariable definition");
+    // We import global variables only temporarily in order for instcombine
+    // and globalopt to perform constant folding and static constructor
+    // evaluation. After that elim-avail-extern will covert imported globals
+    // back to declarations, so we don't need debug info for them.
     ValueMap.MD()[CU->getRawGlobalVariables()].reset(nullptr);
 
     // Imported entities only need to be mapped in if they have local

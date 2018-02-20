@@ -55,6 +55,20 @@ public:
     Inline_Minimal = 0x1
   };
 
+  /// Hints for figuring out of a call should be inlined during evalCall().
+  struct EvalCallOptions {
+    /// This call is a constructor or a destructor for which we do not currently
+    /// compute the this-region correctly.
+    bool IsCtorOrDtorWithImproperlyModeledTargetRegion = false;
+    /// This call is a constructor or a destructor for a single element within
+    /// an array, a part of array construction or destruction.
+    bool IsArrayCtorOrDtor = false;
+    /// This call is a constructor or a destructor of a temporary value.
+    bool IsTemporaryCtorOrDtor = false;
+
+    EvalCallOptions() {}
+  };
+
 private:
   AnalysisManager &AMgr;
   
@@ -194,7 +208,7 @@ public:
   void processCFGElement(const CFGElement E, ExplodedNode *Pred,
                          unsigned StmtIdx, NodeBuilderContext *Ctx) override;
 
-  void ProcessStmt(const CFGStmt S, ExplodedNode *Pred);
+  void ProcessStmt(const Stmt *S, ExplodedNode *Pred);
 
   void ProcessLoopExit(const Stmt* S, ExplodedNode *Pred);
 
@@ -299,8 +313,9 @@ public:
                        const CallEvent *Call) override;
 
   /// printState - Called by ProgramStateManager to print checker-specific data.
-  void printState(raw_ostream &Out, ProgramStateRef State,
-                  const char *NL, const char *Sep) override;
+  void printState(raw_ostream &Out, ProgramStateRef State, const char *NL,
+                  const char *Sep,
+                  const LocationContext *LCtx = nullptr) override;
 
   ProgramStateManager& getStateManager() override { return StateMgr; }
 
@@ -392,7 +407,7 @@ public:
   void VisitMemberExpr(const MemberExpr *M, ExplodedNode *Pred, 
                            ExplodedNodeSet &Dst);
 
-  /// VisitMemberExpr - Transfer function for builtin atomic expressions
+  /// VisitAtomicExpr - Transfer function for builtin atomic expressions
   void VisitAtomicExpr(const AtomicExpr *E, ExplodedNode *Pred,
                        ExplodedNodeSet &Dst);
 
@@ -433,10 +448,6 @@ public:
                                        ExplodedNode *Pred,
                                        ExplodedNodeSet &Dst);
 
-  void VisitCXXBindTemporaryExpr(const CXXBindTemporaryExpr *BTE,
-                                 ExplodedNodeSet &PreVisit,
-                                 ExplodedNodeSet &Dst);
-
   void VisitCXXCatchStmt(const CXXCatchStmt *CS, ExplodedNode *Pred,
                          ExplodedNodeSet &Dst);
 
@@ -448,7 +459,8 @@ public:
 
   void VisitCXXDestructor(QualType ObjectType, const MemRegion *Dest,
                           const Stmt *S, bool IsBaseDtor,
-                          ExplodedNode *Pred, ExplodedNodeSet &Dst);
+                          ExplodedNode *Pred, ExplodedNodeSet &Dst,
+                          const EvalCallOptions &Options);
 
   void VisitCXXNewAllocatorCall(const CXXNewExpr *CNE,
                                 ExplodedNode *Pred,
@@ -561,6 +573,12 @@ public:
                  ExplodedNode *Pred, ProgramStateRef St, SVal TargetLV, SVal Val,
                  const ProgramPointTag *tag = nullptr);
 
+  /// Return the CFG element corresponding to the worklist element
+  /// that is currently being processed by ExprEngine.
+  CFGElement getCurrentCFGElement() {
+    return (*currBldrCtx->getBlock())[currStmtIdx];
+  }
+
   /// \brief Create a new state in which the call return value is binded to the
   /// call origin expression.
   ProgramStateRef bindReturnValue(const CallEvent &Call,
@@ -574,7 +592,9 @@ public:
 
   /// \brief Default implementation of call evaluation.
   void defaultEvalCall(NodeBuilder &B, ExplodedNode *Pred,
-                       const CallEvent &Call);
+                       const CallEvent &Call,
+                       const EvalCallOptions &CallOpts = {});
+
 private:
   void evalLoadCommon(ExplodedNodeSet &Dst,
                       const Expr *NodeEx,  /* Eventually will be a CFGStmt */
@@ -598,9 +618,23 @@ private:
   void examineStackFrames(const Decl *D, const LocationContext *LCtx,
                           bool &IsRecursive, unsigned &StackDepth);
 
+  enum CallInlinePolicy {
+    CIP_Allowed,
+    CIP_DisallowedOnce,
+    CIP_DisallowedAlways
+  };
+
+  /// \brief See if a particular call should be inlined, by only looking
+  /// at the call event and the current state of analysis.
+  CallInlinePolicy mayInlineCallKind(const CallEvent &Call,
+                                     const ExplodedNode *Pred,
+                                     AnalyzerOptions &Opts,
+                                     const EvalCallOptions &CallOpts);
+
   /// Checks our policies and decides weither the given call should be inlined.
   bool shouldInlineCall(const CallEvent &Call, const Decl *D,
-                        const ExplodedNode *Pred);
+                        const ExplodedNode *Pred,
+                        const EvalCallOptions &CallOpts = {});
 
   bool inlineCall(const CallEvent &Call, const Decl *D, NodeBuilder &Bldr,
                   ExplodedNode *Pred, ProgramStateRef State);
@@ -634,6 +668,17 @@ private:
                                                 const Expr *InitWithAdjustments,
                                                 const Expr *Result = nullptr);
 
+  /// Returns a region representing the first element of a (possibly
+  /// multi-dimensional) array, for the purposes of element construction or
+  /// destruction.
+  ///
+  /// On return, \p Ty will be set to the base type of the array.
+  ///
+  /// If the type is not an array type at all, the original value is returned.
+  /// Otherwise the "IsArray" flag is set.
+  static SVal makeZeroElementRegion(ProgramStateRef State, SVal LValue,
+                                    QualType &Ty, bool &IsArray);
+
   /// For a DeclStmt or CXXInitCtorInitializer, walk backward in the current CFG
   /// block to find the constructor expression that directly constructed into
   /// the storage for this statement. Returns null if the constructor for this
@@ -641,20 +686,27 @@ private:
   /// constructing into an existing region.
   const CXXConstructExpr *findDirectConstructorForCurrentCFGElement();
 
-  /// For a CXXConstructExpr, walk forward in the current CFG block to find the
-  /// CFGElement for the DeclStmt or CXXInitCtorInitializer or CXXNewExpr which
-  /// is directly constructed by this constructor. Returns None if the current
-  /// constructor expression did not directly construct into an existing
-  /// region.
-  Optional<CFGElement> findElementDirectlyInitializedByCurrentConstructor();
-
   /// For a given constructor, look forward in the current CFG block to
   /// determine the region into which an object will be constructed by \p CE.
-  /// Returns either a field or local variable region if the object will be
-  /// directly constructed in an existing region or a temporary object region
-  /// if not.
+  /// When the lookahead fails, a temporary region is returned, and the
+  /// IsConstructorWithImproperlyModeledTargetRegion flag is set in \p CallOpts.
   const MemRegion *getRegionForConstructedObject(const CXXConstructExpr *CE,
-                                                 ExplodedNode *Pred);
+                                                 ExplodedNode *Pred,
+                                                 const ConstructionContext *CC,
+                                                 EvalCallOptions &CallOpts);
+
+  /// Store the region of a C++ temporary object corresponding to a
+  /// CXXBindTemporaryExpr for later destruction.
+  static ProgramStateRef addInitializedTemporary(
+      ProgramStateRef State, const CXXBindTemporaryExpr *BTE,
+      const LocationContext *LC, const CXXTempObjectRegion *R);
+
+  /// Check if all initialized temporary regions are clear for the given
+  /// context range (including FromLC, not including ToLC).
+  /// This is useful for assertions.
+  static bool areInitializedTemporariesClear(ProgramStateRef State,
+                                             const LocationContext *FromLC,
+                                             const LocationContext *ToLC);
 
   /// Store the region returned by operator new() so that the constructor
   /// that follows it knew what location to initialize. The value should be

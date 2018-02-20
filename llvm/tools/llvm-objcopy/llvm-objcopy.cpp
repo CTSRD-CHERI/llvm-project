@@ -72,8 +72,8 @@ LLVM_ATTRIBUTE_NORETURN void reportError(StringRef File, Error E) {
 } // end namespace llvm
 
 static cl::opt<std::string> InputFilename(cl::Positional, cl::desc("<input>"));
-static cl::opt<std::string> OutputFilename(cl::Positional, cl::desc("<output>"),
-                                           cl::init("-"));
+static cl::opt<std::string> OutputFilename(cl::Positional, cl::desc("[ <output> ]"));
+
 static cl::opt<std::string>
     OutputFormat("O", cl::desc("Set output format to one of the following:"
                                "\n\tbinary"));
@@ -96,8 +96,12 @@ static cl::list<std::string> OnlyKeep("only-keep",
                                       cl::value_desc("section"));
 static cl::alias OnlyKeepA("j", cl::desc("Alias for only-keep"),
                            cl::aliasopt(OnlyKeep));
+static cl::opt<bool>
+    OnlyKeepDebug("only-keep-debug",
+                  cl::desc("Removes all but debug information"));
 static cl::opt<bool> StripDebug("strip-debug",
                                 cl::desc("Removes all debug information"));
+
 static cl::opt<bool> StripSections("strip-sections",
                                    cl::desc("Remove all section headers"));
 static cl::opt<bool>
@@ -284,6 +288,28 @@ void HandleArgs(Object &Obj, const Reader &Reader) {
     };
   }
 
+  if (OnlyKeepDebug) {
+    RemovePred = [RemovePred, &Obj](const SectionBase &Sec) {
+      // Allow all implicit removes.
+      if (RemovePred(Sec))
+        return true;
+
+      // Only keep debug sections and the string + symbol table.
+      // This is much more aggressive than either GNU binutils or elftoolchain
+      // but GDB accepts this just fine
+      if (Obj.SectionNames == &Sec || Obj.SymbolTable == &Sec ||
+          Obj.SymbolTable->getStrTab() == &Sec)
+        return false;
+      for (const char *S : {".debug", ".zdebug", ".gdb_index", ".line", ".stab",
+                            ".gnu.linkonce.wi."})
+        if (Sec.Name.startswith(S))
+          return false;
+
+      // Remove everything else.
+      return true;
+    };
+  }
+
   if (!Keep.empty()) {
     RemovePred = [RemovePred](const SectionBase &Sec) {
       // Explicitly keep these sections regardless of previous removes.
@@ -340,7 +366,9 @@ int main(int argc, char **argv) {
 
   auto Reader = CreateReader();
   auto Obj = Reader->create();
-  auto Writer = CreateWriter(*Obj, OutputFilename);
+  StringRef Output =
+      OutputFilename.getNumOccurrences() ? OutputFilename : InputFilename;
+  auto Writer = CreateWriter(*Obj, Output);
   HandleArgs(*Obj, *Reader);
   Writer->finalize();
   Writer->write();

@@ -3672,10 +3672,9 @@ bool ScalarEvolution::isSCEVable(Type *Ty) const {
 /// return true.
 uint64_t ScalarEvolution::getTypeSizeInBits(Type *Ty) const {
   assert(isSCEVable(Ty) && "Type is not SCEVable!");
-  const DataLayout &DL = getDataLayout();
-  if (PointerType *PT = dyn_cast<PointerType>(Ty))
-    return DL.getPointerBaseSizeInBits(PT->getPointerAddressSpace());
-  return DL.getTypeSizeInBits(Ty);
+  if (Ty->isPointerTy())
+    return getDataLayout().getIndexTypeSizeInBits(Ty);
+  return getDataLayout().getTypeSizeInBits(Ty);
 }
 
 /// Return a type with the same bitwidth as the given type and which represents
@@ -8677,7 +8676,8 @@ bool ScalarEvolution::isKnownPredicate(ICmpInst::Predicate Pred,
   bool RightGuarded = false;
   if (LAR) {
     const Loop *L = LAR->getLoop();
-    if (isLoopEntryGuardedByCond(L, Pred, LAR->getStart(), RHS) &&
+    if (isAvailableAtLoopEntry(RHS, L) &&
+        isLoopEntryGuardedByCond(L, Pred, LAR->getStart(), RHS) &&
         isLoopBackedgeGuardedByCond(L, Pred, LAR->getPostIncExpr(*this), RHS)) {
       if (!RAR) return true;
       LeftGuarded = true;
@@ -8685,7 +8685,8 @@ bool ScalarEvolution::isKnownPredicate(ICmpInst::Predicate Pred,
   }
   if (RAR) {
     const Loop *L = RAR->getLoop();
-    if (isLoopEntryGuardedByCond(L, Pred, LHS, RAR->getStart()) &&
+    if (isAvailableAtLoopEntry(LHS, L) &&
+        isLoopEntryGuardedByCond(L, Pred, LHS, RAR->getStart()) &&
         isLoopBackedgeGuardedByCond(L, Pred, LHS, RAR->getPostIncExpr(*this))) {
       if (!LAR) return true;
       RightGuarded = true;
@@ -8697,8 +8698,8 @@ bool ScalarEvolution::isKnownPredicate(ICmpInst::Predicate Pred,
   if (isKnownPredicateViaSplitting(Pred, LHS, RHS))
     return true;
 
-  // Otherwise see what can be done with known constant ranges.
-  return isKnownPredicateViaConstantRanges(Pred, LHS, RHS);
+  // Otherwise see what can be done with some simple reasoning.
+  return isKnownViaNonRecursiveReasoning(Pred, LHS, RHS);
 }
 
 bool ScalarEvolution::isMonotonicPredicate(const SCEVAddRecExpr *LHS,
@@ -8965,7 +8966,7 @@ ScalarEvolution::isLoopBackedgeGuardedByCond(const Loop *L,
   // (interprocedural conditions notwithstanding).
   if (!L) return true;
 
-  if (isKnownPredicateViaConstantRanges(Pred, LHS, RHS))
+  if (isKnownViaNonRecursiveReasoning(Pred, LHS, RHS))
     return true;
 
   BasicBlock *Latch = L->getLoopLatch();
@@ -9070,8 +9071,67 @@ ScalarEvolution::isLoopEntryGuardedByCond(const Loop *L,
   // (interprocedural conditions notwithstanding).
   if (!L) return false;
 
-  if (isKnownPredicateViaConstantRanges(Pred, LHS, RHS))
+  // Both LHS and RHS must be available at loop entry.
+  assert(isAvailableAtLoopEntry(LHS, L) &&
+         "LHS is not available at Loop Entry");
+  assert(isAvailableAtLoopEntry(RHS, L) &&
+         "RHS is not available at Loop Entry");
+
+  if (isKnownViaNonRecursiveReasoning(Pred, LHS, RHS))
     return true;
+
+  // If we cannot prove strict comparison (e.g. a > b), maybe we can prove
+  // the facts (a >= b && a != b) separately. A typical situation is when the
+  // non-strict comparison is known from ranges and non-equality is known from
+  // dominating predicates. If we are proving strict comparison, we always try
+  // to prove non-equality and non-strict comparison separately.
+  auto NonStrictPredicate = ICmpInst::getNonStrictPredicate(Pred);
+  const bool ProvingStrictComparison = (Pred != NonStrictPredicate);
+  bool ProvedNonStrictComparison = false;
+  bool ProvedNonEquality = false;
+
+  if (ProvingStrictComparison) {
+    ProvedNonStrictComparison =
+        isKnownViaNonRecursiveReasoning(NonStrictPredicate, LHS, RHS);
+    ProvedNonEquality =
+        isKnownViaNonRecursiveReasoning(ICmpInst::ICMP_NE, LHS, RHS);
+    if (ProvedNonStrictComparison && ProvedNonEquality)
+      return true;
+  }
+
+  // Try to prove (Pred, LHS, RHS) using isImpliedViaGuard.
+  auto ProveViaGuard = [&](BasicBlock *Block) {
+    if (isImpliedViaGuard(Block, Pred, LHS, RHS))
+      return true;
+    if (ProvingStrictComparison) {
+      if (!ProvedNonStrictComparison)
+        ProvedNonStrictComparison =
+            isImpliedViaGuard(Block, NonStrictPredicate, LHS, RHS);
+      if (!ProvedNonEquality)
+        ProvedNonEquality =
+            isImpliedViaGuard(Block, ICmpInst::ICMP_NE, LHS, RHS);
+      if (ProvedNonStrictComparison && ProvedNonEquality)
+        return true;
+    }
+    return false;
+  };
+
+  // Try to prove (Pred, LHS, RHS) using isImpliedCond.
+  auto ProveViaCond = [&](Value *Condition, bool Inverse) {
+    if (isImpliedCond(Pred, LHS, RHS, Condition, Inverse))
+      return true;
+    if (ProvingStrictComparison) {
+      if (!ProvedNonStrictComparison)
+        ProvedNonStrictComparison =
+            isImpliedCond(NonStrictPredicate, LHS, RHS, Condition, Inverse);
+      if (!ProvedNonEquality)
+        ProvedNonEquality =
+            isImpliedCond(ICmpInst::ICMP_NE, LHS, RHS, Condition, Inverse);
+      if (ProvedNonStrictComparison && ProvedNonEquality)
+        return true;
+    }
+    return false;
+  };
 
   // Starting at the loop predecessor, climb up the predecessor chain, as long
   // as there are predecessors that can be found that have unique successors
@@ -9081,7 +9141,7 @@ ScalarEvolution::isLoopEntryGuardedByCond(const Loop *L,
        Pair.first;
        Pair = getPredecessorWithUniqueSuccessorForBB(Pair.first)) {
 
-    if (isImpliedViaGuard(Pair.first, Pred, LHS, RHS))
+    if (ProveViaGuard(Pair.first))
       return true;
 
     BranchInst *LoopEntryPredicate =
@@ -9090,9 +9150,8 @@ ScalarEvolution::isLoopEntryGuardedByCond(const Loop *L,
         LoopEntryPredicate->isUnconditional())
       continue;
 
-    if (isImpliedCond(Pred, LHS, RHS,
-                      LoopEntryPredicate->getCondition(),
-                      LoopEntryPredicate->getSuccessor(0) != Pair.second))
+    if (ProveViaCond(LoopEntryPredicate->getCondition(),
+                     LoopEntryPredicate->getSuccessor(0) != Pair.second))
       return true;
   }
 
@@ -9104,7 +9163,7 @@ ScalarEvolution::isLoopEntryGuardedByCond(const Loop *L,
     if (!DT.dominates(CI, L->getHeader()))
       continue;
 
-    if (isImpliedCond(Pred, LHS, RHS, CI->getArgOperand(0), false))
+    if (ProveViaCond(CI->getArgOperand(0), false))
       return true;
   }
 
@@ -9426,7 +9485,8 @@ bool ScalarEvolution::isImpliedCondOperandsViaNoOverflow(
   }
 
   // Try to prove (1) or (2), as needed.
-  return isLoopEntryGuardedByCond(L, Pred, FoundRHS,
+  return isAvailableAtLoopEntry(FoundRHS, L) &&
+         isLoopEntryGuardedByCond(L, Pred, FoundRHS,
                                   getConstant(FoundRHSLimit));
 }
 
@@ -9589,7 +9649,7 @@ bool ScalarEvolution::isImpliedViaOperations(ICmpInst::Predicate Pred,
 
   // Is the SGT predicate can be proved trivially or using the found context.
   auto IsSGTViaContext = [&](const SCEV *S1, const SCEV *S2) {
-    return isKnownViaSimpleReasoning(ICmpInst::ICMP_SGT, S1, S2) ||
+    return isKnownViaNonRecursiveReasoning(ICmpInst::ICMP_SGT, S1, S2) ||
            isImpliedViaOperations(ICmpInst::ICMP_SGT, S1, S2, OrigFoundLHS,
                                   FoundRHS, Depth + 1);
   };
@@ -9694,7 +9754,7 @@ bool ScalarEvolution::isImpliedViaOperations(ICmpInst::Predicate Pred,
 }
 
 bool
-ScalarEvolution::isKnownViaSimpleReasoning(ICmpInst::Predicate Pred,
+ScalarEvolution::isKnownViaNonRecursiveReasoning(ICmpInst::Predicate Pred,
                                            const SCEV *LHS, const SCEV *RHS) {
   return isKnownPredicateViaConstantRanges(Pred, LHS, RHS) ||
          IsKnownPredicateViaMinOrMax(*this, Pred, LHS, RHS) ||
@@ -9716,26 +9776,26 @@ ScalarEvolution::isImpliedCondOperandsHelper(ICmpInst::Predicate Pred,
     break;
   case ICmpInst::ICMP_SLT:
   case ICmpInst::ICMP_SLE:
-    if (isKnownViaSimpleReasoning(ICmpInst::ICMP_SLE, LHS, FoundLHS) &&
-        isKnownViaSimpleReasoning(ICmpInst::ICMP_SGE, RHS, FoundRHS))
+    if (isKnownViaNonRecursiveReasoning(ICmpInst::ICMP_SLE, LHS, FoundLHS) &&
+        isKnownViaNonRecursiveReasoning(ICmpInst::ICMP_SGE, RHS, FoundRHS))
       return true;
     break;
   case ICmpInst::ICMP_SGT:
   case ICmpInst::ICMP_SGE:
-    if (isKnownViaSimpleReasoning(ICmpInst::ICMP_SGE, LHS, FoundLHS) &&
-        isKnownViaSimpleReasoning(ICmpInst::ICMP_SLE, RHS, FoundRHS))
+    if (isKnownViaNonRecursiveReasoning(ICmpInst::ICMP_SGE, LHS, FoundLHS) &&
+        isKnownViaNonRecursiveReasoning(ICmpInst::ICMP_SLE, RHS, FoundRHS))
       return true;
     break;
   case ICmpInst::ICMP_ULT:
   case ICmpInst::ICMP_ULE:
-    if (isKnownViaSimpleReasoning(ICmpInst::ICMP_ULE, LHS, FoundLHS) &&
-        isKnownViaSimpleReasoning(ICmpInst::ICMP_UGE, RHS, FoundRHS))
+    if (isKnownViaNonRecursiveReasoning(ICmpInst::ICMP_ULE, LHS, FoundLHS) &&
+        isKnownViaNonRecursiveReasoning(ICmpInst::ICMP_UGE, RHS, FoundRHS))
       return true;
     break;
   case ICmpInst::ICMP_UGT:
   case ICmpInst::ICMP_UGE:
-    if (isKnownViaSimpleReasoning(ICmpInst::ICMP_UGE, LHS, FoundLHS) &&
-        isKnownViaSimpleReasoning(ICmpInst::ICMP_ULE, RHS, FoundRHS))
+    if (isKnownViaNonRecursiveReasoning(ICmpInst::ICMP_UGE, LHS, FoundLHS) &&
+        isKnownViaNonRecursiveReasoning(ICmpInst::ICMP_ULE, RHS, FoundRHS))
       return true;
     break;
   }
@@ -10211,6 +10271,31 @@ const SCEV *SCEVAddRecExpr::getNumIterationsInRange(const ConstantRange &Range,
   }
 
   return SE.getCouldNotCompute();
+}
+
+const SCEVAddRecExpr *
+SCEVAddRecExpr::getPostIncExpr(ScalarEvolution &SE) const {
+  assert(getNumOperands() > 1 && "AddRec with zero step?");
+  // There is a temptation to just call getAddExpr(this, getStepRecurrence(SE)),
+  // but in this case we cannot guarantee that the value returned will be an
+  // AddRec because SCEV does not have a fixed point where it stops
+  // simplification: it is legal to return ({rec1} + {rec2}). For example, it
+  // may happen if we reach arithmetic depth limit while simplifying. So we
+  // construct the returned value explicitly.
+  SmallVector<const SCEV *, 3> Ops;
+  // If this is {A,+,B,+,C,...,+,N}, then its step is {B,+,C,+,...,+,N}, and
+  // (this + Step) is {A+B,+,B+C,+...,+,N}.
+  for (unsigned i = 0, e = getNumOperands() - 1; i < e; ++i)
+    Ops.push_back(SE.getAddExpr(getOperand(i), getOperand(i + 1)));
+  // We know that the last operand is not a constant zero (otherwise it would
+  // have been popped out earlier). This guarantees us that if the result has
+  // the same last operand, then it will also not be popped out, meaning that
+  // the returned value will be an AddRec.
+  const SCEV *Last = getOperand(getNumOperands() - 1);
+  assert(!Last->isZero() && "Recurrency with zero step?");
+  Ops.push_back(Last);
+  return cast<SCEVAddRecExpr>(SE.getAddRecExpr(Ops, getLoop(),
+                                               SCEV::FlagAnyWrap));
 }
 
 // Return true when S contains at least an undef value.

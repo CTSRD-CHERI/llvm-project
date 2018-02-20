@@ -1501,7 +1501,6 @@ bool FPPassManager::runOnFunction(Function &F) {
   if (F.isDeclaration())
     return false;
 
-  //assert(!verifyModule(*F.getParent(), &dbgs()));
   bool Changed = false;
 
   // Collect inherited analysis from Module level pass manager.
@@ -1521,7 +1520,6 @@ bool FPPassManager::runOnFunction(Function &F) {
       TimeRegion PassTimer(getPassTimer(FP));
 
       LocalChanged |= FP->runOnFunction(F);
-      //assert(!LocalChanged || !verifyModule(*F.getParent(), &dbgs()));
     }
 
     Changed |= LocalChanged;

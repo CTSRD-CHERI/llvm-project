@@ -58,7 +58,9 @@ LegalizeActionStep LegalizeRuleSet::apply(const LegalityQuery &Query) const {
       std::pair<unsigned, LLT> Mutation = Rule.determineMutation(Query);
       DEBUG(dbgs() << ".. .. " << (unsigned)Rule.getAction() << ", "
                    << Mutation.first << ", " << Mutation.second << "\n");
-      assert(Query.Types[Mutation.first] != Mutation.second &&
+      assert((Query.Types[Mutation.first] != Mutation.second ||
+              Rule.getAction() == MoreElements ||
+              Rule.getAction() == FewerElements) &&
              "Simple loop detected");
       return {Rule.getAction(), Mutation.first, Mutation.second};
     } else
@@ -258,6 +260,10 @@ LegalizeRuleSet &LegalizerInfo::getActionDefinitionsBuilder(unsigned Opcode) {
 LegalizeRuleSet &LegalizerInfo::getActionDefinitionsBuilder(
     std::initializer_list<unsigned> Opcodes) {
   unsigned Representative = *Opcodes.begin();
+
+  assert(Opcodes.begin() != Opcodes.end() &&
+         Opcodes.begin() + 1 != Opcodes.end() &&
+         "Initializer list must have at least two opcodes");
 
   for (auto I = Opcodes.begin() + 1, E = Opcodes.end(); I != E; ++I)
     aliasActionDefinitions(Representative, *I);
