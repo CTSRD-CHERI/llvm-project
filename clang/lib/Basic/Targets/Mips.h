@@ -28,26 +28,28 @@ namespace targets {
 class LLVM_LIBRARY_VISIBILITY MipsTargetInfo : public TargetInfo {
   void setDataLayout() {
     StringRef Layout;
-
+    // XXXAR: why do we need this here? can't we use the LLVM one?
     if (ABI == "o32")
       Layout = "m:m-p:32:32-i8:8:32-i16:16:32-i64:64-n32-S64";
     else if (ABI == "n32")
       Layout = "m:e-p:32:32-i8:8:32-i16:16:32-i64:64-n32:64-S128";
     else if (ABI == "n64") {
       if (IsCHERI) {
-        if (CapSize == 128)
-           Layout = "m:e-pf200:128:128-i8:8:32-i16:16:32-i64:64-n32:64-S128";
-         else
-           Layout = "m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128";
+        if (CapSize == 64)
+          Layout = "m:e-pf200:64:64:64:32-i8:8:32-i16:16:32-i64:64-n32:64-S128";
+        else if (CapSize == 128)
+          Layout = "m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128";
+        else
+          Layout = "m:e-pf200:256:256:256:64-i8:8:32-i16:16:32-i64:64-n32:64-S128";
       } else
         Layout = "m:e-i8:8:32-i16:16:32-i64:64-n32:64-S128";
     } else
       llvm_unreachable("Invalid ABI");
 
     if (BigEndian)
-      resetDataLayout(("E-" + Layout + (CapabilityABI ? "-A200" : "")).str());
+      resetDataLayout(("E-" + Layout + (CapabilityABI ? "-A200-P200" : "")).str());
     else
-      resetDataLayout(("e-" + Layout + (CapabilityABI ? "-A200" : "")).str());
+      resetDataLayout(("e-" + Layout + (CapabilityABI ? "-A200-P200" : "")).str());
   }
 
   static const Builtin::Info BuiltinInfo[];
