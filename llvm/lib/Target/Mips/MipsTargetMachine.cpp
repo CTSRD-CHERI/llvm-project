@@ -76,12 +76,13 @@ static std::string computeDataLayout(const Triple &TT, StringRef CPU,
   else
     Ret += "-m:e";
 
-  // FIXME: Should check for +cheri64
   if (FS.find("+cheri128") != StringRef::npos) {
-    Ret += "-pf200:128:128";
+    Ret += "-pf200:128:128:128:64";
+  } else if (FS.find("+cheri64") != StringRef::npos) {
+    Ret += "-pf200:64:64:64:32";
   } else if (FS.find("+cheri256") != StringRef::npos ||
              Triple(TT).getArch() == Triple::cheri) {
-    Ret += "-pf200:256:256";
+    Ret += "-pf200:256:256:256:64";
   }
 
   // Pointers are 32 bit on some ABIs.
@@ -100,8 +101,9 @@ static std::string computeDataLayout(const Triple &TT, StringRef CPU,
   else
     Ret += "-n32-S64";
 
+  // TODO: we may want to put functions in AS201 at some point
   if (ABI.IsCheriPureCap())
-    Ret += "-A200";
+    Ret += "-A200-P200";
 
   return Ret;
 }
