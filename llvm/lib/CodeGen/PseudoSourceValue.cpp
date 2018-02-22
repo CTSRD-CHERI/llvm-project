@@ -109,7 +109,7 @@ PseudoSourceValueManager::PseudoSourceValueManager(
     : TII(TIInfo),
       StackPSV(PseudoSourceValue::Stack, TII),
       GOTPSV(PseudoSourceValue::GOT, TII),
-      CapTablePSV(PseudoSourceValue::GOT, TII),
+      CapTablePSV(PseudoSourceValue::CapTable, TII),
       JumpTablePSV(PseudoSourceValue::JumpTable, TII),
       ConstantPoolPSV(PseudoSourceValue::ConstantPool, TII) {}
 
