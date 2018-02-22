@@ -311,7 +311,10 @@ GlobalVariable::GlobalVariable(Module &M, Type *Ty, bool constant,
                                bool isExternallyInitialized)
     : GlobalObject(Ty, Value::GlobalVariableVal,
                    OperandTraits<GlobalVariable>::op_begin(this),
-                   InitVal != nullptr, Link, Name, AddressSpace),
+                   InitVal != nullptr, Link, Name,
+                   AddressSpace == UINT_MAX
+                       ? M.getDataLayout().getGlobalsAddressSpace()
+                       : AddressSpace),
       isConstantGlobal(constant),
       isExternallyInitializedConstant(isExternallyInitialized) {
   assert(!Ty->isFunctionTy() && PointerType::isValidElementType(Ty) &&
