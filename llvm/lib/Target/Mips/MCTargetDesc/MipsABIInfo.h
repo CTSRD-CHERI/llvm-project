@@ -34,8 +34,8 @@ public:
     int64_t GetThreadLocalOffset_CDL() const {return CapSize * 7;}
     int64_t GetThreadLocalOffset_CGP() const {return CapSize * 8;}
 
-    int64_t GetStackPointerOffset_Next() const {return CapSize * -2;}
-    int64_t GetStackPointerOffset_Prev() const {return CapSize * -1;}
+    int64_t GetStackPointerOffset_Next() const {return CapSize * -1;}
+    int64_t GetStackPointerOffset_Prev() const {return CapSize * -2;}
 
     TemporalABILayout(uint32_t capSize) : CapSize(capSize) {}
   };

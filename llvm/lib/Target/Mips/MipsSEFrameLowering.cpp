@@ -402,7 +402,8 @@ MipsSEFrameLowering::MipsSEFrameLowering(const MipsSubtarget &STI)
 int MipsSEFrameLowering::createUnsafeEndObject(MachineFunction &MF) const {
   MachineFrameInfo &MFI    = MF.getFrameInfo();
   MipsABIInfo ABI = STI.getABI();
-  return MFI.CreateStackObject(ABI.GetCapSize(), ABI.GetCapSize(), false);
+  // This is the 'prev' pointer. here.
+  return MFI.CreateStackObject(ABI.GetCapSize()*2, ABI.GetCapSize(), true);
 }
 
 bool MipsSEFrameLowering::partitionUnsafeObjects(void) const {
@@ -884,9 +885,9 @@ void MipsSEFrameLowering::emitEpilogue(MachineFunction &MF,
     // instead we sacrifice a little memory safety and only use incoffset
 
 
-    BuildMI(MBB, MBBI, DL, TII.get(Mips::CIncOffset), USP)
+    BuildMI(MBB, MBBI, DL, TII.get(Mips::CIncOffsetImm), USP)
            .addReg(SP)
-           .addReg(SafeStackSize);
+           .addImm(SafeStackSize);
 
     /* Implements set bounds back. Too long.
     BuildMI(MBB, MBBI, DL, TII.get(Mips::CGetOffset), (Mips::AT))
@@ -914,10 +915,10 @@ void MipsSEFrameLowering::emitEpilogue(MachineFunction &MF,
     // TODO: only if using dynamic linking
     // Save cusp as it may have changed, and this may be a cross domain return
     BuildMI(MBB, MBBI, DL, TII.get(Mips::STORECAP))
-            .addReg(ABI.GetLocalCapability())
+            .addReg(USP)
             .addReg(ZERO)
             .addImm(ABI.GetTABILayout()->GetThreadLocalOffset_CUSP())
-            .addReg(USP);
+            .addReg(ABI.GetLocalCapability());
   } else {
     // Adjust stack.
     TII.adjustStackPtr(SP, StackSize, MBB, MBBI);
