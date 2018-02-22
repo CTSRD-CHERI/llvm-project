@@ -47,9 +47,9 @@ class LLVM_LIBRARY_VISIBILITY MipsTargetInfo : public TargetInfo {
       llvm_unreachable("Invalid ABI");
 
     if (BigEndian)
-      resetDataLayout(("E-" + Layout + (CapabilityABI ? "-A200-P200-G200" : "")).str());
+      resetDataLayout(("E-" + Layout + (CapabilityABI ? "-A200-P200" : "")).str());
     else
-      resetDataLayout(("e-" + Layout + (CapabilityABI ? "-A200-P200-G200" : "")).str());
+      resetDataLayout(("e-" + Layout + (CapabilityABI ? "-A200-P200" : "")).str());
   }
 
   static const Builtin::Info BuiltinInfo[];
