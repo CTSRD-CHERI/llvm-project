@@ -103,7 +103,7 @@ static std::string computeDataLayout(const Triple &TT, StringRef CPU,
 
   // TODO: we may want to put functions in AS201 at some point
   if (ABI.IsCheriPureCap())
-    Ret += "-A200-P200-G200";
+    Ret += "-A200-P200";
 
   return Ret;
 }
