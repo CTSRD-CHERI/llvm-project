@@ -117,6 +117,7 @@ private:
   unsigned AllocaAddrSpace;
   unsigned StackNaturalAlign;
   unsigned ProgramAddrSpace;
+  unsigned GlobalsAddrSpace;
 
   enum ManglingModeT {
     MM_None,
@@ -202,6 +203,7 @@ public:
     AllocaAddrSpace = DL.AllocaAddrSpace;
     StackNaturalAlign = DL.StackNaturalAlign;
     ProgramAddrSpace = DL.ProgramAddrSpace;
+    GlobalsAddrSpace = DL.GlobalsAddrSpace;
     ManglingMode = DL.ManglingMode;
     LegalIntWidths = DL.LegalIntWidths;
     Alignments = DL.Alignments;
@@ -261,6 +263,7 @@ public:
   void setAllocaAS(unsigned AS) { AllocaAddrSpace = AS; }
 
   unsigned getProgramAddressSpace() const { return ProgramAddrSpace; }
+  unsigned getGlobalsAddressSpace() const { return GlobalsAddrSpace; }
 
   bool hasMicrosoftFastStdCallMangling() const {
     return ManglingMode == MM_WinCOFFX86;

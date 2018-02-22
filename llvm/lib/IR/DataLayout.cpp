@@ -184,6 +184,7 @@ void DataLayout::reset(StringRef Desc) {
   AllocaAddrSpace = 0;
   StackNaturalAlign = 0;
   ProgramAddrSpace = 0;
+  GlobalsAddrSpace = 0;
   ManglingMode = MM_None;
   NonIntegralAddressSpaces.clear();
 
@@ -392,6 +393,10 @@ void DataLayout::parseSpecifier(StringRef Desc) {
     }
     case 'A': { // Default stack/alloca address space.
       AllocaAddrSpace = getAddrSpace(Tok);
+      break;
+    }
+    case 'G': { // Default address space for global variables.
+      GlobalsAddrSpace = getAddrSpace(Tok);
       break;
     }
     case 'm':
