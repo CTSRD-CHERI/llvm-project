@@ -67,19 +67,19 @@ static inline void nonFatalWarning(const Twine &Str) {
 }
 
 static SymbolAndOffset sectionWithOffsetToSymbol(InputSectionBase *IS,
-                                                 uint64_t Offset, Symbol *Src) {
+                                                 uint64_t Offset, Symbol *Default=nullptr) {
   Symbol *FallbackResult = nullptr;
   assert((int64_t)Offset >= 0);
   uint64_t FallbackOffset = Offset;
   // For internal symbols we don't have a matching InputFile, just return
   auto* File = IS->File;
   if (!File)
-    return {Src, (int64_t)Offset};
+    return {Default, (int64_t)Offset};
   for (Symbol *B : IS->File->getSymbols()) {
     if (auto *D = dyn_cast<Defined>(B)) {
       if (D->Section != IS)
         continue;
-      if (D->Value <= Offset && Offset < D->Value + D->Size) {
+      if (D->Value <= Offset && Offset <= D->Value + D->Size) {
         // XXXAR: should we accept any symbol that encloses or only exact
         // matches?
         if (D->Value == Offset && (D->isFunc() || D->isObject()))
@@ -98,11 +98,11 @@ static SymbolAndOffset sectionWithOffsetToSymbol(InputSectionBase *IS,
     // since clang won't emit a symbol (and no size) for those
     if (!IS->Name.startswith(".rodata.str"))
       nonFatalWarning("Could not find a real symbol for __cap_reloc against " + IS->Name +
-           "+0x" + utohexstr(Offset) + " in " + toString(Src->File));
-    FallbackResult = Src;
+           "+0x" + utohexstr(Offset) + " in " + toString(IS->File));
+    FallbackResult = Default;
   }
   // we should have found at least a section symbol
-  assert(FallbackResult && "SHOULD HAVE FOUND A SYMBOL!");
+  assert((Default == nullptr || FallbackResult) && "SHOULD HAVE FOUND A SYMBOL!");
   return {FallbackResult, (int64_t)FallbackOffset};
 }
 
@@ -116,6 +116,14 @@ SymbolAndOffset SymbolAndOffset::findRealSymbol() const {
     }
   }
   return *this;
+}
+
+template<typename ELFT>
+std::string CheriCapRelocLocation::toString() const {
+  SymbolAndOffset Resolved = sectionWithOffsetToSymbol(Section, Offset);
+  if (Resolved.Sym)
+    return Resolved.verboseToString<ELFT>();
+  return Section->getObjMsg(Offset);
 }
 
 template <class ELFT>
@@ -235,9 +243,9 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
   TargetNeedsDynReloc = TargetNeedsDynReloc || Config->Pic || Config->Pie;
   uint64_t CurrentEntryOffset = RelocsMap.size() * RelocSize;
 
+  std::string SourceMsg =
+      SourceSymbol ? verboseToString<ELFT>(SourceSymbol) : Loc.toString<ELFT>();
   if (Target.Sym->isUndefined() && !Target.Sym->isUndefWeak()) {
-    std::string SourceMsg =
-        SourceSymbol ? verboseToString<ELFT>(SourceSymbol) : Loc.toString();
     std::string Msg =
         "cap_reloc against undefined symbol: " + toString(*Target.Sym) +
         "\n>>> referenced by " + SourceMsg;
@@ -250,8 +258,15 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
   // assert(CapabilityOffset >= 0 && "Negative offsets not supported");
   if (errorHandler().Verbose && CapabilityOffset < 0)
     message("global capability offset " + Twine(CapabilityOffset) +
-            " is less than 0:\n>>> Location: " + Loc.toString() +
+            " is less than 0:\n>>> Location: " + Loc.toString<ELFT>() +
             "\n>>> Target: " + Target.verboseToString<ELFT>());
+
+  bool CanWriteLoc = (Loc.Section->Flags & SHF_WRITE) || !Config->ZText;
+  if (!CanWriteLoc) {
+    error("Attempting to add a capability relocation in a read-only section; "
+          "pass -Wl,-z,notext if you really want to do this"
+          "\n>>> referenced by " + SourceMsg);
+  }
   if (!addEntry(Loc, {Target, CapabilityOffset, TargetNeedsDynReloc})) {
     return; // Maybe happens with vtables?
   }
@@ -321,7 +336,7 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &Location,
   if (TargetSize > INT_MAX) {
     error("Insanely large symbol size for " +
           Reloc.Target.verboseToString<ELFT>() + "for cap_reloc at" +
-          Location.toString());
+          Location.toString<ELFT>());
     return 0;
   }
   auto TargetSym = Reloc.Target.Sym;
@@ -369,7 +384,7 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &Location,
     if (WarnAboutUnknownSize || errorHandler().Verbose) {
       std::string Msg = "could not determine size of cap reloc against " +
                         Reloc.Target.verboseToString<ELFT>() +
-                        "\n>>> referenced by " + Location.toString();
+                        "\n>>> referenced by " + Location.toString<ELFT>();
       if (Strict)
         warn(Msg);
       else

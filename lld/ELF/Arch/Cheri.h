@@ -48,7 +48,8 @@ struct CheriCapRelocLocation {
   bool operator==(const CheriCapRelocLocation &Other) const {
     return Section == Other.Section && Offset == Other.Offset;
   }
-  std::string toString() const { return Section->getObjMsg(Offset); }
+  template<typename ELFT>
+  std::string toString() const;
 };
 
 struct CheriCapReloc {
@@ -85,7 +86,7 @@ private:
     auto it = RelocsMap.insert(std::make_pair(Loc, Relocation));
     // assert(it.first->second == Relocation);
     if (!(it.first->second == Relocation)) {
-      error("Newly inserted relocation at " + Loc.toString() +
+      error("Newly inserted relocation at " + Loc.toString<ELFT>() +
             " does not match existing one:\n>   Existing: " +
             it.first->second.Target.template verboseToString<ELFT>() +
             ", cap offset=" + Twine(it.first->second.CapabilityOffset) +
