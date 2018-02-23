@@ -1,7 +1,6 @@
 // REQUIRES: clang
 
 // RUN: %cheri128_purecap_cc1 -emit-obj -O2 -mllvm -cheri-cap-table %s -o %t.o
-// RUN: llvm-objdump -d -r -t %t.o
 // RUNNOT: llvm-objdump -d -r %t.o | FileCheck %s -check-prefix OBJECT
 // RUN: ld.lld -o %t.exe %t.o
 // RUN: ld.lld -pie -o %t-pie.exe %t.o
@@ -39,6 +38,7 @@ int __start(void) {
 // STATIC-EXE: 0000000         *ABS*		 00000000 .hidden __init_array_start
 // EXE: 0030008         .preinit_array		 00000000 .hidden __preinit_array_end
 // EXE: 0030000         .preinit_array		 00000008 .hidden __preinit_array_start
+// EXE: 0030010         .cap_table		 000000b0 _CHERI_CAPABILITY_TABLE_
 // STATIC-EXE: 0000000000000000  w      *UND*		 00000000 _DYNAMIC
 // EXE: 00100b0 g     F .text		 00000008 __start
 // EXE: 0030278         __cap_relocs		 00000000 _edata

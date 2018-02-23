@@ -321,14 +321,6 @@ template <class ELFT> static void createSyntheticSections() {
     if (Config->CapabilitySize > 0) {
       InX::CheriCapTable = make<CheriCapTableSection>();
       Add(InX::CheriCapTable);
-      if (!Config->Relocatable) {
-        // When creating relocatable output we should not define the
-        // _CHERI_CAPABILITY_TABLE_ symbol because otherwise we get duplicate symbol
-        // errors when linking that into a final executable
-        // XXXAR: should I change the binding or visibility?
-        ElfSym::CheriCapabilityTable = addOptionalRegular(
-          "_CHERI_CAPABILITY_TABLE_", InX::CheriCapTable, 0);
-      }
     }
     if (!Config->Shared && Config->HasDynSymTab) {
       InX::MipsRldMap = make<MipsRldMapSection>();
@@ -1533,6 +1525,25 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
 
   for (Symbol *S : Symtab->getSymbols())
     S->IsPreemptible |= computeIsPreemptible(*S);
+
+  if (InX::CheriCapTable) {
+    // When creating relocatable output we should not define the
+    // _CHERI_CAPABILITY_TABLE_ symbol because otherwise we get duplicate
+    // symbol errors when linking that into a final executable
+    if (!Config->Relocatable) {
+      StringRef CaptableSym = "_CHERI_CAPABILITY_TABLE_";
+      // ensure that the symbol always exists (to make llvm-objdump more
+      // useful by printing which symbol is being loaded from captable)
+      if (auto *S = Symtab->find(CaptableSym))
+        if (S->isDefined())
+          error(CaptableSym + " must only be defined by the linker!");
+      // TODO: can we make this STB_LOCAL?
+      ElfSym::CheriCapabilityTable = cast<Defined>(
+          Symtab->addRegular(CaptableSym, STV_HIDDEN, STT_NOTYPE, 0, 0,
+                             STB_LOCAL, InX::CheriCapTable, nullptr));
+      ElfSym::CheriCapabilityTable->IsSectionStartSymbol = true;
+    }
+  }
 
   // Scan relocations. This must be done after every symbol is declared so that
   // we can correctly decide if a dynamic relocation is needed.
