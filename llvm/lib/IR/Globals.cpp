@@ -285,18 +285,6 @@ Optional<ConstantRange> GlobalValue::getAbsoluteSymbolRange() const {
 //===----------------------------------------------------------------------===//
 // GlobalVariable Implementation
 //===----------------------------------------------------------------------===//
-// XXXAR: the dummy forwarding ctors for non-addressspace overloads
-GlobalVariable::GlobalVariable(Type *Ty, bool constant, LinkageTypes Link,
-                               Constant *InitVal, const Twine &Name,
-                               ThreadLocalMode TLMode)
-  : GlobalVariable(Ty, constant, Link, InitVal, Name, TLMode, 0, false) {}
-
-GlobalVariable::GlobalVariable(Module &M, Type *Ty, bool constant,
-                               LinkageTypes Link, Constant *InitVal,
-                               const Twine &Name, GlobalVariable *Before,
-                               ThreadLocalMode TLMode)
-  : GlobalVariable(M, Ty, constant, Link, InitVal, Name, Before, TLMode, 0, false) {}
-
 
 GlobalVariable::GlobalVariable(Type *Ty, bool constant, LinkageTypes Link,
                                Constant *InitVal, const Twine &Name,
@@ -324,7 +312,10 @@ GlobalVariable::GlobalVariable(Module &M, Type *Ty, bool constant,
                                bool isExternallyInitialized)
     : GlobalObject(Ty, Value::GlobalVariableVal,
                    OperandTraits<GlobalVariable>::op_begin(this),
-                   InitVal != nullptr, Link, Name, AddressSpace),
+                   InitVal != nullptr, Link, Name,
+                   AddressSpace == UINT_MAX
+                       ? M.getDataLayout().getGlobalsAddressSpace()
+                       : AddressSpace),
       isConstantGlobal(constant),
       isExternallyInitializedConstant(isExternallyInitialized) {
   assert(!Ty->isFunctionTy() && PointerType::isValidElementType(Ty) &&

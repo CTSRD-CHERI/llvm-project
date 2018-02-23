@@ -254,6 +254,12 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
   if (MI.getOperand(ImmOpNo).isImm())
     Offset += MI.getOperand(ImmOpNo).getImm();
 
+  // For CHERI spills, we store the offset as an immediate operand from the
+  // FrameIndex where the register operand should go and then replace it with
+  // the real register here.
+  if (MI.getOperand(RegOpNo).isImm())
+    Offset += MI.getOperand(RegOpNo).getImm();
+
   DEBUG(errs() << "Offset     : " << Offset << "\n" << "<--------->\n");
 
   if (!MI.isDebugValue()) {

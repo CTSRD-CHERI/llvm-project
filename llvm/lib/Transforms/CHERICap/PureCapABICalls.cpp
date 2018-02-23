@@ -36,7 +36,9 @@ class CHERICapDirectCalls : public FunctionPass,
                           public InstVisitor<CHERICapDirectCalls> {
   bool Modified = false;
   SmallVector<Value*,32> DeadInstructions;
-
+  StringRef getPassName() const override {
+    return "Contract CHERI pure-capability calls";
+  }
 public:
   static char ID;
   CHERICapDirectCalls() : FunctionPass(ID) {}

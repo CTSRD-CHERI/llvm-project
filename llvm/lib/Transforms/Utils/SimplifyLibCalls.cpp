@@ -698,9 +698,13 @@ Value *LibCallSimplifier::optimizeMemChr(CallInst *CI, IRBuilder<> &B) {
     Value *Shl = B.CreateShl(B.getIntN(Width, 1ULL), C);
     Value *Bits = B.CreateIsNotNull(B.CreateAnd(Shl, BitfieldC), "memchr.bits");
 
-    // Finally merge both checks and cast to pointer type. The inttoptr
-    // implicitly zexts the i1 to intptr type.
-    return B.CreateIntToPtr(B.CreateAnd(Bounds, Bits, "memchr"), CI->getType());
+    // Finally merge both checks and cast to pointer type. To avoid
+    // materialising a nonsense pointer value, we select either a null or the
+    // source string and hope that later bits of instcombine will fold the two
+    // compares.
+    Value *Result = B.CreateAnd(Bounds, Bits, "memchr");
+    return B.CreateSelect(B.CreateIsNull(Result),
+        Constant::getNullValue(CI->getType()), SrcStr);
   }
 
   // Check if all arguments are constants.  If so, we can constant fold.

@@ -1,28 +1,39 @@
 @Library('ctsrd-jenkins-scripts') _
 
 properties([disableConcurrentBuilds(),
-        compressBuildLog(),
-        disableResume(),
-        [$class: 'GithubProjectProperty', displayName: '', projectUrlStr: 'https://github.com/CTSRD-CHERI/llvm/'],
-        [$class: 'CopyArtifactPermissionProperty', projectNames: '*'],
-        [$class: 'JobPropertyImpl', throttle: [count: 2, durationName: 'hour', userBoost: true]],
-        durabilityHint('PERFORMANCE_OPTIMIZED'),
-        pipelineTriggers([githubPush()])
+            compressBuildLog(),
+            disableResume(),
+            [$class: 'GithubProjectProperty', displayName: '', projectUrlStr: 'https://github.com/CTSRD-CHERI/llvm/'],
+            [$class: 'CopyArtifactPermissionProperty', projectNames: '*'],
+            [$class: 'JobPropertyImpl', throttle: [count: 2, durationName: 'hour', userBoost: true]],
+            durabilityHint('PERFORMANCE_OPTIMIZED'),
+            pipelineTriggers([githubPush()])
 ])
+
+// global vars needed to update github status
+llvmRepo = null
+clangRepo = null
+lldRepo = null
+
+def updateGithubStatus(String message) {
+    for (repo in [llvmRepo, clangRepo, lldRepo])  {
+        setGitHubStatus(repo, [message: message])
+    }
+}
 
 def doGit(String url, String branch, String subdir) {
     def options = [ changelog: true, poll: true,
-            scm: [$class: 'GitSCM',
-                    doGenerateSubmoduleConfigurations: false,
-                    branches: [[name: "refs/heads/${branch}"]],
-                    extensions: [/* to skip polling: [$class: 'IgnoreNotifyCommit'], */
-                            [$class: 'RelativeTargetDirectory', relativeTargetDir: subdir],
-                            [$class: 'CloneOption', noTags: false, reference: '', shallow: true, depth: 10, timeout: 60],
-                            // Uncomment for git problems debugging: /* Clean clone: */ [$class: 'WipeWorkspace'],
-                            // [$class: 'LocalBranch', localBranch: branch]
-                    ],
-                    userRemoteConfigs: [[url: url, credentialsId: 'ctsrd-jenkins-api-token-with-username']]
-            ]
+                    scm: [$class: 'GitSCM',
+                          doGenerateSubmoduleConfigurations: false,
+                          branches: [[name: "refs/heads/${branch}"]],
+                          extensions: [/* to skip polling: [$class: 'IgnoreNotifyCommit'], */
+                                       [$class: 'RelativeTargetDirectory', relativeTargetDir: subdir],
+                                       [$class: 'CloneOption', noTags: false, reference: '', shallow: true, depth: 10, timeout: 60],
+                                       // Uncomment for git problems debugging: /* Clean clone: */ [$class: 'WipeWorkspace'],
+                                       // [$class: 'LocalBranch', localBranch: branch]
+                          ],
+                          userRemoteConfigs: [[url: url, credentialsId: 'ctsrd-jenkins-api-token-with-username']]
+                    ]
     ]
     echo("Git options: ${options}")
     def result = checkout(options)
@@ -40,10 +51,11 @@ git log -3
 
 def runTests(int bits) {
     stage("Run tests (${bits})") {
+        updateGithubStatus("Running CHERI${bits} tests...")
         sh """#!/usr/bin/env bash 
 set -xe
 
-cd \${WORKSPACE}/llvm/Build
+cd \${WORKSPACE}/llvm-build
 # run tests
 rm -fv "\${WORKSPACE}/llvm-test-output.xml"
 ninja check-all-cheri${bits} \${JFLAG} || echo "Some CHERI${bits} tests failed!"
@@ -55,9 +67,6 @@ echo "Done running CHERI${bits} tests"
 }
 
 def doBuild() {
-    def llvmRepo = null
-    def clangRepo = null
-    def lldRepo = null
     String llvmBranch = env.BRANCH_NAME
     String clangBranch = llvmBranch
     String lldBranch = llvmBranch == 'cap-table' ? 'master' : llvmBranch
@@ -73,6 +82,7 @@ def doBuild() {
         }
     }
     stage("Build") {
+        updateGithubStatus('Compiling...')
         sh '''#!/usr/bin/env bash 
 set -xe
 
@@ -82,7 +92,7 @@ rm -fv cheri-*-clang-*.tar.xz
 if [ -e "${SDKROOT_DIR}" ]; then
    echo "ERROR, old SDK was not deleted!" && exit 1
 fi
-# if [ -e "${WORKSPACE}/llvm/Build" ]; then
+# if [ -e "${WORKSPACE}/llvm-build" ]; then
 #   echo "ERROR, old build was not deleted!" && exit 1
 # fi
 
@@ -91,11 +101,11 @@ git -C "${WORKSPACE}/llvm" rev-parse HEAD
 git -C "${WORKSPACE}/llvm/tools/clang" rev-parse HEAD
 git -C "${WORKSPACE}/llvm/tools/lld" rev-parse HEAD
 
-cd "${WORKSPACE}/llvm" || exit 1
-mkdir -p Build
+cd "${WORKSPACE}" || exit 1
+mkdir -p llvm-build
 
 # run cmake
-cd Build || exit 1
+cd llvm-build || exit 1
 CMAKE_ARGS=("-DCMAKE_INSTALL_PREFIX=${SDKROOT_DIR}" "-DLLVM_OPTIMIZED_TABLEGEN=OFF")
 if [ "$label" == "linux" ] ; then
     export CMAKE_CXX_COMPILER=clang++-4.0
@@ -113,10 +123,10 @@ CMAKE_ARGS+=("-DCMAKE_BUILD_TYPE=Release" "-DLLVM_ENABLE_ASSERTIONS=ON")
 CMAKE_ARGS+=("-DLLVM_LIT_ARGS=--xunit-xml-output ${WORKSPACE}/llvm-test-output.xml --max-time 3600 --timeout 240 ${JFLAG}")
 
 rm -f CMakeCache.txt
-cmake -G Ninja "${CMAKE_ARGS[@]}" ..
+cmake -G Ninja "${CMAKE_ARGS[@]}" ../llvm
 
 # build
-ninja -v ${JFLAG}
+ninja ${JFLAG}
 
 # install
 ninja install
@@ -126,6 +136,7 @@ ninja install
     runTests(256)
 
     stage("Archive artifacts") {
+        updateGithubStatus("Archiving artifacts...")
         sh '''#!/usr/bin/env bash 
 set -xe
 
@@ -172,7 +183,7 @@ cd ${SDKROOT_DIR}/..
 tar -cJf "cheri-${BRANCH_NAME}-clang-llvm.tar.xz" `basename ${SDKROOT_DIR}`
 
 # clean up to save some disk space
-# rm -rf "${WORKSPACE}/llvm/Build"
+# rm -rf "${WORKSPACE}/llvm-build"
 rm -rf "$SDKROOT_DIR"
 '''
         archiveArtifacts artifacts: 'cheri-*-clang-*.tar.xz', onlyIfSuccessful: true
@@ -198,8 +209,16 @@ node(nodeLabel) {
         warnings canComputeNew: false, canResolveRelativePaths: true, consoleParsers: [[parserName: 'Clang (LLVM based)']]
         step([$class: 'AnalysisPublisher', canComputeNew: false])
     } finally {
-        dir(env.SDKROOT_DIR) {
-            deleteDir()
+        // Remove the test binaries to save some disk space and to make typos in
+        // test scripts fail the build even if a previous commit created that file
+        for (path in ['llvm/Build', env.SDKROOT_DIR, 'llvm-build/test',
+                     'llvm-build/tools/clang/test', 'llvm-build/tools/lld/test']) {
+            dir(path) {
+                deleteDir()
+            }
         }
+        // set the final build result so we can update the github status
+        currentBuild.result = currentBuild.currentResult
+        updateGithubStatus("Build completed.")
     }
 }

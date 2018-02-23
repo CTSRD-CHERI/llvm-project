@@ -358,8 +358,12 @@ class Test:
             # The Jenkins JUnit XML parser throws an exception if the output
             # contains control characters like \x1b (e.g. if there is some
             # -fcolor-diagnostics output).
-            # TODO: also handle other control chars
-            escaped = self.result.output.replace('\x1b', '\\x1b')
+            # TODO: this is slow
+            escaped = self.result.output
+            for i in range(31):
+                if chr(i) in ('\t', '\n', '\r'):
+                    continue
+                escaped = escaped.replace(chr(i), '\\x' + hex(i)[2:])
             # Also wrap the output in a CDATA section because escape() only
             # replaces &, >, < and there may be some other characters in the
             # output that the parser might not accept outside of CDATA

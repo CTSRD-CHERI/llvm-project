@@ -93,12 +93,12 @@ struct PointerAlignElem {
   uint32_t TypeByteWidth;
   uint32_t AddressSpace;
   uint32_t IndexWidth;
+  bool IsFatPointer;
 
   /// Initializer
   static PointerAlignElem get(uint32_t AddressSpace, unsigned ABIAlign,
                               unsigned PrefAlign, uint32_t TypeByteWidth,
-                              uint32_t IndexWidth);
-
+                              uint32_t IndexWidth, bool IsFatPointer);
 
   bool operator==(const PointerAlignElem &rhs) const;
 };
@@ -117,6 +117,7 @@ private:
   unsigned AllocaAddrSpace;
   unsigned StackNaturalAlign;
   unsigned ProgramAddrSpace;
+  unsigned GlobalsAddrSpace;
 
   enum ManglingModeT {
     MM_None,
@@ -170,7 +171,7 @@ private:
                             bool ABIAlign, Type *Ty) const;
   void setPointerAlignment(uint32_t AddrSpace, unsigned ABIAlign,
                            unsigned PrefAlign, uint32_t TypeByteWidth,
-                           uint32_t IndexWidth);
+                           uint32_t IndexWidth, bool IsFatPointer);
 
   /// Internal helper method that returns requested alignment for type.
   unsigned getAlignment(Type *Ty, bool abi_or_pref) const;
@@ -202,6 +203,7 @@ public:
     AllocaAddrSpace = DL.AllocaAddrSpace;
     StackNaturalAlign = DL.StackNaturalAlign;
     ProgramAddrSpace = DL.ProgramAddrSpace;
+    GlobalsAddrSpace = DL.GlobalsAddrSpace;
     ManglingMode = DL.ManglingMode;
     LegalIntWidths = DL.LegalIntWidths;
     Alignments = DL.Alignments;
@@ -261,6 +263,7 @@ public:
   void setAllocaAS(unsigned AS) { AllocaAddrSpace = AS; }
 
   unsigned getProgramAddressSpace() const { return ProgramAddrSpace; }
+  unsigned getGlobalsAddressSpace() const { return GlobalsAddrSpace; }
 
   bool hasMicrosoftFastStdCallMangling() const {
     return ManglingMode == MM_WinCOFFX86;
@@ -335,9 +338,7 @@ public:
     return getIndexSize(AS);
   };
 
-  bool isFatPointer(unsigned AS) const {
-    return getPointerBaseSize(AS) != getPointerSize(AS);
-  }
+  bool isFatPointer(unsigned AS) const;
 
   unsigned isFatPointer(const Type *Ty) const {
     return isFatPointer(Ty->getPointerAddressSpace());
