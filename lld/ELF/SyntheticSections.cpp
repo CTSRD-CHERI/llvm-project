@@ -25,6 +25,7 @@
 #include "Symbols.h"
 #include "Target.h"
 #include "Writer.h"
+#include "Arch/Cheri.h"
 #include "lld/Common/ErrorHandler.h"
 #include "lld/Common/Memory.h"
 #include "lld/Common/Threads.h"
@@ -1362,6 +1363,11 @@ template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
       // relative to the address of the tag.
       addInSecRelative(DT_MIPS_RLD_MAP_REL, InX::MipsRldMap);
     }
+  }
+
+  if (In<ELFT>::CapRelocs) {
+    addInSec(DT_CHERI___CAPRELOCS, In<ELFT>::CapRelocs);
+    addSize(DT_CHERI___CAPRELOCSSZ, In<ELFT>::CapRelocs->getParent());
   }
 
   addInt(DT_NULL, 0);
