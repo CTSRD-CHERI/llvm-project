@@ -895,7 +895,8 @@ OptimizeGlobalAddressOfMalloc(GlobalVariable *GV, CallInst *CI, Type *AllocTy,
     new GlobalVariable(Type::getInt1Ty(GV->getContext()), false,
                        GlobalValue::InternalLinkage,
                        ConstantInt::getFalse(GV->getContext()),
-                       GV->getName()+".init", GV->getThreadLocalMode());
+                       GV->getName()+".init", GV->getThreadLocalMode(),
+                       GV->getType()->getAddressSpace());
   bool InitBoolUsed = false;
 
   // Loop over all uses of GV, processing them in turn.
