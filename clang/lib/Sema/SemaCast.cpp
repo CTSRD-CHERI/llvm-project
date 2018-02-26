@@ -2904,6 +2904,17 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc,
   //       purecap ABI if both source and destination types are capabilities
   //       and the types are compatible.
 
+  CastOperation Op(*this, DestTy, SubExpr);
+  Op.DestRange = TSInfo->getTypeLoc().getSourceRange();
+  Op.OpRange = SourceRange(Op.DestRange.getBegin(), SubExpr->getLocEnd());
+
+  Op.CheckCStyleCast();
+
+  if (Op.SrcExpr.isInvalid())
+    return ExprError();
+
+  SubExpr = Op.SrcExpr.get();
+
   // Use getRealReferenceType() because getType() only returns T for T&
   QualType SrcTy = SubExpr->getRealReferenceType();
   CastKind Kind = CK_NoOp;
@@ -2976,6 +2987,17 @@ ExprResult Sema::BuildCheriOffsetOrAddress(SourceLocation LParenLoc,
                                            DestTy, TypeSourceInfo *TSInfo,
                                            SourceLocation RParenLoc, Expr
                                            *SubExpr) {
+  CastOperation Op(*this, DestTy, SubExpr);
+  Op.DestRange = TSInfo->getTypeLoc().getSourceRange();
+  Op.OpRange = SourceRange(Op.DestRange.getBegin(), SubExpr->getLocEnd());
+
+  Op.CheckCStyleCast();
+
+  if (Op.SrcExpr.isInvalid())
+    return ExprError();
+
+  SubExpr = Op.SrcExpr.get();
+
   // Check the source type
   // Use getRealReferenceType() because getType() only returns T for T&
   QualType SrcTy = SubExpr->getRealReferenceType();

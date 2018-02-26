@@ -1,10 +1,23 @@
 // RUN: %cheri_cc1 %s  -DALIGN=1 -verify
+// RUN: %cheri_cc1 %s  -DDECAY=1 -fsyntax-only -ast-dump | FileCheck -check-prefix=DECAY %s
 // RUN: %cheri_cc1 %s  -fsyntax-only -ast-dump | FileCheck %s
 
 #ifdef ALIGN
 void f() {
   unsigned long foo[8];
   ((int * __capability *)foo)[0] = 0; // expected-error-re {{cast from 'unsigned long *' to 'int * __capability *' increases required alignment from 8 to {{16|32}}}} expected-note{{use __builtin_assume_aligned(..., sizeof(void* __capability)) if you know that the source type is sufficiently aligned}}
+}
+#elif defined(DECAY)
+void f() {
+  char buf[1];
+  char * __capability bufp;
+  void (* __capability fp)();
+  bufp = (__cheri_tocap char * __capability) buf;
+  // DECAY: CStyleCastExpr {{.*}} {{.*}} 'char * __capability' <PointerToCHERICapability>
+  // DECAY-NEXT: ImplicitCastExpr {{.*}} {{.*}} 'char *' <ArrayToPointerDecay>
+  fp = (__cheri_tocap void (* __capability)()) f;
+  // DECAY: CStyleCastExpr {{.*}} {{.*}} 'void (* __capability)()' <PointerToCHERICapability>
+  // DECAY-NEXT: ImplicitCastExpr {{.*}} {{.*}} 'void (*)()' <FunctionToPointerDecay>
 }
 #else
 void g() {

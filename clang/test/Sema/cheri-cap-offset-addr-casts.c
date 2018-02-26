@@ -1,5 +1,6 @@
 // RUN: %cheri_cc1 -DAST -ast-dump %s 2>&1 | FileCheck --check-prefix=AST %s
 // RUN: %cheri_cc1 -DTYPES -verify %s
+// RUN: %cheri_purecap_cc1 -DDECAY -ast-dump %s 2>&1 | FileCheck --check-prefix=DECAY %s
 //
 // Various Sema tests for the __cheri_offset and __cheri_addr casts
 //
@@ -33,5 +34,17 @@ void types_addr(char * __capability c) {
   long x5 = (__cheri_addr short)c; // expected-warning {{target type 'short' is smaller than the type 'long int' of the address}}
   short x6 = (__cheri_addr long)c;
   char *x7 = (__cheri_addr char *)c; // expected-error {{integral pointer type 'char *' is not a valid target type for __cheri_addr}}
+}
+#endif
+
+#ifdef DECAY
+void f() {
+  char buf[1];
+  long x1 = (__cheri_addr long) buf;
+  // DECAY: CStyleCastExpr {{.*}} {{.*}} 'long' <CHERICapabilityToAddress>
+  // DECAY-NEXT: ImplicitCastExpr {{.*}} {{.*}} 'char * __capability' <ArrayToPointerDecay>
+  long x2 = (__cheri_offset long) buf;
+  // DECAY: CStyleCastExpr {{.*}} {{.*}} 'long' <CHERICapabilityToOffset>
+  // DECAY-NEXT: ImplicitCastExpr {{.*}} {{.*}} 'char * __capability' <ArrayToPointerDecay>
 }
 #endif
