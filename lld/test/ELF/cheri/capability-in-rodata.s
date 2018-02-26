@@ -25,15 +25,18 @@ __start:
 
 .rodata
 .space 16
+
+.type	foo,@object
 .global foo
+.p2align 5
 foo:
   .chericap __start + 0x4
 # CHECK: error: Attempting to add a capability relocation in a read-only section; pass -Wl,-z,notext if you really want to do this
-# CHECK-NEXT: >>> referenced by <unknown kind> foo
-# CHECK-NEXT: >>> defined in  ({{.+}}capability-in-rodata.s.tmp.o:(.rodata+0x10))
+# CHECK-NEXT: >>> referenced by object foo
+# CHECK-NEXT: >>> defined in  ({{.+}}capability-in-rodata.s.tmp.o:(.rodata+0x20))
 
 # EXE: CAPABILITY RELOCATION RECORDS:
-# EXE: 0x00000001200001a0	Base: __start (0x0000000120010000)	Offset: 0x0000000000000004	Length: 0x0000000000000010	Permissions: 0x8000000000000000 (Function)
+# EXE: 0x00000001200001c0	Base: __start (0x0000000120010000)	Offset: 0x0000000000000004	Length: 0x0000000000000010	Permissions: 0x8000000000000000 (Function)
 
 # SHLIB: CAPABILITY RELOCATION RECORDS:
-# SHLIB: 0x00000000000001e0	Base: __start (0x0000000000010000)	Offset: 0x0000000000000004	Length: 0x0000000000000010	Permissions: 0x8000000000000000 (Function)
+# SHLIB: 0x0000000000000200	Base: __start (0x0000000000010000)	Offset: 0x0000000000000004	Length: 0x0000000000000010	Permissions: 0x8000000000000000 (Function)
