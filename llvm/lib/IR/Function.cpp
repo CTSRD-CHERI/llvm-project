@@ -210,7 +210,8 @@ void Function::eraseFromParent() {
 Function::Function(FunctionType *Ty, LinkageTypes Linkage, const Twine &name,
                    Module *ParentModule)
     : GlobalObject(Ty, Value::FunctionVal,
-                   OperandTraits<Function>::op_begin(this), 0, Linkage, name),
+     // XXXAR: FIXME: this should not be hardcoded to AS0 (see https://reviews.llvm.org/D37054)
+                   OperandTraits<Function>::op_begin(this), 0, Linkage, name, 0),
       NumArgs(Ty->getNumParams()) {
   assert(FunctionType::isValidReturnType(getReturnType()) &&
          "invalid return type");
