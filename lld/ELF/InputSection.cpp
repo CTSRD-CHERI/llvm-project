@@ -790,7 +790,7 @@ static void fillGlobalSizesSection(InputSection* IS, uint8_t* Buf, uint8_t* BufE
   if (Config->VerboseCapRelocs)
     message("Write .global_sizes: IS = " + toString(IS));
 
-  for (Symbol *B : IS->getFile<ELFT>()->getSymbols()) {
+  for (Symbol *B : IS->File->getSymbols()) {
     if (auto *D = dyn_cast<Defined>(B)) {
       if (D->Section != IS)
         continue;

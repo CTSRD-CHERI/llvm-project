@@ -1,8 +1,9 @@
 #pragma once
 
-#include "lld/Common/ErrorHandler.h"
+#include "../SymbolTable.h"
 #include "../Symbols.h"
 #include "../SyntheticSections.h"
+#include "lld/Common/ErrorHandler.h"
 #include "llvm/ADT/DenseMapInfo.h"
 #include "llvm/Support/Endian.h"
 
@@ -133,6 +134,29 @@ private:
   bool ValuesAssigned = false;
 };
 
+template <typename ELFT, typename CallBack>
+static void foreachGlobalSizesSymbol(InputSection *IS, CallBack &&CB) {
+  assert(IS->Name == ".global_sizes");
+  for (Symbol *B : IS->File->getSymbols()) {
+    if (auto *D = dyn_cast<Defined>(B)) {
+      if (D->Section != IS)
+        continue;
+      // skip the initial .global_sizes symbol (exists e.g. in
+      // openpam_static_modules.o)
+      if (D->isSection() && D->isLocal() && D->getName().empty())
+        continue;
+      StringRef Name = D->getName();
+      if (!Name.startswith(".size.")) {
+        error(".global_sizes symbol name is invalid: " +
+              verboseToString<ELFT>(D));
+        continue;
+      }
+      StringRef RealSymName = Name.drop_front(strlen(".size."));
+      Symbol *Target = Symtab->find(RealSymName);
+      CB(RealSymName, Target);
+    }
+  }
+}
 
 } // namespace elf
 } // namespace lld

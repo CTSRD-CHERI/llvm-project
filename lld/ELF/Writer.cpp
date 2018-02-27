@@ -1559,9 +1559,25 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
 
   // Now handle __cap_relocs (must be before RelaDyn because it might
   // result in new dynamic relocations being added)
-  if (Config->ProcessCapRelocs && In<ELFT>::CapRelocs) {
+  if (Config->ProcessCapRelocs) {
     applySynthetic({In<ELFT>::CapRelocs},
                    [](SyntheticSection *SS) { SS->finalizeContents(); });
+
+    if (OutputSection *GS = findSection(".global_sizes"))
+      // Also check if the .global_sizes section needs to be writable:
+      for (BaseCommand *Cmd : GS->SectionCommands)
+        if (auto *ISD = dyn_cast<InputSectionDescription>(Cmd))
+          for (InputSection *IS : ISD->Sections)
+            foreachGlobalSizesSymbol<ELFT>(
+                IS, [&GS](StringRef Name, Symbol *Sym) {
+                  if (Sym->isUndefined() && (GS->Flags & SHF_WRITE) == 0) {
+                    warn(".global_sizes section contains unresolved values -> "
+                         "making writable because it references unresolved "
+                         "symbol " +
+                         Name);
+                    GS->Flags |= SHF_WRITE;
+                  }
+                });
   }
 
   if (InX::Plt && !InX::Plt->empty())
