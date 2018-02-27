@@ -2161,7 +2161,7 @@ SDValue MipsTargetLowering::lowerADDRSPACECAST(SDValue Op, SelectionDAG &DAG)
   SDLoc DL(Op);
   SDValue Src = Op.getOperand(0);
   EVT DstTy = Op.getValueType();
-  // A noop addrspacecast can happend when using the cap table because functions
+  // A noop addrspacecast can happen when using the cap table because functions
   // can not yet be in AS200
   if (Src.getValueType() == Op.getValueType())
     return Src;
@@ -2337,12 +2337,10 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
         GlobalVariable *SizeGV = M.getGlobalVariable(Name);
         Type *I64 = Type::getInt64Ty(*DAG.getContext());
         if (!SizeGV) {
-          //XXXAR: creating this in AS0 is fine since it needs the GOT anyway
           SizeGV = new GlobalVariable(const_cast<Module&>(M),
               I64, /*isConstant*/true,
               GlobalValue::LinkOnceAnyLinkage, ConstantInt::get(I64, 0),
-              Twine(".size.")+GV->getName(), nullptr,
-              llvm::GlobalVariable::NotThreadLocal, /* AS=*/0);
+              Twine(".size.")+GV->getName());
           SizeGV->setSection(".global_sizes");
         }
         SDValue Size = DAG.getGlobalAddress(SizeGV, SDLoc(Global), MVT::i64);
@@ -2460,12 +2458,10 @@ lowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const
 SDValue MipsTargetLowering::
 lowerJumpTable(SDValue Op, SelectionDAG &DAG) const
 {
-
   JumpTableSDNode *N = cast<JumpTableSDNode>(Op);
   EVT Ty = Op.getValueType();
 
   if (ABI.UsesCapabilityTable()) {
-    // FIXME: or should this be something else? like in lowerCall?
     auto PtrInfo = MachinePointerInfo::getCapTable(DAG.getMachineFunction());
     return getFromCapTable(false, N, SDLoc(N), CapType, DAG, DAG.getEntryNode(),
                            PtrInfo);

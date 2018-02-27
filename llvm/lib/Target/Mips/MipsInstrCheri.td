@@ -334,6 +334,7 @@ def : Pat<(ptrtoint CheriOpnd:$rt),
 def : Pat<(ptrtoint CheriOpnd:$rt),
           (CToPtr32 C0, $rt)>;
 
+
 let Predicates = [IsCHERI], DecoderNamespace="CHERI" in {
 def STORECAP : CheriFmtCLS<0x3e, (outs), (ins CheriOpnd:$cs, GPR64Opnd:$rt, simm11s4:$offset, CheriOpnd:$cb),
                          "csc\t$cs, ${rt}, ${offset}(${cb})",

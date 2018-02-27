@@ -298,7 +298,6 @@ bool llvm::IsConstantOffsetFromGlobal(Constant *C, GlobalValue *&GV,
 
   // For CHERI we also need to look through AddrSpaceCasts
   // Look through ptr->int and ptr->ptr casts.
-  // FIXME: add boolean parameter
   if (CE->getOpcode() == Instruction::PtrToInt ||
       CE->getOpcode() == Instruction::BitCast ||
       (LookThroughAddrSpaces && CE->getOpcode() == Instruction::AddrSpaceCast))

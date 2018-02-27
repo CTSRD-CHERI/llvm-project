@@ -166,6 +166,7 @@ class CheriFmtCLS<bits<6> op, dag outs, dag ins, string asmstr,
   let Inst{10-0}  = offset;
   let hasSideEffects = 0;
 }
+
 class CheriFmtCLS_BigImm<bits<6> op, dag outs, dag ins, string asmstr,
                          list<dag> pattern> :
   MipsInst<outs, ins, asmstr, pattern, NoItinerary, FrmOther>, Sched<[]>

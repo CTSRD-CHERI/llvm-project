@@ -12,7 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include <llvm/MC/MCTargetOptions.h>
 #include "LLVMContextImpl.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/Triple.h"
