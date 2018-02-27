@@ -5041,11 +5041,9 @@ llvm::Value *CodeGenModule::EmitSandboxRequiredMethod(StringRef Cls,
   auto *MethodNumVar = getModule().getNamedGlobal(GlobalName);
   auto *Zero64 = llvm::ConstantInt::get(Int64Ty, 0);
   if (!MethodNumVar) {
-    // FIXME: does using 200 in non-captable purecap mode break anything?
-    unsigned AS = getTargetCodeGenInfo().getDefaultAS();
     MethodNumVar = new llvm::GlobalVariable(getModule(), Int64Ty,
         /*isConstant*/false, llvm::GlobalValue::LinkOnceODRLinkage,
-        Zero64, GlobalName, nullptr, llvm::GlobalValue::NotThreadLocal, AS);
+        Zero64, GlobalName);
     MethodNumVar->setSection(".CHERI_CALLER");
     addUsedGlobal(MethodNumVar);
   }
