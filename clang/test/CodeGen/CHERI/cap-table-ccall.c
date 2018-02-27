@@ -8,5 +8,5 @@ struct {
 __attribute__((cheri_ccall))
 __attribute__((cheri_method_class(_cheri_system_object))) int
 cheri_system_putchar(void) {
-  cheri_system_putchar();
+  return cheri_system_putchar();
 }

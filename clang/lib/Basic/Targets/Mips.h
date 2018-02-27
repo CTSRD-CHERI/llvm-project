@@ -14,11 +14,11 @@
 #ifndef LLVM_CLANG_LIB_BASIC_TARGETS_MIPS_H
 #define LLVM_CLANG_LIB_BASIC_TARGETS_MIPS_H
 
+#include "llvm/Config/config.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Basic/TargetOptions.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/ADT/Triple.h"
-#include "llvm/Config/config.h"
 #include "llvm/MC/MCTargetOptions.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Compiler.h"
