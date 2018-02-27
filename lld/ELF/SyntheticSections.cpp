@@ -1365,7 +1365,7 @@ template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
     }
   }
 
-  if (In<ELFT>::CapRelocs) {
+  if (In<ELFT>::CapRelocs && !In<ELFT>::CapRelocs->empty()) {
     addInSec(DT_CHERI___CAPRELOCS, In<ELFT>::CapRelocs);
     addSize(DT_CHERI___CAPRELOCSSZ, In<ELFT>::CapRelocs->getParent());
   }
