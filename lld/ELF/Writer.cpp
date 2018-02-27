@@ -1526,23 +1526,14 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
   for (Symbol *S : Symtab->getSymbols())
     S->IsPreemptible |= computeIsPreemptible(*S);
 
+  StringRef CaptableSym = "_CHERI_CAPABILITY_TABLE_";
   if (InX::CheriCapTable) {
     // When creating relocatable output we should not define the
     // _CHERI_CAPABILITY_TABLE_ symbol because otherwise we get duplicate
     // symbol errors when linking that into a final executable
-    if (!Config->Relocatable) {
-      StringRef CaptableSym = "_CHERI_CAPABILITY_TABLE_";
-      // ensure that the symbol always exists (to make llvm-objdump more
-      // useful by printing which symbol is being loaded from captable)
-      if (auto *S = Symtab->find(CaptableSym))
-        if (S->isDefined())
-          error(CaptableSym + " must only be defined by the linker!");
-      // TODO: can we make this STB_LOCAL?
-      ElfSym::CheriCapabilityTable = cast<Defined>(
-          Symtab->addRegular(CaptableSym, STV_HIDDEN, STT_NOTYPE, 0, 0,
-                             STB_LOCAL, InX::CheriCapTable, nullptr));
-      ElfSym::CheriCapabilityTable->IsSectionStartSymbol = true;
-    }
+    if (!Config->Relocatable)
+      ElfSym::CheriCapabilityTable = addOptionalRegular(
+          CaptableSym, InX::CheriCapTable, 0, STV_HIDDEN, STB_LOCAL);
   }
 
   // Scan relocations. This must be done after every symbol is declared so that
@@ -1554,6 +1545,15 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
   // Must come before CapRelocs->finalizeContents() because it can add
   // __cap_relocs
   if (InX::CheriCapTable) {
+    // Ensure that we always have a _CHERI_CAPABILITY_TABLE_ symbol if the
+    // cap table exists. This makes llvm-objdump more useful since it can now
+    // print the target of a cap table load
+    if (!ElfSym::CheriCapabilityTable && !InX::CheriCapTable->empty()) {
+      ElfSym::CheriCapabilityTable = cast<Defined>(
+          Symtab->addRegular(CaptableSym, STV_HIDDEN, STT_NOTYPE, 0, 0,
+                             STB_LOCAL, InX::CheriCapTable, nullptr));
+      ElfSym::CheriCapabilityTable->IsSectionStartSymbol = true;
+    }
     InX::CheriCapTable->assignValuesAndAddCapTableSymbols<ELFT>();
   }
 
