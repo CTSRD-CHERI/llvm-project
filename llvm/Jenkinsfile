@@ -204,6 +204,7 @@ node(nodeLabel) {
     try {
         env.label = nodeLabel
         env.SDKROOT_DIR = "${env.WORKSPACE}/sdk"
+        env.JFLAG = "-j20"
         doBuild()
         // Scan for compiler warnings
         warnings canComputeNew: false, canResolveRelativePaths: true, consoleParsers: [[parserName: 'Clang (LLVM based)']]

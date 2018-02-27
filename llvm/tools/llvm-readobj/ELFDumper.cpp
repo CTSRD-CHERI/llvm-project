@@ -1621,6 +1621,8 @@ static const char *getTypeString(unsigned Arch, uint64_t Type) {
   LLVM_READOBJ_TYPE_CASE(TLSDESC_GOT);
   LLVM_READOBJ_TYPE_CASE(AUXILIARY);
   LLVM_READOBJ_TYPE_CASE(FILTER);
+  LLVM_READOBJ_TYPE_CASE(CHERI___CAPRELOCS);
+  LLVM_READOBJ_TYPE_CASE(CHERI___CAPRELOCSSZ);
   default: return "unknown";
   }
 }

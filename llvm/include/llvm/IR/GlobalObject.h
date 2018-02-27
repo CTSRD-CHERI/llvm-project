@@ -31,7 +31,7 @@ class GlobalObject : public GlobalValue {
 protected:
   GlobalObject(Type *Ty, ValueTy VTy, Use *Ops, unsigned NumOps,
                LinkageTypes Linkage, const Twine &Name,
-               unsigned AddressSpace = 0)
+               unsigned AddressSpace)
       : GlobalValue(Ty, VTy, Ops, NumOps, Linkage, Name, AddressSpace),
         ObjComdat(nullptr) {
     setGlobalValueSubClassData(0);
