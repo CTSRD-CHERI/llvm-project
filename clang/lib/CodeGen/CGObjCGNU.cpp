@@ -844,10 +844,9 @@ protected:
     std::string SymbolName = "_OBJC_CLASS_" + Name;
     llvm::GlobalVariable *ClassSymbol = TheModule.getGlobalVariable(SymbolName);
     if (!ClassSymbol)
-      ClassSymbol = new llvm::GlobalVariable(
-          TheModule, LongTy, false, llvm::GlobalValue::ExternalLinkage, nullptr,
-          SymbolName, nullptr, llvm::GlobalValue::NotThreadLocal,
-          CGM.getTargetCodeGenInfo().getDefaultAS());
+      ClassSymbol = new llvm::GlobalVariable(TheModule, LongTy, false,
+                                             llvm::GlobalValue::ExternalLinkage,
+                                             nullptr, SymbolName);
     return ClassSymbol;
   }
 
@@ -1170,11 +1169,11 @@ llvm::Constant *CGObjCGNUstep::GetEHType(QualType T) {
     llvm::Constant *IDEHType =
       CGM.getModule().getGlobalVariable("__objc_id_type_info");
     if (!IDEHType)
-      IDEHType = new llvm::GlobalVariable(
-          CGM.getModule(), PtrToInt8Ty, false,
-          llvm::GlobalValue::ExternalLinkage, nullptr, "__objc_id_type_info",
-          nullptr, llvm::GlobalValue::NotThreadLocal,
-          CGM.getTargetCodeGenInfo().getDefaultAS());
+      IDEHType =
+        new llvm::GlobalVariable(CGM.getModule(), PtrToInt8Ty,
+                                 false,
+                                 llvm::GlobalValue::ExternalLinkage,
+                                 nullptr, "__objc_id_type_info");
     return llvm::ConstantExpr::getBitCast(IDEHType, PtrToInt8Ty);
   }
 

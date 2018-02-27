@@ -1953,10 +1953,8 @@ CGObjCCommonMac::GenerateConstantNSString(const StringLiteral *Literal) {
   llvm::GlobalValue::LinkageTypes Linkage = llvm::GlobalValue::PrivateLinkage;
   bool isConstant = !CGM.getLangOpts().WritableStrings;
 
-  auto *GV = new llvm::GlobalVariable(
-      CGM.getModule(), C->getType(), isConstant, Linkage, C, ".str", nullptr,
-      llvm::GlobalValue::NotThreadLocal,
-      CGM.getTargetCodeGenInfo().getDefaultAS());
+  auto *GV = new llvm::GlobalVariable(CGM.getModule(), C->getType(), isConstant,
+                                      Linkage, C, ".str");
   GV->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
   // Don't enforce the target's minimum global alignment, since the only use
   // of the string is via this class initializer.
@@ -2992,9 +2990,7 @@ llvm::Constant *CGObjCMac::GetOrEmitProtocolRef(const ObjCProtocolDecl *PD) {
     // contents for protocols which were referenced but never defined.
     Entry = new llvm::GlobalVariable(CGM.getModule(), ObjCTypes.ProtocolTy,
                                      false, llvm::GlobalValue::PrivateLinkage,
-                                     nullptr, "OBJC_PROTOCOL_" + PD->getName(),
-                                     nullptr, llvm::GlobalValue::NotThreadLocal,
-                                     CGM.getTargetCodeGenInfo().getDefaultAS());
+                                     nullptr, "OBJC_PROTOCOL_" + PD->getName());
     Entry->setSection("__OBJC,__protocol,regular,no_dead_strip");
     // FIXME: Is this necessary? Why only for protocol?
     Entry->setAlignment(4);
@@ -3589,9 +3585,7 @@ llvm::Constant *CGObjCMac::EmitMetaClassRef(const ObjCInterfaceDecl *ID) {
   if (!GV)
     GV = new llvm::GlobalVariable(CGM.getModule(), ObjCTypes.ClassTy, false,
                                   llvm::GlobalValue::PrivateLinkage, nullptr,
-                                  Name, nullptr,
-                                  llvm::GlobalValue::NotThreadLocal,
-                                  CGM.getTargetCodeGenInfo().getDefaultAS());
+                                  Name);
 
   assert(GV->getType()->getElementType() == ObjCTypes.ClassTy &&
          "Forward metaclass reference has incorrect type.");
@@ -3605,9 +3599,7 @@ llvm::Value *CGObjCMac::EmitSuperClassRef(const ObjCInterfaceDecl *ID) {
   if (!GV)
     GV = new llvm::GlobalVariable(CGM.getModule(), ObjCTypes.ClassTy, false,
                                   llvm::GlobalValue::PrivateLinkage, nullptr,
-                                  Name, nullptr,
-                                  llvm::GlobalValue::NotThreadLocal,
-                                  CGM.getTargetCodeGenInfo().getDefaultAS());
+                                  Name);
 
   assert(GV->getType()->getElementType() == ObjCTypes.ClassTy &&
          "Forward class metadata reference has incorrect type.");
@@ -3905,10 +3897,9 @@ llvm::GlobalVariable *CGObjCCommonMac::CreateMetadataVar(Twine Name,
                                                          CharUnits Align,
                                                          bool AddToUsed) {
   llvm::Type *Ty = Init->getType();
-  llvm::GlobalVariable *GV = new llvm::GlobalVariable(
-      CGM.getModule(), Ty, false, llvm::GlobalValue::PrivateLinkage, Init, Name,
-      nullptr, llvm::GlobalValue::NotThreadLocal,
-      CGM.getTargetCodeGenInfo().getDefaultAS());
+  llvm::GlobalVariable *GV =
+    new llvm::GlobalVariable(CGM.getModule(), Ty, false,
+                             llvm::GlobalValue::PrivateLinkage, Init, Name);
   if (!Section.empty())
     GV->setSection(Section);
   GV->setAlignment(Align.getQuantity());
@@ -3952,11 +3943,10 @@ CGObjCCommonMac::CreateCStringLiteral(StringRef Name, ObjCLabelType Type,
 
   llvm::Constant *Value =
       llvm::ConstantDataArray::getString(VMContext, Name, NullTerminate);
-  llvm::GlobalVariable *GV = new llvm::GlobalVariable(
-      CGM.getModule(), Value->getType(),
-      /*isConstant=*/true, llvm::GlobalValue::PrivateLinkage, Value, Label,
-      nullptr, llvm::GlobalValue::NotThreadLocal,
-      CGM.getTargetCodeGenInfo().getDefaultAS());
+  llvm::GlobalVariable *GV =
+      new llvm::GlobalVariable(CGM.getModule(), Value->getType(),
+                               /*isConstant=*/true,
+                               llvm::GlobalValue::PrivateLinkage, Value, Label);
   if (CGM.getTriple().isOSBinFormatMachO())
     GV->setSection(Section);
   GV->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
@@ -5954,11 +5944,11 @@ void CGObjCNonFragileABIMac::AddModuleClassList(
                                                   Symbols.size()),
                              Symbols);
 
-  llvm::GlobalVariable *GV = new llvm::GlobalVariable(
-      CGM.getModule(), Init->getType(), false,
-      llvm::GlobalValue::PrivateLinkage, Init, SymbolName, nullptr,
-      llvm::GlobalValue::NotThreadLocal,
-      CGM.getTargetCodeGenInfo().getDefaultAS());
+  llvm::GlobalVariable *GV =
+    new llvm::GlobalVariable(CGM.getModule(), Init->getType(), false,
+                             llvm::GlobalValue::PrivateLinkage,
+                             Init,
+                             SymbolName);
   GV->setAlignment(CGM.getDataLayout().getABITypeAlignment(Init->getType()));
   GV->setSection(SectionName);
   CGM.addCompilerUsedGlobal(GV);
@@ -6256,22 +6246,20 @@ static llvm::GlobalValue::DLLStorageClassTypes getStorage(CodeGenModule &CGM,
 
 void CGObjCNonFragileABIMac::GenerateClass(const ObjCImplementationDecl *ID) {
   if (!ObjCEmptyCacheVar) {
-    ObjCEmptyCacheVar = new llvm::GlobalVariable(
-        CGM.getModule(), ObjCTypes.CacheTy, false,
-        llvm::GlobalValue::ExternalLinkage, nullptr, "_objc_empty_cache",
-        nullptr, llvm::GlobalValue::NotThreadLocal,
-        CGM.getTargetCodeGenInfo().getDefaultAS());
+    ObjCEmptyCacheVar =
+        new llvm::GlobalVariable(CGM.getModule(), ObjCTypes.CacheTy, false,
+                                 llvm::GlobalValue::ExternalLinkage, nullptr,
+                                 "_objc_empty_cache");
     if (CGM.getTriple().isOSBinFormatCOFF())
       ObjCEmptyCacheVar->setDLLStorageClass(getStorage(CGM, "_objc_empty_cache"));
 
     // Only OS X with deployment version <10.9 use the empty vtable symbol
     const llvm::Triple &Triple = CGM.getTarget().getTriple();
     if (Triple.isMacOSX() && Triple.isMacOSXVersionLT(10, 9))
-      ObjCEmptyVtableVar = new llvm::GlobalVariable(
-          CGM.getModule(), ObjCTypes.ImpnfABITy, false,
-          llvm::GlobalValue::ExternalLinkage, nullptr, "_objc_empty_vtable",
-          nullptr, llvm::GlobalValue::NotThreadLocal,
-          CGM.getTargetCodeGenInfo().getDefaultAS());
+      ObjCEmptyVtableVar =
+          new llvm::GlobalVariable(CGM.getModule(), ObjCTypes.ImpnfABITy, false,
+                                   llvm::GlobalValue::ExternalLinkage, nullptr,
+                                   "_objc_empty_vtable");
     else
       ObjCEmptyVtableVar =
         llvm::ConstantPointerNull::get(ObjCTypes.ImpnfABITy->getPointerTo(
@@ -6414,9 +6402,7 @@ llvm::Value *CGObjCNonFragileABIMac::GenerateProtocolRef(CodeGenFunction &CGF,
     return CGF.Builder.CreateAlignedLoad(PTGV, Align);
   PTGV = new llvm::GlobalVariable(CGM.getModule(), Init->getType(), false,
                                   llvm::GlobalValue::WeakAnyLinkage, Init,
-                                  ProtocolName, nullptr,
-                                  llvm::GlobalValue::NotThreadLocal,
-                                  CGM.getTargetCodeGenInfo().getDefaultAS());
+                                  ProtocolName);
   PTGV->setSection(GetSectionName("__objc_protorefs",
                                   "coalesced,no_dead_strip"));
   PTGV->setVisibility(llvm::GlobalValue::HiddenVisibility);
@@ -6628,11 +6614,10 @@ CGObjCNonFragileABIMac::ObjCIvarOffsetVariable(const ObjCInterfaceDecl *ID,
   Name += Ivar->getName();
   llvm::GlobalVariable *IvarOffsetGV = CGM.getModule().getGlobalVariable(Name);
   if (!IvarOffsetGV) {
-    IvarOffsetGV = new llvm::GlobalVariable(
-        CGM.getModule(), ObjCTypes.IvarOffsetVarTy, false,
-        llvm::GlobalValue::ExternalLinkage, nullptr, Name.str(), nullptr,
-        llvm::GlobalValue::NotThreadLocal,
-        CGM.getTargetCodeGenInfo().getDefaultAS());
+    IvarOffsetGV =
+        new llvm::GlobalVariable(CGM.getModule(), ObjCTypes.IvarOffsetVarTy,
+                                 false, llvm::GlobalValue::ExternalLinkage,
+                                 nullptr, Name.str());
     if (CGM.getTriple().isOSBinFormatCOFF()) {
       bool IsPrivateOrPackage =
           Ivar->getAccessControl() == ObjCIvarDecl::Private ||
@@ -6771,9 +6756,7 @@ llvm::Constant *CGObjCNonFragileABIMac::GetOrEmitProtocolRef(
 
     Entry = new llvm::GlobalVariable(CGM.getModule(), ObjCTypes.ProtocolnfABITy,
                                      false, llvm::GlobalValue::ExternalLinkage,
-                                     nullptr, Protocol, nullptr,
-                                     llvm::GlobalValue::NotThreadLocal,
-                                     CGM.getTargetCodeGenInfo().getDefaultAS());
+                                     nullptr, Protocol);
     if (!CGM.getTriple().isOSBinFormatMachO())
       Entry->setComdat(CGM.getModule().getOrInsertComdat(Protocol));
   }
@@ -6878,11 +6861,10 @@ llvm::Constant *CGObjCNonFragileABIMac::GetOrEmitProtocol(
   llvm::raw_svector_ostream(ProtocolRef) << "\01l_OBJC_LABEL_PROTOCOL_$_"
                                          << PD->getObjCRuntimeNameAsString();
 
-  llvm::GlobalVariable *PTGV = new llvm::GlobalVariable(
-      CGM.getModule(), ObjCTypes.ProtocolnfABIPtrTy, false,
-      llvm::GlobalValue::WeakAnyLinkage, Entry, ProtocolRef, nullptr,
-      llvm::GlobalValue::NotThreadLocal,
-      CGM.getTargetCodeGenInfo().getDefaultAS());
+  llvm::GlobalVariable *PTGV =
+    new llvm::GlobalVariable(CGM.getModule(), ObjCTypes.ProtocolnfABIPtrTy,
+                             false, llvm::GlobalValue::WeakAnyLinkage, Entry,
+                             ProtocolRef);
   if (!CGM.getTriple().isOSBinFormatMachO())
     PTGV->setComdat(CGM.getModule().getOrInsertComdat(ProtocolRef));
   PTGV->setAlignment(
@@ -7165,9 +7147,7 @@ CGObjCNonFragileABIMac::GetClassGlobal(StringRef Name,
   llvm::GlobalVariable *GV = CGM.getModule().getGlobalVariable(Name);
   if (!GV) {
     GV = new llvm::GlobalVariable(CGM.getModule(), ObjCTypes.ClassnfABITy,
-                                  false, L, nullptr, Name, nullptr,
-                                  llvm::GlobalValue::NotThreadLocal,
-                                  CGM.getTargetCodeGenInfo().getDefaultAS());
+                                  false, L, nullptr, Name);
 
     if (DLLImport)
       GV->setDLLStorageClass(llvm::GlobalValue::DLLImportStorageClass);
@@ -7195,9 +7175,7 @@ CGObjCNonFragileABIMac::EmitClassRefFromId(CodeGenFunction &CGF,
 
     Entry = new llvm::GlobalVariable(CGM.getModule(), ObjCTypes.ClassnfABIPtrTy,
                                      false, llvm::GlobalValue::PrivateLinkage,
-                                     ClassGV, "OBJC_CLASSLIST_REFERENCES_$_",
-                                     nullptr, llvm::GlobalValue::NotThreadLocal,
-                                     CGM.getTargetCodeGenInfo().getDefaultAS());
+                                     ClassGV, "OBJC_CLASSLIST_REFERENCES_$_");
     Entry->setAlignment(Align.getQuantity());
     Entry->setSection(GetSectionName("__objc_classrefs",
                                      "regular,no_dead_strip"));
@@ -7232,9 +7210,7 @@ CGObjCNonFragileABIMac::EmitSuperClassRef(CodeGenFunction &CGF,
     auto ClassGV = GetClassGlobal(ID, /*metaclass*/ false, NotForDefinition);
     Entry = new llvm::GlobalVariable(CGM.getModule(), ObjCTypes.ClassnfABIPtrTy,
                                      false, llvm::GlobalValue::PrivateLinkage,
-                                     ClassGV, "OBJC_CLASSLIST_SUP_REFS_$_",
-                                     nullptr, llvm::GlobalValue::NotThreadLocal,
-                                     CGM.getTargetCodeGenInfo().getDefaultAS());
+                                     ClassGV, "OBJC_CLASSLIST_SUP_REFS_$_");
     Entry->setAlignment(Align.getQuantity());
     Entry->setSection(GetSectionName("__objc_superrefs",
                                      "regular,no_dead_strip"));
@@ -7256,9 +7232,7 @@ llvm::Value *CGObjCNonFragileABIMac::EmitMetaClassRef(CodeGenFunction &CGF,
 
     Entry = new llvm::GlobalVariable(CGM.getModule(), ObjCTypes.ClassnfABIPtrTy,
                                      false, llvm::GlobalValue::PrivateLinkage,
-                                     MetaClassGV, "OBJC_CLASSLIST_SUP_REFS_$_",
-                                     nullptr, llvm::GlobalValue::NotThreadLocal,
-                                     CGM.getTargetCodeGenInfo().getDefaultAS());
+                                     MetaClassGV, "OBJC_CLASSLIST_SUP_REFS_$_");
     Entry->setAlignment(Align.getQuantity());
 
     Entry->setSection(GetSectionName("__objc_superrefs",
@@ -7356,9 +7330,7 @@ Address CGObjCNonFragileABIMac::EmitSelectorAddr(CodeGenFunction &CGF,
                                      ObjCTypes.SelectorPtrTy);
     Entry = new llvm::GlobalVariable(CGM.getModule(), ObjCTypes.SelectorPtrTy,
                                      false, llvm::GlobalValue::PrivateLinkage,
-                                     Casted, "OBJC_SELECTOR_REFERENCES_",
-                                     nullptr, llvm::GlobalValue::NotThreadLocal,
-                                     CGM.getTargetCodeGenInfo().getDefaultAS());
+                                     Casted, "OBJC_SELECTOR_REFERENCES_");
     Entry->setExternallyInitialized(true);
     Entry->setSection(GetSectionName("__objc_selrefs",
                                      "literal_pointers,no_dead_strip"));
@@ -7496,11 +7468,10 @@ CGObjCNonFragileABIMac::GetEHType(QualType T) {
   if (T->isObjCIdType() || T->isObjCQualifiedIdType()) {
     auto *IDEHType = CGM.getModule().getGlobalVariable("OBJC_EHTYPE_id");
     if (!IDEHType) {
-      IDEHType = new llvm::GlobalVariable(
-          CGM.getModule(), ObjCTypes.EHTypeTy, false,
-          llvm::GlobalValue::ExternalLinkage, nullptr, "OBJC_EHTYPE_id",
-          nullptr, llvm::GlobalValue::NotThreadLocal,
-          CGM.getTargetCodeGenInfo().getDefaultAS());
+      IDEHType =
+          new llvm::GlobalVariable(CGM.getModule(), ObjCTypes.EHTypeTy, false,
+                                   llvm::GlobalValue::ExternalLinkage, nullptr,
+                                   "OBJC_EHTYPE_id");
       if (CGM.getTriple().isOSBinFormatCOFF())
         IDEHType->setDLLStorageClass(getStorage(CGM, "OBJC_EHTYPE_id"));
     }
@@ -7560,11 +7531,9 @@ CGObjCNonFragileABIMac::GetInterfaceEHType(const ObjCInterfaceDecl *ID,
     // attribute, emit an external reference.
     if (hasObjCExceptionAttribute(CGM.getContext(), ID)) {
       std::string EHTypeName = ("OBJC_EHTYPE_$_" + ClassName).str();
-      Entry = new llvm::GlobalVariable(
-          CGM.getModule(), ObjCTypes.EHTypeTy, false,
-          llvm::GlobalValue::ExternalLinkage, nullptr, EHTypeName, nullptr,
-          llvm::GlobalValue::NotThreadLocal,
-          CGM.getTargetCodeGenInfo().getDefaultAS());
+      Entry = new llvm::GlobalVariable(CGM.getModule(), ObjCTypes.EHTypeTy,
+                                       false, llvm::GlobalValue::ExternalLinkage,
+                                       nullptr, EHTypeName);
       if (CGM.getTriple().isOSBinFormatCOFF()) {
         if (ID->hasAttr<DLLExportAttr>())
           Entry->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
@@ -7581,11 +7550,10 @@ CGObjCNonFragileABIMac::GetInterfaceEHType(const ObjCInterfaceDecl *ID,
   std::string VTableName = "objc_ehtype_vtable";
   auto *VTableGV = CGM.getModule().getGlobalVariable(VTableName);
   if (!VTableGV) {
-    VTableGV = new llvm::GlobalVariable(
-        CGM.getModule(), ObjCTypes.Int8PtrTy, false,
-        llvm::GlobalValue::ExternalLinkage, nullptr, VTableName, nullptr,
-        llvm::GlobalValue::NotThreadLocal,
-        CGM.getTargetCodeGenInfo().getDefaultAS());
+    VTableGV =
+        new llvm::GlobalVariable(CGM.getModule(), ObjCTypes.Int8PtrTy, false,
+                                 llvm::GlobalValue::ExternalLinkage, nullptr,
+                                 VTableName);
     if (CGM.getTriple().isOSBinFormatCOFF())
       VTableGV->setDLLStorageClass(getStorage(CGM, VTableName));
   }
