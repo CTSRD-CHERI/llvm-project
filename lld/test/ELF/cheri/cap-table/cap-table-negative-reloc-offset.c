@@ -146,7 +146,8 @@ int __start(void) {
 // verify that the __cap_reloc for man_macros has the right length 0x440 even though it is way out of bounds
 
 // WARN: global capability offset -11648 is less than 0:
-// WARN-NEXT: >>> Location: {{.+}}cap-table-negative-reloc-offset.c.tmp.o:(man_macros)
+// WARN-NEXT: >>> Location: object man_macros
+// WARN-NEXT: >>> defined in cap-table-negative-reloc-offset.c (
 // WARN-NEXT: >>> Target: object __man_macros
 // WARN-NEXT: >>> defined in cap-table-negative-reloc-offset.c
 
