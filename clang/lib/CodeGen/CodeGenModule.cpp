@@ -5005,17 +5005,8 @@ GenerateAS0StringLiteral(CodeGenModule &CGM, StringRef Str) {
   llvm::Constant *C = llvm::ConstantDataArray::getString(CGM.getLLVMContext(),
           StrWithNull, false);
 
-  unsigned AS = 0;
-  // XXXAR: in the cap-table ABI we want all globals in AS200!
-  // TODO: rename this function
-  if (CGM.getContext().getTargetInfo().areAllPointersCapabilities())
-    if (llvm::MCTargetOptions::cheriUsesCapabilityTable())
-      AS = CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
-
   auto *GV = new llvm::GlobalVariable( CGM.getModule(), C->getType(), true,
-          llvm::GlobalValue::PrivateLinkage, C,
-          // when using the cap table this needs to be in AS200
-          "", nullptr, llvm::GlobalValue::NotThreadLocal, AS);
+          llvm::GlobalValue::PrivateLinkage, C);
   GV->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
 
   return GV;
