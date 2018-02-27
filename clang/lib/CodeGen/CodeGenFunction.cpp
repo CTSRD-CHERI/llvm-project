@@ -483,9 +483,7 @@ CodeGenFunction::EncodeAddrForUseInPrologue(llvm::Function *F,
   // won't result in a run-time fixup, even if Addr has linkonce_odr linkage.
   auto *GV = new llvm::GlobalVariable(CGM.getModule(), Addr->getType(),
                                       /*isConstant=*/true,
-                                      llvm::GlobalValue::PrivateLinkage, Addr, "",
-                                      nullptr, llvm::GlobalValue::NotThreadLocal,
-                                      CGM.getTargetCodeGenInfo().getDefaultAS());
+                                      llvm::GlobalValue::PrivateLinkage, Addr);
 
   // Create a PC-relative address.
   auto *GOTAsInt = llvm::ConstantExpr::getPtrToInt(GV, IntPtrTy);
@@ -1809,9 +1807,7 @@ CodeGenFunction::EmitNullInitialization(Address DestPtr, QualType Ty) {
       new llvm::GlobalVariable(CGM.getModule(), NullConstant->getType(),
                                /*isConstant=*/true,
                                llvm::GlobalVariable::PrivateLinkage,
-                               NullConstant, Twine(),
-                               nullptr, llvm::GlobalValue::NotThreadLocal,
-                               CGM.getTargetCodeGenInfo().getDefaultAS());
+                               NullConstant, Twine());
     CharUnits NullAlign = DestPtr.getAlignment();
     NullVariable->setAlignment(NullAlign.getQuantity());
     Address SrcPtr(Builder.CreatePointerBitCastOrAddrSpaceCast(NullVariable, CGM.Int8PtrTy),

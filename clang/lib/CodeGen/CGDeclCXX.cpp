@@ -364,9 +364,7 @@ void CodeGenModule::EmitPointerToInitFunc(const VarDecl *D,
                                           InitSegAttr *ISA) {
   llvm::GlobalVariable *PtrArray = new llvm::GlobalVariable(
       TheModule, InitFunc->getType(), /*isConstant=*/true,
-      llvm::GlobalValue::PrivateLinkage, InitFunc, "__cxx_init_fn_ptr",
-      nullptr, llvm::GlobalValue::NotThreadLocal,
-      getTargetCodeGenInfo().getDefaultAS());
+      llvm::GlobalValue::PrivateLinkage, InitFunc, "__cxx_init_fn_ptr");
   PtrArray->setSection(ISA->getSection());
   addUsedGlobal(PtrArray);
 

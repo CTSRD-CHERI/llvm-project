@@ -2699,9 +2699,7 @@ llvm::Constant *CodeGenFunction::EmitCheckTypeDescriptor(QualType T) {
 
   auto *GV = new llvm::GlobalVariable(
       CGM.getModule(), Descriptor->getType(),
-      /*isConstant=*/true, llvm::GlobalVariable::PrivateLinkage, Descriptor,
-      "", nullptr, llvm::GlobalValue::NotThreadLocal,
-      CGM.getTargetCodeGenInfo().getDefaultAS());
+      /*isConstant=*/true, llvm::GlobalVariable::PrivateLinkage, Descriptor);
   GV->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
   CGM.getSanitizerMetadata()->disableSanitizerForGlobal(GV);
 
@@ -2951,9 +2949,7 @@ void CodeGenFunction::EmitCheck(
       llvm::Constant *Info = llvm::ConstantStruct::getAnon(StaticArgs);
       auto *InfoPtr =
           new llvm::GlobalVariable(CGM.getModule(), Info->getType(), false,
-                                   llvm::GlobalVariable::PrivateLinkage, Info,
-                                   "", nullptr, llvm::GlobalValue::NotThreadLocal,
-                                   CGM.getTargetCodeGenInfo().getDefaultAS());
+                                   llvm::GlobalVariable::PrivateLinkage, Info);
       InfoPtr->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
       CGM.getSanitizerMetadata()->disableSanitizerForGlobal(InfoPtr);
       Args.push_back(Builder.CreateBitCast(InfoPtr, Int8PtrTy));
@@ -3013,9 +3009,7 @@ void CodeGenFunction::EmitCfiSlowPathCheck(
     llvm::Constant *Info = llvm::ConstantStruct::getAnon(StaticArgs);
     auto *InfoPtr =
         new llvm::GlobalVariable(CGM.getModule(), Info->getType(), false,
-                                 llvm::GlobalVariable::PrivateLinkage, Info, "",
-                                 nullptr, llvm::GlobalValue::NotThreadLocal,
-                                 CGM.getTargetCodeGenInfo().getDefaultAS());
+                                 llvm::GlobalVariable::PrivateLinkage, Info);
     InfoPtr->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
     CGM.getSanitizerMetadata()->disableSanitizerForGlobal(InfoPtr);
 
@@ -4830,8 +4824,7 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
     if (!CHERIErrno) {
       CHERIErrno = new llvm::GlobalVariable(M, IntTy,
           /*isConstant*/false, llvm::GlobalValue::ExternalLinkage,
-          nullptr, "cheri_errno", nullptr, llvm::GlobalValue::NotThreadLocal,
-          CGM.getTargetCodeGenInfo().getDefaultAS());
+          nullptr, "cheri_errno");
       CHERIErrno->setThreadLocal(true);
     }
     // FIXME: Don't hard code 4-byte alignment for int!

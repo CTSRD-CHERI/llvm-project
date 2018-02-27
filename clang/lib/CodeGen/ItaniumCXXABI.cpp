@@ -2472,9 +2472,7 @@ void ItaniumCXXABI::EmitThreadLocalInitFuncs(
     llvm::GlobalVariable *Guard = new llvm::GlobalVariable(
         CGM.getModule(), CGM.Int8Ty, /*isConstant=*/false,
         llvm::GlobalVariable::InternalLinkage,
-        llvm::ConstantInt::get(CGM.Int8Ty, 0), "__tls_guard",
-        nullptr, llvm::GlobalValue::NotThreadLocal,
-        CGM.getTargetCodeGenInfo().getDefaultAS());
+        llvm::ConstantInt::get(CGM.Int8Ty, 0), "__tls_guard");
     Guard->setThreadLocal(true);
 
     CharUnits GuardAlign = CharUnits::One();

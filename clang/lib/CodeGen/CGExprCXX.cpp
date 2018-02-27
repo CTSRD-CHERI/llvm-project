@@ -528,9 +528,7 @@ static void EmitNullBaseClassInitialization(CodeGenFunction &CGF,
     llvm::GlobalVariable *NullVariable = new llvm::GlobalVariable(
         CGF.CGM.getModule(), NullConstantForBase->getType(),
         /*isConstant=*/true, llvm::GlobalVariable::PrivateLinkage,
-        NullConstantForBase, Twine(),
-        nullptr, llvm::GlobalValue::NotThreadLocal,
-        CGF.CGM.getTargetCodeGenInfo().getDefaultAS());
+        NullConstantForBase, Twine());
 
     CharUnits Align = std::max(Layout.getNonVirtualAlignment(),
                                DestPtr.getAlignment());

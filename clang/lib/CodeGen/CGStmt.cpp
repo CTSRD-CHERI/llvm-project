@@ -1023,9 +1023,7 @@ void CodeGenFunction::EmitReturnStmt(const ReturnStmt &S) {
     llvm::Constant *SLoc = EmitCheckSourceLocation(S.getLocStart());
     auto *SLocPtr =
         new llvm::GlobalVariable(CGM.getModule(), SLoc->getType(), false,
-                                 llvm::GlobalVariable::PrivateLinkage, SLoc,
-                                 "", nullptr, llvm::GlobalValue::NotThreadLocal,
-                                 CGM.getTargetCodeGenInfo().getDefaultAS());
+                                 llvm::GlobalVariable::PrivateLinkage, SLoc);
     SLocPtr->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
     CGM.getSanitizerMetadata()->disableSanitizerForGlobal(SLocPtr);
     assert(ReturnLocation.isValid() && "No valid return location");
