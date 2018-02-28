@@ -2904,17 +2904,6 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc,
   //       purecap ABI if both source and destination types are capabilities
   //       and the types are compatible.
 
-  CastOperation Op(*this, DestTy, SubExpr);
-  Op.DestRange = TSInfo->getTypeLoc().getSourceRange();
-  Op.OpRange = SourceRange(Op.DestRange.getBegin(), SubExpr->getLocEnd());
-
-  Op.CheckCStyleCast();
-
-  if (Op.SrcExpr.isInvalid())
-    return ExprError();
-
-  SubExpr = Op.SrcExpr.get();
-
   // Use getRealReferenceType() because getType() only returns T for T&
   QualType SrcTy = SubExpr->getRealReferenceType();
   CastKind Kind = CK_NoOp;
@@ -2987,17 +2976,6 @@ ExprResult Sema::BuildCheriOffsetOrAddress(SourceLocation LParenLoc,
                                            DestTy, TypeSourceInfo *TSInfo,
                                            SourceLocation RParenLoc, Expr
                                            *SubExpr) {
-  CastOperation Op(*this, DestTy, SubExpr);
-  Op.DestRange = TSInfo->getTypeLoc().getSourceRange();
-  Op.OpRange = SourceRange(Op.DestRange.getBegin(), SubExpr->getLocEnd());
-
-  Op.CheckCStyleCast();
-
-  if (Op.SrcExpr.isInvalid())
-    return ExprError();
-
-  SubExpr = Op.SrcExpr.get();
-
   // Check the source type
   // Use getRealReferenceType() because getType() only returns T for T&
   QualType SrcTy = SubExpr->getRealReferenceType();
@@ -3013,11 +2991,9 @@ ExprResult Sema::BuildCheriOffsetOrAddress(SourceLocation LParenLoc,
   // For __cheri_addr, output a more specific error message if DestTy is an
   // integral pointer type
   if (!IsOffsetCast) {
-    bool DestIsPtr = DestTy->isPointerType()
-                        && !DestTy->getAs<PointerType>()->isCHERICapability();
-    if (DestIsPtr) {
+    if (DestTy->isPointerType()) {
       Diag(SubExpr->getLocStart(), diag::err_cheri_addr_ptr_type)
-        << DestTy;
+        << DestTy << (int)DestTy->getAs<PointerType>()->isCHERICapability();
       return ExprError();
     }
   }
@@ -3052,15 +3028,22 @@ ExprResult Sema::BuildCheriOffsetOrAddress(SourceLocation LParenLoc,
 ExprResult Sema::ActOnCheriCast(Scope *S, SourceLocation LParenLoc, tok::TokenKind Kind,
                                 SourceLocation KeywordLoc, ParsedType Type,
                                 SourceLocation RParenLoc, Expr *SubExpr) {
+  if (Kind == tok::kw___cheri_cast) {
+    Diag(KeywordLoc, diag::err_cheri_cast);
+    return ExprError();
+  }
   TypeSourceInfo *TSInfo = nullptr;
   QualType T = GetTypeFromParser(Type, &TSInfo);
   if (!TSInfo)
     TSInfo = Context.getTrivialTypeSourceInfo(T, LParenLoc);
-  switch (Kind) {
-  case tok::kw___cheri_cast: {
-    Diag(KeywordLoc, diag::err_cheri_cast);
+
+  // Perform the default function/array to pointer decay first:
+  ExprResult Decayed = DefaultFunctionArrayLvalueConversion(SubExpr);
+  if (Decayed.isInvalid())
     return ExprError();
-  }
+  SubExpr = Decayed.get();
+
+  switch (Kind) {
   case tok::kw___cheri_tocap:
   case tok::kw___cheri_fromcap:
     return BuildCheriToOrFromCap(LParenLoc, KeywordLoc,
