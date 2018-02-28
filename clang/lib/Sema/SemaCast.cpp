@@ -2948,15 +2948,36 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc,
   //     return hasSameType(LHS, RHS);
   //  return !mergeTypes(LHS, RHS, false, CompareUnqualified).isNull();
 
-  // XXXAR: I had to modify mergeTypes() to add a IncludeCapabilityQualifier flag
-  // because here we want to compare everything but the __capability qualifier
+  // XXXAR: I had to modify mergeTypes() to add a IncludeCapabilityQualifier
+  // flag because here we want to compare everything but the __capability
+  // qualifier
   // XXXKG: I also extended mergeTypes() with a MergeVoidPtr flag to allow the
-  // <-> void* case (and still get the checkng of qualifiers).
-  bool TypesCompatible = !Context.mergeTypes(SrcTy, DestTy, false, false, false, false, true).isNull();
-  if (!TypesCompatible) {
-    Diag(SubExpr->getLocStart(), diag::err_cheri_to_from_cap_unrelated_type)
-      << IsToCap << SrcTy << DestTy;
-    return ExprError();
+  // <-> void* case (and still get the checking of qualifiers).
+  QualType MergedTy = Context.mergeTypes(
+      SrcTy, DestTy, /*OfBlockPointer=*/false, /*Unqualified=*/false,
+      /*BlockReturnType=*/false, /*IncludeCapabilityQualifier=*/false,
+      /*MergeVoidPtr=*/false);
+  if (MergedTy.isNull()) {
+    // As a special case we allow changing the types if either source or dest is
+    // a pointer to void:
+    MergedTy = Context.mergeTypes(
+        SrcTy, DestTy, /*OfBlockPointer=*/false, /*Unqualified=*/false,
+        /*BlockReturnType=*/false, /*IncludeCapabilityQualifier=*/false,
+        /*MergeVoidPtr=*/true);
+    if (!MergedTy.isNull()) {
+      // Insert a CK_BitCast to ensure we don't crash during codegen (see
+      // https://github.com/CTSRD-CHERI/clang/issues/178)
+      QualType BitCastTy = Context.getPointerType(
+          DestTy->getAs<PointerType>()->getPointeeType(),
+          SrcTy->isCHERICapabilityType(Context) ? ASTContext::PIK_Capability
+                                                : ASTContext::PIK_Integer);
+      SubExpr = ImplicitCastExpr::Create(Context, BitCastTy, CK_BitCast,
+                                         SubExpr, nullptr, VK_RValue);
+    } else {
+      Diag(SubExpr->getLocStart(), diag::err_cheri_to_from_cap_unrelated_type)
+          << IsToCap << SrcTy << DestTy;
+      return ExprError();
+    }
   }
 
   // Warn about no-op cheri casts.
@@ -2964,6 +2985,7 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc,
     Diag(KeywordLoc, diag::warn_cheri_to_from_cap_noop)
       << IsToCap << SrcTy << DestTy
       << FixItHint::CreateRemoval(SourceRange(LParenLoc, RParenLoc));
+    // If we are casting to void*
   }
 
   return CStyleCastExpr::Create(Context, DestTy, VK_RValue, Kind, SubExpr,
