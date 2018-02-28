@@ -808,7 +808,7 @@ static void fillGlobalSizesSection(InputSection* IS, uint8_t* Buf, uint8_t* BufE
              verboseToString<ELFT>(Target));
       }
     }
-    if (ResolvedSize == 0 && (IS->getOutputSection()->Flags & SHF_WRITE) != 0) {
+    if (ResolvedSize == 0 && (IS->getOutputSection()->Flags & SHF_WRITE) == 0) {
       error("Unknown .global_sizes value for " + RealSymName +
             " but section was not marked as writable");
     }
