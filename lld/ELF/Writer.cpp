@@ -1569,7 +1569,8 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
         if (auto *ISD = dyn_cast<InputSectionDescription>(Cmd))
           for (InputSection *IS : ISD->Sections)
             foreachGlobalSizesSymbol<ELFT>(
-                IS, [&GS](StringRef Name, Symbol *Sym) {
+                IS, [&GS](StringRef Name, Symbol *Sym, uint64_t Offset) {
+                  (void)Offset;
                   if (Name == "__progname" || Name == "environ")
                     // These are provided by crt1.c and we know the size so
                     // we don't need to change .global_sizes to be writable
@@ -1577,8 +1578,7 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
                   if (Sym->isUndefined() && (GS->Flags & SHF_WRITE) == 0) {
                     warn(".global_sizes section contains unresolved values -> "
                          "making writable because it references unresolved "
-                         "symbol " +
-                         Name);
+                         "symbol " + Name);
                     GS->Flags |= SHF_WRITE;
                   }
                 });

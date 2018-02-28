@@ -153,7 +153,7 @@ static void foreachGlobalSizesSymbol(InputSection *IS, CallBack &&CB) {
       }
       StringRef RealSymName = Name.drop_front(strlen(".size."));
       Symbol *Target = Symtab->find(RealSymName);
-      CB(RealSymName, Target);
+      CB(RealSymName, Target, D->Value);
     }
   }
 }

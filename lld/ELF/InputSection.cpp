@@ -790,57 +790,44 @@ static void fillGlobalSizesSection(InputSection* IS, uint8_t* Buf, uint8_t* BufE
   if (Config->VerboseCapRelocs)
     message("Write .global_sizes: IS = " + toString(IS));
 
-  for (Symbol *B : IS->File->getSymbols()) {
-    if (auto *D = dyn_cast<Defined>(B)) {
-      if (D->Section != IS)
-        continue;
-      // skip the initial .global_sizes symbol (exists e.g. in openpam_static_modules.o)
-      if (D->isSection() && D->isLocal() && D->getName().empty())
-        continue;
-      StringRef Name = D->getName();
-      if (!Name.startswith(".size.")) {
-        error(".global_sizes symbol name is invalid: " + verboseToString<ELFT>(D));
-        continue;
-      }
-      StringRef RealSymName = Name.drop_front(strlen(".size."));
-      Symbol* Target = Symtab->find(RealSymName);
-      uint64_t ResolvedSize = Target->getSize();
-      uint8_t* Location = Buf + D->Value;
-      assert(Location + 8 <= BufEnd); // Should use a span type instead
+  foreachGlobalSizesSymbol<ELFT>(IS, [&](StringRef RealSymName, Symbol *Target,
+                                        uint64_t Offset) {
+    uint64_t ResolvedSize = Target->getSize();
+    uint8_t *Location = Buf + Offset;
+    assert(Location + 8 <= BufEnd); // Should use a span type instead
 
-      if (ResolvedSize == 0) {
-        // HACK for environ and __progname (both are capabilities):
-        if (Config->Shared &&
-            (RealSymName == "__progname" || RealSymName == "environ")) {
-          message("Using .global_size for symbol " + RealSymName +
-                  " in shared lib (assuming size==sizeof(void* __capability)");
-          ResolvedSize = Config->CapabilitySize;
-        } else {
-          warn("Could not find .global_size for " + verboseToString<ELFT>(Target));
-        }
+    if (ResolvedSize == 0 || Target->isUndefined()) {
+      // HACK for environ and __progname (both are capabilities):
+      if (Config->Shared &&
+          (RealSymName == "__progname" || RealSymName == "environ")) {
+        message("Using .global_size for symbol " + RealSymName +
+                " in shared lib (assuming size==sizeof(void* __capability)");
+        ResolvedSize = Config->CapabilitySize;
+      } else {
+        warn("Could not find .global_size for " +
+             verboseToString<ELFT>(Target));
       }
-      if (ResolvedSize == 0 &&
-          (IS->getOutputSection()->Flags & SHF_WRITE) != 0) {
-        error("Unknown .global_sizes value for " + RealSymName +
-              " but section was not marked as writable");
-      }
-      uint64_t Existing = read64<E>(Location);
-      if (Existing != 0 && Existing != ResolvedSize) {
-        // The value might not be zero if we are linking against a file built
-        // with -r (e.g. openpam_static_modules.o) In that case we need to check
-        // whether the existing value and the value we want to write matches
-        error("Conflicting values for " + Name +
-              "\n>>> was already initialized to 0x" + utohexstr(Existing) +
-              " in " + toString(IS) + "\n>>> expected value is 0x" +
-              utohexstr(ResolvedSize));
-      }
-
-      write64<E>(Location, ResolvedSize);
-      if (Config->VerboseCapRelocs)
-        message("Writing size 0x" + utohexstr(ResolvedSize) + " for " +
-                verboseToString<ELFT>(Target));
     }
-  }
+    if (ResolvedSize == 0 && (IS->getOutputSection()->Flags & SHF_WRITE) != 0) {
+      error("Unknown .global_sizes value for " + RealSymName +
+            " but section was not marked as writable");
+    }
+    uint64_t Existing = read64<E>(Location);
+    if (Existing != 0 && Existing != ResolvedSize) {
+      // The value might not be zero if we are linking against a file built
+      // with -r (e.g. openpam_static_modules.o) In that case we need to check
+      // whether the existing value and the value we want to write matches
+      error("Conflicting values for .size." + RealSymName +
+            "\n>>> was already initialized to 0x" + utohexstr(Existing) +
+            " in " + toString(IS) + "\n>>> expected value is 0x" +
+            utohexstr(ResolvedSize));
+    }
+
+    write64<E>(Location, ResolvedSize);
+    if (Config->VerboseCapRelocs)
+      message("Writing size 0x" + utohexstr(ResolvedSize) + " for " +
+              verboseToString<ELFT>(Target));
+  });
 }
 
 template <class ELFT> void InputSection::writeTo(uint8_t *Buf) {
