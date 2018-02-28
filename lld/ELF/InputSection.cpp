@@ -819,6 +819,11 @@ static void fillGlobalSizesSection(InputSection* IS, uint8_t* Buf, uint8_t* BufE
           warn("Could not find .global_size for " + verboseToString<ELFT>(Target));
         }
       }
+      if (ResolvedSize == 0 &&
+          (IS->getOutputSection()->Flags & SHF_WRITE) != 0) {
+        error("Unknown .global_sizes value for " + RealSymName +
+              " but section was not marked as writable");
+      }
       uint64_t Existing = read64<E>(Location);
       if (Existing != 0 && Existing != ResolvedSize) {
         // The value might not be zero if we are linking against a file built
