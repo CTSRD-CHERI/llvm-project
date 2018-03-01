@@ -5633,8 +5633,9 @@ public:
 
 static bool EvaluatePointer(const Expr* E, LValue& Result, EvalInfo &Info,
                             bool InvalidBaseOK) {
-  assert(E->isRValue() && (E->getType()->hasPointerRepresentation() ||
-        E->getType()->isCHERICapabilityType(Info.Ctx)));
+  assert(E->isRValue() &&
+         (E->getType()->hasPointerRepresentation() ||
+          E->getType()->isCHERICapabilityType(Info.Ctx, false)));
   return PointerExprEvaluator(Info, Result, InvalidBaseOK).Visit(E);
 }
 

@@ -1866,7 +1866,8 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
     Align = Target->getPointerAlign(0);
     break;
   case Type::BlockPointer:
-    if (Target->areAllPointersCapabilities() || T->isCHERICapabilityType(*this)) {
+    if (Target->areAllPointersCapabilities() ||
+        T->isCHERICapabilityType(*this, false)) {
       Width = Target->getCHERICapabilityWidth();
       Align = Target->getCHERICapabilityAlign();
     } else {
@@ -1879,7 +1880,7 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
   case Type::RValueReference:
     // alignof and sizeof should never enter this code path here, so we go
     // the pointer route.
-    if (T->isCHERICapabilityType(*this) ||
+    if (cast<ReferenceType>(T)->isCHERICapability() ||
         Target->areAllPointersCapabilities()) {
       Width = Target->getCHERICapabilityWidth();
       Align = Target->getCHERICapabilityAlign();
@@ -1900,7 +1901,8 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
       }
     }
 
-    if (T->isCHERICapabilityType(*this) || Target->areAllPointersCapabilities()) {
+    if (cast<PointerType>(T)->isCHERICapability() ||
+        Target->areAllPointersCapabilities()) {
       Width = Target->getCHERICapabilityWidth();
       Align = Target->getCHERICapabilityAlign();
     } else {

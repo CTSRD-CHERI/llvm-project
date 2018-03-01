@@ -424,7 +424,8 @@ bool Type::isStructureOrClassType() const {
   return false;
 }
 
-bool Type::isCHERICapabilityType(const ASTContext &Context) const {
+bool Type::isCHERICapabilityType(const ASTContext &Context,
+                                 bool IncludeIntCap) const {
   if (const PointerType *PT = getAs<PointerType>())
     return PT->isCHERICapability();
   else if (const ReferenceType *RT = getAs<ReferenceType>())
@@ -435,11 +436,11 @@ bool Type::isCHERICapabilityType(const ASTContext &Context) const {
     auto Kind = BT->getKind();
     if (Kind == BuiltinType::IntCap ||
         Kind == BuiltinType::UIntCap)
-      return true;
+      return IncludeIntCap;
     if (Kind == BuiltinType::ObjCId || Kind == BuiltinType::NullPtr)
       return Context.getTargetInfo().areAllPointersCapabilities();
   } else if (const AtomicType *AT = getAs<AtomicType>())
-    return AT->getValueType()->isCHERICapabilityType(Context);
+    return AT->getValueType()->isCHERICapabilityType(Context, IncludeIntCap);
   else if  (const MemberPointerType *MPT = getAs<MemberPointerType>())
     // XXXAR: Currently member function pointers contain capabities, but
     // pointers to member data don't
