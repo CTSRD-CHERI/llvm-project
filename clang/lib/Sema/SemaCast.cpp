@@ -2221,9 +2221,8 @@ static TryCastResult TryReinterpretCast(Sema &Self, ExprResult &SrcExpr,
                        diag::err_bad_reinterpret_cast_small_int;
       return TC_Failed;
     }
-    bool DestIsIntCap = DestType->isSpecificBuiltinType(BuiltinType::UIntCap)
-                        || DestType->isSpecificBuiltinType(BuiltinType::IntCap);
-    Kind = SrcIsCap && !DestIsIntCap ? CK_CHERICapabilityToAddress : CK_PointerToIntegral;
+    Kind = SrcIsCap && !DestType->isIntCapType() ? CK_CHERICapabilityToAddress
+                                                 : CK_PointerToIntegral;
     return TC_Success;
   }
 
@@ -2304,9 +2303,8 @@ static TryCastResult TryReinterpretCast(Sema &Self, ExprResult &SrcExpr,
                        diag::err_bad_reinterpret_cast_small_int;
       return TC_Failed;
     }
-    bool DestIsIntCap = DestType->isSpecificBuiltinType(BuiltinType::UIntCap)
-                        || DestType->isSpecificBuiltinType(BuiltinType::IntCap);
-    Kind = SrcIsCap && !DestIsIntCap ? CK_CHERICapabilityToAddress : CK_PointerToIntegral;
+    Kind = SrcIsCap && !DestType->isIntCapType() ? CK_CHERICapabilityToAddress
+                                                 : CK_PointerToIntegral;
     return TC_Success;
   }
 

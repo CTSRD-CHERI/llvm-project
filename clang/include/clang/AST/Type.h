@@ -1759,6 +1759,7 @@ public:
   bool isFunctionProtoType() const { return getAs<FunctionProtoType>(); }
   bool isPointerType() const;
   bool isCHERICapabilityType(const ASTContext &Context) const;
+  bool isIntCapType() const;       // __uintcap_t or __intcap_t
   bool isAnyPointerType() const;   // Any C pointer or ObjC object pointer
   bool isBlockPointerType() const;
   bool isVoidPointerType() const;
@@ -6266,6 +6267,13 @@ inline bool Type::isIntegralOrEnumerationType() const {
     return IsEnumDeclComplete(ET->getDecl());
 
   return false;  
+}
+
+inline bool Type::isIntCapType() const {
+  if (const BuiltinType *BT = dyn_cast<BuiltinType>(CanonicalType))
+    return BT->getKind() == BuiltinType::IntCap ||
+           BT->getKind() == BuiltinType::UIntCap;
+  return false;
 }
 
 inline bool Type::isBooleanType() const {

@@ -7759,9 +7759,8 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
       const Expr::NullPointerConstantKind RHSNullKind =
           RHS.get()->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNull);
       bool RHSIsNull = RHSNullKind != Expr::NPCK_NotNull;
-      bool IsIntCap = RHSType->isSpecificBuiltinType(BuiltinType::UIntCap) ||
-                      RHSType->isSpecificBuiltinType(BuiltinType::IntCap);
-      if (LHSPointer->isCHERICapability() && !RHSIsNull && !IsIntCap)
+      if (LHSPointer->isCHERICapability() && !RHSIsNull &&
+          !RHSType->isIntCapType())
         return Incompatible;
       Kind = CK_IntegralToPointer; // FIXME: null?
       return IntToPointer;
@@ -7906,9 +7905,8 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
       const Expr::NullPointerConstantKind RHSNullKind =
           RHS.get()->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNull);
       bool RHSIsNull = RHSNullKind != Expr::NPCK_NotNull;
-      bool IsIntCap = LHSType->isSpecificBuiltinType(BuiltinType::UIntCap) ||
-                      LHSType->isSpecificBuiltinType(BuiltinType::IntCap);
-      if (RHSPointer->isCHERICapability() && !RHSIsNull && !IsIntCap)
+      if (RHSPointer->isCHERICapability() && !RHSIsNull &&
+          !LHSType->isIntCapType())
         return Incompatible;
       Kind = CK_PointerToIntegral;
       return PointerToInt;
