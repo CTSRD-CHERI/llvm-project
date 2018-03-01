@@ -210,7 +210,8 @@ template <class ELFT> bool MIPS<ELFT>::isPicRel(RelType Type) const {
 }
 
 template <class ELFT> RelType MIPS<ELFT>::getDynRel(RelType Type) const {
-  return RelativeRel;
+  // TODO: are there any that need to change?
+  return Type;
 }
 
 template <class ELFT>
