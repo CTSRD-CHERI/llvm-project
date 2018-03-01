@@ -11210,6 +11210,20 @@ static void diagnoseAddressOfInvalidType(Sema &S, SourceLocation Loc,
   S.Diag(Loc, diag::err_typecheck_address_of) << Type << E->getSourceRange();
 }
 
+static ASTContext::PointerInterpretationKind
+pointerKindForBaseExpr(const ASTContext &Context, const Expr *Base) {
+  if (auto *mr = dyn_cast<MemberExpr>(Base))
+    return pointerKindForBaseExpr(Context, mr->getBase());
+  else if (auto *as = dyn_cast<ArraySubscriptExpr>(Base))
+    // We need IgnoreImpCasts() here to strip the ArrayToPointerDecay
+    return pointerKindForBaseExpr(Context, as->getBase()->IgnoreImpCasts());
+  // If the basetype is __uintcap_t we don't want to treat the result as a
+  // capability (such as in uintcap_t foo; return &foo;)
+  if (Base->getType()->isCHERICapabilityType(Context, /*IncludeIntCap=*/false))
+    return ASTContext::PIK_Capability;
+  return ASTContext::PIK_Default;
+}
+
 /// CheckAddressOfOperand - The operand of & must be either a function
 /// designator or an lvalue designating an object. If it is an lvalue, the
 /// object cannot be declared with storage class register or be a bit field.
@@ -11430,17 +11444,9 @@ QualType Sema::CheckAddressOfOperand(ExprResult &OrigOp, SourceLocation OpLoc) {
 
   CheckAddressOfPackedMember(op);
 
-  if (auto *mr = dyn_cast<MemberExpr>(op))
-    if (mr->getBase()->getType()->isCHERICapabilityType(Context))
-      return Context.getPointerType(op->getType(),
-          ASTContext::PIK_Capability);
-
-  if (auto *as = dyn_cast<ArraySubscriptExpr>(op))
-    if (as->getBase()->getType()->isCHERICapabilityType(Context))
-      return Context.getPointerType(op->getType(),
-          ASTContext::PIK_Capability);
-
-  return Context.getPointerType(op->getType());
+  ASTContext::PointerInterpretationKind PIK =
+      pointerKindForBaseExpr(Context, op);
+  return Context.getPointerType(op->getType(), PIK);
 }
 
 static void RecordModifiableNonNullParam(Sema &S, const Expr *Exp) {
