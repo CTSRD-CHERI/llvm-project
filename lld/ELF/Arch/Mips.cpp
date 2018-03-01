@@ -62,11 +62,13 @@ template <class ELFT> MIPS<ELFT>::MIPS() {
     TlsGotRel = R_MIPS_TLS_TPREL64;
     TlsModuleIndexRel = R_MIPS_TLS_DTPMOD64;
     TlsOffsetRel = R_MIPS_TLS_DTPREL64;
+    AbsPointerRel = R_MIPS_64;
   } else {
     RelativeRel = R_MIPS_REL32;
     TlsGotRel = R_MIPS_TLS_TPREL32;
     TlsModuleIndexRel = R_MIPS_TLS_DTPMOD32;
     TlsOffsetRel = R_MIPS_TLS_DTPREL32;
+    AbsPointerRel = Config->MipsN32Abi ? R_MIPS_64 : R_MIPS_32;
   }
   // Make the CheriABI start address more similar to the BFD output
   if (Config->OSABI == ELFOSABI_FREEBSD && Config->isCheriABI()) {

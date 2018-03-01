@@ -101,12 +101,12 @@
 // BFD has a useless NULL relocation herefirst
 // SHLIB-DAG:    {{(0x0 R_MIPS_NONE/R_MIPS_NONE/R_MIPS_NONE - 0x0$)?}}
 // The old compiler uses a different machine type so the relocations names are not parsed correctly
-// SHLIB-DAG:    [[CAP_RELOCS_ADDR]] [[CAP_RELOCATION_TYPE:(R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE)|(Unknown)]] - 0x0
-// SHLIB-DAG:    0x[[@EXPR hex(CAP_RELOCS_ADDR + 0x28)]] [[CAP_RELOCATION_TYPE]] - 0x0
-// SHLIB-DAG:    0x[[@EXPR hex(CAP_RELOCS_ADDR + 0x50)]] [[CAP_RELOCATION_TYPE]] - 0x0
-// SHLIB-DAG:    0x[[@EXPR hex(CAP_RELOCS_ADDR + 0x30)]] [[CAP_RELOCATION_TYPE]] buffer 0x0
-// SHLIB-DAG:    0x[[@EXPR hex(CAP_RELOCS_ADDR + 0x08)]] [[CAP_RELOCATION_TYPE]] x 0x0
-// SHLIB-DAG:    0x[[@EXPR hex(CAP_RELOCS_ADDR + 0x58)]] [[CAP_RELOCATION_TYPE]] __start 0x0
+// SHLIB-DAG:    [[CAP_RELOCS_ADDR]] [[RELATIVE_RELOCATION_TYPE:(R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE)|(Unknown)]] - 0x0
+// SHLIB-DAG:    0x[[@EXPR hex(CAP_RELOCS_ADDR + 0x28)]] [[RELATIVE_RELOCATION_TYPE]] - 0x0
+// SHLIB-DAG:    0x[[@EXPR hex(CAP_RELOCS_ADDR + 0x50)]] [[RELATIVE_RELOCATION_TYPE]] - 0x0
+// SHLIB-DAG:    0x[[@EXPR hex(CAP_RELOCS_ADDR + 0x30)]] [[ABS_RELOCATION_TYPE:(R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE)|(Unknown)]] buffer 0x0
+// SHLIB-DAG:    0x[[@EXPR hex(CAP_RELOCS_ADDR + 0x08)]] [[ABS_RELOCATION_TYPE]] x 0x0
+// SHLIB-DAG:    0x[[@EXPR hex(CAP_RELOCS_ADDR + 0x58)]] [[ABS_RELOCATION_TYPE]] __start 0x0
 // SHLIB-NEXT:  }
 // SHLIB-NEXT: ]
 

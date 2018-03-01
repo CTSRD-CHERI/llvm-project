@@ -16,7 +16,7 @@
 // SHLIB-RELOCS:      Relocations [
 // SHLIB-RELOCS-NEXT:  Section (7) .rel.dyn {
 // SHLIB-RELOCS-NEXT:    0x20000 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// SHLIB-RELOCS-NEXT:    0x20008 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE foo 0x0 (real addend unknown)
+// SHLIB-RELOCS-NEXT:    0x20008 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE foo 0x0 (real addend unknown)
 // SHLIB-RELOCS-NEXT:  }
 // SHLIB-RELOCS-NEXT:]
 // RUN: llvm-objdump -C -r -s -t -h %t.so | FileCheck %s -check-prefixes CHECK,%cheri_type

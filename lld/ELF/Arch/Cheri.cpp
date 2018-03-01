@@ -321,9 +321,9 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
     // will be zero unless we are targetting a string constant as these
     // don't have a symbol and will be like .rodata.str+0x1234
 
-    // TODO: this should not be relative but use R_MIPS_64 for an absolute value
-    // This happens to work for FreeBSD rtld  but is fragile
-    InX::RelaDyn->addReloc({elf::Target->RelativeRel, this, OffsetInOutSec,
+    RelType RelocKind = RelativeToLoadAddress ? elf::Target->RelativeRel
+                                              : *elf::Target->AbsPointerRel;
+    InX::RelaDyn->addReloc({RelocKind, this, OffsetInOutSec,
                             RelativeToLoadAddress, Target.Sym,
                             static_cast<int64_t>(Target.Offset)});
   }
