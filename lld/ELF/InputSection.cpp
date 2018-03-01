@@ -787,8 +787,10 @@ static void fillGlobalSizesSection(InputSection* IS, uint8_t* Buf, uint8_t* BufE
   std::lock_guard<std::mutex> Lock(Mu);
   const endianness E = ELFT::TargetEndianness;
 
+#ifdef DEBUG_CAP_RELOCS
   if (Config->VerboseCapRelocs)
     message("Write .global_sizes: IS = " + toString(IS));
+#endif
 
   foreachGlobalSizesSymbol<ELFT>(IS, [&](StringRef RealSymName, Symbol *Target,
                                         uint64_t Offset) {

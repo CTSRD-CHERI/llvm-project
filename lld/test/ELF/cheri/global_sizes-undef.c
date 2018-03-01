@@ -1,7 +1,6 @@
 // RUN: %cheri_purecap_cc1 -emit-obj %s -o %t.o
 // RUN: ld.lld -shared -o %t.so %t.o -verbose-cap-relocs 2>&1 | FileCheck %s -check-prefix LINKER-MSG
 // LINKER-MSG: warning: .global_sizes section contains unresolved values -> making writable because it references unresolved symbol errno
-// LINKER-MSG-NEXT: Write .global_sizes: IS = {{.+}}global_sizes-undef.c.tmp.o:(.global_sizes)
 // LINKER-MSG-NEXT: warning: Could not find .global_size for <undefined> (in GOT) errno
 // LINKER-MSG-NEXT: Writing size 0x0 for <undefined> (in GOT) errno
 
