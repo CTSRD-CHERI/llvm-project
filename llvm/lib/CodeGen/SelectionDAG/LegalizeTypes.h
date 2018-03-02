@@ -262,6 +262,7 @@ private:
   SDValue PromoteIntRes_MLOAD(MaskedLoadSDNode *N);
   SDValue PromoteIntRes_MGATHER(MaskedGatherSDNode *N);
   SDValue PromoteIntRes_Overflow(SDNode *N);
+  SDValue PromoteIntRes_PTRTOINT(SDNode *N);
   SDValue PromoteIntRes_SADDSUBO(SDNode *N, unsigned ResNo);
   SDValue PromoteIntRes_SELECT(SDNode *N);
   SDValue PromoteIntRes_VSELECT(SDNode *N);
