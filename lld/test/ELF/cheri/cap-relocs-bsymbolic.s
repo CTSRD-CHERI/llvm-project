@@ -27,9 +27,9 @@
 # RUN: llvm-readobj -r %t-mips.so | FileCheck %s -check-prefix MIPS-PREEMPTIBLE
 # MIPS-PREEMPTIBLE-LABEL: Relocations [
 # MIPS-PREEMPTIBLE-NEXT:    Section (7) .rel.dyn {
-# MIPS-PREEMPTIBLE-NEXT:      0x20000 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE foo 0x0 (real addend unknown)
-# MIPS-PREEMPTIBLE-NEXT:      0x20010 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE bar 0x0 (real addend unknown)
-# MIPS-PREEMPTIBLE-NEXT:      0x20020 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE baz 0x0 (real addend unknown)
+# MIPS-PREEMPTIBLE-NEXT:      0x20000 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE foo 0x0 (real addend unknown)
+# MIPS-PREEMPTIBLE-NEXT:      0x20010 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE bar 0x0 (real addend unknown)
+# MIPS-PREEMPTIBLE-NEXT:      0x20020 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE baz 0x0 (real addend unknown)
 # MIPS-PREEMPTIBLE-NEXT:    }
 # MIPS-PREEMPTIBLE-NEXT:  ]
 # RUN: llvm-objdump -section=.data -s %t-mips.so | FileCheck %s -check-prefix MIPS-PREEMPTIBLE-ADDEND

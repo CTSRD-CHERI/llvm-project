@@ -40,11 +40,11 @@
 
 # SHARED:       Relocations [
 # SHARED-FREEBSD-NEXT: Section (7) .rel.dyn {
-# SHARED-FREEBSD-NEXT:         0x10000 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE foo 0x0 (real addend unknown)
+# SHARED-FREEBSD-NEXT:         0x10000 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE foo 0x0 (real addend unknown)
 # SHARED-FREEBSD32-NEXT: Section (7) .rel.dyn {
-# SHARED-FREEBSD32-NEXT:       0x10000 R_MIPS_64 foo 0x0 (real addend unknown)
+# SHARED-FREEBSD32-NEXT:       0x10000 R_MIPS_REL32 foo 0x0 (real addend unknown)
 # SHARED-LINUX-NEXT:   Section (7) .rel.dyn {
-# SHARED-LINUX-NEXT:           0x10000 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE foo 0x0 (real addend unknown)
+# SHARED-LINUX-NEXT:           0x10000 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE foo 0x0 (real addend unknown)
 # SHARED-NEXT:         }
 # SHARED-NEXT: ]
 
