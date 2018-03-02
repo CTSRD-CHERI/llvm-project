@@ -75,3 +75,10 @@ void addrof_uintcap_t(__uintcap_t cap, struct as *__capability asc, struct as *a
   __intcap_t *__capability i2 = &asc->intcap; // no-diagnostics
   __intcap_t *__capability i3 = &asp->intcap; // expected-error{{converting non-capability type '__intcap_t *' to capability type '__intcap_t * __capability'}}
 }
+
+
+// This started crashing in CodeGen after recursively resolving memberexprs
+void a(void) {
+  void * __capability b;
+  void *__capability *__capability c = &b; // expected-error{{converting non-capability type 'void * __capability *' to capability type 'void * __capability * __capability' without an explicit cast}}
+}
