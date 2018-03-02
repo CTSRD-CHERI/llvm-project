@@ -297,10 +297,11 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
     // We only have the offset relative to the load address...
     // Ideally RTLD/crt_init_globals would just add the load address to all
     // cap_relocs entries that have a RELATIVE flag set instead of requiring a
-    // full Elf_Rel/Elf_Rela Can't use RealLocation here because that will
-    // usually refer to a local symbol
+    // full Elf_Rel/Elf_Rela
+    // The addend is zero here since it will be written in writeTo()
+    assert(!Config->IsRela);
     InX::RelaDyn->addReloc({elf::Target->RelativeRel, this, CurrentEntryOffset,
-                            true, nullptr, static_cast<int64_t>(Loc.Offset)});
+                            true, nullptr, 0});
   }
   if (TargetNeedsDynReloc) {
     // Capability target is the second field -> offset + 8
@@ -323,9 +324,9 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
 
     RelType RelocKind = RelativeToLoadAddress ? elf::Target->RelativeRel
                                               : *elf::Target->AbsPointerRel;
+    int64_t Addend = RelativeToLoadAddress ? Target.Offset : 0;
     InX::RelaDyn->addReloc({RelocKind, this, OffsetInOutSec,
-                            RelativeToLoadAddress, Target.Sym,
-                            static_cast<int64_t>(Target.Offset)});
+                            RelativeToLoadAddress, Target.Sym, Addend});
   }
 }
 
@@ -447,6 +448,10 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
       // If we have a relocation against a preemptible symbol (even in the
       // current DSO) we can't compute the virtual address here so we only write
       // the addend
+      if (Reloc.Target.Offset != 0)
+        error("Dyn Reloc Target offset was nonzero: " +
+              Twine(Reloc.Target.Offset) + " - " +
+              Reloc.Target.verboseToString<ELFT>());
       TargetVA = Reloc.Target.Offset;
     }
     uint64_t TargetOffset = Reloc.CapabilityOffset;
@@ -469,6 +474,9 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
     //     }
     Offset += RelocSize;
   }
+
+  // FIXME: this totally breaks dynamic relocs!!! need to do in finalize()
+
   // Sort the cap_relocs by target address for better cache and TLB locality
   // It also makes it much easier to read the llvm-objdump -C output since it
   // is sorted in a sensible order
