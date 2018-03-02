@@ -145,6 +145,7 @@ struct Configuration {
   bool ProcessCapRelocs = false;
   bool Relocatable;
   bool SaveTemps;
+  bool SortCapRelocs;
   bool SingleRoRx;
   bool Shared;
   bool Static = false;

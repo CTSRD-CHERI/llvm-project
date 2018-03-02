@@ -276,6 +276,10 @@ def shared: F<"shared">, HelpText<"Build a shared object">;
 
 defm soname: Eq<"soname">, HelpText<"Set DT_SONAME">;
 
+defm sort_cap_relocs: B<"sort-cap-relocs",
+    "Sort the __cap_relocs section by capability location",
+    "Do not sort the __cap_relocs section by capability location">, Flags<[HelpHidden]>;
+
 defm sort_section: Eq<"sort-section">,
   HelpText<"Specifies sections sorting rule when linkerscript is used">;
 

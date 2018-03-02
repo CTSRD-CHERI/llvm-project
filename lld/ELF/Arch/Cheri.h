@@ -102,6 +102,9 @@ private:
 
   llvm::MapVector<CheriCapRelocLocation, CheriCapReloc> RelocsMap;
   std::vector<InputSectionBase *> LegacyInputs;
+  // If we have dynamic relocations we can't sort the __cap_relocs section
+  // before writing it. TODO: actually we can but it will require refactoring
+  bool ContainsDynamicRelocations = false;
   // If this is true reduce number of warnings for compat
   bool containsLegacyCapRelocs() const { return !LegacyInputs.empty(); }
 };

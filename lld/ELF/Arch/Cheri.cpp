@@ -302,6 +302,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
     assert(!Config->IsRela);
     InX::RelaDyn->addReloc({elf::Target->RelativeRel, this, CurrentEntryOffset,
                             true, nullptr, 0});
+    ContainsDynamicRelocations = true;
   }
   if (TargetNeedsDynReloc) {
     // Capability target is the second field -> offset + 8
@@ -327,6 +328,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
     int64_t Addend = RelativeToLoadAddress ? Target.Offset : 0;
     InX::RelaDyn->addReloc({RelocKind, this, OffsetInOutSec,
                             RelativeToLoadAddress, Target.Sym, Addend});
+    ContainsDynamicRelocations = true;
   }
 }
 
@@ -480,11 +482,16 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
   // Sort the cap_relocs by target address for better cache and TLB locality
   // It also makes it much easier to read the llvm-objdump -C output since it
   // is sorted in a sensible order
-  std::stable_sort(reinterpret_cast<InMemoryCapRelocEntry<E>*>(Buf),
-            reinterpret_cast<InMemoryCapRelocEntry<E>*>(Buf + Offset),
-            [](const InMemoryCapRelocEntry<E>& a, const InMemoryCapRelocEntry<E>& b) {
-                return a.capability_location < b.capability_location;
-            });
+  // However, we can't do this if we added any dynamic relocations since it
+  // will mean the dynamic relocation offset refers to a different location
+  // FIXME: do the sorting in finalizeSection instead
+  if (Config->SortCapRelocs && !ContainsDynamicRelocations)
+    std::stable_sort(reinterpret_cast<InMemoryCapRelocEntry<E> *>(Buf),
+                     reinterpret_cast<InMemoryCapRelocEntry<E> *>(Buf + Offset),
+                     [](const InMemoryCapRelocEntry<E> &a,
+                        const InMemoryCapRelocEntry<E> &b) {
+                       return a.capability_location < b.capability_location;
+                     });
   assert(Offset == getSize() && "Not all data written?");
 }
 
