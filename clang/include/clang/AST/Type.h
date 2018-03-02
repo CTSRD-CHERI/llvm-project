@@ -1758,7 +1758,14 @@ public:
   bool isFunctionNoProtoType() const { return getAs<FunctionNoProtoType>(); }
   bool isFunctionProtoType() const { return getAs<FunctionProtoType>(); }
   bool isPointerType() const;
-  bool isCHERICapabilityType(const ASTContext &Context) const;
+  /// Return struct of this type is a CHERI capability type. If \p IncludeIntCap
+  /// is true this also includes __uintcap_t and __intcap_t, otherwise it will
+  /// return false for these types. This is useful for cases such as checking
+  /// the validity of casts where __uintcap_t is not handled the same way as
+  /// pointers.
+  bool isCHERICapabilityType(const ASTContext &Context,
+                             bool IncludeIntCap = true) const;
+  bool isIntCapType() const;       // __uintcap_t or __intcap_t
   bool isAnyPointerType() const;   // Any C pointer or ObjC object pointer
   bool isBlockPointerType() const;
   bool isVoidPointerType() const;
@@ -6266,6 +6273,13 @@ inline bool Type::isIntegralOrEnumerationType() const {
     return IsEnumDeclComplete(ET->getDecl());
 
   return false;  
+}
+
+inline bool Type::isIntCapType() const {
+  if (const BuiltinType *BT = dyn_cast<BuiltinType>(CanonicalType))
+    return BT->getKind() == BuiltinType::IntCap ||
+           BT->getKind() == BuiltinType::UIntCap;
+  return false;
 }
 
 inline bool Type::isBooleanType() const {

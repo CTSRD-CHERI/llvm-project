@@ -1054,8 +1054,7 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
 
     // Allow conversions from floating point types -> (u)intcap
     if (SrcType->isFloatingType()) {
-      assert((DstType->isSpecificBuiltinType(BuiltinType::UIntCap) ||
-             DstType->isSpecificBuiltinType(BuiltinType::IntCap)) &&
+      assert((DstType->isIntCapType()) &&
              "Float->cap conversions should only be possible with (u)intcap");
       unsigned BitWidth =
           CGF.getContext().getTargetInfo().getPointerRangeForCHERICapability();
@@ -1088,8 +1087,7 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
     if (!SrcType->isPointerType()) {
       // If this is not a pointer type in C, but is in LLVM IR, then it must be
       // a [u]intcap_t
-      assert(SrcType->isSpecificBuiltinType(BuiltinType::UIntCap) ||
-             SrcType->isSpecificBuiltinType(BuiltinType::IntCap));
+      assert(SrcType->isIntCapType());
       Src = CGF.getPointerOffset(Src);
       // Conversions from (u)intcap -> float should not be a bitcast:
       if (DstType->isFloatingType()) {

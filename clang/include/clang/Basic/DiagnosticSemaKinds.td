@@ -6061,7 +6061,7 @@ def err_cheri_offset_addr_invalid_source_type: Error<
 def err_cheri_offset_addr_invalid_target_type: Error<
   "invalid target type %0 for __cheri_%select{addr|offset}1: target must be an integer type">;
 def err_cheri_addr_ptr_type: Error<
-  "integral pointer type %0 is not a valid target type for __cheri_addr: "
+  "%select{integral pointer|capability}1 type %0 is not a valid target type for __cheri_addr: "
   "target must be an integer type">;
 def warn_cheri_offset_addr_smaller_target_type: Warning<
   "target type %0 is smaller than the type '%1' of the "
