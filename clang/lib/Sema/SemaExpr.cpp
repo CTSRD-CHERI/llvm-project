@@ -11211,12 +11211,21 @@ static void diagnoseAddressOfInvalidType(Sema &S, SourceLocation Loc,
 }
 
 static ASTContext::PointerInterpretationKind
-pointerKindForBaseExpr(const ASTContext &Context, const Expr *Base) {
+pointerKindForBaseExpr(const ASTContext &Context, const Expr *Base, bool WasMemberExpr = false) {
   if (auto *mr = dyn_cast<MemberExpr>(Base))
-    return pointerKindForBaseExpr(Context, mr->getBase());
+    return pointerKindForBaseExpr(Context, mr->getBase(), true);
   else if (auto *as = dyn_cast<ArraySubscriptExpr>(Base))
     // We need IgnoreImpCasts() here to strip the ArrayToPointerDecay
-    return pointerKindForBaseExpr(Context, as->getBase()->IgnoreImpCasts());
+    return pointerKindForBaseExpr(Context, as->getBase()->IgnoreImpCasts(), true);
+
+  // If we are just taking the address of something that happens to be a
+  // capability we should not infer that the result is a capability. This only
+  // applies if there is a least one level of MemberExpr/ArraySubscriptExpr
+  // For example the following should be an error in the hybrid ABI:
+  // void * __capability b;
+  // void *__capability *__capability c = &b;
+  if (!WasMemberExpr)
+    return ASTContext::PIK_Default;
   // If the basetype is __uintcap_t we don't want to treat the result as a
   // capability (such as in uintcap_t foo; return &foo;)
   if (Base->getType()->isCHERICapabilityType(Context, /*IncludeIntCap=*/false))
