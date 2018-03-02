@@ -140,6 +140,8 @@ void DAGTypeLegalizer::PromoteIntegerResult(SDNode *N, unsigned ResNo) {
   case ISD::ADDCARRY:
   case ISD::SUBCARRY:    Res = PromoteIntRes_ADDSUBCARRY(N, ResNo); break;
 
+  case ISD::PTRTOINT:     Res = PromoteIntRes_PTRTOINT(N); break;
+
   case ISD::ATOMIC_LOAD:
     Res = PromoteIntRes_Atomic0(cast<AtomicSDNode>(N)); break;
 
@@ -245,6 +247,14 @@ SDValue DAGTypeLegalizer::PromoteIntRes_AtomicCmpSwap(AtomicSDNode *N,
   for (unsigned i = 1, NumResults = N->getNumValues(); i < NumResults; ++i)
     ReplaceValueWith(SDValue(N, i), Res.getValue(i));
   return Res;
+}
+
+SDValue DAGTypeLegalizer::PromoteIntRes_PTRTOINT(SDNode *N) {
+  SDValue InOp = N->getOperand(0);
+  EVT OutVT = N->getValueType(0);
+  EVT NOutVT = TLI.getTypeToTransformTo(*DAG.getContext(), OutVT);
+  SDLoc dl(N);
+  return DAG.getNode(ISD::PTRTOINT, dl, NOutVT, InOp);
 }
 
 SDValue DAGTypeLegalizer::PromoteIntRes_BITCAST(SDNode *N) {
