@@ -70,6 +70,10 @@ ELF_RELOC(R_MIPS_PCLO16,             65)
 // would just add the load address. Furthermore for CheriABI we really don't want a GOT but still want to be able
 // to write absolute 64-bit values
 ELF_RELOC(R_MIPS_CHERI_ABSPTR,       70)
+// A dynamic relocation that writes the st_size of a symbol (currently used to
+// support __cap_relocs and .global_sizes against unresolved symbols)
+ELF_RELOC(R_MIPS_CHERI_SIZE,         71)
+
 
 // RTLD should set the following to a capability pointing to symbol. This can be
 // preemptible and if not we can optimize it to a
