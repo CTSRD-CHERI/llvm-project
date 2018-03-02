@@ -2311,11 +2311,6 @@ SDValue MipsTargetLowering::lowerBlockAddress(SDValue Op,
     return Subtarget.hasSym32() ? getAddrNonPIC(N, SDLoc(N), Ty, DAG)
                                 : getAddrNonPICSym64(N, SDLoc(N), Ty, DAG);
 
-  if (LargeGOT)
-    return getAddrGlobalLargeGOT(N, SDLoc(N), Ty, DAG, MipsII::MO_GOT_HI16,
-                                 MipsII::MO_GOT_LO16, DAG.getEntryNode(),
-                                 MachinePointerInfo::getGOT(DAG.getMachineFunction()));
-
   return getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64());
 }
 
