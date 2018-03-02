@@ -1626,15 +1626,6 @@ bool CastExpr::CastConsistency() const {
     assert(!getType()->isBooleanType() && "unheralded conversion to bool");
     goto CheckNoBasePath;
 
-  case CK_NoOp:
-    if (getType().getCanonicalType() != getSubExpr()->getRealReferenceType().getCanonicalType()) {
-      llvm::errs() << "CK_NoOp cast was not a noop:\n";
-      getType().getCanonicalType().dump();
-      getSubExpr()->getRealReferenceType().getCanonicalType().dump();
-      llvm_unreachable("NoOp Cast was not a noop");
-    };
-    goto CheckNoBasePath;
-
   case CK_CHERICapabilityToOffset:
   case CK_CHERICapabilityToAddress: {
     QualType SubType = getSubExpr()->getRealReferenceType();
@@ -1650,6 +1641,7 @@ bool CastExpr::CastConsistency() const {
 
   case CK_Dependent:
   case CK_LValueToRValue:
+  case CK_NoOp:
   case CK_AtomicToNonAtomic:
   case CK_NonAtomicToAtomic:
   case CK_PointerToBoolean:
