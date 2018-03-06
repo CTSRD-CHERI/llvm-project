@@ -16,12 +16,21 @@ const void* foo3 = (void*)(__intcap_t)(const void*)&i;
 const void* foo4 = (void*)(long)&i;
 #endif
 
+// Check that constant initialization works even for binary operations
+const __uintcap_t thinFlag = 1;
+const __uintcap_t reservedFlag = 2;
+const __uintcap_t flags = thinFlag | reservedFlag;
+
 // CHECK: @i = common global i32 0, align 4
 // CHECK: @foo = global i8* bitcast (i32* @i to i8*), align 8
 // CHECK: @foo1 = global i8* bitcast (i32* @i to i8*), align 8
 // CHECK: @foo2 = global i8* bitcast (i32* @i to i8*), align 8
 // CHECK: @foo3 = global i8* bitcast (i32* @i to i8*), align 8
 // CHECK: @foo4 = global i8* bitcast (i32* @i to i8*), align 8
+
+// CHECK: @thinFlag = constant i8 addrspace(200)* inttoptr (i64 1 to i8 addrspace(200)*), align [[$CAP_SIZE]]
+// CHECK: @reservedFlag = constant i8 addrspace(200)* inttoptr (i64 2 to i8 addrspace(200)*), align [[$CAP_SIZE]]
+// CHECK: @flags = constant i8 addrspace(200)* inttoptr (i64 3 to i8 addrspace(200)*), align [[$CAP_SIZE]]
 
 // PURECAP: @i = common addrspace(200) global i32 0, align 4
 // PURECAP: @foo  = addrspace(200) global i8 addrspace(200)* bitcast (i32 addrspace(200)* @i to i8 addrspace(200)*), align [[$CAP_SIZE]]

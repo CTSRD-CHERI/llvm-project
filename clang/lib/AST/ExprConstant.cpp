@@ -4861,14 +4861,24 @@ public:
       return StmtVisitorTy::Visit(E->getSubExpr());
 
     case CK_LValueToRValue: {
+      const Expr *SubExpr = E->getSubExpr();
       LValue LVal;
-      if (!EvaluateLValue(E->getSubExpr(), LVal, Info))
+      if (!EvaluateLValue(SubExpr, LVal, Info))
         return false;
       APValue RVal;
       // Note, we use the subexpression's type in order to retain cv-qualifiers.
-      if (!handleLValueToRValueConversion(Info, E, E->getSubExpr()->getType(),
+      if (!handleLValueToRValueConversion(Info, E, SubExpr->getType(),
                                           LVal, RVal))
         return false;
+
+      // CHERI: If the LValue is a capability with an integer initializer, then
+      //        extract the int value.
+      if (SubExpr->getType()->isCHERICapabilityType(Info.Ctx)) {
+        APSInt IntValue;
+        if (!SubExpr->EvaluateAsInt(IntValue, Info.Ctx))
+          return false;
+        RVal = APValue(IntValue);
+      }
       return DerivedSuccess(RVal, E);
     }
     }
