@@ -4873,7 +4873,7 @@ public:
 
       // CHERI: If the LValue is a capability with an integer initializer, then
       //        extract the int value.
-      if (SubExpr->getType()->isCHERICapabilityType(Info.Ctx)) {
+      if (SubExpr->getType()->isIntCapType()) {
         APSInt IntValue;
         if (!SubExpr->EvaluateAsInt(IntValue, Info.Ctx))
           return false;
@@ -9106,7 +9106,7 @@ bool IntExprEvaluator::VisitCastExpr(const CastExpr *E) {
         return Info.Ctx.getTypeSize(DestType) <= Info.Ctx.getTypeSize(SrcType);
       // CHERI: If we are doing an integer cast from a capability, then extract
       // the int value
-      if (SrcType->isCHERICapabilityType(Info.Ctx)) {
+      if (SrcType->isIntCapType()) {
         APSInt IntValue;
         if (!SubExpr->EvaluateAsInt(IntValue, Info.Ctx))
           return false;
