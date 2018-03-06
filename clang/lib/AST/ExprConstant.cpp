@@ -4877,6 +4877,7 @@ public:
         APSInt IntValue;
         if (!SubExpr->EvaluateAsInt(IntValue, Info.Ctx))
           return false;
+        IntValue.setIsUnsigned(SubExpr->getType()->isUnsignedIntegerOrEnumerationType());
         RVal = APValue(IntValue);
       }
       return DerivedSuccess(RVal, E);
@@ -9109,6 +9110,7 @@ bool IntExprEvaluator::VisitCastExpr(const CastExpr *E) {
         APSInt IntValue;
         if (!SubExpr->EvaluateAsInt(IntValue, Info.Ctx))
           return false;
+        IntValue.setIsUnsigned(SrcType->isUnsignedIntegerOrEnumerationType());
         Result = APValue(IntValue);
       } else
         // Only allow casts of lvalues if they are lossless.
