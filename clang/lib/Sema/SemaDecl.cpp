@@ -8775,7 +8775,7 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     WrappedFD->addAttr(Attr->clone(Context));
     Attr->setSuffix(Context, "");
     // Make the new prototype visible.
-    TU->addDecl(WrappedFD);
+    NewFD->getLexicalDeclContext()->addDecl(WrappedFD);
     S->AddDecl(WrappedFD);
     IdResolver.AddDecl(WrappedFD);
   }
