@@ -16,15 +16,17 @@ typedef void (*voidfn_ptr)(void);
 typedef void (*__capability voidfn_cap)(void);
 
 void addrof(void) {
-    // capability from taking address of global in hybrid mode is an error:
-    int* __capability intcap = &global_int; // expected-error {{converting non-capability type 'int *' to capability type 'int * __capability' without an explicit cast}}
-    void* __capability vcap = &global_int; // expected-error  {{converting non-capability type 'int *' to capability type 'void * __capability' without an explicit cast}}
-    // but fine for pointers
-    int* intptr = &global_int; // okay
-    void* vptr = &global_int; // okay
+    // capability from taking address of global in hybrid mode is allowed
+    int* __capability intcap = &global_int;
+    void* __capability vcap = &global_int;
+    // and fine for pointers
+    int* intptr = &global_int;
+    void* vptr = &global_int;
     struct test_struct s;
-    s.ptr = &global_int; // okay
-    s.cap = &global_int; // expected-error  {{converting non-capability type 'int *' to capability type 'int * __capability' without an explicit cast; if this is intended use __cheri_tocap}}
+    s.ptr = &global_int;
+    s.cap = &global_int;
+    // unrelated types give an error
+    float* __capability fcap = &global_int; // expected-error {{cannot implicitly or explicitly convert non-capability  type 'int *' to unrelated capability type 'float * __capability'}}
 
     // but assigning function pointers always works
     voidfn_ptr fnptr = addrof;

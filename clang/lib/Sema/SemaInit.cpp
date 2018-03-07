@@ -7856,14 +7856,31 @@ bool InitializationSequence::Diagnose(Sema &S,
   }
   case FK_ConversionFailed: {
     QualType FromType = Args[0]->getType();
-    PartialDiagnostic PDiag = S.PDiag(diag::err_init_conversion_failed)
-      << (int)Entity.getKind()
-      << DestType
-      << Args[0]->isLValue()
-      << FromType
-      << Args[0]->getSourceRange();
-    S.HandleFunctionTypeMismatch(PDiag, FromType, DestType);
-    S.Diag(Kind.getLocation(), PDiag);
+
+    // CHERI: in the case of initializing a capability with an address-of expressions,
+    // output error message here if the types are not compatible, so that we
+    // get the same error message for both C and C++.
+    Expr *SrcExpr = Args[0];
+    if (FromType->isPointerType()
+        && !FromType->isCHERICapabilityType(S.Context, false)
+        && DestType->isCHERICapabilityType(S.Context, false)) {
+      if (UnaryOperator *UnOp = dyn_cast<UnaryOperator>(SrcExpr)) {
+        if (UnOp->getOpcode() == UO_AddrOf) {
+          S.Diag(SrcExpr->getExprLoc(), diag::err_typecheck_convert_ptr_to_cap_unrelated_type)
+            << FromType << DestType << false;
+          return true;
+        }
+      }
+    } else {
+      PartialDiagnostic PDiag = S.PDiag(diag::err_init_conversion_failed)
+        << (int)Entity.getKind()
+        << DestType
+        << Args[0]->isLValue()
+        << FromType
+        << Args[0]->getSourceRange();
+      S.HandleFunctionTypeMismatch(PDiag, FromType, DestType);
+      S.Diag(Kind.getLocation(), PDiag);
+    }
     emitBadConversionNotes(S, Entity, Args[0]);
     break;
   }

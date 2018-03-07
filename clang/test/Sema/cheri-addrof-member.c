@@ -59,26 +59,30 @@ void nested_arraycap_access(struct as *__capability asc) {
 
 void deref_member_ptr(struct as *__capability asc) {
   // But If the chain includes a pointer -> operator the inferring should stop there
-  int *__capability i = &asc->structptr->value;                 // expected-error {{converting non-capability type 'int *' to capability type 'int * __capability' without an explicit cast}}
-  int *__capability i2 = &asc->structptr->structmember.member1; // expected-error {{converting non-capability type 'int *' to capability type 'int * __capability' without an explicit cast}}
+  int *__capability i = &asc->structptr->value;
+  int *__capability i2 = &asc->structptr->structmember.member1;
 }
 
 void nested_arrayptr_access(struct as *__capability asc) {
   // And the same for the [] operator
-  int *__capability i = &asc->structptrarray[0]->value;     // expected-error {{converting non-capability type 'int *' to capability type 'int * __capability' without an explicit cast}}
-  char *__capability i2 = &asc->structptrarray[0]->name[0]; // expected-error {{converting non-capability type 'char *' to capability type 'char * __capability' without an explicit cast}}
+  int *__capability i = &asc->structptrarray[0]->value;
+  char *__capability i2 = &asc->structptrarray[0]->name[0];
 }
 
 void addrof_uintcap_t(__uintcap_t cap, struct as *__capability asc, struct as *asp) {
   // Also taking the address of a uintcap_t should not be a capability!
-  __uintcap_t *__capability i = &cap;         // expected-error{{converting non-capability type '__uintcap_t *' to capability type '__uintcap_t * __capability'}}
+  __uintcap_t *__capability i = &cap;
   __intcap_t *__capability i2 = &asc->intcap; // no-diagnostics
-  __intcap_t *__capability i3 = &asp->intcap; // expected-error{{converting non-capability type '__intcap_t *' to capability type '__intcap_t * __capability'}}
+  __intcap_t *__capability i3 = &asp->intcap;
 }
 
+void different_types(int i) {
+  float * __capability f = &i; // expected-error {{cannot implicitly or explicitly convert non-capability  type 'int *' to unrelated capability type 'float * __capability'}}
+  void * __capability v = &i; // okay
+}
 
 // This started crashing in CodeGen after recursively resolving memberexprs
 void a(void) {
   void * __capability b;
-  void *__capability *__capability c = &b; // expected-error{{converting non-capability type 'void * __capability *' to capability type 'void * __capability * __capability' without an explicit cast}}
+  void *__capability *__capability c = &b;
 }

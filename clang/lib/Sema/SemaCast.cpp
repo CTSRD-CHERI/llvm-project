@@ -2942,35 +2942,10 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc,
   //     return hasSameType(LHS, RHS);
   //  return !mergeTypes(LHS, RHS, false, CompareUnqualified).isNull();
 
-  // XXXAR: I had to modify mergeTypes() to add a IncludeCapabilityQualifier
-  // flag because here we want to compare everything but the __capability
-  // qualifier
-  // XXXKG: I also extended mergeTypes() with a MergeVoidPtr flag to allow the
-  // <-> void* case (and still get the checking of qualifiers).
-  QualType MergedTy = Context.mergeTypes(
-      SrcTy, DestTy, /*OfBlockPointer=*/false, /*Unqualified=*/false,
-      /*BlockReturnType=*/false, /*IncludeCapabilityQualifier=*/false,
-      /*MergeVoidPtr=*/false);
-  if (MergedTy.isNull()) {
-    // As a special case we allow changing the types if either source or dest is
-    // a pointer to void:
-    MergedTy = Context.mergeTypes(
-        SrcTy, DestTy, /*OfBlockPointer=*/false, /*Unqualified=*/false,
-        /*BlockReturnType=*/false, /*IncludeCapabilityQualifier=*/false,
-        /*MergeVoidPtr=*/true);
-    if (!MergedTy.isNull()) {
-      // Insert a CK_BitCast to ensure we don't crash during codegen (see
-      // https://github.com/CTSRD-CHERI/clang/issues/178)
-      QualType BitCastTy = Context.getPointerType(
-          DestTy->getAs<PointerType>()->getPointeeType(),
-          SrcIsCap ? ASTContext::PIK_Capability : ASTContext::PIK_Integer);
-      SubExpr = ImplicitCastExpr::Create(Context, BitCastTy, CK_BitCast,
-                                         SubExpr, nullptr, VK_RValue);
-    } else {
-      Diag(SubExpr->getLocStart(), diag::err_cheri_to_from_cap_unrelated_type)
-          << IsToCap << SrcTy << DestTy;
-      return ExprError();
-    }
+  if (!CheckCHERIAssignCompatible(DestTy, SrcTy, SubExpr)) {
+    Diag(SubExpr->getLocStart(), diag::err_cheri_to_from_cap_unrelated_type)
+         << IsToCap << SrcTy << DestTy;
+    return ExprError();
   }
 
   // Warn about no-op cheri casts.
@@ -2983,6 +2958,51 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc,
 
   return CStyleCastExpr::Create(Context, DestTy, VK_RValue, Kind, SubExpr,
                                 nullptr, TSInfo, LParenLoc, RParenLoc);
+}
+
+// Check if LHS and RHS are assign compatibile for CHERI (ignoring capability
+// qualifiers). Insert an implicit bitcast if necessary (when InsertBitCast is
+// true - the default) and update RHSExpr to point to it.
+//
+// Two types LHS and RHS are assign compatible (ignoring capability qualifiers) if:
+// - LHS == RHS
+// - either of LHS or RHS is void*
+//
+// In the case of LHS being void*, an implicit bitcast from RHSExpr to void*
+// will be inserted and RHSExpr updated to point to this ImplicitCastExpr.
+bool Sema::CheckCHERIAssignCompatible(QualType LHS, QualType RHS, Expr *&RHSExpr, bool InsertBitCast) {
+  // XXXAR: I had to modify mergeTypes() to add a IncludeCapabilityQualifier
+  // flag because here we want to compare everything but the __capability
+  // qualifier
+  // XXXKG: I also extended mergeTypes() with a MergeVoidPtr flag to allow the
+  // <-> void* case (and still get the checking of qualifiers).
+  QualType MergedTy = Context.mergeTypes(
+      RHS, LHS, /*OfBlockPointer=*/false, /*Unqualified=*/false,
+      /*BlockReturnType=*/false, /*IncludeCapabilityQualifier=*/false,
+      /*MergeVoidPtr=*/false);
+  if (MergedTy.isNull()) {
+    // As a special case we allow changing the types if either source or dest is
+    // a pointer to void:
+    MergedTy = Context.mergeTypes(
+        RHS, LHS, /*OfBlockPointer=*/false, /*Unqualified=*/false,
+        /*BlockReturnType=*/false, /*IncludeCapabilityQualifier=*/false,
+        /*MergeVoidPtr=*/true);
+    if (!MergedTy.isNull()) {
+      if (InsertBitCast) {
+        // Insert a CK_BitCast to ensure we don't crash during codegen (see
+        // https://github.com/CTSRD-CHERI/clang/issues/178)
+        bool RHSIsCap = RHS->isCHERICapabilityType(Context, false);
+        QualType BitCastTy = Context.getPointerType(
+            LHS->getAs<PointerType>()->getPointeeType(),
+            RHSIsCap ? ASTContext::PIK_Capability : ASTContext::PIK_Integer);
+        RHSExpr = ImplicitCastExpr::Create(Context, BitCastTy, CK_BitCast,
+                                           RHSExpr, nullptr, VK_RValue);
+      }
+      return true;
+    }
+    return false;
+  }
+  return true;
 }
 
 ExprResult Sema::BuildCheriOffsetOrAddress(SourceLocation LParenLoc,

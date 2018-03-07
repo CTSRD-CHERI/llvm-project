@@ -8237,6 +8237,9 @@ public:
                             SourceLocation CheriPtrKeywordLoc, ParsedType Type,
                             SourceLocation RParenLoc, Expr *SubExpr);
 
+  bool CheckCHERIAssignCompatible(QualType LHS, QualType RHS, Expr *&RHSExpr,
+                                  bool InsertBitCast = true);
+
   void CheckTollFreeBridgeCast(QualType castType, Expr *castExpr);
 
   void CheckObjCBridgeRelatedCast(QualType castType, Expr *castExpr);

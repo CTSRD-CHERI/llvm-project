@@ -13614,6 +13614,15 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
     }
 
     bool PtrToCap = ConvTy == PointerToCHERICapability;
+
+    // conversion from addr-of expression to capability is fine
+    if (UnaryOperator *UnOp = dyn_cast<UnaryOperator>(
+                                SrcExpr->IgnoreParens()->IgnoreImpCasts()
+                              )) {
+      if (PtrToCap && UnOp->getOpcode() == UO_AddrOf)
+        return false;
+    }
+
     DiagKind = PtrToCap ? diag::err_typecheck_convert_ptr_to_cap
                         : diag::err_typecheck_convert_cap_to_ptr;
     MayHaveConvFixit = true;
@@ -13630,6 +13639,21 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
       if (Complained)
         *Complained = true;
       return true;
+    }
+
+    // CHERI: in the case of implicit conversion of address-of expressions to capabilities,
+    // output error message here if the types are not compatible, so that we
+    // get the same error message for both C and C++.
+    if (SrcType->isPointerType()
+        && !SrcType->isCHERICapabilityType(Context, false)
+        && DstType->isCHERICapabilityType(Context, false)) {
+      if (UnaryOperator *UnOp = dyn_cast<UnaryOperator>(SrcExpr)) {
+        if (UnOp->getOpcode() == UO_AddrOf) {
+          Diag(SrcExpr->getExprLoc(), diag::err_typecheck_convert_ptr_to_cap_unrelated_type)
+            << SrcType << DstType << false;
+          return true;
+        }
+      }
     }
 
     DiagKind = diag::err_typecheck_convert_incompatible;

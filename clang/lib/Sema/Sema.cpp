@@ -531,15 +531,28 @@ ExprResult Sema::ImpCastExprToType(Expr *E, QualType Ty,
   }
 
   // Disallow implicit casts from pointers to CHERI capabilities, 
-  // except if the pointer is a string or null literal.
+  // except if the pointer is a string or null literal, or an
+  // address-of (&) expression and the types are compatible.
+  // XXXKG: I'm not sure if we should allow this implicit behaviour with
+  // functions?
   if (const PointerType *EPTy = dyn_cast<PointerType>(ExprTy)) {
     if (const PointerType *TPTy = dyn_cast<PointerType>(TypeTy)) {
       if (!EPTy->isCHERICapability() && TPTy->isCHERICapability()) {
         bool StrLit = dyn_cast<StringLiteral>(E->IgnoreImpCasts()) != nullptr;
         bool NullLit = false;
+        bool AddrOf = false;
         if (IntegerLiteral* Int = dyn_cast<IntegerLiteral>(E->IgnoreParenCasts()))
           NullLit = Int->getValue().isNullValue();
-        if (!StrLit && !NullLit) {
+        if (UnaryOperator *UnOp = dyn_cast<UnaryOperator>(E)) {
+          // XXXKG: don't allow implicit behaviour for function pointer types
+          if (UnOp->getOpcode() == UO_AddrOf && !EPTy->isFunctionPointerType()) {
+            AddrOf = CheckCHERIAssignCompatible(TypeTy, ExprTy, E);
+            if (!AddrOf)
+              return ExprError(Diag(E->getExprLoc(), diag::err_typecheck_convert_ptr_to_cap_unrelated_type)
+                << ExprTy << TypeTy << false);
+          }
+        }
+        if (!StrLit && !NullLit && !AddrOf) {
           return ExprError(Diag(E->getExprLoc(), diag::err_typecheck_convert_ptr_to_cap)
             << ExprTy << TypeTy << false
             << FixItHint::CreateInsertion(E->getExprLoc(), "(__cheri_tocap " +

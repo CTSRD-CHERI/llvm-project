@@ -1843,14 +1843,27 @@ static bool IsStandardConversion(Sema &S, Expr* From, QualType ToType,
                                          ObjCLifetimeConversion)) {
     SCS.Third = ICK_Qualification;
     SCS.QualificationIncludesObjCLifetime = ObjCLifetimeConversion;
-    // This may change the __capability qualifier so we need to diagnose it later
+    // Check for CHERI type conversion
     if (ToType->isCHERICapabilityType(S.getASTContext()) !=
         FromType->isCHERICapabilityType(S.getASTContext())) {
-      // only allow implicit conversions from string literals
+      // Allow implicit pointer to capability conversions from null and string literals,
+      // and address-of (&) expressions if types are compatible. Only allow implicit
+      // conversion of address-of expressions when not doing overload resolution.
       // XXXAR: should we allow any array type?
-      if (!isa<StringLiteral>(From->IgnoreParens())) {
-        SCS.setInvalidCHERIConversion(true);
+      bool StrLit = isa<StringLiteral>(From->IgnoreParens());
+      bool NullLit = false;
+      bool AddrOf = false;
+      if (IntegerLiteral* Int = dyn_cast<IntegerLiteral>(From->IgnoreParenCasts()))
+        NullLit = Int->getValue().isNullValue();
+      if (!InOverloadResolution) {
+        // XXXKG: don't allow implicit behaviour for function pointer types
+        if (UnaryOperator *UnOp = dyn_cast<UnaryOperator>(From)) {
+          if (UnOp->getOpcode() == UO_AddrOf && !FromType->isFunctionPointerType()) {
+            AddrOf = S.CheckCHERIAssignCompatible(ToType, FromType, From, false);
+          }
+        }
       }
+      SCS.setInvalidCHERIConversion(!NullLit && !StrLit && !AddrOf);
     }
     FromType = ToType;
   } else {

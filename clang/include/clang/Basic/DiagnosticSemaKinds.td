@@ -6008,6 +6008,9 @@ def err_typecheck_convert_cap_to_ptr: Error<"converting capability"
 def err_typecheck_convert_ptr_to_cap: Error<"converting non-capability"
   "%select{| reference to}2 type %0 to capability type %1 without "
   "an explicit cast; if this is intended use __cheri_tocap">;
+def err_typecheck_convert_ptr_to_cap_unrelated_type: Error<"cannot implicitly "
+  "or explicitly convert non-capability %select{| reference to}2 type %0 to "
+  "unrelated capability type %1">;
 
 def warn_mixed_capability_binop : Warning<
   "binary expression on capability and non-capability types: %0 and %1.  "
