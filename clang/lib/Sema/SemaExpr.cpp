@@ -7750,7 +7750,7 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
                                                  PointerToCHERICapability;
       } else {
         Kind = CK_BitCast;
-        if (RHSPointer->isCHERICapability() &&
+        if (RHSPointer->isCHERICapability() && isa<PointerType>(OrigRHSType) &&
             RHSPointer->getPointeeType()->isVoidType())
           if (auto *TT = dyn_cast<TypedefType>(
                 cast<PointerType>(OrigRHSType)->getPointeeType())) {
