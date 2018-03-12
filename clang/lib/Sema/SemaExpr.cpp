@@ -7601,6 +7601,7 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
                                  CastKind &Kind, bool ConvertRHS) {
   QualType RHSType = RHS.get()->getType();
   QualType OrigLHSType = LHSType;
+  QualType OrigRHSType = RHSType;
 
   // Get canonical types.  We're not formatting these types, just comparing
   // them.
@@ -7749,6 +7750,17 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
                                                  PointerToCHERICapability;
       } else {
         Kind = CK_BitCast;
+        if (RHSPointer->isCHERICapability() &&
+            RHSPointer->getPointeeType()->isVoidType())
+          if (auto *TT = dyn_cast<TypedefType>(
+                cast<PointerType>(OrigRHSType)->getPointeeType())) {
+            unsigned FromAlign = Context.getTypeAlignInChars(TT).getQuantity();
+            unsigned ToAlign =
+              Context.getTypeAlignInChars(LHSType).getQuantity();
+            if ((FromAlign > 1) && (ToAlign > FromAlign))
+              Diag(RHS.get()->getExprLoc(), diag::err_cheri_ptr_align) <<
+                OrigRHSType << LHSType << FromAlign << ToAlign;
+          }
       }
       return checkPointerTypesForAssignment(*this, LHSType, RHSType);
     }
