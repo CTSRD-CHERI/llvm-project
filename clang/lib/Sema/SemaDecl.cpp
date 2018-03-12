@@ -5814,6 +5814,9 @@ Sema::ActOnTypedefNameDecl(Scope *S, DeclContext *DC, TypedefNameDecl *NewTD,
         Context.setucontext_tDecl(NewTD);
     }
 
+  if (isa<TypedefDecl>(NewTD) && NewTD->hasAttrs())
+    CheckAlignasUnderalignment(NewTD);
+
   return NewTD;
 }
 

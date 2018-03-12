@@ -6039,6 +6039,9 @@ def warn_capability_integer_cast : Warning<
   // XXXAR: this is currently too noisy when building CHERIBSD, have if off for now
   // InGroup<CHERICapabilityToIntegerCast>;
   InGroup<CHERICapabilityToIntegerCast>, DefaultIgnore;
+def warn_cheri_underalign : Warning<
+  "alignment (%0) of %1 is less than the required capability alignment (%2)">,
+  InGroup<CHERICaps>;
 def warn_capability_pointer_cast : Warning<
   "cast from capability type %0 to non-capability type %1 is most likely an "
    "error; use __cheri_fromcap to convert between pointers and capabilities">,

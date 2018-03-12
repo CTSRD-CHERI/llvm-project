@@ -3730,9 +3730,11 @@ void Sema::CheckAlignasUnderalignment(Decl *D) {
   assert(D->hasAttrs() && "no attributes on decl");
 
   QualType UnderlyingTy, DiagTy;
-  if (const auto *VD = dyn_cast<ValueDecl>(D)) {
+  if (const auto *VD = dyn_cast<ValueDecl>(D))
     UnderlyingTy = DiagTy = VD->getType();
-  } else {
+  else if (const auto *TD = dyn_cast<TypedefDecl>(D))
+    UnderlyingTy = DiagTy = Context.getTypeDeclType(TD);
+  else {
     UnderlyingTy = DiagTy = Context.getTagDeclType(cast<TagDecl>(D));
     if (const auto *ED = dyn_cast<EnumDecl>(D))
       UnderlyingTy = ED->getIntegerType();
@@ -3746,13 +3748,24 @@ void Sema::CheckAlignasUnderalignment(Decl *D) {
   //   would otherwise be required for the entity being declared.
   AlignedAttr *AlignasAttr = nullptr;
   unsigned Align = 0;
+  bool hasAlignOverride = false;
   for (auto *I : D->specific_attrs<AlignedAttr>()) {
     if (I->isAlignmentDependent())
       return;
     if (I->isAlignas())
       AlignasAttr = I;
     Align = std::max(Align, I->getAlignment(Context));
+    hasAlignOverride = true;
   }
+  // If this target supports capabilities, then warn if we're requesting
+  // lss-than-capability alignment for a type containing capabilities.
+  if (hasAlignOverride && Context.getTargetInfo().SupportsCapabilities()) {
+    unsigned CapAlign = Context.getTargetInfo().getCHERICapabilityAlign();
+    if ((Align < CapAlign) && Context.containsCapabilities(UnderlyingTy))
+      Diag(D->getLocation(), diag::warn_cheri_underalign)
+          << (Align / 8) << DiagTy << (CapAlign / 8);
+  }
+
 
   if (AlignasAttr && Align) {
     CharUnits RequestedAlign = Context.toCharUnitsFromBits(Align);
