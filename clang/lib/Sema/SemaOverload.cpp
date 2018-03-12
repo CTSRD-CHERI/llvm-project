@@ -1853,17 +1853,27 @@ static bool IsStandardConversion(Sema &S, Expr* From, QualType ToType,
       bool StrLit = isa<StringLiteral>(From->IgnoreParens());
       bool NullLit = false;
       bool AddrOf = false;
+      bool Decayed = false;
       if (IntegerLiteral* Int = dyn_cast<IntegerLiteral>(From->IgnoreParenCasts()))
         NullLit = Int->getValue().isNullValue();
       if (!InOverloadResolution) {
-        // XXXKG: don't allow implicit behaviour for function pointer types
         if (UnaryOperator *UnOp = dyn_cast<UnaryOperator>(From)) {
-          if (UnOp->getOpcode() == UO_AddrOf && !FromType->isFunctionPointerType()) {
+          if (UnOp->getOpcode() == UO_AddrOf)
             AddrOf = S.CheckCHERIAssignCompatible(ToType, FromType, From, false);
-          }
+        }
+        ExprResult DecayedExpr = S.DefaultFunctionArrayLvalueConversion(From);
+        if (DecayedExpr.isInvalid())
+          return false;
+
+        From = DecayedExpr.get();
+        if (ImplicitCastExpr *Imp = dyn_cast<ImplicitCastExpr>(From)) {
+          Decayed = Imp->getCastKind() == CK_ArrayToPointerDecay
+                    || Imp->getCastKind() == CK_FunctionToPointerDecay;
+          if (Decayed)
+            Decayed = S.CheckCHERIAssignCompatible(ToType, FromType, From, false);
         }
       }
-      SCS.setInvalidCHERIConversion(!NullLit && !StrLit && !AddrOf);
+      SCS.setInvalidCHERIConversion(!NullLit && !StrLit && !AddrOf && !Decayed);
     }
     FromType = ToType;
   } else {

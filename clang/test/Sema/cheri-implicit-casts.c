@@ -23,3 +23,7 @@ void j() {
   char * __capability x;
   __uintcap_t y = x; // expected-warning {{incompatible pointer to integer conversion initializing '__uintcap_t' with an expression of type 'char * __capability'}}
 }
+void k() {
+  char staticarray[2];
+  char * __capability array = staticarray; // this is fine
+}

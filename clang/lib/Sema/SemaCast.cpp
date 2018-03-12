@@ -2976,17 +2976,20 @@ bool Sema::CheckCHERIAssignCompatible(QualType LHS, QualType RHS, Expr *&RHSExpr
   // qualifier
   // XXXKG: I also extended mergeTypes() with a MergeVoidPtr flag to allow the
   // <-> void* case (and still get the checking of qualifiers).
+  // XXXKG: Allow non-const to const assignment
   QualType MergedTy = Context.mergeTypes(
-      RHS, LHS, /*OfBlockPointer=*/false, /*Unqualified=*/false,
+      LHS, RHS, /*OfBlockPointer=*/false, /*Unqualified=*/false,
       /*BlockReturnType=*/false, /*IncludeCapabilityQualifier=*/false,
-      /*MergeVoidPtr=*/false);
+      /*MergeVoidPtr=*/false, /*MergeLHSConst=*/false);
   if (MergedTy.isNull()) {
-    // As a special case we allow changing the types if either source or dest is
-    // a pointer to void:
+    // As a special case we allow changing the types if either:
+    // - LHS or RHS is a pointer to void
+    // - LHS has a const-qualified pointee type and the RHS pointee is not
+    //   const-qualified
     MergedTy = Context.mergeTypes(
-        RHS, LHS, /*OfBlockPointer=*/false, /*Unqualified=*/false,
+        LHS, RHS, /*OfBlockPointer=*/false, /*Unqualified=*/false,
         /*BlockReturnType=*/false, /*IncludeCapabilityQualifier=*/false,
-        /*MergeVoidPtr=*/true);
+        /*MergeVoidPtr=*/true, /*MergeLHSConst=*/true);
     if (!MergedTy.isNull()) {
       if (InsertBitCast) {
         // Insert a CK_BitCast to ensure we don't crash during codegen (see

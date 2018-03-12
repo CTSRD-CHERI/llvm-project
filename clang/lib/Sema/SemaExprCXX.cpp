@@ -4075,16 +4075,22 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
       }
       CK = FromIsCap ? CK_CHERICapabilityToPointer : CK_PointerToCHERICapability;
     }
+    // ImpCastExprToType may return an ExprError, so cache the current value of
+    // From for the warning
+    Expr *FromOld = From;
     From = ImpCastExprToType(From, ToType.getNonLValueExprType(Context),
                              CK, VK, /*BasePath=*/nullptr, CCK).get();
 
     if (SCS.DeprecatedStringLiteralToCharPtr &&
         !getLangOpts().WritableStrings) {
-      Diag(From->getLocStart(), getLangOpts().CPlusPlus11
+      Diag(FromOld->getLocStart(), getLangOpts().CPlusPlus11
            ? diag::ext_deprecated_string_literal_conversion
            : diag::warn_deprecated_string_literal_conversion)
         << ToType.getNonReferenceType();
     }
+
+    if (!From)
+      return ExprError();
 
     break;
   }

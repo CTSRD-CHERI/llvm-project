@@ -13621,13 +13621,25 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
     break;
   case CHERICapabilityToPointer:
   case PointerToCHERICapability: {
-    if (isa<StringLiteral>(SrcExpr->IgnoreParens()->IgnoreImpCasts())) {
-      return false; // conversion from string to capability is fine
+    // The following conversions are OK:
+    // - String literal to capability
+    // - Null literal to capability
+    // - Address-of expression to capability
+    // - (Array|Function)ToPointerDecay to capability
+
+    // String literal
+    if (isa<StringLiteral>(SrcExpr->IgnoreParens()->IgnoreImpCasts()))
+      return false;
+
+    // Null literal
+    if (IntegerLiteral* Int = dyn_cast<IntegerLiteral>(SrcExpr->IgnoreParenCasts()->IgnoreImpCasts())) {
+      if (Int->getValue().isNullValue())
+        return false;
     }
 
     bool PtrToCap = ConvTy == PointerToCHERICapability;
 
-    // conversion from addr-of expression to capability is fine
+    // addr-to expression
     if (UnaryOperator *UnOp = dyn_cast<UnaryOperator>(
                                 SrcExpr->IgnoreParens()->IgnoreImpCasts()
                               )) {
@@ -13635,6 +13647,23 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
         return false;
     }
 
+    // (Array|Function)ToPointerDecay
+    // First perform array|function to pointer decay
+    ExprResult Decayed = DefaultFunctionArrayLvalueConversion(SrcExpr);
+    if (Decayed.isInvalid()) {
+      isInvalid = true;
+      return true;
+      break;
+    }
+    SrcExpr = Decayed.get();
+    if (ImplicitCastExpr *Imp = dyn_cast<ImplicitCastExpr>(SrcExpr)) {
+      if (PtrToCap &&
+          (Imp->getCastKind() == CK_ArrayToPointerDecay
+           || Imp->getCastKind() == CK_FunctionToPointerDecay))
+        return false;
+    }
+
+    // If we reach here, output an error
     DiagKind = PtrToCap ? diag::err_typecheck_convert_ptr_to_cap
                         : diag::err_typecheck_convert_cap_to_ptr;
     MayHaveConvFixit = true;

@@ -33,14 +33,6 @@ void addrof(void) {
     voidfn_ptr fnptr2 = &addrof;
     voidfn_cap fncap = addrof;
     voidfn_cap fncap2 = &addrof;
-#ifdef __cplusplus
-    // XXXAR: currently C++ doesn't allow implicit conversions from function pointer to capability (and I'm not sure we should allow it without a cast)
-    //expected-error@-4 {{converting non-capability type 'void ()' to capability type 'voidfn_cap' (aka 'void (* __capability)()') without an explicit cast}}
-    //expected-error@-4 {{converting non-capability type 'void (*)()' to capability type 'voidfn_cap' (aka 'void (* __capability)()') without an explicit cast}}
-#else
-    // expected-error@-7 {{converting non-capability type 'void (*)(void)' to capability type 'void (* __capability)(void)' without an explicit cast}}
-    // expected-error@-7 {{converting non-capability type 'void (*)(void)' to capability type 'void (* __capability)(void)' without an explicit cast}}
-#endif
 }
 
 
@@ -105,6 +97,7 @@ void str_to_ptr(void) {
 #ifdef __cplusplus
   // expected-warning@-3 {{ISO C++11 does not allow conversion from string literal to 'char *'}}
   // expected-warning@-3 {{ISO C++11 does not allow conversion from string literal to 'char * __capability'}}
+  // expected-error@-4 {{cannot implicitly or explicitly convert non-capability  type 'const char *' to unrelated capability type 'char * __capability'}}
 #endif
   // CXXAST: FunctionDecl {{.+}} str_to_ptr 'void ()'
   // CXXAST: VarDecl {{.+}} cap 'const char * __capability' cinit
@@ -115,6 +108,7 @@ void str_to_ptr(void) {
   // CAST: FunctionDecl {{.+}} str_to_ptr 'void (void)'
   // CAST: VarDecl {{.+}} cap 'const char * __capability' cinit
   // CAST-NEXT: ImplicitCastExpr {{.+}} 'const char * __capability' <PointerToCHERICapability>
+  // CAST-NEXT: ImplicitCastExpr {{.+}} 'const char *' <BitCast>
   // CAST-NEXT: ImplicitCastExpr {{.+}} 'char *' <ArrayToPointerDecay>
   // CAST-NEXT: StringLiteral {{.+}} 'char [4]' lvalue "foo"
 }
