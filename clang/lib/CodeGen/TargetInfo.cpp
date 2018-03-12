@@ -6713,16 +6713,8 @@ void MSP430TargetCodeGenInfo::setTargetAttributes(
 
 namespace {
 
-class CHERICapClassifier {
-  ASTContext &C;
-  mutable llvm::DenseMap<void*, bool> ContainsCapabilities;
-public:
-  CHERICapClassifier(ASTContext &Ctx) : C(Ctx) {}
-  bool containsCapabilities(ASTContext &C, const RecordDecl *RD) const;
-  bool containsCapabilities(QualType Ty) const;
-};
 
-class MipsABIInfo : public ABIInfo, CHERICapClassifier {
+class MipsABIInfo : public ABIInfo {
   bool IsO32;
   CodeGenModule &CGM;
   unsigned MinABIStackAlignInBytes, StackAlignInBytes;
@@ -6733,7 +6725,7 @@ class MipsABIInfo : public ABIInfo, CHERICapClassifier {
   llvm::Type* getPaddingType(uint64_t Align, uint64_t Offset) const;
 public:
   MipsABIInfo(CodeGenTypes &CGT, bool _IsO32, CodeGenModule &_CGM) :
-    ABIInfo(CGT), CHERICapClassifier(CGT.getContext()),
+    ABIInfo(CGT),
     IsO32(_IsO32), CGM(_CGM), MinABIStackAlignInBytes(IsO32 ? 4 : 8) {
       const TargetInfo& TI = _CGM.getTarget();
       if (TI.areAllPointersCapabilities())
@@ -6750,8 +6742,7 @@ public:
   ABIArgInfo extendType(QualType Ty) const;
 };
 
-class MIPSTargetCodeGenInfo : public TargetCodeGenInfo,
-                              CHERICapClassifier {
+class MIPSTargetCodeGenInfo : public TargetCodeGenInfo {
   unsigned SizeOfUnwindException;
   mutable llvm::Function *GetOffset = nullptr;
   mutable llvm::Function *SetOffset = nullptr;
@@ -6766,7 +6757,6 @@ class MIPSTargetCodeGenInfo : public TargetCodeGenInfo,
 public:
   MIPSTargetCodeGenInfo(CodeGenTypes &CGT, bool IsO32, CodeGenModule &CGM)
     : TargetCodeGenInfo(new MipsABIInfo(CGT, IsO32, CGM)),
-      CHERICapClassifier(CGT.getContext()),
       SizeOfUnwindException(IsO32 ? 24 : 32) {}
 
   int getDwarfEHStackPointer(CodeGen::CodeGenModule &CGM) const override {
@@ -6861,9 +6851,7 @@ public:
   unsigned getSizeOfUnwindException() const override {
     return SizeOfUnwindException;
   }
-  bool containsCapabilities(QualType Ty) const override {
-    return CHERICapClassifier::containsCapabilities(Ty);
-  }
+
   unsigned getDefaultAS() const override {
     const TargetInfo &Target = getABIInfo().getContext().getTargetInfo();
     return Target.areAllPointersCapabilities() ? getCHERICapabilityAS() : 0;
@@ -6890,50 +6878,6 @@ void MipsABIInfo::CoerceToIntArgs(
     ArgList.push_back(llvm::IntegerType::get(getVMContext(), R));
 }
 
-bool CHERICapClassifier::containsCapabilities(ASTContext &C,
-                                              const RecordDecl *RD) const {
-  for (auto i = RD->field_begin(), e = RD->field_end(); i != e; ++i) {
-    const QualType Ty = i->getType();
-    if (Ty->isCHERICapabilityType(C))
-      return true;
-    if (const RecordType *RT = Ty->getAs<RecordType>())
-      if (containsCapabilities(C, RT->getDecl()))
-        return true;
-    if (Ty->isArrayType() && containsCapabilities(Ty))
-      return true;
-  }
-  // In the case of C++ classes, also check base classes
-  if (const CXXRecordDecl *CRD = dyn_cast<CXXRecordDecl>(RD)) {
-    for (auto i = CRD->bases_begin(), e = CRD->bases_end(); i != e; ++i) {
-      const QualType Ty = i->getType();
-      if (const RecordType *RT = Ty->getAs<RecordType>())
-        if (containsCapabilities(C, RT->getDecl()))
-          return true;
-    }
-  }
-  return false;
-}
-
-bool CHERICapClassifier::containsCapabilities(QualType Ty) const {
-  // If we've already looked up this type, then return the cached value.
-  auto Cached = ContainsCapabilities.find(Ty.getAsOpaquePtr());
-  if (Cached != ContainsCapabilities.end())
-    return Cached->second;
-  // Don't bother caching the trivial cases.
-  if (Ty->isCHERICapabilityType(C))
-      return true;
-  if (Ty->isArrayType()) {
-    QualType ElTy = QualType(Ty->getBaseElementTypeUnsafe(), 0);
-    return containsCapabilities(ElTy);
-  }
-  const RecordType *RT = Ty->getAs<RecordType>();
-  if (!RT)
-    return false;
-  bool Ret = containsCapabilities(C, RT->getDecl());
-  ContainsCapabilities[Ty.getAsOpaquePtr()] = Ret;
-  return Ret;
-}
-
 // In N32/64, an aligned double precision floating point field is passed in
 // a register.
 llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
@@ -6952,7 +6896,7 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
   // On CHERI, we must pass unions containing capabilities in capability
   // registers.  Otherwise, pass them as integers.
   if (RT &&
-      (RT->isUnionType() && containsCapabilities(getContext(), RT->getDecl()))
+      (RT->isUnionType() && getContext().containsCapabilities(RT->getDecl()))
       && getTarget().SupportsCapabilities())
     return llvm::Type::getInt8Ty(getVMContext())->getPointerTo(
                             CGM.getTargetCodeGenInfo().getCHERICapabilityAS());
@@ -6989,7 +6933,7 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
         const QualType Ty = i->getType();
         uint64_t Offset = BaseLayout.getFieldOffset(idx);
         if (const RecordType *FRT = Ty->getAs<RecordType>()) {
-          if (containsCapabilities(getContext(), FRT->getDecl())) {
+          if (getContext().containsCapabilities(FRT->getDecl())) {
             uint64_t FieldSize = getContext().getTypeSize(Ty);
             LastOffset = Offset + FieldSize;
             ArgList.push_back(HandleAggregates(Ty, FieldSize));
@@ -7020,7 +6964,7 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
     uint64_t Offset = Layout.getFieldOffset(idx);
 
     if (const RecordType *FRT = Ty->getAs<RecordType>()) {
-      if (containsCapabilities(getContext(), FRT->getDecl())) {
+      if (getContext().containsCapabilities(FRT->getDecl())) {
         uint64_t FieldSize = getContext().getTypeSize(Ty);
         LastOffset = Layout.getFieldOffset(idx) + FieldSize;
         ArgList.push_back(HandleAggregates(Ty, FieldSize));
@@ -7048,7 +6992,7 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
         LastOffset += Elements * ElemSize;
         assert(CapSize == ElemSize || (Ty->isMemberFunctionPointerType() && ElemSize == 2 * CapSize));
         continue;
-      } else if (containsCapabilities(ElementType)) {
+      } else if (getContext().containsCapabilities(ElementType)) {
         uint64_t FieldSize = getContext().getTypeSize(ElementType);
         LastOffset += FieldSize * Elements;
         auto ElTy = HandleAggregates(ElementType, FieldSize);
@@ -7126,8 +7070,9 @@ MipsABIInfo::classifyArgumentType(QualType Ty, uint64_t &Offset) const {
     // For CHERI, also pass C++ classes and structs that contain capabilities
     // indirectly (for now).
     // XXXKG: We should revisit passing fields in registers.
-    else if (Ty->isCXXStructureOrClassType()
-        && containsCapabilities(Ty) && Target.SupportsCapabilities())
+    else if (Ty->isCXXStructureOrClassType() &&
+             Target.SupportsCapabilities() &&
+             getContext().containsCapabilities(Ty))
       PassIndirect = true;
     if (PassIndirect)
       return ABIArgInfo::getIndirect(CharUnits::fromQuantity(Align), true,
@@ -7233,7 +7178,7 @@ ABIArgInfo MipsABIInfo::classifyReturnType(QualType RetTy) const {
       // On CHERI, we can return unions containing capabilities or
       // structs containing only one capability directly
       const RecordType *RT = RetTy->getAs<RecordType>();
-      if (RT && containsCapabilities(getContext(), RT->getDecl())) {
+      if (RT && getContext().containsCapabilities(RT->getDecl())) {
         ABIArgInfo ArgInfo =
             ABIArgInfo::getDirect(returnAggregateInRegs(RetTy, Size));
         ArgInfo.setInReg(true);

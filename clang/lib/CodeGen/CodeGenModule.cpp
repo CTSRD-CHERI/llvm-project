@@ -3167,7 +3167,7 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D,
   if (!getCodeGenOpts().CHERILinker &&
       InitExpr && Target.SupportsCapabilities()) {
     QualType T = InitExpr->getType();
-    if (TheTargetCodeGenInfo->containsCapabilities(T)) {
+    if (getContext().containsCapabilities(T)) {
       NeedsGlobalCtor = true;
       Init = EmitNullConstant(D->getType());
     }

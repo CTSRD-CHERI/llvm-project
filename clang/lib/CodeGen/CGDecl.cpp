@@ -319,7 +319,7 @@ CodeGenFunction::AddInitializerToStaticVarDecl(const VarDecl &D,
     const VarDecl *InitDecl;
     const Expr *InitExpr = D.getAnyInitializer(InitDecl);
     QualType T = InitExpr->getType();
-    if (getTargetHooks().containsCapabilities(T)) {
+    if (getContext().containsCapabilities(T)) {
       GV->setConstant(false);
       CGM.EmitCXXGlobalVarDeclInitFunc(&D, GV, true);
       return GV;
@@ -1348,7 +1348,7 @@ void CodeGenFunction::EmitAutoVarInit(const AutoVarEmission &emission) {
     Loc = Builder.CreateBitCast(Loc, BP);
 
   bool ContainsCapabilities = Target.SupportsCapabilities() &&
-      getTargetHooks().containsCapabilities(type);
+      getContext().containsCapabilities(type);
 
   // If the initializer is all or mostly zeros, codegen with memset then do
   // a few stores afterward.

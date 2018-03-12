@@ -2010,6 +2010,9 @@ public:
                           unsigned *IntegerConstantArgs = nullptr) const;
 
 private:
+  /// Map storing whether a type contains capabilities.
+  mutable llvm::DenseMap<void*, bool> ContainsCapabilities;
+
   CanQualType getFromTargetType(unsigned Type) const;
   TypeInfo getTypeInfoImpl(const Type *T) const;
 
@@ -2201,6 +2204,11 @@ public:
   unsigned CountNonClassIvars(const ObjCInterfaceDecl *OI) const;
   void CollectInheritedProtocols(const Decl *CDecl,
                           llvm::SmallPtrSet<ObjCProtocolDecl*, 8> &Protocols);
+  /// Returns true if the record type contains one or more capabilities.
+  bool containsCapabilities(const RecordDecl *RD) const;
+  /// Returns true if the type is a scalar type that is represented as a
+  /// capability or an aggregate type that contains one or more capabilities.
+  bool containsCapabilities(QualType Ty) const;
 
   /// \brief Return true if the specified type has unique object representations
   /// according to (C++17 [meta.unary.prop]p9)
