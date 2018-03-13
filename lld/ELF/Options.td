@@ -251,11 +251,6 @@ defm print_icf_sections: B<"print-icf-sections",
 def print_map: F<"print-map">,
   HelpText<"Print a link map to the standard output">;
 
-def process_cap_relocs: F<"process-cap-relocs">,
-  HelpText<"Enable special processing of __cap_relocs sections">;
-def no_process_cap_relocs: F<"no-process-cap-relocs">,
-  HelpText<"Don't do any special processing for the __cap_relocs section">;
-
 defm reproduce: Eq<"reproduce">,
   HelpText<"Dump linker invocation and input files for debugging">;
 
@@ -275,10 +270,6 @@ def section_start: S<"section-start">, MetaVarName<"<address>">,
 def shared: F<"shared">, HelpText<"Build a shared object">;
 
 defm soname: Eq<"soname">, HelpText<"Set DT_SONAME">;
-
-defm sort_cap_relocs: B<"sort-cap-relocs",
-    "Sort the __cap_relocs section by capability location",
-    "Do not sort the __cap_relocs section by capability location">, Flags<[HelpHidden]>;
 
 defm sort_section: Eq<"sort-section">,
   HelpText<"Specifies sections sorting rule when linkerscript is used">;
@@ -327,8 +318,6 @@ defm rsp_quoting: Eq<"rsp-quoting">,
 def v: Flag<["-"], "v">, HelpText<"Display the version number">;
 
 def verbose: F<"verbose">, HelpText<"Verbose mode">;
-
-def verbose_cap_relocs : F<"verbose-cap-relocs">, HelpText<"Print all cap_relocs information (this is a lot!)">;
 
 def version: F<"version">, HelpText<"Display the version number and exit">;
 
@@ -461,3 +450,14 @@ def Qy : F<"Qy">;
 // Hidden option used for testing MIPS multi-GOT implementation.
 def mips_got_size: S<"mips-got-size">, Flags<[HelpHidden]>,
   HelpText<"Max size of a single MIPS GOT. 0x10000 by default.">;
+
+
+// CHERI options:
+// -no-process-cap-relocs flag to fall back to using external capsizefix tool
+defm process_cap_relocs: B<"process-cap-relocs",
+    "Enable special processing of __cap_relocs sections",
+    "Don't do any special processing for the __cap_relocs section">;
+defm sort_cap_relocs: B<"sort-cap-relocs",
+    "Sort the __cap_relocs section by capability location",
+    "Do not sort the __cap_relocs section by capability location">, Flags<[HelpHidden]>;
+def verbose_cap_relocs : F<"verbose-cap-relocs">, HelpText<"Print all cap_relocs information (this is a lot!)">;
