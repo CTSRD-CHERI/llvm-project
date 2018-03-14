@@ -817,13 +817,13 @@ static RelExpr processRelocAux(InputSectionBase &Sec, RelExpr Expr,
         static std::vector<Symbol*> AddedToDynSymTab;
         // Ensure that it is included in the dynamic symbol table
         Sym.ExportDynamic = true;
+        Sym.ForceExportDynamic = true;
+        // Local symbols will not be part of Symtab so the code in Writer.cpp
+        // will not add them to DynSymTab. Do it manually here if it hasn't
+        // been added yet.
         if (Sym.isLocal() && !llvm::is_contained(AddedToDynSymTab, &Sym)) {
           Sym.Binding = STB_GLOBAL;
           Sym.Visibility = STV_INTERNAL;
-          if (Sym.isDefined() && Sym.VersionId == VER_NDX_LOCAL)
-            Sym.VersionId = VER_NDX_GLOBAL;
-          Sym.IsUsedInRegularObj = true;
-          Sym.Used = true;
           InX::DynSymTab->addSymbol(&Sym);
         }
       }

@@ -72,6 +72,8 @@ public:
   // executables, by most symbols in DSOs and executables built with
   // --export-dynamic, and by dynamic lists.
   unsigned ExportDynamic : 1;
+  // XXXAR: This is a hack to force exporting internal symbols
+  unsigned ForceExportDynamic : 1;
 
   // False if LTO shouldn't inline whatever this symbol points to. If a symbol
   // is overwritten after LTO, LTO shouldn't inline the symbol because it
@@ -132,7 +134,7 @@ public:
 protected:
   Symbol(Kind K, InputFile *File, StringRefZ Name, uint8_t Binding,
          uint8_t StOther, uint8_t Type)
-      : Binding(Binding), File(File), SymbolKind(K), NeedsPltAddr(false),
+      : Binding(Binding), ForceExportDynamic(false), File(File), SymbolKind(K), NeedsPltAddr(false),
         IsInIplt(false), IsInIgot(false), IsPreemptible(false),
         Used(!Config->GcSections), IsSectionStartSymbol(false),
         Type(Type), StOther(StOther), Name(Name) {}
@@ -370,6 +372,7 @@ void replaceSymbol(Symbol *S, ArgT &&... Arg) {
   S->Visibility = Sym.Visibility;
   S->IsUsedInRegularObj = Sym.IsUsedInRegularObj;
   S->ExportDynamic = Sym.ExportDynamic;
+  S->ForceExportDynamic = Sym.ForceExportDynamic;
   S->CanInline = Sym.CanInline;
   S->Traced = Sym.Traced;
   S->InVersionScript = Sym.InVersionScript;

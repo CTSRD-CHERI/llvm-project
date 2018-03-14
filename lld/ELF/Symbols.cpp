@@ -256,13 +256,11 @@ uint8_t Symbol::computeBinding() const {
 bool Symbol::includeInDynsym() const {
   if (!Config->HasDynSymTab)
     return false;
-  if (computeBinding() == STB_LOCAL) {
-    // XXXAR: This is a hack to allow R_CHERI_CAPABILITY against local symbols
-    if (Visibility == STV_INTERNAL && ExportDynamic)
-      return true;
-    else
+  // XXXAR: This is a hack to allow R_CHERI_CAPABILITY against local symbols
+  if (ForceExportDynamic)
+    return true;
+  if (computeBinding() == STB_LOCAL)
       return false;
-  }
   if (!isDefined())
     return true;
   return ExportDynamic;
