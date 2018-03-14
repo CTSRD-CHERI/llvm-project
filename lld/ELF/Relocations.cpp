@@ -42,6 +42,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "Relocations.h"
+#include "Arch/Cheri.h"
 #include "Config.h"
 #include "LinkerScript.h"
 #include "OutputSections.h"
@@ -51,8 +52,8 @@
 #include "SyntheticSections.h"
 #include "Target.h"
 #include "Thunks.h"
+#include "Writer.h"
 #include "lld/Common/Memory.h"
-#include "Arch/Cheri.h"
 
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/Format.h"
@@ -798,7 +799,14 @@ static RelExpr processRelocAux(InputSectionBase &Sec, RelExpr Expr,
     // local cap relocs don't need a Elf relocation with a full symbol lookup:
     if (CapRelocMode == CapRelocsMode::ElfReloc) {
       assert(Config->Pic && "CapRelocsMode::ElfReloc needs a dynamic linker!");
+      assert(Config->HasDynSymTab && "Should have been checked in Driver.cpp");
       InX::RelaDyn->addReloc(Type, &Sec, Offset, &Sym, Addend, R_ADDEND, Type);
+      if (!Sym.includeInDynsym()) {
+        error("added a R_CHERI_CAPABILITY relocation but symbol not included "
+              "in dynamic symbol: " +
+              verboseToString<ELFT>(&Sym));
+        return Expr;
+      }
     } else if (CapRelocMode == CapRelocsMode::Legacy) {
       In<ELFT>::CapRelocs->addCapReloc({&Sec, Offset, Config->Pic}, {&Sym, 0u},
                                        Sym.IsPreemptible, Addend);
