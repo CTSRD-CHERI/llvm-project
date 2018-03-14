@@ -3,7 +3,6 @@
 // as dynamic binaries. Currently the kernel just gives us a read-write mapping to
 // work around this but we really should just make this an error
 //
-// RUN: %cheri_purecap_cc1 %s -O0 -S -o -
 // RUN: %cheri_purecap_cc1 %s -emit-obj -o %t.o
 // RUNNOT: llvm-readobj -r %t.o
 // RUN: not ld.lld -shared %t.o -o %t.so 2>&1 | FileCheck %s
