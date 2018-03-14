@@ -801,6 +801,29 @@ static RelExpr processRelocAux(InputSectionBase &Sec, RelExpr Expr,
       assert(Config->Pic && "CapRelocsMode::ElfReloc needs a dynamic linker!");
       assert(Config->HasDynSymTab && "Should have been checked in Driver.cpp");
       InX::RelaDyn->addReloc(Type, &Sec, Offset, &Sym, Addend, R_ADDEND, Type);
+      // in the case that -local-caprelocs=elf is passed we need to ensure that
+      // the target symbol is included in the dynamic symbol table
+      if (!InX::DynSymTab) {
+        error("R_CHERI_CAPABILITY relocations need a dynamic symbol table");
+        return Expr;
+      }
+      // The following is a hack for allowing R_MIPS_CHERI_CAPABILITY relocation
+      // for local symbols (this should probably be removed in the future)
+      errs() << toString(Sym) << " binding=" << (int)Sym.Binding << " vis=" << (int)Sym.Visibility << " export dyn=" << Sym.ExportDynamic << "\n";
+      if (!Sym.includeInDynsym()) {
+        static std::vector<Symbol*> AddedToDynSymTab;
+        // Ensure that it is included in the dynamic symbol table
+        Sym.ExportDynamic = true;
+        if (Sym.isLocal() && !llvm::is_contained(AddedToDynSymTab, &Sym)) {
+          Sym.Binding = STB_GLOBAL;
+          Sym.Visibility = STV_PROTECTED; // TODO: STV_HIDDEN?
+          if (Sym.isDefined() && Sym.VersionId == VER_NDX_LOCAL)
+            Sym.VersionId = VER_NDX_GLOBAL;
+          Sym.IsUsedInRegularObj = true;
+          Sym.Used = true;
+          InX::DynSymTab->addSymbol(&Sym);
+        }
+      }
       if (!Sym.includeInDynsym()) {
         error("added a R_CHERI_CAPABILITY relocation but symbol not included "
               "in dynamic symbol: " +
