@@ -816,7 +816,7 @@ static RelExpr processRelocAux(InputSectionBase &Sec, RelExpr Expr,
         Sym.ExportDynamic = true;
         if (Sym.isLocal() && !llvm::is_contained(AddedToDynSymTab, &Sym)) {
           Sym.Binding = STB_GLOBAL;
-          Sym.Visibility = STV_PROTECTED; // TODO: STV_HIDDEN?
+          Sym.Visibility = STV_INTERNAL;
           if (Sym.isDefined() && Sym.VersionId == VER_NDX_LOCAL)
             Sym.VersionId = VER_NDX_GLOBAL;
           Sym.IsUsedInRegularObj = true;

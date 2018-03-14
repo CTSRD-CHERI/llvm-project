@@ -79,7 +79,7 @@ local_ref_with_addend:
 # R_CAPABILITY_FOR_ALL-NEXT:     Name: @ (0)
 # R_CAPABILITY_FOR_ALL-NEXT:     Value: 0x0
 # R_CAPABILITY_FOR_ALL-NEXT:     Size: 0
-# R_CAPABILITY_FOR_ALL-NEXT:     Binding: Local (0x0)
+# R_CAPABILITY_FOR_ALL-NEXT:     Binding: Local
 # R_CAPABILITY_FOR_ALL-NEXT:     Type: None (0x0)
 # R_CAPABILITY_FOR_ALL-NEXT:     Other: 0
 # R_CAPABILITY_FOR_ALL-NEXT:     Section: Undefined (0x0)
@@ -88,7 +88,7 @@ local_ref_with_addend:
 # R_CAPABILITY_FOR_ALL-NEXT:     Name: foo@ (5)
 # R_CAPABILITY_FOR_ALL-NEXT:     Value: 0x10000
 # R_CAPABILITY_FOR_ALL-NEXT:     Size: 4
-# R_CAPABILITY_FOR_ALL-NEXT:     Binding: Global (0x1)
+# R_CAPABILITY_FOR_ALL-NEXT:     Binding: Global
 # R_CAPABILITY_FOR_ALL-NEXT:     Type: Function (0x2)
 # R_CAPABILITY_FOR_ALL-NEXT:     Other: 0
 # R_CAPABILITY_FOR_ALL-NEXT:     Section: .text (0x8)
@@ -97,10 +97,10 @@ local_ref_with_addend:
 # R_CAPABILITY_FOR_ALL-NEXT:     Name: bar@ (1)
 # R_CAPABILITY_FOR_ALL-NEXT:     Value: 0x10040
 # R_CAPABILITY_FOR_ALL-NEXT:     Size: 8
-# R_CAPABILITY_FOR_ALL-NEXT:     Binding: Global (0x1)
+# R_CAPABILITY_FOR_ALL-NEXT:     Binding: Local
 # R_CAPABILITY_FOR_ALL-NEXT:     Type: Function (0x2)
 # R_CAPABILITY_FOR_ALL-NEXT:     Other [
-# R_CAPABILITY_FOR_ALL-NEXT:       STV_PROTECTED
+# R_CAPABILITY_FOR_ALL-NEXT:       STV_INTERNAL
 # R_CAPABILITY_FOR_ALL-NEXT:     ]
 # R_CAPABILITY_FOR_ALL-NEXT:     Section: .text (0x8)
 # R_CAPABILITY_FOR_ALL-NEXT:  }
