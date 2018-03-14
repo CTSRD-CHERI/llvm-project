@@ -1423,7 +1423,12 @@ void RelocationBaseSection::addReloc(RelType DynType,
                                      RelType Type) {
   // Write the addends to the relocated address if required. We skip
   // it if the written value would be zero.
-  if (Config->WriteAddends && (Expr != R_ADDEND || Addend != 0))
+  bool WriteAddend = Config->WriteAddends && (Expr != R_ADDEND || Addend != 0);
+  // If we are adding a dynamic R_CHERI_CAPABILITY relocation we need to write
+  // the added to the output file since it will be initialized to 0xcacacaca
+  if (Expr == R_CHERI_CAPABILITY)
+    Expr = R_ADDEND;
+  if (WriteAddend)
     InputSec->Relocations.push_back({Expr, Type, OffsetInSec, Addend, Sym});
   addReloc({DynType, InputSec, OffsetInSec, Expr != R_ADDEND, Sym, Addend});
 }
