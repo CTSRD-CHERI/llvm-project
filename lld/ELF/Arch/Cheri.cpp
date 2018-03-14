@@ -66,8 +66,9 @@ static inline void nonFatalWarning(const Twine &Str) {
     warn(Str);
 }
 
-static SymbolAndOffset sectionWithOffsetToSymbol(InputSectionBase *IS,
-                                                 uint64_t Offset, Symbol *Default=nullptr) {
+SymbolAndOffset SymbolAndOffset::fromSectionWithOffset(InputSectionBase *IS,
+                                                       uint64_t Offset,
+                                                       Symbol *Default) {
   Symbol *FallbackResult = nullptr;
   assert((int64_t)Offset >= 0);
   uint64_t FallbackOffset = Offset;
@@ -112,7 +113,7 @@ SymbolAndOffset SymbolAndOffset::findRealSymbol() const {
 
   if (Defined *DefinedSym = dyn_cast<Defined>(Sym)) {
     if (auto *IS = dyn_cast<InputSectionBase>(DefinedSym->Section)) {
-      return sectionWithOffsetToSymbol(IS, Offset, Sym);
+      return SymbolAndOffset::fromSectionWithOffset(IS, Offset, Sym);
     }
   }
   return *this;
@@ -120,7 +121,8 @@ SymbolAndOffset SymbolAndOffset::findRealSymbol() const {
 
 template<typename ELFT>
 std::string CheriCapRelocLocation::toString() const {
-  SymbolAndOffset Resolved = sectionWithOffsetToSymbol(Section, Offset);
+  SymbolAndOffset Resolved =
+      SymbolAndOffset::fromSectionWithOffset(Section, Offset);
   if (Resolved.Sym)
     return Resolved.verboseToString<ELFT>();
   return Section->getObjMsg(Offset);
@@ -263,10 +265,10 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
 
   bool CanWriteLoc = (Loc.Section->Flags & SHF_WRITE) || !Config->ZText;
   if (!CanWriteLoc) {
-    error("Attempting to add a capability relocation in a read-only section; "
-          "pass -Wl,-z,notext if you really want to do this"
-          "\n>>> referenced by " + SourceMsg);
+    readOnlyCapRelocsError(*Target.Sym, "\n>>> referenced by " + SourceMsg);
+    return;
   }
+
   if (!addEntry(Loc, {Target, CapabilityOffset, TargetNeedsDynReloc})) {
     return; // Maybe happens with vtables?
   }

@@ -344,6 +344,13 @@ static bool isStaticLinkTimeConstant(RelExpr E, RelType Type, const Symbol &Sym,
                      R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE>(E))
     return true;
 
+  // Cheri capability relocations are never static link time constants since
+  // even if we know the exact value of the capability we can't write it since
+  // there is no way to store the tag bit
+  // TODO: for undef weak -> 0 (or other untagged values) it actually is okay
+  if (E == R_CHERI_CAPABILITY)
+    return false;
+
   // These never do, except if the entire file is position dependent or if
   // only the low bits are used.
   if (E == R_GOT || E == R_PLT || E == R_TLSDESC)
@@ -772,6 +779,37 @@ static RelExpr processRelocAux(InputSectionBase &Sec, RelExpr Expr,
     return Expr;
   }
 
+  if (Expr == R_CHERI_CAPABILITY) {
+    if (!CanWrite) {
+      auto RelocTarget = SymbolAndOffset::fromSectionWithOffset(&Sec, Offset);
+      readOnlyCapRelocsError(Sym, RelocTarget.Sym
+                                      ? ("\n>>> referenced by " +
+                                         RelocTarget.verboseToString<ELFT>())
+                                      : getLocation(Sec, Sym, Offset));
+      return Expr;
+    }
+    // Emit either the legacy __cap_relocs section or a R_CHERI_CAPABILITY reloc
+    // For local symbols we can also emit the untagged capability bits and
+    // instruct csu/rtld to run CBuildCap
+    assert(Config->ProcessCapRelocs);
+    CapRelocsMode CapRelocMode = Sym.IsPreemptible
+                                     ? Config->PreemptibleCapRelocsMode
+                                     : Config->LocalCapRelocsMode;
+    // local cap relocs don't need a Elf relocation with a full symbol lookup:
+    if (CapRelocMode == CapRelocsMode::ElfReloc) {
+      assert(Config->Pic && "CapRelocsMode::ElfReloc needs a dynamic linker!");
+      InX::RelaDyn->addReloc(Type, &Sec, Offset, &Sym, Addend, R_ADDEND, Type);
+    } else if (CapRelocMode == CapRelocsMode::Legacy) {
+      In<ELFT>::CapRelocs->addCapReloc({&Sec, Offset, Config->Pic}, {&Sym, 0u},
+                                       Sym.IsPreemptible, Addend);
+    } else {
+      assert(Config->LocalCapRelocsMode == CapRelocsMode::CBuildCap);
+      error("CBuildCap method not implemented yet!");
+    }
+    // TODO: check if it is a call and needs a plt stub
+    return Expr;
+  }
+
   if (CanWrite) {
     // R_GOT refers to a position in the got, even if the symbol is preemptible.
     bool IsPreemptibleValue = Sym.IsPreemptible && Expr != R_GOT;
@@ -816,6 +854,8 @@ static RelExpr processRelocAux(InputSectionBase &Sec, RelExpr Expr,
   // If the relocation is to a weak undef, and we are producing
   // executable, give up on it and produce a non preemptible 0.
   if (!Config->Shared && Sym.isUndefWeak()) {
+    if (Expr == R_CHERI_CAPABILITY)
+      error("Not implemented yet");
     Sec.Relocations.push_back({Expr, Type, Offset, Addend, &Sym});
     return Expr;
   }
@@ -962,16 +1002,8 @@ static void scanReloc(InputSectionBase &Sec, OffsetGetter &GetOffset, RelTy *&I,
     return;
   }
 
-  if (Expr == R_CHERI_CAPABILITY) {
-    assert(Config->ProcessCapRelocs);
-    bool NeedsDynReloc = Sym.IsPreemptible;
-    In<ELFT>::CapRelocs->addCapReloc({&Sec, Offset, Config->Pic}, {&Sym, 0u},
-                                     NeedsDynReloc, Addend);
-    // TODO: check if it needs a plt stub
-    return;
-  } else if (isRelExprOneOf<R_CHERI_CAPABILITY_TABLE_INDEX,
-                            R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE>(
-                 Expr)) {
+  if (isRelExprOneOf<R_CHERI_CAPABILITY_TABLE_INDEX,
+                     R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE>(Expr)) {
     assert(Config->ProcessCapRelocs);
     bool SmallImmediate =
         Expr == R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE;

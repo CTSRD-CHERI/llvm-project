@@ -21,7 +21,7 @@ __attribute((visibility("protected"))) int __start(int x) {
 const char space[16] = {0};
 __attribute((section(".rodata"))) const int(*foo)(int) = &__start + 4;
 
-// CHECK: error: Attempting to add a capability relocation in a read-only section; pass -Wl,-z,notext if you really want to do this
+// CHECK: error: attempting to add a capability relocation against symbol __start in a read-only section; pass -Wl,-z,notext if you really want to do this
 // CHECK-NEXT: >>> referenced by object foo
 // CHECK-NEXT: >>> defined in capability-in-rodata2.c ({{.+}}capability-in-rodata2.c.tmp.o:(foo))
 

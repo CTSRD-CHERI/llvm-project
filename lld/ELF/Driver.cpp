@@ -300,6 +300,17 @@ static void checkOptions(opt::InputArgList &Args) {
     if (Config->Pie)
       error("-r and -pie may not be used together");
   }
+
+  // Validate CHERI cap-relocs mode
+  if (!Config->Pic && !Config->Relocatable) {
+    if (Config->PreemptibleCapRelocsMode == CapRelocsMode::ElfReloc)
+      error("preemptible-cap-relocs=elf only works with a runtime linker");
+    if (Config->LocalCapRelocsMode == CapRelocsMode::ElfReloc)
+      error("local-cap-relocs=elf only works with a runtime linker");
+  }
+  if (Config->LocalCapRelocsMode == CapRelocsMode::CBuildCap)
+    error("local-cap-relocs=cbuildcap is not implemented yet");
+  assert(Config->PreemptibleCapRelocsMode != CapRelocsMode::CBuildCap);
 }
 
 static const char *getReproduceOption(opt::InputArgList &Args) {
@@ -478,6 +489,35 @@ static DiscardPolicy getDiscard(opt::InputArgList &Args) {
   return DiscardPolicy::None;
 }
 
+static CapRelocsMode getPreemptibleCapRelocsMode(opt::InputArgList &Args) {
+  auto *Arg = Args.getLastArg(OPT_preemptible_caprelocs_legacy,
+                              OPT_preemptible_caprelocs_elf);
+  if (!Arg) // TODO: change default to Elf
+    return CapRelocsMode::Legacy;
+  if (Arg->getOption().getID() == OPT_preemptible_caprelocs_legacy) {
+    return CapRelocsMode::Legacy;
+  } else if (Arg->getOption().getID() == OPT_preemptible_caprelocs_elf) {
+    return CapRelocsMode::ElfReloc;
+  }
+  llvm_unreachable("Invalid arg");
+}
+
+static CapRelocsMode getLocalCapRelocsMode(opt::InputArgList &Args) {
+  auto *Arg =
+      Args.getLastArg(OPT_local_caprelocs_cbuildcap, OPT_local_caprelocs_elf,
+                      OPT_local_caprelocs_cbuildcap);
+  if (!Arg) // TODO: change default to CBuildCap (at least for non-PIC)
+    return CapRelocsMode::Legacy;
+  if (Arg->getOption().getID() == OPT_local_caprelocs_legacy) {
+    return CapRelocsMode::Legacy;
+  } else if (Arg->getOption().getID() == OPT_local_caprelocs_elf) {
+    return CapRelocsMode::ElfReloc;
+  } else if (Arg->getOption().getID() == OPT_local_caprelocs_cbuildcap) {
+    return CapRelocsMode::CBuildCap;
+  }
+  llvm_unreachable("Invalid arg");
+}
+
 static StringRef getDynamicLinker(opt::InputArgList &Args) {
   auto *Arg = Args.getLastArg(OPT_dynamic_linker, OPT_no_dynamic_linker);
   if (!Arg || Arg->getOption().getID() == OPT_no_dynamic_linker)
@@ -647,6 +687,7 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
   Config->IgnoreFunctionAddressEquality =
       Args.hasArg(OPT_ignore_function_address_equality);
   Config->Init = Args.getLastArgValue(OPT_init, "_init");
+  Config->LocalCapRelocsMode = getLocalCapRelocsMode(Args);
   Config->LTOAAPipeline = Args.getLastArgValue(OPT_lto_aa_pipeline);
   Config->LTONewPmPasses = Args.getLastArgValue(OPT_lto_newpm_passes);
   Config->LTOO = args::getInteger(Args, OPT_lto_O, 2);
@@ -683,6 +724,7 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
   Config->SortCapRelocs =
       Args.hasFlag(OPT_sort_cap_relocs, OPT_no_sort_cap_relocs, true);
   Config->SortSection = getSortSection(Args);
+  Config->PreemptibleCapRelocsMode = getPreemptibleCapRelocsMode(Args);
   Config->Strip = getStrip(Args);
   Config->Sysroot = Args.getLastArgValue(OPT_sysroot);
   Config->Target1Rel = Args.hasFlag(OPT_target1_rel, OPT_target1_abs, false);

@@ -31,7 +31,7 @@ __start:
 .p2align 5
 foo:
   .chericap __start + 0x4
-# CHECK: error: Attempting to add a capability relocation in a read-only section; pass -Wl,-z,notext if you really want to do this
+# CHECK: error: attempting to add a capability relocation against symbol __start in a read-only section; pass -Wl,-z,notext if you really want to do this
 # CHECK-NEXT: >>> referenced by object foo
 # CHECK-NEXT: >>> defined in  ({{.+}}capability-in-rodata.s.tmp.o:(.rodata+0x20))
 

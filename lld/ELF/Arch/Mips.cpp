@@ -696,6 +696,8 @@ void MIPS<ELFT>::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
     checkInt<25>(Loc, Val, Type);
     writeShuffleValue<E>(Loc, Val, 23, 2);
     break;
+  case R_MIPS_CHERI_CAPABILITY:
+    llvm_unreachable("R_MIPS_CHERI_CAPABILITY should never be handled here!");
   default:
     error(getErrorLocation(Loc) + "unrecognized reloc " + Twine(Type));
   }

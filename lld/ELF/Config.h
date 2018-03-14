@@ -37,6 +37,8 @@ enum ELFKind {
 // For --build-id.
 enum class BuildIdKind { None, Fast, Md5, Sha1, Hexstring, Uuid };
 
+enum class CapRelocsMode { Legacy, ElfReloc, CBuildCap };
+
 // For --discard-{all,locals,none}.
 enum class DiscardPolicy { Default, All, Locals, None };
 
@@ -176,6 +178,11 @@ struct Configuration {
   StripPolicy Strip;
   UnresolvedPolicy UnresolvedSymbols;
   Target2Policy Target2;
+  // Method used for capability relocations for preemptible symbols
+  CapRelocsMode PreemptibleCapRelocsMode;
+  // Method used for capability relocations for non-preemptible symbols
+  CapRelocsMode LocalCapRelocsMode;
+
   BuildIdKind BuildId = BuildIdKind::None;
   ELFKind EKind = ELFNoneKind;
   uint16_t DefaultSymbolVersion = llvm::ELF::VER_NDX_GLOBAL;

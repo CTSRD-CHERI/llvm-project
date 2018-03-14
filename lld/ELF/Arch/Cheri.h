@@ -37,6 +37,10 @@ struct SymbolAndOffset {
   // is stripped. This function tries to find the local symbol to a better match
   SymbolAndOffset findRealSymbol() const;
 
+  static SymbolAndOffset fromSectionWithOffset(InputSectionBase *IS,
+                                               uint64_t Offset,
+                                               Symbol *Default = nullptr);
+
   template <typename ELFT> inline std::string verboseToString() const {
     return lld::verboseToString<ELFT>(Sym, Offset);
   }
@@ -159,6 +163,14 @@ static void foreachGlobalSizesSymbol(InputSection *IS, CallBack &&CB) {
       CB(RealSymName, Target, D->Value);
     }
   }
+}
+
+inline void readOnlyCapRelocsError(Symbol &Sym, const Twine &SourceMsg) {
+  error("attempting to add a capability relocation against " +
+        (Sym.getName().empty() ? "local symbol" : "symbol " + toString(Sym)) +
+        " in a read-only section; pass -Wl,-z,notext if you really want to do "
+        "this" +
+        SourceMsg);
 }
 
 } // namespace elf
