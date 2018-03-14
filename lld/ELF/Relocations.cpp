@@ -809,7 +809,6 @@ static RelExpr processRelocAux(InputSectionBase &Sec, RelExpr Expr,
       }
       // The following is a hack for allowing R_MIPS_CHERI_CAPABILITY relocation
       // for local symbols (this should probably be removed in the future)
-      errs() << toString(Sym) << " binding=" << (int)Sym.Binding << " vis=" << (int)Sym.Visibility << " export dyn=" << Sym.ExportDynamic << "\n";
       if (!Sym.includeInDynsym()) {
         static std::vector<Symbol*> AddedToDynSymTab;
         // Ensure that it is included in the dynamic symbol table
