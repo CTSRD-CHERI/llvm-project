@@ -2263,7 +2263,9 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
                              DAG.getEntryNode(), PtrInfo);
     } else {
       llvm::errs() << "Not using capability table for " <<  GV->getName() << "\n";
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
       GV->dump();
+#endif
       assert(false && "SHOULD HAVE USED CAP TABLE");
     }
   }
