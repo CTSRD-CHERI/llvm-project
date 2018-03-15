@@ -1505,6 +1505,9 @@ unsigned R600InstrInfo::getAddressSpaceForPseudoSourceKind(
   case PseudoSourceValue::GlobalValueCallEntry:
   case PseudoSourceValue::ExternalSymbolCallEntry:
   case PseudoSourceValue::TargetCustom:
+  // CapTable is not used on AMDGPU but we still need to handle it to
+  // avoid assertions during PseudoSourceValueManager ctor
+  case PseudoSourceValue::CapTable:
     return AMDGPUASI.CONSTANT_ADDRESS;
   }
   llvm_unreachable("Invalid pseudo source kind");

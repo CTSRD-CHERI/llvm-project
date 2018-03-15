@@ -1896,7 +1896,9 @@ unsigned SIInstrInfo::getAddressSpaceForPseudoSourceKind(
   case PseudoSourceValue::TargetCustom:
     return AMDGPUASI.CONSTANT_ADDRESS;
   case PseudoSourceValue::CapTable:
-    llvm_unreachable("Cap table not supported for AMDGPU");
+    // llvm_unreachable("Cap table not supported for AMDGPU");
+    // It won't be used. just return some random value
+    return AMDGPUASI.CONSTANT_ADDRESS;
   }
   return AMDGPUASI.FLAT_ADDRESS;
 }
