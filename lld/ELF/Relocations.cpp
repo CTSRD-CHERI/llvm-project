@@ -798,7 +798,8 @@ static RelExpr processRelocAux(InputSectionBase &Sec, RelExpr Expr,
                                      : Config->LocalCapRelocsMode;
     // local cap relocs don't need a Elf relocation with a full symbol lookup:
     if (CapRelocMode == CapRelocsMode::ElfReloc) {
-      assert(Config->Pic && "CapRelocsMode::ElfReloc needs a dynamic linker!");
+      assert((Config->Pic || needsInterpSection()) &&
+             "CapRelocsMode::ElfReloc needs a dynamic linker!");
       assert(Config->HasDynSymTab && "Should have been checked in Driver.cpp");
       // We don't use a R_MIPS_CHERI_CAPABILITY relocation for the input but
       // instead need to use an absolute pointer size relocation to write

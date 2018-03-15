@@ -123,7 +123,7 @@ StringRef elf::getOutputSectionName(InputSectionBase *S) {
   return S->Name;
 }
 
-static bool needsInterpSection() {
+bool lld::elf::needsInterpSection() {
   return !SharedFiles.empty() && !Config->DynamicLinker.empty() &&
          Script->needsInterpSection();
 }
