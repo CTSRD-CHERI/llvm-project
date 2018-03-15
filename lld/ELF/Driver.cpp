@@ -300,6 +300,9 @@ static void checkOptions(opt::InputArgList &Args) {
     if (Config->Pie)
       error("-r and -pie may not be used together");
   }
+  if (Config->LocalCapRelocsMode == CapRelocsMode::CBuildCap)
+    error("local-cap-relocs=cbuildcap is not implemented yet");
+  assert(Config->PreemptibleCapRelocsMode != CapRelocsMode::CBuildCap);
 }
 
 static const char *getReproduceOption(opt::InputArgList &Args) {
@@ -1202,20 +1205,6 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
       warn("lld may use movt/movw, no object with architecture supporting "
            "feature detected.");
   }
-
-  // Validate CHERI cap-relocs mode (can only be done once we know if there are
-  // any linked shared libraries)
-  if (!Config->Pic && !Config->Relocatable && !needsInterpSection()) {
-    if (Config->PreemptibleCapRelocsMode == CapRelocsMode::ElfReloc)
-      error("preemptible-cap-relocs=elf only works with a runtime linker");
-    if (Config->LocalCapRelocsMode == CapRelocsMode::ElfReloc)
-      error("local-cap-relocs=elf only works with a runtime linker");
-  }
-  if (Config->LocalCapRelocsMode == CapRelocsMode::CBuildCap)
-    error("local-cap-relocs=cbuildcap is not implemented yet");
-  assert(Config->PreemptibleCapRelocsMode != CapRelocsMode::CBuildCap);
-  if (errorCount())
-    return;
 
   if (Config->EMachine == EM_MIPS) {
     // Compute the size of a CHERI capability based on the MIPS ABI flags:

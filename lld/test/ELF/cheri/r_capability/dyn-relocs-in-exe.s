@@ -2,8 +2,10 @@
 
 # Linking with elf relocs should not work for static binaries
 # RUN: not ld.lld -preemptible-caprelocs=elf -local-caprelocs=elf %t.o -o %t.exe 2>&1 | FileCheck %s -check-prefix ERR
-# ERR: error: preemptible-cap-relocs=elf only works with a runtime linker
-# ERR: error: local-cap-relocs=elf only works with a runtime linker
+# ERR: error: attempting to emit a R_CAPABILITY relocation against symbol __start in binary without a dynamic linker; try removing -Wl,-local-caprelocs=elf
+# ERR-NEXT: >>> referenced by <unknown kind> capsym
+# ERR-NEXT: >>> defined in {{.+}}dyn-relocs-in-exe.s.tmp.o:(.data+0x0)
+
 
 # But -pie is fine
 # RUN: ld.lld -pie -preemptible-caprelocs=elf -local-caprelocs=elf %t.o -o %t.exe
@@ -22,6 +24,8 @@ __start:
   nop
 
 .data
+.global capsym
+capsym:
 .chericap __start
 
 .endif

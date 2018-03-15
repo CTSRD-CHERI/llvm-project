@@ -781,12 +781,14 @@ static RelExpr processRelocAux(InputSectionBase &Sec, RelExpr Expr,
   }
 
   if (Expr == R_CHERI_CAPABILITY) {
-    if (!CanWrite) {
+    static auto getRelocTargetLocation = [&]() -> std::string {
       auto RelocTarget = SymbolAndOffset::fromSectionWithOffset(&Sec, Offset);
-      readOnlyCapRelocsError(Sym, RelocTarget.Sym
-                                      ? ("\n>>> referenced by " +
-                                         RelocTarget.verboseToString<ELFT>())
-                                      : getLocation(Sec, Sym, Offset));
+      return RelocTarget.Sym ? ("\n>>> referenced by " +
+                                RelocTarget.verboseToString<ELFT>())
+                             : getLocation(Sec, Sym, Offset);
+    };
+    if (!CanWrite) {
+      readOnlyCapRelocsError(Sym, getRelocTargetLocation());
       return Expr;
     }
     // Emit either the legacy __cap_relocs section or a R_CHERI_CAPABILITY reloc
@@ -798,8 +800,15 @@ static RelExpr processRelocAux(InputSectionBase &Sec, RelExpr Expr,
                                      : Config->LocalCapRelocsMode;
     // local cap relocs don't need a Elf relocation with a full symbol lookup:
     if (CapRelocMode == CapRelocsMode::ElfReloc) {
-      assert((Config->Pic || needsInterpSection()) &&
-             "CapRelocsMode::ElfReloc needs a dynamic linker!");
+      if (!Config->Pic && !needsInterpSection()) {
+        error("attempting to emit a R_CAPABILITY relocation against " +
+              (Sym.getName().empty() ? "local symbol"
+                                     : "symbol " + toString(Sym)) +
+              " in binary without a dynamic linker; try removing -Wl,-" +
+              (Sym.IsPreemptible ? "preemptible" : "local") +
+              "-caprelocs=elf" + getRelocTargetLocation());
+        return Expr;
+      }
       assert(Config->HasDynSymTab && "Should have been checked in Driver.cpp");
       // We don't use a R_MIPS_CHERI_CAPABILITY relocation for the input but
       // instead need to use an absolute pointer size relocation to write
