@@ -87,9 +87,3 @@ void a(void) {
   void *__capability *__capability c = &b;
 }
 
-
-// This started crashing in CodeGen after recursively resolving memberexprs
-void a(void) {
-  void * __capability b;
-  void *__capability *__capability c = &b; // expected-error{{converting non-capability type 'void * __capability *' to capability type 'void * __capability * __capability' without an explicit cast}}
-}
