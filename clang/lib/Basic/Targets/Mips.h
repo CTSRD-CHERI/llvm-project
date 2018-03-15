@@ -19,6 +19,7 @@
 #include "clang/Basic/TargetOptions.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/ADT/Triple.h"
+#include "llvm/MC/MCTargetOptions.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Compiler.h"
 
@@ -46,10 +47,19 @@ class LLVM_LIBRARY_VISIBILITY MipsTargetInfo : public TargetInfo {
     } else
       llvm_unreachable("Invalid ABI");
 
+    StringRef PurecapOptions = "";
+    // Only set globals address space to 200 for cap-table mode
+    if (CapabilityABI)
+      PurecapOptions = llvm::MCTargetOptions::cheriUsesCapabilityTable()
+                           ? "-A200-P200-G200"
+                           : "-A200-P200";
+
     if (BigEndian)
-      resetDataLayout(("E-" + Layout + (CapabilityABI ? "-A200-P200" : "")).str());
+      resetDataLayout(
+          ("E-" + Layout + (CapabilityABI ? PurecapOptions : "")).str());
     else
-      resetDataLayout(("e-" + Layout + (CapabilityABI ? "-A200-P200" : "")).str());
+      resetDataLayout(
+          ("e-" + Layout + (CapabilityABI ? PurecapOptions : "")).str());
   }
 
   static const Builtin::Info BuiltinInfo[];

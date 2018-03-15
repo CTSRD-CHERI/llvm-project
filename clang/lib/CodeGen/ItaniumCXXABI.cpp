@@ -934,8 +934,8 @@ ItaniumCXXABI::BuildMemberPointer(const CXXMethodDecl *MD,
     if (TI.areAllPointersCapabilities()) {
       if (CGF) {
         // llvm::errs() << "emitting local member pointer to " << MD->getQualifiedNameAsString() << "\n";
-        NonConstAddr = CodeGenFunction::FunctionAddressToCapability(*CGF, addr);
-        NonConstAddr = CGF->Builder.CreateBitCast(NonConstAddr, CGM.VoidPtrTy);
+        NonConstAddr = CodeGenFunction::FunctionAddressToCapability(
+            *CGF, addr, CGM.VoidPtrTy);
       }
       else {
         // llvm::errs() << "emitting global member pointer to " << MD->getQualifiedNameAsString() << "\n";
@@ -1226,7 +1226,8 @@ void ItaniumCXXABI::emitThrow(CodeGenFunction &CGF, const CXXThrowExpr *E) {
       CXXDestructorDecl *DtorD = Record->getDestructor();
       Dtor = CGM.getAddrOfCXXStructor(DtorD, StructorType::Complete);
       if (CGF.getContext().getTargetInfo().areAllPointersCapabilities())
-        Dtor = CodeGenFunction::FunctionAddressToCapability(CGF, Dtor);
+        Dtor = CodeGenFunction::FunctionAddressToCapability(CGF, Dtor,
+                                                            CGM.Int8PtrTy);
       Dtor = CGF.Builder.CreateBitCast(Dtor, CGM.Int8PtrTy);
     }
   }
@@ -2332,7 +2333,7 @@ static void emitGlobalDtorWithCXAAtExit(CodeGenFunction &CGF,
   if (TI.areAllPointersCapabilities()) {
     if (dtorV->getType()->getPointerAddressSpace() != AS) {
       // dtorTy defined above will be the right capability type
-      dtorV = CodeGenFunction::FunctionAddressToCapability(CGF, dtorV);
+      dtorV = CodeGenFunction::FunctionAddressToCapability(CGF, dtorV, dtorTy);
     }
   }
   dtorV = CGF.Builder.CreateBitCast(dtorV, dtorTy);

@@ -378,7 +378,7 @@ namespace PR7556 {
 
     // C can't be zero-initialized due to pointer to data member:
     // CHECK-NEXT: [[C_AS_I8:%.+]] = bitcast %"struct.PR7556::C" addrspace(200)* [[STRUCT_C]] to i8 addrspace(200)*
-    // CHECK-NEXT: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 8 [[C_AS_I8]], i8 addrspace(200)* align 8 addrspacecast (i8* bitcast (%"struct.PR7556::C"* @0 to i8*) to i8 addrspace(200)*), i64 8, i1 false)
+    // CHECK-NEXT: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 8 [[C_AS_I8]], i8 addrspace(200)* align 8 bitcast (%"struct.PR7556::C" addrspace(200)* @0 to i8 addrspace(200)*), i64 8, i1 false)
     // CHECK-NEXT: call void @_ZN6PR75561CD1Ev(%"struct.PR7556::C" addrspace(200)* [[STRUCT_C]])
     C();
     // CHECK: ret void

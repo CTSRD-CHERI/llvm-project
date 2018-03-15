@@ -17,6 +17,7 @@
 #include "clang/Basic/MacroBuilder.h"
 #include "clang/Basic/TargetBuiltins.h"
 #include "llvm/ADT/StringSwitch.h"
+#include "llvm/MC/MCTargetOptions.h"
 
 using namespace clang;
 using namespace clang::targets;
@@ -172,6 +173,8 @@ void MipsTargetInfo::getTargetDefines(const LangOptions &Opts,
       Builder.defineMacro("__CHERI_SANDBOX__", Twine(4));
       Builder.defineMacro("__CHERI_PURE_CAPABILITY__", Twine(2));
     }
+    if (llvm::MCTargetOptions::cheriUsesCapabilityTable())
+      Builder.defineMacro("__CHERI_CAPABILITY_TABLE__", Twine(1));
 
     // Macros for use with the set and get permissions builtins.
     Builder.defineMacro("__CHERI_CAP_PERMISSION_GLOBAL__", Twine(1<<0));
