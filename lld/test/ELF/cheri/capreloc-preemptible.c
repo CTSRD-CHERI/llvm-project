@@ -15,13 +15,13 @@
 // SHLIB-RELOCS-NEXT:  Section (7) .rel.dyn {
 // SHLIB-RELOCS-NEXT:    0x20000 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 // SHLIB-RELOCS-NEXT:    0x20008 R_MIPS_CHERI_ABSPTR/R_MIPS_64/R_MIPS_NONE foo 0x0 (real addend unknown)
+// SHLIB-RELOCS-NEXT:    0x20018 R_MIPS_CHERI_SIZE/R_MIPS_64/R_MIPS_NONE foo 0x0 (real addend unknown)
 // SHLIB-RELOCS-NEXT:  }
 // SHLIB-RELOCS-NEXT:]
 // RUN: llvm-objdump -C -r -s -t -h %t.so | FileCheck %s -check-prefixes CHECK,%cheri_type
 // CHECK-LABEL: CAPABILITY RELOCATION RECORDS:
 // 10000 is the address of foo_ptr
-// FIXME: shouldn't really be setting the length here
-// CHECK-NEXT: 0x0000000000010000	Base:  (0x0000000000000000)	Offset: 0x0000000000000000	Length: 0x0000000000000004	Permissions: 0x00000000
+// CHECK-NEXT: 0x0000000000010000	Base:  (0x0000000000000000)	Offset: 0x0000000000000000	Length: 0x0000000000000000	Permissions: 0x00000000
 // CHECK-LABEL: Sections:
 // CHERI128:  .data         00000010 0000000000010000 DATA
 // CHERI256:  .data         00000020 0000000000010000 DATA

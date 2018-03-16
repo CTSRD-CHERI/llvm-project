@@ -19,6 +19,8 @@
 //                           ^--- Target for bar_ptr (since it is not preemptible this is resolved against the load address)
 // SHLIB-RELOCS-NEXT:     0x20008 R_MIPS_CHERI_ABSPTR/R_MIPS_64/R_MIPS_NONE foo 0x0 (real addend unknown)
 //                           ^--- Target for foo_ptr
+// SHLIB-RELOCS-NEXT:     0x20018 R_MIPS_CHERI_SIZE/R_MIPS_64/R_MIPS_NONE foo 0x0 (real addend unknown)
+//                           ^--- Size for foo_ptr
 // SHLIB-RELOCS-NEXT:  }
 // SHLIB-RELOCS-NEXT:]
 // RUN: llvm-objdump -C -r -s -t -h %t.so | FileCheck %s -check-prefixes CHECK,%cheri_type

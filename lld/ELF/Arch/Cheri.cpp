@@ -307,9 +307,6 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
     ContainsDynamicRelocations = true;
   }
   if (TargetNeedsDynReloc) {
-    // Capability target is the second field -> offset + 8
-    uint64_t OffsetInOutSec = CurrentEntryOffset + 8;
-    assert(OffsetInOutSec < getSize());
 #ifdef DEBUG_CAP_RELOCS
     message("Adding dyn reloc at " + toString(this) + "+0x" +
             utohexstr(OffsetInOutSec) + " against " +
@@ -317,20 +314,35 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
     message("Symbol preemptible:" + Twine(Target.Sym->IsPreemptible));
 #endif
 
-    // If the target is not preemptible we can optimize this to a relative
-    // relocation agaist the image base
-    bool RelativeToLoadAddress = !Target.Sym->IsPreemptible;
+    bool RelativeToLoadAddress = false;
+    RelType RelocKind;
+    if (Target.Sym->IsPreemptible) {
+      RelocKind = *elf::Target->AbsPointerRel;
+    } else {
+      // If the target is not preemptible we can optimize this to a relative
+      // relocation agaist the image base
+      RelativeToLoadAddress = true;
+      RelocKind = elf::Target->RelativeRel;
+    }
     // The addend is not used as the offset into the capability here, as we
     // have the offset field in the __cap_relocs for that. The Addend
     // will be zero unless we are targetting a string constant as these
     // don't have a symbol and will be like .rodata.str+0x1234
-
-    RelType RelocKind = RelativeToLoadAddress ? elf::Target->RelativeRel
-                                              : *elf::Target->AbsPointerRel;
-    int64_t Addend = RelativeToLoadAddress ? Target.Offset : 0;
-    InX::RelaDyn->addReloc({RelocKind, this, OffsetInOutSec,
+    int64_t Addend = Target.Offset;
+    // Capability target is the second field -> offset + 8
+    assert((CurrentEntryOffset + 8) < getSize());
+    InX::RelaDyn->addReloc({RelocKind, this, CurrentEntryOffset + 8,
                             RelativeToLoadAddress, Target.Sym, Addend});
     ContainsDynamicRelocations = true;
+    if (!RelativeToLoadAddress) {
+      // We also add a size relocation for the size field here
+      assert(Config->EMachine == EM_MIPS);
+      RelType Size64Rel = R_MIPS_CHERI_SIZE | (R_MIPS_64 << 8);
+      // Capability size is the fourth field -> offset + 24
+      assert((CurrentEntryOffset + 24) < getSize());
+      InX::RelaDyn->addReloc(Size64Rel, this, CurrentEntryOffset + 24,
+                             Target.Sym);
+    }
   }
 }
 
@@ -448,6 +460,7 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
     uint64_t TargetVA = Reloc.Target.Sym->getVA(Reloc.Target.Offset);
     bool PreemptibleDynReloc =
         Reloc.NeedsDynReloc && Reloc.Target.Sym->IsPreemptible;
+    uint64_t TargetSize = 0;
     if (PreemptibleDynReloc) {
       // If we have a relocation against a preemptible symbol (even in the
       // current DSO) we can't compute the virtual address here so we only write
@@ -457,15 +470,18 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
               Twine(Reloc.Target.Offset) + " - " +
               Reloc.Target.verboseToString<ELFT>());
       TargetVA = Reloc.Target.Offset;
+    } else {
+      // For non-preemptible symbols we can write the target size:
+      TargetSize = getTargetSize<ELFT>(Location, Reloc,
+                                       /*Strict=*/!containsLegacyCapRelocs());
     }
     uint64_t TargetOffset = Reloc.CapabilityOffset;
     uint64_t Permissions = Reloc.Target.Sym->isFunc() ? 1ULL << 63 : 0;
-    uint64_t TargetSize =
-        getTargetSize<ELFT>(Location, Reloc,
-                            /*Strict=*/!containsLegacyCapRelocs());
+
     // TODO: should we warn about symbols that are out-of-bounds?
     // mandoc seems to do it so I guess we need it
     // if (TargetOffset < 0 || TargetOffset > TargetSize) warn(...);
+
     InMemoryCapRelocEntry<E> Entry{LocationVA, TargetVA, TargetOffset,
                                    TargetSize, Permissions};
     memcpy(Buf + Offset, &Entry, sizeof(Entry));
