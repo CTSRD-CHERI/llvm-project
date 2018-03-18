@@ -504,6 +504,8 @@ class Reducer(object):
     def _check_crash(self, command, infile, proc_info: subprocess.CompletedProcess=None) -> typing.Optional[ErrorKind]:
         # command = ["/tmp/crash"]
         full_cmd = command + [str(infile)]
+        assert "%s" not in full_cmd, full_cmd
+
         verbose_print("\nRunning", blue(quote_cmd(full_cmd)))
         if self.args.reduce_tool == "noop":
             if proc_info is not None:
@@ -673,15 +675,18 @@ class Reducer(object):
             if not input("Are you sure you want to continue? [y/N]").lower().startswith("y"):
                 sys.exit()
 
-        if command[0] == str(self.options.clang_cmd):
-            return self._simplify_clang_crash_command(command, infile)
-        # TODO: should be able to simplify llc crashes (e.g. by adding -O0, -verify-machineinstrs, etc)
+        if new_command[0] == str(self.options.clang_cmd):
+            new_command, infile = self._simplify_clang_crash_command(new_command, infile)
+        elif new_command[0] == str(self.options.llc_cmd):
+            # TODO: should be able to simplify llc crashes (e.g. by adding -O0, -verify-machineinstrs, etc)
+            pass
         new_command.append("%s")  # ensure that the command contains %s at the end
         return new_command, infile
 
     def _simplify_clang_crash_command(self, new_command: list, infile: Path) -> tuple:
         assert new_command[0] == str(self.options.clang_cmd)
         assert "-o" in new_command
+        assert "%s" not in new_command
         full_cmd = new_command.copy()
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether replacing optimization level with -O0 crashes:",
