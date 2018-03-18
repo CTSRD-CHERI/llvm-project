@@ -5646,11 +5646,7 @@ static bool EvaluatePointer(const Expr* E, LValue& Result, EvalInfo &Info,
                             bool InvalidBaseOK) {
   assert(E->isRValue() &&
          (E->getType()->hasPointerRepresentation() ||
-          E->getType()->isCHERICapabilityType(Info.Ctx, /*false*/true)));
-  // XXXAR: I'm not sure we should be handling __intcap_t here but unlike doing
-  // it in EvaluateInteger we will get assertions instead of silently emitting
-  // the wrong type to the output (e.g. an .8byte directive for uintcap_t values
-  // in an array).
+          E->getType()->isCHERICapabilityType(Info.Ctx, false)));
   return PointerExprEvaluator(Info, Result, InvalidBaseOK).Visit(E);
 }
 
@@ -6996,7 +6992,6 @@ public:
 
   bool Success(const llvm::APSInt &SI, const Expr *E, APValue &Result) {
     assert(E->getType()->isIntegralOrEnumerationType() &&
-           !E->getType()->isIntCapType() &&
            "Invalid evaluation result.");
     assert(SI.isSigned() == E->getType()->isSignedIntegerOrEnumerationType() &&
            "Invalid evaluation result.");
@@ -7011,7 +7006,6 @@ public:
 
   bool Success(const llvm::APInt &I, const Expr *E, APValue &Result) {
     assert(E->getType()->isIntegralOrEnumerationType() && 
-           !E->getType()->isIntCapType() &&
            "Invalid evaluation result.");
     assert(I.getBitWidth() == Info.Ctx.getIntWidth(E->getType()) &&
            "Invalid evaluation result.");
@@ -7025,8 +7019,7 @@ public:
   }
 
   bool Success(uint64_t Value, const Expr *E, APValue &Result) {
-    assert(E->getType()->isIntegralOrEnumerationType() &&
-           !E->getType()->isIntCapType() &&
+    assert(E->getType()->isIntegralOrEnumerationType() && 
            "Invalid evaluation result.");
     Result = APValue(Info.Ctx.MakeIntValue(Value, E->getType()));
     return true;
@@ -10066,13 +10059,6 @@ static bool Evaluate(APValue &Result, EvalInfo &Info, const Expr *E) {
   } else if (T->isVectorType()) {
     if (!EvaluateVector(E, Result, Info))
       return false;
-  } else if (T->isIntCapType()) {
-    // XXXAR: not sure if treating this as a pointer is better than just
-    // special casing CodeGen later?
-    LValue LV;
-    if (!EvaluatePointer(E, LV, Info))
-      return false;
-    LV.moveInto(Result);
   } else if (T->isIntegralOrEnumerationType()) {
     if (!IntExprEvaluator(Info, Result).Visit(E))
       return false;

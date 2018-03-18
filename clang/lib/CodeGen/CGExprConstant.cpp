@@ -1821,7 +1821,6 @@ llvm::Constant *ConstantEmitter::tryEmitPrivate(const APValue &Value,
   case APValue::LValue:
     return ConstantLValueEmitter(*this, Value, DestType).tryEmit();
   case APValue::Int:
-    assert(!DestType->isIntCapType());
     return llvm::ConstantInt::get(CGM.getLLVMContext(), Value.getInt());
   case APValue::ComplexInt: {
     llvm::Constant *Complex[2];
@@ -2104,7 +2103,7 @@ llvm::Constant *ConstantEmitter::emitNullForMemory(CodeGenModule &CGM,
 }
 
 llvm::Constant *CodeGenModule::EmitNullConstant(QualType T) {
-  if (T->getAs<PointerType>() || T->isIntCapType())
+  if (T->getAs<PointerType>())
     return getNullPointer(
         cast<llvm::PointerType>(getTypes().ConvertTypeForMem(T)), T);
 

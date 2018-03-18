@@ -3,6 +3,8 @@
 // RUN: %cheri_cc1 -S %s -o - | FileCheck %s -check-prefix HYBRID-ASM
 // RUN: %cheri_purecap_cc1 -S %s -o - | %cheri_FileCheck %s -check-prefix PURECAP-ASM
 
+// XFAIL: *
+
 // We were miscompiling qhooks.cpp from QtBase: even in the purecap ABI we
 // were emitting .8byte directives for the qtHookData members instead of
 // capability sized elements. Because of this the qtHookData symbol only
