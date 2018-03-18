@@ -3,8 +3,6 @@
 // RUN: %cheri_cc1 -S %s -o - | FileCheck %s -check-prefix HYBRID-ASM
 // RUN: %cheri_purecap_cc1 -S %s -o - | %cheri_FileCheck %s -check-prefix PURECAP-ASM
 
-// XFAIL: *
-
 // We were miscompiling qhooks.cpp from QtBase: even in the purecap ABI we
 // were emitting .8byte directives for the qtHookData members instead of
 // capability sized elements. Because of this the qtHookData symbol only
@@ -91,11 +89,16 @@ quintptr array2[4] = {
 // HYBRID-ASM-NEXT:	.8byte	0
 // HYBRID-ASM-NEXT:	.size	array2, 32
 
-// FIXME: The size is correct now but we are emitting a ctor function for this field array
-// Maybe this does need to be done in IntExprEvaluator
-// CHECK-PURECAP: @array2 = addrspace(200) global [4 x i8 addrspace(200)*] zeroinitializer, align [[$CAP_SIZE]]
+// CHECK-PURECAP: @array2 = addrspace(200) global [4 x i8 addrspace(200)*]
+// CHECK-PURECAP-SAME: [i8 addrspace(200)* inttoptr (i64 42 to i8 addrspace(200)*),
+// CHECK-PURECAP-SAME:  i8 addrspace(200)* bitcast ([4 x i8 addrspace(200)*] addrspace(200)* @array2 to i8 addrspace(200)*),
+// CHECK-PURECAP-SAME:  i8 addrspace(200)* null,
+// CHECK-PURECAP-SAME:  i8 addrspace(200)* null], align [[$CAP_SIZE]]
 // PURECAP-ASM-LABEL: array2:
-// PURECAP-ASM-NEXT:	.space	[[@EXPR 4 * $CAP_SIZE]]
+// PURECAP-ASM-NEXT:	.chericap	42
+// PURECAP-ASM-NEXT:	.chericap	array2
+// PURECAP-ASM-NEXT:	.chericap	0
+// PURECAP-ASM-NEXT:	.chericap	0
 // PURECAP-ASM-NEXT: 	.size	array2, [[@EXPR 4 * $CAP_SIZE]]
 
 // Check arrays with run-time initializers:

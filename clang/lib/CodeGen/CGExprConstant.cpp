@@ -1820,8 +1820,18 @@ llvm::Constant *ConstantEmitter::tryEmitPrivate(const APValue &Value,
     llvm_unreachable("Constant expressions should be initialized.");
   case APValue::LValue:
     return ConstantLValueEmitter(*this, Value, DestType).tryEmit();
-  case APValue::Int:
-    return llvm::ConstantInt::get(CGM.getLLVMContext(), Value.getInt());
+  case APValue::Int: {
+    // For __uintcap_t we get an APValue::Int but we actually need to emit
+    // a i8 addrspace(200)* and not i64 here.
+    llvm::Type *TargetTy = CGM.getTypes().ConvertTypeForMem(DestType);
+    auto AsInt = llvm::ConstantInt::get(CGM.getLLVMContext(), Value.getInt());
+    if (DestType->isIntCapType()) {
+      return llvm::ConstantExpr::getIntToPtr(AsInt, TargetTy);
+    }
+    assert(!DestType->isCHERICapabilityType(CGM.getContext()));
+    assert(AsInt->getType() == TargetTy);
+    return AsInt;
+  }
   case APValue::ComplexInt: {
     llvm::Constant *Complex[2];
 
