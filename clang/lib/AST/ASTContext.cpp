@@ -10146,11 +10146,12 @@ ASTContext::ObjCMethodsAreEqual(const ObjCMethodDecl *MethodDecl,
 
 uint64_t ASTContext::getTargetNullPointerValue(QualType QT) const {
   LangAS AS;
-  if (QT->getUnqualifiedDesugaredType()->isNullPtrType())
+  if (QT->isIntCapType())
+    AS = LangAS::Default; // TODO: LangAS::CheriCap?
+  else if (QT->getUnqualifiedDesugaredType()->isNullPtrType())
     AS = LangAS::Default;
   else
     AS = QT->getPointeeType().getAddressSpace();
-
   return getTargetInfo().getNullPointerValue(AS);
 }
 
