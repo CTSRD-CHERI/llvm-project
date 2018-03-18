@@ -1829,7 +1829,6 @@ llvm::Constant *ConstantEmitter::tryEmitPrivate(const APValue &Value,
       return llvm::ConstantExpr::getIntToPtr(AsInt, TargetTy);
     }
     assert(!DestType->isCHERICapabilityType(CGM.getContext()));
-    assert(AsInt->getType() == TargetTy);
     return AsInt;
   }
   case APValue::ComplexInt: {
