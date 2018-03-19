@@ -35,21 +35,31 @@ SUBST = {
     '%clang': [],
     '%clang_cc1': ['-cc1'],
     '%clangxx': ['--driver-mode=g++'],
+    '%cheri_cc1': ['-cc1', "-triple=cheri-unknown-freebsd"],
+    '%cheri128_cc1': ['-cc1', "-triple=cheri-unknown-freebsd", "-target-cpu", "cheri128", "-cheri-size", "128"],
+    '%cheri256_cc1': ['-cc1', "-triple=cheri-unknown-freebsd", "-target-cpu", "cheri256", "-cheri-size", "256"],
+    '%cheri_purecap_cc1': ['-cc1', "-triple=cheri-unknown-freebsd", "-target-abi", "purecap"],
+    '%cheri256_purecap_cc1': ['-cc1', "-triple=cheri-unknown-freebsd", "-target-abi", "purecap", "-target-cpu", "cheri128", "-cheri-size", "128"],
+    '%cheri123_purecap_cc1': ['-cc1', "-triple=cheri-unknown-freebsd", "-target-abi", "purecap", "-target-cpu", "cheri256", "-cheri-size", "256"],
 }
 
 def get_line2spell_and_mangled(args, clang_args):
   ret = {}
   with tempfile.NamedTemporaryFile() as f:
     # TODO Make c-index-test print mangled names without circumventing through precompiled headers
-    status = subprocess.run([args.c_index_test, '-write-pch', f.name, *clang_args],
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    c_index_cmd = [args.c_index_test, '-write-pch', f.name, *clang_args]
+    if args.verbose:
+      print("Running", c_index_cmd)
+    status = subprocess.run(c_index_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if status.returncode:
       sys.stderr.write(status.stdout.decode())
       sys.exit(2)
     output = subprocess.check_output([args.c_index_test,
-        '-test-print-mangle', f.name])
+        '-test-print-mangle', f.name, *clang_args])
     if sys.version_info[0] > 2:
       output = output.decode()
+
+  # FIXME: mangling won't work for C++ and CheriABI for some reason..
 
   RE = re.compile(r'^FunctionDecl=(\w+):(\d+):\d+ \(Definition\) \[mangled=([^]]+)\]')
   for line in output.splitlines():
