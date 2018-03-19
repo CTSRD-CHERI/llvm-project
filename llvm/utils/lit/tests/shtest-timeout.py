@@ -3,7 +3,9 @@
 # PR33944
 # XFAIL: windows
 # https://bugs.llvm.org/show_bug.cgi?id=35083
-# UNSUPPORTED: freebsd
+
+# This seems to break in jenkins where we run with a per-test timeout of 4 minutes
+# UNSUPPORTED: *
 
 # Test per test timeout using external shell
 # RUN: not %{lit} \
