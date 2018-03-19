@@ -61,7 +61,8 @@ def get_line2spell_and_mangled(args, clang_args):
 
   # FIXME: mangling won't work for C++ and CheriABI for some reason..
 
-  RE = re.compile(r'^FunctionDecl=(\w+):(\d+):\d+ \(Definition\) \[mangled=([^]]+)\]')
+  # ignore flags such as (noexcept) between (Definition) and [mangled=
+  RE = re.compile(r'^FunctionDecl=(\w+):(\d+):\d+ \(Definition\).* \[mangled=([^]]+)\]')
   for line in output.splitlines():
     m = RE.match(line)
     if not m: continue
