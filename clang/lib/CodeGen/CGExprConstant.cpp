@@ -1155,6 +1155,22 @@ llvm::Constant *
 ConstantEmitter::tryEmitAbstract(const Expr *E, QualType destType) {
   auto state = pushAbstract();
   auto C = tryEmitPrivate(E, destType);
+  // XXXAR: add some sanitity checks here to catch wrong arguments
+  // See for example commit b1b58b0e0c34463518b5fac08114388ee57e565e
+  // However, in the exceptions-seh.cpp test bool is promoted to
+  // CGM.getContext().IntTy so skip that check
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
+  if (LLVM_UNLIKELY(E->getType() != destType &&
+                    E->getType() != CGM.getContext().BoolTy)) {
+    llvm::errs() << __func__ << ": E->getType(): ";
+    E->getType().dump();
+    llvm::errs() << __func__ << ": destType: ";
+    destType.dump();
+    llvm::errs() << __func__ << ": E: ";
+    E->dump();
+    assert(E->getType() == destType);
+  }
+#endif
   return validateAndPopAbstract(C, state);
 }
 
@@ -1823,12 +1839,25 @@ llvm::Constant *ConstantEmitter::tryEmitPrivate(const APValue &Value,
   case APValue::Int: {
     // For __uintcap_t we get an APValue::Int but we actually need to emit
     // a i8 addrspace(200)* and not i64 here.
-    llvm::Type *TargetTy = CGM.getTypes().ConvertTypeForMem(DestType);
+    // Use ConvertType() here and not ConvertTypeForMem since that turns
+    // _Bool into i8/i32 instead of i1
+    llvm::Type *TargetTy = CGM.getTypes().ConvertType(DestType);
     auto AsInt = llvm::ConstantInt::get(CGM.getLLVMContext(), Value.getInt());
     if (DestType->isIntCapType()) {
       return llvm::ConstantExpr::getIntToPtr(AsInt, TargetTy);
     }
     assert(!DestType->isCHERICapabilityType(CGM.getContext()));
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
+    if (LLVM_UNLIKELY(AsInt->getType() != TargetTy)) {
+      llvm::errs() << __func__ << ": AsInt->getType(): ";
+      AsInt->getType()->dump();
+      llvm::errs() << __func__ << ": TargetTy: ";
+      TargetTy->dump();
+      llvm::errs() << __func__ << ": DestType: ";
+      DestType.dump();
+      assert(AsInt->getType() == TargetTy);
+    }
+#endif
     return AsInt;
   }
   case APValue::ComplexInt: {
