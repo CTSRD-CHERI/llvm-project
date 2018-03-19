@@ -7171,7 +7171,7 @@ bool IntExprEvaluator::CheckReferencedDecl(const Expr* E, const Decl* D) {
       if (!SameSign)
         Val.setIsSigned(!ECD->getInitVal().isSigned());
       if (!SameWidth)
-        Val = Val.extOrTrunc(Info.Ctx.getIntWidth(E->getType()));
+        Val = Val.extOrTrunc(Info.Ctx.getIntRange(E->getType()));
       return Success(Val, E);
     }
   }

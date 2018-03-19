@@ -15983,7 +15983,7 @@ EnumConstantDecl *Sema::CheckEnumConstant(EnumDecl *Enum,
   if (!EltTy->isDependentType()) {
     // Make the enumerator value match the signedness and size of the
     // enumerator's type.
-    EnumVal = EnumVal.extOrTrunc(Context.getIntWidth(EltTy));
+    EnumVal = EnumVal.extOrTrunc(Context.getIntRange(EltTy));
     EnumVal.setIsSigned(EltTy->isSignedIntegerOrEnumerationType());
   }
 

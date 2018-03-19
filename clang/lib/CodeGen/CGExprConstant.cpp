@@ -1837,14 +1837,18 @@ llvm::Constant *ConstantEmitter::tryEmitPrivate(const APValue &Value,
   case APValue::LValue:
     return ConstantLValueEmitter(*this, Value, DestType).tryEmit();
   case APValue::Int: {
-    // For __uintcap_t we get an APValue::Int but we actually need to emit
-    // a i8 addrspace(200)* and not i64 here.
+    // For __uintcap_t and enums whose underlying type is __[u]intcap_t,  we
+    // get an APValue::Int but we actually need to emit a i8 addrspace(200)*
+    // and not i64 here.
     // Use ConvertType() here and not ConvertTypeForMem since that turns
     // _Bool into i8/i32 instead of i1
     llvm::Type *TargetTy = CGM.getTypes().ConvertType(DestType);
     auto AsInt = llvm::ConstantInt::get(CGM.getLLVMContext(), Value.getInt());
-    if (DestType->isIntCapType()) {
+    if (DestType->isIntCapType())
       return llvm::ConstantExpr::getIntToPtr(AsInt, TargetTy);
+    if (const EnumType *ET = dyn_cast<EnumType>(DestType)) {
+      if (ET->getDecl()->getIntegerType()->isIntCapType())
+        return llvm::ConstantExpr::getIntToPtr(AsInt, TargetTy);
     }
     assert(!DestType->isCHERICapabilityType(CGM.getContext()));
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
