@@ -484,8 +484,10 @@ static DiscardPolicy getDiscard(opt::InputArgList &Args) {
 static CapRelocsMode getPreemptibleCapRelocsMode(opt::InputArgList &Args) {
   auto *Arg = Args.getLastArg(OPT_preemptible_caprelocs_legacy,
                               OPT_preemptible_caprelocs_elf);
-  if (!Arg) // TODO: change default to Elf
-    return CapRelocsMode::Legacy;
+  // The default behaviour is to emit R_CHERI_CAPABILITY relocations for
+  // preemptible symbols
+  if (!Arg)
+    return CapRelocsMode::ElfReloc;
   if (Arg->getOption().getID() == OPT_preemptible_caprelocs_legacy) {
     return CapRelocsMode::Legacy;
   } else if (Arg->getOption().getID() == OPT_preemptible_caprelocs_elf) {

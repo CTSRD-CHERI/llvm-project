@@ -4,7 +4,7 @@
 
 
 .rodata
-.global foo
+.protected foo
 .type foo,@object
 foo:
 .space 16
