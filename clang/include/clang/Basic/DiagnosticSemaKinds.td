@@ -6012,6 +6012,18 @@ def err_typecheck_convert_ptr_to_cap_unrelated_type: Error<"cannot implicitly "
   "or explicitly convert non-capability %select{| reference to}2 type %0 to "
   "unrelated capability type %1">;
 
+def warn_uintcap_bitwise_and : Warning<
+  "using bitwise and on capability types may give surprising results; "
+  "if this is an alignment check use __builtin_{is_aligned,align_up,align_down}(); "
+  "if you are operating on integer values only consider using size_t/vaddr_t; "
+  "if you are attempting to store data in the low pointer bits use the XXX builtins/macros.">,
+  InGroup<CHERIBitwiseOps>;
+def warn_uintcap_bad_bitwise_op : Warning<
+  "using %select{xor|shifts}0 on a capability type only operates on the offset; "
+  "consider casting to vaddr_t if this is used for pointer hashing "
+  "or explicitly get the offset with __builtin_cheri_offset_get().">,
+  InGroup<CHERIBitwiseOps>;
+
 def warn_mixed_capability_binop : Warning<
   "binary expression on capability and non-capability types: %0 and %1.  "
   "Provenance will be inherited from left-hand side">,

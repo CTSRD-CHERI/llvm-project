@@ -9416,6 +9416,13 @@ QualType Sema::CheckShiftOperands(ExprResult &LHS, ExprResult &RHS,
   // Sanity-check shift operands
   DiagnoseBadShiftValues(*this, LHS, RHS, Loc, Opc, LHSType);
 
+  if ((LHSType->isIntCapType() || RHSType->isIntCapType()) &&
+      (Opc == BO_Shl || Opc == BO_ShlAssign || Opc == BO_Shr ||
+       Opc == BO_ShrAssign))
+    Diag(Loc, diag::warn_uintcap_bad_bitwise_op)
+        << 1 /*=shift*/
+        << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
+
   // "The type of the result is that of the promoted left operand."
   return LHSType;
 }
@@ -10324,12 +10331,8 @@ inline QualType Sema::CheckBitwiseOperands(ExprResult &LHS, ExprResult &RHS,
                                            BinaryOperatorKind Opc) {
   checkArithmeticNull(*this, LHS, RHS, Loc, /*isCompare=*/false);
 
-  bool isLHSCap = LHS.get()->getType()->isCHERICapabilityType(Context);
-  bool isRHSCap = RHS.get()->getType()->isCHERICapabilityType(Context);
-  if ((isLHSCap && !isRHSCap) || (!isLHSCap && isRHSCap))
-    Diag(Loc, diag::warn_mixed_capability_binop)
-    << LHS.get()->getType() << RHS.get()->getType()
-    << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
+  // For the CHERI checks below we want to look at the unpromoted type
+  QualType OriginalLHSType = LHS.get()->getType();
 
   bool IsCompAssign =
       Opc == BO_AndAssign || Opc == BO_OrAssign || Opc == BO_XorAssign;
@@ -10355,8 +10358,23 @@ inline QualType Sema::CheckBitwiseOperands(ExprResult &LHS, ExprResult &RHS,
   LHS = LHSResult.get();
   RHS = RHSResult.get();
 
-  if (!compType.isNull() && compType->isIntegralOrUnscopedEnumerationType())
+  if (!compType.isNull() && compType->isIntegralOrUnscopedEnumerationType()) {
+    bool isLHSCap = OriginalLHSType->isCHERICapabilityType(Context);
+    bool isRHSCap = RHS.get()->getType()->isCHERICapabilityType(Context);
+    if (isLHSCap && (Opc == BO_And || Opc == BO_AndAssign))
+      Diag(Loc, diag::warn_uintcap_bitwise_and)
+          << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
+    else if (isLHSCap && (Opc == BO_Xor || Opc == BO_XorAssign))
+      Diag(Loc, diag::warn_uintcap_bad_bitwise_op)
+          << 0 /*=xor*/
+          << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
+    else if ((isLHSCap && !isRHSCap) || (!isLHSCap && isRHSCap))
+      // FIXME: this warning is not always useful
+      Diag(Loc, diag::warn_mixed_capability_binop)
+          << OriginalLHSType << RHS.get()->getType()
+          << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
     return compType;
+  }
   return InvalidOperands(Loc, LHS, RHS);
 }
 

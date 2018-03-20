@@ -693,6 +693,8 @@ public:
   Value *GetBinOpResult(const BinOpInfo &Op, Value *LHS, Value *V, QualType T) {
     if (!T->isCHERICapabilityType(CGF.getContext()))
       return V;
+    // FIXME: this breaks patterns such as `if (uintptr_t(x) & 1 == 1)`
+    // For now try to solve this by warning for this pattern
     return CGF.setPointerOffset(LHS, V);
   }
   Value *GetBinOpResult(const BinOpInfo &Op, Value *LHS, Value *V) {
