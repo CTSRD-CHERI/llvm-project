@@ -1086,8 +1086,10 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
   if (isa<llvm::PointerType>(SrcTy)) {
     if (!SrcType->isPointerType()) {
       // If this is not a pointer type in C, but is in LLVM IR, then it must be
-      // a [u]intcap_t
-      assert(SrcType->isIntCapType());
+      // a [u]intcap_t or enum type whose underlying integer type is [u]intcap_t
+      assert(SrcType->isIntCapType() ||
+             (SrcType->isEnumeralType() &&
+                SrcType->getAs<EnumType>()->getDecl()->getIntegerType()->isIntCapType()));
       Src = CGF.getPointerOffset(Src);
       // Conversions from (u)intcap -> float should not be a bitcast:
       if (DstType->isFloatingType()) {

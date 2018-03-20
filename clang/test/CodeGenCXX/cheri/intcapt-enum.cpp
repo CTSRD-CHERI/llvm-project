@@ -7,3 +7,9 @@ a c() {
   // CHECK: ret i8 addrspace(200)* inttoptr (i64 1 to i8 addrspace(200)*)
   return d;
 }
+
+void e() {
+  // CHECK: %0 = call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)* inttoptr (i64 1 to i8 addrspace(200)*))
+  // CHECK-NEXT: %conv = trunc i64 %0 to i32
+  (int(d));
+}
