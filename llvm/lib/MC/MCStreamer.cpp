@@ -150,10 +150,13 @@ void MCStreamer::EmitSLEB128IntValue(int64_t Value) {
 }
 
 void MCStreamer::EmitValue(const MCExpr *Value, unsigned Size, SMLoc Loc) {
+  assert(Size <= 8);
+#if 0
   if (Size > 8) // FIXME: shouldn't ever be called
     EmitLegacyCHERICapability(Value, Size, Loc);
   else
-    EmitValueImpl(Value, Size, Loc);
+#endif
+  EmitValueImpl(Value, Size, Loc);
 }
 
 void MCStreamer::EmitSymbolValue(const MCSymbol *Sym, unsigned Size,
@@ -191,6 +194,22 @@ void MCStreamer::EmitGPRel32Value(const MCExpr *Value) {
   report_fatal_error("unsupported directive in streamer");
 }
 
+void MCStreamer::EmitCheriCapability(const MCSymbol *Value, int64_t Addend,
+                                     unsigned CapSize, SMLoc Loc) {
+  if (LLVM_UNLIKELY(TargetStreamer->useLegacyCapRelocs())) {
+    // XXXAR: The legacy path still exists to allow comparing bounds quality vs
+    // the R_CHERI_CAPABILITY approach.
+    // TODO: remove this at some point in the future
+    assert(Value);
+    auto *E = MCBinaryExpr::createAdd(MCSymbolRefExpr::create(Value, Context),
+                                      MCConstantExpr::create(Addend, Context),
+                                      Context);
+    EmitLegacyCHERICapability(E, CapSize, Loc);
+  } else {
+    EmitCheriCapabilityImpl(Value, Addend, CapSize, Loc);
+  }
+}
+
 void MCStreamer::EmitLegacyCHERICapability(const MCExpr *Value,
                                            unsigned CapSize, SMLoc Loc) {
   assert(TargetStreamer->useLegacyCapRelocs());
@@ -221,8 +240,8 @@ void MCStreamer::EmitLegacyCHERICapability(const MCExpr *Value,
   EmitZeros(CapSize);
 }
 
-void MCStreamer::EmitCheriCapability(const MCSymbol *Value, int64_t Addend,
-                                     unsigned CapSize, SMLoc Loc) {
+void MCStreamer::EmitCheriCapabilityImpl(const MCSymbol *Value, int64_t Addend,
+                                         unsigned CapSize, SMLoc Loc) {
   report_fatal_error("EmitCheriCapability is not implemented for this target!");
 }
 

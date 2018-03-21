@@ -294,8 +294,8 @@ public:
   void EmitBundleLock(bool AlignToEnd) override;
   void EmitBundleUnlock() override;
 
-  void EmitCheriCapability(const MCSymbol *Symbol, int64_t Offset,
-                           unsigned CapSize, SMLoc Loc = SMLoc()) override;
+  void EmitCheriCapabilityImpl(const MCSymbol *Symbol, int64_t Offset,
+                               unsigned CapSize, SMLoc Loc = SMLoc()) override;
   void EmitCheriIntcap(int64_t Value, unsigned CapSize,
                        SMLoc Loc = SMLoc()) override;
 
@@ -1745,8 +1745,9 @@ void MCAsmStreamer::EmitBundleUnlock() {
   EmitEOL();
 }
 
-void MCAsmStreamer::EmitCheriCapability(const MCSymbol *Symbol, int64_t Offset,
-                                        unsigned CapSize, SMLoc Loc) {
+void MCAsmStreamer::EmitCheriCapabilityImpl(const MCSymbol *Symbol,
+                                            int64_t Offset, unsigned CapSize,
+                                            SMLoc Loc) {
   OS << "\t.chericap\t";
   Symbol->print(OS, MAI);
   if (Offset > 0)

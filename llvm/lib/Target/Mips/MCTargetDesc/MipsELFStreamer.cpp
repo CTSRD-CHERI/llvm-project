@@ -86,9 +86,9 @@ void MipsELFStreamer::EmitValueImpl(const MCExpr *Value, unsigned Size,
   Labels.clear();
 }
 
-void MipsELFStreamer::EmitCheriCapability(const MCSymbol *Symbol,
-                                          int64_t Offset, unsigned CapSize,
-                                          SMLoc Loc) {
+void MipsELFStreamer::EmitCheriCapabilityImpl(const MCSymbol *Symbol,
+                                              int64_t Offset, unsigned CapSize,
+                                              SMLoc Loc) {
   visitUsedSymbol(*Symbol);
   MCContext &Context = getContext();
 

@@ -2499,15 +2499,10 @@ static void emitGlobalConstantCHERICap(const DataLayout &DL, const Constant *CV,
   }
   GlobalValue *GV;
   APInt Addend;
-  // XXXAR: The legacy path still exists to allow comparing performance vs the
-  // __cap_relocs path for benchmarking
   if (IsConstantOffsetFromGlobal(const_cast<Constant *>(CV), GV, Addend, DL,
                                  true)) {
-    if (AP.OutStreamer->getTargetStreamer()->useLegacyCapRelocs())
-      AP.OutStreamer->EmitLegacyCHERICapability(Expr, CapWidth);
-    else
-      AP.OutStreamer->EmitCheriCapability(AP.getSymbol(GV),
-                                          Addend.getSExtValue(), CapWidth);
+    AP.OutStreamer->EmitCheriCapability(AP.getSymbol(GV), Addend.getSExtValue(),
+                                        CapWidth);
     return;
   }
   llvm_unreachable("Tried to emit a capability which is neither a constant nor "
