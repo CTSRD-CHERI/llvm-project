@@ -224,6 +224,10 @@ typename A::pint_t
 DwarfInstructions<A, R>::evaluateExpression(pint_t expression, A &addressSpace,
                                             const R &registers,
                                             pint_t initialStackValue) {
+// XXXAR: I am not entirely sure these operations should work on a uintcap_t
+// but if it's an untagged integer value it is fine
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcheri-bitwise-operations"
   *(volatile char*)expression;
   const bool log = false;
   pint_t p = expression;
@@ -759,6 +763,7 @@ DwarfInstructions<A, R>::evaluateExpression(pint_t expression, A &addressSpace,
   if (log)
     fprintf(stderr, "expression evaluates to 0x%" PRIx64 "\n", (uint64_t)*sp);
   return *sp;
+#pragma clang diagnostic pop
 }
 
 
