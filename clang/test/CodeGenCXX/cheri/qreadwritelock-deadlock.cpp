@@ -1,3 +1,5 @@
+// RUN: %cheri_purecap_cc1 -x c++ -std=c++11 -emit-llvm -ast-dump -fcolor-diagnostics -o /dev/null %s
+// RUN: %cheri_purecap_cc1 -x c++ -std=c++11 -emit-llvm -o - %s
 // RUN: %cheri_purecap_cc1 -x c++ -std=c++11 -emit-llvm -o - %s | FileCheck %s
 
 // XFAIL: *
@@ -32,4 +34,28 @@ void lock() {
     return;
 
   lockSlowPath();
+}
+
+enum class intcap_enum : __intcap_t {
+  val1 = 5,
+  val2 = 45,
+};
+
+void test2() {
+  void *v = (void *)1;
+  void *v2 = (void *)(__intcap_t)2;
+  void *v3 = (void *)(intcap_enum)3;  // This previously crashed the compiler
+  void* v4 = (void*)(long)4;
+  void* v5 = (void*)intcap_enum::val1;
+  void* v6 = (void*)(__intcap_t)intcap_enum::val2;
+
+  __intcap_t i = 41;
+  __intcap_t i2 = (__intcap_t)42;
+  __intcap_t i3 = (__intcap_t)(void*)(intcap_enum)43;
+  __intcap_t i4 = (__intcap_t)(long)44;
+  __intcap_t i5 = (__intcap_t)intcap_enum::val2;
+
+
+  void* bad = dummyLockedForRead;
+  void* bad2 = dummyLockedForWrite;
 }

@@ -432,6 +432,9 @@ bool Type::isCHERICapabilityType(const ASTContext &Context,
     return RT->isCHERICapability();
   else if (isObjCObjectPointerType() || isBlockPointerType())
     return Context.getTargetInfo().areAllPointersCapabilities();
+  else if (const EnumType *ET = getAs<EnumType>())
+    return ET->getDecl()->getIntegerType()->isCHERICapabilityType(
+        Context, IncludeIntCap);
   else if (const BuiltinType *BT = getAs<BuiltinType>()) {
     auto Kind = BT->getKind();
     if (Kind == BuiltinType::IntCap ||
