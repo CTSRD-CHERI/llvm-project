@@ -3313,9 +3313,8 @@ public:
                                         CE->getOperand(0));
           }
         }
-        // We should never have an inttoptr in a function since it behaves
-        // differently from globals using inttoptr
-        assert(!CGF.CGM.getDataLayout().isFatPointer(PTy));
+        // TODO: are there any other exprs we need to special case?
+        // assert(!CGF.CGM.getDataLayout().isFatPointer(PTy));
       }
       return C;
     }
