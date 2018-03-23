@@ -1846,10 +1846,6 @@ llvm::Constant *ConstantEmitter::tryEmitPrivate(const APValue &Value,
     auto AsInt = llvm::ConstantInt::get(CGM.getLLVMContext(), Value.getInt());
     if (DestType->isIntCapType())
       return llvm::ConstantExpr::getIntToPtr(AsInt, TargetTy);
-    if (const EnumType *ET = dyn_cast<EnumType>(DestType)) {
-      if (ET->getDecl()->getIntegerType()->isIntCapType())
-        return llvm::ConstantExpr::getIntToPtr(AsInt, TargetTy);
-    }
     assert(!DestType->isCHERICapabilityType(CGM.getContext()));
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
     if (LLVM_UNLIKELY(AsInt->getType() != TargetTy)) {
