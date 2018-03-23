@@ -435,7 +435,9 @@ public:
     if (Constant.isReference())
       return EmitLoadOfLValue(Constant.getReferenceLValue(CGF, E),
                               E->getExprLoc());
-    return Constant.getValue();
+    // XXXAR: For CHERI convert inttoptr instructions to setPointerOffset on
+    // null See https://github.com/CTSRD-CHERI/llvm/issues/268
+    return Constant.getValue(CGF);
   }
 
   // l-values.

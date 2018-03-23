@@ -127,7 +127,9 @@ public:
       return EmitLoadOfLValue(Constant.getReferenceLValue(CGF, E),
                               E->getExprLoc());
 
-    llvm::Constant *pair = Constant.getValue();
+    // XXXAR: this cast is needed because I had to change the return type to
+    // Value* instead (see https://github.com/CTSRD-CHERI/llvm/issues/268)
+    llvm::Constant *pair = cast<llvm::Constant>(Constant.getValue(CGF));
     return ComplexPairTy(pair->getAggregateElement(0U),
                          pair->getAggregateElement(1U));
   }

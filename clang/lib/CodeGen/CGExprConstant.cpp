@@ -1686,6 +1686,8 @@ ConstantLValueEmitter::tryEmitAbsolute(llvm::Type *destTy) {
     llvm::Constant *C = offset;
     C = llvm::ConstantExpr::getIntegerCast(getOffset(), intptrTy,
                                            /*isSigned*/ false);
+    // FIXME: This may or may not be a valid pointer on CHERI
+    // See https://github.com/CTSRD-CHERI/llvm/issues/268
     C = llvm::ConstantExpr::getIntToPtr(C, destPtrTy);
     return C;
   }
@@ -1844,8 +1846,28 @@ llvm::Constant *ConstantEmitter::tryEmitPrivate(const APValue &Value,
     // _Bool into i8/i32 instead of i1
     llvm::Type *TargetTy = CGM.getTypes().ConvertType(DestType);
     auto AsInt = llvm::ConstantInt::get(CGM.getLLVMContext(), Value.getInt());
-    if (DestType->isIntCapType())
+
+    if (DestType->isIntCapType()) {
+      // If we use an inttoptr inside a function the backend will generate a
+      // CFromPtr $c0 which probably gives a valid capability with vaddr = AsInt
+      // We really want a null-derived value here instead!
+      // This previously broke cases such as QReadWriteLock which writes 0x2
+      // to indicate write locked state but since it was not equal to
+      // (__intptr_t)0x2 it assumed it was a valid QReadWriteLockerPrivate and
+      // then crashed trying to read memory at address 0x2
+      //
+      // See https://github.com/CTSRD-CHERI/llvm/issues/268
+
+      // Would be nice use CGF->setPointerOffset() but we can't since that
+      // is not a llvm::Constant
+      // if (CGF)
+      //   return CGF->setPointerOffset(
+      //       llvm::ConstantPointerNull::get(cast<llvm::PointerType>(TargetTy)),
+      //       AsInt);
+
+      // Note: CodeGenFunction needs to convert this into a CGF.getPointerOffset
       return llvm::ConstantExpr::getIntToPtr(AsInt, TargetTy);
+    }
     assert(!DestType->isCHERICapabilityType(CGM.getContext()));
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
     if (LLVM_UNLIKELY(AsInt->getType() != TargetTy)) {

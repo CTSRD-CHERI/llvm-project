@@ -2273,6 +2273,7 @@ void CodeGenFunction::EmitAsmStmt(const AsmStmt &S) {
       if (TruncTy->isFloatingPointTy())
         Tmp = Builder.CreateFPTrunc(Tmp, TruncTy);
       else if (TruncTy->isPointerTy() && Tmp->getType()->isIntegerTy()) {
+        assert(!CGM.getDataLayout().isFatPointer(TruncTy));
         uint64_t ResSize = CGM.getDataLayout().getTypeSizeInBits(TruncTy);
         Tmp = Builder.CreateTrunc(Tmp,
                    llvm::IntegerType::get(getLLVMContext(), (unsigned)ResSize));

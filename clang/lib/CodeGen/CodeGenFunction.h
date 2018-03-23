@@ -3299,10 +3299,25 @@ public:
       return CGF.MakeNaturalAlignAddrLValue(ValueAndIsReference.getPointer(),
                                             refExpr->getType());
     }
-
-    llvm::Constant *getValue() const {
+    // XXXAR: the CGF parameter exists to prevent inttoptr instructions
+    // that are lowered incorrectly
+    // See https://github.com/CTSRD-CHERI/llvm/issues/268
+    llvm::Value *getValue(CodeGenFunction &CGF) const {
       assert(!isReference());
-      return ValueAndIsReference.getPointer();
+      llvm::Constant *C = ValueAndIsReference.getPointer();
+      if (auto *PTy = dyn_cast<llvm::PointerType>(C->getType())) {
+        if (auto *CE = dyn_cast<llvm::ConstantExpr>(C)) {
+          if (CE->getOpcode() == llvm::Instruction::IntToPtr &&
+              CGF.CGM.getDataLayout().isFatPointer(PTy)) {
+            return CGF.setPointerOffset(llvm::ConstantPointerNull::get(PTy),
+                                        CE->getOperand(0));
+          }
+        }
+        // We should never have an inttoptr in a function since it behaves
+        // differently from globals using inttoptr
+        assert(!CGF.CGM.getDataLayout().isFatPointer(PTy));
+      }
+      return C;
     }
   };
 
