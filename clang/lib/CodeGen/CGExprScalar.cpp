@@ -1072,8 +1072,8 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
     assert(SrcType->isIntegerType() && "Not ptr->ptr or int->ptr conversion?");
 
     if (DstType->isCHERICapabilityType(CGF.getContext())) {
-      Value *Null =
-        Builder.CreateIntToPtr(llvm::ConstantInt::get(CGF.IntPtrTy, 0), DstTy);
+      Value *Null = llvm::ConstantPointerNull::get(DstPT);
+      // Builder.CreateIntToPtr(llvm::ConstantInt::get(CGF.IntPtrTy, 0), DstPT);
       Src = Builder.CreateSExtOrTrunc(Src, CGF.Int64Ty);
       return CGF.setPointerOffset(Null, Src);
     }
