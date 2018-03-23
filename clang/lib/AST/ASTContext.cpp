@@ -8985,6 +8985,7 @@ unsigned ASTContext::getIntRange(QualType T) const {
       if (T->getAs<EnumType>()->getDecl()->getIntegerType()->isIntCapType())
         return Target->getPointerRangeForCHERICapability();
     }
+    assert(!T->isReferenceType() && "Should probably not be handled here");
   }
   return getIntWidth(T);
 }

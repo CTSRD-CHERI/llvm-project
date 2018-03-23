@@ -1160,6 +1160,8 @@ static llvm::Value *CoerceIntOrPtrToIntOrPtr(llvm::Value *Val,
     if (isa<llvm::PointerType>(Ty))
       return CGF.Builder.CreateBitCast(Val, Ty, "coerce.val");
 
+    // This should not happen in CHERI:
+    assert(!CGF.CGM.getDataLayout().isFatPointer(Val->getType()));
     // Convert the pointer to an integer so we can play with its width.
     Val = CGF.Builder.CreatePtrToInt(Val, CGF.IntPtrTy, "coerce.val.pi");
   }
@@ -1189,8 +1191,10 @@ static llvm::Value *CoerceIntOrPtrToIntOrPtr(llvm::Value *Val,
     }
   }
 
-  if (isa<llvm::PointerType>(Ty))
+  if (isa<llvm::PointerType>(Ty)) {
+    assert(!CGF.CGM.getDataLayout().isFatPointer(Ty));
     Val = CGF.Builder.CreateIntToPtr(Val, Ty, "coerce.val.ip");
+  }
   return Val;
 }
 

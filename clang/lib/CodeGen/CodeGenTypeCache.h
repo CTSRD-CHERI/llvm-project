@@ -44,7 +44,7 @@ struct CodeGenTypeCache {
 
   /// intptr_t, size_t, and ptrdiff_t, which we assume are the same size.
   union {
-    llvm::IntegerType *IntPtrTy;
+    llvm::IntegerType *IntPtrTy; // FIXME: this is not really intptr_t for CHERI
     llvm::IntegerType *SizeTy;
     llvm::IntegerType *PtrDiffTy;
   };
