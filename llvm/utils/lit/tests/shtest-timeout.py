@@ -5,7 +5,9 @@
 # https://bugs.llvm.org/show_bug.cgi?id=35083
 
 # This seems to break in jenkins where we run with a per-test timeout of 4 minutes
-# UNSUPPORTED: *
+# if I add UNSUPPORTED here the junit xml ends up broken...
+# XFAIL: *
+# RUN: false
 
 # Test per test timeout using external shell
 # RUN: not %{lit} \
