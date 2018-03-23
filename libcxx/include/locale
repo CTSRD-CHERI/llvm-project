@@ -3565,7 +3565,7 @@ messages<_CharT>::do_get(catalog __c, int __set, int __msgid,
                                                        __dflt.c_str(),
                                                        __dflt.c_str() + __dflt.size());
     if (__c != -1)
-        __c <<= 1;
+        __c = (vaddr_t)__c << 1;
     nl_catd __cat = (nl_catd)__c;
     char* __n = catgets(__cat, __set, __msgid, __ndflt.c_str());
     string_type __w;
@@ -3586,7 +3586,7 @@ messages<_CharT>::do_close(catalog __c) const
 {
 #ifdef _LIBCPP_HAS_CATOPEN
     if (__c != -1)
-        __c <<= 1;
+        __c = (vaddr_t)__c << 1;
     nl_catd __cat = (nl_catd)__c;
     catclose(__cat);
 #else
