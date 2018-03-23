@@ -432,10 +432,11 @@ bool Type::isCHERICapabilityType(const ASTContext &Context,
     return RT->isCHERICapability();
   else if (isObjCObjectPointerType() || isBlockPointerType())
     return Context.getTargetInfo().areAllPointersCapabilities();
-  else if (const EnumType *ET = getAs<EnumType>())
-    return ET->getDecl()->getIntegerType()->isCHERICapabilityType(
-        Context, IncludeIntCap);
-  else if (const BuiltinType *BT = getAs<BuiltinType>()) {
+  else if (const EnumType *ET = getAs<EnumType>()) {
+    QualType Ty = ET->getDecl()->getIntegerType();
+    return Ty.isNull() ? false
+                       : Ty->isCHERICapabilityType(Context, IncludeIntCap);
+  } else if (const BuiltinType *BT = getAs<BuiltinType>()) {
     auto Kind = BT->getKind();
     if (Kind == BuiltinType::IntCap ||
         Kind == BuiltinType::UIntCap)
@@ -456,8 +457,11 @@ bool Type::isIntCapType() const {
     return BT->getKind() == BuiltinType::IntCap ||
            BT->getKind() == BuiltinType::UIntCap;
   // Also handle enums with underlying type __intcap_t
-  if (const EnumType *ET = dyn_cast<EnumType>(CanonicalType))
-    return ET->getDecl()->getIntegerType()->isIntCapType();
+  if (const EnumType *ET = dyn_cast<EnumType>(CanonicalType)) {
+    QualType Ty = ET->getDecl()->getIntegerType();
+    if (!Ty.isNull())
+      return Ty->isIntCapType();
+  }
   return false;
 }
 
