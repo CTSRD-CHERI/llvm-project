@@ -8686,6 +8686,11 @@ QualType Sema::CheckRemainderOperands(
   ExprResult &LHS, ExprResult &RHS, SourceLocation Loc, bool IsCompAssign) {
   checkArithmeticNull(*this, LHS, RHS, Loc, /*isCompare=*/false);
 
+  if (LHS.get()->getType()->isCHERICapabilityType(Context))
+    Diag(Loc, diag::warn_uintcap_bad_bitwise_op)
+      << 2 /*=modulo*/ << 1 /* used for alignment checks */
+      << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
+
   if (LHS.get()->getType()->isVectorType() ||
       RHS.get()->getType()->isVectorType()) {
     if (LHS.get()->getType()->hasIntegerRepresentation() && 
@@ -9420,7 +9425,7 @@ QualType Sema::CheckShiftOperands(ExprResult &LHS, ExprResult &RHS,
       (Opc == BO_Shl || Opc == BO_ShlAssign || Opc == BO_Shr ||
        Opc == BO_ShrAssign))
     Diag(Loc, diag::warn_uintcap_bad_bitwise_op)
-        << 1 /*=shift*/
+        << 1 /*=shift*/ << 0 /* usecase is hashing */
         << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
 
   // "The type of the result is that of the promoted left operand."
@@ -10366,7 +10371,7 @@ inline QualType Sema::CheckBitwiseOperands(ExprResult &LHS, ExprResult &RHS,
           << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
     else if (isLHSCap && (Opc == BO_Xor || Opc == BO_XorAssign))
       Diag(Loc, diag::warn_uintcap_bad_bitwise_op)
-          << 0 /*=xor*/
+          << 0 /*=xor*/ << 0 /* usecase is hashing */
           << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
     else if ((isLHSCap && !isRHSCap) || (!isLHSCap && isRHSCap))
       // FIXME: this warning is not always useful

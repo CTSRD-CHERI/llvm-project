@@ -12,7 +12,7 @@ void check_xor(void *ptr, uintptr_t cap, int i) {
   uintptr_t int_and_int = i ^ i; // fine
   // i is promoted to __intcap_t here so the warning triggers:
   uintptr_t int_and_cap = i ^ cap;   // expected-warning{{binary expression on capability and non-capability types: 'int' and 'uintptr_t' (aka '__uintcap_t')}}
-  uintptr_t cap_and_int = cap ^ i;   // expected-warning{{using xor on a capability type only operates on the offset}}
+  uintptr_t cap_and_int = cap ^ i;   // expected-warning{{using xor on a capability type only operates on the offset; consider using vaddr_t if this is used for pointer hashing or explicitly get the offset with __builtin_cheri_offset_get().}}
   uintptr_t cap_and_cap = cap ^ cap; // expected-warning{{using xor on a capability type only operates on the offset}}
 
   int int_and_int_2 = i ^ i; // fine
@@ -89,8 +89,6 @@ void check_or(void *ptr, uintptr_t cap, int i) {
   // TODO: this is also not really sensible since it only uses the offset
   cap |= cap;
 }
-
-
 
 void set_low_pointer_bits(void *ptr, uintptr_t cap) {
   _Bool aligned = ptr & 7;     // expected-error{{invalid operands to binary expression ('void * __capability' and 'int')}}

@@ -6019,8 +6019,8 @@ def warn_uintcap_bitwise_and : Warning<
   "if you are attempting to store data in the low pointer bits use the XXX builtins/macros.">,
   InGroup<CHERIBitwiseOps>;
 def warn_uintcap_bad_bitwise_op : Warning<
-  "using %select{xor|shifts}0 on a capability type only operates on the offset; "
-  "consider casting to vaddr_t if this is used for pointer hashing "
+  "using %select{xor|shifts|remainder}0 on a capability type only operates on the offset; "
+  "consider using %select{vaddr_t if this is used for pointer hashing|__builtin_is_aligned() instead}1 "
   "or explicitly get the offset with __builtin_cheri_offset_get().">,
   InGroup<CHERIBitwiseOps>;
 
