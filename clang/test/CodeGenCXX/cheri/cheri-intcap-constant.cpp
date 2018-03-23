@@ -16,6 +16,6 @@ void f() {
   x = a.flags;
 }
 
-// CHECK: store i8 addrspace(200)* inttoptr (i64 1 to i8 addrspace(200)*),
-// CHECK: store i8 addrspace(200)* inttoptr (i64 2 to i8 addrspace(200)*),
-// CHECK: store i8 addrspace(200)* inttoptr (i64 3 to i8 addrspace(200)*),
+// CHECK: call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 1)
+// CHECK: call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 2)
+// CHECK: call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 3)
