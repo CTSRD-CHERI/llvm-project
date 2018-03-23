@@ -4,12 +4,14 @@
 typedef __intcap_t a;
 enum : a { b, d };
 a c() {
-  // CHECK: ret i8 addrspace(200)* inttoptr (i64 1 to i8 addrspace(200)*)
+  // CHECK: [[RET:%.+]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 1)
+  // CHECK: ret i8 addrspace(200)* [[RET]]
   return d;
 }
 
 void e() {
-  // CHECK: %0 = call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)* inttoptr (i64 1 to i8 addrspace(200)*))
-  // CHECK-NEXT: %conv = trunc i64 %0 to i32
+  // CHECK: [[ENUMVAL:%.+]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 1)
+  // CHECK: [[OFFSET:%.+]] = call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)* [[ENUMVAL]])
+  // CHECK-NEXT: %conv = trunc i64 [[OFFSET]] to i32
   (int(d));
 }
