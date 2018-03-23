@@ -6275,16 +6275,6 @@ inline bool Type::isIntegralOrEnumerationType() const {
   return false;  
 }
 
-inline bool Type::isIntCapType() const {
-  if (const BuiltinType *BT = dyn_cast<BuiltinType>(CanonicalType))
-    return BT->getKind() == BuiltinType::IntCap ||
-           BT->getKind() == BuiltinType::UIntCap;
-  // Also handle enums with underlying type __intcap_t
-  if (const EnumType *ET = dyn_cast<EnumType>(CanonicalType))
-    return ET->getDecl()->getIntegerType()->isIntCapType();
-  return false;
-}
-
 inline bool Type::isBooleanType() const {
   if (const BuiltinType *BT = dyn_cast<BuiltinType>(CanonicalType))
     return BT->getKind() == BuiltinType::Bool;
