@@ -7695,7 +7695,7 @@ bool IntExprEvaluator::VisitCallExpr(const CallExpr *E) {
 
 static bool getBuiltinAlignArguments(const CallExpr *E, EvalInfo &Info,
                                      bool IsPowerOfTwo, APSInt &Val,
-                                     APSInt &Alignment) {
+                                     APSInt &Alignment, unsigned *ValWidth) {
   if (!E->getArg(0)->EvaluateAsInt(Val, Info.Ctx))
     return false;
   if (!E->getArg(1)->EvaluateAsInt(Alignment, Info.Ctx))
@@ -7713,7 +7713,11 @@ static bool getBuiltinAlignArguments(const CallExpr *E, EvalInfo &Info,
   if (!Alignment.isPowerOf2())
     return false;
   // ensure both values have the same bit width so that we don't assert later
-  Val = Val.zextOrSelf(Alignment.getBitWidth());
+  *ValWidth = Val.getBitWidth();
+  if (Val.isUnsigned())
+    Val = Val.zextOrSelf(Alignment.getBitWidth());
+  else
+    Val = Val.sextOrSelf(Alignment.getBitWidth());
   Alignment = Alignment.zextOrSelf(Val.getBitWidth());
   return true;
 }
@@ -7761,8 +7765,9 @@ bool IntExprEvaluator::VisitBuiltinCallExpr(const CallExpr *E,
   case Builtin::BI__builtin_is_p2aligned: {
     APSInt Val;
     APSInt Alignment;
+    unsigned ValWidth = -1;
     bool Pow2 = BuiltinOp == Builtin::BI__builtin_is_p2aligned;
-    if (!getBuiltinAlignArguments(E, Info, Pow2, Val, Alignment))
+    if (!getBuiltinAlignArguments(E, Info, Pow2, Val, Alignment, &ValWidth))
       return false;
     return Success((Val & (Alignment - 1)) == 0 ? 1 : 0, E);
   }
@@ -7770,21 +7775,25 @@ bool IntExprEvaluator::VisitBuiltinCallExpr(const CallExpr *E,
   case Builtin::BI__builtin_p2align_up: {
     APSInt Val;
     APSInt Alignment;
+    unsigned ValWidth = -1;
     bool Pow2 = BuiltinOp == Builtin::BI__builtin_p2align_up;
-    if (!getBuiltinAlignArguments(E, Info, Pow2, Val, Alignment))
+    if (!getBuiltinAlignArguments(E, Info, Pow2, Val, Alignment, &ValWidth))
       return false;
     // #define roundup2(x, y) (((x)+((y)-1))&(~((y)-1)))
-    return Success((Val + (Alignment - 1)) & ~(Alignment - 1), E);
+    APSInt Result = APSInt((Val + (Alignment - 1)) & ~(Alignment - 1), Val.isUnsigned());
+    return Success(Result.extOrTrunc(ValWidth), E);
   }
   case Builtin::BI__builtin_align_down:
   case Builtin::BI__builtin_p2align_down: {
     APSInt Val;
     APSInt Alignment;
+    unsigned ValWidth = -1;
     bool Pow2 = BuiltinOp == Builtin::BI__builtin_p2align_down;
-    if (!getBuiltinAlignArguments(E, Info, Pow2, Val, Alignment))
+    if (!getBuiltinAlignArguments(E, Info, Pow2, Val, Alignment, &ValWidth))
       return false;
     // #define rounddown2(x, y) ((x)&(~((y)-1)))
-    return Success(Val & ~(Alignment - 1), E);
+    APSInt Result = APSInt(Val & ~(Alignment - 1), Val.isUnsigned());
+    return Success(Result.extOrTrunc(ValWidth), E);
   }
 
   case Builtin::BI__builtin_bswap16:
