@@ -704,6 +704,8 @@ public:
       return MipsMCExpr::create(MipsMCExpr::MEK_GOTTPREL, E, Ctx);
     case AsmToken::PercentGp_Rel:
       return MipsMCExpr::create(MipsMCExpr::MEK_GPREL, E, Ctx);
+    case AsmToken::PercentCapTab_Rel:
+      return MipsMCExpr::create(MipsMCExpr::MEK_CAPTABLEREL, E, Ctx);
     case AsmToken::PercentHi:
       return MipsMCExpr::create(MipsMCExpr::MEK_HI, E, Ctx);
     case AsmToken::PercentHigher:

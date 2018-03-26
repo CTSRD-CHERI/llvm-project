@@ -697,6 +697,7 @@ AsmToken AsmLexer::LexToken() {
               // TODO: captab20 should probably captab in the future
               .StartsWith("captab_lo", {AsmToken::PercentCapTab_Lo, 10})
               .StartsWith("captab_hi", {AsmToken::PercentCapTab_Hi, 10})
+              .StartsWith("captab_rel", {AsmToken::PercentCapTab_Rel, 11})
               .StartsWith("captab20", {AsmToken::PercentCapTab20, 9})
               .StartsWith("captab", {AsmToken::PercentCapTab11, 7})
               .StartsWith("capcall_hi", {AsmToken::PercentCapTabCall_Hi, 11})

@@ -1204,6 +1204,7 @@ bool AsmParser::parsePrimaryExpr(const MCExpr *&Res, SMLoc &EndLoc) {
   case AsmToken::PercentGot_Page:
   case AsmToken::PercentGottprel:
   case AsmToken::PercentGp_Rel:
+  case AsmToken::PercentCapTab_Rel:
   case AsmToken::PercentHi:
   case AsmToken::PercentHigher:
   case AsmToken::PercentHighest:

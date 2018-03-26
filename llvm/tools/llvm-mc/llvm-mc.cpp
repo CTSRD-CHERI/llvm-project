@@ -337,6 +337,9 @@ static int AsLexInput(SourceMgr &SrcMgr, MCAsmInfo &MAI,
     case AsmToken::PercentGp_Rel:
       OS << "PercentGp_Rel";
       break;
+    case AsmToken::PercentCapTab_Rel:
+      OS << "PercentCapTab_Rel";
+      break;
     case AsmToken::PercentHi:
       OS << "PercentHi";
       break;
