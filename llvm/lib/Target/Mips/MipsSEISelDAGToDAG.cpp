@@ -165,12 +165,12 @@ void MipsSEDAGToDAGISel::initGlobalBaseReg(MachineFunction &MF) {
 
   if (ABI.IsN64()) {
     if (ABI.IsCheriPureCap()) {
-      // assert(!MF.getRegInfo().isLiveIn(Mips::C12)); // FIXME: pcrel captable
-      // mode?
+      if (ABI.UsesCapabilityTable()) {
+        assert(MipsFI->usesTlsViaGlobalReg() && "$gp should only be used for TLS");
+        assert(!MF.getRegInfo().isLiveIn(Mips::C12) && "C12 should not be used yet");
+      }
       MF.getRegInfo().addLiveIn(Mips::C12);
       MBB.addLiveIn(Mips::C12);
-      if (Subtarget->useCheriCapTable())
-        assert(MipsFI->usesTlsViaGlobalReg() && "$gp should only be used for TLS");
       BuildMI(MBB, I, DL, TII.get(Mips::CGetOffset))
         .addReg(Mips::T9_64, RegState::Define)
         .addReg(Mips::C12);
@@ -279,10 +279,14 @@ void MipsSEDAGToDAGISel::initCapGlobalBaseReg(MachineFunction &MF) {
     // write permissions which means we're back to relying only on the MMU to
     // protect the .text segment.
 
-    // assert(!MF.getRegInfo().isLiveIn(Mips::C12)); // TODO: tls?
-    assert(!MBB.isLiveIn(Mips::C12)); // TODO: tls?
-    MF.getRegInfo().addLiveIn(Mips::C12);
-    MBB.addLiveIn(Mips::C12);
+    // XXXAR: Mips::C12 may already be marked as live-in if we use TLS
+    if (MF.getRegInfo().isLiveIn(Mips::C12)) {
+      assert(MipsFI->usesTlsViaGlobalReg() && "$gp should only be used for TLS");
+      assert(MBB.isLiveIn(Mips::C12)); // should have been added by the TLS hack
+    } else {
+      MF.getRegInfo().addLiveIn(Mips::C12);
+      MBB.addLiveIn(Mips::C12);
+    }
 
     // FIXME: there doesn't seem to be an easy way to get a label difference
     // For now I'll just add a new relocation or see if I can convert itm
