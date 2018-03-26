@@ -165,6 +165,8 @@ void MipsSEDAGToDAGISel::initGlobalBaseReg(MachineFunction &MF) {
 
   if (ABI.IsN64()) {
     if (ABI.IsCheriPureCap()) {
+      // assert(!MF.getRegInfo().isLiveIn(Mips::C12)); // FIXME: pcrel captable
+      // mode?
       MF.getRegInfo().addLiveIn(Mips::C12);
       MBB.addLiveIn(Mips::C12);
       if (Subtarget->useCheriCapTable())
@@ -265,10 +267,44 @@ void MipsSEDAGToDAGISel::initCapGlobalBaseReg(MachineFunction &MF) {
   // capability table on function entry, so emit a single COPY
   // (which may be optimised away):
   // COPY $capglobalbasereg, $c26
-  MF.getRegInfo().addLiveIn(GlobalCapReg);
-  MBB.addLiveIn(GlobalCapReg);
-  BuildMI(MBB, I, DL, TII.get(TargetOpcode::COPY), CapGlobalBaseReg)
-    .addReg(GlobalCapReg);
+  if (MCTargetOptions::cheriCapabilityTableABI() ==
+      CheriCapabilityTableABI::Pcrel) {
+    // However, we also support an experimental mode where we derive the $cgp
+    // register from $pcc (this is closer to what MIPS does and has the
+    // advantage that we don't need to reserve $cgp since we can always derive
+    // it from $pcc. However, in this mode we can't restrict the bounds or
+    // permissions on $pcc very much since we need it to always contain the
+    // whole cap table as well as Load_Capability permission. If we decide to
+    // also inline global statics into the cap-table it also needs to contain
+    // write permissions which means we're back to relying only on the MMU to
+    // protect the .text segment.
+
+    // assert(!MF.getRegInfo().isLiveIn(Mips::C12)); // TODO: tls?
+    assert(!MBB.isLiveIn(Mips::C12)); // TODO: tls?
+    MF.getRegInfo().addLiveIn(Mips::C12);
+    MBB.addLiveIn(Mips::C12);
+
+    // FIXME: there doesn't seem to be an easy way to get a label difference
+    // For now I'll just add a new relocation or see if I can convert itm
+    MachineRegisterInfo &RegInfo = MF.getRegInfo();
+    const GlobalValue *FName = &MF.getFunction();
+    unsigned Tmp1 = RegInfo.createVirtualRegister(&Mips::GPR64RegClass);
+    unsigned Tmp2 = RegInfo.createVirtualRegister(&Mips::GPR64RegClass);
+    BuildMI(MBB, I, DL, TII.get(Mips::LUi64), Tmp1)
+        .addGlobalAddress(FName, 0, MipsII::MO_CAPTABLE_OFF_HI);
+    BuildMI(MBB, I, DL, TII.get(Mips::DADDiu), Tmp2)
+        .addReg(Tmp1)
+        .addGlobalAddress(FName, 0, MipsII::MO_CAPTABLE_OFF_LO);
+    BuildMI(MBB, I, DL, TII.get(Mips::CIncOffset), CapGlobalBaseReg)
+        .addReg(Mips::C12)
+        .addReg(Tmp2);
+
+  } else {
+    MF.getRegInfo().addLiveIn(GlobalCapReg);
+    MBB.addLiveIn(GlobalCapReg);
+    BuildMI(MBB, I, DL, TII.get(TargetOpcode::COPY), CapGlobalBaseReg)
+        .addReg(GlobalCapReg);
+  }
 }
 
 void MipsSEDAGToDAGISel::processFunctionAfterISel(MachineFunction &MF) {

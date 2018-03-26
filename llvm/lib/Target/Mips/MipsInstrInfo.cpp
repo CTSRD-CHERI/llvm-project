@@ -669,6 +669,10 @@ MipsInstrInfo::getSerializableDirectMachineOperandTargetFlags() const {
     { MO_CAPTAB_HI16,      "mips-captable-hi16" },
     { MO_CAPTAB_CALL_LO16, "mips-captable-lo16-call" },
     { MO_CAPTAB_CALL_HI16, "mips-captable-hi16-call" },
+
+    { MO_CAPTABLE_OFF_HI, "mips-captable-off-hi" },
+    { MO_CAPTABLE_OFF_LO, "mips-captable-off-lo" },
+
   };
   return makeArrayRef(Flags);
 }
