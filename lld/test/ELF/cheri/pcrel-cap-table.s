@@ -1,8 +1,9 @@
 # RUN: %cheri128_llvm-mc -filetype=obj %s -o %t.o
-# RUN: llvm-readobj -r -t %t.o
 # RUN: ld.lld %t.o -o %t.exe
-# RUN: llvm-objdump -C -t -d -h %t.exe
 # RUN: llvm-objdump -C -t -d -h %t.exe | FileCheck %s
+# RUN: %cheri128_llvm-mc -filetype=obj -defsym=EMPTY_CAP_TABLE=1 %s -o %t2.o
+# RUN: ld.lld %t2.o -o %t.exe
+# RUN: llvm-objdump -C -t -d -h %t.exe | FileCheck %s -check-prefix EMPTY-TABLE
 
 .text
 
@@ -22,10 +23,15 @@ lui        $3, %higher(_CHERI_CAPABILITY_TABLE_)
 lui        $2, %hi(_CHERI_CAPABILITY_TABLE_)
 lui        $1, %lo(_CHERI_CAPABILITY_TABLE_)
 # Address is 0x40000:
-# CHECK: lui $4, 0
-# CHECK: lui $3, 0
-# CHECK: lui $2, 4
-# CHECK: lui $1, 0
+# CHECK:      lui $4, 0
+# CHECK-NEXT: lui $3, 0
+# CHECK-NEXT: lui $2, 4
+# CHECK-NEXT: lui $1, 0
+
+# EMPTY-TABLE:      lui $4, 0
+# EMPTY-TABLE-NEXT: lui $3, 0
+# EMPTY-TABLE-NEXT: lui $2, 0
+# EMPTY-TABLE-NEXT: lui $1, 0
 
 
 nop
@@ -38,10 +44,18 @@ cincoffset $c1, $c12, $1
 # CHECK:   lui $1, 2
 # CHECK:   daddiu  $1, $1, 0
 
+# with an empty table this loads -addrof(__start) -> -0x20000
+# EMPTY-TABLE: lui $1, 65534
+# EMPTY-TABLE: daddiu  $1, $1, 0
+
+
 
 # Just to ensure we have something in the captable:
-# TODO: what happens if _CHERI_CAPABILITY_TABLE_ is empty?
+.ifdef EMPTY_CAP_TABLE
+nop
+.else
 clcbi      $c1, %captab20(bar)($c1)
+.endif
 cjr        $c17
 cld        $2, $zero, 0($c1)
 
@@ -67,6 +81,10 @@ daddiu     $1, $1, %lo(%neg(%captab_rel(fn_2)))
 # CHECK: lui $1, 2
 # CHECK: daddiu $1, $1, -44
 
+# with an empty table this loads -addrof(fn_2) -> -0x2002c
+# EMPTY-TABLE: lui $1, 65534
+# EMPTY-TABLE: daddiu  $1, $1, -44
+
 nop
 
 
@@ -76,6 +94,10 @@ daddiu     $1, $1, %lo(%neg(%captab_rel(foo)))
 # -> lui 0x10000 and subtract 32
 # CHECK: lui $1, 1
 # CHECK: daddiu $1, $1, -32
+
+# with an empty table this loads -addrof(foo) -> -0x30020
+# EMPTY-TABLE: lui $1, 65533
+# EMPTY-TABLE: daddiu  $1, $1, -32
 
 .end fn_2
 
