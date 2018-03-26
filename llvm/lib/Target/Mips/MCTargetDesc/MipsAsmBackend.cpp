@@ -337,7 +337,7 @@ Optional<MCFixupKind> MipsAsmBackend::getFixupKind(StringRef Name) const {
 
 const MCFixupKindInfo &MipsAsmBackend::
 getFixupKindInfo(MCFixupKind Kind) const {
-  const static MCFixupKindInfo LittleEndianInfos[Mips::NumTargetFixupKinds] = {
+  const static MCFixupKindInfo LittleEndianInfos[/*Mips::NumTargetFixupKinds*/] = {
     // This table *must* be in same the order of fixup_* kinds in
     // MipsFixupKinds.h.
     //
@@ -418,9 +418,13 @@ getFixupKindInfo(MCFixupKind Kind) const {
     { "fixup_CHERI_CAPCALL_LO16",        0,     16,   0 },
     { "fixup_CHERI_CAPABILITY",          0,  0xdead,   0 },
 
+    { "fixup_Mips_CAPTABLEREL16",        0,     16,   0 }, // like GPREL16
+    { "fixup_Mips_CAPTABLEREL_HI",       0,     16,   0 }, // like GPOFF_HI
+    { "fixup_Mips_CAPTABLEREL_LO",       0,     16,   0 }, // like GPOFF_LO
+
   };
 
-  const static MCFixupKindInfo BigEndianInfos[Mips::NumTargetFixupKinds] = {
+  const static MCFixupKindInfo BigEndianInfos[/*Mips::NumTargetFixupKinds*/] = {
     // This table *must* be in same the order of fixup_* kinds in
     // MipsFixupKinds.h.
     //
@@ -501,7 +505,13 @@ getFixupKindInfo(MCFixupKind Kind) const {
     { "fixup_CHERI_CAPCALL_LO16",  16,    16,   0 },
     { "fixup_CHERI_CAPABILITY",     0,0xdead,   0 },
 
+    { "fixup_Mips_CAPTABLEREL16",  16,    16,   0 }, // like GPREL16
+    { "fixup_Mips_CAPTABLEREL_HI", 16,    16,   0 }, // like GPOFF_HI
+    { "fixup_Mips_CAPTABLEREL_LO", 16,    16,   0 }, // like GPOFF_LO
+
   };
+  static_assert(array_lengthof(BigEndianInfos) == Mips::NumTargetFixupKinds, "");
+  static_assert(array_lengthof(LittleEndianInfos) == Mips::NumTargetFixupKinds, "");
 
   if (Kind < FirstTargetFixupKind)
     return MCAsmBackend::getFixupKindInfo(Kind);
