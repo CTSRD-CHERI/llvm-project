@@ -321,7 +321,8 @@ static bool needsGot(RelExpr Expr) {
 // file (PC, or GOT for example).
 static bool isRelExpr(RelExpr Expr) {
   return isRelExprOneOf<R_PC, R_GOTREL, R_GOTREL_FROM_END, R_MIPS_GOTREL,
-                        R_PAGE_PC, R_RELAX_GOT_PC>(Expr);
+                        R_PAGE_PC, R_RELAX_GOT_PC,
+                        R_CHERI_CAPABILITY_TABLE_REL>(Expr);
 }
 
 // Returns true if a given relocation can be computed at link-time.
@@ -342,7 +343,8 @@ static bool isStaticLinkTimeConstant(RelExpr E, RelType Type, const Symbol &Sym,
                      R_GOTONLY_PC, R_GOTONLY_PC_FROM_END, R_PLT_PC, R_TLSGD_PC,
                      R_TLSGD, R_PPC_PLT_OPD, R_TLSDESC_CALL, R_TLSDESC_PAGE,
                      R_HINT, R_CHERI_CAPABILITY_TABLE_INDEX,
-                     R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE>(E))
+                     R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE,
+                     R_CHERI_CAPABILITY_TABLE_REL>(E))
     return true;
 
   // Cheri capability relocations are never static link time constants since

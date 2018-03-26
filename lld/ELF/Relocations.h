@@ -84,6 +84,7 @@ enum RelExpr {
   R_CHERI_CAPABILITY,
   R_CHERI_CAPABILITY_TABLE_INDEX,
   R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE,
+  R_CHERI_CAPABILITY_TABLE_REL // relative offset to _CHERI_CAPABILITY_TABLE_
 };
 
 // Build a bitmask with one bit set for each RelExpr.

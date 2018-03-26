@@ -98,6 +98,8 @@ RelExpr MIPS<ELFT>::getRelExpr(RelType Type, const Symbol &S,
   case R_MICROMIPS_GPREL16:
   case R_MICROMIPS_GPREL7_S2:
     return R_MIPS_GOTREL;
+  case R_MIPS_CHERI_CAPTABLEREL16:
+    return R_CHERI_CAPABILITY_TABLE_REL;
   case R_MIPS_26:
   case R_MICROMIPS_26_S1:
     return R_PLT;
