@@ -35,6 +35,11 @@ const MipsMCExpr *MipsMCExpr::createGpOff(MipsMCExpr::MipsExprKind Kind,
   return create(Kind, create(MEK_NEG, create(MEK_GPREL, Expr, Ctx), Ctx), Ctx);
 }
 
+const MipsMCExpr *MipsMCExpr::createCaptableOff(MipsMCExpr::MipsExprKind Kind,
+                                          const MCExpr *Expr, MCContext &Ctx) {
+  return create(Kind, create(MEK_NEG, create(MEK_CAPTABLEREL, Expr, Ctx), Ctx), Ctx);
+}
+
 void MipsMCExpr::printImpl(raw_ostream &OS, const MCAsmInfo *MAI) const {
   int64_t AbsVal;
 
@@ -81,6 +86,9 @@ void MipsMCExpr::printImpl(raw_ostream &OS, const MCAsmInfo *MAI) const {
     break;
   case MEK_GPREL:
     OS << "%gp_rel";
+    break;
+  case MEK_CAPTABLEREL:
+    OS << "%captab_rel";
     break;
   case MEK_HI:
     OS << "%hi";
@@ -198,6 +206,7 @@ MipsMCExpr::evaluateAsRelocatableImpl(MCValue &Res,
     case MEK_GOT_OFST:
     case MEK_GOT_PAGE:
     case MEK_GPREL:
+    case MEK_CAPTABLEREL:
     case MEK_PCREL_HI16:
     case MEK_PCREL_LO16:
     case MEK_TLSGD:
@@ -295,6 +304,7 @@ void MipsMCExpr::fixELFSymbolsInTLSFixups(MCAssembler &Asm) const {
   case MEK_GOT_OFST:
   case MEK_GOT_PAGE:
   case MEK_GPREL:
+  case MEK_CAPTABLEREL:
   case MEK_HI:
   case MEK_HIGHER:
   case MEK_HIGHEST:
@@ -327,11 +337,11 @@ void MipsMCExpr::fixELFSymbolsInTLSFixups(MCAssembler &Asm) const {
   }
 }
 
-bool MipsMCExpr::isGpOff(MipsExprKind &Kind) const {
+bool MipsMCExpr::isOffImpl(MipsExprKind &Kind, MipsExprKind Expected) const {
   if (getKind() == MEK_HI || getKind() == MEK_LO) {
     if (const MipsMCExpr *S1 = dyn_cast<const MipsMCExpr>(getSubExpr())) {
       if (const MipsMCExpr *S2 = dyn_cast<const MipsMCExpr>(S1->getSubExpr())) {
-        if (S1->getKind() == MEK_NEG && S2->getKind() == MEK_GPREL) {
+        if (S1->getKind() == MEK_NEG && S2->getKind() == Expected) {
           Kind = getKind();
           return true;
         }

@@ -654,10 +654,17 @@ getExprOpValue(const MCExpr *Expr, SmallVectorImpl<MCFixup> &Fixups,
     case MipsMCExpr::MEK_GPREL:
       FixupKind = Mips::fixup_Mips_GPREL16;
       break;
+    case MipsMCExpr::MEK_CAPTABLEREL:
+      // TODO: llvm_unreachable() since this should always be part of LO/HI?
+      FixupKind = Mips::fixup_Mips_CAPTABLEREL16;
+      break;
     case MipsMCExpr::MEK_LO:
       // Check for %lo(%neg(%gp_rel(X)))
       if (MipsExpr->isGpOff()) {
         FixupKind = Mips::fixup_Mips_GPOFF_LO;
+        break;
+      } else if (MipsExpr->isCaptableOff()) {
+        FixupKind = Mips::fixup_Mips_CAPTABLEOFF_LO;
         break;
       }
       FixupKind = isMicroMips(STI) ? Mips::fixup_MICROMIPS_LO16
@@ -673,6 +680,9 @@ getExprOpValue(const MCExpr *Expr, SmallVectorImpl<MCFixup> &Fixups,
       // Check for %hi(%neg(%gp_rel(X)))
       if (MipsExpr->isGpOff()) {
         FixupKind = Mips::fixup_Mips_GPOFF_HI;
+        break;
+      } else if (MipsExpr->isCaptableOff()) {
+        FixupKind = Mips::fixup_Mips_CAPTABLEOFF_HI;
         break;
       }
       FixupKind = isMicroMips(STI) ? Mips::fixup_MICROMIPS_HI16

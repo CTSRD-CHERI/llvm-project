@@ -39,6 +39,7 @@ MCOperand MipsMCInstLower::LowerSymbolOperand(const MachineOperand &MO,
   MCSymbolRefExpr::VariantKind Kind = MCSymbolRefExpr::VK_None;
   MipsMCExpr::MipsExprKind TargetKind = MipsMCExpr::MEK_None;
   bool IsGpOff = false;
+  bool IsCapTableOff = false;
   const MCSymbol *Symbol;
 
   switch(MO.getTargetFlags()) {
@@ -141,6 +142,14 @@ MCOperand MipsMCInstLower::LowerSymbolOperand(const MachineOperand &MO,
   case MipsII::MO_CAPTAB_CALL_LO16:
     TargetKind = MipsMCExpr::MEK_CAPCALL_LO16;
     break;
+  case MipsII::MO_CAPTABLE_OFF_HI:
+    TargetKind = MipsMCExpr::MEK_HI;
+    IsCapTableOff = true;
+    break;
+  case MipsII::MO_CAPTABLE_OFF_LO:
+    TargetKind = MipsMCExpr::MEK_LO;
+    IsCapTableOff = true;
+    break;
   }
 
   switch (MOTy) {
@@ -193,6 +202,8 @@ MCOperand MipsMCInstLower::LowerSymbolOperand(const MachineOperand &MO,
 
   if (IsGpOff)
     Expr = MipsMCExpr::createGpOff(TargetKind, Expr, *Ctx);
+  else if (IsCapTableOff)
+    Expr = MipsMCExpr::createCaptableOff(TargetKind, Expr, *Ctx);
   else if (TargetKind != MipsMCExpr::MEK_None)
     Expr = MipsMCExpr::create(TargetKind, Expr, *Ctx);
 

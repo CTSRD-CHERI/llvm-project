@@ -294,6 +294,8 @@ unsigned MipsELFObjectWriter::getRelocType(MCContext &Ctx,
     return ELF::R_MIPS_GPREL32;
   case Mips::fixup_Mips_GPREL16:
     return ELF::R_MIPS_GPREL16;
+  case Mips::fixup_Mips_CAPTABLEREL16:
+    return ELF::R_MIPS_CHERI_CAPTABLEREL16;
   case Mips::fixup_Mips_26:
     return ELF::R_MIPS_26;
   case Mips::fixup_Mips_CALL16:
@@ -334,6 +336,20 @@ unsigned MipsELFObjectWriter::getRelocType(MCContext &Ctx,
   case Mips::fixup_Mips_GPOFF_LO: {
     unsigned Type = (unsigned)ELF::R_MIPS_NONE;
     Type = setRType((unsigned)ELF::R_MIPS_GPREL16, Type);
+    Type = setRType2((unsigned)ELF::R_MIPS_SUB, Type);
+    Type = setRType3((unsigned)ELF::R_MIPS_LO16, Type);
+    return Type;
+  }
+  case Mips::fixup_Mips_CAPTABLEOFF_HI: {
+    unsigned Type = (unsigned)ELF::R_MIPS_NONE;
+    Type = setRType((unsigned)ELF::R_MIPS_CHERI_CAPTABLEREL16, Type);
+    Type = setRType2((unsigned)ELF::R_MIPS_SUB, Type);
+    Type = setRType3((unsigned)ELF::R_MIPS_HI16, Type);
+    return Type;
+  }
+  case Mips::fixup_Mips_CAPTABLEOFF_LO: {
+    unsigned Type = (unsigned)ELF::R_MIPS_NONE;
+    Type = setRType((unsigned)ELF::R_MIPS_CHERI_CAPTABLEREL16, Type);
     Type = setRType2((unsigned)ELF::R_MIPS_SUB, Type);
     Type = setRType3((unsigned)ELF::R_MIPS_LO16, Type);
     return Type;

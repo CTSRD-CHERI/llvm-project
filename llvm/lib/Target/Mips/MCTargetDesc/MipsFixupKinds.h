@@ -229,6 +229,13 @@ namespace Mips {
     // resulting in - R_MIPS_CHERI_CAPABILITY
     fixup_CHERI_CAPABILITY,
 
+    // 16 bit fixup for _CHERI_CAPABILITY_TABLE offest resulting in - R_MIPS_CHERI_CAPTABLEREL16.
+    fixup_Mips_CAPTABLEREL16,
+    // resulting in - R_MIPS_CHERI_CAPTABLEREL16/R_MIPS_SUB/R_MIPS_HI16
+    fixup_Mips_CAPTABLEOFF_HI,
+    // resulting in - R_MIPS_CHERI_CAPTABLEREL16/R_MIPS_SUB/R_MIPS_LO16
+    fixup_Mips_CAPTABLEOFF_LO,
+
     // Marker
     LastTargetFixupKind,
     NumTargetFixupKinds = LastTargetFixupKind - FirstTargetFixupKind
