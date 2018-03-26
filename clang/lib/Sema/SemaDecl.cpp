@@ -15,6 +15,7 @@
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/ASTLambda.h"
+#include "clang/AST/RecordLayout.h"
 #include "clang/AST/CXXInheritance.h"
 #include "clang/AST/CharUnits.h"
 #include "clang/AST/CommentDiagnostic.h"
@@ -14605,8 +14606,46 @@ void Sema::ActOnTagFinishDefinition(Scope *S, Decl *TagD,
     Tag->setTopLevelDeclInObjCContainer();
 
   // Notify the consumer that we've defined a tag.
-  if (!Tag->isInvalidDecl())
+  if (!Tag->isInvalidDecl()) {
     Consumer.HandleTagDeclDefinition(Tag);
+    // Don't try to compute excess padding (which can be expensive) if the diag
+    // is ignored.
+    if (RecordDecl *RD = dyn_cast<RecordDecl>(Tag))
+      if (!Diags.isIgnored(diag::warn_excess_padding, RD->getLocation())) {
+        unsigned CharBitNum = Context.getTargetInfo().getCharWidth();
+        unsigned i = 0;
+        unsigned LastFieldEnd = 0;
+        unsigned Padding = 0;
+        const ASTRecordLayout &Layout = Context.getASTRecordLayout(RD);
+        unsigned BitEnd = 0;
+        for (auto F : RD->fields()) {
+          unsigned Offset = Layout.getFieldOffset(i);
+          i++;
+          // Count the bits in a bitfield.
+          if (F->isBitField()) {
+            BitEnd += F->getBitWidthValue(Context);
+            continue;
+          }
+          // If the last field was a bitfield then round the width up to a char
+          // and use that.
+          if (BitEnd) {
+            LastFieldEnd += (BitEnd + (CharBitNum - 1)) / CharBitNum;
+            BitEnd = 0;
+          }
+          Padding += Offset - LastFieldEnd;
+          LastFieldEnd = Offset + Context.getTypeSizeInChars(F->getType()).getQuantity();
+        }
+        unsigned Size = Layout.getSize().getQuantity();
+        Padding += Size - LastFieldEnd;
+        unsigned UnpaddedSize = Size - Padding;
+
+        if ((Padding > 8) || ((Padding * 3) > (UnpaddedSize * 4)))
+          getDiagnostics().Report(RD->getLocation(), diag::warn_excess_padding)
+              << Context.getTypeDeclType(RD)
+              << Padding
+              << Size;
+      }
+  }
 }
 
 void Sema::ActOnObjCContainerFinishDefinition() {

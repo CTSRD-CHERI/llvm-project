@@ -4941,6 +4941,10 @@ def warn_padded_struct_size : Warning<
 def warn_unnecessary_packed : Warning<
   "packed attribute is unnecessary for %0">, InGroup<Packed>, DefaultIgnore;
 
+def warn_excess_padding : Warning<
+  "%0 contains %1 bytes of padding in a %2 byte structure">,
+  InGroup<ExcessPadding>, DefaultIgnore;
+
 def err_typecheck_negative_array_size : Error<"array size is negative">;
 def warn_typecheck_function_qualifiers_ignored : Warning<
   "'%0' qualifier on function type %1 has no effect">,

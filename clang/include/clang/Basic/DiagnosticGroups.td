@@ -386,6 +386,7 @@ def ObjCFlexibleArray : DiagGroup<"objc-flexible-array">;
 def OpenCLUnsupportedRGBA: DiagGroup<"opencl-unsupported-rgba">;
 def DeprecatedObjCIsaUsage : DiagGroup<"deprecated-objc-isa-usage">;
 def ExplicitInitializeCall : DiagGroup<"explicit-initialize-call">;
+def ExcessPadding : DiagGroup<"excess-padding">;
 def Packed : DiagGroup<"packed">;
 def Padded : DiagGroup<"padded">;
 def PessimizingMove : DiagGroup<"pessimizing-move">;
