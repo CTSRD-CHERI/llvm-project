@@ -84,7 +84,7 @@ target triple = "cheri-unknown-freebsd"
 ; LEGACY:	.space	16
 ; LEGACY:	.8byte	.Ltmp2
 ; LEGACY:	.8byte	a
-; LEGACY:	.space	8
+; LEGACY:	.8byte	0
 ; LEGACY:	.space	16
 ; LEGACY:	.8byte	.Ltmp3
 ; LEGACY:	.8byte	a
@@ -96,5 +96,5 @@ target triple = "cheri-unknown-freebsd"
 ; LEGACY:	.space	16
 ; LEGACY:	.8byte	.Ltmp5
 ; LEGACY:	.8byte	a
-; LEGACY:	.space	8
+; LEGACY:	.8byte	0
 ; LEGACY:	.space	16

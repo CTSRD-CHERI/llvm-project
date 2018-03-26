@@ -41,19 +41,19 @@ target triple = "cheri-unknown-freebsd"
 ; LEGACY: 	.section	__cap_relocs,"a",@progbits
 ; LEGACY-NEXT: 	.8byte	.L
 ; LEGACY-NEXT: 	.8byte	_ZN1A7nonvirtEv
-; LEGACY-NEXT: 	.space	8
+; LEGACY-NEXT: 	.8byte	0
 ; LEGACY-NEXT: 	.space	16
 ; LEGACY-NEXT: 	.8byte	.L
 ; LEGACY-NEXT: 	.8byte	_Z9global_fnv
-; LEGACY-NEXT: 	.space	8
+; LEGACY-NEXT: 	.8byte	0
 ; LEGACY-NEXT: 	.space	16
 ; LEGACY-NEXT: 	.8byte	.L
 ; LEGACY-NEXT: 	.8byte	_ZN1A4virtEv
-; LEGACY-NEXT: 	.space	8
+; LEGACY-NEXT: 	.8byte	0
 ; LEGACY-NEXT: 	.space	16
 ; LEGACY-NEXT: 	.8byte	.L
 ; LEGACY-NEXT: 	.8byte	_ZN1A5virt2Ev
-; LEGACY-NEXT: 	.space	8
+; LEGACY-NEXT: 	.8byte	0
 ; LEGACY-NEXT: 	.space	16
 
 %class.A = type { i32 (...) addrspace(200)* addrspace(200)* }
