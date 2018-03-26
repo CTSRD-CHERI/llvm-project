@@ -18,8 +18,25 @@ using namespace llvm;
 static cl::opt<bool> UseCheriCapTable("cheri-cap-table", cl::Hidden,
                                cl::desc("Use the new cheri cap table to load globals"));
 
+// TODO: remove the -mllvm -cheri-cap-table flag since this is a superset
+static cl::opt<CheriCapabilityTableABI> CapTableABI("cheri-cap-table-abi",
+    cl::desc("ABI to use for :"), cl::init(CheriCapabilityTableABI::Legacy),
+    cl::values(clEnumValN(CheriCapabilityTableABI::Legacy, "legacy",
+                          "Disable capability table and use the legacy ABI"),
+               clEnumValN(CheriCapabilityTableABI::PLT, "plt",
+                          "Use PLT stubs to setup $cgp correctly"),
+               clEnumValN(CheriCapabilityTableABI::Pcrel, "pcrel",
+                          "Derive $cgp from $pcc in every function"),
+               clEnumValN(CheriCapabilityTableABI::FunctionDescriptor,
+                          "fn-desc",
+                          "Use function descriptors to setup $cgp correctly")));
+
 bool MCTargetOptions::cheriUsesCapabilityTable() {
-  return UseCheriCapTable;
+  return UseCheriCapTable; // TODO: return CapTableABI != Legacy;
+}
+
+CheriCapabilityTableABI MCTargetOptions::cheriCapabilityTableABI() {
+  return CapTableABI;
 }
 
 MCTargetOptions::MCTargetOptions()
