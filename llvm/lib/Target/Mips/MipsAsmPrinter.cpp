@@ -635,6 +635,8 @@ void MipsAsmPrinter::printOperand(const MachineInstr *MI, int opNum,
   case MipsII::MO_TPREL_LO: O << "%tprel_lo("; break;
   case MipsII::MO_GPOFF_HI: O << "%hi(%neg(%gp_rel("; break;
   case MipsII::MO_GPOFF_LO: O << "%lo(%neg(%gp_rel("; break;
+  case MipsII::MO_CAPTABLE_OFF_HI: O << "%hi(%neg(%captab_rel("; break;
+  case MipsII::MO_CAPTABLE_OFF_LO: O << "%lo(%neg(%captab_rel("; break;
   case MipsII::MO_GOT_DISP: O << "%got_disp("; break;
   case MipsII::MO_GOT_PAGE: O << "%got_page("; break;
   case MipsII::MO_GOT_OFST: O << "%got_ofst("; break;

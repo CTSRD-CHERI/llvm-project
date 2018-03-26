@@ -617,6 +617,10 @@ bool MipsELFObjectWriter::needsRelocateWithSymbol(const MCSymbol &Sym,
   case ELF::R_MIPS_CHERI_GLOBALS_TABLE:
     llvm_unreachable("This relocation should not be genreated yet!");
     return true;
+  // We want to keep the symbol for CAPTABLEREL since otherwise the offset to
+  // $pcc could be wrong
+  case ELF::R_MIPS_CHERI_CAPTABLEREL16:
+    return true;
 
   // FIXME: Many of these relocations should probably return false but this
   //        hasn't been confirmed to be safe yet.

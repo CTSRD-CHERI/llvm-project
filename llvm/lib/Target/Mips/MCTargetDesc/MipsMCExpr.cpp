@@ -166,7 +166,7 @@ MipsMCExpr::evaluateAsRelocatableImpl(MCValue &Res,
                                       const MCAsmLayout *Layout,
                                       const MCFixup *Fixup) const {
   // Look for the %hi(%neg(%gp_rel(X))) and %lo(%neg(%gp_rel(X))) special cases.
-  if (isGpOff()) {
+  if (isGpOff() || isCaptableOff()) {
     const MCExpr *SubExpr =
         cast<MipsMCExpr>(cast<MipsMCExpr>(getSubExpr())->getSubExpr())
             ->getSubExpr();

@@ -51,6 +51,9 @@ static unsigned adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
   case Mips::fixup_Mips_GPREL16:
   case Mips::fixup_Mips_GPOFF_HI:
   case Mips::fixup_Mips_GPOFF_LO:
+  case Mips::fixup_Mips_CAPTABLEREL16:
+  case Mips::fixup_Mips_CAPTABLEOFF_HI:
+  case Mips::fixup_Mips_CAPTABLEOFF_LO:
   case Mips::fixup_Mips_GOT_PAGE:
   case Mips::fixup_Mips_GOT_OFST:
   case Mips::fixup_Mips_GOT_DISP:
