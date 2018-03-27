@@ -3088,6 +3088,8 @@ bool MipsAsmParser::loadAndAddSymbolAddress(const MCExpr *SymExpr,
                ELF::STB_LOCAL))) {
       const MCExpr *CallExpr =
           MipsMCExpr::create(MipsMCExpr::MEK_GOT_CALL, SymExpr, getContext());
+      if (ABI.UsesCapabilityTable())
+        return Error(IDLoc, "Can't expand $gp-relative in cap-table mode");
       TOut.emitRRX(Mips::LD, DstReg, ABI.GetGlobalPtr(),
                    MCOperand::createExpr(CallExpr), IDLoc, STI);
       return false;
@@ -3130,7 +3132,8 @@ bool MipsAsmParser::loadAndAddSymbolAddress(const MCExpr *SymExpr,
         return true;
       TmpReg = ATReg;
     }
-
+    if (ABI.UsesCapabilityTable())
+      return Error(IDLoc, "Can't expand $gp-relative in cap-table mode");
     TOut.emitRRX(Mips::LD, TmpReg, ABI.GetGlobalPtr(),
                  MCOperand::createExpr(GotExpr), IDLoc, STI);
 
