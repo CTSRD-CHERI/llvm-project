@@ -562,6 +562,22 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
       SmallEntryCount++;
     }
   }
+
+  unsigned MaxSmallEntries = (1 << 19) / Config->CapabilitySize;
+  if (SmallEntryCount > MaxSmallEntries) {
+    // Use warn here since the calculation may be wrong if the 11 bit clc is
+    // used. We will error when writing the relocation values later anyway
+    // so this will help find the error
+    warn("added " + Twine(SmallEntryCount) + " entries to .cap_table but "
+        "current maximum is " + Twine(MaxSmallEntries) + "; try recompiling "
+        "non-performance critical source files with -mllvm -mxcaptable");
+  }
+  if (errorHandler().Verbose) {
+    message("Total " + Twine(Entries.size()) + " .cap_table entries: " +
+        Twine(SmallEntryCount) + " use a small immediate and " +
+        Twine(Entries.size() - SmallEntryCount) + " use -mxcaptable. ");
+  }
+
   uint32_t AssignedSmallIndexes = 0;
   uint32_t AssignedLargeIndexes = 0;
   for (auto &it : Entries) {
