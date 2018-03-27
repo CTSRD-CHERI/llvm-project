@@ -1506,12 +1506,25 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
   // It should be okay as no one seems to care about the type.
   // Even the author of gold doesn't remember why gold behaves that way.
   // https://sourceware.org/ml/binutils/2002-03/msg00360.html
+  // XXXAR: We really should not be setting _DYNAMIC with --export-dynmic
+  bool Needs_DYNAMIC = (Config->Pic || needsInterpSection());
   if (InX::DynSymTab) {
     auto *Sym = Symtab->addRegular("_DYNAMIC", STV_HIDDEN, STT_NOTYPE, 0 /*Value*/,
                            /*Size=*/0, STB_WEAK, InX::Dynamic,
                            /*File=*/nullptr);
     // In CheriABI we want sensible bounds if we do &_DYNAMIC in C code
     Sym->IsSectionStartSymbol = true;
+  }
+
+  // The common check if a program is dynamically linked (&_DYNAMIC != 0)
+  // will not work in the early CHERI startup. In PIC code we also can't
+  // use dla _DYNAMIC since that needs either $gp or text relocations
+  // Instead we just let the linker generate a new symbol _HAS__DYNAMIC
+  if (auto *HasDynamic = Symtab->find("_HAS__DYNAMIC")) {
+    if (!HasDynamic->isDefined()) {
+      Defined *D = Symtab->addAbsolute("_HAS__DYNAMIC");
+      D->Value = Needs_DYNAMIC ? 1 : 0;
+    }
   }
 
   // Define __rel[a]_iplt_{start,end} symbols if needed.
