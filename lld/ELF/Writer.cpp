@@ -1508,7 +1508,7 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
   // https://sourceware.org/ml/binutils/2002-03/msg00360.html
   // XXXAR: We really should not be setting _DYNAMIC with --export-dynmic
   bool Needs_DYNAMIC = (Config->Pic || needsInterpSection());
-  if (InX::DynSymTab) {
+  if (Needs_DYNAMIC) {
     auto *Sym = Symtab->addRegular("_DYNAMIC", STV_HIDDEN, STT_NOTYPE, 0 /*Value*/,
                            /*Size=*/0, STB_WEAK, InX::Dynamic,
                            /*File=*/nullptr);
