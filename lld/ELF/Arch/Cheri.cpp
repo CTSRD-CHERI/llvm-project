@@ -593,19 +593,9 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
 
     uint32_t Index = *CTI.Index;
     auto Body = it.first;
-    // FIXME: locking?
     In<ELFT>::CapRelocs->addCapReloc(
         {InX::CheriCapTable, Index * Config->CapabilitySize, Config->Pic},
         {Body, 0u}, Body->IsPreemptible, 0);
-    if (Config->Pic) {
-      static bool HasWarned = false;
-      if (!HasWarned) {
-        HasWarned = true;
-        // Avoid failing the build due to on by default fatal-warnings
-        nonFatalWarning("cannot add capability table entries for PIC code yet, "
-                        "file will be broken!");
-      }
-    }
 
     StringRef Name = it.first->getName();
     if (Name.empty())
