@@ -2,14 +2,18 @@
 # RUN: ld.lld %t.o -o %t.exe
 # RUN: llvm-objdump -t -d -h -s -section=.data -section=.text %t.exe | FileCheck %s -check-prefix STATIC
 # RUN: ld.lld -pie %t.o -o %t-pie.exe
-# RUN: llvm-objdump -t -d -h -s -section=.data -section=.text %t-pie.exe | FileCheck %s -check-prefix DYNAMIC
+# RUN: llvm-objdump -t -d -h -s -section=.data -section=.text %t-pie.exe | FileCheck %s -check-prefixes DYNAMIC,DYNAMIC-PIE
 # RUN: ld.lld -shared %t.o -o %t.so
-# RUN: llvm-objdump -t -d -h -s -section=.data -section=.text %t.so | FileCheck %s -check-prefix DYNAMIC
+# RUN: llvm-objdump -t -d -h -s -section=.data -section=.text %t.so | FileCheck %s -check-prefixes DYNAMIC,DYNAMIC-SHLIB
 # Also check that --export-dynamic doesn't cause _HAS__DYNAMIC to be true
 # RUN: ld.lld -export-dynamic %t.o -o %t-export.exe
 # RUN: llvm-objdump -t -d -h -s -section=.data -section=.text %t-export.exe | FileCheck %s -check-prefix STATIC
 
-
+# Check that a static executable that is linked against a shared library has a valid _DYNAMIC symbol
+# RUN: %cheri128_llvm-mc -filetype=obj %S/../Inputs/shared.s -o %t2.o
+# RUN: ld.lld -shared %t2.o -o %t-shlib.so
+# RUN: ld.lld %t.o %t-shlib.so -o %t-with-shlib.exe
+# RUN: llvm-objdump -t -d -h -s -section=.data -section=.text %t-with-shlib.exe | FileCheck %s -check-prefixes DYNAMIC,DYNAMIC-NONPIC
 
 # This is a hack since we can't easily load the value of _DYNAMIC prior to globals
 # being initialized:
@@ -29,7 +33,9 @@ ori $2, $0, %lo(_HAS__DYNAMIC)
 
 # DYNAMIC-LABEL: Disassembly of section .text:
 # DYNAMIC-NEXT: __start:
-# DYNAMIC-NEXT:   10000:	34 02 00 01 	ori	$2, $zero, 1
+# DYNAMIC-PIE-NEXT:      10000:	34 02 00 01 	ori	$2, $zero, 1
+# DYNAMIC-SHLIB-NEXT:    10000:	34 02 00 01 	ori	$2, $zero, 1
+# DYNAMIC-NONPIC-NEXT:   20000:	34 02 00 01 	ori	$2, $zero, 1
 
 .data
 .weak _DYNAMIC
@@ -59,14 +65,20 @@ value_of_HAS__DYNAMIC:
 
 
 # DYNAMIC-LABEL: Contents of section .data:
-# DYNAMIC-NEXT: 20000 00000000 00000{{1f8|258}} 12345678 90abcdef
+# DYNAMIC-PIE-NEXT:    20000 00000000 000001f8 12345678 90abcdef
+# DYNAMIC-SHLIB-NEXT:  20000 00000000 00000258 12345678 90abcdef
 #                        ^----- _DYNAMIC == relocbase + 0x1f8 (addend 0x1f8 is written here since we use REL)
-# DYNAMIC-NEXT: 20010 00000000 00000001 fedcba09 87654321
+# DYNAMIC-NONPIC-NEXT: 30000 00000000 000101f8 12345678 90abcdef
+#                        ^----- absolute value for _DYNAMIC in non-pie executable with shlibs
+# DYNAMIC-NEXT: {{3|2}}0010 00000000 00000001 fedcba09 87654321
 #                        ^----- _HAS__DYNAMIC == 1
 # DYNAMIC-LABEL: SYMBOL TABLE:
 # DYNAMIC-NEXT: 0000000000000000         *UND*		 00000000
-# DYNAMIC-NEXT: 0000000000000{{1f8|258}}         .dynamic  00000000 .hidden _DYNAMIC
-#                       ^----- _DYNAMIC == relocbase + 0x1f8
+# DYNAMIC-PIE-NEXT:    00000000000001f8         .dynamic  00000000 .hidden _DYNAMIC
+# DYNAMIC-SHLIB-NEXT:  0000000000000258        .dynamic  00000000 .hidden _DYNAMIC
+#                       ^----- _DYNAMIC == relocbase + 0x1f8/258
+# DYNAMIC-NONPIC-NEXT: 00000000000101f8         .dynamic  00000000 .hidden _DYNAMIC
+#                      ^----- absolute value for _DYNAMIC in non-pie executable with shlibs
 # DYNAMIC-NEXT: 0000000000000001         *ABS*		 00000000 .hidden _HAS__DYNAMIC
 #                       ^----- _HAS__DYNAMIC == 1
 # DYNAMIC-NEXT: {{.+}}         .got		   00000000 .hidden _gp

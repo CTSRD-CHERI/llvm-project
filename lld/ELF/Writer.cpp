@@ -1506,26 +1506,32 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
   // It should be okay as no one seems to care about the type.
   // Even the author of gold doesn't remember why gold behaves that way.
   // https://sourceware.org/ml/binutils/2002-03/msg00360.html
-  // XXXAR: We really should not be setting _DYNAMIC with --export-dynmic
-  bool Needs_DYNAMIC = (Config->Pic || needsInterpSection());
-  if (Needs_DYNAMIC) {
-    auto *Sym = Symtab->addRegular("_DYNAMIC", STV_HIDDEN, STT_NOTYPE, 0 /*Value*/,
-                           /*Size=*/0, STB_WEAK, InX::Dynamic,
-                           /*File=*/nullptr);
+
+  bool NeedsDYNAMIC = (Config->Pic || !SharedFiles.empty()); // TODO: --as-needed?
+  if (InX::DynSymTab && NeedsDYNAMIC) {
+    // Set _DYNAMIC to null for static binaries without shared libraries
+    // Note: This is needed in order to not have a valid _DYNAMIC if
+    // --export-dynamic is passed to a static executable. Some programs check
+    // if they are dynamically linked using `if (&_DYNAMIC != 0)` so we should
+    // keep this check working.
+
+    auto *S = Symtab->addRegular("_DYNAMIC", STV_HIDDEN, STT_NOTYPE, 0 /*Value*/,
+                                 /*Size=*/0, STB_WEAK, InX::Dynamic,
+                                 /*File=*/nullptr);
     // In CheriABI we want sensible bounds if we do &_DYNAMIC in C code
-    Sym->IsSectionStartSymbol = true;
+    S->IsSectionStartSymbol = true;
   }
 
   // The common check if a program is dynamically linked (&_DYNAMIC != 0)
   // will not work in the early CHERI startup. In PIC code we also can't
   // use dla _DYNAMIC since that needs either $gp or text relocations
   // Instead we just let the linker generate a new symbol _HAS__DYNAMIC
-  if (auto *HasDynamic = Symtab->find("_HAS__DYNAMIC")) {
-    if (!HasDynamic->isDefined()) {
-      Defined *D = Symtab->addAbsolute("_HAS__DYNAMIC");
-      D->Value = Needs_DYNAMIC ? 1 : 0;
+  if (auto *Reference = Symtab->find("_HAS__DYNAMIC"))
+    if (!Reference->isDefined()) {
+      Defined *HasDynamicSym = Symtab->addAbsolute("_HAS__DYNAMIC");
+      HasDynamicSym->Value = NeedsDYNAMIC ? 1 : 0;
     }
-  }
+
 
   // Define __rel[a]_iplt_{start,end} symbols if needed.
   addRelIpltSymbols();
