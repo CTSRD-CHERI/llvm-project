@@ -57,7 +57,7 @@ __attribute__((weak)) extern void *__capability
 __cap_table_end;
 
 #define INIT_CGP_REGISTER_ASM                                                  \
-  ".option pic0\n\t.set noreorder\n\t"                                         \
+  ".option pic0\n\t"                                                           \
   "dla $2, __cap_table_start\n\t"                                              \
   "beqz $2, .Lskip_cgp_setup\n\t"                                              \
   "nop\n\t"                                                                    \
@@ -74,11 +74,19 @@ __cap_table_end;
  */
 #define DEFINE_CHERI_START_FUNCTION(c_startup_fn)                              \
   __asm__(".text\n\t"                                                          \
+          ".set noat\n\t"                                                      \
+          ".set noreorder\n\t"                                                 \
           ".global __start\n\t"                                                \
           ".ent __start\n\t"                                                   \
           "__start:\n\t"                                                       \
           INIT_CGP_REGISTER_ASM                                                \
-          "b " #c_startup_fn "\n\t"                                            \
+          /* Setup $c12 correctly in case we are inferring $cgp from $c12 */   \
+          ".protected "  #c_startup_fn "\n\t"                                  \
+          "lui $1, %pcrel_hi("  #c_startup_fn " - 8)\n\t"                      \
+          "daddiu $1, $1, %pcrel_lo("  #c_startup_fn " - 4)\n\t"               \
+          "cgetpcc $c12\n\t"                                                   \
+          "cincoffset $c12, $c12, $1\n\t"                                      \
+          "cjr $c12\n\t"                                                       \
           "nop\n\t"                                                            \
           ".end __start");
 
