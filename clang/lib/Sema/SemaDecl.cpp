@@ -14613,14 +14613,14 @@ void Sema::ActOnTagFinishDefinition(Scope *S, Decl *TagD,
     if (RecordDecl *RD = dyn_cast<RecordDecl>(Tag))
       if (!Diags.isIgnored(diag::warn_excess_padding, RD->getLocation())) {
         unsigned CharBitNum = Context.getTargetInfo().getCharWidth();
-        unsigned i = 0;
+        unsigned NumFields = 0;
         unsigned LastFieldEnd = 0;
         unsigned Padding = 0;
         const ASTRecordLayout &Layout = Context.getASTRecordLayout(RD);
         unsigned BitEnd = 0;
         for (auto F : RD->fields()) {
-          unsigned Offset = Layout.getFieldOffset(i);
-          i++;
+          unsigned Offset = Layout.getFieldOffset(NumFields);
+          NumFields++;
           // Count the bits in a bitfield.
           if (F->isBitField()) {
             BitEnd += F->getBitWidthValue(Context);
@@ -14639,11 +14639,13 @@ void Sema::ActOnTagFinishDefinition(Scope *S, Decl *TagD,
         Padding += Size - LastFieldEnd;
         unsigned UnpaddedSize = Size - Padding;
 
-        if ((Padding > 8) || ((Padding * 3) > (UnpaddedSize * 4)))
-          getDiagnostics().Report(RD->getLocation(), diag::warn_excess_padding)
-              << Context.getTypeDeclType(RD)
-              << Padding
-              << Size;
+        // Don't warn for empty structs even though they have 1 byte padding in
+        // a 1 byte record
+        if (NumFields > 0)
+          if ((Padding > 8) || ((Padding * 3) > (UnpaddedSize * 4)))
+            getDiagnostics().Report(RD->getLocation(),
+                                    diag::warn_excess_padding)
+                << Context.getTypeDeclType(RD) << Padding << Size;
       }
   }
 }
