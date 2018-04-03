@@ -75,7 +75,8 @@ entry:
 ; PCREL-NEXT: liveins: $c12
 ; PCREL-NEXT: %3:gpr64 = LUi64 target-flags(mips-captable-off-hi) @test
 ; PCREL-NEXT: %4:gpr64 = DADDiu %3, target-flags(mips-captable-off-lo) @test
-; PCREL-NEXT: %0:cheriregs = CIncOffset $c12, %4
+; PCREL-NEXT: $c26 = CIncOffset $c12, %4
+; PCREL-NEXT: %0:cheriregs = COPY $c26
 ; PCREL-NEXT: %1:cheriregs = LOADCAP_BigImm target-flags(mips-captable20) @global, %0; mem:LD[[$CAP_SIZE]][JumpTable]
 ; PCREL-NEXT: [[RESULT:%2]]:gpr64 = CAPLOAD64 $zero_64, 0, killed %1; mem:LD8[@global(addrspace=200)](dereferenceable)
 
@@ -138,8 +139,8 @@ entry:
 ; PCREL-NEXT:         #   fixup A - offset: 0, value: %hi(%neg(%captab_rel(test))), kind:
 ; PCREL-NEXT: daddiu	$1, $1, %lo(%neg(%captab_rel(test))) # encoding: [0x64,0x21,A,A]
 ; PCREL-NEXT:                 #   fixup A - offset: 0, value: %lo(%neg(%captab_rel(test))), kind:
-; PCREL-NEXT: cincoffset	$c1, $c12, $1
-; PCREL-NEXT: clcbi	$c1, %captab20(global)($c1) # encoding: [0x74,0x21,A,A]
+; PCREL-NEXT: cincoffset	$[[CGP:c26]], $c12, $1
+; PCREL-NEXT: clcbi	$c1, %captab20(global)($[[CGP]]) # encoding: [0x74,0x3a,A,A]
 ; PCREL-NEXT:            #   fixup A - offset: 0, value: %captab20(global), kind: fixup_CHERI_CAPTABLE20
 ; PCREL-NEXT: cjr	$c17
 ; PCREL-NEXT: cld	$2, $zero, 0($c1)

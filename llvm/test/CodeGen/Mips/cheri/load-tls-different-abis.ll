@@ -80,7 +80,8 @@ entry:
 ; PCREL-NEXT: liveins: $c12
 ; PCREL-NEXT:  %12:gpr64 = LUi64 target-flags(mips-captable-off-hi) @test
 ; PCREL-NEXT: %13:gpr64 = DADDiu %12, target-flags(mips-captable-off-lo) @test
-; PCREL-NEXT: %0:cheriregs = CIncOffset $c12, %13
+; PCREL-NEXT: $c26 = CIncOffset $c12, %13
+; PCREL-NEXT: %0:cheriregs = COPY $c26
 
 
 ; CAP-TABLE-HACK-NEXT:  $t9_64 = CGetOffset $c12
@@ -130,13 +131,13 @@ entry:
 
 
 
+; Get $t9 for the tls hack:
+; CAP-TABLE-HACK-NEXT:  cgetoffset      $25, $c12
 ; PCREL-NEXT:           lui     $1, %hi(%neg(%captab_rel(test))) # encoding: [0x3c,0x01,A,A]
 ; PCREL-NEXT:                   #   fixup A - offset: 0, value: %hi(%neg(%captab_rel(test))), kind: fixup_Mips_CAPTABLEREL_HI
 ; PCREL-NEXT:           daddiu  $1, $1, %lo(%neg(%captab_rel(test))) # encoding: [0x64,0x21,A,A]
 ; PCREL-NEXT:                   #   fixup A - offset: 0, value: %lo(%neg(%captab_rel(test))), kind: fixup_Mips_CAPTABLEREL_LO
-
 ; From now on it's all the same TLS hack:
-; CAP-TABLE-HACK-NEXT:  cgetoffset      $25, $c12
 ; CAP-TABLE-HACK-NEXT:  lui     [[TLSADDR:\$.+]], %hi(%neg(%gp_rel(test)))
 ; CAP-TABLE-HACK-NEXT:                                  #   fixup A - offset: 0, value: %hi(%neg(%gp_rel(test))), kind: fixup_Mips_GPOFF_HI
 ; CAP-TABLE-HACK-NEXT:  daddu   [[TLSADDR]], [[TLSADDR]], $25
@@ -149,9 +150,8 @@ entry:
 ; CAP-TABLE-HACK-NEXT:  ld      [[TLSPTR:\$.+]], %gottprel(global_tls)([[TLSADDR]])
 ; CAP-TABLE-HACK-NEXT:                       #   fixup A - offset: 0, value: %gottprel(global_tls), kind: fixup_Mips_GOTTPREL
 ; For PCREL derive $cgp from $c12 now:
-; PCREL-NEXT:           cincoffset      $c1, $c12, $1
-
-; CAP-TABLE-HACK-NEXT:  clcbi   $c1, %captab20(global_normal)($c{{26|1}})
+; PCREL-NEXT:           cincoffset      $c26, $c12, $1
+; CAP-TABLE-HACK-NEXT:  clcbi   $c1, %captab20(global_normal)($c26)
 ; CAP-TABLE-HACK-NEXT:               #   fixup A - offset: 0, value: %captab20(global_normal), kind: fixup_CHERI_CAPTABLE20
 ; CAP-TABLE-HACK-NEXT:  daddu   $1, [[HWREG]], [[TLSPTR]]
 ; CAP-TABLE-HACK-NEXT:  ld      $1, 0($1)

@@ -261,7 +261,7 @@ void MipsSEDAGToDAGISel::initCapGlobalBaseReg(MachineFunction &MF) {
   const MipsABIInfo &ABI = static_cast<const MipsTargetMachine &>(TM).getABI();
 
   assert(ABI.IsCheriPureCap());
-  const unsigned GlobalCapReg = ABI.GetGlobalCapability();
+  const unsigned ABIGlobalCapReg = ABI.GetGlobalCapability();
 
   // For the purecap ABI, $cgp is required to point to the function's/DSOs
   // capability table on function entry, so emit a single COPY
@@ -299,15 +299,27 @@ void MipsSEDAGToDAGISel::initCapGlobalBaseReg(MachineFunction &MF) {
     BuildMI(MBB, I, DL, TII.get(Mips::DADDiu), Tmp2)
         .addReg(Tmp1)
         .addGlobalAddress(FName, 0, MipsII::MO_CAPTABLE_OFF_LO);
+#if 0
     BuildMI(MBB, I, DL, TII.get(Mips::CIncOffset), CapGlobalBaseReg)
         .addReg(Mips::C12)
         .addReg(Tmp2);
-
-  } else {
-    MF.getRegInfo().addLiveIn(GlobalCapReg);
-    MBB.addLiveIn(GlobalCapReg);
+#else
+    // Generate the globals in $cgp to make the llvm-objdump output more useful
+    // since it will guess which global is being loaded. Also I think that if
+    // we explicitly use $cgp here the register allocator will be able to use
+    // one additional register (since it can optimize away the copy node and
+    // just use $cgp directly for loads)
+    BuildMI(MBB, I, DL, TII.get(Mips::CIncOffset), ABIGlobalCapReg)
+        .addReg(Mips::C12)
+        .addReg(Tmp2);
     BuildMI(MBB, I, DL, TII.get(TargetOpcode::COPY), CapGlobalBaseReg)
-        .addReg(GlobalCapReg);
+        .addReg(ABIGlobalCapReg);
+#endif
+  } else {
+    MF.getRegInfo().addLiveIn(ABIGlobalCapReg);
+    MBB.addLiveIn(ABIGlobalCapReg);
+    BuildMI(MBB, I, DL, TII.get(TargetOpcode::COPY), CapGlobalBaseReg)
+        .addReg(ABIGlobalCapReg);
   }
 }
 
