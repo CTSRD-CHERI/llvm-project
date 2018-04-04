@@ -13,7 +13,7 @@
 using namespace llvm;
 
 static cl::opt<bool> EnableCheri128FailHard(
-    "enable-cheri218-fail-hard", cl::init(false),
+    "enable-cheri128-fail-hard", cl::init(false),
     cl::desc("Trap if CHERI128 operations lose their tags"), cl::Hidden);
 
 namespace {
