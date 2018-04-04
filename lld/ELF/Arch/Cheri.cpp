@@ -554,6 +554,11 @@ uint32_t CheriCapTableSection::getIndex(const Symbol &Sym) const {
 
 template <class ELFT>
 void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
+  // FIXME: we should not be hardcoding architecture specific relocation numbers
+  // here
+  assert(Config->EMachine == EM_MIPS);
+  RelType ElfCapabilityReloc = R_MIPS_CHERI_CAPABILITY;
+
   uint64_t SmallEntryCount = 0;
   for (auto &it : Entries) {
     // TODO: looping twice is inefficient, we could keep track of the number of
@@ -592,10 +597,7 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
     }
 
     uint32_t Index = *CTI.Index;
-    auto Body = it.first;
-    In<ELFT>::CapRelocs->addCapReloc(
-        {InX::CheriCapTable, Index * Config->CapabilitySize, Config->Pic},
-        {Body, 0u}, Body->IsPreemptible, 0);
+    Symbol *TargetSym = it.first;
 
     StringRef Name = it.first->getName();
     if (Name.empty())
@@ -619,6 +621,10 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
     uint64_t Off = Index * Config->CapabilitySize;
     Symtab->addRegular(Saver.save(RefName), STV_HIDDEN, STT_OBJECT, Off,
                        Config->CapabilitySize, STB_LOCAL, this, nullptr);
+    addCapabilityRelocation<ELFT>(
+        *TargetSym, ElfCapabilityReloc, InX::CheriCapTable, Off,
+        R_CHERI_CAPABILITY, 0,
+        [&]() { return "\n>>> referenced by " + RefName; });
   }
   assert(AssignedSmallIndexes + AssignedLargeIndexes == Entries.size());
   ValuesAssigned = true;
