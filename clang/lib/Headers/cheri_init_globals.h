@@ -74,12 +74,12 @@ __cap_table_end;
  */
 #define DEFINE_CHERI_START_FUNCTION(c_startup_fn)                              \
   __asm__(".text\n\t"                                                          \
-          ".set noat\n\t"                                                      \
           ".set noreorder\n\t"                                                 \
           ".global __start\n\t"                                                \
           ".ent __start\n\t"                                                   \
           "__start:\n\t"                                                       \
           INIT_CGP_REGISTER_ASM                                                \
+          ".set noat\n\t"                                                      \
           /* Setup $c12 correctly in case we are inferring $cgp from $c12 */   \
           ".protected "  #c_startup_fn "\n\t"                                  \
           "lui $1, %pcrel_hi("  #c_startup_fn " - 8)\n\t"                      \

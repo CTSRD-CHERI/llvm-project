@@ -27,9 +27,17 @@ int _start(void) {
   // CHECK-NEXT: dsubu	$1, $3, $2
   // CHECK-NEXT: csetbounds	$c26, $c26, $1
   // CHECK-NEXT: .Lskip_cgp_setup:
-  // CHECK-NEXT: b	_start
+  // CHECK-NEXT: .set    noat
+  // CHECK-NEXT: .protected      _start
+  // CHECK-NEXT: lui     $1, %pcrel_hi(_start-8)
+  // CHECK-NEXT: daddiu  $1, $1, %pcrel_lo(_start-4)
+  // CHECK-NEXT: cgetpcc $c12
+  // CHECK-NEXT: cincoffset      $c12, $c12, $1
+  // CHECK-NEXT: cjr     $c12
   // CHECK-NEXT: nop
-  // CHECK-NEXT: .end	__start
+  // CHECK-NEXT: .end    __start
+
+
 
   return 0;
 }
