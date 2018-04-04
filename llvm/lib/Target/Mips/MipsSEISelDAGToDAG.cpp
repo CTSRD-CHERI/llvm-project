@@ -303,6 +303,9 @@ void MipsSEDAGToDAGISel::initCapGlobalBaseReg(MachineFunction &MF) {
     BuildMI(MBB, I, DL, TII.get(Mips::CIncOffset), CapGlobalBaseReg)
         .addReg(Mips::C12)
         .addReg(Tmp2);
+    // XXXAR: the hints are being ignored (probably since $cgp is reserved?)
+    RegInfo.addRegAllocationHint(CapGlobalBaseReg, ABIGlobalCapReg);
+    RegInfo.setSimpleHint(CapGlobalBaseReg, ABIGlobalCapReg);
 #else
     // Generate the globals in $cgp to make the llvm-objdump output more useful
     // since it will guess which global is being loaded. Also I think that if
