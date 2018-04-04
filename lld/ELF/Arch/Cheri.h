@@ -166,6 +166,16 @@ static void foreachGlobalSizesSymbol(InputSection *IS, CallBack &&CB) {
   }
 }
 
+inline bool isSectionEndSymbol(StringRef Name) {
+  // Section end symbols like __preinit_array_end, etc. should actually be
+  // zero size symbol since they are just markers for the end of a section
+  // and not usable as a valid pointer
+  return Name.startswith("__stop_") ||
+         (Name.startswith("__") && Name.endswith("_end")) || Name == "end" ||
+         Name == "_end" || Name == "etext" || Name == "_etext" ||
+         Name == "edata" || Name == "_edata";
+}
+
 inline void readOnlyCapRelocsError(Symbol &Sym, const Twine &SourceMsg) {
   error("attempting to add a capability relocation against " +
         (Sym.getName().empty() ? "local symbol" : "symbol " + toString(Sym)) +

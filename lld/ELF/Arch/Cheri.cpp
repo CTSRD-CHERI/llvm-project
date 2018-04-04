@@ -362,11 +362,7 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &Location,
     // Section end symbols like __preinit_array_end, etc. should actually be
     // zero size symbol since they are just markers for the end of a section
     // and not usable as a valid pointer
-    bool IsSpecialEndSymbol = Name.startswith("__stop_") ||
-        (Name.startswith("__") && Name.endswith("_end")) ||
-        Name == "end" || Name == "_end" || Name == "etext" ||
-        Name == "_etext" || Name == "edata" || Name == "_edata";
-    if (IsSpecialEndSymbol)
+    if (isSectionEndSymbol(Name))
       return TargetSize;
 
     // Symbols previously declared as weak can have size 0 (if they then resolve

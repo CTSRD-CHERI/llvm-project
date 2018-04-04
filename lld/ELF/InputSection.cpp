@@ -799,20 +799,27 @@ static void fillGlobalSizesSection(InputSection* IS, uint8_t* Buf, uint8_t* BufE
     uint64_t ResolvedSize = Target->getSize();
     uint8_t *Location = Buf + Offset;
     assert(Location + 8 <= BufEnd); // Should use a span type instead
-
-    if (ResolvedSize == 0 || Target->isUndefined()) {
+    bool SizeIsUnknown = ResolvedSize == 0;
+    if (SizeIsUnknown || Target->isUndefined()) {
       // HACK for environ and __progname (both are capabilities):
-      if (Config->Shared &&
-          (RealSymName == "__progname" || RealSymName == "environ")) {
+      if (Target->IsSectionStartSymbol) {
+        assert(!Target->getOutputSection() ||
+               Target->getOutputSection()->Size == 0);
+        SizeIsUnknown = false; // output section is empty -> size 0 is fine
+      } else if (isSectionEndSymbol(RealSymName)) {
+        SizeIsUnknown = false; // zero size is fine for section end symbols
+      } else if (Config->Shared &&
+                 (RealSymName == "__progname" || RealSymName == "environ")) {
         message("Using .global_size for symbol " + RealSymName +
                 " in shared lib (assuming size==sizeof(void* __capability)");
         ResolvedSize = Config->CapabilitySize;
+        SizeIsUnknown = false;
       } else {
         warn("Could not find .global_size for " +
              verboseToString<ELFT>(Target));
       }
     }
-    if (ResolvedSize == 0 && (IS->getOutputSection()->Flags & SHF_WRITE) == 0) {
+    if (SizeIsUnknown && (IS->getOutputSection()->Flags & SHF_WRITE) == 0) {
       error("Unknown .global_sizes value for " + RealSymName +
             " but section was not marked as writable");
     }

@@ -178,9 +178,8 @@ static Defined *addOptionalRegular(StringRef Name, SectionBase *Sec,
   Symbol *S = Symtab->find(Name);
   if (!S || S->isDefined())
     return nullptr;
-  Symbol *Sym = Symtab->addRegular(Name, StOther, STT_NOTYPE, Val,
-                                   /*Size=*/0, Binding, Sec,
-                                   /*File=*/nullptr);
+  Symbol *Sym = Symtab->addRegular(Name, StOther, STT_NOTYPE, Val, /*Size=*/0,
+                                   Binding, Sec, /*File=*/nullptr);
   // If Val == 0 assume this symbol references the start of a section.
   // When targetting CHERI we set the size of that symbol since otherwise
   // an expression like foo = &_DYNAMIC will create a zero-length capability
@@ -1766,7 +1765,7 @@ template <class ELFT> void Writer<ELFT>::addStartEndSymbols() {
       if (Config->Pic)
         OS = Out::ElfHeader;
       addOptionalRegular(Start, OS, 0, STV_HIDDEN, STB_GLOBAL,
-                         /*CanBeSectionStart=*/OS != nullptr);
+                         /*CanBeSectionStart=*/true);
       // End is not a section start symbol even though it has value 0:
       addOptionalRegular(End, OS, 0, STV_HIDDEN, STB_GLOBAL,
                          /*CanBeSectionStart=*/false);
@@ -1776,10 +1775,8 @@ template <class ELFT> void Writer<ELFT>::addStartEndSymbols() {
   Define("__preinit_array_start", "__preinit_array_end", Out::PreinitArray);
   Define("__init_array_start", "__init_array_end", Out::InitArray);
   Define("__fini_array_start", "__fini_array_end", Out::FiniArray);
-  if (auto* CtorsSec = findSection(".ctors"))
-    Define("__ctors_start", "__ctors_end", CtorsSec);
-  if (auto* DtorsSec = findSection(".dtors"))
-    Define("__dtors_start", "__dtors_end", DtorsSec);
+  Define("__ctors_start", "__ctors_end", findSection(".ctors"));
+  Define("__dtors_start", "__dtors_end", findSection(".dtors"));
   if (InX::CheriCapTable)
     Define("__cap_table_start", "__cap_table_end",
            InX::CheriCapTable->getOutputSection());
