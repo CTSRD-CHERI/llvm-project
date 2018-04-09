@@ -189,11 +189,9 @@ void MipsTargetInfo::getTargetDefines(const LangOptions &Opts,
     Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_STORE_LOCAL__",
             Twine(1<<6));
     Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_SEAL__", Twine(1<<7));
-    Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_EPCC__", Twine(1<<10));
-    Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_KDC__", Twine(1<<11));
-    Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_KCC__", Twine(1<<12));
-    Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_KR1C__", Twine(1<<13));
-    Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_KR2C__", Twine(1<<14));
+    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_CCALL__", Twine(1<<8));
+    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_UNSEAL__", Twine(1<<9));
+    Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_SYSTEM_REGISTERS__", Twine(1<<10));
 
     Builder.defineMacro("_MIPS_SZCAP", Twine(getCHERICapabilityWidth()));
     if (getCHERICapabilityWidth() == 128)
