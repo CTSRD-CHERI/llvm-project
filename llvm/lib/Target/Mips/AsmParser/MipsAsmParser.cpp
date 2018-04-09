@@ -54,6 +54,9 @@
 #include <string>
 #include <utility>
 
+#include "../InstPrinter/MipsInstPrinter.h"
+
+
 using namespace llvm;
 
 #define DEBUG_TYPE "mips-asm-parser"
@@ -377,6 +380,7 @@ class MipsAsmParser : public MCTargetAsmParser {
   int matchHWRegsRegisterName(StringRef Symbol);
 
   int matchCheriRegisterName(StringRef Name);
+  int matchCheriHWRegsRegisterName(StringRef Symbol);
 
   int matchFPURegisterName(StringRef Name);
 
@@ -5816,6 +5820,24 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name) {
   return CC;
 }
 
+int MipsAsmParser::matchCheriHWRegsRegisterName(StringRef Name) {
+  DEBUG(dbgs() << "matchCheriHWRegsRegisterName(" << Name << ")\n");
+  if (!Name.startswith("chwr_"))
+    return -1;
+
+  int Result = -1;
+  for (int Reg = Mips::CAPHWR0; Reg <= Mips::CAPHWR31; Reg++) {
+    StringRef RegName = MipsInstPrinter::getRegisterName(Reg);
+    if (RegName.startswith("chwr_") && Name == RegName) {
+      Result = Reg - Mips::CAPHWR0;
+      DEBUG(dbgs() << "-> CheriHWReg " << Result << ")\n");
+      break;
+    }
+  }
+  return Result;
+}
+
+
 
 int MipsAsmParser::matchFCCRegisterName(StringRef Name) {
   if (Name.startswith("fcc")) {
@@ -6175,6 +6197,7 @@ OperandMatchResultTy
 MipsAsmParser::matchAnyRegisterNameWithoutDollar(OperandVector &Operands,
                                                  StringRef Identifier,
                                                  SMLoc S) {
+  DEBUG(dbgs() << "matchAnyRegisterNameWithoutDollar\n");
   int Index = matchCPURegisterName(Identifier);
   if (Index != -1) {
     Operands.push_back(MipsOperand::createGPRReg(
@@ -6237,6 +6260,14 @@ MipsAsmParser::matchAnyRegisterNameWithoutDollar(OperandVector &Operands,
       return MatchOperand_ParseFail;
     Operands.push_back(MipsOperand::CreateCheriReg(
         Index, Identifier, getContext().getRegisterInfo(), S, getLexer().getLoc(), *this));
+    return MatchOperand_Success;
+  }
+
+  Index = matchCheriHWRegsRegisterName(Identifier);
+  if (Index != -1) {
+    Operands.push_back(MipsOperand::CreateCheriHWRegsReg(
+        Index, Identifier, getContext().getRegisterInfo(), S,
+        getLexer().getLoc(), *this));
     return MatchOperand_Success;
   }
 
