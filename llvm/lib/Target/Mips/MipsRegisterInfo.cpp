@@ -50,8 +50,9 @@ Cheri8("cheri8", cl::NotHidden,
 #define GET_REGINFO_TARGET_DESC
 #include "MipsGenRegisterInfo.inc"
 
-MipsRegisterInfo::MipsRegisterInfo(unsigned HwMode) :
-  MipsGenRegisterInfo(Mips::RA, 0, 0, 0, HwMode) {}
+MipsRegisterInfo::MipsRegisterInfo(const MipsSubtarget &STI) :
+  MipsGenRegisterInfo(STI.isABI_CheriPureCap() ?
+          Mips::C17 : Mips::RA, 0, 0, 0, STI.getHwMode()) {}
 
 unsigned MipsRegisterInfo::getPICCallReg() { return Mips::T9; }
 

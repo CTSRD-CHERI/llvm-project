@@ -24,6 +24,7 @@
 namespace llvm {
 
 class TargetRegisterClass;
+class MipsSubtarget;
 
 class MipsRegisterInfo : public MipsGenRegisterInfo {
 public:
@@ -39,7 +40,7 @@ public:
     GlobalPointer = 3,
   };
 
-  MipsRegisterInfo(unsigned HwMode);
+  MipsRegisterInfo(const MipsSubtarget &STI);
 
   /// Get PIC indirect call register
   static unsigned getPICCallReg();
