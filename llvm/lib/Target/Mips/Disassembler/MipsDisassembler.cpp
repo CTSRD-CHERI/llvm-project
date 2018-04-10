@@ -93,10 +93,12 @@ static DecodeStatus DecodeGPR64RegisterClass(MCInst &Inst,
                                              unsigned RegNo,
                                              uint64_t Address,
                                              const void *Decoder);
-static DecodeStatus DecodeCheriRegsRegisterClass(MCInst &Inst,
-                                                 unsigned RegNo,
+static DecodeStatus DecodeCheriRegsRegisterClass(MCInst &Inst, unsigned RegNo,
                                                  uint64_t Address,
                                                  const void *Decoder);
+static DecodeStatus DecodeCheriHWRegsRegisterClass(MCInst &Inst, unsigned RegNo,
+                                                   uint64_t Address,
+                                                   const void *Decoder);
 
 static DecodeStatus DecodeCPU16RegsRegisterClass(MCInst &Inst,
                                                  unsigned RegNo,
@@ -1435,11 +1437,9 @@ static DecodeStatus DecodeGPR64RegisterClass(MCInst &Inst,
   return MCDisassembler::Success;
 }
 
-static DecodeStatus DecodeCheriRegsRegisterClass(MCInst &Inst,
-                                                 unsigned RegNo,
+static DecodeStatus DecodeCheriRegsRegisterClass(MCInst &Inst, unsigned RegNo,
                                                  uint64_t Address,
                                                  const void *Decoder) {
-
   if (RegNo > 31)
     return MCDisassembler::Fail;
 
@@ -1447,6 +1447,18 @@ static DecodeStatus DecodeCheriRegsRegisterClass(MCInst &Inst,
   Inst.addOperand(MCOperand::createReg(Reg));
   return MCDisassembler::Success;
 }
+
+static DecodeStatus DecodeCheriHWRegsRegisterClass(MCInst &Inst, unsigned RegNo,
+                                                   uint64_t Address,
+                                                   const void *Decoder) {
+  if (RegNo > 31)
+    return MCDisassembler::Fail;
+
+  unsigned Reg = getReg(Decoder, Mips::CheriHWRegsRegClassID, RegNo);
+  Inst.addOperand(MCOperand::createReg(Reg));
+  return MCDisassembler::Success;
+}
+
 static DecodeStatus DecodeGPRMM16RegisterClass(MCInst &Inst,
                                                unsigned RegNo,
                                                uint64_t Address,

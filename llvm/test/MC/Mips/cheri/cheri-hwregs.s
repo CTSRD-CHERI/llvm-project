@@ -1,5 +1,7 @@
 # RUN: %cheri_llvm-mc %s -show-encoding | FileCheck %s
 # RUN: not %cheri_llvm-mc %s -show-encoding -defsym=BAD=1 2>&1 | FileCheck %s -check-prefix=ERR
+# Check that we don't crash when disassembling:
+# RUN: %cheri_llvm-mc %s -filetype=obj -o - | llvm-objdump -d - > /dev/null
 
 # 0x37f = ﻿hex(0x3f + (0xd << 6))
 CReadHwr $c1, $0
