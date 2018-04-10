@@ -1690,6 +1690,9 @@ public:
   bool isCheriAsmReg() const {
     return isRegIdx() && RegIdx.Kind & RegKind_Cheri && RegIdx.Index <= 31;
   }
+  bool isCheriHWAsmReg() const {
+    return isRegIdx() && RegIdx.Kind & RegKind_CheriHWRegs && RegIdx.Index <= 31;
+  }
   bool isMM16AsmReg() const {
     if (!(isRegIdx() && RegIdx.Kind))
       return false;

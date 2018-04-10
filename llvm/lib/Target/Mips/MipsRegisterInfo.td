@@ -706,6 +706,7 @@ def HWRegsAsmOperand : MipsAsmRegOperand {
 
 def CheriHWRegsAsmOperand : MipsAsmRegOperand {
   let Name = "CheriHWRegsAsmReg";
+  let PredicateMethod = "isCheriHWAsmReg";
 }
 
 def COP0AsmOperand : MipsAsmRegOperand {
