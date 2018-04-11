@@ -2504,6 +2504,12 @@ static void emitGlobalConstantCHERICap(const DataLayout &DL, const Constant *CV,
     AP.OutStreamer->EmitCheriCapability(AP.getSymbol(GV), Addend.getSExtValue(),
                                         CapWidth);
     return;
+  } else if (const MCSymbolRefExpr *SRE = dyn_cast<MCSymbolRefExpr>(Expr)) {
+    // emit capability for label whose address is stored in a global variable
+    if (SRE->getSymbol().isTemporary()) {
+      AP.OutStreamer->EmitCheriCapability(&SRE->getSymbol(), 0, CapWidth);
+      return;
+    }
   }
   llvm_unreachable("Tried to emit a capability which is neither a constant nor "
                    "a global+offset");
