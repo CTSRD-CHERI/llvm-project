@@ -410,6 +410,12 @@ public:
   Value *VisitUnaryExprOrTypeTraitExpr(const UnaryExprOrTypeTraitExpr *E);
   Value *VisitAddrLabelExpr(const AddrLabelExpr *E) {
     llvm::Value *V = CGF.GetAddrOfLabel(E->getLabel());
+    auto &TI = CGF.getContext().getTargetInfo();
+    if (TI.areAllPointersCapabilities()) {
+      unsigned CapAS = CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
+      if (V->getType()->getPointerAddressSpace() != CapAS)
+        V = CodeGenFunction::FunctionAddressToCapability(CGF, V);
+    }
     return Builder.CreateBitCast(V, ConvertType(E->getType()));
   }
 
