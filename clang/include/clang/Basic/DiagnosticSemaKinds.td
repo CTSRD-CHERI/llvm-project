@@ -6020,7 +6020,8 @@ def warn_uintcap_bitwise_and : Warning<
   "using bitwise and on capability types may give surprising results; "
   "if this is an alignment check use __builtin_{is_aligned,align_up,align_down}(); "
   "if you are operating on integer values only consider using size_t/vaddr_t; "
-  "if you are attempting to store data in the low pointer bits use the XXX builtins/macros.">,
+  "if you are attempting to store data in the low pointer bits use the "
+  "cheri_{get,set,clear}_low_ptr_bits() macros.">,
   InGroup<CHERIBitwiseOps>;
 def warn_uintcap_bad_bitwise_op : Warning<
   "using %select{xor|shifts|remainder}0 on a capability type only operates on the offset; "

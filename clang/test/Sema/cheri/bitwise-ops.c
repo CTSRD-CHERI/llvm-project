@@ -65,7 +65,8 @@ void check_and(void *ptr, uintptr_t cap, int i) {
   uintptr_t int_and_int = i & i; // fine
   // i is promoted to __intcap_t here so the warning triggers:
   uintptr_t int_and_cap = i & cap;   // expected-warning{{binary expression on capability and non-capability types: 'int' and 'uintptr_t' (aka '__uintcap_t')}}
-  uintptr_t cap_and_int = cap & i;   // expected-warning{{using bitwise and on capability types may give surprising results;}}
+  // Verify the full message once:
+  uintptr_t cap_and_int = cap & i;   // expected-warning{{using bitwise and on capability types may give surprising results; if this is an alignment check use __builtin_{is_aligned,align_up,align_down}(); if you are operating on integer values only consider using size_t/vaddr_t; if you are attempting to store data in the low pointer bits use the cheri_{get,set,clear}_low_ptr_bits() macros.}}
   uintptr_t cap_and_cap = cap & cap; // expected-warning{{using bitwise and on capability types may give surprising results;}}
   i &= i;
   // FIXME: shouldn't this really be an invalid operand error?
