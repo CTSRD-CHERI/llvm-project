@@ -10812,6 +10812,7 @@ struct BuiltinAlignArgs {
     // We need to convert source to an integer in order to perform the masking
     // For CHERI we need to get the virtual address and perform add the
     // difference instead of masking since that only works on the offset.
+
     if (IsCheri) {
       Value *Callee = CGF.CGM.getIntrinsic(Intrinsic::cheri_cap_address_get);
       auto *I8CapTy = CGF.Int8Ty->getPointerTo(
@@ -10823,6 +10824,12 @@ struct BuiltinAlignArgs {
     }
     auto *One = llvm::ConstantInt::get(IntType, 1);
     Alignment = CGF.EmitScalarExpr(E->getArg(1));
+    // Ensure that we also handle __uintcap_t values as the alignment param
+    if (E->getArg(1)->getType()->isIntCapType()) {
+      Value *Callee = CGF.CGM.getIntrinsic(Intrinsic::cheri_cap_address_get);
+      Alignment = CGF.Builder.CreateCall(Callee, {Alignment});
+    }
+
     Alignment = CGF.Builder.CreateZExtOrTrunc(
         Alignment, IntType, PowerOfTwo ? "pow2" : "alignment");
     if (PowerOfTwo) {
