@@ -174,7 +174,6 @@ __cheri_set_low_ptr_bits(__UINTPTR_TYPE__ ptr, __SIZE_TYPE__ bits) {
 static inline __attribute__((always_inline)) __attribute__((warn_unused_result))
 __UINTPTR_TYPE__
 __cheri_clear_low_ptr_bits(__UINTPTR_TYPE__ ptr, __SIZE_TYPE__ bits_mask) {
-  __PTRDIFF_TYPE__ clearing_mask = ~bits_mask;
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wcheri-bitwise-operations"
   /*
