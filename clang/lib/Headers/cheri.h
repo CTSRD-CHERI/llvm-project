@@ -22,6 +22,7 @@
  *
 \*===----------------------------------------------------------------------===*/
 
+#pragma once
 
 typedef unsigned short cheri_perms_t;
 typedef unsigned __INT32_TYPE__ cheri_type_t;
@@ -35,7 +36,7 @@ typedef unsigned __INT32_TYPE__ cheri_type_t;
 #define __IF_CAPS(x, y) x
 typedef __intcap_t intcap_t;
 typedef __uintcap_t uintcap_t;
-#ifndef NO_CHERI_MACROS
+#ifdef WANT_CHERI_QUALIFIER_MACROS
 #define capability __capability
 #define output __output
 #define input __input
@@ -45,7 +46,7 @@ typedef __uintcap_t uintcap_t;
 typedef __INTPTR_TYPE__ intcap_t;
 typedef __INTPTR_TYPE__ uintcap_t;
 #define __capability
-#ifndef NO_CHERI_MACROS
+#ifdef WANT_CHERI_QUALIFIER_MACROS
 #define capability
 #define output
 #define input
