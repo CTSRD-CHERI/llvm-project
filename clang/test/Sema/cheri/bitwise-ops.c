@@ -1,6 +1,6 @@
-// RUN: %cheri_purecap_cc1 -verify %s
-// also check that the same warnings trigger in C++ mode
-// RUNTODO: %cheri_purecap_cc1 -xc++ -verify %s
+// RUN: %cheri_purecap_cc1 -std=c11 -verify -Wpedantic -Wall -Wno-unused-parameter -Wno-unused-variable -Wno-self-assign -Wno-missing-prototypes -Wno-sign-conversion %s
+// also check that the same warnings trigger in C++ modes
+// RUN: %cheri_purecap_cc1 -xc++ -verify -Wpedantic -Wall -Wno-unused-parameter -Wno-unused-variable -Wno-self-assign -Wno-missing-prototypes -Wno-sign-conversion %s
 
 // See https://github.com/CTSRD-CHERI/clang/issues/189
 typedef __uintcap_t uintptr_t;
@@ -90,9 +90,13 @@ void check_or(void *ptr, uintptr_t cap, int i) {
   cap |= cap;
 }
 
+#ifndef __cplusplus
+typedef _Bool bool;
+#endif
+
 void set_low_pointer_bits(void *ptr, uintptr_t cap) {
-  _Bool aligned = ptr & 7;     // expected-error{{invalid operands to binary expression ('void * __capability' and 'int')}}
-  _Bool aligned_bad = cap & 7; // expected-warning{{using bitwise and on capability types may give surprising results;}}
+  bool aligned = ptr & 7;     // expected-error{{invalid operands to binary expression ('void * __capability' and 'int')}}
+  bool aligned_bad = cap & 7; // expected-warning{{using bitwise and on capability types may give surprising results;}}
 
   // store flag in low pointer bits
   uintptr_t with_flags = cap | 3; // bitwise or works as expected
@@ -118,6 +122,62 @@ void set_low_pointer_bits(void *ptr, uintptr_t cap) {
 void do_unlock(void);
 void this_broke_qmutex(uintptr_t mtx) {
   if ((mtx & (uintptr_t)1) == (uintptr_t)1) { // expected-warning{{using bitwise and on capability types may give surprising results;}}
+    do_unlock();
+  }
+}
+
+extern void __assert(int);
+#define assert(expr) __assert(expr);
+
+// Test that the the macros from cheri.h work as expected
+#include <cheri.h>
+
+void check_without_macros(void *mtx) {
+  __uintcap_t u = (__uintcap_t)mtx;
+  u |= 1;
+  // Bug: will always be false
+  // TODO: we should also warn about always false here
+  if ((u & 1) == 1) { // expected-warning{{using bitwise and on capability types may give surprising results;}}
+    do_unlock();
+  }
+  // clear the bit again, warning should trigger
+  u &= ~1; // expected-warning{{using bitwise and on capability types may give surprising results;}}
+}
+
+void check_with_macros(void *mtx) {
+  // This should not trigger any warnings
+  __uintcap_t u = (__uintcap_t)mtx;
+  u = cheri_set_low_ptr_bits(u, 1);
+  if (cheri_get_low_ptr_bits(u, 3) == 1) {
+    do_unlock();
+  }
+  u = cheri_clear_low_ptr_bits(u, 3);
+}
+
+void check_bad_macro_values(void *mtx) {
+  __uintcap_t u = (__uintcap_t)mtx;
+  // Bad replacement of u &= ~3: should trigger unused result warning
+  cheri_clear_low_ptr_bits(u, 3); // expected-warning{{ignoring return value of function declared with 'warn_unused_result' attribute}}
+  // Bad replacement of u | 3: should trigger unused result warning
+  cheri_set_low_ptr_bits(u, 3); // expected-warning{{ignoring return value of function declared with 'warn_unused_result' attribute}}
+  // get should also have warn unused result
+  cheri_get_low_ptr_bits(u, 3); // expected-warning{{ignoring return value of function declared with 'warn_unused_result' attribute}}
+
+  // call the implementation directly
+  __cheri_clear_low_ptr_bits(u, 3); // expected-warning{{ignoring return value of function declared with 'warn_unused_result' attribute}}
+  __cheri_set_low_ptr_bits(u, 3);   // expected-warning{{ignoring return value of function declared with 'warn_unused_result' attribute}}
+  __cheri_get_low_ptr_bits(u, 3);   // expected-warning{{ignoring return value of function declared with 'warn_unused_result' attribute}}
+
+  // getting or clearing too many bits should warn:
+  unsigned long value;
+  value = cheri_get_low_ptr_bits(u, 32); // expected-error{{static_assert failed "Should only use the low 5 pointer bits"}}
+  value = cheri_get_low_ptr_bits(u, 31); // This is fine
+
+  // Check that the other macros also work in if statements
+  if (cheri_set_low_ptr_bits(u, 3) == 1) {
+    do_unlock();
+  }
+  if (cheri_clear_low_ptr_bits(u, 3) == 1) {
     do_unlock();
   }
 }
