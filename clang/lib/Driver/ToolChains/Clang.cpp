@@ -1670,6 +1670,16 @@ void Clang::AddMIPSTargetArgs(const ArgList &Args,
   CmdArgs.push_back("-mllvm");
   CmdArgs.push_back(EnableCapTable ? "-cheri-cap-table=true"
                                    : "-cheri-cap-table=false");
+  if (Arg *A = Args.getLastArg(options::OPT_cheri_cap_table_abi)) {
+      StringRef v = A->getValue();
+      CmdArgs.push_back("-mllvm");
+      CmdArgs.push_back(Args.MakeArgString("-cheri-cap-table-abi=" + v));
+      if (Args.hasFlag(options::OPT_cheri_large_cap_table)) {
+	  CmdArgs.push_back("-mllvm");
+	  CmdArgs.push_back("-mxcaptable");
+      }
+      A->claim();
+  }
 }
 
 void Clang::AddPPCTargetArgs(const ArgList &Args,

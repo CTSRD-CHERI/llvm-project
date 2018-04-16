@@ -259,6 +259,10 @@ def cheri_cap_table : Flag<["-"], "cheri-cap-table">, Flags<[DriverOption]>, Gro
   HelpText<"Enable support for loading globals via a capability table">;
 def no_cheri_cap_table : Flag<["-"], "no-cheri-cap-table">, Flags<[DriverOption]>, Group<cheri_Group>,
   HelpText<"Disable support for the cheri cap table and emit legacy global loads">;
+def cheri_cap_table_abi : Joined<["-"], "cheri-cap-table-abi=">, Group<cheri_Group>,
+  HelpText<"CHERI cap table ABI to use">;
+def cheri_large_cap_table : Flag<["-"], "mxcaptable">, Flags<[DriverOption]> Group<cheri_Group>,
+  HelpText<"Use large immediates to index the cap table">;
 
 def external_capsizefix : Flag<["-"], "external-capsizefix">, Flags<[CC1Option]>,
   Group<cheri_Group>, HelpText<"Use the external capsizefix tool instead of relying on the linker (deprecated)">;
