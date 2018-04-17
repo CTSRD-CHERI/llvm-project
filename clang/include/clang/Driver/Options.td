@@ -263,6 +263,8 @@ def cheri_cap_table_abi : Joined<["-"], "cheri-cap-table-abi=">, Group<cheri_Gro
   HelpText<"CHERI cap table ABI to use">;
 def cheri_large_cap_table : Flag<["-"], "mxcaptable">, Flags<[DriverOption]>, Group<cheri_Group>,
   HelpText<"Use large immediates to index the cap table">;
+def no_cheri_large_cap_table : Flag<["-"], "no-mxcaptable">, Flags<[DriverOption]>, Group<cheri_Group>,
+  HelpText<"Do not use large immediates to index the cap table">;
 
 def external_capsizefix : Flag<["-"], "external-capsizefix">, Flags<[CC1Option]>,
   Group<cheri_Group>, HelpText<"Use the external capsizefix tool instead of relying on the linker (deprecated)">;
