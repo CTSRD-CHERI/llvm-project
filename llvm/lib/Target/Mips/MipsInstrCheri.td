@@ -316,13 +316,15 @@ def CCheckType : CheriFmt2Op<0x9, (outs), (ins CheriOpnd:$r1, CheriOpnd:$r2),
                               "cchecktype\t${r1}, ${r2}",
                               [(int_cheri_cap_type_check CheriOpnd:$r1,  CheriOpnd:$r2)]>;
 }
-def CTestSubset : CheriFmt3Op<0x20, (outs GPR64Opnd:$r1), (ins CheriOpnd:$r2, CheriOpnd:$r3),
-  "ctestsubset\t$r1, $r2, $r3", [(set GPR64Opnd: $r1, (int_cheri_cap_subset_test CheriOpnd: $r2, CheriOpnd: $r3))]>;
 
 def CBuildCap : CheriFmt3Op<0x1d, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, CheriOpnd:$r3),
   "cbuildcap\t$r1, $r2, $r3", [(set CheriOpnd: $r1, (int_cheri_cap_build CheriOpnd: $r2, CheriOpnd: $r3))]>;
 def CCopyType : CheriFmt3Op<0x1e, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, CheriOpnd:$r3),
   "ccopytype\t$r1, $r2, $r3", [(set CheriOpnd: $r1, (int_cheri_cap_type_copy CheriOpnd: $r2, CheriOpnd: $r3))]>;
+def CCSeal : CheriFmt3Op<0x1f, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, CheriOpnd:$r3),
+  "ccseal\t$r1, $r2, $r3", [(set CheriOpnd: $r1, (int_cheri_cap_conditional_seal CheriOpnd: $r2, CheriOpnd: $r3))]>;
+def CTestSubset : CheriFmt3Op<0x20, (outs GPR64Opnd:$r1), (ins CheriOpnd:$r2, CheriOpnd:$r3),
+  "ctestsubset\t$r1, $r2, $r3", [(set GPR64Opnd: $r1, (int_cheri_cap_subset_test CheriOpnd: $r2, CheriOpnd: $r3))]>;
 
 // Cursors
 def : Pat<(ptradd CheriOpnd:$r2, GPR64Opnd:$r3),

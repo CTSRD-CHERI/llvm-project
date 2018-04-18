@@ -74,6 +74,11 @@ def int_cheri_cap_seal :
   Intrinsic<[llvm_fatptr_ty],
             [llvm_fatptr_ty, llvm_fatptr_ty],
             [IntrNoMem]>;
+def int_cheri_cap_conditional_seal :
+  GCCBuiltin<"__builtin_cheri_conditional_seal">,
+  Intrinsic<[llvm_fatptr_ty],
+            [llvm_fatptr_ty, llvm_fatptr_ty],
+            [IntrNoMem]>;
 def int_cheri_cap_unseal  :
   GCCBuiltinAlias<"__builtin_mips_cheri_unseal_cap">,
   GCCBuiltin<"__builtin_cheri_unseal">,

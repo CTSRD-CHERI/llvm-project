@@ -139,11 +139,9 @@
 	CCopyType	$c1, $c2, $c8
 # CHECK: ccopytype	$c1, $c2, $c8
 # CHECK-SAME: encoding: [0x48,0x01,0x12,0x1e]
-.ifdef NOTYET
 	CCSeal	$c1, $c2, $c8
-# TODO-CHECK: ccseal	$c1, $c2, $c8
-# TODO-CHECK-SAME: encoding: [0x48,0x01,0x12,0x1f]
-.endif
+# CHECK: ccseal	$c1, $c2, $c8
+# CHECK-SAME: encoding: [0x48,0x01,0x12,0x1f]
 	CTestSubset	$at, $c2, $c8
 # CHECK: ctestsubset	$1, $c2, $c8
 # CHECK-SAME: encoding: [0x48,0x01,0x12,0x20]
