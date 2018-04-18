@@ -595,24 +595,24 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
     uint32_t Index = *CTI.Index;
     Symbol *TargetSym = it.first;
 
-    StringRef Name = it.first->getName();
-    if (Name.empty())
-      continue;
-    // TODO: don't add for local symbols? or somehow rename?
-    // if (it.first->isLocal())
-    //   continue;s
-
-
+    StringRef Name = TargetSym->getName();
     // Avoid duplicate symbol name errors for unnamed string constants:
-    // XXXAR: maybe renumber them instead?
-    if (Name.startswith(".L.str"))
-      continue;
-    // XXXAR: for some reason we sometimes create more than one cap table entry
-    // for a given global name, for now just rename the symbol
-    // Could possibly happen with local symbols?
-    std::string RefName = (Name + "@CAPTABLE").str();
-    while (Symtab->find(RefName)) {
-      RefName += ".duplicate-name";
+    std::string RefName;
+    // Asumme any name with .L is a local name that may not be unique (e.g.
+    // string constants start with .L.strNNNN)
+    if (Name.empty() || Name.startswith(".L"))
+      RefName = (Name + "@CAPTABLE." + Twine(Index)).str();
+    else
+      RefName = (Name + "@CAPTABLE").str();
+
+    if (Symtab->find(RefName)) {
+      assert(TargetSym->isLocal());
+      // XXXAR: for some reason we sometimes create more than one cap table entry
+      // for a given global name, for now just rename the symbol
+      message("Found duplicate captable name " + RefName);
+      RefName = (Name + "@CAPTABLE." + Twine(Index)).str();
+      message(">>>Replacing with " + RefName);
+      assert(!Symtab->find(RefName) && "RefName should be unique");
     }
     uint64_t Off = Index * Config->CapabilitySize;
     Symtab->addRegular(Saver.save(RefName), STV_HIDDEN, STT_OBJECT, Off,
