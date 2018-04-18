@@ -135,3 +135,12 @@ def int_cheri_cap_to_pointer:
 def int_cheri_cap_from_pointer:
   Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_i64_ty], [IntrNoMem]>;
 
+////////////////////////////////////////////////////////////////////////////////
+// Building capabilities from untagged data
+////////////////////////////////////////////////////////////////////////////////
+def int_cheri_cap_build:
+  GCCBuiltin<"__builtin_cheri_cap_build">,
+  Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_fatptr_ty], [IntrNoMem]>;
+def int_cheri_cap_type_copy:
+  GCCBuiltin<"__builtin_cheri_cap_type_copy">,
+  Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_fatptr_ty], [IntrNoMem]>;

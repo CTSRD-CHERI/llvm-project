@@ -319,6 +319,11 @@ def CCheckType : CheriFmt2Op<0x9, (outs), (ins CheriOpnd:$r1, CheriOpnd:$r2),
 def CTestSubset : CheriFmt3Op<0x20, (outs GPR64Opnd:$r1), (ins CheriOpnd:$r2, CheriOpnd:$r3),
   "ctestsubset\t$r1, $r2, $r3", [(set GPR64Opnd: $r1, (int_cheri_cap_subset_test CheriOpnd: $r2, CheriOpnd: $r3))]>;
 
+def CBuildCap : CheriFmt3Op<0x1d, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, CheriOpnd:$r3),
+  "cbuildcap\t$r1, $r2, $r3", [(set CheriOpnd: $r1, (int_cheri_cap_build CheriOpnd: $r2, CheriOpnd: $r3))]>;
+def CCopyType : CheriFmt3Op<0x1e, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, CheriOpnd:$r3),
+  "ccopytype\t$r1, $r2, $r3", [(set CheriOpnd: $r1, (int_cheri_cap_type_copy CheriOpnd: $r2, CheriOpnd: $r3))]>;
+
 // Cursors
 def : Pat<(ptradd CheriOpnd:$r2, GPR64Opnd:$r3),
           (CIncOffset $r2, $r3)>;
@@ -453,7 +458,8 @@ let isCodeGenOnly=1 in {
   defm CAPSTORE3264     : StoreViaCapScaled<2, 0, "csw", GPR64Opnd, truncstorei32, simm8s2, simm8s2Pattern>;
 }
 defm CAPSTORE64     : StoreViaCapScaled<3, 0, "csd", GPR64Opnd, store, simm8s3, simm8s3Pattern>;
-          
+
+// TODO: replace these by CReadHwr
 def : Pat<(int_cheri_ddc_get), (CIncOffset C0, ZERO_64)>;
 def : Pat<(int_mips_idc_get), (CIncOffset C26, ZERO_64)>;
 def : Pat<(int_mips_kr1c_get), (CIncOffset C27, ZERO_64)>;

@@ -1,5 +1,7 @@
 # RUN: %cheri_llvm-mc %s -show-encoding | FileCheck %s
 # RUN: %cheri_llvm-mc %s -show-encoding 2>&1 -defsym=BAD=1| FileCheck %s -check-prefix=WARN
+# Check that llvm-objdump doesn't crash the disassembler due to invalid register names in tablegen:
+# RUN: %cheri_llvm-mc %s -filetype=obj -o - | llvm-objdump -d - > /dev/null
 #
 # Check that the assembler is able to handle capability get instructions.
 #
@@ -128,3 +130,20 @@
 # FIXME: should this be an error since it bypasses the warnings?
 # but it uses createNumericReg(27, ...)
 #	CMove	$c1, $27
+
+
+# Check that we can assemble the new CBuildCap/CCopyType and CTestSubset instrs
+	CBuildCap	$c1, $c2, $c8
+# CHECK: cbuildcap	$c1, $c2, $c8
+# CHECK-SAME: encoding: [0x48,0x01,0x12,0x1d]
+	CCopyType	$c1, $c2, $c8
+# CHECK: ccopytype	$c1, $c2, $c8
+# CHECK-SAME: encoding: [0x48,0x01,0x12,0x1e]
+.ifdef NOTYET
+	CCSeal	$c1, $c2, $c8
+# TODO-CHECK: ccseal	$c1, $c2, $c8
+# TODO-CHECK-SAME: encoding: [0x48,0x01,0x12,0x1f]
+.endif
+	CTestSubset	$at, $c2, $c8
+# CHECK: ctestsubset	$1, $c2, $c8
+# CHECK-SAME: encoding: [0x48,0x01,0x12,0x20]
