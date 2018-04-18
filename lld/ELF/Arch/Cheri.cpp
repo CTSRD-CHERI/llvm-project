@@ -609,9 +609,9 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
       assert(TargetSym->isLocal());
       // XXXAR: for some reason we sometimes create more than one cap table entry
       // for a given global name, for now just rename the symbol
-      message("Found duplicate captable name " + RefName);
+      // message("Found duplicate captable name " + RefName);
       RefName = (Name + "@CAPTABLE." + Twine(Index)).str();
-      message(">>>Replacing with " + RefName);
+      // message(">>> Replacing with " + RefName);
       assert(!Symtab->find(RefName) && "RefName should be unique");
     }
     uint64_t Off = Index * Config->CapabilitySize;

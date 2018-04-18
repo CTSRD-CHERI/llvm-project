@@ -9,6 +9,7 @@
 
 # But duplicate locals are fine so we need to add sensible @CAPTABLE names:
 # RUN: ld.lld -shared -preemptible-caprelocs=legacy %t1.o %t2.o -o %t.so
+# RUN: llvm-objdump -C -d -r -t %t.so
 # RUN: llvm-objdump -C -d -r -t %t.so | FileCheck %s
 
 # Check that we still have all the capability relocations:
@@ -17,18 +18,20 @@
 # CHECK: CAPABILITY RELOCATION RECORDS:
 # CHECK-NEXT: 0x0000000000030000	Base: .L.str.123 (0x0000000000020000)	Offset: 0x0000000000000000	Length: 0x0000000000000006	Permissions: 0x00000000
 # CHECK-NEXT: 0x0000000000030010	Base: .L.duplicate_local (0x0000000000020006)	Offset: 0x0000000000000000	Length: 0x0000000000000008	Permissions: 0x00000000
-# CHECK-NEXT: 0x0000000000030020	Base:  (0x0000000000000000)	Offset: 0x0000000000000000	Length: 0x0000000000000000	Permissions: 0x00000000
-# CHECK-NEXT: 0x0000000000030030	Base: .L.duplicate_local (0x0000000000020020)	Offset: 0x0000000000000000	Length: 0x0000000000000008	Permissions: 0x00000000
-# CHECK-NEXT: 0x0000000000030040	Base:  (0x0000000000000000)	Offset: 0x0000000000000000	Length: 0x0000000000000000	Permissions: 0x00000000
-
+# CHECK-NEXT: 0x0000000000030020	Base: duplicate_local_without_prefix (0x000000000002000e)	Offset: 0x0000000000000000	Length: 0x0000000000000008	Permissions: 0x00000000
+# CHECK-NEXT: 0x0000000000030030	Base:  (0x0000000000000000)	Offset: 0x0000000000000000	Length: 0x0000000000000000	Permissions: 0x00000000
+# CHECK-NEXT: 0x0000000000030040	Base: .L.duplicate_local (0x0000000000020020)	Offset: 0x0000000000000000	Length: 0x0000000000000008	Permissions: 0x00000000
+# CHECK-NEXT: 0x0000000000030050	Base: duplicate_local_without_prefix (0x0000000000020028)	Offset: 0x0000000000000000	Length: 0x0000000000000008	Permissions: 0x00000000
+# CHECK-NEXT: 0x0000000000030060	Base:  (0x0000000000000000)	Offset: 0x0000000000000000	Length: 0x0000000000000000	Permissions: 0x00000000
 
 # CHECK: SYMBOL TABLE:
-# CHECK: 0000000000030000         .cap_table		 00000050 _CHERI_CAPABILITY_TABLE_
-# CHECK: 0000000000030000 l       .cap_table		 00000010 .L.str.123@CAPTABLE.0
-# CHECK: 0000000000030010 l       .cap_table		 00000010 .L.duplicate_local@CAPTABLE.1
-# CHECK: 0000000000030020 l       .cap_table		 00000010 duplicate_global@CAPTABLE
-# CHECK: 0000000000030030 l       .cap_table		 00000010 .L.duplicate_local@CAPTABLE.3
-# CHECK: 0000000000030040 l       .cap_table		 00000010 g@CAPTABLE
+# CHECK:      0000000000030000         .cap_table		 00000070 _CHERI_CAPABILITY_TABLE_
+# CHECK-NEXT: 0000000000030000 l       .cap_table		 00000010 .L.str.123@CAPTABLE.0
+# CHECK-NEXT: 0000000000030010 l       .cap_table		 00000010 .L.duplicate_local@CAPTABLE.1
+# CHECK-NEXT: 0000000000030020 l       .cap_table		 00000010 duplicate_local_without_prefix@CAPTABLE
+# CHECK-NEXT: 0000000000030030 l       .cap_table		 00000010 duplicate_global@CAPTABLE
+# CHECK-NEXT: 0000000000030040 l       .cap_table		 00000010 .L.duplicate_local@CAPTABLE.4
+# CHECK-NEXT: 0000000000030050 l       .cap_table		 00000010 duplicate_local_without_prefix@CAPTABLE.5
 
 .macro add_captable_reference name
 .text
@@ -50,10 +53,12 @@ clcbi $c1, %captab20(\name)($c1)  # add a reference so that it ends up in the ca
 add_data_symbol .L.str.123, .asciiz "asdfg"
 add_captable_reference .L.str.123
 
-use_local_1:
 # Try a duplicate local name:
 add_data_symbol .L.duplicate_local, .quad 8
 add_captable_reference .L.duplicate_local
+
+add_data_symbol duplicate_local_without_prefix, .quad 40
+add_captable_reference duplicate_local_without_prefix
 
 .global duplicate_global
 add_data_symbol duplicate_global, .quad 10
@@ -61,9 +66,12 @@ add_captable_reference duplicate_global
 .endif
 
 .if FILE == 2
-use_local_2:
 add_data_symbol .L.duplicate_local, .quad 9
 add_captable_reference .L.duplicate_local
+
+add_data_symbol duplicate_local_without_prefix, .quad 42
+add_captable_reference duplicate_local_without_prefix
+
 .global g
 add_data_symbol g, .quad 10
 add_captable_reference g
