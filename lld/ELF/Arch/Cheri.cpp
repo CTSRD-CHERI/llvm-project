@@ -598,9 +598,10 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
     StringRef Name = TargetSym->getName();
     // Avoid duplicate symbol name errors for unnamed string constants:
     std::string RefName;
-    // Asumme any name with .L is a local name that may not be unique (e.g.
-    // string constants start with .L.strNNNN)
-    if (Name.empty() || Name.startswith(".L"))
+    // For now always append .INDEX to local symbols @CAPTABLE names since they
+    // might not be unique. If there is a global with the same name we always
+    // want the global to have the plain @CAPTABLE name
+    if (Name.empty() /* || Name.startswith(".L") */ || TargetSym->isLocal())
       RefName = (Name + "@CAPTABLE." + Twine(Index)).str();
     else
       RefName = (Name + "@CAPTABLE").str();
