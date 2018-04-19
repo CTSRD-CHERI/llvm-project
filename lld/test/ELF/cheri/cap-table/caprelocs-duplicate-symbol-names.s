@@ -1,6 +1,6 @@
-# RUN: %cheri_purecap_llvm-mc %s -defsym=FILE=1 -filetype=obj -o %t1.o
-# RUN: %cheri_purecap_llvm-mc %s -defsym=FILE=2 -filetype=obj -o %t2.o
-# RUN: %cheri_purecap_llvm-mc %s -defsym=FILE=3 -filetype=obj -o %t-duplicate.o
+# RUN: %cheri128_purecap_llvm-mc %s -defsym=FILE=1 -filetype=obj -o %t1.o
+# RUN: %cheri128_purecap_llvm-mc %s -defsym=FILE=2 -filetype=obj -o %t2.o
+# RUN: %cheri128_purecap_llvm-mc %s -defsym=FILE=3 -filetype=obj -o %t-duplicate.o
 
 # Should not be possible to have duplicate names for globals in .captable
 # RUN: not ld.lld %t1.o %t2.o %t-duplicate.o -o %t.exe 2>&1 | FileCheck %s -check-prefix ERR
