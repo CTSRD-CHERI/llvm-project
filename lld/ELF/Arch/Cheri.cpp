@@ -579,6 +579,10 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
         Twine(Entries.size() - SmallEntryCount) + " use -mxcaptable. ");
   }
 
+  // Only add the @CAPTABLE symbols when running the LLD unit tests
+  // errorHandler().ExitEarly is set to false if LLD_IN_TEST=1 so just reuse
+  // that instead of calling getenv on every iteration
+  const bool ShouldAddAtCaptableSymbols = !errorHandler().ExitEarly;
   uint32_t AssignedSmallIndexes = 0;
   uint32_t AssignedLargeIndexes = 0;
   for (auto &it : Entries) {
@@ -616,8 +620,10 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
       assert(!Symtab->find(RefName) && "RefName should be unique");
     }
     uint64_t Off = Index * Config->CapabilitySize;
-    Symtab->addRegular(Saver.save(RefName), STV_HIDDEN, STT_OBJECT, Off,
-                       Config->CapabilitySize, STB_LOCAL, this, nullptr);
+    if (ShouldAddAtCaptableSymbols) {
+      Symtab->addRegular(Saver.save(RefName), STV_HIDDEN, STT_OBJECT, Off,
+                         Config->CapabilitySize, STB_LOCAL, this, nullptr);
+    }
     addCapabilityRelocation<ELFT>(
         *TargetSym, ElfCapabilityReloc, InX::CheriCapTable, Off,
         R_CHERI_CAPABILITY, 0,
