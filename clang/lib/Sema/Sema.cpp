@@ -549,7 +549,7 @@ ExprResult Sema::ImpCastExprToType(Expr *E, QualType Ty,
   return ImplicitCastExpr::Create(Context, Ty, Kind, E, BasePath, VK);
 }
 
-bool Sema::ImpCastPointerToCHERICapability(QualType FromTy, QualType ToTy, Expr *From, bool Diagnose) {
+bool Sema::ImpCastPointerToCHERICapability(QualType FromTy, QualType ToTy, Expr *&From, bool Diagnose) {
 
   assert(FromTy->isPointerType() && ToTy->isPointerType() && ToTy->getAs<PointerType>()->isCHERICapability() &&
          "Both argument types should be PointerType");
