@@ -5,7 +5,7 @@ void f() {
 }
 void g() {
   char *x;
-  char * __capability y = x; // expected-error {{converting non-capability type 'char *' to capability type 'char * __capability' without an explicit cast}}
+  char * __capability y = x; // expected-warning  {{converting non-capability type 'char *' to capability type 'char * __capability' without an explicit cast}}
 }
 void h() {
   char * __capability x;
@@ -26,4 +26,23 @@ void j() {
 void k() {
   char staticarray[2];
   char * __capability array = staticarray; // this is fine
+}
+
+void l() {
+  unsigned int *x;
+  int * __capability y = x; // expected-warning {{implicit conversion from non-capability type 'unsigned int *' to capability type 'int * __capability' converts between integer types with different signs}}
+}
+
+void n() {
+  int x;
+  int * __capability y = &x; // this is fine
+}
+
+void o() {
+  unsigned int x;
+  int * __capability y = &x; // expected-warning {{implicit conversion from non-capability type 'unsigned int *' to capability type 'int * __capability' converts between integer types with different signs}}
+}
+
+void p() {
+  void (* __capability pf)() = o; // this is fine
 }

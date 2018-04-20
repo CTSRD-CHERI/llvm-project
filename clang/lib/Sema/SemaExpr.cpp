@@ -13644,45 +13644,19 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
     break;
   case CHERICapabilityToPointer:
   case PointerToCHERICapability: {
-    // The following conversions are OK:
-    // - String literal to capability
-    // - Null literal to capability
-    // - Address-of expression to capability
-    // - (Array|Function)ToPointerDecay to capability
-
-    // String literal
-    if (isa<StringLiteral>(SrcExpr->IgnoreParens()->IgnoreImpCasts()))
-      return false;
-
-    // Null literal
-    if (IntegerLiteral* Int = dyn_cast<IntegerLiteral>(SrcExpr->IgnoreParenCasts()->IgnoreImpCasts())) {
-      if (Int->getValue().isNullValue())
-        return false;
-    }
-
     bool PtrToCap = ConvTy == PointerToCHERICapability;
 
-    // addr-to expression
-    if (UnaryOperator *UnOp = dyn_cast<UnaryOperator>(
-                                SrcExpr->IgnoreParens()->IgnoreImpCasts()
-                              )) {
-      if (PtrToCap && UnOp->getOpcode() == UO_AddrOf)
-        return false;
-    }
-
-    // (Array|Function)ToPointerDecay
-    // First perform array|function to pointer decay
-    ExprResult Decayed = DefaultFunctionArrayLvalueConversion(SrcExpr);
-    if (Decayed.isInvalid()) {
-      isInvalid = true;
-      return true;
-      break;
-    }
-    SrcExpr = Decayed.get();
-    if (ImplicitCastExpr *Imp = dyn_cast<ImplicitCastExpr>(SrcExpr)) {
-      if (PtrToCap &&
-          (Imp->getCastKind() == CK_ArrayToPointerDecay
-           || Imp->getCastKind() == CK_FunctionToPointerDecay))
+    if (PtrToCap) {
+      // first perform array|function to pointer decay
+      ExprResult Decayed = DefaultFunctionArrayLvalueConversion(SrcExpr);
+      if (Decayed.isInvalid()) {
+        isInvalid = true;
+        return true;
+        break;
+      }
+      SrcExpr = Decayed.get();
+      SrcType = SrcExpr->getType();
+      if (ImpCastPointerToCHERICapability(SrcType, DstType, SrcExpr, false))
         return false;
     }
 

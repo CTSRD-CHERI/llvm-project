@@ -6006,6 +6006,12 @@ def warn_tautological_constant_compare : Warning<
   "%select{%1|%3}0 is always %4">,
   InGroup<TautologicalTypeLimitCompare>, DefaultIgnore;
 
+def warn_typecheck_convert_ptr_to_cap: Warning<"converting non-capability "
+  "type %0 to capability type %1 without an explicit cast; if this is intended use __cheri_tocap">,
+  InGroup<CHERIImplicitConversion>;
+def warn_typecheck_convert_ptr_to_cap_sign_difference: Warning<"implicit conversion "
+  "from non-capability type %0 to capability type %1 converts between integer types with different signs">,
+  InGroup<CHERIImplicitConversionSign>;
 def err_typecheck_convert_cap_to_ptr: Error<"converting capability"
   "%select{| reference to}2 type %0 to non-capability type %1 without "
   "an explicit cast; if this is intended use __cheri_fromcap">;

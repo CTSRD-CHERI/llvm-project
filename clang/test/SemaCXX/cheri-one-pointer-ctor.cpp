@@ -101,6 +101,6 @@ void test_cap_conversion_still_fails() {
       mut_back[ 0], mut_back[ 1], mut_back[ 2], mut_back[ 3]
   };
 #ifndef __CHERI_PURE_CAPABILITY__
-  // expected-error@-3 4 {{converting non-capability type '__libcpp_mutex_t' (aka 'pthread_mutex *') to capability type 'pthread_mutex * __capability' without an explicit cast; if this is intended use __cheri_tocap}}
+  // expected-warning@-3 4 {{converting non-capability type '__libcpp_mutex_t' (aka 'pthread_mutex *') to capability type 'pthread_mutex * __capability' without an explicit cast; if this is intended use __cheri_tocap}}
 #endif
 }

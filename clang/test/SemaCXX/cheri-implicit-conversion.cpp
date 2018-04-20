@@ -2,8 +2,8 @@
 // RUN: %cheri_cc1 -x c -o - %s -fsyntax-only -Wall -Wno-unused-variable -verify
 // RUN: %cheri_cc1 -x c++ -o - %s -fsyntax-only -Wall -Wno-unused-variable -verify
 
-// RUN: not %cheri_cc1 -x c++ -o - %s -fsyntax-only -Wall -Wno-unused-variable -ast-dump 2>/dev/null | FileCheck %s -check-prefix CXXAST
-// RUN: not %cheri_cc1 -x c -o - %s -fsyntax-only -Wall -Wno-unused-variable -ast-dump 2>/dev/null | FileCheck %s -check-prefix CAST
+// not %cheri_cc1 -x c++ -o - %s -fsyntax-only -Wall -Wno-unused-variable -ast-dump 2>/dev/null | FileCheck %s -check-prefix CXXAST
+// not %cheri_cc1 -x c -o - %s -fsyntax-only -Wall -Wno-unused-variable -ast-dump 2>/dev/null | FileCheck %s -check-prefix CAST
 
 
 int global_int;
@@ -39,7 +39,13 @@ void addrof(void) {
 
 int foo(int* __capability cap_arg_int, void* __capability cap_arg_void, int* ptr_arg_int, void* ptr_arg_void) {
   // pointer -> cap
-  int* __capability intcap = ptr_arg_int; // expected-error {{converting non-capability type 'int *' to capability type 'int * __capability' without an explicit cast}}
+  int* __capability intcap = ptr_arg_int; // expected-warning {{converting non-capability type 'int *' to capability type 'int * __capability' without an explicit cast}}
+  unsigned int* __capability uintcap = ptr_arg_int;
+#ifdef __cplusplus
+  // expected-error@-2 {{cannot implicitly or explicitly convert non-capability  type 'int *' to unrelated capability type 'unsigned int * __capability'}}
+#else
+  // expected-warning@-4 {{implicit conversion from non-capability type 'int *' to capability type 'unsigned int * __capability' converts between integer types with different signs}}
+#endif
   void* __capability vcap = ptr_arg_int; // expected-error {{converting non-capability type 'int *' to capability type 'void * __capability' without an explicit cast}}
   // cap -> pointer
   int* intptr = cap_arg_int; // expected-error {{converting capability type 'int * __capability' to non-capability type 'int *' without an explicit cast}}
@@ -69,7 +75,7 @@ int foo(int* __capability cap_arg_int, void* __capability cap_arg_void, int* ptr
 
   struct test_struct s;
   s.ptr = ptr_arg_int; // okay
-  s.cap = ptr_arg_int; // expected-error  {{converting non-capability type 'int *' to capability type 'int * __capability' without an explicit cast; if this is intended use __cheri_tocap}}
+  s.cap = ptr_arg_int; // expected-warning  {{converting non-capability type 'int *' to capability type 'int * __capability' without an explicit cast; if this is intended use __cheri_tocap}}
   s.ptr = cap_arg_int; // expected-error  {{converting capability type 'int * __capability' to non-capability type 'int *' without an explicit cast; if this is intended use __cheri_fromcap}}
   s.cap = cap_arg_int; // okay
 
@@ -89,7 +95,7 @@ void str_to_ptr(void) {
   fn_taking_const_char_cap("foo");
 
   // but conversion from a pointer isn't
-  const char* __capability cap2 = ptr;  // expected-error {{converting non-capability type 'const char *' to capability type 'const char * __capability' without an explicit cast}}
+  const char* __capability cap2 = ptr;  // expected-warning {{converting non-capability type 'const char *' to capability type 'const char * __capability' without an explicit cast}}
 
   // conversion to char* should be an error:
   char* nonconst_ptr = "foo";
@@ -97,7 +103,6 @@ void str_to_ptr(void) {
 #ifdef __cplusplus
   // expected-warning@-3 {{ISO C++11 does not allow conversion from string literal to 'char *'}}
   // expected-warning@-3 {{ISO C++11 does not allow conversion from string literal to 'char * __capability'}}
-  // expected-error@-4 {{cannot implicitly or explicitly convert non-capability  type 'const char *' to unrelated capability type 'char * __capability'}}
 #endif
   // CXXAST: FunctionDecl {{.+}} str_to_ptr 'void ()'
   // CXXAST: VarDecl {{.+}} cap 'const char * __capability' cinit

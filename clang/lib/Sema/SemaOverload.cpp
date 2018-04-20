@@ -1844,36 +1844,15 @@ static bool IsStandardConversion(Sema &S, Expr* From, QualType ToType,
     SCS.Third = ICK_Qualification;
     SCS.QualificationIncludesObjCLifetime = ObjCLifetimeConversion;
     // Check for CHERI type conversion
-    if (ToType->isCHERICapabilityType(S.getASTContext()) !=
-        FromType->isCHERICapabilityType(S.getASTContext())) {
-      // Allow implicit pointer to capability conversions from null and string literals,
-      // and address-of (&) expressions if types are compatible. Only allow implicit
-      // conversion of address-of expressions when not doing overload resolution.
-      // XXXAR: should we allow any array type?
-      bool StrLit = isa<StringLiteral>(From->IgnoreParens());
-      bool NullLit = false;
-      bool AddrOf = false;
-      bool Decayed = false;
-      if (IntegerLiteral* Int = dyn_cast<IntegerLiteral>(From->IgnoreParenCasts()))
-        NullLit = Int->getValue().isNullValue();
-      if (!InOverloadResolution) {
-        if (UnaryOperator *UnOp = dyn_cast<UnaryOperator>(From)) {
-          if (UnOp->getOpcode() == UO_AddrOf)
-            AddrOf = S.CheckCHERIAssignCompatible(ToType, FromType, From, false);
-        }
-        ExprResult DecayedExpr = S.DefaultFunctionArrayLvalueConversion(From);
-        if (DecayedExpr.isInvalid())
-          return false;
+    if (FromType->isCHERICapabilityType(S.getASTContext())
+        != ToType->isCHERICapabilityType(S.getASTContext())) {
+      // Check implicit pointer-to-capability conversion.
+      // Don't output warnings at this point as they will be output later.
+      bool validCHERIConversion = false;
+      if (FromType->isPointerType() && ToType->isPointerType() && ToType->getAs<PointerType>()->isCHERICapability())
+        validCHERIConversion = S.ImpCastPointerToCHERICapability(FromType, ToType, From, false);
 
-        From = DecayedExpr.get();
-        if (ImplicitCastExpr *Imp = dyn_cast<ImplicitCastExpr>(From)) {
-          Decayed = Imp->getCastKind() == CK_ArrayToPointerDecay
-                    || Imp->getCastKind() == CK_FunctionToPointerDecay;
-          if (Decayed)
-            Decayed = S.CheckCHERIAssignCompatible(ToType, FromType, From, false);
-        }
-      }
-      SCS.setInvalidCHERIConversion(!NullLit && !StrLit && !AddrOf && !Decayed);
+      SCS.setInvalidCHERIConversion(!validCHERIConversion);
     }
     FromType = ToType;
   } else {

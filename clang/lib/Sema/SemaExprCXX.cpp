@@ -3880,8 +3880,12 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
     }
     if (getLangOpts().allowsNonTrivialObjCLifetimeQualifiers())
       CheckObjCConversion(SourceRange(), ToType, From, CCK);
-    From = ImpCastExprToType(From, ToType, Kind, VK_RValue, &BasePath, CCK)
-             .get();
+    ExprResult E = ImpCastExprToType(From, ToType, Kind, VK_RValue, &BasePath, CCK);
+    if (E.isInvalid())
+      return ExprError();
+    else
+      From = E.get();
+
     break;
   }
 
@@ -4076,7 +4080,6 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
       CK = FromIsCap ? CK_CHERICapabilityToPointer : CK_PointerToCHERICapability;
     }
     // ImpCastExprToType may return an ExprError, so cache the current value of
-    // From for the warning
     Expr *FromOld = From;
     From = ImpCastExprToType(From, ToType.getNonLValueExprType(Context),
                              CK, VK, /*BasePath=*/nullptr, CCK).get();

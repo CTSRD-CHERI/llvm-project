@@ -540,42 +540,90 @@ ExprResult Sema::ImpCastExprToType(Expr *E, QualType Ty,
   if (const PointerType *EPTy = dyn_cast<PointerType>(ExprTy)) {
     if (const PointerType *TPTy = dyn_cast<PointerType>(TypeTy)) {
       if (!EPTy->isCHERICapability() && TPTy->isCHERICapability()) {
-        bool StrLit = dyn_cast<StringLiteral>(E->IgnoreImpCasts()) != nullptr;
-        bool NullLit = false;
-        bool AddrOf = false;
-        bool Decayed = false;
-        if (IntegerLiteral* Int = dyn_cast<IntegerLiteral>(E->IgnoreParenCasts()))
-          NullLit = Int->getValue().isNullValue();
-        if (UnaryOperator *UnOp = dyn_cast<UnaryOperator>(E)) {
-          if (UnOp->getOpcode() == UO_AddrOf) {
-            AddrOf = CheckCHERIAssignCompatible(TypeTy, ExprTy, E);
-            if (!AddrOf)
-              return ExprError(Diag(E->getExprLoc(), diag::err_typecheck_convert_ptr_to_cap_unrelated_type)
-                << ExprTy << TypeTy << false);
-          }
-        }
-        if (ImplicitCastExpr* Imp = dyn_cast<ImplicitCastExpr>(E)) {
-          Decayed = Imp->getCastKind() == CK_ArrayToPointerDecay
-                    || Imp->getCastKind() == CK_FunctionToPointerDecay;
-          if (Decayed) { // check types
-            if (!CheckCHERIAssignCompatible(TypeTy, ExprTy, E))
-              return ExprError(Diag(E->getExprLoc(), diag::err_typecheck_convert_ptr_to_cap_unrelated_type)
-                << ExprTy << TypeTy << false);
-          }
-        }
-
-        // if conversion is not allowed, output an error
-        if (!StrLit && !NullLit && !AddrOf && !Decayed) {
-          return ExprError(Diag(E->getExprLoc(), diag::err_typecheck_convert_ptr_to_cap)
-            << ExprTy << TypeTy << false
-            << FixItHint::CreateInsertion(E->getExprLoc(), "(__cheri_tocap " +
-                                          TypeTy.getAsString() + ")"));
-        }
+        if (!ImpCastPointerToCHERICapability(ExprTy, TypeTy, E))
+          return ExprError();
       }
     }
   }
 
   return ImplicitCastExpr::Create(Context, Ty, Kind, E, BasePath, VK);
+}
+
+bool Sema::ImpCastPointerToCHERICapability(QualType FromTy, QualType ToTy, Expr *From, bool Diagnose) {
+
+  assert(FromTy->isPointerType() && ToTy->isPointerType() && ToTy->getAs<PointerType>()->isCHERICapability() &&
+         "Both argument types should be PointerType");
+
+  bool StrLit = dyn_cast<StringLiteral>(From->IgnoreImpCasts()) != nullptr;
+  bool NullLit = false;
+  bool AddrOf = false;
+  bool Decayed = false;
+  bool CompatTypes = false;
+
+  // null literal
+  if (IntegerLiteral* Int = dyn_cast<IntegerLiteral>(From->IgnoreParenCasts()))
+    NullLit = Int->getValue().isNullValue();
+  // address-of (&)
+  if (UnaryOperator *UnOp = dyn_cast<UnaryOperator>(From)) {
+    if (UnOp->getOpcode() == UO_AddrOf) {
+      AddrOf = true;
+      CompatTypes = CheckCHERIAssignCompatible(ToTy, FromTy, From);
+    }
+  }
+  // Function-to-pointer and array-to-pointer decay
+  if (ImplicitCastExpr* Imp = dyn_cast<ImplicitCastExpr>(From)) {
+    if (Imp->getCastKind() == CK_ArrayToPointerDecay
+        || Imp->getCastKind() == CK_FunctionToPointerDecay) {
+      Decayed = true;
+      CompatTypes = CheckCHERIAssignCompatible(ToTy, FromTy, From);
+    }
+  }
+
+  // The type check for address-of (&) could have failed above but may
+  // still succeed below when we look at pointee types
+  if (!(StrLit || NullLit || Decayed || (AddrOf && CompatTypes))) {
+    // Check if pointee types are assign compatible
+    QualType TPointee = ToTy->getAs<PointerType>()->getPointeeType();
+    QualType EPointee = FromTy->getAs<PointerType>()->getPointeeType();
+    if (CheckCHERIAssignCompatible(TPointee, EPointee, From, false)) {
+      if (Diagnose)
+        Diag(From->getExprLoc(), diag::warn_typecheck_convert_ptr_to_cap)
+                                    << From->getType() << ToTy
+                                    << FixItHint::CreateInsertion(From->getExprLoc(), "(__cheri_tocap "
+                                                                                      + ToTy.getAsString() + ")");
+      CompatTypes = true;
+    } else {
+      // Check for integer pointee types with differences only in sign
+      // (if they were exactly the same integer type then the above if-test would have succeeded)
+      if (TPointee->isIntegerType() && EPointee->isIntegerType()) {
+        if (TPointee->isSignedIntegerType())
+          TPointee = Context.getCorrespondingUnsignedType(TPointee);
+        if (EPointee->isSignedIntegerType())
+          EPointee = Context.getCorrespondingUnsignedType(EPointee);
+
+        if (TPointee == EPointee) {
+          // Output a warning, as unsigned types are the same but the only difference is sign
+          if (Diagnose)
+            Diag(From->getExprLoc(), diag::warn_typecheck_convert_ptr_to_cap_sign_difference) << FromTy << ToTy;
+          CompatTypes = true;
+        }
+      }
+    }
+    if (!(StrLit || NullLit || Decayed || AddrOf || CompatTypes)) {
+      if (Diagnose) {
+        Diag(From->getExprLoc(), diag::err_typecheck_convert_ptr_to_cap)
+                                 << From->getType() << ToTy << false;
+      }
+      return false;
+    } else if (!CompatTypes) {
+      if (Diagnose) {
+        Diag(From->getExprLoc(), diag::err_typecheck_convert_ptr_to_cap_unrelated_type)
+                                 << From->getType() << ToTy << false;
+      }
+      return false;
+    }
+  }
+  return true;
 }
 
 /// ScalarTypeToBooleanCastKind - Returns the cast kind corresponding
