@@ -2,8 +2,8 @@
 // RUN: %cheri_cc1 -x c -o - %s -fsyntax-only -Wall -Wno-unused-variable -verify
 // RUN: %cheri_cc1 -x c++ -o - %s -fsyntax-only -Wall -Wno-unused-variable -verify
 
-// not %cheri_cc1 -x c++ -o - %s -fsyntax-only -Wall -Wno-unused-variable -ast-dump 2>/dev/null | FileCheck %s -check-prefix CXXAST
-// not %cheri_cc1 -x c -o - %s -fsyntax-only -Wall -Wno-unused-variable -ast-dump 2>/dev/null | FileCheck %s -check-prefix CAST
+// RUN: not %cheri_cc1 -x c++ -o - %s -fsyntax-only -Wall -Wno-unused-variable -ast-dump 2>/dev/null | FileCheck %s -check-prefix CXXAST
+// RUN: not %cheri_cc1 -x c -o - %s -fsyntax-only -Wall -Wno-unused-variable -ast-dump 2>/dev/null | FileCheck %s -check-prefix CAST
 
 
 int global_int;
