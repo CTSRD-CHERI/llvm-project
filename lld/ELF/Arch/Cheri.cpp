@@ -611,12 +611,20 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
       RefName = (Name + "@CAPTABLE").str();
 
     if (Symtab->find(RefName)) {
-      assert(TargetSym->isLocal());
+      std::string NewRefName = (Name + "@CAPTABLE." + Twine(Index)).str();
       // XXXAR: for some reason we sometimes create more than one cap table entry
       // for a given global name, for now just rename the symbol
-      // message("Found duplicate captable name " + RefName);
-      RefName = (Name + "@CAPTABLE." + Twine(Index)).str();
-      // message(">>> Replacing with " + RefName);
+      // assert(TargetSym->isLocal());
+      if (!TargetSym->isLocal()) {
+        error("Found duplicate global captable ref name " + RefName +
+              " but referenced symbol was not local\n>>> " +
+              verboseToString<ELFT>(TargetSym));
+      } else {
+        // TODO: make this a warning
+        message("Found duplicate captable name " + RefName +
+                "\n>>> Replacing with " + NewRefName);
+      }
+      RefName = std::move(NewRefName);
       assert(!Symtab->find(RefName) && "RefName should be unique");
     }
     uint64_t Off = Index * Config->CapabilitySize;
