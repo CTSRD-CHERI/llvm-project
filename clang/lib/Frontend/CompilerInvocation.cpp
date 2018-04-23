@@ -693,12 +693,18 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
         << Args.getLastArg(OPT_mthread_model)->getAsString(Args)
         << Opts.ThreadModel;
   Opts.TrapFuncName = Args.getLastArgValue(OPT_ftrap_function_EQ);
-  const bool IsPurecapFreeBSD = Triple.getOS() == llvm::Triple::FreeBSD && TargetOpts.ABI == "purecap";
+  const bool IsPurecapFreeBSD =
+      Triple.getOS() == llvm::Triple::FreeBSD && TargetOpts.ABI == "purecap";
+  // CheriBSD purecap RTLD does not support .ctors for shared libraries/pie
+  // binaries so we default to .init_array
+  // TODO: we should proabbly do that for MIPS as well (which is what the clang
+  // frontend does but cc1 doesn't yet). Shouldn't really matter since we always
+  // compile with clang and not clang -cc1
   bool UseInitArrayDefault = IsPurecapFreeBSD;
-  Opts.UseInitArray = Args.hasFlag(OPT_fuse_init_array, OPT_fno_use_init_array, IsPurecapFreeBSD);
-  if (!Opts.UseInitArray && IsPurecapFreeBSD) {
+  Opts.UseInitArray = Args.hasFlag(OPT_fuse_init_array, OPT_fno_use_init_array,
+                                   UseInitArrayDefault);
+  if (!Opts.UseInitArray && IsPurecapFreeBSD)
     Diags.Report(diag::warn_cheri_purecap_init_array_required);
-  }
 
   Opts.FunctionSections = Args.hasFlag(OPT_ffunction_sections,
                                        OPT_fno_function_sections, false);
