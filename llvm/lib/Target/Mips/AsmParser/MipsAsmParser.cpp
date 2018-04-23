@@ -8218,7 +8218,7 @@ bool MipsAsmParser::ParseDirective(AsmToken DirectiveID) {
     }
 
     MipsOperand &ReturnRegOpnd = static_cast<MipsOperand &>(*TmpReg[0]);
-    if (!ReturnRegOpnd.isGPRAsmReg()) {
+    if (!ReturnRegOpnd.isGPRAsmReg() && !ReturnRegOpnd.isCheriAsmReg()) {
       reportParseError(ReturnRegOpnd.getStartLoc(),
                        "expected general purpose register");
       return false;
@@ -8230,8 +8230,11 @@ bool MipsAsmParser::ParseDirective(AsmToken DirectiveID) {
       return false;
     }
 
-    getTargetStreamer().emitFrame(StackReg, FrameSizeVal,
-                                  ReturnRegOpnd.getGPR32Reg());
+    unsigned ReturnReg = ReturnRegOpnd.isCheriAsmReg()
+                        ? ReturnRegOpnd.getCheriReg()
+                        : ReturnRegOpnd.getGPR32Reg();
+
+    getTargetStreamer().emitFrame(StackReg, FrameSizeVal, ReturnReg);
     IsCpRestoreSet = false;
     return false;
   }
