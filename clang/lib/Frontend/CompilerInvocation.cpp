@@ -693,7 +693,12 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
         << Args.getLastArg(OPT_mthread_model)->getAsString(Args)
         << Opts.ThreadModel;
   Opts.TrapFuncName = Args.getLastArgValue(OPT_ftrap_function_EQ);
-  Opts.UseInitArray = Args.hasArg(OPT_fuse_init_array);
+  const bool IsPurecapFreeBSD = Triple.getOS() == llvm::Triple::FreeBSD && TargetOpts.ABI == "purecap";
+  bool UseInitArrayDefault = IsPurecapFreeBSD;
+  Opts.UseInitArray = Args.hasFlag(OPT_fuse_init_array, OPT_fno_use_init_array, IsPurecapFreeBSD);
+  if (!Opts.UseInitArray && IsPurecapFreeBSD) {
+    Diags.Report(diag::warn_cheri_purecap_init_array_required);
+  }
 
   Opts.FunctionSections = Args.hasFlag(OPT_ffunction_sections,
                                        OPT_fno_function_sections, false);
@@ -2791,6 +2796,7 @@ static void ParseTargetArgs(TargetOptions &Opts, ArgList &Args,
     Opts.ABI = "purecap";
     Diags.Report(diag::warn_cheri_sandbox_abi_is_purecap);
   }
+
   if (const Arg *A = Args.getLastArg(OPT_cheri_size)) {
     StringRef CheriCPUName;
     auto &F = Opts.Features;
