@@ -694,6 +694,11 @@ void ScalarEnumerationTraits<ELFYAML::MIPS_AFL_EXT>::enumeration(
   ECase(EXT_LOONGSON_2E);
   ECase(EXT_LOONGSON_2F);
   ECase(EXT_OCTEON3);
+  ECase(EXT_CHERI);
+  ECase(EXT_CHERI_ABI_LEGACY);
+  ECase(EXT_CHERI_ABI_PLT);
+  ECase(EXT_CHERI_ABI_PCREL);
+  ECase(EXT_CHERI_ABI_FNDESC);
 #undef ECase
 }
 

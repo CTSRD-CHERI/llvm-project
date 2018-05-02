@@ -2246,7 +2246,12 @@ static const EnumEntry<unsigned> ElfMipsISAExtType[] = {
   {"NEC VR5400",              Mips::AFL_EXT_5400},
   {"NEC VR5500",              Mips::AFL_EXT_5500},
   {"RMI Xlr",                 Mips::AFL_EXT_XLR},
-  {"Toshiba R3900",           Mips::AFL_EXT_3900}
+  {"Toshiba R3900",           Mips::AFL_EXT_3900},
+  {"CHERI purecap (unknown ABI)",  Mips::AFL_EXT_CHERI},
+  {"CHERI purecap (legacy)",       Mips::AFL_EXT_CHERI_ABI_LEGACY},
+  {"CHERI purecap (pc-relative)",  Mips::AFL_EXT_CHERI_ABI_PCREL},
+  {"CHERI purecap (PLT based)",    Mips::AFL_EXT_CHERI_ABI_PLT},
+  {"CHERI purecap (function descriptor)", Mips::AFL_EXT_CHERI_ABI_FNDESC},
 };
 
 static const EnumEntry<unsigned> ElfMipsASEFlags[] = {

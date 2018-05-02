@@ -66,7 +66,16 @@ enum AFL_EXT {
   AFL_EXT_5500 = 16,        // NEC VR5500 instruction
   AFL_EXT_LOONGSON_2E = 17, // ST Microelectronics Loongson 2E
   AFL_EXT_LOONGSON_2F = 18, // ST Microelectronics Loongson 2F
-  AFL_EXT_OCTEON3 = 19      // Cavium Networks Octeon3
+  AFL_EXT_OCTEON3 = 19,     // Cavium Networks Octeon3
+
+  // XXXAR: We reuse this field to prevent incompatible CheriABI prototypes
+  // from being linked together
+  AFL_EXT_CHERI = 0xc0,     // CheriABI
+  AFL_EXT_CHERI_ABI_LEGACY = AFL_EXT_CHERI | 1,
+  AFL_EXT_CHERI_ABI_PLT    = AFL_EXT_CHERI | 2,
+  AFL_EXT_CHERI_ABI_PCREL  = AFL_EXT_CHERI | 3,
+  AFL_EXT_CHERI_ABI_FNDESC = AFL_EXT_CHERI | 4,
+  AFL_EXT_CHERI_ABI_MASK   = 0xc7,
 };
 
 // Values for the flags1 word of an ABI flags structure.
