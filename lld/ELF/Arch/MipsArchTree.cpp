@@ -371,6 +371,74 @@ uint8_t elf::getMipsFpAbiFlag(uint8_t OldFlag, StringRef OldFile,
   return OldFlag;
 }
 
+static std::string getMipsIsaExtName(Mips::AFL_EXT Ext) {
+  switch (Ext) {
+    // duplicated from ELFYAML.cpp
+#define ECase(X)                                                               \
+  case Mips::AFL_##X:                                                          \
+    return #X
+    ECase(EXT_NONE);
+    ECase(EXT_XLR);
+    ECase(EXT_OCTEON2);
+    ECase(EXT_OCTEONP);
+    ECase(EXT_LOONGSON_3A);
+    ECase(EXT_OCTEON);
+    ECase(EXT_5900);
+    ECase(EXT_4650);
+    ECase(EXT_4010);
+    ECase(EXT_4100);
+    ECase(EXT_3900);
+    ECase(EXT_10000);
+    ECase(EXT_SB1);
+    ECase(EXT_4111);
+    ECase(EXT_4120);
+    ECase(EXT_5400);
+    ECase(EXT_5500);
+    ECase(EXT_LOONGSON_2E);
+    ECase(EXT_LOONGSON_2F);
+    ECase(EXT_OCTEON3);
+    ECase(EXT_CHERI);
+    ECase(EXT_CHERI_ABI_LEGACY);
+    ECase(EXT_CHERI_ABI_PLT);
+    ECase(EXT_CHERI_ABI_PCREL);
+    ECase(EXT_CHERI_ABI_FNDESC);
+  default:
+    return ("<unknown isa_ext (" + Twine(Ext) + ")>").str();
+#undef ECase
+  }
+}
+
+uint8_t elf::getMipsIsaExt(uint64_t OldExt, StringRef OldFile, uint64_t NewExt,
+                           StringRef NewFile) {
+  if (OldExt == NewExt)
+    return NewExt;
+
+  // ISA_EXT is different, now check if we want to allow this
+  // No ext -> any ext is always fine (XXXAR: well at least for now it is)
+  // TODO: require isa_ext to be set for CHERI purecap programs in the future
+  if (OldExt == Mips::AFL_EXT_NONE)
+    return NewExt;
+  if (NewExt == Mips::AFL_EXT_NONE)
+    return OldExt;
+  Mips::AFL_EXT CheriABIs[] = {
+      Mips::AFL_EXT_CHERI_ABI_LEGACY,
+      Mips::AFL_EXT_CHERI_ABI_PLT,
+      Mips::AFL_EXT_CHERI_ABI_PCREL,
+      Mips::AFL_EXT_CHERI_ABI_FNDESC,
+  };
+  if (llvm::is_contained(CheriABIs, OldExt) ||
+      llvm::is_contained(CheriABIs, NewExt)) {
+    // incompatible cheri purecap ABIs:
+    error("incompatible pure-capability ABIs:\n>>> " + OldFile + " uses " +
+          getMipsIsaExtName((Mips::AFL_EXT)OldExt) + "\n>>> " + NewFile +
+          " uses " + getMipsIsaExtName((Mips::AFL_EXT)NewExt));
+    // return NewExt to get sensible error messages with multiple mismatches
+    return NewExt;
+  }
+  // non-cheri isa_ext -> just return the maximum
+  return std::max(OldExt, NewExt);
+}
+
 template <class ELFT> static bool isN32Abi(const InputFile *F) {
   if (auto *EF = dyn_cast<ELFFileBase<ELFT>>(F))
     return EF->getObj().getHeader()->e_flags & EF_MIPS_ABI2;

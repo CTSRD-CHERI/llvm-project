@@ -138,7 +138,8 @@ MipsAbiFlagsSection<ELFT> *MipsAbiFlagsSection<ELFT>::create() {
     // select the highest number of ISA/Rev/Ext.
     Flags.isa_level = std::max(Flags.isa_level, S->isa_level);
     Flags.isa_rev = std::max(Flags.isa_rev, S->isa_rev);
-    Flags.isa_ext = std::max(Flags.isa_ext, S->isa_ext);
+    Flags.isa_ext =
+        elf::getMipsIsaExt(Flags.isa_ext, LastFile, S->isa_ext, Filename);
     Flags.gpr_size = std::max(Flags.gpr_size, S->gpr_size);
     Flags.cpr1_size = std::max(Flags.cpr1_size, S->cpr1_size);
     Flags.cpr2_size = std::max(Flags.cpr2_size, S->cpr2_size);
