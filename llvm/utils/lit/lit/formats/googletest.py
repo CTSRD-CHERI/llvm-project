@@ -118,7 +118,7 @@ class GoogleTest(TestFormat):
             cmd = litConfig.valgrindArgs + cmd
 
         # XXXAR: HACK: assume that no gtest tests are Cheri tests:
-        if litConfig.cheri_test_mode != CheriTestMode.INCLUDE:
+        if litConfig.cheri_test_mode == CheriTestMode.ONLY:
             #  litConfig.note(
             #      "Skipping gtests because cheri-tests-filter=" +
             #      litConfig.cheri_test_mode)
