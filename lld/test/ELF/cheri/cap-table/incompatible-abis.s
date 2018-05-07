@@ -1,8 +1,8 @@
-# RUN: %cheri_purecap_llvm-mc -cheri-cap-table-abi=legacy -filetype=obj %s -o %t-legacy.o
-# RUN: %cheri_purecap_llvm-mc -cheri-cap-table-abi=pcrel -filetype=obj %s -o %t-pcrel.o
-# RUN: %cheri_purecap_llvm-mc -cheri-cap-table-abi=plt -filetype=obj %s -o %t-plt.o
-# RUN: %cheri_purecap_llvm-mc -cheri-cap-table-abi=fn-desc -filetype=obj %s -o %t-fn-desc.o
-# RUN: %cheri_purecap_llvm-mc -filetype=obj %s -o %t-default.o
+# RUN: %cheri128_purecap_llvm-mc -cheri-cap-table-abi=legacy -filetype=obj %s -o %t-legacy.o
+# RUN: %cheri128_purecap_llvm-mc -cheri-cap-table-abi=pcrel -filetype=obj %s -o %t-pcrel.o
+# RUN: %cheri128_purecap_llvm-mc -cheri-cap-table-abi=plt -filetype=obj %s -o %t-plt.o
+# RUN: %cheri128_purecap_llvm-mc -cheri-cap-table-abi=fn-desc -filetype=obj %s -o %t-fn-desc.o
+# RUN: %cheri128_purecap_llvm-mc -filetype=obj %s -o %t-default.o
 # RUN: yaml2obj -o %t-non-cheri.o %S/Inputs/non-cheri-isa-ext.yaml
 # RUN: not ld.lld %t-legacy.o %t-pcrel.o %t-plt.o %t-fn-desc.o %t-default.o %t-non-cheri.o 2>&1 | FileCheck %s
 
