@@ -1392,7 +1392,7 @@ def parseIntegratedTestScript(test, additional_parsers=[],
     # cheri tests if they use any of the CHERI substitutions in the RUN: lines
     if "/cheri/" in test.getFullName().lower():
         is_cheri_test = True
-    if not is_cheri_test and (script and any("%cheri_" in command for command in script)):
+    if not is_cheri_test and (script and any("%cheri" in command for command in script)):
         # print("Test", test.getFullName(), "uses cheri substitutions")
         is_cheri_test = True
     if is_cheri_test:
