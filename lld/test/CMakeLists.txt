@@ -46,7 +46,7 @@ set(LLD_TEST_PARAMS
   lld_site_config=${CMAKE_CURRENT_BINARY_DIR}/lit.site.cfg
   )
 
-add_lit_target_with_cheri_selectors(check-lld "Running lld test suite"
+add_lit_testsuite_with_cheri_selectors(check-lld "Running lld test suite"
   ${CMAKE_CURRENT_BINARY_DIR}
   PARAMS lld_site_config=${CMAKE_CURRENT_BINARY_DIR}/lit.site.cfg
        lld_unit_site_config=${CMAKE_CURRENT_BINARY_DIR}/Unit/lit.site.cfg
