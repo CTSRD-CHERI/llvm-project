@@ -114,7 +114,7 @@ endif()
 add_custom_target(clang-test-depends DEPENDS ${CLANG_TEST_DEPS})
 set_target_properties(clang-test-depends PROPERTIES FOLDER "Clang tests")
 
-add_lit_testsuite(check-clang "Running the Clang regression tests"
+add_lit_target_with_cheri_selectors(check-clang "Running the Clang regression tests"
   ${CMAKE_CURRENT_BINARY_DIR}
   #LIT ${LLVM_LIT}
   PARAMS ${CLANG_TEST_PARAMS}
