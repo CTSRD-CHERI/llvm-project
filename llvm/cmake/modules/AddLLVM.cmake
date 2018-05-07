@@ -1298,7 +1298,7 @@ endfunction()
 # A raw function to create a lit target. This is used to implement the testuite
 # management functions.
 function(add_lit_target target comment)
-  cmake_parse_arguments(ARG "" "LIT_PROGRAM_SUFFIX" "PARAMS;DEPENDS;ARGS" ${ARGN})
+  cmake_parse_arguments(ARG "" "LIT_PROGRAM_SUFFIX" "PARAMS;DEPENDS;ARGS;LIT_CHERI_FLAGS" ${ARGN})
   set(LIT_ARGS "${ARG_ARGS} ${LLVM_LIT_ARGS}")
   separate_arguments(LIT_ARGS)
   if (NOT CMAKE_CFG_INTDIR STREQUAL ".")
@@ -1315,6 +1315,7 @@ function(add_lit_target target comment)
 
   set(LIT_COMMAND "${PYTHON_EXECUTABLE};${lit_base_dir}/${lit_file_name}${ARG_LIT_PROGRAM_SUFFIX}")
   list(APPEND LIT_COMMAND ${LIT_ARGS})
+  list(APPEND LIT_COMMAND ${ARG_LIT_CHERI_FLAGS})
   foreach(param ${ARG_PARAMS})
     list(APPEND LIT_COMMAND --param ${param})
   endforeach()
@@ -1335,6 +1336,20 @@ function(add_lit_target target comment)
 
   # Tests should be excluded from "Build Solution".
   set_target_properties(${target} PROPERTIES EXCLUDE_FROM_DEFAULT_BUILD ON)
+endfunction()
+
+function(add_lit_target_with_cheri_selectors target comment)
+  add_lit_target(${target} ${comment} ${ARGN})
+  add_lit_target(${target}-cheri128 "${comment} (with CHERI128)" ${ARGN}
+    LIT_PROGRAM_SUFFIX "-cheri128" LIT_CHERI_FLAGS "--cheri-tests-filter=include")
+  add_lit_target(${target}-cheri256 "${comment} (with CHERI256)" ${ARGN}
+    LIT_PROGRAM_SUFFIX "-cheri256" LIT_CHERI_FLAGS "--cheri-tests-filter=include")
+  add_lit_target(${target}-cheri128-only "${comment} (only CHERI128)" ${ARGN}
+    LIT_PROGRAM_SUFFIX "-cheri128" LIT_CHERI_FLAGS "--cheri-tests-filter=only")
+  add_lit_target(${target}-cheri256-only "${comment} (only CHERI256)" ${ARGN}
+    LIT_PROGRAM_SUFFIX "-cheri256" LIT_CHERI_FLAGS "--cheri-tests-filter=only")
+  add_lit_target(${target}-without-cheri "${comment} (without CHERI tests)" ${ARGN}
+    LIT_CHERI_FLAGS --cheri-tests-filter=exclude)
 endfunction()
 
 # A function to add a set of lit test suites to be driven through 'check-*' targets.

@@ -924,49 +924,9 @@ if( LLVM_INCLUDE_TESTS )
                GLOBAL PROPERTY LLVM_ADDITIONAL_TEST_TARGETS)
   get_property(LLVM_ADDITIONAL_TEST_DEPENDS
                GLOBAL PROPERTY LLVM_ADDITIONAL_TEST_DEPENDS)
-  add_lit_target(check-all
+  add_lit_target_with_cheri_selectors(check-all
     "Running all regression tests"
     ${LLVM_LIT_TESTSUITES}
-    PARAMS ${LLVM_LIT_PARAMS}
-    DEPENDS ${LLVM_LIT_DEPENDS} ${LLVM_ADDITIONAL_TEST_TARGETS}
-    ARGS ${LLVM_LIT_EXTRA_ARGS}
-    )
-  add_lit_target(check-all-cheri256
-    "Running all regression tests"
-    ${LLVM_LIT_TESTSUITES}
-    LIT_PROGRAM_SUFFIX -cheri256 --cheri-tests-filter=include
-    PARAMS ${LLVM_LIT_PARAMS}
-    DEPENDS ${LLVM_LIT_DEPENDS} ${LLVM_ADDITIONAL_TEST_TARGETS}
-    ARGS ${LLVM_LIT_EXTRA_ARGS}
-    )
-  add_lit_target(check-all-cheri128
-    "Running all regression tests"
-    ${LLVM_LIT_TESTSUITES}
-    LIT_PROGRAM_SUFFIX -cheri128  --cheri-tests-filter=include
-    PARAMS ${LLVM_LIT_PARAMS}
-    DEPENDS ${LLVM_LIT_DEPENDS} ${LLVM_ADDITIONAL_TEST_TARGETS}
-    ARGS ${LLVM_LIT_EXTRA_ARGS}
-    )
-  add_lit_target(check-all-cheri256-only
-    "Running all regression tests (CHERI256 ONLY)"
-    ${LLVM_LIT_TESTSUITES}
-    LIT_PROGRAM_SUFFIX -cheri256 --cheri-tests-filter=only
-    PARAMS ${LLVM_LIT_PARAMS}
-    DEPENDS ${LLVM_LIT_DEPENDS} ${LLVM_ADDITIONAL_TEST_TARGETS}
-    ARGS ${LLVM_LIT_EXTRA_ARGS}
-    )
-  add_lit_target(check-all-cheri128-only
-    "Running all regression tests (CHERI128 ONLY)"
-    ${LLVM_LIT_TESTSUITES}
-    LIT_PROGRAM_SUFFIX -cheri128 --cheri-tests-filter=only
-    PARAMS ${LLVM_LIT_PARAMS}
-    DEPENDS ${LLVM_LIT_DEPENDS} ${LLVM_ADDITIONAL_TEST_TARGETS}
-    ARGS ${LLVM_LIT_EXTRA_ARGS}
-    )
-  add_lit_target(check-all-except-cheri
-    "Running all regression tests (except CHERI tests)"
-    ${LLVM_LIT_TESTSUITES}
-    LIT_PROGRAM_SUFFIX -cheri256 --cheri-tests-filter=exclude
     PARAMS ${LLVM_LIT_PARAMS}
     DEPENDS ${LLVM_LIT_DEPENDS} ${LLVM_ADDITIONAL_TEST_TARGETS}
     ARGS ${LLVM_LIT_EXTRA_ARGS}
