@@ -2,6 +2,15 @@ import os
 import sys
 
 
+class CheriTestMode(object):
+    INCLUDE = "include"
+    EXCLUDE = "exclude"
+    ONLY = "only"
+
+    feature_include_cheri_tests = "include-cheri-tests"
+    feature_cheri_tests_only = "cheri-tests-only"
+
+
 class TestingConfig:
     """"
     TestingConfig - Information on the tests inside a suite.
@@ -14,6 +23,8 @@ class TestingConfig:
 
         Create a TestingConfig object with default values.
         """
+        import lit.LitConfig
+        assert isinstance(litConfig, lit.LitConfig.LitConfig)
         # Set the environment based on the command line arguments.
         environment = {
             'PATH' : os.pathsep.join(litConfig.path +
@@ -44,6 +55,19 @@ class TestingConfig:
 
         # Set the default available features based on the LitConfig.
         available_features = []
+        if litConfig.cheri_test_mode == CheriTestMode.INCLUDE:
+            # run the cheri tests as well
+            available_features.append(CheriTestMode.feature_include_cheri_tests)
+        elif litConfig.cheri_test_mode == CheriTestMode.ONLY:
+            # run the cheri tests and exclude all that don't use %cheri_foo
+            available_features.append(CheriTestMode.feature_cheri_tests_only)
+            available_features.append(CheriTestMode.feature_include_cheri_tests)
+        elif litConfig.cheri_test_mode == CheriTestMode.EXCLUDE:
+            litConfig.warning("Not running CHERI tests (is this intended?)")
+            assert CheriTestMode.INCLUDE not in available_features
+        else:
+            litConfig.fatal("Invalid value for litConfig.cheri_test_mode " +
+                            litConfig.cheri_test_mode)
         if litConfig.useValgrind:
             available_features.append('valgrind')
             if litConfig.valgrindLeakCheck:

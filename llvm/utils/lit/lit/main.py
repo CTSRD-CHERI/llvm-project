@@ -24,6 +24,8 @@ import lit.run
 import lit.util
 import lit.discovery
 
+from lit.LitConfig import CheriTestMode
+
 class TestingProgressDisplay(object):
     def __init__(self, opts, numTests, progressBar=None):
         self.opts = opts
@@ -273,6 +275,13 @@ def main_with_tmp(builtinParameters):
                            "regular expression"),
                      action="store",
                      default=os.environ.get("LIT_FILTER"))
+    selection_group.add_argument("--cheri-tests-filter",
+                     default=CheriTestMode.INCLUDE,
+                     choices=(CheriTestMode.INCLUDE, CheriTestMode.EXCLUDE,
+                              CheriTestMode.ONLY),
+                     help="Selector for CHERI specific test (include, exclude,"
+                     " only). This is useful to run only the tests that depend"
+                     " on Cheri128 vs Cheri256 in Jenkins)")
     selection_group.add_argument("--num-shards", dest="numShards", metavar="M",
                      help="Split testsuite into M pieces and only run one",
                      action="store", type=int,
@@ -354,6 +363,8 @@ def main_with_tmp(builtinParameters):
         maxFailures = opts.maxFailures,
         parallelism_groups = {},
         echo_all_commands = opts.echoAllCommands)
+
+    litConfig.cheri_test_mode = opts.cheri_tests_filter
 
     # Perform test discovery.
     run = lit.run.Run(litConfig,

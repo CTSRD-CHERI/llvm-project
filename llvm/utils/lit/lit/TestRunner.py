@@ -23,6 +23,7 @@ import lit.Test as Test
 import lit.util
 from lit.util import to_bytes, to_string
 from lit.BooleanExpression import BooleanExpression
+from lit.TestingConfig import CheriTestMode
 
 class InternalShellError(Exception):
     def __init__(self, command, message):
@@ -1334,6 +1335,7 @@ class IntegratedTestKeywordParser(object):
 
 def parseIntegratedTestScript(test, additional_parsers=[],
                               require_script=True):
+
     """parseIntegratedTestScript - Scan an LLVM/Clang style integrated test
     script and extract the lines to 'RUN' as well as 'XFAIL' and 'REQUIRES'
     and 'UNSUPPORTED' information.
@@ -1348,6 +1350,7 @@ def parseIntegratedTestScript(test, additional_parsers=[],
 
     # Install the built-in keyword parsers.
     script = []
+    assert isinstance(test, lit.Test.Test)
     builtin_parsers = [
         IntegratedTestKeywordParser('RUN:', ParserKind.COMMAND,
                                     initial_value=script),
@@ -1363,7 +1366,6 @@ def parseIntegratedTestScript(test, additional_parsers=[],
         IntegratedTestKeywordParser('END.', ParserKind.TAG)
     ]
     keyword_parsers = {p.keyword: p for p in builtin_parsers}
-    
     # Install user-defined additional parsers.
     for parser in additional_parsers:
         if not isinstance(parser, IntegratedTestKeywordParser):
@@ -1373,7 +1375,7 @@ def parseIntegratedTestScript(test, additional_parsers=[],
             raise ValueError("Parser for keyword '%s' already exists"
                              % parser.keyword)
         keyword_parsers[parser.keyword] = parser
-        
+
     # Collect the test lines from the script.
     sourcepath = test.getSourcePath()
     for line_number, command_type, ln in \
@@ -1383,6 +1385,21 @@ def parseIntegratedTestScript(test, additional_parsers=[],
         parser.parseLine(line_number, ln)
         if command_type == 'END.' and parser.getValue() is True:
             break
+
+    # HACK to allow running only cheri tests:
+    is_cheri_test = False
+    # tests are CHERI tests if they are inside a cheri directory. They are also
+    # cheri tests if they use any of the CHERI substitutions in the RUN: lines
+    if "/cheri/" in test.getFullName().lower():
+        is_cheri_test = True
+    if not is_cheri_test and (script and any("%cheri_" in command for command in script)):
+        # print("Test", test.getFullName(), "uses cheri substitutions")
+        is_cheri_test = True
+    if is_cheri_test:
+        test.requires.append(CheriTestMode.feature_include_cheri_tests)
+    else:
+        # This test should not be run when running cheri tests only
+        test.unsupported.append(CheriTestMode.feature_cheri_tests_only)
 
     # Verify the script contains a run line.
     if require_script and not script:
