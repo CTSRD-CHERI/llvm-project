@@ -1,5 +1,5 @@
-; RUN: %cheri_purecap_llc -cheri-cap-table %s -mxcaptable=true  -o - | %cheri_FileCheck %s -check-prefixes CHECK,BIGTABLE
-; RUN: %cheri_purecap_llc -cheri-cap-table %s -mxcaptable=false -o - | %cheri_FileCheck %s -check-prefixes CHECK,SMALLTABLE
+; RUN: %cheri_purecap_llc -cheri-cap-table-abi=plt %s -mxcaptable=true  -o - | %cheri_FileCheck %s -check-prefixes CHECK,BIGTABLE
+; RUN: %cheri_purecap_llc -cheri-cap-table-abi=plt %s -mxcaptable=false -o - | %cheri_FileCheck %s -check-prefixes CHECK,SMALLTABLE
 
 ; ModuleID = '/Users/alex/cheri/llvm/tools/clang/test/CodeGen/CHERI/cap-table-call-extern.c'
 source_filename = "/Users/alex/cheri/llvm/tools/clang/test/CodeGen/CHERI/cap-table-call-extern.c"

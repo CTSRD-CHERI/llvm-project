@@ -1,8 +1,8 @@
 ; MIPS is inefficient and generates a mul instruction....
-; RUNNOT: %cheri_llc %s -O2 -mxgot -target-abi n64 -relocation-model=pic -cheri-cap-table -o -
-; RUN: %cheri_purecap_llc %s -O2 -cheri-cap-table -o - -mxcaptable=true | %cheri_FileCheck %s
-; RUN: %cheri_purecap_llc %s -O2 -cheri-cap-table -o - -mxcaptable=false | %cheri_FileCheck %s -check-prefix SMALLTABLE
-; RUN: %cheri_purecap_llc %s -O0 -cheri-cap-table -o - -mxcaptable=true | %cheri_FileCheck %s -check-prefix NO-OPT
+; RUNNOT: %cheri_llc %s -O2 -mxgot -target-abi n64 -relocation-model=pic -cheri-cap-table-abi=plt -o -
+; RUN: %cheri_purecap_llc %s -O2 -cheri-cap-table-abi=plt -o - -mxcaptable=true | %cheri_FileCheck %s
+; RUN: %cheri_purecap_llc %s -O2 -cheri-cap-table-abi=plt -o - -mxcaptable=false | %cheri_FileCheck %s -check-prefix SMALLTABLE
+; RUN: %cheri_purecap_llc %s -O0 -cheri-cap-table-abi=plt -o - -mxcaptable=true | %cheri_FileCheck %s -check-prefix NO-OPT
 ; ModuleID = '/Users/alex/cheri/build/llvm-256-build/cap-table-jump-table-reduce.ll-reduced-simplified.bc'
 source_filename = "cap-table-jump-table-reduce.ll-output-7f90547.bc"
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"

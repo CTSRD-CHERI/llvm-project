@@ -1,5 +1,5 @@
-; RUN: %cheri_purecap_llc -cheri-cap-table %s -o - -mxcaptable=true | %cheri_FileCheck %s -check-prefixes CHECK,BIG
-; RUN: %cheri_purecap_llc -cheri-cap-table %s -o - -mxcaptable=false | %cheri_FileCheck %s -check-prefixes CHECK,SMALL
+; RUN: %cheri_purecap_llc -cheri-cap-table-abi=plt %s -o - -mxcaptable=true | %cheri_FileCheck %s -check-prefixes CHECK,BIG
+; RUN: %cheri_purecap_llc -cheri-cap-table-abi=plt %s -o - -mxcaptable=false | %cheri_FileCheck %s -check-prefixes CHECK,SMALL
 source_filename = "/Users/alex/cheri/llvm/tools/clang/test/CodeGen/CHERI/cap-table-call-extern.c"
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
 target triple = "cheri-unknown-freebsd"
