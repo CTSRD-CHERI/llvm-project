@@ -615,6 +615,8 @@ class Reducer(object):
             r"Generating code for declaration '(.+)'",
             # error in backend:
             r"fatal error: error in backend:(.+)",
+            r"LLVM ERROR: Cannot select: (.+)",
+            r"LLVM ERROR: Cannot select:",
             # same with color diagnostics:
             "\x1b\\[0m\x1b\\[0;1;31mfatal error: \x1b\\[0merror in backend:(.+)",
             r"error in backend:(.+)",
@@ -624,7 +626,9 @@ class Reducer(object):
         regexes = [(r, 0) for r in simple_regexes]
         # For this crash message we only want group 1
         # TODO: add another grep for the program counter
-        regexes.append((re.compile(r"ERROR: (AddressSanitizer: .+ on address) 0x[0-9a-fA-F]+ (at pc 0x[0-9a-fA-F]+)"), 1))
+        regexes.insert(0, (re.compile(r"ERROR: (AddressSanitizer: .+ on address) 0x[0-9a-fA-F]+ (at pc 0x[0-9a-fA-F]+)"), 1))
+        # only get the kind of the cannot select from the message (without the number for tNN)
+        regexes.insert(0, (re.compile(r"LLVM ERROR: Cannot select: (t\w+): (.+)", ), 2))
 
         for line in stderr.decode("utf-8").splitlines():
             # Check for failed assertions:
