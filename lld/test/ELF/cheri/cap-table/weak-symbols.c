@@ -1,6 +1,6 @@
 // REQUIRES: clang
 
-// RUN: %cheri128_purecap_cc1 -emit-obj -O2 -mllvm -cheri-cap-table %s -o %t.o
+// RUN: %cheri128_purecap_cc1 -emit-obj -O2 -mllvm -cheri-cap-table-abi=plt %s -o %t.o
 // RUNNOT: llvm-objdump -d -r %t.o | FileCheck %s -check-prefix OBJECT
 // RUN: ld.lld -o %t.exe %t.o
 // RUN: ld.lld -pie -o %t-pie.exe %t.o

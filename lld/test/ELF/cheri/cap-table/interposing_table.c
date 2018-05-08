@@ -1,4 +1,4 @@
-// RUN: %cheri256_cc1 -emit-obj -O2 -target-feature +soft-float -msoft-float -target-abi purecap -mllvm -cheri-cap-table %s -o %t.o
+// RUN: %cheri256_cc1 -emit-obj -O2 -target-feature +soft-float -msoft-float -target-abi purecap -mllvm -cheri-cap-table-abi=plt %s -o %t.o
 // RUN: ld.lld %t.o %S/Inputs/interposing_table.o  -o %t.exe
 // RUN: llvm-objdump -t -C %t.exe | FileCheck %s
 

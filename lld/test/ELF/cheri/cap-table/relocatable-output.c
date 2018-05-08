@@ -1,7 +1,7 @@
 // REQUIRES: clang
 
-// RUN: %cheri_purecap_cc1 -DFIRST -emit-obj -O2 -mllvm -cheri-cap-table %s -o %t1.o
-// RUN: %cheri_purecap_cc1 -DSECOND -emit-obj -O2 -mllvm -cheri-cap-table %s -o %t2.o
+// RUN: %cheri_purecap_cc1 -DFIRST -emit-obj -O2 -mllvm -cheri-cap-table-abi=plt %s -o %t1.o
+// RUN: %cheri_purecap_cc1 -DSECOND -emit-obj -O2 -mllvm -cheri-cap-table-abi=plt %s -o %t2.o
 
 
 // Test that we can link the two files into an executable

@@ -1,4 +1,4 @@
-// RUN: %cheri128_cc1 -emit-obj -O2 -target-abi purecap -mllvm -cheri-cap-table %s -o %t.o
+// RUN: %cheri128_cc1 -emit-obj -O2 -target-abi purecap -mllvm -cheri-cap-table-abi=plt %s -o %t.o
 // RUN: llvm-readobj -r %t.o | FileCheck -check-prefix RELOCATIONS %s
 // RUN: ld.lld -o %t.exe %t.o -verbose 2>&1 | FileCheck %s -check-prefix WARN
 // RUN: llvm-objdump -d -r -C -t %t.exe | FileCheck %s

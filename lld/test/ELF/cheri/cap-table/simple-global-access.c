@@ -1,7 +1,7 @@
 // REQUIRES: clang
 
-// RUN: %cheri128_purecap_cc1 -mllvm -mxcaptable -emit-obj -O0 -mllvm -cheri-cap-table %s -o %t-128.o
-// RUN: %cheri256_purecap_cc1 -mllvm -mxcaptable -emit-obj -O0 -mllvm -cheri-cap-table %s -o %t-256.o
+// RUN: %cheri128_purecap_cc1 -mllvm -mxcaptable -emit-obj -O0 -mllvm -cheri-cap-table-abi=plt %s -o %t-128.o
+// RUN: %cheri256_purecap_cc1 -mllvm -mxcaptable -emit-obj -O0 -mllvm -cheri-cap-table-abi=plt %s -o %t-256.o
 // RUN: llvm-objdump -d -r %t-128.o | FileCheck %s -check-prefix OBJECT
 // RUN: llvm-objdump -d -r %t-256.o | FileCheck %s -check-prefix OBJECT
 // RUN: ld.lld -o %t-128.exe %t-128.o

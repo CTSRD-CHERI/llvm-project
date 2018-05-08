@@ -571,7 +571,7 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
     // so this will help find the error
     warn("added " + Twine(SmallEntryCount) + " entries to .cap_table but "
         "current maximum is " + Twine(MaxSmallEntries) + "; try recompiling "
-        "non-performance critical source files with -mllvm -mxcaptable");
+        "non-performance critical source files with -mxcaptable");
   }
   if (errorHandler().Verbose) {
     message("Total " + Twine(Entries.size()) + " .cap_table entries: " +
