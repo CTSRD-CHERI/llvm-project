@@ -1,8 +1,7 @@
-// RUN: %cheri_purecap_cc1 -emit-llvm -mrelocation-model pic -pic-level 1 -O0 -std=gnu99 -mllvm -cheri-cap-table -x c -o - %s | FileCheck %s
-// RUN: %cheri_purecap_cc1 -emit-llvm -mrelocation-model pic -pic-level 1 -O3 -std=gnu99 -mllvm -cheri-cap-table -x c -o - %s | FileCheck %s -check-prefix OPT
+// RUN: %cheri_purecap_cc1 -emit-llvm -mrelocation-model pic -pic-level 1 -O0 -std=gnu99 -mllvm -cheri-cap-table-abi=plt -x c -o - %s | FileCheck %s
+// RUN: %cheri_purecap_cc1 -emit-llvm -mrelocation-model pic -pic-level 1 -O3 -std=gnu99 -mllvm -cheri-cap-table-abi=plt -x c -o - %s | FileCheck %s -check-prefix OPT
 // Check that it doesn't crash when compiling:
-// RUN: %cheri_purecap_cc1 -S -mrelocation-model pic -pic-level 1 -O2 -std=gnu99 -mllvm -cheri-cap-table -x c -o /dev/null %s
-
+// RUN: %cheri_purecap_cc1 -S -mrelocation-model pic -pic-level 1 -O2 -std=gnu99 -mllvm -cheri-cap-table-abi=plt -x c -o /dev/null %s
 
 // The optimize libcalls pass changes the global string from AS200 to AS0
 // This happens when in converts printf to puts
