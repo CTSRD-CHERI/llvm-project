@@ -1329,6 +1329,7 @@ function(add_lit_target target comment)
     add_custom_target(${target}
       COMMAND ${CMAKE_COMMAND} -E echo "${target} does nothing, no tools built.")
     message(STATUS "${target} does nothing.")
+    message(STATUS "argv was ${ARGV}.")
   endif()
   if (ARG_DEPENDS)
     add_dependencies(${target} ${ARG_DEPENDS})
@@ -1408,7 +1409,7 @@ function(add_lit_targets_for_cheri target comment)
     LIT_CHERI_FLAG "--cheri-tests-filter=only" LIT_PROGRAM_SUFFIX "-cheri256" ${ARGN})
   # Add a -without cheri that skips all CHERI tests
   add_lit_target(${target}-without-cheri "${comment} (without CHERI tests)"
-    LIT_CHERI_FLAG --cheri-tests-filter=exclude LIT_PROGRAM_SUFFIX "" ${ARGN})
+    LIT_CHERI_FLAG --cheri-tests-filter=exclude ${ARGN})
 endfunction()
 
 function(add_lit_target_with_cheri_selectors target comment)
