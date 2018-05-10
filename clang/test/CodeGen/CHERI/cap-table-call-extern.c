@@ -1,4 +1,4 @@
-// RUN: %cheri_purecap_cc1 -O3 -mllvm -cheri-cap-table-abi=plt -o - %s -emit-llvm -o - | %cheri_FileCheck %s
+// RUN: %cheri_purecap_cc1 -O3 -mllvm -cheri-cap-table=true -o - %s -emit-llvm -o - | %cheri_FileCheck %s
 
 typedef void(*fnptr)(void);
 
