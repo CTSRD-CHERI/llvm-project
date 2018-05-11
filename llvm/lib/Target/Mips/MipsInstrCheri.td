@@ -540,20 +540,16 @@ def : InstAlias<"cgetepcc $dst",
 def : InstAlias<"csetepcc $src",
                 (CIncOffset C31, CheriOpnd:$src, ZERO_64), 1>;
 
-// For the disassembler only:
-def CGetNull : CheriFmt3Op<0x13, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, GPR64Opnd:$r3),
-  "cgetnull\t$r1", [/* For disassembler only*/]> {
-  let r2 = /*C0*/0;
-  let r3 = /*ZERO_64*/0;
-}
-// So that we can use ptr -> int without a warning that $c0 access is deprecated in .s files
-def : InstAlias<"cfromddc $dst, $src", (CFromPtr CheriOpnd:$dst, C0, GPR64Opnd:$src), 1>;
 
+// Must come before cfromddc to have a higher priority when disassembling
 // TODO: once $c0 is a null register change this
-// def : InstAlias<"cgetnull $dst", (CFromPtr CheriOpnd:$dst, C0, ZERO_64), 1>;
+def : InstAlias<"cgetnull $dst", (CFromPtr CheriOpnd:$dst, C0, ZERO_64), 1>;
 // TODO: enable these once we have a null register:
 // def : InstAlias<"cgetnull $dst", (CMove CheriOpnd:$dst, C0), 1>;
 // def : InstAlias<"cfromint $dst, $src", (CIncOffset CheriOpnd:$dst, C0, GPR64Opnd:$src), 1>;
+
+// So that we can use ptr -> int without a warning that $c0 access is deprecated in .s files
+def : InstAlias<"cfromddc $dst, $src", (CFromPtr CheriOpnd:$dst, C0, GPR64Opnd:$src), 1>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Atomic operations.
