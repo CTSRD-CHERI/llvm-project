@@ -38,7 +38,7 @@ handler set_handler_atomic(handler func) noexcept {
   // ASM-LABEL: _Z18set_handler_atomicU3capPFvvE:
   // ASM: ld      [[GLOBAL_ADDR:\$[0-9]+]], %got_page(_ZL9__handler)($1)
   // ASM: daddiu  [[GLOBAL_ADDR]], [[GLOBAL_ADDR]], %got_ofst(_ZL9__handler)
-  // ASM: cfromptr        $c1, $c0, [[GLOBAL_ADDR]]
+  // ASM: cfromddc        $c1, [[GLOBAL_ADDR]]
   // ASM: csetbounds      $c3, $c1, 16
   // ASM: ld      [[GLOBAL_ADDR:\$[0-9]+]], %call16(__atomic_exchange)($1)
   // ASM: cgetpccsetoffset        $c1, [[GLOBAL_ADDR]]
@@ -64,7 +64,7 @@ handler get_handler_atomic() noexcept {
   // ASM-LABEL: _Z18get_handler_atomicv:
   // ASM: ld      $2, %got_page(_ZL9__handler)($1)
   // ASM: daddiu  $2, $2, %got_ofst(_ZL9__handler)
-  // ASM: cfromptr        $c1, $c0, $2
+  // ASM: cfromddc        $c1, $2
   // ASM: csetbounds      $c3, $c1, $25
   // ASM: ld      $2, %call16(__atomic_load)($1)
   // ASM: cgetpccsetoffset        $c1, $2
@@ -94,7 +94,7 @@ handler set_handler_c11_atomic(handler func) noexcept {
   // ASM-LABEL: _Z22set_handler_c11_atomicPFvvE:
   // ASM: ld      [[GLOBAL_ADDR:\$[0-9]+]], %got_page(_ZL16__atomic_handler)($1)
   // ASM: daddiu  [[GLOBAL_ADDR]], [[GLOBAL_ADDR]], %got_ofst(_ZL16__atomic_handler)
-  // ASM: cfromptr        $c1, $c0, [[GLOBAL_ADDR]]
+  // ASM: cfromddc        $c1, [[GLOBAL_ADDR]]
   // ASM: csetbounds      $c3, $c1, $25
   // ASM: ld      [[GLOBAL_ADDR:\$[0-9]+]], %call16(__atomic_exchange)($1)
   // ASM: cgetpccsetoffset        $c1, [[GLOBAL_ADDR]]
@@ -121,7 +121,7 @@ handler get_handler_c11_atomic() noexcept {
   // ASM-LABEL: _Z22get_handler_c11_atomicv:
   // ASM: ld      [[GLOBAL_ADDR:\$[0-9]+]], %got_page(_ZL16__atomic_handler)($1)
   // ASM: daddiu  [[GLOBAL_ADDR]], [[GLOBAL_ADDR]], %got_ofst(_ZL16__atomic_handler)
-  // ASM: cfromptr        $c1, $c0, [[GLOBAL_ADDR]]
+  // ASM: cfromddc        $c1, [[GLOBAL_ADDR]]
   // ASM: csetbounds      $c3, $c1, $25
   // ASM: ld      $2, %call16(__atomic_load)($1)
   // ASM: cgetpccsetoffset        $c1, $2

@@ -25,7 +25,7 @@ IntptrStruct set_int() {
   // CHECK: %.fca.0.insert = insertvalue { i8 addrspace(200)* } undef, i8 addrspace(200)* [[VAR0]], 0
   // CHECK: ret { i8 addrspace(200)* } %.fca.0.insert
   // ASM-LABEL: set_int
-  // ASM:       cfromptr        $c1, $c0, $zero
+  // ASM:       cgetnull        $c1
   // ASM-NEXT:  cjr     $c17
   // ASM-NEXT:  csetoffset      $c3, $c1, $zero
 }
@@ -92,7 +92,7 @@ IntCapSizeUnion intcap_size_union() {
   // ASM:       ld      [[SIZE_PTR:\$[0-9]+]], %got_disp(.size.global)($1)
   // ASM-NEXT:  ld      [[GLOBAL_PTR:\$[0-9]+]], %got_disp(global)($1)
   // ASM-NEXT:  ld      [[LENGTH:\$[0-9]+]], 0([[SIZE_PTR]])
-  // ASM-NEXT:  cfromptr        $c1, $c0, [[GLOBAL_PTR]]
+  // ASM-NEXT:  cfromddc        $c1, [[GLOBAL_PTR]]
   // ASM-NEXT:  cjr     $c17
   // ASM-NEXT:  csetbounds      $c3, $c1, [[LENGTH]]
 }
@@ -118,7 +118,7 @@ GreaterThanIntCapSizeUnion greater_than_intcap_size_union() {
   // ASM:       ld      $2, %got_disp(.size.global)($1)
   // ASM-NEXT:  ld      $1, %got_disp(global)($1)
   // ASM-NEXT:  ld      $2, 0($2)
-  // ASM-NEXT:  cfromptr        $c1, $c0, $1
+  // ASM-NEXT:  cfromddc        $c1, $1
   // ASM-NEXT:  csetbounds      $c1, $c1, $2
   // ASM-NEXT:  cjr     $c17
   // ASM-NEXT:  csc     $c1, $zero, 0($c3)
@@ -171,7 +171,7 @@ ThreeLongs three_longs() {
   // For cheri256 clang will inline the memcpy from a global (since it is smaller than 1 cap)
   // CHERI256-ASM:      ld	[[REG:\$[0-9]+]], %got_page(.Lthree_longs.t)(${{.+}})
   // CHERI256-ASM-NEXT: daddiu	[[REG]], [[REG]], %got_ofst(.Lthree_longs.t)
-  // CHERI256-ASM-NEXT: cfromptr	$c1, $c0, [[REG]]
+  // CHERI256-ASM-NEXT: cfromddc	$c1, [[REG]]
   // CHERI256-ASM-NEXT: csetbounds	$c1, $c1, 24
   // CHERI256-ASM-NEXT: cld	$1, $zero, 0($c1)
   // CHERI256-ASM-NEXT: cld	$2, $zero, 16($c1)

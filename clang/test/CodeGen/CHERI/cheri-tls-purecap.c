@@ -12,7 +12,7 @@ _Thread_local int dtors;
 int test(void) {
   // CHECK: rdhwr   $3, $29
   // CHECK: daddu   [[TLS_ADDR:\$[0-9]+]], $3, ${{[0-9]+}}
-  // CHECK-O0: cfromptr $c2, $c0, [[TLS_ADDR]]
+  // CHECK-O0: cfromddc $c2, [[TLS_ADDR]]
   // CHECK: lw $2, 0([[TLS_ADDR]])
   int *i = &dtors;
   return *i;
