@@ -4652,6 +4652,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   }
   for (const Arg *A : Args.filtered(options::OPT_mllvm)) {
     A->claim();
+    if (StringRef(A->getValue(0)).startswith("-cheri-cap-table")) {
+      D.Diag(diag::err_drv_unsupported_opt_with_suggestion)
+          << A->getAsString(Args) << StringRef(A->getValue(0));
+    }
 
     // We translate this by hand to the -cc1 argument, since nightly test uses
     // it and developers have been trained to spell it with -mllvm. Both
