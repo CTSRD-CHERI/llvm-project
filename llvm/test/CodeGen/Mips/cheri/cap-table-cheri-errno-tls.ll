@@ -1,5 +1,5 @@
-; RUN: %cheri_purecap_llc -o - -O2 -cheri-cap-table=false %s | FileCheck %s
-; RUN: %cheri_purecap_llc -o - -O2 -cheri-cap-table=true %s | FileCheck %s
+; RUN: %cheri_purecap_llc -o - -O2 -cheri-cap-table-abi=legacy %s | FileCheck %s
+; RUN: %cheri_purecap_llc -o - -O2 -cheri-cap-table-abi=plt %s | FileCheck %s
 ; ModuleID = '/home/alr48/obj/build-postmerge/llvm-256-build/cheritest_libcheri-d2fe5e-bugpoint-reduce.ll-reduced-simplified.bc'
 source_filename = "cheritest_libcheri-d2fe5e-bugpoint-reduce.ll-output-14b49b1.bc"
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
