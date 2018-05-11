@@ -1495,6 +1495,58 @@ void Clang::AddAArch64TargetArgs(const ArgList &Args,
   }
 }
 
+static void addCheriFlags(const ArgList &Args, ArgStringList &CmdArgs,
+                          StringRef ABIName) {
+  if (Arg *A = Args.getLastArg(options::OPT_cheri, options::OPT_cheri_EQ)) {
+    CmdArgs.push_back("-cheri-size");
+    if (A->getOption().matches(options::OPT_cheri))
+      CmdArgs.push_back("128");
+    else {
+      CmdArgs.push_back(Args.MakeArgString(A->getValue()));
+    }
+  }
+
+  // Add the -cap-table-abi flags (ignore for non-purecap ABIs)
+  bool IsCapTable = false;
+  StringRef DefaultCapTableABI = "pcrel";
+  if (Arg *A = Args.getLastArg(options::OPT_cheri_cap_table_abi)) {
+    StringRef v = A->getValue();
+    if (ABIName == "purecap") {
+      CmdArgs.push_back("-mllvm");
+      CmdArgs.push_back(Args.MakeArgString("-cheri-cap-table-abi=" + v));
+    }
+    IsCapTable = v != "legacy";
+    A->claim();
+  } else {
+    // XXXAR: The following is a hack for jenkins:
+    StringRef CapTableEnv = getenv("CHERI_CAP_TABLE");
+    bool CapTableDefault = false;
+    if (!CapTableEnv.empty() && CapTableEnv != "0" && CapTableEnv != "false" &&
+        CapTableEnv != "no")
+      CapTableDefault = true;
+    // HACK to switch the default for a bunch of jenkins jobs without
+    // having to modify the cflags:
+    if (getenv("ISA") == StringRef("cap-table") ||
+        getenv("LLVM_BRANCH") == StringRef("cap-table"))
+      CapTableDefault = true;
+
+    IsCapTable = Args.hasFlag(options::OPT_cheri_cap_table,
+                              options::OPT_no_cheri_cap_table, CapTableDefault);
+    StringRef ChosenABI = IsCapTable ? DefaultCapTableABI : "legacy";
+    if (ABIName == "purecap") {
+      CmdArgs.push_back("-mllvm");
+      CmdArgs.push_back(
+          Args.MakeArgString("-cheri-cap-table-abi=" + ChosenABI));
+    }
+  }
+  bool MxCapTable = Args.hasFlag(options::OPT_cheri_large_cap_table,
+                                 options::OPT_no_cheri_large_cap_table, false);
+  if (IsCapTable) {
+    CmdArgs.push_back("-mllvm");
+    CmdArgs.push_back(MxCapTable ? "-mxcaptable=true" : "-mxcaptable=false");
+  }
+}
+
 void Clang::AddMIPSTargetArgs(const ArgList &Args,
                               ArgStringList &CmdArgs,
                               bool IsNonPic, const JobAction &JA) const {
@@ -1643,53 +1695,8 @@ void Clang::AddMIPSTargetArgs(const ArgList &Args,
     } else
       D.Diag(diag::warn_target_unsupported_compact_branches) << CPUName;
   }
-  if (Arg *A = Args.getLastArg(options::OPT_cheri, options::OPT_cheri_EQ)) {
-      CmdArgs.push_back("-cheri-size");
-    if (A->getOption().matches(options::OPT_cheri))
-      CmdArgs.push_back("128");
-    else {
-      CmdArgs.push_back(Args.MakeArgString(A->getValue()));
-    }
-  }
 
-  // Add the -cap-table-abi flags (ignore for non-purecap ABIs)
-  bool IsCapTable = false;
-  StringRef DefaultCapTableABI = "pcrel";
-  if (Arg *A = Args.getLastArg(options::OPT_cheri_cap_table_abi)) {
-    StringRef v = A->getValue();
-    if (ABIName == "purecap") {
-      CmdArgs.push_back("-mllvm");
-      CmdArgs.push_back(Args.MakeArgString("-cheri-cap-table-abi=" + v));
-    }
-    IsCapTable = v != "legacy";
-    A->claim();
-  } else {
-    // XXXAR: The following is a hack for jenkins:
-    StringRef CapTableEnv = getenv("CHERI_CAP_TABLE");
-    bool CapTableDefault = false;
-    if (!CapTableEnv.empty() && CapTableEnv != "0" && CapTableEnv != "false" &&
-        CapTableEnv != "no")
-      CapTableDefault = true;
-    // HACK to switch the default for a bunch of jenkins jobs without
-    // having to modify the cflags:
-    if (getenv("ISA") == StringRef("cap-table") ||
-        getenv("LLVM_BRANCH") == StringRef("cap-table"))
-      CapTableDefault = true;
-
-    IsCapTable = Args.hasFlag(options::OPT_cheri_cap_table,
-                              options::OPT_no_cheri_cap_table, CapTableDefault);
-    StringRef ChosenABI = IsCapTable ? DefaultCapTableABI : "legacy";
-    if (ABIName == "purecap") {
-      CmdArgs.push_back("-mllvm");
-      CmdArgs.push_back(Args.MakeArgString("-cheri-cap-table-abi=" + ChosenABI));
-    }
-  }
-  bool MxCapTable = Args.hasFlag(options::OPT_cheri_large_cap_table,
-                                 options::OPT_no_cheri_large_cap_table, false);
-  if (IsCapTable) {
-    CmdArgs.push_back("-mllvm");
-    CmdArgs.push_back(MxCapTable ? "-mxcaptable=true" : "-mxcaptable=false");
-  }
+  addCheriFlags(Args, CmdArgs, ABIName);
 }
 
 void Clang::AddPPCTargetArgs(const ArgList &Args,
@@ -5296,6 +5303,8 @@ void ClangAs::AddMIPSTargetArgs(const ArgList &Args,
 
   CmdArgs.push_back("-target-abi");
   CmdArgs.push_back(ABIName.data());
+
+  addCheriFlags(Args, CmdArgs, ABIName);
 }
 
 void ClangAs::AddX86TargetArgs(const ArgList &Args,
