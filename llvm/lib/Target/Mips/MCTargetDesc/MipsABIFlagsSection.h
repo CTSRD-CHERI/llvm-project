@@ -143,9 +143,9 @@ public:
   }
 
   template <class PredicateLibrary>
-  void setISAExtensionFromPredicates(const PredicateLibrary &P, Optional<MipsABIInfo> ABI) {
-    if (ABI && ABI->IsCheriPureCap()) {
-      ISAExtension = CheriPurecapISA_EXT(*ABI);
+  void setISAExtensionFromPredicates(const PredicateLibrary &P, const MipsABIInfo& ABI) {
+    if (ABI.IsCheriPureCap()) {
+      ISAExtension = CheriPurecapISA_EXT(ABI);
     } else if (P.hasCnMips())
       ISAExtension = Mips::AFL_EXT_OCTEON;
     else
@@ -189,7 +189,7 @@ public:
   }
 
   template <class PredicateLibrary>
-  void setAllFromPredicates(const PredicateLibrary &P, Optional<MipsABIInfo> ABI) {
+  void setAllFromPredicates(const PredicateLibrary &P, const MipsABIInfo& ABI) {
     setISALevelAndRevisionFromPredicates(P);
     setGPRSizeFromPredicates(P);
     setCPR1SizeFromPredicates(P);

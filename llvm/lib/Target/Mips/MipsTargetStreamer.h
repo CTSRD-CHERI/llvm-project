@@ -164,7 +164,7 @@ public:
   template <class PredicateLibrary>
   void updateABIInfo(const PredicateLibrary &P) {
     ABI = P.getABI();
-    ABIFlagsSection.setAllFromPredicates(P, ABI);
+    ABIFlagsSection.setAllFromPredicates(P, getABI());
   }
 
   MipsABIFlagsSection &getABIFlagsSection() { return ABIFlagsSection; }
