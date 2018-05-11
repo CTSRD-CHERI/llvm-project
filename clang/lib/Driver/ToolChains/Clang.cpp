@@ -1652,33 +1652,43 @@ void Clang::AddMIPSTargetArgs(const ArgList &Args,
     }
   }
 
-  // XXXAR: TODO change this default instead of using env var
-  StringRef CapTableEnv = getenv("CHERI_CAP_TABLE");
-  bool CapTableDefault = false;
-  if (!CapTableEnv.empty() && CapTableEnv != "0" && CapTableEnv != "false" &&
-      CapTableEnv != "no")
-    CapTableDefault = true;
-  // HACK to switch the default for a bunch of jenkins jobs without
-  // having to modify the cflags:
-  if (getenv("ISA") == StringRef("cap-table") ||
-      getenv("LLVM_BRANCH") == StringRef("cap-table"))
-    CapTableDefault = true;
-
-  bool EnableCapTable =
-      Args.hasFlag(options::OPT_cheri_cap_table,
-                   options::OPT_no_cheri_cap_table, CapTableDefault);
-  CmdArgs.push_back("-mllvm");
-  CmdArgs.push_back(EnableCapTable ? "-cheri-cap-table=true"
-                                   : "-cheri-cap-table=false");
+  // Add the -cap-table-abi flags (ignore for non-purecap ABIs)
+  bool IsCapTable = false;
+  StringRef DefaultCapTableABI = "pcrel";
   if (Arg *A = Args.getLastArg(options::OPT_cheri_cap_table_abi)) {
-      StringRef v = A->getValue();
+    StringRef v = A->getValue();
+    if (ABIName == "purecap") {
       CmdArgs.push_back("-mllvm");
       CmdArgs.push_back(Args.MakeArgString("-cheri-cap-table-abi=" + v));
-      bool MxCapTable = Args.hasFlag(options::OPT_cheri_large_cap_table,
-				     options::OPT_no_cheri_large_cap_table, false);
+    }
+    IsCapTable = v != "legacy";
+    A->claim();
+  } else {
+    // XXXAR: The following is a hack for jenkins:
+    StringRef CapTableEnv = getenv("CHERI_CAP_TABLE");
+    bool CapTableDefault = false;
+    if (!CapTableEnv.empty() && CapTableEnv != "0" && CapTableEnv != "false" &&
+        CapTableEnv != "no")
+      CapTableDefault = true;
+    // HACK to switch the default for a bunch of jenkins jobs without
+    // having to modify the cflags:
+    if (getenv("ISA") == StringRef("cap-table") ||
+        getenv("LLVM_BRANCH") == StringRef("cap-table"))
+      CapTableDefault = true;
+
+    IsCapTable = Args.hasFlag(options::OPT_cheri_cap_table,
+                              options::OPT_no_cheri_cap_table, CapTableDefault);
+    StringRef ChosenABI = IsCapTable ? DefaultCapTableABI : "legacy";
+    if (ABIName == "purecap") {
       CmdArgs.push_back("-mllvm");
-      CmdArgs.push_back(MxCapTable ? "-mxcaptable=true" : "-mxcaptable=false");
-      A->claim();
+      CmdArgs.push_back(Args.MakeArgString("-cheri-cap-table-abi=" + ChosenABI));
+    }
+  }
+  bool MxCapTable = Args.hasFlag(options::OPT_cheri_large_cap_table,
+                                 options::OPT_no_cheri_large_cap_table, false);
+  if (IsCapTable) {
+    CmdArgs.push_back("-mllvm");
+    CmdArgs.push_back(MxCapTable ? "-mxcaptable=true" : "-mxcaptable=false");
   }
 }
 

@@ -1,5 +1,5 @@
-// RUN: %cheri_purecap_cc1 %s -mllvm -mxgot -mllvm -cheri-cap-table -x c -S -O2 -o -
-// RUN: %cheri_purecap_cc1 %s -mllvm -mxgot -mllvm -cheri-cap-table -x c -S -O2 -o - | FileCheck %s
+// RUN: %cheri_purecap_cc1 %s -mllvm -mxgot -mllvm -cheri-cap-table-abi=plt -x c -S -O2 -o -
+// RUN: %cheri_purecap_cc1 %s -mllvm -mxgot -mllvm -cheri-cap-table-abi=plt -x c -S -O2 -o - | FileCheck %s
 
 #include <cheri_init_globals.h>
 
