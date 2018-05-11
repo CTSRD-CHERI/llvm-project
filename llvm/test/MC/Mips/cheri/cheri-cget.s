@@ -125,7 +125,7 @@
 
 
 # Check that cgetnull $cN is an alias for cfromptr $cN, $c0, $zero:
-# CHECK:      cfromptr  $c2, $c0, $zero
+# CHECK:      cfromddc  $c2, $zero
 # CHECK-SAME: encoding: [0x48,0x02,0x00,0x13]
 	cfromptr	$c2, $c0, $zero
 # CHECK:      cgetnull  $c1
@@ -134,3 +134,13 @@
 # Both should disassemble to cgetnull:
 # DUMP-NEXT: 48 02 00 13 	cgetnull	$c2
 # DUMP-NEXT: 48 01 00 13 	cgetnull	$c1
+
+# CHECK:      cfromddc  $c3, $4
+# CHECK-SAME: encoding: [0x48,0x03,0x01,0x13]
+# DUMP-NEXT: 48 03 01 13 cfromddc $c3, $4
+	cfromddc	$c3, $4
+	# Check that cfromddc	$c4, $zero this disassembles to cgetnull
+# CHECK:      cfromddc	$c4, $zero
+# CHECK-SAME: encoding: [0x48,0x04,0x00,0x13]
+# DUMP-NEXT: 48 04 00 13 cgetnull $c4
+	cfromddc	$c4, $zero
