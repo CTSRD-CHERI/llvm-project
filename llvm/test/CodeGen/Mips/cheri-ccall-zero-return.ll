@@ -17,7 +17,7 @@ entry:
 define chericcallcc i32 @cgetnumber(i8 addrspace(200)* inreg nocapture readnone %c.coerce0, i8 addrspace(200)* inreg nocapture readnone %c.coerce1) #0 {
 entry:
 ; The real return value goes in $v0, check that $c3 and $v1 are zeroed:
-; CHECK: cfromptr $c3, $c0, $zero
+; CHECK: cgetnull $c3
 ; CHECK: daddiu	$3, $zero, 0
   ret i32 42
 }

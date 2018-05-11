@@ -17,7 +17,7 @@ entry:
 ; CHECK-NEXT:	daddiu	$1, $1, %capcall_lo(b)
 ; CHECK-NEXT:	clc	$c12, $1, 0($c26)
 ; CHECK-NEXT:	cjalr	$c12, $c17
-; CHECK-NEXT:	cfromptr	$c13, $c0, $zero
+; CHECK-NEXT:	cgetnull	$c13
 ; CHECK-NEXT:	clc	$c17, $zero, 0($c11)    # [[$CAP_SIZE]]-byte Folded Reload
 ; CHECK-NEXT:	cjr	$c17
 ; CHECK-NEXT:	cincoffset	$c11, $c11, [[$CAP_SIZE]]

@@ -15,7 +15,7 @@ entry:
   %0 = bitcast i8 addrspace(200)* addrspace(200)* %v to i8 addrspace(200)*
   ; Load the address of va_cpy
   ; CHECK: 	ld	$1, %got_disp(va_cpy)($1)
-  ; CHECK: cfromptr $c[[CPYADDR:[0-9]+]], $c0, $1
+  ; CHECK: cfromddc $c[[CPYADDR:[0-9]+]], $1
   ; Store the va_list (passed in $c13) in the global
   ; CHECK: csc	$c13, $zero, 0($c[[CPYADDR]])
   %1 = addrspacecast i8 addrspace(200)* %0 to i8*
@@ -50,7 +50,7 @@ entry:
   %v = alloca i8 addrspace(200)*, align 32, addrspace(200)
   ; Load the address of the global
   ; CHECK: 	ld	$1, %got_disp(va_cpy)($1)
-  ; CHECK: cfromptr $c1, $c0, $1
+  ; CHECK: cfromddc $c1, $1
   ; Load the va_list into the return capability
   ; CHECK: clc	$c3, $zero, 0($c1)
   %0 = bitcast i8 addrspace(200)* addrspace(200)* %v to i8 addrspace(200)*

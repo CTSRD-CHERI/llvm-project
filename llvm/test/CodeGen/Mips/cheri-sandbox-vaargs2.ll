@@ -25,7 +25,7 @@ entry:
   %xo_vap1 = addrspacecast i8 addrspace(200)* addrspace(200)* %xo_vap to i8*
   ; Load the address of b
   ; CHECK: ld	$1, %got_disp(b)($1)
-  ; CHECK: cfromptr $c1, $c0, $1
+  ; CHECK: cfromddc $c1, $1
   ; Store the va_list (passed in $c13) in the global
   ; CHECK: csc	$c13
   call void @llvm.va_start.p200i8(i8* %xo_vap1)

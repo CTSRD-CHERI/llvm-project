@@ -16,7 +16,7 @@ define void @fn1() #0 {
 entry:
   ; Load the address of a
   ; CHECK: ld	$[[AADDR:[0-9]+]], %got_disp(a)($gp)
-  ; CHECK: cfromptr $c1, $c0, $[[AADDR]]
+  ; CHECK: cfromddc $c1, $[[AADDR]]
   ; CHECK: ld	$[[FN2ADDR:([0-9]+|sp)]], %call16(fn2)($gp)
   ; Call fn2
   ; CHECK: cgetpccsetoffset	$c12, $[[FN2ADDR]]

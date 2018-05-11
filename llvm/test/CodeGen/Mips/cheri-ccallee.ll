@@ -6,7 +6,7 @@ target triple = "cheri-unknown-freebsd"
 ; Function Attrs: nounwind
 define chericcallcce void @fish() #0 {
 entry:
-  ; CHECK: cfromptr $c3, $c0, $zero
+  ; CHECK: cgetnull $c3
   ; CHECK: daddiu	$2, $zero, 0
   ; CHECK: daddiu	$3, $zero, 0
   ret void

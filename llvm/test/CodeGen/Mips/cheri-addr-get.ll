@@ -22,7 +22,7 @@ define i64 @null_get_vaddr() #1 {
   ; OPT-NEXT: daddiu  $4, $zero, 0
 
   ; NOOPT-LABEL: null_get_vaddr: # @null_get_vaddr
-  ; NOOPT: cfromptr        $c1, $c0, $zero
+  ; NOOPT: cgetnull $c1
   ; NOOPT: cgetbase $2, $c1
   ; NOOPT: cgetoffset      $3, $c1
   ; NOOPT: daddu   $2, $2, $3
@@ -45,7 +45,7 @@ define void @infer_values_from_null_set_offset() #1 {
   ; OPT-NEXT: daddiu  $4, $zero, 50
 
   ; NOOPT-LABEL: infer_values_from_null_set_offset: # @infer_values_from_null_set_offset
-  ; NOOPT: cfromptr        $c1, $c0, $zero
+  ; NOOPT: cgetnull $c1
   ; NOOPT: daddiu  $2, $zero, 50
   ; NOOPT: csetoffset      $c1, $c1, $2
   ; NOOPT: cgetbase $2, $c1

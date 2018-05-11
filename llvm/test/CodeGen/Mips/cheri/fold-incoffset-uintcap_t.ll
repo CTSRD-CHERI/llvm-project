@@ -32,7 +32,7 @@ entry:
   ; CHECK-LABEL: add_cap
   ; CHECK: daddiu $1, $zero, 1024
   ; CHECK: jr $ra
-  ; CHECK: cfromptr $c3, $c0, $1
+  ; CHECK: cfromddc $c3, $1
 }
 
 define i8 addrspace(200)* @add_uintcap_t() #0 {
@@ -52,7 +52,7 @@ entry:
   ; IR: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 1024)
 
   ; CHECK-LABEL: add_uintcap_t
-  ; CHECK: cfromptr	$c1, $c0, $zero
+  ; CHECK: cgetnull $c1
   ; CHECK: daddiu	$1, $zero, 1024
   ; CHECK: jr	$ra
   ; CHECK: csetoffset	$c3, $c1, $1

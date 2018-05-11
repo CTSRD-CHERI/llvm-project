@@ -20,7 +20,7 @@ define i32 @a(i64 addrspace(200) *, i32 addrspace(200) *, i32 addrspace(200) *,
 ; CHECK-NEXT:    ld $1, %call16(b)($gp)
 ; CHECK-NEXT:    cgetpccsetoffset $c12, $1
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    cfromptr $c13, $c0, $zero
+; CHECK-NEXT:    cgetnull $c13
 ; CHECK-NEXT:    clc $c17, $zero, 0($c11)
 ; CHECK-NEXT:    cld $gp, $zero, [[GP_OFFSET]]($c11) # 8-byte Folded Reload
 ; CHECK-NEXT:    cjr $c17

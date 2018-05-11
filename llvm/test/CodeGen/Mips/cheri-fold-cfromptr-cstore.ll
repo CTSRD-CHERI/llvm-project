@@ -15,6 +15,7 @@ entry:
   %0 = load i32, i32* @b, align 4, !tbaa !1
   store i32 %0, i32 addrspace(200)* getelementptr (%struct.int_struct, %struct.int_struct addrspace(200)* addrspacecast (%struct.int_struct* @a to %struct.int_struct addrspace(200)*), i64 0, i32 0), align 4, !tbaa !5
   ; CHECK-NOT: cfromptr
+  ; CHECK-NOT: cfromddc
   ; CHECK-NOT: csw
   ret void
 }

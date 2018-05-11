@@ -119,7 +119,7 @@ entry:
 ; LEGACY-NEXT: ld	$1, %got_disp(global)($1)
 ; LEGACY-NEXT:        #   fixup A - offset: 0, value: %got_disp(global), kind: fixup_Mips_GOT_DISP
 ; LEGACY-NEXT: ld	$2, 0($2)
-; LEGACY-NEXT: cfromptr	$c1, $c0, $1
+; LEGACY-NEXT: cfromddc	$c1, $1
 ; LEGACY-NEXT: csetbounds	$c1, $c1, $2
 ; LEGACY-NEXT: cjr	$c17
 ; LEGACY-NEXT: cld	$2, $zero, 0($c1)

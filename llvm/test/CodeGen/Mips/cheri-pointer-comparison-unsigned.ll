@@ -46,7 +46,7 @@ entry:
 %cmp = icmp ult i8 addrspace(200)* %0, %1
 br i1 %cmp, label %if.then, label %if.end
 
-; CHECK: cfromptr        $c1, $c0, $zero
+; CHECK:      cgetnull $c1
 ; CHECK-NEXT: lui     $1, 1
 ; CHECK-NEXT: daddiu  $1, $1, 8243
 ; CHECK-NEXT: dsll    $1, $1, 16

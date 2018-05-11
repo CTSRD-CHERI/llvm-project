@@ -18,7 +18,7 @@ entry:
   ;CHECK-NEXT: clcbi $c12, %capcall20(printf)($c26)
   ;CHECK-NEXT: daddiu	$1, $zero, 0
   ;CHECK-NEXT: cjalr	$c12, $c17
-  ;CHECK-NEXT: cfromptr	$c13, $c0, $zero
+  ;CHECK-NEXT: cgetnull $c13
 }
 
 declare i32 @printf(i8 addrspace(200)*, ...) #1

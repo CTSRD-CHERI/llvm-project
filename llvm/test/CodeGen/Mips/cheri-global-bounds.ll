@@ -12,7 +12,7 @@ target triple = "cheri-unknown-freebsd"
 define void @foo(i32 signext %y) #0 {
 entry:
   ; MIPS: sw	$4, 0($1)
-  ; CHERI: cfromptr	$c1, $c0, $1
+  ; CHERI: cfromddc	$c1, $1
   ; CHERI: csetbounds	$c1, $c1, $2
   ; CHERI: csw	$4, $zero, 0($c1)
 
