@@ -4663,6 +4663,11 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       D.Diag(diag::err_drv_unsupported_opt_with_suggestion)
           << A->getAsString(Args) << StringRef(A->getValue(0));
     }
+    if (StringRef(A->getValue(0)).startswith("-mxcaptable")) {
+      StringRef Replacement = StringRef(A->getValue(0)) == "-mxcaptable=false" ? "-no-mxcaptable" : "-mxcaptable";
+      D.Diag(diag::err_drv_unsupported_opt_with_suggestion)
+          << A->getAsString(Args) << Replacement;
+    }
 
     // We translate this by hand to the -cc1 argument, since nightly test uses
     // it and developers have been trained to spell it with -mllvm. Both
