@@ -113,16 +113,18 @@
 # WARN-NEXT:	CMove	$c1, $c30
 	CMove	$c1, $c30
 
-# WARN: warning: Direct access to EPCC is deprecated. Use C(Get/Set)EPCC instead.
+# EPCC can no longer be accessed using $c31
+
+# WARN: [[@LINE+2]]:13: error: Direct access to EPCC is deprecated. Use C(Get/Set)EPCC instead.
 # WARN-NEXT:	CMove	$c1, $epcc
 	CMove	$c1, $epcc
-# WARN: warning: Direct access to EPCC is deprecated. Use C(Get/Set)EPCC instead.
+# WARN: [[@LINE+2]]:8: error: Direct access to EPCC is deprecated. Use C(Get/Set)EPCC instead.
 # WARN-NEXT:	CMove	$epcc, $c1
 	CMove	$epcc, $c1
-# WARN: warning: Direct access to EPCC is deprecated. Use C(Get/Set)EPCC instead.
+# WARN: [[@LINE+2]]:8: error: Direct access to EPCC is deprecated. Use C(Get/Set)EPCC instead.
 # WARN-NEXT:	CMove	$c31, $c1
 	CMove	$c31, $c1
-# WARN: warning: Direct access to EPCC is deprecated. Use C(Get/Set)EPCC instead.
+# WARN: [[@LINE+2]]:13: error: Direct access to EPCC is deprecated. Use C(Get/Set)EPCC instead.
 # WARN-NEXT:	CMove	$c1, $c31
 	CMove	$c1, $c31
 

@@ -5798,22 +5798,29 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name) {
       CC = IntVal;
     } else {
       CC = StringSwitch<unsigned>(Name)
-        .Case("ddc", 0)
-        .Case("idc", 26)
-        .Case("kr1c", 27)
-        .Case("kr2c", 28)
-        .Case("kcc", 29)
-        .Case("kdc", 30)
-        .Case("epcc", 31)
-        .Default(-1);
+               .Case("ddc", 0)
+               .Case("idc", 26)
+               .Case("kr1c", 27)
+               .Case("kr2c", 28)
+               .Case("kcc", 29)
+               .Case("kdc", 30)
+               .Case("epcc", 31)
+               .Default(-1);
     }
   }
-  auto BadReg = [&](const Twine & Reg, const char* Replacement = nullptr) {
-      Warning(Parser.getTok().getLoc(), "Direct access to " + Reg +
-        " is deprecated. Use C(Get/Set)" + (Replacement ? Replacement : Reg) +
-        " instead.");
-      // TODO: turn this into an error and return -2
+  auto BadReg = [&](const Twine &Reg, const char *Replacement = nullptr,
+                    bool Allowed = true) {
+    const std::string Msg =
+        ("Direct access to " + Reg + " is deprecated. Use C(Get/Set)" +
+         (Replacement ? Replacement : Reg) + " instead.")
+            .str();
+    if (Allowed) {
+      Warning(Parser.getTok().getLoc(), Msg);
       return CC;
+    } else {
+      Error(Parser.getTok().getLoc(), Msg, Parser.getTok().getLocRange());
+      return -2;
+    }
   };
   switch (CC) {
     case 0: return BadReg("DDC", "Default");
@@ -5821,7 +5828,7 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name) {
     case 28: return BadReg("KR2C");
     case 29: return BadReg("KCC");
     case 30: return BadReg("KDC");
-    case 31: return BadReg("EPCC");
+    case 31: return BadReg("EPCC", nullptr, /*Allowed=*/false);
     default: break;
   }
   return CC;
