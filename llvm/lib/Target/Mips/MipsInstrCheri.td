@@ -471,7 +471,7 @@ def : Pat<(int_mips_kr1c_get), (CIncOffset C27, ZERO_64)>;
 def : Pat<(int_mips_kr2c_get), (CIncOffset C28, ZERO_64)>;
 def : Pat<(int_mips_kcc_get), (CIncOffset C29, ZERO_64)>;
 def : Pat<(int_mips_kdc_get), (CIncOffset C30, ZERO_64)>;
-def : Pat<(int_mips_epcc_get), (CIncOffset C31, ZERO_64)>;
+def : Pat<(int_mips_epcc_get), (CReadHwr CAPHWR31)>;
 def : Pat<(int_cheri_stack_cap_get), (CIncOffset C11, ZERO_64)>;
 
 
