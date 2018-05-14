@@ -1,5 +1,5 @@
 # RUN: %cheri_llvm-mc %s -show-encoding | FileCheck %s
-# RUN: %cheri_llvm-mc %s -show-encoding 2>&1 -defsym=BAD=1| FileCheck %s -check-prefix=WARN
+# RUN: not %cheri_llvm-mc %s -show-encoding 2>&1 -defsym=BAD=1 | FileCheck %s -check-prefix=WARN
 # Check that llvm-objdump doesn't crash the disassembler due to invalid register names in tablegen:
 # RUN: %cheri_llvm-mc %s -filetype=obj -o - | llvm-objdump -d - > /dev/null
 #
@@ -125,12 +125,16 @@
 # WARN: warning: Direct access to EPCC is deprecated. Use C(Get/Set)EPCC instead.
 # WARN-NEXT:	CMove	$c1, $c31
 	CMove	$c1, $c31
+
+# Also don't allow just numeric registers since that bypasses the checks added in
+# matchCheriRegisterName
+# WARN: [[@LINE+2]]:8: error: expected general-purpose CHERI register operand
+# WARN-NEXT:	CMove	$31, $c1
+	CMove	$31, $c1
+# WARN: [[@LINE+2]]:13: error: expected general-purpose CHERI register operand
+# WARN-NEXT:	CMove	$c1, $31
+	CMove	$c1, $31
 .endif
-
-# FIXME: should this be an error since it bypasses the warnings?
-# but it uses createNumericReg(27, ...)
-#	CMove	$c1, $27
-
 
 # Check that we can assemble the new CBuildCap/CCopyType and CTestSubset instrs
 	CBuildCap	$c1, $c2, $c8

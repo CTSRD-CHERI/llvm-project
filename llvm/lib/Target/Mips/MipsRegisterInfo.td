@@ -310,6 +310,7 @@ let Namespace = "Mips" in {
   def C28 : CAP<28, "C28">, DwarfRegNum<[100]>;
   def C29 : CAP<29, "C29">, DwarfRegNum<[101]>;
   def C30 : CAP<30, "C30">, DwarfRegNum<[102]>;
+  // TODO: turn this into CNULL
   def C31 : CAP<31, "C31">, DwarfRegNum<[103]>;
 
   // Octeon multiplier and product registers
@@ -565,6 +566,7 @@ def GPR64AsmOperand : MipsAsmRegOperand {
 def CheriAsmOperand : MipsAsmRegOperand {
   let Name = "CheriAsmReg";
   let PredicateMethod = "isCheriAsmReg";
+  let DiagnosticType = "CheriAsmReg";
 }
 
 def GPR32ZeroAsmOperand : MipsAsmRegOperand {

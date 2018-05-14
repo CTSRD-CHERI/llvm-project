@@ -775,10 +775,11 @@ public:
     RegKind_Cheri = 2048,
     RegKind_CheriHWRegs = 4096,
     /// Potentially any (e.g. $1)
+    /// XXXAR: but not CHERI since those should always be prefixed
     RegKind_Numeric = RegKind_GPR | RegKind_FGR | RegKind_FCC | RegKind_MSA128 |
                       RegKind_MSACtrl | RegKind_COP2 | RegKind_ACC |
                       RegKind_CCR | RegKind_HWRegs | RegKind_COP3 | RegKind_COP0
-                      | RegKind_Cheri | RegKind_CheriHWRegs
+                      /* | RegKind_Cheri */ | RegKind_CheriHWRegs
   };
 
 private:
@@ -5622,6 +5623,9 @@ bool MipsAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
   case Match_MemSImm16:
     return Error(RefineErrorLoc(IDLoc, Operands, ErrorInfo),
                  "expected memory with 16-bit signed offset");
+  case Match_CheriAsmReg:
+    return Error(RefineErrorLoc(IDLoc, Operands, ErrorInfo),
+                 "expected general-purpose CHERI register operand");
   case Match_RequiresPosSizeRange0_32: {
     SMLoc ErrorStart = Operands[3]->getStartLoc();
     SMLoc ErrorEnd = Operands[4]->getEndLoc();
