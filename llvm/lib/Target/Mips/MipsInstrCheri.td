@@ -535,10 +535,11 @@ def : InstAlias<"cgetkdc $dst",
 def : InstAlias<"csetkdc $src",
                 (CIncOffset C30, CheriOpnd:$src, ZERO_64), 1>;
 
+// TODO: Emit = 0 here to show that creadhwr is used
 def : InstAlias<"cgetepcc $dst",
-                (CReadHwr CheriOpnd:$dst, CAPHWR31), 1>;
+                (CReadHwr CheriOpnd:$dst, CAPHWR31), 0>;
 def : InstAlias<"csetepcc $src",
-                (CWriteHwr CheriOpnd:$src, CAPHWR31), 1>;
+                (CWriteHwr CheriOpnd:$src, CAPHWR31), 0>;
 
 
 // Must come before cfromddc to have a higher priority when disassembling
