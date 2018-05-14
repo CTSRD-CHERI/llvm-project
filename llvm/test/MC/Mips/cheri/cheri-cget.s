@@ -69,14 +69,19 @@
 	cgetcause	$t0
 
 # CHECK: cgetepcc	 $c4
-# CHECK-SAME:  encoding: [0x48,0x04,0xf8,0x11]
-# DUMP-NEXT: 48 04 f8 11 	cgetepcc	$c4
+# CHECK-SAME:  encoding: [0x48,0x04,0xfb,0x7f]
+# DUMP-NEXT: 48 04 fb 7f 	cgetepcc	$c4
 	CGetEPCC $c4
 
 # CHECK: csetepcc	 $c4
-# CHECK-SAME:  encoding: [0x48,0x1f,0x20,0x11]
-# DUMP-NEXT: 48 1f 20 11 	csetepcc	$c4
+# CHECK-SAME:  encoding: [0x48,0x04,0xfb,0xbf]
+# DUMP-NEXT: 48 04 fb bf 	csetepcc	$c4
 	CSetEPCC $c4
+	# test disassembly of the old encoding:
+	.word 0x4804f811  # CGetEPCC $c4 (old)
+	# DUMP-NEXT: 48 04 f8 11 cincoffset $c4, $c31, $zero
+	.word 0x481f2011  # CSetEPCC $c4 (old)
+	# DUMP-NEXT: 48 1f 20 11 cincoffset $c31, $c4, $zero
 
 # CHECK: cgetkcc	 $c4
 # CHECK-SAME:  encoding: [0x48,0x04,0xe8,0x11]

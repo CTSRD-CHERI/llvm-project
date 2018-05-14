@@ -536,9 +536,9 @@ def : InstAlias<"csetkdc $src",
                 (CIncOffset C30, CheriOpnd:$src, ZERO_64), 1>;
 
 def : InstAlias<"cgetepcc $dst",
-                (CIncOffset CheriOpnd:$dst, C31, ZERO_64), 1>;
+                (CReadHwr CheriOpnd:$dst, CAPHWR31), 1>;
 def : InstAlias<"csetepcc $src",
-                (CIncOffset C31, CheriOpnd:$src, ZERO_64), 1>;
+                (CWriteHwr CheriOpnd:$src, CAPHWR31), 1>;
 
 
 // Must come before cfromddc to have a higher priority when disassembling
