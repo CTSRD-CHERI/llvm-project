@@ -54,11 +54,10 @@ def run(cmd: list, **kwargs):
 
 
 class ErrorKind(Enum):
-    CRASH = None
-    INFINITE_LOOP = b"INFINITE LOOP:"
-    LLVM_ERROR = b"LLVM ERROR:"
-    FATAL_ERROR = b"fatal error:"
-    AddressSanitizer_ERROR = b"ERROR: AddressSanitizer:"
+    CRASH = tuple()
+    INFINITE_LOOP = (b"INFINITE LOOP:", )
+    FATAL_ERROR = (b"fatal error:", b"LLVM ERROR:")
+    AddressSanitizer_ERROR = (b"ERROR: AddressSanitizer:", )
 
 
 # TODO: it should be possible to just use a table here to apply and remove the substitutions
@@ -389,7 +388,7 @@ class Options(object):
         # could also be an LLVM error or Address Sanitizer error that returns a non-crash exit code
         self.expected_error_kind = None  # type: ErrorKind
         if self.llvm_error:
-            self.expected_error_kind = ErrorKind.LLVM_ERROR
+            self.expected_error_kind = ErrorKind.FATAL_ERROR
         if args.infinite_loop:
             if not self.timeout:
                 self.timeout = 30
@@ -527,7 +526,7 @@ class Reducer(object):
                 for kind in ErrorKind:
                     if kind.value:
                         verbose_print("Checking for", kind.value)
-                        if kind.value in proc.stderr:
+                        if any(msg in proc.stderr for msg in kind.value):
                             verbose_print("Crash was", kind)
                             error_kind = kind
                             break
@@ -613,35 +612,35 @@ class Reducer(object):
             # generic code gen crashes (at least creduce will keep the function name):
             r"LLVM IR generation of declaration '(.+)'",
             r"Generating code for declaration '(.+)'",
-            # error in backend:
-            r"fatal error: error in backend:(.+)",
             r"LLVM ERROR: Cannot select: (.+)",
             r"LLVM ERROR: Cannot select:",
-            # same with color diagnostics:
-            "\x1b\\[0m\x1b\\[0;1;31mfatal error: \x1b\\[0merror in backend:(.+)",
-            r"error in backend:(.+)",
-            # generic fatal error:
-            r"fatal error:(.+)",
-        )]
+       )]
         regexes = [(r, 0) for r in simple_regexes]
         # For this crash message we only want group 1
         # TODO: add another grep for the program counter
         regexes.insert(0, (re.compile(r"ERROR: (AddressSanitizer: .+ on address) 0x[0-9a-fA-F]+ (at pc 0x[0-9a-fA-F]+)"), 1))
         # only get the kind of the cannot select from the message (without the number for tNN)
         regexes.insert(0, (re.compile(r"LLVM ERROR: Cannot select: (t\w+): (.+)", ), 2))
+        # This message is different when invoked as llc: it prints LLVM ERROR instead
+        # so we only capture the actual message
+        regexes.insert(0, (re.compile(r"fatal error: error in backend:(.+)"), 1))
+        # same without colour diagnostics:
+        regexes.insert(0, (re.compile("\x1b\\[0m\x1b\\[0;1;31mfatal error: \x1b\\[0merror in backend:(.+)"), 1))
+
+        # Any other error in backed
+        regexes.append((re.compile(r"error in backend:(.+)"), 1))
+        # final fallback message: generic fatal error:
+        regexes.append((re.compile(r"fatal error:(.+)"), 0))
 
         for line in stderr.decode("utf-8").splitlines():
             # Check for failed assertions:
             for r, index in regexes:
                 match = r.search(line)
                 if match:
-                    print("Inferred crash message bytes: ", match.group(index).encode("utf-8"))
-                    print(len(match.groups()))
                     message = match.group(index)
-                    # if "\x1b" in message:
-                    #     message = message[:message.find("\x1b")]
-                    # print("Inferred crash message bytes (ANSI escape sequences might break grep): ",
-                    #       message.encode("utf-8"))
+                    if "\x1b" in message:
+                         message = message[:message.rfind("\x1b")]
+                    print("Inferred crash message bytes: ", message.encode("utf-8"))
                     return message
         return None
 
