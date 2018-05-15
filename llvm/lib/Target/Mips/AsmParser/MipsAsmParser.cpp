@@ -144,6 +144,7 @@ class MipsAsmParser : public MCTargetAsmParser {
   bool IsLittleEndian;
   bool IsPicEnabled;
   bool IsCpRestoreSet;
+  bool AreCheriSysRegsAccessible;
   int CpRestoreOffset;
   unsigned CpSaveLocation;
   /// If true, then CpSaveLocation is a register, otherwise it's an offset.
@@ -515,6 +516,7 @@ public:
     IsPicEnabled = getContext().getObjectFileInfo()->isPositionIndependent();
 
     IsCpRestoreSet = false;
+    AreCheriSysRegsAccessible = false;
     CpRestoreOffset = -1;
 
     const Triple &TheTriple = sti.getTargetTriple();
@@ -5810,11 +5812,20 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name) {
   }
   auto BadReg = [&](const Twine &Reg, const char *Replacement = nullptr,
                     bool Allowed = true) {
-    const std::string Msg =
-        ("Direct access to " + Reg + " is deprecated. Use C(Get/Set)" +
+    // $ddc should always warn:
+    bool AffectedBySysregsAccessible = Allowed && CC != 0;
+    if (AreCheriSysRegsAccessible && AffectedBySysregsAccessible)
+      return CC;
+
+    std::string Msg =
+        ("Direct access to " + Reg + " is deprecated: use C(Get/Set)" +
          (Replacement ? Replacement : Reg) + " instead.")
             .str();
+
     if (Allowed) {
+      if (AffectedBySysregsAccessible)
+        Msg += " In kernel code you can use  `.set cheri_sysregs_accessible`"
+               " to silence this warning.";
       Warning(Parser.getTok().getLoc(), Msg);
       return CC;
     } else {
@@ -7534,12 +7545,16 @@ bool MipsAsmParser::parseDirectiveSet() {
     return parseSetSoftFloatDirective();
   } else if (Tok.getString() == "hardfloat") {
     return parseSetHardFloatDirective();
+  } else if (Tok.getString() == "cheri_sysregs_accessible" ||
+             Tok.getString() == "nocheri_sysregs_accessible") {
+    AreCheriSysRegsAccessible = Tok.getString() == "cheri_sysregs_accessible";
+    Parser.eatToEndOfStatement();
+    return false;
   } else {
     // It is just an identifier, look for an assignment.
     parseSetAssignment();
     return false;
   }
-
   return true;
 }
 

@@ -53,78 +53,75 @@
 	CGetDefault	$c1
 
 .ifdef BAD
-# WARN: warning: Direct access to DDC is deprecated. Use C(Get/Set)Default instead.
-# WARN-NEXT: CMove $c1, $c0
-	CMove	$c1, $c0
-# WARN: warning: Direct access to DDC is deprecated. Use C(Get/Set)Default instead.
-# WARN-NEXT: CMove $c0, $c1
-	CMove	$c0, $c1
-
-# WARN: warning: Direct access to KR1C is deprecated. Use C(Get/Set)KR1C instead.
+# WARN: warning: Direct access to KR1C is deprecated: use C(Get/Set)KR1C instead.
+# WARN-SAME: In kernel code you can use  `.set cheri_sysregs_accessible` to silence this warning.
 # WARN-NEXT:	CMove	$c1, $kr1c
 	CMove	$c1, $kr1c
-# WARN: warning: Direct access to KR1C is deprecated. Use C(Get/Set)KR1C instead.
+# WARN: warning: Direct access to KR1C is deprecated: use C(Get/Set)KR1C instead.
 # WARN-NEXT:	CMove	$kr1c, $c1
 	CMove	$kr1c, $c1
-# WARN: warning: Direct access to KR1C is deprecated. Use C(Get/Set)KR1C instead.
+# WARN: warning: Direct access to KR1C is deprecated: use C(Get/Set)KR1C instead.
 # WARN-NEXT:	CMove	$c27, $c1
 	CMove	$c27, $c1
-# WARN: warning: Direct access to KR1C is deprecated. Use C(Get/Set)KR1C instead.
+# WARN: warning: Direct access to KR1C is deprecated: use C(Get/Set)KR1C instead.
 # WARN-NEXT:	CMove	$c1, $c27
 	CMove	$c1, $c27
 
-# WARN: warning: Direct access to KR2C is deprecated. Use C(Get/Set)KR2C instead.
+# WARN: warning: Direct access to KR2C is deprecated: use C(Get/Set)KR2C instead.
+# WARN-SAME: In kernel code you can use  `.set cheri_sysregs_accessible` to silence this warning.
 # WARN-NEXT:	CMove	$c1, $kr2c
 	CMove	$c1, $kr2c
-# WARN: warning: Direct access to KR2C is deprecated. Use C(Get/Set)KR2C instead.
+# WARN: warning: Direct access to KR2C is deprecated: use C(Get/Set)KR2C instead.
 # WARN-NEXT:	CMove	$kr2c, $c1
 	CMove	$kr2c, $c1
-# WARN: warning: Direct access to KR2C is deprecated. Use C(Get/Set)KR2C instead.
+# WARN: warning: Direct access to KR2C is deprecated: use C(Get/Set)KR2C instead.
 # WARN-NEXT:	CMove	$c28, $c1
 	CMove	$c28, $c1
-# WARN: warning: Direct access to KR2C is deprecated. Use C(Get/Set)KR2C instead.
+# WARN: warning: Direct access to KR2C is deprecated: use C(Get/Set)KR2C instead.
 # WARN-NEXT:	CMove	$c1, $c28
 	CMove	$c1, $c28
 
-
-# WARN: warning: Direct access to KCC is deprecated. Use C(Get/Set)KCC instead.
+# WARN: warning: Direct access to KCC is deprecated: use C(Get/Set)KCC instead.
+# WARN-SAME: In kernel code you can use  `.set cheri_sysregs_accessible` to silence this warning.
 # WARN-NEXT:	CMove	$c1, $kcc
 	CMove	$c1, $kcc
-# WARN: warning: Direct access to KCC is deprecated. Use C(Get/Set)KCC instead.
+# WARN: warning: Direct access to KCC is deprecated: use C(Get/Set)KCC instead.
 # WARN-NEXT:	CMove	$kcc, $c1
 	CMove	$kcc, $c1
-# WARN: warning: Direct access to KCC is deprecated. Use C(Get/Set)KCC instead.
+# WARN: warning: Direct access to KCC is deprecated: use C(Get/Set)KCC instead.
 # WARN-NEXT:	CMove	$c29, $c1
 	CMove	$c29, $c1
-# WARN: warning: Direct access to KCC is deprecated. Use C(Get/Set)KCC instead.
+# WARN: warning: Direct access to KCC is deprecated: use C(Get/Set)KCC instead.
 # WARN-NEXT:	CMove	$c1, $c29
 	CMove	$c1, $c29
 
-# WARN: warning: Direct access to KDC is deprecated. Use C(Get/Set)KDC instead.
+# WARN: warning: Direct access to KDC is deprecated: use C(Get/Set)KDC instead.
+# WARN-SAME: In kernel code you can use  `.set cheri_sysregs_accessible` to silence this warning.
 # WARN-NEXT:	CMove	$c1, $kdc
 	CMove	$c1, $kdc
-# WARN: warning: Direct access to KDC is deprecated. Use C(Get/Set)KDC instead.
+# WARN: warning: Direct access to KDC is deprecated: use C(Get/Set)KDC instead.
 # WARN-NEXT:	CMove	$kdc, $c1
 	CMove	$kdc, $c1
-# WARN: warning: Direct access to KDC is deprecated. Use C(Get/Set)KDC instead.
+# WARN: warning: Direct access to KDC is deprecated: use C(Get/Set)KDC instead.
 # WARN-NEXT:	CMove	$c30, $c1
 	CMove	$c30, $c1
-# WARN: warning: Direct access to KDC is deprecated. Use C(Get/Set)KDC instead.
+# WARN: warning: Direct access to KDC is deprecated: use C(Get/Set)KDC instead.
 # WARN-NEXT:	CMove	$c1, $c30
 	CMove	$c1, $c30
 
 # EPCC can no longer be accessed using $c31
 
-# WARN: [[@LINE+2]]:13: error: Direct access to EPCC is deprecated. Use C(Get/Set)EPCC instead.
+# WARN: [[@LINE+3]]:13: error: Direct access to EPCC is deprecated: use C(Get/Set)EPCC instead.
+# WARN-NOT: cheri_sysregs_accessible
 # WARN-NEXT:	CMove	$c1, $epcc
 	CMove	$c1, $epcc
-# WARN: [[@LINE+2]]:8: error: Direct access to EPCC is deprecated. Use C(Get/Set)EPCC instead.
+# WARN: [[@LINE+2]]:8: error: Direct access to EPCC is deprecated: use C(Get/Set)EPCC instead.
 # WARN-NEXT:	CMove	$epcc, $c1
 	CMove	$epcc, $c1
-# WARN: [[@LINE+2]]:8: error: Direct access to EPCC is deprecated. Use C(Get/Set)EPCC instead.
+# WARN: [[@LINE+2]]:8: error: Direct access to EPCC is deprecated: use C(Get/Set)EPCC instead.
 # WARN-NEXT:	CMove	$c31, $c1
 	CMove	$c31, $c1
-# WARN: [[@LINE+2]]:13: error: Direct access to EPCC is deprecated. Use C(Get/Set)EPCC instead.
+# WARN: [[@LINE+2]]:13: error: Direct access to EPCC is deprecated: use C(Get/Set)EPCC instead.
 # WARN-NEXT:	CMove	$c1, $c31
 	CMove	$c1, $c31
 
@@ -136,6 +133,56 @@
 # WARN: [[@LINE+2]]:13: error: expected general-purpose CHERI register operand
 # WARN-NEXT:	CMove	$c1, $31
 	CMove	$c1, $31
+
+# DDC should not suggest cheri_sysregs_accessible
+# WARN: [[@LINE+3]]:13: warning: Direct access to DDC is deprecated: use C(Get/Set)Default instead.
+# WARN-NOT: cheri_sysregs_accessible
+# WARN-NEXT: CMove $c1, $c0
+	CMove	$c1, $c0
+# WARN: [[@LINE+3]]:8: warning: Direct access to DDC is deprecated: use C(Get/Set)Default instead.
+# WARN-NOT: cheri_sysregs_accessible
+# WARN-NEXT: CMove $c0, $c1
+	CMove	$c0, $c1
+
+	# Check that there are no warnings for KR1C/KR2C/KDC/KCC with cheri_sysregs_accessible
+	.set cheri_sysregs_accessible
+	# WARN-NOT: warning:
+	# WARN-NOT: error:
+	CMove	$c1, $kr1c
+	CMove	$c1, $kr2c
+	CMove	$c1, $kcc
+	CMove	$c1, $kdc
+	CMove	$c1, $c27
+	CMove	$c1, $c28
+	CMove	$c1, $c29
+	CMove	$c1, $c30
+	# But C31 should still give and error
+	# WARN: [[@LINE+3]]:13: error: Direct access to EPCC is deprecated: use C(Get/Set)EPCC instead.
+  # WARN-NOT: cheri_sysregs_accessible
+  # WARN-NEXT:	CMove	$c1, $c31
+	CMove	$c1, $c31
+	# WARN: [[@LINE+3]]:13: error: Direct access to EPCC is deprecated: use C(Get/Set)EPCC instead.
+  # WARN-NOT: cheri_sysregs_accessible
+  # WARN-NEXT:	CMove	$c1, $epcc
+	CMove	$c1, $epcc
+
+  # And $C0 should also not have changed:
+  # WARN: [[@LINE+3]]:13: warning: Direct access to DDC is deprecated: use C(Get/Set)Default instead.
+  # WARN-NOT: cheri_sysregs_accessible
+  # WARN-NEXT: CMove $c1, $c0
+	CMove	$c1, $c0
+
+  # Check that disabling works:
+	.set nocheri_sysregs_accessible
+	# WARN: warning: Direct access to KR1C is deprecated: use C(Get/Set)KR1C instead.
+  # WARN-SAME: In kernel code you can use  `.set cheri_sysregs_accessible` to silence this warning.
+  # WARN-NEXT:	CMove	$c1, $kr1c
+	CMove	$c1, $kr1c
+
+
+	# Typo in the .set:
+	# WARN: [[@LINE+1]]:34: error: unexpected token, expected comma
+	.set no_cheri_sysregs_accessible
 .endif
 
 # Check that we can assemble the new CBuildCap/CCopyType and CTestSubset instrs
