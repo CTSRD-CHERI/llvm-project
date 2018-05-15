@@ -183,7 +183,10 @@ getReservedRegs(const MachineFunction &MF) const {
 
   static const uint16_t ReservedCheriRegs[] = {
     Mips::C0, Mips::C25, Mips::C26, Mips::C27, Mips::C28, Mips::C29, Mips::C30,
-    Mips::C31
+    Mips::C31,
+    // Mark the capability HWRegs as reserved to avoid machine verifier errors
+    Mips::CAPHWR0, Mips::CAPHWR1, Mips::CAPHWR8, Mips::CAPHWR22,
+    Mips::CAPHWR23, Mips::CAPHWR29, Mips::CAPHWR30, Mips::CAPHWR31,
   };
 
   // C1-C7, C11, C12, C17-C23 allowed
@@ -255,6 +258,7 @@ getReservedRegs(const MachineFunction &MF) const {
         Reserved.set(ABI.GetBasePtr());
       if (Subtarget.useCheriCapTable())
         Reserved.set(ABI.GetGlobalCapability());
+
     }
     if (Cheri8)
       for (unsigned I = 0; I < array_lengthof(ReservedCheri8Regs); ++I)
