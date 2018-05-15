@@ -931,6 +931,12 @@ if( LLVM_INCLUDE_TESTS )
     DEPENDS ${LLVM_LIT_DEPENDS} ${LLVM_ADDITIONAL_TEST_TARGETS}
     ARGS ${LLVM_LIT_EXTRA_ARGS}
     )
+
+  # Add shorter target aliases for the check-all-cheri128-only
+  add_custom_target(check-cheri128 DEPENDS check-all-cheri128-only)
+  set_target_properties(check-cheri128 PROPERTIES FOLDER "Tests")
+  add_custom_target(check-cheri256 DEPENDS check-all-cheri256-only)
+  set_target_properties(check-cheri256 PROPERTIES FOLDER "Tests")
   if(TARGET check-runtimes)
     add_dependencies(check-all check-runtimes)
   endif()
