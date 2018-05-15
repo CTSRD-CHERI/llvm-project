@@ -68,14 +68,14 @@
 # DUMP-NEXT: 48 0c 0f ff 	cgetcause	$12
 	cgetcause	$t0
 
-# CHECK: cgetepcc	 $c4
+# CHECK: creadhwr	 $c4, $chwr_epcc
 # CHECK-SAME:  encoding: [0x48,0x04,0xfb,0x7f]
-# DUMP-NEXT: 48 04 fb 7f 	cgetepcc	$c4
+# DUMP-NEXT: 48 04 fb 7f 	creadhwr	 $c4, $chwr_epcc
 	CGetEPCC $c4
 
-# CHECK: csetepcc	 $c4
+# CHECK: cwritehwr	 $c4, $chwr_epcc
 # CHECK-SAME:  encoding: [0x48,0x04,0xfb,0xbf]
-# DUMP-NEXT: 48 04 fb bf 	csetepcc	$c4
+# DUMP-NEXT: 48 04 fb bf 	cwritehwr	 $c4, $chwr_epcc
 	CSetEPCC $c4
 	# test disassembly of the old encoding:
 	.word 0x4804f811  # CGetEPCC $c4 (old)
