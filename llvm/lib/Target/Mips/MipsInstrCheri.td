@@ -472,7 +472,10 @@ def : Pat<(int_mips_kr2c_get), (CIncOffset C28, ZERO_64)>;
 def : Pat<(int_mips_kcc_get), (CIncOffset C29, ZERO_64)>;
 def : Pat<(int_mips_kdc_get), (CIncOffset C30, ZERO_64)>;
 def : Pat<(int_mips_epcc_get), (CReadHwr CAPHWR31)>;
-def : Pat<(int_cheri_stack_cap_get), (CIncOffset C11, ZERO_64)>;
+let Predicates=[IsCHERIABI] in {
+  // C11 is only defined in the purecap ABI
+  def : Pat<(int_cheri_stack_cap_get), (CIncOffset C11, ZERO_64)>;
+}
 
 
 defm CAP0STORE8     : StoreViaCap0<CAPSTORE8, GPR64Opnd, truncstorei8>;
