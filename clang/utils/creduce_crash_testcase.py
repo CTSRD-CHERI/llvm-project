@@ -170,6 +170,7 @@ def run_cmd(cmd, timeout):
             # check for %s should have happened earlier
             assert "%s" in cmd, cmd
             compiler_cmd = quote_cmd(cmd).replace("%s", self.input_file_arg(input_file))
+            assert compiler_cmd.startswith("/"), "Command must use absolute path: " + compiler_cmd
             grep_msg = ""
             crash_flag = "--crash" if self.args.expected_error_kind in (None, ErrorKind.CRASH) else ""
             if self.args.crash_message:
@@ -181,7 +182,6 @@ def run_cmd(cmd, timeout):
             result += """
 try:
     command = r'''{not_cmd} {crash_flag} {command} {grep_msg} '''
-    print(command)
     result = run_cmd(command, timeout={timeout_arg})
     if result.returncode != 0:
         sys.exit({not_interesting})
@@ -224,7 +224,7 @@ except Exception as e:
         verbose_print(result)
 
     def is_reduce_script_interesting(self, reduce_script: Path, input_file: Path) -> bool:
-        return False
+        raise NotImplemented()
 
     @abstractmethod
     def reduce(self, input_file: Path, extra_args: list, tempdir: Path,
@@ -312,7 +312,7 @@ class RunBugpoint(ReduceTool):
 
     def is_reduce_script_interesting(self, reduce_script: Path, input_file: Path) -> bool:
         proc = subprocess.run([str(reduce_script), str(input_file)])
-        return proc.returncode != 0
+        return proc.returncode == self.interesting_exit_code
 
 
 class RunCreduce(ReduceTool):
@@ -486,6 +486,7 @@ class Reducer(object):
             # try to remove all unnecessary command line arguments
             command[0] = str(self.options.clang_cmd)  # replace command with the clang binary
             command, real_in_file = self.simplify_crash_command(command, real_in_file.absolute())
+            assert Path(command[0]).is_absolute(), "Command must be absolute: " + command[0]
             quoted_cmd = quote_cmd(command)
             verbose_print("Test command is", bold(quoted_cmd))
             self.run_cmds.append(command)
@@ -955,7 +956,6 @@ class Reducer(object):
         if self._check_crash(llc_args, irfile, llc_info):
             print("Crash found with llc -> using bugpoint which is faster than creduce.")
             self.reduce_tool = RunBugpoint(self.options)
-            llc_args[0] = "llc"
             return llc_args, irfile
         print("Compiling IR file with llc did not reproduce crash. Stderr was:", llc_info.stderr.decode("utf-8"))
         print("Checking whether compiling IR file with opt crashes:", end="", flush=True)
@@ -966,7 +966,6 @@ class Reducer(object):
         if self._check_crash(opt_args, irfile, opt_info):
             print("Crash found with LLC -> using bugpoint which is faster than creduce.")
             self.reduce_tool = RunBugpoint(self.options)
-            opt_args[0] = "opt"
             return opt_args, irfile
         print("Compiling IR file with opt did not reproduce crash. Stderr was:", opt_info.stderr.decode("utf-8"))
 
@@ -978,7 +977,6 @@ class Reducer(object):
         if self._check_crash(bugpoint_clang_cmd, irfile, clang_info):
             print("Crash found compiling IR with clang -> using bugpoint which is faster than creduce.")
             self.reduce_tool = RunBugpoint(self.options)
-            full_cmd[0] = "%clang"
             return bugpoint_clang_cmd, irfile
         print("Compiling IR file with clang did not reproduce crash. Stderr was:", clang_info.stderr.decode("utf-8"))
         print(red("No crash found compiling the IR! Possibly crash only happens when invoking clang -> using creduce."))
