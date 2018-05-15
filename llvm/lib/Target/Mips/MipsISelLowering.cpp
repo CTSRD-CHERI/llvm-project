@@ -2251,7 +2251,15 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
 
   if (Subtarget.getABI().IsCheriPureCap() && Subtarget.useCheriCapTable()) {
     // FIXME: shouldn't functions have a R_MIPS_CHERI_CAPCALL relocation?
-    bool CanUseCapTable = GVTy->isFunctionTy() ||  DAG.getDataLayout().isFatPointer(GVTy);
+    bool CanUseCapTable = GVTy->isFunctionTy() || DAG.getDataLayout().isFatPointer(GVTy);
+    if (!CanUseCapTable && !GV->isThreadLocal()) {
+      if (GVTy->getPointerAddressSpace() == 0) {
+        errs() << "warning: Found global in default address space: "
+               << GV->getName()
+               << ". This should not happen, assuming it is AS200 for now\n";
+        CanUseCapTable = true;
+      }
+    }
     // FIXME: should not use MVT::iFATPTR once the tablegen changes get merged
     EVT GlobalTy = Ty.isFatPointer() ? Ty : CapType;
     bool IsFnPtr =
