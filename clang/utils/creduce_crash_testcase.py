@@ -900,6 +900,8 @@ class Reducer(object):
         llc_args = [str(self.options.llc_cmd), "-o", "/dev/null"]  # TODO: -o -?
         cpu_flag = None  # -mcpu= only allowed once!
         pass_once_flags = set()
+        # Some crash messages only happen with verify-machineinstrs:
+        pass_once_flags.add("-verify-machineinstrs")
         skip_next = False
         optimization_flag = "-O2"
         for i, arg in enumerate(command):
