@@ -245,6 +245,14 @@ def CGetAddr  : CheriFmt2Op<0xf, (outs GPR64Opnd:$r1), (ins CheriOpnd:$r2),
 // Versions of property setters that take immediate operands
 def CSetBoundsImm : CheriFmtCSetImm<0x14, simm11s0, simm11s0Pattern, "bounds">;
 def CIncOffsetImm : CheriFmtCSetImm<0x13, simm11s0, simm11s0Pattern, "offset", "offset", "inc", "increment">;
+
+// Accept CIncOffsetImm as an assembler mnemonic because ancient binutils is too stupid to have an opcode
+// with differing encoding depending on the parameters
+def : InstAlias<"csetboundsimm $dst, $src, $imm",
+                (CSetBoundsImm CheriOpnd:$dst, CheriOpnd:$src, simm11s0:$imm), 0>;
+def : InstAlias<"cincoffsetimm $dst, $src, $imm",
+                (CIncOffsetImm CheriOpnd:$dst, CheriOpnd:$src, simm11s0:$imm), 0>;
+
 // Property setters
 def CAndPerms  : CheriFmtCSet<0xd, "perm", "perms", "and">;
 def CSetOffset : CheriFmtCSet<0xf, "offset">;
