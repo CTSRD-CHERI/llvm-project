@@ -77,13 +77,20 @@ def MacroRedefined : DiagGroup<"macro-redefined">;
 def BuiltinMacroRedefined : DiagGroup<"builtin-macro-redefined">;
 def BuiltinRequiresHeader : DiagGroup<"builtin-requires-header">;
 
-def CHERICapabilityToIntegerCast : DiagGroup<"capability-to-integer-cast">;
-def CHERIPedantic : DiagGroup<"cheri-pedantic", [CHERICapabilityToIntegerCast]>;
+
+// Generally useful CHERI warnings
 def CHERICaps : DiagGroup<"cheri-capability-misuse">;
 def CHERIBitwiseOps : DiagGroup<"cheri-bitwise-operations">;
 def CHERIImplicitConversion : DiagGroup<"cheri-implicit-conversion">;
 def CHERIImplicitConversionSign : DiagGroup<"cheri-implicit-conversion-sign">;
 def MIPSCHERIPrototypes: DiagGroup<"mips-cheri-prototypes">;
+def CHERIAll : DiagGroup<"cheri",
+     [CHERICaps, CHERIBitwiseOps, CHERIImplicitConversion,
+      CHERIImplicitConversionSign, MIPSCHERIPrototypes]>;
+// CHERI warnings that are too noisy to turn on by default
+def CHERICapabilityToIntegerCast : DiagGroup<"capability-to-integer-cast">;
+def CHERIPedantic : DiagGroup<"cheri-pedantic", [CHERICapabilityToIntegerCast]>;
+// Warnings/Errors for bugs in the MIPS/CHERI backend
 def MIPSCHERIBugs: DiagGroup<"mips-cheri-bugs">;
 
 def C99Compat : DiagGroup<"c99-compat">;
