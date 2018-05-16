@@ -84,12 +84,12 @@ def CHERIBitwiseOps : DiagGroup<"cheri-bitwise-operations">;
 def CHERIImplicitConversion : DiagGroup<"cheri-implicit-conversion">;
 def CHERIImplicitConversionSign : DiagGroup<"cheri-implicit-conversion-sign">;
 def MIPSCHERIPrototypes: DiagGroup<"mips-cheri-prototypes">;
-def CHERIAll : DiagGroup<"cheri",
+def CheriAll : DiagGroup<"cheri",
      [CHERICaps, CHERIBitwiseOps, CHERIImplicitConversion,
       CHERIImplicitConversionSign, MIPSCHERIPrototypes]>;
 // CHERI warnings that are too noisy to turn on by default
 def CHERICapabilityToIntegerCast : DiagGroup<"capability-to-integer-cast">;
-def CHERIPedantic : DiagGroup<"cheri-pedantic", [CHERICapabilityToIntegerCast]>;
+def CheriPedantic : DiagGroup<"cheri-pedantic", [CHERICapabilityToIntegerCast]>;
 // Warnings/Errors for bugs in the MIPS/CHERI backend
 def MIPSCHERIBugs: DiagGroup<"mips-cheri-bugs">;
 
@@ -806,7 +806,7 @@ def All : DiagGroup<"all", [Most, Parentheses, Switch, SwitchBool]>;
 def : DiagGroup<"CL4", [All, Extra]>;
 
 // Warnings enabled by -pedantic.  This is magically filled in by TableGen.
-def Pedantic : DiagGroup<"pedantic">;
+def Pedantic : DiagGroup<"pedantic", [CheriPedantic]>;
 
 // Aliases.
 def : DiagGroup<"", [Extra]>;                   // -W = -Wextra

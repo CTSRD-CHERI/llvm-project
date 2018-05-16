@@ -6081,7 +6081,7 @@ def err_cheri_to_from_cap_invalid_source_type: Error<
   "%select{capability|pointer}1">;
 def warn_cheri_to_from_cap_noop : Warning<
   "__cheri_%select{from|to}0cap from %1 to %2 is a no-op">,
-  InGroup<CHERIPedantic>, DefaultIgnore;
+  InGroup<CheriPedantic>, DefaultIgnore;
 
 def err_cheri_offset_addr_invalid_source_type: Error<
   "invalid source type %0 for __cheri_%select{addr|offset}1: source must be a capability">;
