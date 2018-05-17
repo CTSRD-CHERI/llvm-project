@@ -13,12 +13,13 @@ declare i8 addrspace(200)* @many_cap_args(i8 addrspace(200)* %arg1, i8 addrspace
 
 
 ; Check that the debug output prints
-; CHECK: Clearing $c13 in call_one_arg_from_many_arg(is varargs: 0) callee = {{t[0-9]+}}: i64 = GlobalAddress<i8 addrspace(200)* (i8 addrspace(200)*)* @one_arg> 0
-; CHECK-NEXT: Clearing $c13 in call_one_arg_from_variadic_with_va_start(is varargs: 1) callee = {{t[0-9]+}}: i64 = GlobalAddress<i8 addrspace(200)* (i8 addrspace(200)*)* @one_arg> 0
-; CHECK-NEXT: Clearing $c13 in call_one_arg_from_variadic_without_va_start(is varargs: 1) callee = {{t[0-9]+}}: i64 = GlobalAddress<i8 addrspace(200)* (i8 addrspace(200)*)* @one_arg> 0
-; CHECK-NEXT: Clearing $c13 in call_variadic_no_onstack_from_varargs(is varargs: 1) callee = {{t[0-9]+}}: i64 = GlobalAddress<i8 addrspace(200)* (i8 addrspace(200)*, ...)* @variadic> 0
-; CHECK-NEXT: Clearing $c13 in call_variadic_no_onstack_from_many_args(is varargs: 0) callee = {{t[0-9]+}}: i64 = GlobalAddress<i8 addrspace(200)* (i8 addrspace(200)*, ...)* @variadic> 0
-; CHECK-NEXT: .text
+; FAILS_ON_JENKINS_CHECK: Clearing $c13 in call_one_arg_from_many_arg(is varargs: 0) callee = {{t[0-9]+}}: i64 = GlobalAddress<i8 addrspace(200)* (i8 addrspace(200)*)* @one_arg> 0
+; FAILS_ON_JENKINS_CHECK-NEXT: Clearing $c13 in call_one_arg_from_variadic_with_va_start(is varargs: 1) callee = {{t[0-9]+}}: i64 = GlobalAddress<i8 addrspace(200)* (i8 addrspace(200)*)* @one_arg> 0
+; FAILS_ON_JENKINS_CHECK-NEXT: Clearing $c13 in call_one_arg_from_variadic_without_va_start(is varargs: 1) callee = {{t[0-9]+}}: i64 = GlobalAddress<i8 addrspace(200)* (i8 addrspace(200)*)* @one_arg> 0
+; FAILS_ON_JENKINS_CHECK-NEXT: Clearing $c13 in call_variadic_no_onstack_from_varargs(is varargs: 1) callee = {{t[0-9]+}}: i64 = GlobalAddress<i8 addrspace(200)* (i8 addrspace(200)*, ...)* @variadic> 0
+; FAILS_ON_JENKINS_CHECK-NEXT: Clearing $c13 in call_variadic_no_onstack_from_many_args(is varargs: 0) callee = {{t[0-9]+}}: i64 = GlobalAddress<i8 addrspace(200)* (i8 addrspace(200)*, ...)* @variadic> 0
+; FAILS_ON_JENKINS_CHECK-NEXT: .text
+; FAILS_ON_JENKINS_CHECK-LABEL: .file
 
 define void @call_variadic_one_onstack_long(i8 addrspace(200)* %in_arg1) {
 ; CHECK-LABEL: call_variadic_one_onstack_long:
