@@ -20,7 +20,7 @@ entry:
   ; SMALL-NEXT: clcbi $c1, %captab20(fn)($c26)
   ; CHECK-NEXT: clc	$c12, $zero, 0($c1)
   ; CHECK-NEXT: cjalr	$c12, $c17
-  ; CHECK-NEXT: cgetnull $c13
+  ; CHECK-NEXT: nop
   ; CHECK-NEXT: clc	$c17, $zero, 0($c11)
   ; CHECK-NEXT: cjr	$c17
 

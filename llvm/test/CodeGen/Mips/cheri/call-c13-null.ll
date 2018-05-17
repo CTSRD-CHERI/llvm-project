@@ -105,18 +105,18 @@ define void @call_nonvariadic_many_args(i8 addrspace(200)* %in_arg1) {
 ; CHECK-NEXT:    cincoffset $c13, $c3, 117
 ; CHECK-NEXT:    cincoffset $c3, $c3, 127
 ; CHECK-NEXT:    csc $c2, $zero, 0($c11)
-; CHECK-NEXT:    csc $c3, $zero, 48($c11)
-; CHECK-NEXT:    csc $c13, $zero, 32($c11)
-; CHECK-NEXT:    csc $c12, $zero, 16($c11)
+; CHECK-NEXT:    csc $c3, $zero, [[@EXPR $CAP_SIZE * 3]]($c11)
+; CHECK-NEXT:    csc $c13, $zero, [[@EXPR $CAP_SIZE * 2]]($c11)
+; CHECK-NEXT:    csc $c12, $zero, [[@EXPR $CAP_SIZE * 1]]($c11)
 ; CHECK-NEXT:    clcbi $c12, %capcall20(many_cap_args)($c26)
-; CHECK-NEXT:    csetbounds $c2, $c11, 64
+; CHECK-NEXT:    csetbounds $c2, $c11, [[@EXPR $CAP_SIZE * 4]]
 ; CHECK-NEXT:    ori $1, $zero, 65495
 ; CHECK-NEXT:    candperm $c13, $c2, $1
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    cmove $c3, $c1
-; CHECK-NEXT:    clc $c17, $zero, 64($c11) # 16-byte Folded Reload
+; CHECK-NEXT:    clc $c17, $zero, {{.*}}($c11)
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    cincoffset $c11, $c11, 80
+; CHECK-NEXT:    cincoffset $c11, $c11, {{.*}}
 ; CHECK:         .end call_nonvariadic_many_args
 
 entry:

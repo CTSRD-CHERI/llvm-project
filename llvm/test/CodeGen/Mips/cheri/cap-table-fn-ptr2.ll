@@ -28,11 +28,11 @@ entry:
   ; SMALLTABLE-NEXT: clcbi $c2, %captab20(fn2)($c26)
   ; load fn for call:
   ; CHECK-NEXT: clc	$c12, $zero, 0($c1)
-  ; save %arg to fn2
-  ; CHECK-NEXT: csc	$c3, $zero, 0($c2)
-  tail call void %0() #2
   ; call fn:
   ; CHECK-NEXT: cjalr	$c12, $c17
+  ; save %arg to fn2 (delay slot)
+  ; CHECK-NEXT: csc	$c3, $zero, 0($c2)
+  tail call void %0() #2
   ret void
 }
 
