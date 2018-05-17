@@ -2252,6 +2252,14 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
   if (Subtarget.getABI().IsCheriPureCap() && Subtarget.useCheriCapTable()) {
     // FIXME: shouldn't functions have a R_MIPS_CHERI_CAPCALL relocation?
     bool CanUseCapTable = GVTy->isFunctionTy() || DAG.getDataLayout().isFatPointer(GVTy);
+    EVT GlobalTy = Ty.isFatPointer() ? Ty : CapType;
+    bool IsFnPtr =
+      GVTy->isPointerTy() && GVTy->getPointerElementType()->isFunctionTy();
+    if (IsFnPtr) {
+      // Functions don't have addres spaces yet which is why this hack is needed
+      // See https://reviews.llvm.org/D37054
+      CanUseCapTable = true;
+    }
     if (!CanUseCapTable && !GV->isThreadLocal()) {
       if (GVTy->getPointerAddressSpace() == 0) {
         errs() << "warning: Found global in default address space: "
@@ -2260,11 +2268,7 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
         CanUseCapTable = true;
       }
     }
-    // FIXME: should not use MVT::iFATPTR once the tablegen changes get merged
-    EVT GlobalTy = Ty.isFatPointer() ? Ty : CapType;
-    bool IsFnPtr =
-      GVTy->isPointerTy() && GVTy->getPointerElementType()->isFunctionTy();
-    if (CanUseCapTable || IsFnPtr) {
+    if (CanUseCapTable) {
       // FIXME: or should this be something else? like in lowerCall?
       auto PtrInfo = MachinePointerInfo::getCapTable(DAG.getMachineFunction());
       return getFromCapTable(IsFnPtr, N, SDLoc(N), GlobalTy, DAG,
