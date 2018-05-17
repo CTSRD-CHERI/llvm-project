@@ -12,7 +12,7 @@ void snprintf_func(void) {
 // ASM:      clcbi	$c3, %capcall20(snprintf_func)($c26)
 // ASM-NEXT: clcbi $c12, %capcall20(a)($c26)
 // ASM-NEXT: cjalr	$c12, $c17
-// ASM-NEXT: cgetnull	$c13
+// ASM-NEXT: nop
 
 // Checking the asm output should be done in LLVM but the IR will probably change
 
