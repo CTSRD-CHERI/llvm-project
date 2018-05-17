@@ -3585,9 +3585,31 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
           DAG.getConstant(Intrinsic::cheri_cap_perms_and, DL, MVT::i64), PtrOff,
           DAG.getIntPtrConstant(0xFFD7, DL));
       RegsToPass.push_back(std::make_pair(Mips::C13, PtrOff));
-    } else
-      RegsToPass.push_back(std::make_pair(Mips::C13,
-                                        DAG.getConstant(0, DL, CapType)));
+    } else {
+      bool ShouldClearC13 = false;
+      // We only need to clear $c13 (for on-stack arguments if the calling
+      // function had args on the stack (i.e. $c13 was a live in)
+      // However, $c13 being a live in is only set once lowerVASTART is processed
+      // so we just look if the current function is variadic in the IR Decl
+      // TODO: should we just mark c13 as live-in in for all variadic functions
+      // in MipsTargetLowering::LowerFormalArguments()?
+      if (MF.getFunction().isVarArg())
+        ShouldClearC13 = true;
+      // Also clear $c13 if it was marked as live-in due to having
+      if (MF.getRegInfo().isLiveIn(Mips::C13))
+        ShouldClearC13 = true;
+      if (ShouldClearC13) {
+        DEBUG(dbgs() << "Clearing $c13 in " << MF.getName() << "(is varargs: "
+                     << MF.getFunction().isVarArg() << ") callee = ");
+        DEBUG(Callee.dump(&DAG););
+      }
+      // We always clear $c13 if we are compiling at -O0 or -O1 since this helps
+      // us catch errors with calling convention mismatches.
+      if (getTargetMachine().getOptLevel() < CodeGenOpt::Default)
+        ShouldClearC13 = true;
+      if (ShouldClearC13)
+        RegsToPass.push_back(std::make_pair(Mips::C13, DAG.getConstant(0, DL, CapType)));
+    }
   }
   // If we're doing a CCall then any unused arg registers should be zero.
   if (!UseClearRegs && (CallConv == CallingConv::CHERI_CCall)) {
