@@ -675,6 +675,11 @@ public:
 
   void warnIfNoMacro(SMLoc Loc);
 
+  /// Avoid another error message if we already have one pending
+  bool ErrorIfNotPending(SMLoc L, const Twine& Msg, SMRange Range = SMRange()) {
+    return getParser().hasPendingError() ? true : Error(L, Msg, Range);
+  }
+
   bool isLittle() const { return IsLittleEndian; }
 
   const MCExpr *createTargetUnaryExpr(const MCExpr *E,
@@ -6554,7 +6559,7 @@ bool MipsAsmParser::parseParenSuffix(StringRef Name, OperandVector &Operands) {
     Parser.Lex();
     if (parseOperand(Operands, Name)) {
       SMLoc Loc = getLexer().getLoc();
-      return Error(Loc, "unexpected token in argument list");
+      return ErrorIfNotPending(Loc, "unexpected token in argument list");
     }
     if (Parser.getTok().isNot(AsmToken::RParen)) {
       SMLoc Loc = getLexer().getLoc();
@@ -6582,7 +6587,7 @@ bool MipsAsmParser::parseBracketSuffix(StringRef Name,
     Parser.Lex();
     if (parseOperand(Operands, Name)) {
       SMLoc Loc = getLexer().getLoc();
-      return Error(Loc, "unexpected token in argument list");
+      return ErrorIfNotPending(Loc, "unexpected token in argument list");
     }
     if (Parser.getTok().isNot(AsmToken::RBrac)) {
       SMLoc Loc = getLexer().getLoc();
@@ -6615,7 +6620,7 @@ bool MipsAsmParser::ParseInstruction(ParseInstructionInfo &Info, StringRef Name,
     // Read the first operand.
     if (parseOperand(Operands, Name)) {
       SMLoc Loc = getLexer().getLoc();
-      return Error(Loc, "unexpected token in argument list");
+      return ErrorIfNotPending(Loc, "unexpected token in argument list");
     }
     if (getLexer().is(AsmToken::LBrac) && parseBracketSuffix(Name, Operands))
       return true;
@@ -6643,7 +6648,7 @@ bool MipsAsmParser::ParseInstruction(ParseInstructionInfo &Info, StringRef Name,
       if (parseOperand(Operands, Name)) {
         SMLoc Loc = getLexer().getLoc();
         Parser.eatToEndOfStatement();
-        return Error(Loc, "unexpected token in argument list");
+        return ErrorIfNotPending(Loc, "unexpected token in argument list");
       }
       if (getLexer().isNot(AsmToken::Comma)) {
         SMLoc Loc = getLexer().getLoc();
@@ -6655,7 +6660,7 @@ bool MipsAsmParser::ParseInstruction(ParseInstructionInfo &Info, StringRef Name,
       if (parseOperand(Operands, Name)) {
         SMLoc Loc = getLexer().getLoc();
         Parser.eatToEndOfStatement();
-        return Error(Loc, "unexpected token in argument list");
+        return ErrorIfNotPending(Loc, "unexpected token in argument list");
       }
       if (getLexer().isNot(AsmToken::LParen)) {
         SMLoc Loc = getLexer().getLoc();
@@ -6669,7 +6674,7 @@ bool MipsAsmParser::ParseInstruction(ParseInstructionInfo &Info, StringRef Name,
       if (parseOperand(Operands, Name)) {
         SMLoc Loc = getLexer().getLoc();
         Parser.eatToEndOfStatement();
-        return Error(Loc, "unexpected token in argument list");
+        return ErrorIfNotPending(Loc, "unexpected token in argument list");
       }
       if (getLexer().isNot(AsmToken::RParen)) {
         SMLoc Loc = getLexer().getLoc();
@@ -6686,7 +6691,7 @@ bool MipsAsmParser::ParseInstruction(ParseInstructionInfo &Info, StringRef Name,
       // Parse and remember the operand.
       if (parseOperand(Operands, Name)) {
         SMLoc Loc = getLexer().getLoc();
-        return Error(Loc, "unexpected token in argument list");
+        return ErrorIfNotPending(Loc, "unexpected token in argument list");
       }
       // Parse bracket and parenthesis suffixes before we iterate
       if (getLexer().is(AsmToken::LBrac)) {
@@ -6699,7 +6704,7 @@ bool MipsAsmParser::ParseInstruction(ParseInstructionInfo &Info, StringRef Name,
   }
   if (getLexer().isNot(AsmToken::EndOfStatement)) {
     SMLoc Loc = getLexer().getLoc();
-    return Error(Loc, "unexpected token in argument list");
+    return ErrorIfNotPending(Loc, "unexpected token in argument list");
   }
   Parser.Lex(); // Consume the EndOfStatement.
   return false;
