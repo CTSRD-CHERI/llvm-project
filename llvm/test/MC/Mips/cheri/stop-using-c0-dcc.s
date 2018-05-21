@@ -1,7 +1,7 @@
 # Check that it assembles if I no longer defined INCLUDE_BAD
-# RUN: not %cheri_llvm-mc %s -defsym=INCLUDE_BAD=1 -show-encoding 2>&1 | FileCheck %s
+# RUN: not %cheri_llvm-mc %s -defsym=INCLUDE_BAD=1 -show-encoding 2>&1 -cheri-strict-ddc-asm | FileCheck %s
 # Check that we assemble successfully if we exclude the bad instrs
-# RUN: %cheri_llvm-mc %s -show-encoding -o /dev/null 2>&1
+# RUN: %cheri_llvm-mc %s -show-encoding -cheri-strict-ddc-asm -o /dev/null 2>&1
 
 .ifdef INCLUDE_BAD
 cmove $c0, $c1  # CHECK: [[@LINE]]:7: error: Direct access to DDC is deprecated: use C(Get/Set)Default instead.

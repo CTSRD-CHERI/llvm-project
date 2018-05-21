@@ -39,6 +39,7 @@
 #include "llvm/MC/MCValue.h"
 #include "llvm/MC/SubtargetFeature.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -66,6 +67,12 @@ namespace llvm {
 class MCInstrInfo;
 
 } // end namespace llvm
+
+static cl::opt<bool>
+CheriStrictDDCUse("cheri-strict-ddc-asm", cl::Hidden,
+         cl::desc("Don't allow use of $ddc execpt in cfromptr and loads/stores."),
+         cl::init(false),
+         cl::ZeroOrMore);
 
 namespace {
 
@@ -5877,7 +5884,7 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name,
   };
   switch (CC) {
   case 0:
-    if (!checkCheriRegZeroAccess(Operands, Name))
+    if (CheriStrictDDCUse && !checkCheriRegZeroAccess(Operands, Name))
       return BadReg("DDC", "Default", /*Allowed=*/false);
     // Access is fine (cfrompr, clc, etc.)
     // TODO: should we still warn?
