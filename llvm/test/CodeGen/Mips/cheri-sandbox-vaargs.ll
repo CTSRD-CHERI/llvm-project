@@ -14,10 +14,12 @@ entry:
   %v = alloca i8 addrspace(200)*, align 32, addrspace(200)
   %0 = bitcast i8 addrspace(200)* addrspace(200)* %v to i8 addrspace(200)*
   ; Load the address of va_cpy
-  ; CHECK: 	ld	$1, %got_disp(va_cpy)($1)
-  ; CHECK: cfromddc $c[[CPYADDR:[0-9]+]], $1
+  ; CHECK: cmove [[VA_LIST:\$c[0-9]+]],  $c13
+  ; CHECK: 	ld	[[VADDR:\$[0-9]+]], %got_disp(va_cpy)($1)
+  ; CHECK: cfromddc $c[[CPYADDR:[0-9]+]], [[VADDR]]
   ; Store the va_list (passed in $c13) in the global
-  ; CHECK: csc	$c13, $zero, 0($c[[CPYADDR]])
+  ; CHECK: cgetnull $c13
+  ; CHECK: csc	[[VA_LIST]], $zero, 0($c[[CPYADDR]])
   %1 = addrspacecast i8 addrspace(200)* %0 to i8*
   call void @llvm.lifetime.start.p200i8(i64 32, i8 addrspace(200)* %0) #1
   call void @llvm.va_start.p200i8(i8 addrspace(200)* %0)
@@ -68,7 +70,11 @@ entry:
   ; When calling from a variadic function to one that takes a va_list, we
   ; should simply move the va capability from $c13 to the relevant argument
   ; register.
-  ; CHECK: cmove	$c3, $c13
+  ; TODO: CodeGen is a bit stupid here since $c13 is zeroed before moving $c13 to $c3 we are inserting another copy instead of moving to $c3 first and then zeroing
+  ; CHECK: cmove	[[VA_LIST:\$c[0-9]+]], $c13
+  ; CHECK: cgetnull        $c13
+  ; CHECK: cmove	$c3, [[VA_LIST]]
+
   %v = alloca i8 addrspace(200)*, align 32, addrspace(200)
   %0 = bitcast i8 addrspace(200)* addrspace(200)* %v to i8 addrspace(200)*
   call void @llvm.lifetime.start.p200i8(i64 32, i8 addrspace(200)* %0) #1

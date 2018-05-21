@@ -7,12 +7,12 @@
 define i32 @a(i64 addrspace(200) *, i32 addrspace(200) *, i32 addrspace(200) *,
 ; CHECK-LABEL: a:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[TWO_CAPS:(32|64)]]
-; CHECK-NEXT:    .cfi_def_cfa_offset [[TWO_CAPS]]
-; CHECK-NEXT:    csd $gp, $zero, [[GP_OFFSET:(24|56)]]($c11) # 8-byte Folded Spill
-; CHECK-NEXT:    csc $c17, $zero, 0($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, -32
+; CHECK-NEXT:    .cfi_def_cfa_offset 32
+; CHECK-NEXT:    csd $gp, $zero, 24($c11) # 8-byte Folded Spill
+; CHECK-NEXT:    csc $c17, $zero, 0($c11) # 16-byte Folded Spill
 ; CHECK-NEXT:    .cfi_offset 28, -8
-; CHECK-NEXT:    .cfi_offset 89, -[[TWO_CAPS]]
+; CHECK-NEXT:    .cfi_offset 89, -32
 ; CHECK-NEXT:    cgetoffset $25, $c12
 ; CHECK-NEXT:    lui $1, %hi(%neg(%gp_rel(a)))
 ; CHECK-NEXT:    daddu $1, $1, $25
@@ -21,10 +21,11 @@ define i32 @a(i64 addrspace(200) *, i32 addrspace(200) *, i32 addrspace(200) *,
 ; CHECK-NEXT:    cgetpccsetoffset $c12, $1
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    cgetnull $c13
-; CHECK-NEXT:    clc $c17, $zero, 0($c11)
-; CHECK-NEXT:    cld $gp, $zero, [[GP_OFFSET]]($c11) # 8-byte Folded Reload
+; CHECK-NEXT:    cgetnull $c13
+; CHECK-NEXT:    clc $c17, $zero, 0($c11) # 16-byte Folded Reload
+; CHECK-NEXT:    cld $gp, $zero, 24($c11) # 8-byte Folded Reload
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    cincoffset $c11, $c11, [[TWO_CAPS]]
+; CHECK-NEXT:    cincoffset $c11, $c11, 32
               i64 addrspace(200) *, i64 addrspace(200) *, i64 addrspace(200) *,
               i32 addrspace(200) *, i32 addrspace(200) *, i32 addrspace(200) *) {
   %ret = call i32 @b()

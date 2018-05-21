@@ -138,7 +138,15 @@ bool MipsSEDAGToDAGISel::replaceUsesWithCheriNullReg(
     // Remove from parent and replace with the CFromPtr
     UseMI->removeFromParent();
   }
-  return true;
+
+  // If there are no more uses of the NULL vreg after this pass we can delete it
+  if (MRI->use_empty(SrcReg)) {
+    DEBUG(dbgs() << "Was able to remove all uses of GetNull instruction: ";
+          GetNullMI.dump());
+    return true;
+  }
+
+  return false;
 }
 
 bool MipsSEDAGToDAGISel::replaceUsesWithZeroReg(MachineRegisterInfo *MRI,
@@ -189,7 +197,13 @@ bool MipsSEDAGToDAGISel::replaceUsesWithZeroReg(MachineRegisterInfo *MRI,
     MO.setReg(ZeroReg);
   }
 
-  return true;
+  if (MRI->use_empty(DstReg)) {
+    DEBUG(dbgs() << "Was able to remove all uses of get zero instruction: ";
+          MI.dump());
+    return false; // TODO: return true and fix all the test cases;
+  }
+
+  return false;
 }
 
 void MipsSEDAGToDAGISel::initGlobalBaseReg(MachineFunction &MF) {
@@ -385,6 +399,7 @@ void MipsSEDAGToDAGISel::processFunctionAfterISel(MachineFunction &MF) {
 
   MachineRegisterInfo *MRI = &MF.getRegInfo();
 
+  llvm::SmallVector<MachineInstr*, 8> DeadNullInsts;
   for (auto &MBB: MF) {
     for (auto &MI: MBB) {
       switch (MI.getOpcode()) {
@@ -395,10 +410,14 @@ void MipsSEDAGToDAGISel::processFunctionAfterISel(MachineFunction &MF) {
         addDSPCtrlRegOperands(true, MI, MF);
         break;
       default:
-        replaceUsesWithZeroReg(MRI, MI);
+        if (replaceUsesWithZeroReg(MRI, MI))
+          DeadNullInsts.push_back(&MI);
       }
     }
   }
+  // TODO: it seems to me like there should be a pass that removes dead instrs?
+  for (MachineInstr* MI : DeadNullInsts)
+    MI->removeFromParent();
 }
 
 void MipsSEDAGToDAGISel::selectAddE(SDNode *Node, const SDLoc &DL) const {
