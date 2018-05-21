@@ -160,10 +160,19 @@ void MipsSEInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
    .addReg(DestReg, RegState::Define)
    .addReg(SrcReg, getKillRegState(KillSrc));
    return;
-  }
-  else if (Mips::MSA128BRegClass.contains(DestReg)) { // Copy to MSA reg
-    if (Mips::MSA128BRegClass.contains(SrcReg))
-      Opc = Mips::MOVE_V;
+ } else if (Mips::CheriHWRegsRegClass.contains(SrcReg)) {
+   BuildMI(MBB, I, DL, get(Mips::CReadHwr))
+       .addReg(DestReg, RegState::Define)
+       .addReg(SrcReg, getKillRegState(KillSrc));
+   return;
+ } else if (Mips::CheriHWRegsRegClass.contains(DestReg)) {
+   BuildMI(MBB, I, DL, get(Mips::CWriteHwr))
+       .addReg(SrcReg, RegState::Define)
+       .addReg(DestReg, getKillRegState(KillSrc));
+   return;
+ } else if (Mips::MSA128BRegClass.contains(DestReg)) { // Copy to MSA reg
+   if (Mips::MSA128BRegClass.contains(SrcReg))
+     Opc = Mips::MOVE_V;
   }
 
   assert(Opc && "Cannot copy registers");
