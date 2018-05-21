@@ -36,6 +36,8 @@ private:
   unsigned getMSACtrlReg(const SDValue RegIdx) const;
 
   bool replaceUsesWithZeroReg(MachineRegisterInfo *MRI, const MachineInstr&);
+  bool replaceUsesWithCheriNullReg(MachineRegisterInfo *MRI,
+                                   const MachineInstr &GetNullMI);
 
   std::pair<SDNode *, SDNode *> selectMULT(SDNode *N, unsigned Opc,
                                            const SDLoc &dl, EVT Ty, bool HasLo,

@@ -90,6 +90,57 @@ unsigned MipsSEDAGToDAGISel::getMSACtrlReg(const SDValue RegIdx) const {
   }
 }
 
+bool MipsSEDAGToDAGISel::replaceUsesWithCheriNullReg(
+    MachineRegisterInfo *MRI, const MachineInstr &GetNullMI) {
+
+  unsigned SrcReg = 0;
+  if (GetNullMI.getOpcode() == Mips::CFromPtr &&
+      GetNullMI.getOperand(2).getReg() == Mips::ZERO_64) {
+    // When zeroing capability registers codegen will often create NULL in a
+    // saved register (e.g. $c18 and then move it to other registers). This is
+    // stupid since it will often spill to the stack and add additional
+    // instructions when we can just use a CGetNull to the destination register
+    DEBUG(dbgs() << "Trying to replace uses of CGetNull: "; GetNullMI.dump());
+    SrcReg = GetNullMI.getOperand(0).getReg();
+  }
+
+  if (!SrcReg)
+    return false;
+
+  // Cannot replace uses of physical registers (e.g. setting $c13 to null
+  if (TargetRegisterInfo::isPhysicalRegister(SrcReg))
+    return false;
+
+  llvm::SmallVector<MachineInstr *, 4> UsesToReplace;
+  for (MachineInstr &UseMI : MRI->use_instructions(SrcReg)) {
+    // TODO: Once we have a null register this will also work for non-CMove
+    // instrs
+    assert(UseMI.getOpcode() != Mips::CMove &&
+           "Should not have been expanded yet!");
+    if (UseMI.getOpcode() != TargetOpcode::COPY) {
+      DEBUG(dbgs() << "Found use of NULL register, but cannot replace yet:";
+            UseMI.dump(););
+      continue;
+    }
+    UsesToReplace.push_back(&UseMI);
+  }
+  for (MachineInstr *UseMI : UsesToReplace) {
+    DEBUG(dbgs() << "Replacing copy of synthesized NULL: "; UseMI->dump());
+    MachineBasicBlock *MBB = UseMI->getParent();
+    auto TargetReg = UseMI->getOperand(0).getReg();
+    // FIXME: this assert only works with virtregs so not for $c13
+    if (TargetRegisterInfo::isVirtualRegister(TargetReg))
+      assert(MRI->getRegClass(TargetReg)->contains(SrcReg));
+    BuildMI(*MBB, *UseMI, UseMI->getDebugLoc(), TII->get(Mips::CFromPtr),
+            UseMI->getOperand(0).getReg())
+        .addReg(Mips::C0, getRegState(GetNullMI.getOperand(1)))
+        .addReg(Mips::ZERO_64, getRegState(GetNullMI.getOperand(2)));
+    // Remove from parent and replace with the CFromPtr
+    UseMI->removeFromParent();
+  }
+  return true;
+}
+
 bool MipsSEDAGToDAGISel::replaceUsesWithZeroReg(MachineRegisterInfo *MRI,
                                                 const MachineInstr& MI) {
   unsigned DstReg = 0, ZeroReg = 0;
@@ -109,8 +160,10 @@ bool MipsSEDAGToDAGISel::replaceUsesWithZeroReg(MachineRegisterInfo *MRI,
     ZeroReg = Mips::ZERO_64;
   }
 
-  if (!DstReg)
-    return false;
+  if (!DstReg) {
+    // Not using MIPS zero reg, try to replace CHERI NULL reg as well
+    return replaceUsesWithCheriNullReg(MRI, MI);
+  }
 
   // Replace uses with ZeroReg.
   for (MachineRegisterInfo::use_iterator U = MRI->use_begin(DstReg),
