@@ -380,7 +380,7 @@ class MipsAsmParser : public MCTargetAsmParser {
 
   int matchHWRegsRegisterName(StringRef Symbol);
 
-  int matchCheriRegisterName(StringRef Name);
+  int matchCheriRegisterName(StringRef Name, const OperandVector &Operands);
   int matchCheriHWRegsRegisterName(StringRef Symbol);
 
   int matchFPURegisterName(StringRef Name);
@@ -5780,7 +5780,44 @@ int MipsAsmParser::matchFPURegisterName(StringRef Name) {
   return -1;
 }
 
-int MipsAsmParser::matchCheriRegisterName(StringRef Name) {
+// Check whether this instruction accepts the given spelling for Register 0
+// Some instructions (cfromptr + loads/stores, clc, cld) accept $c0 and $ddc
+// for references to DDC but in other instructions we would like to have $c0
+// be a NULL register (e.g. cincoffset)
+// TODO: would be nice if we could generate these checks from tablegen (0 == $ddc vs 0 == NULL)
+static bool checkCheriRegZeroAccess(const OperandVector &Operands, StringRef RegSpelling) {
+  if (Operands.empty())
+    return false;
+  const auto& FirstOp = Operands[0];
+  if (!FirstOp->isToken()) {
+    DEBUG(dbgs() << "Access to $c0 not allowed since mnemonic is not known\n");
+    return false;
+  }
+  MipsOperand* MipsOp = static_cast<MipsOperand*>(FirstOp.get());
+  StringRef Mnemonic =  MipsOp->getToken();
+  size_t OperandIndex = Operands.size();
+  DEBUG(dbgs() << "Checking if " << Mnemonic << " accepts register $"
+               << RegSpelling << " as operand " << OperandIndex << ": ");
+  assert(RegSpelling == "c0" || RegSpelling == "ddc");
+  size_t AllowedIndex = StringSwitch<size_t>(Mnemonic)
+            .Cases("clc", "clb", "clbu", "clh", "clhu", "clw", "clwu", "cld", 5)
+            .Cases("csc", "csb", "csh", "csw", "csd", 5)
+            .Cases("clcbi", "cscbi", 4)
+            .Cases("cfromptr", "ctoptr", 2)
+            .Cases("cllc", "cllb", "cllbu", "cllh", "cllhu", "cllw", "cllwu", "clld", 2)
+            .Cases("cscc", "cscb", "csch", "cscw", "cscd", 3)
+            .Default(std::numeric_limits<size_t>::max());
+  DEBUG(dbgs() << (OperandIndex == AllowedIndex ? "true" : "false") << " ");
+  DEBUG(for (auto&& X : enumerate(Operands)) {
+    dbgs() << " Op" << X.index() << "=" << *(X.value());
+  });
+  DEBUG(dbgs() << "\n");
+
+  return OperandIndex == AllowedIndex;
+}
+
+int MipsAsmParser::matchCheriRegisterName(StringRef Name,
+                                          const OperandVector &Operands) {
   MCAsmParser &Parser = getParser();
 
   int CC = -1;
@@ -5839,13 +5876,24 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name) {
     }
   };
   switch (CC) {
-    case 0: return BadReg("DDC", "Default");
-    case 27: return BadReg("KR1C");
-    case 28: return BadReg("KR2C");
-    case 29: return BadReg("KCC");
-    case 30: return BadReg("KDC");
-    case 31: return BadReg("EPCC", nullptr, /*Allowed=*/false);
-    default: break;
+  case 0:
+    if (!checkCheriRegZeroAccess(Operands, Name))
+      return BadReg("DDC", "Default", /*Allowed=*/false);
+    // Access is fine (cfrompr, clc, etc.)
+    // TODO: should we still warn?
+    return BadReg("DDC", "Default", /*Allowed=*/true);
+  case 27:
+    return BadReg("KR1C");
+  case 28:
+    return BadReg("KR2C");
+  case 29:
+    return BadReg("KCC");
+  case 30:
+    return BadReg("KDC");
+  case 31:
+    return BadReg("EPCC", nullptr, /*Allowed=*/false);
+  default:
+    break;
   }
   return CC;
 }
@@ -6284,7 +6332,7 @@ MipsAsmParser::matchAnyRegisterNameWithoutDollar(OperandVector &Operands,
     return MatchOperand_Success;
   }
 
-  Index = matchCheriRegisterName(Identifier);
+  Index = matchCheriRegisterName(Identifier, Operands);
   if (Index != -1) {
     if (Index == -2)
       return MatchOperand_ParseFail;
