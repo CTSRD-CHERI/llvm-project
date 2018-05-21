@@ -129,8 +129,22 @@ bool MipsSEDAGToDAGISel::replaceUsesWithCheriNullReg(
     MachineBasicBlock *MBB = UseMI->getParent();
     auto TargetReg = UseMI->getOperand(0).getReg();
     // FIXME: this assert only works with virtregs so not for $c13
-    if (TargetRegisterInfo::isVirtualRegister(TargetReg))
-      assert(MRI->getRegClass(TargetReg)->contains(SrcReg));
+    if (TargetRegisterInfo::isVirtualRegister(TargetReg)) {
+#if 0
+      if (!MRI->getRegClass(TargetReg)->hasSuperClassEq(&Mips::CheriRegsRegClass)) {
+        errs() << "Not a CHERI reg?!"; UseMI->dump();
+        errs() << "Source instr ="; GetNullMI.dump();
+        errs() << "reg class id: " << MRI->getRegClassOrNull(TargetReg)->getID();
+        errs() << " cheri reg class id =" << Mips::CheriRegsRegClass.getID();
+        errs() << "\n";
+      }
+#endif
+      // The target vreg register must be a CHERI register:
+      assert(MRI->getRegClass(TargetReg)->hasSuperClassEq(&Mips::CheriRegsRegClass));
+    } else {
+      // Check that the physreg is a valid CHERI register
+      assert(Mips::CheriRegsRegClass.contains(TargetReg));
+    }
     BuildMI(*MBB, *UseMI, UseMI->getDebugLoc(), TII->get(Mips::CFromPtr),
             UseMI->getOperand(0).getReg())
         .addReg(Mips::C0, getRegState(GetNullMI.getOperand(1)))
