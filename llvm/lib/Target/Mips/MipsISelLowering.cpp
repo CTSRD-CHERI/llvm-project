@@ -4247,6 +4247,21 @@ MipsTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
     RetOps.push_back(DAG.getRegister(V0, SRetTy));
   }
 
+  if (ABI.IsCheriPureCap()) {
+    // If this function used $c13 we want to zero it before returning so that
+    // all functions without on-stack arguments can assume that $c13 is null
+    // on entry
+    if (MF.getRegInfo().isLiveIn(Mips::C13) || IsVarArg) {
+      DEBUG(dbgs() << "Lowering return for function with $c13 live-in: "
+                   << MF.getName()
+                   << "(is varargs: " << MF.getFunction().isVarArg() << ")\n");
+      Chain = DAG.getCopyToReg(Chain, DL, Mips::C13,
+                                       DAG.getConstant(0, DL, CapType), Flag);
+      Flag = Chain.getValue(1);
+      RetOps.push_back(DAG.getRegister(Mips::C13, CapType));
+    }
+  }
+
   RetOps[0] = Chain;  // Update chain.
 
   // Add the flag if we have it.

@@ -1,4 +1,5 @@
 ; REQUIRES: asserts
+; RUN: %cheri_purecap_llc -o - -O2 -cheri-cap-table-abi=pcrel -debug-only=mips-lower %s 2>&1
 ; RUN: %cheri_purecap_llc -o - -O2 -cheri-cap-table-abi=pcrel -debug-only=mips-lower %s 2>&1 | %cheri_FileCheck %s -check-prefixes CHECK,OPT
 ; RUN: %cheri_purecap_llc -o - -O1 -cheri-cap-table-abi=pcrel -debug-only=mips-lower %s 2>&1 | %cheri_FileCheck %s -check-prefixes CHECK,NOOPT
 
@@ -145,7 +146,12 @@ define void @call_one_arg_from_many_arg(i8 addrspace(200)* %in_arg1, i8 addrspac
 ; This cgetnull should remain here since we are calling a function without on-stack args from one with
 ; CHECK-LABEL: call_one_arg_from_many_arg:
 ; CHECK:       cincoffset	$c3, $c3, 77
-; CHECK:       cgetnull $c13
+; CHECK:            cjalr   $c12, $c17
+; Clear $c13 in branch-delay slot
+; CHECK-NEXT:       cgetnull $c13
+; Also need to clear $c13 on return since this function has on-stack args
+; TODO: we know $c13 is already null so this is not strictly required but probably not worth optimizing
+; CHECK-NEXT:       cgetnull $c13
 ; CHECK:       .end	call_one_arg_from_many_arg
 entry:
   %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 77)
@@ -157,7 +163,12 @@ define void @call_one_arg_from_variadic_with_va_start(i8 addrspace(200)* %in_arg
 ; This cgenull should remain since we have a valid $c13 that should not leak to the other function
 ; CHECK-LABEL: call_one_arg_from_variadic_with_va_start:
 ; CHECK:       cincoffset	$c3, $c3, 77
-; CHECK:       cgetnull $c13
+; CHECK:            cjalr   $c12, $c17
+; Clear $c13 in branch-delay slot
+; CHECK-NEXT:       cgetnull $c13
+; Also need to clear $c13 on return since this function has on-stack args
+; TODO: we know $c13 is already null so this is not strictly required but probably not worth optimizing
+; CHECK-NEXT:       cgetnull $c13
 ; CHECK:       .end	call_one_arg_from_variadic_with_va_start
 entry:
   %ap = alloca i8 addrspace(200)*, align 16, addrspace(200)
@@ -179,7 +190,12 @@ define void @call_one_arg_from_variadic_without_va_start(i8 addrspace(200)* %in_
 ; (This should be the case even if the function doesn't use va_start (i.e. doesn't mark $c13 as live-in)
 ; CHECK-LABEL: call_one_arg_from_variadic_without_va_start:
 ; CHECK:       cincoffset	$c3, $c3, 77
-; CHECK:       cgetnull $c13
+; CHECK:            cjalr   $c12, $c17
+; Clear $c13 in branch-delay slot
+; CHECK-NEXT:       cgetnull $c13
+; Also need to clear $c13 on return since this function has on-stack args
+; TODO: we know $c13 is already null so this is not strictly required but probably not worth optimizing
+; CHECK-NEXT:       cgetnull $c13
 ; CHECK:       .end	call_one_arg_from_variadic_without_va_start
 entry:
   %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 77)
@@ -193,7 +209,12 @@ define void @call_variadic_no_onstack_from_varargs(i8 addrspace(200)* %in_arg1, 
 ; Calling a varargs function without onstack args from a varargs function should clear $c13
 ; CHECK-LABEL: call_variadic_no_onstack_from_varargs:
 ; CHECK:       cincoffset	$c3, $c3, 77
-; CHECK:       cgetnull $c13
+; CHECK:            cjalr   $c12, $c17
+; Clear $c13 in branch-delay slot
+; CHECK-NEXT:       cgetnull $c13
+; Also need to clear $c13 on return since this function has on-stack args
+; TODO: we know $c13 is already null so this is not strictly required but probably not worth optimizing
+; CHECK-NEXT:       cgetnull $c13
 ; CHECK:       .end	call_variadic_no_onstack_from_varargs
 entry:
   %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 77)
@@ -207,13 +228,40 @@ define void @call_variadic_no_onstack_from_many_args(i8 addrspace(200)* %arg1, i
 ; Calling a varargs function without onstack args from a function with on-stack args should clear $c13
 ; CHECK-LABEL: call_variadic_no_onstack_from_many_args:
 ; CHECK:       cincoffset	$c3, $c3, 77
-; CHECK:       cgetnull $c13
+; CHECK:            cjalr   $c12, $c17
+; Clear $c13 in branch-delay slot
+; CHECK-NEXT:       cgetnull $c13
+; Also need to clear $c13 on return since this function has on-stack args
+; TODO: we know $c13 is already null so this is not strictly required but probably not worth optimizing
+; CHECK-NEXT:       cgetnull $c13
 ; CHECK:       .end	call_variadic_no_onstack_from_many_args
 entry:
   %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %arg1, i64 77)
   %0 = call i8 addrspace(200)* (i8 addrspace(200)*, ...) @variadic(i8 addrspace(200)* %first_arg)
   ret void
 }
+
+
+define void @call_variadic_onstack_and_no_stack_fn_from_nostack_fn(i8 addrspace(200)* %in_arg1) {
+; Calling a varargs function without onstack args from a varargs function should clear $c13
+; CHECK-LABEL: call_variadic_onstack_and_no_stack_fn_from_nostack_fn:
+; CHECK:       cincoffset	$c3, $c18, 77
+; CHECK:       candperm        $c13, $c1, $1
+; Since the variadic fn clears $c13 on return we should not have another cgetnull here!
+; OPT-NOT:   $c13
+; CHECK:       cincoffset      $c3, $c18, 97
+; OPT-NOT:   $c13
+; CHECK:       .end	call_variadic_onstack_and_no_stack_fn_from_nostack_fn
+entry:
+  %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 77)
+  %second_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 87)
+  %0 = call i8 addrspace(200)* (i8 addrspace(200)*, ...) @variadic(i8 addrspace(200)* %first_arg, i8 addrspace(200)* %second_arg)
+  %third_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 97)
+  %1 = call i8 addrspace(200)* @one_arg(i8 addrspace(200)* %third_arg)
+  ret void
+}
+
+
 
 
 declare i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)*, i64)
