@@ -114,8 +114,12 @@ DEFINE_LIBUNWIND_FUNCTION(unw_getcontext)
   SAVE_GPR(30) # $fp
   # Offset of the start of the capability register set
   daddiu $1, $zero, 64*8
-#define SAVE_CAP(x) csc $c ## x, $1, (x * _MIPS_SZCAP/8)($c3)
-  SAVE_CAP(0)
+#define SAVE_CAP_REG(src, x) csc $c ## src, $1, (x * _MIPS_SZCAP/8)($c3)
+#define SAVE_CAP(x) SAVE_CAP_REG(x, x)
+  // Use $c12 as a temp register in order to save it $ddc since $c12 will hold
+  // the cap for unw_getcontext and it doesn't make sense to save it
+  cgetdefault $c12
+  SAVE_CAP_REG(12, 0)
   SAVE_CAP(11)
   SAVE_CAP(17)
   SAVE_CAP(18)

@@ -142,7 +142,9 @@ DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind20Registers_mips_cheri6jumptoEv)
   cld $31, $zero, -(8+2*(_MIPS_SZCAP/8))($c3)
 #define RESTORE_CAP_REG(reg, idx) clc $c ## reg, $zero, ((idx-2)*(_MIPS_SZCAP/8))($c3)
 #define RESTORE_CAP(x) RESTORE_CAP_REG(x, x)
-  RESTORE_CAP(0)
+  // Use $c17 as the temporary when restoring $ddc since it is loaded last
+  RESTORE_CAP_REG(17, 0)
+  csetdefault $c17
   RESTORE_CAP(1)
   RESTORE_CAP(2)
   RESTORE_CAP(4)
@@ -169,7 +171,6 @@ DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind20Registers_mips_cheri6jumptoEv)
   RESTORE_CAP(26)
 
   // Load the new PC into $cra
-  
   RESTORE_CAP_REG(17, 32)
   // Jump to $ca, load $c3 in the delay slot
   cjr $c17
