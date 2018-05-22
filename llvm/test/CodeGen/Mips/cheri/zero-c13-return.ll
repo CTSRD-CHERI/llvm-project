@@ -4,7 +4,7 @@
 ; This is not strictly required but does ensure that all on-stack arguments are no longer reachable
 ; after the return.
 ; TODO: It might make more sense to do this in the caller since the stack is owned by the caller not the callee
-; RUN: %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=plt %s -o - | FileCheck %s
+; RUN: %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=plt %s -o - | %cheri_FileCheck %s
 
 @global = local_unnamed_addr addrspace(200) global i8 123, align 8
 
@@ -72,10 +72,10 @@ define i8 addrspace(200)* @no_onstack_args_call_variadic(i8 addrspace(200)* %in_
 ; We should not need to clear $c13 after calling the variadic function since it will clear it prior to return
 ; CHECK-LABEL: no_onstack_args_call_variadic:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset $c11, $c11, -32
-; CHECK-NEXT:    .cfi_def_cfa_offset 32
-; CHECK-NEXT:    csc $c17, $zero, 16($c11) # 16-byte Folded Spill
-; CHECK-NEXT:    .cfi_offset 89, -16
+; CHECK-NEXT:    cincoffset $c11, $c11, -[[@EXPR 2 * $CAP_SIZE]]
+; CHECK-NEXT:    .cfi_def_cfa_offset [[@EXPR 2 * $CAP_SIZE]]
+; CHECK-NEXT:    csc $c17, $zero, [[$CAP_SIZE]]($c11)
+; CHECK-NEXT:    .cfi_offset 89, -[[$CAP_SIZE]]
 ; CHECK-NEXT:    daddiu $1, $zero, 42
 ; CHECK-NEXT:    csd $1, $zero, 0($c11)
 ; CHECK-NEXT:    clcbi $c12, %capcall20(variadic_fn)($c26)
@@ -84,9 +84,9 @@ define i8 addrspace(200)* @no_onstack_args_call_variadic(i8 addrspace(200)* %in_
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    candperm $c13, $c1, $1
 ; CHECK-NEXT:    clcbi $c3, %captab20(global)($c26)
-; CHECK-NEXT:    clc $c17, $zero, 16($c11) # 16-byte Folded Reload
+; CHECK-NEXT:    clc $c17, $zero, [[$CAP_SIZE]]($c11)
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    cincoffset $c11, $c11, 32
+; CHECK-NEXT:    cincoffset $c11, $c11, [[@EXPR 2 * $CAP_SIZE]]
 entry:
   %0 = call i8 addrspace(200)* (i8 addrspace(200)*, ...) @variadic_fn(i8 addrspace(200)* %in_arg1, i64 42)
   ret i8 addrspace(200)* @global
