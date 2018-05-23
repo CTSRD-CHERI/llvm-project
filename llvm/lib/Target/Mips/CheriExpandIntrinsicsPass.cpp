@@ -16,7 +16,6 @@
 
 using namespace llvm;
 
-/// Expand the @llvm.cheri.cap.address.get() instrinsic to base + offset
 /// Expand the @llvm.cheri.cap.address.set() instrinsic to getaddr + sub + cincoffset
 namespace {
 
@@ -31,36 +30,6 @@ class CHERIExpandCapIntrinsics : public ModulePass {
 public:
   static char ID;
   CHERIExpandCapIntrinsics() : ModulePass(ID) {}
-
-  void expandAddrGet(Module &M, bool* Modified) {
-    Function *GetAddr =
-        M.getFunction(Intrinsic::getName(Intrinsic::cheri_cap_address_get));
-    if (!GetAddr)
-      return;
-
-    Function *GetBase =
-        Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_base_get);
-    Function *GetOffset =
-        Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_offset_get);
-
-    std::vector<CallInst *> ToErase;
-    for (Value *V : GetAddr->users()) {
-      CallInst *CI = cast<CallInst>(V);
-      Value *Cap = CI->getOperand(0);
-      IRBuilder<> B(CI);
-      Value *Replacement = B.CreateAdd(B.CreateCall(GetBase, {Cap}),
-                                       B.CreateCall(GetOffset, {Cap}));
-      CI->replaceAllUsesWith(Replacement);
-      // Seems like this causes the users() iterator to be invalidated
-      // CI->eraseFromParent();
-      // Let's collect the users and erase them in separate loop instead
-      ToErase.push_back(CI);
-      *Modified = true;
-    }
-    for (CallInst *CI : ToErase) {
-      CI->eraseFromParent();
-    }
-  }
 
   void expandAddrSet(Module &M, bool *Modified) {
     Function *SetAddr =
@@ -97,8 +66,6 @@ public:
   bool runOnModule(Module &M) override {
     bool Modified = false;
     expandAddrSet(M, &Modified);
-    // Get must be expanded after setaddr since setaddr inserts getaddr instrs
-    expandAddrGet(M, &Modified);
     return Modified;
   }
 };

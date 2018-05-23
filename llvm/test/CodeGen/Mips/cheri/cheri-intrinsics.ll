@@ -11,6 +11,7 @@ entry:
   %1 = inttoptr i64 %0 to i8 addrspace(200)*
   ; CHECK: csetbounds
   %2 = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %1, i64 %s)
+  ; CHECK: .end cmalloc
   ret i8 addrspace(200)* %2
 }
 
@@ -20,6 +21,7 @@ declare noalias i8* @malloc(i64) nounwind
 define i8 addrspace(200)* @addBase(i8 addrspace(200)* %p) nounwind readnone {
 entry:
   ; CHECK: cincoffset
+  ; CHECK: .end addBase
   %incdec.ptr = getelementptr inbounds i8, i8 addrspace(200)* %p, i64 1
   ret i8 addrspace(200)* %incdec.ptr
 }
@@ -27,7 +29,7 @@ entry:
 ; CHECK-LABEL: getLength
 define i64 @getLength(i8 addrspace(200)* %c) nounwind readnone {
 entry:
-  ; CHECK: cgetlen
+  ; CHECK: cgetlen $2, $c3
   %0 = tail call i64 @llvm.cheri.cap.length.get(i8 addrspace(200)* %c)
   ret i64 %0
 }
@@ -37,11 +39,8 @@ declare i64 @llvm.cheri.cap.length.get(i8 addrspace(200)*) nounwind readnone
 ; CHECK-LABEL: getAddress
 define i64 @getAddress(i8 addrspace(200)* %c) nounwind readnone {
 entry:
-  ; CHECK: cgetbase [[BASE:\$[0-9]+]], $c3
-  ; CHECK: cgetoffset [[OFFSET:\$[0-9]+]], $c3
-  ; CHECK: daddu $2, [[BASE]], [[OFFSET]]
+  ; CHECK: cgetaddr $2, $c3
   ; CHECK: .end getAddress
-
   %0 = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* %c)
   ret i64 %0
 }
@@ -51,13 +50,10 @@ declare i64 @llvm.cheri.cap.address.get(i8 addrspace(200)*) nounwind readnone
 ; CHECK-LABEL: setAddress
 define i8 addrspace(200)* @setAddress(i8 addrspace(200)* %c) nounwind readnone {
 entry:
-  ; CHECK: cgetbase        $1, $c3
-  ; CHECK: cgetoffset      $2, $c3
-  ; CHECK: daddu   $1, $1, $2
-  ; CHECK: daddiu  $2, $zero, 1234
-  ; CHECK: dsubu   $1, $2, $1
-  ; CHECK: jr      $ra
-  ; CHECK: cincoffset      $c3, $c3, $1
+  ; CHECK:  cgetaddr        $1, $c3
+  ; CHECK:  daddiu  $2, $zero, 1234
+  ; CHECK:  dsubu   $1, $2, $1
+  ; CHECK:  cincoffset      $c3, $c3, $1
   ; CHECK: .end setAddress
   %0 = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* %c, i64 1234)
   ret i8 addrspace(200)* %0
@@ -66,12 +62,12 @@ entry:
 declare i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)*, i64) nounwind readnone
 
 ; CHECK-LABEL: getPerms
-define signext i16 @getPerms(i8 addrspace(200)* %c) nounwind readnone {
+define signext i64 @getPerms(i8 addrspace(200)* %c) nounwind readnone {
 entry:
-  ; CHECK: cgetperm
+  ; CHECK: cgetperm        $2, $c3
+  ; CHECK: .end getPerms
   %0 = tail call i64 @llvm.cheri.cap.perms.get(i8 addrspace(200)* %c)
-  %1 = trunc i64 %0 to i16
-  ret i16 %1
+  ret i64 %0
 }
 
 declare i64 @llvm.cheri.cap.perms.get(i8 addrspace(200)*) nounwind readnone
@@ -79,7 +75,8 @@ declare i64 @llvm.cheri.cap.perms.get(i8 addrspace(200)*) nounwind readnone
 ; CHECK-LABEL: andPerms
 define i8 addrspace(200)* @andPerms(i8 addrspace(200)* %c, i16 signext %perms) nounwind readnone {
 entry:
-  ; CHECK: candperm
+  ; CHECK: candperm        $c3, $c3, $1
+  ; CHECK: .end andPerms
   %0 = zext i16 %perms to i64
   %1 = tail call i8 addrspace(200)* @llvm.cheri.cap.perms.and(i8 addrspace(200)* %c, i64 %0)
   ret i8 addrspace(200)* %1
@@ -90,7 +87,8 @@ declare i8 addrspace(200)* @llvm.cheri.cap.perms.and(i8 addrspace(200)*, i64) no
 ; CHECK-LABEL: gettype
 define i64 @gettype(i8 addrspace(200)* %c) nounwind readnone {
 entry:
-  ; CHECK: cgettype
+  ; CHECK: cgettype        $2, $c3
+  ; CHECK: .end gettype
   %0 = tail call i64 @llvm.cheri.cap.type.get(i8 addrspace(200)* %c)
   ret i64 %0
 }
@@ -100,7 +98,8 @@ declare i64 @llvm.cheri.cap.type.get(i8 addrspace(200)*) nounwind readnone
 ; CHECK-LABEL: setBounds
 define i8 addrspace(200)* @setBounds(i8 addrspace(200)* %c, i64 %bounds) nounwind readnone {
 entry:
-  ; CHECK: csetbounds
+  ; CHECK: csetbounds      $c3, $c3, $4
+  ; CHECK: .end setBounds
   %0 = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %c, i64 %bounds)
   ret i8 addrspace(200)* %0
 }

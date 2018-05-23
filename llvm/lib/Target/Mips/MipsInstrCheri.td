@@ -238,10 +238,7 @@ def CGetLength : CheriFmtCGet<3, "len", "length">;
 def CGetTag    : CheriFmtCGet<4, "tag">;
 def CGetSealed : CheriFmtCGet<5, "sealed">;
 def CGetOffset : CheriFmtCGet<6, "offset">;
-// TODO: uncommment this once we have CGetAddr support on all emulators/hardware
-// For now only add assembler support until we have it running in the testsuite
-def CGetAddr  : CheriFmt2Op<0xf, (outs GPR64Opnd:$r1), (ins CheriOpnd:$r2),
-                              "cgetaddr\t$r1, $r2", []>;
+def CGetAddr   : CheriFmtCGet<0xf, "addr", "address">;
 // Versions of property setters that take immediate operands
 def CSetBoundsImm : CheriFmtCSetImm<0x14, simm11s0, simm11s0Pattern, "bounds">;
 def CIncOffsetImm : CheriFmtCSetImm<0x13, simm11s0, simm11s0Pattern, "offset", "offset", "inc", "increment">;
