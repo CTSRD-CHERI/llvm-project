@@ -503,18 +503,50 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
   uint64_t UnsafeStackSize = MFI.getUnsafeStackSize();
 
   if(MFI.hasStaticUnsafeObjects()) {
+    // We allocate and set bounds to ensure the stack is still large enough
+    // It will alos fail if there is no stack. Either way get a new one
+    int64_t minSize = ABI.GetTABILayout()->GetMinStack_Size();
+    // FIXME lasyness made use c15, should be a new virtual register
+    if (isInt<11>(minSize) && isInt<11>(-minSize)) {
+      BuildMI(MBB, MBBI, dl, TII.get(Mips::CIncOffsetImm), Mips::C15)
+          .addReg(USP)
+          .addImm(-minSize);
+      BuildMI(MBB, MBBI, dl, TII.get(Mips::CSetBoundsImm), Mips::C15)
+          .addReg(Mips::C15)
+          .addImm(minSize);
+    } else {
+        unsigned MinReg = TII.loadImmediate(-minSize, MBB, MBBI, dl, nullptr);
+        BuildMI(MBB, MBBI, dl, TII.get(Mips::CIncOffset), Mips::C15)
+            .addReg(USP)
+            .addReg(MinReg);
+        BuildMI(MBB, MBBI, dl, TII.get(Mips::DSUBu), MinReg).addReg(ZERO).addReg(MinReg);
+        BuildMI(MBB, MBBI, dl, TII.get(Mips::CSetBounds), Mips::C15)
+            .addReg(Mips::C15, RegState::Kill)
+            .addReg(MinReg, RegState::Kill);
+    }
+
     // Store old csp
     BuildMI(MBB, MBBI, dl, TII.get(Mips::STORECAP))
             .addReg(SP)
             .addReg(ZERO)
             .addImm(-UnsafeStackSize+ABI.GetTABILayout()->GetStackPointerOffset_Prev())
             .addReg(USP);
-    // Get new csp
-    BuildMI(MBB, MBBI, dl, TII.get(Mips::CMove), SP).addReg(USP);
+
+    // Get new csp. We fold the move with inc offset we need for allocating a frame
+
+    if (isInt<11>(-StackSize)) {
+      BuildMI(MBB, MBBI, dl, TII.get(Mips::CIncOffsetImm), SP)
+          .addReg(USP).addImm(-StackSize);
+    } else {
+      unsigned Reg = TII.loadImmediate(-StackSize, MBB, MBBI, dl, nullptr);
+      BuildMI(MBB, MBBI, dl, TII.get(Mips::CIncOffset), SP)
+          .addReg(SP).addReg(Reg, RegState::Kill);
+    }
+
     // Get new cusp
     BuildMI(MBB, MBBI, dl, TII.get(Mips::LOADCAP), USP)
             .addReg(ZERO)
-            .addImm(ABI.GetTABILayout()->GetStackPointerOffset_Next())
+            .addImm(StackSize + ABI.GetTABILayout()->GetStackPointerOffset_Next())
             .addReg(SP);
   }
 
@@ -525,7 +557,8 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
   const MCRegisterInfo *MRI = MMI.getContext().getRegisterInfo();
 
   // Adjust stack.
-  TII.adjustStackPtr(SP, -StackSize, MBB, MBBI);
+  if(!MFI.hasStaticUnsafeObjects()) // We will have allocated with the move
+    TII.adjustStackPtr(SP, -StackSize, MBB, MBBI);
 
   // emit ".cfi_def_cfa_offset StackSize"
   unsigned CFIIndex = MF.addFrameInst(
