@@ -15,13 +15,13 @@ declare i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)*, i64) #
 define i64 @null_get_vaddr() #1 {
 ; OPT-LABEL: null_get_vaddr:
 ; OPT:       # %bb.0:
-; OPT-NEXT:    daddiu $sp, $sp, -16
-; OPT-NEXT:    sd $ra, 8($sp) # 8-byte Folded Spill
+; OPT-NEXT:    daddiu $sp, $sp
+; OPT-NEXT:    sd $ra, {{8|24}}($sp) # 8-byte Folded Spill
 ; OPT-NEXT:    jal check_fold
 ; OPT-NEXT:    daddiu $4, $zero, 0
-; OPT-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
+; OPT-NEXT:    ld $ra, {{8|24}}($sp) # 8-byte Folded Reload
 ; OPT-NEXT:    jr $ra
-; OPT-NEXT:    daddiu $sp, $sp, 16
+; OPT-NEXT:    daddiu $sp, $sp
 ; IR-LABEL: @null_get_vaddr(
 ; IR-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.base.get(i8 addrspace(200)* null)
 ; IR-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)* null)
@@ -36,15 +36,15 @@ define i64 @null_get_vaddr() #1 {
 define i64 @null_set_vaddr() #1 {
 ; OPT-LABEL: null_set_vaddr:
 ; OPT:       # %bb.0:
-; OPT-NEXT:    daddiu $sp, $sp, -16
-; OPT-NEXT:    sd $ra, 8($sp) # 8-byte Folded Spill
+; OPT-NEXT:    daddiu $sp, $sp,
+; OPT-NEXT:    sd $ra, {{8|24}}($sp) # 8-byte Folded Spill
 ; OPT-NEXT:    cgetnull $c1
 ; OPT-NEXT:    daddiu $1, $zero, 12345
 ; OPT-NEXT:    jal check_fold_cap
 ; OPT-NEXT:    csetoffset $c3, $c1, $1
-; OPT-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
+; OPT-NEXT:    ld $ra, {{8|24}}($sp) # 8-byte Folded Reload
 ; OPT-NEXT:    jr $ra
-; OPT-NEXT:    daddiu $sp, $sp, 16
+; OPT-NEXT:    daddiu $sp, $sp
 ; IR-LABEL: @null_set_vaddr(
 ; IR-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.base.get(i8 addrspace(200)* null)
 ; IR-NEXT:    [[TMP2:%.*]] = call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)* null)
@@ -61,13 +61,13 @@ define i64 @null_set_vaddr() #1 {
 define void @infer_values_from_null_set_offset() #1 {
 ; OPT-LABEL: infer_values_from_null_set_offset:
 ; OPT:       # %bb.0:
-; OPT-NEXT:    daddiu $sp, $sp, -16
-; OPT-NEXT:    sd $ra, 8($sp) # 8-byte Folded Spill
+; OPT-NEXT:    daddiu $sp, $sp,
+; OPT-NEXT:    sd $ra, {{8|24}}($sp) # 8-byte Folded Spill
 ; OPT-NEXT:    jal check_fold
 ; OPT-NEXT:    daddiu $4, $zero, 50
-; OPT-NEXT:    ld $ra, 8($sp) # 8-byte Folded Reload
+; OPT-NEXT:    ld $ra, {{8|24}}($sp) # 8-byte Folded Reload
 ; OPT-NEXT:    jr $ra
-; OPT-NEXT:    daddiu $sp, $sp, 16
+; OPT-NEXT:    daddiu $sp, $sp
 ; IR-LABEL: @infer_values_from_null_set_offset(
 ; IR-NEXT:    [[WITH_OFFSET:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 50)
 ; IR-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.base.get(i8 addrspace(200)* [[WITH_OFFSET]])
@@ -79,8 +79,6 @@ define void @infer_values_from_null_set_offset() #1 {
   %vaddr = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* %with_offset)
   %vaddr_check = tail call i64 @check_fold(i64 %vaddr)
   ret void
-
-
 }
 
 
