@@ -419,6 +419,7 @@ int main(int argc, char **argv) {
   // Add the Cheri IR -> IR passes
   initializeCHERICapFoldIntrinsicsPass(Registry);
   initializeCHERICapDirectCallsPass(Registry);
+  initializeCHERIExpandCapIntrinsicsPass(Registry);
 
 #ifdef LINK_POLLY_INTO_TOOLS
   polly::initializePollyPasses(Registry);
