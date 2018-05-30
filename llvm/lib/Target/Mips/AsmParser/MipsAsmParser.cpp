@@ -68,11 +68,10 @@ class MCInstrInfo;
 
 } // end namespace llvm
 
-static cl::opt<bool>
-CheriStrictDDCUse("cheri-strict-ddc-asm", cl::Hidden,
-         cl::desc("Don't allow use of $ddc execpt in cfromptr and loads/stores."),
-         cl::init(false),
-         cl::ZeroOrMore);
+static cl::opt<bool> CheriStrictC0(
+    "cheri-strict-c0-asm", cl::Hidden,
+    cl::desc("Require $ddc or $cnull instead of $c0."),
+    cl::init(false), cl::ZeroOrMore);
 
 namespace {
 
@@ -5792,7 +5791,8 @@ int MipsAsmParser::matchFPURegisterName(StringRef Name) {
 // for references to DDC but in other instructions we would like to have $c0
 // be a NULL register (e.g. cincoffset)
 // TODO: would be nice if we could generate these checks from tablegen (0 == $ddc vs 0 == NULL)
-static bool checkCheriRegZeroAccess(const OperandVector &Operands, StringRef RegSpelling) {
+static bool isCRegZeroDDC(const OperandVector &Operands,
+                          StringRef RegSpelling) {
   if (Operands.empty())
     return false;
   const auto& FirstOp = Operands[0];
@@ -5805,7 +5805,7 @@ static bool checkCheriRegZeroAccess(const OperandVector &Operands, StringRef Reg
   size_t OperandIndex = Operands.size();
   DEBUG(dbgs() << "Checking if " << Mnemonic << " accepts register $"
                << RegSpelling << " as operand " << OperandIndex << ": ");
-  assert(RegSpelling == "c0" || RegSpelling == "ddc");
+  assert(RegSpelling == "c0" || RegSpelling == "ddc" || RegSpelling == "cnull");
   size_t AllowedIndex = StringSwitch<size_t>(Mnemonic)
             .Cases("clc", "clb", "clbu", "clh", "clhu", "clw", "clwu", "cld", 5)
             .Cases("csc", "csb", "csh", "csw", "csd", 5)
@@ -5840,13 +5840,17 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name,
   }
   if (CC == -1) {
     if (Name[0] == 'c') {
-      StringRef NumString = Name.substr(1);
-      int IntVal;
-      if (NumString.getAsInteger(10, IntVal))
-        return -1; // This is not an integer.
-      if (IntVal < 0 || IntVal > 31) // Maximum index for CHERI register.
-        return -1;
-      CC = IntVal;
+      if (Name == "cnull") {
+        CC = 0;
+      } else {
+        StringRef NumString = Name.substr(1);
+        int IntVal;
+        if (NumString.getAsInteger(10, IntVal))
+          return -1;                   // This is not an integer.
+        if (IntVal < 0 || IntVal > 31) // Maximum index for CHERI register.
+          return -1;
+        CC = IntVal;
+      }
     } else {
       CC = StringSwitch<unsigned>(Name)
                .Case("ddc", 0)
@@ -5882,13 +5886,53 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name,
       return -2;
     }
   };
+  if (CC == 0) {
+    // special handling for register zero (some instructions treat it as NULL
+    // and other use it for $ddc
+    bool RegZeroIsDDC = isCRegZeroDDC(Operands, Name);
+    if (Name == "cnull") {
+      // the spelling $cnull is not allowed for address/cfromptr operands
+      // where register zero means $ddc
+      if (RegZeroIsDDC) {
+        Error(Parser.getTok().getLoc(),
+              "register name $cnull is invalid as this operand. Did you mean "
+              "$ddc?",
+              Parser.getTok().getLocRange());
+        return -2;
+      }
+      return CC;
+    } else if (Name == "c0") {
+      if (!RegZeroIsDDC) {
+        StringRef ErrMsg =
+            "register name $c0 is invalid as this operand. It will no longer "
+            "refer to $ddc but instead be NULL. If this is what you want use "
+            "$cnull, otherwise use CGetDefault/CSetDefault to manipulate $ddc.";
+        if (CheriStrictC0) {
+          Error(Parser.getTok().getLoc(), ErrMsg, Parser.getTok().getLocRange());
+          return -2;
+        } else {
+          Warning(Parser.getTok().getLoc(), ErrMsg);
+          return CC;
+        }
+      }
+      // Otherwise $c0 means $ddc so just print a deprecation warning
+      Warning(Parser.getTok().getLoc(),
+              "register name $c0 is deprecated. Use $ddc instead.");
+      return CC;
+    } else if (Name == "ddc") {
+      if (!RegZeroIsDDC) {
+        Error(Parser.getTok().getLoc(),
+              "register name $ddc is invalid as this operand. Did you mean "
+              "$cnull?",
+              Parser.getTok().getLocRange());
+        return -2;
+      }
+      return CC;
+    }
+    errs() << "REGISTER NAME " << Name << "not handled?\n";
+    llvm_unreachable("Bad register name?");
+  }
   switch (CC) {
-  case 0:
-    if (CheriStrictDDCUse && !checkCheriRegZeroAccess(Operands, Name))
-      return BadReg("DDC", "Default", /*Allowed=*/false);
-    // Access is fine (cfrompr, clc, etc.)
-    // TODO: should we still warn?
-    return BadReg("DDC", "Default", /*Allowed=*/true);
   case 27:
     return BadReg("KR1C");
   case 28:
