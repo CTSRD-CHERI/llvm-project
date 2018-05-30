@@ -71,7 +71,7 @@ class MCInstrInfo;
 static cl::opt<bool> CheriStrictC0(
     "cheri-strict-c0-asm", cl::Hidden,
     cl::desc("Require $ddc or $cnull instead of $c0."),
-    cl::init(false), cl::ZeroOrMore);
+    cl::init(true), cl::ZeroOrMore);
 
 namespace {
 

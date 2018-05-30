@@ -141,11 +141,11 @@
 	CMove	$c1, $31
 
 # DDC should not suggest cheri_sysregs_accessible
-# WARN: [[@LINE+3]]:13: warning: Direct access to DDC is deprecated: use C(Get/Set)Default instead.
+# WARN: [[@LINE+3]]:13: error: register name $c0 is invalid as this operand. It will no longer refer to $ddc but instead be NULL.
 # WARN-NOT: cheri_sysregs_accessible
 # WARN-NEXT: CMove $c1, $c0
 	CMove	$c1, $c0
-# WARN: [[@LINE+3]]:8: warning: Direct access to DDC is deprecated: use C(Get/Set)Default instead.
+# WARN: [[@LINE+3]]:8: error: register name $c0 is invalid as this operand. It will no longer refer to $ddc but instead be NULL.
 # WARN-NOT: cheri_sysregs_accessible
 # WARN-NEXT: CMove $c0, $c1
 	CMove	$c0, $c1
@@ -173,7 +173,7 @@
 	CMove	$c1, $epcc
 
   # And $C0 should also not have changed:
-  # WARN: [[@LINE+3]]:13: warning: Direct access to DDC is deprecated: use C(Get/Set)Default instead.
+  # WARN: [[@LINE+3]]:13: error: register name $c0 is invalid as this operand. It will no longer refer to $ddc but instead be NULL.
   # WARN-NOT: cheri_sysregs_accessible
   # WARN-NEXT: CMove $c1, $c0
 	CMove	$c1, $c0

@@ -5,10 +5,10 @@
 
 # CHECK: csc	$c0, $13, 48($c1)
 # CHECK: encoding: [0xf8,0x01,0x68,0x03]
-	csc		$c0, $t1, 48($c1)
+	csc		$cnull, $t1, 48($c1)
 # CHECK: clc	$c0, $13, 48($c1)
 # CHECK: encoding: [0xd8,0x01,0x68,0x03]
-	clc		$c0, $t1, 48($c1)
+	clc		$cnull, $t1, 48($c1)
 # CHECK: clb	$12, $13, 3($c1)
 # CHECK: encoding: [0xc9,0x81,0x68,0x1c]
 	clb		$t0, $t1, 3($c1)
