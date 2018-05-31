@@ -709,6 +709,9 @@ class Reducer(object):
         # try emitting llvm-ir (i.e. frontend bug):
         print("Checking whether -O0 -emit-llvm crashes:", end="", flush=True)
         generate_ir_cmd = new_command + ["-O0", "-emit-llvm"]
+        if "-cc1" in generate_ir_cmd:
+            # Don't add the optnone attribute to the generated IR function
+            generate_ir_cmd.append("-disable-O0-optnone")
         if "-emit-obj" in generate_ir_cmd:
             generate_ir_cmd.remove("-emit-obj")
         if self._check_crash(generate_ir_cmd, infile):
