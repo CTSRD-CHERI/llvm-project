@@ -22,7 +22,7 @@ int _start(void) {
   // CHECK-NEXT: daddiu	$1, $1, %lo(__cap_table_end)
   // CHECK-NEXT: dsll32	$3, $3, 0
   // CHECK-NEXT: daddu	$3, $3, $1
-  // CHECK-NEXT: cgetdefault	 $c26
+  // CHECK-NEXT: creadhwr $c26, $chwr_ddc
   // CHECK-NEXT: csetoffset	$c26, $c26, $2
   // CHECK-NEXT: dsubu	$1, $3, $2
   // CHECK-NEXT: csetbounds	$c26, $c26, $1
