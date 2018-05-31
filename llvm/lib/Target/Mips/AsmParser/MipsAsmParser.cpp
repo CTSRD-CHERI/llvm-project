@@ -5810,7 +5810,7 @@ static bool isCRegZeroDDC(const OperandVector &Operands,
             .Cases("clc", "clb", "clbu", "clh", "clhu", "clw", "clwu", "cld", 5)
             .Cases("csc", "csb", "csh", "csw", "csd", 5)
             .Cases("clcbi", "cscbi", 4)
-            .Cases("cfromptr", "ctoptr", 2)
+            .Cases("cfromptr", "ctoptr", "cbuildcap", 2)
             .Cases("cllc", "cllb", "cllbu", "cllh", "cllhu", "cllw", "cllwu", "clld", 2)
             .Cases("cscc", "cscb", "csch", "cscw", "cscd", 3)
             .Default(std::numeric_limits<size_t>::max());
