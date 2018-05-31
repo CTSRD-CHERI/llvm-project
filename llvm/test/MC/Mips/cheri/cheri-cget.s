@@ -68,6 +68,30 @@
 # DUMP-NEXT: 48 0c 0f ff 	cgetcause	$12
 	cgetcause	$t0
 
+.macro cheri_opcode_3arg code, r1, r2, r3
+  .word ((0x12 << 26) | (\r1 << 16) | (\r2 << 11) | (\r3 << 6) | \code)
+.endm
+.macro cheri_opcode_2arg code, r1, r2
+  cheri_opcode_3arg 0x3f, \r1, \r2, \code
+.endm
+.macro cheri_opcode_1arg code, r1
+  cheri_opcode_3arg 0x3f, \r1, \code, 0x3f
+.endm
+
+# Allow generating the old cmove even if the registers are no longer used
+.macro old_cget_c4 regno
+  # cmove $c4 $regno
+  # cheri_opcode_2arg 0xa, 4, \regno
+  # use cincoffset instead
+  cheri_opcode_3arg 0x11, 4, \regno, 0
+.endm
+.macro old_cset_c4 regno
+  # cmove $regno, c4
+  # cheri_opcode_2arg 0xa, \regno, 4
+  # use cincoffset instead
+  cheri_opcode_3arg 0x11, \regno, 4, 0
+.endm
+
 # CHECK: creadhwr	 $c4, $chwr_epcc
 # CHECK-SAME:  encoding: [0x48,0x04,0xfb,0x7f]
 # DUMP-NEXT: 48 04 fb 7f 	creadhwr	 $c4, $chwr_epcc
@@ -77,31 +101,45 @@
 # CHECK-SAME:  encoding: [0x48,0x04,0xfb,0xbf]
 # DUMP-NEXT: 48 04 fb bf 	cwritehwr	 $c4, $chwr_epcc
 	CSetEPCC $c4
+
 	# test disassembly of the old encoding:
-	.word 0x4804f811  # CGetEPCC $c4 (old)
+	old_cget_c4 31
 	# DUMP-NEXT: 48 04 f8 11 cincoffset $c4, $c31, $zero
-	.word 0x481f2011  # CSetEPCC $c4 (old)
+	old_cset_c4 31
 	# DUMP-NEXT: 48 1f 20 11 cincoffset $c31, $c4, $zero
 
-# CHECK: cgetkcc	 $c4
-# CHECK-SAME:  encoding: [0x48,0x04,0xe8,0x11]
-# DUMP-NEXT: 48 04 e8 11 	cgetkcc	$c4
+# CHECK: creadhwr        $c4, $chwr_kcc
+# CHECK-SAME:  encoding: [0x48,0x04,0xeb,0x7f]
+# DUMP-NEXT: 48 04 eb 7f     creadhwr        $c4, $chwr_kcc
 	CGetKCC $c4
 
-# CHECK: csetkcc	 $c4
-# CHECK-SAME:  encoding: [0x48,0x1d,0x20,0x11]
-# DUMP-NEXT: 48 1d 20 11 	csetkcc	$c4
+# CHECK: cwritehwr        $c4, $chwr_kcc
+# CHECK-SAME:  encoding: [0x48,0x04,0xeb,0xbf]
+# DUMP-NEXT: 48 04 eb bf     cwritehwr       $c4, $chwr_kcc
 	CSetKCC $c4
 
-# CHECK: cgetkdc	 $c4
-# CHECK-SAME:  encoding: [0x48,0x04,0xf0,0x11]
-# DUMP-NEXT: 48 04 f0 11 	cgetkdc	$c4
+	# test disassembly of the old encoding:
+	old_cget_c4 29
+	# DUMP-NEXT: 48 04 e8 11 cincoffset $c4, $c29, $zero
+	old_cset_c4 29
+	# DUMP-NEXT: 48 1d 20 11 cincoffset $c29, $c4, $zero
+
+# CHECK: creadhwr        $c4, $chwr_kdc
+# CHECK-SAME:  encoding: [0x48,0x04,0xf3,0x7f]
+# DUMP-NEXT: 48 04 f3 7f     creadhwr        $c4, $chwr_kdc
 	CGetKDC $c4
 
-# CHECK: csetkdc	 $c4
-# CHECK-SAME:  encoding: [0x48,0x1e,0x20,0x11]
-# DUMP-NEXT: 48 1e 20 11 	csetkdc	$c4
+# CHECK: cwritehwr        $c4, $chwr_kdc
+# CHECK-SAME:  encoding: [0x48,0x04,0xf3,0xbf]
+# DUMP-NEXT: 48 04 f3 bf     cwritehwr       $c4, $chwr_kdc
 	CSetKDC $c4
+
+	# test disassembly of the old encoding:
+	old_cget_c4 30
+	# DUMP-NEXT: 48 04 f0 11 cincoffset $c4, $c30, $zero
+	old_cset_c4 30
+	# DUMP-NEXT: 48 1e 20 11 cincoffset $c30, $c4, $zero
+
 
 # CHECK: cgetkr1c	 $c4
 # CHECK-SAME:  encoding: [0x48,0x04,0xd8,0x11]
@@ -122,6 +160,22 @@
 # CHECK-SAME:  encoding: [0x48,0x1c,0x20,0x11]
 # DUMP-NEXT: 48 1c 20 11 	csetkr2c	$c4
 	CSetKR2C $c4
+
+# CHECK:  creadhwr        $c4, $chwr_ddc
+# CHECK-SAME:  encoding: [0x48,0x04,0x03,0x7f]
+# DUMP-NEXT: 48 04 03 7f creadhwr        $c4, $chwr_ddc
+	CGetDefault $c4
+
+# CHECK:  cwritehwr       $c4, $chwr_ddc
+# CHECK-SAME:  encoding: [0x48,0x04,0x03,0xbf]
+# DUMP-NEXT: 48 04 03 bf cwritehwr       $c4, $chwr_ddc
+	CSetDefault $c4
+
+	# test disassembly of the old encoding:
+	old_cget_c4 0
+	# DUMP-NEXT: 48 04 00 11 cincoffset $c4, $c0, $zero
+	old_cset_c4 0
+	# DUMP-NEXT: 48 00 20 11 cincoffset $c0, $c4, $zero
 
 # CHECK: csub	 $1, $c2, $c3
 # CHECK-SAME:  encoding: [0x48,0x01,0x10,0xca]

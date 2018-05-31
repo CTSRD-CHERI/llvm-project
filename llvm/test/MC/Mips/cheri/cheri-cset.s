@@ -51,11 +51,11 @@
 # Check for correct encoding of explicit set / get default and deprecated
 # direct access to C0
 
-# CHECK: csetdefault	$c1
-# CHECK-SAME: encoding: [0x48,0x00,0x08,0x11]
+# CHECK: cwritehwr $c1, $chwr_ddc
+# CHECK-SAME: encoding: [0x48,0x01,0x03,0xbf]
 	CSetDefault	$c1
-# CHECK: cgetdefault	$c1
-# CHECK-SAME: encoding: [0x48,0x01,0x00,0x11]
+# CHECK: creadhwr $c1, $chwr_ddc
+# CHECK-SAME: encoding: [0x48,0x01,0x03,0x7f]
 	CGetDefault	$c1
 
 .ifdef BAD

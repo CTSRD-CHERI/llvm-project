@@ -470,12 +470,12 @@ let isCodeGenOnly=1 in {
 defm CAPSTORE64     : StoreViaCapScaled<3, 0, "csd", GPR64Opnd, store, simm8s3, simm8s3Pattern>;
 
 // TODO: replace these by CReadHwr
-def : Pat<(int_cheri_ddc_get), (CIncOffset C0, ZERO_64)>;
-def : Pat<(int_mips_idc_get), (CIncOffset C26, ZERO_64)>;
+def : Pat<(int_cheri_ddc_get), (CReadHwr CAPHWR0)>;
+def : Pat<(int_mips_idc_get),  (CIncOffset C26, ZERO_64)>;
 def : Pat<(int_mips_kr1c_get), (CIncOffset C27, ZERO_64)>;
 def : Pat<(int_mips_kr2c_get), (CIncOffset C28, ZERO_64)>;
-def : Pat<(int_mips_kcc_get), (CIncOffset C29, ZERO_64)>;
-def : Pat<(int_mips_kdc_get), (CIncOffset C30, ZERO_64)>;
+def : Pat<(int_mips_kcc_get),  (CReadHwr CAPHWR29)>;
+def : Pat<(int_mips_kdc_get),  (CReadHwr CAPHWR30)>;
 def : Pat<(int_mips_epcc_get), (CReadHwr CAPHWR31)>;
 let Predicates=[IsCHERIABI] in {
   // C11 is only defined in the purecap ABI
@@ -518,11 +518,27 @@ defm : StoreViaCap0<CSDC1, FGR64Opnd, store>;
 ////////////////////////////////////////////////////////////////////////////////
 // Accessor pseudos
 ////////////////////////////////////////////////////////////////////////////////
-def : InstAlias<"cgetdefault $dst",
-                (CIncOffset CheriOpnd:$dst, C0, ZERO_64), 1>;
-def : InstAlias<"csetdefault $src",
-                (CIncOffset C0, CheriOpnd:$src, ZERO_64), 1>;
 
+// Set Emit = 0 here to show that creadhwr is used in the disasm
+// TODO: change this to 1?
+def : InstAlias<"cgetdefault $dst",
+                (CReadHwr CheriOpnd:$dst, CAPHWR0), 0>;
+def : InstAlias<"csetdefault $src",
+                (CWriteHwr CheriOpnd:$src, CAPHWR0), 0>;
+def : InstAlias<"cgetkcc $dst",
+                (CReadHwr CheriOpnd:$dst, CAPHWR29), 0>;
+def : InstAlias<"csetkcc $src",
+                (CWriteHwr CheriOpnd:$src, CAPHWR29), 0>;
+def : InstAlias<"cgetkdc $dst",
+                (CReadHwr CheriOpnd:$dst, CAPHWR30), 0>;
+def : InstAlias<"csetkdc $src",
+                (CWriteHwr CheriOpnd:$src, CAPHWR30), 0>;
+def : InstAlias<"cgetepcc $dst",
+                (CReadHwr CheriOpnd:$dst, CAPHWR31), 0>;
+def : InstAlias<"csetepcc $src",
+                (CWriteHwr CheriOpnd:$src, CAPHWR31), 0>;
+
+// TODO: these aliases still use the c27/c28 registers since the hwregs are not mirrored and this may be confusing
 def : InstAlias<"cgetkr1c $dst",
                 (CIncOffset CheriOpnd:$dst, C27, ZERO_64), 1>;
 def : InstAlias<"csetkr1c $src",
@@ -532,22 +548,6 @@ def : InstAlias<"cgetkr2c $dst",
                 (CIncOffset CheriOpnd:$dst, C28, ZERO_64), 1>;
 def : InstAlias<"csetkr2c $src",
                 (CIncOffset C28, CheriOpnd:$src, ZERO_64), 1>;
-
-def : InstAlias<"cgetkcc $dst",
-                (CIncOffset CheriOpnd:$dst, C29, ZERO_64), 1>;
-def : InstAlias<"csetkcc $src",
-                (CIncOffset C29, CheriOpnd:$src, ZERO_64), 1>;
-
-def : InstAlias<"cgetkdc $dst",
-                (CIncOffset CheriOpnd:$dst, C30, ZERO_64), 1>;
-def : InstAlias<"csetkdc $src",
-                (CIncOffset C30, CheriOpnd:$src, ZERO_64), 1>;
-
-// TODO: Emit = 0 here to show that creadhwr is used
-def : InstAlias<"cgetepcc $dst",
-                (CReadHwr CheriOpnd:$dst, CAPHWR31), 0>;
-def : InstAlias<"csetepcc $src",
-                (CWriteHwr CheriOpnd:$src, CAPHWR31), 0>;
 
 
 // Must come before cfromddc to have a higher priority when disassembling

@@ -8,7 +8,8 @@ target triple = "cheri-unknown-freebsd"
 define i8 addrspace(200)* @getddc() nounwind {
 entry:
   ; CHECK-LABEL: getddc:
-  ; CHECK: cgetdefault	$c3
+  ; CHECK: creadhwr $c3, $chwr_ddc
+  ; CHECK: .end getddc
   %0 = call i8 addrspace(200)* @llvm.cheri.ddc.get()
   ret i8 addrspace(200)* %0
 }
@@ -18,6 +19,7 @@ define i8 addrspace(200)* @getpcc() nounwind {
 entry:
   ; CHECK-LABEL: getpcc:
   ; CHECK: cgetpcc	$c3
+  ; CHECK: .end getpcc
   %0 = call i8 addrspace(200)* @llvm.cheri.pcc.get()
   ret i8 addrspace(200)* %0
 }
@@ -28,6 +30,7 @@ define i64 @getcause() nounwind {
 entry:
   ; CHECK-LABEL: getcause:
   ; CHECK: cgetcause	$2
+  ; CHECK: .end getcause
   %0 = call i64 @llvm.mips.cap.cause.get()
   ret i64 %0
 }
@@ -38,6 +41,8 @@ define void @setcause() nounwind {
 entry:
   ; CHECK-LABEL: setcause:
   ; CHECK: csetcause	$1
+  ; CHECK: .end setcause
+
   call void @llvm.mips.cap.cause.set(i64 1)
   ret void
 }
@@ -53,6 +58,7 @@ entry:
 }
 ; CHECK-LABEL: getidc:
 ; CHECK: cincoffset	$c3, $c26, $zero
+; CHECK: .end getidc
 
 define i8 addrspace(200)* @getkr1c() nounwind {
 entry:
@@ -61,6 +67,7 @@ entry:
 }
 ; CHECK-LABEL: getkr1c:
 ; CHECK: cgetkr1c	$c3
+; CHECK: .end getkr1c
 
 define i8 addrspace(200)* @getkr2c() nounwind {
 entry:
@@ -69,6 +76,7 @@ entry:
 }
 ; CHECK-LABEL: getkr2c:
 ; CHECK: cgetkr2c	$c3
+; CHECK: .end getkr2c
 
 define i8 addrspace(200)* @getkcc() nounwind {
 entry:
@@ -76,7 +84,8 @@ entry:
   ret i8 addrspace(200)* %0
 }
 ; CHECK-LABEL: getkcc:
-; CHECK: cgetkcc	$c3
+; CHECK: creadhwr $c3, $chwr_kcc
+; CHECK: .end getkcc
 
 define i8 addrspace(200)* @getkdc() nounwind {
 entry:
@@ -84,7 +93,8 @@ entry:
   ret i8 addrspace(200)* %0
 }
 ; CHECK-LABEL: getkdc:
-; CHECK: cgetkdc	$c3
+; CHECK: creadhwr $c3, $chwr_kdc
+; CHECK: .end getkdc
 
 define i8 addrspace(200)* @getepcc() nounwind {
 entry:
@@ -93,6 +103,7 @@ entry:
 }
 ; CHECK-LABEL: getepcc:
 ; CHECK: creadhwr $c3, $chwr_epcc
+; CHECK: .end getepcc
 
 declare i8 addrspace(200)* @llvm.mips.idc.get()
 declare i8 addrspace(200)* @llvm.mips.kr1c.get()
@@ -104,7 +115,7 @@ declare i8 addrspace(200)* @llvm.mips.epcc.get()
 
 ; DUMP-LABEL: getddc:
 ; DUMP-NEXT:       03 e0 00 08 	jr	$ra
-; DUMP-NEXT:       48 03 00 11 	cgetdefault	$c3
+; DUMP-NEXT:       48 03 03 7f creadhwr $c3, $chwr_ddc
 
 ; DUMP-LABEL: getpcc:
 ; DUMP-NEXT:       03 e0 00 08 	jr	$ra
@@ -136,11 +147,11 @@ declare i8 addrspace(200)* @llvm.mips.epcc.get()
 
 ; DUMP-LABEL: getkcc:
 ; DUMP-NEXT:       03 e0 00 08 	jr	$ra
-; DUMP-NEXT:       48 03 e8 11 	cgetkcc	$c3
+; DUMP-NEXT:       48 03 eb 7f creadhwr $c3, $chwr_kcc
 
 ; DUMP-LABEL: getkdc:
 ; DUMP-NEXT:       03 e0 00 08 	jr	$ra
-; DUMP-NEXT:       48 03 f0 11 	cgetkdc	$c3
+; DUMP-NEXT:       48 03 f3 7f creadhwr $c3, $chwr_kdc
 
 ; DUMP-LABEL: getepcc:
 ; DUMP-NEXT:       03 e0 00 08 	jr	$ra
