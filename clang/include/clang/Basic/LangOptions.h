@@ -113,6 +113,13 @@ public:
     FPC_Fast
   };
 
+  enum CheriUIntCapMode {
+    UIntCap_Offset, /// Use the capability the offset for operations on
+                    /// uintcap_t (GC-friendlier than vaddr)
+    UIntCap_Addr, /// Use the capability the offset for operations on uintcap_t
+                  /// (More C compatible than offset)
+  };
+
 public:
   /// \brief Set of enabled sanitizers.
   SanitizerSet Sanitize;

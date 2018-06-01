@@ -3338,7 +3338,7 @@ LValue CodeGenFunction::EmitArraySubscriptExpr(const ArraySubscriptExpr *E,
       EmitBoundsCheck(E, E->getBase(), Idx, IdxTy, Accessed);
 
     if (Idx->getType()->isPointerTy())
-      Idx = getPointerOffset(Idx);
+      Idx = getCapabilityIntegerValue(Idx);
 
     // Extend or truncate the index type to 32 or 64-bits.
     if (Promote && Idx->getType() != IntPtrTy)

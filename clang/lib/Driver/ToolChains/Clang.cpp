@@ -3736,6 +3736,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
   Args.AddLastArg(CmdArgs, options::OPT_working_directory);
 
+  Args.AddLastArg(CmdArgs, options::OPT_cheri_uintcap_offset,
+                  options::OPT_cheri_uintcap_addr);
+
   RenderARCMigrateToolOptions(D, Args, CmdArgs);
 
   // Add preprocessing options like -I, -D, etc. if we are using the

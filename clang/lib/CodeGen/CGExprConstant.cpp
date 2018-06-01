@@ -1861,11 +1861,12 @@ llvm::Constant *ConstantEmitter::tryEmitPrivate(const APValue &Value,
       // Would be nice use CGF->setPointerOffset() but we can't since that
       // is not a llvm::Constant
       // if (CGF)
-      //   return CGF->setPointerOffset(
+      //   return CGF->setCapabilityIntegerValue(
       //       llvm::ConstantPointerNull::get(cast<llvm::PointerType>(TargetTy)),
       //       AsInt);
 
-      // Note: CodeGenFunction needs to convert this into a CGF.getPointerOffset
+      // Note: CodeGenFunction needs to convert this into a
+      // CGF.getCapabilityIntegerValue
       return llvm::ConstantExpr::getIntToPtr(AsInt, TargetTy);
     }
     assert(!DestType->isCHERICapabilityType(CGM.getContext()));

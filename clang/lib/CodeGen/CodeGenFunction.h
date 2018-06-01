@@ -3309,8 +3309,8 @@ public:
         if (auto *CE = dyn_cast<llvm::ConstantExpr>(C)) {
           if (CE->getOpcode() == llvm::Instruction::IntToPtr &&
               CGF.CGM.getDataLayout().isFatPointer(PTy)) {
-            return CGF.setPointerOffset(llvm::ConstantPointerNull::get(PTy),
-                                        CE->getOperand(0));
+            return CGF.setCapabilityIntegerValue(
+                llvm::ConstantPointerNull::get(PTy), CE->getOperand(0));
           }
         }
         // TODO: are there any other exprs we need to special case?
@@ -4018,8 +4018,29 @@ public:
   llvm::Value *getPointerOffset(llvm::Value *V) {
     return getTargetHooks().getPointerOffset(*this, V);
   }
+  /// Returns the result of casting a __uintcap_t to long:
+  /// This is a getoffset operation by default but if -cheri-uintcap=addr is
+  /// passed we will return the address instead
+  llvm::Value *getCapabilityIntegerValue(llvm::Value *V) {
+    return getLangOpts().getCheriUIntCap() == LangOptions::UIntCap_Addr
+               ? getPointerAddress(V)
+               : getPointerOffset(V);
+  }
+  /// Update a __uintcap_t with a long value:
+  /// This is a getoffset operation by default but if -cheri-uintcap=addr is
+  /// passed we will return the address instead (this may make certain alignment
+  /// code work unchanged)
+  llvm::Value *setCapabilityIntegerValue(llvm::Value *Ptr,
+                                         llvm::Value *NewVal) {
+    return getLangOpts().getCheriUIntCap() == LangOptions::UIntCap_Addr
+               ? setPointerAddress(Ptr, NewVal)
+               : setPointerOffset(Ptr, NewVal);
+  }
   llvm::Value *setPointerOffset(llvm::Value *Ptr, llvm::Value *Offset) {
     return getTargetHooks().setPointerOffset(*this, Ptr, Offset);
+  }
+  llvm::Value *setPointerAddress(llvm::Value *Ptr, llvm::Value *Offset) {
+    return getTargetHooks().setPointerAddress(*this, Ptr, Offset);
   }
   llvm::Value *getPointerAddress(llvm::Value *V, const llvm::Twine &Name = "") {
     return getTargetHooks().getPointerAddress(*this, V, Name);

@@ -290,7 +290,7 @@ static Address emitVoidPtrDirectVAArg(CodeGenFunction &CGF,
     if (CGF.getTarget().SupportsCapabilities() &&
         Ptr->getType()->getPointerAddressSpace() ==
         (unsigned)CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS()) {
-      PtrAsInt = CGF.getPointerOffset(PtrAsInt);
+      PtrAsInt = CGF.getCapabilityIntegerValue(PtrAsInt);
       PtrAsInt = CGF.Builder.CreateAdd(PtrAsInt,
             llvm::ConstantInt::get(CGF.IntPtrTy, DirectAlign.getQuantity() - 1));
       PtrAsInt = CGF.Builder.CreateAnd(PtrAsInt,
@@ -6746,6 +6746,7 @@ class MIPSTargetCodeGenInfo : public TargetCodeGenInfo {
   unsigned SizeOfUnwindException;
   mutable llvm::Function *GetOffset = nullptr;
   mutable llvm::Function *SetOffset = nullptr;
+  mutable llvm::Function *SetAddr = nullptr;
   mutable llvm::Function *GetBase = nullptr;
   mutable llvm::Function *GetAddress = nullptr;
   mutable llvm::PointerType *I8Cap = nullptr;
@@ -6779,6 +6780,17 @@ public:
     auto &B = CGF.Builder;
     Ptr = B.CreateBitCast(Ptr, getI8CapTy(CGF));
     return B.CreateBitCast(B.CreateCall(SetOffset, {Ptr, Offset}), DstTy);
+  }
+
+  llvm::Value *setPointerAddress(CodeGen::CodeGenFunction &CGF,
+                                 llvm::Value *Ptr,
+                                 llvm::Value *Offset) const override {
+    if (!SetAddr)
+      SetAddr = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_address_set);
+    llvm::Type *DstTy = Ptr->getType();
+    auto &B = CGF.Builder;
+    Ptr = B.CreateBitCast(Ptr, getI8CapTy(CGF));
+    return B.CreateBitCast(B.CreateCall(SetAddr, {Ptr, Offset}), DstTy);
   }
 
   llvm::Value *getPointerBase(CodeGen::CodeGenFunction &CGF,

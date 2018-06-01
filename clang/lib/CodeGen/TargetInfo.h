@@ -244,6 +244,12 @@ public:
       assert(0 && "Target does not support capabilities!\n");
       return nullptr;
   }
+  virtual llvm::Value *setPointerAddress(CodeGen::CodeGenFunction &,
+                                         llvm::Value *Ptr,
+                                         llvm::Value *Offset) const {
+    assert(0 && "Target does not support capabilities!\n");
+    return nullptr;
+  }
   virtual llvm::Value *getPointerBase(CodeGen::CodeGenFunction &,
                                       llvm::Value *V) const {
       return V;

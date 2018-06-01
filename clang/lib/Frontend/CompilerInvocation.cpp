@@ -2204,6 +2204,13 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   else if (Args.hasArg(OPT_fwrapv))
     Opts.setSignedOverflowBehavior(LangOptions::SOB_Defined);
 
+  // uintcap_t mode: vaddr or offset
+  bool UseCheriVaddrMode =
+      Args.hasFlag(OPT_cheri_uintcap_addr, OPT_cheri_uintcap_offset, false);
+  Opts.setCheriUIntCap(UseCheriVaddrMode
+                           ? LangOptions::CheriUIntCapMode::UIntCap_Addr
+                           : LangOptions::CheriUIntCapMode::UIntCap_Offset);
+
   Opts.MSVCCompat = Args.hasArg(OPT_fms_compatibility);
   Opts.MicrosoftExt = Opts.MSVCCompat || Args.hasArg(OPT_fms_extensions);
   Opts.AsmBlocks = Args.hasArg(OPT_fasm_blocks) || Opts.MicrosoftExt;

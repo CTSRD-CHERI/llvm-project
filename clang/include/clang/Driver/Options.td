@@ -266,6 +266,11 @@ def cheri_large_cap_table : Flag<["-"], "mxcaptable">, Flags<[DriverOption]>, Gr
 def no_cheri_large_cap_table : Flag<["-"], "no-mxcaptable">, Flags<[DriverOption]>, Group<cheri_Group>,
   HelpText<"Do not use large immediates to index the cap table">;
 
+def cheri_uintcap_offset : Flag<["-"], "cheri-uintcap=offset">, Flags<[DriverOption,CC1Option]>, Group<cheri_Group>,
+  HelpText<"Use the capability offset when performing computations on uintcap_t (more GC-friendly but needs more changes to source code)">;
+def cheri_uintcap_addr : Flag<["-"], "cheri-uintcap=addr">, Flags<[DriverOption,CC1Option]>, Group<cheri_Group>,
+  HelpText<"Use the capability address when performing computations on uintcap_t (more C compatible but may break copying GC)">;
+
 def external_capsizefix : Flag<["-"], "external-capsizefix">, Flags<[CC1Option]>,
   Group<cheri_Group>, HelpText<"Use the external capsizefix tool instead of relying on the linker (deprecated)">;
 def no_capsizefix : Flag<["-"], "no-capsizefix">, Flags<[CC1Option]>,

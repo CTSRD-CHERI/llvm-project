@@ -693,7 +693,7 @@ public:
     if (!T->isCHERICapabilityType(CGF.getContext()) ||
         !V->getType()->isPointerTy())
       return V;
-    return CGF.getPointerOffset(V);
+    return CGF.getCapabilityIntegerValue(V);
   }
   Value *GetBinOpVal(const BinOpInfo &Op, Value *V) {
     return GetBinOpVal(Op, V, Op.E->getType());
@@ -703,7 +703,7 @@ public:
       return V;
     // FIXME: this breaks patterns such as `if (uintptr_t(x) & 1 == 1)`
     // For now try to solve this by warning for this pattern
-    return CGF.setPointerOffset(LHS, V);
+    return CGF.setCapabilityIntegerValue(LHS, V);
   }
   Value *GetBinOpResult(const BinOpInfo &Op, Value *LHS, Value *V) {
     return GetBinOpResult(Op, LHS, V, Op.E->getType());
@@ -1081,7 +1081,7 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
       Value *Null = llvm::ConstantPointerNull::get(DstPT);
       // Builder.CreateIntToPtr(llvm::ConstantInt::get(CGF.IntPtrTy, 0), DstPT);
       Src = Builder.CreateSExtOrTrunc(Src, CGF.Int64Ty);
-      return CGF.setPointerOffset(Null, Src);
+      return CGF.setCapabilityIntegerValue(Null, Src);
     }
     // First, convert to the correct width so that we control the kind of
     // extension.
@@ -1099,7 +1099,7 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
       // If this is not a pointer type in C, but is in LLVM IR, then it must be
       // a [u]intcap_t or enum type whose underlying integer type is [u]intcap_t
       assert(SrcType->isIntCapType());
-      Src = CGF.getPointerOffset(Src);
+      Src = CGF.getCapabilityIntegerValue(Src);
       // Conversions from (u)intcap -> float should not be a bitcast:
       if (DstType->isFloatingType()) {
         if (SrcType->isSignedIntegerOrEnumerationType()) {
@@ -1972,7 +1972,7 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
       // Otherwise, it's some kind of non-capability pointer, so we need to
       // create an integer value first
       if (IsPureCap)
-        Src = CGF.getPointerOffset(Src);
+        Src = CGF.getCapabilityIntegerValue(Src);
       else 
         Src = Builder.CreatePtrToInt(Src, CGF.IntPtrTy);
     }
@@ -1985,8 +1985,9 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
       Builder.CreateIntCast(Src, MiddleTy, InputSigned, "conv");
 
     if (IsPureCap && DestTy->isCHERICapabilityType(CGF.getContext()))
-      return CGF.setPointerOffset(llvm::ConstantPointerNull::get(
-            cast<llvm::PointerType>(ResultType)), IntResult);
+      return CGF.setCapabilityIntegerValue(
+          llvm::ConstantPointerNull::get(cast<llvm::PointerType>(ResultType)),
+          IntResult);
 
     return Builder.CreateIntToPtr(IntResult, ResultType);
   }
@@ -2209,7 +2210,7 @@ ScalarExprEmitter::EmitScalarPrePostIncDec(const UnaryOperator *E, LValue LV,
   } else if (type->isIntegerType()) {
     llvm::Value *Base = value;
     if (type->isCHERICapabilityType(CGF.getContext()))
-      value = CGF.getPointerOffset(Base);
+      value = CGF.getCapabilityIntegerValue(Base);
     // Note that signed integer inc/dec with width less than int can't
     // overflow because of promotion rules; we're just eliding a few steps here.
     if (E->canOverflow() && type->isSignedIntegerOrEnumerationType()) {
@@ -2223,7 +2224,7 @@ ScalarExprEmitter::EmitScalarPrePostIncDec(const UnaryOperator *E, LValue LV,
       value = Builder.CreateAdd(value, amt, isInc ? "inc" : "dec");
     }
     if (type->isCHERICapabilityType(CGF.getContext()))
-      value = CGF.setPointerOffset(Base, value);
+      value = CGF.setCapabilityIntegerValue(Base, value);
   // Next most common: pointer increment.
   } else if (const PointerType *ptr = type->getAs<PointerType>()) {
     QualType type = ptr->getPointeeType();
@@ -2401,10 +2402,10 @@ Value *ScalarExprEmitter::VisitUnaryNot(const UnaryOperator *E) {
   Value *Base = Op;
   bool IsIntCap = E->getType()->isCHERICapabilityType(CGF.getContext());
   if (IsIntCap)
-    Op = CGF.getPointerOffset(Op);
+    Op = CGF.getCapabilityIntegerValue(Op);
   Op = Builder.CreateNot(Op, "neg");
   if (IsIntCap)
-    Op = CGF.setPointerOffset(Base, Op);
+    Op = CGF.setCapabilityIntegerValue(Base, Op);
   return Op;
 }
 
@@ -2983,8 +2984,8 @@ static Value *emitPointerArithmetic(CodeGenFunction &CGF,
   }
 
   if (index->getType()->isPointerTy())
-    index = CGF.getPointerOffset(index);
-  
+    index = CGF.getCapabilityIntegerValue(index);
+
   bool isSigned = indexOperand->getType()->isSignedIntegerOrEnumerationType();
 
   unsigned width = cast<llvm::IntegerType>(index->getType())->getBitWidth();
@@ -3305,7 +3306,7 @@ Value *ScalarExprEmitter::EmitShl(const BinOpInfo &Ops) {
   // RHS to the same size as the LHS.
   Value *RHS = Ops.RHS;
   if (RHS->getType()->isPointerTy())
-    RHS = CGF.getPointerOffset(RHS);
+    RHS = CGF.getCapabilityIntegerValue(RHS);
   if (Ops.LHS->getType() != RHS->getType())
     RHS = Builder.CreateIntCast(RHS, Ops.LHS->getType(), false, "sh_prom");
 
@@ -3374,7 +3375,7 @@ Value *ScalarExprEmitter::EmitShr(const BinOpInfo &Ops) {
   // RHS to the same size as the LHS.
   Value *RHS = Ops.RHS;
   if (RHS->getType()->isPointerTy())
-    RHS = CGF.getPointerOffset(RHS);
+    RHS = CGF.getCapabilityIntegerValue(RHS);
   if (Ops.LHS->getType() != RHS->getType())
     RHS = Builder.CreateIntCast(RHS, Ops.LHS->getType(), false, "sh_prom");
 

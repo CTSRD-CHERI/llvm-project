@@ -1457,7 +1457,7 @@ ItaniumCXXABI::GetVirtualBaseClassOffset(CodeGenFunction &CGF,
     VBaseOffset =
       CGF.Builder.CreateAlignedLoad(VBaseOffsetPtr, CGF.getPointerAlign(),
                                     "vbase.offset.intcap");
-    VBaseOffset = CGF.getPointerOffset(VBaseOffset);
+    VBaseOffset = CGF.getCapabilityIntegerValue(VBaseOffset);
   } else {
     VBaseOffsetPtr = CGF.Builder.CreateBitCast(VBaseOffsetPtr,
                                                CGM.PtrDiffTy->getPointerTo(
@@ -1864,7 +1864,7 @@ static llvm::Value *performTypeAdjustment(CodeGenFunction &CGF,
       Offset =
         CGF.Builder.CreateAlignedLoad(OffsetPtr, CGF.getPointerAlign(),
                                       "vbase.offset.intcap");
-      Offset = CGF.getPointerOffset(Offset);
+      Offset = CGF.getCapabilityIntegerValue(Offset);
     } else {
       OffsetPtr = CGF.Builder.CreateBitCast(OffsetPtr, 
                         PtrDiffTy->getPointerTo(
