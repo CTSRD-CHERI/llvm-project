@@ -74,11 +74,13 @@ class CHERICapFoldIntrinsics : public ModulePass {
             });
     foldGet(M, Intrinsic::cheri_cap_address_get,
             [this](Value *V, CallInst *CI, int) {
-              return inferCapabilityAddress(V, CI);
+              return inferCapabilityAddress(V, CI, CI->getType());
             });
     // For all other capability fields we can only infer a value when the
     // argument is a null capability (potentially with an offset)
     auto inferOther = [this](Value *V, CallInst *CI, int NullValue) {
+      // TODO: Can we ignore capabilities becoming unrepresentable for any of
+      // these intrinsics?
       return inferCapabilityNonOffsetField(V, CI, NullValue);
     };
     foldGet(M, Intrinsic::cheri_cap_base_get, inferOther);
@@ -101,23 +103,32 @@ class CHERICapFoldIntrinsics : public ModulePass {
     return nullptr;
   }
 
-  Value *inferCapabilityNonOffsetField(Value *V, CallInst *Call,
-                                       int NullValue) {
-    // Calling an llv.cheri.cap.$INTRIN.get() on a null value or
-    // and integer stored in capability always returns 0 or -1 (for CGetLen and
-    // CGetType) unless $INTRIN is offset (in which case it returns the int value)
+  Value *inferCapabilityNonOffsetField(Value *V, CallInst *Call, int NullValue,
+                                       bool OnlyIfRootWasNull = false) {
+    // Calling an llvm.cheri.cap.$INTRIN.get() on a null value or
+    // an integer stored in a capability always returns 0 or -1 (for CGetLen and
+    // CGetType) unless $INTRIN is offset/address (in which case it returns the
+    // int value)
     if (isa<ConstantPointerNull>(V) || getIntToPtrSourceValue(V)) {
       Type *Ty = Call->getType();
       return NullValue == 0 ? llvm::Constant::getNullValue(Ty)
                             : llvm::Constant::getAllOnesValue(Ty);
     }
     Value *Arg = nullptr;
-    // ignore all setoffset/incoffset operations:
+    // We can ignore all setoffset/incoffset/setaddr operations if called on
+    // null -> set OnlyIfRootWasNull=true when recursing. This currently doesn't
+    // change anything but if we were to also infer for non-null values we
+    // would need to abort any further analysis after a setoffset/incoffset or
+    // setaddr since the intrinsic could cause the capability to become
+    // unrepresentable (which is not an issue if it is already null)
     if (match(V, m_Intrinsic<Intrinsic::cheri_cap_offset_set>(m_Value(Arg)))) {
-      return inferCapabilityNonOffsetField(Arg, Call, NullValue);
+      return inferCapabilityNonOffsetField(Arg, Call, NullValue, true);
     } else if (match(V, m_Intrinsic<Intrinsic::cheri_cap_offset_increment>(
                             m_Value(Arg)))) {
-      return inferCapabilityNonOffsetField(Arg, Call, NullValue);
+      return inferCapabilityNonOffsetField(Arg, Call, NullValue, true);
+    } else if (match(V, m_Intrinsic<Intrinsic::cheri_cap_address_set>(
+                            m_Value(Arg)))) {
+      return inferCapabilityNonOffsetField(Arg, Call, NullValue, true);
     }
     // TODO: is there anything else we can infer?
     return nullptr;
@@ -150,27 +161,55 @@ class CHERICapFoldIntrinsics : public ModulePass {
     return nullptr;
   }
 
-  Value *inferCapabilityOffset(Value *V, CallInst *Call, Type *IntTy,
-                               Value **BaseCap = nullptr) {
+  template <Intrinsic::ID Intrin, typename InferFunc>
+  Value *inferCapabilityOffsetOrAddr(InferFunc &&InferOffsetOrAddr,
+                                            Value *V, CallInst *Call,
+                                            Type *IntTy,
+                                            Value **BaseCap = nullptr) {
+    // For null values both getoffset and getaddr return zero
     if (isa<ConstantPointerNull>(V)) {
       if (BaseCap)
         *BaseCap = V;
       return llvm::Constant::getNullValue(IntTy);
     }
+    // For inttoptr values both getoffset and getaddr return the integer value
     if (Constant* IntToPtr = getIntToPtrSourceValue(V)) {
       if (BaseCap)
         *BaseCap = V;
       return IntToPtr;
     }
     Value *Arg = nullptr;
-    Value *Offset = nullptr;
+    Value *IntrinArg = nullptr;
+    // For a setoffset we can infer the offset (and the address for setoffset on
+    // NULL)
     if (match(V, m_Intrinsic<Intrinsic::cheri_cap_offset_set>(
-                     m_Value(Arg), m_Value(Offset)))) {
-      if (BaseCap)
-        *BaseCap = Arg;
-      return Offset;
-    } else if (Value *Increment = getOffsetIncrement(V, &Arg)) {
-      if (Value *LHS = inferCapabilityOffset(Arg, Call, IntTy, BaseCap)) {
+                     m_Value(Arg), m_Value(IntrinArg)))) {
+      // If we are inferring the offset a setoffset can always be used. For
+      // the address we can only infer the value if the setoffset call is on
+      // NULL
+      if (Intrin == Intrinsic::cheri_cap_offset_get ||
+          isa<ConstantPointerNull>(Arg)) {
+        if (BaseCap)
+          *BaseCap = Arg;
+        return IntrinArg;
+      }
+    }
+
+    if (match(V, m_Intrinsic<Intrinsic::cheri_cap_address_set>(
+                     m_Value(Arg), m_Value(IntrinArg)))) {
+      // If we are inferring the offset a we can only infer the value of the
+      // setaddr intrinsic was used on NULL. For getaddr the value will always
+      // be the argumennt of the setaddr intrinsic.
+      if (Intrin == Intrinsic::cheri_cap_address_get ||
+          isa<ConstantPointerNull>(Arg)) {
+        if (BaseCap)
+          *BaseCap = Arg;
+        return IntrinArg;
+      }
+    }
+    // Finally we can fold inc-offset calls into the result as adds
+    if (Value *Increment = getOffsetIncrement(V, &Arg)) {
+      if (Value *LHS = (this->*InferOffsetOrAddr)(Arg, Call, IntTy, BaseCap)) {
         IRBuilder<> B(cast<Instruction>(V));
         return B.CreateAdd(LHS, Increment);
       }
@@ -179,15 +218,16 @@ class CHERICapFoldIntrinsics : public ModulePass {
     return nullptr;
   }
 
-  Value *inferCapabilityAddress(Value *V, CallInst *Call) {
-    Type* IntTy = Call->getType();
-    Value *Offset = inferCapabilityOffset(V, Call, IntTy);
-    Value *Base = inferCapabilityNonOffsetField(V, Call, 0);
-    if (Offset && Base) {
-      IRBuilder<> B(Call);
-      return B.CreateAdd(Base, Offset);
-    }
-    return nullptr;
+  Value *inferCapabilityOffset(Value *V, CallInst *Call, Type *IntTy,
+                                      Value **BaseCap = nullptr) {
+    return inferCapabilityOffsetOrAddr<Intrinsic::cheri_cap_offset_get>(
+        &CHERICapFoldIntrinsics::inferCapabilityOffset, V, Call, IntTy, BaseCap);
+  }
+
+  Value *inferCapabilityAddress(Value *V, CallInst *Call, Type *IntTy,
+                                       Value **BaseCap = nullptr) {
+    return inferCapabilityOffsetOrAddr<Intrinsic::cheri_cap_address_get>(
+        &CHERICapFoldIntrinsics::inferCapabilityAddress, V, Call, IntTy, BaseCap);
   }
 
   void foldIncOffsetSetOffsetOnlyUserIncrement(CallInst* CI, SmallPtrSet<Instruction*, 8> &ToErase) {
@@ -317,13 +357,15 @@ public:
   bool runOnModule(Module &M) override {
     Modified = false;
     DL = &M.getDataLayout();
+    // Don't add these intrinsics to the module if none of them are used:
     IncOffset = M.getFunction(
         Intrinsic::getName(Intrinsic::cheri_cap_offset_increment));
     SetOffset =
         M.getFunction(Intrinsic::getName(Intrinsic::cheri_cap_offset_set));
     GetOffset =
         M.getFunction(Intrinsic::getName(Intrinsic::cheri_cap_offset_get));
-
+    // at least one intrinsic was used -> we need to run the fold
+    // setoffset/incoffset pass
     if (IncOffset || SetOffset || GetOffset) {
       if (!IncOffset)
         IncOffset = Intrinsic::getDeclaration(
