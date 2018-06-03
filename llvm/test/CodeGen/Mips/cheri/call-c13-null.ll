@@ -1,6 +1,6 @@
 ; REQUIRES: asserts
-; RUN: %cheri_purecap_llc -o - -O2 -cheri-cap-table-abi=pcrel -debug-only=mips-lower %s 2>&1 | %cheri_FileCheck %s -check-prefixes CHECK,OPT
-; RUN: %cheri_purecap_llc -o - -O1 -cheri-cap-table-abi=pcrel -debug-only=mips-lower %s 2>&1 | %cheri_FileCheck %s -check-prefixes CHECK,NOOPT
+; RUN: %cheri_purecap_llc -o - -O2 -cheri-cap-table-abi=pcrel %s | %cheri_FileCheck %s -check-prefixes CHECK,OPT
+; RUN: %cheri_purecap_llc -o - -O1 -cheri-cap-table-abi=pcrel %s | %cheri_FileCheck %s -check-prefixes CHECK,NOOPT
 ; RUN: %cheri_purecap_llc -o /dev/null -O2 -cheri-cap-table-abi=pcrel -debug-only=mips-lower %s 2>&1 | FileCheck %s -check-prefix DEBUG-OUTPUT-CHECK
 
 @fn = common local_unnamed_addr addrspace(200) global void () addrspace(200)* null, align 32
