@@ -1,7 +1,7 @@
 ; REQUIRES: asserts
-; RUN: %cheri_purecap_llc -o - -O2 -cheri-cap-table-abi=pcrel -debug-only=mips-lower %s 2>&1
 ; RUN: %cheri_purecap_llc -o - -O2 -cheri-cap-table-abi=pcrel -debug-only=mips-lower %s 2>&1 | %cheri_FileCheck %s -check-prefixes CHECK,OPT
 ; RUN: %cheri_purecap_llc -o - -O1 -cheri-cap-table-abi=pcrel -debug-only=mips-lower %s 2>&1 | %cheri_FileCheck %s -check-prefixes CHECK,NOOPT
+; RUN: %cheri_purecap_llc -o /dev/null -O2 -cheri-cap-table-abi=pcrel -debug-only=mips-lower %s 2>&1 | FileCheck %s -check-prefix DEBUG-OUTPUT-CHECK
 
 @fn = common local_unnamed_addr addrspace(200) global void () addrspace(200)* null, align 32
 
@@ -14,13 +14,19 @@ declare i8 addrspace(200)* @many_cap_args(i8 addrspace(200)* %arg1, i8 addrspace
 
 
 ; Check that the debug output prints
-; FAILS_ON_JENKINS_CHECK: Clearing $c13 in call_one_arg_from_many_arg(is varargs: 0) callee = {{t[0-9]+}}: i64 = GlobalAddress<i8 addrspace(200)* (i8 addrspace(200)*)* @one_arg> 0
-; FAILS_ON_JENKINS_CHECK-NEXT: Clearing $c13 in call_one_arg_from_variadic_with_va_start(is varargs: 1) callee = {{t[0-9]+}}: i64 = GlobalAddress<i8 addrspace(200)* (i8 addrspace(200)*)* @one_arg> 0
-; FAILS_ON_JENKINS_CHECK-NEXT: Clearing $c13 in call_one_arg_from_variadic_without_va_start(is varargs: 1) callee = {{t[0-9]+}}: i64 = GlobalAddress<i8 addrspace(200)* (i8 addrspace(200)*)* @one_arg> 0
-; FAILS_ON_JENKINS_CHECK-NEXT: Clearing $c13 in call_variadic_no_onstack_from_varargs(is varargs: 1) callee = {{t[0-9]+}}: i64 = GlobalAddress<i8 addrspace(200)* (i8 addrspace(200)*, ...)* @variadic> 0
-; FAILS_ON_JENKINS_CHECK-NEXT: Clearing $c13 in call_variadic_no_onstack_from_many_args(is varargs: 0) callee = {{t[0-9]+}}: i64 = GlobalAddress<i8 addrspace(200)* (i8 addrspace(200)*, ...)* @variadic> 0
-; FAILS_ON_JENKINS_CHECK-NEXT: .text
-; FAILS_ON_JENKINS_CHECK-LABEL: .file
+; DEBUG-OUTPUT-CHECK:      Clearing $c13 in call_one_arg_from_many_arg(is varargs: 0) callee = {{t[0-9]+}}: i64 = GlobalAddress<i8 addrspace(200)* (i8 addrspace(200)*)* @one_arg> 0
+; DEBUG-OUTPUT-CHECK-NEXT: Lowering return for function with $c13 live-in: call_one_arg_from_many_arg(is varargs: 0)
+; DEBUG-OUTPUT-CHECK-NEXT: Clearing $c13 in call_one_arg_from_variadic_with_va_start(is varargs: 1) callee = {{t[0-9]+}}: i64 = GlobalAddress<i8 addrspace(200)* (i8 addrspace(200)*)* @one_arg> 0
+; DEBUG-OUTPUT-CHECK-NEXT: Lowering return for function with $c13 live-in: call_one_arg_from_variadic_with_va_start(is varargs: 1)
+; DEBUG-OUTPUT-CHECK-NEXT: Clearing $c13 in call_one_arg_from_variadic_without_va_start(is varargs: 1) callee = {{t[0-9]+}}: i64 = GlobalAddress<i8 addrspace(200)* (i8 addrspace(200)*)* @one_arg> 0
+; DEBUG-OUTPUT-CHECK-NEXT: Lowering return for function with $c13 live-in: call_one_arg_from_variadic_without_va_start(is varargs: 1)
+; DEBUG-OUTPUT-CHECK-NEXT: Clearing $c13 in call_variadic_no_onstack_from_varargs(is varargs: 1) callee = {{t[0-9]+}}: i64 = GlobalAddress<i8 addrspace(200)* (i8 addrspace(200)*, ...)* @variadic> 0
+; DEBUG-OUTPUT-CHECK-NEXT: Lowering return for function with $c13 live-in: call_variadic_no_onstack_from_varargs(is varargs: 1)
+; DEBUG-OUTPUT-CHECK-NEXT: Clearing $c13 in call_variadic_no_onstack_from_many_args(is varargs: 0) callee = {{t[0-9]+}}: i64 = GlobalAddress<i8 addrspace(200)* (i8 addrspace(200)*, ...)* @variadic> 0
+; DEBUG-OUTPUT-CHECK-NEXT: Lowering return for function with $c13 live-in: call_variadic_no_onstack_from_many_args(is varargs: 0)
+
+; CHECK-LABEL: .text
+; CHECK-LABEL: .file
 
 define void @call_variadic_one_onstack_long(i8 addrspace(200)* %in_arg1) {
 ; CHECK-LABEL: call_variadic_one_onstack_long:
