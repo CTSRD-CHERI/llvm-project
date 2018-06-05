@@ -68,6 +68,18 @@ void check_shift_right(void *ptr, uintptr_t cap, int i) {
   cap >>= cap; // expected-warning{{using shifts on a capability type only operates on the offset}}
 }
 
+void check_modulo(void *ptr, uintptr_t cap, int i) {
+  uintptr_t int_and_int = i % i; // fine
+  // i is promoted to __intcap_t here so the warning triggers:
+  uintptr_t int_and_cap = i % cap;   // offset-warning{{using remainder on a capability type only operates on the offset}}
+  uintptr_t cap_and_int = cap % i;   // offset-warning{{using remainder on a capability type only operates on the offset}}
+  uintptr_t cap_and_cap = cap % cap; // offset-warning{{using remainder on a capability type only operates on the offset}}
+  i %= i;
+  i %= cap;   // offset-warning{{using remainder on a capability type only operates on the offset}}
+  cap %= i;   // offset-warning{{using remainder on a capability type only operates on the offset}}
+  cap %= cap; // offset-warning{{using remainder on a capability type only operates on the offset}}
+}
+
 void check_and(void *ptr, uintptr_t cap, int i) {
   uintptr_t int_and_int = i & i; // fine
   // i is promoted to __intcap_t here so the warning triggers:

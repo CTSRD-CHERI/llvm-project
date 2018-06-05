@@ -8686,7 +8686,10 @@ QualType Sema::CheckRemainderOperands(
   ExprResult &LHS, ExprResult &RHS, SourceLocation Loc, bool IsCompAssign) {
   checkArithmeticNull(*this, LHS, RHS, Loc, /*isCompare=*/false);
 
-  if (LHS.get()->getType()->isCHERICapabilityType(Context))
+  // Remainder in offset mode will not work for alignment checks since it
+  // doesn't take the base into account so we warn then
+  if ((LHS.get()->getType()->isCHERICapabilityType(Context) ||
+       RHS.get()->getType()->isCHERICapabilityType(Context)))
     Diag(Loc, diag::warn_uintcap_bad_bitwise_op)
       << 2 /*=modulo*/ << 1 /* used for alignment checks */
       << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
