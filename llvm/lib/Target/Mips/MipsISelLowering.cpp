@@ -4496,7 +4496,7 @@ MipsTargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
         return std::make_pair(0U, &Mips::GPR64RegClass);
     case 'C':
       if (VT == CapType)
-        return std::make_pair(0U, &Mips::CheriRegsRegClass);
+        return std::make_pair(0U, &Mips::CheriGPRRegClass);
       // This will generate an error message
       return std::make_pair(0U, nullptr);
     case 'f': // FPU or MSA register

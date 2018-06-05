@@ -389,7 +389,7 @@ void RegDefsUses::setUnallocatableRegs(const MachineFunction &MF) {
   // If we're not a CHERI target, then the C0 register is just a convenient
   // fiction and shouldn't impede optimisation.
   if (!MF.getSubtarget<MipsSubtarget>().isCheri())
-    AllocSet[Mips::C0] = true;
+    AllocSet[Mips::DDC] = true;
 
   for (unsigned R : AllocSet.set_bits())
     for (MCRegAliasIterator AI(R, &TRI, false); AI.isValid(); ++AI)
@@ -397,6 +397,7 @@ void RegDefsUses::setUnallocatableRegs(const MachineFunction &MF) {
 
   AllocSet.set(Mips::ZERO);
   AllocSet.set(Mips::ZERO_64);
+  AllocSet.set(Mips::CNULL);
 
   Defs |= AllocSet.flip();
 }

@@ -180,7 +180,8 @@ MipsSETargetLowering::MipsSETargetLowering(const MipsTargetMachine &TM,
   }
 
   if (Subtarget.isCheri()) {
-    addRegisterClass(CapType, &Mips::CheriRegsRegClass);
+    // This crashes: addRegisterClass(CapType, &Mips::CheriRegsAllRegClass);
+    addRegisterClass(CapType, &Mips::CheriGPRRegClass);
     setTruncStoreAction(MVT::i32, MVT::i8, Custom);
     setTruncStoreAction(MVT::i32, MVT::i16, Custom);
     setLoadExtAction(ISD::EXTLOAD, MVT::i8, MVT::i32, Custom);

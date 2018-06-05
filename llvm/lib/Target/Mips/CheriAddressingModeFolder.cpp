@@ -133,7 +133,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
     MachineRegisterInfo &RI = MF.getRegInfo();
     std::set<MachineInstr *> IncOffsets;
     std::set<MachineInstr *> Adds;
-    llvm::SmallVector<std::pair<MachineInstr *, MachineInstr *>, 8> C0Ops;
+    llvm::SmallVector<std::pair<MachineInstr *, MachineInstr *>, 8> DDCOps;
     std::set<MachineInstr *> GetPCCs;
     bool modified = false;
     for (auto &MBB : MF)
@@ -197,8 +197,8 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         if (IncOffset->getOpcode() == Mips::CFromPtr) {
           if ((Op == Mips::LOADCAP) || (Op == Mips::STORECAP))
             continue;
-          if (IncOffset->getOperand(1).getReg() == Mips::C0)
-            C0Ops.emplace_back(&MI, IncOffset);
+          if (IncOffset->getOperand(1).getReg() == Mips::DDC)
+            DDCOps.emplace_back(&MI, IncOffset);
           continue;
         }
 
@@ -280,7 +280,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         IncOffsets.insert(IncOffset);
         modified = true;
       }
-    for (auto &I : C0Ops) {
+    for (auto &I : DDCOps) {
       IncOffsets.insert(I.second);
       unsigned BaseReg = I.second->getOperand(2).getReg();
       // This can't be a symbolic address (yet) because we don't have

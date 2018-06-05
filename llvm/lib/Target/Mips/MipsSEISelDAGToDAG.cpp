@@ -131,23 +131,33 @@ bool MipsSEDAGToDAGISel::replaceUsesWithCheriNullReg(
     // FIXME: this assert only works with virtregs so not for $c13
     if (TargetRegisterInfo::isVirtualRegister(TargetReg)) {
 #if 0
-      if (!MRI->getRegClass(TargetReg)->hasSuperClassEq(&Mips::CheriRegsRegClass)) {
+      if (!MRI->getRegClass(TargetReg)->hasSuperClassEq(&Mips::CheriGPRRegClass)) {
         errs() << "Not a CHERI reg?!"; UseMI->dump();
         errs() << "Source instr ="; GetNullMI.dump();
         errs() << "reg class id: " << MRI->getRegClassOrNull(TargetReg)->getID();
-        errs() << " cheri reg class id =" << Mips::CheriRegsRegClass.getID();
+        errs() << " cheri reg class id =" << Mips::CheriGPRRegClass.getID();
         errs() << "\n";
       }
 #endif
-      // The target vreg register must be a CHERI register:
-      assert(MRI->getRegClass(TargetReg)->hasSuperClassEq(&Mips::CheriRegsRegClass));
+      // The target vreg register must be a CHERI general-purpose register:
+      assert(MRI->getRegClass(TargetReg)->hasSuperClassEq(
+          &Mips::CheriGPRRegClass));
     } else {
-      // Check that the physreg is a valid CHERI register
-      assert(Mips::CheriRegsRegClass.contains(TargetReg));
+#if 0
+      if (!Mips::CheriGPRRegClass.contains(TargetReg)) {
+        errs() << "REG " << (int)TargetReg << " not in CHERI GPRS?\n";
+        errs() << "Use: "; UseMI->dump();
+        errs() << "GetNull: "; UseMI->dump();
+        UseMI->getParent()->dump();
+        llvm_unreachable("Something went wrong");
+      }
+#endif
+      // Check that the physreg is a valid CHERI general-purpose register
+      assert(Mips::CheriGPRRegClass.contains(TargetReg));
     }
     BuildMI(*MBB, *UseMI, UseMI->getDebugLoc(), TII->get(Mips::CFromPtr),
             UseMI->getOperand(0).getReg())
-        .addReg(Mips::C0, getRegState(GetNullMI.getOperand(1)))
+        .addReg(Mips::DDC, getRegState(GetNullMI.getOperand(1)))
         .addReg(Mips::ZERO_64, getRegState(GetNullMI.getOperand(2)));
     // Remove from parent and replace with the CFromPtr
     UseMI->removeFromParent();

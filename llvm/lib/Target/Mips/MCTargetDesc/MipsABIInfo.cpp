@@ -94,9 +94,7 @@ unsigned MipsABIInfo::GetBasePtr() const {
     (ArePtrs64bit() ? Mips::S7_64 : Mips::S7);
 }
 
-unsigned MipsABIInfo::GetDefaultDataCapability() const {
-  return Mips::C0;
-}
+unsigned MipsABIInfo::GetDefaultDataCapability() const { return Mips::DDC; }
 
 unsigned MipsABIInfo::GetGlobalCapability() const {
   return Mips::C26;

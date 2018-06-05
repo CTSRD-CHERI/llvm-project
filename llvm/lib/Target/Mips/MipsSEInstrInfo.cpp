@@ -155,24 +155,24 @@ void MipsSEInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
       Opc = Mips::MTLO64, DestReg = 0;
     else if (Mips::FGR64RegClass.contains(DestReg))
       Opc = Mips::DMTC1;
- } else if (Mips::CheriRegsRegClass.contains(SrcReg)) {
-   BuildMI(MBB, I, DL, get(Mips::CMove))
-   .addReg(DestReg, RegState::Define)
-   .addReg(SrcReg, getKillRegState(KillSrc));
-   return;
- } else if (Mips::CheriHWRegsRegClass.contains(SrcReg)) {
-   BuildMI(MBB, I, DL, get(Mips::CReadHwr))
-       .addReg(DestReg, RegState::Define)
-       .addReg(SrcReg, getKillRegState(KillSrc));
-   return;
- } else if (Mips::CheriHWRegsRegClass.contains(DestReg)) {
-   BuildMI(MBB, I, DL, get(Mips::CWriteHwr))
-       .addReg(SrcReg, RegState::Define)
-       .addReg(DestReg, getKillRegState(KillSrc));
-   return;
- } else if (Mips::MSA128BRegClass.contains(DestReg)) { // Copy to MSA reg
-   if (Mips::MSA128BRegClass.contains(SrcReg))
-     Opc = Mips::MOVE_V;
+  } else if (Mips::CheriGPRRegClass.contains(SrcReg)) {
+    BuildMI(MBB, I, DL, get(Mips::CMove))
+        .addReg(DestReg, RegState::Define)
+        .addReg(SrcReg, getKillRegState(KillSrc));
+    return;
+  } else if (Mips::CheriHWRegsRegClass.contains(SrcReg)) {
+    BuildMI(MBB, I, DL, get(Mips::CReadHwr))
+        .addReg(DestReg, RegState::Define)
+        .addReg(SrcReg, getKillRegState(KillSrc));
+    return;
+  } else if (Mips::CheriHWRegsRegClass.contains(DestReg)) {
+    BuildMI(MBB, I, DL, get(Mips::CWriteHwr))
+        .addReg(SrcReg, RegState::Define)
+        .addReg(DestReg, getKillRegState(KillSrc));
+    return;
+  } else if (Mips::MSA128BRegClass.contains(DestReg)) { // Copy to MSA reg
+    if (Mips::MSA128BRegClass.contains(SrcReg))
+      Opc = Mips::MOVE_V;
   }
 
   assert(Opc && "Cannot copy registers");
@@ -217,8 +217,7 @@ storeRegToStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
       BuildMI(MBB, I, DL, get(Mips::CAPSTORE64)).addReg(IntReg, getKillRegState(true))
         .addReg(Mips::ZERO_64).addFrameIndex(FI).addImm(Offset).addMemOperand(MMO);
       return;
-    }
-    else if (Mips::CheriRegsRegClass.hasSubClassEq(RC)) {
+    } else if (Mips::CheriGPRRegClass.hasSubClassEq(RC)) {
       Opc = Mips::STORECAP;
       // Ensure that capabilities have a 32-byte alignment
       // FIXME: This shouldn't be needed.  Whatever is allocating the frame index
@@ -261,19 +260,21 @@ storeRegToStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
   else if (TRI->isTypeLegalForClass(*RC, MVT::v2i64) ||
            TRI->isTypeLegalForClass(*RC, MVT::v2f64))
     Opc = Mips::ST_D;
-  else if (Mips::CheriRegsRegClass.hasSubClassEq(RC)) {
+  else if (Mips::CheriGPRRegClass.hasSubClassEq(RC)) {
     Opc = Mips::STORECAP;
     // Ensure that capabilities have a 32-byte alignment
     // FIXME: This shouldn't be needed.  Whatever is allocating the frame index
     // ought to set it.
     MachineFrameInfo &MFI = MBB.getParent()->getFrameInfo();
     MFI.setObjectAlignment(FI, Subtarget.isCheri128() ? 16 : 32);
-    BuildMI(MBB, I, DL, get(Opc)).addReg(SrcReg, getKillRegState(isKill))
-      .addFrameIndex(FI).addImm(Offset).addMemOperand(MMO)
-      .addReg(Mips::C0);
+    BuildMI(MBB, I, DL, get(Opc))
+        .addReg(SrcReg, getKillRegState(isKill))
+        .addFrameIndex(FI)
+        .addImm(Offset)
+        .addMemOperand(MMO)
+        .addReg(Mips::DDC);
     return;
-  }
-  else if (Mips::LO32RegClass.hasSubClassEq(RC))
+  } else if (Mips::LO32RegClass.hasSubClassEq(RC))
     Opc = Mips::SW;
   else if (Mips::LO64RegClass.hasSubClassEq(RC))
     Opc = Mips::SD;
@@ -336,7 +337,7 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
       BuildMI(MBB, I, DL, get(Mips::DMTC1), DestReg)
         .addReg(IntReg, getKillRegState(true));
       return;
-    } else if (Mips::CheriRegsRegClass.hasSubClassEq(RC)) {
+    } else if (Mips::CheriGPRRegClass.hasSubClassEq(RC)) {
       Opc = Mips::LOADCAP;
     } else {
       llvm_unreachable("Unexpected register type for CHERI!");
@@ -380,11 +381,13 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
   else if (TRI->isTypeLegalForClass(*RC, MVT::v2i64) ||
            TRI->isTypeLegalForClass(*RC, MVT::v2f64))
     Opc = Mips::LD_D;
-  else if (Mips::CheriRegsRegClass.hasSubClassEq(RC)) {
+  else if (Mips::CheriGPRRegClass.hasSubClassEq(RC)) {
     Opc = Mips::LOADCAP;
     BuildMI(MBB, I, DL, get(Opc), DestReg)
-      .addFrameIndex(FI).addImm(Offset).addMemOperand(MMO)
-      .addReg(Mips::C0);
+        .addFrameIndex(FI)
+        .addImm(Offset)
+        .addMemOperand(MMO)
+        .addReg(Mips::DDC);
     return;
   } else if (Mips::HI32RegClass.hasSubClassEq(RC))
     Opc = Mips::LW;

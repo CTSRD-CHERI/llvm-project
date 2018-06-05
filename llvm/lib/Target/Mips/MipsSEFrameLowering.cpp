@@ -422,7 +422,7 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
 
   // C0 is always live in.  In non-CHERI MIPS, C0 is treated as a read-only
   // register that is implicitly read by loads and stores.
-  MBB.addLiveIn(Mips::C0);
+  MBB.addLiveIn(Mips::DDC);
 
   const TargetRegisterClass *RC = ABI.ArePtrs64bit() ?
         &Mips::GPR64RegClass : &Mips::GPR32RegClass;

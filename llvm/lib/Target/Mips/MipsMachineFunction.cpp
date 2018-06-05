@@ -70,7 +70,7 @@ unsigned MipsFunctionInfo::getCapGlobalBaseReg() {
   if (CapGlobalBaseReg)
     return CapGlobalBaseReg;
 
-  const TargetRegisterClass *RC = &Mips::CheriRegsRegClass;
+  const TargetRegisterClass *RC = &Mips::CheriGPRRegClass;
   return CapGlobalBaseReg = MF.getRegInfo().createVirtualRegister(RC);
 }
 

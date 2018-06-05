@@ -1043,8 +1043,22 @@ public:
   /// register for the current target.
   unsigned getCheriReg() const {
     assert(isRegIdx() && (RegIdx.Kind & RegKind_Cheri) && "Invalid access!");
-    unsigned ClassID = Mips::CheriRegsRegClassID;
-    return RegIdx.RegInfo->getRegClass(ClassID).getRegister(RegIdx.Index);
+    unsigned ClassID = Mips::CheriGPRRegClassID;
+    assert(RegIdx.Index == Mips::CNULL ||
+           (RegIdx.Index >= Mips::C1 && RegIdx.Index <= Mips::C31));
+    unsigned RealIndex =
+        RegIdx.Index == Mips::CNULL ? 0 : RegIdx.Index - Mips::C1 + 1;
+    return RegIdx.RegInfo->getRegClass(ClassID).getRegister(RealIndex);
+  }
+  unsigned getCheriReg0IsDDC() const {
+    assert(isRegIdx() && (RegIdx.Kind & RegKind_Cheri) && "Invalid access!");
+    unsigned ClassID = Mips::CheriGPR0IsDDCRegClassID;
+    assert(RegIdx.Index == Mips::DDC ||
+           (RegIdx.Index >= Mips::C1 && RegIdx.Index <= Mips::C31));
+    unsigned RealIndex =
+        RegIdx.Index == Mips::DDC ? 0 : RegIdx.Index - Mips::C1 + 1;
+    assert(RealIndex < 31);
+    return RegIdx.RegInfo->getRegClass(ClassID).getRegister(RealIndex);
   }
 
   void addExpr(MCInst &Inst, const MCExpr *Expr) const {
@@ -1210,6 +1224,11 @@ public:
   void addCheriAsmRegOperands(MCInst &Inst, unsigned N) const {
     assert(N == 1 && "Invalid number of operands!");
     Inst.addOperand(MCOperand::createReg(getCheriReg()));
+  }
+
+  void addCheriAsmReg0IsDDCOperands(MCInst &Inst, unsigned N) const {
+    assert(N == 1 && "Invalid number of operands!");
+    Inst.addOperand(MCOperand::createReg(getCheriReg0IsDDC()));
   }
 
   template <unsigned Bits, int Offset = 0, int AdjustOffset = 0>
@@ -1701,8 +1720,20 @@ public:
   bool isGPRAsmReg() const {
     return isRegIdx() && RegIdx.Kind & RegKind_GPR && RegIdx.Index <= 31;
   }
+  static_assert(Mips::CNULL != Mips::DDC, "DDC must not be CNULL");
+  static_assert(Mips::C31 - Mips::C1 == 30, "Need 31 contiguous GPRS");
   bool isCheriAsmReg() const {
-    return isRegIdx() && RegIdx.Kind & RegKind_Cheri && RegIdx.Index <= 31;
+
+    return isRegIdx() && RegIdx.Kind & RegKind_Cheri &&
+           RegIdx.RegInfo->getRegClass(Mips::CheriGPRRegClassID).contains(RegIdx.Index);
+  }
+  bool isCheriAsmReg0IsDDC() const {
+    return isRegIdx() && RegIdx.Kind & RegKind_Cheri &&
+#if 0
+           (RegIdx.Index == Mips::DDC ||
+            (RegIdx.Index >= Mips::C1 && RegIdx.Index <= Mips::C31));
+#endif
+     RegIdx.RegInfo->getRegClass(Mips::CheriGPR0IsDDCRegClassID).contains(RegIdx.Index);
   }
   bool isCheriHWAsmReg() const {
     return isRegIdx() && RegIdx.Kind & RegKind_CheriHWRegs && RegIdx.Index <= 31;
@@ -5806,15 +5837,18 @@ static bool isCRegZeroDDC(const OperandVector &Operands,
   DEBUG(dbgs() << "Checking if " << Mnemonic << " accepts register $"
                << RegSpelling << " as operand " << OperandIndex << ": ");
   assert(RegSpelling == "c0" || RegSpelling == "ddc" || RegSpelling == "cnull");
-  size_t AllowedIndex = StringSwitch<size_t>(Mnemonic)
-            .Cases("clc", "clb", "clbu", "clh", "clhu", "clw", "clwu", "cld", 5)
-            .Cases("csc", "csb", "csh", "csw", "csd", 5)
-            .Cases("clcbi", "cscbi", 4)
-            .Cases("cfromptr", "cbuildcap", 2)
-            .Case("ctoptr", 3)
-            .Cases("cllc", "cllb", "cllbu", "cllh", "cllhu", "cllw", "cllwu", "clld", 2)
-            .Cases("cscc", "cscb", "csch", "cscw", "cscd", 3)
-            .Default(std::numeric_limits<size_t>::max());
+  // TODO: can I somehow get this information from the tablegen'd code?
+  size_t AllowedIndex =
+      StringSwitch<size_t>(Mnemonic)
+          .Cases("clc", "clb", "clbu", "clh", "clhu", "clw", "clwu", "cld", 5)
+          .Cases("csc", "csb", "csh", "csw", "csd", 5)
+          .Cases("clcbi", "cscbi", 4)
+          .Cases("cllc", "cllb", "cllbu", "cllh", "cllhu", "cllw", "cllwu",
+                 "clld", 2)
+          .Cases("cscc", "cscb", "csch", "cscw", "cscd", 3)
+          .Cases("cfromptr", "cbuildcap", "ctestsubset", 2)
+          .Case("ctoptr", 3) // XXXAR: inconsisten with the insns above
+          .Default(std::numeric_limits<size_t>::max());
   DEBUG(dbgs() << (OperandIndex == AllowedIndex ? "true" : "false") << " ");
   DEBUG(for (auto&& X : enumerate(Operands)) {
     dbgs() << " Op" << X.index() << "=" << *(X.value());
@@ -5831,18 +5865,18 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name,
   int CC = -1;
   if (ABI.IsCheriPureCap()) {
     CC = StringSwitch<unsigned>(Name)
-           .Case("cbp", ABI.GetBasePtr() - Mips::C0)
-           .Case("cfp", ABI.GetFramePtr() - Mips::C0)
-           .Case("cgp", ABI.GetGlobalCapability() - Mips::C0)
-           .Case("cra", ABI.GetReturnAddress() - Mips::C0)
-           .Case("csp", ABI.GetStackPtr() - Mips::C0)
-           .Case("ddc", 0/*ABI.GetDefaultDataCapability() - Mips::C0 */)
-           .Default(-1);
+             .Case("cbp", ABI.GetBasePtr())
+             .Case("cfp", ABI.GetFramePtr())
+             .Case("cgp", ABI.GetGlobalCapability())
+             .Case("cra", ABI.GetReturnAddress())
+             .Case("csp", ABI.GetStackPtr())
+             .Case("ddc", ABI.GetDefaultDataCapability())
+             .Default(-1);
   }
   if (CC == -1) {
     if (Name[0] == 'c') {
       if (Name == "cnull") {
-        CC = 0;
+        CC = Mips::CNULL;
       } else {
         StringRef NumString = Name.substr(1);
         int IntVal;
@@ -5850,17 +5884,20 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name,
           return -1;                   // This is not an integer.
         if (IntVal < 0 || IntVal > 31) // Maximum index for CHERI register.
           return -1;
-        CC = IntVal;
+        if (IntVal == 0)
+          CC = 0; // $c0 is special -> handled further down
+        else
+          CC = Mips::C1 + IntVal - 1;
       }
     } else {
       CC = StringSwitch<unsigned>(Name)
-               .Case("ddc", 0)
-               .Case("idc", 26)
-               .Case("kr1c", 27)
-               .Case("kr2c", 28)
-               .Case("kcc", 29)
-               .Case("kdc", 30)
-               .Case("epcc", 31)
+               .Case("ddc", Mips::DDC)
+               .Case("idc", Mips::C26)
+               .Case("kr1c", Mips::C27)
+               .Case("kr2c", Mips::C28)
+               .Case("kcc", Mips::C29)
+               .Case("kdc", Mips::C30)
+               .Case("epcc", Mips::C31)
                .Default(-1);
     }
   }
@@ -5887,9 +5924,9 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name,
       return -2;
     }
   };
-  if (CC == 0) {
+  if (CC == 0 || CC == Mips::CNULL || CC == Mips::DDC) {
     // special handling for register zero (some instructions treat it as NULL
-    // and other use it for $ddc
+    // and other use it for $ddc)
     bool RegZeroIsDDC = isCRegZeroDDC(Operands, Name);
     if (Name == "cnull") {
       // the spelling $cnull is not allowed for address/cfromptr operands
@@ -5901,7 +5938,7 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name,
               Parser.getTok().getLocRange());
         return -2;
       }
-      return CC;
+      return Mips::CNULL;
     } else if (Name == "c0") {
       if (!RegZeroIsDDC) {
         StringRef ErrMsg =
@@ -5913,13 +5950,13 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name,
           return -2;
         } else {
           Warning(Parser.getTok().getLoc(), ErrMsg);
-          return CC;
+          return Mips::CNULL;
         }
       }
       // Otherwise $c0 means $ddc so just print a deprecation warning
       Warning(Parser.getTok().getLoc(),
               "register name $c0 is deprecated. Use $ddc instead.");
-      return CC;
+      return Mips::DDC;
     } else if (Name == "ddc") {
       if (!RegZeroIsDDC) {
         Error(Parser.getTok().getLoc(),
@@ -5928,21 +5965,22 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name,
               Parser.getTok().getLocRange());
         return -2;
       }
-      return CC;
+      return Mips::DDC;
     }
     errs() << "REGISTER NAME " << Name << "not handled?\n";
     llvm_unreachable("Bad register name?");
   }
+  assert(CC != 0);
   switch (CC) {
-  case 27:
+  case Mips::C27:
     return BadReg("KR1C");
-  case 28:
+  case Mips::C28:
     return BadReg("KR2C");
-  case 29:
+  case Mips::C29:
     return BadReg("KCC");
-  case 30:
+  case Mips::C30:
     return BadReg("KDC");
-  case 31:
+  case Mips::C31:
     return BadReg("EPCC", nullptr, /*Allowed=*/false);
   default:
     break;

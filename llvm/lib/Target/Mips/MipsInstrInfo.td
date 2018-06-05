@@ -1339,7 +1339,7 @@ class LoadMemory<string opstr, DAGOperand RO, DAGOperand MO,
   let canFoldAsLoad = 1;
   string BaseOpcode = opstr;
   let mayLoad = 1;
-  let Uses = [C0];
+  let Uses = [DDC];
 }
 
 class Load<string opstr, DAGOperand RO, SDPatternOperator OpNode = null_frag,
@@ -1354,7 +1354,7 @@ class StoreMemory<string opstr, DAGOperand RO, DAGOperand MO,
   let DecoderMethod = "DecodeMem";
   string BaseOpcode = opstr;
   let mayStore = 1;
-  let Uses = [C0];
+  let Uses = [DDC];
 }
 
 class Store<string opstr, DAGOperand RO, SDPatternOperator OpNode = null_frag,
@@ -1406,7 +1406,7 @@ class LW_FT3<string opstr, RegisterOperand RC, InstrItinClass Itin,
          [(set RC:$rt, (OpNode addrDefault:$addr))], Itin, FrmFI, opstr> {
   let DecoderMethod = "DecodeFMem3";
   let mayLoad = 1;
-  let Uses = [C0];
+  let Uses = [DDC];
 }
 
 class SW_FT3<string opstr, RegisterOperand RC, InstrItinClass Itin,
@@ -1415,7 +1415,7 @@ class SW_FT3<string opstr, RegisterOperand RC, InstrItinClass Itin,
          [(OpNode RC:$rt, addrDefault:$addr)], Itin, FrmFI, opstr> {
   let DecoderMethod = "DecodeFMem3";
   let mayStore = 1;
-  let Uses = [C0];
+  let Uses = [DDC];
 }
 
 // Conditional Branch
@@ -1759,7 +1759,7 @@ class LLBase<string opstr, RegisterOperand RO, DAGOperand MO = mem> :
          [], II_LL, FrmI, opstr> {
   let DecoderMethod = "DecodeMem";
   let mayLoad = 1;
-  let Uses = [C0];
+  let Uses = [DDC];
 }
 
 class SCBase<string opstr, RegisterOperand RO> :
@@ -1767,7 +1767,7 @@ class SCBase<string opstr, RegisterOperand RO> :
          !strconcat(opstr, "\t$rt, $addr"), [], II_SC, FrmI> {
   let DecoderMethod = "DecodeMem";
   let mayStore = 1;
-  let Uses = [C0];
+  let Uses = [DDC];
   let Constraints = "$rt = $dst";
 }
 

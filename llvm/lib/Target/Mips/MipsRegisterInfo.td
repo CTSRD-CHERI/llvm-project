@@ -231,18 +231,6 @@ let Namespace = "Mips" in {
   foreach I = 4-31 in
   def HWR#I : MipsReg<#I, ""#I>;
 
-  def CAPHWR0 : MipsReg<0, "chwr_ddc">;
-  def CAPHWR1 : MipsReg<1, "chwr_userlocal">;
-  foreach I = 2-7 in def CAPHWR#I : MipsReg<#I, ""#I>;
-  def CAPHWR8 : MipsReg<8, "chwr_priv_userlocal">;
-  foreach I = 9-21 in def CAPHWR#I : MipsReg<#I, ""#I>;
-  def CAPHWR22 : MipsReg<22, "chwr_kr1c">;
-  def CAPHWR23 : MipsReg<23, "chwr_kr2c">;
-  foreach I = 24-28 in def CAPHWR#I : MipsReg<#I, ""#I>;
-  def CAPHWR29 : MipsReg<29, "chwr_kcc">;
-  def CAPHWR30 : MipsReg<30, "chwr_kdc">;
-  def CAPHWR31 : MipsReg<31, "chwr_epcc">;
-
   // Accum registers
   foreach I = 0-3 in
   def AC#I : ACCReg<#I, "ac"#I,
@@ -279,7 +267,14 @@ let Namespace = "Mips" in {
   def MSAUnmap   : MipsReg<7, "7">;
 
   // Capability registers
-  def C0  : CAP<0, "C0">, DwarfRegNum<[72]>;
+
+  def DDC : CAP<0, "DDC">, DwarfRegNum<[72]>; // TODO: this == CAPHWR0
+  // CNULL and DDC share the same encoding register number since some instructions
+  // use reg = 0 to mean $ddc (loads/stores/cfromptr/ctoptr/cbuildcap)
+  // For compatibility with GDB keep the DwarfRegNum for DDC as 72 and assign
+  // the next one to cnull (not very useful in GDB anyway since it will always
+  // be null).
+  def CNULL : CAP<0, "CNULL">, DwarfRegNum<[104]>;
   def C1  : CAP<1, "C1">, DwarfRegNum<[73]>;
   def C2  : CAP<2, "C2">, DwarfRegNum<[74]>;
   def C3  : CAP<3, "C3">, DwarfRegNum<[75]>;
@@ -310,8 +305,21 @@ let Namespace = "Mips" in {
   def C28 : CAP<28, "C28">, DwarfRegNum<[100]>;
   def C29 : CAP<29, "C29">, DwarfRegNum<[101]>;
   def C30 : CAP<30, "C30">, DwarfRegNum<[102]>;
-  // TODO: turn this into CNULL
   def C31 : CAP<31, "C31">, DwarfRegNum<[103]>;
+
+
+  // TODO: assign DWARF register numbers to the special hwregs
+  def CAPHWR0 : MipsReg<0, "chwr_ddc">;
+  def CAPHWR1 : MipsReg<1, "chwr_userlocal">;
+  foreach I = 2-7 in def CAPHWR#I : MipsReg<#I, ""#I>;
+  def CAPHWR8 : MipsReg<8, "chwr_priv_userlocal">;
+  foreach I = 9-21 in def CAPHWR#I : MipsReg<#I, ""#I>;
+  def CAPHWR22 : MipsReg<22, "chwr_kr1c">;
+  def CAPHWR23 : MipsReg<23, "chwr_kr2c">;
+  foreach I = 24-28 in def CAPHWR#I : MipsReg<#I, ""#I>;
+  def CAPHWR29 : MipsReg<29, "chwr_kcc">;
+  def CAPHWR30 : MipsReg<30, "chwr_kdc">;
+  def CAPHWR31 : MipsReg<31, "chwr_epcc">;
 
   // Octeon multiplier and product registers
   def MPL0 : MipsReg<0, "mpl0">;
@@ -422,15 +430,32 @@ def CPUSPReg : RegisterClass<"Mips", [i32], 32, (add SP)>, Unallocatable;
 def CapRegType : ValueTypeByHwMode<[Cap64, Cap128, Cap256, DefaultMode],
                                    [iFATPTR64, iFATPTR128, iFATPTR256, iFATPTR128]>;
 
-def CheriRegs : RegisterClass<"Mips", [CapRegType], 256, (add
-  C0, C1, C2, C3, C4, C5, C6, C7, C8, C9, 
+def CheriRegsCommon : RegisterClass<"Mips", [CapRegType], 256, (add
+  C1, C2, C3, C4, C5, C6, C7, C8, C9,
   C10, C11, C12, C13, C14, C15, C16, C17, C18, C19, 
   C20, C21, C22, C23, C24, C25, C26, C27, C28, C29, 
   C30, C31)> {
   let RegInfos = RegInfoByHwMode<[Cap64, Cap128, Cap256, DefaultMode],
        [RegInfo<64,64,64>, RegInfo<128,128,128>, RegInfo<256,256,256>, RegInfo<128,128,128>]>;
 }
-def FakeCheriRegs : RegisterClass<"Mips", [iFATPTR256], 256, (add C0)>;
+def FakeCheriRegs : RegisterClass<"Mips", [iFATPTR256], 256, (add DDC)>;
+
+// Cap register class which includes both CNULL and DDC. This is not a
+// constraint used by any instructions, it is used as a common super-class.
+// This approach is copied from AArch64RegisterInfo.td
+def CheriRegsAll : RegisterClass<"Mips", [CapRegType], 256, (add CheriRegsCommon, CNULL, DDC)> {
+  let RegInfos = RegInfoByHwMode<[Cap64, Cap128, Cap256, DefaultMode],
+       [RegInfo<64,64,64>, RegInfo<128,128,128>, RegInfo<256,256,256>, RegInfo<128,128,128>]>;
+}
+
+def CheriGPR : RegisterClass<"Mips", [CapRegType], 256, (add CNULL, CheriRegsCommon)> {
+  let RegInfos = RegInfoByHwMode<[Cap64, Cap128, Cap256, DefaultMode],
+       [RegInfo<64,64,64>, RegInfo<128,128,128>, RegInfo<256,256,256>, RegInfo<128,128,128>]>;
+}
+def CheriGPR0IsDDC : RegisterClass<"Mips", [CapRegType], 256, (add DDC, CheriRegsCommon)>{
+  let RegInfos = RegInfoByHwMode<[Cap64, Cap128, Cap256, DefaultMode],
+       [RegInfo<64,64,64>, RegInfo<128,128,128>, RegInfo<256,256,256>, RegInfo<128,128,128>]>;
+}
 
 def CheriHWRegs : RegisterClass<"Mips", [CapRegType], 256, (sequence "CAPHWR%u", 0, 31)>, Unallocatable {
   let RegInfos = RegInfoByHwMode<[Cap64, Cap128, Cap256, DefaultMode],
@@ -567,6 +592,12 @@ def CheriAsmOperand : MipsAsmRegOperand {
   let Name = "CheriAsmReg";
   let PredicateMethod = "isCheriAsmReg";
   let DiagnosticType = "CheriAsmReg";
+}
+
+def CheriAsmOperand0IsDDC : MipsAsmRegOperand {
+  let Name = "CheriAsmReg0IsDDC";
+  let PredicateMethod = "isCheriAsmReg0IsDDC";
+  let DiagnosticType = "CheriAsmReg0IsDDC";
 }
 
 def GPR32ZeroAsmOperand : MipsAsmRegOperand {
@@ -719,8 +750,12 @@ def COP2AsmOperand : MipsAsmRegOperand {
   let Name = "COP2AsmReg";
 }
 
-def CheriOpnd : RegisterOperand<CheriRegs> {
+def CheriOpnd : RegisterOperand<CheriGPR> {
   let ParserMatchClass = CheriAsmOperand;
+}
+
+def CheriOpnd0IsDDC : RegisterOperand<CheriGPR0IsDDC> {
+  let ParserMatchClass = CheriAsmOperand0IsDDC;
 }
 
 
