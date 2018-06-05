@@ -1,13 +1,17 @@
-// RUN: %cheri_purecap_cc1 -std=c11 -verify=expected,offset-expected,bitand -Wpedantic -Wall -Wno-unused-parameter -Wno-unused-variable -Wno-self-assign -Wno-missing-prototypes -Wno-sign-conversion %s
+// RUN: %cheri_purecap_cc1 -std=c11 -verify=expected,offset,bitand -Wpedantic -Wall -Wno-unused-parameter -Wno-unused-variable -Wno-self-assign -Wno-missing-prototypes -Wno-sign-conversion %s
 // also check that the same warnings trigger in C++ modes
-// RUN: %cheri_purecap_cc1 -xc++ -verify=expected,offset-expected,bitand -Wpedantic -Wall -Wno-unused-parameter -Wno-unused-variable -Wno-self-assign -Wno-missing-prototypes -Wno-sign-conversion %s
+// RUN: %cheri_purecap_cc1 -xc++ -verify=expected,offset,bitand -Wpedantic -Wall -Wno-unused-parameter -Wno-unused-variable -Wno-self-assign -Wno-missing-prototypes -Wno-sign-conversion %s
+
+// Check that we don't warn about bitwise operations (other than &) when in cheri-uintcap=addr mode
+// For & we can't just rely on vaddr mode to make it work, we also need data-dependent provenance
+// RUN: %cheri_purecap_cc1 -cheri-uintcap=addr -xc++ -verify=expected,bitand -Wpedantic -Wall -Wno-unused-parameter -Wno-unused-variable -Wno-self-assign -Wno-missing-prototypes -Wno-sign-conversion %s
 
 // Check that -cheri-data-dependent-provenance affects the displayed diagnostics
 // If we are in cheri-uintcap=offset mode we should still display the diagnostic since it won't do what we expect
-// RUN: %cheri_purecap_cc1 -cheri-uintcap=offset -cheri-data-dependent-provenance -xc++ -verify=expected,offset-expected,bitand -Wpedantic -Wall -Wno-unused-parameter -Wno-unused-variable -Wno-self-assign -Wno-missing-prototypes -Wno-sign-conversion %s
+// RUN: %cheri_purecap_cc1 -cheri-uintcap=offset -cheri-data-dependent-provenance -xc++ -verify=expected,offset,bitand -Wpedantic -Wall -Wno-unused-parameter -Wno-unused-variable -Wno-self-assign -Wno-missing-prototypes -Wno-sign-conversion %s
 // However in the -cheri-uintcap=addr mode we are operating on vaddrs and using data-dependent provenance
 // so the bitwise-and operations should mostly behave the way a C programmer expects them to so we shouldn't warn:
-// RUN: %cheri_purecap_cc1 -cheri-uintcap=addr -cheri-data-dependent-provenance -xc++ -verify=expected,offset-expected -Wpedantic -Wall -Wno-unused-parameter -Wno-unused-variable -Wno-self-assign -Wno-missing-prototypes -Wno-sign-conversion %s
+// RUN: %cheri_purecap_cc1 -cheri-uintcap=addr -cheri-data-dependent-provenance -xc++ -verify=expected -Wpedantic -Wall -Wno-unused-parameter -Wno-unused-variable -Wno-self-assign -Wno-missing-prototypes -Wno-sign-conversion %s
 
 // See https://github.com/CTSRD-CHERI/clang/issues/189
 typedef __uintcap_t uintptr_t;
@@ -19,53 +23,53 @@ void check_xor(void *ptr, uintptr_t cap, int i) {
   uintptr_t int_and_int = i ^ i; // fine
   // i is promoted to __intcap_t here so the warning triggers:
   uintptr_t int_and_cap = i ^ cap;   // expected-warning{{binary expression on capability and non-capability types: 'int' and 'uintptr_t' (aka '__uintcap_t')}}
-  uintptr_t cap_and_int = cap ^ i;   // expected-warning{{using xor on a capability type only operates on the offset; consider using vaddr_t if this is used for pointer hashing or explicitly get the offset with __builtin_cheri_offset_get().}}
-  uintptr_t cap_and_cap = cap ^ cap; // expected-warning{{using xor on a capability type only operates on the offset}}
+  uintptr_t cap_and_int = cap ^ i;   // offset-warning{{using xor on a capability type only operates on the offset; consider using vaddr_t if this is used for pointer hashing or explicitly get the offset with __builtin_cheri_offset_get().}}
+  uintptr_t cap_and_cap = cap ^ cap; // offset-warning{{using xor on a capability type only operates on the offset}}
 
   int int_and_int_2 = i ^ i; // fine
   // i is promoted to __intcap_t here so the warning triggers:
   int int_and_cap_2 = i ^ cap;         // expected-warning{{binary expression on capability and non-capability types: 'int' and 'uintptr_t' (aka '__uintcap_t')}}
-  uintptr_t cap_and_int_2 = cap ^ i;   // expected-warning{{using xor on a capability type only operates on the offset}}
-  uintptr_t cap_and_cap_2 = cap ^ cap; // expected-warning{{using xor on a capability type only operates on the offset}}
+  uintptr_t cap_and_int_2 = cap ^ i;   // offset-warning{{using xor on a capability type only operates on the offset}}
+  uintptr_t cap_and_cap_2 = cap ^ cap; // offset-warning{{using xor on a capability type only operates on the offset}}
 
   i ^= i;
   // FIXME: shouldn't this really be an invalid operand error?
   i ^= cap;   // expected-warning{{binary expression on capability and non-capability types}}
-  cap ^= i;   // expected-warning{{using xor on a capability type only operates on the offset}}
-  cap ^= cap; // expected-warning{{using xor on a capability type only operates on the offset}}
+  cap ^= i;   // offset-warning{{using xor on a capability type only operates on the offset}}
+  cap ^= cap; // offset-warning{{using xor on a capability type only operates on the offset}}
 
   uintptr_t hash = ptr ^ 0x1234567;                                  // expected-error{{invalid operands to binary expression ('void * __capability' and 'int')}}
-  uintptr_t hash2 = (__intcap_t)ptr ^ 0x1234567;                     // expected-warning{{using xor on a capability type only operates on the offset}}
-  uintptr_t hash3 = cap ^ 0x1234567;                                 // expected-warning{{using xor on a capability type only operates on the offset}}
-  uintptr_t nonsense = (__intcap_t)ptr ^ cap;                        // expected-warning{{using xor on a capability type only operates on the offset}}
-  uintptr_t is_this_really_zero = (__intcap_t)ptr ^ (__intcap_t)ptr; // expected-warning{{using xor on a capability type only operates on the offset}}
-  uintptr_t is_this_really_zero2 = (__intcap_t)ptr ^ cap;            // expected-warning{{using xor on a capability type only operates on the offset}}
+  uintptr_t hash2 = (__intcap_t)ptr ^ 0x1234567;                     // offset-warning{{using xor on a capability type only operates on the offset}}
+  uintptr_t hash3 = cap ^ 0x1234567;                                 // offset-warning{{using xor on a capability type only operates on the offset}}
+  uintptr_t nonsense = (__intcap_t)ptr ^ cap;                        // offset-warning{{using xor on a capability type only operates on the offset}}
+  uintptr_t is_this_really_zero = (__intcap_t)ptr ^ (__intcap_t)ptr; // offset-warning{{using xor on a capability type only operates on the offset}}
+  uintptr_t is_this_really_zero2 = (__intcap_t)ptr ^ cap;            // offset-warning{{using xor on a capability type only operates on the offset}}
 }
 
 void check_shift_left(void *ptr, uintptr_t cap, int i) {
   uintptr_t int_and_int = i << i; // fine
   // i is promoted to __intcap_t here so the warning triggers:
-  uintptr_t int_and_cap = i << cap;   // expected-warning{{using shifts on a capability type only operates on the offset}}
-  uintptr_t cap_and_int = cap << i;   // expected-warning{{using shifts on a capability type only operates on the offset}}
-  uintptr_t cap_and_cap = cap << cap; // expected-warning{{using shifts on a capability type only operates on the offset}}
+  uintptr_t int_and_cap = i << cap;   // offset-warning{{using shifts on a capability type only operates on the offset}}
+  uintptr_t cap_and_int = cap << i;   // offset-warning{{using shifts on a capability type only operates on the offset}}
+  uintptr_t cap_and_cap = cap << cap; // offset-warning{{using shifts on a capability type only operates on the offset}}
   i <<= i;
   // FIXME: shouldn't this really be an invalid operand error?
-  i <<= cap;   // expected-warning{{using shifts on a capability type only operates on the offset}}
-  cap <<= i;   // expected-warning{{using shifts on a capability type only operates on the offset}}
-  cap <<= cap; // expected-warning{{using shifts on a capability type only operates on the offset}}
+  i <<= cap;   // offset-warning{{using shifts on a capability type only operates on the offset}}
+  cap <<= i;   // offset-warning{{using shifts on a capability type only operates on the offset}}
+  cap <<= cap; // offset-warning{{using shifts on a capability type only operates on the offset}}
 }
 
 void check_shift_right(void *ptr, uintptr_t cap, int i) {
   uintptr_t int_and_int = i >> i; // fine
   // i is promoted to __intcap_t here so the warning triggers:
-  uintptr_t int_and_cap = i >> cap;   // expected-warning{{using shifts on a capability type only operates on the offset}}
-  uintptr_t cap_and_int = cap >> i;   // expected-warning{{using shifts on a capability type only operates on the offset}}
-  uintptr_t cap_and_cap = cap >> cap; // expected-warning{{using shifts on a capability type only operates on the offset}}
+  uintptr_t int_and_cap = i >> cap;   // offset-warning{{using shifts on a capability type only operates on the offset}}
+  uintptr_t cap_and_int = cap >> i;   // offset-warning{{using shifts on a capability type only operates on the offset}}
+  uintptr_t cap_and_cap = cap >> cap; // offset-warning{{using shifts on a capability type only operates on the offset}}
   i >>= i;
   // FIXME: shouldn't this really be an invalid operand error?
-  i >>= cap;   // expected-warning{{using shifts on a capability type only operates on the offset}}
-  cap >>= i;   // expected-warning{{using shifts on a capability type only operates on the offset}}
-  cap >>= cap; // expected-warning{{using shifts on a capability type only operates on the offset}}
+  i >>= cap;   // offset-warning{{using shifts on a capability type only operates on the offset}}
+  cap >>= i;   // offset-warning{{using shifts on a capability type only operates on the offset}}
+  cap >>= cap; // offset-warning{{using shifts on a capability type only operates on the offset}}
 }
 
 void check_modulo(void *ptr, uintptr_t cap, int i) {
@@ -79,6 +83,8 @@ void check_modulo(void *ptr, uintptr_t cap, int i) {
   cap %= i;   // offset-warning{{using remainder on a capability type only operates on the offset}}
   cap %= cap; // offset-warning{{using remainder on a capability type only operates on the offset}}
 }
+
+// TODO: what about div/mul?
 
 void check_and(void *ptr, uintptr_t cap, int i) {
   uintptr_t int_and_int = i & i; // fine

@@ -210,6 +210,14 @@ public:
     return MSCompatibilityVersion >= MajorVersion * 10000000U;
   }
 
+  bool cheriUIntCapUsesAddr() const {
+    return getCheriUIntCap() == UIntCap_Addr;
+  }
+
+  bool cheriUIntCapUsesOffset() const {
+    return getCheriUIntCap() == UIntCap_Offset;
+  }
+
   /// \brief Reset all of the options that are not considered when building a
   /// module.
   void resetNonModularOptions();

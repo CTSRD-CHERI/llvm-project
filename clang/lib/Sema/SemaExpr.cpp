@@ -8688,7 +8688,8 @@ QualType Sema::CheckRemainderOperands(
 
   // Remainder in offset mode will not work for alignment checks since it
   // doesn't take the base into account so we warn then
-  if ((LHS.get()->getType()->isCHERICapabilityType(Context) ||
+  if (getLangOpts().cheriUIntCapUsesOffset() &&
+      (LHS.get()->getType()->isCHERICapabilityType(Context) ||
        RHS.get()->getType()->isCHERICapabilityType(Context)))
     Diag(Loc, diag::warn_uintcap_bad_bitwise_op)
       << 2 /*=modulo*/ << 1 /* used for alignment checks */
@@ -9424,7 +9425,10 @@ QualType Sema::CheckShiftOperands(ExprResult &LHS, ExprResult &RHS,
   // Sanity-check shift operands
   DiagnoseBadShiftValues(*this, LHS, RHS, Loc, Opc, LHSType);
 
-  if ((LHSType->isIntCapType() || RHSType->isIntCapType()) &&
+  // In CHERI offset mode shifts only look at the offset and ignore the base.
+  // This is rarely the intended behaviour so warn if that is the case.
+  if (getLangOpts().cheriUIntCapUsesOffset() &&
+      (LHSType->isIntCapType() || RHSType->isIntCapType()) &&
       (Opc == BO_Shl || Opc == BO_ShlAssign || Opc == BO_Shr ||
        Opc == BO_ShrAssign))
     Diag(Loc, diag::warn_uintcap_bad_bitwise_op)
@@ -10369,17 +10373,22 @@ inline QualType Sema::CheckBitwiseOperands(ExprResult &LHS, ExprResult &RHS,
   if (!compType.isNull() && compType->isIntegralOrUnscopedEnumerationType()) {
     bool isLHSCap = OriginalLHSType->isCHERICapabilityType(Context);
     bool isRHSCap = RHS.get()->getType()->isCHERICapabilityType(Context);
-    bool UsingVaddr = getLangOpts().getCheriUIntCap() == LangOptions::UIntCap_Addr;
+    bool UsingUIntCapOffset = getLangOpts().cheriUIntCapUsesOffset();
     if (isLHSCap && (Opc == BO_And || Opc == BO_AndAssign)) {
       // Bitwise and can cause checking low pointer bits to be compiled to
       // and always false condition (see CTSRD-CHERI/clang#189) unless we
       // have CheriDataDependentProvenance enabled. It also gives surprising
       // behaviour if we are compiling in uintcap=offset mode so warn if either
       // of conditions are not met:
-      if (!UsingVaddr || !getLangOpts().CheriDataDependentProvenance)
-       Diag(Loc, diag::warn_uintcap_bitwise_and)
-           << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
-    } else if (isLHSCap && (Opc == BO_Xor || Opc == BO_XorAssign)) {
+      if (UsingUIntCapOffset || !getLangOpts().CheriDataDependentProvenance)
+        Diag(Loc, diag::warn_uintcap_bitwise_and)
+            << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
+    } else if (UsingUIntCapOffset && isLHSCap &&
+               (Opc == BO_Xor || Opc == BO_XorAssign)) {
+      // XOR is highly dubious when in offset mode (except when using on plain
+      // integer values, but then the user should be using size_t/vaddr_t and
+      // not uintcap_t. Don't warn in address mode since that works just fine
+      // (only slightly less efficiently)
       Diag(Loc, diag::warn_uintcap_bad_bitwise_op)
           << 0 /*=xor*/ << 0 /* usecase is hashing */
           << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
