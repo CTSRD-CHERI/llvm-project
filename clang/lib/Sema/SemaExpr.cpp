@@ -10366,18 +10366,26 @@ inline QualType Sema::CheckBitwiseOperands(ExprResult &LHS, ExprResult &RHS,
   if (!compType.isNull() && compType->isIntegralOrUnscopedEnumerationType()) {
     bool isLHSCap = OriginalLHSType->isCHERICapabilityType(Context);
     bool isRHSCap = RHS.get()->getType()->isCHERICapabilityType(Context);
-    if (isLHSCap && (Opc == BO_And || Opc == BO_AndAssign))
-      Diag(Loc, diag::warn_uintcap_bitwise_and)
-          << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
-    else if (isLHSCap && (Opc == BO_Xor || Opc == BO_XorAssign))
+    bool UsingVaddr = getLangOpts().getCheriUIntCap() == LangOptions::UIntCap_Addr;
+    if (isLHSCap && (Opc == BO_And || Opc == BO_AndAssign)) {
+      // Bitwise and can cause checking low pointer bits to be compiled to
+      // and always false condition (see CTSRD-CHERI/clang#189) unless we
+      // have CheriDataDependentProvenance enabled. It also gives surprising
+      // behaviour if we are compiling in uintcap=offset mode so warn if either
+      // of conditions are not met:
+      if (!UsingVaddr || !getLangOpts().CheriDataDependentProvenance)
+       Diag(Loc, diag::warn_uintcap_bitwise_and)
+           << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
+    } else if (isLHSCap && (Opc == BO_Xor || Opc == BO_XorAssign)) {
       Diag(Loc, diag::warn_uintcap_bad_bitwise_op)
           << 0 /*=xor*/ << 0 /* usecase is hashing */
           << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
-    else if ((isLHSCap && !isRHSCap) || (!isLHSCap && isRHSCap))
+    } else if ((isLHSCap && !isRHSCap) || (!isLHSCap && isRHSCap)) {
       // FIXME: this warning is not always useful
       Diag(Loc, diag::warn_mixed_capability_binop)
           << OriginalLHSType << RHS.get()->getType()
           << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
+    }
     return compType;
   }
   return InvalidOperands(Loc, LHS, RHS);
