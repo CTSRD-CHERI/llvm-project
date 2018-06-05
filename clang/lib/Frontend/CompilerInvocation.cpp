@@ -2211,6 +2211,9 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
                            ? LangOptions::CheriUIntCapMode::UIntCap_Addr
                            : LangOptions::CheriUIntCapMode::UIntCap_Offset);
 
+  Opts.CheriDataDependentProvenance =
+      Args.hasArg(OPT_cheri_data_dependent_provenance);
+
   Opts.MSVCCompat = Args.hasArg(OPT_fms_compatibility);
   Opts.MicrosoftExt = Opts.MSVCCompat || Args.hasArg(OPT_fms_extensions);
   Opts.AsmBlocks = Args.hasArg(OPT_fasm_blocks) || Opts.MicrosoftExt;

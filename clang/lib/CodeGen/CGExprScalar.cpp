@@ -89,6 +89,9 @@ struct BinOpInfo {
   BinaryOperator::Opcode Opcode; // Opcode of BinOp to perform
   FPOptions FPFeatures;
   const Expr *E;      // Entire expr, for error unsupported.  May not be binop.
+  // For CHERI we may have to use NULL as the resulting base in a bitiwise-and
+  // instead of the LHS (see https://github.com/CTSRD-CHERI/clang/issues/189)
+  Value *ResultProvenanceOverride = nullptr;
 
   /// Check if the binop can result in integer overflow.
   bool mayHaveIntegerOverflow() const {
@@ -699,10 +702,35 @@ public:
     return GetBinOpVal(Op, V, Op.E->getType());
   }
   Value *GetBinOpResult(const BinOpInfo &Op, Value *LHS, Value *V, QualType T) {
-    if (!T->isCHERICapabilityType(CGF.getContext()))
+    bool IsCapabilityResult = T->isCHERICapabilityType(CGF.getContext());
+    // TODO: or just check LHS LLVM type?
+    if (!IsCapabilityResult)
       return V;
-    // FIXME: this breaks patterns such as `if (uintptr_t(x) & 1 == 1)`
-    // For now try to solve this by warning for this pattern
+    // Bitwise-and require special handling (due to checking vs clearing low
+    // pointer bits: see https://github.com/CTSRD-CHERI/clang/issues/189
+    // Note: without data-dependent provenance patterns such as
+    // `if (uintptr_t(x) & 1 == 1)` break. This is commonly used is used to
+    // test for data stored in low pointer bits (for mutexes, etc...)
+    if (Op.Opcode == BinaryOperator::Opcode::BO_And ||
+        Op.Opcode == BinaryOperator::Opcode::BO_AndAssign) {
+      // If we are using data-dependent provenance we may need to return either
+      // a NULL-derived or LHS derived capability for bitwise-and
+      // TODO: is this also a problem for xor (should be less common so can
+      // probably ignore?)
+      if (IsCapabilityResult &&
+          CGF.getLangOpts().CheriDataDependentProvenance) {
+        // For now we derive from NULL if the value we are anding with is less
+        // than one page since such values should *almost* never be valid anyway
+        uint64_t NullDeriveLimit = 4096;
+        auto *ShouldDeriveFromNull = CGF.Builder.CreateICmpULE(
+            Op.RHS, llvm::ConstantInt::get(Op.RHS->getType(), NullDeriveLimit),
+            "bitand.should-nullderive");
+        auto CapNull = llvm::ConstantPointerNull::get(
+            cast<llvm::PointerType>(LHS->getType()));
+        LHS = Builder.CreateSelect(ShouldDeriveFromNull, CapNull, LHS,
+                                 "bitand.provenance");
+      }
+    }
     return CGF.setCapabilityIntegerValue(LHS, V);
   }
   Value *GetBinOpResult(const BinOpInfo &Op, Value *LHS, Value *V) {

@@ -270,6 +270,8 @@ def cheri_uintcap_offset : Flag<["-"], "cheri-uintcap=offset">, Flags<[DriverOpt
   HelpText<"Use the capability offset when performing computations on uintcap_t (more GC-friendly but needs more changes to source code)">;
 def cheri_uintcap_addr : Flag<["-"], "cheri-uintcap=addr">, Flags<[DriverOption,CC1Option]>, Group<cheri_Group>,
   HelpText<"Use the capability address when performing computations on uintcap_t (more C compatible but may break copying GC)">;
+def cheri_data_dependent_provenance : Flag<["-"], "cheri-data-dependent-provenance">, Flags<[CC1Option]>, Group<cheri_Group>,
+  HelpText<"Use the LHS or NULL provenance of a bitwise-and operation depending on the value of the RHS">;
 
 def external_capsizefix : Flag<["-"], "external-capsizefix">, Flags<[CC1Option]>,
   Group<cheri_Group>, HelpText<"Use the external capsizefix tool instead of relying on the linker (deprecated)">;
