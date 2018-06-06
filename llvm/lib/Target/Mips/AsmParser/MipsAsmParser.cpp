@@ -5950,22 +5950,11 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name,
       return -2;
     }
   };
-  if (CC == 0 || CC == Mips::CNULL || CC == Mips::DDC) {
+  if (CC == 0) {
     // special handling for register zero (some instructions treat it as NULL
     // and other use it for $ddc)
     bool RegZeroIsDDC = isCRegZeroDDC(Operands, Name);
-    if (Name == "cnull") {
-      // the spelling $cnull is not allowed for address/cfromptr operands
-      // where register zero means $ddc
-      if (RegZeroIsDDC) {
-        Error(Parser.getTok().getLoc(),
-              "register name $cnull is invalid as this operand. Did you mean "
-              "$ddc?",
-              Parser.getTok().getLocRange());
-        return -2;
-      }
-      return Mips::CNULL;
-    } else if (Name == "c0") {
+    if (Name == "c0") {
       if (!RegZeroIsDDC) {
         StringRef ErrMsg =
             "register name $c0 is invalid as this operand. It will no longer "
@@ -5982,15 +5971,6 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name,
       // Otherwise $c0 means $ddc so just print a deprecation warning
       Warning(Parser.getTok().getLoc(),
               "register name $c0 is deprecated. Use $ddc instead.");
-      return Mips::DDC;
-    } else if (Name == "ddc") {
-      if (!RegZeroIsDDC) {
-        Error(Parser.getTok().getLoc(),
-              "register name $ddc is invalid as this operand. Did you mean "
-              "$cnull?",
-              Parser.getTok().getLocRange());
-        return -2;
-      }
       return Mips::DDC;
     }
     errs() << "REGISTER NAME " << Name << "not handled?\n";
