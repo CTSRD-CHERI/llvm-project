@@ -1741,16 +1741,18 @@ public:
     bool Result = isRegIdx() && RegIdx.Kind & RegKind_Cheri &&
                   RegIdx.RegInfo->getRegClass(Mips::CheriGPRRegClassID)
                       .contains(RegIdx.RealRegister);
-    DEBUG(dbgs() << __func__ << " CheriGPRRegClassID contains(" << RegIdx.Index
-                 << "): " << Result << "\n");
+    DEBUG(dbgs() << __func__ << " CheriGPRRegClassID contains("
+                 << RegIdx.RegInfo->getName(RegIdx.RealRegister) << "="
+                 << RegIdx.RealRegister << "): " << Result << "\n");
     return Result;
   }
   bool isCheriAsmReg0IsDDC() const {
     bool Result = isRegIdx() && RegIdx.Kind & RegKind_Cheri &&
-                  RegIdx.RegInfo->getRegClass(Mips::CheriGPRRegClassID)
+                  RegIdx.RegInfo->getRegClass(Mips::CheriGPR0IsDDCRegClassID)
                       .contains(RegIdx.RealRegister);
-    DEBUG(dbgs() << __func__ << " CheriGPR0IsDDCRegClassID contains(" << RegIdx.Index
-           << "): " << Result << "\n");
+    DEBUG(dbgs() << __func__ << " CheriGPR0IsDDCRegClassID contains("
+                 << RegIdx.RegInfo->getName(RegIdx.RealRegister) << "="
+                 << RegIdx.RealRegister << "): " << Result << "\n");
     return Result;
   }
   bool isCheriHWAsmReg() const {
