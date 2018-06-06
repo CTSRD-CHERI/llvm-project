@@ -36,9 +36,9 @@ entry:
 ; MIPS-NEXT: %0:gpr64 = DADDiu %{{6|4}}, target-flags(mips-gpoff-lo) @test
 ; MIPS-MXGOT-NEXT: %1:gpr64 = LUi64 target-flags(mips-got-hi16) @global
 ; MIPS-MXGOT-NEXT: %2:gpr64 = DADDu killed %1, %0
-; MIPS-MXGOT-NEXT: [[ADDR:%3]]:gpr64 = LD killed %2, target-flags(mips-got-lo16) @global, implicit $c0; mem:LD8[GOT]
-; MIPS-SMALLGOT-NEXT: [[ADDR:%1]]:gpr64 = LD %0, target-flags(mips-got-disp) @global, implicit $c0; mem:LD8[GOT]
-; MIPS-NEXT: [[RESULT:%.+]]:gpr64 = LD killed [[ADDR]], 0, implicit $c0; mem:LD8[@global](dereferenceable)
+; MIPS-MXGOT-NEXT: [[ADDR:%3]]:gpr64 = LD killed %2, target-flags(mips-got-lo16) @global, implicit $ddc; mem:LD8[GOT]
+; MIPS-SMALLGOT-NEXT: [[ADDR:%1]]:gpr64 = LD %0, target-flags(mips-got-disp) @global, implicit $ddc; mem:LD8[GOT]
+; MIPS-NEXT: [[RESULT:%.+]]:gpr64 = LD killed [[ADDR]], 0, implicit $ddc; mem:LD8[@global](dereferenceable)
 
 
 ; Legacy loads the vaddr of global from the got then loads .size.global and
@@ -51,7 +51,7 @@ entry:
 ; LEGACY-NEXT:   %1:gpr64 = DADDiu %0, target-flags(mips-got-disp) @.size.global
 ; LEGACY-NEXT:   %2:cheriregs = CFromPtr $c0, killed %1
 ; LEGACY-NEXT:   %3:gpr64 = CAPLOAD64 $zero_64, 0, killed %2; mem:LD8[GOT]
-; LEGACY-NEXT:   %4:gpr64 = LD killed %3, 0, implicit $c0; mem:LD8[@.size.global]
+; LEGACY-NEXT:   %4:gpr64 = LD killed %3, 0, implicit $ddc; mem:LD8[@.size.global]
 ; LEGACY-NEXT:   %5:gpr64 = DADDiu %0, target-flags(mips-got-disp) @global
 ; LEGACY-NEXT:   %6:cheriregs = CFromPtr $c0, killed %5
 ; LEGACY-NEXT:   %7:gpr64 = CAPLOAD64 $zero_64, 0, killed %6; mem:LD8[GOT]
