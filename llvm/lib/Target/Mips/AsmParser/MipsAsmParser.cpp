@@ -839,6 +839,7 @@ private:
     RegKind Kind;   /// Bitfield of the kinds it could possibly be
     struct Token Tok; /// The input token this operand originated from.
     const MCRegisterInfo *RegInfo;
+    unsigned RealRegister; // The real underlying register (if already known)
   };
 
   struct ImmOp {
@@ -865,17 +866,17 @@ private:
   SMLoc StartLoc, EndLoc;
 
   /// Internal constructor for register kinds
-  static std::unique_ptr<MipsOperand> CreateReg(unsigned Index, StringRef Str,
-                                                RegKind RegKind,
-                                                const MCRegisterInfo *RegInfo,
-                                                SMLoc S, SMLoc E,
-                                                MipsAsmParser &Parser) {
+  static std::unique_ptr<MipsOperand>
+  CreateReg(unsigned Index, StringRef Str, RegKind RegKind,
+            const MCRegisterInfo *RegInfo, SMLoc S, SMLoc E,
+            MipsAsmParser &Parser, unsigned RealRegister = Mips::NoRegister) {
     auto Op = llvm::make_unique<MipsOperand>(k_RegisterIndex, Parser);
     Op->RegIdx.Index = Index;
     Op->RegIdx.RegInfo = RegInfo;
     Op->RegIdx.Kind = RegKind;
     Op->RegIdx.Tok.Data = Str.data();
     Op->RegIdx.Tok.Length = Str.size();
+    Op->RegIdx.RealRegister = RealRegister;
     Op->StartLoc = S;
     Op->EndLoc = E;
     return Op;
@@ -1044,21 +1045,20 @@ public:
   unsigned getCheriReg() const {
     assert(isRegIdx() && (RegIdx.Kind & RegKind_Cheri) && "Invalid access!");
     unsigned ClassID = Mips::CheriGPRRegClassID;
-    assert(RegIdx.Index == Mips::CNULL ||
-           (RegIdx.Index >= Mips::C1 && RegIdx.Index <= Mips::C31));
-    unsigned RealIndex =
-        RegIdx.Index == Mips::CNULL ? 0 : RegIdx.Index - Mips::C1 + 1;
-    return RegIdx.RegInfo->getRegClass(ClassID).getRegister(RealIndex);
+    assert(
+        RegIdx.RealRegister == Mips::CNULL ||
+        (RegIdx.RealRegister >= Mips::C1 && RegIdx.RealRegister <= Mips::C31));
+    assert(RegIdx.Index <= 31);
+    return RegIdx.RegInfo->getRegClass(ClassID).getRegister(RegIdx.Index);
   }
   unsigned getCheriReg0IsDDC() const {
     assert(isRegIdx() && (RegIdx.Kind & RegKind_Cheri) && "Invalid access!");
     unsigned ClassID = Mips::CheriGPR0IsDDCRegClassID;
-    assert(RegIdx.Index == Mips::DDC ||
-           (RegIdx.Index >= Mips::C1 && RegIdx.Index <= Mips::C31));
-    unsigned RealIndex =
-        RegIdx.Index == Mips::DDC ? 0 : RegIdx.Index - Mips::C1 + 1;
-    assert(RealIndex < 31);
-    return RegIdx.RegInfo->getRegClass(ClassID).getRegister(RealIndex);
+    assert(
+        RegIdx.RealRegister == Mips::DDC ||
+        (RegIdx.RealRegister >= Mips::C1 && RegIdx.RealRegister <= Mips::C31));
+    assert(RegIdx.Index <= 31);
+    return RegIdx.RegInfo->getRegClass(ClassID).getRegister(RegIdx.Index);
   }
 
   void addExpr(MCInst &Inst, const MCExpr *Expr) const {
@@ -1661,7 +1661,20 @@ public:
   static std::unique_ptr<MipsOperand>
   CreateCheriReg(unsigned Index, StringRef Str, const MCRegisterInfo *RegInfo,
                  SMLoc S, SMLoc E, MipsAsmParser &Parser) {
-    return CreateReg(Index, Str, RegKind_Cheri, RegInfo, S, E, Parser);
+    // Turn the index into a real register index
+    unsigned EncodedNumber = -1;
+    // Pass along whether it was DDC or CNULL:
+    if (Index == Mips::DDC) {
+      EncodedNumber = 0;
+    } else if (Index == Mips::CNULL) {
+      EncodedNumber = 0;
+    } else {
+      assert(Index >= Mips::C1 && Index <= Mips::C31);
+      EncodedNumber = Index - Mips::C1 + 1;
+    }
+    assert(EncodedNumber <= 31);
+    return CreateReg(EncodedNumber, Str, RegKind_Cheri, RegInfo, S, E, Parser,
+                     Index);
   }
 
   static std::unique_ptr<MipsOperand>
@@ -1723,17 +1736,20 @@ public:
   static_assert(Mips::CNULL != Mips::DDC, "DDC must not be CNULL");
   static_assert(Mips::C31 - Mips::C1 == 30, "Need 31 contiguous GPRS");
   bool isCheriAsmReg() const {
-
-    return isRegIdx() && RegIdx.Kind & RegKind_Cheri &&
-           RegIdx.RegInfo->getRegClass(Mips::CheriGPRRegClassID).contains(RegIdx.Index);
+    bool Result = isRegIdx() && RegIdx.Kind & RegKind_Cheri &&
+                  RegIdx.RegInfo->getRegClass(Mips::CheriGPRRegClassID)
+                      .contains(RegIdx.RealRegister);
+    DEBUG(dbgs() << __func__ << " CheriGPRRegClassID contains(" << RegIdx.Index
+                 << "): " << Result << "\n");
+    return Result;
   }
   bool isCheriAsmReg0IsDDC() const {
-    return isRegIdx() && RegIdx.Kind & RegKind_Cheri &&
-#if 0
-           (RegIdx.Index == Mips::DDC ||
-            (RegIdx.Index >= Mips::C1 && RegIdx.Index <= Mips::C31));
-#endif
-     RegIdx.RegInfo->getRegClass(Mips::CheriGPR0IsDDCRegClassID).contains(RegIdx.Index);
+    bool Result = isRegIdx() && RegIdx.Kind & RegKind_Cheri &&
+                  RegIdx.RegInfo->getRegClass(Mips::CheriGPRRegClassID)
+                      .contains(RegIdx.RealRegister);
+    DEBUG(dbgs() << __func__ << " CheriGPR0IsDDCRegClassID contains(" << RegIdx.Index
+           << "): " << Result << "\n");
+    return Result;
   }
   bool isCheriHWAsmReg() const {
     return isRegIdx() && RegIdx.Kind & RegKind_CheriHWRegs && RegIdx.Index <= 31;
@@ -5669,7 +5685,10 @@ bool MipsAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
                  "expected memory with 16-bit signed offset");
   case Match_CheriAsmReg:
     return Error(RefineErrorLoc(IDLoc, Operands, ErrorInfo),
-                 "expected general-purpose CHERI register operand");
+                 "expected general-purpose CHERI register operand or $cnull");
+  case Match_CheriAsmReg0IsDDC:
+    return Error(RefineErrorLoc(IDLoc, Operands, ErrorInfo),
+                 "expected general-purpose CHERI register operand or $ddc");
   case Match_RequiresPosSizeRange0_32: {
     SMLoc ErrorStart = Operands[3]->getStartLoc();
     SMLoc ErrorEnd = Operands[4]->getEndLoc();

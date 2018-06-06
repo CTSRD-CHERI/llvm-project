@@ -490,25 +490,25 @@ defm CAP0STORE3264  : StoreViaCap0<CAPSTORE3264, GPR64Opnd, truncstorei32>;
 defm CAP0STORE64    : StoreViaCap0<CAPSTORE64, GPR64Opnd, store>;
 
 def CLDC1 : CheriPseudo<(outs FGR64Opnd: $rd),
-  (ins GPR64Opnd:$rt, simm8s3:$offset, CheriGPR0IsDDC:$cb),
+  (ins GPR64Opnd:$rt, simm8s3:$offset, CheriOpnd0IsDDC:$cb),
   "cldc1\t$rd,  ${rt}, ${offset}(${cb})",
-  [(set FGR64Opnd:$rd, (load (add (add (ptrtoint CheriGPR0IsDDC:$cb), GPR64Opnd:$rt), (i64 simm8s3Pattern:$offset))))]>;
+  [(set FGR64Opnd:$rd, (load (add (add (ptrtoint CheriOpnd0IsDDC:$cb), GPR64Opnd:$rt), (i64 simm8s3Pattern:$offset))))]>;
 
 
 def CLWC1 : CheriPseudo<(outs FGR32Opnd: $rd),
-  (ins GPR64Opnd:$rt, simm8s2:$offset, CheriGPR0IsDDC:$cb),
+  (ins GPR64Opnd:$rt, simm8s2:$offset, CheriOpnd0IsDDC:$cb),
   "clwc1\t$rd,  ${rt}, ${offset}(${cb})",
-  [(set FGR32Opnd:$rd, (load (add (add (ptrtoint CheriGPR0IsDDC:$cb), GPR64Opnd:$rt), (i64 simm8s2Pattern:$offset))))]>;
+  [(set FGR32Opnd:$rd, (load (add (add (ptrtoint CheriOpnd0IsDDC:$cb), GPR64Opnd:$rt), (i64 simm8s2Pattern:$offset))))]>;
 
 def CSDC1 : CheriPseudo<(outs),
-  (ins FGR64Opnd:$rs, GPR64Opnd:$rt, simm8s3:$offset, CheriGPR0IsDDC:$cb),
+  (ins FGR64Opnd:$rs, GPR64Opnd:$rt, simm8s3:$offset, CheriOpnd0IsDDC:$cb),
   "csdc1\t$rs,  ${rt}, ${offset}(${cb})",
-  [(store (add (add (ptrtoint CheriGPR0IsDDC:$cb), GPR64Opnd:$rt), (i64 simm8s3Pattern:$offset)), FGR64Opnd: $rs)]>;
+  [(store (add (add (ptrtoint CheriOpnd0IsDDC:$cb), GPR64Opnd:$rt), (i64 simm8s3Pattern:$offset)), FGR64Opnd: $rs)]>;
 
 def CSWC1 : CheriPseudo<(outs),
-  (ins FGR32Opnd:$rs, GPR64Opnd:$rt, simm8s2:$offset, CheriGPR0IsDDC:$cb),
+  (ins FGR32Opnd:$rs, GPR64Opnd:$rt, simm8s2:$offset, CheriOpnd0IsDDC:$cb),
   "cswc1\t$rs,  ${rt}, ${offset}(${cb})",
-  [(store (add (add (ptrtoint CheriGPR0IsDDC:$cb), GPR64Opnd:$rt), (i64 simm8s2Pattern:$offset)), FGR32Opnd: $rs)]>;
+  [(store (add (add (ptrtoint CheriOpnd0IsDDC:$cb), GPR64Opnd:$rt), (i64 simm8s2Pattern:$offset)), FGR32Opnd: $rs)]>;
 
 defm : LoadViaCap0<CLWC1, load>;
 defm : LoadViaCap0<CLDC1, load>;
@@ -565,11 +565,11 @@ def : InstAlias<"cfromddc $dst, $src", (CFromPtr CheriOpnd:$dst, DDC, GPR64Opnd:
 ////////////////////////////////////////////////////////////////////////////////
 
 class CapAtomic2Ops<PatFrag Op, RegisterClass DRC> :
-  PseudoSE<(outs DRC:$dst), (ins CheriGPR0IsDDC:$ptr, DRC:$incr),
-           [(set DRC:$dst, (Op CheriGPR0IsDDC:$ptr, DRC:$incr))]>;
+  PseudoSE<(outs DRC:$dst), (ins CheriOpnd0IsDDC:$ptr, DRC:$incr),
+           [(set DRC:$dst, (Op CheriOpnd0IsDDC:$ptr, DRC:$incr))]>;
 class CapAtomicCmpSwap<PatFrag Op, RegisterClass DRC> :
-  PseudoSE<(outs DRC:$dst), (ins CheriGPR0IsDDC:$ptr, DRC:$cmp, DRC:$swap),
-           [(set DRC:$dst, (Op CheriGPR0IsDDC:$ptr, DRC:$cmp, DRC:$swap))]>;
+  PseudoSE<(outs DRC:$dst), (ins CheriOpnd0IsDDC:$ptr, DRC:$cmp, DRC:$swap),
+           [(set DRC:$dst, (Op CheriOpnd0IsDDC:$ptr, DRC:$cmp, DRC:$swap))]>;
 
 
 let usesCustomInserter = 1 in {
@@ -611,28 +611,28 @@ let usesCustomInserter = 1 in {
 
 // Atomic load patterns.  These (and the store patterns) expand to simple loads
 // because an IR pass adds the required barriers.
-def : MipsPat<(atomic_load_8 CheriGPR0IsDDC:$a), (CAPLOAD832 ZERO_64, (i64 0), CheriOpnd0IsDDC:$a)>;
-def : MipsPat<(atomic_load_16 CheriGPR0IsDDC:$a), (CAPLOAD1632 ZERO_64, (i64 0), CheriOpnd0IsDDC:$a)>;
-def : MipsPat<(atomic_load_32 CheriGPR0IsDDC:$a), (CAPLOAD32 ZERO_64, (i64 0), CheriOpnd0IsDDC:$a)>;
-def : MipsPat<(atomic_load_64 CheriGPR0IsDDC:$a), (CAPLOAD64 ZERO_64, (i64 0), CheriOpnd0IsDDC:$a)>;
-def : MipsPat<(atomic_load_cap CheriGPR0IsDDC:$a), (LOADCAP ZERO_64, (i64 0), CheriOpnd0IsDDC:$a)>;
+def : MipsPat<(atomic_load_8 CheriOpnd0IsDDC:$a), (CAPLOAD832 ZERO_64, (i64 0), CheriOpnd0IsDDC:$a)>;
+def : MipsPat<(atomic_load_16 CheriOpnd0IsDDC:$a), (CAPLOAD1632 ZERO_64, (i64 0), CheriOpnd0IsDDC:$a)>;
+def : MipsPat<(atomic_load_32 CheriOpnd0IsDDC:$a), (CAPLOAD32 ZERO_64, (i64 0), CheriOpnd0IsDDC:$a)>;
+def : MipsPat<(atomic_load_64 CheriOpnd0IsDDC:$a), (CAPLOAD64 ZERO_64, (i64 0), CheriOpnd0IsDDC:$a)>;
+def : MipsPat<(atomic_load_cap CheriOpnd0IsDDC:$a), (LOADCAP ZERO_64, (i64 0), CheriOpnd0IsDDC:$a)>;
 
 // Atomic store patterns.
-def : MipsPat<(atomic_store_8 CheriGPR0IsDDC:$a, GPR64:$v),
+def : MipsPat<(atomic_store_8 CheriOpnd0IsDDC:$a, GPR64:$v),
               (CAPSTORE8 $v, ZERO_64, (i64 0), $a)>;
-def : MipsPat<(atomic_store_8 CheriGPR0IsDDC:$a, GPR32:$v),
+def : MipsPat<(atomic_store_8 CheriOpnd0IsDDC:$a, GPR32:$v),
               (CAPSTORE832 $v, ZERO_64, (i64 0), $a)>;
-def : MipsPat<(atomic_store_16 CheriGPR0IsDDC:$a, GPR64:$v),
+def : MipsPat<(atomic_store_16 CheriOpnd0IsDDC:$a, GPR64:$v),
               (CAPSTORE16 $v, ZERO_64, (i64 0), $a)>;
-def : MipsPat<(atomic_store_16 CheriGPR0IsDDC:$a, GPR32:$v),
+def : MipsPat<(atomic_store_16 CheriOpnd0IsDDC:$a, GPR32:$v),
               (CAPSTORE1632 $v, ZERO_64, (i64 0), $a)>;
-def : MipsPat<(atomic_store_32 CheriGPR0IsDDC:$a, GPR64:$v),
+def : MipsPat<(atomic_store_32 CheriOpnd0IsDDC:$a, GPR64:$v),
               (CAPSTORE3264 $v, ZERO_64, (i64 0), $a)>;
-def : MipsPat<(atomic_store_32 CheriGPR0IsDDC:$a, GPR32:$v),
+def : MipsPat<(atomic_store_32 CheriOpnd0IsDDC:$a, GPR32:$v),
               (CAPSTORE32 $v, ZERO_64, (i64 0), $a)>;
-def : MipsPat<(atomic_store_64 CheriGPR0IsDDC:$a, GPR64:$v),
+def : MipsPat<(atomic_store_64 CheriOpnd0IsDDC:$a, GPR64:$v),
               (CAPSTORE64 $v, ZERO_64, (i64 0), $a)>;
-def : MipsPat<(atomic_store_cap CheriGPR0IsDDC:$a, CheriGPR0IsDDC:$v),
+def : MipsPat<(atomic_store_cap CheriOpnd0IsDDC:$a, CheriOpnd0IsDDC:$v),
               (STORECAP $v, ZERO_64, (i64 0), $a)>;
 
 
