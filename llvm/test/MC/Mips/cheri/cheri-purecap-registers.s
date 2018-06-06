@@ -1,5 +1,5 @@
 # RUN: %cheri_purecap_llvm-mc -show-encoding %s | FileCheck %s
-# CHECK: cld	$1, $zero, 0($c0)
+# CHECK: cld	$1, $zero, 0($ddc)
 cld $1, $zero, 0($ddc)
 # CHECK: cld	$1, $zero, 0($c11)
 cld $1, $zero, 0($csp)

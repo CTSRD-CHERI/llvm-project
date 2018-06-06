@@ -173,9 +173,9 @@
 
 	# test disassembly of the old encoding:
 	old_cget_c4 0
-	# DUMP-NEXT: 48 04 00 11 cincoffset $c4, $c0, $zero
+	# DUMP-NEXT: 48 04 00 11 cincoffset $c4, $cnull, $zero
 	old_cset_c4 0
-	# DUMP-NEXT: 48 00 20 11 cincoffset $c0, $c4, $zero
+	# DUMP-NEXT: 48 00 20 11 cincoffset $cnull, $c4, $zero
 
 # CHECK: csub	 $1, $c2, $c3
 # CHECK-SAME:  encoding: [0x48,0x01,0x10,0xca]

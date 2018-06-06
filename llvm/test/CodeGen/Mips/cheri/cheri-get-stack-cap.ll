@@ -20,7 +20,7 @@ entry:
   ; CHECK-LABEL: getstack:
   ; CHECK: 	cincoffset	$c3, $c11, $zero
   ; CHECK:	cjr	$c17
-  ; CHECK:	csc	$c3, $1, 0($c0)
+  ; CHECK:	csc	$c3, $1, 0($ddc)
 
   ; PCREL-LABEL: getstack:
   ; PCREL:      clcbi	$c1, %captab20(reserved_reg_target)($c26)
@@ -40,7 +40,7 @@ entry:
   store i8 addrspace(200)* %0, i8 addrspace(200)** @reserved_reg_target, align 32
   ; CHECK: creadhwr	[[EPCC:\$c[0-9]+]], $chwr_epcc
   ; CHECK: cjr	$c17
-  ; CHECK: csc	[[EPCC]], $1, 0($c0)
+  ; CHECK: csc	[[EPCC]], $1, 0($ddc)
   ; PCREL-LABEL: test_fault_read_epcc:
   ; PCREL:      clcbi   $c1, %captab20(reserved_reg_target)($c26)
   ; PCREL-NEXT: creadhwr        $c2, $chwr_epcc

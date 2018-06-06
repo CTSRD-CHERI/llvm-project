@@ -42,7 +42,7 @@ define void @xo_emit(i8 addrspace(200)* %fmt, ...) {
 ; CHECK-NEXT:    csc $c3, $zero, 0($c2)
 ; CHECK-NEXT:    ctoptr $1, $c3, $c0
 ; CHECK-NEXT:    cgetnull $c13
-; CHECK-NEXT:    csc $c1, $1, 0($c0)
+; CHECK-NEXT:    csc $c1, $1, 0($ddc)
 ; CHECK-NEXT:    cincoffset $c11, $c24, $zero
 ; CHECK-NEXT:    clc $c24, $zero, 48($c11) # 16-byte Folded Reload
 ; CHECK-NEXT:    cjr $c17
