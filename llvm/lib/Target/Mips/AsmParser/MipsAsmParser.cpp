@@ -244,10 +244,12 @@ class MipsAsmParser : public MCTargetAsmParser {
   bool expandUncondBranchMMPseudo(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out,
                                   const MCSubtargetInfo *STI);
 
-  void expandCapLoadC1(MCInst &Inst, SMLoc IDLoc, bool is64Bit,
-                       MCStreamer &Out, const MCSubtargetInfo *STI);
-  void expandCapStoreC1(MCInst &Inst, SMLoc IDLoc, bool is64Bit,
-                        MCStreamer &Out, const MCSubtargetInfo *STI);
+  MacroExpanderResultTy expandCapLoadC1(MCInst &Inst, SMLoc IDLoc, bool is64Bit,
+                                        MCStreamer &Out,
+                                        const MCSubtargetInfo *STI);
+  MacroExpanderResultTy expandCapStoreC1(MCInst &Inst, SMLoc IDLoc,
+                                         bool is64Bit, MCStreamer &Out,
+                                         const MCSubtargetInfo *STI);
   void expandMemInst(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out,
                      const MCSubtargetInfo *STI, bool IsLoad, bool IsImmOpnd);
 
@@ -2506,14 +2508,12 @@ MipsAsmParser::tryExpandInstruction(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out,
                : MER_Success;
   case Mips::CLWC1:
     is64Bit = false;
-  case Mips::CLDC1: 
-    expandCapLoadC1(Inst, IDLoc, is64Bit, Out, STI);
-    return MER_Success;
+  case Mips::CLDC1:
+    return expandCapLoadC1(Inst, IDLoc, is64Bit, Out, STI);
   case Mips::CSWC1:
     is64Bit = false;
   case Mips::CSDC1:
-    expandCapStoreC1(Inst, IDLoc, is64Bit, Out, STI);
-    return MER_Success;
+    return expandCapStoreC1(Inst, IDLoc, is64Bit, Out, STI);
   case Mips::LoadAddrReg32:
   case Mips::LoadAddrReg64:
     assert(Inst.getOperand(0).isReg() && "expected register operand kind");
@@ -2719,12 +2719,14 @@ MipsAsmParser::tryExpandInstruction(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out,
   }
 }
 
-void MipsAsmParser::expandCapStoreC1(MCInst &Inst, SMLoc IDLoc, bool is64Bit,
-                                     MCStreamer &Out,
-                                     const MCSubtargetInfo *STI) {
+MipsAsmParser::MacroExpanderResultTy
+MipsAsmParser::expandCapStoreC1(MCInst &Inst, SMLoc IDLoc, bool is64Bit,
+                                MCStreamer &Out, const MCSubtargetInfo *STI) {
   MCInst tmpInst;
-  unsigned AtRegNum = getReg(
-    is64Bit ? Mips::GPR64RegClassID : Mips::GPR32RegClassID, getATReg(IDLoc));
+  unsigned AtRegNum = getATReg(IDLoc);
+  if (AtRegNum == 0)
+    return MER_Fail; // requires $at but set noat enabled (getAtReg reports err)
+
   tmpInst.setOpcode(is64Bit ? Mips::DMFC1 : Mips::MFC1);
   tmpInst.addOperand(MCOperand::createReg(AtRegNum));
   tmpInst.addOperand(MCOperand::createReg(Inst.getOperand(0).getReg()));
@@ -2738,13 +2740,16 @@ void MipsAsmParser::expandCapStoreC1(MCInst &Inst, SMLoc IDLoc, bool is64Bit,
   tmpInst.addOperand(MCOperand::createReg(Inst.getOperand(3).getReg()));
   tmpInst.setLoc(IDLoc);
   Out.EmitInstruction(tmpInst, *STI);
+  return MER_Success;
 }
-void MipsAsmParser::expandCapLoadC1(MCInst &Inst, SMLoc IDLoc, bool is64Bit,
-                                    MCStreamer &Out,
-                                    const MCSubtargetInfo *STI) {
+
+MipsAsmParser::MacroExpanderResultTy
+MipsAsmParser::expandCapLoadC1(MCInst &Inst, SMLoc IDLoc, bool is64Bit,
+                               MCStreamer &Out, const MCSubtargetInfo *STI) {
   MCInst tmpInst;
-  unsigned AtRegNum = getReg(
-    is64Bit ? Mips::GPR64RegClassID : Mips::GPR32RegClassID, getATReg(IDLoc));
+  unsigned AtRegNum = getATReg(IDLoc);
+  if (AtRegNum == 0)
+    return MER_Fail; // requires $at but set noat enabled (getAtReg reports err)
   tmpInst.setOpcode(is64Bit ? Mips::CAPLOAD64 : Mips::CAPLOAD32);
   tmpInst.addOperand(MCOperand::createReg(AtRegNum));
   tmpInst.addOperand(MCOperand::createReg(Inst.getOperand(1).getReg()));
@@ -2758,8 +2763,8 @@ void MipsAsmParser::expandCapLoadC1(MCInst &Inst, SMLoc IDLoc, bool is64Bit,
   tmpInst.addOperand(MCOperand::createReg(AtRegNum));
   tmpInst.setLoc(IDLoc);
   Out.EmitInstruction(tmpInst, *STI);
+  return MER_Success;
 }
-
 
 bool MipsAsmParser::expandJalWithRegs(MCInst &Inst, SMLoc IDLoc,
                                       MCStreamer &Out,
