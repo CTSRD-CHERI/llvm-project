@@ -23,7 +23,7 @@ entry:
   ; CHECK-NOFOLD-NEXT: daddiu  $1, $zero, 4096
   ; CHECK-NOFOLD-NEXT: csetoffset $c2, $c2, $1
   ; CHECK-NOFOLD-NEXT: clc $c2, $zero, 0($c2)
-  ; CHECK-OPT: clc $c1, $zero, 4096($c0)
+  ; CHECK-OPT: clc $c1, $zero, 4096($ddc)
 }
 
 ; Function Attrs: nounwind readnone

@@ -58,7 +58,7 @@ memptr.end:                                       ; preds = %memptr.nonvirtual, 
   ; CHECK: clc     $c1, [[STACK_VTABLE_ADDR]]
   ; CHECK: clc     $c2, $zero, 0($c1)
   ; CHECK: clc     [[MEMPTR:\$c3]], [[STACK_MEMPTR_PTR]]
-  ; CHECK: ctoptr $1, [[MEMPTR]], $c0
+  ; CHECK: ctoptr $1, [[MEMPTR]], $ddc
   ; CHECK: clc     $c2, $1, 0($c2)
   ; CHECK: csc     $c2, [[STACK_TARGET_FN_PTR:\$zero, (([0-9]+|sp))\(\$c11\)]]
   ; CHECK: j       .LBB0_4
@@ -88,7 +88,7 @@ memptr.end:                                       ; preds = %memptr.nonvirtual, 
   ; OPT: cincoffset [[THIS_ADJ:\$c3]], [[THIS_NON_ADJ:\$c3]], [[ADJ]]
   ; virtual case:
   ; OPT: clc     [[VTABLE:\$c[0-9]+]], $zero, 0([[THIS_ADJ]])
-  ; OPT: ctoptr  [[VTABLE_OFFSET:\$1]], $c4, $c0
+  ; OPT: ctoptr  [[VTABLE_OFFSET:\$1]], $c4, $ddc
   ; OPT: clc     $c4, [[VTABLE_OFFSET]], 0([[VTABLE]])
   ; OPT: .LBB0_2:                                # %memptr.end
   ; OPT: cincoffset      $c12, $c4, $zero

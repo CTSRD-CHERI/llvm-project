@@ -40,7 +40,7 @@ define void @xo_emit(i8 addrspace(200)* %fmt, ...) {
 ; CHECK-NEXT:    cfromddc $c3, $1
 ; CHECK-NEXT:    csetbounds $c3, $c3, $2
 ; CHECK-NEXT:    csc $c3, $zero, 0($c2)
-; CHECK-NEXT:    ctoptr $1, $c3, $c0
+; CHECK-NEXT:    ctoptr $1, $c3, $ddc
 ; CHECK-NEXT:    cgetnull $c13
 ; CHECK-NEXT:    csc $c1, $1, 0($ddc)
 ; CHECK-NEXT:    cincoffset $c11, $c24, $zero

@@ -59,13 +59,13 @@ entry:
 ; LEGACY-NEXT:  %4:gpr64 = DADDu %3, killed %2
 ; LEGACY-NEXT:  %5:gpr64 = LD killed %4, 0, implicit $ddc; mem:LD8[@global_tls](dereferenceable)
 ; LEGACY-NEXT:  %6:gpr64 = DADDiu %0, target-flags(mips-got-disp) @.size.global_normal
-; LEGACY-NEXT:  %7:cheriregs = CFromPtr $c0, killed %6
+; LEGACY-NEXT:  %7:cheriregs = CFromPtr $ddc, killed %6
 ; LEGACY-NEXT:  %8:gpr64 = CAPLOAD64 $zero_64, 0, killed %7; mem:LD8[GOT]
 ; LEGACY-NEXT:  %9:gpr64 = LD killed %8, 0, implicit $ddc; mem:LD8[@.size.global_normal]
 ; LEGACY-NEXT:  %10:gpr64 = DADDiu %0, target-flags(mips-got-disp) @global_normal
-; LEGACY-NEXT:  %11:cheriregs = CFromPtr $c0, killed %10
+; LEGACY-NEXT:  %11:cheriregs = CFromPtr $ddc, killed %10
 ; LEGACY-NEXT:  %12:gpr64 = CAPLOAD64 $zero_64, 0, killed %11; mem:LD8[GOT]
-; LEGACY-NEXT:  %13:cheriregs = CFromPtr $c0, killed %12
+; LEGACY-NEXT:  %13:cheriregs = CFromPtr $ddc, killed %12
 ; LEGACY-NEXT:  %14:cheriregs = CSetBounds killed %13, killed %9
 ; LEGACY-NEXT:  %15:gpr64 = CAPLOAD64 $zero_64, 0, killed %14; mem:LD8[@global_normal(addrspace=200)](dereferenceable)
 ; LEGACY-NEXT:  [[RESULT:%16]]:gpr64 = DADDu killed %5, killed %15

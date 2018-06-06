@@ -49,13 +49,13 @@ entry:
 ; LEGACY-NEXT:   %12:gpr64 = DADDu %11, $t9_64
 ; LEGACY-NEXT:   %0:gpr64 = DADDiu %12, target-flags(mips-gpoff-lo) @test
 ; LEGACY-NEXT:   %1:gpr64 = DADDiu %0, target-flags(mips-got-disp) @.size.global
-; LEGACY-NEXT:   %2:cheriregs = CFromPtr $c0, killed %1
+; LEGACY-NEXT:   %2:cheriregs = CFromPtr $ddc, killed %1
 ; LEGACY-NEXT:   %3:gpr64 = CAPLOAD64 $zero_64, 0, killed %2; mem:LD8[GOT]
 ; LEGACY-NEXT:   %4:gpr64 = LD killed %3, 0, implicit $ddc; mem:LD8[@.size.global]
 ; LEGACY-NEXT:   %5:gpr64 = DADDiu %0, target-flags(mips-got-disp) @global
-; LEGACY-NEXT:   %6:cheriregs = CFromPtr $c0, killed %5
+; LEGACY-NEXT:   %6:cheriregs = CFromPtr $ddc, killed %5
 ; LEGACY-NEXT:   %7:gpr64 = CAPLOAD64 $zero_64, 0, killed %6; mem:LD8[GOT]
-; LEGACY-NEXT:   %8:cheriregs = CFromPtr $c0, killed %7
+; LEGACY-NEXT:   %8:cheriregs = CFromPtr $ddc, killed %7
 ; LEGACY-NEXT:   %9:cheriregs = CSetBounds killed %8, killed %4
 ; LEGACY-NEXT:   [[RESULT:%10]]:gpr64 = CAPLOAD64 $zero_64, 0, killed %9; mem:LD8[@global(addrspace=200)](dereferenceable)
 
