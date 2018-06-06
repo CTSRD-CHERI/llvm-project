@@ -186,7 +186,7 @@
 # Check that cgetnull $cN is an alias for cfromptr $cN, $c0, $zero:
 # CHECK:      cgetnull  $c2
 # CHECK-SAME: encoding: [0x48,0x02,0x00,0x13]
-	cfromptr	$c2, $c0, $zero
+	cfromptr	$c2, $ddc, $zero
 # CHECK:      cgetnull  $c1
 # CHECK-SAME: encoding: [0x48,0x01,0x00,0x13]
 	cgetnull	$c1

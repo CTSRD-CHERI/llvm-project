@@ -3,10 +3,10 @@
 # Check that the assembler is able to handle capability memory instructions.
 #
 
-# CHECK: csc	$c0, $13, 48($c1)
+# CHECK: csc	$cnull, $13, 48($c1)
 # CHECK: encoding: [0xf8,0x01,0x68,0x03]
 	csc		$cnull, $t1, 48($c1)
-# CHECK: clc	$c0, $13, 48($c1)
+# CHECK: clc	$cnull, $13, 48($c1)
 # CHECK: encoding: [0xd8,0x01,0x68,0x03]
 	clc		$cnull, $t1, 48($c1)
 # CHECK: clb	$12, $13, 3($c1)
