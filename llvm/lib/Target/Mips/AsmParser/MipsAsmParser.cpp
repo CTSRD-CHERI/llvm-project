@@ -1046,7 +1046,7 @@ public:
   /// register for the current target.
   unsigned getCheriReg() const {
     assert(isRegIdx() && (RegIdx.Kind & RegKind_Cheri) && "Invalid access!");
-    unsigned ClassID = Mips::CheriGPRRegClassID;
+    unsigned ClassID = Mips::CheriGPROrCNullRegClassID;
     assert(
         RegIdx.RealRegister == Mips::CNULL ||
         (RegIdx.RealRegister >= Mips::C1 && RegIdx.RealRegister <= Mips::C31));
@@ -1055,7 +1055,7 @@ public:
   }
   unsigned getCheriReg0IsDDC() const {
     assert(isRegIdx() && (RegIdx.Kind & RegKind_Cheri) && "Invalid access!");
-    unsigned ClassID = Mips::CheriGPR0IsDDCRegClassID;
+    unsigned ClassID = Mips::CheriGPROrDDCRegClassID;
     assert(
         RegIdx.RealRegister == Mips::DDC ||
         (RegIdx.RealRegister >= Mips::C1 && RegIdx.RealRegister <= Mips::C31));
@@ -1739,18 +1739,18 @@ public:
   static_assert(Mips::C31 - Mips::C1 == 30, "Need 31 contiguous GPRS");
   bool isCheriAsmReg() const {
     bool Result = isRegIdx() && RegIdx.Kind & RegKind_Cheri &&
-                  RegIdx.RegInfo->getRegClass(Mips::CheriGPRRegClassID)
+                  RegIdx.RegInfo->getRegClass(Mips::CheriGPROrCNullRegClassID)
                       .contains(RegIdx.RealRegister);
-    DEBUG(dbgs() << __func__ << " CheriGPRRegClassID contains("
+    DEBUG(dbgs() << __func__ << " CheriGPROrCNullRegClassID contains("
                  << RegIdx.RegInfo->getName(RegIdx.RealRegister) << "="
                  << RegIdx.RealRegister << "): " << Result << "\n");
     return Result;
   }
   bool isCheriAsmReg0IsDDC() const {
     bool Result = isRegIdx() && RegIdx.Kind & RegKind_Cheri &&
-                  RegIdx.RegInfo->getRegClass(Mips::CheriGPR0IsDDCRegClassID)
+                  RegIdx.RegInfo->getRegClass(Mips::CheriGPROrDDCRegClassID)
                       .contains(RegIdx.RealRegister);
-    DEBUG(dbgs() << __func__ << " CheriGPR0IsDDCRegClassID contains("
+    DEBUG(dbgs() << __func__ << " CheriGPROrDDCRegClassID contains("
                  << RegIdx.RegInfo->getName(RegIdx.RealRegister) << "="
                  << RegIdx.RealRegister << "): " << Result << "\n");
     return Result;

@@ -197,12 +197,12 @@ def CMOVN32 : CheriFmt3Op<0x1c, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, GPR32O
   let Constraints = "$S = $r1";
 }
 }
-defm : MovnPats<GPR64, CheriGPR, CMOVN, XOR64>;
-defm : MovnPats<GPR32, CheriGPR, CMOVN32, XOR>;
-defm : MovzPats1<GPR64, CheriGPR, CMOVZ, XOR64>;
-defm : MovzPats2<GPR64, CheriGPR, CMOVZ, XORi64>;
-defm : MovzPats1<GPR32, CheriGPR, CMOVZ32, XOR>;
-defm : MovzPats2<GPR32, CheriGPR, CMOVZ32, XORi>;
+defm : MovnPats<GPR64, CheriGPROrCNull, CMOVN, XOR64>;
+defm : MovnPats<GPR32, CheriGPROrCNull, CMOVN32, XOR>;
+defm : MovzPats1<GPR64, CheriGPROrCNull, CMOVZ, XOR64>;
+defm : MovzPats2<GPR64, CheriGPROrCNull, CMOVZ, XORi64>;
+defm : MovzPats1<GPR32, CheriGPROrCNull, CMOVZ32, XOR>;
+defm : MovzPats2<GPR32, CheriGPROrCNull, CMOVZ32, XORi>;
 
 class CheriPseudo<dag outs, dag ins, string asmstr,
                 list<dag> pattern> :

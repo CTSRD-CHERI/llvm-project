@@ -93,13 +93,14 @@ static DecodeStatus DecodeGPR64RegisterClass(MCInst &Inst,
                                              unsigned RegNo,
                                              uint64_t Address,
                                              const void *Decoder);
-static DecodeStatus DecodeCheriGPRRegisterClass(MCInst &Inst, unsigned RegNo,
-                                                uint64_t Address,
-                                                const void *Decoder);
-static DecodeStatus DecodeCheriGPR0IsDDCRegisterClass(MCInst &Inst,
-                                                      unsigned RegNo,
-                                                      uint64_t Address,
-                                                      const void *Decoder);
+static DecodeStatus DecodeCheriGPROrCNullRegisterClass(MCInst &Inst,
+                                                       unsigned RegNo,
+                                                       uint64_t Address,
+                                                       const void *Decoder);
+static DecodeStatus DecodeCheriGPROrDDCRegisterClass(MCInst &Inst,
+                                                     unsigned RegNo,
+                                                     uint64_t Address,
+                                                     const void *Decoder);
 static DecodeStatus DecodeCheriHWRegsRegisterClass(MCInst &Inst, unsigned RegNo,
                                                    uint64_t Address,
                                                    const void *Decoder);
@@ -1441,25 +1442,26 @@ static DecodeStatus DecodeGPR64RegisterClass(MCInst &Inst,
   return MCDisassembler::Success;
 }
 
-static DecodeStatus DecodeCheriGPRRegisterClass(MCInst &Inst, unsigned RegNo,
-                                                uint64_t Address,
-                                                const void *Decoder) {
+static DecodeStatus DecodeCheriGPROrCNullRegisterClass(MCInst &Inst,
+                                                       unsigned RegNo,
+                                                       uint64_t Address,
+                                                       const void *Decoder) {
   if (RegNo > 31)
     return MCDisassembler::Fail;
 
-  unsigned Reg = getReg(Decoder, Mips::CheriGPRRegClassID, RegNo);
+  unsigned Reg = getReg(Decoder, Mips::CheriGPROrCNullRegClassID, RegNo);
   Inst.addOperand(MCOperand::createReg(Reg));
   return MCDisassembler::Success;
 }
 
-static DecodeStatus DecodeCheriGPR0IsDDCRegisterClass(MCInst &Inst,
-                                                      unsigned RegNo,
-                                                      uint64_t Address,
-                                                      const void *Decoder) {
+static DecodeStatus DecodeCheriGPROrDDCRegisterClass(MCInst &Inst,
+                                                     unsigned RegNo,
+                                                     uint64_t Address,
+                                                     const void *Decoder) {
   if (RegNo > 31)
     return MCDisassembler::Fail;
 
-  unsigned Reg = getReg(Decoder, Mips::CheriGPR0IsDDCRegClassID, RegNo);
+  unsigned Reg = getReg(Decoder, Mips::CheriGPROrDDCRegClassID, RegNo);
   Inst.addOperand(MCOperand::createReg(Reg));
   return MCDisassembler::Success;
 }

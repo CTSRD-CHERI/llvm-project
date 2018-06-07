@@ -133,7 +133,7 @@ void MipsAsmPrinter::emitPseudoIndirectBranch(MCStreamer &OutStreamer,
   else if (static_cast<MipsTargetMachine &>(TM).getABI().IsCheriPureCap())
     // Everything else should use (JR $rs) or (CJR $rs), depending on the register.
     TmpInst0.setOpcode(
-        Mips::CheriGPRRegClass.contains(MI->getOperand(0).getReg())
+        Mips::CheriGPROrCNullRegClass.contains(MI->getOperand(0).getReg())
             ? Mips::CJR
             : Mips::JR);
   else {

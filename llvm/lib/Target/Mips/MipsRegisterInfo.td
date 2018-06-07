@@ -430,7 +430,7 @@ def CPUSPReg : RegisterClass<"Mips", [i32], 32, (add SP)>, Unallocatable;
 def CapRegType : ValueTypeByHwMode<[Cap64, Cap128, Cap256, DefaultMode],
                                    [iFATPTR64, iFATPTR128, iFATPTR256, iFATPTR128]>;
 
-def CheriRegsCommon : RegisterClass<"Mips", [CapRegType], 256, (add
+def CheriGPR : RegisterClass<"Mips", [CapRegType], 256, (add
   C1, C2, C3, C4, C5, C6, C7, C8, C9,
   C10, C11, C12, C13, C14, C15, C16, C17, C18, C19, 
   C20, C21, C22, C23, C24, C25, C26, C27, C28, C29, 
@@ -438,21 +438,21 @@ def CheriRegsCommon : RegisterClass<"Mips", [CapRegType], 256, (add
   let RegInfos = RegInfoByHwMode<[Cap64, Cap128, Cap256, DefaultMode],
        [RegInfo<64,64,64>, RegInfo<128,128,128>, RegInfo<256,256,256>, RegInfo<128,128,128>]>;
 }
-def FakeCheriRegs : RegisterClass<"Mips", [iFATPTR256], 256, (add DDC)>;
+def FakeCheriRegs : RegisterClass<"Mips", [iFATPTR256], 256, (add DDC)>, Unallocatable;
 
 // Cap register class which includes both CNULL and DDC. This is not a
 // constraint used by any instructions, it is used as a common super-class.
 // This approach is copied from AArch64RegisterInfo.td
-def CheriRegsAll : RegisterClass<"Mips", [CapRegType], 256, (add CheriRegsCommon, CNULL, DDC)> {
+def CheriRegsAll : RegisterClass<"Mips", [CapRegType], 256, (add CheriGPR, CNULL, DDC)>, Unallocatable {
   let RegInfos = RegInfoByHwMode<[Cap64, Cap128, Cap256, DefaultMode],
        [RegInfo<64,64,64>, RegInfo<128,128,128>, RegInfo<256,256,256>, RegInfo<128,128,128>]>;
 }
 
-def CheriGPR : RegisterClass<"Mips", [CapRegType], 256, (add CNULL, CheriRegsCommon)> {
+def CheriGPROrCNull : RegisterClass<"Mips", [CapRegType], 256, (add CNULL, CheriGPR)>, Unallocatable {
   let RegInfos = RegInfoByHwMode<[Cap64, Cap128, Cap256, DefaultMode],
        [RegInfo<64,64,64>, RegInfo<128,128,128>, RegInfo<256,256,256>, RegInfo<128,128,128>]>;
 }
-def CheriGPR0IsDDC : RegisterClass<"Mips", [CapRegType], 256, (add DDC, CheriRegsCommon)>{
+def CheriGPROrDDC : RegisterClass<"Mips", [CapRegType], 256, (add DDC, CheriGPR)>, Unallocatable {
   let RegInfos = RegInfoByHwMode<[Cap64, Cap128, Cap256, DefaultMode],
        [RegInfo<64,64,64>, RegInfo<128,128,128>, RegInfo<256,256,256>, RegInfo<128,128,128>]>;
 }
@@ -750,11 +750,11 @@ def COP2AsmOperand : MipsAsmRegOperand {
   let Name = "COP2AsmReg";
 }
 
-def CheriOpnd : RegisterOperand<CheriGPR> {
+def CheriOpnd : RegisterOperand<CheriGPROrCNull> {
   let ParserMatchClass = CheriAsmOperand;
 }
 
-def CheriOpnd0IsDDC : RegisterOperand<CheriGPR0IsDDC> {
+def CheriOpnd0IsDDC : RegisterOperand<CheriGPROrDDC> {
   let ParserMatchClass = CheriAsmOperand0IsDDC;
 }
 

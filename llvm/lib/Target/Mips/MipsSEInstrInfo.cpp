@@ -155,7 +155,7 @@ void MipsSEInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
       Opc = Mips::MTLO64, DestReg = 0;
     else if (Mips::FGR64RegClass.contains(DestReg))
       Opc = Mips::DMTC1;
-  } else if (Mips::CheriGPRRegClass.contains(SrcReg)) {
+  } else if (Mips::CheriGPROrCNullRegClass.contains(SrcReg)) {
     BuildMI(MBB, I, DL, get(Mips::CMove))
         .addReg(DestReg, RegState::Define)
         .addReg(SrcReg, getKillRegState(KillSrc));
@@ -217,7 +217,7 @@ storeRegToStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
       BuildMI(MBB, I, DL, get(Mips::CAPSTORE64)).addReg(IntReg, getKillRegState(true))
         .addReg(Mips::ZERO_64).addFrameIndex(FI).addImm(Offset).addMemOperand(MMO);
       return;
-    } else if (Mips::CheriGPRRegClass.hasSubClassEq(RC)) {
+    } else if (Mips::CheriGPROrCNullRegClass.hasSubClassEq(RC)) {
       Opc = Mips::STORECAP;
       // Ensure that capabilities have a 32-byte alignment
       // FIXME: This shouldn't be needed.  Whatever is allocating the frame index
@@ -260,7 +260,7 @@ storeRegToStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
   else if (TRI->isTypeLegalForClass(*RC, MVT::v2i64) ||
            TRI->isTypeLegalForClass(*RC, MVT::v2f64))
     Opc = Mips::ST_D;
-  else if (Mips::CheriGPRRegClass.hasSubClassEq(RC)) {
+  else if (Mips::CheriGPROrCNullRegClass.hasSubClassEq(RC)) {
     Opc = Mips::STORECAP;
     // Ensure that capabilities have a 32-byte alignment
     // FIXME: This shouldn't be needed.  Whatever is allocating the frame index
@@ -337,7 +337,7 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
       BuildMI(MBB, I, DL, get(Mips::DMTC1), DestReg)
         .addReg(IntReg, getKillRegState(true));
       return;
-    } else if (Mips::CheriGPRRegClass.hasSubClassEq(RC)) {
+    } else if (Mips::CheriGPROrCNullRegClass.hasSubClassEq(RC)) {
       Opc = Mips::LOADCAP;
     } else {
       llvm_unreachable("Unexpected register type for CHERI!");
@@ -381,7 +381,7 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
   else if (TRI->isTypeLegalForClass(*RC, MVT::v2i64) ||
            TRI->isTypeLegalForClass(*RC, MVT::v2f64))
     Opc = Mips::LD_D;
-  else if (Mips::CheriGPRRegClass.hasSubClassEq(RC)) {
+  else if (Mips::CheriGPROrCNullRegClass.hasSubClassEq(RC)) {
     Opc = Mips::LOADCAP;
     BuildMI(MBB, I, DL, get(Opc), DestReg)
         .addFrameIndex(FI)

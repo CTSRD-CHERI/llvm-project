@@ -183,7 +183,7 @@ void MipsSubtarget::getCriticalPathRCs(RegClassVector &CriticalPathRCs) const {
   CriticalPathRCs.push_back(isGP64bit() ? &Mips::GPR64RegClass
                                         : &Mips::GPR32RegClass);
   if (IsCheri)
-    CriticalPathRCs.push_back(&Mips::CheriGPRRegClass);
+    CriticalPathRCs.push_back(&Mips::CheriGPROrCNullRegClass);
 }
 
 CodeGenOpt::Level MipsSubtarget::getOptLevelToEnablePostRAScheduler() const {
