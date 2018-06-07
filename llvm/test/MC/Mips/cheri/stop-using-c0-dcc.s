@@ -5,9 +5,9 @@
 
 .ifdef INCLUDE_BAD
 cmove $c0, $c1  # CHECK: [[@LINE]]:7: error: register name $c0 is invalid as this operand.
-cmove $ddc, $c1  # CHECK: [[@LINE]]:7: error: register name $ddc is invalid as this operand. Did you mean $cnull?
+cmove $ddc, $c1  # CHECK: [[@LINE]]:7: error: expected general-purpose CHERI register operand or $cnull
 cmove $c2, $c0  # CHECK: [[@LINE]]:12: error: register name $c0 is invalid as this operand.
-cmove $c2, $ddc  # CHECK: [[@LINE]]:12: error: register name $ddc is invalid as this operand. Did you mean $cnull?
+cmove $c2, $ddc  # CHECK: [[@LINE]]:12: error: expected general-purpose CHERI register operand or $cnull
 cincoffset $c0, $c0, 2  # CHECK: [[@LINE]]:12: error: register name $c0 is invalid as this operand.
 
 cgetdefault $c0 # CHECK: [[@LINE]]:13: error: register name $c0 is invalid as this operand.
@@ -34,7 +34,18 @@ clw $3, $zero, 0($c0)  # CHECK: [[@LINE]]:18: warning: register name $c0 is depr
 csc $c1, $zero, 0($c0)  # CHECK: [[@LINE]]:19: warning: register name $c0 is deprecated. Use $ddc instead.
 cscbi $c1, 0($c0)  # CHECK: [[@LINE]]:14: warning: register name $c0 is deprecated. Use $ddc instead.
 csd $3, $zero, 0($c0)  # CHECK: [[@LINE]]:18: warning: register name $c0 is deprecated. Use $ddc instead.
+
 cllc $c1, $c0  # CHECK: [[@LINE]]:11: warning: register name $c0 is deprecated. Use $ddc instead.
 cllbu $2, $c0  # CHECK: [[@LINE]]:11: warning: register name $c0 is deprecated. Use $ddc instead.
+cllwu $2, $c0  # CHECK: [[@LINE]]:11: warning: register name $c0 is deprecated. Use $ddc instead.
+cllhu $2, $c0  # CHECK: [[@LINE]]:11: warning: register name $c0 is deprecated. Use $ddc instead.
+cllb $2, $c0  # CHECK: [[@LINE]]:10: warning: register name $c0 is deprecated. Use $ddc instead.
+cllh $2, $c0  # CHECK: [[@LINE]]:10: warning: register name $c0 is deprecated. Use $ddc instead.
+cllw $2, $c0  # CHECK: [[@LINE]]:10: warning: register name $c0 is deprecated. Use $ddc instead.
+clld $2, $c0  # CHECK: [[@LINE]]:10: warning: register name $c0 is deprecated. Use $ddc instead.
+
 cscc $2, $c1, $c0  # CHECK: [[@LINE]]:15: warning: register name $c0 is deprecated. Use $ddc instead.
 cscb $2, $3, $c0  # CHECK: [[@LINE]]:14: warning: register name $c0 is deprecated. Use $ddc instead.
+csch $2, $3, $c0  # CHECK: [[@LINE]]:14: warning: register name $c0 is deprecated. Use $ddc instead.
+cscw $2, $3, $c0  # CHECK: [[@LINE]]:14: warning: register name $c0 is deprecated. Use $ddc instead.
+cscd $2, $3, $c0  # CHECK: [[@LINE]]:14: warning: register name $c0 is deprecated. Use $ddc instead.

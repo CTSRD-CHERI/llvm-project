@@ -688,32 +688,32 @@ def CapRetPseudo : PseudoSE<(outs), (ins), [(CapRet)]>;
 ////////////////////////////////////////////////////////////////////////////////
 
 let DecoderNamespace="CHERI" in {
-def CLLC  : CheriFmtCLL<1, 3, (outs CheriOpnd:$rd), (ins CheriOpnd:$cb),
+def CLLC  : CheriFmtCLL<1, 3, (outs CheriOpnd:$rd), (ins CheriOpnd0IsDDC:$cb),
                         "cllc\t$rd, $cb">;
-def CLLD  : CheriFmtCLL<0, 3, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
+def CLLD  : CheriFmtCLL<0, 3, (outs GPR64Opnd:$rd), (ins CheriOpnd0IsDDC:$cb),
                         "clld\t$rd, $cb">;
-def CLLW  : CheriFmtCLL<1, 2, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
+def CLLW  : CheriFmtCLL<1, 2, (outs GPR64Opnd:$rd), (ins CheriOpnd0IsDDC:$cb),
                         "cllw\t$rd, $cb">;
-def CLLWU : CheriFmtCLL<0, 2, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
+def CLLWU : CheriFmtCLL<0, 2, (outs GPR64Opnd:$rd), (ins CheriOpnd0IsDDC:$cb),
                         "cllwu\t$rd, $cb">;
-def CLLH  : CheriFmtCLL<1, 1, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
+def CLLH  : CheriFmtCLL<1, 1, (outs GPR64Opnd:$rd), (ins CheriOpnd0IsDDC:$cb),
                         "cllh\t$rd, $cb">;
-def CLLHU : CheriFmtCLL<0, 1, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
+def CLLHU : CheriFmtCLL<0, 1, (outs GPR64Opnd:$rd), (ins CheriOpnd0IsDDC:$cb),
                         "cllhu\t$rd, $cb">;
-def CLLB  : CheriFmtCLL<1, 0, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
+def CLLB  : CheriFmtCLL<1, 0, (outs GPR64Opnd:$rd), (ins CheriOpnd0IsDDC:$cb),
                         "cllb\t$rd, $cb">;
-def CLLBU : CheriFmtCLL<0, 0, (outs GPR64Opnd:$rd), (ins CheriOpnd:$cb),
+def CLLBU : CheriFmtCLL<0, 0, (outs GPR64Opnd:$rd), (ins CheriOpnd0IsDDC:$cb),
                         "cllbu\t$rd, $cb">;
 
-def CSCC  : CheriFmtCSC<7, (outs GPR64Opnd:$rd), (ins CheriOpnd: $rs, CheriOpnd:$cb),
+def CSCC  : CheriFmtCSC<7, (outs GPR64Opnd:$rd), (ins CheriOpnd: $rs, CheriOpnd0IsDDC:$cb),
                         "cscc\t$rd, $rs, $cb">;
-def CSCD  : CheriFmtCSC<3, (outs GPR64Opnd:$rd), (ins GPR64Opnd: $rs, CheriOpnd:$cb),
+def CSCD  : CheriFmtCSC<3, (outs GPR64Opnd:$rd), (ins GPR64Opnd: $rs, CheriOpnd0IsDDC:$cb),
                         "cscd\t$rd, $rs, $cb">;
-def CSCW  : CheriFmtCSC<2, (outs GPR64Opnd:$rd), (ins GPR64Opnd: $rs, CheriOpnd:$cb),
+def CSCW  : CheriFmtCSC<2, (outs GPR64Opnd:$rd), (ins GPR64Opnd: $rs, CheriOpnd0IsDDC:$cb),
                         "cscw\t$rd, $rs, $cb">;
-def CSCH  : CheriFmtCSC<1, (outs GPR64Opnd:$rd), (ins GPR64Opnd: $rs, CheriOpnd:$cb),
+def CSCH  : CheriFmtCSC<1, (outs GPR64Opnd:$rd), (ins GPR64Opnd: $rs, CheriOpnd0IsDDC:$cb),
                         "csch\t$rd, $rs, $cb">;
-def CSCB  : CheriFmtCSC<0, (outs GPR64Opnd:$rd), (ins GPR64Opnd: $rs, CheriOpnd:$cb),
+def CSCB  : CheriFmtCSC<0, (outs GPR64Opnd:$rd), (ins GPR64Opnd: $rs, CheriOpnd0IsDDC:$cb),
                         "cscb\t$rd, $rs, $cb">;
 }
 
