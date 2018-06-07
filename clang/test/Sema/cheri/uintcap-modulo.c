@@ -18,11 +18,11 @@ void _fillRange(void *buffer, void *bufferEnd) {
 void check_modulo(void *ptr, uintptr_t cap, int i) {
   uintptr_t int_and_int = i % i; // fine
   // i is promoted to __intcap_t here so the warning triggers:
-  uintptr_t int_and_cap = i % cap;   // TODO: shouldn't this really be an invalid operand warning/error?
+  uintptr_t int_and_cap = i % cap;   // expected-warning {{using remainder on a capability type only operates on the offset}}
   uintptr_t cap_and_int = cap % i;   // expected-warning {{using remainder on a capability type only operates on the offset}}
   uintptr_t cap_and_cap = cap % cap; // expected-warning {{using remainder on a capability type only operates on the offset}}
   i %= i;
-  i %= cap;   // TODO: shouldn't this really be an invalid operand warning/error?
+  i %= cap;   // expected-warning {{using remainder on a capability type only operates on the offset}}
   cap %= i;   // expected-warning {{using remainder on a capability type only operates on the offset}}
   cap %= cap; // expected-warning {{using remainder on a capability type only operates on the offset}}
 }

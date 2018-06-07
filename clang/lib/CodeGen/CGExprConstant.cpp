@@ -1849,7 +1849,7 @@ llvm::Constant *ConstantEmitter::tryEmitPrivate(const APValue &Value,
 
     if (DestType->isIntCapType()) {
       // If we use an inttoptr inside a function the backend will generate a
-      // CFromPtr $c0 which probably gives a valid capability with vaddr = AsInt
+      // CFromPtr $ddc which probably gives a valid capability with vaddr = AsInt
       // We really want a null-derived value here instead!
       // This previously broke cases such as QReadWriteLock which writes 0x2
       // to indicate write locked state but since it was not equal to
