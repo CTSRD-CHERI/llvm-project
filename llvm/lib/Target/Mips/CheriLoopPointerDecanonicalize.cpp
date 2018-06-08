@@ -131,6 +131,9 @@ class CheriLoopPointerDecanonicalize : public FunctionPass {
   public:
   static char ID;
   CheriLoopPointerDecanonicalize() : FunctionPass(ID) {}
+  StringRef getPassName() const override {
+    return "CheriLoopPointerDecanonicalize";
+  }
 };
 }
 

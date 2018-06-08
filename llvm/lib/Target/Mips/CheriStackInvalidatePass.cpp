@@ -27,6 +27,7 @@ class CheriInvalidatePass : public MachineFunctionPass {
 public:
   static char ID;
   CheriInvalidatePass() : MachineFunctionPass(ID) {}
+  StringRef getPassName() const override { return "CHERI invalidate pass"; }
 
   void runOnMachineBasicBlock(MachineBasicBlock &MBB) {
     if (!InstrInfo)
@@ -43,7 +44,7 @@ public:
     }
   }
 
-  virtual bool runOnMachineFunction(MachineFunction &F) {
+  bool runOnMachineFunction(MachineFunction &F) override{
     if (!InstrInfo)
       InstrInfo = F.getSubtarget<MipsSubtarget>().getInstrInfo();
 

@@ -28,11 +28,11 @@ class CheriPureCapABI : public ModulePass, public InstVisitor<CheriPureCapABI> {
   llvm::SmallVector<AllocaInst *, 16> Allocas;
   bool IsCheri128;
 
-  virtual StringRef getPassName() const { return "CHERI sandbox ABI setup"; }
 
 public:
   static char ID;
   CheriPureCapABI() : ModulePass(ID) {}
+  virtual StringRef getPassName() const { return "CHERI sandbox ABI setup"; }
   void visitAllocaInst(AllocaInst &AI) { Allocas.push_back(&AI); }
   virtual bool runOnModule(Module &Mod) {
     M = &Mod;
