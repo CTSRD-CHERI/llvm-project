@@ -141,25 +141,38 @@
 	# DUMP-NEXT: 48 1e 20 11 cincoffset $c30, $c4, $zero
 
 
-# CHECK: cgetkr1c	 $c4
-# CHECK-SAME:  encoding: [0x48,0x04,0xd8,0x11]
-# DUMP-NEXT: 48 04 d8 11 	cgetkr1c	$c4
+# CHECK: creadhwr	 $c4, $chwr_kr1c
+# CHECK-SAME:  encoding: [0x48,0x04,0xb3,0x7f]
+# DUMP-NEXT: 48 04 b3 7f 	creadhwr	 $c4, $chwr_kr1c
 	CGetKR1C $c4
 
-# CHECK: csetkr1c	 $c4
-# CHECK-SAME:  encoding: [0x48,0x1b,0x20,0x11]
-# DUMP-NEXT: 48 1b 20 11 	csetkr1c	$c4
+# CHECK: cwritehwr	 $c4, $chwr_kr1c
+# CHECK-SAME:  encoding: [0x48,0x04,0xb3,0xbf]
+# DUMP-NEXT: 48 04 b3 bf 	cwritehwr	 $c4, $chwr_kr1c
 	CSetKR1C $c4
 
-# CHECK: cgetkr2c	 $c4
-# CHECK-SAME:  encoding: [0x48,0x04,0xe0,0x11]
-# DUMP-NEXT: 48 04 e0 11 	cgetkr2c	$c4
+# test disassembly of the old encoding:
+old_cget_c4 27
+# DUMP-NEXT: 48 04 d8 11 cincoffset $c4, $c27, $zero
+old_cset_c4 27
+# DUMP-NEXT: 48 1b 20 11 cincoffset $c27, $c4, $zero
+
+# CHECK: creadhwr	 $c4, $chwr_kr2c
+# CHECK-SAME:  encoding: [0x48,0x04,0xbb,0x7f]
+# DUMP-NEXT: 48 04 bb 7f 	creadhwr	 $c4, $chwr_kr2c
 	CGetKR2C $c4
 
-# CHECK: csetkr2c	 $c4
-# CHECK-SAME:  encoding: [0x48,0x1c,0x20,0x11]
-# DUMP-NEXT: 48 1c 20 11 	csetkr2c	$c4
+# CHECK: cwritehwr	 $c4, $chwr_kr2c
+# CHECK-SAME:  encoding: [0x48,0x04,0xbb,0xbf]
+# DUMP-NEXT: 48 04 bb bf 	cwritehwr	 $c4, $chwr_kr2c
 	CSetKR2C $c4
+# test disassembly of the old encoding:
+old_cget_c4 28
+# DUMP-NEXT: 48 04 e0 11 cincoffset $c4, $c28, $zero
+old_cset_c4 28
+# DUMP-NEXT: 48 1c 20 11 cincoffset $c28, $c4, $zero
+
+
 
 # CHECK:  creadhwr        $c4, $chwr_ddc
 # CHECK-SAME:  encoding: [0x48,0x04,0x03,0x7f]

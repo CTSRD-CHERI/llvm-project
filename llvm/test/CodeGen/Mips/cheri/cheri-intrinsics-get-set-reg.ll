@@ -66,7 +66,7 @@ entry:
   ret i8 addrspace(200)* %0
 }
 ; CHECK-LABEL: getkr1c:
-; CHECK: cgetkr1c	$c3
+; CHECK: creadhwr $c3, $chwr_kr1c
 ; CHECK: .end getkr1c
 
 define i8 addrspace(200)* @getkr2c() nounwind {
@@ -75,7 +75,7 @@ entry:
   ret i8 addrspace(200)* %0
 }
 ; CHECK-LABEL: getkr2c:
-; CHECK: cgetkr2c	$c3
+; CHECK: creadhwr $c3, $chwr_kr2c
 ; CHECK: .end getkr2c
 
 define i8 addrspace(200)* @getkcc() nounwind {
@@ -139,11 +139,11 @@ declare i8 addrspace(200)* @llvm.mips.epcc.get()
 
 ; DUMP-LABEL: getkr1c:
 ; DUMP-NEXT:       03 e0 00 08 	jr	$ra
-; DUMP-NEXT:       48 03 d8 11 	cgetkr1c	$c3
+; DUMP-NEXT:       48 03 b3 7f creadhwr $c3, $chwr_kr1c
 
 ; DUMP-LABEL: getkr2c:
 ; DUMP-NEXT:       03 e0 00 08 	jr	$ra
-; DUMP-NEXT:       48 03 e0 11 	cgetkr2c	$c3
+; DUMP-NEXT:       48 03 bb 7f creadhwr $c3, $chwr_kr2c
 
 ; DUMP-LABEL: getkcc:
 ; DUMP-NEXT:       03 e0 00 08 	jr	$ra

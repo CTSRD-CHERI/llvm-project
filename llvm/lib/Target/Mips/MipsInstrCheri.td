@@ -472,8 +472,8 @@ defm CAPSTORE64     : StoreViaCapScaled<3, 0, "csd", GPR64Opnd, store, simm8s3, 
 // TODO: replace these by CReadHwr
 def : Pat<(int_cheri_ddc_get), (CReadHwr CAPHWR0)>;
 def : Pat<(int_mips_idc_get),  (CIncOffset C26, ZERO_64)>;
-def : Pat<(int_mips_kr1c_get), (CIncOffset C27, ZERO_64)>;
-def : Pat<(int_mips_kr2c_get), (CIncOffset C28, ZERO_64)>;
+def : Pat<(int_mips_kr1c_get), (CReadHwr CAPHWR22)>;
+def : Pat<(int_mips_kr2c_get), (CReadHwr CAPHWR23)>;
 def : Pat<(int_mips_kcc_get),  (CReadHwr CAPHWR29)>;
 def : Pat<(int_mips_kdc_get),  (CReadHwr CAPHWR30)>;
 def : Pat<(int_mips_epcc_get), (CReadHwr CAPHWR31)>;
@@ -537,17 +537,15 @@ def : InstAlias<"cgetepcc $dst",
                 (CReadHwr CheriOpnd:$dst, CAPHWR31), 0>;
 def : InstAlias<"csetepcc $src",
                 (CWriteHwr CheriOpnd:$src, CAPHWR31), 0>;
-
-// TODO: these aliases still use the c27/c28 registers since the hwregs are not mirrored and this may be confusing
+// Access to the two scratch hardware registers:
 def : InstAlias<"cgetkr1c $dst",
-                (CIncOffset CheriOpnd:$dst, C27, ZERO_64), 1>;
+                (CReadHwr CheriOpnd:$dst, CAPHWR22), 0>;
 def : InstAlias<"csetkr1c $src",
-                (CIncOffset C27, CheriOpnd:$src, ZERO_64), 1>;
-
+                (CWriteHwr CheriOpnd:$src, CAPHWR22), 0>;
 def : InstAlias<"cgetkr2c $dst",
-                (CIncOffset CheriOpnd:$dst, C28, ZERO_64), 1>;
+                (CReadHwr CheriOpnd:$dst, CAPHWR23), 0>;
 def : InstAlias<"csetkr2c $src",
-                (CIncOffset C28, CheriOpnd:$src, ZERO_64), 1>;
+                (CWriteHwr CheriOpnd:$src, CAPHWR23), 0>;
 
 
 // Must come before cfromddc to have a higher priority when disassembling
