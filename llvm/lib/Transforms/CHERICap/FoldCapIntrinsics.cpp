@@ -308,6 +308,18 @@ class CHERICapFoldIntrinsics : public ModulePass {
           Modified = true;
         }
       }
+      // Also convert a setoffset on null to a incoffset on null since we have
+      // an immediate version of incoffset but not setoffset
+      // FIXME: this should be done in the MIPS backend instead...
+      Value *NewOffset = CI->getOperand(1);
+      if (isa<ConstantPointerNull>(CI->getOperand(0))) {
+        IRBuilder<> B(CI);
+        CallInst *Replacement = B.CreateCall(
+            IncOffset, {CI->getOperand(0), CI->getOperand(1)});
+        // Replacement->setTailCall(true);
+        CI->replaceAllUsesWith(Replacement);
+        Modified = true;
+      }
     }
     for (Instruction *I : ToErase)
       I->eraseFromParent();
@@ -327,22 +339,6 @@ class CHERICapFoldIntrinsics : public ModulePass {
       }
       // fold chains of inc-offset, (inc-offset/GEP)+ into a single inc-offset
       foldIncOffsetSetOffsetOnlyUserIncrement(CI, ToErase);
-
-      Value *Inc = CI->getOperand(1);
-      Value *BaseCap = nullptr;
-      // TODO: how to delete any dead instructions?
-
-      // Also convert a incoffset on null to a setoffset on null
-      if (Value *Offset =
-              inferCapabilityOffset(CI->getOperand(0), CI, Inc->getType(), &BaseCap)) {
-        assert(BaseCap);
-        IRBuilder<> B(CI);
-        CallInst *Replacement = B.CreateCall(
-            SetOffset, {BaseCap, B.CreateAdd(Offset, Inc)});
-        Replacement->setTailCall(true);
-        CI->replaceAllUsesWith(Replacement);
-        Modified = true;
-      }
     }
     for (Instruction *I : ToErase)
       I->eraseFromParent();

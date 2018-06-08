@@ -335,10 +335,10 @@ def CTestSubset : CheriFmt3Op<0x20, (outs GPR64Opnd:$r1), (ins CheriOpnd0IsDDC:$
   "ctestsubset\t$r1, $r2, $r3", [(set GPR64Opnd: $r1, (int_cheri_cap_subset_test CheriOpnd0IsDDC: $r2, CheriOpnd: $r3))]>;
 
 // Cursors
-def : Pat<(ptradd CheriOpnd:$r2, GPR64Opnd:$r3),
-          (CIncOffset $r2, $r3)>;
 def : Pat<(ptradd CheriOpnd:$r2, simm11s0Pattern:$imm),
           (CIncOffsetImm $r2, simm11s0Pattern: $imm)>;
+def : Pat<(ptradd CheriOpnd:$r2, GPR64Opnd:$r3),
+          (CIncOffset $r2, $r3)>;
 // Int to pointer in address space 0
 def : Pat<(inttoptr GPR64Opnd:$rt),
           (CFromPtr DDC, $rt)>;
