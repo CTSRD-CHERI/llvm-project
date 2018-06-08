@@ -51,9 +51,8 @@ br i1 %cmp, label %if.then, label %if.end
 ; CHECK-NEXT: daddiu  $1, $1, 8243
 ; CHECK-NEXT: dsll    $1, $1, 16
 ; CHECK-NEXT: daddiu  $1, $1, 2334
-; CHECK-NEXT: csetoffset      [[RANDOM_POINTER_VALUE_CAP:\$c.+]], $c1, $1
-; CHECK-NEXT: daddiu  $1, $zero, -1
-; CHECK-NEXT: csetoffset      [[UINT64_MAX_CAP:\$c.+]], $c1, $1
+; CHECK-NEXT: cincoffset      [[RANDOM_POINTER_VALUE_CAP:\$c.+]], $c1, $1
+; CHECK-NEXT: cincoffset      [[UINT64_MAX_CAP:\$c.+]], $c1, -1
 ; If block should be entered if random_value < UINT64_MAX, i.e. skip if UINT64_MAX <= random_value
 ; CHECK-NEXT: cleu    $1, [[UINT64_MAX_CAP]], [[RANDOM_POINTER_VALUE_CAP]]
 ; CHECK-NEXT: bnez    $1, .LBB1_2

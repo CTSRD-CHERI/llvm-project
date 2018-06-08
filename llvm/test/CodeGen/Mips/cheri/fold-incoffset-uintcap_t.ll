@@ -49,13 +49,13 @@ entry:
   ret i8 addrspace(200)* %5
   ; This always creates an untagged capability:
   ; IR-LABEL: @add_uintcap_t()
-  ; IR: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 1024)
+  ; IR: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 1024)
 
   ; CHECK-LABEL: add_uintcap_t
   ; CHECK: cgetnull $c1
   ; CHECK: daddiu	$1, $zero, 1024
   ; CHECK: jr	$ra
-  ; CHECK: csetoffset	$c3, $c1, $1
+  ; CHECK: cincoffset	$c3, $c1, $1
 }
 
 ; Function Attrs: nounwind readnone

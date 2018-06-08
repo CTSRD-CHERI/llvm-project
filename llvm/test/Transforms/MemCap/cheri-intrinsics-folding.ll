@@ -1,9 +1,7 @@
 ; RUN: %cheri_opt -S -cheri-fold-intrisics %s -o %t.ll
 ; RUN: FileCheck %s < %t.ll
-; Check that the dynamic GEP is folded properly (but we need to run opt one more time)
-; RUN: %cheri_opt -S -O2 %t.ll -o %t1.ll
-; RUN: FileCheck %s -check-prefix OPTIMIZED < %t1.ll
-; RUN: %cheri_llc -O2 %t1.ll -o - | FileCheck %s -check-prefix DYNAMIC-GEP-ASM
+; Check that the dynamic GEP is folded properly
+; RUN: %cheri_llc -O2 %t.ll -o - | FileCheck %s -check-prefix DYNAMIC-GEP-ASM
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
 target triple = "cheri-unknown-freebsd"
 
@@ -348,15 +346,9 @@ define i64 @no_fold_set_and_inc_offset_get_addr(i8 addrspace(200)* %arg) #1 {
   ret i64 %ret
   ; The %with_offset will be removed by dead code elimination later in the pipeline
   ; CHECK-LABEL: @no_fold_set_and_inc_offset_get_addr(i8 addrspace(200)* %arg)
-  ; CHECK: %1 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %arg, i64 142)
   ; CHECK: %with_offset = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %arg, i64 142)
-  ; CHECK: %ret = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* %1)
+  ; CHECK: %ret = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* %with_offset)
   ; CHECK: ret i64 %ret
-
-  ; OPTIMIZED-LABEL: @no_fold_set_and_inc_offset_get_addr(
-  ; OPTIMIZED-NEXT: %1 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %arg, i64 142)
-  ; OPTIMIZED-NEXT: %ret = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* %1)
-  ; OPTIMIZED-NEXT: ret i64 %ret
 }
 
 define i64 @fold_set_and_multiple_inc_offset_get_offset(i8 addrspace(200)* %arg) #1 {
@@ -463,12 +455,8 @@ entry:
 
   ret i8 addrspace(200)* %inc
   ; CHECK-LABEL: @fold_set_inc_gep_sequence()
-  ; CHECK: %0 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 80)
-  ; CHECK: ret i8 addrspace(200)* %0
-  ; OPTIMIZED-LABEL: @fold_set_inc_gep_sequence()
-  ; OPTIMIZED: entry:
-  ; OPTIMIZED-NEXT: %0 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 80)
-  ; OPTIMIZED-NEXT: ret i8 addrspace(200)* %0
+  ; CHECK: %set = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 80)
+  ; CHECK: ret i8 addrspace(200)* %set
 }
 
 define i8 addrspace(200)* @fold_set_addr_inc_gep_sequence() local_unnamed_addr #1 {
@@ -482,18 +470,8 @@ entry:
   ret i8 addrspace(200)* %inc
   ; CHECK-LABEL: @fold_set_addr_inc_gep_sequence()
   ; The %set/getp/inc will be removed later
-  ; CHECK:  %set = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* null, i64 100)
-  ; CHECK:  %gep1 = getelementptr inbounds i8, i8 addrspace(200)* %set, i64 -4
-  ; CHECK:  %gep2 = getelementptr inbounds i8, i8 addrspace(200)* %gep1, i64 -4
-  ; CHECK:  %gep3 = getelementptr inbounds i8, i8 addrspace(200)* %gep2, i64 -2
-  ; CHECK:  %0 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 80)
-  ; CHECK:  %inc = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %gep3, i64 -10)
-  ; CHECK:  ret i8 addrspace(200)* %0
-
-  ; OPTIMIZED-LABEL: @fold_set_addr_inc_gep_sequence()
-  ; OPTIMIZED: entry:
-  ; OPTIMIZED-NEXT: %0 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 80)
-  ; OPTIMIZED-NEXT: ret i8 addrspace(200)* %0
+  ; CHECK:  %set = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 80)
+  ; CHECK:  ret i8 addrspace(200)* %set
 }
 
 define i8 addrspace(200)* @fold_set_inc_gep_sequence_arg(i8 addrspace(200)* %arg) local_unnamed_addr #1 {
@@ -532,7 +510,7 @@ define i8 addrspace(200)* @fold_inc_gep_sequence_null() local_unnamed_addr #1 {
   %inc = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %gep2, i64 -10)
   ret i8 addrspace(200)* %inc
   ; CHECK-LABEL: @fold_inc_gep_sequence_null()
-  ; CHECK: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 82)
+  ; CHECK: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 82)
 }
 
 define i8 addrspace(200)* @fold_inc_gep_sequence_arg(i8 addrspace(200)* %arg) local_unnamed_addr #1 {

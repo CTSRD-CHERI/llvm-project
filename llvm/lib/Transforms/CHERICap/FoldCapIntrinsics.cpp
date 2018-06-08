@@ -278,7 +278,7 @@ class CHERICapFoldIntrinsics : public ModulePass {
 
   /// Replace get-offset, add, set-offset sequences with inc-offset
   void foldSetOffset() {
-    std::vector<CallInst *> SetOffsets;
+    SmallVector<CallInst *, 16> SetOffsets;
     SmallPtrSet<Instruction*, 8> ToErase;
     for (Value *V : SetOffset->users())
       SetOffsets.push_back(cast<CallInst>(V));
@@ -312,11 +312,7 @@ class CHERICapFoldIntrinsics : public ModulePass {
       // an immediate version of incoffset but not setoffset
       // FIXME: this should be done in the MIPS backend instead...
       if (isa<ConstantPointerNull>(CI->getOperand(0))) {
-        IRBuilder<> B(CI);
-        CallInst *Replacement = B.CreateCall(
-            IncOffset, {CI->getOperand(0), CI->getOperand(1)});
-        // Replacement->setTailCall(true);
-        CI->replaceAllUsesWith(Replacement);
+        CI->setCalledFunction(IncOffset);
         Modified = true;
       }
     }
@@ -324,10 +320,31 @@ class CHERICapFoldIntrinsics : public ModulePass {
       I->eraseFromParent();
   }
 
+  void foldSetAddressOnNull(Module* M) {
+    Function *SetAddr = M->getFunction(Intrinsic::getName(Intrinsic::cheri_cap_address_set));
+    if (!SetAddr)
+      return;
+    // Convert all llvm.cheri.cap.address.set(null, FOO) to offset.increment()
+    // since there is not setaddr instruction and a incoffset is the most efficient
+    // operation to set the offset since there is a version with an immediate overload
+    SmallVector<CallInst *, 16> SetAddrs; // Needed since we are modifying the users()
+    for (Value *V : SetAddr->users())
+      SetAddrs.push_back(cast<CallInst>(V));
+    for (CallInst *CI : SetAddrs) {
+      if (isa<ConstantPointerNull>(CI->getOperand(0))) {
+        // IRBuilder<> B(CI);
+        if (!IncOffset)
+          IncOffset = Intrinsic::getDeclaration(M, Intrinsic::cheri_cap_offset_increment);
+        CI->setCalledFunction(IncOffset);
+        Modified = true;
+      }
+    }
+  }
+
   /// Replace set-offset, inc-offset sequences with a single set-offset
   /// Also fold multiple inc-offsets into a single on if possible
   void foldIncOffset() {
-    std::vector<CallInst *> IncOffsets;
+    SmallVector<CallInst *, 16> IncOffsets;
     SmallPtrSet<Instruction*, 8> ToErase;
     for (Value *V : IncOffset->users())
       IncOffsets.push_back(cast<CallInst>(V));
@@ -361,6 +378,7 @@ public:
         M.getFunction(Intrinsic::getName(Intrinsic::cheri_cap_offset_get));
     // at least one intrinsic was used -> we need to run the fold
     // setoffset/incoffset pass
+    foldSetAddressOnNull(&M);
     if (IncOffset || SetOffset || GetOffset) {
       if (!IncOffset)
         IncOffset = Intrinsic::getDeclaration(
