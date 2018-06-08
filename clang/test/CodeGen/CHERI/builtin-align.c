@@ -190,7 +190,7 @@ TYPE inline_align_down(void) {
   // LONG-OPT: ret i64 96
   // PTR-OPT: ret i8* inttoptr (i64 96 to i8*)
   // CAP-OPT: ret i8 addrspace(200)* inttoptr (i64 96 to i8 addrspace(200)*)
-  // UINTCAP-OPT: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 96)
+  // UINTCAP-OPT: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 96)
   return align_down((TYPE)100, 32);
 }
 
@@ -201,7 +201,7 @@ TYPE inline_p2align_down(void) {
   // PTR-OPT: ret i8* null
   // CAP-OPT: ret i8 addrspace(200)* null
   // FIXME: this should be optimized to return null:
-  // UINTCAP-OPT: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 0)
+  // UINTCAP-OPT: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 0)
   return p2align_down((TYPE)100, 10);
 }
 
@@ -211,7 +211,7 @@ TYPE inline_align_up(void) {
   // LONG-OPT: ret i64 128
   // PTR-OPT: ret i8* inttoptr (i64 128 to i8*)
   // CAP-OPT: ret i8 addrspace(200)* inttoptr (i64 128 to i8 addrspace(200)*)
-  // UINTCAP-OPT: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 128)
+  // UINTCAP-OPT: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 128)
   return align_up((TYPE)100, 32);
 }
 
@@ -221,7 +221,7 @@ TYPE inline_p2align_up(void) {
   // LONG-OPT: ret i64 1024
   // PTR-OPT: ret i8* inttoptr (i64 1024 to i8*)
   // CAP-OPT: ret i8 addrspace(200)* inttoptr (i64 1024 to i8 addrspace(200)*)
-  // UINTCAP-OPT: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 1024)
+  // UINTCAP-OPT: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 1024)
   return p2align_up((TYPE)100, 10);
 }
 

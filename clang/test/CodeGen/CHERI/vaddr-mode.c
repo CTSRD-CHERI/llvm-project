@@ -20,8 +20,8 @@ long cap_to_long(void *__capability cap) {
 
 long write_uintcap(__uintcap_t *cap) {
   // BOTH-LABEL: @write_uintcap(
-  // OFFSET: [[RESULT:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 5)
-  // ADDR: [[RESULT:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* null, i64 5)
+  // OFFSET: [[RESULT:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 5)
+  // ADDR:   [[RESULT:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 5)
   // BOTH-NEXT: store i8 addrspace(200)* [[RESULT]], i8 addrspace(200)* addrspace(200)* %cap
   // BOTH-NEXT: ret i64 5
   *cap = 5;
@@ -125,9 +125,9 @@ long modulo_return_long(__uintcap_t cap) {
 
 void do_unlock(void);
 // BOTH-LABEL: @this_broke_qmutex(
-// OFFSET:       [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 1)
+// OFFSET:       [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 1)
 // OFFSET-NEXT:  [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)* [[MTX:%.*]])
-// ADDR:         [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* null, i64 1)
+// ADDR:         [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 1)
 // ADDR-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* [[MTX:%.*]])
 // BOTH-NEXT:    [[AND:%.*]] = and i64 [[TMP1]], 1
 // OFFSET-NEXT:  [[TMP2:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* [[MTX]], i64 [[AND]])

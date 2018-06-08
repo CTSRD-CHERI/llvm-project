@@ -15,5 +15,5 @@ __uintcap_t add_uintcap_t(void) {
   return cap + 914;
   // But this always returns a untagged capability with offset 1024
   // CHECK-LABEL: @add_uintcap_t()
-  // CHECK: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 1024)
+  // CHECK: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 1024)
 }

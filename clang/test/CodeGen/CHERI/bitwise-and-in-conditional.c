@@ -45,7 +45,7 @@ __uintcap_t this_broke_qmutex(__uintcap_t mtx) {
 
 // BROKEN-OPT-LABEL: @this_broke_qmutex(
 // BROKEN-OPT-NEXT:  entry:
-// BROKEN-OPT-NEXT:    [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.[[$UINTCAP_INTRIN]].set(i8 addrspace(200)* null, i64 1)
+// BROKEN-OPT-NEXT:    [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 1)
 // BROKEN-OPT-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.[[$UINTCAP_INTRIN]].get(i8 addrspace(200)* [[MTX:%.*]])
 // BROKEN-OPT-NEXT:    [[AND:%.*]] = and i64 [[TMP1]], 1
 // BROKEN-OPT-NEXT:    [[TMP2:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.[[$UINTCAP_INTRIN]].set(i8 addrspace(200)* [[MTX]], i64 [[AND]])
@@ -93,10 +93,10 @@ __uintcap_t this_broke_qmutex(__uintcap_t mtx) {
 //
 // WORKS-OPT-LABEL: @this_broke_qmutex(
 // WORKS-OPT-NEXT:  entry:
-// WORKS-OPT-NEXT:    [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.[[$UINTCAP_INTRIN]].set(i8 addrspace(200)* null, i64 1)
+// WORKS-OPT-NEXT:    [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 1)
 // WORKS-OPT-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.[[$UINTCAP_INTRIN]].get(i8 addrspace(200)* [[MTX:%.*]])
 // WORKS-OPT-NEXT:    [[AND:%.*]] = and i64 [[TMP1]], 1
-// WORKS-OPT-NEXT:    [[TMP2:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.[[$UINTCAP_INTRIN]].set(i8 addrspace(200)* null, i64 [[AND]])
+// WORKS-OPT-NEXT:    [[TMP2:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 [[AND]])
 // WORKS-OPT-NEXT:    [[CMP:%.*]] = icmp eq i8 addrspace(200)* [[TMP2]], [[TMP0]]
 // WORKS-OPT-NEXT:    br i1 [[CMP]], label [[IF_THEN:%.*]], label [[IF_END:%.*]]
 // WORKS-OPT:       if.then:
@@ -113,7 +113,7 @@ __uintcap_t this_broke_qmutex(__uintcap_t mtx) {
 // TODO: should we diagnose these cases where we actually emit a runtime check?
 // BROKEN-OPT-LABEL: @can_fold_the_bitand_provenance_check(
 // BROKEN-OPT-NEXT:  entry:
-// BROKEN-OPT-NEXT:    [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.[[$UINTCAP_INTRIN]].set(i8 addrspace(200)* null, i64 1)
+// BROKEN-OPT-NEXT:    [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 1)
 // BROKEN-OPT-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.[[$UINTCAP_INTRIN]].get(i8 addrspace(200)* [[MTX:%.*]])
 // BROKEN-OPT-NEXT:    [[AND:%.*]] = and i64 [[TMP1]], 1
 // BROKEN-OPT-NEXT:    [[TMP2:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.[[$UINTCAP_INTRIN]].set(i8 addrspace(200)* [[MTX]], i64 [[AND]])
@@ -161,10 +161,10 @@ __uintcap_t this_broke_qmutex(__uintcap_t mtx) {
 //
 // WORKS-OPT-LABEL: @can_fold_the_bitand_provenance_check(
 // WORKS-OPT-NEXT:  entry:
-// WORKS-OPT-NEXT:    [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.[[$UINTCAP_INTRIN]].set(i8 addrspace(200)* null, i64 1)
+// WORKS-OPT-NEXT:    [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 1)
 // WORKS-OPT-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.[[$UINTCAP_INTRIN]].get(i8 addrspace(200)* [[MTX:%.*]])
 // WORKS-OPT-NEXT:    [[AND:%.*]] = and i64 [[TMP1]], 1
-// WORKS-OPT-NEXT:    [[TMP2:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.[[$UINTCAP_INTRIN]].set(i8 addrspace(200)* null, i64 [[AND]])
+// WORKS-OPT-NEXT:    [[TMP2:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 [[AND]])
 // WORKS-OPT-NEXT:    [[CMP:%.*]] = icmp eq i8 addrspace(200)* [[TMP2]], [[TMP0]]
 // WORKS-OPT-NEXT:    br i1 [[CMP]], label [[IF_THEN:%.*]], label [[IF_END:%.*]]
 // WORKS-OPT:       if.then:
