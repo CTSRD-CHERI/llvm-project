@@ -311,7 +311,6 @@ class CHERICapFoldIntrinsics : public ModulePass {
       // Also convert a setoffset on null to a incoffset on null since we have
       // an immediate version of incoffset but not setoffset
       // FIXME: this should be done in the MIPS backend instead...
-      Value *NewOffset = CI->getOperand(1);
       if (isa<ConstantPointerNull>(CI->getOperand(0))) {
         IRBuilder<> B(CI);
         CallInst *Replacement = B.CreateCall(
