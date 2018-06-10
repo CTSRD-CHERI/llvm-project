@@ -5,8 +5,6 @@
 // RUNNOT: %clang_cc1 -O2 -triple=x86_64-unknown-linux -fcolor-diagnostics %s -o - -fsanitize=local-bounds,array-bounds,object-size -emit-llvm
 // RUN: %cheri_purecap_cc1 -cheri-bounds=references-only -O2 -std=c++17 -emit-llvm %s -o - -mllvm -debug-only=cheri-bounds 2>%t.dbg -print-stats | %cheri_FileCheck %s
 // RUN: %cheri_FileCheck %s -check-prefix DEBUG-MSG < %t.dbg
-// RUN: cat %t.dbg
-// RUN: %cheri_purecap_cc1 -cheri-bounds=references-only -O2 -mllvm -cheri-cap-table-abi=plt -std=c++11 -S %s -o -
 
 class Foo {
 public:
@@ -180,7 +178,6 @@ TEST_PTR_TO_REF(IntOrFloat)
 // DEBUG-MSG-NEXT: Found record type 'union IntOrFloat' -> not a struct/class -> not setting bounds
 // CHECK-LABEL: define void @_Z10test_derefU3capP10IntOrFloat(
 // CHECK-NOT: @llvm.cheri.cap.bounds.set
-
 
 // finally check the dumped statistics:
 // DEBUG-MSG-LABEL: STATISTICS:
