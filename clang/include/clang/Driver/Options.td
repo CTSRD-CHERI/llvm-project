@@ -273,6 +273,14 @@ def cheri_uintcap_addr : Flag<["-"], "cheri-uintcap=addr">, Flags<[DriverOption,
 def cheri_data_dependent_provenance : Flag<["-"], "cheri-data-dependent-provenance">, Flags<[CC1Option]>, Group<cheri_Group>,
   HelpText<"Use the LHS or NULL provenance of a bitwise-and operation depending on the value of the RHS">;
 
+def cheri_bounds_EQ : Joined<["-"], "cheri-bounds=">, Flags<[CC1Option]>, Group<cheri_Group>,
+  HelpText<"Choose when to tighten bounds on capabilities. Choices are: "
+           "'conservative' (only stack allocations, default), "
+           "'references-only' (also set bounds on C++ references that are definitely fixed size) "
+           "'subobject-safe' (also set bounds when taking a pointer to a subobject) and "
+           "'aggressive' (tighten bounds whenever feasible and not annotated as unsafe)">,
+  Values<"conservative,references-only,subobject-safe,aggressive">;
+
 def external_capsizefix : Flag<["-"], "external-capsizefix">, Flags<[CC1Option]>,
   Group<cheri_Group>, HelpText<"Use the external capsizefix tool instead of relying on the linker (deprecated)">;
 def no_capsizefix : Flag<["-"], "no-capsizefix">, Flags<[CC1Option]>,

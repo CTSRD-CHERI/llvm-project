@@ -230,24 +230,30 @@ public:
   }
 
   virtual unsigned getCHERICapabilityAS() const {
-    assert(0 && "Target does not support capabilities!\n");
+    llvm_unreachable("Target does not support capabilities!\n");
     return 0;
   }
 
   virtual llvm::Value *getPointerOffset(CodeGen::CodeGenFunction &,
                                         llvm::Value *V) const {
-      assert(0 && "Target does not support capabilities!\n");
-      return nullptr;
+    llvm_unreachable("Target does not support capabilities!\n");
+    return nullptr;
   }
   virtual llvm::Value *setPointerOffset(CodeGen::CodeGenFunction &,
           llvm::Value *Ptr, llvm::Value *Offset) const {
-      assert(0 && "Target does not support capabilities!\n");
-      return nullptr;
+    llvm_unreachable("Target does not support capabilities!\n");
+    return nullptr;
   }
   virtual llvm::Value *setPointerAddress(CodeGen::CodeGenFunction &,
                                          llvm::Value *Ptr,
                                          llvm::Value *Offset) const {
-    assert(0 && "Target does not support capabilities!\n");
+    llvm_unreachable("Target does not support capabilities!\n");
+    return nullptr;
+  }
+  virtual llvm::Value *setPointerBounds(CodeGen::CodeGenFunction &,
+                                        llvm::Value *Ptr, llvm::Value *Size,
+                                        const llvm::Twine &Name) const {
+    llvm_unreachable("Target does not support capabilities!\n");
     return nullptr;
   }
   virtual llvm::Value *getPointerBase(CodeGen::CodeGenFunction &,

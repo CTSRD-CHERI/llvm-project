@@ -120,6 +120,26 @@ public:
                   /// (More C compatible than offset)
   };
 
+  // TODO: this should probably be flags
+#if 0
+    CBM_ReferencesAggressive, /// (unused for now, might set more bounds)
+    CBM_NestedStructs
+    CBM_NonArrayObjectMembers, /// also set bounds on non-array object members
+    CBM_AllObjectMembers,     /// also set bounds on non-array object members
+    CBM_NonzeroArrayIndexes, /// also set bounds &array[n] if n != 0
+    CBM_AllArrayIndexes,     /// also set bounds on all non-annoated array index
+#endif
+  enum CheriBoundsMode {
+    CBM_Conservative, /// Only set bounds for stack allocations (safe)
+    CBM_References,   /// Also set bounds for C++ references to scalar types and
+                      /// references to final without vtables or flexible arrays
+    CBM_SubObjectsSafe, /// in addition to references also set bounds for
+                        /// pointers to subobjects (but only for those where we
+                        /// assume that it is safe to do so)
+    CBM_Aggressive, /// set bounds for anything that is not definitively unsafe
+                    /// or annotated as not wanting bounds
+  };
+
 public:
   /// \brief Set of enabled sanitizers.
   SanitizerSet Sanitize;

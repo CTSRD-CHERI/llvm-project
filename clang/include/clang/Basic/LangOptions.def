@@ -252,6 +252,8 @@ ENUM_LANGOPT(SignedOverflowBehavior, SignedOverflowBehaviorTy, 2, SOB_Undefined,
              "signed integer overflow handling")
 ENUM_LANGOPT(CheriUIntCap, CheriUIntCapMode, 1, UIntCap_Offset,
              "CHERI uintcap_t handling")
+ENUM_LANGOPT(CheriBounds, CheriBoundsMode, 2, CBM_Conservative,
+             "whether to reduce bounds when passing pointers/references to subobjects")
 // See test/CodeGen/CHERI/bitwise-and-in-conditional.c for the motivating use case (deadlocks in mutex code)
 LANGOPT(CheriDataDependentProvenance, 1, 0, "Derive pointer provenance for bitwise-and operations depending on value of the RHS")
 

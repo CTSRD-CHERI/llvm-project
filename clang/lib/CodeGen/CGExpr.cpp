@@ -29,6 +29,7 @@
 #include "clang/Frontend/CodeGenOptions.h"
 #include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/ADT/Statistic.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/LLVMContext.h"
@@ -527,14 +528,101 @@ EmitMaterializeTemporaryExpr(const MaterializeTemporaryExpr *M) {
   return MakeAddrLValue(Object, M->getType(), AlignmentSource::Decl);
 }
 
+#define CHERI_BOUNDS_DBG(x) DEBUG_WITH_TYPE("cheri-bounds", llvm::dbgs() x)
+#define DEBUG_TYPE "cheri-bounds"
+STATISTIC(NumReferencesCheckedForBoundsTightening,
+          "Number of references processed for tightening bounds");
+STATISTIC(NumBoundsSetOnReferences,
+          "Number of references where bounds were tightend");
+#undef DEBUG_TYPE
+
+static inline llvm::Value *setCHERIBounds(CodeGenFunction &CGF,
+                                          llvm::Value *Value, QualType Ty) {
+  uint64_t Size = CGF.getContext().getTypeSizeInChars(Ty).getQuantity();
+  CHERI_BOUNDS_DBG(<< "setting bounds for '" << Ty.getAsString()
+                   << "' reference to " << Size << "\n");
+  NumBoundsSetOnReferences++;
+  return CGF.setPointerBounds(Value, Size, "ref.with.bounds");
+};
+
+llvm::Value *CodeGenFunction::setCHERIBoundsOnReference(llvm::Value *Value,
+                                                        QualType Ty) {
+  if (getLangOpts().getCheriBounds() < LangOptions::CBM_References)
+    return Value; // Not enabled
+
+  // CHERI_BOUNDS_DBG(<< "Trying to set CHERI bounds on reference ";
+  //                  E->dump(llvm::dbgs()));
+
+  // TODO: add a statistic for number of bounds that were added?
+  NumReferencesCheckedForBoundsTightening++;
+
+  if (Ty->isIncompleteType()) {
+    CHERI_BOUNDS_DBG(<< "Cannot set bounds on incomplete type\n");
+    return Value;
+  }
+  assert(CGM.getTypes().getDataLayout().isFatPointer(Value->getType()));
+  // It should be possible to set the size for all scalar types
+  if (Ty->isScalarType()) {
+    CHERI_BOUNDS_DBG(<< "Found scalar type -> ");
+    return setCHERIBounds(*this, Value, Ty);
+  }
+  // It because a bit more tricky for class types since they might be
+  // downcasted to something with a larger size.
+  // TODO: can we try to set bounds on all classes without a vtable
+  // I guess final classes would work
+  if (Ty->isRecordType()) {
+    CHERI_BOUNDS_DBG(<< "Found record type '" << Ty.getAsString() << "' -> ");
+    if (Ty->isCXXStructureOrClassType()) {
+      CXXRecordDecl *CRD = Ty->getAsCXXRecordDecl();
+      if (CRD->hasFlexibleArrayMember()) {
+        CHERI_BOUNDS_DBG(<< "has flexible array member -> can't set bounds\n");
+        return Value;
+      }
+      const bool IsFinalClass = CRD->hasAttr<FinalAttr>();
+      // TODO: isCLike() -> safe to set bounds? hopefully not inherited from?
+      if (!IsFinalClass) {
+        // TODO: should we have a mode where we aggressively set bounds
+        // (at least for c-like structs?)
+        CHERI_BOUNDS_DBG(<< "not final -> can't assume it has no inheritors\n");
+        return Value;
+      }
+      if (CRD->isCLike()) {
+        CHERI_BOUNDS_DBG(<< "is C-like struct type and is marked as final -> ");
+        return setCHERIBounds(*this, Value, Ty);
+      }
+      // Final class: check it doesn't have any virtual bases
+      // TODO: check there are no flexible array members
+      if (!CRD->isLiteral()) {
+        CHERI_BOUNDS_DBG(<< "final but not a literal type -> "
+                         << "size might by dynamic -> not setting bounds\n");
+        return Value;
+      } else {
+        assert(CRD->getNumVBases() == 0);
+        CHERI_BOUNDS_DBG(<< "is literal type and is marked as final -> ");
+        return setCHERIBounds(*this, Value, Ty);
+      }
+    }
+    CHERI_BOUNDS_DBG(<< "not a struct/class -> not setting bounds\n");
+    // TODO: flexible array members
+    // TODO: unions?
+    return Value;
+  }
+  // Otherwise this type is unhandled, let's print a message:
+  llvm::errs() << __func__ << ": don't know how to handle type "
+               << Ty.getAsString() << "\n";
+  // TODO: assert here to find all the cases?
+  // llvm_unreachable("Don't know whether to set bounds on type");
+  return Value;
+}
+
 RValue
 CodeGenFunction::EmitReferenceBindingToExpr(const Expr *E) {
   // Emit the expression as an lvalue.
   LValue LV = EmitLValue(E);
   assert(LV.isSimple());
   llvm::Value *Value = LV.getPointer();
-
-  if (sanitizePerformTypeCheck() && !E->getType()->isFunctionType()) {
+  QualType Ty = E->getType();
+  if (sanitizePerformTypeCheck() && !Ty->isFunctionType()) {
     // C++11 [dcl.ref]p5 (as amended by core issue 453):
     //   If a glvalue to which a reference is directly bound designates neither
     //   an existing object or function of an appropriate type nor a region of
@@ -543,7 +631,12 @@ CodeGenFunction::EmitReferenceBindingToExpr(const Expr *E) {
     QualType Ty = E->getType();
     EmitTypeCheck(TCK_ReferenceBinding, E->getExprLoc(), Value, Ty);
   }
-
+  // For CHERI we want to insert bounds on references (at least for simple
+  // types) unless they are references to functions
+  // TODO: we should probably check if references are capabilities instead since
+  // there could be a mode where references are capabilities but pointers aren't
+  if (CGM.getTarget().areAllPointersCapabilities() && !Ty->isFunctionType())
+    Value = setCHERIBoundsOnReference(Value, Ty);
   return RValue::get(Value);
 }
 
@@ -592,6 +685,8 @@ void CodeGenFunction::EmitTypeCheck(TypeCheckKind TCK, SourceLocation Loc,
                                     llvm::Value *Ptr, QualType Ty,
                                     CharUnits Alignment,
                                     SanitizerSet SkippedChecks) {
+  // TODO: if this was called everywhere we might be able to add CHERI reduced
+  // bounds in a central place instead of having toChecks
   if (!sanitizePerformTypeCheck())
     return;
 

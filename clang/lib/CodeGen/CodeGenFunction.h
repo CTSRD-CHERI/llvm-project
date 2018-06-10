@@ -3604,6 +3604,7 @@ public:
 
   /// \brief Emits a reference binding to the passed in expression.
   RValue EmitReferenceBindingToExpr(const Expr *E);
+  llvm::Value *setCHERIBoundsOnReference(llvm::Value *Ptr, QualType Ty);
 
   //===--------------------------------------------------------------------===//
   //                           Expression Emission
@@ -4044,6 +4045,14 @@ public:
   }
   llvm::Value *getPointerAddress(llvm::Value *V, const llvm::Twine &Name = "") {
     return getTargetHooks().getPointerAddress(*this, V, Name);
+  }
+  llvm::Value *setPointerBounds(llvm::Value *V, llvm::Value *Size,
+                                const llvm::Twine &Name = "") {
+    return getTargetHooks().setPointerBounds(*this, V, Size, Name);
+  }
+  llvm::Value *setPointerBounds(llvm::Value *V, uint64_t Size,
+                                const llvm::Twine &Name = "") {
+    return setPointerBounds(V, llvm::ConstantInt::get(Int64Ty, Size), Name);
   }
 
   /// EmitPointerWithAlignment - Given an expression with a pointer type,
