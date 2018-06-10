@@ -29,7 +29,7 @@ def target_abi : Separate<["-"], "target-abi">,
   HelpText<"Target a particular ABI type">;
 
 def cheri_size : Separate<["-"], "cheri-size">,
-  HelpText<"CHERI capability size">;
+  HelpText<"CHERI capability size">, Group<cheri_Group>;
 }
 
 def target_linker_version : Separate<["-"], "target-linker-version">,
