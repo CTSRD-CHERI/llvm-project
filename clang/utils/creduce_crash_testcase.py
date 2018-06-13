@@ -650,6 +650,15 @@ class Reducer(object):
         assert new_command.count("%s") == 1, new_command
         new_command.remove("%s")
 
+        # Remove -mllvm options that no longer exist
+        def is_old_llvm_option(opt: str):
+            # -cheri-cap-table=true/false was replace with -mllvm -cheri-cap-table-abi=
+            if opt == "-cheri-cap-table" or opt.startswith("-cheri-cap-table="):
+                return True
+            return False
+
+        new_command = self._filter_args(new_command, one_arg_opts_to_remove_if={"-mllvm": is_old_llvm_option})
+
         print("Checking whether reproducer crashes with ", new_command[0], ":", sep="", end="", flush=True)
         crash_info = subprocess.CompletedProcess(None, None)
         self.options.expected_error_kind = self._check_crash(new_command, infile, crash_info)
