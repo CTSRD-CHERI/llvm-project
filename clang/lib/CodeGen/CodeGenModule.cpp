@@ -132,6 +132,8 @@ CodeGenModule::CodeGenModule(ASTContext &C, const HeaderSearchOptions &HSO,
   Int8PtrPtrTy = Int8PtrTy->getPointerTo(getTargetCodeGenInfo().getDefaultAS());
   AllocaInt8PtrTy =
       Int8Ty->getPointerTo(M.getDataLayout().getAllocaAddrSpace());
+  ProgramInt8PtrTy =
+      Int8Ty->getPointerTo(M.getDataLayout().getProgramAddressSpace());
   ASTAllocaAddressSpace = getTargetCodeGenInfo().getASTAllocaAddressSpace();
 
   RuntimeCC = getTargetCodeGenInfo().getABIInfo().getRuntimeCC();

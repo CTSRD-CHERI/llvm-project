@@ -1830,26 +1830,20 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
   case Builtin::BI__builtin_return_address: {
     Value *Depth = ConstantEmitter(*this).emitAbstract(E->getArg(0),
                                                    getContext().UnsignedIntTy);
-    auto *RetTy = CGM.getTarget().areAllPointersCapabilities()
-                      ? CGM.Int8CheriCapTy
-                      : CGM.Int8PtrTy;
-    Value *F = CGM.getIntrinsic(Intrinsic::returnaddress, {RetTy});
+    Value *F =
+        CGM.getIntrinsic(Intrinsic::returnaddress, {CGM.ProgramInt8PtrTy});
     return RValue::get(Builder.CreateCall(F, Depth));
   }
   case Builtin::BI_ReturnAddress: {
-    auto *RetTy = CGM.getTarget().areAllPointersCapabilities()
-                      ? CGM.Int8CheriCapTy
-                      : CGM.Int8PtrTy;
-    Value *F = CGM.getIntrinsic(Intrinsic::returnaddress, {RetTy});
+    Value *F =
+        CGM.getIntrinsic(Intrinsic::returnaddress, {CGM.ProgramInt8PtrTy});
     return RValue::get(Builder.CreateCall(F, Builder.getInt32(0)));
   }
   case Builtin::BI__builtin_frame_address: {
     Value *Depth = ConstantEmitter(*this).emitAbstract(E->getArg(0),
                                                    getContext().UnsignedIntTy);
-    auto *RetTy = CGM.getTarget().areAllPointersCapabilities()
-                      ? CGM.Int8CheriCapTy
-                      : CGM.Int8PtrTy;
-    Value *F = CGM.getIntrinsic(Intrinsic::frameaddress, {RetTy});
+    Value *F =
+        CGM.getIntrinsic(Intrinsic::frameaddress, {CGM.ProgramInt8PtrTy});
     return RValue::get(Builder.CreateCall(F, Depth));
   }
   case Builtin::BI__builtin_extract_return_addr: {
@@ -1932,9 +1926,9 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     Address Buf = EmitPointerWithAlignment(E->getArg(0));
 
     // Store the frame pointer to the setjmp buffer.
-    Value *FrameAddr =
-      Builder.CreateCall(CGM.getIntrinsic(Intrinsic::frameaddress),
-                         ConstantInt::get(Int32Ty, 0));
+    Value *FrameAddr = Builder.CreateCall(
+        CGM.getIntrinsic(Intrinsic::frameaddress, {CGM.ProgramInt8PtrTy}),
+        ConstantInt::get(Int32Ty, 0));
     Builder.CreateStore(FrameAddr, Buf);
 
     // Store the stack pointer to the setjmp buffer.
@@ -2764,9 +2758,9 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
           "_setjmpex", ReturnsTwiceAttr, /*Local=*/true);
       llvm::Value *Buf = Builder.CreateBitOrPointerCast(
           EmitScalarExpr(E->getArg(0)), Int8PtrTy);
-      llvm::Value *FrameAddr =
-          Builder.CreateCall(CGM.getIntrinsic(Intrinsic::frameaddress),
-                             ConstantInt::get(Int32Ty, 0));
+      llvm::Value *FrameAddr = Builder.CreateCall(
+          CGM.getIntrinsic(Intrinsic::frameaddress, {CGM.ProgramInt8PtrTy}),
+          ConstantInt::get(Int32Ty, 0));
       llvm::Value *Args[] = {Buf, FrameAddr};
       llvm::CallSite CS = EmitRuntimeCallOrInvoke(SetJmpEx, Args);
       CS.setAttributes(ReturnsTwiceAttr);
@@ -2795,9 +2789,9 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
         llvm::Constant *SetJmp = CGM.CreateRuntimeFunction(
             llvm::FunctionType::get(IntTy, ArgTypes, /*isVarArg=*/false),
             "_setjmp", ReturnsTwiceAttr, /*Local=*/true);
-        llvm::Value *FrameAddr =
-            Builder.CreateCall(CGM.getIntrinsic(Intrinsic::frameaddress),
-                               ConstantInt::get(Int32Ty, 0));
+        llvm::Value *FrameAddr = Builder.CreateCall(
+            CGM.getIntrinsic(Intrinsic::frameaddress, {CGM.ProgramInt8PtrTy}),
+            ConstantInt::get(Int32Ty, 0));
         llvm::Value *Args[] = {Buf, FrameAddr};
         CS = EmitRuntimeCallOrInvoke(SetJmp, Args);
       }

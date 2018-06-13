@@ -1602,7 +1602,8 @@ void CodeGenFunction::EmitCapturedLocals(CodeGenFunction &ParentCGF,
     // EH registration is passed in as the EBP physical register.  We can
     // recover that with llvm.frameaddress(1).
     EntryFP = Builder.CreateCall(
-        CGM.getIntrinsic(llvm::Intrinsic::frameaddress), {Builder.getInt32(1)});
+        CGM.getIntrinsic(llvm::Intrinsic::frameaddress, {CGM.ProgramInt8PtrTy}),
+        {Builder.getInt32(1)});
   } else {
     // Otherwise, for x64 and 32-bit finally functions, the parent FP is the
     // second parameter.
