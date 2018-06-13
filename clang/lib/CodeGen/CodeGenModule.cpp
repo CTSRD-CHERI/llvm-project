@@ -123,9 +123,15 @@ CodeGenModule::CodeGenModule(ASTContext &C, const HeaderSearchOptions &HSO,
   // the pointer range and not as an integer with the same width as a pointer
   IntPtrTy = llvm::IntegerType::get(LLVMContext, Target.getMaxPointerRange());
   Int8PtrTy = Int8Ty->getPointerTo(getTargetCodeGenInfo().getDefaultAS());
+  if (Target.SupportsCapabilities()) {
+    Int8CheriCapTy =
+        Int8Ty->getPointerTo(getTargetCodeGenInfo().getCHERICapabilityAS());
+  } else {
+    Int8CheriCapTy = nullptr;
+  }
   Int8PtrPtrTy = Int8PtrTy->getPointerTo(getTargetCodeGenInfo().getDefaultAS());
-  AllocaInt8PtrTy = Int8Ty->getPointerTo(
-      M.getDataLayout().getAllocaAddrSpace());
+  AllocaInt8PtrTy =
+      Int8Ty->getPointerTo(M.getDataLayout().getAllocaAddrSpace());
   ASTAllocaAddressSpace = getTargetCodeGenInfo().getASTAllocaAddressSpace();
 
   RuntimeCC = getTargetCodeGenInfo().getABIInfo().getRuntimeCC();

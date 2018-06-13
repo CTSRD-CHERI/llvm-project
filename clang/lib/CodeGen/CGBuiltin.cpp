@@ -10815,9 +10815,7 @@ struct BuiltinAlignArgs {
 
     if (IsCheri) {
       Value *Callee = CGF.CGM.getIntrinsic(Intrinsic::cheri_cap_address_get);
-      auto *I8CapTy = CGF.Int8Ty->getPointerTo(
-          CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS());
-      SrcAsI8Cap = CGF.Builder.CreateBitCast(Src, I8CapTy);
+      SrcAsI8Cap = CGF.Builder.CreateBitCast(Src, CGF.CGM.Int8CheriCapTy);
       SrcAddr = CGF.Builder.CreateCall(Callee, {SrcAsI8Cap});
     } else {
       SrcAddr = CGF.Builder.CreateBitOrPointerCast(Src, IntType);
