@@ -39,19 +39,20 @@ static void insertCall(Function &CurFn, StringRef Func,
   }
 
   if (Func == "__cyg_profile_func_enter" || Func == "__cyg_profile_func_exit") {
-    Type *ArgTypes[] = {Type::getInt8PtrTy(C), Type::getInt8PtrTy(C)};
+    auto ProgASPtr =
+        Type::getInt8PtrTy(C, M.getDataLayout().getProgramAddressSpace());
+    Type *ArgTypes[] = {ProgASPtr, ProgASPtr};
 
     Constant *Fn = M.getOrInsertFunction(
         Func, FunctionType::get(Type::getVoidTy(C), ArgTypes, false));
 
     Instruction *RetAddr = CallInst::Create(
-        Intrinsic::getDeclaration(&M, Intrinsic::returnaddress),
+        Intrinsic::getDeclaration(&M, Intrinsic::returnaddress, {ProgASPtr}),
         ArrayRef<Value *>(ConstantInt::get(Type::getInt32Ty(C), 0)), "",
         InsertionPt);
     RetAddr->setDebugLoc(DL);
 
-    Value *Args[] = {ConstantExpr::getBitCast(&CurFn, Type::getInt8PtrTy(C)),
-                     RetAddr};
+    Value *Args[] = {ConstantExpr::getBitCast(&CurFn, ProgASPtr), RetAddr};
 
     CallInst *Call =
         CallInst::Create(Fn, ArrayRef<Value *>(Args), "", InsertionPt);

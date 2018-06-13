@@ -414,8 +414,11 @@ Value *HWAddressSanitizer::getStackBaseTag(IRBuilder<> &IRB) {
   // FIXME: use addressofreturnaddress (but implement it in aarch64 backend
   // first).
   Module *M = IRB.GetInsertBlock()->getParent()->getParent();
+
+  auto ProgramASPtr = Type::getInt8PtrTy(
+      M->getContext(), M->getDataLayout().getProgramAddressSpace());
   auto GetStackPointerFn =
-      Intrinsic::getDeclaration(M, Intrinsic::frameaddress);
+      Intrinsic::getDeclaration(M, Intrinsic::frameaddress, ProgramASPtr);
   Value *StackPointer = IRB.CreateCall(
       GetStackPointerFn, {Constant::getNullValue(IRB.getInt32Ty())});
 
