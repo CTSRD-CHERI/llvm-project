@@ -2729,8 +2729,11 @@ lowerFRAMEADDR(SDValue Op, SelectionDAG &DAG) const {
   MFI.setFrameAddressIsTaken(true);
   EVT VT = Op.getValueType();
   SDLoc DL(Op);
-  SDValue FrameAddr = DAG.getCopyFromReg(
-      DAG.getEntryNode(), DL, ABI.IsN64() ? Mips::FP_64 : Mips::FP, VT);
+  SDValue FrameAddr =
+      DAG.getCopyFromReg(DAG.getEntryNode(), DL, ABI.GetFramePtr(), VT);
+  if (ABI.IsCheriPureCap()) {
+    assert(VT == CapType);
+  }
   return FrameAddr;
 }
 
@@ -2746,10 +2749,9 @@ SDValue MipsTargetLowering::lowerRETURNADDR(SDValue Op,
   MachineFunction &MF = DAG.getMachineFunction();
   MachineFrameInfo &MFI = MF.getFrameInfo();
   MVT VT = Op.getSimpleValueType();
-  unsigned RA = ABI.IsN64() ? Mips::RA_64 : Mips::RA;
+  unsigned RA = ABI.GetReturnAddress();
   if (ABI.IsCheriPureCap()) {
      assert(VT == CapType);
-     RA = Mips::C17;
   }
   MFI.setReturnAddressIsTaken(true);
 

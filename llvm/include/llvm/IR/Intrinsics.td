@@ -324,10 +324,9 @@ def int_gcwrite : Intrinsic<[],
 
 //===--------------------- Code Generator Intrinsics ----------------------===//
 //
-def int_returnaddress : Intrinsic<[llvm_ptr_ty], [llvm_i32_ty], [IntrNoMem]>;
-def int_returncapability : Intrinsic<[llvm_fatptr_ty], [llvm_i32_ty], [IntrNoMem]>;
-def int_addressofreturnaddress : Intrinsic<[llvm_ptr_ty], [], [IntrNoMem]>;
-def int_frameaddress  : Intrinsic<[llvm_ptr_ty], [llvm_i32_ty], [IntrNoMem]>;
+def int_returnaddress : Intrinsic<[llvm_anyptr_ty], [llvm_i32_ty], [IntrNoMem]>;
+def int_addressofreturnaddress : Intrinsic<[llvm_anyptr_ty], [], [IntrNoMem]>;
+def int_frameaddress  : Intrinsic<[llvm_anyptr_ty], [llvm_i32_ty], [IntrNoMem]>;
 def int_read_register  : Intrinsic<[llvm_anyint_ty], [llvm_metadata_ty],
                                    [IntrReadMem], "llvm.read_register">;
 def int_write_register : Intrinsic<[], [llvm_metadata_ty, llvm_anyint_ty],

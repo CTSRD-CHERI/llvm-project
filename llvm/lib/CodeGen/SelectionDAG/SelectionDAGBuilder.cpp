@@ -4984,25 +4984,25 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
   case Intrinsic::vastart:  visitVAStart(I); return nullptr;
   case Intrinsic::vaend:    visitVAEnd(I); return nullptr;
   case Intrinsic::vacopy:   visitVACopy(I); return nullptr;
-  case Intrinsic::returncapability:
-    // FIXME: Don't hard-code 200
-    setValue(&I, DAG.getNode(ISD::RETURNADDR, sdl,
-                             TLI.getPointerTy(DAG.getDataLayout(), 200),
-                             getValue(I.getArgOperand(0))));
-    return nullptr;
   case Intrinsic::returnaddress:
-    setValue(&I, DAG.getNode(ISD::RETURNADDR, sdl,
-                             TLI.getPointerTy(DAG.getDataLayout()),
-                             getValue(I.getArgOperand(0))));
+    setValue(
+        &I, DAG.getNode(ISD::RETURNADDR, sdl,
+                        TLI.getPointerTy(DAG.getDataLayout(),
+                                         I.getType()->getPointerAddressSpace()),
+                        getValue(I.getArgOperand(0))));
     return nullptr;
   case Intrinsic::addressofreturnaddress:
-    setValue(&I, DAG.getNode(ISD::ADDROFRETURNADDR, sdl,
-                             TLI.getPointerTy(DAG.getDataLayout())));
+    setValue(&I, DAG.getNode(
+                     ISD::ADDROFRETURNADDR, sdl,
+                     TLI.getPointerTy(DAG.getDataLayout(),
+                                      I.getType()->getPointerAddressSpace())));
     return nullptr;
   case Intrinsic::frameaddress:
-    setValue(&I, DAG.getNode(ISD::FRAMEADDR, sdl,
-                             TLI.getPointerTy(DAG.getDataLayout()),
-                             getValue(I.getArgOperand(0))));
+    setValue(
+        &I, DAG.getNode(ISD::FRAMEADDR, sdl,
+                        TLI.getPointerTy(DAG.getDataLayout(),
+                                         I.getType()->getPointerAddressSpace()),
+                        getValue(I.getArgOperand(0))));
     return nullptr;
   case Intrinsic::read_register: {
     Value *Reg = I.getArgOperand(0);
