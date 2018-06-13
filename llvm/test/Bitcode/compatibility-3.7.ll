@@ -797,6 +797,7 @@ define void @instructions.binops(i8 %op1, i8 %op2) {
   ; CHECK: sdiv exact i8 %op1, %op2
 
   ; none
+  ; none
   urem i8 %op1, %op2
   ; CHECK: urem i8 %op1, %op2
   srem i8 %op1, %op2
@@ -1145,9 +1146,9 @@ declare void @llvm.instrprof_increment(i8*, i64, i32, i32)
 !10 = !{!"rax"}
 define void @intrinsics.codegen() {
   call i8* @llvm.returnaddress(i32 1)
-  ; CHECK: call i8* @llvm.returnaddress(i32 1)
+  ; CHECK: call i8* @llvm.returnaddress.p0i8(i32 1)
   call i8* @llvm.frameaddress(i32 1)
-  ; CHECK: call i8* @llvm.frameaddress(i32 1)
+  ; CHECK: call i8* @llvm.frameaddress.p0i8(i32 1)
 
   call i32 @llvm.read_register.i32(metadata !10)
   ; CHECK: call i32 @llvm.read_register.i32(metadata !10)

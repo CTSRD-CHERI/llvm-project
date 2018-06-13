@@ -403,6 +403,13 @@ static bool UpgradeIntrinsicFunction1(Function *F, Function *&NewFn) {
   switch (Name[0]) {
   default: break;
   case 'a': {
+    if (Name == "addressofreturnaddress") {
+      NewFn = Intrinsic::getDeclaration(F->getParent(),
+                                        Intrinsic::addressofreturnaddress,
+                                        F->getReturnType());
+      return true;
+    }
+
     if (Name.startswith("arm.rbit") || Name.startswith("aarch64.rbit")) {
       NewFn = Intrinsic::getDeclaration(F->getParent(), Intrinsic::bitreverse,
                                         F->arg_begin()->getType());
@@ -489,6 +496,12 @@ static bool UpgradeIntrinsicFunction1(Function *F, Function *&NewFn) {
     }
     break;
   }
+  case 'f':
+    if (Name == "frameaddress") {
+      NewFn = Intrinsic::getDeclaration(F->getParent(), Intrinsic::frameaddress,
+                                        F->getReturnType());
+      return true;
+    }
   case 'i':
   case 'l': {
     bool IsLifetimeStart = Name.startswith("lifetime.start");
@@ -642,7 +655,12 @@ static bool UpgradeIntrinsicFunction1(Function *F, Function *&NewFn) {
       }
     }
     break;
-
+  case 'r':
+    if (Name == "returnaddress") {
+      NewFn = Intrinsic::getDeclaration(
+          F->getParent(), Intrinsic::returnaddress, F->getReturnType());
+      return true;
+    }
   case 's':
     if (Name == "stackprotectorcheck") {
       NewFn = nullptr;
