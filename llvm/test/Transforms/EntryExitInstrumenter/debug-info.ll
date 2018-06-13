@@ -10,10 +10,10 @@ entry:
   ret i32 42, !dbg !12
 
 ; CHECK-LABEL: define i32 @f(i32 %x)
-; CHECK: call i8* @llvm.returnaddress(i32 0), !dbg ![[ENTRYLOC:[0-9]+]]
+; CHECK: call i8* @llvm.returnaddress.p0i8(i32 0), !dbg ![[ENTRYLOC:[0-9]+]]
 ; CHECK: call void @__cyg_profile_func_enter{{.*}}, !dbg ![[ENTRYLOC]]
 
-; CHECK: call i8* @llvm.returnaddress(i32 0), !dbg ![[EXITLOC:[0-9]+]]
+; CHECK: call i8* @llvm.returnaddress.p0i8(i32 0), !dbg ![[EXITLOC:[0-9]+]]
 ; CHECK: call void @__cyg_profile_func_exit{{.*}}, !dbg ![[EXITLOC]]
 ; CHECK: ret i32 42, !dbg ![[EXITLOC]]
 }

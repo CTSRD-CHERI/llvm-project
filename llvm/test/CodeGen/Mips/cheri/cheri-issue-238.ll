@@ -1,4 +1,4 @@
-; RUN: %cheri_purecap_llc -float-abi soft %s -o - -O3 "-thread-model" "posix" "-vectorize-loops" "-vectorize-slp" -filetype=obj | llvm-objdump -d - | FileCheck %s
+; RUN: %cheri_purecap_llc -float-abi soft %s -o - -O3 "-thread-model" "posix" -filetype=obj | llvm-objdump -d - | FileCheck %s
 ; This code used to generate a csw of $c28 which is inacessible:
 ; https://github.com/CTSRD-CHERI/llvm/issues/238
 ; CHECK-NOT: $c28

@@ -348,7 +348,10 @@ void WinEHStatePass::emitExceptionRegistrationRecord(Function *F) {
     if (UseStackGuard) {
       Value *Val = Builder.CreateLoad(Int32Ty, Cookie);
       Value *FrameAddr = Builder.CreateCall(
-          Intrinsic::getDeclaration(TheModule, Intrinsic::frameaddress),
+          Intrinsic::getDeclaration(
+              TheModule, Intrinsic::frameaddress,
+              Builder.getInt8PtrTy(
+                  F->getParent()->getDataLayout().getProgramAddressSpace())),
           Builder.getInt32(0), "frameaddr");
       Value *FrameAddrI32 = Builder.CreatePtrToInt(FrameAddr, Int32Ty);
       FrameAddrI32 = Builder.CreateXor(FrameAddrI32, Val);
