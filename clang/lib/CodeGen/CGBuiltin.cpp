@@ -1830,19 +1830,26 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
   case Builtin::BI__builtin_return_address: {
     Value *Depth = ConstantEmitter(*this).emitAbstract(E->getArg(0),
                                                    getContext().UnsignedIntTy);
-    Value *F = CGM.getContext().getTargetInfo().areAllPointersCapabilities()
-        ? CGM.getIntrinsic(Intrinsic::returncapability)
-        : CGM.getIntrinsic(Intrinsic::returnaddress);
+    auto *RetTy = CGM.getTarget().areAllPointersCapabilities()
+                      ? CGM.Int8CheriCapTy
+                      : CGM.Int8PtrTy;
+    Value *F = CGM.getIntrinsic(Intrinsic::returnaddress, {RetTy});
     return RValue::get(Builder.CreateCall(F, Depth));
   }
   case Builtin::BI_ReturnAddress: {
-    Value *F = CGM.getIntrinsic(Intrinsic::returnaddress);
+    auto *RetTy = CGM.getTarget().areAllPointersCapabilities()
+                      ? CGM.Int8CheriCapTy
+                      : CGM.Int8PtrTy;
+    Value *F = CGM.getIntrinsic(Intrinsic::returnaddress, {RetTy});
     return RValue::get(Builder.CreateCall(F, Builder.getInt32(0)));
   }
   case Builtin::BI__builtin_frame_address: {
     Value *Depth = ConstantEmitter(*this).emitAbstract(E->getArg(0),
                                                    getContext().UnsignedIntTy);
-    Value *F = CGM.getIntrinsic(Intrinsic::frameaddress);
+    auto *RetTy = CGM.getTarget().areAllPointersCapabilities()
+                      ? CGM.Int8CheriCapTy
+                      : CGM.Int8PtrTy;
+    Value *F = CGM.getIntrinsic(Intrinsic::frameaddress, {RetTy});
     return RValue::get(Builder.CreateCall(F, Depth));
   }
   case Builtin::BI__builtin_extract_return_addr: {
@@ -9320,7 +9327,10 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
   }
 
   case X86::BI_AddressOfReturnAddress: {
-    Value *F = CGM.getIntrinsic(Intrinsic::addressofreturnaddress);
+    auto *RetTy = CGM.getTarget().areAllPointersCapabilities()
+                      ? CGM.Int8CheriCapTy
+                      : CGM.Int8PtrTy;
+    Value *F = CGM.getIntrinsic(Intrinsic::addressofreturnaddress, {RetTy});
     return Builder.CreateCall(F);
   }
   case X86::BI__stosb: {
