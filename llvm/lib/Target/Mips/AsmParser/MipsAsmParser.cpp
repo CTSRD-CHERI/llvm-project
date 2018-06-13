@@ -5927,10 +5927,9 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name,
                .Default(-1);
     }
   }
-  auto BadReg = [&](const Twine &Reg, const char *Replacement = nullptr,
-                    bool Allowed = true) {
+  auto BadReg = [&](const Twine &Reg, const char *Replacement = nullptr) {
     // $ddc should always warn:
-    bool AffectedBySysregsAccessible = Allowed && CC != 0;
+    bool AffectedBySysregsAccessible = CC != 0;
     if (AreCheriSysRegsAccessible && AffectedBySysregsAccessible)
       return CC;
 
@@ -5939,16 +5938,12 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name,
          (Replacement ? Replacement : Reg) + " instead.")
             .str();
 
-    if (Allowed) {
-      if (AffectedBySysregsAccessible)
-        Msg += " In kernel code you can use  `.set cheri_sysregs_accessible`"
+    if (AffectedBySysregsAccessible) {
+      Msg += " In kernel code you can use  `.set cheri_sysregs_accessible`"
                " to silence this warning.";
       Warning(Parser.getTok().getLoc(), Msg);
-      return CC;
-    } else {
-      Error(Parser.getTok().getLoc(), Msg, Parser.getTok().getLocRange());
-      return -2;
     }
+    return CC;
   };
   if (CC == 0) {
     // special handling for register zero (some instructions treat it as NULL
@@ -5987,7 +5982,7 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name,
   case Mips::C30:
     return BadReg("KDC");
   case Mips::C31:
-    return BadReg("EPCC", nullptr, /*Allowed=*/false);
+    return BadReg("EPCC");
   default:
     break;
   }
