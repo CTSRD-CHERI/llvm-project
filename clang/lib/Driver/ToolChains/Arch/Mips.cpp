@@ -51,7 +51,7 @@ void mips::getMipsCPUAndABI(const ArgList &Args, const llvm::Triple &Triple,
                      .Case("256", "cheri256")
                      .Default("cheri128");
   }
-  if (Triple.getArch() == llvm::Triple::cheri) {
+  if (Triple.getArch() == llvm::Triple::cheri || ABIName == "purecap") {
     DefMips32CPU = CHERICPU;
     DefMips64CPU = CHERICPU;
   }
@@ -211,7 +211,8 @@ void mips::getMIPSTargetFeatures(const Driver &D, const llvm::Triple &Triple,
   StringRef ABIName;
   getMipsCPUAndABI(Args, Triple, CPUName, ABIName);
   ABIName = getGnuCompatibleMipsABIName(ABIName);
-  if (ABIName == "purecap" && Triple.getArch() != llvm::Triple::cheri)
+  if (ABIName == "purecap" && Triple.getArch() != llvm::Triple::cheri &&
+      Triple.getArch() != llvm::Triple::mips64)
     D.Diag(diag::err_drv_argument_not_allowed_with) << "-mabi=purecap"
       << Triple.str();
 

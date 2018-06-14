@@ -158,7 +158,8 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   ArgStringList CmdArgs;
 
   bool IsCHERIPureCapABI = false;
-  if (ToolChain.getArch() == llvm::Triple::cheri)
+  if (ToolChain.getArch() == llvm::Triple::cheri ||
+      ToolChain.getArch() == llvm::Triple::mips64)
     if (Args.hasArg(options::OPT_mabi_EQ)) {
       auto A = Args.getLastArg(options::OPT_mabi_EQ);
       IsCHERIPureCapABI = StringRef(A->getValue()).lower() == "purecap";
@@ -386,8 +387,9 @@ FreeBSD::FreeBSD(const Driver &D, const llvm::Triple &Triple,
        Triple.getArch() == llvm::Triple::ppc) &&
       D.getVFS().exists(getDriver().SysRoot + "/usr/lib32/crt1.o"))
     getFilePaths().push_back(getDriver().SysRoot + "/usr/lib32");
-  else if (Triple.getArch() == llvm::Triple::cheri &&
-        tools::mips::hasMipsAbiArg(Args, "purecap"))
+  else if ((Triple.getArch() == llvm::Triple::cheri ||
+            Triple.getArch() == llvm::Triple::mips64) &&
+           tools::mips::hasMipsAbiArg(Args, "purecap"))
     getFilePaths().push_back(getDriver().SysRoot + "/usr/libcheri");
   else
     getFilePaths().push_back(getDriver().SysRoot + "/usr/lib");
