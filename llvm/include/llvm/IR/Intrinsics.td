@@ -462,10 +462,10 @@ def int_maxnum : Intrinsic<[llvm_anyfloat_ty],
 >;
 
 // NOTE: these are internal interfaces.
-def int_setjmp     : Intrinsic<[llvm_i32_ty],  [llvm_ptr_ty]>;
-def int_longjmp    : Intrinsic<[], [llvm_ptr_ty, llvm_i32_ty], [IntrNoReturn]>;
-def int_sigsetjmp  : Intrinsic<[llvm_i32_ty] , [llvm_ptr_ty, llvm_i32_ty]>;
-def int_siglongjmp : Intrinsic<[], [llvm_ptr_ty, llvm_i32_ty], [IntrNoReturn]>;
+def int_setjmp     : Intrinsic<[llvm_i32_ty],  [llvm_anyptr_ty]>;
+def int_longjmp    : Intrinsic<[], [llvm_anyptr_ty, llvm_i32_ty], [IntrNoReturn]>;
+def int_sigsetjmp  : Intrinsic<[llvm_i32_ty] , [llvm_anyptr_ty, llvm_i32_ty]>;
+def int_siglongjmp : Intrinsic<[], [llvm_anyptr_ty, llvm_i32_ty], [IntrNoReturn]>;
 
 // Internal interface for object size checking
 def int_objectsize : Intrinsic<[llvm_anyint_ty],
