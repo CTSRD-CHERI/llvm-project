@@ -379,9 +379,9 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &Location,
               utohexstr(TargetSym->getVA(0)) + ": " +
               verboseToString<ELFT>(TargetSym));
       }
-#endif
       return 0;
     }
+#endif
     bool WarnAboutUnknownSize = true;
     // currently clang doesn't emit the necessary symbol information for local
     // string constants such as: struct config_opt opts[] = { { ..., "foo" },
