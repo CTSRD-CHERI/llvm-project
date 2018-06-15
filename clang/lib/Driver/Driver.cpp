@@ -36,6 +36,7 @@
 #include "ToolChains/NetBSD.h"
 #include "ToolChains/OpenBSD.h"
 #include "ToolChains/PS4CPU.h"
+#include "ToolChains/RTEMS.h"
 #include "ToolChains/Solaris.h"
 #include "ToolChains/TCE.h"
 #include "ToolChains/WebAssembly.h"
@@ -4092,6 +4093,7 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
                                       const llvm::Triple &Target) const {
 
   auto &TC = ToolChains[Target.str()];
+  // FIXME: handle RTEMS here
   if (!TC) {
     switch (Target.getOS()) {
     case llvm::Triple::Haiku:
@@ -4183,6 +4185,10 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
       break;
     case llvm::Triple::Contiki:
       TC = llvm::make_unique<toolchains::Contiki>(*this, Target, Args);
+      break;
+    case llvm::Triple::RTEMS:
+      // FIXME: This will probably break the x86 rtems build but should work for MIPS/CHERI
+      TC = llvm::make_unique<toolchains::RTEMS>(*this, Target, Args);
       break;
     default:
       // Of these targets, Hexagon is the only one that might have
