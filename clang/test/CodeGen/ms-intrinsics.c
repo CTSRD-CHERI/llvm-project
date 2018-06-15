@@ -48,7 +48,7 @@ void *test_ReturnAddress() {
   return _ReturnAddress();
 }
 // CHECK-LABEL: define{{.*}}i8* @test_ReturnAddress()
-// CHECK: = tail call i8* @llvm.returnaddress(i32 0)
+// CHECK: = tail call i8* @llvm.returnaddress.p0i8(i32 0)
 // CHECK: ret i8*
 
 #if defined(__i386__) || defined(__x86_64__)
