@@ -245,6 +245,9 @@ def internal_debug_Group :
 
 def cheri_Group : OptionGroup<"<CHERI specific options>">, HelpText<"CHERI OPTIONS">;
 
+// HACK for rtems:
+def q_rtems : Flag<["-"], "qrtems">, Flags<[DriverOption]>, Group<cheri_Group>,
+  HelpText<"Hack for RTEMS to use start.o instead of crt0.o">;
 
 def cheri_linker : Flag<["-"], "cheri-linker">, Flags<[CC1Option]>, Group<cheri_Group>,
   HelpText<"Assume the existence of a CHERI-aware linker">;
