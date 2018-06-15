@@ -1513,6 +1513,7 @@ Value *ScalarExprEmitter::VisitArraySubscriptExpr(ArraySubscriptExpr *E) {
   Value *Idx  = Visit(E->getIdx());
   QualType IdxTy = E->getIdx()->getType();
 
+  // FIXME: should look at this
   if (CGF.SanOpts.has(SanitizerKind::ArrayBounds))
     CGF.EmitBoundsCheck(E, E->getBase(), Idx, IdxTy, /*Accessed*/true);
 
@@ -2999,6 +3000,8 @@ Value *ScalarExprEmitter::EmitOverflowCheckedBinOp(const BinOpInfo &Ops) {
 static Value *emitPointerArithmetic(CodeGenFunction &CGF,
                                     const BinOpInfo &op,
                                     bool isSubtraction) {
+  // FIXME: subobject-bounds
+
   // Must have binary (not unary) expr here.  Unary pointer
   // increment/decrement doesn't use this path.
   const BinaryOperator *expr = cast<BinaryOperator>(op.E);

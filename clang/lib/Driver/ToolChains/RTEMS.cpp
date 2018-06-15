@@ -97,8 +97,10 @@ void rtems::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
     // Add the rtems libns:
-    CmdArgs.push_back("-lrtemsbsp");
-    CmdArgs.push_back("-lrtemscpu");
+    if (Args.hasArg(options::OPT_q_rtems)) {
+      CmdArgs.push_back("-lrtemsbsp");
+      CmdArgs.push_back("-lrtemscpu");
+    }
     if (D.CCCIsCXX()) {
       if (ToolChain.ShouldLinkCXXStdlib(Args))
         ToolChain.AddCXXStdlibLibArgs(Args, CmdArgs);

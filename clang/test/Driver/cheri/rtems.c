@@ -17,7 +17,6 @@
 // CHECK-NOT: crti.o
 // CHECK-NOT: crtbegin.o
 // CHECK: "-L[[SYSROOT]]{{/|\\\\}}lib"
-// CHECK: "-lrtemsbsp" "-lrtemscpu"
 // CHECK-X86_64: "[[SYSROOT]]{{/|\\\\}}lib{{[/\\]}}libclang_rt.builtins-x86_64.a"
 // CHECK-AARCH64: "[[SYSROOT]]{{/|\\\\}}lib{{[/\\]}}libclang_rt.builtins-aarch64.a"
 // CHECK: "-lc"
@@ -50,5 +49,8 @@
 
 // QTREMS: ld.lld
 // QRTEMS: start.o
+// QRTEMS: "-lrtemsbsp" "-lrtemscpu"
 // NO-QTREMS: ld.lld
 // NO-QTREMS: crt0.o
+// NO-QTREMS-NOT: "-lrtemsbsp"
+// NO-QTREMS-NOT: "-lrtemscpu"
