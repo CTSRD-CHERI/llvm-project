@@ -274,7 +274,7 @@ void MipsSEDAGToDAGISel::initCapGlobalBaseReg(MachineFunction &MF) {
 
   if(GlobalCapReg == 0) {
     // Load from local
-    BuildMI(MBB, I, DL, TII.get(Mips::LOADCAP), CapGlobalBaseReg).addReg(ABI.GetNullPtr()).addImm((32*5))
+    BuildMI(MBB, I, DL, TII.get(Mips::LOADCAP), CapGlobalBaseReg).addReg(ABI.GetNullPtr()).addImm((ABI.GetTABILayout()->GetThreadLocalOffset_CGP()))
         .addReg(CapLocalBaseReg);
   } else {
     // Is live in
