@@ -4238,6 +4238,18 @@ ARMAsmParser::parseMSRMaskOperand(OperandVector &Operands) {
   MCAsmParser &Parser = getParser();
   SMLoc S = Parser.getTok().getLoc();
   const AsmToken &Tok = Parser.getTok();
+
+  if (Tok.is(AsmToken::Integer)) {
+    int64_t Val = Tok.getIntVal();
+    if (Val > 255 || Val < 0) {
+      return MatchOperand_NoMatch;
+    }
+    unsigned SYSmvalue = Val & 0xFF;
+    Parser.Lex(); 
+    Operands.push_back(ARMOperand::CreateMSRMask(SYSmvalue, S));
+    return MatchOperand_Success;
+  }
+
   if (!Tok.is(AsmToken::Identifier))
     return MatchOperand_NoMatch;
   StringRef Mask = Tok.getString();
@@ -6629,6 +6641,24 @@ bool ARMAsmParser::validateInstruction(MCInst &Inst,
       return Error(Operands[1]->getStartLoc(), "instruction 'csdb' is not "
                                                "predicable, but condition "
                                                "code specified");
+    break;
+  }
+  case ARM::VMOVRRS: {
+    // Source registers must be sequential.
+    const unsigned Sm = MRI->getEncodingValue(Inst.getOperand(2).getReg());
+    const unsigned Sm1 = MRI->getEncodingValue(Inst.getOperand(3).getReg());
+    if (Sm1 != Sm + 1)
+      return Error(Operands[5]->getStartLoc(),
+                   "source operands must be sequential");
+    break;
+  }
+  case ARM::VMOVSRR: {
+    // Destination registers must be sequential.
+    const unsigned Sm = MRI->getEncodingValue(Inst.getOperand(0).getReg());
+    const unsigned Sm1 = MRI->getEncodingValue(Inst.getOperand(1).getReg());
+    if (Sm1 != Sm + 1)
+      return Error(Operands[3]->getStartLoc(),
+                   "destination operands must be sequential");
     break;
   }
   }

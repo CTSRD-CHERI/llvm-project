@@ -93,8 +93,7 @@ private:
   void layoutMemory();
   void createHeader();
   void createSections();
-  SyntheticSection *createSyntheticSection(uint32_t Type,
-                                           StringRef Name = "");
+  SyntheticSection *createSyntheticSection(uint32_t Type, StringRef Name = "");
 
   // Builtin sections
   void createTypeSection();
@@ -137,7 +136,6 @@ private:
   std::vector<OutputSection *> OutputSections;
 
   std::unique_ptr<FileOutputBuffer> Buffer;
-  std::string CtorFunctionBody;
 
   std::vector<OutputSegment *> Segments;
   llvm::SmallDenseMap<StringRef, OutputSegment *> SegmentMap;
@@ -473,8 +471,11 @@ void Writer::createLinkingSection() {
     Sub.writeTo(OS);
   }
 
-  struct ComdatEntry { unsigned Kind; uint32_t Index; };
-  std::map<StringRef,std::vector<ComdatEntry>> Comdats;
+  struct ComdatEntry {
+    unsigned Kind;
+    uint32_t Index;
+  };
+  std::map<StringRef, std::vector<ComdatEntry>> Comdats;
 
   for (const InputFunction *F : InputFunctions) {
     StringRef Comdat = F->getComdat();
@@ -633,8 +634,8 @@ void Writer::createSections() {
 
   // Custom sections
   if (Config->Relocatable) {
-    createRelocSections();
     createLinkingSection();
+    createRelocSections();
   }
   if (!Config->StripDebug && !Config->StripAll)
     createNameSection();
@@ -679,14 +680,8 @@ void Writer::calculateExports() {
 
     DEBUG(dbgs() << "exporting sym: " << Sym->getName() << "\n");
 
-    if (auto *D = dyn_cast<DefinedData>(Sym)) {
-      // TODO Remove this check here; for non-relocatable output we actually
-      // used only to create fake-global exports for the synthetic symbols.  Fix
-      // this in a future commit
-      if (Sym != WasmSym::DataEnd && Sym != WasmSym::HeapBase)
-        continue;
+    if (auto *D = dyn_cast<DefinedData>(Sym))
       DefinedFakeGlobals.emplace_back(D);
-    }
     ExportedSymbols.emplace_back(Sym);
   }
 }
@@ -701,8 +696,9 @@ void Writer::assignSymtab() {
     for (Symbol *Sym : File->getSymbols()) {
       if (Sym->getFile() != File)
         continue;
-      if (!Sym->isLive())
-        return;
+      // (Since this is relocatable output, GC is not performed so symbols must
+      // be live.)
+      assert(Sym->isLive());
       Sym->setOutputSymbolIndex(SymbolIndex++);
       SymtabEntries.emplace_back(Sym);
     }
@@ -857,12 +853,11 @@ static const int OPCODE_END = 0xb;
 // in input object.
 void Writer::createCtorFunction() {
   uint32_t FunctionIndex = NumImportedFunctions + InputFunctions.size();
-  WasmSym::CallCtors->setOutputIndex(FunctionIndex);
 
-  // First write the body bytes to a string.
-  std::string FunctionBody;
+  // First write the body's contents to a string.
+  std::string BodyContent;
   {
-    raw_string_ostream OS(FunctionBody);
+    raw_string_ostream OS(BodyContent);
     writeUleb128(OS, 0, "num locals");
     for (const WasmInitEntry &F : InitFunctions) {
       writeU8(OS, OPCODE_CALL, "CALL");
@@ -872,14 +867,17 @@ void Writer::createCtorFunction() {
   }
 
   // Once we know the size of the body we can create the final function body
-  raw_string_ostream OS(CtorFunctionBody);
-  writeUleb128(OS, FunctionBody.size(), "function size");
-  OS.flush();
-  CtorFunctionBody += FunctionBody;
+  std::string FunctionBody;
+  {
+    raw_string_ostream OS(FunctionBody);
+    writeUleb128(OS, BodyContent.size(), "function size");
+    OS << BodyContent;
+  }
 
   const WasmSignature *Sig = WasmSym::CallCtors->getFunctionType();
-  SyntheticFunction *F = make<SyntheticFunction>(
-      *Sig, toArrayRef(CtorFunctionBody), WasmSym::CallCtors->getName());
+  SyntheticFunction *F =
+      make<SyntheticFunction>(*Sig, toArrayRef(Saver.save(FunctionBody)),
+                              WasmSym::CallCtors->getName());
 
   F->setOutputIndex(FunctionIndex);
   F->Live = true;
@@ -893,9 +891,12 @@ void Writer::createCtorFunction() {
 void Writer::calculateInitFunctions() {
   for (ObjFile *File : Symtab->ObjectFiles) {
     const WasmLinkingData &L = File->getWasmObj()->linkingData();
-    for (const WasmInitFunc &F : L.InitFunctions)
-      InitFunctions.emplace_back(
-          WasmInitEntry{File->getFunctionSymbol(F.Symbol), F.Priority});
+    for (const WasmInitFunc &F : L.InitFunctions) {
+      FunctionSymbol *Sym = File->getFunctionSymbol(F.Symbol);
+      if (*Sym->getFunctionType() != WasmSignature{{}, WASM_TYPE_NORESULT})
+        error("invalid signature for init func: " + toString(*Sym));
+      InitFunctions.emplace_back(WasmInitEntry{Sym, F.Priority});
+    }
   }
 
   // Sort in order of priority (lowest first) so that they are called

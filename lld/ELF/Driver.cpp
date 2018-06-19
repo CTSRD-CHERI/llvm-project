@@ -1072,6 +1072,12 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   for (StringRef S : Config->Undefined)
     Symtab->fetchIfLazy<ELFT>(S);
 
+  // Handle the --just-symbols option. This may add absolute symbols
+  // to the symbol table.
+  for (auto *Arg : Args.filtered(OPT_just_symbols))
+    if (Optional<MemoryBufferRef> MB = readFile(Arg->getValue()))
+      readJustSymbolsFile<ELFT>(*MB);
+
   // If an entry symbol is in a static archive, pull out that file now
   // to complete the symbol table. After this, no new names except a
   // few linker-synthesized ones will be added to the symbol table.
@@ -1080,6 +1086,10 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   // Return if there were name resolution errors.
   if (errorCount())
     return;
+
+  // Now when we read all script files, we want to finalize order of linker
+  // script commands, which can be not yet final because of INSERT commands.
+  Script->processInsertCommands();
 
   // We want to declare linker script's symbols early,
   // so that we can version them.

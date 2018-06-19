@@ -47,22 +47,17 @@ def get_line2spell_and_mangled(args, clang_args):
   ret = {}
   with tempfile.NamedTemporaryFile() as f:
     # TODO Make c-index-test print mangled names without circumventing through precompiled headers
-    c_index_cmd = [args.c_index_test, '-write-pch', f.name, *clang_args]
-    if args.verbose:
-      print("Running", c_index_cmd)
-    status = subprocess.run(c_index_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    status = subprocess.run([args.c_index_test, '-write-pch', f.name, *clang_args],
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if status.returncode:
       sys.stderr.write(status.stdout.decode())
       sys.exit(2)
     output = subprocess.check_output([args.c_index_test,
-        '-test-print-mangle', f.name, *clang_args])
+        '-test-print-mangle', f.name])
     if sys.version_info[0] > 2:
       output = output.decode()
 
-  # FIXME: mangling won't work for C++ and CheriABI for some reason..
-
-  # ignore flags such as (noexcept) between (Definition) and [mangled=
-  RE = re.compile(r'^FunctionDecl=(\w+):(\d+):\d+ \(Definition\).* \[mangled=([^]]+)\]')
+  RE = re.compile(r'^FunctionDecl=(\w+):(\d+):\d+ \(Definition\) \[mangled=([^]]+)\]')
   for line in output.splitlines():
     m = RE.match(line)
     if not m: continue
@@ -237,7 +232,8 @@ def main():
             if added:
               output_lines.append('//')
             added.add(mangled)
-            common.add_ir_checks(output_lines, '//', run_list, func_dict, mangled)
+            # This is also used for adding IR CHECK lines.
+            asm.add_asm_checks(output_lines, '//', run_list, func_dict, mangled)
       output_lines.append(line.rstrip('\n'))
 
     # Update the test file.

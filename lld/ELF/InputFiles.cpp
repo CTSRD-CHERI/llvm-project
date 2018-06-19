@@ -126,6 +126,8 @@ template <class ELFT> void ObjFile<ELFT>::initializeDwarf() {
   // CU (object file), so offset is always 0.
   const DWARFDebugLine::LineTable *LT =
       DwarfLine->getOrParseLineTable(LineData, 0, Dwarf, nullptr);
+  if (!LT)
+    return;
 
   // Return if there is no debug information about CU available.
   if (!Dwarf.getNumCompileUnits())
@@ -429,8 +431,15 @@ void ObjFile<ELFT>::initializeSections(
       if (Sec.sh_link >= this->Sections.size())
         fatal(toString(this) +
               ": invalid sh_link index: " + Twine(Sec.sh_link));
-      this->Sections[Sec.sh_link]->DependentSections.push_back(
-          cast<InputSection>(this->Sections[I]));
+
+      InputSectionBase *LinkSec = this->Sections[Sec.sh_link];
+      InputSection *IS = cast<InputSection>(this->Sections[I]);
+      LinkSec->DependentSections.push_back(IS);
+      if (!isa<InputSection>(LinkSec))
+        error("a section " + IS->Name +
+              " with SHF_LINK_ORDER should not refer a non-regular "
+              "section: " +
+              toString(LinkSec));
     }
   }
 }
@@ -1117,61 +1126,87 @@ InputFile *LazyObjFile::fetch() {
 }
 
 template <class ELFT> void LazyObjFile::parse() {
-  for (StringRef Sym : getSymbolNames())
-    Symtab->addLazyObject<ELFT>(Sym, *this);
+  // A lazy object file wraps either a bitcode file or an ELF file.
+  if (isBitcode(this->MB)) {
+    std::unique_ptr<lto::InputFile> Obj =
+        CHECK(lto::InputFile::create(this->MB), this);
+    for (const lto::InputFile::Symbol &Sym : Obj->symbols())
+      if (!Sym.isUndefined())
+        Symtab->addLazyObject<ELFT>(Saver.save(Sym.getName()), *this);
+    return;
+  }
+
+  switch (getELFKind(this->MB)) {
+  case ELF32LEKind:
+    addElfSymbols<ELF32LE>();
+    return;
+  case ELF32BEKind:
+    addElfSymbols<ELF32BE>();
+    return;
+  case ELF64LEKind:
+    addElfSymbols<ELF64LE>();
+    return;
+  case ELF64BEKind:
+    addElfSymbols<ELF64BE>();
+    return;
+  default:
+    llvm_unreachable("getELFKind");
+  }
 }
 
-template <class ELFT> std::vector<StringRef> LazyObjFile::getElfSymbols() {
+template <class ELFT> void LazyObjFile::addElfSymbols() {
+  ELFFile<ELFT> Obj = check(ELFFile<ELFT>::create(MB.getBuffer()));
+  ArrayRef<typename ELFT::Shdr> Sections = CHECK(Obj.sections(), this);
+
+  for (const typename ELFT::Shdr &Sec : Sections) {
+    if (Sec.sh_type != SHT_SYMTAB)
+      continue;
+
+    typename ELFT::SymRange Syms = CHECK(Obj.symbols(&Sec), this);
+    uint32_t FirstNonLocal = Sec.sh_info;
+    StringRef StringTable =
+        CHECK(Obj.getStringTableForSymtab(Sec, Sections), this);
+
+    for (const typename ELFT::Sym &Sym : Syms.slice(FirstNonLocal))
+      if (Sym.st_shndx != SHN_UNDEF)
+        Symtab->addLazyObject<ELFT>(CHECK(Sym.getName(StringTable), this),
+                                    *this);
+    return;
+  }
+}
+
+// This is for --just-symbols.
+//
+// This option allows you to link your output against other existing
+// program, so that if you load both your program and the other program
+// into memory, your output can use program's symbols.
+//
+// What we are doing here is to read defined symbols from a given ELF
+// file and add them as absolute symbols.
+template <class ELFT> void elf::readJustSymbolsFile(MemoryBufferRef MB) {
   typedef typename ELFT::Shdr Elf_Shdr;
   typedef typename ELFT::Sym Elf_Sym;
   typedef typename ELFT::SymRange Elf_Sym_Range;
 
-  ELFFile<ELFT> Obj = check(ELFFile<ELFT>::create(this->MB.getBuffer()));
-  ArrayRef<Elf_Shdr> Sections = CHECK(Obj.sections(), this);
+  StringRef ObjName = MB.getBufferIdentifier();
+  ELFFile<ELFT> Obj = check(ELFFile<ELFT>::create(MB.getBuffer()));
+  ArrayRef<Elf_Shdr> Sections = CHECK(Obj.sections(), ObjName);
+
   for (const Elf_Shdr &Sec : Sections) {
     if (Sec.sh_type != SHT_SYMTAB)
       continue;
 
-    Elf_Sym_Range Syms = CHECK(Obj.symbols(&Sec), this);
+    Elf_Sym_Range Syms = CHECK(Obj.symbols(&Sec), ObjName);
     uint32_t FirstNonLocal = Sec.sh_info;
     StringRef StringTable =
-        CHECK(Obj.getStringTableForSymtab(Sec, Sections), this);
-    std::vector<StringRef> V;
+        CHECK(Obj.getStringTableForSymtab(Sec, Sections), ObjName);
 
     for (const Elf_Sym &Sym : Syms.slice(FirstNonLocal))
       if (Sym.st_shndx != SHN_UNDEF)
-        V.push_back(CHECK(Sym.getName(StringTable), this));
-    return V;
-  }
-  return {};
-}
-
-std::vector<StringRef> LazyObjFile::getBitcodeSymbols() {
-  std::unique_ptr<lto::InputFile> Obj =
-      CHECK(lto::InputFile::create(this->MB), this);
-  std::vector<StringRef> V;
-  for (const lto::InputFile::Symbol &Sym : Obj->symbols())
-    if (!Sym.isUndefined())
-      V.push_back(Saver.save(Sym.getName()));
-  return V;
-}
-
-// Returns a vector of globally-visible defined symbol names.
-std::vector<StringRef> LazyObjFile::getSymbolNames() {
-  if (isBitcode(this->MB))
-    return getBitcodeSymbols();
-
-  switch (getELFKind(this->MB)) {
-  case ELF32LEKind:
-    return getElfSymbols<ELF32LE>();
-  case ELF32BEKind:
-    return getElfSymbols<ELF32BE>();
-  case ELF64LEKind:
-    return getElfSymbols<ELF64LE>();
-  case ELF64BEKind:
-    return getElfSymbols<ELF64BE>();
-  default:
-    llvm_unreachable("getELFKind");
+        Symtab->addRegular(CHECK(Sym.getName(StringTable), ObjName),
+                           Sym.st_other, Sym.getType(), Sym.st_value,
+                           Sym.st_size, Sym.getBinding(), nullptr, nullptr);
+    return;
   }
 }
 
@@ -1204,3 +1239,8 @@ template class elf::SharedFile<ELF32LE>;
 template class elf::SharedFile<ELF32BE>;
 template class elf::SharedFile<ELF64LE>;
 template class elf::SharedFile<ELF64BE>;
+
+template void elf::readJustSymbolsFile<ELF32LE>(MemoryBufferRef);
+template void elf::readJustSymbolsFile<ELF32BE>(MemoryBufferRef);
+template void elf::readJustSymbolsFile<ELF64LE>(MemoryBufferRef);
+template void elf::readJustSymbolsFile<ELF64BE>(MemoryBufferRef);

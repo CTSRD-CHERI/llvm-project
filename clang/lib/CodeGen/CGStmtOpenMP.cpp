@@ -120,18 +120,18 @@ public:
 /// of used expression from loop statement.
 class OMPLoopScope : public CodeGenFunction::RunCleanupsScope {
   void emitPreInitStmt(CodeGenFunction &CGF, const OMPLoopDirective &S) {
-    CodeGenFunction::OMPPrivateScope PreCondScope(CGF);
+    CodeGenFunction::OMPMapVars PreCondVars;
     for (auto *E : S.counters()) {
       const auto *VD = cast<VarDecl>(cast<DeclRefExpr>(E)->getDecl());
-      (void)PreCondScope.addPrivate(VD, [&CGF, VD]() {
-        return CGF.CreateMemTemp(VD->getType().getNonReferenceType());
-      });
+      (void)PreCondVars.setVarAddr(
+          CGF, VD, CGF.CreateMemTemp(VD->getType().getNonReferenceType()));
     }
-    (void)PreCondScope.Privatize();
+    (void)PreCondVars.apply(CGF);
     if (auto *PreInits = cast_or_null<DeclStmt>(S.getPreInits())) {
       for (const auto *I : PreInits->decls())
         CGF.EmitVarDecl(cast<VarDecl>(*I));
     }
+    PreCondVars.restore(CGF);
   }
 
 public:
@@ -1475,24 +1475,24 @@ void CodeGenFunction::EmitOMPPrivateLoopCounters(
   for (auto *E : S.counters()) {
     auto *VD = cast<VarDecl>(cast<DeclRefExpr>(E)->getDecl());
     auto *PrivateVD = cast<VarDecl>(cast<DeclRefExpr>(*I)->getDecl());
-    (void)LoopScope.addPrivate(VD, [&]() -> Address {
-      // Emit var without initialization.
-      if (!LocalDeclMap.count(PrivateVD)) {
-        auto VarEmission = EmitAutoVarAlloca(*PrivateVD);
-        EmitAutoVarCleanups(VarEmission);
-      }
-      DeclRefExpr DRE(const_cast<VarDecl *>(PrivateVD),
-                      /*RefersToEnclosingVariableOrCapture=*/false,
-                      (*I)->getType(), VK_LValue, (*I)->getExprLoc());
-      return EmitLValue(&DRE).getAddress();
+    // Emit var without initialization.
+    auto VarEmission = EmitAutoVarAlloca(*PrivateVD);
+    EmitAutoVarCleanups(VarEmission);
+    LocalDeclMap.erase(PrivateVD);
+    (void)LoopScope.addPrivate(VD, [&VarEmission]() {
+      return VarEmission.getAllocatedAddress();
     });
     if (LocalDeclMap.count(VD) || CapturedStmtInfo->lookup(VD) ||
         VD->hasGlobalStorage()) {
-      (void)LoopScope.addPrivate(PrivateVD, [&]() -> Address {
+      (void)LoopScope.addPrivate(PrivateVD, [this, VD, E]() {
         DeclRefExpr DRE(const_cast<VarDecl *>(VD),
                         LocalDeclMap.count(VD) || CapturedStmtInfo->lookup(VD),
                         E->getType(), VK_LValue, E->getExprLoc());
         return EmitLValue(&DRE).getAddress();
+      });
+    } else {
+      (void)LoopScope.addPrivate(PrivateVD, [&VarEmission]() {
+        return VarEmission.getAllocatedAddress();
       });
     }
     ++I;
@@ -1611,9 +1611,9 @@ void CodeGenFunction::EmitOMPSimdFinal(
         }
       }
       Address OrigAddr = Address::invalid();
-      if (CED)
+      if (CED) {
         OrigAddr = EmitLValue(CED->getInit()->IgnoreImpCasts()).getAddress();
-      else {
+      } else {
         DeclRefExpr DRE(const_cast<VarDecl *>(PrivateVD),
                         /*RefersToEnclosingVariableOrCapture=*/false,
                         (*IPC)->getType(), VK_LValue, (*IPC)->getExprLoc());
@@ -2886,6 +2886,11 @@ void CodeGenFunction::EmitOMPTaskBasedDirective(
       for (unsigned Cnt = 0, E = Data.ReductionVars.size(); Cnt < E; ++Cnt) {
         RedCG.emitSharedLValue(CGF, Cnt);
         RedCG.emitAggregateType(CGF, Cnt);
+        // FIXME: This must removed once the runtime library is fixed.
+        // Emit required threadprivate variables for
+        // initilizer/combiner/finalizer.
+        CGF.CGM.getOpenMPRuntime().emitTaskReductionFixups(CGF, S.getLocStart(),
+                                                           RedCG, Cnt);
         Address Replacement = CGF.CGM.getOpenMPRuntime().getTaskReductionItem(
             CGF, S.getLocStart(), ReductionsPtr, RedCG.getSharedLValue(Cnt));
         Replacement =
@@ -2898,11 +2903,6 @@ void CodeGenFunction::EmitOMPTaskBasedDirective(
         Replacement = RedCG.adjustPrivateAddress(CGF, Cnt, Replacement);
         Scope.addPrivate(RedCG.getBaseDecl(Cnt),
                          [Replacement]() { return Replacement; });
-        // FIXME: This must removed once the runtime library is fixed.
-        // Emit required threadprivate variables for
-        // initilizer/combiner/finalizer.
-        CGF.CGM.getOpenMPRuntime().emitTaskReductionFixups(CGF, S.getLocStart(),
-                                                           RedCG, Cnt);
       }
     }
     // Privatize all private variables except for in_reduction items.
@@ -2935,6 +2935,11 @@ void CodeGenFunction::EmitOMPTaskBasedDirective(
         RedCG.emitAggregateType(CGF, Cnt);
         // The taskgroup descriptor variable is always implicit firstprivate and
         // privatized already during procoessing of the firstprivates.
+        // FIXME: This must removed once the runtime library is fixed.
+        // Emit required threadprivate variables for
+        // initilizer/combiner/finalizer.
+        CGF.CGM.getOpenMPRuntime().emitTaskReductionFixups(CGF, S.getLocStart(),
+                                                           RedCG, Cnt);
         llvm::Value *ReductionsPtr =
             CGF.EmitLoadOfScalar(CGF.EmitLValue(TaskgroupDescriptors[Cnt]),
                                  TaskgroupDescriptors[Cnt]->getExprLoc());
@@ -2949,11 +2954,6 @@ void CodeGenFunction::EmitOMPTaskBasedDirective(
         Replacement = RedCG.adjustPrivateAddress(CGF, Cnt, Replacement);
         InRedScope.addPrivate(RedCG.getBaseDecl(Cnt),
                               [Replacement]() { return Replacement; });
-        // FIXME: This must removed once the runtime library is fixed.
-        // Emit required threadprivate variables for
-        // initilizer/combiner/finalizer.
-        CGF.CGM.getOpenMPRuntime().emitTaskReductionFixups(CGF, S.getLocStart(),
-                                                           RedCG, Cnt);
       }
     }
     (void)InRedScope.Privatize();

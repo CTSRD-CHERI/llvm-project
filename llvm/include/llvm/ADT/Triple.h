@@ -203,7 +203,6 @@ public:
     MSVC,
     Itanium,
     Cygnus,
-    AMDOpenCL,
     CoreCLR,
     OpenCL,
     Simulator,  // Simulator variants of other systems, e.g., Apple's iOS

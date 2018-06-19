@@ -2843,8 +2843,10 @@ AST_MATCHER_P_OVERLOAD(CallExpr, callee, internal::Matcher<Decl>, InnerMatcher,
 AST_POLYMORPHIC_MATCHER_P_OVERLOAD(
     hasType, AST_POLYMORPHIC_SUPPORTED_TYPES(Expr, TypedefNameDecl, ValueDecl),
     internal::Matcher<QualType>, InnerMatcher, 0) {
-  return InnerMatcher.matches(internal::getUnderlyingType(Node),
-                              Finder, Builder);
+  QualType QT = internal::getUnderlyingType(Node);
+  if (!QT.isNull())
+    return InnerMatcher.matches(QT, Finder, Builder);
+  return false;
 }
 
 /// \brief Overloaded to match the declaration of the expression's or value
@@ -3410,7 +3412,7 @@ AST_MATCHER(CXXCtorInitializer, isMemberInitializer) {
 }
 
 /// \brief Matches any argument of a call expression or a constructor call
-/// expression.
+/// expression, or an ObjC-message-send expression.
 ///
 /// Given
 /// \code
@@ -3420,9 +3422,18 @@ AST_MATCHER(CXXCtorInitializer, isMemberInitializer) {
 ///   matches x(1, y, 42)
 /// with hasAnyArgument(...)
 ///   matching y
+///
+/// For ObjectiveC, given
+/// \code
+///   @interface I - (void) f:(int) y; @end
+///   void foo(I *i) { [i f:12]; }
+/// \endcode
+/// objcMessageExpr(hasAnyArgument(integerLiteral(equals(12))))
+///   matches [i f:12]
 AST_POLYMORPHIC_MATCHER_P(hasAnyArgument,
                           AST_POLYMORPHIC_SUPPORTED_TYPES(CallExpr,
-                                                          CXXConstructExpr),
+                                                          CXXConstructExpr,
+                                                          ObjCMessageExpr),
                           internal::Matcher<Expr>, InnerMatcher) {
   for (const Expr *Arg : Node.arguments()) {
     BoundNodesTreeBuilder Result(*Builder);

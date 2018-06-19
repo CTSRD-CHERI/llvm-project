@@ -23,7 +23,8 @@
 using namespace llvm;
 using namespace LegalizeActions;
 
-AMDGPULegalizerInfo::AMDGPULegalizerInfo() {
+AMDGPULegalizerInfo::AMDGPULegalizerInfo(const SISubtarget &ST,
+                                         const GCNTargetMachine &TM) {
   using namespace TargetOpcode;
 
   const LLT S1= LLT::scalar(1);
@@ -105,6 +106,18 @@ AMDGPULegalizerInfo::AMDGPULegalizerInfo() {
   setAction({G_GEP, S64}, Legal);
   setAction({G_LOAD, 1, S64}, Legal);
   setAction({G_STORE, 1, S64}, Legal);
+
+  // FIXME: Doesn't handle extract of illegal sizes.
+  getActionDefinitionsBuilder(G_EXTRACT)
+    .unsupportedIf([=](const LegalityQuery &Query) {
+        return Query.Types[0].getSizeInBits() >= Query.Types[1].getSizeInBits();
+      })
+    .legalIf([=](const LegalityQuery &Query) {
+        const LLT &Ty0 = Query.Types[0];
+        const LLT &Ty1 = Query.Types[1];
+        return (Ty0.getSizeInBits() % 32 == 0) &&
+               (Ty1.getSizeInBits() % 32 == 0);
+      });
 
   computeTables();
 }

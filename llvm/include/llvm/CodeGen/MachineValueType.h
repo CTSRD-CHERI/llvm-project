@@ -192,17 +192,19 @@ namespace llvm {
                                // unspecified type.  The register class
                                // will be determined by the opcode.
 
-      iFATPTR64      =  113,   // 64-bit fat pointer type
-      iFATPTR128     =  114,   // 128-bit fat pointer type
-      iFATPTR256     =  115,   // 256-bit fat pointer type
-      iFATPTR512     =  116,   // 512-bit fat pointer type
-      iFATPTRAny     =  117,   // Generic fat pointer type (must be legalised
+      ExceptRef      = 113,    // WebAssembly's except_ref type
+
+      iFATPTR64      =  114,   // 64-bit fat pointer type
+      iFATPTR128     =  115,   // 128-bit fat pointer type
+      iFATPTR256     =  116,   // 256-bit fat pointer type
+      iFATPTR512     =  117,   // 512-bit fat pointer type
+      iFATPTRAny     =  118,   // Generic fat pointer type (must be legalised
                                // to a sized  version)
       FIRST_FAT_POINTER = iFATPTR64,
       LAST_FAT_POINTER = iFATPTRAny,
 
       FIRST_VALUETYPE = 1,     // This is always the beginning of the list.
-      LAST_VALUETYPE =  118,   // This always remains at the end of the list.
+      LAST_VALUETYPE =  119,   // This always remains at the end of the list.
 
       // This is the current maximum for LAST_VALUETYPE.
       // MVT::MAX_ALLOWED_VALUETYPE is used for asserts and to size bit vectors
@@ -768,6 +770,7 @@ namespace llvm {
       case v64i32:
       case v32i64:
       case nxv32i64: return 2048;
+      case ExceptRef: return 0; // opaque type
       }
     }
 

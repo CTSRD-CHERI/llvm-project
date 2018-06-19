@@ -215,6 +215,7 @@ class LinkerScript final {
   void addSymbol(SymbolAssignment *Cmd);
   void assignSymbol(SymbolAssignment *Cmd, bool InSec);
   void setDot(Expr E, const Twine &Loc, bool InSec);
+  void expandOutputSection(uint64_t Size);
 
   std::vector<InputSection *>
   computeInputSections(const InputSectionDescription *);
@@ -266,6 +267,9 @@ public:
   void processSectionCommands();
   void declareSymbols();
 
+  // Used to handle INSERT AFTER statements.
+  void processInsertCommands();
+
   // SECTIONS command list.
   std::vector<BaseCommand *> SectionCommands;
 
@@ -284,6 +288,10 @@ public:
 
   // A list of symbols referenced by the script.
   std::vector<llvm::StringRef> ReferencedSymbols;
+
+  // Used to implement INSERT AFTER. Contains commands that need
+  // to be inserted into SECTIONS commands list.
+  llvm::DenseMap<StringRef, std::vector<BaseCommand *>> InsertAfterCommands;
 };
 
 extern LinkerScript *Script;

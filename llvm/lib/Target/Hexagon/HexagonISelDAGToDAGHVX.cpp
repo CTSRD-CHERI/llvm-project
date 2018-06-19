@@ -776,6 +776,13 @@ struct ShuffleMask {
     size_t H = Mask.size()/2;
     return ShuffleMask(Mask.take_back(H));
   }
+
+  void print(raw_ostream &OS) const {
+    OS << "MinSrc:" << MinSrc << ", MaxSrc:" << MaxSrc << " {";
+    for (int M : Mask)
+      OS << ' ' << M;
+    OS << " }";
+  }
 };
 } // namespace
 
@@ -813,6 +820,7 @@ namespace llvm {
 
     void selectShuffle(SDNode *N);
     void selectRor(SDNode *N);
+    void selectVAlign(SDNode *N);
 
   private:
     void materialize(const ResultStack &Results);
@@ -1042,19 +1050,36 @@ OpRef HvxSelector::packs(ShuffleMask SM, OpRef Va, OpRef Vb,
   int VecLen = SM.Mask.size();
   MVT Ty = getSingleVT(MVT::i8);
 
-  if (SM.MaxSrc - SM.MinSrc < int(HwLen)) {
-    if (SM.MaxSrc < int(HwLen)) {
-      memcpy(NewMask.data(), SM.Mask.data(), sizeof(int)*VecLen);
-      return Va;
+  auto IsSubvector = [] (ShuffleMask M) {
+    assert(M.MinSrc >= 0 && M.MaxSrc >= 0);
+    for (int I = 0, E = M.Mask.size(); I != E; ++I) {
+      if (M.Mask[I] >= 0 && M.Mask[I]-I != M.MinSrc)
+        return false;
     }
-    if (SM.MinSrc >= int(HwLen)) {
-      for (int I = 0; I != VecLen; ++I) {
-        int M = SM.Mask[I];
-        if (M != -1)
-          M -= HwLen;
-        NewMask[I] = M;
+    return true;
+  };
+
+  if (SM.MaxSrc - SM.MinSrc < int(HwLen)) {
+    if (SM.MinSrc == 0 || SM.MinSrc == int(HwLen) || !IsSubvector(SM)) {
+      if (SM.MaxSrc < int(HwLen)) {
+        memcpy(NewMask.data(), SM.Mask.data(), sizeof(int)*VecLen);
+        return Va;
       }
-      return Vb;
+      if (SM.MinSrc >= int(HwLen)) {
+        for (int I = 0; I != VecLen; ++I) {
+          int M = SM.Mask[I];
+          if (M != -1)
+            M -= HwLen;
+          NewMask[I] = M;
+        }
+        return Vb;
+      }
+    }
+    if (SM.MaxSrc < int(HwLen)) {
+      Vb = Va;
+    } else if (SM.MinSrc > int(HwLen)) {
+      Va = Vb;
+      SM.MinSrc -= HwLen;
     }
     const SDLoc &dl(Results.InpNode);
     SDValue S = DAG.getTargetConstant(SM.MinSrc, dl, MVT::i32);
@@ -1987,12 +2012,26 @@ void HvxSelector::selectRor(SDNode *N) {
   DAG.RemoveDeadNode(N);
 }
 
+void HvxSelector::selectVAlign(SDNode *N) {
+  SDValue Vv = N->getOperand(0);
+  SDValue Vu = N->getOperand(1);
+  SDValue Rt = N->getOperand(2);
+  SDNode *NewN = DAG.getMachineNode(Hexagon::V6_valignb, SDLoc(N),
+                                    N->getValueType(0), {Vv, Vu, Rt});
+  ISel.ReplaceNode(N, NewN);
+  DAG.RemoveDeadNode(N);
+}
+
 void HexagonDAGToDAGISel::SelectHvxShuffle(SDNode *N) {
   HvxSelector(*this, *CurDAG).selectShuffle(N);
 }
 
 void HexagonDAGToDAGISel::SelectHvxRor(SDNode *N) {
   HvxSelector(*this, *CurDAG).selectRor(N);
+}
+
+void HexagonDAGToDAGISel::SelectHvxVAlign(SDNode *N) {
+  HvxSelector(*this, *CurDAG).selectVAlign(N);
 }
 
 void HexagonDAGToDAGISel::SelectV65GatherPred(SDNode *N) {

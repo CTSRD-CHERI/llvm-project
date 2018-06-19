@@ -146,11 +146,12 @@ def x86mmx : ValueType<64 , 109>;   // X86 MMX value
 def FlagVT : ValueType<0  , 110>;   // Pre-RA sched glue
 def isVoid : ValueType<0  , 111>;   // Produces no value
 def untyped: ValueType<8  , 112>;   // Produces an untyped value
-def iFATPTR64: ValueType<64, 113>;   // 256-bit fat pointer.
-def iFATPTR128: ValueType<128, 114>;   // 256-bit fat pointer.
-def iFATPTR256: ValueType<256, 115>;   // 256-bit fat pointer.
-def iFATPTR512: ValueType<512, 116>;   // 256-bit fat pointer.
-def iFATPTRAny: ValueType<0, 117>;   // 256-bit fat pointer.
+def ExceptRef: ValueType<0, 113>;   // WebAssembly's except_ref type
+def iFATPTR64: ValueType<64, 114>;   // 64-bit fat pointer.
+def iFATPTR128: ValueType<128, 115>; // 128-bit fat pointer.
+def iFATPTR256: ValueType<256, 116>; // 256-bit fat pointer.
+def iFATPTR512: ValueType<512, 117>; // 512-bit fat pointer.
+def iFATPTRAny: ValueType<0, 118>;   // Any fat pointer.
 def token  : ValueType<0  , 248>;   // TokenTy
 def MetadataVT: ValueType<0, 249>;  // Metadata
 

@@ -1426,6 +1426,18 @@ BlockScopeInfo *Sema::getCurBlock() {
   return CurBSI;
 }
 
+FunctionScopeInfo *Sema::getEnclosingFunction() const {
+  if (FunctionScopes.empty())
+    return nullptr;
+
+  for (int e = FunctionScopes.size() - 1; e >= 0; --e) {
+    if (isa<sema::BlockScopeInfo>(FunctionScopes[e]))
+      continue;
+    return FunctionScopes[e];
+  }
+  return nullptr;
+}
+
 LambdaScopeInfo *Sema::getCurLambda(bool IgnoreNonLambdaCapturingScope) {
   if (FunctionScopes.empty())
     return nullptr;
@@ -1463,8 +1475,7 @@ void Sema::ActOnComment(SourceRange Comment) {
   if (!LangOpts.RetainCommentsFromSystemHeaders &&
       SourceMgr.isInSystemHeader(Comment.getBegin()))
     return;
-  RawComment RC(SourceMgr, Comment, false,
-                LangOpts.CommentOpts.ParseAllComments);
+  RawComment RC(SourceMgr, Comment, LangOpts.CommentOpts, false);
   if (RC.isAlmostTrailingComment()) {
     SourceRange MagicMarkerRange(Comment.getBegin(),
                                  Comment.getBegin().getLocWithOffset(3));
