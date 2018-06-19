@@ -4187,8 +4187,12 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
       TC = llvm::make_unique<toolchains::Contiki>(*this, Target, Args);
       break;
     case llvm::Triple::RTEMS:
-      // FIXME: This will probably break the x86 rtems build but should work for MIPS/CHERI
-      TC = llvm::make_unique<toolchains::RTEMS>(*this, Target, Args);
+      if (Target.getVendor() == llvm::Triple::Myriad)
+        TC = llvm::make_unique<toolchains::MyriadToolChain>(*this, Target,
+                                                            Args);
+      else
+        // FIXME: This will probably break the x86 rtems build but should work for MIPS/CHERI
+        TC = llvm::make_unique<toolchains::RTEMS>(*this, Target, Args);
       break;
     default:
       // Of these targets, Hexagon is the only one that might have
