@@ -82,7 +82,7 @@ void ReportErrorSummary(const char *error_type, const StackTrace *stack,
 }
 
 void ReportMmapWriteExec() {
-#if !SANITIZER_GO
+#if !SANITIZER_GO && !SANITIZER_ANDROID
   ScopedErrorReportLock l;
   SanitizerCommonDecorator d;
 

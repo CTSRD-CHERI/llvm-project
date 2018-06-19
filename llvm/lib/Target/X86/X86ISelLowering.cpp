@@ -2098,7 +2098,8 @@ Value *X86TargetLowering::getIRStackGuard(IRBuilder<> &IRB) const {
 
 void X86TargetLowering::insertSSPDeclarations(Module &M) const {
   // MSVC CRT provides functionalities for stack protection.
-  if (Subtarget.getTargetTriple().isOSMSVCRT()) {
+  if (Subtarget.getTargetTriple().isWindowsMSVCEnvironment() ||
+      Subtarget.getTargetTriple().isWindowsItaniumEnvironment()) {
     // MSVC CRT has a global variable holding security cookie.
     M.getOrInsertGlobal("__security_cookie",
                         Type::getInt8PtrTy(M.getContext()));
@@ -2120,15 +2121,19 @@ void X86TargetLowering::insertSSPDeclarations(Module &M) const {
 
 Value *X86TargetLowering::getSDagStackGuard(const Module &M) const {
   // MSVC CRT has a global variable holding security cookie.
-  if (Subtarget.getTargetTriple().isOSMSVCRT())
+  if (Subtarget.getTargetTriple().isWindowsMSVCEnvironment() ||
+      Subtarget.getTargetTriple().isWindowsItaniumEnvironment()) {
     return M.getGlobalVariable("__security_cookie");
+  }
   return TargetLowering::getSDagStackGuard(M);
 }
 
 Value *X86TargetLowering::getSSPStackGuardCheck(const Module &M) const {
   // MSVC CRT has a function to validate security cookie.
-  if (Subtarget.getTargetTriple().isOSMSVCRT())
+  if (Subtarget.getTargetTriple().isWindowsMSVCEnvironment() ||
+      Subtarget.getTargetTriple().isWindowsItaniumEnvironment()) {
     return M.getFunction("__security_check_cookie");
+  }
   return TargetLowering::getSSPStackGuardCheck(M);
 }
 
@@ -3029,7 +3034,11 @@ SDValue X86TargetLowering::LowerFormalArguments(
             getv64i1Argument(VA, ArgLocs[++I], Chain, DAG, dl, Subtarget);
       } else {
         const TargetRegisterClass *RC;
-        if (RegVT == MVT::i32)
+        if (RegVT == MVT::i8)
+          RC = &X86::GR8RegClass;
+        else if (RegVT == MVT::i16)
+          RC = &X86::GR16RegClass;
+        else if (RegVT == MVT::i32)
           RC = &X86::GR32RegClass;
         else if (Is64Bit && RegVT == MVT::i64)
           RC = &X86::GR64RegClass;
@@ -3415,6 +3424,11 @@ X86TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   const Function *Fn = CI ? CI->getCalledFunction() : nullptr;
   bool HasNCSR = (CI && CI->hasFnAttr("no_caller_saved_registers")) ||
                  (Fn && Fn->hasFnAttribute("no_caller_saved_registers"));
+  const auto *II = dyn_cast_or_null<InvokeInst>(CLI.CS.getInstruction());
+  bool HasNoCfCheck =
+      (CI && CI->doesNoCfCheck()) || (II && II->doesNoCfCheck());
+  const Module *M = MF.getMMI().getModule();
+  Metadata *IsCFProtectionSupported = M->getModuleFlag("cf-protection-branch");
 
   if (CallConv == CallingConv::X86_INTR)
     report_fatal_error("X86 interrupts may not be called directly");
@@ -3898,7 +3912,11 @@ X86TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     return DAG.getNode(X86ISD::TC_RETURN, dl, NodeTys, Ops);
   }
 
-  Chain = DAG.getNode(X86ISD::CALL, dl, NodeTys, Ops);
+  if (HasNoCfCheck && IsCFProtectionSupported) {
+    Chain = DAG.getNode(X86ISD::NT_CALL, dl, NodeTys, Ops);
+  } else {
+    Chain = DAG.getNode(X86ISD::CALL, dl, NodeTys, Ops);
+  }
   InFlag = Chain.getValue(1);
 
   // Create the CALLSEQ_END node.
@@ -16967,10 +16985,9 @@ SDValue X86TargetLowering::LowerTRUNCATE(SDValue Op, SelectionDAG &DAG) const {
       // Make sure we're allowed to promote 512-bits.
       if (Subtarget.canExtendTo512DQ())
         return DAG.getNode(ISD::TRUNCATE, DL, VT,
-                           getExtendInVec(X86ISD::VSEXT, DL, MVT::v16i32, In,
-                                          DAG));
+                           DAG.getNode(X86ISD::VSEXT, DL, MVT::v16i32, In));
     } else {
-      return DAG.getNode(ISD::TRUNCATE, DL, VT, In);
+      return Op;
     }
   }
 
@@ -22440,42 +22457,26 @@ static SDValue LowerMUL(SDValue Op, const X86Subtarget &Subtarget,
     MVT ExVT = MVT::v8i16;
 
     // Extract the lo parts and sign extend to i16
-    SDValue ALo, BLo;
-    if (Subtarget.hasSSE41()) {
-      ALo = DAG.getSignExtendVectorInReg(A, dl, ExVT);
-      BLo = DAG.getSignExtendVectorInReg(B, dl, ExVT);
-    } else {
-      // We're going to mask off the low byte of each result element of the
-      // pmullw, so it doesn't matter what's in the high byte of each 16-bit
-      // element.
-      const int ShufMask[] = {0, -1, 1, -1, 2, -1, 3, -1,
+    // We're going to mask off the low byte of each result element of the
+    // pmullw, so it doesn't matter what's in the high byte of each 16-bit
+    // element.
+    const int LoShufMask[] = {0, -1, 1, -1, 2, -1, 3, -1,
                               4, -1, 5, -1, 6, -1, 7, -1};
-      ALo = DAG.getVectorShuffle(VT, dl, A, A, ShufMask);
-      BLo = DAG.getVectorShuffle(VT, dl, B, B, ShufMask);
-      ALo = DAG.getBitcast(ExVT, ALo);
-      BLo = DAG.getBitcast(ExVT, BLo);
-    }
+    SDValue ALo = DAG.getVectorShuffle(VT, dl, A, A, LoShufMask);
+    SDValue BLo = DAG.getVectorShuffle(VT, dl, B, B, LoShufMask);
+    ALo = DAG.getBitcast(ExVT, ALo);
+    BLo = DAG.getBitcast(ExVT, BLo);
 
     // Extract the hi parts and sign extend to i16
-    SDValue AHi, BHi;
-    if (Subtarget.hasSSE41()) {
-      const int ShufMask[] = {8,  9,  10, 11, 12, 13, 14, 15,
-                              -1, -1, -1, -1, -1, -1, -1, -1};
-      AHi = DAG.getVectorShuffle(VT, dl, A, A, ShufMask);
-      BHi = DAG.getVectorShuffle(VT, dl, B, B, ShufMask);
-      AHi = DAG.getSignExtendVectorInReg(AHi, dl, ExVT);
-      BHi = DAG.getSignExtendVectorInReg(BHi, dl, ExVT);
-    } else {
-      // We're going to mask off the low byte of each result element of the
-      // pmullw, so it doesn't matter what's in the high byte of each 16-bit
-      // element.
-      const int ShufMask[] = {8,  -1, 9,  -1, 10, -1, 11, -1,
+    // We're going to mask off the low byte of each result element of the
+    // pmullw, so it doesn't matter what's in the high byte of each 16-bit
+    // element.
+    const int HiShufMask[] = {8,  -1, 9,  -1, 10, -1, 11, -1,
                               12, -1, 13, -1, 14, -1, 15, -1};
-      AHi = DAG.getVectorShuffle(VT, dl, A, A, ShufMask);
-      BHi = DAG.getVectorShuffle(VT, dl, B, B, ShufMask);
-      AHi = DAG.getBitcast(ExVT, AHi);
-      BHi = DAG.getBitcast(ExVT, BHi);
-    }
+    SDValue AHi = DAG.getVectorShuffle(VT, dl, A, A, HiShufMask);
+    SDValue BHi = DAG.getVectorShuffle(VT, dl, B, B, HiShufMask);
+    AHi = DAG.getBitcast(ExVT, AHi);
+    BHi = DAG.getBitcast(ExVT, BHi);
 
     // Multiply, mask the lower 8bits of the lo/hi results and pack
     SDValue RLo = DAG.getNode(ISD::MUL, dl, ExVT, ALo, BLo);
@@ -22662,13 +22663,14 @@ static SDValue LowerMULH(SDValue Op, const X86Subtarget &Subtarget,
   assert(VT == MVT::v16i8 &&
          "Pre-AVX2 support only supports v16i8 multiplication");
   MVT ExVT = MVT::v8i16;
-  unsigned ExSSE41 = (ISD::MULHU == Opcode ? X86ISD::VZEXT : X86ISD::VSEXT);
+  unsigned ExSSE41 = ISD::MULHU == Opcode ? ISD::ZERO_EXTEND_VECTOR_INREG
+                                          : ISD::SIGN_EXTEND_VECTOR_INREG;
 
   // Extract the lo parts and zero/sign extend to i16.
   SDValue ALo, BLo;
   if (Subtarget.hasSSE41()) {
-    ALo = getExtendInVec(ExSSE41, dl, ExVT, A, DAG);
-    BLo = getExtendInVec(ExSSE41, dl, ExVT, B, DAG);
+    ALo = DAG.getNode(ExSSE41, dl, ExVT, A);
+    BLo = DAG.getNode(ExSSE41, dl, ExVT, B);
   } else {
     const int ShufMask[] = {-1, 0, -1, 1, -1, 2, -1, 3,
                             -1, 4, -1, 5, -1, 6, -1, 7};
@@ -22687,8 +22689,8 @@ static SDValue LowerMULH(SDValue Op, const X86Subtarget &Subtarget,
                             -1, -1, -1, -1, -1, -1, -1, -1};
     AHi = DAG.getVectorShuffle(VT, dl, A, A, ShufMask);
     BHi = DAG.getVectorShuffle(VT, dl, B, B, ShufMask);
-    AHi = getExtendInVec(ExSSE41, dl, ExVT, AHi, DAG);
-    BHi = getExtendInVec(ExSSE41, dl, ExVT, BHi, DAG);
+    AHi = DAG.getNode(ExSSE41, dl, ExVT, AHi);
+    BHi = DAG.getNode(ExSSE41, dl, ExVT, BHi);
   } else {
     const int ShufMask[] = {-1, 8,  -1, 9,  -1, 10, -1, 11,
                             -1, 12, -1, 13, -1, 14, -1, 15};
@@ -25852,6 +25854,8 @@ const char *X86TargetLowering::getTargetNodeName(unsigned Opcode) const {
   case X86ISD::GF2P8MULB:          return "X86ISD::GF2P8MULB";
   case X86ISD::GF2P8AFFINEQB:      return "X86ISD::GF2P8AFFINEQB";
   case X86ISD::GF2P8AFFINEINVQB:   return "X86ISD::GF2P8AFFINEINVQB";
+  case X86ISD::NT_CALL:            return "X86ISD::NT_CALL";
+  case X86ISD::NT_BRIND:           return "X86ISD::NT_BRIND";
   }
   return nullptr;
 }
@@ -38530,6 +38534,33 @@ static SDValue combineScalarToVector(SDNode *N, SelectionDAG &DAG) {
   return SDValue();
 }
 
+// Simplify PMULDQ and PMULUDQ operations.
+static SDValue combinePMULDQ(SDNode *N, SelectionDAG &DAG,
+                             TargetLowering::DAGCombinerInfo &DCI) {
+  SDValue LHS = N->getOperand(0);
+  SDValue RHS = N->getOperand(1);
+
+  const TargetLowering &TLI = DAG.getTargetLoweringInfo();
+  TargetLowering::TargetLoweringOpt TLO(DAG, !DCI.isBeforeLegalize(),
+                                        !DCI.isBeforeLegalizeOps());
+  APInt DemandedMask(APInt::getLowBitsSet(64, 32));
+
+  // PMULQDQ/PMULUDQ only uses lower 32 bits from each vector element.
+  KnownBits LHSKnown;
+  if (TLI.SimplifyDemandedBits(LHS, DemandedMask, LHSKnown, TLO)) {
+    DCI.CommitTargetLoweringOpt(TLO);
+    return SDValue(N, 0);
+  }
+
+  KnownBits RHSKnown;
+  if (TLI.SimplifyDemandedBits(RHS, DemandedMask, RHSKnown, TLO)) {
+    DCI.CommitTargetLoweringOpt(TLO);
+    return SDValue(N, 0);
+  }
+
+  return SDValue();
+}
+
 SDValue X86TargetLowering::PerformDAGCombine(SDNode *N,
                                              DAGCombinerInfo &DCI) const {
   SelectionDAG &DAG = DCI.DAG;
@@ -38651,6 +38682,8 @@ SDValue X86TargetLowering::PerformDAGCombine(SDNode *N,
   case ISD::MSCATTER:       return combineGatherScatter(N, DAG, DCI, Subtarget);
   case X86ISD::PCMPEQ:
   case X86ISD::PCMPGT:      return combineVectorCompare(N, DAG, Subtarget);
+  case X86ISD::PMULDQ:
+  case X86ISD::PMULUDQ:     return combinePMULDQ(N, DAG, DCI);
   }
 
   return SDValue();
@@ -38707,6 +38740,22 @@ void X86TargetLowering::finalizeLowering(MachineFunction &MF) const {
   }
 
   TargetLoweringBase::finalizeLowering(MF);
+}
+
+SDValue X86TargetLowering::expandIndirectJTBranch(const SDLoc& dl, 
+                                                  SDValue Value, SDValue Addr,
+                                                  SelectionDAG &DAG) const {
+  const Module *M = DAG.getMachineFunction().getMMI().getModule();
+  Metadata *IsCFProtectionSupported = M->getModuleFlag("cf-protection-branch");
+  if (IsCFProtectionSupported) {
+    // In case control-flow branch protection is enabled, we need to add
+    // notrack prefix to the indirect branch.
+    // In order to do that we create NT_BRIND SDNode.
+    // Upon ISEL, the pattern will convert it to jmp with NoTrack prefix.
+    return DAG.getNode(X86ISD::NT_BRIND, dl, MVT::Other, Value, Addr);
+  }
+
+  return TargetLowering::expandIndirectJTBranch(dl, Value, Addr, DAG);
 }
 
 /// This method query the target whether it is beneficial for dag combiner to

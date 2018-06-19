@@ -220,7 +220,7 @@ def : InstRW<[R52WriteALU_EX1, R52Read_ISS],
       (instregex "MOVCCi32imm", "MOVi32imm", "MOV_ga_dyn", "t2MOVCCi",
       "t2MOVi", "t2MOV_ga_dyn")>;
 def : InstRW<[R52WriteALU_EX2, R52Read_EX1],
-      (instregex "MOV_ga_pcrel", "t2MOV_ga_pcrel")>;
+      (instregex "MOV_ga_pcrel$", "t2MOV_ga_pcrel$")>;
 def : InstRW<[R52WriteLd,R52Read_ISS],
       (instregex "MOV_ga_pcrel_ldr", "t2MOV_ga_pcrel_ldr")>;
 
@@ -512,7 +512,7 @@ def : InstRW<[R52WriteISTM, R52WriteAdr, R52Read_ISS, R52Read_EX2],
 
 // LDRLIT pseudo instructions, they expand to LDR + PICADD
 def : InstRW<[R52WriteLd],
-      (instregex "t?LDRLIT_ga_abs", "t?LDRLIT_ga_pcrel")>;
+      (instregex "t?LDRLIT_ga_abs", "t?LDRLIT_ga_pcrel$")>;
 // LDRLIT_ga_pcrel_ldr expands to LDR + PICLDR
 def : InstRW<[R52WriteLd], (instregex "LDRLIT_ga_pcrel_ldr")>;
 
@@ -530,7 +530,7 @@ def : InstRW<[R52Write2FPALU_F5, R52Read_F1], (instregex "VABS(fq|hq)")>;
 def : InstRW<[R52WriteFPALU_F3, R52Read_F1, R52Read_F1], (instregex "(VACGE|VACGT)(fd|hd)")>;
 def : InstRW<[R52Write2FPALU_F3, R52Read_F1, R52Read_F1], (instregex "(VACGE|VACGT)(fq|hq)")>;
 
-def : InstRW<[R52WriteFPALU_F5, R52Read_F1, R52Read_F1], (instregex "(VADD|VSUB)(D|S|H|fd|hd)")>;
+def : InstRW<[R52WriteFPALU_F5, R52Read_F1, R52Read_F1], (instregex "(VADD|VSUB)(D|S|H|fd|hd)$")>;
 def : InstRW<[R52Write2FPALU_F5, R52Read_F1, R52Read_F1], (instregex "(VADD|VSUB)(fq|hq)")>;
 
 def : InstRW<[R52WriteFPLd_F4, R52Read_ISS, R52Read_F1], (instregex "VLDR")>;
@@ -791,8 +791,6 @@ def : InstRW<[R52Write2FPALU_F3, R52Read_F2], (instregex "VBICi(v8i16|v4i32)")>;
 
 def : InstRW<[R52WriteFPALU_F3, R52Read_F1, R52Read_F2, R52Read_F2], (instregex "(VBIF|VBIT|VBSL)d")>;
 def : InstRW<[R52Write2FPALU_F3, R52Read_F1, R52Read_F2, R52Read_F2], (instregex "(VBIF|VBIT|VBSL)q")>;
-
-def : InstRW<[R52Write2FPALU_F3, R52Read_F2], (instregex "VBICi(v8i16|v4i32)")>;
 
 def : InstRW<[R52WriteFPALU_F3, R52Read_F1, R52Read_F1],
       (instregex "(VCEQ|VCGE|VCGT|VCLE|VCLT|VCLZ|VCMP|VCMPE|VCNT)")>;

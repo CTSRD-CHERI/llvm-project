@@ -608,7 +608,7 @@ void CodeGenFunction::EmitIfStmt(const IfStmt &S) {
     EmitStmt(S.getInit());
 
   if (S.getConditionVariable())
-    EmitAutoVarDecl(*S.getConditionVariable());
+    EmitDecl(*S.getConditionVariable());
 
   // If the condition constant folds and can be elided, try to avoid emitting
   // the condition and the dead arm of the if/else.
@@ -705,7 +705,7 @@ void CodeGenFunction::EmitWhileStmt(const WhileStmt &S,
   RunCleanupsScope ConditionScope(*this);
 
   if (S.getConditionVariable())
-    EmitAutoVarDecl(*S.getConditionVariable());
+    EmitDecl(*S.getConditionVariable());
 
   // Evaluate the conditional in the while header.  C99 6.8.5.1: The
   // evaluation of the controlling expression takes place before each
@@ -865,7 +865,7 @@ void CodeGenFunction::EmitForStmt(const ForStmt &S,
     // If the for statement has a condition scope, emit the local variable
     // declaration.
     if (S.getConditionVariable()) {
-      EmitAutoVarDecl(*S.getConditionVariable());
+      EmitDecl(*S.getConditionVariable());
     }
 
     llvm::BasicBlock *ExitBlock = LoopExit.getBlock();
@@ -1617,7 +1617,7 @@ void CodeGenFunction::EmitSwitchStmt(const SwitchStmt &S) {
       // Emit the condition variable if needed inside the entire cleanup scope
       // used by this special case for constant folded switches.
       if (S.getConditionVariable())
-        EmitAutoVarDecl(*S.getConditionVariable());
+        EmitDecl(*S.getConditionVariable());
 
       // At this point, we are no longer "within" a switch instance, so
       // we can temporarily enforce this to ensure that any embedded case
@@ -1646,7 +1646,7 @@ void CodeGenFunction::EmitSwitchStmt(const SwitchStmt &S) {
     EmitStmt(S.getInit());
 
   if (S.getConditionVariable())
-    EmitAutoVarDecl(*S.getConditionVariable());
+    EmitDecl(*S.getConditionVariable());
   llvm::Value *CondV = EmitScalarExpr(S.getCond());
   // If we're an intcap_t, then we actually want to switch on the offset.
   if (S.getCond()->getType()->isCHERICapabilityType(getContext())) {
@@ -1987,7 +1987,7 @@ void CodeGenFunction::EmitAsmStmt(const AsmStmt &S) {
     // Simplify the output constraint.
     std::string OutputConstraint(S.getOutputConstraint(i));
     OutputConstraint = SimplifyConstraint(OutputConstraint.c_str() + 1,
-                                          getTarget());
+                                          getTarget(), &OutputConstraintInfos);
 
     const Expr *OutExpr = S.getOutputExpr(i);
     OutExpr = OutExpr->IgnoreParenNoopCasts(getContext());

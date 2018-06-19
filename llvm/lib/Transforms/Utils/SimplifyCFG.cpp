@@ -28,6 +28,7 @@
 #include "llvm/Analysis/EHPersonalities.h"
 #include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
+#include "llvm/Analysis/Utils/Local.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/BasicBlock.h"
@@ -66,7 +67,6 @@
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
-#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Utils/ValueMapper.h"
 #include <algorithm>
 #include <cassert>
@@ -2273,6 +2273,10 @@ static bool FoldTwoEntryPHINode(PHINode *PN, const TargetTransformInfo &TTI,
   // dependence information for this check, but simplifycfg can't keep it up
   // to date, and this catches most of the cases we care about anyway.
   BasicBlock *BB = PN->getParent();
+  const Function *Fn = BB->getParent();
+  if (Fn && Fn->hasFnAttribute(Attribute::OptForFuzzing))
+    return false;
+
   BasicBlock *IfTrue, *IfFalse;
   Value *IfCond = GetIfCondition(BB, IfTrue, IfFalse);
   if (!IfCond ||
@@ -5799,6 +5803,9 @@ static BasicBlock *allPredecessorsComeFromSameSource(BasicBlock *BB) {
 
 bool SimplifyCFGOpt::SimplifyCondBranch(BranchInst *BI, IRBuilder<> &Builder) {
   BasicBlock *BB = BI->getParent();
+  const Function *Fn = BB->getParent();
+  if (Fn && Fn->hasFnAttribute(Attribute::OptForFuzzing))
+    return false;
 
   // Conditional branch
   if (isValueEqualityComparison(BI)) {

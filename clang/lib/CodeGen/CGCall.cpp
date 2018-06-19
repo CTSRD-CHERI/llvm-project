@@ -29,15 +29,15 @@
 #include "clang/CodeGen/SwiftCallingConv.h"
 #include "clang/Frontend/CodeGenOptions.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/Analysis/Utils/Local.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/Attributes.h"
-#include "llvm/IR/CallingConv.h"
 #include "llvm/IR/CallSite.h"
+#include "llvm/IR/CallingConv.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/InlineAsm.h"
-#include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/IntrinsicInst.h"
-#include "llvm/Transforms/Utils/Local.h"
+#include "llvm/IR/Intrinsics.h"
 using namespace clang;
 using namespace CodeGen;
 
@@ -812,6 +812,7 @@ CGFunctionInfo *CGFunctionInfo::create(unsigned llvmCC,
   FI->NoReturn = info.getNoReturn();
   FI->ReturnsRetained = info.getProducesResult();
   FI->NoCallerSavedRegs = info.getNoCallerSavedRegs();
+  FI->NoCfCheck = info.getNoCfCheck();
   FI->Required = required;
   FI->HasRegParm = info.getHasRegParm();
   FI->RegParm = info.getRegParm();
@@ -1866,6 +1867,8 @@ void CodeGenModule::ConstructAttributeList(
       RetAttrs.addAttribute(llvm::Attribute::NonNull);
     if (TargetDecl->hasAttr<AnyX86NoCallerSavedRegistersAttr>())
       FuncAttrs.addAttribute("no_caller_saved_registers");
+    if (TargetDecl->hasAttr<AnyX86NoCfCheckAttr>())
+      FuncAttrs.addAttribute(llvm::Attribute::NoCfCheck);
 
     HasOptnone = TargetDecl->hasAttr<OptimizeNoneAttr>();
     if (auto *AllocSize = TargetDecl->getAttr<AllocSizeAttr>()) {

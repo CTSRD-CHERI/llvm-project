@@ -3,6 +3,9 @@
 // ubsan and lsan do not install mmap interceptors
 // UNSUPPORTED: ubsan, lsan
 
+// TODO: Fix option on Android, it hangs there for unknown reasons.
+// XFAIL: android
+
 #include <sys/mman.h>
 
 int main(int argc, char **argv) {

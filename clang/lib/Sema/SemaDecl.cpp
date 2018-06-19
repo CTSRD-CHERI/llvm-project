@@ -10477,12 +10477,22 @@ QualType Sema::deduceVarTypeFromInitializer(VarDecl *VDecl,
   // C++11 [dcl.spec.auto]p3
   if (!Init) {
     assert(VDecl && "no init for init capture deduction?");
-    Diag(VDecl->getLocation(), diag::err_auto_var_requires_init)
-      << VDecl->getDeclName() << Type;
-    return QualType();
+
+    // Except for class argument deduction, and then for an initializing
+    // declaration only, i.e. no static at class scope or extern.
+    if (!isa<DeducedTemplateSpecializationType>(Deduced) ||
+        VDecl->hasExternalStorage() ||
+        VDecl->isStaticDataMember()) {
+      Diag(VDecl->getLocation(), diag::err_auto_var_requires_init)
+        << VDecl->getDeclName() << Type;
+      return QualType();
+    }
   }
 
-  ArrayRef<Expr*> DeduceInits = Init;
+  ArrayRef<Expr*> DeduceInits;
+  if (Init)
+    DeduceInits = Init;
+
   if (DirectInit) {
     if (auto *PL = dyn_cast_or_null<ParenListExpr>(Init))
       DeduceInits = PL->exprs();
@@ -14977,6 +14987,13 @@ FieldDecl *Sema::CheckFieldDecl(DeclarationName Name, QualType T,
     InvalidDecl = true;
   }
 
+  // Anonymous bit-fields cannot be cv-qualified (CWG 2229).
+  if (!InvalidDecl && getLangOpts().CPlusPlus && !II && BitWidth &&
+      T.hasQualifiers()) {
+    InvalidDecl = true;
+    Diag(Loc, diag::err_anon_bitfield_qualifiers);
+  }
+
   // C99 6.7.2.1p8: A member of a structure or union may have any type other
   // than a variably modified type.
   if (!InvalidDecl && T->isVariablyModifiedType()) {
@@ -15380,7 +15397,6 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
 
     // Get the type for the field.
     const Type *FDTy = FD->getType().getTypePtr();
-    Qualifiers QS = FD->getType().getQualifiers();
 
     if (!FD->isAnonymousStructOrUnion()) {
       // Remember all fields written by the user.
@@ -15521,10 +15537,7 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
       QualType T = Context.getObjCObjectPointerType(FD->getType());
       FD->setType(T);
     } else if (getLangOpts().allowsNonTrivialObjCLifetimeQualifiers() &&
-               Record && !ObjCFieldLifetimeErrReported &&
-               ((!getLangOpts().CPlusPlus &&
-                 QS.getObjCLifetime() == Qualifiers::OCL_Weak) ||
-                Record->isUnion())) {
+               Record && !ObjCFieldLifetimeErrReported && Record->isUnion()) {
       // It's an error in ARC or Weak if a field has lifetime.
       // We don't want to report this in a system header, though,
       // so we just make the field unavailable.
@@ -15570,6 +15583,8 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
         Record->setNonTrivialToPrimitiveCopy(true);
       if (FT.isDestructedType())
         Record->setNonTrivialToPrimitiveDestroy(true);
+      if (!FT.canPassInRegisters())
+        Record->setCanPassInRegisters(false);
     }
 
     if (Record && FD->getType().isVolatileQualified())

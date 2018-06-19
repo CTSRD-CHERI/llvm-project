@@ -5036,6 +5036,11 @@ AArch64InstrInfo::getOutliningType(MachineBasicBlock::iterator &MIT,
   // Don't allow debug values to impact outlining type.
   if (MI.isDebugValue() || MI.isIndirectDebugValue()) 
     return MachineOutlinerInstrType::Invisible;
+
+  // At this point, KILL instructions don't really tell us much so we can go
+  // ahead and skip over them.
+  if (MI.isKill())
+    return MachineOutlinerInstrType::Invisible;
   
   // Is this a terminator for a basic block?
   if (MI.isTerminator()) {
@@ -5276,6 +5281,25 @@ void AArch64InstrInfo::insertOutlinerEpilogue(
                                 .addReg(AArch64::SP)
                                 .addImm(-16);
     It = MBB.insert(It, STRXpre);
+
+    const TargetSubtargetInfo &STI = MF.getSubtarget();
+    const MCRegisterInfo *MRI = STI.getRegisterInfo();
+    unsigned DwarfReg = MRI->getDwarfRegNum(AArch64::LR, true);
+
+    // Add a CFI saying the stack was moved 16 B down.
+    int64_t StackPosEntry =
+        MF.addFrameInst(MCCFIInstruction::createDefCfaOffset(nullptr, 16));
+    BuildMI(MBB, It, DebugLoc(), get(AArch64::CFI_INSTRUCTION))
+        .addCFIIndex(StackPosEntry)
+        .setMIFlags(MachineInstr::FrameSetup);
+
+    // Add a CFI saying that the LR that we want to find is now 16 B higher than
+    // before.
+    int64_t LRPosEntry =
+        MF.addFrameInst(MCCFIInstruction::createOffset(nullptr, DwarfReg, 16));
+    BuildMI(MBB, It, DebugLoc(), get(AArch64::CFI_INSTRUCTION))
+        .addCFIIndex(LRPosEntry)
+        .setMIFlags(MachineInstr::FrameSetup);
 
     // Insert a restore before the terminator for the function.
     MachineInstr *LDRXpost = BuildMI(MF, DebugLoc(), get(AArch64::LDRXpost))

@@ -22,17 +22,55 @@ namespace mca {
 
 void BackendStatistics::onInstructionEvent(const HWInstructionEvent &Event) {
   switch (Event.Type) {
-  case HWInstructionEvent::Retired:
+  default:
+    break;
+  case HWInstructionEvent::Retired: {
+    const auto &RE = static_cast<const HWInstructionRetiredEvent &>(Event);
+    for (unsigned I = 0, E = RegisterFiles.size(); I < E; ++I)
+      RegisterFiles[I].CurrentlyUsedMappings -= RE.FreedPhysRegs[I];
+
     ++NumRetired;
     break;
+  }
   case HWInstructionEvent::Issued:
     ++NumIssued;
     break;
-  case HWInstructionEvent::Dispatched:
+  case HWInstructionEvent::Dispatched: {
+    const auto &DE = static_cast<const HWInstructionDispatchedEvent &>(Event);
+    for (unsigned I = 0, E = RegisterFiles.size(); I < E; ++I) {
+      RegisterFileUsage &RFU = RegisterFiles[I];
+      unsigned NumUsedPhysRegs = DE.UsedPhysRegs[I];
+      RFU.CurrentlyUsedMappings += NumUsedPhysRegs;
+      RFU.TotalMappings += NumUsedPhysRegs;
+      RFU.MaxUsedMappings =
+          std::max(RFU.MaxUsedMappings, RFU.CurrentlyUsedMappings);
+    }
+
     ++NumDispatched;
-    break;
-  default:
-    break;
+  }
+  }
+}
+
+void BackendStatistics::onReservedBuffers(ArrayRef<unsigned> Buffers) {
+  for (const unsigned Buffer : Buffers) {
+    if (BufferedResources.find(Buffer) != BufferedResources.end()) {
+      BufferUsage &BU = BufferedResources[Buffer];
+      BU.SlotsInUse++;
+      BU.MaxUsedSlots = std::max(BU.MaxUsedSlots, BU.SlotsInUse);
+      continue;
+    }
+
+    BufferedResources.insert(
+        std::pair<unsigned, BufferUsage>(Buffer, {1U, 1U}));
+  }
+}
+
+void BackendStatistics::onReleasedBuffers(ArrayRef<unsigned> Buffers) {
+  for (const unsigned Buffer : Buffers) {
+    assert(BufferedResources.find(Buffer) != BufferedResources.end() &&
+           "Buffered resource not in map?");
+    BufferUsage &BU = BufferedResources[Buffer];
+    BU.SlotsInUse--;
   }
 }
 
@@ -92,54 +130,51 @@ void BackendStatistics::printSchedulerStatistics(llvm::raw_ostream &OS) const {
   OS << Buffer;
 }
 
-void BackendStatistics::printRATStatistics(raw_ostream &OS,
-                                           unsigned TotalMappings,
-                                           unsigned MaxUsedMappings) const {
+void BackendStatistics::printRATStatistics(raw_ostream &OS) const {
   std::string Buffer;
   raw_string_ostream TempStream(Buffer);
-  TempStream << "\n\nRegister Alias Table:";
-  TempStream << "\nTotal number of mappings created: " << TotalMappings;
-  TempStream << "\nMax number of mappings used:      " << MaxUsedMappings
-             << '\n';
+
+  TempStream << "\n\nRegister File statistics.";
+  for (unsigned I = 0, E = RegisterFiles.size(); I < E; ++I) {
+    const RegisterFileUsage &RFU = RegisterFiles[I];
+    TempStream << "\nRegister File #" << I;
+    TempStream << "\n  Total number of mappings created: " << RFU.TotalMappings;
+    TempStream << "\n  Max number of mappings used:      "
+               << RFU.MaxUsedMappings;
+  }
+
   TempStream.flush();
   OS << Buffer;
 }
 
-void BackendStatistics::printDispatchStalls(raw_ostream &OS, unsigned RATStalls,
-                                            unsigned RCUStalls,
-                                            unsigned SCHEDQStalls,
-                                            unsigned LDQStalls,
-                                            unsigned STQStalls,
-                                            unsigned DGStalls) const {
+void BackendStatistics::printDispatchStalls(raw_ostream &OS) const {
   std::string Buffer;
   raw_string_ostream TempStream(Buffer);
   TempStream << "\n\nDynamic Dispatch Stall Cycles:\n";
   TempStream << "RAT     - Register unavailable:                      "
-             << RATStalls;
+             << HWStalls[HWStallEvent::RegisterFileStall];
   TempStream << "\nRCU     - Retire tokens unavailable:                 "
-             << RCUStalls;
+             << HWStalls[HWStallEvent::RetireControlUnitStall];
   TempStream << "\nSCHEDQ  - Scheduler full:                            "
-             << SCHEDQStalls;
+             << HWStalls[HWStallEvent::SchedulerQueueFull];
   TempStream << "\nLQ      - Load queue full:                           "
-             << LDQStalls;
+             << HWStalls[HWStallEvent::LoadQueueFull];
   TempStream << "\nSQ      - Store queue full:                          "
-             << STQStalls;
+             << HWStalls[HWStallEvent::StoreQueueFull];
   TempStream << "\nGROUP   - Static restrictions on the dispatch group: "
-             << DGStalls;
+             << HWStalls[HWStallEvent::DispatchGroupStall];
   TempStream << '\n';
   TempStream.flush();
   OS << Buffer;
 }
 
-void BackendStatistics::printSchedulerUsage(
-    raw_ostream &OS, const MCSchedModel &SM,
-    const ArrayRef<BufferUsageEntry> &Usage) const {
- 
+void BackendStatistics::printSchedulerUsage(raw_ostream &OS,
+                                            const MCSchedModel &SM) const {
   std::string Buffer;
   raw_string_ostream TempStream(Buffer);
   TempStream << "\n\nScheduler's queue usage:\n";
   // Early exit if no buffered resources were consumed.
-  if (Usage.empty()) {
+  if (BufferedResources.empty()) {
     TempStream << "No scheduler resources used.\n";
     TempStream.flush();
     OS << Buffer;
@@ -148,17 +183,15 @@ void BackendStatistics::printSchedulerUsage(
 
   for (unsigned I = 0, E = SM.getNumProcResourceKinds(); I < E; ++I) {
     const MCProcResourceDesc &ProcResource = *SM.getProcResource(I);
-    if (!ProcResource.BufferSize)
+    if (ProcResource.BufferSize <= 0)
       continue;
 
-    for (const BufferUsageEntry &Entry : Usage)
-      if (I == Entry.first)
-        TempStream << ProcResource.Name << ",  " << Entry.second << '/'
-                   << ProcResource.BufferSize << '\n';
+    const BufferUsage &BU = BufferedResources.lookup(I);
+    TempStream << ProcResource.Name << ",  " << BU.MaxUsedSlots << '/'
+               << ProcResource.BufferSize << '\n';
   }
 
   TempStream.flush();
   OS << Buffer;
 }
-
 } // namespace mca

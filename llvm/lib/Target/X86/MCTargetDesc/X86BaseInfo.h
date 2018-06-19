@@ -60,8 +60,9 @@ namespace X86 {
     IP_HAS_REPEAT_NE = 4,
     IP_HAS_REPEAT = 8,
     IP_HAS_LOCK = 16,
-    NO_SCHED_INFO = 32 // Don't add sched comment to the current instr because
-                       // it was already added
+    NO_SCHED_INFO = 32, // Don't add sched comment to the current instr because
+                        // it was already added
+    IP_HAS_NOTRACK = 64
   };
 } // end namespace X86;
 
@@ -385,7 +386,7 @@ namespace X86II {
     AdSizeShift = OpSizeShift + 2,
     AdSizeMask  = 0x3 << AdSizeShift,
 
-    AdSizeX  = 1 << AdSizeShift,
+    AdSizeX  = 0 << AdSizeShift,
     AdSize16 = 1 << AdSizeShift,
     AdSize32 = 2 << AdSizeShift,
     AdSize64 = 3 << AdSizeShift,
@@ -572,7 +573,11 @@ namespace X86II {
 
     /// Explicitly specified rounding control
     EVEX_RCShift = Has3DNow0F0FOpcodeShift + 1,
-    EVEX_RC = 1ULL << EVEX_RCShift
+    EVEX_RC = 1ULL << EVEX_RCShift,
+
+    // NOTRACK prefix
+    NoTrackShift = EVEX_RCShift + 1,
+    NOTRACK = 1ULL << NoTrackShift
   };
 
   // getBaseOpcodeFor - This function returns the "base" X86 opcode for the
@@ -641,30 +646,40 @@ namespace X86II {
     }
   }
 
-  /// getOperandBias - compute any additional adjustment needed to
-  ///                  the offset to the start of the memory operand
-  ///                  in this instruction.
-  /// If this is a two-address instruction,skip one of the register operands.
-  /// FIXME: This should be handled during MCInst lowering.
-  inline unsigned getOperandBias(const MCInstrDesc& Desc)
-  {
+  /// getOperandBias - compute whether all of the def operands are repeated
+  ///                  in the uses and therefore should be skipped.
+  /// This determines the start of the unique operand list. We need to determine
+  /// if all of the defs have a corresponding tied operand in the uses.
+  /// Unfortunately, the tied operand information is encoded in the uses not
+  /// the defs so we have to use some heuristics to find which operands to
+  /// query.
+  inline unsigned getOperandBias(const MCInstrDesc& Desc) {
+    unsigned NumDefs = Desc.getNumDefs();
     unsigned NumOps = Desc.getNumOperands();
-    if (NumOps > 1 && Desc.getOperandConstraint(1, MCOI::TIED_TO) == 0)
-      return 1;
-    if (NumOps > 3 && Desc.getOperandConstraint(2, MCOI::TIED_TO) == 0 &&
-        Desc.getOperandConstraint(3, MCOI::TIED_TO) == 1)
-      // Special case for AVX-512 GATHER with 2 TIED_TO operands
-      // Skip the first 2 operands: dst, mask_wb
-      return 2;
-    if (NumOps > 3 && Desc.getOperandConstraint(2, MCOI::TIED_TO) == 0 &&
-        Desc.getOperandConstraint(NumOps - 1, MCOI::TIED_TO) == 1)
-      // Special case for GATHER with 2 TIED_TO operands
-      // Skip the first 2 operands: dst, mask_wb
-      return 2;
-    if (NumOps > 2 && Desc.getOperandConstraint(NumOps - 2, MCOI::TIED_TO) == 0)
-      // SCATTER
-      return 1;
-    return 0;
+    switch (NumDefs) {
+    default: llvm_unreachable("Unexpected number of defs");
+    case 0:
+      return 0;
+    case 1:
+      // Common two addr case.
+      if (NumOps > 1 && Desc.getOperandConstraint(1, MCOI::TIED_TO) == 0)
+        return 1;
+      // Check for AVX-512 scatter which has a TIED_TO in the second to last
+      // operand.
+      if (NumOps == 8 &&
+          Desc.getOperandConstraint(6, MCOI::TIED_TO) == 0)
+        return 1;
+      return 0;
+    case 2:
+      // Check for gather. AVX-512 has the second tied operand early. AVX2
+      // has it as the last op.
+      if (NumOps == 9 && Desc.getOperandConstraint(2, MCOI::TIED_TO) == 0 &&
+          (Desc.getOperandConstraint(3, MCOI::TIED_TO) == 1 ||
+           Desc.getOperandConstraint(8, MCOI::TIED_TO) == 1) &&
+          "Instruction with 2 defs isn't gather?")
+        return 2;
+      return 0;
+    }
   }
 
   /// getMemoryOperandNo - The function returns the MCInst operand # for the

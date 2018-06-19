@@ -2631,11 +2631,12 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
   case Builtin::BI__builtin_addressof:
     return RValue::get(EmitLValue(E->getArg(0)).getPointer());
   case Builtin::BI__builtin_operator_new:
-    return EmitBuiltinNewDeleteCall(FD->getType()->castAs<FunctionProtoType>(),
-                                    E->getArg(0), false);
+    return EmitBuiltinNewDeleteCall(
+        E->getCallee()->getType()->castAs<FunctionProtoType>(), E, false);
   case Builtin::BI__builtin_operator_delete:
-    return EmitBuiltinNewDeleteCall(FD->getType()->castAs<FunctionProtoType>(),
-                                    E->getArg(0), true);
+    return EmitBuiltinNewDeleteCall(
+        E->getCallee()->getType()->castAs<FunctionProtoType>(), E, true);
+
   case Builtin::BI__builtin_is_aligned:
     return EmitBuiltinIsAligned(E, false);
   case Builtin::BI__builtin_is_p2aligned:
@@ -2648,6 +2649,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     return EmitBuiltinAlignTo(E, false, false);
   case Builtin::BI__builtin_p2align_down:
     return EmitBuiltinAlignTo(E, true, false);
+
   case Builtin::BI__noop:
     // __noop always evaluates to an integer literal zero.
     return RValue::get(ConstantInt::get(IntTy, 0));
@@ -3514,7 +3516,7 @@ Value *CodeGenFunction::EmitTargetBuiltinExpr(unsigned BuiltinID,
 
 static llvm::VectorType *GetNeonType(CodeGenFunction *CGF,
                                      NeonTypeFlags TypeFlags,
-                                     llvm::Triple::ArchType Arch,
+                                     bool HasLegalHalfType=true,
                                      bool V1Ty=false) {
   int IsQuad = TypeFlags.isQuad();
   switch (TypeFlags.getEltType()) {
@@ -3525,9 +3527,7 @@ static llvm::VectorType *GetNeonType(CodeGenFunction *CGF,
   case NeonTypeFlags::Poly16:
     return llvm::VectorType::get(CGF->Int16Ty, V1Ty ? 1 : (4 << IsQuad));
   case NeonTypeFlags::Float16:
-    // FIXME: Only AArch64 backend can so far properly handle half types.
-    // Remove else part once ARM backend support for half is complete.
-    if (Arch == llvm::Triple::aarch64)
+    if (HasLegalHalfType)
       return llvm::VectorType::get(CGF->HalfTy, V1Ty ? 1 : (4 << IsQuad));
     else
       return llvm::VectorType::get(CGF->Int16Ty, V1Ty ? 1 : (4 << IsQuad));
@@ -3693,13 +3693,24 @@ static const NeonIntrinsicInfo ARMSIMDIntrinsicMap [] = {
   NEONMAP1(vcaleq_v, arm_neon_vacge, 0),
   NEONMAP1(vcalt_v, arm_neon_vacgt, 0),
   NEONMAP1(vcaltq_v, arm_neon_vacgt, 0),
+  NEONMAP0(vceqz_v),
+  NEONMAP0(vceqzq_v),
+  NEONMAP0(vcgez_v),
+  NEONMAP0(vcgezq_v),
+  NEONMAP0(vcgtz_v),
+  NEONMAP0(vcgtzq_v),
+  NEONMAP0(vclez_v),
+  NEONMAP0(vclezq_v),
   NEONMAP1(vcls_v, arm_neon_vcls, Add1ArgType),
   NEONMAP1(vclsq_v, arm_neon_vcls, Add1ArgType),
+  NEONMAP0(vcltz_v),
+  NEONMAP0(vcltzq_v),
   NEONMAP1(vclz_v, ctlz, Add1ArgType),
   NEONMAP1(vclzq_v, ctlz, Add1ArgType),
   NEONMAP1(vcnt_v, ctpop, Add1ArgType),
   NEONMAP1(vcntq_v, ctpop, Add1ArgType),
   NEONMAP1(vcvt_f16_f32, arm_neon_vcvtfp2hf, 0),
+  NEONMAP0(vcvt_f16_v),
   NEONMAP1(vcvt_f32_f16, arm_neon_vcvthf2fp, 0),
   NEONMAP0(vcvt_f32_v),
   NEONMAP2(vcvt_n_f16_v, arm_neon_vcvtfxu2fp, arm_neon_vcvtfxs2fp, 0),
@@ -3763,6 +3774,7 @@ static const NeonIntrinsicInfo ARMSIMDIntrinsicMap [] = {
   NEONMAP1(vcvtpq_u16_v, arm_neon_vcvtpu, 0),
   NEONMAP1(vcvtpq_u32_v, arm_neon_vcvtpu, 0),
   NEONMAP1(vcvtpq_u64_v, arm_neon_vcvtpu, 0),
+  NEONMAP0(vcvtq_f16_v),
   NEONMAP0(vcvtq_f32_v),
   NEONMAP2(vcvtq_n_f16_v, arm_neon_vcvtfxu2fp, arm_neon_vcvtfxs2fp, 0),
   NEONMAP2(vcvtq_n_f32_v, arm_neon_vcvtfxu2fp, arm_neon_vcvtfxs2fp, 0),
@@ -3931,8 +3943,18 @@ static const NeonIntrinsicInfo AArch64SIMDIntrinsicMap[] = {
   NEONMAP1(vcaleq_v, aarch64_neon_facge, 0),
   NEONMAP1(vcalt_v, aarch64_neon_facgt, 0),
   NEONMAP1(vcaltq_v, aarch64_neon_facgt, 0),
+  NEONMAP0(vceqz_v),
+  NEONMAP0(vceqzq_v),
+  NEONMAP0(vcgez_v),
+  NEONMAP0(vcgezq_v),
+  NEONMAP0(vcgtz_v),
+  NEONMAP0(vcgtzq_v),
+  NEONMAP0(vclez_v),
+  NEONMAP0(vclezq_v),
   NEONMAP1(vcls_v, aarch64_neon_cls, Add1ArgType),
   NEONMAP1(vclsq_v, aarch64_neon_cls, Add1ArgType),
+  NEONMAP0(vcltz_v),
+  NEONMAP0(vcltzq_v),
   NEONMAP1(vclz_v, ctlz, Add1ArgType),
   NEONMAP1(vclzq_v, ctlz, Add1ArgType),
   NEONMAP1(vcnt_v, ctpop, Add1ArgType),
@@ -4411,8 +4433,9 @@ Value *CodeGenFunction::EmitCommonNeonBuiltinExpr(
   NeonTypeFlags Type(NeonTypeConst.getZExtValue());
   bool Usgn = Type.isUnsigned();
   bool Quad = Type.isQuad();
+  const bool HasLegalHalfType = getTarget().hasLegalHalfType();
 
-  llvm::VectorType *VTy = GetNeonType(this, Type, Arch);
+  llvm::VectorType *VTy = GetNeonType(this, Type, HasLegalHalfType);
   llvm::Type *Ty = VTy;
   if (!Ty)
     return nullptr;
@@ -4477,6 +4500,26 @@ Value *CodeGenFunction::EmitCommonNeonBuiltinExpr(
     Function *F = CGM.getIntrinsic(LLVMIntrinsic, Tys);
     return EmitNeonCall(F, Ops, NameHint);
   }
+  case NEON::BI__builtin_neon_vceqz_v:
+  case NEON::BI__builtin_neon_vceqzq_v:
+    return EmitAArch64CompareBuiltinExpr(Ops[0], Ty, ICmpInst::FCMP_OEQ,
+                                         ICmpInst::ICMP_EQ, "vceqz");
+  case NEON::BI__builtin_neon_vcgez_v:
+  case NEON::BI__builtin_neon_vcgezq_v:
+    return EmitAArch64CompareBuiltinExpr(Ops[0], Ty, ICmpInst::FCMP_OGE,
+                                         ICmpInst::ICMP_SGE, "vcgez");
+  case NEON::BI__builtin_neon_vclez_v:
+  case NEON::BI__builtin_neon_vclezq_v:
+    return EmitAArch64CompareBuiltinExpr(Ops[0], Ty, ICmpInst::FCMP_OLE,
+                                         ICmpInst::ICMP_SLE, "vclez");
+  case NEON::BI__builtin_neon_vcgtz_v:
+  case NEON::BI__builtin_neon_vcgtzq_v:
+    return EmitAArch64CompareBuiltinExpr(Ops[0], Ty, ICmpInst::FCMP_OGT,
+                                         ICmpInst::ICMP_SGT, "vcgtz");
+  case NEON::BI__builtin_neon_vcltz_v:
+  case NEON::BI__builtin_neon_vcltzq_v:
+    return EmitAArch64CompareBuiltinExpr(Ops[0], Ty, ICmpInst::FCMP_OLT,
+                                         ICmpInst::ICMP_SLT, "vcltz");
   case NEON::BI__builtin_neon_vclz_v:
   case NEON::BI__builtin_neon_vclzq_v:
     // We generate target-independent intrinsic, which needs a second argument
@@ -4486,13 +4529,15 @@ Value *CodeGenFunction::EmitCommonNeonBuiltinExpr(
   case NEON::BI__builtin_neon_vcvt_f32_v:
   case NEON::BI__builtin_neon_vcvtq_f32_v:
     Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
-    Ty = GetNeonType(this, NeonTypeFlags(NeonTypeFlags::Float32, false, Quad), Arch);
+    Ty = GetNeonType(this, NeonTypeFlags(NeonTypeFlags::Float32, false, Quad),
+                     HasLegalHalfType);
     return Usgn ? Builder.CreateUIToFP(Ops[0], Ty, "vcvt")
                 : Builder.CreateSIToFP(Ops[0], Ty, "vcvt");
   case NEON::BI__builtin_neon_vcvt_f16_v:
   case NEON::BI__builtin_neon_vcvtq_f16_v:
     Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
-    Ty = GetNeonType(this, NeonTypeFlags(NeonTypeFlags::Float16, false, Quad), Arch);
+    Ty = GetNeonType(this, NeonTypeFlags(NeonTypeFlags::Float16, false, Quad),
+                     HasLegalHalfType);
     return Usgn ? Builder.CreateUIToFP(Ops[0], Ty, "vcvt")
                 : Builder.CreateSIToFP(Ops[0], Ty, "vcvt");
   case NEON::BI__builtin_neon_vcvt_n_f16_v:
@@ -5603,7 +5648,8 @@ Value *CodeGenFunction::EmitARMBuiltinExpr(unsigned BuiltinID,
   bool usgn = Type.isUnsigned();
   bool rightShift = false;
 
-  llvm::VectorType *VTy = GetNeonType(this, Type, Arch);
+  llvm::VectorType *VTy = GetNeonType(this, Type,
+                                      getTarget().hasLegalHalfType());
   llvm::Type *Ty = VTy;
   if (!Ty)
     return nullptr;
@@ -5849,7 +5895,7 @@ static Value *EmitAArch64TblBuiltinExpr(CodeGenFunction &CGF, unsigned BuiltinID
 
   // Determine the type of this overloaded NEON intrinsic.
   NeonTypeFlags Type(Result.getZExtValue());
-  llvm::VectorType *Ty = GetNeonType(&CGF, Type, Arch);
+  llvm::VectorType *Ty = GetNeonType(&CGF, Type);
   if (!Ty)
     return nullptr;
 
@@ -6905,7 +6951,7 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
   }
   }
 
-  llvm::VectorType *VTy = GetNeonType(this, Type, Arch);
+  llvm::VectorType *VTy = GetNeonType(this, Type);
   llvm::Type *Ty = VTy;
   if (!Ty)
     return nullptr;
@@ -6970,7 +7016,7 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
       Ops[0] = Builder.CreateBitCast(Ops[0], DoubleTy);
       Ops[1] = Builder.CreateBitCast(Ops[1], DoubleTy);
       llvm::Type *VTy = GetNeonType(this,
-        NeonTypeFlags(NeonTypeFlags::Float64, false, true), Arch);
+        NeonTypeFlags(NeonTypeFlags::Float64, false, true));
       Ops[2] = Builder.CreateBitCast(Ops[2], VTy);
       Ops[2] = Builder.CreateExtractElement(Ops[2], Ops[3], "extract");
       Value *F = CGM.getIntrinsic(Intrinsic::fma, DoubleTy);
@@ -7186,37 +7232,17 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
     Int = Intrinsic::trunc;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrndz");
   }
-  case NEON::BI__builtin_neon_vceqz_v:
-  case NEON::BI__builtin_neon_vceqzq_v:
-    return EmitAArch64CompareBuiltinExpr(Ops[0], Ty, ICmpInst::FCMP_OEQ,
-                                         ICmpInst::ICMP_EQ, "vceqz");
-  case NEON::BI__builtin_neon_vcgez_v:
-  case NEON::BI__builtin_neon_vcgezq_v:
-    return EmitAArch64CompareBuiltinExpr(Ops[0], Ty, ICmpInst::FCMP_OGE,
-                                         ICmpInst::ICMP_SGE, "vcgez");
-  case NEON::BI__builtin_neon_vclez_v:
-  case NEON::BI__builtin_neon_vclezq_v:
-    return EmitAArch64CompareBuiltinExpr(Ops[0], Ty, ICmpInst::FCMP_OLE,
-                                         ICmpInst::ICMP_SLE, "vclez");
-  case NEON::BI__builtin_neon_vcgtz_v:
-  case NEON::BI__builtin_neon_vcgtzq_v:
-    return EmitAArch64CompareBuiltinExpr(Ops[0], Ty, ICmpInst::FCMP_OGT,
-                                         ICmpInst::ICMP_SGT, "vcgtz");
-  case NEON::BI__builtin_neon_vcltz_v:
-  case NEON::BI__builtin_neon_vcltzq_v:
-    return EmitAArch64CompareBuiltinExpr(Ops[0], Ty, ICmpInst::FCMP_OLT,
-                                         ICmpInst::ICMP_SLT, "vcltz");
   case NEON::BI__builtin_neon_vcvt_f64_v:
   case NEON::BI__builtin_neon_vcvtq_f64_v:
     Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
-    Ty = GetNeonType(this, NeonTypeFlags(NeonTypeFlags::Float64, false, quad), Arch);
+    Ty = GetNeonType(this, NeonTypeFlags(NeonTypeFlags::Float64, false, quad));
     return usgn ? Builder.CreateUIToFP(Ops[0], Ty, "vcvt")
                 : Builder.CreateSIToFP(Ops[0], Ty, "vcvt");
   case NEON::BI__builtin_neon_vcvt_f64_f32: {
     assert(Type.getEltType() == NeonTypeFlags::Float64 && quad &&
            "unexpected vcvt_f64_f32 builtin");
     NeonTypeFlags SrcFlag = NeonTypeFlags(NeonTypeFlags::Float32, false, false);
-    Ops[0] = Builder.CreateBitCast(Ops[0], GetNeonType(this, SrcFlag, Arch));
+    Ops[0] = Builder.CreateBitCast(Ops[0], GetNeonType(this, SrcFlag));
 
     return Builder.CreateFPExt(Ops[0], Ty, "vcvt");
   }
@@ -7224,7 +7250,7 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
     assert(Type.getEltType() == NeonTypeFlags::Float32 &&
            "unexpected vcvt_f32_f64 builtin");
     NeonTypeFlags SrcFlag = NeonTypeFlags(NeonTypeFlags::Float64, false, true);
-    Ops[0] = Builder.CreateBitCast(Ops[0], GetNeonType(this, SrcFlag, Arch));
+    Ops[0] = Builder.CreateBitCast(Ops[0], GetNeonType(this, SrcFlag));
 
     return Builder.CreateFPTrunc(Ops[0], Ty, "vcvt");
   }
@@ -7313,6 +7339,16 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
     Int = Intrinsic::aarch64_neon_fmulx;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vmulx");
   }
+  case NEON::BI__builtin_neon_vmulxh_lane_f16:
+  case NEON::BI__builtin_neon_vmulxh_laneq_f16: {
+    // vmulx_lane should be mapped to Neon scalar mulx after
+    // extracting the scalar element
+    Ops.push_back(EmitScalarExpr(E->getArg(2)));
+    Ops[1] = Builder.CreateExtractElement(Ops[1], Ops[2], "extract");
+    Ops.pop_back();
+    Int = Intrinsic::aarch64_neon_fmulx;
+    return EmitNeonCall(CGM.getIntrinsic(Int, HalfTy), Ops, "vmulx");
+  }
   case NEON::BI__builtin_neon_vmul_lane_v:
   case NEON::BI__builtin_neon_vmul_laneq_v: {
     // v1f64 vmul_lane should be mapped to Neon scalar mul lane
@@ -7321,7 +7357,7 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
       Quad = true;
     Ops[0] = Builder.CreateBitCast(Ops[0], DoubleTy);
     llvm::Type *VTy = GetNeonType(this,
-      NeonTypeFlags(NeonTypeFlags::Float64, false, Quad), Arch);
+      NeonTypeFlags(NeonTypeFlags::Float64, false, Quad));
     Ops[1] = Builder.CreateBitCast(Ops[1], VTy);
     Ops[1] = Builder.CreateExtractElement(Ops[1], Ops[2], "extract");
     Value *Result = Builder.CreateFMul(Ops[0], Ops[1]);
@@ -10611,31 +10647,30 @@ Value *CodeGenFunction::EmitNVPTXBuiltinExpr(unsigned BuiltinID,
     unsigned NumResults;
     switch (BuiltinID) {
     case NVPTX::BI__hmma_m16n16k16_ld_a:
-      IID = isColMajor ? Intrinsic::nvvm_wmma_load_a_f16_col_stride
-                       : Intrinsic::nvvm_wmma_load_a_f16_row_stride;
+      IID = isColMajor ? Intrinsic::nvvm_wmma_m16n16k16_load_a_f16_col_stride
+                       : Intrinsic::nvvm_wmma_m16n16k16_load_a_f16_row_stride;
       NumResults = 8;
       break;
     case NVPTX::BI__hmma_m16n16k16_ld_b:
-      IID = isColMajor ? Intrinsic::nvvm_wmma_load_b_f16_col_stride
-                       : Intrinsic::nvvm_wmma_load_b_f16_row_stride;
+      IID = isColMajor ? Intrinsic::nvvm_wmma_m16n16k16_load_b_f16_col_stride
+                       : Intrinsic::nvvm_wmma_m16n16k16_load_b_f16_row_stride;
       NumResults = 8;
       break;
     case NVPTX::BI__hmma_m16n16k16_ld_c_f16:
-      IID = isColMajor ? Intrinsic::nvvm_wmma_load_c_f16_col_stride
-                       : Intrinsic::nvvm_wmma_load_c_f16_row_stride;
+      IID = isColMajor ? Intrinsic::nvvm_wmma_m16n16k16_load_c_f16_col_stride
+                       : Intrinsic::nvvm_wmma_m16n16k16_load_c_f16_row_stride;
       NumResults = 4;
       break;
     case NVPTX::BI__hmma_m16n16k16_ld_c_f32:
-      IID = isColMajor ? Intrinsic::nvvm_wmma_load_c_f32_col_stride
-                       : Intrinsic::nvvm_wmma_load_c_f32_row_stride;
+      IID = isColMajor ? Intrinsic::nvvm_wmma_m16n16k16_load_c_f32_col_stride
+                       : Intrinsic::nvvm_wmma_m16n16k16_load_c_f32_row_stride;
       NumResults = 8;
       break;
     default:
       llvm_unreachable("Unexpected builtin ID.");
     }
     Value *Result =
-        Builder.CreateCall(CGM.getIntrinsic(IID),
-                           {Builder.CreatePointerCast(Src, VoidPtrTy), Ldm});
+        Builder.CreateCall(CGM.getIntrinsic(IID, Src->getType()), {Src, Ldm});
 
     // Save returned values.
     for (unsigned i = 0; i < NumResults; ++i) {
@@ -10663,21 +10698,20 @@ Value *CodeGenFunction::EmitNVPTXBuiltinExpr(unsigned BuiltinID,
     // for some reason nvcc builtins use _c_.
     switch (BuiltinID) {
     case NVPTX::BI__hmma_m16n16k16_st_c_f16:
-      IID = isColMajor ? Intrinsic::nvvm_wmma_store_d_f16_col_stride
-                       : Intrinsic::nvvm_wmma_store_d_f16_row_stride;
+      IID = isColMajor ? Intrinsic::nvvm_wmma_m16n16k16_store_d_f16_col_stride
+                       : Intrinsic::nvvm_wmma_m16n16k16_store_d_f16_row_stride;
       NumResults = 4;
       break;
     case NVPTX::BI__hmma_m16n16k16_st_c_f32:
-      IID = isColMajor ? Intrinsic::nvvm_wmma_store_d_f32_col_stride
-                       : Intrinsic::nvvm_wmma_store_d_f32_row_stride;
+      IID = isColMajor ? Intrinsic::nvvm_wmma_m16n16k16_store_d_f32_col_stride
+                       : Intrinsic::nvvm_wmma_m16n16k16_store_d_f32_row_stride;
       break;
     default:
       llvm_unreachable("Unexpected builtin ID.");
     }
-    Function *Intrinsic = CGM.getIntrinsic(IID);
+    Function *Intrinsic = CGM.getIntrinsic(IID, Dst->getType());
     llvm::Type *ParamType = Intrinsic->getFunctionType()->getParamType(1);
-    SmallVector<Value *, 10> Values;
-    Values.push_back(Builder.CreatePointerCast(Dst, VoidPtrTy));
+    SmallVector<Value *, 10> Values = {Dst};
     for (unsigned i = 0; i < NumResults; ++i) {
       Value *V = Builder.CreateAlignedLoad(
           Builder.CreateGEP(Src.getPointer(), llvm::ConstantInt::get(IntTy, i)),
@@ -10689,8 +10723,8 @@ Value *CodeGenFunction::EmitNVPTXBuiltinExpr(unsigned BuiltinID,
     return Result;
   }
 
-  // BI__hmma_m16n16k16_mma_<Dtype><CType>(d, a, b, c, layout, satf)
-  //  --> Intrinsic::nvvm_wmma_mma_sync<layout A,B><DType><CType><Satf>
+  // BI__hmma_m16n16k16_mma_<Dtype><CType>(d, a, b, c, layout, satf) -->
+  // Intrinsic::nvvm_wmma_m16n16k16_mma_sync<layout A,B><DType><CType><Satf>
   case NVPTX::BI__hmma_m16n16k16_mma_f16f16:
   case NVPTX::BI__hmma_m16n16k16_mma_f32f16:
   case NVPTX::BI__hmma_m16n16k16_mma_f32f32:
@@ -10711,15 +10745,15 @@ Value *CodeGenFunction::EmitNVPTXBuiltinExpr(unsigned BuiltinID,
     bool Satf = SatfArg.getSExtValue();
 
     // clang-format off
-#define MMA_VARIANTS(type) {{                                   \
-      Intrinsic::nvvm_wmma_mma_sync_row_row_##type,             \
-      Intrinsic::nvvm_wmma_mma_sync_row_row_##type##_satfinite, \
-      Intrinsic::nvvm_wmma_mma_sync_row_col_##type,             \
-      Intrinsic::nvvm_wmma_mma_sync_row_col_##type##_satfinite, \
-      Intrinsic::nvvm_wmma_mma_sync_col_row_##type,             \
-      Intrinsic::nvvm_wmma_mma_sync_col_row_##type##_satfinite, \
-      Intrinsic::nvvm_wmma_mma_sync_col_col_##type,             \
-      Intrinsic::nvvm_wmma_mma_sync_col_col_##type##_satfinite  \
+#define MMA_VARIANTS(type) {{                                        \
+      Intrinsic::nvvm_wmma_m16n16k16_mma_row_row_##type,             \
+      Intrinsic::nvvm_wmma_m16n16k16_mma_row_row_##type##_satfinite, \
+      Intrinsic::nvvm_wmma_m16n16k16_mma_row_col_##type,             \
+      Intrinsic::nvvm_wmma_m16n16k16_mma_row_col_##type##_satfinite, \
+      Intrinsic::nvvm_wmma_m16n16k16_mma_col_row_##type,             \
+      Intrinsic::nvvm_wmma_m16n16k16_mma_col_row_##type##_satfinite, \
+      Intrinsic::nvvm_wmma_m16n16k16_mma_col_col_##type,             \
+      Intrinsic::nvvm_wmma_m16n16k16_mma_col_col_##type##_satfinite  \
     }}
     // clang-format on
 

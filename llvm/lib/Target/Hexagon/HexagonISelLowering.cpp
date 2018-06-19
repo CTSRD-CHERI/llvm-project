@@ -30,7 +30,6 @@
 #include "llvm/CodeGen/RuntimeLibcalls.h"
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/TargetCallingConv.h"
-#include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CallingConv.h"
 #include "llvm/IR/DataLayout.h"
@@ -43,6 +42,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
+#include "llvm/IR/ValueTypes.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CodeGen.h"
@@ -549,8 +549,8 @@ bool HexagonTargetLowering::getPostIndexedAddressParts(SDNode *N, SDNode *Op,
   if (!VT.isSimple())
     return false;
   bool IsLegalType = VT == MVT::i8 || VT == MVT::i16 || VT == MVT::i32 ||
-                     VT == MVT::i64 || VT == MVT::v2i16 || MVT::v2i32 ||
-                     VT == MVT::v4i8 || VT == MVT::v4i16 || MVT::v8i8 ||
+                     VT == MVT::i64 || VT == MVT::v2i16 || VT == MVT::v2i32 ||
+                     VT == MVT::v4i8 || VT == MVT::v4i16 || VT == MVT::v8i8 ||
                      Subtarget.isHVXVectorType(VT.getSimpleVT());
   if (!IsLegalType)
     return false;

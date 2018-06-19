@@ -94,6 +94,8 @@ def SDT_X86CallSeqEnd   : SDCallSeqEnd<[SDTCisVT<0, i32>,
 
 def SDT_X86Call   : SDTypeProfile<0, -1, [SDTCisVT<0, iPTR>]>;
 
+def SDT_X86NtBrind : SDTypeProfile<0, -1, [SDTCisVT<0, iPTR>]>;
+
 def SDT_X86VASTART_SAVE_XMM_REGS : SDTypeProfile<0, -1, [SDTCisVT<0, i8>,
                                                          SDTCisVT<1, iPTR>,
                                                          SDTCisVT<2, iPTR>]>;
@@ -195,6 +197,12 @@ def X86callseq_end :
 def X86call    : SDNode<"X86ISD::CALL",     SDT_X86Call,
                         [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue,
                          SDNPVariadic]>;
+
+def X86NoTrackCall : SDNode<"X86ISD::NT_CALL", SDT_X86Call,
+                            [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue, 
+                             SDNPVariadic]>;
+def X86NoTrackBrind : SDNode<"X86ISD::NT_BRIND", SDT_X86NtBrind, 
+                             [SDNPHasChain]>;
 
 def X86rep_stos: SDNode<"X86ISD::REP_STOS", SDTX86RepStr,
                         [SDNPHasChain, SDNPInGlue, SDNPOutGlue, SDNPMayStore]>;
@@ -1125,7 +1133,7 @@ def trunc_su : PatFrag<(ops node:$src), (trunc node:$src), [{
 //
 
 // Nop
-let hasSideEffects = 0, SchedRW = [WriteZero] in {
+let hasSideEffects = 0, SchedRW = [WriteNop] in {
   def NOOP : I<0x90, RawFrm, (outs), (ins), "nop", [], IIC_NOP>;
   def NOOPW : I<0x1f, MRMXm, (outs), (ins i16mem:$zero),
                 "nop{w}\t$zero", [], IIC_NOP>, TB, OpSize16;

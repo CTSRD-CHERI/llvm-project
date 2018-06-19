@@ -190,8 +190,14 @@ void elf::addReservedSymbols() {
           Symtab->addAbsolute("__gnu_local_gp", STV_HIDDEN, STB_GLOBAL);
   }
 
+  // The 64-bit PowerOpen ABI defines a TableOfContents (TOC) which combines the
+  // typical ELF GOT with the small data sections. It commonly includes .got
+  // .toc .sdata .sbss. The .TOC. symbol replaces both _GLOBAL_OFFSET_TABLE_ and
+  // _SDA_BASE_ from the 32-bit ABI. It is used to represent the TOC base which
+  // is offset by 0x8000 bytes from the start of the .got section.
   ElfSym::GlobalOffsetTable = addOptionalRegular(
-      "_GLOBAL_OFFSET_TABLE_", Out::ElfHeader, Target->GotBaseSymOff);
+      (Config->EMachine == EM_PPC64) ? ".TOC." : "_GLOBAL_OFFSET_TABLE_",
+      Out::ElfHeader, Target->GotBaseSymOff);
 
   // __ehdr_start is the location of ELF file headers. Note that we define
   // this symbol unconditionally even when using a linker script, which
@@ -276,10 +282,9 @@ template <class ELFT> static void createSyntheticSections() {
   // If there is a SECTIONS command and a .data.rel.ro section name use name
   // .data.rel.ro.bss so that we match in the .data.rel.ro output section.
   // This makes sure our relro is contiguous.
-  bool HasDataRelRo =
-      Script->HasSectionsCommand && findSection(".data.rel.ro");
-  InX::BssRelRo = make<BssSection>(
-      HasDataRelRo ? ".data.rel.ro.bss" : ".bss.rel.ro", 0, 1);
+  bool HasDataRelRo = Script->HasSectionsCommand && findSection(".data.rel.ro");
+  InX::BssRelRo =
+      make<BssSection>(HasDataRelRo ? ".data.rel.ro.bss" : ".bss.rel.ro", 0, 1);
   Add(InX::BssRelRo);
 
   // Add MIPS-specific sections.
@@ -869,11 +874,12 @@ void Writer<ELFT>::forEachRelSec(std::function<void(InputSectionBase &)> Fn) {
 // defining these symbols explicitly in the linker script.
 template <class ELFT> void Writer<ELFT>::setReservedSymbolSections() {
   if (ElfSym::GlobalOffsetTable) {
-    // The _GLOBAL_OFFSET_TABLE_ symbol is defined by target convention to
-    // be at some offset from the base of the .got section, usually 0 or the end
-    // of the .got
-    InputSection *GotSection = InX::MipsGot ? cast<InputSection>(InX::MipsGot)
-                                            : cast<InputSection>(InX::Got);
+    // The _GLOBAL_OFFSET_TABLE_ symbol is defined by target convention usually
+    // to the start of the .got or .got.plt section.
+    InputSection *GotSection = InX::GotPlt;
+    if (!Target->GotBaseSymInGotPlt)
+      GotSection = InX::MipsGot ? cast<InputSection>(InX::MipsGot)
+                                : cast<InputSection>(InX::Got);
     ElfSym::GlobalOffsetTable->Section = GotSection;
   }
 
@@ -1622,8 +1628,8 @@ void Writer<ELFT>::addStartStopSymbols(OutputSection *Sec) {
   StringRef S = Sec->Name;
   if (!isValidCIdentifier(S))
     return;
-  addOptionalRegular(Saver.save("__start_" + S), Sec, 0, STV_DEFAULT);
-  addOptionalRegular(Saver.save("__stop_" + S), Sec, -1, STV_DEFAULT);
+  addOptionalRegular(Saver.save("__start_" + S), Sec, 0, STV_PROTECTED);
+  addOptionalRegular(Saver.save("__stop_" + S), Sec, -1, STV_PROTECTED);
 }
 
 static bool needsPtLoad(OutputSection *Sec) {
@@ -1751,11 +1757,9 @@ template <class ELFT> std::vector<PhdrEntry *> Writer<ELFT>::createPhdrs() {
   // pages for the stack non-executable. If you really want an executable
   // stack, you can pass -z execstack, but that's not recommended for
   // security reasons.
-  unsigned Perm;
+  unsigned Perm = PF_R | PF_W;
   if (Config->ZExecstack)
-    Perm = PF_R | PF_W | PF_X;
-  else
-    Perm = PF_R | PF_W;
+    Perm |= PF_X;
   AddHdr(PT_GNU_STACK, Perm)->p_memsz = Config->ZStackSize;
 
   // PT_OPENBSD_WXNEEDED is a OpenBSD-specific header to mark the executable
@@ -2017,12 +2021,13 @@ template <class ELFT> void Writer<ELFT>::checkNoOverlappingSections() {
   // space in the file so Sec->Offset + Sec->Size can overlap with others.
   // If --oformat binary is specified only add SHF_ALLOC sections are added to
   // the output file so we skip any non-allocated sections in that case.
-  checkForSectionOverlap(
-      OutputSections, "file", [](const OutputSection *Sec) { return Sec->Offset; },
-      [](const OutputSection *Sec) {
-        return Sec->Type == SHT_NOBITS ||
-               (Config->OFormatBinary && (Sec->Flags & SHF_ALLOC) == 0);
-      });
+  checkForSectionOverlap(OutputSections, "file",
+                         [](const OutputSection *Sec) { return Sec->Offset; },
+                         [](const OutputSection *Sec) {
+                           return Sec->Type == SHT_NOBITS ||
+                                  (Config->OFormatBinary &&
+                                   (Sec->Flags & SHF_ALLOC) == 0);
+                         });
 
   // When linking with -r there is no need to check for overlapping virtual/load
   // addresses since those addresses will only be assigned when the final

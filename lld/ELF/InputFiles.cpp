@@ -115,51 +115,46 @@ std::string InputFile::getSrcMsg(const Symbol &Sym, InputSectionBase &Sec,
 }
 
 template <class ELFT> void ObjFile<ELFT>::initializeDwarf() {
-  DWARFContext Dwarf(make_unique<LLDDwarfObj<ELFT>>(this));
-  const DWARFObject &Obj = Dwarf.getDWARFObj();
+  Dwarf = llvm::make_unique<DWARFContext>(make_unique<LLDDwarfObj<ELFT>>(this));
+  const DWARFObject &Obj = Dwarf->getDWARFObj();
   DwarfLine.reset(new DWARFDebugLine);
   DWARFDataExtractor LineData(Obj, Obj.getLineSection(), Config->IsLE,
                               Config->Wordsize);
 
-  // The second parameter is offset in .debug_line section
-  // for compilation unit (CU) of interest. We have only one
-  // CU (object file), so offset is always 0.
-  const DWARFDebugLine::LineTable *LT =
-      DwarfLine->getOrParseLineTable(LineData, 0, Dwarf, nullptr);
-  if (!LT)
-    return;
-
-  // Return if there is no debug information about CU available.
-  if (!Dwarf.getNumCompileUnits())
-    return;
-
-  // Loop over variable records and insert them to VariableLoc.
-  DWARFCompileUnit *CU = Dwarf.getCompileUnitAtIndex(0);
-  for (const auto &Entry : CU->dies()) {
-    DWARFDie Die(CU, &Entry);
-    // Skip all tags that are not variables.
-    if (Die.getTag() != dwarf::DW_TAG_variable)
+  for (std::unique_ptr<DWARFCompileUnit> &CU : Dwarf->compile_units()) {
+    const DWARFDebugLine::LineTable *LT = Dwarf->getLineTableForUnit(CU.get());
+    if (!LT)
       continue;
+    LineTables.push_back(LT);
 
-    // Skip if a local variable because we don't need them for generating error
-    // messages. In general, only non-local symbols can fail to be linked.
-    if (!dwarf::toUnsigned(Die.find(dwarf::DW_AT_external), 0))
-      continue;
+    // Loop over variable records and insert them to VariableLoc.
+    for (const auto &Entry : CU->dies()) {
+      DWARFDie Die(CU.get(), &Entry);
+      // Skip all tags that are not variables.
+      if (Die.getTag() != dwarf::DW_TAG_variable)
+        continue;
 
-    // Get the source filename index for the variable.
-    unsigned File = dwarf::toUnsigned(Die.find(dwarf::DW_AT_decl_file), 0);
-    if (!LT->hasFileAtIndex(File))
-      continue;
+      // Skip if a local variable because we don't need them for generating
+      // error messages. In general, only non-local symbols can fail to be
+      // linked.
+      if (!dwarf::toUnsigned(Die.find(dwarf::DW_AT_external), 0))
+        continue;
 
-    // Get the line number on which the variable is declared.
-    unsigned Line = dwarf::toUnsigned(Die.find(dwarf::DW_AT_decl_line), 0);
+      // Get the source filename index for the variable.
+      unsigned File = dwarf::toUnsigned(Die.find(dwarf::DW_AT_decl_file), 0);
+      if (!LT->hasFileAtIndex(File))
+        continue;
 
-    // Get the name of the variable and add the collected information to
-    // VariableLoc. Usually Name is non-empty, but it can be empty if the input
-    // object file lacks some debug info.
-    StringRef Name = dwarf::toString(Die.find(dwarf::DW_AT_name), "");
-    if (!Name.empty())
-      VariableLoc.insert({Name, {File, Line}});
+      // Get the line number on which the variable is declared.
+      unsigned Line = dwarf::toUnsigned(Die.find(dwarf::DW_AT_decl_line), 0);
+
+      // Get the name of the variable and add the collected information to
+      // VariableLoc. Usually Name is non-empty, but it can be empty if the
+      // input object file lacks some debug info.
+      StringRef Name = dwarf::toString(Die.find(dwarf::DW_AT_name), "");
+      if (!Name.empty())
+        VariableLoc.insert({Name, {LT, File, Line}});
+    }
   }
 }
 
@@ -170,11 +165,6 @@ Optional<std::pair<std::string, unsigned>>
 ObjFile<ELFT>::getVariableLoc(StringRef Name) {
   llvm::call_once(InitDwarfLine, [this]() { initializeDwarf(); });
 
-  // There is always only one CU so it's offset is 0.
-  const DWARFDebugLine::LineTable *LT = DwarfLine->getLineTable(0);
-  if (!LT)
-    return None;
-
   // Return if we have no debug information about data object.
   auto It = VariableLoc.find(Name);
   if (It == VariableLoc.end())
@@ -182,12 +172,12 @@ ObjFile<ELFT>::getVariableLoc(StringRef Name) {
 
   // Take file name string from line table.
   std::string FileName;
-  if (!LT->getFileNameByIndex(
-          It->second.first /* File */, nullptr,
+  if (!It->second.LT->getFileNameByIndex(
+          It->second.File, nullptr,
           DILineInfoSpecifier::FileLineInfoKind::AbsoluteFilePath, FileName))
     return None;
 
-  return std::make_pair(FileName, It->second.second /*Line*/);
+  return std::make_pair(FileName, It->second.Line);
 }
 
 // Returns source line information for a given offset
@@ -197,20 +187,15 @@ Optional<DILineInfo> ObjFile<ELFT>::getDILineInfo(InputSectionBase *S,
                                                   uint64_t Offset) {
   llvm::call_once(InitDwarfLine, [this]() { initializeDwarf(); });
 
-  // The offset to CU is 0.
-  const DWARFDebugLine::LineTable *Tbl = DwarfLine->getLineTable(0);
-  if (!Tbl)
-    return None;
-
   // Use fake address calcuated by adding section file offset and offset in
   // section. See comments for ObjectInfo class.
   DILineInfo Info;
-  Tbl->getFileLineInfoForAddress(
-      S->getOffsetInFile() + Offset, nullptr,
-      DILineInfoSpecifier::FileLineInfoKind::AbsoluteFilePath, Info);
-  if (Info.Line == 0)
-    return None;
-  return Info;
+  for (const llvm::DWARFDebugLine::LineTable *LT : LineTables)
+    if (LT->getFileLineInfoForAddress(
+            S->getOffsetInFile() + Offset, nullptr,
+            DILineInfoSpecifier::FileLineInfoKind::AbsoluteFilePath, Info))
+      return Info;
+  return None;
 }
 
 // Returns source line information for a given offset using DWARF debug info.
@@ -799,17 +784,15 @@ template <class ELFT> void SharedFile<ELFT>::parseSoName() {
 
 // Parse the version definitions in the object file if present. Returns a vector
 // whose nth element contains a pointer to the Elf_Verdef for version identifier
-// n. Version identifiers that are not definitions map to nullptr. The array
-// always has at least length 1.
+// n. Version identifiers that are not definitions map to nullptr.
 template <class ELFT>
 std::vector<const typename ELFT::Verdef *>
 SharedFile<ELFT>::parseVerdefs(const Elf_Versym *&Versym) {
-  std::vector<const Elf_Verdef *> Verdefs(1);
   // We only need to process symbol versions for this DSO if it has both a
   // versym and a verdef section, which indicates that the DSO contains symbol
   // version definitions.
   if (!VersymSec || !VerdefSec)
-    return Verdefs;
+    return {};
 
   // The location of the first global versym entry.
   const char *Base = this->MB.getBuffer().data();
@@ -821,7 +804,7 @@ SharedFile<ELFT>::parseVerdefs(const Elf_Versym *&Versym) {
   // sequentially starting from 1, so we predict that the largest identifier
   // will be VerdefCount.
   unsigned VerdefCount = VerdefSec->sh_info;
-  Verdefs.resize(VerdefCount + 1);
+  std::vector<const Elf_Verdef *> Verdefs(VerdefCount + 1);
 
   // Build the Verdefs array by following the chain of Elf_Verdef objects
   // from the start of the .gnu.version_d section.
@@ -876,13 +859,12 @@ template <class ELFT> void SharedFile<ELFT>::parseRest() {
       continue;
     }
 
-    if (Config->EMachine == EM_MIPS) {
-      // FIXME: MIPS BFD linker puts _gp_disp symbol into DSO files
-      // and incorrectly assigns VER_NDX_LOCAL to this section global
-      // symbol. Here is a workaround for this bug.
-      if (Versym && VersymIndex == VER_NDX_LOCAL && Name == "_gp_disp")
-        continue;
-    }
+    // MIPS BFD linker puts _gp_disp symbol into DSO files and incorrectly
+    // assigns VER_NDX_LOCAL to this section global symbol. Here is a
+    // workaround for this bug.
+    if (Config->EMachine == EM_MIPS && VersymIndex == VER_NDX_LOCAL &&
+        Name == "_gp_disp")
+      continue;
 
     const Elf_Verdef *Ver = nullptr;
     if (VersymIndex != VER_NDX_GLOBAL) {
@@ -893,8 +875,6 @@ template <class ELFT> void SharedFile<ELFT>::parseRest() {
         continue;
       }
       Ver = Verdefs[VersymIndex];
-    } else {
-      VersymIndex = 0;
     }
 
     // We do not usually care about alignments of data in shared object

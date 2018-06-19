@@ -2156,27 +2156,13 @@ public:
     return it->second;
   }
 
-  /// getOpaqueLValueMapping - Given an opaque value expression (which
-  /// must be mapped to an l-value), return its mapping.
-  const LValue &getOpaqueLValueMapping(const OpaqueValueExpr *e) {
-    assert(OpaqueValueMapping::shouldBindAsLValue(e));
+  /// Given an opaque value expression, return its LValue mapping if it exists,
+  /// otherwise create one.
+  LValue getOrCreateOpaqueLValueMapping(const OpaqueValueExpr *e);
 
-    llvm::DenseMap<const OpaqueValueExpr*,LValue>::iterator
-      it = OpaqueLValues.find(e);
-    assert(it != OpaqueLValues.end() && "no mapping for opaque value!");
-    return it->second;
-  }
-
-  /// getOpaqueRValueMapping - Given an opaque value expression (which
-  /// must be mapped to an r-value), return its mapping.
-  const RValue &getOpaqueRValueMapping(const OpaqueValueExpr *e) {
-    assert(!OpaqueValueMapping::shouldBindAsLValue(e));
-
-    llvm::DenseMap<const OpaqueValueExpr*,RValue>::iterator
-      it = OpaqueRValues.find(e);
-    assert(it != OpaqueRValues.end() && "no mapping for opaque value!");
-    return it->second;
-  }
+  /// Given an opaque value expression, return its RValue mapping if it exists,
+  /// otherwise create one.
+  RValue getOrCreateOpaqueRValueMapping(const OpaqueValueExpr *e);
 
   /// Get the index of the current ArrayInitLoopExpr, if any.
   llvm::Value *getArrayInitIndex() { return ArrayInitIndex; }
@@ -2378,7 +2364,7 @@ public:
                       CharUnits CookieSize = CharUnits());
 
   RValue EmitBuiltinNewDeleteCall(const FunctionProtoType *Type,
-                                  const Expr *Arg, bool IsDelete);
+                                  const CallExpr *TheCallExpr, bool IsDelete);
 
   llvm::Value *EmitCXXTypeidExpr(const CXXTypeidExpr *E);
   llvm::Value *EmitDynamicCast(Address V, const CXXDynamicCastExpr *DCE);
@@ -3589,6 +3575,8 @@ public:
   llvm::Value *EmitARCLoadWeak(Address addr);
   llvm::Value *EmitARCLoadWeakRetained(Address addr);
   llvm::Value *EmitARCStoreWeak(Address addr, llvm::Value *value, bool ignored);
+  void emitARCCopyAssignWeak(QualType Ty, Address DstAddr, Address SrcAddr);
+  void emitARCMoveAssignWeak(QualType Ty, Address DstAddr, Address SrcAddr);
   void EmitARCCopyWeak(Address dst, Address src);
   void EmitARCMoveWeak(Address dst, Address src);
   llvm::Value *EmitARCRetainAutorelease(QualType type, llvm::Value *value);

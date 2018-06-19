@@ -318,9 +318,9 @@ def MOV64ImmSExti8 : I<0, Pseudo, (outs GR64:$dst), (ins i64i8imm:$src), "",
 // use MOV32ri with a SUBREG_TO_REG to represent the zero-extension, however
 // that would make it more difficult to rematerialize.
 let isReMaterializable = 1, isAsCheapAsAMove = 1,
-    isPseudo = 1, hasSideEffects = 0, SchedRW = [WriteALU] in
+    isPseudo = 1, hasSideEffects = 0, SchedRW = [WriteMove] in
 def MOV32ri64 : I<0, Pseudo, (outs GR32:$dst), (ins i64i32imm:$src), "", [],
-                  IIC_ALU_NONMEM>;
+                  IIC_MOV>;
 
 // This 64-bit pseudo-move can be used for both a 64-bit constant that is
 // actually the zero-extension of a 32-bit constant and for labels in the
@@ -1340,13 +1340,16 @@ let isConvertibleToThreeAddress = 1,
 let isCommutable = 1 in {
 def ADD16rr_DB  : I<0, Pseudo, (outs GR16:$dst), (ins GR16:$src1, GR16:$src2),
                     "", // orw/addw REG, REG
-                    [(set GR16:$dst, (or_is_add GR16:$src1, GR16:$src2))]>;
+                    [(set GR16:$dst, (or_is_add GR16:$src1, GR16:$src2))], 
+                    IIC_BIN_NONMEM>;
 def ADD32rr_DB  : I<0, Pseudo, (outs GR32:$dst), (ins GR32:$src1, GR32:$src2),
                     "", // orl/addl REG, REG
-                    [(set GR32:$dst, (or_is_add GR32:$src1, GR32:$src2))]>;
+                    [(set GR32:$dst, (or_is_add GR32:$src1, GR32:$src2))],
+                    IIC_BIN_NONMEM>;
 def ADD64rr_DB  : I<0, Pseudo, (outs GR64:$dst), (ins GR64:$src1, GR64:$src2),
                     "", // orq/addq REG, REG
-                    [(set GR64:$dst, (or_is_add GR64:$src1, GR64:$src2))]>;
+                    [(set GR64:$dst, (or_is_add GR64:$src1, GR64:$src2))],
+                    IIC_BIN_NONMEM>;
 } // isCommutable
 
 // NOTE: These are order specific, we want the ri8 forms to be listed
@@ -1355,30 +1358,36 @@ def ADD64rr_DB  : I<0, Pseudo, (outs GR64:$dst), (ins GR64:$src1, GR64:$src2),
 def ADD16ri8_DB : I<0, Pseudo,
                     (outs GR16:$dst), (ins GR16:$src1, i16i8imm:$src2),
                     "", // orw/addw REG, imm8
-                    [(set GR16:$dst,(or_is_add GR16:$src1,i16immSExt8:$src2))]>;
+                    [(set GR16:$dst,(or_is_add GR16:$src1,i16immSExt8:$src2))],
+                    IIC_BIN_NONMEM>;
 def ADD16ri_DB  : I<0, Pseudo, (outs GR16:$dst), (ins GR16:$src1, i16imm:$src2),
                     "", // orw/addw REG, imm
-                    [(set GR16:$dst, (or_is_add GR16:$src1, imm:$src2))]>;
+                    [(set GR16:$dst, (or_is_add GR16:$src1, imm:$src2))],
+                    IIC_BIN_NONMEM>;
 
 def ADD32ri8_DB : I<0, Pseudo,
                     (outs GR32:$dst), (ins GR32:$src1, i32i8imm:$src2),
                     "", // orl/addl REG, imm8
-                    [(set GR32:$dst,(or_is_add GR32:$src1,i32immSExt8:$src2))]>;
+                    [(set GR32:$dst,(or_is_add GR32:$src1,i32immSExt8:$src2))],
+                    IIC_BIN_NONMEM>;
 def ADD32ri_DB  : I<0, Pseudo, (outs GR32:$dst), (ins GR32:$src1, i32imm:$src2),
                     "", // orl/addl REG, imm
-                    [(set GR32:$dst, (or_is_add GR32:$src1, imm:$src2))]>;
+                    [(set GR32:$dst, (or_is_add GR32:$src1, imm:$src2))],
+                    IIC_BIN_NONMEM>;
 
 
 def ADD64ri8_DB : I<0, Pseudo,
                     (outs GR64:$dst), (ins GR64:$src1, i64i8imm:$src2),
                     "", // orq/addq REG, imm8
                     [(set GR64:$dst, (or_is_add GR64:$src1,
-                                                i64immSExt8:$src2))]>;
+                                                i64immSExt8:$src2))],
+                    IIC_BIN_NONMEM>;
 def ADD64ri32_DB : I<0, Pseudo,
                      (outs GR64:$dst), (ins GR64:$src1, i64i32imm:$src2),
-                      "", // orq/addq REG, imm
-                      [(set GR64:$dst, (or_is_add GR64:$src1,
-                                                  i64immSExt32:$src2))]>;
+                     "", // orq/addq REG, imm
+                     [(set GR64:$dst, (or_is_add GR64:$src1,
+                                                 i64immSExt32:$src2))],
+                     IIC_BIN_NONMEM>;
 }
 } // AddedComplexity, SchedRW
 
@@ -1569,16 +1578,16 @@ def : Pat<(i8 (trunc (srl_su GR32:$src, (i8 8)))),
       Requires<[Not64BitMode]>;
 def : Pat<(srl GR16:$src, (i8 8)),
           (EXTRACT_SUBREG
-            (MOVZX32_NOREXrr8 (EXTRACT_SUBREG GR16:$src, sub_8bit_hi)),
+            (MOVZX32rr8_NOREX (EXTRACT_SUBREG GR16:$src, sub_8bit_hi)),
             sub_16bit)>;
 def : Pat<(i32 (zext (srl_su GR16:$src, (i8 8)))),
-          (MOVZX32_NOREXrr8 (EXTRACT_SUBREG GR16:$src, sub_8bit_hi))>;
+          (MOVZX32rr8_NOREX (EXTRACT_SUBREG GR16:$src, sub_8bit_hi))>;
 def : Pat<(i32 (anyext (srl_su GR16:$src, (i8 8)))),
-          (MOVZX32_NOREXrr8 (EXTRACT_SUBREG GR16:$src, sub_8bit_hi))>;
+          (MOVZX32rr8_NOREX (EXTRACT_SUBREG GR16:$src, sub_8bit_hi))>;
 def : Pat<(and (srl_su GR32:$src, (i8 8)), (i32 255)),
-          (MOVZX32_NOREXrr8 (EXTRACT_SUBREG GR32:$src, sub_8bit_hi))>;
+          (MOVZX32rr8_NOREX (EXTRACT_SUBREG GR32:$src, sub_8bit_hi))>;
 def : Pat<(srl (and_su GR32:$src, immff00_ffff), (i8 8)),
-          (MOVZX32_NOREXrr8 (EXTRACT_SUBREG GR32:$src, sub_8bit_hi))>;
+          (MOVZX32rr8_NOREX (EXTRACT_SUBREG GR32:$src, sub_8bit_hi))>;
 
 // h-register tricks.
 // For now, be conservative on x86-64 and use an h-register extract only if the
@@ -1591,19 +1600,19 @@ def : Pat<(srl (and_su GR32:$src, immff00_ffff), (i8 8)),
 def : Pat<(and (srl_su GR64:$src, (i8 8)), (i64 255)),
           (SUBREG_TO_REG
             (i64 0),
-            (MOVZX32_NOREXrr8
+            (MOVZX32rr8_NOREX
               (EXTRACT_SUBREG GR64:$src, sub_8bit_hi)),
             sub_32bit)>;
 def : Pat<(i64 (zext (srl_su GR16:$src, (i8 8)))),
           (SUBREG_TO_REG
             (i64 0),
-            (MOVZX32_NOREXrr8
+            (MOVZX32rr8_NOREX
               (EXTRACT_SUBREG GR16:$src, sub_8bit_hi)),
             sub_32bit)>;
 def : Pat<(i64 (anyext (srl_su GR16:$src, (i8 8)))),
           (SUBREG_TO_REG
             (i64 0),
-            (MOVZX32_NOREXrr8
+            (MOVZX32rr8_NOREX
               (EXTRACT_SUBREG GR16:$src, sub_8bit_hi)),
             sub_32bit)>;
 

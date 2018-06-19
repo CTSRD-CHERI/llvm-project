@@ -3078,6 +3078,7 @@ void ItaniumRTTIBuilder::BuildVTablePointer(const Type *Ty) {
   }
 
   llvm::Constant *VTable =
+#if 0 // PREVIOUS CODE:
     CGM.getModule().getGlobalVariable(VTableName);
   if (VTable)
     VTable = llvm::ConstantExpr::getBitCast(VTable, CGM.Int8PtrPtrTy);
@@ -3087,6 +3088,10 @@ void ItaniumRTTIBuilder::BuildVTablePointer(const Type *Ty) {
             llvm::GlobalVariable::ExternalLinkage, nullptr, VTableName,
             nullptr, llvm::GlobalValue::NotThreadLocal, DefaultAS);
   }
+#else // UPSTREAM CODE
+     CGM.getModule().getOrInsertGlobal(VTableName, CGM.Int8PtrTy);
+#endif
+  CGM.setDSOLocal(cast<llvm::GlobalValue>(VTable->stripPointerCasts()));
 
   llvm::Type *PtrDiffTy =
     CGM.getTypes().ConvertType(CGM.getContext().getPointerDiffType());

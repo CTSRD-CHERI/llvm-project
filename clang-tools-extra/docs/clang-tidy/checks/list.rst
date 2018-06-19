@@ -51,6 +51,7 @@ Clang-Tidy Checks
    bugprone-undefined-memory-manipulation
    bugprone-undelegated-constructor
    bugprone-unused-raii
+   bugprone-unused-return-value
    bugprone-use-after-move
    bugprone-virtual-near-miss
    cert-dcl03-c (redirects to misc-static-assert) <cert-dcl03-c>
@@ -121,6 +122,7 @@ Clang-Tidy Checks
    hicpp-invalid-access-moved (redirects to bugprone-use-after-move) <hicpp-invalid-access-moved>
    hicpp-member-init (redirects to cppcoreguidelines-pro-type-member-init) <hicpp-member-init>
    hicpp-move-const-arg (redirects to performance-move-const-arg) <hicpp-move-const-arg>
+   hicpp-multiway-paths-covered
    hicpp-named-parameter (redirects to readability-named-parameter) <hicpp-named-parameter>
    hicpp-new-delete-operators (redirects to misc-new-delete-overloads) <hicpp-new-delete-operators>
    hicpp-no-array-decay (redirects to cppcoreguidelines-pro-bounds-array-to-pointer-decay) <hicpp-no-array-decay>

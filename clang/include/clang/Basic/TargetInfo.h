@@ -62,6 +62,8 @@ protected:
   bool VLASupported;
   bool NoAsmVariants;  // True if {|} are normal characters.
   bool CapabilityABI = false;
+  bool HasLegalHalfType; // True if the backend supports operations on the half
+                         // LLVM IR type.
   bool HasFloat128;
   unsigned short PointerWidth, PointerAlign;
   unsigned char BoolWidth, BoolAlign;
@@ -395,6 +397,9 @@ public:
   virtual bool hasInt128Type() const {
     return (getPointerWidth(0) >= 64) || getTargetOpts().ForceEnableInt128;
   } // FIXME
+
+  /// \brief Determine whether _Float16 is supported on this target.
+  virtual bool hasLegalHalfType() const { return HasLegalHalfType; }
 
   /// \brief Determine whether the __float128 type is supported on this target.
   virtual bool hasFloat128Type() const { return HasFloat128; }

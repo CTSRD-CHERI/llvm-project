@@ -25,26 +25,77 @@ using namespace llvm;
 
 namespace mca {
 
-void RegisterFile::addRegisterMapping(WriteState &WS) {
+void RegisterFile::addRegisterFile(ArrayRef<unsigned> RegisterClasses,
+                                   unsigned NumTemps) {
+  unsigned RegisterFileIndex = RegisterFiles.size();
+  assert(RegisterFileIndex < 32 && "Too many register files!");
+  RegisterFiles.emplace_back(NumTemps);
+
+  // Special case where there are no register classes specified.
+  // An empty register class set means *all* registers.
+  if (RegisterClasses.empty()) {
+    for (std::pair<WriteState *, unsigned> &Mapping : RegisterMappings)
+      Mapping.second |= 1U << RegisterFileIndex;
+  } else {
+    for (const unsigned RegClassIndex : RegisterClasses) {
+      const MCRegisterClass &RC = MRI.getRegClass(RegClassIndex);
+      for (const MCPhysReg Reg : RC)
+        RegisterMappings[Reg].second |= 1U << RegisterFileIndex;
+    }
+  }
+}
+
+void RegisterFile::createNewMappings(unsigned RegisterFileMask,
+                                     MutableArrayRef<unsigned> UsedPhysRegs) {
+  assert(RegisterFileMask && "RegisterFileMask cannot be zero!");
+  // Notify each register file that contains RegID.
+  do {
+    unsigned NextRegisterFile = llvm::PowerOf2Floor(RegisterFileMask);
+    unsigned RegisterFileIndex = llvm::countTrailingZeros(NextRegisterFile);
+    RegisterMappingTracker &RMT = RegisterFiles[RegisterFileIndex];
+    RMT.NumUsedMappings++;
+    UsedPhysRegs[RegisterFileIndex]++;
+    RegisterFileMask ^= NextRegisterFile;
+  } while (RegisterFileMask);
+}
+
+void RegisterFile::removeMappings(unsigned RegisterFileMask,
+                                  MutableArrayRef<unsigned> FreedPhysRegs) {
+  assert(RegisterFileMask && "RegisterFileMask cannot be zero!");
+  // Notify each register file that contains RegID.
+  do {
+    unsigned NextRegisterFile = llvm::PowerOf2Floor(RegisterFileMask);
+    unsigned RegisterFileIndex = llvm::countTrailingZeros(NextRegisterFile);
+    RegisterMappingTracker &RMT = RegisterFiles[RegisterFileIndex];
+    assert(RMT.NumUsedMappings);
+    RMT.NumUsedMappings--;
+    FreedPhysRegs[RegisterFileIndex]++;
+    RegisterFileMask ^= NextRegisterFile;
+  } while (RegisterFileMask);
+}
+
+void RegisterFile::addRegisterMapping(WriteState &WS,
+                                      MutableArrayRef<unsigned> UsedPhysRegs) {
   unsigned RegID = WS.getRegisterID();
   assert(RegID && "Adding an invalid register definition?");
 
-  RegisterMappings[RegID] = &WS;
+  RegisterMapping &Mapping = RegisterMappings[RegID];
+  Mapping.first = &WS;
   for (MCSubRegIterator I(RegID, &MRI); I.isValid(); ++I)
-    RegisterMappings[*I] = &WS;
-  if (MaxUsedMappings == NumUsedMappings)
-    MaxUsedMappings++;
-  NumUsedMappings++;
-  TotalMappingsCreated++;
+    RegisterMappings[*I].first = &WS;
+
+  createNewMappings(Mapping.second, UsedPhysRegs);
+
   // If this is a partial update, then we are done.
   if (!WS.fullyUpdatesSuperRegs())
     return;
 
   for (MCSuperRegIterator I(RegID, &MRI); I.isValid(); ++I)
-    RegisterMappings[*I] = &WS;
+    RegisterMappings[*I].first = &WS;
 }
 
-void RegisterFile::invalidateRegisterMapping(const WriteState &WS) {
+void RegisterFile::invalidateRegisterMapping(
+    const WriteState &WS, MutableArrayRef<unsigned> FreedPhysRegs) {
   unsigned RegID = WS.getRegisterID();
   bool ShouldInvalidateSuperRegs = WS.fullyUpdatesSuperRegs();
 
@@ -52,42 +103,31 @@ void RegisterFile::invalidateRegisterMapping(const WriteState &WS) {
   assert(WS.getCyclesLeft() != -512 &&
          "Invalidating a write of unknown cycles!");
   assert(WS.getCyclesLeft() <= 0 && "Invalid cycles left for this write!");
-  if (!RegisterMappings[RegID])
+  RegisterMapping &Mapping = RegisterMappings[RegID];
+  if (!Mapping.first)
     return;
 
-  assert(NumUsedMappings);
-  NumUsedMappings--;
+  removeMappings(Mapping.second, FreedPhysRegs);
 
-  if (RegisterMappings[RegID] == &WS)
-    RegisterMappings[RegID] = nullptr;
+  if (Mapping.first == &WS)
+    Mapping.first = nullptr;
 
   for (MCSubRegIterator I(RegID, &MRI); I.isValid(); ++I)
-    if (RegisterMappings[*I] == &WS)
-      RegisterMappings[*I] = nullptr;
+    if (RegisterMappings[*I].first == &WS)
+      RegisterMappings[*I].first = nullptr;
 
   if (!ShouldInvalidateSuperRegs)
     return;
 
   for (MCSuperRegIterator I(RegID, &MRI); I.isValid(); ++I)
-    if (RegisterMappings[*I] == &WS)
-      RegisterMappings[*I] = nullptr;
-}
-
-// Update the number of used mappings in the event of instruction retired.
-// This mehod delegates to the register file the task of invalidating
-// register mappings that were created for instruction IS.
-void DispatchUnit::invalidateRegisterMappings(const Instruction &IS) {
-  for (const std::unique_ptr<WriteState> &WS : IS.getDefs()) {
-    DEBUG(dbgs() << "[RAT] Invalidating mapping for: ");
-    DEBUG(WS->dump());
-    RAT->invalidateRegisterMapping(*WS.get());
-  }
+    if (RegisterMappings[*I].first == &WS)
+      RegisterMappings[*I].first = nullptr;
 }
 
 void RegisterFile::collectWrites(SmallVectorImpl<WriteState *> &Writes,
                                  unsigned RegID) const {
   assert(RegID && RegID < RegisterMappings.size());
-  WriteState *WS = RegisterMappings[RegID];
+  WriteState *WS = RegisterMappings[RegID].first;
   if (WS) {
     DEBUG(dbgs() << "Found a dependent use of RegID=" << RegID << '\n');
     Writes.push_back(WS);
@@ -95,7 +135,7 @@ void RegisterFile::collectWrites(SmallVectorImpl<WriteState *> &Writes,
 
   // Handle potential partial register updates.
   for (MCSubRegIterator I(RegID, &MRI); I.isValid(); ++I) {
-    WS = RegisterMappings[*I];
+    WS = RegisterMappings[*I].first;
     if (WS && std::find(Writes.begin(), Writes.end(), WS) == Writes.end()) {
       DEBUG(dbgs() << "Found a dependent use of subReg " << *I << " (part of "
                    << RegID << ")\n");
@@ -104,32 +144,65 @@ void RegisterFile::collectWrites(SmallVectorImpl<WriteState *> &Writes,
   }
 }
 
-bool RegisterFile::isAvailable(unsigned NumRegWrites) {
-  if (!TotalMappings)
-    return true;
-  if (NumRegWrites > TotalMappings) {
-    // The user specified a too small number of registers.
-    // Artificially set the number of temporaries to NumRegWrites.
-    errs() << "warning: not enough temporaries in the register file. "
-           << "The register file size has been automatically increased to "
-           << NumRegWrites << '\n';
-    TotalMappings = NumRegWrites;
+unsigned RegisterFile::isAvailable(ArrayRef<unsigned> Regs) const {
+  SmallVector<unsigned, 4> NumTemporaries(getNumRegisterFiles());
+
+  // Find how many new mappings must be created for each register file.
+  for (const unsigned RegID : Regs) {
+    unsigned RegisterFileMask = RegisterMappings[RegID].second;
+    do {
+      unsigned NextRegisterFileID = llvm::PowerOf2Floor(RegisterFileMask);
+      NumTemporaries[llvm::countTrailingZeros(NextRegisterFileID)]++;
+      RegisterFileMask ^= NextRegisterFileID;
+    } while (RegisterFileMask);
   }
 
-  return NumRegWrites + NumUsedMappings <= TotalMappings;
+  unsigned Response = 0;
+  for (unsigned I = 0, E = getNumRegisterFiles(); I < E; ++I) {
+    unsigned Temporaries = NumTemporaries[I];
+    if (!Temporaries)
+      continue;
+
+    const RegisterMappingTracker &RMT = RegisterFiles[I];
+    if (!RMT.TotalMappings) {
+      // The register file has an unbound number of microarchitectural
+      // registers.
+      continue;
+    }
+
+    if (RMT.TotalMappings < Temporaries) {
+      // The current register file is too small. This may occur if the number of
+      // microarchitectural registers in register file #0 was changed by the
+      // users via flag -reg-file-size. Alternatively, the scheduling model
+      // specified a too small number of registers for this register file.
+      report_fatal_error(
+          "Not enough microarchitectural registers in the register file");
+    }
+
+    if (RMT.TotalMappings < RMT.NumUsedMappings + Temporaries)
+      Response |= (1U << I);
+  }
+
+  return Response;
 }
 
 #ifndef NDEBUG
 void RegisterFile::dump() const {
-  for (unsigned I = 0, E = MRI.getNumRegs(); I < E; ++I)
-    if (RegisterMappings[I]) {
-      dbgs() << MRI.getName(I) << ", " << I << ", ";
-      RegisterMappings[I]->dump();
-    }
+  for (unsigned I = 0, E = MRI.getNumRegs(); I < E; ++I) {
+    const RegisterMapping &RM = RegisterMappings[I];
+    dbgs() << MRI.getName(I) << ", " << I << ", Map=" << RM.second << ", ";
+    if (RM.first)
+      RM.first->dump();
+    else
+      dbgs() << "(null)\n";
+  }
 
-  dbgs() << "TotalMappingsCreated: " << TotalMappingsCreated
-         << ", MaxUsedMappings: " << MaxUsedMappings
-         << ", NumUsedMappings: " << NumUsedMappings << '\n';
+  for (unsigned I = 0, E = getNumRegisterFiles(); I < E; ++I) {
+    dbgs() << "Register File #" << I;
+    const RegisterMappingTracker &RMT = RegisterFiles[I];
+    dbgs() << "\n  TotalMappings:        " << RMT.TotalMappings
+           << "\n  NumUsedMappings:      " << RMT.NumUsedMappings << '\n';
+  }
 }
 #endif
 
@@ -150,19 +223,20 @@ unsigned RetireControlUnit::reserveSlot(unsigned Index, unsigned NumMicroOps) {
   return TokenID;
 }
 
-void DispatchUnit::notifyInstructionDispatched(unsigned Index) {
+void DispatchUnit::notifyInstructionDispatched(
+    unsigned Index, ArrayRef<unsigned> UsedRegs) {
   DEBUG(dbgs() << "[E] Instruction Dispatched: " << Index << '\n');
-  Owner->notifyInstructionEvent(
-      HWInstructionEvent(HWInstructionEvent::Dispatched, Index));
+  Owner->notifyInstructionEvent(HWInstructionDispatchedEvent(Index, UsedRegs));
 }
 
 void DispatchUnit::notifyInstructionRetired(unsigned Index) {
   DEBUG(dbgs() << "[E] Instruction Retired: " << Index << '\n');
-  Owner->notifyInstructionEvent(
-      HWInstructionEvent(HWInstructionEvent::Retired, Index));
-
   const Instruction &IS = Owner->getInstruction(Index);
-  invalidateRegisterMappings(IS);
+  SmallVector<unsigned, 4> FreedRegs(RAT->getNumRegisterFiles());
+  for (const std::unique_ptr<WriteState> &WS : IS.getDefs())
+    RAT->invalidateRegisterMapping(*WS.get(), FreedRegs);
+
+  Owner->notifyInstructionEvent(HWInstructionRetiredEvent(Index, FreedRegs));
   Owner->eraseInstruction(Index);
 }
 
@@ -199,42 +273,50 @@ void RetireControlUnit::dump() const {
 }
 #endif
 
-bool DispatchUnit::checkRAT(const Instruction &Instr) {
+bool DispatchUnit::checkRAT(unsigned Index, const Instruction &Instr) {
   const InstrDesc &Desc = Instr.getDesc();
   unsigned NumWrites = Desc.Writes.size();
-  if (RAT->isAvailable(NumWrites))
-    return true;
-  DispatchStalls[DS_RAT_REG_UNAVAILABLE]++;
-  return false;
+  unsigned RegisterMask = RAT->isAvailable(NumWrites);
+  // A mask with all zeroes means: register files are available.
+  if (RegisterMask) {
+    Owner->notifyStallEvent(
+        HWStallEvent(HWStallEvent::RegisterFileStall, Index));
+    return false;
+  }
+
+  return true;
 }
 
-bool DispatchUnit::checkRCU(const InstrDesc &Desc) {
+bool DispatchUnit::checkRCU(unsigned Index, const InstrDesc &Desc) {
   unsigned NumMicroOps = Desc.NumMicroOps;
   if (RCU->isAvailable(NumMicroOps))
     return true;
-  DispatchStalls[DS_RCU_TOKEN_UNAVAILABLE]++;
+  Owner->notifyStallEvent(
+      HWStallEvent(HWStallEvent::RetireControlUnitStall, Index));
   return false;
 }
 
-bool DispatchUnit::checkScheduler(const InstrDesc &Desc) {
+bool DispatchUnit::checkScheduler(unsigned Index, const InstrDesc &Desc) {
   // If this is a zero-latency instruction, then it bypasses
   // the scheduler.
+  HWStallEvent::GenericEventType Type = HWStallEvent::Invalid;
   switch (SC->canBeDispatched(Desc)) {
   case Scheduler::HWS_AVAILABLE:
     return true;
   case Scheduler::HWS_QUEUE_UNAVAILABLE:
-    DispatchStalls[DS_SQ_TOKEN_UNAVAILABLE]++;
+    Type = HWStallEvent::SchedulerQueueFull;
     break;
   case Scheduler::HWS_LD_QUEUE_UNAVAILABLE:
-    DispatchStalls[DS_LDQ_TOKEN_UNAVAILABLE]++;
+    Type = HWStallEvent::LoadQueueFull;
     break;
   case Scheduler::HWS_ST_QUEUE_UNAVAILABLE:
-    DispatchStalls[DS_STQ_TOKEN_UNAVAILABLE]++;
+    Type = HWStallEvent::StoreQueueFull;
     break;
   case Scheduler::HWS_DISPATCH_GROUP_RESTRICTION:
-    DispatchStalls[DS_DISPATCH_GROUP_RESTRICTION]++;
+    Type = HWStallEvent::DispatchGroupStall;
   }
 
+  Owner->notifyStallEvent(HWStallEvent(Type, Index));
   return false;
 }
 
@@ -266,8 +348,8 @@ void DispatchUnit::updateRAWDependencies(ReadState &RS,
   DependentWrites.clear();
 }
 
-unsigned DispatchUnit::dispatch(unsigned IID, Instruction *NewInst,
-                                const MCSubtargetInfo &STI) {
+void DispatchUnit::dispatch(unsigned IID, Instruction *NewInst,
+                            const MCSubtargetInfo &STI) {
   assert(!CarryOver && "Cannot dispatch another instruction!");
   unsigned NumMicroOps = NewInst->getDesc().NumMicroOps;
   if (NumMicroOps > DispatchWidth) {
@@ -283,37 +365,28 @@ unsigned DispatchUnit::dispatch(unsigned IID, Instruction *NewInst,
   for (std::unique_ptr<ReadState> &RS : NewInst->getUses())
     updateRAWDependencies(*RS, STI);
 
-  // Allocate temporary registers in the register file.
+  // Allocate new mappings.
+  SmallVector<unsigned, 4> RegisterFiles(RAT->getNumRegisterFiles());
   for (std::unique_ptr<WriteState> &WS : NewInst->getDefs())
-    addNewRegisterMapping(*WS);
+    RAT->addRegisterMapping(*WS, RegisterFiles);
 
-  // Set the cycles left before the write-back stage.
-  const InstrDesc &D = NewInst->getDesc();
-  NewInst->setCyclesLeft(D.MaxLatency);
+  // Reserve slots in the RCU, and notify the instruction that it has been
+  // dispatched to the schedulers for execution.
+  NewInst->dispatch(RCU->reserveSlot(IID, NumMicroOps));
 
-  // Reserve slots in the RCU.
-  unsigned RCUTokenID = RCU->reserveSlot(IID, NumMicroOps);
-  NewInst->setRCUTokenID(RCUTokenID);
-  notifyInstructionDispatched(IID);
+  // Notify listeners of the "instruction dispatched" event.
+  notifyInstructionDispatched(IID, RegisterFiles);
 
-  SC->scheduleInstruction(IID, NewInst);
-  return RCUTokenID;
+  // Now move the instruction into the scheduler's queue.
+  // The scheduler is responsible for checking if this is a zero-latency
+  // instruction that doesn't consume pipeline/scheduler resources.
+  SC->scheduleInstruction(IID, *NewInst);
 }
 
 #ifndef NDEBUG
 void DispatchUnit::dump() const {
   RAT->dump();
   RCU->dump();
-
-  unsigned DSRAT = DispatchStalls[DS_RAT_REG_UNAVAILABLE];
-  unsigned DSRCU = DispatchStalls[DS_RCU_TOKEN_UNAVAILABLE];
-  unsigned DSSCHEDQ = DispatchStalls[DS_SQ_TOKEN_UNAVAILABLE];
-  unsigned DSLQ = DispatchStalls[DS_LDQ_TOKEN_UNAVAILABLE];
-  unsigned DSSQ = DispatchStalls[DS_STQ_TOKEN_UNAVAILABLE];
-
-  dbgs() << "STALLS --- RAT: " << DSRAT << ", RCU: " << DSRCU
-         << ", SCHED_QUEUE: " << DSSCHEDQ << ", LOAD_QUEUE: " << DSLQ
-         << ", STORE_QUEUE: " << DSSQ << '\n';
 }
 #endif
 

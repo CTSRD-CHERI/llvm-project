@@ -32,12 +32,10 @@
 #include "llvm/Analysis/DivergenceAnalysis.h"
 #include "llvm/CodeGen/DAGCombine.h"
 #include "llvm/CodeGen/ISDOpcodes.h"
-#include "llvm/CodeGen/MachineValueType.h"
 #include "llvm/CodeGen/RuntimeLibcalls.h"
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
 #include "llvm/CodeGen/TargetCallingConv.h"
-#include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/CallingConv.h"
@@ -49,10 +47,12 @@
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Type.h"
+#include "llvm/IR/ValueTypes.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/Support/AtomicOrdering.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/MachineValueType.h"
 #include "llvm/Target/TargetMachine.h"
 #include <algorithm>
 #include <cassert>
@@ -3583,6 +3583,13 @@ public:
   /// Lower TLS global address SDNode for target independent emulated TLS model.
   virtual SDValue LowerToTLSEmulatedModel(const GlobalAddressSDNode *GA,
                                           SelectionDAG &DAG) const;
+
+  /// Expands target specific indirect branch for the case of JumpTable
+  /// expanasion.
+  virtual SDValue expandIndirectJTBranch(const SDLoc& dl, SDValue Value, SDValue Addr,
+                                         SelectionDAG &DAG) const {
+    return DAG.getNode(ISD::BRIND, dl, MVT::Other, Value, Addr);
+  }
 
   // seteq(x, 0) -> truncate(srl(ctlz(zext(x)), log2(#bits)))
   // If we're comparing for equality to zero and isCtlzFast is true, expose the
