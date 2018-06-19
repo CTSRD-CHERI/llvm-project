@@ -1099,6 +1099,9 @@ private:
   /// Mark predicate values currently being processed by isImpliedCond.
   SmallPtrSet<Value *, 6> PendingLoopPredicates;
 
+  /// Mark SCEVUnknown Phis currently being processed by getRangeRef.
+  SmallPtrSet<const PHINode *, 6> PendingPhiRanges;
+
   /// Set to true by isLoopBackedgeGuardedByCond when we're walking the set of
   /// conditions dominating the backedge of a loop.
   bool WalkingBEDominatingConds = false;
@@ -1768,6 +1771,11 @@ private:
   /// Get mul expr already created or create a new one.
   const SCEV *getOrCreateMulExpr(SmallVectorImpl<const SCEV *> &Ops,
                                  SCEV::NoWrapFlags Flags);
+
+  /// Find all of the loops transitively used in \p S, and fill \p LoopsUsed.
+  /// A loop is considered "used" by an expression if it contains
+  /// an add rec on said loop.
+  void getUsedLoops(const SCEV *S, SmallPtrSetImpl<const Loop *> &LoopsUsed);
 
   /// Find all of the loops transitively used in \p S, and update \c LoopUsers
   /// accordingly.

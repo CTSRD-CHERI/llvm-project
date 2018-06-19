@@ -99,18 +99,6 @@ static uint8_t readVaruint1(const uint8_t *&Ptr) {
   return result;
 }
 
-static int8_t readVarint7(const uint8_t *&Ptr) {
-  int64_t result = readLEB128(Ptr);
-  assert(result <= VARINT7_MAX && result >= VARINT7_MIN);
-  return result;
-}
-
-static uint8_t readVaruint7(const uint8_t *&Ptr) {
-  uint64_t result = readULEB128(Ptr);
-  assert(result <= VARUINT7_MAX);
-  return result;
-}
-
 static int32_t readVarint32(const uint8_t *&Ptr) {
   int64_t result = readLEB128(Ptr);
   assert(result <= INT32_MAX && result >= INT32_MIN);
@@ -174,7 +162,7 @@ static wasm::WasmLimits readLimits(const uint8_t *&Ptr) {
 
 static wasm::WasmTable readTable(const uint8_t *&Ptr) {
   wasm::WasmTable Table;
-  Table.ElemType = readVarint7(Ptr);
+  Table.ElemType = readUint8(Ptr);
   Table.Limits = readLimits(Ptr);
   return Table;
 }
@@ -182,7 +170,7 @@ static wasm::WasmTable readTable(const uint8_t *&Ptr) {
 static Error readSection(WasmSection &Section, const uint8_t *&Ptr,
                          const uint8_t *Start, const uint8_t *Eof) {
   Section.Offset = Ptr - Start;
-  Section.Type = readVaruint7(Ptr);
+  Section.Type = readUint8(Ptr);
   uint32_t Size = readVaruint32(Ptr);
   if (Size == 0)
     return make_error<StringError>("Zero length section",
@@ -197,8 +185,6 @@ static Error readSection(WasmSection &Section, const uint8_t *&Ptr,
 
 WasmObjectFile::WasmObjectFile(MemoryBufferRef Buffer, Error &Err)
     : ObjectFile(Binary::ID_Wasm, Buffer) {
-  LinkingData.DataSize = 0;
-
   ErrorAsOutParameter ErrAsOutParam(&Err);
   Header.Magic = getData().substr(0, 4);
   if (Header.Magic != StringRef("\0asm", 4)) {
@@ -276,7 +262,7 @@ Error WasmObjectFile::parseNameSection(const uint8_t *Ptr, const uint8_t *End) {
   }
 
   while (Ptr < End) {
-    uint8_t Type = readVarint7(Ptr);
+    uint8_t Type = readUint8(Ptr);
     uint32_t Size = readVaruint32(Ptr);
     const uint8_t *SubSectionEnd = Ptr + Size;
     switch (Type) {
@@ -326,16 +312,13 @@ Error WasmObjectFile::parseLinkingSection(const uint8_t *Ptr,
   }
 
   while (Ptr < End) {
-    uint8_t Type = readVarint7(Ptr);
+    uint8_t Type = readUint8(Ptr);
     uint32_t Size = readVaruint32(Ptr);
     const uint8_t *SubSectionEnd = Ptr + Size;
     switch (Type) {
     case wasm::WASM_SYMBOL_TABLE:
       if (Error Err = parseLinkingSectionSymtab(Ptr, SubSectionEnd))
         return Err;
-      break;
-    case wasm::WASM_DATA_SIZE:
-      LinkingData.DataSize = readVaruint32(Ptr);
       break;
     case wasm::WASM_SEGMENT_INFO: {
       uint32_t Count = readVaruint32(Ptr);
@@ -460,7 +443,7 @@ Error WasmObjectFile::parseLinkingSectionSymtab(const uint8_t *&Ptr,
         uint32_t Offset = readVaruint32(Ptr);
         uint32_t Size = readVaruint32(Ptr);
         if (Offset + Size > DataSegments[Index].Data.Content.size())
-          return make_error<GenericBinaryError>("invalid data symbol index",
+          return make_error<GenericBinaryError>("invalid data symbol offset",
                                                 object_error::parse_failed);
         Info.DataRef = wasm::WasmDataReference{Index, Offset, Size};
       }
@@ -553,7 +536,7 @@ WasmSection* WasmObjectFile::findSectionByType(uint32_t Type) {
 
 Error WasmObjectFile::parseRelocSection(StringRef Name, const uint8_t *Ptr,
                                         const uint8_t *End) {
-  uint8_t SectionCode = readVarint7(Ptr);
+  uint8_t SectionCode = readUint8(Ptr);
   WasmSection* Section = nullptr;
   if (SectionCode == wasm::WASM_SEC_CUSTOM) {
     StringRef Name = readString(Ptr);
@@ -618,7 +601,7 @@ Error WasmObjectFile::parseTypeSection(const uint8_t *Ptr, const uint8_t *End) {
   while (Count--) {
     wasm::WasmSignature Sig;
     Sig.ReturnType = wasm::WASM_TYPE_NORESULT;
-    int8_t Form = readVarint7(Ptr);
+    uint8_t Form = readUint8(Ptr);
     if (Form != wasm::WASM_TYPE_FUNC) {
       return make_error<GenericBinaryError>("Invalid signature type",
                                             object_error::parse_failed);
@@ -626,7 +609,7 @@ Error WasmObjectFile::parseTypeSection(const uint8_t *Ptr, const uint8_t *End) {
     uint32_t ParamCount = readVaruint32(Ptr);
     Sig.ParamTypes.reserve(ParamCount);
     while (ParamCount--) {
-      uint32_t ParamType = readVarint7(Ptr);
+      uint32_t ParamType = readUint8(Ptr);
       Sig.ParamTypes.push_back(ParamType);
     }
     uint32_t ReturnCount = readVaruint32(Ptr);
@@ -635,7 +618,7 @@ Error WasmObjectFile::parseTypeSection(const uint8_t *Ptr, const uint8_t *End) {
         return make_error<GenericBinaryError>(
             "Multiple return types not supported", object_error::parse_failed);
       }
-      Sig.ReturnType = readVarint7(Ptr);
+      Sig.ReturnType = readUint8(Ptr);
     }
     Signatures.push_back(Sig);
   }
@@ -660,7 +643,7 @@ Error WasmObjectFile::parseImportSection(const uint8_t *Ptr, const uint8_t *End)
       break;
     case wasm::WASM_EXTERNAL_GLOBAL:
       NumImportedGlobals++;
-      Im.Global.Type = readVarint7(Ptr);
+      Im.Global.Type = readUint8(Ptr);
       Im.Global.Mutable = readVaruint1(Ptr);
       break;
     case wasm::WASM_EXTERNAL_MEMORY:
@@ -731,7 +714,7 @@ Error WasmObjectFile::parseGlobalSection(const uint8_t *Ptr, const uint8_t *End)
   while (Count--) {
     wasm::WasmGlobal Global;
     Global.Index = NumImportedGlobals + Globals.size();
-    Global.Type.Type = readVarint7(Ptr);
+    Global.Type.Type = readUint8(Ptr);
     Global.Type.Mutable = readVaruint1(Ptr);
     if (Error Err = readInitExpr(Global.InitExpr, Ptr))
       return Err;
@@ -839,7 +822,7 @@ Error WasmObjectFile::parseCodeSection(const uint8_t *Ptr, const uint8_t *End) {
     while (NumLocalDecls--) {
       wasm::WasmLocalDecl Decl;
       Decl.Count = readVaruint32(Ptr);
-      Decl.Type = readVarint7(Ptr);
+      Decl.Type = readUint8(Ptr);
       Function.Locals.push_back(Decl);
     }
 

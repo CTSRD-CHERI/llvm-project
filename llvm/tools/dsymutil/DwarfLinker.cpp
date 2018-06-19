@@ -2591,7 +2591,8 @@ void DwarfLinker::keepDIEAndDependencies(RelocationManager &RelocMgr,
   for (const auto &AttrSpec : Abbrev->attributes()) {
     DWARFFormValue Val(AttrSpec.Form);
 
-    if (!Val.isFormClass(DWARFFormValue::FC_Reference)) {
+    if (!Val.isFormClass(DWARFFormValue::FC_Reference) ||
+        AttrSpec.Attr == dwarf::DW_AT_sibling) {
       DWARFFormValue::skipValue(AttrSpec.Form, Data, &Offset,
                                 Unit.getFormParams());
       continue;
@@ -2767,7 +2768,7 @@ unsigned DwarfLinker::DIECloner::cloneDieReferenceAttribute(
       resolveDIEReference(Linker, CompileUnits, Val, U, InputDIE, RefUnit);
 
   // If the referenced DIE is not found,  drop the attribute.
-  if (!RefDie)
+  if (!RefDie || AttrSpec.Attr == dwarf::DW_AT_sibling)
     return 0;
 
   unsigned Idx = RefUnit->getOrigUnit().getDIEIndex(RefDie);
@@ -4134,49 +4135,6 @@ bool DwarfLinker::link(const DebugMap &Map) {
   }
 
   return Options.NoOutput ? true : Streamer->finish(Map);
-}
-
-DwarfStringPoolEntryRef NonRelocatableStringpool::getEntry(StringRef S) {
-  if (S.empty() && !Strings.empty())
-    return EmptyString;
-
-  auto I = Strings.insert(std::make_pair(S, DwarfStringPoolEntry()));
-  auto &Entry = I.first->second;
-  if (I.second || Entry.Index == -1U) {
-    Entry.Index = NumEntries++;
-    Entry.Offset = CurrentEndOffset;
-    Entry.Symbol = nullptr;
-    CurrentEndOffset += S.size() + 1;
-  }
-  return DwarfStringPoolEntryRef(*I.first);
-}
-
-uint32_t NonRelocatableStringpool::getStringOffset(StringRef S) {
-  return getEntry(S).getOffset();
-}
-
-/// Put \p S into the StringMap so that it gets permanent
-/// storage, but do not actually link it in the chain of elements
-/// that go into the output section. A latter call to
-/// getStringOffset() with the same string will chain it though.
-StringRef NonRelocatableStringpool::internString(StringRef S) {
-  DwarfStringPoolEntry Entry{nullptr, 0, -1U};
-  auto InsertResult = Strings.insert(std::make_pair(S, Entry));
-  return InsertResult.first->getKey();
-}
-
-std::vector<DwarfStringPoolEntryRef>
-NonRelocatableStringpool::getEntries() const {
-  std::vector<DwarfStringPoolEntryRef> Result;
-  Result.reserve(Strings.size());
-  for (const auto &E : Strings)
-    Result.emplace_back(E);
-  std::sort(
-      Result.begin(), Result.end(),
-      [](const DwarfStringPoolEntryRef A, const DwarfStringPoolEntryRef B) {
-        return A.getIndex() < B.getIndex();
-      });
-  return Result;
 }
 
 void warn(const Twine &Warning, const Twine &Context) {

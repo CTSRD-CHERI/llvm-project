@@ -49,7 +49,7 @@ target triple = "wasm32-unknown-unknown-wasm"
 ; RELOC:       - Type:            DATA
 ; RELOC-NEXT:     Relocations:
 ; RELOC-NEXT:       - Type:            R_WEBASSEMBLY_MEMORY_ADDR_I32
-; RELOC-NEXT:         Index:           5
+; RELOC-NEXT:         Index:           4
 ; RELOC-NEXT:         Offset:          0x00000018
 ; RELOC-NEXT:     Segments:
 ; RELOC-NEXT:       - SectionOffset:   6
@@ -79,7 +79,6 @@ target triple = "wasm32-unknown-unknown-wasm"
 
 ; RELOC:        - Type:            CUSTOM
 ; RELOC-NEXT:     Name:            linking
-; RELOC-NEXT:     DataSize:        35
 ; RELOC-NEXT:     SymbolTable:
 ; RELOC-NEXT:       - Index:           0
 ; RELOC-NEXT:         Kind:            DATA
@@ -99,7 +98,7 @@ target triple = "wasm32-unknown-unknown-wasm"
 ; RELOC-NEXT:         Flags:           [  ]
 ; RELOC-NEXT:         Segment:         2
 ; RELOC-NEXT:         Size:            4
-; RELOC:            - Index:           5
+; RELOC:            - Index:           4
 ; RELOC-NEXT:         Kind:            DATA
 ; RELOC-NEXT:         Name:            hello_str
 ; RELOC-NEXT:         Flags:           [  ]

@@ -22,15 +22,14 @@ entry:
 
 ; CHECK:        - Type:            CUSTOM
 ; CHECK-NEXT:     Name:            linking
-; CHECK-NEXT:     DataSize:        0
 ; CHECK-NEXT:     SymbolTable:      
 ; CHECK-NEXT:       - Index:           0
-; CHECK-NEXT:         Kind:            DATA
-; CHECK-NEXT:         Name:            weak_external_data
-; CHECK-NEXT:         Flags:           [ BINDING_WEAK, UNDEFINED ]
-; CHECK-NEXT:       - Index:           1
 ; CHECK-NEXT:         Kind:            FUNCTION
 ; CHECK-NEXT:         Name:            weak_function
 ; CHECK-NEXT:         Flags:           [ BINDING_WEAK, VISIBILITY_HIDDEN ]
 ; CHECK-NEXT:         Function:        0
+; CHECK-NEXT:       - Index:           1
+; CHECK-NEXT:         Kind:            DATA
+; CHECK-NEXT:         Name:            weak_external_data
+; CHECK-NEXT:         Flags:           [ BINDING_WEAK, UNDEFINED ]
 ; CHECK-NEXT: ...

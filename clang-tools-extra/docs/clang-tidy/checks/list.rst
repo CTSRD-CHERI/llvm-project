@@ -24,16 +24,28 @@ Clang-Tidy Checks
    bugprone-dangling-handle
    bugprone-fold-init-type
    bugprone-forward-declaration-namespace
+   bugprone-forwarding-reference-overload
    bugprone-inaccurate-erase
    bugprone-incorrect-roundings
    bugprone-integer-division
+   bugprone-lambda-function-name
+   bugprone-macro-repeated-side-effects
    bugprone-misplaced-operator-in-strlen-in-alloc
+   bugprone-misplaced-widening-cast
    bugprone-move-forwarding-reference
    bugprone-multiple-statement-macro
    bugprone-string-constructor
+   bugprone-string-integer-assignment
+   bugprone-string-literal-with-embedded-nul
+   bugprone-suspicious-enum-usage
    bugprone-suspicious-memset-usage
+   bugprone-suspicious-missing-comma
+   bugprone-suspicious-semicolon
+   bugprone-suspicious-string-compare
+   bugprone-swapped-arguments
    bugprone-throw-keyword-missing
    bugprone-undefined-memory-manipulation
+   bugprone-undelegated-constructor
    bugprone-use-after-move
    bugprone-virtual-near-miss
    cert-dcl03-c (redirects to misc-static-assert) <cert-dcl03-c>
@@ -113,7 +125,7 @@ Clang-Tidy Checks
    hicpp-signed-bitwise
    hicpp-special-member-functions (redirects to cppcoreguidelines-special-member-functions) <hicpp-special-member-functions>
    hicpp-static-assert (redirects to misc-static-assert) <hicpp-static-assert>
-   hicpp-undelegated-constructor (redirects to misc-undelegated-constructor) <hicpp-undelegated-constructor>
+   hicpp-undelegated-constructor (redirects to bugprone-undelegated-constructor) <hicpp-undelegated-constructor>
    hicpp-use-auto (redirects to modernize-use-auto) <hicpp-use-auto>
    hicpp-use-emplace (redirects to modernize-use-emplace) <hicpp-use-emplace>
    hicpp-use-equals-default (redirects to modernize-use-equals-default) <hicpp-use-equals-default>
@@ -127,28 +139,16 @@ Clang-Tidy Checks
    llvm-namespace-comment
    llvm-twine-local
    misc-definitions-in-headers
-   misc-forwarding-reference-overload
-   misc-lambda-function-name
    misc-macro-parentheses
-   misc-macro-repeated-side-effects
    misc-misplaced-const
-   misc-misplaced-widening-cast
    misc-new-delete-overloads
    misc-non-copyable-objects
    misc-redundant-expression
    misc-sizeof-container
    misc-sizeof-expression
    misc-static-assert
-   misc-string-integer-assignment
-   misc-string-literal-with-embedded-nul
-   misc-suspicious-enum-usage
-   misc-suspicious-missing-comma
-   misc-suspicious-semicolon
-   misc-suspicious-string-compare
-   misc-swapped-arguments
    misc-throw-by-value-catch-by-reference
    misc-unconventional-assign-operator
-   misc-undelegated-constructor
    misc-uniqueptr-reset-release
    misc-unused-alias-decls
    misc-unused-parameters

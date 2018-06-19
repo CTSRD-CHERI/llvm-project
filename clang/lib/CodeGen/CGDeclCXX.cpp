@@ -79,6 +79,7 @@ static void EmitDeclDestroy(CodeGenFunction &CGF, const VarDecl &D,
 
   case QualType::DK_objc_strong_lifetime:
   case QualType::DK_objc_weak_lifetime:
+  case QualType::DK_nontrivial_c_struct:
     // We don't care about releasing objects during process teardown.
     assert(!D.getTLSKind() && "should have rejected this");
     return;
@@ -321,7 +322,7 @@ llvm::Function *CodeGenModule::CreateGlobalInitOrDestructFunction(
       Fn->setSection(Section);
   }
 
-  SetInternalFunctionAttributes(nullptr, Fn, FI);
+  SetInternalFunctionAttributes(GlobalDecl(), Fn, FI);
 
   Fn->setCallingConv(getRuntimeCC());
 

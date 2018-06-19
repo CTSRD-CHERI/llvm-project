@@ -128,11 +128,9 @@ class OMPLoopScope : public CodeGenFunction::RunCleanupsScope {
       });
     }
     (void)PreCondScope.Privatize();
-    if (auto *LD = dyn_cast<OMPLoopDirective>(&S)) {
-      if (auto *PreInits = cast_or_null<DeclStmt>(LD->getPreInits())) {
-        for (const auto *I : PreInits->decls())
-          CGF.EmitVarDecl(cast<VarDecl>(*I));
-      }
+    if (auto *PreInits = cast_or_null<DeclStmt>(S.getPreInits())) {
+      for (const auto *I : PreInits->decls())
+        CGF.EmitVarDecl(cast<VarDecl>(*I));
     }
   }
 
@@ -4260,6 +4258,7 @@ void CodeGenFunction::EmitOMPTeamsDistributeParallelForSimdDirective(
 static void emitTargetTeamsDistributeParallelForRegion(
     CodeGenFunction &CGF, const OMPTargetTeamsDistributeParallelForDirective &S,
     PrePostActionTy &Action) {
+  Action.Enter(CGF);
   auto &&CodeGenDistribute = [&S](CodeGenFunction &CGF, PrePostActionTy &) {
     CGF.EmitOMPDistributeLoop(S, emitInnerParallelForWhenCombined,
                               S.getDistInc());
@@ -4310,6 +4309,7 @@ static void emitTargetTeamsDistributeParallelForSimdRegion(
     CodeGenFunction &CGF,
     const OMPTargetTeamsDistributeParallelForSimdDirective &S,
     PrePostActionTy &Action) {
+  Action.Enter(CGF);
   auto &&CodeGenDistribute = [&S](CodeGenFunction &CGF, PrePostActionTy &) {
     CGF.EmitOMPDistributeLoop(S, emitInnerParallelForWhenCombined,
                               S.getDistInc());

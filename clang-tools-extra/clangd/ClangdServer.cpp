@@ -141,7 +141,6 @@ void ClangdServer::forceReparse(PathRef File) {
 void ClangdServer::codeComplete(
     PathRef File, Position Pos, const clangd::CodeCompleteOptions &Opts,
     UniqueFunction<void(Tagged<CompletionList>)> Callback,
-    llvm::Optional<StringRef> OverridenContents,
     IntrusiveRefCntPtr<vfs::FileSystem> *UsedFS) {
   using CallbackType = UniqueFunction<void(Tagged<CompletionList>)>;
 
@@ -154,14 +153,9 @@ void ClangdServer::codeComplete(
   if (!CodeCompleteOpts.Index) // Respect overridden index.
     CodeCompleteOpts.Index = Index;
 
-  std::string Contents;
-  if (OverridenContents) {
-    Contents = OverridenContents->str();
-  } else {
-    VersionedDraft Latest = DraftMgr.getDraft(File);
-    assert(Latest.Draft && "codeComplete called for non-added document");
-    Contents = *Latest.Draft;
-  }
+  VersionedDraft Latest = DraftMgr.getDraft(File);
+  // FIXME(sammccall): return error for consistency?
+  assert(Latest.Draft && "codeComplete called for non-added document");
 
   // Copy PCHs to avoid accessing this->PCHs concurrently
   std::shared_ptr<PCHContainerOperations> PCHs = this->PCHs;
@@ -183,34 +177,27 @@ void ClangdServer::codeComplete(
 
   WorkScheduler.runWithPreamble(
       "CodeComplete", File,
-      Bind(Task, std::move(Contents), File.str(), std::move(Callback)));
+      Bind(Task, std::move(*Latest.Draft), File.str(), std::move(Callback)));
 }
 
 void ClangdServer::signatureHelp(
     PathRef File, Position Pos,
     UniqueFunction<void(llvm::Expected<Tagged<SignatureHelp>>)> Callback,
-    llvm::Optional<StringRef> OverridenContents,
     IntrusiveRefCntPtr<vfs::FileSystem> *UsedFS) {
   auto TaggedFS = FSProvider.getTaggedFileSystem(File);
   if (UsedFS)
     *UsedFS = TaggedFS.Value;
 
-  std::string Contents;
-  if (OverridenContents) {
-    Contents = OverridenContents->str();
-  } else {
-    VersionedDraft Latest = DraftMgr.getDraft(File);
-    if (!Latest.Draft)
-      return Callback(llvm::make_error<llvm::StringError>(
-          "signatureHelp is called for non-added document",
-          llvm::errc::invalid_argument));
-    Contents = std::move(*Latest.Draft);
-  }
+  VersionedDraft Latest = DraftMgr.getDraft(File);
+  if (!Latest.Draft)
+    return Callback(llvm::make_error<llvm::StringError>(
+        "signatureHelp is called for non-added document",
+        llvm::errc::invalid_argument));
 
   auto PCHs = this->PCHs;
-  auto Action = [Contents, Pos, TaggedFS,
-                 PCHs](Path File, decltype(Callback) Callback,
-                       llvm::Expected<InputsAndPreamble> IP) {
+  auto Action = [Pos, TaggedFS, PCHs](std::string Contents, Path File,
+                                      decltype(Callback) Callback,
+                                      llvm::Expected<InputsAndPreamble> IP) {
     if (!IP)
       return Callback(IP.takeError());
 
@@ -223,8 +210,9 @@ void ClangdServer::signatureHelp(
         TaggedFS.Tag));
   };
 
-  WorkScheduler.runWithPreamble("SignatureHelp", File,
-                                Bind(Action, File.str(), std::move(Callback)));
+  WorkScheduler.runWithPreamble(
+      "SignatureHelp", File,
+      Bind(Action, std::move(*Latest.Draft), File.str(), std::move(Callback)));
 }
 
 llvm::Expected<tooling::Replacements>
@@ -313,31 +301,42 @@ void ClangdServer::rename(
       Bind(Action, File.str(), NewName.str(), std::move(Callback)));
 }
 
+/// Creates a `HeaderFile` from \p Header which can be either a URI or a literal
+/// include.
+static llvm::Expected<HeaderFile> toHeaderFile(StringRef Header,
+                                               llvm::StringRef HintPath) {
+  if (isLiteralInclude(Header))
+    return HeaderFile{Header.str(), /*Verbatim=*/true};
+  auto U = URI::parse(Header);
+  if (!U)
+    return U.takeError();
+  auto Resolved = URI::resolve(*U, HintPath);
+  if (!Resolved)
+    return Resolved.takeError();
+  return HeaderFile{std::move(*Resolved), /*Verbatim=*/false};
+};
+
 Expected<tooling::Replacements>
 ClangdServer::insertInclude(PathRef File, StringRef Code,
-                            llvm::StringRef Header) {
+                            StringRef DeclaringHeader,
+                            StringRef InsertedHeader) {
+  assert(!DeclaringHeader.empty() && !InsertedHeader.empty());
   std::string ToInclude;
-  if (Header.startswith("<") || Header.startswith("\"")) {
-    ToInclude = Header;
-  } else {
-    auto U = URI::parse(Header);
-    if (!U)
-      return U.takeError();
-    auto Resolved = URI::resolve(*U, /*HintPath=*/File);
-    if (!Resolved)
-      return Resolved.takeError();
-
-    tooling::CompileCommand CompileCommand =
-        CompileArgs.getCompileCommand(File);
-    auto Include =
-        calculateIncludePath(File, Code, *Resolved, CompileCommand,
-                             FSProvider.getTaggedFileSystem(File).Value);
-    if (!Include)
-      return Include.takeError();
-    if (Include->empty())
-      return tooling::Replacements();
-    ToInclude = std::move(*Include);
-  }
+  auto ResolvedOrginal = toHeaderFile(DeclaringHeader, File);
+  if (!ResolvedOrginal)
+    return ResolvedOrginal.takeError();
+  auto ResolvedPreferred = toHeaderFile(InsertedHeader, File);
+  if (!ResolvedPreferred)
+    return ResolvedPreferred.takeError();
+  tooling::CompileCommand CompileCommand = CompileArgs.getCompileCommand(File);
+  auto Include = calculateIncludePath(
+      File, Code, *ResolvedOrginal, *ResolvedPreferred, CompileCommand,
+      FSProvider.getTaggedFileSystem(File).Value);
+  if (!Include)
+    return Include.takeError();
+  if (Include->empty())
+    return tooling::Replacements();
+  ToInclude = std::move(*Include);
 
   auto Style = format::getStyle("file", File, "llvm");
   if (!Style) {

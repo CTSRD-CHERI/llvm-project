@@ -1536,6 +1536,24 @@ bool TargetLowering::SimplifyDemandedVectorElts(
     }
     break;
   }
+  case ISD::ADD:
+  case ISD::SUB: {
+    APInt SrcUndef, SrcZero;
+    if (SimplifyDemandedVectorElts(Op.getOperand(1), DemandedElts, SrcUndef,
+                                   SrcZero, TLO, Depth + 1))
+      return true;
+    if (SimplifyDemandedVectorElts(Op.getOperand(0), DemandedElts, KnownUndef,
+                                   KnownZero, TLO, Depth + 1))
+      return true;
+    KnownZero &= SrcZero;
+    KnownUndef &= SrcUndef;
+    break;
+  }
+  case ISD::TRUNCATE:
+    if (SimplifyDemandedVectorElts(Op.getOperand(0), DemandedElts, KnownUndef,
+                                   KnownZero, TLO, Depth + 1))
+      return true;
+    break;
   default: {
     if (Op.getOpcode() >= ISD::BUILTIN_OP_END)
       if (SimplifyDemandedVectorEltsForTargetNode(Op, DemandedElts, KnownUndef,
@@ -2203,7 +2221,8 @@ SDValue TargetLowering::SimplifySetCC(EVT VT, SDValue N0, SDValue N1,
       if (C1 == MinVal)
         return DAG.getBoolConstant(false, dl, VT, OpVT); // X < MIN --> false
 
-      if (!VT.isVector()) { // TODO: Support this for vectors.
+      // TODO: Support this for vectors after legalize ops.
+      if (!VT.isVector() || DCI.isBeforeLegalizeOps()) {
         // Canonicalize setlt X, Max --> setne X, Max
         if (C1 == MaxVal)
           return DAG.getSetCC(dl, VT, N0, N1, ISD::SETNE);
@@ -2220,7 +2239,8 @@ SDValue TargetLowering::SimplifySetCC(EVT VT, SDValue N0, SDValue N1,
       if (C1 == MaxVal)
         return DAG.getBoolConstant(false, dl, VT, OpVT); // X > MAX --> false
 
-      if (!VT.isVector()) { // TODO: Support this for vectors.
+      // TODO: Support this for vectors after legalize ops.
+      if (!VT.isVector() || DCI.isBeforeLegalizeOps()) {
         // Canonicalize setgt X, Min --> setne X, Min
         if (C1 == MinVal)
           return DAG.getSetCC(dl, VT, N0, N1, ISD::SETNE);
@@ -2235,7 +2255,8 @@ SDValue TargetLowering::SimplifySetCC(EVT VT, SDValue N0, SDValue N1,
 
     // If we have "setcc X, C0", check to see if we can shrink the immediate
     // by changing cc.
-    if (!VT.isVector()) { // TODO: Support this for vectors.
+    // TODO: Support this for vectors after legalize ops.
+    if (!VT.isVector() || DCI.isBeforeLegalizeOps()) {
       // SETUGT X, SINTMAX  -> SETLT X, 0
       if (Cond == ISD::SETUGT &&
           C1 == APInt::getSignedMaxValue(OperandBitSize))

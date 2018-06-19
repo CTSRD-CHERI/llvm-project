@@ -855,7 +855,7 @@
 				LLDB_ENERGY_CFLAGS = "";
 				"LLDB_ENERGY_CFLAGS[sdk=macosx*]" = "-DLLDB_ENERGY";
 				LLDB_ENERGY_LFLAGS = "";
-				"LLDB_ENERGY_LFLAGS[sdk=macosx*]" = "-weak-lpmenergy -weak-lpmsample";
+				"LLDB_ENERGY_LFLAGS[sdk=macosx*]" = "-lpmenergy -lpmsample";
 				LLDB_ZLIB_CFLAGS = "-DHAVE_LIBZ=1";
 				LLDB_ZLIB_LDFLAGS = "-lz";
 				OTHER_CFLAGS = (
@@ -875,6 +875,8 @@
 					"$(LLDB_COMPRESSION_CFLAGS)",
 					"$(LLDB_ZLIB_CFLAGS)",
 					"$(LLDB_OS_LOG_CFLAGS)",
+					"-isystem",
+					"$(SDKROOT)/System/Library/Frameworks/System.framework/PrivateHeaders",
 				);
 				"OTHER_CPLUSPLUSFLAGS[sdk=iphoneos*][arch=*]" = "$(OTHER_CFLAGS)";
 				OTHER_LDFLAGS = "";
@@ -909,12 +911,7 @@
 				SKIP_INSTALL = YES;
 				"SKIP_INSTALL[sdk=iphoneos*]" = NO;
 				STRIP_INSTALLED_PRODUCT = YES;
-				USER_HEADER_SEARCH_PATHS = (
-					./source,
-					../../source,
-					"$(DERIVED_SOURCES_DIR)",
-					../../include,
-				);
+				USER_HEADER_SEARCH_PATHS = "./source ../../source $(DERIVED_SOURCES_DIR) ../../include";
 				ZERO_LINK = NO;
 			};
 			name = BuildAndIntegration;
@@ -958,7 +955,7 @@
 				LLDB_ENERGY_CFLAGS = "";
 				"LLDB_ENERGY_CFLAGS[sdk=macosx.internal]" = "-DLLDB_ENERGY";
 				LLDB_ENERGY_LFLAGS = "";
-				"LLDB_ENERGY_LFLAGS[sdk=macosx.internal]" = "-weak-lpmenergy -weak-lpmsample";
+				"LLDB_ENERGY_LFLAGS[sdk=macosx.internal]" = "-lpmenergy -lpmsample";
 				LLDB_ZLIB_CFLAGS = "-DHAVE_LIBZ=1";
 				LLDB_ZLIB_LDFLAGS = "-lz";
 				OTHER_CFLAGS = (
@@ -978,6 +975,8 @@
 					"$(LLDB_COMPRESSION_CFLAGS)",
 					"$(LLDB_ZLIB_CFLAGS)",
 					"$(LLDB_OS_LOG_CFLAGS)",
+					"-isystem",
+					"$(SDKROOT)/System/Library/Frameworks/System.framework/PrivateHeaders",
 				);
 				"OTHER_CPLUSPLUSFLAGS[sdk=iphoneos*][arch=*]" = "$(OTHER_CFLAGS)";
 				OTHER_LDFLAGS = "";
@@ -1012,12 +1011,7 @@
 				"SDKROOT[arch=x86_64]" = macosx;
 				"SDKROOT[arch=x86_64h]" = macosx;
 				SKIP_INSTALL = YES;
-				USER_HEADER_SEARCH_PATHS = (
-					./source,
-					../../source,
-					"$(DERIVED_SOURCES_DIR)",
-					../../include,
-				);
+				USER_HEADER_SEARCH_PATHS = "./source ../../source $(DERIVED_SOURCES_DIR) ../../include";
 				ZERO_LINK = NO;
 			};
 			name = Debug;
@@ -1060,7 +1054,7 @@
 				LLDB_ENERGY_CFLAGS = "";
 				"LLDB_ENERGY_CFLAGS[sdk=macosx.internal]" = "-DLLDB_ENERGY";
 				LLDB_ENERGY_LFLAGS = "";
-				"LLDB_ENERGY_LFLAGS[sdk=macosx.internal]" = "-weak-lpmenergy -weak-lpmsample";
+				"LLDB_ENERGY_LFLAGS[sdk=macosx.internal]" = "-lpmenergy -lpmsample";
 				LLDB_ZLIB_CFLAGS = "-DHAVE_LIBZ=1";
 				LLDB_ZLIB_LDFLAGS = "-lz";
 				OTHER_CFLAGS = (
@@ -1080,6 +1074,8 @@
 					"$(LLDB_COMPRESSION_CFLAGS)",
 					"$(LLDB_ZLIB_CFLAGS)",
 					"$(LLDB_OS_LOG_CFLAGS)",
+					"-isystem",
+					"$(SDKROOT)/System/Library/Frameworks/System.framework/PrivateHeaders",
 				);
 				"OTHER_CPLUSPLUSFLAGS[sdk=iphoneos*][arch=*]" = "$(OTHER_CFLAGS)";
 				OTHER_LDFLAGS = "";
@@ -1114,12 +1110,7 @@
 				"SDKROOT[arch=x86_64]" = macosx;
 				"SDKROOT[arch=x86_64h]" = macosx;
 				SKIP_INSTALL = YES;
-				USER_HEADER_SEARCH_PATHS = (
-					./source,
-					../../source,
-					"$(DERIVED_SOURCES_DIR)",
-					../../include,
-				);
+				USER_HEADER_SEARCH_PATHS = "./source ../../source $(DERIVED_SOURCES_DIR) ../../include";
 				ZERO_LINK = NO;
 			};
 			name = Release;
@@ -1171,7 +1162,7 @@
 				LLDB_ENERGY_CFLAGS = "";
 				"LLDB_ENERGY_CFLAGS[sdk=macosx.internal]" = "-DLLDB_ENERGY";
 				LLDB_ENERGY_LFLAGS = "";
-				"LLDB_ENERGY_LFLAGS[sdk=macosx.internal]" = "-weak-lpmenergy -weak-lpmsample";
+				"LLDB_ENERGY_LFLAGS[sdk=macosx.internal]" = "-lpmenergy -lpmsample";
 				LLDB_ZLIB_CFLAGS = "-DHAVE_LIBZ=1";
 				LLDB_ZLIB_LDFLAGS = "-lz";
 				ONLY_ACTIVE_ARCH = YES;
@@ -1205,12 +1196,7 @@
 				"SDKROOT[arch=x86_64h]" = macosx;
 				SKIP_INSTALL = YES;
 				STRIP_INSTALLED_PRODUCT = NO;
-				USER_HEADER_SEARCH_PATHS = (
-					./source,
-					../../source,
-					"$(DERIVED_SOURCES_DIR)",
-					../../include,
-				);
+				USER_HEADER_SEARCH_PATHS = "./source ../../source $(DERIVED_SOURCES_DIR) ../../include";
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_BUILDER = "$(USER)";
 				ZERO_LINK = NO;
@@ -1244,7 +1230,7 @@
 				LLDB_ENERGY_CFLAGS = "";
 				"LLDB_ENERGY_CFLAGS[sdk=macosx.internal]" = "-DLLDB_ENERGY";
 				LLDB_ENERGY_LFLAGS = "";
-				"LLDB_ENERGY_LFLAGS[sdk=macosx.internal]" = "-weak-lpmenergy -weak-lpmsample";
+				"LLDB_ENERGY_LFLAGS[sdk=macosx.internal]" = "-lpmenergy -lpmsample";
 				OTHER_CFLAGS = (
 					"$(LLDB_COMPRESSION_CFLAGS)",
 					"$(LLDB_ZLIB_CFLAGS)",
@@ -1280,12 +1266,7 @@
 				"SDKROOT[arch=x86_64]" = macosx;
 				"SDKROOT[arch=x86_64h]" = macosx;
 				SKIP_INSTALL = YES;
-				USER_HEADER_SEARCH_PATHS = (
-					./source,
-					../../source,
-					"$(DERIVED_SOURCES_DIR)",
-					../../include,
-				);
+				USER_HEADER_SEARCH_PATHS = "./source ../../source $(DERIVED_SOURCES_DIR) ../../include";
 				ZERO_LINK = NO;
 			};
 			name = DebugClang;
@@ -1317,7 +1298,7 @@
 				LLDB_ENERGY_CFLAGS = "";
 				"LLDB_ENERGY_CFLAGS[sdk=macosx.internal]" = "-DLLDB_ENERGY";
 				LLDB_ENERGY_LFLAGS = "";
-				"LLDB_ENERGY_LFLAGS[sdk=macosx.internal]" = "-weak-lpmenergy -weak-lpmsample";
+				"LLDB_ENERGY_LFLAGS[sdk=macosx.internal]" = "-lpmenergy -lpmsample";
 				OTHER_CFLAGS = (
 					"$(LLDB_COMPRESSION_CFLAGS)",
 					"$(LLDB_ZLIB_CFLAGS)",
@@ -1356,12 +1337,7 @@
 				"SDKROOT[arch=x86_64]" = macosx;
 				"SDKROOT[arch=x86_64h]" = macosx;
 				SKIP_INSTALL = YES;
-				USER_HEADER_SEARCH_PATHS = (
-					./source,
-					../../source,
-					"$(DERIVED_SOURCES_DIR)",
-					../../include,
-				);
+				USER_HEADER_SEARCH_PATHS = "./source ../../source $(DERIVED_SOURCES_DIR) ../../include";
 				ZERO_LINK = NO;
 			};
 			name = Release;
@@ -1394,7 +1370,7 @@
 				LLDB_ENERGY_CFLAGS = "";
 				"LLDB_ENERGY_CFLAGS[sdk=macosx*]" = "-DLLDB_ENERGY";
 				LLDB_ENERGY_LFLAGS = "";
-				"LLDB_ENERGY_LFLAGS[sdk=macosx*]" = "-weak-lpmenergy -weak-lpmsample";
+				"LLDB_ENERGY_LFLAGS[sdk=macosx*]" = "-lpmenergy -lpmsample";
 				OTHER_CFLAGS = (
 					"-Wparentheses",
 					"$(LLDB_ENERGY_CFLAGS)",
@@ -1426,12 +1402,7 @@
 				SKIP_INSTALL = YES;
 				"SKIP_INSTALL[sdk=iphoneos*]" = NO;
 				STRIP_INSTALLED_PRODUCT = YES;
-				USER_HEADER_SEARCH_PATHS = (
-					./source,
-					../../source,
-					"$(DERIVED_SOURCES_DIR)",
-					../../include,
-				);
+				USER_HEADER_SEARCH_PATHS = "./source ../../source $(DERIVED_SOURCES_DIR) ../../include";
 				ZERO_LINK = NO;
 			};
 			name = BuildAndIntegration;
@@ -1519,7 +1490,7 @@
 				LLDB_ENERGY_CFLAGS = "";
 				"LLDB_ENERGY_CFLAGS[sdk=macosx.internal]" = "-DLLDB_ENERGY";
 				LLDB_ENERGY_LFLAGS = "";
-				"LLDB_ENERGY_LFLAGS[sdk=macosx.internal]" = "-weak-lpmenergy -weak-lpmsample";
+				"LLDB_ENERGY_LFLAGS[sdk=macosx.internal]" = "-lpmenergy -lpmsample";
 				LLDB_ZLIB_CFLAGS = "-DHAVE_LIBZ=1";
 				LLDB_ZLIB_LDFLAGS = "-lz";
 				OTHER_CFLAGS = (
@@ -1539,6 +1510,8 @@
 					"$(LLDB_COMPRESSION_CFLAGS)",
 					"$(LLDB_ZLIB_CFLAGS)",
 					"$(LLDB_OS_LOG_CFLAGS)",
+					"-isystem",
+					"$(SDKROOT)/System/Library/Frameworks/System.framework/PrivateHeaders",
 				);
 				"OTHER_CPLUSPLUSFLAGS[sdk=iphoneos*][arch=*]" = "$(OTHER_CFLAGS)";
 				"OTHER_LDFLAGS[sdk=iphoneos*][arch=*]" = (
@@ -1572,12 +1545,7 @@
 				"SDKROOT[arch=x86_64]" = macosx;
 				"SDKROOT[arch=x86_64h]" = macosx;
 				SKIP_INSTALL = YES;
-				USER_HEADER_SEARCH_PATHS = (
-					./source,
-					../../source,
-					"$(DERIVED_SOURCES_DIR)",
-					../../include,
-				);
+				USER_HEADER_SEARCH_PATHS = "./source ../../source $(DERIVED_SOURCES_DIR) ../../include";
 				ZERO_LINK = NO;
 			};
 			name = DebugClang;
@@ -1665,7 +1633,7 @@
 				LLDB_ENERGY_CFLAGS = "";
 				"LLDB_ENERGY_CFLAGS[sdk=macosx.internal]" = "-DLLDB_ENERGY";
 				LLDB_ENERGY_LFLAGS = "";
-				"LLDB_ENERGY_LFLAGS[sdk=macosx.internal]" = "-weak-lpmenergy -weak-lpmsample";
+				"LLDB_ENERGY_LFLAGS[sdk=macosx.internal]" = "-lpmenergy -lpmsample";
 				LLDB_ZLIB_CFLAGS = "-DHAVE_LIBZ=1";
 				LLDB_ZLIB_LDFLAGS = "-lz";
 				OTHER_CFLAGS = (
@@ -1684,6 +1652,8 @@
 					"$(LLDB_COMPRESSION_CFLAGS)",
 					"$(LLDB_ZLIB_CFLAGS)",
 					"$(LLDB_OS_LOG_CFLAGS)",
+					"-isystem",
+					"$(SDKROOT)/System/Library/Frameworks/System.framework/PrivateHeaders",
 				);
 				"OTHER_CPLUSPLUSFLAGS[sdk=iphoneos*][arch=*]" = "$(OTHER_CFLAGS)";
 				"OTHER_LDFLAGS[sdk=iphoneos*][arch=*]" = (
@@ -1717,12 +1687,7 @@
 				"SDKROOT[arch=x86_64]" = macosx;
 				"SDKROOT[arch=x86_64h]" = macosx;
 				SKIP_INSTALL = YES;
-				USER_HEADER_SEARCH_PATHS = (
-					./source,
-					../../source,
-					"$(DERIVED_SOURCES_DIR)",
-					../../include,
-				);
+				USER_HEADER_SEARCH_PATHS = "./source ../../source $(DERIVED_SOURCES_DIR) ../../include";
 				ZERO_LINK = NO;
 			};
 			name = DebugPresubmission;
@@ -1754,7 +1719,7 @@
 				LLDB_ENERGY_CFLAGS = "";
 				"LLDB_ENERGY_CFLAGS[sdk=macosx.internal]" = "-DLLDB_ENERGY";
 				LLDB_ENERGY_LFLAGS = "";
-				"LLDB_ENERGY_LFLAGS[sdk=macosx.internal]" = "-weak-lpmenergy -weak-lpmsample";
+				"LLDB_ENERGY_LFLAGS[sdk=macosx.internal]" = "-lpmenergy -lpmsample";
 				OTHER_CFLAGS = (
 					"-Wparentheses",
 					"$(LLDB_ENERGY_CFLAGS)",
@@ -1788,12 +1753,7 @@
 				"SDKROOT[arch=x86_64]" = macosx;
 				"SDKROOT[arch=x86_64h]" = macosx;
 				SKIP_INSTALL = YES;
-				USER_HEADER_SEARCH_PATHS = (
-					./source,
-					../../source,
-					"$(DERIVED_SOURCES_DIR)",
-					../../include,
-				);
+				USER_HEADER_SEARCH_PATHS = "./source ../../source $(DERIVED_SOURCES_DIR) ../../include";
 				ZERO_LINK = NO;
 			};
 			name = DebugPresubmission;
@@ -1885,7 +1845,7 @@
 				LLDB_ENERGY_CFLAGS = "";
 				"LLDB_ENERGY_CFLAGS[sdk=macosx.internal]" = "-DLLDB_ENERGY";
 				LLDB_ENERGY_LFLAGS = "";
-				"LLDB_ENERGY_LFLAGS[sdk=macosx.internal]" = "-weak-lpmenergy -weak-lpmsample";
+				"LLDB_ENERGY_LFLAGS[sdk=macosx.internal]" = "-lpmenergy -lpmsample";
 				LLDB_ZLIB_CFLAGS = "-DHAVE_LIBZ=1";
 				LLDB_ZLIB_LDFLAGS = "-lz";
 				OTHER_CFLAGS = (
@@ -1905,6 +1865,8 @@
 					"$(LLDB_COMPRESSION_CFLAGS)",
 					"$(LLDB_ZLIB_CFLAGS)",
 					"$(LLDB_OS_LOG_CFLAGS)",
+					"-isystem",
+					"$(SDKROOT)/System/Library/Frameworks/System.framework/PrivateHeaders",
 				);
 				"OTHER_CPLUSPLUSFLAGS[sdk=iphoneos*][arch=*]" = "$(OTHER_CFLAGS)";
 				OTHER_LDFLAGS = "";
@@ -1939,12 +1901,7 @@
 				"SDKROOT[arch=x86_64]" = macosx;
 				"SDKROOT[arch=x86_64h]" = macosx;
 				SKIP_INSTALL = YES;
-				USER_HEADER_SEARCH_PATHS = (
-					./source,
-					../../source,
-					"$(DERIVED_SOURCES_DIR)",
-					../../include,
-				);
+				USER_HEADER_SEARCH_PATHS = "./source ../../source $(DERIVED_SOURCES_DIR) ../../include";
 				ZERO_LINK = NO;
 			};
 			name = "CustomSwift-Debug";
@@ -2022,7 +1979,7 @@
 				LLDB_ENERGY_CFLAGS = "";
 				"LLDB_ENERGY_CFLAGS[sdk=macosx.internal]" = "-DLLDB_ENERGY";
 				LLDB_ENERGY_LFLAGS = "";
-				"LLDB_ENERGY_LFLAGS[sdk=macosx.internal]" = "-weak-lpmenergy -weak-lpmsample";
+				"LLDB_ENERGY_LFLAGS[sdk=macosx.internal]" = "-lpmenergy -lpmsample";
 				LLDB_ZLIB_CFLAGS = "-DHAVE_LIBZ=1";
 				LLDB_ZLIB_LDFLAGS = "-lz";
 				OTHER_CFLAGS = (
@@ -2042,6 +1999,8 @@
 					"$(LLDB_COMPRESSION_CFLAGS)",
 					"$(LLDB_ZLIB_CFLAGS)",
 					"$(LLDB_OS_LOG_CFLAGS)",
+					"-isystem",
+					"$(SDKROOT)/System/Library/Frameworks/System.framework/PrivateHeaders",
 				);
 				"OTHER_CPLUSPLUSFLAGS[sdk=iphoneos*][arch=*]" = "$(OTHER_CFLAGS)";
 				"OTHER_LDFLAGS[sdk=iphoneos*][arch=*]" = (
@@ -2075,12 +2034,7 @@
 				"SDKROOT[arch=x86_64]" = macosx;
 				"SDKROOT[arch=x86_64h]" = macosx;
 				SKIP_INSTALL = YES;
-				USER_HEADER_SEARCH_PATHS = (
-					./source,
-					../../source,
-					"$(DERIVED_SOURCES_DIR)",
-					../../include,
-				);
+				USER_HEADER_SEARCH_PATHS = "./source ../../source $(DERIVED_SOURCES_DIR) ../../include";
 				ZERO_LINK = NO;
 			};
 			name = "CustomSwift-Release";

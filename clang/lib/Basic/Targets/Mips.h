@@ -489,10 +489,11 @@ public:
   }
 
   bool hasInt128Type() const override {
-    return getTriple().getArch() == llvm::Triple::mips64 ||
+    return (getTriple().getArch() == llvm::Triple::mips64 ||
            getTriple().getArch() == llvm::Triple::cheri ||
            getTriple().getArch() == llvm::Triple::mips64el ||
-           ABI == "n32" || ABI == "n64";
+           ABI == "n32" || ABI == "n64" || ABI == "purecap") ||
+           getTargetOpts().ForceEnableInt128;
   }
 
   unsigned getIntCapWidth() const override { return CapSize; }
