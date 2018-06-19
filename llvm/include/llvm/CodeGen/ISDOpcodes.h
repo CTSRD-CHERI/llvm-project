@@ -14,7 +14,7 @@
 #ifndef LLVM_CODEGEN_ISDOPCODES_H
 #define LLVM_CODEGEN_ISDOPCODES_H
 
-#include "llvm/CodeGen/ValueTypes.h"
+#include "llvm/IR/ValueTypes.h"
 
 namespace llvm {
 

@@ -11,7 +11,7 @@
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/InstVisitor.h"
-#include "llvm/Transforms/Utils/Local.h"
+#include "llvm/Analysis/Utils/Local.h"
 
 #include <string>
 #include <utility>

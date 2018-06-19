@@ -2658,7 +2658,7 @@ Value *LLParser::PerFunctionState::GetVal(const std::string &Name, Type *Ty,
       P.Error(Loc, "'%" + Name + "' is not a basic block");
     else
       P.Error(Loc, "'%" + Name + "' defined with type '" +
-              getTypeString(ValTy) + "' but expected '" +
+              getTypeString(Val->getType()) + "' but expected '" +
               getTypeString(Ty) + "'");
     return nullptr;
   }
@@ -2702,7 +2702,7 @@ Value *LLParser::PerFunctionState::GetVal(unsigned ID, Type *Ty, LocTy Loc,
       P.Error(Loc, "'%" + Twine(ID) + "' is not a basic block");
     else
       P.Error(Loc, "'%" + Twine(ID) + "' defined with type '" +
-              getTypeString(ValTy) + "' but expected '" +
+              getTypeString(Val->getType()) + "' but expected '" +
               getTypeString(Ty) + "'");
     return nullptr;
   }

@@ -329,7 +329,9 @@ let AdditionalPredicates = [NotInMicroMips] in {
 
 def LEA_ADDiu64 : EffectiveAddress<"daddiu", GPR64Opnd>, LW_FM<0x19>;
 
-let DecoderNamespace="Mips64" in
+// XXXAR: we had this pre-merge:
+// let DecoderNamespace="Mips64" in
+let isCodeGenOnly = 1 in
 def RDHWR64 : ReadHardware<GPR64Opnd, HWRegsOpnd>, RDHWR_FM;
 
 let AdditionalPredicates = [NotInMicroMips] in {
@@ -849,14 +851,10 @@ def : MipsInstAlias<"dsra $rd, $rt, $rs",
                     (DSRAV GPR64Opnd:$rd, GPR64Opnd:$rt, GPR32Opnd:$rs), 0>,
                     ISA_MIPS3;
 
-def : MipsInstAlias<"bnez $rs,$offset",
-                    (BNE64 GPR64Opnd:$rs, ZERO_64, brtarget:$offset), 0>;
-def : MipsInstAlias<"bnezl $rs,$offset",
-                    (BNEL64 GPR64Opnd:$rs, ZERO_64, brtarget:$offset), 0>;
-def : MipsInstAlias<"beqz $rs,$offset",
-                    (BEQ64 GPR64Opnd:$rs, ZERO_64, brtarget:$offset), 0>;
-def : MipsInstAlias<"beqzl $rs,$offset",
-                    (BEQL64 GPR64Opnd:$rs, ZERO_64, brtarget:$offset), 0>;
+// def : MipsInstAlias<"bnez $rs,$offset",
+//                     (BNE64 GPR64Opnd:$rs, ZERO_64, brtarget:$offset), 0>;
+// def : MipsInstAlias<"beqz $rs,$offset",
+//                     (BEQ64 GPR64Opnd:$rs, ZERO_64, brtarget:$offset), 0>;
 
 let AdditionalPredicates = [NotInMicroMips] in {
   def : MipsInstAlias<"dsll $rd, $rt, $rs",

@@ -26,7 +26,7 @@
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/InstVisitor.h"
-#include "llvm/Transforms/Utils/Local.h"
+#include "llvm/Analysis/Utils/Local.h"
 #include "llvm/Transforms/CHERICap.h"
 
 using namespace llvm;
