@@ -37,7 +37,6 @@
 #include "llvm/CodeGen/MachineMemOperand.h"
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
-#include "llvm/CodeGen/MachineValueType.h"
 #include "llvm/CodeGen/RegisterScavenging.h"
 #include "llvm/CodeGen/ScheduleDAG.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
@@ -53,6 +52,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/MachineValueType.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Target/TargetMachine.h"
 #include <cassert>
@@ -3927,6 +3927,13 @@ void SIInstrInfo::moveToVALU(MachineInstr &TopInst) const {
         MRI.replaceRegWith(DstReg, Inst.getOperand(1).getReg());
         MRI.clearKillFlags(Inst.getOperand(1).getReg());
         Inst.getOperand(0).setReg(DstReg);
+
+        // Make sure we don't leave around a dead VGPR->SGPR copy. Normally
+        // these are deleted later, but at -O0 it would leave a suspicious
+        // looking illegal copy of an undef register.
+        for (unsigned I = Inst.getNumOperands() - 1; I != 0; --I)
+          Inst.RemoveOperand(I);
+        Inst.setDesc(get(AMDGPU::IMPLICIT_DEF));
         continue;
       }
 

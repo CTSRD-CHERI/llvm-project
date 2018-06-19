@@ -2042,6 +2042,12 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
     }
   }
 
+  if (const Arg *A = Args.getLastArg(OPT_fcf_protection_EQ)) {
+    StringRef Name = A->getValue();
+    if (Name == "full" || Name == "branch") {
+      Opts.CFProtectionBranch = 1;
+    }
+  }
   // -cl-std only applies for OpenCL language standards.
   // Override the -std option in this case.
   if (const Arg *A = Args.getLastArg(OPT_cl_std_EQ)) {
@@ -2366,7 +2372,8 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.DebuggerCastResultToId = Args.hasArg(OPT_fdebugger_cast_result_to_id);
   Opts.DebuggerObjCLiteral = Args.hasArg(OPT_fdebugger_objc_literal);
   Opts.ApplePragmaPack = Args.hasArg(OPT_fapple_pragma_pack);
-  Opts.CurrentModule = Args.getLastArgValue(OPT_fmodule_name_EQ);
+  Opts.ModuleName = Args.getLastArgValue(OPT_fmodule_name_EQ);
+  Opts.CurrentModule = Opts.ModuleName;
   Opts.AppExt = Args.hasArg(OPT_fapplication_extension);
   Opts.ModuleFeatures = Args.getAllArgValues(OPT_fmodule_feature);
   std::sort(Opts.ModuleFeatures.begin(), Opts.ModuleFeatures.end());
@@ -3066,16 +3073,15 @@ createVFSFromCompilerInvocation(const CompilerInvocation &CI,
         BaseFS->getBufferForFile(File);
     if (!Buffer) {
       Diags.Report(diag::err_missing_vfs_overlay_file) << File;
-      return IntrusiveRefCntPtr<vfs::FileSystem>();
+      continue;
     }
 
     IntrusiveRefCntPtr<vfs::FileSystem> FS = vfs::getVFSFromYAML(
         std::move(Buffer.get()), /*DiagHandler*/ nullptr, File);
-    if (!FS.get()) {
+    if (FS)
+      Overlay->pushOverlay(FS);
+    else
       Diags.Report(diag::err_invalid_vfs_overlay) << File;
-      return IntrusiveRefCntPtr<vfs::FileSystem>();
-    }
-    Overlay->pushOverlay(FS);
   }
   return Overlay;
 }

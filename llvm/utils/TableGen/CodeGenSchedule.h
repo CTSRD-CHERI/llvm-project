@@ -33,9 +33,6 @@ using RecIter = std::vector<Record*>::const_iterator;
 using IdxVec = std::vector<unsigned>;
 using IdxIter = std::vector<unsigned>::const_iterator;
 
-void splitSchedReadWrites(const RecVec &RWDefs,
-                          RecVec &WriteDefs, RecVec &ReadDefs);
-
 /// We have two kinds of SchedReadWrites. Explicitly defined and inferred
 /// sequences.  TheDef is nonnull for explicit SchedWrites, but Sequence may or
 /// may not be empty. TheDef is null for inferred sequences, and Sequence must
@@ -142,9 +139,11 @@ struct CodeGenSchedClass {
   // off to join another inferred class.
   RecVec InstRWs;
 
-  CodeGenSchedClass(): Index(0), ItinClassDef(nullptr) {}
+  CodeGenSchedClass(unsigned Index, std::string Name, Record *ItinClassDef)
+    : Index(Index), Name(std::move(Name)), ItinClassDef(ItinClassDef) {}
 
-  bool isKeyEqual(Record *IC, ArrayRef<unsigned> W, ArrayRef<unsigned> R) {
+  bool isKeyEqual(Record *IC, ArrayRef<unsigned> W,
+                  ArrayRef<unsigned> R) const {
     return ItinClassDef == IC && makeArrayRef(Writes) == W &&
            makeArrayRef(Reads) == R;
   }
@@ -200,9 +199,9 @@ struct CodeGenProcModel {
   // Per-operand machine model resources associated with this processor.
   RecVec ProcResourceDefs;
 
-  CodeGenProcModel(unsigned Idx, const std::string &Name, Record *MDef,
+  CodeGenProcModel(unsigned Idx, std::string Name, Record *MDef,
                    Record *IDef) :
-    Index(Idx), ModelName(Name), ModelDef(MDef), ItinsDef(IDef) {}
+    Index(Idx), ModelName(std::move(Name)), ModelDef(MDef), ItinsDef(IDef) {}
 
   bool hasItineraries() const {
     return !ItinsDef->getValueAsListOfDefs("IID").empty();
@@ -339,7 +338,7 @@ public:
     return const_cast<CodeGenSchedModels&>(*this).getSchedRW(Def);
   }
 
-  unsigned getSchedRWIdx(Record *Def, bool IsRead, unsigned After = 0) const;
+  unsigned getSchedRWIdx(Record *Def, bool IsRead) const;
 
   // Return true if the given write record is referenced by a ReadAdvance.
   bool hasReadOfWrite(Record *WriteDef) const;

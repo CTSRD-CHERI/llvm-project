@@ -1,4 +1,4 @@
-//===--------------------- TimelineView.cpp ---------------*- C++ -*-===//
+//===--------------------- TimelineView.cpp ---------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -233,5 +233,4 @@ void TimelineView::printTimeline(raw_ostream &OS) const {
     OS << Buffer;
   }
 }
-
 } // namespace mca

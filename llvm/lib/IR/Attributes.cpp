@@ -299,10 +299,14 @@ std::string Attribute::getAsString(bool InAttrGrp) const {
     return "noredzone";
   if (hasAttribute(Attribute::NoReturn))
     return "noreturn";
+  if (hasAttribute(Attribute::NoCfCheck))
+    return "nocf_check";
   if (hasAttribute(Attribute::NoRecurse))
     return "norecurse";
   if (hasAttribute(Attribute::NoUnwind))
     return "nounwind";
+  if (hasAttribute(Attribute::OptForFuzzing))
+    return "optforfuzzing";
   if (hasAttribute(Attribute::OptimizeNone))
     return "optnone";
   if (hasAttribute(Attribute::OptimizeForSize))

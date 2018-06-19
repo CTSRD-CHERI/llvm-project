@@ -1546,90 +1546,44 @@ template <class ELFT> void ELFDumper<ELFT>::printELFLinkerOptions() {
   ELFDumperStyle->printELFLinkerOptions(Obj);
 }
 
-#define LLVM_READOBJ_TYPE_CASE(name) \
-  case DT_##name: return #name
-
 static const char *getTypeString(unsigned Arch, uint64_t Type) {
+#define DYNAMIC_TAG(n, v)
   switch (Arch) {
   case EM_HEXAGON:
     switch (Type) {
-    LLVM_READOBJ_TYPE_CASE(HEXAGON_SYMSZ);
-    LLVM_READOBJ_TYPE_CASE(HEXAGON_VER);
-    LLVM_READOBJ_TYPE_CASE(HEXAGON_PLT);
+#define HEXAGON_DYNAMIC_TAG(name, value)                                       \
+  case DT_##name:                                                              \
+    return #name;
+#include "llvm/BinaryFormat/DynamicTags.def"
+#undef HEXAGON_DYNAMIC_TAG
     }
   case EM_MIPS:
     switch (Type) {
-    LLVM_READOBJ_TYPE_CASE(MIPS_RLD_MAP_REL);
-    LLVM_READOBJ_TYPE_CASE(MIPS_RLD_VERSION);
-    LLVM_READOBJ_TYPE_CASE(MIPS_FLAGS);
-    LLVM_READOBJ_TYPE_CASE(MIPS_BASE_ADDRESS);
-    LLVM_READOBJ_TYPE_CASE(MIPS_LOCAL_GOTNO);
-    LLVM_READOBJ_TYPE_CASE(MIPS_SYMTABNO);
-    LLVM_READOBJ_TYPE_CASE(MIPS_UNREFEXTNO);
-    LLVM_READOBJ_TYPE_CASE(MIPS_GOTSYM);
-    LLVM_READOBJ_TYPE_CASE(MIPS_RLD_MAP);
-    LLVM_READOBJ_TYPE_CASE(MIPS_PLTGOT);
-    LLVM_READOBJ_TYPE_CASE(MIPS_OPTIONS);
+#define MIPS_DYNAMIC_TAG(name, value)                                          \
+  case DT_##name:                                                              \
+    return #name;
+#include "llvm/BinaryFormat/DynamicTags.def"
+#undef MIPS_DYNAMIC_TAG
     }
   }
+#undef DYNAMIC_TAG
   switch (Type) {
-  LLVM_READOBJ_TYPE_CASE(ANDROID_REL);
-  LLVM_READOBJ_TYPE_CASE(ANDROID_RELSZ);
-  LLVM_READOBJ_TYPE_CASE(ANDROID_RELA);
-  LLVM_READOBJ_TYPE_CASE(ANDROID_RELASZ);
-  LLVM_READOBJ_TYPE_CASE(BIND_NOW);
-  LLVM_READOBJ_TYPE_CASE(DEBUG);
-  LLVM_READOBJ_TYPE_CASE(FINI);
-  LLVM_READOBJ_TYPE_CASE(FINI_ARRAY);
-  LLVM_READOBJ_TYPE_CASE(FINI_ARRAYSZ);
-  LLVM_READOBJ_TYPE_CASE(FLAGS);
-  LLVM_READOBJ_TYPE_CASE(FLAGS_1);
-  LLVM_READOBJ_TYPE_CASE(HASH);
-  LLVM_READOBJ_TYPE_CASE(INIT);
-  LLVM_READOBJ_TYPE_CASE(INIT_ARRAY);
-  LLVM_READOBJ_TYPE_CASE(INIT_ARRAYSZ);
-  LLVM_READOBJ_TYPE_CASE(PREINIT_ARRAY);
-  LLVM_READOBJ_TYPE_CASE(PREINIT_ARRAYSZ);
-  LLVM_READOBJ_TYPE_CASE(JMPREL);
-  LLVM_READOBJ_TYPE_CASE(NEEDED);
-  LLVM_READOBJ_TYPE_CASE(NULL);
-  LLVM_READOBJ_TYPE_CASE(PLTGOT);
-  LLVM_READOBJ_TYPE_CASE(PLTREL);
-  LLVM_READOBJ_TYPE_CASE(PLTRELSZ);
-  LLVM_READOBJ_TYPE_CASE(REL);
-  LLVM_READOBJ_TYPE_CASE(RELA);
-  LLVM_READOBJ_TYPE_CASE(RELENT);
-  LLVM_READOBJ_TYPE_CASE(RELSZ);
-  LLVM_READOBJ_TYPE_CASE(RELAENT);
-  LLVM_READOBJ_TYPE_CASE(RELASZ);
-  LLVM_READOBJ_TYPE_CASE(RPATH);
-  LLVM_READOBJ_TYPE_CASE(RUNPATH);
-  LLVM_READOBJ_TYPE_CASE(SONAME);
-  LLVM_READOBJ_TYPE_CASE(STRSZ);
-  LLVM_READOBJ_TYPE_CASE(STRTAB);
-  LLVM_READOBJ_TYPE_CASE(SYMBOLIC);
-  LLVM_READOBJ_TYPE_CASE(SYMENT);
-  LLVM_READOBJ_TYPE_CASE(SYMTAB);
-  LLVM_READOBJ_TYPE_CASE(TEXTREL);
-  LLVM_READOBJ_TYPE_CASE(VERDEF);
-  LLVM_READOBJ_TYPE_CASE(VERDEFNUM);
-  LLVM_READOBJ_TYPE_CASE(VERNEED);
-  LLVM_READOBJ_TYPE_CASE(VERNEEDNUM);
-  LLVM_READOBJ_TYPE_CASE(VERSYM);
-  LLVM_READOBJ_TYPE_CASE(RELACOUNT);
-  LLVM_READOBJ_TYPE_CASE(RELCOUNT);
-  LLVM_READOBJ_TYPE_CASE(GNU_HASH);
-  LLVM_READOBJ_TYPE_CASE(TLSDESC_PLT);
-  LLVM_READOBJ_TYPE_CASE(TLSDESC_GOT);
-  LLVM_READOBJ_TYPE_CASE(AUXILIARY);
-  LLVM_READOBJ_TYPE_CASE(FILTER);
-  LLVM_READOBJ_TYPE_CASE(CHERI___CAPRELOCS);
-  LLVM_READOBJ_TYPE_CASE(CHERI___CAPRELOCSSZ);
+// Now handle all dynamic tags except the architecture specific ones
+#define MIPS_DYNAMIC_TAG(name, value)
+#define HEXAGON_DYNAMIC_TAG(name, value)
+// Also ignore marker tags such as DT_HIOS (maps to DT_VERNEEDNUM), etc.
+#define DYNAMIC_TAG_MARKER(name, value)
+#define DYNAMIC_TAG(name, value)                                               \
+  case DT_##name:                                                              \
+    return #name;
+#include "llvm/BinaryFormat/DynamicTags.def"
+#undef DYNAMIC_TAG
+#undef MIPS_DYNAMIC_TAG
+#undef HEXAGON_DYNAMIC_TAG
+#undef DYNAMIC_TAG_MARKER
   default: return "unknown";
   }
 }
-
-#undef LLVM_READOBJ_TYPE_CASE
 
 #define LLVM_READOBJ_DT_FLAG_ENT(prefix, enum) \
   { #enum, prefix##_##enum }
@@ -3425,6 +3379,7 @@ static std::string getGNUNoteTypeName(const uint32_t NT) {
       {ELF::NT_GNU_HWCAP, "NT_GNU_HWCAP (DSO-supplied software HWCAP info)"},
       {ELF::NT_GNU_BUILD_ID, "NT_GNU_BUILD_ID (unique build ID bitstring)"},
       {ELF::NT_GNU_GOLD_VERSION, "NT_GNU_GOLD_VERSION (gold version)"},
+      {ELF::NT_GNU_PROPERTY_TYPE_0, "NT_GNU_PROPERTY_TYPE_0 (property note)"},
   };
 
   for (const auto &Note : Notes)
@@ -3489,8 +3444,35 @@ static std::string getAMDGPUNoteTypeName(const uint32_t NT) {
 }
 
 template <typename ELFT>
+static void printGNUProperty(raw_ostream &OS, uint32_t Type, uint32_t DataSize,
+                             ArrayRef<uint8_t> Data) {
+  switch (Type) {
+  default:
+    OS << format("    <application-specific type 0x%x>\n", Type);
+    return;
+  case GNU_PROPERTY_STACK_SIZE: {
+    OS << "    stack size: ";
+    if (DataSize == sizeof(typename ELFT::uint))
+      OS << format("0x%x\n",
+                   (uint64_t)(*(const typename ELFT::Addr *)Data.data()));
+    else
+      OS << format("<corrupt length: 0x%x>\n", DataSize);
+    break;
+  }
+  case GNU_PROPERTY_NO_COPY_ON_PROTECTED:
+    OS << "    no copy on protected";
+    if (DataSize)
+      OS << format(" <corrupt length: 0x%x>", DataSize);
+    OS << "\n";
+    break;
+  }
+}
+
+template <typename ELFT>
 static void printGNUNote(raw_ostream &OS, uint32_t NoteType,
                          ArrayRef<typename ELFT::Word> Words, size_t Size) {
+  using Elf_Word = typename ELFT::Word;
+
   switch (NoteType) {
   default:
     return;
@@ -3522,8 +3504,31 @@ static void printGNUNote(raw_ostream &OS, uint32_t NoteType,
     OS << "    Version: "
        << StringRef(reinterpret_cast<const char *>(Words.data()), Size);
     break;
-  }
+  case ELF::NT_GNU_PROPERTY_TYPE_0:
+    OS << "    Properties:";
 
+    ArrayRef<uint8_t> Arr(reinterpret_cast<const uint8_t *>(Words.data()),
+                          Size);
+    while (Arr.size() >= 8) {
+      uint32_t Type = *reinterpret_cast<const Elf_Word *>(Arr.data());
+      uint32_t DataSize = *reinterpret_cast<const Elf_Word *>(Arr.data() + 4);
+      Arr = Arr.drop_front(8);
+
+      // Take padding size into account if present.
+      uint64_t PaddedSize = alignTo(DataSize, sizeof(typename ELFT::uint));
+      if (Arr.size() < PaddedSize) {
+        OS << format("    <corrupt type (0x%x) datasz: 0x%x>\n", Type,
+                     DataSize);
+        break;
+      }
+      printGNUProperty<ELFT>(OS, Type, DataSize, Arr.take_front(PaddedSize));
+      Arr = Arr.drop_front(PaddedSize);
+    }
+
+    if (!Arr.empty())
+      OS << "    <corrupted GNU_PROPERTY_TYPE_0>";
+    break;
+  }
   OS << '\n';
 }
 

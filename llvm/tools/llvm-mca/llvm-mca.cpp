@@ -23,6 +23,7 @@
 
 #include "BackendPrinter.h"
 #include "BackendStatistics.h"
+#include "InstructionInfoView.h"
 #include "ResourcePressureView.h"
 #include "SummaryView.h"
 #include "TimelineView.h"
@@ -88,6 +89,11 @@ static cl::opt<unsigned>
                      cl::desc("Maximum number of temporary registers which can "
                               "be used for register mappings"),
                      cl::init(0));
+
+static cl::opt<bool>
+    PrintResourcePressureView("resource-pressure",
+                              cl::desc("Print the resource pressure view"),
+                              cl::init(true));
 
 static cl::opt<bool> PrintTimelineView("timeline",
                                        cl::desc("Print the timeline view"),
@@ -198,7 +204,6 @@ public:
 
   const InstVec &GetInstructionSequence() const { return Insts; }
 };
-
 } // end of anonymous namespace
 
 int main(int argc, char **argv) {
@@ -317,32 +322,32 @@ int main(int argc, char **argv) {
   if (DispatchWidth)
     Width = DispatchWidth;
 
+  // Create an instruction builder.
+  std::unique_ptr<mca::InstrBuilder> IB =
+      llvm::make_unique<mca::InstrBuilder>(*STI, *MCII);
+
   std::unique_ptr<mca::Backend> B = llvm::make_unique<mca::Backend>(
-      *STI, *MCII, *MRI, *S, Width, RegisterFileSize, MaxRetirePerCycle,
+      *STI, *MRI, *IB, *S, Width, RegisterFileSize, MaxRetirePerCycle,
       LoadQueueSize, StoreQueueSize, AssumeNoAlias);
 
   std::unique_ptr<mca::BackendPrinter> Printer =
       llvm::make_unique<mca::BackendPrinter>(*B);
 
-  std::unique_ptr<mca::SummaryView> SV =
-      llvm::make_unique<mca::SummaryView>(*STI, *MCII, *S, *IP, Width);
-  Printer->addView(std::move(SV));
+  Printer->addView(llvm::make_unique<mca::SummaryView>(*S, Width));
 
-  if (PrintModeVerbose) {
-    std::unique_ptr<mca::BackendStatistics> BS =
-        llvm::make_unique<mca::BackendStatistics>(*B, *STI);
-    Printer->addView(std::move(BS));
-  }
+  Printer->addView(
+      llvm::make_unique<mca::InstructionInfoView>(*STI, *MCII, *S, *IP));
 
-  std::unique_ptr<mca::ResourcePressureView> RPV =
-      llvm::make_unique<mca::ResourcePressureView>(*STI, *IP, *S);
-  Printer->addView(std::move(RPV));
+  if (PrintModeVerbose)
+    Printer->addView(llvm::make_unique<mca::BackendStatistics>(*STI));
+
+  if (PrintResourcePressureView)
+    Printer->addView(
+        llvm::make_unique<mca::ResourcePressureView>(*STI, *IP, *S));
 
   if (PrintTimelineView) {
-    std::unique_ptr<mca::TimelineView> TV =
-        llvm::make_unique<mca::TimelineView>(
-            *STI, *IP, *S, TimelineMaxIterations, TimelineMaxCycles);
-    Printer->addView(std::move(TV));
+    Printer->addView(llvm::make_unique<mca::TimelineView>(
+        *STI, *IP, *S, TimelineMaxIterations, TimelineMaxCycles));
   }
 
   B->run();

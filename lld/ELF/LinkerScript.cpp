@@ -380,7 +380,10 @@ LinkerScript::computeInputSections(const InputSectionDescription *Cmd) {
       // For -emit-relocs we have to ignore entries like
       //   .rela.dyn : { *(.rela.data) }
       // which are common because they are in the default bfd script.
-      if (Sec->Type == SHT_REL || Sec->Type == SHT_RELA)
+      // We do not ignore SHT_REL[A] linker-synthesized sections here because
+      // want to support scripts that do custom layout for them.
+      if (!isa<SyntheticSection>(Sec) &&
+          (Sec->Type == SHT_REL || Sec->Type == SHT_RELA))
         continue;
 
       std::string Filename = getFilename(Sec->File);
@@ -405,7 +408,7 @@ LinkerScript::computeInputSections(const InputSectionDescription *Cmd) {
 void LinkerScript::discard(ArrayRef<InputSection *> V) {
   for (InputSection *S : V) {
     if (S == InX::ShStrTab || S == InX::Dynamic || S == InX::DynSymTab ||
-        S == InX::DynStrTab)
+        S == InX::DynStrTab || S == InX::RelaPlt || S == InX::RelaDyn)
       error("discarding " + S->Name + " section is not allowed");
 
     // You can discard .hash and .gnu.hash sections by linker scripts. Since
@@ -629,11 +632,11 @@ static OutputSection *addInputSec(StringMap<OutputSection *> &Map,
 void LinkerScript::addOrphanSections() {
   unsigned End = SectionCommands.size();
   StringMap<OutputSection *> Map;
-
   std::vector<OutputSection *> V;
-  for (InputSectionBase *S : InputSections) {
+
+  auto Add = [&](InputSectionBase *S) {
     if (!S->Live || S->Parent)
-      continue;
+      return;
 
     StringRef Name = getOutputSectionName(S);
 
@@ -645,12 +648,25 @@ void LinkerScript::addOrphanSections() {
     if (OutputSection *Sec =
             findByName(makeArrayRef(SectionCommands).slice(0, End), Name)) {
       Sec->addSection(cast<InputSection>(S));
-      continue;
+      return;
     }
 
     if (OutputSection *OS = addInputSec(Map, S, Name))
       V.push_back(OS);
     assert(S->getOutputSection()->SectionIndex == UINT32_MAX);
+  };
+
+  // For futher --emit-reloc handling code we need target output section
+  // to be created before we create relocation output section, so we want
+  // to create target sections first. We do not want priority handling
+  // for synthetic sections because them are special.
+  for (InputSectionBase *IS : InputSections) {
+    if ((IS->Type == SHT_REL || IS->Type == SHT_RELA) &&
+        !isa<SyntheticSection>(IS))
+      if (auto *Rel = cast<InputSection>(IS)->getRelocatedSection())
+        if (auto *RelIS = dyn_cast_or_null<InputSectionBase>(Rel->Parent))
+          Add(RelIS);
+    Add(IS);
   }
 
   // If no SECTIONS command was given, we should insert sections commands

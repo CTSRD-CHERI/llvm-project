@@ -23,6 +23,7 @@
 #include "llvm/Analysis/LoopIterator.h"
 #include "llvm/Analysis/OptimizationRemarkEmitter.h"
 #include "llvm/Analysis/ScalarEvolution.h"
+#include "llvm/Analysis/Utils/Local.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DebugInfoMetadata.h"
@@ -33,7 +34,6 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Cloning.h"
-#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Utils/LoopSimplify.h"
 #include "llvm/Transforms/Utils/LoopUtils.h"
 #include "llvm/Transforms/Utils/SimplifyIndVar.h"
@@ -403,8 +403,9 @@ LoopUnrollResult llvm::UnrollLoop(
          "Did not expect runtime trip-count unrolling "
          "and peeling for the same loop");
 
+  bool Peeled = false;
   if (PeelCount) {
-    bool Peeled = peelLoop(L, PeelCount, LI, SE, DT, AC, PreserveLCSSA);
+    Peeled = peelLoop(L, PeelCount, LI, SE, DT, AC, PreserveLCSSA);
 
     // Successful peeling may result in a change in the loop preheader/trip
     // counts. If we later unroll the loop, we want these to be updated.
@@ -790,7 +791,7 @@ LoopUnrollResult llvm::UnrollLoop(
   }
 
   // Simplify any new induction variables in the partially unrolled loop.
-  if (SE && !CompletelyUnroll && Count > 1) {
+  if (SE && !CompletelyUnroll && (Count > 1 || Peeled)) {
     SmallVector<WeakTrackingVH, 16> DeadInsts;
     simplifyLoopIVs(L, SE, DT, LI, DeadInsts);
 

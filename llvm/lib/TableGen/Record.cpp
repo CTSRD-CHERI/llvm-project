@@ -194,7 +194,7 @@ void RecordRecTy::Profile(FoldingSetNodeID &ID) const {
 
 std::string RecordRecTy::getAsString() const {
   if (NumClasses == 1)
-    return getClasses()[0]->getName();
+    return getClasses()[0]->getNameInitAsString();
 
   std::string Str = "{";
   bool First = true;
@@ -202,7 +202,7 @@ std::string RecordRecTy::getAsString() const {
     if (!First)
       Str += ", ";
     First = false;
-    Str += R->getName();
+    Str += R->getNameInitAsString();
   }
   Str += "}";
   return Str;
@@ -634,13 +634,8 @@ Init *ListInit::resolveReferences(Resolver &R) const {
   bool Changed = false;
 
   for (Init *CurElt : getValues()) {
-    Init *E;
-
-    do {
-      E = CurElt;
-      CurElt = CurElt->resolveReferences(R);
-      Changed |= E != CurElt;
-    } while (E != CurElt);
+    Init *E = CurElt->resolveReferences(R);
+    Changed |= E != CurElt;
     Resolved.push_back(E);
   }
 
@@ -700,7 +695,7 @@ void UnOpInit::Profile(FoldingSetNodeID &ID) const {
   ProfileUnOpInit(ID, getOpcode(), getOperand(), getType());
 }
 
-Init *UnOpInit::Fold(Record *CurRec, MultiClass *CurMultiClass) const {
+Init *UnOpInit::Fold(Record *CurRec, bool IsFinal) const {
   switch (getOpcode()) {
   case CAST:
     if (isa<StringRecTy>(getType())) {
@@ -714,48 +709,35 @@ Init *UnOpInit::Fold(Record *CurRec, MultiClass *CurMultiClass) const {
         return StringInit::get(LHSi->getAsString());
     } else if (isa<RecordRecTy>(getType())) {
       if (StringInit *Name = dyn_cast<StringInit>(LHS)) {
-        // From TGParser::ParseIDValue
-        if (CurRec) {
-          if (const RecordVal *RV = CurRec->getValue(Name)) {
-            if (RV->getType() != getType())
-              PrintFatalError("type mismatch in cast");
-            return VarInit::get(Name, RV->getType());
-          }
-
-          Init *TemplateArgName = QualifyName(*CurRec, CurMultiClass, Name,
-                                              ":");
-
-          if (CurRec->isTemplateArg(TemplateArgName)) {
-            const RecordVal *RV = CurRec->getValue(TemplateArgName);
-            assert(RV && "Template arg doesn't exist??");
-
-            if (RV->getType() != getType())
-              PrintFatalError("type mismatch in cast");
-
-            return VarInit::get(TemplateArgName, RV->getType());
-          }
-        }
-
-        if (CurMultiClass) {
-          Init *MCName = QualifyName(CurMultiClass->Rec, CurMultiClass, Name,
-                                     "::");
-
-          if (CurMultiClass->Rec.isTemplateArg(MCName)) {
-            const RecordVal *RV = CurMultiClass->Rec.getValue(MCName);
-            assert(RV && "Template arg doesn't exist??");
-
-            if (RV->getType() != getType())
-              PrintFatalError("type mismatch in cast");
-
-            return VarInit::get(MCName, RV->getType());
-          }
-        }
         assert(CurRec && "NULL pointer");
-        if (Record *D = (CurRec->getRecords()).getDef(Name->getValue()))
-          return DefInit::get(D);
+        Record *D;
 
-        PrintFatalError(CurRec->getLoc(),
-                        "Undefined reference:'" + Name->getValue() + "'\n");
+        // Self-references are allowed, but their resolution is delayed until
+        // the final resolve to ensure that we get the correct type for them.
+        if (Name == CurRec->getNameInit()) {
+          if (!IsFinal)
+            break;
+          D = CurRec;
+        } else {
+          D = CurRec->getRecords().getDef(Name->getValue());
+          if (!D) {
+            if (IsFinal)
+              PrintFatalError(CurRec->getLoc(),
+                              Twine("Undefined reference to record: '") +
+                              Name->getValue() + "'\n");
+            break;
+          }
+        }
+
+        DefInit *DI = DefInit::get(D);
+        if (!DI->getType()->typeIsA(getType())) {
+          PrintFatalError(CurRec->getLoc(),
+                          Twine("Expected type '") +
+                          getType()->getAsString() + "', got '" +
+                          DI->getType()->getAsString() + "' in: " +
+                          getAsString() + "\n");
+        }
+        return DI;
       }
     }
 
@@ -797,10 +779,10 @@ Init *UnOpInit::Fold(Record *CurRec, MultiClass *CurMultiClass) const {
 Init *UnOpInit::resolveReferences(Resolver &R) const {
   Init *lhs = LHS->resolveReferences(R);
 
-  if (LHS != lhs)
+  if (LHS != lhs || (R.isFinal() && getOpcode() == CAST))
     return (UnOpInit::get(getOpcode(), lhs, getType()))
-        ->Fold(R.getCurrentRecord(), nullptr);
-  return Fold(R.getCurrentRecord(), nullptr);
+        ->Fold(R.getCurrentRecord(), R.isFinal());
+  return const_cast<UnOpInit *>(this);
 }
 
 std::string UnOpInit::getAsString() const {
@@ -851,7 +833,15 @@ static StringInit *ConcatStringInits(const StringInit *I0,
   return StringInit::get(Concat);
 }
 
-Init *BinOpInit::Fold(Record *CurRec, MultiClass *CurMultiClass) const {
+Init *BinOpInit::getStrConcat(Init *I0, Init *I1) {
+  // Shortcut for the common case of concatenating two strings.
+  if (const StringInit *I0s = dyn_cast<StringInit>(I0))
+    if (const StringInit *I1s = dyn_cast<StringInit>(I1))
+      return ConcatStringInits(I0s, I1s);
+  return BinOpInit::get(BinOpInit::STRCONCAT, I0, I1, StringRecTy::get());
+}
+
+Init *BinOpInit::Fold(Record *CurRec) const {
   switch (getOpcode()) {
   case CONCAT: {
     DagInit *LHSs = dyn_cast<DagInit>(LHS);
@@ -974,8 +964,8 @@ Init *BinOpInit::resolveReferences(Resolver &R) const {
 
   if (LHS != lhs || RHS != rhs)
     return (BinOpInit::get(getOpcode(), lhs, rhs, getType()))
-        ->Fold(R.getCurrentRecord(), nullptr);
-  return Fold(R.getCurrentRecord(), nullptr);
+        ->Fold(R.getCurrentRecord());
+  return const_cast<BinOpInit *>(this);
 }
 
 std::string BinOpInit::getAsString() const {
@@ -1084,7 +1074,7 @@ static Init *ForeachHelper(Init *LHS, Init *MHS, Init *RHS, RecTy *Type,
   return nullptr;
 }
 
-Init *TernOpInit::Fold(Record *CurRec, MultiClass *CurMultiClass) const {
+Init *TernOpInit::Fold(Record *CurRec) const {
   switch (getOpcode()) {
   case SUBST: {
     DefInit *LHSd = dyn_cast<DefInit>(LHS);
@@ -1199,8 +1189,8 @@ Init *TernOpInit::resolveReferences(Resolver &R) const {
 
   if (LHS != lhs || MHS != mhs || RHS != rhs)
     return (TernOpInit::get(getOpcode(), lhs, mhs, rhs, getType()))
-        ->Fold(R.getCurrentRecord(), nullptr);
-  return Fold(R.getCurrentRecord(), nullptr);
+        ->Fold(R.getCurrentRecord());
+  return const_cast<TernOpInit *>(this);
 }
 
 std::string TernOpInit::getAsString() const {
@@ -1401,7 +1391,7 @@ Init *TypedInit::getCastTo(RecTy *Ty) const {
     return nullptr;
 
   return UnOpInit::get(UnOpInit::CAST, const_cast<TypedInit *>(this), Ty)
-             ->Fold(nullptr, nullptr);
+      ->Fold(nullptr);
 }
 
 Init *TypedInit::convertInitListSlice(ArrayRef<unsigned> Elements) const {
@@ -1513,14 +1503,8 @@ Init *VarListElementInit::getBit(unsigned Bit) const {
   return VarBitInit::get(const_cast<VarListElementInit*>(this), Bit);
 }
 
-static RecordRecTy *makeDefInitType(Record *Rec) {
-  SmallVector<Record *, 4> SuperClasses;
-  Rec->getDirectSuperClasses(SuperClasses);
-  return RecordRecTy::get(SuperClasses);
-}
-
 DefInit::DefInit(Record *D)
-    : TypedInit(IK_DefInit, makeDefInitType(D)), Def(D) {}
+    : TypedInit(IK_DefInit, D->getType()), Def(D) {}
 
 DefInit *DefInit::get(Record *R) {
   return R->getDefInit();
@@ -1689,13 +1673,19 @@ Init *FieldInit::getBit(unsigned Bit) const {
 Init *FieldInit::resolveReferences(Resolver &R) const {
   Init *NewRec = Rec->resolveReferences(R);
   if (NewRec != Rec)
-    return FieldInit::get(NewRec, FieldName)->Fold();
+    return FieldInit::get(NewRec, FieldName)->Fold(R.getCurrentRecord());
   return const_cast<FieldInit *>(this);
 }
 
-Init *FieldInit::Fold() const {
+Init *FieldInit::Fold(Record *CurRec) const {
   if (DefInit *DI = dyn_cast<DefInit>(Rec)) {
-    Init *FieldVal = DI->getDef()->getValue(FieldName)->getValue();
+    Record *Def = DI->getDef();
+    if (Def == CurRec)
+      PrintFatalError(CurRec->getLoc(),
+                      Twine("Attempting to access field '") +
+                      FieldName->getAsUnquotedString() + "' of '" +
+                      Rec->getAsString() + "' is a forbidden self-reference");
+    Init *FieldVal = Def->getValue(FieldName)->getValue();
     if (FieldVal->isComplete())
       return FieldVal;
   }
@@ -1864,7 +1854,14 @@ void Record::checkName() {
   // Ensure the record name has string type.
   const TypedInit *TypedName = cast<const TypedInit>(Name);
   if (!isa<StringRecTy>(TypedName->getType()))
-    PrintFatalError(getLoc(), "Record name is not a string!");
+    PrintFatalError(getLoc(), Twine("Record name '") + Name->getAsString() +
+                                  "' is not a string!");
+}
+
+RecordRecTy *Record::getType() {
+  SmallVector<Record *, 4> DirectSCs;
+  getDirectSuperClasses(DirectSCs);
+  return RecordRecTy::get(DirectSCs);
 }
 
 DefInit *Record::getDefInit() {
@@ -1914,7 +1911,7 @@ void Record::resolveReferences(Resolver &R, const RecordVal *SkipVal) {
         PrintFatalError(getLoc(), Twine("Invalid value ") + Type +
                                       "is found when setting '" +
                                       Value.getNameInitAsString() +
-                                      " of type '" +
+                                      "' of type '" +
                                       Value.getType()->getAsString() +
                                       "' after resolving references: " +
                                       VR->getAsUnquotedString() + "\n");
@@ -1931,6 +1928,7 @@ void Record::resolveReferences(Resolver &R, const RecordVal *SkipVal) {
 
 void Record::resolveReferences() {
   RecordResolver R(*this);
+  R.setFinal(true);
   resolveReferences(R);
 }
 
@@ -2183,26 +2181,19 @@ RecordKeeper::getAllDerivedDefinitions(StringRef ClassName) const {
   return Defs;
 }
 
-static Init *GetStrConcat(Init *I0, Init *I1) {
-  // Shortcut for the common case of concatenating two strings.
-  if (const StringInit *I0s = dyn_cast<StringInit>(I0))
-    if (const StringInit *I1s = dyn_cast<StringInit>(I1))
-      return ConcatStringInits(I0s, I1s);
-  return BinOpInit::get(BinOpInit::STRCONCAT, I0, I1, StringRecTy::get());
-}
-
 Init *llvm::QualifyName(Record &CurRec, MultiClass *CurMultiClass,
                         Init *Name, StringRef Scoper) {
-  Init *NewName = GetStrConcat(CurRec.getNameInit(), StringInit::get(Scoper));
-  NewName = GetStrConcat(NewName, Name);
+  Init *NewName =
+      BinOpInit::getStrConcat(CurRec.getNameInit(), StringInit::get(Scoper));
+  NewName = BinOpInit::getStrConcat(NewName, Name);
   if (CurMultiClass && Scoper != "::") {
-    Init *Prefix = GetStrConcat(CurMultiClass->Rec.getNameInit(),
-                                StringInit::get("::"));
-    NewName = GetStrConcat(Prefix, NewName);
+    Init *Prefix = BinOpInit::getStrConcat(CurMultiClass->Rec.getNameInit(),
+                                           StringInit::get("::"));
+    NewName = BinOpInit::getStrConcat(Prefix, NewName);
   }
 
   if (BinOpInit *BinOp = dyn_cast<BinOpInit>(NewName))
-    NewName = BinOp->Fold(&CurRec, CurMultiClass);
+    NewName = BinOp->Fold(&CurRec);
   return NewName;
 }
 

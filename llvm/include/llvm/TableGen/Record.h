@@ -742,10 +742,6 @@ public:
   virtual unsigned getNumOperands() const = 0;
   virtual Init *getOperand(unsigned i) const = 0;
 
-  // Fold - If possible, fold this to a simpler init.  Return this if not
-  // possible to fold.
-  virtual Init *Fold(Record *CurRec, MultiClass *CurMultiClass) const = 0;
-
   Init *getBit(unsigned Bit) const override;
 };
 
@@ -792,7 +788,7 @@ public:
 
   // Fold - If possible, fold this to a simpler init.  Return this if not
   // possible to fold.
-  Init *Fold(Record *CurRec, MultiClass *CurMultiClass) const override;
+  Init *Fold(Record *CurRec, bool IsFinal = false) const;
 
   Init *resolveReferences(Resolver &R) const override;
 
@@ -821,6 +817,7 @@ public:
 
   static BinOpInit *get(BinaryOp opc, Init *lhs, Init *rhs,
                         RecTy *Type);
+  static Init *getStrConcat(Init *lhs, Init *rhs);
 
   void Profile(FoldingSetNodeID &ID) const;
 
@@ -846,7 +843,7 @@ public:
 
   // Fold - If possible, fold this to a simpler init.  Return this if not
   // possible to fold.
-  Init *Fold(Record *CurRec, MultiClass *CurMultiClass) const override;
+  Init *Fold(Record *CurRec) const;
 
   Init *resolveReferences(Resolver &R) const override;
 
@@ -904,7 +901,7 @@ public:
 
   // Fold - If possible, fold this to a simpler init.  Return this if not
   // possible to fold.
-  Init *Fold(Record *CurRec, MultiClass *CurMultiClass) const override;
+  Init *Fold(Record *CurRec) const;
 
   bool isComplete() const override {
     return LHS->isComplete() && MHS->isComplete() && RHS->isComplete();
@@ -1203,7 +1200,7 @@ public:
   Init *getBit(unsigned Bit) const override;
 
   Init *resolveReferences(Resolver &R) const override;
-  Init *Fold() const;
+  Init *Fold(Record *CurRec) const;
 
   std::string getAsString() const override {
     return Rec->getAsString() + "." + FieldName->getValue().str();
@@ -1373,9 +1370,8 @@ public:
     init();
   }
 
-  explicit Record(StringRef N, ArrayRef<SMLoc> locs, RecordKeeper &records,
-                  bool Anonymous = false)
-    : Record(StringInit::get(N), locs, records, Anonymous) {}
+  explicit Record(StringRef N, ArrayRef<SMLoc> locs, RecordKeeper &records)
+      : Record(StringInit::get(N), locs, records) {}
 
   // When copy-constructing a Record, we must still guarantee a globally unique
   // ID number.  Don't copy TheInit either since it's owned by the original
@@ -1403,6 +1399,10 @@ public:
   void setName(Init *Name);      // Also updates RecordKeeper.
 
   ArrayRef<SMLoc> getLoc() const { return Locs; }
+  void appendLoc(SMLoc Loc) { Locs.push_back(Loc); }
+
+  // Make the type that this record should have based on its superclasses.
+  RecordRecTy *getType();
 
   /// get the corresponding DefInit.
   DefInit *getDefInit();
@@ -1494,12 +1494,16 @@ public:
   }
 
   void addSuperClass(Record *R, SMRange Range) {
+    assert(!TheInit && "changing type of record after it has been referenced");
     assert(!isSubClassOf(R) && "Already subclassing record!");
     SuperClasses.push_back(std::make_pair(R, Range));
   }
 
   /// If there are any field references that refer to fields
   /// that have been filled in, we can propagate the values now.
+  ///
+  /// This is a final resolve: any error messages, e.g. due to undefined
+  /// !cast references, are generated now.
   void resolveReferences();
 
   /// Apply the resolver to the name of the record as well as to the
@@ -1789,6 +1793,7 @@ Init *QualifyName(Record &CurRec, MultiClass *CurMultiClass,
 /// Init::resolveReferences.
 class Resolver {
   Record *CurRec;
+  bool IsFinal = false;
 
 public:
   explicit Resolver(Record *CurRec) : CurRec(CurRec) {}
@@ -1804,6 +1809,13 @@ public:
   // result in a ? (UnsetInit). This behavior is used to represent instruction
   // encodings by keeping references to unset variables within a record.
   virtual bool keepUnsetBits() const { return false; }
+
+  // Whether this is the final resolve step before adding a record to the
+  // RecordKeeper. Error reporting during resolve and related constant folding
+  // should only happen when this is true.
+  bool isFinal() const { return IsFinal; }
+
+  void setFinal(bool Final) { IsFinal = Final; }
 };
 
 /// Resolve arbitrary mappings.
@@ -1864,7 +1876,10 @@ class ShadowResolver final : public Resolver {
   DenseSet<Init *> Shadowed;
 
 public:
-  explicit ShadowResolver(Resolver &R) : Resolver(R.getCurrentRecord()), R(R) {}
+  explicit ShadowResolver(Resolver &R)
+      : Resolver(R.getCurrentRecord()), R(R) {
+    setFinal(R.isFinal());
+  }
 
   void addShadow(Init *Key) { Shadowed.insert(Key); }
 

@@ -511,7 +511,7 @@ namespace clang {
 namespace format {
 
 const std::error_category &getParseCategory() {
-  static ParseErrorCategory C;
+  static const ParseErrorCategory C{};
   return C;
 }
 std::error_code make_error_code(ParseError e) {
@@ -1449,6 +1449,19 @@ private:
     // Keep this array sorted, since we are binary searching over it.
     static constexpr llvm::StringLiteral FoundationIdentifiers[] = {
         "CGFloat",
+        "CGPoint",
+        "CGPointMake",
+        "CGPointZero",
+        "CGRect",
+        "CGRectEdge",
+        "CGRectInfinite",
+        "CGRectMake",
+        "CGRectNull",
+        "CGRectZero",
+        "CGSize",
+        "CGSizeMake",
+        "CGVector",
+        "CGVectorMake",
         "NSAffineTransform",
         "NSArray",
         "NSAttributedString",
@@ -1497,10 +1510,12 @@ private:
         "NSURLQueryItem",
         "NSUUID",
         "NSValue",
+        "UIImage",
+        "UIView",
     };
 
-    for (auto &Line : AnnotatedLines) {
-      for (FormatToken *FormatTok = Line->First; FormatTok;
+    auto LineContainsObjCCode = [&Keywords](const AnnotatedLine &Line) {
+      for (const FormatToken *FormatTok = Line.First; FormatTok;
            FormatTok = FormatTok->Next) {
         if ((FormatTok->Previous && FormatTok->Previous->is(tok::at) &&
              (FormatTok->isObjCAtKeyword(tok::objc_interface) ||
@@ -1520,6 +1535,15 @@ private:
                                TT_ObjCMethodSpecifier, TT_ObjCProperty)) {
           return true;
         }
+      }
+      return false;
+    };
+    for (auto Line : AnnotatedLines) {
+      if (LineContainsObjCCode(*Line))
+        return true;
+      for (auto ChildLine : Line->Children) {
+        if (LineContainsObjCCode(*ChildLine))
+          return true;
       }
     }
     return false;

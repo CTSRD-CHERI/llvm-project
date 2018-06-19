@@ -33,15 +33,16 @@ void Backend::runCycle(unsigned Cycle) {
 
   while (SM.hasNext()) {
     InstRef IR = SM.peekNext();
-    std::unique_ptr<Instruction> NewIS(
-        IB->createInstruction(STI, IR.first, *IR.second));
+    std::unique_ptr<Instruction> NewIS =
+        IB.createInstruction(IR.first, *IR.second);
     const InstrDesc &Desc = NewIS->getDesc();
-    if (!DU->isAvailable(Desc.NumMicroOps) || !DU->canDispatch(*NewIS))
+    if (!DU->isAvailable(Desc.NumMicroOps) ||
+        !DU->canDispatch(IR.first, *NewIS))
       break;
 
     Instruction *IS = NewIS.get();
     Instructions[IR.first] = std::move(NewIS);
-    IS->setRCUTokenID(DU->dispatch(IR.first, IS, STI));
+    DU->dispatch(IR.first, IS, STI);
     SM.updateNext();
   }
 
@@ -62,6 +63,11 @@ void Backend::notifyInstructionEvent(const HWInstructionEvent &Event) {
     Listener->onInstructionEvent(Event);
 }
 
+void Backend::notifyStallEvent(const HWStallEvent &Event) {
+  for (HWEventListener *Listener : Listeners)
+    Listener->onStallEvent(Event);
+}
+
 void Backend::notifyResourceAvailable(const ResourceRef &RR) {
   DEBUG(dbgs() << "[E] Resource Available: [" << RR.first << '.' << RR.second
                << "]\n");
@@ -69,10 +75,19 @@ void Backend::notifyResourceAvailable(const ResourceRef &RR) {
     Listener->onResourceAvailable(RR);
 }
 
+void Backend::notifyReservedBuffers(ArrayRef<unsigned> Buffers) {
+  for (HWEventListener *Listener : Listeners)
+    Listener->onReservedBuffers(Buffers);
+}
+
+void Backend::notifyReleasedBuffers(ArrayRef<unsigned> Buffers) {
+  for (HWEventListener *Listener : Listeners)
+    Listener->onReleasedBuffers(Buffers);
+}
+
 void Backend::notifyCycleEnd(unsigned Cycle) {
   DEBUG(dbgs() << "[E] Cycle end: " << Cycle << "\n\n");
   for (HWEventListener *Listener : Listeners)
     Listener->onCycleEnd(Cycle);
 }
-
 } // namespace mca.

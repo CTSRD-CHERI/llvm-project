@@ -32,7 +32,6 @@
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineMemOperand.h"
-#include "llvm/CodeGen/MachineValueType.h"
 #include "llvm/CodeGen/RuntimeLibcalls.h"
 #include "llvm/CodeGen/SelectionDAGAddressAnalysis.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
@@ -40,7 +39,6 @@
 #include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
-#include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/Constant.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
@@ -52,12 +50,14 @@
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
+#include "llvm/IR/ValueTypes.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/KnownBits.h"
+#include "llvm/Support/MachineValueType.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/Mutex.h"
@@ -2378,10 +2378,7 @@ void SelectionDAG::computeKnownBits(SDValue Op, KnownBits &Known,
       break;
     }
 
-    // Support big-endian targets when it becomes useful.
     bool IsLE = getDataLayout().isLittleEndian();
-    if (!IsLE)
-      break;
 
     // Bitcast 'small element' vector to 'large element' scalar/vector.
     if ((BitWidth % SubBitWidth) == 0) {
@@ -2400,8 +2397,9 @@ void SelectionDAG::computeKnownBits(SDValue Op, KnownBits &Known,
       for (unsigned i = 0; i != SubScale; ++i) {
         computeKnownBits(N0, Known2, SubDemandedElts.shl(i),
                          Depth + 1);
-        Known.One |= Known2.One.zext(BitWidth).shl(SubBitWidth * i);
-        Known.Zero |= Known2.Zero.zext(BitWidth).shl(SubBitWidth * i);
+        unsigned Shifts = IsLE ? i : SubScale - 1 - i;
+        Known.One |= Known2.One.zext(BitWidth).shl(SubBitWidth * Shifts);
+        Known.Zero |= Known2.Zero.zext(BitWidth).shl(SubBitWidth * Shifts);
       }
     }
 
@@ -2423,7 +2421,8 @@ void SelectionDAG::computeKnownBits(SDValue Op, KnownBits &Known,
       Known.Zero.setAllBits(); Known.One.setAllBits();
       for (unsigned i = 0; i != NumElts; ++i)
         if (DemandedElts[i]) {
-          unsigned Offset = (i % SubScale) * BitWidth;
+          unsigned Shifts = IsLE ? i : NumElts - 1 - i;
+          unsigned Offset = (Shifts % SubScale) * BitWidth;
           Known.One &= Known2.One.lshr(Offset).trunc(BitWidth);
           Known.Zero &= Known2.Zero.lshr(Offset).trunc(BitWidth);
           // If we don't know any bits, early out.

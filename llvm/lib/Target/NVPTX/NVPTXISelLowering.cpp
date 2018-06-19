@@ -26,12 +26,10 @@
 #include "llvm/CodeGen/Analysis.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineMemOperand.h"
-#include "llvm/CodeGen/MachineValueType.h"
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
 #include "llvm/CodeGen/TargetCallingConv.h"
 #include "llvm/CodeGen/TargetLowering.h"
-#include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/CallSite.h"
@@ -45,10 +43,12 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
+#include "llvm/IR/ValueTypes.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/MachineValueType.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
@@ -3323,30 +3323,14 @@ bool NVPTXTargetLowering::getTgtMemIntrinsic(
     // Our result depends on both our and other thread's arguments.
     Info.flags = MachineMemOperand::MOLoad | MachineMemOperand::MOStore;
     return true;
-  case Intrinsic::nvvm_wmma_load_a_f16_col:
-  case Intrinsic::nvvm_wmma_load_a_f16_row:
-  case Intrinsic::nvvm_wmma_load_a_f16_col_stride:
-  case Intrinsic::nvvm_wmma_load_a_f16_row_stride:
-  case Intrinsic::nvvm_wmma_load_a_f16_col_shared:
-  case Intrinsic::nvvm_wmma_load_a_f16_row_shared:
-  case Intrinsic::nvvm_wmma_load_a_f16_col_shared_stride:
-  case Intrinsic::nvvm_wmma_load_a_f16_row_shared_stride:
-  case Intrinsic::nvvm_wmma_load_a_f16_col_global:
-  case Intrinsic::nvvm_wmma_load_a_f16_row_global:
-  case Intrinsic::nvvm_wmma_load_a_f16_col_global_stride:
-  case Intrinsic::nvvm_wmma_load_a_f16_row_global_stride:
-  case Intrinsic::nvvm_wmma_load_b_f16_col:
-  case Intrinsic::nvvm_wmma_load_b_f16_row:
-  case Intrinsic::nvvm_wmma_load_b_f16_col_stride:
-  case Intrinsic::nvvm_wmma_load_b_f16_row_stride:
-  case Intrinsic::nvvm_wmma_load_b_f16_col_shared:
-  case Intrinsic::nvvm_wmma_load_b_f16_row_shared:
-  case Intrinsic::nvvm_wmma_load_b_f16_col_shared_stride:
-  case Intrinsic::nvvm_wmma_load_b_f16_row_shared_stride:
-  case Intrinsic::nvvm_wmma_load_b_f16_col_global:
-  case Intrinsic::nvvm_wmma_load_b_f16_row_global:
-  case Intrinsic::nvvm_wmma_load_b_f16_col_global_stride:
-  case Intrinsic::nvvm_wmma_load_b_f16_row_global_stride: {
+  case Intrinsic::nvvm_wmma_m16n16k16_load_a_f16_col:
+  case Intrinsic::nvvm_wmma_m16n16k16_load_a_f16_row:
+  case Intrinsic::nvvm_wmma_m16n16k16_load_a_f16_col_stride:
+  case Intrinsic::nvvm_wmma_m16n16k16_load_a_f16_row_stride:
+  case Intrinsic::nvvm_wmma_m16n16k16_load_b_f16_col:
+  case Intrinsic::nvvm_wmma_m16n16k16_load_b_f16_row:
+  case Intrinsic::nvvm_wmma_m16n16k16_load_b_f16_col_stride:
+  case Intrinsic::nvvm_wmma_m16n16k16_load_b_f16_row_stride: {
     Info.opc = ISD::INTRINSIC_W_CHAIN;
     Info.memVT = MVT::v8f16;
     Info.ptrVal = I.getArgOperand(0);
@@ -3356,18 +3340,10 @@ bool NVPTXTargetLowering::getTgtMemIntrinsic(
     return true;
   }
 
-  case Intrinsic::nvvm_wmma_load_c_f16_col:
-  case Intrinsic::nvvm_wmma_load_c_f16_row:
-  case Intrinsic::nvvm_wmma_load_c_f16_col_stride:
-  case Intrinsic::nvvm_wmma_load_c_f16_row_stride:
-  case Intrinsic::nvvm_wmma_load_c_f16_col_shared:
-  case Intrinsic::nvvm_wmma_load_c_f16_row_shared:
-  case Intrinsic::nvvm_wmma_load_c_f16_col_shared_stride:
-  case Intrinsic::nvvm_wmma_load_c_f16_row_shared_stride:
-  case Intrinsic::nvvm_wmma_load_c_f16_col_global:
-  case Intrinsic::nvvm_wmma_load_c_f16_row_global:
-  case Intrinsic::nvvm_wmma_load_c_f16_col_global_stride:
-  case Intrinsic::nvvm_wmma_load_c_f16_row_global_stride: {
+  case Intrinsic::nvvm_wmma_m16n16k16_load_c_f16_col:
+  case Intrinsic::nvvm_wmma_m16n16k16_load_c_f16_row:
+  case Intrinsic::nvvm_wmma_m16n16k16_load_c_f16_col_stride:
+  case Intrinsic::nvvm_wmma_m16n16k16_load_c_f16_row_stride: {
     Info.opc = ISD::INTRINSIC_W_CHAIN;
     Info.memVT = MVT::v4f16;
     Info.ptrVal = I.getArgOperand(0);
@@ -3377,18 +3353,10 @@ bool NVPTXTargetLowering::getTgtMemIntrinsic(
     return true;
   }
 
-  case Intrinsic::nvvm_wmma_load_c_f32_col:
-  case Intrinsic::nvvm_wmma_load_c_f32_row:
-  case Intrinsic::nvvm_wmma_load_c_f32_col_stride:
-  case Intrinsic::nvvm_wmma_load_c_f32_row_stride:
-  case Intrinsic::nvvm_wmma_load_c_f32_col_shared:
-  case Intrinsic::nvvm_wmma_load_c_f32_row_shared:
-  case Intrinsic::nvvm_wmma_load_c_f32_col_shared_stride:
-  case Intrinsic::nvvm_wmma_load_c_f32_row_shared_stride:
-  case Intrinsic::nvvm_wmma_load_c_f32_col_global:
-  case Intrinsic::nvvm_wmma_load_c_f32_row_global:
-  case Intrinsic::nvvm_wmma_load_c_f32_col_global_stride:
-  case Intrinsic::nvvm_wmma_load_c_f32_row_global_stride: {
+  case Intrinsic::nvvm_wmma_m16n16k16_load_c_f32_col:
+  case Intrinsic::nvvm_wmma_m16n16k16_load_c_f32_row:
+  case Intrinsic::nvvm_wmma_m16n16k16_load_c_f32_col_stride:
+  case Intrinsic::nvvm_wmma_m16n16k16_load_c_f32_row_stride: {
     Info.opc = ISD::INTRINSIC_W_CHAIN;
     Info.memVT = MVT::v8f32;
     Info.ptrVal = I.getArgOperand(0);
@@ -3398,18 +3366,10 @@ bool NVPTXTargetLowering::getTgtMemIntrinsic(
     return true;
   }
 
-  case Intrinsic::nvvm_wmma_store_d_f16_col:
-  case Intrinsic::nvvm_wmma_store_d_f16_row:
-  case Intrinsic::nvvm_wmma_store_d_f16_col_stride:
-  case Intrinsic::nvvm_wmma_store_d_f16_row_stride:
-  case Intrinsic::nvvm_wmma_store_d_f16_col_shared:
-  case Intrinsic::nvvm_wmma_store_d_f16_row_shared:
-  case Intrinsic::nvvm_wmma_store_d_f16_col_shared_stride:
-  case Intrinsic::nvvm_wmma_store_d_f16_row_shared_stride:
-  case Intrinsic::nvvm_wmma_store_d_f16_col_global:
-  case Intrinsic::nvvm_wmma_store_d_f16_row_global:
-  case Intrinsic::nvvm_wmma_store_d_f16_col_global_stride:
-  case Intrinsic::nvvm_wmma_store_d_f16_row_global_stride: {
+  case Intrinsic::nvvm_wmma_m16n16k16_store_d_f16_col:
+  case Intrinsic::nvvm_wmma_m16n16k16_store_d_f16_row:
+  case Intrinsic::nvvm_wmma_m16n16k16_store_d_f16_col_stride:
+  case Intrinsic::nvvm_wmma_m16n16k16_store_d_f16_row_stride: {
     Info.opc = ISD::INTRINSIC_VOID;
     Info.memVT = MVT::v4f16;
     Info.ptrVal = I.getArgOperand(0);
@@ -3419,18 +3379,10 @@ bool NVPTXTargetLowering::getTgtMemIntrinsic(
     return true;
   }
 
-  case Intrinsic::nvvm_wmma_store_d_f32_col:
-  case Intrinsic::nvvm_wmma_store_d_f32_row:
-  case Intrinsic::nvvm_wmma_store_d_f32_col_stride:
-  case Intrinsic::nvvm_wmma_store_d_f32_row_stride:
-  case Intrinsic::nvvm_wmma_store_d_f32_col_shared:
-  case Intrinsic::nvvm_wmma_store_d_f32_row_shared:
-  case Intrinsic::nvvm_wmma_store_d_f32_col_shared_stride:
-  case Intrinsic::nvvm_wmma_store_d_f32_row_shared_stride:
-  case Intrinsic::nvvm_wmma_store_d_f32_col_global:
-  case Intrinsic::nvvm_wmma_store_d_f32_row_global:
-  case Intrinsic::nvvm_wmma_store_d_f32_col_global_stride:
-  case Intrinsic::nvvm_wmma_store_d_f32_row_global_stride: {
+  case Intrinsic::nvvm_wmma_m16n16k16_store_d_f32_col:
+  case Intrinsic::nvvm_wmma_m16n16k16_store_d_f32_row:
+  case Intrinsic::nvvm_wmma_m16n16k16_store_d_f32_col_stride:
+  case Intrinsic::nvvm_wmma_m16n16k16_store_d_f32_row_stride: {
     Info.opc = ISD::INTRINSIC_VOID;
     Info.memVT = MVT::v8f32;
     Info.ptrVal = I.getArgOperand(0);
