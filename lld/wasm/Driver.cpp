@@ -8,7 +8,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "lld/Common/Driver.h"
-#include "InputChunks.h"
+#include "Config.h"
+#include "InputGlobal.h"
 #include "MarkLive.h"
 #include "SymbolTable.h"
 #include "Writer.h"
@@ -33,14 +34,9 @@ using namespace llvm::wasm;
 using namespace lld;
 using namespace lld::wasm;
 
-namespace {
+Configuration *lld::wasm::Config;
 
-// Parses command line options.
-class WasmOptTable : public llvm::opt::OptTable {
-public:
-  WasmOptTable();
-  llvm::opt::InputArgList parse(ArrayRef<const char *> Argv);
-};
+namespace {
 
 // Create enum with OPT_xxx values for each option in Options.td
 enum {
@@ -55,15 +51,13 @@ public:
   void link(ArrayRef<const char *> ArgsArr);
 
 private:
-  void createFiles(llvm::opt::InputArgList &Args);
+  void createFiles(opt::InputArgList &Args);
   void addFile(StringRef Path);
   void addLibrary(StringRef Name);
   std::vector<InputFile *> Files;
+  llvm::wasm::WasmGlobal StackPointerGlobal;
 };
-
 } // anonymous namespace
-
-Configuration *lld::wasm::Config;
 
 bool lld::wasm::link(ArrayRef<const char *> Args, bool CanExitEarly,
                      raw_ostream &Error) {
@@ -89,8 +83,6 @@ bool lld::wasm::link(ArrayRef<const char *> Args, bool CanExitEarly,
   return !errorCount();
 }
 
-// Create OptTable
-
 // Create prefix string literals used in Options.td
 #define PREFIX(NAME, VALUE) const char *const NAME[] = VALUE;
 #include "Options.inc"
@@ -103,6 +95,12 @@ static const opt::OptTable::Info OptInfo[] = {
    X9, X8, OPT_##GROUP, OPT_##ALIAS, X7,       X12},
 #include "Options.inc"
 #undef OPTION
+};
+
+class WasmOptTable : public llvm::opt::OptTable {
+public:
+  WasmOptTable() : OptTable(OptInfo) {}
+  opt::InputArgList parse(ArrayRef<const char *> Argv);
 };
 
 // Set color diagnostics according to -color-diagnostics={auto,always,never}
@@ -136,12 +134,6 @@ static Optional<std::string> findFile(StringRef Path1, const Twine &Path2) {
     return S.str().str();
   return None;
 }
-
-static void printHelp(const char *Argv0) {
-  WasmOptTable().PrintHelp(outs(), Argv0, "LLVM Linker", false);
-}
-
-WasmOptTable::WasmOptTable() : OptTable(OptInfo) {}
 
 opt::InputArgList WasmOptTable::parse(ArrayRef<const char *> Argv) {
   SmallVector<const char *, 256> Vec(Argv.data(), Argv.data() + Argv.size());
@@ -222,8 +214,8 @@ static StringRef getEntry(opt::InputArgList &Args, StringRef Default) {
   return Arg->getValue();
 }
 
-static Symbol* addUndefinedFunction(StringRef Name, const WasmSignature *Type) {
-  return Symtab->addUndefined(Name, Symbol::UndefinedFunctionKind, 0, nullptr,
+static Symbol *addUndefinedFunction(StringRef Name, const WasmSignature *Type) {
+  return Symtab->addUndefined(Name, WASM_SYMBOL_TYPE_FUNCTION, 0, nullptr,
                               Type);
 }
 
@@ -233,7 +225,13 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
 
   // Handle --help
   if (Args.hasArg(OPT_help)) {
-    printHelp(ArgsArr[0]);
+    Parser.PrintHelp(outs(), ArgsArr[0], "LLVM Linker", false);
+    return;
+  }
+
+  // Handle --version
+  if (Args.hasArg(OPT_version) || Args.hasArg(OPT_v)) {
+    outs() << getLLDVersion() << "\n";
     return;
   }
 
@@ -245,11 +243,6 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   cl::ParseCommandLineOptions(V.size(), V.data());
 
   errorHandler().ErrorLimit = args::getInteger(Args, OPT_error_limit, 20);
-
-  if (Args.hasArg(OPT_version) || Args.hasArg(OPT_v)) {
-    outs() << getLLDVersion() << "\n";
-    return;
-  }
 
   Config->AllowUndefined = Args.hasArg(OPT_allow_undefined);
   Config->CheckSignatures =
@@ -296,15 +289,26 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
 
   Symbol *EntrySym = nullptr;
   if (!Config->Relocatable) {
-    static WasmSignature NullSignature = {{}, WASM_TYPE_NORESULT};
+    // Can't export the SP right now because it's mutable, and mutable
+    // globals aren't yet supported in the official binary format.
+    // TODO(sbc): Remove WASM_SYMBOL_VISIBILITY_HIDDEN if/when the
+    // "mutable global" proposal is accepted.
+    StackPointerGlobal.Type = {WASM_TYPE_I32, true};
+    StackPointerGlobal.InitExpr.Value.Int32 = 0;
+    StackPointerGlobal.InitExpr.Opcode = WASM_OPCODE_I32_CONST;
+    InputGlobal *StackPointer = make<InputGlobal>(StackPointerGlobal);
+    StackPointer->Live = true;
 
+    static WasmSignature NullSignature = {{}, WASM_TYPE_NORESULT};
     // Add synthetic symbols before any others
     WasmSym::CallCtors = Symtab->addSyntheticFunction(
         "__wasm_call_ctors", &NullSignature, WASM_SYMBOL_VISIBILITY_HIDDEN);
-    WasmSym::StackPointer = Symtab->addSyntheticGlobal("__stack_pointer");
-    WasmSym::HeapBase = Symtab->addSyntheticGlobal("__heap_base");
-    WasmSym::DsoHandle = Symtab->addSyntheticGlobal("__dso_handle");
-    WasmSym::DataEnd = Symtab->addSyntheticGlobal("__data_end");
+    WasmSym::StackPointer = Symtab->addSyntheticGlobal(
+        "__stack_pointer", WASM_SYMBOL_VISIBILITY_HIDDEN, StackPointer);
+    WasmSym::HeapBase = Symtab->addSyntheticDataSymbol("__heap_base");
+    WasmSym::DsoHandle = Symtab->addSyntheticDataSymbol(
+        "__dso_handle", WASM_SYMBOL_VISIBILITY_HIDDEN);
+    WasmSym::DataEnd = Symtab->addSyntheticDataSymbol("__data_end");
 
     if (!Config->Entry.empty())
       EntrySym = addUndefinedFunction(Config->Entry, &NullSignature);
@@ -340,13 +344,14 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   if (errorCount())
     return;
 
+  // Handle --export.
   for (auto *Arg : Args.filtered(OPT_export)) {
-    Symbol *Sym = Symtab->find(Arg->getValue());
-    if (!Sym || !Sym->isDefined())
-      error("symbol exported via --export not found: " +
-            Twine(Arg->getValue()));
-    else
+    StringRef Name = Arg->getValue();
+    Symbol *Sym = Symtab->find(Name);
+    if (Sym && Sym->isDefined())
       Sym->setHidden(false);
+    else
+      error("symbol exported via --export not found: " + Name);
   }
 
   if (EntrySym)

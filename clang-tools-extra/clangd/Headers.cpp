@@ -16,6 +16,7 @@
 #include "clang/Lex/HeaderSearch.h"
 #include "clang/Lex/PreprocessorOptions.h"
 #include "clang/Tooling/CompilationDatabase.h"
+#include "llvm/Support/Path.h"
 
 namespace clang {
 namespace clangd {
@@ -45,10 +46,17 @@ private:
 /// FIXME(ioeric): we might not want to insert an absolute include path if the
 /// path is not shortened.
 llvm::Expected<std::string>
-shortenIncludePath(llvm::StringRef File, llvm::StringRef Code,
-                   llvm::StringRef Header,
-                   const tooling::CompileCommand &CompileCommand,
-                   IntrusiveRefCntPtr<vfs::FileSystem> FS) {
+calculateIncludePath(llvm::StringRef File, llvm::StringRef Code,
+                     llvm::StringRef Header,
+                     const tooling::CompileCommand &CompileCommand,
+                     IntrusiveRefCntPtr<vfs::FileSystem> FS) {
+  assert(llvm::sys::path::is_absolute(File) &&
+         llvm::sys::path::is_absolute(Header));
+
+  if (File == Header)
+    return "";
+  FS->setCurrentWorkingDirectory(CompileCommand.Directory);
+
   // Set up a CompilerInstance and create a preprocessor to collect existing
   // #include headers in \p Code. Preprocesor also provides HeaderSearch with
   // which we can calculate the shortest include path for \p Header.
@@ -71,12 +79,12 @@ shortenIncludePath(llvm::StringRef File, llvm::StringRef Code,
   // added more than once.
   CI->getPreprocessorOpts().SingleFileParseMode = true;
 
+  // The diagnostic options must be set before creating a CompilerInstance.
+  CI->getDiagnosticOpts().IgnoreWarnings = true;
   auto Clang = prepareCompilerInstance(
       std::move(CI), /*Preamble=*/nullptr,
       llvm::MemoryBuffer::getMemBuffer(Code, File),
       std::make_shared<PCHContainerOperations>(), FS, IgnoreDiags);
-  auto &DiagOpts = Clang->getDiagnosticOpts();
-  DiagOpts.IgnoreWarnings = true;
 
   if (Clang->getFrontendOpts().Inputs.empty())
     return llvm::make_error<llvm::StringError>(

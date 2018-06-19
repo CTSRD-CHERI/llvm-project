@@ -16,6 +16,9 @@
 #include "MipsMachineFunction.h"
 #include "MipsRegisterInfo.h"
 #include "MipsTargetMachine.h"
+#include "MipsCallLowering.h"
+#include "MipsLegalizerInfo.h"
+#include "MipsRegisterBankInfo.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/Function.h"
 #include "llvm/Support/CommandLine.h"
@@ -76,9 +79,10 @@ MipsSubtarget::MipsSubtarget(const Triple &TT, StringRef CPU, StringRef FS,
       HasDSPR2(false), HasDSPR3(false), AllowMixed16_32(Mixed16_32 | Mips_Os16),
       Os16(Mips_Os16), HasMSA(false), UseTCCInDIV(false), HasSym32(false),
       HasEVA(false), DisableMadd4(false), HasMT(false),
-      StackAlignOverride(StackAlignOverride), TM(TM), TargetTriple(TT),
-      TSInfo(), InstrInfo(MipsInstrInfo::create(
-                    initializeSubtargetDependencies(CPU, FS, TM))),
+      UseIndirectJumpsHazard(false), StackAlignOverride(StackAlignOverride),
+      TM(TM), TargetTriple(TT), TSInfo(),
+      InstrInfo(
+          MipsInstrInfo::create(initializeSubtargetDependencies(CPU, FS, TM))),
       FrameLowering(MipsFrameLowering::create(*this)),
       TLInfo(MipsTargetLowering::create(TM, *this)) {
 
@@ -111,6 +115,15 @@ MipsSubtarget::MipsSubtarget(const Triple &TT, StringRef CPU, StringRef FS,
   if (hasMips64r6() && InMicroMipsMode)
     report_fatal_error("microMIPS64R6 is not supported", false);
 
+
+  if (UseIndirectJumpsHazard) {
+    if (InMicroMipsMode)
+      report_fatal_error(
+          "cannot combine indirect jumps with hazard barriers and microMIPS");
+    if (!hasMips32r2())
+      report_fatal_error(
+          "indirect jumps with hazard barriers requires MIPS32R2 or later");
+  }
   if (hasMips32r6()) {
     StringRef ISA = hasMips64r6() ? "MIPS64r6" : "MIPS32r6";
 
@@ -167,6 +180,14 @@ MipsSubtarget::MipsSubtarget(const Triple &TT, StringRef CPU, StringRef FS,
       MSAWarningPrinted = true;
     }
   }
+
+  CallLoweringInfo.reset(new MipsCallLowering(*getTargetLowering()));
+  Legalizer.reset(new MipsLegalizerInfo(*this));
+
+  auto *RBI = new MipsRegisterBankInfo(*getRegisterInfo());
+  RegBankInfo.reset(RBI);
+  InstSelector.reset(createMipsInstructionSelector(
+      *static_cast<const MipsTargetMachine *>(&TM), *this, *RBI));
 }
 
 bool MipsSubtarget::isPositionIndependent() const {
@@ -224,3 +245,19 @@ bool MipsSubtarget::isABI_N64() const { return getABI().IsN64(); }
 bool MipsSubtarget::isABI_N32() const { return getABI().IsN32(); }
 bool MipsSubtarget::isABI_O32() const { return getABI().IsO32(); }
 const MipsABIInfo &MipsSubtarget::getABI() const { return TM.getABI(); }
+
+const CallLowering *MipsSubtarget::getCallLowering() const {
+  return CallLoweringInfo.get();
+}
+
+const LegalizerInfo *MipsSubtarget::getLegalizerInfo() const {
+  return Legalizer.get();
+}
+
+const RegisterBankInfo *MipsSubtarget::getRegBankInfo() const {
+  return RegBankInfo.get();
+}
+
+const InstructionSelector *MipsSubtarget::getInstructionSelector() const {
+  return InstSelector.get();
+}

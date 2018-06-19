@@ -45,15 +45,19 @@ struct DiagWithFixIts {
   llvm::SmallVector<TextEdit, 1> FixIts;
 };
 
+using InclusionLocations = std::vector<std::pair<Range, Path>>;
+
 // Stores Preamble and associated data.
 struct PreambleData {
   PreambleData(PrecompiledPreamble Preamble,
                std::vector<serialization::DeclID> TopLevelDeclIDs,
-               std::vector<DiagWithFixIts> Diags);
+               std::vector<DiagWithFixIts> Diags,
+               InclusionLocations IncLocations);
 
   PrecompiledPreamble Preamble;
   std::vector<serialization::DeclID> TopLevelDeclIDs;
   std::vector<DiagWithFixIts> Diags;
+  InclusionLocations IncLocations;
 };
 
 /// Information required to run clang, e.g. to parse AST or do code completion.
@@ -97,13 +101,14 @@ public:
   /// Returns the esitmated size of the AST and the accessory structures, in
   /// bytes. Does not include the size of the preamble.
   std::size_t getUsedBytes() const;
+  const InclusionLocations &getInclusionLocations() const;
 
 private:
   ParsedAST(std::shared_ptr<const PreambleData> Preamble,
             std::unique_ptr<CompilerInstance> Clang,
             std::unique_ptr<FrontendAction> Action,
             std::vector<const Decl *> TopLevelDecls,
-            std::vector<DiagWithFixIts> Diags);
+            std::vector<DiagWithFixIts> Diags, InclusionLocations IncLocations);
 
 private:
   void ensurePreambleDeclsDeserialized();
@@ -123,6 +128,7 @@ private:
   std::vector<DiagWithFixIts> Diags;
   std::vector<const Decl *> TopLevelDecls;
   bool PreambleDeclsDeserialized;
+  InclusionLocations IncLocations;
 };
 
 using ASTParsedCallback = std::function<void(PathRef Path, ParsedAST *)>;
@@ -152,12 +158,15 @@ private:
   /// This method is const to ensure we don't incidentally modify any fields.
   std::shared_ptr<const PreambleData>
   rebuildPreamble(CompilerInvocation &CI,
+                  const tooling::CompileCommand &Command,
                   IntrusiveRefCntPtr<vfs::FileSystem> FS,
                   llvm::MemoryBuffer &ContentsBuffer) const;
 
   const Path FileName;
   const bool StorePreamblesInMemory;
 
+  /// The last CompileCommand used to build AST and Preamble.
+  tooling::CompileCommand Command;
   /// The last parsed AST.
   llvm::Optional<ParsedAST> AST;
   /// The last built Preamble.

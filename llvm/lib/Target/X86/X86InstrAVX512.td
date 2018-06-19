@@ -1965,6 +1965,14 @@ multiclass avx512_blendmask_rmb<bits<8> opc, string OpcodeStr, OpndItins itins,
       [], itins.rm>, EVEX_4V, EVEX_K, EVEX_B, EVEX_CD8<_.EltSize, CD8VF>,
       Sched<[itins.Sched.Folded, ReadAfterLd]>;
 
+  def rmbkz : AVX5128I<opc, MRMSrcMem, (outs _.RC:$dst),
+      (ins _.KRCWM:$mask, _.RC:$src1, _.ScalarMemOp:$src2),
+       !strconcat(OpcodeStr,
+            "\t{${src2}", _.BroadcastStr, ", $src1, $dst {${mask}} {z}|",
+            "$dst {${mask}} {z}, $src1, ${src2}", _.BroadcastStr, "}"),
+      [], itins.rm>, EVEX_4V, EVEX_KZ, EVEX_B, EVEX_CD8<_.EltSize, CD8VF>,
+      Sched<[itins.Sched.Folded, ReadAfterLd]>;
+
   def rmb : AVX5128I<opc, MRMSrcMem, (outs _.RC:$dst),
       (ins _.RC:$src1, _.ScalarMemOp:$src2),
        !strconcat(OpcodeStr,
@@ -2189,27 +2197,27 @@ multiclass avx512_icmp_packed_rmb_vl<bits<8> opc, string OpcodeStr,
   }
 }
 
-def X86pcmpeqm : PatFrag<(ops node:$src1, node:$src2),
-                         (X86cmpm_c node:$src1, node:$src2, (i8 0))>;
-def X86pcmpnem : PatFrag<(ops node:$src1, node:$src2),
-                         (X86cmpm_c node:$src1, node:$src2, (i8 4))>;
+// This fragment treats X86cmpm as commutable to help match loads in both
+// operands for PCMPEQ.
+def X86pcmpeqm_c : PatFrag<(ops node:$src1, node:$src2),
+                           (X86cmpm_c node:$src1, node:$src2, (i8 0))>;
 def X86pcmpgtm : PatFrag<(ops node:$src1, node:$src2),
                          (X86cmpm node:$src1, node:$src2, (i8 6))>;
 
 // FIXME: Is there a better scheduler itinerary for VPCMP?
-defm VPCMPEQB : avx512_icmp_packed_vl<0x74, "vpcmpeqb", X86pcmpeqm,
+defm VPCMPEQB : avx512_icmp_packed_vl<0x74, "vpcmpeqb", X86pcmpeqm_c,
                       SSE_ALU_F32P, avx512vl_i8_info, HasBWI, 1>,
                 EVEX_CD8<8, CD8VF>, VEX_WIG;
 
-defm VPCMPEQW : avx512_icmp_packed_vl<0x75, "vpcmpeqw", X86pcmpeqm,
+defm VPCMPEQW : avx512_icmp_packed_vl<0x75, "vpcmpeqw", X86pcmpeqm_c,
                       SSE_ALU_F32P, avx512vl_i16_info, HasBWI, 1>,
                 EVEX_CD8<16, CD8VF>, VEX_WIG;
 
-defm VPCMPEQD : avx512_icmp_packed_rmb_vl<0x76, "vpcmpeqd", X86pcmpeqm,
+defm VPCMPEQD : avx512_icmp_packed_rmb_vl<0x76, "vpcmpeqd", X86pcmpeqm_c,
                       SSE_ALU_F32P, avx512vl_i32_info, HasAVX512, 1>,
                 EVEX_CD8<32, CD8VF>;
 
-defm VPCMPEQQ : avx512_icmp_packed_rmb_vl<0x29, "vpcmpeqq", X86pcmpeqm,
+defm VPCMPEQQ : avx512_icmp_packed_rmb_vl<0x29, "vpcmpeqq", X86pcmpeqm_c,
                       SSE_ALU_F32P, avx512vl_i64_info, HasAVX512, 1>,
                 T8PD, VEX_W, EVEX_CD8<64, CD8VF>;
 
@@ -2233,18 +2241,7 @@ defm VPCMPGTQ : avx512_icmp_packed_rmb_vl<0x37, "vpcmpgtq", X86pcmpgtm,
 // operand.
 def CommutePCMPCC : SDNodeXForm<imm, [{
   uint8_t Imm = N->getZExtValue() & 0x7;
-  switch (Imm) {
-  default: llvm_unreachable("Unreachable!");
-  case 0x01: Imm = 0x06; break; // LT  -> NLE
-  case 0x02: Imm = 0x05; break; // LE  -> NLT
-  case 0x05: Imm = 0x02; break; // NLT -> LE
-  case 0x06: Imm = 0x01; break; // NLE -> LT
-  case 0x00: // EQ
-  case 0x03: // FALSE
-  case 0x04: // NE
-  case 0x07: // TRUE
-    break;
-  }
+  Imm = X86::getSwappedVPCMPImm(Imm);
   return getI8Imm(Imm, SDLoc(N));
 }]>;
 
@@ -3111,16 +3108,16 @@ def : Pat<(Narrow.KVT (and Narrow.KRC:$mask,
 
 let Predicates = [HasAVX512, NoVLX] in {
   defm : axv512_icmp_packed_no_vlx_lowering<X86pcmpgtm, "VPCMPGTD", v8i32x_info, v16i32_info>;
-  defm : axv512_icmp_packed_no_vlx_lowering<X86pcmpeqm, "VPCMPEQD", v8i32x_info, v16i32_info>;
+  defm : axv512_icmp_packed_no_vlx_lowering<X86pcmpeqm_c, "VPCMPEQD", v8i32x_info, v16i32_info>;
 
   defm : axv512_icmp_packed_no_vlx_lowering<X86pcmpgtm, "VPCMPGTD", v4i32x_info, v16i32_info>;
-  defm : axv512_icmp_packed_no_vlx_lowering<X86pcmpeqm, "VPCMPEQD", v4i32x_info, v16i32_info>;
+  defm : axv512_icmp_packed_no_vlx_lowering<X86pcmpeqm_c, "VPCMPEQD", v4i32x_info, v16i32_info>;
 
   defm : axv512_icmp_packed_no_vlx_lowering<X86pcmpgtm, "VPCMPGTQ", v4i64x_info, v8i64_info>;
-  defm : axv512_icmp_packed_no_vlx_lowering<X86pcmpeqm, "VPCMPEQQ", v4i64x_info, v8i64_info>;
+  defm : axv512_icmp_packed_no_vlx_lowering<X86pcmpeqm_c, "VPCMPEQQ", v4i64x_info, v8i64_info>;
 
   defm : axv512_icmp_packed_no_vlx_lowering<X86pcmpgtm, "VPCMPGTQ", v2i64x_info, v8i64_info>;
-  defm : axv512_icmp_packed_no_vlx_lowering<X86pcmpeqm, "VPCMPEQQ", v2i64x_info, v8i64_info>;
+  defm : axv512_icmp_packed_no_vlx_lowering<X86pcmpeqm_c, "VPCMPEQQ", v2i64x_info, v8i64_info>;
 
   defm : axv512_icmp_packed_cc_no_vlx_lowering<X86cmpm, "VCMPPS", v8f32x_info, v16f32_info>;
   defm : axv512_icmp_packed_cc_no_vlx_lowering<X86cmpm, "VPCMPD", v8i32x_info, v16i32_info>;
@@ -3141,16 +3138,16 @@ let Predicates = [HasAVX512, NoVLX] in {
 
 let Predicates = [HasBWI, NoVLX] in {
   defm : axv512_icmp_packed_no_vlx_lowering<X86pcmpgtm, "VPCMPGTB", v32i8x_info, v64i8_info>;
-  defm : axv512_icmp_packed_no_vlx_lowering<X86pcmpeqm, "VPCMPEQB", v32i8x_info, v64i8_info>;
+  defm : axv512_icmp_packed_no_vlx_lowering<X86pcmpeqm_c, "VPCMPEQB", v32i8x_info, v64i8_info>;
 
   defm : axv512_icmp_packed_no_vlx_lowering<X86pcmpgtm, "VPCMPGTB", v16i8x_info, v64i8_info>;
-  defm : axv512_icmp_packed_no_vlx_lowering<X86pcmpeqm, "VPCMPEQB", v16i8x_info, v64i8_info>;
+  defm : axv512_icmp_packed_no_vlx_lowering<X86pcmpeqm_c, "VPCMPEQB", v16i8x_info, v64i8_info>;
 
   defm : axv512_icmp_packed_no_vlx_lowering<X86pcmpgtm, "VPCMPGTW", v16i16x_info, v32i16_info>;
-  defm : axv512_icmp_packed_no_vlx_lowering<X86pcmpeqm, "VPCMPEQW", v16i16x_info, v32i16_info>;
+  defm : axv512_icmp_packed_no_vlx_lowering<X86pcmpeqm_c, "VPCMPEQW", v16i16x_info, v32i16_info>;
 
   defm : axv512_icmp_packed_no_vlx_lowering<X86pcmpgtm, "VPCMPGTW", v8i16x_info, v32i16_info>;
-  defm : axv512_icmp_packed_no_vlx_lowering<X86pcmpeqm, "VPCMPEQW", v8i16x_info, v32i16_info>;
+  defm : axv512_icmp_packed_no_vlx_lowering<X86pcmpeqm_c, "VPCMPEQW", v8i16x_info, v32i16_info>;
 
   defm : axv512_icmp_packed_cc_no_vlx_lowering<X86cmpm, "VPCMPB", v32i8x_info, v64i8_info>;
   defm : axv512_icmp_packed_cc_no_vlx_lowering<X86cmpmu, "VPCMPUB", v32i8x_info, v64i8_info>;
@@ -3881,22 +3878,22 @@ multiclass avx512_move_scalar_lowering<string InstrStr, SDNode OpNode,
 
 def : Pat<(_.VT (OpNode _.RC:$src0,
                         (_.VT (scalar_to_vector
-                                  (_.EltVT (X86selects (scalar_to_vector (and (i8 (trunc GR32:$mask)), (i8 1))),
+                                  (_.EltVT (X86selects VK1WM:$mask,
                                                        (_.EltVT _.FRC:$src1),
                                                        (_.EltVT _.FRC:$src2))))))),
           (!cast<Instruction>(InstrStr#rrk)
                         (COPY_TO_REGCLASS _.FRC:$src2, _.RC),
-                        (COPY_TO_REGCLASS GR32:$mask, VK1WM),
+                        VK1WM:$mask,
                         (_.VT _.RC:$src0),
                         (COPY_TO_REGCLASS _.FRC:$src1, _.RC))>;
 
 def : Pat<(_.VT (OpNode _.RC:$src0,
                         (_.VT (scalar_to_vector
-                                  (_.EltVT (X86selects (scalar_to_vector (and (i8 (trunc GR32:$mask)), (i8 1))),
+                                  (_.EltVT (X86selects VK1WM:$mask,
                                                        (_.EltVT _.FRC:$src1),
                                                        (_.EltVT ZeroFP))))))),
           (!cast<Instruction>(InstrStr#rrkz)
-                        (COPY_TO_REGCLASS GR32:$mask, VK1WM),
+                        VK1WM:$mask,
                         (_.VT _.RC:$src0),
                         (COPY_TO_REGCLASS _.FRC:$src1, _.RC))>;
 }
@@ -4004,7 +4001,7 @@ defm : avx512_load_scalar_lowering_subreg<"VMOVSSZ", avx512vl_f32_info,
 defm : avx512_load_scalar_lowering_subreg<"VMOVSDZ", avx512vl_f64_info,
                    (v8i1 (bitconvert (i8 (and GR8:$mask, (i8 1))))), GR8, sub_8bit>;
 
-def : Pat<(f32 (X86selects (scalar_to_vector (and GR8:$mask, (i8 1))),
+def : Pat<(f32 (X86selects (scalar_to_vector GR8:$mask),
                            (f32 FR32X:$src1), (f32 FR32X:$src2))),
           (COPY_TO_REGCLASS
             (VMOVSSZrrk (COPY_TO_REGCLASS FR32X:$src2, VR128X),
@@ -4018,7 +4015,7 @@ def : Pat<(f32 (X86selects VK1WM:$mask, (f32 FR32X:$src1), (f32 FR32X:$src2))),
            VK1WM:$mask, (v4f32 (IMPLICIT_DEF)),
            (COPY_TO_REGCLASS FR32X:$src1, VR128X)), FR32X)>;
 
-def : Pat<(f64 (X86selects (scalar_to_vector (and GR8:$mask, (i8 1))),
+def : Pat<(f64 (X86selects (scalar_to_vector GR8:$mask),
                            (f64 FR64X:$src1), (f64 FR64X:$src2))),
           (COPY_TO_REGCLASS
             (VMOVSDZrrk (COPY_TO_REGCLASS FR64X:$src2, VR128X),
@@ -5464,6 +5461,14 @@ multiclass avx512_vptest_wb<bits<8> opc, string OpcodeStr,
   defm WZ128_Alt : avx512_vptest_lowering<OpNode, v32i16_info, v8i16x_info, "W">;
   }
 }
+
+// These patterns are used to match vptestm/vptestnm. We don't treat pcmpeqm
+// as commutable here because we already canonicalized all zeros vectors to the
+// RHS during lowering.
+def X86pcmpeqm : PatFrag<(ops node:$src1, node:$src2),
+                         (X86cmpm node:$src1, node:$src2, (i8 0))>;
+def X86pcmpnem : PatFrag<(ops node:$src1, node:$src2),
+                         (X86cmpm node:$src1, node:$src2, (i8 4))>;
 
 multiclass avx512_vptest_all_forms<bits<8> opc_wb, bits<8> opc_dq, string OpcodeStr,
                                    PatFrag OpNode, OpndItins itins> :

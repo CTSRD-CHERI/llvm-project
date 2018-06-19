@@ -20,9 +20,18 @@ std::unique_ptr<SymbolSlab> indexAST(ASTContext &Ctx,
                                      std::shared_ptr<Preprocessor> PP,
                                      llvm::ArrayRef<const Decl *> Decls) {
   SymbolCollector::Options CollectorOpts;
-  // Code completion gets main-file results from Sema.
-  // But we leave this option on because features like go-to-definition want it.
-  CollectorOpts.IndexMainFiles = true;
+  // Although we do not index symbols in main files (e.g. cpp file), information
+  // in main files like definition locations of class declarations will still be
+  // collected; thus, the index works for go-to-definition.
+  // FIXME(ioeric): get rid of `IndexMainFiles` as this is always set to false.
+  CollectorOpts.IndexMainFiles = false;
+  // FIXME(ioeric): we might also want to collect include headers. We would need
+  // to make sure all includes are canonicalized (with CanonicalIncludes), which
+  // is not trivial given the current way of collecting symbols: we only have
+  // AST at this point, but we also need preprocessor callbacks (e.g.
+  // CommentHandler for IWYU pragma) to canonicalize includes.
+  CollectorOpts.CollectIncludePath = false;
+
   auto Collector = std::make_shared<SymbolCollector>(std::move(CollectorOpts));
   Collector->setPreprocessor(std::move(PP));
   index::IndexingOptions IndexOpts;

@@ -100,6 +100,10 @@ struct Position {
     return std::tie(LHS.line, LHS.character) <
            std::tie(RHS.line, RHS.character);
   }
+  friend bool operator<=(const Position &LHS, const Position &RHS) {
+    return std::tie(LHS.line, LHS.character) <=
+           std::tie(RHS.line, RHS.character);
+  }
 };
 bool fromJSON(const json::Expr &, Position &);
 json::Expr toJSON(const Position &);
@@ -118,6 +122,8 @@ struct Range {
   friend bool operator<(const Range &LHS, const Range &RHS) {
     return std::tie(LHS.start, LHS.end) < std::tie(RHS.start, RHS.end);
   }
+
+  bool contains(Position Pos) const { return start <= Pos && Pos < end; }
 };
 bool fromJSON(const json::Expr &, Range &);
 json::Expr toJSON(const Range &);
@@ -291,6 +297,12 @@ struct DidChangeTextDocumentParams {
 
   /// The actual content changes.
   std::vector<TextDocumentContentChangeEvent> contentChanges;
+
+  /// Forces diagnostics to be generated, or to not be generated, for this
+  /// version of the file. If not set, diagnostics are eventually consistent:
+  /// either they will be provided for this version or some subsequent one.
+  /// This is a clangd extension.
+  llvm::Optional<bool> wantDiagnostics;
 };
 bool fromJSON(const json::Expr &, DidChangeTextDocumentParams &);
 
@@ -317,6 +329,20 @@ struct DidChangeWatchedFilesParams {
   std::vector<FileEvent> changes;
 };
 bool fromJSON(const json::Expr &, DidChangeWatchedFilesParams &);
+
+/// Clangd extension to manage a workspace/didChangeConfiguration notification
+/// since the data received is described as 'any' type in LSP.
+struct ClangdConfigurationParamsChange {
+  llvm::Optional<std::string> compilationDatabasePath;
+};
+bool fromJSON(const json::Expr &, ClangdConfigurationParamsChange &);
+
+struct DidChangeConfigurationParams {
+  // We use this predefined struct because it is easier to use
+  // than the protocol specified type of 'any'.
+  ClangdConfigurationParamsChange settings;
+};
+bool fromJSON(const json::Expr &, DidChangeConfigurationParams &);
 
 struct FormattingOptions {
   /// Size of a tab in spaces.

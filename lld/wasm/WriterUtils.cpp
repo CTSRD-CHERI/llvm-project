@@ -8,9 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "WriterUtils.h"
-
 #include "lld/Common/ErrorHandler.h"
-
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/EndianStream.h"
 #include "llvm/Support/LEB128.h"
@@ -162,23 +160,6 @@ void wasm::writeExport(raw_ostream &OS, const WasmExport &Export) {
     fatal("unsupported export type: " + Twine(Export.Kind));
   }
 }
-
-void wasm::writeReloc(raw_ostream &OS, const OutputRelocation &Reloc) {
-  writeUleb128(OS, Reloc.Reloc.Type, "reloc type");
-  writeUleb128(OS, Reloc.Reloc.Offset, "reloc offset");
-  writeUleb128(OS, Reloc.NewIndex, "reloc index");
-
-  switch (Reloc.Reloc.Type) {
-  case R_WEBASSEMBLY_MEMORY_ADDR_LEB:
-  case R_WEBASSEMBLY_MEMORY_ADDR_SLEB:
-  case R_WEBASSEMBLY_MEMORY_ADDR_I32:
-    writeUleb128(OS, Reloc.Reloc.Addend, "reloc addend");
-    break;
-  default:
-    break;
-  }
-}
-
 } // namespace lld
 
 std::string lld::toString(ValType Type) {
@@ -208,4 +189,11 @@ std::string lld::toString(const WasmSignature &Sig) {
   else
     S += toString(static_cast<ValType>(Sig.ReturnType));
   return S.str();
+}
+
+std::string lld::toString(const WasmGlobalType &Sig) {
+  std::string S = toString(static_cast<ValType>(Sig.Type));
+  if (Sig.Mutable)
+    return "mutable " + S;
+  return S;
 }

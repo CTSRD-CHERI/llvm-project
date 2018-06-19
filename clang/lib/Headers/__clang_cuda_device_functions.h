@@ -530,6 +530,7 @@ __DEVICE__ int __syncthreads_or(int __a) { return __nvvm_bar0_or(__a); }
 __DEVICE__ float __tanf(float __a) { return __nv_fast_tanf(__a); }
 __DEVICE__ void __threadfence(void) { __nvvm_membar_gl(); }
 __DEVICE__ void __threadfence_block(void) { __nvvm_membar_cta(); };
+__DEVICE__ void __threadfence_system(void) { __nvvm_membar_sys(); };
 __DEVICE__ void __trap(void) { asm volatile("trap;"); }
 __DEVICE__ unsigned int __uAtomicAdd(unsigned int *__p, unsigned int __v) {
   return __nvvm_atom_add_gen_i((int *)__p, __v);
@@ -686,6 +687,10 @@ __DEVICE__ float __ull2float_ru(unsigned long long __a) {
 __DEVICE__ float __ull2float_rz(unsigned long long __a) {
   return __nv_ull2float_rz(__a);
 }
+__DEVICE__ unsigned long long __ullAtomicAdd(unsigned long long *__p,
+                                             unsigned long long __v) {
+  return __nvvm_atom_add_gen_ll((long long *)__p, __v);
+}
 __DEVICE__ unsigned long long __ullAtomicAdd_block(unsigned long long *__p,
                                                    unsigned long long __v) {
   return __nvvm_atom_cta_add_gen_ll((long long *)__p, __v);
@@ -706,6 +711,11 @@ __DEVICE__ unsigned long long __ullAtomicAnd_system(unsigned long long *__p,
                                                     unsigned long long __v) {
   return __nvvm_atom_sys_and_gen_ll((long long *)__p, __v);
 }
+__DEVICE__ unsigned long long __ullAtomicCAS(unsigned long long *__p,
+                                             unsigned long long __cmp,
+                                             unsigned long long __v) {
+  return __nvvm_atom_cas_gen_ll((long long *)__p, __cmp, __v);
+}
 __DEVICE__ unsigned long long __ullAtomicCAS_block(unsigned long long *__p,
                                                    unsigned long long __cmp,
                                                    unsigned long long __v) {
@@ -715,6 +725,10 @@ __DEVICE__ unsigned long long __ullAtomicCAS_system(unsigned long long *__p,
                                                     unsigned long long __cmp,
                                                     unsigned long long __v) {
   return __nvvm_atom_sys_cas_gen_ll((long long *)__p, __cmp, __v);
+}
+__DEVICE__ unsigned long long __ullAtomicExch(unsigned long long *__p,
+                                              unsigned long long __v) {
+  return __nvvm_atom_xchg_gen_ll((long long *)__p, __v);
 }
 __DEVICE__ unsigned long long __ullAtomicExch_block(unsigned long long *__p,
                                                     unsigned long long __v) {
@@ -1122,10 +1136,16 @@ __DEVICE__ double j1(double __a) { return __nv_j1(__a); }
 __DEVICE__ float j1f(float __a) { return __nv_j1f(__a); }
 __DEVICE__ double jn(int __n, double __a) { return __nv_jn(__n, __a); }
 __DEVICE__ float jnf(int __n, float __a) { return __nv_jnf(__n, __a); }
+#if defined(__LP64__)
+__DEVICE__ long labs(long __a) { return llabs(__a); };
+#else
+__DEVICE__ long labs(long __a) { return __nv_abs(__a); };
+#endif
 __DEVICE__ double ldexp(double __a, int __b) { return __nv_ldexp(__a, __b); }
 __DEVICE__ float ldexpf(float __a, int __b) { return __nv_ldexpf(__a, __b); }
 __DEVICE__ double lgamma(double __a) { return __nv_lgamma(__a); }
 __DEVICE__ float lgammaf(float __a) { return __nv_lgammaf(__a); }
+__DEVICE__ long long llabs(long long __a) { return __nv_llabs(__a); }
 __DEVICE__ long long llmax(long long __a, long long __b) {
   return __nv_llmax(__a, __b);
 }
@@ -1266,6 +1286,9 @@ __DEVICE__ float scalblnf(float __a, long __b) {
   return scalbnf(__a, (int)__b);
 }
 __DEVICE__ double sin(double __a) { return __nv_sin(__a); }
+__DEVICE__ void sincos(double __a, double *__sptr, double *__cptr) {
+  return __nv_sincos(__a, __sptr, __cptr);
+}
 __DEVICE__ void sincosf(float __a, float *__sptr, float *__cptr) {
   return __FAST_OR_SLOW(__nv_fast_sincosf, __nv_sincosf)(__a, __sptr, __cptr);
 }

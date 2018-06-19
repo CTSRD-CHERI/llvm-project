@@ -28,14 +28,19 @@ inline bool operator!=(const llvm::wasm::WasmSignature &LHS,
   return !(LHS == RHS);
 }
 
+// Used for general comparison
+inline bool operator==(const llvm::wasm::WasmGlobalType &LHS,
+                       const llvm::wasm::WasmGlobalType &RHS) {
+  return LHS.Type == RHS.Type && LHS.Mutable == RHS.Mutable;
+}
+
+inline bool operator!=(const llvm::wasm::WasmGlobalType &LHS,
+                       const llvm::wasm::WasmGlobalType &RHS) {
+  return !(LHS == RHS);
+}
+
 namespace lld {
 namespace wasm {
-
-struct OutputRelocation {
-  llvm::wasm::WasmRelocation Reloc;
-  uint32_t NewIndex;
-  uint32_t Value;
-};
 
 void debugWrite(uint64_t Offset, const Twine &Msg);
 
@@ -67,12 +72,11 @@ void writeImport(raw_ostream &OS, const llvm::wasm::WasmImport &Import);
 
 void writeExport(raw_ostream &OS, const llvm::wasm::WasmExport &Export);
 
-void writeReloc(raw_ostream &OS, const OutputRelocation &Reloc);
-
 } // namespace wasm
 
 std::string toString(const llvm::wasm::ValType Type);
 std::string toString(const llvm::wasm::WasmSignature &Sig);
+std::string toString(const llvm::wasm::WasmGlobalType &Sig);
 
 } // namespace lld
 

@@ -115,6 +115,14 @@ DwarfAccelTables("dwarf-accel-tables", cl::Hidden,
                             clEnumVal(Disable, "Disabled")),
                  cl::init(Default));
 
+static cl::opt<DefaultOnOff>
+DwarfInlinedStrings("dwarf-inlined-strings", cl::Hidden,
+                 cl::desc("Use inlined strings rather than string section."),
+                 cl::values(clEnumVal(Default, "Default for platform"),
+                            clEnumVal(Enable, "Enabled"),
+                            clEnumVal(Disable, "Disabled")),
+                 cl::init(Default));
+
 enum LinkageNameOption {
   DefaultLinkageNames,
   AllLinkageNames,
@@ -284,6 +292,7 @@ DwarfDebug::DwarfDebug(AsmPrinter *A, Module *M)
   else
     HasDwarfAccelTables = DwarfAccelTables == Enable;
 
+  UseInlineStrings = DwarfInlinedStrings == Enable;
   HasAppleExtensionAttributes = tuneForLLDB();
 
   // Handle split DWARF.
@@ -1375,7 +1384,7 @@ void DwarfDebug::endFunctionImpl(const MachineFunction *MF) {
 void DwarfDebug::recordSourceLine(unsigned Line, unsigned Col, const MDNode *S,
                                   unsigned Flags) {
   StringRef Fn;
-  unsigned Src = 1;
+  unsigned FileNo = 1;
   unsigned Discriminator = 0;
   if (auto *Scope = cast_or_null<DIScope>(S)) {
     Fn = Scope->getFilename();
@@ -1384,10 +1393,10 @@ void DwarfDebug::recordSourceLine(unsigned Line, unsigned Col, const MDNode *S,
         Discriminator = LBF->getDiscriminator();
 
     unsigned CUID = Asm->OutStreamer->getContext().getDwarfCompileUnitID();
-    Src = static_cast<DwarfCompileUnit &>(*InfoHolder.getUnits()[CUID])
+    FileNo = static_cast<DwarfCompileUnit &>(*InfoHolder.getUnits()[CUID])
               .getOrCreateSourceID(Scope->getFile());
   }
-  Asm->OutStreamer->EmitDwarfLocDirective(Src, Line, Col, Flags, 0,
+  Asm->OutStreamer->EmitDwarfLocDirective(FileNo, Line, Col, Flags, 0,
                                           Discriminator, Fn);
 }
 
@@ -2011,8 +2020,11 @@ void DwarfDebug::emitDebugMacinfo() {
     auto *SkCU = TheCU.getSkeleton();
     DwarfCompileUnit &U = SkCU ? *SkCU : TheCU;
     auto *CUNode = cast<DICompileUnit>(P.first);
-    Asm->OutStreamer->EmitLabel(U.getMacroLabelBegin());
-    handleMacroNodes(CUNode->getMacros(), U);
+    DIMacroNodeArray Macros = CUNode->getMacros();
+    if (!Macros.empty()) {
+      Asm->OutStreamer->EmitLabel(U.getMacroLabelBegin());
+      handleMacroNodes(Macros, U);
+    }
   }
   Asm->OutStreamer->AddComment("End Of Macro List Mark");
   Asm->EmitInt8(0);

@@ -20,6 +20,10 @@
 #include "MipsInstrInfo.h"
 #include "llvm/CodeGen/SelectionDAGTargetInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
+#include "llvm/CodeGen/GlobalISel/CallLowering.h"
+#include "llvm/CodeGen/GlobalISel/LegalizerInfo.h"
+#include "llvm/CodeGen/GlobalISel/RegisterBankInfo.h"
+#include "llvm/CodeGen/GlobalISel/InstructionSelector.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/MC/MCInstrItineraries.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -158,6 +162,10 @@ class MipsSubtarget : public MipsGenSubtargetInfo {
   // HasMT -- support MT ASE.
   bool HasMT;
 
+  // Use hazard variants of the jump register instructions for indirect
+  // function calls and jump tables.
+  bool UseIndirectJumpsHazard;
+
   // Disable use of the `jal` instruction.
   bool UseLongCalls = false;
 
@@ -278,6 +286,9 @@ public:
   bool disableMadd4() const { return DisableMadd4; }
   bool hasEVA() const { return HasEVA; }
   bool hasMT() const { return HasMT; }
+  bool useIndirectJumpsHazard() const {
+    return UseIndirectJumpsHazard && hasMips32r2();
+  }
   bool useSmallSection() const { return UseSmallSection; }
 
   bool hasStandardEncoding() const { return !inMips16Mode(); }
@@ -342,6 +353,19 @@ public:
   const InstrItineraryData *getInstrItineraryData() const override {
     return &InstrItins;
   }
+
+protected:
+  // GlobalISel related APIs.
+  std::unique_ptr<CallLowering> CallLoweringInfo;
+  std::unique_ptr<LegalizerInfo> Legalizer;
+  std::unique_ptr<RegisterBankInfo> RegBankInfo;
+  std::unique_ptr<InstructionSelector> InstSelector;
+
+public:
+  const CallLowering *getCallLowering() const override;
+  const LegalizerInfo *getLegalizerInfo() const override;
+  const RegisterBankInfo *getRegBankInfo() const override;
+  const InstructionSelector *getInstructionSelector() const override;
 };
 } // End llvm namespace
 

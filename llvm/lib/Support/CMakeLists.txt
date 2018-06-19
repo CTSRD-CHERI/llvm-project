@@ -4,7 +4,8 @@ if ( LLVM_ENABLE_ZLIB AND HAVE_LIBZ )
 endif()
 if( MSVC OR MINGW )
   # libuuid required for FOLDERID_Profile usage in lib/Support/Windows/Path.inc.
-  set(system_libs ${system_libs} psapi shell32 ole32 uuid)
+  # advapi32 required for CryptAcquireContextW in lib/Support/Windows/Path.inc.
+  set(system_libs ${system_libs} psapi shell32 ole32 uuid advapi32)
 elseif( CMAKE_HOST_UNIX )
   if( HAVE_LIBRT )
     set(system_libs ${system_libs} rt)
@@ -113,6 +114,7 @@ add_llvm_library(LLVMSupport
   Triple.cpp
   Twine.cpp
   Unicode.cpp
+  UnicodeCaseFold.cpp
   YAMLParser.cpp
   YAMLTraits.cpp
   raw_os_ostream.cpp

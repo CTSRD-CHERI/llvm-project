@@ -34,6 +34,13 @@ using namespace clang;
 
 namespace {
 
+bool compileCommandsAreEqual(const tooling::CompileCommand &LHS,
+                             const tooling::CompileCommand &RHS) {
+  // We don't check for Output, it should not matter to clangd.
+  return LHS.Directory == RHS.Directory && LHS.Filename == RHS.Filename &&
+         llvm::makeArrayRef(LHS.CommandLine).equals(RHS.CommandLine);
+}
+
 template <class T> std::size_t getUsedBytes(const std::vector<T> &Vec) {
   return Vec.capacity() * sizeof(T);
 }
@@ -74,10 +81,58 @@ private:
   std::vector<const Decl *> TopLevelDecls;
 };
 
+// Converts a half-open clang source range to an LSP range.
+// Note that clang also uses closed source ranges, which this can't handle!
+Range toRange(CharSourceRange R, const SourceManager &M) {
+  // Clang is 1-based, LSP uses 0-based indexes.
+  Position Begin;
+  Begin.line = static_cast<int>(M.getSpellingLineNumber(R.getBegin())) - 1;
+  Begin.character =
+      static_cast<int>(M.getSpellingColumnNumber(R.getBegin())) - 1;
+
+  Position End;
+  End.line = static_cast<int>(M.getSpellingLineNumber(R.getEnd())) - 1;
+  End.character = static_cast<int>(M.getSpellingColumnNumber(R.getEnd())) - 1;
+
+  return {Begin, End};
+}
+
+class InclusionLocationsCollector : public PPCallbacks {
+public:
+  InclusionLocationsCollector(SourceManager &SourceMgr,
+                              InclusionLocations &IncLocations)
+      : SourceMgr(SourceMgr), IncLocations(IncLocations) {}
+
+  void InclusionDirective(SourceLocation HashLoc, const Token &IncludeTok,
+                          StringRef FileName, bool IsAngled,
+                          CharSourceRange FilenameRange, const FileEntry *File,
+                          StringRef SearchPath, StringRef RelativePath,
+                          const Module *Imported) override {
+    auto SR = FilenameRange.getAsRange();
+    if (SR.isInvalid() || !File || File->tryGetRealPathName().empty())
+      return;
+
+    if (SourceMgr.isInMainFile(SR.getBegin())) {
+      // Only inclusion directives in the main file make sense. The user cannot
+      // select directives not in the main file.
+      IncLocations.emplace_back(toRange(FilenameRange, SourceMgr),
+                                File->tryGetRealPathName());
+    }
+  }
+
+private:
+  SourceManager &SourceMgr;
+  InclusionLocations &IncLocations;
+};
+
 class CppFilePreambleCallbacks : public PreambleCallbacks {
 public:
   std::vector<serialization::DeclID> takeTopLevelDeclIDs() {
     return std::move(TopLevelDeclIDs);
+  }
+
+  InclusionLocations takeInclusionLocations() {
+    return std::move(IncLocations);
   }
 
   void AfterPCHEmitted(ASTWriter &Writer) override {
@@ -98,9 +153,21 @@ public:
     }
   }
 
+  void BeforeExecute(CompilerInstance &CI) override {
+    SourceMgr = &CI.getSourceManager();
+  }
+
+  std::unique_ptr<PPCallbacks> createPPCallbacks() override {
+    assert(SourceMgr && "SourceMgr must be set at this point");
+    return llvm::make_unique<InclusionLocationsCollector>(*SourceMgr,
+                                                          IncLocations);
+  }
+
 private:
   std::vector<Decl *> TopLevelDecls;
   std::vector<serialization::DeclID> TopLevelDeclIDs;
+  InclusionLocations IncLocations;
+  SourceManager *SourceMgr = nullptr;
 };
 
 /// Convert from clang diagnostic level to LSP severity.
@@ -130,22 +197,6 @@ bool locationInRange(SourceLocation L, CharSourceRange R,
       M.getFileID(R.getBegin()) != M.getFileID(L))
     return false;
   return L != R.getEnd() && M.isPointWithin(L, R.getBegin(), R.getEnd());
-}
-
-// Converts a half-open clang source range to an LSP range.
-// Note that clang also uses closed source ranges, which this can't handle!
-Range toRange(CharSourceRange R, const SourceManager &M) {
-  // Clang is 1-based, LSP uses 0-based indexes.
-  Position Begin;
-  Begin.line = static_cast<int>(M.getSpellingLineNumber(R.getBegin())) - 1;
-  Begin.character =
-      static_cast<int>(M.getSpellingColumnNumber(R.getBegin())) - 1;
-
-  Position End;
-  End.line = static_cast<int>(M.getSpellingLineNumber(R.getEnd())) - 1;
-  End.character = static_cast<int>(M.getSpellingColumnNumber(R.getEnd())) - 1;
-
-  return {Begin, End};
 }
 
 // Clang diags have a location (shown as ^) and 0 or more ranges (~~~~).
@@ -260,6 +311,17 @@ ParsedAST::Build(std::unique_ptr<clang::CompilerInvocation> CI,
         MainInput.getFile());
     return llvm::None;
   }
+
+  InclusionLocations IncLocations;
+  // Copy over the includes from the preamble, then combine with the
+  // non-preamble includes below.
+  if (Preamble)
+    IncLocations = Preamble->IncLocations;
+
+  Clang->getPreprocessor().addPPCallbacks(
+      llvm::make_unique<InclusionLocationsCollector>(Clang->getSourceManager(),
+                                                     IncLocations));
+
   if (!Action->Execute())
     log("Execute() failed when building AST for " + MainInput.getFile());
 
@@ -269,7 +331,8 @@ ParsedAST::Build(std::unique_ptr<clang::CompilerInvocation> CI,
 
   std::vector<const Decl *> ParsedDecls = Action->takeTopLevelDecls();
   return ParsedAST(std::move(Preamble), std::move(Clang), std::move(Action),
-                   std::move(ParsedDecls), std::move(ASTDiags));
+                   std::move(ParsedDecls), std::move(ASTDiags),
+                   std::move(IncLocations));
 }
 
 namespace {
@@ -348,21 +411,28 @@ std::size_t ParsedAST::getUsedBytes() const {
          ::getUsedBytes(TopLevelDecls) + ::getUsedBytes(Diags);
 }
 
+const InclusionLocations &ParsedAST::getInclusionLocations() const {
+  return IncLocations;
+}
+
 PreambleData::PreambleData(PrecompiledPreamble Preamble,
                            std::vector<serialization::DeclID> TopLevelDeclIDs,
-                           std::vector<DiagWithFixIts> Diags)
+                           std::vector<DiagWithFixIts> Diags,
+                           InclusionLocations IncLocations)
     : Preamble(std::move(Preamble)),
-      TopLevelDeclIDs(std::move(TopLevelDeclIDs)), Diags(std::move(Diags)) {}
+      TopLevelDeclIDs(std::move(TopLevelDeclIDs)), Diags(std::move(Diags)),
+      IncLocations(std::move(IncLocations)) {}
 
 ParsedAST::ParsedAST(std::shared_ptr<const PreambleData> Preamble,
                      std::unique_ptr<CompilerInstance> Clang,
                      std::unique_ptr<FrontendAction> Action,
                      std::vector<const Decl *> TopLevelDecls,
-                     std::vector<DiagWithFixIts> Diags)
+                     std::vector<DiagWithFixIts> Diags,
+                     InclusionLocations IncLocations)
     : Preamble(std::move(Preamble)), Clang(std::move(Clang)),
       Action(std::move(Action)), Diags(std::move(Diags)),
-      TopLevelDecls(std::move(TopLevelDecls)),
-      PreambleDeclsDeserialized(false) {
+      TopLevelDecls(std::move(TopLevelDecls)), PreambleDeclsDeserialized(false),
+      IncLocations(std::move(IncLocations)) {
   assert(this->Clang);
   assert(this->Action);
 }
@@ -417,7 +487,7 @@ CppFile::rebuild(ParseInputs &&Inputs) {
 
   // Compute updated Preamble.
   std::shared_ptr<const PreambleData> NewPreamble =
-      rebuildPreamble(*CI, Inputs.FS, *ContentsBuffer);
+      rebuildPreamble(*CI, Inputs.CompileCommand, Inputs.FS, *ContentsBuffer);
 
   // Remove current AST to avoid wasting memory.
   AST = llvm::None;
@@ -445,6 +515,7 @@ CppFile::rebuild(ParseInputs &&Inputs) {
   }
 
   // Write the results of rebuild into class fields.
+  Command = std::move(Inputs.CompileCommand);
   Preamble = std::move(NewPreamble);
   AST = std::move(NewAST);
   return Diagnostics;
@@ -471,11 +542,12 @@ std::size_t CppFile::getUsedBytes() const {
 
 std::shared_ptr<const PreambleData>
 CppFile::rebuildPreamble(CompilerInvocation &CI,
+                         const tooling::CompileCommand &Command,
                          IntrusiveRefCntPtr<vfs::FileSystem> FS,
                          llvm::MemoryBuffer &ContentsBuffer) const {
   const auto &OldPreamble = this->Preamble;
   auto Bounds = ComputePreambleBounds(*CI.getLangOpts(), &ContentsBuffer, 0);
-  if (OldPreamble &&
+  if (OldPreamble && compileCommandsAreEqual(this->Command, Command) &&
       OldPreamble->Preamble.CanReuse(CI, &ContentsBuffer, Bounds, FS.get())) {
     log("Reusing preamble for file " + Twine(FileName));
     return OldPreamble;
@@ -512,7 +584,8 @@ CppFile::rebuildPreamble(CompilerInvocation &CI,
     return std::make_shared<PreambleData>(
         std::move(*BuiltPreamble),
         SerializedDeclsCollector.takeTopLevelDeclIDs(),
-        std::move(PreambleDiags));
+        std::move(PreambleDiags),
+        SerializedDeclsCollector.takeInclusionLocations());
   } else {
     log("Could not build a preamble for file " + Twine(FileName));
     return nullptr;
