@@ -4822,13 +4822,13 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
     // Add the method number
     auto *MethodNum = Builder.CreateExtractValue(Callee.getFunctionPointer(), {1});
     auto NumTy = getContext().UnsignedLongLongTy;
-    CallArg MethodNumArg(RValue::get(MethodNum), NumTy, false);
+    CallArg MethodNumArg(RValue::get(MethodNum), NumTy);
     NewParams.push_back(NumTy);
     Args.insert(Args.begin(), MethodNumArg);
     // Add the CHERI object
     auto *Obj = Builder.CreateExtractValue(Callee.getFunctionPointer(), {0});
     auto ObjTy = getContext().getCHERIClassType();
-    CallArg ObjArg(RValue::get(Obj), ObjTy, false);
+    CallArg ObjArg(RValue::get(Obj), ObjTy);
     NewParams.push_back(ObjTy);
     Args.insert(Args.begin(), ObjArg);
 
@@ -4859,7 +4859,7 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
     auto *MethodNum = Builder.CreateLoad(Address(MethodNumVar, CharUnits::fromQuantity(8)));
     MethodNum->setMetadata(CGM.getModule().getMDKindID("invariant.load"),
         llvm::MDNode::get(getLLVMContext(), None));
-    CallArg MethodNumArg(RValue::get(MethodNum), NumTy, false);
+    CallArg MethodNumArg(RValue::get(MethodNum), NumTy);
     NewParams.push_back(NumTy);
     // If we have a non-empty suffix, then we're not the version of the method
     // that takes an explicit class, we're the version with the same explicit
@@ -4884,8 +4884,8 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
       assert(std::distance(Fields.begin(), Fields.end()) == 2);
       QualType Ty1 = FieldsIt->getType();
       QualType Ty2 = (++FieldsIt)->getType();
-      CallArg Arg1(RValue::get(Builder.CreateLoad(A1)), Ty1, false);
-      CallArg Arg2(RValue::get(Builder.CreateLoad(A2)), Ty2, false);
+      CallArg Arg1(RValue::get(Builder.CreateLoad(A1)), Ty1);
+      CallArg Arg2(RValue::get(Builder.CreateLoad(A2)), Ty2);
       Args.insert(Args.begin(), MethodNumArg);
       Args.insert(Args.begin(), Arg2);
       Args.insert(Args.begin(), Arg1);

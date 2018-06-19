@@ -117,7 +117,7 @@ CodeGenFunction::EmitNVPTXDevicePrintfCallExpr(const CallExpr *E,
   }
 
   // Invoke vprintf and return.
-  llvm::Function* VprintfFunc = GetVprintfDeclaration(CGM.getModule());
+  llvm::Function* VprintfFunc = GetVprintfDeclaration(CGM);
   return RValue::get(Builder.CreateCall(
       VprintfFunc, {Args[0].getRValue(*this).getScalarVal(), BufferPtr}));
 }
