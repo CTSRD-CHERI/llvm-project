@@ -117,17 +117,16 @@
 
 # EPCC can no longer be accessed using $c31
 
-# WARN: [[@LINE+3]]:13: error: Direct access to EPCC is deprecated: use C(Get/Set)EPCC instead.
-# WARN-NOT: cheri_sysregs_accessible
+# WARN: [[@LINE+2]]:13: warning: Direct access to EPCC is deprecated: use C(Get/Set)EPCC instead.
 # WARN-NEXT:	CMove	$c1, $epcc
 	CMove	$c1, $epcc
-# WARN: [[@LINE+2]]:8: error: Direct access to EPCC is deprecated: use C(Get/Set)EPCC instead.
+# WARN: [[@LINE+2]]:8: warning: Direct access to EPCC is deprecated: use C(Get/Set)EPCC instead.
 # WARN-NEXT:	CMove	$epcc, $c1
 	CMove	$epcc, $c1
-# WARN: [[@LINE+2]]:8: error: Direct access to EPCC is deprecated: use C(Get/Set)EPCC instead.
+# WARN: [[@LINE+2]]:8: warning: Direct access to EPCC is deprecated: use C(Get/Set)EPCC instead.
 # WARN-NEXT:	CMove	$c31, $c1
 	CMove	$c31, $c1
-# WARN: [[@LINE+2]]:13: error: Direct access to EPCC is deprecated: use C(Get/Set)EPCC instead.
+# WARN: [[@LINE+2]]:13: warning: Direct access to EPCC is deprecated: use C(Get/Set)EPCC instead.
 # WARN-NEXT:	CMove	$c1, $c31
 	CMove	$c1, $c31
 
@@ -162,14 +161,7 @@
 	CMove	$c1, $c28
 	CMove	$c1, $c29
 	CMove	$c1, $c30
-	# But C31 should still give and error
-	# WARN: [[@LINE+3]]:13: error: Direct access to EPCC is deprecated: use C(Get/Set)EPCC instead.
-  # WARN-NOT: cheri_sysregs_accessible
-  # WARN-NEXT:	CMove	$c1, $c31
 	CMove	$c1, $c31
-	# WARN: [[@LINE+3]]:13: error: Direct access to EPCC is deprecated: use C(Get/Set)EPCC instead.
-  # WARN-NOT: cheri_sysregs_accessible
-  # WARN-NEXT:	CMove	$c1, $epcc
 	CMove	$c1, $epcc
 
   # And $C0 should also not have changed:

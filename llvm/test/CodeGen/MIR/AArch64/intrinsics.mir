@@ -13,6 +13,6 @@
 name:            use_intrin
 body: |
   bb.0:
-    %0:_(s64) = G_INTRINSIC intrinsic(@llvm.returnaddress)
+    %0:_(s64) = G_INTRINSIC intrinsic(@llvm.returnaddress.p0i8)
     RET_ReallyLR
 ...
