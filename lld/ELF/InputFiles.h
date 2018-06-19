@@ -242,9 +242,7 @@ public:
   InputFile *fetch();
 
 private:
-  std::vector<StringRef> getSymbolNames();
-  template <class ELFT> std::vector<StringRef> getElfSymbols();
-  std::vector<StringRef> getBitcodeSymbols();
+  template <class ELFT> void addElfSymbols();
 
   bool Seen = false;
   uint64_t OffsetInArchive;
@@ -331,6 +329,9 @@ public:
 InputFile *createObjectFile(MemoryBufferRef MB, StringRef ArchiveName = "",
                             uint64_t OffsetInArchive = 0);
 InputFile *createSharedFile(MemoryBufferRef MB, StringRef DefaultSoName);
+
+// For --just-symbols
+template <class ELFT> void readJustSymbolsFile(MemoryBufferRef MB);
 
 extern std::vector<BinaryFile *> BinaryFiles;
 extern std::vector<BitcodeFile *> BitcodeFiles;

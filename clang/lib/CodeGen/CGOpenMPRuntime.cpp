@@ -1104,11 +1104,9 @@ static Address castToBase(CodeGenFunction &CGF, QualType BaseTy, QualType ElTy,
   return Address(Addr, BaseLVAlignment);
 }
 
-Address ReductionCodeGen::adjustPrivateAddress(CodeGenFunction &CGF, unsigned N,
-                                               Address PrivateAddr) {
-  const DeclRefExpr *DE;
+static const VarDecl *getBaseDecl(const Expr *Ref, const DeclRefExpr *&DE) {
   const VarDecl *OrigVD = nullptr;
-  if (auto *OASE = dyn_cast<OMPArraySectionExpr>(ClausesData[N].Ref)) {
+  if (auto *OASE = dyn_cast<OMPArraySectionExpr>(Ref)) {
     auto *Base = OASE->getBase()->IgnoreParenImpCasts();
     while (auto *TempOASE = dyn_cast<OMPArraySectionExpr>(Base))
       Base = TempOASE->getBase()->IgnoreParenImpCasts();
@@ -1116,14 +1114,20 @@ Address ReductionCodeGen::adjustPrivateAddress(CodeGenFunction &CGF, unsigned N,
       Base = TempASE->getBase()->IgnoreParenImpCasts();
     DE = cast<DeclRefExpr>(Base);
     OrigVD = cast<VarDecl>(DE->getDecl());
-  } else if (auto *ASE = dyn_cast<ArraySubscriptExpr>(ClausesData[N].Ref)) {
+  } else if (auto *ASE = dyn_cast<ArraySubscriptExpr>(Ref)) {
     auto *Base = ASE->getBase()->IgnoreParenImpCasts();
     while (auto *TempASE = dyn_cast<ArraySubscriptExpr>(Base))
       Base = TempASE->getBase()->IgnoreParenImpCasts();
     DE = cast<DeclRefExpr>(Base);
     OrigVD = cast<VarDecl>(DE->getDecl());
   }
-  if (OrigVD) {
+  return OrigVD;
+}
+
+Address ReductionCodeGen::adjustPrivateAddress(CodeGenFunction &CGF, unsigned N,
+                                               Address PrivateAddr) {
+  const DeclRefExpr *DE;
+  if (const VarDecl *OrigVD = ::getBaseDecl(ClausesData[N].Ref, DE)) {
     BaseDecls.emplace_back(OrigVD);
     auto OriginalBaseLValue = CGF.EmitLValue(DE);
     LValue BaseLValue =
@@ -5363,12 +5367,19 @@ void CGOpenMPRuntime::emitReduction(CodeGenFunction &CGF, SourceLocation Loc,
 }
 
 /// Generates unique name for artificial threadprivate variables.
-/// Format is: <Prefix> "." <Loc_raw_encoding> "_" <N>
-static std::string generateUniqueName(StringRef Prefix, SourceLocation Loc,
-                                      unsigned N) {
+/// Format is: <Prefix> "." <Decl_mangled_name> "_" "<Decl_start_loc_raw_enc>"
+static std::string generateUniqueName(CodeGenModule &CGM, StringRef Prefix,
+                                      const Expr *Ref) {
   SmallString<256> Buffer;
   llvm::raw_svector_ostream Out(Buffer);
-  Out << Prefix << "." << Loc.getRawEncoding() << "_" << N;
+  const clang::DeclRefExpr *DE;
+  const VarDecl *D = ::getBaseDecl(Ref, DE);
+  if (!D)
+    D = cast<VarDecl>(cast<DeclRefExpr>(Ref)->getDecl());
+  D = D->getCanonicalDecl();
+  Out << Prefix << "."
+      << (D->isLocalVarDeclOrParm() ? D->getName() : CGM.getMangledName(D))
+      << "_" << D->getCanonicalDecl()->getLocStart().getRawEncoding();
   return Out.str();
 }
 
@@ -5405,7 +5416,7 @@ static llvm::Value *emitReduceInitFunction(CodeGenModule &CGM,
   if (RCG.getSizes(N).second) {
     Address SizeAddr = CGM.getOpenMPRuntime().getAddrOfArtificialThreadPrivate(
         CGF, CGM.getContext().getSizeType(),
-        generateUniqueName("reduction_size", Loc, N));
+        generateUniqueName(CGM, "reduction_size", RCG.getRefExpr(N)));
     Size = CGF.EmitLoadOfScalar(SizeAddr, /*Volatile=*/false,
                                 CGM.getContext().getSizeType(), Loc);
   }
@@ -5418,7 +5429,7 @@ static llvm::Value *emitReduceInitFunction(CodeGenModule &CGM,
     Address SharedAddr =
         CGM.getOpenMPRuntime().getAddrOfArtificialThreadPrivate(
             CGF, CGM.getContext().VoidPtrTy,
-            generateUniqueName("reduction", Loc, N));
+            generateUniqueName(CGM, "reduction", RCG.getRefExpr(N)));
     SharedLVal = CGF.MakeAddrLValue(SharedAddr, CGM.getContext().VoidPtrTy);
   } else {
     SharedLVal = CGF.MakeNaturalAlignAddrLValue(
@@ -5474,7 +5485,7 @@ static llvm::Value *emitReduceCombFunction(CodeGenModule &CGM,
   if (RCG.getSizes(N).second) {
     Address SizeAddr = CGM.getOpenMPRuntime().getAddrOfArtificialThreadPrivate(
         CGF, CGM.getContext().getSizeType(),
-        generateUniqueName("reduction_size", Loc, N));
+        generateUniqueName(CGM, "reduction_size", RCG.getRefExpr(N)));
     Size = CGF.EmitLoadOfScalar(SizeAddr, /*Volatile=*/false,
                                 CGM.getContext().getSizeType(), Loc);
   }
@@ -5545,7 +5556,7 @@ static llvm::Value *emitReduceFiniFunction(CodeGenModule &CGM,
   if (RCG.getSizes(N).second) {
     Address SizeAddr = CGM.getOpenMPRuntime().getAddrOfArtificialThreadPrivate(
         CGF, CGM.getContext().getSizeType(),
-        generateUniqueName("reduction_size", Loc, N));
+        generateUniqueName(CGM, "reduction_size", RCG.getRefExpr(N)));
     Size = CGF.EmitLoadOfScalar(SizeAddr, /*Volatile=*/false,
                                 CGM.getContext().getSizeType(), Loc);
   }
@@ -5674,14 +5685,14 @@ void CGOpenMPRuntime::emitTaskReductionFixups(CodeGenFunction &CGF,
                                                      /*isSigned=*/false);
     Address SizeAddr = getAddrOfArtificialThreadPrivate(
         CGF, CGM.getContext().getSizeType(),
-        generateUniqueName("reduction_size", Loc, N));
+        generateUniqueName(CGM, "reduction_size", RCG.getRefExpr(N)));
     CGF.Builder.CreateStore(SizeVal, SizeAddr, /*IsVolatile=*/false);
   }
   // Store address of the original reduction item if custom initializer is used.
   if (RCG.usesReductionInitializer(N)) {
     Address SharedAddr = getAddrOfArtificialThreadPrivate(
         CGF, CGM.getContext().VoidPtrTy,
-        generateUniqueName("reduction", Loc, N));
+        generateUniqueName(CGM, "reduction", RCG.getRefExpr(N)));
     CGF.Builder.CreateStore(
         CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(
             RCG.getSharedLValue(N).getPointer(), CGM.VoidPtrTy),
@@ -7870,7 +7881,7 @@ emitX86DeclareSimdFunction(const FunctionDecl *FD, llvm::Function *Fn,
 void CGOpenMPRuntime::emitDeclareSimdFunction(const FunctionDecl *FD,
                                               llvm::Function *Fn) {
   ASTContext &C = CGM.getContext();
-  FD = FD->getCanonicalDecl();
+  FD = FD->getMostRecentDecl();
   // Map params to their positions in function decl.
   llvm::DenseMap<const Decl *, unsigned> ParamPositions;
   if (isa<CXXMethodDecl>(FD))
@@ -7880,80 +7891,84 @@ void CGOpenMPRuntime::emitDeclareSimdFunction(const FunctionDecl *FD,
     ParamPositions.insert({P->getCanonicalDecl(), ParamPos});
     ++ParamPos;
   }
-  for (auto *Attr : FD->specific_attrs<OMPDeclareSimdDeclAttr>()) {
-    llvm::SmallVector<ParamAttrTy, 8> ParamAttrs(ParamPositions.size());
-    // Mark uniform parameters.
-    for (auto *E : Attr->uniforms()) {
-      E = E->IgnoreParenImpCasts();
-      unsigned Pos;
-      if (isa<CXXThisExpr>(E))
-        Pos = ParamPositions[FD];
-      else {
-        auto *PVD = cast<ParmVarDecl>(cast<DeclRefExpr>(E)->getDecl())
-                        ->getCanonicalDecl();
-        Pos = ParamPositions[PVD];
+  while (FD) {
+    for (auto *Attr : FD->specific_attrs<OMPDeclareSimdDeclAttr>()) {
+      llvm::SmallVector<ParamAttrTy, 8> ParamAttrs(ParamPositions.size());
+      // Mark uniform parameters.
+      for (auto *E : Attr->uniforms()) {
+        E = E->IgnoreParenImpCasts();
+        unsigned Pos;
+        if (isa<CXXThisExpr>(E))
+          Pos = ParamPositions[FD];
+        else {
+          auto *PVD = cast<ParmVarDecl>(cast<DeclRefExpr>(E)->getDecl())
+                          ->getCanonicalDecl();
+          Pos = ParamPositions[PVD];
+        }
+        ParamAttrs[Pos].Kind = Uniform;
       }
-      ParamAttrs[Pos].Kind = Uniform;
-    }
-    // Get alignment info.
-    auto NI = Attr->alignments_begin();
-    for (auto *E : Attr->aligneds()) {
-      E = E->IgnoreParenImpCasts();
-      unsigned Pos;
-      QualType ParmTy;
-      if (isa<CXXThisExpr>(E)) {
-        Pos = ParamPositions[FD];
-        ParmTy = E->getType();
-      } else {
-        auto *PVD = cast<ParmVarDecl>(cast<DeclRefExpr>(E)->getDecl())
-                        ->getCanonicalDecl();
-        Pos = ParamPositions[PVD];
-        ParmTy = PVD->getType();
-      }
-      ParamAttrs[Pos].Alignment =
-          (*NI) ? (*NI)->EvaluateKnownConstInt(C)
+      // Get alignment info.
+      auto NI = Attr->alignments_begin();
+      for (auto *E : Attr->aligneds()) {
+        E = E->IgnoreParenImpCasts();
+        unsigned Pos;
+        QualType ParmTy;
+        if (isa<CXXThisExpr>(E)) {
+          Pos = ParamPositions[FD];
+          ParmTy = E->getType();
+        } else {
+          auto *PVD = cast<ParmVarDecl>(cast<DeclRefExpr>(E)->getDecl())
+                          ->getCanonicalDecl();
+          Pos = ParamPositions[PVD];
+          ParmTy = PVD->getType();
+        }
+        ParamAttrs[Pos].Alignment =
+            (*NI)
+                ? (*NI)->EvaluateKnownConstInt(C)
                 : llvm::APSInt::getUnsigned(
                       C.toCharUnitsFromBits(C.getOpenMPDefaultSimdAlign(ParmTy))
                           .getQuantity());
-      ++NI;
-    }
-    // Mark linear parameters.
-    auto SI = Attr->steps_begin();
-    auto MI = Attr->modifiers_begin();
-    for (auto *E : Attr->linears()) {
-      E = E->IgnoreParenImpCasts();
-      unsigned Pos;
-      if (isa<CXXThisExpr>(E))
-        Pos = ParamPositions[FD];
-      else {
-        auto *PVD = cast<ParmVarDecl>(cast<DeclRefExpr>(E)->getDecl())
-                        ->getCanonicalDecl();
-        Pos = ParamPositions[PVD];
+        ++NI;
       }
-      auto &ParamAttr = ParamAttrs[Pos];
-      ParamAttr.Kind = Linear;
-      if (*SI) {
-        if (!(*SI)->EvaluateAsInt(ParamAttr.StrideOrArg, C,
-                                  Expr::SE_AllowSideEffects)) {
-          if (auto *DRE = cast<DeclRefExpr>((*SI)->IgnoreParenImpCasts())) {
-            if (auto *StridePVD = cast<ParmVarDecl>(DRE->getDecl())) {
-              ParamAttr.Kind = LinearWithVarStride;
-              ParamAttr.StrideOrArg = llvm::APSInt::getUnsigned(
-                  ParamPositions[StridePVD->getCanonicalDecl()]);
+      // Mark linear parameters.
+      auto SI = Attr->steps_begin();
+      auto MI = Attr->modifiers_begin();
+      for (auto *E : Attr->linears()) {
+        E = E->IgnoreParenImpCasts();
+        unsigned Pos;
+        if (isa<CXXThisExpr>(E))
+          Pos = ParamPositions[FD];
+        else {
+          auto *PVD = cast<ParmVarDecl>(cast<DeclRefExpr>(E)->getDecl())
+                          ->getCanonicalDecl();
+          Pos = ParamPositions[PVD];
+        }
+        auto &ParamAttr = ParamAttrs[Pos];
+        ParamAttr.Kind = Linear;
+        if (*SI) {
+          if (!(*SI)->EvaluateAsInt(ParamAttr.StrideOrArg, C,
+                                    Expr::SE_AllowSideEffects)) {
+            if (auto *DRE = cast<DeclRefExpr>((*SI)->IgnoreParenImpCasts())) {
+              if (auto *StridePVD = cast<ParmVarDecl>(DRE->getDecl())) {
+                ParamAttr.Kind = LinearWithVarStride;
+                ParamAttr.StrideOrArg = llvm::APSInt::getUnsigned(
+                    ParamPositions[StridePVD->getCanonicalDecl()]);
+              }
             }
           }
         }
+        ++SI;
+        ++MI;
       }
-      ++SI;
-      ++MI;
+      llvm::APSInt VLENVal;
+      if (const Expr *VLEN = Attr->getSimdlen())
+        VLENVal = VLEN->EvaluateKnownConstInt(C);
+      OMPDeclareSimdDeclAttr::BranchStateTy State = Attr->getBranchState();
+      if (CGM.getTriple().getArch() == llvm::Triple::x86 ||
+          CGM.getTriple().getArch() == llvm::Triple::x86_64)
+        emitX86DeclareSimdFunction(FD, Fn, VLENVal, ParamAttrs, State);
     }
-    llvm::APSInt VLENVal;
-    if (const Expr *VLEN = Attr->getSimdlen())
-      VLENVal = VLEN->EvaluateKnownConstInt(C);
-    OMPDeclareSimdDeclAttr::BranchStateTy State = Attr->getBranchState();
-    if (CGM.getTriple().getArch() == llvm::Triple::x86 ||
-        CGM.getTriple().getArch() == llvm::Triple::x86_64)
-      emitX86DeclareSimdFunction(FD, Fn, VLENVal, ParamAttrs, State);
+    FD = FD->getPreviousDecl();
   }
 }
 

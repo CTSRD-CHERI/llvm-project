@@ -70,35 +70,41 @@ RealFileSystemProvider::getTaggedFileSystem(PathRef File) {
   return make_tagged(vfs::getRealFileSystem(), VFSTag());
 }
 
+ClangdServer::Options ClangdServer::optsForTest() {
+  ClangdServer::Options Opts;
+  Opts.UpdateDebounce = std::chrono::steady_clock::duration::zero(); // Faster!
+  Opts.StorePreamblesInMemory = true;
+  Opts.AsyncThreadsCount = 4; // Consistent!
+  return Opts;
+}
+
 ClangdServer::ClangdServer(GlobalCompilationDatabase &CDB,
-                           DiagnosticsConsumer &DiagConsumer,
                            FileSystemProvider &FSProvider,
-                           unsigned AsyncThreadsCount,
-                           bool StorePreamblesInMemory,
-                           bool BuildDynamicSymbolIndex, SymbolIndex *StaticIdx,
-                           llvm::Optional<StringRef> ResourceDir)
-    : CompileArgs(CDB,
-                  ResourceDir ? ResourceDir->str() : getStandardResourceDir()),
+                           DiagnosticsConsumer &DiagConsumer,
+                           const Options &Opts)
+    : CompileArgs(CDB, Opts.ResourceDir ? Opts.ResourceDir->str()
+                                        : getStandardResourceDir()),
       DiagConsumer(DiagConsumer), FSProvider(FSProvider),
-      FileIdx(BuildDynamicSymbolIndex ? new FileIndex() : nullptr),
+      FileIdx(Opts.BuildDynamicSymbolIndex ? new FileIndex() : nullptr),
       PCHs(std::make_shared<PCHContainerOperations>()),
       // Pass a callback into `WorkScheduler` to extract symbols from a newly
       // parsed file and rebuild the file index synchronously each time an AST
       // is parsed.
       // FIXME(ioeric): this can be slow and we may be able to index on less
       // critical paths.
-      WorkScheduler(AsyncThreadsCount, StorePreamblesInMemory,
+      WorkScheduler(Opts.AsyncThreadsCount, Opts.StorePreamblesInMemory,
                     FileIdx
                         ? [this](PathRef Path,
                                  ParsedAST *AST) { FileIdx->update(Path, AST); }
-                        : ASTParsedCallback()) {
-  if (FileIdx && StaticIdx) {
-    MergedIndex = mergeIndex(FileIdx.get(), StaticIdx);
+                        : ASTParsedCallback(),
+                    Opts.UpdateDebounce) {
+  if (FileIdx && Opts.StaticIndex) {
+    MergedIndex = mergeIndex(FileIdx.get(), Opts.StaticIndex);
     Index = MergedIndex.get();
   } else if (FileIdx)
     Index = FileIdx.get();
-  else if (StaticIdx)
-    Index = StaticIdx;
+  else if (Opts.StaticIndex)
+    Index = Opts.StaticIndex;
   else
     Index = nullptr;
 }
@@ -314,7 +320,7 @@ static llvm::Expected<HeaderFile> toHeaderFile(StringRef Header,
   if (!Resolved)
     return Resolved.takeError();
   return HeaderFile{std::move(*Resolved), /*Verbatim=*/false};
-};
+}
 
 Expected<tooling::Replacements>
 ClangdServer::insertInclude(PathRef File, StringRef Code,
@@ -347,8 +353,11 @@ ClangdServer::insertInclude(PathRef File, StringRef Code,
   // Replacement with offset UINT_MAX and length 0 will be treated as include
   // insertion.
   tooling::Replacement R(File, /*Offset=*/UINT_MAX, 0, "#include " + ToInclude);
-  return format::cleanupAroundReplacements(Code, tooling::Replacements(R),
-                                           *Style);
+  auto Replaces = format::cleanupAroundReplacements(
+      Code, tooling::Replacements(R), *Style);
+  if (!Replaces)
+    return Replaces;
+  return formatReplacements(Code, *Replaces, *Style);
 }
 
 llvm::Optional<std::string> ClangdServer::getDocument(PathRef File) {
@@ -459,13 +468,21 @@ ClangdServer::formatCode(llvm::StringRef Code, PathRef File,
                          ArrayRef<tooling::Range> Ranges) {
   // Call clang-format.
   auto TaggedFS = FSProvider.getTaggedFileSystem(File);
-  auto StyleOrError =
+  auto Style =
       format::getStyle("file", File, "LLVM", Code, TaggedFS.Value.get());
-  if (!StyleOrError) {
-    return StyleOrError.takeError();
-  } else {
-    return format::reformat(StyleOrError.get(), Code, Ranges, File);
-  }
+  if (!Style)
+    return Style.takeError();
+
+  tooling::Replacements IncludeReplaces =
+      format::sortIncludes(*Style, Code, Ranges, File);
+  auto Changed = tooling::applyAllReplacements(Code, IncludeReplaces);
+  if (!Changed)
+    return Changed.takeError();
+
+  return IncludeReplaces.merge(format::reformat(
+      Style.get(), *Changed,
+      tooling::calculateRangesAfterReplacements(IncludeReplaces, Ranges),
+      File));
 }
 
 void ClangdServer::findDocumentHighlights(

@@ -395,17 +395,12 @@ void ClangdLSPServer::onChangeConfiguration(
   }
 }
 
-ClangdLSPServer::ClangdLSPServer(JSONOutput &Out, unsigned AsyncThreadsCount,
-                                 bool StorePreamblesInMemory,
+ClangdLSPServer::ClangdLSPServer(JSONOutput &Out,
                                  const clangd::CodeCompleteOptions &CCOpts,
-                                 llvm::Optional<StringRef> ResourceDir,
                                  llvm::Optional<Path> CompileCommandsDir,
-                                 bool BuildDynamicSymbolIndex,
-                                 SymbolIndex *StaticIdx)
+                                 const ClangdServer::Options &Opts)
     : Out(Out), CDB(std::move(CompileCommandsDir)), CCOpts(CCOpts),
-      Server(CDB, /*DiagConsumer=*/*this, FSProvider, AsyncThreadsCount,
-             StorePreamblesInMemory, BuildDynamicSymbolIndex, StaticIdx,
-             ResourceDir) {}
+      Server(CDB, FSProvider, /*DiagConsumer=*/*this, Opts) {}
 
 bool ClangdLSPServer::run(std::istream &In, JSONStreamStyle InputStyle) {
   assert(!IsDone && "Run was called before");
@@ -414,7 +409,7 @@ bool ClangdLSPServer::run(std::istream &In, JSONStreamStyle InputStyle) {
   JSONRPCDispatcher Dispatcher([](const json::Expr &Params) {
     replyError(ErrorCode::MethodNotFound, "method not found");
   });
-  registerCallbackHandlers(Dispatcher, Out, /*Callbacks=*/*this);
+  registerCallbackHandlers(Dispatcher, /*Callbacks=*/*this);
 
   // Run the Language Server loop.
   runLanguageServerLoop(In, Out, InputStyle, Dispatcher, IsDone);

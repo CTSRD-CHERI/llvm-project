@@ -235,7 +235,6 @@ std::pair<Symbol *, bool> SymbolTable::insert(StringRef Name) {
   Symbol *Sym;
   if (IsNew) {
     Sym = reinterpret_cast<Symbol *>(make<SymbolUnion>());
-    Sym->InVersionScript = false;
     Sym->Visibility = STV_DEFAULT;
     Sym->IsUsedInRegularObj = false;
     Sym->ExportDynamic = false;
@@ -698,10 +697,10 @@ void SymbolTable::assignExactVersion(SymbolVersion Ver, uint16_t VersionId,
     if (Sym->getName().contains('@'))
       continue;
 
-    if (Sym->InVersionScript)
-      warn("duplicate symbol '" + Ver.Name + "' in version script");
+    if (Sym->VersionId != Config->DefaultSymbolVersion &&
+        Sym->VersionId != VersionId)
+      error("duplicate symbol '" + Ver.Name + "' in version script");
     Sym->VersionId = VersionId;
-    Sym->InVersionScript = true;
   }
 }
 

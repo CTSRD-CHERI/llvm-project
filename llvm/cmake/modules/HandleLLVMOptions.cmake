@@ -881,3 +881,5 @@ function(get_compile_definitions)
   set(LLVM_DEFINITIONS "${result}" PARENT_SCOPE)
 endfunction()
 get_compile_definitions()
+
+option(LLVM_FORCE_ENABLE_STATS "Enable statistics collection for builds that wouldn't normally enable it" OFF)

@@ -641,6 +641,8 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   Opts.DisableFree = Args.hasArg(OPT_disable_free);
   Opts.DiscardValueNames = Args.hasArg(OPT_discard_value_names);
   Opts.DisableTailCalls = Args.hasArg(OPT_mdisable_tail_calls);
+  Opts.NoEscapingBlockTailCalls =
+      Args.hasArg(OPT_fno_escaping_block_tail_calls);
   Opts.FloatABI = Args.getLastArgValue(OPT_mfloat_abi);
   Opts.LessPreciseFPMAD = Args.hasArg(OPT_cl_mad_enable) ||
                           Args.hasArg(OPT_cl_unsafe_math_optimizations) ||
@@ -1826,18 +1828,30 @@ void CompilerInvocation::setLangDefaults(LangOptions &Opts, InputKind IK,
       break;
     case InputKind::Asm:
     case InputKind::C:
+#if defined(CLANG_DEFAULT_STD_C)
+      LangStd = CLANG_DEFAULT_STD_C;
+#else
       // The PS4 uses C99 as the default C standard.
       if (T.isPS4())
         LangStd = LangStandard::lang_gnu99;
       else
         LangStd = LangStandard::lang_gnu11;
+#endif
       break;
     case InputKind::ObjC:
+#if defined(CLANG_DEFAULT_STD_C)
+      LangStd = CLANG_DEFAULT_STD_C;
+#else
       LangStd = LangStandard::lang_gnu11;
+#endif
       break;
     case InputKind::CXX:
     case InputKind::ObjCXX:
+#if defined(CLANG_DEFAULT_STD_CXX)
+      LangStd = CLANG_DEFAULT_STD_CXX;
+#else
       LangStd = LangStandard::lang_gnucxx14;
+#endif
       break;
     case InputKind::RenderScript:
       LangStd = LangStandard::lang_c99;

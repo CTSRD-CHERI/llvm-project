@@ -3968,6 +3968,15 @@ bool llvm::isGuaranteedToTransferExecutionToSuccessor(const Instruction *I) {
   return true;
 }
 
+bool llvm::isGuaranteedToTransferExecutionToSuccessor(const BasicBlock *BB) {
+  // TODO: This is slightly consdervative for invoke instruction since exiting
+  // via an exception *is* normal control for them.
+  for (auto I = BB->begin(), E = BB->end(); I != E; ++I)
+    if (!isGuaranteedToTransferExecutionToSuccessor(&*I))
+      return false;
+  return true;
+}
+
 bool llvm::isGuaranteedToExecuteForEveryIteration(const Instruction *I,
                                                   const Loop *L) {
   // The loop header is guaranteed to be executed for every iteration.
@@ -4508,7 +4517,7 @@ static SelectPatternResult matchSelectPattern(CmpInst::Predicate Pred,
 ///
 /// The function processes the case when type of true and false values of a
 /// select instruction differs from type of the cmp instruction operands because
-/// of a cast instructon. The function checks if it is legal to move the cast
+/// of a cast instruction. The function checks if it is legal to move the cast
 /// operation after "select". If yes, it returns the new second value of
 /// "select" (with the assumption that cast is moved):
 /// 1. As operand of cast instruction when both values of "select" are same cast
@@ -4659,6 +4668,30 @@ SelectPatternResult llvm::matchSelectPattern(Value *V, Value *&LHS, Value *&RHS,
   }
   return ::matchSelectPattern(Pred, FMF, CmpLHS, CmpRHS, TrueVal, FalseVal,
                               LHS, RHS, Depth);
+}
+
+CmpInst::Predicate llvm::getMinMaxPred(SelectPatternFlavor SPF, bool Ordered) {
+  if (SPF == SPF_SMIN) return ICmpInst::ICMP_SLT;
+  if (SPF == SPF_UMIN) return ICmpInst::ICMP_ULT;
+  if (SPF == SPF_SMAX) return ICmpInst::ICMP_SGT;
+  if (SPF == SPF_UMAX) return ICmpInst::ICMP_UGT;
+  if (SPF == SPF_FMINNUM)
+    return Ordered ? FCmpInst::FCMP_OLT : FCmpInst::FCMP_ULT;
+  if (SPF == SPF_FMAXNUM)
+    return Ordered ? FCmpInst::FCMP_OGT : FCmpInst::FCMP_UGT;
+  llvm_unreachable("unhandled!");
+}
+
+SelectPatternFlavor llvm::getInverseMinMaxFlavor(SelectPatternFlavor SPF) {
+  if (SPF == SPF_SMIN) return SPF_SMAX;
+  if (SPF == SPF_UMIN) return SPF_UMAX;
+  if (SPF == SPF_SMAX) return SPF_SMIN;
+  if (SPF == SPF_UMAX) return SPF_UMIN;
+  llvm_unreachable("unhandled!");
+}
+
+CmpInst::Predicate llvm::getInverseMinMaxPred(SelectPatternFlavor SPF) {
+  return getMinMaxPred(getInverseMinMaxFlavor(SPF));
 }
 
 /// Return true if "icmp Pred LHS RHS" is always true.

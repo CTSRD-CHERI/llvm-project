@@ -331,6 +331,8 @@ StringRef ToolChain::getOSLibName() const {
     return "freebsd";
   case llvm::Triple::NetBSD:
     return "netbsd";
+  case llvm::Triple::OpenBSD:
+    return "openbsd";
   case llvm::Triple::Solaris:
     return "sunos";
   default:

@@ -3355,6 +3355,12 @@ static Value *SimplifyFCmpInst(unsigned Predicate, Value *LHS, Value *RHS,
       return getTrue(RetTy);
   }
 
+  // NaN is unordered; NaN is not ordered.
+  assert((FCmpInst::isOrdered(Pred) || FCmpInst::isUnordered(Pred)) &&
+         "Comparison must be either ordered or unordered");
+  if (match(RHS, m_NaN()))
+    return ConstantInt::get(RetTy, CmpInst::isUnordered(Pred));
+
   // fcmp pred x, undef  and  fcmp pred undef, x
   // fold to true if unordered, false if ordered
   if (isa<UndefValue>(LHS) || isa<UndefValue>(RHS)) {
@@ -3374,15 +3380,6 @@ static Value *SimplifyFCmpInst(unsigned Predicate, Value *LHS, Value *RHS,
   // Handle fcmp with constant RHS.
   const APFloat *C;
   if (match(RHS, m_APFloat(C))) {
-    // If the constant is a nan, see if we can fold the comparison based on it.
-    if (C->isNaN()) {
-      if (FCmpInst::isOrdered(Pred)) // True "if ordered and foo"
-        return getFalse(RetTy);
-      assert(FCmpInst::isUnordered(Pred) &&
-             "Comparison must be either ordered or unordered!");
-      // True if unordered.
-      return getTrue(RetTy);
-    }
     // Check whether the constant is an infinity.
     if (C->isInfinity()) {
       if (C->isNegative()) {
@@ -3626,24 +3623,6 @@ static Value *simplifySelectWithICmpCond(Value *CondVal, Value *TrueVal,
   if (Value *V = simplifySelectWithFakeICmpEq(CmpLHS, CmpRHS, Pred,
                                               TrueVal, FalseVal))
     return V;
-
-  if (CondVal->hasOneUse()) {
-    const APInt *C;
-    if (match(CmpRHS, m_APInt(C))) {
-      // X < MIN ? T : F  -->  F
-      if (Pred == ICmpInst::ICMP_SLT && C->isMinSignedValue())
-        return FalseVal;
-      // X < MIN ? T : F  -->  F
-      if (Pred == ICmpInst::ICMP_ULT && C->isMinValue())
-        return FalseVal;
-      // X > MAX ? T : F  -->  F
-      if (Pred == ICmpInst::ICMP_SGT && C->isMaxSignedValue())
-        return FalseVal;
-      // X > MAX ? T : F  -->  F
-      if (Pred == ICmpInst::ICMP_UGT && C->isMaxValue())
-        return FalseVal;
-    }
-  }
 
   // If we have an equality comparison, then we know the value in one of the
   // arms of the select. See if substituting this value into the arm and
