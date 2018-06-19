@@ -13,6 +13,7 @@ set(LIBFUZZER_SOURCES
   FuzzerMerge.cpp
   FuzzerMutate.cpp
   FuzzerSHA1.cpp
+  FuzzerShmemFuchsia.cpp
   FuzzerShmemPosix.cpp
   FuzzerShmemWindows.cpp
   FuzzerTracePC.cpp
@@ -110,6 +111,11 @@ if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux" AND COMPILER_RT_LIBCXX_PATH)
     add_dependencies(RTfuzzer_main.${arch} libcxx_fuzzer_${arch}-build)
     partially_link_libcxx(fuzzer_no_main ${LIBCXX_${arch}_PREFIX} ${arch})
     partially_link_libcxx(fuzzer ${LIBCXX_${arch}_PREFIX} ${arch})
+  endforeach()
+elseif("${CMAKE_SYSTEM_NAME}" STREQUAL "Fuchsia" AND HAVE_LIBCXX)
+  foreach(arch ${FUZZER_SUPPORTED_ARCH})
+    add_dependencies(RTfuzzer.${arch} cxx)
+    add_dependencies(RTfuzzer_main.${arch} cxx)
   endforeach()
 endif()
 

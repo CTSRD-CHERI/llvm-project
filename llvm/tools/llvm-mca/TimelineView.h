@@ -100,8 +100,8 @@
 #ifndef LLVM_TOOLS_LLVM_MCA_TIMELINEVIEW_H
 #define LLVM_TOOLS_LLVM_MCA_TIMELINEVIEW_H
 
-#include "View.h"
 #include "SourceMgr.h"
+#include "View.h"
 #include "llvm/MC/MCInstPrinter.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/Support/raw_ostream.h"
@@ -162,14 +162,8 @@ public:
   void initialize(unsigned MaxIterations);
 
   // Event handlers.
-  void onInstructionDispatched(unsigned Index) override;
-  void onInstructionReady(unsigned Index) override;
-  void onInstructionIssued(
-      unsigned Index,
-      const llvm::ArrayRef<std::pair<ResourceRef, unsigned>> &Used) override;
-  void onInstructionExecuted(unsigned Index) override;
-  void onInstructionRetired(unsigned Index) override;
   void onCycleBegin(unsigned Cycle) override { CurrentCycle = Cycle; }
+  void onInstructionEvent(const HWInstructionEvent &Event) override;
 
   // print functionalities.
   void printTimeline(llvm::raw_ostream &OS) const;

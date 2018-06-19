@@ -40,6 +40,11 @@ Non-comprehensive list of changes in this release
    functionality, or simply have a lot to talk about), see the `NOTE` below
    for adding a new subsection.
 
+* The LoopInstSimplify pass (-loop-instsimplify) has been removed.
+
+* Symbols starting with ``?`` are no longer mangled by LLVM when using the
+  Windows ``x`` or ``w`` IR mangling schemes.
+
 * Note..
 
 .. NOTE

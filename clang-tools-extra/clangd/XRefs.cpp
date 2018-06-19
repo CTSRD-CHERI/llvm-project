@@ -7,6 +7,7 @@
 //
 //===---------------------------------------------------------------------===//
 #include "XRefs.h"
+#include "AST.h"
 #include "Logger.h"
 #include "SourceCode.h"
 #include "URI.h"
@@ -126,6 +127,16 @@ private:
         MacroInfo *MacroInf = MacroDef.getMacroInfo();
         if (MacroInf) {
           MacroInfos.push_back(MacroDecl{IdentifierInfo->getName(), MacroInf});
+          // Clear all collected delcarations if this is a macro search.
+          //
+          // In theory, there should be no declarataions being collected when we
+          // search a source location that refers to a macro.
+          // The occurrence location returned by `handleDeclOccurence` is
+          // limited (FID, Offset are from expansion location), we will collect
+          // all declarations inside the macro.
+          //
+          // FIXME: Avoid adding decls from inside macros in handlDeclOccurence.
+          Decls.clear();
         }
       }
     }
@@ -133,7 +144,7 @@ private:
 };
 
 llvm::Optional<Location>
-getDeclarationLocation(ParsedAST &AST, const SourceRange &ValSourceRange) {
+makeLocation(ParsedAST &AST, const SourceRange &ValSourceRange) {
   const SourceManager &SourceMgr = AST.getASTContext().getSourceManager();
   const LangOptions &LangOpts = AST.getASTContext().getLangOpts();
   SourceLocation LocStart = ValSourceRange.getBegin();
@@ -200,16 +211,16 @@ std::vector<Location> findDefinitions(ParsedAST &AST, Position Pos) {
   std::vector<const Decl *> Decls = DeclMacrosFinder->takeDecls();
   std::vector<MacroDecl> MacroInfos = DeclMacrosFinder->takeMacroInfos();
 
-  for (auto Item : Decls) {
-    auto L = getDeclarationLocation(AST, Item->getSourceRange());
+  for (auto D : Decls) {
+    auto Loc = findNameLoc(D);
+    auto L = makeLocation(AST, SourceRange(Loc, Loc));
     if (L)
       Result.push_back(*L);
   }
 
   for (auto Item : MacroInfos) {
-    SourceRange SR(Item.Info->getDefinitionLoc(),
-                   Item.Info->getDefinitionEndLoc());
-    auto L = getDeclarationLocation(AST, SR);
+    auto Loc = Item.Info->getDefinitionLoc();
+    auto L = makeLocation(AST, SourceRange(Loc, Loc));
     if (L)
       Result.push_back(*L);
   }

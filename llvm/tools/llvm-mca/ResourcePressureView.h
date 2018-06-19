@@ -58,8 +58,8 @@
 #ifndef LLVM_TOOLS_LLVM_MCA_RESOURCEPRESSUREVIEW_H
 #define LLVM_TOOLS_LLVM_MCA_RESOURCEPRESSUREVIEW_H
 
-#include "View.h"
 #include "SourceMgr.h"
+#include "View.h"
 #include "llvm/MC/MCInstPrinter.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include <map>
@@ -87,19 +87,16 @@ class ResourcePressureView : public View {
                                          unsigned Executions) const;
   void printResourcePressurePerInstruction(llvm::raw_ostream &OS,
                                            unsigned Executions) const;
-  void initialize(const llvm::ArrayRef<uint64_t> ProcResoureMasks);
+  void initialize();
 
 public:
   ResourcePressureView(const llvm::MCSubtargetInfo &ST,
-                       llvm::MCInstPrinter &Printer, const SourceMgr &SM,
-                       const llvm::ArrayRef<uint64_t> ProcResourceMasks)
+                       llvm::MCInstPrinter &Printer, const SourceMgr &SM)
       : STI(ST), MCIP(Printer), Source(SM) {
-    initialize(ProcResourceMasks);
+    initialize();
   }
 
-  void onInstructionIssued(
-      unsigned Index,
-      const llvm::ArrayRef<std::pair<ResourceRef, unsigned>> &Used) override;
+  void onInstructionEvent(const HWInstructionEvent &Event) override;
 
   void printView(llvm::raw_ostream &OS) const override {
     unsigned Executions = Source.getNumIterations();

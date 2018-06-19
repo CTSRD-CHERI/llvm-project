@@ -127,6 +127,7 @@ static std::tuple<ELFKind, uint16_t, uint8_t> parseEmulation(StringRef Emul) {
           .Case("elf64btsmip", {ELF64BEKind, EM_MIPS})
           .Case("elf64ltsmip", {ELF64LEKind, EM_MIPS})
           .Case("elf64ppc", {ELF64BEKind, EM_PPC64})
+          .Case("elf64lppc", {ELF64LEKind, EM_PPC64})
           .Cases("elf_amd64", "elf_x86_64", {ELF64LEKind, EM_X86_64})
           .Case("elf_i386", {ELF32LEKind, EM_386})
           .Case("elf_iamcu", {ELF32LEKind, EM_IAMCU})
@@ -617,6 +618,7 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
       Args.hasFlag(OPT_check_sections, OPT_no_check_sections, true);
   Config->Chroot = Args.getLastArgValue(OPT_chroot);
   Config->CompressDebugSections = getCompressDebugSections(Args);
+  Config->Cref = Args.hasFlag(OPT_cref, OPT_no_cref, false);
   Config->DefineCommon = Args.hasFlag(OPT_define_common, OPT_no_define_common,
                                       !Args.hasArg(OPT_relocatable));
   Config->Demangle = Args.hasFlag(OPT_demangle, OPT_no_demangle, true);

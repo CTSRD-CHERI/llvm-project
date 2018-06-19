@@ -11,6 +11,7 @@
 #define LLVM_CLANG_TOOLS_EXTRA_CLANGD_CLANGDLSPSERVER_H
 
 #include "ClangdServer.h"
+#include "DraftStore.h"
 #include "GlobalCompilationDatabase.h"
 #include "Path.h"
 #include "Protocol.h"
@@ -46,9 +47,7 @@ public:
 
 private:
   // Implement DiagnosticsConsumer.
-  virtual void
-  onDiagnosticsReady(PathRef File,
-                     Tagged<std::vector<DiagWithFixIts>> Diagnostics) override;
+  void onDiagnosticsReady(PathRef File, std::vector<Diag> Diagnostics) override;
 
   // Implement ProtocolCallbacks.
   void onInitialize(InitializeParams &Params) override;
@@ -74,7 +73,12 @@ private:
   void onHover(TextDocumentPositionParams &Params) override;
   void onChangeConfiguration(DidChangeConfigurationParams &Params) override;
 
-  std::vector<TextEdit> getFixIts(StringRef File, const clangd::Diagnostic &D);
+  std::vector<Fix> getFixes(StringRef File, const clangd::Diagnostic &D);
+
+  /// Forces a reparse of all currently opened files.  As a result, this method
+  /// may be very expensive.  This method is normally called when the
+  /// compilation database is changed.
+  void reparseOpenedFiles();
 
   JSONOutput &Out;
   /// Used to indicate that the 'shutdown' request was received from the
@@ -87,8 +91,7 @@ private:
   bool IsDone = false;
 
   std::mutex FixItsMutex;
-  typedef std::map<clangd::Diagnostic, std::vector<TextEdit>,
-                   LSPDiagnosticCompare>
+  typedef std::map<clangd::Diagnostic, std::vector<Fix>, LSPDiagnosticCompare>
       DiagnosticToReplacementMap;
   /// Caches FixIts per file and diagnostics
   llvm::StringMap<DiagnosticToReplacementMap> FixItsMap;
@@ -99,6 +102,10 @@ private:
   RealFileSystemProvider FSProvider;
   /// Options used for code completion
   clangd::CodeCompleteOptions CCOpts;
+
+  // Store of the current versions of the open documents.
+  DraftStore DraftMgr;
+
   // Server must be the last member of the class to allow its destructor to exit
   // the worker thread that may otherwise run an async callback on partially
   // destructed instance of ClangdLSPServer.

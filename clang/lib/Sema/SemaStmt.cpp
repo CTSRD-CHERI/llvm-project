@@ -557,7 +557,7 @@ StmtResult Sema::BuildIfStmt(SourceLocation IfLoc, bool IsConstexpr,
     return StmtError();
 
   if (IsConstexpr || isa<ObjCAvailabilityCheckExpr>(Cond.get().second))
-    getCurFunction()->setHasBranchProtectedScope();
+    setFunctionHasBranchProtectedScope();
 
   DiagnoseUnusedExprResult(thenStmt);
   DiagnoseUnusedExprResult(elseStmt);
@@ -688,7 +688,7 @@ StmtResult Sema::ActOnStartOfSwitchStmt(SourceLocation SwitchLoc,
   if (Cond.isInvalid())
     return StmtError();
 
-  getCurFunction()->setHasBranchIntoScope();
+  setFunctionHasBranchIntoScope();
 
   SwitchStmt *SS = new (Context)
       SwitchStmt(Context, InitStmt, Cond.get().first, Cond.get().second);
@@ -1873,7 +1873,7 @@ StmtResult
 Sema::ActOnObjCForCollectionStmt(SourceLocation ForLoc,
                                  Stmt *First, Expr *collection,
                                  SourceLocation RParenLoc) {
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
 
   ExprResult CollectionExprResult =
     CheckObjCForCollectionOperand(ForLoc, collection);
@@ -2784,7 +2784,7 @@ StmtResult Sema::FinishCXXForRangeStmt(Stmt *S, Stmt *B) {
 StmtResult Sema::ActOnGotoStmt(SourceLocation GotoLoc,
                                SourceLocation LabelLoc,
                                LabelDecl *TheDecl) {
-  getCurFunction()->setHasBranchIntoScope();
+  setFunctionHasBranchIntoScope();
   TheDecl->markUsed(Context);
   return new (Context) GotoStmt(TheDecl, GotoLoc, LabelLoc);
 }
@@ -2811,7 +2811,7 @@ Sema::ActOnIndirectGotoStmt(SourceLocation GotoLoc, SourceLocation StarLoc,
     return StmtError();
   E = ExprRes.get();
 
-  getCurFunction()->setHasIndirectGoto();
+  setFunctionHasIndirectGoto();
 
   return new (Context) IndirectGotoStmt(GotoLoc, StarLoc, E);
 }
@@ -2862,7 +2862,7 @@ Sema::ActOnBreakStmt(SourceLocation BreakLoc, Scope *CurScope) {
 /// \param E The expression being returned from the function or block, or
 /// being thrown.
 ///
-/// \param AllowParamOrMoveConstructible Whether we allow function parameters or
+/// \param CESK Whether we allow function parameters or
 /// id-expressions that could be moved out of the function to be considered NRVO
 /// candidates. C++ prohibits these for NRVO itself, but we re-use this logic to
 /// determine whether we should try to move as part of a return or throw (which
@@ -2871,7 +2871,7 @@ Sema::ActOnBreakStmt(SourceLocation BreakLoc, Scope *CurScope) {
 /// \returns The NRVO candidate variable, if the return statement may use the
 /// NRVO, or NULL if there is no such candidate.
 VarDecl *Sema::getCopyElisionCandidate(QualType ReturnType, Expr *E,
-                                       bool AllowParamOrMoveConstructible) {
+                                       CopyElisionSemanticsKind CESK) {
   if (!getLangOpts().CPlusPlus)
     return nullptr;
 
@@ -2884,13 +2884,13 @@ VarDecl *Sema::getCopyElisionCandidate(QualType ReturnType, Expr *E,
   if (!VD)
     return nullptr;
 
-  if (isCopyElisionCandidate(ReturnType, VD, AllowParamOrMoveConstructible))
+  if (isCopyElisionCandidate(ReturnType, VD, CESK))
     return VD;
   return nullptr;
 }
 
 bool Sema::isCopyElisionCandidate(QualType ReturnType, const VarDecl *VD,
-                                  bool AllowParamOrMoveConstructible) {
+                                  CopyElisionSemanticsKind CESK) {
   QualType VDType = VD->getType();
   // - in a return statement in a function with ...
   // ... a class return type ...
@@ -2899,14 +2899,14 @@ bool Sema::isCopyElisionCandidate(QualType ReturnType, const VarDecl *VD,
       return false;
     // ... the same cv-unqualified type as the function return type ...
     // When considering moving this expression out, allow dissimilar types.
-    if (!AllowParamOrMoveConstructible && !VDType->isDependentType() &&
+    if (!(CESK & CES_AllowDifferentTypes) && !VDType->isDependentType() &&
         !Context.hasSameUnqualifiedType(ReturnType, VDType))
       return false;
   }
 
   // ...object (other than a function or catch-clause parameter)...
   if (VD->getKind() != Decl::Var &&
-      !(AllowParamOrMoveConstructible && VD->getKind() == Decl::ParmVar))
+      !((CESK & CES_AllowParameters) && VD->getKind() == Decl::ParmVar))
     return false;
   if (VD->isExceptionVariable()) return false;
 
@@ -2918,7 +2918,7 @@ bool Sema::isCopyElisionCandidate(QualType ReturnType, const VarDecl *VD,
   // variable will no longer be used.
   if (VD->hasAttr<BlocksAttr>()) return false;
 
-  if (AllowParamOrMoveConstructible)
+  if (CESK & CES_AllowDifferentTypes)
     return true;
 
   // ...non-volatile...
@@ -2931,6 +2931,71 @@ bool Sema::isCopyElisionCandidate(QualType ReturnType, const VarDecl *VD,
     return false;
 
   return true;
+}
+
+/// \brief Try to perform the initialization of a potentially-movable value,
+/// which is the operand to a return or throw statement.
+///
+/// This routine implements C++14 [class.copy]p32, which attempts to treat
+/// returned lvalues as rvalues in certain cases (to prefer move construction),
+/// then falls back to treating them as lvalues if that failed.
+///
+/// \param Res We will fill this in if move-initialization was possible.
+/// If move-initialization is not possible, such that we must fall back to
+/// treating the operand as an lvalue, we will leave Res in its original
+/// invalid state.
+static void TryMoveInitialization(Sema& S,
+                                  const InitializedEntity &Entity,
+                                  const VarDecl *NRVOCandidate,
+                                  QualType ResultType,
+                                  Expr *&Value,
+                                  ExprResult &Res) {
+  ImplicitCastExpr AsRvalue(ImplicitCastExpr::OnStack, Value->getType(),
+                            CK_NoOp, Value, VK_XValue);
+
+  Expr *InitExpr = &AsRvalue;
+
+  InitializationKind Kind = InitializationKind::CreateCopy(
+      Value->getLocStart(), Value->getLocStart());
+
+  InitializationSequence Seq(S, Entity, Kind, InitExpr);
+
+  if (!Seq)
+    return;
+
+  for (const InitializationSequence::Step &Step : Seq.steps()) {
+    if (Step.Kind != InitializationSequence::SK_ConstructorInitialization &&
+        Step.Kind != InitializationSequence::SK_UserConversion)
+      continue;
+
+    FunctionDecl *FD = Step.Function.Function;
+    if (isa<CXXConstructorDecl>(FD)) {
+      // C++14 [class.copy]p32:
+      // [...] If the first overload resolution fails or was not performed,
+      // or if the type of the first parameter of the selected constructor
+      // is not an rvalue reference to the object's type (possibly
+      // cv-qualified), overload resolution is performed again, considering
+      // the object as an lvalue.
+      const RValueReferenceType *RRefType =
+          FD->getParamDecl(0)->getType()->getAs<RValueReferenceType>();
+      if (!RRefType)
+        break;
+      if (!S.Context.hasSameUnqualifiedType(RRefType->getPointeeType(),
+                                            NRVOCandidate->getType()))
+        break;
+    } else {
+      continue;
+    }
+
+    // Promote "AsRvalue" to the heap, since we now need this
+    // expression node to persist.
+    Value = ImplicitCastExpr::Create(S.Context, Value->getType(), CK_NoOp,
+                                     Value, nullptr, VK_XValue);
+
+    // Complete type-checking the initialization of the return type
+    // using the constructor we found.
+    Res = Seq.Perform(S, Entity, Kind, Value);
+  }
 }
 
 /// \brief Perform the initialization of a potentially-movable value, which
@@ -2956,53 +3021,14 @@ Sema::PerformMoveOrCopyInitialization(const InitializedEntity &Entity,
   // were designated by an rvalue.
   ExprResult Res = ExprError();
 
-  if (AllowNRVO && !NRVOCandidate)
-    NRVOCandidate = getCopyElisionCandidate(ResultType, Value, true);
+  if (AllowNRVO) {
+    if (!NRVOCandidate) {
+      NRVOCandidate = getCopyElisionCandidate(ResultType, Value, CES_Default);
+    }
 
-  if (AllowNRVO && NRVOCandidate) {
-    ImplicitCastExpr AsRvalue(ImplicitCastExpr::OnStack, Value->getType(),
-                              CK_NoOp, Value, VK_XValue);
-
-    Expr *InitExpr = &AsRvalue;
-
-    InitializationKind Kind = InitializationKind::CreateCopy(
-        Value->getLocStart(), Value->getLocStart());
-
-    InitializationSequence Seq(*this, Entity, Kind, InitExpr);
-    if (Seq) {
-      for (const InitializationSequence::Step &Step : Seq.steps()) {
-        if (!(Step.Kind ==
-                  InitializationSequence::SK_ConstructorInitialization ||
-              (Step.Kind == InitializationSequence::SK_UserConversion &&
-               isa<CXXConstructorDecl>(Step.Function.Function))))
-          continue;
-
-        CXXConstructorDecl *Constructor =
-            cast<CXXConstructorDecl>(Step.Function.Function);
-
-        const RValueReferenceType *RRefType
-          = Constructor->getParamDecl(0)->getType()
-                                                 ->getAs<RValueReferenceType>();
-
-        // [...] If the first overload resolution fails or was not performed, or
-        // if the type of the first parameter of the selected constructor is not
-        // an rvalue reference to the object's type (possibly cv-qualified),
-        // overload resolution is performed again, considering the object as an
-        // lvalue.
-        if (!RRefType ||
-            !Context.hasSameUnqualifiedType(RRefType->getPointeeType(),
-                                            NRVOCandidate->getType()))
-          break;
-
-        // Promote "AsRvalue" to the heap, since we now need this
-        // expression node to persist.
-        Value = ImplicitCastExpr::Create(Context, Value->getType(), CK_NoOp,
-                                         Value, nullptr, VK_XValue);
-
-        // Complete type-checking the initialization of the return type
-        // using the constructor we found.
-        Res = Seq.Perform(*this, Entity, Kind, Value);
-      }
+    if (NRVOCandidate) {
+      TryMoveInitialization(*this, Entity, NRVOCandidate, ResultType, Value,
+                            Res);
     }
   }
 
@@ -3149,7 +3175,7 @@ Sema::ActOnCapScopeReturnStmt(SourceLocation ReturnLoc, Expr *RetValExp) {
 
     // In C++ the return statement is handled via a copy initialization.
     // the C version of which boils down to CheckSingleAssignmentConstraints.
-    NRVOCandidate = getCopyElisionCandidate(FnRetType, RetValExp, false);
+    NRVOCandidate = getCopyElisionCandidate(FnRetType, RetValExp, CES_Strict);
     InitializedEntity Entity = InitializedEntity::InitializeResult(ReturnLoc,
                                                                    FnRetType,
                                                       NRVOCandidate != nullptr);
@@ -3162,7 +3188,7 @@ Sema::ActOnCapScopeReturnStmt(SourceLocation ReturnLoc, Expr *RetValExp) {
     RetValExp = Res.get();
     CheckReturnValExpr(RetValExp, FnRetType, ReturnLoc);
   } else {
-    NRVOCandidate = getCopyElisionCandidate(FnRetType, RetValExp, false);
+    NRVOCandidate = getCopyElisionCandidate(FnRetType, RetValExp, CES_Strict);
   }
 
   if (RetValExp) {
@@ -3532,7 +3558,7 @@ StmtResult Sema::BuildReturnStmt(SourceLocation ReturnLoc, Expr *RetValExp) {
     // In C++ the return statement is handled via a copy initialization,
     // the C version of which boils down to CheckSingleAssignmentConstraints.
     if (RetValExp)
-      NRVOCandidate = getCopyElisionCandidate(FnRetType, RetValExp, false);
+      NRVOCandidate = getCopyElisionCandidate(FnRetType, RetValExp, CES_Strict);
     if (!HasDependentReturnType && !RetValExp->isTypeDependent()) {
       // we have a non-void function with an expression, continue checking
       InitializedEntity Entity = InitializedEntity::InitializeResult(ReturnLoc,
@@ -3607,7 +3633,7 @@ Sema::ActOnObjCAtTryStmt(SourceLocation AtLoc, Stmt *Try,
   if (!getLangOpts().ObjCExceptions)
     Diag(AtLoc, diag::err_objc_exceptions_disabled) << "@try";
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
   unsigned NumCatchStmts = CatchStmts.size();
   return ObjCAtTryStmt::Create(Context, AtLoc, Try, CatchStmts.data(),
                                NumCatchStmts, Finally);
@@ -3698,7 +3724,7 @@ StmtResult
 Sema::ActOnObjCAtSynchronizedStmt(SourceLocation AtLoc, Expr *SyncExpr,
                                   Stmt *SyncBody) {
   // We can't jump into or indirect-jump out of a @synchronized block.
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
   return new (Context) ObjCAtSynchronizedStmt(AtLoc, SyncExpr, SyncBody);
 }
 
@@ -3714,7 +3740,7 @@ Sema::ActOnCXXCatchBlock(SourceLocation CatchLoc, Decl *ExDecl,
 
 StmtResult
 Sema::ActOnObjCAutoreleasePoolStmt(SourceLocation AtLoc, Stmt *Body) {
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
   return new (Context) ObjCAutoreleasePoolStmt(AtLoc, Body);
 }
 

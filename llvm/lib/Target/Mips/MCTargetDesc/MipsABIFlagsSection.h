@@ -167,6 +167,8 @@ public:
       ASESet |= Mips::AFL_ASE_MIPS16;
     if (P.hasMT())
       ASESet |= Mips::AFL_ASE_MT;
+    if (P.hasCRC())
+      ASESet |= Mips::AFL_ASE_CRC;
   }
 
   template <class PredicateLibrary>

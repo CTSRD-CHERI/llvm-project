@@ -31,8 +31,10 @@ class PredicateControl {
   list<Predicate> PTRPredicates = [];
   // Predicates for the FGR size and layout such as IsFP64bit
   list<Predicate> FGRPredicates = [];
-  // Predicates for the instruction group membership such as ISA's and ASE's
+  // Predicates for the instruction group membership such as ISA's.
   list<Predicate> InsnPredicates = [];
+  // Predicate for the ASE that an instruction belongs to.
+  list<Predicate> ASEPredicate = [];
   // Predicate for marking the instruction as usable in hard-float mode only.
   list<Predicate> HardFloatPredicate = [];
   // Predicates for anything else
@@ -43,6 +45,7 @@ class PredicateControl {
                                            FGRPredicates,
                                            InsnPredicates,
                                            HardFloatPredicate,
+                                           ASEPredicate,
                                            AdditionalPredicates);
 }
 
@@ -191,6 +194,8 @@ def FeatureDSPR3
 def FeatureMSA : SubtargetFeature<"msa", "HasMSA", "true", "Mips MSA ASE">;
 
 def FeatureEVA : SubtargetFeature<"eva", "HasEVA", "true", "Mips EVA ASE">;
+
+def FeatureCRC : SubtargetFeature<"crc", "HasCRC", "true", "Mips R6 CRC ASE">;
 
 def FeatureMicroMips  : SubtargetFeature<"micromips", "InMicroMipsMode", "true",
                                          "microMips mode">;

@@ -2946,8 +2946,20 @@ private:
         Matched.clear();
       }
       if (IsMatched) {
-        // Replace all matched values and erase them.
+        // If we matched phi node to different but identical phis then
+        // make a simplification here.
+        DenseMap<PHINode *, PHINode *> MatchedPHINodeMapping;
         for (auto MV : Matched) {
+          auto AlreadyMatched = MatchedPHINodeMapping.find(MV.first);
+          if (AlreadyMatched != MatchedPHINodeMapping.end()) {
+            MV.second->replaceAllUsesWith(AlreadyMatched->second);
+            ST.Put(MV.second, AlreadyMatched->second);
+            MV.second->eraseFromParent();
+          } else
+            MatchedPHINodeMapping.insert({ MV.first, MV.second });
+        }
+        // Replace all matched values and erase them.
+        for (auto MV : MatchedPHINodeMapping) {
           MV.first->replaceAllUsesWith(MV.second);
           PhiNodesToMatch.erase(MV.first);
           ST.Put(MV.first, MV.second);
@@ -5987,12 +5999,13 @@ static bool splitMergedValStore(StoreInst &SI, const DataLayout &DL,
   if (HBC && HBC->getParent() != SI.getParent())
     HValue = Builder.CreateBitCast(HBC->getOperand(0), HBC->getType());
 
+  bool IsLE = SI.getModule()->getDataLayout().isLittleEndian();
   auto CreateSplitStore = [&](Value *V, bool Upper) {
     V = Builder.CreateZExtOrBitCast(V, SplitStoreType);
     Value *Addr = Builder.CreateBitCast(
         SI.getOperand(1),
         SplitStoreType->getPointerTo(SI.getPointerAddressSpace()));
-    if (Upper)
+    if ((IsLE && Upper) || (!IsLE && !Upper))
       Addr = Builder.CreateGEP(
           SplitStoreType, Addr,
           ConstantInt::get(Type::getInt32Ty(SI.getContext()), 1));

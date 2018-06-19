@@ -364,6 +364,7 @@ class MipsAsmParser : public MCTargetAsmParser {
   bool parseSetHardFloatDirective();
   bool parseSetMtDirective();
   bool parseSetNoMtDirective();
+  bool parseSetNoCRCDirective();
 
   bool parseSetAssignment();
 
@@ -677,6 +678,10 @@ public:
     if (getSTI().getFeatureBits()[Mips::FeatureMipsCheri64])
       return 8;
     llvm_unreachable("Should not have been called without checking isCheri()!");
+  }
+
+  bool hasCRC() const {
+    return getSTI().getFeatureBits()[Mips::FeatureCRC];
   }
 
   /// Warn if RegIndex is the same as the current AT.
@@ -5507,6 +5512,13 @@ unsigned MipsAsmParser::checkTargetMatchPredicate(MCInst &Inst) {
       return Match_RequiresPosSizeRange33_64;
     return Match_Success;
   }
+  case Mips::CRC32B: case Mips::CRC32CB:
+  case Mips::CRC32H: case Mips::CRC32CH:
+  case Mips::CRC32W: case Mips::CRC32CW:
+  case Mips::CRC32D: case Mips::CRC32CD:
+    if (Inst.getOperand(0).getReg() != Inst.getOperand(2).getReg())
+      return Match_RequiresSameSrcAndDst;
+    return Match_Success;
   }
 
   uint64_t TSFlags = getInstDesc(Inst.getOpcode()).TSFlags;
@@ -7175,6 +7187,23 @@ bool MipsAsmParser::parseSetNoMtDirective() {
   return false;
 }
 
+bool MipsAsmParser::parseSetNoCRCDirective() {
+  MCAsmParser &Parser = getParser();
+  Parser.Lex(); // Eat "nocrc".
+
+  // If this is not the end of the statement, report an error.
+  if (getLexer().isNot(AsmToken::EndOfStatement)) {
+    reportParseError("unexpected token, expected end of statement");
+    return false;
+  }
+
+  clearFeatureBits(Mips::FeatureCRC, "crc");
+
+  getTargetStreamer().emitDirectiveSetNoCRC();
+  Parser.Lex(); // Consume the EndOfStatement.
+  return false;
+}
+
 bool MipsAsmParser::parseSetPopDirective() {
   MCAsmParser &Parser = getParser();
   SMLoc Loc = getLexer().getLoc();
@@ -7395,6 +7424,10 @@ bool MipsAsmParser::parseSetFeature(uint64_t Feature) {
   case Mips::FeatureMips64r6:
     selectArch("mips64r6");
     getTargetStreamer().emitDirectiveSetMips64R6();
+    break;
+  case Mips::FeatureCRC:
+    setFeatureBits(Mips::FeatureCRC, "crc");
+    getTargetStreamer().emitDirectiveSetCRC();
     break;
   }
   return false;
@@ -7705,6 +7738,10 @@ bool MipsAsmParser::parseDirectiveSet() {
     AreCheriSysRegsAccessible = Tok.getString() == "cheri_sysregs_accessible";
     Parser.eatToEndOfStatement();
     return false;
+  } else if (Tok.getString() == "crc") {
+    return parseSetFeature(Mips::FeatureCRC);
+  } else if (Tok.getString() == "nocrc") {
+    return parseSetNoCRCDirective();
   } else {
     // It is just an identifier, look for an assignment.
     parseSetAssignment();
@@ -7950,6 +7987,8 @@ bool MipsAsmParser::parseSSectionDirective(StringRef Section, unsigned Type) {
 ///  ::= .module softfloat
 ///  ::= .module hardfloat
 ///  ::= .module mt
+///  ::= .module crc
+///  ::= .module nocrc
 bool MipsAsmParser::parseDirectiveModule() {
   MCAsmParser &Parser = getParser();
   MCAsmLexer &Lexer = getLexer();
@@ -8060,6 +8099,44 @@ bool MipsAsmParser::parseDirectiveModule() {
     // If generating ELF, don't do anything (the .MIPS.abiflags section gets
     // emitted later).
     getTargetStreamer().emitDirectiveModuleMT();
+
+    // If this is not the end of the statement, report an error.
+    if (getLexer().isNot(AsmToken::EndOfStatement)) {
+      reportParseError("unexpected token, expected end of statement");
+      return false;
+    }
+
+    return false; // parseDirectiveModule has finished successfully.
+  } else if (Option == "crc") {
+    setModuleFeatureBits(Mips::FeatureCRC, "crc");
+
+    // Synchronize the ABI Flags information with the FeatureBits information we
+    // updated above.
+    getTargetStreamer().updateABIInfo(*this);
+
+    // If printing assembly, use the recently updated ABI Flags information.
+    // If generating ELF, don't do anything (the .MIPS.abiflags section gets
+    // emitted later).
+    getTargetStreamer().emitDirectiveModuleCRC();
+
+    // If this is not the end of the statement, report an error.
+    if (getLexer().isNot(AsmToken::EndOfStatement)) {
+      reportParseError("unexpected token, expected end of statement");
+      return false;
+    }
+
+    return false; // parseDirectiveModule has finished successfully.
+  } else if (Option == "nocrc") {
+    clearModuleFeatureBits(Mips::FeatureCRC, "crc");
+
+    // Synchronize the ABI Flags information with the FeatureBits information we
+    // updated above.
+    getTargetStreamer().updateABIInfo(*this);
+
+    // If printing assembly, use the recently updated ABI Flags information.
+    // If generating ELF, don't do anything (the .MIPS.abiflags section gets
+    // emitted later).
+    getTargetStreamer().emitDirectiveModuleNoCRC();
 
     // If this is not the end of the statement, report an error.
     if (getLexer().isNot(AsmToken::EndOfStatement)) {

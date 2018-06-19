@@ -39,11 +39,7 @@ struct StackTrace;
 const uptr kWordSize = SANITIZER_WORDSIZE / 8;
 const uptr kWordSizeInBits = 8 * kWordSize;
 
-#if defined(__powerpc__) || defined(__powerpc64__)
-  const uptr kCacheLineSize = 128;
-#else
-  const uptr kCacheLineSize = 64;
-#endif
+const uptr kCacheLineSize = SANITIZER_CACHE_LINE_SIZE;
 
 const uptr kMaxPathLength = 4096;
 
@@ -381,6 +377,8 @@ void ReportErrorSummary(const char *error_type, const AddressInfo &info,
 // Same as above, but obtains AddressInfo by symbolizing top stack trace frame.
 void ReportErrorSummary(const char *error_type, const StackTrace *trace,
                         const char *alt_tool_name = nullptr);
+
+void ReportMmapWriteExec();
 
 // Math
 #if SANITIZER_WINDOWS && !defined(__clang__) && !defined(__GNUC__)

@@ -61,7 +61,7 @@ bool link(ArrayRef<const char *> Args, bool CanExitEarly, raw_ostream &Diag) {
   errorHandler().ColorDiagnostics = Diag.has_colors();
   errorHandler().ErrorLimitExceededMsg =
       "too many errors emitted, stopping now"
-      " (use /ERRORLIMIT:0 to see all errors)";
+      " (use /errorlimit:0 to see all errors)";
   errorHandler().ExitEarly = CanExitEarly;
   Config = make<Configuration>();
   Config->Argv = {Args.begin(), Args.end()};
@@ -804,8 +804,10 @@ static void parseOrderFile(StringRef Arg) {
     if (Config->Machine == I386 && !isDecorated(S))
       S = "_" + S;
 
-    if (Set.count(S) == 0)
-      warn("/order:" + Arg + ": missing symbol: " + S);
+    if (Set.count(S) == 0) {
+      if (Config->WarnMissingOrderSymbol)
+        warn("/order:" + Arg + ": missing symbol: " + S + " [LNK4037]");
+    }
     else
       Config->Order[S] = INT_MIN + Config->Order.size();
   }
@@ -899,7 +901,9 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
 
   // Handle /ignore
   for (auto *Arg : Args.filtered(OPT_ignore)) {
-    if (StringRef(Arg->getValue()) == "4217")
+    if (StringRef(Arg->getValue()) == "4037")
+      Config->WarnMissingOrderSymbol = false;
+    else if (StringRef(Arg->getValue()) == "4217")
       Config->WarnLocallyDefinedImported = false;
     // Other warning numbers are ignored.
   }
@@ -1069,6 +1073,10 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   if (Args.hasArg(OPT_lldsavetemps))
     Config->SaveTemps = true;
 
+  // Handle /kill-at
+  if (Args.hasArg(OPT_kill_at))
+    Config->KillAt = true;
+
   // Handle /lldltocache
   if (auto *Arg = Args.getLastArg(OPT_lldltocache))
     Config->LTOCache = Arg->getValue();
@@ -1124,7 +1132,7 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
 
   if (!Config->ManifestInput.empty() &&
       Config->Manifest != Configuration::Embed) {
-    fatal("/MANIFESTINPUT: requires /MANIFEST:EMBED");
+    fatal("/manifestinput: requires /manifest:embed");
   }
 
   // Handle miscellaneous boolean flags.
@@ -1142,13 +1150,13 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   Config->MapFile = getMapFile(Args);
 
   if (Config->Incremental && Config->DoGC) {
-    warn("ignoring '/INCREMENTAL' because REF is enabled; use '/OPT:NOREF' to "
+    warn("ignoring '/incremental' because REF is enabled; use '/opt:noref' to "
          "disable");
     Config->Incremental = false;
   }
 
   if (Config->Incremental && Config->DoICF) {
-    warn("ignoring '/INCREMENTAL' because ICF is enabled; use '/OPT:NOICF' to "
+    warn("ignoring '/incremental' because ICF is enabled; use '/opt:noicf' to "
          "disable");
     Config->Incremental = false;
   }

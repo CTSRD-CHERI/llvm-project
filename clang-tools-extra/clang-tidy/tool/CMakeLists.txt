@@ -18,6 +18,7 @@ target_link_libraries(clang-tidy
   clangBasic
   clangTidy
   clangTidyAndroidModule
+  clangTidyAbseilModule
   clangTidyBoostModule
   clangTidyBugproneModule
   clangTidyCERTModule
@@ -33,6 +34,7 @@ target_link_libraries(clang-tidy
   clangTidyPerformanceModule
   clangTidyPortabilityModule
   clangTidyReadabilityModule
+  clangTidyZirconModule
   clangTooling
   clangToolingCore
   )

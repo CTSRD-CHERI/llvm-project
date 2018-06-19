@@ -19,8 +19,7 @@ namespace mca {
 
 using namespace llvm;
 
-void ResourcePressureView::initialize(
-    const ArrayRef<uint64_t> ProcResourceMasks) {
+void ResourcePressureView::initialize() {
   // Populate the map of resource descriptors.
   unsigned R2VIndex = 0;
   const MCSchedModel &SM = STI.getSchedModel();
@@ -31,9 +30,7 @@ void ResourcePressureView::initialize(
     if (ProcResource.SubUnitsIdxBegin || !NumUnits)
       continue;
 
-    uint64_t ResourceMask = ProcResourceMasks[I];
-    Resource2VecIndex.insert(
-        std::pair<uint64_t, unsigned>(ResourceMask, R2VIndex));
+    Resource2VecIndex.insert(std::pair<uint64_t, unsigned>(I, R2VIndex));
     R2VIndex += ProcResource.NumUnits;
   }
 
@@ -42,10 +39,13 @@ void ResourcePressureView::initialize(
   std::fill(ResourceUsage.begin(), ResourceUsage.end(), 0);
 }
 
-void ResourcePressureView::onInstructionIssued(
-    unsigned Index, const ArrayRef<std::pair<ResourceRef, unsigned>> &Used) {
-  unsigned SourceIdx = Index % Source.size();
-  for (const std::pair<ResourceRef, unsigned> &Use : Used) {
+void ResourcePressureView::onInstructionEvent(const HWInstructionEvent &Event) {
+  // We're only interested in Issue events.
+  if (Event.Type != HWInstructionEvent::Issued)
+    return;
+  const auto &IssueEvent = static_cast<const HWInstructionIssuedEvent &>(Event);
+  unsigned SourceIdx = Event.Index % Source.size();
+  for (const std::pair<ResourceRef, unsigned> &Use : IssueEvent.UsedResources) {
     const ResourceRef &RR = Use.first;
     assert(Resource2VecIndex.find(RR.first) != Resource2VecIndex.end());
     unsigned R2VIndex = Resource2VecIndex[RR.first];
