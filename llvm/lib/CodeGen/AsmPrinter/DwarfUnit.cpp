@@ -241,6 +241,12 @@ void DwarfUnit::addSInt(DIELoc &Die, Optional<dwarf::Form> Form,
 
 void DwarfUnit::addString(DIE &Die, dwarf::Attribute Attribute,
                           StringRef String) {
+  if (DD->useInlineStrings()) {
+    Die.addValue(DIEValueAllocator, Attribute, dwarf::DW_FORM_string,
+                 new (DIEValueAllocator)
+                     DIEInlineString(String, DIEValueAllocator));
+    return;
+  }
   auto StringPoolEntry = DU->getStringPool().getEntry(*Asm, String);
   dwarf::Form IxForm =
       isDwoUnit() ? dwarf::DW_FORM_GNU_str_index : dwarf::DW_FORM_strp;
@@ -296,7 +302,9 @@ MD5::MD5Result *DwarfUnit::getMD5AsBytes(const DIFile *File) {
 unsigned DwarfTypeUnit::getOrCreateSourceID(const DIFile *File) {
   return SplitLineTable
              ? SplitLineTable->getFile(File->getDirectory(),
-                                       File->getFilename(), getMD5AsBytes(File))
+                                       File->getFilename(),
+                                       getMD5AsBytes(File),
+                                       File->getSource())
              : getCU().getOrCreateSourceID(File);
 }
 

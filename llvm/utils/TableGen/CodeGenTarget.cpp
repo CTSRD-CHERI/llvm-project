@@ -229,6 +229,9 @@ Record *CodeGenTarget::getInstructionSet() const {
   return TargetRec->getValueAsDef("InstructionSet");
 }
 
+bool CodeGenTarget::getAllowRegisterRenaming() const {
+  return TargetRec->getValueAsInt("AllowRegisterRenaming");
+}
 
 /// getAsmParser - Return the AssemblyParser definition for this target.
 ///

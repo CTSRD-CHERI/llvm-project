@@ -14,7 +14,6 @@
 #include "InputSection.h"
 #include "LinkerScript.h"
 #include "Relocations.h"
-
 #include "lld/Common/LLVM.h"
 #include "llvm/MC/StringTableBuilder.h"
 #include "llvm/Object/ELF.h"
@@ -120,6 +119,8 @@ private:
 };
 
 int getPriority(StringRef S);
+
+std::vector<InputSection *> getInputSections(OutputSection* OS);
 
 // All output sections that are handled by the linker specially are
 // globally accessible. Writer initializes them, so don't use them

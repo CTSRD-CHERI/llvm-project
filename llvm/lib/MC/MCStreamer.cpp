@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/MC/MCStreamer.h"
+#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
@@ -260,12 +261,14 @@ void MCStreamer::EmitZeros(uint64_t NumBytes) {
   emitFill(NumBytes, 0);
 }
 
-unsigned MCStreamer::EmitDwarfFileDirective(unsigned FileNo,
-                                            StringRef Directory,
-                                            StringRef Filename,
-                                            MD5::MD5Result *Checksum,
-                                            unsigned CUID) {
-  return getContext().getDwarfFile(Directory, Filename, FileNo, Checksum, CUID);
+Expected<unsigned>
+MCStreamer::tryEmitDwarfFileDirective(unsigned FileNo, StringRef Directory,
+                                      StringRef Filename,
+                                      MD5::MD5Result *Checksum,
+                                      Optional<StringRef> Source,
+                                      unsigned CUID) {
+  return getContext().getDwarfFile(Directory, Filename, FileNo, Checksum,
+                                   Source, CUID);
 }
 
 void MCStreamer::EmitDwarfLocDirective(unsigned FileNo, unsigned Line,
@@ -888,10 +891,11 @@ void MCStreamer::EmitWindowsUnwindTables() {
 }
 
 void MCStreamer::Finish() {
-  if (!DwarfFrameInfos.empty() && !DwarfFrameInfos.back().End)
+  if ((!DwarfFrameInfos.empty() && !DwarfFrameInfos.back().End) ||
+      (!WinFrameInfos.empty() && !WinFrameInfos.back()->End)) {
     getContext().reportError(SMLoc(), "Unfinished frame!");
-  if (!WinFrameInfos.empty() && !WinFrameInfos.back()->End)
-    getContext().reportError(SMLoc(), "Unfinished frame!");
+    return;
+  }
 
   if (!FatRelocs.empty()) {
     MCSection *DefaultRelocSection = Context.getELFSection("__cap_relocs",

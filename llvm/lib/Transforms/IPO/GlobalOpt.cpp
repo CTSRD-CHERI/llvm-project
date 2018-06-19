@@ -2230,6 +2230,11 @@ OptimizeFunctions(Module &M, TargetLibraryInfo *TLI,
   for (Module::iterator FI = M.begin(), E = M.end(); FI != E; ) {
     Function *F = &*FI++;
 
+    // Don't perform global opt pass on naked functions; we don't want fast
+    // calling conventions for naked functions.
+    if (F->hasFnAttribute(Attribute::Naked))
+      continue;
+
     // Functions without names cannot be referenced outside this module.
     if (!F->hasName() && !F->isDeclaration() && !F->hasLocalLinkage())
       F->setLinkage(GlobalValue::InternalLinkage);
@@ -2721,7 +2726,7 @@ OptimizeGlobalAliases(Module &M,
       continue;
     }
 
-    // If the aliasee may change at link time, nothing can be done - bail out.
+    // If the alias can change at link time, nothing can be done - bail out.
     if (J->isInterposable())
       continue;
 

@@ -781,7 +781,13 @@ class SkylakeServerProc<string Name> : ProcModel<Name, SkylakeServerModel,
 def : SkylakeServerProc<"skylake-avx512">;
 def : SkylakeServerProc<"skx">; // Legacy alias.
 
-def CNLFeatures : ProcessorFeatures<SKXFeatures.Value, [
+def CNLFeatures : ProcessorFeatures<SKLFeatures.Value, [
+  FeatureAVX512,
+  FeatureCDI,
+  FeatureDQI,
+  FeatureBWI,
+  FeatureVLX,
+  FeaturePKU,
   FeatureVBMI,
   FeatureIFMA,
   FeatureSHA
@@ -1124,4 +1130,5 @@ def X86 : Target {
   let InstructionSet = X86InstrInfo;
   let AssemblyParserVariants = [ATTAsmParserVariant, IntelAsmParserVariant];
   let AssemblyWriters = [ATTAsmWriter, IntelAsmWriter];
+  let AllowRegisterRenaming = 1;
 }

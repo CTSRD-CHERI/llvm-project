@@ -23,6 +23,10 @@ namespace llvm {
   class ModulePass;
   class FunctionPass;
   class MachineFunctionPass;
+  class MipsRegisterBankInfo;
+  class MipsSubtarget;
+  class MipsTargetMachine;
+  class InstructionSelector;
 
   ModulePass *createMipsOs16Pass();
   ModulePass *createMips16HardFloatPass();
@@ -43,6 +47,9 @@ namespace llvm {
   ModulePass *createCheriPureCapABI();
   MachineFunctionPass *createCheriAddressingModeFolder();
   MachineFunctionPass *createCheri128FailHardPass();
+  InstructionSelector *createMipsInstructionSelector(const MipsTargetMachine &,
+                                                     MipsSubtarget &,
+                                                     MipsRegisterBankInfo &);
 } // end namespace llvm;
 
 #endif

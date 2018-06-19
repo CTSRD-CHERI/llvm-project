@@ -263,7 +263,8 @@ public:
   /// A documentation for this function would be nice...
   virtual MVT getScalarShiftAmountTy(const DataLayout &, EVT) const;
 
-  EVT getShiftAmountTy(EVT LHSTy, const DataLayout &DL) const;
+  EVT getShiftAmountTy(EVT LHSTy, const DataLayout &DL,
+                       bool LegalTypes = true) const;
 
   /// Returns the type to be used for the index operand of:
   /// ISD::INSERT_VECTOR_ELT, ISD::EXTRACT_VECTOR_ELT,
@@ -997,9 +998,14 @@ public:
 
   /// Return true if the specified condition code is legal on this target.
   bool isCondCodeLegal(ISD::CondCode CC, MVT VT) const {
-    return
-      getCondCodeAction(CC, VT) == Legal ||
-      getCondCodeAction(CC, VT) == Custom;
+    return getCondCodeAction(CC, VT) == Legal;
+  }
+
+  /// Return true if the specified condition code is legal or custom on this
+  /// target.
+  bool isCondCodeLegalOrCustom(ISD::CondCode CC, MVT VT) const {
+    return getCondCodeAction(CC, VT) == Legal ||
+           getCondCodeAction(CC, VT) == Custom;
   }
 
   /// If the action for this operation is to promote, this method returns the

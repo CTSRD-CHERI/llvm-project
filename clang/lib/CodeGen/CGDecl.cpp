@@ -240,7 +240,6 @@ llvm::Constant *CodeGenModule::getOrCreateStaticVarDecl(
       getModule(), LTy, Ty.isConstant(getContext()), Linkage, Init, Name,
       nullptr, llvm::GlobalVariable::NotThreadLocal, TargetAS);
   GV->setAlignment(getContext().getDeclAlign(&D).getQuantity());
-  setGVProperties(GV, &D);
 
   if (supportsCOMDAT() && GV->isWeakForLinker())
     GV->setComdat(TheModule.getOrInsertComdat(GV->getName()));
@@ -254,6 +253,8 @@ llvm::Constant *CodeGenModule::getOrCreateStaticVarDecl(
     else if (D.hasAttr<DLLExportAttr>())
       GV->setDLLStorageClass(llvm::GlobalVariable::DLLExportStorageClass);
   }
+
+  setGVProperties(GV, &D);
 
   // Make sure the result is of the correct type.
   LangAS ExpectedAS = Ty.getAddressSpace();
@@ -1848,9 +1849,12 @@ void CodeGenFunction::EmitParmDecl(const VarDecl &D, ParamValue Arg,
   // Use better IR generation for certain implicit parameters.
   if (auto IPD = dyn_cast<ImplicitParamDecl>(&D)) {
     // The only implicit argument a block has is its literal.
-    // We assume this is always passed directly.
+    // This may be passed as an inalloca'ed value on Windows x86.
     if (BlockInfo) {
-      setBlockContextParameter(IPD, ArgNo, Arg.getDirectValue());
+      llvm::Value *V = Arg.isIndirect()
+                           ? Builder.CreateLoad(Arg.getIndirectAddress())
+                           : Arg.getDirectValue();
+      setBlockContextParameter(IPD, ArgNo, V);
       return;
     }
   }

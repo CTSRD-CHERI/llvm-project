@@ -1641,12 +1641,13 @@ llvm::GlobalVariable *ItaniumCXXABI::getAddrOfVTable(const CXXRecordDecl *RD,
   VTable = CGM.CreateOrReplaceCXXRuntimeVariable(
       Name, VTableType, llvm::GlobalValue::ExternalLinkage);
   VTable->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
-  CGM.setGVProperties(VTable, RD);
 
   if (RD->hasAttr<DLLImportAttr>())
     VTable->setDLLStorageClass(llvm::GlobalValue::DLLImportStorageClass);
   else if (RD->hasAttr<DLLExportAttr>())
     VTable->setDLLStorageClass(llvm::GlobalValue::DLLExportStorageClass);
+
+  CGM.setGVProperties(VTable, RD);
 
   return VTable;
 }
@@ -3214,10 +3215,10 @@ llvm::Constant *ItaniumRTTIBuilder::BuildTypeInfo(QualType Ty, bool Force,
     llvmVisibility = CodeGenModule::GetLLVMVisibility(Ty->getVisibility());
 
   TypeName->setVisibility(llvmVisibility);
-  CGM.setDSOLocal(TypeName, Ty->getAsCXXRecordDecl());
+  CGM.setDSOLocal(TypeName);
 
   GV->setVisibility(llvmVisibility);
-  CGM.setDSOLocal(GV, Ty->getAsCXXRecordDecl());
+  CGM.setDSOLocal(GV);
 
   if (CGM.getTriple().isWindowsItaniumEnvironment()) {
     auto RD = Ty->getAsCXXRecordDecl();

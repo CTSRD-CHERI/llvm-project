@@ -2646,10 +2646,13 @@ struct CompleteObject {
   APValue *Value;
   /// The type of the complete object.
   QualType Type;
+  bool LifetimeStartedInEvaluation;
 
   CompleteObject() : Value(nullptr) {}
-  CompleteObject(APValue *Value, QualType Type)
-      : Value(Value), Type(Type) {
+  CompleteObject(APValue *Value, QualType Type,
+                 bool LifetimeStartedInEvaluation)
+      : Value(Value), Type(Type),
+        LifetimeStartedInEvaluation(LifetimeStartedInEvaluation) {
     assert(Value && "missing value for complete object");
   }
 
@@ -2679,6 +2682,8 @@ findSubobject(EvalInfo &Info, const Expr *E, const CompleteObject &Obj,
   APValue *O = Obj.Value;
   QualType ObjType = Obj.Type;
   const FieldDecl *LastField = nullptr;
+  const bool MayReadMutableMembers =
+      Obj.LifetimeStartedInEvaluation && Info.getLangOpts().CPlusPlus14;
 
   // Walk the designator's path to find the subobject.
   for (unsigned I = 0, N = Sub.Entries.size(); /**/; ++I) {
@@ -2694,7 +2699,7 @@ findSubobject(EvalInfo &Info, const Expr *E, const CompleteObject &Obj,
       // cannot perform this read. (This only happens when performing a trivial
       // copy or assignment.)
       if (ObjType->isRecordType() && handler.AccessKind == AK_Read &&
-          diagnoseUnreadableFields(Info, E, ObjType))
+          !MayReadMutableMembers && diagnoseUnreadableFields(Info, E, ObjType))
         return handler.failed();
 
       if (!handler.found(*O, ObjType))
@@ -2774,7 +2779,11 @@ findSubobject(EvalInfo &Info, const Expr *E, const CompleteObject &Obj,
                                    : O->getComplexFloatReal(), ObjType);
       }
     } else if (const FieldDecl *Field = getAsField(Sub.Entries[I])) {
-      if (Field->isMutable() && handler.AccessKind == AK_Read) {
+      // In C++14 onwards, it is permitted to read a mutable member whose
+      // lifetime began within the evaluation.
+      // FIXME: Should we also allow this in C++11?
+      if (Field->isMutable() && handler.AccessKind == AK_Read &&
+          !MayReadMutableMembers) {
         Info.FFDiag(E, diag::note_constexpr_ltor_mutable, 1)
           << Field;
         Info.Note(Field->getLocation(), diag::note_declared_at);
@@ -3020,6 +3029,7 @@ static CompleteObject findCompleteObject(EvalInfo &Info, const Expr *E,
   // Compute value storage location and type of base object.
   APValue *BaseVal = nullptr;
   QualType BaseType = getType(LVal.Base);
+  bool LifetimeStartedInEvaluation = Frame;
 
   if (const ValueDecl *D = LVal.Base.dyn_cast<const ValueDecl*>()) {
     // In C++98, const, non-volatile integers initialized with ICEs are ICEs.
@@ -3131,7 +3141,7 @@ static CompleteObject findCompleteObject(EvalInfo &Info, const Expr *E,
         //   int &&r = 1;
         //   int x = ++r;
         //   constexpr int k = r;
-        // Therefore we use the C++1y rules in C++11 too.
+        // Therefore we use the C++14 rules in C++11 too.
         const ValueDecl *VD = Info.EvaluatingDecl.dyn_cast<const ValueDecl*>();
         const ValueDecl *ED = MTE->getExtendingDecl();
         if (!(BaseType.isConstQualified() &&
@@ -3144,6 +3154,7 @@ static CompleteObject findCompleteObject(EvalInfo &Info, const Expr *E,
 
         BaseVal = Info.Ctx.getMaterializedTemporaryValue(MTE, false);
         assert(BaseVal && "got reference to unevaluated temporary");
+        LifetimeStartedInEvaluation = true;
       } else {
         Info.FFDiag(E);
         return CompleteObject();
@@ -3172,9 +3183,10 @@ static CompleteObject findCompleteObject(EvalInfo &Info, const Expr *E,
   if (Info.isEvaluatingConstructor(LVal.getLValueBase(), LVal.CallIndex)) {
     BaseType = Info.Ctx.getCanonicalType(BaseType);
     BaseType.removeLocalConst();
+    LifetimeStartedInEvaluation = true;
   }
 
-  // In C++1y, we can't safely access any mutable state when we might be
+  // In C++14, we can't safely access any mutable state when we might be
   // evaluating after an unmodeled side effect.
   //
   // FIXME: Not all local state is mutable. Allow local constant subobjects
@@ -3184,7 +3196,7 @@ static CompleteObject findCompleteObject(EvalInfo &Info, const Expr *E,
       (AK != AK_Read && Info.IsSpeculativelyEvaluating))
     return CompleteObject();
 
-  return CompleteObject(BaseVal, BaseType);
+  return CompleteObject(BaseVal, BaseType, LifetimeStartedInEvaluation);
 }
 
 /// \brief Perform an lvalue-to-rvalue conversion on the given glvalue. This
@@ -3218,14 +3230,14 @@ static bool handleLValueToRValueConversion(EvalInfo &Info, const Expr *Conv,
       APValue Lit;
       if (!Evaluate(Lit, Info, CLE->getInitializer()))
         return false;
-      CompleteObject LitObj(&Lit, Base->getType());
+      CompleteObject LitObj(&Lit, Base->getType(), false);
       return extractSubobject(Info, Conv, LitObj, LVal.Designator, RVal);
     } else if (isa<StringLiteral>(Base) || isa<PredefinedExpr>(Base)) {
       // We represent a string literal array as an lvalue pointing at the
       // corresponding expression, rather than building an array of chars.
       // FIXME: Support ObjCEncodeExpr, MakeStringConstant
       APValue Str(Base, CharUnits::Zero(), APValue::NoLValuePath(), 0);
-      CompleteObject StrObj(&Str, Base->getType());
+      CompleteObject StrObj(&Str, Base->getType(), false);
       return extractSubobject(Info, Conv, StrObj, LVal.Designator, RVal);
     }
   }
@@ -4371,6 +4383,7 @@ static bool HandleConstructorCall(const Expr *E, const LValue &This,
 #endif
   for (const auto *I : Definition->inits()) {
     LValue Subobject = This;
+    LValue SubobjectParent = This;
     APValue *Value = &Result;
 
     // Determine the subobject to initialize.
@@ -4401,7 +4414,8 @@ static bool HandleConstructorCall(const Expr *E, const LValue &This,
     } else if (IndirectFieldDecl *IFD = I->getIndirectMember()) {
       // Walk the indirect field decl's chain to find the object to initialize,
       // and make sure we've initialized every step along it.
-      for (auto *C : IFD->chain()) {
+      auto IndirectFieldChain = IFD->chain();
+      for (auto *C : IndirectFieldChain) {
         FD = cast<FieldDecl>(C);
         CXXRecordDecl *CD = cast<CXXRecordDecl>(FD->getParent());
         // Switch the union field if it differs. This happens if we had
@@ -4417,6 +4431,10 @@ static bool HandleConstructorCall(const Expr *E, const LValue &This,
             *Value = APValue(APValue::UninitStruct(), CD->getNumBases(),
                              std::distance(CD->field_begin(), CD->field_end()));
         }
+        // Store Subobject as its parent before updating it for the last element
+        // in the chain.
+        if (C == IndirectFieldChain.back())
+          SubobjectParent = Subobject;
         if (!HandleLValueMember(Info, I->getInit(), Subobject, FD))
           return false;
         if (CD->isUnion())
@@ -4428,10 +4446,16 @@ static bool HandleConstructorCall(const Expr *E, const LValue &This,
       llvm_unreachable("unknown base initializer kind");
     }
 
+    // Need to override This for implicit field initializers as in this case
+    // This refers to innermost anonymous struct/union containing initializer,
+    // not to currently constructed class.
+    const Expr *Init = I->getInit();
+    ThisOverrideRAII ThisOverride(*Info.CurrentCall, &SubobjectParent,
+                                  isa<CXXDefaultInitExpr>(Init));
     FullExpressionRAII InitScope(Info);
-    if (!EvaluateInPlace(*Value, Info, Subobject, I->getInit()) ||
-        (FD && FD->isBitField() && !truncateBitfieldValue(Info, I->getInit(),
-                                                          *Value, FD))) {
+    if (!EvaluateInPlace(*Value, Info, Subobject, Init) ||
+        (FD && FD->isBitField() &&
+         !truncateBitfieldValue(Info, Init, *Value, FD))) {
       // If we're checking for a potential constant expression, evaluate all
       // initializers even if some of them fail.
       if (!Info.noteFailure())
@@ -4823,7 +4847,7 @@ public:
     assert(BaseTy->castAs<RecordType>()->getDecl()->getCanonicalDecl() ==
            FD->getParent()->getCanonicalDecl() && "record / field mismatch");
 
-    CompleteObject Obj(&Val, BaseTy);
+    CompleteObject Obj(&Val, BaseTy, true);
     SubobjectDesignator Designator(BaseTy);
     Designator.addDeclUnchecked(FD);
 
