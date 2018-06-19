@@ -746,6 +746,9 @@
 		4CE4EFB41E899A4000A80C06 /* RegisterContextOpenBSD_x86_64.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 4CE4EFAD1E899A1200A80C06 /* RegisterContextOpenBSD_x86_64.cpp */; };
 		4CE4F673162C971A00F75CB3 /* SBExpressionOptions.h in Headers */ = {isa = PBXBuildFile; fileRef = 4CE4F672162C971A00F75CB3 /* SBExpressionOptions.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		4CE4F675162C973F00F75CB3 /* SBExpressionOptions.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 4CE4F674162C973F00F75CB3 /* SBExpressionOptions.cpp */; };
+		4CEC86A4204738C5009B37B1 /* TestArm64InstEmulation.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 4CEC86A3204738C5009B37B1 /* TestArm64InstEmulation.cpp */; };
+		4CEC86A7204738EB009B37B1 /* TestPPC64InstEmulation.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 4CEC86A6204738EA009B37B1 /* TestPPC64InstEmulation.cpp */; };
+		4CEC86A92047395F009B37B1 /* Python.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2326CF3F1BDD613E00A5CEAC /* Python.framework */; };
 		4CF3D80C15AF4DC800845BF3 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EDB919B414F6F10D008FF64B /* Security.framework */; };
 		4CF52AF51428291E0051E832 /* SBFileSpecList.h in Headers */ = {isa = PBXBuildFile; fileRef = 4CF52AF41428291E0051E832 /* SBFileSpecList.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		4CF52AF8142829390051E832 /* SBFileSpecList.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 4CF52AF7142829390051E832 /* SBFileSpecList.cpp */; };
@@ -954,7 +957,6 @@
 		AF235EB41FBE7858009C5541 /* RegisterInfoPOSIX_ppc64le.h in Headers */ = {isa = PBXBuildFile; fileRef = AF235EB21FBE7857009C5541 /* RegisterInfoPOSIX_ppc64le.h */; };
 		AF235EB51FBE7858009C5541 /* RegisterInfoPOSIX_ppc64le.cpp in Sources */ = {isa = PBXBuildFile; fileRef = AF235EB31FBE7858009C5541 /* RegisterInfoPOSIX_ppc64le.cpp */; };
 		AF23B4DB19009C66003E2A58 /* FreeBSDSignals.cpp in Sources */ = {isa = PBXBuildFile; fileRef = AF23B4D919009C66003E2A58 /* FreeBSDSignals.cpp */; };
-		AF248A4D1DA71C77000B814D /* TestArm64InstEmulation.cpp in Sources */ = {isa = PBXBuildFile; fileRef = AF248A4C1DA71C77000B814D /* TestArm64InstEmulation.cpp */; };
 		AF254E31170CCC33007AE5C9 /* PlatformDarwinKernel.cpp in Sources */ = {isa = PBXBuildFile; fileRef = AF254E2F170CCC33007AE5C9 /* PlatformDarwinKernel.cpp */; };
 		AF25AB26188F685C0030DEC3 /* AppleGetQueuesHandler.cpp in Sources */ = {isa = PBXBuildFile; fileRef = AF25AB24188F685C0030DEC3 /* AppleGetQueuesHandler.cpp */; };
 		AF26703A1852D01E00B6CC36 /* Queue.cpp in Sources */ = {isa = PBXBuildFile; fileRef = AF2670381852D01E00B6CC36 /* Queue.cpp */; };
@@ -1015,6 +1017,7 @@
 		AFCB2BBE1BF577F40018B553 /* PythonExceptionState.h in Headers */ = {isa = PBXBuildFile; fileRef = AFCB2BBC1BF577F40018B553 /* PythonExceptionState.h */; };
 		AFD65C811D9B5B2E00D93120 /* RegisterContextMinidump_x86_64.cpp in Sources */ = {isa = PBXBuildFile; fileRef = AFD65C7F1D9B5B2E00D93120 /* RegisterContextMinidump_x86_64.cpp */; };
 		AFD65C821D9B5B2E00D93120 /* RegisterContextMinidump_x86_64.h in Headers */ = {isa = PBXBuildFile; fileRef = AFD65C801D9B5B2E00D93120 /* RegisterContextMinidump_x86_64.h */; };
+		AFDBC36E204663AF00B9C8F2 /* EmulateInstructionPPC64.cpp in Sources */ = {isa = PBXBuildFile; fileRef = AFDBC36C204663AF00B9C8F2 /* EmulateInstructionPPC64.cpp */; };
 		AFDCDBCB19DD0F42005EA55E /* SBExecutionContext.h in Headers */ = {isa = PBXBuildFile; fileRef = 940B02F419DC96CB00AD0F52 /* SBExecutionContext.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		AFDFDFD119E34D3400EAE509 /* ConnectionFileDescriptorPosix.cpp in Sources */ = {isa = PBXBuildFile; fileRef = AFDFDFD019E34D3400EAE509 /* ConnectionFileDescriptorPosix.cpp */; };
 		AFEC3362194A8ABA00FF05C6 /* StructuredData.cpp in Sources */ = {isa = PBXBuildFile; fileRef = AFEC3361194A8ABA00FF05C6 /* StructuredData.cpp */; };
@@ -2626,6 +2629,8 @@
 		4CE4F672162C971A00F75CB3 /* SBExpressionOptions.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = SBExpressionOptions.h; path = include/lldb/API/SBExpressionOptions.h; sourceTree = "<group>"; };
 		4CE4F674162C973F00F75CB3 /* SBExpressionOptions.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = SBExpressionOptions.cpp; path = source/API/SBExpressionOptions.cpp; sourceTree = "<group>"; };
 		4CE4F676162CE1E100F75CB3 /* SBExpressionOptions.i */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c.preprocessed; path = SBExpressionOptions.i; sourceTree = "<group>"; };
+		4CEC86A3204738C5009B37B1 /* TestArm64InstEmulation.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = TestArm64InstEmulation.cpp; path = UnwindAssembly/ARM64/TestArm64InstEmulation.cpp; sourceTree = "<group>"; };
+		4CEC86A6204738EA009B37B1 /* TestPPC64InstEmulation.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = TestPPC64InstEmulation.cpp; path = UnwindAssembly/PPC64/TestPPC64InstEmulation.cpp; sourceTree = "<group>"; };
 		4CEDAED311754F5E00E875A6 /* ThreadPlanStepUntil.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ThreadPlanStepUntil.h; path = include/lldb/Target/ThreadPlanStepUntil.h; sourceTree = "<group>"; };
 		4CF52AF41428291E0051E832 /* SBFileSpecList.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = SBFileSpecList.h; path = include/lldb/API/SBFileSpecList.h; sourceTree = "<group>"; };
 		4CF52AF7142829390051E832 /* SBFileSpecList.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = SBFileSpecList.cpp; path = source/API/SBFileSpecList.cpp; sourceTree = "<group>"; };
@@ -3030,7 +3035,6 @@
 		AF235EB31FBE7858009C5541 /* RegisterInfoPOSIX_ppc64le.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = RegisterInfoPOSIX_ppc64le.cpp; path = Utility/RegisterInfoPOSIX_ppc64le.cpp; sourceTree = "<group>"; };
 		AF23B4D919009C66003E2A58 /* FreeBSDSignals.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = FreeBSDSignals.cpp; path = Utility/FreeBSDSignals.cpp; sourceTree = "<group>"; };
 		AF23B4DA19009C66003E2A58 /* FreeBSDSignals.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = FreeBSDSignals.h; path = Utility/FreeBSDSignals.h; sourceTree = "<group>"; };
-		AF248A4C1DA71C77000B814D /* TestArm64InstEmulation.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = TestArm64InstEmulation.cpp; path = UnwindAssembly/InstEmulation/TestArm64InstEmulation.cpp; sourceTree = "<group>"; };
 		AF254E2F170CCC33007AE5C9 /* PlatformDarwinKernel.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = PlatformDarwinKernel.cpp; sourceTree = "<group>"; };
 		AF254E30170CCC33007AE5C9 /* PlatformDarwinKernel.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PlatformDarwinKernel.h; sourceTree = "<group>"; };
 		AF25AB24188F685C0030DEC3 /* AppleGetQueuesHandler.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = AppleGetQueuesHandler.cpp; sourceTree = "<group>"; };
@@ -3136,6 +3140,8 @@
 		AFCB2BBC1BF577F40018B553 /* PythonExceptionState.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = PythonExceptionState.h; path = ScriptInterpreter/Python/PythonExceptionState.h; sourceTree = "<group>"; };
 		AFD65C7F1D9B5B2E00D93120 /* RegisterContextMinidump_x86_64.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = RegisterContextMinidump_x86_64.cpp; sourceTree = "<group>"; };
 		AFD65C801D9B5B2E00D93120 /* RegisterContextMinidump_x86_64.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RegisterContextMinidump_x86_64.h; sourceTree = "<group>"; };
+		AFDBC36B204663AF00B9C8F2 /* EmulateInstructionPPC64.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = EmulateInstructionPPC64.h; path = source/Plugins/Instruction/PPC64/EmulateInstructionPPC64.h; sourceTree = SOURCE_ROOT; };
+		AFDBC36C204663AF00B9C8F2 /* EmulateInstructionPPC64.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = EmulateInstructionPPC64.cpp; path = source/Plugins/Instruction/PPC64/EmulateInstructionPPC64.cpp; sourceTree = SOURCE_ROOT; };
 		AFDFDFD019E34D3400EAE509 /* ConnectionFileDescriptorPosix.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = ConnectionFileDescriptorPosix.cpp; sourceTree = "<group>"; };
 		AFEC3361194A8ABA00FF05C6 /* StructuredData.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = StructuredData.cpp; path = source/Utility/StructuredData.cpp; sourceTree = "<group>"; };
 		AFEC5FD51D94F9380076A480 /* Testx86AssemblyInspectionEngine.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Testx86AssemblyInspectionEngine.cpp; path = UnwindAssembly/x86/Testx86AssemblyInspectionEngine.cpp; sourceTree = "<group>"; };
@@ -3196,6 +3202,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4CEC86A92047395F009B37B1 /* Python.framework in Frameworks */,
 				23CB15491D66DA9300EDDDE1 /* libxml2.2.dylib in Frameworks */,
 				23CB154A1D66DA9300EDDDE1 /* libpanel.dylib in Frameworks */,
 				23CB154B1D66DA9300EDDDE1 /* libedit.dylib in Frameworks */,
@@ -5611,6 +5618,7 @@
 		26D9FDCA12F785120003F2EE /* Instruction */ = {
 			isa = PBXGroup;
 			children = (
+				AFDBC36A2046638D00B9C8F2 /* PPC64 */,
 				E778E99D1B062D1700247609 /* MIPS */,
 				26D9FDCB12F785270003F2EE /* ARM */,
 				264A12F91372522000875C42 /* ARM64 */,
@@ -6031,6 +6039,22 @@
 				4CE4EFA71E8999B000A80C06 /* PlatformOpenBSD.h */,
 			);
 			path = OpenBSD;
+			sourceTree = "<group>";
+		};
+		4CEC86A5204738CC009B37B1 /* ARM64 */ = {
+			isa = PBXGroup;
+			children = (
+				4CEC86A3204738C5009B37B1 /* TestArm64InstEmulation.cpp */,
+			);
+			name = ARM64;
+			sourceTree = "<group>";
+		};
+		4CEC86A8204738EE009B37B1 /* PPC64 */ = {
+			isa = PBXGroup;
+			children = (
+				4CEC86A6204738EA009B37B1 /* TestPPC64InstEmulation.cpp */,
+			);
+			name = PPC64;
 			sourceTree = "<group>";
 		};
 		4CEE62F71145F1C70064CF93 /* GDB Remote */ = {
@@ -6556,14 +6580,6 @@
 			name = "SysV-arm64";
 			sourceTree = "<group>";
 		};
-		AF248A4B1DA71C67000B814D /* InstEmulation */ = {
-			isa = PBXGroup;
-			children = (
-				AF248A4C1DA71C77000B814D /* TestArm64InstEmulation.cpp */,
-			);
-			name = InstEmulation;
-			sourceTree = "<group>";
-		};
 		AF2BCA6518C7EFDE005B4526 /* JITLoader */ = {
 			isa = PBXGroup;
 			children = (
@@ -6636,10 +6652,21 @@
 			name = Target;
 			sourceTree = "<group>";
 		};
+		AFDBC36A2046638D00B9C8F2 /* PPC64 */ = {
+			isa = PBXGroup;
+			children = (
+				AFDBC36C204663AF00B9C8F2 /* EmulateInstructionPPC64.cpp */,
+				AFDBC36B204663AF00B9C8F2 /* EmulateInstructionPPC64.h */,
+			);
+			name = PPC64;
+			path = "New Group";
+			sourceTree = "<group>";
+		};
 		AFEC5FD31D94F9130076A480 /* UnwindAssembly */ = {
 			isa = PBXGroup;
 			children = (
-				AF248A4B1DA71C67000B814D /* InstEmulation */,
+				4CEC86A8204738EE009B37B1 /* PPC64 */,
+				4CEC86A5204738CC009B37B1 /* ARM64 */,
 				AFEC5FD41D94F9270076A480 /* x86 */,
 			);
 			name = UnwindAssembly;
@@ -7272,12 +7299,13 @@
 				23E2E5251D90373D006F38BB /* ArchSpecTest.cpp in Sources */,
 				9A2057081F3B819100F6C293 /* MemoryRegionInfoTest.cpp in Sources */,
 				9A20572D1F3B8E6600F6C293 /* TestCompletion.cpp in Sources */,
-				AF248A4D1DA71C77000B814D /* TestArm64InstEmulation.cpp in Sources */,
 				23CB15371D66DA9300EDDDE1 /* PythonTestSuite.cpp in Sources */,
 				23E2E5321D903832006F38BB /* BreakpointIDTest.cpp in Sources */,
+				4CEC86A7204738EB009B37B1 /* TestPPC64InstEmulation.cpp in Sources */,
 				23CB15381D66DA9300EDDDE1 /* PythonExceptionStateTests.cpp in Sources */,
 				9A3D43D81F3151C400EB767C /* NameMatchesTest.cpp in Sources */,
 				23CB15391D66DA9300EDDDE1 /* DataExtractorTest.cpp in Sources */,
+				4CEC86A4204738C5009B37B1 /* TestArm64InstEmulation.cpp in Sources */,
 				9A3D43ED1F3237F900EB767C /* StateTest.cpp in Sources */,
 				23CB153A1D66DA9300EDDDE1 /* GDBRemoteClientBaseTest.cpp in Sources */,
 				23CB153B1D66DA9300EDDDE1 /* SocketTest.cpp in Sources */,
@@ -8007,6 +8035,7 @@
 				260CC65415D0440D002BF2E0 /* OptionValueUUID.cpp in Sources */,
 				94BA8B6D176F8C9B005A91B5 /* Range.cpp in Sources */,
 				267F684A1CC02DED0086832B /* ABISysV_s390x.cpp in Sources */,
+				AFDBC36E204663AF00B9C8F2 /* EmulateInstructionPPC64.cpp in Sources */,
 				26DAED6315D327C200E15819 /* OptionValuePathMappings.cpp in Sources */,
 				B2B7CCEB15D1BD6700EEFB57 /* CommandObjectWatchpointCommand.cpp in Sources */,
 				E7E94ABC1B54961F00D0AE30 /* GDBRemoteSignals.cpp in Sources */,
@@ -8341,7 +8370,7 @@
 					"$(LLDB_ZLIB_LDFLAGS)",
 					"$(LLDB_COVERAGE_LDFLAGS)",
 				);
-				PYTHON_FRAMEWORK_PATH = /System/Library/Frameworks/Python.framework;
+				PYTHON_FRAMEWORK_PATH = /System/Library/Frameworks/Python.framework/;
 				PYTHON_VERSION_MAJOR = 2;
 				PYTHON_VERSION_MINOR = 7;
 				SDKROOT = "";
@@ -8431,7 +8460,7 @@
 					"$(LLDB_ZLIB_LDFLAGS)",
 					"$(LLDB_COVERAGE_LDFLAGS)",
 				);
-				PYTHON_FRAMEWORK_PATH = /System/Library/Frameworks/Python.framework;
+				PYTHON_FRAMEWORK_PATH = /System/Library/Frameworks/Python.framework/;
 				PYTHON_VERSION_MAJOR = 2;
 				PYTHON_VERSION_MINOR = 7;
 				SDKROOT = "";
@@ -8725,7 +8754,7 @@
 					"$(LLVM_SOURCE_DIR)/tools/clang/include",
 					"$(LLVM_BUILD_DIR)/$(LLVM_BUILD_DIR_ARCH)/tools/clang/include",
 				);
-				LLDB_GTESTS_CFLAGS = "-I unittests -I $(LLVM_SOURCE_DIR)/utils/unittest/googlemock/include -I $(LLVM_SOURCE_DIR)/utils/unittest/googletest/include -I $(LLVM_SOURCE_DIR)/include -I $(LLVM_BUILD_DIR)/x86_64/include -DYAML2OBJ=\"\\\"$(LLVM_BUILD_DIR)/x86_64/bin/yaml2obj\\\"\" -I include -I source -I $(PYTHON_FRAMEWORK_PATH)/Headers";
+				LLDB_GTESTS_CFLAGS = "-I unittests -I $(LLVM_SOURCE_DIR)/utils/unittest/googlemock/include -I $(LLVM_SOURCE_DIR)/utils/unittest/googletest/include -I $(LLVM_SOURCE_DIR)/include -I $(LLVM_BUILD_DIR)/x86_64/include -DYAML2OBJ=\"\\\"$(LLVM_BUILD_DIR)/x86_64/bin/yaml2obj\\\"\" -I include -I source -I $PYTHON_FRAMEWORK_PATH)/Versions/$(PYTHON_VERSION_MAJOR).$(PYTHON_VERSION_MINOR)/include/python$(PYTHON_VERSION_MAJOR).$(PYTHON_VERSION_MINOR)";
 				LLDB_GTESTS_LDFLAGS = "$(LLVM_BUILD_DIR)/x86_64/lib/libgtest.a -L $(PYTHON_FRAMEWORK_PATH)/Versions/$(PYTHON_VERSION_MAJOR).$(PYTHON_VERSION_MINOR)/lib -l python$(PYTHON_VERSION_MAJOR).$(PYTHON_VERSION_MINOR)";
 				OTHER_CFLAGS = (
 					"-fno-rtti",
@@ -8767,7 +8796,7 @@
 					"$(LLVM_SOURCE_DIR)/tools/clang/include",
 					"$(LLVM_BUILD_DIR)/$(LLVM_BUILD_DIR_ARCH)/tools/clang/include",
 				);
-				LLDB_GTESTS_CFLAGS = "-I unittests -I $(LLVM_SOURCE_DIR)/utils/unittest/googlemock/include -I $(LLVM_SOURCE_DIR)/utils/unittest/googletest/include -I $(LLVM_SOURCE_DIR)/include -I $(LLVM_BUILD_DIR)/x86_64/include -DYAML2OBJ=\"\\\"$(LLVM_BUILD_DIR)/x86_64/bin/yaml2obj\\\"\" -I include -I source -I $(PYTHON_FRAMEWORK_PATH)/Headers";
+				LLDB_GTESTS_CFLAGS = "-I unittests -I $(LLVM_SOURCE_DIR)/utils/unittest/googlemock/include -I $(LLVM_SOURCE_DIR)/utils/unittest/googletest/include -I $(LLVM_SOURCE_DIR)/include -I $(LLVM_BUILD_DIR)/x86_64/include -DYAML2OBJ=\"\\\"$(LLVM_BUILD_DIR)/x86_64/bin/yaml2obj\\\"\" -I include -I source -I $(PYTHON_FRAMEWORK_PATH)/Versions/$(PYTHON_VERSION_MAJOR).$(PYTHON_VERSION_MINOR)/include/python$(PYTHON_VERSION_MAJOR).$(PYTHON_VERSION_MINOR)";
 				LLDB_GTESTS_LDFLAGS = "$(LLVM_BUILD_DIR)/x86_64/lib/libgtest.a -L $(PYTHON_FRAMEWORK_PATH)/Versions/$(PYTHON_VERSION_MAJOR).$(PYTHON_VERSION_MINOR)/lib -l python$(PYTHON_VERSION_MAJOR).$(PYTHON_VERSION_MINOR)";
 				OTHER_CFLAGS = (
 					"-fno-rtti",
@@ -8809,7 +8838,7 @@
 					"$(LLVM_SOURCE_DIR)/tools/clang/include",
 					"$(LLVM_BUILD_DIR)/$(LLVM_BUILD_DIR_ARCH)/tools/clang/include",
 				);
-				LLDB_GTESTS_CFLAGS = "-I unittests -I $(LLVM_SOURCE_DIR)/utils/unittest/googlemock/include -I $(LLVM_SOURCE_DIR)/utils/unittest/googletest/include -I $(LLVM_SOURCE_DIR)/include -I $(LLVM_BUILD_DIR)/x86_64/include -DYAML2OBJ=\"\\\"$(LLVM_BUILD_DIR)/x86_64/bin/yaml2obj\\\"\" -I include -I source -I $(PYTHON_FRAMEWORK_PATH)/Headers";
+				LLDB_GTESTS_CFLAGS = "-I unittests -I $(LLVM_SOURCE_DIR)/utils/unittest/googlemock/include -I $(LLVM_SOURCE_DIR)/utils/unittest/googletest/include -I $(LLVM_SOURCE_DIR)/include -I $(LLVM_BUILD_DIR)/x86_64/include -DYAML2OBJ=\"\\\"$(LLVM_BUILD_DIR)/x86_64/bin/yaml2obj\\\"\" -I include -I source -I $(PYTHON_FRAMEWORK_PATH)/Versions/$(PYTHON_VERSION_MAJOR).$(PYTHON_VERSION_MINOR)/include/python$(PYTHON_VERSION_MAJOR).$(PYTHON_VERSION_MINOR)";
 				LLDB_GTESTS_LDFLAGS = "$(LLVM_BUILD_DIR)/x86_64/lib/libgtest.a -L $(PYTHON_FRAMEWORK_PATH)/Versions/$(PYTHON_VERSION_MAJOR).$(PYTHON_VERSION_MINOR)/lib -l python$(PYTHON_VERSION_MAJOR).$(PYTHON_VERSION_MINOR)";
 				OTHER_CFLAGS = (
 					"-fno-rtti",
@@ -8851,7 +8880,7 @@
 					"$(LLVM_SOURCE_DIR)/tools/clang/include",
 					"$(LLVM_BUILD_DIR)/$(LLVM_BUILD_DIR_ARCH)/tools/clang/include",
 				);
-				LLDB_GTESTS_CFLAGS = "-I unittests -I $(LLVM_SOURCE_DIR)/utils/unittest/googlemock/include -I $(LLVM_SOURCE_DIR)/utils/unittest/googletest/include -I $(LLVM_SOURCE_DIR)/include -I $(LLVM_BUILD_DIR)/x86_64/include -DYAML2OBJ=\"\\\"$(LLVM_BUILD_DIR)/x86_64/bin/yaml2obj\\\"\" -I include -I source -I $(PYTHON_FRAMEWORK_PATH)/Headers";
+				LLDB_GTESTS_CFLAGS = "-I unittests -I $(LLVM_SOURCE_DIR)/utils/unittest/googlemock/include -I $(LLVM_SOURCE_DIR)/utils/unittest/googletest/include -I $(LLVM_SOURCE_DIR)/include -I $(LLVM_BUILD_DIR)/x86_64/include -DYAML2OBJ=\"\\\"$(LLVM_BUILD_DIR)/x86_64/bin/yaml2obj\\\"\" -I include -I source -I $(PYTHON_FRAMEWORK_PATH)/Versions/$(PYTHON_VERSION_MAJOR).$(PYTHON_VERSION_MINOR)/include/python$(PYTHON_VERSION_MAJOR).$(PYTHON_VERSION_MINOR)";
 				LLDB_GTESTS_LDFLAGS = "$(LLVM_BUILD_DIR)/x86_64/lib/libgtest.a -L $(PYTHON_FRAMEWORK_PATH)/Versions/$(PYTHON_VERSION_MAJOR).$(PYTHON_VERSION_MINOR)/lib -l python$(PYTHON_VERSION_MAJOR).$(PYTHON_VERSION_MINOR)";
 				OTHER_CFLAGS = (
 					"-fno-rtti",
@@ -9384,7 +9413,7 @@
 					"$(LLDB_ZLIB_LDFLAGS)",
 					"$(LLDB_COVERAGE_LDFLAGS)",
 				);
-				PYTHON_FRAMEWORK_PATH = /System/Library/Frameworks/Python.framework;
+				PYTHON_FRAMEWORK_PATH = /System/Library/Frameworks/Python.framework/;
 				PYTHON_VERSION_MAJOR = 2;
 				PYTHON_VERSION_MINOR = 7;
 				SDKROOT = "";
@@ -10098,7 +10127,7 @@
 					"$(LLDB_ZLIB_LDFLAGS)",
 					"$(LLDB_COVERAGE_LDFLAGS)",
 				);
-				PYTHON_FRAMEWORK_PATH = /System/Library/Frameworks/Python.framework;
+				PYTHON_FRAMEWORK_PATH = /System/Library/Frameworks/Python.framework/;
 				PYTHON_VERSION_MAJOR = 2;
 				PYTHON_VERSION_MINOR = 7;
 				SDKROOT = "";

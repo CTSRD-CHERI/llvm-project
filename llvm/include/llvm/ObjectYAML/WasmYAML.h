@@ -28,9 +28,9 @@ namespace llvm {
 namespace WasmYAML {
 
 LLVM_YAML_STRONG_TYPEDEF(uint32_t, SectionType)
-LLVM_YAML_STRONG_TYPEDEF(int32_t, ValueType)
-LLVM_YAML_STRONG_TYPEDEF(int32_t, TableType)
-LLVM_YAML_STRONG_TYPEDEF(int32_t, SignatureForm)
+LLVM_YAML_STRONG_TYPEDEF(uint32_t, ValueType)
+LLVM_YAML_STRONG_TYPEDEF(uint32_t, TableType)
+LLVM_YAML_STRONG_TYPEDEF(uint32_t, SignatureForm)
 LLVM_YAML_STRONG_TYPEDEF(uint32_t, ExportKind)
 LLVM_YAML_STRONG_TYPEDEF(uint32_t, Opcode)
 LLVM_YAML_STRONG_TYPEDEF(uint32_t, RelocType)
@@ -195,7 +195,6 @@ struct LinkingSection : CustomSection {
     return C && C->Name == "linking";
   }
 
-  uint32_t DataSize;
   std::vector<SymbolInfo> SymbolTable;
   std::vector<SegmentInfo> SegmentInfos;
   std::vector<InitFunction> InitFunctions;

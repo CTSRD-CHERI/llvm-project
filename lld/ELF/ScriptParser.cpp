@@ -157,14 +157,17 @@ static ExprValue sub(ExprValue A, ExprValue B) {
   return {A.Sec, false, A.getSectionOffset() - B.getValue(), A.Loc};
 }
 
-static ExprValue mul(ExprValue A, ExprValue B) {
-  return A.getValue() * B.getValue();
-}
-
 static ExprValue div(ExprValue A, ExprValue B) {
   if (uint64_t BV = B.getValue())
     return A.getValue() / BV;
   error("division by zero");
+  return 0;
+}
+
+static ExprValue mod(ExprValue A, ExprValue B) {
+  if (uint64_t BV = B.getValue())
+    return A.getValue() % BV;
+  error("modulo by zero");
   return 0;
 }
 
@@ -461,7 +464,7 @@ void ScriptParser::readSections() {
 
 static int precedence(StringRef Op) {
   return StringSwitch<int>(Op)
-      .Cases("*", "/", 5)
+      .Cases("*", "/", "%", 5)
       .Cases("+", "-", 4)
       .Cases("<<", ">>", 3)
       .Cases("<", "<=", ">", ">=", "==", "!=", 2)
@@ -668,6 +671,8 @@ OutputSection *ScriptParser::readOutputSectionDescription(StringRef OutSec) {
   OutputSection *Cmd =
       Script->createOutputSection(OutSec, getCurrentLocation());
 
+  size_t SymbolsReferenced = Script->ReferencedSymbols.size();
+
   if (peek() != ":")
     readSectionAddressType(Cmd);
   expect(":");
@@ -734,6 +739,8 @@ OutputSection *ScriptParser::readOutputSectionDescription(StringRef OutSec) {
   // Consume optional comma following output section command.
   consume(",");
 
+  if (Script->ReferencedSymbols.size() > SymbolsReferenced)
+    Cmd->ExpressionsUseSymbols = true;
   return Cmd;
 }
 
@@ -808,9 +815,11 @@ static Expr combine(StringRef Op, Expr L, Expr R) {
   if (Op == "-")
     return [=] { return sub(L(), R()); };
   if (Op == "*")
-    return [=] { return mul(L(), R()); };
+    return [=] { return L().getValue() * R().getValue(); };
   if (Op == "/")
     return [=] { return div(L(), R()); };
+  if (Op == "%")
+    return [=] { return mod(L(), R()); };
   if (Op == "<<")
     return [=] { return L().getValue() << R().getValue(); };
   if (Op == ">>")
@@ -880,7 +889,7 @@ Expr ScriptParser::readConstant() {
   if (S == "MAXPAGESIZE")
     return [] { return Config->MaxPageSize; };
   setError("unknown constant: " + S);
-  return {};
+  return [] { return 0; };
 }
 
 // Parses Tok as an integer. It recognizes hexadecimal (prefixed with
@@ -1043,8 +1052,10 @@ Expr ScriptParser::readPrimary() {
   }
   if (Tok == "LENGTH") {
     StringRef Name = readParenLiteral();
-    if (Script->MemoryRegions.count(Name) == 0)
+    if (Script->MemoryRegions.count(Name) == 0) {
       setError("memory region not defined: " + Name);
+      return [] { return 0; };
+    }
     return [=] { return Script->MemoryRegions[Name]->Length; };
   }
   if (Tok == "LOADADDR") {
@@ -1057,8 +1068,10 @@ Expr ScriptParser::readPrimary() {
   }
   if (Tok == "ORIGIN") {
     StringRef Name = readParenLiteral();
-    if (Script->MemoryRegions.count(Name) == 0)
+    if (Script->MemoryRegions.count(Name) == 0) {
       setError("memory region not defined: " + Name);
+      return [] { return 0; };
+    }
     return [=] { return Script->MemoryRegions[Name]->Origin; };
   }
   if (Tok == "SEGMENT_START") {

@@ -815,7 +815,7 @@ def femit_all_decls : Flag<["-"], "femit-all-decls">, Group<f_Group>, Flags<[CC1
   HelpText<"Emit all declarations, even if unused">;
 def femulated_tls : Flag<["-"], "femulated-tls">, Group<f_Group>, Flags<[CC1Option]>,
   HelpText<"Use emutls functions to access thread_local variables">;
-def fno_emulated_tls : Flag<["-"], "fno-emulated-tls">, Group<f_Group>;
+def fno_emulated_tls : Flag<["-"], "fno-emulated-tls">, Group<f_Group>, Flags<[CC1Option]>;
 def fencoding_EQ : Joined<["-"], "fencoding=">, Group<f_Group>;
 def ferror_limit_EQ : Joined<["-"], "ferror-limit=">, Group<f_Group>, Flags<[CoreOption]>;
 def fexceptions : Flag<["-"], "fexceptions">, Group<f_Group>, Flags<[CC1Option]>,
@@ -849,6 +849,12 @@ def fno_signaling_math : Flag<["-"], "fno-signaling-math">, Group<f_Group>;
 def fjump_tables : Flag<["-"], "fjump-tables">, Group<f_Group>;
 def fno_jump_tables : Flag<["-"], "fno-jump-tables">, Group<f_Group>, Flags<[CC1Option]>,
   HelpText<"Do not use jump tables for lowering switches">;
+def fforce_enable_int128 : Flag<["-"], "fforce-enable-int128">,
+  Group<f_Group>, Flags<[CC1Option]>,
+  HelpText<"Enable support for int128_t type">;
+def fno_force_enable_int128 : Flag<["-"], "fno-force-enable-int128">,
+  Group<f_Group>, Flags<[CC1Option]>,
+  HelpText<"Disable support for int128_t type">;
 
 // Begin sanitizer flags. These should all be core options exposed in all driver
 // modes.
@@ -1309,6 +1315,8 @@ def fno_operator_names : Flag<["-"], "fno-operator-names">, Group<f_Group>,
 def fno_pascal_strings : Flag<["-"], "fno-pascal-strings">, Group<f_Group>;
 def fno_rtti : Flag<["-"], "fno-rtti">, Group<f_Group>, Flags<[CC1Option]>,
   HelpText<"Disable generation of rtti information">;
+def fno_rtti_data : Flag<["-"], "fno-rtti-data">, Group<f_Group>, Flags<[CC1Option]>,
+  HelpText<"Control emission of RTTI data">;
 def fno_short_enums : Flag<["-"], "fno-short-enums">, Group<f_Group>;
 def fno_show_column : Flag<["-"], "fno-show-column">, Group<f_Group>, Flags<[CC1Option]>,
   HelpText<"Do not include column number on diagnostics">;
@@ -1418,6 +1426,8 @@ def fnoopenmp_relocatable_target : Flag<["-"], "fnoopenmp-relocatable-target">,
 def fopenmp_simd : Flag<["-"], "fopenmp-simd">, Group<f_Group>, Flags<[CC1Option, NoArgumentUnused]>,
   HelpText<"Emit OpenMP code only for SIMD-based constructs.">;
 def fno_openmp_simd : Flag<["-"], "fno-openmp-simd">, Group<f_Group>, Flags<[CC1Option, NoArgumentUnused]>;
+def fopenmp_cuda_mode : Flag<["-"], "fopenmp-cuda-mode">, Group<f_Group>, Flags<[CC1Option, NoArgumentUnused]>;
+def fno_openmp_cuda_mode : Flag<["-"], "fno-openmp-cuda-mode">, Group<f_Group>, Flags<[CC1Option, NoArgumentUnused]>;
 def fno_optimize_sibling_calls : Flag<["-"], "fno-optimize-sibling-calls">, Group<f_Group>;
 def foptimize_sibling_calls : Flag<["-"], "foptimize-sibling-calls">, Group<f_Group>;
 def force__cpusubtype__ALL : Flag<["-"], "force_cpusubtype_ALL">;
@@ -1697,6 +1707,11 @@ def gz : Flag<["-"], "gz">, Group<g_flags_Group>,
     HelpText<"DWARF debug sections compression type">;
 def gz_EQ : Joined<["-"], "gz=">, Group<g_flags_Group>,
     HelpText<"DWARF debug sections compression type">;
+def gembed_source : Flag<["-"], "gembed-source">, Group<g_flags_Group>, Flags<[CC1Option]>,
+    HelpText<"Embed source text in DWARF debug sections">;
+def gno_embed_source : Flag<["-"], "gno-embed-source">, Group<g_flags_Group>,
+    Flags<[DriverOption]>,
+    HelpText<"Restore the default behavior of not embedding source text in DWARF debug sections">;
 def headerpad__max__install__names : Joined<["-"], "headerpad_max_install_names">;
 def help : Flag<["-", "--"], "help">, Flags<[CC1Option,CC1AsOption]>,
   HelpText<"Display available options">;
@@ -2485,6 +2500,8 @@ def mno_hexagon_hvx_double
     : Flag<[ "-" ], "mno-hvx-double">,
       Group<m_hexagon_Features_HVX_Group>,
       HelpText<"Disable Hexagon Double Vector eXtensions">;
+def ffixed_r19: Flag<["-"], "ffixed-r19">,
+  HelpText<"Reserve the r19 register (Hexagon only)">;
 
 
 // X86 feature flags

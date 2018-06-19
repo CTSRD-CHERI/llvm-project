@@ -1,7 +1,7 @@
 ; RUN: llc -filetype=obj -mtriple=wasm32-unknown-uknown-wasm %p/Inputs/comdat1.ll -o %t1.o
 ; RUN: llc -filetype=obj -mtriple=wasm32-unknown-uknown-wasm %p/Inputs/comdat2.ll -o %t2.o
 ; RUN: llc -filetype=obj -mtriple=wasm32-unknown-uknown-wasm %s -o %t.o
-; RUN: wasm-ld -no-gc-sections --check-signatures -o %t.wasm %t.o %t1.o %t2.o
+; RUN: wasm-ld --check-signatures -o %t.wasm %t.o %t1.o %t2.o
 ; RUN: obj2yaml %t.wasm | FileCheck %s
 
 target triple = "wasm32-unknown-unknown-wasm"
@@ -39,6 +39,12 @@ entry:
 ; CHECK-NEXT:      - Name:            memory
 ; CHECK-NEXT:        Kind:            MEMORY
 ; CHECK-NEXT:        Index:           0
+; CHECK-NEXT:      - Name:            __heap_base
+; CHECK-NEXT:        Kind:            GLOBAL
+; CHECK-NEXT:        Index:           1
+; CHECK-NEXT:      - Name:            __data_end
+; CHECK-NEXT:        Kind:            GLOBAL
+; CHECK-NEXT:        Index:           2
 ; CHECK-NEXT:      - Name:            _start
 ; CHECK-NEXT:        Kind:            FUNCTION
 ; CHECK-NEXT:        Index:           0
@@ -51,12 +57,6 @@ entry:
 ; CHECK-NEXT:      - Name:            callInline2
 ; CHECK-NEXT:        Kind:            FUNCTION
 ; CHECK-NEXT:        Index:           3
-; CHECK-NEXT:      - Name:            __heap_base
-; CHECK-NEXT:        Kind:            GLOBAL
-; CHECK-NEXT:        Index:           1
-; CHECK-NEXT:      - Name:            __data_end
-; CHECK-NEXT:        Kind:            GLOBAL
-; CHECK-NEXT:        Index:           2
 ; CHECK-NEXT:  - Type:            ELEM
 ; CHECK-NEXT:    Segments:
 ; CHECK-NEXT:      - Offset:

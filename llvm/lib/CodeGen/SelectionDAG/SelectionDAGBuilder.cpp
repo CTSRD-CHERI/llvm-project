@@ -7727,7 +7727,7 @@ void SelectionDAGBuilder::populateCallLoweringInfo(
     TargetLowering::ArgListEntry Entry;
     Entry.Node = getValue(V);
     Entry.Ty = V->getType();
-    Entry.setAttributes(&CS, ArgIdx);
+    Entry.setAttributes(&CS, ArgI);
     Args.push_back(Entry);
   }
 

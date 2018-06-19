@@ -171,10 +171,7 @@ public:
   /// Run code completion for \p File at \p Pos.
   /// Request is processed asynchronously.
   ///
-  /// If \p OverridenContents is not None, they will used only for code
-  /// completion, i.e. no diagnostics update will be scheduled and a draft for
-  /// \p File will not be updated. If \p OverridenContents is None, contents of
-  /// the current draft for \p File will be used. If \p UsedFS is non-null, it
+  /// The current draft for \p File will be used. If \p UsedFS is non-null, it
   /// will be overwritten by vfs::FileSystem used for completion.
   ///
   /// This method should only be called for currently tracked files. However, it
@@ -185,20 +182,16 @@ public:
   void codeComplete(PathRef File, Position Pos,
                     const clangd::CodeCompleteOptions &Opts,
                     UniqueFunction<void(Tagged<CompletionList>)> Callback,
-                    llvm::Optional<StringRef> OverridenContents = llvm::None,
                     IntrusiveRefCntPtr<vfs::FileSystem> *UsedFS = nullptr);
 
   /// Provide signature help for \p File at \p Pos. If \p OverridenContents is
   /// not None, they will used only for signature help, i.e. no diagnostics
   /// update will be scheduled and a draft for \p File will not be updated. If
-  /// \p OverridenContents is None, contents of the current draft for \p File
-  /// will be used. If \p UsedFS is non-null, it will be overwritten by
-  /// vfs::FileSystem used for signature help. This method should only be called
-  /// for currently tracked files.
+  /// If \p UsedFS is non-null, it will be overwritten by vfs::FileSystem used
+  /// for signature help. This method should only be called for tracked files.
   void signatureHelp(
       PathRef File, Position Pos,
       UniqueFunction<void(llvm::Expected<Tagged<SignatureHelp>>)> Callback,
-      llvm::Optional<StringRef> OverridenContents = llvm::None,
       IntrusiveRefCntPtr<vfs::FileSystem> *UsedFS = nullptr);
 
   /// Get definition of symbol at a specified \p Line and \p Column in \p File.
@@ -241,12 +234,21 @@ public:
               UniqueFunction<void(Expected<std::vector<tooling::Replacement>>)>
                   Callback);
 
-  /// Inserts a new #include of \p Header into \p File, if it's not present.
-  /// \p Header is either an URI that can be resolved to an #include path that
-  /// is suitable to be inserted or a literal string quoted with <> or "" that
-  /// can be #included directly.
+  /// Inserts a new #include into \p File, if it's not present in \p Code.
+  ///
+  /// \p DeclaringHeader The original header corresponding to this insertion
+  /// e.g. the header that declared a symbol. This can be either a URI or a
+  /// literal string quoted with <> or "" that can be #included directly.
+  /// \p InsertedHeader The preferred header to be inserted. This may be
+  /// different from \p DeclaringHeader as a header file can have a different
+  /// canonical include. This can be either a URI or a literal string quoted
+  /// with <> or "" that can be #included directly.
+  ///
+  /// Both OriginalHeader and InsertedHeader will be considered to determine
+  /// whether an include needs to be added.
   Expected<tooling::Replacements> insertInclude(PathRef File, StringRef Code,
-                                                StringRef Header);
+                                                StringRef DeclaringHeader,
+                                                StringRef InsertedHeader);
 
   /// Gets current document contents for \p File. Returns None if \p File is not
   /// currently tracked.

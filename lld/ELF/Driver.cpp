@@ -33,7 +33,6 @@
 #include "MarkLive.h"
 #include "OutputSections.h"
 #include "ScriptParser.h"
-#include "Strings.h"
 #include "SymbolTable.h"
 #include "Symbols.h"
 #include "SyntheticSections.h"
@@ -43,6 +42,7 @@
 #include "lld/Common/Driver.h"
 #include "lld/Common/ErrorHandler.h"
 #include "lld/Common/Memory.h"
+#include "lld/Common/Strings.h"
 #include "lld/Common/TargetOptionsCommandFlags.h"
 #include "lld/Common/Threads.h"
 #include "lld/Common/Version.h"
@@ -626,7 +626,8 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
   Config->EhFrameHdr =
       Args.hasFlag(OPT_eh_frame_hdr, OPT_no_eh_frame_hdr, false);
   Config->EmitRelocs = Args.hasArg(OPT_emit_relocs);
-  Config->EnableNewDtags = !Args.hasArg(OPT_disable_new_dtags);
+  Config->EnableNewDtags =
+      Args.hasFlag(OPT_enable_new_dtags, OPT_disable_new_dtags, true);
   Config->Entry = Args.getLastArgValue(OPT_entry);
   Config->ExportDynamic =
       Args.hasFlag(OPT_export_dynamic, OPT_no_export_dynamic, false);
@@ -771,7 +772,7 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
 
   std::tie(Config->BuildId, Config->BuildIdVector) = getBuildId(Args);
 
-  if (auto *Arg = Args.getLastArg(OPT_pack_dyn_relocs_eq)) {
+  if (auto *Arg = Args.getLastArg(OPT_pack_dyn_relocs)) {
     StringRef S = Arg->getValue();
     if (S == "android")
       Config->AndroidPackDynRelocs = true;
@@ -1080,9 +1081,10 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   if (errorCount())
     return;
 
-  // Handle undefined symbols in DSOs.
-  if (!Config->Shared)
-    Symtab->scanShlibUndefined<ELFT>();
+  // We want to declare linker script's symbols early,
+  // so that we can version them.
+  // They also might be exported if referenced by DSOs.
+  Script->declareSymbols();
 
   // Handle the -exclude-libs option.
   if (Args.hasArg(OPT_exclude_libs))
@@ -1096,10 +1098,6 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   // We need to create some reserved symbols such as _end. Create them.
   if (!Config->Relocatable)
     addReservedSymbols();
-
-  // We want to declare linker script's symbols early,
-  // so that we can version them.
-  Script->declareSymbols();
 
   // Apply version scripts.
   //

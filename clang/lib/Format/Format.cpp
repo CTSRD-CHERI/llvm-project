@@ -411,7 +411,13 @@ template <> struct MappingTraits<FormatStyle> {
                    Style.SpaceAfterTemplateKeyword);
     IO.mapOptional("SpaceBeforeAssignmentOperators",
                    Style.SpaceBeforeAssignmentOperators);
+    IO.mapOptional("SpaceBeforeCtorInitializerColon",
+                   Style.SpaceBeforeCtorInitializerColon);
+    IO.mapOptional("SpaceBeforeInheritanceColon",
+                   Style.SpaceBeforeInheritanceColon);
     IO.mapOptional("SpaceBeforeParens", Style.SpaceBeforeParens);
+    IO.mapOptional("SpaceBeforeRangeBasedForLoopColon",
+                   Style.SpaceBeforeRangeBasedForLoopColon);
     IO.mapOptional("SpaceInEmptyParentheses", Style.SpaceInEmptyParentheses);
     IO.mapOptional("SpacesBeforeTrailingComments",
                    Style.SpacesBeforeTrailingComments);
@@ -662,7 +668,10 @@ FormatStyle getLLVMStyle() {
   LLVMStyle.SpacesInCStyleCastParentheses = false;
   LLVMStyle.SpaceAfterCStyleCast = false;
   LLVMStyle.SpaceAfterTemplateKeyword = true;
+  LLVMStyle.SpaceBeforeCtorInitializerColon = true;
+  LLVMStyle.SpaceBeforeInheritanceColon = true;
   LLVMStyle.SpaceBeforeParens = FormatStyle::SBPO_ControlStatements;
+  LLVMStyle.SpaceBeforeRangeBasedForLoopColon = true;
   LLVMStyle.SpaceBeforeAssignmentOperators = true;
   LLVMStyle.SpacesInAngles = false;
 
@@ -2295,8 +2304,8 @@ static FormatStyle::LanguageKind getLanguageByFileName(StringRef FileName) {
 }
 
 FormatStyle::LanguageKind guessLanguage(StringRef FileName, StringRef Code) {
-  FormatStyle::LanguageKind result = getLanguageByFileName(FileName);
-  if (result == FormatStyle::LK_Cpp) {
+  const auto GuessedLanguage = getLanguageByFileName(FileName);
+  if (GuessedLanguage == FormatStyle::LK_Cpp) {
     auto Extension = llvm::sys::path::extension(FileName);
     // If there's no file extension (or it's .h), we need to check the contents
     // of the code to see if it contains Objective-C.
@@ -2306,12 +2315,11 @@ FormatStyle::LanguageKind guessLanguage(StringRef FileName, StringRef Code) {
           Environment::CreateVirtualEnvironment(Code, NonEmptyFileName, /*Ranges=*/{});
       ObjCHeaderStyleGuesser Guesser(*Env, getLLVMStyle());
       Guesser.process();
-      if (Guesser.isObjC()) {
-        result = FormatStyle::LK_ObjC;
-      }
+      if (Guesser.isObjC())
+        return FormatStyle::LK_ObjC;
     }
   }
-  return result;
+  return GuessedLanguage;
 }
 
 llvm::Expected<FormatStyle> getStyle(StringRef StyleName, StringRef FileName,

@@ -288,15 +288,12 @@ template <class ELFT> class SharedFile : public ELFFileBase<ELFT> {
   typedef typename ELFT::Verdef Elf_Verdef;
   typedef typename ELFT::Versym Elf_Versym;
 
-  std::vector<StringRef> Undefs;
   const Elf_Shdr *VersymSec = nullptr;
   const Elf_Shdr *VerdefSec = nullptr;
 
 public:
   std::vector<const Elf_Verdef *> Verdefs;
   std::string SoName;
-
-  llvm::ArrayRef<StringRef> getUndefinedSymbols() { return Undefs; }
 
   static bool classof(const InputFile *F) {
     return F->kind() == Base::SharedKind;

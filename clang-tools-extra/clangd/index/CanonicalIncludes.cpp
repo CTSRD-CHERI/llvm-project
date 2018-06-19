@@ -27,7 +27,17 @@ void CanonicalIncludes::addRegexMapping(llvm::StringRef RE,
   this->RegexHeaderMappingTable.emplace_back(llvm::Regex(RE), CanonicalPath);
 }
 
-llvm::StringRef CanonicalIncludes::mapHeader(llvm::StringRef Header) const {
+void CanonicalIncludes::addSymbolMapping(llvm::StringRef QualifiedName,
+                                         llvm::StringRef CanonicalPath) {
+  this->SymbolMapping[QualifiedName] = CanonicalPath;
+}
+
+llvm::StringRef
+CanonicalIncludes::mapHeader(llvm::StringRef Header,
+                             llvm::StringRef QualifiedName) const {
+  auto SE = SymbolMapping.find(QualifiedName);
+  if (SE != SymbolMapping.end())
+    return SE->second;
   std::lock_guard<std::mutex> Lock(RegexMutex);
   for (auto &Entry : RegexHeaderMappingTable) {
 #ifndef NDEBUG
@@ -67,6 +77,53 @@ collectIWYUHeaderMaps(CanonicalIncludes *Includes) {
 }
 
 void addSystemHeadersMapping(CanonicalIncludes *Includes) {
+  static const std::vector<std::pair<const char *, const char *>> SymbolMap = {
+      // Map symbols in <iosfwd> to their preferred includes.
+      {"std::basic_filebuf", "<fstream>"},
+      {"std::basic_fstream", "<fstream>"},
+      {"std::basic_ifstream", "<fstream>"},
+      {"std::basic_ofstream", "<fstream>"},
+      {"std::filebuf", "<fstream>"},
+      {"std::fstream", "<fstream>"},
+      {"std::ifstream", "<fstream>"},
+      {"std::ofstream", "<fstream>"},
+      {"std::wfilebuf", "<fstream>"},
+      {"std::wfstream", "<fstream>"},
+      {"std::wifstream", "<fstream>"},
+      {"std::wofstream", "<fstream>"},
+      {"std::basic_ios", "<ios>"},
+      {"std::ios", "<ios>"},
+      {"std::wios", "<ios>"},
+      {"std::basic_iostream", "<iostream>"},
+      {"std::iostream", "<iostream>"},
+      {"std::wiostream", "<iostream>"},
+      {"std::basic_istream", "<istream>"},
+      {"std::istream", "<istream>"},
+      {"std::wistream", "<istream>"},
+      {"std::istreambuf_iterator", "<iterator>"},
+      {"std::ostreambuf_iterator", "<iterator>"},
+      {"std::basic_ostream", "<ostream>"},
+      {"std::ostream", "<ostream>"},
+      {"std::wostream", "<ostream>"},
+      {"std::basic_istringstream", "<sstream>"},
+      {"std::basic_ostringstream", "<sstream>"},
+      {"std::basic_stringbuf", "<sstream>"},
+      {"std::basic_stringstream", "<sstream>"},
+      {"std::istringstream", "<sstream>"},
+      {"std::ostringstream", "<sstream>"},
+      {"std::stringbuf", "<sstream>"},
+      {"std::stringstream", "<sstream>"},
+      {"std::wistringstream", "<sstream>"},
+      {"std::wostringstream", "<sstream>"},
+      {"std::wstringbuf", "<sstream>"},
+      {"std::wstringstream", "<sstream>"},
+      {"std::basic_streambuf", "<streambuf>"},
+      {"std::streambuf", "<streambuf>"},
+      {"std::wstreambuf", "<streambuf>"},
+  };
+  for (const auto &Pair : SymbolMap)
+    Includes->addSymbolMapping(Pair.first, Pair.second);
+
   static const std::vector<std::pair<const char *, const char *>>
       SystemHeaderMap = {
           {"include/__stddef_max_align_t.h$", "<cstddef>"},
@@ -140,7 +197,8 @@ void addSystemHeadersMapping(CanonicalIncludes *Includes) {
           {"backward/binders.h$", "<string>"},
           {"bits/algorithmfwd.h$", "<algorithm>"},
           {"bits/alloc_traits.h$", "<unordered_set>"},
-          {"bits/allocator.h$", "<string>"},
+          {"bits/allocated_ptr.h$", "<memory>"},
+          {"bits/allocator.h$", "<allocator>"},
           {"bits/atomic_base.h$", "<atomic>"},
           {"bits/atomic_lockfree_defines.h$", "<exception>"},
           {"bits/basic_ios.h$", "<ios>"},
@@ -171,6 +229,7 @@ void addSystemHeadersMapping(CanonicalIncludes *Includes) {
           {"bits/list.tcc$", "<list>"},
           {"bits/locale_classes.h$", "<locale>"},
           {"bits/locale_classes.tcc$", "<locale>"},
+          {"bits/locale_conv.h$", "<locale>"},
           {"bits/locale_facets.h$", "<locale>"},
           {"bits/locale_facets.tcc$", "<locale>"},
           {"bits/locale_facets_nonio.h$", "<locale>"},
@@ -183,6 +242,7 @@ void addSystemHeadersMapping(CanonicalIncludes *Includes) {
           {"bits/ostream.tcc$", "<ostream>"},
           {"bits/ostream_insert.h$", "<ostream>"},
           {"bits/postypes.h$", "<iosfwd>"},
+          {"bits/predefined_ops.h$", "<algorithm>"},
           {"bits/ptr_traits.h$", "<memory>"},
           {"bits/random.h$", "<random>"},
           {"bits/random.tcc$", "<random>"},
@@ -197,15 +257,17 @@ void addSystemHeadersMapping(CanonicalIncludes *Includes) {
           {"bits/regex_nfa.h$", "<regex>"},
           {"bits/shared_ptr.h$", "<memory>"},
           {"bits/shared_ptr_base.h$", "<memory>"},
+          {"bits/shared_ptr_atomic.h$", "<memory>"},
           {"bits/slice_array.h$", "<valarray>"},
           {"bits/sstream.tcc$", "<sstream>"},
+          {"bits/std_mutex.h$", "<mutex>"},
           {"bits/stl_algo.h$", "<algorithm>"},
-          {"bits/stl_algobase.h$", "<list>"},
+          {"bits/stl_algobase.h$", "<algorithm>"},
           {"bits/stl_bvector.h$", "<vector>"},
           {"bits/stl_construct.h$", "<deque>"},
           {"bits/stl_deque.h$", "<deque>"},
-          {"bits/stl_function.h$", "<string>"},
-          {"bits/stl_heap.h$", "<queue>"},
+          {"bits/stl_function.h$", "<functional>"},
+          {"bits/stl_heap.h$", "<heap>"},
           {"bits/stl_iterator.h$", "<iterator>"},
           {"bits/stl_iterator_base_funcs.h$", "<iterator>"},
           {"bits/stl_iterator_base_types.h$", "<numeric>"},
@@ -228,6 +290,7 @@ void addSystemHeadersMapping(CanonicalIncludes *Includes) {
           {"bits/streambuf.tcc$", "<streambuf>"},
           {"bits/streambuf_iterator.h$", "<iterator>"},
           {"bits/stringfwd.h$", "<string>"},
+          {"bits/uniform_int_dist.h$", "<random>"},
           {"bits/unique_ptr.h$", "<memory>"},
           {"bits/unordered_map.h$", "<unordered_map>"},
           {"bits/unordered_set.h$", "<unordered_set>"},
@@ -374,7 +437,7 @@ void addSystemHeadersMapping(CanonicalIncludes *Includes) {
           {"bits/atomic_word.h$", "<memory>"},
           {"bits/basic_file.h$", "<fstream>"},
           {"bits/c\\+\\+allocator.h$", "<string>"},
-          {"bits/c\\+\\+config.h$", "<iosfwd>"},
+          {"bits/c\\+\\+config.h$", "<cstddef>"},
           {"bits/c\\+\\+io.h$", "<ios>"},
           {"bits/c\\+\\+locale.h$", "<locale>"},
           {"bits/cpu_defines.h$", "<iosfwd>"},

@@ -15,12 +15,12 @@
 #include "MapFile.h"
 #include "OutputSections.h"
 #include "Relocations.h"
-#include "Strings.h"
 #include "SymbolTable.h"
 #include "Symbols.h"
 #include "SyntheticSections.h"
 #include "Target.h"
 #include "lld/Common/Memory.h"
+#include "lld/Common/Strings.h"
 #include "lld/Common/Threads.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSwitch.h"
@@ -668,16 +668,17 @@ static bool isRelroSection(const OutputSection *Sec) {
 // * It is easy to check if a give branch was taken.
 // * It is easy two see how similar two ranks are (see getRankProximity).
 enum RankFlags {
-  RF_NOT_ADDR_SET = 1 << 16,
-  RF_NOT_INTERP = 1 << 15,
-  RF_NOT_ALLOC = 1 << 14,
-  RF_WRITE = 1 << 13,
-  RF_EXEC_WRITE = 1 << 12,
-  RF_EXEC = 1 << 11,
-  RF_NON_TLS_BSS = 1 << 10,
-  RF_NON_TLS_BSS_RO = 1 << 9,
-  RF_NOT_TLS = 1 << 8,
-  RF_BSS = 1 << 7,
+  RF_NOT_ADDR_SET = 1 << 18,
+  RF_NOT_INTERP = 1 << 17,
+  RF_NOT_ALLOC = 1 << 16,
+  RF_WRITE = 1 << 15,
+  RF_EXEC_WRITE = 1 << 13,
+  RF_EXEC = 1 << 12,
+  RF_NON_TLS_BSS = 1 << 11,
+  RF_NON_TLS_BSS_RO = 1 << 10,
+  RF_NOT_TLS = 1 << 9,
+  RF_BSS = 1 << 8,
+  RF_NOTE = 1 << 7,
   RF_PPC_NOT_TOCBSS = 1 << 6,
   RF_PPC_OPD = 1 << 5,
   RF_PPC_TOCL = 1 << 4,
@@ -765,6 +766,12 @@ static unsigned getSectionRank(const OutputSection *Sec) {
   if (IsNoBits)
     Rank |= RF_BSS;
 
+  // We create a NOTE segment for contiguous .note sections, so make
+  // them contigous if there are more than one .note section with the
+  // same attributes.
+  if (Sec->Type == SHT_NOTE)
+    Rank |= RF_NOTE;
+
   // Some architectures have additional ordering restrictions for sections
   // within the same PT_LOAD.
   if (Config->EMachine == EM_PPC64) {
@@ -790,6 +797,7 @@ static unsigned getSectionRank(const OutputSection *Sec) {
     if (Name == ".branch_lt")
       Rank |= RF_PPC_BRANCH_LT;
   }
+
   if (Config->EMachine == EM_MIPS) {
     // All sections with SHF_MIPS_GPREL flag should be grouped together
     // because data in these sections is addressable with a gp relative address.
@@ -1056,7 +1064,7 @@ static DenseMap<const InputSectionBase *, int> buildSectionOrder() {
         continue;
 
       if (auto *Sec = dyn_cast_or_null<InputSectionBase>(D->Section)) {
-        int &Priority = SectionOrder[Sec];
+        int &Priority = SectionOrder[cast<InputSectionBase>(Sec->Repl)];
         Priority = std::min(Priority, Ent.Priority);
       }
     }
@@ -1382,11 +1390,6 @@ static void removeUnusedSyntheticSections() {
       if (auto *ISD = dyn_cast<InputSectionDescription>(B))
         llvm::erase_if(ISD->Sections,
                        [=](InputSection *IS) { return IS == SS; });
-
-    // If there are no other alive input sections left, we remove output
-    // section from the output.
-    if (getInputSections(OS).empty())
-      OS->Live = false;
   }
 }
 
@@ -1933,9 +1936,8 @@ template <class ELFT> void Writer<ELFT>::setPhdrs() {
 
 static std::string rangeToString(uint64_t Addr, uint64_t Len) {
   if (Len == 0)
-    return "<emtpy range at 0x" + utohexstr(Addr) + ">";
-  return "[0x" + utohexstr(Addr) + " -> 0x" +
-         utohexstr(Addr + Len - 1) + "]";
+    return "<empty range at 0x" + utohexstr(Addr) + ">";
+  return "[0x" + utohexstr(Addr) + " -> 0x" + utohexstr(Addr + Len - 1) + "]";
 }
 
 // Check whether sections overlap for a specific address range (file offsets,
@@ -1965,11 +1967,11 @@ static void checkForSectionOverlap(ArrayRef<OutputSection *> AllSections,
             [=](const OutputSection *A, const OutputSection *B) {
               return GetStart(A) < GetStart(B);
             });
-  for (size_t i = 0; i < Sections.size(); ++i) {
-    OutputSection *Sec = Sections[i];
+  for (size_t I = 0; I < Sections.size(); ++I) {
+    OutputSection *Sec = Sections[I];
     uint64_t Start = GetStart(Sec);
-    for (auto *Other : ArrayRef<OutputSection *>(Sections).slice(i + 1)) {
-      // Since the sections are storted by start address we only need to check
+    for (auto *Other : ArrayRef<OutputSection *>(Sections).slice(I + 1)) {
+      // Since the sections are sorted by start address we only need to check
       // whether the other sections starts before the end of Sec. If this is
       // not the case we can break out of this loop since all following sections
       // will also start after the end of Sec.
