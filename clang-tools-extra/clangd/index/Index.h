@@ -131,6 +131,9 @@ struct Symbol {
   //   * For non-inline functions, the canonical declaration typically appears
   //     in the ".h" file corresponding to the definition.
   SymbolLocation CanonicalDeclaration;
+  // The number of translation units that reference this symbol from their main
+  // file. This number is only meaningful if aggregated in an index.
+  unsigned References = 0;
 
   /// A brief description of the symbol that can be displayed in the completion
   /// candidate list. For example, "Foo(X x, Y y) const" is a labal for a
@@ -245,6 +248,10 @@ struct FuzzyFindRequest {
   size_t MaxCandidateCount = UINT_MAX;
 };
 
+struct LookupRequest {
+  llvm::DenseSet<SymbolID> IDs;
+};
+
 /// \brief Interface for symbol indexes that can be used for searching or
 /// matching symbols among a set of symbols based on names or unique IDs.
 class SymbolIndex {
@@ -260,8 +267,14 @@ public:
   fuzzyFind(const FuzzyFindRequest &Req,
             llvm::function_ref<void(const Symbol &)> Callback) const = 0;
 
+  /// Looks up symbols with any of the given symbol IDs and applies \p Callback
+  /// on each matched symbol.
+  /// The returned symbol must be deep-copied if it's used outside Callback.
+  virtual void
+  lookup(const LookupRequest &Req,
+         llvm::function_ref<void(const Symbol &)> Callback) const = 0;
+
   // FIXME: add interfaces for more index use cases:
-  //  - Symbol getSymbolInfo(SymbolID);
   //  - getAllOccurrences(SymbolID);
 };
 

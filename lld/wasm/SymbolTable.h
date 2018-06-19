@@ -13,7 +13,7 @@
 #include "InputFiles.h"
 #include "Symbols.h"
 #include "llvm/ADT/CachedHashString.h"
-#include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/DenseSet.h"
 #include "llvm/Support/raw_ostream.h"
 
 using llvm::wasm::WasmGlobalType;
@@ -41,6 +41,8 @@ public:
   void addFile(InputFile *File);
 
   std::vector<ObjFile *> ObjectFiles;
+  std::vector<InputFunction *> SyntheticFunctions;
+  std::vector<InputGlobal *> SyntheticGlobals;
 
   void reportRemainingUndefines();
 
@@ -63,14 +65,13 @@ public:
 
   void addLazy(ArchiveFile *F, const Archive::Symbol *Sym);
 
-  bool addComdat(StringRef Name, const ObjFile *File);
+  bool addComdat(StringRef Name);
 
   DefinedData *addSyntheticDataSymbol(StringRef Name, uint32_t Flags);
   DefinedGlobal *addSyntheticGlobal(StringRef Name, uint32_t Flags,
                                     InputGlobal *Global);
-  DefinedFunction *addSyntheticFunction(StringRef Name,
-                                        const WasmSignature *Type,
-                                        uint32_t Flags);
+  DefinedFunction *addSyntheticFunction(StringRef Name, uint32_t Flags,
+                                        InputFunction *Function);
 
 private:
   std::pair<Symbol *, bool> insert(StringRef Name);
@@ -78,7 +79,7 @@ private:
   llvm::DenseMap<llvm::CachedHashStringRef, Symbol *> SymMap;
   std::vector<Symbol *> SymVector;
 
-  llvm::DenseMap<StringRef, const ObjFile *> Comdats;
+  llvm::DenseSet<llvm::CachedHashStringRef> Comdats;
 };
 
 extern SymbolTable *Symtab;

@@ -108,26 +108,20 @@ class BackendStatistics : public View {
 
 public:
   BackendStatistics(const Backend &backend)
-      : B(backend), NumDispatched(0), NumIssued(0), NumRetired(0) {}
+      : B(backend), NumDispatched(0), NumIssued(0), NumRetired(0), NumCycles(0) {}
 
-  void onInstructionDispatched(unsigned Index) override { NumDispatched++; }
-  void
-  onInstructionIssued(unsigned Index,
-                      const llvm::ArrayRef<std::pair<ResourceRef, unsigned>>
-                          & /* unused */) override {
-    NumIssued++;
-  }
-  void onInstructionRetired(unsigned Index) override { NumRetired++; }
+  void onInstructionEvent(const HWInstructionEvent &Event) override;
 
   void onCycleBegin(unsigned Cycle) override { NumCycles++; }
 
   void onCycleEnd(unsigned Cycle) override { updateHistograms(); }
 
   void printView(llvm::raw_ostream &OS) const override {
-    printDispatchStalls(OS, B.getNumRATStalls(), B.getNumRCUStalls(), B.getNumSQStalls(),
-                        B.getNumLDQStalls(), B.getNumSTQStalls(), B.getNumDispatchGroupStalls());
+    printDispatchStalls(OS, B.getNumRATStalls(), B.getNumRCUStalls(),
+                        B.getNumSQStalls(), B.getNumLDQStalls(),
+                        B.getNumSTQStalls(), B.getNumDispatchGroupStalls());
     printRATStatistics(OS, B.getTotalRegisterMappingsCreated(),
-                           B.getMaxUsedRegisterMappings());
+                       B.getMaxUsedRegisterMappings());
     printDispatchUnitStatistics(OS);
     printSchedulerStatistics(OS);
     printRetireUnitStatistics(OS);

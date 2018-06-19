@@ -2742,13 +2742,9 @@ ItaniumRTTIBuilder::GetAddrOfExternalRTTIDescriptor(QualType Ty) {
     GV = new llvm::GlobalVariable(CGM.getModule(), CGM.Int8PtrTy,
                                   /*Constant=*/true,
                                   llvm::GlobalValue::ExternalLinkage, nullptr,
-                                  Name, nullptr,
-                                  llvm::GlobalValue::NotThreadLocal,
-                                  CGM.getTargetCodeGenInfo().getDefaultAS());
-    if (const RecordType *RecordTy = dyn_cast<RecordType>(Ty)) {
-      const CXXRecordDecl *RD = cast<CXXRecordDecl>(RecordTy->getDecl());
-      CGM.setGVProperties(GV, RD);
-    }
+                                  Name);
+    const CXXRecordDecl *RD = Ty->getAsCXXRecordDecl();
+    CGM.setGVProperties(GV, RD);
   }
 
   return llvm::ConstantExpr::getBitCast(GV, CGM.Int8PtrTy);

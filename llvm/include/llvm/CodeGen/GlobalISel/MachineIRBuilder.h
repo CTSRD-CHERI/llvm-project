@@ -23,7 +23,6 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DebugLoc.h"
 
-#include <queue>
 
 namespace llvm {
 
@@ -571,6 +570,12 @@ public:
     return buildFConstant(getDestFromArg(Res), Val);
   }
   MachineInstrBuilder buildFConstant(unsigned Res, const ConstantFP &Val);
+
+  template <typename DstType>
+  MachineInstrBuilder buildFConstant(DstType &&Res, double Val) {
+    return buildFConstant(getDestFromArg(Res), Val);
+  }
+  MachineInstrBuilder buildFConstant(unsigned Res, double Val);
 
   /// Build and insert \p Res = COPY Op
   ///

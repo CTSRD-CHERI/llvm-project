@@ -11,6 +11,7 @@
 
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/DebugInfo/PDB/IPDBEnumChildren.h"
+#include "llvm/DebugInfo/PDB/IPDBInjectedSource.h"
 #include "llvm/DebugInfo/PDB/IPDBLineNumber.h"
 #include "llvm/DebugInfo/PDB/IPDBRawSymbol.h"
 #include "llvm/DebugInfo/PDB/IPDBSession.h"
@@ -87,6 +88,11 @@ class MockSession : public IPDBSession {
   findLineNumbersByAddress(uint64_t Address, uint32_t Length) const override {
     return nullptr;
   }
+  std::unique_ptr<IPDBEnumLineNumbers>
+  findLineNumbersBySectOffset(uint32_t Section, uint32_t Offset,
+                              uint32_t Length) const override {
+    return nullptr;
+  }
   std::unique_ptr<IPDBEnumSourceFiles>
   findSourceFiles(const PDBSymbolCompiland *Compiland, llvm::StringRef Pattern,
                   PDB_NameSearchFlags Flags) const override {
@@ -122,6 +128,10 @@ class MockSession : public IPDBSession {
   }
 
   std::unique_ptr<IPDBEnumTables> getEnumTables() const override {
+    return nullptr;
+  }
+
+  std::unique_ptr<IPDBEnumInjectedSources> getInjectedSources() const override {
     return nullptr;
   }
 };

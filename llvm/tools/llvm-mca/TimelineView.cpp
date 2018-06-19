@@ -34,53 +34,42 @@ void TimelineView::initialize(unsigned MaxIterations) {
   std::fill(WaitTime.begin(), WaitTime.end(), NullWTEntry);
 }
 
-void TimelineView::onInstructionDispatched(unsigned Index) {
-  if (CurrentCycle >= MaxCycle || Index >= Timeline.size())
+void TimelineView::onInstructionEvent(const HWInstructionEvent &Event) {
+  if (CurrentCycle >= MaxCycle || Event.Index >= Timeline.size())
     return;
-  Timeline[Index].CycleDispatched = CurrentCycle;
-  LastCycle = std::max(LastCycle, CurrentCycle);
-}
+  switch (Event.Type) {
+  case HWInstructionEvent::Retired: {
+    TimelineViewEntry &TVEntry = Timeline[Event.Index];
+    TVEntry.CycleRetired = CurrentCycle;
 
-void TimelineView::onInstructionReady(unsigned Index) {
-  if (CurrentCycle >= MaxCycle || Index >= Timeline.size())
+    // Update the WaitTime entry which corresponds to this Index.
+    WaitTimeEntry &WTEntry = WaitTime[Event.Index % AsmSequence.size()];
+    WTEntry.Executions++;
+    WTEntry.CyclesSpentInSchedulerQueue +=
+        TVEntry.CycleIssued - TVEntry.CycleDispatched;
+    assert(TVEntry.CycleDispatched <= TVEntry.CycleReady);
+    WTEntry.CyclesSpentInSQWhileReady +=
+        TVEntry.CycleIssued - TVEntry.CycleReady;
+    WTEntry.CyclesSpentAfterWBAndBeforeRetire +=
+        (TVEntry.CycleRetired - 1) - TVEntry.CycleExecuted;
+    break;
+  }
+  case HWInstructionEvent::Ready:
+    Timeline[Event.Index].CycleReady = CurrentCycle;
+    break;
+  case HWInstructionEvent::Issued:
+    Timeline[Event.Index].CycleIssued = CurrentCycle;
+    break;
+  case HWInstructionEvent::Executed:
+    Timeline[Event.Index].CycleExecuted = CurrentCycle;
+    break;
+  case HWInstructionEvent::Dispatched:
+    Timeline[Event.Index].CycleDispatched = CurrentCycle;
+    break;
+  default:
     return;
-  Timeline[Index].CycleReady = CurrentCycle;
+  }
   LastCycle = std::max(LastCycle, CurrentCycle);
-}
-
-void TimelineView::onInstructionIssued(
-    unsigned Index,
-    const ArrayRef<std::pair<ResourceRef, unsigned>> & /* Unused */) {
-  if (CurrentCycle >= MaxCycle || Index >= Timeline.size())
-    return;
-  Timeline[Index].CycleIssued = CurrentCycle;
-  LastCycle = std::max(LastCycle, CurrentCycle);
-}
-
-void TimelineView::onInstructionExecuted(unsigned Index) {
-  if (CurrentCycle >= MaxCycle || Index >= Timeline.size())
-    return;
-  Timeline[Index].CycleExecuted = CurrentCycle;
-  LastCycle = std::max(LastCycle, CurrentCycle);
-}
-
-void TimelineView::onInstructionRetired(unsigned Index) {
-  if (CurrentCycle >= MaxCycle || Index >= Timeline.size())
-    return;
-  TimelineViewEntry &TVEntry = Timeline[Index];
-  TVEntry.CycleRetired = CurrentCycle;
-  LastCycle = std::max(LastCycle, CurrentCycle);
-
-  // Update the WaitTime entry which corresponds to this Index.
-
-  WaitTimeEntry &WTEntry = WaitTime[Index % AsmSequence.size()];
-  WTEntry.Executions++;
-  WTEntry.CyclesSpentInSchedulerQueue +=
-      TVEntry.CycleIssued - TVEntry.CycleDispatched;
-  assert(TVEntry.CycleDispatched <= TVEntry.CycleReady);
-  WTEntry.CyclesSpentInSQWhileReady += TVEntry.CycleIssued - TVEntry.CycleReady;
-  WTEntry.CyclesSpentAfterWBAndBeforeRetire +=
-      (TVEntry.CycleRetired - 1) - TVEntry.CycleExecuted;
 }
 
 void TimelineView::printWaitTimeEntry(raw_string_ostream &OS,
@@ -175,14 +164,16 @@ void TimelineView::printTimelineViewEntry(raw_string_ostream &OS,
   if (Entry.CycleDispatched != Entry.CycleExecuted) {
     // Zero latency instructions have the same value for CycleDispatched,
     // CycleIssued and CycleExecuted.
-    for (unsigned I = Entry.CycleDispatched + 1, E = Entry.CycleIssued; I < E; ++I)
+    for (unsigned I = Entry.CycleDispatched + 1, E = Entry.CycleIssued; I < E;
+         ++I)
       OS << '=';
     if (Entry.CycleIssued == Entry.CycleExecuted)
       OS << 'E';
     else {
       if (Entry.CycleDispatched != Entry.CycleIssued)
         OS << 'e';
-      for (unsigned I = Entry.CycleIssued + 1, E = Entry.CycleExecuted; I < E; ++I)
+      for (unsigned I = Entry.CycleIssued + 1, E = Entry.CycleExecuted; I < E;
+           ++I)
         OS << 'e';
       OS << 'E';
     }

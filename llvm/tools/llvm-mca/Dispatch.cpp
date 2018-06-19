@@ -15,6 +15,7 @@
 
 #include "Dispatch.h"
 #include "Backend.h"
+#include "HWEventListener.h"
 #include "Scheduler.h"
 #include "llvm/Support/Debug.h"
 
@@ -150,11 +151,19 @@ unsigned RetireControlUnit::reserveSlot(unsigned Index, unsigned NumMicroOps) {
 }
 
 void DispatchUnit::notifyInstructionDispatched(unsigned Index) {
-  Owner->notifyInstructionDispatched(Index);
+  DEBUG(dbgs() << "[E] Instruction Dispatched: " << Index << '\n');
+  Owner->notifyInstructionEvent(
+      HWInstructionEvent(HWInstructionEvent::Dispatched, Index));
 }
 
 void DispatchUnit::notifyInstructionRetired(unsigned Index) {
-  Owner->notifyInstructionRetired(Index);
+  DEBUG(dbgs() << "[E] Instruction Retired: " << Index << '\n');
+  Owner->notifyInstructionEvent(
+      HWInstructionEvent(HWInstructionEvent::Retired, Index));
+
+  const Instruction &IS = Owner->getInstruction(Index);
+  invalidateRegisterMappings(IS);
+  Owner->eraseInstruction(Index);
 }
 
 void RetireControlUnit::cycleEvent() {
@@ -190,7 +199,8 @@ void RetireControlUnit::dump() const {
 }
 #endif
 
-bool DispatchUnit::checkRAT(const InstrDesc &Desc) {
+bool DispatchUnit::checkRAT(const Instruction &Instr) {
+  const InstrDesc &Desc = Instr.getDesc();
   unsigned NumWrites = Desc.Writes.size();
   if (RAT->isAvailable(NumWrites))
     return true;
@@ -228,7 +238,36 @@ bool DispatchUnit::checkScheduler(const InstrDesc &Desc) {
   return false;
 }
 
-unsigned DispatchUnit::dispatch(unsigned IID, Instruction *NewInst) {
+void DispatchUnit::updateRAWDependencies(ReadState &RS,
+                                         const MCSubtargetInfo &STI) {
+  SmallVector<WriteState *, 4> DependentWrites;
+
+  collectWrites(DependentWrites, RS.getRegisterID());
+  RS.setDependentWrites(DependentWrites.size());
+  DEBUG(dbgs() << "Found " << DependentWrites.size() << " dependent writes\n");
+  // We know that this read depends on all the writes in DependentWrites.
+  // For each write, check if we have ReadAdvance information, and use it
+  // to figure out in how many cycles this read becomes available.
+  const ReadDescriptor &RD = RS.getDescriptor();
+  if (!RD.HasReadAdvanceEntries) {
+    for (WriteState *WS : DependentWrites)
+      WS->addUser(&RS, /* ReadAdvance */ 0);
+    return;
+  }
+
+  const MCSchedModel &SM = STI.getSchedModel();
+  const MCSchedClassDesc *SC = SM.getSchedClassDesc(RD.SchedClassID);
+  for (WriteState *WS : DependentWrites) {
+    unsigned WriteResID = WS->getWriteResourceID();
+    int ReadAdvance = STI.getReadAdvanceCycles(SC, RD.OpIndex, WriteResID);
+    WS->addUser(&RS, ReadAdvance);
+  }
+  // Prepare the set for another round.
+  DependentWrites.clear();
+}
+
+unsigned DispatchUnit::dispatch(unsigned IID, Instruction *NewInst,
+                                const MCSubtargetInfo &STI) {
   assert(!CarryOver && "Cannot dispatch another instruction!");
   unsigned NumMicroOps = NewInst->getDesc().NumMicroOps;
   if (NumMicroOps > DispatchWidth) {
@@ -240,10 +279,22 @@ unsigned DispatchUnit::dispatch(unsigned IID, Instruction *NewInst) {
     AvailableEntries -= NumMicroOps;
   }
 
+  // Update RAW dependencies.
+  for (std::unique_ptr<ReadState> &RS : NewInst->getUses())
+    updateRAWDependencies(*RS, STI);
+
+  // Allocate temporary registers in the register file.
+  for (std::unique_ptr<WriteState> &WS : NewInst->getDefs())
+    addNewRegisterMapping(*WS);
+
+  // Set the cycles left before the write-back stage.
+  const InstrDesc &D = NewInst->getDesc();
+  NewInst->setCyclesLeft(D.MaxLatency);
+
   // Reserve slots in the RCU.
   unsigned RCUTokenID = RCU->reserveSlot(IID, NumMicroOps);
   NewInst->setRCUTokenID(RCUTokenID);
-  Owner->notifyInstructionDispatched(IID);
+  notifyInstructionDispatched(IID);
 
   SC->scheduleInstruction(IID, NewInst);
   return RCUTokenID;

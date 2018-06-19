@@ -45,6 +45,9 @@ public:
                   const IPDBSourceFile &File) const = 0;
   virtual std::unique_ptr<IPDBEnumLineNumbers>
   findLineNumbersByAddress(uint64_t Address, uint32_t Length) const = 0;
+  virtual std::unique_ptr<IPDBEnumLineNumbers>
+  findLineNumbersBySectOffset(uint32_t Section, uint32_t Offset,
+                              uint32_t Length) const = 0;
 
   virtual std::unique_ptr<IPDBEnumSourceFiles>
   findSourceFiles(const PDBSymbolCompiland *Compiland, llvm::StringRef Pattern,
@@ -69,6 +72,9 @@ public:
   virtual std::unique_ptr<IPDBEnumDataStreams> getDebugStreams() const = 0;
 
   virtual std::unique_ptr<IPDBEnumTables> getEnumTables() const = 0;
+
+  virtual std::unique_ptr<IPDBEnumInjectedSources>
+  getInjectedSources() const = 0;
 };
 }
 }

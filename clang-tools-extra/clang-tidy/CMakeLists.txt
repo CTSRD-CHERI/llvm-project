@@ -27,6 +27,7 @@ add_clang_library(clangTidy
   )
 
 add_subdirectory(android)
+add_subdirectory(abseil)
 add_subdirectory(boost)
 add_subdirectory(bugprone)
 add_subdirectory(cert)
@@ -45,3 +46,4 @@ add_subdirectory(portability)
 add_subdirectory(readability)
 add_subdirectory(tool)
 add_subdirectory(utils)
+add_subdirectory(zircon)

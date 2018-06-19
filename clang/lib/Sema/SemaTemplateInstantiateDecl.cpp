@@ -176,7 +176,8 @@ static void instantiateDependentAllocAlignAttr(
     Sema &S, const MultiLevelTemplateArgumentList &TemplateArgs,
     const AllocAlignAttr *Align, Decl *New) {
   Expr *Param = IntegerLiteral::Create(
-      S.getASTContext(), llvm::APInt(64, Align->getParamIndex()),
+      S.getASTContext(),
+      llvm::APInt(64, Align->getParamIndex().getSourceIndex()),
       S.getASTContext().UnsignedLongLongTy, Align->getLocation());
   S.AddAllocAlignAttr(Align->getLocation(), New, Param,
                       Align->getSpellingListIndex());
@@ -741,7 +742,7 @@ Decl *TemplateDeclInstantiator::VisitVarDecl(VarDecl *D,
 
   if (D->isNRVOVariable()) {
     QualType ReturnType = cast<FunctionDecl>(DC)->getReturnType();
-    if (SemaRef.isCopyElisionCandidate(ReturnType, Var, false))
+    if (SemaRef.isCopyElisionCandidate(ReturnType, Var, Sema::CES_Strict))
       Var->setNRVOVariable(true);
   }
 
@@ -1652,6 +1653,7 @@ Decl *TemplateDeclInstantiator::VisitFunctionDecl(FunctionDecl *D,
       NameInfo, T, TInfo, D->getSourceRange().getEnd());
     if (DGuide->isCopyDeductionCandidate())
       cast<CXXDeductionGuideDecl>(Function)->setIsCopyDeductionCandidate();
+    Function->setAccess(D->getAccess());
   } else {
     Function = FunctionDecl::Create(
         SemaRef.Context, DC, D->getInnerLocStart(), NameInfo, T, TInfo,
@@ -2709,6 +2711,8 @@ Decl *TemplateDeclInstantiator::VisitClassScopeFunctionSpecializationDecl(
   FunctionDecl *Specialization = cast<FunctionDecl>(Previous.getFoundDecl());
   assert(Specialization && "Class scope Specialization is null");
   SemaRef.Context.setClassScopeSpecializationPattern(Specialization, OldFD);
+
+  // FIXME: If this is a definition, check for redefinition errors!
 
   return NewFD;
 }
@@ -3936,8 +3940,10 @@ void Sema::InstantiateFunctionDefinition(SourceLocation PointOfInstantiation,
                                          TemplateArgs))
       return;
 
+    StmtResult Body;
     if (PatternDecl->hasSkippedBody()) {
       ActOnSkippedFunctionBody(Function);
+      Body = nullptr;
     } else {
       if (CXXConstructorDecl *Ctor = dyn_cast<CXXConstructorDecl>(Function)) {
         // If this is a constructor, instantiate the member initializers.
@@ -3953,16 +3959,14 @@ void Sema::InstantiateFunctionDefinition(SourceLocation PointOfInstantiation,
       }
 
       // Instantiate the function body.
-      StmtResult Body = SubstStmt(Pattern, TemplateArgs);
+      Body = SubstStmt(Pattern, TemplateArgs);
 
       if (Body.isInvalid())
         Function->setInvalidDecl();
-
-      // FIXME: finishing the function body while in an expression evaluation
-      // context seems wrong. Investigate more.
-      ActOnFinishFunctionBody(Function, Body.get(),
-                              /*IsInstantiation=*/true);
     }
+    // FIXME: finishing the function body while in an expression evaluation
+    // context seems wrong. Investigate more.
+    ActOnFinishFunctionBody(Function, Body.get(), /*IsInstantiation=*/true);
 
     PerformDependentDiagnostics(PatternDecl, TemplateArgs);
 

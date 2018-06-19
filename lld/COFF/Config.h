@@ -187,8 +187,10 @@ struct Configuration {
   bool HighEntropyVA = false;
   bool AppContainer = false;
   bool MinGW = false;
+  bool WarnMissingOrderSymbol = true;
   bool WarnLocallyDefinedImported = true;
   bool Incremental = true;
+  bool KillAt = false;
 };
 
 extern Configuration *Config;

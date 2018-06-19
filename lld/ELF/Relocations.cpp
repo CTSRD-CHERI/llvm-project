@@ -814,7 +814,8 @@ static RelExpr processRelocAux(InputSectionBase &Sec, RelExpr Expr,
     error(
         "can't create dynamic relocation " + toString(Type) + " against " +
         (Sym.getName().empty() ? "local symbol" : "symbol: " + toString(Sym)) +
-        " in readonly segment; recompile object files with -fPIC" +
+        " in readonly segment; recompile object files with -fPIC "
+        "or pass '-Wl,-z,notext' to allow text relocations in the output" +
         getLocation(Sec, Sym, Offset));
     return Expr;
   }
@@ -875,6 +876,17 @@ static RelExpr processRelocAux(InputSectionBase &Sec, RelExpr Expr,
     // that points to the real function is a dedicated got entry used by the
     // plt. That is identified by special relocation types (R_X86_64_JUMP_SLOT,
     // R_386_JMP_SLOT, etc).
+
+    // For position independent executable on i386, the plt entry requires ebx
+    // to be set. This causes two problems:
+    // * If some code has a direct reference to a function, it was probably
+    //   compiled without -fPIE/-fPIC and doesn't maintain ebx.
+    // * If a library definition gets preempted to the executable, it will have
+    //   the wrong ebx value.
+    if (Config->Pie && Config->EMachine == EM_386)
+      errorOrWarn("symbol '" + toString(Sym) +
+                  "' cannot be preempted; recompile with -fPIE" +
+                  getLocation(Sec, Sym, Offset));
     Sym.NeedsPltAddr = true;
     Expr = toPlt(Expr);
     Sec.Relocations.push_back({Expr, Type, Offset, Addend, &Sym});
@@ -1240,17 +1252,22 @@ ThunkSection *ThunkCreator::addThunkSection(OutputSection *OS,
 
 std::pair<Thunk *, bool> ThunkCreator::getThunk(Symbol &Sym, RelType Type,
                                                 uint64_t Src) {
-  auto Res = ThunkedSymbols.insert({&Sym, std::vector<Thunk *>()});
-  if (!Res.second) {
-    // Check existing Thunks for Sym to see if they can be reused
-    for (Thunk *ET : Res.first->second)
-      if (ET->isCompatibleWith(Type) &&
-          Target->inBranchRange(Type, Src, ET->ThunkSym->getVA()))
-        return std::make_pair(ET, false);
-  }
+  std::vector<Thunk *> *ThunkVec = nullptr;
+  // We use (section, offset) pair to find the thunk position if possible so
+  // that we create only one thunk for aliased symbols or ICFed sections.
+  if (auto *D = dyn_cast<Defined>(&Sym))
+    if (!D->isInPlt() && D->Section)
+      ThunkVec = &ThunkedSymbolsBySection[{D->Section->Repl, D->Value}];
+  if (!ThunkVec)
+    ThunkVec = &ThunkedSymbols[&Sym];
+  // Check existing Thunks for Sym to see if they can be reused
+  for (Thunk *ET : *ThunkVec)
+    if (ET->isCompatibleWith(Type) &&
+        Target->inBranchRange(Type, Src, ET->ThunkSym->getVA()))
+      return std::make_pair(ET, false);
   // No existing compatible Thunk in range, create a new one
   Thunk *T = addThunk(Type, Sym);
-  Res.first->second.push_back(T);
+  ThunkVec->push_back(T);
   return std::make_pair(T, true);
 }
 

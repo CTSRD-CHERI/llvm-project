@@ -730,7 +730,8 @@ void CodeGenModule::setGlobalVisibility(llvm::GlobalValue *GV,
     GV->setVisibility(llvm::GlobalValue::DefaultVisibility);
     return;
   }
-
+  if (!D)
+    return;
   // Set visibility for definitions.
   LinkageInfo LV = D->getLinkageAndVisibility();
   if (LV.isVisibilityExplicit() || !GV->isDeclarationForLinker())
@@ -808,19 +809,17 @@ void CodeGenModule::setDSOLocal(llvm::GlobalValue *GV) const {
 void CodeGenModule::setDLLImportDLLExport(llvm::GlobalValue *GV,
                                           GlobalDecl GD) const {
   const auto *D = dyn_cast<NamedDecl>(GD.getDecl());
+  // C++ destructors have a few C++ ABI specific special cases.
   if (const auto *Dtor = dyn_cast_or_null<CXXDestructorDecl>(D)) {
-    if (getCXXABI().useThunkForDtorVariant(Dtor, GD.getDtorType())) {
-      // Don't dllexport/import destructor thunks.
-      GV->setDLLStorageClass(llvm::GlobalValue::DefaultStorageClass);
-      return;
-    }
+    getCXXABI().setCXXDestructorDLLStorage(GV, Dtor, GD.getDtorType());
+    return;
   }
   setDLLImportDLLExport(GV, D);
 }
 
 void CodeGenModule::setDLLImportDLLExport(llvm::GlobalValue *GV,
                                           const NamedDecl *D) const {
-  if (D->isExternallyVisible()) {
+  if (D && D->isExternallyVisible()) {
     if (D->hasAttr<DLLImportAttr>())
       GV->setDLLStorageClass(llvm::GlobalVariable::DLLImportStorageClass);
     else if (D->hasAttr<DLLExportAttr>() && !GV->isDeclarationForLinker())
@@ -1098,14 +1097,8 @@ CodeGenModule::getFunctionLinkage(GlobalDecl GD) {
 
   GVALinkage Linkage = getContext().GetGVALinkageForFunction(D);
 
-  if (isa<CXXDestructorDecl>(D) &&
-      getCXXABI().useThunkForDtorVariant(cast<CXXDestructorDecl>(D),
-                                         GD.getDtorType())) {
-    // Destructor variants in the Microsoft C++ ABI are always internal or
-    // linkonce_odr thunks emitted on an as-needed basis.
-    return Linkage == GVA_Internal ? llvm::GlobalValue::InternalLinkage
-                                   : llvm::GlobalValue::LinkOnceODRLinkage;
-  }
+  if (const auto *Dtor = dyn_cast<CXXDestructorDecl>(D))
+    return getCXXABI().getCXXDestructorLinkage(Linkage, Dtor, GD.getDtorType());
 
   if (isa<CXXConstructorDecl>(D) &&
       cast<CXXConstructorDecl>(D)->isInheritingConstructor() &&
@@ -2408,6 +2401,12 @@ llvm::Constant *CodeGenModule::GetOrCreateLLVMFunction(
   // Any attempts to use a MultiVersion function should result in retrieving
   // the iFunc instead. Name Mangling will handle the rest of the changes.
   if (const FunctionDecl *FD = cast_or_null<FunctionDecl>(D)) {
+    // For the device mark the function as one that should be emitted.
+    if (getLangOpts().OpenMPIsDevice && OpenMPRuntime &&
+        !OpenMPRuntime->markAsGlobalTarget(FD) && FD->isDefined() &&
+        !DontDefer && !IsForDefinition)
+      addDeferredDeclToEmit(GD);
+
     if (FD->isMultiVersion() && FD->getAttr<TargetAttr>()->isDefaultVersion()) {
       UpdateMultiVersionNames(GD, FD);
       if (!IsForDefinition)
@@ -2581,6 +2580,16 @@ llvm::Constant *CodeGenModule::GetAddrOfFunction(GlobalDecl GD,
     Ty = getTypes().ConvertFunctionType(CanonTy, FD);
   }
 
+  // Devirtualized destructor calls may come through here instead of via
+  // getAddrOfCXXStructor. Make sure we use the MS ABI base destructor instead
+  // of the complete destructor when necessary.
+  if (const auto *DD = dyn_cast<CXXDestructorDecl>(GD.getDecl())) {
+    if (getTarget().getCXXABI().isMicrosoft() &&
+        GD.getDtorType() == Dtor_Complete &&
+        DD->getParent()->getNumVBases() == 0)
+      GD = GlobalDecl(DD, Dtor_Base);
+  }
+
   StringRef MangledName = getMangledName(GD);
   return GetOrCreateLLVMFunction(MangledName, Ty, GD, ForVTable, DontDefer,
                                  /*IsThunk=*/false, llvm::AttributeList(),
@@ -2602,7 +2611,7 @@ GetRuntimeFunctionDecl(ASTContext &C, StringRef Name) {
 
   // Demangle the premangled name from getTerminateFn()
   IdentifierInfo &CXXII =
-      (Name == "_ZSt9terminatev" || Name == "\01?terminate@@YAXXZ")
+      (Name == "_ZSt9terminatev" || Name == "?terminate@@YAXXZ")
           ? C.Idents.get("terminate")
           : C.Idents.get(Name);
 
@@ -3126,6 +3135,12 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D,
   // therefore no need to be translated.
   QualType ASTTy = D->getType();
   if (getLangOpts().OpenCL && ASTTy->isSamplerT())
+    return;
+
+  // If this is OpenMP device, check if it is legal to emit this global
+  // normally.
+  if (LangOpts.OpenMPIsDevice && OpenMPRuntime &&
+      OpenMPRuntime->emitTargetGlobalVariable(D))
     return;
 
   llvm::Constant *Init = nullptr;

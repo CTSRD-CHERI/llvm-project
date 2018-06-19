@@ -47,16 +47,14 @@ using namespace llvm::dwarf;
 using namespace llvm::ELF;
 using namespace llvm::object;
 using namespace llvm::support;
-using namespace llvm::support::endian;
 
 using namespace lld;
 using namespace lld::elf;
 
-constexpr size_t MergeNoTailSection::NumShards;
+using llvm::support::endian::write32le;
+using llvm::support::endian::write64le;
 
-static void write32(void *Buf, uint32_t Val) {
-  endian::write32(Buf, Val, Config->Endianness);
-}
+constexpr size_t MergeNoTailSection::NumShards;
 
 uint64_t SyntheticSection::getVA() const {
   if (OutputSection *Sec = getParent())
@@ -381,7 +379,7 @@ EhFrameSection::EhFrameSection()
 template <class ELFT, class RelTy>
 CieRecord *EhFrameSection::addCie(EhSectionPiece &Cie, ArrayRef<RelTy> Rels) {
   auto *Sec = cast<EhInputSection>(Cie.Sec);
-  if (read32(Cie.data().data() + 4, Config->Endianness) != 0)
+  if (read32(Cie.data().data() + 4) != 0)
     fatal(toString(Sec) + ": CIE expected at beginning of .eh_frame");
 
   Symbol *Personality = nullptr;
@@ -440,7 +438,7 @@ void EhFrameSection::addSectionAux(EhInputSection *Sec, ArrayRef<RelTy> Rels) {
       return;
 
     size_t Offset = Piece.InputOff;
-    uint32_t ID = read32(Piece.data().data() + 4, Config->Endianness);
+    uint32_t ID = read32(Piece.data().data() + 4);
     if (ID == 0) {
       OffsetToCie[Offset] = addCie<ELFT>(Piece, Rels);
       continue;
@@ -538,11 +536,11 @@ std::vector<EhFrameSection::FdeData> EhFrameSection::getFdeData() const {
 static uint64_t readFdeAddr(uint8_t *Buf, int Size) {
   switch (Size) {
   case DW_EH_PE_udata2:
-    return read16(Buf, Config->Endianness);
+    return read16(Buf);
   case DW_EH_PE_udata4:
-    return read32(Buf, Config->Endianness);
+    return read32(Buf);
   case DW_EH_PE_udata8:
-    return read64(Buf, Config->Endianness);
+    return read64(Buf);
   case DW_EH_PE_absptr:
     return readUint(Buf);
   }
@@ -1792,14 +1790,20 @@ void GnuHashTableSection::addSymbols(std::vector<SymbolTableEntry> &V) {
           return SS->CopyRelSec == nullptr && !SS->NeedsPltAddr;
         return !S.Sym->isDefined();
       });
-  if (Mid == V.end())
-    return;
 
   // We chose load factor 4 for the on-disk hash table. For each hash
   // collision, the dynamic linker will compare a uint32_t hash value.
-  // Since the integer comparison is quite fast, we believe we can make
-  // the load factor even larger. 4 is just a conservative choice.
+  // Since the integer comparison is quite fast, we believe we can
+  // make the load factor even larger. 4 is just a conservative choice.
+  //
+  // Note that we don't want to create a zero-sized hash table because
+  // Android loader as of 2018 doesn't like a .gnu.hash containing such
+  // table. If that's the case, we create a hash table with one unused
+  // dummy slot.
   NBuckets = std::max<size_t>((V.end() - Mid) / 4, 1);
+
+  if (Mid == V.end())
+    return;
 
   for (SymbolTableEntry &Ent : llvm::make_range(Mid, V.end())) {
     Symbol *B = Ent.Sym;

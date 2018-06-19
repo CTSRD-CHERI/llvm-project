@@ -43,6 +43,10 @@ public:
   virtual void addPltHeaderSymbols(InputSection &IS) const {}
   virtual void addPltSymbols(InputSection &IS, uint64_t Off) const {}
 
+  unsigned getPltEntryOffset(unsigned Index) const {
+    return Index * PltEntrySize + PltHeaderSize;
+  }
+
   // Returns true if a relocation only uses the low bits of a value such that
   // all those bits are in in the same page. For example, if the relocation
   // only uses the low 12 bits in a system with 4k pages. If this is true, the
@@ -178,6 +182,31 @@ static void checkAlignment(uint8_t *Loc, uint64_t V, RelType Type) {
     error(getErrorLocation(Loc) + "improper alignment for relocation " +
           lld::toString(Type) + ": 0x" + llvm::utohexstr(V) +
           " is not aligned to " + Twine(N) + " bytes");
+}
+
+// Endianness-aware read/write.
+inline uint16_t read16(const void *P) {
+  return llvm::support::endian::read16(P, Config->Endianness);
+}
+
+inline uint32_t read32(const void *P) {
+  return llvm::support::endian::read32(P, Config->Endianness);
+}
+
+inline uint64_t read64(const void *P) {
+  return llvm::support::endian::read64(P, Config->Endianness);
+}
+
+inline void write16(void *P, uint16_t V) {
+  llvm::support::endian::write16(P, V, Config->Endianness);
+}
+
+inline void write32(void *P, uint32_t V) {
+  llvm::support::endian::write32(P, V, Config->Endianness);
+}
+
+inline void write64(void *P, uint64_t V) {
+  llvm::support::endian::write64(P, V, Config->Endianness);
 }
 } // namespace elf
 } // namespace lld

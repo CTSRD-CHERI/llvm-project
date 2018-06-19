@@ -23,6 +23,7 @@
 namespace mca {
 
 class HWEventListener;
+class HWInstructionEvent;
 
 /// \brief An out of order backend for a specific subtarget.
 ///
@@ -70,7 +71,8 @@ public:
             this, MRI, Subtarget.getSchedModel().MicroOpBufferSize,
             RegisterFileSize, MaxRetirePerCycle, DispatchWidth, HWS.get())),
         SM(Source), Cycles(0) {
-    IB = llvm::make_unique<InstrBuilder>(MCII, getProcResourceMasks());
+    IB = llvm::make_unique<InstrBuilder>(MCII, HWS->getProcResourceMasks());
+    HWS->setDispatchUnit(DU.get());
   }
 
   void run() {
@@ -78,27 +80,21 @@ public:
       runCycle(Cycles++);
   }
 
-  unsigned getNumIterations() const { return SM.getNumIterations(); }
-  unsigned getNumInstructions() const { return SM.size(); }
-  unsigned getNumCycles() const { return Cycles; }
+  const Instruction &getInstruction(unsigned Index) const {
+    const auto It = Instructions.find(Index);
+    assert(It != Instructions.end() && "no running instructions with index");
+    assert(It->second);
+    return *It->second;
+  }
+  void eraseInstruction(unsigned Index) { Instructions.erase(Index); }
   unsigned getTotalRegisterMappingsCreated() const {
     return DU->getTotalRegisterMappingsCreated();
   }
   unsigned getMaxUsedRegisterMappings() const {
     return DU->getMaxUsedRegisterMappings();
   }
-  unsigned getDispatchWidth() const { return DU->getDispatchWidth(); }
-
-  const llvm::MCSubtargetInfo &getSTI() const { return STI; }
   const llvm::MCSchedModel &getSchedModel() const {
     return STI.getSchedModel();
-  }
-  const llvm::ArrayRef<uint64_t> getProcResourceMasks() const {
-    return HWS->getProcResourceMasks();
-  }
-
-  double getRThroughput(const InstrDesc &ID) const {
-    return HWS->getRThroughput(ID);
   }
   void getBuffersUsage(std::vector<BufferUsageEntry> &Usage) const {
     return HWS->getBuffersUsage(Usage);
@@ -113,26 +109,10 @@ public:
     return DU->getNumDispatchGroupStalls();
   }
 
-  const llvm::MCInst &getMCInstFromIndex(unsigned Index) const {
-    return SM.getMCInstFromIndex(Index);
-  }
-
-  const InstrDesc &getInstrDesc(const llvm::MCInst &Inst) const {
-    return IB->getOrCreateInstrDesc(STI, Inst);
-  }
-
-  const SourceMgr &getSourceMgr() const { return SM; }
-
   void addEventListener(HWEventListener *Listener);
   void notifyCycleBegin(unsigned Cycle);
-  void notifyInstructionDispatched(unsigned Index);
-  void notifyInstructionReady(unsigned Index);
-  void notifyInstructionIssued(
-      unsigned Index,
-      const llvm::ArrayRef<std::pair<ResourceRef, unsigned>> &Used);
-  void notifyInstructionExecuted(unsigned Index);
+  void notifyInstructionEvent(const HWInstructionEvent &Event);
   void notifyResourceAvailable(const ResourceRef &RR);
-  void notifyInstructionRetired(unsigned Index);
   void notifyCycleEnd(unsigned Cycle);
 };
 

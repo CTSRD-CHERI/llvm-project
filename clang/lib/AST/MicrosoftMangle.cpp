@@ -290,7 +290,7 @@ public:
 
   raw_ostream &getStream() const { return Out; }
 
-  void mangle(const NamedDecl *D, StringRef Prefix = "\01?");
+  void mangle(const NamedDecl *D, StringRef Prefix = "?");
   void mangleName(const NamedDecl *ND);
   void mangleFunctionEncoding(const FunctionDecl *FD, bool ShouldMangle);
   void mangleVariableEncoding(const VarDecl *VD);
@@ -2787,7 +2787,7 @@ MicrosoftMangleContextImpl::mangleVirtualMemPtrThunk(const CXXMethodDecl *MD,
 
   msvc_hashing_ostream MHO(Out);
   MicrosoftCXXNameMangler Mangler(*this, MHO);
-  Mangler.getStream() << "\01?";
+  Mangler.getStream() << '?';
   Mangler.mangleVirtualMemPtrThunk(MD, ML);
 }
 
@@ -2796,7 +2796,7 @@ void MicrosoftMangleContextImpl::mangleThunk(const CXXMethodDecl *MD,
                                              raw_ostream &Out) {
   msvc_hashing_ostream MHO(Out);
   MicrosoftCXXNameMangler Mangler(*this, MHO);
-  Mangler.getStream() << "\01?";
+  Mangler.getStream() << '?';
   Mangler.mangleName(MD);
   mangleThunkThisAdjustment(MD, Thunk.This, Mangler, MHO);
   if (!Thunk.Return.isEmpty())
@@ -2817,7 +2817,7 @@ void MicrosoftMangleContextImpl::mangleCXXDtorThunk(
   assert(Type == Dtor_Deleting);
   msvc_hashing_ostream MHO(Out);
   MicrosoftCXXNameMangler Mangler(*this, MHO, DD, Type);
-  Mangler.getStream() << "\01??_E";
+  Mangler.getStream() << "??_E";
   Mangler.mangleName(DD->getParent());
   mangleThunkThisAdjustment(DD, Adjustment, Mangler, MHO);
   Mangler.mangleFunctionType(DD->getType()->castAs<FunctionProtoType>(), DD);
@@ -2833,9 +2833,9 @@ void MicrosoftMangleContextImpl::mangleCXXVFTable(
   msvc_hashing_ostream MHO(Out);
   MicrosoftCXXNameMangler Mangler(*this, MHO);
   if (Derived->hasAttr<DLLImportAttr>())
-    Mangler.getStream() << "\01??_S";
+    Mangler.getStream() << "??_S";
   else
-    Mangler.getStream() << "\01??_7";
+    Mangler.getStream() << "??_7";
   Mangler.mangleName(Derived);
   Mangler.getStream() << "6B"; // '6' for vftable, 'B' for const.
   for (const CXXRecordDecl *RD : BasePath)
@@ -2852,7 +2852,7 @@ void MicrosoftMangleContextImpl::mangleCXXVBTable(
   // is always '7' for vbtables.
   msvc_hashing_ostream MHO(Out);
   MicrosoftCXXNameMangler Mangler(*this, MHO);
-  Mangler.getStream() << "\01??_8";
+  Mangler.getStream() << "??_8";
   Mangler.mangleName(Derived);
   Mangler.getStream() << "7B";  // '7' for vbtable, 'B' for const.
   for (const CXXRecordDecl *RD : BasePath)
@@ -2863,7 +2863,7 @@ void MicrosoftMangleContextImpl::mangleCXXVBTable(
 void MicrosoftMangleContextImpl::mangleCXXRTTI(QualType T, raw_ostream &Out) {
   msvc_hashing_ostream MHO(Out);
   MicrosoftCXXNameMangler Mangler(*this, MHO);
-  Mangler.getStream() << "\01??_R0";
+  Mangler.getStream() << "??_R0";
   Mangler.mangleType(T, SourceRange(), MicrosoftCXXNameMangler::QMM_Result);
   Mangler.getStream() << "@8";
 }
@@ -2879,7 +2879,7 @@ void MicrosoftMangleContextImpl::mangleCXXVirtualDisplacementMap(
     const CXXRecordDecl *SrcRD, const CXXRecordDecl *DstRD, raw_ostream &Out) {
   msvc_hashing_ostream MHO(Out);
   MicrosoftCXXNameMangler Mangler(*this, MHO);
-  Mangler.getStream() << "\01??_K";
+  Mangler.getStream() << "??_K";
   Mangler.mangleName(SrcRD);
   Mangler.getStream() << "$C";
   Mangler.mangleName(DstRD);
@@ -2925,7 +2925,7 @@ void MicrosoftMangleContextImpl::mangleCXXCatchableType(
     msvc_hashing_ostream MHO(Stream);
     mangleCXXRTTI(T, MHO);
   }
-  Mangler.getStream() << RTTIMangling.substr(1);
+  Mangler.getStream() << RTTIMangling;
 
   // VS2015 CTP6 omits the copy-constructor in the mangled name.  This name is,
   // in fact, superfluous but I'm not sure the change was made consciously.
@@ -2937,7 +2937,7 @@ void MicrosoftMangleContextImpl::mangleCXXCatchableType(
     msvc_hashing_ostream MHO(Stream);
     mangleCXXCtor(CD, CT, MHO);
   }
-  Mangler.getStream() << CopyCtorMangling.substr(1);
+  Mangler.getStream() << CopyCtorMangling;
 
   Mangler.getStream() << Size;
   if (VBPtrOffset == -1) {
@@ -2956,7 +2956,7 @@ void MicrosoftMangleContextImpl::mangleCXXRTTIBaseClassDescriptor(
     uint32_t VBTableOffset, uint32_t Flags, raw_ostream &Out) {
   msvc_hashing_ostream MHO(Out);
   MicrosoftCXXNameMangler Mangler(*this, MHO);
-  Mangler.getStream() << "\01??_R1";
+  Mangler.getStream() << "??_R1";
   Mangler.mangleNumber(NVOffset);
   Mangler.mangleNumber(VBPtrOffset);
   Mangler.mangleNumber(VBTableOffset);
@@ -2969,7 +2969,7 @@ void MicrosoftMangleContextImpl::mangleCXXRTTIBaseClassArray(
     const CXXRecordDecl *Derived, raw_ostream &Out) {
   msvc_hashing_ostream MHO(Out);
   MicrosoftCXXNameMangler Mangler(*this, MHO);
-  Mangler.getStream() << "\01??_R2";
+  Mangler.getStream() << "??_R2";
   Mangler.mangleName(Derived);
   Mangler.getStream() << "8";
 }
@@ -2978,7 +2978,7 @@ void MicrosoftMangleContextImpl::mangleCXXRTTIClassHierarchyDescriptor(
     const CXXRecordDecl *Derived, raw_ostream &Out) {
   msvc_hashing_ostream MHO(Out);
   MicrosoftCXXNameMangler Mangler(*this, MHO);
-  Mangler.getStream() << "\01??_R3";
+  Mangler.getStream() << "??_R3";
   Mangler.mangleName(Derived);
   Mangler.getStream() << "8";
 }
@@ -2994,16 +2994,16 @@ void MicrosoftMangleContextImpl::mangleCXXRTTICompleteObjectLocator(
   llvm::raw_svector_ostream Stream(VFTableMangling);
   mangleCXXVFTable(Derived, BasePath, Stream);
 
-  if (VFTableMangling.startswith("\01??@")) {
+  if (VFTableMangling.startswith("??@")) {
     assert(VFTableMangling.endswith("@"));
     Out << VFTableMangling << "??_R4@";
     return;
   }
 
-  assert(VFTableMangling.startswith("\01??_7") ||
-         VFTableMangling.startswith("\01??_S"));
+  assert(VFTableMangling.startswith("??_7") ||
+         VFTableMangling.startswith("??_S"));
 
-  Out << "\01??_R4" << StringRef(VFTableMangling).drop_front(5);
+  Out << "??_R4" << StringRef(VFTableMangling).drop_front(4);
 }
 
 void MicrosoftMangleContextImpl::mangleSEHFilterExpression(
@@ -3014,7 +3014,7 @@ void MicrosoftMangleContextImpl::mangleSEHFilterExpression(
   // so the numbering here doesn't have to be the same across TUs.
   //
   // <mangled-name> ::= ?filt$ <filter-number> @0
-  Mangler.getStream() << "\01?filt$" << SEHFilterIds[EnclosingDecl]++ << "@0@";
+  Mangler.getStream() << "?filt$" << SEHFilterIds[EnclosingDecl]++ << "@0@";
   Mangler.mangleName(EnclosingDecl);
 }
 
@@ -3026,7 +3026,7 @@ void MicrosoftMangleContextImpl::mangleSEHFinallyBlock(
   // so the numbering here doesn't have to be the same across TUs.
   //
   // <mangled-name> ::= ?fin$ <filter-number> @0
-  Mangler.getStream() << "\01?fin$" << SEHFinallyIds[EnclosingDecl]++ << "@0@";
+  Mangler.getStream() << "?fin$" << SEHFinallyIds[EnclosingDecl]++ << "@0@";
   Mangler.mangleName(EnclosingDecl);
 }
 
@@ -3059,7 +3059,7 @@ void MicrosoftMangleContextImpl::mangleReferenceTemporary(
   msvc_hashing_ostream MHO(Out);
   MicrosoftCXXNameMangler Mangler(*this, MHO);
 
-  Mangler.getStream() << "\01?$RT" << ManglingNumber << '@';
+  Mangler.getStream() << "?$RT" << ManglingNumber << '@';
   Mangler.mangle(VD, "");
 }
 
@@ -3068,7 +3068,7 @@ void MicrosoftMangleContextImpl::mangleThreadSafeStaticGuardVariable(
   msvc_hashing_ostream MHO(Out);
   MicrosoftCXXNameMangler Mangler(*this, MHO);
 
-  Mangler.getStream() << "\01?$TSS" << GuardNum << '@';
+  Mangler.getStream() << "?$TSS" << GuardNum << '@';
   Mangler.mangleNestedName(VD);
   Mangler.getStream() << "@4HA";
 }
@@ -3090,9 +3090,9 @@ void MicrosoftMangleContextImpl::mangleStaticGuardVariable(const VarDecl *VD,
 
   bool Visible = VD->isExternallyVisible();
   if (Visible) {
-    Mangler.getStream() << (VD->getTLSKind() ? "\01??__J" : "\01??_B");
+    Mangler.getStream() << (VD->getTLSKind() ? "??__J" : "??_B");
   } else {
-    Mangler.getStream() << "\01?$S1@";
+    Mangler.getStream() << "?$S1@";
   }
   unsigned ScopeDepth = 0;
   if (Visible && !getNextDiscriminator(VD, ScopeDepth))
@@ -3112,7 +3112,7 @@ void MicrosoftMangleContextImpl::mangleInitFiniStub(const VarDecl *D,
                                                     raw_ostream &Out) {
   msvc_hashing_ostream MHO(Out);
   MicrosoftCXXNameMangler Mangler(*this, MHO);
-  Mangler.getStream() << "\01??__" << CharCode;
+  Mangler.getStream() << "??__" << CharCode;
   Mangler.mangleName(D);
   if (D->isStaticDataMember()) {
     Mangler.mangleVariableEncoding(D);
@@ -3158,7 +3158,7 @@ void MicrosoftMangleContextImpl::mangleStringLiteral(const StringLiteral *SL,
   // <literal> ::= '??_C@_' <char-type> <literal-length> <encoded-crc>
   //               <encoded-string> '@'
   MicrosoftCXXNameMangler Mangler(*this, Out);
-  Mangler.getStream() << "\01??_C@_";
+  Mangler.getStream() << "??_C@_";
 
   // <char-type>: The "kind" of string literal is encoded into the mangled name.
   if (SL->isWide())
