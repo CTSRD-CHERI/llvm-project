@@ -21,14 +21,15 @@ def updateGithubStatus(String message) {
     }
 }
 
-def doGit(String url, String branch, String subdir) {
+def doGit(String url, String branch, String subdir, String referenceDirName) {
+    String referenceDir = "/var/tmp/git-reference-repos/${referenceDirName}"
     def options = [ changelog: true, poll: true,
                     scm: [$class: 'GitSCM',
                           doGenerateSubmoduleConfigurations: false,
                           branches: [[name: "refs/heads/${branch}"]],
                           extensions: [/* to skip polling: [$class: 'IgnoreNotifyCommit'], */
                                        [$class: 'RelativeTargetDirectory', relativeTargetDir: subdir],
-                                       [$class: 'CloneOption', noTags: false, reference: '', shallow: true, depth: 10, timeout: 60],
+                                       [$class: 'CloneOption', noTags: false, reference: referenceDir, shallow: false, depth: 10, timeout: 60],
                                        // Uncomment for git problems debugging: /* Clean clone: */ [$class: 'WipeWorkspace'],
                                        // [$class: 'LocalBranch', localBranch: branch]
                           ],
@@ -73,11 +74,11 @@ def doBuild() {
     stage("Checkout sources") {
         timestamps {
             echo("scm=${scm}")
-            llvmRepo = doGit('https://github.com/CTSRD-CHERI/llvm', llvmBranch, 'llvm')
+            llvmRepo = doGit('https://github.com/CTSRD-CHERI/llvm', llvmBranch, 'llvm', 'llvm')
             echo("LLVM = ${llvmRepo}")
-            clangRepo = doGit('https://github.com/CTSRD-CHERI/clang', clangBranch, 'llvm/tools/clang')
+            clangRepo = doGit('https://github.com/CTSRD-CHERI/clang', clangBranch, 'llvm/tools/clang', 'clang')
             echo("CLANG = ${clangRepo}")
-            lldRepo = doGit('https://github.com/CTSRD-CHERI/lld', lldBranch, 'llvm/tools/lld')
+            lldRepo = doGit('https://github.com/CTSRD-CHERI/lld', lldBranch, 'llvm/tools/lld', 'lld')
             echo("LLD = ${lldRepo}")
         }
     }
