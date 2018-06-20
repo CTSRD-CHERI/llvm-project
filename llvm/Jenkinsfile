@@ -59,9 +59,9 @@ set -xe
 cd \${WORKSPACE}/llvm-build
 # run tests
 rm -fv "\${WORKSPACE}/llvm-test-output.xml"
-ninja check-all-{targetSuffix} \${JFLAG} || echo "Some ${targetSuffix} tests failed!"
+ninja check-all-${targetSuffix} \${JFLAG} || echo "Some ${targetSuffix} tests failed!"
 mv -fv "\${WORKSPACE}/llvm-test-output.xml" "\${WORKSPACE}/llvm-test-output-${targetSuffix}.xml"
-echo "Done running {targetSuffix} tests"
+echo "Done running ${targetSuffix} tests"
 """
         junit healthScaleFactor: 2.0, testResults: "llvm-test-output-${targetSuffix}.xml"
     }
