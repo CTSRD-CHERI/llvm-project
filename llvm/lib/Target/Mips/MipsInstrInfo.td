@@ -2049,7 +2049,6 @@ def SDC2 : StdMMR6Rel, SW_FT2<"sdc2", COP2Opnd, II_SDC2, store>,
            LW_FM<0x3e>, ISA_MIPS2_NOT_32R6_64R6;
 }
 
-let AdditionalPredicates = [NotInMicroMips] in {
 // COP3 Memory Instructions
 let DecoderNamespace = "COP3_" in {
   def LWC3 : LW_FT3<"lwc3", COP3Opnd, II_LWC3, load>, LW_FM<0x33>,

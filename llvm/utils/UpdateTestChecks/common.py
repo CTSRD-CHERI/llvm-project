@@ -87,7 +87,7 @@ def build_function_body_dictionary(function_re, scrubber, scrubber_args, raw_too
       continue
     func = m.group('func')
     scrubbed_body = scrubber(m.group('body'), *scrubber_args)
-    if m.groupdict().has_key('analysis'):
+    if 'analysis' in m.groupdict():
       analysis = m.group('analysis')
       if analysis.lower() != 'cost model analysis':
         print('WARNING: Unsupported analysis mode: %r!' % (analysis,), file=sys.stderr)
