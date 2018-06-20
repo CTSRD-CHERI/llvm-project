@@ -775,7 +775,8 @@ static std::string DetectLibcxxIncludePath(StringRef base) {
   return MaxVersion ? (base + "/" + MaxVersionString).str() : "";
 }
 
-std::string Linux::findLibCxxIncludePath() const {
+void Linux::addLibCxxIncludePaths(const llvm::opt::ArgList &DriverArgs,
+                                  llvm::opt::ArgStringList &CC1Args) const {
   const std::string LibCXXIncludePathCandidates[] = {
       DetectLibcxxIncludePath(getDriver().Dir + "/../include/c++"),
       // If this is a development, non-installed, clang, libcxx will
@@ -787,9 +788,9 @@ std::string Linux::findLibCxxIncludePath() const {
     if (IncludePath.empty() || !getVFS().exists(IncludePath))
       continue;
     // Use the first candidate that exists.
-    return IncludePath;
+    addSystemInclude(DriverArgs, CC1Args, IncludePath);
+    return;
   }
-  return "";
 }
 
 void Linux::addLibStdCxxIncludePaths(const llvm::opt::ArgList &DriverArgs,
@@ -899,8 +900,10 @@ SanitizerMask Linux::getSupportedSanitizers() const {
     Res |= SanitizerKind::Function;
   if (IsX86_64 || IsMIPS64 || IsAArch64 || IsX86 || IsMIPS || IsArmArch)
     Res |= SanitizerKind::Scudo;
-  if (IsX86_64 || IsAArch64)
+  if (IsX86_64 || IsAArch64) {
     Res |= SanitizerKind::HWAddress;
+    Res |= SanitizerKind::KernelHWAddress;
+  }
   return Res;
 }
 

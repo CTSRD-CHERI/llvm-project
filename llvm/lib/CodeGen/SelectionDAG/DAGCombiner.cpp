@@ -668,8 +668,12 @@ static char isNegatibleForFree(SDValue Op, bool LegalOperations,
   // fneg is removable even if it has multiple uses.
   if (Op.getOpcode() == ISD::FNEG) return 2;
 
-  // Don't allow anything with multiple uses.
-  if (!Op.hasOneUse()) return 0;
+  // Don't allow anything with multiple uses unless we know it is free.
+  EVT VT = Op.getValueType();
+  if (!Op.hasOneUse())
+    if (!(Op.getOpcode() == ISD::FP_EXTEND &&
+          TLI.isFPExtFree(VT, Op.getOperand(0).getValueType())))
+      return 0;
 
   // Don't recurse exponentially.
   if (Depth > 6) return 0;
@@ -682,7 +686,6 @@ static char isNegatibleForFree(SDValue Op, bool LegalOperations,
 
     // Don't invert constant FP values after legalization unless the target says
     // the negated constant is legal.
-    EVT VT = Op.getValueType();
     return TLI.isOperationLegal(ISD::ConstantFP, VT) ||
       TLI.isFPImmLegal(neg(cast<ConstantFPSDNode>(Op)->getValueAPF()), VT);
   }
@@ -691,8 +694,7 @@ static char isNegatibleForFree(SDValue Op, bool LegalOperations,
     if (!Options->UnsafeFPMath) return 0;
 
     // After operation legalization, it might not be legal to create new FSUBs.
-    if (LegalOperations &&
-        !TLI.isOperationLegalOrCustom(ISD::FSUB,  Op.getValueType()))
+    if (LegalOperations && !TLI.isOperationLegalOrCustom(ISD::FSUB, VT))
       return 0;
 
     // fold (fneg (fadd A, B)) -> (fsub (fneg A), B)
@@ -737,9 +739,6 @@ static SDValue GetNegatedExpression(SDValue Op, SelectionDAG &DAG,
   const TargetOptions &Options = DAG.getTarget().Options;
   // fneg is removable even if it has multiple uses.
   if (Op.getOpcode() == ISD::FNEG) return Op.getOperand(0);
-
-  // Don't allow anything with multiple uses.
-  assert(Op.hasOneUse() && "Unknown reuse!");
 
   assert(Depth <= 6 && "GetNegatedExpression doesn't match isNegatibleForFree");
 
@@ -3843,6 +3842,17 @@ bool DAGCombiner::isLegalNarrowLoad(LoadSDNode *LoadN, ISD::LoadExtType ExtType,
   // uses gets things wrong.
   if (LoadN->getNumValues() > 2)
     return false;
+
+ // Only allow byte offsets.
+  if (ShAmt % 8)
+    return false;
+
+  // Ensure that this isn't going to produce an unsupported unaligned access.
+  if (ShAmt && !TLI.allowsMemoryAccess(*DAG.getContext(), DAG.getDataLayout(),
+                                       ExtVT, LoadN->getAddressSpace(),
+                                       ShAmt / 8))
+    return false;
+
 
   // If the load that we're shrinking is an extload and we're not just
   // discarding the extension we can't simply shrink the load. Bail.
@@ -8450,8 +8460,9 @@ SDValue DAGCombiner::ReduceLoadWidth(SDNode *N) {
 
   unsigned ShAmt = 0;
   if (N0.getOpcode() == ISD::SRL && N0.hasOneUse()) {
-    if (ConstantSDNode *N01 = dyn_cast<ConstantSDNode>(N0.getOperand(1))) {
-      ShAmt = N01->getZExtValue();
+    SDValue SRL = N0;
+    if (auto *ConstShift = dyn_cast<ConstantSDNode>(SRL.getOperand(1))) {
+      ShAmt = ConstShift->getZExtValue();
       unsigned EVTBits = ExtVT.getSizeInBits();
       // Is the shift amount a multiple of size of VT?
       if ((ShAmt & (EVTBits-1)) == 0) {
@@ -8464,17 +8475,35 @@ SDValue DAGCombiner::ReduceLoadWidth(SDNode *N) {
       // At this point, we must have a load or else we can't do the transform.
       if (!isa<LoadSDNode>(N0)) return SDValue();
 
+      auto *LN0 = cast<LoadSDNode>(N0);
+
       // Because a SRL must be assumed to *need* to zero-extend the high bits
       // (as opposed to anyext the high bits), we can't combine the zextload
       // lowering of SRL and an sextload.
-      if (cast<LoadSDNode>(N0)->getExtensionType() == ISD::SEXTLOAD)
+      if (LN0->getExtensionType() == ISD::SEXTLOAD)
         return SDValue();
 
       // If the shift amount is larger than the input type then we're not
       // accessing any of the loaded bytes.  If the load was a zextload/extload
       // then the result of the shift+trunc is zero/undef (handled elsewhere).
-      if (ShAmt >= cast<LoadSDNode>(N0)->getMemoryVT().getSizeInBits())
+      if (ShAmt >= LN0->getMemoryVT().getSizeInBits())
         return SDValue();
+
+      // If the SRL is only used by a masking AND, we may be able to adjust
+      // the ExtVT to make the AND redundant.
+      SDNode *Mask = *(SRL->use_begin());
+      if (Mask->getOpcode() == ISD::AND &&
+          isa<ConstantSDNode>(Mask->getOperand(1))) {
+        const APInt &ShiftMask =
+          cast<ConstantSDNode>(Mask->getOperand(1))->getAPIntValue();
+        if (ShiftMask.isMask()) {
+          EVT MaskedVT = EVT::getIntegerVT(*DAG.getContext(),
+                                           ShiftMask.countTrailingOnes());
+          // Recompute the type.
+          if (TLI.isLoadExtLegal(ExtType, N0.getValueType(), MaskedVT))
+            ExtVT = MaskedVT;
+        }
+      }
     }
   }
 
@@ -10876,15 +10905,6 @@ SDValue DAGCombiner::visitSINT_TO_FP(SDNode *N) {
     }
   }
 
-  // fptosi rounds towards zero, so converting from FP to integer and back is
-  // the same as an 'ftrunc': sitofp (fptosi X) --> ftrunc X
-  // We only do this if the target has legal ftrunc, otherwise we'd likely be
-  // replacing casts with a libcall.
-  if (N0.getOpcode() == ISD::FP_TO_SINT &&
-      N0.getOperand(0).getValueType() == VT &&
-      TLI.isOperationLegal(ISD::FTRUNC, VT))
-    return DAG.getNode(ISD::FTRUNC, SDLoc(N), VT, N0.getOperand(0));
-
   return SDValue();
 }
 
@@ -10923,15 +10943,6 @@ SDValue DAGCombiner::visitUINT_TO_FP(SDNode *N) {
       return DAG.getNode(ISD::SELECT_CC, DL, VT, Ops);
     }
   }
-
-  // fptoui rounds towards zero, so converting from FP to integer and back is
-  // the same as an 'ftrunc': uitofp (fptoui X) --> ftrunc X
-  // We only do this if the target has legal ftrunc, otherwise we'd likely be
-  // replacing casts with a libcall.
-  if (N0.getOpcode() == ISD::FP_TO_UINT &&
-      N0.getOperand(0).getValueType() == VT &&
-      TLI.isOperationLegal(ISD::FTRUNC, VT))
-    return DAG.getNode(ISD::FTRUNC, SDLoc(N), VT, N0.getOperand(0));
 
   return SDValue();
 }

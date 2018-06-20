@@ -527,6 +527,9 @@ ARMTargetLowering::ARMTargetLowering(const TargetMachine &TM,
     setOperationAction(ISD::BITCAST, MVT::i16, Custom);
     setOperationAction(ISD::BITCAST, MVT::i32, Custom);
     setOperationAction(ISD::BITCAST, MVT::f16, Custom);
+
+    setOperationAction(ISD::FMINNUM, MVT::f16, Legal);
+    setOperationAction(ISD::FMAXNUM, MVT::f16, Legal);
   }
 
   for (MVT VT : MVT::vector_valuetypes()) {
@@ -1047,16 +1050,19 @@ ARMTargetLowering::ARMTargetLowering(const TargetMachine &TM,
     setLibcallName(RTLIB::UNWIND_RESUME, "_Unwind_SjLj_Resume");
 
   setOperationAction(ISD::SETCC,     MVT::i32, Expand);
-  setOperationAction(ISD::SETCC,     MVT::f16, Expand);
   setOperationAction(ISD::SETCC,     MVT::f32, Expand);
   setOperationAction(ISD::SETCC,     MVT::f64, Expand);
   setOperationAction(ISD::SELECT,    MVT::i32, Custom);
   setOperationAction(ISD::SELECT,    MVT::f32, Custom);
   setOperationAction(ISD::SELECT,    MVT::f64, Custom);
-  setOperationAction(ISD::SELECT_CC, MVT::f16, Custom);
   setOperationAction(ISD::SELECT_CC, MVT::i32, Custom);
   setOperationAction(ISD::SELECT_CC, MVT::f32, Custom);
   setOperationAction(ISD::SELECT_CC, MVT::f64, Custom);
+  if (Subtarget->hasFullFP16()) {
+    setOperationAction(ISD::SETCC,     MVT::f16, Expand);
+    setOperationAction(ISD::SELECT,    MVT::f16, Custom);
+    setOperationAction(ISD::SELECT_CC, MVT::f16, Custom);
+  }
 
   // Thumb-1 cannot currently select ARMISD::SUBE.
   if (!Subtarget->isThumb1Only())
@@ -1064,7 +1070,8 @@ ARMTargetLowering::ARMTargetLowering(const TargetMachine &TM,
 
   setOperationAction(ISD::BRCOND,    MVT::Other, Custom);
   setOperationAction(ISD::BR_CC,     MVT::i32,   Custom);
-  setOperationAction(ISD::BR_CC,     MVT::f16,   Custom);
+  if (Subtarget->hasFullFP16())
+      setOperationAction(ISD::BR_CC, MVT::f16,   Custom);
   setOperationAction(ISD::BR_CC,     MVT::f32,   Custom);
   setOperationAction(ISD::BR_CC,     MVT::f64,   Custom);
   setOperationAction(ISD::BR_JT,     MVT::Other, Custom);
@@ -1143,6 +1150,8 @@ ARMTargetLowering::ARMTargetLowering(const TargetMachine &TM,
   if (Subtarget->hasNEON()) {
     // vmin and vmax aren't available in a scalar form, so we use
     // a NEON instruction with an undef lane instead.
+    setOperationAction(ISD::FMINNAN, MVT::f16, Legal);
+    setOperationAction(ISD::FMAXNAN, MVT::f16, Legal);
     setOperationAction(ISD::FMINNAN, MVT::f32, Legal);
     setOperationAction(ISD::FMAXNAN, MVT::f32, Legal);
     setOperationAction(ISD::FMINNAN, MVT::v2f32, Legal);
@@ -4522,7 +4531,9 @@ SDValue ARMTargetLowering::LowerSELECT_CC(SDValue Op, SelectionDAG &DAG) const {
   // Normalize the fp compare. If RHS is zero we keep it there so we match
   // CMPFPw0 instead of CMPFP.
   if (Subtarget->hasFPARMv8() && !isFloatingPointZero(RHS) &&
-    (TrueVal.getValueType() == MVT::f32 || TrueVal.getValueType() == MVT::f64)) {
+     (TrueVal.getValueType() == MVT::f16 ||
+      TrueVal.getValueType() == MVT::f32 ||
+      TrueVal.getValueType() == MVT::f64)) {
     bool swpCmpOps = false;
     bool swpVselOps = false;
     checkVSELConstraints(CC, CondCode, swpCmpOps, swpVselOps);

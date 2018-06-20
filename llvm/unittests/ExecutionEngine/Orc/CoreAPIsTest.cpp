@@ -22,20 +22,30 @@ namespace {
 class SimpleMaterializationUnit : public MaterializationUnit {
 public:
   using GetSymbolsFunction = std::function<SymbolFlagsMap()>;
-  using MaterializeFunction = std::function<Error(VSO &)>;
-  using DiscardFunction = std::function<void(VSO &, SymbolStringPtr)>;
+  using MaterializeFunction =
+      std::function<void(MaterializationResponsibility)>;
+  using DiscardFunction = std::function<void(const VSO &, SymbolStringPtr)>;
+  using DestructorFunction = std::function<void()>;
 
-  SimpleMaterializationUnit(GetSymbolsFunction GetSymbols,
-                            MaterializeFunction Materialize,
-                            DiscardFunction Discard)
+  SimpleMaterializationUnit(
+      GetSymbolsFunction GetSymbols, MaterializeFunction Materialize,
+      DiscardFunction Discard,
+      DestructorFunction Destructor = DestructorFunction())
       : GetSymbols(std::move(GetSymbols)), Materialize(std::move(Materialize)),
-        Discard(std::move(Discard)) {}
+        Discard(std::move(Discard)), Destructor(std::move(Destructor)) {}
+
+  ~SimpleMaterializationUnit() override {
+    if (Destructor)
+      Destructor();
+  }
 
   SymbolFlagsMap getSymbols() override { return GetSymbols(); }
 
-  Error materialize(VSO &V) override { return Materialize(V); }
+  void materialize(MaterializationResponsibility R) override {
+    Materialize(std::move(R));
+  }
 
-  void discard(VSO &V, SymbolStringPtr Name) override {
+  void discard(const VSO &V, SymbolStringPtr Name) override {
     Discard(V, std::move(Name));
   }
 
@@ -43,6 +53,7 @@ private:
   GetSymbolsFunction GetSymbols;
   MaterializeFunction Materialize;
   DiscardFunction Discard;
+  DestructorFunction Destructor;
 };
 
 TEST(CoreAPIsTest, AsynchronousSymbolQuerySuccessfulResolutionOnly) {
@@ -68,7 +79,7 @@ TEST(CoreAPIsTest, AsynchronousSymbolQuerySuccessfulResolutionOnly) {
 
   AsynchronousSymbolQuery Q(Names, OnResolution, OnReady);
 
-  Q.setDefinition(Foo, JITEvaluatedSymbol(FakeAddr, JITSymbolFlags::Exported));
+  Q.resolve(Foo, JITEvaluatedSymbol(FakeAddr, JITSymbolFlags::Exported));
 
   EXPECT_TRUE(OnResolutionRun) << "OnResolutionCallback was not run";
   EXPECT_FALSE(OnReadyRun) << "OnReady unexpectedly run";
@@ -95,7 +106,8 @@ TEST(CoreAPIsTest, AsynchronousSymbolQueryResolutionErrorOnly) {
 
   AsynchronousSymbolQuery Q(Names, OnResolution, OnReady);
 
-  Q.setFailed(make_error<StringError>("xyz", inconvertibleErrorCode()));
+  Q.notifyMaterializationFailed(
+      make_error<StringError>("xyz", inconvertibleErrorCode()));
 
   EXPECT_TRUE(OnResolutionRun) << "OnResolutionCallback was not run";
   EXPECT_FALSE(OnReadyRun) << "OnReady unexpectedly run";
@@ -157,10 +169,10 @@ TEST(CoreAPIsTest, LookupFlagsTest) {
       [=]() {
         return SymbolFlagsMap({{Bar, BarFlags}});
       },
-      [](VSO &V) -> Error {
+      [](MaterializationResponsibility R) {
         llvm_unreachable("Symbol materialized on flags lookup");
       },
-      [](VSO &V, SymbolStringPtr Name) -> Error {
+      [](const VSO &V, SymbolStringPtr Name) {
         llvm_unreachable("Symbol finalized on flags lookup");
       });
 
@@ -186,6 +198,44 @@ TEST(CoreAPIsTest, LookupFlagsTest) {
   EXPECT_EQ(SymbolFlags[Bar], BarFlags) << "Incorrect flags returned for Bar";
 }
 
+TEST(CoreAPIsTest, DropMaterializerWhenEmpty) {
+  SymbolStringPool SP;
+  auto Foo = SP.intern("foo");
+  auto Bar = SP.intern("bar");
+
+  bool DestructorRun = false;
+
+  auto MU = llvm::make_unique<SimpleMaterializationUnit>(
+      [=]() {
+        return SymbolFlagsMap(
+            {{Foo, JITSymbolFlags::Weak}, {Bar, JITSymbolFlags::Weak}});
+      },
+      [](MaterializationResponsibility R) {
+        llvm_unreachable("Unexpected call to materialize");
+      },
+      [&](const VSO &V, SymbolStringPtr Name) {
+        EXPECT_TRUE(Name == Foo || Name == Bar)
+            << "Discard of unexpected symbol?";
+      },
+      [&]() { DestructorRun = true; });
+
+  VSO V;
+
+  cantFail(V.defineLazy(std::move(MU)));
+
+  auto FooSym = JITEvaluatedSymbol(1, JITSymbolFlags::Exported);
+  auto BarSym = JITEvaluatedSymbol(2, JITSymbolFlags::Exported);
+  cantFail(V.define(SymbolMap({{Foo, FooSym}})));
+
+  EXPECT_FALSE(DestructorRun)
+      << "MaterializationUnit should not have been destroyed yet";
+
+  cantFail(V.define(SymbolMap({{Bar, BarSym}})));
+
+  EXPECT_TRUE(DestructorRun)
+      << "MaterializationUnit should have been destroyed";
+}
+
 TEST(CoreAPIsTest, AddAndMaterializeLazySymbol) {
 
   constexpr JITTargetAddress FakeFooAddr = 0xdeadbeef;
@@ -207,19 +257,16 @@ TEST(CoreAPIsTest, AddAndMaterializeLazySymbol) {
              {Bar, static_cast<JITSymbolFlags::FlagNames>(
                        JITSymbolFlags::Exported | JITSymbolFlags::Weak)}});
       },
-      [&](VSO &V) {
+      [&](MaterializationResponsibility R) {
         assert(BarDiscarded && "Bar should have been discarded by this point");
         SymbolMap SymbolsToResolve;
         SymbolsToResolve[Foo] =
             JITEvaluatedSymbol(FakeFooAddr, JITSymbolFlags::Exported);
-        V.resolve(std::move(SymbolsToResolve));
-        SymbolNameSet SymbolsToFinalize;
-        SymbolsToFinalize.insert(Foo);
-        V.finalize(SymbolsToFinalize);
+        R.resolve(std::move(SymbolsToResolve));
+        R.finalize();
         FooMaterialized = true;
-        return Error::success();
       },
-      [&](VSO &V, SymbolStringPtr Name) {
+      [&](const VSO &V, SymbolStringPtr Name) {
         EXPECT_EQ(Name, Bar) << "Expected Name to be Bar";
         BarDiscarded = true;
       });
@@ -254,14 +301,125 @@ TEST(CoreAPIsTest, AddAndMaterializeLazySymbol) {
 
   auto LR = V.lookup(std::move(Q), Names);
 
-  for (auto &SWKV : LR.MaterializationUnits)
-    cantFail(SWKV->materialize(V));
+  for (auto &M : LR.Materializers)
+    M();
 
   EXPECT_TRUE(LR.UnresolvedSymbols.empty()) << "Could not find Foo in dylib";
   EXPECT_TRUE(FooMaterialized) << "Foo was not materialized";
   EXPECT_TRUE(BarDiscarded) << "Bar was not discarded";
   EXPECT_TRUE(OnResolutionRun) << "OnResolutionCallback was not run";
   EXPECT_TRUE(OnReadyRun) << "OnReady was not run";
+}
+
+TEST(CoreAPIsTest, FailResolution) {
+  SymbolStringPool SP;
+  auto Foo = SP.intern("foo");
+  auto Bar = SP.intern("bar");
+
+  SymbolNameSet Names({Foo, Bar});
+
+  auto MU = llvm::make_unique<SimpleMaterializationUnit>(
+      [=]() {
+        return SymbolFlagsMap(
+            {{Foo, JITSymbolFlags::Weak}, {Bar, JITSymbolFlags::Weak}});
+      },
+      [&](MaterializationResponsibility R) { R.notifyMaterializationFailed(); },
+      [&](const VSO &V, SymbolStringPtr Name) {
+        llvm_unreachable("Unexpected call to discard");
+      });
+
+  VSO V;
+
+  cantFail(V.defineLazy(std::move(MU)));
+
+  auto OnResolution = [&](Expected<SymbolMap> Result) {
+    handleAllErrors(Result.takeError(),
+                    [&](FailedToResolve &F) {
+                      EXPECT_EQ(F.getSymbols(), Names)
+                          << "Expected to fail on symbols in Names";
+                    },
+                    [](ErrorInfoBase &EIB) {
+                      std::string ErrMsg;
+                      {
+                        raw_string_ostream ErrOut(ErrMsg);
+                        EIB.log(ErrOut);
+                      }
+                      ADD_FAILURE()
+                          << "Expected a FailedToResolve error. Got:\n"
+                          << ErrMsg;
+                    });
+  };
+
+  auto OnReady = [](Error Err) {
+    cantFail(std::move(Err));
+    ADD_FAILURE() << "OnReady should never be called";
+  };
+
+  auto Q =
+      std::make_shared<AsynchronousSymbolQuery>(Names, OnResolution, OnReady);
+
+  auto LR = V.lookup(std::move(Q), Names);
+  for (auto &M : LR.Materializers)
+    M();
+}
+
+TEST(CoreAPIsTest, FailFinalization) {
+  SymbolStringPool SP;
+  auto Foo = SP.intern("foo");
+  auto Bar = SP.intern("bar");
+
+  SymbolNameSet Names({Foo, Bar});
+
+  auto MU = llvm::make_unique<SimpleMaterializationUnit>(
+      [=]() {
+        return SymbolFlagsMap(
+            {{Foo, JITSymbolFlags::Exported}, {Bar, JITSymbolFlags::Exported}});
+      },
+      [&](MaterializationResponsibility R) {
+        constexpr JITTargetAddress FakeFooAddr = 0xdeadbeef;
+        constexpr JITTargetAddress FakeBarAddr = 0xcafef00d;
+
+        auto FooSym = JITEvaluatedSymbol(FakeFooAddr, JITSymbolFlags::Exported);
+        auto BarSym = JITEvaluatedSymbol(FakeBarAddr, JITSymbolFlags::Exported);
+        R.resolve(SymbolMap({{Foo, FooSym}, {Bar, BarSym}}));
+        R.notifyMaterializationFailed();
+      },
+      [&](const VSO &V, SymbolStringPtr Name) {
+        llvm_unreachable("Unexpected call to discard");
+      });
+
+  VSO V;
+
+  cantFail(V.defineLazy(std::move(MU)));
+
+  auto OnResolution = [](Expected<SymbolMap> Result) {
+    cantFail(std::move(Result));
+  };
+
+  auto OnReady = [&](Error Err) {
+    handleAllErrors(std::move(Err),
+                    [&](FailedToFinalize &F) {
+                      EXPECT_EQ(F.getSymbols(), Names)
+                          << "Expected to fail on symbols in Names";
+                    },
+                    [](ErrorInfoBase &EIB) {
+                      std::string ErrMsg;
+                      {
+                        raw_string_ostream ErrOut(ErrMsg);
+                        EIB.log(ErrOut);
+                      }
+                      ADD_FAILURE()
+                          << "Expected a FailedToFinalize error. Got:\n"
+                          << ErrMsg;
+                    });
+  };
+
+  auto Q =
+      std::make_shared<AsynchronousSymbolQuery>(Names, OnResolution, OnReady);
+
+  auto LR = V.lookup(std::move(Q), Names);
+  for (auto &M : LR.Materializers)
+    M();
 }
 
 TEST(CoreAPIsTest, TestLambdaSymbolResolver) {
@@ -282,7 +440,7 @@ TEST(CoreAPIsTest, TestLambdaSymbolResolver) {
       },
       [&](std::shared_ptr<AsynchronousSymbolQuery> Q, SymbolNameSet Symbols) {
         auto LR = V.lookup(std::move(Q), Symbols);
-        assert(LR.MaterializationUnits.empty() &&
+        assert(LR.Materializers.empty() &&
                "Test generated unexpected materialization work?");
         return std::move(LR.UnresolvedSymbols);
       });
@@ -342,12 +500,11 @@ TEST(CoreAPIsTest, TestLookupWithUnthreadedMaterialization) {
       [=]() {
         return SymbolFlagsMap({{Foo, JITSymbolFlags::Exported}});
       },
-      [&](VSO &V) -> Error {
-        V.resolve({{Foo, FooSym}});
-        V.finalize({Foo});
-        return Error::success();
+      [&](MaterializationResponsibility R) {
+        R.resolve({{Foo, FooSym}});
+        R.finalize();
       },
-      [](VSO &V, SymbolStringPtr Name) -> Error {
+      [](const VSO &V, SymbolStringPtr Name) {
         llvm_unreachable("Not expecting finalization");
       });
 
@@ -356,7 +513,7 @@ TEST(CoreAPIsTest, TestLookupWithUnthreadedMaterialization) {
   cantFail(V.defineLazy(std::move(MU)));
 
   auto FooLookupResult =
-      cantFail(lookup({&V}, Foo, MaterializeOnCurrentThread(ES)));
+      cantFail(lookup({&V}, Foo, MaterializeOnCurrentThread()));
 
   EXPECT_EQ(FooLookupResult.getAddress(), FooSym.getAddress())
       << "lookup returned an incorrect address";
@@ -376,12 +533,11 @@ TEST(CoreAPIsTest, TestLookupWithThreadedMaterialization) {
       [=]() {
         return SymbolFlagsMap({{Foo, JITSymbolFlags::Exported}});
       },
-      [&](VSO &V) -> Error {
-        V.resolve({{Foo, FooSym}});
-        V.finalize({Foo});
-        return Error::success();
+      [&](MaterializationResponsibility R) {
+        R.resolve({{Foo, FooSym}});
+        R.finalize();
       },
-      [](VSO &V, SymbolStringPtr Name) -> Error {
+      [](const VSO &V, SymbolStringPtr Name) {
         llvm_unreachable("Not expecting finalization");
       });
 
@@ -390,14 +546,10 @@ TEST(CoreAPIsTest, TestLookupWithThreadedMaterialization) {
   cantFail(V.defineLazy(std::move(MU)));
 
   std::thread MaterializationThread;
-  auto MaterializeOnNewThread = [&](VSO &V,
-                                    std::unique_ptr<MaterializationUnit> MU) {
+  auto MaterializeOnNewThread = [&](VSO::Materializer M) {
     // FIXME: Use move capture once we move to C++14.
-    std::shared_ptr<MaterializationUnit> SharedMU = std::move(MU);
-    MaterializationThread = std::thread([&ES, &V, SharedMU]() {
-      if (auto Err = SharedMU->materialize(V))
-        ES.reportError(std::move(Err));
-    });
+    auto SharedM = std::make_shared<VSO::Materializer>(std::move(M));
+    MaterializationThread = std::thread([SharedM]() { (*SharedM)(); });
   };
 
   auto FooLookupResult =

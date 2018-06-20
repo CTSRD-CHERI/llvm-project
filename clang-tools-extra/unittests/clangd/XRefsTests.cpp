@@ -24,15 +24,6 @@ namespace clang {
 namespace clangd {
 using namespace llvm;
 
-void PrintTo(const DocumentHighlight &V, std::ostream *O) {
-  llvm::raw_os_ostream OS(*O);
-  OS << V.range;
-  if (V.kind == DocumentHighlightKind::Read)
-    OS << "(r)";
-  if (V.kind == DocumentHighlightKind::Write)
-    OS << "(w)";
-}
-
 namespace {
 using testing::ElementsAre;
 using testing::Field;
@@ -222,6 +213,18 @@ TEST(GoToDefinition, All) {
        }
       )cpp",
 
+      R"cpp(// Macro argument
+       int [[i]];
+       #define ADDRESSOF(X) &X;
+       int *j = ADDRESSOF(^i);
+      )cpp",
+
+      R"cpp(// Symbol concatenated inside macro (not supported)
+       int *pi;
+       #define POINTER(X) p # X;
+       int i = *POINTER(^i);
+      )cpp",
+
       R"cpp(// Forward class declaration
         class Foo;
         class [[Foo]] {};
@@ -249,8 +252,11 @@ TEST(GoToDefinition, All) {
   for (const char *Test : Tests) {
     Annotations T(Test);
     auto AST = build(T.code());
+    std::vector<Matcher<Location>> ExpectedLocations;
+    for (const auto &R : T.ranges())
+      ExpectedLocations.push_back(RangeIs(R));
     EXPECT_THAT(findDefinitions(AST, T.point()),
-                ElementsAre(RangeIs(T.range())))
+                ElementsAreArray(ExpectedLocations))
         << Test;
   }
 }

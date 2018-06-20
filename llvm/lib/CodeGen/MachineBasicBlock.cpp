@@ -408,12 +408,13 @@ void MachineBasicBlock::print(raw_ostream &OS, ModuleSlotTracker &MST,
 
     OS.indent(IsInBundle ? 4 : 2);
     MI.print(OS, MST, IsStandalone, /*SkipOpers=*/false, /*SkipDebugLoc=*/false,
-             &TII);
+             /*AddNewLine=*/false, &TII);
 
     if (!IsInBundle && MI.getFlag(MachineInstr::BundledSucc)) {
       OS << " {";
       IsInBundle = true;
     }
+    OS << '\n';
   }
 
   if (IsInBundle)
@@ -718,6 +719,14 @@ void MachineBasicBlock::replaceSuccessor(MachineBasicBlock *Old,
       *ProbIter += *getProbabilityIterator(OldI);
   }
   removeSuccessor(OldI);
+}
+
+void MachineBasicBlock::copySuccessor(MachineBasicBlock *Orig,
+                                      succ_iterator I) {
+  if (Orig->Probs.empty())
+    addSuccessor(*I, Orig->getSuccProbability(I));
+  else
+    addSuccessorWithoutProb(*I);
 }
 
 void MachineBasicBlock::addPredecessor(MachineBasicBlock *Pred) {

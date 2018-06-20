@@ -657,9 +657,12 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
       Args.hasArg(OPT_ignore_function_address_equality);
   Config->Init = Args.getLastArgValue(OPT_init, "_init");
   Config->LTOAAPipeline = Args.getLastArgValue(OPT_lto_aa_pipeline);
+  Config->LTODebugPassManager = Args.hasArg(OPT_lto_debug_pass_manager);
+  Config->LTONewPassManager = Args.hasArg(OPT_lto_new_pass_manager);
   Config->LTONewPmPasses = Args.getLastArgValue(OPT_lto_newpm_passes);
   Config->LTOO = args::getInteger(Args, OPT_lto_O, 2);
   Config->LTOPartitions = args::getInteger(Args, OPT_lto_partitions, 1);
+  Config->LTOSampleProfile = Args.getLastArgValue(OPT_lto_sample_profile);
   Config->MapFile = Args.getLastArgValue(OPT_Map);
   Config->MergeArmExidx =
       Args.hasFlag(OPT_merge_exidx_entries, OPT_no_merge_exidx_entries, true);
@@ -701,6 +704,8 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
   Config->UndefinedVersion =
       Args.hasFlag(OPT_undefined_version, OPT_no_undefined_version, true);
   Config->UnresolvedSymbols = getUnresolvedSymbolPolicy(Args);
+  Config->WarnBackrefs =
+      Args.hasFlag(OPT_warn_backrefs, OPT_no_warn_backrefs, false);
   Config->WarnCommon = Args.hasFlag(OPT_warn_common, OPT_no_warn_common, false);
   Config->WarnSymbolOrdering =
       Args.hasFlag(OPT_warn_symbol_ordering, OPT_no_warn_symbol_ordering, true);
@@ -734,6 +739,12 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
       Config->ThinLTOJobs = parseInt(S.substr(5), Arg);
     else if (S.startswith("mcpu="))
       parseClangOption(Saver.save("-" + S), Arg->getSpelling());
+    else if (S == "new-pass-manager")
+      Config->LTONewPassManager = true;
+    else if (S == "debug-pass-manager")
+      Config->LTODebugPassManager = true;
+    else if (S.startswith("sample-profile="))
+      Config->LTOSampleProfile = S.substr(strlen("sample-profile="));
     else if (!S.startswith("/") && !S.startswith("-fresolution=") &&
              !S.startswith("-pass-through=") && !S.startswith("thinlto"))
       parseClangOption(S, Arg->getSpelling());
@@ -928,6 +939,16 @@ void LinkerDriver::createFiles(opt::InputArgList &Args) {
         Files.back()->JustSymbols = true;
       }
       break;
+    case OPT_start_group:
+      if (InputFile::IsInGroup)
+        error("nested --start-group");
+      InputFile::IsInGroup = true;
+      break;
+    case OPT_end_group:
+      if (!InputFile::IsInGroup)
+        error("stray --end-group");
+      InputFile::IsInGroup = false;
+      break;
     case OPT_start_lib:
       InLib = true;
       break;
@@ -1036,6 +1057,18 @@ template <class ELFT> static void handleUndefined(StringRef Name) {
 
   if (Sym->isLazy())
     Symtab->fetchLazy<ELFT>(Sym);
+}
+
+// If all references to a DSO happen to be weak, the DSO is not added
+// to DT_NEEDED. If that happens, we need to eliminate shared symbols
+// created from the DSO. Otherwise, they become dangling references
+// that point to a non-existent DSO.
+template <class ELFT> static void demoteSharedSymbols() {
+  for (Symbol *Sym : Symtab->getSymbols())
+    if (auto *S = dyn_cast<SharedSymbol>(Sym))
+      if (!S->getFile<ELFT>().IsNeeded)
+        replaceSymbol<Undefined>(S, nullptr, S->getName(), STB_WEAK, S->StOther,
+                                 S->Type);
 }
 
 // Do actual linking. Note that when this function is called,
@@ -1198,6 +1231,7 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   // Do size optimizations: garbage collection, merging of SHF_MERGE sections
   // and identical code folding.
   markLive<ELFT>();
+  demoteSharedSymbols<ELFT>();
   decompressSections();
   mergeSections();
   if (Config->ICF)

@@ -201,6 +201,7 @@ defm : ZnWriteResFpuPair<WriteCvtF2F,    [ZnFPU3],  5>;
 defm : ZnWriteResFpuPair<WriteCvtF2I,    [ZnFPU3],  5>;
 defm : ZnWriteResFpuPair<WriteFDiv,      [ZnFPU3], 15>;
 defm : ZnWriteResFpuPair<WriteFShuffle,  [ZnFPU12], 1>;
+defm : ZnWriteResFpuPair<WriteFVarShuffle, [ZnFPU12], 1>;
 defm : ZnWriteResFpuPair<WriteFMul,      [ZnFPU0],  5>;
 defm : ZnWriteResFpuPair<WriteFMA,       [ZnFPU03], 5>;
 defm : ZnWriteResFpuPair<WriteFRcp,      [ZnFPU01], 5>;
@@ -219,8 +220,10 @@ defm : ZnWriteResFpuPair<WriteVecALU,     [ZnFPU],   1>;
 defm : ZnWriteResFpuPair<WriteVecIMul,    [ZnFPU0],  4>;
 defm : ZnWriteResFpuPair<WritePMULLD,     [ZnFPU0],  4>; // FIXME
 defm : ZnWriteResFpuPair<WriteShuffle,    [ZnFPU],   1>;
+defm : ZnWriteResFpuPair<WriteVarShuffle, [ZnFPU],   1>;
 defm : ZnWriteResFpuPair<WriteBlend,      [ZnFPU01], 1>;
 defm : ZnWriteResFpuPair<WriteShuffle256, [ZnFPU],   2>;
+defm : ZnWriteResFpuPair<WriteVarShuffle256, [ZnFPU],   2>;
 
 // Vector Shift Operations
 defm : ZnWriteResFpuPair<WriteVarVecShift, [ZnFPU12], 1>;
@@ -241,8 +244,9 @@ def : WriteRes<WriteNop, []>;
 // Following instructions with latency=100 are microcoded.
 // We set long latency so as to block the entire pipeline.
 defm : ZnWriteResFpuPair<WriteFShuffle256, [ZnFPU], 100>;
+defm : ZnWriteResFpuPair<WriteFVarShuffle256, [ZnFPU], 100>;
 
-//Microcoded Instructions
+// Microcoded Instructions
 let Latency = 100 in {
   def : WriteRes<WriteMicrocoded, []>;
   def : WriteRes<WriteSystem, []>;
@@ -260,7 +264,7 @@ let Latency = 100 in {
   def : WriteRes<WritePCmpIStrILd, []>;
   }
 
-//=== Regex based itineraries ===//
+//=== Regex based InstRW ===//
 // Notation:
 // - r: register.
 // - m = memory.

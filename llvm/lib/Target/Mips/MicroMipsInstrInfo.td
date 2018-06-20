@@ -971,16 +971,22 @@ let DecoderNamespace = "MicroMips", Predicates = [InMicroMips] in {
   def TLTU_MM : MMRel, TEQ_FT<"tltu", GPR32Opnd, uimm4, II_TLTU>,
                 TEQ_FM_MM<0x28>;
   def TNE_MM  : MMRel, TEQ_FT<"tne", GPR32Opnd, uimm4, II_TNE>, TEQ_FM_MM<0x30>;
-
-  def TEQI_MM  : MMRel, TEQI_FT<"teqi", GPR32Opnd, II_TEQI>, TEQI_FM_MM<0x0e>;
-  def TGEI_MM  : MMRel, TEQI_FT<"tgei", GPR32Opnd, II_TGEI>, TEQI_FM_MM<0x09>;
+}
+let DecoderNamespace = "MicroMips" in {
+  def TEQI_MM  : MMRel, TEQI_FT<"teqi", GPR32Opnd, II_TEQI>, TEQI_FM_MM<0x0e>,
+                 ISA_MICROMIPS32_NOT_MIPS32R6;
+  def TGEI_MM  : MMRel, TEQI_FT<"tgei", GPR32Opnd, II_TGEI>, TEQI_FM_MM<0x09>,
+                 ISA_MICROMIPS32_NOT_MIPS32R6;
   def TGEIU_MM : MMRel, TEQI_FT<"tgeiu", GPR32Opnd, II_TGEIU>,
-                 TEQI_FM_MM<0x0b>;
-  def TLTI_MM  : MMRel, TEQI_FT<"tlti", GPR32Opnd, II_TLTI>, TEQI_FM_MM<0x08>;
+                 TEQI_FM_MM<0x0b>, ISA_MICROMIPS32_NOT_MIPS32R6;
+  def TLTI_MM  : MMRel, TEQI_FT<"tlti", GPR32Opnd, II_TLTI>, TEQI_FM_MM<0x08>,
+                 ISA_MICROMIPS32_NOT_MIPS32R6;
   def TLTIU_MM : MMRel, TEQI_FT<"tltiu", GPR32Opnd, II_TTLTIU>,
-                 TEQI_FM_MM<0x0a>;
-  def TNEI_MM  : MMRel, TEQI_FT<"tnei", GPR32Opnd, II_TNEI>, TEQI_FM_MM<0x0c>;
-
+                 TEQI_FM_MM<0x0a>, ISA_MICROMIPS32_NOT_MIPS32R6;
+  def TNEI_MM  : MMRel, TEQI_FT<"tnei", GPR32Opnd, II_TNEI>, TEQI_FM_MM<0x0c>,
+                 ISA_MICROMIPS32_NOT_MIPS32R6;
+}
+let DecoderNamespace = "MicroMips", Predicates = [InMicroMips] in {
   /// Load-linked, Store-conditional
   def LL_MM : LLBaseMM<"ll", GPR32Opnd>, LL_FM_MM<0x3>;
   def SC_MM : SCBaseMM<"sc", GPR32Opnd>, LL_FM_MM<0xb>;
@@ -1006,20 +1012,27 @@ let DecoderNamespace = "MicroMips" in {
     def CACHEE_MM : MMRel, CacheOp<"cachee", mem_mm_9, II_CACHEE>,
                     CACHE_PREFE_FM_MM<0x18, 0x3>, ISA_MICROMIPS, ASE_EVA;
   }
-}
-let DecoderNamespace = "MicroMips", Predicates = [InMicroMips] in {
-  def SSNOP_MM : MMRel, Barrier<"ssnop", II_SSNOP>, BARRIER_FM_MM<0x1>;
-  def EHB_MM   : MMRel, Barrier<"ehb", II_EHB>, BARRIER_FM_MM<0x3>;
-  def PAUSE_MM : MMRel, Barrier<"pause", II_PAUSE>, BARRIER_FM_MM<0x5>;
+  def SSNOP_MM : MMRel, Barrier<"ssnop", II_SSNOP>, BARRIER_FM_MM<0x1>,
+                 ISA_MICROMIPS;
+  def EHB_MM   : MMRel, Barrier<"ehb", II_EHB>, BARRIER_FM_MM<0x3>,
+                 ISA_MICROMIPS;
+  def PAUSE_MM : MMRel, Barrier<"pause", II_PAUSE>, BARRIER_FM_MM<0x5>,
+                 ISA_MICROMIPS;
 
-  def TLBP_MM : MMRel, TLB<"tlbp", II_TLBP>, COP0_TLB_FM_MM<0x0d>;
-  def TLBR_MM : MMRel, TLB<"tlbr", II_TLBR>, COP0_TLB_FM_MM<0x4d>;
-  def TLBWI_MM : MMRel, TLB<"tlbwi", II_TLBWI>, COP0_TLB_FM_MM<0x8d>;
-  def TLBWR_MM : MMRel, TLB<"tlbwr", II_TLBWR>, COP0_TLB_FM_MM<0xcd>;
+  def TLBP_MM : MMRel, TLB<"tlbp", II_TLBP>, COP0_TLB_FM_MM<0x0d>,
+                ISA_MICROMIPS;
+  def TLBR_MM : MMRel, TLB<"tlbr", II_TLBR>, COP0_TLB_FM_MM<0x4d>,
+                ISA_MICROMIPS;
+  def TLBWI_MM : MMRel, TLB<"tlbwi", II_TLBWI>, COP0_TLB_FM_MM<0x8d>,
+                 ISA_MICROMIPS;
+  def TLBWR_MM : MMRel, TLB<"tlbwr", II_TLBWR>, COP0_TLB_FM_MM<0xcd>,
+                 ISA_MICROMIPS;
 
-  def SDBBP_MM : MMRel, SYS_FT<"sdbbp", uimm10, II_SDBBP>, SDBBP_FM_MM;
+  def SDBBP_MM : MMRel, SYS_FT<"sdbbp", uimm10, II_SDBBP>, SDBBP_FM_MM,
+                 ISA_MICROMIPS;
 
-  def PREFX_MM : PrefetchIndexed<"prefx">, POOL32F_PREFX_FM_MM<0x15, 0x1A0>;
+  def PREFX_MM : PrefetchIndexed<"prefx">, POOL32F_PREFX_FM_MM<0x15, 0x1A0>,
+                 ISA_MICROMIPS32_NOT_MIPS32R6;
 }
 
 def TAILCALL_MM : TailCall<J_MM, jmptarget_mm>, ISA_MIPS1_NOT_32R6_64R6;

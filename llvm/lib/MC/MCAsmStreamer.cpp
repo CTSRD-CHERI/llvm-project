@@ -1111,10 +1111,8 @@ static void printDwarfFileDirective(unsigned FileNo, StringRef Directory,
     OS << ' ';
   }
   PrintQuotedString(Filename, OS);
-  if (Checksum) {
-    OS << " md5 ";
-    PrintQuotedString(Checksum->digest(), OS);
-  }
+  if (Checksum)
+    OS << " md5 0x" << Checksum->digest();
   if (Source) {
     OS << " source ";
     PrintQuotedString(*Source, OS);

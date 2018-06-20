@@ -64,6 +64,12 @@ Improvements to clang-tidy
 
 - New module ``zircon`` for checks related to Fuchsia's Zircon kernel.
 
+- New :doc:`android-comparison-in-temp-failure-retry
+  <clang-tidy/checks/android-comparison-in-temp-failure-retry>` check
+
+  Diagnoses comparisons that appear to be incorrectly placed in the argument to
+  the ``TEMP_FAILURE_RETRY`` macro.
+
 - New :doc:`bugprone-parent-virtual-call
   <clang-tidy/checks/bugprone-parent-virtual-call>` check
 
@@ -87,6 +93,11 @@ Improvements to clang-tidy
   The usage of ``goto`` for control flow is error prone and should be replaced
   with looping constructs. Every backward jump is rejected. Forward jumps are
   only allowed in nested loops.
+
+- New alias :doc:`fuchsia-header-anon-namespaces
+  <clang-tidy/checks/fuchsia-header-anon-namespaces>` to :doc:`google-build-namespaces
+  <clang-tidy/checks/google-build-namespaces>`
+  added.
 
 - New :doc:`fuchsia-multiple-inheritance
   <clang-tidy/checks/fuchsia-multiple-inheritance>` check
@@ -134,6 +145,22 @@ Improvements to clang-tidy
   <clang-tidy/checks/zircon-temporary-objects>` check
 
   Warns on construction of specific temporary objects in the Zircon kernel.
+
+- Adding the missing bitwise assignment operations to 
+  :doc:`hicpp-signed-bitwise <clang-tidy/checks/hicpp-signed-bitwise>`.
+
+- New option `MinTypeNameLength` for :doc:`modernize-use-auto
+  <clang-tidy/checks/modernize-use-auto>` check to limit the minimal length of
+  type names to be replaced with ``auto``. Use to skip replacing short type
+  names like ``int``/``bool`` with ``auto``. Default value is 5 which means
+  replace types with the name length >= 5 letters only (ex. ``double``,
+  ``unsigned``).
+
+- Added `VariableThreshold` option to :doc:`readability-function-size
+  <clang-tidy/checks/readability-function-size>` check
+
+  Flags functions that have more than a specified number of variables declared
+  in the body.
 
 - New alias :doc:`hicpp-avoid-goto
   <clang-tidy/checks/hicpp-avoid-goto>` to :doc:`cppcoreguidelines-avoid-goto

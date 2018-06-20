@@ -26,6 +26,7 @@
 #include "clang/Basic/VersionTuple.h"
 #include "clang/Basic/VirtualFileSystem.h"
 #include "clang/Basic/Visibility.h"
+#include "clang/Basic/XRayInstr.h"
 #include "clang/Config/config.h"
 #include "clang/Driver/DriverDiagnostic.h"
 #include "clang/Driver/Options.h"
@@ -75,9 +76,9 @@
 #include "llvm/Support/Path.h"
 #include "llvm/Support/Process.h"
 #include "llvm/Support/Regex.h"
+#include "llvm/Support/ScopedPrinter.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetOptions.h"
-#include "llvm/Support/ScopedPrinter.h"
 #include <algorithm>
 #include <atomic>
 #include <cassert>
@@ -446,6 +447,25 @@ static void parseSanitizerKinds(StringRef FlagName,
   }
 }
 
+static void parseXRayInstrumentationBundle(StringRef FlagName, StringRef Bundle,
+                                           ArgList &Args, DiagnosticsEngine &D,
+                                           XRayInstrSet &S) {
+  llvm::SmallVector<StringRef, 2> BundleParts;
+  llvm::SplitString(Bundle, BundleParts, ",");
+  for (const auto B : BundleParts) {
+    auto Mask = parseXRayInstrValue(B);
+    if (Mask == XRayInstrKind::None)
+      if (B != "none")
+        D.Report(diag::err_drv_invalid_value) << FlagName << Bundle;
+      else
+        S.Mask = Mask;
+    else if (Mask == XRayInstrKind::All)
+      S.Mask = Mask;
+    else
+      S.set(Mask, true);
+  }
+}
+
 // Set the profile kind for fprofile-instrument.
 static void setPGOInstrumentor(CodeGenOptions &Opts, ArgList &Args,
                                DiagnosticsEngine &Diags) {
@@ -677,7 +697,6 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   Opts.ReciprocalMath = Args.hasArg(OPT_freciprocal_math);
   Opts.NoTrappingMath = Args.hasArg(OPT_fno_trapping_math);
   Opts.NoZeroInitializedInBSS = Args.hasArg(OPT_mno_zero_initialized_in_bss);
-  Opts.BackendOptions = Args.getAllArgValues(OPT_backend_option);
   Opts.NumRegisterParameters = getLastArgIntValue(Args, OPT_mregparm, 0, Diags);
   Opts.NoExecStack = Args.hasArg(OPT_mno_exec_stack);
   Opts.FatalWarnings = Args.hasArg(OPT_massembler_fatal_warnings);
@@ -821,11 +840,23 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
       Args.hasArg(OPT_finstrument_functions_after_inlining);
   Opts.InstrumentFunctionEntryBare =
       Args.hasArg(OPT_finstrument_function_entry_bare);
-  Opts.XRayInstrumentFunctions = Args.hasArg(OPT_fxray_instrument);
+
+  Opts.XRayInstrumentFunctions =
+      Args.hasArg(OPT_fxray_instrument);
   Opts.XRayAlwaysEmitCustomEvents =
       Args.hasArg(OPT_fxray_always_emit_customevents);
   Opts.XRayInstructionThreshold =
       getLastArgIntValue(Args, OPT_fxray_instruction_threshold_EQ, 200, Diags);
+
+  auto XRayInstrBundles =
+      Args.getAllArgValues(OPT_fxray_instrumentation_bundle);
+  if (XRayInstrBundles.empty())
+    Opts.XRayInstrumentationBundle.Mask = XRayInstrKind::All;
+  else
+    for (const auto &A : XRayInstrBundles)
+      parseXRayInstrumentationBundle("-fxray-instrumentation-bundle=", A, Args,
+                                     Diags, Opts.XRayInstrumentationBundle);
+
   Opts.InstrumentForProfiling = Args.hasArg(OPT_pg);
   Opts.CallFEntry = Args.hasArg(OPT_mfentry);
   Opts.EmitOpenCLArgMetadata = Args.hasArg(OPT_cl_kernel_arg_info);
@@ -1872,6 +1903,8 @@ void CompilerInvocation::setLangDefaults(LangOptions &Opts, InputKind IK,
     Opts.OpenCLVersion = 120;
   else if (LangStd == LangStandard::lang_opencl20)
     Opts.OpenCLVersion = 200;
+  else if (LangStd == LangStandard::lang_openclcpp)
+    Opts.OpenCLCPlusPlusVersion = 100;
 
   // OpenCL has some additional defaults.
   if (Opts.OpenCL) {
@@ -2063,6 +2096,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
         .Cases("cl1.1", "CL1.1", LangStandard::lang_opencl11)
         .Cases("cl1.2", "CL1.2", LangStandard::lang_opencl12)
         .Cases("cl2.0", "CL2.0", LangStandard::lang_opencl20)
+        .Case("c++", LangStandard::lang_openclcpp)
         .Default(LangStandard::lang_unspecified);
 
     if (OpenCLLangStd == LangStandard::lang_unspecified) {
@@ -2275,7 +2309,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.RTTI = Opts.CPlusPlus && !Args.hasArg(OPT_fno_rtti);
   Opts.RTTIData = Opts.RTTI && !Args.hasArg(OPT_fno_rtti_data);
   Opts.Blocks = Args.hasArg(OPT_fblocks) || (Opts.OpenCL
-    && Opts.OpenCLVersion >= 200);
+    && Opts.OpenCLVersion == 200);
   Opts.BlocksRuntimeOptional = Args.hasArg(OPT_fblocks_runtime_optional);
   Opts.CoroutinesTS = Args.hasArg(OPT_fcoroutines_ts);
 
@@ -2640,6 +2674,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
       Args.getAllArgValues(OPT_fxray_always_instrument);
   Opts.XRayNeverInstrumentFiles =
       Args.getAllArgValues(OPT_fxray_never_instrument);
+  Opts.XRayAttrListFiles = Args.getAllArgValues(OPT_fxray_attr_list);
 
   // -fallow-editor-placeholders
   Opts.AllowEditorPlaceholders = Args.hasArg(OPT_fallow_editor_placeholders);

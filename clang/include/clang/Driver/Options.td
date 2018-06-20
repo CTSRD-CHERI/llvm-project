@@ -514,7 +514,7 @@ def cl_mad_enable : Flag<["-"], "cl-mad-enable">, Group<opencl_Group>, Flags<[CC
 def cl_no_signed_zeros : Flag<["-"], "cl-no-signed-zeros">, Group<opencl_Group>, Flags<[CC1Option]>,
   HelpText<"OpenCL only. Allow use of less precise no signed zeros computations in the generated binary.">;
 def cl_std_EQ : Joined<["-"], "cl-std=">, Group<opencl_Group>, Flags<[CC1Option]>,
-  HelpText<"OpenCL language standard to compile for.">, Values<"cl,CL,cl1.1,CL1.1,cl1.2,CL1.2,cl2.0,CL2.0">;
+  HelpText<"OpenCL language standard to compile for.">, Values<"cl,CL,cl1.1,CL1.1,cl1.2,CL1.2,cl2.0,CL2.0,c++">;
 def cl_denorms_are_zero : Flag<["-"], "cl-denorms-are-zero">, Group<opencl_Group>, Flags<[CC1Option]>,
   HelpText<"OpenCL only. Allow denormals to be flushed to zero.">;
 def cl_fp32_correctly_rounded_divide_sqrt : Flag<["-"], "cl-fp32-correctly-rounded-divide-sqrt">, Group<opencl_Group>, Flags<[CC1Option]>,
@@ -546,6 +546,10 @@ def cuda_host_only : Flag<["--"], "cuda-host-only">,
 def cuda_compile_host_device : Flag<["--"], "cuda-compile-host-device">,
   HelpText<"Compile CUDA code for both host and device (default).  Has no "
            "effect on non-CUDA compilations.">;
+def cuda_include_ptx_EQ : Joined<["--"], "cuda-include-ptx=">, Flags<[DriverOption]>,
+  HelpText<"Include PTX for the follwing GPU architecture (e.g. sm_35) or 'all'. May be specified more than once.">;
+def no_cuda_include_ptx_EQ : Joined<["--"], "no-cuda-include-ptx=">, Flags<[DriverOption]>,
+  HelpText<"Do not include PTX for the follwing GPU architecture (e.g. sm_35) or 'all'. May be specified more than once.">;
 def cuda_gpu_arch_EQ : Joined<["--"], "cuda-gpu-arch=">, Flags<[DriverOption]>,
   HelpText<"CUDA GPU architecture (e.g. sm_35).  May be specified more than once.">;
 def no_cuda_gpu_arch_EQ : Joined<["--"], "no-cuda-gpu-arch=">, Flags<[DriverOption]>,
@@ -1095,11 +1099,19 @@ def fxray_instruction_threshold_ :
 def fxray_always_instrument :
   JoinedOrSeparate<["-"], "fxray-always-instrument=">,
   Group<f_Group>, Flags<[CC1Option]>,
-  HelpText<"Filename defining the whitelist for imbuing the 'always instrument' XRay attribute.">;
+  HelpText<"DEPRECATED: Filename defining the whitelist for imbuing the 'always instrument' XRay attribute.">;
 def fxray_never_instrument :
   JoinedOrSeparate<["-"], "fxray-never-instrument=">,
   Group<f_Group>, Flags<[CC1Option]>,
-  HelpText<"Filename defining the whitelist for imbuing the 'never instrument' XRay attribute.">;
+  HelpText<"DEPRECATED: Filename defining the whitelist for imbuing the 'never instrument' XRay attribute.">;
+def fxray_attr_list :
+  JoinedOrSeparate<["-"], "fxray-attr-list=">,
+  Group<f_Group>, Flags<[CC1Option]>,
+  HelpText<"Filename defining the list of functions/types for imbuing XRay attributes.">;
+def fxray_modes :
+  JoinedOrSeparate<["-"], "fxray-modes=">,
+  Group<f_Group>, Flags<[CC1Option]>,
+  HelpText<"List of modes to link in by default into XRay instrumented binaries.">;
 
 def fxray_always_emit_customevents : Flag<["-"], "fxray-always-emit-customevents">, Group<f_Group>,
   Flags<[CC1Option]>,
@@ -1112,6 +1124,11 @@ def fxray_link_deps : Flag<["-"], "fxray-link-deps">, Group<f_Group>,
   HelpText<"Tells clang to add the link dependencies for XRay.">;
 def fnoxray_link_deps : Flag<["-"], "fnoxray-link-deps">, Group<f_Group>,
   Flags<[CC1Option]>;
+
+def fxray_instrumentation_bundle :
+  JoinedOrSeparate<["-"], "fxray-instrumentation-bundle=">,
+  Group<f_Group>, Flags<[CC1Option]>,
+  HelpText<"Select which XRay instrumentation points to emit. Options: all, none, function, custom. Default is 'all'.">;
 
 def ffine_grained_bitfield_accesses : Flag<["-"],
   "ffine-grained-bitfield-accesses">, Group<f_clang_Group>, Flags<[CC1Option]>,
@@ -1945,6 +1962,7 @@ def maltivec : Flag<["-"], "maltivec">, Group<m_ppc_Features_Group>;
 def mno_altivec : Flag<["-"], "mno-altivec">, Group<m_ppc_Features_Group>;
 def mvsx : Flag<["-"], "mvsx">, Group<m_ppc_Features_Group>;
 def mno_vsx : Flag<["-"], "mno-vsx">, Group<m_ppc_Features_Group>;
+def msecure_plt : Flag<["-"], "msecure-plt">, Group<m_ppc_Features_Group>;
 def mpower8_vector : Flag<["-"], "mpower8-vector">,
     Group<m_ppc_Features_Group>;
 def mno_power8_vector : Flag<["-"], "mno-power8-vector">,
@@ -2581,10 +2599,14 @@ def mbmi : Flag<["-"], "mbmi">, Group<m_x86_Features_Group>;
 def mno_bmi : Flag<["-"], "mno-bmi">, Group<m_x86_Features_Group>;
 def mbmi2 : Flag<["-"], "mbmi2">, Group<m_x86_Features_Group>;
 def mno_bmi2 : Flag<["-"], "mno-bmi2">, Group<m_x86_Features_Group>;
+def mcldemote : Flag<["-"], "mcldemote">, Group<m_x86_Features_Group>;
+def mno_cldemote : Flag<["-"], "mno-cldemote">, Group<m_x86_Features_Group>;
 def mclflushopt : Flag<["-"], "mclflushopt">, Group<m_x86_Features_Group>;
 def mno_clflushopt : Flag<["-"], "mno-clflushopt">, Group<m_x86_Features_Group>;
 def mclwb : Flag<["-"], "mclwb">, Group<m_x86_Features_Group>;
 def mno_clwb : Flag<["-"], "mno-clwb">, Group<m_x86_Features_Group>;
+def mwbnoinvd : Flag<["-"], "mwbnoinvd">, Group<m_x86_Features_Group>;
+def mno_wbnoinvd : Flag<["-"], "mno-wbnoinvd">, Group<m_x86_Features_Group>;
 def mclzero : Flag<["-"], "mclzero">, Group<m_x86_Features_Group>;
 def mno_clzero : Flag<["-"], "mno-clzero">, Group<m_x86_Features_Group>;
 def mcx16 : Flag<["-"], "mcx16">, Group<m_x86_Features_Group>;

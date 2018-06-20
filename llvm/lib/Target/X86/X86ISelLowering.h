@@ -1121,8 +1121,6 @@ namespace llvm {
     bool lowerInterleavedStore(StoreInst *SI, ShuffleVectorInst *SVI,
                                unsigned Factor) const override;
 
-    void finalizeLowering(MachineFunction &MF) const override;
-
     SDValue expandIndirectJTBranch(const SDLoc& dl, SDValue Value, 
                                    SDValue Addr, SelectionDAG &DAG) 
                                    const override;
@@ -1201,7 +1199,8 @@ namespace llvm {
     SDValue LowerEXTRACT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerINSERT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) const;
 
-    unsigned getGlobalWrapperKind(const GlobalValue *GV = nullptr) const;
+    unsigned getGlobalWrapperKind(const GlobalValue *GV = nullptr,
+                                  const unsigned char OpFlags = 0) const;
     SDValue LowerConstantPool(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerBlockAddress(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerGlobalAddress(const GlobalValue *GV, const SDLoc &dl,

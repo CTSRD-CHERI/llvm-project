@@ -134,6 +134,7 @@ tools = [
     ToolSubst('%ocamlc', ocamlc_command, unresolved='ignore'),
     ToolSubst('%ocamlopt', ocamlopt_command, unresolved='ignore'),
     ToolSubst('%opt-viewer', opt_viewer_cmd),
+    ToolSubst('%llvm-objcopy', FindTool('llvm-objcopy')),
 ]
 
 llvm_config.add_cheri_tool_substitutions(['llc', 'opt', 'llvm-mc'])

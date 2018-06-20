@@ -40,6 +40,7 @@ set(files
   __clang_cuda_math_forward_declares.h
   __clang_cuda_runtime_wrapper.h
   cetintrin.h
+  cldemoteintrin.h
   clzerointrin.h
   cpuid.h
   clflushoptintrin.h
@@ -95,6 +96,7 @@ set(files
   varargs.h
   vecintrin.h
   vpclmulqdqintrin.h
+  wbnoinvdintrin.h
   wmmintrin.h
   __wmmintrin_aes.h
   __wmmintrin_pclmul.h

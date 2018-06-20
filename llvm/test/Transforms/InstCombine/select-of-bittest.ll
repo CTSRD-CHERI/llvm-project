@@ -174,6 +174,23 @@ define i32 @f_var0(i32 %arg, i32 %arg1) {
   ret i32 %tmp5
 }
 
+; Should be exactly as the previous one
+define i32 @f_var0_commutative_and(i32 %arg, i32 %arg1) {
+; CHECK-LABEL: @f_var0_commutative_and(
+; CHECK-NEXT:    [[TMP1:%.*]] = or i32 [[ARG1:%.*]], 2
+; CHECK-NEXT:    [[TMP2:%.*]] = and i32 [[TMP1]], [[ARG:%.*]]
+; CHECK-NEXT:    [[TMP3:%.*]] = icmp ne i32 [[TMP2]], 0
+; CHECK-NEXT:    [[TMP5:%.*]] = zext i1 [[TMP3]] to i32
+; CHECK-NEXT:    ret i32 [[TMP5]]
+;
+  %tmp = and i32 %arg1, %arg ; in different order
+  %tmp2 = icmp eq i32 %tmp, 0
+  %tmp3 = lshr i32 %arg, 1
+  %tmp4 = and i32 %tmp3, 1
+  %tmp5 = select i1 %tmp2, i32 %tmp4, i32 1
+  ret i32 %tmp5
+}
+
 define <2 x i32> @f_var0_splatvec(<2 x i32> %arg, <2 x i32> %arg1) {
 ; CHECK-LABEL: @f_var0_splatvec(
 ; CHECK-NEXT:    [[TMP1:%.*]] = or <2 x i32> [[ARG1:%.*]], <i32 2, i32 2>
@@ -232,6 +249,22 @@ define i32 @f_var1(i32 %arg, i32 %arg1) {
 ; CHECK-NEXT:    ret i32 [[TMP4]]
 ;
   %tmp = and i32 %arg, %arg1
+  %tmp2 = icmp eq i32 %tmp, 0
+  %tmp3 = and i32 %arg, 1
+  %tmp4 = select i1 %tmp2, i32 %tmp3, i32 1
+  ret i32 %tmp4
+}
+
+; Should be exactly as the previous one
+define i32 @f_var1_commutative_and(i32 %arg, i32 %arg1) {
+; CHECK-LABEL: @f_var1_commutative_and(
+; CHECK-NEXT:    [[TMP1:%.*]] = or i32 [[ARG1:%.*]], 1
+; CHECK-NEXT:    [[TMP2:%.*]] = and i32 [[TMP1]], [[ARG:%.*]]
+; CHECK-NEXT:    [[TMP3:%.*]] = icmp ne i32 [[TMP2]], 0
+; CHECK-NEXT:    [[TMP4:%.*]] = zext i1 [[TMP3]] to i32
+; CHECK-NEXT:    ret i32 [[TMP4]]
+;
+  %tmp = and i32 %arg1, %arg ; in different order
   %tmp2 = icmp eq i32 %tmp, 0
   %tmp3 = and i32 %arg, 1
   %tmp4 = select i1 %tmp2, i32 %tmp3, i32 1
@@ -354,6 +387,24 @@ define i32 @f_var3(i32 %arg, i32 %arg1, i32 %arg2) {
 ; CHECK-NEXT:    ret i32 [[TMP6]]
 ;
   %tmp = and i32 %arg, %arg1
+  %tmp3 = icmp eq i32 %tmp, 0
+  %tmp4 = lshr i32 %arg, %arg2
+  %tmp5 = and i32 %tmp4, 1
+  %tmp6 = select i1 %tmp3, i32 %tmp5, i32 1
+  ret i32 %tmp6
+}
+
+; Should be exactly as the previous one
+define i32 @f_var3_commutative_and(i32 %arg, i32 %arg1, i32 %arg2) {
+; CHECK-LABEL: @f_var3_commutative_and(
+; CHECK-NEXT:    [[TMP1:%.*]] = shl i32 1, [[ARG2:%.*]]
+; CHECK-NEXT:    [[TMP2:%.*]] = or i32 [[TMP1]], [[ARG1:%.*]]
+; CHECK-NEXT:    [[TMP3:%.*]] = and i32 [[TMP2]], [[ARG:%.*]]
+; CHECK-NEXT:    [[TMP4:%.*]] = icmp ne i32 [[TMP3]], 0
+; CHECK-NEXT:    [[TMP6:%.*]] = zext i1 [[TMP4]] to i32
+; CHECK-NEXT:    ret i32 [[TMP6]]
+;
+  %tmp = and i32 %arg1, %arg ; in different order
   %tmp3 = icmp eq i32 %tmp, 0
   %tmp4 = lshr i32 %arg, %arg2
   %tmp5 = and i32 %tmp4, 1

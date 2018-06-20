@@ -1556,6 +1556,12 @@ static void addLinkOptionsPostorder(CodeGenModule &CGM, Module *Mod,
   // Add linker options to link against the libraries/frameworks
   // described by this module.
   llvm::LLVMContext &Context = CGM.getLLVMContext();
+
+  // For modules that use export_as for linking, use that module
+  // name instead.
+  if (Mod->UseExportAsModuleLinkName)
+    return;
+
   for (unsigned I = Mod->LinkLibraries.size(); I > 0; --I) {
     // Link against a framework.  Frameworks are currently Darwin only, so we
     // don't to ask TargetCodeGenInfo for the spelling of the linker option.
@@ -1817,7 +1823,8 @@ bool CodeGenModule::isInSanitizerBlacklist(llvm::GlobalVariable *GV,
                                            StringRef Category) const {
   // For now globals can be blacklisted only in ASan and KASan.
   const SanitizerMask EnabledAsanMask = LangOpts.Sanitize.Mask &
-      (SanitizerKind::Address | SanitizerKind::KernelAddress | SanitizerKind::HWAddress);
+      (SanitizerKind::Address | SanitizerKind::KernelAddress |
+       SanitizerKind::HWAddress | SanitizerKind::KernelHWAddress);
   if (!EnabledAsanMask)
     return false;
   const auto &SanitizerBL = getContext().getSanitizerBlacklist();
@@ -1846,9 +1853,10 @@ bool CodeGenModule::imbueXRayAttrs(llvm::Function *Fn, SourceLocation Loc,
                                    StringRef Category) const {
   if (!LangOpts.XRayInstrument)
     return false;
+
   const auto &XRayFilter = getContext().getXRayFilter();
   using ImbueAttr = XRayFunctionFilter::ImbueAttribute;
-  auto Attr = XRayFunctionFilter::ImbueAttribute::NONE;
+  auto Attr = ImbueAttr::NONE;
   if (Loc.isValid())
     Attr = XRayFilter.shouldImbueLocation(Loc, Category);
   if (Attr == ImbueAttr::NONE)
