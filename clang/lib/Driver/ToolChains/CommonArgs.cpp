@@ -714,6 +714,8 @@ bool tools::addXRayRuntime(const ToolChain&TC, const ArgList &Args, ArgStringLis
   if (TC.getXRayArgs().needsXRayRt()) {
     CmdArgs.push_back("-whole-archive");
     CmdArgs.push_back(TC.getCompilerRTArgString(Args, "xray", false));
+    for (const auto &Mode : TC.getXRayArgs().modeList())
+      CmdArgs.push_back(TC.getCompilerRTArgString(Args, Mode, false));
     CmdArgs.push_back("-no-whole-archive");
     return true;
   }
@@ -1007,13 +1009,18 @@ tools::ParsePICArgs(const ToolChain &ToolChain, const ArgList &Args) {
   if ((ROPI || RWPI) && (PIC || PIE))
     ToolChain.getDriver().Diag(diag::err_drv_ropi_rwpi_incompatible_with_pic);
 
-  // When targettng MIPS64 with N64, the default is PIC, unless -mno-abicalls is
-  // used.
-  if ((Triple.getArch() == llvm::Triple::mips64 ||
+  if (Triple.getArch() == llvm::Triple::mips ||
+       Triple.getArch() == llvm::Triple::mipsel ||
+       Triple.getArch() == llvm::Triple::mips64 ||
        Triple.getArch() == llvm::Triple::mips64el ||
-       Triple.getArch() == llvm::Triple::cheri) &&
-      Args.hasArg(options::OPT_mno_abicalls))
-    return std::make_tuple(llvm::Reloc::Static, 0U, false);
+       Triple.getArch() == llvm::Triple::cheri) {
+    // When targettng MIPS with -mno-abicalls, it's always static.
+    if(Args.hasArg(options::OPT_mno_abicalls))
+      return std::make_tuple(llvm::Reloc::Static, 0U, false);
+    // Unlike other architectures, MIPS, even with -fPIC/-mxgot/multigot,
+    // does not use PIC level 2 for historical reasons.
+    IsPICLevelTwo = false;
+  }
 
   if (PIC)
     return std::make_tuple(llvm::Reloc::PIC_, IsPICLevelTwo ? 2U : 1U, PIE);

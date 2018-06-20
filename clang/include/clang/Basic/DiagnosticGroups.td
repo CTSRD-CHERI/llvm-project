@@ -401,7 +401,11 @@ def ExplicitInitializeCall : DiagGroup<"explicit-initialize-call">;
 def ExcessPadding : DiagGroup<"excess-padding">;
 def Packed : DiagGroup<"packed">;
 def Padded : DiagGroup<"padded">;
+
 def PessimizingMove : DiagGroup<"pessimizing-move">;
+def ReturnStdMoveInCXX11 : DiagGroup<"return-std-move-in-c++11">;
+def ReturnStdMove : DiagGroup<"return-std-move">;
+
 def PointerArith : DiagGroup<"pointer-arith">;
 def PoundWarning : DiagGroup<"#warnings">;
 def PoundPragmaMessage : DiagGroup<"#pragma-messages">,
@@ -741,7 +745,12 @@ def IntToVoidPointerCast : DiagGroup<"int-to-void-pointer-cast">;
 def IntToPointerCast : DiagGroup<"int-to-pointer-cast",
                                  [IntToVoidPointerCast]>;
 
-def Move : DiagGroup<"move", [PessimizingMove, RedundantMove, SelfMove]>;
+def Move : DiagGroup<"move", [
+    PessimizingMove,
+    RedundantMove,
+    ReturnStdMove,
+    SelfMove
+  ]>;
 
 def Extra : DiagGroup<"extra", [
     MissingFieldInitializers,

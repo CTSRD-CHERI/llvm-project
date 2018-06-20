@@ -430,17 +430,16 @@ class Scheduler {
   // Notify the Backend that buffered resources were freed.
   void notifyReleasedBuffers(llvm::ArrayRef<uint64_t> Buffers);
 
-  /// Issue instructions from the ReadyQueue by giving priority to older
-  /// instructions. This method returns true if at least one instruction has
-  /// been promoted in the process from the WaitQueue to the ReadyQueue.
+  /// Issue the next instruction from the ReadyQueue. This method gives priority
+  /// to older instructions.
   bool issue();
 
-  /// Scans the WaitQueue in search of instructions that can be moved to
-  /// the ReadyQueue.
-  bool promoteToReadyQueue();
+  /// Move instructions from the WaitQueue to the ReadyQueue if input operands
+  /// are all available.
+  void promoteToReadyQueue();
 
   /// Issue an instruction without updating the ready queue.
-  void issueInstruction(Instruction &IS, unsigned InstrIndex);
+  void issueInstruction(unsigned Index, Instruction &IS);
   void updatePendingQueue();
   void updateIssuedQueue();
 
@@ -454,45 +453,17 @@ public:
 
   void setDispatchUnit(DispatchUnit *DispUnit) { DU = DispUnit; }
 
-  /// Scheduling events.
+  /// Check if instruction at index Idx can be dispatched.
   ///
   /// The DispatchUnit is responsible for querying the Scheduler before
   /// dispatching new instructions. Queries are performed through method
-  /// `Scheduler::CanBeDispatched`, which returns an instance of this enum to
-  /// tell if the dispatch would fail or not.  If scheduling resources are
-  /// available, and the instruction can be dispatched, then the query returns
-  /// HWS_AVAILABLE.  A values different than HWS_AVAILABLE means that the
-  /// instruction cannot be dispatched during this cycle.
-  ///
-  /// Each event name starts with prefix "HWS_", and it is followed by
-  /// a substring which describes the reason why the Scheduler was unavailable
-  /// (or "AVAILABLE" if the instruction is allowed to be dispatched).
-  ///
-  /// HWS_QUEUE_UNAVAILABLE is returned if there are not enough available slots
-  /// in the  scheduler's queue. That means, one (or more) buffered resources
-  /// consumed by the instruction were full.
-  ///
-  /// HWS_LD_QUEUE_UNAVAILABLE is returned when an instruction 'mayLoad', and
-  /// the load queue in the load/store unit (implemented by class LSUnit) is
-  /// full.  Similarly, HWS_ST_QUEUE_UNAVAILABLE is returned when the store
-  /// queue is full, and the instruction to be dispatched 'mayStore'.
-  ///
-  /// HWS_DISPATCH_GROUP_RESTRICTION is only returned in special cases where the
-  /// instruction consumes an in-order issue/dispatch resource (i.e. a resource
-  /// with `BufferSize=0`), and the pipeline resource is not immediately
-  /// available.
-  enum Event {
-    HWS_AVAILABLE,
-    HWS_QUEUE_UNAVAILABLE,
-    HWS_DISPATCH_GROUP_RESTRICTION,
-    HWS_LD_QUEUE_UNAVAILABLE,
-    HWS_ST_QUEUE_UNAVAILABLE
-  };
-
-  Event canBeDispatched(const InstrDesc &Desc) const;
+  /// `Scheduler::CanBeDispatched`. If scheduling resources are available,
+  /// and the instruction can be dispatched, then this method returns true.
+  /// Otherwise, a generic HWStallEvent is notified to the listeners.
+  bool canBeDispatched(unsigned Idx, const InstrDesc &Desc) const;
   void scheduleInstruction(unsigned Idx, Instruction &MCIS);
 
-  void cycleEvent(unsigned Cycle);
+  void cycleEvent();
 
 #ifndef NDEBUG
   void dump() const;

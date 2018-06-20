@@ -57,4 +57,4 @@
 # CHECK-NEXT: [3]: Average time elapsed from WB until retire stage
 
 # CHECK:            [0]    [1]    [2]    [3]
-# CHECK-NEXT: 0.     4     2.2    2.2    0.0  	b   t
+# CHECK-NEXT: 0.     4     2.3    2.3    0.0  	b   t

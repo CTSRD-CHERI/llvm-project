@@ -1,6 +1,4 @@
 include_directories(
-  ${LLVM_MAIN_SRC_DIR}/lib/Target/X86
-  ${LLVM_BINARY_DIR}/lib/Target/X86
   ${LLVM_MAIN_SRC_DIR}/tools/llvm-exegesis/lib
   )
 
@@ -10,19 +8,21 @@ set(LLVM_LINK_COMPONENTS
   Object
   Support
   Symbolize
-  native
   )
 
 add_llvm_unittest(LLVMExegesisTests
   BenchmarkResultTest.cpp
-  InMemoryAssemblerTest.cpp
-  InstructionSnippetGeneratorTest.cpp
   OperandGraphTest.cpp
   PerfHelperTest.cpp
   )
 target_link_libraries(LLVMExegesisTests PRIVATE LLVMExegesis)
 
-if(HAVE_LIBPFM)
+if(LLVM_ENABLE_LIBPFM AND HAVE_LIBPFM)
   target_link_libraries(LLVMExegesisTests PRIVATE pfm)
 endif()
 
+if(LLVM_TARGETS_TO_BUILD MATCHES "X86")
+  add_subdirectory(
+    X86
+  )
+endif()

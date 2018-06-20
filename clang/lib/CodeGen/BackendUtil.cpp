@@ -245,10 +245,9 @@ static void addAddressSanitizerPasses(const PassManagerBuilder &Builder,
 static void addKernelAddressSanitizerPasses(const PassManagerBuilder &Builder,
                                             legacy::PassManagerBase &PM) {
   PM.add(createAddressSanitizerFunctionPass(
-      /*CompileKernel*/ true,
-      /*Recover*/ true, /*UseAfterScope*/ false));
-  PM.add(createAddressSanitizerModulePass(/*CompileKernel*/true,
-                                          /*Recover*/true));
+      /*CompileKernel*/ true, /*Recover*/ true, /*UseAfterScope*/ false));
+  PM.add(createAddressSanitizerModulePass(
+      /*CompileKernel*/ true, /*Recover*/ true));
 }
 
 static void addHWAddressSanitizerPasses(const PassManagerBuilder &Builder,
@@ -257,7 +256,13 @@ static void addHWAddressSanitizerPasses(const PassManagerBuilder &Builder,
       static_cast<const PassManagerBuilderWrapper &>(Builder);
   const CodeGenOptions &CGOpts = BuilderWrapper.getCGOpts();
   bool Recover = CGOpts.SanitizeRecover.has(SanitizerKind::HWAddress);
-  PM.add(createHWAddressSanitizerPass(Recover));
+  PM.add(createHWAddressSanitizerPass(/*CompileKernel*/ false, Recover));
+}
+
+static void addKernelHWAddressSanitizerPasses(const PassManagerBuilder &Builder,
+                                            legacy::PassManagerBase &PM) {
+  PM.add(createHWAddressSanitizerPass(
+      /*CompileKernel*/ true, /*Recover*/ true));
 }
 
 static void addMemorySanitizerPass(const PassManagerBuilder &Builder,
@@ -603,6 +608,13 @@ void EmitAssemblyHelper::CreatePasses(legacy::PassManager &MPM,
                            addHWAddressSanitizerPasses);
   }
 
+  if (LangOpts.Sanitize.has(SanitizerKind::KernelHWAddress)) {
+    PMBuilder.addExtension(PassManagerBuilder::EP_OptimizerLast,
+                           addKernelHWAddressSanitizerPasses);
+    PMBuilder.addExtension(PassManagerBuilder::EP_EnabledOnOptLevel0,
+                           addKernelHWAddressSanitizerPasses);
+  }
+
   if (LangOpts.Sanitize.has(SanitizerKind::Memory)) {
     PMBuilder.addExtension(PassManagerBuilder::EP_OptimizerLast,
                            addMemorySanitizerPass);
@@ -680,8 +692,6 @@ static void setCommandLineOpts(const CodeGenOptions &CodeGenOpts) {
     BackendArgs.push_back("-limit-float-precision");
     BackendArgs.push_back(CodeGenOpts.LimitFloatPrecision.c_str());
   }
-  for (const std::string &BackendOption : CodeGenOpts.BackendOptions)
-    BackendArgs.push_back(BackendOption.c_str());
   BackendArgs.push_back(nullptr);
   llvm::cl::ParseCommandLineOptions(BackendArgs.size() - 1,
                                     BackendArgs.data());

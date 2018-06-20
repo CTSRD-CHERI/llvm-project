@@ -161,12 +161,12 @@ private:
   bool ForceCapturing = false;
   CriticalsWithHintsTy Criticals;
 
-  typedef SmallVector<SharingMapTy, 8>::reverse_iterator reverse_iterator;
+  typedef StackTy::reverse_iterator reverse_iterator;
 
-  DSAVarData getDSA(StackTy::reverse_iterator &Iter, ValueDecl *D);
+  DSAVarData getDSA(reverse_iterator &Iter, ValueDecl *D);
 
   /// \brief Checks if the variable is a local for OpenMP region.
-  bool isOpenMPLocal(VarDecl *D, StackTy::reverse_iterator Iter);
+  bool isOpenMPLocal(VarDecl *D, reverse_iterator Iter);
 
   bool isStackEmpty() const {
     return Stack.empty() ||
@@ -224,7 +224,7 @@ public:
   }
 
   void addCriticalWithHint(OMPCriticalDirective *D, llvm::APSInt Hint) {
-    Criticals[D->getDirectiveName().getAsString()] = std::make_pair(D, Hint);
+    Criticals.try_emplace(D->getDirectiveName().getAsString(), D, Hint);
   }
   const std::pair<OMPCriticalDirective *, llvm::APSInt>
   getCriticalWithHint(const DeclarationNameInfo &Name) const {
@@ -300,35 +300,36 @@ public:
   /// match specified \a CPred predicate in any directive which matches \a DPred
   /// predicate.
   DSAVarData hasDSA(ValueDecl *D,
-                    const llvm::function_ref<bool(OpenMPClauseKind)> &CPred,
-                    const llvm::function_ref<bool(OpenMPDirectiveKind)> &DPred,
+                    const llvm::function_ref<bool(OpenMPClauseKind)> CPred,
+                    const llvm::function_ref<bool(OpenMPDirectiveKind)> DPred,
                     bool FromParent);
   /// \brief Checks if the specified variables has data-sharing attributes which
   /// match specified \a CPred predicate in any innermost directive which
   /// matches \a DPred predicate.
   DSAVarData
   hasInnermostDSA(ValueDecl *D,
-                  const llvm::function_ref<bool(OpenMPClauseKind)> &CPred,
-                  const llvm::function_ref<bool(OpenMPDirectiveKind)> &DPred,
+                  const llvm::function_ref<bool(OpenMPClauseKind)> CPred,
+                  const llvm::function_ref<bool(OpenMPDirectiveKind)> DPred,
                   bool FromParent);
   /// \brief Checks if the specified variables has explicit data-sharing
   /// attributes which match specified \a CPred predicate at the specified
   /// OpenMP region.
   bool hasExplicitDSA(ValueDecl *D,
-                      const llvm::function_ref<bool(OpenMPClauseKind)> &CPred,
+                      const llvm::function_ref<bool(OpenMPClauseKind)> CPred,
                       unsigned Level, bool NotLastprivate = false);
 
   /// \brief Returns true if the directive at level \Level matches in the
   /// specified \a DPred predicate.
   bool hasExplicitDirective(
-      const llvm::function_ref<bool(OpenMPDirectiveKind)> &DPred,
+      const llvm::function_ref<bool(OpenMPDirectiveKind)> DPred,
       unsigned Level);
 
   /// \brief Finds a directive which matches specified \a DPred predicate.
-  bool hasDirective(const llvm::function_ref<bool(OpenMPDirectiveKind,
-                                                  const DeclarationNameInfo &,
-                                                  SourceLocation)> &DPred,
-                    bool FromParent);
+  bool hasDirective(
+      const llvm::function_ref<bool(
+          OpenMPDirectiveKind, const DeclarationNameInfo &, SourceLocation)>
+          DPred,
+      bool FromParent);
 
   /// \brief Returns currently analyzed directive.
   OpenMPDirectiveKind getCurrentDirective() const {
@@ -479,7 +480,8 @@ public:
       ValueDecl *VD, bool CurrentRegionOnly,
       const llvm::function_ref<
           bool(OMPClauseMappableExprCommon::MappableExprComponentListRef,
-               OpenMPClauseKind)> &Check) {
+               OpenMPClauseKind)>
+          Check) {
     if (isStackEmpty())
       return false;
     auto SI = Stack.back().first.rbegin();
@@ -510,7 +512,8 @@ public:
       ValueDecl *VD, unsigned Level,
       const llvm::function_ref<
           bool(OMPClauseMappableExprCommon::MappableExprComponentListRef,
-               OpenMPClauseKind)> &Check) {
+               OpenMPClauseKind)>
+          Check) {
     if (isStackEmpty())
       return false;
 
@@ -603,7 +606,7 @@ static ValueDecl *getCanonicalDecl(ValueDecl *D) {
   return D;
 }
 
-DSAStackTy::DSAVarData DSAStackTy::getDSA(StackTy::reverse_iterator &Iter,
+DSAStackTy::DSAVarData DSAStackTy::getDSA(reverse_iterator &Iter,
                                           ValueDecl *D) {
   D = getCanonicalDecl(D);
   auto *VD = dyn_cast<VarDecl>(D);
@@ -939,7 +942,7 @@ DSAStackTy::getTopMostTaskgroupReductionData(ValueDecl *D, SourceRange &SR,
   return DSAVarData();
 }
 
-bool DSAStackTy::isOpenMPLocal(VarDecl *D, StackTy::reverse_iterator Iter) {
+bool DSAStackTy::isOpenMPLocal(VarDecl *D, reverse_iterator Iter) {
   D = D->getCanonicalDecl();
   if (!isStackEmpty()) {
     reverse_iterator I = Iter, E = Stack.back().first.rend();
@@ -1100,7 +1103,7 @@ DSAStackTy::DSAVarData DSAStackTy::getTopDSA(ValueDecl *D, bool FromParent) {
 DSAStackTy::DSAVarData DSAStackTy::getImplicitDSA(ValueDecl *D,
                                                   bool FromParent) {
   if (isStackEmpty()) {
-    StackTy::reverse_iterator I;
+    reverse_iterator I;
     return getDSA(I, D);
   }
   D = getCanonicalDecl(D);
@@ -1113,8 +1116,8 @@ DSAStackTy::DSAVarData DSAStackTy::getImplicitDSA(ValueDecl *D,
 
 DSAStackTy::DSAVarData
 DSAStackTy::hasDSA(ValueDecl *D,
-                   const llvm::function_ref<bool(OpenMPClauseKind)> &CPred,
-                   const llvm::function_ref<bool(OpenMPDirectiveKind)> &DPred,
+                   const llvm::function_ref<bool(OpenMPClauseKind)> CPred,
+                   const llvm::function_ref<bool(OpenMPDirectiveKind)> DPred,
                    bool FromParent) {
   if (isStackEmpty())
     return {};
@@ -1135,8 +1138,8 @@ DSAStackTy::hasDSA(ValueDecl *D,
 }
 
 DSAStackTy::DSAVarData DSAStackTy::hasInnermostDSA(
-    ValueDecl *D, const llvm::function_ref<bool(OpenMPClauseKind)> &CPred,
-    const llvm::function_ref<bool(OpenMPDirectiveKind)> &DPred,
+    ValueDecl *D, const llvm::function_ref<bool(OpenMPClauseKind)> CPred,
+    const llvm::function_ref<bool(OpenMPDirectiveKind)> DPred,
     bool FromParent) {
   if (isStackEmpty())
     return {};
@@ -1153,7 +1156,7 @@ DSAStackTy::DSAVarData DSAStackTy::hasInnermostDSA(
 }
 
 bool DSAStackTy::hasExplicitDSA(
-    ValueDecl *D, const llvm::function_ref<bool(OpenMPClauseKind)> &CPred,
+    ValueDecl *D, const llvm::function_ref<bool(OpenMPClauseKind)> CPred,
     unsigned Level, bool NotLastprivate) {
   if (isStackEmpty())
     return false;
@@ -1170,8 +1173,7 @@ bool DSAStackTy::hasExplicitDSA(
 }
 
 bool DSAStackTy::hasExplicitDirective(
-    const llvm::function_ref<bool(OpenMPDirectiveKind)> &DPred,
-    unsigned Level) {
+    const llvm::function_ref<bool(OpenMPDirectiveKind)> DPred, unsigned Level) {
   if (isStackEmpty())
     return false;
   auto StartI = Stack.back().first.begin();
@@ -1185,7 +1187,7 @@ bool DSAStackTy::hasExplicitDirective(
 bool DSAStackTy::hasDirective(
     const llvm::function_ref<bool(OpenMPDirectiveKind,
                                   const DeclarationNameInfo &, SourceLocation)>
-        &DPred,
+        DPred,
     bool FromParent) {
   // We look only in the enclosing region.
   if (isStackEmpty())
@@ -2172,7 +2174,7 @@ void Sema::ActOnOpenMPRegionStart(OpenMPDirectiveKind DKind, Scope *CurScope) {
   case OMPD_teams:
   case OMPD_teams_distribute:
   case OMPD_teams_distribute_simd: {
-    QualType KmpInt32Ty = Context.getIntTypeForBitwidth(32, 1);
+    QualType KmpInt32Ty = Context.getIntTypeForBitwidth(32, 1).withConst();
     QualType KmpInt32PtrTy =
         Context.getPointerType(KmpInt32Ty).withConst().withRestrict();
     Sema::CapturedParamNameType Params[] = {
@@ -2190,17 +2192,21 @@ void Sema::ActOnOpenMPRegionStart(OpenMPDirectiveKind DKind, Scope *CurScope) {
   case OMPD_target_parallel_for_simd:
   case OMPD_target_teams_distribute:
   case OMPD_target_teams_distribute_simd: {
-    QualType KmpInt32Ty = Context.getIntTypeForBitwidth(32, 1);
-    QualType Args[] = {Context.VoidPtrTy.withConst().withRestrict()};
+    QualType KmpInt32Ty = Context.getIntTypeForBitwidth(32, 1).withConst();
+    QualType VoidPtrTy = Context.VoidPtrTy.withConst().withRestrict();
+    QualType KmpInt32PtrTy =
+        Context.getPointerType(KmpInt32Ty).withConst().withRestrict();
+    QualType Args[] = {VoidPtrTy};
     FunctionProtoType::ExtProtoInfo EPI;
     EPI.Variadic = true;
     QualType CopyFnType = Context.getFunctionType(Context.VoidTy, Args, EPI);
     Sema::CapturedParamNameType Params[] = {
         std::make_pair(".global_tid.", KmpInt32Ty),
-        std::make_pair(".part_id.", Context.getPointerType(KmpInt32Ty)),
-        std::make_pair(".privates.", Context.VoidPtrTy.withConst()),
-        std::make_pair(".copy_fn.",
-                       Context.getPointerType(CopyFnType).withConst()),
+        std::make_pair(".part_id.", KmpInt32PtrTy),
+        std::make_pair(".privates.", VoidPtrTy),
+        std::make_pair(
+            ".copy_fn.",
+            Context.getPointerType(CopyFnType).withConst().withRestrict()),
         std::make_pair(".task_t.", Context.VoidPtrTy.withConst()),
         std::make_pair(StringRef(), QualType()) // __context with shared vars
     };
@@ -2210,15 +2216,13 @@ void Sema::ActOnOpenMPRegionStart(OpenMPDirectiveKind DKind, Scope *CurScope) {
     // function directly.
     getCurCapturedRegion()->TheCapturedDecl->addAttr(
         AlwaysInlineAttr::CreateImplicit(
-            Context, AlwaysInlineAttr::Keyword_forceinline, SourceRange()));
+            Context, AlwaysInlineAttr::Keyword_forceinline));
     Sema::CapturedParamNameType ParamsTarget[] = {
         std::make_pair(StringRef(), QualType()) // __context with shared vars
     };
     // Start a captured region for 'target' with no implicit parameters.
     ActOnCapturedRegionStart(DSAStack->getConstructLoc(), CurScope, CR_OpenMP,
                              ParamsTarget);
-    QualType KmpInt32PtrTy =
-        Context.getPointerType(KmpInt32Ty).withConst().withRestrict();
     Sema::CapturedParamNameType ParamsTeamsOrParallel[] = {
         std::make_pair(".global_tid.", KmpInt32PtrTy),
         std::make_pair(".bound_tid.", KmpInt32PtrTy),
@@ -2232,17 +2236,21 @@ void Sema::ActOnOpenMPRegionStart(OpenMPDirectiveKind DKind, Scope *CurScope) {
   }
   case OMPD_target:
   case OMPD_target_simd: {
-    QualType KmpInt32Ty = Context.getIntTypeForBitwidth(32, 1);
-    QualType Args[] = {Context.VoidPtrTy.withConst().withRestrict()};
+    QualType KmpInt32Ty = Context.getIntTypeForBitwidth(32, 1).withConst();
+    QualType VoidPtrTy = Context.VoidPtrTy.withConst().withRestrict();
+    QualType KmpInt32PtrTy =
+        Context.getPointerType(KmpInt32Ty).withConst().withRestrict();
+    QualType Args[] = {VoidPtrTy};
     FunctionProtoType::ExtProtoInfo EPI;
     EPI.Variadic = true;
     QualType CopyFnType = Context.getFunctionType(Context.VoidTy, Args, EPI);
     Sema::CapturedParamNameType Params[] = {
         std::make_pair(".global_tid.", KmpInt32Ty),
-        std::make_pair(".part_id.", Context.getPointerType(KmpInt32Ty)),
-        std::make_pair(".privates.", Context.VoidPtrTy.withConst()),
-        std::make_pair(".copy_fn.",
-                       Context.getPointerType(CopyFnType).withConst()),
+        std::make_pair(".part_id.", KmpInt32PtrTy),
+        std::make_pair(".privates.", VoidPtrTy),
+        std::make_pair(
+            ".copy_fn.",
+            Context.getPointerType(CopyFnType).withConst().withRestrict()),
         std::make_pair(".task_t.", Context.VoidPtrTy.withConst()),
         std::make_pair(StringRef(), QualType()) // __context with shared vars
     };
@@ -2252,7 +2260,7 @@ void Sema::ActOnOpenMPRegionStart(OpenMPDirectiveKind DKind, Scope *CurScope) {
     // function directly.
     getCurCapturedRegion()->TheCapturedDecl->addAttr(
         AlwaysInlineAttr::CreateImplicit(
-            Context, AlwaysInlineAttr::Keyword_forceinline, SourceRange()));
+            Context, AlwaysInlineAttr::Keyword_forceinline));
     ActOnCapturedRegionStart(DSAStack->getConstructLoc(), CurScope, CR_OpenMP,
                              std::make_pair(StringRef(), QualType()));
     break;
@@ -2279,17 +2287,21 @@ void Sema::ActOnOpenMPRegionStart(OpenMPDirectiveKind DKind, Scope *CurScope) {
     break;
   }
   case OMPD_task: {
-    QualType KmpInt32Ty = Context.getIntTypeForBitwidth(32, 1);
-    QualType Args[] = {Context.VoidPtrTy.withConst().withRestrict()};
+    QualType KmpInt32Ty = Context.getIntTypeForBitwidth(32, 1).withConst();
+    QualType VoidPtrTy = Context.VoidPtrTy.withConst().withRestrict();
+    QualType KmpInt32PtrTy =
+        Context.getPointerType(KmpInt32Ty).withConst().withRestrict();
+    QualType Args[] = {VoidPtrTy};
     FunctionProtoType::ExtProtoInfo EPI;
     EPI.Variadic = true;
     QualType CopyFnType = Context.getFunctionType(Context.VoidTy, Args, EPI);
     Sema::CapturedParamNameType Params[] = {
         std::make_pair(".global_tid.", KmpInt32Ty),
-        std::make_pair(".part_id.", Context.getPointerType(KmpInt32Ty)),
-        std::make_pair(".privates.", Context.VoidPtrTy.withConst()),
-        std::make_pair(".copy_fn.",
-                       Context.getPointerType(CopyFnType).withConst()),
+        std::make_pair(".part_id.", KmpInt32PtrTy),
+        std::make_pair(".privates.", VoidPtrTy),
+        std::make_pair(
+            ".copy_fn.",
+            Context.getPointerType(CopyFnType).withConst().withRestrict()),
         std::make_pair(".task_t.", Context.VoidPtrTy.withConst()),
         std::make_pair(StringRef(), QualType()) // __context with shared vars
     };
@@ -2299,35 +2311,40 @@ void Sema::ActOnOpenMPRegionStart(OpenMPDirectiveKind DKind, Scope *CurScope) {
     // function directly.
     getCurCapturedRegion()->TheCapturedDecl->addAttr(
         AlwaysInlineAttr::CreateImplicit(
-            Context, AlwaysInlineAttr::Keyword_forceinline, SourceRange()));
+            Context, AlwaysInlineAttr::Keyword_forceinline));
     break;
   }
   case OMPD_taskloop:
   case OMPD_taskloop_simd: {
     QualType KmpInt32Ty =
-        Context.getIntTypeForBitwidth(/*DestWidth=*/32, /*Signed=*/1);
+        Context.getIntTypeForBitwidth(/*DestWidth=*/32, /*Signed=*/1)
+            .withConst();
     QualType KmpUInt64Ty =
-        Context.getIntTypeForBitwidth(/*DestWidth=*/64, /*Signed=*/0);
+        Context.getIntTypeForBitwidth(/*DestWidth=*/64, /*Signed=*/0)
+            .withConst();
     QualType KmpInt64Ty =
-        Context.getIntTypeForBitwidth(/*DestWidth=*/64, /*Signed=*/1);
-    QualType Args[] = {Context.VoidPtrTy.withConst().withRestrict()};
+        Context.getIntTypeForBitwidth(/*DestWidth=*/64, /*Signed=*/1)
+            .withConst();
+    QualType VoidPtrTy = Context.VoidPtrTy.withConst().withRestrict();
+    QualType KmpInt32PtrTy =
+        Context.getPointerType(KmpInt32Ty).withConst().withRestrict();
+    QualType Args[] = {VoidPtrTy};
     FunctionProtoType::ExtProtoInfo EPI;
     EPI.Variadic = true;
     QualType CopyFnType = Context.getFunctionType(Context.VoidTy, Args, EPI);
     Sema::CapturedParamNameType Params[] = {
         std::make_pair(".global_tid.", KmpInt32Ty),
-        std::make_pair(".part_id.", Context.getPointerType(KmpInt32Ty)),
-        std::make_pair(".privates.",
-                       Context.VoidPtrTy.withConst().withRestrict()),
+        std::make_pair(".part_id.", KmpInt32PtrTy),
+        std::make_pair(".privates.", VoidPtrTy),
         std::make_pair(
             ".copy_fn.",
             Context.getPointerType(CopyFnType).withConst().withRestrict()),
         std::make_pair(".task_t.", Context.VoidPtrTy.withConst()),
         std::make_pair(".lb.", KmpUInt64Ty),
-        std::make_pair(".ub.", KmpUInt64Ty), std::make_pair(".st.", KmpInt64Ty),
+        std::make_pair(".ub.", KmpUInt64Ty),
+        std::make_pair(".st.", KmpInt64Ty),
         std::make_pair(".liter.", KmpInt32Ty),
-        std::make_pair(".reductions.",
-                       Context.VoidPtrTy.withConst().withRestrict()),
+        std::make_pair(".reductions.", VoidPtrTy),
         std::make_pair(StringRef(), QualType()) // __context with shared vars
     };
     ActOnCapturedRegionStart(DSAStack->getConstructLoc(), CurScope, CR_OpenMP,
@@ -2336,19 +2353,19 @@ void Sema::ActOnOpenMPRegionStart(OpenMPDirectiveKind DKind, Scope *CurScope) {
     // function directly.
     getCurCapturedRegion()->TheCapturedDecl->addAttr(
         AlwaysInlineAttr::CreateImplicit(
-            Context, AlwaysInlineAttr::Keyword_forceinline, SourceRange()));
+            Context, AlwaysInlineAttr::Keyword_forceinline));
     break;
   }
   case OMPD_distribute_parallel_for_simd:
   case OMPD_distribute_parallel_for: {
-    QualType KmpInt32Ty = Context.getIntTypeForBitwidth(32, 1);
+    QualType KmpInt32Ty = Context.getIntTypeForBitwidth(32, 1).withConst();
     QualType KmpInt32PtrTy =
         Context.getPointerType(KmpInt32Ty).withConst().withRestrict();
     Sema::CapturedParamNameType Params[] = {
         std::make_pair(".global_tid.", KmpInt32PtrTy),
         std::make_pair(".bound_tid.", KmpInt32PtrTy),
-        std::make_pair(".previous.lb.", Context.getSizeType()),
-        std::make_pair(".previous.ub.", Context.getSizeType()),
+        std::make_pair(".previous.lb.", Context.getSizeType().withConst()),
+        std::make_pair(".previous.ub.", Context.getSizeType().withConst()),
         std::make_pair(StringRef(), QualType()) // __context with shared vars
     };
     ActOnCapturedRegionStart(DSAStack->getConstructLoc(), CurScope, CR_OpenMP,
@@ -2357,20 +2374,22 @@ void Sema::ActOnOpenMPRegionStart(OpenMPDirectiveKind DKind, Scope *CurScope) {
   }
   case OMPD_target_teams_distribute_parallel_for:
   case OMPD_target_teams_distribute_parallel_for_simd: {
-    QualType KmpInt32Ty = Context.getIntTypeForBitwidth(32, 1);
+    QualType KmpInt32Ty = Context.getIntTypeForBitwidth(32, 1).withConst();
     QualType KmpInt32PtrTy =
         Context.getPointerType(KmpInt32Ty).withConst().withRestrict();
+    QualType VoidPtrTy = Context.VoidPtrTy.withConst().withRestrict();
 
-    QualType Args[] = {Context.VoidPtrTy.withConst().withRestrict()};
+    QualType Args[] = {VoidPtrTy};
     FunctionProtoType::ExtProtoInfo EPI;
     EPI.Variadic = true;
     QualType CopyFnType = Context.getFunctionType(Context.VoidTy, Args, EPI);
     Sema::CapturedParamNameType Params[] = {
         std::make_pair(".global_tid.", KmpInt32Ty),
-        std::make_pair(".part_id.", Context.getPointerType(KmpInt32Ty)),
-        std::make_pair(".privates.", Context.VoidPtrTy.withConst()),
-        std::make_pair(".copy_fn.",
-                       Context.getPointerType(CopyFnType).withConst()),
+        std::make_pair(".part_id.", KmpInt32PtrTy),
+        std::make_pair(".privates.", VoidPtrTy),
+        std::make_pair(
+            ".copy_fn.",
+            Context.getPointerType(CopyFnType).withConst().withRestrict()),
         std::make_pair(".task_t.", Context.VoidPtrTy.withConst()),
         std::make_pair(StringRef(), QualType()) // __context with shared vars
     };
@@ -2380,7 +2399,7 @@ void Sema::ActOnOpenMPRegionStart(OpenMPDirectiveKind DKind, Scope *CurScope) {
     // function directly.
     getCurCapturedRegion()->TheCapturedDecl->addAttr(
         AlwaysInlineAttr::CreateImplicit(
-            Context, AlwaysInlineAttr::Keyword_forceinline, SourceRange()));
+            Context, AlwaysInlineAttr::Keyword_forceinline));
     Sema::CapturedParamNameType ParamsTarget[] = {
         std::make_pair(StringRef(), QualType()) // __context with shared vars
     };
@@ -2400,8 +2419,8 @@ void Sema::ActOnOpenMPRegionStart(OpenMPDirectiveKind DKind, Scope *CurScope) {
     Sema::CapturedParamNameType ParamsParallel[] = {
         std::make_pair(".global_tid.", KmpInt32PtrTy),
         std::make_pair(".bound_tid.", KmpInt32PtrTy),
-        std::make_pair(".previous.lb.", Context.getSizeType()),
-        std::make_pair(".previous.ub.", Context.getSizeType()),
+        std::make_pair(".previous.lb.", Context.getSizeType().withConst()),
+        std::make_pair(".previous.ub.", Context.getSizeType().withConst()),
         std::make_pair(StringRef(), QualType()) // __context with shared vars
     };
     // Start a captured region for 'teams' or 'parallel'.  Both regions have
@@ -2413,7 +2432,7 @@ void Sema::ActOnOpenMPRegionStart(OpenMPDirectiveKind DKind, Scope *CurScope) {
 
   case OMPD_teams_distribute_parallel_for:
   case OMPD_teams_distribute_parallel_for_simd: {
-    QualType KmpInt32Ty = Context.getIntTypeForBitwidth(32, 1);
+    QualType KmpInt32Ty = Context.getIntTypeForBitwidth(32, 1).withConst();
     QualType KmpInt32PtrTy =
         Context.getPointerType(KmpInt32Ty).withConst().withRestrict();
 
@@ -2429,8 +2448,8 @@ void Sema::ActOnOpenMPRegionStart(OpenMPDirectiveKind DKind, Scope *CurScope) {
     Sema::CapturedParamNameType ParamsParallel[] = {
         std::make_pair(".global_tid.", KmpInt32PtrTy),
         std::make_pair(".bound_tid.", KmpInt32PtrTy),
-        std::make_pair(".previous.lb.", Context.getSizeType()),
-        std::make_pair(".previous.ub.", Context.getSizeType()),
+        std::make_pair(".previous.lb.", Context.getSizeType().withConst()),
+        std::make_pair(".previous.ub.", Context.getSizeType().withConst()),
         std::make_pair(StringRef(), QualType()) // __context with shared vars
     };
     // Start a captured region for 'teams' or 'parallel'.  Both regions have
@@ -2442,17 +2461,21 @@ void Sema::ActOnOpenMPRegionStart(OpenMPDirectiveKind DKind, Scope *CurScope) {
   case OMPD_target_update:
   case OMPD_target_enter_data:
   case OMPD_target_exit_data: {
-    QualType KmpInt32Ty = Context.getIntTypeForBitwidth(32, 1);
-    QualType Args[] = {Context.VoidPtrTy.withConst().withRestrict()};
+    QualType KmpInt32Ty = Context.getIntTypeForBitwidth(32, 1).withConst();
+    QualType VoidPtrTy = Context.VoidPtrTy.withConst().withRestrict();
+    QualType KmpInt32PtrTy =
+        Context.getPointerType(KmpInt32Ty).withConst().withRestrict();
+    QualType Args[] = {VoidPtrTy};
     FunctionProtoType::ExtProtoInfo EPI;
     EPI.Variadic = true;
     QualType CopyFnType = Context.getFunctionType(Context.VoidTy, Args, EPI);
     Sema::CapturedParamNameType Params[] = {
         std::make_pair(".global_tid.", KmpInt32Ty),
-        std::make_pair(".part_id.", Context.getPointerType(KmpInt32Ty)),
-        std::make_pair(".privates.", Context.VoidPtrTy.withConst()),
-        std::make_pair(".copy_fn.",
-                       Context.getPointerType(CopyFnType).withConst()),
+        std::make_pair(".part_id.", KmpInt32PtrTy),
+        std::make_pair(".privates.", VoidPtrTy),
+        std::make_pair(
+            ".copy_fn.",
+            Context.getPointerType(CopyFnType).withConst().withRestrict()),
         std::make_pair(".task_t.", Context.VoidPtrTy.withConst()),
         std::make_pair(StringRef(), QualType()) // __context with shared vars
     };
@@ -2462,7 +2485,7 @@ void Sema::ActOnOpenMPRegionStart(OpenMPDirectiveKind DKind, Scope *CurScope) {
     // function directly.
     getCurCapturedRegion()->TheCapturedDecl->addAttr(
         AlwaysInlineAttr::CreateImplicit(
-            Context, AlwaysInlineAttr::Keyword_forceinline, SourceRange()));
+            Context, AlwaysInlineAttr::Keyword_forceinline));
     break;
   }
   case OMPD_threadprivate:
@@ -3382,7 +3405,7 @@ Sema::DeclGroupPtrTy Sema::ActOnOpenMPDeclareSimdDirective(
         if (FD->getNumParams() > PVD->getFunctionScopeIndex() &&
             FD->getParamDecl(PVD->getFunctionScopeIndex())
                     ->getCanonicalDecl() == PVD->getCanonicalDecl()) {
-          UniformedArgs.insert(std::make_pair(PVD->getCanonicalDecl(), E));
+          UniformedArgs.try_emplace(PVD->getCanonicalDecl(), E);
           continue;
         }
     if (isa<CXXThisExpr>(E)) {
@@ -9922,9 +9945,9 @@ public:
 };
 } // namespace
 
-template <typename T>
-static T filterLookupForUDR(SmallVectorImpl<UnresolvedSet<8>> &Lookups,
-                            const llvm::function_ref<T(ValueDecl *)> &Gen) {
+template <typename T, typename U>
+static T filterLookupForUDR(SmallVectorImpl<U> &Lookups,
+                            const llvm::function_ref<T(ValueDecl *)> Gen) {
   for (auto &Set : Lookups) {
     for (auto *D : Set) {
       if (auto Res = Gen(cast<ValueDecl>(D)))

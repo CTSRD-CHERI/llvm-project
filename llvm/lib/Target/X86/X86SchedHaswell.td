@@ -119,6 +119,13 @@ defm : HWWriteResPair<WriteShift, [HWPort06],  1>;
 defm : HWWriteResPair<WriteJump,  [HWPort06],   1>;
 defm : HWWriteResPair<WriteCRC32, [HWPort1],   3>;
 
+defm : HWWriteResPair<WriteCMOV,  [HWPort06,HWPort0156], 2, [1,1], 2>; // Conditional move.
+def  : WriteRes<WriteSETCC, [HWPort06]>; // Setcc.
+def  : WriteRes<WriteSETCCStore, [HWPort06,HWPort4,HWPort237]> {
+  let Latency = 2;
+  let NumMicroOps = 3;
+}
+
 // This is for simple LEAs with one or two input operands.
 // The complex ones can only execute on port 1, and they require two cycles on
 // the port to read all inputs. We don't model that.
@@ -152,8 +159,10 @@ defm : HWWriteResPair<WriteCvtI2F, [HWPort1], 4>;
 defm : HWWriteResPair<WriteCvtF2F, [HWPort1], 3>;
 defm : HWWriteResPair<WriteFMA,   [HWPort01], 5>;
 defm : HWWriteResPair<WriteFShuffle,  [HWPort5],  1>;
+defm : HWWriteResPair<WriteFVarShuffle,  [HWPort5],  1>;
 defm : HWWriteResPair<WriteFBlend,  [HWPort015],  1>;
 defm : HWWriteResPair<WriteFShuffle256,  [HWPort5],  3>;
+defm : HWWriteResPair<WriteFVarShuffle256,  [HWPort5],  3>;
 defm : HWWriteResPair<WriteFVarBlend,  [HWPort5], 2, [2]>;
 
 // Vector integer operations.
@@ -167,8 +176,10 @@ defm : HWWriteResPair<WriteVecALU,   [HWPort15],  1>;
 defm : HWWriteResPair<WriteVecIMul,  [HWPort0],   5>;
 defm : HWWriteResPair<WritePMULLD,   [HWPort0], 10, [2], 2, 6>;
 defm : HWWriteResPair<WriteShuffle,  [HWPort5],  1>;
+defm : HWWriteResPair<WriteVarShuffle,  [HWPort5],  1>;
 defm : HWWriteResPair<WriteBlend,  [HWPort15],  1>;
 defm : HWWriteResPair<WriteShuffle256,  [HWPort5],  3>;
+defm : HWWriteResPair<WriteVarShuffle256,  [HWPort5],  3>;
 defm : HWWriteResPair<WriteVarBlend,  [HWPort5], 2, [2]>;
 defm : HWWriteResPair<WriteVarVecShift,  [HWPort0, HWPort5], 2, [2, 1]>;
 defm : HWWriteResPair<WriteMPSAD,  [HWPort0, HWPort5], 6, [1, 2]>;
@@ -717,7 +728,6 @@ def: InstRW<[HWWriteResGroup4], (instregex "MMX_MOVD64rr",
                                            "MMX_MOVD64to64rr",
                                            "MMX_MOVQ2DQrr",
                                            "MMX_PALIGNRrri",
-                                           "MMX_PSHUFBrr",
                                            "MMX_PSHUFWri",
                                            "MMX_PUNPCKHBWirr",
                                            "MMX_PUNPCKHDQirr",
@@ -755,9 +765,7 @@ def: InstRW<[HWWriteResGroup4], (instregex "MMX_MOVD64rr",
                                            "VPBROADCASTDrr",
                                            "VPBROADCASTQrr",
                                            "VPERMILPD(Y?)ri",
-                                           "VPERMILPD(Y?)rr",
                                            "VPERMILPS(Y?)ri",
-                                           "VPERMILPS(Y?)rr",
                                            "(V?)PMOVSXBDrr",
                                            "(V?)PMOVSXBQrr",
                                            "(V?)PMOVSXBWrr",
@@ -770,7 +778,6 @@ def: InstRW<[HWWriteResGroup4], (instregex "MMX_MOVD64rr",
                                            "(V?)PMOVZXDQrr",
                                            "(V?)PMOVZXWDrr",
                                            "(V?)PMOVZXWQrr",
-                                           "(V?)PSHUFB(Y?)rr",
                                            "(V?)PSHUFD(Y?)ri",
                                            "(V?)PSHUFHW(Y?)ri",
                                            "(V?)PSHUFLW(Y?)ri",
@@ -830,7 +837,6 @@ def: InstRW<[HWWriteResGroup7], (instregex "BT(16|32|64)ri8",
                                            "SAR(8|16|32|64)r1",
                                            "SAR(8|16|32|64)ri",
                                            "SARX(32|64)rr",
-                                           "SET(AE|B|E|G|GE|L|LE|NE|NO|NP|NS|O|P|S)r",
                                            "SHL(8|16|32|64)r1",
                                            "SHL(8|16|32|64)ri",
                                            "SHLX(32|64)rr",
@@ -1405,13 +1411,6 @@ def HWWriteResGroup21 : SchedWriteRes<[HWPort4,HWPort6,HWPort237]> {
 }
 def: InstRW<[HWWriteResGroup21], (instregex "FNSTCW16m")>;
 
-def HWWriteResGroup22 : SchedWriteRes<[HWPort4,HWPort237,HWPort06]> {
-  let Latency = 2;
-  let NumMicroOps = 3;
-  let ResourceCycles = [1,1,1];
-}
-def: InstRW<[HWWriteResGroup22], (instregex "SET(AE|B|E|G|GE|L|LE|NE|NO|NP|NS|O|P|S)m")>;
-
 def HWWriteResGroup23 : SchedWriteRes<[HWPort4,HWPort237,HWPort15]> {
   let Latency = 2;
   let NumMicroOps = 3;
@@ -1568,7 +1567,6 @@ def: InstRW<[HWWriteResGroup35], (instrs CWD, JCXZ, JECXZ, JRCXZ)>;
 def: InstRW<[HWWriteResGroup35], (instregex "ADC(8|16|32|64)ri",
                                             "ADC(8|16|32|64)rr",
                                             "ADC(8|16|32|64)i",
-                                            "CMOV(AE|B|E|G|GE|L|LE|NE|NO|NP|NS|O|P|S)(16|32|64)rr",
                                             "SBB(8|16|32|64)ri",
                                             "SBB(8|16|32|64)rr",
                                             "SBB(8|16|32|64)i",
@@ -1663,7 +1661,6 @@ def HWWriteResGroup43 : SchedWriteRes<[HWPort23,HWPort06,HWPort0156]> {
   let NumMicroOps = 3;
   let ResourceCycles = [1,1,1];
 }
-def: InstRW<[HWWriteResGroup43], (instregex "CMOV(AE|B|E|G|GE|L|LE|NE|NO|NP|NS|O|P|S)(16|32|64)rm")>;
 def: InstRW<[HWWriteResGroup43, ReadAfterLd], (instrs ADC8rm, ADC16rm, ADC32rm, ADC64rm,
                                                       SBB8rm, SBB16rm, SBB32rm, SBB64rm)>;
 
@@ -1783,9 +1780,7 @@ def: InstRW<[HWWriteResGroup51], (instregex "VBROADCASTSDYrr",
                                             "VPBROADCASTWrr",
                                             "VPERM2F128rr",
                                             "VPERM2I128rr",
-                                            "VPERMDYrr",
                                             "VPERMPDYri",
-                                            "VPERMPSYrr",
                                             "VPERMQYri",
                                             "VPMOVSXBDYrr",
                                             "VPMOVSXBQYrr",

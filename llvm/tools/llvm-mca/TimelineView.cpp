@@ -72,6 +72,17 @@ void TimelineView::onInstructionEvent(const HWInstructionEvent &Event) {
   LastCycle = std::max(LastCycle, CurrentCycle);
 }
 
+static void printAverageTime(raw_string_ostream &OS, double AverageTime) {
+  // Round to the nearest tenth.
+  OS << format("%.1f", floor((AverageTime * 10) + 0.5)/10);
+  if (AverageTime < 10.0)
+    OS << "    ";
+  else if (AverageTime < 100.0)
+    OS << "   ";
+  else
+    OS << "  ";
+}
+
 void TimelineView::printWaitTimeEntry(raw_string_ostream &OS,
                                       const WaitTimeEntry &Entry,
                                       unsigned SourceIndex) const {
@@ -100,27 +111,9 @@ void TimelineView::printWaitTimeEntry(raw_string_ostream &OS,
     else
       OS << Executions << "   ";
 
-    OS << format("%.1f", AverageTime1);
-    if (AverageTime1 < 10.0)
-      OS << "    ";
-    else if (AverageTime1 < 100.0)
-      OS << "   ";
-    else
-      OS << "  ";
-
-    OS << format("%.1f", AverageTime2);
-    if (AverageTime2 < 10.0)
-      OS << "    ";
-    else if (AverageTime2 < 100.0)
-      OS << "   ";
-    else
-      OS << "  ";
-
-    OS << format("%.1f", AverageTime3);
-    if (AverageTime3 < 10.0)
-      OS << "  ";
-    else if (AverageTime3 < 100.0)
-      OS << ' ';
+    printAverageTime(OS, AverageTime1);
+    printAverageTime(OS, AverageTime2);
+    printAverageTime(OS, AverageTime3);
   }
 }
 

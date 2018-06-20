@@ -13882,27 +13882,29 @@ define void @test_setcc(i8 %a0, i8 *%a1) optsize {
 ; ZNVER1-NEXT:    setge %dil # sched: [1:0.25]
 ; ZNVER1-NEXT:    setle %dil # sched: [1:0.25]
 ; ZNVER1-NEXT:    setg %dil # sched: [1:0.25]
-; ZNVER1-NEXT:    seto (%rsi) # sched: [1:0.25]
-; ZNVER1-NEXT:    setno (%rsi) # sched: [1:0.25]
-; ZNVER1-NEXT:    setb (%rsi) # sched: [1:0.25]
-; ZNVER1-NEXT:    setae (%rsi) # sched: [1:0.25]
-; ZNVER1-NEXT:    sete (%rsi) # sched: [1:0.25]
-; ZNVER1-NEXT:    setne (%rsi) # sched: [1:0.25]
-; ZNVER1-NEXT:    setbe (%rsi) # sched: [1:0.25]
-; ZNVER1-NEXT:    seta (%rsi) # sched: [1:0.25]
-; ZNVER1-NEXT:    sets (%rsi) # sched: [1:0.25]
-; ZNVER1-NEXT:    setns (%rsi) # sched: [1:0.25]
-; ZNVER1-NEXT:    setp (%rsi) # sched: [1:0.25]
-; ZNVER1-NEXT:    setnp (%rsi) # sched: [1:0.25]
-; ZNVER1-NEXT:    setl (%rsi) # sched: [1:0.25]
-; ZNVER1-NEXT:    setge (%rsi) # sched: [1:0.25]
-; ZNVER1-NEXT:    setle (%rsi) # sched: [1:0.25]
-; ZNVER1-NEXT:    setg (%rsi) # sched: [1:0.25]
+; ZNVER1-NEXT:    seto (%rsi) # sched: [1:0.50]
+; ZNVER1-NEXT:    setno (%rsi) # sched: [1:0.50]
+; ZNVER1-NEXT:    setb (%rsi) # sched: [1:0.50]
+; ZNVER1-NEXT:    setae (%rsi) # sched: [1:0.50]
+; ZNVER1-NEXT:    sete (%rsi) # sched: [1:0.50]
+; ZNVER1-NEXT:    setne (%rsi) # sched: [1:0.50]
+; ZNVER1-NEXT:    setbe (%rsi) # sched: [1:0.50]
+; ZNVER1-NEXT:    seta (%rsi) # sched: [1:0.50]
+; ZNVER1-NEXT:    sets (%rsi) # sched: [1:0.50]
+; ZNVER1-NEXT:    setns (%rsi) # sched: [1:0.50]
+; ZNVER1-NEXT:    setp (%rsi) # sched: [1:0.50]
+; ZNVER1-NEXT:    setnp (%rsi) # sched: [1:0.50]
+; ZNVER1-NEXT:    setl (%rsi) # sched: [1:0.50]
+; ZNVER1-NEXT:    setge (%rsi) # sched: [1:0.50]
+; ZNVER1-NEXT:    setle (%rsi) # sched: [1:0.50]
+; ZNVER1-NEXT:    setg (%rsi) # sched: [1:0.50]
 ; ZNVER1-NEXT:    #NO_APP
 ; ZNVER1-NEXT:    retq # sched: [1:0.50]
   call void asm sideeffect "seto $0 \0A\09 setno $0 \0A\09 setb $0 \0A\09 setnb $0 \0A\09 setz $0 \0A\09 setnz $0 \0A\09 setbe $0 \0A\09 setnbe $0 \0A\09 sets $0 \0A\09 setns $0 \0A\09 setp $0 \0A\09 setnp $0 \0A\09 setl $0 \0A\09 setnl $0 \0A\09 setle $0 \0A\09 setnle $0 \0A\09 seto $1 \0A\09 setno $1 \0A\09 setb $1 \0A\09 setnb $1 \0A\09 setz $1 \0A\09 setnz $1 \0A\09 setbe $1 \0A\09 setnbe $1 \0A\09 sets $1 \0A\09 setns $1 \0A\09 setp $1 \0A\09 setnp $1 \0A\09 setl $1 \0A\09 setnl $1 \0A\09 setle $1 \0A\09 setnle $1", "r,*m"(i8 %a0, i8 *%a1)
   ret void
 }
+
+; TODO - test_sgdt
 
 define void @test_shld_shrd_16(i16 %a0, i16 %a1, i16 *%a2) optsize {
 ; GENERIC-LABEL: test_shld_shrd_16:
@@ -14334,6 +14336,10 @@ define void @test_shld_shrd_64(i64 %a0, i64 %a1, i64 *%a2) optsize {
   ret void
 }
 
+; TODO - test_sidt
+; TODO - test_sldt
+; TODO - test_smsw
+
 define void @test_stc_std() optsize {
 ; GENERIC-LABEL: test_stc_std:
 ; GENERIC:       # %bb.0:
@@ -14417,6 +14423,9 @@ define void @test_stc_std() optsize {
   call void asm sideeffect "stc \0A\09 std", ""()
   ret void
 }
+
+; TODO - test_sti
+; TODO - test_stgi
 
 define void @test_stos() optsize {
 ; GENERIC-LABEL: test_stos:
@@ -14521,6 +14530,8 @@ define void @test_stos() optsize {
   call void asm sideeffect "stosb \0A\09 stosw \0A\09 stosl \0A\09 stosq", ""()
   ret void
 }
+
+; TODO - test_str
 
 define void @test_sub_8(i8 %a0, i8* %a1) optsize {
 ; GENERIC-LABEL: test_sub_8:
@@ -15165,6 +15176,12 @@ define void @test_sub_64(i64 %a0, i64* %a1) optsize {
   ret void
 }
 
+; TODO - test_swapgs
+; TODO - test_syscall
+; TODO - test_sysenter
+; TODO - test_sysexit
+; TODO - test_sysret
+
 define void @test_test_8(i8 %a0, i8* %a1) optsize {
 ; GENERIC-LABEL: test_test_8:
 ; GENERIC:       # %bb.0:
@@ -15720,7 +15737,7 @@ define void @test_ud2() optsize {
 ; ATOM-LABEL: test_ud2:
 ; ATOM:       # %bb.0:
 ; ATOM-NEXT:    #APP
-; ATOM-NEXT:    ud2 # sched: [0:?]
+; ATOM-NEXT:    ud2 # sched: [100:0.50]
 ; ATOM-NEXT:    #NO_APP
 ; ATOM-NEXT:    retq # sched: [79:39.50]
 ;
@@ -15782,6 +15799,14 @@ define void @test_ud2() optsize {
   call void asm sideeffect "ud2", ""()
   ret void
 }
+
+; TODO - test_verr
+; TODO - test_verw
+; TODO - test_vmload
+; TODO - test_vmmcall
+; TODO - test_vmrun
+; TODO - test_vmsave
+; TODO - test_wbinvd
 
 define void @test_xadd_8(i8 %a0, i8 %a1, i8 *%a2) optsize {
 ; GENERIC-LABEL: test_xadd_8:

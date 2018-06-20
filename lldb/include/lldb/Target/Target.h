@@ -35,6 +35,7 @@
 #include "lldb/Target/ProcessLaunchInfo.h"
 #include "lldb/Target/SectionLoadHistory.h"
 #include "lldb/Utility/ArchSpec.h"
+#include "lldb/Utility/LLDBAssert.h"
 #include "lldb/Utility/Timeout.h"
 #include "lldb/lldb-public.h"
 
@@ -101,9 +102,6 @@ public:
   void SetDisableSTDIO(bool b);
 
   const char *GetDisassemblyFlavor() const;
-
-  //    void
-  //    SetDisassemblyFlavor(const char *flavor);
 
   InlineStrategy GetInlineStrategy() const;
 
@@ -488,9 +486,6 @@ public:
   static ArchSpec GetDefaultArchitecture();
 
   static void SetDefaultArchitecture(const ArchSpec &arch);
-
-  //    void
-  //    UpdateInstanceName ();
 
   lldb::ModuleSP GetSharedModule(const ModuleSpec &module_spec,
                                  Status *error_ptr = nullptr);
@@ -992,13 +987,6 @@ public:
     return m_section_load_history.GetCurrentSectionLoadList();
   }
 
-  //    const SectionLoadList&
-  //    GetSectionLoadList() const
-  //    {
-  //        return const_cast<SectionLoadHistory
-  //        *>(&m_section_load_history)->GetCurrentSectionLoadList();
-  //    }
-
   static Target *GetTargetFromContexts(const ExecutionContext *exe_ctx_ptr,
                                        const SymbolContext *sc_ptr);
 
@@ -1172,9 +1160,6 @@ public:
 
   bool GetSuppressStopHooks() { return m_suppress_stop_hooks; }
 
-  //    StopHookSP &
-  //    GetStopHookByIndex (size_t index);
-  //
   bool RemoveStopHookByID(lldb::user_id_t uid);
 
   void RemoveAllStopHooks();
@@ -1299,6 +1284,28 @@ protected:
 
   static void ImageSearchPathsChanged(const PathMappingList &path_list,
                                       void *baton);
+
+  //------------------------------------------------------------------
+  // Utilities for `statistics` command.
+  //------------------------------------------------------------------
+private:
+  std::vector<uint32_t> m_stats_storage;
+  bool m_collecting_stats = false;
+
+public:
+  void SetCollectingStats(bool v) { m_collecting_stats = v; }
+
+  bool GetCollectingStats() { return m_collecting_stats; }
+
+  void IncrementStats(lldb_private::StatisticKind key) {
+    if (!GetCollectingStats())
+      return;
+    lldbassert(key < lldb_private::StatisticKind::StatisticMax &&
+               "invalid statistics!");
+    m_stats_storage[key] += 1;
+  }
+
+  std::vector<uint32_t> GetStatistics() { return m_stats_storage; }
 
 private:
   //------------------------------------------------------------------

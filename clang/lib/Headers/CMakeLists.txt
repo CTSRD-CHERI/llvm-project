@@ -42,6 +42,7 @@ set(files
   cetintrin.h
   cheri.h
   cheri_init_globals.h
+  cldemoteintrin.h
   clzerointrin.h
   cpuid.h
   clflushoptintrin.h
@@ -97,6 +98,7 @@ set(files
   varargs.h
   vecintrin.h
   vpclmulqdqintrin.h
+  wbnoinvdintrin.h
   wmmintrin.h
   __wmmintrin_aes.h
   __wmmintrin_pclmul.h

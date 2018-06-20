@@ -788,7 +788,8 @@ ASTContext::ASTContext(LangOptions &LOpts, SourceManager &SM,
       SubstTemplateTemplateParmPacks(this_()), SourceMgr(SM), LangOpts(LOpts),
       SanitizerBL(new SanitizerBlacklist(LangOpts.SanitizerBlacklistFiles, SM)),
       XRayFilter(new XRayFunctionFilter(LangOpts.XRayAlwaysInstrumentFiles,
-                                        LangOpts.XRayNeverInstrumentFiles, SM)),
+                                        LangOpts.XRayNeverInstrumentFiles,
+                                        LangOpts.XRayAttrListFiles, SM)),
       PrintingPolicy(LOpts), Idents(idents), Selectors(sels),
       BuiltinInfo(builtins), DeclarationNames(*this), Comments(SM),
       CommentCommandTraits(BumpAlloc, LOpts.CommentOpts), LastSDM(nullptr, 0) {
@@ -7392,6 +7393,10 @@ TypedefDecl *ASTContext::getBuiltinMSVaListDecl() const {
     BuiltinMSVaListDecl = CreateMSVaListDecl(this);
 
   return BuiltinMSVaListDecl;
+}
+
+bool ASTContext::canBuiltinBeRedeclared(const FunctionDecl *FD) const {
+  return BuiltinInfo.canBeRedeclared(FD->getBuiltinID());
 }
 
 void ASTContext::setObjCConstantStringInterface(ObjCInterfaceDecl *Decl) {

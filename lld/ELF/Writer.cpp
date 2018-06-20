@@ -494,7 +494,7 @@ template <class ELFT> void Writer<ELFT>::run() {
 
 static bool shouldKeepInSymtab(SectionBase *Sec, StringRef SymName,
                                const Symbol &B) {
-  if (B.isFile() || B.isSection())
+  if (B.isSection())
     return false;
 
   // If sym references a section in a discarded group, don't keep it.
@@ -1057,16 +1057,19 @@ static DenseMap<const InputSectionBase *, int> buildSectionOrder() {
       auto *D = dyn_cast<Defined>(&Sym);
       InputFile *File = Sym.File;
       if (Sym.isUndefined())
-        warn(File->getName() +
+        warn(toString(File) +
              ": unable to order undefined symbol: " + Sym.getName());
       else if (Sym.isShared())
-        warn(File->getName() +
+        warn(toString(File) +
              ": unable to order shared symbol: " + Sym.getName());
       else if (D && !D->Section)
-        warn(File->getName() +
+        warn(toString(File) +
              ": unable to order absolute symbol: " + Sym.getName());
-      else if (D && !D->Section->Live)
-        warn(File->getName() +
+      else if (D && isa<OutputSection>(D->Section))
+        warn(toString(File) +
+             ": unable to order synthetic symbol: " + Sym.getName());
+      else if (D && !D->Section->Repl->Live)
+        warn(toString(File) +
              ": unable to order discarded symbol: " + Sym.getName());
     }
 
@@ -1213,22 +1216,29 @@ template <class ELFT> void Writer<ELFT>::sortSections() {
   if (Config->Relocatable)
     return;
 
-  for (BaseCommand *Base : Script->SectionCommands)
-    if (auto *Sec = dyn_cast<OutputSection>(Base))
-      Sec->SortRank = getSectionRank(Sec);
-
   sortInputSections();
+
+  for (BaseCommand *Base : Script->SectionCommands) {
+    auto *OS = dyn_cast<OutputSection>(Base);
+    if (!OS)
+      continue;
+    OS->SortRank = getSectionRank(OS);
+
+    // We want to assign rude approximation values to OutSecOff fields
+    // to know the relative order of the input sections. We use it for
+    // sorting SHF_LINK_ORDER sections. See resolveShfLinkOrder().
+    uint64_t I = 0;
+    for (InputSection *Sec : getInputSections(OS))
+      Sec->OutSecOff = I++;
+  }
 
   if (!Script->HasSectionsCommand) {
     // We know that all the OutputSections are contiguous in this case.
-    auto E = Script->SectionCommands.end();
-    auto I = Script->SectionCommands.begin();
     auto IsSection = [](BaseCommand *Base) { return isa<OutputSection>(Base); };
-    I = std::find_if(I, E, IsSection);
-    E = std::find_if(llvm::make_reverse_iterator(E),
-                     llvm::make_reverse_iterator(I), IsSection)
-            .base();
-    std::stable_sort(I, E, compareSections);
+    std::stable_sort(
+        llvm::find_if(Script->SectionCommands, IsSection),
+        llvm::find_if(llvm::reverse(Script->SectionCommands), IsSection).base(),
+        compareSections);
     return;
   }
 
@@ -1663,15 +1673,15 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     } while (Changed);
   }
 
+  // createThunks may have added local symbols to the static symbol table
+  applySynthetic({InX::SymTab},
+                 [](SyntheticSection *SS) { SS->postThunkContents(); });
+
   // Fill other section headers. The dynamic table is finalized
   // at the end because some tags like RELSZ depend on result
   // of finalizing other sections.
   for (OutputSection *Sec : OutputSections)
     Sec->finalize<ELFT>();
-
-  // createThunks may have added local symbols to the static symbol table
-  applySynthetic({InX::SymTab},
-                 [](SyntheticSection *SS) { SS->postThunkContents(); });
 }
 
 // The linker is expected to define SECNAME_start and SECNAME_end

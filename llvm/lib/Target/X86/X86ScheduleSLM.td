@@ -93,6 +93,13 @@ defm : SLMWriteResPair<WriteShift, [SLM_IEC_RSV0],  1>;
 defm : SLMWriteResPair<WriteJump,  [SLM_IEC_RSV1],  1>;
 defm : SLMWriteResPair<WriteCRC32, [SLM_IEC_RSV1],  3>;
 
+defm : SLMWriteResPair<WriteCMOV,  [SLM_IEC_RSV01], 1>;
+def  : WriteRes<WriteSETCC, [SLM_IEC_RSV01]>;
+def  : WriteRes<WriteSETCCStore, [SLM_IEC_RSV01, SLM_MEC_RSV]> {
+  // FIXME Latency and NumMicrOps?
+  let ResourceCycles = [2,1];
+}
+
 // This is for simple LEAs with one or two input operands.
 // The complex ones can only execute on port 1, and they require two cycles on
 // the port to read all inputs. We don't model that.
@@ -127,6 +134,7 @@ defm : SLMWriteResPair<WriteCvtF2I, [SLM_FPC_RSV01], 4>;
 defm : SLMWriteResPair<WriteCvtI2F, [SLM_FPC_RSV01], 4>;
 defm : SLMWriteResPair<WriteCvtF2F, [SLM_FPC_RSV01], 4>;
 defm : SLMWriteResPair<WriteFShuffle, [SLM_FPC_RSV0],  1>;
+defm : SLMWriteResPair<WriteFVarShuffle, [SLM_FPC_RSV0],  1>;
 defm : SLMWriteResPair<WriteFBlend,  [SLM_FPC_RSV0],  1>;
 
 // Vector integer operations.
@@ -138,8 +146,11 @@ defm : SLMWriteResPair<WriteVecShift, [SLM_FPC_RSV0],  1>;
 defm : SLMWriteResPair<WriteVecLogic, [SLM_FPC_RSV01], 1>;
 defm : SLMWriteResPair<WriteVecALU,   [SLM_FPC_RSV01],  1>;
 defm : SLMWriteResPair<WriteVecIMul,  [SLM_FPC_RSV0],   4>;
-defm : SLMWriteResPair<WritePMULLD,  [SLM_FPC_RSV0],   11, [11], 7>;
+// FIXME: The below is closer to correct, but caused some perf regressions.
+//defm : SLMWriteResPair<WritePMULLD,  [SLM_FPC_RSV0],   11, [11], 7>;
+defm : SLMWriteResPair<WritePMULLD,  [SLM_FPC_RSV0],   4>;
 defm : SLMWriteResPair<WriteShuffle,  [SLM_FPC_RSV0],  1>;
+defm : SLMWriteResPair<WriteVarShuffle,  [SLM_FPC_RSV0],  1>;
 defm : SLMWriteResPair<WriteBlend,  [SLM_FPC_RSV0],  1>;
 defm : SLMWriteResPair<WriteMPSAD,  [SLM_FPC_RSV0],  7>;
 
@@ -246,7 +257,9 @@ def  : WriteRes<WriteIMulH, [SLM_FPC_RSV0]>;
 defm : SLMWriteResPair<WriteVarBlend, [SLM_FPC_RSV0], 1>;
 defm : SLMWriteResPair<WriteFVarBlend, [SLM_FPC_RSV0], 1>;
 defm : SLMWriteResPair<WriteFShuffle256, [SLM_FPC_RSV0],  1>;
+defm : SLMWriteResPair<WriteFVarShuffle256, [SLM_FPC_RSV0],  1>;
 defm : SLMWriteResPair<WriteShuffle256, [SLM_FPC_RSV0],  1>;
+defm : SLMWriteResPair<WriteVarShuffle256, [SLM_FPC_RSV0],  1>;
 defm : SLMWriteResPair<WriteVarVecShift, [SLM_FPC_RSV0],  1>;
 defm : SLMWriteResPair<WriteFMA, [SLM_FPC_RSV0],  1>;
 

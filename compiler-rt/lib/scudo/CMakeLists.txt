@@ -4,7 +4,7 @@ include_directories(..)
 
 set(SCUDO_CFLAGS ${SANITIZER_COMMON_CFLAGS})
 # SANITIZER_COMMON_CFLAGS include -fno-builtin, but we actually want builtins!
-list(APPEND SCUDO_CFLAGS -fbuiltin -ffunction-sections -fdata-sections)
+list(APPEND SCUDO_CFLAGS -fbuiltin)
 append_rtti_flag(OFF SCUDO_CFLAGS)
 
 set(SCUDO_DYNAMIC_LIBS ${SANITIZER_COMMON_LINK_LIBS})
@@ -25,10 +25,11 @@ set(SCUDO_OBJECT_LIBS
 if (FUCHSIA)
   list(APPEND SCUDO_CFLAGS -nostdinc++)
   list(APPEND SCUDO_DYNAMIC_LINK_FLAGS -nostdlib++)
-  # TODO(kostyak): remove when stacktraces are split off of RTSanitizerCommon
-  list(APPEND SCUDO_DYNAMIC_LIBS unwind_shared)
 else()
-  list(APPEND SCUDO_OBJECT_LIBS RTSanitizerCommonCoverage RTUbsan)
+  list(APPEND SCUDO_OBJECT_LIBS
+    RTSanitizerCommonCoverage
+    RTSanitizerCommonSymbolizer
+    RTUbsan)
   list(APPEND SCUDO_DYNAMIC_LIBS ${SANITIZER_CXX_ABI_LIBRARY})
 endif()
 

@@ -141,6 +141,10 @@ defm : JWriteResIntPair<WriteIMul,  [JALU1, JMul], 3, [1, 1], 2>; // i8/i16/i32 
 defm : JWriteResIntPair<WriteIDiv,  [JALU1, JDiv], 41, [1, 41], 2>; // Worst case (i64 division)
 defm : JWriteResIntPair<WriteCRC32, [JALU01], 3, [4], 3>;
 
+defm : JWriteResIntPair<WriteCMOV,  [JALU01], 1>; // Conditional move.
+def  : WriteRes<WriteSETCC, [JALU01]>; // Setcc.
+def  : WriteRes<WriteSETCCStore, [JALU01,JSAGU]>;
+
 def  : WriteRes<WriteIMulH, [JALU1]> {
   let Latency = 6;
   let ResourceCycles = [4];
@@ -297,9 +301,11 @@ defm : JWriteResFpuPair<WriteFRsqrt,       [JFPU1, JFPM],  2>;
 defm : JWriteResFpuPair<WriteFDiv,         [JFPU1, JFPM], 19, [1, 19]>;
 defm : JWriteResFpuPair<WriteFSqrt,        [JFPU1, JFPM], 21, [1, 21]>;
 defm : JWriteResFpuPair<WriteFShuffle,    [JFPU01, JFPX],  1>;
+defm : JWriteResFpuPair<WriteFVarShuffle, [JFPU01, JFPX],  2, [1, 4], 3>;
 defm : JWriteResFpuPair<WriteFBlend,      [JFPU01, JFPX],  1>;
 defm : JWriteResFpuPair<WriteFVarBlend,   [JFPU01, JFPX],  2, [1, 4], 3>;
 defm : JWriteResFpuPair<WriteFShuffle256, [JFPU01, JFPX],  1>;
+defm : JWriteResFpuPair<WriteFVarShuffle256, [JFPU01, JFPX],  1>; // NOTE: Doesn't exist on Jaguar.
 
 ////////////////////////////////////////////////////////////////////////////////
 // Conversions.
@@ -363,11 +369,32 @@ defm : JWriteResFpuPair<WriteVecIMul,     [JFPU0, JVIMUL], 2>;
 defm : JWriteResFpuPair<WritePMULLD,      [JFPU0, JFPU01, JVIMUL, JVALU], 4, [2, 1, 2, 1], 3>;
 defm : JWriteResFpuPair<WriteMPSAD,       [JFPU0, JVIMUL], 3, [1, 2]>;
 defm : JWriteResFpuPair<WriteShuffle,     [JFPU01, JVALU], 1>;
+defm : JWriteResFpuPair<WriteVarShuffle,  [JFPU01, JVALU], 2, [1, 4], 3>;
 defm : JWriteResFpuPair<WriteBlend,       [JFPU01, JVALU], 1>;
 defm : JWriteResFpuPair<WriteVarBlend,    [JFPU01, JVALU], 2, [1, 4], 3>;
 defm : JWriteResFpuPair<WriteVecLogic,    [JFPU01, JVALU], 1>;
 defm : JWriteResFpuPair<WriteShuffle256,  [JFPU01, JVALU], 1>;
+defm : JWriteResFpuPair<WriteVarShuffle256, [JFPU01, JVALU], 1>; // NOTE: Doesn't exist on Jaguar.
 defm : JWriteResFpuPair<WriteVarVecShift, [JFPU01, JVALU], 1>; // NOTE: Doesn't exist on Jaguar.
+
+////////////////////////////////////////////////////////////////////////////////
+// Vector Extraction instructions.
+////////////////////////////////////////////////////////////////////////////////
+
+def JWritePEXTR : SchedWriteRes<[JFPU0, JFPA, JALU0]> { let Latency = 3; }
+def : InstRW<[JWritePEXTR], (instrs MMX_PEXTRWrr,
+                                    EXTRACTPSrr, VEXTRACTPSrr,
+                                    PEXTRBrr, VPEXTRBrr,
+                                    PEXTRDrr, VPEXTRDrr,
+                                    PEXTRQrr, VPEXTRQrr,
+                                    PEXTRWrr, VPEXTRWrr, PEXTRWrr_REV, VPEXTRWrr_REV)>;
+
+def JWritePEXTRSt : SchedWriteRes<[JFPU1, JSTC, JSAGU]> { let Latency = 3; }
+def : InstRW<[JWritePEXTRSt], (instrs EXTRACTPSmr, VEXTRACTPSmr,
+                                      PEXTRBmr, VPEXTRBmr,
+                                      PEXTRDmr, VPEXTRDmr,
+                                      PEXTRQmr, VPEXTRQmr,
+                                      PEXTRWmr, VPEXTRWmr)>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // SSE42 String instructions.
@@ -726,34 +753,6 @@ def JWriteVCVTPDYLd: SchedWriteRes<[JLAGU, JFPU1, JSTC, JFPX]> {
   let NumMicroOps = 3;
 }
 def : InstRW<[JWriteVCVTPDYLd, ReadAfterLd], (instrs VCVTPD2DQYrm, VCVTTPD2DQYrm, VCVTPD2PSYrm)>;
-
-def JWritePSHUFB: SchedWriteRes<[JFPU01, JVALU]> {
-  let Latency = 2;
-  let ResourceCycles = [1, 4];
-  let NumMicroOps = 3;
-}
-def : InstRW<[JWritePSHUFB], (instrs MMX_PSHUFBrr, PSHUFBrr, VPSHUFBrr)>;
-
-def JWritePSHUFBLd: SchedWriteRes<[JLAGU, JFPU01, JVALU]> {
-  let Latency = 7;
-  let ResourceCycles = [1, 1, 4];
-  let NumMicroOps = 3;
-}
-def : InstRW<[JWritePSHUFBLd, ReadAfterLd], (instrs MMX_PSHUFBrm, PSHUFBrm, VPSHUFBrm)>;
-
-def JWriteVPERM: SchedWriteRes<[JFPU01, JFPX]> {
-  let Latency = 2;
-  let ResourceCycles = [1, 4];
-  let NumMicroOps = 3;
-}
-def : InstRW<[JWriteVPERM], (instrs VPERMILPDrr, VPERMILPSrr)>;
-
-def JWriteVPERMLd: SchedWriteRes<[JLAGU, JFPU01, JFPX]> {
-  let Latency = 7;
-  let ResourceCycles = [1, 1, 4];
-  let NumMicroOps = 3;
-}
-def : InstRW<[JWriteVPERMLd, ReadAfterLd], (instrs VPERMILPDrm, VPERMILPSrm)>;
 
 def JWriteVPERMY: SchedWriteRes<[JFPU01, JFPX]> {
   let Latency = 3;

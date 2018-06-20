@@ -2446,6 +2446,10 @@ Instruction *InstCombiner::visitXor(BinaryOperator &I) {
   if (Value *V = SimplifyBSwap(I, Builder))
     return replaceInstUsesWith(I, V);
 
+  // A^B --> A|B iff A and B have no bits set in common.
+  if (haveNoCommonBitsSet(Op0, Op1, DL, &AC, &I, &DT))
+    return BinaryOperator::CreateOr(Op0, Op1);
+
   // Apply DeMorgan's Law for 'nand' / 'nor' logic with an inverted operand.
   Value *X, *Y;
 
@@ -2694,6 +2698,36 @@ Instruction *InstCombiner::visitXor(BinaryOperator &I) {
     // --> (A < 0) ? -A : A
     Value *Cmp = Builder.CreateICmpSLT(A, ConstantInt::getNullValue(Ty));
     return SelectInst::Create(Cmp, Builder.CreateNeg(A), A);
+  }
+
+  // Eliminate a bitwise 'not' op of 'not' min/max by inverting the min/max:
+  //
+  //   %notx = xor i32 %x, -1
+  //   %cmp1 = icmp sgt i32 %notx, %y
+  //   %smax = select i1 %cmp1, i32 %notx, i32 %y
+  //   %res = xor i32 %smax, -1
+  // =>
+  //   %noty = xor i32 %y, -1
+  //   %cmp2 = icmp slt %x, %noty
+  //   %res = select i1 %cmp2, i32 %x, i32 %noty
+  //
+  // Same is applicable for smin/umax/umin.
+  {
+    Value *LHS, *RHS;
+    SelectPatternFlavor SPF = matchSelectPattern(Op0, LHS, RHS).Flavor;
+    if (Op0->hasOneUse() && SelectPatternResult::isMinOrMax(SPF) &&
+        match(Op1, m_AllOnes())) {
+
+      Value *X;
+      if (match(RHS, m_Not(m_Value(X))))
+        std::swap(RHS, LHS);
+
+      if (match(LHS, m_Not(m_Value(X)))) {
+        Value *NotY = Builder.CreateNot(RHS);
+        return SelectInst::Create(
+            Builder.CreateICmp(getInverseMinMaxPred(SPF), X, NotY), X, NotY);
+      }
+    }
   }
 
   return Changed ? &I : nullptr;

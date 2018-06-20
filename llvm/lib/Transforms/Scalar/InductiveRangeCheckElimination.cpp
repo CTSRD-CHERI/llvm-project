@@ -312,13 +312,8 @@ InductiveRangeCheck::RangeCheckKind
 InductiveRangeCheck::parseRangeCheckICmp(Loop *L, ICmpInst *ICI,
                                          ScalarEvolution &SE, Value *&Index,
                                          Value *&Length, bool &IsSigned) {
-  auto IsNonNegativeAndNotLoopVarying = [&SE, L](Value *V) {
-    const SCEV *S = SE.getSCEV(V);
-    if (isa<SCEVCouldNotCompute>(S))
-      return false;
-
-    return SE.getLoopDisposition(S, L) == ScalarEvolution::LoopInvariant &&
-           SE.isKnownNonNegative(S);
+  auto IsLoopInvariant = [&SE, L](Value *V) {
+    return SE.isLoopInvariant(SE.getSCEV(V), L);
   };
 
   ICmpInst::Predicate Pred = ICI->getPredicate();
@@ -350,7 +345,7 @@ InductiveRangeCheck::parseRangeCheckICmp(Loop *L, ICmpInst *ICI,
       return RANGE_CHECK_LOWER;
     }
 
-    if (IsNonNegativeAndNotLoopVarying(LHS)) {
+    if (IsLoopInvariant(LHS)) {
       Index = RHS;
       Length = LHS;
       return RANGE_CHECK_UPPER;
@@ -362,7 +357,7 @@ InductiveRangeCheck::parseRangeCheckICmp(Loop *L, ICmpInst *ICI,
     LLVM_FALLTHROUGH;
   case ICmpInst::ICMP_UGT:
     IsSigned = false;
-    if (IsNonNegativeAndNotLoopVarying(LHS)) {
+    if (IsLoopInvariant(LHS)) {
       Index = RHS;
       Length = LHS;
       return RANGE_CHECK_BOTH;
@@ -809,6 +804,13 @@ static bool CannotBeMinInLoop(const SCEV *BoundSCEV, Loop *L,
                                      SE.getConstant(Min));
 }
 
+static bool isKnownNonNegativeInLoop(const SCEV *BoundSCEV, Loop *L,
+                                     ScalarEvolution &SE) {
+  const SCEV *Zero = SE.getZero(BoundSCEV->getType());
+  return SE.isAvailableAtLoopEntry(BoundSCEV, L) &&
+         SE.isLoopEntryGuardedByCond(L, ICmpInst::ICMP_SGE, BoundSCEV, Zero);
+}
+
 Optional<LoopStructure>
 LoopStructure::parseLoopStructure(ScalarEvolution &SE,
                                   BranchProbabilityInfo *BPI, Loop &L,
@@ -968,8 +970,8 @@ LoopStructure::parseLoopStructure(ScalarEvolution &SE,
         // If both parts are known non-negative, it is profitable to use
         // unsigned comparison in increasing loop. This allows us to make the
         // comparison check against "RightSCEV + 1" more optimistic.
-        if (SE.isKnownNonNegative(IndVarStart) &&
-            SE.isKnownNonNegative(RightSCEV))
+        if (isKnownNonNegativeInLoop(IndVarStart, &L, SE) &&
+            isKnownNonNegativeInLoop(RightSCEV, &L, SE))
           Pred = ICmpInst::ICMP_ULT;
         else
           Pred = ICmpInst::ICMP_SLT;

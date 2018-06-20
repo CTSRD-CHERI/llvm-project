@@ -14,6 +14,7 @@
 #include "../URI.h"
 #include "CanonicalIncludes.h"
 #include "clang/AST/DeclCXX.h"
+#include "clang/AST/DeclTemplate.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Index/IndexSymbol.h"
@@ -26,6 +27,14 @@ namespace clang {
 namespace clangd {
 
 namespace {
+/// If \p ND is a template specialization, returns the described template.
+/// Otherwise, returns \p ND.
+const NamedDecl &getTemplateOrThis(const NamedDecl &ND) {
+  if (auto T = ND.getDescribedTemplate())
+    return *T;
+  return ND;
+}
+
 // Returns a URI of \p Path. Firstly, this makes the \p Path absolute using the
 // current working directory of the given SourceManager if the Path is not an
 // absolute path. If failed, this resolves relative paths against \p FallbackDir
@@ -192,9 +201,24 @@ llvm::Optional<SymbolLocation> getSymbolLocation(
   FileURIStorage = std::move(*U);
   SymbolLocation Result;
   Result.FileURI = FileURIStorage;
-  Result.StartOffset = SM.getFileOffset(NameLoc);
-  Result.EndOffset = Result.StartOffset + clang::Lexer::MeasureTokenLength(
-                                              NameLoc, SM, LangOpts);
+  auto TokenLength = clang::Lexer::MeasureTokenLength(NameLoc, SM, LangOpts);
+
+  auto CreatePosition = [&SM](SourceLocation Loc) {
+    auto FileIdAndOffset = SM.getDecomposedLoc(Loc);
+    auto FileId = FileIdAndOffset.first;
+    auto Offset = FileIdAndOffset.second;
+    SymbolLocation::Position Pos;
+    // Position is 0-based while SourceManager is 1-based.
+    Pos.Line = SM.getLineNumber(FileId, Offset) - 1;
+    // FIXME: Use UTF-16 code units, not UTF-8 bytes.
+    Pos.Column = SM.getColumnNumber(FileId, Offset) - 1;
+    return Pos;
+  };
+
+  Result.Start = CreatePosition(NameLoc);
+  auto EndLoc = NameLoc.getLocWithOffset(TokenLength);
+  Result.End = CreatePosition(EndLoc);
+
   return std::move(Result);
 }
 
@@ -225,7 +249,7 @@ void SymbolCollector::initialize(ASTContext &Ctx) {
 // Always return true to continue indexing.
 bool SymbolCollector::handleDeclOccurence(
     const Decl *D, index::SymbolRoleSet Roles,
-    ArrayRef<index::SymbolRelation> Relations, FileID FID, unsigned Offset,
+    ArrayRef<index::SymbolRelation> Relations, SourceLocation Loc,
     index::IndexDataConsumer::ASTNodeInfo ASTNode) {
   assert(ASTCtx && PP.get() && "ASTContext and Preprocessor must be set.");
   assert(CompletionAllocator && CompletionTUInfo);
@@ -235,9 +259,10 @@ bool SymbolCollector::handleDeclOccurence(
 
   // Mark D as referenced if this is a reference coming from the main file.
   // D may not be an interesting symbol, but it's cheaper to check at the end.
+  auto &SM = ASTCtx->getSourceManager();
   if (Opts.CountReferences &&
       (Roles & static_cast<unsigned>(index::SymbolRole::Reference)) &&
-      ASTCtx->getSourceManager().getMainFileID() == FID)
+      SM.getFileID(SM.getSpellingLoc(Loc)) == SM.getMainFileID())
     ReferencedDecls.insert(ND);
 
   // Don't continue indexing if this is a mere reference.
@@ -309,7 +334,8 @@ const Symbol *SymbolCollector::addDeclaration(const NamedDecl &ND,
   // Add completion info.
   // FIXME: we may want to choose a different redecl, or combine from several.
   assert(ASTCtx && PP.get() && "ASTContext and Preprocessor must be set.");
-  CodeCompletionResult SymbolCompletion(&ND, 0);
+  // We use the primary template, as clang does during code completion.
+  CodeCompletionResult SymbolCompletion(&getTemplateOrThis(ND), 0);
   const auto *CCS = SymbolCompletion.CreateCodeCompletionString(
       *ASTCtx, *PP, CodeCompletionContext::CCC_Name, *CompletionAllocator,
       *CompletionTUInfo,

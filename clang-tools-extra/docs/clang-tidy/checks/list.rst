@@ -17,6 +17,7 @@ Clang-Tidy Checks
    android-cloexec-memfd-create
    android-cloexec-open
    android-cloexec-socket
+   android-comparison-in-temp-failure-retry
    boost-use-to-string
    bugprone-argument-comment
    bugprone-assert-side-effect
@@ -90,6 +91,7 @@ Clang-Tidy Checks
    cppcoreguidelines-pro-type-vararg
    cppcoreguidelines-slicing
    cppcoreguidelines-special-member-functions
+   fuchsia-header-anon-namespaces (redirects to google-build-namespaces) <fuchsia-header-anon-namespaces>
    fuchsia-default-arguments
    fuchsia-multiple-inheritance
    fuchsia-overloaded-operator

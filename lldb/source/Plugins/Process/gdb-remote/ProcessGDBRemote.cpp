@@ -52,6 +52,7 @@
 #include "lldb/Interpreter/CommandObject.h"
 #include "lldb/Interpreter/CommandObjectMultiword.h"
 #include "lldb/Interpreter/CommandReturnObject.h"
+#include "lldb/Interpreter/OptionArgParser.h"
 #include "lldb/Interpreter/OptionGroupBoolean.h"
 #include "lldb/Interpreter/OptionGroupUInt64.h"
 #include "lldb/Interpreter/OptionValueProperties.h"
@@ -534,7 +535,7 @@ void ProcessGDBRemote::BuildDynamicRegisterInfo(bool force) {
               reg_info.encoding = encoding;
           } else if (name.equals("format")) {
             Format format = eFormatInvalid;
-            if (Args::StringToFormat(value.str().c_str(), format, NULL)
+            if (OptionArgParser::ToFormat(value.str().c_str(), format, NULL)
                     .Success())
               reg_info.format = format;
             else {
@@ -1821,10 +1822,9 @@ ThreadSP ProcessGDBRemote::SetThreadStopInfo(
       if (!thread_sp->StopInfoIsUpToDate()) {
         thread_sp->SetStopInfo(StopInfoSP());
         // If there's a memory thread backed by this thread, we need to use it
-        // to calcualte StopInfo.
-        ThreadSP memory_thread_sp =
-            m_thread_list.FindThreadByProtocolID(thread_sp->GetProtocolID());
-        if (memory_thread_sp)
+        // to calculate StopInfo.
+        if (ThreadSP memory_thread_sp =
+                m_thread_list.GetBackingThread(thread_sp))
           thread_sp = memory_thread_sp;
 
         if (exc_type != 0) {
@@ -4388,7 +4388,7 @@ bool ParseRegisters(XMLNode feature_node, GdbServerTargetInfo &target_info,
           } else if (name == "format") {
             format_set = true;
             Format format = eFormatInvalid;
-            if (Args::StringToFormat(value.data(), format, NULL).Success())
+            if (OptionArgParser::ToFormat(value.data(), format, NULL).Success())
               reg_info.format = format;
             else if (value == "vector-sint8")
               reg_info.format = eFormatVectorOfSInt8;
