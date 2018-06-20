@@ -4096,7 +4096,7 @@ declare <16 x i16> @llvm.x86.avx2.pminu.w(<16 x i16>, <16 x i16>) nounwind readn
 define i32 @test_pmovmskb(<32 x i8> %a0) {
 ; GENERIC-LABEL: test_pmovmskb:
 ; GENERIC:       # %bb.0:
-; GENERIC-NEXT:    vpmovmskb %ymm0, %eax # sched: [1:1.00]
+; GENERIC-NEXT:    vpmovmskb %ymm0, %eax # sched: [2:1.00]
 ; GENERIC-NEXT:    vzeroupper # sched: [100:0.33]
 ; GENERIC-NEXT:    retq # sched: [1:1.00]
 ;
@@ -4126,7 +4126,7 @@ define i32 @test_pmovmskb(<32 x i8> %a0) {
 ;
 ; ZNVER1-LABEL: test_pmovmskb:
 ; ZNVER1:       # %bb.0:
-; ZNVER1-NEXT:    vpmovmskb %ymm0, %eax # sched: [2:1.00]
+; ZNVER1-NEXT:    vpmovmskb %ymm0, %eax # sched: [2:2.00]
 ; ZNVER1-NEXT:    vzeroupper # sched: [100:?]
 ; ZNVER1-NEXT:    retq # sched: [1:0.50]
   %1 = call i32 @llvm.x86.avx2.pmovmskb(<32 x i8> %a0)
@@ -4911,7 +4911,7 @@ define <8 x i32> @test_pmulld(<8 x i32> %a0, <8 x i32> %a1, <8 x i32> *%a2) {
 ; GENERIC-LABEL: test_pmulld:
 ; GENERIC:       # %bb.0:
 ; GENERIC-NEXT:    vpmulld %ymm1, %ymm0, %ymm0 # sched: [5:1.00]
-; GENERIC-NEXT:    vpmulld (%rdi), %ymm0, %ymm0 # sched: [9:1.00]
+; GENERIC-NEXT:    vpmulld (%rdi), %ymm0, %ymm0 # sched: [11:1.00]
 ; GENERIC-NEXT:    retq # sched: [1:1.00]
 ;
 ; HASWELL-LABEL: test_pmulld:

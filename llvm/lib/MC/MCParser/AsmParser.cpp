@@ -3286,8 +3286,8 @@ bool AsmParser::parseDirectiveFile(SMLoc DirectiveLoc) {
     FileNumber = getTok().getIntVal();
     Lex();
 
-    if (FileNumber < 1)
-      return TokError("file number less than one");
+    if (FileNumber < 0)
+      return TokError("negative file number");
   }
 
   std::string Path = getTok().getString();
@@ -3366,11 +3366,15 @@ bool AsmParser::parseDirectiveFile(SMLoc DirectiveLoc) {
       memcpy(SourceBuf, SourceString.data(), SourceString.size());
       Source = StringRef(SourceBuf, SourceString.size());
     }
-    Expected<unsigned> FileNumOrErr = getStreamer().tryEmitDwarfFileDirective(
-        FileNumber, Directory, Filename, CKMem, Source);
-    if (!FileNumOrErr)
-      return Error(DirectiveLoc, toString(FileNumOrErr.takeError()));
-    FileNumber = FileNumOrErr.get();
+    if (FileNumber == 0)
+      getStreamer().emitDwarfFile0Directive(Directory, Filename, CKMem, Source);
+    else {
+      Expected<unsigned> FileNumOrErr = getStreamer().tryEmitDwarfFileDirective(
+          FileNumber, Directory, Filename, CKMem, Source);
+      if (!FileNumOrErr)
+        return Error(DirectiveLoc, toString(FileNumOrErr.takeError()));
+      FileNumber = FileNumOrErr.get();
+    }
   }
 
   return false;

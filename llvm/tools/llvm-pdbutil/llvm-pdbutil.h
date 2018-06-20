@@ -189,13 +189,10 @@ extern llvm::cl::list<ModuleSubsection> DumpModuleSubsections;
 extern llvm::cl::opt<bool> DumpModuleSyms;
 } // namespace pdb2yaml
 
-namespace diff {
-extern llvm::cl::opt<bool> PrintValueColumns;
-extern llvm::cl::opt<bool> PrintResultColumn;
-extern llvm::DenseMap<uint32_t, uint32_t> Equivalences;
-extern llvm::cl::opt<std::string> LeftRoot;
-extern llvm::cl::opt<std::string> RightRoot;
-} // namespace diff
+namespace explain {
+extern llvm::cl::list<std::string> InputFilename;
+extern llvm::cl::list<uint64_t> Offsets;
+} // namespace explain
 }
 
 #endif

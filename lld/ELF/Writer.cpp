@@ -62,7 +62,7 @@ private:
   void assignFileOffsets();
   void assignFileOffsetsBinary();
   void setPhdrs();
-  void checkNoOverlappingSections();
+  void checkSectionOverlap();
   void fixSectionAlignments();
   void openFile();
   void writeTrapInstr();
@@ -94,13 +94,13 @@ StringRef elf::getOutputSectionName(InputSectionBase *S) {
   // This is for --emit-relocs. If .text.foo is emitted as .text.bar, we want
   // to emit .rela.text.foo as .rela.text.bar for consistency (this is not
   // technically required, but not doing it is odd). This code guarantees that.
-  if ((S->Type == SHT_REL || S->Type == SHT_RELA) &&
-      !isa<SyntheticSection>(S)) {
-    OutputSection *Out =
-        cast<InputSection>(S)->getRelocatedSection()->getOutputSection();
-    if (S->Type == SHT_RELA)
-      return Saver.save(".rela" + Out->Name);
-    return Saver.save(".rel" + Out->Name);
+  if (auto *IS = dyn_cast<InputSection>(S)) {
+    if (InputSectionBase *Rel = IS->getRelocatedSection()) {
+      OutputSection *Out = Rel->getOutputSection();
+      if (S->Type == SHT_RELA)
+        return Saver.save(".rela" + Out->Name);
+      return Saver.save(".rel" + Out->Name);
+    }
   }
 
   for (StringRef V :
@@ -203,14 +203,16 @@ void elf::addReservedSymbols() {
   // this symbol unconditionally even when using a linker script, which
   // differs from the behavior implemented by GNU linker which only define
   // this symbol if ELF headers are in the memory mapped segment.
+  addOptionalRegular("__ehdr_start", Out::ElfHeader, 0, STV_HIDDEN);
+
   // __executable_start is not documented, but the expectation of at
-  // least the android libc is that it points to the elf header too.
+  // least the Android libc is that it points to the ELF header.
+  addOptionalRegular("__executable_start", Out::ElfHeader, 0, STV_HIDDEN);
+
   // __dso_handle symbol is passed to cxa_finalize as a marker to identify
   // each DSO. The address of the symbol doesn't matter as long as they are
   // different in different DSOs, so we chose the start address of the DSO.
-  for (const char *Name :
-       {"__ehdr_start", "__executable_start", "__dso_handle"})
-    addOptionalRegular(Name, Out::ElfHeader, 0, STV_HIDDEN);
+  addOptionalRegular("__dso_handle", Out::ElfHeader, 0, STV_HIDDEN);
 
   // If linker script do layout we do not need to create any standart symbols.
   if (Script->HasSectionsCommand)
@@ -456,7 +458,7 @@ template <class ELFT> void Writer<ELFT>::run() {
   }
 
   if (Config->CheckSections)
-    checkNoOverlappingSections();
+    checkSectionOverlap();
 
   // It does not make sense try to open the file if we have error already.
   if (errorCount())
@@ -1085,6 +1087,72 @@ static DenseMap<const InputSectionBase *, int> buildSectionOrder() {
   return SectionOrder;
 }
 
+// Sorts the sections in ISD according to the provided section order.
+static void
+sortISDBySectionOrder(InputSectionDescription *ISD,
+                      const DenseMap<const InputSectionBase *, int> &Order) {
+  std::vector<InputSection *> UnorderedSections;
+  std::vector<InputSection *> OrderedSections;
+  uint64_t UnorderedSize = 0;
+
+  for (InputSection *IS : ISD->Sections) {
+    if (!Order.count(IS)) {
+      UnorderedSections.push_back(IS);
+      UnorderedSize += IS->getSize();
+      continue;
+    }
+    OrderedSections.push_back(IS);
+  }
+  std::sort(OrderedSections.begin(), OrderedSections.end(),
+            [&](InputSection *A, InputSection *B) {
+              return Order.lookup(A) < Order.lookup(B);
+            });
+
+  // Find an insertion point for the ordered section list in the unordered
+  // section list. On targets with limited-range branches, this is the mid-point
+  // of the unordered section list. This decreases the likelihood that a range
+  // extension thunk will be needed to enter or exit the ordered region. If the
+  // ordered section list is a list of hot functions, we can generally expect
+  // the ordered functions to be called more often than the unordered functions,
+  // making it more likely that any particular call will be within range, and
+  // therefore reducing the number of thunks required.
+  //
+  // For example, imagine that you have 8MB of hot code and 32MB of cold code.
+  // If the layout is:
+  //
+  // 8MB hot
+  // 32MB cold
+  //
+  // only the first 8-16MB of the cold code (depending on which hot function it
+  // is actually calling) can call the hot code without a range extension thunk.
+  // However, if we use this layout:
+  //
+  // 16MB cold
+  // 8MB hot
+  // 16MB cold
+  //
+  // both the last 8-16MB of the first block of cold code and the first 8-16MB
+  // of the second block of cold code can call the hot code without a thunk. So
+  // we effectively double the amount of code that could potentially call into
+  // the hot code without a thunk.
+  size_t UnorderedInsPt = 0;
+  if (Target->ThunkSectionSpacing && !OrderedSections.empty()) {
+    uint64_t UnorderedPos = 0;
+    for (; UnorderedInsPt != UnorderedSections.size(); ++UnorderedInsPt) {
+      UnorderedPos += UnorderedSections[UnorderedInsPt]->getSize();
+      if (UnorderedPos > UnorderedSize / 2)
+        break;
+    }
+  }
+
+  std::copy(UnorderedSections.begin(),
+            UnorderedSections.begin() + UnorderedInsPt, ISD->Sections.begin());
+  std::copy(OrderedSections.begin(), OrderedSections.end(),
+            ISD->Sections.begin() + UnorderedInsPt);
+  std::copy(UnorderedSections.begin() + UnorderedInsPt, UnorderedSections.end(),
+            ISD->Sections.begin() + UnorderedInsPt + OrderedSections.size());
+}
+
 static void sortSection(OutputSection *Sec,
                         const DenseMap<const InputSectionBase *, int> &Order) {
   StringRef Name = Sec->Name;
@@ -1111,7 +1179,9 @@ static void sortSection(OutputSection *Sec,
   // Sort input sections by priority using the list provided
   // by --symbol-ordering-file.
   if (!Order.empty())
-    Sec->sort([&](InputSectionBase *S) { return Order.lookup(S); });
+    for (BaseCommand *B : Sec->SectionCommands)
+      if (auto *ISD = dyn_cast<InputSectionDescription>(B))
+        sortISDBySectionOrder(ISD, Order);
 }
 
 // If no layout was provided by linker script, we want to apply default
@@ -1964,49 +2034,33 @@ template <class ELFT> void Writer<ELFT>::setPhdrs() {
   }
 }
 
+// A helper struct for checkSectionOverlap.
+namespace {
+struct SectionOffset {
+  OutputSection *Sec;
+  uint64_t Offset;
+};
+} // namespace
+
 // Check whether sections overlap for a specific address range (file offsets,
 // load and virtual adresses).
-//
-// This is a helper function called by Writer::checkNoOverlappingSections().
-template <typename Getter, typename Predicate>
-static void checkForSectionOverlap(ArrayRef<OutputSection *> AllSections,
-                                   StringRef Kind, Getter GetStart,
-                                   Predicate ShouldSkip) {
-  std::vector<OutputSection *> Sections;
-  // By removing all zero-size sections we can simplify the check for overlap to
-  // just checking whether the section range contains the other section's start
-  // address. Additionally, it also slightly speeds up the checking since we
-  // don't bother checking for overlap with sections that can never overlap.
-  for (OutputSection *Sec : AllSections)
-    if (Sec->Size > 0 && !ShouldSkip(Sec))
-      Sections.push_back(Sec);
-
-  // Instead of comparing every OutputSection with every other output section
-  // we sort the sections by address (file offset or load/virtual address). This
-  // way we find all overlapping sections but only need one comparision with the
-  // next section in the common non-overlapping case. The only time we end up
-  // doing more than one iteration of the following nested loop is if there are
-  // overlapping sections.
+static void checkOverlap(StringRef Name, std::vector<SectionOffset> &Sections) {
   std::sort(Sections.begin(), Sections.end(),
-            [=](const OutputSection *A, const OutputSection *B) {
-              return GetStart(A) < GetStart(B);
+            [=](const SectionOffset &A, const SectionOffset &B) {
+              return A.Offset < B.Offset;
             });
-  for (size_t I = 0; I < Sections.size(); ++I) {
-    OutputSection *Sec = Sections[I];
-    uint64_t Start = GetStart(Sec);
-    for (auto *Other : ArrayRef<OutputSection *>(Sections).slice(I + 1)) {
-      // Since the sections are sorted by start address we only need to check
-      // whether the other sections starts before the end of Sec. If this is
-      // not the case we can break out of this loop since all following sections
-      // will also start after the end of Sec.
-      if (Start + Sec->Size <= GetStart(Other))
-        break;
-      errorOrWarn("section " + Sec->Name + " " + Kind +
-                  " range overlaps with " + Other->Name + "\n>>> " + Sec->Name +
-                  " range is " + rangeToString(Start, Sec->Size) + "\n>>> " +
-                  Other->Name + " range is " +
-                  rangeToString(GetStart(Other), Other->Size));
-    }
+
+  // Finding overlap is easy given a vector is sorted by start position.
+  // If an element starts before the end of the previous element, they overlap.
+  for (size_t I = 1, End = Sections.size(); I < End; ++I) {
+    SectionOffset A = Sections[I - 1];
+    SectionOffset B = Sections[I];
+    if (B.Offset < A.Offset + A.Sec->Size)
+      errorOrWarn(
+          "section " + A.Sec->Name + " " + Name + " range overlaps with " +
+          B.Sec->Name + "\n>>> " + A.Sec->Name + " range is " +
+          rangeToString(A.Offset, A.Sec->Size) + "\n>>> " + B.Sec->Name +
+          " range is " + rangeToString(B.Offset, B.Sec->Size));
   }
 }
 
@@ -2015,19 +2069,18 @@ static void checkForSectionOverlap(ArrayRef<OutputSection *> AllSections,
 // In this function we check that none of the output sections have overlapping
 // file offsets. For SHF_ALLOC sections we also check that the load address
 // ranges and the virtual address ranges don't overlap
-template <class ELFT> void Writer<ELFT>::checkNoOverlappingSections() {
+template <class ELFT> void Writer<ELFT>::checkSectionOverlap() {
   // First check for overlapping file offsets. In this case we need to skip
-  // Any section marked as SHT_NOBITS. These sections don't actually occupy
+  // any section marked as SHT_NOBITS. These sections don't actually occupy
   // space in the file so Sec->Offset + Sec->Size can overlap with others.
   // If --oformat binary is specified only add SHF_ALLOC sections are added to
   // the output file so we skip any non-allocated sections in that case.
-  checkForSectionOverlap(OutputSections, "file",
-                         [](const OutputSection *Sec) { return Sec->Offset; },
-                         [](const OutputSection *Sec) {
-                           return Sec->Type == SHT_NOBITS ||
-                                  (Config->OFormatBinary &&
-                                   (Sec->Flags & SHF_ALLOC) == 0);
-                         });
+  std::vector<SectionOffset> FileOffs;
+  for (OutputSection *Sec : OutputSections)
+    if (0 < Sec->Size && Sec->Type != SHT_NOBITS &&
+        (!Config->OFormatBinary || (Sec->Flags & SHF_ALLOC)))
+      FileOffs.push_back({Sec, Sec->Offset});
+  checkOverlap("file", FileOffs);
 
   // When linking with -r there is no need to check for overlapping virtual/load
   // addresses since those addresses will only be assigned when the final
@@ -2040,19 +2093,20 @@ template <class ELFT> void Writer<ELFT>::checkNoOverlappingSections() {
   // Furthermore, we also need to skip SHF_TLS sections since these will be
   // mapped to other addresses at runtime and can therefore have overlapping
   // ranges in the file.
-  auto SkipNonAllocSections = [](const OutputSection *Sec) {
-    return (Sec->Flags & SHF_ALLOC) == 0 || (Sec->Flags & SHF_TLS);
-  };
-  checkForSectionOverlap(OutputSections, "virtual address",
-                         [](const OutputSection *Sec) { return Sec->Addr; },
-                         SkipNonAllocSections);
+  std::vector<SectionOffset> VMAs;
+  for (OutputSection *Sec : OutputSections)
+    if (0 < Sec->Size && (Sec->Flags & SHF_ALLOC) && !(Sec->Flags & SHF_TLS))
+      VMAs.push_back({Sec, Sec->Addr});
+  checkOverlap("virtual address", VMAs);
 
   // Finally, check that the load addresses don't overlap. This will usually be
   // the same as the virtual addresses but can be different when using a linker
   // script with AT().
-  checkForSectionOverlap(OutputSections, "load address",
-                         [](const OutputSection *Sec) { return Sec->getLMA(); },
-                         SkipNonAllocSections);
+  std::vector<SectionOffset> LMAs;
+  for (OutputSection *Sec : OutputSections)
+    if (0 < Sec->Size && (Sec->Flags & SHF_ALLOC) && !(Sec->Flags & SHF_TLS))
+      LMAs.push_back({Sec, Sec->getLMA()});
+  checkOverlap("load address", LMAs);
 }
 
 // The entry point address is chosen in the following ways.
@@ -2097,17 +2151,19 @@ static uint16_t getELFType() {
 }
 
 static uint8_t getAbiVersion() {
-  if (Config->EMachine == EM_MIPS) {
-    // Increment the ABI version for non-PIC executable files.
-    if (getELFType() == ET_EXEC &&
-        (Config->EFlags & (EF_MIPS_PIC | EF_MIPS_CPIC)) == EF_MIPS_CPIC)
-      return 1;
-  }
+  // MIPS non-PIC executable gets ABI version 1.
+  if (Config->EMachine == EM_MIPS && getELFType() == ET_EXEC &&
+      (Config->EFlags & (EF_MIPS_PIC | EF_MIPS_CPIC)) == EF_MIPS_CPIC)
+    return 1;
   return 0;
 }
 
 template <class ELFT> void Writer<ELFT>::writeHeader() {
   uint8_t *Buf = Buffer->getBufferStart();
+  // For executable segments, the trap instructions are written before writing
+  // the header. Setting Elf header bytes to zero ensures that any unused bytes
+  // in header are zero-cleared, instead of having trap instructions.
+  memset(Buf, 0, sizeof(Elf_Ehdr));
   memcpy(Buf, "\177ELF", 4);
 
   // Write the ELF header.

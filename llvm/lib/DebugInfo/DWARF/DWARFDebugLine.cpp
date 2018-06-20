@@ -553,7 +553,7 @@ bool DWARFDebugLine::LineTable::parse(DWARFDataExtractor &DebugLineData,
           DebugLineData.setAddressSize(Len - 1);
         else if (DebugLineData.getAddressSize() != Len - 1) {
           fprintf(stderr, "Mismatching address size at offset 0x%8.8" PRIx32
-                  " expected 0x%2.2" PRIx32 " found 0x%2.2" PRIx64 "\n",
+                  " expected 0x%2.2" PRIx8 " found 0x%2.2" PRIx64 "\n",
                   ExtOffset, DebugLineData.getAddressSize(), Len - 1);
           // Skip the rest of the line-number program.
           *OffsetPtr = EndOffset;
@@ -835,7 +835,7 @@ bool DWARFDebugLine::LineTable::parse(DWARFDataExtractor &DebugLineData,
 
   // Sort all sequences so that address lookup will work faster.
   if (!Sequences.empty()) {
-    std::sort(Sequences.begin(), Sequences.end(), Sequence::orderByLowPC);
+    llvm::sort(Sequences.begin(), Sequences.end(), Sequence::orderByLowPC);
     // Note: actually, instruction address ranges of sequences should not
     // overlap (in shared objects and executables). If they do, the address
     // lookup would still work, though, but result would be ambiguous.

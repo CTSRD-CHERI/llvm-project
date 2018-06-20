@@ -16,6 +16,7 @@
 #include "MCTargetDesc/MipsFixupKinds.h"
 #include "MCTargetDesc/MipsMCExpr.h"
 #include "MCTargetDesc/MipsMCTargetDesc.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCAssembler.h"
 #include "llvm/MC/MCContext.h"
@@ -340,7 +341,7 @@ Optional<MCFixupKind> MipsAsmBackend::getFixupKind(StringRef Name) const {
 
 const MCFixupKindInfo &MipsAsmBackend::
 getFixupKindInfo(MCFixupKind Kind) const {
-  const static MCFixupKindInfo LittleEndianInfos[/*Mips::NumTargetFixupKinds*/] = {
+  const static MCFixupKindInfo LittleEndianInfos[] = {
     // This table *must* be in same the order of fixup_* kinds in
     // MipsFixupKinds.h.
     //
@@ -426,8 +427,10 @@ getFixupKindInfo(MCFixupKind Kind) const {
     { "fixup_Mips_CAPTABLEREL_LO",       0,     16,   0 }, // like GPOFF_LO
 
   };
+  static_assert(array_lengthof(LittleEndianInfos) == Mips::NumTargetFixupKinds,
+                "Not all MIPS little endian fixup kinds added!");
 
-  const static MCFixupKindInfo BigEndianInfos[/*Mips::NumTargetFixupKinds*/] = {
+  const static MCFixupKindInfo BigEndianInfos[] = {
     // This table *must* be in same the order of fixup_* kinds in
     // MipsFixupKinds.h.
     //
@@ -513,8 +516,8 @@ getFixupKindInfo(MCFixupKind Kind) const {
     { "fixup_Mips_CAPTABLEREL_LO", 16,    16,   0 }, // like GPOFF_LO
 
   };
-  static_assert(array_lengthof(BigEndianInfos) == Mips::NumTargetFixupKinds, "");
-  static_assert(array_lengthof(LittleEndianInfos) == Mips::NumTargetFixupKinds, "");
+  static_assert(array_lengthof(BigEndianInfos) == Mips::NumTargetFixupKinds,
+                "Not all MIPS big endian fixup kinds added!");
 
   if (Kind < FirstTargetFixupKind)
     return MCAsmBackend::getFixupKindInfo(Kind);

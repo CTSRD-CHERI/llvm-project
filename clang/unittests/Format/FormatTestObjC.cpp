@@ -537,6 +537,22 @@ TEST_F(FormatTestObjC, FormatObjCMethodDeclarations) {
                "       aShortf:(NSRect)theRect {\n"
                "}");
 
+  // Make sure selectors with 0, 1, or more arguments are indented
+  // when IndentWrappedFunctionNames is true.
+  verifyFormat("- (aaaaaaaaaaaaaaaaaaaaaaaaaaaaa)\n"
+               "    aaaaaaaaaaaaaaaaaaaaaaaaaaaa;\n");
+  verifyFormat("- (aaaaaaaaaaaaaaaaaaaaaaaaaaaaa)\n"
+               "    aaaaaaaaaaaaaaaaaaaaaaaaaaaa:(int)a;\n");
+  verifyFormat("- (aaaaaaaaaaaaaaaaaaaaaaaaaaaaa)\n"
+               "    aaaaaaaaaaaaaaaaaaaaaaaaaaaa:(int)a\n"
+               "    aaaaaaaaaaaaaaaaaaaaaaaaaaaa:(int)a;\n");
+  verifyFormat("- (aaaaaaaaaaaaaaaaaaaaaaaaaaaaa)\n"
+               "     aaaaaaaaaaaaaaaaaaaaaaaaaaa:(int)a\n"
+               "    aaaaaaaaaaaaaaaaaaaaaaaaaaaa:(int)a;\n");
+  verifyFormat("- (aaaaaaaaaaaaaaaaaaaaaaaaaaaaa)\n"
+               "    aaaaaaaaaaaaaaaaaaaaaaaaaaaa:(int)a\n"
+               "     aaaaaaaaaaaaaaaaaaaaaaaaaaa:(int)a;\n");
+
   // Format pairs correctly.
   Style.ColumnLimit = 80;
   verifyFormat("- (void)drawRectOn:(id)surface\n"
@@ -1000,6 +1016,21 @@ TEST_F(FormatTestObjC, ObjCDictLiterals) {
       "  (aaaaaaaa id)aaaaaaaaa : (aaaaaaaa id)aaaaaaaaaaaaaaaaaaaaaaaa,\n"
       "  (aaaaaaaa id)aaaaaaaaaaaaaa : (aaaaaaaa id)aaaaaaaaaaaaaa,\n"
       "};");
+  Style.ColumnLimit = 40;
+  verifyFormat("int Foo() {\n"
+               "  a12345 = @{a12345 : a12345};\n"
+               "}");
+  verifyFormat("int Foo() {\n"
+               "  a12345 = @{(Foo *)a12345 : @(a12345)};\n"
+               "}");
+  Style.SpacesInContainerLiterals = false;
+  verifyFormat("int Foo() {\n"
+               "  b12345 = @{b12345: b12345};\n"
+               "}");
+  verifyFormat("int Foo() {\n"
+               "  b12345 = @{(Foo *)b12345: @(b12345)};\n"
+               "}");
+  Style.SpacesInContainerLiterals = true;
 
   Style = getGoogleStyle(FormatStyle::LK_ObjC);
   verifyFormat(
@@ -1055,6 +1086,21 @@ TEST_F(FormatTestObjC, ObjCArrayLiterals) {
   verifyFormat("[someFunction someLooooooooooooongParameter:@[\n"
                "  NSBundle.mainBundle.infoDictionary[@\"a\"]\n"
                "]];");
+  Style.ColumnLimit = 40;
+  verifyFormat("int Foo() {\n"
+               "  a12345 = @[ a12345, a12345 ];\n"
+               "}");
+  verifyFormat("int Foo() {\n"
+               "  a123 = @[ (Foo *)a12345, @(a12345) ];\n"
+               "}");
+  Style.SpacesInContainerLiterals = false;
+  verifyFormat("int Foo() {\n"
+               "  b12345 = @[b12345, b12345];\n"
+               "}");
+  verifyFormat("int Foo() {\n"
+               "  b12345 = @[(Foo *)b12345, @(b12345)];\n"
+               "}");
+  Style.SpacesInContainerLiterals = true;
   Style.ColumnLimit = 20;
   // We can't break string literals inside NSArray literals
   // (that raises -Wobjc-string-concatenation).

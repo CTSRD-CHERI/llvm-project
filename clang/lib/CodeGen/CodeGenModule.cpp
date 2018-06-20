@@ -408,13 +408,15 @@ void CodeGenModule::Release() {
     if (llvm::Function *CudaDtorFunction = CUDARuntime->makeModuleDtorFunction())
       AddGlobalDtor(CudaDtorFunction);
   }
-  if (OpenMPRuntime)
+  if (OpenMPRuntime) {
     if (llvm::Function *OpenMPRegistrationFunction =
             OpenMPRuntime->emitRegistrationFunction()) {
       auto ComdatKey = OpenMPRegistrationFunction->hasComdat() ?
         OpenMPRegistrationFunction : nullptr;
       AddGlobalCtor(OpenMPRegistrationFunction, 0, ComdatKey);
     }
+    OpenMPRuntime->clear();
+  }
   if (PGOReader) {
     getModule().setProfileSummary(PGOReader->getSummary().getMD(VMContext));
     if (PGOStats.hasDiagnostics())
@@ -1294,7 +1296,7 @@ bool CodeGenModule::GetCPUAndFeaturesAttributes(const Decl *D,
     AddedAttr = true;
   }
   if (!Features.empty()) {
-    std::sort(Features.begin(), Features.end());
+    llvm::sort(Features.begin(), Features.end());
     Attrs.addAttribute("target-features", llvm::join(Features, ","));
     AddedAttr = true;
   }
@@ -2398,8 +2400,10 @@ llvm::Constant *CodeGenModule::GetOrCreateLLVMFunction(
     }
 
     // Handle dropped DLL attributes.
-    if (D && !D->hasAttr<DLLImportAttr>() && !D->hasAttr<DLLExportAttr>())
+    if (D && !D->hasAttr<DLLImportAttr>() && !D->hasAttr<DLLExportAttr>()) {
       Entry->setDLLStorageClass(llvm::GlobalValue::DefaultStorageClass);
+      setDSOLocal(Entry);
+    }
 
     // If there are two attempts to define the same mangled name, issue an
     // error.
@@ -2691,6 +2695,9 @@ CodeGenModule::GetOrCreateLLVMGlobal(StringRef MangledName,
     if (D && !D->hasAttr<DLLImportAttr>() && !D->hasAttr<DLLExportAttr>())
       Entry->setDLLStorageClass(llvm::GlobalValue::DefaultStorageClass);
 
+    if (LangOpts.OpenMP && !LangOpts.OpenMPSimd && D)
+      getOpenMPRuntime().registerTargetGlobalVariable(D, Entry);
+
     if (Entry->getType() == Ty)
       return Entry;
 
@@ -2759,6 +2766,9 @@ CodeGenModule::GetOrCreateLLVMGlobal(StringRef MangledName,
 
   // Handle things which are present even on external declarations.
   if (D) {
+    if (LangOpts.OpenMP && !LangOpts.OpenMPSimd)
+      getOpenMPRuntime().registerTargetGlobalVariable(D, GV);
+
     // FIXME: This code is overly simple and should be merged with other global
     // handling.
     GV->setConstant(isTypeConstant(D->getType(), false));
@@ -4677,9 +4687,7 @@ static void EmitGlobalDeclMetadata(CodeGenModule &CGM,
 /// to such functions with an unmangled name from inline assembly within the
 /// same translation unit.
 void CodeGenModule::EmitStaticExternCAliases() {
-  // Don't do anything if we're generating CUDA device code -- the NVPTX
-  // assembly target doesn't support aliases.
-  if (Context.getTargetInfo().getTriple().isNVPTX())
+  if (!getTargetCodeGenInfo().shouldEmitStaticExternCAliases())
     return;
   for (auto &I : StaticExternCValues) {
     IdentifierInfo *Name = I.first;

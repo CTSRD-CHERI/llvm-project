@@ -978,7 +978,7 @@ void AsmPrinter::emitStackSizeSection(const MachineFunction &MF) {
   OutStreamer->PushSection();
   OutStreamer->SwitchSection(StackSizeSection);
 
-  const MCSymbol *FunctionSymbol = getSymbol(&MF.getFunction());
+  const MCSymbol *FunctionSymbol = getFunctionBegin();
   uint64_t StackSize = FrameInfo.getStackSize();
   OutStreamer->EmitSymbolValue(FunctionSymbol, TM.getProgramPointerSize());
   OutStreamer->EmitULEB128IntValue(StackSize);
@@ -1506,7 +1506,8 @@ void AsmPrinter::SetupMachineFunction(MachineFunction &MF) {
   CurrentFnBegin = nullptr;
   CurExceptionSym = nullptr;
   bool NeedsLocalForSize = MAI->needsLocalForSize();
-  if (needFuncLabelsForEHOrDebugInfo(MF, MMI) || NeedsLocalForSize) {
+  if (needFuncLabelsForEHOrDebugInfo(MF, MMI) || NeedsLocalForSize ||
+      MF.getTarget().Options.EmitStackSizeSection) {
     CurrentFnBegin = createTempSymbol("func_begin");
     if (NeedsLocalForSize)
       CurrentFnSymForSize = CurrentFnBegin;
@@ -1911,19 +1912,19 @@ void AsmPrinter::EmitModuleIdents(Module &M) {
 // Emission and print routines
 //
 
-/// EmitInt8 - Emit a byte directive and value.
+/// Emit a byte directive and value.
 ///
-void AsmPrinter::EmitInt8(int Value) const {
+void AsmPrinter::emitInt8(int Value) const {
   OutStreamer->EmitIntValue(Value, 1);
 }
 
-/// EmitInt16 - Emit a short directive and value.
-void AsmPrinter::EmitInt16(int Value) const {
+/// Emit a short directive and value.
+void AsmPrinter::emitInt16(int Value) const {
   OutStreamer->EmitIntValue(Value, 2);
 }
 
-/// EmitInt32 - Emit a long directive and value.
-void AsmPrinter::EmitInt32(int Value) const {
+/// Emit a long directive and value.
+void AsmPrinter::emitInt32(int Value) const {
   OutStreamer->EmitIntValue(Value, 4);
 }
 

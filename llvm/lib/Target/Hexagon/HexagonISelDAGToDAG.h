@@ -90,6 +90,8 @@ public:
                                     unsigned ConstraintID,
                                     std::vector<SDValue> &OutOps) override;
   bool tryLoadOfLoadIntrinsic(LoadSDNode *N);
+  bool SelectBrevLdIntrinsic(SDNode *IntN);
+  bool SelectNewCircIntrinsic(SDNode *IntN);
   void SelectLoad(SDNode *N);
   void SelectIndexedLoad(LoadSDNode *LD, const SDLoc &dl);
   void SelectIndexedStore(StoreSDNode *ST, const SDLoc &dl);

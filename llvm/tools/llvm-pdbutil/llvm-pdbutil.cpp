@@ -15,8 +15,8 @@
 
 #include "Analyze.h"
 #include "BytesOutputStyle.h"
-#include "Diff.h"
 #include "DumpOutputStyle.h"
+#include "ExplainOutputStyle.h"
 #include "InputFile.h"
 #include "LinePrinter.h"
 #include "OutputStyle.h"
@@ -98,8 +98,6 @@ cl::SubCommand
     PrettySubcommand("pretty",
                      "Dump semantic information about types and symbols");
 
-cl::SubCommand DiffSubcommand("diff", "Diff the contents of 2 PDB files");
-
 cl::SubCommand
     YamlToPdbSubcommand("yaml2pdb",
                         "Generate a PDB file from a YAML description");
@@ -113,6 +111,9 @@ cl::SubCommand
 
 cl::SubCommand MergeSubcommand("merge",
                                "Merge multiple PDBs into a single PDB");
+
+cl::SubCommand ExplainSubcommand("explain",
+                                 "Explain the meaning of a file offset");
 
 cl::OptionCategory TypeCategory("Symbol Type Options");
 cl::OptionCategory FilterCategory("Filtering and Sorting Options");
@@ -293,44 +294,6 @@ cl::opt<bool>
 cl::opt<bool> NoEnumDefs("no-enum-definitions",
                          cl::desc("Don't display full enum definitions"),
                          cl::cat(FilterCategory), cl::sub(PrettySubcommand));
-}
-
-namespace diff {
-cl::opt<bool> PrintValueColumns(
-    "values", cl::init(true),
-    cl::desc("Print one column for each PDB with the field value"),
-    cl::Optional, cl::sub(DiffSubcommand));
-cl::opt<bool>
-    PrintResultColumn("result", cl::init(false),
-                      cl::desc("Print a column with the result status"),
-                      cl::Optional, cl::sub(DiffSubcommand));
-
-cl::list<std::string>
-    RawModiEquivalences("modi-equivalence", cl::ZeroOrMore,
-                        cl::value_desc("left,right"),
-                        cl::desc("Modules with the specified indices will be "
-                                 "treated as referring to the same module"),
-                        cl::sub(DiffSubcommand));
-
-cl::opt<std::string> LeftRoot(
-    "left-bin-root", cl::Optional,
-    cl::desc("Treats the specified path as the root of the tree containing "
-             "binaries referenced by the left PDB.  The root is stripped from "
-             "embedded paths when doing equality comparisons."),
-    cl::sub(DiffSubcommand));
-cl::opt<std::string> RightRoot(
-    "right-bin-root", cl::Optional,
-    cl::desc("Treats the specified path as the root of the tree containing "
-             "binaries referenced by the right PDB.  The root is stripped from "
-             "embedded paths when doing equality comparisons"),
-    cl::sub(DiffSubcommand));
-
-cl::opt<std::string> Left(cl::Positional, cl::desc("<left>"),
-                          cl::sub(DiffSubcommand));
-cl::opt<std::string> Right(cl::Positional, cl::desc("<right>"),
-                           cl::sub(DiffSubcommand));
-
-llvm::DenseMap<uint32_t, uint32_t> Equivalences;
 }
 
 cl::OptionCategory FileOptions("Module & File Options");
@@ -646,6 +609,15 @@ cl::opt<std::string>
     PdbOutputFile("pdb", cl::desc("the name of the PDB file to write"),
                   cl::sub(MergeSubcommand));
 }
+
+namespace explain {
+cl::list<std::string> InputFilename(cl::Positional,
+                                    cl::desc("<input PDB file>"), cl::Required,
+                                    cl::sub(ExplainSubcommand));
+
+cl::list<uint64_t> Offsets("offset", cl::desc("The file offset to explain"),
+                           cl::sub(ExplainSubcommand), cl::OneOrMore);
+} // namespace explain
 }
 
 static ExitOnError ExitOnErr;
@@ -798,18 +770,6 @@ static void dumpAnalysis(StringRef Path) {
   std::unique_ptr<IPDBSession> Session;
   auto &File = loadPDB(Path, Session);
   auto O = llvm::make_unique<AnalysisStyle>(File);
-
-  ExitOnErr(O->dump());
-}
-
-static void diff(StringRef Path1, StringRef Path2) {
-  std::unique_ptr<IPDBSession> Session1;
-  std::unique_ptr<IPDBSession> Session2;
-
-  auto &File1 = loadPDB(Path1, Session1);
-  auto &File2 = loadPDB(Path2, Session2);
-
-  auto O = llvm::make_unique<DiffStyle>(File1, File2);
 
   ExitOnErr(O->dump());
 }
@@ -1017,8 +977,8 @@ static void dumpPretty(StringRef Path) {
           std::vector<std::unique_ptr<PDBSymbolFunc>> Funcs;
           while (auto Func = Functions->getNext())
             Funcs.push_back(std::move(Func));
-          std::sort(Funcs.begin(), Funcs.end(),
-                    opts::pretty::compareFunctionSymbols);
+          llvm::sort(Funcs.begin(), Funcs.end(),
+                     opts::pretty::compareFunctionSymbols);
           for (const auto &Func : Funcs) {
             Printer.NewLine();
             Dumper.start(*Func, FunctionDumper::PointerType::None);
@@ -1036,8 +996,8 @@ static void dumpPretty(StringRef Path) {
           std::vector<std::unique_ptr<PDBSymbolData>> Datas;
           while (auto Var = Vars->getNext())
             Datas.push_back(std::move(Var));
-          std::sort(Datas.begin(), Datas.end(),
-                    opts::pretty::compareDataSymbols);
+          llvm::sort(Datas.begin(), Datas.end(),
+                     opts::pretty::compareDataSymbols);
           for (const auto &Var : Datas)
             Dumper.start(*Var);
         }
@@ -1125,6 +1085,17 @@ static void mergePdbs() {
     llvm::sys::path::replace_extension(OutFile, "merged.pdb");
   }
   ExitOnErr(Builder.commit(OutFile));
+}
+
+static void explain() {
+  std::unique_ptr<IPDBSession> Session;
+  PDBFile &File = loadPDB(opts::explain::InputFilename.front(), Session);
+
+  for (uint64_t Off : opts::explain::Offsets) {
+    auto O = llvm::make_unique<ExplainOutputStyle>(File, Off);
+
+    ExitOnErr(O->dump());
+  }
 }
 
 static bool parseRange(StringRef Str,
@@ -1241,11 +1212,6 @@ int main(int argc_, const char *argv_[]) {
     if (opts::pdb2yaml::DumpModules)
       opts::pdb2yaml::DbiStream = true;
   }
-  if (opts::DiffSubcommand) {
-    if (!opts::diff::PrintResultColumn && !opts::diff::PrintValueColumns) {
-      llvm::errs() << "WARNING: No diff columns specified\n";
-    }
-  }
 
   llvm::sys::InitializeCOMRAII COM(llvm::sys::COMThreadingMode::MultiThreaded);
 
@@ -1300,27 +1266,14 @@ int main(int argc_, const char *argv_[]) {
     llvm::for_each(opts::dump::InputFilenames, dumpRaw);
   } else if (opts::BytesSubcommand) {
     llvm::for_each(opts::bytes::InputFilenames, dumpBytes);
-  } else if (opts::DiffSubcommand) {
-    for (StringRef S : opts::diff::RawModiEquivalences) {
-      StringRef Left;
-      StringRef Right;
-      std::tie(Left, Right) = S.split(',');
-      uint32_t X, Y;
-      if (!to_integer(Left, X) || !to_integer(Right, Y)) {
-        errs() << formatv("invalid value {0} specified for modi equivalence\n",
-                          S);
-        exit(1);
-      }
-      opts::diff::Equivalences[X] = Y;
-    }
-
-    diff(opts::diff::Left, opts::diff::Right);
   } else if (opts::MergeSubcommand) {
     if (opts::merge::InputFilenames.size() < 2) {
       errs() << "merge subcommand requires at least 2 input files.\n";
       exit(1);
     }
     mergePdbs();
+  } else if (opts::ExplainSubcommand) {
+    explain();
   }
 
   outs().flush();

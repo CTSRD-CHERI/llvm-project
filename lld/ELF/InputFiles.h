@@ -110,6 +110,9 @@ public:
   std::string getSrcMsg(const Symbol &Sym, InputSectionBase &Sec,
                         uint64_t Offset);
 
+  // True if this is an argument for --just-symbols. Usually false.
+  bool JustSymbols = false;
+
 protected:
   InputFile(Kind K, MemoryBufferRef M);
   std::vector<InputSectionBase *> Sections;
@@ -142,7 +145,7 @@ public:
 
 protected:
   ArrayRef<Elf_Sym> ELFSyms;
-  uint32_t FirstNonLocal = 0;
+  uint32_t FirstGlobal = 0;
   ArrayRef<Elf_Word> SymtabSHNDX;
   StringRef StringTable;
   void initSymtab(ArrayRef<Elf_Shdr> Sections, const Elf_Shdr *Symtab);
@@ -165,6 +168,7 @@ public:
   static bool classof(const InputFile *F) { return F->kind() == Base::ObjKind; }
 
   ArrayRef<Symbol *> getLocalSymbols();
+  ArrayRef<Symbol *> getGlobalSymbols();
 
   ObjFile(MemoryBufferRef M, StringRef ArchiveName);
   void parse(llvm::DenseSet<llvm::CachedHashStringRef> &ComdatGroups);
@@ -200,6 +204,7 @@ private:
   void
   initializeSections(llvm::DenseSet<llvm::CachedHashStringRef> &ComdatGroups);
   void initializeSymbols();
+  void initializeJustSymbols();
   void initializeDwarf();
   InputSectionBase *getRelocTarget(const Elf_Shdr &Sec);
   InputSectionBase *createInputSection(const Elf_Shdr &Sec);
@@ -308,7 +313,9 @@ public:
 
   void parseSoName();
   void parseRest();
-  std::vector<const Elf_Verdef *> parseVerdefs(const Elf_Versym *&Versym);
+  uint32_t getAlignment(ArrayRef<Elf_Shdr> Sections, const Elf_Sym &Sym);
+  std::vector<const Elf_Verdef *> parseVerdefs();
+  std::vector<uint32_t> parseVersyms();
 
   struct NeededVer {
     // The string table offset of the version name in the output file.
@@ -336,9 +343,6 @@ public:
 InputFile *createObjectFile(MemoryBufferRef MB, StringRef ArchiveName = "",
                             uint64_t OffsetInArchive = 0);
 InputFile *createSharedFile(MemoryBufferRef MB, StringRef DefaultSoName);
-
-// For --just-symbols
-template <class ELFT> void readJustSymbolsFile(MemoryBufferRef MB);
 
 extern std::vector<BinaryFile *> BinaryFiles;
 extern std::vector<BitcodeFile *> BitcodeFiles;

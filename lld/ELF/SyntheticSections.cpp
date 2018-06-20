@@ -264,8 +264,8 @@ InputSection *elf::createInterpSection() {
   return Sec;
 }
 
-Symbol *elf::addSyntheticLocal(StringRef Name, uint8_t Type, uint64_t Value,
-                               uint64_t Size, InputSectionBase &Section) {
+Defined *elf::addSyntheticLocal(StringRef Name, uint8_t Type, uint64_t Value,
+                                uint64_t Size, InputSectionBase &Section) {
   auto *S = make<Defined>(Section.File, Name, STB_LOCAL, STV_DEFAULT, Type,
                           Value, Size, &Section);
   if (InX::SymTab)
@@ -587,10 +587,18 @@ void EhFrameSection::writeTo(uint8_t *Buf) {
 
 GotSection::GotSection()
     : SyntheticSection(SHF_ALLOC | SHF_WRITE, SHT_PROGBITS,
-                       Target->GotEntrySize, ".got") {}
+                       Target->GotEntrySize, ".got") {
+  // PPC64 saves the ElfSym::GlobalOffsetTable .TOC. as the first entry in the
+  // .got. If there are no references to .TOC. in the symbol table,
+  // ElfSym::GlobalOffsetTable will not be defined and we won't need to save
+  // .TOC. in the .got. When it is defined, we increase NumEntries by the number
+  // of entries used to emit ElfSym::GlobalOffsetTable.
+  if (ElfSym::GlobalOffsetTable && !Target->GotBaseSymInGotPlt)
+    NumEntries += Target->GotHeaderEntriesNum;
+}
 
 void GotSection::addEntry(Symbol &Sym) {
-  Sym.GotIndex = Target->GotHeaderEntriesNum + NumEntries;
+  Sym.GotIndex = NumEntries;
   ++NumEntries;
 }
 
@@ -622,7 +630,7 @@ uint64_t GotSection::getGlobalDynOffset(const Symbol &B) const {
 }
 
 void GotSection::finalizeContents() {
-  Size = (NumEntries + Target->GotHeaderEntriesNum) * Config->Wordsize;
+  Size = NumEntries * Config->Wordsize;
 }
 
 bool GotSection::empty() const {
@@ -2565,8 +2573,11 @@ void elf::mergeSections() {
     }
     (*I)->addSection(MS);
   }
-  for (auto *MS : MergeSections)
+  for (auto *MS : MergeSections) {
     MS->finalizeContents();
+    parallelForEach(MS->Sections,
+                    [](MergeInputSection *Sec) { Sec->initOffsetMap(); });
+  }
 
   std::vector<InputSectionBase *> &V = InputSections;
   V.erase(std::remove(V.begin(), V.end(), nullptr), V.end());
@@ -2610,16 +2621,13 @@ ThunkSection::ThunkSection(OutputSection *OS, uint64_t Off)
 }
 
 void ThunkSection::addThunk(Thunk *T) {
-  uint64_t Off = alignTo(Size, T->Alignment);
-  T->Offset = Off;
   Thunks.push_back(T);
   T->addSymbols(*this);
-  Size = Off + T->size();
 }
 
 void ThunkSection::writeTo(uint8_t *Buf) {
-  for (const Thunk *T : Thunks)
-    T->writeTo(Buf + T->Offset, *this);
+  for (Thunk *T : Thunks)
+    T->writeTo(Buf + T->Offset);
 }
 
 InputSection *ThunkSection::getTargetInputSection() const {
@@ -2627,6 +2635,20 @@ InputSection *ThunkSection::getTargetInputSection() const {
     return nullptr;
   const Thunk *T = Thunks.front();
   return T->getTargetInputSection();
+}
+
+bool ThunkSection::assignOffsets() {
+  uint64_t Off = 0;
+  for (Thunk *T : Thunks) {
+    Off = alignTo(Off, T->Alignment);
+    T->setOffset(Off);
+    uint32_t Size = T->size();
+    T->getThunkTargetSym()->Size = Size;
+    Off += Size;
+  }
+  bool Changed = Off != Size;
+  Size = Off;
+  return Changed;
 }
 
 InputSection *InX::ARMAttributes;
