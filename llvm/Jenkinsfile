@@ -49,20 +49,20 @@ git log -3
     return result
 }
 
-def runTests(int bits) {
-    stage("Run tests (${bits})") {
-        updateGithubStatus("Running CHERI${bits} tests...")
-        sh """#!/usr/bin/env bash 
+def runTests(String targetSuffix) {
+    stage("Run tests (${targetSuffix})") {
+        updateGithubStatus("Running check-all-${targetSuffix} tests...")
+        sh """#!/usr/bin/env bash
 set -xe
 
 cd \${WORKSPACE}/llvm-build
 # run tests
 rm -fv "\${WORKSPACE}/llvm-test-output.xml"
-ninja check-all-cheri${bits} \${JFLAG} || echo "Some CHERI${bits} tests failed!"
-mv -fv "\${WORKSPACE}/llvm-test-output.xml" "\${WORKSPACE}/llvm-test-output-cheri${bits}.xml"
-echo "Done running CHERI${bits} tests"
+ninja check-all-{targetSuffix} \${JFLAG} || echo "Some ${targetSuffix} tests failed!"
+mv -fv "\${WORKSPACE}/llvm-test-output.xml" "\${WORKSPACE}/llvm-test-output-${targetSuffix}.xml"
+echo "Done running {targetSuffix} tests"
 """
-        junit healthScaleFactor: 2.0, testResults: "llvm-test-output-cheri${bits}.xml"
+        junit healthScaleFactor: 2.0, testResults: "llvm-test-output-${targetSuffix}.xml"
     }
 }
 
@@ -132,12 +132,13 @@ ninja ${JFLAG}
 ninja install
 '''
     }
-    runTests(128)
-    runTests(256)
+    runTests('cheri128')
+    // No need to rerun the full test suite, only run CHERI-specific  tests for 256
+    runTests('cheri256-only')
 
     stage("Archive artifacts") {
         updateGithubStatus("Archiving artifacts...")
-        sh '''#!/usr/bin/env bash 
+        sh '''#!/usr/bin/env bash
 set -xe
 
 du -sh "${SDKROOT_DIR}"
