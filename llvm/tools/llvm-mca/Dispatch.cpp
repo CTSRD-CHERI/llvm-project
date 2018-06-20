@@ -223,8 +223,8 @@ unsigned RetireControlUnit::reserveSlot(unsigned Index, unsigned NumMicroOps) {
   return TokenID;
 }
 
-void DispatchUnit::notifyInstructionDispatched(
-    unsigned Index, ArrayRef<unsigned> UsedRegs) {
+void DispatchUnit::notifyInstructionDispatched(unsigned Index,
+                                               ArrayRef<unsigned> UsedRegs) {
   DEBUG(dbgs() << "[E] Instruction Dispatched: " << Index << '\n');
   Owner->notifyInstructionEvent(HWInstructionDispatchedEvent(Index, UsedRegs));
 }
@@ -274,9 +274,11 @@ void RetireControlUnit::dump() const {
 #endif
 
 bool DispatchUnit::checkRAT(unsigned Index, const Instruction &Instr) {
-  const InstrDesc &Desc = Instr.getDesc();
-  unsigned NumWrites = Desc.Writes.size();
-  unsigned RegisterMask = RAT->isAvailable(NumWrites);
+  SmallVector<unsigned, 4> RegDefs;
+  for (const std::unique_ptr<WriteState> &RegDef : Instr.getDefs())
+    RegDefs.emplace_back(RegDef->getRegisterID());
+
+  unsigned RegisterMask = RAT->isAvailable(RegDefs);
   // A mask with all zeroes means: register files are available.
   if (RegisterMask) {
     Owner->notifyStallEvent(
@@ -341,7 +343,7 @@ void DispatchUnit::updateRAWDependencies(ReadState &RS,
   const MCSchedClassDesc *SC = SM.getSchedClassDesc(RD.SchedClassID);
   for (WriteState *WS : DependentWrites) {
     unsigned WriteResID = WS->getWriteResourceID();
-    int ReadAdvance = STI.getReadAdvanceCycles(SC, RD.OpIndex, WriteResID);
+    int ReadAdvance = STI.getReadAdvanceCycles(SC, RD.UseIndex, WriteResID);
     WS->addUser(&RS, ReadAdvance);
   }
   // Prepare the set for another round.
@@ -389,5 +391,4 @@ void DispatchUnit::dump() const {
   RCU->dump();
 }
 #endif
-
 } // namespace mca

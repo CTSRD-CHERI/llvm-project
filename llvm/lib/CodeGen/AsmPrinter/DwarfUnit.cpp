@@ -85,8 +85,6 @@ DwarfTypeUnit::DwarfTypeUnit(DwarfCompileUnit &CU, AsmPrinter *A,
                              MCDwarfDwoLineTable *SplitLineTable)
     : DwarfUnit(dwarf::DW_TAG_type_unit, CU.getCUNode(), A, DW, DWU), CU(CU),
       SplitLineTable(SplitLineTable) {
-  if (SplitLineTable)
-    addSectionOffset(getUnitDie(), dwarf::DW_AT_stmt_list, 0);
 }
 
 DwarfUnit::~DwarfUnit() {
@@ -284,8 +282,10 @@ void DwarfUnit::addSectionOffset(DIE &Die, dwarf::Attribute Attribute,
     addUInt(Die, Attribute, dwarf::DW_FORM_data4, Integer);
 }
 
-MD5::MD5Result *DwarfUnit::getMD5AsBytes(const DIFile *File) {
+MD5::MD5Result *DwarfUnit::getMD5AsBytes(const DIFile *File) const {
   assert(File);
+  if (DD->getDwarfVersion() < 5)
+    return nullptr;
   Optional<DIFile::ChecksumInfo<StringRef>> Checksum = File->getChecksum();
   if (!Checksum || Checksum->Kind != DIFile::CSK_MD5)
     return nullptr;
@@ -300,12 +300,15 @@ MD5::MD5Result *DwarfUnit::getMD5AsBytes(const DIFile *File) {
 }
 
 unsigned DwarfTypeUnit::getOrCreateSourceID(const DIFile *File) {
-  return SplitLineTable
-             ? SplitLineTable->getFile(File->getDirectory(),
-                                       File->getFilename(),
-                                       getMD5AsBytes(File),
-                                       File->getSource())
-             : getCU().getOrCreateSourceID(File);
+  if (!SplitLineTable)
+    return getCU().getOrCreateSourceID(File);
+  if (!UsedLineTable) {
+    UsedLineTable = true;
+    // This is a split type unit that needs a line table.
+    addSectionOffset(getUnitDie(), dwarf::DW_AT_stmt_list, 0);
+  }
+  return SplitLineTable->getFile(File->getDirectory(), File->getFilename(),
+                                 getMD5AsBytes(File), File->getSource());
 }
 
 void DwarfUnit::addOpAddress(DIELoc &Die, const MCSymbol *Sym) {
@@ -1659,18 +1662,18 @@ DIE *DwarfUnit::getOrCreateStaticMemberDIE(const DIDerivedType *DT) {
 void DwarfUnit::emitCommonHeader(bool UseOffsets, dwarf::UnitType UT) {
   // Emit size of content not including length itself
   Asm->OutStreamer->AddComment("Length of Unit");
-  Asm->EmitInt32(getHeaderSize() + getUnitDie().getSize());
+  Asm->emitInt32(getHeaderSize() + getUnitDie().getSize());
 
   Asm->OutStreamer->AddComment("DWARF version number");
   unsigned Version = DD->getDwarfVersion();
-  Asm->EmitInt16(Version);
+  Asm->emitInt16(Version);
 
   // DWARF v5 reorders the address size and adds a unit type.
   if (Version >= 5) {
     Asm->OutStreamer->AddComment("DWARF Unit Type");
-    Asm->EmitInt8(UT);
+    Asm->emitInt8(UT);
     Asm->OutStreamer->AddComment("Address Size (in bytes)");
-    Asm->EmitInt8(Asm->MAI->getCodePointerSize());
+    Asm->emitInt8(Asm->MAI->getCodePointerSize());
   }
 
   // We share one abbreviations table across all units so it's always at the
@@ -1679,14 +1682,14 @@ void DwarfUnit::emitCommonHeader(bool UseOffsets, dwarf::UnitType UT) {
   Asm->OutStreamer->AddComment("Offset Into Abbrev. Section");
   const TargetLoweringObjectFile &TLOF = Asm->getObjFileLowering();
   if (UseOffsets)
-    Asm->EmitInt32(0);
+    Asm->emitInt32(0);
   else
     Asm->emitDwarfSymbolReference(
         TLOF.getDwarfAbbrevSection()->getBeginSymbol(), false);
 
   if (Version <= 4) {
     Asm->OutStreamer->AddComment("Address Size (in bytes)");
-    Asm->EmitInt8(Asm->MAI->getCodePointerSize());
+    Asm->emitInt8(Asm->MAI->getCodePointerSize());
   }
 }
 

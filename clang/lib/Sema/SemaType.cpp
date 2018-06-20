@@ -3345,6 +3345,18 @@ getCCForDeclaratorChunk(Sema &S, Declarator &D,
   CallingConv CC = S.Context.getDefaultCallingConvention(FTI.isVariadic,
                                                          IsCXXInstanceMethod);
 
+  // Attribute AT_CUDAGlobal affects the calling convention for AMDGPU targets.
+  // This is the simplest place to infer calling convention for CUDA kernels.
+  if (S.getLangOpts().CUDA && S.getLangOpts().CUDAIsDevice) {
+    for (const AttributeList *Attr = D.getDeclSpec().getAttributes().getList();
+         Attr; Attr = Attr->getNext()) {
+      if (Attr->getKind() == AttributeList::AT_CUDAGlobal) {
+        CC = CC_CUDAKernel;
+        break;
+      }
+    }
+  }
+
   // Attribute AT_OpenCLKernel affects the calling convention for SPIR
   // and AMDGPU targets, hence it cannot be treated as a calling
   // convention attribute. This is the simplest place to infer
@@ -4894,8 +4906,8 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
         if (Chunk.Fun.TypeQuals & Qualifiers::Restrict)
           RemovalLocs.push_back(Chunk.Fun.getRestrictQualifierLoc());
         if (!RemovalLocs.empty()) {
-          std::sort(RemovalLocs.begin(), RemovalLocs.end(),
-                    BeforeThanCompare<SourceLocation>(S.getSourceManager()));
+          llvm::sort(RemovalLocs.begin(), RemovalLocs.end(),
+                     BeforeThanCompare<SourceLocation>(S.getSourceManager()));
           RemovalRange = SourceRange(RemovalLocs.front(), RemovalLocs.back());
           Loc = RemovalLocs.front();
         }

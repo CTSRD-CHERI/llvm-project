@@ -1096,6 +1096,14 @@ public:
   /// SupportsCapabilities - Returns true if the target supports capabilities.
   virtual bool SupportsCapabilities() const { return false; }
 
+  enum CallingConvKind {
+    CCK_Default,
+    CCK_ClangABI4OrPS4,
+    CCK_MicrosoftX86_64
+  };
+
+  virtual CallingConvKind getCallingConvKind(bool ClangABICompat4) const;
+
   /// Controls if __builtin_longjmp / __builtin_setjmp can be lowered to
   /// llvm.eh.sjlj.longjmp / llvm.eh.sjlj.setjmp.
   virtual bool hasSjLjLowering() const {

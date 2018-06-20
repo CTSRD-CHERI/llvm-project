@@ -23,7 +23,7 @@ def HaswellModel : SchedMachineModel {
   // Based on the LSD (loop-stream detector) queue size and benchmarking data.
   let LoopMicroOpBufferSize = 50;
 
-  // This flag is set to allow the scheduler to assign a default model to 
+  // This flag is set to allow the scheduler to assign a default model to
   // unrecognized opcodes.
   let CompleteModel = 0;
 }
@@ -81,7 +81,8 @@ def : ReadAdvance<ReadAfterLd, 5>;
 // folded loads.
 multiclass HWWriteResPair<X86FoldableSchedWrite SchedRW,
                           list<ProcResourceKind> ExePorts,
-                          int Lat, list<int> Res = [1], int UOps = 1> {
+                          int Lat, list<int> Res = [1], int UOps = 1,
+                          int LoadLat = 5> {
   // Register variant is using a single cycle on ExePort.
   def : WriteRes<SchedRW, ExePorts> {
     let Latency = Lat;
@@ -89,12 +90,12 @@ multiclass HWWriteResPair<X86FoldableSchedWrite SchedRW,
     let NumMicroOps = UOps;
   }
 
-  // Memory variant also uses a cycle on port 2/3 and adds 5 cycles to the
-  // latency.
+  // Memory variant also uses a cycle on port 2/3 and adds LoadLat cycles to
+  // the latency (default = 5).
   def : WriteRes<SchedRW.Folded, !listconcat([HWPort23], ExePorts)> {
-    let Latency = !add(Lat, 5);
+    let Latency = !add(Lat, LoadLat);
     let ResourceCycles = !listconcat([1], Res);
-    let NumMicroOps = UOps;
+    let NumMicroOps = !add(UOps, 1);
   }
 }
 
@@ -114,22 +115,25 @@ defm : HWWriteResPair<WriteIMul,  [HWPort1],   3>;
 def  : WriteRes<WriteIMulH, []> { let Latency = 3; }
 defm : HWWriteResPair<WriteShift, [HWPort06],  1>;
 defm : HWWriteResPair<WriteJump,  [HWPort06],   1>;
+defm : HWWriteResPair<WriteCRC32, [HWPort1],   3>;
 
 // This is for simple LEAs with one or two input operands.
 // The complex ones can only execute on port 1, and they require two cycles on
 // the port to read all inputs. We don't model that.
 def : WriteRes<WriteLEA, [HWPort15]>;
 
-// This is quite rough, latency depends on the dividend.
-def : WriteRes<WriteIDiv, [HWPort0, HWDivider]> {
-  let Latency = 25;
-  let ResourceCycles = [1, 10];
-}
-def : WriteRes<WriteIDivLd, [HWPort23, HWPort0, HWDivider]> {
-  let Latency = 29;
-  let ResourceCycles = [1, 1, 10];
-}
+// Bit counts.
+defm : HWWriteResPair<WriteBitScan, [HWPort1], 3>;
+defm : HWWriteResPair<WriteLZCNT,   [HWPort1], 3>;
+defm : HWWriteResPair<WriteTZCNT,   [HWPort1], 3>;
+defm : HWWriteResPair<WritePOPCNT,  [HWPort1], 3>;
 
+// BMI1 BEXTR, BMI2 BZHI
+defm : HWWriteResPair<WriteBEXTR, [HWPort06,HWPort15], 2, [1,1], 2>;
+defm : HWWriteResPair<WriteBZHI, [HWPort15], 1>;
+
+// This is quite rough, latency depends on the dividend.
+defm : HWWriteResPair<WriteIDiv,  [HWPort0, HWDivider], 25, [1,10], 1, 4>;
 // Scalar and vector floating point.
 def  : WriteRes<WriteFStore,       [HWPort237, HWPort4]>;
 def  : WriteRes<WriteFLoad,        [HWPort23]> { let Latency = 5; }
@@ -159,6 +163,7 @@ defm : HWWriteResPair<WriteVecShift, [HWPort0],  1>;
 defm : HWWriteResPair<WriteVecLogic, [HWPort015], 1>;
 defm : HWWriteResPair<WriteVecALU,   [HWPort15],  1>;
 defm : HWWriteResPair<WriteVecIMul,  [HWPort0],   5>;
+defm : HWWriteResPair<WritePMULLD,   [HWPort0], 10, [2], 2, 6>;
 defm : HWWriteResPair<WriteShuffle,  [HWPort5],  1>;
 defm : HWWriteResPair<WriteBlend,  [HWPort15],  1>;
 defm : HWWriteResPair<WriteShuffle256,  [HWPort5],  3>;
@@ -215,6 +220,11 @@ def : WriteRes<WritePCmpEStrILd, [HWPort0, HWPort5, HWPort23, HWPort0156]> {
   let NumMicroOps = 9;
   let ResourceCycles = [4,3,1,1];
 }
+
+// MOVMSK Instructions.
+def : WriteRes<WriteFMOVMSK, [HWPort0]> { let Latency = 3; }
+def : WriteRes<WriteVecMOVMSK, [HWPort0]> { let Latency = 3; }
+def : WriteRes<WriteMMXMOVMSK, [HWPort0]> { let Latency = 1; }
 
 // AES Instructions.
 def : WriteRes<WriteAESDecEnc, [HWPort5]> {
@@ -658,7 +668,6 @@ def HWWriteResGroup2 : SchedWriteRes<[HWPort0]> {
 }
 def: InstRW<[HWWriteResGroup2], (instregex "MMX_MOVD64from64rr",
                                            "MMX_MOVD64grr",
-                                           "MMX_PMOVMSKBrr",
                                            "MMX_PSLLDri",
                                            "MMX_PSLLDrr",
                                            "MMX_PSLLQri",
@@ -687,10 +696,8 @@ def: InstRW<[HWWriteResGroup2], (instregex "MMX_MOVD64from64rr",
                                            "(V?)PSRLQ(Y?)ri",
                                            "VPSRLVQ(Y?)rr",
                                            "(V?)PSRLW(Y?)ri",
-                                           "VTESTPDYrr",
-                                           "VTESTPDrr",
-                                           "VTESTPSYrr",
-                                           "VTESTPSrr")>;
+                                           "VTESTPD(Y?)rr",
+                                           "VTESTPS(Y?)rr")>;
 
 def HWWriteResGroup3 : SchedWriteRes<[HWPort1]> {
   let Latency = 1;
@@ -707,12 +714,7 @@ def HWWriteResGroup4 : SchedWriteRes<[HWPort5]> {
   let NumMicroOps = 1;
   let ResourceCycles = [1];
 }
-def: InstRW<[HWWriteResGroup4], (instregex "ANDNPDrr",
-                                           "ANDNPSrr",
-                                           "ANDPDrr",
-                                           "ANDPSrr",
-                                           "INSERTPSrr",
-                                           "MMX_MOVD64rr",
+def: InstRW<[HWWriteResGroup4], (instregex "MMX_MOVD64rr",
                                            "MMX_MOVD64to64rr",
                                            "MMX_MOVQ2DQrr",
                                            "MMX_PALIGNRrri",
@@ -724,167 +726,71 @@ def: InstRW<[HWWriteResGroup4], (instregex "ANDNPDrr",
                                            "MMX_PUNPCKLBWirr",
                                            "MMX_PUNPCKLDQirr",
                                            "MMX_PUNPCKLWDirr",
-                                           "MOV64toPQIrr",
-                                           "MOVAPDrr",
-                                           "MOVAPSrr",
-                                           "MOVDDUPrr",
-                                           "MOVDI2PDIrr",
-                                           "MOVHLPSrr",
-                                           "MOVLHPSrr",
-                                           "MOVSDrr",
-                                           "MOVSHDUPrr",
-                                           "MOVSLDUPrr",
-                                           "MOVSSrr",
-                                           "MOVUPDrr",
-                                           "MOVUPSrr",
-                                           "ORPDrr",
-                                           "ORPSrr",
-                                           "PACKSSDWrr",
-                                           "PACKSSWBrr",
-                                           "PACKUSDWrr",
-                                           "PACKUSWBrr",
-                                           "PALIGNRrri",
-                                           "PBLENDWrri",
-                                           "PMOVSXBDrr",
-                                           "PMOVSXBQrr",
-                                           "PMOVSXBWrr",
-                                           "PMOVSXDQrr",
-                                           "PMOVSXWDrr",
-                                           "PMOVSXWQrr",
-                                           "PMOVZXBDrr",
-                                           "PMOVZXBQrr",
-                                           "PMOVZXBWrr",
-                                           "PMOVZXDQrr",
-                                           "PMOVZXWDrr",
-                                           "PMOVZXWQrr",
-                                           "PSHUFBrr",
-                                           "PSHUFDri",
-                                           "PSHUFHWri",
-                                           "PSHUFLWri",
-                                           "PSLLDQri",
-                                           "PSRLDQri",
-                                           "PUNPCKHBWrr",
-                                           "PUNPCKHDQrr",
-                                           "PUNPCKHQDQrr",
-                                           "PUNPCKHWDrr",
-                                           "PUNPCKLBWrr",
-                                           "PUNPCKLDQrr",
-                                           "PUNPCKLQDQrr",
-                                           "PUNPCKLWDrr",
-                                           "SHUFPDrri",
-                                           "SHUFPSrri",
-                                           "UNPCKHPDrr",
-                                           "UNPCKHPSrr",
-                                           "UNPCKLPDrr",
-                                           "UNPCKLPSrr",
-                                           "VANDNPDYrr",
-                                           "VANDNPDrr",
-                                           "VANDNPSYrr",
-                                           "VANDNPSrr",
-                                           "VANDPDYrr",
-                                           "VANDPDrr",
-                                           "VANDPSYrr",
-                                           "VANDPSrr",
+                                           "(V?)ANDNPD(Y?)rr",
+                                           "(V?)ANDNPS(Y?)rr",
+                                           "(V?)ANDPD(Y?)rr",
+                                           "(V?)ANDPS(Y?)rr",
                                            "VBROADCASTSSrr",
-                                           "VINSERTPSrr",
-                                           "VMOV64toPQIrr",
-                                           "VMOVAPDYrr",
-                                           "VMOVAPDrr",
-                                           "VMOVAPSYrr",
-                                           "VMOVAPSrr",
-                                           "VMOVDDUPYrr",
-                                           "VMOVDDUPrr",
-                                           "VMOVDI2PDIrr",
-                                           "VMOVHLPSrr",
-                                           "VMOVLHPSrr",
-                                           "VMOVSDrr",
-                                           "VMOVSHDUPYrr",
-                                           "VMOVSHDUPrr",
-                                           "VMOVSLDUPYrr",
-                                           "VMOVSLDUPrr",
-                                           "VMOVSSrr",
-                                           "VMOVUPDYrr",
-                                           "VMOVUPDrr",
-                                           "VMOVUPSYrr",
-                                           "VMOVUPSrr",
-                                           "VORPDYrr",
-                                           "VORPDrr",
-                                           "VORPSYrr",
-                                           "VORPSrr",
-                                           "VPACKSSDWYrr",
-                                           "VPACKSSDWrr",
-                                           "VPACKSSWBYrr",
-                                           "VPACKSSWBrr",
-                                           "VPACKUSDWYrr",
-                                           "VPACKUSDWrr",
-                                           "VPACKUSWBYrr",
-                                           "VPACKUSWBrr",
-                                           "VPALIGNRYrri",
-                                           "VPALIGNRrri",
-                                           "VPBLENDWYrri",
-                                           "VPBLENDWrri",
+                                           "(V?)INSERTPSrr",
+                                           "(V?)MOV64toPQIrr",
+                                           "(V?)MOVAPD(Y?)rr",
+                                           "(V?)MOVAPS(Y?)rr",
+                                           "(V?)MOVDDUP(Y?)rr",
+                                           "(V?)MOVDI2PDIrr",
+                                           "(V?)MOVHLPSrr",
+                                           "(V?)MOVLHPSrr",
+                                           "(V?)MOVSDrr",
+                                           "(V?)MOVSHDUP(Y?)rr",
+                                           "(V?)MOVSLDUP(Y?)rr",
+                                           "(V?)MOVSSrr",
+                                           "(V?)MOVUPD(Y?)rr",
+                                           "(V?)MOVUPS(Y?)rr",
+                                           "(V?)ORPD(Y?)rr",
+                                           "(V?)ORPS(Y?)rr",
+                                           "(V?)PACKSSDW(Y?)rr",
+                                           "(V?)PACKSSWB(Y?)rr",
+                                           "(V?)PACKUSDW(Y?)rr",
+                                           "(V?)PACKUSWB(Y?)rr",
+                                           "(V?)PALIGNR(Y?)rri",
+                                           "(V?)PBLENDW(Y?)rri",
                                            "VPBROADCASTDrr",
                                            "VPBROADCASTQrr",
-                                           "VPERMILPDYri",
-                                           "VPERMILPDYrr",
-                                           "VPERMILPDri",
-                                           "VPERMILPDrr",
-                                           "VPERMILPSYri",
-                                           "VPERMILPSYrr",
-                                           "VPERMILPSri",
-                                           "VPERMILPSrr",
-                                           "VPMOVSXBDrr",
-                                           "VPMOVSXBQrr",
-                                           "VPMOVSXBWrr",
-                                           "VPMOVSXDQrr",
-                                           "VPMOVSXWDrr",
-                                           "VPMOVSXWQrr",
-                                           "VPMOVZXBDrr",
-                                           "VPMOVZXBQrr",
-                                           "VPMOVZXBWrr",
-                                           "VPMOVZXDQrr",
-                                           "VPMOVZXWDrr",
-                                           "VPMOVZXWQrr",
-                                           "VPSHUFBYrr",
-                                           "VPSHUFBrr",
-                                           "VPSHUFDYri",
-                                           "VPSHUFDri",
-                                           "VPSHUFHWYri",
-                                           "VPSHUFHWri",
-                                           "VPSHUFLWYri",
-                                           "VPSHUFLWri",
-                                           "VPSLLDQYri",
-                                           "VPSLLDQri",
-                                           "VPSRLDQYri",
-                                           "VPSRLDQri",
-                                           "VPUNPCKHBWYrr",
-                                           "VPUNPCKHBWrr",
-                                           "VPUNPCKHDQYrr",
-                                           "VPUNPCKHDQrr",
-                                           "VPUNPCKHQDQYrr",
-                                           "VPUNPCKHQDQrr",
-                                           "VPUNPCKHWDYrr",
-                                           "VPUNPCKHWDrr",
-                                           "VPUNPCKLBWYrr",
-                                           "VPUNPCKLBWrr",
-                                           "VPUNPCKLDQYrr",
-                                           "VPUNPCKLDQrr",
-                                           "VPUNPCKLQDQYrr",
-                                           "VPUNPCKLQDQrr",
-                                           "VPUNPCKLWDYrr",
-                                           "VPUNPCKLWDrr",
-                                           "VSHUFPDYrri",
-                                           "VSHUFPDrri",
-                                           "VSHUFPSYrri",
-                                           "VSHUFPSrri",
-                                           "VUNPCKHPDYrr",
-                                           "VUNPCKHPDrr",
-                                           "VUNPCKHPSYrr",
-                                           "VUNPCKHPSrr",
-                                           "VUNPCKLPDYrr",
-                                           "VUNPCKLPDrr",
-                                           "VUNPCKLPSYrr",
-                                           "VUNPCKLPSrr",
+                                           "VPERMILPD(Y?)ri",
+                                           "VPERMILPD(Y?)rr",
+                                           "VPERMILPS(Y?)ri",
+                                           "VPERMILPS(Y?)rr",
+                                           "(V?)PMOVSXBDrr",
+                                           "(V?)PMOVSXBQrr",
+                                           "(V?)PMOVSXBWrr",
+                                           "(V?)PMOVSXDQrr",
+                                           "(V?)PMOVSXWDrr",
+                                           "(V?)PMOVSXWQrr",
+                                           "(V?)PMOVZXBDrr",
+                                           "(V?)PMOVZXBQrr",
+                                           "(V?)PMOVZXBWrr",
+                                           "(V?)PMOVZXDQrr",
+                                           "(V?)PMOVZXWDrr",
+                                           "(V?)PMOVZXWQrr",
+                                           "(V?)PSHUFB(Y?)rr",
+                                           "(V?)PSHUFD(Y?)ri",
+                                           "(V?)PSHUFHW(Y?)ri",
+                                           "(V?)PSHUFLW(Y?)ri",
+                                           "(V?)PSLLDQ(Y?)ri",
+                                           "(V?)PSRLDQ(Y?)ri",
+                                           "(V?)PUNPCKHBW(Y?)rr",
+                                           "(V?)PUNPCKHDQ(Y?)rr",
+                                           "(V?)PUNPCKHQDQ(Y?)rr",
+                                           "(V?)PUNPCKHWD(Y?)rr",
+                                           "(V?)PUNPCKLBW(Y?)rr",
+                                           "(V?)PUNPCKLDQ(Y?)rr",
+                                           "(V?)PUNPCKLQDQ(Y?)rr",
+                                           "(V?)PUNPCKLWD(Y?)rr",
+                                           "(V?)SHUFPD(Y?)rri",
+                                           "(V?)SHUFPS(Y?)rri",
+                                           "(V?)UNPCKHPD(Y?)rr",
+                                           "(V?)UNPCKHPS(Y?)rr",
+                                           "(V?)UNPCKLPD(Y?)rr",
+                                           "(V?)UNPCKLPS(Y?)rr",
                                            "(V?)XORPD(Y?)rr",
                                            "(V?)XORPS(Y?)rr")>;
 
@@ -943,7 +849,6 @@ def: InstRW<[HWWriteResGroup8], (instregex "ANDN(32|64)rr",
                                            "BLSI(32|64)rr",
                                            "BLSMSK(32|64)rr",
                                            "BLSR(32|64)rr",
-                                           "BZHI(32|64)rr",
                                            "LEA(16|32|64)(_32)?r",
                                            "MMX_PABSBrr",
                                            "MMX_PABSDrr",
@@ -979,135 +884,49 @@ def: InstRW<[HWWriteResGroup8], (instregex "ANDN(32|64)rr",
                                            "MMX_PSUBUSBirr",
                                            "MMX_PSUBUSWirr",
                                            "MMX_PSUBWirr",
-                                           "PABSBrr",
-                                           "PABSDrr",
-                                           "PABSWrr",
-                                           "PADDBrr",
-                                           "PADDDrr",
-                                           "PADDQrr",
-                                           "PADDSBrr",
-                                           "PADDSWrr",
-                                           "PADDUSBrr",
-                                           "PADDUSWrr",
-                                           "PADDWrr",
-                                           "PAVGBrr",
-                                           "PAVGWrr",
-                                           "PCMPEQBrr",
-                                           "PCMPEQDrr",
-                                           "PCMPEQQrr",
-                                           "PCMPEQWrr",
-                                           "PCMPGTBrr",
-                                           "PCMPGTDrr",
-                                           "PCMPGTWrr",
-                                           "PMAXSBrr",
-                                           "PMAXSDrr",
-                                           "PMAXSWrr",
-                                           "PMAXUBrr",
-                                           "PMAXUDrr",
-                                           "PMAXUWrr",
-                                           "PMINSBrr",
-                                           "PMINSDrr",
-                                           "PMINSWrr",
-                                           "PMINUBrr",
-                                           "PMINUDrr",
-                                           "PMINUWrr",
-                                           "PSIGNBrr",
-                                           "PSIGNDrr",
-                                           "PSIGNWrr",
-                                           "PSUBBrr",
-                                           "PSUBDrr",
-                                           "PSUBQrr",
-                                           "PSUBSBrr",
-                                           "PSUBSWrr",
-                                           "PSUBUSBrr",
-                                           "PSUBUSWrr",
-                                           "PSUBWrr",
-                                           "VPABSBYrr",
-                                           "VPABSBrr",
-                                           "VPABSDYrr",
-                                           "VPABSDrr",
-                                           "VPABSWYrr",
-                                           "VPABSWrr",
-                                           "VPADDBYrr",
-                                           "VPADDBrr",
-                                           "VPADDDYrr",
-                                           "VPADDDrr",
-                                           "VPADDQYrr",
-                                           "VPADDQrr",
-                                           "VPADDSBYrr",
-                                           "VPADDSBrr",
-                                           "VPADDSWYrr",
-                                           "VPADDSWrr",
-                                           "VPADDUSBYrr",
-                                           "VPADDUSBrr",
-                                           "VPADDUSWYrr",
-                                           "VPADDUSWrr",
-                                           "VPADDWYrr",
-                                           "VPADDWrr",
-                                           "VPAVGBYrr",
-                                           "VPAVGBrr",
-                                           "VPAVGWYrr",
-                                           "VPAVGWrr",
-                                           "VPCMPEQBYrr",
-                                           "VPCMPEQBrr",
-                                           "VPCMPEQDYrr",
-                                           "VPCMPEQDrr",
-                                           "VPCMPEQQYrr",
-                                           "VPCMPEQQrr",
-                                           "VPCMPEQWYrr",
-                                           "VPCMPEQWrr",
-                                           "VPCMPGTBYrr",
-                                           "VPCMPGTBrr",
-                                           "VPCMPGTDYrr",
-                                           "VPCMPGTDrr",
-                                           "VPCMPGTWYrr",
-                                           "VPCMPGTWrr",
-                                           "VPMAXSBYrr",
-                                           "VPMAXSBrr",
-                                           "VPMAXSDYrr",
-                                           "VPMAXSDrr",
-                                           "VPMAXSWYrr",
-                                           "VPMAXSWrr",
-                                           "VPMAXUBYrr",
-                                           "VPMAXUBrr",
-                                           "VPMAXUDYrr",
-                                           "VPMAXUDrr",
-                                           "VPMAXUWYrr",
-                                           "VPMAXUWrr",
-                                           "VPMINSBYrr",
-                                           "VPMINSBrr",
-                                           "VPMINSDYrr",
-                                           "VPMINSDrr",
-                                           "VPMINSWYrr",
-                                           "VPMINSWrr",
-                                           "VPMINUBYrr",
-                                           "VPMINUBrr",
-                                           "VPMINUDYrr",
-                                           "VPMINUDrr",
-                                           "VPMINUWYrr",
-                                           "VPMINUWrr",
-                                           "VPSIGNBYrr",
-                                           "VPSIGNBrr",
-                                           "VPSIGNDYrr",
-                                           "VPSIGNDrr",
-                                           "VPSIGNWYrr",
-                                           "VPSIGNWrr",
-                                           "VPSUBBYrr",
-                                           "VPSUBBrr",
-                                           "VPSUBDYrr",
-                                           "VPSUBDrr",
-                                           "VPSUBQYrr",
-                                           "VPSUBQrr",
-                                           "VPSUBSBYrr",
-                                           "VPSUBSBrr",
-                                           "VPSUBSWYrr",
-                                           "VPSUBSWrr",
-                                           "VPSUBUSBYrr",
-                                           "VPSUBUSBrr",
-                                           "VPSUBUSWYrr",
-                                           "VPSUBUSWrr",
-                                           "VPSUBWYrr",
-                                           "VPSUBWrr")>;
+                                           "(V?)PABSB(Y?)rr",
+                                           "(V?)PABSD(Y?)rr",
+                                           "(V?)PABSW(Y?)rr",
+                                           "(V?)PADDB(Y?)rr",
+                                           "(V?)PADDD(Y?)rr",
+                                           "(V?)PADDQ(Y?)rr",
+                                           "(V?)PADDSB(Y?)rr",
+                                           "(V?)PADDSW(Y?)rr",
+                                           "(V?)PADDUSB(Y?)rr",
+                                           "(V?)PADDUSW(Y?)rr",
+                                           "(V?)PADDW(Y?)rr",
+                                           "(V?)PAVGB(Y?)rr",
+                                           "(V?)PAVGW(Y?)rr",
+                                           "(V?)PCMPEQB(Y?)rr",
+                                           "(V?)PCMPEQD(Y?)rr",
+                                           "(V?)PCMPEQQ(Y?)rr",
+                                           "(V?)PCMPEQW(Y?)rr",
+                                           "(V?)PCMPGTB(Y?)rr",
+                                           "(V?)PCMPGTD(Y?)rr",
+                                           "(V?)PCMPGTW(Y?)rr",
+                                           "(V?)PMAXSB(Y?)rr",
+                                           "(V?)PMAXSD(Y?)rr",
+                                           "(V?)PMAXSW(Y?)rr",
+                                           "(V?)PMAXUB(Y?)rr",
+                                           "(V?)PMAXUD(Y?)rr",
+                                           "(V?)PMAXUW(Y?)rr",
+                                           "(V?)PMINSB(Y?)rr",
+                                           "(V?)PMINSD(Y?)rr",
+                                           "(V?)PMINSW(Y?)rr",
+                                           "(V?)PMINUB(Y?)rr",
+                                           "(V?)PMINUD(Y?)rr",
+                                           "(V?)PMINUW(Y?)rr",
+                                           "(V?)PSIGNB(Y?)rr",
+                                           "(V?)PSIGND(Y?)rr",
+                                           "(V?)PSIGNW(Y?)rr",
+                                           "(V?)PSUBB(Y?)rr",
+                                           "(V?)PSUBD(Y?)rr",
+                                           "(V?)PSUBQ(Y?)rr",
+                                           "(V?)PSUBSB(Y?)rr",
+                                           "(V?)PSUBSW(Y?)rr",
+                                           "(V?)PSUBUSB(Y?)rr",
+                                           "(V?)PSUBUSW(Y?)rr",
+                                           "(V?)PSUBW(Y?)rr")>;
 
 def HWWriteResGroup9 : SchedWriteRes<[HWPort015]> {
   let Latency = 1;
@@ -1238,20 +1057,15 @@ def HWWriteResGroup12 : SchedWriteRes<[HWPort1,HWPort23]> {
 def: InstRW<[HWWriteResGroup12], (instrs MUL8m, MUL16m,
                                          IMUL8m, IMUL16m,
                                          IMUL16rm, IMUL16rmi, IMUL16rmi8, IMUL32rm, IMUL32rmi, IMUL32rmi8, IMUL64rm, IMUL64rmi32, IMUL64rmi8)>;
-def: InstRW<[HWWriteResGroup12], (instregex "BSF(16|32|64)rm",
-                                            "BSR(16|32|64)rm",
-                                            "FCOM32m",
+def: InstRW<[HWWriteResGroup12], (instregex "FCOM32m",
                                             "FCOM64m",
                                             "FCOMP32m",
                                             "FCOMP64m",
-                                            "LZCNT(16|32|64)rm",
                                             "MMX_CVTPI2PSirm",
                                             "MMX_CVTPS2PIirm",
                                             "MMX_CVTTPS2PIirm",
                                             "PDEP(32|64)rm",
                                             "PEXT(32|64)rm",
-                                            "POPCNT(16|32|64)rm",
-                                            "TZCNT(16|32|64)rm",
                                             "(V?)ADDSDrm",
                                             "(V?)ADDSSrm",
                                             "(V?)CMPSDrm",
@@ -1420,7 +1234,6 @@ def: InstRW<[HWWriteResGroup16], (instregex "ANDN(32|64)rm",
                                             "BLSI(32|64)rm",
                                             "BLSMSK(32|64)rm",
                                             "BLSR(32|64)rm",
-                                            "BZHI(32|64)rm",
                                             "MMX_PABSBrm",
                                             "MMX_PABSDrm",
                                             "MMX_PABSWrm",
@@ -1717,12 +1530,9 @@ def: InstRW<[HWWriteResGroup27], (instregex "BLENDVPDrr0",
                                             "BLENDVPSrr0",
                                             "MMX_PINSRWrr",
                                             "PBLENDVBrr0",
-                                            "VBLENDVPDYrr",
-                                            "VBLENDVPDrr",
-                                            "VBLENDVPSYrr",
-                                            "VBLENDVPSrr",
-                                            "VPBLENDVBYrr",
-                                            "VPBLENDVBrr",
+                                            "VBLENDVPD(Y?)rr",
+                                            "VBLENDVPS(Y?)rr",
+                                            "VPBLENDVB(Y?)rr",
                                             "(V?)PINSRBrr",
                                             "(V?)PINSRDrr",
                                             "(V?)PINSRQrr",
@@ -1799,8 +1609,7 @@ def HWWriteResGroup34 : SchedWriteRes<[HWPort06,HWPort15]> {
   let NumMicroOps = 2;
   let ResourceCycles = [1,1];
 }
-def: InstRW<[HWWriteResGroup34], (instregex "BEXTR(32|64)rr",
-                                            "BSWAP(16|32|64)r")>;
+def: InstRW<[HWWriteResGroup34], (instregex "BSWAP(16|32|64)r")>;
 
 def HWWriteResGroup35 : SchedWriteRes<[HWPort06,HWPort0156]> {
   let Latency = 2;
@@ -1904,13 +1713,6 @@ def: InstRW<[HWWriteResGroup41], (instregex "LRETQ",
                                             "RETL",
                                             "RETQ")>;
 
-def HWWriteResGroup42 : SchedWriteRes<[HWPort23,HWPort06,HWPort15]> {
-  let Latency = 7;
-  let NumMicroOps = 3;
-  let ResourceCycles = [1,1,1];
-}
-def: InstRW<[HWWriteResGroup42], (instregex "BEXTR(32|64)rm")>;
-
 def HWWriteResGroup43 : SchedWriteRes<[HWPort23,HWPort06,HWPort0156]> {
   let Latency = 7;
   let NumMicroOps = 3;
@@ -1960,15 +1762,6 @@ def HWWriteResGroup48 : SchedWriteRes<[HWPort4,HWPort6,HWPort23,HWPort237,HWPort
 def: InstRW<[HWWriteResGroup48], (instregex "CALL(16|32|64)m",
                                             "FARCALL64")>;
 
-def HWWriteResGroup49 : SchedWriteRes<[HWPort0]> {
-  let Latency = 3;
-  let NumMicroOps = 1;
-  let ResourceCycles = [1];
-}
-def: InstRW<[HWWriteResGroup49], (instregex "(V?)MOVMSKPD(Y?)rr",
-                                            "(V?)MOVMSKPS(Y?)rr",
-                                            "(V?)PMOVMSKB(Y?)rr")>;
-
 def HWWriteResGroup50 : SchedWriteRes<[HWPort1]> {
   let Latency = 3;
   let NumMicroOps = 1;
@@ -1978,13 +1771,9 @@ def: InstRW<[HWWriteResGroup50], (instrs MUL8r, IMUL8r, IMUL16rr, IMUL32rr, IMUL
 def: InstRW<[HWWriteResGroup50], (instregex "ADD_FPrST0",
                                             "ADD_FST0r",
                                             "ADD_FrST0",
-                                            "BSF(16|32|64)rr",
-                                            "BSR(16|32|64)rr",
-                                            "LZCNT(16|32|64)rr",
                                             "MMX_CVTPI2PSirr",
                                             "PDEP(32|64)rr",
                                             "PEXT(32|64)rr",
-                                            "POPCNT(16|32|64)rr",
                                             "SHLD(16|32|64)rri8",
                                             "SHRD(16|32|64)rri8",
                                             "SUBR_FPrST0",
@@ -1993,7 +1782,6 @@ def: InstRW<[HWWriteResGroup50], (instregex "ADD_FPrST0",
                                             "SUB_FPrST0",
                                             "SUB_FST0r",
                                             "SUB_FrST0",
-                                            "TZCNT(16|32|64)rr",
                                             "(V?)ADDPD(Y?)rr",
                                             "(V?)ADDPS(Y?)rr",
                                             "(V?)ADDSDrr",
@@ -2158,12 +1946,9 @@ def HWWriteResGroup55 : SchedWriteRes<[HWPort0,HWPort5]> {
   let NumMicroOps = 3;
   let ResourceCycles = [2,1];
 }
-def: InstRW<[HWWriteResGroup55], (instregex "VPSLLVDYrr",
-                                            "VPSLLVDrr",
-                                            "VPSRAVDYrr",
-                                            "VPSRAVDrr",
-                                            "VPSRLVDYrr",
-                                            "VPSRLVDrr")>;
+def: InstRW<[HWWriteResGroup55], (instregex "VPSLLVD(Y?)rr",
+                                            "VPSRAVD(Y?)rr",
+                                            "VPSRLVD(Y?)rr")>;
 
 def HWWriteResGroup56 : SchedWriteRes<[HWPort5,HWPort15]> {
   let Latency = 3;
@@ -2513,14 +2298,10 @@ def HWWriteResGroup84 : SchedWriteRes<[HWPort0,HWPort4,HWPort237,HWPort15]> {
   let NumMicroOps = 4;
   let ResourceCycles = [1,1,1,1];
 }
-def: InstRW<[HWWriteResGroup84], (instregex "VMASKMOVPDYmr",
-                                            "VMASKMOVPDmr",
-                                            "VMASKMOVPSYmr",
-                                            "VMASKMOVPSmr",
-                                            "VPMASKMOVDYmr",
-                                            "VPMASKMOVDmr",
-                                            "VPMASKMOVQYmr",
-                                            "VPMASKMOVQmr")>;
+def: InstRW<[HWWriteResGroup84], (instregex "VMASKMOVPD(Y?)mr",
+                                            "VMASKMOVPS(Y?)mr",
+                                            "VPMASKMOVD(Y?)mr",
+                                            "VPMASKMOVQ(Y?)mr")>;
 
 def HWWriteResGroup85 : SchedWriteRes<[HWPort1,HWPort4,HWPort5,HWPort237]> {
   let Latency = 5;
@@ -2614,12 +2395,18 @@ def: InstRW<[HWWriteResGroup91], (instregex "MMX_PMADDUBSWrm",
                                             "(V?)RSQRTSSm")>;
 
 def HWWriteResGroup91_1 : SchedWriteRes<[HWPort0,HWPort23]> {
+  let Latency = 16;
+  let NumMicroOps = 2;
+  let ResourceCycles = [1,1];
+}
+def: InstRW<[HWWriteResGroup91_1], (instregex "(V?)SQRTSSm")>;
+
+def HWWriteResGroup91_4 : SchedWriteRes<[HWPort0,HWPort23]> {
   let Latency = 18;
   let NumMicroOps = 2;
   let ResourceCycles = [1,1];
 }
-def: InstRW<[HWWriteResGroup91_1], (instregex "SQRTSSm",
-                                              "VDIVSSrm")>;
+def: InstRW<[HWWriteResGroup91_4], (instregex "(V?)DIVSSrm")>;
 
 def HWWriteResGroup91_2 : SchedWriteRes<[HWPort0,HWPort23]> {
   let Latency = 11;
@@ -2894,20 +2681,6 @@ def HWWriteResGroup117 : SchedWriteRes<[HWPort0,HWPort1,HWPort5,HWPort23]> {
 }
 def: InstRW<[HWWriteResGroup117], (instregex "(V?)DPPDrmi")>;
 
-def HWWriteResGroup118 : SchedWriteRes<[HWPort0]> {
-  let Latency = 10;
-  let NumMicroOps = 2;
-  let ResourceCycles = [2];
-}
-def: InstRW<[HWWriteResGroup118], (instregex "(V?)PMULLD(Y?)rr")>;
-
-def HWWriteResGroup119 : SchedWriteRes<[HWPort0,HWPort23]> {
-  let Latency = 16;
-  let NumMicroOps = 3;
-  let ResourceCycles = [2,1];
-}
-def: InstRW<[HWWriteResGroup119], (instregex "(V?)PMULLDrm")>;
-
 def HWWriteResGroup119_1 : SchedWriteRes<[HWPort0,HWPort23]> {
   let Latency = 17;
   let NumMicroOps = 3;
@@ -2923,26 +2696,12 @@ def HWWriteResGroup120 : SchedWriteRes<[HWPort1,HWPort23,HWPort237,HWPort06,HWPo
 def: InstRW<[HWWriteResGroup120], (instregex "RCL(8|16|32|64)mCL")>;
 
 def HWWriteResGroup121 : SchedWriteRes<[HWPort0]> {
-  let Latency = 11;
+  let Latency = 13;
   let NumMicroOps = 1;
   let ResourceCycles = [1];
 }
-def: InstRW<[HWWriteResGroup121], (instregex "DIVPSrr",
-                                             "DIVSSrr")>;
-
-def HWWriteResGroup122 : SchedWriteRes<[HWPort0,HWPort23]> {
-  let Latency = 17;
-  let NumMicroOps = 2;
-  let ResourceCycles = [1,1];
-}
-def: InstRW<[HWWriteResGroup122], (instregex "DIVPSrm")>;
-
-def HWWriteResGroup122_1 : SchedWriteRes<[HWPort0,HWPort23]> {
-  let Latency = 16;
-  let NumMicroOps = 2;
-  let ResourceCycles = [1,1];
-}
-def: InstRW<[HWWriteResGroup122_1], (instregex "DIVSSrm")>;
+def: InstRW<[HWWriteResGroup121], (instregex "(V?)DIVPSrr",
+                                             "(V?)DIVSSrr")>;
 
 def HWWriteResGroup125 : SchedWriteRes<[HWPort0,HWPort015]> {
   let Latency = 11;
@@ -2990,24 +2749,19 @@ def HWWriteResGroup132 : SchedWriteRes<[HWPort4,HWPort23,HWPort237,HWPort06,HWPo
 def: InstRW<[HWWriteResGroup132], (instregex "CMPXCHG8B")>;
 
 def HWWriteResGroup133 : SchedWriteRes<[HWPort0]> {
-  let Latency = 13;
+  let Latency = 11;
   let NumMicroOps = 1;
   let ResourceCycles = [1];
 }
-def: InstRW<[HWWriteResGroup133], (instregex "SQRTPSr",
-                                             "SQRTSSr",
-                                             "VDIVPSrr",
-                                             "VDIVSSrr")>;
+def: InstRW<[HWWriteResGroup133], (instregex "(V?)SQRTPSr",
+                                             "(V?)SQRTSSr")>;
 
 def HWWriteResGroup134 : SchedWriteRes<[HWPort0,HWPort23]> {
   let Latency = 19;
   let NumMicroOps = 2;
   let ResourceCycles = [1,1];
 }
-def: InstRW<[HWWriteResGroup134], (instregex "DIVSDrm",
-                                             "SQRTPSm",
-                                             "VDIVPSrm",
-                                             "VSQRTSSm")>;
+def: InstRW<[HWWriteResGroup134], (instregex "(V?)DIVPSrm")>;
 
 def HWWriteResGroup135 : SchedWriteRes<[HWPort1,HWPort23,HWPort237,HWPort06,HWPort15,HWPort0156]> {
   let Latency = 19;
@@ -3016,23 +2770,12 @@ def HWWriteResGroup135 : SchedWriteRes<[HWPort1,HWPort23,HWPort237,HWPort06,HWPo
 }
 def: InstRW<[HWWriteResGroup135], (instregex "RCR(8|16|32|64)mCL")>;
 
-def HWWriteResGroup136 : SchedWriteRes<[HWPort0]> {
-  let Latency = 14;
-  let NumMicroOps = 1;
-  let ResourceCycles = [1];
-}
-def: InstRW<[HWWriteResGroup136], (instregex "DIVPDrr",
-                                             "DIVSDrr",
-                                             "VSQRTPSr",
-                                             "VSQRTSSr")>;
-
 def HWWriteResGroup138 : SchedWriteRes<[HWPort0,HWPort23]> {
-  let Latency = 20;
+  let Latency = 17;
   let NumMicroOps = 2;
   let ResourceCycles = [1,1];
 }
-def: InstRW<[HWWriteResGroup138], (instregex "DIVPDrm",
-                                             "VSQRTPSm")>;
+def: InstRW<[HWWriteResGroup138], (instregex "(V?)SQRTPSm")>;
 
 def HWWriteResGroup140 : SchedWriteRes<[HWPort0,HWPort1,HWPort5]> {
   let Latency = 14;
@@ -3122,10 +2865,8 @@ def HWWriteResGroup154 : SchedWriteRes<[HWPort0]> {
 def: InstRW<[HWWriteResGroup154], (instregex "DIV_FPrST0",
                                              "DIV_FST0r",
                                              "DIV_FrST0",
-                                             "SQRTPDr",
-                                             "SQRTSDr",
-                                             "VDIVPDrr",
-                                             "VDIVSDrr")>;
+                                             "(V?)DIVPDrr",
+                                             "(V?)DIVSDrr")>;
 
 def HWWriteResGroup155 : SchedWriteRes<[HWPort0,HWPort23]> {
   let Latency = 27;
@@ -3133,25 +2874,35 @@ def HWWriteResGroup155 : SchedWriteRes<[HWPort0,HWPort23]> {
   let ResourceCycles = [1,1];
 }
 def: InstRW<[HWWriteResGroup155], (instregex "DIVR_F32m",
-                                             "DIVR_F64m",
-                                             "VSQRTPDm")>;
+                                             "DIVR_F64m")>;
 
 def HWWriteResGroup155_1 : SchedWriteRes<[HWPort0,HWPort23]> {
   let Latency = 26;
   let NumMicroOps = 2;
   let ResourceCycles = [1,1];
 }
-def: InstRW<[HWWriteResGroup155_1], (instregex "SQRTPDm",
-                                               "VDIVPDrm",
-                                               "VSQRTSDm")>;
+def: InstRW<[HWWriteResGroup155_1], (instregex "(V?)DIVPDrm")>;
 
 def HWWriteResGroup155_2 : SchedWriteRes<[HWPort0,HWPort23]> {
+  let Latency = 21;
+  let NumMicroOps = 2;
+  let ResourceCycles = [1,1];
+}
+def: InstRW<[HWWriteResGroup155_2], (instregex "(V?)SQRTSDm")>;
+
+def HWWriteResGroup155_3 : SchedWriteRes<[HWPort0,HWPort23]> {
+  let Latency = 22;
+  let NumMicroOps = 2;
+  let ResourceCycles = [1,1];
+}
+def: InstRW<[HWWriteResGroup155_3], (instregex "(V?)SQRTPDm")>;
+
+def HWWriteResGroup155_4 : SchedWriteRes<[HWPort0,HWPort23]> {
   let Latency = 25;
   let NumMicroOps = 2;
   let ResourceCycles = [1,1];
 }
-def: InstRW<[HWWriteResGroup155_2], (instregex "SQRTSDm",
-                                               "VDIVSDrm")>;
+def: InstRW<[HWWriteResGroup155_4], (instregex "(V?)DIVSDrm")>;
 
 def HWWriteResGroup156 : SchedWriteRes<[HWPort5,HWPort6,HWPort0156]> {
   let Latency = 20;
@@ -3161,12 +2912,12 @@ def HWWriteResGroup156 : SchedWriteRes<[HWPort5,HWPort6,HWPort0156]> {
 def: InstRW<[HWWriteResGroup156], (instregex "MWAITrr")>;
 
 def HWWriteResGroup157 : SchedWriteRes<[HWPort0]> {
-  let Latency = 21;
+  let Latency = 16;
   let NumMicroOps = 1;
   let ResourceCycles = [1];
 }
-def: InstRW<[HWWriteResGroup157], (instregex "VSQRTPDr",
-                                             "VSQRTSDr")>;
+def: InstRW<[HWWriteResGroup157], (instregex "(V?)SQRTPDr",
+                                             "(V?)SQRTSDr")>;
 
 def HWWriteResGroup159 : SchedWriteRes<[HWPort0,HWPort015]> {
   let Latency = 21;

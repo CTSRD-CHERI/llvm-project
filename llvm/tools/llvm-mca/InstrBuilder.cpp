@@ -23,10 +23,10 @@ namespace mca {
 
 using namespace llvm;
 
-static void
-initializeUsedResources(InstrDesc &ID, const MCSchedClassDesc &SCDesc,
-                        const MCSubtargetInfo &STI,
-                        ArrayRef<uint64_t> ProcResourceMasks) {
+static void initializeUsedResources(InstrDesc &ID,
+                                    const MCSchedClassDesc &SCDesc,
+                                    const MCSubtargetInfo &STI,
+                                    ArrayRef<uint64_t> ProcResourceMasks) {
   const MCSchedModel &SM = STI.getSchedModel();
 
   // Populate resources consumed.
@@ -340,6 +340,7 @@ static void populateReads(InstrDesc &ID, const MCInst &MCI,
   for (unsigned CurrentUse = 0; CurrentUse < NumExplicitUses; ++CurrentUse) {
     ReadDescriptor &Read = ID.Reads[CurrentUse];
     Read.OpIndex = i + CurrentUse;
+    Read.UseIndex = CurrentUse;
     Read.HasReadAdvanceEntries = HasReadAdvanceEntries;
     Read.SchedClassID = SchedClassID;
     DEBUG(dbgs() << "\t\tOpIdx=" << Read.OpIndex);
@@ -348,6 +349,7 @@ static void populateReads(InstrDesc &ID, const MCInst &MCI,
   for (unsigned CurrentUse = 0; CurrentUse < NumImplicitUses; ++CurrentUse) {
     ReadDescriptor &Read = ID.Reads[NumExplicitUses + CurrentUse];
     Read.OpIndex = -1;
+    Read.UseIndex = -1;
     Read.RegisterID = MCDesc.getImplicitUses()[CurrentUse];
     Read.HasReadAdvanceEntries = false;
     Read.SchedClassID = SchedClassID;

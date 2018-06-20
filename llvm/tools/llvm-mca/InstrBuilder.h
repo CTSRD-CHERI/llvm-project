@@ -40,7 +40,6 @@ class InstrBuilder {
   llvm::SmallVector<uint64_t, 8> ProcResourceMasks;
 
   llvm::DenseMap<unsigned short, std::unique_ptr<const InstrDesc>> Descriptors;
-  llvm::DenseMap<unsigned, std::unique_ptr<Instruction>> Instructions;
 
   void createInstrDescImpl(const llvm::MCInst &MCI);
 
@@ -52,6 +51,13 @@ public:
   }
 
   const InstrDesc &getOrCreateInstrDesc(const llvm::MCInst &MCI);
+  // Returns an array of processor resource masks.
+  // Masks are computed by function mca::computeProcResourceMasks. see
+  // Support.h for a description of how masks are computed and how masks can be
+  // used to solve set membership problems.
+  llvm::ArrayRef<uint64_t> getProcResourceMasks() const {
+    return ProcResourceMasks;
+  }
 
   std::unique_ptr<Instruction> createInstruction(unsigned Idx,
                                                  const llvm::MCInst &MCI);

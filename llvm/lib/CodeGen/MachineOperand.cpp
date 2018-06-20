@@ -739,7 +739,15 @@ void MachineOperand::print(raw_ostream &OS, ModuleSlotTracker &MST,
       OS << "debug-use ";
     if (TargetRegisterInfo::isPhysicalRegister(getReg()) && isRenamable())
       OS << "renamable ";
-    OS << printReg(Reg, TRI);
+
+    const MachineRegisterInfo *MRI = nullptr;
+    if (TargetRegisterInfo::isVirtualRegister(Reg)) {
+      if (const MachineFunction *MF = getMFIfAvailable(*this)) {
+        MRI = &MF->getRegInfo();
+      }
+    }
+
+    OS << printReg(Reg, TRI, 0, MRI);
     // Print the sub register.
     if (unsigned SubReg = getSubReg()) {
       if (TRI)
@@ -1100,7 +1108,12 @@ void MachineMemOperand::print(raw_ostream &OS, ModuleSlotTracker &MST,
           OS, cast<ExternalSymbolPseudoSourceValue>(PVal)->getSymbol());
       break;
     case PseudoSourceValue::TargetCustom:
-      llvm_unreachable("TargetCustom pseudo source values are not supported");
+      // FIXME: This is not necessarily the correct MIR serialization format for
+      // a custom pseudo source value, but at least it allows
+      // -print-machineinstrs to work on a target with custom pseudo source
+      // values.
+      OS << "custom ";
+      PVal->printCustom(OS);
       break;
     }
   }

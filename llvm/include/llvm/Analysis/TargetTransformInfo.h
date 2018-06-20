@@ -476,6 +476,10 @@ public:
   /// calculation for the instructions in a loop.
   bool canMacroFuseCmp() const;
 
+  /// \return True is LSR should make efforts to create/preserve post-inc
+  /// addressing mode expressions.
+  bool shouldFavorPostInc() const;
+
   /// \brief Return true if the target supports masked load/store
   /// AVX2 and AVX-512 targets allow masks for consecutive load and store
   bool isLegalMaskedStore(Type *DataType) const;
@@ -528,6 +532,8 @@ public:
   /// \brief Return true if it is profitable to hoist instruction in the
   /// then/else to before if.
   bool isProfitableToHoist(Instruction *I) const;
+
+  bool useAA() const;
 
   /// \brief Return true if this type is legal.
   bool isTypeLegal(Type *Ty) const;
@@ -665,6 +671,14 @@ public:
 
   /// \return The width of the smallest vector register type.
   unsigned getMinVectorRegisterBitWidth() const;
+
+  /// \return True if the vectorization factor should be chosen to
+  /// make the vector of the smallest element type match the size of a
+  /// vector register. For wider element types, this could result in
+  /// creating vectors that span multiple vector registers.
+  /// If false, the vectorization factor will be chosen based on the
+  /// size of the widest element type.
+  bool shouldMaximizeVectorBandwidth(bool OptSize) const;
 
   /// \return True if it should be considered for address type promotion.
   /// \p AllowPromotionWithoutCommonHeader Set true if promoting \p I is
@@ -886,6 +900,21 @@ public:
   bool areInlineCompatible(const Function *Caller,
                            const Function *Callee) const;
 
+  /// \brief The type of load/store indexing.
+  enum MemIndexedMode {
+    MIM_Unindexed,  ///< No indexing.
+    MIM_PreInc,     ///< Pre-incrementing.
+    MIM_PreDec,     ///< Pre-decrementing.
+    MIM_PostInc,    ///< Post-incrementing.
+    MIM_PostDec     ///< Post-decrementing.
+  };
+
+  /// \returns True if the specified indexed load for the given type is legal.
+  bool isIndexedLoadLegal(enum MemIndexedMode Mode, Type *Ty) const;
+
+  /// \returns True if the specified indexed store for the given type is legal.
+  bool isIndexedStoreLegal(enum MemIndexedMode Mode, Type *Ty) const;
+
   /// \returns The bitwidth of the largest vector type that should be used to
   /// load/store in the given address space.
   unsigned getLoadStoreVecRegBitWidth(unsigned AddrSpace) const;
@@ -994,6 +1023,7 @@ public:
   virtual bool isLSRCostLess(TargetTransformInfo::LSRCost &C1,
                              TargetTransformInfo::LSRCost &C2) = 0;
   virtual bool canMacroFuseCmp() = 0;
+  virtual bool shouldFavorPostInc() const = 0;
   virtual bool isLegalMaskedStore(Type *DataType) = 0;
   virtual bool isLegalMaskedLoad(Type *DataType) = 0;
   virtual bool isLegalMaskedScatter(Type *DataType) = 0;
@@ -1007,6 +1037,7 @@ public:
   virtual bool LSRWithInstrQueries() = 0;
   virtual bool isTruncateFree(Type *Ty1, Type *Ty2) = 0;
   virtual bool isProfitableToHoist(Instruction *I) = 0;
+  virtual bool useAA() = 0;
   virtual bool isTypeLegal(Type *Ty) = 0;
   virtual unsigned getJumpBufAlignment() = 0;
   virtual unsigned getJumpBufSize() = 0;
@@ -1042,6 +1073,7 @@ public:
   virtual unsigned getNumberOfRegisters(bool Vector) = 0;
   virtual unsigned getRegisterBitWidth(bool Vector) const = 0;
   virtual unsigned getMinVectorRegisterBitWidth() = 0;
+  virtual bool shouldMaximizeVectorBandwidth(bool OptSize) const = 0;
   virtual bool shouldConsiderAddressTypePromotion(
       const Instruction &I, bool &AllowPromotionWithoutCommonHeader) = 0;
   virtual unsigned getCacheLineSize() = 0;
@@ -1109,6 +1141,8 @@ public:
       unsigned RemainingBytes, unsigned SrcAlign, unsigned DestAlign) const = 0;
   virtual bool areInlineCompatible(const Function *Caller,
                                    const Function *Callee) const = 0;
+  virtual bool isIndexedLoadLegal(MemIndexedMode Mode, Type *Ty) const = 0;
+  virtual bool isIndexedStoreLegal(MemIndexedMode Mode,Type *Ty) const = 0;
   virtual unsigned getLoadStoreVecRegBitWidth(unsigned AddrSpace) const = 0;
   virtual bool isLegalToVectorizeLoad(LoadInst *LI) const = 0;
   virtual bool isLegalToVectorizeStore(StoreInst *SI) const = 0;
@@ -1216,6 +1250,9 @@ public:
   bool canMacroFuseCmp() override {
     return Impl.canMacroFuseCmp();
   }
+  bool shouldFavorPostInc() const override {
+    return Impl.shouldFavorPostInc();
+  }
   bool isLegalMaskedStore(Type *DataType) override {
     return Impl.isLegalMaskedStore(DataType);
   }
@@ -1252,6 +1289,7 @@ public:
   bool isProfitableToHoist(Instruction *I) override {
     return Impl.isProfitableToHoist(I);
   }
+  bool useAA() override { return Impl.useAA(); }
   bool isTypeLegal(Type *Ty) override { return Impl.isTypeLegal(Ty); }
   unsigned getJumpBufAlignment() override { return Impl.getJumpBufAlignment(); }
   unsigned getJumpBufSize() override { return Impl.getJumpBufSize(); }
@@ -1331,6 +1369,9 @@ public:
   }
   unsigned getMinVectorRegisterBitWidth() override {
     return Impl.getMinVectorRegisterBitWidth();
+  }
+  bool shouldMaximizeVectorBandwidth(bool OptSize) const override {
+    return Impl.shouldMaximizeVectorBandwidth(OptSize);
   }
   bool shouldConsiderAddressTypePromotion(
       const Instruction &I, bool &AllowPromotionWithoutCommonHeader) override {
@@ -1469,6 +1510,12 @@ public:
   bool areInlineCompatible(const Function *Caller,
                            const Function *Callee) const override {
     return Impl.areInlineCompatible(Caller, Callee);
+  }
+  bool isIndexedLoadLegal(MemIndexedMode Mode, Type *Ty) const override {
+    return Impl.isIndexedLoadLegal(Mode, Ty, getDataLayout());
+  }
+  bool isIndexedStoreLegal(MemIndexedMode Mode, Type *Ty) const override {
+    return Impl.isIndexedStoreLegal(Mode, Ty, getDataLayout());
   }
   unsigned getLoadStoreVecRegBitWidth(unsigned AddrSpace) const override {
     return Impl.getLoadStoreVecRegBitWidth(AddrSpace);

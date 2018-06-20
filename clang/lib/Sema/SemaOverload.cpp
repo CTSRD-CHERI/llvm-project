@@ -1486,7 +1486,6 @@ bool Sema::IsFunctionConversion(QualType FromType, QualType ToType,
                  .getTypePtr());
       Changed = true;
     }
-
     // Convert FromFPT's ExtParameterInfo if necessary. The conversion is valid
     // only if the ExtParameterInfo lists of the two function prototypes can be
     // merged and the merged list is identical to ToFPT's ExtParameterInfo list.
@@ -10720,8 +10719,8 @@ void TemplateSpecCandidateSet::NoteCandidates(Sema &S, SourceLocation Loc) {
     // in general, want to list every possible builtin candidate.
   }
 
-  std::sort(Cands.begin(), Cands.end(),
-            CompareTemplateSpecCandidatesForDisplay(S));
+  llvm::sort(Cands.begin(), Cands.end(),
+             CompareTemplateSpecCandidatesForDisplay(S));
 
   // FIXME: Perhaps rename OverloadsShown and getShowOverloads()
   // for generalization purposes (?).

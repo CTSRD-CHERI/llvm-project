@@ -37,6 +37,7 @@
 #include "llvm/CodeGen/SelectionDAGNodes.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/DebugLoc.h"
 #include "llvm/IR/Function.h"
@@ -44,7 +45,6 @@
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Module.h"
-#include "llvm/IR/ValueTypes.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/CommandLine.h"
@@ -3999,6 +3999,27 @@ void PPCDAGToDAGISel::Select(SDNode *N) {
   case ISD::SETCC:
     if (trySETCC(N))
       return;
+    break;
+
+  case PPCISD::CALL: {
+    const Module *M = MF->getFunction().getParent();
+
+    if (PPCLowering->getPointerTy(CurDAG->getDataLayout()) != MVT::i32 ||
+        !PPCSubTarget->isSecurePlt() || !PPCSubTarget->isTargetELF() ||
+        M->getPICLevel() == PICLevel::SmallPIC)
+      break;
+
+    SDValue Op = N->getOperand(1);
+
+    if (GlobalAddressSDNode *GA = dyn_cast<GlobalAddressSDNode>(Op)) {
+      if (GA->getTargetFlags() == PPCII::MO_PLT)
+        getGlobalBaseReg();
+    }
+    else if (ExternalSymbolSDNode *ES = dyn_cast<ExternalSymbolSDNode>(Op)) {
+      if (ES->getTargetFlags() == PPCII::MO_PLT)
+        getGlobalBaseReg();
+    }
+  }
     break;
 
   case PPCISD::GlobalBaseReg:
