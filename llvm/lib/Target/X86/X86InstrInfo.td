@@ -1061,14 +1061,6 @@ def loadi16 : PatFrag<(ops node:$ptr), (i16 (unindexedload node:$ptr)), [{
   return false;
 }]>;
 
-def loadi16_anyext : PatFrag<(ops node:$ptr), (i32 (unindexedload node:$ptr)),[{
-  LoadSDNode *LD = cast<LoadSDNode>(N);
-  ISD::LoadExtType ExtType = LD->getExtensionType();
-  if (ExtType == ISD::EXTLOAD)
-    return LD->getAlignment() >= 2 && !LD->isVolatile();
-  return false;
-}]>;
-
 def loadi32 : PatFrag<(ops node:$ptr), (i32 (unindexedload node:$ptr)), [{
   LoadSDNode *LD = cast<LoadSDNode>(N);
   ISD::LoadExtType ExtType = LD->getExtensionType();
@@ -1829,7 +1821,8 @@ def BTR32rr : I<0xB3, MRMDestReg, (outs GR32:$dst), (ins GR32:$src1, GR32:$src2)
                 "btr{l}\t{$src2, $src1|$src1, $src2}", [], IIC_BTX_RR>,
                 OpSize32, TB, NotMemoryFoldable;
 def BTR64rr : RI<0xB3, MRMDestReg, (outs GR64:$dst), (ins GR64:$src1, GR64:$src2),
-                 "btr{q}\t{$src2, $src1|$src1, $src2}", []>, TB, NotMemoryFoldable;
+                 "btr{q}\t{$src2, $src1|$src1, $src2}", [], IIC_BTX_RR>, TB,
+                 NotMemoryFoldable;
 } // SchedRW
 
 let mayLoad = 1, mayStore = 1, SchedRW = [WriteALULd, WriteRMW] in {
@@ -2126,13 +2119,13 @@ def INSL : I<0x6D, RawFrmDst, (outs), (ins dstidx32:$dst),
 
 // Flag instructions
 let SchedRW = [WriteALU] in {
-def CLC : I<0xF8, RawFrm, (outs), (ins), "clc", [], IIC_CLC>;
-def STC : I<0xF9, RawFrm, (outs), (ins), "stc", [], IIC_STC>;
+def CLC : I<0xF8, RawFrm, (outs), (ins), "clc", [], IIC_CLC_CMC_STC>;
+def STC : I<0xF9, RawFrm, (outs), (ins), "stc", [], IIC_CLC_CMC_STC>;
 def CLI : I<0xFA, RawFrm, (outs), (ins), "cli", [], IIC_CLI>;
 def STI : I<0xFB, RawFrm, (outs), (ins), "sti", [], IIC_STI>;
 def CLD : I<0xFC, RawFrm, (outs), (ins), "cld", [], IIC_CLD>;
 def STD : I<0xFD, RawFrm, (outs), (ins), "std", [], IIC_STD>;
-def CMC : I<0xF5, RawFrm, (outs), (ins), "cmc", [], IIC_CMC>;
+def CMC : I<0xF5, RawFrm, (outs), (ins), "cmc", [], IIC_CLC_CMC_STC>;
 
 def CLTS : I<0x06, RawFrm, (outs), (ins), "clts", [], IIC_CLTS>, TB;
 }

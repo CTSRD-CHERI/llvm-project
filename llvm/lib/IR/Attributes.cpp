@@ -332,6 +332,8 @@ std::string Attribute::getAsString(bool InAttrGrp) const {
     return "sspstrong";
   if (hasAttribute(Attribute::SafeStack))
     return "safestack";
+  if (hasAttribute(Attribute::ShadowCallStack))
+    return "shadowcallstack";
   if (hasAttribute(Attribute::StrictFP))
     return "strictfp";
   if (hasAttribute(Attribute::StructRet))
@@ -653,7 +655,7 @@ AttributeSetNode *AttributeSetNode::get(LLVMContext &C,
   FoldingSetNodeID ID;
 
   SmallVector<Attribute, 8> SortedAttrs(Attrs.begin(), Attrs.end());
-  std::sort(SortedAttrs.begin(), SortedAttrs.end());
+  llvm::sort(SortedAttrs.begin(), SortedAttrs.end());
 
   for (const auto Attr : SortedAttrs)
     Attr.Profile(ID);

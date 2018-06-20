@@ -1700,18 +1700,36 @@ Instruction *InstCombiner::visitFSub(BinaryOperator &I) {
 
   // Subtraction from -0.0 is the canonical form of fneg.
   // fsub nsz 0, X ==> fsub nsz -0.0, X
-  if (I.getFastMathFlags().noSignedZeros() && match(Op0, m_PosZeroFP()))
+  if (I.hasNoSignedZeros() && match(Op0, m_PosZeroFP()))
     return BinaryOperator::CreateFNegFMF(Op1, &I);
+
+  // If Op0 is not -0.0 or we can ignore -0.0: Z - (X - Y) --> Z + (Y - X)
+  // Canonicalize to fadd to make analysis easier.
+  // This can also help codegen because fadd is commutative.
+  // Note that if this fsub was really an fneg, the fadd with -0.0 will get
+  // killed later. We still limit that particular transform with 'hasOneUse'
+  // because an fneg is assumed better/cheaper than a generic fsub.
+  Value *X, *Y;
+  if (I.hasNoSignedZeros() || CannotBeNegativeZero(Op0, SQ.TLI)) {
+    if (match(Op1, m_OneUse(m_FSub(m_Value(X), m_Value(Y))))) {
+      Value *NewSub = Builder.CreateFSubFMF(Y, X, &I);
+      return BinaryOperator::CreateFAddFMF(Op0, NewSub, &I);
+    }
+  }
 
   if (isa<Constant>(Op0))
     if (SelectInst *SI = dyn_cast<SelectInst>(Op1))
       if (Instruction *NV = FoldOpIntoSelect(I, SI))
         return NV;
 
-  // If this is a 'B = x-(-A)', change to B = x+A, potentially looking
-  // through FP extensions/truncations along the way.
-  if (Value *V = dyn_castFNegVal(Op1))
-    return BinaryOperator::CreateFAddFMF(Op0, V, &I);
+  // X - C --> X + (-C)
+  Constant *C;
+  if (match(Op1, m_Constant(C)))
+    return BinaryOperator::CreateFAddFMF(Op0, ConstantExpr::getFNeg(C), &I);
+  
+  // X - (-Y) --> X + Y
+  if (match(Op1, m_FNeg(m_Value(Y))))
+    return BinaryOperator::CreateFAddFMF(Op0, Y, &I);
 
   if (FPTruncInst *FPTI = dyn_cast<FPTruncInst>(Op1)) {
     if (Value *V = dyn_castFNegVal(FPTI->getOperand(0))) {

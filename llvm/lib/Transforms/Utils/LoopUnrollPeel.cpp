@@ -69,7 +69,7 @@ static const unsigned InfiniteIterationsToInvariance =
     std::numeric_limits<unsigned>::max();
 
 // Check whether we are capable of peeling this loop.
-static bool canPeel(Loop *L) {
+bool llvm::canPeel(Loop *L) {
   // Make sure the loop is in simplified form
   if (!L->isLoopSimplifyForm())
     return false;
@@ -221,12 +221,28 @@ void llvm::computePeelCount(Loop *L, unsigned LoopSize,
                             TargetTransformInfo::UnrollingPreferences &UP,
                             unsigned &TripCount, ScalarEvolution &SE) {
   assert(LoopSize > 0 && "Zero loop size is not allowed!");
+  // Save the UP.PeelCount value set by the target in
+  // TTI.getUnrollingPreferences or by the flag -unroll-peel-count.
+  unsigned TargetPeelCount = UP.PeelCount;
   UP.PeelCount = 0;
   if (!canPeel(L))
     return;
 
   // Only try to peel innermost loops.
   if (!L->empty())
+    return;
+
+  // If the user provided a peel count, use that.
+  bool UserPeelCount = UnrollForcePeelCount.getNumOccurrences() > 0;
+  if (UserPeelCount) {
+    DEBUG(dbgs() << "Force-peeling first " << UnrollForcePeelCount
+                 << " iterations.\n");
+    UP.PeelCount = UnrollForcePeelCount;
+    return;
+  }
+
+  // Skip peeling if it's disabled.
+  if (!UP.AllowPeeling)
     return;
 
   // Here we try to get rid of Phis which become invariants after 1, 2, ..., N
@@ -240,7 +256,9 @@ void llvm::computePeelCount(Loop *L, unsigned LoopSize,
     SmallDenseMap<PHINode *, unsigned> IterationsToInvariance;
     // Now go through all Phis to calculate their the number of iterations they
     // need to become invariants.
-    unsigned DesiredPeelCount = 0;
+    // Start the max computation with the UP.PeelCount value set by the target
+    // in TTI.getUnrollingPreferences or by the flag -unroll-peel-count.
+    unsigned DesiredPeelCount = TargetPeelCount;
     BasicBlock *BackEdge = L->getLoopLatch();
     assert(BackEdge && "Loop is not in simplified form?");
     for (auto BI = L->getHeader()->begin(); isa<PHINode>(&*BI); ++BI) {
@@ -274,21 +292,12 @@ void llvm::computePeelCount(Loop *L, unsigned LoopSize,
   if (TripCount)
     return;
 
-  // If the user provided a peel count, use that.
-  bool UserPeelCount = UnrollForcePeelCount.getNumOccurrences() > 0;
-  if (UserPeelCount) {
-    DEBUG(dbgs() << "Force-peeling first " << UnrollForcePeelCount
-                 << " iterations.\n");
-    UP.PeelCount = UnrollForcePeelCount;
-    return;
-  }
-
   // If we don't know the trip count, but have reason to believe the average
   // trip count is low, peeling should be beneficial, since we will usually
   // hit the peeled section.
   // We only do this in the presence of profile information, since otherwise
   // our estimates of the trip count are not reliable enough.
-  if (UP.AllowPeeling && L->getHeader()->getParent()->hasProfileData()) {
+  if (L->getHeader()->getParent()->hasProfileData()) {
     Optional<unsigned> PeelCount = getLoopEstimatedTripCount(L);
     if (!PeelCount)
       return;

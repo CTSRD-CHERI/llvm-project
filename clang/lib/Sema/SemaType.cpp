@@ -3316,18 +3316,6 @@ getCCForDeclaratorChunk(Sema &S, Declarator &D,
   CallingConv CC = S.Context.getDefaultCallingConvention(FTI.isVariadic,
                                                          IsCXXInstanceMethod);
 
-  // Attribute AT_CUDAGlobal affects the calling convention for AMDGPU targets.
-  // This is the simplest place to infer calling convention for CUDA kernels.
-  if (S.getLangOpts().CUDA && S.getLangOpts().CUDAIsDevice) {
-    for (const AttributeList *Attr = D.getDeclSpec().getAttributes().getList();
-         Attr; Attr = Attr->getNext()) {
-      if (Attr->getKind() == AttributeList::AT_CUDAGlobal) {
-        CC = CC_CUDAKernel;
-        break;
-      }
-    }
-  }
-
   // Attribute AT_OpenCLKernel affects the calling convention for SPIR
   // and AMDGPU targets, hence it cannot be treated as a calling
   // convention attribute. This is the simplest place to infer
@@ -7092,12 +7080,12 @@ static void deduceOpenCLImplicitAddrSpace(TypeProcessingState &State,
 
   // Handle the cases where address space should not be deduced.
   //
-  // The pointee type of a pointer type is alwasy deduced since a pointer always
+  // The pointee type of a pointer type is always deduced since a pointer always
   // points to some memory location which should has an address space.
   //
   // There are situations that at the point of certain declarations, the address
   // space may be unknown and better to be left as default. For example, when
-  // definining a typedef or struct type, they are not associated with any
+  // defining a typedef or struct type, they are not associated with any
   // specific address space. Later on, they may be used with any address space
   // to declare a variable.
   //

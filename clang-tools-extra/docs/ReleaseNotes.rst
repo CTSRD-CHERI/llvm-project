@@ -64,6 +64,12 @@ Improvements to clang-tidy
 
 - New module ``zircon`` for checks related to Fuchsia's Zircon kernel.
 
+- New :doc:`bugprone-parent-virtual-call
+  <clang-tidy/checks/bugprone-parent-virtual-call>` check
+
+  Detects and fixes calls to grand-...parent virtual methods instead of calls
+  to overridden parent's virtual methods.
+
 - New :doc:`bugprone-throw-keyword-missing
   <clang-tidy/checks/bugprone-throw-keyword-missing>` check
 
@@ -187,6 +193,8 @@ Improvements to clang-tidy
 
 - The 'misc-unused-raii' check was renamed to :doc:`bugprone-unused-raii
   <clang-tidy/checks/bugprone-unused-raii>`
+
+- The 'google-runtime-member-string-references' check was removed.
 
 Improvements to include-fixer
 -----------------------------

@@ -442,3 +442,37 @@ class SchedAlias<SchedReadWrite match, SchedReadWrite alias> {
   SchedReadWrite AliasRW = alias;
   SchedMachineModel SchedModel = ?;
 }
+
+// Allow the definition of processor register files.
+// Each processor register file declares the number of physical registers, as
+// well as a optional register cost information. The cost of a register R is the
+// number of physical registers used to rename R (at register renaming stage).
+// That value defaults to 1, to all the registers contained in the register
+// file. The set of target register files is inferred from the list of register
+// classes. Register costs are defined at register class granularity. An empty
+// list of register classes means that this register file contains all the
+// registers defined by the target.
+class RegisterFile<int numPhysRegs, list<RegisterClass> Classes = [],
+                   list<int> Costs = []> {
+  list<RegisterClass> RegClasses = Classes;
+  list<int> RegCosts = Costs;
+  int NumPhysRegs = numPhysRegs;
+  SchedMachineModel SchedModel = ?;
+}
+
+// Describe the retire control unit.
+// A retire control unit specifies the size of the reorder buffer, as well as
+// the maximum number of opcodes that can be retired every cycle.
+// A value less-than-or-equal-to zero for field 'ReorderBufferSize' means: "the
+// size is unknown". The idea is that external tools can fall-back to using
+// field MicroOpBufferSize in SchedModel if the reorder buffer size is unknown.
+// A zero or negative value for field 'MaxRetirePerCycle' means "no
+// restrictions on the number of instructions retired per cycle".
+// Models can optionally specify up to one instance of RetireControlUnit per
+// scheduling model.
+class RetireControlUnit<int bufferSize, int retirePerCycle> {
+  int ReorderBufferSize = bufferSize;
+  int MaxRetirePerCycle = retirePerCycle;
+  SchedMachineModel SchedModel = ?;
+}
+

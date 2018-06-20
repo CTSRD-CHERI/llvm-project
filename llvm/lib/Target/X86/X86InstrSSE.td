@@ -146,6 +146,7 @@ def SSE_INTMUL_ITINS_P : OpndItins<
 >;
 
 // FIXME: Merge SSE_INTSHIFT_P + SSE_INTSHIFT_ITINS_P.
+let Sched = WriteVecShift in
 def SSE_INTSHIFT_P : OpndItins<
   IIC_SSE_INTSH_P_RR, IIC_SSE_INTSH_P_RM
 >;
@@ -5472,7 +5473,7 @@ defm : SS41I_pmovx_avx2_patterns<"VPMOVZX", "z", X86vzext>;
 
 // SSE4.1/AVX patterns.
 multiclass SS41I_pmovx_patterns<string OpcPrefix, string ExtTy,
-                                SDNode ExtOp, PatFrag ExtLoad16> {
+                                SDNode ExtOp> {
   let Predicates = [HasAVX, NoVLX_Or_NoBWI] in {
   def : Pat<(v8i16 (ExtOp (v16i8 VR128:$src))),
             (!cast<I>(OpcPrefix#BWrr) VR128:$src)>;
@@ -5531,7 +5532,7 @@ multiclass SS41I_pmovx_patterns<string OpcPrefix, string ExtTy,
   def : Pat<(v4i32 (ExtOp (bc_v16i8 (loadv2i64 addr:$src)))),
             (!cast<I>(OpcPrefix#BDrm) addr:$src)>;
 
-  def : Pat<(v2i64 (ExtOp (bc_v16i8 (v4i32 (scalar_to_vector (ExtLoad16 addr:$src)))))),
+  def : Pat<(v2i64 (ExtOp (bc_v16i8 (v4i32 (scalar_to_vector (extloadi32i16 addr:$src)))))),
             (!cast<I>(OpcPrefix#BQrm) addr:$src)>;
   def : Pat<(v2i64 (ExtOp (v16i8 (vzmovl_v4i32 addr:$src)))),
             (!cast<I>(OpcPrefix#BQrm) addr:$src)>;
@@ -5573,12 +5574,12 @@ multiclass SS41I_pmovx_patterns<string OpcPrefix, string ExtTy,
   }
 }
 
-defm : SS41I_pmovx_patterns<"VPMOVSX", "s", sext_invec, extloadi32i16>;
-defm : SS41I_pmovx_patterns<"VPMOVZX", "z", zext_invec, loadi16_anyext>;
+defm : SS41I_pmovx_patterns<"VPMOVSX", "s", sext_invec>;
+defm : SS41I_pmovx_patterns<"VPMOVZX", "z", zext_invec>;
 
 let Predicates = [UseSSE41] in {
-  defm : SS41I_pmovx_patterns<"PMOVSX", "s", sext_invec, extloadi32i16>;
-  defm : SS41I_pmovx_patterns<"PMOVZX", "z", zext_invec, loadi16_anyext>;
+  defm : SS41I_pmovx_patterns<"PMOVSX", "s", sext_invec>;
+  defm : SS41I_pmovx_patterns<"PMOVZX", "z", zext_invec>;
 }
 
 //===----------------------------------------------------------------------===//
@@ -5806,7 +5807,7 @@ let Constraints = "$src1 = $dst" in
 // vector. The next one matches the intrinsic and could zero arbitrary elements
 // in the target vector.
 multiclass SS41I_insertf32<bits<8> opc, string asm, bit Is2Addr = 1,
-                           OpndItins itins = DEFAULT_ITINS> {
+                           OpndItins itins = SSE_INSERT_ITINS> {
   def rr : SS4AIi8<opc, MRMSrcReg, (outs VR128:$dst),
       (ins VR128:$src1, VR128:$src2, u8imm:$src3),
       !if(Is2Addr,
@@ -5831,9 +5832,10 @@ multiclass SS41I_insertf32<bits<8> opc, string asm, bit Is2Addr = 1,
 
 let ExeDomain = SSEPackedSingle in {
   let Predicates = [UseAVX] in
-    defm VINSERTPS : SS41I_insertf32<0x21, "vinsertps", 0>, VEX_4V, VEX_WIG;
+    defm VINSERTPS : SS41I_insertf32<0x21, "vinsertps", 0>,
+                     VEX_4V, VEX_WIG;
   let Constraints = "$src1 = $dst" in
-    defm INSERTPS : SS41I_insertf32<0x21, "insertps", 1, SSE_INSERT_ITINS>;
+    defm INSERTPS : SS41I_insertf32<0x21, "insertps", 1>;
 }
 
 let Predicates = [UseAVX] in {
@@ -7609,7 +7611,7 @@ let hasSideEffects = 0, ExeDomain = SSEPackedSingle in {
 def VEXTRACTF128rr : AVXAIi8<0x19, MRMDestReg, (outs VR128:$dst),
           (ins VR256:$src1, u8imm:$src2),
           "vextractf128\t{$src2, $src1, $dst|$dst, $src1, $src2}",
-          []>, Sched<[WriteFShuffle]>, VEX, VEX_L;
+          []>, Sched<[WriteFShuffle256]>, VEX, VEX_L;
 let mayStore = 1 in
 def VEXTRACTF128mr : AVXAIi8<0x19, MRMDestMem, (outs),
           (ins f128mem:$dst, VR256:$src1, u8imm:$src2),

@@ -2367,8 +2367,6 @@ namespace {
 
 class VFTableBuilder {
 public:
-  typedef MicrosoftVTableContext::MethodVFTableLocation MethodVFTableLocation;
-
   typedef llvm::DenseMap<GlobalDecl, MethodVFTableLocation>
     MethodVFTableLocationsTy;
 
@@ -2997,7 +2995,7 @@ void VFTableBuilder::AddMethods(BaseSubobject Base, unsigned BaseDepth,
       }
 
       // In case we need a return adjustment, we'll add a new slot for
-      // the overrider. Mark the overriden method as shadowed by the new slot.
+      // the overrider. Mark the overridden method as shadowed by the new slot.
       OverriddenMethodInfo.Shadowed = true;
 
       // Force a special name mangling for a return-adjusting thunk
@@ -3544,10 +3542,9 @@ static void computeFullPathsForVFTables(ASTContext &Context,
   }
 }
 
-static bool
-vfptrIsEarlierInMDC(const ASTRecordLayout &Layout,
-                    const MicrosoftVTableContext::MethodVFTableLocation &LHS,
-                    const MicrosoftVTableContext::MethodVFTableLocation &RHS) {
+static bool vfptrIsEarlierInMDC(const ASTRecordLayout &Layout,
+                                const MethodVFTableLocation &LHS,
+                                const MethodVFTableLocation &RHS) {
   CharUnits L = LHS.VFPtrOffset;
   CharUnits R = RHS.VFPtrOffset;
   if (LHS.VBase)
@@ -3568,14 +3565,14 @@ void MicrosoftVTableContext::computeVTableRelatedInformation(
   const VTableLayout::AddressPointsMapTy EmptyAddressPointsMap;
 
   {
-    VPtrInfoVector VFPtrs;
-    computeVTablePaths(/*ForVBTables=*/false, RD, VFPtrs);
-    computeFullPathsForVFTables(Context, RD, VFPtrs);
+    auto VFPtrs = llvm::make_unique<VPtrInfoVector>();
+    computeVTablePaths(/*ForVBTables=*/false, RD, *VFPtrs);
+    computeFullPathsForVFTables(Context, RD, *VFPtrs);
     VFPtrLocations[RD] = std::move(VFPtrs);
   }
 
   MethodVFTableLocationsTy NewMethodLocations;
-  for (const std::unique_ptr<VPtrInfo> &VFPtr : VFPtrLocations[RD]) {
+  for (const std::unique_ptr<VPtrInfo> &VFPtr : *VFPtrLocations[RD]) {
     VFTableBuilder Builder(*this, RD, *VFPtr);
 
     VFTableIdTy id(RD, VFPtr->FullOffsetInMDC);
@@ -3720,7 +3717,7 @@ MicrosoftVTableContext::getVFPtrOffsets(const CXXRecordDecl *RD) {
   computeVTableRelatedInformation(RD);
 
   assert(VFPtrLocations.count(RD) && "Couldn't find vfptr locations");
-  return VFPtrLocations[RD];
+  return *VFPtrLocations[RD];
 }
 
 const VTableLayout &
@@ -3733,7 +3730,7 @@ MicrosoftVTableContext::getVFTableLayout(const CXXRecordDecl *RD,
   return *VFTableLayouts[id];
 }
 
-const MicrosoftVTableContext::MethodVFTableLocation &
+MethodVFTableLocation
 MicrosoftVTableContext::getMethodVFTableLocation(GlobalDecl GD) {
   assert(cast<CXXMethodDecl>(GD.getDecl())->isVirtual() &&
          "Only use this method for virtual methods or dtors");

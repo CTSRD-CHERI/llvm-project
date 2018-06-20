@@ -283,7 +283,7 @@ CodeGenRegBank &CodeGenTarget::getRegBank() const {
 
 void CodeGenTarget::ReadRegAltNameIndices() const {
   RegAltNameIndices = Records.getAllDerivedDefinitions("RegAltNameIndex");
-  std::sort(RegAltNameIndices.begin(), RegAltNameIndices.end(), LessRecord());
+  llvm::sort(RegAltNameIndices.begin(), RegAltNameIndices.end(), LessRecord());
 }
 
 /// getRegisterByName - If there is a register with the specific AsmName,
@@ -308,7 +308,7 @@ std::vector<ValueTypeByHwMode> CodeGenTarget::getRegisterVTs(Record *R)
   }
 
   // Remove duplicates.
-  std::sort(Result.begin(), Result.end());
+  llvm::sort(Result.begin(), Result.end());
   Result.erase(std::unique(Result.begin(), Result.end()), Result.end());
   return Result;
 }
@@ -319,7 +319,7 @@ void CodeGenTarget::ReadLegalValueTypes() const {
     LegalValueTypes.insert(LegalValueTypes.end(), RC.VTs.begin(), RC.VTs.end());
 
   // Remove duplicates.
-  std::sort(LegalValueTypes.begin(), LegalValueTypes.end());
+  llvm::sort(LegalValueTypes.begin(), LegalValueTypes.end());
   LegalValueTypes.erase(std::unique(LegalValueTypes.begin(),
                                     LegalValueTypes.end()),
                         LegalValueTypes.end());
@@ -387,8 +387,9 @@ void CodeGenTarget::ComputeInstrsByEnum() const {
 
   // All of the instructions are now in random order based on the map iteration.
   // Sort them by name.
-  std::sort(InstrsByEnum.begin() + EndOfPredefines, InstrsByEnum.end(),
-            [](const CodeGenInstruction *Rec1, const CodeGenInstruction *Rec2) {
+  llvm::sort(InstrsByEnum.begin() + EndOfPredefines, InstrsByEnum.end(),
+             [](const CodeGenInstruction *Rec1,
+                const CodeGenInstruction *Rec2) {
     return Rec1->TheDef->getName() < Rec2->TheDef->getName();
   });
 }
@@ -512,11 +513,11 @@ CodeGenIntrinsicTable::CodeGenIntrinsicTable(const RecordKeeper &RC,
     if (isTarget == TargetOnly)
       Intrinsics.push_back(CodeGenIntrinsic(Defs[I]));
   }
-  std::sort(Intrinsics.begin(), Intrinsics.end(),
-            [](const CodeGenIntrinsic &LHS, const CodeGenIntrinsic &RHS) {
-              return std::tie(LHS.TargetPrefix, LHS.Name) <
-                     std::tie(RHS.TargetPrefix, RHS.Name);
-            });
+  llvm::sort(Intrinsics.begin(), Intrinsics.end(),
+             [](const CodeGenIntrinsic &LHS, const CodeGenIntrinsic &RHS) {
+               return std::tie(LHS.TargetPrefix, LHS.Name) <
+                      std::tie(RHS.TargetPrefix, RHS.Name);
+             });
   Targets.push_back({"", 0, 0});
   for (size_t I = 0, E = Intrinsics.size(); I < E; ++I)
     if (Intrinsics[I].TargetPrefix != Targets.back().Name) {
@@ -718,6 +719,6 @@ CodeGenIntrinsic::CodeGenIntrinsic(Record *R) {
   Properties = parseSDPatternOperatorProperties(R);
 
   // Sort the argument attributes for later benefit.
-  std::sort(ArgumentAttributes.begin(), ArgumentAttributes.end());
+  llvm::sort(ArgumentAttributes.begin(), ArgumentAttributes.end());
 }
 

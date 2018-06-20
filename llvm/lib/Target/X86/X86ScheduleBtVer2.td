@@ -38,6 +38,21 @@ def JSAGU : ProcResource<1>; // Integer Pipe3: SAGU (also handles 3-operand LEA)
 def JFPU0 : ProcResource<1>; // Vector/FPU Pipe0: VALU0/VIMUL/FPA
 def JFPU1 : ProcResource<1>; // Vector/FPU Pipe1: VALU1/STC/FPM
 
+// The Integer PRF for Jaguar is 64 entries, and it holds the architectural and
+// speculative version of the 64-bit integer registers.
+// Reference: www.realworldtech.com/jaguar/4/
+def IntegerPRF : RegisterFile<64, [GR8, GR16, GR32, GR64, CCR]>;
+
+// The Jaguar FP Retire Queue renames SIMD and FP uOps onto a pool of 72 SSE
+// registers. Operations on 256-bit data types are cracked into two COPs.
+// Reference: www.realworldtech.com/jaguar/4/
+def FpuPRF: RegisterFile<72, [VR64, VR128, VR256], [1, 1, 2]>;
+
+// The retire control unit (RCU) can track up to 64 macro-ops in-flight. It can
+// retire up to two macro-ops per cycle.
+// Reference: "Software Optimization Guide for AMD Family 16h Processors"
+def RCU : RetireControlUnit<64, 2>;
+
 // Integer Pipe Scheduler
 def JALU01 : ProcResGroup<[JALU0, JALU1]> {
   let BufferSize=20;
@@ -125,6 +140,10 @@ defm : JWriteResIntPair<WriteALU,   [JALU01], 1>;
 defm : JWriteResIntPair<WriteIMul,  [JALU1, JMul], 3, [1, 1], 2>; // i8/i16/i32 multiplication
 defm : JWriteResIntPair<WriteIDiv,  [JALU1, JDiv], 41, [1, 41], 2>; // Worst case (i64 division)
 defm : JWriteResIntPair<WriteCRC32, [JALU01], 3, [4], 3>;
+
+defm : JWriteResIntPair<WriteCMOV,  [JALU01], 1>; // Conditional move.
+def  : WriteRes<WriteSETCC, [JALU01]>; // Setcc.
+def  : WriteRes<WriteSETCCStore, [JALU01,JSAGU]>;
 
 def  : WriteRes<WriteIMulH, [JALU1]> {
   let Latency = 6;
@@ -353,6 +372,25 @@ defm : JWriteResFpuPair<WriteVarBlend,    [JFPU01, JVALU], 2, [1, 4], 3>;
 defm : JWriteResFpuPair<WriteVecLogic,    [JFPU01, JVALU], 1>;
 defm : JWriteResFpuPair<WriteShuffle256,  [JFPU01, JVALU], 1>;
 defm : JWriteResFpuPair<WriteVarVecShift, [JFPU01, JVALU], 1>; // NOTE: Doesn't exist on Jaguar.
+
+////////////////////////////////////////////////////////////////////////////////
+// Vector Extraction instructions.
+////////////////////////////////////////////////////////////////////////////////
+
+def JWritePEXTR : SchedWriteRes<[JFPU0, JFPA, JALU0]> { let Latency = 3; }
+def : InstRW<[JWritePEXTR], (instrs MMX_PEXTRWrr,
+                                    EXTRACTPSrr, VEXTRACTPSrr,
+                                    PEXTRBrr, VPEXTRBrr,
+                                    PEXTRDrr, VPEXTRDrr,
+                                    PEXTRQrr, VPEXTRQrr,
+                                    PEXTRWrr, VPEXTRWrr, PEXTRWrr_REV, VPEXTRWrr_REV)>;
+
+def JWritePEXTRSt : SchedWriteRes<[JFPU1, JSTC, JSAGU]> { let Latency = 3; }
+def : InstRW<[JWritePEXTRSt], (instrs EXTRACTPSmr, VEXTRACTPSmr,
+                                      PEXTRBmr, VPEXTRBmr,
+                                      PEXTRDmr, VPEXTRDmr,
+                                      PEXTRQmr, VPEXTRQmr,
+                                      PEXTRWmr, VPEXTRWmr)>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // SSE42 String instructions.

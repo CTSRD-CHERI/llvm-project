@@ -243,6 +243,10 @@ module std [system] {
     header "codecvt"
     export *
   }
+  module compare {
+    header "compare"
+    export *
+  }
   module complex {
     header "complex"
     export *
@@ -468,6 +472,10 @@ module std [system] {
   module vector {
     header "vector"
     export initializer_list
+    export *
+  }
+  module version {
+    header "version"
     export *
   }
 

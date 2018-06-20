@@ -50,6 +50,7 @@
 #include "llvm/DebugInfo/PDB/IPDBSession.h"
 #include "llvm/DebugInfo/PDB/Native/DbiModuleDescriptorBuilder.h"
 #include "llvm/DebugInfo/PDB/Native/DbiStreamBuilder.h"
+#include "llvm/DebugInfo/PDB/Native/InfoStream.h"
 #include "llvm/DebugInfo/PDB/Native/InfoStreamBuilder.h"
 #include "llvm/DebugInfo/PDB/Native/NativeSession.h"
 #include "llvm/DebugInfo/PDB/Native/PDBFile.h"
@@ -114,6 +115,9 @@ cl::SubCommand MergeSubcommand("merge",
 
 cl::SubCommand ExplainSubcommand("explain",
                                  "Explain the meaning of a file offset");
+
+cl::SubCommand ExportSubcommand("export",
+                                "Write binary data from a stream to a file");
 
 cl::OptionCategory TypeCategory("Symbol Type Options");
 cl::OptionCategory FilterCategory("Filtering and Sorting Options");
@@ -617,7 +621,39 @@ cl::list<std::string> InputFilename(cl::Positional,
 
 cl::list<uint64_t> Offsets("offset", cl::desc("The file offset to explain"),
                            cl::sub(ExplainSubcommand), cl::OneOrMore);
+
+cl::opt<InputFileType> InputType(
+    "input-type", cl::desc("Specify how to interpret the input file"),
+    cl::init(InputFileType::PDBFile), cl::Optional, cl::sub(ExplainSubcommand),
+    cl::values(clEnumValN(InputFileType::PDBFile, "pdb-file",
+                          "Treat input as a PDB file (default)"),
+               clEnumValN(InputFileType::PDBStream, "pdb-stream",
+                          "Treat input as raw contents of PDB stream"),
+               clEnumValN(InputFileType::DBIStream, "dbi-stream",
+                          "Treat input as raw contents of DBI stream"),
+               clEnumValN(InputFileType::Names, "names-stream",
+                          "Treat input as raw contents of /names named stream"),
+               clEnumValN(InputFileType::ModuleStream, "mod-stream",
+                          "Treat input as raw contents of a module stream")));
 } // namespace explain
+
+namespace exportstream {
+cl::list<std::string> InputFilename(cl::Positional,
+                                    cl::desc("<input PDB file>"), cl::Required,
+                                    cl::sub(ExportSubcommand));
+cl::opt<std::string> OutputFile("out",
+                                cl::desc("The file to write the stream to"),
+                                cl::Required, cl::sub(ExportSubcommand));
+cl::opt<std::string>
+    Stream("stream", cl::Required,
+           cl::desc("The index or name of the stream whose contents to export"),
+           cl::sub(ExportSubcommand));
+cl::opt<bool> ForceName("name",
+                        cl::desc("Force the interpretation of -stream as a "
+                                 "string, even if it is a valid integer"),
+                        cl::sub(ExportSubcommand), cl::Optional,
+                        cl::init(false));
+} // namespace exportstream
 }
 
 static ExitOnError ExitOnErr;
@@ -750,7 +786,6 @@ static void pdb2Yaml(StringRef Path) {
 }
 
 static void dumpRaw(StringRef Path) {
-
   InputFile IF = ExitOnErr(InputFile::open(Path));
 
   auto O = llvm::make_unique<DumpOutputStyle>(IF);
@@ -1089,13 +1124,54 @@ static void mergePdbs() {
 
 static void explain() {
   std::unique_ptr<IPDBSession> Session;
-  PDBFile &File = loadPDB(opts::explain::InputFilename.front(), Session);
+  InputFile IF =
+      ExitOnErr(InputFile::open(opts::explain::InputFilename.front(), true));
 
   for (uint64_t Off : opts::explain::Offsets) {
-    auto O = llvm::make_unique<ExplainOutputStyle>(File, Off);
+    auto O = llvm::make_unique<ExplainOutputStyle>(IF, Off);
 
     ExitOnErr(O->dump());
   }
+}
+
+static void exportStream() {
+  std::unique_ptr<IPDBSession> Session;
+  PDBFile &File = loadPDB(opts::exportstream::InputFilename.front(), Session);
+
+  std::unique_ptr<MappedBlockStream> SourceStream;
+  uint32_t Index = 0;
+  bool Success = false;
+  std::string OutFileName = opts::exportstream::OutputFile;
+
+  if (!opts::exportstream::ForceName) {
+    // First try to parse it as an integer, if it fails fall back to treating it
+    // as a named stream.
+    if (to_integer(opts::exportstream::Stream, Index)) {
+      if (Index >= File.getNumStreams()) {
+        errs() << "Error: " << Index << " is not a valid stream index.\n";
+        exit(1);
+      }
+      Success = true;
+      outs() << "Dumping contents of stream index " << Index << " to file "
+             << OutFileName << ".\n";
+    }
+  }
+
+  if (!Success) {
+    InfoStream &IS = cantFail(File.getPDBInfoStream());
+    Index = ExitOnErr(IS.getNamedStreamIndex(opts::exportstream::Stream));
+    outs() << "Dumping contents of stream '" << opts::exportstream::Stream
+           << "' (index " << Index << ") to file " << OutFileName << ".\n";
+  }
+
+  SourceStream = MappedBlockStream::createIndexedStream(
+      File.getMsfLayout(), File.getMsfBuffer(), Index, File.getAllocator());
+  auto OutFile = ExitOnErr(
+      FileOutputBuffer::create(OutFileName, SourceStream->getLength()));
+  FileBufferByteStream DestStream(std::move(OutFile), llvm::support::little);
+  BinaryStreamWriter Writer(DestStream);
+  ExitOnErr(Writer.writeStreamRef(*SourceStream));
+  ExitOnErr(DestStream.commit());
 }
 
 static bool parseRange(StringRef Str,
@@ -1274,6 +1350,8 @@ int main(int argc_, const char *argv_[]) {
     mergePdbs();
   } else if (opts::ExplainSubcommand) {
     explain();
+  } else if (opts::ExportSubcommand) {
+    exportStream();
   }
 
   outs().flush();

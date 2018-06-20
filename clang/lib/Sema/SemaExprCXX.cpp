@@ -1975,11 +1975,12 @@ Sema::BuildCXXNew(SourceRange Range, bool UseGlobal,
   bool PassAlignment = getLangOpts().AlignedAllocation &&
                        Alignment > NewAlignment;
 
+  AllocationFunctionScope Scope = UseGlobal ? AFS_Global : AFS_Both;
   if (!AllocType->isDependentType() &&
       !Expr::hasAnyTypeDependentArguments(PlacementArgs) &&
       FindAllocationFunctions(StartLoc,
                               SourceRange(PlacementLParen, PlacementRParen),
-                              UseGlobal, AllocType, ArraySize, PassAlignment,
+                              Scope, Scope, AllocType, ArraySize, PassAlignment,
                               PlacementArgs, OperatorNew, OperatorDelete))
     return ExprError();
 
@@ -2271,19 +2272,19 @@ static bool resolveAllocationOverload(
   llvm_unreachable("Unreachable, bad result from BestViableFunction");
 }
 
-/// FindAllocationFunctions - Finds the overloads of operator new and delete
-/// that are appropriate for the allocation.
 bool Sema::FindAllocationFunctions(SourceLocation StartLoc, SourceRange Range,
-                                   bool UseGlobal, QualType AllocType,
-                                   bool IsArray, bool &PassAlignment,
-                                   MultiExprArg PlaceArgs,
+                                   AllocationFunctionScope NewScope,
+                                   AllocationFunctionScope DeleteScope,
+                                   QualType AllocType, bool IsArray,
+                                   bool &PassAlignment, MultiExprArg PlaceArgs,
                                    FunctionDecl *&OperatorNew,
                                    FunctionDecl *&OperatorDelete,
                                    bool Diagnose) {
   // --- Choosing an allocation function ---
   // C++ 5.3.4p8 - 14 & 18
-  // 1) If UseGlobal is true, only look in the global scope. Else, also look
-  //   in the scope of the allocated class.
+  // 1) If looking in AFS_Global scope for allocation functions, only look in
+  //    the global scope. Else, if AFS_Class, only look in the scope of the
+  //    allocated class. If AFS_Both, look in both.
   // 2) If an array size is given, look for operator new[], else look for
   //   operator new.
   // 3) The first argument is always size_t. Append the arguments from the
@@ -2333,7 +2334,7 @@ bool Sema::FindAllocationFunctions(SourceLocation StartLoc, SourceRange Range,
     //   function's name is looked up in the global scope. Otherwise, if the
     //   allocated type is a class type T or array thereof, the allocation
     //   function's name is looked up in the scope of T.
-    if (AllocElemType->isRecordType() && !UseGlobal)
+    if (AllocElemType->isRecordType() && NewScope != AFS_Global)
       LookupQualifiedName(R, AllocElemType->getAsCXXRecordDecl());
 
     // We can see ambiguity here if the allocation function is found in
@@ -2344,8 +2345,12 @@ bool Sema::FindAllocationFunctions(SourceLocation StartLoc, SourceRange Range,
     //   If this lookup fails to find the name, or if the allocated type is not
     //   a class type, the allocation function's name is looked up in the
     //   global scope.
-    if (R.empty())
+    if (R.empty()) {
+      if (NewScope == AFS_Class)
+        return true;
+
       LookupQualifiedName(R, Context.getTranslationUnitDecl());
+    }
 
     assert(!R.empty() && "implicitly declared allocation functions not found");
     assert(!R.isAmbiguous() && "global allocation functions are ambiguous");
@@ -2382,7 +2387,7 @@ bool Sema::FindAllocationFunctions(SourceLocation StartLoc, SourceRange Range,
   //   the allocated type is not a class type or array thereof, the
   //   deallocation function's name is looked up in the global scope.
   LookupResult FoundDelete(*this, DeleteName, StartLoc, LookupOrdinaryName);
-  if (AllocElemType->isRecordType() && !UseGlobal) {
+  if (AllocElemType->isRecordType() && DeleteScope != AFS_Global) {
     CXXRecordDecl *RD
       = cast<CXXRecordDecl>(AllocElemType->getAs<RecordType>()->getDecl());
     LookupQualifiedName(FoundDelete, RD);
@@ -2392,6 +2397,9 @@ bool Sema::FindAllocationFunctions(SourceLocation StartLoc, SourceRange Range,
 
   bool FoundGlobalDelete = FoundDelete.empty();
   if (FoundDelete.empty()) {
+    if (DeleteScope == AFS_Class)
+      return true;
+
     DeclareGlobalNewDelete();
     LookupQualifiedName(FoundDelete, Context.getTranslationUnitDecl());
   }
@@ -4525,8 +4533,10 @@ static bool EvaluateUnaryTypeTrait(Sema &Self, TypeTrait UTT,
       return RD->hasTrivialDefaultConstructor() &&
              !RD->hasNonTrivialDefaultConstructor();
     return false;
-  case UTT_HasTrivialMoveConstructor:
-    if (T.isNonTrivialToPrimitiveDestructiveMove())
+  case UTT_HasTrivialMoveConstructor: {
+    QualType::PrimitiveCopyKind PCK =
+        T.isNonTrivialToPrimitiveDestructiveMove();
+    if (PCK != QualType::PCK_Trivial && PCK != QualType::PCK_VolatileTrivial)
       return false;
     //  This trait is implemented by MSVC 2012 and needed to parse the
     //  standard library headers. Specifically this is used as the logic
@@ -4536,8 +4546,10 @@ static bool EvaluateUnaryTypeTrait(Sema &Self, TypeTrait UTT,
     if (CXXRecordDecl *RD = C.getBaseElementType(T)->getAsCXXRecordDecl())
       return RD->hasTrivialMoveConstructor() && !RD->hasNonTrivialMoveConstructor();
     return false;
-  case UTT_HasTrivialCopy:
-    if (T.isNonTrivialToPrimitiveCopy())
+  }
+  case UTT_HasTrivialCopy: {
+    QualType::PrimitiveCopyKind PCK = T.isNonTrivialToPrimitiveCopy();
+    if (PCK != QualType::PCK_Trivial && PCK != QualType::PCK_VolatileTrivial)
       return false;
     // http://gcc.gnu.org/onlinedocs/gcc/Type-Traits.html:
     //   If __is_pod (type) is true or type is a reference type then
@@ -4550,8 +4562,11 @@ static bool EvaluateUnaryTypeTrait(Sema &Self, TypeTrait UTT,
       return RD->hasTrivialCopyConstructor() &&
              !RD->hasNonTrivialCopyConstructor();
     return false;
-  case UTT_HasTrivialMoveAssign:
-    if (T.isNonTrivialToPrimitiveDestructiveMove())
+  }
+  case UTT_HasTrivialMoveAssign: {
+    QualType::PrimitiveCopyKind PCK =
+        T.isNonTrivialToPrimitiveDestructiveMove();
+    if (PCK != QualType::PCK_Trivial && PCK != QualType::PCK_VolatileTrivial)
       return false;
     //  This trait is implemented by MSVC 2012 and needed to parse the
     //  standard library headers. Specifically it is used as the logic
@@ -4561,8 +4576,10 @@ static bool EvaluateUnaryTypeTrait(Sema &Self, TypeTrait UTT,
     if (CXXRecordDecl *RD = C.getBaseElementType(T)->getAsCXXRecordDecl())
       return RD->hasTrivialMoveAssignment() && !RD->hasNonTrivialMoveAssignment();
     return false;
-  case UTT_HasTrivialAssign:
-    if (T.isNonTrivialToPrimitiveCopy())
+  }
+  case UTT_HasTrivialAssign: {
+    QualType::PrimitiveCopyKind PCK = T.isNonTrivialToPrimitiveCopy();
+    if (PCK != QualType::PCK_Trivial && PCK != QualType::PCK_VolatileTrivial)
       return false;
     // http://gcc.gnu.org/onlinedocs/gcc/Type-Traits.html:
     //   If type is const qualified or is a reference type then the
@@ -4584,6 +4601,7 @@ static bool EvaluateUnaryTypeTrait(Sema &Self, TypeTrait UTT,
       return RD->hasTrivialCopyAssignment() &&
              !RD->hasNonTrivialCopyAssignment();
     return false;
+  }
   case UTT_IsDestructible:
   case UTT_IsTriviallyDestructible:
   case UTT_IsNothrowDestructible:
@@ -5458,7 +5476,7 @@ static bool TryClassUnification(Sema &Self, Expr *From, Expr *To,
   //      constraint that in the conversion the reference must bind directly to
   //      an lvalue.
   //   -- If E2 is an xvalue: E1 can be converted to match E2 if E1 can be
-  //      implicitly conveted to the type "rvalue reference to R2", subject to
+  //      implicitly converted to the type "rvalue reference to R2", subject to
   //      the constraint that the reference must bind directly.
   if (To->isLValue() || To->isXValue()) {
     QualType T = To->isLValue() ? Self.Context.getLValueReferenceType(ToType)

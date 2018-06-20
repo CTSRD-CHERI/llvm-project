@@ -229,12 +229,14 @@ llvm::Constant *CodeGenModule::getOrCreateStaticVarDecl(
   LangAS AS = GetGlobalVarAddressSpace(&D);
   unsigned TargetAS = getContext().getTargetAddressSpace(AS);
 
-  // Local address space cannot have an initializer.
+  // OpenCL variables in local address space and CUDA shared
+  // variables cannot have an initializer.
   llvm::Constant *Init = nullptr;
-  if (Ty.getAddressSpace() != LangAS::opencl_local)
-    Init = EmitNullConstant(Ty);
-  else
+  if (Ty.getAddressSpace() == LangAS::opencl_local ||
+      D.hasAttr<CUDASharedAttr>())
     Init = llvm::UndefValue::get(LTy);
+  else
+    Init = EmitNullConstant(Ty);
 
   llvm::GlobalVariable *GV = new llvm::GlobalVariable(
       getModule(), LTy, Ty.isConstant(getContext()), Linkage, Init, Name,
@@ -1414,17 +1416,17 @@ void CodeGenFunction::EmitAutoVarInit(const AutoVarEmission &emission) {
   }
 }
 
-/// Emit an expression as an initializer for a variable at the given
-/// location.  The expression is not necessarily the normal
-/// initializer for the variable, and the address is not necessarily
+/// Emit an expression as an initializer for an object (variable, field, etc.)
+/// at the given location.  The expression is not necessarily the normal
+/// initializer for the object, and the address is not necessarily
 /// its normal location.
 ///
 /// \param init the initializing expression
-/// \param var the variable to act as if we're initializing
+/// \param D the object to act as if we're initializing
 /// \param loc the address to initialize; its type is a pointer
-///   to the LLVM mapping of the variable's type
+///   to the LLVM mapping of the object's type
 /// \param alignment the alignment of the address
-/// \param capturedByInit true if the variable is a __block variable
+/// \param capturedByInit true if \p D is a __block variable
 ///   whose address is potentially changed by the initializer
 void CodeGenFunction::EmitExprAsInit(const Expr *init, const ValueDecl *D,
                                      LValue lvalue, bool capturedByInit) {
@@ -1452,11 +1454,17 @@ void CodeGenFunction::EmitExprAsInit(const Expr *init, const ValueDecl *D,
     if (type->isAtomicType()) {
       EmitAtomicInit(const_cast<Expr*>(init), lvalue);
     } else {
+      AggValueSlot::Overlap_t Overlap = AggValueSlot::MayOverlap;
+      if (isa<VarDecl>(D))
+        Overlap = AggValueSlot::DoesNotOverlap;
+      else if (auto *FD = dyn_cast<FieldDecl>(D))
+        Overlap = overlapForFieldInit(FD);
       // TODO: how can we delay here if D is captured by its initializer?
       EmitAggExpr(init, AggValueSlot::forLValue(lvalue,
                                               AggValueSlot::IsDestructed,
                                          AggValueSlot::DoesNotNeedGCBarriers,
-                                              AggValueSlot::IsNotAliased));
+                                              AggValueSlot::IsNotAliased,
+                                              Overlap));
     }
     return;
   }

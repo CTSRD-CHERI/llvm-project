@@ -107,13 +107,14 @@ static cl::opt<DefaultOnOff> UnknownLocations(
                clEnumVal(Enable, "In all cases"), clEnumVal(Disable, "Never")),
     cl::init(Default));
 
-static cl::opt<DefaultOnOff>
-DwarfAccelTables("dwarf-accel-tables", cl::Hidden,
-                 cl::desc("Output prototype dwarf accelerator tables."),
-                 cl::values(clEnumVal(Default, "Default for platform"),
-                            clEnumVal(Enable, "Enabled"),
-                            clEnumVal(Disable, "Disabled")),
-                 cl::init(Default));
+static cl::opt<AccelTableKind> AccelTables(
+    "accel-tables", cl::Hidden, cl::desc("Output dwarf accelerator tables."),
+    cl::values(clEnumValN(AccelTableKind::Default, "Default",
+                          "Default for platform"),
+               clEnumValN(AccelTableKind::None, "Disable", "Disabled."),
+               clEnumValN(AccelTableKind::Apple, "Apple", "Apple"),
+               clEnumValN(AccelTableKind::Dwarf, "Dwarf", "DWARF")),
+    cl::init(AccelTableKind::Default));
 
 static cl::opt<DefaultOnOff>
 DwarfInlinedStrings("dwarf-inlined-strings", cl::Hidden,
@@ -240,11 +241,11 @@ ArrayRef<DbgVariable::FrameIndexExpr> DbgVariable::getFrameIndexExprs() const {
                         return A.Expr->isFragment();
                       }) &&
          "multiple FI expressions without DW_OP_LLVM_fragment");
-  std::sort(FrameIndexExprs.begin(), FrameIndexExprs.end(),
-            [](const FrameIndexExpr &A, const FrameIndexExpr &B) -> bool {
-              return A.Expr->getFragmentInfo()->OffsetInBits <
-                     B.Expr->getFragmentInfo()->OffsetInBits;
-            });
+  llvm::sort(FrameIndexExprs.begin(), FrameIndexExprs.end(),
+             [](const FrameIndexExpr &A, const FrameIndexExpr &B) -> bool {
+               return A.Expr->getFragmentInfo()->OffsetInBits <
+                      B.Expr->getFragmentInfo()->OffsetInBits;
+             });
 
   return FrameIndexExprs;
 }
@@ -303,11 +304,13 @@ DwarfDebug::DwarfDebug(AsmPrinter *A, Module *M)
 
   // Turn on accelerator tables by default, if tuning for LLDB and the target is
   // supported.
-  if (DwarfAccelTables == Default)
-    HasDwarfAccelTables =
-        tuneForLLDB() && A->TM.getTargetTriple().isOSBinFormatMachO();
-  else
-    HasDwarfAccelTables = DwarfAccelTables == Enable;
+  if (AccelTables == AccelTableKind::Default) {
+    if (tuneForLLDB() && A->TM.getTargetTriple().isOSBinFormatMachO())
+      TheAccelTableKind = AccelTableKind::Apple;
+    else
+      TheAccelTableKind = AccelTableKind::None;
+  } else
+    TheAccelTableKind = AccelTables;
 
   UseInlineStrings = DwarfInlinedStrings == Enable;
   HasAppleExtensionAttributes = tuneForLLDB();
@@ -574,21 +577,22 @@ void DwarfDebug::constructAndAddImportedEntityDIE(DwarfCompileUnit &TheCU,
 /// Sort and unique GVEs by comparing their fragment offset.
 static SmallVectorImpl<DwarfCompileUnit::GlobalExpr> &
 sortGlobalExprs(SmallVectorImpl<DwarfCompileUnit::GlobalExpr> &GVEs) {
-  std::sort(GVEs.begin(), GVEs.end(),
-            [](DwarfCompileUnit::GlobalExpr A, DwarfCompileUnit::GlobalExpr B) {
-              // Sort order: first null exprs, then exprs without fragment
-              // info, then sort by fragment offset in bits.
-              // FIXME: Come up with a more comprehensive comparator so
-              // the sorting isn't non-deterministic, and so the following
-              // std::unique call works correctly.
-              if (!A.Expr || !B.Expr)
-                return !!B.Expr;
-              auto FragmentA = A.Expr->getFragmentInfo();
-              auto FragmentB = B.Expr->getFragmentInfo();
-              if (!FragmentA || !FragmentB)
-                return !!FragmentB;
-              return FragmentA->OffsetInBits < FragmentB->OffsetInBits;
-            });
+  llvm::sort(GVEs.begin(), GVEs.end(),
+             [](DwarfCompileUnit::GlobalExpr A,
+                DwarfCompileUnit::GlobalExpr B) {
+               // Sort order: first null exprs, then exprs without fragment
+               // info, then sort by fragment offset in bits.
+               // FIXME: Come up with a more comprehensive comparator so
+               // the sorting isn't non-deterministic, and so the following
+               // std::unique call works correctly.
+               if (!A.Expr || !B.Expr)
+                 return !!B.Expr;
+               auto FragmentA = A.Expr->getFragmentInfo();
+               auto FragmentB = B.Expr->getFragmentInfo();
+               if (!FragmentA || !FragmentB)
+                 return !!FragmentB;
+               return FragmentA->OffsetInBits < FragmentB->OffsetInBits;
+             });
   GVEs.erase(std::unique(GVEs.begin(), GVEs.end(),
                          [](DwarfCompileUnit::GlobalExpr A,
                             DwarfCompileUnit::GlobalExpr B) {
@@ -839,11 +843,20 @@ void DwarfDebug::endModule() {
   }
 
   // Emit info into the dwarf accelerator table sections.
-  if (useDwarfAccelTables()) {
+  switch (getAccelTableKind()) {
+  case AccelTableKind::Apple:
     emitAccelNames();
     emitAccelObjC();
     emitAccelNamespaces();
     emitAccelTypes();
+    break;
+  case AccelTableKind::Dwarf:
+    emitAccelDebugNames();
+    break;
+  case AccelTableKind::None:
+    break;
+  case AccelTableKind::Default:
+    llvm_unreachable("Default should have already been resolved.");
   }
 
   // Emit the pubnames and pubtypes sections if requested.
@@ -1455,6 +1468,12 @@ void DwarfDebug::emitAccel(AccelTableT &Accel, MCSection *Section,
   emitAppleAccelTable(Asm, Accel, TableName, Section->getBeginSymbol());
 }
 
+void DwarfDebug::emitAccelDebugNames() {
+  Asm->OutStreamer->SwitchSection(
+      Asm->getObjFileLowering().getDwarfDebugNamesSection());
+  emitDWARF5AccelTable(Asm, AccelDebugNames, *this, getUnits());
+}
+
 // Emit visible names into a hashed accelerator table section.
 void DwarfDebug::emitAccelNames() {
   emitAccel(AccelNames, Asm->getObjFileLowering().getDwarfAccelNamesSection(),
@@ -1860,10 +1879,10 @@ void DwarfDebug::emitDebugARanges() {
   }
 
   // Sort the CU list (again, to ensure consistent output order).
-  std::sort(CUs.begin(), CUs.end(),
-            [](const DwarfCompileUnit *A, const DwarfCompileUnit *B) {
-              return A->getUniqueID() < B->getUniqueID();
-            });
+  llvm::sort(CUs.begin(), CUs.end(),
+             [](const DwarfCompileUnit *A, const DwarfCompileUnit *B) {
+               return A->getUniqueID() < B->getUniqueID();
+             });
 
   // Emit an arange table for each CU we used.
   for (DwarfCompileUnit *CU : CUs) {
@@ -2250,27 +2269,58 @@ void DwarfDebug::addDwarfTypeUnitType(DwarfCompileUnit &CU,
 // to reference is in the string table. We do this since the names we
 // add may not only be identical to the names in the DIE.
 void DwarfDebug::addAccelName(StringRef Name, const DIE &Die) {
-  if (!useDwarfAccelTables())
+  switch (getAccelTableKind()) {
+  case AccelTableKind::Apple:
+    AccelNames.addName(InfoHolder.getStringPool().getEntry(*Asm, Name), &Die);
+    break;
+  case AccelTableKind::Dwarf:
+    AccelDebugNames.addName(InfoHolder.getStringPool().getEntry(*Asm, Name),
+                            Die);
+    break;
+  case AccelTableKind::None:
     return;
-  AccelNames.addName(InfoHolder.getStringPool().getEntry(*Asm, Name), &Die);
+  case AccelTableKind::Default:
+    llvm_unreachable("Default should have already been resolved.");
+  }
 }
 
 void DwarfDebug::addAccelObjC(StringRef Name, const DIE &Die) {
-  if (!useDwarfAccelTables())
+  if (getAccelTableKind() != AccelTableKind::Apple)
     return;
   AccelObjC.addName(InfoHolder.getStringPool().getEntry(*Asm, Name), &Die);
 }
 
 void DwarfDebug::addAccelNamespace(StringRef Name, const DIE &Die) {
-  if (!useDwarfAccelTables())
+  switch (getAccelTableKind()) {
+  case AccelTableKind::Apple:
+    AccelNamespace.addName(InfoHolder.getStringPool().getEntry(*Asm, Name),
+                           &Die);
+    break;
+  case AccelTableKind::Dwarf:
+    AccelDebugNames.addName(InfoHolder.getStringPool().getEntry(*Asm, Name),
+                            Die);
+    break;
+  case AccelTableKind::None:
     return;
-  AccelNamespace.addName(InfoHolder.getStringPool().getEntry(*Asm, Name), &Die);
+  case AccelTableKind::Default:
+    llvm_unreachable("Default should have already been resolved.");
+  }
 }
 
 void DwarfDebug::addAccelType(StringRef Name, const DIE &Die, char Flags) {
-  if (!useDwarfAccelTables())
+  switch (getAccelTableKind()) {
+  case AccelTableKind::Apple:
+    AccelTypes.addName(InfoHolder.getStringPool().getEntry(*Asm, Name), &Die);
+    break;
+  case AccelTableKind::Dwarf:
+    AccelDebugNames.addName(InfoHolder.getStringPool().getEntry(*Asm, Name),
+                            Die);
+    break;
+  case AccelTableKind::None:
     return;
-  AccelTypes.addName(InfoHolder.getStringPool().getEntry(*Asm, Name), &Die);
+  case AccelTableKind::Default:
+    llvm_unreachable("Default should have already been resolved.");
+  }
 }
 
 uint16_t DwarfDebug::getDwarfVersion() const {

@@ -742,27 +742,26 @@ template <class ELFT> void ArchiveFile::parse() {
 }
 
 // Returns a buffer pointing to a member file containing a given symbol.
-std::pair<MemoryBufferRef, uint64_t>
-ArchiveFile::getMember(const Archive::Symbol *Sym) {
+InputFile *ArchiveFile::fetch(const Archive::Symbol &Sym) {
   Archive::Child C =
-      CHECK(Sym->getMember(), toString(this) +
-                                  ": could not get the member for symbol " +
-                                  Sym->getName());
+      CHECK(Sym.getMember(), toString(this) +
+                                 ": could not get the member for symbol " +
+                                 Sym.getName());
 
   if (!Seen.insert(C.getChildOffset()).second)
-    return {MemoryBufferRef(), 0};
+    return nullptr;
 
-  MemoryBufferRef Ret =
+  MemoryBufferRef MB =
       CHECK(C.getMemoryBufferRef(),
             toString(this) +
                 ": could not get the buffer for the member defining symbol " +
-                Sym->getName());
+                Sym.getName());
 
-  if (C.getParent()->isThin() && Tar)
-    Tar->append(relativeToRoot(CHECK(C.getFullName(), this)), Ret.getBuffer());
-  if (C.getParent()->isThin())
-    return {Ret, 0};
-  return {Ret, C.getChildOffset()};
+  if (Tar && C.getParent()->isThin())
+    Tar->append(relativeToRoot(CHECK(C.getFullName(), this)), MB.getBuffer());
+
+  return createObjectFile(MB, getName(),
+                          C.getParent()->isThin() ? 0 : C.getChildOffset());
 }
 
 template <class ELFT>
@@ -907,6 +906,11 @@ template <class ELFT> void SharedFile<ELFT>::parseRest() {
   std::vector<uint32_t> Versyms = parseVersyms(); // parse .gnu.version
   ArrayRef<Elf_Shdr> Sections = CHECK(this->getObj().sections(), this);
 
+  // System libraries can have a lot of symbols with versions. Using a
+  // fixed buffer for computing the versions name (foo@ver) can save a
+  // lot of allocations.
+  SmallString<0> VersionedNameBuffer;
+
   // Add symbols to the symbol table.
   ArrayRef<Elf_Sym> Syms = this->getGlobalELFSyms();
   for (size_t I = 0; I < Syms.size(); ++I) {
@@ -957,8 +961,9 @@ template <class ELFT> void SharedFile<ELFT>::parseRest() {
 
     StringRef VerName =
         this->StringTable.data() + Verdefs[Idx]->getAux()->vda_name;
-    Name = Saver.save(Name + "@" + VerName);
-    Symtab->addShared(Name, *this, Sym, Alignment, Idx);
+    VersionedNameBuffer.clear();
+    Name = (Name + "@" + VerName).toStringRef(VersionedNameBuffer);
+    Symtab->addShared(Saver.save(Name), *this, Sym, Alignment, Idx);
   }
 }
 

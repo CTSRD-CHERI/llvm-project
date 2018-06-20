@@ -30,7 +30,7 @@ class InfoStream {
   friend class InfoStreamBuilder;
 
 public:
-  InfoStream(std::unique_ptr<msf::MappedBlockStream> Stream);
+  InfoStream(std::unique_ptr<BinaryStream> Stream);
 
   Error reload();
 
@@ -52,11 +52,11 @@ public:
 
   BinarySubstreamRef getNamedStreamsBuffer() const;
 
-  uint32_t getNamedStreamIndex(llvm::StringRef Name) const;
+  Expected<uint32_t> getNamedStreamIndex(llvm::StringRef Name) const;
   StringMap<uint32_t> named_streams() const;
 
 private:
-  std::unique_ptr<msf::MappedBlockStream> Stream;
+  std::unique_ptr<BinaryStream> Stream;
 
   const InfoStreamHeader *Header;
 

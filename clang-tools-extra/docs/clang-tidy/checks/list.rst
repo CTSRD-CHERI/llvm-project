@@ -36,6 +36,7 @@ Clang-Tidy Checks
    bugprone-misplaced-widening-cast
    bugprone-move-forwarding-reference
    bugprone-multiple-statement-macro
+   bugprone-parent-virtual-call
    bugprone-sizeof-container
    bugprone-sizeof-expression
    bugprone-string-constructor
@@ -110,7 +111,6 @@ Clang-Tidy Checks
    google-readability-redundant-smartptr-get (redirects to readability-redundant-smartptr-get) <google-readability-redundant-smartptr-get>
    google-readability-todo
    google-runtime-int
-   google-runtime-member-string-references
    google-runtime-operator
    google-runtime-references
    hicpp-avoid-goto

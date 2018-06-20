@@ -1239,7 +1239,7 @@ MachineOutliner::createOutlinedFunction(Module &M, const OutlinedFunction &OF,
 
   // NOTE: If this is linkonceodr, then we can take advantage of linker deduping
   // which gives us better results when we outline from linkonceodr functions.
-  F->setLinkage(GlobalValue::PrivateLinkage);
+  F->setLinkage(GlobalValue::InternalLinkage);
   F->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
 
   // Save F so that we can add debug info later if we need to.
@@ -1416,7 +1416,15 @@ bool MachineOutliner::runOnModule(Module &M) {
       MMI.getOrCreateMachineFunction(*M.begin()).getSubtarget();
   const TargetRegisterInfo *TRI = STI.getRegisterInfo();
   const TargetInstrInfo *TII = STI.getInstrInfo();
-  
+
+  // Does the target implement the MachineOutliner? If it doesn't, quit here.
+  if (!TII->useMachineOutliner()) {
+    // No. So we're done.
+    DEBUG(dbgs()
+          << "Skipping pass: Target does not support the MachineOutliner.\n");
+    return false;
+  }
+
   InstructionMapper Mapper;
 
   // Build instruction mappings for each function in the module. Start by
