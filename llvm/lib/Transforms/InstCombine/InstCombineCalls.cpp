@@ -2016,37 +2016,34 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
     Value *Src0 = II->getArgOperand(0);
     Value *Src1 = II->getArgOperand(1);
 
-    // Canonicalize constants into the RHS.
+    // Canonicalize constant multiply operand to Src1.
     if (isa<Constant>(Src0) && !isa<Constant>(Src1)) {
       II->setArgOperand(0, Src1);
       II->setArgOperand(1, Src0);
       std::swap(Src0, Src1);
     }
 
-    Value *LHS = nullptr;
-    Value *RHS = nullptr;
-
     // fma fneg(x), fneg(y), z -> fma x, y, z
-    if (match(Src0, m_FNeg(m_Value(LHS))) &&
-        match(Src1, m_FNeg(m_Value(RHS)))) {
-      II->setArgOperand(0, LHS);
-      II->setArgOperand(1, RHS);
+    Value *X, *Y;
+    if (match(Src0, m_FNeg(m_Value(X))) && match(Src1, m_FNeg(m_Value(Y)))) {
+      II->setArgOperand(0, X);
+      II->setArgOperand(1, Y);
       return II;
     }
 
     // fma fabs(x), fabs(x), z -> fma x, x, z
-    if (match(Src0, m_Intrinsic<Intrinsic::fabs>(m_Value(LHS))) &&
-        match(Src1, m_Intrinsic<Intrinsic::fabs>(m_Value(RHS))) && LHS == RHS) {
-      II->setArgOperand(0, LHS);
-      II->setArgOperand(1, RHS);
+    if (match(Src0, m_Intrinsic<Intrinsic::fabs>(m_Value(X))) &&
+        match(Src1, m_Intrinsic<Intrinsic::fabs>(m_Specific(X)))) {
+      II->setArgOperand(0, X);
+      II->setArgOperand(1, X);
       return II;
     }
 
     // fma x, 1, z -> fadd x, z
     if (match(Src1, m_FPOne())) {
-      Instruction *RI = BinaryOperator::CreateFAdd(Src0, II->getArgOperand(2));
-      RI->copyFastMathFlags(II);
-      return RI;
+      auto *FAdd = BinaryOperator::CreateFAdd(Src0, II->getArgOperand(2));
+      FAdd->copyFastMathFlags(II);
+      return FAdd;
     }
 
     break;
@@ -3996,8 +3993,17 @@ bool InstCombiner::transformConstExprCastCall(CallSite CS) {
   if (!Callee)
     return false;
 
-  // The prototype of a thunk is a lie. Don't directly call such a function.
+  // If this is a call to a thunk function, don't remove the cast. Thunks are
+  // used to transparently forward all incoming parameters and outgoing return
+  // values, so it's important to leave the cast in place.
   if (Callee->hasFnAttribute("thunk"))
+    return false;
+
+  // If this is a musttail call, the callee's prototype must match the caller's
+  // prototype with the exception of pointee types. The code below doesn't
+  // implement that, so we can't do this transform.
+  // TODO: Do the transform if it only requires adding pointer casts.
+  if (CS.isMustTailCall())
     return false;
 
   Instruction *Caller = CS.getInstruction();

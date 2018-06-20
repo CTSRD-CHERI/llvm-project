@@ -72,6 +72,8 @@ protected:
 
   void verifyFormat(llvm::StringRef Expected, llvm::StringRef Code,
                     const FormatStyle &Style = getLLVMStyle()) {
+    EXPECT_EQ(Expected.str(), format(Expected, Style))
+        << "Expected code is not stable";
     EXPECT_EQ(Expected.str(), format(Code, Style));
     if (Style.Language == FormatStyle::LK_Cpp) {
       // Objective-C++ is a superset of C++, so everything checked for C++
@@ -6035,6 +6037,7 @@ TEST_F(FormatTest, UnderstandsUsesOfStarAndAmp) {
   PointerMiddle.PointerAlignment = FormatStyle::PAS_Middle;
   verifyFormat("delete *x;", PointerMiddle);
   verifyFormat("int * x;", PointerMiddle);
+  verifyFormat("int *[] x;", PointerMiddle);
   verifyFormat("template <int * y> f() {}", PointerMiddle);
   verifyFormat("int * f(int * a) {}", PointerMiddle);
   verifyFormat("int main(int argc, char ** argv) {}", PointerMiddle);
@@ -6042,7 +6045,7 @@ TEST_F(FormatTest, UnderstandsUsesOfStarAndAmp) {
   verifyFormat("A<int *> a;", PointerMiddle);
   verifyFormat("A<int **> a;", PointerMiddle);
   verifyFormat("A<int *, int *> a;", PointerMiddle);
-  verifyFormat("A<int * []> a;", PointerMiddle);
+  verifyFormat("A<int *[]> a;", PointerMiddle);
   verifyFormat("A = new SomeType *[Length]();", PointerMiddle);
   verifyFormat("A = new SomeType *[Length];", PointerMiddle);
   verifyFormat("T ** t = new T *;", PointerMiddle);
@@ -12106,6 +12109,9 @@ TEST_F(FormatTest, FileAndCode) {
       FormatStyle::LK_ObjC,
       guessLanguage("foo.h",
                     "#define MY_POINT_MAKE(x, y) CGPointMake((x), (y));\n"));
+  EXPECT_EQ(
+      FormatStyle::LK_Cpp,
+      guessLanguage("foo.h", "#define FOO(...) auto bar = [] __VA_ARGS__;"));
 }
 
 TEST_F(FormatTest, GuessLanguageWithCpp11AttributeSpecifiers) {

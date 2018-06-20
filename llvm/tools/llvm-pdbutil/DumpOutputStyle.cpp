@@ -876,7 +876,7 @@ Error DumpOutputStyle::dumpStringTableFromPdb() {
 
       std::vector<uint32_t> SortedIDs(IS->name_ids().begin(),
                                       IS->name_ids().end());
-      std::sort(SortedIDs.begin(), SortedIDs.end());
+      llvm::sort(SortedIDs.begin(), SortedIDs.end());
       for (uint32_t I : SortedIDs) {
         auto ES = IS->getStringForID(I);
         llvm::SmallString<32> Str;
@@ -1058,8 +1058,15 @@ Error DumpOutputStyle::dumpTypesFromObjectFile() {
     if (auto EC = S.getName(SectionName))
       return errorCodeToError(EC);
 
-    if (SectionName != ".debug$T")
+    // .debug$T is a standard CodeView type section, while .debug$P is the same
+    // format but used for MSVC precompiled header object files.
+    if (SectionName == ".debug$T")
+      printHeader(P, "Types (.debug$T)");
+    else if (SectionName == ".debug$P")
+      printHeader(P, "Precompiled Types (.debug$P)");
+    else
       continue;
+
     StringRef Contents;
     if (auto EC = S.getContents(Contents))
       return errorCodeToError(EC);

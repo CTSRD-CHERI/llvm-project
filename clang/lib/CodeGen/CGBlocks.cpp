@@ -72,7 +72,7 @@ static llvm::Value *getFunctionPointer(CodeGenFunction &CGF, llvm::Value *V) {
 /// buildBlockDescriptor - Build the block descriptor meta-data for a block.
 /// buildBlockDescriptor is accessed from 5th field of the Block_literal
 /// meta-data and contains stationary information about the block literal.
-/// Its definition will have 4 (or optinally 6) words.
+/// Its definition will have 4 (or optionally 6) words.
 /// \code
 /// struct Block_descriptor {
 ///   unsigned long reserved;
@@ -336,7 +336,7 @@ static void initializeForBlockHeader(CodeGenModule &CGM, CGBlockInfo &info,
     info.BlockSize = CharUnits::fromQuantity(Offset);
   } else {
     // The header is basically 'struct { void *; int; int; void *; void *; }'.
-    // Assert that that struct is packed.
+    // Assert that the struct is packed.
     assert(CGM.getIntSize() <= CGM.getPointerSize());
     assert(CGM.getIntAlign() <= CGM.getPointerAlign());
     assert((2 * CGM.getIntSize()).isMultipleOf(CGM.getPointerAlign()));
@@ -893,7 +893,7 @@ llvm::Value *CodeGenFunction::EmitBlockLiteral(const CGBlockInfo &blockInfo) {
         const CGBlockInfo::Capture &enclosingCapture =
             BlockInfo->getCapture(variable);
 
-        // This is a [[type]]*, except that a byref entry wil just be an i8**.
+        // This is a [[type]]*, except that a byref entry will just be an i8**.
         src = Builder.CreateStructGEP(LoadBlockStruct(),
                                       enclosingCapture.getIndex(),
                                       enclosingCapture.getOffset(),
@@ -937,7 +937,8 @@ llvm::Value *CodeGenFunction::EmitBlockLiteral(const CGBlockInfo &blockInfo) {
             AggValueSlot::forAddr(blockField, Qualifiers(),
                                   AggValueSlot::IsDestructed,
                                   AggValueSlot::DoesNotNeedGCBarriers,
-                                  AggValueSlot::IsNotAliased);
+                                  AggValueSlot::IsNotAliased,
+                                  AggValueSlot::DoesNotOverlap);
         EmitAggExpr(copyExpr, Slot);
       } else {
         EmitSynthesizedCXXCopyCtor(blockField, src, copyExpr);

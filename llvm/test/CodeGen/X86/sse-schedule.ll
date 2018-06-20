@@ -1723,8 +1723,8 @@ define i64 @test_cvttss2siq(float %a0, float *%a1) {
 define <4 x float> @test_divps(<4 x float> %a0, <4 x float> %a1, <4 x float> *%a2) {
 ; GENERIC-LABEL: test_divps:
 ; GENERIC:       # %bb.0:
-; GENERIC-NEXT:    divps %xmm1, %xmm0 # sched: [14:1.00]
-; GENERIC-NEXT:    divps (%rdi), %xmm0 # sched: [20:1.00]
+; GENERIC-NEXT:    divps %xmm1, %xmm0 # sched: [14:14.00]
+; GENERIC-NEXT:    divps (%rdi), %xmm0 # sched: [20:14.00]
 ; GENERIC-NEXT:    retq # sched: [1:1.00]
 ;
 ; ATOM-LABEL: test_divps:
@@ -1735,68 +1735,68 @@ define <4 x float> @test_divps(<4 x float> %a0, <4 x float> %a1, <4 x float> *%a
 ;
 ; SLM-LABEL: test_divps:
 ; SLM:       # %bb.0:
-; SLM-NEXT:    divps %xmm1, %xmm0 # sched: [34:34.00]
-; SLM-NEXT:    divps (%rdi), %xmm0 # sched: [37:34.00]
+; SLM-NEXT:    divps %xmm1, %xmm0 # sched: [39:39.00]
+; SLM-NEXT:    divps (%rdi), %xmm0 # sched: [42:39.00]
 ; SLM-NEXT:    retq # sched: [4:1.00]
 ;
 ; SANDY-SSE-LABEL: test_divps:
 ; SANDY-SSE:       # %bb.0:
-; SANDY-SSE-NEXT:    divps %xmm1, %xmm0 # sched: [14:1.00]
-; SANDY-SSE-NEXT:    divps (%rdi), %xmm0 # sched: [20:1.00]
+; SANDY-SSE-NEXT:    divps %xmm1, %xmm0 # sched: [14:14.00]
+; SANDY-SSE-NEXT:    divps (%rdi), %xmm0 # sched: [20:14.00]
 ; SANDY-SSE-NEXT:    retq # sched: [1:1.00]
 ;
 ; SANDY-LABEL: test_divps:
 ; SANDY:       # %bb.0:
-; SANDY-NEXT:    vdivps %xmm1, %xmm0, %xmm0 # sched: [14:1.00]
-; SANDY-NEXT:    vdivps (%rdi), %xmm0, %xmm0 # sched: [20:1.00]
+; SANDY-NEXT:    vdivps %xmm1, %xmm0, %xmm0 # sched: [14:14.00]
+; SANDY-NEXT:    vdivps (%rdi), %xmm0, %xmm0 # sched: [20:14.00]
 ; SANDY-NEXT:    retq # sched: [1:1.00]
 ;
 ; HASWELL-SSE-LABEL: test_divps:
 ; HASWELL-SSE:       # %bb.0:
-; HASWELL-SSE-NEXT:    divps %xmm1, %xmm0 # sched: [13:1.00]
-; HASWELL-SSE-NEXT:    divps (%rdi), %xmm0 # sched: [19:1.00]
+; HASWELL-SSE-NEXT:    divps %xmm1, %xmm0 # sched: [13:7.00]
+; HASWELL-SSE-NEXT:    divps (%rdi), %xmm0 # sched: [19:7.00]
 ; HASWELL-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; HASWELL-LABEL: test_divps:
 ; HASWELL:       # %bb.0:
-; HASWELL-NEXT:    vdivps %xmm1, %xmm0, %xmm0 # sched: [13:1.00]
-; HASWELL-NEXT:    vdivps (%rdi), %xmm0, %xmm0 # sched: [19:1.00]
+; HASWELL-NEXT:    vdivps %xmm1, %xmm0, %xmm0 # sched: [13:7.00]
+; HASWELL-NEXT:    vdivps (%rdi), %xmm0, %xmm0 # sched: [19:7.00]
 ; HASWELL-NEXT:    retq # sched: [7:1.00]
 ;
 ; BROADWELL-SSE-LABEL: test_divps:
 ; BROADWELL-SSE:       # %bb.0:
-; BROADWELL-SSE-NEXT:    divps %xmm1, %xmm0 # sched: [11:1.00]
-; BROADWELL-SSE-NEXT:    divps (%rdi), %xmm0 # sched: [16:1.00]
+; BROADWELL-SSE-NEXT:    divps %xmm1, %xmm0 # sched: [11:5.00]
+; BROADWELL-SSE-NEXT:    divps (%rdi), %xmm0 # sched: [16:5.00]
 ; BROADWELL-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; BROADWELL-LABEL: test_divps:
 ; BROADWELL:       # %bb.0:
-; BROADWELL-NEXT:    vdivps %xmm1, %xmm0, %xmm0 # sched: [11:1.00]
-; BROADWELL-NEXT:    vdivps (%rdi), %xmm0, %xmm0 # sched: [16:1.00]
+; BROADWELL-NEXT:    vdivps %xmm1, %xmm0, %xmm0 # sched: [11:5.00]
+; BROADWELL-NEXT:    vdivps (%rdi), %xmm0, %xmm0 # sched: [16:5.00]
 ; BROADWELL-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKYLAKE-SSE-LABEL: test_divps:
 ; SKYLAKE-SSE:       # %bb.0:
-; SKYLAKE-SSE-NEXT:    divps %xmm1, %xmm0 # sched: [11:1.00]
-; SKYLAKE-SSE-NEXT:    divps (%rdi), %xmm0 # sched: [17:1.00]
+; SKYLAKE-SSE-NEXT:    divps %xmm1, %xmm0 # sched: [11:3.00]
+; SKYLAKE-SSE-NEXT:    divps (%rdi), %xmm0 # sched: [17:5.00]
 ; SKYLAKE-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKYLAKE-LABEL: test_divps:
 ; SKYLAKE:       # %bb.0:
-; SKYLAKE-NEXT:    vdivps %xmm1, %xmm0, %xmm0 # sched: [11:1.00]
-; SKYLAKE-NEXT:    vdivps (%rdi), %xmm0, %xmm0 # sched: [17:1.00]
+; SKYLAKE-NEXT:    vdivps %xmm1, %xmm0, %xmm0 # sched: [11:3.00]
+; SKYLAKE-NEXT:    vdivps (%rdi), %xmm0, %xmm0 # sched: [17:5.00]
 ; SKYLAKE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-SSE-LABEL: test_divps:
 ; SKX-SSE:       # %bb.0:
-; SKX-SSE-NEXT:    divps %xmm1, %xmm0 # sched: [11:1.00]
-; SKX-SSE-NEXT:    divps (%rdi), %xmm0 # sched: [17:1.00]
+; SKX-SSE-NEXT:    divps %xmm1, %xmm0 # sched: [11:3.00]
+; SKX-SSE-NEXT:    divps (%rdi), %xmm0 # sched: [17:5.00]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_divps:
 ; SKX:       # %bb.0:
-; SKX-NEXT:    vdivps %xmm1, %xmm0, %xmm0 # sched: [11:1.00]
-; SKX-NEXT:    vdivps (%rdi), %xmm0, %xmm0 # sched: [17:1.00]
+; SKX-NEXT:    vdivps %xmm1, %xmm0, %xmm0 # sched: [11:3.00]
+; SKX-NEXT:    vdivps (%rdi), %xmm0, %xmm0 # sched: [17:5.00]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
 ; BTVER2-SSE-LABEL: test_divps:
@@ -1831,8 +1831,8 @@ define <4 x float> @test_divps(<4 x float> %a0, <4 x float> %a1, <4 x float> *%a
 define float @test_divss(float %a0, float %a1, float *%a2) {
 ; GENERIC-LABEL: test_divss:
 ; GENERIC:       # %bb.0:
-; GENERIC-NEXT:    divss %xmm1, %xmm0 # sched: [14:1.00]
-; GENERIC-NEXT:    divss (%rdi), %xmm0 # sched: [20:1.00]
+; GENERIC-NEXT:    divss %xmm1, %xmm0 # sched: [14:14.00]
+; GENERIC-NEXT:    divss (%rdi), %xmm0 # sched: [20:14.00]
 ; GENERIC-NEXT:    retq # sched: [1:1.00]
 ;
 ; ATOM-LABEL: test_divss:
@@ -1843,68 +1843,68 @@ define float @test_divss(float %a0, float %a1, float *%a2) {
 ;
 ; SLM-LABEL: test_divss:
 ; SLM:       # %bb.0:
-; SLM-NEXT:    divss %xmm1, %xmm0 # sched: [34:34.00]
-; SLM-NEXT:    divss (%rdi), %xmm0 # sched: [37:34.00]
+; SLM-NEXT:    divss %xmm1, %xmm0 # sched: [19:17.00]
+; SLM-NEXT:    divss (%rdi), %xmm0 # sched: [22:17.00]
 ; SLM-NEXT:    retq # sched: [4:1.00]
 ;
 ; SANDY-SSE-LABEL: test_divss:
 ; SANDY-SSE:       # %bb.0:
-; SANDY-SSE-NEXT:    divss %xmm1, %xmm0 # sched: [14:1.00]
-; SANDY-SSE-NEXT:    divss (%rdi), %xmm0 # sched: [20:1.00]
+; SANDY-SSE-NEXT:    divss %xmm1, %xmm0 # sched: [14:14.00]
+; SANDY-SSE-NEXT:    divss (%rdi), %xmm0 # sched: [20:14.00]
 ; SANDY-SSE-NEXT:    retq # sched: [1:1.00]
 ;
 ; SANDY-LABEL: test_divss:
 ; SANDY:       # %bb.0:
-; SANDY-NEXT:    vdivss %xmm1, %xmm0, %xmm0 # sched: [14:1.00]
-; SANDY-NEXT:    vdivss (%rdi), %xmm0, %xmm0 # sched: [20:1.00]
+; SANDY-NEXT:    vdivss %xmm1, %xmm0, %xmm0 # sched: [14:14.00]
+; SANDY-NEXT:    vdivss (%rdi), %xmm0, %xmm0 # sched: [20:14.00]
 ; SANDY-NEXT:    retq # sched: [1:1.00]
 ;
 ; HASWELL-SSE-LABEL: test_divss:
 ; HASWELL-SSE:       # %bb.0:
-; HASWELL-SSE-NEXT:    divss %xmm1, %xmm0 # sched: [13:1.00]
-; HASWELL-SSE-NEXT:    divss (%rdi), %xmm0 # sched: [18:1.00]
+; HASWELL-SSE-NEXT:    divss %xmm1, %xmm0 # sched: [13:7.00]
+; HASWELL-SSE-NEXT:    divss (%rdi), %xmm0 # sched: [18:7.00]
 ; HASWELL-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; HASWELL-LABEL: test_divss:
 ; HASWELL:       # %bb.0:
-; HASWELL-NEXT:    vdivss %xmm1, %xmm0, %xmm0 # sched: [13:1.00]
-; HASWELL-NEXT:    vdivss (%rdi), %xmm0, %xmm0 # sched: [18:1.00]
+; HASWELL-NEXT:    vdivss %xmm1, %xmm0, %xmm0 # sched: [13:7.00]
+; HASWELL-NEXT:    vdivss (%rdi), %xmm0, %xmm0 # sched: [18:7.00]
 ; HASWELL-NEXT:    retq # sched: [7:1.00]
 ;
 ; BROADWELL-SSE-LABEL: test_divss:
 ; BROADWELL-SSE:       # %bb.0:
-; BROADWELL-SSE-NEXT:    divss %xmm1, %xmm0 # sched: [11:1.00]
-; BROADWELL-SSE-NEXT:    divss (%rdi), %xmm0 # sched: [16:1.00]
+; BROADWELL-SSE-NEXT:    divss %xmm1, %xmm0 # sched: [11:3.00]
+; BROADWELL-SSE-NEXT:    divss (%rdi), %xmm0 # sched: [16:5.00]
 ; BROADWELL-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; BROADWELL-LABEL: test_divss:
 ; BROADWELL:       # %bb.0:
-; BROADWELL-NEXT:    vdivss %xmm1, %xmm0, %xmm0 # sched: [11:1.00]
-; BROADWELL-NEXT:    vdivss (%rdi), %xmm0, %xmm0 # sched: [16:1.00]
+; BROADWELL-NEXT:    vdivss %xmm1, %xmm0, %xmm0 # sched: [11:3.00]
+; BROADWELL-NEXT:    vdivss (%rdi), %xmm0, %xmm0 # sched: [16:5.00]
 ; BROADWELL-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKYLAKE-SSE-LABEL: test_divss:
 ; SKYLAKE-SSE:       # %bb.0:
-; SKYLAKE-SSE-NEXT:    divss %xmm1, %xmm0 # sched: [11:1.00]
-; SKYLAKE-SSE-NEXT:    divss (%rdi), %xmm0 # sched: [16:1.00]
+; SKYLAKE-SSE-NEXT:    divss %xmm1, %xmm0 # sched: [11:3.00]
+; SKYLAKE-SSE-NEXT:    divss (%rdi), %xmm0 # sched: [16:3.00]
 ; SKYLAKE-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKYLAKE-LABEL: test_divss:
 ; SKYLAKE:       # %bb.0:
-; SKYLAKE-NEXT:    vdivss %xmm1, %xmm0, %xmm0 # sched: [11:1.00]
-; SKYLAKE-NEXT:    vdivss (%rdi), %xmm0, %xmm0 # sched: [16:1.00]
+; SKYLAKE-NEXT:    vdivss %xmm1, %xmm0, %xmm0 # sched: [11:3.00]
+; SKYLAKE-NEXT:    vdivss (%rdi), %xmm0, %xmm0 # sched: [16:3.00]
 ; SKYLAKE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-SSE-LABEL: test_divss:
 ; SKX-SSE:       # %bb.0:
-; SKX-SSE-NEXT:    divss %xmm1, %xmm0 # sched: [11:1.00]
-; SKX-SSE-NEXT:    divss (%rdi), %xmm0 # sched: [16:1.00]
+; SKX-SSE-NEXT:    divss %xmm1, %xmm0 # sched: [11:3.00]
+; SKX-SSE-NEXT:    divss (%rdi), %xmm0 # sched: [16:3.00]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_divss:
 ; SKX:       # %bb.0:
-; SKX-NEXT:    vdivss %xmm1, %xmm0, %xmm0 # sched: [11:1.00]
-; SKX-NEXT:    vdivss (%rdi), %xmm0, %xmm0 # sched: [16:1.00]
+; SKX-NEXT:    vdivss %xmm1, %xmm0, %xmm0 # sched: [11:3.00]
+; SKX-NEXT:    vdivss (%rdi), %xmm0, %xmm0 # sched: [16:3.00]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
 ; BTVER2-SSE-LABEL: test_divss:
@@ -1939,7 +1939,7 @@ define float @test_divss(float %a0, float %a1, float *%a2) {
 define void @test_ldmxcsr(i32 %a0) {
 ; GENERIC-LABEL: test_ldmxcsr:
 ; GENERIC:       # %bb.0:
-; GENERIC-NEXT:    movl %edi, -{{[0-9]+}}(%rsp) # sched: [5:1.00]
+; GENERIC-NEXT:    movl %edi, -{{[0-9]+}}(%rsp) # sched: [1:1.00]
 ; GENERIC-NEXT:    ldmxcsr -{{[0-9]+}}(%rsp) # sched: [5:1.00]
 ; GENERIC-NEXT:    retq # sched: [1:1.00]
 ;
@@ -1957,13 +1957,13 @@ define void @test_ldmxcsr(i32 %a0) {
 ;
 ; SANDY-SSE-LABEL: test_ldmxcsr:
 ; SANDY-SSE:       # %bb.0:
-; SANDY-SSE-NEXT:    movl %edi, -{{[0-9]+}}(%rsp) # sched: [5:1.00]
+; SANDY-SSE-NEXT:    movl %edi, -{{[0-9]+}}(%rsp) # sched: [1:1.00]
 ; SANDY-SSE-NEXT:    ldmxcsr -{{[0-9]+}}(%rsp) # sched: [5:1.00]
 ; SANDY-SSE-NEXT:    retq # sched: [1:1.00]
 ;
 ; SANDY-LABEL: test_ldmxcsr:
 ; SANDY:       # %bb.0:
-; SANDY-NEXT:    movl %edi, -{{[0-9]+}}(%rsp) # sched: [5:1.00]
+; SANDY-NEXT:    movl %edi, -{{[0-9]+}}(%rsp) # sched: [1:1.00]
 ; SANDY-NEXT:    vldmxcsr -{{[0-9]+}}(%rsp) # sched: [5:1.00]
 ; SANDY-NEXT:    retq # sched: [1:1.00]
 ;
@@ -2487,7 +2487,7 @@ define void @test_movaps(<4 x float> *%a0, <4 x float> *%a1) {
 ; GENERIC:       # %bb.0:
 ; GENERIC-NEXT:    movaps (%rdi), %xmm0 # sched: [6:0.50]
 ; GENERIC-NEXT:    addps %xmm0, %xmm0 # sched: [3:1.00]
-; GENERIC-NEXT:    movaps %xmm0, (%rsi) # sched: [5:1.00]
+; GENERIC-NEXT:    movaps %xmm0, (%rsi) # sched: [1:1.00]
 ; GENERIC-NEXT:    retq # sched: [1:1.00]
 ;
 ; ATOM-LABEL: test_movaps:
@@ -2508,14 +2508,14 @@ define void @test_movaps(<4 x float> *%a0, <4 x float> *%a1) {
 ; SANDY-SSE:       # %bb.0:
 ; SANDY-SSE-NEXT:    movaps (%rdi), %xmm0 # sched: [6:0.50]
 ; SANDY-SSE-NEXT:    addps %xmm0, %xmm0 # sched: [3:1.00]
-; SANDY-SSE-NEXT:    movaps %xmm0, (%rsi) # sched: [5:1.00]
+; SANDY-SSE-NEXT:    movaps %xmm0, (%rsi) # sched: [1:1.00]
 ; SANDY-SSE-NEXT:    retq # sched: [1:1.00]
 ;
 ; SANDY-LABEL: test_movaps:
 ; SANDY:       # %bb.0:
 ; SANDY-NEXT:    vmovaps (%rdi), %xmm0 # sched: [6:0.50]
 ; SANDY-NEXT:    vaddps %xmm0, %xmm0, %xmm0 # sched: [3:1.00]
-; SANDY-NEXT:    vmovaps %xmm0, (%rsi) # sched: [5:1.00]
+; SANDY-NEXT:    vmovaps %xmm0, (%rsi) # sched: [1:1.00]
 ; SANDY-NEXT:    retq # sched: [1:1.00]
 ;
 ; HASWELL-SSE-LABEL: test_movaps:
@@ -2712,7 +2712,7 @@ define void @test_movhps(<4 x float> %a0, <4 x float> %a1, x86_mmx *%a2) {
 ; GENERIC-NEXT:    movhpd {{.*#+}} xmm1 = xmm1[0],mem[0] sched: [7:1.00]
 ; GENERIC-NEXT:    addps %xmm0, %xmm1 # sched: [3:1.00]
 ; GENERIC-NEXT:    movhlps {{.*#+}} xmm1 = xmm1[1,1] sched: [1:1.00]
-; GENERIC-NEXT:    movlps %xmm1, (%rdi) # sched: [5:1.00]
+; GENERIC-NEXT:    movlps %xmm1, (%rdi) # sched: [1:1.00]
 ; GENERIC-NEXT:    retq # sched: [1:1.00]
 ;
 ; ATOM-LABEL: test_movhps:
@@ -2736,7 +2736,7 @@ define void @test_movhps(<4 x float> %a0, <4 x float> %a1, x86_mmx *%a2) {
 ; SANDY-SSE-NEXT:    movhpd {{.*#+}} xmm1 = xmm1[0],mem[0] sched: [7:1.00]
 ; SANDY-SSE-NEXT:    addps %xmm0, %xmm1 # sched: [3:1.00]
 ; SANDY-SSE-NEXT:    movhlps {{.*#+}} xmm1 = xmm1[1,1] sched: [1:1.00]
-; SANDY-SSE-NEXT:    movlps %xmm1, (%rdi) # sched: [5:1.00]
+; SANDY-SSE-NEXT:    movlps %xmm1, (%rdi) # sched: [1:1.00]
 ; SANDY-SSE-NEXT:    retq # sched: [1:1.00]
 ;
 ; SANDY-LABEL: test_movhps:
@@ -2959,7 +2959,7 @@ define void @test_movlps(<4 x float> %a0, <4 x float> %a1, x86_mmx *%a2) {
 ; GENERIC:       # %bb.0:
 ; GENERIC-NEXT:    movlpd {{.*#+}} xmm1 = mem[0],xmm1[1] sched: [7:1.00]
 ; GENERIC-NEXT:    addps %xmm0, %xmm1 # sched: [3:1.00]
-; GENERIC-NEXT:    movlps %xmm1, (%rdi) # sched: [5:1.00]
+; GENERIC-NEXT:    movlps %xmm1, (%rdi) # sched: [1:1.00]
 ; GENERIC-NEXT:    retq # sched: [1:1.00]
 ;
 ; ATOM-LABEL: test_movlps:
@@ -2980,14 +2980,14 @@ define void @test_movlps(<4 x float> %a0, <4 x float> %a1, x86_mmx *%a2) {
 ; SANDY-SSE:       # %bb.0:
 ; SANDY-SSE-NEXT:    movlpd {{.*#+}} xmm1 = mem[0],xmm1[1] sched: [7:1.00]
 ; SANDY-SSE-NEXT:    addps %xmm0, %xmm1 # sched: [3:1.00]
-; SANDY-SSE-NEXT:    movlps %xmm1, (%rdi) # sched: [5:1.00]
+; SANDY-SSE-NEXT:    movlps %xmm1, (%rdi) # sched: [1:1.00]
 ; SANDY-SSE-NEXT:    retq # sched: [1:1.00]
 ;
 ; SANDY-LABEL: test_movlps:
 ; SANDY:       # %bb.0:
 ; SANDY-NEXT:    vmovlpd {{.*#+}} xmm1 = mem[0],xmm1[1] sched: [7:1.00]
 ; SANDY-NEXT:    vaddps %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
-; SANDY-NEXT:    vmovlps %xmm0, (%rdi) # sched: [5:1.00]
+; SANDY-NEXT:    vmovlps %xmm0, (%rdi) # sched: [1:1.00]
 ; SANDY-NEXT:    retq # sched: [1:1.00]
 ;
 ; HASWELL-SSE-LABEL: test_movlps:
@@ -3178,7 +3178,7 @@ declare i32 @llvm.x86.sse.movmsk.ps(<4 x float>) nounwind readnone
 define void @test_movntps(<4 x float> %a0, <4 x float> *%a1) {
 ; GENERIC-LABEL: test_movntps:
 ; GENERIC:       # %bb.0:
-; GENERIC-NEXT:    movntps %xmm0, (%rdi) # sched: [5:1.00]
+; GENERIC-NEXT:    movntps %xmm0, (%rdi) # sched: [1:1.00]
 ; GENERIC-NEXT:    retq # sched: [1:1.00]
 ;
 ; ATOM-LABEL: test_movntps:
@@ -3199,12 +3199,12 @@ define void @test_movntps(<4 x float> %a0, <4 x float> *%a1) {
 ;
 ; SANDY-SSE-LABEL: test_movntps:
 ; SANDY-SSE:       # %bb.0:
-; SANDY-SSE-NEXT:    movntps %xmm0, (%rdi) # sched: [5:1.00]
+; SANDY-SSE-NEXT:    movntps %xmm0, (%rdi) # sched: [1:1.00]
 ; SANDY-SSE-NEXT:    retq # sched: [1:1.00]
 ;
 ; SANDY-LABEL: test_movntps:
 ; SANDY:       # %bb.0:
-; SANDY-NEXT:    vmovntps %xmm0, (%rdi) # sched: [5:1.00]
+; SANDY-NEXT:    vmovntps %xmm0, (%rdi) # sched: [1:1.00]
 ; SANDY-NEXT:    retq # sched: [1:1.00]
 ;
 ; HASWELL-SSE-LABEL: test_movntps:
@@ -3275,7 +3275,7 @@ define void @test_movss_mem(float* %a0, float* %a1) {
 ; GENERIC:       # %bb.0:
 ; GENERIC-NEXT:    movss {{.*#+}} xmm0 = mem[0],zero,zero,zero sched: [6:0.50]
 ; GENERIC-NEXT:    addss %xmm0, %xmm0 # sched: [3:1.00]
-; GENERIC-NEXT:    movss %xmm0, (%rsi) # sched: [5:1.00]
+; GENERIC-NEXT:    movss %xmm0, (%rsi) # sched: [1:1.00]
 ; GENERIC-NEXT:    retq # sched: [1:1.00]
 ;
 ; ATOM-LABEL: test_movss_mem:
@@ -3296,14 +3296,14 @@ define void @test_movss_mem(float* %a0, float* %a1) {
 ; SANDY-SSE:       # %bb.0:
 ; SANDY-SSE-NEXT:    movss {{.*#+}} xmm0 = mem[0],zero,zero,zero sched: [6:0.50]
 ; SANDY-SSE-NEXT:    addss %xmm0, %xmm0 # sched: [3:1.00]
-; SANDY-SSE-NEXT:    movss %xmm0, (%rsi) # sched: [5:1.00]
+; SANDY-SSE-NEXT:    movss %xmm0, (%rsi) # sched: [1:1.00]
 ; SANDY-SSE-NEXT:    retq # sched: [1:1.00]
 ;
 ; SANDY-LABEL: test_movss_mem:
 ; SANDY:       # %bb.0:
 ; SANDY-NEXT:    vmovss {{.*#+}} xmm0 = mem[0],zero,zero,zero sched: [6:0.50]
 ; SANDY-NEXT:    vaddss %xmm0, %xmm0, %xmm0 # sched: [3:1.00]
-; SANDY-NEXT:    vmovss %xmm0, (%rsi) # sched: [5:1.00]
+; SANDY-NEXT:    vmovss %xmm0, (%rsi) # sched: [1:1.00]
 ; SANDY-NEXT:    retq # sched: [1:1.00]
 ;
 ; HASWELL-SSE-LABEL: test_movss_mem:
@@ -3495,7 +3495,7 @@ define void @test_movups(<4 x float> *%a0, <4 x float> *%a1) {
 ; GENERIC:       # %bb.0:
 ; GENERIC-NEXT:    movups (%rdi), %xmm0 # sched: [6:0.50]
 ; GENERIC-NEXT:    addps %xmm0, %xmm0 # sched: [3:1.00]
-; GENERIC-NEXT:    movups %xmm0, (%rsi) # sched: [5:1.00]
+; GENERIC-NEXT:    movups %xmm0, (%rsi) # sched: [1:1.00]
 ; GENERIC-NEXT:    retq # sched: [1:1.00]
 ;
 ; ATOM-LABEL: test_movups:
@@ -3516,14 +3516,14 @@ define void @test_movups(<4 x float> *%a0, <4 x float> *%a1) {
 ; SANDY-SSE:       # %bb.0:
 ; SANDY-SSE-NEXT:    movups (%rdi), %xmm0 # sched: [6:0.50]
 ; SANDY-SSE-NEXT:    addps %xmm0, %xmm0 # sched: [3:1.00]
-; SANDY-SSE-NEXT:    movups %xmm0, (%rsi) # sched: [5:1.00]
+; SANDY-SSE-NEXT:    movups %xmm0, (%rsi) # sched: [1:1.00]
 ; SANDY-SSE-NEXT:    retq # sched: [1:1.00]
 ;
 ; SANDY-LABEL: test_movups:
 ; SANDY:       # %bb.0:
 ; SANDY-NEXT:    vmovups (%rdi), %xmm0 # sched: [6:0.50]
 ; SANDY-NEXT:    vaddps %xmm0, %xmm0, %xmm0 # sched: [3:1.00]
-; SANDY-NEXT:    vmovups %xmm0, (%rsi) # sched: [5:1.00]
+; SANDY-NEXT:    vmovups %xmm0, (%rsi) # sched: [1:1.00]
 ; SANDY-NEXT:    retq # sched: [1:1.00]
 ;
 ; HASWELL-SSE-LABEL: test_movups:
@@ -4900,8 +4900,8 @@ define <4 x float> @test_shufps(<4 x float> %a0, <4 x float> %a1, <4 x float> *%
 define <4 x float> @test_sqrtps(<4 x float> %a0, <4 x float> *%a1) {
 ; GENERIC-LABEL: test_sqrtps:
 ; GENERIC:       # %bb.0:
-; GENERIC-NEXT:    sqrtps %xmm0, %xmm1 # sched: [14:1.00]
-; GENERIC-NEXT:    sqrtps (%rdi), %xmm0 # sched: [20:1.00]
+; GENERIC-NEXT:    sqrtps %xmm0, %xmm1 # sched: [14:14.00]
+; GENERIC-NEXT:    sqrtps (%rdi), %xmm0 # sched: [20:14.00]
 ; GENERIC-NEXT:    addps %xmm1, %xmm0 # sched: [3:1.00]
 ; GENERIC-NEXT:    retq # sched: [1:1.00]
 ;
@@ -4914,79 +4914,79 @@ define <4 x float> @test_sqrtps(<4 x float> %a0, <4 x float> *%a1) {
 ;
 ; SLM-LABEL: test_sqrtps:
 ; SLM:       # %bb.0:
-; SLM-NEXT:    sqrtps (%rdi), %xmm1 # sched: [18:1.00]
-; SLM-NEXT:    sqrtps %xmm0, %xmm0 # sched: [15:1.00]
+; SLM-NEXT:    sqrtps (%rdi), %xmm1 # sched: [44:40.00]
+; SLM-NEXT:    sqrtps %xmm0, %xmm0 # sched: [41:40.00]
 ; SLM-NEXT:    addps %xmm0, %xmm1 # sched: [3:1.00]
 ; SLM-NEXT:    movaps %xmm1, %xmm0 # sched: [1:0.50]
 ; SLM-NEXT:    retq # sched: [4:1.00]
 ;
 ; SANDY-SSE-LABEL: test_sqrtps:
 ; SANDY-SSE:       # %bb.0:
-; SANDY-SSE-NEXT:    sqrtps %xmm0, %xmm1 # sched: [14:1.00]
-; SANDY-SSE-NEXT:    sqrtps (%rdi), %xmm0 # sched: [20:1.00]
+; SANDY-SSE-NEXT:    sqrtps %xmm0, %xmm1 # sched: [14:14.00]
+; SANDY-SSE-NEXT:    sqrtps (%rdi), %xmm0 # sched: [20:14.00]
 ; SANDY-SSE-NEXT:    addps %xmm1, %xmm0 # sched: [3:1.00]
 ; SANDY-SSE-NEXT:    retq # sched: [1:1.00]
 ;
 ; SANDY-LABEL: test_sqrtps:
 ; SANDY:       # %bb.0:
-; SANDY-NEXT:    vsqrtps %xmm0, %xmm0 # sched: [14:1.00]
-; SANDY-NEXT:    vsqrtps (%rdi), %xmm1 # sched: [20:1.00]
+; SANDY-NEXT:    vsqrtps %xmm0, %xmm0 # sched: [14:14.00]
+; SANDY-NEXT:    vsqrtps (%rdi), %xmm1 # sched: [20:14.00]
 ; SANDY-NEXT:    vaddps %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
 ; SANDY-NEXT:    retq # sched: [1:1.00]
 ;
 ; HASWELL-SSE-LABEL: test_sqrtps:
 ; HASWELL-SSE:       # %bb.0:
-; HASWELL-SSE-NEXT:    sqrtps %xmm0, %xmm1 # sched: [11:1.00]
-; HASWELL-SSE-NEXT:    sqrtps (%rdi), %xmm0 # sched: [17:1.00]
+; HASWELL-SSE-NEXT:    sqrtps %xmm0, %xmm1 # sched: [11:7.00]
+; HASWELL-SSE-NEXT:    sqrtps (%rdi), %xmm0 # sched: [17:7.00]
 ; HASWELL-SSE-NEXT:    addps %xmm1, %xmm0 # sched: [3:1.00]
 ; HASWELL-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; HASWELL-LABEL: test_sqrtps:
 ; HASWELL:       # %bb.0:
-; HASWELL-NEXT:    vsqrtps %xmm0, %xmm0 # sched: [11:1.00]
-; HASWELL-NEXT:    vsqrtps (%rdi), %xmm1 # sched: [17:1.00]
+; HASWELL-NEXT:    vsqrtps %xmm0, %xmm0 # sched: [11:7.00]
+; HASWELL-NEXT:    vsqrtps (%rdi), %xmm1 # sched: [17:7.00]
 ; HASWELL-NEXT:    vaddps %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
 ; HASWELL-NEXT:    retq # sched: [7:1.00]
 ;
 ; BROADWELL-SSE-LABEL: test_sqrtps:
 ; BROADWELL-SSE:       # %bb.0:
-; BROADWELL-SSE-NEXT:    sqrtps %xmm0, %xmm1 # sched: [11:1.00]
-; BROADWELL-SSE-NEXT:    sqrtps (%rdi), %xmm0 # sched: [16:1.00]
+; BROADWELL-SSE-NEXT:    sqrtps %xmm0, %xmm1 # sched: [11:7.00]
+; BROADWELL-SSE-NEXT:    sqrtps (%rdi), %xmm0 # sched: [16:7.00]
 ; BROADWELL-SSE-NEXT:    addps %xmm1, %xmm0 # sched: [3:1.00]
 ; BROADWELL-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; BROADWELL-LABEL: test_sqrtps:
 ; BROADWELL:       # %bb.0:
-; BROADWELL-NEXT:    vsqrtps %xmm0, %xmm0 # sched: [11:1.00]
-; BROADWELL-NEXT:    vsqrtps (%rdi), %xmm1 # sched: [16:1.00]
+; BROADWELL-NEXT:    vsqrtps %xmm0, %xmm0 # sched: [11:7.00]
+; BROADWELL-NEXT:    vsqrtps (%rdi), %xmm1 # sched: [16:7.00]
 ; BROADWELL-NEXT:    vaddps %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
 ; BROADWELL-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKYLAKE-SSE-LABEL: test_sqrtps:
 ; SKYLAKE-SSE:       # %bb.0:
-; SKYLAKE-SSE-NEXT:    sqrtps %xmm0, %xmm1 # sched: [12:1.00]
-; SKYLAKE-SSE-NEXT:    sqrtps (%rdi), %xmm0 # sched: [18:1.00]
+; SKYLAKE-SSE-NEXT:    sqrtps %xmm0, %xmm1 # sched: [12:3.00]
+; SKYLAKE-SSE-NEXT:    sqrtps (%rdi), %xmm0 # sched: [18:3.00]
 ; SKYLAKE-SSE-NEXT:    addps %xmm1, %xmm0 # sched: [4:0.50]
 ; SKYLAKE-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKYLAKE-LABEL: test_sqrtps:
 ; SKYLAKE:       # %bb.0:
-; SKYLAKE-NEXT:    vsqrtps %xmm0, %xmm0 # sched: [12:1.00]
-; SKYLAKE-NEXT:    vsqrtps (%rdi), %xmm1 # sched: [18:1.00]
+; SKYLAKE-NEXT:    vsqrtps %xmm0, %xmm0 # sched: [12:3.00]
+; SKYLAKE-NEXT:    vsqrtps (%rdi), %xmm1 # sched: [18:3.00]
 ; SKYLAKE-NEXT:    vaddps %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKYLAKE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-SSE-LABEL: test_sqrtps:
 ; SKX-SSE:       # %bb.0:
-; SKX-SSE-NEXT:    sqrtps %xmm0, %xmm1 # sched: [12:1.00]
-; SKX-SSE-NEXT:    sqrtps (%rdi), %xmm0 # sched: [18:1.00]
+; SKX-SSE-NEXT:    sqrtps %xmm0, %xmm1 # sched: [12:3.00]
+; SKX-SSE-NEXT:    sqrtps (%rdi), %xmm0 # sched: [18:3.00]
 ; SKX-SSE-NEXT:    addps %xmm1, %xmm0 # sched: [4:0.33]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_sqrtps:
 ; SKX:       # %bb.0:
-; SKX-NEXT:    vsqrtps %xmm0, %xmm0 # sched: [12:1.00]
-; SKX-NEXT:    vsqrtps (%rdi), %xmm1 # sched: [18:1.00]
+; SKX-NEXT:    vsqrtps %xmm0, %xmm0 # sched: [12:3.00]
+; SKX-NEXT:    vsqrtps (%rdi), %xmm1 # sched: [18:3.00]
 ; SKX-NEXT:    vaddps %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
@@ -5030,9 +5030,9 @@ declare <4 x float> @llvm.x86.sse.sqrt.ps(<4 x float>) nounwind readnone
 define <4 x float> @test_sqrtss(<4 x float> %a0, <4 x float> *%a1) {
 ; GENERIC-LABEL: test_sqrtss:
 ; GENERIC:       # %bb.0:
-; GENERIC-NEXT:    sqrtss %xmm0, %xmm0 # sched: [14:1.00]
+; GENERIC-NEXT:    sqrtss %xmm0, %xmm0 # sched: [14:14.00]
 ; GENERIC-NEXT:    movaps (%rdi), %xmm1 # sched: [6:0.50]
-; GENERIC-NEXT:    sqrtss %xmm1, %xmm1 # sched: [14:1.00]
+; GENERIC-NEXT:    sqrtss %xmm1, %xmm1 # sched: [14:14.00]
 ; GENERIC-NEXT:    addps %xmm1, %xmm0 # sched: [3:1.00]
 ; GENERIC-NEXT:    retq # sched: [1:1.00]
 ;
@@ -5047,88 +5047,88 @@ define <4 x float> @test_sqrtss(<4 x float> %a0, <4 x float> *%a1) {
 ; SLM-LABEL: test_sqrtss:
 ; SLM:       # %bb.0:
 ; SLM-NEXT:    movaps (%rdi), %xmm1 # sched: [3:1.00]
-; SLM-NEXT:    sqrtss %xmm0, %xmm0 # sched: [15:1.00]
-; SLM-NEXT:    sqrtss %xmm1, %xmm1 # sched: [15:1.00]
+; SLM-NEXT:    sqrtss %xmm0, %xmm0 # sched: [20:20.00]
+; SLM-NEXT:    sqrtss %xmm1, %xmm1 # sched: [20:20.00]
 ; SLM-NEXT:    addps %xmm1, %xmm0 # sched: [3:1.00]
 ; SLM-NEXT:    retq # sched: [4:1.00]
 ;
 ; SANDY-SSE-LABEL: test_sqrtss:
 ; SANDY-SSE:       # %bb.0:
-; SANDY-SSE-NEXT:    sqrtss %xmm0, %xmm0 # sched: [14:1.00]
+; SANDY-SSE-NEXT:    sqrtss %xmm0, %xmm0 # sched: [14:14.00]
 ; SANDY-SSE-NEXT:    movaps (%rdi), %xmm1 # sched: [6:0.50]
-; SANDY-SSE-NEXT:    sqrtss %xmm1, %xmm1 # sched: [14:1.00]
+; SANDY-SSE-NEXT:    sqrtss %xmm1, %xmm1 # sched: [14:14.00]
 ; SANDY-SSE-NEXT:    addps %xmm1, %xmm0 # sched: [3:1.00]
 ; SANDY-SSE-NEXT:    retq # sched: [1:1.00]
 ;
 ; SANDY-LABEL: test_sqrtss:
 ; SANDY:       # %bb.0:
-; SANDY-NEXT:    vsqrtss %xmm0, %xmm0, %xmm0 # sched: [14:1.00]
+; SANDY-NEXT:    vsqrtss %xmm0, %xmm0, %xmm0 # sched: [14:14.00]
 ; SANDY-NEXT:    vmovaps (%rdi), %xmm1 # sched: [6:0.50]
-; SANDY-NEXT:    vsqrtss %xmm1, %xmm1, %xmm1 # sched: [14:1.00]
+; SANDY-NEXT:    vsqrtss %xmm1, %xmm1, %xmm1 # sched: [14:14.00]
 ; SANDY-NEXT:    vaddps %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
 ; SANDY-NEXT:    retq # sched: [1:1.00]
 ;
 ; HASWELL-SSE-LABEL: test_sqrtss:
 ; HASWELL-SSE:       # %bb.0:
-; HASWELL-SSE-NEXT:    sqrtss %xmm0, %xmm0 # sched: [11:1.00]
+; HASWELL-SSE-NEXT:    sqrtss %xmm0, %xmm0 # sched: [11:7.00]
 ; HASWELL-SSE-NEXT:    movaps (%rdi), %xmm1 # sched: [6:0.50]
-; HASWELL-SSE-NEXT:    sqrtss %xmm1, %xmm1 # sched: [11:1.00]
+; HASWELL-SSE-NEXT:    sqrtss %xmm1, %xmm1 # sched: [11:7.00]
 ; HASWELL-SSE-NEXT:    addps %xmm1, %xmm0 # sched: [3:1.00]
 ; HASWELL-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; HASWELL-LABEL: test_sqrtss:
 ; HASWELL:       # %bb.0:
-; HASWELL-NEXT:    vsqrtss %xmm0, %xmm0, %xmm0 # sched: [11:1.00]
+; HASWELL-NEXT:    vsqrtss %xmm0, %xmm0, %xmm0 # sched: [11:7.00]
 ; HASWELL-NEXT:    vmovaps (%rdi), %xmm1 # sched: [6:0.50]
-; HASWELL-NEXT:    vsqrtss %xmm1, %xmm1, %xmm1 # sched: [11:1.00]
+; HASWELL-NEXT:    vsqrtss %xmm1, %xmm1, %xmm1 # sched: [11:7.00]
 ; HASWELL-NEXT:    vaddps %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
 ; HASWELL-NEXT:    retq # sched: [7:1.00]
 ;
 ; BROADWELL-SSE-LABEL: test_sqrtss:
 ; BROADWELL-SSE:       # %bb.0:
-; BROADWELL-SSE-NEXT:    sqrtss %xmm0, %xmm0 # sched: [11:1.00]
+; BROADWELL-SSE-NEXT:    sqrtss %xmm0, %xmm0 # sched: [11:4.00]
 ; BROADWELL-SSE-NEXT:    movaps (%rdi), %xmm1 # sched: [5:0.50]
-; BROADWELL-SSE-NEXT:    sqrtss %xmm1, %xmm1 # sched: [11:1.00]
+; BROADWELL-SSE-NEXT:    sqrtss %xmm1, %xmm1 # sched: [11:4.00]
 ; BROADWELL-SSE-NEXT:    addps %xmm1, %xmm0 # sched: [3:1.00]
 ; BROADWELL-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; BROADWELL-LABEL: test_sqrtss:
 ; BROADWELL:       # %bb.0:
-; BROADWELL-NEXT:    vsqrtss %xmm0, %xmm0, %xmm0 # sched: [11:1.00]
+; BROADWELL-NEXT:    vsqrtss %xmm0, %xmm0, %xmm0 # sched: [11:4.00]
 ; BROADWELL-NEXT:    vmovaps (%rdi), %xmm1 # sched: [5:0.50]
-; BROADWELL-NEXT:    vsqrtss %xmm1, %xmm1, %xmm1 # sched: [11:1.00]
+; BROADWELL-NEXT:    vsqrtss %xmm1, %xmm1, %xmm1 # sched: [11:4.00]
 ; BROADWELL-NEXT:    vaddps %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
 ; BROADWELL-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKYLAKE-SSE-LABEL: test_sqrtss:
 ; SKYLAKE-SSE:       # %bb.0:
-; SKYLAKE-SSE-NEXT:    sqrtss %xmm0, %xmm0 # sched: [12:1.00]
+; SKYLAKE-SSE-NEXT:    sqrtss %xmm0, %xmm0 # sched: [12:3.00]
 ; SKYLAKE-SSE-NEXT:    movaps (%rdi), %xmm1 # sched: [6:0.50]
-; SKYLAKE-SSE-NEXT:    sqrtss %xmm1, %xmm1 # sched: [12:1.00]
+; SKYLAKE-SSE-NEXT:    sqrtss %xmm1, %xmm1 # sched: [12:3.00]
 ; SKYLAKE-SSE-NEXT:    addps %xmm1, %xmm0 # sched: [4:0.50]
 ; SKYLAKE-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKYLAKE-LABEL: test_sqrtss:
 ; SKYLAKE:       # %bb.0:
-; SKYLAKE-NEXT:    vsqrtss %xmm0, %xmm0, %xmm0 # sched: [12:1.00]
+; SKYLAKE-NEXT:    vsqrtss %xmm0, %xmm0, %xmm0 # sched: [12:3.00]
 ; SKYLAKE-NEXT:    vmovaps (%rdi), %xmm1 # sched: [6:0.50]
-; SKYLAKE-NEXT:    vsqrtss %xmm1, %xmm1, %xmm1 # sched: [12:1.00]
+; SKYLAKE-NEXT:    vsqrtss %xmm1, %xmm1, %xmm1 # sched: [12:3.00]
 ; SKYLAKE-NEXT:    vaddps %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKYLAKE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-SSE-LABEL: test_sqrtss:
 ; SKX-SSE:       # %bb.0:
-; SKX-SSE-NEXT:    sqrtss %xmm0, %xmm0 # sched: [12:1.00]
+; SKX-SSE-NEXT:    sqrtss %xmm0, %xmm0 # sched: [12:3.00]
 ; SKX-SSE-NEXT:    movaps (%rdi), %xmm1 # sched: [6:0.50]
-; SKX-SSE-NEXT:    sqrtss %xmm1, %xmm1 # sched: [12:1.00]
+; SKX-SSE-NEXT:    sqrtss %xmm1, %xmm1 # sched: [12:3.00]
 ; SKX-SSE-NEXT:    addps %xmm1, %xmm0 # sched: [4:0.33]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_sqrtss:
 ; SKX:       # %bb.0:
-; SKX-NEXT:    vsqrtss %xmm0, %xmm0, %xmm0 # sched: [12:1.00]
+; SKX-NEXT:    vsqrtss %xmm0, %xmm0, %xmm0 # sched: [12:3.00]
 ; SKX-NEXT:    vmovaps (%rdi), %xmm1 # sched: [6:0.50]
-; SKX-NEXT:    vsqrtss %xmm1, %xmm1, %xmm1 # sched: [12:1.00]
+; SKX-NEXT:    vsqrtss %xmm1, %xmm1, %xmm1 # sched: [12:3.00]
 ; SKX-NEXT:    vaddps %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;

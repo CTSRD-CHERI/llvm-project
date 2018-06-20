@@ -49,7 +49,8 @@ XRayArgs::XRayArgs(const ToolChain &TC, const ArgList &Args) {
         D.Diag(diag::err_drv_clang_unsupported)
             << (std::string(XRayInstrumentOption) + " on " + Triple.str());
       }
-    } else if (Triple.getOS() == llvm::Triple::FreeBSD) {
+    } else if (Triple.getOS() == llvm::Triple::FreeBSD ||
+               Triple.getOS() == llvm::Triple::OpenBSD) {
         if (Triple.getArch() != llvm::Triple::x86_64) {
           D.Diag(diag::err_drv_clang_unsupported)
               << (std::string(XRayInstrumentOption) + " on " + Triple.str());
@@ -74,6 +75,10 @@ XRayArgs::XRayArgs(const ToolChain &TC, const ArgList &Args) {
     if (Args.hasFlag(options::OPT_fxray_always_emit_customevents,
                      options::OPT_fnoxray_always_emit_customevents, false))
       XRayAlwaysEmitCustomEvents = true;
+
+    if (!Args.hasFlag(options::OPT_fxray_link_deps,
+                      options::OPT_fnoxray_link_deps, true))
+      XRayRT = false;
 
     // Validate the always/never attribute files. We also make sure that they
     // are treated as actual dependencies.

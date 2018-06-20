@@ -7,9 +7,29 @@ define float @neg_constant(float %x) {
 ; CHECK-NEXT:    [[MUL:%.*]] = fmul ninf float [[X:%.*]], -2.000000e+01
 ; CHECK-NEXT:    ret float [[MUL]]
 ;
-  %sub = fsub float -0.000000e+00, %x
+  %sub = fsub float -0.0, %x
   %mul = fmul ninf float %sub, 2.0e+1
   ret float %mul
+}
+
+define <2 x float> @neg_constant_vec(<2 x float> %x) {
+; CHECK-LABEL: @neg_constant_vec(
+; CHECK-NEXT:    [[MUL:%.*]] = fmul ninf <2 x float> [[X:%.*]], <float -2.000000e+00, float -3.000000e+00>
+; CHECK-NEXT:    ret <2 x float> [[MUL]]
+;
+  %sub = fsub <2 x float> <float -0.0, float -0.0>, %x
+  %mul = fmul ninf <2 x float> %sub, <float 2.0, float 3.0>
+  ret <2 x float> %mul
+}
+
+define <2 x float> @neg_constant_vec_undef(<2 x float> %x) {
+; CHECK-LABEL: @neg_constant_vec_undef(
+; CHECK-NEXT:    [[MUL:%.*]] = fmul ninf <2 x float> [[X:%.*]], <float -2.000000e+00, float -3.000000e+00>
+; CHECK-NEXT:    ret <2 x float> [[MUL]]
+;
+  %sub = fsub <2 x float> <float undef, float -0.0>, %x
+  %mul = fmul ninf <2 x float> %sub, <float 2.0, float 3.0>
+  ret <2 x float> %mul
 }
 
 ; (0.0 - X) * C => X * -C
@@ -18,7 +38,7 @@ define float @neg_nsz_constant(float %x) {
 ; CHECK-NEXT:    [[MUL:%.*]] = fmul nnan float [[X:%.*]], -2.000000e+01
 ; CHECK-NEXT:    ret float [[MUL]]
 ;
-  %sub = fsub nsz float 0.000000e+00, %x
+  %sub = fsub nsz float 0.0, %x
   %mul = fmul nnan float %sub, 2.0e+1
   ret float %mul
 }
@@ -29,10 +49,32 @@ define float @neg_neg(float %x, float %y) {
 ; CHECK-NEXT:    [[MUL:%.*]] = fmul arcp float [[X:%.*]], [[Y:%.*]]
 ; CHECK-NEXT:    ret float [[MUL]]
 ;
-  %sub1 = fsub float -0.000000e+00, %x
-  %sub2 = fsub float -0.000000e+00, %y
+  %sub1 = fsub float -0.0, %x
+  %sub2 = fsub float -0.0, %y
   %mul = fmul arcp float %sub1, %sub2
   ret float %mul
+}
+
+define <2 x float> @neg_neg_vec(<2 x float> %x, <2 x float> %y) {
+; CHECK-LABEL: @neg_neg_vec(
+; CHECK-NEXT:    [[MUL:%.*]] = fmul arcp <2 x float> [[X:%.*]], [[Y:%.*]]
+; CHECK-NEXT:    ret <2 x float> [[MUL]]
+;
+  %sub1 = fsub <2 x float> <float -0.0, float -0.0>, %x
+  %sub2 = fsub <2 x float> <float -0.0, float -0.0>, %y
+  %mul = fmul arcp <2 x float> %sub1, %sub2
+  ret <2 x float> %mul
+}
+
+define <2 x float> @neg_neg_vec_undef(<2 x float> %x, <2 x float> %y) {
+; CHECK-LABEL: @neg_neg_vec_undef(
+; CHECK-NEXT:    [[MUL:%.*]] = fmul arcp <2 x float> [[X:%.*]], [[Y:%.*]]
+; CHECK-NEXT:    ret <2 x float> [[MUL]]
+;
+  %sub1 = fsub <2 x float> <float -0.0, float undef>, %x
+  %sub2 = fsub <2 x float> <float undef, float -0.0>, %y
+  %mul = fmul arcp <2 x float> %sub1, %sub2
+  ret <2 x float> %mul
 }
 
 ; (0.0 - X) * (0.0 - Y) => X * Y
@@ -41,8 +83,8 @@ define float @neg_neg_nsz(float %x, float %y) {
 ; CHECK-NEXT:    [[MUL:%.*]] = fmul afn float [[X:%.*]], [[Y:%.*]]
 ; CHECK-NEXT:    ret float [[MUL]]
 ;
-  %sub1 = fsub nsz float 0.000000e+00, %x
-  %sub2 = fsub nsz float 0.000000e+00, %y
+  %sub1 = fsub nsz float 0.0, %x
+  %sub2 = fsub nsz float 0.0, %y
   %mul = fmul afn float %sub1, %sub2
   ret float %mul
 }
@@ -58,8 +100,8 @@ define float @neg_neg_multi_use(float %x, float %y) {
 ; CHECK-NEXT:    call void @use_f32(float [[NY]])
 ; CHECK-NEXT:    ret float [[MUL]]
 ;
-  %nx = fsub float -0.000000e+00, %x
-  %ny = fsub float -0.000000e+00, %y
+  %nx = fsub float -0.0, %x
+  %ny = fsub float -0.0, %y
   %mul = fmul afn float %nx, %ny
   call void @use_f32(float %nx)
   call void @use_f32(float %ny)
@@ -73,9 +115,31 @@ define float @neg_sink(float %x, float %y) {
 ; CHECK-NEXT:    [[MUL:%.*]] = fsub float -0.000000e+00, [[TMP1]]
 ; CHECK-NEXT:    ret float [[MUL]]
 ;
-  %sub1 = fsub float -0.000000e+00, %x
-  %mul = fmul float %sub1, %y
+  %sub = fsub float -0.0, %x
+  %mul = fmul float %sub, %y
   ret float %mul
+}
+
+define <2 x float> @neg_sink_vec(<2 x float> %x, <2 x float> %y) {
+; CHECK-LABEL: @neg_sink_vec(
+; CHECK-NEXT:    [[TMP1:%.*]] = fmul <2 x float> [[X:%.*]], [[Y:%.*]]
+; CHECK-NEXT:    [[MUL:%.*]] = fsub <2 x float> <float -0.000000e+00, float -0.000000e+00>, [[TMP1]]
+; CHECK-NEXT:    ret <2 x float> [[MUL]]
+;
+  %sub = fsub <2 x float> <float -0.0, float -0.0>, %x
+  %mul = fmul <2 x float> %sub, %y
+  ret <2 x float> %mul
+}
+
+define <2 x float> @neg_sink_vec_undef(<2 x float> %x, <2 x float> %y) {
+; CHECK-LABEL: @neg_sink_vec_undef(
+; CHECK-NEXT:    [[TMP1:%.*]] = fmul <2 x float> [[X:%.*]], [[Y:%.*]]
+; CHECK-NEXT:    [[MUL:%.*]] = fsub <2 x float> <float -0.000000e+00, float -0.000000e+00>, [[TMP1]]
+; CHECK-NEXT:    ret <2 x float> [[MUL]]
+;
+  %sub = fsub <2 x float> <float undef, float -0.0>, %x
+  %mul = fmul <2 x float> %sub, %y
+  ret <2 x float> %mul
 }
 
 ; (0.0 - X) * Y => 0.0 - (X * Y)
@@ -85,7 +149,7 @@ define float @neg_sink_nsz(float %x, float %y) {
 ; CHECK-NEXT:    [[MUL:%.*]] = fsub float -0.000000e+00, [[TMP1]]
 ; CHECK-NEXT:    ret float [[MUL]]
 ;
-  %sub1 = fsub nsz float 0.000000e+00, %x
+  %sub1 = fsub nsz float 0.0, %x
   %mul = fmul float %sub1, %y
   ret float %mul
 }
@@ -99,7 +163,7 @@ define float @neg_sink_multi_use(float %x, float %y) {
 ; CHECK-NEXT:    [[MUL2:%.*]] = fmul float [[MUL]], [[SUB1]]
 ; CHECK-NEXT:    ret float [[MUL2]]
 ;
-  %sub1 = fsub float -0.000000e+00, %x
+  %sub1 = fsub float -0.0, %x
   %mul = fmul float %sub1, %y
   %mul2 = fmul float %mul, %sub1
   ret float %mul2
@@ -336,11 +400,11 @@ define float @log2half_commute(float %x1, float %y) {
 
 define float @fdiv_constant_numerator_fmul(float %x) {
 ; CHECK-LABEL: @fdiv_constant_numerator_fmul(
-; CHECK-NEXT:    [[T3:%.*]] = fdiv fast float 1.200000e+07, [[X:%.*]]
+; CHECK-NEXT:    [[T3:%.*]] = fdiv reassoc float 1.200000e+07, [[X:%.*]]
 ; CHECK-NEXT:    ret float [[T3]]
 ;
   %t1 = fdiv float 2.0e+3, %x
-  %t3 = fmul fast float %t1, 6.0e+3
+  %t3 = fmul reassoc float %t1, 6.0e+3
   ret float %t3
 }
 
@@ -365,21 +429,21 @@ define float @fdiv_constant_numerator_fmul_extra_use(float %x) {
 
 define float @fdiv_constant_denominator_fmul(float %x) {
 ; CHECK-LABEL: @fdiv_constant_denominator_fmul(
-; CHECK-NEXT:    [[T3:%.*]] = fmul fast float [[X:%.*]], 3.000000e+00
+; CHECK-NEXT:    [[T3:%.*]] = fmul reassoc float [[X:%.*]], 3.000000e+00
 ; CHECK-NEXT:    ret float [[T3]]
 ;
   %t1 = fdiv float %x, 2.0e+3
-  %t3 = fmul fast float %t1, 6.0e+3
+  %t3 = fmul reassoc float %t1, 6.0e+3
   ret float %t3
 }
 
 define <4 x float> @fdiv_constant_denominator_fmul_vec(<4 x float> %x) {
 ; CHECK-LABEL: @fdiv_constant_denominator_fmul_vec(
-; CHECK-NEXT:    [[T3:%.*]] = fmul fast <4 x float> [[X:%.*]], <float 3.000000e+00, float 2.000000e+00, float 1.000000e+00, float 1.000000e+00>
+; CHECK-NEXT:    [[T3:%.*]] = fmul reassoc <4 x float> [[X:%.*]], <float 3.000000e+00, float 2.000000e+00, float 1.000000e+00, float 1.000000e+00>
 ; CHECK-NEXT:    ret <4 x float> [[T3]]
 ;
   %t1 = fdiv <4 x float> %x, <float 2.0e+3, float 3.0e+3, float 2.0e+3, float 1.0e+3>
-  %t3 = fmul fast <4 x float> %t1, <float 6.0e+3, float 6.0e+3, float 2.0e+3, float 1.0e+3>
+  %t3 = fmul reassoc <4 x float> %t1, <float 6.0e+3, float 6.0e+3, float 2.0e+3, float 1.0e+3>
   ret <4 x float> %t3
 }
 
@@ -387,12 +451,12 @@ define <4 x float> @fdiv_constant_denominator_fmul_vec(<4 x float> %x) {
 
 define <4 x float> @fdiv_constant_denominator_fmul_vec_constexpr(<4 x float> %x) {
 ; CHECK-LABEL: @fdiv_constant_denominator_fmul_vec_constexpr(
-; CHECK-NEXT:    [[T3:%.*]] = fmul fast <4 x float> [[X:%.*]], <float 3.000000e+00, float 2.000000e+00, float 1.000000e+00, float 1.000000e+00>
+; CHECK-NEXT:    [[T3:%.*]] = fmul reassoc <4 x float> [[X:%.*]], <float 3.000000e+00, float 2.000000e+00, float 1.000000e+00, float 1.000000e+00>
 ; CHECK-NEXT:    ret <4 x float> [[T3]]
 ;
   %constExprMul = bitcast i128 trunc (i160 bitcast (<5 x float> <float 6.0e+3, float 6.0e+3, float 2.0e+3, float 1.0e+3, float undef> to i160) to i128) to <4 x float>
   %t1 = fdiv <4 x float> %x, <float 2.0e+3, float 3.0e+3, float 2.0e+3, float 1.0e+3>
-  %t3 = fmul fast <4 x float> %t1, %constExprMul
+  %t3 = fmul reassoc <4 x float> %t1, %constExprMul
   ret <4 x float> %t3
 }
 
@@ -416,11 +480,11 @@ define float @fdiv_constant_denominator_fmul_denorm(float %x) {
 
 define float @fdiv_constant_denominator_fmul_denorm_try_harder(float %x) {
 ; CHECK-LABEL: @fdiv_constant_denominator_fmul_denorm_try_harder(
-; CHECK-NEXT:    [[T3:%.*]] = fdiv fast float [[X:%.*]], 0x47E8000000000000
+; CHECK-NEXT:    [[T3:%.*]] = fdiv reassoc float [[X:%.*]], 0x47E8000000000000
 ; CHECK-NEXT:    ret float [[T3]]
 ;
   %t1 = fdiv float %x, 3.0
-  %t3 = fmul fast float %t1, 0x3810000000000000
+  %t3 = fmul reassoc float %t1, 0x3810000000000000
   ret float %t3
 }
 
@@ -443,12 +507,12 @@ define float @fdiv_constant_denominator_fmul_denorm_try_harder_extra_use(float %
 
 define float @fmul_fadd_distribute(float %x) {
 ; CHECK-LABEL: @fmul_fadd_distribute(
-; CHECK-NEXT:    [[TMP1:%.*]] = fmul fast float [[X:%.*]], 3.000000e+00
-; CHECK-NEXT:    [[T3:%.*]] = fadd fast float [[TMP1]], 6.000000e+00
+; CHECK-NEXT:    [[TMP1:%.*]] = fmul reassoc float [[X:%.*]], 3.000000e+00
+; CHECK-NEXT:    [[T3:%.*]] = fadd reassoc float [[TMP1]], 6.000000e+00
 ; CHECK-NEXT:    ret float [[T3]]
 ;
   %t2 = fadd float %x, 2.0
-  %t3 = fmul fast float %t2, 3.0
+  %t3 = fmul reassoc float %t2, 3.0
   ret float %t3
 }
 
@@ -456,12 +520,12 @@ define float @fmul_fadd_distribute(float %x) {
 
 define float @fmul_fsub_distribute1(float %x) {
 ; CHECK-LABEL: @fmul_fsub_distribute1(
-; CHECK-NEXT:    [[TMP1:%.*]] = fmul fast float [[X:%.*]], 3.000000e+00
-; CHECK-NEXT:    [[T3:%.*]] = fadd fast float [[TMP1]], -6.000000e+00
+; CHECK-NEXT:    [[TMP1:%.*]] = fmul reassoc float [[X:%.*]], 3.000000e+00
+; CHECK-NEXT:    [[T3:%.*]] = fadd reassoc float [[TMP1]], -6.000000e+00
 ; CHECK-NEXT:    ret float [[T3]]
 ;
   %t2 = fsub float %x, 2.0
-  %t3 = fmul fast float %t2, 3.0
+  %t3 = fmul reassoc float %t2, 3.0
   ret float %t3
 }
 
@@ -469,15 +533,16 @@ define float @fmul_fsub_distribute1(float %x) {
 
 define float @fmul_fsub_distribute2(float %x) {
 ; CHECK-LABEL: @fmul_fsub_distribute2(
-; CHECK-NEXT:    [[TMP1:%.*]] = fmul fast float [[X:%.*]], 3.000000e+00
-; CHECK-NEXT:    [[T3:%.*]] = fsub fast float 6.000000e+00, [[TMP1]]
+; CHECK-NEXT:    [[TMP1:%.*]] = fmul reassoc float [[X:%.*]], 3.000000e+00
+; CHECK-NEXT:    [[T3:%.*]] = fsub reassoc float 6.000000e+00, [[TMP1]]
 ; CHECK-NEXT:    ret float [[T3]]
 ;
   %t2 = fsub float 2.0, %x
-  %t3 = fmul fast float %t2, 3.0
+  %t3 = fmul reassoc float %t2, 3.0
   ret float %t3
 }
 
+; FIXME: This should only need 'reassoc'.
 ; ((X*C1) + C2) * C3 => (X * (C1*C3)) + (C2*C3)
 
 define float @fmul_fadd_fmul_distribute(float %x) {
@@ -514,13 +579,13 @@ define float @fmul_fadd_distribute_extra_use(float %x) {
 
 define double @fmul_fadd_fdiv_distribute2(double %x) {
 ; CHECK-LABEL: @fmul_fadd_fdiv_distribute2(
-; CHECK-NEXT:    [[TMP1:%.*]] = fdiv fast double [[X:%.*]], 0x7FE8000000000000
-; CHECK-NEXT:    [[T3:%.*]] = fadd fast double [[TMP1]], 0x34000000000000
+; CHECK-NEXT:    [[TMP1:%.*]] = fdiv reassoc double [[X:%.*]], 0x7FE8000000000000
+; CHECK-NEXT:    [[T3:%.*]] = fadd reassoc double [[TMP1]], 0x34000000000000
 ; CHECK-NEXT:    ret double [[T3]]
 ;
   %t1 = fdiv double %x, 3.0
   %t2 = fadd double %t1, 5.0
-  %t3 = fmul fast double %t2, 0x10000000000000
+  %t3 = fmul reassoc double %t2, 0x10000000000000
   ret double %t3
 }
 
@@ -529,16 +594,17 @@ define double @fmul_fadd_fdiv_distribute2(double %x) {
 
 define double @fmul_fadd_fdiv_distribute3(double %x) {
 ; CHECK-LABEL: @fmul_fadd_fdiv_distribute3(
-; CHECK-NEXT:    [[TMP1:%.*]] = fdiv fast double [[X:%.*]], 0x7FE8000000000000
-; CHECK-NEXT:    [[T3:%.*]] = fadd fast double [[TMP1]], 0x34000000000000
+; CHECK-NEXT:    [[TMP1:%.*]] = fdiv reassoc double [[X:%.*]], 0x7FE8000000000000
+; CHECK-NEXT:    [[T3:%.*]] = fadd reassoc double [[TMP1]], 0x34000000000000
 ; CHECK-NEXT:    ret double [[T3]]
 ;
   %t1 = fdiv double %x, 3.0
   %t2 = fadd double %t1, 5.0
-  %t3 = fmul fast double %t2, 0x10000000000000
+  %t3 = fmul reassoc double %t2, 0x10000000000000
   ret double %t3
 }
 
+; FIXME: This should only need 'reassoc'.
 ; (C2 - (X*C1)) * C3 => (C2*C3) - (X * (C1*C3))
 
 define float @fmul_fsub_fmul_distribute(float %x) {
@@ -568,6 +634,7 @@ define float @fmul_fsub_fmul_distribute_extra_use(float %x) {
   ret float %t3
 }
 
+; FIXME: This should only need 'reassoc'.
 ; ((X*C1) - C2) * C3 => (X * (C1*C3)) - C2*C3
 
 define float @fmul_fsub_fmul_distribute2(float %x) {

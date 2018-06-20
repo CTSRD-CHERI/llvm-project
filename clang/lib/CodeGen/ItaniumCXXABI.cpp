@@ -1534,7 +1534,7 @@ void ItaniumCXXABI::EmitInstanceFunctionProlog(CodeGenFunction &CGF) {
     return;
 
   /// Initialize the 'this' slot. In the Itanium C++ ABI, no prologue
-  /// adjustments are required, becuase they are all handled by thunks.
+  /// adjustments are required, because they are all handled by thunks.
   setCXXABIThisValue(CGF, loadIncomingCXXThis(CGF));
 
   /// Initialize the 'vtt' slot if needed.
@@ -4041,7 +4041,7 @@ static void InitCatchParam(CodeGenFunction &CGF,
                         caughtExnAlignment);
     LValue Dest = CGF.MakeAddrLValue(ParamAddr, CatchType);
     LValue Src = CGF.MakeAddrLValue(adjustedExn, CatchType);
-    CGF.EmitAggregateCopy(Dest, Src, CatchType);
+    CGF.EmitAggregateCopy(Dest, Src, CatchType, AggValueSlot::DoesNotOverlap);
     return;
   }
 
@@ -4068,7 +4068,8 @@ static void InitCatchParam(CodeGenFunction &CGF,
                   AggValueSlot::forAddr(ParamAddr, Qualifiers(),
                                         AggValueSlot::IsNotDestructed,
                                         AggValueSlot::DoesNotNeedGCBarriers,
-                                        AggValueSlot::IsNotAliased));
+                                        AggValueSlot::IsNotAliased,
+                                        AggValueSlot::DoesNotOverlap));
 
   // Leave the terminate scope.
   CGF.EHStack.popTerminate();

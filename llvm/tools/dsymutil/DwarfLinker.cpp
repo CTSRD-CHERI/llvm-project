@@ -1069,7 +1069,7 @@ void DwarfStreamer::emitUnitRangesEntries(CompileUnit &Unit,
 
   // The object addresses where sorted, but again, the linked
   // addresses might end up in a different order.
-  std::sort(Ranges.begin(), Ranges.end());
+  llvm::sort(Ranges.begin(), Ranges.end());
 
   if (!Ranges.empty()) {
     MS->SwitchSection(MC->getObjectFileInfo()->getDwarfARangesSection());
@@ -1480,6 +1480,10 @@ private:
     if (MaxDwarfVersion < Version)
       MaxDwarfVersion = Version;
   }
+
+  /// Emit warnings as Dwarf compile units to leave a trail after linking.
+  bool emitPaperTrailWarnings(const DebugMapObject &DMO, const DebugMap &Map,
+                              OffsetsStringPool &StringPool);
 
   /// Keeps track of relocations.
   class RelocationManager {
@@ -2407,7 +2411,7 @@ bool DwarfLinker::RelocationManager::findValidRelocs(
   // the file, this allows us to just keep an index in the relocation
   // array that we advance during our walk, rather than resorting to
   // some associative container. See DwarfLinker::NextValidReloc.
-  std::sort(ValidRelocs.begin(), ValidRelocs.end());
+  llvm::sort(ValidRelocs.begin(), ValidRelocs.end());
   return true;
 }
 
@@ -4118,6 +4122,64 @@ void DwarfLinker::DIECloner::cloneAllCompileUnits(
   }
 }
 
+bool DwarfLinker::emitPaperTrailWarnings(const DebugMapObject &DMO,
+                                         const DebugMap &Map,
+                                         OffsetsStringPool &StringPool) {
+  if (DMO.getWarnings().empty() || !DMO.empty())
+    return false;
+
+  Streamer->switchToDebugInfoSection(/* Version */ 2);
+  DIE *CUDie = DIE::get(DIEAlloc, dwarf::DW_TAG_compile_unit);
+  CUDie->setOffset(11);
+  StringRef Producer = StringPool.internString("dsymutil");
+  StringRef File = StringPool.internString(DMO.getObjectFilename());
+  CUDie->addValue(DIEAlloc, dwarf::DW_AT_producer, dwarf::DW_FORM_strp,
+                  DIEInteger(StringPool.getStringOffset(Producer)));
+  DIEBlock *String = new (DIEAlloc) DIEBlock();
+  DIEBlocks.push_back(String);
+  for (auto &C : File)
+    String->addValue(DIEAlloc, dwarf::Attribute(0), dwarf::DW_FORM_data1,
+                     DIEInteger(C));
+  String->addValue(DIEAlloc, dwarf::Attribute(0), dwarf::DW_FORM_data1,
+                   DIEInteger(0));
+
+  CUDie->addValue(DIEAlloc, dwarf::DW_AT_name, dwarf::DW_FORM_string, String);
+  for (const auto &Warning : DMO.getWarnings()) {
+    DIE &ConstDie = CUDie->addChild(DIE::get(DIEAlloc, dwarf::DW_TAG_constant));
+    ConstDie.addValue(
+        DIEAlloc, dwarf::DW_AT_name, dwarf::DW_FORM_strp,
+        DIEInteger(StringPool.getStringOffset("dsymutil_warning")));
+    ConstDie.addValue(DIEAlloc, dwarf::DW_AT_artificial, dwarf::DW_FORM_flag,
+                      DIEInteger(1));
+    ConstDie.addValue(DIEAlloc, dwarf::DW_AT_const_value, dwarf::DW_FORM_strp,
+                      DIEInteger(StringPool.getStringOffset(Warning)));
+  }
+  unsigned Size = 4 /* FORM_strp */ + File.size() + 1 +
+                  DMO.getWarnings().size() * (4 + 1 + 4) +
+                  1 /* End of children */;
+  DIEAbbrev Abbrev = CUDie->generateAbbrev();
+  AssignAbbrev(Abbrev);
+  CUDie->setAbbrevNumber(Abbrev.getNumber());
+  Size += getULEB128Size(Abbrev.getNumber());
+  // Abbreviation ordering needed for classic compatibility.
+  for (auto &Child : CUDie->children()) {
+    Abbrev = Child.generateAbbrev();
+    AssignAbbrev(Abbrev);
+    Child.setAbbrevNumber(Abbrev.getNumber());
+    Size += getULEB128Size(Abbrev.getNumber());
+  }
+  CUDie->setSize(Size);
+  auto &Asm = Streamer->getAsmPrinter();
+  Asm.emitInt32(11 + CUDie->getSize() - 4);
+  Asm.emitInt16(2);
+  Asm.emitInt32(0);
+  Asm.emitInt8(Map.getTriple().isArch64Bit() ? 8 : 4);
+  Streamer->emitDIE(*CUDie);
+  OutputDebugInfoSize += 11 /* Header */ + Size;
+
+  return true;
+}
+
 bool DwarfLinker::link(const DebugMap &Map) {
   if (!createStreamer(Map.getTriple(), OutFile))
     return false;
@@ -4184,8 +4246,10 @@ bool DwarfLinker::link(const DebugMap &Map) {
       continue;
     }
 
-    if (!LinkContext.ObjectFile)
+    if (emitPaperTrailWarnings(LinkContext.DMO, Map, OffsetsStringPool))
+      continue;
 
+    if (!LinkContext.ObjectFile)
       continue;
 
     // Look for relocations that correspond to debug map entries.
@@ -4232,7 +4296,10 @@ bool DwarfLinker::link(const DebugMap &Map) {
     }
   }
 
-  ThreadPool pool(2);
+  // If we haven't seen any CUs, pick an arbitrary valid Dwarf version anyway,
+  // to be able to emit papertrail warnings.
+  if (MaxDwarfVersion == 0)
+    MaxDwarfVersion = 3;
 
   // These variables manage the list of processed object files.
   // The mutex and condition variable are to ensure that this is thread safe.
@@ -4241,7 +4308,7 @@ bool DwarfLinker::link(const DebugMap &Map) {
   BitVector ProcessedFiles(NumObjects, false);
 
   // Now do analyzeContextInfo in parallel as it is particularly expensive.
-  pool.async([&]() {
+  auto AnalyzeLambda = [&]() {
     for (unsigned i = 0, e = NumObjects; i != e; ++i) {
       auto &LinkContext = ObjectContexts[i];
 
@@ -4262,13 +4329,13 @@ bool DwarfLinker::link(const DebugMap &Map) {
       ProcessedFiles.set(i);
       ProcessedFilesConditionVariable.notify_one();
     }
-  });
+  };
 
   // And then the remaining work in serial again.
   // Note, although this loop runs in serial, it can run in parallel with
   // the analyzeContextInfo loop so long as we process files with indices >=
   // than those processed by analyzeContextInfo.
-  pool.async([&]() {
+  auto CloneLambda = [&]() {
     for (unsigned i = 0, e = NumObjects; i != e; ++i) {
       {
         std::unique_lock<std::mutex> LockGuard(ProcessedFilesMutex);
@@ -4328,9 +4395,20 @@ bool DwarfLinker::link(const DebugMap &Map) {
       Streamer->emitAppleTypes(AppleTypes);
       Streamer->emitAppleObjc(AppleObjc);
     }
-  });
+  };
 
-  pool.wait();
+  // FIXME: The DwarfLinker can have some very deep recursion that can max
+  // out the (significantly smaller) stack when using threads. We don't
+  // want this limitation when we only have a single thread.
+  if (Options.Threads == 1) {
+    AnalyzeLambda();
+    CloneLambda();
+  } else {
+    ThreadPool pool(2);
+    pool.async(AnalyzeLambda);
+    pool.async(CloneLambda);
+    pool.wait();
+  }
 
   return Options.NoOutput ? true : Streamer->finish(Map);
 }

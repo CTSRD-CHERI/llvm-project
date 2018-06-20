@@ -180,21 +180,21 @@ def IMUL16rm : I<0xAF, MRMSrcMem, (outs GR16:$dst),
                                   (ins GR16:$src1, i16mem:$src2),
                  "imul{w}\t{$src2, $dst|$dst, $src2}",
                  [(set GR16:$dst, EFLAGS,
-                       (X86smul_flag GR16:$src1, (load addr:$src2)))],
+                       (X86smul_flag GR16:$src1, (loadi16 addr:$src2)))],
                        IIC_IMUL16_RM>,
                TB, OpSize16;
 def IMUL32rm : I<0xAF, MRMSrcMem, (outs GR32:$dst),
                  (ins GR32:$src1, i32mem:$src2),
                  "imul{l}\t{$src2, $dst|$dst, $src2}",
                  [(set GR32:$dst, EFLAGS,
-                       (X86smul_flag GR32:$src1, (load addr:$src2)))],
+                       (X86smul_flag GR32:$src1, (loadi32 addr:$src2)))],
                        IIC_IMUL32_RM>,
                TB, OpSize32;
 def IMUL64rm : RI<0xAF, MRMSrcMem, (outs GR64:$dst),
                                    (ins GR64:$src1, i64mem:$src2),
                   "imul{q}\t{$src2, $dst|$dst, $src2}",
                   [(set GR64:$dst, EFLAGS,
-                        (X86smul_flag GR64:$src1, (load addr:$src2)))],
+                        (X86smul_flag GR64:$src1, (loadi64 addr:$src2)))],
                         IIC_IMUL64_RM>,
                TB;
 } // SchedRW
@@ -250,41 +250,41 @@ def IMUL16rmi  : Ii16<0x69, MRMSrcMem,                     // GR16 = [mem16]*I16
                       (outs GR16:$dst), (ins i16mem:$src1, i16imm:$src2),
                       "imul{w}\t{$src2, $src1, $dst|$dst, $src1, $src2}",
                       [(set GR16:$dst, EFLAGS,
-                            (X86smul_flag (load addr:$src1), imm:$src2))],
+                            (X86smul_flag (loadi16 addr:$src1), imm:$src2))],
                             IIC_IMUL16_RMI>,
                  OpSize16;
 def IMUL16rmi8 : Ii8<0x6B, MRMSrcMem,                       // GR16 = [mem16]*I8
                      (outs GR16:$dst), (ins i16mem:$src1, i16i8imm :$src2),
                      "imul{w}\t{$src2, $src1, $dst|$dst, $src1, $src2}",
                      [(set GR16:$dst, EFLAGS,
-                           (X86smul_flag (load addr:$src1),
+                           (X86smul_flag (loadi16 addr:$src1),
                                          i16immSExt8:$src2))], IIC_IMUL16_RMI>,
                                          OpSize16;
 def IMUL32rmi  : Ii32<0x69, MRMSrcMem,                     // GR32 = [mem32]*I32
                       (outs GR32:$dst), (ins i32mem:$src1, i32imm:$src2),
                       "imul{l}\t{$src2, $src1, $dst|$dst, $src1, $src2}",
                       [(set GR32:$dst, EFLAGS,
-                            (X86smul_flag (load addr:$src1), imm:$src2))],
+                            (X86smul_flag (loadi32 addr:$src1), imm:$src2))],
                             IIC_IMUL32_RMI>, OpSize32;
 def IMUL32rmi8 : Ii8<0x6B, MRMSrcMem,                       // GR32 = [mem32]*I8
                      (outs GR32:$dst), (ins i32mem:$src1, i32i8imm: $src2),
                      "imul{l}\t{$src2, $src1, $dst|$dst, $src1, $src2}",
                      [(set GR32:$dst, EFLAGS,
-                           (X86smul_flag (load addr:$src1),
+                           (X86smul_flag (loadi32 addr:$src1),
                                          i32immSExt8:$src2))],
                                          IIC_IMUL32_RMI>, OpSize32;
 def IMUL64rmi32 : RIi32S<0x69, MRMSrcMem,                   // GR64 = [mem64]*I32
                          (outs GR64:$dst), (ins i64mem:$src1, i64i32imm:$src2),
                          "imul{q}\t{$src2, $src1, $dst|$dst, $src1, $src2}",
                          [(set GR64:$dst, EFLAGS,
-                              (X86smul_flag (load addr:$src1),
+                              (X86smul_flag (loadi64 addr:$src1),
                                             i64immSExt32:$src2))],
                                             IIC_IMUL64_RMI>;
 def IMUL64rmi8 : RIi8<0x6B, MRMSrcMem,                      // GR64 = [mem64]*I8
                       (outs GR64:$dst), (ins i64mem:$src1, i64i8imm: $src2),
                       "imul{q}\t{$src2, $src1, $dst|$dst, $src1, $src2}",
                       [(set GR64:$dst, EFLAGS,
-                            (X86smul_flag (load addr:$src1),
+                            (X86smul_flag (loadi64 addr:$src1),
                                           i64immSExt8:$src2))],
                                           IIC_IMUL64_RMI>;
 } // SchedRW
@@ -394,7 +394,7 @@ def NEG64r : RI<0xF7, MRM3r, (outs GR64:$dst), (ins GR64:$src1), "neg{q}\t$dst",
 } // Constraints = "$src1 = $dst", SchedRW
 
 // Read-modify-write negate.
-let SchedRW = [WriteALULd, WriteRMW] in {
+let SchedRW = [WriteALURMW] in {
 def NEG8m  : I<0xF6, MRM3m, (outs), (ins i8mem :$dst),
                "neg{b}\t$dst",
                [(store (ineg (loadi8 addr:$dst)), addr:$dst),
@@ -434,7 +434,7 @@ def NOT64r : RI<0xF7, MRM2r, (outs GR64:$dst), (ins GR64:$src1), "not{q}\t$dst",
 }
 } // Constraints = "$src1 = $dst", SchedRW
 
-let SchedRW = [WriteALULd, WriteRMW] in {
+let SchedRW = [WriteALURMW] in {
 def NOT8m  : I<0xF6, MRM2m, (outs), (ins i8mem :$dst),
                "not{b}\t$dst",
                [(store (not (loadi8 addr:$dst)), addr:$dst)], IIC_UNARY_MEM>;
@@ -485,7 +485,7 @@ def INC32r_alt : I<0x40, AddRegFrm, (outs GR32:$dst), (ins GR32:$src1),
 } // CodeSize = 1, hasSideEffects = 0
 } // Constraints = "$src1 = $dst", SchedRW
 
-let CodeSize = 2, SchedRW = [WriteALULd, WriteRMW] in {
+let CodeSize = 2, SchedRW = [WriteALURMW] in {
 let Predicates = [UseIncDec] in {
   def INC8m  : I<0xFE, MRM0m, (outs), (ins i8mem :$dst), "inc{b}\t$dst",
                [(store (add (loadi8 addr:$dst), 1), addr:$dst),
@@ -536,7 +536,7 @@ def DEC32r_alt : I<0x48, AddRegFrm, (outs GR32:$dst), (ins GR32:$src1),
 } // Constraints = "$src1 = $dst", SchedRW
 
 
-let CodeSize = 2, SchedRW = [WriteALULd, WriteRMW] in {
+let CodeSize = 2, SchedRW = [WriteALURMW] in {
 let Predicates = [UseIncDec] in {
   def DEC8m  : I<0xFE, MRM1m, (outs), (ins i8mem :$dst), "dec{b}\t$dst",
                [(store (add (loadi8 addr:$dst), -1), addr:$dst),
@@ -835,7 +835,7 @@ class BinOpMR_RMW<bits<8> opcode, string mnemonic, X86TypeInfo typeinfo,
                   SDNode opnode>
   : BinOpMR<opcode, mnemonic, typeinfo,
           [(store (opnode (load addr:$dst), typeinfo.RegClass:$src), addr:$dst),
-           (implicit EFLAGS)]>, Sched<[WriteALULd, WriteRMW]>;
+           (implicit EFLAGS)]>, Sched<[WriteALURMW]>;
 
 // BinOpMR_RMW_FF - Instructions like "adc [mem], reg".
 class BinOpMR_RMW_FF<bits<8> opcode, string mnemonic, X86TypeInfo typeinfo,
@@ -844,7 +844,7 @@ class BinOpMR_RMW_FF<bits<8> opcode, string mnemonic, X86TypeInfo typeinfo,
             [(store (opnode (load addr:$dst), typeinfo.RegClass:$src, EFLAGS),
                     addr:$dst),
              (implicit EFLAGS)], IIC_BIN_CARRY_MEM>,
-            Sched<[WriteALULd, WriteRMW]>;
+            Sched<[WriteALURMW]>;
 
 // BinOpMR_F - Instructions like "cmp [mem], reg".
 class BinOpMR_F<bits<8> opcode, string mnemonic, X86TypeInfo typeinfo,
@@ -852,7 +852,8 @@ class BinOpMR_F<bits<8> opcode, string mnemonic, X86TypeInfo typeinfo,
   : BinOpMR<opcode, mnemonic, typeinfo,
             [(set EFLAGS, (opnode (typeinfo.LoadNode addr:$dst),
                                    typeinfo.RegClass:$src))]>,
-            Sched<[WriteALULd, ReadAfterLd]>;
+            Sched<[WriteALULd, ReadDefault, ReadDefault, ReadDefault,
+                   ReadDefault, ReadDefault, ReadAfterLd]>;
 
 // BinOpMI - Instructions like "add [mem], imm".
 class BinOpMI<bits<8> opcode, string mnemonic, X86TypeInfo typeinfo,
@@ -870,7 +871,7 @@ class BinOpMI_RMW<bits<8> opcode, string mnemonic, X86TypeInfo typeinfo,
   : BinOpMI<opcode, mnemonic, typeinfo, f,
             [(store (opnode (typeinfo.VT (load addr:$dst)),
                             typeinfo.ImmOperator:$src), addr:$dst),
-             (implicit EFLAGS)]>, Sched<[WriteALULd, WriteRMW]>;
+             (implicit EFLAGS)]>, Sched<[WriteALURMW]>;
 // BinOpMI_RMW_FF - Instructions like "adc [mem], imm".
 class BinOpMI_RMW_FF<bits<8> opcode, string mnemonic, X86TypeInfo typeinfo,
                      SDNode opnode, Format f>
@@ -878,7 +879,7 @@ class BinOpMI_RMW_FF<bits<8> opcode, string mnemonic, X86TypeInfo typeinfo,
             [(store (opnode (typeinfo.VT (load addr:$dst)),
                              typeinfo.ImmOperator:$src, EFLAGS), addr:$dst),
              (implicit EFLAGS)], IIC_BIN_CARRY_MEM>,
-            Sched<[WriteALULd, WriteRMW]>;
+            Sched<[WriteALURMW]>;
 
 // BinOpMI_F - Instructions like "cmp [mem], imm".
 class BinOpMI_F<bits<8> opcode, string mnemonic, X86TypeInfo typeinfo,
@@ -886,7 +887,7 @@ class BinOpMI_F<bits<8> opcode, string mnemonic, X86TypeInfo typeinfo,
   : BinOpMI<opcode, mnemonic, typeinfo, f,
             [(set EFLAGS, (opnode (typeinfo.LoadNode addr:$dst),
                                   typeinfo.ImmOperator:$src))]>,
-            Sched<[WriteALULd, ReadAfterLd]>;
+            Sched<[WriteALULd]>;
 
 // BinOpMI8 - Instructions like "add [mem], imm8".
 class BinOpMI8<string mnemonic, X86TypeInfo typeinfo,
@@ -904,7 +905,7 @@ class BinOpMI8_RMW<string mnemonic, X86TypeInfo typeinfo,
   : BinOpMI8<mnemonic, typeinfo, f,
              [(store (opnode (load addr:$dst),
                              typeinfo.Imm8Operator:$src), addr:$dst),
-              (implicit EFLAGS)]>, Sched<[WriteALULd, WriteRMW]>;
+              (implicit EFLAGS)]>, Sched<[WriteALURMW]>;
 
 // BinOpMI8_RMW_FF - Instructions like "adc [mem], imm8".
 class BinOpMI8_RMW_FF<string mnemonic, X86TypeInfo typeinfo,
@@ -913,7 +914,7 @@ class BinOpMI8_RMW_FF<string mnemonic, X86TypeInfo typeinfo,
              [(store (opnode (load addr:$dst),
                              typeinfo.Imm8Operator:$src, EFLAGS), addr:$dst),
               (implicit EFLAGS)], IIC_BIN_CARRY_MEM>,
-             Sched<[WriteALULd, WriteRMW]>;
+             Sched<[WriteALURMW]>;
 
 // BinOpMI8_F - Instructions like "cmp [mem], imm8".
 class BinOpMI8_F<string mnemonic, X86TypeInfo typeinfo,
@@ -921,7 +922,7 @@ class BinOpMI8_F<string mnemonic, X86TypeInfo typeinfo,
   : BinOpMI8<mnemonic, typeinfo, f,
              [(set EFLAGS, (opnode (typeinfo.LoadNode addr:$dst),
                                     typeinfo.Imm8Operator:$src))]>,
-             Sched<[WriteALULd, ReadAfterLd]>;
+             Sched<[WriteALULd]>;
 
 // BinOpAI - Instructions like "add %eax, %eax, imm", that imp-def EFLAGS.
 class BinOpAI<bits<8> opcode, string mnemonic, X86TypeInfo typeinfo,
@@ -1334,56 +1335,64 @@ let Predicates = [HasBMI2] in {
 }
 
 //===----------------------------------------------------------------------===//
-// ADCX Instruction
+// ADCX and ADOX Instructions
 //
 let Predicates = [HasADX], Defs = [EFLAGS], Uses = [EFLAGS],
-    Constraints = "$src0 = $dst", AddedComplexity = 10 in {
+    Constraints = "$src1 = $dst", AddedComplexity = 10 in {
   let SchedRW = [WriteALU] in {
   def ADCX32rr : I<0xF6, MRMSrcReg, (outs GR32:$dst),
-             (ins GR32:$src0, GR32:$src), "adcx{l}\t{$src, $dst|$dst, $src}",
-             [(set GR32:$dst, EFLAGS,
-                 (X86adc_flag GR32:$src0, GR32:$src, EFLAGS))],
-             IIC_BIN_CARRY_NONMEM>, T8PD;
+                   (ins GR32:$src1, GR32:$src2),
+                   "adcx{l}\t{$src2, $dst|$dst, $src2}",
+                   [(set GR32:$dst, EFLAGS,
+                     (X86adc_flag GR32:$src1, GR32:$src2, EFLAGS))],
+                   IIC_BIN_CARRY_NONMEM>, T8PD;
   def ADCX64rr : RI<0xF6, MRMSrcReg, (outs GR64:$dst),
-             (ins GR64:$src0, GR64:$src), "adcx{q}\t{$src, $dst|$dst, $src}",
-             [(set GR64:$dst, EFLAGS,
-                 (X86adc_flag GR64:$src0, GR64:$src, EFLAGS))],
-             IIC_BIN_CARRY_NONMEM>, T8PD;
+                    (ins GR64:$src1, GR64:$src2),
+                    "adcx{q}\t{$src2, $dst|$dst, $src2}",
+                    [(set GR64:$dst, EFLAGS,
+                      (X86adc_flag GR64:$src1, GR64:$src2, EFLAGS))],
+                    IIC_BIN_CARRY_NONMEM>, T8PD;
+
+  // We don't have patterns for ADOX yet.
+  let hasSideEffects = 0 in {
+  def ADOX32rr : I<0xF6, MRMSrcReg, (outs GR32:$dst),
+                   (ins GR32:$src1, GR32:$src2),
+                   "adox{l}\t{$src2, $dst|$dst, $src2}",
+                   [], IIC_BIN_CARRY_NONMEM>, T8XS;
+
+  def ADOX64rr : RI<0xF6, MRMSrcReg, (outs GR64:$dst),
+                    (ins GR64:$src1, GR64:$src2),
+                    "adox{q}\t{$src2, $dst|$dst, $src2}",
+                    [], IIC_BIN_CARRY_NONMEM>, T8XS;
+  } // hasSideEffects = 0
   } // SchedRW
 
-  let mayLoad = 1, SchedRW = [WriteALULd] in {
+  let mayLoad = 1, SchedRW = [WriteALULd, ReadAfterLd] in {
   def ADCX32rm : I<0xF6, MRMSrcMem, (outs GR32:$dst),
-             (ins GR32:$src0, i32mem:$src), "adcx{l}\t{$src, $dst|$dst, $src}",
-             [(set GR32:$dst, EFLAGS,
-                 (X86adc_flag GR32:$src0, (loadi32 addr:$src), EFLAGS))],
-             IIC_BIN_CARRY_MEM>, T8PD;
+                   (ins GR32:$src1, i32mem:$src2),
+                   "adcx{l}\t{$src2, $dst|$dst, $src2}",
+                   [(set GR32:$dst, EFLAGS,
+                     (X86adc_flag GR32:$src1, (loadi32 addr:$src2), EFLAGS))],
+                   IIC_BIN_CARRY_MEM>, T8PD;
 
   def ADCX64rm : RI<0xF6, MRMSrcMem, (outs GR64:$dst),
-             (ins GR64:$src0, i64mem:$src), "adcx{q}\t{$src, $dst|$dst, $src}",
-             [(set GR64:$dst, EFLAGS,
-                 (X86adc_flag GR64:$src0, (loadi64 addr:$src), EFLAGS))],
-             IIC_BIN_CARRY_MEM>, T8PD;
-  }
-}
+                    (ins GR64:$src1, i64mem:$src2),
+                    "adcx{q}\t{$src2, $dst|$dst, $src2}",
+                    [(set GR64:$dst, EFLAGS,
+                      (X86adc_flag GR64:$src1, (loadi64 addr:$src2), EFLAGS))],
+                    IIC_BIN_CARRY_MEM>, T8PD;
 
-//===----------------------------------------------------------------------===//
-// ADOX Instruction
-//
-let Predicates = [HasADX], hasSideEffects = 0, Defs = [EFLAGS],
-    Uses = [EFLAGS] in {
-  let SchedRW = [WriteALU] in {
-  def ADOX32rr : I<0xF6, MRMSrcReg, (outs GR32:$dst), (ins GR32:$src),
-             "adox{l}\t{$src, $dst|$dst, $src}", [], IIC_BIN_NONMEM>, T8XS;
+  // We don't have patterns for ADOX yet.
+  let hasSideEffects = 0 in {
+  def ADOX32rm : I<0xF6, MRMSrcMem, (outs GR32:$dst),
+                   (ins GR32:$src1, i32mem:$src2),
+                   "adox{l}\t{$src2, $dst|$dst, $src2}",
+                   [], IIC_BIN_CARRY_MEM>, T8XS;
 
-  def ADOX64rr : RI<0xF6, MRMSrcReg, (outs GR64:$dst), (ins GR64:$src),
-             "adox{q}\t{$src, $dst|$dst, $src}", [], IIC_BIN_NONMEM>, T8XS;
-  } // SchedRW
-
-  let mayLoad = 1, SchedRW = [WriteALULd] in {
-  def ADOX32rm : I<0xF6, MRMSrcMem, (outs GR32:$dst), (ins i32mem:$src),
-             "adox{l}\t{$src, $dst|$dst, $src}", [], IIC_BIN_MEM>, T8XS;
-
-  def ADOX64rm : RI<0xF6, MRMSrcMem, (outs GR64:$dst), (ins i64mem:$src),
-             "adox{q}\t{$src, $dst|$dst, $src}", [], IIC_BIN_MEM>, T8XS;
-  }
+  def ADOX64rm : RI<0xF6, MRMSrcMem, (outs GR64:$dst),
+                    (ins GR64:$src1, i64mem:$src2),
+                    "adox{q}\t{$src2, $dst|$dst, $src2}",
+                    [], IIC_BIN_CARRY_MEM>, T8XS;
+  } // hasSideEffects = 0
+  } // mayLoad = 1, SchedRW = [WriteALULd]
 }
