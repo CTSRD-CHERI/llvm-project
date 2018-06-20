@@ -55,6 +55,8 @@ STATISTIC(CmpIselsConverted,
           "Number of ISELs that depend on comparison of constants converted");
 STATISTIC(MissedConvertibleImmediateInstrs,
           "Number of compare-immediate instructions fed by constants");
+STATISTIC(NumRcRotatesConvertedToRcAnd,
+          "Number of record-form rotates converted to record-form andi");
 
 static cl::
 opt<bool> DisableCTRLoopAnal("disable-ppc-ctrloop-analysis", cl::Hidden,
@@ -1897,6 +1899,31 @@ bool PPCInstrInfo::optimizeCompareInstr(MachineInstr &CmpInstr, unsigned SrcReg,
     // specifically the case if this is the instruction directly after the
     // compare).
 
+    // Rotates are expensive instructions. If we're emitting a record-form
+    // rotate that can just be an andi, we should just emit the andi.
+    if ((MIOpC == PPC::RLWINM || MIOpC == PPC::RLWINM8) &&
+        MI->getOperand(2).getImm() == 0) {
+      int64_t MB = MI->getOperand(3).getImm();
+      int64_t ME = MI->getOperand(4).getImm();
+      if (MB < ME && MB >= 16) {
+        uint64_t Mask = ((1LLU << (32 - MB)) - 1) & ~((1LLU << (31 - ME)) - 1);
+        NewOpC = MIOpC == PPC::RLWINM ? PPC::ANDIo : PPC::ANDIo8;
+        MI->RemoveOperand(4);
+        MI->RemoveOperand(3);
+        MI->getOperand(2).setImm(Mask);
+        NumRcRotatesConvertedToRcAnd++;
+      }
+    } else if (MIOpC == PPC::RLDICL && MI->getOperand(2).getImm() == 0) {
+      int64_t MB = MI->getOperand(3).getImm();
+      if (MB >= 48) {
+        uint64_t Mask = (1LLU << (63 - MB + 1)) - 1;
+        NewOpC = PPC::ANDIo8;
+        MI->RemoveOperand(3);
+        MI->getOperand(2).setImm(Mask);
+        NumRcRotatesConvertedToRcAnd++;
+      }
+    }
+
     const MCInstrDesc &NewDesc = get(NewOpC);
     MI->setDesc(NewDesc);
 
@@ -2151,28 +2178,6 @@ bool PPCInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
   return false;
 }
 
-unsigned PPCInstrInfo::lookThruCopyLike(unsigned SrcReg,
-                                        const MachineRegisterInfo *MRI) {
-  while (true) {
-    MachineInstr *MI = MRI->getVRegDef(SrcReg);
-    if (!MI->isCopyLike())
-      return SrcReg;
-
-    unsigned CopySrcReg;
-    if (MI->isCopy())
-      CopySrcReg = MI->getOperand(1).getReg();
-    else {
-      assert(MI->isSubregToReg() && "Bad opcode for lookThruCopyLike");
-      CopySrcReg = MI->getOperand(2).getReg();
-    }
-
-    if (!TargetRegisterInfo::isVirtualRegister(CopySrcReg))
-      return CopySrcReg;
-
-    SrcReg = CopySrcReg;
-  }
-}
-
 // Essentially a compile-time implementation of a compare->isel sequence.
 // It takes two constants to compare, along with the true/false registers
 // and the comparison type (as a subreg to a CR field) and returns one
@@ -2238,6 +2243,7 @@ MachineInstr *PPCInstrInfo::getConstantDefMI(MachineInstr &MI,
   ConstOp = ~0U;
   MachineInstr *DefMI = nullptr;
   MachineRegisterInfo *MRI = &MI.getParent()->getParent()->getRegInfo();
+  const TargetRegisterInfo *TRI = &getRegisterInfo();
   // If we'ere in SSA, get the defs through the MRI. Otherwise, only look
   // within the basic block to see if the register is defined using an LI/LI8.
   if (MRI->isSSA()) {
@@ -2247,7 +2253,7 @@ MachineInstr *PPCInstrInfo::getConstantDefMI(MachineInstr &MI,
       unsigned Reg = MI.getOperand(i).getReg();
       if (!TargetRegisterInfo::isVirtualRegister(Reg))
         continue;
-      unsigned TrueReg = lookThruCopyLike(Reg, MRI);
+      unsigned TrueReg = TRI->lookThruCopyLike(Reg, MRI);
       if (TargetRegisterInfo::isVirtualRegister(TrueReg)) {
         DefMI = MRI->getVRegDef(TrueReg);
         if (DefMI->getOpcode() == PPC::LI || DefMI->getOpcode() == PPC::LI8) {

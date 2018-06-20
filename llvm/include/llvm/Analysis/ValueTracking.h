@@ -423,6 +423,13 @@ class Value;
   /// though division by zero might cause undefined behavior.
   bool isGuaranteedToTransferExecutionToSuccessor(const Instruction *I);
 
+  /// Returns true if this block does not contain a potential implicit exit.
+  /// This is equivelent to saying that all instructions within the basic block
+  /// are guaranteed to transfer execution to their successor within the basic
+  /// block. This has the same assumptions w.r.t. undefined behavior as the
+  /// instruction variant of this function. 
+  bool isGuaranteedToTransferExecutionToSuccessor(const BasicBlock *BB);
+
   /// Return true if this function can prove that the instruction I
   /// is executed for every iteration of the loop L.
   ///
@@ -486,9 +493,9 @@ class Value;
                                 /// fcmp; select, does the fcmp have to be
                                 /// ordered?
 
-    /// \brief Return true if \p SPF is a min or a max pattern.
+    /// Return true if \p SPF is a min or a max pattern.
     static bool isMinOrMax(SelectPatternFlavor SPF) {
-      return !(SPF == SPF_UNKNOWN || SPF == SPF_ABS || SPF == SPF_NABS);
+      return SPF != SPF_UNKNOWN && SPF != SPF_ABS && SPF != SPF_NABS;
     }
   };
 
@@ -520,6 +527,19 @@ class Value;
     RHS = R;
     return Result;
   }
+
+  /// Return the canonical comparison predicate for the specified
+  /// minimum/maximum flavor.
+  CmpInst::Predicate getMinMaxPred(SelectPatternFlavor SPF,
+                                   bool Ordered = false);
+
+  /// Return the inverse minimum/maximum flavor of the specified flavor.
+  /// For example, signed minimum is the inverse of signed maximum.
+  SelectPatternFlavor getInverseMinMaxFlavor(SelectPatternFlavor SPF);
+
+  /// Return the canonical inverse comparison predicate for the specified
+  /// minimum/maximum flavor.
+  CmpInst::Predicate getInverseMinMaxPred(SelectPatternFlavor SPF);
 
   /// Return true if RHS is known to be implied true by LHS.  Return false if
   /// RHS is known to be implied false by LHS.  Otherwise, return None if no

@@ -143,6 +143,23 @@ TEST_F(FormatTestTextProto, AddsNewlinesAfterTrailingComments) {
                "}");
 }
 
+TEST_F(FormatTestTextProto, ImplicitStringLiteralConcatenation) {
+  verifyFormat("field_a: 'aaaaa'\n"
+               "         'bbbbb'");
+  verifyFormat("field_a: \"aaaaa\"\n"
+               "         \"bbbbb\"");
+  FormatStyle Style = getGoogleStyle(FormatStyle::LK_TextProto);
+  Style.AlwaysBreakBeforeMultilineStrings = true;
+  verifyFormat("field_a:\n"
+               "    'aaaaa'\n"
+               "    'bbbbb'",
+               Style);
+  verifyFormat("field_a:\n"
+               "    \"aaaaa\"\n"
+               "    \"bbbbb\"",
+               Style);
+}
+
 TEST_F(FormatTestTextProto, SupportsAngleBracketMessageFields) {
   // Single-line tests
   verifyFormat("msg_field <>");
@@ -375,10 +392,12 @@ TEST_F(FormatTestTextProto, FormatsExtensions) {
                "     .long/longg.longlong] { key: value }");
   verifyFormat("[aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/\n"
                " bbbbbbbbbbbbbb] { key: value }");
-  verifyFormat("[aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
-               "] { key: value }");
-  verifyFormat("[aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
-               "] {\n"
+  // These go over the column limit intentionally, since the alternative
+  // [aa..a\n] is worse.
+  verifyFormat("[aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa] {\n"
+               "  key: value\n"
+               "}");
+  verifyFormat("[aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa] {\n"
                "  [type.type] {\n"
                "    keyyyyyyyyyyyyyy: valuuuuuuuuuuuuuuuuuuuuuuuuue\n"
                "  }\n"
@@ -389,6 +408,14 @@ TEST_F(FormatTestTextProto, FormatsExtensions) {
                "    keyyyyyyyyyyyyyy: valuuuuuuuuuuuuuuuuuuuuuuuuue\n"
                "  }\n"
                "}");
+  verifyFormat(
+      "aaaaaaaaaaaaaaa {\n"
+      "  bbbbbb {\n"
+      "    [a.b/cy] {\n"
+      "      eeeeeeeeeeeee: \"The lazy coo cat jumps over the lazy hot dog\"\n"
+      "    }\n"
+      "  }\n"
+      "}");
 }
 
 TEST_F(FormatTestTextProto, NoSpaceAfterPercent) {
@@ -432,5 +459,38 @@ TEST_F(FormatTestTextProto, FormatsRepeatedListInitializers) {
   Style.Cpp11BracedListStyle = true;
   verifyFormat("keys: [1]", Style);
 }
+
+TEST_F(FormatTestTextProto, AcceptsOperatorAsKey) {
+  verifyFormat("aaaaaaaaaaa: <\n"
+               "  bbbbbbbbb: <\n"
+               "    ccccccccccccccccccccccc: <\n"
+               "      operator: 1\n"
+               "      operator: 2\n"
+               "      operator { key: value }\n"
+               "    >\n"
+               "  >\n"
+               ">");
+}
+
+TEST_F(FormatTestTextProto, BreaksConsecutiveStringLiterals) {
+  verifyFormat("ala: \"str1\"\n"
+               "     \"str2\"\n");
+}
+
+TEST_F(FormatTestTextProto, PutsMultipleEntriesInExtensionsOnNewlines) {
+  FormatStyle Style = getGoogleStyle(FormatStyle::LK_TextProto);
+  verifyFormat("pppppppppp: {\n"
+               "  ssssss: \"http://example.com/blahblahblah\"\n"
+               "  ppppppp: \"sssss/MMMMMMMMMMMM\"\n"
+               "  [ns.sssss.eeeeeeeee.eeeeeeeeeeeeeee] { begin: 24 end: 252 }\n"
+               "  [ns.sssss.eeeeeeeee.eeeeeeeeeeeeeee] {\n"
+               "    begin: 24\n"
+               "    end: 252\n"
+               "    key: value\n"
+               "    key: value\n"
+               "  }\n"
+               "}", Style);
+}
+
 } // end namespace tooling
 } // end namespace clang

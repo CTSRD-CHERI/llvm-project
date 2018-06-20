@@ -343,7 +343,8 @@ def run_break_set_by_file_and_line(
 
     If extra_options is not None, then we append it to the breakpoint set command.
 
-    If num_expected_locations is -1 we check that we got AT LEAST one location, otherwise we check that num_expected_locations equals the number of locations.
+    If num_expected_locations is -1, we check that we got AT LEAST one location. If num_expected_locations is -2, we don't
+    check the actual number at all. Otherwise, we check that num_expected_locations equals the number of locations.
 
     If loc_exact is true, we check that there is one location, and that location must be at the input file and line number."""
 
@@ -563,7 +564,7 @@ def check_breakpoint_result(
     if num_locations == -1:
         test.assertTrue(out_num_locations > 0,
                         "Expecting one or more locations, got none.")
-    else:
+    elif num_locations != -2:
         test.assertTrue(
             num_locations == out_num_locations,
             "Expecting %d locations, got %d." %
@@ -1249,11 +1250,11 @@ def join_remote_paths(*paths):
     return os.path.join(*paths).replace(os.path.sep, '/')
 
 
-def append_to_process_working_directory(*paths):
+def append_to_process_working_directory(test, *paths):
     remote = lldb.remote_platform
     if remote:
         return join_remote_paths(remote.GetWorkingDirectory(), *paths)
-    return os.path.join(os.getcwd(), *paths)
+    return os.path.join(test.getBuildDir(), *paths)
 
 # ==================================================
 # Utility functions to get the correct signal number
@@ -1320,6 +1321,21 @@ def skip_if_library_missing(test, target, library):
          target))
 
 
+def read_file_on_target(test, remote):
+    if lldb.remote_platform:
+        local = test.getBuildArtifact("file_from_target")
+        error = lldb.remote_platform.Get(lldb.SBFileSpec(remote, False),
+                    lldb.SBFileSpec(local, True))
+        test.assertTrue(error.Success(), "Reading file {0} failed: {1}".format(remote, error))
+    else:
+        local = remote
+    with open(local, 'r') as f:
+        return f.read()
+
+def read_file_from_process_wd(test, name):
+    path = append_to_process_working_directory(test, name)
+    return read_file_on_target(test, path)
+
 def wait_for_file_on_target(testcase, file_path, max_attempts=6):
     for i in range(max_attempts):
         err, retcode, msg = testcase.run_platform_command("ls %s" % file_path)
@@ -1334,9 +1350,4 @@ def wait_for_file_on_target(testcase, file_path, max_attempts=6):
             "File %s not found even after %d attempts." %
             (file_path, max_attempts))
 
-    err, retcode, data = testcase.run_platform_command("cat %s" % (file_path))
-
-    testcase.assertTrue(
-        err.Success() and retcode == 0, "Failed to read file %s: %s, retcode: %d" %
-        (file_path, err.GetCString(), retcode))
-    return data
+    return read_file_on_target(testcase, file_path)

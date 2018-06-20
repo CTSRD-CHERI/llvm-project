@@ -328,7 +328,7 @@ void MachineBasicBlock::print(raw_ostream &OS, ModuleSlotTracker &MST,
   bool HasLineAttributes = false;
 
   // Print the preds of this block according to the CFG.
-  if (!pred_empty()) {
+  if (!pred_empty() && IsStandalone) {
     if (Indexes) OS << '\t';
     // Don't indent(2), align with previous line attributes.
     OS << "; predecessors: ";
@@ -354,7 +354,7 @@ void MachineBasicBlock::print(raw_ostream &OS, ModuleSlotTracker &MST,
            << format("0x%08" PRIx32, getSuccProbability(I).getNumerator())
            << ')';
     }
-    if (!Probs.empty()) {
+    if (!Probs.empty() && IsStandalone) {
       // Print human readable probabilities as comments.
       OS << "; ";
       for (auto I = succ_begin(), E = succ_end(); I != E; ++I) {
@@ -387,7 +387,6 @@ void MachineBasicBlock::print(raw_ostream &OS, ModuleSlotTracker &MST,
       if (!LI.LaneMask.all())
         OS << ":0x" << PrintLaneMask(LI.LaneMask);
     }
-    OS << '\n';
     HasLineAttributes = true;
   }
 
@@ -415,14 +414,12 @@ void MachineBasicBlock::print(raw_ostream &OS, ModuleSlotTracker &MST,
       OS << " {";
       IsInBundle = true;
     }
-
-    OS << '\n';
   }
 
   if (IsInBundle)
     OS.indent(2) << "}\n";
 
-  if (IrrLoopHeaderWeight) {
+  if (IrrLoopHeaderWeight && IsStandalone) {
     if (Indexes) OS << '\t';
     OS.indent(2) << "; Irreducible loop header weight: "
                  << IrrLoopHeaderWeight.getValue() << '\n';
@@ -1255,6 +1252,16 @@ MachineBasicBlock::findDebugLoc(instr_iterator MBBI) {
   MBBI = skipDebugInstructionsForward(MBBI, instr_end());
   if (MBBI != instr_end())
     return MBBI->getDebugLoc();
+  return {};
+}
+
+/// Find the previous valid DebugLoc preceding MBBI, skipping and DBG_VALUE
+/// instructions.  Return UnknownLoc if there is none.
+DebugLoc MachineBasicBlock::findPrevDebugLoc(instr_iterator MBBI) {
+  if (MBBI == instr_begin()) return {};
+  // Skip debug declarations, we don't want a DebugLoc from them.
+  MBBI = skipDebugInstructionsBackward(std::prev(MBBI), instr_begin());
+  if (!MBBI->isDebugValue()) return MBBI->getDebugLoc();
   return {};
 }
 

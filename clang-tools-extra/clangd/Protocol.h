@@ -100,6 +100,10 @@ struct Position {
     return std::tie(LHS.line, LHS.character) <
            std::tie(RHS.line, RHS.character);
   }
+  friend bool operator<=(const Position &LHS, const Position &RHS) {
+    return std::tie(LHS.line, LHS.character) <=
+           std::tie(RHS.line, RHS.character);
+  }
 };
 bool fromJSON(const json::Expr &, Position &);
 json::Expr toJSON(const Position &);
@@ -115,9 +119,14 @@ struct Range {
   friend bool operator==(const Range &LHS, const Range &RHS) {
     return std::tie(LHS.start, LHS.end) == std::tie(RHS.start, RHS.end);
   }
+  friend bool operator!=(const Range &LHS, const Range &RHS) {
+    return !(LHS == RHS);
+  }
   friend bool operator<(const Range &LHS, const Range &RHS) {
     return std::tie(LHS.start, LHS.end) < std::tie(RHS.start, RHS.end);
   }
+
+  bool contains(Position Pos) const { return start <= Pos && Pos < end; }
 };
 bool fromJSON(const json::Expr &, Range &);
 json::Expr toJSON(const Range &);
@@ -291,6 +300,12 @@ struct DidChangeTextDocumentParams {
 
   /// The actual content changes.
   std::vector<TextDocumentContentChangeEvent> contentChanges;
+
+  /// Forces diagnostics to be generated, or to not be generated, for this
+  /// version of the file. If not set, diagnostics are eventually consistent:
+  /// either they will be provided for this version or some subsequent one.
+  /// This is a clangd extension.
+  llvm::Optional<bool> wantDiagnostics;
 };
 bool fromJSON(const json::Expr &, DidChangeTextDocumentParams &);
 
@@ -317,6 +332,20 @@ struct DidChangeWatchedFilesParams {
   std::vector<FileEvent> changes;
 };
 bool fromJSON(const json::Expr &, DidChangeWatchedFilesParams &);
+
+/// Clangd extension to manage a workspace/didChangeConfiguration notification
+/// since the data received is described as 'any' type in LSP.
+struct ClangdConfigurationParamsChange {
+  llvm::Optional<std::string> compilationDatabasePath;
+};
+bool fromJSON(const json::Expr &, ClangdConfigurationParamsChange &);
+
+struct DidChangeConfigurationParams {
+  // We use this predefined struct because it is easier to use
+  // than the protocol specified type of 'any'.
+  ClangdConfigurationParamsChange settings;
+};
+bool fromJSON(const json::Expr &, DidChangeConfigurationParams &);
 
 struct FormattingOptions {
   /// Size of a tab in spaces.
@@ -384,13 +413,14 @@ struct Diagnostic {
   /// The diagnostic's message.
   std::string message;
 };
+
 /// A LSP-specific comparator used to find diagnostic in a container like
 /// std:map.
 /// We only use the required fields of Diagnostic to do the comparsion to avoid
 /// any regression issues from LSP clients (e.g. VScode), see
 /// https://git.io/vbr29
 struct LSPDiagnosticCompare {
-  bool operator()(const Diagnostic& LHS, const Diagnostic& RHS) const {
+  bool operator()(const Diagnostic &LHS, const Diagnostic &RHS) const {
     return std::tie(LHS.range, LHS.message) < std::tie(RHS.range, RHS.message);
   }
 };
@@ -427,11 +457,20 @@ json::Expr toJSON(const WorkspaceEdit &WE);
 
 struct IncludeInsertion {
   /// The document in which the command was invoked.
+  /// If either originalHeader or preferredHeader has been (directly) included
+  /// in the current file, no new include will be inserted.
   TextDocumentIdentifier textDocument;
 
-  /// The header to be inserted. This could be either a URI ir a literal string
-  /// quoted with <> or "" that can be #included directly.
-  std::string header;
+  /// The declaring header corresponding to this insertion e.g. the header that
+  /// declares a symbol. This could be either a URI or a literal string quoted
+  /// with <> or "" that can be #included directly.
+  std::string declaringHeader;
+  /// The preferred header to be inserted. This may be different from
+  /// originalHeader as a header file can have a different canonical include.
+  /// This could be either a URI or a literal string quoted with <> or "" that
+  /// can be #included directly. If empty, declaringHeader is used to calculate
+  /// the #include path.
+  std::string preferredHeader;
 };
 bool fromJSON(const json::Expr &, IncludeInsertion &);
 json::Expr toJSON(const IncludeInsertion &II);

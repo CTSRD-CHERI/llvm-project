@@ -1,5 +1,5 @@
 // RUN: %clang_analyze_cc1 -triple x86_64-apple-darwin10 %s -o /dev/null -analyzer-checker=core,osx.cocoa,debug.ConfigDumper -analyzer-max-loop 34 > %t 2>&1
-// RUN: FileCheck --input-file=%t %s
+// RUN: FileCheck --input-file=%t %s --match-full-lines
 
 void bar() {}
 void foo() {
@@ -16,8 +16,9 @@ void foo() {
 // CHECK-NEXT: cfg-lifetime = false
 // CHECK-NEXT: cfg-loopexit = false
 // CHECK-NEXT: cfg-rich-constructors = true
-// CHECK-NEXT: cfg-temporary-dtors = false
-// CHECK-NEXT: exploration_strategy = dfs
+// CHECK-NEXT: cfg-scopes = false
+// CHECK-NEXT: cfg-temporary-dtors = true
+// CHECK-NEXT: exploration_strategy = unexplored_first_queue
 // CHECK-NEXT: faux-bodies = true
 // CHECK-NEXT: graph-trim-interval = 1000
 // CHECK-NEXT: inline-lambdas = true
@@ -34,4 +35,4 @@ void foo() {
 // CHECK-NEXT: unroll-loops = false
 // CHECK-NEXT: widen-loops = false
 // CHECK-NEXT: [stats]
-// CHECK-NEXT: num-entries = 22
+// CHECK-NEXT: num-entries = 23

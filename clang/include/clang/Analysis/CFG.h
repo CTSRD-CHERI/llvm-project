@@ -17,6 +17,7 @@
 
 #include "clang/AST/ExprCXX.h"
 #include "clang/Analysis/Support/BumpVector.h"
+#include "clang/Analysis/ConstructionContext.h"
 #include "clang/Basic/LLVM.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/GraphTraits.h"
@@ -56,14 +57,17 @@ public:
   enum Kind {
     // main kind
     Initializer,
+    ScopeBegin,
+    ScopeEnd,
     NewAllocator,
     LifetimeEnds,
     LoopExit,
     // stmt kind
     Statement,
     Constructor,
+    CXXRecordTypedCall,
     STMT_BEGIN = Statement,
-    STMT_END = Constructor,
+    STMT_END = CXXRecordTypedCall,
     // dtor kind
     AutomaticObjectDtor,
     DeleteDtor,
@@ -140,45 +144,6 @@ protected:
   CFGStmt() = default;
 };
 
-// This is bulky data for CFGConstructor which would not fit into the
-// CFGElement's room (pair of pointers). Contains the information
-// necessary to express what memory is being initialized by
-// the construction.
-class ConstructionContext {
-public:
-  typedef llvm::PointerUnion<Stmt *, CXXCtorInitializer *> TriggerTy;
-
-private:
-  // The construction site - the statement that triggered the construction
-  // for one of its parts. For instance, stack variable declaration statement
-  // triggers construction of itself or its elements if it's an array,
-  // new-expression triggers construction of the newly allocated object(s).
-  TriggerTy Trigger;
-
-public:
-  ConstructionContext() = default;
-  ConstructionContext(TriggerTy Trigger)
-      : Trigger(Trigger) {}
-
-  bool isNull() const { return Trigger.isNull(); }
-
-  TriggerTy getTrigger() const { return Trigger; }
-
-  const Stmt *getTriggerStmt() const {
-    return Trigger.dyn_cast<Stmt *>();
-  }
-
-  const CXXCtorInitializer *getTriggerInit() const {
-    return Trigger.dyn_cast<CXXCtorInitializer *>();
-  }
-
-  const ConstructionContext *getPersistentCopy(BumpVectorContext &C) const {
-    ConstructionContext *CC = C.getAllocator().Allocate<ConstructionContext>();
-    *CC = *this;
-    return CC;
-  }
-};
-
 /// CFGConstructor - Represents C++ constructor call. Maintains information
 /// necessary to figure out what memory is being initialized by the
 /// constructor expression. For now this is only used by the analyzer's CFG.
@@ -186,28 +151,12 @@ class CFGConstructor : public CFGStmt {
 public:
   explicit CFGConstructor(CXXConstructExpr *CE, const ConstructionContext *C)
       : CFGStmt(CE, Constructor) {
-    assert(!C->isNull());
+    assert(C);
     Data2.setPointer(const_cast<ConstructionContext *>(C));
   }
 
   const ConstructionContext *getConstructionContext() const {
     return static_cast<ConstructionContext *>(Data2.getPointer());
-  }
-
-  QualType getType() const {
-    return cast<CXXConstructExpr>(getStmt())->getType();
-  }
-
-  ConstructionContext::TriggerTy getTrigger() const {
-    return getConstructionContext()->getTrigger();
-  }
-
-  const Stmt *getTriggerStmt() const {
-    return getConstructionContext()->getTriggerStmt();
-  }
-
-  const CXXCtorInitializer *getTriggerInit() const {
-    return getConstructionContext()->getTriggerInit();
   }
 
 private:
@@ -217,6 +166,47 @@ private:
 
   static bool isKind(const CFGElement &E) {
     return E.getKind() == Constructor;
+  }
+};
+
+/// CFGCXXRecordTypedCall - Represents a function call that returns a C++ object
+/// by value. This, like constructor, requires a construction context in order
+/// to understand the storage of the returned object . In C such tracking is not
+/// necessary because no additional effort is required for destroying the object
+/// or modeling copy elision. Like CFGConstructor, this element is for now only
+/// used by the analyzer's CFG.
+class CFGCXXRecordTypedCall : public CFGStmt {
+public:
+  /// Returns true when call expression \p CE needs to be represented
+  /// by CFGCXXRecordTypedCall, as opposed to a regular CFGStmt.
+  static bool isCXXRecordTypedCall(CallExpr *CE, const ASTContext &ACtx) {
+    return CE->getCallReturnType(ACtx).getCanonicalType()->getAsCXXRecordDecl();
+  }
+
+  explicit CFGCXXRecordTypedCall(CallExpr *CE, const ConstructionContext *C)
+      : CFGStmt(CE, CXXRecordTypedCall) {
+    // FIXME: This is not protected against squeezing a non-record-typed-call
+    // into the constructor. An assertion would require passing an ASTContext
+    // which would mean paying for something we don't use.
+    assert(C && (isa<TemporaryObjectConstructionContext>(C) ||
+                 // These are possible in C++17 due to mandatory copy elision.
+                 isa<ReturnedValueConstructionContext>(C) ||
+                 isa<VariableConstructionContext>(C) ||
+                 isa<ConstructorInitializerConstructionContext>(C)));
+    Data2.setPointer(const_cast<ConstructionContext *>(C));
+  }
+
+  const ConstructionContext *getConstructionContext() const {
+    return static_cast<ConstructionContext *>(Data2.getPointer());
+  }
+
+private:
+  friend class CFGElement;
+
+  CFGCXXRecordTypedCall() = default;
+
+  static bool isKind(const CFGElement &E) {
+    return E.getKind() == CXXRecordTypedCall;
   }
 };
 
@@ -307,6 +297,55 @@ private:
 
   static bool isKind(const CFGElement &elem) {
     return elem.getKind() == LifetimeEnds;
+  }
+};
+
+/// Represents beginning of a scope implicitly generated
+/// by the compiler on encountering a CompoundStmt
+class CFGScopeBegin : public CFGElement {
+public:
+  CFGScopeBegin() {}
+  CFGScopeBegin(const VarDecl *VD, const Stmt *S)
+      : CFGElement(ScopeBegin, VD, S) {}
+
+  // Get statement that triggered a new scope.
+  const Stmt *getTriggerStmt() const {
+    return static_cast<Stmt*>(Data2.getPointer());
+  }
+
+  // Get VD that triggered a new scope.
+  const VarDecl *getVarDecl() const {
+    return static_cast<VarDecl *>(Data1.getPointer());
+  }
+
+private:
+  friend class CFGElement;
+  static bool isKind(const CFGElement &E) {
+    Kind kind = E.getKind();
+    return kind == ScopeBegin;
+  }
+};
+
+/// Represents end of a scope implicitly generated by
+/// the compiler after the last Stmt in a CompoundStmt's body
+class CFGScopeEnd : public CFGElement {
+public:
+  CFGScopeEnd() {}
+  CFGScopeEnd(const VarDecl *VD, const Stmt *S) : CFGElement(ScopeEnd, VD, S) {}
+
+  const VarDecl *getVarDecl() const {
+    return static_cast<VarDecl *>(Data1.getPointer());
+  }
+
+  const Stmt *getTriggerStmt() const {
+    return static_cast<Stmt *>(Data2.getPointer());
+  }
+
+private:
+  friend class CFGElement;
+  static bool isKind(const CFGElement &E) {
+    Kind kind = E.getKind();
+    return kind == ScopeEnd;
   }
 };
 
@@ -834,9 +873,15 @@ public:
     Elements.push_back(CFGStmt(statement), C);
   }
 
-  void appendConstructor(CXXConstructExpr *CE, const ConstructionContext &CC,
+  void appendConstructor(CXXConstructExpr *CE, const ConstructionContext *CC,
                          BumpVectorContext &C) {
-    Elements.push_back(CFGConstructor(CE, CC.getPersistentCopy(C)), C);
+    Elements.push_back(CFGConstructor(CE, CC), C);
+  }
+
+  void appendCXXRecordTypedCall(CallExpr *CE,
+                                const ConstructionContext *CC,
+                                BumpVectorContext &C) {
+    Elements.push_back(CFGCXXRecordTypedCall(CE, CC), C);
   }
 
   void appendInitializer(CXXCtorInitializer *initializer,
@@ -847,6 +892,24 @@ public:
   void appendNewAllocator(CXXNewExpr *NE,
                           BumpVectorContext &C) {
     Elements.push_back(CFGNewAllocator(NE), C);
+  }
+
+  void appendScopeBegin(const VarDecl *VD, const Stmt *S,
+                        BumpVectorContext &C) {
+    Elements.push_back(CFGScopeBegin(VD, S), C);
+  }
+
+  void prependScopeBegin(const VarDecl *VD, const Stmt *S,
+                         BumpVectorContext &C) {
+    Elements.insert(Elements.rbegin(), 1, CFGScopeBegin(VD, S), C);
+  }
+
+  void appendScopeEnd(const VarDecl *VD, const Stmt *S, BumpVectorContext &C) {
+    Elements.push_back(CFGScopeEnd(VD, S), C);
+  }
+
+  void prependScopeEnd(const VarDecl *VD, const Stmt *S, BumpVectorContext &C) {
+    Elements.insert(Elements.rbegin(), 1, CFGScopeEnd(VD, S), C);
   }
 
   void appendBaseDtor(const CXXBaseSpecifier *BS, BumpVectorContext &C) {
@@ -902,6 +965,19 @@ public:
     *I = CFGLifetimeEnds(VD, S);
     return ++I;
   }
+
+  // Scope leaving must be performed in reversed order. So insertion is in two
+  // steps. First we prepare space for some number of elements, then we insert
+  // the elements beginning at the last position in prepared space.
+  iterator beginScopeEndInsert(iterator I, size_t Cnt, BumpVectorContext &C) {
+    return iterator(
+        Elements.insert(I.base(), Cnt, CFGScopeEnd(nullptr, nullptr), C));
+  }
+  iterator insertScopeEnd(iterator I, VarDecl *VD, Stmt *S) {
+    *I = CFGScopeEnd(VD, S);
+    return ++I;
+  }
+
 };
 
 /// \brief CFGCallback defines methods that should be called when a logical
@@ -944,6 +1020,7 @@ public:
     bool AddLifetime = false;
     bool AddLoopExit = false;
     bool AddTemporaryDtors = false;
+    bool AddScopes = false;
     bool AddStaticInitBranches = false;
     bool AddCXXNewAllocator = false;
     bool AddCXXDefaultInitExprInCtors = false;

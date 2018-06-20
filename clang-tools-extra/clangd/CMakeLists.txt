@@ -3,6 +3,7 @@ set(LLVM_LINK_COMPONENTS
   )
 
 add_clang_library(clangDaemon
+  AST.cpp
   ClangdLSPServer.cpp
   ClangdServer.cpp
   ClangdUnit.cpp
@@ -11,6 +12,7 @@ add_clang_library(clangDaemon
   CompileArgsCache.cpp
   Compiler.cpp
   Context.cpp
+  Diagnostics.cpp
   DraftStore.cpp
   FuzzyMatch.cpp
   GlobalCompilationDatabase.cpp

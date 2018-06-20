@@ -71,8 +71,11 @@ Name prefix            Description
 ``mpi-``               Checks related to MPI (Message Passing Interface).
 ``objc-``              Checks related to Objective-C coding conventions.
 ``performance-``       Checks that target performance-related issues.
+``portability-``       Checks that target portability-related issues that don't
+                       relate to any particular coding style.
 ``readability-``       Checks that target readability-related issues that don't
                        relate to any particular coding style.
+``zircon-``            Checks related to Zircon kernel coding conventions.
 ====================== =========================================================
 
 Clang diagnostics are treated in a similar way as check diagnostics. Clang

@@ -13,7 +13,6 @@
 
 // Other libraries and framework includes
 #include "clang/Basic/TargetInfo.h"
-#include "clang/Driver/Driver.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/FrontendActions.h"
 #include "clang/Lex/Preprocessor.h"
@@ -28,6 +27,7 @@
 // Project includes
 #include "ClangModulesDeclVendor.h"
 
+#include "lldb/Core/ModuleList.h"
 #include "lldb/Host/Host.h"
 #include "lldb/Host/HostInfo.h"
 #include "lldb/Symbol/CompileUnit.h"
@@ -169,7 +169,7 @@ ClangModulesDeclVendorImpl::ClangModulesDeclVendorImpl(
     : m_diagnostics_engine(std::move(diagnostics_engine)),
       m_compiler_invocation(std::move(compiler_invocation)),
       m_compiler_instance(std::move(compiler_instance)),
-      m_parser(std::move(parser)) {}
+      m_parser(std::move(parser)), m_origin_map() {}
 
 void ClangModulesDeclVendorImpl::ReportModuleExportsHelper(
     std::set<ClangModulesDeclVendor::ModuleID> &exports,
@@ -591,12 +591,11 @@ ClangModulesDeclVendor::Create(Target &target) {
   // Add additional search paths with { "-I", path } or { "-F", path } here.
 
   {
-    llvm::SmallString<128> Path;
-    target.GetClangModulesCachePath().GetPath(Path);
-    if (Path.empty())
-      clang::driver::Driver::getDefaultModuleCachePath(Path);
+    llvm::SmallString<128> path;
+    auto props = ModuleList::GetGlobalModuleListProperties();
+    props.GetClangModulesCachePath().GetPath(path);
     std::string module_cache_argument("-fmodules-cache-path=");
-    module_cache_argument.append(Path.str());
+    module_cache_argument.append(path.str());
     compiler_invocation_arguments.push_back(module_cache_argument);
   }
 

@@ -164,7 +164,9 @@ sum = 0.0;
 
 // CHECK: define internal void @[[RED_INIT2]](i8*)
 // CHECK: call i8* @__kmpc_threadprivate_cached(
-// CHECK: call i8* @__kmpc_threadprivate_cached(
+// CHECK: [[ORIG_PTR_ADDR:%.+]] = call i8* @__kmpc_threadprivate_cached(
+// CHECK: [[ORIG_PTR_REF:%.+]] = bitcast i8* [[ORIG_PTR_ADDR]] to i8**
+// CHECK: load i8*, i8** [[ORIG_PTR_REF]],
 // CHECK: call void @llvm.memcpy.p0i8.p0i8.i64(
 // CHECK: ret void
 
@@ -198,6 +200,17 @@ sum = 0.0;
 // CHECK: fadd float %
 // CHECK: store float %{{.+}}, float* %
 // CHECK: ret void
+
+// CHECK-NOT: call i8* @__kmpc_threadprivate_cached(
+// CHECK: call i8* @__kmpc_task_reduction_get_th_data(
+// CHECK: call i8* @__kmpc_threadprivate_cached(
+// CHECK: call i8* @__kmpc_threadprivate_cached(
+// CHECK: call i8* @__kmpc_task_reduction_get_th_data(
+// CHECK-NOT: call i8* @__kmpc_threadprivate_cached(
+// CHECK: call i8* @__kmpc_task_reduction_get_th_data(
+// CHECK: call i8* @__kmpc_threadprivate_cached(
+// CHECK: call i8* @__kmpc_task_reduction_get_th_data(
+// CHECK-NOT: call i8* @__kmpc_threadprivate_cached(
 
 // CHECK-DAG: distinct !DISubprogram(linkageName: "[[TASK]]", scope: !
 // CHECK-DAG: !DISubprogram(linkageName: "[[RED_INIT1]]"

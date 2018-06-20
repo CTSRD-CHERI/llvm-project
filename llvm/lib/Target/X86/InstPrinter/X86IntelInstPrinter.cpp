@@ -49,6 +49,9 @@ void X86IntelInstPrinter::printInst(const MCInst *MI, raw_ostream &OS,
   else if (Flags & X86::IP_HAS_REPEAT)
     OS << "\trep\t";
 
+  if ((TSFlags & X86II::NOTRACK) || (Flags & X86::IP_HAS_NOTRACK))
+    OS << "\tnotrack\t";
+
   printInstruction(MI, OS);
 
   // Next always print the annotation.
@@ -56,7 +59,7 @@ void X86IntelInstPrinter::printInst(const MCInst *MI, raw_ostream &OS,
 
   // If verbose assembly is enabled, we can print some informative comments.
   if (CommentStream)
-    EmitAnyX86InstComments(MI, *CommentStream, getRegisterName);
+    EmitAnyX86InstComments(MI, *CommentStream, MII, getRegisterName);
 }
 
 void X86IntelInstPrinter::printSSEAVXCC(const MCInst *MI, unsigned Op,

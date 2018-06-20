@@ -889,8 +889,8 @@ unsigned ContinuationIndenter::getNewLineColumn(const LineState &State) {
   if ((PreviousNonComment &&
        (PreviousNonComment->ClosesTemplateDeclaration ||
         PreviousNonComment->isOneOf(
-            TT_AttributeParen, TT_FunctionAnnotationRParen, TT_JavaAnnotation,
-            TT_LeadingJavaAnnotation))) ||
+            TT_AttributeParen, TT_AttributeSquare, TT_FunctionAnnotationRParen,
+            TT_JavaAnnotation, TT_LeadingJavaAnnotation))) ||
       (!Style.IndentWrappedFunctionNames &&
        NextNonComment->isOneOf(tok::kw_operator, TT_FunctionDeclarationName)))
     return std::max(State.Stack.back().LastSpace, State.Stack.back().Indent);
@@ -1385,9 +1385,10 @@ unsigned ContinuationIndenter::reformatRawStringLiteral(
   // violate the rectangle rule and visually flows within the surrounding
   // source.
   bool ContentStartsOnNewline = Current.TokenText[OldPrefixSize] == '\n';
-  unsigned NextStartColumn = ContentStartsOnNewline
-                                 ? State.Stack.back().Indent + Style.IndentWidth
-                                 : FirstStartColumn;
+  unsigned NextStartColumn =
+      ContentStartsOnNewline
+          ? State.Stack.back().NestedBlockIndent + Style.IndentWidth
+          : FirstStartColumn;
 
   // The last start column is the column the raw string suffix starts if it is
   // put on a newline.
@@ -1399,7 +1400,7 @@ unsigned ContinuationIndenter::reformatRawStringLiteral(
   //     indent.
   unsigned LastStartColumn = Current.NewlinesBefore
                                  ? FirstStartColumn - NewPrefixSize
-                                 : State.Stack.back().Indent;
+                                 : State.Stack.back().NestedBlockIndent;
 
   std::pair<tooling::Replacements, unsigned> Fixes = internal::reformat(
       RawStringStyle, RawText, {tooling::Range(0, RawText.size())},
@@ -1453,7 +1454,13 @@ unsigned ContinuationIndenter::reformatRawStringLiteral(
   unsigned RawLastLineEndColumn = getLastLineEndColumn(
       *NewCode, FirstStartColumn, Style.TabWidth, Encoding);
   State.Column = RawLastLineEndColumn + NewSuffixSize;
-  return Fixes.second;
+  // Since we're updating the column to after the raw string literal here, we
+  // have to manually add the penalty for the prefix R"delim( over the column
+  // limit.
+  unsigned PrefixExcessCharacters =
+      StartColumn + NewPrefixSize > Style.ColumnLimit ?
+      StartColumn + NewPrefixSize - Style.ColumnLimit : 0;
+  return Fixes.second + PrefixExcessCharacters * Style.PenaltyExcessCharacter;
 }
 
 unsigned ContinuationIndenter::addMultilineToken(const FormatToken &Current,
@@ -1479,7 +1486,7 @@ unsigned ContinuationIndenter::handleEndOfLine(const FormatToken &Current,
   // Compute the raw string style to use in case this is a raw string literal
   // that can be reformatted.
   auto RawStringStyle = getRawStringStyle(Current, State);
-  if (RawStringStyle) {
+  if (RawStringStyle && !Current.Finalized) {
     Penalty = reformatRawStringLiteral(Current, State, *RawStringStyle, DryRun);
   } else if (Current.IsMultiline && Current.isNot(TT_BlockComment)) {
     // Don't break multi-line tokens other than block comments and raw string

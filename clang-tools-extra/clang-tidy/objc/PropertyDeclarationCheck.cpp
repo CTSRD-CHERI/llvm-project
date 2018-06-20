@@ -50,6 +50,7 @@ constexpr llvm::StringLiteral DefaultSpecialAcronyms[] = {
     "FTP",
     "GIF",
     "GPS",
+    "GUID",
     "HD",
     "HDR",
     "HTML",
@@ -87,6 +88,7 @@ constexpr llvm::StringLiteral DefaultSpecialAcronyms[] = {
     "UI",
     "URI",
     "URL",
+    "UUID",
     "VC",
     "VOIP",
     "VPN",
@@ -168,6 +170,10 @@ PropertyDeclarationCheck::PropertyDeclarationCheck(StringRef Name,
       EscapedAcronyms() {}
 
 void PropertyDeclarationCheck::registerMatchers(MatchFinder *Finder) {
+  // this check should only be applied to ObjC sources.
+  if (!getLangOpts().ObjC1 && !getLangOpts().ObjC2) {
+    return;
+  }
   if (IncludeDefaultAcronyms) {
     EscapedAcronyms.reserve(llvm::array_lengthof(DefaultSpecialAcronyms) +
                             SpecialAcronyms.size());

@@ -18,19 +18,22 @@
 namespace clang {
 namespace clangd {
 
-Tagged<CompletionList>
+// Calls addDocument and then blockUntilIdleForTest.
+void runAddDocument(ClangdServer &Server, PathRef File, StringRef Contents,
+                    WantDiagnostics WantDiags = WantDiagnostics::Auto,
+                    bool SkipCache = false);
+
+llvm::Expected<CompletionList>
 runCodeComplete(ClangdServer &Server, PathRef File, Position Pos,
-                clangd::CodeCompleteOptions Opts,
-                llvm::Optional<StringRef> OverridenContents = llvm::None);
+                clangd::CodeCompleteOptions Opts);
 
-llvm::Expected<Tagged<SignatureHelp>>
-runSignatureHelp(ClangdServer &Server, PathRef File, Position Pos,
-                 llvm::Optional<StringRef> OverridenContents = llvm::None);
+llvm::Expected<SignatureHelp> runSignatureHelp(ClangdServer &Server,
+                                               PathRef File, Position Pos);
 
-llvm::Expected<Tagged<std::vector<Location>>>
+llvm::Expected<std::vector<Location>>
 runFindDefinitions(ClangdServer &Server, PathRef File, Position Pos);
 
-llvm::Expected<Tagged<std::vector<DocumentHighlight>>>
+llvm::Expected<std::vector<DocumentHighlight>>
 runFindDocumentHighlights(ClangdServer &Server, PathRef File, Position Pos);
 
 llvm::Expected<std::vector<tooling::Replacement>>

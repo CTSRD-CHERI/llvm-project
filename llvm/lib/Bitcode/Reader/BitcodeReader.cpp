@@ -1047,19 +1047,21 @@ static Comdat::SelectionKind getDecodedComdatSelectionKind(unsigned Val) {
 
 static FastMathFlags getDecodedFastMathFlags(unsigned Val) {
   FastMathFlags FMF;
-  if (0 != (Val & FastMathFlags::AllowReassoc))
+  if (0 != (Val & bitc::UnsafeAlgebra))
+    FMF.setFast();
+  if (0 != (Val & bitc::AllowReassoc))
     FMF.setAllowReassoc();
-  if (0 != (Val & FastMathFlags::NoNaNs))
+  if (0 != (Val & bitc::NoNaNs))
     FMF.setNoNaNs();
-  if (0 != (Val & FastMathFlags::NoInfs))
+  if (0 != (Val & bitc::NoInfs))
     FMF.setNoInfs();
-  if (0 != (Val & FastMathFlags::NoSignedZeros))
+  if (0 != (Val & bitc::NoSignedZeros))
     FMF.setNoSignedZeros();
-  if (0 != (Val & FastMathFlags::AllowReciprocal))
+  if (0 != (Val & bitc::AllowReciprocal))
     FMF.setAllowReciprocal();
-  if (0 != (Val & FastMathFlags::AllowContract))
+  if (0 != (Val & bitc::AllowContract))
     FMF.setAllowContract(true);
-  if (0 != (Val & FastMathFlags::ApproxFunc))
+  if (0 != (Val & bitc::ApproxFunc))
     FMF.setApproxFunc();
   return FMF;
 }
@@ -1158,6 +1160,8 @@ static uint64_t getRawAttributeMask(Attribute::AttrKind Val) {
   case Attribute::Speculatable:    return 1ULL << 54;
   case Attribute::StrictFP:        return 1ULL << 55;
   case Attribute::SanitizeHWAddress: return 1ULL << 56;
+  case Attribute::NoCfCheck:       return 1ULL << 57;
+  case Attribute::OptForFuzzing:   return 1ULL << 58;
   case Attribute::Dereferenceable:
     llvm_unreachable("dereferenceable attribute not supported in raw format");
     break;
@@ -1336,8 +1340,12 @@ static Attribute::AttrKind getAttrFromCode(uint64_t Code) {
     return Attribute::NoRedZone;
   case bitc::ATTR_KIND_NO_RETURN:
     return Attribute::NoReturn;
+  case bitc::ATTR_KIND_NOCF_CHECK:
+    return Attribute::NoCfCheck;
   case bitc::ATTR_KIND_NO_UNWIND:
     return Attribute::NoUnwind;
+  case bitc::ATTR_KIND_OPT_FOR_FUZZING:
+    return Attribute::OptForFuzzing;
   case bitc::ATTR_KIND_OPTIMIZE_FOR_SIZE:
     return Attribute::OptimizeForSize;
   case bitc::ATTR_KIND_OPTIMIZE_NONE:

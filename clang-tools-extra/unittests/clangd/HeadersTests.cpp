@@ -24,27 +24,28 @@ public:
   }
 
 protected:
-  // Adds \p File with content \p Code to the sub directory and returns the
-  // absolute path.
-//  std::string addToSubdir(PathRef File, llvm::StringRef Code = "") {
-//    assert(llvm::sys::path::is_relative(File) && "FileName should be relative");
-//    llvm::SmallString<32> Path;
-//    llvm::sys::path::append(Path, Subdir, File);
-//    FS.Files[Path] = Code;
-//    return Path.str();
-//  };
-
-  // Shortens the header and returns "" on error.
-  std::string shorten(PathRef Header) {
-    auto VFS = FS.getTaggedFileSystem(MainFile).Value;
+  // Calculates the include path, or returns "" on error.
+  std::string calculate(PathRef Original, PathRef Preferred = "",
+                        bool ExpectError = false) {
+    if (Preferred.empty())
+      Preferred = Original;
+    auto VFS = FS.getFileSystem();
     auto Cmd = CDB.getCompileCommand(MainFile);
     assert(static_cast<bool>(Cmd));
     VFS->setCurrentWorkingDirectory(Cmd->Directory);
-    auto Path =
-        shortenIncludePath(MainFile, FS.Files[MainFile], Header, *Cmd, VFS);
+    auto ToHeaderFile = [](llvm::StringRef Header) {
+      return HeaderFile{Header,
+                        /*Verbatim=*/!llvm::sys::path::is_absolute(Header)};
+    };
+    auto Path = calculateIncludePath(MainFile, FS.Files[MainFile],
+                                     ToHeaderFile(Original),
+                                     ToHeaderFile(Preferred), *Cmd, VFS);
     if (!Path) {
       llvm::consumeError(Path.takeError());
+      EXPECT_TRUE(ExpectError);
       return std::string();
+    } else {
+      EXPECT_FALSE(ExpectError);
     }
     return std::move(*Path);
   }
@@ -58,7 +59,7 @@ protected:
 TEST_F(HeadersTest, InsertInclude) {
   std::string Path = testPath("sub/bar.h");
   FS.Files[Path] = "";
-  EXPECT_EQ(shorten(Path), "\"bar.h\"");
+  EXPECT_EQ(calculate(Path), "\"bar.h\"");
 }
 
 TEST_F(HeadersTest, DontInsertDuplicateSameName) {
@@ -67,7 +68,7 @@ TEST_F(HeadersTest, DontInsertDuplicateSameName) {
 )cpp";
   std::string BarHeader = testPath("sub/bar.h");
   FS.Files[BarHeader] = "";
-  EXPECT_EQ(shorten(BarHeader), "");
+  EXPECT_EQ(calculate(BarHeader), "");
 }
 
 TEST_F(HeadersTest, DontInsertDuplicateDifferentName) {
@@ -76,7 +77,21 @@ TEST_F(HeadersTest, DontInsertDuplicateDifferentName) {
   FS.Files[MainFile] = R"cpp(
 #include "sub/bar.h"  // not shortest
 )cpp";
-  EXPECT_EQ(shorten(BarHeader), "");
+  EXPECT_EQ(calculate("\"sub/bar.h\""), ""); // Duplicate rewritten.
+  EXPECT_EQ(calculate(BarHeader), "");       // Duplicate resolved.
+  EXPECT_EQ(calculate(BarHeader, "\"BAR.h\""), ""); // Do not insert preferred.
+}
+
+TEST_F(HeadersTest, DontInsertDuplicatePreferred) {
+  std::string BarHeader = testPath("sub/bar.h");
+  FS.Files[BarHeader] = "";
+  FS.Files[MainFile] = R"cpp(
+#include "sub/bar.h"  // not shortest
+)cpp";
+  // Duplicate written.
+  EXPECT_EQ(calculate("\"original.h\"", "\"sub/bar.h\""), "");
+  // Duplicate resolved.
+  EXPECT_EQ(calculate("\"original.h\"", BarHeader), "");
 }
 
 TEST_F(HeadersTest, StillInsertIfTrasitivelyIncluded) {
@@ -89,7 +104,24 @@ TEST_F(HeadersTest, StillInsertIfTrasitivelyIncluded) {
   FS.Files[MainFile] = R"cpp(
 #include "bar.h"
 )cpp";
-  EXPECT_EQ(shorten(BazHeader), "\"baz.h\"");
+  EXPECT_EQ(calculate(BazHeader), "\"baz.h\"");
+}
+
+TEST_F(HeadersTest, DoNotInsertIfInSameFile) {
+  MainFile = testPath("main.h");
+  FS.Files[MainFile] = "";
+  EXPECT_EQ(calculate(MainFile), "");
+}
+
+TEST_F(HeadersTest, PreferredHeader) {
+  FS.Files[MainFile] = "";
+  std::string BarHeader = testPath("sub/bar.h");
+  FS.Files[BarHeader] = "";
+  EXPECT_EQ(calculate(BarHeader, "<bar>"), "<bar>");
+
+  std::string BazHeader = testPath("sub/baz.h");
+  FS.Files[BazHeader] = "";
+  EXPECT_EQ(calculate(BarHeader, BazHeader), "\"baz.h\"");
 }
 
 } // namespace

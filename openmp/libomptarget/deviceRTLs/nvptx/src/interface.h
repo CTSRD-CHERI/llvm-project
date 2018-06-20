@@ -470,9 +470,8 @@ EXTERN void __kmpc_spmd_kernel_init(int ThreadLimit, int16_t RequiresOMPRuntime,
                                     int16_t RequiresDataSharing);
 EXTERN void __kmpc_spmd_kernel_deinit();
 EXTERN void __kmpc_kernel_prepare_parallel(void *WorkFn,
-                                           void ***SharedArgs, int32_t nArgs,
                                            int16_t IsOMPRuntimeInitialized);
-EXTERN bool __kmpc_kernel_parallel(void **WorkFn, void ***SharedArgs,
+EXTERN bool __kmpc_kernel_parallel(void **WorkFn,
                                    int16_t IsOMPRuntimeInitialized);
 EXTERN void __kmpc_kernel_end_parallel();
 EXTERN bool __kmpc_kernel_convergent_parallel(void *buffer, uint32_t Mask,
@@ -484,11 +483,21 @@ EXTERN bool __kmpc_kernel_convergent_simd(void *buffer, uint32_t Mask,
                                           int32_t *LaneId, int32_t *NumLanes);
 EXTERN void __kmpc_kernel_end_convergent_simd(void *buffer);
 
+
+EXTERN void __kmpc_data_sharing_init_stack();
+EXTERN void *__kmpc_data_sharing_push_stack(size_t size, int16_t UseSharedMemory);
+EXTERN void __kmpc_data_sharing_pop_stack(void *a);
+EXTERN void __kmpc_begin_sharing_variables(void ***GlobalArgs, size_t nArgs);
+EXTERN void __kmpc_end_sharing_variables();
+EXTERN void __kmpc_get_shared_variables(void ***GlobalArgs);
+
 // The slot used for data sharing by the master and worker threads. We use a
 // complete (default size version and an incomplete one so that we allow sizes
 // greater than the default).
 struct __kmpc_data_sharing_slot {
   __kmpc_data_sharing_slot *Next;
+  __kmpc_data_sharing_slot *Prev;
+  void *PrevSlotStackPtr;
   void *DataEnd;
   char Data[];
 };

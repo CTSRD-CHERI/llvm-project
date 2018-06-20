@@ -52,9 +52,10 @@ public:
   virtual void onRename(RenameParams &Parames) = 0;
   virtual void onDocumentHighlight(TextDocumentPositionParams &Params) = 0;
   virtual void onHover(TextDocumentPositionParams &Params) = 0;
+  virtual void onChangeConfiguration(DidChangeConfigurationParams &Params) = 0;
 };
 
-void registerCallbackHandlers(JSONRPCDispatcher &Dispatcher, JSONOutput &Out,
+void registerCallbackHandlers(JSONRPCDispatcher &Dispatcher,
                               ProtocolCallbacks &Callbacks);
 
 } // namespace clangd

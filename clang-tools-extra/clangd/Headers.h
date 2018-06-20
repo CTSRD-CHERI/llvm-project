@@ -18,18 +18,39 @@
 
 namespace clang {
 namespace clangd {
+
+/// Returns true if \p Include is literal include like "path" or <path>.
+bool isLiteralInclude(llvm::StringRef Include);
+
+/// Represents a header file to be #include'd.
+struct HeaderFile {
+  std::string File;
+  /// If this is true, `File` is a literal string quoted with <> or "" that
+  /// can be #included directly; otherwise, `File` is an absolute file path.
+  bool Verbatim;
+
+  bool valid() const;
+};
+
 /// Determines the preferred way to #include a file, taking into account the
 /// search path. Usually this will prefer a shorter representation like
 /// 'Foo/Bar.h' over a longer one like 'Baz/include/Foo/Bar.h'.
 ///
-/// \param Header is an absolute file path.
-/// \return A quoted "path" or <path>. If \p Header is already (directly)
-/// included in the file (including those included via different paths), this
-/// returns an empty string.
+/// \param File is an absolute file path.
+/// \param DeclaringHeader is the original header corresponding to \p
+/// InsertedHeader e.g. the header that declares a symbol.
+/// \param InsertedHeader The preferred header to be inserted. This could be the
+/// same as DeclaringHeader but must be provided.
+//  \return A quoted "path" or <path>. This returns an empty string if:
+///   - Either \p DeclaringHeader or \p InsertedHeader is already (directly)
+///   included in the file (including those included via different paths).
+///   - \p DeclaringHeader or \p InsertedHeader is the same as \p File.
 llvm::Expected<std::string>
-shortenIncludePath(PathRef File, llvm::StringRef Code, llvm::StringRef Header,
-                   const tooling::CompileCommand &CompileCommand,
-                   IntrusiveRefCntPtr<vfs::FileSystem> FS);
+calculateIncludePath(PathRef File, llvm::StringRef Code,
+                     const HeaderFile &DeclaringHeader,
+                     const HeaderFile &InsertedHeader,
+                     const tooling::CompileCommand &CompileCommand,
+                     IntrusiveRefCntPtr<vfs::FileSystem> FS);
 
 } // namespace clangd
 } // namespace clang

@@ -198,6 +198,7 @@
 #include <term.h>
 #include <termios.h>
 #include <time.h>
+#include <ttyent.h>
 #include <utime.h>
 #include <utmp.h>
 #include <utmpx.h>
@@ -257,8 +258,6 @@ int ptrace_pt_get_event_mask = PT_GET_EVENT_MASK;
 int ptrace_pt_get_process_state = PT_GET_PROCESS_STATE;
 int ptrace_pt_set_siginfo = PT_SET_SIGINFO;
 int ptrace_pt_get_siginfo = PT_GET_SIGINFO;
-int ptrace_pt_set_sigmask = PT_SET_SIGMASK;
-int ptrace_pt_get_sigmask = PT_GET_SIGMASK;
 int ptrace_piod_read_d = PIOD_READ_D;
 int ptrace_piod_write_d = PIOD_WRITE_D;
 int ptrace_piod_read_i = PIOD_READ_I;
@@ -337,6 +336,8 @@ int glob_nomatch = GLOB_NOMATCH;
 int glob_altdirfunc = GLOB_ALTDIRFUNC;
 
 unsigned path_max = PATH_MAX;
+
+int struct_ttyent_sz = sizeof(struct ttyent);
 
 // ioctl arguments
 unsigned struct_altqreq_sz = sizeof(altqreq);

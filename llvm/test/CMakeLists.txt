@@ -56,7 +56,7 @@ set(LLVM_TEST_DEPENDS
           llvm-diff
           llvm-dis
           llvm-dlltool
-          llvm-dsymutil
+          dsymutil
           llvm-dwarfdump
           llvm-dwp
           llvm-extract
@@ -66,6 +66,7 @@ set(LLVM_TEST_DEPENDS
           llvm-link
           llvm-lto2
           llvm-mc
+          llvm-mca
           llvm-mcmarkup
           llvm-modextract
           llvm-mt

@@ -314,6 +314,14 @@ private:
       }
       return MergedLines;
     }
+    // Don't merge block with left brace wrapped after ObjC special blocks
+    if (TheLine->First->is(tok::l_brace) && I != AnnotatedLines.begin() &&
+        I[-1]->First->is(tok::at) && I[-1]->First->Next) {
+      tok::ObjCKeywordKind kwId = I[-1]->First->Next->Tok.getObjCKeywordID();
+      if (kwId == clang::tok::objc_autoreleasepool ||
+          kwId == clang::tok::objc_synchronized)
+        return 0;
+    }
     // Try to merge a block with left brace wrapped that wasn't yet covered
     if (TheLine->Last->is(tok::l_brace)) {
       return !Style.BraceWrapping.AfterFunction ||
@@ -1125,8 +1133,12 @@ void UnwrappedLineFormatter::formatFirstToken(const AnnotatedLine &Line,
       std::min(RootToken.NewlinesBefore, Style.MaxEmptyLinesToKeep + 1);
   // Remove empty lines before "}" where applicable.
   if (RootToken.is(tok::r_brace) &&
+      // Look for "}", "} // comment", "};" or "}; // comment".
       (!RootToken.Next ||
-       (RootToken.Next->is(tok::semi) && !RootToken.Next->Next)))
+       (RootToken.Next->is(tok::comment) && !RootToken.Next->Next) ||
+       (RootToken.Next->is(tok::semi) &&
+        (!RootToken.Next->Next || (RootToken.Next->Next->is(tok::comment) &&
+                                   !RootToken.Next->Next->Next)))))
     Newlines = std::min(Newlines, 1u);
   // Remove empty lines at the start of nested blocks (lambdas/arrow functions)
   if (PreviousLine == nullptr && Line.Level > 0)

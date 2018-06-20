@@ -14,6 +14,7 @@
 #include "llvm/ExecutionEngine/Orc/NullResolver.h"
 #include "llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h"
 #include "llvm/ExecutionEngine/SectionMemoryManager.h"
+#include "llvm/IR/Module.h"
 #include "llvm/Object/ObjectFile.h"
 #include "gtest/gtest.h"
 
@@ -288,16 +289,13 @@ TEST(ObjectTransformLayerTest, Main) {
         std::make_shared<NullResolver>()};
   });
 
-  auto IdentityTransform =
-    [](std::shared_ptr<llvm::object::OwningBinary<llvm::object::ObjectFile>>
-       Obj) {
-      return Obj;
-    };
+  auto IdentityTransform = [](std::unique_ptr<llvm::MemoryBuffer> Obj) {
+    return Obj;
+  };
   ObjectTransformLayer<decltype(BaseLayer), decltype(IdentityTransform)>
       TransformLayer(BaseLayer, IdentityTransform);
   auto NullCompiler = [](llvm::Module &) {
-    return llvm::object::OwningBinary<llvm::object::ObjectFile>(nullptr,
-                                                                nullptr);
+    return std::unique_ptr<llvm::MemoryBuffer>(nullptr);
   };
   IRCompileLayer<decltype(TransformLayer), decltype(NullCompiler)>
     CompileLayer(TransformLayer, NullCompiler);
@@ -305,7 +303,7 @@ TEST(ObjectTransformLayerTest, Main) {
   // Make sure that the calls from IRCompileLayer to ObjectTransformLayer
   // compile.
   cantFail(CompileLayer.addModule(ES.allocateVModule(),
-                                  std::shared_ptr<llvm::Module>()));
+                                  std::unique_ptr<llvm::Module>()));
 
   // Make sure that the calls from ObjectTransformLayer to ObjectLinkingLayer
   // compile.

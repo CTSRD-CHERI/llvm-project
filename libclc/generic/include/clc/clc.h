@@ -98,10 +98,12 @@
 #include <clc/math/maxmag.h>
 #include <clc/math/minmag.h>
 #include <clc/math/modf.h>
+#include <clc/math/nan.h>
 #include <clc/math/nextafter.h>
 #include <clc/math/pow.h>
 #include <clc/math/pown.h>
 #include <clc/math/powr.h>
+#include <clc/math/remainder.h>
 #include <clc/math/rint.h>
 #include <clc/math/rootn.h>
 #include <clc/math/round.h>

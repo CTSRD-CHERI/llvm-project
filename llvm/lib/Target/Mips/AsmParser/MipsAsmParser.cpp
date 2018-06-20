@@ -348,6 +348,7 @@ class MipsAsmParser : public MCTargetAsmParser {
   bool parseSetHardFloatDirective();
   bool parseSetMtDirective();
   bool parseSetNoMtDirective();
+  bool parseSetNoCRCDirective();
 
   bool parseSetAssignment();
 
@@ -466,6 +467,7 @@ public:
     Match_RequiresSameSrcAndDst,
     Match_NoFCCRegisterForCurrentISA,
     Match_NonZeroOperandForSync,
+    Match_NonZeroOperandForMTCX,
     Match_RequiresPosSizeRange0_32,
     Match_RequiresPosSizeRange33_64,
     Match_RequiresPosSizeUImm6,
@@ -641,6 +643,10 @@ public:
   }
   bool hasMT() const {
     return getSTI().getFeatureBits()[Mips::FeatureMT];
+  }
+
+  bool hasCRC() const {
+    return getSTI().getFeatureBits()[Mips::FeatureCRC];
   }
 
   /// Warn if RegIndex is the same as the current AT.
@@ -3885,7 +3891,7 @@ bool MipsAsmParser::expandCondBranches(MCInst &Inst, SMLoc IDLoc,
   // This is accomplished by using a BNEZ with the result of the SLT.
   //
   // The other 2 pseudo-branches are opposites of the above 2 (BGE with BLT
-  // and BLE with BGT), so we change the BNEZ into a a BEQZ.
+  // and BLE with BGT), so we change the BNEZ into a BEQZ.
   // Because only BGE and BLE branch on equality, we can use the
   // AcceptsEquality variable to decide when to emit the BEQZ.
   // Note that the order of the SLT arguments doesn't change between
@@ -5136,6 +5142,7 @@ unsigned MipsAsmParser::checkTargetMatchPredicate(MCInst &Inst) {
   // It also applies for registers Rt and Rs of microMIPSr6 jalrc.hb instruction
   // and registers Rd and Base for microMIPS lwp instruction
   case Mips::JALR_HB:
+  case Mips::JALR_HB64:
   case Mips::JALRC_HB_MMR6:
   case Mips::JALRC_MMR6:
     if (Inst.getOperand(0).getReg() == Inst.getOperand(1).getReg())
@@ -5149,6 +5156,13 @@ unsigned MipsAsmParser::checkTargetMatchPredicate(MCInst &Inst) {
   case Mips::SYNC:
     if (Inst.getOperand(0).getImm() != 0 && !hasMips32())
       return Match_NonZeroOperandForSync;
+    return Match_Success;
+  case Mips::MFC0:
+  case Mips::MTC0:
+  case Mips::MTC2:
+  case Mips::MFC2:
+    if (Inst.getOperand(2).getImm() != 0 && !hasMips32())
+      return Match_NonZeroOperandForMTCX;
     return Match_Success;
   // As described the MIPSR6 spec, the compact branches that compare registers
   // must:
@@ -5237,6 +5251,13 @@ unsigned MipsAsmParser::checkTargetMatchPredicate(MCInst &Inst) {
       return Match_RequiresPosSizeRange33_64;
     return Match_Success;
   }
+  case Mips::CRC32B: case Mips::CRC32CB:
+  case Mips::CRC32H: case Mips::CRC32CH:
+  case Mips::CRC32W: case Mips::CRC32CW:
+  case Mips::CRC32D: case Mips::CRC32CD:
+    if (Inst.getOperand(0).getReg() != Inst.getOperand(2).getReg())
+      return Match_RequiresSameSrcAndDst;
+    return Match_Success;
   }
 
   uint64_t TSFlags = getInstDesc(Inst.getOpcode()).TSFlags;
@@ -5291,6 +5312,8 @@ bool MipsAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
   }
   case Match_NonZeroOperandForSync:
     return Error(IDLoc, "s-type must be zero or unspecified for pre-MIPS32 ISAs");
+  case Match_NonZeroOperandForMTCX:
+    return Error(IDLoc, "selector must be zero for pre-MIPS32 ISAs");
   case Match_MnemonicFail:
     return Error(IDLoc, "invalid instruction");
   case Match_RequiresDifferentSrcAndDst:
@@ -6654,6 +6677,23 @@ bool MipsAsmParser::parseSetNoMtDirective() {
   return false;
 }
 
+bool MipsAsmParser::parseSetNoCRCDirective() {
+  MCAsmParser &Parser = getParser();
+  Parser.Lex(); // Eat "nocrc".
+
+  // If this is not the end of the statement, report an error.
+  if (getLexer().isNot(AsmToken::EndOfStatement)) {
+    reportParseError("unexpected token, expected end of statement");
+    return false;
+  }
+
+  clearFeatureBits(Mips::FeatureCRC, "crc");
+
+  getTargetStreamer().emitDirectiveSetNoCRC();
+  Parser.Lex(); // Consume the EndOfStatement.
+  return false;
+}
+
 bool MipsAsmParser::parseSetPopDirective() {
   MCAsmParser &Parser = getParser();
   SMLoc Loc = getLexer().getLoc();
@@ -6874,6 +6914,10 @@ bool MipsAsmParser::parseSetFeature(uint64_t Feature) {
   case Mips::FeatureMips64r6:
     selectArch("mips64r6");
     getTargetStreamer().emitDirectiveSetMips64R6();
+    break;
+  case Mips::FeatureCRC:
+    setFeatureBits(Mips::FeatureCRC, "crc");
+    getTargetStreamer().emitDirectiveSetCRC();
     break;
   }
   return false;
@@ -7179,6 +7223,10 @@ bool MipsAsmParser::parseDirectiveSet() {
     return parseSetSoftFloatDirective();
   } else if (Tok.getString() == "hardfloat") {
     return parseSetHardFloatDirective();
+  } else if (Tok.getString() == "crc") {
+    return parseSetFeature(Mips::FeatureCRC);
+  } else if (Tok.getString() == "nocrc") {
+    return parseSetNoCRCDirective();
   } else {
     // It is just an identifier, look for an assignment.
     parseSetAssignment();
@@ -7425,6 +7473,8 @@ bool MipsAsmParser::parseSSectionDirective(StringRef Section, unsigned Type) {
 ///  ::= .module softfloat
 ///  ::= .module hardfloat
 ///  ::= .module mt
+///  ::= .module crc
+///  ::= .module nocrc
 bool MipsAsmParser::parseDirectiveModule() {
   MCAsmParser &Parser = getParser();
   MCAsmLexer &Lexer = getLexer();
@@ -7535,6 +7585,44 @@ bool MipsAsmParser::parseDirectiveModule() {
     // If generating ELF, don't do anything (the .MIPS.abiflags section gets
     // emitted later).
     getTargetStreamer().emitDirectiveModuleMT();
+
+    // If this is not the end of the statement, report an error.
+    if (getLexer().isNot(AsmToken::EndOfStatement)) {
+      reportParseError("unexpected token, expected end of statement");
+      return false;
+    }
+
+    return false; // parseDirectiveModule has finished successfully.
+  } else if (Option == "crc") {
+    setModuleFeatureBits(Mips::FeatureCRC, "crc");
+
+    // Synchronize the ABI Flags information with the FeatureBits information we
+    // updated above.
+    getTargetStreamer().updateABIInfo(*this);
+
+    // If printing assembly, use the recently updated ABI Flags information.
+    // If generating ELF, don't do anything (the .MIPS.abiflags section gets
+    // emitted later).
+    getTargetStreamer().emitDirectiveModuleCRC();
+
+    // If this is not the end of the statement, report an error.
+    if (getLexer().isNot(AsmToken::EndOfStatement)) {
+      reportParseError("unexpected token, expected end of statement");
+      return false;
+    }
+
+    return false; // parseDirectiveModule has finished successfully.
+  } else if (Option == "nocrc") {
+    clearModuleFeatureBits(Mips::FeatureCRC, "crc");
+
+    // Synchronize the ABI Flags information with the FeatureBits information we
+    // updated above.
+    getTargetStreamer().updateABIInfo(*this);
+
+    // If printing assembly, use the recently updated ABI Flags information.
+    // If generating ELF, don't do anything (the .MIPS.abiflags section gets
+    // emitted later).
+    getTargetStreamer().emitDirectiveModuleNoCRC();
 
     // If this is not the end of the statement, report an error.
     if (getLexer().isNot(AsmToken::EndOfStatement)) {

@@ -29,8 +29,14 @@ def should_add_line_to_output(input_line, prefix_set):
 # Invoke the tool that is being tested.
 def invoke_tool(exe, cmd_args, ir):
   with open(ir) as ir_file:
-    stdout = subprocess.check_output(exe + ' ' + cmd_args,
-                                     shell=True, stdin=ir_file)
+    # TODO Remove the str form which is used by update_test_checks.py and
+    # update_llc_test_checks.py
+    # The safer list form is used by update_cc_test_checks.py
+    if isinstance(cmd_args, list):
+      stdout = subprocess.check_output([exe] + cmd_args, stdin=ir_file)
+    else:
+      stdout = subprocess.check_output(exe + ' ' + cmd_args,
+                                       shell=True, stdin=ir_file)
     if sys.version_info[0] > 2:
       stdout = stdout.decode()
   # Fix line endings to unix CR style.
@@ -38,9 +44,9 @@ def invoke_tool(exe, cmd_args, ir):
 
 ##### LLVM IR parser
 
-RUN_LINE_RE = re.compile('^\s*;\s*RUN:\s*(.*)$')
-CHECK_PREFIX_RE = re.compile('--?check-prefix(?:es)?=(\S+)')
-CHECK_RE = re.compile(r'^\s*;\s*([^:]+?)(?:-NEXT|-NOT|-DAG|-LABEL)?:')
+RUN_LINE_RE = re.compile('^\s*[;#]\s*RUN:\s*(.*)$')
+CHECK_PREFIX_RE = re.compile('--?check-prefix(?:es)?[= ](\S+)')
+CHECK_RE = re.compile(r'^\s*[;#]\s*([^:]+?)(?:-NEXT|-NOT|-DAG|-LABEL)?:')
 
 OPT_FUNCTION_RE = re.compile(
     r'^\s*define\s+(?:internal\s+)?[^@]*@(?P<func>[\w-]+?)\s*\('
@@ -48,8 +54,9 @@ OPT_FUNCTION_RE = re.compile(
     flags=(re.M | re.S))
 
 IR_FUNCTION_RE = re.compile('^\s*define\s+(?:internal\s+)?[^@]*@(\w+)\s*\(')
-TRIPLE_IR_RE = re.compile(r'^target\s+triple\s*=\s*"([^"]+)"$')
-TRIPLE_ARG_RE = re.compile(r'-mtriple=([^ ]+)')
+TRIPLE_IR_RE = re.compile(r'^\s*target\s+triple\s*=\s*"([^"]+)"$')
+TRIPLE_ARG_RE = re.compile(r'-mtriple[= ]([^ ]+)')
+MARCH_ARG_RE = re.compile(r'-march[= ]([^ ]+)')
 
 SCRUB_LEADING_WHITESPACE_RE = re.compile(r'^(\s+)')
 SCRUB_WHITESPACE_RE = re.compile(r'(?!^(|  \w))[ \t]+', flags=re.M)
@@ -99,13 +106,14 @@ SCRUB_IR_COMMENT_RE = re.compile(r'\s*;.*')
 
 # Match things that look at identifiers, but only if they are followed by
 # spaces, commas, paren, or end of the string
-IR_VALUE_RE = re.compile(r'(\s+)%([\w\.]+?)([,\s\(\)]|\Z)')
+IR_VALUE_RE = re.compile(r'(\s+)%([\w\.\-]+?)([,\s\(\)]|\Z)')
 
 # Create a FileCheck variable name based on an IR name.
 def get_value_name(var):
   if var.isdigit():
     var = 'TMP' + var
   var = var.replace('.', '_')
+  var = var.replace('-', '_')
   return var.upper()
 
 
@@ -148,12 +156,13 @@ def genericize_check_lines(lines):
   return lines
 
 
-def add_ir_checks(output_lines, prefix_list, func_dict, func_name, opt_basename):
+def add_ir_checks(output_lines, comment_marker, prefix_list, func_dict, func_name):
   # Label format is based on IR string.
-  check_label_format = "; %s-LABEL: @%s("
+  check_label_format = '{} %s-LABEL: @%s('.format(comment_marker)
 
   printed_prefixes = []
-  for checkprefixes, _ in prefix_list:
+  for p in prefix_list:
+    checkprefixes = p[0]
     for checkprefix in checkprefixes:
       if checkprefix in printed_prefixes:
         break
@@ -193,13 +202,15 @@ def add_ir_checks(output_lines, prefix_list, func_dict, func_name, opt_basename)
 
         # Skip blank lines instead of checking them.
         if is_blank_line == True:
-          output_lines.append('; %s:       %s' % (checkprefix, func_line))
+          output_lines.append('{} {}:       {}'.format(
+              comment_marker, checkprefix, func_line))
         else:
-          output_lines.append('; %s-NEXT:  %s' % (checkprefix, func_line))
+          output_lines.append('{} {}-NEXT:  {}'.format(
+              comment_marker, checkprefix, func_line))
         is_blank_line = False
 
       # Add space between different check prefixes and also before the first
       # line of code in the test function.
-      output_lines.append(';')
+      output_lines.append(comment_marker)
       break
   return output_lines

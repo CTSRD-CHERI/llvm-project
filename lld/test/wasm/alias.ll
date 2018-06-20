@@ -58,18 +58,18 @@ entry:
 ; CHECK-NEXT:       - Name:            memory
 ; CHECK-NEXT:         Kind:            MEMORY
 ; CHECK-NEXT:         Index:           0
-; CHECK-NEXT:       - Name:            start_alias
-; CHECK-NEXT:         Kind:            FUNCTION
-; CHECK-NEXT:         Index:           0
-; CHECK-NEXT:       - Name:            _start
-; CHECK-NEXT:         Kind:            FUNCTION
-; CHECK-NEXT:         Index:           0
 ; CHECK-NEXT:       - Name:            __heap_base
 ; CHECK-NEXT:         Kind:            GLOBAL
 ; CHECK-NEXT:         Index:           1
 ; CHECK-NEXT:       - Name:            __data_end
 ; CHECK-NEXT:         Kind:            GLOBAL
 ; CHECK-NEXT:         Index:           2
+; CHECK-NEXT:       - Name:            _start
+; CHECK-NEXT:         Kind:            FUNCTION
+; CHECK-NEXT:         Index:           1
+; CHECK-NEXT:       - Name:            start_alias
+; CHECK-NEXT:         Kind:            FUNCTION
+; CHECK-NEXT:         Index:           1
 ; CHECK-NEXT:   - Type:            CODE
 ; CHECK-NEXT:     Functions:
 ; CHECK-NEXT:       - Index:           0
@@ -79,13 +79,10 @@ entry:
 ; CHECK-NEXT:         Locals:
 ; CHECK-NEXT:         Body:            0B
 ; CHECK-NEXT:   - Type:            CUSTOM
-; CHECK-NEXT:     Name:            linking
-; CHECK-NEXT:     DataSize:        0
-; CHECK-NEXT:   - Type:            CUSTOM
 ; CHECK-NEXT:     Name:            name
 ; CHECK-NEXT:     FunctionNames:
 ; CHECK-NEXT:       - Index:           0
-; CHECK-NEXT:         Name:            _start
-; CHECK-NEXT:       - Index:           1
 ; CHECK-NEXT:         Name:            __wasm_call_ctors
+; CHECK-NEXT:       - Index:           1
+; CHECK-NEXT:         Name:            _start
 ; CHECK-NEXT: ...

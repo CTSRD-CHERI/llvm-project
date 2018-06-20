@@ -4,7 +4,6 @@ include "llvm/Option/OptParser.td"
 // two can precede the option name except those that start with 'o'.
 class F<string name>: Flag<["--", "-"], name>;
 class J<string name>: Joined<["--", "-"], name>;
-class S<string name>: Separate<["--", "-"], name>;
 
 multiclass Eq<string name> {
   def NAME: Separate<["--", "-"], name>;
@@ -16,7 +15,8 @@ multiclass B<string name, string help1, string help2> {
   def no_ # NAME: Flag<["--", "-"], "no-" # name>, HelpText<help2>;
 }
 
-def auxiliary: S<"auxiliary">, HelpText<"Set DT_AUXILIARY field to the specified name">;
+defm auxiliary: Eq<"auxiliary">,
+  HelpText<"Set DT_AUXILIARY field to the specified name">;
 
 def Bsymbolic: F<"Bsymbolic">, HelpText<"Bind defined symbols locally">;
 
@@ -70,13 +70,17 @@ defm as_needed: B<"as-needed",
     "Always set DT_NEEDED for shared libraries">;
 
 // -chroot doesn't have a help text because it is an internal option.
-def chroot: S<"chroot">;
+defm chroot: Eq<"chroot">;
 
 def color_diagnostics: F<"color-diagnostics">,
   HelpText<"Use colors in diagnostics">;
 
 def color_diagnostics_eq: J<"color-diagnostics=">,
   HelpText<"Use colors in diagnostics">;
+
+defm cref: B<"cref",
+    "Output cross reference table",
+    "Do not output cross reference table">;
 
 defm define_common: B<"define-common",
     "Assign space to common symbols",
@@ -97,7 +101,7 @@ def discard_locals: F<"discard-locals">,
 def discard_none: F<"discard-none">,
   HelpText<"Keep all symbols in the symbol table">;
 
-def dynamic_linker: S<"dynamic-linker">,
+defm dynamic_linker: Eq<"dynamic-linker">,
   HelpText<"Which dynamic linker to use">;
 
 defm dynamic_list: Eq<"dynamic-list">,
@@ -186,6 +190,8 @@ defm image_base : Eq<"image-base">, HelpText<"Set the base address">;
 defm init: Eq<"init">, HelpText<"Specify an initializer function">,
   MetaVarName<"<symbol>">;
 
+defm just_symbols: Eq<"just-symbols">, HelpText<"Just link symbols">;
+
 defm library: Eq<"library">, HelpText<"Root name of library to use">,
   MetaVarName<"<libName>">;
 
@@ -233,7 +239,7 @@ def omagic: Flag<["--"], "omagic">, MetaVarName<"<magic>">,
 defm orphan_handling: Eq<"orphan-handling">,
   HelpText<"Control how orphan sections are handled when linker script used">;
 
-def pack_dyn_relocs_eq: J<"pack-dyn-relocs=">, MetaVarName<"<format>">,
+defm pack_dyn_relocs: Eq<"pack-dyn-relocs">, MetaVarName<"<format>">,
   HelpText<"Pack dynamic relocations in the given format (none or android)">;
 
 defm pie: B<"pie",
@@ -264,7 +270,7 @@ defm retain_symbols_file: Eq<"retain-symbols-file">,
 
 defm script: Eq<"script">, HelpText<"Read linker script">;
 
-def section_start: S<"section-start">, MetaVarName<"<address>">,
+defm section_start: Eq<"section-start">, MetaVarName<"<address>">,
   HelpText<"Set address of section">;
 
 def shared: F<"shared">, HelpText<"Build a shared object">;
@@ -281,7 +287,7 @@ def strip_all: F<"strip-all">, HelpText<"Strip all symbols">;
 
 def strip_debug: F<"strip-debug">, HelpText<"Strip debugging information">;
 
-def symbol_ordering_file: S<"symbol-ordering-file">,
+defm symbol_ordering_file: Eq<"symbol-ordering-file">,
   HelpText<"Layout sections in the order specified by symbol file">;
 
 defm sysroot: Eq<"sysroot">, HelpText<"Set the system root">;
@@ -360,7 +366,7 @@ def alias_emit_relocs: Flag<["-"], "q">, Alias<emit_relocs>;
 def alias_entry_e: JoinedOrSeparate<["-"], "e">, Alias<entry>;
 def alias_export_dynamic_E: Flag<["-"], "E">, Alias<export_dynamic>;
 def alias_filter: Separate<["-"], "F">, Alias<filter>;
-def alias_format_b: S<"b">, Alias<format>;
+def alias_format_b: Separate<["-"], "b">, Alias<format>;
 def alias_library: JoinedOrSeparate<["-"], "l">, Alias<library>;
 def alias_library_path: JoinedOrSeparate<["-"], "L">, Alias<library_path>;
 def alias_no_pie_pic_executable: F<"no-pic-executable">, Alias<no_pie>;
@@ -378,8 +384,8 @@ def alias_strip_all: Flag<["-"], "s">, Alias<strip_all>;
 def alias_strip_debug_S: Flag<["-"], "S">, Alias<strip_debug>;
 def alias_trace: Flag<["-"], "t">, Alias<trace>;
 def alias_trace_symbol_y : JoinedOrSeparate<["-"], "y">, Alias<trace_symbol>;
-def alias_Ttext_segment: S<"Ttext-segment">, Alias<Ttext>;
-def alias_Ttext_segment_eq: J<"Ttext-segment=">, Alias<Ttext>;
+def alias_Ttext_segment: Separate<["-", "--"], "Ttext-segment">, Alias<Ttext>;
+def alias_Ttext_segment_eq: Joined<["-", "--"], "Ttext-segment=">, Alias<Ttext>;
 def alias_undefined_u: JoinedOrSeparate<["-"], "u">, Alias<undefined>;
 def alias_version_V: Flag<["-"], "V">, Alias<version>;
 
@@ -399,7 +405,7 @@ def lto_newpm_passes: J<"lto-newpm-passes=">,
 def lto_partitions: J<"lto-partitions=">,
   HelpText<"Number of LTO codegen partitions">;
 def disable_verify: F<"disable-verify">;
-def mllvm: S<"mllvm">;
+defm mllvm: Eq<"mllvm">;
 def opt_remarks_filename: Separate<["--"], "opt-remarks-filename">,
   HelpText<"YAML output file for optimization remarks">;
 def opt_remarks_with_hotness: Flag<["--"], "opt-remarks-with-hotness">,
@@ -409,7 +415,7 @@ defm plugin_opt: Eq<"plugin-opt">,
 def save_temps: F<"save-temps">;
 def thinlto_cache_dir: J<"thinlto-cache-dir=">,
   HelpText<"Path to ThinLTO cached object file directory">;
-def thinlto_cache_policy: S<"thinlto-cache-policy">,
+defm thinlto_cache_policy: Eq<"thinlto-cache-policy">,
   HelpText<"Pruning policy for the ThinLTO cache">;
 def thinlto_jobs: J<"thinlto-jobs=">, HelpText<"Number of ThinLTO jobs">;
 
@@ -424,7 +430,6 @@ defm plugin: Eq<"plugin">;
 
 // Options listed below are silently ignored for now for compatibility.
 def allow_shlib_undefined: F<"allow-shlib-undefined">;
-def cref: F<"cref">;
 def detect_odr_violations: F<"detect-odr-violations">;
 def g: Flag<["-"], "g">;
 def long_plt: F<"long-plt">;
@@ -435,8 +440,7 @@ def no_ctors_in_init_array: F<"no-ctors-in-init-array">;
 def no_keep_memory: F<"no-keep-memory">;
 def no_mmap_output_file: F<"no-mmap-output-file">;
 def no_warn_mismatch: F<"no-warn-mismatch">;
-def rpath_link: S<"rpath-link">;
-def rpath_link_eq: J<"rpath-link=">;
+defm rpath_link: Eq<"rpath-link">;
 def sort_common: F<"sort-common">;
 def stats: F<"stats">;
 def warn_execstack: F<"warn-execstack">;
@@ -448,9 +452,8 @@ def G: JoinedOrSeparate<["-"], "G">;
 def Qy : F<"Qy">;
 
 // Hidden option used for testing MIPS multi-GOT implementation.
-def mips_got_size: S<"mips-got-size">, Flags<[HelpHidden]>,
+defm mips_got_size: Eq<"mips-got-size">, Flags<[HelpHidden]>,
   HelpText<"Max size of a single MIPS GOT. 0x10000 by default.">;
-
 
 // CHERI options:
 // -no-process-cap-relocs flag to fall back to using external capsizefix tool

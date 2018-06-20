@@ -19,6 +19,7 @@
 #include "clang/AST/DeclObjC.h"
 #include "clang/AST/Expr.h"
 #include "clang/AST/ExprCXX.h"
+#include "clang/AST/PrettyDeclStackTrace.h"
 #include "clang/AST/StmtCXX.h"
 #include "clang/Basic/DiagnosticOptions.h"
 #include "clang/Basic/PartialDiagnostic.h"
@@ -31,7 +32,6 @@
 #include "clang/Sema/Initialization.h"
 #include "clang/Sema/MultiplexExternalSemaSource.h"
 #include "clang/Sema/ObjCMethodList.h"
-#include "clang/Sema/PrettyDeclStackTrace.h"
 #include "clang/Sema/Scope.h"
 #include "clang/Sema/ScopeInfo.h"
 #include "clang/Sema/SemaConsumer.h"
@@ -162,7 +162,7 @@ Sema::Sema(Preprocessor &pp, ASTContext &ctxt, ASTConsumer &consumer,
       ExpressionEvaluationContext::PotentiallyEvaluated, 0, CleanupInfo{},
       nullptr, false);
 
-  FunctionScopes.push_back(new FunctionScopeInfo(Diags));
+  PreallocatedFunctionScope.reset(new FunctionScopeInfo(Diags));
 
   // Initilization of data sharing attributes stack for OpenMP
   InitDataSharingAttributesStack();
@@ -332,11 +332,11 @@ void Sema::Initialize() {
 
 Sema::~Sema() {
   if (VisContext) FreeVisContext();
+
   // Kill all the active scopes.
-  for (unsigned I = 1, E = FunctionScopes.size(); I != E; ++I)
-    delete FunctionScopes[I];
-  if (FunctionScopes.size() == 1)
-    delete FunctionScopes[0];
+  for (sema::FunctionScopeInfo *FSI : FunctionScopes)
+    if (FSI != PreallocatedFunctionScope.get())
+      delete FSI;
 
   // Tell the SemaConsumer to forget about us; we're going out of scope.
   if (SemaConsumer *SC = dyn_cast<SemaConsumer>(&Consumer))
@@ -1340,17 +1340,13 @@ Scope *Sema::getScopeForContext(DeclContext *Ctx) {
 
 /// \brief Enter a new function scope
 void Sema::PushFunctionScope() {
-  if (FunctionScopes.size() == 1) {
-    // Use the "top" function scope rather than having to allocate
-    // memory for a new scope.
-    FunctionScopes.back()->Clear();
-    FunctionScopes.push_back(FunctionScopes.back());
-    if (LangOpts.OpenMP)
-      pushOpenMPFunctionRegion();
-    return;
+  if (FunctionScopes.empty()) {
+    // Use PreallocatedFunctionScope to avoid allocating memory when possible.
+    PreallocatedFunctionScope->Clear();
+    FunctionScopes.push_back(PreallocatedFunctionScope.get());
+  } else {
+    FunctionScopes.push_back(new FunctionScopeInfo(getDiagnostics()));
   }
-
-  FunctionScopes.push_back(new FunctionScopeInfo(getDiagnostics()));
   if (LangOpts.OpenMP)
     pushOpenMPFunctionRegion();
 }
@@ -1370,15 +1366,15 @@ void Sema::RecordParsingTemplateParameterDepth(unsigned Depth) {
   if (LambdaScopeInfo *const LSI = getCurLambda()) {
     LSI->AutoTemplateParameterDepth = Depth;
     return;
-  } 
-  llvm_unreachable( 
+  }
+  llvm_unreachable(
       "Remove assertion if intentionally called in a non-lambda context.");
 }
 
 void Sema::PopFunctionScopeInfo(const AnalysisBasedWarnings::Policy *WP,
                                 const Decl *D, const BlockExpr *blkExpr) {
-  FunctionScopeInfo *Scope = FunctionScopes.pop_back_val();
   assert(!FunctionScopes.empty() && "mismatched push/pop!");
+  FunctionScopeInfo *Scope = FunctionScopes.pop_back_val();
 
   if (LangOpts.OpenMP)
     popOpenMPFunctionRegion(Scope);
@@ -1390,7 +1386,8 @@ void Sema::PopFunctionScopeInfo(const AnalysisBasedWarnings::Policy *WP,
     for (const auto &PUD : Scope->PossiblyUnreachableDiags)
       Diag(PUD.Loc, PUD.PD);
 
-  if (FunctionScopes.back() != Scope)
+  // Delete the scope unless its our preallocated scope.
+  if (Scope != PreallocatedFunctionScope.get())
     delete Scope;
 }
 
@@ -1411,6 +1408,21 @@ bool Sema::hasAnyUnrecoverableErrorsInThisFunction() const {
   return getCurFunction()->ErrorTrap.hasUnrecoverableErrorOccurred();
 }
 
+void Sema::setFunctionHasBranchIntoScope() {
+  if (!FunctionScopes.empty())
+    FunctionScopes.back()->setHasBranchIntoScope();
+}
+
+void Sema::setFunctionHasBranchProtectedScope() {
+  if (!FunctionScopes.empty())
+    FunctionScopes.back()->setHasBranchProtectedScope();
+}
+
+void Sema::setFunctionHasIndirectGoto() {
+  if (!FunctionScopes.empty())
+    FunctionScopes.back()->setHasIndirectGoto();
+}
+
 BlockScopeInfo *Sema::getCurBlock() {
   if (FunctionScopes.empty())
     return nullptr;
@@ -1424,6 +1436,18 @@ BlockScopeInfo *Sema::getCurBlock() {
   }
 
   return CurBSI;
+}
+
+FunctionScopeInfo *Sema::getEnclosingFunction() const {
+  if (FunctionScopes.empty())
+    return nullptr;
+
+  for (int e = FunctionScopes.size() - 1; e >= 0; --e) {
+    if (isa<sema::BlockScopeInfo>(FunctionScopes[e]))
+      continue;
+    return FunctionScopes[e];
+  }
+  return nullptr;
 }
 
 LambdaScopeInfo *Sema::getCurLambda(bool IgnoreNonLambdaCapturingScope) {
@@ -1463,8 +1487,7 @@ void Sema::ActOnComment(SourceRange Comment) {
   if (!LangOpts.RetainCommentsFromSystemHeaders &&
       SourceMgr.isInSystemHeader(Comment.getBegin()))
     return;
-  RawComment RC(SourceMgr, Comment, false,
-                LangOpts.CommentOpts.ParseAllComments);
+  RawComment RC(SourceMgr, Comment, LangOpts.CommentOpts, false);
   if (RC.isAlmostTrailingComment()) {
     SourceRange MagicMarkerRange(Comment.getBegin(),
                                  Comment.getBegin().getLocWithOffset(3));
@@ -1501,24 +1524,6 @@ void ExternalSemaSource::ReadUndefinedButUsed(
 
 void ExternalSemaSource::ReadMismatchingDeleteExpressions(llvm::MapVector<
     FieldDecl *, llvm::SmallVector<std::pair<SourceLocation, bool>, 4>> &) {}
-
-void PrettyDeclStackTraceEntry::print(raw_ostream &OS) const {
-  SourceLocation Loc = this->Loc;
-  if (!Loc.isValid() && TheDecl) Loc = TheDecl->getLocation();
-  if (Loc.isValid()) {
-    Loc.print(OS, S.getSourceManager());
-    OS << ": ";
-  }
-  OS << Message;
-
-  if (auto *ND = dyn_cast_or_null<NamedDecl>(TheDecl)) {
-    OS << " '";
-    ND->getNameForDiagnostic(OS, ND->getASTContext().getPrintingPolicy(), true);
-    OS << "'";
-  }
-
-  OS << '\n';
-}
 
 /// \brief Figure out if an expression could be turned into a call.
 ///

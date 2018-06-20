@@ -28,7 +28,7 @@ public:
   virtual ~IPDBSession();
 
   virtual uint64_t getLoadAddress() const = 0;
-  virtual void setLoadAddress(uint64_t Address) = 0;
+  virtual bool setLoadAddress(uint64_t Address) = 0;
   virtual std::unique_ptr<PDBSymbolExe> getGlobalScope() = 0;
   virtual std::unique_ptr<PDBSymbol> getSymbolById(uint32_t SymbolId) const = 0;
 
@@ -45,6 +45,9 @@ public:
                   const IPDBSourceFile &File) const = 0;
   virtual std::unique_ptr<IPDBEnumLineNumbers>
   findLineNumbersByAddress(uint64_t Address, uint32_t Length) const = 0;
+  virtual std::unique_ptr<IPDBEnumLineNumbers>
+  findLineNumbersBySectOffset(uint32_t Section, uint32_t Offset,
+                              uint32_t Length) const = 0;
 
   virtual std::unique_ptr<IPDBEnumSourceFiles>
   findSourceFiles(const PDBSymbolCompiland *Compiland, llvm::StringRef Pattern,
@@ -69,6 +72,12 @@ public:
   virtual std::unique_ptr<IPDBEnumDataStreams> getDebugStreams() const = 0;
 
   virtual std::unique_ptr<IPDBEnumTables> getEnumTables() const = 0;
+
+  virtual std::unique_ptr<IPDBEnumInjectedSources>
+  getInjectedSources() const = 0;
+
+  virtual std::unique_ptr<IPDBEnumSectionContribs>
+  getSectionContribs() const = 0;
 };
 }
 }

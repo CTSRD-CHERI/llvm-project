@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "SymbolCollector.h"
+#include "../AST.h"
 #include "../CodeCompletionStrings.h"
 #include "../Logger.h"
 #include "../URI.h"
@@ -115,12 +116,16 @@ bool shouldFilterDecl(const NamedDecl *ND, ASTContext *ASTCtx,
   //   * enum constants in unscoped enum decl (e.g. "red" in "enum {red};")
   auto InTopLevelScope = hasDeclContext(
       anyOf(namespaceDecl(), translationUnitDecl(), linkageSpecDecl()));
-  if (match(decl(allOf(Opts.IndexMainFiles
-                           ? decl()
-                           : decl(unless(isExpansionInMainFile())),
+  // Don't index template specializations.
+  auto IsSpecialization =
+      anyOf(functionDecl(isExplicitTemplateSpecialization()),
+            cxxRecordDecl(isExplicitTemplateSpecialization()),
+            varDecl(isExplicitTemplateSpecialization()));
+  if (match(decl(allOf(unless(isExpansionInMainFile()),
                        anyOf(InTopLevelScope,
                              hasDeclContext(enumDecl(InTopLevelScope,
-                                                     unless(isScoped())))))),
+                                                     unless(isScoped())))),
+                       unless(IsSpecialization))),
             *ND, *ASTCtx)
           .empty())
     return true;
@@ -150,27 +155,26 @@ bool shouldCollectIncludePath(index::SymbolKind Kind) {
   }
 }
 
-/// Gets a canonical include (<header>  or "header") for header of \p Loc.
-/// Returns None if the header has no canonical include.
+/// Gets a canonical include (URI of the header or <header>  or "header") for
+/// header of \p Loc.
+/// Returns None if fails to get include header for \p Loc.
 /// FIXME: we should handle .inc files whose symbols are expected be exported by
 /// their containing headers.
 llvm::Optional<std::string>
-getIncludeHeader(const SourceManager &SM, SourceLocation Loc,
-                 const SymbolCollector::Options &Opts) {
+getIncludeHeader(llvm::StringRef QName, const SourceManager &SM,
+                 SourceLocation Loc, const SymbolCollector::Options &Opts) {
   llvm::StringRef FilePath = SM.getFilename(Loc);
   if (FilePath.empty())
     return llvm::None;
   if (Opts.Includes) {
-    llvm::StringRef Mapped = Opts.Includes->mapHeader(FilePath);
+    llvm::StringRef Mapped = Opts.Includes->mapHeader(FilePath, QName);
     if (Mapped != FilePath)
       return (Mapped.startswith("<") || Mapped.startswith("\""))
                  ? Mapped.str()
                  : ("\"" + Mapped + "\"").str();
   }
-  // If the header path is the same as the file path of the declaration, we skip
-  // storing the #include path; users can use the URI in declaration location to
-  // calculate the #include path.
-  return llvm::None;
+
+  return toURI(SM, SM.getFilename(Loc), Opts);
 }
 
 // Return the symbol location of the given declaration `D`.
@@ -178,36 +182,33 @@ getIncludeHeader(const SourceManager &SM, SourceLocation Loc,
 // For symbols defined inside macros:
 //   * use expansion location, if the symbol is formed via macro concatenation.
 //   * use spelling location, otherwise.
-llvm::Optional<SymbolLocation>
-getSymbolLocation(const NamedDecl &D, SourceManager &SM,
-                  const SymbolCollector::Options &Opts,
-                  const clang::LangOptions& LangOpts,
-                  std::string &FileURIStorage) {
-  SourceLocation SpellingLoc = SM.getSpellingLoc(D.getLocation());
-  if (D.getLocation().isMacroID()) {
-    std::string PrintLoc = SpellingLoc.printToString(SM);
-    if (llvm::StringRef(PrintLoc).startswith("<scratch") ||
-        llvm::StringRef(PrintLoc).startswith("<command line>")) {
-      // We use the expansion location for the following symbols, as spelling
-      // locations of these symbols are not interesting to us:
-      //   * symbols formed via macro concatenation, the spelling location will
-      //     be "<scratch space>"
-      //   * symbols controlled and defined by a compile command-line option
-      //     `-DName=foo`, the spelling location will be "<command line>".
-      SpellingLoc = SM.getExpansionRange(D.getLocation()).first;
-    }
-  }
-
-  auto U = toURI(SM, SM.getFilename(SpellingLoc), Opts);
+llvm::Optional<SymbolLocation> getSymbolLocation(
+    const NamedDecl &D, SourceManager &SM, const SymbolCollector::Options &Opts,
+    const clang::LangOptions &LangOpts, std::string &FileURIStorage) {
+  SourceLocation NameLoc = findNameLoc(&D);
+  auto U = toURI(SM, SM.getFilename(NameLoc), Opts);
   if (!U)
     return llvm::None;
   FileURIStorage = std::move(*U);
   SymbolLocation Result;
   Result.FileURI = FileURIStorage;
-  Result.StartOffset = SM.getFileOffset(SpellingLoc);
+  Result.StartOffset = SM.getFileOffset(NameLoc);
   Result.EndOffset = Result.StartOffset + clang::Lexer::MeasureTokenLength(
-                                              SpellingLoc, SM, LangOpts);
+                                              NameLoc, SM, LangOpts);
   return std::move(Result);
+}
+
+// Checks whether \p ND is a definition of a TagDecl (class/struct/enum/union)
+// in a header file, in which case clangd would prefer to use ND as a canonical
+// declaration.
+// FIXME: handle symbol types that are not TagDecl (e.g. functions), if using
+// the the first seen declaration as canonical declaration is not a good enough
+// heuristic.
+bool isPreferredDeclaration(const NamedDecl &ND, index::SymbolRoleSet Roles) {
+  using namespace clang::ast_matchers;
+  return (Roles & static_cast<unsigned>(index::SymbolRole::Definition)) &&
+         llvm::isa<TagDecl>(&ND) &&
+         match(decl(isExpansionInMainFile()), ND, ND.getASTContext()).empty();
 }
 
 } // namespace
@@ -227,29 +228,58 @@ bool SymbolCollector::handleDeclOccurence(
     ArrayRef<index::SymbolRelation> Relations, FileID FID, unsigned Offset,
     index::IndexDataConsumer::ASTNodeInfo ASTNode) {
   assert(ASTCtx && PP.get() && "ASTContext and Preprocessor must be set.");
+  assert(CompletionAllocator && CompletionTUInfo);
+  const NamedDecl *ND = llvm::dyn_cast<NamedDecl>(D);
+  if (!ND)
+    return true;
 
-  // FIXME: collect all symbol references.
+  // Mark D as referenced if this is a reference coming from the main file.
+  // D may not be an interesting symbol, but it's cheaper to check at the end.
+  if (Opts.CountReferences &&
+      (Roles & static_cast<unsigned>(index::SymbolRole::Reference)) &&
+      ASTCtx->getSourceManager().getMainFileID() == FID)
+    ReferencedDecls.insert(ND);
+
+  // Don't continue indexing if this is a mere reference.
   if (!(Roles & static_cast<unsigned>(index::SymbolRole::Declaration) ||
         Roles & static_cast<unsigned>(index::SymbolRole::Definition)))
     return true;
+  if (shouldFilterDecl(ND, ASTCtx, Opts))
+    return true;
 
-  assert(CompletionAllocator && CompletionTUInfo);
+  llvm::SmallString<128> USR;
+  if (index::generateUSRForDecl(ND, USR))
+    return true;
+  SymbolID ID(USR);
 
-  if (const NamedDecl *ND = llvm::dyn_cast<NamedDecl>(D)) {
-    if (shouldFilterDecl(ND, ASTCtx, Opts))
-      return true;
-    llvm::SmallString<128> USR;
-    if (index::generateUSRForDecl(ND, USR))
-      return true;
+  const NamedDecl &OriginalDecl = *cast<NamedDecl>(ASTNode.OrigD);
+  const Symbol *BasicSymbol = Symbols.find(ID);
+  if (!BasicSymbol) // Regardless of role, ND is the canonical declaration.
+    BasicSymbol = addDeclaration(*ND, std::move(ID));
+  else if (isPreferredDeclaration(OriginalDecl, Roles))
+    // If OriginalDecl is preferred, replace the existing canonical
+    // declaration (e.g. a class forward declaration). There should be at most
+    // one duplicate as we expect to see only one preferred declaration per
+    // TU, because in practice they are definitions.
+    BasicSymbol = addDeclaration(OriginalDecl, std::move(ID));
 
-    auto ID = SymbolID(USR);
-    const Symbol* BasicSymbol = Symbols.find(ID);
-    if (!BasicSymbol) // Regardless of role, ND is the canonical declaration.
-      BasicSymbol = addDeclaration(*ND, std::move(ID));
-    if (Roles & static_cast<unsigned>(index::SymbolRole::Definition))
-      addDefinition(*cast<NamedDecl>(ASTNode.OrigD), *BasicSymbol);
-  }
+  if (Roles & static_cast<unsigned>(index::SymbolRole::Definition))
+    addDefinition(OriginalDecl, *BasicSymbol);
   return true;
+}
+
+void SymbolCollector::finish() {
+  // At the end of the TU, add 1 to the refcount of the ReferencedDecls.
+  for (const auto *ND : ReferencedDecls) {
+    llvm::SmallString<128> USR;
+    if (!index::generateUSRForDecl(ND, USR))
+      if (const auto *S = Symbols.find(SymbolID(USR))) {
+        Symbol Inc = *S;
+        ++Inc.References;
+        Symbols.insert(Inc);
+      }
+  }
+  ReferencedDecls.clear();
 }
 
 const Symbol *SymbolCollector::addDeclaration(const NamedDecl &ND,
@@ -272,8 +302,6 @@ const Symbol *SymbolCollector::addDeclaration(const NamedDecl &ND,
   std::tie(S.Scope, S.Name) = splitQualifiedName(QName);
   S.SymInfo = index::getSymbolInfo(&ND);
   std::string FileURI;
-  // FIXME: we may want a different "canonical" heuristic than clang chooses.
-  // Clang seems to choose the first, which may not have the most information.
   if (auto DeclLoc =
           getSymbolLocation(ND, SM, Opts, ASTCtx->getLangOpts(), FileURI))
     S.CanonicalDeclaration = *DeclLoc;
@@ -302,8 +330,8 @@ const Symbol *SymbolCollector::addDeclaration(const NamedDecl &ND,
   if (Opts.CollectIncludePath && shouldCollectIncludePath(S.SymInfo.Kind)) {
     // Use the expansion location to get the #include header since this is
     // where the symbol is exposed.
-    if (auto Header =
-            getIncludeHeader(SM, SM.getExpansionLoc(ND.getLocation()), Opts))
+    if (auto Header = getIncludeHeader(
+            QName, SM, SM.getExpansionLoc(ND.getLocation()), Opts))
       Include = std::move(*Header);
   }
   S.CompletionFilterText = FilterText;

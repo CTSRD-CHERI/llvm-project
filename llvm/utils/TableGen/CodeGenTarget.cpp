@@ -174,6 +174,7 @@ StringRef llvm::getEnumName(MVT::SimpleValueType T) {
   case MVT::iPTR:     return "MVT::iPTR";
   case MVT::iPTRAny:  return "MVT::iPTRAny";
   case MVT::Untyped:  return "MVT::Untyped";
+  case MVT::ExceptRef: return "MVT::ExceptRef";
   default: llvm_unreachable("ILLEGAL VALUE TYPE!");
   }
 }
@@ -224,6 +225,9 @@ Record *CodeGenTarget::getInstructionSet() const {
   return TargetRec->getValueAsDef("InstructionSet");
 }
 
+bool CodeGenTarget::getAllowRegisterRenaming() const {
+  return TargetRec->getValueAsInt("AllowRegisterRenaming");
+}
 
 /// getAsmParser - Return the AssemblyParser definition for this target.
 ///
@@ -347,7 +351,7 @@ GetInstByName(const char *Name,
 
 static const char *const FixedInstrs[] = {
 #define HANDLE_TARGET_OPCODE(OPC) #OPC,
-#include "llvm/CodeGen/TargetOpcodes.def"
+#include "llvm/Support/TargetOpcodes.def"
     nullptr};
 
 unsigned CodeGenTarget::getNumFixedInstructions() {

@@ -136,7 +136,7 @@ entry:
   %0 = bitcast float %F.coerce to i32
   %tmp.0.extract.trunc = trunc i32 %0 to i16
   %1 = bitcast i16 %tmp.0.extract.trunc to half
-  %cmp = fcmp une half %1, 0.000000e+00 
+  %cmp = fcmp une half %1, 0.000000e+00
   ret i1 %cmp
 
 ; CHECK-LABEL:             VCMP2:
@@ -183,6 +183,36 @@ entry:
 ; CHECK-SOFTFP-FP16:       vcmpe.f32 s{{.}}, s{{.}}
 ; CHECK-SOFTFP-FULLFP16:   vcmpe.f16 s{{.}}, s{{.}}
 ; CHECK-HARDFP-FULLFP16:   vcmpe.f16 s{{.}}, s{{.}}
+}
+
+; Test lowering of BR_CC
+define hidden i32 @VCMPBRCC() {
+entry:
+  %f = alloca half, align 2
+  br label %for.cond
+
+for.cond:
+  %0 = load half, half* %f, align 2
+  %cmp = fcmp nnan ninf nsz ole half %0, 0xH6800
+  br i1 %cmp, label %for.body, label %for.end
+
+for.body:
+  ret i32 1
+
+for.end:
+  ret i32 0
+
+; CHECK-LABEL:            VCMPBRCC:
+
+; CHECK-SOFT:             bl  __aeabi_fcmple
+; CHECK-SOFT:             cmp r0, #0
+
+; CHECK-SOFTFP-FP16:      vcvtb.f32.f16 [[S2:s[0-9]]], [[S2]]
+; CHECK-SOFTFP-FP16:      vcmpe.f32 [[S2]], s0
+; CHECK-SOFTFP-FP16:      vmrs  APSR_nzcv, fpscr
+
+; CHECK-SOFTFP-FULLFP16:  vcmpe.f16 s{{.}}, s{{.}}
+; CHECK-SOFTFP-FULLFP16:  vmrs  APSR_nzcv, fpscr
 }
 
 ; 5. VCVT (between floating-point and fixed-point)
@@ -657,6 +687,7 @@ entry:
 ; CHECK-HARDFP-FULLFP16:       vnmul.f16  s0, s0, s1
 }
 
+; TODO:
 ; 28. VRINTA
 ; 29. VRINTM
 ; 30. VRINTN
@@ -664,11 +695,48 @@ entry:
 ; 32. VRINTR
 ; 33. VRINTX
 ; 34. VRINTZ
+
 ; 35. VSELEQ
+define half @select_cc1()  {
+  %1 = fcmp nsz oeq half undef, 0xH0001
+  %2 = select i1 %1, half 0xHC000, half 0xH0002
+  ret half %2
+
+; CHECK-LABEL:                 select_cc1:
+; CHECK-HARDFP-FULLFP16:       vseleq.f16  s0, s{{.}}, s{{.}}
+}
+
 ; 36. VSELGE
+define half @select_cc2()  {
+  %1 = fcmp nsz oge half undef, 0xH0001
+  %2 = select i1 %1, half 0xHC000, half 0xH0002
+  ret half %2
+
+; CHECK-LABEL:                 select_cc2:
+; CHECK-HARDFP-FULLFP16:       vselge.f16  s0, s{{.}}, s{{.}}
+}
+
 ; 37. VSELGT
+define half @select_cc3()  {
+  %1 = fcmp nsz ogt half undef, 0xH0001
+  %2 = select i1 %1, half 0xHC000, half 0xH0002
+  ret half %2
+
+; CHECK-LABEL:                 select_cc3:
+; CHECK-HARDFP-FULLFP16:       vselgt.f16  s0, s{{.}}, s{{.}}
+}
+
 ; 38. VSELVS
-; 39. VSQRT
+define half @select_cc4()  {
+  %1 = fcmp nsz ueq half undef, 0xH0001
+  %2 = select i1 %1, half 0xHC000, half 0xH0002
+  ret half %2
+
+; CHECK-LABEL:                 select_cc4:
+; CHECK-HARDFP-FULLFP16:       vselvs.f16  s0, s{{.}}, s{{.}}
+}
+
+; 39. VSQRT - TODO
 
 ; 40. VSUB
 define float @Sub(float %a.coerce, float %b.coerce) {

@@ -151,8 +151,10 @@ def Exceptions : DiagGroup<"exceptions">;
 def GNUEmptyInitializer : DiagGroup<"gnu-empty-initializer">;
 def GNUEmptyStruct : DiagGroup<"gnu-empty-struct">;
 def ExtraTokens : DiagGroup<"extra-tokens">;
+def CXX98CompatExtraSemi : DiagGroup<"c++98-compat-extra-semi">;
 def CXX11ExtraSemi : DiagGroup<"c++11-extra-semi">;
-def ExtraSemi : DiagGroup<"extra-semi", [CXX11ExtraSemi]>;
+def ExtraSemi : DiagGroup<"extra-semi", [CXX98CompatExtraSemi,
+                                         CXX11ExtraSemi]>;
 
 def GNUFlexibleArrayInitializer : DiagGroup<"gnu-flexible-array-initializer">;
 def GNUFlexibleArrayUnionMember : DiagGroup<"gnu-flexible-array-union-member">;
@@ -196,6 +198,7 @@ def CXX98Compat : DiagGroup<"c++98-compat",
 def CXX98CompatPedantic : DiagGroup<"c++98-compat-pedantic",
                                     [CXX98Compat,
                                      CXX98CompatBindToTemporaryCopy,
+                                     CXX98CompatExtraSemi,
                                      CXXPre14CompatPedantic,
                                      CXXPre17CompatPedantic,
                                      CXXPre2aCompatPedantic]>;
@@ -512,8 +515,13 @@ def UninitializedStaticSelfInit : DiagGroup<"static-self-init">;
 def Uninitialized  : DiagGroup<"uninitialized", [UninitializedSometimes,
                                                  UninitializedStaticSelfInit]>;
 def IgnoredPragmaIntrinsic : DiagGroup<"ignored-pragma-intrinsic">;
+// #pragma optimize is often used to avoid to work around MSVC codegen bugs or
+// to disable inlining. It's not completely clear what alternative to suggest
+// (#pragma clang optimize, noinline) so suggest nothing for now.
+def IgnoredPragmaOptimize : DiagGroup<"ignored-pragma-optimize">;
 def UnknownPragmas : DiagGroup<"unknown-pragmas">;
-def IgnoredPragmas : DiagGroup<"ignored-pragmas", [IgnoredPragmaIntrinsic]>;
+def IgnoredPragmas : DiagGroup<"ignored-pragmas",
+    [IgnoredPragmaIntrinsic, IgnoredPragmaOptimize]>;
 def PragmaClangAttribute : DiagGroup<"pragma-clang-attribute">;
 def PragmaPackSuspiciousInclude : DiagGroup<"pragma-pack-suspicious-include">;
 def PragmaPack : DiagGroup<"pragma-pack", [PragmaPackSuspiciousInclude]>;

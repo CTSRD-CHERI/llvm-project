@@ -549,7 +549,7 @@ class GdbRemoteTestCaseBase(TestBase):
                 inferior_exe_path = self.getBuildArtifact("a.out")
 
             if lldb.remote_platform:
-                remote_path = lldbutil.append_to_process_working_directory(
+                remote_path = lldbutil.append_to_process_working_directory(self,
                     os.path.basename(inferior_exe_path))
                 remote_file_spec = lldb.SBFileSpec(remote_path, False)
                 err = lldb.remote_platform.Install(lldb.SBFileSpec(
@@ -1008,9 +1008,10 @@ class GdbRemoteTestCaseBase(TestBase):
                     reg_info["name"] in PREFERRED_REGISTER_NAMES):
                 # We found a preferred register.  Use it.
                 return reg_info["lldb_register_index"]
-            if ("generic" in reg_info) and (reg_info["generic"] == "fp"):
-                # A frame pointer register will do as a register to modify
-                # temporarily.
+            if ("generic" in reg_info) and (reg_info["generic"] == "fp" or
+                    reg_info["generic"] == "arg1"):
+                # A frame pointer or first arg register will do as a
+                # register to modify temporarily.
                 alternative_register_index = reg_info["lldb_register_index"]
 
         # We didn't find a preferred register.  Return whatever alternative register
@@ -1610,7 +1611,7 @@ class GdbRemoteTestCaseBase(TestBase):
         exe_path = self.getBuildArtifact("a.out")
         if not lldb.remote_platform:
             return [exe_path]
-        remote_path = lldbutil.append_to_process_working_directory(
+        remote_path = lldbutil.append_to_process_working_directory(self,
             os.path.basename(exe_path))
         remote_file_spec = lldb.SBFileSpec(remote_path, False)
         err = lldb.remote_platform.Install(lldb.SBFileSpec(exe_path, True),

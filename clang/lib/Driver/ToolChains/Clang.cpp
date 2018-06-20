@@ -1306,6 +1306,8 @@ static bool isSignedCharDefault(const llvm::Triple &Triple) {
 static bool isNoCommonDefault(const llvm::Triple &Triple) {
   switch (Triple.getArch()) {
   default:
+    if (Triple.isOSFuchsia())
+      return true;
     return false;
 
   case llvm::Triple::xcore:
@@ -2379,6 +2381,7 @@ static void RenderOpenCLOptions(const ArgList &Args, ArgStringList &CmdArgs) {
       options::OPT_cl_no_signed_zeros,
       options::OPT_cl_denorms_are_zero,
       options::OPT_cl_fp32_correctly_rounded_divide_sqrt,
+      options::OPT_cl_uniform_work_group_size
   };
 
   if (Arg *A = Args.getLastArg(options::OPT_cl_std_EQ)) {
@@ -2965,7 +2968,7 @@ static void RenderDebugOptions(const ToolChain &TC, const Driver &D,
 
   // Forward -gcodeview. EmitCodeView might have been set by CL-compatibility
   // argument parsing.
-  if (Args.hasArg(options::OPT_gcodeview) || EmitCodeView) {
+  if (EmitCodeView) {
     // DWARFVersion remains at 0 if no explicit choice was made.
     CmdArgs.push_back("-gcodeview");
   } else if (DWARFVersion == 0 &&
@@ -3020,6 +3023,18 @@ static void RenderDebugOptions(const ToolChain &TC, const Driver &D,
                                     TC.GetDefaultStandaloneDebug());
   if (DebugInfoKind == codegenoptions::LimitedDebugInfo && NeedFullDebug)
     DebugInfoKind = codegenoptions::FullDebugInfo;
+
+  if (Args.hasFlag(options::OPT_gembed_source, options::OPT_gno_embed_source, false)) {
+    // Source embedding is a vendor extension to DWARF v5. By now we have
+    // checked if a DWARF version was stated explicitly, and have otherwise
+    // fallen back to the target default, so if this is still not at least 5 we
+    // emit an error.
+    if (DWARFVersion < 5)
+      D.Diag(diag::err_drv_argument_only_allowed_with)
+          << Args.getLastArg(options::OPT_gembed_source)->getAsString(Args)
+          << "-gdwarf-5";
+    CmdArgs.push_back("-gembed-source");
+  }
 
   RenderDebugEnablingArgs(Args, CmdArgs, DebugInfoKind, DWARFVersion,
                           DebuggerTuning);
@@ -3234,7 +3249,11 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     if (JA.getType() == types::TY_LLVM_BC)
       CmdArgs.push_back("-emit-llvm-uselists");
 
-    if (D.isUsingLTO()) {
+    // Device-side jobs do not support LTO.
+    bool isDeviceOffloadAction = !(JA.isDeviceOffloading(Action::OFK_None) ||
+                                   JA.isDeviceOffloading(Action::OFK_Host));
+
+    if (D.isUsingLTO() && !isDeviceOffloadAction) {
       Args.AddLastArg(CmdArgs, options::OPT_flto, options::OPT_flto_EQ);
 
       // The Darwin and PS4 linkers currently use the legacy LTO API, which
@@ -3439,6 +3458,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (!Args.hasFlag(options::OPT_foptimize_sibling_calls,
                     options::OPT_fno_optimize_sibling_calls))
     CmdArgs.push_back("-mdisable-tail-calls");
+  if (Args.hasFlag(options::OPT_fno_escaping_block_tail_calls,
+                   options::OPT_fescaping_block_tail_calls, false))
+    CmdArgs.push_back("-fno-escaping-block-tail-calls");
 
   Args.AddLastArg(CmdArgs, options::OPT_ffine_grained_bitfield_accesses,
                   options::OPT_fno_fine_grained_bitfield_accesses);
@@ -3552,6 +3574,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   types::ID InputType = Input.getType();
   if (D.IsCLMode())
     AddClangCLArgs(Args, InputType, CmdArgs, &DebugInfoKind, &EmitCodeView);
+  else
+    EmitCodeView = Args.hasArg(options::OPT_gcodeview);
 
   const Arg *SplitDWARFArg = nullptr;
   RenderDebugOptions(getToolChain(), D, RawTriple, Args, EmitCodeView,
@@ -3920,13 +3944,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   Args.AddLastArg(CmdArgs, options::OPT_femit_all_decls);
   Args.AddLastArg(CmdArgs, options::OPT_fheinous_gnu_extensions);
   Args.AddLastArg(CmdArgs, options::OPT_fno_operator_names);
-  // Emulated TLS is enabled by default on Android and OpenBSD, and can be enabled
-  // manually with -femulated-tls.
-  bool EmulatedTLSDefault = Triple.isAndroid() || Triple.isOSOpenBSD() ||
-                            Triple.isWindowsCygwinEnvironment();
-  if (Args.hasFlag(options::OPT_femulated_tls, options::OPT_fno_emulated_tls,
-                   EmulatedTLSDefault))
-    CmdArgs.push_back("-femulated-tls");
+  Args.AddLastArg(CmdArgs, options::OPT_femulated_tls,
+                  options::OPT_fno_emulated_tls);
+
   // AltiVec-like language extensions aren't relevant for assembling.
   if (!isa<PreprocessJobAction>(JA) || Output.getType() != types::TY_PP_Asm)
     Args.AddLastArg(CmdArgs, options::OPT_fzvector);
@@ -3953,6 +3973,11 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                         options::OPT_fnoopenmp_use_tls, /*Default=*/true))
         CmdArgs.push_back("-fnoopenmp-use-tls");
       Args.AddAllArgs(CmdArgs, options::OPT_fopenmp_version_EQ);
+
+      // When in OpenMP offloading mode with NVPTX target, forward
+      // cuda-mode flag
+      Args.AddLastArg(CmdArgs, options::OPT_fopenmp_cuda_mode,
+                      options::OPT_fno_openmp_cuda_mode);
       break;
     default:
       // By default, if Clang doesn't know how to generate useful OpenMP code
@@ -4045,6 +4070,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     else
       CmdArgs.push_back("-mstack-probe-size=0");
   }
+
+  if (!Args.hasFlag(options::OPT_mstack_arg_probe,
+                    options::OPT_mno_stack_arg_probe, true))
+    CmdArgs.push_back(Args.MakeArgString("-mno-stack-arg-probe"));
 
   if (Arg *A = Args.getLastArg(options::OPT_mrestrict_it,
                                options::OPT_mno_restrict_it)) {
@@ -4656,13 +4685,12 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   }
 
   if (IsCuda) {
-    // Host-side cuda compilation receives device-side outputs as Inputs[1...].
-    // Include them with -fcuda-include-gpubinary.
+    // Host-side cuda compilation receives all device-side outputs in a single
+    // fatbin as Inputs[1]. Include the binary with -fcuda-include-gpubinary.
     if (Inputs.size() > 1) {
-      for (auto I = std::next(Inputs.begin()), E = Inputs.end(); I != E; ++I) {
-        CmdArgs.push_back("-fcuda-include-gpubinary");
-        CmdArgs.push_back(I->getFilename());
-      }
+      assert(Inputs.size() == 2 && "More than one GPU binary!");
+      CmdArgs.push_back("-fcuda-include-gpubinary");
+      CmdArgs.push_back(Inputs[1].getFilename());
     }
 
     if (Args.hasFlag(options::OPT_fcuda_rdc, options::OPT_fno_cuda_rdc, false))
@@ -4741,6 +4769,12 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     } else {
       CmdArgs.push_back("-global-isel=0");
     }
+  }
+
+  if (Arg *A = Args.getLastArg(options::OPT_fforce_enable_int128,
+                               options::OPT_fno_force_enable_int128)) {
+    if (A->getOption().matches(options::OPT_fforce_enable_int128))
+      CmdArgs.push_back("-fforce-enable-int128");
   }
 
   // Finally add the compile command to the compilation.

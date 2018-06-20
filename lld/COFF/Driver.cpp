@@ -9,7 +9,9 @@
 
 #include "Driver.h"
 #include "Config.h"
+#include "ICF.h"
 #include "InputFiles.h"
+#include "MarkLive.h"
 #include "MinGW.h"
 #include "SymbolTable.h"
 #include "Symbols.h"
@@ -37,9 +39,8 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/ToolDrivers/llvm-lib/LibDriver.h"
 #include <algorithm>
-#include <memory>
-
 #include <future>
+#include <memory>
 
 using namespace llvm;
 using namespace llvm::object;
@@ -60,7 +61,7 @@ bool link(ArrayRef<const char *> Args, bool CanExitEarly, raw_ostream &Diag) {
   errorHandler().ColorDiagnostics = Diag.has_colors();
   errorHandler().ErrorLimitExceededMsg =
       "too many errors emitted, stopping now"
-      " (use /ERRORLIMIT:0 to see all errors)";
+      " (use /errorlimit:0 to see all errors)";
   errorHandler().ExitEarly = CanExitEarly;
   Config = make<Configuration>();
   Config->Argv = {Args.begin(), Args.end()};
@@ -123,39 +124,46 @@ MemoryBufferRef LinkerDriver::takeBuffer(std::unique_ptr<MemoryBuffer> MB) {
 
 void LinkerDriver::addBuffer(std::unique_ptr<MemoryBuffer> MB,
                              bool WholeArchive) {
+  StringRef Filename = MB->getBufferIdentifier();
+
   MemoryBufferRef MBRef = takeBuffer(std::move(MB));
-  FilePaths.push_back(MBRef.getBufferIdentifier());
+  FilePaths.push_back(Filename);
 
   // File type is detected by contents, not by file extension.
   switch (identify_magic(MBRef.getBuffer())) {
   case file_magic::windows_resource:
     Resources.push_back(MBRef);
     break;
-
   case file_magic::archive:
     if (WholeArchive) {
       std::unique_ptr<Archive> File =
-          CHECK(Archive::create(MBRef),
-                MBRef.getBufferIdentifier() + ": failed to parse archive");
+          CHECK(Archive::create(MBRef), Filename + ": failed to parse archive");
 
       for (MemoryBufferRef M : getArchiveMembers(File.get()))
-        addArchiveBuffer(M, "<whole-archive>", MBRef.getBufferIdentifier());
+        addArchiveBuffer(M, "<whole-archive>", Filename);
       return;
     }
     Symtab->addFile(make<ArchiveFile>(MBRef));
     break;
-
   case file_magic::bitcode:
     Symtab->addFile(make<BitcodeFile>(MBRef));
     break;
-
-  case file_magic::coff_cl_gl_object:
-    error(MBRef.getBufferIdentifier() + ": is not a native COFF file. "
-          "Recompile without /GL");
-    break;
-
-  default:
+  case file_magic::coff_object:
+  case file_magic::coff_import_library:
     Symtab->addFile(make<ObjFile>(MBRef));
+    break;
+  case file_magic::coff_cl_gl_object:
+    error(Filename + ": is not a native COFF file. Recompile without /GL");
+    break;
+  case file_magic::pecoff_executable:
+    if (Filename.endswith_lower(".dll")) {
+      error(Filename + ": bad file type. Did you specify a DLL instead of an "
+                       "import library?");
+      break;
+    }
+    LLVM_FALLTHROUGH;
+  default:
+    error(MBRef.getBufferIdentifier() + ": unknown file type");
     break;
   }
 }
@@ -796,8 +804,10 @@ static void parseOrderFile(StringRef Arg) {
     if (Config->Machine == I386 && !isDecorated(S))
       S = "_" + S;
 
-    if (Set.count(S) == 0)
-      warn("/order:" + Arg + ": missing symbol: " + S);
+    if (Set.count(S) == 0) {
+      if (Config->WarnMissingOrderSymbol)
+        warn("/order:" + Arg + ": missing symbol: " + S + " [LNK4037]");
+    }
     else
       Config->Order[S] = INT_MIN + Config->Order.size();
   }
@@ -891,7 +901,9 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
 
   // Handle /ignore
   for (auto *Arg : Args.filtered(OPT_ignore)) {
-    if (StringRef(Arg->getValue()) == "4217")
+    if (StringRef(Arg->getValue()) == "4037")
+      Config->WarnMissingOrderSymbol = false;
+    else if (StringRef(Arg->getValue()) == "4217")
       Config->WarnLocallyDefinedImported = false;
     // Other warning numbers are ignored.
   }
@@ -921,9 +933,12 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
 
   // Handle /pdb
   bool ShouldCreatePDB = Args.hasArg(OPT_debug, OPT_debug_ghash);
-  if (ShouldCreatePDB)
+  if (ShouldCreatePDB) {
     if (auto *Arg = Args.getLastArg(OPT_pdb))
       Config->PDBPath = Arg->getValue();
+    if (Args.hasArg(OPT_natvis))
+      Config->NatvisFiles = Args.getAllArgValues(OPT_natvis);
+  }
 
   // Handle /noentry
   if (Args.hasArg(OPT_noentry)) {
@@ -1061,6 +1076,10 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   if (Args.hasArg(OPT_lldsavetemps))
     Config->SaveTemps = true;
 
+  // Handle /kill-at
+  if (Args.hasArg(OPT_kill_at))
+    Config->KillAt = true;
+
   // Handle /lldltocache
   if (auto *Arg = Args.getLastArg(OPT_lldltocache))
     Config->LTOCache = Arg->getValue();
@@ -1116,7 +1135,7 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
 
   if (!Config->ManifestInput.empty() &&
       Config->Manifest != Configuration::Embed) {
-    fatal("/MANIFESTINPUT: requires /MANIFEST:EMBED");
+    fatal("/manifestinput: requires /manifest:embed");
   }
 
   // Handle miscellaneous boolean flags.
@@ -1134,13 +1153,13 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   Config->MapFile = getMapFile(Args);
 
   if (Config->Incremental && Config->DoGC) {
-    warn("ignoring '/INCREMENTAL' because REF is enabled; use '/OPT:NOREF' to "
+    warn("ignoring '/incremental' because REF is enabled; use '/opt:noref' to "
          "disable");
     Config->Incremental = false;
   }
 
   if (Config->Incremental && Config->DoICF) {
-    warn("ignoring '/INCREMENTAL' because ICF is enabled; use '/OPT:NOICF' to "
+    warn("ignoring '/incremental' because ICF is enabled; use '/opt:noicf' to "
          "disable");
     Config->Incremental = false;
   }

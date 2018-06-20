@@ -11,6 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/CodeGen/GlobalISel/Utils.h"
+#include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/CodeGen/GlobalISel/RegisterBankInfo.h"
 #include "llvm/CodeGen/MachineInstr.h"
@@ -42,23 +43,25 @@ unsigned llvm::constrainRegToClass(MachineRegisterInfo &MRI,
   return Reg;
 }
 
-
 unsigned llvm::constrainOperandRegClass(
     const MachineFunction &MF, const TargetRegisterInfo &TRI,
     MachineRegisterInfo &MRI, const TargetInstrInfo &TII,
     const RegisterBankInfo &RBI, MachineInstr &InsertPt, const MCInstrDesc &II,
-    unsigned Reg, unsigned OpIdx) {
+    const MachineOperand &RegMO, unsigned OpIdx) {
+  unsigned Reg = RegMO.getReg();
   // Assume physical registers are properly constrained.
   assert(TargetRegisterInfo::isVirtualRegister(Reg) &&
          "PhysReg not implemented");
 
   const TargetRegisterClass *RegClass = TII.getRegClass(II, OpIdx, &TRI, MF);
   // Some of the target independent instructions, like COPY, may not impose any
-  // register class constraints on some of their operands:
+  // register class constraints on some of their operands: If it's a use, we can
+  // skip constraining as the instruction defining the register would constrain
+  // it.
   if (!RegClass) {
-    assert(!isTargetSpecificOpcode(II.getOpcode()) &&
-           "Only target independent instructions are allowed to have operands "
-           "with no register class constraints");
+    assert((!isTargetSpecificOpcode(II.getOpcode()) || RegMO.isUse()) &&
+           "Register class constraint is required unless either the "
+           "instruction is target independent or the operand is a use");
     // FIXME: Just bailing out like this here could be not enough, unless we
     // expect the users of this function to do the right thing for PHIs and
     // COPY:
@@ -108,7 +111,7 @@ bool llvm::constrainSelectedInstRegOperands(MachineInstr &I,
     // insert COPYs if that's impossible.
     // constrainOperandRegClass does that for us.
     MO.setReg(constrainOperandRegClass(MF, TRI, MRI, TII, RBI, I, I.getDesc(),
-                                       Reg, OpI));
+                                       MO, OpI));
 
     // Tie uses to defs as indicated in MCInstrDesc if this hasn't already been
     // done.
@@ -166,7 +169,7 @@ void llvm::reportGISelFailure(MachineFunction &MF, const TargetPassConfig &TPC,
                                     MI.getDebugLoc(), MI.getParent());
   R << Msg;
   // Printing MI is expensive;  only do it if expensive remarks are enabled.
-  if (MORE.allowExtraAnalysis(PassName))
+  if (TPC.isGlobalISelAbortEnabled() || MORE.allowExtraAnalysis(PassName))
     R << ": " << ore::MNV("Inst", MI);
   reportGISelFailure(MF, TPC, MORE, R);
 }
@@ -209,4 +212,17 @@ llvm::MachineInstr *llvm::getOpcodeDef(unsigned Opcode, unsigned Reg,
     DefMI = MRI.getVRegDef(SrcReg);
   }
   return DefMI->getOpcode() == Opcode ? DefMI : nullptr;
+}
+
+APFloat llvm::getAPFloatFromSize(double Val, unsigned Size) {
+  if (Size == 32)
+    return APFloat(float(Val));
+  if (Size == 64)
+    return APFloat(Val);
+  if (Size != 16)
+    llvm_unreachable("Unsupported FPConstant size");
+  bool Ignored;
+  APFloat APF(Val);
+  APF.convert(APFloat::IEEEhalf(), APFloat::rmNearestTiesToEven, &Ignored);
+  return APF;
 }

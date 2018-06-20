@@ -1126,8 +1126,7 @@ public:
   /// Replace all occurrences of FromReg with ToReg:SubIdx,
   /// properly composing subreg indices where necessary.
   void substituteRegister(unsigned FromReg, unsigned ToReg, unsigned SubIdx,
-                          const TargetRegisterInfo &RegInfo,
-                          bool ClearIsRenamable = false);
+                          const TargetRegisterInfo &RegInfo);
 
   /// We have determined MI kills a register. Look for the
   /// operand that uses it and mark it as IsKill. If AddIfNotFound is true,
@@ -1317,6 +1316,11 @@ public:
   /// for use when merging two MachineInstrs into one. This routine does not
   /// modify the memrefs of the this MachineInstr.
   std::pair<mmo_iterator, unsigned> mergeMemRefsWith(const MachineInstr& Other);
+
+  /// Return the MIFlags which represent both MachineInstrs. This
+  /// should be used when merging two MachineInstrs into one. This routine does
+  /// not modify the MIFlags of this MachineInstr.
+  uint8_t mergeFlagsWith(const MachineInstr& Other) const;
 
   /// Clear this MachineInstr's memory reference descriptor list.  This resets
   /// the memrefs to their most conservative state.  This should be used only

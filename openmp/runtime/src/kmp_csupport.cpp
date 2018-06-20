@@ -4065,4 +4065,13 @@ void __kmpc_doacross_fini(ident_t *loc, int gtid) {
 }
 #endif
 
+#if OMP_50_ENABLED
+int __kmpc_get_target_offload(void) {
+  if (!__kmp_init_serial) {
+    __kmp_serial_initialize();
+  }
+  return __kmp_target_offload;
+}
+#endif // OMP_50_ENABLED
+
 // end of file //

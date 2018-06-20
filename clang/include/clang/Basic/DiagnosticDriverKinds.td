@@ -203,6 +203,9 @@ def err_drv_expecting_fopenmp_with_fopenmp_targets : Error<
 def warn_drv_omp_offload_target_duplicate : Warning<
   "The OpenMP offloading target '%0' is similar to target '%1' already specified - will be ignored.">, 
   InGroup<OpenMPTarget>;
+def warn_drv_omp_offload_target_missingbcruntime : Warning<
+  "No library '%0' found in the default clang lib directory or in LIBRARY_PATH. Expect degraded performance due to no inlining of runtime functions on target devices.">,
+  InGroup<OpenMPTarget>;
 def err_drv_bitcode_unsupported_on_toolchain : Error<
   "-fembed-bitcode is not supported on versions of iOS prior to 6.0">;
 
@@ -333,6 +336,10 @@ def warn_drv_unsupported_abicalls : Warning<
   "ignoring '-mabicalls' option as it cannot be used with "
   "non position-independent code and the N64 ABI">,
   InGroup<OptionIgnored>;
+def err_drv_unsupported_indirect_jump_opt : Error<
+  "'-mindirect-jump=%0' is unsupported with the '%1' architecture">;
+def err_drv_unknown_indirect_jump_opt : Error<
+  "unknown '-mindirect-jump=' option '%0'">;
 
 def warn_drv_unable_to_find_directory_expected : Warning<
   "unable to find %0 directory, expected to be in '%1'">,

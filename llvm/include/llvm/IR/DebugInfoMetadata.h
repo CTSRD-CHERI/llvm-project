@@ -455,6 +455,7 @@ public:
 
   inline StringRef getFilename() const;
   inline StringRef getDirectory() const;
+  inline Optional<StringRef> getSource() const;
 
   StringRef getName() const;
   DIScopeRef getScope() const;
@@ -532,42 +533,48 @@ public:
 
 private:
   Optional<ChecksumInfo<MDString *>> Checksum;
+  Optional<MDString *> Source;
 
   DIFile(LLVMContext &C, StorageType Storage,
-         Optional<ChecksumInfo<MDString *>> CS,
+         Optional<ChecksumInfo<MDString *>> CS, Optional<MDString *> Src,
          ArrayRef<Metadata *> Ops)
       : DIScope(C, DIFileKind, Storage, dwarf::DW_TAG_file_type, Ops),
-        Checksum(CS) {}
+        Checksum(CS), Source(Src) {}
   ~DIFile() = default;
 
   static DIFile *getImpl(LLVMContext &Context, StringRef Filename,
                          StringRef Directory,
                          Optional<ChecksumInfo<StringRef>> CS,
+                         Optional<StringRef> Source,
                          StorageType Storage, bool ShouldCreate = true) {
     Optional<ChecksumInfo<MDString *>> MDChecksum;
     if (CS)
       MDChecksum.emplace(CS->Kind, getCanonicalMDString(Context, CS->Value));
     return getImpl(Context, getCanonicalMDString(Context, Filename),
                    getCanonicalMDString(Context, Directory), MDChecksum,
+                   Source ? Optional<MDString *>(getCanonicalMDString(Context, *Source)) : None,
                    Storage, ShouldCreate);
   }
   static DIFile *getImpl(LLVMContext &Context, MDString *Filename,
                          MDString *Directory,
                          Optional<ChecksumInfo<MDString *>> CS,
-                         StorageType Storage, bool ShouldCreate = true);
+                         Optional<MDString *> Source, StorageType Storage,
+                         bool ShouldCreate = true);
 
   TempDIFile cloneImpl() const {
     return getTemporary(getContext(), getFilename(), getDirectory(),
-                        getChecksum());
+                        getChecksum(), getSource());
   }
 
 public:
   DEFINE_MDNODE_GET(DIFile, (StringRef Filename, StringRef Directory,
-                             Optional<ChecksumInfo<StringRef>> CS = None),
-                    (Filename, Directory, CS))
+                             Optional<ChecksumInfo<StringRef>> CS = None,
+                             Optional<StringRef> Source = None),
+                    (Filename, Directory, CS, Source))
   DEFINE_MDNODE_GET(DIFile, (MDString * Filename, MDString *Directory,
-                             Optional<ChecksumInfo<MDString *>> CS = None),
-                    (Filename, Directory, CS))
+                             Optional<ChecksumInfo<MDString *>> CS = None,
+                             Optional<MDString *> Source = None),
+                    (Filename, Directory, CS, Source))
 
   TempDIFile clone() const { return cloneImpl(); }
 
@@ -579,10 +586,14 @@ public:
       StringRefChecksum.emplace(Checksum->Kind, Checksum->Value->getString());
     return StringRefChecksum;
   }
+  Optional<StringRef> getSource() const {
+    return Source ? Optional<StringRef>((*Source)->getString()) : None;
+  }
 
   MDString *getRawFilename() const { return getOperandAs<MDString>(0); }
   MDString *getRawDirectory() const { return getOperandAs<MDString>(1); }
   Optional<ChecksumInfo<MDString *>> getRawChecksum() const { return Checksum; }
+  Optional<MDString *> getRawSource() const { return Source; }
 
   static StringRef getChecksumKindAsString(ChecksumKind CSKind);
   static Optional<ChecksumKind> getChecksumKind(StringRef CSKindStr);
@@ -602,6 +613,12 @@ StringRef DIScope::getDirectory() const {
   if (auto *F = getFile())
     return F->getDirectory();
   return "";
+}
+
+Optional<StringRef> DIScope::getSource() const {
+  if (auto *F = getFile())
+    return F->getSource();
+  return None;
 }
 
 /// Base class for types.
@@ -1408,6 +1425,7 @@ public:
   DIFile *getFile() const { return getScope()->getFile(); }
   StringRef getFilename() const { return getScope()->getFilename(); }
   StringRef getDirectory() const { return getScope()->getDirectory(); }
+  Optional<StringRef> getSource() const { return getScope()->getSource(); }
 
   /// Get the scope where this is inlined.
   ///
@@ -2177,6 +2195,12 @@ public:
     return "";
   }
 
+  Optional<StringRef> getSource() const {
+    if (auto *F = getFile())
+      return F->getSource();
+    return None;
+  }
+
   Metadata *getRawScope() const { return getOperand(0); }
   MDString *getRawName() const { return getOperandAs<MDString>(1); }
   Metadata *getRawFile() const { return getOperand(2); }
@@ -2391,6 +2415,32 @@ public:
   static Optional<DIExpression *>
   createFragmentExpression(const DIExpression *Expr, unsigned OffsetInBits,
                            unsigned SizeInBits);
+
+  /// Determine the relative position of the fragments described by this
+  /// DIExpression and \p Other.
+  /// Returns -1 if this is entirely before Other, 0 if this and Other overlap,
+  /// 1 if this is entirely after Other.
+  int fragmentCmp(const DIExpression *Other) const {
+    auto Fragment1 = *getFragmentInfo();
+    auto Fragment2 = *Other->getFragmentInfo();
+    unsigned l1 = Fragment1.OffsetInBits;
+    unsigned l2 = Fragment2.OffsetInBits;
+    unsigned r1 = l1 + Fragment1.SizeInBits;
+    unsigned r2 = l2 + Fragment2.SizeInBits;
+    if (r1 <= l2)
+      return -1;
+    else if (r2 <= l1)
+      return 1;
+    else
+      return 0;
+  }
+
+  /// Check if fragments overlap between this DIExpression and \p Other.
+  bool fragmentsOverlap(const DIExpression *Other) const {
+    if (!isFragment() || !Other->isFragment())
+      return true;
+    return fragmentCmp(Other) == 0;
+  }
 };
 
 /// Global variables.
@@ -2622,6 +2672,12 @@ public:
     if (auto *F = getFile())
       return F->getDirectory();
     return "";
+  }
+
+  Optional<StringRef> getSource() const {
+    if (auto *F = getFile())
+      return F->getSource();
+    return None;
   }
 
   MDString *getRawName() const { return getOperandAs<MDString>(0); }

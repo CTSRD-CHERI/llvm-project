@@ -30,9 +30,9 @@
 #include "InputFiles.h"
 #include "InputSection.h"
 #include "LinkerScript.h"
+#include "MarkLive.h"
 #include "OutputSections.h"
 #include "ScriptParser.h"
-#include "Strings.h"
 #include "SymbolTable.h"
 #include "Symbols.h"
 #include "SyntheticSections.h"
@@ -42,6 +42,7 @@
 #include "lld/Common/Driver.h"
 #include "lld/Common/ErrorHandler.h"
 #include "lld/Common/Memory.h"
+#include "lld/Common/Strings.h"
 #include "lld/Common/TargetOptionsCommandFlags.h"
 #include "lld/Common/Threads.h"
 #include "lld/Common/Version.h"
@@ -130,6 +131,7 @@ static std::tuple<ELFKind, uint16_t, uint8_t> parseEmulation(StringRef Emul) {
           .Case("elf64btsmip_cheri", {ELF64BEKind, EM_MIPS})
           .Case("elf64ltsmip", {ELF64LEKind, EM_MIPS})
           .Case("elf64ppc", {ELF64BEKind, EM_PPC64})
+          .Case("elf64lppc", {ELF64LEKind, EM_PPC64})
           .Cases("elf_amd64", "elf_x86_64", {ELF64LEKind, EM_X86_64})
           .Case("elf_i386", {ELF32LEKind, EM_386})
           .Case("elf_iamcu", {ELF32LEKind, EM_IAMCU})
@@ -656,6 +658,7 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
       Args.hasFlag(OPT_check_sections, OPT_no_check_sections, true);
   Config->Chroot = Args.getLastArgValue(OPT_chroot);
   Config->CompressDebugSections = getCompressDebugSections(Args);
+  Config->Cref = Args.hasFlag(OPT_cref, OPT_no_cref, false);
   Config->DefineCommon = Args.hasFlag(OPT_define_common, OPT_no_define_common,
                                       !Args.hasArg(OPT_relocatable));
   Config->Demangle = Args.hasFlag(OPT_demangle, OPT_no_demangle, true);
@@ -665,7 +668,8 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
   Config->EhFrameHdr =
       Args.hasFlag(OPT_eh_frame_hdr, OPT_no_eh_frame_hdr, false);
   Config->EmitRelocs = Args.hasArg(OPT_emit_relocs);
-  Config->EnableNewDtags = !Args.hasArg(OPT_disable_new_dtags);
+  Config->EnableNewDtags =
+      Args.hasFlag(OPT_enable_new_dtags, OPT_disable_new_dtags, true);
   Config->Entry = Args.getLastArgValue(OPT_entry);
   Config->ExportDynamic =
       Args.hasFlag(OPT_export_dynamic, OPT_no_export_dynamic, false);
@@ -740,6 +744,7 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
       Args.hasFlag(OPT_warn_symbol_ordering, OPT_no_warn_symbol_ordering, true);
   Config->ZCombreloc = !hasZOption(Args, "nocombreloc");
   Config->ZExecstack = hasZOption(Args, "execstack");
+  Config->ZHazardplt = hasZOption(Args, "hazardplt");
   Config->ZNocopyreloc = hasZOption(Args, "nocopyreloc");
   Config->ZNodelete = hasZOption(Args, "nodelete");
   Config->ZNodlopen = hasZOption(Args, "nodlopen");
@@ -821,7 +826,7 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
 
   std::tie(Config->BuildId, Config->BuildIdVector) = getBuildId(Args);
 
-  if (auto *Arg = Args.getLastArg(OPT_pack_dyn_relocs_eq)) {
+  if (auto *Arg = Args.getLastArg(OPT_pack_dyn_relocs)) {
     StringRef S = Arg->getValue();
     if (S == "android")
       Config->AndroidPackDynRelocs = true;
@@ -1124,6 +1129,12 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   for (StringRef S : Config->Undefined)
     Symtab->fetchIfLazy<ELFT>(S);
 
+  // Handle the --just-symbols option. This may add absolute symbols
+  // to the symbol table.
+  for (auto *Arg : Args.filtered(OPT_just_symbols))
+    if (Optional<MemoryBufferRef> MB = readFile(Arg->getValue()))
+      readJustSymbolsFile<ELFT>(*MB);
+
   // If an entry symbol is in a static archive, pull out that file now
   // to complete the symbol table. After this, no new names except a
   // few linker-synthesized ones will be added to the symbol table.
@@ -1133,9 +1144,14 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   if (errorCount())
     return;
 
-  // Handle undefined symbols in DSOs.
-  if (!Config->Shared)
-    Symtab->scanShlibUndefined<ELFT>();
+  // Now when we read all script files, we want to finalize order of linker
+  // script commands, which can be not yet final because of INSERT commands.
+  Script->processInsertCommands();
+
+  // We want to declare linker script's symbols early,
+  // so that we can version them.
+  // They also might be exported if referenced by DSOs.
+  Script->declareSymbols();
 
   // Handle the -exclude-libs option.
   if (Args.hasArg(OPT_exclude_libs))
@@ -1149,10 +1165,6 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   // We need to create some reserved symbols such as _end. Create them.
   if (!Config->Relocatable)
     addReservedSymbols();
-
-  // We want to declare linker script's symbols early,
-  // so that we can version them.
-  Script->declareSymbols();
 
   // Apply version scripts.
   //

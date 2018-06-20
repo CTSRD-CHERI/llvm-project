@@ -21,7 +21,7 @@ namespace clangd {
 using ::testing::Pair;
 using ::testing::Pointee;
 
-void ignoreUpdate(llvm::Optional<std::vector<DiagWithFixIts>>) {}
+void ignoreUpdate(llvm::Optional<std::vector<Diag>>) {}
 void ignoreError(llvm::Error Err) {
   handleAllErrors(std::move(Err), [](const llvm::ErrorInfoBase &) {});
 }
@@ -42,7 +42,8 @@ private:
 TEST_F(TUSchedulerTests, MissingFiles) {
   TUScheduler S(getDefaultAsyncThreadsCount(),
                 /*StorePreamblesInMemory=*/true,
-                /*ASTParsedCallback=*/nullptr);
+                /*ASTParsedCallback=*/nullptr,
+                /*UpdateDebounce=*/std::chrono::steady_clock::duration::zero());
 
   auto Added = testPath("added.cpp");
   Files[Added] = "";
@@ -50,7 +51,7 @@ TEST_F(TUSchedulerTests, MissingFiles) {
   auto Missing = testPath("missing.cpp");
   Files[Missing] = "";
 
-  S.update(Added, getInputs(Added, ""), ignoreUpdate);
+  S.update(Added, getInputs(Added, ""), WantDiagnostics::No, ignoreUpdate);
 
   // Assert each operation for missing file is an error (even if it's available
   // in VFS).
@@ -88,6 +89,61 @@ TEST_F(TUSchedulerTests, MissingFiles) {
   S.remove(Added);
 }
 
+TEST_F(TUSchedulerTests, WantDiagnostics) {
+  std::atomic<int> CallbackCount(0);
+  {
+    // To avoid a racy test, don't allow tasks to actualy run on the worker
+    // thread until we've scheduled them all.
+    Notification Ready;
+    TUScheduler S(
+        getDefaultAsyncThreadsCount(),
+        /*StorePreamblesInMemory=*/true,
+        /*ASTParsedCallback=*/nullptr,
+        /*UpdateDebounce=*/std::chrono::steady_clock::duration::zero());
+    auto Path = testPath("foo.cpp");
+    S.update(Path, getInputs(Path, ""), WantDiagnostics::Yes,
+             [&](std::vector<Diag>) { Ready.wait(); });
+
+    S.update(Path, getInputs(Path, "request diags"), WantDiagnostics::Yes,
+             [&](std::vector<Diag> Diags) { ++CallbackCount; });
+    S.update(Path, getInputs(Path, "auto (clobbered)"), WantDiagnostics::Auto,
+             [&](std::vector<Diag> Diags) {
+               ADD_FAILURE() << "auto should have been cancelled by auto";
+             });
+    S.update(Path, getInputs(Path, "request no diags"), WantDiagnostics::No,
+             [&](std::vector<Diag> Diags) {
+               ADD_FAILURE() << "no diags should not be called back";
+             });
+    S.update(Path, getInputs(Path, "auto (produces)"), WantDiagnostics::Auto,
+             [&](std::vector<Diag> Diags) { ++CallbackCount; });
+    Ready.notify();
+  }
+  EXPECT_EQ(2, CallbackCount);
+}
+
+TEST_F(TUSchedulerTests, Debounce) {
+  std::atomic<int> CallbackCount(0);
+  {
+    TUScheduler S(getDefaultAsyncThreadsCount(),
+                  /*StorePreamblesInMemory=*/true,
+                  /*ASTParsedCallback=*/nullptr,
+                  /*UpdateDebounce=*/std::chrono::seconds(1));
+    // FIXME: we could probably use timeouts lower than 1 second here.
+    auto Path = testPath("foo.cpp");
+    S.update(Path, getInputs(Path, "auto (debounced)"), WantDiagnostics::Auto,
+             [&](std::vector<Diag> Diags) {
+               ADD_FAILURE() << "auto should have been debounced and canceled";
+             });
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    S.update(Path, getInputs(Path, "auto (timed out)"), WantDiagnostics::Auto,
+             [&](std::vector<Diag> Diags) { ++CallbackCount; });
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+    S.update(Path, getInputs(Path, "auto (shut down)"), WantDiagnostics::Auto,
+             [&](std::vector<Diag> Diags) { ++CallbackCount; });
+  }
+  EXPECT_EQ(2, CallbackCount);
+}
+
 TEST_F(TUSchedulerTests, ManyUpdates) {
   const int FilesCount = 3;
   const int UpdatesPerFile = 10;
@@ -101,7 +157,8 @@ TEST_F(TUSchedulerTests, ManyUpdates) {
   {
     TUScheduler S(getDefaultAsyncThreadsCount(),
                   /*StorePreamblesInMemory=*/true,
-                  /*ASTParsedCallback=*/nullptr);
+                  /*ASTParsedCallback=*/nullptr,
+                  /*UpdateDebounce=*/std::chrono::milliseconds(50));
 
     std::vector<std::string> Files;
     for (int I = 0; I < FilesCount; ++I) {
@@ -132,9 +189,9 @@ TEST_F(TUSchedulerTests, ManyUpdates) {
 
         {
           WithContextValue WithNonce(NonceKey, ++Nonce);
-          S.update(File, Inputs,
-                   [Nonce, &Mut, &TotalUpdates](
-                       llvm::Optional<std::vector<DiagWithFixIts>> Diags) {
+          S.update(File, Inputs, WantDiagnostics::Auto,
+                   [Nonce, &Mut,
+                    &TotalUpdates](llvm::Optional<std::vector<Diag>> Diags) {
                      EXPECT_THAT(Context::current().get(NonceKey),
                                  Pointee(Nonce));
 
@@ -169,8 +226,7 @@ TEST_F(TUSchedulerTests, ManyUpdates) {
                 EXPECT_THAT(Context::current().get(NonceKey), Pointee(Nonce));
 
                 ASSERT_TRUE((bool)Preamble);
-                EXPECT_EQ(Preamble->Inputs.FS, Inputs.FS);
-                EXPECT_EQ(Preamble->Inputs.Contents, Inputs.Contents);
+                EXPECT_EQ(Preamble->Contents, Inputs.Contents);
 
                 std::lock_guard<std::mutex> Lock(Mut);
                 ++TotalPreambleReads;

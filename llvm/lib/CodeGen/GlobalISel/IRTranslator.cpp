@@ -746,6 +746,11 @@ bool IRTranslator::translateKnownIntrinsic(const CallInst &CI, Intrinsic::ID ID,
         .addDef(getOrCreateVReg(CI))
         .addUse(getOrCreateVReg(*CI.getArgOperand(0)));
     return true;
+  case Intrinsic::fabs:
+    MIRBuilder.buildInstr(TargetOpcode::G_FABS)
+        .addDef(getOrCreateVReg(CI))
+        .addUse(getOrCreateVReg(*CI.getArgOperand(0)));
+    return true;
   case Intrinsic::fma:
     MIRBuilder.buildInstr(TargetOpcode::G_FMA)
         .addDef(getOrCreateVReg(CI))
@@ -1190,9 +1195,15 @@ bool IRTranslator::translate(const Constant &C, unsigned Reg) {
     EntryBuilder.buildFConstant(Reg, *CF);
   else if (isa<UndefValue>(C))
     EntryBuilder.buildUndef(Reg);
-  else if (isa<ConstantPointerNull>(C))
-    EntryBuilder.buildConstant(Reg, 0);
-  else if (auto GV = dyn_cast<GlobalValue>(&C))
+  else if (isa<ConstantPointerNull>(C)) {
+    // As we are trying to build a constant val of 0 into a pointer,
+    // insert a cast to make them correct with respect to types.
+    unsigned NullSize = DL->getTypeSizeInBits(C.getType());
+    auto *ZeroTy = Type::getIntNTy(C.getContext(), NullSize);
+    auto *ZeroVal = ConstantInt::get(ZeroTy, 0);
+    unsigned ZeroReg = getOrCreateVReg(*ZeroVal);
+    EntryBuilder.buildCast(Reg, ZeroReg);
+  } else if (auto GV = dyn_cast<GlobalValue>(&C))
     EntryBuilder.buildGlobalValue(Reg, GV);
   else if (auto CAZ = dyn_cast<ConstantAggregateZero>(&C)) {
     if (!CAZ->getType()->isVectorTy())

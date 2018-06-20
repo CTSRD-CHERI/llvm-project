@@ -359,11 +359,15 @@ unsigned MachineVerifier::verify(MachineFunction &MF) {
   TRI = MF.getSubtarget().getRegisterInfo();
   MRI = &MF.getRegInfo();
 
-  isFunctionRegBankSelected = MF.getProperties().hasProperty(
-      MachineFunctionProperties::Property::RegBankSelected);
-  isFunctionSelected = MF.getProperties().hasProperty(
-      MachineFunctionProperties::Property::Selected);
-
+  const bool isFunctionFailedISel = MF.getProperties().hasProperty(
+      MachineFunctionProperties::Property::FailedISel);
+  isFunctionRegBankSelected =
+      !isFunctionFailedISel &&
+      MF.getProperties().hasProperty(
+          MachineFunctionProperties::Property::RegBankSelected);
+  isFunctionSelected = !isFunctionFailedISel &&
+                       MF.getProperties().hasProperty(
+                           MachineFunctionProperties::Property::Selected);
   LiveVars = nullptr;
   LiveInts = nullptr;
   LiveStks = nullptr;
@@ -1132,14 +1136,10 @@ MachineVerifier::visitMachineOperand(const MachineOperand *MO, unsigned MONum) {
         }
       }
       if (MO->isRenamable()) {
-        if ((MO->isDef() && MI->hasExtraDefRegAllocReq()) ||
-            (MO->isUse() && MI->hasExtraSrcRegAllocReq()))
-          report("Illegal isRenamable setting for opcode with extra regalloc "
-                 "requirements",
-                 MO, MONum);
-        if (MRI->isReserved(Reg))
+        if (MRI->isReserved(Reg)) {
           report("isRenamable set on reserved register", MO, MONum);
-        return;
+          return;
+        }
       }
     } else {
       // Virtual register.

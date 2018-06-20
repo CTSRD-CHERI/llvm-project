@@ -883,6 +883,7 @@ public:
            (SourceExpr && SourceExpr->isInstantiationDependent()),
            false),
       SourceExpr(SourceExpr), Loc(Loc) {
+    setIsUnique(false);
   }
 
   /// Given an expression which invokes a copy constructor --- i.e.  a
@@ -924,6 +925,14 @@ public:
   /// expression which binds the opaque value expression in the first
   /// place.
   Expr *getSourceExpr() const { return SourceExpr; }
+
+  void setIsUnique(bool V) {
+    assert((!V || SourceExpr) &&
+           "unique OVEs are expected to have source expressions");
+    OpaqueValueExprBits.IsUnique = V;
+  }
+
+  bool isUnique() const { return OpaqueValueExprBits.IsUnique; }
 
   static bool classof(const Stmt *T) {
     return T->getStmtClass() == OpaqueValueExprClass;
@@ -2169,19 +2178,19 @@ public:
   void setRHS(Expr *E) { SubExprs[RHS] = E; }
 
   Expr *getBase() {
-    return cast<Expr>(getRHS()->getType()->isIntegerType() ? getLHS():getRHS());
+    return getRHS()->getType()->isIntegerType() ? getLHS() : getRHS();
   }
 
   const Expr *getBase() const {
-    return cast<Expr>(getRHS()->getType()->isIntegerType() ? getLHS():getRHS());
+    return getRHS()->getType()->isIntegerType() ? getLHS() : getRHS();
   }
 
   Expr *getIdx() {
-    return cast<Expr>(getRHS()->getType()->isIntegerType() ? getRHS():getLHS());
+    return getRHS()->getType()->isIntegerType() ? getRHS() : getLHS();
   }
 
   const Expr *getIdx() const {
-    return cast<Expr>(getRHS()->getType()->isIntegerType() ? getRHS():getLHS());
+    return getRHS()->getType()->isIntegerType() ? getRHS() : getLHS();
   }
 
   SourceLocation getLocStart() const LLVM_READONLY {

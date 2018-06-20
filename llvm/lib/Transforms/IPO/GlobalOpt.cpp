@@ -27,6 +27,7 @@
 #include "llvm/Analysis/MemoryBuiltins.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
+#include "llvm/Analysis/Utils/Local.h"
 #include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/BasicBlock.h"
@@ -66,7 +67,6 @@
 #include "llvm/Transforms/Utils/CtorUtils.h"
 #include "llvm/Transforms/Utils/Evaluator.h"
 #include "llvm/Transforms/Utils/GlobalStatus.h"
-#include "llvm/Transforms/Utils/Local.h"
 #include <cassert>
 #include <cstdint>
 #include <utility>
@@ -2115,8 +2115,31 @@ static void RemoveNestAttribute(Function *F) {
 /// GHC, or anyregcc.
 static bool hasChangeableCC(Function *F) {
   CallingConv::ID CC = F->getCallingConv();
+
   // FIXME: Is it worth transforming x86_stdcallcc and x86_fastcallcc?
-  return CC == CallingConv::C || CC == CallingConv::X86_ThisCall;
+  if (CC != CallingConv::C && CC != CallingConv::X86_ThisCall)
+    return false;
+
+  // FIXME: Change CC for the whole chain of musttail calls when possible.
+  //
+  // Can't change CC of the function that either has musttail calls, or is a
+  // musttail callee itself
+  for (User *U : F->users()) {
+    if (isa<BlockAddress>(U))
+      continue;
+    CallInst* CI = dyn_cast<CallInst>(U);
+    if (!CI)
+      continue;
+
+    if (CI->isMustTailCall())
+      return false;
+  }
+
+  for (BasicBlock &BB : *F)
+    if (BB.getTerminatingMustTailCall())
+      return false;
+
+  return true;
 }
 
 /// Return true if the block containing the call site has a BlockFrequency of
@@ -2220,6 +2243,11 @@ OptimizeFunctions(Module &M, TargetLibraryInfo *TLI,
   // Optimize functions.
   for (Module::iterator FI = M.begin(), E = M.end(); FI != E; ) {
     Function *F = &*FI++;
+
+    // Don't perform global opt pass on naked functions; we don't want fast
+    // calling conventions for naked functions.
+    if (F->hasFnAttribute(Attribute::Naked))
+      continue;
 
     // Functions without names cannot be referenced outside this module.
     if (!F->hasName() && !F->isDeclaration() && !F->hasLocalLinkage())
@@ -2712,7 +2740,7 @@ OptimizeGlobalAliases(Module &M,
       continue;
     }
 
-    // If the aliasee may change at link time, nothing can be done - bail out.
+    // If the alias can change at link time, nothing can be done - bail out.
     if (J->isInterposable())
       continue;
 

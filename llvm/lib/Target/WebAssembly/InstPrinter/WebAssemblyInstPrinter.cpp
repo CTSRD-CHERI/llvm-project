@@ -82,10 +82,12 @@ void WebAssemblyInstPrinter::printInst(const MCInst *MI, raw_ostream &OS,
       ControlFlowStack.push_back(std::make_pair(ControlFlowCounter++, false));
       break;
     case WebAssembly::END_LOOP:
-      ControlFlowStack.pop_back();
+      // Have to guard against an empty stack, in case of mismatched pairs
+      // in assembly parsing.
+      if (!ControlFlowStack.empty()) ControlFlowStack.pop_back();
       break;
     case WebAssembly::END_BLOCK:
-      printAnnotation(
+      if (!ControlFlowStack.empty()) printAnnotation(
           OS, "label" + utostr(ControlFlowStack.pop_back_val().first) + ':');
       break;
     }
@@ -176,10 +178,10 @@ void WebAssemblyInstPrinter::printOperand(const MCInst *MI, unsigned OpNo,
     if (Info.OperandType == WebAssembly::OPERAND_F32IMM) {
       // TODO: MC converts all floating point immediate operands to double.
       // This is fine for numeric values, but may cause NaNs to change bits.
-      O << toString(APFloat(float(Op.getFPImm())));
+      O << ::toString(APFloat(float(Op.getFPImm())));
     } else {
       assert(Info.OperandType == WebAssembly::OPERAND_F64IMM);
-      O << toString(APFloat(Op.getFPImm()));
+      O << ::toString(APFloat(Op.getFPImm()));
     }
   } else {
     assert((OpNo < MII.get(MI->getOpcode()).getNumOperands() ||
@@ -220,6 +222,7 @@ WebAssemblyInstPrinter::printWebAssemblySignatureOperand(const MCInst *MI,
   case WebAssembly::ExprType::B8x16: O << "b8x16"; break;
   case WebAssembly::ExprType::B16x8: O << "b16x8"; break;
   case WebAssembly::ExprType::B32x4: O << "b32x4"; break;
+  case WebAssembly::ExprType::ExceptRef: O << "except_ref"; break;
   }
 }
 
@@ -238,6 +241,8 @@ const char *llvm::WebAssembly::TypeToString(MVT Ty) {
   case MVT::v4i32:
   case MVT::v4f32:
     return "v128";
+  case MVT::ExceptRef:
+    return "except_ref";
   default:
     llvm_unreachable("unsupported type");
   }
@@ -253,6 +258,8 @@ const char *llvm::WebAssembly::TypeToString(wasm::ValType Type) {
     return "f32";
   case wasm::ValType::F64:
     return "f64";
+  case wasm::ValType::EXCEPT_REF:
+    return "except_ref";
   }
   llvm_unreachable("unsupported type");
 }

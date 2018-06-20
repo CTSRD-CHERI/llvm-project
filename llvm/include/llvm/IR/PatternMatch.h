@@ -144,55 +144,6 @@ struct match_zero {
 /// zero_initializer for vectors and ConstantPointerNull for pointers.
 inline match_zero m_Zero() { return match_zero(); }
 
-struct match_neg_zero {
-  template <typename ITy> bool match(ITy *V) {
-    if (const auto *C = dyn_cast<Constant>(V))
-      return C->isNegativeZeroValue();
-    return false;
-  }
-};
-
-/// Match an arbitrary zero/null constant. This includes
-/// zero_initializer for vectors and ConstantPointerNull for pointers. For
-/// floating point constants, this will match negative zero but not positive
-/// zero
-inline match_neg_zero m_NegZero() { return match_neg_zero(); }
-
-struct match_any_zero {
-  template <typename ITy> bool match(ITy *V) {
-    if (const auto *C = dyn_cast<Constant>(V))
-      return C->isZeroValue();
-    return false;
-  }
-};
-
-/// Match an arbitrary zero/null constant. This includes
-/// zero_initializer for vectors and ConstantPointerNull for pointers. For
-/// floating point constants, this will match negative zero and positive zero
-inline match_any_zero m_AnyZero() { return match_any_zero(); }
-
-struct match_nan {
-  template <typename ITy> bool match(ITy *V) {
-    if (const auto *C = dyn_cast<ConstantFP>(V))
-      return C->isNaN();
-    return false;
-  }
-};
-
-/// Match an arbitrary NaN constant. This includes quiet and signalling nans.
-inline match_nan m_NaN() { return match_nan(); }
-
-struct match_sign_mask {
-  template <typename ITy> bool match(ITy *V) {
-    if (const auto *C = dyn_cast<Constant>(V))
-      return C->isMinSignedValue();
-    return false;
-  }
-};
-
-/// Match an integer or vector with only the sign bit(s) set.
-inline match_sign_mask m_SignMask() { return match_sign_mask(); }
-
 struct apint_match {
   const APInt *&Res;
 
@@ -261,8 +212,9 @@ template <int64_t Val> inline constantint_match<Val> m_ConstantInt() {
   return constantint_match<Val>();
 }
 
-/// This helper class is used to match scalar and vector constants that satisfy
-/// a specified predicate. For vector constants, undefined elements are ignored.
+/// This helper class is used to match scalar and vector integer constants that
+/// satisfy a specified predicate.
+/// For vector constants, undefined elements are ignored.
 template <typename Predicate> struct cst_pred_ty : public Predicate {
   template <typename ITy> bool match(ITy *V) {
     if (const auto *CI = dyn_cast<ConstantInt>(V))
@@ -313,6 +265,38 @@ template <typename Predicate> struct api_pred_ty : public Predicate {
             return true;
           }
 
+    return false;
+  }
+};
+
+/// This helper class is used to match scalar and vector floating-point
+/// constants that satisfy a specified predicate.
+/// For vector constants, undefined elements are ignored.
+template <typename Predicate> struct cstfp_pred_ty : public Predicate {
+  template <typename ITy> bool match(ITy *V) {
+    if (const auto *CF = dyn_cast<ConstantFP>(V))
+      return this->isValue(CF->getValueAPF());
+    if (V->getType()->isVectorTy()) {
+      if (const auto *C = dyn_cast<Constant>(V)) {
+        if (const auto *CF = dyn_cast_or_null<ConstantFP>(C->getSplatValue()))
+          return this->isValue(CF->getValueAPF());
+
+        // Non-splat vector constant: check each element for a match.
+        unsigned NumElts = V->getType()->getVectorNumElements();
+        assert(NumElts != 0 && "Constant vector with no elements?");
+        for (unsigned i = 0; i != NumElts; ++i) {
+          Constant *Elt = C->getAggregateElement(i);
+          if (!Elt)
+            return false;
+          if (isa<UndefValue>(Elt))
+            continue;
+          auto *CF = dyn_cast<ConstantFP>(Elt);
+          if (!CF || !this->isValue(CF->getValueAPF()))
+            return false;
+        }
+        return true;
+      }
+    }
     return false;
   }
 };
@@ -368,6 +352,14 @@ inline api_pred_ty<is_nonnegative> m_NonNegative(const APInt *&V) {
   return V;
 }
 
+struct is_one {
+  bool isValue(const APInt &C) { return C.isOneValue(); }
+};
+/// Match an integer 1 or a vector with all elements equal to 1.
+inline cst_pred_ty<is_one> m_One() {
+  return cst_pred_ty<is_one>();
+}
+
 struct is_power2 {
   bool isValue(const APInt &C) { return C.isPowerOf2(); }
 };
@@ -390,12 +382,37 @@ inline api_pred_ty<is_power2_or_zero> m_Power2OrZero(const APInt *&V) {
   return V;
 }
 
-struct is_one {
-  bool isValue(const APInt &C) { return C.isOneValue(); }
+struct is_sign_mask {
+  bool isValue(const APInt &C) { return C.isSignMask(); }
 };
-/// Match an integer 1 or a vector with all elements equal to 1.
-inline cst_pred_ty<is_one> m_One() {
-  return cst_pred_ty<is_one>();
+/// Match an integer or vector with only the sign bit(s) set.
+inline cst_pred_ty<is_sign_mask> m_SignMask() {
+  return cst_pred_ty<is_sign_mask>();
+}
+
+struct is_neg_zero {
+  bool isValue(const APFloat &C) { return C.isNegZero(); }
+};
+/// Match an FP or FP vector with all -0.0 values.
+inline cstfp_pred_ty<is_neg_zero> m_NegZero() {
+  return cstfp_pred_ty<is_neg_zero>();
+}
+
+struct is_nan {
+  bool isValue(const APFloat &C) { return C.isNaN(); }
+};
+// Match an arbitrary NaN constant. This includes quiet and signalling nans.
+inline cstfp_pred_ty<is_nan> m_NaN() {
+  return cstfp_pred_ty<is_nan>();
+}
+
+struct is_any_zero_fp {
+  bool isValue(const APFloat &C) { return C.isZero(); }
+};
+
+/// Match a floating-point negative zero or positive zero
+inline cstfp_pred_ty<is_any_zero_fp> m_AnyZeroFP() {
+  return cstfp_pred_ty<is_any_zero_fp>();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1039,33 +1056,10 @@ template <typename Op_t> struct LoadClass_match {
 template <typename OpTy> inline LoadClass_match<OpTy> m_Load(const OpTy &Op) {
   return LoadClass_match<OpTy>(Op);
 }
+
 //===----------------------------------------------------------------------===//
 // Matchers for unary operators
 //
-
-template <typename LHS_t> struct not_match {
-  LHS_t L;
-
-  not_match(const LHS_t &LHS) : L(LHS) {}
-
-  template <typename OpTy> bool match(OpTy *V) {
-    if (auto *O = dyn_cast<Operator>(V))
-      if (O->getOpcode() == Instruction::Xor) {
-        if (isAllOnes(O->getOperand(1)))
-          return L.match(O->getOperand(0));
-        if (isAllOnes(O->getOperand(0)))
-          return L.match(O->getOperand(1));
-      }
-    return false;
-  }
-
-private:
-  bool isAllOnes(Value *V) {
-    return isa<Constant>(V) && cast<Constant>(V)->isAllOnesValue();
-  }
-};
-
-template <typename LHS> inline not_match<LHS> m_Not(const LHS &L) { return L; }
 
 template <typename LHS_t> struct neg_match {
   LHS_t L;
@@ -1104,7 +1098,7 @@ template <typename LHS_t> struct fneg_match {
 
 private:
   bool matchIfFNeg(Value *LHS, Value *RHS) {
-    if (const auto *C = dyn_cast<ConstantFP>(LHS))
+    if (const auto *C = dyn_cast<Constant>(LHS))
       return C->isNegativeZeroValue() && L.match(RHS);
     return false;
   }
@@ -1591,6 +1585,13 @@ template <typename LHS, typename RHS>
 inline BinaryOp_match<LHS, RHS, Instruction::Xor, true> m_c_Xor(const LHS &L,
                                                                 const RHS &R) {
   return BinaryOp_match<LHS, RHS, Instruction::Xor, true>(L, R);
+}
+
+/// Matches a 'Not' as 'xor V, -1' or 'xor -1, V'.
+template <typename ValTy>
+inline BinaryOp_match<ValTy, cst_pred_ty<is_all_ones>, Instruction::Xor, true>
+m_Not(const ValTy &V) {
+  return m_c_Xor(V, m_AllOnes());
 }
 
 /// Matches an SMin with LHS and RHS in either order.

@@ -165,7 +165,7 @@ SymIndexId NativeSession::findSymbolByTypeIndex(codeview::TypeIndex Index) {
 
 uint64_t NativeSession::getLoadAddress() const { return 0; }
 
-void NativeSession::setLoadAddress(uint64_t Address) {}
+bool NativeSession::setLoadAddress(uint64_t Address) { return false; }
 
 std::unique_ptr<PDBSymbolExe> NativeSession::getGlobalScope() {
   const auto Id = static_cast<SymIndexId>(SymbolCache.size());
@@ -199,6 +199,12 @@ NativeSession::findLineNumbers(const PDBSymbolCompiland &Compiland,
 std::unique_ptr<IPDBEnumLineNumbers>
 NativeSession::findLineNumbersByAddress(uint64_t Address,
                                         uint32_t Length) const {
+  return nullptr;
+}
+
+std::unique_ptr<IPDBEnumLineNumbers>
+NativeSession::findLineNumbersBySectOffset(uint32_t Section, uint32_t Offset,
+                                           uint32_t Length) const {
   return nullptr;
 }
 
@@ -247,5 +253,15 @@ std::unique_ptr<IPDBEnumDataStreams> NativeSession::getDebugStreams() const {
 }
 
 std::unique_ptr<IPDBEnumTables> NativeSession::getEnumTables() const {
+  return nullptr;
+}
+
+std::unique_ptr<IPDBEnumInjectedSources>
+NativeSession::getInjectedSources() const {
+  return nullptr;
+}
+
+std::unique_ptr<IPDBEnumSectionContribs>
+NativeSession::getSectionContribs() const {
   return nullptr;
 }

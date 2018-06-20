@@ -31,7 +31,7 @@ WebAssemblyTargetStreamer::WebAssemblyTargetStreamer(MCStreamer &S)
     : MCTargetStreamer(S) {}
 
 void WebAssemblyTargetStreamer::emitValueType(wasm::ValType Type) {
-  Streamer.EmitSLEB128IntValue(int32_t(Type));
+  Streamer.EmitIntValue(uint8_t(Type), 1);
 }
 
 WebAssemblyTargetAsmStreamer::WebAssemblyTargetAsmStreamer(
@@ -215,7 +215,7 @@ void WebAssemblyTargetWasmStreamer::emitIndirectFunctionType(
 
   WasmSym->setParams(std::move(ValParams));
   WasmSym->setReturns(std::move(ValResults));
-  WasmSym->setIsFunction(true);
+  WasmSym->setType(wasm::WASM_SYMBOL_TYPE_FUNCTION);
 }
 
 void WebAssemblyTargetWasmStreamer::emitGlobalImport(StringRef name) {

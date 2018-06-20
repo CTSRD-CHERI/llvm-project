@@ -17,7 +17,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/Transforms/IPO/SCCP.h"
 #include "llvm/Transforms/Scalar/SCCP.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
@@ -30,6 +29,7 @@
 #include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/Analysis/GlobalsModRef.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
+#include "llvm/Analysis/Utils/Local.h"
 #include "llvm/Analysis/ValueLattice.h"
 #include "llvm/Analysis/ValueLatticeUtils.h"
 #include "llvm/IR/BasicBlock.h"
@@ -54,9 +54,7 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Transforms/IPO.h"
 #include "llvm/Transforms/Scalar.h"
-#include "llvm/Transforms/Utils/Local.h"
 #include <cassert>
 #include <utility>
 #include <vector>
@@ -223,6 +221,10 @@ class SCCPSolver : public InstVisitor<SCCPSolver> {
   /// represented here for efficient lookup.
   SmallPtrSet<Function *, 16> MRVFunctionsTracked;
 
+  /// MustTailFunctions - Each function here is a callee of non-removable
+  /// musttail call site.
+  SmallPtrSet<Function *, 16> MustTailCallees;
+
   /// TrackingIncomingArguments - This is the set of functions for whose
   /// arguments we make optimistic assumptions about and try to prove as
   /// constants.
@@ -287,6 +289,18 @@ public:
                                                      LatticeVal()));
     } else
       TrackedRetVals.insert(std::make_pair(F, LatticeVal()));
+  }
+
+  /// AddMustTailCallee - If the SCCP solver finds that this function is called
+  /// from non-removable musttail call site.
+  void AddMustTailCallee(Function *F) {
+    MustTailCallees.insert(F);
+  }
+
+  /// Returns true if the given function is called from non-removable musttail
+  /// call site.
+  bool isMustTailCallee(Function *F) {
+    return MustTailCallees.count(F);
   }
 
   void AddArgumentTrackedFunction(Function *F) {
@@ -356,6 +370,12 @@ public:
   /// values tracked by the pass.
   const SmallPtrSet<Function *, 16> getMRVFunctionsTracked() {
     return MRVFunctionsTracked;
+  }
+
+  /// getMustTailCallees - Get the set of functions which are called
+  /// from non-removable musttail call sites.
+  const SmallPtrSet<Function *, 16> getMustTailCallees() {
+    return MustTailCallees;
   }
 
   /// markOverdefined - Mark the specified value overdefined.  This
@@ -1622,12 +1642,7 @@ static bool tryToReplaceWithConstantRange(SCCPSolver &Solver, Value *V) {
     ValueLatticeElement A = getIcmpLatticeValue(Icmp->getOperand(0));
     ValueLatticeElement B = getIcmpLatticeValue(Icmp->getOperand(1));
 
-    Constant *C = nullptr;
-    if (A.satisfiesPredicate(Icmp->getPredicate(), B))
-      C = ConstantInt::getTrue(Icmp->getType());
-    else if (A.satisfiesPredicate(Icmp->getInversePredicate(), B))
-      C = ConstantInt::getFalse(Icmp->getType());
-
+    Constant *C = A.getCompare(Icmp->getPredicate(), Icmp->getType(), B);
     if (C) {
       Icmp->replaceAllUsesWith(C);
       DEBUG(dbgs() << "Replacing " << *Icmp << " with " << *C
@@ -1672,6 +1687,23 @@ static bool tryToReplaceWithConstant(SCCPSolver &Solver, Value *V) {
           IV.isConstant() ? IV.getConstant() : UndefValue::get(V->getType());
   }
   assert(Const && "Constant is nullptr here!");
+
+  // Replacing `musttail` instructions with constant breaks `musttail` invariant
+  // unless the call itself can be removed
+  CallInst *CI = dyn_cast<CallInst>(V);
+  if (CI && CI->isMustTailCall() && !CI->isSafeToRemove()) {
+    CallSite CS(CI);
+    Function *F = CS.getCalledFunction();
+
+    // Don't zap returns of the callee
+    if (F)
+      Solver.AddMustTailCallee(F);
+
+    DEBUG(dbgs() << "  Can\'t treat the result of musttail call : " << *CI
+                 << " as a constant\n");
+    return false;
+  }
+
   DEBUG(dbgs() << "  Constant: " << *Const << " = " << *V << '\n');
 
   // Replaces all of the uses of a variable with uses of the constant.
@@ -1802,14 +1834,30 @@ static void findReturnsToZap(Function &F,
   if (!Solver.isArgumentTrackedFunction(&F))
     return;
 
-  for (BasicBlock &BB : F)
+  // There is a non-removable musttail call site of this function. Zapping
+  // returns is not allowed.
+  if (Solver.isMustTailCallee(&F)) {
+    DEBUG(dbgs() << "Can't zap returns of the function : " << F.getName()
+                 << " due to present musttail call of it\n");
+    return;
+  }
+
+  for (BasicBlock &BB : F) {
+    if (CallInst *CI = BB.getTerminatingMustTailCall()) {
+      DEBUG(dbgs() << "Can't zap return of the block due to present "
+                   << "musttail call : " << *CI << "\n");
+      (void)CI;
+      return;
+    }
+
     if (auto *RI = dyn_cast<ReturnInst>(BB.getTerminator()))
       if (!isa<UndefValue>(RI->getOperand(0)))
         ReturnsToZap.push_back(RI);
+  }
 }
 
-static bool runIPSCCP(Module &M, const DataLayout &DL,
-                      const TargetLibraryInfo *TLI) {
+bool llvm::runIPSCCP(Module &M, const DataLayout &DL,
+                     const TargetLibraryInfo *TLI) {
   SCCPSolver Solver(DL, TLI);
 
   // Loop over all functions, marking arguments to those with their addresses
@@ -1991,55 +2039,3 @@ static bool runIPSCCP(Module &M, const DataLayout &DL,
 
   return MadeChanges;
 }
-
-PreservedAnalyses IPSCCPPass::run(Module &M, ModuleAnalysisManager &AM) {
-  const DataLayout &DL = M.getDataLayout();
-  auto &TLI = AM.getResult<TargetLibraryAnalysis>(M);
-  if (!runIPSCCP(M, DL, &TLI))
-    return PreservedAnalyses::all();
-  return PreservedAnalyses::none();
-}
-
-namespace {
-
-//===--------------------------------------------------------------------===//
-//
-/// IPSCCP Class - This class implements interprocedural Sparse Conditional
-/// Constant Propagation.
-///
-class IPSCCPLegacyPass : public ModulePass {
-public:
-  static char ID;
-
-  IPSCCPLegacyPass() : ModulePass(ID) {
-    initializeIPSCCPLegacyPassPass(*PassRegistry::getPassRegistry());
-  }
-
-  bool runOnModule(Module &M) override {
-    if (skipModule(M))
-      return false;
-    const DataLayout &DL = M.getDataLayout();
-    const TargetLibraryInfo *TLI =
-        &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
-    return runIPSCCP(M, DL, TLI);
-  }
-
-  void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.addRequired<TargetLibraryInfoWrapperPass>();
-  }
-};
-
-} // end anonymous namespace
-
-char IPSCCPLegacyPass::ID = 0;
-
-INITIALIZE_PASS_BEGIN(IPSCCPLegacyPass, "ipsccp",
-                      "Interprocedural Sparse Conditional Constant Propagation",
-                      false, false)
-INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfoWrapperPass)
-INITIALIZE_PASS_END(IPSCCPLegacyPass, "ipsccp",
-                    "Interprocedural Sparse Conditional Constant Propagation",
-                    false, false)
-
-// createIPSCCPPass - This is the public interface to this file.
-ModulePass *llvm::createIPSCCPPass() { return new IPSCCPLegacyPass(); }

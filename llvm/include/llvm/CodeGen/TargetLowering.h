@@ -29,14 +29,13 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Analysis/DivergenceAnalysis.h"
 #include "llvm/CodeGen/DAGCombine.h"
 #include "llvm/CodeGen/ISDOpcodes.h"
-#include "llvm/CodeGen/MachineValueType.h"
 #include "llvm/CodeGen/RuntimeLibcalls.h"
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
 #include "llvm/CodeGen/TargetCallingConv.h"
-#include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/CallingConv.h"
@@ -48,10 +47,12 @@
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Type.h"
+#include "llvm/IR/ValueTypes.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/Support/AtomicOrdering.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/MachineValueType.h"
 #include "llvm/Target/TargetMachine.h"
 #include <algorithm>
 #include <cassert>
@@ -253,7 +254,8 @@ public:
   /// A documentation for this function would be nice...
   virtual MVT getScalarShiftAmountTy(const DataLayout &, EVT) const;
 
-  EVT getShiftAmountTy(EVT LHSTy, const DataLayout &DL) const;
+  EVT getShiftAmountTy(EVT LHSTy, const DataLayout &DL,
+                       bool LegalTypes = true) const;
 
   /// Returns the type to be used for the index operand of:
   /// ISD::INSERT_VECTOR_ELT, ISD::EXTRACT_VECTOR_ELT,
@@ -986,9 +988,14 @@ public:
 
   /// Return true if the specified condition code is legal on this target.
   bool isCondCodeLegal(ISD::CondCode CC, MVT VT) const {
-    return
-      getCondCodeAction(CC, VT) == Legal ||
-      getCondCodeAction(CC, VT) == Custom;
+    return getCondCodeAction(CC, VT) == Legal;
+  }
+
+  /// Return true if the specified condition code is legal or custom on this
+  /// target.
+  bool isCondCodeLegalOrCustom(ISD::CondCode CC, MVT VT) const {
+    return getCondCodeAction(CC, VT) == Legal ||
+           getCondCodeAction(CC, VT) == Custom;
   }
 
   /// If the action for this operation is to promote, this method returns the
@@ -2110,6 +2117,9 @@ public:
     return false;
   }
 
+  /// Return true if the target has a vector blend instruction.
+  virtual bool hasVectorBlend() const { return false; }
+
   /// \brief Get the maximum supported factor for interleaved memory accesses.
   /// Default to be the minimum interleave factor: 2.
   virtual unsigned getMaxSupportedInterleaveFactor() const { return 2; }
@@ -2556,6 +2566,16 @@ public:
 
   bool isPositionIndependent() const;
 
+  virtual bool isSDNodeSourceOfDivergence(const SDNode *N,
+                                          FunctionLoweringInfo *FLI,
+                                          DivergenceAnalysis *DA) const {
+    return false;
+  }
+
+  virtual bool isSDNodeAlwaysUniform(const SDNode * N) const {
+    return false;
+  }
+
   /// Returns true by value, base pointer and offset pointer and addressing mode
   /// by reference if the node's address can be legally represented as
   /// pre-indexed load / store address.
@@ -2781,7 +2801,7 @@ public:
 
     bool isBeforeLegalize() const { return Level == BeforeLegalizeTypes; }
     bool isBeforeLegalizeOps() const { return Level < AfterLegalizeVectorOps; }
-    bool isAfterLegalizeVectorOps() const {
+    bool isAfterLegalizeDAG() const {
       return Level == AfterLegalizeDAG;
     }
     CombineLevel getDAGCombineLevel() { return Level; }
@@ -3563,6 +3583,13 @@ public:
   /// Lower TLS global address SDNode for target independent emulated TLS model.
   virtual SDValue LowerToTLSEmulatedModel(const GlobalAddressSDNode *GA,
                                           SelectionDAG &DAG) const;
+
+  /// Expands target specific indirect branch for the case of JumpTable
+  /// expanasion.
+  virtual SDValue expandIndirectJTBranch(const SDLoc& dl, SDValue Value, SDValue Addr,
+                                         SelectionDAG &DAG) const {
+    return DAG.getNode(ISD::BRIND, dl, MVT::Other, Value, Addr);
+  }
 
   // seteq(x, 0) -> truncate(srl(ctlz(zext(x)), log2(#bits)))
   // If we're comparing for equality to zero and isCtlzFast is true, expose the

@@ -45,6 +45,7 @@
 #include "llvm/DebugInfo/MSF/MSFBuilder.h"
 #include "llvm/DebugInfo/PDB/GenericError.h"
 #include "llvm/DebugInfo/PDB/IPDBEnumChildren.h"
+#include "llvm/DebugInfo/PDB/IPDBInjectedSource.h"
 #include "llvm/DebugInfo/PDB/IPDBRawSymbol.h"
 #include "llvm/DebugInfo/PDB/IPDBSession.h"
 #include "llvm/DebugInfo/PDB/Native/DbiModuleDescriptorBuilder.h"
@@ -146,6 +147,14 @@ namespace pretty {
 cl::list<std::string> InputFilenames(cl::Positional,
                                      cl::desc("<input PDB files>"),
                                      cl::OneOrMore, cl::sub(PrettySubcommand));
+
+cl::opt<bool> InjectedSources("injected-sources",
+                              cl::desc("Display injected sources"),
+                              cl::cat(OtherOptions), cl::sub(PrettySubcommand));
+cl::opt<bool> ShowInjectedSourceContent(
+    "injected-source-content",
+    cl::desc("When displaying an injected source, display the file content"),
+    cl::cat(OtherOptions), cl::sub(PrettySubcommand));
 
 cl::opt<bool> Compilands("compilands", cl::desc("Display compilands"),
                          cl::cat(TypeCategory), cl::sub(PrettySubcommand));
@@ -525,8 +534,16 @@ cl::opt<bool> JustMyCode("jmc", cl::Optional,
                          cl::cat(FileOptions), cl::sub(DumpSubcommand));
 
 // MISCELLANEOUS OPTIONS
+cl::opt<bool> DumpNamedStreams("named-streams",
+                               cl::desc("dump PDB named stream table"),
+                               cl::cat(MiscOptions), cl::sub(DumpSubcommand));
+
 cl::opt<bool> DumpStringTable("string-table", cl::desc("dump PDB String Table"),
                               cl::cat(MiscOptions), cl::sub(DumpSubcommand));
+cl::opt<bool> DumpStringTableDetails("string-table-details",
+                                     cl::desc("dump PDB String Table Details"),
+                                     cl::cat(MiscOptions),
+                                     cl::sub(DumpSubcommand));
 
 cl::opt<bool> DumpSectionContribs("section-contribs",
                                   cl::desc("dump section contributions"),
@@ -840,6 +857,62 @@ bool opts::pretty::compareDataSymbols(
   return getTypeLength(*F1) > getTypeLength(*F2);
 }
 
+static std::string stringOr(std::string Str, std::string IfEmpty) {
+  return (Str.empty()) ? IfEmpty : Str;
+}
+
+static void dumpInjectedSources(LinePrinter &Printer, IPDBSession &Session) {
+  auto Sources = Session.getInjectedSources();
+  if (0 == Sources->getChildCount()) {
+    Printer.printLine("There are no injected sources.");
+    return;
+  }
+
+  while (auto IS = Sources->getNext()) {
+    Printer.NewLine();
+    std::string File = stringOr(IS->getFileName(), "<null>");
+    uint64_t Size = IS->getCodeByteSize();
+    std::string Obj = stringOr(IS->getObjectFileName(), "<null>");
+    std::string VFName = stringOr(IS->getVirtualFileName(), "<null>");
+    uint32_t CRC = IS->getCrc32();
+
+    std::string CompressionStr;
+    llvm::raw_string_ostream Stream(CompressionStr);
+    Stream << IS->getCompression();
+    WithColor(Printer, PDB_ColorItem::Path).get() << File;
+    Printer << " (";
+    WithColor(Printer, PDB_ColorItem::LiteralValue).get() << Size;
+    Printer << " bytes): ";
+    WithColor(Printer, PDB_ColorItem::Keyword).get() << "obj";
+    Printer << "=";
+    WithColor(Printer, PDB_ColorItem::Path).get() << Obj;
+    Printer << ", ";
+    WithColor(Printer, PDB_ColorItem::Keyword).get() << "vname";
+    Printer << "=";
+    WithColor(Printer, PDB_ColorItem::Path).get() << VFName;
+    Printer << ", ";
+    WithColor(Printer, PDB_ColorItem::Keyword).get() << "crc";
+    Printer << "=";
+    WithColor(Printer, PDB_ColorItem::LiteralValue).get() << CRC;
+    Printer << ", ";
+    WithColor(Printer, PDB_ColorItem::Keyword).get() << "compression";
+    Printer << "=";
+    WithColor(Printer, PDB_ColorItem::LiteralValue).get() << Stream.str();
+
+    if (!opts::pretty::ShowInjectedSourceContent)
+      continue;
+
+    // Set the indent level to 0 when printing file content.
+    int Indent = Printer.getIndentLevel();
+    Printer.Unindent(Indent);
+
+    Printer.printLine(IS->getCode());
+
+    // Re-indent back to the original level.
+    Printer.Indent(Indent);
+  }
+}
+
 static void dumpPretty(StringRef Path) {
   std::unique_ptr<IPDBSession> Session;
 
@@ -857,6 +930,8 @@ static void dumpPretty(StringRef Path) {
   LinePrinter Printer(2, UseColor, Stream);
 
   auto GlobalScope(Session->getGlobalScope());
+  if (!GlobalScope)
+    return;
   std::string FileName(GlobalScope->getSymbolsFileName());
 
   WithColor(Printer, PDB_ColorItem::None).get() << "Summary for ";
@@ -893,15 +968,16 @@ static void dumpPretty(StringRef Path) {
     Printer.NewLine();
     WithColor(Printer, PDB_ColorItem::SectionHeader).get()
         << "---COMPILANDS---";
-    Printer.Indent();
-    auto Compilands = GlobalScope->findAllChildren<PDBSymbolCompiland>();
-    CompilandDumper Dumper(Printer);
-    CompilandDumpFlags options = CompilandDumper::Flags::None;
-    if (opts::pretty::Lines)
-      options = options | CompilandDumper::Flags::Lines;
-    while (auto Compiland = Compilands->getNext())
-      Dumper.start(*Compiland, options);
-    Printer.Unindent();
+    if (auto Compilands = GlobalScope->findAllChildren<PDBSymbolCompiland>()) {
+      Printer.Indent();
+      CompilandDumper Dumper(Printer);
+      CompilandDumpFlags options = CompilandDumper::Flags::None;
+      if (opts::pretty::Lines)
+        options = options | CompilandDumper::Flags::Lines;
+      while (auto Compiland = Compilands->getNext())
+        Dumper.start(*Compiland, options);
+      Printer.Unindent();
+    }
   }
 
   if (opts::pretty::Classes || opts::pretty::Enums || opts::pretty::Typedefs) {
@@ -916,12 +992,13 @@ static void dumpPretty(StringRef Path) {
   if (opts::pretty::Symbols) {
     Printer.NewLine();
     WithColor(Printer, PDB_ColorItem::SectionHeader).get() << "---SYMBOLS---";
-    Printer.Indent();
-    auto Compilands = GlobalScope->findAllChildren<PDBSymbolCompiland>();
-    CompilandDumper Dumper(Printer);
-    while (auto Compiland = Compilands->getNext())
-      Dumper.start(*Compiland, true);
-    Printer.Unindent();
+    if (auto Compilands = GlobalScope->findAllChildren<PDBSymbolCompiland>()) {
+      Printer.Indent();
+      CompilandDumper Dumper(Printer);
+      while (auto Compiland = Compilands->getNext())
+        Dumper.start(*Compiland, true);
+      Printer.Unindent();
+    }
   }
 
   if (opts::pretty::Globals) {
@@ -929,45 +1006,49 @@ static void dumpPretty(StringRef Path) {
     WithColor(Printer, PDB_ColorItem::SectionHeader).get() << "---GLOBALS---";
     Printer.Indent();
     if (shouldDumpSymLevel(opts::pretty::SymLevel::Functions)) {
-      FunctionDumper Dumper(Printer);
-      auto Functions = GlobalScope->findAllChildren<PDBSymbolFunc>();
-      if (opts::pretty::SymbolOrder == opts::pretty::SymbolSortMode::None) {
-        while (auto Function = Functions->getNext()) {
-          Printer.NewLine();
-          Dumper.start(*Function, FunctionDumper::PointerType::None);
-        }
-      } else {
-        std::vector<std::unique_ptr<PDBSymbolFunc>> Funcs;
-        while (auto Func = Functions->getNext())
-          Funcs.push_back(std::move(Func));
-        std::sort(Funcs.begin(), Funcs.end(),
-                  opts::pretty::compareFunctionSymbols);
-        for (const auto &Func : Funcs) {
-          Printer.NewLine();
-          Dumper.start(*Func, FunctionDumper::PointerType::None);
+      if (auto Functions = GlobalScope->findAllChildren<PDBSymbolFunc>()) {
+        FunctionDumper Dumper(Printer);
+        if (opts::pretty::SymbolOrder == opts::pretty::SymbolSortMode::None) {
+          while (auto Function = Functions->getNext()) {
+            Printer.NewLine();
+            Dumper.start(*Function, FunctionDumper::PointerType::None);
+          }
+        } else {
+          std::vector<std::unique_ptr<PDBSymbolFunc>> Funcs;
+          while (auto Func = Functions->getNext())
+            Funcs.push_back(std::move(Func));
+          std::sort(Funcs.begin(), Funcs.end(),
+                    opts::pretty::compareFunctionSymbols);
+          for (const auto &Func : Funcs) {
+            Printer.NewLine();
+            Dumper.start(*Func, FunctionDumper::PointerType::None);
+          }
         }
       }
     }
     if (shouldDumpSymLevel(opts::pretty::SymLevel::Data)) {
-      auto Vars = GlobalScope->findAllChildren<PDBSymbolData>();
-      VariableDumper Dumper(Printer);
-      if (opts::pretty::SymbolOrder == opts::pretty::SymbolSortMode::None) {
-        while (auto Var = Vars->getNext())
-          Dumper.start(*Var);
-      } else {
-        std::vector<std::unique_ptr<PDBSymbolData>> Datas;
-        while (auto Var = Vars->getNext())
-          Datas.push_back(std::move(Var));
-        std::sort(Datas.begin(), Datas.end(), opts::pretty::compareDataSymbols);
-        for (const auto &Var : Datas)
-          Dumper.start(*Var);
+      if (auto Vars = GlobalScope->findAllChildren<PDBSymbolData>()) {
+        VariableDumper Dumper(Printer);
+        if (opts::pretty::SymbolOrder == opts::pretty::SymbolSortMode::None) {
+          while (auto Var = Vars->getNext())
+            Dumper.start(*Var);
+        } else {
+          std::vector<std::unique_ptr<PDBSymbolData>> Datas;
+          while (auto Var = Vars->getNext())
+            Datas.push_back(std::move(Var));
+          std::sort(Datas.begin(), Datas.end(),
+                    opts::pretty::compareDataSymbols);
+          for (const auto &Var : Datas)
+            Dumper.start(*Var);
+        }
       }
     }
     if (shouldDumpSymLevel(opts::pretty::SymLevel::Thunks)) {
-      auto Thunks = GlobalScope->findAllChildren<PDBSymbolThunk>();
-      CompilandDumper Dumper(Printer);
-      while (auto Thunk = Thunks->getNext())
-        Dumper.dump(*Thunk);
+      if (auto Thunks = GlobalScope->findAllChildren<PDBSymbolThunk>()) {
+        CompilandDumper Dumper(Printer);
+        while (auto Thunk = Thunks->getNext())
+          Dumper.dump(*Thunk);
+      }
     }
     Printer.Unindent();
   }
@@ -981,6 +1062,19 @@ static void dumpPretty(StringRef Path) {
   if (opts::pretty::Lines) {
     Printer.NewLine();
   }
+  if (opts::pretty::InjectedSources) {
+    Printer.NewLine();
+    WithColor(Printer, PDB_ColorItem::SectionHeader).get()
+        << "---INJECTED SOURCES---";
+    AutoIndent Indent1(Printer);
+
+    if (ReaderType == PDB_ReaderType::Native)
+      Printer.printLine(
+          "Injected sources are not supported with the native reader.");
+    else
+      dumpInjectedSources(Printer, *Session);
+  }
+
   outs().flush();
 }
 
@@ -1113,6 +1207,7 @@ int main(int argc_, const char *argv_[]) {
       opts::dump::DumpStreams = true;
       opts::dump::DumpStreamBlocks = true;
       opts::dump::DumpStringTable = true;
+      opts::dump::DumpStringTableDetails = true;
       opts::dump::DumpSummary = true;
       opts::dump::DumpSymbols = true;
       opts::dump::DumpSymbolStats = true;

@@ -338,7 +338,7 @@ define <4 x float> @test_cmpps(<4 x float> %a0, <4 x float> %a1, <4 x float> *%a
 ;
 ; SKYLAKE-LABEL: test_cmpps:
 ; SKYLAKE:       # %bb.0:
-; SKYLAKE-NEXT:    vcmpeqps %xmm1, %xmm0, %xmm1 # sched: [4:0.33]
+; SKYLAKE-NEXT:    vcmpeqps %xmm1, %xmm0, %xmm1 # sched: [4:0.50]
 ; SKYLAKE-NEXT:    vcmpeqps (%rdi), %xmm0, %xmm0 # sched: [10:0.50]
 ; SKYLAKE-NEXT:    vorps %xmm0, %xmm1, %xmm0 # sched: [1:0.33]
 ; SKYLAKE-NEXT:    retq # sched: [7:1.00]
@@ -412,7 +412,7 @@ define float @test_cmpss(float %a0, float %a1, float *%a2) {
 ;
 ; SKYLAKE-LABEL: test_cmpss:
 ; SKYLAKE:       # %bb.0:
-; SKYLAKE-NEXT:    vcmpeqss %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKYLAKE-NEXT:    vcmpeqss %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKYLAKE-NEXT:    vcmpeqss (%rdi), %xmm0, %xmm0 # sched: [9:0.50]
 ; SKYLAKE-NEXT:    retq # sched: [7:1.00]
 ;
@@ -1299,7 +1299,7 @@ define <4 x float> @test_maxps(<4 x float> %a0, <4 x float> %a1, <4 x float> *%a
 ;
 ; SKYLAKE-LABEL: test_maxps:
 ; SKYLAKE:       # %bb.0:
-; SKYLAKE-NEXT:    vmaxps %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKYLAKE-NEXT:    vmaxps %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKYLAKE-NEXT:    vmaxps (%rdi), %xmm0, %xmm0 # sched: [10:0.50]
 ; SKYLAKE-NEXT:    retq # sched: [7:1.00]
 ;
@@ -1366,7 +1366,7 @@ define <4 x float> @test_maxss(<4 x float> %a0, <4 x float> %a1, <4 x float> *%a
 ;
 ; SKYLAKE-LABEL: test_maxss:
 ; SKYLAKE:       # %bb.0:
-; SKYLAKE-NEXT:    vmaxss %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKYLAKE-NEXT:    vmaxss %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKYLAKE-NEXT:    vmaxss (%rdi), %xmm0, %xmm0 # sched: [9:0.50]
 ; SKYLAKE-NEXT:    retq # sched: [7:1.00]
 ;
@@ -1433,7 +1433,7 @@ define <4 x float> @test_minps(<4 x float> %a0, <4 x float> %a1, <4 x float> *%a
 ;
 ; SKYLAKE-LABEL: test_minps:
 ; SKYLAKE:       # %bb.0:
-; SKYLAKE-NEXT:    vminps %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKYLAKE-NEXT:    vminps %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKYLAKE-NEXT:    vminps (%rdi), %xmm0, %xmm0 # sched: [10:0.50]
 ; SKYLAKE-NEXT:    retq # sched: [7:1.00]
 ;
@@ -1500,7 +1500,7 @@ define <4 x float> @test_minss(<4 x float> %a0, <4 x float> %a1, <4 x float> *%a
 ;
 ; SKYLAKE-LABEL: test_minss:
 ; SKYLAKE:       # %bb.0:
-; SKYLAKE-NEXT:    vminss %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKYLAKE-NEXT:    vminss %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKYLAKE-NEXT:    vminss (%rdi), %xmm0, %xmm0 # sched: [9:0.50]
 ; SKYLAKE-NEXT:    retq # sched: [7:1.00]
 ;
@@ -1738,7 +1738,7 @@ define void @test_movhps(<4 x float> %a0, <4 x float> %a1, x86_mmx *%a2) {
 ; ZNVER1:       # %bb.0:
 ; ZNVER1-NEXT:    vmovhpd {{.*#+}} xmm1 = xmm1[0],mem[0] sched: [8:0.50]
 ; ZNVER1-NEXT:    vaddps %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
-; ZNVER1-NEXT:    vpextrq $1, %xmm0, (%rdi) # sched: [8:1.00]
+; ZNVER1-NEXT:    vpextrq $1, %xmm0, (%rdi) # sched: [5:3.00]
 ; ZNVER1-NEXT:    retq # sched: [1:0.50]
   %1 = bitcast x86_mmx* %a2 to <2 x float>*
   %2 = load <2 x float>, <2 x float> *%1, align 8
@@ -2557,7 +2557,7 @@ define <4 x float> @test_rcpps(<4 x float> %a0, <4 x float> *%a1) {
 ; SLM-NEXT:    rcpps (%rdi), %xmm1 # sched: [8:1.00]
 ; SLM-NEXT:    rcpps %xmm0, %xmm0 # sched: [5:1.00]
 ; SLM-NEXT:    addps %xmm0, %xmm1 # sched: [3:1.00]
-; SLM-NEXT:    movaps %xmm1, %xmm0 # sched: [1:1.00]
+; SLM-NEXT:    movaps %xmm1, %xmm0 # sched: [1:0.50]
 ; SLM-NEXT:    retq # sched: [4:1.00]
 ;
 ; SANDY-LABEL: test_rcpps:
@@ -2630,8 +2630,8 @@ define <4 x float> @test_rcpss(float %a0, float *%a1) {
 ; ATOM-LABEL: test_rcpss:
 ; ATOM:       # %bb.0:
 ; ATOM-NEXT:    movss {{.*#+}} xmm1 = mem[0],zero,zero,zero sched: [1:1.00]
-; ATOM-NEXT:    rcpss %xmm0, %xmm0
-; ATOM-NEXT:    rcpss %xmm1, %xmm1
+; ATOM-NEXT:    rcpss %xmm0, %xmm0 # sched: [0:?]
+; ATOM-NEXT:    rcpss %xmm1, %xmm1 # sched: [0:?]
 ; ATOM-NEXT:    addps %xmm1, %xmm0 # sched: [5:5.00]
 ; ATOM-NEXT:    retq # sched: [79:39.50]
 ;
@@ -2729,7 +2729,7 @@ define <4 x float> @test_rsqrtps(<4 x float> %a0, <4 x float> *%a1) {
 ; SLM-NEXT:    rsqrtps (%rdi), %xmm1 # sched: [8:1.00]
 ; SLM-NEXT:    rsqrtps %xmm0, %xmm0 # sched: [5:1.00]
 ; SLM-NEXT:    addps %xmm0, %xmm1 # sched: [3:1.00]
-; SLM-NEXT:    movaps %xmm1, %xmm0 # sched: [1:1.00]
+; SLM-NEXT:    movaps %xmm1, %xmm0 # sched: [1:0.50]
 ; SLM-NEXT:    retq # sched: [4:1.00]
 ;
 ; SANDY-LABEL: test_rsqrtps:
@@ -2802,8 +2802,8 @@ define <4 x float> @test_rsqrtss(float %a0, float *%a1) {
 ; ATOM-LABEL: test_rsqrtss:
 ; ATOM:       # %bb.0:
 ; ATOM-NEXT:    movss {{.*#+}} xmm1 = mem[0],zero,zero,zero sched: [1:1.00]
-; ATOM-NEXT:    rsqrtss %xmm0, %xmm0
-; ATOM-NEXT:    rsqrtss %xmm1, %xmm1
+; ATOM-NEXT:    rsqrtss %xmm0, %xmm0 # sched: [0:?]
+; ATOM-NEXT:    rsqrtss %xmm1, %xmm1 # sched: [0:?]
 ; ATOM-NEXT:    addps %xmm1, %xmm0 # sched: [5:5.00]
 ; ATOM-NEXT:    retq # sched: [79:39.50]
 ;
@@ -3038,7 +3038,7 @@ define <4 x float> @test_sqrtps(<4 x float> %a0, <4 x float> *%a1) {
 ; SLM-NEXT:    sqrtps (%rdi), %xmm1 # sched: [18:1.00]
 ; SLM-NEXT:    sqrtps %xmm0, %xmm0 # sched: [15:1.00]
 ; SLM-NEXT:    addps %xmm0, %xmm1 # sched: [3:1.00]
-; SLM-NEXT:    movaps %xmm1, %xmm0 # sched: [1:1.00]
+; SLM-NEXT:    movaps %xmm1, %xmm0 # sched: [1:0.50]
 ; SLM-NEXT:    retq # sched: [4:1.00]
 ;
 ; SANDY-LABEL: test_sqrtps:
@@ -3111,8 +3111,8 @@ define <4 x float> @test_sqrtss(<4 x float> %a0, <4 x float> *%a1) {
 ; ATOM-LABEL: test_sqrtss:
 ; ATOM:       # %bb.0:
 ; ATOM-NEXT:    movaps (%rdi), %xmm1 # sched: [1:1.00]
-; ATOM-NEXT:    sqrtss %xmm0, %xmm0
-; ATOM-NEXT:    sqrtss %xmm1, %xmm1
+; ATOM-NEXT:    sqrtss %xmm0, %xmm0 # sched: [0:?]
+; ATOM-NEXT:    sqrtss %xmm1, %xmm1 # sched: [0:?]
 ; ATOM-NEXT:    addps %xmm1, %xmm0 # sched: [5:5.00]
 ; ATOM-NEXT:    retq # sched: [79:39.50]
 ;
@@ -3761,6 +3761,98 @@ define <4 x float> @test_xorps(<4 x float> %a0, <4 x float> %a1, <4 x float> *%a
   %6 = xor <4 x i32> %3, %5
   %7 = bitcast <4 x i32> %6 to <4 x float>
   ret <4 x float> %7
+}
+
+; 'WriteZero' and 'WriteNop' class instructions.
+
+define <4 x float> @test_fnop() nounwind {
+; GENERIC-LABEL: test_fnop:
+; GENERIC:       # %bb.0:
+; GENERIC-NEXT:    #APP
+; GENERIC-NEXT:    nop # sched: [1:?]
+; GENERIC-NEXT:    #NO_APP
+; GENERIC-NEXT:    xorps %xmm0, %xmm0 # sched: [1:1.00]
+; GENERIC-NEXT:    retq # sched: [1:1.00]
+;
+; ATOM-LABEL: test_fnop:
+; ATOM:       # %bb.0:
+; ATOM-NEXT:    xorps %xmm0, %xmm0 # sched: [1:0.50]
+; ATOM-NEXT:    #APP
+; ATOM-NEXT:    nop # sched: [1:0.50]
+; ATOM-NEXT:    #NO_APP
+; ATOM-NEXT:    nop # sched: [1:0.50]
+; ATOM-NEXT:    nop # sched: [1:0.50]
+; ATOM-NEXT:    nop # sched: [1:0.50]
+; ATOM-NEXT:    nop # sched: [1:0.50]
+; ATOM-NEXT:    nop # sched: [1:0.50]
+; ATOM-NEXT:    nop # sched: [1:0.50]
+; ATOM-NEXT:    retq # sched: [79:39.50]
+;
+; SLM-LABEL: test_fnop:
+; SLM:       # %bb.0:
+; SLM-NEXT:    xorps %xmm0, %xmm0 # sched: [1:0.50]
+; SLM-NEXT:    #APP
+; SLM-NEXT:    nop # sched: [1:?]
+; SLM-NEXT:    #NO_APP
+; SLM-NEXT:    retq # sched: [4:1.00]
+;
+; SANDY-LABEL: test_fnop:
+; SANDY:       # %bb.0:
+; SANDY-NEXT:    #APP
+; SANDY-NEXT:    nop # sched: [1:?]
+; SANDY-NEXT:    #NO_APP
+; SANDY-NEXT:    vxorps %xmm0, %xmm0, %xmm0 # sched: [1:1.00]
+; SANDY-NEXT:    retq # sched: [1:1.00]
+;
+; HASWELL-LABEL: test_fnop:
+; HASWELL:       # %bb.0:
+; HASWELL-NEXT:    #APP
+; HASWELL-NEXT:    nop # sched: [1:0.25]
+; HASWELL-NEXT:    #NO_APP
+; HASWELL-NEXT:    vxorps %xmm0, %xmm0, %xmm0 # sched: [1:1.00]
+; HASWELL-NEXT:    retq # sched: [7:1.00]
+;
+; BROADWELL-LABEL: test_fnop:
+; BROADWELL:       # %bb.0:
+; BROADWELL-NEXT:    #APP
+; BROADWELL-NEXT:    nop # sched: [1:0.25]
+; BROADWELL-NEXT:    #NO_APP
+; BROADWELL-NEXT:    vxorps %xmm0, %xmm0, %xmm0 # sched: [1:1.00]
+; BROADWELL-NEXT:    retq # sched: [7:1.00]
+;
+; SKYLAKE-LABEL: test_fnop:
+; SKYLAKE:       # %bb.0:
+; SKYLAKE-NEXT:    #APP
+; SKYLAKE-NEXT:    nop # sched: [1:0.25]
+; SKYLAKE-NEXT:    #NO_APP
+; SKYLAKE-NEXT:    vxorps %xmm0, %xmm0, %xmm0 # sched: [1:0.33]
+; SKYLAKE-NEXT:    retq # sched: [7:1.00]
+;
+; SKX-LABEL: test_fnop:
+; SKX:       # %bb.0:
+; SKX-NEXT:    #APP
+; SKX-NEXT:    nop # sched: [1:0.25]
+; SKX-NEXT:    #NO_APP
+; SKX-NEXT:    vxorps %xmm0, %xmm0, %xmm0 # sched: [1:0.33]
+; SKX-NEXT:    retq # sched: [7:1.00]
+;
+; BTVER2-LABEL: test_fnop:
+; BTVER2:       # %bb.0:
+; BTVER2-NEXT:    vxorps %xmm0, %xmm0, %xmm0 # sched: [1:0.50]
+; BTVER2-NEXT:    #APP
+; BTVER2-NEXT:    nop # sched: [1:0.50]
+; BTVER2-NEXT:    #NO_APP
+; BTVER2-NEXT:    retq # sched: [4:1.00]
+;
+; ZNVER1-LABEL: test_fnop:
+; ZNVER1:       # %bb.0:
+; ZNVER1-NEXT:    vxorps %xmm0, %xmm0, %xmm0 # sched: [1:0.25]
+; ZNVER1-NEXT:    #APP
+; ZNVER1-NEXT:    nop # sched: [1:?]
+; ZNVER1-NEXT:    #NO_APP
+; ZNVER1-NEXT:    retq # sched: [1:0.50]
+  tail call void asm sideeffect "nop", ""() nounwind
+  ret <4 x float> zeroinitializer
 }
 
 !0 = !{i32 1}

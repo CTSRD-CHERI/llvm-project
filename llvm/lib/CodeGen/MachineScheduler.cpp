@@ -32,7 +32,6 @@
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachinePassRegistry.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
-#include "llvm/CodeGen/MachineValueType.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/RegisterClassInfo.h"
 #include "llvm/CodeGen/RegisterPressure.h"
@@ -55,6 +54,7 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/GraphWriter.h"
+#include "llvm/Support/MachineValueType.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 #include <cassert>
@@ -549,13 +549,9 @@ void MachineSchedulerBase::scheduleRegions(ScheduleDAGInstrs &Scheduler,
       }
       DEBUG(dbgs() << "********** MI Scheduling **********\n");
       DEBUG(dbgs() << MF->getName() << ":" << printMBBReference(*MBB) << " "
-                   << MBB->getName() << "\n  From: " << *I << '\n'
-                   << "    To: ";
-            if (RegionEnd != MBB->end()) {
-              dbgs() << *RegionEnd << '\n';
-            } else {
-              dbgs() << "End";
-            }
+                   << MBB->getName() << "\n  From: " << *I << "    To: ";
+            if (RegionEnd != MBB->end()) dbgs() << *RegionEnd;
+            else dbgs() << "End";
             dbgs() << " RegionInstrs: " << NumRegionInstrs << '\n');
       if (DumpCriticalPathLength) {
         errs() << MF->getName();
@@ -766,10 +762,6 @@ void ScheduleDAGMI::schedule() {
   SmallVector<SUnit*, 8> TopRoots, BotRoots;
   findRootsAndBiasEdges(TopRoots, BotRoots);
 
-  // Initialize the strategy before modifying the DAG.
-  // This may initialize a DFSResult to be used for queue priority.
-  SchedImpl->initialize(this);
-
   DEBUG(
     if (EntrySU.getInstr() != nullptr)
       EntrySU.dumpAll(this);
@@ -779,6 +771,10 @@ void ScheduleDAGMI::schedule() {
       ExitSU.dumpAll(this);
   );
   if (ViewMISchedDAGs) viewGraph();
+
+  // Initialize the strategy before modifying the DAG.
+  // This may initialize a DFSResult to be used for queue priority.
+  SchedImpl->initialize(this);
 
   // Initialize ready queues now that the DAG and priority data are finalized.
   initQueues(TopRoots, BotRoots);
@@ -1137,7 +1133,7 @@ void ScheduleDAGMILive::updatePressureDiffs(
         DEBUG(
           dbgs() << "  UpdateRegP: SU(" << SU.NodeNum << ") "
                  << printReg(Reg, TRI) << ':' << PrintLaneMask(P.LaneMask)
-                 << ' ' << *SU.getInstr() << '\n';
+                 << ' ' << *SU.getInstr();
           dbgs() << "              to ";
           PDiff.dump(*TRI);
         );
@@ -1174,7 +1170,7 @@ void ScheduleDAGMILive::updatePressureDiffs(
             PDiff.addPressureChange(Reg, true, &MRI);
             DEBUG(
               dbgs() << "  UpdateRegP: SU(" << SU->NodeNum << ") "
-                     << *SU->getInstr() << '\n';
+                     << *SU->getInstr();
               dbgs() << "              to ";
               PDiff.dump(*TRI);
             );
@@ -3338,8 +3334,7 @@ SUnit *PostGenericScheduler::pickNode(bool &IsTopNode) {
   IsTopNode = true;
   Top.removeReady(SU);
 
-  DEBUG(dbgs() << "Scheduling SU(" << SU->NodeNum << ") " << *SU->getInstr()
-               << '\n');
+  DEBUG(dbgs() << "Scheduling SU(" << SU->NodeNum << ") " << *SU->getInstr());
   return SU;
 }
 

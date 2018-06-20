@@ -600,8 +600,6 @@ class DSReadPat <DS_Pseudo inst, ValueType vt, PatFrag frag> : GCNPat <
   (inst $ptr, (as_i16imm $offset), (i1 0))
 >;
 
-// FIXME: Passing name of PatFrag in workaround. Why doesn't
-// !cast<PatFrag>(frag.NAME#"_m0") work!?
 multiclass DSReadPat_mc<DS_Pseudo inst, ValueType vt, string frag> {
 
   let OtherPredicates = [LDSRequiresM0Init] in {
@@ -609,7 +607,7 @@ multiclass DSReadPat_mc<DS_Pseudo inst, ValueType vt, string frag> {
   }
 
   let OtherPredicates = [NotLDSRequiresM0Init] in {
-    def : DSReadPat<!cast<DS_Pseudo>(inst.NAME#"_gfx9"), vt, !cast<PatFrag>(frag)>;
+    def : DSReadPat<!cast<DS_Pseudo>(!cast<string>(inst)#"_gfx9"), vt, !cast<PatFrag>(frag)>;
   }
 }
 
@@ -651,6 +649,7 @@ defm : DSReadPat_mc <DS_READ_B32, i32, "load_local">;
 let AddedComplexity = 100 in {
 
 defm : DSReadPat_mc <DS_READ_B64, v2i32, "load_align8_local">;
+defm : DSReadPat_mc <DS_READ_B128, v4i32, "load_align16_local">;
 
 } // End AddedComplexity = 100
 
@@ -678,7 +677,7 @@ multiclass DSWritePat_mc <DS_Pseudo inst, ValueType vt, string frag> {
   }
 
   let OtherPredicates = [NotLDSRequiresM0Init] in {
-    def : DSWritePat<!cast<DS_Pseudo>(inst.NAME#"_gfx9"), vt, !cast<PatFrag>(frag)>;
+    def : DSWritePat<!cast<DS_Pseudo>(!cast<string>(inst)#"_gfx9"), vt, !cast<PatFrag>(frag)>;
   }
 }
 
@@ -720,6 +719,8 @@ def : DS64Bit4ByteAlignedWritePat<DS_WRITE2_B32_gfx9, store_local>;
 let AddedComplexity = 100 in {
 
 defm : DSWritePat_mc <DS_WRITE_B64, v2i32, "store_align8_local">;
+defm : DSWritePat_mc <DS_WRITE_B128, v4i32, "store_align16_local">;
+
 } // End AddedComplexity = 100
 class DSAtomicRetPat<DS_Pseudo inst, ValueType vt, PatFrag frag> : GCNPat <
   (frag (DS1Addr1Offset i32:$ptr, i32:$offset), vt:$value),
@@ -732,7 +733,8 @@ multiclass DSAtomicRetPat_mc<DS_Pseudo inst, ValueType vt, string frag> {
   }
 
   let OtherPredicates = [NotLDSRequiresM0Init] in {
-    def : DSAtomicRetPat<!cast<DS_Pseudo>(inst.NAME#"_gfx9"), vt, !cast<PatFrag>(frag)>;
+    def : DSAtomicRetPat<!cast<DS_Pseudo>(!cast<string>(inst)#"_gfx9"), vt,
+                         !cast<PatFrag>(frag)>;
   }
 }
 
@@ -749,7 +751,8 @@ multiclass DSAtomicCmpXChg_mc<DS_Pseudo inst, ValueType vt, string frag> {
   }
 
   let OtherPredicates = [NotLDSRequiresM0Init] in {
-    def : DSAtomicCmpXChg<!cast<DS_Pseudo>(inst.NAME#"_gfx9"), vt, !cast<PatFrag>(frag)>;
+    def : DSAtomicCmpXChg<!cast<DS_Pseudo>(!cast<string>(inst)#"_gfx9"), vt,
+                          !cast<PatFrag>(frag)>;
   }
 }
 

@@ -90,7 +90,8 @@ struct TypeCloner {
         unsigned ParamCount = LLVMCountParamTypes(Src);
         LLVMTypeRef* Params = nullptr;
         if (ParamCount > 0) {
-          Params = (LLVMTypeRef*) malloc(ParamCount * sizeof(LLVMTypeRef));
+          Params = static_cast<LLVMTypeRef*>(
+              safe_malloc(ParamCount * sizeof(LLVMTypeRef)));
           LLVMGetParamTypes(Src, Params);
           for (unsigned i = 0; i < ParamCount; i++)
             Params[i] = Clone(Params[i]);
@@ -437,7 +438,7 @@ struct FunCloner {
         LLVMBasicBlockRef ElseBB = DeclareBB(LLVMValueAsBasicBlock(Else));
         LLVMValueRef Then = LLVMGetOperand(Src, 2);
         LLVMBasicBlockRef ThenBB = DeclareBB(LLVMValueAsBasicBlock(Then));
-        Dst = LLVMBuildCondBr(Builder, Cond, ThenBB, ElseBB);
+        Dst = LLVMBuildCondBr(Builder, CloneValue(Cond), ThenBB, ElseBB);
         break;
       }
       case LLVMSwitch:
@@ -863,7 +864,7 @@ static void clone_symbols(LLVMModuleRef Src, LLVMModuleRef M) {
     LLVMSetLinkage(G, LLVMGetLinkage(Cur));
     LLVMSetSection(G, LLVMGetSection(Cur));
     LLVMSetVisibility(G, LLVMGetVisibility(Cur));
-    LLVMSetUnnamedAddr(G, LLVMHasUnnamedAddr(Cur));
+    LLVMSetUnnamedAddress(G, LLVMGetUnnamedAddress(Cur));
     LLVMSetAlignment(G, LLVMGetAlignment(Cur));
 
     Next = LLVMGetNextGlobal(Cur);
@@ -948,6 +949,7 @@ int llvm_echo(void) {
   fputs(Str, stdout);
 
   LLVMDisposeMessage(Str);
+  LLVMDisposeModule(Src);
   LLVMDisposeModule(M);
   LLVMContextDispose(Ctx);
 

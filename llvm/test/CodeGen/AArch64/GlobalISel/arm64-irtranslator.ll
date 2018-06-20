@@ -700,7 +700,8 @@ define i32 @test_urem(i32 %arg1, i32 %arg2) {
 }
 
 ; CHECK-LABEL: name: test_constant_null
-; CHECK: [[NULL:%[0-9]+]]:_(p0) = G_CONSTANT i64 0
+; CHECK: [[ZERO:%[0-9]+]]:_(s64) = G_CONSTANT i64 0
+; CHECK: [[NULL:%[0-9]+]]:_(p0) = G_INTTOPTR [[ZERO]]
 ; CHECK: $x0 = COPY [[NULL]]
 define i8* @test_constant_null() {
   ret i8* null
@@ -1318,6 +1319,17 @@ define float @test_log2_intrin(float %a) {
   %res = call float @llvm.log2.f32(float %a)
   ret float %res
 }
+
+declare float @llvm.fabs.f32(float)
+define float @test_fabs_intrin(float %a) {
+; CHECK-LABEL: name: test_fabs_intrin
+; CHECK: [[A:%[0-9]+]]:_(s32) = COPY $s0
+; CHECK: [[RES:%[0-9]+]]:_(s32) = G_FABS [[A]]
+; CHECK: $s0 = COPY [[RES]]
+  %res = call float @llvm.fabs.f32(float %a)
+  ret float %res
+}
+
 declare void @llvm.lifetime.start.p0i8(i64, i8*)
 declare void @llvm.lifetime.end.p0i8(i64, i8*)
 define void @test_lifetime_intrin() {

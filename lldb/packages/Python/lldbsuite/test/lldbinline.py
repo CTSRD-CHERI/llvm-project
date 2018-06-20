@@ -97,7 +97,6 @@ class InlineTest(TestBase):
             return "-N dsym " + self.mydir
 
     def BuildMakefile(self):
-        self.makeBuildDir()
         makefilePath = self.getBuildArtifact("Makefile")
         if os.path.exists(makefilePath):
             return
@@ -181,14 +180,23 @@ class InlineTest(TestBase):
         parser.parse_source_files(source_files)
         parser.set_breakpoints(target)
 
-        process = target.LaunchSimple(None, None, self.getBuildDir())
+        process = target.LaunchSimple(None, None, self.get_process_working_directory())
+        hit_breakpoints = 0
 
         while lldbutil.get_stopped_thread(process, lldb.eStopReasonBreakpoint):
+            hit_breakpoints += 1
             thread = lldbutil.get_stopped_thread(
                 process, lldb.eStopReasonBreakpoint)
             breakpoint_id = thread.GetStopReasonDataAtIndex(0)
             parser.handle_breakpoint(self, breakpoint_id)
             process.Continue()
+
+        self.assertTrue(hit_breakpoints > 0,
+                        "inline test did not hit a single breakpoint")
+        # Either the process exited or the stepping plan is complete.
+        self.assertTrue(process.GetState() in [lldb.eStateStopped,
+                                               lldb.eStateExited],
+                        PROCESS_EXITED)
 
     # Utilities for testcases
 

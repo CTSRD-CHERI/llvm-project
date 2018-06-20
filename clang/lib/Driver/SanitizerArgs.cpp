@@ -30,7 +30,7 @@ enum : SanitizerMask {
   NeedsUbsanCxxRt = Vptr | CFI,
   NotAllowedWithTrap = Vptr,
   NotAllowedWithMinimalRuntime = Vptr,
-  RequiresPIE = DataFlow | Scudo,
+  RequiresPIE = DataFlow | HWAddress | Scudo,
   NeedsUnwindTables = Address | HWAddress | Thread | Memory | DataFlow,
   SupportsCoverage = Address | HWAddress | KernelAddress | Memory | Leak |
                      Undefined | Integer | Nullability | DataFlow | Fuzzer |
@@ -92,31 +92,28 @@ static std::string describeSanitizeArg(const llvm::opt::Arg *A,
 /// Sanitizers set.
 static std::string toString(const clang::SanitizerSet &Sanitizers);
 
-static bool getDefaultBlacklist(const Driver &D, SanitizerMask Kinds,
-                                std::string &BLPath) {
-  const char *BlacklistFile = nullptr;
-  if (Kinds & Address)
-    BlacklistFile = "asan_blacklist.txt";
-  else if (Kinds & HWAddress)
-    BlacklistFile = "hwasan_blacklist.txt";
-  else if (Kinds & Memory)
-    BlacklistFile = "msan_blacklist.txt";
-  else if (Kinds & Thread)
-    BlacklistFile = "tsan_blacklist.txt";
-  else if (Kinds & DataFlow)
-    BlacklistFile = "dfsan_abilist.txt";
-  else if (Kinds & CFI)
-    BlacklistFile = "cfi_blacklist.txt";
-  else if (Kinds & (Undefined | Integer | Nullability))
-    BlacklistFile = "ubsan_blacklist.txt";
+static void addDefaultBlacklists(const Driver &D, SanitizerMask Kinds,
+                                 std::vector<std::string> &BlacklistFiles) {
+  struct Blacklist {
+    const char *File;
+    SanitizerMask Mask;
+  } Blacklists[] = {{"asan_blacklist.txt", Address},
+                    {"hwasan_blacklist.txt", HWAddress},
+                    {"msan_blacklist.txt", Memory},
+                    {"tsan_blacklist.txt", Thread},
+                    {"dfsan_abilist.txt", DataFlow},
+                    {"cfi_blacklist.txt", CFI},
+                    {"ubsan_blacklist.txt", Undefined | Integer | Nullability}};
 
-  if (BlacklistFile) {
+  for (auto BL : Blacklists) {
+    if (!(Kinds & BL.Mask))
+      continue;
+
     clang::SmallString<64> Path(D.ResourceDir);
-    llvm::sys::path::append(Path, "share", BlacklistFile);
-    BLPath = Path.str();
-    return true;
+    llvm::sys::path::append(Path, "share", BL.File);
+    if (llvm::sys::fs::exists(Path))
+      BlacklistFiles.push_back(Path.str());
   }
-  return false;
 }
 
 /// Sets group bits for every group that has at least one representative already
@@ -335,8 +332,31 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
     }
   }
 
+  std::pair<SanitizerMask, SanitizerMask> IncompatibleGroups[] = {
+      std::make_pair(Address, Thread | Memory),
+      std::make_pair(Thread, Memory),
+      std::make_pair(Leak, Thread | Memory),
+      std::make_pair(KernelAddress, Address | Leak | Thread | Memory),
+      std::make_pair(HWAddress, Address | Thread | Memory | KernelAddress),
+      std::make_pair(Efficiency, Address | HWAddress | Leak | Thread | Memory |
+                                     KernelAddress),
+      std::make_pair(Scudo, Address | HWAddress | Leak | Thread | Memory |
+                                KernelAddress | Efficiency),
+      std::make_pair(SafeStack, Address | HWAddress | Leak | Thread | Memory |
+                                    KernelAddress | Efficiency)};
+
   // Enable toolchain specific default sanitizers if not explicitly disabled.
-  Kinds |= TC.getDefaultSanitizers() & ~AllRemove;
+  SanitizerMask Default = TC.getDefaultSanitizers() & ~AllRemove;
+
+  // Disable default sanitizers that are incompatible with explicitly requested
+  // ones.
+  for (auto G : IncompatibleGroups) {
+    SanitizerMask Group = G.first;
+    if ((Default & Group) && (Kinds & G.second))
+      Default &= ~Group;
+  }
+
+  Kinds |= Default;
 
   // We disable the vptr sanitizer if it was enabled by group expansion but RTTI
   // is disabled.
@@ -372,16 +392,6 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
   }
 
   // Warn about incompatible groups of sanitizers.
-  std::pair<SanitizerMask, SanitizerMask> IncompatibleGroups[] = {
-      std::make_pair(Address, Thread | Memory),
-      std::make_pair(Thread, Memory),
-      std::make_pair(Leak, Thread | Memory),
-      std::make_pair(KernelAddress, Address | Leak | Thread | Memory),
-      std::make_pair(HWAddress, Address | Thread | Memory | KernelAddress),
-      std::make_pair(Efficiency, Address | HWAddress | Leak | Thread | Memory |
-                                     KernelAddress),
-      std::make_pair(Scudo, Address | HWAddress | Leak | Thread | Memory |
-                                KernelAddress | Efficiency)};
   for (auto G : IncompatibleGroups) {
     SanitizerMask Group = G.first;
     if (Kinds & Group) {
@@ -444,11 +454,7 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
 
   // Setup blacklist files.
   // Add default blacklist from resource directory.
-  {
-    std::string BLPath;
-    if (getDefaultBlacklist(D, Kinds, BLPath) && llvm::sys::fs::exists(BLPath))
-      BlacklistFiles.push_back(BLPath);
-  }
+  addDefaultBlacklists(D, Kinds, BlacklistFiles);
   // Parse -f(no-)sanitize-blacklist options.
   for (const auto *Arg : Args) {
     if (Arg->getOption().matches(options::OPT_fsanitize_blacklist)) {
@@ -457,9 +463,9 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
       if (llvm::sys::fs::exists(BLPath)) {
         BlacklistFiles.push_back(BLPath);
         ExtraDeps.push_back(BLPath);
-      } else
+      } else {
         D.Diag(clang::diag::err_drv_no_such_file) << BLPath;
-
+      }
     } else if (Arg->getOption().matches(options::OPT_fno_sanitize_blacklist)) {
       Arg->claim();
       BlacklistFiles.clear();

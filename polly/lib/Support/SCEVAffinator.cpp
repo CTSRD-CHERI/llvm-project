@@ -15,6 +15,7 @@
 #include "polly/Options.h"
 #include "polly/ScopInfo.h"
 #include "polly/Support/GICHelper.h"
+#include "polly/Support/ISLOperators.h"
 #include "polly/Support/SCEVValidator.h"
 #include "polly/Support/ScopHelper.h"
 #include "isl/aff.h"
@@ -162,6 +163,7 @@ isl::pw_aff SCEVAffinator::addModuloSemantic(isl::pw_aff PWA,
   isl::set Domain = PWA.domain();
   isl::pw_aff AddPW =
       isl::manage(getWidthExpValOnDomain(Width - 1, Domain.take()));
+
   return PWA.add(AddPW).mod(ModVal).sub(AddPW);
 }
 
@@ -282,8 +284,7 @@ PWACtx SCEVAffinator::visitTruncateExpr(const SCEVTruncateExpr *Expr) {
   auto *SmallerDom =
       isl_pw_aff_lt_set(OpPWAC.first.copy(), isl_pw_aff_neg(ExpPWA));
   auto *OutOfBoundsDom = isl_set_union(SmallerDom, GreaterDom);
-  OpPWAC.second =
-      OpPWAC.second.unite(isl::manage(isl_set_copy(OutOfBoundsDom)));
+  OpPWAC.second = OpPWAC.second.unite(isl::manage_copy(OutOfBoundsDom));
 
   if (!BB) {
     assert(isl_set_dim(OutOfBoundsDom, isl_dim_set) == 0 &&

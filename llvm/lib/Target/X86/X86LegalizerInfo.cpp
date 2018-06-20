@@ -15,9 +15,9 @@
 #include "X86Subtarget.h"
 #include "X86TargetMachine.h"
 #include "llvm/CodeGen/TargetOpcodes.h"
-#include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Type.h"
+#include "llvm/IR/ValueTypes.h"
 
 using namespace llvm;
 using namespace TargetOpcode;
@@ -86,7 +86,7 @@ X86LegalizerInfo::X86LegalizerInfo(const X86Subtarget &STI,
 
 void X86LegalizerInfo::setLegalizerInfo32bit() {
 
-  const LLT p0 = LLT::pointer(0, TM.getPointerSize() * 8);
+  const LLT p0 = LLT::pointer(0, TM.getPointerSizeInBits(0));
   const LLT s1 = LLT::scalar(1);
   const LLT s8 = LLT::scalar(8);
   const LLT s16 = LLT::scalar(16);
@@ -123,6 +123,19 @@ void X86LegalizerInfo::setLegalizerInfo32bit() {
 
   setAction({G_GEP, p0}, Legal);
   setAction({G_GEP, 1, s32}, Legal);
+
+  if (!Subtarget.is64Bit()) {
+    getActionDefinitionsBuilder(G_PTRTOINT)
+        .legalForCartesianProduct({s1, s8, s16, s32}, {p0})
+        .maxScalar(0, s32)
+        .widenScalarToNextPow2(0, /*Min*/ 8);
+    getActionDefinitionsBuilder(G_INTTOPTR).legalFor({s32, p0});
+
+    // Shifts and SDIV
+    getActionDefinitionsBuilder({G_SHL, G_LSHR, G_ASHR, G_SDIV})
+        .legalFor({s8, s16, s32})
+        .clampScalar(0, s8, s32);
+  }
 
   // Control-flow
   setAction({G_BRCOND, s1}, Legal);
@@ -161,6 +174,11 @@ void X86LegalizerInfo::setLegalizerInfo64bit() {
   if (!Subtarget.is64Bit())
     return;
 
+  const LLT p0 = LLT::pointer(0, TM.getPointerSizeInBits(0));
+  const LLT s1 = LLT::scalar(1);
+  const LLT s8 = LLT::scalar(8);
+  const LLT s16 = LLT::scalar(16);
+  const LLT s32 = LLT::scalar(32);
   const LLT s64 = LLT::scalar(64);
   const LLT s128 = LLT::scalar(128);
 
@@ -179,6 +197,11 @@ void X86LegalizerInfo::setLegalizerInfo64bit() {
 
   // Pointer-handling
   setAction({G_GEP, 1, s64}, Legal);
+  getActionDefinitionsBuilder(G_PTRTOINT)
+      .legalForCartesianProduct({s1, s8, s16, s32, s64}, {p0})
+      .maxScalar(0, s64)
+      .widenScalarToNextPow2(0, /*Min*/ 8);
+  getActionDefinitionsBuilder(G_INTTOPTR).legalFor({s64, p0});
 
   // Constants
   setAction({TargetOpcode::G_CONSTANT, s64}, Legal);
@@ -190,6 +213,11 @@ void X86LegalizerInfo::setLegalizerInfo64bit() {
 
   // Comparison
   setAction({G_ICMP, 1, s64}, Legal);
+
+  // Shifts and SDIV
+  getActionDefinitionsBuilder({G_SHL, G_LSHR, G_ASHR, G_SDIV})
+    .legalFor({s8, s16, s32, s64})
+    .clampScalar(0, s8, s64);
 
   // Merge/Unmerge
   setAction({G_MERGE_VALUES, s128}, Legal);

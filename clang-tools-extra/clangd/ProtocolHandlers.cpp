@@ -38,16 +38,14 @@ struct HandlerRegisterer {
   }
 
   JSONRPCDispatcher &Dispatcher;
-  JSONOutput *Out;
   ProtocolCallbacks *Callbacks;
 };
 
 } // namespace
 
 void clangd::registerCallbackHandlers(JSONRPCDispatcher &Dispatcher,
-                                      JSONOutput &Out,
                                       ProtocolCallbacks &Callbacks) {
-  HandlerRegisterer Register{Dispatcher, &Out, &Callbacks};
+  HandlerRegisterer Register{Dispatcher, &Callbacks};
 
   Register("initialize", &ProtocolCallbacks::onInitialize);
   Register("shutdown", &ProtocolCallbacks::onShutdown);
@@ -72,4 +70,6 @@ void clangd::registerCallbackHandlers(JSONRPCDispatcher &Dispatcher,
   Register("workspace/executeCommand", &ProtocolCallbacks::onCommand);
   Register("textDocument/documentHighlight",
            &ProtocolCallbacks::onDocumentHighlight);
+  Register("workspace/didChangeConfiguration",
+           &ProtocolCallbacks::onChangeConfiguration);
 }

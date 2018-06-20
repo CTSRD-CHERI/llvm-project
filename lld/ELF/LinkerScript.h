@@ -11,9 +11,9 @@
 #define LLD_ELF_LINKER_SCRIPT_H
 
 #include "Config.h"
-#include "Strings.h"
 #include "Writer.h"
 #include "lld/Common/LLVM.h"
+#include "lld/Common/Strings.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
@@ -86,8 +86,10 @@ struct BaseCommand {
 
 // This represents ". = <expr>" or "<symbol> = <expr>".
 struct SymbolAssignment : BaseCommand {
-  SymbolAssignment(StringRef Name, Expr E, std::string Loc)
-      : BaseCommand(AssignmentKind), Name(Name), Expression(E), Location(Loc) {}
+  SymbolAssignment(StringRef Name, Expr E, std::string Loc,
+                   std::string CommandString)
+      : BaseCommand(AssignmentKind), Name(Name), Expression(E), Location(Loc),
+        CommandString(CommandString) {}
 
   static bool classof(const BaseCommand *C) {
     return C->Kind == AssignmentKind;
@@ -106,6 +108,16 @@ struct SymbolAssignment : BaseCommand {
 
   // Holds file name and line number for error reporting.
   std::string Location;
+
+  // A string representation of this command. We use this for -Map.
+  std::string CommandString;
+
+  // This is just an offset of this assignment command in the output section.
+  unsigned Offset;
+
+  // Size of this assignment command. This is usually 0, but if you move '.'
+  // or use a BYTE()-family command, this may be greater than 0."
+  unsigned Size;
 };
 
 // Linker scripts allow additional constraints to be put on ouput sections.
@@ -178,10 +190,14 @@ struct AssertCommand : BaseCommand {
 
 // Represents BYTE(), SHORT(), LONG(), or QUAD().
 struct ByteCommand : BaseCommand {
-  ByteCommand(Expr E, unsigned Size)
-      : BaseCommand(ByteKind), Expression(E), Size(Size) {}
+  ByteCommand(Expr E, unsigned Size, std::string CommandString)
+      : BaseCommand(ByteKind), CommandString(CommandString), Expression(E),
+        Size(Size) {}
 
   static bool classof(const BaseCommand *C) { return C->Kind == ByteKind; }
+
+  // Keeps string representing the command. Used for -Map" is perhaps better.
+  std::string CommandString;
 
   Expr Expression;
   unsigned Offset;
@@ -215,6 +231,7 @@ class LinkerScript final {
   void addSymbol(SymbolAssignment *Cmd);
   void assignSymbol(SymbolAssignment *Cmd, bool InSec);
   void setDot(Expr E, const Twine &Loc, bool InSec);
+  void expandOutputSection(uint64_t Size);
 
   std::vector<InputSection *>
   computeInputSections(const InputSectionDescription *);
@@ -254,7 +271,6 @@ public:
   ExprValue getSymbolValue(StringRef Name, const Twine &Loc);
 
   void addOrphanSections();
-  void removeEmptyCommands();
   void adjustSectionsBeforeSorting();
   void adjustSectionsAfterSorting();
 
@@ -266,6 +282,9 @@ public:
   void allocateHeaders(std::vector<PhdrEntry *> &Phdrs);
   void processSectionCommands();
   void declareSymbols();
+
+  // Used to handle INSERT AFTER statements.
+  void processInsertCommands();
 
   // SECTIONS command list.
   std::vector<BaseCommand *> SectionCommands;
@@ -285,6 +304,11 @@ public:
 
   // A list of symbols referenced by the script.
   std::vector<llvm::StringRef> ReferencedSymbols;
+
+  // Used to implement INSERT [AFTER|BEFORE]. Contains commands that need
+  // to be inserted into SECTIONS commands list.
+  llvm::DenseMap<StringRef, std::vector<BaseCommand *>> InsertAfterCommands;
+  llvm::DenseMap<StringRef, std::vector<BaseCommand *>> InsertBeforeCommands;
 };
 
 extern LinkerScript *Script;

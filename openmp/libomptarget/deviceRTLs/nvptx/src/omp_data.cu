@@ -50,4 +50,4 @@ __device__ __shared__ void *ReductionScratchpadPtr;
 ////////////////////////////////////////////////////////////////////////////////
 // Data sharing related variables.
 ////////////////////////////////////////////////////////////////////////////////
-__device__ __shared__ omptarget_nvptx_SharedArgs omptarget_nvptx_sharedArgs;
+__device__ __shared__ omptarget_nvptx_SharedArgs omptarget_nvptx_globalArgs;

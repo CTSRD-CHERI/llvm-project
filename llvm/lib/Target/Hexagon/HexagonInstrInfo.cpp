@@ -34,7 +34,6 @@
 #include "llvm/CodeGen/MachineMemOperand.h"
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
-#include "llvm/CodeGen/MachineValueType.h"
 #include "llvm/CodeGen/ScheduleDAG.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/CodeGen/TargetOpcodes.h"
@@ -49,6 +48,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/MachineValueType.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
@@ -144,9 +144,9 @@ static unsigned nonDbgMICount(MachineBasicBlock::const_instr_iterator MIB,
 /// On Hexagon, we have two instructions used to set-up the hardware loop
 /// (LOOP0, LOOP1) with corresponding endloop (ENDLOOP0, ENDLOOP1) instructions
 /// to indicate the end of a loop.
-static MachineInstr *findLoopInstr(MachineBasicBlock *BB, unsigned EndLoopOp,
-      MachineBasicBlock *TargetBB,
-      SmallPtrSet<MachineBasicBlock *, 8> &Visited) {
+MachineInstr *HexagonInstrInfo::findLoopInstr(MachineBasicBlock *BB,
+      unsigned EndLoopOp, MachineBasicBlock *TargetBB,
+      SmallPtrSet<MachineBasicBlock *, 8> &Visited) const {
   unsigned LOOPi;
   unsigned LOOPr;
   if (EndLoopOp == Hexagon::ENDLOOP0) {
@@ -1886,6 +1886,10 @@ bool HexagonInstrInfo::isAccumulator(const MachineInstr &MI) const {
   return((F >> HexagonII::AccumulatorPos) & HexagonII::AccumulatorMask);
 }
 
+bool HexagonInstrInfo::isBaseImmOffset(const MachineInstr &MI) const {
+  return getAddrMode(MI) == HexagonII::BaseImmOffset;
+}
+
 bool HexagonInstrInfo::isComplex(const MachineInstr &MI) const {
   return !isTC1(MI) && !isTC2Early(MI) && !MI.getDesc().mayLoad() &&
          !MI.getDesc().mayStore() &&
@@ -2522,6 +2526,11 @@ bool HexagonInstrInfo::isValidAutoIncImm(const EVT VT, int Offset) const {
     case MVT::i16:
     case MVT::i32:
     case MVT::i64:
+    case MVT::v2i16:
+    case MVT::v2i32:
+    case MVT::v4i8:
+    case MVT::v4i16:
+    case MVT::v8i8:
       return isInt<4>(Count);
     // For HVX vectors the auto-inc is s3
     case MVT::v64i8:

@@ -77,6 +77,7 @@
 #include "llvm/Analysis/MemoryBuiltins.h"
 #include "llvm/Analysis/MemorySSA.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
+#include "llvm/Analysis/Utils/Local.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constant.h"
@@ -105,7 +106,6 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Scalar/GVNExpression.h"
-#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Utils/PredicateInfo.h"
 #include "llvm/Transforms/Utils/VNCoercion.h"
 #include <algorithm>
@@ -2819,6 +2819,7 @@ NewGVN::makePossiblePHIOfOps(Instruction *I,
       for (auto PHIOp : Ops)
         ValuePHI->addIncoming(PHIOp.first, PHIOp.second);
     } else {
+      TempToBlock[ValuePHI] = PHIBlock;
       unsigned int i = 0;
       for (auto PHIOp : Ops) {
         ValuePHI->setIncomingValue(i, PHIOp.first);

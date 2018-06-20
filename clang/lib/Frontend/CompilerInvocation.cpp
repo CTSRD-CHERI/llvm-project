@@ -545,6 +545,7 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   Opts.DebugTypeExtRefs = Args.hasArg(OPT_dwarf_ext_refs);
   Opts.DebugExplicitImport = Args.hasArg(OPT_dwarf_explicit_import);
   Opts.DebugFwdTemplateParams = Args.hasArg(OPT_debug_forward_template_params);
+  Opts.EmbedSource = Args.hasArg(OPT_gembed_source);
 
   for (const auto &Arg : Args.getAllArgValues(OPT_fdebug_prefix_map_EQ))
     Opts.DebugPrefixMap.insert(StringRef(Arg).split('='));
@@ -639,6 +640,8 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   Opts.DisableFree = Args.hasArg(OPT_disable_free);
   Opts.DiscardValueNames = Args.hasArg(OPT_discard_value_names);
   Opts.DisableTailCalls = Args.hasArg(OPT_mdisable_tail_calls);
+  Opts.NoEscapingBlockTailCalls =
+      Args.hasArg(OPT_fno_escaping_block_tail_calls);
   Opts.FloatABI = Args.getLastArgValue(OPT_mfloat_abi);
   Opts.LessPreciseFPMAD = Args.hasArg(OPT_cl_mad_enable) ||
                           Args.hasArg(OPT_cl_unsafe_math_optimizations) ||
@@ -659,6 +662,8 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   Opts.FlushDenorm = Args.hasArg(OPT_cl_denorms_are_zero);
   Opts.CorrectlyRoundedDivSqrt =
       Args.hasArg(OPT_cl_fp32_correctly_rounded_divide_sqrt);
+  Opts.UniformWGSize =
+      Args.hasArg(OPT_cl_uniform_work_group_size);
   Opts.Reciprocals = Args.getAllArgValues(OPT_mrecip_EQ);
   Opts.ReciprocalMath = Args.hasArg(OPT_freciprocal_math);
   Opts.NoTrappingMath = Args.hasArg(OPT_fno_trapping_math);
@@ -921,6 +926,8 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
     Opts.StackProbeSize = StackProbeSize;
   }
 
+  Opts.NoStackArgProbe = Args.hasArg(OPT_mno_stack_arg_probe);
+
   if (Arg *A = Args.getLastArg(OPT_fobjc_dispatch_method_EQ)) {
     StringRef Name = A->getValue();
     unsigned Method = llvm::StringSwitch<unsigned>(Name)
@@ -937,8 +944,12 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
     }
   }
 
-  Opts.EmulatedTLS =
-      Args.hasFlag(OPT_femulated_tls, OPT_fno_emulated_tls, false);
+  if (Args.getLastArg(OPT_femulated_tls) ||
+      Args.getLastArg(OPT_fno_emulated_tls)) {
+    Opts.ExplicitEmulatedTLS = true;
+    Opts.EmulatedTLS =
+        Args.hasFlag(OPT_femulated_tls, OPT_fno_emulated_tls, false);
+  }
 
   if (Arg *A = Args.getLastArg(OPT_ftlsmodel_EQ)) {
     StringRef Name = A->getValue();
@@ -1041,8 +1052,8 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
                       Args.getAllArgValues(OPT_fsanitize_trap_EQ), Diags,
                       Opts.SanitizeTrap);
 
-  Opts.CudaGpuBinaryFileNames =
-      Args.getAllArgValues(OPT_fcuda_include_gpubinary);
+  Opts.CudaGpuBinaryFileName =
+      Args.getLastArgValue(OPT_fcuda_include_gpubinary);
 
   Opts.Backchain = Args.hasArg(OPT_mbackchain);
 
@@ -1798,18 +1809,30 @@ void CompilerInvocation::setLangDefaults(LangOptions &Opts, InputKind IK,
       break;
     case InputKind::Asm:
     case InputKind::C:
+#if defined(CLANG_DEFAULT_STD_C)
+      LangStd = CLANG_DEFAULT_STD_C;
+#else
       // The PS4 uses C99 as the default C standard.
       if (T.isPS4())
         LangStd = LangStandard::lang_gnu99;
       else
         LangStd = LangStandard::lang_gnu11;
+#endif
       break;
     case InputKind::ObjC:
+#if defined(CLANG_DEFAULT_STD_C)
+      LangStd = CLANG_DEFAULT_STD_C;
+#else
       LangStd = LangStandard::lang_gnu11;
+#endif
       break;
     case InputKind::CXX:
     case InputKind::ObjCXX:
+#if defined(CLANG_DEFAULT_STD_CXX)
+      LangStd = CLANG_DEFAULT_STD_CXX;
+#else
       LangStd = LangStandard::lang_gnucxx14;
+#endif
       break;
     case InputKind::RenderScript:
       LangStd = LangStandard::lang_c99;
@@ -2019,6 +2042,12 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
     }
   }
 
+  if (const Arg *A = Args.getLastArg(OPT_fcf_protection_EQ)) {
+    StringRef Name = A->getValue();
+    if (Name == "full" || Name == "branch") {
+      Opts.CFProtectionBranch = 1;
+    }
+  }
   // -cl-std only applies for OpenCL language standards.
   // Override the -std option in this case.
   if (const Arg *A = Args.getLastArg(OPT_cl_std_EQ)) {
@@ -2343,7 +2372,8 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.DebuggerCastResultToId = Args.hasArg(OPT_fdebugger_cast_result_to_id);
   Opts.DebuggerObjCLiteral = Args.hasArg(OPT_fdebugger_objc_literal);
   Opts.ApplePragmaPack = Args.hasArg(OPT_fapple_pragma_pack);
-  Opts.CurrentModule = Args.getLastArgValue(OPT_fmodule_name_EQ);
+  Opts.ModuleName = Args.getLastArgValue(OPT_fmodule_name_EQ);
+  Opts.CurrentModule = Opts.ModuleName;
   Opts.AppExt = Args.hasArg(OPT_fapplication_extension);
   Opts.ModuleFeatures = Args.getAllArgValues(OPT_fmodule_feature);
   std::sort(Opts.ModuleFeatures.begin(), Opts.ModuleFeatures.end());
@@ -2520,6 +2550,10 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
       Diags.Report(clang::diag::err_drv_omp_host_ir_file_not_found)
           << Opts.OMPHostIRFile;
   }
+
+  // set CUDA mode for OpenMP target NVPTX if specified in options
+  Opts.OpenMPCUDAMode = Opts.OpenMPIsDevice && T.isNVPTX() &&
+                        Args.hasArg(options::OPT_fopenmp_cuda_mode);
 
   // Record whether the __DEPRECATED define was requested.
   Opts.Deprecated = Args.hasFlag(OPT_fdeprecated_macro,
@@ -2777,6 +2811,7 @@ static void ParseTargetArgs(TargetOptions &Opts, ArgList &Args,
   if (Opts.Triple.empty())
     Opts.Triple = llvm::sys::getDefaultTargetTriple();
   Opts.OpenCLExtensionsAsWritten = Args.getAllArgValues(OPT_cl_ext_EQ);
+  Opts.ForceEnableInt128 = Args.hasArg(OPT_fforce_enable_int128);
 }
 
 bool CompilerInvocation::CreateFromArgs(CompilerInvocation &Res,
@@ -3038,16 +3073,15 @@ createVFSFromCompilerInvocation(const CompilerInvocation &CI,
         BaseFS->getBufferForFile(File);
     if (!Buffer) {
       Diags.Report(diag::err_missing_vfs_overlay_file) << File;
-      return IntrusiveRefCntPtr<vfs::FileSystem>();
+      continue;
     }
 
     IntrusiveRefCntPtr<vfs::FileSystem> FS = vfs::getVFSFromYAML(
         std::move(Buffer.get()), /*DiagHandler*/ nullptr, File);
-    if (!FS.get()) {
+    if (FS)
+      Overlay->pushOverlay(FS);
+    else
       Diags.Report(diag::err_invalid_vfs_overlay) << File;
-      return IntrusiveRefCntPtr<vfs::FileSystem>();
-    }
-    Overlay->pushOverlay(FS);
   }
   return Overlay;
 }

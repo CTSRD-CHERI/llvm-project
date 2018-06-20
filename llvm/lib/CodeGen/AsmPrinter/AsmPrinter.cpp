@@ -31,7 +31,6 @@
 #include "llvm/ADT/Twine.h"
 #include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/Analysis/EHPersonalities.h"
-#include "llvm/Analysis/ObjectUtils.h"
 #include "llvm/Analysis/OptimizationRemarkEmitter.h"
 #include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/BinaryFormat/ELF.h"
@@ -55,7 +54,6 @@
 #include "llvm/CodeGen/TargetFrameLowering.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/CodeGen/TargetLowering.h"
-#include "llvm/CodeGen/TargetLoweringObjectFile.h"
 #include "llvm/CodeGen/TargetOpcodes.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
@@ -108,6 +106,7 @@
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/Timer.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Target/TargetLoweringObjectFile.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
 #include <algorithm>
@@ -214,8 +213,10 @@ const DataLayout &AsmPrinter::getDataLayout() const {
 }
 
 // Do not use the cached DataLayout because some client use it without a Module
-// (llvm-dsymutil, llvm-dwarfdump).
-unsigned AsmPrinter::getPointerSize() const { return TM.getPointerSize(); }
+// (dsymutil, llvm-dwarfdump).
+unsigned AsmPrinter::getPointerSize() const {
+  return TM.getPointerSize(0); // FIXME: Default address space
+}
 
 const MCSubtargetInfo &AsmPrinter::getSubtargetInfo() const {
   assert(MF && "getSubtargetInfo requires a valid MachineFunction!");
@@ -249,7 +250,7 @@ bool AsmPrinter::doInitialization(Module &M) {
 
   OutStreamer->InitSections(false);
 
-  // Emit the version-min deplyment target directive if needed.
+  // Emit the version-min deployment target directive if needed.
   //
   // FIXME: If we end up with a collection of these sorts of Darwin-specific
   // or ELF-specific things, it may make sense to have a platform helper class
@@ -353,6 +354,9 @@ bool AsmPrinter::doInitialization(Module &M) {
       break;
     }
     break;
+  case ExceptionHandling::Wasm:
+    // TODO to prevent warning
+    break;
   }
   if (ES)
     Handlers.push_back(HandlerInfo(ES, EHTimerName, EHTimerDescription,
@@ -371,7 +375,7 @@ static bool canBeHidden(const GlobalValue *GV, const MCAsmInfo &MAI) {
   if (!MAI.hasWeakDefCanBeHiddenDirective())
     return false;
 
-  return canBeOmittedFromSymbolTable(GV);
+  return GV->canBeOmittedFromSymbolTable();
 }
 
 void AsmPrinter::EmitLinkage(const GlobalValue *GV, MCSymbol *GVSym) const {
@@ -426,7 +430,7 @@ MCSymbol *AsmPrinter::getSymbol(const GlobalValue *GV) const {
 
 /// EmitGlobalVariable - Emit the specified global variable to the .s file.
 void AsmPrinter::EmitGlobalVariable(const GlobalVariable *GV) {
-  bool IsEmuTLSVar = TM.Options.EmulatedTLS && GV->isThreadLocal();
+  bool IsEmuTLSVar = TM.useEmulatedTLS() && GV->isThreadLocal();
   assert(!(IsEmuTLSVar && GV->hasCommonLinkage()) &&
          "No emulated TLS variables in the common section");
 
@@ -976,7 +980,7 @@ void AsmPrinter::emitStackSizeSection(const MachineFunction &MF) {
 
   const MCSymbol *FunctionSymbol = getSymbol(&MF.getFunction());
   uint64_t StackSize = FrameInfo.getStackSize();
-  OutStreamer->EmitSymbolValue(FunctionSymbol, TM.getPointerSize());
+  OutStreamer->EmitSymbolValue(FunctionSymbol, TM.getProgramPointerSize());
   OutStreamer->EmitULEB128IntValue(StackSize);
 
   OutStreamer->PopSection();
@@ -2124,6 +2128,7 @@ static void emitGlobalConstantImpl(const DataLayout &DL, const Constant *C,
                                    uint64_t Offset = 0);
 
 static void emitGlobalConstantFP(const ConstantFP *CFP, AsmPrinter &AP);
+static void emitGlobalConstantFP(APFloat APF, Type *ET, AsmPrinter &AP);
 
 /// isRepeatedByteSequence - Determine whether the given value is
 /// composed of a repeated sequence of identical bytes and return the
@@ -2201,8 +2206,9 @@ static void emitGlobalConstantDataSequential(const DataLayout &DL,
                                    ElementByteSize);
     }
   } else {
+    Type *ET = CDS->getElementType();
     for (unsigned I = 0, E = CDS->getNumElements(); I != E; ++I)
-      emitGlobalConstantFP(cast<ConstantFP>(CDS->getElementAsConstant(I)), AP);
+      emitGlobalConstantFP(CDS->getElementAsAPFloat(I), ET, AP);
   }
 
   unsigned Size = DL.getTypeAllocSize(CDS->getType());
@@ -2271,17 +2277,17 @@ static void emitGlobalConstantStruct(const DataLayout &DL,
          "Layout of constant struct may be incorrect!");
 }
 
-static void emitGlobalConstantFP(const ConstantFP *CFP, AsmPrinter &AP) {
-  APInt API = CFP->getValueAPF().bitcastToAPInt();
+static void emitGlobalConstantFP(APFloat APF, Type *ET, AsmPrinter &AP) {
+  APInt API = APF.bitcastToAPInt();
 
   // First print a comment with what we think the original floating-point value
   // should have been.
   if (AP.isVerbose()) {
     SmallString<8> StrVal;
-    CFP->getValueAPF().toString(StrVal);
+    APF.toString(StrVal);
 
-    if (CFP->getType())
-      CFP->getType()->print(AP.OutStreamer->GetCommentOS());
+    if (ET)
+      ET->print(AP.OutStreamer->GetCommentOS());
     else
       AP.OutStreamer->GetCommentOS() << "Printing <null> Type";
     AP.OutStreamer->GetCommentOS() << ' ' << StrVal << '\n';
@@ -2296,7 +2302,7 @@ static void emitGlobalConstantFP(const ConstantFP *CFP, AsmPrinter &AP) {
 
   // PPC's long double has odd notions of endianness compared to how LLVM
   // handles it: p[0] goes first for *big* endian on PPC.
-  if (AP.getDataLayout().isBigEndian() && !CFP->getType()->isPPC_FP128Ty()) {
+  if (AP.getDataLayout().isBigEndian() && !ET->isPPC_FP128Ty()) {
     int Chunk = API.getNumWords() - 1;
 
     if (TrailingBytes)
@@ -2315,8 +2321,11 @@ static void emitGlobalConstantFP(const ConstantFP *CFP, AsmPrinter &AP) {
 
   // Emit the tail padding for the long double.
   const DataLayout &DL = AP.getDataLayout();
-  AP.OutStreamer->EmitZeros(DL.getTypeAllocSize(CFP->getType()) -
-                            DL.getTypeStoreSize(CFP->getType()));
+  AP.OutStreamer->EmitZeros(DL.getTypeAllocSize(ET) - DL.getTypeStoreSize(ET));
+}
+
+static void emitGlobalConstantFP(const ConstantFP *CFP, AsmPrinter &AP) {
+  emitGlobalConstantFP(CFP->getValueAPF(), CFP->getType(), AP);
 }
 
 static void emitGlobalConstantLargeInt(const ConstantInt *CI, AsmPrinter &AP) {

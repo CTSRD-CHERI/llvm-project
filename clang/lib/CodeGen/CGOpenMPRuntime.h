@@ -191,12 +191,26 @@ public:
   }
   /// Returns the base declaration of the reduction item.
   const VarDecl *getBaseDecl(unsigned N) const { return BaseDecls[N]; }
+  /// Returns the base declaration of the reduction item.
+  const Expr *getRefExpr(unsigned N) const { return ClausesData[N].Ref; }
   /// Returns true if the initialization of the reduction item uses initializer
   /// from declare reduction construct.
   bool usesReductionInitializer(unsigned N) const;
 };
 
 class CGOpenMPRuntime {
+public:
+  /// Allows to disable automatic handling of functions used in target regions
+  /// as those marked as `omp declare target`.
+  class DisableAutoDeclareTargetRAII {
+    CodeGenModule &CGM;
+    bool SavedShouldMarkAsGlobal;
+
+  public:
+    DisableAutoDeclareTargetRAII(CodeGenModule &CGM);
+    ~DisableAutoDeclareTargetRAII();
+  };
+
 protected:
   CodeGenModule &CGM;
 
@@ -251,9 +265,12 @@ protected:
   virtual StringRef getOutlinedHelperName() const { return ".omp_outlined."; }
 
   /// Emits \p Callee function call with arguments \p Args with location \p Loc.
-  void emitCall(CodeGenFunction &CGF, llvm::Value *Callee,
-                ArrayRef<llvm::Value *> Args = llvm::None,
-                SourceLocation Loc = SourceLocation()) const;
+  void emitCall(CodeGenFunction &CGF, SourceLocation Loc, llvm::Value *Callee,
+                ArrayRef<llvm::Value *> Args = llvm::None) const;
+
+  /// \brief Emits address of the word in a memory where current thread id is
+  /// stored.
+  virtual Address emitThreadIDAddress(CodeGenFunction &CGF, SourceLocation Loc);
 
 private:
   /// \brief Default const ident_t object used for initialization of all other
@@ -487,6 +504,9 @@ private:
   };
   OffloadEntriesInfoManagerTy OffloadEntriesInfoManager;
 
+  bool ShouldMarkAsGlobal = true;
+  llvm::SmallDenseSet<const FunctionDecl *> AlreadyEmittedTargetFunctions;
+
   /// \brief Creates and registers offloading binary descriptor for the current
   /// compilation unit. The function that does the registration is returned.
   llvm::Function *createOffloadingBinaryDescriptorRegistration();
@@ -547,10 +567,6 @@ private:
   /// \param VD Threadprivate variable.
   /// \return Cache variable for the specified threadprivate.
   llvm::Constant *getOrCreateThreadPrivateCache(const VarDecl *VD);
-
-  /// \brief Emits address of the word in a memory where current thread id is
-  /// stored.
-  virtual Address emitThreadIDAddress(CodeGenFunction &CGF, SourceLocation Loc);
 
   /// \brief Gets (if variable with the given name already exist) or creates
   /// internal global variable with the specified Name. The created variable has
@@ -675,7 +691,7 @@ public:
 
   /// \brief Cleans up references to the objects in finished function.
   ///
-  void functionFinished(CodeGenFunction &CGF);
+  virtual void functionFinished(CodeGenFunction &CGF);
 
   /// \brief Emits code for parallel or serial call of the \a OutlinedFn with
   /// variables captured in a record which address is stored in \a
@@ -1361,6 +1377,19 @@ public:
   emitOutlinedFunctionCall(CodeGenFunction &CGF, SourceLocation Loc,
                            llvm::Value *OutlinedFn,
                            ArrayRef<llvm::Value *> Args = llvm::None) const;
+
+  /// Emits OpenMP-specific function prolog.
+  /// Required for device constructs.
+  virtual void emitFunctionProlog(CodeGenFunction &CGF, const Decl *D) {}
+
+  /// Gets the OpenMP-specific address of the local variable.
+  virtual Address getAddressOfLocalVariable(CodeGenFunction &CGF,
+                                            const VarDecl *VD);
+
+  /// Marks the declaration as alread emitted for the device code and returns
+  /// true, if it was marked already, and false, otherwise.
+  bool markAsGlobalTarget(const FunctionDecl *D);
+
 };
 
 /// Class supports emissionof SIMD-only code.

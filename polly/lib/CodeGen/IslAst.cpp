@@ -122,7 +122,6 @@ struct AstBuildUserInfo {
   /// The last iterator id created for the current SCoP.
   isl_id *LastForNodeId = nullptr;
 };
-
 } // namespace polly
 
 /// Free an IslAstUserPayload object pointed to by @p Ptr.
@@ -439,14 +438,12 @@ IslAst::buildRunCondition(Scop &S, __isl_keep isl_ast_build *Build) {
       for (auto RWAccIt1 = RWAccIt0 + 1; RWAccIt1 != RWAccEnd; ++RWAccIt1)
         RunCondition = isl_ast_expr_and(
             RunCondition,
-            buildCondition(S, isl::manage(isl_ast_build_copy(Build)), RWAccIt0,
-                           RWAccIt1)
+            buildCondition(S, isl::manage_copy(Build), RWAccIt0, RWAccIt1)
                 .release());
       for (const Scop::MinMaxAccessTy &ROAccIt : MinMaxReadOnly)
         RunCondition = isl_ast_expr_and(
             RunCondition,
-            buildCondition(S, isl::manage(isl_ast_build_copy(Build)), RWAccIt0,
-                           &ROAccIt)
+            buildCondition(S, isl::manage_copy(Build), RWAccIt0, &ROAccIt)
                 .release());
     }
   }
@@ -683,7 +680,7 @@ static __isl_give isl_printer *cbPrintUser(__isl_take isl_printer *P,
                                            __isl_take isl_ast_print_options *O,
                                            __isl_keep isl_ast_node *Node,
                                            void *User) {
-  isl::ast_node AstNode = isl::manage(isl_ast_node_copy(Node));
+  isl::ast_node AstNode = isl::manage_copy(Node);
   isl::ast_expr NodeExpr = AstNode.user_get_expr();
   isl::ast_expr CallExpr = NodeExpr.get_op_arg(0);
   isl::id CallExprId = CallExpr.get_id();
@@ -703,8 +700,7 @@ static __isl_give isl_printer *cbPrintUser(__isl_take isl_printer *P,
     else
       P = isl_printer_print_str(P, "/* write */  ");
 
-    isl::ast_build Build =
-        isl::manage(isl_ast_build_copy(IslAstInfo::getBuild(Node)));
+    isl::ast_build Build = isl::manage_copy(IslAstInfo::getBuild(Node));
     if (MemAcc->isAffine()) {
       isl_pw_multi_aff *PwmaPtr =
           MemAcc->applyScheduleToAccessRelation(Build.get_schedule()).release();

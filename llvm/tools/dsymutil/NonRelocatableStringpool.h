@@ -15,7 +15,7 @@
 #include "llvm/CodeGen/DwarfStringPoolEntry.h"
 #include "llvm/Support/Allocator.h"
 #include <cstdint>
-#include <utility>
+#include <vector>
 
 namespace llvm {
 namespace dsymutil {
@@ -23,8 +23,8 @@ namespace dsymutil {
 /// A string table that doesn't need relocations.
 ///
 /// We are doing a final link, no need for a string table that has relocation
-/// entries for every reference to it. This class provides this ablitity by
-/// just associating offsets with strings.
+/// entries for every reference to it. This class provides this ability by just
+/// associating offsets with strings.
 class NonRelocatableStringpool {
 public:
   /// Entries are stored into the StringMap and simply linked together through
@@ -33,19 +33,20 @@ public:
   using MapTy = StringMap<DwarfStringPoolEntry, BumpPtrAllocator>;
 
   NonRelocatableStringpool() {
-    // Legacy dsymutil puts an empty string at the start of the line
-    // table.
+    // Legacy dsymutil puts an empty string at the start of the line table.
     EmptyString = getEntry("");
   }
 
   DwarfStringPoolEntryRef getEntry(StringRef S);
 
   /// Get the offset of string \p S in the string table. This can insert a new
-  /// element or return the offset of a pre-exisitng one.
-  uint32_t getStringOffset(StringRef S);
+  /// element or return the offset of a pre-existing one.
+  uint32_t getStringOffset(StringRef S) { return getEntry(S).getOffset(); }
 
   /// Get permanent storage for \p S (but do not necessarily emit \p S in the
-  /// output section).
+  /// output section). A latter call to getStringOffset() with the same string
+  /// will chain it though.
+  ///
   /// \returns The StringRef that points to permanent storage to use
   /// in place of \p S.
   StringRef internString(StringRef S);

@@ -150,17 +150,8 @@ const llgs_tests::ProcessInfo &TestClient::GetProcessInfo() {
   return *m_process_info;
 }
 
-Optional<JThreadsInfo> TestClient::GetJThreadsInfo() {
-  std::string response;
-  if (SendMessage("jThreadsInfo", response))
-    return llvm::None;
-  auto creation = JThreadsInfo::Create(response, m_process_info->GetEndian());
-  if (auto create_error = creation.takeError()) {
-    GTEST_LOG_(ERROR) << toString(std::move(create_error));
-    return llvm::None;
-  }
-
-  return std::move(*creation);
+Expected<JThreadsInfo> TestClient::GetJThreadsInfo() {
+  return SendMessage<JThreadsInfo>("jThreadsInfo", m_register_infos);
 }
 
 const StopReply &TestClient::GetLatestStopReply() {
@@ -244,22 +235,20 @@ Error TestClient::queryProcess() {
 Error TestClient::Continue(StringRef message) {
   assert(m_process_info.hasValue());
 
-  std::string response;
-  if (Error E = SendMessage(message, response))
-    return E;
-  auto creation = StopReply::create(response, m_process_info->GetEndian());
-  if (Error E = creation.takeError())
-    return E;
+  auto StopReplyOr = SendMessage<StopReply>(
+      message, m_process_info->GetEndian(), m_register_infos);
+  if (!StopReplyOr)
+    return StopReplyOr.takeError();
 
-  m_stop_reply = std::move(*creation);
+  m_stop_reply = std::move(*StopReplyOr);
   if (!isa<StopReplyStop>(m_stop_reply)) {
     StringExtractorGDBRemote R;
     PacketResult result = ReadPacket(R, GetPacketTimeout(), false);
     if (result != PacketResult::ErrorDisconnected) {
       return make_error<StringError>(
-          formatv("Expected connection close after receiving {0}. Got {1}/{2} "
+          formatv("Expected connection close after sending {0}. Got {1}/{2} "
                   "instead.",
-                  response, result, R.GetStringRef())
+                  message, result, R.GetStringRef())
               .str(),
           inconvertibleErrorCode());
     }

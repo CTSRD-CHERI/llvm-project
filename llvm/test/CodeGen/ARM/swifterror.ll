@@ -40,7 +40,7 @@ define float @caller(i8* %error_ref) {
 ; CHECK-APPLE-DAG: mov r8, #0
 ; CHECK-APPLE: bl {{.*}}foo
 ; CHECK-APPLE: mov r0, r8
-; CHECK-APPLE: cmp r0, #0
+; CHECK-APPLE: cmp r8, #0
 ; Access part of the error object and save it to error_ref
 ; CHECK-APPLE: ldrbeq [[CODE:r[0-9]+]], [r0, #8]
 ; CHECK-APPLE: strbeq [[CODE]], [{{.*}}[[ID]]]
@@ -181,19 +181,17 @@ define float @foo_loop(%swift_error** swifterror %error_ptr_ref, i32 %cc, float 
 ; CHECK-APPLE: beq
 ; CHECK-APPLE: mov r0, #16
 ; CHECK-APPLE: malloc
-; CHECK-APPLE: mov r8, r0
-; CHECK-APPLE: strb r{{.*}}, [r8, #8]
+; CHECK-APPLE: strb r{{.*}}, [r0, #8]
 ; CHECK-APPLE: ble
 
 ; CHECK-O0-LABEL: foo_loop:
 ; CHECK-O0: mov r{{.*}}, r8
 ; CHECK-O0: cmp r{{.*}}, #0
 ; CHECK-O0: beq
-; CHECK-O0-DAG: movw r{{.*}}, #1
-; CHECK-O0-DAG: mov r{{.*}}, #16
+; CHECK-O0: mov r0, #16
 ; CHECK-O0: malloc
 ; CHECK-O0-DAG: mov [[ID:r[0-9]+]], r0
-; CHECK-O0-DAG: ldr [[ID2:r[0-9]+]], [sp{{.*}}]
+; CHECK-O0-DAG: movw [[ID2:.*]], #1
 ; CHECK-O0: strb [[ID2]], [{{.*}}[[ID]], #8]
 ; spill r0
 ; CHECK-O0: str r0, [sp{{.*}}]
@@ -266,7 +264,7 @@ define float @caller3(i8* %error_ref) {
 ; CHECK-APPLE: mov r8, #0
 ; CHECK-APPLE: bl {{.*}}foo_sret
 ; CHECK-APPLE: mov r0, r8
-; CHECK-APPLE: cmp r0, #0
+; CHECK-APPLE: cmp r8, #0
 ; Access part of the error object and save it to error_ref
 ; CHECK-APPLE: ldrbeq [[CODE:r[0-9]+]], [r0, #8]
 ; CHECK-APPLE: strbeq [[CODE]], [{{.*}}[[ID]]]
@@ -347,7 +345,7 @@ define float @caller4(i8* %error_ref) {
 ; CHECK-APPLE: mov r8, #0
 ; CHECK-APPLE: bl {{.*}}foo_vararg
 ; CHECK-APPLE: mov r0, r8
-; CHECK-APPLE: cmp r0, #0
+; CHECK-APPLE: cmp r8, #0
 ; Access part of the error object and save it to error_ref
 ; CHECK-APPLE: ldrbeq [[CODE:r[0-9]+]], [r0, #8]
 ; CHECK-APPLE: strbeq [[CODE]], [{{.*}}[[ID]]]

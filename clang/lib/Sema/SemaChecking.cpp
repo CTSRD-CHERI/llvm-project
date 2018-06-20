@@ -1097,20 +1097,14 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
       return ExprError();
     break;
   case Builtin::BI__builtin_operator_new:
-  case Builtin::BI__builtin_operator_delete:
-    if (!getLangOpts().CPlusPlus) {
-      Diag(TheCall->getExprLoc(), diag::err_builtin_requires_language)
-        << (BuiltinID == Builtin::BI__builtin_operator_new
-                ? "__builtin_operator_new"
-                : "__builtin_operator_delete")
-        << "C++";
-      return ExprError();
-    }
-    // CodeGen assumes it can find the global new and delete to call,
-    // so ensure that they are declared.
-    DeclareGlobalNewDelete();
-    break;
-
+  case Builtin::BI__builtin_operator_delete: {
+    bool IsDelete = BuiltinID == Builtin::BI__builtin_operator_delete;
+    ExprResult Res =
+        SemaBuiltinOperatorNewDeleteOverloaded(TheCallResult, IsDelete);
+    if (Res.isInvalid())
+      CorrectDelayedTyposInExpr(TheCallResult.get());
+    return Res;
+  }
   // check secure string manipulation functions where overflows
   // are detectable at compile time
   case Builtin::BI__builtin___memcpy_chk:
@@ -2619,12 +2613,13 @@ static void CheckNonNullArguments(Sema &S,
         return;
       }
 
-      for (unsigned Val : NonNull->args()) {
-        if (Val >= Args.size())
+      for (const ParamIdx &Idx : NonNull->args()) {
+        unsigned IdxAST = Idx.getASTIndex();
+        if (IdxAST >= Args.size())
           continue;
         if (NonNullArgs.empty())
           NonNullArgs.resize(Args.size());
-        NonNullArgs.set(Val);
+        NonNullArgs.set(IdxAST);
       }
     }
   }
@@ -5002,12 +4997,7 @@ checkFormatStringExpr(Sema &S, const Expr *E, ArrayRef<const Expr *> Args,
     const CallExpr *CE = cast<CallExpr>(E);
     if (const NamedDecl *ND = dyn_cast_or_null<NamedDecl>(CE->getCalleeDecl())) {
       if (const FormatArgAttr *FA = ND->getAttr<FormatArgAttr>()) {
-        unsigned ArgIndex = FA->getFormatIdx();
-        if (const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(ND))
-          if (MD->isInstance())
-            --ArgIndex;
-        const Expr *Arg = CE->getArg(ArgIndex - 1);
-
+        const Expr *Arg = CE->getArg(FA->getFormatIdx().getASTIndex());
         return checkFormatStringExpr(S, Arg, Args,
                                      HasVAListArg, format_idx, firstDataArg,
                                      Type, CallType, InFunctionCall,
@@ -5032,8 +5022,7 @@ checkFormatStringExpr(Sema &S, const Expr *E, ArrayRef<const Expr *> Args,
     const auto *ME = cast<ObjCMessageExpr>(E);
     if (const auto *ND = ME->getMethodDecl()) {
       if (const auto *FA = ND->getAttr<FormatArgAttr>()) {
-        unsigned ArgIndex = FA->getFormatIdx();
-        const Expr *Arg = ME->getArg(ArgIndex - 1);
+        const Expr *Arg = ME->getArg(FA->getFormatIdx().getASTIndex());
         return checkFormatStringExpr(
             S, Arg, Args, HasVAListArg, format_idx, firstDataArg, Type,
             CallType, InFunctionCall, CheckedVarArgs, UncoveredArg, Offset);
@@ -9188,6 +9177,32 @@ static void DiagnoseImpCast(Sema &S, Expr *E, QualType T,
   DiagnoseImpCast(S, E, E->getType(), T, CContext, diag, pruneControlFlow);
 }
 
+/// Analyze the given compound assignment for the possible losing of
+/// floating-point precision.
+static void AnalyzeCompoundAssignment(Sema &S, BinaryOperator *E) {
+  assert(isa<CompoundAssignOperator>(E) &&
+         "Must be compound assignment operation");
+  // Recurse on the LHS and RHS in here
+  AnalyzeImplicitConversions(S, E->getLHS(), E->getOperatorLoc());
+  AnalyzeImplicitConversions(S, E->getRHS(), E->getOperatorLoc());
+
+  // Now check the outermost expression
+  const auto *ResultBT = E->getLHS()->getType()->getAs<BuiltinType>();
+  const auto *RBT = cast<CompoundAssignOperator>(E)
+                        ->getComputationResultType()
+                        ->getAs<BuiltinType>();
+
+  // If both source and target are floating points.
+  if (ResultBT && ResultBT->isFloatingPoint() && RBT && RBT->isFloatingPoint())
+    // Builtin FP kinds are ordered by increasing FP rank.
+    if (ResultBT->getKind() < RBT->getKind())
+      // We don't want to warn for system macro.
+      if (!S.SourceMgr.isInSystemMacro(E->getOperatorLoc()))
+        // warn about dropping FP rank.
+        DiagnoseImpCast(S, E->getRHS(), E->getLHS()->getType(),
+                        E->getOperatorLoc(),
+                        diag::warn_impcast_float_result_precision);
+}
 
 /// Diagnose an implicit cast from a floating point value to an integer value.
 static void DiagnoseFloatingImpCast(Sema &S, Expr *E, QualType T,
@@ -9555,7 +9570,7 @@ CheckImplicitConversion(Sema &S, Expr *E, QualType T, SourceLocation CC,
         return;
       return DiagnoseImpCast(S, E, T, CC, diag::warn_impcast_vector_scalar);
     }
-    
+
     // If the vector cast is cast between two vectors of the same size, it is
     // a bitcast, not a conversion.
     if (S.Context.getTypeSize(Source) == S.Context.getTypeSize(Target))
@@ -9832,7 +9847,7 @@ static void AnalyzeImplicitConversions(Sema &S, Expr *OrigE,
 
   if (E->isTypeDependent() || E->isValueDependent())
     return;
-  
+
   // For conditional operators, we analyze the arguments as if they
   // were being fed directly into the output.
   if (isa<ConditionalOperator>(E)) {
@@ -9876,6 +9891,9 @@ static void AnalyzeImplicitConversions(Sema &S, Expr *OrigE,
     // And with simple assignments.
     if (BO->getOpcode() == BO_Assign)
       return AnalyzeAssignment(S, BO);
+    // And with compound assignments.
+    if (BO->isAssignmentOp())
+      return AnalyzeCompoundAssignment(S, BO);
   }
 
   // These break the otherwise-useful invariant below.  Fortunately,
@@ -10086,8 +10104,8 @@ void Sema::DiagnoseAlwaysNonNullPointer(Expr *E,
               return;
           }
 
-          for (unsigned ArgNo : NonNull->args()) {
-            if (ArgNo == ParamNo) {
+          for (const ParamIdx &ArgNo : NonNull->args()) {
+            if (ArgNo.getASTIndex() == ParamNo) {
               ComplainAboutNonnullParamOrCall(NonNull);
               return;
             }
@@ -10985,9 +11003,9 @@ void Sema::CheckArrayAccess(const Expr *BaseExpr, const Expr *IndexExpr,
 
   const NamedDecl *ND = nullptr;
   if (const DeclRefExpr *DRE = dyn_cast<DeclRefExpr>(BaseExpr))
-    ND = dyn_cast<NamedDecl>(DRE->getDecl());
+    ND = DRE->getDecl();
   if (const MemberExpr *ME = dyn_cast<MemberExpr>(BaseExpr))
-    ND = dyn_cast<NamedDecl>(ME->getMemberDecl());
+    ND = ME->getMemberDecl();
 
   if (index.isUnsigned() || !index.isNegative()) {
     llvm::APInt size = ArrayTy->getSize();
@@ -11070,9 +11088,9 @@ void Sema::CheckArrayAccess(const Expr *BaseExpr, const Expr *IndexExpr,
            dyn_cast<ArraySubscriptExpr>(BaseExpr))
       BaseExpr = ASE->getBase()->IgnoreParenCasts();
     if (const DeclRefExpr *DRE = dyn_cast<DeclRefExpr>(BaseExpr))
-      ND = dyn_cast<NamedDecl>(DRE->getDecl());
+      ND = DRE->getDecl();
     if (const MemberExpr *ME = dyn_cast<MemberExpr>(BaseExpr))
-      ND = dyn_cast<NamedDecl>(ME->getMemberDecl());
+      ND = ME->getMemberDecl();
   }
 
   if (ND)
@@ -12242,13 +12260,13 @@ void Sema::CheckArgumentWithTypeTag(const ArgumentWithTypeTagAttr *Attr,
   bool IsPointerAttr = Attr->getIsPointer();
 
   // Retrieve the argument representing the 'type_tag'.
-  if (Attr->getTypeTagIdx() >= ExprArgs.size()) {
-    // Add 1 to display the user's specified value.
+  unsigned TypeTagIdxAST = Attr->getTypeTagIdx().getASTIndex();
+  if (TypeTagIdxAST >= ExprArgs.size()) {
     Diag(CallSiteLoc, diag::err_tag_index_out_of_range)
-        << 0 << Attr->getTypeTagIdx() + 1;
+        << 0 << Attr->getTypeTagIdx().getSourceIndex();
     return;
   }
-  const Expr *TypeTagExpr = ExprArgs[Attr->getTypeTagIdx()];
+  const Expr *TypeTagExpr = ExprArgs[TypeTagIdxAST];
   bool FoundWrongKind;
   TypeTagData TypeInfo;
   if (!GetMatchingCType(ArgumentKind, TypeTagExpr, Context,
@@ -12262,13 +12280,13 @@ void Sema::CheckArgumentWithTypeTag(const ArgumentWithTypeTagAttr *Attr,
   }
 
   // Retrieve the argument representing the 'arg_idx'.
-  if (Attr->getArgumentIdx() >= ExprArgs.size()) {
-    // Add 1 to display the user's specified value.
+  unsigned ArgumentIdxAST = Attr->getArgumentIdx().getASTIndex();
+  if (ArgumentIdxAST >= ExprArgs.size()) {
     Diag(CallSiteLoc, diag::err_tag_index_out_of_range)
-        << 1 << Attr->getArgumentIdx() + 1;
+        << 1 << Attr->getArgumentIdx().getSourceIndex();
     return;
   }
-  const Expr *ArgumentExpr = ExprArgs[Attr->getArgumentIdx()];
+  const Expr *ArgumentExpr = ExprArgs[ArgumentIdxAST];
   if (IsPointerAttr) {
     // Skip implicit cast of pointer to `void *' (as a function argument).
     if (const ImplicitCastExpr *ICE = dyn_cast<ImplicitCastExpr>(ArgumentExpr))

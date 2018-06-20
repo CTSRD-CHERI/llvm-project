@@ -10,6 +10,7 @@ import platform
 import re
 import sys
 import tempfile
+import subprocess
 
 # Third-party modules
 import six
@@ -21,6 +22,7 @@ import use_lldb_suite
 import lldb
 from . import configuration
 from . import test_categories
+from . import lldbtest_config
 from lldbsuite.test_event.event_builder import EventBuilder
 from lldbsuite.support import funcutils
 from lldbsuite.test import lldbplatform
@@ -304,15 +306,12 @@ def add_test_categories(cat):
         if isinstance(func, type) and issubclass(func, unittest2.TestCase):
             raise Exception(
                 "@add_test_categories can only be used to decorate a test method")
-
-        # Update or set the categories attribute. For instance methods, the
-        # attribute must be set on the actual function.
-        func_for_attr = func
-        if inspect.ismethod(func_for_attr):
-            func_for_attr = func.__func__
-        if hasattr(func_for_attr, "categories"):
-            cat.extend(func_for_attr.categories)
-        setattr(func_for_attr, "categories", cat)
+        try:
+            if hasattr(func, "categories"):
+                cat.extend(func.categories)
+            setattr(func, "categories", cat)
+        except AttributeError:
+            raise Exception('Cannot assign categories to inline tests.')
 
         return func
 
@@ -436,12 +435,6 @@ def expectedFlakey(expected_fn, bugnumber=None):
         return expectedFailure_impl
 
 
-def expectedFlakeyDwarf(bugnumber=None):
-    def fn(self):
-        return self.getDebugInfo() == "dwarf"
-    return expectedFlakey(fn, bugnumber)
-
-
 def expectedFlakeyDsym(bugnumber=None):
     def fn(self):
         return self.getDebugInfo() == "dwarf"
@@ -476,27 +469,6 @@ def expectedFlakeyNetBSD(bugnumber=None, compilers=None):
     return expectedFlakeyOS(['netbsd'], bugnumber, compilers)
 
 
-def expectedFlakeyCompiler(compiler, compiler_version=None, bugnumber=None):
-    if compiler_version is None:
-        compiler_version = ['=', None]
-
-    def fn(self):
-        return compiler in self.getCompiler() and self.expectedCompilerVersion(compiler_version)
-    return expectedFlakey(fn, bugnumber)
-
-# @expectedFlakeyClang('bugnumber', ['<=', '3.4'])
-
-
-def expectedFlakeyClang(bugnumber=None, compiler_version=None):
-    return expectedFlakeyCompiler('clang', compiler_version, bugnumber)
-
-# @expectedFlakeyGcc('bugnumber', ['<=', '3.4'])
-
-
-def expectedFlakeyGcc(bugnumber=None, compiler_version=None):
-    return expectedFlakeyCompiler('gcc', compiler_version, bugnumber)
-
-
 def expectedFlakeyAndroid(bugnumber=None, api_levels=None, archs=None):
     return expectedFlakey(
         _skip_for_android(
@@ -505,6 +477,11 @@ def expectedFlakeyAndroid(bugnumber=None, api_levels=None, archs=None):
             archs),
         bugnumber)
 
+def skipIfOutOfTreeDebugserver(func):
+    """Decorate the item to skip tests if using an out-of-tree debugserver."""
+    def is_out_of_tree_debugserver():
+        return "out-of-tree debugserver" if lldbtest_config.out_of_tree_debugserver else None
+    return skipTestIfFn(is_out_of_tree_debugserver)(func)
 
 def skipIfRemote(func):
     """Decorate the item to skip tests if testing remotely."""
@@ -675,6 +652,19 @@ def skipIfTargetAndroid(api_levels=None, archs=None):
             api_levels,
             archs))
 
+def skipUnlessSupportedTypeAttribute(attr):
+    """Decorate the item to skip test unless Clang supports type __attribute__(attr)."""
+    def compiler_doesnt_support_struct_attribute(self):
+        compiler_path = self.getCompiler()
+        compiler = os.path.basename(compiler_path)
+        f = tempfile.NamedTemporaryFile()
+        cmd = "echo 'struct __attribute__((%s)) Test {};' | %s -x c++ -c -o %s - ; exit" % (attr, compiler_path, f.name)
+        p = subprocess.Popen(cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
+        test_result = p.stderr.read()
+        if attr in test_result:
+            return "Compiler does not support attribute %s"%(attr)
+        return None
+    return skipTestIfFn(compiler_doesnt_support_struct_attribute)
 
 def skipUnlessThreadSanitizer(func):
     """Decorate the item to skip test unless Clang -fsanitize=thread is supported."""
@@ -763,3 +753,28 @@ def skipUnlessAddressSanitizer(func):
             return "Compiler cannot compile with -fsanitize=address"
         return None
     return skipTestIfFn(is_compiler_with_address_sanitizer)(func)
+
+def skipIfXmlSupportMissing(func):
+    config = lldb.SBDebugger.GetBuildConfiguration()
+    xml = config.GetValueForKey("xml")
+
+    fail_value = True # More likely to notice if something goes wrong
+    have_xml = xml.GetValueForKey("value").GetBooleanValue(fail_value)
+    return unittest2.skipIf(not have_xml, "requires xml support")(func)
+
+# Call sysctl on darwin to see if a specified hardware feature is available on this machine.
+def skipUnlessFeature(feature):
+    def is_feature_enabled(self):
+        if platform.system() == 'Darwin':
+            try:
+                DEVNULL = open(os.devnull, 'w')
+                output = subprocess.check_output(["/usr/sbin/sysctl", feature], stderr=DEVNULL)
+                # If 'feature: 1' was output, then this feature is available and
+                # the test should not be skipped.
+                if re.match('%s: 1\s*' % feature, output):
+                    return None
+                else:
+                    return "%s is not supported on this system." % feature
+            except subprocess.CalledProcessError:
+                return "%s is not supported on this system." % feature
+    return skipTestIfFn(is_feature_enabled)

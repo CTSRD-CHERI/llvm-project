@@ -18,6 +18,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "ICF.h"
 #include "Chunks.h"
 #include "Symbols.h"
 #include "lld/Common/ErrorHandler.h"
@@ -222,6 +223,12 @@ void ICF::run(ArrayRef<Chunk *> Vec) {
         SC->Class[0] = NextId++;
     }
   }
+
+  // Make sure that ICF doesn't merge sections that are being handled by string
+  // tail merging.
+  for (auto &P : MergeChunk::Instances)
+    for (SectionChunk *SC : P.second->Sections)
+      SC->Class[0] = NextId++;
 
   // Initially, we use hash values to partition sections.
   for_each(parallel::par, Chunks.begin(), Chunks.end(), [&](SectionChunk *SC) {

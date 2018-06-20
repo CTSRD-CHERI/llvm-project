@@ -219,7 +219,7 @@ OptTable::suggestValueCompletions(StringRef Option, StringRef Arg) const {
 
     std::vector<std::string> Result;
     for (StringRef Val : Candidates)
-      if (Val.startswith(Arg))
+      if (Val.startswith(Arg) && Arg.compare(Val))
         Result.push_back(Val);
     return Result;
   }
@@ -240,7 +240,7 @@ OptTable::findByPrefix(StringRef Cur, unsigned short DisableFlags) const {
       std::string S = std::string(In.Prefixes[I]) + std::string(In.Name) + "\t";
       if (In.HelpText)
         S += In.HelpText;
-      if (StringRef(S).startswith(Cur))
+      if (StringRef(S).startswith(Cur) && S.compare(std::string(Cur) + "\t"))
         Ret.push_back(S);
     }
   }
@@ -537,12 +537,9 @@ void OptTable::PrintHelp(raw_ostream &OS, const char *Name, const char *Title,
 
   // Render help text into a map of group-name to a list of (option, help)
   // pairs.
-  using helpmap_ty = std::map<std::string, std::vector<OptionInfo>>;
-  helpmap_ty GroupedOptionHelp;
+  std::map<std::string, std::vector<OptionInfo>> GroupedOptionHelp;
 
-  for (unsigned i = 0, e = getNumOptions(); i != e; ++i) {
-    unsigned Id = i + 1;
-
+  for (unsigned Id = 1, e = getNumOptions() + 1; Id != e; ++Id) {
     // FIXME: Split out option groups.
     if (getOptionKind(Id) == Option::GroupClass)
       continue;
@@ -569,11 +566,10 @@ void OptTable::PrintHelp(raw_ostream &OS, const char *Name, const char *Title,
     }
   }
 
-  for (helpmap_ty::iterator it = GroupedOptionHelp .begin(),
-         ie = GroupedOptionHelp.end(); it != ie; ++it) {
-    if (it != GroupedOptionHelp .begin())
+  for (auto& OptionGroup : GroupedOptionHelp) {
+    if (OptionGroup.first != GroupedOptionHelp.begin()->first)
       OS << "\n";
-    PrintHelpOptionList(OS, it->first, it->second);
+    PrintHelpOptionList(OS, OptionGroup.first, OptionGroup.second);
   }
 
   OS.flush();

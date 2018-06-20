@@ -17,13 +17,12 @@
 
 #include "AMDGPUTargetTransformInfo.h"
 #include "AMDGPUSubtarget.h"
+#include "Utils/AMDGPUBaseInfo.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/CodeGen/ISDOpcodes.h"
-#include "llvm/CodeGen/MachineValueType.h"
-#include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/BasicBlock.h"
@@ -38,11 +37,13 @@
 #include "llvm/IR/PatternMatch.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
+#include "llvm/IR/ValueTypes.h"
 #include "llvm/MC/SubtargetFeature.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/MachineValueType.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
 #include <algorithm>
@@ -233,24 +234,50 @@ unsigned AMDGPUTTIImpl::getMinVectorRegisterBitWidth() const {
   return 32;
 }
 
+unsigned AMDGPUTTIImpl::getLoadVectorFactor(unsigned VF, unsigned LoadSize,
+                                            unsigned ChainSizeInBytes,
+                                            VectorType *VecTy) const {
+  unsigned VecRegBitWidth = VF * LoadSize;
+  if (VecRegBitWidth > 128 && VecTy->getScalarSizeInBits() < 32)
+    // TODO: Support element-size less than 32bit?
+    return 128 / LoadSize;
+
+  return VF;
+}
+
+unsigned AMDGPUTTIImpl::getStoreVectorFactor(unsigned VF, unsigned StoreSize,
+                                             unsigned ChainSizeInBytes,
+                                             VectorType *VecTy) const {
+  unsigned VecRegBitWidth = VF * StoreSize;
+  if (VecRegBitWidth > 128)
+    return 128 / StoreSize;
+
+  return VF;
+}
+
 unsigned AMDGPUTTIImpl::getLoadStoreVecRegBitWidth(unsigned AddrSpace) const {
   AMDGPUAS AS = ST->getAMDGPUAS();
   if (AddrSpace == AS.GLOBAL_ADDRESS ||
       AddrSpace == AS.CONSTANT_ADDRESS ||
-      AddrSpace == AS.CONSTANT_ADDRESS_32BIT ||
-      AddrSpace == AS.FLAT_ADDRESS)
-    return 128;
-  if (AddrSpace == AS.LOCAL_ADDRESS ||
+      AddrSpace == AS.CONSTANT_ADDRESS_32BIT) {
+    if (ST->getGeneration() <= AMDGPUSubtarget::NORTHERN_ISLANDS)
+      return 128;
+    return 512;
+  }
+
+  if (AddrSpace == AS.FLAT_ADDRESS ||
+      AddrSpace == AS.LOCAL_ADDRESS ||
       AddrSpace == AS.REGION_ADDRESS)
-    return 64;
+    return 128;
+
   if (AddrSpace == AS.PRIVATE_ADDRESS)
     return 8 * ST->getMaxPrivateElementSize();
 
   if (ST->getGeneration() <= AMDGPUSubtarget::NORTHERN_ISLANDS &&
       (AddrSpace == AS.PARAM_D_ADDRESS ||
       AddrSpace == AS.PARAM_I_ADDRESS ||
-      (AddrSpace >= AS.CONSTANT_BUFFER_0 &&
-      AddrSpace <= AS.CONSTANT_BUFFER_15)))
+       (AddrSpace >= AS.CONSTANT_BUFFER_0 &&
+        AddrSpace <= AS.CONSTANT_BUFFER_15)))
     return 128;
   llvm_unreachable("unhandled address space");
 }
@@ -464,55 +491,7 @@ int AMDGPUTTIImpl::getVectorInstrCost(unsigned Opcode, Type *ValTy,
   }
 }
 
-static bool isIntrinsicSourceOfDivergence(const IntrinsicInst *I) {
-  switch (I->getIntrinsicID()) {
-  case Intrinsic::amdgcn_workitem_id_x:
-  case Intrinsic::amdgcn_workitem_id_y:
-  case Intrinsic::amdgcn_workitem_id_z:
-  case Intrinsic::amdgcn_interp_mov:
-  case Intrinsic::amdgcn_interp_p1:
-  case Intrinsic::amdgcn_interp_p2:
-  case Intrinsic::amdgcn_mbcnt_hi:
-  case Intrinsic::amdgcn_mbcnt_lo:
-  case Intrinsic::r600_read_tidig_x:
-  case Intrinsic::r600_read_tidig_y:
-  case Intrinsic::r600_read_tidig_z:
-  case Intrinsic::amdgcn_atomic_inc:
-  case Intrinsic::amdgcn_atomic_dec:
-  case Intrinsic::amdgcn_ds_fadd:
-  case Intrinsic::amdgcn_ds_fmin:
-  case Intrinsic::amdgcn_ds_fmax:
-  case Intrinsic::amdgcn_image_atomic_swap:
-  case Intrinsic::amdgcn_image_atomic_add:
-  case Intrinsic::amdgcn_image_atomic_sub:
-  case Intrinsic::amdgcn_image_atomic_smin:
-  case Intrinsic::amdgcn_image_atomic_umin:
-  case Intrinsic::amdgcn_image_atomic_smax:
-  case Intrinsic::amdgcn_image_atomic_umax:
-  case Intrinsic::amdgcn_image_atomic_and:
-  case Intrinsic::amdgcn_image_atomic_or:
-  case Intrinsic::amdgcn_image_atomic_xor:
-  case Intrinsic::amdgcn_image_atomic_inc:
-  case Intrinsic::amdgcn_image_atomic_dec:
-  case Intrinsic::amdgcn_image_atomic_cmpswap:
-  case Intrinsic::amdgcn_buffer_atomic_swap:
-  case Intrinsic::amdgcn_buffer_atomic_add:
-  case Intrinsic::amdgcn_buffer_atomic_sub:
-  case Intrinsic::amdgcn_buffer_atomic_smin:
-  case Intrinsic::amdgcn_buffer_atomic_umin:
-  case Intrinsic::amdgcn_buffer_atomic_smax:
-  case Intrinsic::amdgcn_buffer_atomic_umax:
-  case Intrinsic::amdgcn_buffer_atomic_and:
-  case Intrinsic::amdgcn_buffer_atomic_or:
-  case Intrinsic::amdgcn_buffer_atomic_xor:
-  case Intrinsic::amdgcn_buffer_atomic_cmpswap:
-  case Intrinsic::amdgcn_ps_live:
-  case Intrinsic::amdgcn_ds_swizzle:
-    return true;
-  default:
-    return false;
-  }
-}
+
 
 static bool isArgPassedInSGPR(const Argument *A) {
   const Function *F = A->getParent();
@@ -563,7 +542,7 @@ bool AMDGPUTTIImpl::isSourceOfDivergence(const Value *V) const {
     return true;
 
   if (const IntrinsicInst *Intrinsic = dyn_cast<IntrinsicInst>(V))
-    return isIntrinsicSourceOfDivergence(Intrinsic);
+    return AMDGPU::isIntrinsicSourceOfDivergence(Intrinsic->getIntrinsicID());
 
   // Assume all function calls are a source of divergence.
   if (isa<CallInst>(V) || isa<InvokeInst>(V))

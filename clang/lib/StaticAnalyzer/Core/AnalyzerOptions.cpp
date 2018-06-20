@@ -1,4 +1,4 @@
-//===-- AnalyzerOptions.cpp - Analysis Engine Options -----------*- C++ -*-===//
+//===- AnalyzerOptions.cpp - Analysis Engine Options ----------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -16,8 +16,15 @@
 #include "clang/StaticAnalyzer/Core/Checker.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringSwitch.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/Twine.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/raw_ostream.h"
+#include <cassert>
+#include <cstddef>
+#include <utility>
+#include <vector>
 
 using namespace clang;
 using namespace ento;
@@ -60,7 +67,7 @@ AnalyzerOptions::getExplorationStrategy() {
   if (ExplorationStrategy == ExplorationStrategyKind::NotSet) {
     StringRef StratStr =
         Config
-            .insert(std::make_pair("exploration_strategy", "dfs"))
+            .insert(std::make_pair("exploration_strategy", "unexplored_first_queue"))
             .first->second;
     ExplorationStrategy =
         llvm::StringSwitch<ExplorationStrategyKind>(StratStr)
@@ -68,6 +75,8 @@ AnalyzerOptions::getExplorationStrategy() {
             .Case("bfs", ExplorationStrategyKind::BFS)
             .Case("unexplored_first",
                   ExplorationStrategyKind::UnexploredFirst)
+            .Case("unexplored_first_queue",
+                  ExplorationStrategyKind::UnexploredFirstQueue)
             .Case("bfs_block_dfs_contents",
                   ExplorationStrategyKind::BFSBlockDFSContents)
             .Default(ExplorationStrategyKind::NotSet);
@@ -79,7 +88,6 @@ AnalyzerOptions::getExplorationStrategy() {
 
 IPAKind AnalyzerOptions::getIPAMode() {
   if (IPAMode == IPAK_NotSet) {
-
     // Use the User Mode to set the default IPA value.
     // Note, we have to add the string to the Config map for the ConfigDumper
     // checker to function properly.
@@ -191,7 +199,7 @@ bool AnalyzerOptions::getBooleanOption(Optional<bool> &V, StringRef Name,
 bool AnalyzerOptions::includeTemporaryDtorsInCFG() {
   return getBooleanOption(IncludeTemporaryDtorsInCFG,
                           "cfg-temporary-dtors",
-                          /* Default = */ false);
+                          /* Default = */ true);
 }
 
 bool AnalyzerOptions::includeImplicitDtorsInCFG() {
@@ -214,6 +222,12 @@ bool AnalyzerOptions::includeRichConstructorsInCFG() {
   return getBooleanOption(IncludeRichConstructorsInCFG,
                           "cfg-rich-constructors",
                           /* Default = */ true);
+}
+
+bool AnalyzerOptions::includeScopesInCFG() {
+  return getBooleanOption(IncludeScopesInCFG,
+                          "cfg-scopes",
+                          /* Default = */ false);
 }
 
 bool AnalyzerOptions::mayInlineCXXStandardLibrary() {
@@ -338,7 +352,6 @@ unsigned AnalyzerOptions::getAlwaysInlineSize() {
 
 unsigned AnalyzerOptions::getMaxInlinableSize() {
   if (!MaxInlinableSize.hasValue()) {
-
     int DefaultValue = 0;
     UserModeKind HighLevelMode = getUserMode();
     switch (HighLevelMode) {
@@ -430,4 +443,27 @@ bool AnalyzerOptions::shouldDisplayNotesAsEvents() {
     DisplayNotesAsEvents =
         getBooleanOption("notes-as-events", /*Default=*/false);
   return DisplayNotesAsEvents.getValue();
+}
+
+StringRef AnalyzerOptions::getCTUDir() {
+  if (!CTUDir.hasValue()) {
+    CTUDir = getOptionAsString("ctu-dir", "");
+    if (!llvm::sys::fs::is_directory(*CTUDir))
+      CTUDir = "";
+  }
+  return CTUDir.getValue();
+}
+
+bool AnalyzerOptions::naiveCTUEnabled() {
+  if (!NaiveCTU.hasValue()) {
+    NaiveCTU = getBooleanOption("experimental-enable-naive-ctu-analysis",
+                                /*Default=*/false);
+  }
+  return NaiveCTU.getValue();
+}
+
+StringRef AnalyzerOptions::getCTUIndexName() {
+  if (!CTUIndexName.hasValue())
+    CTUIndexName = getOptionAsString("ctu-index-name", "externalFnMap.txt");
+  return CTUIndexName.getValue();
 }

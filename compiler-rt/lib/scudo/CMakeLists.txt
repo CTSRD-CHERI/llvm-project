@@ -9,6 +9,10 @@ append_rtti_flag(OFF SCUDO_CFLAGS)
 
 set(SCUDO_DYNAMIC_LINK_FLAGS ${SANITIZER_COMMON_LINK_FLAGS})
 
+# Use gc-sections by default to avoid unused code being pulled in.
+list(APPEND SCUDO_CFLAGS -ffunction-sections -fdata-sections)
+list(APPEND SCUDO_DYNAMIC_LINK_FLAGS -Wl,--gc-sections)
+
 set(SCUDO_SOURCES
   scudo_allocator.cpp
   scudo_crc32.cpp
@@ -47,6 +51,7 @@ if(COMPILER_RT_HAS_SCUDO)
     SOURCES ${SCUDO_SOURCES}
     OBJECT_LIBS RTSanitizerCommonNoTermination
                 RTSanitizerCommonLibc
+                RTSanitizerCommonCoverage
                 RTInterception
                 RTUbsan
     CFLAGS ${SCUDO_CFLAGS}
@@ -66,6 +71,7 @@ if(COMPILER_RT_HAS_SCUDO)
     SOURCES ${SCUDO_SOURCES} ${SCUDO_CXX_SOURCES}
     OBJECT_LIBS RTSanitizerCommonNoTermination
                 RTSanitizerCommonLibc
+                RTSanitizerCommonCoverage
                 RTInterception
                 RTUbsan
                 RTUbsan_cxx

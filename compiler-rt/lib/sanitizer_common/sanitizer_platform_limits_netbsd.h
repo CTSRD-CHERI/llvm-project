@@ -113,6 +113,19 @@ struct __sanitizer_shmid_ds {
   void *_shm_internal;
 };
 
+struct __sanitizer_protoent {
+  char *p_name;
+  char **p_aliases;
+  int p_proto;
+};
+
+struct __sanitizer_netent {
+  char *n_name;
+  char **n_aliases;
+  int n_addrtype;
+  u32 n_net;
+};
+
 extern unsigned struct_msqid_ds_sz;
 extern unsigned struct_mq_attr_sz;
 extern unsigned struct_timex_sz;
@@ -362,6 +375,8 @@ extern int glob_altdirfunc;
 
 extern unsigned path_max;
 
+extern int struct_ttyent_sz;
+
 extern int ptrace_pt_io;
 extern int ptrace_pt_lwpinfo;
 extern int ptrace_pt_set_event_mask;
@@ -369,8 +384,6 @@ extern int ptrace_pt_get_event_mask;
 extern int ptrace_pt_get_process_state;
 extern int ptrace_pt_set_siginfo;
 extern int ptrace_pt_get_siginfo;
-extern int ptrace_pt_set_sigmask;
-extern int ptrace_pt_get_sigmask;
 extern int ptrace_piod_read_d;
 extern int ptrace_piod_write_d;
 extern int ptrace_piod_read_i;
@@ -435,6 +448,16 @@ struct __sanitizer_ifconf {
   union {
     void *ifcu_req;
   } ifc_ifcu;
+};
+
+struct __sanitizer_ttyent {
+  char *ty_name;
+  char *ty_getty;
+  char *ty_type;
+  int ty_status;
+  char *ty_window;
+  char *ty_comment;
+  char *ty_class;
 };
 
 #define IOC_NRBITS 8

@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/Transforms/Utils/Local.h"
+#include "llvm/Analysis/Utils/Local.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseMapInfo.h"
@@ -431,6 +431,7 @@ llvm::RecursivelyDeleteTriviallyDeadInstructions(Value *V,
 
   do {
     I = DeadInsts.pop_back_val();
+    salvageDebugInfo(*I);
 
     // Null out all of the instruction's operands to see if any operand becomes
     // dead as we go.
@@ -503,6 +504,8 @@ simplifyAndDCEInstruction(Instruction *I,
                           const DataLayout &DL,
                           const TargetLibraryInfo *TLI) {
   if (isInstructionTriviallyDead(I, TLI)) {
+    salvageDebugInfo(*I);
+
     // Null out all of the instruction's operands to see if any operand becomes
     // dead as we go.
     for (unsigned i = 0, e = I->getNumOperands(); i != e; ++i) {
@@ -1319,25 +1322,36 @@ bool llvm::LowerDbgDeclare(Function &F) {
     // stored on the stack, while the dbg.declare can only describe
     // the stack slot (and at a lexical-scope granularity). Later
     // passes will attempt to elide the stack slot.
-    if (AI && !isArray(AI)) {
-      for (auto &AIUse : AI->uses()) {
-        User *U = AIUse.getUser();
-        if (StoreInst *SI = dyn_cast<StoreInst>(U)) {
-          if (AIUse.getOperandNo() == 1)
-            ConvertDebugDeclareToDebugValue(DDI, SI, DIB);
-        } else if (LoadInst *LI = dyn_cast<LoadInst>(U)) {
-          ConvertDebugDeclareToDebugValue(DDI, LI, DIB);
-        } else if (CallInst *CI = dyn_cast<CallInst>(U)) {
-          // This is a call by-value or some other instruction that
-          // takes a pointer to the variable. Insert a *value*
-          // intrinsic that describes the alloca.
-          DIB.insertDbgValueIntrinsic(AI, DDI->getVariable(),
-                                      DDI->getExpression(), DDI->getDebugLoc(),
-                                      CI);
-        }
+    if (!AI || isArray(AI))
+      continue;
+
+    // A volatile load/store means that the alloca can't be elided anyway.
+    if (llvm::any_of(AI->users(), [](User *U) -> bool {
+          if (LoadInst *LI = dyn_cast<LoadInst>(U))
+            return LI->isVolatile();
+          if (StoreInst *SI = dyn_cast<StoreInst>(U))
+            return SI->isVolatile();
+          return false;
+        }))
+      continue;
+
+    for (auto &AIUse : AI->uses()) {
+      User *U = AIUse.getUser();
+      if (StoreInst *SI = dyn_cast<StoreInst>(U)) {
+        if (AIUse.getOperandNo() == 1)
+          ConvertDebugDeclareToDebugValue(DDI, SI, DIB);
+      } else if (LoadInst *LI = dyn_cast<LoadInst>(U)) {
+        ConvertDebugDeclareToDebugValue(DDI, LI, DIB);
+      } else if (CallInst *CI = dyn_cast<CallInst>(U)) {
+        // This is a call by-value or some other instruction that
+        // takes a pointer to the variable. Insert a *value*
+        // intrinsic that describes the alloca.
+        DIB.insertDbgValueIntrinsic(AI, DDI->getVariable(),
+                                    DDI->getExpression(), DDI->getDebugLoc(),
+                                    CI);
       }
-      DDI->eraseFromParent();
     }
+    DDI->eraseFromParent();
   }
   return true;
 }
@@ -1365,14 +1379,17 @@ void llvm::insertDebugValuesForPHIs(BasicBlock *BB,
   // propagate the info through the new PHI.
   LLVMContext &C = BB->getContext();
   for (auto PHI : InsertedPHIs) {
+    BasicBlock *Parent = PHI->getParent();
+    // Avoid inserting an intrinsic into an EH block.
+    if (Parent->getFirstNonPHI()->isEHPad())
+      continue;
+    auto PhiMAV = MetadataAsValue::get(C, ValueAsMetadata::get(PHI));
     for (auto VI : PHI->operand_values()) {
       auto V = DbgValueMap.find(VI);
       if (V != DbgValueMap.end()) {
         auto *DbgII = cast<DbgInfoIntrinsic>(V->second);
         Instruction *NewDbgII = DbgII->clone();
-        auto PhiMAV = MetadataAsValue::get(C, ValueAsMetadata::get(PHI));
         NewDbgII->setOperand(0, PhiMAV);
-        BasicBlock *Parent = PHI->getParent();
         auto InsertionPt = Parent->getFirstInsertionPt();
         assert(InsertionPt != Parent->end() && "Ill-formed basic block");
         NewDbgII->insertBefore(&*InsertionPt);
@@ -1486,6 +1503,11 @@ void llvm::replaceDbgValueForAlloca(AllocaInst *AI, Value *NewAllocaAddress,
 }
 
 void llvm::salvageDebugInfo(Instruction &I) {
+  // This function is hot. An early check to determine whether the instruction
+  // has any metadata to save allows it to return earlier on average.
+  if (!I.isUsedByMetadata())
+    return;
+
   SmallVector<DbgInfoIntrinsic *, 1> DbgUsers;
   findDbgUsers(DbgUsers, &I);
   if (DbgUsers.empty())

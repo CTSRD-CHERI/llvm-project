@@ -530,7 +530,7 @@ bool llvm::isValidAssumeForContext(const Instruction *Inv,
   if (Inv->getParent() != CxtI->getParent())
     return false;
 
-  // If we have a dom tree, then we now know that the assume doens't dominate
+  // If we have a dom tree, then we now know that the assume doesn't dominate
   // the other instruction.  If we don't have a dom tree then we can check if
   // the assume is first in the BB.
   if (!DT) {
@@ -574,7 +574,7 @@ static void computeKnownBitsFromAssume(const Value *V, KnownBits &Known,
     if (Q.isExcluded(I))
       continue;
 
-    // Warning: This loop can end up being somewhat performance sensetive.
+    // Warning: This loop can end up being somewhat performance sensitive.
     // We're running this loop for once for each value queried resulting in a
     // runtime of ~O(#assumes * #values).
 
@@ -856,7 +856,7 @@ static void computeKnownBitsFromAssume(const Value *V, KnownBits &Known,
 /// Compute known bits from a shift operator, including those with a
 /// non-constant shift amount. Known is the output of this function. Known2 is a
 /// pre-allocated temporary with the same bit width as Known. KZF and KOF are
-/// operator-specific functors that, given the known-zero or known-one bits
+/// operator-specific functions that, given the known-zero or known-one bits
 /// respectively, and a shift amount, compute the implied known-zero or
 /// known-one bits of the shift operator's result respectively for that shift
 /// amount. The results from calling KZF and KOF are conservatively combined for
@@ -2192,7 +2192,7 @@ static unsigned ComputeNumSignBits(const Value *V, unsigned Depth,
 /// (itself), but other cases can give us information. For example, immediately
 /// after an "ashr X, 2", we know that the top 3 bits are all equal to each
 /// other, so we return 3. For vectors, return the number of sign bits for the
-/// vector element with the mininum number of known sign bits.
+/// vector element with the minimum number of known sign bits.
 static unsigned ComputeNumSignBitsImpl(const Value *V, unsigned Depth,
                                        const Query &Q) {
   assert(Depth <= MaxDepth && "Limit Search Depth");
@@ -2728,6 +2728,24 @@ static bool cannotBeOrderedLessThanZeroImpl(const Value *V,
            (!SignBitOnly && CFP->getValueAPF().isZero());
   }
 
+  // Handle vector of constants.
+  if (auto *CV = dyn_cast<Constant>(V)) {
+    if (CV->getType()->isVectorTy()) {
+      unsigned NumElts = CV->getType()->getVectorNumElements();
+      for (unsigned i = 0; i != NumElts; ++i) {
+        auto *CFP = dyn_cast_or_null<ConstantFP>(CV->getAggregateElement(i));
+        if (!CFP)
+          return false;
+        if (CFP->getValueAPF().isNegative() &&
+            (SignBitOnly || !CFP->getValueAPF().isZero()))
+          return false;
+      }
+
+      // All non-negative ConstantFPs.
+      return true;
+    }
+  }
+
   if (Depth == MaxDepth)
     return false; // Limit search depth.
 
@@ -2763,6 +2781,12 @@ static bool cannotBeOrderedLessThanZeroImpl(const Value *V,
   case Instruction::FPExt:
   case Instruction::FPTrunc:
     // Widening/narrowing never change sign.
+    return cannotBeOrderedLessThanZeroImpl(I->getOperand(0), TLI, SignBitOnly,
+                                           Depth + 1);
+  case Instruction::ExtractElement:
+    // Look through extract element. At the moment we keep this simple and skip
+    // tracking the specific element. But at least we might find information
+    // valid for all elements of the vector.
     return cannotBeOrderedLessThanZeroImpl(I->getOperand(0), TLI, SignBitOnly,
                                            Depth + 1);
   case Instruction::Call:
@@ -2979,7 +3003,7 @@ static Value *BuildSubAggregate(Value *From, Value* To, Type *IndexedType,
   if (!V)
     return nullptr;
 
-  // Insert the value in the new (sub) aggregrate
+  // Insert the value in the new (sub) aggregate
   return InsertValueInst::Create(To, V, makeArrayRef(Idxs).slice(IdxSkip),
                                  "tmp", InsertBefore);
 }
@@ -3008,9 +3032,9 @@ static Value *BuildSubAggregate(Value *From, ArrayRef<unsigned> idx_range,
   return BuildSubAggregate(From, To, IndexedType, Idxs, IdxSkip, InsertBefore);
 }
 
-/// Given an aggregrate and an sequence of indices, see if
-/// the scalar value indexed is already around as a register, for example if it
-/// were inserted directly into the aggregrate.
+/// Given an aggregate and a sequence of indices, see if the scalar value
+/// indexed is already around as a register, for example if it was inserted
+/// directly into the aggregate.
 ///
 /// If InsertBefore is not null, this function will duplicate (modified)
 /// insertvalues when a part of a nested struct is extracted.
@@ -3944,6 +3968,15 @@ bool llvm::isGuaranteedToTransferExecutionToSuccessor(const Instruction *I) {
   return true;
 }
 
+bool llvm::isGuaranteedToTransferExecutionToSuccessor(const BasicBlock *BB) {
+  // TODO: This is slightly consdervative for invoke instruction since exiting
+  // via an exception *is* normal control for them.
+  for (auto I = BB->begin(), E = BB->end(); I != E; ++I)
+    if (!isGuaranteedToTransferExecutionToSuccessor(&*I))
+      return false;
+  return true;
+}
+
 bool llvm::isGuaranteedToExecuteForEveryIteration(const Instruction *I,
                                                   const Loop *L) {
   // The loop header is guaranteed to be executed for every iteration.
@@ -4484,7 +4517,7 @@ static SelectPatternResult matchSelectPattern(CmpInst::Predicate Pred,
 ///
 /// The function processes the case when type of true and false values of a
 /// select instruction differs from type of the cmp instruction operands because
-/// of a cast instructon. The function checks if it is legal to move the cast
+/// of a cast instruction. The function checks if it is legal to move the cast
 /// operation after "select". If yes, it returns the new second value of
 /// "select" (with the assumption that cast is moved):
 /// 1. As operand of cast instruction when both values of "select" are same cast
@@ -4635,6 +4668,30 @@ SelectPatternResult llvm::matchSelectPattern(Value *V, Value *&LHS, Value *&RHS,
   }
   return ::matchSelectPattern(Pred, FMF, CmpLHS, CmpRHS, TrueVal, FalseVal,
                               LHS, RHS, Depth);
+}
+
+CmpInst::Predicate llvm::getMinMaxPred(SelectPatternFlavor SPF, bool Ordered) {
+  if (SPF == SPF_SMIN) return ICmpInst::ICMP_SLT;
+  if (SPF == SPF_UMIN) return ICmpInst::ICMP_ULT;
+  if (SPF == SPF_SMAX) return ICmpInst::ICMP_SGT;
+  if (SPF == SPF_UMAX) return ICmpInst::ICMP_UGT;
+  if (SPF == SPF_FMINNUM)
+    return Ordered ? FCmpInst::FCMP_OLT : FCmpInst::FCMP_ULT;
+  if (SPF == SPF_FMAXNUM)
+    return Ordered ? FCmpInst::FCMP_OGT : FCmpInst::FCMP_UGT;
+  llvm_unreachable("unhandled!");
+}
+
+SelectPatternFlavor llvm::getInverseMinMaxFlavor(SelectPatternFlavor SPF) {
+  if (SPF == SPF_SMIN) return SPF_SMAX;
+  if (SPF == SPF_UMIN) return SPF_UMAX;
+  if (SPF == SPF_SMAX) return SPF_SMIN;
+  if (SPF == SPF_UMAX) return SPF_UMIN;
+  llvm_unreachable("unhandled!");
+}
+
+CmpInst::Predicate llvm::getInverseMinMaxPred(SelectPatternFlavor SPF) {
+  return getMinMaxPred(getInverseMinMaxFlavor(SPF));
 }
 
 /// Return true if "icmp Pred LHS RHS" is always true.

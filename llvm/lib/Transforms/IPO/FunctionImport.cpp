@@ -18,8 +18,8 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/StringMap.h"
-#include "llvm/ADT/StringSet.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/StringSet.h"
 #include "llvm/Bitcode/BitcodeReader.h"
 #include "llvm/IR/AutoUpgrade.h"
 #include "llvm/IR/Constants.h"
@@ -256,12 +256,11 @@ static void computeImportForReferencedGlobals(
           // Don't try to import regular LTO summaries added to dummy module.
           !RefSummary->modulePath().empty() &&
           !GlobalValue::isInterposableLinkage(RefSummary->linkage()) &&
-          // For now we don't import global variables which have outgoing
-          // refs. Otherwise we have to promote referenced vars/functions.
           RefSummary->refs().empty()) {
         ImportList[RefSummary->modulePath()][VI.getGUID()] = 1;
         if (ExportLists)
           (*ExportLists)[RefSummary->modulePath()].insert(VI.getGUID());
+        break;
       }
   }
 }
@@ -611,9 +610,26 @@ void llvm::computeDeadSymbols(
       if (S->isLive())
         return;
 
-    // We do not keep live symbols that are known to be non-prevailing.
-    if (isPrevailing(VI.getGUID()) == PrevailingType::No)
-      return;
+    // We only keep live symbols that are known to be non-prevailing if any are
+    // available_externally. Those symbols are discarded later in the
+    // EliminateAvailableExternally pass and setting them to not-live breaks
+    // downstreams users of liveness information (PR36483).
+    if (isPrevailing(VI.getGUID()) == PrevailingType::No) {
+      bool AvailableExternally = false;
+      bool Interposable = false;
+      for (auto &S : VI.getSummaryList()) {
+        if (S->linkage() == GlobalValue::AvailableExternallyLinkage)
+          AvailableExternally = true;
+        else if (GlobalValue::isInterposableLinkage(S->linkage()))
+          Interposable = true;
+      }
+
+      if (!AvailableExternally)
+        return;
+
+      if (Interposable)
+        report_fatal_error("Interposable and available_externally symbol");
+    }
 
     for (auto &S : VI.getSummaryList())
       S->setLive(true);

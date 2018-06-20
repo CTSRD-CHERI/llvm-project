@@ -93,6 +93,8 @@ COMMON_FLAG(HandleSignalMode, handle_abort, kHandleSignalNo,
             COMMON_FLAG_HANDLE_SIGNAL_HELP(SIGABRT))
 COMMON_FLAG(HandleSignalMode, handle_sigill, kHandleSignalNo,
             COMMON_FLAG_HANDLE_SIGNAL_HELP(SIGILL))
+COMMON_FLAG(HandleSignalMode, handle_sigtrap, kHandleSignalNo,
+            COMMON_FLAG_HANDLE_SIGNAL_HELP(SIGTRAP))
 COMMON_FLAG(HandleSignalMode, handle_sigfpe, kHandleSignalYes,
             COMMON_FLAG_HANDLE_SIGNAL_HELP(SIGFPE))
 #undef COMMON_FLAG_HANDLE_SIGNAL_HELP
@@ -238,3 +240,6 @@ COMMON_FLAG(bool, dump_instruction_bytes, false,
 COMMON_FLAG(bool, dump_registers, true,
           "If true, dump values of CPU registers when SEGV happens. Only "
           "available on OS X for now.")
+COMMON_FLAG(bool, detect_write_exec, false,
+          "If true, triggers warning when writable-executable pages requests "
+          "are being made")

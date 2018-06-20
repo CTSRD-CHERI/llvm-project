@@ -11,6 +11,13 @@
 namespace clang {
 namespace clangd {
 
+void runAddDocument(ClangdServer &Server, PathRef File, StringRef Contents,
+                    WantDiagnostics WantDiags, bool SkipCache) {
+  Server.addDocument(File, Contents, WantDiags, SkipCache);
+  if (!Server.blockUntilIdleForTest())
+    llvm_unreachable("not idle after addDocument");
+}
+
 namespace {
 /// A helper that waits for async callbacks to fire and exposes their result in
 /// the output variable. Intended to be used in the following way:
@@ -32,7 +39,7 @@ template <typename T> struct CaptureProxy {
   operator UniqueFunction<void(T)>() && {
     assert(!Future.valid() && "conversion to callback called multiple times");
     Future = Promise.get_future();
-    return BindWithForward(
+    return Bind(
         [](std::promise<std::shared_ptr<T>> Promise, T Value) {
           Promise.set_value(std::make_shared<T>(std::move(Value)));
         },
@@ -61,33 +68,31 @@ template <typename T> CaptureProxy<T> capture(llvm::Optional<T> &Target) {
 }
 } // namespace
 
-Tagged<CompletionList>
+llvm::Expected<CompletionList>
 runCodeComplete(ClangdServer &Server, PathRef File, Position Pos,
-                clangd::CodeCompleteOptions Opts,
-                llvm::Optional<StringRef> OverridenContents) {
-  llvm::Optional<Tagged<CompletionList>> Result;
-  Server.codeComplete(File, Pos, Opts, capture(Result), OverridenContents);
+                clangd::CodeCompleteOptions Opts) {
+  llvm::Optional<llvm::Expected<CompletionList>> Result;
+  Server.codeComplete(File, Pos, Opts, capture(Result));
   return std::move(*Result);
 }
 
-llvm::Expected<Tagged<SignatureHelp>>
-runSignatureHelp(ClangdServer &Server, PathRef File, Position Pos,
-                 llvm::Optional<StringRef> OverridenContents) {
-  llvm::Optional<llvm::Expected<Tagged<SignatureHelp>>> Result;
-  Server.signatureHelp(File, Pos, capture(Result), OverridenContents);
+llvm::Expected<SignatureHelp> runSignatureHelp(ClangdServer &Server,
+                                               PathRef File, Position Pos) {
+  llvm::Optional<llvm::Expected<SignatureHelp>> Result;
+  Server.signatureHelp(File, Pos, capture(Result));
   return std::move(*Result);
 }
 
-llvm::Expected<Tagged<std::vector<Location>>>
+llvm::Expected<std::vector<Location>>
 runFindDefinitions(ClangdServer &Server, PathRef File, Position Pos) {
-  llvm::Optional<llvm::Expected<Tagged<std::vector<Location>>>> Result;
+  llvm::Optional<llvm::Expected<std::vector<Location>>> Result;
   Server.findDefinitions(File, Pos, capture(Result));
   return std::move(*Result);
 }
 
-llvm::Expected<Tagged<std::vector<DocumentHighlight>>>
+llvm::Expected<std::vector<DocumentHighlight>>
 runFindDocumentHighlights(ClangdServer &Server, PathRef File, Position Pos) {
-  llvm::Optional<llvm::Expected<Tagged<std::vector<DocumentHighlight>>>> Result;
+  llvm::Optional<llvm::Expected<std::vector<DocumentHighlight>>> Result;
   Server.findDocumentHighlights(File, Pos, capture(Result));
   return std::move(*Result);
 }

@@ -23,7 +23,9 @@ namespace llvm {
 namespace pdb {
 
 class IPDBDataStream;
+class IPDBInjectedSource;
 class IPDBLineNumber;
+class IPDBSectionContrib;
 class IPDBSourceFile;
 class IPDBTable;
 class PDBSymDumper;
@@ -65,6 +67,8 @@ using IPDBEnumSourceFiles = IPDBEnumChildren<IPDBSourceFile>;
 using IPDBEnumDataStreams = IPDBEnumChildren<IPDBDataStream>;
 using IPDBEnumLineNumbers = IPDBEnumChildren<IPDBLineNumber>;
 using IPDBEnumTables = IPDBEnumChildren<IPDBTable>;
+using IPDBEnumInjectedSources = IPDBEnumChildren<IPDBInjectedSource>;
+using IPDBEnumSectionContribs = IPDBEnumChildren<IPDBSectionContrib>;
 
 /// Specifies which PDB reader implementation is to be used.  Only a value
 /// of PDB_ReaderType::DIA is currently supported, but Native is in the works.
@@ -96,7 +100,12 @@ enum PDB_NameSearchFlags {
   NS_CaseInsensitive = 0x2,
   NS_FileNameExtMatch = 0x4,
   NS_Regex = 0x8,
-  NS_UndecoratedName = 0x10
+  NS_UndecoratedName = 0x10,
+
+  // For backward compatibility.
+  NS_CaseInFileNameExt = NS_CaseInsensitive | NS_FileNameExtMatch,
+  NS_CaseRegex = NS_Regex | NS_CaseSensitive,
+  NS_CaseInRex = NS_Regex | NS_CaseInsensitive
 };
 
 /// Specifies the hash algorithm that a source file from a PDB was hashed with.
@@ -131,6 +140,13 @@ enum class PDB_Machine {
   SH5 = 0x1A8,
   Thumb = 0x1C2,
   WceMipsV2 = 0x169
+};
+
+enum class PDB_SourceCompression {
+  None,
+  RunLengthEncoded,
+  Huffman,
+  LZ,
 };
 
 /// These values correspond to the CV_call_e enumeration, and are documented
@@ -244,7 +260,9 @@ enum class PDB_BuiltinType {
   Complex = 28,
   Bitfield = 29,
   BSTR = 30,
-  HResult = 31
+  HResult = 31,
+  Char16 = 32,
+  Char32 = 33
 };
 
 /// These values correspond to the flags that can be combined to control the

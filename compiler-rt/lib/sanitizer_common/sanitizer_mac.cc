@@ -61,6 +61,7 @@ extern "C" {
 #include <mach/mach.h>
 #include <mach/mach_time.h>
 #include <mach/vm_statistics.h>
+#include <malloc/malloc.h>
 #include <pthread.h>
 #include <sched.h>
 #include <signal.h>
@@ -343,6 +344,29 @@ uptr GetPageSize() {
   return sysconf(_SC_PAGESIZE);
 }
 
+extern "C" unsigned malloc_num_zones;
+extern "C" malloc_zone_t **malloc_zones;
+malloc_zone_t sanitizer_zone;
+
+// We need to make sure that sanitizer_zone is registered as malloc_zones[0]. If
+// libmalloc tries to set up a different zone as malloc_zones[0], it will call
+// mprotect(malloc_zones, ..., PROT_READ).  This interceptor will catch that and
+// make sure we are still the first (default) zone.
+void MprotectMallocZones(void *addr, int prot) {
+  if (addr == malloc_zones && prot == PROT_READ) {
+    if (malloc_num_zones > 1 && malloc_zones[0] != &sanitizer_zone) {
+      for (unsigned i = 1; i < malloc_num_zones; i++) {
+        if (malloc_zones[i] == &sanitizer_zone) {
+          // Swap malloc_zones[0] and malloc_zones[i].
+          malloc_zones[i] = malloc_zones[0];
+          malloc_zones[0] = &sanitizer_zone;
+          break;
+        }
+      }
+    }
+  }
+}
+
 BlockingMutex::BlockingMutex() {
   internal_memset(this, 0, sizeof(*this));
 }
@@ -435,6 +459,8 @@ static HandleSignalMode GetHandleSignalModeImpl(int signum) {
       return common_flags()->handle_abort;
     case SIGILL:
       return common_flags()->handle_sigill;
+    case SIGTRAP:
+      return common_flags()->handle_sigtrap;
     case SIGFPE:
       return common_flags()->handle_sigfpe;
     case SIGSEGV:
@@ -885,10 +911,9 @@ uptr GetMaxVirtualAddress() {
   return GetMaxUserVirtualAddress();
 }
 
-uptr FindAvailableMemoryRange(uptr shadow_size,
-                              uptr alignment,
-                              uptr left_padding,
-                              uptr *largest_gap_found) {
+uptr FindAvailableMemoryRange(uptr size, uptr alignment, uptr left_padding,
+                              uptr *largest_gap_found,
+                              uptr *max_occupied_addr) {
   typedef vm_region_submap_short_info_data_64_t RegionInfo;
   enum { kRegionInfoSize = VM_REGION_SUBMAP_SHORT_INFO_COUNT_64 };
   // Start searching for available memory region past PAGEZERO, which is
@@ -900,6 +925,7 @@ uptr FindAvailableMemoryRange(uptr shadow_size,
   mach_vm_address_t free_begin = start_address;
   kern_return_t kr = KERN_SUCCESS;
   if (largest_gap_found) *largest_gap_found = 0;
+  if (max_occupied_addr) *max_occupied_addr = 0;
   while (kr == KERN_SUCCESS) {
     mach_vm_size_t vmsize = 0;
     natural_t depth = 0;
@@ -911,13 +937,15 @@ uptr FindAvailableMemoryRange(uptr shadow_size,
       // No more regions beyond "address", consider the gap at the end of VM.
       address = GetMaxVirtualAddress() + 1;
       vmsize = 0;
+    } else {
+      if (max_occupied_addr) *max_occupied_addr = address + vmsize;
     }
     if (free_begin != address) {
       // We found a free region [free_begin..address-1].
       uptr gap_start = RoundUpTo((uptr)free_begin + left_padding, alignment);
       uptr gap_end = RoundDownTo((uptr)address, alignment);
       uptr gap_size = gap_end > gap_start ? gap_end - gap_start : 0;
-      if (shadow_size < gap_size) {
+      if (size < gap_size) {
         return gap_start;
       }
 

@@ -18,12 +18,12 @@
 #include "Hexagon.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/CodeGen/ISDOpcodes.h"
-#include "llvm/CodeGen/MachineValueType.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
 #include "llvm/CodeGen/TargetLowering.h"
-#include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/CallingConv.h"
 #include "llvm/IR/InlineAsm.h"
+#include "llvm/IR/ValueTypes.h"
+#include "llvm/Support/MachineValueType.h"
 #include <cstdint>
 #include <utility>
 
@@ -79,7 +79,9 @@ namespace HexagonISD {
       VZERO,
       TYPECAST,    // No-op that's used to convert between different legal
                    // types in a register.
-      VALIGNADDR,  // Align vector address: Op & -HwLen, except when it is
+      VALIGN,      // Align two vectors (in Op0, Op1) to one that would have
+                   // been loaded from address in Op2.
+      VALIGNADDR,  // Align vector address: Op0 & -Op1, except when it is
                    // an address in a vector load, then it's a no-op.
       OP_END
     };
@@ -119,6 +121,10 @@ namespace HexagonISD {
     bool isTruncateFree(Type *Ty1, Type *Ty2) const override;
     bool isTruncateFree(EVT VT1, EVT VT2) const override;
 
+    bool isCheapToSpeculateCttz() const override { return true; }
+    bool isCheapToSpeculateCtlz() const override { return true; }
+    bool isCtlzFast() const override { return true; }
+
     bool allowTruncateForTailCall(Type *Ty1, Type *Ty2) const override;
 
     /// Return true if an FMA operation is faster than a pair of mul and add
@@ -153,6 +159,7 @@ namespace HexagonISD {
     SDValue LowerANY_EXTEND(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerSIGN_EXTEND(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerZERO_EXTEND(SDValue Op, SelectionDAG &DAG) const;
+    SDValue LowerUnalignedLoad(SDValue Op, SelectionDAG &DAG) const;
 
     SDValue LowerDYNAMIC_STACKALLOC(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerINLINEASM(SDValue Op, SelectionDAG &DAG) const;
@@ -418,7 +425,6 @@ namespace HexagonISD {
     SDValue LowerHvxSetCC(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerHvxExtend(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerHvxShift(SDValue Op, SelectionDAG &DAG) const;
-    SDValue LowerHvxUnalignedLoad(SDValue Op, SelectionDAG &DAG) const;
 
     SDValue SplitHvxPairOp(SDValue Op, SelectionDAG &DAG) const;
     SDValue SplitHvxMemOp(SDValue Op, SelectionDAG &DAG) const;

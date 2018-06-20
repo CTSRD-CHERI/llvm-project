@@ -40,6 +40,16 @@ Non-comprehensive list of changes in this release
    functionality, or simply have a lot to talk about), see the `NOTE` below
    for adding a new subsection.
 
+* The LoopInstSimplify pass (-loop-instsimplify) has been removed.
+
+* Symbols starting with ``?`` are no longer mangled by LLVM when using the
+  Windows ``x`` or ``w`` IR mangling schemes.
+
+* A new tool named :doc:`llvm-mca <CommandGuide/llvm-mca>` has been added.
+  :program:`llvm-mca` is a  static performance analysis tool that uses
+  information available in LLVM to statically predict the performance of
+  machine code for a specific CPU.
+
 * Note..
 
 .. NOTE

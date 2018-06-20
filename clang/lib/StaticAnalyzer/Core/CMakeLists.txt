@@ -51,6 +51,7 @@ add_clang_library(clangStaticAnalyzerCore
   Store.cpp
   SubEngine.cpp
   SymbolManager.cpp
+  WorkList.cpp
   Z3ConstraintManager.cpp
 
   LINK_LIBS
@@ -58,6 +59,7 @@ add_clang_library(clangStaticAnalyzerCore
   clangASTMatchers
   clangAnalysis
   clangBasic
+  clangCrossTU
   clangLex
   clangRewrite
   ${Z3_LINK_FILES}

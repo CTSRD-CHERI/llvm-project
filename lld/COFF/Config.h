@@ -99,6 +99,7 @@ struct Configuration {
   bool DebugGHashes = false;
   bool ShowTiming = false;
   unsigned DebugTypes = static_cast<unsigned>(DebugType::None);
+  std::vector<std::string> NatvisFiles;
   llvm::SmallString<128> PDBPath;
   std::vector<llvm::StringRef> Argv;
 
@@ -187,8 +188,10 @@ struct Configuration {
   bool HighEntropyVA = false;
   bool AppContainer = false;
   bool MinGW = false;
+  bool WarnMissingOrderSymbol = true;
   bool WarnLocallyDefinedImported = true;
   bool Incremental = true;
+  bool KillAt = false;
 };
 
 extern Configuration *Config;

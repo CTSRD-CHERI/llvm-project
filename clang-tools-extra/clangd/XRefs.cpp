@@ -7,7 +7,9 @@
 //
 //===---------------------------------------------------------------------===//
 #include "XRefs.h"
+#include "AST.h"
 #include "Logger.h"
+#include "SourceCode.h"
 #include "URI.h"
 #include "clang/AST/DeclTemplate.h"
 #include "clang/Index/IndexDataConsumer.h"
@@ -21,7 +23,7 @@ namespace {
 // Get the definition from a given declaration `D`.
 // Return nullptr if no definition is found, or the declaration type of `D` is
 // not supported.
-const Decl* GetDefinition(const Decl* D) {
+const Decl *GetDefinition(const Decl *D) {
   assert(D);
   if (const auto *TD = dyn_cast<TagDecl>(D))
     return TD->getDefinition();
@@ -85,7 +87,7 @@ public:
       // We don't use parameter `D`, as Parameter `D` is the canonical
       // declaration, which is the first declaration of a redeclarable
       // declaration, and it could be a forward declaration.
-      if (const auto* Def = GetDefinition(D)) {
+      if (const auto *Def = GetDefinition(D)) {
         Decls.push_back(Def);
       } else {
         // Couldn't find a definition, fall back to use `D`.
@@ -125,6 +127,16 @@ private:
         MacroInfo *MacroInf = MacroDef.getMacroInfo();
         if (MacroInf) {
           MacroInfos.push_back(MacroDecl{IdentifierInfo->getName(), MacroInf});
+          // Clear all collected delcarations if this is a macro search.
+          //
+          // In theory, there should be no declarataions being collected when we
+          // search a source location that refers to a macro.
+          // The occurrence location returned by `handleDeclOccurence` is
+          // limited (FID, Offset are from expansion location), we will collect
+          // all declarations inside the macro.
+          //
+          // FIXME: Avoid adding decls from inside macros in handlDeclOccurence.
+          Decls.clear();
         }
       }
     }
@@ -132,7 +144,7 @@ private:
 };
 
 llvm::Optional<Location>
-getDeclarationLocation(ParsedAST &AST, const SourceRange &ValSourceRange) {
+makeLocation(ParsedAST &AST, const SourceRange &ValSourceRange) {
   const SourceManager &SourceMgr = AST.getASTContext().getSourceManager();
   const LangOptions &LangOpts = AST.getASTContext().getLangOpts();
   SourceLocation LocStart = ValSourceRange.getBegin();
@@ -143,12 +155,8 @@ getDeclarationLocation(ParsedAST &AST, const SourceRange &ValSourceRange) {
     return llvm::None;
   SourceLocation LocEnd = Lexer::getLocForEndOfToken(ValSourceRange.getEnd(), 0,
                                                      SourceMgr, LangOpts);
-  Position Begin;
-  Begin.line = SourceMgr.getSpellingLineNumber(LocStart) - 1;
-  Begin.character = SourceMgr.getSpellingColumnNumber(LocStart) - 1;
-  Position End;
-  End.line = SourceMgr.getSpellingLineNumber(LocEnd) - 1;
-  End.character = SourceMgr.getSpellingColumnNumber(LocEnd) - 1;
+  Position Begin = sourceLocToPosition(SourceMgr, LocStart);
+  Position End = sourceLocToPosition(SourceMgr, LocEnd);
   Range R = {Begin, End};
   Location L;
 
@@ -177,6 +185,18 @@ std::vector<Location> findDefinitions(ParsedAST &AST, Position Pos) {
 
   SourceLocation SourceLocationBeg = getBeginningOfIdentifier(AST, Pos, FE);
 
+  std::vector<Location> Result;
+  // Handle goto definition for #include.
+  for (auto &IncludeLoc : AST.getInclusionLocations()) {
+    Range R = IncludeLoc.first;
+    Position Pos = sourceLocToPosition(SourceMgr, SourceLocationBeg);
+
+    if (R.contains(Pos))
+      Result.push_back(Location{URIForFile{IncludeLoc.second}, {}});
+  }
+  if (!Result.empty())
+    return Result;
+
   auto DeclMacrosFinder = std::make_shared<DeclarationAndMacrosFinder>(
       llvm::errs(), SourceLocationBeg, AST.getASTContext(),
       AST.getPreprocessor());
@@ -190,18 +210,17 @@ std::vector<Location> findDefinitions(ParsedAST &AST, Position Pos) {
 
   std::vector<const Decl *> Decls = DeclMacrosFinder->takeDecls();
   std::vector<MacroDecl> MacroInfos = DeclMacrosFinder->takeMacroInfos();
-  std::vector<Location> Result;
 
-  for (auto Item : Decls) {
-    auto L = getDeclarationLocation(AST, Item->getSourceRange());
+  for (auto D : Decls) {
+    auto Loc = findNameLoc(D);
+    auto L = makeLocation(AST, SourceRange(Loc, Loc));
     if (L)
       Result.push_back(*L);
   }
 
   for (auto Item : MacroInfos) {
-    SourceRange SR(Item.Info->getDefinitionLoc(),
-                   Item.Info->getDefinitionEndLoc());
-    auto L = getDeclarationLocation(AST, SR);
+    auto Loc = Item.Info->getDefinitionLoc();
+    auto L = makeLocation(AST, SourceRange(Loc, Loc));
     if (L)
       Result.push_back(*L);
   }
@@ -263,13 +282,8 @@ private:
   DocumentHighlight getDocumentHighlight(SourceRange SR,
                                          DocumentHighlightKind Kind) {
     const SourceManager &SourceMgr = AST.getSourceManager();
-    SourceLocation LocStart = SR.getBegin();
-    Position Begin;
-    Begin.line = SourceMgr.getSpellingLineNumber(LocStart) - 1;
-    Begin.character = SourceMgr.getSpellingColumnNumber(LocStart) - 1;
-    Position End;
-    End.line = SourceMgr.getSpellingLineNumber(SR.getEnd()) - 1;
-    End.character = SourceMgr.getSpellingColumnNumber(SR.getEnd()) - 1;
+    Position Begin = sourceLocToPosition(SourceMgr, SR.getBegin());
+    Position End = sourceLocToPosition(SourceMgr, SR.getEnd());
     Range R = {Begin, End};
     DocumentHighlight DH;
     DH.range = R;

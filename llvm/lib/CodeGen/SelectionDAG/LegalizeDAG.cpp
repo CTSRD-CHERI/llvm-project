@@ -22,14 +22,12 @@
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineJumpTableInfo.h"
 #include "llvm/CodeGen/MachineMemOperand.h"
-#include "llvm/CodeGen/MachineValueType.h"
 #include "llvm/CodeGen/RuntimeLibcalls.h"
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
 #include "llvm/CodeGen/TargetFrameLowering.h"
 #include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
-#include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/CallingConv.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
@@ -37,10 +35,12 @@
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Type.h"
+#include "llvm/IR/ValueTypes.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/MachineValueType.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
@@ -1631,20 +1631,20 @@ bool SelectionDAGLegalize::LegalizeSetCCCondCode(EVT VT, SDValue &LHS,
     break;
   case TargetLowering::Expand: {
     ISD::CondCode InvCC = ISD::getSetCCSwappedOperands(CCCode);
-    if (TLI.isCondCodeLegal(InvCC, OpVT)) {
+    if (TLI.isCondCodeLegalOrCustom(InvCC, OpVT)) {
       std::swap(LHS, RHS);
       CC = DAG.getCondCode(InvCC);
       return true;
     }
     // Swapping operands didn't work. Try inverting the condition.
     InvCC = getSetCCInverse(CCCode, OpVT.isInteger());
-    if (!TLI.isCondCodeLegal(InvCC, OpVT)) {
+    if (!TLI.isCondCodeLegalOrCustom(InvCC, OpVT)) {
       // If inverting the condition is not enough, try swapping operands
       // on top of it.
       InvCC = ISD::getSetCCSwappedOperands(InvCC);
       NeedSwap = true;
     }
-    if (TLI.isCondCodeLegal(InvCC, OpVT)) {
+    if (TLI.isCondCodeLegalOrCustom(InvCC, OpVT)) {
       CC = DAG.getCondCode(InvCC);
       NeedInvert = true;
       if (NeedSwap)
@@ -1657,13 +1657,11 @@ bool SelectionDAGLegalize::LegalizeSetCCCondCode(EVT VT, SDValue &LHS,
     switch (CCCode) {
     default: llvm_unreachable("Don't know how to expand this condition!");
     case ISD::SETO:
-        assert(TLI.getCondCodeAction(ISD::SETOEQ, OpVT)
-            == TargetLowering::Legal
+        assert(TLI.isCondCodeLegal(ISD::SETOEQ, OpVT)
             && "If SETO is expanded, SETOEQ must be legal!");
         CC1 = ISD::SETOEQ; CC2 = ISD::SETOEQ; Opc = ISD::AND; break;
     case ISD::SETUO:
-        assert(TLI.getCondCodeAction(ISD::SETUNE, OpVT)
-            == TargetLowering::Legal
+        assert(TLI.isCondCodeLegal(ISD::SETUNE, OpVT)
             && "If SETUO is expanded, SETUNE must be legal!");
         CC1 = ISD::SETUNE; CC2 = ISD::SETUNE; Opc = ISD::OR;  break;
     case ISD::SETOEQ:
@@ -3708,7 +3706,8 @@ bool SelectionDAGLegalize::ExpandNode(SDNode *Node) {
       Addr = DAG.getNode(ISD::ADD, dl, PTy, Addr,
                           TLI.getPICJumpTableRelocBase(Table, DAG));
     }
-    Tmp1 = DAG.getNode(ISD::BRIND, dl, MVT::Other, LD.getValue(1), Addr);
+
+    Tmp1 = TLI.expandIndirectJTBranch(dl, LD.getValue(1), Addr, DAG);
     Results.push_back(Tmp1);
     break;
   }
@@ -3791,7 +3790,7 @@ bool SelectionDAGLegalize::ExpandNode(SDNode *Node) {
     SDValue CC = Node->getOperand(4);
     ISD::CondCode CCOp = cast<CondCodeSDNode>(CC)->get();
 
-    if (TLI.isCondCodeLegal(CCOp, Tmp1.getSimpleValueType())) {
+    if (TLI.isCondCodeLegalOrCustom(CCOp, Tmp1.getSimpleValueType())) {
       // If the condition code is legal, then we need to expand this
       // node using SETCC and SELECT.
       EVT CmpVT = Tmp1.getValueType();
@@ -3812,7 +3811,7 @@ bool SelectionDAGLegalize::ExpandNode(SDNode *Node) {
     // version (or vice versa).
     ISD::CondCode InvCC = ISD::getSetCCInverse(CCOp,
                                                Tmp1.getValueType().isInteger());
-    if (TLI.isCondCodeLegal(InvCC, Tmp1.getSimpleValueType())) {
+    if (TLI.isCondCodeLegalOrCustom(InvCC, Tmp1.getSimpleValueType())) {
       // Use the new condition code and swap true and false
       Legalized = true;
       Tmp1 = DAG.getSelectCC(dl, Tmp1, Tmp2, Tmp4, Tmp3, InvCC);
@@ -3820,7 +3819,7 @@ bool SelectionDAGLegalize::ExpandNode(SDNode *Node) {
       // If The inverse is not legal, then try to swap the arguments using
       // the inverse condition code.
       ISD::CondCode SwapInvCC = ISD::getSetCCSwappedOperands(InvCC);
-      if (TLI.isCondCodeLegal(SwapInvCC, Tmp1.getSimpleValueType())) {
+      if (TLI.isCondCodeLegalOrCustom(SwapInvCC, Tmp1.getSimpleValueType())) {
         // The swapped inverse condition is legal, so swap true and false,
         // lhs and rhs.
         Legalized = true;

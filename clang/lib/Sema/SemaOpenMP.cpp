@@ -803,7 +803,8 @@ void DSAStackTy::addDSA(ValueDecl *D, Expr *E, OpenMPClauseKind A,
 
 /// \brief Build a variable declaration for OpenMP loop iteration variable.
 static VarDecl *buildVarDecl(Sema &SemaRef, SourceLocation Loc, QualType Type,
-                             StringRef Name, const AttrVec *Attrs = nullptr) {
+                             StringRef Name, const AttrVec *Attrs = nullptr,
+                             DeclRefExpr *OrigRef = nullptr) {
   DeclContext *DC = SemaRef.CurContext;
   IdentifierInfo *II = &SemaRef.PP.getIdentifierTable().get(Name);
   TypeSourceInfo *TInfo = SemaRef.Context.getTrivialTypeSourceInfo(Type, Loc);
@@ -815,6 +816,10 @@ static VarDecl *buildVarDecl(Sema &SemaRef, SourceLocation Loc, QualType Type,
       Decl->addAttr(*I);
   }
   Decl->setImplicit();
+  if (OrigRef) {
+    Decl->addAttr(
+        OMPReferencedVarAttr::CreateImplicit(SemaRef.Context, OrigRef));
+  }
   return Decl;
 }
 
@@ -936,10 +941,11 @@ DSAStackTy::getTopMostTaskgroupReductionData(ValueDecl *D, SourceRange &SR,
 
 bool DSAStackTy::isOpenMPLocal(VarDecl *D, StackTy::reverse_iterator Iter) {
   D = D->getCanonicalDecl();
-  if (!isStackEmpty() && Stack.back().first.size() > 1) {
+  if (!isStackEmpty()) {
     reverse_iterator I = Iter, E = Stack.back().first.rend();
     Scope *TopScope = nullptr;
-    while (I != E && !isParallelOrTaskRegion(I->Directive))
+    while (I != E && !isParallelOrTaskRegion(I->Directive) &&
+           !isOpenMPTargetExecutionDirective(I->Directive))
       ++I;
     if (I == E)
       return false;
@@ -956,20 +962,7 @@ DSAStackTy::DSAVarData DSAStackTy::getTopDSA(ValueDecl *D, bool FromParent) {
   D = getCanonicalDecl(D);
   DSAVarData DVar;
 
-  // OpenMP [2.9.1.1, Data-sharing Attribute Rules for Variables Referenced
-  // in a Construct, C/C++, predetermined, p.1]
-  //  Variables appearing in threadprivate directives are threadprivate.
   auto *VD = dyn_cast<VarDecl>(D);
-  if ((VD && VD->getTLSKind() != VarDecl::TLS_None &&
-       !(VD->hasAttr<OMPThreadPrivateDeclAttr>() &&
-         SemaRef.getLangOpts().OpenMPUseTLS &&
-         SemaRef.getASTContext().getTargetInfo().isTLSSupported())) ||
-      (VD && VD->getStorageClass() == SC_Register &&
-       VD->hasAttr<AsmLabelAttr>() && !VD->isLocalVarDecl())) {
-    addDSA(D, buildDeclRefExpr(SemaRef, VD, D->getType().getNonReferenceType(),
-                               D->getLocation()),
-           OMPC_threadprivate);
-  }
   auto TI = Threadprivates.find(D);
   if (TI != Threadprivates.end()) {
     DVar.RefExpr = TI->getSecond().RefExpr.getPointer();
@@ -981,6 +974,62 @@ DSAStackTy::DSAVarData DSAStackTy::getTopDSA(ValueDecl *D, bool FromParent) {
         VD->getAttr<OMPThreadPrivateDeclAttr>()->getLocation());
     DVar.CKind = OMPC_threadprivate;
     addDSA(D, DVar.RefExpr, OMPC_threadprivate);
+    return DVar;
+  }
+  // OpenMP [2.9.1.1, Data-sharing Attribute Rules for Variables Referenced
+  // in a Construct, C/C++, predetermined, p.1]
+  //  Variables appearing in threadprivate directives are threadprivate.
+  if ((VD && VD->getTLSKind() != VarDecl::TLS_None &&
+       !(VD->hasAttr<OMPThreadPrivateDeclAttr>() &&
+         SemaRef.getLangOpts().OpenMPUseTLS &&
+         SemaRef.getASTContext().getTargetInfo().isTLSSupported())) ||
+      (VD && VD->getStorageClass() == SC_Register &&
+       VD->hasAttr<AsmLabelAttr>() && !VD->isLocalVarDecl())) {
+    DVar.RefExpr = buildDeclRefExpr(
+        SemaRef, VD, D->getType().getNonReferenceType(), D->getLocation());
+    DVar.CKind = OMPC_threadprivate;
+    addDSA(D, DVar.RefExpr, OMPC_threadprivate);
+    return DVar;
+  }
+  if (SemaRef.getLangOpts().OpenMPCUDAMode && VD &&
+      VD->isLocalVarDeclOrParm() && !isStackEmpty() &&
+      !isLoopControlVariable(D).first) {
+    auto IterTarget =
+        std::find_if(Stack.back().first.rbegin(), Stack.back().first.rend(),
+                     [](const SharingMapTy &Data) {
+                       return isOpenMPTargetExecutionDirective(Data.Directive);
+                     });
+    if (IterTarget != Stack.back().first.rend()) {
+      auto ParentIterTarget = std::next(IterTarget, 1);
+      auto Iter = Stack.back().first.rbegin();
+      while (Iter != ParentIterTarget) {
+        if (isOpenMPLocal(VD, Iter)) {
+          DVar.RefExpr =
+              buildDeclRefExpr(SemaRef, VD, D->getType().getNonReferenceType(),
+                               D->getLocation());
+          DVar.CKind = OMPC_threadprivate;
+          return DVar;
+        }
+        std::advance(Iter, 1);
+      }
+      if (!isClauseParsingMode() || IterTarget != Stack.back().first.rbegin()) {
+        auto DSAIter = IterTarget->SharingMap.find(D);
+        if (DSAIter != IterTarget->SharingMap.end() &&
+            isOpenMPPrivate(DSAIter->getSecond().Attributes)) {
+          DVar.RefExpr = DSAIter->getSecond().RefExpr.getPointer();
+          DVar.CKind = OMPC_threadprivate;
+          return DVar;
+        } else if (!SemaRef.IsOpenMPCapturedByRef(
+                       D, std::distance(ParentIterTarget,
+                                        Stack.back().first.rend()))) {
+          DVar.RefExpr =
+              buildDeclRefExpr(SemaRef, VD, D->getType().getNonReferenceType(),
+                               IterTarget->ConstructLoc);
+          DVar.CKind = OMPC_threadprivate;
+          return DVar;
+        }
+      }
+    }
   }
 
   if (isStackEmpty())
@@ -1338,13 +1387,17 @@ VarDecl *Sema::IsOpenMPCapturedDecl(ValueDecl *D) {
   // If we are attempting to capture a global variable in a directive with
   // 'target' we return true so that this global is also mapped to the device.
   //
-  // FIXME: If the declaration is enclosed in a 'declare target' directive,
-  // then it should not be captured. Therefore, an extra check has to be
-  // inserted here once support for 'declare target' is added.
-  //
   auto *VD = dyn_cast<VarDecl>(D);
-  if (VD && !VD->hasLocalStorage() && isInOpenMPTargetExecutionDirective())
+  if (VD && !VD->hasLocalStorage() && isInOpenMPTargetExecutionDirective()) {
+    // If the declaration is enclosed in a 'declare target' directive,
+    // then it should not be captured.
+    //
+    for (const auto *Var = VD->getMostRecentDecl(); Var;
+         Var = Var->getPreviousDecl())
+      if (Var->hasAttr<OMPDeclareTargetDeclAttr>())
+        return nullptr;
     return VD;
+  }
 
   if (DSAStack->getCurrentDirective() != OMPD_unknown &&
       (!DSAStack->isClauseParsingMode() ||
@@ -1414,7 +1467,11 @@ void Sema::setOpenMPCaptureKind(FieldDecl *FD, ValueDecl *D, unsigned Level) {
     }
     if (DSAStack->hasExplicitDirective(isOpenMPTargetExecutionDirective,
                                        NewLevel)) {
-      OMPC = OMPC_firstprivate;
+      OMPC = OMPC_map;
+      if (D->getType()->isScalarType() &&
+          DSAStack->getDefaultDMAAtLevel(NewLevel) !=
+              DefaultMapAttributes::DMA_tofrom_scalar)
+        OMPC = OMPC_firstprivate;
       break;
     }
   }
@@ -1477,7 +1534,7 @@ void Sema::EndOpenMPDSABlock(Stmt *CurDirective) {
             // region uses original variable for proper diagnostics.
             auto *VDPrivate = buildVarDecl(
                 *this, DE->getExprLoc(), Type.getUnqualifiedType(),
-                VD->getName(), VD->hasAttrs() ? &VD->getAttrs() : nullptr);
+                VD->getName(), VD->hasAttrs() ? &VD->getAttrs() : nullptr, DRE);
             ActOnUninitializedDecl(VDPrivate);
             if (VDPrivate->isInvalidDecl())
               continue;
@@ -1591,7 +1648,7 @@ ExprResult Sema::ActOnOpenMPIdExpression(Scope *CurScope,
   }
 
   VarDecl *CanonicalVD = VD->getCanonicalDecl();
-  NamedDecl *ND = cast<NamedDecl>(CanonicalVD);
+  NamedDecl *ND = CanonicalVD;
   // OpenMP [2.9.2, Restrictions, C/C++, p.2]
   //   A threadprivate directive for file-scope variables must appear outside
   //   any definition or declaration.
@@ -3528,7 +3585,7 @@ StmtResult Sema::ActOnOpenMPParallelDirective(ArrayRef<OMPClause *> Clauses,
   // longjmp() and throw() must not violate the entry/exit criteria.
   CS->getCapturedDecl()->setNothrow();
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
 
   return OMPParallelDirective::Create(Context, StartLoc, EndLoc, Clauses, AStmt,
                                       DSAStack->isCancelRegion());
@@ -4158,9 +4215,12 @@ DeclRefExpr *OpenMPIterationSpaceChecker::BuildCounterVar(
 Expr *OpenMPIterationSpaceChecker::BuildPrivateCounterVar() const {
   if (LCDecl && !LCDecl->isInvalidDecl()) {
     auto Type = LCDecl->getType().getNonReferenceType();
-    auto *PrivateVar =
-        buildVarDecl(SemaRef, DefaultLoc, Type, LCDecl->getName(),
-                     LCDecl->hasAttrs() ? &LCDecl->getAttrs() : nullptr);
+    auto *PrivateVar = buildVarDecl(
+        SemaRef, DefaultLoc, Type, LCDecl->getName(),
+        LCDecl->hasAttrs() ? &LCDecl->getAttrs() : nullptr,
+        isa<VarDecl>(LCDecl)
+            ? buildDeclRefExpr(SemaRef, cast<VarDecl>(LCDecl), Type, DefaultLoc)
+            : nullptr);
     if (PrivateVar->isInvalidDecl())
       return nullptr;
     return buildDeclRefExpr(SemaRef, PrivateVar, Type, DefaultLoc);
@@ -5237,7 +5297,7 @@ StmtResult Sema::ActOnOpenMPSimdDirective(
   if (checkSimdlenSafelenSpecified(*this, Clauses))
     return StmtError();
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
   return OMPSimdDirective::Create(Context, StartLoc, EndLoc, NestedLoopCount,
                                   Clauses, AStmt, B);
 }
@@ -5273,7 +5333,7 @@ StmtResult Sema::ActOnOpenMPForDirective(
     }
   }
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
   return OMPForDirective::Create(Context, StartLoc, EndLoc, NestedLoopCount,
                                  Clauses, AStmt, B, DSAStack->isCancelRegion());
 }
@@ -5313,7 +5373,7 @@ StmtResult Sema::ActOnOpenMPForSimdDirective(
   if (checkSimdlenSafelenSpecified(*this, Clauses))
     return StmtError();
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
   return OMPForSimdDirective::Create(Context, StartLoc, EndLoc, NestedLoopCount,
                                      Clauses, AStmt, B);
 }
@@ -5350,7 +5410,7 @@ StmtResult Sema::ActOnOpenMPSectionsDirective(ArrayRef<OMPClause *> Clauses,
     return StmtError();
   }
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
 
   return OMPSectionsDirective::Create(Context, StartLoc, EndLoc, Clauses, AStmt,
                                       DSAStack->isCancelRegion());
@@ -5364,7 +5424,7 @@ StmtResult Sema::ActOnOpenMPSectionDirective(Stmt *AStmt,
 
   assert(isa<CapturedStmt>(AStmt) && "Captured statement expected");
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
   DSAStack->setParentCancelRegion(DSAStack->isCancelRegion());
 
   return OMPSectionDirective::Create(Context, StartLoc, EndLoc, AStmt,
@@ -5380,7 +5440,7 @@ StmtResult Sema::ActOnOpenMPSingleDirective(ArrayRef<OMPClause *> Clauses,
 
   assert(isa<CapturedStmt>(AStmt) && "Captured statement expected");
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
 
   // OpenMP [2.7.3, single Construct, Restrictions]
   // The copyprivate clause must not be used with the nowait clause.
@@ -5410,7 +5470,7 @@ StmtResult Sema::ActOnOpenMPMasterDirective(Stmt *AStmt,
 
   assert(isa<CapturedStmt>(AStmt) && "Captured statement expected");
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
 
   return OMPMasterDirective::Create(Context, StartLoc, EndLoc, AStmt);
 }
@@ -5464,7 +5524,7 @@ StmtResult Sema::ActOnOpenMPCriticalDirective(
     }
   }
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
 
   auto *Dir = OMPCriticalDirective::Create(Context, DirName, StartLoc, EndLoc,
                                            Clauses, AStmt);
@@ -5512,7 +5572,7 @@ StmtResult Sema::ActOnOpenMPParallelForDirective(
     }
   }
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
   return OMPParallelForDirective::Create(Context, StartLoc, EndLoc,
                                          NestedLoopCount, Clauses, AStmt, B,
                                          DSAStack->isCancelRegion());
@@ -5557,7 +5617,7 @@ StmtResult Sema::ActOnOpenMPParallelForSimdDirective(
   if (checkSimdlenSafelenSpecified(*this, Clauses))
     return StmtError();
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
   return OMPParallelForSimdDirective::Create(
       Context, StartLoc, EndLoc, NestedLoopCount, Clauses, AStmt, B);
 }
@@ -5595,7 +5655,7 @@ Sema::ActOnOpenMPParallelSectionsDirective(ArrayRef<OMPClause *> Clauses,
     return StmtError();
   }
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
 
   return OMPParallelSectionsDirective::Create(
       Context, StartLoc, EndLoc, Clauses, AStmt, DSAStack->isCancelRegion());
@@ -5615,7 +5675,7 @@ StmtResult Sema::ActOnOpenMPTaskDirective(ArrayRef<OMPClause *> Clauses,
   // longjmp() and throw() must not violate the entry/exit criteria.
   CS->getCapturedDecl()->setNothrow();
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
 
   return OMPTaskDirective::Create(Context, StartLoc, EndLoc, Clauses, AStmt,
                                   DSAStack->isCancelRegion());
@@ -5645,7 +5705,7 @@ StmtResult Sema::ActOnOpenMPTaskgroupDirective(ArrayRef<OMPClause *> Clauses,
 
   assert(isa<CapturedStmt>(AStmt) && "Captured statement expected");
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
 
   return OMPTaskgroupDirective::Create(Context, StartLoc, EndLoc, Clauses,
                                        AStmt,
@@ -5728,7 +5788,7 @@ StmtResult Sema::ActOnOpenMPOrderedDirective(ArrayRef<OMPClause *> Clauses,
   if (AStmt) {
     assert(isa<CapturedStmt>(AStmt) && "Captured statement expected");
 
-    getCurFunction()->setHasBranchProtectedScope();
+    setFunctionHasBranchProtectedScope();
   }
 
   return OMPOrderedDirective::Create(Context, StartLoc, EndLoc, Clauses, AStmt);
@@ -6398,7 +6458,7 @@ StmtResult Sema::ActOnOpenMPAtomicDirective(ArrayRef<OMPClause *> Clauses,
     }
   }
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
 
   return OMPAtomicDirective::Create(Context, StartLoc, EndLoc, Clauses, AStmt,
                                     X, V, E, UE, IsXLHSInRHSPart,
@@ -6463,7 +6523,7 @@ StmtResult Sema::ActOnOpenMPTargetDirective(ArrayRef<OMPClause *> Clauses,
     }
   }
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
 
   return OMPTargetDirective::Create(Context, StartLoc, EndLoc, Clauses, AStmt);
 }
@@ -6493,7 +6553,7 @@ Sema::ActOnOpenMPTargetParallelDirective(ArrayRef<OMPClause *> Clauses,
     CS->getCapturedDecl()->setNothrow();
   }
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
 
   return OMPTargetParallelDirective::Create(Context, StartLoc, EndLoc, Clauses,
                                             AStmt);
@@ -6548,7 +6608,7 @@ StmtResult Sema::ActOnOpenMPTargetParallelForDirective(
     }
   }
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
   return OMPTargetParallelForDirective::Create(Context, StartLoc, EndLoc,
                                                NestedLoopCount, Clauses, AStmt,
                                                B, DSAStack->isCancelRegion());
@@ -6585,7 +6645,7 @@ StmtResult Sema::ActOnOpenMPTargetDataDirective(ArrayRef<OMPClause *> Clauses,
     return StmtError();
   }
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
 
   return OMPTargetDataDirective::Create(Context, StartLoc, EndLoc, Clauses,
                                         AStmt);
@@ -6712,7 +6772,7 @@ StmtResult Sema::ActOnOpenMPTeamsDirective(ArrayRef<OMPClause *> Clauses,
   // longjmp() and throw() must not violate the entry/exit criteria.
   CS->getCapturedDecl()->setNothrow();
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
 
   DSAStack->setParentTeamsRegionLoc(StartLoc);
 
@@ -6835,7 +6895,7 @@ StmtResult Sema::ActOnOpenMPTaskLoopDirective(
   if (checkReductionClauseWithNogroup(*this, Clauses))
     return StmtError();
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
   return OMPTaskLoopDirective::Create(Context, StartLoc, EndLoc,
                                       NestedLoopCount, Clauses, AStmt, B);
 }
@@ -6885,7 +6945,7 @@ StmtResult Sema::ActOnOpenMPTaskLoopSimdDirective(
   if (checkSimdlenSafelenSpecified(*this, Clauses))
     return StmtError();
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
   return OMPTaskLoopSimdDirective::Create(Context, StartLoc, EndLoc,
                                           NestedLoopCount, Clauses, AStmt, B);
 }
@@ -6911,7 +6971,7 @@ StmtResult Sema::ActOnOpenMPDistributeDirective(
   assert((CurContext->isDependentContext() || B.builtAll()) &&
          "omp for loop exprs were not built");
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
   return OMPDistributeDirective::Create(Context, StartLoc, EndLoc,
                                         NestedLoopCount, Clauses, AStmt, B);
 }
@@ -6955,7 +7015,7 @@ StmtResult Sema::ActOnOpenMPDistributeParallelForDirective(
   assert((CurContext->isDependentContext() || B.builtAll()) &&
          "omp for loop exprs were not built");
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
   return OMPDistributeParallelForDirective::Create(
       Context, StartLoc, EndLoc, NestedLoopCount, Clauses, AStmt, B,
       DSAStack->isCancelRegion());
@@ -7014,7 +7074,7 @@ StmtResult Sema::ActOnOpenMPDistributeParallelForSimdDirective(
   if (checkSimdlenSafelenSpecified(*this, Clauses))
     return StmtError();
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
   return OMPDistributeParallelForSimdDirective::Create(
       Context, StartLoc, EndLoc, NestedLoopCount, Clauses, AStmt, B);
 }
@@ -7071,7 +7131,7 @@ StmtResult Sema::ActOnOpenMPDistributeSimdDirective(
   if (checkSimdlenSafelenSpecified(*this, Clauses))
     return StmtError();
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
   return OMPDistributeSimdDirective::Create(Context, StartLoc, EndLoc,
                                             NestedLoopCount, Clauses, AStmt, B);
 }
@@ -7127,7 +7187,7 @@ StmtResult Sema::ActOnOpenMPTargetParallelForSimdDirective(
   if (checkSimdlenSafelenSpecified(*this, Clauses))
     return StmtError();
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
   return OMPTargetParallelForSimdDirective::Create(
       Context, StartLoc, EndLoc, NestedLoopCount, Clauses, AStmt, B);
 }
@@ -7184,7 +7244,7 @@ StmtResult Sema::ActOnOpenMPTargetSimdDirective(
   if (checkSimdlenSafelenSpecified(*this, Clauses))
     return StmtError();
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
   return OMPTargetSimdDirective::Create(Context, StartLoc, EndLoc,
                                         NestedLoopCount, Clauses, AStmt, B);
 }
@@ -7227,7 +7287,7 @@ StmtResult Sema::ActOnOpenMPTeamsDistributeDirective(
   assert((CurContext->isDependentContext() || B.builtAll()) &&
          "omp teams distribute loop exprs were not built");
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
 
   DSAStack->setParentTeamsRegionLoc(StartLoc);
 
@@ -7290,7 +7350,7 @@ StmtResult Sema::ActOnOpenMPTeamsDistributeSimdDirective(
   if (checkSimdlenSafelenSpecified(*this, Clauses))
     return StmtError();
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
 
   DSAStack->setParentTeamsRegionLoc(StartLoc);
 
@@ -7353,7 +7413,7 @@ StmtResult Sema::ActOnOpenMPTeamsDistributeParallelForSimdDirective(
   if (checkSimdlenSafelenSpecified(*this, Clauses))
     return StmtError();
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
 
   DSAStack->setParentTeamsRegionLoc(StartLoc);
 
@@ -7402,7 +7462,7 @@ StmtResult Sema::ActOnOpenMPTeamsDistributeParallelForDirective(
   assert((CurContext->isDependentContext() || B.builtAll()) &&
          "omp for loop exprs were not built");
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
 
   DSAStack->setParentTeamsRegionLoc(StartLoc);
 
@@ -7436,7 +7496,7 @@ StmtResult Sema::ActOnOpenMPTargetTeamsDirective(ArrayRef<OMPClause *> Clauses,
     // longjmp() and throw() must not violate the entry/exit criteria.
     CS->getCapturedDecl()->setNothrow();
   }
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
 
   return OMPTargetTeamsDirective::Create(Context, StartLoc, EndLoc, Clauses,
                                          AStmt);
@@ -7481,7 +7541,7 @@ StmtResult Sema::ActOnOpenMPTargetTeamsDistributeDirective(
   assert((CurContext->isDependentContext() || B.builtAll()) &&
          "omp target teams distribute loop exprs were not built");
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
   return OMPTargetTeamsDistributeDirective::Create(
       Context, StartLoc, EndLoc, NestedLoopCount, Clauses, AStmt, B);
 }
@@ -7536,7 +7596,7 @@ StmtResult Sema::ActOnOpenMPTargetTeamsDistributeParallelForDirective(
     }
   }
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
   return OMPTargetTeamsDistributeParallelForDirective::Create(
       Context, StartLoc, EndLoc, NestedLoopCount, Clauses, AStmt, B,
       DSAStack->isCancelRegion());
@@ -7597,7 +7657,7 @@ StmtResult Sema::ActOnOpenMPTargetTeamsDistributeParallelForSimdDirective(
   if (checkSimdlenSafelenSpecified(*this, Clauses))
     return StmtError();
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
   return OMPTargetTeamsDistributeParallelForSimdDirective::Create(
       Context, StartLoc, EndLoc, NestedLoopCount, Clauses, AStmt, B);
 }
@@ -7655,7 +7715,7 @@ StmtResult Sema::ActOnOpenMPTargetTeamsDistributeSimdDirective(
   if (checkSimdlenSafelenSpecified(*this, Clauses))
     return StmtError();
 
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
   return OMPTargetTeamsDistributeSimdDirective::Create(
       Context, StartLoc, EndLoc, NestedLoopCount, Clauses, AStmt, B);
 }
@@ -9274,8 +9334,10 @@ OMPClause *Sema::ActOnOpenMPPrivateClause(ArrayRef<Expr *> VarList,
     // IdResolver, so the code in the OpenMP region uses original variable for
     // proper diagnostics.
     Type = Type.getUnqualifiedType();
-    auto VDPrivate = buildVarDecl(*this, ELoc, Type, D->getName(),
-                                  D->hasAttrs() ? &D->getAttrs() : nullptr);
+    auto VDPrivate =
+        buildVarDecl(*this, ELoc, Type, D->getName(),
+                     D->hasAttrs() ? &D->getAttrs() : nullptr,
+                     VD ? cast<DeclRefExpr>(SimpleRefExpr) : nullptr);
     ActOnUninitializedDecl(VDPrivate);
     if (VDPrivate->isInvalidDecl())
       continue;
@@ -9513,8 +9575,10 @@ OMPClause *Sema::ActOnOpenMPFirstprivateClause(ArrayRef<Expr *> VarList,
     }
 
     Type = Type.getUnqualifiedType();
-    auto VDPrivate = buildVarDecl(*this, ELoc, Type, D->getName(),
-                                  D->hasAttrs() ? &D->getAttrs() : nullptr);
+    auto VDPrivate =
+        buildVarDecl(*this, ELoc, Type, D->getName(),
+                     D->hasAttrs() ? &D->getAttrs() : nullptr,
+                     VD ? cast<DeclRefExpr>(SimpleRefExpr) : nullptr);
     // Generate helper private variable and initialize it with the value of the
     // original variable. The address of the original variable is replaced by
     // the address of the new private variable in the CodeGen. This new variable
@@ -10406,8 +10470,10 @@ static bool ActOnOMPReductionKindClause(
                Context.getAsArrayType(D->getType().getNonReferenceType()))
       PrivateTy = D->getType().getNonReferenceType();
     // Private copy.
-    auto *PrivateVD = buildVarDecl(S, ELoc, PrivateTy, D->getName(),
-                                   D->hasAttrs() ? &D->getAttrs() : nullptr);
+    auto *PrivateVD =
+        buildVarDecl(S, ELoc, PrivateTy, D->getName(),
+                     D->hasAttrs() ? &D->getAttrs() : nullptr,
+                     VD ? cast<DeclRefExpr>(SimpleRefExpr) : nullptr);
     // Add initializer for private variable.
     Expr *Init = nullptr;
     auto *LHSDRE = buildDeclRefExpr(S, LHSVD, Type, ELoc);
@@ -10863,8 +10929,10 @@ OMPClause *Sema::ActOnOpenMPLinearClause(
     Type = Type.getNonReferenceType().getUnqualifiedType().getCanonicalType();
 
     // Build private copy of original var.
-    auto *Private = buildVarDecl(*this, ELoc, Type, D->getName(),
-                                 D->hasAttrs() ? &D->getAttrs() : nullptr);
+    auto *Private =
+        buildVarDecl(*this, ELoc, Type, D->getName(),
+                     D->hasAttrs() ? &D->getAttrs() : nullptr,
+                     VD ? cast<DeclRefExpr>(SimpleRefExpr) : nullptr);
     auto *PrivateRef = buildDeclRefExpr(*this, Private, Type, ELoc);
     // Build var to save initial value.
     VarDecl *Init = buildVarDecl(*this, ELoc, Type, ".linear.start");
@@ -11527,12 +11595,16 @@ OMPClause *Sema::ActOnOpenMPDeviceClause(Expr *Device, SourceLocation StartLoc,
 }
 
 static bool CheckTypeMappable(SourceLocation SL, SourceRange SR, Sema &SemaRef,
-                              DSAStackTy *Stack, QualType QTy) {
+                              DSAStackTy *Stack, QualType QTy,
+                              bool FullCheck = true) {
   NamedDecl *ND;
   if (QTy->isIncompleteType(&ND)) {
     SemaRef.Diag(SL, diag::err_incomplete_type) << QTy << SR;
     return false;
   }
+  if (FullCheck && !SemaRef.CurContext->isDependentContext() &&
+      !QTy.isTrivialType(SemaRef.Context))
+    SemaRef.Diag(SL, diag::warn_omp_non_trivial_type_mapped) << QTy << SR;
   return true;
 }
 
@@ -11987,14 +12059,20 @@ static bool CheckMapConflicts(
                 DerivedLoc,
                 diag::err_omp_pointer_mapped_along_with_derived_section)
                 << DerivedLoc;
-          } else {
+            SemaRef.Diag(RE->getExprLoc(), diag::note_used_here)
+                << RE->getSourceRange();
+            return true;
+          } else if (CI->getAssociatedExpression()->getStmtClass() !=
+                         SI->getAssociatedExpression()->getStmtClass() ||
+                     CI->getAssociatedDeclaration()->getCanonicalDecl() ==
+                         SI->getAssociatedDeclaration()->getCanonicalDecl()) {
             assert(CI != CE && SI != SE);
-            SemaRef.Diag(DerivedLoc, diag::err_omp_same_pointer_derreferenced)
+            SemaRef.Diag(DerivedLoc, diag::err_omp_same_pointer_dereferenced)
                 << DerivedLoc;
+            SemaRef.Diag(RE->getExprLoc(), diag::note_used_here)
+                << RE->getSourceRange();
+            return true;
           }
-          SemaRef.Diag(RE->getExprLoc(), diag::note_used_here)
-              << RE->getSourceRange();
-          return true;
         }
 
         // OpenMP 4.5 [2.15.5.1, map Clause, Restrictions, p.4]
@@ -12396,7 +12474,7 @@ void Sema::ActOnOpenMPDeclareReductionCombinerStart(Scope *S, Decl *D) {
 
   // Enter new function scope.
   PushFunctionScope();
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
   getCurFunction()->setHasOMPDeclareReductionCombiner();
 
   if (S != nullptr)
@@ -12452,7 +12530,7 @@ VarDecl *Sema::ActOnOpenMPDeclareReductionInitializerStart(Scope *S, Decl *D) {
 
   // Enter new function scope.
   PushFunctionScope();
-  getCurFunction()->setHasBranchProtectedScope();
+  setFunctionHasBranchProtectedScope();
 
   if (S != nullptr)
     PushDeclContext(S, DRD);
@@ -12876,7 +12954,8 @@ static bool checkValueDeclInTarget(SourceLocation SL, SourceRange SR,
                                    ValueDecl *VD) {
   if (VD->hasAttr<OMPDeclareTargetDeclAttr>())
     return true;
-  if (!CheckTypeMappable(SL, SR, SemaRef, Stack, VD->getType()))
+  if (!CheckTypeMappable(SL, SR, SemaRef, Stack, VD->getType(),
+                         /*FullCheck=*/false))
     return false;
   return true;
 }
@@ -13013,8 +13092,10 @@ OMPClause *Sema::ActOnOpenMPUseDevicePtrClause(ArrayRef<Expr *> VarList,
     }
 
     // Build the private variable and the expression that refers to it.
-    auto VDPrivate = buildVarDecl(*this, ELoc, Type, D->getName(),
-                                  D->hasAttrs() ? &D->getAttrs() : nullptr);
+    auto VDPrivate =
+        buildVarDecl(*this, ELoc, Type, D->getName(),
+                     D->hasAttrs() ? &D->getAttrs() : nullptr,
+                     VD ? cast<DeclRefExpr>(SimpleRefExpr) : nullptr);
     if (VDPrivate->isInvalidDecl())
       continue;
 

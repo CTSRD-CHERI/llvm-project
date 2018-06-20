@@ -7,8 +7,18 @@
 namespace clang {
 namespace clangd {
 
-CancellationFlag::CancellationFlag()
-    : WasCancelled(std::make_shared<std::atomic<bool>>(false)) {}
+void Notification::notify() {
+  {
+    std::lock_guard<std::mutex> Lock(Mu);
+    Notified = true;
+  }
+  CV.notify_all();
+}
+
+void Notification::wait() const {
+  std::unique_lock<std::mutex> Lock(Mu);
+  CV.wait(Lock, [this] { return Notified; });
+}
 
 Semaphore::Semaphore(std::size_t MaxLocks) : FreeSlots(MaxLocks) {}
 
@@ -66,9 +76,18 @@ void AsyncTaskRunner::runAsync(llvm::Twine Name,
 Deadline timeoutSeconds(llvm::Optional<double> Seconds) {
   using namespace std::chrono;
   if (!Seconds)
-    return llvm::None;
+    return Deadline::infinity();
   return steady_clock::now() +
          duration_cast<steady_clock::duration>(duration<double>(*Seconds));
+}
+
+void wait(std::unique_lock<std::mutex> &Lock, std::condition_variable &CV,
+          Deadline D) {
+  if (D == Deadline::zero())
+    return;
+  if (D == Deadline::infinity())
+    return CV.wait(Lock);
+  CV.wait_until(Lock, D.time());
 }
 
 } // namespace clangd

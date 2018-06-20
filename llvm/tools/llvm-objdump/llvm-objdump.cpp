@@ -20,6 +20,7 @@
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/ADT/StringSet.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/CodeGen/FaultMaps.h"
 #include "llvm/DebugInfo/DWARF/DWARFContext.h"
@@ -84,6 +85,12 @@ llvm::DisassembleAll("disassemble-all",
 static cl::alias
 DisassembleAlld("D", cl::desc("Alias for --disassemble-all"),
              cl::aliasopt(DisassembleAll));
+
+static cl::list<std::string>
+DisassembleFunctions("df",
+                     cl::CommaSeparated,
+                     cl::desc("List of functions to disassemble"));
+static StringSet<> DisasmFuncsSet;
 
 cl::opt<bool>
 llvm::Relocations("r", cl::desc("Display the relocation entries in the file"));
@@ -408,7 +415,7 @@ protected:
   std::unordered_map<std::string, std::vector<StringRef>> LineCache;
 
 private:
-  bool cacheSource(const std::string& File);
+  bool cacheSource(const DILineInfo& LineInfoFile);
 
 public:
   SourcePrinter() = default;
@@ -423,23 +430,29 @@ public:
                                StringRef Delimiter = "; ");
 };
 
-bool SourcePrinter::cacheSource(const std::string& File) {
-  auto BufferOrError = MemoryBuffer::getFile(File);
-  if (!BufferOrError)
-    return false;
+bool SourcePrinter::cacheSource(const DILineInfo &LineInfo) {
+  std::unique_ptr<MemoryBuffer> Buffer;
+  if (LineInfo.Source) {
+    Buffer = MemoryBuffer::getMemBuffer(*LineInfo.Source);
+  } else {
+    auto BufferOrError = MemoryBuffer::getFile(LineInfo.FileName);
+    if (!BufferOrError)
+      return false;
+    Buffer = std::move(*BufferOrError);
+  }
   // Chomp the file to get lines
-  size_t BufferSize = (*BufferOrError)->getBufferSize();
-  const char *BufferStart = (*BufferOrError)->getBufferStart();
+  size_t BufferSize = Buffer->getBufferSize();
+  const char *BufferStart = Buffer->getBufferStart();
   for (const char *Start = BufferStart, *End = BufferStart;
        End < BufferStart + BufferSize; End++)
     if (*End == '\n' || End == BufferStart + BufferSize - 1 ||
         (*End == '\r' && *(End + 1) == '\n')) {
-      LineCache[File].push_back(StringRef(Start, End - Start));
+      LineCache[LineInfo.FileName].push_back(StringRef(Start, End - Start));
       if (*End == '\r')
         End++;
       Start = End + 1;
     }
-  SourceCache[File] = std::move(*BufferOrError);
+  SourceCache[LineInfo.FileName] = std::move(Buffer);
   return true;
 }
 
@@ -463,7 +476,7 @@ void SourcePrinter::printSourceLine(raw_ostream &OS, uint64_t Address,
     OS << Delimiter << LineInfo.FileName << ":" << LineInfo.Line << "\n";
   if (PrintSource) {
     if (SourceCache.find(LineInfo.FileName) == SourceCache.end())
-      if (!cacheSource(LineInfo.FileName))
+      if (!cacheSource(LineInfo))
         return;
     auto FileBuffer = SourceCache.find(LineInfo.FileName);
     if (FileBuffer != SourceCache.end()) {
@@ -1382,23 +1395,15 @@ static void DisassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
       DataRefImpl DR = Section.getRawDataRefImpl();
       SegmentName = MachO->getSectionFinalSegmentName(DR);
     }
-    StringRef name;
-    error(Section.getName(name));
-
-    if ((SectionAddr <= StopAddress) &&
-        (SectionAddr + SectSize) >= StartAddress) {
-    outs() << "Disassembly of section ";
-    if (!SegmentName.empty())
-      outs() << SegmentName << ",";
-    outs() << name << ':';
-    }
+    StringRef SectionName;
+    error(Section.getName(SectionName));
 
     // If the section has no symbol at the start, just insert a dummy one.
     if (Symbols.empty() || std::get<0>(Symbols[0]) != 0) {
-      Symbols.insert(Symbols.begin(),
-                     std::make_tuple(SectionAddr, name, Section.isText()
-                                                            ? ELF::STT_FUNC
-                                                            : ELF::STT_OBJECT));
+      Symbols.insert(
+          Symbols.begin(),
+          std::make_tuple(SectionAddr, SectionName,
+                          Section.isText() ? ELF::STT_FUNC : ELF::STT_OBJECT));
     }
 
     SmallString<40> Comments;
@@ -1411,6 +1416,7 @@ static void DisassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
 
     uint64_t Size;
     uint64_t Index;
+    bool PrintedSection = false;
 
     std::vector<RelocationRef>::const_iterator rel_cur = Rels.begin();
     std::vector<RelocationRef>::const_iterator rel_end = Rels.end();
@@ -1433,6 +1439,19 @@ static void DisassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
       if (End + SectionAddr < StartAddress ||
           Start + SectionAddr > StopAddress) {
         continue;
+      }
+
+      /// Skip if user requested specific symbols and this is not in the list
+      if (!DisasmFuncsSet.empty() &&
+          !DisasmFuncsSet.count(std::get<1>(Symbols[si])))
+        continue;
+
+      if (!PrintedSection) {
+        PrintedSection = true;
+        outs() << "Disassembly of section ";
+        if (!SegmentName.empty())
+          outs() << SegmentName << ",";
+        outs() << SectionName << ':';
       }
 
       // Stop disassembly at the stop address specified
@@ -2196,6 +2215,9 @@ int main(int argc, char **argv) {
     cl::PrintHelpMessage();
     return 2;
   }
+
+  DisasmFuncsSet.insert(DisassembleFunctions.begin(),
+                        DisassembleFunctions.end());
 
   llvm::for_each(InputFilenames, DumpInput);
 

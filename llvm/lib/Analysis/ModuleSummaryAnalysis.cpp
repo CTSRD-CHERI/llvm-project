@@ -279,17 +279,9 @@ computeFunctionSummary(ModuleSummaryIndex &Index, const Module &M,
         // Add the relative block frequency to CalleeInfo if there is no profile
         // information.
         if (BFI != nullptr && Hotness == CalleeInfo::HotnessType::Unknown) {
-          auto BBFreq = BFI->getBlockFreq(&BB).getFrequency();
-          // FIXME: This might need some scaling to prevent BBFreq values from
-          // being rounded down to 0.
-          auto EntryFreq = BFI->getEntryFreq();
-          // Block frequencies can be directly set for a block and so we need to
-          // handle the case of entry frequency being 0.
-          if (EntryFreq)
-            BBFreq /= EntryFreq;
-          else
-            BBFreq = 0;
-          ValueInfo.updateRelBlockFreq(BBFreq);
+          uint64_t BBFreq = BFI->getBlockFreq(&BB).getFrequency();
+          uint64_t EntryFreq = BFI->getEntryFreq();
+          ValueInfo.updateRelBlockFreq(BBFreq, EntryFreq);
         }
       } else {
         // Skip inline assembly calls.
@@ -298,6 +290,18 @@ computeFunctionSummary(ModuleSummaryIndex &Index, const Module &M,
         // Skip direct calls.
         if (!CalledValue || isa<Constant>(CalledValue))
           continue;
+
+        // Check if the instruction has a callees metadata. If so, add callees
+        // to CallGraphEdges to reflect the references from the metadata, and
+        // to enable importing for subsequent indirect call promotion and
+        // inlining.
+        if (auto *MD = I.getMetadata(LLVMContext::MD_callees)) {
+          for (auto &Op : MD->operands()) {
+            Function *Callee = mdconst::extract_or_null<Function>(Op);
+            if (Callee)
+              CallGraphEdges[Index.getOrInsertValueInfo(Callee)];
+          }
+        }
 
         uint32_t NumVals, NumCandidates;
         uint64_t TotalCount;

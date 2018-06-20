@@ -28,13 +28,14 @@ namespace llvm {
 namespace WasmYAML {
 
 LLVM_YAML_STRONG_TYPEDEF(uint32_t, SectionType)
-LLVM_YAML_STRONG_TYPEDEF(int32_t, ValueType)
-LLVM_YAML_STRONG_TYPEDEF(int32_t, TableType)
-LLVM_YAML_STRONG_TYPEDEF(int32_t, SignatureForm)
+LLVM_YAML_STRONG_TYPEDEF(uint32_t, ValueType)
+LLVM_YAML_STRONG_TYPEDEF(uint32_t, TableType)
+LLVM_YAML_STRONG_TYPEDEF(uint32_t, SignatureForm)
 LLVM_YAML_STRONG_TYPEDEF(uint32_t, ExportKind)
 LLVM_YAML_STRONG_TYPEDEF(uint32_t, Opcode)
 LLVM_YAML_STRONG_TYPEDEF(uint32_t, RelocType)
 LLVM_YAML_STRONG_TYPEDEF(uint32_t, SymbolFlags)
+LLVM_YAML_STRONG_TYPEDEF(uint32_t, SymbolKind)
 LLVM_YAML_STRONG_TYPEDEF(uint32_t, SegmentFlags)
 LLVM_YAML_STRONG_TYPEDEF(uint32_t, LimitFlags)
 LLVM_YAML_STRONG_TYPEDEF(uint32_t, ComdatKind)
@@ -130,13 +131,19 @@ struct Signature {
 };
 
 struct SymbolInfo {
+  uint32_t Index;
   StringRef Name;
+  SymbolKind Kind;
   SymbolFlags Flags;
+  union {
+    uint32_t ElementIndex;
+    wasm::WasmDataReference DataRef;
+  };
 };
 
 struct InitFunction {
   uint32_t Priority;
-  uint32_t FunctionIndex;
+  uint32_t Symbol;
 };
 
 struct ComdatEntry {
@@ -188,8 +195,7 @@ struct LinkingSection : CustomSection {
     return C && C->Name == "linking";
   }
 
-  uint32_t DataSize;
-  std::vector<SymbolInfo> SymbolInfos;
+  std::vector<SymbolInfo> SymbolTable;
   std::vector<SegmentInfo> SegmentInfos;
   std::vector<InitFunction> InitFunctions;
   std::vector<Comdat> Comdats;
@@ -366,6 +372,10 @@ template <> struct ScalarBitSetTraits<WasmYAML::LimitFlags> {
 
 template <> struct ScalarBitSetTraits<WasmYAML::SymbolFlags> {
   static void bitset(IO &IO, WasmYAML::SymbolFlags &Value);
+};
+
+template <> struct ScalarEnumerationTraits<WasmYAML::SymbolKind> {
+  static void enumeration(IO &IO, WasmYAML::SymbolKind &Kind);
 };
 
 template <> struct ScalarBitSetTraits<WasmYAML::SegmentFlags> {

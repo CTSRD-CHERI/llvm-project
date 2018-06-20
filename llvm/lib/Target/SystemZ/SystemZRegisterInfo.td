@@ -130,7 +130,7 @@ defm AnyReg : SystemZRegClass<"AnyReg",
                               [i64, f64, v8i8, v4i16, v2i32, v2f32], 64,
                               (add (sequence "R%uD", 0, 15),
                                    (sequence "F%uD", 0, 15),
-                                   (sequence "V%u", 0, 15))>;
+                                   (sequence "V%u", 0, 15)), 0/*allocatable*/>;
 
 //===----------------------------------------------------------------------===//
 // Floating-point registers
@@ -263,7 +263,7 @@ defm VF128 : SystemZRegClass<"VF128",
 
 // All vector registers.
 defm VR128 : SystemZRegClass<"VR128",
-                             [f128, v16i8, v8i16, v4i32, v2i64, v4f32, v2f64],
+                             [v16i8, v8i16, v4i32, v2i64, v4f32, v2f64, f128],
                              128, (add (sequence "V%u", 0, 7),
                                        (sequence "V%u", 16, 31),
                                        (sequence "V%u", 8, 15))>;

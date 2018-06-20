@@ -44,13 +44,9 @@ DynamicRegisterInfo::SetRegisterInfo(const StructuredData::Dictionary &dict,
   if (dict.GetValueForKeyAsArray("sets", sets)) {
     const uint32_t num_sets = sets->GetSize();
     for (uint32_t i = 0; i < num_sets; ++i) {
-      llvm::StringRef set_name_str;
       ConstString set_name;
-      if (sets->GetItemAtIndexAsString(i, set_name_str))
-        set_name.SetString(set_name_str);
-      if (set_name) {
-        RegisterSet new_set = {set_name.AsCString(), NULL, 0, NULL};
-        m_sets.push_back(new_set);
+      if (sets->GetItemAtIndexAsString(i, set_name) && !set_name.IsEmpty()) {
+        m_sets.push_back({ set_name.AsCString(), NULL, 0, NULL });
       } else {
         Clear();
         printf("error: register sets must have valid names\n");
@@ -59,6 +55,7 @@ DynamicRegisterInfo::SetRegisterInfo(const StructuredData::Dictionary &dict,
     }
     m_set_reg_nums.resize(m_sets.size());
   }
+
   StructuredData::Array *regs = nullptr;
   if (!dict.GetValueForKeyAsArray("registers", regs))
     return 0;
@@ -437,7 +434,7 @@ void DynamicRegisterInfo::Finalize(const ArchSpec &arch) {
   for (size_t set = 0; set < num_sets; ++set) {
     assert(m_sets.size() == m_set_reg_nums.size());
     m_sets[set].num_registers = m_set_reg_nums[set].size();
-    m_sets[set].registers = &m_set_reg_nums[set][0];
+    m_sets[set].registers = m_set_reg_nums[set].data();
   }
 
   // sort and unique all value registers and make sure each is terminated with

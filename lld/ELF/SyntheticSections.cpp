@@ -20,7 +20,6 @@
 #include "InputFiles.h"
 #include "LinkerScript.h"
 #include "OutputSections.h"
-#include "Strings.h"
 #include "SymbolTable.h"
 #include "Symbols.h"
 #include "Target.h"
@@ -28,6 +27,7 @@
 #include "Arch/Cheri.h"
 #include "lld/Common/ErrorHandler.h"
 #include "lld/Common/Memory.h"
+#include "lld/Common/Strings.h"
 #include "lld/Common/Threads.h"
 #include "lld/Common/Version.h"
 #include "llvm/ADT/SetOperations.h"
@@ -49,16 +49,14 @@ using namespace llvm::dwarf;
 using namespace llvm::ELF;
 using namespace llvm::object;
 using namespace llvm::support;
-using namespace llvm::support::endian;
 
 using namespace lld;
 using namespace lld::elf;
 
-constexpr size_t MergeNoTailSection::NumShards;
+using llvm::support::endian::write32le;
+using llvm::support::endian::write64le;
 
-static void write32(void *Buf, uint32_t Val) {
-  endian::write32(Buf, Val, Config->Endianness);
-}
+constexpr size_t MergeNoTailSection::NumShards;
 
 uint64_t SyntheticSection::getVA() const {
   if (OutputSection *Sec = getParent())
@@ -69,7 +67,7 @@ uint64_t SyntheticSection::getVA() const {
 // Returns an LLD version string.
 static ArrayRef<uint8_t> getVersion() {
   // Check LLD_VERSION first for ease of testing.
-  // You can get consitent output by using the environment variable.
+  // You can get consistent output by using the environment variable.
   // This is only for testing.
   StringRef S = getenv("LLD_VERSION");
   if (S.empty())
@@ -392,7 +390,7 @@ EhFrameSection::EhFrameSection()
 template <class ELFT, class RelTy>
 CieRecord *EhFrameSection::addCie(EhSectionPiece &Cie, ArrayRef<RelTy> Rels) {
   auto *Sec = cast<EhInputSection>(Cie.Sec);
-  if (read32(Cie.data().data() + 4, Config->Endianness) != 0)
+  if (read32(Cie.data().data() + 4) != 0)
     fatal(toString(Sec) + ": CIE expected at beginning of .eh_frame");
 
   Symbol *Personality = nullptr;
@@ -451,7 +449,7 @@ void EhFrameSection::addSectionAux(EhInputSection *Sec, ArrayRef<RelTy> Rels) {
       return;
 
     size_t Offset = Piece.InputOff;
-    uint32_t ID = read32(Piece.data().data() + 4, Config->Endianness);
+    uint32_t ID = read32(Piece.data().data() + 4);
     if (ID == 0) {
       OffsetToCie[Offset] = addCie<ELFT>(Piece, Rels);
       continue;
@@ -553,11 +551,11 @@ std::vector<EhFrameSection::FdeData> EhFrameSection::getFdeData() const {
 static uint64_t readFdeAddr(uint8_t *Buf, int Size) {
   switch (Size) {
   case DW_EH_PE_udata2:
-    return read16(Buf, Config->Endianness);
+    return read16(Buf);
   case DW_EH_PE_udata4:
-    return read32(Buf, Config->Endianness);
+    return read32(Buf);
   case DW_EH_PE_udata8:
-    return read64(Buf, Config->Endianness);
+    return read64(Buf);
   case DW_EH_PE_absptr:
     return readUint(Buf);
   }
@@ -607,7 +605,7 @@ GotSection::GotSection()
                        Target->GotEntrySize, ".got") {}
 
 void GotSection::addEntry(Symbol &Sym) {
-  Sym.GotIndex = NumEntries;
+  Sym.GotIndex = Target->GotHeaderEntriesNum + NumEntries;
   ++NumEntries;
 }
 
@@ -638,19 +636,24 @@ uint64_t GotSection::getGlobalDynOffset(const Symbol &B) const {
   return B.GlobalDynIndex * Config->Wordsize;
 }
 
-void GotSection::finalizeContents() { Size = NumEntries * Config->Wordsize; }
+void GotSection::finalizeContents() {
+  Size = (NumEntries + Target->GotHeaderEntriesNum) * Config->Wordsize;
+}
 
 bool GotSection::empty() const {
   // We need to emit a GOT even if it's empty if there's a relocation that is
   // relative to GOT(such as GOTOFFREL) or there's a symbol that points to a GOT
-  // (i.e. _GLOBAL_OFFSET_TABLE_).
-  return NumEntries == 0 && !HasGotOffRel && !ElfSym::GlobalOffsetTable;
+  // (i.e. _GLOBAL_OFFSET_TABLE_) that the target defines relative to the .got.
+  return NumEntries == 0 && !HasGotOffRel &&
+         !(ElfSym::GlobalOffsetTable && !Target->GotBaseSymInGotPlt);
 }
 
 void GotSection::writeTo(uint8_t *Buf) {
   // Buf points to the start of this section's buffer,
   // whereas InputSectionBase::relocateAlloc() expects its argument
   // to point to the start of the output section.
+  Target->writeGotHeader(Buf);
+  Buf += Target->GotHeaderEntriesNum * Target->GotEntrySize;
   relocateAlloc(Buf - OutSecOff, Buf - OutSecOff + Size);
 }
 
@@ -1088,6 +1091,14 @@ void GotPltSection::writeTo(uint8_t *Buf) {
   }
 }
 
+bool GotPltSection::empty() const {
+  // We need to emit a GOT.PLT even if it's empty if there's a symbol that
+  // references the _GLOBAL_OFFSET_TABLE_ and the Target defines the symbol
+  // relative to the .got.plt section.
+  return Entries.empty() &&
+         !(ElfSym::GlobalOffsetTable && Target->GotBaseSymInGotPlt);
+}
+
 // On ARM the IgotPltSection is part of the GotSection, on other Targets it is
 // part of the .got.plt
 IgotPltSection::IgotPltSection()
@@ -1193,8 +1204,7 @@ void DynamicSection<ELFT>::addInt(int32_t Tag, uint64_t Val) {
 
 template <class ELFT>
 void DynamicSection<ELFT>::addInSec(int32_t Tag, InputSection *Sec) {
-  Entries.push_back(
-      {Tag, [=] { return Sec->getParent()->Addr + Sec->OutSecOff; }});
+  Entries.push_back({Tag, [=] { return Sec->getVA(0); }});
 }
 
 template <class ELFT>
@@ -1243,6 +1253,8 @@ template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
     DtFlags |= DF_ORIGIN;
     DtFlags1 |= DF_1_ORIGIN;
   }
+  if (!Config->ZText)
+    DtFlags |= DF_TEXTREL;
 
   if (DtFlags)
     addInt(DT_FLAGS, DtFlags);
@@ -1388,7 +1400,7 @@ template <class ELFT> void DynamicSection<ELFT>::writeTo(uint8_t *Buf) {
 }
 
 uint64_t DynamicReloc::getOffset() const {
-  return InputSec->getOutputSection()->Addr + InputSec->getOffset(OffsetInSec);
+  return InputSec->getVA(OffsetInSec);
 }
 
 int64_t DynamicReloc::computeAddend() const {
@@ -1930,7 +1942,7 @@ void GnuHashTableSection::writeTo(uint8_t *Buf) {
   write32(Buf, NBuckets);
   write32(Buf + 4, InX::DynSymTab->getNumSymbols() - Symbols.size());
   write32(Buf + 8, MaskWords);
-  write32(Buf + 12, getShift2());
+  write32(Buf + 12, Shift2);
   Buf += 16;
 
   // Write a bloom filter and a hash table.
@@ -1952,7 +1964,7 @@ void GnuHashTableSection::writeBloomFilter(uint8_t *Buf) {
     size_t I = (Sym.Hash / C) & (MaskWords - 1);
     uint64_t Val = readUint(Buf + I * Config->Wordsize);
     Val |= uint64_t(1) << (Sym.Hash % C);
-    Val |= uint64_t(1) << ((Sym.Hash >> getShift2()) % C);
+    Val |= uint64_t(1) << ((Sym.Hash >> Shift2) % C);
     writeUint(Buf + I * Config->Wordsize, Val);
   }
 }
@@ -2000,14 +2012,20 @@ void GnuHashTableSection::addSymbols(std::vector<SymbolTableEntry> &V) {
           return SS->CopyRelSec == nullptr && !SS->NeedsPltAddr;
         return !S.Sym->isDefined();
       });
-  if (Mid == V.end())
-    return;
 
   // We chose load factor 4 for the on-disk hash table. For each hash
   // collision, the dynamic linker will compare a uint32_t hash value.
-  // Since the integer comparison is quite fast, we believe we can make
-  // the load factor even larger. 4 is just a conservative choice.
+  // Since the integer comparison is quite fast, we believe we can
+  // make the load factor even larger. 4 is just a conservative choice.
+  //
+  // Note that we don't want to create a zero-sized hash table because
+  // Android loader as of 2018 doesn't like a .gnu.hash containing such
+  // table. If that's the case, we create a hash table with one unused
+  // dummy slot.
   NBuckets = std::max<size_t>((V.end() - Mid) / 4, 1);
+
+  if (Mid == V.end())
+    return;
 
   for (SymbolTableEntry &Ent : llvm::make_range(Mid, V.end())) {
     Symbol *B = Ent.Sym;
@@ -2336,8 +2354,7 @@ void GdbIndexSection::writeTo(uint8_t *Buf) {
   // Write the address area.
   for (GdbIndexChunk &D : Chunks) {
     for (GdbIndexChunk::AddressEntry &E : D.AddressAreas) {
-      uint64_t BaseAddr =
-          E.Section->getParent()->Addr + E.Section->getOffset(0);
+      uint64_t BaseAddr = E.Section->getVA(0);
       write64le(Buf, BaseAddr + E.LowAddress);
       write64le(Buf + 8, BaseAddr + E.HighAddress);
       write32le(Buf + 16, E.CuIndex);
@@ -2520,8 +2537,7 @@ VersionNeedSection<ELFT>::VersionNeedSection()
 template <class ELFT>
 void VersionNeedSection<ELFT>::addSymbol(SharedSymbol *SS) {
   SharedFile<ELFT> &File = SS->getFile<ELFT>();
-  const typename ELFT::Verdef *Ver = File.Verdefs[SS->VerdefIndex];
-  if (!Ver) {
+  if (SS->VerdefIndex == VER_NDX_GLOBAL) {
     SS->VersionId = VER_NDX_GLOBAL;
     return;
   }
@@ -2531,7 +2547,9 @@ void VersionNeedSection<ELFT>::addSymbol(SharedSymbol *SS) {
   // for the soname.
   if (File.VerdefMap.empty())
     Needed.push_back({&File, InX::DynStrTab->addString(File.SoName)});
+  const typename ELFT::Verdef *Ver = File.Verdefs[SS->VerdefIndex];
   typename SharedFile<ELFT>::NeededVer &NV = File.VerdefMap[Ver];
+
   // If we don't already know that we need an Elf_Vernaux for this Elf_Verdef,
   // prepare to create one by allocating a version identifier and creating a
   // dynstr entry for the version name.
@@ -2780,8 +2798,7 @@ ARMExidxSentinelSection::ARMExidxSentinelSection()
 // address described by any other table entry.
 void ARMExidxSentinelSection::writeTo(uint8_t *Buf) {
   assert(Highest);
-  uint64_t S =
-      Highest->getParent()->Addr + Highest->getOffset(Highest->getSize());
+  uint64_t S = Highest->getVA(Highest->getSize());
   uint64_t P = getVA();
   Target->relocateOne(Buf, R_ARM_PREL31, S - P);
   write32le(Buf + 4, 1);
@@ -2789,12 +2806,9 @@ void ARMExidxSentinelSection::writeTo(uint8_t *Buf) {
 
 // The sentinel has to be removed if there are no other .ARM.exidx entries.
 bool ARMExidxSentinelSection::empty() const {
-  OutputSection *OS = getParent();
-  for (auto *B : OS->SectionCommands)
-    if (auto *ISD = dyn_cast<InputSectionDescription>(B))
-      for (auto *S : ISD->Sections)
-        if (!isa<ARMExidxSentinelSection>(S))
-          return false;
+  for (InputSection *IS : getInputSections(getParent()))
+    if (!isa<ARMExidxSentinelSection>(IS))
+      return false;
   return true;
 }
 

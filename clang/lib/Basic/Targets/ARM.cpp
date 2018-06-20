@@ -419,6 +419,8 @@ bool ARMTargetInfo::handleTargetFeatures(std::vector<std::string> &Features,
       Unaligned = 0;
     } else if (Feature == "+fp16") {
       HW_FP |= HW_FP_HP;
+    } else if (Feature == "+fullfp16") {
+      HasLegalHalfType = true;
     }
   }
   HW_FP &= ~HW_FP_remove;
@@ -710,6 +712,15 @@ void ARMTargetInfo::getTargetDefines(const LangOptions &Opts,
   if (Opts.UnsafeFPMath)
     Builder.defineMacro("__ARM_FP_FAST", "1");
 
+  // Armv8.2-A FP16 vector intrinsic
+  if ((FPU & NeonFPU) && HasLegalHalfType)
+    Builder.defineMacro("__ARM_FEATURE_FP16_VECTOR_ARITHMETIC", "1");
+
+  // Armv8.2-A FP16 scalar intrinsics
+  if (HasLegalHalfType)
+    Builder.defineMacro("__ARM_FEATURE_FP16_SCALAR_ARITHMETIC", "1");
+
+
   switch (ArchKind) {
   default:
     break;
@@ -960,6 +971,8 @@ WindowsARMTargetInfo::checkCallingConvention(CallingConv CC) const {
     return CCCR_Ignore;
   case CC_C:
   case CC_OpenCLKernel:
+  case CC_PreserveMost:
+  case CC_PreserveAll:
     return CCCR_OK;
   default:
     return CCCR_Warning;

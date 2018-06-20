@@ -98,6 +98,7 @@ private:
   uint64_t readMemoryAssignment(StringRef, StringRef, StringRef);
   std::pair<uint32_t, uint32_t> readMemoryAttributes();
 
+  Expr combine(StringRef Op, Expr L, Expr R);
   Expr readExpr();
   Expr readExpr1(Expr Lhs, int MinPrec);
   StringRef readParenLiteral();
@@ -155,17 +156,6 @@ static ExprValue sub(ExprValue A, ExprValue B) {
   if (!A.isAbsolute() && !B.isAbsolute())
     return A.getValue() - B.getValue();
   return {A.Sec, false, A.getSectionOffset() - B.getValue(), A.Loc};
-}
-
-static ExprValue mul(ExprValue A, ExprValue B) {
-  return A.getValue() * B.getValue();
-}
-
-static ExprValue div(ExprValue A, ExprValue B) {
-  if (uint64_t BV = B.getValue())
-    return A.getValue() / BV;
-  error("division by zero");
-  return 0;
 }
 
 static ExprValue bitAnd(ExprValue A, ExprValue B) {
@@ -277,7 +267,8 @@ void ScriptParser::readDefsym(StringRef Name) {
   Expr E = readExpr();
   if (!atEOF())
     setError("EOF expected, but got " + next());
-  SymbolAssignment *Cmd = make<SymbolAssignment>(Name, E, getCurrentLocation());
+  SymbolAssignment *Cmd = make<SymbolAssignment>(Name, E, getCurrentLocation(),
+                                                 "" /*CommandString*/);
   Script->SectionCommands.push_back(Cmd);
 }
 
@@ -446,6 +437,7 @@ void ScriptParser::readSections() {
   Config->SingleRoRx = true;
 
   expect("{");
+  std::vector<BaseCommand *> V;
   while (!errorCount() && !consume("}")) {
     StringRef Tok = next();
     BaseCommand *Cmd = readProvideOrAssignment(Tok);
@@ -455,17 +447,34 @@ void ScriptParser::readSections() {
       else
         Cmd = readOutputSectionDescription(Tok);
     }
-    Script->SectionCommands.push_back(Cmd);
+    V.push_back(Cmd);
   }
+
+  if (!atEOF() && consume("INSERT")) {
+    std::vector<BaseCommand *> *Dest = nullptr;
+    if (consume("AFTER"))
+      Dest = &Script->InsertAfterCommands[next()];
+    else if (consume("BEFORE"))
+      Dest = &Script->InsertBeforeCommands[next()];
+    else
+      setError("expected AFTER/BEFORE, but got '" + next() + "'");
+    if (Dest)
+      Dest->insert(Dest->end(), V.begin(), V.end());
+    return;
+  }
+
+  Script->SectionCommands.insert(Script->SectionCommands.end(), V.begin(),
+                                 V.end());
 }
 
 static int precedence(StringRef Op) {
   return StringSwitch<int>(Op)
-      .Cases("*", "/", 5)
-      .Cases("+", "-", 4)
-      .Cases("<<", ">>", 3)
-      .Cases("<", "<=", ">", ">=", "==", "!=", 2)
-      .Cases("&", "|", 1)
+      .Cases("*", "/", "%", 6)
+      .Cases("+", "-", 5)
+      .Cases("<<", ">>", 4)
+      .Cases("<", "<=", ">", ">=", "==", "!=", 3)
+      .Case("&", 2)
+      .Case("|", 1)
       .Default(-1);
 }
 
@@ -668,6 +677,8 @@ OutputSection *ScriptParser::readOutputSectionDescription(StringRef OutSec) {
   OutputSection *Cmd =
       Script->createOutputSection(OutSec, getCurrentLocation());
 
+  size_t SymbolsReferenced = Script->ReferencedSymbols.size();
+
   if (peek() != ":")
     readSectionAddressType(Cmd);
   expect(":");
@@ -734,6 +745,8 @@ OutputSection *ScriptParser::readOutputSectionDescription(StringRef OutSec) {
   // Consume optional comma following output section command.
   consume(",");
 
+  if (Script->ReferencedSymbols.size() > SymbolsReferenced)
+    Cmd->ExpressionsUseSymbols = true;
   return Cmd;
 }
 
@@ -780,6 +793,7 @@ SymbolAssignment *ScriptParser::readProvideOrAssignment(StringRef Tok) {
 }
 
 SymbolAssignment *ScriptParser::readAssignment(StringRef Name) {
+  size_t OldPos = Pos;
   StringRef Op = next();
   assert(Op == "=" || Op == "+=");
   Expr E = readExpr();
@@ -787,7 +801,11 @@ SymbolAssignment *ScriptParser::readAssignment(StringRef Name) {
     std::string Loc = getCurrentLocation();
     E = [=] { return add(Script->getSymbolValue(Name, Loc), E()); };
   }
-  return make<SymbolAssignment>(Name, E, getCurrentLocation());
+
+  std::string CommandString =
+      Name.str() + " " +
+      llvm::join(Tokens.begin() + OldPos, Tokens.begin() + Pos, " ");
+  return make<SymbolAssignment>(Name, E, getCurrentLocation(), CommandString);
 }
 
 // This is an operator-precedence parser to parse a linker
@@ -802,15 +820,31 @@ Expr ScriptParser::readExpr() {
   return E;
 }
 
-static Expr combine(StringRef Op, Expr L, Expr R) {
+Expr ScriptParser::combine(StringRef Op, Expr L, Expr R) {
   if (Op == "+")
     return [=] { return add(L(), R()); };
   if (Op == "-")
     return [=] { return sub(L(), R()); };
   if (Op == "*")
-    return [=] { return mul(L(), R()); };
-  if (Op == "/")
-    return [=] { return div(L(), R()); };
+    return [=] { return L().getValue() * R().getValue(); };
+  if (Op == "/") {
+    std::string Loc = getCurrentLocation();
+    return [=]() -> uint64_t {
+      if (uint64_t RV = R().getValue())
+        return L().getValue() / RV;
+      error(Loc + ": division by zero");
+      return 0;
+    };
+  }
+  if (Op == "%") {
+    std::string Loc = getCurrentLocation();
+    return [=]() -> uint64_t {
+      if (uint64_t RV = R().getValue())
+        return L().getValue() % RV;
+      error(Loc + ": modulo by zero");
+      return 0;
+    };
+  }
   if (Op == "<<")
     return [=] { return L().getValue() << R().getValue(); };
   if (Op == ">>")
@@ -880,7 +914,7 @@ Expr ScriptParser::readConstant() {
   if (S == "MAXPAGESIZE")
     return [] { return Config->MaxPageSize; };
   setError("unknown constant: " + S);
-  return {};
+  return [] { return 0; };
 }
 
 // Parses Tok as an integer. It recognizes hexadecimal (prefixed with
@@ -925,7 +959,13 @@ ByteCommand *ScriptParser::readByteCommand(StringRef Tok) {
                  .Default(-1);
   if (Size == -1)
     return nullptr;
-  return make<ByteCommand>(readParenExpr(), Size);
+
+  size_t OldPos = Pos;
+  Expr E = readParenExpr();
+  std::string CommandString =
+      Tok.str() + " " +
+      llvm::join(Tokens.begin() + OldPos, Tokens.begin() + Pos, " ");
+  return make<ByteCommand>(E, Size, CommandString);
 }
 
 StringRef ScriptParser::readParenLiteral() {
@@ -1043,8 +1083,10 @@ Expr ScriptParser::readPrimary() {
   }
   if (Tok == "LENGTH") {
     StringRef Name = readParenLiteral();
-    if (Script->MemoryRegions.count(Name) == 0)
+    if (Script->MemoryRegions.count(Name) == 0) {
       setError("memory region not defined: " + Name);
+      return [] { return 0; };
+    }
     return [=] { return Script->MemoryRegions[Name]->Length; };
   }
   if (Tok == "LOADADDR") {
@@ -1057,8 +1099,10 @@ Expr ScriptParser::readPrimary() {
   }
   if (Tok == "ORIGIN") {
     StringRef Name = readParenLiteral();
-    if (Script->MemoryRegions.count(Name) == 0)
+    if (Script->MemoryRegions.count(Name) == 0) {
       setError("memory region not defined: " + Name);
+      return [] { return 0; };
+    }
     return [=] { return Script->MemoryRegions[Name]->Origin; };
   }
   if (Tok == "SEGMENT_START") {
@@ -1296,11 +1340,10 @@ void ScriptParser::readMemory() {
     uint64_t Length = readMemoryAssignment("LENGTH", "len", "l");
 
     // Add the memory region to the region map.
-    if (Script->MemoryRegions.count(Name))
-      setError("region '" + Name + "' already defined");
     MemoryRegion *MR =
         make<MemoryRegion>(Name, Origin, Length, Flags, NegFlags);
-    Script->MemoryRegions[Name] = MR;
+    if (!Script->MemoryRegions.insert({Name, MR}).second)
+      setError("region '" + Name + "' already defined");
   }
 }
 

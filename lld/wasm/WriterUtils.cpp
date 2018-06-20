@@ -8,9 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "WriterUtils.h"
-
 #include "lld/Common/ErrorHandler.h"
-
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/EndianStream.h"
 #include "llvm/Support/LEB128.h"
@@ -21,7 +19,7 @@ using namespace llvm;
 using namespace llvm::wasm;
 using namespace lld::wasm;
 
-static const char *valueTypeToString(int32_t Type) {
+static const char *valueTypeToString(uint8_t Type) {
   switch (Type) {
   case WASM_TYPE_I32:
     return "i32";
@@ -42,45 +40,47 @@ void wasm::debugWrite(uint64_t Offset, const Twine &Msg) {
   DEBUG(dbgs() << format("  | %08lld: ", Offset) << Msg << "\n");
 }
 
-void wasm::writeUleb128(raw_ostream &OS, uint32_t Number, StringRef Msg) {
+void wasm::writeUleb128(raw_ostream &OS, uint32_t Number, const Twine &Msg) {
   debugWrite(OS.tell(), Msg + "[" + utohexstr(Number) + "]");
   encodeULEB128(Number, OS);
 }
 
-void wasm::writeSleb128(raw_ostream &OS, int32_t Number, StringRef Msg) {
+void wasm::writeSleb128(raw_ostream &OS, int32_t Number, const Twine &Msg) {
   debugWrite(OS.tell(), Msg + "[" + utohexstr(Number) + "]");
   encodeSLEB128(Number, OS);
 }
 
 void wasm::writeBytes(raw_ostream &OS, const char *Bytes, size_t Count,
-                      StringRef Msg) {
+                      const Twine &Msg) {
   debugWrite(OS.tell(), Msg + " [data[" + Twine(Count) + "]]");
   OS.write(Bytes, Count);
 }
 
-void wasm::writeStr(raw_ostream &OS, StringRef String, StringRef Msg) {
+void wasm::writeStr(raw_ostream &OS, StringRef String, const Twine &Msg) {
   debugWrite(OS.tell(),
              Msg + " [str[" + Twine(String.size()) + "]: " + String + "]");
   encodeULEB128(String.size(), OS);
   OS.write(String.data(), String.size());
 }
 
-void wasm::writeU8(raw_ostream &OS, uint8_t byte, StringRef Msg) { OS << byte; }
+void wasm::writeU8(raw_ostream &OS, uint8_t Byte, const Twine &Msg) {
+  debugWrite(OS.tell(), Msg + " [0x" + utohexstr(Byte) + "]");
+  OS << Byte;
+}
 
-void wasm::writeU32(raw_ostream &OS, uint32_t Number, StringRef Msg) {
-  debugWrite(OS.tell(), Msg + "[" + utohexstr(Number) + "]");
+void wasm::writeU32(raw_ostream &OS, uint32_t Number, const Twine &Msg) {
+  debugWrite(OS.tell(), Msg + "[0x" + utohexstr(Number) + "]");
   support::endian::Writer<support::little>(OS).write(Number);
 }
 
-void wasm::writeValueType(raw_ostream &OS, int32_t Type, StringRef Msg) {
-  debugWrite(OS.tell(), Msg + "[type: " + valueTypeToString(Type) + "]");
-  encodeSLEB128(Type, OS);
+void wasm::writeValueType(raw_ostream &OS, uint8_t Type, const Twine &Msg) {
+  writeU8(OS, Type, Msg + "[type: " + valueTypeToString(Type) + "]");
 }
 
 void wasm::writeSig(raw_ostream &OS, const WasmSignature &Sig) {
-  writeSleb128(OS, WASM_TYPE_FUNC, "signature type");
+  writeU8(OS, WASM_TYPE_FUNC, "signature type");
   writeUleb128(OS, Sig.ParamTypes.size(), "param Count");
-  for (int32_t ParamType : Sig.ParamTypes) {
+  for (uint8_t ParamType : Sig.ParamTypes) {
     writeValueType(OS, ParamType, "param type");
   }
   if (Sig.ReturnType == WASM_TYPE_NORESULT) {
@@ -110,7 +110,7 @@ void wasm::writeInitExpr(raw_ostream &OS, const WasmInitExpr &InitExpr) {
 }
 
 void wasm::writeLimits(raw_ostream &OS, const WasmLimits &Limits) {
-  writeUleb128(OS, Limits.Flags, "limits flags");
+  writeU8(OS, Limits.Flags, "limits flags");
   writeUleb128(OS, Limits.Initial, "limits initial");
   if (Limits.Flags & WASM_LIMITS_FLAG_HAS_MAX)
     writeUleb128(OS, Limits.Maximum, "limits max");
@@ -118,7 +118,7 @@ void wasm::writeLimits(raw_ostream &OS, const WasmLimits &Limits) {
 
 void wasm::writeGlobalType(raw_ostream &OS, const WasmGlobalType &Type) {
   writeValueType(OS, Type.Type, "global type");
-  writeUleb128(OS, Type.Mutable, "global mutable");
+  writeU8(OS, Type.Mutable, "global mutable");
 }
 
 void wasm::writeGlobal(raw_ostream &OS, const WasmGlobal &Global) {
@@ -162,23 +162,6 @@ void wasm::writeExport(raw_ostream &OS, const WasmExport &Export) {
     fatal("unsupported export type: " + Twine(Export.Kind));
   }
 }
-
-void wasm::writeReloc(raw_ostream &OS, const OutputRelocation &Reloc) {
-  writeUleb128(OS, Reloc.Reloc.Type, "reloc type");
-  writeUleb128(OS, Reloc.Reloc.Offset, "reloc offset");
-  writeUleb128(OS, Reloc.NewIndex, "reloc index");
-
-  switch (Reloc.Reloc.Type) {
-  case R_WEBASSEMBLY_MEMORY_ADDR_LEB:
-  case R_WEBASSEMBLY_MEMORY_ADDR_SLEB:
-  case R_WEBASSEMBLY_MEMORY_ADDR_I32:
-    writeUleb128(OS, Reloc.Reloc.Addend, "reloc addend");
-    break;
-  default:
-    break;
-  }
-}
-
 } // namespace lld
 
 std::string lld::toString(ValType Type) {
@@ -191,6 +174,8 @@ std::string lld::toString(ValType Type) {
     return "F32";
   case ValType::F64:
     return "F64";
+  case ValType::EXCEPT_REF:
+    return "except_ref";
   }
   llvm_unreachable("Invalid wasm::ValType");
 }
@@ -208,4 +193,9 @@ std::string lld::toString(const WasmSignature &Sig) {
   else
     S += toString(static_cast<ValType>(Sig.ReturnType));
   return S.str();
+}
+
+std::string lld::toString(const WasmGlobalType &Sig) {
+  return (Sig.Mutable ? "var " : "const ") +
+         toString(static_cast<ValType>(Sig.Type));
 }

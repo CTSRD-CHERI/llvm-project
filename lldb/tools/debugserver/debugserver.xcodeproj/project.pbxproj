@@ -99,6 +99,7 @@
 		49D404621E39260F00570CDC /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 49D404611E39260F00570CDC /* Foundation.framework */; };
 		AF48558C1D75126800D19C07 /* StdStringExtractor.cpp in Sources */ = {isa = PBXBuildFile; fileRef = AF48558B1D75126800D19C07 /* StdStringExtractor.cpp */; };
 		AF48558D1D75127500D19C07 /* StdStringExtractor.cpp in Sources */ = {isa = PBXBuildFile; fileRef = AF48558B1D75126800D19C07 /* StdStringExtractor.cpp */; };
+		AF588449206077BD00A0CB5A /* SocketAddress.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D6631CA81E848FE9006A7B11 /* SocketAddress.cpp */; };
 		AFA3FCA11E39984900218D5E /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 49D404611E39260F00570CDC /* Foundation.framework */; };
 		AFEC3364194A8B0B00FF05C6 /* Genealogy.cpp in Sources */ = {isa = PBXBuildFile; fileRef = AFEC3363194A8B0B00FF05C6 /* Genealogy.cpp */; };
 		D6631CA91E848FE9006A7B11 /* SocketAddress.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D6631CA81E848FE9006A7B11 /* SocketAddress.cpp */; };
@@ -219,10 +220,9 @@
 		AF61C60418F75ABC00B48D9D /* debugserver-macosx-entitlements.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "debugserver-macosx-entitlements.plist"; sourceTree = "<group>"; };
 		AF67ABFF0D34604D0022D128 /* PseudoTerminal.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = PseudoTerminal.cpp; sourceTree = "<group>"; };
 		AF67AC000D34604D0022D128 /* PseudoTerminal.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PseudoTerminal.h; sourceTree = "<group>"; };
+		AF949ED620605DC2002A91F9 /* com.apple.internal.xpc.remote.debugserver.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = com.apple.internal.xpc.remote.debugserver.plist; sourceTree = "<group>"; };
 		AFEC3363194A8B0B00FF05C6 /* Genealogy.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = Genealogy.cpp; sourceTree = "<group>"; };
 		D6631CA81E848FE9006A7B11 /* SocketAddress.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; name = SocketAddress.cpp; path = ../../source/Host/common/SocketAddress.cpp; sourceTree = "<group>"; };
-		ED128B7918E1F163003F6A7B /* libpmenergy.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libpmenergy.dylib; path = usr/lib/libpmenergy.dylib; sourceTree = SDKROOT; };
-		ED128B7A18E1F163003F6A7B /* libpmsample.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libpmsample.dylib; path = usr/lib/libpmsample.dylib; sourceTree = SDKROOT; };
 		EF88788B0D9C7558001831DA /* com.apple.debugserver.applist.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = com.apple.debugserver.applist.plist; sourceTree = "<group>"; };
 		EF88789F0D9C797C001831DA /* RNBServices.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RNBServices.h; sourceTree = "<group>"; };
 		EF8878A00D9C797C001831DA /* RNBServices.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = RNBServices.cpp; sourceTree = "<group>"; };
@@ -320,14 +320,15 @@
 		26A028FE114AB6A60029C479 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				26A4BAED0D498B7D00A9BEAB /* com.apple.debugserver.plist */,
+				EF88788B0D9C7558001831DA /* com.apple.debugserver.applist.plist */,
 				269E8DF8164B2ED200AD65F6 /* com.apple.debugserver.posix.plist */,
 				26203D1C1641EFB200A662F7 /* com.apple.debugserver.applist.internal.plist */,
 				26203D1D1641EFB200A662F7 /* com.apple.debugserver.internal.plist */,
+				AF949ED620605DC2002A91F9 /* com.apple.internal.xpc.remote.debugserver.plist */,
 				260FC7320E5B290400043FC9 /* debugnub-exports */,
 				26242C390DDBD33C0054A4CC /* debugserver-entitlements.plist */,
 				AF61C60418F75ABC00B48D9D /* debugserver-macosx-entitlements.plist */,
-				26A4BAED0D498B7D00A9BEAB /* com.apple.debugserver.plist */,
-				EF88788B0D9C7558001831DA /* com.apple.debugserver.applist.plist */,
 			);
 			name = Resources;
 			sourceTree = "<group>";
@@ -377,8 +378,6 @@
 		26ACA3330D3E94F200A2120B /* Framework */ = {
 			isa = PBXGroup;
 			children = (
-				ED128B7918E1F163003F6A7B /* libpmenergy.dylib */,
-				ED128B7A18E1F163003F6A7B /* libpmsample.dylib */,
 				26ACA3340D3E956300A2120B /* CoreFoundation.framework */,
 			);
 			name = Framework;
@@ -670,6 +669,7 @@
 				23AC04C71D2F41A00072351D /* LogFilter.cpp in Sources */,
 				23043C9E1D35DBFA00FC25CA /* StringConvert.cpp in Sources */,
 				456F67611AD46CE9002850C2 /* DNBArchImpl.cpp in Sources */,
+				AF588449206077BD00A0CB5A /* SocketAddress.cpp in Sources */,
 				456F67621AD46CE9002850C2 /* CFString.cpp in Sources */,
 				23AC04CB1D2F42250072351D /* LogFilterChain.cpp in Sources */,
 				AF48558D1D75127500D19C07 /* StdStringExtractor.cpp in Sources */,
@@ -688,10 +688,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				"ARCHS[sdk=iphoneos*]" = (
-					arm64,
-					armv7,
-				);
+				"ARCHS[sdk=iphoneos*]" = arm64;
 				"ARCHS[sdk=macosx*]" = "$(ARCHS_STANDARD_64_BIT)";
 				CLANG_WARN_BOOL_CONVERSION = YES;
 				CLANG_WARN_CONSTANT_CONVERSION = YES;
@@ -714,9 +711,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LLDB_COMPRESSION_CFLAGS = "-DHAVE_LIBCOMPRESSION=1";
-				"LLDB_COMPRESSION_CFLAGS[sdk=macosx10.11]" = "-DHAVE_LIBCOMPRESSION=1";
 				LLDB_COMPRESSION_LDFLAGS = "-lcompression";
-				"LLDB_COMPRESSION_LDFLAGS[sdk=macosx10.11]" = "-lcompression";
 				LLDB_OS_LOG_CFLAGS = "-DLLDB_USE_OS_LOG=$(LLDB_USE_OS_LOG)";
 				LLDB_USE_OS_LOG = 0;
 				LLDB_ZLIB_CFLAGS = "-DHAVE_LIBZ=1";
@@ -733,10 +728,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				"ARCHS[sdk=iphoneos*]" = (
-					armv7,
-					armv7s,
-				);
+				"ARCHS[sdk=iphoneos*]" = arm64;
 				"ARCHS[sdk=macosx*]" = "$(ARCHS_STANDARD_64_BIT)";
 				CLANG_WARN_BOOL_CONVERSION = YES;
 				CLANG_WARN_CONSTANT_CONVERSION = YES;
@@ -758,9 +750,8 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LLDB_COMPRESSION_CFLAGS = "-DHAVE_LIBCOMPRESSION=1";
-				"LLDB_COMPRESSION_CFLAGS[sdk=macosx10.11]" = "-DHAVE_LIBCOMPRESSION=1";
 				LLDB_COMPRESSION_LDFLAGS = "-lcompression";
-				"LLDB_COMPRESSION_LDFLAGS[sdk=macosx10.11]" = "-lcompression";
+				LLDB_ENERGY_LDFLAGS = "-lpmenergy -lpmsample";
 				LLDB_OS_LOG_CFLAGS = "-DLLDB_USE_OS_LOG=$(LLDB_USE_OS_LOG)";
 				LLDB_USE_OS_LOG = 0;
 				LLDB_ZLIB_CFLAGS = "-DHAVE_LIBZ=1";
@@ -800,9 +791,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				LLDB_COMPRESSION_CFLAGS = "-DHAVE_LIBCOMPRESSION=1";
-				"LLDB_COMPRESSION_CFLAGS[sdk=macosx10.11]" = "-DHAVE_LIBCOMPRESSION=1";
 				LLDB_COMPRESSION_LDFLAGS = "-lcompression";
-				"LLDB_COMPRESSION_LDFLAGS[sdk=macosx10.11]" = "-lcompression";
 				LLDB_OS_LOG_CFLAGS = "-DLLDB_USE_OS_LOG=$(LLDB_USE_OS_LOG)";
 				LLDB_USE_OS_LOG = 1;
 				LLDB_ZLIB_CFLAGS = "-DHAVE_LIBZ=1";
@@ -839,23 +828,12 @@
 				HEADER_SEARCH_PATHS = /System/Library/Frameworks/System.framework/PrivateHeaders;
 				INSTALL_PATH = /usr/bin;
 				"INSTALL_PATH[sdk=iphoneos*]" = /Developer/usr/bin/;
-				LLDB_COMPRESSION_CFLAGS = "";
-				"LLDB_COMPRESSION_CFLAGS[sdk=appletvos*]" = "-DHAVE_LIBCOMPRESSION=1";
-				"LLDB_COMPRESSION_CFLAGS[sdk=iphoneos*]" = "-DHAVE_LIBCOMPRESSION=1";
-				"LLDB_COMPRESSION_CFLAGS[sdk=macosx10.11]" = "-DHAVE_LIBCOMPRESSION=1";
-				"LLDB_COMPRESSION_CFLAGS[sdk=macosx10.11internal]" = "-DHAVE_LIBCOMPRESSION=1";
-				"LLDB_COMPRESSION_CFLAGS[sdk=watchos*]" = "-DHAVE_LIBCOMPRESSION=1";
-				LLDB_COMPRESSION_LDFLAGS = "";
-				"LLDB_COMPRESSION_LDFLAGS[sdk=appletvos*]" = "-weak-lcompression";
-				"LLDB_COMPRESSION_LDFLAGS[sdk=iphoneos*]" = "-weak-lcompression";
-				"LLDB_COMPRESSION_LDFLAGS[sdk=macosx10.11]" = "-weak-lcompression";
-				"LLDB_COMPRESSION_LDFLAGS[sdk=macosx10.11internal]" = "-weak-lcompression";
-				"LLDB_COMPRESSION_LDFLAGS[sdk=watchos*]" = "-weak-lcompression";
+				LLDB_COMPRESSION_CFLAGS = "-DHAVE_LIBCOMPRESSION=1";
+				LLDB_COMPRESSION_LDFLAGS = "-lcompression";
 				LLDB_DEBUGSERVER = 1;
 				LLDB_ENERGY_CFLAGS = "";
-				"LLDB_ENERGY_CFLAGS[sdk=macosx*]" = "-DLLDB_ENERGY";
-				LLDB_ENERGY_LFLAGS = "";
-				"LLDB_ENERGY_LFLAGS[sdk=macosx*]" = "-weak-lpmenergy -weak-lpmsample";
+				"LLDB_ENERGY_CFLAGS[sdk=*internal]" = "-DLLDB_ENERGY";
+				LLDB_ENERGY_LDFLAGS = "-lpmenergy -lpmsample";
 				LLDB_ZLIB_CFLAGS = "-DHAVE_LIBZ=1";
 				LLDB_ZLIB_LDFLAGS = "-lz";
 				OTHER_CFLAGS = (
@@ -872,9 +850,12 @@
 					"-DWITH_FBS",
 					"-DWITH_BKS",
 					"-DOS_OBJECT_USE_OBJC=0",
+					"$(LLDB_ENERGY_CFLAGS)",
 					"$(LLDB_COMPRESSION_CFLAGS)",
 					"$(LLDB_ZLIB_CFLAGS)",
 					"$(LLDB_OS_LOG_CFLAGS)",
+					"-isystem",
+					"$(SDKROOT)/System/Library/Frameworks/System.framework/PrivateHeaders",
 				);
 				"OTHER_CPLUSPLUSFLAGS[sdk=iphoneos*][arch=*]" = "$(OTHER_CFLAGS)";
 				OTHER_LDFLAGS = "";
@@ -888,6 +869,7 @@
 					FrontBoardServices,
 					"-framework",
 					MobileCoreServices,
+					"$(LLDB_ENERGY_LDFLAGS)",
 					"$(LLDB_COMPRESSION_LDFLAGS)",
 					"$(LLDB_ZLIB_LDFLAGS)",
 				);
@@ -896,25 +878,17 @@
 					__TEXT,
 					__info_plist,
 					"$(PROJECT_DIR)/resources/lldb-debugserver-Info.plist",
-					"$(LLDB_ENERGY_LFLAGS)",
+					"$(LLDB_ENERGY_LDFLAGS)",
 					"$(LLDB_COMPRESSION_LDFLAGS)",
 					"$(LLDB_ZLIB_LDFLAGS)",
 				);
 				OTHER_MIGFLAGS = "-I$(DERIVED_FILE_DIR)";
 				PRODUCT_NAME = debugserver;
 				SDKROOT = macosx;
-				"SDKROOT[arch=i386]" = macosx;
-				"SDKROOT[arch=x86_64]" = macosx;
-				"SDKROOT[arch=x86_64h]" = macosx;
 				SKIP_INSTALL = YES;
 				"SKIP_INSTALL[sdk=iphoneos*]" = NO;
 				STRIP_INSTALLED_PRODUCT = YES;
-				USER_HEADER_SEARCH_PATHS = (
-					./source,
-					../../source,
-					"$(DERIVED_SOURCES_DIR)",
-					../../include,
-				);
+				USER_HEADER_SEARCH_PATHS = "./source ../../source $(DERIVED_SOURCES_DIR) ../../include";
 				ZERO_LINK = NO;
 			};
 			name = BuildAndIntegration;
@@ -942,29 +916,18 @@
 				GCC_PREPROCESSOR_DEFINITIONS = LLDB_DEBUGSERVER_DEBUG;
 				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
 				INSTALL_PATH = /usr/bin;
-				LLDB_COMPRESSION_CFLAGS = "";
-				"LLDB_COMPRESSION_CFLAGS[sdk=appletvos*]" = "-DHAVE_LIBCOMPRESSION=1";
-				"LLDB_COMPRESSION_CFLAGS[sdk=iphoneos*]" = "-DHAVE_LIBCOMPRESSION=1";
-				"LLDB_COMPRESSION_CFLAGS[sdk=macosx10.11]" = "-DHAVE_LIBCOMPRESSION=1";
-				"LLDB_COMPRESSION_CFLAGS[sdk=macosx10.11internal]" = "-DHAVE_LIBCOMPRESSION=1";
-				"LLDB_COMPRESSION_CFLAGS[sdk=watchos*]" = "-DHAVE_LIBCOMPRESSION=1";
-				LLDB_COMPRESSION_LDFLAGS = "";
-				"LLDB_COMPRESSION_LDFLAGS[sdk=appletvos*]" = "-weak-lcompression";
-				"LLDB_COMPRESSION_LDFLAGS[sdk=iphoneos*]" = "-weak-lcompression";
-				"LLDB_COMPRESSION_LDFLAGS[sdk=macosx10.11]" = "-weak-lcompression";
-				"LLDB_COMPRESSION_LDFLAGS[sdk=macosx10.11internal]" = "-weak-lcompression";
-				"LLDB_COMPRESSION_LDFLAGS[sdk=watchos*]" = "-weak-lcompression";
+				LLDB_COMPRESSION_CFLAGS = "-DHAVE_LIBCOMPRESSION=1";
+				LLDB_COMPRESSION_LDFLAGS = "-lcompression";
 				LLDB_DEBUGSERVER = 1;
 				LLDB_ENERGY_CFLAGS = "";
-				"LLDB_ENERGY_CFLAGS[sdk=macosx.internal]" = "-DLLDB_ENERGY";
-				LLDB_ENERGY_LFLAGS = "";
-				"LLDB_ENERGY_LFLAGS[sdk=macosx.internal]" = "-weak-lpmenergy -weak-lpmsample";
+				"LLDB_ENERGY_CFLAGS[sdk=*internal]" = "-DLLDB_ENERGY";
+				LLDB_ENERGY_LDFLAGS = "-lpmenergy -lpmsample";
 				LLDB_ZLIB_CFLAGS = "-DHAVE_LIBZ=1";
 				LLDB_ZLIB_LDFLAGS = "-lz";
 				OTHER_CFLAGS = (
 					"-Wparentheses",
-					"$(LLDB_ENERGY_CFLAGS)",
 					"-DDT_VARIANT_$(DT_VARIANT)",
+					"$(LLDB_ENERGY_CFLAGS)",
 					"$(LLDB_COMPRESSION_CFLAGS)",
 					"$(LLDB_ZLIB_CFLAGS)",
 					"$(LLDB_OS_LOG_CFLAGS)",
@@ -975,9 +938,12 @@
 					"-DWITH_BKS",
 					"-DWITH_FBS",
 					"-DOS_OBJECT_USE_OBJC=0",
+					"$(LLDB_ENERGY_CFLAGS)",
 					"$(LLDB_COMPRESSION_CFLAGS)",
 					"$(LLDB_ZLIB_CFLAGS)",
 					"$(LLDB_OS_LOG_CFLAGS)",
+					"-isystem",
+					"$(SDKROOT)/System/Library/Frameworks/System.framework/PrivateHeaders",
 				);
 				"OTHER_CPLUSPLUSFLAGS[sdk=iphoneos*][arch=*]" = "$(OTHER_CFLAGS)";
 				OTHER_LDFLAGS = "";
@@ -991,6 +957,7 @@
 					FrontBoardServices,
 					"-framework",
 					MobileCoreServices,
+					"$(LLDB_ENERGY_LDFLAGS)",
 					"$(LLDB_COMPRESSION_LDFLAGS)",
 					"$(LLDB_ZLIB_LDFLAGS)",
 				);
@@ -999,7 +966,7 @@
 					__TEXT,
 					__info_plist,
 					"$(PROJECT_DIR)/resources/lldb-debugserver-Info.plist",
-					"$(LLDB_ENERGY_LFLAGS)",
+					"$(LLDB_ENERGY_LDFLAGS)",
 					"$(LLDB_ZLIB_LDFLAGS)",
 					"$(LLDB_COMPRESSION_LDFLAGS)",
 				);
@@ -1008,16 +975,8 @@
 				"PROVISIONING_PROFILE[sdk=iphoneos*]" = "";
 				"PROVISIONING_PROFILE[sdk=macosx*]" = "";
 				SDKROOT = macosx;
-				"SDKROOT[arch=i386]" = macosx;
-				"SDKROOT[arch=x86_64]" = macosx;
-				"SDKROOT[arch=x86_64h]" = macosx;
 				SKIP_INSTALL = YES;
-				USER_HEADER_SEARCH_PATHS = (
-					./source,
-					../../source,
-					"$(DERIVED_SOURCES_DIR)",
-					../../include,
-				);
+				USER_HEADER_SEARCH_PATHS = "./source ../../source $(DERIVED_SOURCES_DIR) ../../include";
 				ZERO_LINK = NO;
 			};
 			name = Debug;
@@ -1044,29 +1003,18 @@
 				GCC_PREPROCESSOR_DEFINITIONS = LLDB_DEBUGSERVER_RELEASE;
 				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
 				INSTALL_PATH = /usr/bin;
-				LLDB_COMPRESSION_CFLAGS = "";
-				"LLDB_COMPRESSION_CFLAGS[sdk=appletvos*]" = "-DHAVE_LIBCOMPRESSION=1";
-				"LLDB_COMPRESSION_CFLAGS[sdk=iphoneos*]" = "-DHAVE_LIBCOMPRESSION=1";
-				"LLDB_COMPRESSION_CFLAGS[sdk=macosx10.11]" = "-DHAVE_LIBCOMPRESSION=1";
-				"LLDB_COMPRESSION_CFLAGS[sdk=macosx10.11internal]" = "-DHAVE_LIBCOMPRESSION=1";
-				"LLDB_COMPRESSION_CFLAGS[sdk=watchos*]" = "-DHAVE_LIBCOMPRESSION=1";
-				LLDB_COMPRESSION_LDFLAGS = "";
-				"LLDB_COMPRESSION_LDFLAGS[sdk=appletvos*]" = "-weak-lcompression";
-				"LLDB_COMPRESSION_LDFLAGS[sdk=iphoneos*]" = "-weak-lcompression";
-				"LLDB_COMPRESSION_LDFLAGS[sdk=macosx10.11]" = "-weak-lcompression";
-				"LLDB_COMPRESSION_LDFLAGS[sdk=macosx10.11internal]" = "-weak-lcompression";
-				"LLDB_COMPRESSION_LDFLAGS[sdk=watchos*]" = "-weak-lcompression";
+				LLDB_COMPRESSION_CFLAGS = "-DHAVE_LIBCOMPRESSION=1";
+				LLDB_COMPRESSION_LDFLAGS = "-lcompression";
 				LLDB_DEBUGSERVER = 1;
 				LLDB_ENERGY_CFLAGS = "";
-				"LLDB_ENERGY_CFLAGS[sdk=macosx.internal]" = "-DLLDB_ENERGY";
-				LLDB_ENERGY_LFLAGS = "";
-				"LLDB_ENERGY_LFLAGS[sdk=macosx.internal]" = "-weak-lpmenergy -weak-lpmsample";
+				"LLDB_ENERGY_CFLAGS[sdk=*.internal]" = "-DLLDB_ENERGY";
+				LLDB_ENERGY_LDFLAGS = "-lpmenergy -lpmsample";
 				LLDB_ZLIB_CFLAGS = "-DHAVE_LIBZ=1";
 				LLDB_ZLIB_LDFLAGS = "-lz";
 				OTHER_CFLAGS = (
 					"-Wparentheses",
-					"$(LLDB_ENERGY_CFLAGS)",
 					"-DDT_VARIANT_$(DT_VARIANT)",
+					"$(LLDB_ENERGY_CFLAGS)",
 					"$(LLDB_COMPRESSION_CFLAGS)",
 					"$(LLDB_ZLIB_CFLAGS)",
 					"$(LLDB_OS_LOG_CFLAGS)",
@@ -1077,9 +1025,12 @@
 					"-DWITH_FBS",
 					"-DWITH_BKS",
 					"-DOS_OBJECT_USE_OBJC=0",
+					"$(LLDB_ENERGY_CFLAGS)",
 					"$(LLDB_COMPRESSION_CFLAGS)",
 					"$(LLDB_ZLIB_CFLAGS)",
 					"$(LLDB_OS_LOG_CFLAGS)",
+					"-isystem",
+					"$(SDKROOT)/System/Library/Frameworks/System.framework/PrivateHeaders",
 				);
 				"OTHER_CPLUSPLUSFLAGS[sdk=iphoneos*][arch=*]" = "$(OTHER_CFLAGS)";
 				OTHER_LDFLAGS = "";
@@ -1093,6 +1044,7 @@
 					FrontBoardServices,
 					"-framework",
 					MobileCoreServices,
+					"$(LLDB_ENERGY_LDFLAGS)",
 					"$(LLDB_COMPRESSION_LDFLAGS)",
 					"$(LLDB_ZLIB_LDFLAGS)",
 				);
@@ -1101,7 +1053,7 @@
 					__TEXT,
 					__info_plist,
 					"$(PROJECT_DIR)/resources/lldb-debugserver-Info.plist",
-					"$(LLDB_ENERGY_LFLAGS)",
+					"$(LLDB_ENERGY_LDFLAGS)",
 					"$(LLDB_COMPRESSION_LDFLAGS)",
 					"$(LLDB_ZLIB_LDFLAGS)",
 				);
@@ -1110,16 +1062,8 @@
 				"PROVISIONING_PROFILE[sdk=iphoneos*]" = "";
 				"PROVISIONING_PROFILE[sdk=macosx*]" = "";
 				SDKROOT = macosx;
-				"SDKROOT[arch=i386]" = macosx;
-				"SDKROOT[arch=x86_64]" = macosx;
-				"SDKROOT[arch=x86_64h]" = macosx;
 				SKIP_INSTALL = YES;
-				USER_HEADER_SEARCH_PATHS = (
-					./source,
-					../../source,
-					"$(DERIVED_SOURCES_DIR)",
-					../../include,
-				);
+				USER_HEADER_SEARCH_PATHS = "./source ../../source $(DERIVED_SOURCES_DIR) ../../include";
 				ZERO_LINK = NO;
 			};
 			name = Release;
@@ -1163,54 +1107,55 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				INSTALL_PATH = /usr/local/bin;
-				LLDB_COMPRESSION_CFLAGS = "";
-				"LLDB_COMPRESSION_CFLAGS[sdk=macosx10.11]" = "-DHAVE_LIBCOMPRESSION=1";
-				LLDB_COMPRESSION_LDFLAGS = "";
-				"LLDB_COMPRESSION_LDFLAGS[sdk=macosx10.11]" = "-weak-lcompression";
+				LLDB_COMPRESSION_CFLAGS = "-DHAVE_LIBCOMPRESSION=1";
+				LLDB_COMPRESSION_LDFLAGS = "-lcompression";
 				LLDB_DEBUGSERVER = 1;
 				LLDB_ENERGY_CFLAGS = "";
-				"LLDB_ENERGY_CFLAGS[sdk=macosx.internal]" = "-DLLDB_ENERGY";
-				LLDB_ENERGY_LFLAGS = "";
-				"LLDB_ENERGY_LFLAGS[sdk=macosx.internal]" = "-weak-lpmenergy -weak-lpmsample";
+				"LLDB_ENERGY_CFLAGS[sdk=*.internal]" = "-DLLDB_ENERGY";
+				LLDB_ENERGY_LDFLAGS = "-lpmenergy -lpmsample";
 				LLDB_ZLIB_CFLAGS = "-DHAVE_LIBZ=1";
 				LLDB_ZLIB_LDFLAGS = "-lz";
 				ONLY_ACTIVE_ARCH = YES;
-				OTHER_CFLAGS = "";
+				OTHER_CFLAGS = (
+					"-Wparentheses",
+					"-DDT_VARIANT_$(DT_VARIANT)",
+					"$(LLDB_ENERGY_CFLAGS)",
+					"$(LLDB_COMPRESSION_CFLAGS)",
+					"$(LLDB_ZLIB_CFLAGS)",
+					"$(LLDB_OS_LOG_CFLAGS)",
+				);
 				"OTHER_CFLAGS[sdk=iphoneos*][arch=*]" = (
 					"-Wparentheses",
 					"-DOS_OBJECT_USE_OBJC=0",
 					"-DDEBUGSERVER_PROGRAM_SYMBOL=debugserver_nonui",
+					"$(LLDB_ENERGY_CFLAGS)",
 					"$(LLDB_OS_LOG_CFLAGS)",
+					"$(LLDB_COMPRESSION_CFLAGS)",
 				);
 				"OTHER_CPLUSPLUSFLAGS[sdk=iphoneos*][arch=*]" = "$(OTHER_CFLAGS)";
 				OTHER_LDFLAGS = "";
 				"OTHER_LDFLAGS[sdk=iphoneos*][arch=*]" = (
 					"-framework",
 					Foundation,
+					"$(LLDB_ENERGY_LDFLAGS)",
+					"$(LLDB_COMPRESSION_LDFLAGS)",
 				);
 				"OTHER_LDFLAGS[sdk=macosx*]" = (
 					"-sectcreate",
 					__TEXT,
 					__info_plist,
 					"$(PROJECT_DIR)/resources/lldb-debugserver-Info.plist",
-					"$(LLDB_ENERGY_LFLAGS)",
+					"$(LLDB_ENERGY_LDFLAGS)",
+					"$(LLDB_COMPRESSION_LDFLAGS)",
 				);
 				OTHER_MIGFLAGS = "-I$(DERIVED_FILE_DIR)";
 				PRODUCT_NAME = "debugserver-nonui";
 				"PROVISIONING_PROFILE[sdk=iphoneos*]" = "";
 				"PROVISIONING_PROFILE[sdk=macosx*]" = "";
-				SDKROOT = macosx.internal;
-				"SDKROOT[arch=i386]" = macosx;
-				"SDKROOT[arch=x86_64]" = macosx;
-				"SDKROOT[arch=x86_64h]" = macosx;
+				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
 				STRIP_INSTALLED_PRODUCT = NO;
-				USER_HEADER_SEARCH_PATHS = (
-					./source,
-					../../source,
-					"$(DERIVED_SOURCES_DIR)",
-					../../include,
-				);
+				USER_HEADER_SEARCH_PATHS = "./source ../../source $(DERIVED_SOURCES_DIR) ../../include";
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_BUILDER = "$(USER)";
 				ZERO_LINK = NO;
@@ -1242,10 +1187,10 @@
 				INSTALL_PATH = /usr/local/bin;
 				LLDB_DEBUGSERVER = 1;
 				LLDB_ENERGY_CFLAGS = "";
-				"LLDB_ENERGY_CFLAGS[sdk=macosx.internal]" = "-DLLDB_ENERGY";
-				LLDB_ENERGY_LFLAGS = "";
-				"LLDB_ENERGY_LFLAGS[sdk=macosx.internal]" = "-weak-lpmenergy -weak-lpmsample";
+				"LLDB_ENERGY_CFLAGS[sdk=*.internal]" = "-DLLDB_ENERGY";
+				LLDB_ENERGY_LDFLAGS = "-lpmenergy -lpmsample";
 				OTHER_CFLAGS = (
+					"$(LLDB_ENERGY_CFLAGS)",
 					"$(LLDB_COMPRESSION_CFLAGS)",
 					"$(LLDB_ZLIB_CFLAGS)",
 				);
@@ -1260,6 +1205,7 @@
 				"OTHER_LDFLAGS[sdk=iphoneos*][arch=*]" = (
 					"-framework",
 					Foundation,
+					"$(LLDB_ENERGY_LDFLAGS)",
 					"$(LLDB_COMPRESSION_LDFLAGS)",
 				);
 				"OTHER_LDFLAGS[sdk=macosx*]" = (
@@ -1267,7 +1213,7 @@
 					__TEXT,
 					__info_plist,
 					"$(PROJECT_DIR)/resources/lldb-debugserver-Info.plist",
-					"$(LLDB_ENERGY_LFLAGS)",
+					"$(LLDB_ENERGY_LDFLAGS)",
 					"$(LLDB_COMPRESSION_LDFLAGS)",
 					"$(LLDB_ZLIB_LDFLAGS)",
 				);
@@ -1275,17 +1221,9 @@
 				PRODUCT_NAME = "debugserver-nonui";
 				"PROVISIONING_PROFILE[sdk=iphoneos*]" = "";
 				"PROVISIONING_PROFILE[sdk=macosx*]" = "";
-				SDKROOT = macosx.internal;
-				"SDKROOT[arch=i386]" = macosx;
-				"SDKROOT[arch=x86_64]" = macosx;
-				"SDKROOT[arch=x86_64h]" = macosx;
+				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
-				USER_HEADER_SEARCH_PATHS = (
-					./source,
-					../../source,
-					"$(DERIVED_SOURCES_DIR)",
-					../../include,
-				);
+				USER_HEADER_SEARCH_PATHS = "./source ../../source $(DERIVED_SOURCES_DIR) ../../include";
 				ZERO_LINK = NO;
 			};
 			name = DebugClang;
@@ -1313,12 +1251,14 @@
 				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
 				HEADER_SEARCH_PATHS = /System/Library/Frameworks/System.framework/PrivateHeaders;
 				INSTALL_PATH = /usr/local/bin;
+				LLDB_COMPRESSION_CFLAGS = "-DHAVE_LIBCOMPRESSION=1";
+				LLDB_COMPRESSION_LDFLAGS = "-lcompression";
 				LLDB_DEBUGSERVER = 1;
 				LLDB_ENERGY_CFLAGS = "";
-				"LLDB_ENERGY_CFLAGS[sdk=macosx.internal]" = "-DLLDB_ENERGY";
-				LLDB_ENERGY_LFLAGS = "";
-				"LLDB_ENERGY_LFLAGS[sdk=macosx.internal]" = "-weak-lpmenergy -weak-lpmsample";
+				"LLDB_ENERGY_CFLAGS[sdk=*.internal]" = "-DLLDB_ENERGY";
+				LLDB_ENERGY_LDFLAGS = "-lpmenergy -lpmsample";
 				OTHER_CFLAGS = (
+					"$(LLDB_ENERGY_CFLAGS)",
 					"$(LLDB_COMPRESSION_CFLAGS)",
 					"$(LLDB_ZLIB_CFLAGS)",
 					"-DDEBUGSERVER_PROGRAM_SYMBOL=debugserver_nonui",
@@ -1328,6 +1268,8 @@
 					"-Wparentheses",
 					"-DOS_OBJECT_USE_OBJC=0",
 					"-DDEBUGSERVER_PROGRAM_SYMBOL=debugserver_nonui",
+					"$(LLDB_ENERGY_CFLAGS)",
+					"$(LLDB_COMPRESSION_CFLAGS)",
 					"$(LLDB_OS_LOG_CFLAGS)",
 				);
 				"OTHER_CPLUSPLUSFLAGS[sdk=iphoneos*][arch=*]" = "$(OTHER_CFLAGS)";
@@ -1335,6 +1277,7 @@
 				"OTHER_LDFLAGS[sdk=iphoneos*][arch=*]" = (
 					"-framework",
 					Foundation,
+					"$(LLDB_ENERGY_LDFLAGS)",
 					"$(LLDB_COMPRESSION_LDFLAGS)",
 					"$(LLDB_ZLIB_LDFLAGS)",
 				);
@@ -1343,7 +1286,7 @@
 					__TEXT,
 					__info_plist,
 					"$(PROJECT_DIR)/resources/lldb-debugserver-Info.plist",
-					"$(LLDB_ENERGY_LFLAGS)",
+					"$(LLDB_ENERGY_LDFLAGS)",
 					"$(LLDB_COMPRESSION_LDFLAGS)",
 					"$(LLDB_ZLIB_LDFLAGS)",
 				);
@@ -1351,17 +1294,9 @@
 				PRODUCT_NAME = "debugserver-nonui";
 				"PROVISIONING_PROFILE[sdk=iphoneos*]" = "";
 				"PROVISIONING_PROFILE[sdk=macosx*]" = "";
-				SDKROOT = macosx.internal;
-				"SDKROOT[arch=i386]" = macosx;
-				"SDKROOT[arch=x86_64]" = macosx;
-				"SDKROOT[arch=x86_64h]" = macosx;
+				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
-				USER_HEADER_SEARCH_PATHS = (
-					./source,
-					../../source,
-					"$(DERIVED_SOURCES_DIR)",
-					../../include,
-				);
+				USER_HEADER_SEARCH_PATHS = "./source ../../source $(DERIVED_SOURCES_DIR) ../../include";
 				ZERO_LINK = NO;
 			};
 			name = Release;
@@ -1392,9 +1327,8 @@
 				"INSTALL_PATH[sdk=iphoneos*]" = /usr/local/bin;
 				LLDB_DEBUGSERVER = 1;
 				LLDB_ENERGY_CFLAGS = "";
-				"LLDB_ENERGY_CFLAGS[sdk=macosx*]" = "-DLLDB_ENERGY";
-				LLDB_ENERGY_LFLAGS = "";
-				"LLDB_ENERGY_LFLAGS[sdk=macosx*]" = "-weak-lpmenergy -weak-lpmsample";
+				"LLDB_ENERGY_CFLAGS[sdk=*.internal]" = "-DLLDB_ENERGY";
+				LLDB_ENERGY_LDFLAGS = "-lpmenergy -lpmsample";
 				OTHER_CFLAGS = (
 					"-Wparentheses",
 					"$(LLDB_ENERGY_CFLAGS)",
@@ -1418,20 +1352,15 @@
 					__TEXT,
 					__info_plist,
 					"$(PROJECT_DIR)/resources/lldb-debugserver-Info.plist",
-					"$(LLDB_ENERGY_LFLAGS)",
+					"$(LLDB_ENERGY_LDFLAGS)",
 				);
 				OTHER_MIGFLAGS = "-I$(DERIVED_FILE_DIR)";
 				PRODUCT_NAME = "debugserver-nonui";
-				SDKROOT = macosx.internal;
+				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
 				"SKIP_INSTALL[sdk=iphoneos*]" = NO;
 				STRIP_INSTALLED_PRODUCT = YES;
-				USER_HEADER_SEARCH_PATHS = (
-					./source,
-					../../source,
-					"$(DERIVED_SOURCES_DIR)",
-					../../include,
-				);
+				USER_HEADER_SEARCH_PATHS = "./source ../../source $(DERIVED_SOURCES_DIR) ../../include";
 				ZERO_LINK = NO;
 			};
 			name = BuildAndIntegration;
@@ -1440,10 +1369,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				"ARCHS[sdk=iphoneos*]" = (
-					arm64,
-					armv7,
-				);
+				"ARCHS[sdk=iphoneos*]" = arm64;
 				"ARCHS[sdk=macosx*]" = "$(ARCHS_STANDARD_64_BIT)";
 				CLANG_WARN_BOOL_CONVERSION = YES;
 				CLANG_WARN_CONSTANT_CONVERSION = YES;
@@ -1470,10 +1396,7 @@
 				LLDB_OS_LOG_CFLAGS = "-DLLDB_USE_OS_LOG=$(LLDB_USE_OS_LOG)";
 				LLDB_USE_OS_LOG = 0;
 				ONLY_ACTIVE_ARCH = YES;
-				SDKROOT = macosx.internal;
-				"SDKROOT[arch=i386]" = macosx;
-				"SDKROOT[arch=x86_64]" = macosx;
-				"SDKROOT[arch=x86_64h]" = macosx;
+				SDKROOT = macosx;
 				STRIP_INSTALLED_PRODUCT = NO;
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_BUILDER = "$(USER)";
@@ -1503,29 +1426,18 @@
 				GCC_PREPROCESSOR_DEFINITIONS = LLDB_DEBUGSERVER_DEBUG;
 				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
 				INSTALL_PATH = /usr/bin;
-				LLDB_COMPRESSION_CFLAGS = "";
-				"LLDB_COMPRESSION_CFLAGS[sdk=appletvos*]" = "-DHAVE_LIBCOMPRESSION=1";
-				"LLDB_COMPRESSION_CFLAGS[sdk=iphoneos*]" = "-DHAVE_LIBCOMPRESSION=1";
-				"LLDB_COMPRESSION_CFLAGS[sdk=macosx10.11]" = "-DHAVE_LIBCOMPRESSION=1";
-				"LLDB_COMPRESSION_CFLAGS[sdk=macosx10.11internal]" = "-DHAVE_LIBCOMPRESSION=1";
-				"LLDB_COMPRESSION_CFLAGS[sdk=watchos*]" = "-DHAVE_LIBCOMPRESSION=1";
-				LLDB_COMPRESSION_LDFLAGS = "";
-				"LLDB_COMPRESSION_LDFLAGS[sdk=appletvos*]" = "-weak-lcompression";
-				"LLDB_COMPRESSION_LDFLAGS[sdk=iphoneos*]" = "-weak-lcompression";
-				"LLDB_COMPRESSION_LDFLAGS[sdk=macosx10.11]" = "-weak-lcompression";
-				"LLDB_COMPRESSION_LDFLAGS[sdk=macosx10.11internal]" = "-weak-lcompression";
-				"LLDB_COMPRESSION_LDFLAGS[sdk=watchos*]" = "-weak-lcompression";
+				LLDB_COMPRESSION_CFLAGS = "-DHAVE_LIBCOMPRESSION=1";
+				LLDB_COMPRESSION_LDFLAGS = "-lcompression";
 				LLDB_DEBUGSERVER = 1;
 				LLDB_ENERGY_CFLAGS = "";
-				"LLDB_ENERGY_CFLAGS[sdk=macosx.internal]" = "-DLLDB_ENERGY";
-				LLDB_ENERGY_LFLAGS = "";
-				"LLDB_ENERGY_LFLAGS[sdk=macosx.internal]" = "-weak-lpmenergy -weak-lpmsample";
+				"LLDB_ENERGY_CFLAGS[sdk=*.internal]" = "-DLLDB_ENERGY";
+				LLDB_ENERGY_LDFLAGS = "-lpmenergy -lpmsample";
 				LLDB_ZLIB_CFLAGS = "-DHAVE_LIBZ=1";
 				LLDB_ZLIB_LDFLAGS = "-lz";
 				OTHER_CFLAGS = (
 					"-Wparentheses",
-					"$(LLDB_ENERGY_CFLAGS)",
 					"-DDT_VARIANT_$(DT_VARIANT)",
+					"$(LLDB_ENERGY_CFLAGS)",
 					"$(LLDB_COMPRESSION_CFLAGS)",
 					"$(LLDB_ZLIB_CFLAGS)",
 					"$(LLDB_OS_LOG_CFLAGS)",
@@ -1536,9 +1448,12 @@
 					"-DWITH_FBS",
 					"-DWITH_BKS",
 					"-DOS_OBJECT_USE_OBJC=0",
+					"$(LLDB_ENERGY_CFLAGS)",
 					"$(LLDB_COMPRESSION_CFLAGS)",
 					"$(LLDB_ZLIB_CFLAGS)",
 					"$(LLDB_OS_LOG_CFLAGS)",
+					"-isystem",
+					"$(SDKROOT)/System/Library/Frameworks/System.framework/PrivateHeaders",
 				);
 				"OTHER_CPLUSPLUSFLAGS[sdk=iphoneos*][arch=*]" = "$(OTHER_CFLAGS)";
 				"OTHER_LDFLAGS[sdk=iphoneos*][arch=*]" = (
@@ -1551,6 +1466,7 @@
 					FrontBoardServices,
 					"-framework",
 					MobileCoreServices,
+					"$(LLDB_ENERGY_LDFLAGS)",
 					"$(LLDB_COMPRESSION_LDFLAGS)",
 					"$(LLDB_ZLIB_LDFLAGS)",
 				);
@@ -1559,7 +1475,7 @@
 					__TEXT,
 					__info_plist,
 					"$(PROJECT_DIR)/resources/lldb-debugserver-Info.plist",
-					"$(LLDB_ENERGY_LFLAGS)",
+					"$(LLDB_ENERGY_LDFLAGS)",
 					"$(LLDB_COMPRESSION_LDFLAGS)",
 					"$(LLDB_ZLIB_LDFLAGS)",
 				);
@@ -1568,16 +1484,8 @@
 				"PROVISIONING_PROFILE[sdk=iphoneos*]" = "";
 				"PROVISIONING_PROFILE[sdk=macosx*]" = "";
 				SDKROOT = macosx;
-				"SDKROOT[arch=i386]" = macosx;
-				"SDKROOT[arch=x86_64]" = macosx;
-				"SDKROOT[arch=x86_64h]" = macosx;
 				SKIP_INSTALL = YES;
-				USER_HEADER_SEARCH_PATHS = (
-					./source,
-					../../source,
-					"$(DERIVED_SOURCES_DIR)",
-					../../include,
-				);
+				USER_HEADER_SEARCH_PATHS = "./source ../../source $(DERIVED_SOURCES_DIR) ../../include";
 				ZERO_LINK = NO;
 			};
 			name = DebugClang;
@@ -1586,10 +1494,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				"ARCHS[sdk=iphoneos*]" = (
-					arm64,
-					armv7,
-				);
+				"ARCHS[sdk=iphoneos*]" = arm64;
 				"ARCHS[sdk=macosx*]" = "$(ARCHS_STANDARD_64_BIT)";
 				CLANG_WARN_BOOL_CONVERSION = YES;
 				CLANG_WARN_CONSTANT_CONVERSION = YES;
@@ -1616,10 +1521,7 @@
 				LLDB_OS_LOG_CFLAGS = "-DLLDB_USE_OS_LOG=$(LLDB_USE_OS_LOG)";
 				LLDB_USE_OS_LOG = 0;
 				ONLY_ACTIVE_ARCH = YES;
-				SDKROOT = macosx.internal;
-				"SDKROOT[arch=i386]" = macosx;
-				"SDKROOT[arch=x86_64]" = macosx;
-				"SDKROOT[arch=x86_64h]" = macosx;
+				SDKROOT = macosx;
 				STRIP_INSTALLED_PRODUCT = NO;
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_BUILDER = "$(USER)";
@@ -1649,23 +1551,12 @@
 				GCC_PREPROCESSOR_DEFINITIONS = LLDB_DEBUGSERVER_DEBUG;
 				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
 				INSTALL_PATH = /usr/bin;
-				LLDB_COMPRESSION_CFLAGS = "";
-				"LLDB_COMPRESSION_CFLAGS[sdk=appletvos*]" = "-DHAVE_LIBCOMPRESSION=1";
-				"LLDB_COMPRESSION_CFLAGS[sdk=iphoneos*]" = "-DHAVE_LIBCOMPRESSION=1";
-				"LLDB_COMPRESSION_CFLAGS[sdk=macosx10.11]" = "-DHAVE_LIBCOMPRESSION=1";
-				"LLDB_COMPRESSION_CFLAGS[sdk=macosx10.11internal]" = "-DHAVE_LIBCOMPRESSION=1";
-				"LLDB_COMPRESSION_CFLAGS[sdk=watchos*]" = "-DHAVE_LIBCOMPRESSION=1";
-				LLDB_COMPRESSION_LDFLAGS = "";
-				"LLDB_COMPRESSION_LDFLAGS[sdk=appletvos*]" = "-weak-lcompression";
-				"LLDB_COMPRESSION_LDFLAGS[sdk=iphoneos*]" = "-weak-lcompression";
-				"LLDB_COMPRESSION_LDFLAGS[sdk=macosx10.11]" = "-weak-lcompression";
-				"LLDB_COMPRESSION_LDFLAGS[sdk=macosx10.11internal]" = "-weak-lcompression";
-				"LLDB_COMPRESSION_LDFLAGS[sdk=watchos*]" = "-weak-lcompression";
+				LLDB_COMPRESSION_CFLAGS = "-DHAVE_LIBCOMPRESSION=1";
+				LLDB_COMPRESSION_LDFLAGS = "-lcompression";
 				LLDB_DEBUGSERVER = 1;
 				LLDB_ENERGY_CFLAGS = "";
-				"LLDB_ENERGY_CFLAGS[sdk=macosx.internal]" = "-DLLDB_ENERGY";
-				LLDB_ENERGY_LFLAGS = "";
-				"LLDB_ENERGY_LFLAGS[sdk=macosx.internal]" = "-weak-lpmenergy -weak-lpmsample";
+				"LLDB_ENERGY_CFLAGS[sdk=*.internal]" = "-DLLDB_ENERGY";
+				LLDB_ENERGY_LDFLAGS = "-lpmenergy -lpmsample";
 				LLDB_ZLIB_CFLAGS = "-DHAVE_LIBZ=1";
 				LLDB_ZLIB_LDFLAGS = "-lz";
 				OTHER_CFLAGS = (
@@ -1681,9 +1572,12 @@
 					"-DWITH_FBS",
 					"-DWITH_BKS",
 					"-DOS_OBJECT_USE_OBJC=0",
+					"$(LLDB_ENERGY_CFLAGS)",
 					"$(LLDB_COMPRESSION_CFLAGS)",
 					"$(LLDB_ZLIB_CFLAGS)",
 					"$(LLDB_OS_LOG_CFLAGS)",
+					"-isystem",
+					"$(SDKROOT)/System/Library/Frameworks/System.framework/PrivateHeaders",
 				);
 				"OTHER_CPLUSPLUSFLAGS[sdk=iphoneos*][arch=*]" = "$(OTHER_CFLAGS)";
 				"OTHER_LDFLAGS[sdk=iphoneos*][arch=*]" = (
@@ -1696,6 +1590,7 @@
 					FrontBoardServices,
 					"-framework",
 					MobileCoreServices,
+					"$(LLDB_ENERGY_LDFLAGS)",
 					"$(LLDB_COMPRESSION_LDFLAGS)",
 					"$(LLDB_ZLIB_LDFLAGS)",
 				);
@@ -1704,7 +1599,7 @@
 					__TEXT,
 					__info_plist,
 					"$(PROJECT_DIR)/resources/lldb-debugserver-Info.plist",
-					"$(LLDB_ENERGY_LFLAGS)",
+					"$(LLDB_ENERGY_LDFLAGS)",
 					"$(LLDB_COMPRESSION_LDFLAGS)",
 					"$(LLDB_ZLIB_LDFLAGS)",
 				);
@@ -1713,16 +1608,8 @@
 				"PROVISIONING_PROFILE[sdk=iphoneos*]" = "";
 				"PROVISIONING_PROFILE[sdk=macosx*]" = "";
 				SDKROOT = macosx;
-				"SDKROOT[arch=i386]" = macosx;
-				"SDKROOT[arch=x86_64]" = macosx;
-				"SDKROOT[arch=x86_64h]" = macosx;
 				SKIP_INSTALL = YES;
-				USER_HEADER_SEARCH_PATHS = (
-					./source,
-					../../source,
-					"$(DERIVED_SOURCES_DIR)",
-					../../include,
-				);
+				USER_HEADER_SEARCH_PATHS = "./source ../../source $(DERIVED_SOURCES_DIR) ../../include";
 				ZERO_LINK = NO;
 			};
 			name = DebugPresubmission;
@@ -1752,9 +1639,8 @@
 				INSTALL_PATH = /usr/local/bin;
 				LLDB_DEBUGSERVER = 1;
 				LLDB_ENERGY_CFLAGS = "";
-				"LLDB_ENERGY_CFLAGS[sdk=macosx.internal]" = "-DLLDB_ENERGY";
-				LLDB_ENERGY_LFLAGS = "";
-				"LLDB_ENERGY_LFLAGS[sdk=macosx.internal]" = "-weak-lpmenergy -weak-lpmsample";
+				"LLDB_ENERGY_CFLAGS[sdk=*.internal]" = "-DLLDB_ENERGY";
+				LLDB_ENERGY_LDFLAGS = "-lpmenergy -lpmsample";
 				OTHER_CFLAGS = (
 					"-Wparentheses",
 					"$(LLDB_ENERGY_CFLAGS)",
@@ -1777,23 +1663,15 @@
 					__TEXT,
 					__info_plist,
 					"$(PROJECT_DIR)/resources/lldb-debugserver-Info.plist",
-					"$(LLDB_ENERGY_LFLAGS)",
+					"$(LLDB_ENERGY_LDFLAGS)",
 				);
 				OTHER_MIGFLAGS = "-I$(DERIVED_FILE_DIR)";
 				PRODUCT_NAME = "debugserver-nonui";
 				"PROVISIONING_PROFILE[sdk=iphoneos*]" = "";
 				"PROVISIONING_PROFILE[sdk=macosx*]" = "";
-				SDKROOT = macosx.internal;
-				"SDKROOT[arch=i386]" = macosx;
-				"SDKROOT[arch=x86_64]" = macosx;
-				"SDKROOT[arch=x86_64h]" = macosx;
+				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
-				USER_HEADER_SEARCH_PATHS = (
-					./source,
-					../../source,
-					"$(DERIVED_SOURCES_DIR)",
-					../../include,
-				);
+				USER_HEADER_SEARCH_PATHS = "./source ../../source $(DERIVED_SOURCES_DIR) ../../include";
 				ZERO_LINK = NO;
 			};
 			name = DebugPresubmission;
@@ -1816,10 +1694,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				"ARCHS[sdk=iphoneos*]" = (
-					arm64,
-					armv7,
-				);
+				"ARCHS[sdk=iphoneos*]" = arm64;
 				"ARCHS[sdk=macosx*]" = "$(ARCHS_STANDARD_64_BIT)";
 				CLANG_WARN_BOOL_CONVERSION = YES;
 				CLANG_WARN_CONSTANT_CONVERSION = YES;
@@ -1846,10 +1721,7 @@
 				LLDB_OS_LOG_CFLAGS = "-DLLDB_USE_OS_LOG=$(LLDB_USE_OS_LOG)";
 				LLDB_USE_OS_LOG = 0;
 				ONLY_ACTIVE_ARCH = YES;
-				SDKROOT = macosx.internal;
-				"SDKROOT[arch=i386]" = macosx;
-				"SDKROOT[arch=x86_64]" = macosx;
-				"SDKROOT[arch=x86_64h]" = macosx;
+				SDKROOT = macosx;
 				STRIP_INSTALLED_PRODUCT = NO;
 				VERSIONING_SYSTEM = "apple-generic";
 				VERSION_INFO_BUILDER = "$(USER)";
@@ -1883,15 +1755,14 @@
 				LLDB_COMPRESSION_LDFLAGS = "";
 				LLDB_DEBUGSERVER = 1;
 				LLDB_ENERGY_CFLAGS = "";
-				"LLDB_ENERGY_CFLAGS[sdk=macosx.internal]" = "-DLLDB_ENERGY";
-				LLDB_ENERGY_LFLAGS = "";
-				"LLDB_ENERGY_LFLAGS[sdk=macosx.internal]" = "-weak-lpmenergy -weak-lpmsample";
+				"LLDB_ENERGY_CFLAGS[sdk=*.internal]" = "-DLLDB_ENERGY";
+				LLDB_ENERGY_LDFLAGS = "-lpmenergy -lpmsample";
 				LLDB_ZLIB_CFLAGS = "-DHAVE_LIBZ=1";
 				LLDB_ZLIB_LDFLAGS = "-lz";
 				OTHER_CFLAGS = (
 					"-Wparentheses",
-					"$(LLDB_ENERGY_CFLAGS)",
 					"-DDT_VARIANT_$(DT_VARIANT)",
+					"$(LLDB_ENERGY_CFLAGS)",
 					"$(LLDB_COMPRESSION_CFLAGS)",
 					"$(LLDB_ZLIB_CFLAGS)",
 					"$(LLDB_OS_LOG_CFLAGS)",
@@ -1902,9 +1773,12 @@
 					"-DWITH_BKS",
 					"-DWITH_FBS",
 					"-DOS_OBJECT_USE_OBJC=0",
+					"$(LLDB_ENERGY_CFLAGS)",
 					"$(LLDB_COMPRESSION_CFLAGS)",
 					"$(LLDB_ZLIB_CFLAGS)",
 					"$(LLDB_OS_LOG_CFLAGS)",
+					"-isystem",
+					"$(SDKROOT)/System/Library/Frameworks/System.framework/PrivateHeaders",
 				);
 				"OTHER_CPLUSPLUSFLAGS[sdk=iphoneos*][arch=*]" = "$(OTHER_CFLAGS)";
 				OTHER_LDFLAGS = "";
@@ -1918,6 +1792,7 @@
 					FrontBoardServices,
 					"-framework",
 					MobileCoreServices,
+					"$(LLDB_ENERGY_LDFLAGS)",
 					"$(LLDB_COMPRESSION_LDFLAGS)",
 					"$(LLDB_ZLIB_LDFLAGS)",
 				);
@@ -1926,7 +1801,7 @@
 					__TEXT,
 					__info_plist,
 					"$(PROJECT_DIR)/resources/lldb-debugserver-Info.plist",
-					"$(LLDB_ENERGY_LFLAGS)",
+					"$(LLDB_ENERGY_LDFLAGS)",
 					"$(LLDB_COMPRESSION_LDFLAGS)",
 					"$(LLDB_ZLIB_LDFLAGS)",
 				);
@@ -1935,16 +1810,8 @@
 				"PROVISIONING_PROFILE[sdk=iphoneos*]" = "";
 				"PROVISIONING_PROFILE[sdk=macosx*]" = "";
 				SDKROOT = macosx;
-				"SDKROOT[arch=i386]" = macosx;
-				"SDKROOT[arch=x86_64]" = macosx;
-				"SDKROOT[arch=x86_64h]" = macosx;
 				SKIP_INSTALL = YES;
-				USER_HEADER_SEARCH_PATHS = (
-					./source,
-					../../source,
-					"$(DERIVED_SOURCES_DIR)",
-					../../include,
-				);
+				USER_HEADER_SEARCH_PATHS = "./source ../../source $(DERIVED_SOURCES_DIR) ../../include";
 				ZERO_LINK = NO;
 			};
 			name = "CustomSwift-Debug";
@@ -1953,10 +1820,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				"ARCHS[sdk=iphoneos*]" = (
-					armv7,
-					armv7s,
-				);
+				"ARCHS[sdk=iphoneos*]" = arm64;
 				"ARCHS[sdk=macosx*]" = "$(ARCHS_STANDARD_64_BIT)";
 				CLANG_WARN_BOOL_CONVERSION = YES;
 				CLANG_WARN_CONSTANT_CONVERSION = YES;
@@ -1982,10 +1846,7 @@
 				LLDB_OS_LOG_CFLAGS = "-DLLDB_USE_OS_LOG=$(LLDB_USE_OS_LOG)";
 				LLDB_USE_OS_LOG = 0;
 				ONLY_ACTIVE_ARCH = YES;
-				SDKROOT = macosx.internal;
-				"SDKROOT[arch=i386]" = macosx;
-				"SDKROOT[arch=x86_64]" = macosx;
-				"SDKROOT[arch=x86_64h]" = macosx;
+				SDKROOT = macosx;
 				STRIPFLAGS = "-x";
 				STRIP_STYLE = debugging;
 				VERSIONING_SYSTEM = "apple-generic";
@@ -2020,15 +1881,14 @@
 				LLDB_COMPRESSION_LDFLAGS = "";
 				LLDB_DEBUGSERVER = 1;
 				LLDB_ENERGY_CFLAGS = "";
-				"LLDB_ENERGY_CFLAGS[sdk=macosx.internal]" = "-DLLDB_ENERGY";
-				LLDB_ENERGY_LFLAGS = "";
-				"LLDB_ENERGY_LFLAGS[sdk=macosx.internal]" = "-weak-lpmenergy -weak-lpmsample";
+				"LLDB_ENERGY_CFLAGS[sdk=*.internal]" = "-DLLDB_ENERGY";
+				LLDB_ENERGY_LDFLAGS = "-lpmenergy -lpmsample";
 				LLDB_ZLIB_CFLAGS = "-DHAVE_LIBZ=1";
 				LLDB_ZLIB_LDFLAGS = "-lz";
 				OTHER_CFLAGS = (
 					"-Wparentheses",
-					"$(LLDB_ENERGY_CFLAGS)",
 					"-DDT_VARIANT_$(DT_VARIANT)",
+					"$(LLDB_ENERGY_CFLAGS)",
 					"$(LLDB_COMPRESSION_CFLAGS)",
 					"$(LLDB_ZLIB_CFLAGS)",
 					"$(LLDB_OS_LOG_CFLAGS)",
@@ -2039,9 +1899,12 @@
 					"-DWITH_FBS",
 					"-DWITH_BKS",
 					"-DOS_OBJECT_USE_OBJC=0",
+					"$(LLDB_ENERGY_CFLAGS)",
 					"$(LLDB_COMPRESSION_CFLAGS)",
 					"$(LLDB_ZLIB_CFLAGS)",
 					"$(LLDB_OS_LOG_CFLAGS)",
+					"-isystem",
+					"$(SDKROOT)/System/Library/Frameworks/System.framework/PrivateHeaders",
 				);
 				"OTHER_CPLUSPLUSFLAGS[sdk=iphoneos*][arch=*]" = "$(OTHER_CFLAGS)";
 				"OTHER_LDFLAGS[sdk=iphoneos*][arch=*]" = (
@@ -2054,6 +1917,7 @@
 					FrontBoardServices,
 					"-framework",
 					MobileCoreServices,
+					"$(LLDB_ENERGY_LDFLAGS)",
 					"$(LLDB_COMPRESSION_LDFLAGS)",
 					"$(LLDB_ZLIB_LDFLAGS)",
 				);
@@ -2062,7 +1926,7 @@
 					__TEXT,
 					__info_plist,
 					"$(PROJECT_DIR)/resources/lldb-debugserver-Info.plist",
-					"$(LLDB_ENERGY_LFLAGS)",
+					"$(LLDB_ENERGY_LDFLAGS)",
 					"$(LLDB_COMPRESSION_LDFLAGS)",
 					"$(LLDB_ZLIB_LDFLAGS)",
 				);
@@ -2071,16 +1935,8 @@
 				"PROVISIONING_PROFILE[sdk=iphoneos*]" = "";
 				"PROVISIONING_PROFILE[sdk=macosx*]" = "";
 				SDKROOT = macosx;
-				"SDKROOT[arch=i386]" = macosx;
-				"SDKROOT[arch=x86_64]" = macosx;
-				"SDKROOT[arch=x86_64h]" = macosx;
 				SKIP_INSTALL = YES;
-				USER_HEADER_SEARCH_PATHS = (
-					./source,
-					../../source,
-					"$(DERIVED_SOURCES_DIR)",
-					../../include,
-				);
+				USER_HEADER_SEARCH_PATHS = "./source ../../source $(DERIVED_SOURCES_DIR) ../../include";
 				ZERO_LINK = NO;
 			};
 			name = "CustomSwift-Release";

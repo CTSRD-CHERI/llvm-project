@@ -6,12 +6,8 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-//
-// This file implements methods in the CodeGen/ValueTypes.h header.
-//
-//===----------------------------------------------------------------------===//
 
-#include "llvm/CodeGen/ValueTypes.h"
+#include "llvm/IR/ValueTypes.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Type.h"
@@ -196,6 +192,7 @@ std::string EVT::getEVTString() const {
   case MVT::v8f64:   return "v8f64";
   case MVT::Metadata:return "Metadata";
   case MVT::Untyped: return "Untyped";
+  case MVT::ExceptRef: return "ExceptRef";
   }
 }
 

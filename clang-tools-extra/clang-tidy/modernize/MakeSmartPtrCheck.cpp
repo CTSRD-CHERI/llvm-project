@@ -61,8 +61,13 @@ void MakeSmartPtrCheck::storeOptions(ClangTidyOptions::OptionMap &Opts) {
   Options.store(Opts, "IgnoreMacros", IgnoreMacros);
 }
 
+bool MakeSmartPtrCheck::isLanguageVersionSupported(
+    const LangOptions &LangOpts) const {
+  return LangOpts.CPlusPlus11;
+}
+
 void MakeSmartPtrCheck::registerPPCallbacks(CompilerInstance &Compiler) {
-  if (getLangOpts().CPlusPlus11) {
+  if (isLanguageVersionSupported(getLangOpts())) {
     Inserter.reset(new utils::IncludeInserter(
         Compiler.getSourceManager(), Compiler.getLangOpts(), IncludeStyle));
     Compiler.getPreprocessor().addPPCallbacks(Inserter->CreatePPCallbacks());
@@ -70,7 +75,7 @@ void MakeSmartPtrCheck::registerPPCallbacks(CompilerInstance &Compiler) {
 }
 
 void MakeSmartPtrCheck::registerMatchers(ast_matchers::MatchFinder *Finder) {
-  if (!getLangOpts().CPlusPlus11)
+  if (!isLanguageVersionSupported(getLangOpts()))
     return;
 
   // Calling make_smart_ptr from within a member function of a type with a
@@ -295,16 +300,8 @@ bool MakeSmartPtrCheck::replaceNew(DiagnosticBuilder &Diag,
           }
           return false;
         };
-        // Check the implicit conversion from the std::initializer_list type to
-        // a class type.
-        if (IsStdInitListInitConstructExpr(Arg))
+        if (IsStdInitListInitConstructExpr(Arg->IgnoreImplicit()))
           return false;
-        // The Arg can be a CXXBindTemporaryExpr, checking its underlying
-        // construct expr.
-        if (const auto * CTE = dyn_cast<CXXBindTemporaryExpr>(Arg)) {
-          if (IsStdInitListInitConstructExpr(CTE->getSubExpr()))
-            return false;
-        }
       }
     }
     if (ArraySizeExpr.empty()) {

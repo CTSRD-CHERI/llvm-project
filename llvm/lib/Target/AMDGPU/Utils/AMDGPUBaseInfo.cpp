@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "AMDGPUBaseInfo.h"
+#include "AMDGPUTargetTransformInfo.h"
 #include "AMDGPU.h"
 #include "SIDefines.h"
 #include "llvm/ADT/StringRef.h"
@@ -205,6 +206,8 @@ IsaVersion getIsaVersion(const FeatureBitset &Features) {
     return {7, 0, 3};
   if (Features.test(FeatureISAVersion7_0_4))
     return {7, 0, 4};
+  if (Features.test(FeatureSeaIslands))
+    return {7, 0, 0};
 
   // GCN GFX8 (Volcanic Islands (VI)).
   if (Features.test(FeatureISAVersion8_0_1))
@@ -215,12 +218,16 @@ IsaVersion getIsaVersion(const FeatureBitset &Features) {
     return {8, 0, 3};
   if (Features.test(FeatureISAVersion8_1_0))
     return {8, 1, 0};
+  if (Features.test(FeatureVolcanicIslands))
+    return {8, 0, 0};
 
   // GCN GFX9.
   if (Features.test(FeatureISAVersion9_0_0))
     return {9, 0, 0};
   if (Features.test(FeatureISAVersion9_0_2))
     return {9, 0, 2};
+  if (Features.test(FeatureGFX9))
+    return {9, 0, 0};
 
   if (!Features.test(FeatureGCN) || Features.test(FeatureSouthernIslands))
     return {0, 0, 0};
@@ -937,6 +944,56 @@ AMDGPUAS getAMDGPUAS(const TargetMachine &M) {
 
 AMDGPUAS getAMDGPUAS(const Module &M) {
   return getAMDGPUAS(Triple(M.getTargetTriple()));
+}
+
+bool isIntrinsicSourceOfDivergence(unsigned IntrID) {
+  switch (IntrID) {
+  case Intrinsic::amdgcn_workitem_id_x:
+  case Intrinsic::amdgcn_workitem_id_y:
+  case Intrinsic::amdgcn_workitem_id_z:
+  case Intrinsic::amdgcn_interp_mov:
+  case Intrinsic::amdgcn_interp_p1:
+  case Intrinsic::amdgcn_interp_p2:
+  case Intrinsic::amdgcn_mbcnt_hi:
+  case Intrinsic::amdgcn_mbcnt_lo:
+  case Intrinsic::r600_read_tidig_x:
+  case Intrinsic::r600_read_tidig_y:
+  case Intrinsic::r600_read_tidig_z:
+  case Intrinsic::amdgcn_atomic_inc:
+  case Intrinsic::amdgcn_atomic_dec:
+  case Intrinsic::amdgcn_ds_fadd:
+  case Intrinsic::amdgcn_ds_fmin:
+  case Intrinsic::amdgcn_ds_fmax:
+  case Intrinsic::amdgcn_image_atomic_swap:
+  case Intrinsic::amdgcn_image_atomic_add:
+  case Intrinsic::amdgcn_image_atomic_sub:
+  case Intrinsic::amdgcn_image_atomic_smin:
+  case Intrinsic::amdgcn_image_atomic_umin:
+  case Intrinsic::amdgcn_image_atomic_smax:
+  case Intrinsic::amdgcn_image_atomic_umax:
+  case Intrinsic::amdgcn_image_atomic_and:
+  case Intrinsic::amdgcn_image_atomic_or:
+  case Intrinsic::amdgcn_image_atomic_xor:
+  case Intrinsic::amdgcn_image_atomic_inc:
+  case Intrinsic::amdgcn_image_atomic_dec:
+  case Intrinsic::amdgcn_image_atomic_cmpswap:
+  case Intrinsic::amdgcn_buffer_atomic_swap:
+  case Intrinsic::amdgcn_buffer_atomic_add:
+  case Intrinsic::amdgcn_buffer_atomic_sub:
+  case Intrinsic::amdgcn_buffer_atomic_smin:
+  case Intrinsic::amdgcn_buffer_atomic_umin:
+  case Intrinsic::amdgcn_buffer_atomic_smax:
+  case Intrinsic::amdgcn_buffer_atomic_umax:
+  case Intrinsic::amdgcn_buffer_atomic_and:
+  case Intrinsic::amdgcn_buffer_atomic_or:
+  case Intrinsic::amdgcn_buffer_atomic_xor:
+  case Intrinsic::amdgcn_buffer_atomic_cmpswap:
+  case Intrinsic::amdgcn_ps_live:
+  case Intrinsic::amdgcn_ds_swizzle:
+    return true;
+  default:
+    return false;
+  }
 }
 } // namespace AMDGPU
 } // namespace llvm

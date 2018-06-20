@@ -235,7 +235,6 @@ std::pair<Symbol *, bool> SymbolTable::insert(StringRef Name) {
   Symbol *Sym;
   if (IsNew) {
     Sym = reinterpret_cast<Symbol *>(make<SymbolUnion>());
-    Sym->InVersionScript = false;
     Sym->Visibility = STV_DEFAULT;
     Sym->IsUsedInRegularObj = false;
     Sym->ExportDynamic = false;
@@ -412,20 +411,17 @@ Symbol *SymbolTable::addCommon(StringRef N, uint64_t Size, uint32_t Alignment,
   return S;
 }
 
-static void warnOrError(const Twine &Msg) {
-  if (Config->AllowMultipleDefinition)
-    warn(Msg);
-  else
-    error(Msg);
-}
-
 static void reportDuplicate(Symbol *Sym, InputFile *NewFile) {
-  warnOrError("duplicate symbol: " + toString(*Sym) + "\n>>> defined in " +
-              toString(Sym->File) + "\n>>> defined in " + toString(NewFile));
+  if (!Config->AllowMultipleDefinition)
+    error("duplicate symbol: " + toString(*Sym) + "\n>>> defined in " +
+          toString(Sym->File) + "\n>>> defined in " + toString(NewFile));
 }
 
 static void reportDuplicate(Symbol *Sym, InputFile *NewFile,
                             InputSectionBase *ErrSec, uint64_t ErrOffset) {
+  if (Config->AllowMultipleDefinition)
+    return;
+
   Defined *D = cast<Defined>(Sym);
   if (!D->Section || !ErrSec) {
     reportDuplicate(Sym, NewFile);
@@ -452,7 +448,7 @@ static void reportDuplicate(Symbol *Sym, InputFile *NewFile,
   if (!Src2.empty())
     Msg += Src2 + "\n>>>            ";
   Msg += Obj2;
-  warnOrError(Msg);
+  error(Msg);
 }
 
 Symbol *SymbolTable::addRegular(StringRef Name, uint8_t StOther, uint8_t Type,
@@ -589,24 +585,6 @@ template <class ELFT> void SymbolTable::fetchIfLazy(StringRef Name) {
   }
 }
 
-// This function takes care of the case in which shared libraries depend on
-// the user program (not the other way, which is usual). Shared libraries
-// may have undefined symbols, expecting that the user program provides
-// the definitions for them. An example is BSD's __progname symbol.
-// We need to put such symbols to the main program's .dynsym so that
-// shared libraries can find them.
-// Except this, we ignore undefined symbols in DSOs.
-template <class ELFT> void SymbolTable::scanShlibUndefined() {
-  for (InputFile *F : SharedFiles) {
-    for (StringRef U : cast<SharedFile<ELFT>>(F)->getUndefinedSymbols()) {
-      Symbol *Sym = find(U);
-      if (!Sym || !Sym->isDefined())
-        continue;
-      Sym->ExportDynamic = true;
-    }
-  }
-}
-
 // Initialize DemangledSyms with a map from demangled symbols to symbol
 // objects. Used to handle "extern C++" directive in version scripts.
 //
@@ -717,10 +695,10 @@ void SymbolTable::assignExactVersion(SymbolVersion Ver, uint16_t VersionId,
     if (Sym->getName().contains('@'))
       continue;
 
-    if (Sym->InVersionScript)
-      warn("duplicate symbol '" + Ver.Name + "' in version script");
+    if (Sym->VersionId != Config->DefaultSymbolVersion &&
+        Sym->VersionId != VersionId)
+      error("duplicate symbol '" + Ver.Name + "' in version script");
     Sym->VersionId = VersionId;
-    Sym->InVersionScript = true;
   }
 }
 
@@ -832,8 +810,3 @@ template void SymbolTable::fetchIfLazy<ELF32LE>(StringRef);
 template void SymbolTable::fetchIfLazy<ELF32BE>(StringRef);
 template void SymbolTable::fetchIfLazy<ELF64LE>(StringRef);
 template void SymbolTable::fetchIfLazy<ELF64BE>(StringRef);
-
-template void SymbolTable::scanShlibUndefined<ELF32LE>();
-template void SymbolTable::scanShlibUndefined<ELF32BE>();
-template void SymbolTable::scanShlibUndefined<ELF64LE>();
-template void SymbolTable::scanShlibUndefined<ELF64BE>();

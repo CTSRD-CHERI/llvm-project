@@ -212,11 +212,6 @@ public:
     return TargetTriple.getOS() == Triple::Mesa3D;
   }
 
-  bool isOpenCLEnv() const {
-    return TargetTriple.getEnvironment() == Triple::OpenCL ||
-           TargetTriple.getEnvironmentName() == "amdgizcl";
-  }
-
   bool isAmdPalOS() const {
     return TargetTriple.getOS() == Triple::AMDPAL;
   }
@@ -414,6 +409,12 @@ public:
     return FlatForGlobal;
   }
 
+  /// \returns If target supports ds_read/write_b128 and user enables generation
+  /// of ds_read/write_b128.
+  bool useDS128(bool UserEnable) const {
+    return CIInsts && UserEnable;
+  }
+
   /// \returns If MUBUF instructions always perform range checking, even for
   /// buffer resources used for private memory access.
   bool privateMemoryResourceIsRangeChecked() const {
@@ -537,12 +538,13 @@ public:
     return isAmdHsaOS() ? 8 : 4;
   }
 
+  /// \returns Number of bytes of arguments that are passed to a shader or
+  /// kernel in addition to the explicit ones declared for the function.
   unsigned getImplicitArgNumBytes(const MachineFunction &MF) const {
     if (isMesaKernel(MF))
       return 16;
-    if (isAmdHsaOS() && isOpenCLEnv())
-      return 32;
-    return 0;
+    return AMDGPU::getIntegerAttribute(
+      MF.getFunction(), "amdgpu-implicitarg-num-bytes", 0);
   }
 
   // Scratch is allocated in 256 dword per wave blocks for the entire
@@ -705,7 +707,7 @@ private:
 
 public:
   SISubtarget(const Triple &TT, StringRef CPU, StringRef FS,
-              const TargetMachine &TM);
+              const GCNTargetMachine &TM);
 
   const SIInstrInfo *getInstrInfo() const override {
     return &InstrInfo;
@@ -842,6 +844,12 @@ public:
   /// \returns true if the flat_scratch register should be initialized with the
   /// pointer to the wave's scratch memory rather than a size and offset.
   bool flatScratchIsPointer() const {
+    return getGeneration() >= GFX9;
+  }
+
+  /// \returns true if the machine has merged shaders in which s0-s7 are
+  /// reserved by the hardware and user SGPRs start at s8
+  bool hasMergedShaders() const {
     return getGeneration() >= GFX9;
   }
 

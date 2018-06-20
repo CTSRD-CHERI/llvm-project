@@ -1986,38 +1986,10 @@ void ObjectFileELF::CreateSections(SectionList &unified_section_list) {
     }
   }
 
-  if (m_sections_ap.get()) {
-    if (GetType() == eTypeDebugInfo) {
-      static const SectionType g_sections[] = {
-          eSectionTypeDWARFDebugAbbrev,   eSectionTypeDWARFDebugAddr,
-          eSectionTypeDWARFDebugAranges,  eSectionTypeDWARFDebugCuIndex,
-          eSectionTypeDWARFDebugFrame,    eSectionTypeDWARFDebugInfo,
-          eSectionTypeDWARFDebugLine,     eSectionTypeDWARFDebugLoc,
-          eSectionTypeDWARFDebugMacInfo,  eSectionTypeDWARFDebugPubNames,
-          eSectionTypeDWARFDebugPubTypes, eSectionTypeDWARFDebugRanges,
-          eSectionTypeDWARFDebugStr,      eSectionTypeDWARFDebugStrOffsets,
-          eSectionTypeELFSymbolTable,
-      };
-      SectionList *elf_section_list = m_sections_ap.get();
-      for (size_t idx = 0; idx < sizeof(g_sections) / sizeof(g_sections[0]);
-           ++idx) {
-        SectionType section_type = g_sections[idx];
-        SectionSP section_sp(
-            elf_section_list->FindSectionByType(section_type, true));
-        if (section_sp) {
-          SectionSP module_section_sp(
-              unified_section_list.FindSectionByType(section_type, true));
-          if (module_section_sp)
-            unified_section_list.ReplaceSection(module_section_sp->GetID(),
-                                                section_sp);
-          else
-            unified_section_list.AddSection(section_sp);
-        }
-      }
-    } else {
-      unified_section_list = *m_sections_ap;
-    }
-  }
+  // For eTypeDebugInfo files, the Symbol Vendor will take care of updating the
+  // unified section list.
+  if (GetType() != eTypeDebugInfo)
+    unified_section_list = *m_sections_ap;
 }
 
 // Find the arm/aarch64 mapping symbol character in the given symbol name.
@@ -3469,4 +3441,39 @@ size_t ObjectFileELF::ReadSectionData(Section *section,
   }
   section_data.SetData(buffer_sp);
   return buffer_sp->GetByteSize();
+}
+
+bool ObjectFileELF::AnySegmentHasPhysicalAddress() {
+  size_t header_count = ParseProgramHeaders();
+  for (size_t i = 1; i <= header_count; ++i) {
+    auto header = GetProgramHeaderByIndex(i);
+    if (header->p_paddr != 0)
+      return true;
+  }
+  return false;
+}
+
+std::vector<ObjectFile::LoadableData>
+ObjectFileELF::GetLoadableData(Target &target) {
+  // Create a list of loadable data from loadable segments,
+  // using physical addresses if they aren't all null
+  std::vector<LoadableData> loadables;
+  size_t header_count = ParseProgramHeaders();
+  bool should_use_paddr = AnySegmentHasPhysicalAddress();
+  for (size_t i = 1; i <= header_count; ++i) {
+    LoadableData loadable;
+    auto header = GetProgramHeaderByIndex(i);
+    if (header->p_type != llvm::ELF::PT_LOAD)
+      continue;
+    loadable.Dest = should_use_paddr ? header->p_paddr : header->p_vaddr;
+    if (loadable.Dest == LLDB_INVALID_ADDRESS)
+      continue;
+    if (header->p_filesz == 0)
+      continue;
+    auto segment_data = GetSegmentDataByIndex(i);
+    loadable.Contents = llvm::ArrayRef<uint8_t>(segment_data.GetDataStart(),
+                                                segment_data.GetByteSize());
+    loadables.push_back(loadable);
+  }
+  return loadables;
 }

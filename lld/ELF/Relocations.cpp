@@ -46,7 +46,6 @@
 #include "Config.h"
 #include "LinkerScript.h"
 #include "OutputSections.h"
-#include "Strings.h"
 #include "SymbolTable.h"
 #include "Symbols.h"
 #include "SyntheticSections.h"
@@ -54,7 +53,7 @@
 #include "Thunks.h"
 #include "Writer.h"
 #include "lld/Common/Memory.h"
-
+#include "lld/Common/Strings.h"
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Support/raw_ostream.h"
@@ -853,7 +852,8 @@ static RelExpr processRelocAux(InputSectionBase &Sec, RelExpr Expr,
     error(
         "can't create dynamic relocation " + toString(Type) + " against " +
         (Sym.getName().empty() ? "local symbol" : "symbol: " + toString(Sym)) +
-        " in readonly segment; recompile object files with -fPIC" +
+        " in readonly segment; recompile object files with -fPIC "
+        "or pass '-Wl,-z,notext' to allow text relocations in the output" +
         getLocation(Sec, Sym, Offset));
     return Expr;
   }
@@ -903,7 +903,7 @@ static RelExpr processRelocAux(InputSectionBase &Sec, RelExpr Expr,
     // use that as the function value.
     //
     // For the static linking part, we just return a plt expr and everything
-    // else will use the the PLT entry as the address.
+    // else will use the PLT entry as the address.
     //
     // The remaining problem is making sure pointer equality still works. We
     // need the help of the dynamic linker for that. We let it know that we have
@@ -914,6 +914,17 @@ static RelExpr processRelocAux(InputSectionBase &Sec, RelExpr Expr,
     // that points to the real function is a dedicated got entry used by the
     // plt. That is identified by special relocation types (R_X86_64_JUMP_SLOT,
     // R_386_JMP_SLOT, etc).
+
+    // For position independent executable on i386, the plt entry requires ebx
+    // to be set. This causes two problems:
+    // * If some code has a direct reference to a function, it was probably
+    //   compiled without -fPIE/-fPIC and doesn't maintain ebx.
+    // * If a library definition gets preempted to the executable, it will have
+    //   the wrong ebx value.
+    if (Config->Pie && Config->EMachine == EM_386)
+      errorOrWarn("symbol '" + toString(Sym) +
+                  "' cannot be preempted; recompile with -fPIE" +
+                  getLocation(Sec, Sym, Offset));
     Sym.NeedsPltAddr = true;
     Expr = toPlt(Expr);
     Sec.Relocations.push_back({Expr, Type, Offset, Addend, &Sym});
@@ -1287,17 +1298,22 @@ ThunkSection *ThunkCreator::addThunkSection(OutputSection *OS,
 
 std::pair<Thunk *, bool> ThunkCreator::getThunk(Symbol &Sym, RelType Type,
                                                 uint64_t Src) {
-  auto Res = ThunkedSymbols.insert({&Sym, std::vector<Thunk *>()});
-  if (!Res.second) {
-    // Check existing Thunks for Sym to see if they can be reused
-    for (Thunk *ET : Res.first->second)
-      if (ET->isCompatibleWith(Type) &&
-          Target->inBranchRange(Type, Src, ET->ThunkSym->getVA()))
-        return std::make_pair(ET, false);
-  }
+  std::vector<Thunk *> *ThunkVec = nullptr;
+  // We use (section, offset) pair to find the thunk position if possible so
+  // that we create only one thunk for aliased symbols or ICFed sections.
+  if (auto *D = dyn_cast<Defined>(&Sym))
+    if (!D->isInPlt() && D->Section)
+      ThunkVec = &ThunkedSymbolsBySection[{D->Section->Repl, D->Value}];
+  if (!ThunkVec)
+    ThunkVec = &ThunkedSymbols[&Sym];
+  // Check existing Thunks for Sym to see if they can be reused
+  for (Thunk *ET : *ThunkVec)
+    if (ET->isCompatibleWith(Type) &&
+        Target->inBranchRange(Type, Src, ET->ThunkSym->getVA()))
+      return std::make_pair(ET, false);
   // No existing compatible Thunk in range, create a new one
   Thunk *T = addThunk(Type, Sym);
-  Res.first->second.push_back(T);
+  ThunkVec->push_back(T);
   return std::make_pair(T, true);
 }
 
@@ -1373,7 +1389,7 @@ bool ThunkCreator::createThunks(ArrayRef<OutputSection *> OutputSections) {
       OutputSections, [&](OutputSection *OS, InputSectionDescription *ISD) {
         for (InputSection *IS : ISD->Sections)
           for (Relocation &Rel : IS->Relocations) {
-            uint64_t Src = OS->Addr + IS->OutSecOff + Rel.Offset;
+            uint64_t Src = IS->getVA(Rel.Offset);
 
             // If we are a relocation to an existing Thunk, check if it is
             // still in range. If not then Rel will be altered to point to its

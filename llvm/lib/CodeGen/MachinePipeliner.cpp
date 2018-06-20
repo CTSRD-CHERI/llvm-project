@@ -10,7 +10,7 @@
 // An implementation of the Swing Modulo Scheduling (SMS) software pipeliner.
 //
 // Software pipelining (SWP) is an instruction scheduling technique for loops
-// that overlap loop iterations and explioits ILP via a compiler transformation.
+// that overlap loop iterations and exploits ILP via a compiler transformation.
 //
 // Swing Modulo Scheduling is an implementation of software pipelining
 // that generates schedules that are near optimal in terms of initiation
@@ -125,6 +125,7 @@ using namespace llvm;
 
 STATISTIC(NumTrytoPipeline, "Number of loops that we attempt to pipeline");
 STATISTIC(NumPipelined, "Number of loops software pipelined");
+STATISTIC(NumNodeOrderIssues, "Number of node order issues found");
 
 /// A command line option to turn software pipelining on or off.
 static cl::opt<bool> EnableSWP("enable-pipeliner", cl::Hidden, cl::init(true),
@@ -217,6 +218,7 @@ public:
   }
 
 private:
+  void preprocessPhiNodes(MachineBasicBlock &B);
   bool canPipelineLoop(MachineLoop &L);
   bool scheduleLoop(MachineLoop &L);
   bool swingModuloScheduler(MachineLoop &L);
@@ -241,6 +243,8 @@ class SwingSchedulerDAG : public ScheduleDAGInstrs {
   struct NodeInfo {
     int ASAP = 0;
     int ALAP = 0;
+    int ZeroLatencyDepth = 0;
+    int ZeroLatencyHeight = 0;
 
     NodeInfo() = default;
   };
@@ -320,8 +324,20 @@ public:
   /// The depth, in the dependence graph, for a node.
   int getDepth(SUnit *Node) { return Node->getDepth(); }
 
+  /// The maximum unweighted length of a path from an arbitrary node to the
+  /// given node in which each edge has latency 0
+  int getZeroLatencyDepth(SUnit *Node) {
+    return ScheduleInfo[Node->NodeNum].ZeroLatencyDepth;
+  }
+
   /// The height, in the dependence graph, for a node.
   int getHeight(SUnit *Node) { return Node->getHeight(); }
+
+  /// The maximum unweighted length of a path from the given node to an
+  /// arbitrary node in which each edge has latency 0
+  int getZeroLatencyHeight(SUnit *Node) {
+    return ScheduleInfo[Node->NodeNum].ZeroLatencyHeight;
+  }
 
   /// Return true if the dependence is a back-edge in the data dependence graph.
   /// Since the DAG doesn't contain cycles, we represent a cycle in the graph
@@ -341,20 +357,6 @@ public:
   }
 
   bool isLoopCarriedOrder(SUnit *Source, const SDep &Dep, bool isSucc = true);
-
-  /// The latency of the dependence.
-  unsigned getLatency(SUnit *Source, const SDep &Dep) {
-    // Anti dependences represent recurrences, so use the latency of the
-    // instruction on the back-edge.
-    if (Dep.getKind() == SDep::Anti) {
-      if (Source->getInstr()->isPHI())
-        return Dep.getSUnit()->Latency;
-      if (Dep.getSUnit()->getInstr()->isPHI())
-        return Source->Latency;
-      return Dep.getLatency();
-    }
-    return Dep.getLatency();
-  }
 
   /// The distance function, which indicates that operation V of iteration I
   /// depends on operations U of iteration I-distance.
@@ -404,6 +406,7 @@ private:
   void addConnectedNodes(SUnit *SU, NodeSet &NewSet,
                          SetVector<SUnit *> &NodesAdded);
   void computeNodeOrder(NodeSetType &NodeSets);
+  void checkValidNodeOrder(const NodeSetType &Circuits) const;
   bool schedulePipeline(SMSchedule &Schedule);
   void generatePipelinedLoop(SMSchedule &Schedule);
   void generateProlog(SMSchedule &Schedule, unsigned LastStage,
@@ -468,12 +471,19 @@ class NodeSet {
   int MaxDepth = 0;
   unsigned Colocate = 0;
   SUnit *ExceedPressure = nullptr;
+  unsigned Latency = 0;
 
 public:
   using iterator = SetVector<SUnit *>::const_iterator;
 
   NodeSet() = default;
-  NodeSet(iterator S, iterator E) : Nodes(S, E), HasRecurrence(true) {}
+  NodeSet(iterator S, iterator E) : Nodes(S, E), HasRecurrence(true) {
+    Latency = 0;
+    for (unsigned i = 0, e = Nodes.size(); i < e; ++i)
+      for (const SDep &Succ : Nodes[i]->Succs)
+        if (Nodes.count(Succ.getSUnit()))
+          Latency += Succ.getLatency();
+  }
 
   bool insert(SUnit *SU) { return Nodes.insert(SU); }
 
@@ -804,16 +814,39 @@ bool MachinePipeliner::canPipelineLoop(MachineLoop &L) {
   if (!L.getLoopPreheader())
     return false;
 
-  // If any of the Phis contain subregs, then we can't pipeline
-  // because we don't know how to maintain subreg information in the
-  // VMap structure.
-  MachineBasicBlock *MBB = L.getHeader();
-  for (auto &PHI : MBB->phis())
-    for (unsigned i = 1; i != PHI.getNumOperands(); i += 2)
-      if (PHI.getOperand(i).getSubReg() != 0)
-        return false;
-
+  // Remove any subregisters from inputs to phi nodes.
+  preprocessPhiNodes(*L.getHeader());
   return true;
+}
+
+void MachinePipeliner::preprocessPhiNodes(MachineBasicBlock &B) {
+  MachineRegisterInfo &MRI = MF->getRegInfo();
+  SlotIndexes &Slots = *getAnalysis<LiveIntervals>().getSlotIndexes();
+
+  for (MachineInstr &PI : make_range(B.begin(), B.getFirstNonPHI())) {
+    MachineOperand &DefOp = PI.getOperand(0);
+    assert(DefOp.getSubReg() == 0);
+    auto *RC = MRI.getRegClass(DefOp.getReg());
+
+    for (unsigned i = 1, n = PI.getNumOperands(); i != n; i += 2) {
+      MachineOperand &RegOp = PI.getOperand(i);
+      if (RegOp.getSubReg() == 0)
+        continue;
+
+      // If the operand uses a subregister, replace it with a new register
+      // without subregisters, and generate a copy to the new register.
+      unsigned NewReg = MRI.createVirtualRegister(RC);
+      MachineBasicBlock &PredB = *PI.getOperand(i+1).getMBB();
+      MachineBasicBlock::iterator At = PredB.getFirstTerminator();
+      const DebugLoc &DL = PredB.findDebugLoc(At);
+      auto Copy = BuildMI(PredB, At, DL, TII->get(TargetOpcode::COPY), NewReg)
+                    .addReg(RegOp.getReg(), getRegState(RegOp),
+                            RegOp.getSubReg());
+      Slots.insertMachineInstrInMaps(*Copy);
+      RegOp.setReg(NewReg);
+      RegOp.setSubReg(0);
+    }
+  }
 }
 
 /// The SMS algorithm consists of the following main steps:
@@ -863,6 +896,7 @@ void SwingSchedulerDAG::schedule() {
 
   NodeSetType NodeSets;
   findCircuits(NodeSets);
+  NodeSetType Circuits = NodeSets;
 
   // Calculate the MII.
   unsigned ResMII = calculateResMII();
@@ -915,6 +949,9 @@ void SwingSchedulerDAG::schedule() {
   });
 
   computeNodeOrder(NodeSets);
+
+  // check for node order issues
+  checkValidNodeOrder(Circuits);
 
   SMSchedule Schedule(Pass.MF);
   Scheduled = schedulePipeline(Schedule);
@@ -1058,31 +1095,41 @@ void SwingSchedulerDAG::addLoopCarriedDependences(AliasAnalysis *AA) {
           int64_t Offset1, Offset2;
           if (!TII->getMemOpBaseRegImmOfs(LdMI, BaseReg1, Offset1, TRI) ||
               !TII->getMemOpBaseRegImmOfs(MI, BaseReg2, Offset2, TRI)) {
-            SU.addPred(SDep(Load, SDep::Barrier));
+            SDep Dep(Load, SDep::Barrier);
+            Dep.setLatency(1);
+            SU.addPred(Dep);
             continue;            
           }
           if (BaseReg1 == BaseReg2 && (int)Offset1 < (int)Offset2) {
             assert(TII->areMemAccessesTriviallyDisjoint(LdMI, MI, AA) &&
                    "What happened to the chain edge?");
-            SU.addPred(SDep(Load, SDep::Barrier));
+            SDep Dep(Load, SDep::Barrier);
+            Dep.setLatency(1);
+            SU.addPred(Dep);
             continue;
           }
           // Second, the more expensive check that uses alias analysis on the
           // base registers. If they alias, and the load offset is less than
           // the store offset, the mark the dependence as loop carried.
           if (!AA) {
-            SU.addPred(SDep(Load, SDep::Barrier));
+            SDep Dep(Load, SDep::Barrier);
+            Dep.setLatency(1);
+            SU.addPred(Dep);
             continue;
           }
           MachineMemOperand *MMO1 = *LdMI.memoperands_begin();
           MachineMemOperand *MMO2 = *MI.memoperands_begin();
           if (!MMO1->getValue() || !MMO2->getValue()) {
-            SU.addPred(SDep(Load, SDep::Barrier));
+            SDep Dep(Load, SDep::Barrier);
+            Dep.setLatency(1);
+            SU.addPred(Dep);
             continue;
           }
           if (MMO1->getValue() == MMO2->getValue() &&
               MMO1->getOffset() <= MMO2->getOffset()) {
-            SU.addPred(SDep(Load, SDep::Barrier));
+            SDep Dep(Load, SDep::Barrier);
+            Dep.setLatency(1);
+            SU.addPred(Dep);
             continue;
           }
           AliasResult AAResult = AA->alias(
@@ -1091,8 +1138,11 @@ void SwingSchedulerDAG::addLoopCarriedDependences(AliasAnalysis *AA) {
               MemoryLocation(MMO2->getValue(), MemoryLocation::UnknownSize,
                              MMO2->getAAInfo()));
 
-          if (AAResult != NoAlias)
-            SU.addPred(SDep(Load, SDep::Barrier));
+          if (AAResult != NoAlias) {
+            SDep Dep(Load, SDep::Barrier);
+            Dep.setLatency(1);
+            SU.addPred(Dep);
+          }
         }
       }
     }
@@ -1134,6 +1184,7 @@ void SwingSchedulerDAG::updatePhiDependences() {
           if (SU != nullptr && UseMI->isPHI()) {
             if (!MI->isPHI()) {
               SDep Dep(SU, SDep::Anti, Reg);
+              Dep.setLatency(1);
               I.addPred(Dep);
             } else {
               HasPhiDef = Reg;
@@ -1568,42 +1619,52 @@ void SwingSchedulerDAG::computeNodeFunctions(NodeSetType &NodeSets) {
   });
 
   int maxASAP = 0;
-  // Compute ASAP.
+  // Compute ASAP and ZeroLatencyDepth.
   for (ScheduleDAGTopologicalSort::const_iterator I = Topo.begin(),
                                                   E = Topo.end();
        I != E; ++I) {
     int asap = 0;
+    int zeroLatencyDepth = 0;
     SUnit *SU = &SUnits[*I];
     for (SUnit::const_pred_iterator IP = SU->Preds.begin(),
                                     EP = SU->Preds.end();
          IP != EP; ++IP) {
+      SUnit *pred = IP->getSUnit();
+      if (IP->getLatency() == 0)
+        zeroLatencyDepth =
+            std::max(zeroLatencyDepth, getZeroLatencyDepth(pred) + 1);
       if (ignoreDependence(*IP, true))
         continue;
-      SUnit *pred = IP->getSUnit();
-      asap = std::max(asap, (int)(getASAP(pred) + getLatency(SU, *IP) -
+      asap = std::max(asap, (int)(getASAP(pred) + IP->getLatency() -
                                   getDistance(pred, SU, *IP) * MII));
     }
     maxASAP = std::max(maxASAP, asap);
     ScheduleInfo[*I].ASAP = asap;
+    ScheduleInfo[*I].ZeroLatencyDepth = zeroLatencyDepth;
   }
 
-  // Compute ALAP and MOV.
+  // Compute ALAP, ZeroLatencyHeight, and MOV.
   for (ScheduleDAGTopologicalSort::const_reverse_iterator I = Topo.rbegin(),
                                                           E = Topo.rend();
        I != E; ++I) {
     int alap = maxASAP;
+    int zeroLatencyHeight = 0;
     SUnit *SU = &SUnits[*I];
     for (SUnit::const_succ_iterator IS = SU->Succs.begin(),
                                     ES = SU->Succs.end();
          IS != ES; ++IS) {
+      SUnit *succ = IS->getSUnit();
+      if (IS->getLatency() == 0)
+        zeroLatencyHeight =
+            std::max(zeroLatencyHeight, getZeroLatencyHeight(succ) + 1);
       if (ignoreDependence(*IS, true))
         continue;
-      SUnit *succ = IS->getSUnit();
-      alap = std::min(alap, (int)(getALAP(succ) - getLatency(SU, *IS) +
+      alap = std::min(alap, (int)(getALAP(succ) - IS->getLatency() +
                                   getDistance(SU, succ, *IS) * MII));
     }
 
     ScheduleInfo[*I].ALAP = alap;
+    ScheduleInfo[*I].ZeroLatencyHeight = zeroLatencyHeight;
   }
 
   // After computing the node functions, compute the summary for each node set.
@@ -1618,6 +1679,8 @@ void SwingSchedulerDAG::computeNodeFunctions(NodeSetType &NodeSets) {
       dbgs() << "\t   MOV  = " << getMOV(&SUnits[i]) << "\n";
       dbgs() << "\t   D    = " << getDepth(&SUnits[i]) << "\n";
       dbgs() << "\t   H    = " << getHeight(&SUnits[i]) << "\n";
+      dbgs() << "\t   ZLD  = " << getZeroLatencyDepth(&SUnits[i]) << "\n";
+      dbgs() << "\t   ZLH  = " << getZeroLatencyHeight(&SUnits[i]) << "\n";
     }
   });
 }
@@ -1986,14 +2049,6 @@ void SwingSchedulerDAG::removeDuplicateNodes(NodeSetType &NodeSets) {
     }
 }
 
-/// Return true if Inst1 defines a value that is used in Inst2.
-static bool hasDataDependence(SUnit *Inst1, SUnit *Inst2) {
-  for (auto &SI : Inst1->Succs)
-    if (SI.getSUnit() == Inst2 && SI.getKind() == SDep::Data)
-      return true;
-  return false;
-}
-
 /// Compute an ordered list of the dependence graph nodes, which
 /// indicates the order that the nodes will be scheduled.  This is a
 /// two-level algorithm. First, a partial order is created, which
@@ -2040,18 +2095,20 @@ void SwingSchedulerDAG::computeNodeOrder(NodeSetType &NodeSets) {
     while (!R.empty()) {
       if (Order == TopDown) {
         // Choose the node with the maximum height.  If more than one, choose
-        // the node with the lowest MOV. If still more than one, check if there
-        // is a dependence between the instructions.
+        // the node with the maximum ZeroLatencyHeight. If still more than one,
+        // choose the node with the lowest MOV.
         while (!R.empty()) {
           SUnit *maxHeight = nullptr;
           for (SUnit *I : R) {
             if (maxHeight == nullptr || getHeight(I) > getHeight(maxHeight))
               maxHeight = I;
             else if (getHeight(I) == getHeight(maxHeight) &&
-                     getMOV(I) < getMOV(maxHeight) &&
-                     !hasDataDependence(maxHeight, I))
+                     getZeroLatencyHeight(I) > getZeroLatencyHeight(maxHeight))
               maxHeight = I;
-            else if (hasDataDependence(I, maxHeight))
+            else if (getHeight(I) == getHeight(maxHeight) &&
+                     getZeroLatencyHeight(I) ==
+                         getZeroLatencyHeight(maxHeight) &&
+                     getMOV(I) < getMOV(maxHeight))
               maxHeight = I;
           }
           NodeOrder.insert(maxHeight);
@@ -2084,18 +2141,19 @@ void SwingSchedulerDAG::computeNodeOrder(NodeSetType &NodeSets) {
           R.insert(N.begin(), N.end());
       } else {
         // Choose the node with the maximum depth.  If more than one, choose
-        // the node with the lowest MOV. If there is still more than one, check
-        // for a dependence between the instructions.
+        // the node with the maximum ZeroLatencyDepth. If still more than one,
+        // choose the node with the lowest MOV.
         while (!R.empty()) {
           SUnit *maxDepth = nullptr;
           for (SUnit *I : R) {
             if (maxDepth == nullptr || getDepth(I) > getDepth(maxDepth))
               maxDepth = I;
             else if (getDepth(I) == getDepth(maxDepth) &&
-                     getMOV(I) < getMOV(maxDepth) &&
-                     !hasDataDependence(I, maxDepth))
+                     getZeroLatencyDepth(I) > getZeroLatencyDepth(maxDepth))
               maxDepth = I;
-            else if (hasDataDependence(maxDepth, I))
+            else if (getDepth(I) == getDepth(maxDepth) &&
+                     getZeroLatencyDepth(I) == getZeroLatencyDepth(maxDepth) &&
+                     getMOV(I) < getMOV(maxDepth))
               maxDepth = I;
           }
           NodeOrder.insert(maxDepth);
@@ -2313,6 +2371,8 @@ void SwingSchedulerDAG::generatePipelinedLoop(SMSchedule &Schedule) {
   addBranches(PrologBBs, KernelBB, EpilogBBs, Schedule, VRMap);
 
   // Remove the original loop since it's no longer referenced.
+  for (auto &I : *BB)
+    LIS.RemoveMachineInstrFromMaps(I);
   BB->clear();
   BB->eraseFromParent();
 
@@ -2889,6 +2949,7 @@ void SwingSchedulerDAG::removeDeadInstructions(MachineBasicBlock *KernelBB,
         used = false;
       }
       if (!used) {
+        LIS.RemoveMachineInstrFromMaps(*MI);
         MI++->eraseFromParent();
         continue;
       }
@@ -2903,6 +2964,7 @@ void SwingSchedulerDAG::removeDeadInstructions(MachineBasicBlock *KernelBB,
     ++BBI;
     unsigned reg = MI->getOperand(0).getReg();
     if (MRI.use_begin(reg) == MRI.use_end()) {
+      LIS.RemoveMachineInstrFromMaps(*MI);
       MI->eraseFromParent();
     }
   }
@@ -3099,8 +3161,10 @@ void SwingSchedulerDAG::updateMemOperands(MachineInstr &NewMI,
       int64_t AdjOffset = Delta * Num;
       NewMemRefs[Refs++] =
           MF.getMachineMemOperand(MMO, AdjOffset, MMO->getSize());
-    } else
-      NewMemRefs[Refs++] = MF.getMachineMemOperand(MMO, 0, UINT64_MAX);
+    } else {
+      NewMI.dropMemRefs();
+      return;
+    }
   }
   NewMI.setMemRefs(NewMemRefs, NewMemRefs + NumRefs);
 }
@@ -3607,7 +3671,7 @@ void SMSchedule::computeStart(SUnit *SU, int *MaxEarlyStart, int *MinLateStart,
         const SDep &Dep = SU->Preds[i];
         if (Dep.getSUnit() == I) {
           if (!DAG->isBackedge(SU, Dep)) {
-            int EarlyStart = cycle + DAG->getLatency(SU, Dep) -
+            int EarlyStart = cycle + Dep.getLatency() -
                              DAG->getDistance(Dep.getSUnit(), SU, Dep) * II;
             *MaxEarlyStart = std::max(*MaxEarlyStart, EarlyStart);
             if (DAG->isLoopCarriedOrder(SU, Dep, false)) {
@@ -3615,7 +3679,7 @@ void SMSchedule::computeStart(SUnit *SU, int *MaxEarlyStart, int *MinLateStart,
               *MinEnd = std::min(*MinEnd, End);
             }
           } else {
-            int LateStart = cycle - DAG->getLatency(SU, Dep) +
+            int LateStart = cycle - Dep.getLatency() +
                             DAG->getDistance(SU, Dep.getSUnit(), Dep) * II;
             *MinLateStart = std::min(*MinLateStart, LateStart);
           }
@@ -3631,7 +3695,7 @@ void SMSchedule::computeStart(SUnit *SU, int *MaxEarlyStart, int *MinLateStart,
         if (SU->Succs[i].getSUnit() == I) {
           const SDep &Dep = SU->Succs[i];
           if (!DAG->isBackedge(SU, Dep)) {
-            int LateStart = cycle - DAG->getLatency(SU, Dep) +
+            int LateStart = cycle - Dep.getLatency() +
                             DAG->getDistance(SU, Dep.getSUnit(), Dep) * II;
             *MinLateStart = std::min(*MinLateStart, LateStart);
             if (DAG->isLoopCarriedOrder(SU, Dep)) {
@@ -3639,7 +3703,7 @@ void SMSchedule::computeStart(SUnit *SU, int *MaxEarlyStart, int *MinLateStart,
               *MaxStart = std::max(*MaxStart, Start);
             }
           } else {
-            int EarlyStart = cycle + DAG->getLatency(SU, Dep) -
+            int EarlyStart = cycle + Dep.getLatency() -
                              DAG->getDistance(Dep.getSUnit(), SU, Dep) * II;
             *MaxEarlyStart = std::max(*MaxEarlyStart, EarlyStart);
           }
@@ -3860,6 +3924,99 @@ bool SMSchedule::isValidSchedule(SwingSchedulerDAG *SSD) {
             return false;
   }
   return true;
+}
+
+/// A property of the node order in swing-modulo-scheduling is
+/// that for nodes outside circuits the following holds:
+/// none of them is scheduled after both a successor and a
+/// predecessor.
+/// The method below checks whether the property is met.
+/// If not, debug information is printed and statistics information updated.
+/// Note that we do not use an assert statement.
+/// The reason is that although an invalid node oder may prevent
+/// the pipeliner from finding a pipelined schedule for arbitrary II,
+/// it does not lead to the generation of incorrect code.
+void SwingSchedulerDAG::checkValidNodeOrder(const NodeSetType &Circuits) const {
+
+  // a sorted vector that maps each SUnit to its index in the NodeOrder
+  typedef std::pair<SUnit *, unsigned> UnitIndex;
+  std::vector<UnitIndex> Indices(NodeOrder.size(), std::make_pair(nullptr, 0));
+
+  for (unsigned i = 0, s = NodeOrder.size(); i < s; ++i)
+    Indices.push_back(std::make_pair(NodeOrder[i], i));
+
+  auto CompareKey = [](UnitIndex i1, UnitIndex i2) {
+    return std::get<0>(i1) < std::get<0>(i2);
+  };
+
+  // sort, so that we can perform a binary search
+  std::sort(Indices.begin(), Indices.end(), CompareKey);
+
+  bool Valid = true;
+  (void)Valid;
+  // for each SUnit in the NodeOrder, check whether
+  // it appears after both a successor and a predecessor
+  // of the SUnit. If this is the case, and the SUnit
+  // is not part of circuit, then the NodeOrder is not
+  // valid.
+  for (unsigned i = 0, s = NodeOrder.size(); i < s; ++i) {
+    SUnit *SU = NodeOrder[i];
+    unsigned Index = i;
+
+    bool PredBefore = false;
+    bool SuccBefore = false;
+
+    SUnit *Succ;
+    SUnit *Pred;
+    (void)Succ;
+    (void)Pred;
+
+    for (SDep &PredEdge : SU->Preds) {
+      SUnit *PredSU = PredEdge.getSUnit();
+      unsigned PredIndex =
+          std::get<1>(*std::lower_bound(Indices.begin(), Indices.end(),
+                                        std::make_pair(PredSU, 0), CompareKey));
+      if (!PredSU->getInstr()->isPHI() && PredIndex < Index) {
+        PredBefore = true;
+        Pred = PredSU;
+        break;
+      }
+    }
+
+    for (SDep &SuccEdge : SU->Succs) {
+      SUnit *SuccSU = SuccEdge.getSUnit();
+      unsigned SuccIndex =
+          std::get<1>(*std::lower_bound(Indices.begin(), Indices.end(),
+                                        std::make_pair(SuccSU, 0), CompareKey));
+      if (!SuccSU->getInstr()->isPHI() && SuccIndex < Index) {
+        SuccBefore = true;
+        Succ = SuccSU;
+        break;
+      }
+    }
+
+    if (PredBefore && SuccBefore && !SU->getInstr()->isPHI()) {
+      // instructions in circuits are allowed to be scheduled
+      // after both a successor and predecessor.
+      bool InCircuit = std::any_of(
+          Circuits.begin(), Circuits.end(),
+          [SU](const NodeSet &Circuit) { return Circuit.count(SU); });
+      if (InCircuit)
+        DEBUG(dbgs() << "In a circuit, predecessor ";);
+      else {
+        Valid = false;
+        NumNodeOrderIssues++;
+        DEBUG(dbgs() << "Predecessor ";);
+      }
+      DEBUG(dbgs() << Pred->NodeNum << " and successor " << Succ->NodeNum
+                   << " are scheduled before node " << SU->NodeNum << "\n";);
+    }
+  }
+
+  DEBUG({
+    if (!Valid)
+      dbgs() << "Invalid node order found!\n";
+  });
 }
 
 /// Attempt to fix the degenerate cases when the instruction serialization

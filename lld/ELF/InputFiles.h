@@ -12,22 +12,20 @@
 
 #include "Config.h"
 #include "lld/Common/ErrorHandler.h"
-
 #include "lld/Common/LLVM.h"
 #include "lld/Common/Reproduce.h"
 #include "llvm/ADT/CachedHashString.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/DebugInfo/DWARF/DWARFDebugLine.h"
 #include "llvm/IR/Comdat.h"
 #include "llvm/Object/Archive.h"
 #include "llvm/Object/ELF.h"
 #include "llvm/Object/IRObjectFile.h"
 #include "llvm/Support/Threading.h"
-
 #include <map>
 
 namespace llvm {
-class DWARFDebugLine;
 class TarWriter;
 struct DILineInfo;
 namespace lto {
@@ -221,8 +219,15 @@ private:
   // reporting. Linker may find reasonable number of errors in a
   // single object file, so we cache debugging information in order to
   // parse it only once for each object file we link.
+  std::unique_ptr<llvm::DWARFContext> Dwarf;
+  std::vector<const llvm::DWARFDebugLine::LineTable *> LineTables;
   std::unique_ptr<llvm::DWARFDebugLine> DwarfLine;
-  llvm::DenseMap<StringRef, std::pair<unsigned, unsigned>> VariableLoc;
+  struct VarLoc {
+    const llvm::DWARFDebugLine::LineTable *LT;
+    unsigned File;
+    unsigned Line;
+  };
+  llvm::DenseMap<StringRef, VarLoc> VariableLoc;
   llvm::once_flag InitDwarfLine;
 };
 
@@ -248,9 +253,7 @@ public:
   InputFile *fetch();
 
 private:
-  std::vector<StringRef> getSymbolNames();
-  template <class ELFT> std::vector<StringRef> getElfSymbols();
-  std::vector<StringRef> getBitcodeSymbols();
+  template <class ELFT> void addElfSymbols();
 
   bool Seen = false;
   uint64_t OffsetInArchive;
@@ -294,15 +297,12 @@ template <class ELFT> class SharedFile : public ELFFileBase<ELFT> {
   typedef typename ELFT::Verdef Elf_Verdef;
   typedef typename ELFT::Versym Elf_Versym;
 
-  std::vector<StringRef> Undefs;
   const Elf_Shdr *VersymSec = nullptr;
   const Elf_Shdr *VerdefSec = nullptr;
 
 public:
   std::vector<const Elf_Verdef *> Verdefs;
   std::string SoName;
-
-  llvm::ArrayRef<StringRef> getUndefinedSymbols() { return Undefs; }
 
   static bool classof(const InputFile *F) {
     return F->kind() == Base::SharedKind;
@@ -340,6 +340,9 @@ public:
 InputFile *createObjectFile(MemoryBufferRef MB, StringRef ArchiveName = "",
                             uint64_t OffsetInArchive = 0);
 InputFile *createSharedFile(MemoryBufferRef MB, StringRef DefaultSoName);
+
+// For --just-symbols
+template <class ELFT> void readJustSymbolsFile(MemoryBufferRef MB);
 
 extern std::vector<BinaryFile *> BinaryFiles;
 extern std::vector<BitcodeFile *> BitcodeFiles;

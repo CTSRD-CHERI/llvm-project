@@ -18,10 +18,10 @@
 #include "clang/AST/DependentDiagnostic.h"
 #include "clang/AST/Expr.h"
 #include "clang/AST/ExprCXX.h"
+#include "clang/AST/PrettyDeclStackTrace.h"
 #include "clang/AST/TypeLoc.h"
 #include "clang/Sema/Initialization.h"
 #include "clang/Sema/Lookup.h"
-#include "clang/Sema/PrettyDeclStackTrace.h"
 #include "clang/Sema/Template.h"
 #include "clang/Sema/TemplateInstCallback.h"
 
@@ -176,7 +176,8 @@ static void instantiateDependentAllocAlignAttr(
     Sema &S, const MultiLevelTemplateArgumentList &TemplateArgs,
     const AllocAlignAttr *Align, Decl *New) {
   Expr *Param = IntegerLiteral::Create(
-      S.getASTContext(), llvm::APInt(64, Align->getParamIndex()),
+      S.getASTContext(),
+      llvm::APInt(64, Align->getParamIndex().getSourceIndex()),
       S.getASTContext().UnsignedLongLongTy, Align->getLocation());
   S.AddAllocAlignAttr(Align->getLocation(), New, Param,
                       Align->getSpellingListIndex());
@@ -741,7 +742,7 @@ Decl *TemplateDeclInstantiator::VisitVarDecl(VarDecl *D,
 
   if (D->isNRVOVariable()) {
     QualType ReturnType = cast<FunctionDecl>(DC)->getReturnType();
-    if (SemaRef.isCopyElisionCandidate(ReturnType, Var, false))
+    if (SemaRef.isCopyElisionCandidate(ReturnType, Var, Sema::CES_Strict))
       Var->setNRVOVariable(true);
   }
 
@@ -1652,6 +1653,7 @@ Decl *TemplateDeclInstantiator::VisitFunctionDecl(FunctionDecl *D,
       NameInfo, T, TInfo, D->getSourceRange().getEnd());
     if (DGuide->isCopyDeductionCandidate())
       cast<CXXDeductionGuideDecl>(Function)->setIsCopyDeductionCandidate();
+    Function->setAccess(D->getAccess());
   } else {
     Function = FunctionDecl::Create(
         SemaRef.Context, DC, D->getInnerLocStart(), NameInfo, T, TInfo,
@@ -1806,45 +1808,24 @@ Decl *TemplateDeclInstantiator::VisitFunctionDecl(FunctionDecl *D,
     //   apply to non-template function declarations and definitions also apply
     //   to these implicit definitions.
     if (D->isThisDeclarationADefinition()) {
-      // Check for a function body.
-      const FunctionDecl *Definition = nullptr;
-      if (Function->isDefined(Definition) &&
-          Definition->getTemplateSpecializationKind() == TSK_Undeclared) {
-        SemaRef.Diag(Function->getLocation(), diag::err_redefinition)
-            << Function->getDeclName();
-        SemaRef.Diag(Definition->getLocation(), diag::note_previous_definition);
-      }
-      // Check for redefinitions due to other instantiations of this or
-      // a similar friend function.
-      else for (auto R : Function->redecls()) {
-        if (R == Function)
-          continue;
+      SemaRef.CheckForFunctionRedefinition(Function);
+      if (!Function->isInvalidDecl()) {
+        for (auto R : Function->redecls()) {
+          if (R == Function)
+            continue;
 
-        // If some prior declaration of this function has been used, we need
-        // to instantiate its definition.
-        if (!QueuedInstantiation && R->isUsed(false)) {
-          if (MemberSpecializationInfo *MSInfo =
-                  Function->getMemberSpecializationInfo()) {
-            if (MSInfo->getPointOfInstantiation().isInvalid()) {
-              SourceLocation Loc = R->getLocation(); // FIXME
-              MSInfo->setPointOfInstantiation(Loc);
-              SemaRef.PendingLocalImplicitInstantiations.push_back(
-                                               std::make_pair(Function, Loc));
-              QueuedInstantiation = true;
-            }
-          }
-        }
-
-        // If some prior declaration of this function was a friend with an
-        // uninstantiated definition, reject it.
-        if (R->getFriendObjectKind()) {
-          if (const FunctionDecl *RPattern =
-                  R->getTemplateInstantiationPattern()) {
-            if (RPattern->isDefined(RPattern)) {
-              SemaRef.Diag(Function->getLocation(), diag::err_redefinition)
-                << Function->getDeclName();
-              SemaRef.Diag(R->getLocation(), diag::note_previous_definition);
-              break;
+          // If some prior declaration of this function has been used, we need
+          // to instantiate its definition.
+          if (!QueuedInstantiation && R->isUsed(false)) {
+            if (MemberSpecializationInfo *MSInfo =
+                Function->getMemberSpecializationInfo()) {
+              if (MSInfo->getPointOfInstantiation().isInvalid()) {
+                SourceLocation Loc = R->getLocation(); // FIXME
+                MSInfo->setPointOfInstantiation(Loc);
+                SemaRef.PendingLocalImplicitInstantiations.push_back(
+                    std::make_pair(Function, Loc));
+                QueuedInstantiation = true;
+              }
             }
           }
         }
@@ -2688,9 +2669,9 @@ Decl *TemplateDeclInstantiator::VisitUnresolvedUsingValueDecl(
 Decl *TemplateDeclInstantiator::VisitUsingPackDecl(UsingPackDecl *D) {
   SmallVector<NamedDecl*, 8> Expansions;
   for (auto *UD : D->expansions()) {
-    if (auto *NewUD =
+    if (NamedDecl *NewUD =
             SemaRef.FindInstantiatedDecl(D->getLocation(), UD, TemplateArgs))
-      Expansions.push_back(cast<NamedDecl>(NewUD));
+      Expansions.push_back(NewUD);
     else
       return nullptr;
   }
@@ -2730,6 +2711,8 @@ Decl *TemplateDeclInstantiator::VisitClassScopeFunctionSpecializationDecl(
   FunctionDecl *Specialization = cast<FunctionDecl>(Previous.getFoundDecl());
   assert(Specialization && "Class scope Specialization is null");
   SemaRef.Context.setClassScopeSpecializationPattern(Specialization, OldFD);
+
+  // FIXME: If this is a definition, check for redefinition errors!
 
   return NewFD;
 }
@@ -3137,6 +3120,13 @@ TemplateDeclInstantiator::SubstTemplateParams(TemplateParameterList *L) {
                                     L->getRAngleLoc(),
                                     UninstantiatedRequiresClause);
   return InstL;
+}
+
+TemplateParameterList *
+Sema::SubstTemplateParams(TemplateParameterList *Params, DeclContext *Owner,
+                          const MultiLevelTemplateArgumentList &TemplateArgs) {
+  TemplateDeclInstantiator Instantiator(*this, Owner, TemplateArgs);
+  return Instantiator.SubstTemplateParams(Params);
 }
 
 /// \brief Instantiate the declaration of a class template partial
@@ -3905,7 +3895,7 @@ void Sema::InstantiateFunctionDefinition(SourceLocation PointOfInstantiation,
   InstantiatingTemplate Inst(*this, PointOfInstantiation, Function);
   if (Inst.isInvalid() || Inst.isAlreadyInstantiating())
     return;
-  PrettyDeclStackTraceEntry CrashInfo(*this, Function, SourceLocation(),
+  PrettyDeclStackTraceEntry CrashInfo(Context, Function, SourceLocation(),
                                       "instantiating function definition");
 
   // The instantiation is visible here, even if it was first declared in an
@@ -3950,8 +3940,10 @@ void Sema::InstantiateFunctionDefinition(SourceLocation PointOfInstantiation,
                                          TemplateArgs))
       return;
 
+    StmtResult Body;
     if (PatternDecl->hasSkippedBody()) {
       ActOnSkippedFunctionBody(Function);
+      Body = nullptr;
     } else {
       if (CXXConstructorDecl *Ctor = dyn_cast<CXXConstructorDecl>(Function)) {
         // If this is a constructor, instantiate the member initializers.
@@ -3967,16 +3959,14 @@ void Sema::InstantiateFunctionDefinition(SourceLocation PointOfInstantiation,
       }
 
       // Instantiate the function body.
-      StmtResult Body = SubstStmt(Pattern, TemplateArgs);
+      Body = SubstStmt(Pattern, TemplateArgs);
 
       if (Body.isInvalid())
         Function->setInvalidDecl();
-
-      // FIXME: finishing the function body while in an expression evaluation
-      // context seems wrong. Investigate more.
-      ActOnFinishFunctionBody(Function, Body.get(),
-                              /*IsInstantiation=*/true);
     }
+    // FIXME: finishing the function body while in an expression evaluation
+    // context seems wrong. Investigate more.
+    ActOnFinishFunctionBody(Function, Body.get(), /*IsInstantiation=*/true);
 
     PerformDependentDiagnostics(PatternDecl, TemplateArgs);
 
@@ -4212,7 +4202,9 @@ void Sema::InstantiateVariableInitializer(
       Var->setInvalidDecl();
     }
   } else {
-    if (Var->isStaticDataMember()) {
+    // `inline` variables are a definition and declaration all in one; we won't
+    // pick up an initializer from anywhere else.
+    if (Var->isStaticDataMember() && !Var->isInline()) {
       if (!Var->isOutOfLine())
         return;
 
@@ -4314,7 +4306,7 @@ void Sema::InstantiateVariableDefinition(SourceLocation PointOfInstantiation,
       InstantiatingTemplate Inst(*this, PointOfInstantiation, Var);
       if (Inst.isInvalid() || Inst.isAlreadyInstantiating())
         return;
-      PrettyDeclStackTraceEntry CrashInfo(*this, Var, SourceLocation(),
+      PrettyDeclStackTraceEntry CrashInfo(Context, Var, SourceLocation(),
                                           "instantiating variable initializer");
 
       // The instantiation is visible here, even if it was first declared in an
@@ -4427,7 +4419,7 @@ void Sema::InstantiateVariableDefinition(SourceLocation PointOfInstantiation,
   InstantiatingTemplate Inst(*this, PointOfInstantiation, Var);
   if (Inst.isInvalid() || Inst.isAlreadyInstantiating())
     return;
-  PrettyDeclStackTraceEntry CrashInfo(*this, Var, SourceLocation(),
+  PrettyDeclStackTraceEntry CrashInfo(Context, Var, SourceLocation(),
                                       "instantiating variable definition");
 
   // If we're performing recursive template instantiation, create our own
@@ -5231,7 +5223,7 @@ void Sema::PerformPendingInstantiations(bool LocalOnly) {
       break;
     }
 
-    PrettyDeclStackTraceEntry CrashInfo(*this, Var, SourceLocation(),
+    PrettyDeclStackTraceEntry CrashInfo(Context, Var, SourceLocation(),
                                         "instantiating variable definition");
     bool DefinitionRequired = Var->getTemplateSpecializationKind() ==
                               TSK_ExplicitInstantiationDefinition;

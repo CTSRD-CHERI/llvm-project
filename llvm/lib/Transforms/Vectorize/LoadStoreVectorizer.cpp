@@ -53,6 +53,7 @@
 #include "llvm/Analysis/OrderedBasicBlock.h"
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
+#include "llvm/Analysis/Utils/Local.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/Analysis/VectorUtils.h"
 #include "llvm/IR/Attributes.h"
@@ -77,7 +78,6 @@
 #include "llvm/Support/KnownBits.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Vectorize.h"
 #include <algorithm>
 #include <cassert>
@@ -118,8 +118,6 @@ public:
   bool run();
 
 private:
-  Value *getPointerOperand(Value *I) const;
-
   GetElementPtrInst *getSourceGEP(Value *Src) const;
 
   unsigned getPointerAddressSpace(Value *I);
@@ -271,14 +269,6 @@ bool Vectorizer::run() {
   return Changed;
 }
 
-Value *Vectorizer::getPointerOperand(Value *I) const {
-  if (LoadInst *LI = dyn_cast<LoadInst>(I))
-    return LI->getPointerOperand();
-  if (StoreInst *SI = dyn_cast<StoreInst>(I))
-    return SI->getPointerOperand();
-  return nullptr;
-}
-
 unsigned Vectorizer::getPointerAddressSpace(Value *I) {
   if (LoadInst *L = dyn_cast<LoadInst>(I))
     return L->getPointerAddressSpace();
@@ -292,7 +282,7 @@ GetElementPtrInst *Vectorizer::getSourceGEP(Value *Src) const {
   // and without casts.
   // TODO: a stride set by the add instruction below can match the difference
   // in pointee type size here. Currently it will not be vectorized.
-  Value *SrcPtr = getPointerOperand(Src);
+  Value *SrcPtr = getLoadStorePointerOperand(Src);
   Value *SrcBase = SrcPtr->stripPointerCasts();
   if (DL.getTypeStoreSize(SrcPtr->getType()->getPointerElementType()) ==
       DL.getTypeStoreSize(SrcBase->getType()->getPointerElementType()))
@@ -302,8 +292,8 @@ GetElementPtrInst *Vectorizer::getSourceGEP(Value *Src) const {
 
 // FIXME: Merge with llvm::isConsecutiveAccess
 bool Vectorizer::isConsecutiveAccess(Value *A, Value *B) {
-  Value *PtrA = getPointerOperand(A);
-  Value *PtrB = getPointerOperand(B);
+  Value *PtrA = getLoadStorePointerOperand(A);
+  Value *PtrB = getLoadStorePointerOperand(B);
   unsigned ASA = getPointerAddressSpace(A);
   unsigned ASB = getPointerAddressSpace(B);
 
@@ -316,6 +306,7 @@ bool Vectorizer::isConsecutiveAccess(Value *A, Value *B) {
   Type *PtrATy = PtrA->getType()->getPointerElementType();
   Type *PtrBTy = PtrB->getType()->getPointerElementType();
   if (PtrA == PtrB ||
+      PtrATy->isVectorTy() != PtrBTy->isVectorTy() ||
       DL.getTypeStoreSize(PtrATy) != DL.getTypeStoreSize(PtrBTy) ||
       DL.getTypeStoreSize(PtrATy->getScalarType()) !=
           DL.getTypeStoreSize(PtrBTy->getScalarType()))
@@ -481,7 +472,7 @@ Vectorizer::getBoundaryInstrs(ArrayRef<Instruction *> Chain) {
 void Vectorizer::eraseInstructions(ArrayRef<Instruction *> Chain) {
   SmallVector<Instruction *, 16> Instrs;
   for (Instruction *I : Chain) {
-    Value *PtrOperand = getPointerOperand(I);
+    Value *PtrOperand = getLoadStorePointerOperand(I);
     assert(PtrOperand && "Instruction must have a pointer operand.");
     Instrs.push_back(I);
     if (GetElementPtrInst *GEP = dyn_cast<GetElementPtrInst>(PtrOperand))
@@ -591,10 +582,10 @@ Vectorizer::getVectorizablePrefix(ArrayRef<Instruction *> Chain) {
           dbgs() << "LSV: Found alias:\n"
                     "  Aliasing instruction and pointer:\n"
                  << "  " << *MemInstr << '\n'
-                 << "  " << *getPointerOperand(MemInstr) << '\n'
+                 << "  " << *getLoadStorePointerOperand(MemInstr) << '\n'
                  << "  Aliased instruction and pointer:\n"
                  << "  " << *ChainInstr << '\n'
-                 << "  " << *getPointerOperand(ChainInstr) << '\n';
+                 << "  " << *getLoadStorePointerOperand(ChainInstr) << '\n';
         });
         // Save this aliasing memory instruction as a barrier, but allow other
         // instructions that precede the barrier to be vectorized with this one.
@@ -665,8 +656,12 @@ Vectorizer::collectInstructions(BasicBlock *BB) {
       unsigned AS = Ptr->getType()->getPointerAddressSpace();
       unsigned VecRegSize = TTI.getLoadStoreVecRegBitWidth(AS);
 
+      unsigned VF = VecRegSize / TySize;
+      VectorType *VecTy = dyn_cast<VectorType>(Ty);
+
       // No point in looking at these if they're too big to vectorize.
-      if (TySize > VecRegSize / 2)
+      if (TySize > VecRegSize / 2 ||
+          (VecTy && TTI.getLoadVectorFactor(VF, TySize, TySize / 8, VecTy) == 0))
         continue;
 
       // Make sure all the users of a vector are constant-index extracts.
@@ -708,8 +703,12 @@ Vectorizer::collectInstructions(BasicBlock *BB) {
       unsigned AS = Ptr->getType()->getPointerAddressSpace();
       unsigned VecRegSize = TTI.getLoadStoreVecRegBitWidth(AS);
 
+      unsigned VF = VecRegSize / TySize;
+      VectorType *VecTy = dyn_cast<VectorType>(Ty);
+
       // No point in looking at these if they're too big to vectorize.
-      if (TySize > VecRegSize / 2)
+      if (TySize > VecRegSize / 2 ||
+          (VecTy && TTI.getStoreVectorFactor(VF, TySize, TySize / 8, VecTy) == 0))
         continue;
 
       if (isa<VectorType>(Ty) && !llvm::all_of(SI->users(), [](const User *U) {

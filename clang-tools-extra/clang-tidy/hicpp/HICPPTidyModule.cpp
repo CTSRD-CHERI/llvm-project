@@ -21,7 +21,7 @@
 #include "../google/ExplicitConstructorCheck.h"
 #include "../misc/NewDeleteOverloadsCheck.h"
 #include "../misc/StaticAssertCheck.h"
-#include "../misc/UndelegatedConstructor.h"
+#include "../bugprone/UndelegatedConstructorCheck.h"
 #include "../modernize/DeprecatedHeadersCheck.h"
 #include "../modernize/UseAutoCheck.h"
 #include "../modernize/UseEmplaceCheck.h"
@@ -36,6 +36,7 @@
 #include "../readability/FunctionSizeCheck.h"
 #include "../readability/IdentifierNamingCheck.h"
 #include "ExceptionBaseclassCheck.h"
+#include "MultiwayPathsCoveredCheck.h"
 #include "NoAssemblerCheck.h"
 #include "SignedBitwiseCheck.h"
 
@@ -54,6 +55,8 @@ public:
         "hicpp-deprecated-headers");
     CheckFactories.registerCheck<ExceptionBaseclassCheck>(
         "hicpp-exception-baseclass");
+    CheckFactories.registerCheck<MultiwayPathsCoveredCheck>(
+        "hicpp-multiway-paths-covered");
     CheckFactories.registerCheck<SignedBitwiseCheck>("hicpp-signed-bitwise");
     CheckFactories.registerCheck<google::ExplicitConstructorCheck>(
         "hicpp-explicit-conversions");
@@ -83,7 +86,7 @@ public:
     CheckFactories.registerCheck<misc::StaticAssertCheck>(
         "hicpp-static-assert");
     CheckFactories.registerCheck<modernize::UseAutoCheck>("hicpp-use-auto");
-    CheckFactories.registerCheck<misc::UndelegatedConstructorCheck>(
+    CheckFactories.registerCheck<bugprone::UndelegatedConstructorCheck>(
         "hicpp-undelegated-constructor");
     CheckFactories.registerCheck<modernize::UseEmplaceCheck>(
         "hicpp-use-emplace");

@@ -259,14 +259,12 @@ def X86selects : SDNode<"X86ISD::SELECTS",
 
 def X86pmuludq : SDNode<"X86ISD::PMULUDQ",
                         SDTypeProfile<1, 2, [SDTCVecEltisVT<0, i64>,
-                                             SDTCVecEltisVT<1, i32>,
-                                             SDTCisSameSizeAs<0,1>,
+                                             SDTCisSameAs<0,1>,
                                              SDTCisSameAs<1,2>]>,
                                              [SDNPCommutative]>;
 def X86pmuldq  : SDNode<"X86ISD::PMULDQ",
                         SDTypeProfile<1, 2, [SDTCVecEltisVT<0, i64>,
-                                             SDTCVecEltisVT<1, i32>,
-                                             SDTCisSameSizeAs<0,1>,
+                                             SDTCisSameAs<0,1>,
                                              SDTCisSameAs<1,2>]>,
                                              [SDNPCommutative]>;
 
@@ -457,10 +455,6 @@ def X86SubVBroadcast : SDNode<"X86ISD::SUBV_BROADCAST",
 
 def X86VBroadcast : SDNode<"X86ISD::VBROADCAST", SDTVBroadcast>;
 def X86VBroadcastm : SDNode<"X86ISD::VBROADCASTM", SDTVBroadcastm>;
-def X86kextract : SDNode<"ISD::EXTRACT_VECTOR_ELT",
-                         SDTypeProfile<1, 2, [SDTCisVT<0, i32>,
-                                              SDTCVecEltisVT<1, i1>,
-                                              SDTCisPtrTy<2>]>>;
 
 def X86Blendi    : SDNode<"X86ISD::BLENDI",   SDTBlend>;
 

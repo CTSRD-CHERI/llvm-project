@@ -31,6 +31,7 @@
 #include "clang/Sema/Initialization.h"
 #include "clang/Sema/Lookup.h"
 #include "clang/Sema/Scope.h"
+#include "clang/Sema/ScopeInfo.h"
 #include "clang/Sema/SemaInternal.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringExtras.h"
@@ -113,7 +114,7 @@ static SourceRange getFunctionOrMethodParamRange(const Decl *D, unsigned Idx) {
 
 static QualType getFunctionOrMethodResultType(const Decl *D) {
   if (const FunctionType *FnTy = D->getFunctionType())
-    return cast<FunctionType>(FnTy)->getReturnType();
+    return FnTy->getReturnType();
   return cast<ObjCMethodDecl>(D)->getReturnType();
 }
 
@@ -311,7 +312,7 @@ static bool checkAttrMutualExclusion(Sema &S, Decl *D, SourceRange Range,
 template <typename AttrInfo>
 static bool checkFunctionOrMethodParameterIndex(
     Sema &S, const Decl *D, const AttrInfo &AI, unsigned AttrArgNum,
-    const Expr *IdxExpr, uint64_t &Idx, bool AllowImplicitThis = false) {
+    const Expr *IdxExpr, ParamIdx &Idx, bool CanIndexImplicitThis = false) {
   assert(isFunctionOrMethodOrBlock(D));
 
   // In C++ the implicit 'this' function parameter also counts.
@@ -331,23 +332,22 @@ static bool checkFunctionOrMethodParameterIndex(
     return false;
   }
 
-  Idx = IdxInt.getLimitedValue();
-  if (Idx < 1 || (!IV && Idx > NumParams)) {
+  unsigned IdxSource = IdxInt.getLimitedValue(UINT_MAX);
+  if (IdxSource < 1 || (!IV && IdxSource > NumParams)) {
     S.Diag(getAttrLoc(AI), diag::err_attribute_argument_out_of_bounds)
-      << getAttrName(AI) << AttrArgNum << IdxExpr->getSourceRange();
+        << getAttrName(AI) << AttrArgNum << IdxExpr->getSourceRange();
     return false;
   }
-  Idx--; // Convert to zero-based.
-  if (HasImplicitThisParam && !AllowImplicitThis) {
-    if (Idx == 0) {
+  if (HasImplicitThisParam && !CanIndexImplicitThis) {
+    if (IdxSource == 1) {
       S.Diag(getAttrLoc(AI),
              diag::err_attribute_invalid_implicit_this_argument)
-        << getAttrName(AI) << IdxExpr->getSourceRange();
+          << getAttrName(AI) << IdxExpr->getSourceRange();
       return false;
     }
-    --Idx;
   }
 
+  Idx = ParamIdx(IdxSource, D);
   return true;
 }
 
@@ -765,25 +765,22 @@ static void handleAssertExclusiveLockAttr(Sema &S, Decl *D,
       AL.getAttributeSpellingListIndex()));
 }
 
-/// \brief Checks to be sure that the given parameter number is in bounds, and is
-/// an integral type. Will emit appropriate diagnostics if this returns
+/// \brief Checks to be sure that the given parameter number is in bounds, and
+/// is an integral type. Will emit appropriate diagnostics if this returns
 /// false.
 ///
-/// FuncParamNo is expected to be from the user, so is base-1. AttrArgNo is used
-/// to actually retrieve the argument, so it's base-0.
+/// AttrArgNo is used to actually retrieve the argument, so it's base-0.
 template <typename AttrInfo>
 static bool checkParamIsIntegerType(Sema &S, const FunctionDecl *FD,
-                                    const AttrInfo &AI, Expr *AttrArg,
-                                    unsigned FuncParamNo, unsigned AttrArgNo,
-                                    bool AllowDependentType = false) {
-  uint64_t Idx;
-  if (!checkFunctionOrMethodParameterIndex(S, FD, AI, FuncParamNo, AttrArg,
+                                    const AttrInfo &AI, unsigned AttrArgNo) {
+  assert(AI.isArgExpr(AttrArgNo) && "Expected expression argument");
+  Expr *AttrArg = AI.getArgAsExpr(AttrArgNo);
+  ParamIdx Idx;
+  if (!checkFunctionOrMethodParameterIndex(S, FD, AI, AttrArgNo + 1, AttrArg,
                                            Idx))
     return false;
 
-  const ParmVarDecl *Param = FD->getParamDecl(Idx);
-  if (AllowDependentType && Param->getType()->isDependentType())
-    return true;
+  const ParmVarDecl *Param = FD->getParamDecl(Idx.getASTIndex());
   if (!Param->getType()->isIntegerType() && !Param->getType()->isCharType()) {
     SourceLocation SrcLoc = AttrArg->getLocStart();
     S.Diag(SrcLoc, diag::err_attribute_integers_only)
@@ -791,20 +788,6 @@ static bool checkParamIsIntegerType(Sema &S, const FunctionDecl *FD,
     return false;
   }
   return true;
-}
-
-/// \brief Checks to be sure that the given parameter number is in bounds, and is
-/// an integral type. Will emit appropriate diagnostics if this returns false.
-///
-/// FuncParamNo is expected to be from the user, so is base-1. AttrArgNo is used
-/// to actually retrieve the argument, so it's base-0.
-static bool checkParamIsIntegerType(Sema &S, const FunctionDecl *FD,
-                                    const AttributeList &AL,
-                                    unsigned FuncParamNo, unsigned AttrArgNo,
-                                    bool AllowDependentType = false) {
-  assert(AL.isArgExpr(AttrArgNo) && "Expected expression argument");
-  return checkParamIsIntegerType(S, FD, AL, AL.getArgAsExpr(AttrArgNo),
-                                 FuncParamNo, AttrArgNo, AllowDependentType);
 }
 
 static void handleAllocSizeAttr(Sema &S, Decl *D, const AttributeList &AL) {
@@ -820,25 +803,24 @@ static void handleAllocSizeAttr(Sema &S, Decl *D, const AttributeList &AL) {
   }
 
   const Expr *SizeExpr = AL.getArgAsExpr(0);
-  int SizeArgNo;
+  int SizeArgNoVal;
   // Parameter indices are 1-indexed, hence Index=1
-  if (!checkPositiveIntArgument(S, AL, SizeExpr, SizeArgNo, /*Index=*/1))
+  if (!checkPositiveIntArgument(S, AL, SizeExpr, SizeArgNoVal, /*Index=*/1))
     return;
-
-  if (!checkParamIsIntegerType(S, FD, AL, SizeArgNo, /*AttrArgNo=*/0))
+  if (!checkParamIsIntegerType(S, FD, AL, /*AttrArgNo=*/0))
     return;
+  ParamIdx SizeArgNo(SizeArgNoVal, D);
 
-  // Args are 1-indexed, so 0 implies that the arg was not present
-  int NumberArgNo = 0;
+  ParamIdx NumberArgNo;
   if (AL.getNumArgs() == 2) {
     const Expr *NumberExpr = AL.getArgAsExpr(1);
+    int Val;
     // Parameter indices are 1-based, hence Index=2
-    if (!checkPositiveIntArgument(S, AL, NumberExpr, NumberArgNo,
-                                  /*Index=*/2))
+    if (!checkPositiveIntArgument(S, AL, NumberExpr, Val, /*Index=*/2))
       return;
-
-    if (!checkParamIsIntegerType(S, FD, AL, NumberArgNo, /*AttrArgNo=*/1))
+    if (!checkParamIsIntegerType(S, FD, AL, /*AttrArgNo=*/1))
       return;
+    NumberArgNo = ParamIdx(Val, D);
   }
 
   D->addAttr(::new (S.Context)
@@ -1438,18 +1420,19 @@ static bool attrNonNullArgCheck(Sema &S, QualType T, const AttributeList &AL,
 }
 
 static void handleNonNullAttr(Sema &S, Decl *D, const AttributeList &AL) {
-  SmallVector<unsigned, 8> NonNullArgs;
+  SmallVector<ParamIdx, 8> NonNullArgs;
   for (unsigned I = 0; I < AL.getNumArgs(); ++I) {
     Expr *Ex = AL.getArgAsExpr(I);
-    uint64_t Idx;
+    ParamIdx Idx;
     if (!checkFunctionOrMethodParameterIndex(S, D, AL, I + 1, Ex, Idx))
       return;
 
     // Is the function argument a pointer type?
-    if (Idx < getFunctionOrMethodNumParams(D) &&
-        !attrNonNullArgCheck(S, getFunctionOrMethodParamType(D, Idx), AL,
-                             Ex->getSourceRange(),
-                             getFunctionOrMethodParamRange(D, Idx)))
+    if (Idx.getASTIndex() < getFunctionOrMethodNumParams(D) &&
+        !attrNonNullArgCheck(
+            S, getFunctionOrMethodParamType(D, Idx.getASTIndex()), AL,
+            Ex->getSourceRange(),
+            getFunctionOrMethodParamRange(D, Idx.getASTIndex())))
       continue;
 
     NonNullArgs.push_back(Idx);
@@ -1473,12 +1456,12 @@ static void handleNonNullAttr(Sema &S, Decl *D, const AttributeList &AL) {
       S.Diag(AL.getLoc(), diag::warn_attribute_nonnull_no_pointers);
   }
 
-  unsigned *Start = NonNullArgs.data();
+  ParamIdx *Start = NonNullArgs.data();
   unsigned Size = NonNullArgs.size();
   llvm::array_pod_sort(Start, Start + Size);
   D->addAttr(::new (S.Context)
-             NonNullAttr(AL.getRange(), S.Context, Start, Size,
-                         AL.getAttributeSpellingListIndex()));
+                 NonNullAttr(AL.getRange(), S.Context, Start, Size,
+                             AL.getAttributeSpellingListIndex()));
 }
 
 static void handleNonNullAttrParameter(Sema &S, ParmVarDecl *D,
@@ -1499,8 +1482,8 @@ static void handleNonNullAttrParameter(Sema &S, ParmVarDecl *D,
     return;
 
   D->addAttr(::new (S.Context)
-             NonNullAttr(AL.getRange(), S.Context, nullptr, 0,
-                         AL.getAttributeSpellingListIndex()));
+                 NonNullAttr(AL.getRange(), S.Context, nullptr, 0,
+                             AL.getAttributeSpellingListIndex()));
 }
 
 static void handleReturnsNonNullAttr(Sema &S, Decl *D,
@@ -1601,7 +1584,7 @@ void Sema::AddAllocAlignAttr(SourceRange AttrRange, Decl *D, Expr *ParamExpr,
                              unsigned SpellingListIndex) {
   QualType ResultType = getFunctionOrMethodResultType(D);
 
-  AllocAlignAttr TmpAttr(AttrRange, Context, 0, SpellingListIndex);
+  AllocAlignAttr TmpAttr(AttrRange, Context, ParamIdx(), SpellingListIndex);
   SourceLocation AttrLoc = AttrRange.getBegin();
 
   if (!ResultType->isDependentType() &&
@@ -1611,28 +1594,22 @@ void Sema::AddAllocAlignAttr(SourceRange AttrRange, Decl *D, Expr *ParamExpr,
     return;
   }
 
-  uint64_t IndexVal;
+  ParamIdx Idx;
   const auto *FuncDecl = cast<FunctionDecl>(D);
   if (!checkFunctionOrMethodParameterIndex(*this, FuncDecl, TmpAttr,
-                                           /*AttrArgNo=*/1, ParamExpr,
-                                           IndexVal))
+                                           /*AttrArgNo=*/1, ParamExpr, Idx))
     return;
 
-  QualType Ty = getFunctionOrMethodParamType(D, IndexVal);
+  QualType Ty = getFunctionOrMethodParamType(D, Idx.getASTIndex());
   if (!Ty->isDependentType() && !Ty->isIntegralType(Context)) {
     Diag(ParamExpr->getLocStart(), diag::err_attribute_integers_only)
-        << &TmpAttr << FuncDecl->getParamDecl(IndexVal)->getSourceRange();
+        << &TmpAttr
+        << FuncDecl->getParamDecl(Idx.getASTIndex())->getSourceRange();
     return;
   }
 
-  // We cannot use the Idx returned from checkFunctionOrMethodParameterIndex
-  // because that has corrected for the implicit this parameter, and is zero-
-  // based.  The attribute expects what the user wrote explicitly.
-  llvm::APSInt Val;
-  ParamExpr->EvaluateAsInt(Val, Context);
-
-  D->addAttr(::new (Context) AllocAlignAttr(
-      AttrRange, Context, Val.getZExtValue(), SpellingListIndex));
+  D->addAttr(::new (Context)
+                 AllocAlignAttr(AttrRange, Context, Idx, SpellingListIndex));
 }
 
 /// Normalize the attribute, __foo__ becomes foo.
@@ -1692,15 +1669,15 @@ static void handleOwnershipAttr(Sema &S, Decl *D, const AttributeList &AL) {
     Module = &S.PP.getIdentifierTable().get(ModuleName);
   }
 
-  SmallVector<unsigned, 8> OwnershipArgs;
+  SmallVector<ParamIdx, 8> OwnershipArgs;
   for (unsigned i = 1; i < AL.getNumArgs(); ++i) {
     Expr *Ex = AL.getArgAsExpr(i);
-    uint64_t Idx;
+    ParamIdx Idx;
     if (!checkFunctionOrMethodParameterIndex(S, D, AL, i, Ex, Idx))
       return;
 
     // Is the function argument a pointer type?
-    QualType T = getFunctionOrMethodParamType(D, Idx);
+    QualType T = getFunctionOrMethodParamType(D, Idx.getASTIndex());
     int Err = -1;  // No error
     switch (K) {
       case OwnershipAttr::Takes:
@@ -1731,14 +1708,13 @@ static void handleOwnershipAttr(Sema &S, Decl *D, const AttributeList &AL) {
       } else if (K == OwnershipAttr::Returns &&
                  I->getOwnKind() == OwnershipAttr::Returns) {
         // A returns attribute conflicts with any other returns attribute using
-        // a different index. Note, diagnostic reporting is 1-based, but stored
-        // argument indexes are 0-based.
+        // a different index.
         if (std::find(I->args_begin(), I->args_end(), Idx) == I->args_end()) {
           S.Diag(I->getLocation(), diag::err_ownership_returns_index_mismatch)
-              << *(I->args_begin()) + 1;
+              << I->args_begin()->getSourceIndex();
           if (I->args_size())
             S.Diag(AL.getLoc(), diag::note_ownership_returns_index_mismatch)
-                << (unsigned)Idx + 1 << Ex->getSourceRange();
+                << Idx.getSourceIndex() << Ex->getSourceRange();
           return;
         }
       }
@@ -1746,13 +1722,12 @@ static void handleOwnershipAttr(Sema &S, Decl *D, const AttributeList &AL) {
     OwnershipArgs.push_back(Idx);
   }
 
-  unsigned* start = OwnershipArgs.data();
-  unsigned size = OwnershipArgs.size();
-  llvm::array_pod_sort(start, start + size);
-
+  ParamIdx *Start = OwnershipArgs.data();
+  unsigned Size = OwnershipArgs.size();
+  llvm::array_pod_sort(Start, Start + Size);
   D->addAttr(::new (S.Context)
-             OwnershipAttr(AL.getLoc(), S.Context, Module, start, size,
-                           AL.getAttributeSpellingListIndex()));
+                 OwnershipAttr(AL.getLoc(), S.Context, Module, Start, Size,
+                               AL.getAttributeSpellingListIndex()));
 }
 
 static void handleWeakRefAttr(Sema &S, Decl *D, const AttributeList &AL) {
@@ -1866,22 +1841,6 @@ static void handleAliasAttr(Sema &S, Decl *D, const AttributeList &AL) {
                                          AL.getAttributeSpellingListIndex()));
 }
 
-static void handleColdAttr(Sema &S, Decl *D, const AttributeList &AL) {
-  if (checkAttrMutualExclusion<HotAttr>(S, D, AL.getRange(), AL.getName()))
-    return;
-
-  D->addAttr(::new (S.Context) ColdAttr(AL.getRange(), S.Context,
-                                        AL.getAttributeSpellingListIndex()));
-}
-
-static void handleHotAttr(Sema &S, Decl *D, const AttributeList &AL) {
-  if (checkAttrMutualExclusion<ColdAttr>(S, D, AL.getRange(), AL.getName()))
-    return;
-
-  D->addAttr(::new (S.Context) HotAttr(AL.getRange(), S.Context,
-                                       AL.getAttributeSpellingListIndex()));
-}
-
 static void handleTLSModelAttr(Sema &S, Decl *D,
                                const AttributeList &AL) {
   StringRef Model;
@@ -1949,9 +1908,6 @@ static void handleNakedAttr(Sema &S, Decl *D, const AttributeList &AL) {
 static void handleNoReturnAttr(Sema &S, Decl *D, const AttributeList &Attrs) {
   if (hasDeclarator(D)) return;
 
-  if (S.CheckNoReturnAttr(Attrs))
-    return;
-
   if (!isa<ObjCMethodDecl>(D)) {
     S.Diag(Attrs.getLoc(), diag::warn_attribute_wrong_decl_type)
         << Attrs.getName() << ExpectedFunctionOrMethod;
@@ -1962,16 +1918,14 @@ static void handleNoReturnAttr(Sema &S, Decl *D, const AttributeList &Attrs) {
       Attrs.getRange(), S.Context, Attrs.getAttributeSpellingListIndex()));
 }
 
-static void handleNoCallerSavedRegsAttr(Sema &S, Decl *D,
-                                        const AttributeList &AL) {
-  if (S.CheckNoCallerSavedRegsAttr(AL))
-    return;
-
-  D->addAttr(::new (S.Context) AnyX86NoCallerSavedRegistersAttr(
-      AL.getRange(), S.Context, AL.getAttributeSpellingListIndex()));
+static void handleNoCfCheckAttr(Sema &S, Decl *D, const AttributeList &Attrs) {
+  if (!S.getLangOpts().CFProtectionBranch)
+    S.Diag(Attrs.getLoc(), diag::warn_nocf_check_attribute_ignored);
+  else
+    handleSimpleAttribute<AnyX86NoCfCheckAttr>(S, D, Attrs);
 }
 
-bool Sema::CheckNoReturnAttr(const AttributeList &Attrs) {
+bool Sema::CheckAttrNoArgs(const AttributeList &Attrs) {
   if (!checkAttributeNumArgs(*this, Attrs, 0)) {
     Attrs.setInvalid();
     return true;
@@ -1980,15 +1934,10 @@ bool Sema::CheckNoReturnAttr(const AttributeList &Attrs) {
   return false;
 }
 
-bool Sema::CheckNoCallerSavedRegsAttr(const AttributeList &AL) {
+bool Sema::CheckAttrTarget(const AttributeList &AL) {
   // Check whether the attribute is valid on the current target.
   if (!AL.existsInTarget(Context.getTargetInfo())) {
     Diag(AL.getLoc(), diag::warn_unknown_attribute_ignored) << AL.getName();
-    AL.setInvalid();
-    return true;
-  }
-
-  if (!checkAttributeNumArgs(*this, AL, 0)) {
     AL.setInvalid();
     return true;
   }
@@ -2088,43 +2037,6 @@ static void handleDependencyAttr(Sema &S, Scope *Scope, Decl *D,
   D->addAttr(::new (S.Context) CarriesDependencyAttr(
                                    AL.getRange(), S.Context,
                                    AL.getAttributeSpellingListIndex()));
-}
-
-static void handleNotTailCalledAttr(Sema &S, Decl *D,
-                                    const AttributeList &AL) {
-  if (checkAttrMutualExclusion<AlwaysInlineAttr>(S, D, AL.getRange(),
-                                                 AL.getName()))
-    return;
-
-  D->addAttr(::new (S.Context) NotTailCalledAttr(
-      AL.getRange(), S.Context, AL.getAttributeSpellingListIndex()));
-}
-
-static void handleDisableTailCallsAttr(Sema &S, Decl *D,
-                                       const AttributeList &AL) {
-  if (checkAttrMutualExclusion<NakedAttr>(S, D, AL.getRange(),
-                                          AL.getName()))
-    return;
-
-  D->addAttr(::new (S.Context) DisableTailCallsAttr(
-      AL.getRange(), S.Context, AL.getAttributeSpellingListIndex()));
-}
-
-static void handleUsedAttr(Sema &S, Decl *D, const AttributeList &AL) {
-  if (const auto *VD = dyn_cast<VarDecl>(D)) {
-    if (VD->hasLocalStorage()) {
-      S.Diag(AL.getLoc(), diag::warn_attribute_ignored) << AL.getName();
-      return;
-    }
-  } else if (!isFunctionOrMethod(D)) {
-    S.Diag(AL.getLoc(), diag::warn_attribute_wrong_decl_type)
-      << AL.getName() << ExpectedVariableOrFunction;
-    return;
-  }
-
-  D->addAttr(::new (S.Context)
-             UsedAttr(AL.getRange(), S.Context,
-                      AL.getAttributeSpellingListIndex()));
 }
 
 static void handleUnusedAttr(Sema &S, Decl *D, const AttributeList &AL) {
@@ -3123,12 +3035,12 @@ static void handleEnumExtensibilityAttr(Sema &S, Decl *D,
 /// http://gcc.gnu.org/onlinedocs/gcc/Function-Attributes.html
 static void handleFormatArgAttr(Sema &S, Decl *D, const AttributeList &AL) {
   Expr *IdxExpr = AL.getArgAsExpr(0);
-  uint64_t Idx;
+  ParamIdx Idx;
   if (!checkFunctionOrMethodParameterIndex(S, D, AL, 1, IdxExpr, Idx))
     return;
 
   // Make sure the format string is really a string.
-  QualType Ty = getFunctionOrMethodParamType(D, Idx);
+  QualType Ty = getFunctionOrMethodParamType(D, Idx.getASTIndex());
 
   bool NotNSStringTy = !isNSStringType(Ty, S.Context);
   if (NotNSStringTy &&
@@ -3151,15 +3063,8 @@ static void handleFormatArgAttr(Sema &S, Decl *D, const AttributeList &AL) {
     return;
   }
 
-  // We cannot use the Idx returned from checkFunctionOrMethodParameterIndex
-  // because that has corrected for the implicit this parameter, and is zero-
-  // based.  The attribute expects what the user wrote explicitly.
-  llvm::APSInt Val;
-  IdxExpr->EvaluateAsInt(Val, S.Context);
-
-  D->addAttr(::new (S.Context)
-             FormatArgAttr(AL.getRange(), S.Context, Val.getZExtValue(),
-                           AL.getAttributeSpellingListIndex()));
+  D->addAttr(::new (S.Context) FormatArgAttr(
+      AL.getRange(), S.Context, Idx, AL.getAttributeSpellingListIndex()));
 }
 
 enum FormatAttrKind {
@@ -4553,42 +4458,30 @@ static void handleArgumentWithTypeTagAttr(Sema &S, Decl *D,
       << AL.getName() << /* arg num = */ 1 << AANT_ArgumentIdentifier;
     return;
   }
-  
-  if (!checkAttributeNumArgs(S, AL, 3))
-    return;
 
-  IdentifierInfo *ArgumentKind = AL.getArgAsIdent(0)->Ident;
-
-  if (!isFunctionOrMethod(D) || !hasFunctionProto(D)) {
-    S.Diag(AL.getLoc(), diag::err_attribute_wrong_decl_type)
-      << AL.getName() << ExpectedFunctionOrMethod;
-    return;
-  }
-
-  uint64_t ArgumentIdx;
+  ParamIdx ArgumentIdx;
   if (!checkFunctionOrMethodParameterIndex(S, D, AL, 2, AL.getArgAsExpr(1),
                                            ArgumentIdx))
     return;
 
-  uint64_t TypeTagIdx;
+  ParamIdx TypeTagIdx;
   if (!checkFunctionOrMethodParameterIndex(S, D, AL, 3, AL.getArgAsExpr(2),
                                            TypeTagIdx))
     return;
 
-  bool IsPointer = (AL.getName()->getName() == "pointer_with_type_tag");
+  bool IsPointer = AL.getName()->getName() == "pointer_with_type_tag";
   if (IsPointer) {
     // Ensure that buffer has a pointer type.
-    QualType BufferTy = getFunctionOrMethodParamType(D, ArgumentIdx);
-    if (!BufferTy->isPointerType()) {
+    unsigned ArgumentIdxAST = ArgumentIdx.getASTIndex();
+    if (ArgumentIdxAST >= getFunctionOrMethodNumParams(D) ||
+        !getFunctionOrMethodParamType(D, ArgumentIdxAST)->isPointerType())
       S.Diag(AL.getLoc(), diag::err_attribute_pointers_only)
-        << AL.getName() << 0;
-    }
+          << AL.getName() << 0;
   }
 
-  D->addAttr(::new (S.Context)
-             ArgumentWithTypeTagAttr(AL.getRange(), S.Context, ArgumentKind,
-                                     ArgumentIdx, TypeTagIdx, IsPointer,
-                                     AL.getAttributeSpellingListIndex()));
+  D->addAttr(::new (S.Context) ArgumentWithTypeTagAttr(
+      AL.getRange(), S.Context, AL.getArgAsIdent(0)->Ident, ArgumentIdx,
+      TypeTagIdx, IsPointer, AL.getAttributeSpellingListIndex()));
 }
 
 static void handleTypeTagForDatatypeAttr(Sema &S, Decl *D,
@@ -4621,19 +4514,18 @@ static void handleTypeTagForDatatypeAttr(Sema &S, Decl *D,
                                     AL.getAttributeSpellingListIndex()));
 }
 
-static void handleXRayLogArgsAttr(Sema &S, Decl *D,
-                                  const AttributeList &AL) {
-  uint64_t ArgCount;
+static void handleXRayLogArgsAttr(Sema &S, Decl *D, const AttributeList &AL) {
+  ParamIdx ArgCount;
 
   if (!checkFunctionOrMethodParameterIndex(S, D, AL, 1, AL.getArgAsExpr(0),
                                            ArgCount,
-                                           true /* AllowImplicitThis*/))
+                                           true /* CanIndexImplicitThis */))
     return;
 
-  // ArgCount isn't a parameter index [0;n), it's a count [1;n] - hence + 1.
-  D->addAttr(::new (S.Context)
-                 XRayLogArgsAttr(AL.getRange(), S.Context, ++ArgCount,
-                                 AL.getAttributeSpellingListIndex()));
+  // ArgCount isn't a parameter index [0;n), it's a count [1;n]
+  D->addAttr(::new (S.Context) XRayLogArgsAttr(
+      AL.getRange(), S.Context, ArgCount.getSourceIndex(),
+      AL.getAttributeSpellingListIndex()));
 }
 
 //===----------------------------------------------------------------------===//
@@ -4866,28 +4758,6 @@ static void handleObjCRequiresSuperAttr(Sema &S, Decl *D,
 
   D->addAttr(::new (S.Context) ObjCRequiresSuperAttr(
       Attrs.getRange(), S.Context, Attrs.getAttributeSpellingListIndex()));
-}
-
-static void handleCFAuditedTransferAttr(Sema &S, Decl *D,
-                                        const AttributeList &AL) {
-  if (checkAttrMutualExclusion<CFUnknownTransferAttr>(S, D, AL.getRange(),
-                                                      AL.getName()))
-    return;
-
-  D->addAttr(::new (S.Context)
-             CFAuditedTransferAttr(AL.getRange(), S.Context,
-                                   AL.getAttributeSpellingListIndex()));
-}
-
-static void handleCFUnknownTransferAttr(Sema &S, Decl *D,
-                                        const AttributeList &AL) {
-  if (checkAttrMutualExclusion<CFAuditedTransferAttr>(S, D, AL.getRange(),
-                                                      AL.getName()))
-    return;
-
-  D->addAttr(::new (S.Context)
-             CFUnknownTransferAttr(AL.getRange(), S.Context,
-             AL.getAttributeSpellingListIndex()));
 }
 
 static void handleObjCBridgeAttr(Sema &S, Decl *D, const AttributeList &AL) {
@@ -5876,6 +5746,9 @@ static bool handleCommonAttributeFeatures(Sema &S, Decl *D,
       return true;
   }
 
+  if (S.CheckAttrTarget(AL))
+    return true;
+
   return false;
 }
 
@@ -6161,16 +6034,19 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
     handleOwnershipAttr(S, D, AL);
     break;
   case AttributeList::AT_Cold:
-    handleColdAttr(S, D, AL);
+    handleSimpleAttributeWithExclusions<ColdAttr, HotAttr>(S, D, AL);
     break;
   case AttributeList::AT_Hot:
-    handleHotAttr(S, D, AL);
+    handleSimpleAttributeWithExclusions<HotAttr, ColdAttr>(S, D, AL);
     break;
   case AttributeList::AT_Naked:
     handleNakedAttr(S, D, AL);
     break;
   case AttributeList::AT_NoReturn:
     handleNoReturnAttr(S, D, AL);
+    break;
+  case AttributeList::AT_AnyX86NoCfCheck:
+    handleNoCfCheckAttr(S, D, AL);
     break;
   case AttributeList::AT_NoThrow:
     handleSimpleAttribute<NoThrowAttr>(S, D, AL);
@@ -6215,10 +6091,12 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
     handleObjCBoxable(S, D, AL);
     break;
   case AttributeList::AT_CFAuditedTransfer:
-    handleCFAuditedTransferAttr(S, D, AL);
+    handleSimpleAttributeWithExclusions<CFAuditedTransferAttr,
+                                        CFUnknownTransferAttr>(S, D, AL);
     break;
   case AttributeList::AT_CFUnknownTransfer:
-    handleCFUnknownTransferAttr(S, D, AL);
+    handleSimpleAttributeWithExclusions<CFUnknownTransferAttr,
+                                        CFAuditedTransferAttr>(S, D, AL);
     break;
   case AttributeList::AT_CFConsumed:
   case AttributeList::AT_NSConsumed:
@@ -6286,13 +6164,15 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
     handleSimpleAttribute<ReturnsTwiceAttr>(S, D, AL);
     break;
   case AttributeList::AT_NotTailCalled:
-    handleNotTailCalledAttr(S, D, AL);
+    handleSimpleAttributeWithExclusions<NotTailCalledAttr,
+                                        AlwaysInlineAttr>(S, D, AL);
     break;
   case AttributeList::AT_DisableTailCalls:
-    handleDisableTailCallsAttr(S, D, AL);
+    handleSimpleAttributeWithExclusions<DisableTailCallsAttr,
+                                        NakedAttr>(S, D, AL);
     break;
   case AttributeList::AT_Used:
-    handleUsedAttr(S, D, AL);
+    handleSimpleAttribute<UsedAttr>(S, D, AL);
     break;
   case AttributeList::AT_Visibility:
     handleVisibilityAttr(S, D, AL, false);
@@ -6543,7 +6423,7 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
     handleTypeTagForDatatypeAttr(S, D, AL);
     break;
   case AttributeList::AT_AnyX86NoCallerSavedRegisters:
-    handleNoCallerSavedRegsAttr(S, D, AL);
+    handleSimpleAttribute<AnyX86NoCallerSavedRegistersAttr>(S, D, AL);
     break;
   case AttributeList::AT_RenderScriptKernel:
     handleSimpleAttribute<RenderScriptKernelAttr>(S, D, AL);

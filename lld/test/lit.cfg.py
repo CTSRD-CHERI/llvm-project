@@ -39,8 +39,8 @@ llvm_config.use_default_substitutions()
 llvm_config.use_lld()
 
 tool_patterns = [
-    'llc', 'llvm-as', 'llvm-mc', 'llvm-nm',
-    'llvm-objdump', 'llvm-pdbutil', 'llvm-readobj', 'obj2yaml', 'yaml2obj']
+    'llc', 'llvm-as', 'llvm-mc', 'llvm-nm', 'llvm-objdump', 'llvm-pdbutil',
+    'llvm-readelf', 'llvm-readobj', 'obj2yaml', 'yaml2obj']
 
 llvm_config.add_tool_substitutions(tool_patterns)
 
@@ -71,7 +71,7 @@ llvm_config.feature_config(
                           'X86': 'x86'})
      ])
 
-# Set a fake constant version so that we get consitent output.
+# Set a fake constant version so that we get consistent output.
 config.environment['LLD_VERSION'] = 'LLD 1.0'
 config.environment['LLD_IN_TEST'] = '1'
 
@@ -84,6 +84,9 @@ if (lit.util.which('cvtres', config.environment['PATH'])) or \
 
 if (config.llvm_libxml2_enabled == '1'):
     config.available_features.add('libxml2')
+
+if config.have_dia_sdk:
+    config.available_features.add("diasdk")
 
 tar_executable = lit.util.which('tar', config.environment['PATH'])
 if tar_executable:

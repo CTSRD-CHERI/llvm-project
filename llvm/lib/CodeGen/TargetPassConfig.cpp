@@ -80,6 +80,9 @@ static cl::opt<bool> DisablePostRAMachineLICM("disable-postra-machine-licm",
     cl::desc("Disable Machine LICM"));
 static cl::opt<bool> DisableMachineSink("disable-machine-sink", cl::Hidden,
     cl::desc("Disable Machine Sinking"));
+static cl::opt<bool> DisablePostRAMachineSink("disable-postra-machine-sink",
+    cl::Hidden,
+    cl::desc("Disable PostRA Machine Sinking"));
 static cl::opt<bool> DisableLSR("disable-lsr", cl::Hidden,
     cl::desc("Disable Loop Strength Reduction Pass"));
 static cl::opt<bool> DisableConstantHoisting("disable-constant-hoisting",
@@ -251,6 +254,9 @@ static IdentifyingPassPtr overridePass(AnalysisID StandardID,
 
   if (StandardID == &MachineSinkingID)
     return applyDisable(TargetID, DisableMachineSink);
+
+  if (StandardID == &PostRAMachineSinkingID)
+    return applyDisable(TargetID, DisablePostRAMachineSink);
 
   if (StandardID == &MachineCopyPropagationID)
     return applyDisable(TargetID, DisableCopyProp);
@@ -653,6 +659,9 @@ void TargetPassConfig::addPassesToHandleExceptions() {
     addPass(createWinEHPass());
     addPass(createDwarfEHPass());
     break;
+  case ExceptionHandling::Wasm:
+    // TODO to prevent warning
+    break;
   case ExceptionHandling::None:
     addPass(createLowerInvokePass());
 
@@ -745,7 +754,7 @@ bool TargetPassConfig::addCoreISelPasses() {
 }
 
 bool TargetPassConfig::addISelPasses() {
-  if (TM->Options.EmulatedTLS)
+  if (TM->useEmulatedTLS())
     addPass(createLowerEmuTLSPass());
 
   addPass(createPreISelIntrinsicLoweringPass());
@@ -834,8 +843,10 @@ void TargetPassConfig::addMachinePasses() {
   addPostRegAlloc();
 
   // Insert prolog/epilog code.  Eliminate abstract frame index references...
-  if (getOptLevel() != CodeGenOpt::None)
+  if (getOptLevel() != CodeGenOpt::None) {
+    addPass(&PostRAMachineSinkingID);
     addPass(&ShrinkWrapID);
+  }
 
   // Prolog/Epilog inserter needs a TargetMachine to instantiate. But only
   // do so if it hasn't been disabled, substituted, or overridden.
@@ -1079,6 +1090,10 @@ void TargetPassConfig::addOptimizedRegAlloc(FunctionPass *RegAllocPass) {
     // FIXME: Re-enable coloring with register when it's capable of adding
     // kill markers.
     addPass(&StackSlotColoringID);
+
+    // Copy propagate to forward register uses and try to eliminate COPYs that
+    // were not coalesced.
+    addPass(&MachineCopyPropagationID);
 
     // Run post-ra machine LICM to hoist reloads / remats.
     //

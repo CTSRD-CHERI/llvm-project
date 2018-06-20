@@ -12,38 +12,34 @@
 using namespace clang;
 using namespace clang::clangd;
 
-VersionedDraft DraftStore::getDraft(PathRef File) const {
+llvm::Optional<std::string> DraftStore::getDraft(PathRef File) const {
   std::lock_guard<std::mutex> Lock(Mutex);
 
   auto It = Drafts.find(File);
   if (It == Drafts.end())
-    return {0, llvm::None};
+    return llvm::None;
+
   return It->second;
 }
 
-DocVersion DraftStore::getVersion(PathRef File) const {
+std::vector<Path> DraftStore::getActiveFiles() const {
   std::lock_guard<std::mutex> Lock(Mutex);
+  std::vector<Path> ResultVector;
 
-  auto It = Drafts.find(File);
-  if (It == Drafts.end())
-    return 0;
-  return It->second.Version;
+  for (auto DraftIt = Drafts.begin(); DraftIt != Drafts.end(); DraftIt++)
+    ResultVector.push_back(DraftIt->getKey());
+
+  return ResultVector;
 }
 
-DocVersion DraftStore::updateDraft(PathRef File, StringRef Contents) {
+void DraftStore::updateDraft(PathRef File, StringRef Contents) {
   std::lock_guard<std::mutex> Lock(Mutex);
 
-  auto &Entry = Drafts[File];
-  DocVersion NewVersion = ++Entry.Version;
-  Entry.Draft = Contents;
-  return NewVersion;
+  Drafts[File] = Contents;
 }
 
-DocVersion DraftStore::removeDraft(PathRef File) {
+void DraftStore::removeDraft(PathRef File) {
   std::lock_guard<std::mutex> Lock(Mutex);
 
-  auto &Entry = Drafts[File];
-  DocVersion NewVersion = ++Entry.Version;
-  Entry.Draft = llvm::None;
-  return NewVersion;
+  Drafts.erase(File);
 }

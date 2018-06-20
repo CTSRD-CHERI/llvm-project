@@ -29,6 +29,12 @@ class X86RegisterInfo;
 class X86Subtarget;
 
 namespace X86 {
+
+enum AsmComments {
+  // For instr that was compressed from EVEX to VEX.
+  AC_EVEX_2_VEX = MachineInstr::TAsmComments
+};
+
 // X86 specific condition code. These correspond to X86_*_COND in
 // X86InstrInfo.td. They must be kept in synch.
 enum CondCode {
@@ -83,6 +89,13 @@ CondCode getCondFromCMovOpc(unsigned Opc);
 /// GetOppositeBranchCondition - Return the inverse of the specified cond,
 /// e.g. turning COND_E to COND_NE.
 CondCode GetOppositeBranchCondition(CondCode CC);
+
+/// \brief Get the VPCMP immediate if the opcodes are swapped.
+unsigned getSwappedVPCMPImm(unsigned Imm);
+
+/// \brief Get the VPCOM immediate if the opcodes are swapped.
+unsigned getSwappedVPCOMImm(unsigned Imm);
+
 } // namespace X86
 
 /// isGlobalStubReference - Return true if the specified TargetFlag operand is

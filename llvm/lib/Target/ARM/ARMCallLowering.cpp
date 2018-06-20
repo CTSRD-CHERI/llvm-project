@@ -31,18 +31,18 @@
 #include "llvm/CodeGen/MachineMemOperand.h"
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
-#include "llvm/CodeGen/MachineValueType.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
-#include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
+#include "llvm/IR/ValueTypes.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/LowLevelTypeImpl.h"
+#include "llvm/Support/MachineValueType.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
@@ -521,7 +521,7 @@ bool ARMCallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
     if (CalleeReg && !TRI->isPhysicalRegister(CalleeReg))
       MIB->getOperand(0).setReg(constrainOperandRegClass(
           MF, *TRI, MRI, *STI.getInstrInfo(), *STI.getRegBankInfo(),
-          *MIB.getInstr(), MIB->getDesc(), CalleeReg, 0));
+          *MIB.getInstr(), MIB->getDesc(), Callee, 0));
   }
 
   SmallVector<ArgInfo, 8> ArgInfos;

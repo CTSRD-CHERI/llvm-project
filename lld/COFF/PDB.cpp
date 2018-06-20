@@ -85,10 +85,18 @@ class PDBLinker {
 public:
   PDBLinker(SymbolTable *Symtab)
       : Alloc(), Symtab(Symtab), Builder(Alloc), TypeTable(Alloc),
-        IDTable(Alloc), GlobalTypeTable(Alloc), GlobalIDTable(Alloc) {}
+        IDTable(Alloc), GlobalTypeTable(Alloc), GlobalIDTable(Alloc) {
+    // This isn't strictly necessary, but link.exe usually puts an empty string
+    // as the first "valid" string in the string table, so we do the same in
+    // order to maintain as much byte-for-byte compatibility as possible.
+    PDBStrTab.insert("");
+  }
 
   /// Emit the basic PDB structure: initial streams, headers, etc.
   void initialize(const llvm::codeview::DebugInfo &BuildId);
+
+  /// Add natvis files specified on the command line.
+  void addNatvisFiles();
 
   /// Link CodeView from each object file in the symbol table into the PDB.
   void addObjectsToPDB();
@@ -147,6 +155,11 @@ private:
   DebugStringTableSubsection PDBStrTab;
 
   llvm::SmallString<128> NativePath;
+
+  /// A list of other PDBs which are loaded during the linking process and which
+  /// we need to keep around since the linking operation may reference pointers
+  /// inside of these PDBs.
+  llvm::SmallVector<std::unique_ptr<pdb::NativeSession>, 2> LoadedPDBs;
 
   std::vector<pdb::SecMapEntry> SectionMap;
 
@@ -361,10 +374,16 @@ Expected<const CVIndexMap&> PDBLinker::maybeMergeTypeServerPDB(ObjFile *File,
     return std::move(E);
   }
 
-  auto ExpectedTpi = (*ExpectedSession)->getPDBFile().getPDBTpiStream();
+  pdb::NativeSession *Session = ExpectedSession->get();
+
+  // Keep a strong reference to this PDB, so that it's safe to hold pointers
+  // into the file.
+  LoadedPDBs.push_back(std::move(*ExpectedSession));
+
+  auto ExpectedTpi = Session->getPDBFile().getPDBTpiStream();
   if (auto E = ExpectedTpi.takeError())
     fatal("Type server does not have TPI stream: " + toString(std::move(E)));
-  auto ExpectedIpi = (*ExpectedSession)->getPDBFile().getPDBIpiStream();
+  auto ExpectedIpi = Session->getPDBFile().getPDBIpiStream();
   if (auto E = ExpectedIpi.takeError())
     fatal("Type server does not have TPI stream: " + toString(std::move(E)));
 
@@ -950,6 +969,18 @@ void PDBLinker::addObjectsToPDB() {
   }
 }
 
+void PDBLinker::addNatvisFiles() {
+  for (StringRef File : Config->NatvisFiles) {
+    ErrorOr<std::unique_ptr<MemoryBuffer>> DataOrErr =
+        MemoryBuffer::getFile(File);
+    if (!DataOrErr) {
+      warn("Cannot open input file: " + File);
+      continue;
+    }
+    Builder.addInjectedSource(File, std::move(*DataOrErr));
+  }
+}
+
 static void addCommonLinkerModuleSymbols(StringRef Path,
                                          pdb::DbiModuleDescriptorBuilder &Mod,
                                          BumpPtrAllocator &Allocator) {
@@ -1013,7 +1044,7 @@ static void addLinkerModuleSectionSymbol(pdb::DbiModuleDescriptorBuilder &Mod,
   Sym.Alignment = 12; // 2^12 = 4KB
   Sym.Characteristics = OS.getCharacteristics();
   Sym.Length = OS.getVirtualSize();
-  Sym.Name = OS.getName();
+  Sym.Name = OS.Name;
   Sym.Rva = OS.getRVA();
   Sym.SectionNumber = OS.SectionIndex;
   Mod.addSymbol(codeview::SymbolSerializer::writeOneSymbol(
@@ -1027,9 +1058,11 @@ void coff::createPDB(SymbolTable *Symtab,
                      const llvm::codeview::DebugInfo &BuildId) {
   ScopedTimer T1(TotalPdbLinkTimer);
   PDBLinker PDB(Symtab);
+
   PDB.initialize(BuildId);
   PDB.addObjectsToPDB();
   PDB.addSections(OutputSections, SectionTable);
+  PDB.addNatvisFiles();
 
   ScopedTimer T2(DiskCommitTimer);
   PDB.commit();
@@ -1045,19 +1078,16 @@ void PDBLinker::initialize(const llvm::codeview::DebugInfo &BuildId) {
 
   // Add an Info stream.
   auto &InfoBuilder = Builder.getInfoBuilder();
-  InfoBuilder.setAge(BuildId.PDB70.Age);
-
   GUID uuid;
   memcpy(&uuid, &BuildId.PDB70.Signature, sizeof(uuid));
+  InfoBuilder.setAge(BuildId.PDB70.Age);
   InfoBuilder.setGuid(uuid);
-  InfoBuilder.setSignature(time(nullptr));
   InfoBuilder.setVersion(pdb::PdbRaw_ImplVer::PdbImplVC70);
 
   // Add an empty DBI stream.
   pdb::DbiStreamBuilder &DbiBuilder = Builder.getDbiBuilder();
   DbiBuilder.setAge(BuildId.PDB70.Age);
   DbiBuilder.setVersionHeader(pdb::PdbDbiV70);
-  ExitOnErr(DbiBuilder.addDbgStream(pdb::DbgHeaderType::NewFPO, {}));
 }
 
 void PDBLinker::addSectionContrib(pdb::DbiModuleDescriptorBuilder &LinkerModule,

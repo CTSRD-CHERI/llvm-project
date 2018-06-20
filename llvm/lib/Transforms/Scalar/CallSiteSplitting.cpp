@@ -60,13 +60,13 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
+#include "llvm/Analysis/Utils/Local.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/PatternMatch.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Cloning.h"
-#include "llvm/Transforms/Utils/Local.h"
 
 using namespace llvm;
 using namespace PatternMatch;
@@ -209,8 +209,46 @@ static bool canSplitCallSite(CallSite CS, TargetTransformInfo &TTI) {
   return CallSiteBB->canSplitPredecessors();
 }
 
-/// Return true if the CS is split into its new predecessors.
+static Instruction *cloneInstForMustTail(Instruction *I, Instruction *Before,
+                                         Value *V) {
+  Instruction *Copy = I->clone();
+  Copy->setName(I->getName());
+  Copy->insertBefore(Before);
+  if (V)
+    Copy->setOperand(0, V);
+  return Copy;
+}
+
+/// Copy mandatory `musttail` return sequence that follows original `CI`, and
+/// link it up to `NewCI` value instead:
 ///
+///   * (optional) `bitcast NewCI to ...`
+///   * `ret bitcast or NewCI`
+///
+/// Insert this sequence right before `SplitBB`'s terminator, which will be
+/// cleaned up later in `splitCallSite` below.
+static void copyMustTailReturn(BasicBlock *SplitBB, Instruction *CI,
+                               Instruction *NewCI) {
+  bool IsVoid = SplitBB->getParent()->getReturnType()->isVoidTy();
+  auto II = std::next(CI->getIterator());
+
+  BitCastInst* BCI = dyn_cast<BitCastInst>(&*II);
+  if (BCI)
+    ++II;
+
+  ReturnInst* RI = dyn_cast<ReturnInst>(&*II);
+  assert(RI && "`musttail` call must be followed by `ret` instruction");
+
+  TerminatorInst *TI = SplitBB->getTerminator();
+  Value *V = NewCI;
+  if (BCI)
+    V = cloneInstForMustTail(BCI, TI, V);
+  cloneInstForMustTail(RI, TI, IsVoid ? nullptr : V);
+
+  // FIXME: remove TI here, `DuplicateInstructionsInSplitBetween` has a bug
+  // that prevents doing this now.
+}
+
 /// For each (predecessor, conditions from predecessors) pair, it will split the
 /// basic block containing the call site, hook it up to the predecessor and
 /// replace the call instruction with new call instructions, which contain
@@ -254,12 +292,18 @@ static bool canSplitCallSite(CallSite CS, TargetTransformInfo &TTI) {
 /// created in createCallSitesOnPredicatedArgument().
 static void splitCallSite(
     CallSite CS,
-    const SmallVectorImpl<std::pair<BasicBlock *, ConditionsTy>> &Preds) {
+    const SmallVectorImpl<std::pair<BasicBlock *, ConditionsTy>> &Preds,
+    DominatorTree *DT) {
   Instruction *Instr = CS.getInstruction();
   BasicBlock *TailBB = Instr->getParent();
+  bool IsMustTailCall = CS.isMustTailCall();
 
   PHINode *CallPN = nullptr;
-  if (Instr->getNumUses())
+
+  // `musttail` calls must be followed by optional `bitcast`, and `ret`. The
+  // split blocks will be terminated right after that so there're no users for
+  // this phi in a `TailBB`.
+  if (!IsMustTailCall && !Instr->use_empty())
     CallPN = PHINode::Create(Instr->getType(), Preds.size(), "phi.call");
 
   DEBUG(dbgs() << "split call-site : " << *Instr << " into \n");
@@ -271,7 +315,8 @@ static void splitCallSite(
   for (unsigned i = 0; i < Preds.size(); i++) {
     BasicBlock *PredBB = Preds[i].first;
     BasicBlock *SplitBlock = DuplicateInstructionsInSplitBetween(
-        TailBB, PredBB, &*std::next(Instr->getIterator()), ValueToValueMaps[i]);
+        TailBB, PredBB, &*std::next(Instr->getIterator()), ValueToValueMaps[i],
+        DT);
     assert(SplitBlock && "Unexpected new basic block split.");
 
     Instruction *NewCI =
@@ -293,6 +338,28 @@ static void splitCallSite(
                  << "\n");
     if (CallPN)
       CallPN->addIncoming(NewCI, SplitBlock);
+
+    // Clone and place bitcast and return instructions before `TI`
+    if (IsMustTailCall)
+      copyMustTailReturn(SplitBlock, Instr, NewCI);
+  }
+
+  NumCallSiteSplit++;
+
+  // FIXME: remove TI in `copyMustTailReturn`
+  if (IsMustTailCall) {
+    // Remove superfluous `br` terminators from the end of the Split blocks
+    // NOTE: Removing terminator removes the SplitBlock from the TailBB's
+    // predecessors. Therefore we must get complete list of Splits before
+    // attempting removal.
+    SmallVector<BasicBlock *, 2> Splits(predecessors((TailBB)));
+    assert(Splits.size() == 2 && "Expected exactly 2 splits!");
+    for (unsigned i = 0; i < Splits.size(); i++)
+      Splits[i]->getTerminator()->eraseFromParent();
+
+    // Erase the tail block once done with musttail patching
+    TailBB->eraseFromParent();
+    return;
   }
 
   auto *OriginalBegin = &*TailBB->begin();
@@ -329,8 +396,6 @@ static void splitCallSite(
     if (CurrentI == OriginalBegin)
       break;
   }
-
-  NumCallSiteSplit++;
 }
 
 // Return true if the call-site has an argument which is a PHI with only
@@ -361,18 +426,18 @@ static bool isPredicatedOnPHI(CallSite CS) {
   return false;
 }
 
-static bool tryToSplitOnPHIPredicatedArgument(CallSite CS) {
+static bool tryToSplitOnPHIPredicatedArgument(CallSite CS, DominatorTree *DT) {
   if (!isPredicatedOnPHI(CS))
     return false;
 
   auto Preds = getTwoPredecessors(CS.getInstruction()->getParent());
   SmallVector<std::pair<BasicBlock *, ConditionsTy>, 2> PredsCS = {
       {Preds[0], {}}, {Preds[1], {}}};
-  splitCallSite(CS, PredsCS);
+  splitCallSite(CS, PredsCS, DT);
   return true;
 }
 
-static bool tryToSplitOnPredicatedArgument(CallSite CS) {
+static bool tryToSplitOnPredicatedArgument(CallSite CS, DominatorTree *DT) {
   auto Preds = getTwoPredecessors(CS.getInstruction()->getParent());
   if (Preds[0] == Preds[1])
     return false;
@@ -390,23 +455,30 @@ static bool tryToSplitOnPredicatedArgument(CallSite CS) {
                   }))
     return false;
 
-  splitCallSite(CS, PredsCS);
+  splitCallSite(CS, PredsCS, DT);
   return true;
 }
 
-static bool tryToSplitCallSite(CallSite CS, TargetTransformInfo &TTI) {
+static bool tryToSplitCallSite(CallSite CS, TargetTransformInfo &TTI,
+                               DominatorTree *DT) {
   if (!CS.arg_size() || !canSplitCallSite(CS, TTI))
     return false;
-  return tryToSplitOnPredicatedArgument(CS) ||
-         tryToSplitOnPHIPredicatedArgument(CS);
+  return tryToSplitOnPredicatedArgument(CS, DT) ||
+         tryToSplitOnPHIPredicatedArgument(CS, DT);
 }
 
 static bool doCallSiteSplitting(Function &F, TargetLibraryInfo &TLI,
-                                TargetTransformInfo &TTI) {
+                                TargetTransformInfo &TTI, DominatorTree *DT) {
   bool Changed = false;
   for (Function::iterator BI = F.begin(), BE = F.end(); BI != BE;) {
     BasicBlock &BB = *BI++;
-    for (BasicBlock::iterator II = BB.begin(), IE = BB.end(); II != IE;) {
+    auto II = BB.getFirstNonPHIOrDbg()->getIterator();
+    auto IE = BB.getTerminator()->getIterator();
+    // Iterate until we reach the terminator instruction. tryToSplitCallSite
+    // can replace BB's terminator in case BB is a successor of itself. In that
+    // case, IE will be invalidated and we also have to check the current
+    // terminator.
+    while (II != IE && &*II != BB.getTerminator()) {
       Instruction *I = &*II++;
       CallSite CS(cast<Value>(I));
       if (!CS || isa<IntrinsicInst>(I) || isInstructionTriviallyDead(I, &TLI))
@@ -415,7 +487,17 @@ static bool doCallSiteSplitting(Function &F, TargetLibraryInfo &TLI,
       Function *Callee = CS.getCalledFunction();
       if (!Callee || Callee->isDeclaration())
         continue;
-      Changed |= tryToSplitCallSite(CS, TTI);
+
+      // Successful musttail call-site splits result in erased CI and erased BB.
+      // Check if such path is possible before attempting the splitting.
+      bool IsMustTail = CS.isMustTailCall();
+
+      Changed |= tryToSplitCallSite(CS, TTI, DT);
+
+      // There're no interesting instructions after this. The call site
+      // itself might have been erased on splitting.
+      if (IsMustTail)
+        break;
     }
   }
   return Changed;
@@ -431,6 +513,7 @@ struct CallSiteSplittingLegacyPass : public FunctionPass {
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.addRequired<TargetLibraryInfoWrapperPass>();
     AU.addRequired<TargetTransformInfoWrapperPass>();
+    AU.addPreserved<DominatorTreeWrapperPass>();
     FunctionPass::getAnalysisUsage(AU);
   }
 
@@ -440,7 +523,9 @@ struct CallSiteSplittingLegacyPass : public FunctionPass {
 
     auto &TLI = getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
     auto &TTI = getAnalysis<TargetTransformInfoWrapperPass>().getTTI(F);
-    return doCallSiteSplitting(F, TLI, TTI);
+    auto *DTWP = getAnalysisIfAvailable<DominatorTreeWrapperPass>();
+    return doCallSiteSplitting(F, TLI, TTI,
+                               DTWP ? &DTWP->getDomTree() : nullptr);
   }
 };
 } // namespace
@@ -460,9 +545,11 @@ PreservedAnalyses CallSiteSplittingPass::run(Function &F,
                                              FunctionAnalysisManager &AM) {
   auto &TLI = AM.getResult<TargetLibraryAnalysis>(F);
   auto &TTI = AM.getResult<TargetIRAnalysis>(F);
+  auto *DT = AM.getCachedResult<DominatorTreeAnalysis>(F);
 
-  if (!doCallSiteSplitting(F, TLI, TTI))
+  if (!doCallSiteSplitting(F, TLI, TTI, DT))
     return PreservedAnalyses::all();
   PreservedAnalyses PA;
+  PA.preserve<DominatorTreeAnalysis>();
   return PA;
 }

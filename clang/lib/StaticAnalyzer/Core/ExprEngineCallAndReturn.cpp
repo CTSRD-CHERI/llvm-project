@@ -16,6 +16,7 @@
 #include "clang/AST/CXXInheritance.h"
 #include "clang/AST/DeclCXX.h"
 #include "clang/Analysis/Analyses/LiveVariables.h"
+#include "clang/Analysis/ConstructionContext.h"
 #include "clang/StaticAnalyzer/Core/CheckerManager.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/CallEvent.h"
 #include "llvm/ADT/SmallSet.h"
@@ -580,23 +581,39 @@ ProgramStateRef ExprEngine::bindReturnValue(const CallEvent &Call,
     return State->BindExpr(E, LCtx, ThisV);
   }
 
-  // Conjure a symbol if the return value is unknown.
+  SVal R;
   QualType ResultTy = Call.getResultType();
-  SValBuilder &SVB = getSValBuilder();
   unsigned Count = currBldrCtx->blockCount();
+  if (auto RTC = getCurrentCFGElement().getAs<CFGCXXRecordTypedCall>()) {
+    // Conjure a temporary if the function returns an object by value.
+    MemRegionManager &MRMgr = svalBuilder.getRegionManager();
+    const CXXTempObjectRegion *TR = MRMgr.getCXXTempObjectRegion(E, LCtx);
+    State = addAllNecessaryTemporaryInfo(State, RTC->getConstructionContext(),
+                                         LCtx, TR);
 
-  // See if we need to conjure a heap pointer instead of
-  // a regular unknown pointer.
-  bool IsHeapPointer = false;
-  if (const auto *CNE = dyn_cast<CXXNewExpr>(E))
-    if (CNE->getOperatorNew()->isReplaceableGlobalAllocationFunction()) {
-      // FIXME: Delegate this to evalCall in MallocChecker?
-      IsHeapPointer = true;
-    }
+    // Invalidate the region so that it didn't look uninitialized. Don't notify
+    // the checkers.
+    State = State->invalidateRegions(TR, E, Count, LCtx,
+                                     /* CausedByPointerEscape=*/false, nullptr,
+                                     &Call, nullptr);
 
-  SVal R = IsHeapPointer
-               ? SVB.getConjuredHeapSymbolVal(E, LCtx, Count)
-               : SVB.conjureSymbolVal(nullptr, E, LCtx, ResultTy, Count);
+    R = State->getSVal(TR, E->getType());
+  } else {
+    // Conjure a symbol if the return value is unknown.
+
+    // See if we need to conjure a heap pointer instead of
+    // a regular unknown pointer.
+    bool IsHeapPointer = false;
+    if (const auto *CNE = dyn_cast<CXXNewExpr>(E))
+      if (CNE->getOperatorNew()->isReplaceableGlobalAllocationFunction()) {
+        // FIXME: Delegate this to evalCall in MallocChecker?
+        IsHeapPointer = true;
+      }
+
+    R = IsHeapPointer ? svalBuilder.getConjuredHeapSymbolVal(E, LCtx, Count)
+                      : svalBuilder.conjureSymbolVal(nullptr, E, LCtx, ResultTy,
+                                                     Count);
+  }
   return State->BindExpr(E, LCtx, R);
 }
 
@@ -635,10 +652,11 @@ ExprEngine::mayInlineCallKind(const CallEvent &Call, const ExplodedNode *Pred,
 
     const CXXConstructExpr *CtorExpr = Ctor.getOriginExpr();
 
-    auto CC = getCurrentCFGElement().getAs<CFGConstructor>();
-    const Stmt *ParentExpr = CC ? CC->getTriggerStmt() : nullptr;
+    auto CCE = getCurrentCFGElement().getAs<CFGConstructor>();
+    const ConstructionContext *CC = CCE ? CCE->getConstructionContext()
+                                        : nullptr;
 
-    if (ParentExpr && isa<CXXNewExpr>(ParentExpr) &&
+    if (CC && isa<NewAllocatedObjectConstructionContext>(CC) &&
         !Opts.mayInlineCXXAllocator())
       return CIP_DisallowedOnce;
 
@@ -675,6 +693,11 @@ ExprEngine::mayInlineCallKind(const CallEvent &Call, const ExplodedNode *Pred,
       // to inline the constructor. Instead we will simply invalidate
       // the fake temporary target.
       if (CallOpts.IsCtorOrDtorWithImproperlyModeledTargetRegion)
+        return CIP_DisallowedOnce;
+
+      // If the temporary is lifetime-extended by binding a smaller object
+      // within it to a reference, automatic destructors don't work properly.
+      if (CallOpts.IsTemporaryLifetimeExtendedViaSubobject)
         return CIP_DisallowedOnce;
     }
 

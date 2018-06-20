@@ -206,8 +206,6 @@ def HasMips64r6  :    Predicate<"Subtarget->hasMips64r6()">,
                       AssemblerPredicate<"FeatureMips64r6">;
 def NotMips64r6  :    Predicate<"!Subtarget->hasMips64r6()">,
                       AssemblerPredicate<"!FeatureMips64r6">;
-def HasMicroMips32r6 : Predicate<"Subtarget->inMicroMips32r6Mode()">,
-                       AssemblerPredicate<"FeatureMicroMips,FeatureMips32r6">;
 def InMips16Mode :    Predicate<"Subtarget->inMips16Mode()">,
                       AssemblerPredicate<"FeatureMips16">;
 def NotInMips16Mode : Predicate<"!Subtarget->inMips16Mode()">,
@@ -237,14 +235,19 @@ def IsBE           :  Predicate<"!Subtarget->isLittle()">;
 def IsNotNaCl    :    Predicate<"!Subtarget->isTargetNaCl()">;
 def UseTCCInDIV    :  AssemblerPredicate<"FeatureUseTCCInDIV">;
 def HasEVA       :    Predicate<"Subtarget->hasEVA()">,
-                      AssemblerPredicate<"FeatureEVA,FeatureMips32r2">;
+                      AssemblerPredicate<"FeatureEVA">;
 def HasMSA : Predicate<"Subtarget->hasMSA()">,
              AssemblerPredicate<"FeatureMSA">;
 def HasMadd4 : Predicate<"!Subtarget->disableMadd4()">,
                AssemblerPredicate<"!FeatureMadd4">;
 def HasMT  : Predicate<"Subtarget->hasMT()">,
              AssemblerPredicate<"FeatureMT">;
-
+def UseIndirectJumpsHazard : Predicate<"Subtarget->useIndirectJumpsHazard()">,
+                            AssemblerPredicate<"FeatureUseIndirectJumpsHazard">;
+def NoIndirectJumpGuards : Predicate<"!Subtarget->useIndirectJumpsHazard()">,
+                           AssemblerPredicate<"!FeatureUseIndirectJumpsHazard">;
+def HasCRC   : Predicate<"Subtarget->hasCRC()">,
+               AssemblerPredicate<"FeatureCRC">;
 //===----------------------------------------------------------------------===//
 // Mips GPR size adjectives.
 // They are mutually exclusive.
@@ -274,126 +277,187 @@ class SYM_64 { list<Predicate> SYMPredicates = [IsSym64]; }
 //        subtractive predicate will hopefully keep us under the 32 predicate
 //        limit long enough to develop an alternative way to handle P1||P2
 //        predicates.
+class ISA_MIPS1 {
+  list<Predicate> EncodingPredicates = [HasStdEnc];
+}
 class ISA_MIPS1_NOT_MIPS3 {
   list<Predicate> InsnPredicates = [NotMips3];
+  list<Predicate> EncodingPredicates = [HasStdEnc];
 }
 class ISA_MIPS1_NOT_4_32 {
   list<Predicate> InsnPredicates = [NotMips4_32];
+  list<Predicate> EncodingPredicates = [HasStdEnc];
 }
 class ISA_MIPS1_NOT_32R6_64R6 {
   list<Predicate> InsnPredicates = [NotMips32r6, NotMips64r6];
+  list<Predicate> EncodingPredicates = [HasStdEnc];
 }
-class ISA_MIPS2    { list<Predicate> InsnPredicates = [HasMips2]; }
+class ISA_MIPS2 {
+  list<Predicate> InsnPredicates = [HasMips2];
+  list<Predicate> EncodingPredicates = [HasStdEnc];
+}
 class ISA_MIPS2_NOT_32R6_64R6 {
   list<Predicate> InsnPredicates = [HasMips2, NotMips32r6, NotMips64r6];
+  list<Predicate> EncodingPredicates = [HasStdEnc];
 }
-class ISA_MIPS3    { list<Predicate> InsnPredicates = [HasMips3]; }
+class ISA_MIPS3 {
+  list<Predicate> InsnPredicates = [HasMips3];
+  list<Predicate> EncodingPredicates = [HasStdEnc];
+}
 class ISA_MIPS3_NOT_32R6_64R6 {
   list<Predicate> InsnPredicates = [HasMips3, NotMips32r6, NotMips64r6];
+  list<Predicate> EncodingPredicates = [HasStdEnc];
 }
-class ISA_MIPS32   { list<Predicate> InsnPredicates = [HasMips32]; }
+class ISA_MIPS32 {
+  list<Predicate> InsnPredicates = [HasMips32];
+  list<Predicate> EncodingPredicates = [HasStdEnc];
+}
 class ISA_MIPS32_NOT_32R6_64R6 {
   list<Predicate> InsnPredicates = [HasMips32, NotMips32r6, NotMips64r6];
+  list<Predicate> EncodingPredicates = [HasStdEnc];
 }
-class ISA_MIPS32R2 { list<Predicate> InsnPredicates = [HasMips32r2]; }
+class ISA_MIPS32R2 {
+  list<Predicate> InsnPredicates = [HasMips32r2];
+  list<Predicate> EncodingPredicates = [HasStdEnc];
+}
 class ISA_MIPS32R2_NOT_32R6_64R6 {
   list<Predicate> InsnPredicates = [HasMips32r2, NotMips32r6, NotMips64r6];
+  list<Predicate> EncodingPredicates = [HasStdEnc];
 }
-class ISA_MIPS32R5 { list<Predicate> InsnPredicates = [HasMips32r5]; }
-class ISA_MIPS64   { list<Predicate> InsnPredicates = [HasMips64]; }
+class ISA_MIPS32R5 {
+  list<Predicate> InsnPredicates = [HasMips32r5];
+  list<Predicate> EncodingPredicates = [HasStdEnc];
+}
+class ISA_MIPS64 {
+  list<Predicate> InsnPredicates = [HasMips64];
+  list<Predicate> EncodingPredicates = [HasStdEnc];
+}
 class ISA_MIPS64_NOT_64R6 {
   list<Predicate> InsnPredicates = [HasMips64, NotMips64r6];
+  list<Predicate> EncodingPredicates = [HasStdEnc];
 }
-class ISA_MIPS64R2 { list<Predicate> InsnPredicates = [HasMips64r2]; }
-class ISA_MIPS32R6 { list<Predicate> InsnPredicates = [HasMips32r6]; }
-class ISA_MIPS64R6 { list<Predicate> InsnPredicates = [HasMips64r6]; }
-class ISA_MICROMIPS { list<Predicate> InsnPredicates = [InMicroMips]; }
+class ISA_MIPS64R2 {
+  list<Predicate> InsnPredicates = [HasMips64r2];
+  list<Predicate> EncodingPredicates = [HasStdEnc];
+}
+class ISA_MIPS32R6 {
+  list<Predicate> InsnPredicates = [HasMips32r6];
+  list<Predicate> EncodingPredicates = [HasStdEnc];
+}
+class ISA_MIPS64R6 {
+  list<Predicate> InsnPredicates = [HasMips64r6];
+  list<Predicate> EncodingPredicates = [HasStdEnc];
+}
+class ISA_MICROMIPS {
+  list<Predicate> EncodingPredicates = [InMicroMips];
+}
 class ISA_MICROMIPS32R6 {
-  list<Predicate> InsnPredicates = [HasMicroMips32r6];
+  list<Predicate> InsnPredicates = [HasMips32r6];
+  list<Predicate> EncodingPredicates = [InMicroMips];
+}
+class ISA_MICROMIPS64R6 {
+  list<Predicate> InsnPredicates = [HasMips64r6];
+  list<Predicate> EncodingPredicates = [InMicroMips];
 }
 class ISA_MICROMIPS32_NOT_MIPS32R6 {
-  list<Predicate> InsnPredicates = [InMicroMips, NotMips32r6];
+  list<Predicate> InsnPredicates = [NotMips32r6];
+  list<Predicate> EncodingPredicates = [InMicroMips];
 }
-
-class INSN_EVA { list<Predicate> InsnPredicates = [HasEVA]; }
-class INSN_EVA_NOT_32R6_64R6 {
-  list<Predicate> InsnPredicates = [NotMips32r6, NotMips64r6, HasEVA];
-}
+class ASE_EVA { list<Predicate> ASEPredicate = [HasEVA]; }
 
 // The portions of MIPS-III that were also added to MIPS32
-class INSN_MIPS3_32 { list<Predicate> InsnPredicates = [HasMips3_32]; }
+class INSN_MIPS3_32 {
+  list<Predicate> InsnPredicates = [HasMips3_32];
+  list<Predicate> EncodingPredicates = [HasStdEnc];
+}
 
 // The portions of MIPS-III that were also added to MIPS32 but were removed in
 // MIPS32r6 and MIPS64r6.
 class INSN_MIPS3_32_NOT_32R6_64R6 {
   list<Predicate> InsnPredicates = [HasMips3_32, NotMips32r6, NotMips64r6];
+  list<Predicate> EncodingPredicates = [HasStdEnc];
 }
 
 // The portions of MIPS-III that were also added to MIPS32
-class INSN_MIPS3_32R2 { list<Predicate> InsnPredicates = [HasMips3_32r2]; }
+class INSN_MIPS3_32R2 {
+  list<Predicate> InsnPredicates = [HasMips3_32r2];
+  list<Predicate> EncodingPredicates = [HasStdEnc];
+}
 
 // The portions of MIPS-IV that were also added to MIPS32.
-class INSN_MIPS4_32 { list <Predicate> InsnPredicates = [HasMips4_32]; }
+class INSN_MIPS4_32 {
+  list <Predicate> InsnPredicates = [HasMips4_32];
+  list<Predicate> EncodingPredicates = [HasStdEnc];
+}
 
 // The portions of MIPS-IV that were also added to MIPS32 but were removed in
 // MIPS32r6 and MIPS64r6.
 class INSN_MIPS4_32_NOT_32R6_64R6 {
   list<Predicate> InsnPredicates = [HasMips4_32, NotMips32r6, NotMips64r6];
+  list<Predicate> EncodingPredicates = [HasStdEnc];
 }
 
 // The portions of MIPS-IV that were also added to MIPS32r2 but were removed in
 // MIPS32r6 and MIPS64r6.
 class INSN_MIPS4_32R2_NOT_32R6_64R6 {
   list<Predicate> InsnPredicates = [HasMips4_32r2, NotMips32r6, NotMips64r6];
+  list<Predicate> EncodingPredicates = [HasStdEnc];
 }
 
 // The portions of MIPS-IV that were also added to MIPS32r2.
 class INSN_MIPS4_32R2 {
   list<Predicate> InsnPredicates = [HasMips4_32r2];
+  list<Predicate> EncodingPredicates = [HasStdEnc];
 }
 
 // The portions of MIPS-V that were also added to MIPS32r2 but were removed in
 // MIPS32r6 and MIPS64r6.
 class INSN_MIPS5_32R2_NOT_32R6_64R6 {
   list<Predicate> InsnPredicates = [HasMips5_32r2, NotMips32r6, NotMips64r6];
+  list<Predicate> EncodingPredicates = [HasStdEnc];
 }
 
 class ASE_CNMIPS {
-  list<Predicate> InsnPredicates = [HasCnMips];
+  list<Predicate> ASEPredicate = [HasCnMips];
 }
 
 class NOT_ASE_CNMIPS {
-  list<Predicate> InsnPredicates = [NotCnMips];
+  list<Predicate> ASEPredicate = [NotCnMips];
 }
 
 class ASE_MIPS64_CNMIPS {
-  list<Predicate> InsnPredicates = [HasMips64, HasCnMips];
+  list<Predicate> ASEPredicate = [HasMips64, HasCnMips];
 }
 
 class ASE_MSA {
-  list<Predicate> InsnPredicates = [HasMSA];
+  list<Predicate> ASEPredicate = [HasMSA];
 }
 
 class ASE_MSA_NOT_MSA64 {
-  list<Predicate> InsnPredicates = [HasMSA, NotMips64];
+  list<Predicate> ASEPredicate = [HasMSA, NotMips64];
 }
 
 class ASE_MSA64 {
-  list<Predicate> InsnPredicates = [HasMSA, HasMips64];
+  list<Predicate> ASEPredicate = [HasMSA, HasMips64];
 }
 
 class ASE_MT {
-  list <Predicate> InsnPredicates = [HasMT];
+  list <Predicate> ASEPredicate = [HasMT];
+}
+
+class ASE_CRC {
+  list <Predicate> ASEPredicate = [HasCRC];
 }
 
 // Class used for separating microMIPSr6 and microMIPS (r3) instruction.
 // It can be used only on instructions that doesn't inherit PredicateControl.
 class ISA_MICROMIPS_NOT_32R6 : PredicateControl {
-  let InsnPredicates = [InMicroMips, NotMips32r6];
+  let InsnPredicates = [NotMips32r6];
+  let EncodingPredicates = [InMicroMips];
 }
 
 class ASE_NOT_DSP {
-  list<Predicate> InsnPredicates = [NotDSP];
+  list<Predicate> ASEPredicate = [NotDSP];
 }
 
 class MADD4 {
@@ -1542,8 +1606,9 @@ let isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1, hasDelaySlot = 1,
     PseudoSE<(outs), (ins calltarget:$target), [], II_J>,
     PseudoInstExpansion<(JumpInst Opnd:$target)>;
 
-  class TailCallReg<RegisterOperand RO> :
-    PseudoSE<(outs), (ins RO:$rs), [(MipsTailCall RO:$rs)], II_JR>;
+  class TailCallReg<Instruction JumpInst, RegisterOperand RO> :
+    PseudoSE<(outs), (ins RO:$rs), [(MipsTailCall RO:$rs)], II_JR>,
+    PseudoInstExpansion<(JumpInst RO:$rs)>;
 }
 
 class BAL_BR_Pseudo<Instruction RealInst> :
@@ -2070,7 +2135,7 @@ def B       : UncondBranch<BEQ, brtarget>,
               AdditionalRequires<[NotInMicroMips]>;
 
 def JAL  : MMRel, JumpLink<"jal", calltarget>, FJ<3>;
-let AdditionalPredicates = [NotInMicroMips] in {
+let AdditionalPredicates = [NotInMicroMips, NoIndirectJumpGuards] in {
   def JALR : JumpLinkReg<"jalr", GPR32Opnd>, JALR_FM;
   def JALRPseudo : JumpLinkRegPseudo<GPR32Opnd, JALR, RA>;
 }
@@ -2090,24 +2155,28 @@ def BAL_BR : BAL_BR_Pseudo<BGEZAL>;
 let AdditionalPredicates = [NotInMips16Mode, NotInMicroMips] in {
   def TAILCALL : TailCall<J, jmptarget>;
 }
-
-def TAILCALLREG : TailCallReg<GPR32Opnd>;
+let AdditionalPredicates = [NotInMips16Mode, NotInMicroMips,
+                            NoIndirectJumpGuards] in
+  def TAILCALLREG : TailCallReg<JR, GPR32Opnd>, ISA_MIPS1_NOT_32R6_64R6;
 
 // Indirect branches are matched as PseudoIndirectBranch/PseudoIndirectBranch64
 // then are expanded to JR, JR64, JALR, or JALR64 depending on the ISA.
-class PseudoIndirectBranchBase<RegisterOperand RO> :
+class PseudoIndirectBranchBase<Instruction JumpInst, RegisterOperand RO> :
     MipsPseudo<(outs), (ins RO:$rs), [(brind RO:$rs)],
-               II_IndirectBranchPseudo> {
+               II_IndirectBranchPseudo>,
+    PseudoInstExpansion<(JumpInst RO:$rs)> {
   let isTerminator=1;
   let isBarrier=1;
   let hasDelaySlot = 1;
   let isBranch = 1;
   let isIndirectBranch = 1;
   bit isCTI = 1;
-  let Predicates = [NotInMips16Mode];
 }
 
-def PseudoIndirectBranch : PseudoIndirectBranchBase<GPR32Opnd>;
+let AdditionalPredicates = [NotInMips16Mode, NotInMicroMips,
+                            NoIndirectJumpGuards] in
+  def PseudoIndirectBranch : PseudoIndirectBranchBase<JR, GPR32Opnd>,
+                             ISA_MIPS1_NOT_32R6_64R6;
 
 // Return instructions are matched as a RetRA instruction, then are expanded
 // into PseudoReturn/PseudoReturn64 after register allocation. Finally,
@@ -2244,12 +2313,14 @@ let AdditionalPredicates = [NotInMicroMips] in {
 /// Move Control Registers From/To CPU Registers
 let AdditionalPredicates = [NotInMicroMips] in {
   def MTC0 : MTC3OP<"mtc0", COP0Opnd, GPR32Opnd, II_MTC0>, MFC3OP_FM<0x10, 4>,
-             ISA_MIPS32;
+             ISA_MIPS1;
   def MFC0 : MFC3OP<"mfc0", GPR32Opnd, COP0Opnd, II_MFC0>, MFC3OP_FM<0x10, 0>,
-             ISA_MIPS32;
+             ISA_MIPS1;
+  def MFC2 : MFC3OP<"mfc2", GPR32Opnd, COP2Opnd, II_MFC2>, MFC3OP_FM<0x12, 0>,
+             ISA_MIPS1;
+  def MTC2 : MTC3OP<"mtc2", COP2Opnd, GPR32Opnd, II_MTC2>, MFC3OP_FM<0x12, 4>,
+             ISA_MIPS1;
 }
-def MFC2 : MFC3OP<"mfc2", GPR32Opnd, COP2Opnd, II_MFC2>, MFC3OP_FM<0x12, 0>;
-def MTC2 : MTC3OP<"mtc2", COP2Opnd, GPR32Opnd, II_MTC2>, MFC3OP_FM<0x12, 4>;
 
 class Barrier<string asmstr, InstrItinClass itin = NoItinerary> :
   InstSE<(outs), (ins), asmstr, [], itin, FrmOther, asmstr>;
@@ -2280,8 +2351,8 @@ class JALR_HB_DESC_BASE<string instr_asm, RegisterOperand GPROpnd> {
   list<dag> Pattern = [];
 }
 
-class JR_HB_DESC : InstSE<(outs), (ins), "", [], II_JR_HB, FrmJ>,
-                   JR_HB_DESC_BASE<"jr.hb", GPR32Opnd> {
+class JR_HB_DESC<RegisterOperand RO> :
+  InstSE<(outs), (ins), "", [], II_JR_HB, FrmJ>, JR_HB_DESC_BASE<"jr.hb", RO> {
   let isBranch=1;
   let isIndirectBranch=1;
   let hasDelaySlot=1;
@@ -2290,8 +2361,9 @@ class JR_HB_DESC : InstSE<(outs), (ins), "", [], II_JR_HB, FrmJ>,
   bit isCTI = 1;
 }
 
-class JALR_HB_DESC : InstSE<(outs), (ins), "", [], II_JALR_HB, FrmJ>,
-                     JALR_HB_DESC_BASE<"jalr.hb", GPR32Opnd> {
+class JALR_HB_DESC<RegisterOperand RO> :
+  InstSE<(outs), (ins), "", [], II_JALR_HB, FrmJ>, JALR_HB_DESC_BASE<"jalr.hb",
+                                                                     RO> {
   let isIndirectBranch=1;
   let hasDelaySlot=1;
   bit isCTI = 1;
@@ -2300,8 +2372,19 @@ class JALR_HB_DESC : InstSE<(outs), (ins), "", [], II_JALR_HB, FrmJ>,
 class JR_HB_ENC : JR_HB_FM<8>;
 class JALR_HB_ENC : JALR_HB_FM<9>;
 
-def JR_HB : JR_HB_DESC, JR_HB_ENC, ISA_MIPS32_NOT_32R6_64R6;
-def JALR_HB : JALR_HB_DESC, JALR_HB_ENC, ISA_MIPS32;
+def JR_HB : JR_HB_DESC<GPR32Opnd>, JR_HB_ENC, ISA_MIPS32R2_NOT_32R6_64R6;
+def JALR_HB : JALR_HB_DESC<GPR32Opnd>, JALR_HB_ENC, ISA_MIPS32;
+
+let AdditionalPredicates = [NotInMicroMips, UseIndirectJumpsHazard] in
+  def JALRHBPseudo : JumpLinkRegPseudo<GPR32Opnd, JALR_HB, RA>;
+
+
+let AdditionalPredicates = [NotInMips16Mode, NotInMicroMips,
+                            UseIndirectJumpsHazard] in {
+  def TAILCALLREGHB : TailCallReg<JR_HB, GPR32Opnd>, ISA_MIPS32_NOT_32R6_64R6;
+  def PseudoIndirectHazardBranch : PseudoIndirectBranchBase<JR_HB, GPR32Opnd>,
+                                   ISA_MIPS32R2_NOT_32R6_64R6;
+}
 
 class TLB<string asmstr, InstrItinClass itin = NoItinerary> :
   InstSE<(outs), (ins), asmstr, [], itin, FrmOther, asmstr>;
@@ -2435,7 +2518,8 @@ def : MipsInstAlias<"j $rs", (JR GPR32Opnd:$rs), 0>;
 let Predicates = [NotInMicroMips] in {
 def : MipsInstAlias<"jalr $rs", (JALR RA, GPR32Opnd:$rs), 0>;
 }
-def : MipsInstAlias<"jalr.hb $rs", (JALR_HB RA, GPR32Opnd:$rs), 1>, ISA_MIPS32;
+def : MipsInstAlias<"jalr.hb $rs", (JALR_HB RA, GPR32Opnd:$rs), 1>,
+      ISA_MIPS32;
 def : MipsInstAlias<"neg $rt, $rs",
                     (SUB GPR32Opnd:$rt, ZERO, GPR32Opnd:$rs), 1>;
 def : MipsInstAlias<"neg $rt",

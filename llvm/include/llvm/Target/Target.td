@@ -175,6 +175,8 @@ class Register<string n, list<string> altNames = []> {
 
   // HWEncoding - The target specific hardware encoding for this register.
   bits<16> HWEncoding = 0;
+
+  bit isArtificial = 0;
 }
 
 // RegisterWithSubRegs - This can be used to define instances of Register which
@@ -1140,6 +1142,12 @@ def FENTRY_CALL : StandardPseudoInstruction {
   let mayStore = 1;
   let hasSideEffects = 1;
 }
+def ICALL_BRANCH_FUNNEL : StandardPseudoInstruction {
+  let OutOperandList = (outs unknown:$dst);
+  let InOperandList = (ins variable_ops);
+  let AsmString = "";
+  let hasSideEffects = 1;
+}
 
 // Generic opcodes used in GlobalISel.
 include "llvm/Target/GenericOpcodes.td"
@@ -1362,6 +1370,12 @@ class Target {
 
   // AssemblyWriters - The AsmWriter instances available for this target.
   list<AsmWriter> AssemblyWriters = [DefaultAsmWriter];
+
+  // AllowRegisterRenaming - Controls whether this target allows
+  // post-register-allocation renaming of registers.  This is done by
+  // setting hasExtraDefRegAllocReq and hasExtraSrcRegAllocReq to 1
+  // for all opcodes if this flag is set to 0.
+  int AllowRegisterRenaming = 0;
 }
 
 //===----------------------------------------------------------------------===//

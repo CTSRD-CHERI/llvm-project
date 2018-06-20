@@ -223,12 +223,9 @@ def S_MEMREALTIME   : SM_Time_Pseudo <"s_memrealtime", int_amdgcn_s_memrealtime>
 def smrd_load : PatFrag <(ops node:$ptr), (load node:$ptr), [{
   auto Ld = cast<LoadSDNode>(N);
   return Ld->getAlignment() >= 4  &&
-    (((Ld->getAddressSpace() == AMDGPUASI.CONSTANT_ADDRESS ||
-       Ld->getAddressSpace() == AMDGPUASI.CONSTANT_ADDRESS_32BIT) &&
-    static_cast<const SITargetLowering *>(getTargetLowering())->isMemOpUniform(N)) ||
+    ((((Ld->getAddressSpace() == AMDGPUASI.CONSTANT_ADDRESS) || (Ld->getAddressSpace() == AMDGPUASI.CONSTANT_ADDRESS_32BIT)) && !N->isDivergent()) ||
     (Subtarget->getScalarizeGlobalBehavior() && Ld->getAddressSpace() == AMDGPUASI.GLOBAL_ADDRESS &&
-    !Ld->isVolatile() &&
-    static_cast<const SITargetLowering *>(getTargetLowering())->isMemOpUniform(N) &&
+     !Ld->isVolatile() && !N->isDivergent() &&
     static_cast<const SITargetLowering *>(getTargetLowering())->isMemOpHasNoClobberedMemOperand(N)));
 }]>;
 
@@ -503,7 +500,7 @@ let AddedComplexity = SM_LOAD_PATTERN.AddedComplexity in {
 
 class SMRD_Pattern_ci <string Instr, ValueType vt> : GCNPat <
   (smrd_load (SMRDImm32 i64:$sbase, i32:$offset)),
-  (vt (!cast<SM_Pseudo>(Instr#"_IMM_ci") $sbase, $offset, 0))> {
+  (vt (!cast<InstSI>(Instr#"_IMM_ci") $sbase, $offset, 0))> {
   let OtherPredicates = [isCIOnly];
 }
 

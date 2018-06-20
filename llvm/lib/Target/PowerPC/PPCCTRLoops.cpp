@@ -35,6 +35,7 @@
 #include "llvm/Analysis/ScalarEvolutionExpander.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
+#include "llvm/Analysis/Utils/Local.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/CodeGen/TargetSchedule.h"
 #include "llvm/IR/Constants.h"
@@ -51,7 +52,6 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
-#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Utils/LoopUtils.h"
 
 #ifndef NDEBUG
@@ -455,13 +455,16 @@ bool PPCCTRLoops::mightUseCTR(BasicBlock *BB) {
         return true;
     }
 
+    // FREM is always a call.
+    if (J->getOpcode() == Instruction::FRem)
+      return true;
+
     if (STI->useSoftFloat()) {
       switch(J->getOpcode()) {
       case Instruction::FAdd:
       case Instruction::FSub:
       case Instruction::FMul:
       case Instruction::FDiv:
-      case Instruction::FRem:
       case Instruction::FPTrunc:
       case Instruction::FPExt:
       case Instruction::FPToUI:

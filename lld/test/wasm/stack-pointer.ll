@@ -26,7 +26,7 @@ entry:
 ; CHECK-NEXT:         Field:           __stack_pointer
 ; CHECK-NEXT:         Kind:            GLOBAL
 ; CHECK-NEXT:         GlobalType:      I32
-; CHECK-NEXT:         GlobalMutable:   false
+; CHECK-NEXT:         GlobalMutable:   true
 ; CHECK-NEXT:   - Type:            FUNCTION
 ; CHECK-NEXT:     FunctionTypes:   [ 0 ]
 ; CHECK-NEXT:   - Type:            TABLE
@@ -39,15 +39,10 @@ entry:
 ; CHECK-NEXT:   - Type:            MEMORY
 ; CHECK-NEXT:     Memories:
 ; CHECK-NEXT:       - Initial:         0x00000000
-; CHECK-NEXT:   - Type:            EXPORT
-; CHECK-NEXT:     Exports:
-; CHECK-NEXT:       - Name:            _start
-; CHECK-NEXT:         Kind:            FUNCTION
-; CHECK-NEXT:         Index:           0
 ; CHECK-NEXT:   - Type:            CODE
 ; CHECK-NEXT:     Relocations:
 ; CHECK-NEXT:       - Type:            R_WEBASSEMBLY_GLOBAL_INDEX_LEB
-; CHECK-NEXT:         Index:           0
+; CHECK-NEXT:         Index:           1
 ; CHECK-NEXT:         Offset:          0x00000004
 ; CHECK-NEXT:     Functions:
 ; CHECK-NEXT:       - Index:           0
@@ -55,7 +50,17 @@ entry:
 ; CHECK-NEXT:         Body:            23808080800041106B1A41000B
 ; CHECK-NEXT:   - Type:            CUSTOM
 ; CHECK-NEXT:     Name:            linking
-; CHECK-NEXT:     DataSize:        0
+; CHECK-NEXT:     SymbolTable:
+; CHECK-NEXT:       - Index:           0
+; CHECK-NEXT:         Kind:            FUNCTION
+; CHECK-NEXT:         Name:            _start
+; CHECK-NEXT:         Flags:           [  ]
+; CHECK-NEXT:         Function:        0
+; CHECK-NEXT:       - Index:           1
+; CHECK-NEXT:         Kind:            GLOBAL
+; CHECK-NEXT:         Name:            __stack_pointer
+; CHECK-NEXT:         Flags:           [ UNDEFINED ]
+; CHECK-NEXT:         Global:          0
 ; CHECK-NEXT:   - Type:            CUSTOM
 ; CHECK-NEXT:     Name:            name
 ; CHECK-NEXT:     FunctionNames:

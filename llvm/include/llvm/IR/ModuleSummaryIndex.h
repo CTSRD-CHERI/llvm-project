@@ -26,6 +26,7 @@
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/MathExtras.h"
+#include "llvm/Support/ScaledNumber.h"
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -59,7 +60,11 @@ struct CalleeInfo {
   // The size of the bit-field might need to be adjusted if more values are
   // added to HotnessType enum.
   uint32_t Hotness : 3;
+
+  /// The value stored in RelBlockFreq has to be interpreted as the digits of
+  /// a scaled number with a scale of \p -ScaleShift.
   uint32_t RelBlockFreq : 29;
+  static constexpr int32_t ScaleShift = 8;
   static constexpr uint64_t MaxRelBlockFreq = (1 << 29) - 1;
 
   CalleeInfo()
@@ -73,10 +78,20 @@ struct CalleeInfo {
 
   HotnessType getHotness() const { return HotnessType(Hotness); }
 
-  // When there are multiple edges between the same (caller, callee) pair, the
-  // relative block frequencies are summed up.
-  void updateRelBlockFreq(uint64_t RBF) {
-    uint64_t Sum = SaturatingAdd<uint64_t>(RelBlockFreq, RBF);
+  /// Update \p RelBlockFreq from \p BlockFreq and \p EntryFreq
+  ///
+  /// BlockFreq is divided by EntryFreq and added to RelBlockFreq. To represent
+  /// fractional values, the result is represented as a fixed point number with
+  /// scale of -ScaleShift.
+  void updateRelBlockFreq(uint64_t BlockFreq, uint64_t EntryFreq) {
+    if (EntryFreq == 0)
+      return;
+    using Scaled64 = ScaledNumber<uint64_t>;
+    Scaled64 Temp(BlockFreq, ScaleShift);
+    Temp /= Scaled64::get(EntryFreq);
+
+    uint64_t Sum =
+        SaturatingAdd<uint64_t>(Temp.toInt<uint64_t>(), RelBlockFreq);
     Sum = std::min(Sum, uint64_t(MaxRelBlockFreq));
     RelBlockFreq = static_cast<uint32_t>(Sum);
   }
@@ -161,6 +176,24 @@ struct ValueInfo {
 
   bool isDSOLocal() const;
 };
+
+inline bool operator==(const ValueInfo &A, const ValueInfo &B) {
+  assert(A.getRef() && B.getRef() &&
+         "Need ValueInfo with non-null Ref to compare GUIDs");
+  return A.getRef() == B.getRef();
+}
+
+inline bool operator!=(const ValueInfo &A, const ValueInfo &B) {
+  assert(A.getRef() && B.getRef() &&
+         "Need ValueInfo with non-null Ref to compare GUIDs");
+  return A.getGUID() != B.getGUID();
+}
+
+inline bool operator<(const ValueInfo &A, const ValueInfo &B) {
+  assert(A.getRef() && B.getRef() &&
+         "Need ValueInfo with non-null Ref to compare GUIDs");
+  return A.getGUID() < B.getGUID();
+}
 
 template <> struct DenseMapInfo<ValueInfo> {
   static inline ValueInfo getEmptyKey() {
@@ -397,6 +430,25 @@ public:
     unsigned ReturnDoesNotAlias : 1;
   };
 
+  /// Create an empty FunctionSummary (with specified call edges).
+  /// Used to represent external nodes and the dummy root node.
+  static FunctionSummary
+  makeDummyFunctionSummary(std::vector<FunctionSummary::EdgeTy> Edges) {
+    return FunctionSummary(
+        FunctionSummary::GVFlags(
+            GlobalValue::LinkageTypes::AvailableExternallyLinkage,
+            /*NotEligibleToImport=*/true, /*Live=*/true, /*IsLocal=*/false),
+        0, FunctionSummary::FFlags{}, std::vector<ValueInfo>(),
+        std::move(Edges), std::vector<GlobalValue::GUID>(),
+        std::vector<FunctionSummary::VFuncId>(),
+        std::vector<FunctionSummary::VFuncId>(),
+        std::vector<FunctionSummary::ConstVCall>(),
+        std::vector<FunctionSummary::ConstVCall>());
+  }
+
+  /// A dummy node to reference external functions that aren't in the index
+  static FunctionSummary ExternalNode;
+
 private:
   /// Number of instructions (ignoring debug instructions, e.g.) computed
   /// during the initial compile step when the summary index is first built.
@@ -516,6 +568,8 @@ public:
       TIdInfo = llvm::make_unique<TypeIdInfo>();
     TIdInfo->TypeTests.push_back(Guid);
   }
+
+  friend struct GraphTraits<ValueInfo>;
 };
 
 template <> struct DenseMapInfo<FunctionSummary::VFuncId> {
@@ -602,8 +656,11 @@ struct TypeTestResolution {
 
 struct WholeProgramDevirtResolution {
   enum Kind {
-    Indir,      ///< Just do a regular virtual call
-    SingleImpl, ///< Single implementation devirtualization
+    Indir,        ///< Just do a regular virtual call
+    SingleImpl,   ///< Single implementation devirtualization
+    BranchFunnel, ///< When retpoline mitigation is enabled, use a branch funnel
+                  ///< that is defined in the merged module. Otherwise same as
+                  ///< Indir.
   } TheKind = Indir;
 
   std::string SingleImplName;
@@ -718,6 +775,69 @@ public:
   const_gvsummary_iterator end() const { return GlobalValueMap.end(); }
   size_t size() const { return GlobalValueMap.size(); }
 
+  /// Convenience function for doing a DFS on a ValueInfo. Marks the function in
+  /// the FunctionHasParent map.
+  static void discoverNodes(ValueInfo V,
+                            std::map<ValueInfo, bool> &FunctionHasParent) {
+    if (!V.getSummaryList().size())
+      return; // skip external functions that don't have summaries
+
+    // Mark discovered if we haven't yet
+    auto S = FunctionHasParent.emplace(V, false);
+
+    // Stop if we've already discovered this node
+    if (!S.second)
+      return;
+
+    FunctionSummary *F =
+        dyn_cast<FunctionSummary>(V.getSummaryList().front().get());
+    assert(F != nullptr && "Expected FunctionSummary node");
+
+    for (auto &C : F->calls()) {
+      // Insert node if necessary
+      auto S = FunctionHasParent.emplace(C.first, true);
+
+      // Skip nodes that we're sure have parents
+      if (!S.second && S.first->second)
+        continue;
+
+      if (S.second)
+        discoverNodes(C.first, FunctionHasParent);
+      else
+        S.first->second = true;
+    }
+  }
+
+  // Calculate the callgraph root
+  FunctionSummary calculateCallGraphRoot() {
+    // Functions that have a parent will be marked in FunctionHasParent pair.
+    // Once we've marked all functions, the functions in the map that are false
+    // have no parent (so they're the roots)
+    std::map<ValueInfo, bool> FunctionHasParent;
+
+    for (auto &S : *this) {
+      // Skip external functions
+      if (!S.second.SummaryList.size() ||
+          !isa<FunctionSummary>(S.second.SummaryList.front().get()))
+        continue;
+      discoverNodes(ValueInfo(IsAnalysis, &S), FunctionHasParent);
+    }
+
+    std::vector<FunctionSummary::EdgeTy> Edges;
+    // create edges to all roots in the Index
+    for (auto &P : FunctionHasParent) {
+      if (P.second)
+        continue; // skip over non-root nodes
+      Edges.push_back(std::make_pair(P.first, CalleeInfo{}));
+    }
+    if (Edges.empty()) {
+      // Failed to find root - return an empty node
+      return FunctionSummary::makeDummyFunctionSummary({});
+    }
+    auto CallGraphRoot = FunctionSummary::makeDummyFunctionSummary(Edges);
+    return CallGraphRoot;
+  }
+
   bool withGlobalValueDeadStripping() const {
     return WithGlobalValueDeadStripping;
   }
@@ -748,7 +868,7 @@ public:
     return ValueInfo(IsAnalysis, getOrInsertValuePtr(GUID));
   }
 
-  /// Return a ValueInfo for \p GUID setting value \p Name. 
+  /// Return a ValueInfo for \p GUID setting value \p Name.
   ValueInfo getOrInsertValueInfo(GlobalValue::GUID GUID, StringRef Name) {
     assert(!IsAnalysis);
     auto VP = getOrInsertValuePtr(GUID);
@@ -923,6 +1043,56 @@ public:
 
   /// Export summary to dot file for GraphViz.
   void exportToDot(raw_ostream& OS) const;
+
+  /// Print out strongly connected components for debugging.
+  void dumpSCCs(raw_ostream &OS);
+};
+
+/// GraphTraits definition to build SCC for the index
+template <> struct GraphTraits<ValueInfo> {
+  typedef ValueInfo NodeRef;
+
+  static NodeRef valueInfoFromEdge(FunctionSummary::EdgeTy &P) {
+    return P.first;
+  }
+  using ChildIteratorType =
+      mapped_iterator<std::vector<FunctionSummary::EdgeTy>::iterator,
+                      decltype(&valueInfoFromEdge)>;
+
+  static NodeRef getEntryNode(ValueInfo V) { return V; }
+
+  static ChildIteratorType child_begin(NodeRef N) {
+    if (!N.getSummaryList().size()) // handle external function
+      return ChildIteratorType(
+          FunctionSummary::ExternalNode.CallGraphEdgeList.begin(),
+          &valueInfoFromEdge);
+    FunctionSummary *F =
+        cast<FunctionSummary>(N.getSummaryList().front()->getBaseObject());
+    return ChildIteratorType(F->CallGraphEdgeList.begin(), &valueInfoFromEdge);
+  }
+
+  static ChildIteratorType child_end(NodeRef N) {
+    if (!N.getSummaryList().size()) // handle external function
+      return ChildIteratorType(
+          FunctionSummary::ExternalNode.CallGraphEdgeList.end(),
+          &valueInfoFromEdge);
+    FunctionSummary *F =
+        cast<FunctionSummary>(N.getSummaryList().front()->getBaseObject());
+    return ChildIteratorType(F->CallGraphEdgeList.end(), &valueInfoFromEdge);
+  }
+};
+
+template <>
+struct GraphTraits<ModuleSummaryIndex *> : public GraphTraits<ValueInfo> {
+  static NodeRef getEntryNode(ModuleSummaryIndex *I) {
+    std::unique_ptr<GlobalValueSummary> Root =
+        make_unique<FunctionSummary>(I->calculateCallGraphRoot());
+    GlobalValueSummaryInfo G(I->isPerformingAnalysis());
+    G.SummaryList.push_back(std::move(Root));
+    static auto P =
+        GlobalValueSummaryMapTy::value_type(GlobalValue::GUID(0), std::move(G));
+    return ValueInfo(I->isPerformingAnalysis(), &P);
+  }
 };
 
 } // end namespace llvm

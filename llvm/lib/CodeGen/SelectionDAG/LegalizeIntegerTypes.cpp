@@ -587,14 +587,23 @@ SDValue DAGTypeLegalizer::PromoteIntRes_SELECT_CC(SDNode *N) {
 }
 
 SDValue DAGTypeLegalizer::PromoteIntRes_SETCC(SDNode *N) {
-  EVT SVT = getSetCCResultType(N->getOperand(0).getValueType());
-
+  EVT InVT = N->getOperand(0).getValueType();
   EVT NVT = TLI.getTypeToTransformTo(*DAG.getContext(), N->getValueType(0));
 
-  // Only use the result of getSetCCResultType if it is legal,
-  // otherwise just use the promoted result type (NVT).
-  if (!TLI.isTypeLegal(SVT))
-    SVT = NVT;
+  EVT SVT = getSetCCResultType(InVT);
+
+  // If we got back a type that needs to be promoted, this likely means the
+  // the input type also needs to be promoted. So get the promoted type for
+  // the input and try the query again.
+  if (getTypeAction(SVT) == TargetLowering::TypePromoteInteger) {
+    if (getTypeAction(InVT) == TargetLowering::TypePromoteInteger) {
+      InVT = TLI.getTypeToTransformTo(*DAG.getContext(), InVT);
+      SVT = getSetCCResultType(InVT);
+    } else {
+      // Input type isn't promoted, just use the default promoted type.
+      SVT = NVT;
+    }
+  }
 
   SDLoc dl(N);
   assert(SVT.isVector() == N->getOperand(0).getValueType().isVector() &&
@@ -3487,21 +3496,6 @@ SDValue DAGTypeLegalizer::PromoteIntRes_CONCAT_VECTORS(SDNode *N) {
   unsigned NumOperands = N->getNumOperands();
   assert(NumElem * NumOperands == NumOutElem &&
          "Unexpected number of elements");
-
-  // If the input type is legal and we can promote it to a legal type with the
-  // same element size, go ahead do that to create a new concat.
-  if (getTypeAction(N->getOperand(0).getValueType()) ==
-      TargetLowering::TypeLegal) {
-    EVT InPromotedTy = EVT::getVectorVT(*DAG.getContext(), OutElemTy, NumElem);
-    if (TLI.isTypeLegal(InPromotedTy)) {
-      SmallVector<SDValue, 8> Ops(NumOperands);
-      for (unsigned i = 0; i < NumOperands; ++i) {
-        Ops[i] = DAG.getNode(ISD::ANY_EXTEND, dl, InPromotedTy,
-                             N->getOperand(i));
-      }
-      return DAG.getNode(ISD::CONCAT_VECTORS, dl, NOutVT, Ops);
-    }
-  }
 
   // Take the elements from the first vector.
   SmallVector<SDValue, 8> Ops(NumOutElem);
