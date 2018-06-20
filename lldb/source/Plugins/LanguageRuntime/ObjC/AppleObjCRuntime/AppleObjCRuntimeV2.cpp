@@ -37,6 +37,7 @@
 #include "lldb/Interpreter/CommandObject.h"
 #include "lldb/Interpreter/CommandObjectMultiword.h"
 #include "lldb/Interpreter/CommandReturnObject.h"
+#include "lldb/Interpreter/OptionArgParser.h"
 #include "lldb/Interpreter/OptionValueBoolean.h"
 #include "lldb/Symbol/ClangASTContext.h"
 #include "lldb/Symbol/ObjectFile.h"
@@ -682,7 +683,7 @@ protected:
           if (!arg_str)
             continue;
           Status error;
-          lldb::addr_t arg_addr = Args::StringToAddress(
+          lldb::addr_t arg_addr = OptionArgParser::ToAddress(
               &exe_ctx, arg_str, LLDB_INVALID_ADDRESS, &error);
           if (arg_addr == 0 || arg_addr == LLDB_INVALID_ADDRESS || error.Fail())
             continue;
@@ -1440,8 +1441,7 @@ uint32_t AppleObjCRuntimeV2::ParseClassInfoArray(const DataExtractor &data,
   //        uint32_t hash;
   //    } __attribute__((__packed__));
 
-  Log *log(GetLogIfAllCategoriesSet(LIBLLDB_LOG_TYPES 
-                                    | LLDB_LOG_OPTION_VERBOSE));
+  Log *log(GetLogIfAllCategoriesSet(LIBLLDB_LOG_TYPES));
   uint32_t num_parsed = 0;
 
   // Iterate through all ClassInfo structures
@@ -1450,7 +1450,7 @@ uint32_t AppleObjCRuntimeV2::ParseClassInfoArray(const DataExtractor &data,
     ObjCISA isa = data.GetPointer(&offset);
 
     if (isa == 0) {
-      if (log)
+      if (log && log->GetVerbose())
         log->Printf(
             "AppleObjCRuntimeV2 found NULL isa, ignoring this class info");
       continue;

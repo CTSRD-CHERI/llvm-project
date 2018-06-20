@@ -545,6 +545,34 @@ define i1 @test36(i32 %x, i32 %y) {
   ret i1 %c
 }
 
+; PR36969 - https://bugs.llvm.org/show_bug.cgi?id=36969
+
+define i1 @ugt_sub(i32 %xsrc, i32 %y) {
+; CHECK-LABEL: @ugt_sub(
+; CHECK-NEXT:    [[X:%.*]] = udiv i32 [[XSRC:%.*]], 42
+; CHECK-NEXT:    [[CMP:%.*]] = icmp ult i32 [[X]], [[Y:%.*]]
+; CHECK-NEXT:    ret i1 [[CMP]]
+;
+  %x = udiv i32 %xsrc, 42 ; thwart complexity-based canonicalization
+  %sub = sub i32 %x, %y
+  %cmp = icmp ugt i32 %sub, %x
+  ret i1 %cmp
+}
+
+; Swap operands and predicate. Try a vector type to verify that works too.
+
+define <2 x i1> @ult_sub(<2 x i8> %xsrc, <2 x i8> %y) {
+; CHECK-LABEL: @ult_sub(
+; CHECK-NEXT:    [[X:%.*]] = udiv <2 x i8> [[XSRC:%.*]], <i8 42, i8 -42>
+; CHECK-NEXT:    [[CMP:%.*]] = icmp ult <2 x i8> [[X]], [[Y:%.*]]
+; CHECK-NEXT:    ret <2 x i1> [[CMP]]
+;
+  %x = udiv <2 x i8> %xsrc, <i8 42, i8 -42> ; thwart complexity-based canonicalization
+  %sub = sub <2 x i8> %x, %y
+  %cmp = icmp ult <2 x i8> %x, %sub
+  ret <2 x i1> %cmp
+}
+
 ; X - Y > X - Z -> Z > Y if there is no overflow.
 define i1 @test37(i32 %x, i32 %y, i32 %z) {
 ; CHECK-LABEL: @test37(
@@ -3311,31 +3339,5 @@ define <2 x i1> @PR36583(<2 x i8*>)  {
   %cast = ptrtoint <2 x i8*> %0 to <2 x i64>
   %res = icmp eq <2 x i64> %cast, zeroinitializer
   ret <2 x i1> %res
-}
-
-define i1 @doublecast_signbit_set(i64 %x) {
-; CHECK-LABEL: @doublecast_signbit_set(
-; CHECK-NEXT:    [[F:%.*]] = sitofp i64 [[X:%.*]] to float
-; CHECK-NEXT:    [[I:%.*]] = bitcast float [[F]] to i32
-; CHECK-NEXT:    [[R:%.*]] = icmp slt i32 [[I]], 0
-; CHECK-NEXT:    ret i1 [[R]]
-;
-  %f = sitofp i64 %x to float
-  %i = bitcast float %f to i32
-  %r = icmp slt i32 %i, 0
-  ret i1 %r
-}
-
-define <3 x i1> @doublecast_signbit_clear(<3 x i32> %x) {
-; CHECK-LABEL: @doublecast_signbit_clear(
-; CHECK-NEXT:    [[F:%.*]] = sitofp <3 x i32> [[X:%.*]] to <3 x double>
-; CHECK-NEXT:    [[I:%.*]] = bitcast <3 x double> [[F]] to <3 x i64>
-; CHECK-NEXT:    [[R:%.*]] = icmp sgt <3 x i64> [[I]], <i64 -1, i64 undef, i64 -1>
-; CHECK-NEXT:    ret <3 x i1> [[R]]
-;
-  %f = sitofp <3 x i32> %x to <3 x double>
-  %i = bitcast <3 x double> %f to <3 x i64>
-  %r = icmp sgt <3 x i64> %i, <i64 -1, i64 undef, i64 -1>
-  ret <3 x i1> %r
 }
 

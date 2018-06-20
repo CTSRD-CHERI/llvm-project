@@ -1006,8 +1006,7 @@ public:
   analyze(TokenAnnotator &Annotator,
           SmallVectorImpl<AnnotatedLine *> &AnnotatedLines,
           FormatTokenLexer &Tokens) override {
-    AffectedRangeMgr.computeAffectedLines(AnnotatedLines.begin(),
-                                          AnnotatedLines.end());
+    AffectedRangeMgr.computeAffectedLines(AnnotatedLines);
     tooling::Replacements Result;
     requoteJSStringLiteral(AnnotatedLines, Result);
     return {Result, 0};
@@ -1097,8 +1096,7 @@ public:
           FormatTokenLexer &Tokens) override {
     tooling::Replacements Result;
     deriveLocalStyle(AnnotatedLines);
-    AffectedRangeMgr.computeAffectedLines(AnnotatedLines.begin(),
-                                          AnnotatedLines.end());
+    AffectedRangeMgr.computeAffectedLines(AnnotatedLines);
     for (unsigned i = 0, e = AnnotatedLines.size(); i != e; ++i) {
       Annotator.calculateFormattingInformation(*AnnotatedLines[i]);
     }
@@ -1222,8 +1220,7 @@ public:
     // To determine if some redundant code is actually introduced by
     // replacements(e.g. deletions), we need to come up with a more
     // sophisticated way of computing affected ranges.
-    AffectedRangeMgr.computeAffectedLines(AnnotatedLines.begin(),
-                                          AnnotatedLines.end());
+    AffectedRangeMgr.computeAffectedLines(AnnotatedLines);
 
     checkEmptyNamespace(AnnotatedLines);
 
@@ -1465,6 +1462,7 @@ private:
         "NSAffineTransform",
         "NSArray",
         "NSAttributedString",
+        "NSBlockOperation",
         "NSBundle",
         "NSCache",
         "NSCalendar",
@@ -1480,6 +1478,7 @@ private:
         "NSIndexPath",
         "NSIndexSet",
         "NSInteger",
+        "NSInvocationOperation",
         "NSLocale",
         "NSMapTable",
         "NSMutableArray",
@@ -1494,9 +1493,13 @@ private:
         "NSNumber",
         "NSNumberFormatter",
         "NSObject",
+        "NSOperation",
+        "NSOperationQueue",
+        "NSOperationQueuePriority",
         "NSOrderedSet",
         "NSPoint",
         "NSPointerArray",
+        "NSQualityOfService",
         "NSRange",
         "NSRect",
         "NSRegularExpression",
@@ -1514,14 +1517,11 @@ private:
         "UIView",
     };
 
-    auto LineContainsObjCCode = [&Keywords](const AnnotatedLine &Line) {
-      for (const FormatToken *FormatTok = Line.First; FormatTok;
+    for (auto Line : AnnotatedLines) {
+      for (const FormatToken *FormatTok = Line->First; FormatTok;
            FormatTok = FormatTok->Next) {
         if ((FormatTok->Previous && FormatTok->Previous->is(tok::at) &&
-             (FormatTok->isObjCAtKeyword(tok::objc_interface) ||
-              FormatTok->isObjCAtKeyword(tok::objc_implementation) ||
-              FormatTok->isObjCAtKeyword(tok::objc_protocol) ||
-              FormatTok->isObjCAtKeyword(tok::objc_end) ||
+             (FormatTok->Tok.getObjCKeywordID() != tok::objc_not_keyword ||
               FormatTok->isOneOf(tok::numeric_constant, tok::l_square,
                                  tok::l_brace))) ||
             (FormatTok->Tok.isAnyIdentifier() &&
@@ -1535,14 +1535,7 @@ private:
                                TT_ObjCMethodSpecifier, TT_ObjCProperty)) {
           return true;
         }
-      }
-      return false;
-    };
-    for (auto Line : AnnotatedLines) {
-      if (LineContainsObjCCode(*Line))
-        return true;
-      for (auto ChildLine : Line->Children) {
-        if (LineContainsObjCCode(*ChildLine))
+        if (guessIsObjC(Line->Children, Keywords))
           return true;
       }
     }

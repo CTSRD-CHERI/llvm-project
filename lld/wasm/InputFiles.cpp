@@ -153,6 +153,8 @@ void ObjFile::parse() {
       CodeSection = &Section;
     else if (Section.Type == WASM_SEC_DATA)
       DataSection = &Section;
+    else if (Section.Type == WASM_SEC_CUSTOM)
+      CustomSections.emplace_back(make<InputSection>(Section, this));
   }
 
   TypeMap.resize(getWasmObj()->types().size());
@@ -185,7 +187,7 @@ void ObjFile::parse() {
 
   // Populate `Globals`.
   for (const WasmGlobal &G : WasmObj->globals())
-    Globals.emplace_back(make<InputGlobal>(G));
+    Globals.emplace_back(make<InputGlobal>(G, this));
 
   // Populate `Symbols` based on the WasmSymbols in the object.
   Symbols.reserve(WasmObj->getNumberOfSymbols());

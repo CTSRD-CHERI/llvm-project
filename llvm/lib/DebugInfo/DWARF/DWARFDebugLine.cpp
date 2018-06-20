@@ -17,6 +17,7 @@
 #include "llvm/DebugInfo/DWARF/DWARFRelocMap.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Support/Path.h"
+#include "llvm/Support/WithColor.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 #include <cassert>
@@ -318,10 +319,11 @@ bool DWARFDebugLine::Prologue::parse(const DWARFDataExtractor &DebugLineData,
     if (!parseV5DirFileTables(DebugLineData, OffsetPtr, EndPrologueOffset,
                               FormParams, Ctx, U, ContentTypes,
                               IncludeDirectories, FileNames)) {
-      fprintf(stderr,
-              "warning: parsing line table prologue at 0x%8.8" PRIx64
-              " found an invalid directory or file table description at"
-              " 0x%8.8" PRIx64 "\n", PrologueOffset, (uint64_t)*OffsetPtr);
+      WithColor::warning() << format(
+          "parsing line table prologue at 0x%8.8" PRIx64
+          " found an invalid directory or file table description at"
+          " 0x%8.8" PRIx64 "\n",
+          PrologueOffset, (uint64_t)*OffsetPtr);
       return false;
     }
   } else
@@ -329,11 +331,11 @@ bool DWARFDebugLine::Prologue::parse(const DWARFDataExtractor &DebugLineData,
                          ContentTypes, IncludeDirectories, FileNames);
 
   if (*OffsetPtr != EndPrologueOffset) {
-    fprintf(stderr,
-            "warning: parsing line table prologue at 0x%8.8" PRIx64
-            " should have ended at 0x%8.8" PRIx64
-            " but it ended at 0x%8.8" PRIx64 "\n",
-            PrologueOffset, EndPrologueOffset, (uint64_t)*OffsetPtr);
+    WithColor::warning() << format(
+        "parsing line table prologue at 0x%8.8" PRIx64
+        " should have ended at 0x%8.8" PRIx64 " but it ended at 0x%8.8" PRIx64
+        "\n",
+        PrologueOffset, EndPrologueOffset, (uint64_t)*OffsetPtr);
     return false;
   }
   return true;
@@ -552,9 +554,10 @@ bool DWARFDebugLine::LineTable::parse(DWARFDataExtractor &DebugLineData,
         if (DebugLineData.getAddressSize() == 0)
           DebugLineData.setAddressSize(Len - 1);
         else if (DebugLineData.getAddressSize() != Len - 1) {
-          fprintf(stderr, "Mismatching address size at offset 0x%8.8" PRIx32
-                  " expected 0x%2.2" PRIx32 " found 0x%2.2" PRIx64 "\n",
-                  ExtOffset, DebugLineData.getAddressSize(), Len - 1);
+          WithColor::warning()
+              << format("mismatching address size at offset 0x%8.8" PRIx32
+                        " expected 0x%2.2" PRIx8 " found 0x%2.2" PRIx64 "\n",
+                        ExtOffset, DebugLineData.getAddressSize(), Len - 1);
           // Skip the rest of the line-number program.
           *OffsetPtr = EndOffset;
           return false;
@@ -619,9 +622,10 @@ bool DWARFDebugLine::LineTable::parse(DWARFDataExtractor &DebugLineData,
       // Make sure the stated and parsed lengths are the same.
       // Otherwise we have an unparseable line-number program.
       if (*OffsetPtr - ExtOffset != Len) {
-        fprintf(stderr, "Unexpected line op length at offset 0x%8.8" PRIx32
-                " expected 0x%2.2" PRIx64 " found 0x%2.2" PRIx32 "\n",
-                ExtOffset, Len, *OffsetPtr - ExtOffset);
+        WithColor::warning()
+            << format("unexpected line op length at offset 0x%8.8" PRIx32
+                      " expected 0x%2.2" PRIx64 " found 0x%2.2" PRIx32 "\n",
+                      ExtOffset, Len, *OffsetPtr - ExtOffset);
         // Skip the rest of the line-number program.
         *OffsetPtr = EndOffset;
         return false;
@@ -828,14 +832,13 @@ bool DWARFDebugLine::LineTable::parse(DWARFDataExtractor &DebugLineData,
       *OS << "\n";
   }
 
-  if (!State.Sequence.Empty) {
-    fprintf(stderr, "warning: last sequence in debug line table is not"
-                    "terminated!\n");
-  }
+  if (!State.Sequence.Empty)
+    WithColor::warning() << "last sequence in debug line table is not"
+                            "terminated!\n";
 
   // Sort all sequences so that address lookup will work faster.
   if (!Sequences.empty()) {
-    std::sort(Sequences.begin(), Sequences.end(), Sequence::orderByLowPC);
+    llvm::sort(Sequences.begin(), Sequences.end(), Sequence::orderByLowPC);
     // Note: actually, instruction address ranges of sequences should not
     // overlap (in shared objects and executables). If they do, the address
     // lookup would still work, though, but result would be ambiguous.

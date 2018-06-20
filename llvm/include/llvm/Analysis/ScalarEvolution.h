@@ -764,6 +764,12 @@ public:
   /// loop bodies.
   void forgetLoop(const Loop *L);
 
+  // This method invokes forgetLoop for the outermost loop of the given loop
+  // \p L, making ScalarEvolution forget about all this subtree. This needs to
+  // be done whenever we make a transform that may affect the parameters of the
+  // outer loop, such as exit counts for branches.
+  void forgetTopmostLoop(const Loop *L);
+
   /// This method should be called by the client when it has changed a value
   /// in a way that may effect its value, or which may disconnect it from a
   /// def-use chain linking it to a loop.
@@ -1142,6 +1148,9 @@ private:
   /// Mark SCEVUnknown Phis currently being processed by getRangeRef.
   SmallPtrSet<const PHINode *, 6> PendingPhiRanges;
 
+  // Mark SCEVUnknown Phis currently being processed by isImpliedViaMerge.
+  SmallPtrSet<const PHINode *, 6> PendingMerges;
+
   /// Set to true by isLoopBackedgeGuardedByCond when we're walking the set of
   /// conditions dominating the backedge of a loop.
   bool WalkingBEDominatingConds = false;
@@ -1288,7 +1297,7 @@ private:
     /// If we allowed SCEV predicates to be generated when populating this
     /// vector, this information can contain them and therefore a
     /// SCEVPredicate argument should be added to getExact.
-    const SCEV *getExact(ScalarEvolution *SE,
+    const SCEV *getExact(const Loop *L, ScalarEvolution *SE,
                          SCEVUnionPredicate *Predicates = nullptr) const;
 
     /// Return the number of times this loop exit may fall through to the back
@@ -1666,6 +1675,18 @@ private:
                                           const SCEV *LHS, const SCEV *RHS,
                                           const SCEV *FoundLHS,
                                           const SCEV *FoundRHS);
+
+  /// Test whether the condition described by Pred, LHS, and RHS is true
+  /// whenever the condition described by Pred, FoundLHS, and FoundRHS is
+  /// true.
+  ///
+  /// This routine tries to figure out predicate for Phis which are SCEVUnknown
+  /// if it is true for every possible incoming value from their respective
+  /// basic blocks.
+  bool isImpliedViaMerge(ICmpInst::Predicate Pred,
+                         const SCEV *LHS, const SCEV *RHS,
+                         const SCEV *FoundLHS, const SCEV *FoundRHS,
+                         unsigned Depth);
 
   /// If we know that the specified Phi is in the header of its containing
   /// loop, we know the loop executes a constant number of times, and the PHI

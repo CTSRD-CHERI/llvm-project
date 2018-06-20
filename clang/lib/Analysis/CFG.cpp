@@ -736,12 +736,12 @@ private:
     if (BuildOpts.AddRichCXXConstructors) {
       if (const ConstructionContextLayer *Layer =
               ConstructionContextMap.lookup(CE)) {
-        const ConstructionContext *CC =
-            ConstructionContext::createFromLayers(cfg->getBumpVectorContext(),
-                                                  Layer);
-        B->appendConstructor(CE, CC, cfg->getBumpVectorContext());
         cleanupConstructionContext(CE);
-        return;
+        if (const auto *CC = ConstructionContext::createFromLayers(
+                cfg->getBumpVectorContext(), Layer)) {
+          B->appendConstructor(CE, CC, cfg->getBumpVectorContext());
+          return;
+        }
       }
     }
 
@@ -757,12 +757,12 @@ private:
       if (CFGCXXRecordTypedCall::isCXXRecordTypedCall(CE, *Context)) {
         if (const ConstructionContextLayer *Layer =
                 ConstructionContextMap.lookup(CE)) {
-          const ConstructionContext *CC =
-              ConstructionContext::createFromLayers(cfg->getBumpVectorContext(),
-                                                    Layer);
-          B->appendCXXRecordTypedCall(CE, CC, cfg->getBumpVectorContext());
           cleanupConstructionContext(CE);
-          return;
+          if (const auto *CC = ConstructionContext::createFromLayers(
+                  cfg->getBumpVectorContext(), Layer)) {
+            B->appendCXXRecordTypedCall(CE, CC, cfg->getBumpVectorContext());
+            return;
+          }
         }
       }
     }
@@ -1302,6 +1302,15 @@ void CFGBuilder::findConstructionContexts(
   }
   case Stmt::ConditionalOperatorClass: {
     auto *CO = cast<ConditionalOperator>(Child);
+    if (!dyn_cast_or_null<MaterializeTemporaryExpr>(Layer->getTriggerStmt())) {
+      // If the object returned by the conditional operator is not going to be a
+      // temporary object that needs to be immediately materialized, then
+      // it must be C++17 with its mandatory copy elision. Do not yet promise
+      // to support this case.
+      assert(!CO->getType()->getAsCXXRecordDecl() || CO->isGLValue() ||
+             Context->getLangOpts().CPlusPlus17);
+      break;
+    }
     findConstructionContexts(Layer, CO->getLHS());
     findConstructionContexts(Layer, CO->getRHS());
     break;
@@ -2358,6 +2367,13 @@ CFGBlock *CFGBuilder::VisitCallExpr(CallExpr *C, AddStmtChoice asc) {
     if (!boundType.isNull()) calleeType = boundType;
   }
 
+  // FIXME: Once actually implemented, this construction context layer should
+  // include the number of the argument as well.
+  for (auto Arg: C->arguments()) {
+    findConstructionContexts(
+        ConstructionContextLayer::create(cfg->getBumpVectorContext(), C), Arg);
+  }
+
   // If this is a call to a no-return function, this stops the block here.
   bool NoReturn = getFunctionExtInfo(*calleeType).getNoReturn();
 
@@ -3153,7 +3169,13 @@ CFGBlock *CFGBuilder::VisitForStmt(ForStmt *F) {
       if (VarDecl *VD = F->getConditionVariable()) {
         if (Expr *Init = VD->getInit()) {
           autoCreateBlock();
-          appendStmt(Block, F->getConditionVariableDeclStmt());
+          const DeclStmt *DS = F->getConditionVariableDeclStmt();
+          assert(DS->isSingleDecl());
+          findConstructionContexts(
+              ConstructionContextLayer::create(cfg->getBumpVectorContext(),
+                                               const_cast<DeclStmt *>(DS)),
+              Init);
+          appendStmt(Block, DS);
           EntryConditionBlock = addStmt(Init);
           assert(Block == EntryConditionBlock);
           maybeAddScopeBeginForVarDecl(EntryConditionBlock, VD, C);
@@ -3478,7 +3500,13 @@ CFGBlock *CFGBuilder::VisitWhileStmt(WhileStmt *W) {
     if (VarDecl *VD = W->getConditionVariable()) {
       if (Expr *Init = VD->getInit()) {
         autoCreateBlock();
-        appendStmt(Block, W->getConditionVariableDeclStmt());
+        const DeclStmt *DS = W->getConditionVariableDeclStmt();
+        assert(DS->isSingleDecl());
+        findConstructionContexts(
+            ConstructionContextLayer::create(cfg->getBumpVectorContext(),
+                                             const_cast<DeclStmt *>(DS)),
+            Init);
+        appendStmt(Block, DS);
         EntryConditionBlock = addStmt(Init);
         assert(Block == EntryConditionBlock);
         maybeAddScopeBeginForVarDecl(EntryConditionBlock, VD, C);

@@ -26,6 +26,14 @@
 //    of vectorization. It decides on the optimal vector width, which
 //    can be one, if vectorization is not profitable.
 //
+// There is a development effort going on to migrate loop vectorizer to the
+// VPlan infrastructure and to introduce outer loop vectorization support (see
+// docs/Proposal/VectorizationPlan.rst and
+// http://lists.llvm.org/pipermail/llvm-dev/2017-December/119523.html). For this
+// purpose, we temporarily introduced the VPlan-native vectorization path: an
+// alternative vectorization path that is natively implemented on top of the
+// VPlan infrastructure. See EnableVPlanNativePath for enabling.
+//
 //===----------------------------------------------------------------------===//
 //
 // The reduction-variable vectorization is based on the paper:
@@ -250,6 +258,11 @@ static cl::opt<unsigned> PragmaVectorizeSCEVCheckThreshold(
     "pragma-vectorize-scev-check-threshold", cl::init(128), cl::Hidden,
     cl::desc("The maximum number of SCEV checks allowed with a "
              "vectorize(enable) pragma"));
+
+static cl::opt<bool> EnableVPlanNativePath(
+    "enable-vplan-native-path", cl::init(false), cl::Hidden,
+    cl::desc("Enable VPlan-native vectorization path with "
+             "support for outer loop vectorization."));
 
 /// Create an analysis remark that explains why vectorization failed
 ///
@@ -979,8 +992,9 @@ namespace {
 class InterleavedAccessInfo {
 public:
   InterleavedAccessInfo(PredicatedScalarEvolution &PSE, Loop *L,
-                        DominatorTree *DT, LoopInfo *LI)
-      : PSE(PSE), TheLoop(L), DT(DT), LI(LI) {}
+                        DominatorTree *DT, LoopInfo *LI,
+                        const LoopAccessInfo *LAI)
+    : PSE(PSE), TheLoop(L), DT(DT), LI(LI), LAI(LAI) {}
 
   ~InterleavedAccessInfo() {
     SmallSet<InterleaveGroup *, 4> DelSet;
@@ -993,7 +1007,7 @@ public:
 
   /// \brief Analyze the interleaved accesses and collect them in interleave
   /// groups. Substitute symbolic strides using \p Strides.
-  void analyzeInterleaving(const ValueToValueMap &Strides);
+  void analyzeInterleaving();
 
   /// \brief Check if \p Instr belongs to any interleave group.
   bool isInterleaved(Instruction *Instr) const {
@@ -1013,9 +1027,6 @@ public:
   /// out-of-bounds requires a scalar epilogue iteration for correctness.
   bool requiresScalarEpilogue() const { return RequiresScalarEpilogue; }
 
-  /// \brief Initialize the LoopAccessInfo used for dependence checking.
-  void setLAI(const LoopAccessInfo *Info) { LAI = Info; }
-
 private:
   /// A wrapper around ScalarEvolution, used to add runtime SCEV checks.
   /// Simplifies SCEV expressions in the context of existing SCEV assumptions.
@@ -1026,7 +1037,7 @@ private:
   Loop *TheLoop;
   DominatorTree *DT;
   LoopInfo *LI;
-  const LoopAccessInfo *LAI = nullptr;
+  const LoopAccessInfo *LAI;
 
   /// True if the loop may contain non-reversed interleaved groups with
   /// out-of-bounds accesses. We ensure we don't speculatively access memory
@@ -1518,13 +1529,11 @@ public:
   LoopVectorizationLegality(
       Loop *L, PredicatedScalarEvolution &PSE, DominatorTree *DT,
       TargetLibraryInfo *TLI, AliasAnalysis *AA, Function *F,
-      const TargetTransformInfo *TTI,
       std::function<const LoopAccessInfo &(Loop &)> *GetLAA, LoopInfo *LI,
       OptimizationRemarkEmitter *ORE, LoopVectorizationRequirements *R,
       LoopVectorizeHints *H, DemandedBits *DB, AssumptionCache *AC)
-      : TheLoop(L), PSE(PSE), TLI(TLI), TTI(TTI), DT(DT), GetLAA(GetLAA),
-        ORE(ORE), InterleaveInfo(PSE, L, DT, LI), Requirements(R), Hints(H),
-        DB(DB), AC(AC) {}
+      : TheLoop(L), LI(LI), PSE(PSE), TLI(TLI), DT(DT), GetLAA(GetLAA),
+        ORE(ORE), Requirements(R), Hints(H), DB(DB), AC(AC) {}
 
   /// ReductionList contains the reduction descriptors for all
   /// of the reductions that were found in the loop.
@@ -1606,22 +1615,6 @@ public:
 
   const LoopAccessInfo *getLAI() const { return LAI; }
 
-  /// \brief Check if \p Instr belongs to any interleaved access group.
-  bool isAccessInterleaved(Instruction *Instr) {
-    return InterleaveInfo.isInterleaved(Instr);
-  }
-
-  /// \brief Get the interleaved access group that \p Instr belongs to.
-  const InterleaveGroup *getInterleavedAccessGroup(Instruction *Instr) {
-    return InterleaveInfo.getInterleaveGroup(Instr);
-  }
-
-  /// \brief Returns true if an interleaved group requires a scalar iteration
-  /// to handle accesses with gaps.
-  bool requiresScalarEpilogue() const {
-    return InterleaveInfo.requiresScalarEpilogue();
-  }
-
   unsigned getMaxSafeDepDistBytes() { return LAI->getMaxSafeDepDistBytes(); }
 
   uint64_t getMaxSafeRegisterWidth() const {
@@ -1641,6 +1634,15 @@ public:
   bool hasFunNoNaNAttr() const { return HasFunNoNaNAttr; }
 
 private:
+  /// Return true if the pre-header, exiting and latch blocks of \p Lp and all
+  /// its nested loops are considered legal for vectorization. These legal
+  /// checks are common for inner and outer loop vectorization.
+  bool canVectorizeLoopNestCFG(Loop *Lp);
+
+  /// Return true if the pre-header, exiting and latch blocks of \p Lp
+  /// (non-recursive) are considered legal for vectorization.
+  bool canVectorizeLoopCFG(Loop *Lp);
+
   /// Check if a single basic block loop is vectorizable.
   /// At this point we know that this is a loop with a constant trip count
   /// and we only need to check individual instructions.
@@ -1655,6 +1657,10 @@ private:
   /// Return true if we can vectorize this loop using the IF-conversion
   /// transformation.
   bool canVectorizeWithIfConvert();
+
+  /// Return true if we can vectorize this outer loop. The method performs
+  /// specific checks for outer loop vectorization.
+  bool canVectorizeOuterLoop();
 
   /// Return true if all of the instructions in the block can be speculatively
   /// executed. \p SafePtrs is a list of addresses that are known to be legal
@@ -1692,6 +1698,9 @@ private:
   /// The loop that we evaluate.
   Loop *TheLoop;
 
+  /// Loop Info analysis.
+  LoopInfo *LI;
+
   /// A wrapper around ScalarEvolution used to add runtime SCEV checks.
   /// Applies dynamic knowledge to simplify SCEV expressions in the context
   /// of existing SCEV assumptions. The analysis will also add a minimal set
@@ -1701,9 +1710,6 @@ private:
 
   /// Target Library Info.
   TargetLibraryInfo *TLI;
-
-  /// Target Transform Info
-  const TargetTransformInfo *TTI;
 
   /// Dominator Tree.
   DominatorTree *DT;
@@ -1717,10 +1723,6 @@ private:
 
   /// Interface to emit optimization remarks.
   OptimizationRemarkEmitter *ORE;
-
-  /// The interleave access information contains groups of interleaved accesses
-  /// with the same stride and close to each other.
-  InterleavedAccessInfo InterleaveInfo;
 
   //  ---  vectorization state --- //
 
@@ -1793,9 +1795,10 @@ public:
                              const TargetLibraryInfo *TLI, DemandedBits *DB,
                              AssumptionCache *AC,
                              OptimizationRemarkEmitter *ORE, const Function *F,
-                             const LoopVectorizeHints *Hints)
+                             const LoopVectorizeHints *Hints,
+                             InterleavedAccessInfo &IAI)
       : TheLoop(L), PSE(PSE), LI(LI), Legal(Legal), TTI(TTI), TLI(TLI), DB(DB),
-        AC(AC), ORE(ORE), TheFunction(F), Hints(Hints) {}
+    AC(AC), ORE(ORE), TheFunction(F), Hints(Hints), InterleaveInfo(IAI) {}
 
   /// \return An upper bound for the vectorization factor, or None if
   /// vectorization should be avoided up front.
@@ -2035,6 +2038,22 @@ public:
   /// access that can be widened.
   bool memoryInstructionCanBeWidened(Instruction *I, unsigned VF = 1);
 
+  /// \brief Check if \p Instr belongs to any interleaved access group.
+  bool isAccessInterleaved(Instruction *Instr) {
+    return InterleaveInfo.isInterleaved(Instr);
+  }
+
+  /// \brief Get the interleaved access group that \p Instr belongs to.
+  const InterleaveGroup *getInterleavedAccessGroup(Instruction *Instr) {
+    return InterleaveInfo.getInterleaveGroup(Instr);
+  }
+
+  /// \brief Returns true if an interleaved group requires a scalar iteration
+  /// to handle accesses with gaps.
+  bool requiresScalarEpilogue() const {
+    return InterleaveInfo.requiresScalarEpilogue();
+  }
+
 private:
   unsigned NumPredStores = 0;
 
@@ -2200,6 +2219,10 @@ public:
   /// Loop Vectorize Hint.
   const LoopVectorizeHints *Hints;
 
+  /// The interleave access information contains groups of interleaved accesses
+  /// with the same stride and close to each other.
+  InterleavedAccessInfo &InterleaveInfo;
+
   /// Values to ignore in the cost model.
   SmallPtrSet<const Value *, 16> ValuesToIgnore;
 
@@ -2281,17 +2304,73 @@ private:
 
 } // end anonymous namespace
 
-static void addAcyclicInnerLoop(Loop &L, LoopInfo &LI,
-                                SmallVectorImpl<Loop *> &V) {
-  if (L.empty()) {
+// Return true if \p OuterLp is an outer loop annotated with hints for explicit
+// vectorization. The loop needs to be annotated with #pragma omp simd
+// simdlen(#) or #pragma clang vectorize(enable) vectorize_width(#). If the
+// vector length information is not provided, vectorization is not considered
+// explicit. Interleave hints are not allowed either. These limitations will be
+// relaxed in the future.
+// Please, note that we are currently forced to abuse the pragma 'clang
+// vectorize' semantics. This pragma provides *auto-vectorization hints*
+// (i.e., LV must check that vectorization is legal) whereas pragma 'omp simd'
+// provides *explicit vectorization hints* (LV can bypass legal checks and
+// assume that vectorization is legal). However, both hints are implemented
+// using the same metadata (llvm.loop.vectorize, processed by
+// LoopVectorizeHints). This will be fixed in the future when the native IR
+// representation for pragma 'omp simd' is introduced.
+static bool isExplicitVecOuterLoop(Loop *OuterLp,
+                                   OptimizationRemarkEmitter *ORE) {
+  assert(!OuterLp->empty() && "This is not an outer loop");
+  LoopVectorizeHints Hints(OuterLp, true /*DisableInterleaving*/, *ORE);
+
+  // Only outer loops with an explicit vectorization hint are supported.
+  // Unannotated outer loops are ignored.
+  if (Hints.getForce() == LoopVectorizeHints::FK_Undefined)
+    return false;
+
+  Function *Fn = OuterLp->getHeader()->getParent();
+  if (!Hints.allowVectorization(Fn, OuterLp, false /*AlwaysVectorize*/)) {
+    DEBUG(dbgs() << "LV: Loop hints prevent outer loop vectorization.\n");
+    return false;
+  }
+
+  if (!Hints.getWidth()) {
+    DEBUG(dbgs() << "LV: Not vectorizing: No user vector width.\n");
+    emitMissedWarning(Fn, OuterLp, Hints, ORE);
+    return false;
+  }
+
+  if (Hints.getInterleave() > 1) {
+    // TODO: Interleave support is future work.
+    DEBUG(dbgs() << "LV: Not vectorizing: Interleave is not supported for "
+                    "outer loops.\n");
+    emitMissedWarning(Fn, OuterLp, Hints, ORE);
+    return false;
+  }
+
+  return true;
+}
+
+static void collectSupportedLoops(Loop &L, LoopInfo *LI,
+                                  OptimizationRemarkEmitter *ORE,
+                                  SmallVectorImpl<Loop *> &V) {
+  // Collect inner loops and outer loops without irreducible control flow. For
+  // now, only collect outer loops that have explicit vectorization hints.
+  if (L.empty() || (EnableVPlanNativePath && isExplicitVecOuterLoop(&L, ORE))) {
     LoopBlocksRPO RPOT(&L);
-    RPOT.perform(&LI);
-    if (!containsIrreducibleCFG<const BasicBlock *>(RPOT, LI))
+    RPOT.perform(LI);
+    if (!containsIrreducibleCFG<const BasicBlock *>(RPOT, *LI)) {
       V.push_back(&L);
-    return;
+      // TODO: Collect inner loops inside marked outer loops in case
+      // vectorization fails for the outer loop. Do not invoke
+      // 'containsIrreducibleCFG' again for inner loops when the outer loop is
+      // already known to be reducible. We can use an inherited attribute for
+      // that.
+      return;
+    }
   }
   for (Loop *InnerL : L)
-    addAcyclicInnerLoop(*InnerL, LI, V);
+    collectSupportedLoops(*InnerL, LI, ORE, V);
 }
 
 namespace {
@@ -2861,7 +2940,7 @@ Value *InnerLoopVectorizer::reverseVector(Value *Vec) {
 //        <0, 4, 8, 1, 5, 9, 2, 6, 10, 3, 7, 11>    ; Interleave R,G,B elements
 //   store <12 x i32> %interleaved.vec              ; Write 4 tuples of R,G,B
 void InnerLoopVectorizer::vectorizeInterleaveGroup(Instruction *Instr) {
-  const InterleaveGroup *Group = Legal->getInterleavedAccessGroup(Instr);
+  const InterleaveGroup *Group = Cost->getInterleavedAccessGroup(Instr);
   assert(Group && "Fail to get an interleaved access group.");
 
   // Skip if current instruction is not the insert position.
@@ -3270,7 +3349,7 @@ Value *InnerLoopVectorizer::getOrCreateVectorTripCount(Loop *L) {
   // does not evenly divide the trip count, no adjustment is necessary since
   // there will already be scalar iterations. Note that the minimum iterations
   // check ensures that N >= Step.
-  if (VF > 1 && Legal->requiresScalarEpilogue()) {
+  if (VF > 1 && Cost->requiresScalarEpilogue()) {
     auto *IsZero = Builder.CreateICmpEQ(R, ConstantInt::get(R->getType(), 0));
     R = Builder.CreateSelect(IsZero, Step, R);
   }
@@ -3321,8 +3400,8 @@ void InnerLoopVectorizer::emitMinimumIterationCountCheck(Loop *L,
   // vector trip count is zero. This check also covers the case where adding one
   // to the backedge-taken count overflowed leading to an incorrect trip count
   // of zero. In this case we will also jump to the scalar loop.
-  auto P = Legal->requiresScalarEpilogue() ? ICmpInst::ICMP_ULE
-                                           : ICmpInst::ICMP_ULT;
+  auto P = Cost->requiresScalarEpilogue() ? ICmpInst::ICMP_ULE
+                                          : ICmpInst::ICMP_ULT;
   Value *CheckMinIters = Builder.CreateICmp(
       P, Count, ConstantInt::get(Count->getType(), VF * UF), "min.iters.check");
 
@@ -4838,15 +4917,24 @@ bool LoopVectorizationLegality::canVectorizeWithIfConvert() {
   return true;
 }
 
-bool LoopVectorizationLegality::canVectorize() {
+// Helper function to canVectorizeLoopNestCFG.
+bool LoopVectorizationLegality::canVectorizeLoopCFG(Loop *Lp) {
+  assert((EnableVPlanNativePath || Lp->empty()) &&
+         "VPlan-native path is not enabled.");
+
+  // TODO: ORE should be improved to show more accurate information when an
+  // outer loop can't be vectorized because a nested loop is not understood or
+  // legal. Something like: "outer_loop_location: loop not vectorized:
+  // (inner_loop_location) loop control flow is not understood by vectorizer".
+
   // Store the result and return it at the end instead of exiting early, in case
   // allowExtraAnalysis is used to report multiple reasons for not vectorizing.
   bool Result = true;
-
   bool DoExtraAnalysis = ORE->allowExtraAnalysis(DEBUG_TYPE);
+
   // We must have a loop in canonical form. Loops with indirectbr in them cannot
   // be canonicalized.
-  if (!TheLoop->getLoopPreheader()) {
+  if (!Lp->getLoopPreheader()) {
     DEBUG(dbgs() << "LV: Loop doesn't have a legal pre-header.\n");
     ORE->emit(createMissedAnalysis("CFGNotUnderstood")
               << "loop control flow is not understood by vectorizer");
@@ -4856,21 +4944,8 @@ bool LoopVectorizationLegality::canVectorize() {
       return false;
   }
 
-  // FIXME: The code is currently dead, since the loop gets sent to
-  // LoopVectorizationLegality is already an innermost loop.
-  //
-  // We can only vectorize innermost loops.
-  if (!TheLoop->empty()) {
-    ORE->emit(createMissedAnalysis("NotInnermostLoop")
-              << "loop is not the innermost loop");
-    if (DoExtraAnalysis)
-      Result = false;
-    else
-      return false;
-  }
-
   // We must have a single backedge.
-  if (TheLoop->getNumBackEdges() != 1) {
+  if (Lp->getNumBackEdges() != 1) {
     ORE->emit(createMissedAnalysis("CFGNotUnderstood")
               << "loop control flow is not understood by vectorizer");
     if (DoExtraAnalysis)
@@ -4880,7 +4955,7 @@ bool LoopVectorizationLegality::canVectorize() {
   }
 
   // We must have a single exiting block.
-  if (!TheLoop->getExitingBlock()) {
+  if (!Lp->getExitingBlock()) {
     ORE->emit(createMissedAnalysis("CFGNotUnderstood")
               << "loop control flow is not understood by vectorizer");
     if (DoExtraAnalysis)
@@ -4892,9 +4967,52 @@ bool LoopVectorizationLegality::canVectorize() {
   // We only handle bottom-tested loops, i.e. loop in which the condition is
   // checked at the end of each iteration. With that we can assume that all
   // instructions in the loop are executed the same number of times.
-  if (TheLoop->getExitingBlock() != TheLoop->getLoopLatch()) {
+  if (Lp->getExitingBlock() != Lp->getLoopLatch()) {
     ORE->emit(createMissedAnalysis("CFGNotUnderstood")
               << "loop control flow is not understood by vectorizer");
+    if (DoExtraAnalysis)
+      Result = false;
+    else
+      return false;
+  }
+
+  return Result;
+}
+
+bool LoopVectorizationLegality::canVectorizeLoopNestCFG(Loop *Lp) {
+  // Store the result and return it at the end instead of exiting early, in case
+  // allowExtraAnalysis is used to report multiple reasons for not vectorizing.
+  bool Result = true;
+  bool DoExtraAnalysis = ORE->allowExtraAnalysis(DEBUG_TYPE);
+  if (!canVectorizeLoopCFG(Lp)) {
+    if (DoExtraAnalysis)
+      Result = false;
+    else
+      return false;
+  }
+
+  // Recursively check whether the loop control flow of nested loops is
+  // understood.
+  for (Loop *SubLp : *Lp)
+    if (!canVectorizeLoopNestCFG(SubLp)) {
+      if (DoExtraAnalysis)
+        Result = false;
+      else
+        return false;
+    }
+
+  return Result;
+}
+
+bool LoopVectorizationLegality::canVectorize() {
+  // Store the result and return it at the end instead of exiting early, in case
+  // allowExtraAnalysis is used to report multiple reasons for not vectorizing.
+  bool Result = true;
+
+  bool DoExtraAnalysis = ORE->allowExtraAnalysis(DEBUG_TYPE);
+  // Check whether the loop-related control flow in the loop nest is expected by
+  // vectorizer.
+  if (!canVectorizeLoopNestCFG(TheLoop)) {
     if (DoExtraAnalysis)
       Result = false;
     else
@@ -4905,6 +5023,23 @@ bool LoopVectorizationLegality::canVectorize() {
   DEBUG(dbgs() << "LV: Found a loop: " << TheLoop->getHeader()->getName()
                << '\n');
 
+  // Specific checks for outer loops. We skip the remaining legal checks at this
+  // point because they don't support outer loops.
+  if (!TheLoop->empty()) {
+    assert(EnableVPlanNativePath && "VPlan-native path is not enabled.");
+
+    if (!canVectorizeOuterLoop()) {
+      DEBUG(dbgs() << "LV: Not vectorizing: Unsupported outer loop.\n");
+      // TODO: Implement DoExtraAnalysis when subsequent legal checks support
+      // outer loops.
+      return false;
+    }
+
+    DEBUG(dbgs() << "LV: We can vectorize this outer loop!\n");
+    return Result;
+  }
+
+  assert(TheLoop->empty() && "Inner loop expected.");
   // Check if we can if-convert non-single-bb loops.
   unsigned NumBlocks = TheLoop->getNumBlocks();
   if (NumBlocks != 1 && !canVectorizeWithIfConvert()) {
@@ -4939,16 +5074,6 @@ bool LoopVectorizationLegality::canVectorize() {
                        : "")
                << "!\n");
 
-  bool UseInterleaved = TTI->enableInterleavedAccessVectorization();
-
-  // If an override option has been passed in for interleaved accesses, use it.
-  if (EnableInterleavedMemAccesses.getNumOccurrences() > 0)
-    UseInterleaved = EnableInterleavedMemAccesses;
-
-  // Analyze interleaved memory accesses.
-  if (UseInterleaved)
-    InterleaveInfo.analyzeInterleaving(*getSymbolicStrides());
-
   unsigned SCEVThreshold = VectorizeSCEVCheckThreshold;
   if (Hints->getForce() == LoopVectorizeHints::FK_Enabled)
     SCEVThreshold = PragmaVectorizeSCEVCheckThreshold;
@@ -4968,6 +5093,140 @@ bool LoopVectorizationLegality::canVectorize() {
   // we can vectorize, and at this point we don't have any other mem analysis
   // which may limit our maximum vectorization factor, so just return true with
   // no restrictions.
+  return Result;
+}
+
+// Return true if the inner loop \p Lp is uniform with regard to the outer loop
+// \p OuterLp (i.e., if the outer loop is vectorized, all the vector lanes
+// executing the inner loop will execute the same iterations). This check is
+// very constrained for now but it will be relaxed in the future. \p Lp is
+// considered uniform if it meets all the following conditions:
+//   1) it has a canonical IV (starting from 0 and with stride 1),
+//   2) its latch terminator is a conditional branch and,
+//   3) its latch condition is a compare instruction whose operands are the
+//      canonical IV and an OuterLp invariant.
+// This check doesn't take into account the uniformity of other conditions not
+// related to the loop latch because they don't affect the loop uniformity.
+//
+// NOTE: We decided to keep all these checks and its associated documentation
+// together so that we can easily have a picture of the current supported loop
+// nests. However, some of the current checks don't depend on \p OuterLp and
+// would be redundantly executed for each \p Lp if we invoked this function for
+// different candidate outer loops. This is not the case for now because we
+// don't currently have the infrastructure to evaluate multiple candidate outer
+// loops and \p OuterLp will be a fixed parameter while we only support explicit
+// outer loop vectorization. It's also very likely that these checks go away
+// before introducing the aforementioned infrastructure. However, if this is not
+// the case, we should move the \p OuterLp independent checks to a separate
+// function that is only executed once for each \p Lp.
+static bool isUniformLoop(Loop *Lp, Loop *OuterLp) {
+  assert(Lp->getLoopLatch() && "Expected loop with a single latch.");
+
+  // If Lp is the outer loop, it's uniform by definition.
+  if (Lp == OuterLp)
+    return true;
+  assert(OuterLp->contains(Lp) && "OuterLp must contain Lp.");
+
+  // 1.
+  PHINode *IV = Lp->getCanonicalInductionVariable();
+  if (!IV) {
+    DEBUG(dbgs() << "LV: Canonical IV not found.\n");
+    return false;
+  }
+
+  // 2.
+  BasicBlock *Latch = Lp->getLoopLatch();
+  auto *LatchBr = dyn_cast<BranchInst>(Latch->getTerminator());
+  if (!LatchBr || LatchBr->isUnconditional()) {
+    DEBUG(dbgs() << "LV: Unsupported loop latch branch.\n");
+    return false;
+  }
+
+  // 3.
+  auto *LatchCmp = dyn_cast<CmpInst>(LatchBr->getCondition());
+  if (!LatchCmp) {
+    DEBUG(dbgs() << "LV: Loop latch condition is not a compare instruction.\n");
+    return false;
+  }
+
+  Value *CondOp0 = LatchCmp->getOperand(0);
+  Value *CondOp1 = LatchCmp->getOperand(1);
+  Value *IVUpdate = IV->getIncomingValueForBlock(Latch);
+  if (!(CondOp0 == IVUpdate && OuterLp->isLoopInvariant(CondOp1)) &&
+      !(CondOp1 == IVUpdate && OuterLp->isLoopInvariant(CondOp0))) {
+    DEBUG(dbgs() << "LV: Loop latch condition is not uniform.\n");
+    return false;
+  }
+
+  return true;
+}
+
+// Return true if \p Lp and all its nested loops are uniform with regard to \p
+// OuterLp.
+static bool isUniformLoopNest(Loop *Lp, Loop *OuterLp) {
+  if (!isUniformLoop(Lp, OuterLp))
+    return false;
+
+  // Check if nested loops are uniform.
+  for (Loop *SubLp : *Lp)
+    if (!isUniformLoopNest(SubLp, OuterLp))
+      return false;
+
+  return true;
+}
+
+bool LoopVectorizationLegality::canVectorizeOuterLoop() {
+  assert(!TheLoop->empty() && "We are not vectorizing an outer loop.");
+  // Store the result and return it at the end instead of exiting early, in case
+  // allowExtraAnalysis is used to report multiple reasons for not vectorizing.
+  bool Result = true;
+  bool DoExtraAnalysis = ORE->allowExtraAnalysis(DEBUG_TYPE);
+
+  for (BasicBlock *BB : TheLoop->blocks()) {
+    // Check whether the BB terminator is a BranchInst. Any other terminator is
+    // not supported yet.
+    auto *Br = dyn_cast<BranchInst>(BB->getTerminator());
+    if (!Br) {
+      DEBUG(dbgs() << "LV: Unsupported basic block terminator.\n");
+      ORE->emit(createMissedAnalysis("CFGNotUnderstood")
+                << "loop control flow is not understood by vectorizer");
+      if (DoExtraAnalysis)
+        Result = false;
+      else
+        return false;
+    }
+
+    // Check whether the BranchInst is a supported one. Only unconditional
+    // branches, conditional branches with an outer loop invariant condition or
+    // backedges are supported.
+    if (Br && Br->isConditional() &&
+        !TheLoop->isLoopInvariant(Br->getCondition()) &&
+        !LI->isLoopHeader(Br->getSuccessor(0)) &&
+        !LI->isLoopHeader(Br->getSuccessor(1))) {
+      DEBUG(dbgs() << "LV: Unsupported conditional branch.\n");
+      ORE->emit(createMissedAnalysis("CFGNotUnderstood")
+                << "loop control flow is not understood by vectorizer");
+      if (DoExtraAnalysis)
+        Result = false;
+      else
+        return false;
+    }
+  }
+
+  // Check whether inner loops are uniform. At this point, we only support
+  // simple outer loops scenarios with uniform nested loops.
+  if (!isUniformLoopNest(TheLoop /*loop nest*/,
+                         TheLoop /*context outer loop*/)) {
+    DEBUG(dbgs()
+          << "LV: Not vectorizing: Outer loop contains divergent loops.\n");
+    ORE->emit(createMissedAnalysis("CFGNotUnderstood")
+              << "loop control flow is not understood by vectorizer");
+    if (DoExtraAnalysis)
+      Result = false;
+    else
+      return false;
+  }
+
   return Result;
 }
 
@@ -5639,7 +5898,6 @@ void LoopVectorizationCostModel::collectLoopUniforms(unsigned VF) {
 
 bool LoopVectorizationLegality::canVectorizeMemory() {
   LAI = &(*GetLAA)(*TheLoop);
-  InterleaveInfo.setLAI(LAI);
   const OptimizationRemarkAnalysis *LAR = LAI->getReport();
   if (LAR) {
     ORE->emit([&]() {
@@ -5814,9 +6072,9 @@ void InterleavedAccessInfo::collectConstStrideAccesses(
 // this group because it and (2) are dependent. However, (1) can be grouped
 // with other accesses that may precede it in program order. Note that a
 // bottom-up order does not imply that WAW dependences should not be checked.
-void InterleavedAccessInfo::analyzeInterleaving(
-    const ValueToValueMap &Strides) {
+void InterleavedAccessInfo::analyzeInterleaving() {
   DEBUG(dbgs() << "LV: Analyzing interleaved accesses...\n");
+  const ValueToValueMap &Strides = LAI->getSymbolicStrides();
 
   // Holds all accesses with a constant stride.
   MapVector<Instruction *, StrideDescriptor> AccessStrideInfo;
@@ -6139,7 +6397,8 @@ LoopVectorizationCostModel::computeFeasibleMaxVF(bool OptForSize,
   }
 
   unsigned MaxVF = MaxVectorSize;
-  if (MaximizeBandwidth && !OptForSize) {
+  if (TTI.shouldMaximizeVectorBandwidth(OptForSize) ||
+      (MaximizeBandwidth && !OptForSize)) {
     // Collect all viable vectorization factors larger than the default MaxVF
     // (i.e. MaxVectorSize).
     SmallVector<unsigned, 8> VFs;
@@ -6157,6 +6416,13 @@ LoopVectorizationCostModel::computeFeasibleMaxVF(bool OptForSize,
       if (RUs[i].MaxLocalUsers <= TargetNumRegisters) {
         MaxVF = VFs[i];
         break;
+      }
+    }
+    if (unsigned MinVF = TTI.getMinimumVF(SmallestType)) {
+      if (MaxVF < MinVF) {
+        DEBUG(dbgs() << "LV: Overriding calculated MaxVF(" << MaxVF
+                     << ") with target's minimum: " << MinVF << '\n');
+        MaxVF = MinVF;
       }
     }
   }
@@ -6256,7 +6522,7 @@ LoopVectorizationCostModel::getSmallestAndWidestTypes() {
       //        optimization to non-pointer types.
       //
       if (T->isPointerTy() && !isConsecutiveLoadOrStore(&I) &&
-          !Legal->isAccessInterleaved(&I) && !isLegalGatherOrScatter(&I))
+          !isAccessInterleaved(&I) && !isLegalGatherOrScatter(&I))
         continue;
 
       MinWidth = std::min(MinWidth,
@@ -6917,7 +7183,7 @@ unsigned LoopVectorizationCostModel::getInterleaveGroupCost(Instruction *I,
   Type *VectorTy = ToVectorTy(ValTy, VF);
   unsigned AS = getMemInstAddressSpace(I);
 
-  auto Group = Legal->getInterleavedAccessGroup(I);
+  auto Group = getInterleavedAccessGroup(I);
   assert(Group && "Fail to get an interleaved access group.");
 
   unsigned InterleaveFactor = Group->getFactor();
@@ -7017,8 +7283,8 @@ void LoopVectorizationCostModel::setCostBasedWideningDecision(unsigned VF) {
       // Choose between Interleaving, Gather/Scatter or Scalarization.
       unsigned InterleaveCost = std::numeric_limits<unsigned>::max();
       unsigned NumAccesses = 1;
-      if (Legal->isAccessInterleaved(&I)) {
-        auto Group = Legal->getInterleavedAccessGroup(&I);
+      if (isAccessInterleaved(&I)) {
+        auto Group = getInterleavedAccessGroup(&I);
         assert(Group && "Fail to get an interleaved access group.");
 
         // Make one decision for the whole group.
@@ -7055,7 +7321,7 @@ void LoopVectorizationCostModel::setCostBasedWideningDecision(unsigned VF) {
       // If the instructions belongs to an interleave group, the whole group
       // receives the same decision. The whole group receives the cost, but
       // the cost will actually be assigned to one instruction.
-      if (auto Group = Legal->getInterleavedAccessGroup(&I))
+      if (auto Group = getInterleavedAccessGroup(&I))
         setWideningDecision(Group, VF, Decision, Cost);
       else
         setWideningDecision(&I, VF, Decision, Cost);
@@ -7105,7 +7371,7 @@ void LoopVectorizationCostModel::setCostBasedWideningDecision(unsigned VF) {
         // Scalarize a widened load of address.
         setWideningDecision(I, VF, CM_Scalarize,
                             (VF * getMemoryInstructionCost(I, 1)));
-      else if (auto Group = Legal->getInterleavedAccessGroup(I)) {
+      else if (auto Group = getInterleavedAccessGroup(I)) {
         // Scalarize an interleave group of address loads.
         for (unsigned I = 0; I < Group->getFactor(); ++I) {
           if (Instruction *Member = Group->getMember(I))
@@ -7415,7 +7681,33 @@ void LoopVectorizationCostModel::collectValuesToIgnore() {
 }
 
 VectorizationFactor
+LoopVectorizationPlanner::planInVPlanNativePath(bool OptForSize,
+                                                unsigned UserVF) {
+  // Width 1 means no vectorize, cost 0 means uncomputed cost.
+  const VectorizationFactor NoVectorization = {1U, 0U};
+
+  // Outer loop handling: They may require CFG and instruction level
+  // transformations before even evaluating whether vectorization is profitable.
+  // Since we cannot modify the incoming IR, we need to build VPlan upfront in
+  // the vectorization pipeline.
+  if (!OrigLoop->empty()) {
+    assert(EnableVPlanNativePath && "VPlan-native path is not enabled.");
+    assert(UserVF && "Expected UserVF for outer loop vectorization.");
+    assert(isPowerOf2_32(UserVF) && "VF needs to be a power of two");
+    DEBUG(dbgs() << "LV: Using user VF " << UserVF << ".\n");
+    buildVPlans(UserVF, UserVF);
+
+    return {UserVF, 0};
+  }
+
+  DEBUG(dbgs() << "LV: Not vectorizing. Inner loops aren't supported in the "
+                  "VPlan-native path.\n");
+  return NoVectorization;
+}
+
+VectorizationFactor
 LoopVectorizationPlanner::plan(bool OptForSize, unsigned UserVF) {
+  assert(OrigLoop->empty() && "Inner loop expected.");
   // Width 1 means no vectorize, cost 0 means uncomputed cost.
   const VectorizationFactor NoVectorization = {1U, 0U};
   Optional<unsigned> MaybeMaxVF = CM.computeMaxVF(OptForSize);
@@ -7696,7 +7988,7 @@ VPValue *LoopVectorizationPlanner::createBlockInMask(BasicBlock *BB,
 VPInterleaveRecipe *
 LoopVectorizationPlanner::tryToInterleaveMemory(Instruction *I,
                                                 VFRange &Range) {
-  const InterleaveGroup *IG = Legal->getInterleavedAccessGroup(I);
+  const InterleaveGroup *IG = CM.getInterleavedAccessGroup(I);
   if (!IG)
     return nullptr;
 
@@ -7978,6 +8270,19 @@ LoopVectorizationPlanner::createReplicateRegion(Instruction *Instr,
 LoopVectorizationPlanner::VPlanPtr
 LoopVectorizationPlanner::buildVPlan(VFRange &Range,
                                      const SmallPtrSetImpl<Value *> &NeedDef) {
+  // Outer loop handling: They may require CFG and instruction level
+  // transformations before even evaluating whether vectorization is profitable.
+  // Since we cannot modify the incoming IR, we need to build VPlan upfront in
+  // the vectorization pipeline.
+  if (!OrigLoop->empty()) {
+    assert(EnableVPlanNativePath && "VPlan-native path is not enabled.");
+
+    // Create new empty VPlan
+    auto Plan = llvm::make_unique<VPlan>();
+    return Plan;
+  }
+
+  assert(OrigLoop->empty() && "Inner loop expected.");
   EdgeMaskCache.clear();
   BlockMaskCache.clear();
   DenseMap<Instruction *, Instruction *> &SinkAfter = Legal->getSinkAfter();
@@ -8034,7 +8339,7 @@ LoopVectorizationPlanner::buildVPlan(VFRange &Range,
 
       // I is a member of an InterleaveGroup for Range.Start. If it's an adjunct
       // member of the IG, do not construct any Recipe for it.
-      const InterleaveGroup *IG = Legal->getInterleavedAccessGroup(Instr);
+      const InterleaveGroup *IG = CM.getInterleavedAccessGroup(Instr);
       if (IG && Instr != IG->getInsertPos() &&
           Range.Start >= 2 && // Query is illegal for VF == 1
           CM.getWideningDecision(Instr, Range.Start) ==
@@ -8307,8 +8612,45 @@ void VPWidenMemoryInstructionRecipe::execute(VPTransformState &State) {
   State.ILV->vectorizeMemoryInstruction(&Instr, &MaskValues);
 }
 
+// Process the loop in the VPlan-native vectorization path. This path builds
+// VPlan upfront in the vectorization pipeline, which allows to apply
+// VPlan-to-VPlan transformations from the very beginning without modifying the
+// input LLVM IR.
+static bool processLoopInVPlanNativePath(
+    Loop *L, PredicatedScalarEvolution &PSE, LoopInfo *LI, DominatorTree *DT,
+    LoopVectorizationLegality *LVL, TargetTransformInfo *TTI,
+    TargetLibraryInfo *TLI, DemandedBits *DB, AssumptionCache *AC,
+    OptimizationRemarkEmitter *ORE, LoopVectorizeHints &Hints) {
+
+  assert(EnableVPlanNativePath && "VPlan-native path is disabled.");
+  Function *F = L->getHeader()->getParent();
+  InterleavedAccessInfo IAI(PSE, L, DT, LI, LVL->getLAI());
+  LoopVectorizationCostModel CM(L, PSE, LI, LVL, *TTI, TLI, DB, AC, ORE, F,
+                                &Hints, IAI);
+  // Use the planner for outer loop vectorization.
+  // TODO: CM is not used at this point inside the planner. Turn CM into an
+  // optional argument if we don't need it in the future.
+  LoopVectorizationPlanner LVP(L, LI, TLI, TTI, LVL, CM);
+
+  // Get user vectorization factor.
+  unsigned UserVF = Hints.getWidth();
+
+  // Check the function attributes to find out if this function should be
+  // optimized for size.
+  bool OptForSize =
+      Hints.getForce() != LoopVectorizeHints::FK_Enabled && F->optForSize();
+
+  // Plan how to best vectorize, return the best VF and its cost.
+  LVP.planInVPlanNativePath(OptForSize, UserVF);
+
+  // Returning false. We are currently not generating vector code in the VPlan
+  // native path.
+  return false;
+}
+
 bool LoopVectorizePass::processLoop(Loop *L) {
-  assert(L->empty() && "Only process inner loops.");
+  assert((EnableVPlanNativePath || L->empty()) &&
+         "VPlan-native path is not enabled. Only process inner loops.");
 
 #ifndef NDEBUG
   const std::string DebugLocStr = getDebugLocString(L);
@@ -8350,7 +8692,7 @@ bool LoopVectorizePass::processLoop(Loop *L) {
 
   // Check if it is legal to vectorize the loop.
   LoopVectorizationRequirements Requirements(*ORE);
-  LoopVectorizationLegality LVL(L, PSE, DT, TLI, AA, F, TTI, GetLAA, LI, ORE,
+  LoopVectorizationLegality LVL(L, PSE, DT, TLI, AA, F, GetLAA, LI, ORE,
                                 &Requirements, &Hints, DB, AC);
   if (!LVL.canVectorize()) {
     DEBUG(dbgs() << "LV: Not vectorizing: Cannot prove legality.\n");
@@ -8363,6 +8705,16 @@ bool LoopVectorizePass::processLoop(Loop *L) {
   bool OptForSize =
       Hints.getForce() != LoopVectorizeHints::FK_Enabled && F->optForSize();
 
+  // Entrance to the VPlan-native vectorization path. Outer loops are processed
+  // here. They may require CFG and instruction level transformations before
+  // even evaluating whether vectorization is profitable. Since we cannot modify
+  // the incoming IR, we need to build VPlan upfront in the vectorization
+  // pipeline.
+  if (!L->empty())
+    return processLoopInVPlanNativePath(L, PSE, LI, DT, &LVL, TTI, TLI, DB, AC,
+                                        ORE, Hints);
+
+  assert(L->empty() && "Inner loop expected.");
   // Check the loop for a trip count threshold: vectorize loops with a tiny trip
   // count by optimizing for size, to minimize overheads.
   // Prefer constant trip counts over profile data, over upper bound estimate.
@@ -8435,9 +8787,21 @@ bool LoopVectorizePass::processLoop(Loop *L) {
     return false;
   }
 
+  bool UseInterleaved = TTI->enableInterleavedAccessVectorization();
+  InterleavedAccessInfo IAI(PSE, L, DT, LI, LVL.getLAI());
+
+  // If an override option has been passed in for interleaved accesses, use it.
+  if (EnableInterleavedMemAccesses.getNumOccurrences() > 0)
+    UseInterleaved = EnableInterleavedMemAccesses;
+
+  // Analyze interleaved memory accesses.
+  if (UseInterleaved) {
+    IAI.analyzeInterleaving();
+  }
+
   // Use the cost model.
   LoopVectorizationCostModel CM(L, PSE, LI, &LVL, *TTI, TLI, DB, AC, ORE, F,
-                                &Hints);
+                                &Hints, IAI);
   CM.collectValuesToIgnore();
 
   // Use the planner for vectorization.
@@ -8627,7 +8991,7 @@ bool LoopVectorizePass::runImpl(
   SmallVector<Loop *, 8> Worklist;
 
   for (Loop *L : *LI)
-    addAcyclicInnerLoop(*L, *LI, Worklist);
+    collectSupportedLoops(*L, LI, ORE, Worklist);
 
   LoopsAnalyzed += Worklist.size();
 

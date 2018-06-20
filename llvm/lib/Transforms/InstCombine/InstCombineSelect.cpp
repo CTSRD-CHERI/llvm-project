@@ -397,6 +397,47 @@ Instruction *InstCombiner::foldSelectIntoOp(SelectInst &SI, Value *TrueVal,
 }
 
 /// We want to turn:
+///   (select (icmp eq (and X, Y), 0), (and (lshr X, Z), 1), 1)
+/// into:
+///   zext (icmp ne i32 (and X, (or Y, (shl 1, Z))), 0)
+/// Note:
+///   Z may be 0 if lshr is missing.
+/// Worst-case scenario is that we will replace 5 instructions with 5 different
+/// instructions, but we got rid of select.
+static Instruction *foldSelectICmpAndAnd(Type *SelType, const ICmpInst *Cmp,
+                                         Value *TVal, Value *FVal,
+                                         InstCombiner::BuilderTy &Builder) {
+  if (!(Cmp->hasOneUse() && Cmp->getOperand(0)->hasOneUse() &&
+        Cmp->getPredicate() == ICmpInst::ICMP_EQ &&
+        match(Cmp->getOperand(1), m_Zero()) && match(FVal, m_One())))
+    return nullptr;
+
+  // The TrueVal has general form of:  and %B, 1
+  Value *B;
+  if (!match(TVal, m_OneUse(m_And(m_Value(B), m_One()))))
+    return nullptr;
+
+  // Where %B may be optionally shifted:  lshr %X, %Z.
+  Value *X, *Z;
+  const bool HasShift = match(B, m_OneUse(m_LShr(m_Value(X), m_Value(Z))));
+  if (!HasShift)
+    X = B;
+
+  Value *Y;
+  if (!match(Cmp->getOperand(0), m_c_And(m_Specific(X), m_Value(Y))))
+    return nullptr;
+
+  // ((X & Y) == 0) ? ((X >> Z) & 1) : 1 --> (X & (Y | (1 << Z))) != 0
+  // ((X & Y) == 0) ? (X & 1) : 1 --> (X & (Y | 1)) != 0
+  Constant *One = ConstantInt::get(SelType, 1);
+  Value *MaskB = HasShift ? Builder.CreateShl(One, Z) : One;
+  Value *FullMask = Builder.CreateOr(Y, MaskB);
+  Value *MaskedX = Builder.CreateAnd(X, FullMask);
+  Value *ICmpNeZero = Builder.CreateIsNotNull(MaskedX);
+  return new ZExtInst(ICmpNeZero, SelType);
+}
+
+/// We want to turn:
 ///   (select (icmp eq (and X, C1), 0), Y, (or Y, C2))
 /// into:
 ///   (or (shl (and X, C1), C3), Y)
@@ -862,6 +903,10 @@ Instruction *InstCombiner::foldSelectInstWithICmp(SelectInst &SI,
         return replaceInstUsesWith(SI, V);
     }
   }
+
+  if (Instruction *V =
+          foldSelectICmpAndAnd(SI.getType(), ICI, TrueVal, FalseVal, Builder))
+    return V;
 
   if (Value *V = foldSelectICmpAndOr(ICI, TrueVal, FalseVal, Builder))
     return replaceInstUsesWith(SI, V);
@@ -1579,10 +1624,10 @@ Instruction *InstCombiner::visitSelectInst(SelectInst &SI) {
     if (match(FCI->getOperand(1), m_AnyZeroFP()) && FCI->hasNoNaNs()) {
       // (X <= +/-0.0) ? (0.0 - X) : X --> fabs(X)
       // (X >  +/-0.0) ? X : (0.0 - X) --> fabs(X)
-      if ((X == FalseVal && match(TrueVal, m_FSub(m_Zero(), m_Specific(X))) &&
-          Pred == FCmpInst::FCMP_OLE) ||
-          (X == TrueVal && match(FalseVal, m_FSub(m_Zero(), m_Specific(X))) &&
-          Pred == FCmpInst::FCMP_OGT)) {
+      if ((X == FalseVal && Pred == FCmpInst::FCMP_OLE &&
+           match(TrueVal, m_FSub(m_PosZeroFP(), m_Specific(X)))) ||
+          (X == TrueVal && Pred == FCmpInst::FCMP_OGT &&
+           match(FalseVal, m_FSub(m_PosZeroFP(), m_Specific(X))))) {
         Value *Fabs = Builder.CreateIntrinsic(Intrinsic::fabs, { X }, FCI);
         return replaceInstUsesWith(SI, Fabs);
       }

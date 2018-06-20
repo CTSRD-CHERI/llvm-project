@@ -17,6 +17,7 @@ Clang-Tidy Checks
    android-cloexec-memfd-create
    android-cloexec-open
    android-cloexec-socket
+   android-comparison-in-temp-failure-retry
    boost-use-to-string
    bugprone-argument-comment
    bugprone-assert-side-effect
@@ -36,6 +37,7 @@ Clang-Tidy Checks
    bugprone-misplaced-widening-cast
    bugprone-move-forwarding-reference
    bugprone-multiple-statement-macro
+   bugprone-parent-virtual-call
    bugprone-sizeof-container
    bugprone-sizeof-expression
    bugprone-string-constructor
@@ -89,6 +91,7 @@ Clang-Tidy Checks
    cppcoreguidelines-pro-type-vararg
    cppcoreguidelines-slicing
    cppcoreguidelines-special-member-functions
+   fuchsia-header-anon-namespaces (redirects to google-build-namespaces) <fuchsia-header-anon-namespaces>
    fuchsia-default-arguments
    fuchsia-multiple-inheritance
    fuchsia-overloaded-operator
@@ -110,7 +113,6 @@ Clang-Tidy Checks
    google-readability-redundant-smartptr-get (redirects to readability-redundant-smartptr-get) <google-readability-redundant-smartptr-get>
    google-readability-todo
    google-runtime-int
-   google-runtime-member-string-references
    google-runtime-operator
    google-runtime-references
    hicpp-avoid-goto

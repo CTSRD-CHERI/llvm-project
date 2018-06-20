@@ -209,8 +209,8 @@ void StackSlotColoring::InitializeSlots() {
   Intervals.reserve(LS->getNumIntervals());
   for (auto &I : *LS)
     Intervals.push_back(&I);
-  std::sort(Intervals.begin(), Intervals.end(),
-            [](Pair *LHS, Pair *RHS) { return LHS->first < RHS->first; });
+  llvm::sort(Intervals.begin(), Intervals.end(),
+             [](Pair *LHS, Pair *RHS) { return LHS->first < RHS->first; });
 
   // Gather all spill slots into a list.
   DEBUG(dbgs() << "Spill slot intervals:\n");
@@ -454,6 +454,9 @@ bool StackSlotColoring::runOnMachineFunction(MachineFunction &MF) {
       dbgs() << "********** Stack Slot Coloring **********\n"
              << "********** Function: " << MF.getName() << '\n';
     });
+
+  if (skipFunction(MF.getFunction()))
+    return false;
 
   MFI = &MF.getFrameInfo();
   TII = MF.getSubtarget().getInstrInfo();

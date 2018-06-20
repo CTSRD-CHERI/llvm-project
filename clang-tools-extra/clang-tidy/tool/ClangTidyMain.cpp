@@ -286,7 +286,8 @@ static void printProfileData(const ProfileData &Profile,
   OS.flush();
 }
 
-static std::unique_ptr<ClangTidyOptionsProvider> createOptionsProvider() {
+static std::unique_ptr<ClangTidyOptionsProvider> createOptionsProvider(
+   llvm::IntrusiveRefCntPtr<vfs::FileSystem> FS) {
   ClangTidyGlobalOptions GlobalOptions;
   if (std::error_code Err = parseLineFilter(LineFilter, GlobalOptions)) {
     llvm::errs() << "Invalid LineFilter: " << Err.message() << "\n\nUsage:\n";
@@ -334,7 +335,7 @@ static std::unique_ptr<ClangTidyOptionsProvider> createOptionsProvider() {
     }
   }
   return llvm::make_unique<FileOptionsProvider>(GlobalOptions, DefaultOptions,
-                                                OverrideOptions);
+                                                OverrideOptions, std::move(FS));
 }
 
 llvm::IntrusiveRefCntPtr<vfs::FileSystem>
@@ -364,8 +365,13 @@ getVfsOverlayFromFile(const std::string &OverlayFile) {
 static int clangTidyMain(int argc, const char **argv) {
   CommonOptionsParser OptionsParser(argc, argv, ClangTidyCategory,
                                     cl::ZeroOrMore);
+  llvm::IntrusiveRefCntPtr<vfs::FileSystem> BaseFS(
+      VfsOverlay.empty() ? vfs::getRealFileSystem()
+                         : getVfsOverlayFromFile(VfsOverlay));
+  if (!BaseFS)
+    return 1;
 
-  auto OwningOptionsProvider = createOptionsProvider();
+  auto OwningOptionsProvider = createOptionsProvider(BaseFS);
   auto *OptionsProvider = OwningOptionsProvider.get();
   if (!OptionsProvider)
     return 1;
@@ -432,12 +438,6 @@ static int clangTidyMain(int argc, const char **argv) {
     llvm::cl::PrintHelpMessage(/*Hidden=*/false, /*Categorized=*/true);
     return 1;
   }
-  llvm::IntrusiveRefCntPtr<vfs::FileSystem> BaseFS(
-      VfsOverlay.empty() ? vfs::getRealFileSystem()
-                         : getVfsOverlayFromFile(VfsOverlay));
-  if (!BaseFS)
-    return 1;
-
   ProfileData Profile;
 
   llvm::InitializeAllTargetInfos();
@@ -448,10 +448,9 @@ static int clangTidyMain(int argc, const char **argv) {
   runClangTidy(Context, OptionsParser.getCompilations(), PathList, BaseFS,
                EnableCheckProfile ? &Profile : nullptr);
   ArrayRef<ClangTidyError> Errors = Context.getErrors();
-  bool FoundErrors =
-      std::find_if(Errors.begin(), Errors.end(), [](const ClangTidyError &E) {
-        return E.DiagLevel == ClangTidyError::Error;
-      }) != Errors.end();
+  bool FoundErrors = llvm::find_if(Errors, [](const ClangTidyError &E) {
+                       return E.DiagLevel == ClangTidyError::Error;
+                     }) != Errors.end();
 
   const bool DisableFixes = Fix && FoundErrors && !FixErrors;
 
@@ -489,6 +488,19 @@ static int clangTidyMain(int argc, const char **argv) {
                    << Plural << "\n";
     }
     return WErrorCount;
+  }
+
+  if (FoundErrors) {
+    // TODO: Figure out when zero exit code should be used with -fix-errors:
+    //   a. when a fix has been applied for an error
+    //   b. when a fix has been applied for all errors
+    //   c. some other condition.
+    // For now always returning zero when -fix-errors is used.
+    if (FixErrors)
+      return 0;
+    if (!Quiet)
+      llvm::errs() << "Found compiler error(s).\n";
+    return 1;
   }
 
   return 0;

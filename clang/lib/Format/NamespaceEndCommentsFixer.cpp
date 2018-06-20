@@ -107,13 +107,14 @@ void updateEndComment(const FormatToken *RBraceTok, StringRef EndCommentText,
                  << llvm::toString(std::move(Err)) << "\n";
   }
 }
+} // namespace
 
 const FormatToken *
-getNamespaceToken(const AnnotatedLine *line,
+getNamespaceToken(const AnnotatedLine *Line,
                   const SmallVectorImpl<AnnotatedLine *> &AnnotatedLines) {
-  if (!line->Affected || line->InPPDirective || !line->startsWith(tok::r_brace))
+  if (!Line->Affected || Line->InPPDirective || !Line->startsWith(tok::r_brace))
     return nullptr;
-  size_t StartLineIndex = line->MatchingOpeningBlockLineIndex;
+  size_t StartLineIndex = Line->MatchingOpeningBlockLineIndex;
   if (StartLineIndex == UnwrappedLine::kInvalidIndex)
     return nullptr;
   assert(StartLineIndex < AnnotatedLines.size());
@@ -131,7 +132,6 @@ getNamespaceToken(const AnnotatedLine *line,
     return nullptr;
   return NamespaceTok;
 }
-} // namespace
 
 NamespaceEndCommentsFixer::NamespaceEndCommentsFixer(const Environment &Env,
                                                      const FormatStyle &Style)
@@ -141,8 +141,7 @@ std::pair<tooling::Replacements, unsigned> NamespaceEndCommentsFixer::analyze(
     TokenAnnotator &Annotator, SmallVectorImpl<AnnotatedLine *> &AnnotatedLines,
     FormatTokenLexer &Tokens) {
   const SourceManager &SourceMgr = Env.getSourceManager();
-  AffectedRangeMgr.computeAffectedLines(AnnotatedLines.begin(),
-                                        AnnotatedLines.end());
+  AffectedRangeMgr.computeAffectedLines(AnnotatedLines);
   tooling::Replacements Fixes;
   std::string AllNamespaceNames = "";
   size_t StartLineIndex = SIZE_MAX;

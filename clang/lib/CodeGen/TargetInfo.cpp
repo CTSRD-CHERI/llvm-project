@@ -1941,13 +1941,8 @@ void X86_32TargetCodeGenInfo::setTargetAttributes(
     return;
   if (const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(D)) {
     if (FD->hasAttr<X86ForceAlignArgPointerAttr>()) {
-      // Get the LLVM function.
       llvm::Function *Fn = cast<llvm::Function>(GV);
-
-      // Now add the 'alignstack' attribute with a value of 16.
-      llvm::AttrBuilder B;
-      B.addStackAlignmentAttr(16);
-      Fn->addAttributes(llvm::AttributeList::FunctionIndex, B);
+      Fn->addFnAttr("stackrealign");
     }
     if (FD->hasAttr<AnyX86InterruptAttr>()) {
       llvm::Function *Fn = cast<llvm::Function>(GV);
@@ -2131,8 +2126,8 @@ class X86_64ABIInfo : public SwiftABIInfo {
   /// classify it as INTEGER (for compatibility with older clang compilers).
   bool classifyIntegerMMXAsSSE() const {
     // Clang <= 3.8 did not do this.
-    if (getCodeGenOpts().getClangABICompat() <=
-        CodeGenOptions::ClangABI::Ver3_8)
+    if (getContext().getLangOpts().getClangABICompat() <=
+        LangOptions::ClangABI::Ver3_8)
       return false;
 
     const llvm::Triple &Triple = getTarget().getTriple();
@@ -2299,13 +2294,8 @@ public:
       return;
     if (const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(D)) {
       if (FD->hasAttr<X86ForceAlignArgPointerAttr>()) {
-        // Get the LLVM function.
-        auto *Fn = cast<llvm::Function>(GV);
-
-        // Now add the 'alignstack' attribute with a value of 16.
-        llvm::AttrBuilder B;
-        B.addStackAlignmentAttr(16);
-        Fn->addAttributes(llvm::AttributeList::FunctionIndex, B);
+        llvm::Function *Fn = cast<llvm::Function>(GV);
+        Fn->addFnAttr("stackrealign");
       }
       if (FD->hasAttr<AnyX86InterruptAttr>()) {
         llvm::Function *Fn = cast<llvm::Function>(GV);
@@ -2431,13 +2421,8 @@ void WinX86_64TargetCodeGenInfo::setTargetAttributes(
     return;
   if (const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(D)) {
     if (FD->hasAttr<X86ForceAlignArgPointerAttr>()) {
-      // Get the LLVM function.
-      auto *Fn = cast<llvm::Function>(GV);
-
-      // Now add the 'alignstack' attribute with a value of 16.
-      llvm::AttrBuilder B;
-      B.addStackAlignmentAttr(16);
-      Fn->addAttributes(llvm::AttributeList::FunctionIndex, B);
+      llvm::Function *Fn = cast<llvm::Function>(GV);
+      Fn->addFnAttr("stackrealign");
     }
     if (FD->hasAttr<AnyX86InterruptAttr>()) {
       llvm::Function *Fn = cast<llvm::Function>(GV);
@@ -4556,7 +4541,7 @@ bool ABIInfo::isHomogeneousAggregate(QualType Ty, const Type *&Base,
 
       // For compatibility with GCC, ignore empty bitfields in C++ mode.
       if (getContext().getLangOpts().CPlusPlus &&
-          FD->isBitField() && FD->getBitWidthValue(getContext()) == 0)
+          FD->isZeroLengthBitField(getContext()))
         continue;
 
       uint64_t FldMembers;
@@ -6154,6 +6139,7 @@ public:
 
   void setTargetAttributes(const Decl *D, llvm::GlobalValue *GV,
                            CodeGen::CodeGenModule &M) const override;
+  bool shouldEmitStaticExternCAliases() const override;
 
 private:
   // Adds a NamedMDNode with F, Name, and Operand as operands, and adds the
@@ -6274,6 +6260,10 @@ void NVPTXTargetCodeGenInfo::addNVVMMetadata(llvm::Function *F, StringRef Name,
           llvm::ConstantInt::get(llvm::Type::getInt32Ty(Ctx), Operand))};
   // Append metadata to nvvm.annotations
   MD->addOperand(llvm::MDNode::get(Ctx, MDVals));
+}
+
+bool NVPTXTargetCodeGenInfo::shouldEmitStaticExternCAliases() const {
+  return false;
 }
 }
 
@@ -6397,7 +6387,7 @@ QualType SystemZABIInfo::GetSingleElementType(QualType Ty) const {
       // Unlike isSingleElementStruct(), empty structure and array fields
       // do count.  So do anonymous bitfields that aren't zero-sized.
       if (getContext().getLangOpts().CPlusPlus &&
-          FD->isBitField() && FD->getBitWidthValue(getContext()) == 0)
+          FD->isZeroLengthBitField(getContext()))
         continue;
 
       // Unlike isSingleElementStruct(), arrays do not count.
@@ -7646,6 +7636,8 @@ public:
   createEnqueuedBlockKernel(CodeGenFunction &CGF,
                             llvm::Function *BlockInvokeFunc,
                             llvm::Value *BlockLiteral) const override;
+  bool shouldEmitStaticExternCAliases() const override;
+  void setCUDAKernelCallingConvention(llvm::Function *F) const override;
 };
 }
 
@@ -7775,6 +7767,15 @@ AMDGPUTargetCodeGenInfo::getLLVMSyncScopeID(SyncScope S,
     Name = "subgroup";
   }
   return C.getOrInsertSyncScopeID(Name);
+}
+
+bool AMDGPUTargetCodeGenInfo::shouldEmitStaticExternCAliases() const {
+  return false;
+}
+
+void AMDGPUTargetCodeGenInfo::setCUDAKernelCallingConvention(
+    llvm::Function *F) const {
+  F->setCallingConv(llvm::CallingConv::AMDGPU_KERNEL);
 }
 
 //===----------------------------------------------------------------------===//
@@ -8513,7 +8514,7 @@ static bool appendRecordType(SmallStringEnc &Enc, const RecordType *RT,
     // The ABI requires unions to be sorted but not structures.
     // See FieldEncoding::operator< for sort algorithm.
     if (RT->isUnionType())
-      std::sort(FE.begin(), FE.end());
+      llvm::sort(FE.begin(), FE.end());
     // We can now complete the TypeString.
     unsigned E = FE.size();
     for (unsigned I = 0; I != E; ++I) {
@@ -8557,7 +8558,7 @@ static bool appendEnumType(SmallStringEnc &Enc, const EnumType *ET,
       EnumEnc += '}';
       FE.push_back(FieldEncoding(!I->getName().empty(), EnumEnc));
     }
-    std::sort(FE.begin(), FE.end());
+    llvm::sort(FE.begin(), FE.end());
     unsigned E = FE.size();
     for (unsigned I = 0; I != E; ++I) {
       if (I)

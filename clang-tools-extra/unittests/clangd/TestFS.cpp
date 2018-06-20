@@ -45,7 +45,7 @@ MockCompilationDatabase::getCompileCommand(PathRef File) const {
 }
 
 const char *testRoot() {
-#ifdef LLVM_ON_WIN32
+#ifdef _WIN32
   return "C:\\clangd-test";
 #else
   return "/clangd-test";
@@ -55,8 +55,10 @@ const char *testRoot() {
 std::string testPath(PathRef File) {
   assert(sys::path::is_relative(File) && "FileName should be relative");
 
+  SmallString<32> NativeFile = File;
+  sys::path::native(NativeFile);
   SmallString<32> Path;
-  sys::path::append(Path, testRoot(), File);
+  sys::path::append(Path, testRoot(), NativeFile);
   return Path.str();
 }
 

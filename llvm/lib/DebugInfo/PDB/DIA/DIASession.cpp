@@ -106,7 +106,7 @@ Error DIASession::createFromPdb(StringRef Path,
   if (!llvm::convertUTF8ToUTF16String(Path, Path16))
     return make_error<GenericError>(generic_error_code::invalid_path);
 
-  const wchar_t *Path16Str = reinterpret_cast<const wchar_t*>(Path16.data());
+  const wchar_t *Path16Str = reinterpret_cast<const wchar_t *>(Path16.data());
   HRESULT HR;
   if (FAILED(HR = DiaDataSource->loadDataFromPdb(Path16Str))) {
     return ErrorFromHResult(HR, "Calling loadDataFromPdb {0}", Path);
@@ -166,6 +166,28 @@ std::unique_ptr<PDBSymbolExe> DIASession::getGlobalScope() {
   return ExeSymbol;
 }
 
+bool DIASession::addressForVA(uint64_t VA, uint32_t &Section,
+                              uint32_t &Offset) const {
+  DWORD ArgSection, ArgOffset = 0;
+  if (S_OK == Session->addressForVA(VA, &ArgSection, &ArgOffset)) {
+    Section = static_cast<uint32_t>(ArgSection);
+    Offset = static_cast<uint32_t>(ArgOffset);
+    return true;
+  }
+  return false;
+}
+
+bool DIASession::addressForRVA(uint32_t RVA, uint32_t &Section,
+                               uint32_t &Offset) const {
+  DWORD ArgSection, ArgOffset = 0;
+  if (S_OK == Session->addressForRVA(RVA, &ArgSection, &ArgOffset)) {
+    Section = static_cast<uint32_t>(ArgSection);
+    Offset = static_cast<uint32_t>(ArgOffset);
+    return true;
+  }
+  return false;
+}
+
 std::unique_ptr<PDBSymbol> DIASession::getSymbolById(uint32_t SymbolId) const {
   CComPtr<IDiaSymbol> LocatedSymbol;
   if (S_OK != Session->symbolById(SymbolId, &LocatedSymbol))
@@ -192,6 +214,31 @@ DIASession::findSymbolByAddress(uint64_t Address, PDB_SymType Type) const {
   return PDBSymbol::create(*this, std::move(RawSymbol));
 }
 
+std::unique_ptr<PDBSymbol> DIASession::findSymbolByRVA(uint32_t RVA,
+                                                       PDB_SymType Type) const {
+  enum SymTagEnum EnumVal = static_cast<enum SymTagEnum>(Type);
+
+  CComPtr<IDiaSymbol> Symbol;
+  if (S_OK != Session->findSymbolByRVA(RVA, EnumVal, &Symbol))
+    return nullptr;
+
+  auto RawSymbol = llvm::make_unique<DIARawSymbol>(*this, Symbol);
+  return PDBSymbol::create(*this, std::move(RawSymbol));
+}
+
+std::unique_ptr<PDBSymbol>
+DIASession::findSymbolBySectOffset(uint32_t Sect, uint32_t Offset,
+                                   PDB_SymType Type) const {
+  enum SymTagEnum EnumVal = static_cast<enum SymTagEnum>(Type);
+
+  CComPtr<IDiaSymbol> Symbol;
+  if (S_OK != Session->findSymbolByAddr(Sect, Offset, EnumVal, &Symbol))
+    return nullptr;
+
+  auto RawSymbol = llvm::make_unique<DIARawSymbol>(*this, Symbol);
+  return PDBSymbol::create(*this, std::move(RawSymbol));
+}
+
 std::unique_ptr<IPDBEnumLineNumbers>
 DIASession::findLineNumbers(const PDBSymbolCompiland &Compiland,
                             const IPDBSourceFile &File) const {
@@ -200,9 +247,8 @@ DIASession::findLineNumbers(const PDBSymbolCompiland &Compiland,
   const DIASourceFile &RawFile = static_cast<const DIASourceFile &>(File);
 
   CComPtr<IDiaEnumLineNumbers> LineNumbers;
-  if (S_OK !=
-      Session->findLines(RawCompiland.getDiaSymbol(), RawFile.getDiaFile(),
-                         &LineNumbers))
+  if (S_OK != Session->findLines(RawCompiland.getDiaSymbol(),
+                                 RawFile.getDiaFile(), &LineNumbers))
     return nullptr;
 
   return llvm::make_unique<DIAEnumLineNumbers>(LineNumbers);
@@ -219,6 +265,15 @@ DIASession::findLineNumbersByAddress(uint64_t Address, uint32_t Length) const {
     if (S_OK != Session->findLinesByRVA(RVA, Length, &LineNumbers))
       return nullptr;
   }
+  return llvm::make_unique<DIAEnumLineNumbers>(LineNumbers);
+}
+
+std::unique_ptr<IPDBEnumLineNumbers>
+DIASession::findLineNumbersByRVA(uint32_t RVA, uint32_t Length) const {
+  CComPtr<IDiaEnumLineNumbers> LineNumbers;
+  if (S_OK != Session->findLinesByRVA(RVA, Length, &LineNumbers))
+    return nullptr;
+
   return llvm::make_unique<DIAEnumLineNumbers>(LineNumbers);
 }
 
@@ -328,9 +383,7 @@ std::unique_ptr<IPDBEnumTables> DIASession::getEnumTables() const {
   return llvm::make_unique<DIAEnumTables>(DiaEnumerator);
 }
 
-template <class T>
-static CComPtr<T>
-getTableEnumerator(IDiaSession &Session) {
+template <class T> static CComPtr<T> getTableEnumerator(IDiaSession &Session) {
   CComPtr<T> Enumerator;
   CComPtr<IDiaEnumTables> ET;
   CComPtr<IDiaTable> Table;
@@ -341,8 +394,7 @@ getTableEnumerator(IDiaSession &Session) {
 
   while (ET->Next(1, &Table, &Count) == S_OK && Count == 1) {
     // There is only one table that matches the given iid
-    if (S_OK ==
-        Table->QueryInterface(__uuidof(T), (void **)&Enumerator))
+    if (S_OK == Table->QueryInterface(__uuidof(T), (void **)&Enumerator))
       break;
     Table.Release();
   }

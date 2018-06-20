@@ -827,10 +827,6 @@ void SIInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
   MachineFrameInfo &FrameInfo = MF->getFrameInfo();
   DebugLoc DL = MBB.findDebugLoc(MI);
 
-  assert(SrcReg != MFI->getStackPtrOffsetReg() &&
-         SrcReg != MFI->getFrameOffsetReg() &&
-         SrcReg != MFI->getScratchWaveOffsetReg());
-
   unsigned Size = FrameInfo.getObjectSize(FrameIndex);
   unsigned Align = FrameInfo.getObjectAlignment(FrameIndex);
   MachinePointerInfo PtrInfo
@@ -864,7 +860,7 @@ void SIInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
     // needing them, and need to ensure that the reserved registers are
     // correctly handled.
 
-    FrameInfo.setStackID(FrameIndex, 1);
+    FrameInfo.setStackID(FrameIndex, SIStackID::SGPR_SPILL);
     if (ST.hasScalarStores()) {
       // m0 is used for offset to scalar stores if used to spill.
       Spill.addReg(AMDGPU::M0, RegState::ImplicitDefine | RegState::Dead);
@@ -960,7 +956,7 @@ void SIInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
       MRI.constrainRegClass(DestReg, &AMDGPU::SReg_32_XM0RegClass);
     }
 
-    FrameInfo.setStackID(FrameIndex, 1);
+    FrameInfo.setStackID(FrameIndex, SIStackID::SGPR_SPILL);
     MachineInstrBuilder Spill = BuildMI(MBB, MI, DL, OpDesc, DestReg)
       .addFrameIndex(FrameIndex) // addr
       .addMemOperand(MMO)
@@ -2339,6 +2335,15 @@ bool SIInstrInfo::isInlineConstant(const MachineOperand &MO,
   }
   case AMDGPU::OPERAND_REG_INLINE_C_V2INT16:
   case AMDGPU::OPERAND_REG_INLINE_C_V2FP16: {
+    if (isUInt<16>(Imm)) {
+      int16_t Trunc = static_cast<int16_t>(Imm);
+      return ST.has16BitInsts() &&
+             AMDGPU::isInlinableLiteral16(Trunc, ST.hasInv2PiInlineImm());
+    }
+    if (!(Imm & 0xffff)) {
+      return ST.has16BitInsts() &&
+             AMDGPU::isInlinableLiteral16(Imm >> 16, ST.hasInv2PiInlineImm());
+    }
     uint32_t Trunc = static_cast<uint32_t>(Imm);
     return  AMDGPU::isInlinableLiteralV216(Trunc, ST.hasInv2PiInlineImm());
   }
@@ -3285,6 +3290,13 @@ unsigned SIInstrInfo::readlaneVGPRToSGPR(unsigned SrcReg, MachineInstr &UseMI,
   unsigned DstReg = MRI.createVirtualRegister(SRC);
   unsigned SubRegs = RI.getRegSizeInBits(*VRC) / 32;
 
+  if (SubRegs == 1) {
+    BuildMI(*UseMI.getParent(), UseMI, UseMI.getDebugLoc(),
+            get(AMDGPU::V_READFIRSTLANE_B32), DstReg)
+        .addReg(SrcReg);
+    return DstReg;
+  }
+
   SmallVector<unsigned, 8> SRegs;
   for (unsigned i = 0; i < SubRegs; ++i) {
     unsigned SGPR = MRI.createVirtualRegister(&AMDGPU::SGPR_32RegClass);
@@ -3459,6 +3471,14 @@ void SIInstrInfo::legalizeOperands(MachineInstr &MI) const {
       MachineOperand &Op = MI.getOperand(1);
       legalizeGenericOperand(*MBB, MI, DstRC, Op, MRI, MI.getDebugLoc());
     }
+    return;
+  }
+
+  // Legalize SI_INIT_M0
+  if (MI.getOpcode() == AMDGPU::SI_INIT_M0) {
+    MachineOperand &Src = MI.getOperand(0);
+    if (Src.isReg() && RI.hasVGPRs(MRI.getRegClass(Src.getReg())))
+      Src.setReg(readlaneVGPRToSGPR(Src.getReg(), MI, MRI));
     return;
   }
 

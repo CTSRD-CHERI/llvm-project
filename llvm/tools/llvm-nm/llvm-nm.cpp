@@ -33,9 +33,8 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Format.h"
-#include "llvm/Support/ManagedStatic.h"
+#include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/MemoryBuffer.h"
-#include "llvm/Support/PrettyStackTrace.h"
 #include "llvm/Support/Program.h"
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/TargetSelect.h"
@@ -705,7 +704,7 @@ static void sortAndPrintSymbolList(SymbolicFile &Obj, bool printName,
 
     if (ReverseSort)
       Cmp = [=](const NMSymbol &A, const NMSymbol &B) { return Cmp(B, A); };
-    std::sort(SymbolList.begin(), SymbolList.end(), Cmp);
+    llvm::sort(SymbolList.begin(), SymbolList.end(), Cmp);
   }
 
   if (!PrintFileName) {
@@ -1588,8 +1587,10 @@ dumpSymbolNamesFromObject(SymbolicFile &Obj, bool printName,
         }
       }
 
-      // Trying adding symbol from the function starts table.
+      // Trying adding symbol from the function starts table and LC_MAIN entry
+      // point.
       SmallVector<uint64_t, 8> FoundFns;
+      uint64_t lc_main_offset = UINT64_MAX;
       for (const auto &Command : MachO->load_commands()) {
         if (Command.C.cmd == MachO::LC_FUNCTION_STARTS) {
           // We found a function starts segment, parse the addresses for 
@@ -1598,6 +1599,10 @@ dumpSymbolNamesFromObject(SymbolicFile &Obj, bool printName,
             MachO->getLinkeditDataLoadCommand(Command);
 
           MachO->ReadULEB128s(LLC.dataoff, FoundFns);
+        } else if (Command.C.cmd == MachO::LC_MAIN) {
+          MachO::entry_point_command LCmain =
+            MachO->getEntryPointCommand(Command);
+          lc_main_offset = LCmain.entryoff;
         }
       }
       // See if these addresses are already in the symbol table.
@@ -1647,7 +1652,10 @@ dumpSymbolNamesFromObject(SymbolicFile &Obj, bool printName,
           F.NDesc = 0;
           F.IndirectName = StringRef();
           SymbolList.push_back(F);
-          FOS << "<redacted function " << f << ">";
+          if (FoundFns[f] == lc_main_offset)
+            FOS << "<redacted LC_MAIN>";
+          else
+            FOS << "<redacted function " << f << ">";
           FOS << '\0';
           FunctionStartsAdded++;
         }
@@ -2007,11 +2015,7 @@ static void dumpSymbolNamesFromFile(std::string &Filename) {
 }
 
 int main(int argc, char **argv) {
-  // Print a stack trace if we signal out.
-  sys::PrintStackTraceOnErrorSignal(argv[0]);
-  PrettyStackTraceProgram X(argc, argv);
-
-  llvm_shutdown_obj Y; // Call llvm_shutdown() on exit.
+  InitLLVM X(argc, argv);
   cl::ParseCommandLineOptions(argc, argv, "llvm symbol table dumper\n");
 
   // llvm-nm only reads binary files.

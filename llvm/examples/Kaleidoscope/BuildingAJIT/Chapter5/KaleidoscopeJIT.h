@@ -34,6 +34,7 @@
 #include "llvm/Support/Error.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
+#include "llvm/Transforms/InstCombine/InstCombine.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Scalar/GVN.h"
 #include <algorithm>
@@ -77,7 +78,6 @@ using MyRemote = remote::OrcRemoteTargetClient;
 
 class KaleidoscopeJIT {
 private:
-  SymbolStringPool SSP;
   ExecutionSession ES;
   std::shared_ptr<SymbolResolver> Resolver;
   std::unique_ptr<TargetMachine> TM;
@@ -96,8 +96,7 @@ private:
 
 public:
   KaleidoscopeJIT(MyRemote &Remote)
-      : ES(SSP),
-        Resolver(createLegacyLookupResolver(
+      : Resolver(createLegacyLookupResolver(
             [this](const std::string &Name) -> JITSymbol {
               if (auto Sym = IndirectStubsMgr->findStub(Name, false))
                 return Sym;

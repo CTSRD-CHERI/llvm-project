@@ -14,7 +14,7 @@
 
 #include "sanitizer_platform.h"
 
-#if SANITIZER_FREEBSD || SANITIZER_LINUX || SANITIZER_NETBSD ||                \
+#if SANITIZER_FREEBSD || SANITIZER_LINUX || SANITIZER_NETBSD || \
     SANITIZER_OPENBSD || SANITIZER_SOLARIS
 
 #include "sanitizer_common.h"
@@ -26,8 +26,6 @@
 #include "sanitizer_mutex.h"
 #include "sanitizer_placement_new.h"
 #include "sanitizer_procmaps.h"
-#include "sanitizer_stacktrace.h"
-#include "sanitizer_symbolizer.h"
 
 #if SANITIZER_LINUX
 #include <asm/param.h>
@@ -140,6 +138,9 @@ extern void internal_sigreturn();
 }
 #endif
 
+// Note : FreeBSD had implemented both
+// Linux and OpenBSD apis, available from
+// future 12.x version most likely
 #if SANITIZER_LINUX && defined(__NR_getrandom)
 # if !defined(GRND_NONBLOCK)
 #  define GRND_NONBLOCK 1
@@ -148,6 +149,12 @@ extern void internal_sigreturn();
 #else
 # define SANITIZER_USE_GETRANDOM 0
 #endif  // SANITIZER_LINUX && defined(__NR_getrandom)
+
+#if SANITIZER_OPENBSD
+# define SANITIZER_USE_GETENTROPY 1
+#else
+# define SANITIZER_USE_GETENTROPY 0
+#endif // SANITIZER_USE_GETENTROPY
 
 namespace __sanitizer {
 
@@ -1906,6 +1913,15 @@ uptr FindAvailableMemoryRange(uptr size, uptr alignment, uptr left_padding,
 bool GetRandom(void *buffer, uptr length, bool blocking) {
   if (!buffer || !length || length > 256)
     return false;
+#if SANITIZER_USE_GETENTROPY
+  uptr rnd = getentropy(buffer, length);
+  int rverrno = 0;
+  if (internal_iserror(rnd, &rverrno) && rverrno == EFAULT)
+    return false;
+  else if (rnd == 0)
+    return true;
+#endif // SANITIZER_USE_GETENTROPY
+
 #if SANITIZER_USE_GETRANDOM
   static atomic_uint8_t skip_getrandom_syscall;
   if (!atomic_load_relaxed(&skip_getrandom_syscall)) {
@@ -1918,7 +1934,7 @@ bool GetRandom(void *buffer, uptr length, bool blocking) {
     else if (res == length)
       return true;
   }
-#endif  // SANITIZER_USE_GETRANDOM
+#endif // SANITIZER_USE_GETRANDOM
   // Up to 256 bytes, a read off /dev/urandom will not be interrupted.
   // blocking is moot here, O_NONBLOCK has no effect when opening /dev/urandom.
   uptr fd = internal_open("/dev/urandom", O_RDONLY);

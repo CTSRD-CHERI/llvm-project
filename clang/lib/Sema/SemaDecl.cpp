@@ -3011,6 +3011,14 @@ bool Sema::MergeFunctionDecl(FunctionDecl *New, NamedDecl *&OldD,
   if (Old->isInvalidDecl())
     return true;
 
+  // Disallow redeclaration of some builtins.
+  if (!getASTContext().canBuiltinBeRedeclared(Old)) {
+    Diag(New->getLocation(), diag::err_builtin_redeclare) << Old->getDeclName();
+    Diag(Old->getLocation(), diag::note_previous_builtin_declaration)
+        << Old << Old->getType();
+    return true;
+  }
+
   diag::kind PrevDiag;
   SourceLocation OldLocation;
   std::tie(PrevDiag, OldLocation) =
@@ -4057,7 +4065,8 @@ void Sema::notePreviousDefinition(const NamedDecl *Old, SourceLocation New) {
   }
 
   // Redefinition coming from different files or couldn't do better above.
-  Diag(Old->getLocation(), diag::note_previous_definition);
+  if (Old->getLocation().isValid())
+    Diag(Old->getLocation(), diag::note_previous_definition);
 }
 
 /// We've just determined that \p Old and \p New both appear to be definitions
@@ -7557,7 +7566,7 @@ enum OverrideErrorKind { OEK_All, OEK_NonDeleted, OEK_Deleted };
 } // end anonymous namespace
 
 /// \brief Report an error regarding overriding, along with any relevant
-/// overriden methods.
+/// overridden methods.
 ///
 /// \param DiagID the primary error to report.
 /// \param MD the overriding method.
@@ -9130,6 +9139,21 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
     AddToScope = false;
   }
 
+  // Diagnose availability attributes. Availability cannot be used on functions
+  // that are run during load/unload.
+  if (const auto *attr = NewFD->getAttr<AvailabilityAttr>()) {
+    if (NewFD->hasAttr<ConstructorAttr>()) {
+      Diag(attr->getLocation(), diag::warn_availability_on_static_initializer)
+          << 1;
+      NewFD->dropAttr<AvailabilityAttr>();
+    }
+    if (NewFD->hasAttr<DestructorAttr>()) {
+      Diag(attr->getLocation(), diag::warn_availability_on_static_initializer)
+          << 2;
+      NewFD->dropAttr<AvailabilityAttr>();
+    }
+  }
+
   return NewFD;
 }
 
@@ -9375,7 +9399,7 @@ static bool CheckMultiVersionFunction(Sema &S, FunctionDecl *NewFD,
 
   TargetAttr::ParsedTargetAttr NewParsed = NewTA->parse();
   // Sort order doesn't matter, it just needs to be consistent.
-  std::sort(NewParsed.Features.begin(), NewParsed.Features.end());
+  llvm::sort(NewParsed.Features.begin(), NewParsed.Features.end());
 
   const auto *OldTA = OldFD->getAttr<TargetAttr>();
   if (!OldFD->isMultiVersion()) {
@@ -10336,7 +10360,7 @@ namespace {
 
       S.DiagRuntimeBehavior(DRE->getLocStart(), DRE,
                             S.PDiag(diag)
-                              << DRE->getNameInfo().getName()
+                              << DRE->getDecl()
                               << OrigDecl->getLocation()
                               << DRE->getSourceRange());
     }
@@ -10916,7 +10940,7 @@ void Sema::AddInitializerToDecl(Decl *RealDecl, Expr *Init, bool DirectInit) {
   } else if (VDecl->isFileVarDecl()) {
     // In C, extern is typically used to avoid tentative definitions when
     // declaring variables in headers, but adding an intializer makes it a
-    // defintion. This is somewhat confusing, so GCC and Clang both warn on it.
+    // definition. This is somewhat confusing, so GCC and Clang both warn on it.
     // In C++, extern is often used to give implictly static const variables
     // external linkage, so don't warn in that case. If selectany is present,
     // this might be header code intended for C and C++ inclusion, so apply the
@@ -12712,8 +12736,8 @@ Decl *Sema::ActOnFinishFunctionBody(Decl *dcl, Stmt *Body,
       // Try to apply the named return value optimization. We have to check
       // if we can do this here because lambdas keep return statements around
       // to deduce an implicit return type.
-      if (getLangOpts().CPlusPlus && FD->getReturnType()->isRecordType() &&
-          !FD->isDependentContext())
+      if (FD->getReturnType()->isRecordType() &&
+          (!getLangOpts().CPlusPlus || !FD->isDependentContext()))
         computeNRVO(Body, getCurFunction());
     }
 
@@ -13116,11 +13140,11 @@ void Sema::AddKnownFunctionAttributes(FunctionDecl *FD) {
         Context.BuiltinInfo.isConstWithoutErrno(BuiltinID))
       FD->addAttr(ConstAttr::CreateImplicit(Context, FD->getLocation()));
 
-    // We make "fma" on GNU or Windows const because we know it does not set
+    // We make "fma" on some platforms const because we know it does not set
     // errno in those environments even though it could set errno based on the
     // C standard.
     const llvm::Triple &Trip = Context.getTargetInfo().getTriple();
-    if ((Trip.isGNUEnvironment() || Trip.isOSMSVCRT()) &&
+    if ((Trip.isGNUEnvironment() || Trip.isAndroid() || Trip.isOSMSVCRT()) &&
         !FD->hasAttr<ConstAttr>()) {
       switch (BuiltinID) {
       case Builtin::BI__builtin_fma:
@@ -15205,7 +15229,7 @@ void Sema::ActOnLastBitfield(SourceLocation DeclLoc,
   Decl *ivarDecl = AllIvarDecls[AllIvarDecls.size()-1];
   ObjCIvarDecl *Ivar = cast<ObjCIvarDecl>(ivarDecl);
 
-  if (!Ivar->isBitField() || Ivar->getBitWidthValue(Context) == 0)
+  if (!Ivar->isBitField() || Ivar->isZeroLengthBitField(Context))
     return;
   ObjCInterfaceDecl *ID = dyn_cast<ObjCInterfaceDecl>(CurContext);
   if (!ID) {
@@ -15460,10 +15484,17 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
       QualType::PrimitiveCopyKind PCK = FT.isNonTrivialToPrimitiveCopy();
       if (PCK != QualType::PCK_Trivial && PCK != QualType::PCK_VolatileTrivial)
         Record->setNonTrivialToPrimitiveCopy(true);
-      if (FT.isDestructedType())
+      if (FT.isDestructedType()) {
         Record->setNonTrivialToPrimitiveDestroy(true);
-      if (!FT.canPassInRegisters())
-        Record->setCanPassInRegisters(false);
+        Record->setParamDestroyedInCallee(true);
+      }
+
+      if (const auto *RT = FT->getAs<RecordType>()) {
+        if (RT->getDecl()->getArgPassingRestrictions() ==
+            RecordDecl::APK_CanNeverPassInRegs)
+          Record->setArgPassingRestrictions(RecordDecl::APK_CanNeverPassInRegs);
+      } else if (FT.getQualifiers().getObjCLifetime() == Qualifiers::OCL_Weak)
+        Record->setArgPassingRestrictions(RecordDecl::APK_CanNeverPassInRegs);
     }
 
     if (Record && FD->getType().isVolatileQualified())
@@ -15511,7 +15542,7 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
                                             SOEnd = M->second.end();
                    SO != SOEnd; ++SO) {
                 assert(SO->second.size() > 0 &&
-                       "Virtual function without overridding functions?");
+                       "Virtual function without overriding functions?");
                 if (SO->second.size() == 1)
                   continue;
 
@@ -15585,7 +15616,7 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
            (NonBitFields == 0 || ZeroSize) && I != E; ++I) {
         IsEmpty = false;
         if (I->isUnnamedBitfield()) {
-          if (I->getBitWidthValue(Context) > 0)
+          if (!I->isZeroLengthBitField(Context))
             ZeroSize = false;
         } else {
           ++NonBitFields;
@@ -16025,39 +16056,10 @@ static bool ValidDuplicateEnum(EnumConstantDecl *ECD, EnumDecl *Enum) {
   return false;
 }
 
-namespace {
-struct DupKey {
-  int64_t val;
-  bool isTombstoneOrEmptyKey;
-  DupKey(int64_t val, bool isTombstoneOrEmptyKey)
-    : val(val), isTombstoneOrEmptyKey(isTombstoneOrEmptyKey) {}
-};
-
-static DupKey GetDupKey(const llvm::APSInt& Val) {
-  return DupKey(Val.isSigned() ? Val.getSExtValue() : Val.getZExtValue(),
-                false);
-}
-
-struct DenseMapInfoDupKey {
-  static DupKey getEmptyKey() { return DupKey(0, true); }
-  static DupKey getTombstoneKey() { return DupKey(1, true); }
-  static unsigned getHashValue(const DupKey Key) {
-    return (unsigned)(Key.val * 37);
-  }
-  static bool isEqual(const DupKey& LHS, const DupKey& RHS) {
-    return LHS.isTombstoneOrEmptyKey == RHS.isTombstoneOrEmptyKey &&
-           LHS.val == RHS.val;
-  }
-};
-} // end anonymous namespace
-
 // Emits a warning when an element is implicitly set a value that
 // a previous element has already been set to.
 static void CheckForDuplicateEnumValues(Sema &S, ArrayRef<Decl *> Elements,
-                                        EnumDecl *Enum,
-                                        QualType EnumType) {
-  if (S.Diags.isIgnored(diag::warn_duplicate_enum_values, Enum->getLocation()))
-    return;
+                                        EnumDecl *Enum, QualType EnumType) {
   // Avoid anonymous enums
   if (!Enum->getIdentifier())
     return;
@@ -16066,20 +16068,28 @@ static void CheckForDuplicateEnumValues(Sema &S, ArrayRef<Decl *> Elements,
   if (Enum->getNumPositiveBits() > 63 || Enum->getNumNegativeBits() > 64)
     return;
 
+  if (S.Diags.isIgnored(diag::warn_duplicate_enum_values, Enum->getLocation()))
+    return;
+
   typedef SmallVector<EnumConstantDecl *, 3> ECDVector;
-  typedef SmallVector<ECDVector *, 3> DuplicatesVector;
+  typedef SmallVector<std::unique_ptr<ECDVector>, 3> DuplicatesVector;
 
   typedef llvm::PointerUnion<EnumConstantDecl*, ECDVector*> DeclOrVector;
-  typedef llvm::DenseMap<DupKey, DeclOrVector, DenseMapInfoDupKey>
-          ValueToVectorMap;
+  typedef llvm::DenseMap<int64_t, DeclOrVector> ValueToVectorMap;
+
+  // Use int64_t as a key to avoid needing special handling for DenseMap keys.
+  auto EnumConstantToKey = [](const EnumConstantDecl *D) {
+    llvm::APSInt Val = D->getInitVal();
+    return Val.isSigned() ? Val.getSExtValue() : Val.getZExtValue();
+  };
 
   DuplicatesVector DupVector;
   ValueToVectorMap EnumMap;
 
   // Populate the EnumMap with all values represented by enum constants without
-  // an initialier.
-  for (unsigned i = 0, e = Elements.size(); i != e; ++i) {
-    EnumConstantDecl *ECD = cast_or_null<EnumConstantDecl>(Elements[i]);
+  // an initializer.
+  for (auto *Element : Elements) {
+    EnumConstantDecl *ECD = cast_or_null<EnumConstantDecl>(Element);
 
     // Null EnumConstantDecl means a previous diagnostic has been emitted for
     // this constant.  Skip this enum since it may be ill-formed.
@@ -16087,45 +16097,45 @@ static void CheckForDuplicateEnumValues(Sema &S, ArrayRef<Decl *> Elements,
       return;
     }
 
+    // Constants with initalizers are handled in the next loop.
     if (ECD->getInitExpr())
       continue;
 
-    DupKey Key = GetDupKey(ECD->getInitVal());
-    DeclOrVector &Entry = EnumMap[Key];
-
-    // First time encountering this value.
-    if (Entry.isNull())
-      Entry = ECD;
+    // Duplicate values are handled in the next loop.
+    EnumMap.insert({EnumConstantToKey(ECD), ECD});
   }
 
+  if (EnumMap.size() == 0)
+    return;
+
   // Create vectors for any values that has duplicates.
-  for (unsigned i = 0, e = Elements.size(); i != e; ++i) {
-    EnumConstantDecl *ECD = cast<EnumConstantDecl>(Elements[i]);
+  for (auto *Element : Elements) {
+    // The last loop returned if any constant was null.
+    EnumConstantDecl *ECD = cast<EnumConstantDecl>(Element);
     if (!ValidDuplicateEnum(ECD, Enum))
       continue;
 
-    DupKey Key = GetDupKey(ECD->getInitVal());
-
-    DeclOrVector& Entry = EnumMap[Key];
-    if (Entry.isNull())
+    auto Iter = EnumMap.find(EnumConstantToKey(ECD));
+    if (Iter == EnumMap.end())
       continue;
 
+    DeclOrVector& Entry = Iter->second;
     if (EnumConstantDecl *D = Entry.dyn_cast<EnumConstantDecl*>()) {
       // Ensure constants are different.
       if (D == ECD)
         continue;
 
       // Create new vector and push values onto it.
-      ECDVector *Vec = new ECDVector();
+      auto Vec = llvm::make_unique<ECDVector>();
       Vec->push_back(D);
       Vec->push_back(ECD);
 
       // Update entry to point to the duplicates vector.
-      Entry = Vec;
+      Entry = Vec.get();
 
       // Store the vector somewhere we can consult later for quick emission of
       // diagnostics.
-      DupVector.push_back(Vec);
+      DupVector.emplace_back(std::move(Vec));
       continue;
     }
 
@@ -16138,26 +16148,21 @@ static void CheckForDuplicateEnumValues(Sema &S, ArrayRef<Decl *> Elements,
   }
 
   // Emit diagnostics.
-  for (DuplicatesVector::iterator DupVectorIter = DupVector.begin(),
-                                  DupVectorEnd = DupVector.end();
-       DupVectorIter != DupVectorEnd; ++DupVectorIter) {
-    ECDVector *Vec = *DupVectorIter;
+  for (const auto &Vec : DupVector) {
     assert(Vec->size() > 1 && "ECDVector should have at least 2 elements.");
 
     // Emit warning for one enum constant.
-    ECDVector::iterator I = Vec->begin();
-    S.Diag((*I)->getLocation(), diag::warn_duplicate_enum_values)
-      << (*I)->getName() << (*I)->getInitVal().toString(10)
-      << (*I)->getSourceRange();
-    ++I;
+    auto *FirstECD = Vec->front();
+    S.Diag(FirstECD->getLocation(), diag::warn_duplicate_enum_values)
+      << FirstECD << FirstECD->getInitVal().toString(10)
+      << FirstECD->getSourceRange();
 
     // Emit one note for each of the remaining enum constants with
     // the same value.
-    for (ECDVector::iterator E = Vec->end(); I != E; ++I)
-      S.Diag((*I)->getLocation(), diag::note_duplicate_element)
-        << (*I)->getName() << (*I)->getInitVal().toString(10)
-        << (*I)->getSourceRange();
-    delete Vec;
+    for (auto *ECD : llvm::make_range(Vec->begin() + 1, Vec->end()))
+      S.Diag(ECD->getLocation(), diag::note_duplicate_element)
+        << ECD << ECD->getInitVal().toString(10)
+        << ECD->getSourceRange();
   }
 }
 

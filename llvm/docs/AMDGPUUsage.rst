@@ -198,11 +198,8 @@ names from both the *Processor* and *Alternative Processor* can be used.
                                                                       - Radeon RX Vega 64
                                                                         Liquid
                                                                       - Radeon Instinct MI25
-     ``gfx902``                  ``amdgcn``   APU   - xnack           *TBA*
-                                                      [on]
-                                                                      .. TODO
-                                                                         Add product
-                                                                         names.
+     ``gfx902``                  ``amdgcn``   APU   - xnack           - Ryzen 3 2200G
+                                                      [on]            - Ryzen 5 2400G
      =========== =============== ============ ===== ========= ======= ==================
 
 .. _amdgpu-target-features:
@@ -763,12 +760,16 @@ The following relocation types are supported:
      Relocation Type            Kind    Value  Field       Calculation
      ========================== ======= =====  ==========  ==============================
      ``R_AMDGPU_NONE``                  0      *none*      *none*
-     ``R_AMDGPU_ABS32_LO``      Dynamic 1      ``word32``  (S + A) & 0xFFFFFFFF
-     ``R_AMDGPU_ABS32_HI``      Dynamic 2      ``word32``  (S + A) >> 32
-     ``R_AMDGPU_ABS64``         Dynamic 3      ``word64``  S + A
+     ``R_AMDGPU_ABS32_LO``      Static, 1      ``word32``  (S + A) & 0xFFFFFFFF
+                                Dynamic
+     ``R_AMDGPU_ABS32_HI``      Static, 2      ``word32``  (S + A) >> 32
+                                Dynamic
+     ``R_AMDGPU_ABS64``         Static, 3      ``word64``  S + A
+                                Dynamic 
      ``R_AMDGPU_REL32``         Static  4      ``word32``  S + A - P
      ``R_AMDGPU_REL64``         Static  5      ``word64``  S + A - P
-     ``R_AMDGPU_ABS32``         Static  6      ``word32``  S + A
+     ``R_AMDGPU_ABS32``         Static, 6      ``word32``  S + A
+                                Dynamic
      ``R_AMDGPU_GOTPCREL``      Static  7      ``word32``  G + GOT + A - P
      ``R_AMDGPU_GOTPCREL32_LO`` Static  8      ``word32``  (G + GOT + A - P) & 0xFFFFFFFF
      ``R_AMDGPU_GOTPCREL32_HI`` Static  9      ``word32``  (G + GOT + A - P) >> 32
@@ -778,6 +779,12 @@ The following relocation types are supported:
      ``R_AMDGPU_RELATIVE64``    Dynamic 13     ``word64``  B + A
      ========================== ======= =====  ==========  ==============================
 
+``R_AMDGPU_ABS32_LO`` and ``R_AMDGPU_ABS32_HI`` are only supported by
+the ``mesa3d`` OS, which does not support ``R_AMDGPU_ABS64``.
+
+There is no current OS loader support for 32 bit programs and so
+``R_AMDGPU_ABS32`` is not used.
+     
 .. _amdgpu-dwarf:
 
 DWARF
@@ -909,6 +916,34 @@ This section provides code conventions used when the target triple OS is
 ``amdhsa`` (see :ref:`amdgpu-target-triples`).
 
 .. _amdgpu-amdhsa-hsa-code-object-metadata:
+
+Code Object Target Identification
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The AMDHSA OS uses the following syntax to specify the code object
+target as a single string:
+
+  ``<Architecture>-<Vendor>-<OS>-<Environment>-<Processor><Target Features>``
+
+Where:
+
+  - ``<Architecture>``, ``<Vendor>``, ``<OS>`` and ``<Environment>``
+    are the same as the *Target Triple* (see
+    :ref:`amdgpu-target-triples`).
+
+  - ``<Processor>`` is the same as the *Processor* (see
+    :ref:`amdgpu-processors`).
+
+  - ``<Target Features>`` is a list of the enabled *Target Features*
+    (see :ref:`amdgpu-target-features`), each prefixed by a plus, that
+    apply to *Processor*. The list must be in the same order as listed
+    in the table :ref:`amdgpu-target-feature-table`. Note that *Target
+    Features* must be included in the list if they are enabled even if
+    that is the default for *Processor*.
+
+For example:
+
+  ``"amdgcn-amd-amdhsa--gfx902+xnack"``
 
 Code Object Metadata
 ~~~~~~~~~~~~~~~~~~~~
@@ -2241,7 +2276,7 @@ VGPR register initial state is defined in
                 > 1)                              wavefront lane.
      ========== ========================== ====== ==============================
 
-The setting of registers is is done by GPU CP/ADC/SPI hardware as follows:
+The setting of registers is done by GPU CP/ADC/SPI hardware as follows:
 
 1. SGPRs before the Work-Group Ids are set by CP using the 16 User Data
    registers.
@@ -3752,6 +3787,125 @@ the ``s_trap`` instruction with the following usage:
      debugger            ``s_trap 0xfe``                 Reserved for debugger.
      debugger            ``s_trap 0xff``                 Reserved for debugger.
      =================== =============== =============== =======================
+
+AMDPAL
+------
+
+This section provides code conventions used when the target triple OS is
+``amdpal`` (see :ref:`amdgpu-target-triples`) for passing runtime parameters
+from the application/runtime to each invocation of a hardware shader. These
+parameters include both generic, application-controlled parameters called
+*user data* as well as system-generated parameters that are a product of the
+draw or dispatch execution.
+
+User Data
+~~~~~~~~~
+
+Each hardware stage has a set of 32-bit *user data registers* which can be
+written from a command buffer and then loaded into SGPRs when waves are launched
+via a subsequent dispatch or draw operation. This is the way most arguments are
+passed from the application/runtime to a hardware shader.
+
+Compute User Data
+~~~~~~~~~~~~~~~~~
+
+Compute shader user data mappings are simpler than graphics shaders, and have a
+fixed mapping.
+
+Note that there are always 10 available *user data entries* in registers -
+entries beyond that limit must be fetched from memory (via the spill table
+pointer) by the shader.
+
+  .. table:: PAL Compute Shader User Data Registers
+     :name: pal-compute-user-data-registers
+
+     ============= ================================
+     User Register Description
+     ============= ================================
+     0             Global Internal Table (32-bit pointer)
+     1             Per-Shader Internal Table (32-bit pointer)
+     2 - 11        Application-Controlled User Data (10 32-bit values)
+     12            Spill Table (32-bit pointer)
+     13 - 14       Thread Group Count (64-bit pointer)
+     15            GDS Range
+     ============= ================================
+
+Graphics User Data
+~~~~~~~~~~~~~~~~~~
+
+Graphics pipelines support a much more flexible user data mapping:
+
+  .. table:: PAL Graphics Shader User Data Registers
+     :name: pal-graphics-user-data-registers
+
+     ============= ================================
+     User Register Description
+     ============= ================================
+     0             Global Internal Table (32-bit pointer)
+     +             Per-Shader Internal Table (32-bit pointer)
+     + 1-15        Application Controlled User Data
+                   (1-15 Contiguous 32-bit Values in Registers)
+     +             Spill Table (32-bit pointer)
+     +             Draw Index (First Stage Only)
+     +             Vertex Offset (First Stage Only)
+     +             Instance Offset (First Stage Only)
+     ============= ================================
+
+  The placement of the global internal table remains fixed in the first *user
+  data SGPR register*. Otherwise all parameters are optional, and can be mapped
+  to any desired *user data SGPR register*, with the following regstrictions:
+
+  * Draw Index, Vertex Offset, and Instance Offset can only be used by the first
+    activehardware stage in a graphics pipeline (i.e. where the API vertex
+    shader runs).
+
+  * Application-controlled user data must be mapped into a contiguous range of
+    user data registers.
+
+  * The application-controlled user data range supports compaction remapping, so
+    only *entries* that are actually consumed by the shader must be assigned to
+    corresponding *registers*. Note that in order to support an efficient runtime
+    implementation, the remapping must pack *registers* in the same order as
+    *entries*, with unused *entries* removed.
+
+.. _pal_global_internal_table:
+
+Global Internal Table
+~~~~~~~~~~~~~~~~~~~~~
+
+The global internal table is a table of *shader resource descriptors* (SRDs) that
+define how certain engine-wide, runtime-managed resources should be accessed
+from a shader. The majority of these resources have HW-defined formats, and it
+is up to the compiler to write/read data as required by the target hardware.
+
+The following table illustrates the required format:
+
+  .. table:: PAL Global Internal Table
+     :name: pal-git-table
+
+     ============= ================================
+     Offset        Description
+     ============= ================================
+     0-3           Graphics Scratch SRD
+     4-7           Compute Scratch SRD
+     8-11          ES/GS Ring Output SRD
+     12-15         ES/GS Ring Input SRD
+     16-19         GS/VS Ring Output #0
+     20-23         GS/VS Ring Output #1
+     24-27         GS/VS Ring Output #2
+     28-31         GS/VS Ring Output #3
+     32-35         GS/VS Ring Input SRD
+     36-39         Tessellation Factor Buffer SRD
+     40-43         Off-Chip LDS Buffer SRD
+     44-47         Off-Chip Param Cache Buffer SRD
+     48-51         Sample Position Buffer SRD
+     52            vaRange::ShadowDescriptorTable High Bits
+     ============= ================================
+
+  The pointer to the global internal table passed to the shader as user data
+  is a 32-bit pointer. The top 32 bits should be assumed to be the same as
+  the top 32 bits of the pipeline, so the shader may use the program
+  counter's top 32 bits.
 
 Unspecified OS
 --------------

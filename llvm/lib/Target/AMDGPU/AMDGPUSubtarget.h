@@ -133,6 +133,7 @@ protected:
   bool EnableLoadStoreOpt;
   bool EnableUnsafeDSOffsetFolding;
   bool EnableSIScheduler;
+  bool EnableDS128;
   bool DumpCode;
 
   // Subtarget statically properties set by tablegen
@@ -152,6 +153,7 @@ protected:
   bool HasMovrel;
   bool HasVGPRIndexMode;
   bool HasScalarStores;
+  bool HasScalarAtomics;
   bool HasInv2PiInlineImm;
   bool HasSDWA;
   bool HasSDWAOmod;
@@ -411,8 +413,8 @@ public:
 
   /// \returns If target supports ds_read/write_b128 and user enables generation
   /// of ds_read/write_b128.
-  bool useDS128(bool UserEnable) const {
-    return CIInsts && UserEnable;
+  bool useDS128() const {
+    return CIInsts && EnableDS128;
   }
 
   /// \returns If MUBUF instructions always perform range checking, even for
@@ -550,8 +552,13 @@ public:
   // Scratch is allocated in 256 dword per wave blocks for the entire
   // wavefront. When viewed from the perspecive of an arbitrary workitem, this
   // is 4-byte aligned.
+  //
+  // Only 4-byte alignment is really needed to access anything. Transformations
+  // on the pointer value itself may rely on the alignment / known low bits of
+  // the pointer. Set this to something above the minimum to avoid needing
+  // dynamic realignment in common cases.
   unsigned getStackAlignment() const {
-    return 4;
+    return 16;
   }
 
   bool enableMachineScheduler() const override {
@@ -777,6 +784,10 @@ public:
 
   bool hasScalarStores() const {
     return HasScalarStores;
+  }
+
+  bool hasScalarAtomics() const {
+    return HasScalarAtomics;
   }
 
   bool hasInv2PiInlineImm() const {

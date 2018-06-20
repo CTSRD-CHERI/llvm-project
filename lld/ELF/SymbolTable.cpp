@@ -130,7 +130,10 @@ template <class ELFT> void SymbolTable::addCombinedLTOObject() {
 
   for (InputFile *File : LTO->compile()) {
     DenseSet<CachedHashStringRef> DummyGroups;
-    cast<ObjFile<ELFT>>(File)->parse(DummyGroups);
+    auto *Obj = cast<ObjFile<ELFT>>(File);
+    Obj->parse(DummyGroups);
+    for (Symbol *Sym : Obj->getGlobalSymbols())
+      Sym->parseSymbolVersion();
     ObjectFiles.push_back(File);
   }
 }
@@ -284,6 +287,63 @@ template <class ELFT> Symbol *SymbolTable::addUndefined(StringRef Name) {
 
 static uint8_t getVisibility(uint8_t StOther) { return StOther & 3; }
 
+// Do extra check for --warn-backrefs.
+//
+// --warn-backrefs is an option to prevent an undefined reference from
+// fetching an archive member written earlier in the command line. It can be
+// used to keep your program compatible with GNU linkers after you switch to
+// lld. I'll explain the feature and why you may find it useful in this
+// comment.
+//
+// lld's symbol resolution semantics is more relaxed than traditional Unix
+// linkers. For example,
+//
+//   ld.lld foo.a bar.o
+//
+// succeeds even if bar.o contains an undefined symbol that have to be
+// resolved by some object file in foo.a. Traditional Unix linkers don't
+// allow this kind of backward reference, as they visit each file only once
+// from left to right in the command line while resolving all undefined
+// symbols at the moment of visiting.
+//
+// In the above case, since there's no undefined symbol when a linker visits
+// foo.a, no files are pulled out from foo.a, and because the linker forgets
+// about foo.a after visiting, it can't resolve undefined symbols in bar.o
+// that could have been resolved otherwise.
+//
+// That lld accepts more relaxed form means that (besides it'd make more
+// sense) you can accidentally write a command line or a build file that
+// works only with lld, even if you have a plan to distribute it to wider
+// users who may be using GNU linkers. With --warn-backrefs, you can detect
+// a library order that doesn't work with other Unix linkers.
+//
+// The option is also useful to detect cyclic dependencies between static
+// archives. Again, lld accepts
+//
+//   ld.lld foo.a bar.a
+//
+// even if foo.a and bar.a depend on each other. With --warn-backrefs, it is
+// handled as an error.
+//
+// Here is how the option works. We assign a group ID to each file. A file
+// with a smaller group ID can pull out object files from an archive file
+// with an equal or greater group ID. Otherwise, it is a reverse dependency
+// and an error.
+//
+// A file outside --{start,end}-group gets a fresh ID when instantiated. All
+// files within the same --{start,end}-group get the same group ID. E.g.
+//
+//   ld.lld A B --start-group C D --end-group E
+//
+// A forms group 0. B form group 1. C and D (including their member object
+// files) form group 2. E forms group 3. I think that you can see how this
+// group assignment rule simulates the traditional linker's semantics.
+static void checkBackrefs(StringRef Name, InputFile *Old, InputFile *New) {
+  if (Config->WarnBackrefs && New && Old->GroupId < New->GroupId)
+    warn("backward reference detected: " + Name + " in " + toString(New) +
+         " refers to " + toString(Old));
+}
+
 template <class ELFT>
 Symbol *SymbolTable::addUndefined(StringRef Name, uint8_t Binding,
                                   uint8_t StOther, uint8_t Type,
@@ -300,20 +360,24 @@ Symbol *SymbolTable::addUndefined(StringRef Name, uint8_t Binding,
     replaceSymbol<Undefined>(S, File, Name, Binding, StOther, Type);
     return S;
   }
+
   if (S->isShared() || S->isLazy() || (S->isUndefined() && Binding != STB_WEAK))
     S->Binding = Binding;
-  if (Binding != STB_WEAK) {
+
+  if (!Config->GcSections && Binding != STB_WEAK)
     if (auto *SS = dyn_cast<SharedSymbol>(S))
-      if (!Config->GcSections)
-        SS->getFile<ELFT>().IsNeeded = true;
-  }
-  if (auto *L = dyn_cast<Lazy>(S)) {
+      SS->getFile<ELFT>().IsNeeded = true;
+
+  if (S->isLazy()) {
     // An undefined weak will not fetch archive members. See comment on Lazy in
     // Symbols.h for the details.
-    if (Binding == STB_WEAK)
-      L->Type = Type;
-    else if (InputFile *F = L->fetch())
-      addFile<ELFT>(F);
+    if (Binding == STB_WEAK) {
+      S->Type = Type;
+      return S;
+    }
+
+    checkBackrefs(Name, S->File, File);
+    fetchLazy<ELFT>(S);
   }
   return S;
 }
@@ -381,7 +445,11 @@ Symbol *SymbolTable::addCommon(StringRef N, uint64_t Size, uint32_t Alignment,
   bool WasInserted;
   std::tie(S, WasInserted) = insert(N, Type, getVisibility(StOther),
                                     /*CanOmitFromDynSym*/ false, &File);
+
   int Cmp = compareDefined(S, WasInserted, Binding, N);
+  if (Cmp < 0)
+    return S;
+
   if (Cmp > 0) {
     auto *Bss = make<BssSection>("COMMON", Size, Alignment);
     Bss->File = &File;
@@ -389,24 +457,25 @@ Symbol *SymbolTable::addCommon(StringRef N, uint64_t Size, uint32_t Alignment,
     InputSections.push_back(Bss);
 
     replaceSymbol<Defined>(S, &File, N, Binding, StOther, Type, 0, Size, Bss);
-  } else if (Cmp == 0) {
-    auto *D = cast<Defined>(S);
-    auto *Bss = dyn_cast_or_null<BssSection>(D->Section);
-    if (!Bss) {
-      // Non-common symbols take precedence over common symbols.
-      if (Config->WarnCommon)
-        warn("common " + S->getName() + " is overridden");
-      return S;
-    }
+    return S;
+  }
 
+  auto *D = cast<Defined>(S);
+  auto *Bss = dyn_cast_or_null<BssSection>(D->Section);
+  if (!Bss) {
+    // Non-common symbols take precedence over common symbols.
     if (Config->WarnCommon)
-      warn("multiple common of " + D->getName());
+      warn("common " + S->getName() + " is overridden");
+    return S;
+  }
 
-    Bss->Alignment = std::max(Bss->Alignment, Alignment);
-    if (Size > Bss->Size) {
-      D->File = Bss->File = &File;
-      D->Size = Bss->Size = Size;
-    }
+  if (Config->WarnCommon)
+    warn("multiple common of " + D->getName());
+
+  Bss->Alignment = std::max(Bss->Alignment, Alignment);
+  if (Size > Bss->Size) {
+    D->File = Bss->File = &File;
+    D->Size = Bss->Size = Size;
   }
   return S;
 }
@@ -526,14 +595,18 @@ Symbol *SymbolTable::find(StringRef Name) {
   return SymVector[It->second];
 }
 
-template <class ELFT>
-void SymbolTable::addLazyArchive(StringRef Name, ArchiveFile &F,
-                                 const object::Archive::Symbol Sym) {
+// This is used to handle lazy symbols. May replace existent
+// symbol with lazy version or request to Fetch it.
+template <class ELFT, typename LazyT, typename... ArgT>
+void replaceOrFetchLazy(StringRef Name, InputFile &File,
+                        llvm::function_ref<InputFile *()> Fetch,
+                        ArgT &&... Arg) {
   Symbol *S;
   bool WasInserted;
-  std::tie(S, WasInserted) = insert(Name);
+  std::tie(S, WasInserted) = Symtab->insert(Name);
   if (WasInserted) {
-    replaceSymbol<LazyArchive>(S, F, Sym, Symbol::UnknownType);
+    replaceSymbol<LazyT>(S, File, Symbol::UnknownType,
+                         std::forward<ArgT>(Arg)...);
     return;
   }
   if (!S->isUndefined())
@@ -542,47 +615,38 @@ void SymbolTable::addLazyArchive(StringRef Name, ArchiveFile &F,
   // An undefined weak will not fetch archive members. See comment on Lazy in
   // Symbols.h for the details.
   if (S->isWeak()) {
-    replaceSymbol<LazyArchive>(S, F, Sym, S->Type);
+    replaceSymbol<LazyT>(S, File, S->Type, std::forward<ArgT>(Arg)...);
     S->Binding = STB_WEAK;
     return;
   }
-  std::pair<MemoryBufferRef, uint64_t> MBInfo = F.getMember(&Sym);
-  if (!MBInfo.first.getBuffer().empty())
-    addFile<ELFT>(createObjectFile(MBInfo.first, F.getName(), MBInfo.second));
+
+  if (InputFile *F = Fetch())
+    Symtab->addFile<ELFT>(F);
+}
+
+template <class ELFT>
+void SymbolTable::addLazyArchive(StringRef Name, ArchiveFile &F,
+                                 const object::Archive::Symbol Sym) {
+  replaceOrFetchLazy<ELFT, LazyArchive>(Name, F, [&]() { return F.fetch(Sym); },
+                                        Sym);
 }
 
 template <class ELFT>
 void SymbolTable::addLazyObject(StringRef Name, LazyObjFile &Obj) {
-  Symbol *S;
-  bool WasInserted;
-  std::tie(S, WasInserted) = insert(Name);
-  if (WasInserted) {
-    replaceSymbol<LazyObject>(S, Obj, Name, Symbol::UnknownType);
-    return;
-  }
-  if (!S->isUndefined())
-    return;
-
-  // See comment for addLazyArchive above.
-  if (S->isWeak()) {
-    replaceSymbol<LazyObject>(S, Obj, Name, S->Type);
-    S->Binding = STB_WEAK;
-    return;
-  }
-  if (InputFile *F = Obj.fetch())
-    addFile<ELFT>(F);
+  replaceOrFetchLazy<ELFT, LazyObject>(Name, Obj, [&]() { return Obj.fetch(); },
+                                       Name);
 }
 
-// If we already saw this symbol, force loading its file.
-template <class ELFT> void SymbolTable::fetchIfLazy(StringRef Name) {
-  if (Symbol *B = find(Name)) {
-    // Mark the symbol not to be eliminated by LTO
-    // even if it is a bitcode symbol.
-    B->IsUsedInRegularObj = true;
-    if (auto *L = dyn_cast<Lazy>(B))
-      if (InputFile *File = L->fetch())
-        addFile<ELFT>(File);
+template <class ELFT> void SymbolTable::fetchLazy(Symbol *Sym) {
+  if (auto *S = dyn_cast<LazyArchive>(Sym)) {
+    if (InputFile *File = S->fetch())
+      addFile<ELFT>(File);
+    return;
   }
+
+  auto *S = cast<LazyObject>(Sym);
+  if (InputFile *File = cast<LazyObjFile>(S->File)->fetch())
+    addFile<ELFT>(File);
 }
 
 // Initialize DemangledSyms with a map from demangled symbols to symbol
@@ -793,6 +857,11 @@ template void SymbolTable::addLazyObject<ELF32BE>(StringRef, LazyObjFile &);
 template void SymbolTable::addLazyObject<ELF64LE>(StringRef, LazyObjFile &);
 template void SymbolTable::addLazyObject<ELF64BE>(StringRef, LazyObjFile &);
 
+template void SymbolTable::fetchLazy<ELF32LE>(Symbol *);
+template void SymbolTable::fetchLazy<ELF32BE>(Symbol *);
+template void SymbolTable::fetchLazy<ELF64LE>(Symbol *);
+template void SymbolTable::fetchLazy<ELF64BE>(Symbol *);
+
 template void SymbolTable::addShared<ELF32LE>(StringRef, SharedFile<ELF32LE> &,
                                               const typename ELF32LE::Sym &,
                                               uint32_t Alignment, uint32_t);
@@ -805,8 +874,3 @@ template void SymbolTable::addShared<ELF64LE>(StringRef, SharedFile<ELF64LE> &,
 template void SymbolTable::addShared<ELF64BE>(StringRef, SharedFile<ELF64BE> &,
                                               const typename ELF64BE::Sym &,
                                               uint32_t Alignment, uint32_t);
-
-template void SymbolTable::fetchIfLazy<ELF32LE>(StringRef);
-template void SymbolTable::fetchIfLazy<ELF32BE>(StringRef);
-template void SymbolTable::fetchIfLazy<ELF64LE>(StringRef);
-template void SymbolTable::fetchIfLazy<ELF64BE>(StringRef);

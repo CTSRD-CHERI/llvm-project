@@ -1558,7 +1558,14 @@ public:
   /// Remove @p MA from this statement.
   ///
   /// In contrast to removeMemoryAccess(), no other access will be eliminated.
-  void removeSingleMemoryAccess(MemoryAccess *MA);
+  ///
+  /// @param MA            The MemoryAccess to be removed.
+  /// @param AfterHoisting If true, also remove from data access lists.
+  ///                      These lists are filled during
+  ///                      ScopBuilder::buildAccessRelations. Therefore, if this
+  ///                      method is called before buildAccessRelations, false
+  ///                      must be passed.
+  void removeSingleMemoryAccess(MemoryAccess *MA, bool AfterHoisting = true);
 
   using iterator = MemoryAccessVec::iterator;
   using const_iterator = MemoryAccessVec::const_iterator;
@@ -1708,9 +1715,6 @@ private:
 
   /// The underlying Region.
   Region &R;
-
-  /// The name of the SCoP (identical to the regions name)
-  std::string name;
 
   /// The ID to be assigned to the next Scop in a function
   static int NextScopID;
@@ -2269,9 +2273,15 @@ private:
 
   /// Remove statements from the list of scop statements.
   ///
-  /// @param ShouldDelete A function that returns true if the statement passed
-  ///                     to it should be deleted.
-  void removeStmts(std::function<bool(ScopStmt &)> ShouldDelete);
+  /// @param ShouldDelete  A function that returns true if the statement passed
+  ///                      to it should be deleted.
+  /// @param AfterHoisting If true, also remove from data access lists.
+  ///                      These lists are filled during
+  ///                      ScopBuilder::buildAccessRelations. Therefore, if this
+  ///                      method is called before buildAccessRelations, false
+  ///                      must be passed.
+  void removeStmts(std::function<bool(ScopStmt &)> ShouldDelete,
+                   bool AfterHoisting = true);
 
   /// Removes @p Stmt from the StmtMap.
   void removeFromStmtMap(ScopStmt &Stmt);
@@ -2442,7 +2452,7 @@ public:
   /// could be executed.
   bool isEmpty() const { return Stmts.empty(); }
 
-  const StringRef getName() const { return name; }
+  const StringRef getName() const { return R.getNameStr(); }
 
   using array_iterator = ArrayInfoSetTy::iterator;
   using const_array_iterator = ArrayInfoSetTy::const_iterator;

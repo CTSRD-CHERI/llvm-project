@@ -2042,16 +2042,6 @@ static void handleDependencyAttr(Sema &S, Scope *Scope, Decl *D,
 static void handleUnusedAttr(Sema &S, Decl *D, const AttributeList &AL) {
   bool IsCXX17Attr = AL.isCXX11Attribute() && !AL.getScopeName();
 
-  if (IsCXX17Attr && isa<VarDecl>(D)) {
-    // The C++17 spelling of this attribute cannot be applied to a static data
-    // member per [dcl.attr.unused]p2.
-    if (cast<VarDecl>(D)->isStaticDataMember()) {
-      S.Diag(AL.getLoc(), diag::warn_attribute_wrong_decl_type)
-          << AL.getName() << ExpectedForMaybeUnused;
-      return;
-    }
-  }
-
   // If this is spelled as the standard C++17 attribute, but not in C++17, warn
   // about using it as an extension.
   if (!S.getLangOpts().CPlusPlus17 && IsCXX17Attr)
@@ -5051,7 +5041,7 @@ static void handleAbiTagAttr(Sema &S, Decl *D, const AttributeList &AL) {
     return;
 
   // Store tags sorted and without duplicates.
-  std::sort(Tags.begin(), Tags.end());
+  llvm::sort(Tags.begin(), Tags.end());
   Tags.erase(std::unique(Tags.begin(), Tags.end()), Tags.end());
 
   D->addAttr(::new (S.Context)
@@ -6828,33 +6818,17 @@ static bool ShouldDiagnoseAvailabilityInContext(Sema &S, AvailabilityResult K,
     return false;
   };
 
-  // FIXME: This is a temporary workaround! Some existing Apple headers depends
-  // on nested declarations in an @interface having the availability of the
-  // interface when they really shouldn't: they are members of the enclosing
-  // context, and can referenced from there.
-  if (S.OriginalLexicalContext && cast<Decl>(S.OriginalLexicalContext) != Ctx) {
-    const auto *OrigCtx = cast<Decl>(S.OriginalLexicalContext);
-    if (CheckContext(OrigCtx))
-      return false;
-
-    // An implementation implicitly has the availability of the interface.
-    if (const auto *CatOrImpl = dyn_cast<ObjCImplDecl>(OrigCtx)) {
-      if (const ObjCInterfaceDecl *Interface = CatOrImpl->getClassInterface())
-        if (CheckContext(Interface))
-          return false;
-    }
-    // A category implicitly has the availability of the interface.
-    else if (const auto *CatD = dyn_cast<ObjCCategoryDecl>(OrigCtx))
-      if (const ObjCInterfaceDecl *Interface = CatD->getClassInterface())
-        if (CheckContext(Interface))
-          return false;
-  }
-
   do {
     if (CheckContext(Ctx))
       return false;
 
     // An implementation implicitly has the availability of the interface.
+    // Unless it is "+load" method.
+    if (const auto *MethodD = dyn_cast<ObjCMethodDecl>(Ctx))
+      if (MethodD->isClassMethod() &&
+          MethodD->getSelector().getAsString() == "load")
+        return true;
+
     if (const auto *CatOrImpl = dyn_cast<ObjCImplDecl>(Ctx)) {
       if (const ObjCInterfaceDecl *Interface = CatOrImpl->getClassInterface())
         if (CheckContext(Interface))
@@ -6931,6 +6905,45 @@ struct AttributeInsertion {
 
 } // end anonymous namespace
 
+/// Tries to parse a string as ObjC method name.
+///
+/// \param Name The string to parse. Expected to originate from availability
+/// attribute argument.
+/// \param SlotNames The vector that will be populated with slot names. In case
+/// of unsuccessful parsing can contain invalid data.
+/// \returns A number of method parameters if parsing was successful, None
+/// otherwise.
+static Optional<unsigned>
+tryParseObjCMethodName(StringRef Name, SmallVectorImpl<StringRef> &SlotNames,
+                       const LangOptions &LangOpts) {
+  // Accept replacements starting with - or + as valid ObjC method names.
+  if (!Name.empty() && (Name.front() == '-' || Name.front() == '+'))
+    Name = Name.drop_front(1);
+  if (Name.empty())
+    return None;
+  Name.split(SlotNames, ':');
+  unsigned NumParams;
+  if (Name.back() == ':') {
+    // Remove an empty string at the end that doesn't represent any slot.
+    SlotNames.pop_back();
+    NumParams = SlotNames.size();
+  } else {
+    if (SlotNames.size() != 1)
+      // Not a valid method name, just a colon-separated string.
+      return None;
+    NumParams = 0;
+  }
+  // Verify all slot names are valid.
+  bool AllowDollar = LangOpts.DollarIdents;
+  for (StringRef S : SlotNames) {
+    if (S.empty())
+      continue;
+    if (!isValidIdentifier(S, AllowDollar))
+      return None;
+  }
+  return NumParams;
+}
+
 /// Returns a source location in which it's appropriate to insert a new
 /// attribute for the given declaration \D.
 static Optional<AttributeInsertion>
@@ -6960,14 +6973,15 @@ createAttributeInsertion(const NamedDecl *D, const SourceManager &SM,
 /// \param Ctx The context that the reference occurred in
 /// \param ReferringDecl The exact declaration that was referenced.
 /// \param OffendingDecl A related decl to \c ReferringDecl that has an
-/// availability attribute corrisponding to \c K attached to it. Note that this
+/// availability attribute corresponding to \c K attached to it. Note that this
 /// may not be the same as ReferringDecl, i.e. if an EnumDecl is annotated and
 /// we refer to a member EnumConstantDecl, ReferringDecl is the EnumConstantDecl
 /// and OffendingDecl is the EnumDecl.
 static void DoEmitAvailabilityWarning(Sema &S, AvailabilityResult K,
                                       Decl *Ctx, const NamedDecl *ReferringDecl,
                                       const NamedDecl *OffendingDecl,
-                                      StringRef Message, SourceLocation Loc,
+                                      StringRef Message,
+                                      ArrayRef<SourceLocation> Locs,
                                       const ObjCInterfaceDecl *UnknownObjCClass,
                                       const ObjCPropertyDecl *ObjCProperty,
                                       bool ObjCPropertyAccess) {
@@ -6988,6 +7002,8 @@ static void DoEmitAvailabilityWarning(Sema &S, AvailabilityResult K,
 
   if (!ShouldDiagnoseAvailabilityInContext(S, K, DeclVersion, Ctx))
     return;
+
+  SourceLocation Loc = Locs.front();
 
   // The declaration can have multiple availability attributes, we are looking
   // at one of them.
@@ -7134,37 +7150,55 @@ static void DoEmitAvailabilityWarning(Sema &S, AvailabilityResult K,
     llvm_unreachable("Warning for availability of available declaration?");
   }
 
-  CharSourceRange UseRange;
-  StringRef Replacement;
+  SmallVector<FixItHint, 12> FixIts;
   if (K == AR_Deprecated) {
+    StringRef Replacement;
     if (auto AL = OffendingDecl->getAttr<DeprecatedAttr>())
       Replacement = AL->getReplacement();
     if (auto AL = getAttrForPlatform(S.Context, OffendingDecl))
       Replacement = AL->getReplacement();
 
+    CharSourceRange UseRange;
     if (!Replacement.empty())
       UseRange =
           CharSourceRange::getCharRange(Loc, S.getLocForEndOfToken(Loc));
+    if (UseRange.isValid()) {
+      if (const auto *MethodDecl = dyn_cast<ObjCMethodDecl>(ReferringDecl)) {
+        Selector Sel = MethodDecl->getSelector();
+        SmallVector<StringRef, 12> SelectorSlotNames;
+        Optional<unsigned> NumParams = tryParseObjCMethodName(
+            Replacement, SelectorSlotNames, S.getLangOpts());
+        if (NumParams && NumParams.getValue() == Sel.getNumArgs()) {
+          assert(SelectorSlotNames.size() == Locs.size());
+          for (unsigned I = 0; I < Locs.size(); ++I) {
+            if (!Sel.getNameForSlot(I).empty()) {
+              CharSourceRange NameRange = CharSourceRange::getCharRange(
+                  Locs[I], S.getLocForEndOfToken(Locs[I]));
+              FixIts.push_back(FixItHint::CreateReplacement(
+                  NameRange, SelectorSlotNames[I]));
+            } else
+              FixIts.push_back(
+                  FixItHint::CreateInsertion(Locs[I], SelectorSlotNames[I]));
+          }
+        } else
+          FixIts.push_back(FixItHint::CreateReplacement(UseRange, Replacement));
+      } else
+        FixIts.push_back(FixItHint::CreateReplacement(UseRange, Replacement));
+    }
   }
 
   if (!Message.empty()) {
-    S.Diag(Loc, diag_message) << ReferringDecl << Message
-      << (UseRange.isValid() ?
-          FixItHint::CreateReplacement(UseRange, Replacement) : FixItHint());
+    S.Diag(Loc, diag_message) << ReferringDecl << Message << FixIts;
     if (ObjCProperty)
       S.Diag(ObjCProperty->getLocation(), diag::note_property_attribute)
           << ObjCProperty->getDeclName() << property_note_select;
   } else if (!UnknownObjCClass) {
-    S.Diag(Loc, diag) << ReferringDecl
-      << (UseRange.isValid() ?
-          FixItHint::CreateReplacement(UseRange, Replacement) : FixItHint());
+    S.Diag(Loc, diag) << ReferringDecl << FixIts;
     if (ObjCProperty)
       S.Diag(ObjCProperty->getLocation(), diag::note_property_attribute)
           << ObjCProperty->getDeclName() << property_note_select;
   } else {
-    S.Diag(Loc, diag_fwdclass_message) << ReferringDecl
-      << (UseRange.isValid() ?
-          FixItHint::CreateReplacement(UseRange, Replacement) : FixItHint());
+    S.Diag(Loc, diag_fwdclass_message) << ReferringDecl << FixIts;
     S.Diag(UnknownObjCClass->getLocation(), diag::note_forward_class);
   }
 
@@ -7180,8 +7214,9 @@ static void handleDelayedAvailabilityCheck(Sema &S, DelayedDiagnostic &DD,
   DD.Triggered = true;
   DoEmitAvailabilityWarning(
       S, DD.getAvailabilityResult(), Ctx, DD.getAvailabilityReferringDecl(),
-      DD.getAvailabilityOffendingDecl(), DD.getAvailabilityMessage(), DD.Loc,
-      DD.getUnknownObjCClass(), DD.getObjCProperty(), false);
+      DD.getAvailabilityOffendingDecl(), DD.getAvailabilityMessage(),
+      DD.getAvailabilitySelectorLocs(), DD.getUnknownObjCClass(),
+      DD.getObjCProperty(), false);
 }
 
 void Sema::PopParsingDeclaration(ParsingDeclState state, Decl *decl) {
@@ -7242,7 +7277,8 @@ void Sema::redelayDiagnostics(DelayedDiagnosticPool &pool) {
 static void EmitAvailabilityWarning(Sema &S, AvailabilityResult AR,
                                     const NamedDecl *ReferringDecl,
                                     const NamedDecl *OffendingDecl,
-                                    StringRef Message, SourceLocation Loc,
+                                    StringRef Message,
+                                    ArrayRef<SourceLocation> Locs,
                                     const ObjCInterfaceDecl *UnknownObjCClass,
                                     const ObjCPropertyDecl *ObjCProperty,
                                     bool ObjCPropertyAccess) {
@@ -7250,14 +7286,14 @@ static void EmitAvailabilityWarning(Sema &S, AvailabilityResult AR,
   if (S.DelayedDiagnostics.shouldDelayDiagnostics()) {
     S.DelayedDiagnostics.add(
         DelayedDiagnostic::makeAvailability(
-            AR, Loc, ReferringDecl, OffendingDecl, UnknownObjCClass,
+            AR, Locs, ReferringDecl, OffendingDecl, UnknownObjCClass,
             ObjCProperty, Message, ObjCPropertyAccess));
     return;
   }
 
   Decl *Ctx = cast<Decl>(S.getCurLexicalContext());
   DoEmitAvailabilityWarning(S, AR, Ctx, ReferringDecl, OffendingDecl,
-                            Message, Loc, UnknownObjCClass, ObjCProperty,
+                            Message, Locs, UnknownObjCClass, ObjCProperty,
                             ObjCPropertyAccess);
 }
 
@@ -7595,7 +7631,8 @@ void Sema::DiagnoseUnguardedAvailabilityViolations(Decl *D) {
   DiagnoseUnguardedAvailability(*this, D).IssueDiagnostics(Body);
 }
 
-void Sema::DiagnoseAvailabilityOfDecl(NamedDecl *D, SourceLocation Loc,
+void Sema::DiagnoseAvailabilityOfDecl(NamedDecl *D,
+                                      ArrayRef<SourceLocation> Locs,
                                       const ObjCInterfaceDecl *UnknownObjCClass,
                                       bool ObjCPropertyAccess,
                                       bool AvoidPartialAvailabilityChecks) {
@@ -7632,6 +7669,6 @@ void Sema::DiagnoseAvailabilityOfDecl(NamedDecl *D, SourceLocation Loc,
     }
   }
 
-  EmitAvailabilityWarning(*this, Result, D, OffendingDecl, Message, Loc,
+  EmitAvailabilityWarning(*this, Result, D, OffendingDecl, Message, Locs,
                           UnknownObjCClass, ObjCPDecl, ObjCPropertyAccess);
 }

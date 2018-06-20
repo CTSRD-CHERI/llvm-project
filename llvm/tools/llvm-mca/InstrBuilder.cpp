@@ -23,10 +23,10 @@ namespace mca {
 
 using namespace llvm;
 
-static void
-initializeUsedResources(InstrDesc &ID, const MCSchedClassDesc &SCDesc,
-                        const MCSubtargetInfo &STI,
-                        ArrayRef<uint64_t> ProcResourceMasks) {
+static void initializeUsedResources(InstrDesc &ID,
+                                    const MCSchedClassDesc &SCDesc,
+                                    const MCSubtargetInfo &STI,
+                                    ArrayRef<uint64_t> ProcResourceMasks) {
   const MCSchedModel &SM = STI.getSchedModel();
 
   // Populate resources consumed.
@@ -44,16 +44,16 @@ initializeUsedResources(InstrDesc &ID, const MCSchedClassDesc &SCDesc,
 
   // Sort elements by mask popcount, so that we prioritize resource units over
   // resource groups, and smaller groups over larger groups.
-  std::sort(Worklist.begin(), Worklist.end(),
-            [](const ResourcePlusCycles &A, const ResourcePlusCycles &B) {
-              unsigned popcntA = countPopulation(A.first);
-              unsigned popcntB = countPopulation(B.first);
-              if (popcntA < popcntB)
-                return true;
-              if (popcntA > popcntB)
-                return false;
-              return A.first < B.first;
-            });
+  llvm::sort(Worklist.begin(), Worklist.end(),
+             [](const ResourcePlusCycles &A, const ResourcePlusCycles &B) {
+               unsigned popcntA = countPopulation(A.first);
+               unsigned popcntB = countPopulation(B.first);
+               if (popcntA < popcntB)
+                 return true;
+               if (popcntA > popcntB)
+                 return false;
+               return A.first < B.first;
+             });
 
   uint64_t UsedResourceUnits = 0;
 
@@ -277,8 +277,18 @@ static void populateWrites(InstrDesc &ID, const MCInst &MCI,
     WriteDescriptor &Write = ID.Writes[Index];
     Write.OpIndex = -1;
     Write.RegisterID = MCDesc.getImplicitDefs()[CurrentDef];
-    Write.Latency = ID.MaxLatency;
-    Write.SClassOrWriteResourceID = 0;
+    if (Index < NumWriteLatencyEntries) {
+      const MCWriteLatencyEntry &WLE =
+          *STI.getWriteLatencyEntry(&SCDesc, Index);
+      // Conservatively default to MaxLatency.
+      Write.Latency = WLE.Cycles == -1 ? ID.MaxLatency : WLE.Cycles;
+      Write.SClassOrWriteResourceID = WLE.WriteResourceID;
+    } else {
+      // Assign a default latency for this write.
+      Write.Latency = ID.MaxLatency;
+      Write.SClassOrWriteResourceID = 0;
+    }
+
     Write.IsOptionalDef = false;
     assert(Write.RegisterID != 0 && "Expected a valid phys register!");
     DEBUG(dbgs() << "\t\tOpIdx=" << Write.OpIndex << ", PhysReg="
@@ -340,6 +350,7 @@ static void populateReads(InstrDesc &ID, const MCInst &MCI,
   for (unsigned CurrentUse = 0; CurrentUse < NumExplicitUses; ++CurrentUse) {
     ReadDescriptor &Read = ID.Reads[CurrentUse];
     Read.OpIndex = i + CurrentUse;
+    Read.UseIndex = CurrentUse;
     Read.HasReadAdvanceEntries = HasReadAdvanceEntries;
     Read.SchedClassID = SchedClassID;
     DEBUG(dbgs() << "\t\tOpIdx=" << Read.OpIndex);
@@ -348,8 +359,9 @@ static void populateReads(InstrDesc &ID, const MCInst &MCI,
   for (unsigned CurrentUse = 0; CurrentUse < NumImplicitUses; ++CurrentUse) {
     ReadDescriptor &Read = ID.Reads[NumExplicitUses + CurrentUse];
     Read.OpIndex = -1;
+    Read.UseIndex = NumExplicitUses + CurrentUse;
     Read.RegisterID = MCDesc.getImplicitUses()[CurrentUse];
-    Read.HasReadAdvanceEntries = false;
+    Read.HasReadAdvanceEntries = HasReadAdvanceEntries;
     Read.SchedClassID = SchedClassID;
     DEBUG(dbgs() << "\t\tOpIdx=" << Read.OpIndex
                  << ", RegisterID=" << Read.RegisterID << '\n');

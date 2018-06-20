@@ -32,7 +32,8 @@ constexpr int UNKNOWN_CYCLES = -512;
 
 /// \brief A register write descriptor.
 struct WriteDescriptor {
-  int OpIndex; // Operand index. -1 if this is an implicit write.
+  // Operand index. -1 if this is an implicit write.
+  int OpIndex;
   // Write latency. Number of cycles before write-back stage.
   int Latency;
   // This field is set to a value different than zero only if this
@@ -44,7 +45,7 @@ struct WriteDescriptor {
   // YMM super-register if the write is associated to a legacy SSE instruction.
   bool FullyUpdatesSuperRegs;
   // Instruction itineraries would set this field to the SchedClass ID.
-  // Otherwise, it defaults to the WriteResourceID from teh MCWriteLatencyEntry
+  // Otherwise, it defaults to the WriteResourceID from the MCWriteLatencyEntry
   // element associated to this write.
   // When computing read latencies, this value is matched against the
   // "ReadAdvance" information. The hardware backend may implement
@@ -60,8 +61,12 @@ struct WriteDescriptor {
 
 /// \brief A register read descriptor.
 struct ReadDescriptor {
-  // This field defaults to -1 if this is an implicit read.
+  // A MCOperand index. This is used by the Dispatch logic to identify register
+  // reads. This field defaults to -1 if this is an implicit read.
   int OpIndex;
+  // The actual "UseIdx". This is used to query the ReadAdvance table. Explicit
+  // uses always come first in the sequence of uses.
+  unsigned UseIndex;
   // This field is only set if this is an implicit read.
   unsigned RegisterID;
   // Scheduling Class Index. It is used to query the scheduling model for the
@@ -296,6 +301,14 @@ public:
   // all the definitions.
   void execute();
 
+  // Force a transition from the IS_AVAILABLE state to the IS_READY state if
+  // input operands are all ready. State transitions normally occur at the
+  // beginning of a new cycle (see method cycleEvent()). However, the scheduler
+  // may decide to promote instructions from the wait queue to the ready queue
+  // as the result of another issue event.  This method is called every time the
+  // instruction might have changed in state.
+  void update();
+
   bool isDispatched() const { return Stage == IS_AVAILABLE; }
   bool isReady() const { return Stage == IS_READY; }
   bool isExecuting() const { return Stage == IS_EXECUTING; }
@@ -309,7 +322,6 @@ public:
 
   void cycleEvent();
 };
-
 } // namespace mca
 
 #endif

@@ -23,6 +23,7 @@
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/CodeGen/ISDOpcodes.h"
+#include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/BasicBlock.h"
@@ -37,7 +38,6 @@
 #include "llvm/IR/PatternMatch.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
-#include "llvm/IR/ValueTypes.h"
 #include "llvm/MC/SubtargetFeature.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
@@ -265,10 +265,12 @@ unsigned AMDGPUTTIImpl::getLoadStoreVecRegBitWidth(unsigned AddrSpace) const {
     return 512;
   }
 
-  if (AddrSpace == AS.FLAT_ADDRESS ||
-      AddrSpace == AS.LOCAL_ADDRESS ||
-      AddrSpace == AS.REGION_ADDRESS)
+  if (AddrSpace == AS.FLAT_ADDRESS)
     return 128;
+
+  if (AddrSpace == AS.LOCAL_ADDRESS ||
+      AddrSpace == AS.REGION_ADDRESS)
+    return ST->useDS128() ? 128 : 64;
 
   if (AddrSpace == AS.PRIVATE_ADDRESS)
     return 8 * ST->getMaxPrivateElementSize();

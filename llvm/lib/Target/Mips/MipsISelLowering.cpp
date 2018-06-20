@@ -47,6 +47,7 @@
 #include "llvm/CodeGen/TargetFrameLowering.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/CallingConv.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
@@ -56,7 +57,6 @@
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
-#include "llvm/IR/ValueTypes.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CodeGen.h"
@@ -2833,6 +2833,13 @@ static bool CC_MipsO32(unsigned ValNo, MVT ValVT, MVT LocVT,
 
 #include "MipsGenCallingConv.inc"
 
+ CCAssignFn *MipsTargetLowering::CCAssignFnForCall() const{
+   return CC_Mips;
+ }
+
+ CCAssignFn *MipsTargetLowering::CCAssignFnForReturn() const{
+   return RetCC_Mips;
+ }
 //===----------------------------------------------------------------------===//
 //                  Call Calling Convention Implementation
 //===----------------------------------------------------------------------===//

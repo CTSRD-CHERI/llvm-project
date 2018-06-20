@@ -220,7 +220,7 @@ Replacements Replacements::getCanonicalReplacements() const {
 llvm::Expected<Replacements>
 Replacements::mergeIfOrderIndependent(const Replacement &R) const {
   Replacements Rs(R);
-  // A Replacements set containg a single replacement that is `R` referring to
+  // A Replacements set containing a single replacement that is `R` referring to
   // the code after the existing replacements `Replaces` are applied.
   Replacements RsShiftedByReplaces(getReplacementInChangedCode(R));
   // A Replacements set that is `Replaces` referring to the code after `R` is
@@ -483,11 +483,11 @@ Replacements Replacements::merge(const Replacements &ReplacesToMerge) const {
 // Returns a set of non-overlapping and sorted ranges that is equivalent to
 // \p Ranges.
 static std::vector<Range> combineAndSortRanges(std::vector<Range> Ranges) {
-  std::sort(Ranges.begin(), Ranges.end(),
-            [](const Range &LHS, const Range &RHS) {
-              if (LHS.getOffset() != RHS.getOffset())
-                return LHS.getOffset() < RHS.getOffset();
-              return LHS.getLength() < RHS.getLength();
+  llvm::sort(Ranges.begin(), Ranges.end(),
+             [](const Range &LHS, const Range &RHS) {
+               if (LHS.getOffset() != RHS.getOffset())
+                 return LHS.getOffset() < RHS.getOffset();
+               return LHS.getLength() < RHS.getLength();
             });
   std::vector<Range> Result;
   for (const auto &R : Ranges) {

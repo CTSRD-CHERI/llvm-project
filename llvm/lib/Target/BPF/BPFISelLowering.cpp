@@ -23,9 +23,9 @@
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/SelectionDAGISel.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
+#include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/IR/DiagnosticPrinter.h"
-#include "llvm/IR/ValueTypes.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
@@ -502,13 +502,7 @@ SDValue BPFTargetLowering::LowerSELECT_CC(SDValue Op, SelectionDAG &DAG) const {
     NegateCC(LHS, RHS, CC);
 
   SDValue TargetCC = DAG.getConstant(CC, DL, LHS.getValueType());
-
   SDVTList VTs = DAG.getVTList(Op.getValueType(), MVT::Glue);
-
-  // The constant is expected at RHS in Select_Ri pattern.
-  if (isa<ConstantSDNode>(LHS.getNode()))
-    std::swap(LHS, RHS);
-
   SDValue Ops[] = {LHS, RHS, TargetCC, TrueV, FalseV};
 
   return DAG.getNode(BPFISD::SELECT_CC, DL, VTs, Ops);

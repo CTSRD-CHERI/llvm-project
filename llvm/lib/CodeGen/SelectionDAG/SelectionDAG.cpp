@@ -39,6 +39,7 @@
 #include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
+#include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/Constant.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
@@ -50,7 +51,6 @@
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
-#include "llvm/IR/ValueTypes.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/Compiler.h"
@@ -3636,6 +3636,8 @@ bool SelectionDAG::isEqualTo(SDValue A, SDValue B) const {
   return false;
 }
 
+// FIXME: unify with llvm::haveNoCommonBitsSet.
+// FIXME: could also handle masked merge pattern (X & ~M) op (Y & M)
 bool SelectionDAG::haveNoCommonBitsSet(SDValue A, SDValue B) const {
   assert(A.getValueType() == B.getValueType() &&
          "Values must have the same type");
@@ -5628,6 +5630,47 @@ SDValue SelectionDAG::getMemcpy(SDValue Chain, const SDLoc &dl, SDValue Dst,
   return CallResult.second;
 }
 
+SDValue SelectionDAG::getAtomicMemcpy(SDValue Chain, const SDLoc &dl,
+                                      SDValue Dst, unsigned DstAlign,
+                                      SDValue Src, unsigned SrcAlign,
+                                      SDValue Size, Type *SizeTy,
+                                      unsigned ElemSz, bool isTailCall,
+                                      MachinePointerInfo DstPtrInfo,
+                                      MachinePointerInfo SrcPtrInfo) {
+  // Emit a library call.
+  TargetLowering::ArgListTy Args;
+  TargetLowering::ArgListEntry Entry;
+  Entry.Ty = getDataLayout().getIntPtrType(*getContext());
+  Entry.Node = Dst;
+  Args.push_back(Entry);
+
+  Entry.Node = Src;
+  Args.push_back(Entry);
+
+  Entry.Ty = SizeTy;
+  Entry.Node = Size;
+  Args.push_back(Entry);
+
+  RTLIB::Libcall LibraryCall =
+      RTLIB::getMEMCPY_ELEMENT_UNORDERED_ATOMIC(ElemSz);
+  if (LibraryCall == RTLIB::UNKNOWN_LIBCALL)
+    report_fatal_error("Unsupported element size");
+
+  TargetLowering::CallLoweringInfo CLI(*this);
+  CLI.setDebugLoc(dl)
+      .setChain(Chain)
+      .setLibCallee(TLI->getLibcallCallingConv(LibraryCall),
+                    Type::getVoidTy(*getContext()),
+                    getExternalSymbol(TLI->getLibcallName(LibraryCall),
+                                      TLI->getPointerTy(getDataLayout())),
+                    std::move(Args))
+      .setDiscardResult()
+      .setTailCall(isTailCall);
+
+  std::pair<SDValue, SDValue> CallResult = TLI->LowerCallTo(CLI);
+  return CallResult.second;
+}
+
 SDValue SelectionDAG::getMemmove(SDValue Chain, const SDLoc &dl, SDValue Dst,
                                  SDValue Src, SDValue Size, unsigned Align,
                                  bool isVol, bool isTailCall,
@@ -5686,6 +5729,47 @@ SDValue SelectionDAG::getMemmove(SDValue Chain, const SDLoc &dl, SDValue Dst,
       .setTailCall(isTailCall);
 
   std::pair<SDValue,SDValue> CallResult = TLI->LowerCallTo(CLI);
+  return CallResult.second;
+}
+
+SDValue SelectionDAG::getAtomicMemmove(SDValue Chain, const SDLoc &dl,
+                                       SDValue Dst, unsigned DstAlign,
+                                       SDValue Src, unsigned SrcAlign,
+                                       SDValue Size, Type *SizeTy,
+                                       unsigned ElemSz, bool isTailCall,
+                                       MachinePointerInfo DstPtrInfo,
+                                       MachinePointerInfo SrcPtrInfo) {
+  // Emit a library call.
+  TargetLowering::ArgListTy Args;
+  TargetLowering::ArgListEntry Entry;
+  Entry.Ty = getDataLayout().getIntPtrType(*getContext());
+  Entry.Node = Dst;
+  Args.push_back(Entry);
+
+  Entry.Node = Src;
+  Args.push_back(Entry);
+
+  Entry.Ty = SizeTy;
+  Entry.Node = Size;
+  Args.push_back(Entry);
+
+  RTLIB::Libcall LibraryCall =
+      RTLIB::getMEMMOVE_ELEMENT_UNORDERED_ATOMIC(ElemSz);
+  if (LibraryCall == RTLIB::UNKNOWN_LIBCALL)
+    report_fatal_error("Unsupported element size");
+
+  TargetLowering::CallLoweringInfo CLI(*this);
+  CLI.setDebugLoc(dl)
+      .setChain(Chain)
+      .setLibCallee(TLI->getLibcallCallingConv(LibraryCall),
+                    Type::getVoidTy(*getContext()),
+                    getExternalSymbol(TLI->getLibcallName(LibraryCall),
+                                      TLI->getPointerTy(getDataLayout())),
+                    std::move(Args))
+      .setDiscardResult()
+      .setTailCall(isTailCall);
+
+  std::pair<SDValue, SDValue> CallResult = TLI->LowerCallTo(CLI);
   return CallResult.second;
 }
 
@@ -5748,6 +5832,46 @@ SDValue SelectionDAG::getMemset(SDValue Chain, const SDLoc &dl, SDValue Dst,
       .setTailCall(isTailCall);
 
   std::pair<SDValue,SDValue> CallResult = TLI->LowerCallTo(CLI);
+  return CallResult.second;
+}
+
+SDValue SelectionDAG::getAtomicMemset(SDValue Chain, const SDLoc &dl,
+                                      SDValue Dst, unsigned DstAlign,
+                                      SDValue Value, SDValue Size, Type *SizeTy,
+                                      unsigned ElemSz, bool isTailCall,
+                                      MachinePointerInfo DstPtrInfo) {
+  // Emit a library call.
+  TargetLowering::ArgListTy Args;
+  TargetLowering::ArgListEntry Entry;
+  Entry.Ty = getDataLayout().getIntPtrType(*getContext());
+  Entry.Node = Dst;
+  Args.push_back(Entry);
+
+  Entry.Ty = Type::getInt8Ty(*getContext());
+  Entry.Node = Value;
+  Args.push_back(Entry);
+
+  Entry.Ty = SizeTy;
+  Entry.Node = Size;
+  Args.push_back(Entry);
+
+  RTLIB::Libcall LibraryCall =
+      RTLIB::getMEMSET_ELEMENT_UNORDERED_ATOMIC(ElemSz);
+  if (LibraryCall == RTLIB::UNKNOWN_LIBCALL)
+    report_fatal_error("Unsupported element size");
+
+  TargetLowering::CallLoweringInfo CLI(*this);
+  CLI.setDebugLoc(dl)
+      .setChain(Chain)
+      .setLibCallee(TLI->getLibcallCallingConv(LibraryCall),
+                    Type::getVoidTy(*getContext()),
+                    getExternalSymbol(TLI->getLibcallName(LibraryCall),
+                                      TLI->getPointerTy(getDataLayout())),
+                    std::move(Args))
+      .setDiscardResult()
+      .setTailCall(isTailCall);
+
+  std::pair<SDValue, SDValue> CallResult = TLI->LowerCallTo(CLI);
   return CallResult.second;
 }
 
@@ -7639,7 +7763,7 @@ void SelectionDAG::ReplaceAllUsesOfValuesWith(const SDValue *From,
   }
 
   // Sort the uses, so that all the uses from a given User are together.
-  std::sort(Uses.begin(), Uses.end());
+  llvm::sort(Uses.begin(), Uses.end());
 
   for (unsigned UseIndex = 0, UseIndexEnd = Uses.size();
        UseIndex != UseIndexEnd; ) {

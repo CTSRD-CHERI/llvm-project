@@ -312,6 +312,9 @@ private:
   /// \sa shouldDisplayNotesAsEvents
   Optional<bool> DisplayNotesAsEvents;
 
+  /// \sa shouldAggressivelySimplifyRelationalComparison
+  Optional<bool> AggressiveRelationalComparisonSimplification;
+
   /// \sa getCTUDir
   Optional<StringRef> CTUDir;
 
@@ -367,7 +370,7 @@ public:
   /// specified.
   /// @param [in] C The optional checker parameter that can be used to restrict
   /// the search to the options of this particular checker (and its parents
-  /// dependening on search mode).
+  /// depending on search mode).
   /// @param [in] SearchInParents If set to true and the searched option was not
   /// specified for the given checker the options for the parent packages will
   /// be searched as well. The inner packages take precedence over the outer
@@ -385,7 +388,7 @@ public:
   /// specified.
   /// @param [in] C The optional checker parameter that can be used to restrict
   /// the search to the options of this particular checker (and its parents
-  /// dependening on search mode).
+  /// depending on search mode).
   /// @param [in] SearchInParents If set to true and the searched option was not
   /// specified for the given checker the options for the parent packages will
   /// be searched as well. The inner packages take precedence over the outer
@@ -402,7 +405,7 @@ public:
   /// specified.
   /// @param [in] C The optional checker parameter that can be used to restrict
   /// the search to the options of this particular checker (and its parents
-  /// dependening on search mode).
+  /// depending on search mode).
   /// @param [in] SearchInParents If set to true and the searched option was not
   /// specified for the given checker the options for the parent packages will
   /// be searched as well. The inner packages take precedence over the outer
@@ -419,7 +422,7 @@ public:
   /// specified.
   /// @param [in] C The optional checker parameter that can be used to restrict
   /// the search to the options of this particular checker (and its parents
-  /// dependening on search mode).
+  /// depending on search mode).
   /// @param [in] SearchInParents If set to true and the searched option was not
   /// specified for the given checker the options for the parent packages will
   /// be searched as well. The inner packages take precedence over the outer
@@ -665,6 +668,20 @@ public:
   /// This is controlled by the 'extra-notes-as-events' option, which defaults
   /// to false when unset.
   bool shouldDisplayNotesAsEvents();
+
+  /// Returns true if SValBuilder should rearrange comparisons of symbolic
+  /// expressions which consist of a sum of a symbol and a concrete integer
+  /// into the format where symbols are on the left-hand side and the integer
+  /// is on the right. This is only done if both symbols and both concrete
+  /// integers are signed, greater than or equal to the quarter of the minimum
+  /// value of the type and less than or equal to the quarter of the maximum
+  /// value of that type.
+  ///
+  /// A + n <REL> B + m becomes A - B <REL> m - n, where A and B symbolic,
+  /// n and m are integers. <REL> is any of '==', '!=', '<', '<=', '>' or '>='.
+  /// The rearrangement also happens with '-' instead of '+' on either or both
+  /// side and also if any or both integers are missing.
+  bool shouldAggressivelySimplifyRelationalComparison();
 
   /// Returns the directory containing the CTU related files.
   StringRef getCTUDir();

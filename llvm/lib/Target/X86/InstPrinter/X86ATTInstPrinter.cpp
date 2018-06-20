@@ -47,8 +47,7 @@ void X86ATTInstPrinter::printInst(const MCInst *MI, raw_ostream &OS,
 
   // If verbose assembly is enabled, we can print some informative comments.
   if (CommentStream)
-    HasCustomInstComment =
-        EmitAnyX86InstComments(MI, *CommentStream, MII, getRegisterName);
+    HasCustomInstComment = EmitAnyX86InstComments(MI, *CommentStream, MII);
 
   unsigned Flags = MI->getFlags();
   if ((TSFlags & X86II::LOCK) || (Flags & X86::IP_HAS_LOCK))
@@ -79,10 +78,8 @@ void X86ATTInstPrinter::printInst(const MCInst *MI, raw_ostream &OS,
   // 0x66 to be interpreted as "data16" by the asm printer.
   // Thus we add an adjustment here in order to print the "right" instruction.
   else if (MI->getOpcode() == X86::DATA16_PREFIX &&
-    (STI.getFeatureBits()[X86::Mode16Bit])) {
-    MCInst Data32MI(*MI);
-    Data32MI.setOpcode(X86::DATA32_PREFIX);
-    printInstruction(&Data32MI, OS);
+           STI.getFeatureBits()[X86::Mode16Bit]) {
+   OS << "\tdata32";
   }
   // Try to print any aliases first.
   else if (!printAliasInstr(MI, OS))

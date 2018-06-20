@@ -17,9 +17,11 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/Analysis/AssumptionCache.h"
+#include "llvm/Analysis/CFG.h"
 #include "llvm/Analysis/CodeMetrics.h"
 #include "llvm/Analysis/LoopAnalysisManager.h"
 #include "llvm/Analysis/LoopInfo.h"
+#include "llvm/Analysis/LoopIterator.h"
 #include "llvm/Analysis/LoopPass.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constant.h"
@@ -879,7 +881,7 @@ static BasicBlock *buildClonedLoopBlocks(
           cast_or_null<BasicBlock>(VMap.lookup(ContinueSuccBB)))
     ClonedContinueSuccBB->removePredecessor(ClonedParentBB,
                                             /*DontDeleteUselessPHIs*/ true);
-  // Replace the cloned branch with an unconditional branch to the cloneed
+  // Replace the cloned branch with an unconditional branch to the cloned
   // unswitched successor.
   auto *ClonedSuccBB = cast<BasicBlock>(VMap.lookup(UnswitchedSuccBB));
   ClonedParentBB->getTerminator()->eraseFromParent();
@@ -911,11 +913,8 @@ static Loop *cloneLoopNest(Loop &OrigRootL, Loop *RootParentL,
     for (auto *BB : OrigL.blocks()) {
       auto *ClonedBB = cast<BasicBlock>(VMap.lookup(BB));
       ClonedL.addBlockEntry(ClonedBB);
-      if (LI.getLoopFor(BB) == &OrigL) {
-        assert(!LI.getLoopFor(ClonedBB) &&
-               "Should not have an existing loop for this block!");
+      if (LI.getLoopFor(BB) == &OrigL)
         LI.changeLoopFor(ClonedBB, &ClonedL);
-      }
     }
   };
 
@@ -1128,11 +1127,12 @@ static Loop *buildClonedLoops(Loop &OrigL, ArrayRef<BasicBlock *> ExitBlocks,
   // matter as we're just trying to build up the map from inside-out; we use
   // the map in a more stably ordered way below.
   auto OrderedClonedExitsInLoops = ClonedExitsInLoops;
-  std::sort(OrderedClonedExitsInLoops.begin(), OrderedClonedExitsInLoops.end(),
-            [&](BasicBlock *LHS, BasicBlock *RHS) {
-              return ExitLoopMap.lookup(LHS)->getLoopDepth() <
-                     ExitLoopMap.lookup(RHS)->getLoopDepth();
-            });
+  llvm::sort(OrderedClonedExitsInLoops.begin(),
+             OrderedClonedExitsInLoops.end(),
+             [&](BasicBlock *LHS, BasicBlock *RHS) {
+               return ExitLoopMap.lookup(LHS)->getLoopDepth() <
+                      ExitLoopMap.lookup(RHS)->getLoopDepth();
+             });
 
   // Populate the existing ExitLoopMap with everything reachable from each
   // exit, starting from the inner most exit.
@@ -1333,13 +1333,14 @@ static SmallPtrSet<const BasicBlock *, 16> recomputeLoopBlockSet(Loop &L,
   if (LoopBlockSet.empty())
     return LoopBlockSet;
 
-  // Add the loop header to the set.
-  LoopBlockSet.insert(Header);
-
   // We found backedges, recurse through them to identify the loop blocks.
   while (!Worklist.empty()) {
     BasicBlock *BB = Worklist.pop_back_val();
     assert(LoopBlockSet.count(BB) && "Didn't put block into the loop set!");
+
+    // No need to walk past the header.
+    if (BB == Header)
+      continue;
 
     // Because we know the inner loop structure remains valid we can use the
     // loop structure to jump immediately across the entire nested loop.
@@ -1361,9 +1362,10 @@ static SmallPtrSet<const BasicBlock *, 16> recomputeLoopBlockSet(Loop &L,
           continue;
 
         // Insert all of the blocks (other than those already present) into
-        // the loop set. The only block we expect to already be in the set is
-        // the one we used to find this loop as we immediately handle the
-        // others the first time we encounter the loop.
+        // the loop set. We expect at least the block that led us to find the
+        // inner loop to be in the block set, but we may also have other loop
+        // blocks if they were already enqueued as predecessors of some other
+        // outer loop block.
         for (auto *InnerBB : InnerL->blocks()) {
           if (InnerBB == BB) {
             assert(LoopBlockSet.count(InnerBB) &&
@@ -1371,9 +1373,7 @@ static SmallPtrSet<const BasicBlock *, 16> recomputeLoopBlockSet(Loop &L,
             continue;
           }
 
-          bool Inserted = LoopBlockSet.insert(InnerBB).second;
-          (void)Inserted;
-          assert(Inserted && "Should only insert an inner loop once!");
+          LoopBlockSet.insert(InnerBB);
         }
 
         // Add the preheader to the worklist so we will continue past the
@@ -1388,6 +1388,8 @@ static SmallPtrSet<const BasicBlock *, 16> recomputeLoopBlockSet(Loop &L,
       if (L.contains(Pred) && LoopBlockSet.insert(Pred).second)
         Worklist.push_back(Pred);
   }
+
+  assert(LoopBlockSet.count(Header) && "Cannot fail to add the header!");
 
   // We've found all the blocks participating in the loop, return our completed
   // set.
@@ -1793,9 +1795,12 @@ static bool unswitchInvariantBranch(
   // unnecessary loops.
   auto UpdateLCSSA = [&](Loop &UpdateL) {
 #ifndef NDEBUG
-    for (Loop *ChildL : UpdateL)
+    UpdateL.verifyLoop();
+    for (Loop *ChildL : UpdateL) {
+      ChildL->verifyLoop();
       assert(ChildL->isRecursivelyLCSSAForm(DT, LI) &&
              "Perturbed a child loop's LCSSA form!");
+    }
 #endif
     formLCSSA(UpdateL, DT, &LI, nullptr);
   };
@@ -1935,6 +1940,17 @@ unswitchLoop(Loop &L, DominatorTree &DT, LoopInfo &LI, AssumptionCache &AC,
 
   // If we didn't find any candidates, we're done.
   if (UnswitchCandidates.empty())
+    return Changed;
+
+  // Check if there are irreducible CFG cycles in this loop. If so, we cannot
+  // easily unswitch non-trivial edges out of the loop. Doing so might turn the
+  // irreducible control flow into reducible control flow and introduce new
+  // loops "out of thin air". If we ever discover important use cases for doing
+  // this, we can add support to loop unswitch, but it is a lot of complexity
+  // for what seems little or no real world benifit.
+  LoopBlocksRPO RPOT(&L);
+  RPOT.perform(&LI);
+  if (containsIrreducibleCFG<const BasicBlock *>(RPOT, LI))
     return Changed;
 
   DEBUG(dbgs() << "Considering " << UnswitchCandidates.size()

@@ -32,6 +32,11 @@ public:
   virtual std::unique_ptr<PDBSymbolExe> getGlobalScope() = 0;
   virtual std::unique_ptr<PDBSymbol> getSymbolById(uint32_t SymbolId) const = 0;
 
+  virtual bool addressForVA(uint64_t VA, uint32_t &Section,
+                            uint32_t &Offset) const = 0;
+  virtual bool addressForRVA(uint32_t RVA, uint32_t &Section,
+                             uint32_t &Offset) const = 0;
+
   template <typename T>
   std::unique_ptr<T> getConcreteSymbolById(uint32_t SymbolId) const {
     return unique_dyn_cast_or_null<T>(getSymbolById(SymbolId));
@@ -39,12 +44,19 @@ public:
 
   virtual std::unique_ptr<PDBSymbol>
   findSymbolByAddress(uint64_t Address, PDB_SymType Type) const = 0;
+  virtual std::unique_ptr<PDBSymbol>
+  findSymbolByRVA(uint32_t RVA, PDB_SymType Type) const = 0;
+  virtual std::unique_ptr<PDBSymbol>
+  findSymbolBySectOffset(uint32_t Sect, uint32_t Offset,
+                         PDB_SymType Type) const = 0;
 
   virtual std::unique_ptr<IPDBEnumLineNumbers>
   findLineNumbers(const PDBSymbolCompiland &Compiland,
                   const IPDBSourceFile &File) const = 0;
   virtual std::unique_ptr<IPDBEnumLineNumbers>
   findLineNumbersByAddress(uint64_t Address, uint32_t Length) const = 0;
+  virtual std::unique_ptr<IPDBEnumLineNumbers>
+  findLineNumbersByRVA(uint32_t RVA, uint32_t Length) const = 0;
   virtual std::unique_ptr<IPDBEnumLineNumbers>
   findLineNumbersBySectOffset(uint32_t Section, uint32_t Offset,
                               uint32_t Length) const = 0;
@@ -79,7 +91,7 @@ public:
   virtual std::unique_ptr<IPDBEnumSectionContribs>
   getSectionContribs() const = 0;
 };
-}
-}
+} // namespace pdb
+} // namespace llvm
 
 #endif

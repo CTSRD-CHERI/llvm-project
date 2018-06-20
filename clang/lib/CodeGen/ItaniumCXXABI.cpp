@@ -34,6 +34,7 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/Value.h"
+#include "llvm/Support/ScopedPrinter.h"
 
 using namespace clang;
 using namespace CodeGen;
@@ -63,13 +64,6 @@ public:
   bool classifyReturnType(CGFunctionInfo &FI) const override;
 
   bool passClassIndirect(const CXXRecordDecl *RD) const {
-    // Clang <= 4 used the pre-C++11 rule, which ignores move operations.
-    // The PS4 platform ABI follows the behavior of Clang 3.2.
-    if (CGM.getCodeGenOpts().getClangABICompat() <=
-            CodeGenOptions::ClangABI::Ver4 ||
-        CGM.getTriple().getOS() == llvm::Triple::PS4)
-      return RD->hasNonTrivialDestructorForCall() ||
-             RD->hasNonTrivialCopyConstructorForCall();
     return !canCopyArgument(RD);
   }
 
@@ -1443,7 +1437,7 @@ void ItaniumCXXABI::EmitInstanceFunctionProlog(CodeGenFunction &CGF) {
     return;
 
   /// Initialize the 'this' slot. In the Itanium C++ ABI, no prologue
-  /// adjustments are required, becuase they are all handled by thunks.
+  /// adjustments are required, because they are all handled by thunks.
   setCXXABIThisValue(CGF, loadIncomingCXXThis(CGF));
 
   /// Initialize the 'vtt' slot if needed.
@@ -2202,12 +2196,61 @@ static void emitGlobalDtorWithCXAAtExit(CodeGenFunction &CGF,
   auto *GV = cast<llvm::GlobalValue>(handle->stripPointerCasts());
   GV->setVisibility(llvm::GlobalValue::HiddenVisibility);
 
+  if (!addr)
+    // addr is null when we are trying to register a dtor annotated with
+    // __attribute__((destructor)) in a constructor function. Using null here is
+    // okay because this argument is just passed back to the destructor
+    // function.
+    addr = llvm::Constant::getNullValue(CGF.Int8PtrTy);
+
   llvm::Value *args[] = {
     llvm::ConstantExpr::getBitCast(dtor, dtorTy),
     llvm::ConstantExpr::getBitCast(addr, CGF.Int8PtrTy),
     handle
   };
   CGF.EmitNounwindRuntimeCall(atexit, args);
+}
+
+void CodeGenModule::registerGlobalDtorsWithAtExit() {
+  for (const auto I : DtorsUsingAtExit) {
+    int Priority = I.first;
+    const llvm::TinyPtrVector<llvm::Function *> &Dtors = I.second;
+
+    // Create a function that registers destructors that have the same priority.
+    //
+    // Since constructor functions are run in non-descending order of their
+    // priorities, destructors are registered in non-descending order of their
+    // priorities, and since destructor functions are run in the reverse order
+    // of their registration, destructor functions are run in non-ascending
+    // order of their priorities.
+    CodeGenFunction CGF(*this);
+    std::string GlobalInitFnName =
+        std::string("__GLOBAL_init_") + llvm::to_string(Priority);
+    llvm::FunctionType *FTy = llvm::FunctionType::get(VoidTy, false);
+    llvm::Function *GlobalInitFn = CreateGlobalInitOrDestructFunction(
+        FTy, GlobalInitFnName, getTypes().arrangeNullaryFunction(),
+        SourceLocation());
+    ASTContext &Ctx = getContext();
+    FunctionDecl *FD = FunctionDecl::Create(
+        Ctx, Ctx.getTranslationUnitDecl(), SourceLocation(), SourceLocation(),
+        &Ctx.Idents.get(GlobalInitFnName), Ctx.VoidTy, nullptr, SC_Static,
+        false, false);
+    CGF.StartFunction(GlobalDecl(FD), getContext().VoidTy, GlobalInitFn,
+                      getTypes().arrangeNullaryFunction(), FunctionArgList(),
+                      SourceLocation(), SourceLocation());
+
+    for (auto *Dtor : Dtors) {
+      // Register the destructor function calling __cxa_atexit if it is
+      // available. Otherwise fall back on calling atexit.
+      if (getCodeGenOpts().CXAAtExit)
+        emitGlobalDtorWithCXAAtExit(CGF, Dtor, nullptr, false);
+      else
+        CGF.registerGlobalDtorWithAtExit(Dtor);
+    }
+
+    CGF.FinishFunction();
+    AddGlobalCtor(GlobalInitFn, Priority, nullptr);
+  }
 }
 
 /// Register a global destructor as best as we know how.
@@ -3903,7 +3946,7 @@ static void InitCatchParam(CodeGenFunction &CGF,
                         caughtExnAlignment);
     LValue Dest = CGF.MakeAddrLValue(ParamAddr, CatchType);
     LValue Src = CGF.MakeAddrLValue(adjustedExn, CatchType);
-    CGF.EmitAggregateCopy(Dest, Src, CatchType);
+    CGF.EmitAggregateCopy(Dest, Src, CatchType, AggValueSlot::DoesNotOverlap);
     return;
   }
 
@@ -3930,7 +3973,8 @@ static void InitCatchParam(CodeGenFunction &CGF,
                   AggValueSlot::forAddr(ParamAddr, Qualifiers(),
                                         AggValueSlot::IsNotDestructed,
                                         AggValueSlot::DoesNotNeedGCBarriers,
-                                        AggValueSlot::IsNotAliased));
+                                        AggValueSlot::IsNotAliased,
+                                        AggValueSlot::DoesNotOverlap));
 
   // Leave the terminate scope.
   CGF.EHStack.popTerminate();

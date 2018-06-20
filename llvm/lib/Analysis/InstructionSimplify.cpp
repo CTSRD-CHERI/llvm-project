@@ -62,6 +62,8 @@ static Value *SimplifyOrInst(Value *, Value *, const SimplifyQuery &, unsigned);
 static Value *SimplifyXorInst(Value *, Value *, const SimplifyQuery &, unsigned);
 static Value *SimplifyCastInst(unsigned, Value *, Type *,
                                const SimplifyQuery &, unsigned);
+static Value *SimplifyGEPInst(Type *, ArrayRef<Value *>, const SimplifyQuery &,
+                              unsigned);
 
 /// For a boolean type or a vector of boolean type, return false or a vector
 /// with every element false.
@@ -90,7 +92,7 @@ static bool isSameCompare(Value *V, CmpInst::Predicate Pred, Value *LHS,
 }
 
 /// Does the given value dominate the specified phi node?
-static bool ValueDominatesPHI(Value *V, PHINode *P, const DominatorTree *DT) {
+static bool valueDominatesPHI(Value *V, PHINode *P, const DominatorTree *DT) {
   Instruction *I = dyn_cast<Instruction>(V);
   if (!I)
     // Arguments and constants dominate all instructions.
@@ -99,7 +101,7 @@ static bool ValueDominatesPHI(Value *V, PHINode *P, const DominatorTree *DT) {
   // If we are processing instructions (and/or basic blocks) that have not been
   // fully added to a function, the parent nodes may still be null. Simply
   // return the conservative answer in these cases.
-  if (!I->getParent() || !P->getParent() || !I->getParent()->getParent())
+  if (!I->getParent() || !P->getParent() || !I->getFunction())
     return false;
 
   // If we have a DominatorTree then do a precise test.
@@ -108,7 +110,7 @@ static bool ValueDominatesPHI(Value *V, PHINode *P, const DominatorTree *DT) {
 
   // Otherwise, if the instruction is in the entry block and is not an invoke,
   // then it obviously dominates all phi nodes.
-  if (I->getParent() == &I->getParent()->getParent()->getEntryBlock() &&
+  if (I->getParent() == &I->getFunction()->getEntryBlock() &&
       !isa<InvokeInst>(I))
     return true;
 
@@ -443,13 +445,13 @@ static Value *ThreadBinOpOverPHI(Instruction::BinaryOps Opcode, Value *LHS,
   if (isa<PHINode>(LHS)) {
     PI = cast<PHINode>(LHS);
     // Bail out if RHS and the phi may be mutually interdependent due to a loop.
-    if (!ValueDominatesPHI(RHS, PI, Q.DT))
+    if (!valueDominatesPHI(RHS, PI, Q.DT))
       return nullptr;
   } else {
     assert(isa<PHINode>(RHS) && "No PHI instruction operand!");
     PI = cast<PHINode>(RHS);
     // Bail out if LHS and the phi may be mutually interdependent due to a loop.
-    if (!ValueDominatesPHI(LHS, PI, Q.DT))
+    if (!valueDominatesPHI(LHS, PI, Q.DT))
       return nullptr;
   }
 
@@ -490,7 +492,7 @@ static Value *ThreadCmpOverPHI(CmpInst::Predicate Pred, Value *LHS, Value *RHS,
   PHINode *PI = cast<PHINode>(LHS);
 
   // Bail out if RHS and the phi may be mutually interdependent due to a loop.
-  if (!ValueDominatesPHI(RHS, PI, Q.DT))
+  if (!valueDominatesPHI(RHS, PI, Q.DT))
     return nullptr;
 
   // Evaluate the BinOp on the incoming phi values.
@@ -680,14 +682,14 @@ static Value *SimplifySubInst(Value *Op0, Value *Op1, bool isNSW, bool isNUW,
   if (match(Op0, m_Zero())) {
     // 0 - X -> 0 if the sub is NUW.
     if (isNUW)
-      return Op0;
+      return Constant::getNullValue(Op0->getType());
 
     KnownBits Known = computeKnownBits(Op1, Q.DL, 0, Q.AC, Q.CxtI, Q.DT);
     if (Known.Zero.isMaxSignedValue()) {
       // Op1 is either 0 or the minimum signed value. If the sub is NSW, then
       // Op1 must be 0 because negating the minimum signed value is undefined.
       if (isNSW)
-        return Op0;
+        return Constant::getNullValue(Op0->getType());
 
       // 0 - X -> X if X is 0 or the minimum signed value.
       return Op1;
@@ -799,12 +801,9 @@ static Value *SimplifyMulInst(Value *Op0, Value *Op1, const SimplifyQuery &Q,
     return C;
 
   // X * undef -> 0
-  if (match(Op1, m_Undef()))
-    return Constant::getNullValue(Op0->getType());
-
   // X * 0 -> 0
-  if (match(Op1, m_Zero()))
-    return Op1;
+  if (match(Op1, m_CombineOr(m_Undef(), m_Zero())))
+    return Constant::getNullValue(Op0->getType());
 
   // X * 1 -> X
   if (match(Op1, m_One()))
@@ -888,7 +887,7 @@ static Value *simplifyDivRem(Value *Op0, Value *Op1, bool IsDiv) {
   // 0 / X -> 0
   // 0 % X -> 0
   if (match(Op0, m_Zero()))
-    return Op0;
+    return Constant::getNullValue(Op0->getType());
 
   // X / X -> 1
   // X % X -> 0
@@ -1147,7 +1146,7 @@ static Value *SimplifyShift(Instruction::BinaryOps Opcode, Value *Op0,
 
   // 0 shift by X -> 0
   if (match(Op0, m_Zero()))
-    return Op0;
+    return Constant::getNullValue(Op0->getType());
 
   // X shift by 0 -> X
   if (match(Op1, m_Zero()))
@@ -1689,7 +1688,7 @@ static Value *SimplifyAndInst(Value *Op0, Value *Op1, const SimplifyQuery &Q,
 
   // X & 0 = 0
   if (match(Op1, m_Zero()))
-    return Op1;
+    return Constant::getNullValue(Op0->getType());
 
   // X & -1 = X
   if (match(Op1, m_AllOnes()))
@@ -3068,8 +3067,7 @@ static Value *SimplifyICmpInst(unsigned Predicate, Value *LHS, Value *RHS,
   Type *ITy = GetCompareTy(LHS); // The return type.
 
   // icmp X, X -> true/false
-  // X icmp undef -> true/false.  For example, icmp ugt %X, undef -> false
-  // because X could be 0.
+  // icmp X, undef -> true/false because undef could be X.
   if (LHS == RHS || isa<UndefValue>(RHS))
     return ConstantInt::get(ITy, CmpInst::isTrueWhenEqual(Pred));
 
@@ -3532,6 +3530,17 @@ static const Value *SimplifyWithOpReplaced(Value *V, Value *Op, Value *RepOp,
     }
   }
 
+  // Same for GEPs.
+  if (auto *GEP = dyn_cast<GetElementPtrInst>(I)) {
+    if (MaxRecurse) {
+      SmallVector<Value *, 8> NewOps(GEP->getNumOperands());
+      transform(GEP->operands(), NewOps.begin(),
+                [&](Value *V) { return V == Op ? RepOp : V; });
+      return SimplifyGEPInst(GEP->getSourceElementType(), NewOps, Q,
+                             MaxRecurse - 1);
+    }
+  }
+
   // TODO: We could hand off more cases to instsimplify here.
 
   // If all operands are constant after substituting Op for RepOp then we can
@@ -3986,7 +3995,7 @@ static Value *SimplifyPHINode(PHINode *PN, const SimplifyQuery &Q) {
   // instruction, we cannot return X as the result of the PHI node unless it
   // dominates the PHI block.
   if (HasUndefInput)
-    return ValueDominatesPHI(CommonValue, PN, Q.DT) ? CommonValue : nullptr;
+    return valueDominatesPHI(CommonValue, PN, Q.DT) ? CommonValue : nullptr;
 
   return CommonValue;
 }
@@ -4196,11 +4205,11 @@ static Value *SimplifyFAddInst(Value *Op0, Value *Op1, FastMathFlags FMF,
     return C;
 
   // fadd X, -0 ==> X
-  if (match(Op1, m_NegZero()))
+  if (match(Op1, m_NegZeroFP()))
     return Op0;
 
   // fadd X, 0 ==> X, when we know X is not -0
-  if (match(Op1, m_Zero()) &&
+  if (match(Op1, m_PosZeroFP()) &&
       (FMF.noSignedZeros() || CannotBeNegativeZero(Op0, Q.TLI)))
     return Op0;
 
@@ -4228,18 +4237,19 @@ static Value *SimplifyFSubInst(Value *Op0, Value *Op1, FastMathFlags FMF,
   if (Constant *C = simplifyFPBinop(Op0, Op1))
     return C;
 
-  // fsub X, 0 ==> X
-  if (match(Op1, m_Zero()))
+  // fsub X, +0 ==> X
+  if (match(Op1, m_PosZeroFP()))
     return Op0;
 
   // fsub X, -0 ==> X, when we know X is not -0
-  if (match(Op1, m_NegZero()) &&
+  if (match(Op1, m_NegZeroFP()) &&
       (FMF.noSignedZeros() || CannotBeNegativeZero(Op0, Q.TLI)))
     return Op0;
 
   // fsub -0.0, (fsub -0.0, X) ==> X
   Value *X;
-  if (match(Op0, m_NegZero()) && match(Op1, m_FSub(m_NegZero(), m_Value(X))))
+  if (match(Op0, m_NegZeroFP()) &&
+      match(Op1, m_FSub(m_NegZeroFP(), m_Value(X))))
     return X;
 
   // fsub 0.0, (fsub 0.0, X) ==> X if signed zeros are ignored.
@@ -4358,11 +4368,11 @@ static Value *SimplifyFRemInst(Value *Op0, Value *Op1, FastMathFlags FMF,
   // The constant match may include undef elements in a vector, so return a full
   // zero constant as the result.
   if (FMF.noNaNs()) {
-    // 0 % X -> 0
-    if (match(Op0, m_Zero()))
+    // +0 % X -> 0
+    if (match(Op0, m_PosZeroFP()))
       return ConstantFP::getNullValue(Op0->getType());
     // -0 % X -> -0
-    if (match(Op0, m_NegZero()))
+    if (match(Op0, m_NegZeroFP()))
       return ConstantFP::getNegativeZero(Op0->getType());
   }
 

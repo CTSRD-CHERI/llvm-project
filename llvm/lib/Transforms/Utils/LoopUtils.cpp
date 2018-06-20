@@ -923,13 +923,13 @@ bool InductionDescriptor::isFPInductionPHI(PHINode *Phi, const Loop *TheLoop,
 }
 
 /// This function is called when we suspect that the update-chain of a phi node
-/// (whose symbolic SCEV expression sin \p PhiScev) contains redundant casts, 
-/// that can be ignored. (This can happen when the PSCEV rewriter adds a runtime 
-/// predicate P under which the SCEV expression for the phi can be the 
-/// AddRecurrence \p AR; See createAddRecFromPHIWithCast). We want to find the 
-/// cast instructions that are involved in the update-chain of this induction. 
-/// A caller that adds the required runtime predicate can be free to drop these 
-/// cast instructions, and compute the phi using \p AR (instead of some scev 
+/// (whose symbolic SCEV expression sin \p PhiScev) contains redundant casts,
+/// that can be ignored. (This can happen when the PSCEV rewriter adds a runtime
+/// predicate P under which the SCEV expression for the phi can be the
+/// AddRecurrence \p AR; See createAddRecFromPHIWithCast). We want to find the
+/// cast instructions that are involved in the update-chain of this induction.
+/// A caller that adds the required runtime predicate can be free to drop these
+/// cast instructions, and compute the phi using \p AR (instead of some scev
 /// expression with casts).
 ///
 /// For example, without a predicate the scev expression can take the following
@@ -964,7 +964,7 @@ static bool getCastsForInductionPHI(PredicatedScalarEvolution &PSE,
   assert(PSE.getSCEV(PN) == AR && "Unexpected phi node SCEV expression");
   const Loop *L = AR->getLoop();
 
-  // Find any cast instructions that participate in the def-use chain of 
+  // Find any cast instructions that participate in the def-use chain of
   // PhiScev in the loop.
   // FORNOW/TODO: We currently expect the def-use chain to include only
   // two-operand instructions, where one of the operands is an invariant.
@@ -1524,6 +1524,38 @@ static Value *addFastMathFlag(Value *V) {
     cast<Instruction>(V)->setFastMathFlags(Flags);
   }
   return V;
+}
+
+// Helper to generate an ordered reduction.
+Value *
+llvm::getOrderedReduction(IRBuilder<> &Builder, Value *Acc, Value *Src,
+                          unsigned Op,
+                          RecurrenceDescriptor::MinMaxRecurrenceKind MinMaxKind,
+                          ArrayRef<Value *> RedOps) {
+  unsigned VF = Src->getType()->getVectorNumElements();
+
+  // Extract and apply reduction ops in ascending order:
+  // e.g. ((((Acc + Scl[0]) + Scl[1]) + Scl[2]) + ) ... + Scl[VF-1]
+  Value *Result = Acc;
+  for (unsigned ExtractIdx = 0; ExtractIdx != VF; ++ExtractIdx) {
+    Value *Ext =
+        Builder.CreateExtractElement(Src, Builder.getInt32(ExtractIdx));
+
+    if (Op != Instruction::ICmp && Op != Instruction::FCmp) {
+      Result = Builder.CreateBinOp((Instruction::BinaryOps)Op, Result, Ext,
+                                   "bin.rdx");
+    } else {
+      assert(MinMaxKind != RecurrenceDescriptor::MRK_Invalid &&
+             "Invalid min/max");
+      Result = RecurrenceDescriptor::createMinMaxOp(Builder, MinMaxKind, Result,
+                                                    Ext);
+    }
+
+    if (!RedOps.empty())
+      propagateIRFlags(Result, RedOps);
+  }
+
+  return Result;
 }
 
 // Helper to generate a log2 shuffle reduction.

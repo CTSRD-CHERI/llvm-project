@@ -41,6 +41,7 @@
 #include "clang/AST/CXXInheritance.h"
 #include "clang/AST/DeclCXX.h"
 #include "clang/AST/DeclObjC.h"
+#include "clang/AST/DeclTemplate.h"
 
 #include <map>
 #include <vector>
@@ -179,9 +180,6 @@ TypeSP DWARFASTParserClang::ParseTypeFromDWO(const DWARFDIE &die, Log *log) {
   lldb_private::CompilerType type =
       GetClangASTImporter().CopyType(m_ast, dwo_type);
 
-  // printf ("copied_qual_type: ast = %p, clang_type = %p, name =
-  // '%s'\n", m_ast, copied_qual_type.getAsOpaquePtr(),
-  // external_type->GetName().GetCString());
   if (!type)
     return TypeSP();
 
@@ -254,17 +252,6 @@ TypeSP DWARFASTParserClang::ParseTypeFromDWARF(const SymbolContext &sc,
           die.GetOffset(), static_cast<void *>(context),
           context_die.GetOffset(), die.GetTagAsCString(), die.GetName());
     }
-    //
-    //        Log *log (LogChannelDWARF::GetLogIfAll(DWARF_LOG_DEBUG_INFO));
-    //        if (log && dwarf_cu)
-    //        {
-    //            StreamString s;
-    //            die->DumpLocation (this, dwarf_cu, s);
-    //            dwarf->GetObjectFile()->GetModule()->LogMessage (log,
-    //            "SymbolFileDwarf::%s %s", __FUNCTION__, s.GetData());
-    //
-    //        }
-
     Type *type_ptr = dwarf->GetDIEToType().lookup(die.GetDIE());
     TypeList *type_list = dwarf->GetTypeList();
     if (type_ptr == NULL) {
@@ -276,6 +263,7 @@ TypeSP DWARFASTParserClang::ParseTypeFromDWARF(const SymbolContext &sc,
       bool is_forward_declaration = false;
       DWARFAttributes attributes;
       const char *type_name_cstr = NULL;
+      const char *mangled_name_cstr = NULL;
       ConstString type_name_const_str;
       Type::ResolveState resolve_state = Type::eResolveStateUnresolved;
       uint64_t byte_size = 0;
@@ -551,17 +539,6 @@ TypeSP DWARFASTParserClang::ParseTypeFromDWARF(const SymbolContext &sc,
                      &decl, clang_type, resolve_state));
 
         dwarf->GetDIEToType()[die.GetDIE()] = type_sp.get();
-
-        //                  Type* encoding_type =
-        //                  GetUniquedTypeForDIEOffset(encoding_uid, type_sp,
-        //                  NULL, 0, 0, false);
-        //                  if (encoding_type != NULL)
-        //                  {
-        //                      if (encoding_type != DIE_IS_BEING_PARSED)
-        //                          type_sp->SetEncodingType(encoding_type);
-        //                      else
-        //                          m_indirect_fixups.push_back(type_sp.get());
-        //                  }
       } break;
 
       case DW_TAG_structure_type:
@@ -576,7 +553,6 @@ TypeSP DWARFASTParserClang::ParseTypeFromDWARF(const SymbolContext &sc,
         size_t calling_convention 
                 = llvm::dwarf::CallingConvention::DW_CC_normal;
         
-        // bool struct_is_class = false;
         const size_t num_attributes = die.GetAttributes(attributes);
         if (num_attributes > 0) {
           uint32_t i;
@@ -1231,9 +1207,8 @@ TypeSP DWARFASTParserClang::ParseTypeFromDWARF(const SymbolContext &sc,
 
               case DW_AT_linkage_name:
               case DW_AT_MIPS_linkage_name:
-                break; // mangled =
-                       // form_value.AsCString(&dwarf->get_debug_str_data());
-                       // break;
+                mangled_name_cstr = form_value.AsCString();
+                break;
               case DW_AT_type:
                 type_die_form = form_value;
                 break;
@@ -1594,9 +1569,10 @@ TypeSP DWARFASTParserClang::ParseTypeFromDWARF(const SymbolContext &sc,
                           clang::CXXMethodDecl *cxx_method_decl =
                               m_ast.AddMethodToCXXRecordType(
                                   class_opaque_type.GetOpaqueQualType(),
-                                  type_name_cstr, clang_type, accessibility,
-                                  is_virtual, is_static, is_inline, is_explicit,
-                                  is_attr_used, is_artificial);
+                                  type_name_cstr, mangled_name_cstr, clang_type,
+                                  accessibility, is_virtual, is_static,
+                                  is_inline, is_explicit, is_attr_used,
+                                  is_artificial);
 
                           type_handled = cxx_method_decl != NULL;
 
@@ -2041,6 +2017,7 @@ bool DWARFASTParserClang::ParseTemplateDIE(
     const DWARFDIE &die,
     ClangASTContext::TemplateParameterInfos &template_param_infos) {
   const dw_tag_t tag = die.Tag();
+  bool is_template_template_argument = false;
 
   switch (tag) {
   case DW_TAG_GNU_template_parameter_pack: {
@@ -2056,11 +2033,15 @@ bool DWARFASTParserClang::ParseTemplateDIE(
     }
     return true;
   }
+  case DW_TAG_GNU_template_template_param:
+    is_template_template_argument = true;
+    LLVM_FALLTHROUGH;
   case DW_TAG_template_type_parameter:
   case DW_TAG_template_value_parameter: {
     DWARFAttributes attributes;
     const size_t num_attributes = die.GetAttributes(attributes);
     const char *name = nullptr;
+    const char *template_name = nullptr;
     CompilerType clang_type;
     uint64_t uval64 = 0;
     bool uval64_valid = false;
@@ -2073,6 +2054,11 @@ bool DWARFASTParserClang::ParseTemplateDIE(
         case DW_AT_name:
           if (attributes.ExtractFormValueAtIndex(i, form_value))
             name = form_value.AsCString();
+          break;
+
+        case DW_AT_GNU_template_name:
+          if (attributes.ExtractFormValueAtIndex(i, form_value))
+            template_name = form_value.AsCString();
           break;
 
         case DW_AT_type:
@@ -2098,7 +2084,7 @@ bool DWARFASTParserClang::ParseTemplateDIE(
       if (!clang_type)
         clang_type = m_ast.GetBasicType(eBasicTypeVoid);
 
-      if (clang_type) {
+      if (!is_template_template_argument) {
         bool is_signed = false;
         if (name && name[0])
           template_param_infos.names.push_back(name);
@@ -2118,7 +2104,10 @@ bool DWARFASTParserClang::ParseTemplateDIE(
               clang::TemplateArgument(ClangUtil::GetQualType(clang_type)));
         }
       } else {
-        return false;
+        auto *tplt_type = m_ast.CreateTemplateTemplateParmDecl(template_name);
+        template_param_infos.names.push_back(name);
+        template_param_infos.args.push_back(
+            clang::TemplateArgument(clang::TemplateName(tplt_type)));
       }
     }
   }
@@ -2145,6 +2134,7 @@ bool DWARFASTParserClang::ParseTemplateParameterInfos(
     case DW_TAG_template_type_parameter:
     case DW_TAG_template_value_parameter:
     case DW_TAG_GNU_template_parameter_pack:
+    case DW_TAG_GNU_template_template_param:
       ParseTemplateDIE(die, template_param_infos);
       break;
 
@@ -2180,7 +2170,10 @@ static bool isOverload(clang::CXXMethodDecl *m1, clang::CXXMethodDecl *m2) {
                                  m2p.getUnqualifiedType());
     };
 
-  return !std::equal(m1Type->param_type_begin(), m1Type->param_type_end(),
+  // FIXME: In C++14 and later, we can just pass m2Type->param_type_end()
+  //        as a fourth parameter to std::equal().
+  return (m1->getNumParams() != m2->getNumParams()) ||
+         !std::equal(m1Type->param_type_begin(), m1Type->param_type_end(),
                      m2Type->param_type_begin(), compareArgTypes);
 }
 
@@ -3534,22 +3527,6 @@ size_t DWARFASTParserClang::ParseChildParameters(
               is_artificial = form_value.Boolean();
               break;
             case DW_AT_location:
-            //                          if (form_value.BlockData())
-            //                          {
-            //                              const DWARFDataExtractor&
-            //                              debug_info_data = debug_info();
-            //                              uint32_t block_length =
-            //                              form_value.Unsigned();
-            //                              DWARFDataExtractor
-            //                              location(debug_info_data,
-            //                              form_value.BlockData() -
-            //                              debug_info_data.GetDataStart(),
-            //                              block_length);
-            //                          }
-            //                          else
-            //                          {
-            //                          }
-            //                          break;
             case DW_AT_const_value:
             case DW_AT_default_value:
             case DW_AT_description:

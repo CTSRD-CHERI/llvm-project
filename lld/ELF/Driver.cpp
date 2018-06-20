@@ -320,6 +320,17 @@ static bool hasZOption(opt::InputArgList &Args, StringRef Key) {
   return false;
 }
 
+static bool getZFlag(opt::InputArgList &Args, StringRef K1, StringRef K2,
+                     bool Default) {
+  for (auto *Arg : Args.filtered_reverse(OPT_z)) {
+    if (K1 == Arg->getValue())
+      return true;
+    if (K2 == Arg->getValue())
+      return false;
+  }
+  return Default;
+}
+
 void LinkerDriver::main(ArrayRef<const char *> ArgsArr) {
   ELFOptTable Parser;
   opt::InputArgList Args = Parser.parse(ArgsArr.slice(1));
@@ -611,6 +622,45 @@ getBuildId(opt::InputArgList &Args) {
   return {BuildIdKind::None, {}};
 }
 
+static void readCallGraph(MemoryBufferRef MB) {
+  // Build a map from symbol name to section
+  DenseMap<StringRef, const Symbol *> SymbolNameToSymbol;
+  for (InputFile *File : ObjectFiles)
+    for (Symbol *Sym : File->getSymbols())
+      SymbolNameToSymbol[Sym->getName()] = Sym;
+
+  for (StringRef L : args::getLines(MB)) {
+    SmallVector<StringRef, 3> Fields;
+    L.split(Fields, ' ');
+    if (Fields.size() != 3)
+      fatal("parse error");
+    uint64_t Count;
+    if (!to_integer(Fields[2], Count))
+      fatal("parse error");
+    const Symbol *FromSym = SymbolNameToSymbol.lookup(Fields[0]);
+    const Symbol *ToSym = SymbolNameToSymbol.lookup(Fields[1]);
+    if (Config->WarnSymbolOrdering) {
+      if (!FromSym)
+        warn("call graph file: no such symbol: " + Fields[0]);
+      if (!ToSym)
+        warn("call graph file: no such symbol: " + Fields[1]);
+    }
+    if (!FromSym || !ToSym || Count == 0)
+      continue;
+    warnUnorderableSymbol(FromSym);
+    warnUnorderableSymbol(ToSym);
+    const Defined *FromSymD = dyn_cast<Defined>(FromSym);
+    const Defined *ToSymD = dyn_cast<Defined>(ToSym);
+    if (!FromSymD || !ToSymD)
+      continue;
+    const auto *FromSB = dyn_cast_or_null<InputSectionBase>(FromSymD->Section);
+    const auto *ToSB = dyn_cast_or_null<InputSectionBase>(ToSymD->Section);
+    if (!FromSB || !ToSB)
+      continue;
+    Config->CallGraphProfile[std::make_pair(FromSB, ToSB)] += Count;
+  }
+}
+
 static bool getCompressDebugSections(opt::InputArgList &Args) {
   StringRef S = Args.getLastArgValue(OPT_compress_debug_sections, "none");
   if (S == "none")
@@ -638,6 +688,17 @@ static std::vector<StringRef> getSymbolOrderingFile(MemoryBufferRef MB) {
       warn(MB.getBufferIdentifier() + ": duplicate ordered symbol: " + S);
 
   return Names.takeVector();
+}
+
+static void parseClangOption(StringRef Opt, const Twine &Msg) {
+  std::string Err;
+  raw_string_ostream OS(Err);
+
+  const char *Argv[] = {Config->ProgName.data(), Opt.data()};
+  if (cl::ParseCommandLineOptions(2, Argv, "", &OS))
+    return;
+  OS.flush();
+  error(Msg + ": " + StringRef(Err).trim());
 }
 
 // Initializes Config members by the command line options.
@@ -687,9 +748,12 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
   Config->Init = Args.getLastArgValue(OPT_init, "_init");
   Config->LocalCapRelocsMode = getLocalCapRelocsMode(Args);
   Config->LTOAAPipeline = Args.getLastArgValue(OPT_lto_aa_pipeline);
+  Config->LTODebugPassManager = Args.hasArg(OPT_lto_debug_pass_manager);
+  Config->LTONewPassManager = Args.hasArg(OPT_lto_new_pass_manager);
   Config->LTONewPmPasses = Args.getLastArgValue(OPT_lto_newpm_passes);
   Config->LTOO = args::getInteger(Args, OPT_lto_O, 2);
   Config->LTOPartitions = args::getInteger(Args, OPT_lto_partitions, 1);
+  Config->LTOSampleProfile = Args.getLastArgValue(OPT_lto_sample_profile);
   Config->MapFile = Args.getLastArgValue(OPT_Map);
   Config->MipsGotSize = args::getInteger(Args, OPT_mips_got_size, 0xfff0);
   Config->MergeArmExidx =
@@ -739,26 +803,27 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
       Args.hasFlag(OPT_undefined_version, OPT_no_undefined_version, true);
   Config->UnresolvedSymbols = getUnresolvedSymbolPolicy(Args);
   Config->VerboseCapRelocs = Args.hasArg(OPT_verbose_cap_relocs);
+  Config->WarnBackrefs =
+      Args.hasFlag(OPT_warn_backrefs, OPT_no_warn_backrefs, false);
   Config->WarnCommon = Args.hasFlag(OPT_warn_common, OPT_no_warn_common, false);
   Config->WarnSymbolOrdering =
       Args.hasFlag(OPT_warn_symbol_ordering, OPT_no_warn_symbol_ordering, true);
-  Config->ZCombreloc = !hasZOption(Args, "nocombreloc");
-  Config->ZExecstack = hasZOption(Args, "execstack");
+  Config->ZCombreloc = getZFlag(Args, "combreloc", "nocombreloc", true);
+  Config->ZCopyreloc = getZFlag(Args, "copyreloc", "nocopyreloc", true);
+  Config->ZExecstack = getZFlag(Args, "execstack", "noexecstack", false);
   Config->ZHazardplt = hasZOption(Args, "hazardplt");
-  Config->ZNocopyreloc = hasZOption(Args, "nocopyreloc");
   Config->ZNodelete = hasZOption(Args, "nodelete");
   Config->ZNodlopen = hasZOption(Args, "nodlopen");
-  Config->ZNow = hasZOption(Args, "now");
+  Config->ZNow = getZFlag(Args, "now", "lazy", false);
   Config->ZOrigin = hasZOption(Args, "origin");
-  Config->ZRelro = !hasZOption(Args, "norelro");
+  Config->ZRelro = getZFlag(Args, "relro", "norelro", true);
   Config->ZRetpolineplt = hasZOption(Args, "retpolineplt");
   Config->ZRodynamic = hasZOption(Args, "rodynamic");
   Config->ZStackSize = args::getZOptionValue(Args, OPT_z, "stack-size", 0);
-  Config->ZText = !hasZOption(Args, "notext");
+  Config->ZText = getZFlag(Args, "text", "notext", true);
   Config->ZWxneeded = hasZOption(Args, "wxneeded");
 
   // Parse LTO plugin-related options for compatibility with gold.
-  std::vector<const char *> LTOOptions({Config->ProgName.data()});
   for (auto *Arg : Args.filtered(OPT_plugin_opt)) {
     StringRef S = Arg->getValue();
     if (S == "disable-verify")
@@ -772,15 +837,21 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
     else if (S.startswith("jobs="))
       Config->ThinLTOJobs = parseInt(S.substr(5), Arg);
     else if (S.startswith("mcpu="))
-      LTOOptions.push_back(Saver.save("-" + S).data());
+      parseClangOption(Saver.save("-" + S), Arg->getSpelling());
+    else if (S == "new-pass-manager")
+      Config->LTONewPassManager = true;
+    else if (S == "debug-pass-manager")
+      Config->LTODebugPassManager = true;
+    else if (S.startswith("sample-profile="))
+      Config->LTOSampleProfile = S.substr(strlen("sample-profile="));
     else if (!S.startswith("/") && !S.startswith("-fresolution=") &&
              !S.startswith("-pass-through=") && !S.startswith("thinlto"))
-      LTOOptions.push_back(S.data());
+      parseClangOption(S, Arg->getSpelling());
   }
-  // Parse and evaluate -mllvm options.
+
+  // Parse -mllvm options.
   for (auto *Arg : Args.filtered(OPT_mllvm))
-    LTOOptions.push_back(Arg->getValue());
-  cl::ParseCommandLineOptions(LTOOptions.size(), LTOOptions.data());
+    parseClangOption(Arg->getValue(), Arg->getSpelling());
 
   if (Config->LTOO > 3)
     error("invalid optimization level for LTO: " + Twine(Config->LTOO));
@@ -964,11 +1035,37 @@ void LinkerDriver::createFiles(opt::InputArgList &Args) {
     case OPT_no_whole_archive:
       InWholeArchive = false;
       break;
+    case OPT_just_symbols:
+      if (Optional<MemoryBufferRef> MB = readFile(Arg->getValue())) {
+        Files.push_back(createObjectFile(*MB));
+        Files.back()->JustSymbols = true;
+      }
+      break;
+    case OPT_start_group:
+      if (InputFile::IsInGroup)
+        error("nested --start-group");
+      InputFile::IsInGroup = true;
+      break;
+    case OPT_end_group:
+      if (!InputFile::IsInGroup)
+        error("stray --end-group");
+      InputFile::IsInGroup = false;
+      ++InputFile::NextGroupId;
+      break;
     case OPT_start_lib:
+      if (InLib)
+        error("nested --start-lib");
+      if (InputFile::IsInGroup)
+        error("may not nest --start-lib in --start-group");
       InLib = true;
+      InputFile::IsInGroup = true;
       break;
     case OPT_end_lib:
+      if (!InLib)
+        error("stray --end-lib");
       InLib = false;
+      InputFile::IsInGroup = false;
+      ++InputFile::NextGroupId;
       break;
     }
   }
@@ -1063,6 +1160,20 @@ static void excludeLibs(opt::InputArgList &Args) {
             Sym->VersionId = VER_NDX_LOCAL;
 }
 
+// Force Sym to be entered in the output. Used for -u or equivalent.
+template <class ELFT> static void handleUndefined(StringRef Name) {
+  Symbol *Sym = Symtab->find(Name);
+  if (!Sym)
+    return;
+
+  // Since symbol S may not be used inside the program, LTO may
+  // eliminate it. Mark the symbol as "used" to prevent it.
+  Sym->IsUsedInRegularObj = true;
+
+  if (Sym->isLazy())
+    Symtab->fetchLazy<ELFT>(Sym);
+}
+
 // Do actual linking. Note that when this function is called,
 // all linker scripts have already been parsed.
 template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
@@ -1127,18 +1238,12 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
 
   // Handle the `--undefined <sym>` options.
   for (StringRef S : Config->Undefined)
-    Symtab->fetchIfLazy<ELFT>(S);
-
-  // Handle the --just-symbols option. This may add absolute symbols
-  // to the symbol table.
-  for (auto *Arg : Args.filtered(OPT_just_symbols))
-    if (Optional<MemoryBufferRef> MB = readFile(Arg->getValue()))
-      readJustSymbolsFile<ELFT>(*MB);
+    handleUndefined<ELFT>(S);
 
   // If an entry symbol is in a static archive, pull out that file now
   // to complete the symbol table. After this, no new names except a
   // few linker-synthesized ones will be added to the symbol table.
-  Symtab->fetchIfLazy<ELFT>(Config->Entry);
+  handleUndefined<ELFT>(Config->Entry);
 
   // Return if there were name resolution errors.
   if (errorCount())
@@ -1246,6 +1351,11 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   mergeSections();
   if (Config->ICF)
     doIcf<ELFT>();
+
+  // Read the callgraph now that we know what was gced or icfed
+  if (auto *Arg = Args.getLastArg(OPT_call_graph_ordering_file))
+    if (Optional<MemoryBufferRef> Buffer = readFile(Arg->getValue()))
+      readCallGraph(*Buffer);
 
   // Write the result to the file.
   writeResult<ELFT>();

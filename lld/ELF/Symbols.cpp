@@ -39,7 +39,7 @@ Defined *ElfSym::MipsGp;
 Defined *ElfSym::MipsGpDisp;
 Defined *ElfSym::MipsLocalGp;
 Defined *ElfSym::CheriCapabilityTable;
-
+Defined *ElfSym::RelaIpltEnd;
 
 static uint64_t getSymVA(const Symbol &Sym, int64_t &Addend) {
   switch (Sym.kind()) {
@@ -57,6 +57,8 @@ static uint64_t getSymVA(const Symbol &Sym, int64_t &Addend) {
     // This is an absolute symbol.
     if (!IS)
       return D.Value;
+
+    IS = IS->Repl;
 
     uint64_t Offset = D.Value;
 
@@ -159,7 +161,7 @@ uint64_t Symbol::getSize() const {
 OutputSection *Symbol::getOutputSection() const {
   if (auto *S = dyn_cast<Defined>(this)) {
     if (auto *Sec = S->Section)
-      return Sec->getOutputSection();
+      return Sec->Repl->getOutputSection();
     return nullptr;
   }
 
@@ -216,27 +218,7 @@ void Symbol::parseSymbolVersion() {
           Verstr);
 }
 
-InputFile *Lazy::fetch() {
-  if (auto *S = dyn_cast<LazyArchive>(this))
-    return S->fetch();
-  return cast<LazyObject>(this)->fetch();
-}
-
-ArchiveFile &LazyArchive::getFile() { return *cast<ArchiveFile>(File); }
-
-InputFile *LazyArchive::fetch() {
-  std::pair<MemoryBufferRef, uint64_t> MBInfo = getFile().getMember(&Sym);
-
-  // getMember returns an empty buffer if the member was already
-  // read from the library.
-  if (MBInfo.first.getBuffer().empty())
-    return nullptr;
-  return createObjectFile(MBInfo.first, getFile().getName(), MBInfo.second);
-}
-
-LazyObjFile &LazyObject::getFile() { return *cast<LazyObjFile>(File); }
-
-InputFile *LazyObject::fetch() { return getFile().fetch(); }
+InputFile *LazyArchive::fetch() { return cast<ArchiveFile>(File)->fetch(Sym); }
 
 uint8_t Symbol::computeBinding() const {
   if (Config->Relocatable)
@@ -278,6 +260,27 @@ void elf::printTraceSymbol(Symbol *Sym) {
     S = ": definition of ";
 
   message(toString(Sym->File) + S + Sym->getName());
+}
+
+void elf::warnUnorderableSymbol(const Symbol *Sym) {
+  if (!Config->WarnSymbolOrdering)
+    return;
+  const InputFile *File = Sym->File;
+  auto *D = dyn_cast<Defined>(Sym);
+  if (Sym->isUndefined())
+    warn(toString(File) +
+         ": unable to order undefined symbol: " + Sym->getName());
+  else if (Sym->isShared())
+    warn(toString(File) + ": unable to order shared symbol: " + Sym->getName());
+  else if (D && !D->Section)
+    warn(toString(File) +
+         ": unable to order absolute symbol: " + Sym->getName());
+  else if (D && isa<OutputSection>(D->Section))
+    warn(toString(File) +
+         ": unable to order synthetic symbol: " + Sym->getName());
+  else if (D && !D->Section->Repl->Live)
+    warn(toString(File) +
+         ": unable to order discarded symbol: " + Sym->getName());
 }
 
 // Returns a symbol for an error message.

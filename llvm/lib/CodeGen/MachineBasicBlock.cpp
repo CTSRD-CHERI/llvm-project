@@ -408,12 +408,13 @@ void MachineBasicBlock::print(raw_ostream &OS, ModuleSlotTracker &MST,
 
     OS.indent(IsInBundle ? 4 : 2);
     MI.print(OS, MST, IsStandalone, /*SkipOpers=*/false, /*SkipDebugLoc=*/false,
-             &TII);
+             /*AddNewLine=*/false, &TII);
 
     if (!IsInBundle && MI.getFlag(MachineInstr::BundledSucc)) {
       OS << " {";
       IsInBundle = true;
     }
+    OS << '\n';
   }
 
   if (IsInBundle)
@@ -456,10 +457,10 @@ bool MachineBasicBlock::isLiveIn(MCPhysReg Reg, LaneBitmask LaneMask) const {
 }
 
 void MachineBasicBlock::sortUniqueLiveIns() {
-  std::sort(LiveIns.begin(), LiveIns.end(),
-            [](const RegisterMaskPair &LI0, const RegisterMaskPair &LI1) {
-              return LI0.PhysReg < LI1.PhysReg;
-            });
+  llvm::sort(LiveIns.begin(), LiveIns.end(),
+             [](const RegisterMaskPair &LI0, const RegisterMaskPair &LI1) {
+               return LI0.PhysReg < LI1.PhysReg;
+             });
   // Liveins are sorted by physreg now we can merge their lanemasks.
   LiveInVector::const_iterator I = LiveIns.begin();
   LiveInVector::const_iterator J;
@@ -718,6 +719,14 @@ void MachineBasicBlock::replaceSuccessor(MachineBasicBlock *Old,
       *ProbIter += *getProbabilityIterator(OldI);
   }
   removeSuccessor(OldI);
+}
+
+void MachineBasicBlock::copySuccessor(MachineBasicBlock *Orig,
+                                      succ_iterator I) {
+  if (Orig->Probs.empty())
+    addSuccessor(*I, Orig->getSuccProbability(I));
+  else
+    addSuccessorWithoutProb(*I);
 }
 
 void MachineBasicBlock::addPredecessor(MachineBasicBlock *Pred) {

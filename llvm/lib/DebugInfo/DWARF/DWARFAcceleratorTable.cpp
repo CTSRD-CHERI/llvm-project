@@ -385,7 +385,7 @@ llvm::Error DWARFDebugNames::Header::extract(const DWARFDataExtractor &AS,
   BucketCount = AS.getU32(Offset);
   NameCount = AS.getU32(Offset);
   AbbrevTableSize = AS.getU32(Offset);
-  AugmentationStringSize = AS.getU32(Offset);
+  AugmentationStringSize = alignTo(AS.getU32(Offset), 4);
 
   if (!AS.isValidOffsetForDataOfSize(*Offset, AugmentationStringSize))
     return make_error<StringError>(
@@ -394,7 +394,6 @@ llvm::Error DWARFDebugNames::Header::extract(const DWARFDataExtractor &AS,
   AugmentationString.resize(AugmentationStringSize);
   AS.getU8(Offset, reinterpret_cast<uint8_t *>(AugmentationString.data()),
            AugmentationStringSize);
-  *Offset = alignTo(*Offset, 4);
   return Error::success();
 }
 
@@ -535,7 +534,7 @@ DWARFDebugNames::Entry::lookup(dwarf::Index Index) const {
 
 Optional<uint64_t> DWARFDebugNames::Entry::getDIEUnitOffset() const {
   if (Optional<DWARFFormValue> Off = lookup(dwarf::DW_IDX_die_offset))
-    return Off->getAsSectionOffset();
+    return Off->getAsReferenceUVal();
   return None;
 }
 
@@ -602,7 +601,7 @@ Expected<DWARFDebugNames::Entry>
 DWARFDebugNames::NameIndex::getEntry(uint32_t *Offset) const {
   const DWARFDataExtractor &AS = Section.AccelSection;
   if (!AS.isValidOffset(*Offset))
-    return make_error<StringError>("Incorrectly terminated entry list",
+    return make_error<StringError>("Incorrectly terminated entry list.",
                                    inconvertibleErrorCode());
 
   uint32_t AbbrevCode = AS.getULEB128(Offset);
@@ -611,7 +610,7 @@ DWARFDebugNames::NameIndex::getEntry(uint32_t *Offset) const {
 
   const auto AbbrevIt = Abbrevs.find_as(AbbrevCode);
   if (AbbrevIt == Abbrevs.end())
-    return make_error<StringError>("Invalid abbreviation",
+    return make_error<StringError>("Invalid abbreviation.",
                                    inconvertibleErrorCode());
 
   Entry E(*this, *AbbrevIt);
@@ -619,7 +618,7 @@ DWARFDebugNames::NameIndex::getEntry(uint32_t *Offset) const {
   dwarf::FormParams FormParams = {Hdr.Version, 0, dwarf::DwarfFormat::DWARF32};
   for (auto &Value : E.Values) {
     if (!Value.extractValue(AS, Offset, FormParams))
-      return make_error<StringError>("Error extracting index attribute values",
+      return make_error<StringError>("Error extracting index attribute values.",
                                      inconvertibleErrorCode());
   }
   return std::move(E);

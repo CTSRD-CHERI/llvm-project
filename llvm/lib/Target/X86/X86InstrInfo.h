@@ -83,6 +83,12 @@ unsigned getSETFromCond(CondCode CC, bool HasMemoryOperand = false);
 unsigned getCMovFromCond(CondCode CC, unsigned RegBytes,
                          bool HasMemoryOperand = false);
 
+// Turn jCC opcode into condition code.
+CondCode getCondFromBranchOpc(unsigned Opc);
+
+// Turn setCC opcode into condition code.
+CondCode getCondFromSETOpc(unsigned Opc);
+
 // Turn CMov opcode into condition code.
 CondCode getCondFromCMovOpc(unsigned Opc);
 
@@ -575,6 +581,9 @@ public:
 
   ArrayRef<std::pair<unsigned, const char *>>
   getSerializableDirectMachineOperandTargetFlags() const override;
+
+  /// X86 supports the MachineOutliner.
+  bool useMachineOutliner() const override { return true; }
 
   virtual MachineOutlinerInfo getOutlininingCandidateInfo(
       std::vector<

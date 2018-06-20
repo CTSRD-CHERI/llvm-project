@@ -651,9 +651,11 @@ getIntelProcessorTypeAndSubtype(unsigned Family, unsigned Model,
     // Goldmont:
     case 0x5c: // Apollo Lake
     case 0x5f: // Denverton
-    case 0x7a: // Gemini Lake
       *Type = X86::INTEL_GOLDMONT;
       break; // "goldmont"
+    case 0x7a:
+      *Type = X86::INTEL_GOLDMONT_PLUS;
+      break;
     case 0x57:
       *Type = X86::INTEL_KNL; // knl
       break;
@@ -1213,9 +1215,12 @@ bool sys::getHostCPUFeatures(StringMap<bool> &Features) {
   Features["tbm"]    = HasExtLeaf1 && ((ECX >> 21) & 1);
   Features["mwaitx"] = HasExtLeaf1 && ((ECX >> 29) & 1);
 
+  // Miscellaneous memory related features, detected by
+  // using the 0x80000008 leaf of the CPUID instruction
   bool HasExtLeaf8 = MaxExtLevel >= 0x80000008 &&
                      !getX86CpuIDAndInfo(0x80000008, &EAX, &EBX, &ECX, &EDX);
-  Features["clzero"] = HasExtLeaf8 && ((EBX >> 0) & 1);
+  Features["clzero"]   = HasExtLeaf8 && ((EBX >> 0) & 1);
+  Features["wbnoinvd"] = HasExtLeaf8 && ((EBX >> 9) & 1);
 
   bool HasLeaf7 =
       MaxLevel >= 7 && !getX86CpuIDAndInfoEx(0x7, 0x0, &EAX, &EBX, &ECX, &EDX);
@@ -1245,6 +1250,7 @@ bool sys::getHostCPUFeatures(StringMap<bool> &Features) {
   Features["prefetchwt1"]     = HasLeaf7 && ((ECX >>  0) & 1);
   Features["avx512vbmi"]      = HasLeaf7 && ((ECX >>  1) & 1) && HasAVX512Save;
   Features["pku"]             = HasLeaf7 && ((ECX >>  4) & 1);
+  Features["waitpkg"]         = HasLeaf7 && ((ECX >>  5) & 1);
   Features["avx512vbmi2"]     = HasLeaf7 && ((ECX >>  6) & 1) && HasAVX512Save;
   Features["shstk"]           = HasLeaf7 && ((ECX >>  7) & 1);
   Features["gfni"]            = HasLeaf7 && ((ECX >>  8) & 1);
@@ -1254,6 +1260,7 @@ bool sys::getHostCPUFeatures(StringMap<bool> &Features) {
   Features["avx512bitalg"]    = HasLeaf7 && ((ECX >> 12) & 1) && HasAVX512Save;
   Features["avx512vpopcntdq"] = HasLeaf7 && ((ECX >> 14) & 1) && HasAVX512Save;
   Features["rdpid"]           = HasLeaf7 && ((ECX >> 22) & 1);
+  Features["cldemote"]        = HasLeaf7 && ((ECX >> 25) & 1);
 
   Features["ibt"] = HasLeaf7 && ((EDX >> 20) & 1);
 

@@ -65,7 +65,7 @@ private:
 
 // Returns a hash value for S.
 uint32_t ICF::getHash(SectionChunk *C) {
-  return hash_combine(C->getPermissions(), C->SectionName, C->NumRelocs,
+  return hash_combine(C->getOutputCharacteristics(), C->SectionName, C->Relocs.size(),
                       C->Alignment, uint32_t(C->Header->SizeOfRawData),
                       C->Checksum, C->getContents());
 }
@@ -82,12 +82,12 @@ uint32_t ICF::getHash(SectionChunk *C) {
 // insignificant to the user program and the Visual C++ linker does this.
 bool ICF::isEligible(SectionChunk *C) {
   // Non-comdat chunks, dead chunks, and writable chunks are not elegible.
-  bool Writable = C->getPermissions() & llvm::COFF::IMAGE_SCN_MEM_WRITE;
+  bool Writable = C->getOutputCharacteristics() & llvm::COFF::IMAGE_SCN_MEM_WRITE;
   if (!C->isCOMDAT() || !C->isLive() || Writable)
     return false;
 
   // Code sections are eligible.
-  if (C->getPermissions() & llvm::COFF::IMAGE_SCN_MEM_EXECUTE)
+  if (C->getOutputCharacteristics() & llvm::COFF::IMAGE_SCN_MEM_EXECUTE)
     return true;
 
   // .xdata unwind info sections are eligble.
@@ -123,7 +123,7 @@ void ICF::segregate(size_t Begin, size_t End, bool Constant) {
 // Compare "non-moving" part of two sections, namely everything
 // except relocation targets.
 bool ICF::equalsConstant(const SectionChunk *A, const SectionChunk *B) {
-  if (A->NumRelocs != B->NumRelocs)
+  if (A->Relocs.size() != B->Relocs.size())
     return false;
 
   // Compare relocations.
@@ -146,7 +146,7 @@ bool ICF::equalsConstant(const SectionChunk *A, const SectionChunk *B) {
     return false;
 
   // Compare section attributes and contents.
-  return A->getPermissions() == B->getPermissions() &&
+  return A->getOutputCharacteristics() == B->getOutputCharacteristics() &&
          A->SectionName == B->SectionName && A->Alignment == B->Alignment &&
          A->Header->SizeOfRawData == B->Header->SizeOfRawData &&
          A->Checksum == B->Checksum && A->getContents() == B->getContents();
@@ -168,6 +168,7 @@ bool ICF::equalsVariable(const SectionChunk *A, const SectionChunk *B) {
   return std::equal(A->Relocs.begin(), A->Relocs.end(), B->Relocs.begin(), Eq);
 }
 
+// Find the first Chunk after Begin that has a different class from Begin.
 size_t ICF::findBoundary(size_t Begin, size_t End) {
   for (size_t I = Begin + 1; I < End; ++I)
     if (Chunks[Begin]->Class[Cnt % 2] != Chunks[I]->Class[Cnt % 2])
@@ -177,11 +178,8 @@ size_t ICF::findBoundary(size_t Begin, size_t End) {
 
 void ICF::forEachClassRange(size_t Begin, size_t End,
                             std::function<void(size_t, size_t)> Fn) {
-  if (Begin > 0)
-    Begin = findBoundary(Begin - 1, End);
-
   while (Begin < End) {
-    size_t Mid = findBoundary(Begin, Chunks.size());
+    size_t Mid = findBoundary(Begin, End);
     Fn(Begin, Mid);
     Begin = Mid;
   }
@@ -197,12 +195,22 @@ void ICF::forEachClass(std::function<void(size_t, size_t)> Fn) {
     return;
   }
 
-  // Split sections into 256 shards and call Fn in parallel.
-  size_t NumShards = 256;
+  // Shard into non-overlapping intervals, and call Fn in parallel.
+  // The sharding must be completed before any calls to Fn are made
+  // so that Fn can modify the Chunks in its shard without causing data
+  // races.
+  const size_t NumShards = 256;
   size_t Step = Chunks.size() / NumShards;
-  for_each_n(parallel::par, size_t(0), NumShards, [&](size_t I) {
-    size_t End = (I == NumShards - 1) ? Chunks.size() : (I + 1) * Step;
-    forEachClassRange(I * Step, End, Fn);
+  size_t Boundaries[NumShards + 1];
+  Boundaries[0] = 0;
+  Boundaries[NumShards] = Chunks.size();
+  for_each_n(parallel::par, size_t(1), NumShards, [&](size_t I) {
+    Boundaries[I] = findBoundary((I - 1) * Step, Chunks.size());
+  });
+  for_each_n(parallel::par, size_t(1), NumShards + 1, [&](size_t I) {
+    if (Boundaries[I - 1] < Boundaries[I]) {
+      forEachClassRange(Boundaries[I - 1], Boundaries[I], Fn);
+    }
   });
   ++Cnt;
 }

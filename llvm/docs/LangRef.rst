@@ -1708,6 +1708,11 @@ example:
     entity to fine grain the HW control flow protection mechanism. The flag
     is target independant and currently appertains to a function or function
     pointer.
+``shadowcallstack``
+    This attribute indicates that the ShadowCallStack checks are enabled for
+    the function. The instrumentation checks that the return address for the
+    function has not changed between the function prolog and eiplog. It is
+    currently x86_64-specific.
 
 .. _glattrs:
 
@@ -5308,7 +5313,8 @@ Irreducible loop header weights are typically based on profile data.
 '``invariant.group``' Metadata
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The ``invariant.group`` metadata may be attached to ``load``/``store`` instructions.
+The experimental ``invariant.group`` metadata may be attached to 
+``load``/``store`` instructions.
 The existence of the ``invariant.group`` metadata on the instruction tells
 the optimizer that every ``load`` and ``store`` to the same pointer operand
 within the same invariant group can be assumed to load or store the same
@@ -5358,6 +5364,8 @@ to the SSA value of the pointer operand.
   ; if %x mustalias %y then we can replace the above instruction with
   %v = load i8, i8* %y
 
+Note that this is an experimental feature, which means that its semantics might
+change in the future.
 
 '``type``' Metadata
 ^^^^^^^^^^^^^^^^^^^
@@ -8371,18 +8379,17 @@ Semantics:
 
 The '``fptrunc``' instruction casts a ``value`` from a larger
 :ref:`floating-point <t_floating>` type to a smaller :ref:`floating-point
-<t_floating>` type. If the value cannot fit (i.e. overflows) within the
-destination type, ``ty2``, then the results are undefined. If the cast produces
-an inexact result, how rounding is performed (e.g. truncation, also known as
-round to zero) is undefined.
+<t_floating>` type.  
+This instruction is assumed to execute in the default :ref:`floating-point
+environment <floatenv>`.
 
 Example:
 """"""""
 
 .. code-block:: llvm
 
-      %X = fptrunc double 123.0 to float         ; yields float:123.0
-      %Y = fptrunc double 1.0E+300 to float      ; yields undefined
+      %X = fptrunc double 16777217.0 to float    ; yields float:16777216.0
+      %Y = fptrunc double 1.0E+300 to half       ; yields half:+infinity
 
 '``fpext .. to``' Instruction
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -12919,7 +12926,8 @@ Overview:
 
 The '``llvm.invariant.group.barrier``' intrinsic can be used when an invariant
 established by invariant.group metadata no longer holds, to obtain a new pointer
-value that does not carry the invariant information.
+value that does not carry the invariant information. It is an experimental
+intrinsic, which means that its semantics might change in the future.
 
 
 Arguments:

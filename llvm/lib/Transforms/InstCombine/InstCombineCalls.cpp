@@ -566,55 +566,6 @@ static Value *simplifyX86varShift(const IntrinsicInst &II,
   return Builder.CreateAShr(Vec, ShiftVec);
 }
 
-static Value *simplifyX86muldq(const IntrinsicInst &II,
-                               InstCombiner::BuilderTy &Builder) {
-  Value *Arg0 = II.getArgOperand(0);
-  Value *Arg1 = II.getArgOperand(1);
-  Type *ResTy = II.getType();
-  assert(Arg0->getType()->getScalarSizeInBits() == 32 &&
-         Arg1->getType()->getScalarSizeInBits() == 32 &&
-         ResTy->getScalarSizeInBits() == 64 && "Unexpected muldq/muludq types");
-
-  // muldq/muludq(undef, undef) -> zero (matches generic mul behavior)
-  if (isa<UndefValue>(Arg0) || isa<UndefValue>(Arg1))
-    return ConstantAggregateZero::get(ResTy);
-
-  // Constant folding.
-  // PMULDQ  = (mul(vXi64 sext(shuffle<0,2,..>(Arg0)),
-  //                vXi64 sext(shuffle<0,2,..>(Arg1))))
-  // PMULUDQ = (mul(vXi64 zext(shuffle<0,2,..>(Arg0)),
-  //                vXi64 zext(shuffle<0,2,..>(Arg1))))
-  if (!isa<Constant>(Arg0) || !isa<Constant>(Arg1))
-    return nullptr;
-
-  unsigned NumElts = ResTy->getVectorNumElements();
-  assert(Arg0->getType()->getVectorNumElements() == (2 * NumElts) &&
-         Arg1->getType()->getVectorNumElements() == (2 * NumElts) &&
-         "Unexpected muldq/muludq types");
-
-  unsigned IntrinsicID = II.getIntrinsicID();
-  bool IsSigned = (Intrinsic::x86_sse41_pmuldq == IntrinsicID ||
-                   Intrinsic::x86_avx2_pmul_dq == IntrinsicID ||
-                   Intrinsic::x86_avx512_pmul_dq_512 == IntrinsicID);
-
-  SmallVector<unsigned, 16> ShuffleMask;
-  for (unsigned i = 0; i != NumElts; ++i)
-    ShuffleMask.push_back(i * 2);
-
-  auto *LHS = Builder.CreateShuffleVector(Arg0, Arg0, ShuffleMask);
-  auto *RHS = Builder.CreateShuffleVector(Arg1, Arg1, ShuffleMask);
-
-  if (IsSigned) {
-    LHS = Builder.CreateSExt(LHS, ResTy);
-    RHS = Builder.CreateSExt(RHS, ResTy);
-  } else {
-    LHS = Builder.CreateZExt(LHS, ResTy);
-    RHS = Builder.CreateZExt(RHS, ResTy);
-  }
-
-  return Builder.CreateMul(LHS, RHS);
-}
-
 static Value *simplifyX86pack(IntrinsicInst &II, bool IsSigned) {
   Value *Arg0 = II.getArgOperand(0);
   Value *Arg1 = II.getArgOperand(1);
@@ -2016,37 +1967,34 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
     Value *Src0 = II->getArgOperand(0);
     Value *Src1 = II->getArgOperand(1);
 
-    // Canonicalize constants into the RHS.
+    // Canonicalize constant multiply operand to Src1.
     if (isa<Constant>(Src0) && !isa<Constant>(Src1)) {
       II->setArgOperand(0, Src1);
       II->setArgOperand(1, Src0);
       std::swap(Src0, Src1);
     }
 
-    Value *LHS = nullptr;
-    Value *RHS = nullptr;
-
     // fma fneg(x), fneg(y), z -> fma x, y, z
-    if (match(Src0, m_FNeg(m_Value(LHS))) &&
-        match(Src1, m_FNeg(m_Value(RHS)))) {
-      II->setArgOperand(0, LHS);
-      II->setArgOperand(1, RHS);
+    Value *X, *Y;
+    if (match(Src0, m_FNeg(m_Value(X))) && match(Src1, m_FNeg(m_Value(Y)))) {
+      II->setArgOperand(0, X);
+      II->setArgOperand(1, Y);
       return II;
     }
 
     // fma fabs(x), fabs(x), z -> fma x, x, z
-    if (match(Src0, m_Intrinsic<Intrinsic::fabs>(m_Value(LHS))) &&
-        match(Src1, m_Intrinsic<Intrinsic::fabs>(m_Value(RHS))) && LHS == RHS) {
-      II->setArgOperand(0, LHS);
-      II->setArgOperand(1, RHS);
+    if (match(Src0, m_Intrinsic<Intrinsic::fabs>(m_Value(X))) &&
+        match(Src1, m_Intrinsic<Intrinsic::fabs>(m_Specific(X)))) {
+      II->setArgOperand(0, X);
+      II->setArgOperand(1, X);
       return II;
     }
 
     // fma x, 1, z -> fadd x, z
     if (match(Src1, m_FPOne())) {
-      Instruction *RI = BinaryOperator::CreateFAdd(Src0, II->getArgOperand(2));
-      RI->copyFastMathFlags(II);
-      return RI;
+      auto *FAdd = BinaryOperator::CreateFAdd(Src0, II->getArgOperand(2));
+      FAdd->copyFastMathFlags(II);
+      return FAdd;
     }
 
     break;
@@ -2362,7 +2310,7 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
     // Folding cmp(sub(a,b),0) -> cmp(a,b) and cmp(0,sub(a,b)) -> cmp(b,a)
     Value *Arg0 = II->getArgOperand(0);
     Value *Arg1 = II->getArgOperand(1);
-    bool Arg0IsZero = match(Arg0, m_Zero());
+    bool Arg0IsZero = match(Arg0, m_PosZeroFP());
     if (Arg0IsZero)
       std::swap(Arg0, Arg1);
     Value *A, *B;
@@ -2374,7 +2322,7 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
     // The compare intrinsic uses the above assumptions and therefore
     // doesn't require additional flags.
     if ((match(Arg0, m_OneUse(m_FSub(m_Value(A), m_Value(B)))) &&
-         match(Arg1, m_Zero()) && isa<Instruction>(Arg0) &&
+         match(Arg1, m_PosZeroFP()) && isa<Instruction>(Arg0) &&
          cast<Instruction>(Arg0)->getFastMathFlags().noInfs())) {
       if (Arg0IsZero)
         std::swap(A, B);
@@ -2644,26 +2592,6 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
     if (Value *V = simplifyX86varShift(*II, Builder))
       return replaceInstUsesWith(*II, V);
     break;
-
-  case Intrinsic::x86_sse2_pmulu_dq:
-  case Intrinsic::x86_sse41_pmuldq:
-  case Intrinsic::x86_avx2_pmul_dq:
-  case Intrinsic::x86_avx2_pmulu_dq:
-  case Intrinsic::x86_avx512_pmul_dq_512:
-  case Intrinsic::x86_avx512_pmulu_dq_512: {
-    if (Value *V = simplifyX86muldq(*II, Builder))
-      return replaceInstUsesWith(*II, V);
-
-    unsigned VWidth = II->getType()->getVectorNumElements();
-    APInt UndefElts(VWidth, 0);
-    APInt DemandedElts = APInt::getAllOnesValue(VWidth);
-    if (Value *V = SimplifyDemandedVectorElts(II, DemandedElts, UndefElts)) {
-      if (V != II)
-        return replaceInstUsesWith(*II, V);
-      return II;
-    }
-    break;
-  }
 
   case Intrinsic::x86_sse2_packssdw_128:
   case Intrinsic::x86_sse2_packsswb_128:
@@ -3996,8 +3924,17 @@ bool InstCombiner::transformConstExprCastCall(CallSite CS) {
   if (!Callee)
     return false;
 
-  // The prototype of a thunk is a lie. Don't directly call such a function.
+  // If this is a call to a thunk function, don't remove the cast. Thunks are
+  // used to transparently forward all incoming parameters and outgoing return
+  // values, so it's important to leave the cast in place.
   if (Callee->hasFnAttribute("thunk"))
+    return false;
+
+  // If this is a musttail call, the callee's prototype must match the caller's
+  // prototype with the exception of pointee types. The code below doesn't
+  // implement that, so we can't do this transform.
+  // TODO: Do the transform if it only requires adding pointer casts.
+  if (CS.isMustTailCall())
     return false;
 
   Instruction *Caller = CS.getInstruction();

@@ -20,6 +20,7 @@
 #include "lld/Common/Strings.h"
 #include "lld/Common/Threads.h"
 #include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/StringMap.h"
 #include "llvm/BinaryFormat/Wasm.h"
 #include "llvm/Object/WasmTraits.h"
 #include "llvm/Support/FileOutputBuffer.h"
@@ -39,6 +40,7 @@ using namespace lld::wasm;
 
 static constexpr int kStackAlignment = 16;
 static constexpr int kInitialTableOffset = 1;
+static constexpr const char *kFunctionTableName = "__indirect_function_table";
 
 namespace {
 
@@ -84,6 +86,7 @@ private:
   void createElemSection();
   void createCodeSection();
   void createDataSection();
+  void createCustomSections();
 
   // Custom sections
   void createRelocSections();
@@ -110,6 +113,8 @@ private:
   std::vector<const Symbol *> SymtabEntries;
   std::vector<WasmInitEntry> InitFunctions;
 
+  llvm::StringMap<std::vector<InputSection *>> CustomSectionMapping;
+
   // Elements that are used to construct the final output
   std::string Header;
   std::vector<OutputSection *> OutputSections;
@@ -125,6 +130,8 @@ private:
 void Writer::createImportSection() {
   uint32_t NumImports = ImportedSymbols.size();
   if (Config->ImportMemory)
+    ++NumImports;
+  if (Config->ImportTable)
     ++NumImports;
 
   if (NumImports == 0)
@@ -146,6 +153,17 @@ void Writer::createImportSection() {
       Import.Memory.Flags |= WASM_LIMITS_FLAG_HAS_MAX;
       Import.Memory.Maximum = MaxMemoryPages;
     }
+    writeImport(OS, Import);
+  }
+
+  if (Config->ImportTable) {
+    uint32_t TableSize = kInitialTableOffset + IndirectFunctions.size();
+    WasmImport Import;
+    Import.Module = "env";
+    Import.Field = kFunctionTableName;
+    Import.Kind = WASM_EXTERNAL_TABLE;
+    Import.Table.ElemType = WASM_TYPE_ANYFUNC;
+    Import.Table.Limits = {WASM_LIMITS_FLAG_HAS_MAX, TableSize, TableSize};
     writeImport(OS, Import);
   }
 
@@ -222,8 +240,11 @@ void Writer::createGlobalSection() {
 }
 
 void Writer::createTableSection() {
-  // Always output a table section, even if there are no indirect calls.
-  // There are two reasons for this:
+  if (Config->ImportTable)
+    return;
+
+  // Always output a table section (or table import), even if there are no
+  // indirect calls.  There are two reasons for this:
   //  1. For executables it is useful to have an empty table slot at 0
   //     which can be filled with a null function call handler.
   //  2. If we don't do this, any program that contains a call_indirect but
@@ -236,16 +257,16 @@ void Writer::createTableSection() {
   raw_ostream &OS = Section->getStream();
 
   writeUleb128(OS, 1, "table count");
-  writeU8(OS, WASM_TYPE_ANYFUNC, "table type");
-  writeUleb128(OS, WASM_LIMITS_FLAG_HAS_MAX, "table flags");
-  writeUleb128(OS, TableSize, "table initial size");
-  writeUleb128(OS, TableSize, "table max size");
+  WasmLimits Limits = {WASM_LIMITS_FLAG_HAS_MAX, TableSize, TableSize};
+  writeTableType(OS, WasmTable{WASM_TYPE_ANYFUNC, Limits});
 }
 
 void Writer::createExportSection() {
   bool ExportMemory = !Config->Relocatable && !Config->ImportMemory;
+  bool ExportTable = !Config->Relocatable && Config->ExportTable;
 
-  uint32_t NumExports = (ExportMemory ? 1 : 0) + ExportedSymbols.size();
+  uint32_t NumExports =
+      (ExportMemory ? 1 : 0) + (ExportTable ? 1 : 0) + ExportedSymbols.size();
   if (!NumExports)
     return;
 
@@ -256,6 +277,8 @@ void Writer::createExportSection() {
 
   if (ExportMemory)
     writeExport(OS, {"memory", WASM_EXTERNAL_MEMORY, 0});
+  if (ExportTable)
+    writeExport(OS, {kFunctionTableName, WASM_EXTERNAL_TABLE, 0});
 
   unsigned FakeGlobalIndex = NumImportedGlobals + InputGlobals.size();
 
@@ -273,6 +296,23 @@ void Writer::createExportSection() {
     else
       llvm_unreachable("unexpected symbol type");
     writeExport(OS, Export);
+  }
+}
+
+void Writer::createCustomSections() {
+  log("createCustomSections");
+  for (ObjFile *File : Symtab->ObjectFiles)
+    for (InputSection *Section : File->CustomSections)
+      CustomSectionMapping[Section->getName()].push_back(Section);
+
+  for (auto &Pair : CustomSectionMapping) {
+    StringRef Name = Pair.first();
+    // These custom sections are known the linker and synthesized rather than
+    // blindly copied
+    if (Name == "linking" || Name == "name" || Name.startswith("reloc."))
+      continue;
+    DEBUG(dbgs() << "createCustomSection: " << Name << "\n");
+    OutputSections.push_back(make<CustomSection>(Name, Pair.second));
   }
 }
 
@@ -340,7 +380,7 @@ void Writer::createRelocSections() {
 
     SyntheticSection *Section = createSyntheticSection(WASM_SEC_CUSTOM, Name);
     raw_ostream &OS = Section->getStream();
-    writeUleb128(OS, OSec->Type, "reloc section");
+    writeUleb128(OS, i, "reloc section");
     writeUleb128(OS, Count, "reloc count");
     OSec->writeRelocations(OS);
   }
@@ -494,7 +534,7 @@ void Writer::createLinkingSection() {
 void Writer::createNameSection() {
   unsigned NumNames = NumImportedFunctions;
   for (const InputFunction *F : InputFunctions)
-    if (!F->getName().empty())
+    if (!F->getName().empty() || !F->getDebugName().empty())
       ++NumNames;
 
   if (NumNames == 0)
@@ -518,8 +558,12 @@ void Writer::createNameSection() {
   for (const InputFunction *F : InputFunctions) {
     if (!F->getName().empty()) {
       writeUleb128(Sub.OS, F->getFunctionIndex(), "func index");
-      Optional<std::string> Name = demangleItanium(F->getName());
-      writeStr(Sub.OS, Name ? StringRef(*Name) : F->getName(), "symbol name");
+      if (!F->getDebugName().empty()) {
+        writeStr(Sub.OS, F->getDebugName(), "symbol name");
+      } else {
+        Optional<std::string> Name = demangleItanium(F->getName());
+        writeStr(Sub.OS, Name ? StringRef(*Name) : F->getName(), "symbol name");
+      }
     }
   }
 
@@ -628,6 +672,7 @@ void Writer::createSections() {
   createElemSection();
   createCodeSection();
   createDataSection();
+  createCustomSections();
 
   // Custom sections
   if (Config->Relocatable) {
@@ -651,6 +696,8 @@ void Writer::calculateImports() {
     if (isa<DataSymbol>(Sym))
       continue;
     if (Sym->isWeak() && !Config->Relocatable)
+      continue;
+    if (!Sym->isLive())
       continue;
 
     DEBUG(dbgs() << "import: " << Sym->getName() << "\n");
@@ -780,13 +827,6 @@ void Writer::assignIndexes() {
         // Mark target type as live
         File->TypeMap[Reloc.Index] = registerType(Types[Reloc.Index]);
         File->TypeIsUsed[Reloc.Index] = true;
-      } else if (Reloc.Type == R_WEBASSEMBLY_GLOBAL_INDEX_LEB) {
-        // Mark target global as live
-        GlobalSymbol *Sym = File->getGlobalSymbol(Reloc.Index);
-        if (auto *G = dyn_cast<DefinedGlobal>(Sym)) {
-          DEBUG(dbgs() << "marking global live: " << Sym->getName() << "\n");
-          G->Global->Live = true;
-        }
       }
     }
   };

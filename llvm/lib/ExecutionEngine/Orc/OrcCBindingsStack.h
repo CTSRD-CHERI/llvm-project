@@ -153,13 +153,13 @@ private:
       for (auto &S : Symbols) {
         if (auto Sym = findSymbol(*S)) {
           if (auto Addr = Sym.getAddress())
-            Query->setDefinition(S, JITEvaluatedSymbol(*Addr, Sym.getFlags()));
+            Query->resolve(S, JITEvaluatedSymbol(*Addr, Sym.getFlags()));
           else {
-            Query->setFailed(Addr.takeError());
+            Query->notifyMaterializationFailed(Addr.takeError());
             return orc::SymbolNameSet();
           }
         } else if (auto Err = Sym.takeError()) {
-          Query->setFailed(std::move(Err));
+          Query->notifyMaterializationFailed(std::move(Err));
           return orc::SymbolNameSet();
         } else
           UnresolvedSymbols.insert(S);
@@ -200,7 +200,7 @@ public:
   OrcCBindingsStack(TargetMachine &TM,
                     std::unique_ptr<CompileCallbackMgr> CCMgr,
                     IndirectStubsManagerBuilder IndirectStubsMgrBuilder)
-      : ES(SSP), DL(TM.createDataLayout()),
+      : DL(TM.createDataLayout()),
         IndirectStubsMgr(IndirectStubsMgrBuilder()), CCMgr(std::move(CCMgr)),
         ObjectLayer(ES,
                     [this](orc::VModuleKey K) {
@@ -421,7 +421,6 @@ private:
     logAllUnhandledErrors(std::move(Err), errs(), "ORC error: ");
   };
 
-  orc::SymbolStringPool SSP;
   orc::ExecutionSession ES;
 
   DataLayout DL;

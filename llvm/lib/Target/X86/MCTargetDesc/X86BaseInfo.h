@@ -369,15 +369,13 @@ namespace X86II {
     // OpSize - OpSizeFixed implies instruction never needs a 0x66 prefix.
     // OpSize16 means this is a 16-bit instruction and needs 0x66 prefix in
     // 32-bit mode. OpSize32 means this is a 32-bit instruction needs a 0x66
-    // prefix in 16-bit mode. OpSizeIgnore means that the instruction may
-    // take a optional 0x66 byte but should not emit with one.
+    // prefix in 16-bit mode.
     OpSizeShift = 7,
     OpSizeMask = 0x3 << OpSizeShift,
 
     OpSizeFixed  = 0 << OpSizeShift,
     OpSize16     = 1 << OpSizeShift,
     OpSize32     = 2 << OpSizeShift,
-    OpSizeIgnore = 3 << OpSizeShift,
 
     // AsSize - AdSizeX implies this instruction determines its need of 0x67
     // prefix from a normal ModRM memory operand. The other types indicate that
@@ -397,21 +395,21 @@ namespace X86II {
     // no prefix.
     //
     OpPrefixShift = AdSizeShift + 2,
-    OpPrefixMask  = 0x7 << OpPrefixShift,
+    OpPrefixMask  = 0x3 << OpPrefixShift,
 
-    // PS, PD - Prefix code for packed single and double precision vector
-    // floating point operations performed in the SSE registers.
-    PS = 1 << OpPrefixShift, PD = 2 << OpPrefixShift,
+    // PD - Prefix code for packed double precision vector floating point
+    // operations performed in the SSE registers.
+    PD = 1 << OpPrefixShift,
 
     // XS, XD - These prefix codes are for single and double precision scalar
     // floating point operations performed in the SSE registers.
-    XS = 3 << OpPrefixShift,  XD = 4 << OpPrefixShift,
+    XS = 2 << OpPrefixShift,  XD = 3 << OpPrefixShift,
 
     //===------------------------------------------------------------------===//
     // OpMap - This field determines which opcode map this instruction
     // belongs to. i.e. one-byte, two-byte, 0x0f 0x38, 0x0f 0x3a, etc.
     //
-    OpMapShift = OpPrefixShift + 3,
+    OpMapShift = OpPrefixShift + 2,
     OpMapMask  = 0x7 << OpMapShift,
 
     // OB - OneByte - Set if this instruction has a one byte opcode.
@@ -670,6 +668,10 @@ namespace X86II {
         return 1;
       return 0;
     case 2:
+      // XCHG/XADD have two destinations and two sources.
+      if (NumOps >= 4 && Desc.getOperandConstraint(2, MCOI::TIED_TO) == 0 &&
+          Desc.getOperandConstraint(3, MCOI::TIED_TO) == 1)
+        return 2;
       // Check for gather. AVX-512 has the second tied operand early. AVX2
       // has it as the last op.
       if (NumOps == 9 && Desc.getOperandConstraint(2, MCOI::TIED_TO) == 0 &&

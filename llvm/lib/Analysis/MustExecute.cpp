@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/Analysis/MustExecute.h"
 #include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/Passes.h"
@@ -19,7 +20,6 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Transforms/Utils/LoopUtils.h"
 using namespace llvm;
 
 /// Computes loop safety information, checks loop body & header
@@ -184,7 +184,7 @@ FunctionPass *llvm::createMustExecutePrinter() {
   return new MustExecutePrinter();
 }
 
-bool isMustExecuteIn(const Instruction &I, Loop *L, DominatorTree *DT) {
+static bool isMustExecuteIn(const Instruction &I, Loop *L, DominatorTree *DT) {
   // TODO: merge these two routines.  For the moment, we display the best
   // result obtained by *either* implementation.  This is a bit unfair since no
   // caller actually gets the full power at the moment.
@@ -194,6 +194,7 @@ bool isMustExecuteIn(const Instruction &I, Loop *L, DominatorTree *DT) {
     isGuaranteedToExecuteForEveryIteration(&I, L);
 }
 
+namespace {
 /// \brief An assembly annotator class to print must execute information in
 /// comments.
 class MustExecuteAnnotatedWriter : public AssemblyAnnotationWriter {
@@ -248,6 +249,7 @@ public:
     OS << ")";
   }
 };
+} // namespace
 
 bool MustExecutePrinter::runOnFunction(Function &F) {
   auto &LI = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();

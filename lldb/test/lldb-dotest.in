@@ -12,5 +12,5 @@ if __name__ == '__main__':
     cmd = [dotest_path, '-q']
     cmd.extend(dotest_args)
     cmd.extend(wrapper_args)
-    # Invoke dotest.py
-    subprocess.call(cmd)
+    # Invoke dotest.py and return exit code.
+    sys.exit(subprocess.call(cmd))

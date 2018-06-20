@@ -9,6 +9,7 @@
 
 #include "ClangdServer.h"
 #include "CodeComplete.h"
+#include "FindSymbols.h"
 #include "Headers.h"
 #include "SourceCode.h"
 #include "XRefs.h"
@@ -286,6 +287,13 @@ static llvm::Expected<HeaderFile> toHeaderFile(StringRef Header,
   auto U = URI::parse(Header);
   if (!U)
     return U.takeError();
+
+  auto IncludePath = URI::includeSpelling(*U);
+  if (!IncludePath)
+    return IncludePath.takeError();
+  if (!IncludePath->empty())
+    return HeaderFile{std::move(*IncludePath), /*Verbatim=*/true};
+
   auto Resolved = URI::resolve(*U, HintPath);
   if (!Resolved)
     return Resolved.takeError();
@@ -490,6 +498,11 @@ void ClangdServer::consumeDiagnostics(PathRef File, DocVersion Version,
 void ClangdServer::onFileEvent(const DidChangeWatchedFilesParams &Params) {
   // FIXME: Do nothing for now. This will be used for indexing and potentially
   // invalidating other caches.
+}
+
+void ClangdServer::workspaceSymbols(
+    StringRef Query, int Limit, Callback<std::vector<SymbolInformation>> CB) {
+  CB(clangd::getWorkspaceSymbols(Query, Limit, Index));
 }
 
 std::vector<std::pair<Path, std::size_t>>

@@ -397,6 +397,10 @@ def VCOMBINE : NoTestOpInst<"vcombine", "kdd", "csilhfUcUsUiUlPcPs", OP_CONC>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // E.3.21 Splitting vectors
+// Note that the ARM NEON Reference 2.0 mistakenly document the vget_high_f16()
+// and vget_low_f16() intrinsics as AArch64-only. We (and GCC) support all
+// versions of these intrinsics in both AArch32 and AArch64 architectures. See
+// D45668 for more details.
 let InstName = "vmov" in {
 def VGET_HIGH : NoTestOpInst<"vget_high", "dk", "csilhfUcUsUiUlPcPs", OP_HI>;
 def VGET_LOW  : NoTestOpInst<"vget_low", "dk", "csilhfUcUsUiUlPcPs", OP_LO>;
@@ -531,6 +535,7 @@ def VREINTERPRET
 let ArchGuard = "defined(__ARM_FEATURE_FMA)" in {
   def VFMA : SInst<"vfma", "dddd", "fQf">;
   def VFMS : SOpInst<"vfms", "dddd", "fQf", OP_FMLS>;
+  def FMLA_N_F32 : SOpInst<"vfma_n", "ddds", "fQf", OP_FMLA_N>;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -621,8 +626,8 @@ def FMLS : SOpInst<"vfms", "dddd", "dQd", OP_FMLS>;
 // MUL, MLA, MLS, FMA, FMS definitions with scalar argument
 def VMUL_N_A64 : IOpInst<"vmul_n", "dds", "Qd", OP_MUL_N>;
 
-def FMLA_N : SOpInst<"vfma_n", "ddds", "fQfQd", OP_FMLA_N>;
-def FMLS_N : SOpInst<"vfms_n", "ddds", "fQfQd", OP_FMLS_N>;
+def FMLA_N : SOpInst<"vfma_n", "ddds", "dQd", OP_FMLA_N>;
+def FMLS_N : SOpInst<"vfms_n", "ddds", "fdQfQd", OP_FMLS_N>;
 
 def MLA_N : SOpInst<"vmla_n", "ddds", "Qd", OP_MLA_N>;
 def MLS_N : SOpInst<"vmls_n", "ddds", "Qd", OP_MLS_N>;
@@ -913,7 +918,7 @@ def VEXT_A64 : WInst<"vext", "dddi", "dQdPlQPl">;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Crypto
-let ArchGuard = "__ARM_FEATURE_CRYPTO" in {
+let ArchGuard = "__ARM_ARCH >= 8 && defined(__ARM_FEATURE_CRYPTO)" in {
 def AESE : SInst<"vaese", "ddd", "QUc">;
 def AESD : SInst<"vaesd", "ddd", "QUc">;
 def AESMC : SInst<"vaesmc", "dd", "QUc">;
@@ -1113,6 +1118,12 @@ def SCALAR_FCVTZS_N_S32 : SInst<"vcvt_n_s32", "$si", "Sf">;
 def SCALAR_FCVTZU_N_U32 : SInst<"vcvt_n_u32", "bsi", "Sf">;
 def SCALAR_FCVTZS_N_S64 : SInst<"vcvt_n_s64", "$si", "Sd">;
 def SCALAR_FCVTZU_N_U64 : SInst<"vcvt_n_u64", "bsi", "Sd">;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Scalar Floating-point Round to Integral
+let ArchGuard = "__ARM_ARCH >= 8 && defined(__ARM_FEATURE_DIRECTED_ROUNDING)" in {
+def SCALAR_FRINTN_S32 : SInst<"vrndn", "ss", "Sf">;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

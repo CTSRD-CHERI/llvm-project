@@ -58,12 +58,6 @@ using llvm::support::endian::write64le;
 
 constexpr size_t MergeNoTailSection::NumShards;
 
-uint64_t SyntheticSection::getVA() const {
-  if (OutputSection *Sec = getParent())
-    return Sec->Addr + OutSecOff;
-  return 0;
-}
-
 // Returns an LLD version string.
 static ArrayRef<uint8_t> getVersion() {
   // Check LLD_VERSION first for ease of testing.
@@ -275,8 +269,8 @@ InputSection *elf::createInterpSection() {
   return Sec;
 }
 
-Symbol *elf::addSyntheticLocal(StringRef Name, uint8_t Type, uint64_t Value,
-                               uint64_t Size, InputSectionBase &Section) {
+Defined *elf::addSyntheticLocal(StringRef Name, uint8_t Type, uint64_t Value,
+                                uint64_t Size, InputSectionBase &Section) {
   auto *S = make<Defined>(Section.File, Name, STB_LOCAL, STV_DEFAULT, Type,
                           Value, Size, &Section);
   if (InX::SymTab)
@@ -602,10 +596,18 @@ void EhFrameSection::writeTo(uint8_t *Buf) {
 
 GotSection::GotSection()
     : SyntheticSection(SHF_ALLOC | SHF_WRITE, SHT_PROGBITS,
-                       Target->GotEntrySize, ".got") {}
+                       Target->GotEntrySize, ".got") {
+  // PPC64 saves the ElfSym::GlobalOffsetTable .TOC. as the first entry in the
+  // .got. If there are no references to .TOC. in the symbol table,
+  // ElfSym::GlobalOffsetTable will not be defined and we won't need to save
+  // .TOC. in the .got. When it is defined, we increase NumEntries by the number
+  // of entries used to emit ElfSym::GlobalOffsetTable.
+  if (ElfSym::GlobalOffsetTable && !Target->GotBaseSymInGotPlt)
+    NumEntries += Target->GotHeaderEntriesNum;
+}
 
 void GotSection::addEntry(Symbol &Sym) {
-  Sym.GotIndex = Target->GotHeaderEntriesNum + NumEntries;
+  Sym.GotIndex = NumEntries;
   ++NumEntries;
 }
 
@@ -637,7 +639,7 @@ uint64_t GotSection::getGlobalDynOffset(const Symbol &B) const {
 }
 
 void GotSection::finalizeContents() {
-  Size = (NumEntries + Target->GotHeaderEntriesNum) * Config->Wordsize;
+  Size = NumEntries * Config->Wordsize;
 }
 
 bool GotSection::empty() const {
@@ -1210,10 +1212,8 @@ void DynamicSection<ELFT>::addInSec(int32_t Tag, InputSection *Sec) {
 template <class ELFT>
 void DynamicSection<ELFT>::addInSecRelative(int32_t Tag, InputSection *Sec) {
   size_t TagOffset = Entries.size() * Entsize;
-  Entries.push_back({Tag, [=] {
-                       return Sec->getParent()->Addr + Sec->OutSecOff -
-                              (getVA() + TagOffset);
-                     }});
+  Entries.push_back(
+      {Tag, [=] { return Sec->getVA(0) - (getVA() + TagOffset); }});
 }
 
 template <class ELFT>
@@ -1591,10 +1591,10 @@ bool AndroidPackedRelocationSection<ELFT>::updateAllocSize() {
       NonRelatives.push_back(R);
   }
 
-  std::sort(Relatives.begin(), Relatives.end(),
-            [](const Elf_Rel &A, const Elf_Rel &B) {
-              return A.r_offset < B.r_offset;
-            });
+  llvm::sort(Relatives.begin(), Relatives.end(),
+             [](const Elf_Rel &A, const Elf_Rel &B) {
+               return A.r_offset < B.r_offset;
+             });
 
   // Try to find groups of relative relocations which are spaced one word
   // apart from one another. These generally correspond to vtable entries. The
@@ -1672,10 +1672,10 @@ bool AndroidPackedRelocationSection<ELFT>::updateAllocSize() {
   }
 
   // Finally the non-relative relocations.
-  std::sort(NonRelatives.begin(), NonRelatives.end(),
-            [](const Elf_Rela &A, const Elf_Rela &B) {
-              return A.r_offset < B.r_offset;
-            });
+  llvm::sort(NonRelatives.begin(), NonRelatives.end(),
+             [](const Elf_Rela &A, const Elf_Rela &B) {
+               return A.r_offset < B.r_offset;
+             });
   if (!NonRelatives.empty()) {
     Add(NonRelatives.size());
     Add(HasAddendIfRela);
@@ -1722,39 +1722,60 @@ static bool sortMipsSymbols(const SymbolTableEntry &L,
 void SymbolTableBaseSection::finalizeContents() {
   getParent()->Link = StrTabSec.getParent()->SectionIndex;
 
+  if (this->Type != SHT_DYNSYM)
+    return;
+
   // If it is a .dynsym, there should be no local symbols, but we need
   // to do a few things for the dynamic linker.
-  if (this->Type == SHT_DYNSYM) {
-    // Section's Info field has the index of the first non-local symbol.
-    // Because the first symbol entry is a null entry, 1 is the first.
-    getParent()->Info = 1;
 
-    if (InX::GnuHashTab) {
-      // NB: It also sorts Symbols to meet the GNU hash table requirements.
-      InX::GnuHashTab->addSymbols(Symbols);
-    } else if (Config->EMachine == EM_MIPS) {
-      std::stable_sort(Symbols.begin(), Symbols.end(), sortMipsSymbols);
-    }
+  // Section's Info field has the index of the first non-local symbol.
+  // Because the first symbol entry is a null entry, 1 is the first.
+  getParent()->Info = 1;
 
-    size_t I = 0;
-    for (const SymbolTableEntry &S : Symbols) S.Sym->DynsymIndex = ++I;
-    return;
+  if (InX::GnuHashTab) {
+    // NB: It also sorts Symbols to meet the GNU hash table requirements.
+    InX::GnuHashTab->addSymbols(Symbols);
+  } else if (Config->EMachine == EM_MIPS) {
+    std::stable_sort(Symbols.begin(), Symbols.end(), sortMipsSymbols);
   }
+
+  size_t I = 0;
+  for (const SymbolTableEntry &S : Symbols)
+    S.Sym->DynsymIndex = ++I;
 }
 
 // The ELF spec requires that all local symbols precede global symbols, so we
 // sort symbol entries in this function. (For .dynsym, we don't do that because
 // symbols for dynamic linking are inherently all globals.)
+//
+// Aside from above, we put local symbols in groups starting with the STT_FILE
+// symbol. That is convenient for purpose of identifying where are local symbols
+// coming from.
 void SymbolTableBaseSection::postThunkContents() {
   if (this->Type == SHT_DYNSYM)
     return;
-  // move all local symbols before global symbols.
-  auto It = std::stable_partition(
+
+  // Move all local symbols before global symbols.
+  auto E = std::stable_partition(
       Symbols.begin(), Symbols.end(), [](const SymbolTableEntry &S) {
         return S.Sym->isLocal() || S.Sym->computeBinding() == STB_LOCAL;
       });
-  size_t NumLocals = It - Symbols.begin();
+  size_t NumLocals = E - Symbols.begin();
   getParent()->Info = NumLocals + 1;
+
+  // Assign the growing unique ID for each local symbol's file.
+  DenseMap<InputFile *, unsigned> FileIDs;
+  for (auto I = Symbols.begin(); I != E; ++I)
+    FileIDs.insert({I->Sym->File, FileIDs.size()});
+
+  // Sort the local symbols to group them by file. We do not need to care about
+  // the STT_FILE symbols, they are already naturally placed first in each group.
+  // That happens because STT_FILE is always the first symbol in the object and
+  // hence precede all other local symbols we add for a file.
+  std::stable_sort(Symbols.begin(), E,
+                   [&](const SymbolTableEntry &L, const SymbolTableEntry &R) {
+                     return FileIDs[L.Sym->File] < FileIDs[R.Sym->File];
+                   });
 }
 
 void SymbolTableBaseSection::addSymbol(Symbol *B) {
@@ -2732,9 +2753,8 @@ void elf::mergeSections() {
   // splitIntoPieces needs to be called on each MergeInputSection
   // before calling finalizeContents(). Do that first.
   parallelForEach(InputSections, [](InputSectionBase *Sec) {
-    if (Sec->Live)
-      if (auto *S = dyn_cast<MergeInputSection>(Sec))
-        S->splitIntoPieces();
+    if (auto *S = dyn_cast<MergeInputSection>(Sec))
+      S->splitIntoPieces();
   });
 
   std::vector<MergeSyntheticSection *> MergeSections;
@@ -2820,16 +2840,13 @@ ThunkSection::ThunkSection(OutputSection *OS, uint64_t Off)
 }
 
 void ThunkSection::addThunk(Thunk *T) {
-  uint64_t Off = alignTo(Size, T->Alignment);
-  T->Offset = Off;
   Thunks.push_back(T);
   T->addSymbols(*this);
-  Size = Off + T->size();
 }
 
 void ThunkSection::writeTo(uint8_t *Buf) {
-  for (const Thunk *T : Thunks)
-    T->writeTo(Buf + T->Offset, *this);
+  for (Thunk *T : Thunks)
+    T->writeTo(Buf + T->Offset);
 }
 
 InputSection *ThunkSection::getTargetInputSection() const {
@@ -2837,6 +2854,20 @@ InputSection *ThunkSection::getTargetInputSection() const {
     return nullptr;
   const Thunk *T = Thunks.front();
   return T->getTargetInputSection();
+}
+
+bool ThunkSection::assignOffsets() {
+  uint64_t Off = 0;
+  for (Thunk *T : Thunks) {
+    Off = alignTo(Off, T->Alignment);
+    T->setOffset(Off);
+    uint32_t Size = T->size();
+    T->getThunkTargetSym()->Size = Size;
+    Off += Size;
+  }
+  bool Changed = Off != Size;
+  Size = Off;
+  return Changed;
 }
 
 InputSection *InX::ARMAttributes;

@@ -36,7 +36,11 @@
 #define _LIBCPP_VERSION 7000
 
 #ifndef _LIBCPP_ABI_VERSION
-#define _LIBCPP_ABI_VERSION 1
+#  ifdef __Fuchsia__
+#    define _LIBCPP_ABI_VERSION 2
+#  else
+#    define _LIBCPP_ABI_VERSION 1
+#  endif
 #endif
 
 #if defined(__ELF__)
@@ -582,9 +586,6 @@ namespace std {
 #define _LIBCPP_HAS_NO_CONSTEXPR
 #define _LIBCPP_HAS_NO_CXX14_CONSTEXPR
 #define _LIBCPP_HAS_NO_VARIABLE_TEMPLATES
-#if _MSC_VER <= 1800
-#define _LIBCPP_HAS_NO_UNICODE_CHARS
-#endif
 #define _LIBCPP_HAS_NO_NOEXCEPT
 #define __alignof__ __alignof
 #define _LIBCPP_NORETURN __declspec(noreturn)
@@ -943,6 +944,12 @@ template <unsigned> struct __static_assert_check {};
 #define _DECLARE_C99_LDBL_MATH 1
 #endif
 
+// If we are getting operator new from the MSVC CRT, then allocation overloads
+// for align_val_t were added in 19.12, aka VS 2017 version 15.3.
+#if defined(_LIBCPP_MSVCRT) && defined(_MSC_VER) && _MSC_VER < 1912
+#define _LIBCPP_HAS_NO_ALIGNED_ALLOCATION
+#endif
+
 #if defined(__APPLE__)
 #  if !defined(__MAC_OS_X_VERSION_MIN_REQUIRED) && \
       defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__)
@@ -1195,6 +1202,11 @@ _LIBCPP_FUNC_VIS extern "C" void __sanitizer_annotate_contiguous_container(
 #if !defined(__cpp_coroutines) || __cpp_coroutines < 201703L
 #define _LIBCPP_HAS_NO_COROUTINES
 #endif
+
+// FIXME: Correct this macro when either (A) a feature test macro for the
+// spaceship operator is provided, or (B) a compiler provides a complete
+// implementation.
+#define _LIBCPP_HAS_NO_SPACESHIP_OPERATOR
 
 // Decide whether to use availability macros.
 #if !defined(_LIBCPP_BUILDING_LIBRARY) &&                                      \

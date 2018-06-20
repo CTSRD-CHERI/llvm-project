@@ -57,6 +57,10 @@ public:
 } // end anonymous namespace
 
 char WebAssemblyCFGStackify::ID = 0;
+INITIALIZE_PASS(WebAssemblyCFGStackify, DEBUG_TYPE,
+                "Insert BLOCK and LOOP markers for WebAssembly scopes",
+                false, false)
+
 FunctionPass *llvm::createWebAssemblyCFGStackify() {
   return new WebAssemblyCFGStackify();
 }
@@ -141,11 +145,15 @@ static void PlaceBlockMarker(
            std::prev(InsertPos)->getOpcode() != WebAssembly::END_LOOP)
       --InsertPos;
   }
+  // The header block in which a 'block' mark will be inserted should have a
+  // terminator because it is branching to a non-layout successor.
+  assert(InsertPos != Header->end());
 
   // Add the BLOCK.
-  MachineInstr *Begin = BuildMI(*Header, InsertPos, MBB.findDebugLoc(InsertPos),
-                                TII.get(WebAssembly::BLOCK))
-                            .addImm(int64_t(WebAssembly::ExprType::Void));
+  MachineInstr *Begin =
+      BuildMI(*Header, InsertPos, Header->findDebugLoc(InsertPos),
+              TII.get(WebAssembly::BLOCK))
+          .addImm(int64_t(WebAssembly::ExprType::Void));
 
   // Mark the end of the block.
   InsertPos = MBB.begin();

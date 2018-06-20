@@ -281,7 +281,7 @@ void SetStackSizeLimitInBytes(uptr limit);
 bool AddressSpaceIsUnlimited();
 void SetAddressSpaceUnlimited();
 void AdjustStackSize(void *attr);
-void PrepareForSandboxing(__sanitizer_sandbox_arguments *args);
+void PlatformPrepareForSandboxing(__sanitizer_sandbox_arguments *args);
 void SetSandboxingCallback(void (*f)());
 
 void InitializeCoverage(bool enabled, const char *coverage_dir);
@@ -307,13 +307,6 @@ CheckFailed(const char *file, int line, const char *cond, u64 v1, u64 v2);
 void NORETURN ReportMmapFailureAndDie(uptr size, const char *mem_type,
                                       const char *mmap_type, error_t err,
                                       bool raw_report = false);
-
-// Set the name of the current thread to 'name', return true on succees.
-// The name may be truncated to a system-dependent limit.
-bool SanitizerSetThreadName(const char *name);
-// Get the name of the current thread (no more than max_len bytes),
-// return true on succees. name should have space for at least max_len+1 bytes.
-bool SanitizerGetThreadName(char *name, int max_len);
 
 // Specific tools may override behavior of "Die" and "CheckFailed" functions
 // to do tool-specific job.

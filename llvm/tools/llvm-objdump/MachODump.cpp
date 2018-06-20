@@ -6909,7 +6909,7 @@ static void DisassembleMachO(StringRef Filename, MachOObjectFile *MachOOF,
                         BaseSegmentAddress);
 
   // Sort the symbols by address, just in case they didn't come in that way.
-  std::sort(Symbols.begin(), Symbols.end(), SymbolSorter());
+  llvm::sort(Symbols.begin(), Symbols.end(), SymbolSorter());
 
   // Build a data in code table that is sorted on by the address of each entry.
   uint64_t BaseAddress = 0;
@@ -6945,10 +6945,12 @@ static void DisassembleMachO(StringRef Filename, MachOObjectFile *MachOOF,
         errs() << "llvm-objdump: " << Filename << ": " << EC.message() << '\n';
         return;
       }
-      DbgObj =
-          ObjectFile::createMachOObjectFile(BufOrErr.get()->getMemBufferRef())
-              .get()
-              .release();
+      Expected<std::unique_ptr<MachOObjectFile>> DbgObjCheck =
+          ObjectFile::createMachOObjectFile(BufOrErr.get()->getMemBufferRef());
+
+      if (DbgObjCheck.takeError())
+        report_error(MachOOF->getFileName(), DbgObjCheck.takeError());
+      DbgObj = DbgObjCheck.get().release();
     }
 
     // Setup the DIContext

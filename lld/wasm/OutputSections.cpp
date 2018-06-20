@@ -140,12 +140,13 @@ DataSection::DataSection(ArrayRef<OutputSegment *> Segments)
     writeUleb128(OS, WASM_OPCODE_END, "opcode:end");
     writeUleb128(OS, Segment->Size, "segment size");
     OS.flush();
-    Segment->setSectionOffset(BodySize);
+
+    Segment->SectionOffset = BodySize;
     BodySize += Segment->Header.size() + Segment->Size;
     log("Data segment: size=" + Twine(Segment->Size));
+
     for (InputSegment *InputSeg : Segment->InputSegments)
-      InputSeg->OutputOffset = Segment->getSectionOffset() +
-                               Segment->Header.size() +
+      InputSeg->OutputOffset = Segment->SectionOffset + Segment->Header.size() +
                                InputSeg->OutputSegmentOffset;
   }
 
@@ -166,7 +167,7 @@ void DataSection::writeTo(uint8_t *Buf) {
 
   parallelForEach(Segments, [&](const OutputSegment *Segment) {
     // Write data segment header
-    uint8_t *SegStart = Buf + Segment->getSectionOffset();
+    uint8_t *SegStart = Buf + Segment->SectionOffset;
     memcpy(SegStart, Segment->Header.data(), Segment->Header.size());
 
     // Write segment data payload
@@ -187,4 +188,39 @@ void DataSection::writeRelocations(raw_ostream &OS) const {
   for (const OutputSegment *Seg : Segments)
     for (const InputChunk *C : Seg->InputSegments)
       C->writeRelocations(OS);
+}
+
+CustomSection::CustomSection(std::string Name,
+                             ArrayRef<InputSection *> InputSections)
+    : OutputSection(WASM_SEC_CUSTOM, Name), PayloadSize(0),
+      InputSections(InputSections) {
+  raw_string_ostream OS(NameData);
+  encodeULEB128(Name.size(), OS);
+  OS << Name;
+  OS.flush();
+
+  for (InputSection *Section : InputSections) {
+    Section->OutputOffset = PayloadSize;
+    PayloadSize += Section->getSize();
+  }
+
+  createHeader(PayloadSize + NameData.size());
+}
+
+void CustomSection::writeTo(uint8_t *Buf) {
+  log("writing " + toString(*this) + " size=" + Twine(getSize()) +
+      " chunks=" + Twine(InputSections.size()));
+
+  assert(Offset);
+  Buf += Offset;
+
+  // Write section header
+  memcpy(Buf, Header.data(), Header.size());
+  Buf += Header.size();
+  memcpy(Buf, NameData.data(), NameData.size());
+  Buf += NameData.size();
+
+  // Write custom sections payload
+  parallelForEach(InputSections,
+                  [&](const InputSection *Section) { Section->writeTo(Buf); });
 }

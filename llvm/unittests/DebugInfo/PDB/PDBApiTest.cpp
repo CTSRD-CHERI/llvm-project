@@ -75,9 +75,25 @@ class MockSession : public IPDBSession {
   getSourceFileById(uint32_t SymbolId) const override {
     return nullptr;
   }
-
+  bool addressForVA(uint64_t VA, uint32_t &Section,
+                    uint32_t &Offset) const override {
+    return false;
+  }
+  bool addressForRVA(uint32_t RVA, uint32_t &Section,
+                     uint32_t &Offset) const override {
+    return false;
+  }
   std::unique_ptr<PDBSymbol>
   findSymbolByAddress(uint64_t Address, PDB_SymType Type) const override {
+    return nullptr;
+  }
+  std::unique_ptr<PDBSymbol> findSymbolByRVA(uint32_t RVA,
+                                             PDB_SymType Type) const override {
+    return nullptr;
+  }
+  std::unique_ptr<PDBSymbol>
+  findSymbolBySectOffset(uint32_t Sect, uint32_t Offset,
+                         PDB_SymType Type) const override {
     return nullptr;
   }
   std::unique_ptr<IPDBEnumLineNumbers>
@@ -87,6 +103,10 @@ class MockSession : public IPDBSession {
   }
   std::unique_ptr<IPDBEnumLineNumbers>
   findLineNumbersByAddress(uint64_t Address, uint32_t Length) const override {
+    return nullptr;
+  }
+  std::unique_ptr<IPDBEnumLineNumbers>
+  findLineNumbersByRVA(uint32_t RVA, uint32_t Length) const override {
     return nullptr;
   }
   std::unique_ptr<IPDBEnumLineNumbers>
@@ -482,5 +502,4 @@ TEST_F(PDBApiTest, Dyncast) {
 
   VerifyUnknownDyncasts();
 }
-
 } // end anonymous namespace

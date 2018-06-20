@@ -153,9 +153,14 @@ public:
     if (IsCall != Other.IsCall)
       return false;
 
-    if (IsCall)
-      return CS.getCalledValue() == Other.CS.getCalledValue();
-    return Loc == Other.Loc;
+    if (!IsCall)
+      return Loc == Other.Loc;
+
+    if (CS.getCalledValue() != Other.CS.getCalledValue())
+      return false;
+
+    return CS.arg_size() == Other.CS.arg_size() &&
+           std::equal(CS.arg_begin(), CS.arg_end(), Other.CS.arg_begin());
   }
 
 private:
@@ -179,12 +184,18 @@ template <> struct DenseMapInfo<MemoryLocOrCall> {
   }
 
   static unsigned getHashValue(const MemoryLocOrCall &MLOC) {
-    if (MLOC.IsCall)
-      return hash_combine(MLOC.IsCall,
-                          DenseMapInfo<const Value *>::getHashValue(
-                              MLOC.getCS().getCalledValue()));
-    return hash_combine(
-        MLOC.IsCall, DenseMapInfo<MemoryLocation>::getHashValue(MLOC.getLoc()));
+    if (!MLOC.IsCall)
+      return hash_combine(
+          MLOC.IsCall,
+          DenseMapInfo<MemoryLocation>::getHashValue(MLOC.getLoc()));
+
+    hash_code hash =
+        hash_combine(MLOC.IsCall, DenseMapInfo<const Value *>::getHashValue(
+                                      MLOC.getCS().getCalledValue()));
+
+    for (const Value *Arg : MLOC.getCS().args())
+      hash = hash_combine(hash, DenseMapInfo<const Value *>::getHashValue(Arg));
+    return hash;
   }
 
   static bool isEqual(const MemoryLocOrCall &LHS, const MemoryLocOrCall &RHS) {
@@ -838,8 +849,6 @@ public:
   ClobberWalker(const MemorySSA &MSSA, AliasAnalysis &AA, DominatorTree &DT)
       : MSSA(MSSA), AA(AA), DT(DT) {}
 
-  void reset() {}
-
   /// Finds the nearest clobber for the given query, optimizing phis if
   /// possible.
   MemoryAccess *findClobber(MemoryAccess *Start, UpwardsMemoryQuery &Q) {
@@ -901,7 +910,6 @@ namespace llvm {
 /// but the name has been retained for the moment.
 class MemorySSA::CachingWalker final : public MemorySSAWalker {
   ClobberWalker Walker;
-  bool AutoResetWalker = true;
 
   MemoryAccess *getClobberingMemoryAccess(MemoryAccess *, UpwardsMemoryQuery &);
 
@@ -915,13 +923,6 @@ public:
   MemoryAccess *getClobberingMemoryAccess(MemoryAccess *,
                                           const MemoryLocation &) override;
   void invalidateInfo(MemoryAccess *) override;
-
-  /// Whether we call resetClobberWalker() after each time we *actually* walk to
-  /// answer a clobber query.
-  void setAutoResetWalker(bool AutoReset) { AutoResetWalker = AutoReset; }
-
-  /// Drop the walker's persistent data structures.
-  void resetClobberWalker() { Walker.reset(); }
 
   void verify(const MemorySSA *MSSA) override {
     MemorySSAWalker::verify(MSSA);
@@ -1327,10 +1328,10 @@ void MemorySSA::placePHINodes(
   SmallVector<BasicBlock *, 32> IDFBlocks;
   IDFs.calculate(IDFBlocks);
 
-  std::sort(IDFBlocks.begin(), IDFBlocks.end(),
-            [&BBNumbers](const BasicBlock *A, const BasicBlock *B) {
-              return BBNumbers.lookup(A) < BBNumbers.lookup(B);
-            });
+  llvm::sort(IDFBlocks.begin(), IDFBlocks.end(),
+             [&BBNumbers](const BasicBlock *A, const BasicBlock *B) {
+               return BBNumbers.lookup(A) < BBNumbers.lookup(B);
+             });
 
   // Now place MemoryPhi nodes.
   for (auto &BB : IDFBlocks)
@@ -1388,11 +1389,7 @@ void MemorySSA::buildMemorySSA() {
 
   CachingWalker *Walker = getWalkerImpl();
 
-  // We're doing a batch of updates; don't drop useful caches between them.
-  Walker->setAutoResetWalker(false);
   OptimizeUses(this, Walker, AA, DT).optimizeUses();
-  Walker->setAutoResetWalker(true);
-  Walker->resetClobberWalker();
 
   // Mark the uses in unreachable blocks as live on entry, so that they go
   // somewhere.
@@ -1455,7 +1452,7 @@ void MemorySSA::insertIntoListsBefore(MemoryAccess *What, const BasicBlock *BB,
     auto *Defs = getOrCreateDefsList(BB);
     // If we got asked to insert at the end, we have an easy job, just shove it
     // at the end. If we got asked to insert before an existing def, we also get
-    // an terator. If we got asked to insert before a use, we have to hunt for
+    // an iterator. If we got asked to insert before a use, we have to hunt for
     // the next def.
     if (WasEnd) {
       Defs->push_back(*What);
@@ -1474,7 +1471,7 @@ void MemorySSA::insertIntoListsBefore(MemoryAccess *What, const BasicBlock *BB,
   BlockNumberingValid.erase(BB);
 }
 
-// Move What before Where in the IR.  The end result is taht What will belong to
+// Move What before Where in the IR.  The end result is that What will belong to
 // the right lists and have the right Block set, but will not otherwise be
 // correct. It will not have the right defining access, and if it is a def,
 // things below it will not properly be updated.
@@ -1554,9 +1551,6 @@ MemoryUseOrDef *MemorySSA::createNewAccess(Instruction *I) {
   // construction, we ignore them.
   if (!Def && !Use)
     return nullptr;
-
-  assert((Def || Use) &&
-         "Trying to create a memory access with a non-memory instruction");
 
   MemoryUseOrDef *MUD;
   if (Def)
@@ -2012,15 +2006,7 @@ void MemorySSA::CachingWalker::invalidateInfo(MemoryAccess *MA) {
 /// \returns our clobbering memory access
 MemoryAccess *MemorySSA::CachingWalker::getClobberingMemoryAccess(
     MemoryAccess *StartingAccess, UpwardsMemoryQuery &Q) {
-  MemoryAccess *New = Walker.findClobber(StartingAccess, Q);
-#ifdef EXPENSIVE_CHECKS
-  MemoryAccess *NewNoCache = Walker.findClobber(StartingAccess, Q);
-  assert(NewNoCache == New && "Cache made us hand back a different result?");
-  (void)NewNoCache;
-#endif
-  if (AutoResetWalker)
-    resetClobberWalker();
-  return New;
+  return Walker.findClobber(StartingAccess, Q);
 }
 
 MemoryAccess *MemorySSA::CachingWalker::getClobberingMemoryAccess(

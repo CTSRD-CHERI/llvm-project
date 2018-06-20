@@ -525,9 +525,20 @@ X86DAGToDAGISel::IsProfitableToFold(SDValue N, SDNode *U, SDNode *Root) const {
       // addl 4(%esp), %eax
       // The former is 2 bytes shorter. In case where the increment is 1, then
       // the saving can be 4 bytes (by using incl %eax).
-      if (ConstantSDNode *Imm = dyn_cast<ConstantSDNode>(Op1))
+      if (ConstantSDNode *Imm = dyn_cast<ConstantSDNode>(Op1)) {
         if (Imm->getAPIntValue().isSignedIntN(8))
           return false;
+
+        // If this is a 64-bit AND with an immediate that fits in 32-bits,
+        // prefer using the smaller and over folding the load. This is needed to
+        // make sure immediates created by shrinkAndImmediate are always folded.
+        // Ideally we would narrow the load during DAG combine and get the
+        // best of both worlds.
+        if (U->getOpcode() == ISD::AND &&
+            Imm->getAPIntValue().getBitWidth() == 64 &&
+            Imm->getAPIntValue().isIntN(32))
+          return false;
+      }
 
       // If the other operand is a TLS address, we should fold it instead.
       // This produces
@@ -2816,8 +2827,6 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
     if (!isSigned) {
       switch (NVT.SimpleTy) {
       default: llvm_unreachable("Unsupported VT!");
-      case MVT::i8:  Opc = X86::MUL8r;  MOpc = X86::MUL8m;  break;
-      case MVT::i16: Opc = X86::MUL16r; MOpc = X86::MUL16m; break;
       case MVT::i32: Opc = hasBMI2 ? X86::MULX32rr : X86::MUL32r;
                      MOpc = hasBMI2 ? X86::MULX32rm : X86::MUL32m; break;
       case MVT::i64: Opc = hasBMI2 ? X86::MULX64rr : X86::MUL64r;
@@ -2826,8 +2835,6 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
     } else {
       switch (NVT.SimpleTy) {
       default: llvm_unreachable("Unsupported VT!");
-      case MVT::i8:  Opc = X86::IMUL8r;  MOpc = X86::IMUL8m;  break;
-      case MVT::i16: Opc = X86::IMUL16r; MOpc = X86::IMUL16m; break;
       case MVT::i32: Opc = X86::IMUL32r; MOpc = X86::IMUL32m; break;
       case MVT::i64: Opc = X86::IMUL64r; MOpc = X86::IMUL64m; break;
       }
@@ -2836,14 +2843,6 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
     unsigned SrcReg, LoReg, HiReg;
     switch (Opc) {
     default: llvm_unreachable("Unknown MUL opcode!");
-    case X86::IMUL8r:
-    case X86::MUL8r:
-      SrcReg = LoReg = X86::AL; HiReg = X86::AH;
-      break;
-    case X86::IMUL16r:
-    case X86::MUL16r:
-      SrcReg = LoReg = X86::AX; HiReg = X86::DX;
-      break;
     case X86::IMUL32r:
     case X86::MUL32r:
       SrcReg = LoReg = X86::EAX; HiReg = X86::EDX;
@@ -2913,27 +2912,6 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
       }
     }
 
-    // Prevent use of AH in a REX instruction by referencing AX instead.
-    if (HiReg == X86::AH && Subtarget->is64Bit() &&
-        !SDValue(Node, 1).use_empty()) {
-      SDValue Result = CurDAG->getCopyFromReg(CurDAG->getEntryNode(), dl,
-                                              X86::AX, MVT::i16, InFlag);
-      InFlag = Result.getValue(2);
-      // Get the low part if needed. Don't use getCopyFromReg for aliasing
-      // registers.
-      if (!SDValue(Node, 0).use_empty())
-        ReplaceUses(SDValue(Node, 0),
-          CurDAG->getTargetExtractSubreg(X86::sub_8bit, dl, MVT::i8, Result));
-
-      // Shift AX down 8 bits.
-      Result = SDValue(CurDAG->getMachineNode(X86::SHR16ri, dl, MVT::i16,
-                                              Result,
-                                     CurDAG->getTargetConstant(8, dl, MVT::i8)),
-                       0);
-      // Then truncate it down to i8.
-      ReplaceUses(SDValue(Node, 1),
-        CurDAG->getTargetExtractSubreg(X86::sub_8bit, dl, MVT::i8, Result));
-    }
     // Copy the low half of the result, if it is needed.
     if (!SDValue(Node, 0).use_empty()) {
       if (!ResLo.getNode()) {

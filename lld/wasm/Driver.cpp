@@ -57,7 +57,6 @@ private:
   void addFile(StringRef Path);
   void addLibrary(StringRef Name);
   std::vector<InputFile *> Files;
-  llvm::wasm::WasmGlobal StackPointerGlobal;
 };
 } // anonymous namespace
 
@@ -241,10 +240,11 @@ static void handleWeakUndefines() {
     // Add a synthetic dummy for weak undefined functions.  These dummies will
     // be GC'd if not used as the target of any "call" instructions.
     Optional<std::string> SymName = demangleItanium(Sym->getName());
-    StringRef StubName =
+    StringRef DebugName =
         Saver.save("undefined function " +
                    (SymName ? StringRef(*SymName) : Sym->getName()));
-    SyntheticFunction *Func = make<SyntheticFunction>(Sig, StubName);
+    SyntheticFunction *Func =
+        make<SyntheticFunction>(Sig, Sym->getName(), DebugName);
     Func->setBody(UnreachableFn);
     // Ensure it compares equal to the null pointer, and so that table relocs
     // don't pull in the stub body (only call-operand relocs should do that).
@@ -286,7 +286,9 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
       Args.hasFlag(OPT_check_signatures, OPT_no_check_signatures, false);
   Config->Demangle = Args.hasFlag(OPT_demangle, OPT_no_demangle, true);
   Config->Entry = getEntry(Args, Args.hasArg(OPT_relocatable) ? "" : "_start");
+  Config->ExportTable = Args.hasArg(OPT_export_table);
   Config->ImportMemory = Args.hasArg(OPT_import_memory);
+  Config->ImportTable = Args.hasArg(OPT_import_table);
   Config->OutputFile = Args.getLastArgValue(OPT_o);
   Config->Relocatable = Args.hasArg(OPT_relocatable);
   Config->GcSections =
@@ -316,6 +318,9 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   if (Config->OutputFile.empty())
     error("no output file specified");
 
+  if (Config->ImportTable && Config->ExportTable)
+    error("--import-table and --export-table may not be used together");
+
   if (Config->Relocatable) {
     if (!Config->Entry.empty())
       error("entry point specified for relocatable output file");
@@ -331,10 +336,12 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
     // globals aren't yet supported in the official binary format.
     // TODO(sbc): Remove WASM_SYMBOL_VISIBILITY_HIDDEN if/when the
     // "mutable global" proposal is accepted.
-    StackPointerGlobal.Type = {WASM_TYPE_I32, true};
-    StackPointerGlobal.InitExpr.Value.Int32 = 0;
-    StackPointerGlobal.InitExpr.Opcode = WASM_OPCODE_I32_CONST;
-    InputGlobal *StackPointer = make<InputGlobal>(StackPointerGlobal);
+    llvm::wasm::WasmGlobal Global;
+    Global.Type = {WASM_TYPE_I32, true};
+    Global.InitExpr.Value.Int32 = 0;
+    Global.InitExpr.Opcode = WASM_OPCODE_I32_CONST;
+    Global.SymbolName = "__stack_pointer";
+    InputGlobal *StackPointer = make<InputGlobal>(Global, nullptr);
     StackPointer->Live = true;
 
     static WasmSignature NullSignature = {{}, WASM_TYPE_NORESULT};

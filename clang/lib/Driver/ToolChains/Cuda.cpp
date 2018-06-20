@@ -184,7 +184,7 @@ CudaInstallationDetector::CudaInstallationDetector(
         StringRef GpuArch = FileName.slice(
             LibDeviceName.size(), FileName.find('.', LibDeviceName.size()));
         LibDeviceMap[GpuArch] = FilePath.str();
-        // Insert map entries for specifc devices with this compute
+        // Insert map entries for specific devices with this compute
         // capability. NVCC's choice of the libdevice library version is
         // rather peculiar and depends on the CUDA version.
         if (GpuArch == "compute_20") {
@@ -273,6 +273,35 @@ void CudaInstallationDetector::print(raw_ostream &OS) const {
        << CudaVersionToString(Version) << "\n";
 }
 
+namespace {
+  /// Debug info kind.
+enum DebugInfoKind {
+  NoDebug,       /// No debug info.
+  LineTableOnly, /// Line tables only.
+  FullDebug      /// Full debug info.
+};
+} // anonymous namespace
+
+static DebugInfoKind mustEmitDebugInfo(const ArgList &Args) {
+  Arg *A = Args.getLastArg(options::OPT_O_Group);
+  if (Args.hasFlag(options::OPT_cuda_noopt_device_debug,
+                   options::OPT_no_cuda_noopt_device_debug,
+                   !A || A->getOption().matches(options::OPT_O0))) {
+    if (const Arg *A = Args.getLastArg(options::OPT_g_Group)) {
+      const Option &Opt = A->getOption();
+      if (Opt.matches(options::OPT_gN_Group)) {
+        if (Opt.matches(options::OPT_g0) || Opt.matches(options::OPT_ggdb0))
+          return NoDebug;
+        if (Opt.matches(options::OPT_gline_tables_only) ||
+            Opt.matches(options::OPT_ggdb1))
+          return LineTableOnly;
+      }
+      return FullDebug;
+    }
+  }
+  return NoDebug;
+}
+
 void NVPTX::Assembler::ConstructJob(Compilation &C, const JobAction &JA,
                                     const InputInfo &Output,
                                     const InputInfoList &Inputs,
@@ -304,8 +333,8 @@ void NVPTX::Assembler::ConstructJob(Compilation &C, const JobAction &JA,
 
   ArgStringList CmdArgs;
   CmdArgs.push_back(TC.getTriple().isArch64Bit() ? "-m64" : "-m32");
-  if (Args.hasFlag(options::OPT_cuda_noopt_device_debug,
-                   options::OPT_no_cuda_noopt_device_debug, false)) {
+  DebugInfoKind DIKind = mustEmitDebugInfo(Args);
+  if (DIKind == FullDebug) {
     // ptxas does not accept -g option if optimization is enabled, so
     // we ignore the compiler's -O* options if we want debug info.
     CmdArgs.push_back("-g");
@@ -341,6 +370,8 @@ void NVPTX::Assembler::ConstructJob(Compilation &C, const JobAction &JA,
     // to no optimizations, but ptxas's default is -O3.
     CmdArgs.push_back("-O0");
   }
+  if (DIKind == LineTableOnly)
+    CmdArgs.push_back("-lineinfo");
 
   // Pass -v to ptxas if it was passed to the driver.
   if (Args.hasArg(options::OPT_v))
@@ -377,6 +408,22 @@ void NVPTX::Assembler::ConstructJob(Compilation &C, const JobAction &JA,
   C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs, Inputs));
 }
 
+static bool shouldIncludePTX(const ArgList &Args, const char *gpu_arch) {
+  bool includePTX = true;
+  for (Arg *A : Args) {
+    if (!(A->getOption().matches(options::OPT_cuda_include_ptx_EQ) ||
+          A->getOption().matches(options::OPT_no_cuda_include_ptx_EQ)))
+      continue;
+    A->claim();
+    const StringRef ArchStr = A->getValue();
+    if (ArchStr == "all" || ArchStr == gpu_arch) {
+      includePTX = A->getOption().matches(options::OPT_cuda_include_ptx_EQ);
+      continue;
+    }
+  }
+  return includePTX;
+}
+
 // All inputs to this linker must be from CudaDeviceActions, as we need to look
 // at the Inputs' Actions in order to figure out which GPU architecture they
 // correspond to.
@@ -394,6 +441,8 @@ void NVPTX::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   CmdArgs.push_back(TC.getTriple().isArch64Bit() ? "-64" : "-32");
   CmdArgs.push_back(Args.MakeArgString("--create"));
   CmdArgs.push_back(Args.MakeArgString(Output.getFilename()));
+  if (mustEmitDebugInfo(Args) == FullDebug)
+    CmdArgs.push_back("-g");
 
   for (const auto& II : Inputs) {
     auto *A = II.getAction();
@@ -404,6 +453,9 @@ void NVPTX::Linker::ConstructJob(Compilation &C, const JobAction &JA,
            "Device action expected to have associated a GPU architecture!");
     CudaArch gpu_arch = StringToCudaArch(gpu_arch_str);
 
+    if (II.getType() == types::TY_PP_Asm &&
+        !shouldIncludePTX(Args, gpu_arch_str))
+      continue;
     // We need to pass an Arch of the form "sm_XX" for cubin files and
     // "compute_XX" for ptx.
     const char *Arch =
@@ -442,7 +494,7 @@ void NVPTX::OpenMPLinker::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(Output.getFilename());
   } else
     assert(Output.isNothing() && "Invalid output.");
-  if (Args.hasArg(options::OPT_g_Flag))
+  if (mustEmitDebugInfo(Args) == FullDebug)
     CmdArgs.push_back("-g");
 
   if (Args.hasArg(options::OPT_v))
@@ -570,17 +622,19 @@ void CudaToolChain::addClangTargetOptions(
   CC1Args.push_back("-mlink-cuda-bitcode");
   CC1Args.push_back(DriverArgs.MakeArgString(LibDeviceFile));
 
-  if (CudaInstallation.version() >= CudaVersion::CUDA_90) {
-    // CUDA-9 uses new instructions that are only available in PTX6.0
-    CC1Args.push_back("-target-feature");
-    CC1Args.push_back("+ptx60");
-  } else {
-    // Libdevice in CUDA-7.0 requires PTX version that's more recent
-    // than LLVM defaults to. Use PTX4.2 which is the PTX version that
-    // came with CUDA-7.0.
-    CC1Args.push_back("-target-feature");
-    CC1Args.push_back("+ptx42");
+  // Libdevice in CUDA-7.0 requires PTX version that's more recent than LLVM
+  // defaults to. Use PTX4.2 by default, which is the PTX version that came with
+  // CUDA-7.0.
+  const char *PtxFeature = "+ptx42";
+  if (CudaInstallation.version() >= CudaVersion::CUDA_91) {
+    // CUDA-9.1 uses new instructions that are only available in PTX6.1+
+    PtxFeature = "+ptx61";
+  } else if (CudaInstallation.version() >= CudaVersion::CUDA_90) {
+    // CUDA-9.0 uses new instructions that are only available in PTX6.0+
+    PtxFeature = "+ptx60";
   }
+  CC1Args.push_back("-target-feature");
+  CC1Args.push_back(PtxFeature);
 
   if (DeviceOffloadingKind == Action::OFK_OpenMP) {
     SmallVector<StringRef, 8> LibraryPaths;

@@ -38,7 +38,7 @@ public:
           "Expect URI body to be an absolute path starting with '/': " + Body,
           llvm::inconvertibleErrorCode());
     Body = Body.ltrim('/');
-#ifdef LLVM_ON_WIN32
+#ifdef _WIN32
     constexpr char TestDir[] = "C:\\clangd-test";
 #else
     constexpr char TestDir[] = "/clangd-test";
@@ -86,6 +86,14 @@ std::vector<TextEdit> replacementsToEdits(StringRef Code,
   return Edits;
 }
 
+SymbolKindBitset defaultSymbolKinds() {
+  SymbolKindBitset Defaults;
+  for (size_t I = SymbolKindMin; I <= static_cast<size_t>(SymbolKind::Array);
+       ++I)
+    Defaults.set(I);
+  return Defaults;
+}
+
 } // namespace
 
 void ClangdLSPServer::onInitialize(InitializeParams &Params) {
@@ -97,10 +105,18 @@ void ClangdLSPServer::onInitialize(InitializeParams &Params) {
   CCOpts.EnableSnippets =
       Params.capabilities.textDocument.completion.completionItem.snippetSupport;
 
+  if (Params.capabilities.workspace && Params.capabilities.workspace->symbol &&
+      Params.capabilities.workspace->symbol->symbolKind) {
+    for (SymbolKind Kind :
+         *Params.capabilities.workspace->symbol->symbolKind->valueSet) {
+      SupportedSymbolKinds.set(static_cast<size_t>(Kind));
+    }
+  }
+
   reply(json::obj{
       {{"capabilities",
         json::obj{
-            {"textDocumentSync", 1},
+            {"textDocumentSync", (int)TextDocumentSyncKind::Incremental},
             {"documentFormattingProvider", true},
             {"documentRangeFormattingProvider", true},
             {"documentOnTypeFormattingProvider",
@@ -122,6 +138,7 @@ void ClangdLSPServer::onInitialize(InitializeParams &Params) {
             {"documentHighlightProvider", true},
             {"hoverProvider", true},
             {"renameProvider", true},
+            {"workspaceSymbolProvider", true},
             {"executeCommandProvider",
              json::obj{
                  {"commands",
@@ -147,25 +164,30 @@ void ClangdLSPServer::onDocumentDidOpen(DidOpenTextDocumentParams &Params) {
   PathRef File = Params.textDocument.uri.file();
   std::string &Contents = Params.textDocument.text;
 
-  DraftMgr.updateDraft(File, Contents);
+  DraftMgr.addDraft(File, Contents);
   Server.addDocument(File, Contents, WantDiagnostics::Yes);
 }
 
 void ClangdLSPServer::onDocumentDidChange(DidChangeTextDocumentParams &Params) {
-  if (Params.contentChanges.size() != 1)
-    return replyError(ErrorCode::InvalidParams,
-                      "can only apply one change at a time");
   auto WantDiags = WantDiagnostics::Auto;
   if (Params.wantDiagnostics.hasValue())
     WantDiags = Params.wantDiagnostics.getValue() ? WantDiagnostics::Yes
                                                   : WantDiagnostics::No;
 
   PathRef File = Params.textDocument.uri.file();
-  std::string &Contents = Params.contentChanges[0].text;
+  llvm::Expected<std::string> Contents =
+      DraftMgr.updateDraft(File, Params.contentChanges);
+  if (!Contents) {
+    // If this fails, we are most likely going to be not in sync anymore with
+    // the client.  It is better to remove the draft and let further operations
+    // fail rather than giving wrong results.
+    DraftMgr.removeDraft(File);
+    Server.removeDocument(File);
+    log(llvm::toString(Contents.takeError()));
+    return;
+  }
 
-  // We only support full syncing right now.
-  DraftMgr.updateDraft(File, Contents);
-  Server.addDocument(File, Contents, WantDiags);
+  Server.addDocument(File, *Contents, WantDiags);
 }
 
 void ClangdLSPServer::onFileEvent(DidChangeWatchedFilesParams &Params) {
@@ -238,6 +260,20 @@ void ClangdLSPServer::onCommand(ExecuteCommandParams &Params) {
         ErrorCode::InvalidParams,
         llvm::formatv("Unsupported command \"{0}\".", Params.command).str());
   }
+}
+
+void ClangdLSPServer::onWorkspaceSymbol(WorkspaceSymbolParams &Params) {
+  Server.workspaceSymbols(
+      Params.query, CCOpts.Limit,
+      [this](llvm::Expected<std::vector<SymbolInformation>> Items) {
+        if (!Items)
+          return replyError(ErrorCode::InternalError,
+                            llvm::toString(Items.takeError()));
+        for (auto &Sym : *Items)
+          Sym.kind = adjustKindToCapability(Sym.kind, SupportedSymbolKinds);
+
+        reply(json::ary(*Items));
+      });
 }
 
 void ClangdLSPServer::onRename(RenameParams &Params) {
@@ -417,6 +453,7 @@ ClangdLSPServer::ClangdLSPServer(JSONOutput &Out,
                                  llvm::Optional<Path> CompileCommandsDir,
                                  const ClangdServer::Options &Opts)
     : Out(Out), CDB(std::move(CompileCommandsDir)), CCOpts(CCOpts),
+      SupportedSymbolKinds(defaultSymbolKinds()),
       Server(CDB, FSProvider, /*DiagConsumer=*/*this, Opts) {}
 
 bool ClangdLSPServer::run(std::istream &In, JSONStreamStyle InputStyle) {

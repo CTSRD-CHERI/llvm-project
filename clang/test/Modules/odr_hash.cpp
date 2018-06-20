@@ -2286,7 +2286,6 @@ Invalid1 i1;
 #undef DECLS
 }  // namespace BaseClass
 
-
 namespace PointersAndReferences {
 #if defined(FIRST) || defined(SECOND)
 template<typename> struct Wrapper{};
@@ -2865,6 +2864,38 @@ struct S3 {
 };
 #else
 S3 s3;
+#endif
+
+#if defined(FIRST)
+using A4 = int;
+using B4 = A4;
+struct S4 {
+  B4 x;
+};
+#elif defined(SECOND)
+using A4 = int;
+using B4 = ::MultipleTypedefs::A4;
+struct S4 {
+  B4 x;
+};
+#else
+S4 s4;
+#endif
+
+#if defined(FIRST)
+using A5 = int;
+using B5 = MultipleTypedefs::A5;
+struct S5 {
+  B5 x;
+};
+#elif defined(SECOND)
+using A5 = int;
+using B5 = ::MultipleTypedefs::A5;
+struct S5 {
+  B5 x;
+};
+#else
+S5 s5;
 #endif
 }  // MultipleTypedefs
 

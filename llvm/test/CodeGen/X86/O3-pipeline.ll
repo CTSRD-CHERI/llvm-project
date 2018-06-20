@@ -89,6 +89,9 @@
 ; CHECK-NEXT:       X86 Fixup SetCC
 ; CHECK-NEXT:       X86 LEA Optimize
 ; CHECK-NEXT:       X86 Optimize Call Frame
+; CHECK-NEXT:       X86 Avoid Store Forwarding Block
+; CHECK-NEXT:       MachineDominator Tree Construction
+; CHECK-NEXT:       X86 EFLAGS copy lowering
 ; CHECK-NEXT:       X86 WinAlloca Expander
 ; CHECK-NEXT:       Detect Dead Lanes
 ; CHECK-NEXT:       Process Implicit Definitions
@@ -120,8 +123,6 @@
 ; CHECK-NEXT:       Bundle Machine CFG Edges
 ; CHECK-NEXT:       X86 FP Stackifier
 ; CHECK-NEXT:       PostRA Machine Sink
-; CHECK-NEXT:       MachineDominator Tree Construction
-; CHECK-NEXT:       Machine Natural Loop Construction
 ; CHECK-NEXT:       Machine Block Frequency Analysis
 ; CHECK-NEXT:       MachinePostDominator Tree Construction
 ; CHECK-NEXT:       Shrink Wrapping analysis
@@ -143,6 +144,7 @@
 ; CHECK-NEXT:       ReachingDefAnalysis
 ; CHECK-NEXT:       X86 Execution Dependency Fix
 ; CHECK-NEXT:       BreakFalseDeps
+; CHECK-NEXT:       Shadow Call Stack
 ; CHECK-NEXT:       X86 Indirect Branch Tracking
 ; CHECK-NEXT:       X86 vzeroupper inserter
 ; CHECK-NEXT:       MachineDominator Tree Construction
@@ -158,10 +160,9 @@
 ; CHECK-NEXT:       Insert XRay ops
 ; CHECK-NEXT:       Implement the 'patchable-function' attribute
 ; CHECK-NEXT:       X86 Retpoline Thunks
+; CHECK-NEXT:       Check CFA info and insert CFI instructions if needed
 ; CHECK-NEXT:       Lazy Machine Block Frequency Analysis
 ; CHECK-NEXT:       Machine Optimization Remark Emitter
-; CHECK-NEXT:       MachineDominator Tree Construction
-; CHECK-NEXT:       Machine Natural Loop Construction
 ; CHECK-NEXT:       X86 Assembly Printer
 ; CHECK-NEXT:       Free MachineFunction
 

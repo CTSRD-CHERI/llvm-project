@@ -2027,8 +2027,13 @@ Parser::DeclGroupPtrTy Parser::ParseDeclGroup(ParsingDeclSpec &DS,
     }
 
     Decl *ThisDecl = Actions.ActOnDeclarator(getCurScope(), D);
-    if (IsForRangeLoop)
+    if (IsForRangeLoop) {
       Actions.ActOnCXXForRangeDecl(ThisDecl);
+    } else {
+      // Obj-C for loop
+      if (auto *VD = dyn_cast_or_null<VarDecl>(ThisDecl))
+        VD->setObjCForDecl(true);
+    }
     Actions.FinalizeDeclaration(ThisDecl);
     D.complete(ThisDecl);
     return Actions.FinalizeDeclaratorGroup(getCurScope(), DS, ThisDecl);
@@ -2463,7 +2468,7 @@ bool Parser::ParseImplicitInt(DeclSpec &DS, CXXScopeSpec *SS,
 
   SourceLocation Loc = Tok.getLocation();
   // If we see an identifier that is not a type name, we normally would
-  // parse it as the identifer being declared.  However, when a typename
+  // parse it as the identifier being declared.  However, when a typename
   // is typo'd or the definition is not included, this will incorrectly
   // parse the typename as the identifier name and fall over misparsing
   // later parts of the diagnostic.
@@ -3449,6 +3454,7 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
     case tok::kw_thread_local:
       isInvalid = DS.SetStorageClassSpecThread(DeclSpec::TSCS_thread_local, Loc,
                                                PrevSpec, DiagID);
+      isStorageClass = true;
       break;
     case tok::kw__Thread_local:
       isInvalid = DS.SetStorageClassSpecThread(DeclSpec::TSCS__Thread_local,
@@ -3461,7 +3467,15 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
       isInvalid = DS.setFunctionSpecInline(Loc, PrevSpec, DiagID);
       break;
     case tok::kw_virtual:
-      isInvalid = DS.setFunctionSpecVirtual(Loc, PrevSpec, DiagID);
+      // OpenCL C++ v1.0 s2.9: the virtual function qualifier is not supported.
+      if (getLangOpts().OpenCLCPlusPlus) {
+        DiagID = diag::err_openclcxx_virtual_function;
+        PrevSpec = Tok.getIdentifierInfo()->getNameStart();
+        isInvalid = true;
+      }
+      else {
+        isInvalid = DS.setFunctionSpecVirtual(Loc, PrevSpec, DiagID);
+      }
       break;
     case tok::kw_explicit:
       isInvalid = DS.setFunctionSpecExplicit(Loc, PrevSpec, DiagID);
@@ -3799,7 +3813,8 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
 
     DS.SetRangeEnd(Tok.getLocation());
     if (DiagID != diag::err_bool_redeclaration)
-      ConsumeToken();
+      // After an error the next token can be an annotation token.
+      ConsumeAnyToken();
 
     AttrsLastTime = false;
   }
@@ -5119,7 +5134,7 @@ void Parser::ParseTypeQualifierListOpt(
                                  getLangOpts());
       break;
     case tok::kw___uptr:
-      // GNU libc headers in C mode use '__uptr' as an identifer which conflicts
+      // GNU libc headers in C mode use '__uptr' as an identifier which conflicts
       // with the MS modifier keyword.
       if ((AttrReqs & AR_DeclspecAttributesParsed) && !getLangOpts().CPlusPlus &&
           IdentifierRequired && DS.isEmpty() && NextToken().is(tok::semi)) {

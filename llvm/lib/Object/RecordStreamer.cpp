@@ -128,6 +128,11 @@ void RecordStreamer::emitELFSymverDirective(StringRef AliasName,
   SymverAliasMap[Aliasee].push_back(AliasName);
 }
 
+iterator_range<RecordStreamer::const_symver_iterator>
+RecordStreamer::symverAliases() {
+  return {SymverAliasMap.begin(), SymverAliasMap.end()};
+}
+
 void RecordStreamer::flushSymverDirectives() {
   // Mapping from mangled name to GV.
   StringMap<const GlobalValue *> MangledNameMap;
@@ -216,7 +221,10 @@ void RecordStreamer::flushSymverDirectives() {
       // TODO: Handle "@@@". Depending on SymbolAttribute value it needs to be
       // converted into @ or @@.
       const MCExpr *Value = MCSymbolRefExpr::create(Aliasee, getContext());
-      EmitAssignment(Alias, Value);
+      if (IsDefined)
+        markDefined(*Alias);
+      // Don't use EmitAssignment override as it always marks alias as defined.
+      MCStreamer::EmitAssignment(Alias, Value);
       if (Attr != MCSA_Invalid)
         EmitSymbolAttribute(Alias, Attr);
     }

@@ -575,7 +575,7 @@ def err_cxx11_attribute_forbids_arguments : Error<
 def err_attribute_requires_arguments : Error<
   "parentheses must be omitted if %0 attribute's argument list is empty">;
 def err_cxx11_attribute_forbids_ellipsis : Error<
-  "attribute '%0' cannot be used as an attribute pack">;
+  "attribute %0 cannot be used as an attribute pack">;
 def err_cxx11_attribute_repeated : Error<
   "attribute %0 cannot appear multiple times in an attribute specifier">;
 def warn_cxx14_compat_using_attribute_ns : Warning<
@@ -1072,6 +1072,10 @@ def err_opencl_taking_function_address_parser : Error<
   "taking address of function is not allowed">;
 def err_opencl_logical_exclusive_or : Error<
   "^^ is a reserved operator in OpenCL">;
+
+// OpenCL C++.
+def err_openclcxx_virtual_function : Error<
+  "virtual functions are not supported in OpenCL C++">;
 
 // OpenMP support.
 def warn_pragma_omp_ignored : Warning<

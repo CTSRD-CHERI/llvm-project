@@ -145,12 +145,8 @@ uint64_t SectionBase::getOffset(uint64_t Offset) const {
     return Offset == uint64_t(-1) ? OS->Size : Offset;
   }
   case Regular:
-    return cast<InputSection>(this->Repl)->OutSecOff + Offset;
-  case Synthetic: {
-    auto *IS = cast<InputSection>(this->Repl);
-    // For synthetic sections we treat offset -1 as the end of the section.
-    return IS->OutSecOff + (Offset == uint64_t(-1) ? IS->getSize() : Offset);
-  }
+  case Synthetic:
+    return cast<InputSection>(this)->getOffset(Offset);
   case EHFrame:
     // The file crtbeginT.o has relocations pointing to the start of an empty
     // .eh_frame that is known to be the first in the link. It does that to
@@ -159,8 +155,8 @@ uint64_t SectionBase::getOffset(uint64_t Offset) const {
   case Merge:
     const MergeInputSection *MS = cast<MergeInputSection>(this);
     if (InputSection *IS = MS->getParent())
-      return cast<InputSection>(IS->Repl)->OutSecOff + MS->getOffset(Offset);
-    return MS->getOffset(Offset);
+      return IS->getOffset(MS->getParentOffset(Offset));
+    return MS->getParentOffset(Offset);
   }
   llvm_unreachable("invalid section kind");
 }
@@ -180,7 +176,7 @@ OutputSection *SectionBase::getOutputSection() {
     Sec = EH->getParent();
   else
     return cast<OutputSection>(this);
-  return Sec ? cast<InputSection>(Sec->Repl)->getParent() : nullptr;
+  return Sec ? Sec->getParent() : nullptr;
 }
 
 // Decompress section contents if required. Note that this function
@@ -337,7 +333,8 @@ template <class ELFT> void InputSection::copyShtGroup(uint8_t *Buf) {
 }
 
 InputSectionBase *InputSection::getRelocatedSection() {
-  assert(Type == SHT_RELA || Type == SHT_REL);
+  if (!File || (Type != SHT_RELA && Type != SHT_REL))
+    return nullptr;
   ArrayRef<InputSectionBase *> Sections = File->getSections();
   return Sections[Info];
 }
@@ -727,10 +724,13 @@ void InputSectionBase::relocateAlloc(uint8_t *Buf, uint8_t *BufEnd) {
   const unsigned Bits = Config->Wordsize * 8;
 
   for (const Relocation &Rel : Relocations) {
-    uint8_t *BufLoc = Buf + getOffset(Rel.Offset);
+    uint64_t Offset = Rel.Offset;
+    if (auto *Sec = dyn_cast<InputSection>(this))
+      Offset += Sec->OutSecOff;
+    uint8_t *BufLoc = Buf + Offset;
     RelType Type = Rel.Type;
 
-    uint64_t AddrLoc = getVA(Rel.Offset);
+    uint64_t AddrLoc = getOutputSection()->Addr + Offset;
     RelExpr Expr = Rel.Expr;
     uint64_t TargetVA = SignExtend64(
         getRelocTargetVA(*File, Type, Rel.Addend, AddrLoc, *Rel.Sym, Expr),
@@ -759,9 +759,13 @@ void InputSectionBase::relocateAlloc(uint8_t *Buf, uint8_t *BufEnd) {
       break;
     case R_PPC_PLT_OPD:
       // Patch a nop (0x60000000) to a ld.
-      if (BufLoc + 8 <= BufEnd && read32be(BufLoc + 4) == 0x60000000)
-        write32be(BufLoc + 4, 0xe8410028); // ld %r2, 40(%r1)
-      LLVM_FALLTHROUGH;
+      if (BufLoc + 8 > BufEnd || read32(BufLoc + 4) != 0x60000000) {
+        error(getErrorLocation(BufLoc) + "call lacks nop, can't restore toc");
+        break;
+      }
+      write32(BufLoc + 4, 0xe8410018); // ld %r2, 24(%r1)
+      Target->relocateOne(BufLoc, Type, TargetVA);
+      break;
     default:
       Target->relocateOne(BufLoc, Type, TargetVA);
       break;
@@ -1012,15 +1016,13 @@ void MergeInputSection::splitIntoPieces() {
   else
     splitNonStrings(Data, Entsize);
 
-  if (Config->GcSections && (Flags & SHF_ALLOC))
-    for (uint64_t Off : LiveOffsets)
-      getSectionPiece(Off)->Live = true;
-}
+  OffsetMap.reserve(Pieces.size());
+  for (size_t I = 0, E = Pieces.size(); I != E; ++I)
+    OffsetMap[Pieces[I].InputOff] = I;
 
-// Do binary search to get a section piece at a given input offset.
-SectionPiece *MergeInputSection::getSectionPiece(uint64_t Offset) {
-  auto *This = static_cast<const MergeInputSection *>(this);
-  return const_cast<SectionPiece *>(This->getSectionPiece(Offset));
+  if (Config->GcSections && (Flags & SHF_ALLOC))
+    for (uint32_t Off : LiveOffsets)
+      getSectionPiece(Off)->Live = true;
 }
 
 template <class It, class T, class Compare>
@@ -1036,32 +1038,34 @@ static It fastUpperBound(It First, It Last, const T &Value, Compare Comp) {
   return Comp(Value, *First) ? First : First + 1;
 }
 
-const SectionPiece *MergeInputSection::getSectionPiece(uint64_t Offset) const {
-  if (Data.size() <= Offset)
-    fatal(toString(this) + ": entry is past the end of the section");
+// Do binary search to get a section piece at a given input offset.
+static SectionPiece *findSectionPiece(MergeInputSection *Sec, uint64_t Offset) {
+  if (Sec->Data.size() <= Offset)
+    fatal(toString(Sec) + ": entry is past the end of the section");
 
   // Find the element this offset points to.
   auto I = fastUpperBound(
-      Pieces.begin(), Pieces.end(), Offset,
+      Sec->Pieces.begin(), Sec->Pieces.end(), Offset,
       [](const uint64_t &A, const SectionPiece &B) { return A < B.InputOff; });
   --I;
   return &*I;
 }
 
+SectionPiece *MergeInputSection::getSectionPiece(uint64_t Offset) {
+  // Find a piece starting at a given offset.
+  auto It = OffsetMap.find(Offset);
+  if (It != OffsetMap.end())
+    return &Pieces[It->second];
+
+  // If Offset is not at beginning of a section piece, it is not in the map.
+  // In that case we need to search from the original section piece vector.
+  return findSectionPiece(this, Offset);
+}
+
 // Returns the offset in an output section for a given input offset.
 // Because contents of a mergeable section is not contiguous in output,
 // it is not just an addition to a base output offset.
-uint64_t MergeInputSection::getOffset(uint64_t Offset) const {
-  if (!Live)
-    return 0;
-
-  // Initialize OffsetMap lazily.
-  llvm::call_once(InitOffsetMap, [&] {
-    OffsetMap.reserve(Pieces.size());
-    for (size_t I = 0; I < Pieces.size(); ++I)
-      OffsetMap[Pieces[I].InputOff] = I;
-  });
-
+uint64_t MergeInputSection::getParentOffset(uint64_t Offset) const {
   // Find a string starting at a given offset.
   auto It = OffsetMap.find(Offset);
   if (It != OffsetMap.end())
@@ -1069,10 +1073,8 @@ uint64_t MergeInputSection::getOffset(uint64_t Offset) const {
 
   // If Offset is not at beginning of a section piece, it is not in the map.
   // In that case we need to search from the original section piece vector.
-  const SectionPiece &Piece = *getSectionPiece(Offset);
-  if (!Piece.Live)
-    return 0;
-
+  const SectionPiece &Piece =
+      *findSectionPiece(const_cast<MergeInputSection *>(this), Offset);
   uint64_t Addend = Offset - Piece.InputOff;
   return Piece.OutputOff + Addend;
 }

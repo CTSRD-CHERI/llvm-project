@@ -186,7 +186,7 @@ void DiagnosticRenderer::emitIncludeStack(FullSourceLoc Loc, PresumedLoc PLoc,
   }
 }
 
-/// \brief Helper to recursivly walk up the include stack and print each layer
+/// \brief Helper to recursively walk up the include stack and print each layer
 /// on the way back down.
 void DiagnosticRenderer::emitIncludeStackRecursively(FullSourceLoc Loc) {
   if (Loc.isInvalid()) {
@@ -227,7 +227,7 @@ void DiagnosticRenderer::emitImportStack(FullSourceLoc Loc) {
   emitImportStackRecursively(NextImportLoc.first, NextImportLoc.second);
 }
 
-/// \brief Helper to recursivly walk up the import stack and print each layer
+/// \brief Helper to recursively walk up the import stack and print each layer
 /// on the way back down.
 void DiagnosticRenderer::emitImportStackRecursively(FullSourceLoc Loc,
                                                     StringRef ModuleName) {
@@ -324,8 +324,8 @@ static void computeCommonMacroArgExpansionFileIDs(
   SmallVector<FileID, 4> EndArgExpansions;
   getMacroArgExpansionFileIDs(Begin, BeginArgExpansions, /*IsBegin=*/true, SM);
   getMacroArgExpansionFileIDs(End, EndArgExpansions, /*IsBegin=*/false, SM);
-  std::sort(BeginArgExpansions.begin(), BeginArgExpansions.end());
-  std::sort(EndArgExpansions.begin(), EndArgExpansions.end());
+  llvm::sort(BeginArgExpansions.begin(), BeginArgExpansions.end());
+  llvm::sort(EndArgExpansions.begin(), EndArgExpansions.end());
   std::set_intersection(BeginArgExpansions.begin(), BeginArgExpansions.end(),
                         EndArgExpansions.begin(), EndArgExpansions.end(),
                         std::back_inserter(CommonArgExpansions));
@@ -448,7 +448,7 @@ static bool checkLocForMacroArgExpansion(SourceLocation Loc,
 }
 
 /// Check if all the locations in the range have the same macro argument
-/// expansion, and that that expansion starts with ArgumentLoc.
+/// expansion, and that the expansion starts with ArgumentLoc.
 static bool checkRangeForMacroArgExpansion(CharSourceRange Range,
                                            const SourceManager &SM,
                                            SourceLocation ArgumentLoc) {

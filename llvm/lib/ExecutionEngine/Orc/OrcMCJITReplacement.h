@@ -175,25 +175,24 @@ class OrcMCJITReplacement : public ExecutionEngine {
       for (auto &S : Symbols) {
         if (auto Sym = M.findMangledSymbol(*S)) {
           if (auto Addr = Sym.getAddress())
-            Query->setDefinition(S, JITEvaluatedSymbol(*Addr, Sym.getFlags()));
+            Query->resolve(S, JITEvaluatedSymbol(*Addr, Sym.getFlags()));
           else {
-            Query->setFailed(Addr.takeError());
+            Query->notifyMaterializationFailed(Addr.takeError());
             return SymbolNameSet();
           }
         } else if (auto Err = Sym.takeError()) {
-          Query->setFailed(std::move(Err));
+          Query->notifyMaterializationFailed(std::move(Err));
           return SymbolNameSet();
         } else {
           if (auto Sym2 = M.ClientResolver->findSymbol(*S)) {
             if (auto Addr = Sym2.getAddress())
-              Query->setDefinition(S,
-                                   JITEvaluatedSymbol(*Addr, Sym2.getFlags()));
+              Query->resolve(S, JITEvaluatedSymbol(*Addr, Sym2.getFlags()));
             else {
-              Query->setFailed(Addr.takeError());
+              Query->notifyMaterializationFailed(Addr.takeError());
               return SymbolNameSet();
             }
           } else if (auto Err = Sym2.takeError()) {
-            Query->setFailed(std::move(Err));
+            Query->notifyMaterializationFailed(std::move(Err));
             return SymbolNameSet();
           } else
             UnresolvedSymbols.insert(S);
@@ -225,7 +224,8 @@ public:
   OrcMCJITReplacement(std::shared_ptr<MCJITMemoryManager> MemMgr,
                       std::shared_ptr<LegacyJITSymbolResolver> ClientResolver,
                       std::unique_ptr<TargetMachine> TM)
-      : ExecutionEngine(TM->createDataLayout()), ES(SSP), TM(std::move(TM)),
+      : ExecutionEngine(TM->createDataLayout()),
+        TM(std::move(TM)),
         MemMgr(
             std::make_shared<MCJITReplacementMemMgr>(*this, std::move(MemMgr))),
         Resolver(std::make_shared<LinkingORCResolver>(*this)),
@@ -450,7 +450,6 @@ private:
   using CompileLayerT = IRCompileLayer<ObjectLayerT, orc::SimpleCompiler>;
   using LazyEmitLayerT = LazyEmittingLayer<CompileLayerT>;
 
-  SymbolStringPool SSP;
   ExecutionSession ES;
 
   std::unique_ptr<TargetMachine> TM;

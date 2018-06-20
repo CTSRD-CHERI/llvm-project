@@ -61,6 +61,7 @@
 #include "llvm/CodeGen/TargetOpcodes.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
+#include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/CodeGen/WinEHFuncInfo.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/Attributes.h"
@@ -91,7 +92,6 @@
 #include "llvm/IR/Type.h"
 #include "llvm/IR/User.h"
 #include "llvm/IR/Value.h"
-#include "llvm/IR/ValueTypes.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/Support/AtomicOrdering.h"
@@ -2522,8 +2522,8 @@ void SelectionDAGBuilder::sortAndRangeify(CaseClusterVector &Clusters) {
     assert(CC.Low == CC.High && "Input clusters must be single-case");
 #endif
 
-  std::sort(Clusters.begin(), Clusters.end(),
-            [](const CaseCluster &a, const CaseCluster &b) {
+  llvm::sort(Clusters.begin(), Clusters.end(),
+             [](const CaseCluster &a, const CaseCluster &b) {
     return a.Low->getValue().slt(b.Low->getValue());
   });
 
@@ -5098,36 +5098,16 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
     SDValue Src = getValue(MI.getRawSource());
     SDValue Length = getValue(MI.getLength());
 
-    // Emit a library call.
-    TargetLowering::ArgListTy Args;
-    TargetLowering::ArgListEntry Entry;
-    Entry.Ty = DAG.getDataLayout().getIntPtrType(*DAG.getContext());
-    Entry.Node = Dst;
-    Args.push_back(Entry);
-
-    Entry.Node = Src;
-    Args.push_back(Entry);
-
-    Entry.Ty = MI.getLength()->getType();
-    Entry.Node = Length;
-    Args.push_back(Entry);
-
-    uint64_t ElementSizeConstant = MI.getElementSizeInBytes();
-    RTLIB::Libcall LibraryCall =
-        RTLIB::getMEMCPY_ELEMENT_UNORDERED_ATOMIC(ElementSizeConstant);
-    if (LibraryCall == RTLIB::UNKNOWN_LIBCALL)
-      report_fatal_error("Unsupported element size");
-
-    TargetLowering::CallLoweringInfo CLI(DAG);
-    CLI.setDebugLoc(sdl).setChain(getRoot()).setLibCallee(
-        TLI.getLibcallCallingConv(LibraryCall),
-        Type::getVoidTy(*DAG.getContext()),
-        DAG.getExternalSymbol(TLI.getLibcallName(LibraryCall),
-                              TLI.getPointerTy(DAG.getDataLayout())),
-        std::move(Args));
-
-    std::pair<SDValue, SDValue> CallResult = TLI.LowerCallTo(CLI);
-    DAG.setRoot(CallResult.second);
+    unsigned DstAlign = MI.getDestAlignment();
+    unsigned SrcAlign = MI.getSourceAlignment();
+    Type *LengthTy = MI.getLength()->getType();
+    unsigned ElemSz = MI.getElementSizeInBytes();
+    bool isTC = I.isTailCall() && isInTailCallPosition(&I, DAG.getTarget());
+    SDValue MC = DAG.getAtomicMemcpy(getRoot(), sdl, Dst, DstAlign, Src,
+                                     SrcAlign, Length, LengthTy, ElemSz, isTC,
+                                     MachinePointerInfo(MI.getRawDest()),
+                                     MachinePointerInfo(MI.getRawSource()));
+    updateDAGForMaybeTailCall(MC);
     return nullptr;
   }
   case Intrinsic::memmove_element_unordered_atomic: {
@@ -5136,36 +5116,16 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
     SDValue Src = getValue(MI.getRawSource());
     SDValue Length = getValue(MI.getLength());
 
-    // Emit a library call.
-    TargetLowering::ArgListTy Args;
-    TargetLowering::ArgListEntry Entry;
-    Entry.Ty = DAG.getDataLayout().getIntPtrType(*DAG.getContext());
-    Entry.Node = Dst;
-    Args.push_back(Entry);
-
-    Entry.Node = Src;
-    Args.push_back(Entry);
-
-    Entry.Ty = MI.getLength()->getType();
-    Entry.Node = Length;
-    Args.push_back(Entry);
-
-    uint64_t ElementSizeConstant = MI.getElementSizeInBytes();
-    RTLIB::Libcall LibraryCall =
-        RTLIB::getMEMMOVE_ELEMENT_UNORDERED_ATOMIC(ElementSizeConstant);
-    if (LibraryCall == RTLIB::UNKNOWN_LIBCALL)
-      report_fatal_error("Unsupported element size");
-
-    TargetLowering::CallLoweringInfo CLI(DAG);
-    CLI.setDebugLoc(sdl).setChain(getRoot()).setLibCallee(
-        TLI.getLibcallCallingConv(LibraryCall),
-        Type::getVoidTy(*DAG.getContext()),
-        DAG.getExternalSymbol(TLI.getLibcallName(LibraryCall),
-                              TLI.getPointerTy(DAG.getDataLayout())),
-        std::move(Args));
-
-    std::pair<SDValue, SDValue> CallResult = TLI.LowerCallTo(CLI);
-    DAG.setRoot(CallResult.second);
+    unsigned DstAlign = MI.getDestAlignment();
+    unsigned SrcAlign = MI.getSourceAlignment();
+    Type *LengthTy = MI.getLength()->getType();
+    unsigned ElemSz = MI.getElementSizeInBytes();
+    bool isTC = I.isTailCall() && isInTailCallPosition(&I, DAG.getTarget());
+    SDValue MC = DAG.getAtomicMemmove(getRoot(), sdl, Dst, DstAlign, Src,
+                                      SrcAlign, Length, LengthTy, ElemSz, isTC,
+                                      MachinePointerInfo(MI.getRawDest()),
+                                      MachinePointerInfo(MI.getRawSource()));
+    updateDAGForMaybeTailCall(MC);
     return nullptr;
   }
   case Intrinsic::memset_element_unordered_atomic: {
@@ -5174,37 +5134,14 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
     SDValue Val = getValue(MI.getValue());
     SDValue Length = getValue(MI.getLength());
 
-    // Emit a library call.
-    TargetLowering::ArgListTy Args;
-    TargetLowering::ArgListEntry Entry;
-    Entry.Ty = DAG.getDataLayout().getIntPtrType(*DAG.getContext());
-    Entry.Node = Dst;
-    Args.push_back(Entry);
-
-    Entry.Ty = Type::getInt8Ty(*DAG.getContext());
-    Entry.Node = Val;
-    Args.push_back(Entry);
-
-    Entry.Ty = MI.getLength()->getType();
-    Entry.Node = Length;
-    Args.push_back(Entry);
-
-    uint64_t ElementSizeConstant = MI.getElementSizeInBytes();
-    RTLIB::Libcall LibraryCall =
-        RTLIB::getMEMSET_ELEMENT_UNORDERED_ATOMIC(ElementSizeConstant);
-    if (LibraryCall == RTLIB::UNKNOWN_LIBCALL)
-      report_fatal_error("Unsupported element size");
-
-    TargetLowering::CallLoweringInfo CLI(DAG);
-    CLI.setDebugLoc(sdl).setChain(getRoot()).setLibCallee(
-        TLI.getLibcallCallingConv(LibraryCall),
-        Type::getVoidTy(*DAG.getContext()),
-        DAG.getExternalSymbol(TLI.getLibcallName(LibraryCall),
-                              TLI.getPointerTy(DAG.getDataLayout())),
-        std::move(Args));
-
-    std::pair<SDValue, SDValue> CallResult = TLI.LowerCallTo(CLI);
-    DAG.setRoot(CallResult.second);
+    unsigned DstAlign = MI.getDestAlignment();
+    Type *LengthTy = MI.getLength()->getType();
+    unsigned ElemSz = MI.getElementSizeInBytes();
+    bool isTC = I.isTailCall() && isInTailCallPosition(&I, DAG.getTarget());
+    SDValue MC = DAG.getAtomicMemset(getRoot(), sdl, Dst, DstAlign, Val, Length,
+                                     LengthTy, ElemSz, isTC,
+                                     MachinePointerInfo(MI.getRawDest()));
+    updateDAGForMaybeTailCall(MC);
     return nullptr;
   }
   case Intrinsic::dbg_addr:
@@ -6067,6 +6004,41 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
     setValue(&I, patchableNode);
     return nullptr;
   }
+  case Intrinsic::xray_typedevent: {
+    // Here we want to make sure that the intrinsic behaves as if it has a
+    // specific calling convention, and only for x86_64.
+    // FIXME: Support other platforms later.
+    const auto &Triple = DAG.getTarget().getTargetTriple();
+    if (Triple.getArch() != Triple::x86_64 || !Triple.isOSLinux())
+      return nullptr;
+
+    SDLoc DL = getCurSDLoc();
+    SmallVector<SDValue, 8> Ops;
+
+    // We want to say that we always want the arguments in registers.
+    // It's unclear to me how manipulating the selection DAG here forces callers
+    // to provide arguments in registers instead of on the stack.
+    SDValue LogTypeId = getValue(I.getArgOperand(0));
+    SDValue LogEntryVal = getValue(I.getArgOperand(1));
+    SDValue StrSizeVal = getValue(I.getArgOperand(2));
+    SDVTList NodeTys = DAG.getVTList(MVT::Other, MVT::Glue);
+    SDValue Chain = getRoot();
+    Ops.push_back(LogTypeId);
+    Ops.push_back(LogEntryVal);
+    Ops.push_back(StrSizeVal);
+    Ops.push_back(Chain);
+
+    // We need to enforce the calling convention for the callsite, so that
+    // argument ordering is enforced correctly, and that register allocation can
+    // see that some registers may be assumed clobbered and have to preserve
+    // them across calls to the intrinsic.
+    MachineSDNode *MN = DAG.getMachineNode(
+        TargetOpcode::PATCHABLE_TYPED_EVENT_CALL, DL, NodeTys, Ops);
+    SDValue patchableNode = SDValue(MN, 0);
+    DAG.setRoot(patchableNode);
+    setValue(&I, patchableNode);
+    return nullptr;
+  }
   case Intrinsic::experimental_deoptimize:
     LowerDeoptimizeCall(&I);
     return nullptr;
@@ -6122,10 +6094,10 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
                                      GA->getGlobal(), getCurSDLoc(),
                                      Val.getValueType(), GA->getOffset())});
     }
-    std::sort(Targets.begin(), Targets.end(),
-              [](const BranchFunnelTarget &T1, const BranchFunnelTarget &T2) {
-                return T1.Offset < T2.Offset;
-              });
+    llvm::sort(Targets.begin(), Targets.end(),
+               [](const BranchFunnelTarget &T1, const BranchFunnelTarget &T2) {
+                 return T1.Offset < T2.Offset;
+               });
 
     for (auto &T : Targets) {
       Ops.push_back(DAG.getTargetConstant(T.Offset, getCurSDLoc(), MVT::i32));
@@ -9470,7 +9442,7 @@ bool SelectionDAGBuilder::buildBitTests(CaseClusterVector &Clusters,
   }
 
   BitTestInfo BTI;
-  std::sort(CBV.begin(), CBV.end(), [](const CaseBits &a, const CaseBits &b) {
+  llvm::sort(CBV.begin(), CBV.end(), [](const CaseBits &a, const CaseBits &b) {
     // Sort by probability first, number of bits second, bit mask third.
     if (a.ExtraProb != b.ExtraProb)
       return a.ExtraProb > b.ExtraProb;
@@ -9669,15 +9641,15 @@ void SelectionDAGBuilder::lowerWorkItem(SwitchWorkListItem W, Value *Cond,
     // checked first. However, two clusters can have the same probability in
     // which case their relative ordering is non-deterministic. So we use Low
     // as a tie-breaker as clusters are guaranteed to never overlap.
-    std::sort(W.FirstCluster, W.LastCluster + 1,
-              [](const CaseCluster &a, const CaseCluster &b) {
+    llvm::sort(W.FirstCluster, W.LastCluster + 1,
+               [](const CaseCluster &a, const CaseCluster &b) {
       return a.Prob != b.Prob ?
              a.Prob > b.Prob :
              a.Low->getValue().slt(b.Low->getValue());
     });
 
     // Rearrange the case blocks so that the last one falls through if possible
-    // without without changing the order of probabilities.
+    // without changing the order of probabilities.
     for (CaseClusterIt I = W.LastCluster; I > W.FirstCluster; ) {
       --I;
       if (I->Prob > W.LastCluster->Prob)

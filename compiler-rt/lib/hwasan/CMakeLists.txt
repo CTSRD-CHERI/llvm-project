@@ -4,11 +4,12 @@ include_directories(..)
 set(HWASAN_RTL_SOURCES
   hwasan.cc
   hwasan_allocator.cc
+  hwasan_dynamic_shadow.cc
   hwasan_interceptors.cc
   hwasan_linux.cc
+  hwasan_poisoning.cc
   hwasan_report.cc
   hwasan_thread.cc
-  hwasan_poisoning.cc
   )
 
 set(HWASAN_RTL_CXX_SOURCES
@@ -79,6 +80,7 @@ foreach(arch ${HWASAN_SUPPORTED_ARCH})
                 RTSanitizerCommon
                 RTSanitizerCommonLibc
                 RTSanitizerCommonCoverage
+                RTSanitizerCommonSymbolizer
                 RTUbsan
     CFLAGS ${HWASAN_RTL_CFLAGS}
     PARENT_TARGET hwasan)
@@ -114,6 +116,7 @@ foreach(arch ${HWASAN_SUPPORTED_ARCH})
             RTSanitizerCommon
             RTSanitizerCommonLibc
             RTSanitizerCommonCoverage
+            RTSanitizerCommonSymbolizer
             RTUbsan
             # The only purpose of RTHWAsan_dynamic_version_script_dummy is to
             # carry a dependency of the shared runtime on the version script.

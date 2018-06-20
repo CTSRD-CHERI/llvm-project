@@ -267,6 +267,8 @@ void MIRPrinter::convert(yaml::MachineFunction &MF,
     unsigned Reg = TargetRegisterInfo::index2VirtReg(I);
     yaml::VirtualRegisterDefinition VReg;
     VReg.ID = I;
+    if (RegInfo.getVRegName(Reg) != "")
+      continue;
     ::printRegClassOrBank(Reg, VReg.Class, RegInfo, TRI);
     unsigned PreferredReg = RegInfo.getSimpleHint(Reg);
     if (PreferredReg)
@@ -313,6 +315,7 @@ void MIRPrinter::convert(ModuleSlotTracker &MST,
   YamlMFI.HasOpaqueSPAdjustment = MFI.hasOpaqueSPAdjustment();
   YamlMFI.HasVAStart = MFI.hasVAStart();
   YamlMFI.HasMustTailInVarArgFunc = MFI.hasMustTailInVarArgFunc();
+  YamlMFI.LocalFrameSize = MFI.getLocalFrameSize();
   if (MFI.getSavePoint()) {
     raw_string_ostream StrOS(YamlMFI.SavePoint.Value);
     StrOS << printMBBReference(*MFI.getSavePoint());

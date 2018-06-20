@@ -134,6 +134,7 @@ tools = [
     ToolSubst('%ocamlc', ocamlc_command, unresolved='ignore'),
     ToolSubst('%ocamlopt', ocamlopt_command, unresolved='ignore'),
     ToolSubst('%opt-viewer', opt_viewer_cmd),
+    ToolSubst('%llvm-objcopy', FindTool('llvm-objcopy')),
 ]
 
 # FIXME: Why do we have both `lli` and `%lli` that do slightly different things?
@@ -141,7 +142,7 @@ tools.extend([
     'dsymutil', 'lli', 'lli-child-target', 'llvm-ar', 'llvm-as', 'llvm-bcanalyzer',
     'llvm-config', 'llvm-cov', 'llvm-cxxdump', 'llvm-cvtres', 'llvm-diff', 'llvm-dis',
     'llvm-dwarfdump', 'llvm-extract', 'llvm-isel-fuzzer', 'llvm-opt-fuzzer', 'llvm-lib',
-    'llvm-link', 'llvm-lto', 'llvm-lto2', 'llvm-mc', 'llvm-mca','llvm-mcmarkup',
+    'llvm-link', 'llvm-lto', 'llvm-lto2', 'llvm-mc', 'llvm-mca',
     'llvm-modextract', 'llvm-nm', 'llvm-objcopy', 'llvm-objdump',
     'llvm-pdbutil', 'llvm-profdata', 'llvm-ranlib', 'llvm-readobj',
     'llvm-rtdyld', 'llvm-size', 'llvm-split', 'llvm-strings', 'llvm-tblgen',

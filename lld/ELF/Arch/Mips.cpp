@@ -32,7 +32,6 @@ public:
   RelExpr getRelExpr(RelType Type, const Symbol &S,
                      const uint8_t *Loc) const override;
   int64_t getImplicitAddend(const uint8_t *Buf, RelType Type) const override;
-  bool isPicRel(RelType Type) const override;
   RelType getDynRel(RelType Type) const override;
   void writeGotPlt(uint8_t *Buf, const Symbol &S) const override;
   void writePltHeader(uint8_t *Buf) const override;
@@ -209,13 +208,10 @@ RelExpr MIPS<ELFT>::getRelExpr(RelType Type, const Symbol &S,
   }
 }
 
-template <class ELFT> bool MIPS<ELFT>::isPicRel(RelType Type) const {
-  return Type == R_MIPS_32 || Type == R_MIPS_64
-      || Type == R_MIPS_CHERI_CAPABILITY;
-}
-
 template <class ELFT> RelType MIPS<ELFT>::getDynRel(RelType Type) const {
-  return RelativeRel;
+  if (Type == R_MIPS_32 || Type == R_MIPS_64 || Type == R_MIPS_CHERI_CAPABILITY)
+    return RelativeRel;
+  return R_MIPS_NONE;
 }
 
 template <class ELFT>
@@ -537,7 +533,7 @@ void MIPS<ELFT>::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
     if (Config->Relocatable) {
       writeValue<E>(Loc, Val + 0x8000, 16, 16);
     } else {
-      checkInt<16>(Loc, Val, Type);
+      checkInt(Loc, Val, 16, Type);
       writeValue<E>(Loc, Val, 16, 0);
     }
     break;
@@ -545,7 +541,7 @@ void MIPS<ELFT>::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
     if (Config->Relocatable) {
       writeShuffleValue<E>(Loc, Val + 0x8000, 16, 16);
     } else {
-      checkInt<16>(Loc, Val, Type);
+      checkInt(Loc, Val, 16, Type);
       writeShuffleValue<E>(Loc, Val, 16, 0);
     }
     break;
@@ -556,7 +552,7 @@ void MIPS<ELFT>::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
   case R_MIPS_TLS_GD:
   case R_MIPS_TLS_GOTTPREL:
   case R_MIPS_TLS_LDM:
-    checkInt<16>(Loc, Val, Type);
+    checkInt(Loc, Val, 16, Type);
     LLVM_FALLTHROUGH;
   case R_MIPS_CALL_LO16:
   case R_MIPS_GOT_LO16:
@@ -577,7 +573,7 @@ void MIPS<ELFT>::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
   case R_MICROMIPS_GPREL16:
   case R_MICROMIPS_TLS_GD:
   case R_MICROMIPS_TLS_LDM:
-    checkInt<16>(Loc, Val, Type);
+    checkInt(Loc, Val, 16, Type);
     writeShuffleValue<E>(Loc, Val, 16, 0);
     break;
   case R_MICROMIPS_CALL16:
@@ -590,7 +586,7 @@ void MIPS<ELFT>::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
     writeShuffleValue<E>(Loc, Val, 16, 0);
     break;
   case R_MICROMIPS_GPREL7_S2:
-    checkInt<7>(Loc, Val, Type);
+    checkInt(Loc, Val, 7, Type);
     writeShuffleValue<E>(Loc, Val, 7, 2);
     break;
   case R_MIPS_CALL_HI16:
@@ -648,23 +644,23 @@ void MIPS<ELFT>::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
     // Ignore this optimization relocation for now
     break;
   case R_MIPS_PC16:
-    checkAlignment<4>(Loc, Val, Type);
-    checkInt<18>(Loc, Val, Type);
+    checkAlignment(Loc, Val, 4, Type);
+    checkInt(Loc, Val, 18, Type);
     writeValue<E>(Loc, Val, 16, 2);
     break;
   case R_MIPS_PC19_S2:
-    checkAlignment<4>(Loc, Val, Type);
-    checkInt<21>(Loc, Val, Type);
+    checkAlignment(Loc, Val, 4, Type);
+    checkInt(Loc, Val, 21, Type);
     writeValue<E>(Loc, Val, 19, 2);
     break;
   case R_MIPS_PC21_S2:
-    checkAlignment<4>(Loc, Val, Type);
-    checkInt<23>(Loc, Val, Type);
+    checkAlignment(Loc, Val, 4, Type);
+    checkInt(Loc, Val, 23, Type);
     writeValue<E>(Loc, Val, 21, 2);
     break;
   case R_MIPS_PC26_S2:
-    checkAlignment<4>(Loc, Val, Type);
-    checkInt<28>(Loc, Val, Type);
+    checkAlignment(Loc, Val, 4, Type);
+    checkInt(Loc, Val, 28, Type);
     writeValue<E>(Loc, Val, 26, 2);
     break;
   case R_MIPS_PC32:
@@ -672,35 +668,35 @@ void MIPS<ELFT>::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
     break;
   case R_MICROMIPS_26_S1:
   case R_MICROMIPS_PC26_S1:
-    checkInt<27>(Loc, Val, Type);
+    checkInt(Loc, Val, 27, Type);
     writeShuffleValue<E>(Loc, Val, 26, 1);
     break;
   case R_MICROMIPS_PC7_S1:
-    checkInt<8>(Loc, Val, Type);
+    checkInt(Loc, Val, 8, Type);
     writeMicroRelocation16<E>(Loc, Val, 7, 1);
     break;
   case R_MICROMIPS_PC10_S1:
-    checkInt<11>(Loc, Val, Type);
+    checkInt(Loc, Val, 11, Type);
     writeMicroRelocation16<E>(Loc, Val, 10, 1);
     break;
   case R_MICROMIPS_PC16_S1:
-    checkInt<17>(Loc, Val, Type);
+    checkInt(Loc, Val, 17, Type);
     writeShuffleValue<E>(Loc, Val, 16, 1);
     break;
   case R_MICROMIPS_PC18_S3:
-    checkInt<21>(Loc, Val, Type);
+    checkInt(Loc, Val, 21, Type);
     writeShuffleValue<E>(Loc, Val, 18, 3);
     break;
   case R_MICROMIPS_PC19_S2:
-    checkInt<21>(Loc, Val, Type);
+    checkInt(Loc, Val, 21, Type);
     writeShuffleValue<E>(Loc, Val, 19, 2);
     break;
   case R_MICROMIPS_PC21_S1:
-    checkInt<22>(Loc, Val, Type);
+    checkInt(Loc, Val, 22, Type);
     writeShuffleValue<E>(Loc, Val, 21, 1);
     break;
   case R_MICROMIPS_PC23_S2:
-    checkInt<25>(Loc, Val, Type);
+    checkInt(Loc, Val, 25, Type);
     writeShuffleValue<E>(Loc, Val, 23, 2);
     break;
   case R_MIPS_CHERI_CAPABILITY:

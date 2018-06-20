@@ -1482,6 +1482,29 @@ ClassTemplateDecl *ClangASTContext::CreateClassTemplateDecl(
   return class_template_decl;
 }
 
+TemplateTemplateParmDecl *
+ClangASTContext::CreateTemplateTemplateParmDecl(const char *template_name) {
+  ASTContext *ast = getASTContext();
+
+  auto *decl_ctx = ast->getTranslationUnitDecl();
+
+  IdentifierInfo &identifier_info = ast->Idents.get(template_name);
+  llvm::SmallVector<NamedDecl *, 8> template_param_decls;
+
+  ClangASTContext::TemplateParameterInfos template_param_infos;
+  TemplateParameterList *template_param_list = CreateTemplateParameterList(
+      ast, template_param_infos, template_param_decls);
+
+  // LLDB needs to create those decls only to be able to display a
+  // type that includes a template template argument. Only the name
+  // matters for this purpose, so we use dummy values for the other
+  // characterisitcs of the type.
+  return TemplateTemplateParmDecl::Create(
+      *ast, decl_ctx, SourceLocation(),
+      /*Depth*/ 0, /*Position*/ 0,
+      /*IsParameterPack*/ false, &identifier_info, template_param_list);
+}
+
 ClassTemplateSpecializationDecl *
 ClangASTContext::CreateClassTemplateSpecializationDecl(
     DeclContext *decl_ctx, ClassTemplateDecl *class_template_decl, int kind,
@@ -7889,7 +7912,7 @@ clang::VarDecl *ClangASTContext::AddVariableToRecordType(
 }
 
 clang::CXXMethodDecl *ClangASTContext::AddMethodToCXXRecordType(
-    lldb::opaque_compiler_type_t type, const char *name,
+    lldb::opaque_compiler_type_t type, const char *name, const char *mangled_name,
     const CompilerType &method_clang_type, lldb::AccessType access,
     bool is_virtual, bool is_static, bool is_inline, bool is_explicit,
     bool is_attr_used, bool is_artificial) {
@@ -8008,6 +8031,11 @@ clang::CXXMethodDecl *ClangASTContext::AddMethodToCXXRecordType(
 
   if (is_attr_used)
     cxx_method_decl->addAttr(clang::UsedAttr::CreateImplicit(*getASTContext()));
+
+  if (mangled_name != NULL) {
+    cxx_method_decl->addAttr(
+        clang::AsmLabelAttr::CreateImplicit(*getASTContext(), mangled_name));
+  }
 
   // Populate the method decl with parameter decls
 

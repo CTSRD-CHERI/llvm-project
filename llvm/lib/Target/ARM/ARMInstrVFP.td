@@ -482,9 +482,9 @@ defm VSELVS : vsel_inst<"vs", 0b01, 6>;
 multiclass vmaxmin_inst<string op, bit opc, SDNode SD> {
   let DecoderNamespace = "VFPV8", PostEncoderMethod = "" in {
     def H : AHbInp<0b11101, 0b00, opc,
-                   (outs SPR:$Sd), (ins SPR:$Sn, SPR:$Sm),
+                   (outs HPR:$Sd), (ins HPR:$Sn, HPR:$Sm),
                    NoItinerary, !strconcat(op, ".f16\t$Sd, $Sn, $Sm"),
-                   []>,
+                   [(set HPR:$Sd, (SD HPR:$Sn, HPR:$Sm))]>,
                    Requires<[HasFullFP16]>;
 
     def S : ASbInp<0b11101, 0b00, opc,
@@ -977,7 +977,7 @@ multiclass vrint_inst_anpm<string opc, bits<2> rm,
 }
 
 defm VRINTA : vrint_inst_anpm<"a", 0b00, fround>;
-defm VRINTN : vrint_inst_anpm<"n", 0b01>;
+defm VRINTN : vrint_inst_anpm<"n", 0b01, int_arm_neon_vrintn>;
 defm VRINTP : vrint_inst_anpm<"p", 0b10, fceil>;
 defm VRINTM : vrint_inst_anpm<"m", 0b11, ffloor>;
 
@@ -1069,7 +1069,7 @@ def VMOVSR : AVConv4I<0b11100000, 0b1010,
   // pipelines.
   let D = VFPNeonDomain;
 }
-def : Pat<(arm_vmovsr GPR:$Rt), (VMOVSR GPR:$Rt)>;
+def : Pat<(arm_vmovsr GPR:$Rt), (VMOVSR GPR:$Rt)>, Requires<[HasVFP2, UseVMOVSR]>;
 
 let hasSideEffects = 0 in {
 def VMOVRRD  : AVConv3I<0b11000101, 0b1011,

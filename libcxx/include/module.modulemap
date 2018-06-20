@@ -243,6 +243,10 @@ module std [system] {
     header "codecvt"
     export *
   }
+  module compare {
+    header "compare"
+    export *
+  }
   module complex {
     header "complex"
     export *
@@ -470,6 +474,10 @@ module std [system] {
     export initializer_list
     export *
   }
+  module version {
+    header "version"
+    export *
+  }
 
   // FIXME: These should be private.
   module __bit_reference { header "__bit_reference" export * }
@@ -540,6 +548,10 @@ module std [system] {
     }
     module regex {
       header "experimental/regex"
+      export *
+    }
+    module simd {
+      header "experimental/simd"
       export *
     }
     module set {

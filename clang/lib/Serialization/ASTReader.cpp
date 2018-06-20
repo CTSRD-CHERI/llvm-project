@@ -396,8 +396,8 @@ static bool checkTargetOptions(const TargetOptions &TargetOpts,
                                              ExistingTargetOpts.FeaturesAsWritten.end());
   SmallVector<StringRef, 4> ReadFeatures(TargetOpts.FeaturesAsWritten.begin(),
                                          TargetOpts.FeaturesAsWritten.end());
-  std::sort(ExistingFeatures.begin(), ExistingFeatures.end());
-  std::sort(ReadFeatures.begin(), ReadFeatures.end());
+  llvm::sort(ExistingFeatures.begin(), ExistingFeatures.end());
+  llvm::sort(ReadFeatures.begin(), ReadFeatures.end());
 
   // We compute the set difference in both directions explicitly so that we can
   // diagnose the differences differently.
@@ -2137,7 +2137,7 @@ InputFile ASTReader::getInputFile(ModuleFile &F, unsigned ID, bool Complain) {
   }
 
   // Check if there was a request to override the contents of the file
-  // that was part of the precompiled header. Overridding such a file
+  // that was part of the precompiled header. Overriding such a file
   // can lead to problems when lexing using the source locations from the
   // PCH.
   SourceManager &SM = getSourceManager();
@@ -4980,7 +4980,7 @@ ASTReader::ReadSubmoduleBlock(ModuleFile &F, unsigned ClientLoadCapabilities) {
       break;
 
     case SUBMODULE_DEFINITION: {
-      if (Record.size() < 8) {
+      if (Record.size() < 12) {
         Error("malformed module definition");
         return Failure;
       }
@@ -4998,6 +4998,7 @@ ASTReader::ReadSubmoduleBlock(ModuleFile &F, unsigned ClientLoadCapabilities) {
       bool InferExplicitSubmodules = Record[Idx++];
       bool InferExportWildcard = Record[Idx++];
       bool ConfigMacrosExhaustive = Record[Idx++];
+      bool ModuleMapIsPrivate = Record[Idx++];
 
       Module *ParentModule = nullptr;
       if (Parent)
@@ -5045,6 +5046,7 @@ ASTReader::ReadSubmoduleBlock(ModuleFile &F, unsigned ClientLoadCapabilities) {
       CurrentModule->InferExplicitSubmodules = InferExplicitSubmodules;
       CurrentModule->InferExportWildcard = InferExportWildcard;
       CurrentModule->ConfigMacrosExhaustive = ConfigMacrosExhaustive;
+      CurrentModule->ModuleMapIsPrivate = ModuleMapIsPrivate;
       if (DeserializationListener)
         DeserializationListener->ModuleRead(GlobalID, CurrentModule);
 
@@ -5171,6 +5173,7 @@ ASTReader::ReadSubmoduleBlock(ModuleFile &F, unsigned ClientLoadCapabilities) {
       break;
 
     case SUBMODULE_LINK_LIBRARY:
+      ModMap.resolveLinkAsDependencies(CurrentModule);
       CurrentModule->LinkLibraries.push_back(
                                          Module::LinkLibrary(Blob, Record[0]));
       break;
@@ -5203,6 +5206,7 @@ ASTReader::ReadSubmoduleBlock(ModuleFile &F, unsigned ClientLoadCapabilities) {
 
     case SUBMODULE_EXPORT_AS:
       CurrentModule->ExportAsModule = Blob.str();
+      ModMap.addLinkAsDependency(CurrentModule);
       break;
     }
   }
@@ -9078,8 +9082,8 @@ void ASTReader::ReadComments() {
   NextCursor:
     // De-serialized SourceLocations get negative FileIDs for other modules,
     // potentially invalidating the original order. Sort it again.
-    std::sort(Comments.begin(), Comments.end(),
-              BeforeThanCompare<RawComment>(SourceMgr));
+    llvm::sort(Comments.begin(), Comments.end(),
+               BeforeThanCompare<RawComment>(SourceMgr));
     Context.Comments.addDeserializedComments(Comments);
   }
 }

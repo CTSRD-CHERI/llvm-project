@@ -383,7 +383,11 @@ def DeprecatedObjCIsaUsage : DiagGroup<"deprecated-objc-isa-usage">;
 def ExplicitInitializeCall : DiagGroup<"explicit-initialize-call">;
 def Packed : DiagGroup<"packed">;
 def Padded : DiagGroup<"padded">;
+
 def PessimizingMove : DiagGroup<"pessimizing-move">;
+def ReturnStdMoveInCXX11 : DiagGroup<"return-std-move-in-c++11">;
+def ReturnStdMove : DiagGroup<"return-std-move">;
+
 def PointerArith : DiagGroup<"pointer-arith">;
 def PoundWarning : DiagGroup<"#warnings">;
 def PoundPragmaMessage : DiagGroup<"#pragma-messages">,
@@ -400,7 +404,8 @@ def ReturnType : DiagGroup<"return-type", [ReturnTypeCLinkage]>;
 def BindToTemporaryCopy : DiagGroup<"bind-to-temporary-copy",
                                     [CXX98CompatBindToTemporaryCopy]>;
 def SelfAssignmentField : DiagGroup<"self-assign-field">;
-def SelfAssignment : DiagGroup<"self-assign", [SelfAssignmentField]>;
+def SelfAssignmentOverloaded : DiagGroup<"self-assign-overloaded">;
+def SelfAssignment : DiagGroup<"self-assign", [SelfAssignmentOverloaded, SelfAssignmentField]>;
 def SelfMove : DiagGroup<"self-move">;
 def SemiBeforeMethodBody : DiagGroup<"semicolon-before-method-body">;
 def Sentinel : DiagGroup<"sentinel">;
@@ -723,7 +728,12 @@ def IntToVoidPointerCast : DiagGroup<"int-to-void-pointer-cast">;
 def IntToPointerCast : DiagGroup<"int-to-pointer-cast",
                                  [IntToVoidPointerCast]>;
 
-def Move : DiagGroup<"move", [PessimizingMove, RedundantMove, SelfMove]>;
+def Move : DiagGroup<"move", [
+    PessimizingMove,
+    RedundantMove,
+    ReturnStdMove,
+    SelfMove
+  ]>;
 
 def Extra : DiagGroup<"extra", [
     MissingFieldInitializers,

@@ -25,6 +25,7 @@
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/Utils.h"
 using namespace llvm;
 
 #define DEBUG_TYPE "wasm"
@@ -48,9 +49,28 @@ extern "C" void LLVMInitializeWebAssemblyTarget() {
   RegisterTargetMachine<WebAssemblyTargetMachine> Y(
       getTheWebAssemblyTarget64());
 
-  // Register exception handling pass to opt
-  initializeWebAssemblyLowerEmscriptenEHSjLjPass(
-      *PassRegistry::getPassRegistry());
+  // Register backend passes
+  auto &PR = *PassRegistry::getPassRegistry();
+  initializeWebAssemblyLowerEmscriptenEHSjLjPass(PR);
+  initializeLowerGlobalDtorsPass(PR);
+  initializeFixFunctionBitcastsPass(PR);
+  initializeOptimizeReturnedPass(PR);
+  initializeWebAssemblyArgumentMovePass(PR);
+  initializeWebAssemblySetP2AlignOperandsPass(PR);
+  initializeWebAssemblyReplacePhysRegsPass(PR);
+  initializeWebAssemblyPrepareForLiveIntervalsPass(PR);
+  initializeWebAssemblyOptimizeLiveIntervalsPass(PR);
+  initializeWebAssemblyStoreResultsPass(PR);
+  initializeWebAssemblyRegStackifyPass(PR);
+  initializeWebAssemblyRegColoringPass(PR);
+  initializeWebAssemblyExplicitLocalsPass(PR);
+  initializeWebAssemblyFixIrreducibleControlFlowPass(PR);
+  initializeWebAssemblyCFGSortPass(PR);
+  initializeWebAssemblyCFGStackifyPass(PR);
+  initializeWebAssemblyLowerBrUnlessPass(PR);
+  initializeWebAssemblyRegNumberingPass(PR);
+  initializeWebAssemblyPeepholePass(PR);
+  initializeWebAssemblyCallIndirectFixupPass(PR);
 }
 
 //===----------------------------------------------------------------------===//
@@ -244,16 +264,15 @@ void WebAssemblyPassConfig::addPostRegAlloc() {
   // virtual registers. Consider removing their restrictions and re-enabling
   // them.
 
-  // Has no asserts of its own, but was not written to handle virtual regs.
-  disablePass(&ShrinkWrapID);
-
   // These functions all require the NoVRegs property.
   disablePass(&MachineCopyPropagationID);
+  disablePass(&PostRAMachineSinkingID);
   disablePass(&PostRASchedulerID);
   disablePass(&FuncletLayoutID);
   disablePass(&StackMapLivenessID);
   disablePass(&LiveDebugValuesID);
   disablePass(&PatchableFunctionID);
+  disablePass(&ShrinkWrapID);
 
   TargetPassConfig::addPostRegAlloc();
 }

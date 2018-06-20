@@ -4985,15 +4985,18 @@ bool AArch64InstrInfo::isFunctionSafeToOutlineFrom(
     MachineFunction &MF, bool OutlineFromLinkOnceODRs) const {
   const Function &F = MF.getFunction();
 
-  // If F uses a redzone, then don't outline from it because it might mess up
-  // the stack.
-  if (!F.hasFnAttribute(Attribute::NoRedZone))
-    return false;
-
   // Can F be deduplicated by the linker? If it can, don't outline from it.
   if (!OutlineFromLinkOnceODRs && F.hasLinkOnceODRLinkage())
     return false;
 
+  // Outlining from functions with redzones is unsafe since the outliner may
+  // modify the stack. Check if hasRedZone is true or unknown; if yes, don't
+  // outline from it.
+  AArch64FunctionInfo *AFI = MF.getInfo<AArch64FunctionInfo>();
+  if (!AFI || AFI->hasRedZone().getValueOr(true))
+    return false;
+
+  // It's safe to outline from MF.
   return true;
 }
 
@@ -5053,13 +5056,26 @@ AArch64InstrInfo::getOutliningType(MachineBasicBlock::iterator &MIT,
     return MachineOutlinerInstrType::Illegal;
   }
 
+  // Make sure none of the operands are un-outlinable.
+  for (const MachineOperand &MOP : MI.operands()) {
+    if (MOP.isCPI() || MOP.isJTI() || MOP.isCFIIndex() || MOP.isFI() ||
+        MOP.isTargetIndex())
+      return MachineOutlinerInstrType::Illegal;
+  }
+
   // Special cases for instructions that can always be outlined, but will fail
   // the later tests. e.g, ADRPs, which are PC-relative use LR, but can always
   // be outlined because they don't require a *specific* value to be in LR.
   if (MI.getOpcode() == AArch64::ADRP)
     return MachineOutlinerInstrType::Legal;
 
-  // Outline calls without stack parameters or aggregate parameters.
+  // If MI is a call we might be able to outline it. We don't want to outline
+  // any calls that rely on the position of items on the stack. When we outline
+  // something containing a call, we have to emit a save and restore of LR in
+  // the outlined function. Currently, this always happens by saving LR to the
+  // stack. Thus, if we outline, say, half the parameters for a function call
+  // plus the call, then we'll break the callee's expectations for the layout
+  // of the stack.
   if (MI.isCall()) {
     const Module *M = MF->getFunction().getParent();
     assert(M && "No module?");
@@ -5082,44 +5098,25 @@ AArch64InstrInfo::getOutliningType(MachineBasicBlock::iterator &MIT,
     // Only handle functions that we have information about.
     if (!Callee)
       return MachineOutlinerInstrType::Illegal;
-    
+
     // We have a function we have information about. Check it if it's something
     // can safely outline.
-
-    // If the callee is vararg, it passes parameters on the stack. Don't touch
-    // it.
-    // FIXME: Functions like printf are very common and we should be able to
-    // outline them.
-    if (Callee->isVarArg())
-      return MachineOutlinerInstrType::Illegal;
-
-    // Check if any of the arguments are a pointer to a struct. We don't want
-    // to outline these since they might be loaded in two instructions.
-    for (Argument &Arg : Callee->args()) {
-      if (Arg.getType()->isPointerTy() &&
-          Arg.getType()->getPointerElementType()->isAggregateType()) 
-        return MachineOutlinerInstrType::Illegal;
-    }
-
-    // If the thing we're calling doesn't access memory at all, then we're good
-    // to go.
-    if (Callee->doesNotAccessMemory()) 
-      return MachineOutlinerInstrType::Legal;
-    
-
-    // It accesses memory. Get the machine function for the callee to see if
-    // it's safe to outline.
     MachineFunction *CalleeMF = MF->getMMI().getMachineFunction(*Callee);
 
     // We don't know what's going on with the callee at all. Don't touch it.
-    if (!CalleeMF) 
+    if (!CalleeMF)
       return MachineOutlinerInstrType::Illegal;
 
-    // Does it pass anything on the stack? If it does, don't outline it.
-    if (CalleeMF->getInfo<AArch64FunctionInfo>()->getBytesInStackArgArea() != 0)
+    // Check if we know anything about the callee saves on the function. If we
+    // don't, then don't touch it, since that implies that we haven't
+    // computed anything about its stack frame yet.
+    MachineFrameInfo &MFI = CalleeMF->getFrameInfo();
+    if (!MFI.isCalleeSavedInfoValid() || MFI.getStackSize() > 0 ||
+        MFI.getNumObjects() > 0)
       return MachineOutlinerInstrType::Illegal;
-    
-    // It doesn't, so it's safe to outline and we're done.
+
+    // At this point, we can say that CalleeMF ought to not pass anything on the
+    // stack. Therefore, we can outline it.
     return MachineOutlinerInstrType::Legal;
   }
 
@@ -5131,17 +5128,6 @@ AArch64InstrInfo::getOutliningType(MachineBasicBlock::iterator &MIT,
   if (MI.readsRegister(AArch64::W30, &getRegisterInfo()) ||
       MI.modifiesRegister(AArch64::W30, &getRegisterInfo()))
     return MachineOutlinerInstrType::Illegal;
-
-  // Make sure none of the operands are un-outlinable.
-  for (const MachineOperand &MOP : MI.operands()) {
-    if (MOP.isCPI() || MOP.isJTI() || MOP.isCFIIndex() || MOP.isFI() ||
-        MOP.isTargetIndex())
-      return MachineOutlinerInstrType::Illegal;
-
-    // Don't outline anything that uses the link register.
-    if (MOP.isReg() && getRegisterInfo().regsOverlap(MOP.getReg(), AArch64::LR))
-      return MachineOutlinerInstrType::Illegal;
-  }
 
   // Does this use the stack?
   if (MI.modifiesRegister(AArch64::SP, &RI) ||
@@ -5339,8 +5325,9 @@ MachineBasicBlock::iterator AArch64InstrInfo::insertOutlinedCall(
   // Are we tail calling?
   if (MInfo.CallConstructionID == MachineOutlinerTailCall) {
     // If yes, then we can just branch to the label.
-    It = MBB.insert(It, BuildMI(MF, DebugLoc(), get(AArch64::B))
-                            .addGlobalAddress(M.getNamedValue(MF.getName())));
+    It = MBB.insert(It, BuildMI(MF, DebugLoc(), get(AArch64::TCRETURNdi))
+                            .addGlobalAddress(M.getNamedValue(MF.getName()))
+                            .addImm(0));
     return It;
   }
 

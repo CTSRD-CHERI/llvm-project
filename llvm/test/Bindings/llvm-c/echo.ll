@@ -6,6 +6,8 @@ source_filename = "/test/Bindings/echo.ll"
 target datalayout = "e-m:o-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-apple-macosx10.11.0"
 
+module asm "classical GAS"
+
 %S = type { i64, %S* }
 
 @var = global i32 42
@@ -121,4 +123,39 @@ do:
   br label %cond
 done:
   ret i32 %p
+}
+
+declare void @personalityFn()
+
+define void @exn() personality void ()* @personalityFn {
+entry:
+  invoke void @decl()
+          to label %via.cleanup unwind label %exn.dispatch
+via.cleanup:
+  invoke void @decl()
+          to label %via.catchswitch unwind label %cleanup.inner
+cleanup.inner:
+  %cp.inner = cleanuppad within none []
+  cleanupret from %cp.inner unwind label %exn.dispatch
+via.catchswitch:
+  invoke void @decl()
+          to label %exit unwind label %dispatch.inner
+dispatch.inner:
+  %cs.inner = catchswitch within none [label %pad.inner] unwind label %exn.dispatch
+pad.inner:
+  %catch.inner = catchpad within %cs.inner [i32 0]
+  catchret from %catch.inner to label %exit
+exn.dispatch:
+  %cs = catchswitch within none [label %pad1, label %pad2] unwind label %cleanup
+pad1:
+  catchpad within %cs [i32 1]
+  unreachable
+pad2:
+  catchpad within %cs [i32 2]
+  unreachable
+cleanup:
+  %cp = cleanuppad within none []
+  cleanupret from %cp unwind to caller
+exit:
+  ret void
 }

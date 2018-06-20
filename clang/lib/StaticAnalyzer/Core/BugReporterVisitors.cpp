@@ -75,6 +75,17 @@ bool bugreporter::isDeclRefExprToReference(const Expr *E) {
   return false;
 }
 
+static const Expr *peelOffPointerArithmetic(const BinaryOperator *B) {
+  if (B->isAdditiveOp() && B->getType()->isPointerType()) {
+    if (B->getLHS()->getType()->isPointerType()) {
+      return B->getLHS();
+    } else if (B->getRHS()->getType()->isPointerType()) {
+      return B->getRHS();
+    }
+  }
+  return nullptr;
+}
+
 /// Given that expression S represents a pointer that would be dereferenced,
 /// try to find a sub-expression from which the pointer came from.
 /// This is used for tracking down origins of a null or undefined value:
@@ -101,14 +112,8 @@ const Expr *bugreporter::getDerefExpr(const Stmt *S) {
       E = CE->getSubExpr();
     } else if (const auto *B = dyn_cast<BinaryOperator>(E)) {
       // Pointer arithmetic: '*(x + 2)' -> 'x') etc.
-      if (B->getType()->isPointerType()) {
-        if (B->getLHS()->getType()->isPointerType()) {
-          E = B->getLHS();
-        } else if (B->getRHS()->getType()->isPointerType()) {
-          E = B->getRHS();
-        } else {
-          break;
-        }
+      if (const Expr *Inner = peelOffPointerArithmetic(B)) {
+        E = Inner;
       } else {
         // Probably more arithmetic can be pattern-matched here,
         // but for now give up.
@@ -909,11 +914,8 @@ static bool isInitializationOfVar(const ExplodedNode *N, const VarRegion *VR) {
 }
 
 /// Show diagnostics for initializing or declaring a region \p R with a bad value.
-void showBRDiagnostics(const char *action,
-    llvm::raw_svector_ostream& os,
-    const MemRegion *R,
-    SVal V,
-    const DeclStmt *DS) {
+static void showBRDiagnostics(const char *action, llvm::raw_svector_ostream &os,
+                              const MemRegion *R, SVal V, const DeclStmt *DS) {
   if (R->canPrintPretty()) {
     R->printPretty(os);
     os << " ";
@@ -1412,6 +1414,11 @@ static const Expr *peelOffOuterExpr(const Expr *Ex,
       NI = NI->getFirstPred();
     } while (NI);
   }
+
+  if (auto *BO = dyn_cast<BinaryOperator>(Ex))
+    if (const Expr *SubEx = peelOffPointerArithmetic(BO))
+      return peelOffOuterExpr(SubEx, N);
+
   return Ex;
 }
 
@@ -2325,4 +2332,25 @@ CXXSelfAssignmentBRVisitor::VisitNode(const ExplodedNode *Succ,
   Piece->addRange(Met->getSourceRange());
 
   return std::move(Piece);
+}
+
+std::shared_ptr<PathDiagnosticPiece>
+TaintBugVisitor::VisitNode(const ExplodedNode *N, const ExplodedNode *PrevN,
+                           BugReporterContext &BRC, BugReport &BR) {
+
+  // Find the ExplodedNode where the taint was first introduced
+  if (!N->getState()->isTainted(V) || PrevN->getState()->isTainted(V))
+    return nullptr;
+
+  const Stmt *S = PathDiagnosticLocation::getStmt(N);
+  if (!S)
+    return nullptr;
+
+  const LocationContext *NCtx = N->getLocationContext();
+  PathDiagnosticLocation L =
+      PathDiagnosticLocation::createBegin(S, BRC.getSourceManager(), NCtx);
+  if (!L.isValid() || !L.asLocation().isValid())
+    return nullptr;
+
+  return std::make_shared<PathDiagnosticEventPiece>(L, "Taint originated here");
 }

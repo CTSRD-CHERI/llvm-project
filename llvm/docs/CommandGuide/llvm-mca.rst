@@ -25,6 +25,44 @@ Given an assembly code sequence, llvm-mca estimates the IPC (Instructions Per
 Cycle), as well as hardware resource pressure. The analysis and reporting style
 were inspired by the IACA tool from Intel.
 
+:program:`llvm-mca` allows the usage of special code comments to mark regions of
+the assembly code to be analyzed.  A comment starting with substring
+``LLVM-MCA-BEGIN`` marks the beginning of a code region. A comment starting with
+substring ``LLVM-MCA-END`` marks the end of a code region.  For example:
+
+.. code-block:: none
+
+  # LLVM-MCA-BEGIN My Code Region
+    ...
+  # LLVM-MCA-END
+
+Multiple regions can be specified provided that they do not overlap.  A code
+region can have an optional description. If no user-defined region is specified,
+then :program:`llvm-mca` assumes a default region which contains every
+instruction in the input file.  Every region is analyzed in isolation, and the
+final performance report is the union of all the reports generated for every
+code region.
+
+Inline assembly directives may be used from source code to annotate the 
+assembly text:
+
+.. code-block:: c++
+
+  int foo(int a, int b) {
+    __asm volatile("# LLVM-MCA-BEGIN foo");
+    a += 42;
+    __asm volatile("# LLVM-MCA-END");
+    a *= b;
+    return a;
+  }
+
+So for example, you can compile code with clang, output assembly, and pipe it
+directly into llvm-mca for analysis:
+
+.. code-block:: bash
+
+  $ clang foo.c -O2 -target x86_64-unknown-unknown -S -o - | llvm-mca -mcpu=btver2
+
 OPTIONS
 -------
 
@@ -65,25 +103,19 @@ option specifies "``-``", then the output will also be sent to standard output.
 .. option:: -dispatch=<width>
 
  Specify a different dispatch width for the processor. The dispatch width
- defaults to the 'IssueWidth' specified by the processor scheduling model.
- If width is zero, then the default dispatch width is used.
-
-.. option:: -max-retire-per-cycle=<retire throughput>
-
- Specify the retire throughput (i.e. how many instructions can be retired by the
- retire control unit every cycle).
+ defaults to field 'IssueWidth' in the processor scheduling model.  If width is
+ zero, then the default dispatch width is used.
 
 .. option:: -register-file-size=<size>
 
- Specify the size of the register file. When specified, this flag limits
- how many temporary registers are available for register renaming purposes. By
- default, the number of temporary registers is unlimited. A value of zero for
- this flag means "unlimited number of temporary registers".
+ Specify the size of the register file. When specified, this flag limits how
+ many temporary registers are available for register renaming purposes. A value
+ of zero for this flag means "unlimited number of temporary registers".
 
 .. option:: -iterations=<number of iterations>
 
  Specify the number of iterations to run. If this flag is set to 0, then the
- tool sets the number of iterations to a default value (i.e. 70).
+ tool sets the number of iterations to a default value (i.e. 100).
 
 .. option:: -noalias=<bool>
 
@@ -104,12 +136,6 @@ option specifies "``-``", then the output will also be sent to standard output.
   queue. A value of zero for this flag is ignored, and the default store queue
   size is used instead.
 
-.. option:: -verbose
-
-  Enable verbose output. In particular, this flag enables a number of extra
-  statistics and performance counters for the dispatch logic, the reorder
-  buffer, the retire control unit and the register file.
-
 .. option:: -timeline
 
   Enable the timeline view.
@@ -123,6 +149,41 @@ option specifies "``-``", then the output will also be sent to standard output.
 
   Limit the number of cycles in the timeline view. By default, the number of
   cycles is set to 80.
+
+.. option:: -resource-pressure
+
+  Enable the resource pressure view. This is enabled by default.
+
+.. option:: -register-file-stats
+
+  Enable register file usage statistics.
+
+.. option:: -dispatch-stats
+
+  Enable extra dispatch statistics. This view collects and analyzes instruction
+  dispatch events, as well as static/dynamic dispatch stall events. This view
+  is disabled by default.
+
+.. option:: -scheduler-stats
+
+  Enable extra scheduler statistics. This view collects and analyzes instruction
+  issue events. This view is disabled by default.
+
+.. option:: -retire-stats
+
+  Enable extra retire control unit statistics. This view is disabled by default.
+
+.. option:: -instruction-info
+
+  Enable the instruction info view. This is enabled by default.
+
+.. option:: -instruction-tables
+
+  Prints resource pressure information based on the static information
+  available from the processor model. This differs from the resource pressure
+  view because it doesn't require that the code is simulated. It instead prints
+  the theoretical uniform distribution of resource pressure for every
+  instruction in sequence.
 
 
 EXIT STATUS

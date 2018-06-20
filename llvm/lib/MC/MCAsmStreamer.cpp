@@ -219,6 +219,10 @@ public:
                                                MD5::MD5Result *Checksum = 0,
                                                Optional<StringRef> Source = None,
                                                unsigned CUID = 0) override;
+  void emitDwarfFile0Directive(StringRef Directory, StringRef Filename,
+                               MD5::MD5Result *Checksum,
+                               Optional<StringRef> Source,
+                               unsigned CUID = 0) override;
   void EmitDwarfLocDirective(unsigned FileNo, unsigned Line,
                              unsigned Column, unsigned Flags,
                              unsigned Isa, unsigned Discriminator,
@@ -532,8 +536,9 @@ void MCAsmStreamer::EmitThumbFunc(MCSymbol *Func) {
 }
 
 void MCAsmStreamer::EmitAssignment(MCSymbol *Symbol, const MCExpr *Value) {
+  OS << ".set ";
   Symbol->print(OS, MAI);
-  OS << " = ";
+  OS << ", ";
   Value->print(OS, MAI);
 
   EmitEOL();
@@ -1076,21 +1081,12 @@ void MCAsmStreamer::EmitFileDirective(StringRef Filename) {
   EmitEOL();
 }
 
-Expected<unsigned> MCAsmStreamer::tryEmitDwarfFileDirective(
-    unsigned FileNo, StringRef Directory, StringRef Filename,
-    MD5::MD5Result *Checksum, Optional<StringRef> Source, unsigned CUID) {
-  assert(CUID == 0);
-
-  MCDwarfLineTable &Table = getContext().getMCDwarfLineTable(CUID);
-  unsigned NumFiles = Table.getMCDwarfFiles().size();
-  Expected<unsigned> FileNoOrErr =
-      Table.tryGetFile(Directory, Filename, Checksum, Source, FileNo);
-  if (!FileNoOrErr)
-    return FileNoOrErr.takeError();
-  FileNo = FileNoOrErr.get();
-  if (NumFiles == Table.getMCDwarfFiles().size())
-    return FileNo;
-
+static void printDwarfFileDirective(unsigned FileNo, StringRef Directory,
+                                    StringRef Filename,
+                                    MD5::MD5Result *Checksum,
+                                    Optional<StringRef> Source,
+                                    bool UseDwarfDirectory,
+                                    raw_svector_ostream &OS) {
   SmallString<128> FullPathName;
 
   if (!UseDwarfDirectory && !Directory.empty()) {
@@ -1104,29 +1100,67 @@ Expected<unsigned> MCAsmStreamer::tryEmitDwarfFileDirective(
     }
   }
 
+  OS << "\t.file\t" << FileNo << ' ';
+  if (!Directory.empty()) {
+    PrintQuotedString(Directory, OS);
+    OS << ' ';
+  }
+  PrintQuotedString(Filename, OS);
+  if (Checksum)
+    OS << " md5 0x" << Checksum->digest();
+  if (Source) {
+    OS << " source ";
+    PrintQuotedString(*Source, OS);
+  }
+}
+
+Expected<unsigned> MCAsmStreamer::tryEmitDwarfFileDirective(
+    unsigned FileNo, StringRef Directory, StringRef Filename,
+    MD5::MD5Result *Checksum, Optional<StringRef> Source, unsigned CUID) {
+  assert(CUID == 0 && "multiple CUs not supported by MCAsmStreamer");
+
+  MCDwarfLineTable &Table = getContext().getMCDwarfLineTable(CUID);
+  unsigned NumFiles = Table.getMCDwarfFiles().size();
+  Expected<unsigned> FileNoOrErr =
+      Table.tryGetFile(Directory, Filename, Checksum, Source, FileNo);
+  if (!FileNoOrErr)
+    return FileNoOrErr.takeError();
+  FileNo = FileNoOrErr.get();
+  if (NumFiles == Table.getMCDwarfFiles().size())
+    return FileNo;
+
   SmallString<128> Str;
   raw_svector_ostream OS1(Str);
-  OS1 << "\t.file\t" << FileNo << ' ';
-  if (!Directory.empty()) {
-    PrintQuotedString(Directory, OS1);
-    OS1 << ' ';
-  }
-  PrintQuotedString(Filename, OS1);
-  if (Checksum) {
-    OS1 << " md5 ";
-    PrintQuotedString(Checksum->digest(), OS1);
-  }
-  if (Source) {
-    OS1 << " source ";
-    PrintQuotedString(*Source, OS1);
-  }
-  if (MCTargetStreamer *TS = getTargetStreamer()) {
+  printDwarfFileDirective(FileNo, Directory, Filename, Checksum, Source,
+                          UseDwarfDirectory, OS1);
+
+  if (MCTargetStreamer *TS = getTargetStreamer())
     TS->emitDwarfFileDirective(OS1.str());
-  } else {
+  else
     EmitRawText(OS1.str());
-  }
 
   return FileNo;
+}
+
+void MCAsmStreamer::emitDwarfFile0Directive(StringRef Directory,
+                                            StringRef Filename,
+                                            MD5::MD5Result *Checksum,
+                                            Optional<StringRef> Source,
+                                            unsigned CUID) {
+  assert(CUID == 0);
+  // .file 0 is new for DWARF v5.
+  if (getContext().getDwarfVersion() < 5)
+    return;
+
+  SmallString<128> Str;
+  raw_svector_ostream OS1(Str);
+  printDwarfFileDirective(0, Directory, Filename, Checksum, Source,
+                          UseDwarfDirectory, OS1);
+
+  if (MCTargetStreamer *TS = getTargetStreamer())
+    TS->emitDwarfFileDirective(OS1.str());
+  else
+    EmitRawText(OS1.str());
 }
 
 void MCAsmStreamer::EmitDwarfLocDirective(unsigned FileNo, unsigned Line,
@@ -1135,27 +1169,29 @@ void MCAsmStreamer::EmitDwarfLocDirective(unsigned FileNo, unsigned Line,
                                           unsigned Discriminator,
                                           StringRef FileName) {
   OS << "\t.loc\t" << FileNo << " " << Line << " " << Column;
-  if (Flags & DWARF2_FLAG_BASIC_BLOCK)
-    OS << " basic_block";
-  if (Flags & DWARF2_FLAG_PROLOGUE_END)
-    OS << " prologue_end";
-  if (Flags & DWARF2_FLAG_EPILOGUE_BEGIN)
-    OS << " epilogue_begin";
+  if (MAI->supportsExtendedDwarfLocDirective()) {
+    if (Flags & DWARF2_FLAG_BASIC_BLOCK)
+      OS << " basic_block";
+    if (Flags & DWARF2_FLAG_PROLOGUE_END)
+      OS << " prologue_end";
+    if (Flags & DWARF2_FLAG_EPILOGUE_BEGIN)
+      OS << " epilogue_begin";
 
-  unsigned OldFlags = getContext().getCurrentDwarfLoc().getFlags();
-  if ((Flags & DWARF2_FLAG_IS_STMT) != (OldFlags & DWARF2_FLAG_IS_STMT)) {
-    OS << " is_stmt ";
+    unsigned OldFlags = getContext().getCurrentDwarfLoc().getFlags();
+    if ((Flags & DWARF2_FLAG_IS_STMT) != (OldFlags & DWARF2_FLAG_IS_STMT)) {
+      OS << " is_stmt ";
 
-    if (Flags & DWARF2_FLAG_IS_STMT)
-      OS << "1";
-    else
-      OS << "0";
+      if (Flags & DWARF2_FLAG_IS_STMT)
+        OS << "1";
+      else
+        OS << "0";
+    }
+
+    if (Isa)
+      OS << " isa " << Isa;
+    if (Discriminator)
+      OS << " discriminator " << Discriminator;
   }
-
-  if (Isa)
-    OS << " isa " << Isa;
-  if (Discriminator)
-    OS << " discriminator " << Discriminator;
 
   if (IsVerboseAsm) {
     OS.PadToColumn(MAI->getCommentColumn());

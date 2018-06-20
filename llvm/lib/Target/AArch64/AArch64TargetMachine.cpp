@@ -244,6 +244,9 @@ AArch64TargetMachine::AArch64TargetMachine(const Target &T, const Triple &TT,
       TLOF(createTLOF(getTargetTriple())), isLittle(LittleEndian) {
   initAsmInfo();
 
+  if (TT.isOSBinFormatMachO())
+    this->Options.TrapUnreachable = true;
+
   // Enable GlobalISel at or below EnableGlobalISelAt0.
   if (getOptLevel() <= EnableGlobalISelAtO)
     setGlobalISel(true);
@@ -389,7 +392,7 @@ void AArch64PassConfig::addIRPasses() {
     // Call SeparateConstOffsetFromGEP pass to extract constants within indices
     // and lower a GEP with multiple indices to either arithmetic operations or
     // multiple GEPs with single index.
-    addPass(createSeparateConstOffsetFromGEPPass(TM, true));
+    addPass(createSeparateConstOffsetFromGEPPass(true));
     // Call EarlyCSE pass to find and remove subexpressions in the lowered
     // result.
     addPass(createEarlyCSEPass());

@@ -1231,23 +1231,27 @@ void ExprEngine::VisitCXXBindTemporaryExpr(const CXXBindTemporaryExpr *BTE,
   }
 }
 
-namespace {
+ProgramStateRef ExprEngine::escapeValue(ProgramStateRef State, SVal V,
+                                        PointerEscapeKind K) const {
+  class CollectReachableSymbolsCallback final : public SymbolVisitor {
+    InvalidatedSymbols Symbols;
 
-class CollectReachableSymbolsCallback final : public SymbolVisitor {
-  InvalidatedSymbols Symbols;
+  public:
+    explicit CollectReachableSymbolsCallback(ProgramStateRef State) {}
 
-public:
-  explicit CollectReachableSymbolsCallback(ProgramStateRef State) {}
+    const InvalidatedSymbols &getSymbols() const { return Symbols; }
 
-  const InvalidatedSymbols &getSymbols() const { return Symbols; }
+    bool VisitSymbol(SymbolRef Sym) override {
+      Symbols.insert(Sym);
+      return true;
+    }
+  };
 
-  bool VisitSymbol(SymbolRef Sym) override {
-    Symbols.insert(Sym);
-    return true;
-  }
-};
-
-} // namespace
+  const CollectReachableSymbolsCallback &Scanner =
+      State->scanReachableSymbols<CollectReachableSymbolsCallback>(V);
+  return getCheckerManager().runCheckersForPointerEscape(
+      State, Scanner.getSymbols(), /*CallEvent*/ nullptr, K, nullptr);
+}
 
 void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
                        ExplodedNodeSet &DstTop) {
@@ -1529,17 +1533,8 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
                                       ->getType()->isRecordType()))
           for (auto Child : Ex->children()) {
             assert(Child);
-
             SVal Val = State->getSVal(Child, LCtx);
-
-            CollectReachableSymbolsCallback Scanner =
-                State->scanReachableSymbols<CollectReachableSymbolsCallback>(
-                    Val);
-            const InvalidatedSymbols &EscapedSymbols = Scanner.getSymbols();
-
-            State = getCheckerManager().runCheckersForPointerEscape(
-                State, EscapedSymbols,
-                /*CallEvent*/ nullptr, PSK_EscapeOther, nullptr);
+            State = escapeValue(State, Val, PSK_EscapeOther);
           }
 
         Bldr2.generateNode(S, N, State);
@@ -2482,7 +2477,7 @@ void ExprEngine::VisitCommonDeclRefExpr(const Expr *Ex, const NamedDecl *D,
     assert(Ex->isGLValue() || VD->getType()->isVoidType());
     const LocationContext *LocCtxt = Pred->getLocationContext();
     const Decl *D = LocCtxt->getDecl();
-    const auto *MD = D ? dyn_cast<CXXMethodDecl>(D) : nullptr;
+    const auto *MD = dyn_cast_or_null<CXXMethodDecl>(D);
     const auto *DeclRefEx = dyn_cast<DeclRefExpr>(Ex);
     Optional<std::pair<SVal, QualType>> VInfo;
 
@@ -2759,15 +2754,7 @@ ProgramStateRef ExprEngine::processPointerEscapedOnBind(ProgramStateRef State,
 
   // Otherwise, find all symbols referenced by 'val' that we are tracking
   // and stop tracking them.
-  CollectReachableSymbolsCallback Scanner =
-      State->scanReachableSymbols<CollectReachableSymbolsCallback>(Val);
-  const InvalidatedSymbols &EscapedSymbols = Scanner.getSymbols();
-  State = getCheckerManager().runCheckersForPointerEscape(State,
-                                                          EscapedSymbols,
-                                                          /*CallEvent*/ nullptr,
-                                                          PSK_EscapeOnBind,
-                                                          nullptr);
-
+  State = escapeValue(State, Val, PSK_EscapeOnBind);
   return State;
 }
 

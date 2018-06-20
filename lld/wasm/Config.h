@@ -21,8 +21,10 @@ struct Configuration {
   bool AllowUndefined;
   bool CheckSignatures;
   bool Demangle;
+  bool ExportTable;
   bool GcSections;
   bool ImportMemory;
+  bool ImportTable;
   bool PrintGcSections;
   bool Relocatable;
   bool StripAll;

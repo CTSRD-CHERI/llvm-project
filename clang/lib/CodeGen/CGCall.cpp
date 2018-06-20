@@ -513,8 +513,8 @@ CodeGenTypes::arrangeGlobalDeclaration(GlobalDecl GD) {
 /// correct type, and the caller will bitcast the function to the correct
 /// prototype.
 const CGFunctionInfo &
-CodeGenTypes::arrangeMSMemberPointerThunk(const CXXMethodDecl *MD) {
-  assert(MD->isVirtual() && "only virtual memptrs have thunks");
+CodeGenTypes::arrangeUnprototypedMustTailThunk(const CXXMethodDecl *MD) {
+  assert(MD->isVirtual() && "only methods have thunks");
   CanQual<FunctionProtoType> FTP = GetFormalType(MD);
   CanQualType ArgTys[] = { GetThisType(Context, MD->getParent()) };
   return arrangeLLVMFunctionInfo(Context.VoidTy, /*instanceMethod=*/false,
@@ -905,8 +905,7 @@ getTypeExpansion(QualType Ty, const ASTContext &Context) {
       CharUnits UnionSize = CharUnits::Zero();
 
       for (const auto *FD : RD->fields()) {
-        // Skip zero length bitfields.
-        if (FD->isBitField() && FD->getBitWidthValue(Context) == 0)
+        if (FD->isZeroLengthBitField(Context))
           continue;
         assert(!FD->isBitField() &&
                "Cannot expand structure with bit-field members.");
@@ -927,8 +926,7 @@ getTypeExpansion(QualType Ty, const ASTContext &Context) {
       }
 
       for (const auto *FD : RD->fields()) {
-        // Skip zero length bitfields.
-        if (FD->isBitField() && FD->getBitWidthValue(Context) == 0)
+        if (FD->isZeroLengthBitField(Context))
           continue;
         assert(!FD->isBitField() &&
                "Cannot expand structure with bit-field members.");
@@ -1746,6 +1744,10 @@ void CodeGenModule::ConstructDefaultFnAttrList(StringRef Name, bool HasOptnone,
     FuncAttrs.addAttribute(
         "correctly-rounded-divide-sqrt-fp-math",
         llvm::toStringRef(CodeGenOpts.CorrectlyRoundedDivSqrt));
+
+    if (getLangOpts().OpenCL)
+      FuncAttrs.addAttribute("denorms-are-zero",
+                             llvm::toStringRef(CodeGenOpts.FlushDenorm));
 
     // TODO: Reciprocal estimate codegen options should apply to instructions?
     const std::vector<std::string> &Recips = CodeGenOpts.Reciprocals;
@@ -3020,7 +3022,8 @@ static AggValueSlot createPlaceholderSlot(CodeGenFunction &CGF,
                                Ty.getQualifiers(),
                                AggValueSlot::IsNotDestructed,
                                AggValueSlot::DoesNotNeedGCBarriers,
-                               AggValueSlot::IsNotAliased);
+                               AggValueSlot::IsNotAliased,
+                               AggValueSlot::DoesNotOverlap);
 }
 
 void CodeGenFunction::EmitDelegateCallArg(CallArgList &args,
@@ -3488,7 +3491,8 @@ RValue CallArg::getRValue(CodeGenFunction &CGF) const {
   if (!HasLV)
     return RV;
   LValue Copy = CGF.MakeAddrLValue(CGF.CreateMemTemp(Ty), Ty);
-  CGF.EmitAggregateCopy(Copy, LV, Ty, LV.isVolatile());
+  CGF.EmitAggregateCopy(Copy, LV, Ty, AggValueSlot::DoesNotOverlap,
+                        LV.isVolatile());
   IsUsed = true;
   return RValue::getAggregate(Copy.getAddress());
 }
@@ -3502,7 +3506,8 @@ void CallArg::copyInto(CodeGenFunction &CGF, Address Addr) const {
   else {
     auto Addr = HasLV ? LV.getAddress() : RV.getAggregateAddress();
     LValue SrcLV = CGF.MakeAddrLValue(Addr, Ty);
-    CGF.EmitAggregateCopy(Dst, SrcLV, Ty,
+    // We assume that call args are never copied into subobjects.
+    CGF.EmitAggregateCopy(Dst, SrcLV, Ty, AggValueSlot::DoesNotOverlap,
                           HasLV ? LV.isVolatileQualified()
                                 : RV.isVolatileQualified());
   }
@@ -3541,14 +3546,10 @@ void CodeGenFunction::EmitCallArg(CallArgList &args, const Expr *E,
       Slot = CreateAggTemp(type, "agg.tmp");
 
     bool DestroyedInCallee = true, NeedsEHCleanup = true;
-    if (const auto *RD = type->getAsCXXRecordDecl()) {
-      DestroyedInCallee =
-          RD && RD->hasNonTrivialDestructor() &&
-          (CGM.getCXXABI().getRecordArgABI(RD) != CGCXXABI::RAA_Default ||
-           RD->hasTrivialABIOverride());
-    } else {
+    if (const auto *RD = type->getAsCXXRecordDecl())
+      DestroyedInCallee = RD->hasNonTrivialDestructor();
+    else
       NeedsEHCleanup = needsEHCleanup(type.isDestructedType());
-    }
 
     if (DestroyedInCallee)
       Slot.setExternallyDestructed();

@@ -121,14 +121,8 @@ private:
 
 class CVDebugRecordChunk : public Chunk {
 public:
-  CVDebugRecordChunk() {
-    PDBAbsPath = Config->PDBPath;
-    if (!PDBAbsPath.empty())
-      llvm::sys::fs::make_absolute(PDBAbsPath);
-  }
-
   size_t getSize() const override {
-    return sizeof(codeview::DebugInfo) + PDBAbsPath.size() + 1;
+    return sizeof(codeview::DebugInfo) + Config->PDBAltPath.size() + 1;
   }
 
   void writeTo(uint8_t *B) const override {
@@ -138,12 +132,11 @@ public:
 
     // variable sized field (PDB Path)
     char *P = reinterpret_cast<char *>(B + OutputSectionOff + sizeof(*BuildId));
-    if (!PDBAbsPath.empty())
-      memcpy(P, PDBAbsPath.data(), PDBAbsPath.size());
-    P[PDBAbsPath.size()] = '\0';
+    if (!Config->PDBAltPath.empty())
+      memcpy(P, Config->PDBAltPath.data(), Config->PDBAltPath.size());
+    P[Config->PDBAltPath.size()] = '\0';
   }
 
-  SmallString<128> PDBAbsPath;
   mutable codeview::DebugInfo *BuildId = nullptr;
 };
 
@@ -158,19 +151,19 @@ private:
   void createMiscChunks();
   void createImportTables();
   void createExportTable();
+  void mergeSections();
   void assignAddresses();
   void removeEmptySections();
   void createSymbolAndStringTable();
   void openFile(StringRef OutputPath);
   template <typename PEHeaderTy> void writeHeader();
-  void createSEHTable(OutputSection *RData);
-  void createGuardCFTables(OutputSection *RData);
-  void createGLJmpTable(OutputSection *RData);
+  void createSEHTable();
+  void createGuardCFTables();
   void markSymbolsForRVATable(ObjFile *File,
                               ArrayRef<SectionChunk *> SymIdxChunks,
                               SymbolRVASet &TableSymbols);
-  void maybeAddRVATable(OutputSection *RData, SymbolRVASet TableSymbols,
-                        StringRef TableSym, StringRef CountSym);
+  void maybeAddRVATable(SymbolRVASet TableSymbols, StringRef TableSym,
+                        StringRef CountSym);
   void setSectionPermissions();
   void writeSections();
   void writeBuildId();
@@ -180,9 +173,8 @@ private:
   size_t addEntryToStringTable(StringRef Str);
 
   OutputSection *findSection(StringRef Name);
-  OutputSection *createSection(StringRef Name);
-  void addBaserels(OutputSection *Dest);
-  void addBaserelBlocks(OutputSection *Dest, std::vector<Baserel> &V);
+  void addBaserels();
+  void addBaserelBlocks(std::vector<Baserel> &V);
 
   uint32_t getSizeOfInitializedData();
   std::map<StringRef, std::vector<DefinedImportData *>> binImports();
@@ -194,8 +186,7 @@ private:
   IdataContents Idata;
   DelayLoadContents DelayIdata;
   EdataContents Edata;
-  RVATableChunk *GuardFidsTable = nullptr;
-  RVATableChunk *SEHTable = nullptr;
+  bool SetNoSEHCharacteristic = false;
 
   DebugDirectoryChunk *DebugDirectory = nullptr;
   std::vector<Chunk *> DebugRecords;
@@ -207,6 +198,28 @@ private:
   uint32_t PointerToSymbolTable = 0;
   uint64_t SizeOfImage;
   uint64_t SizeOfHeaders;
+
+  OutputSection *TextSec;
+  OutputSection *RdataSec;
+  OutputSection *DataSec;
+  OutputSection *PdataSec;
+  OutputSection *IdataSec;
+  OutputSection *EdataSec;
+  OutputSection *DidatSec;
+  OutputSection *RsrcSec;
+  OutputSection *RelocSec;
+
+  // The first and last .pdata sections in the output file.
+  //
+  // We need to keep track of the location of .pdata in whichever section it
+  // gets merged into so that we can sort its contents and emit a correct data
+  // directory entry for the exception table. This is also the case for some
+  // other sections (such as .edata) but because the contents of those sections
+  // are entirely linker-generated we can keep track of their locations using
+  // the chunks that the linker creates. All .pdata chunks come from input
+  // files, so we need to keep track of them separately.
+  Chunk *FirstPdata = nullptr;
+  Chunk *LastPdata;
 };
 } // anonymous namespace
 
@@ -223,12 +236,16 @@ void OutputSection::addChunk(Chunk *C) {
   C->setOutputSection(this);
 }
 
-void OutputSection::addPermissions(uint32_t C) {
-  Header.Characteristics |= C & PermMask;
+void OutputSection::setPermissions(uint32_t C) {
+  Header.Characteristics &= ~PermMask;
+  Header.Characteristics |= C;
 }
 
-void OutputSection::setPermissions(uint32_t C) {
-  Header.Characteristics = C & PermMask;
+void OutputSection::merge(OutputSection *Other) {
+  for (Chunk *C : Other->Chunks)
+    C->setOutputSection(this);
+  Chunks.insert(Chunks.end(), Other->Chunks.begin(), Other->Chunks.end());
+  Other->Chunks.clear();
 }
 
 // Write the section header to a given buffer.
@@ -318,8 +335,7 @@ void Writer::run() {
   createMiscChunks();
   createImportTables();
   createExportTable();
-  if (Config->Relocatable)
-    createSection(".reloc");
+  mergeSections();
   assignAddresses();
   removeEmptySections();
   setSectionPermissions();
@@ -356,17 +372,12 @@ void Writer::run() {
     fatal("failed to write the output file: " + toString(std::move(E)));
 }
 
-static StringRef getOutputSection(StringRef Name) {
+static StringRef getOutputSectionName(StringRef Name) {
   StringRef S = Name.split('$').first;
 
   // Treat a later period as a separator for MinGW, for sections like
   // ".ctors.01234".
-  S = S.substr(0, S.find('.', 1));
-
-  auto It = Config->Merge.find(S);
-  if (It == Config->Merge.end())
-    return S;
-  return It->second;
+  return S.substr(0, S.find('.', 1));
 }
 
 // For /order.
@@ -386,8 +397,39 @@ static void sortBySectionOrder(std::vector<Chunk *> &Chunks) {
 
 // Create output section objects and add them to OutputSections.
 void Writer::createSections() {
-  // First, bin chunks by name.
-  std::map<StringRef, std::vector<Chunk *>> Map;
+  // First, create the builtin sections.
+  const uint32_t DATA = IMAGE_SCN_CNT_INITIALIZED_DATA;
+  const uint32_t BSS = IMAGE_SCN_CNT_UNINITIALIZED_DATA;
+  const uint32_t CODE = IMAGE_SCN_CNT_CODE;
+  const uint32_t DISCARDABLE = IMAGE_SCN_MEM_DISCARDABLE;
+  const uint32_t R = IMAGE_SCN_MEM_READ;
+  const uint32_t W = IMAGE_SCN_MEM_WRITE;
+  const uint32_t X = IMAGE_SCN_MEM_EXECUTE;
+
+  SmallDenseMap<std::pair<StringRef, uint32_t>, OutputSection *> Sections;
+  auto CreateSection = [&](StringRef Name, uint32_t OutChars) {
+    OutputSection *&Sec = Sections[{Name, OutChars}];
+    if (!Sec) {
+      Sec = make<OutputSection>(Name, OutChars);
+      OutputSections.push_back(Sec);
+    }
+    return Sec;
+  };
+
+  // Try to match the section order used by link.exe.
+  TextSec = CreateSection(".text", CODE | R | X);
+  CreateSection(".bss", BSS | R | W);
+  RdataSec = CreateSection(".rdata", DATA | R);
+  DataSec = CreateSection(".data", DATA | R | W);
+  PdataSec = CreateSection(".pdata", DATA | R);
+  IdataSec = CreateSection(".idata", DATA | R);
+  EdataSec = CreateSection(".edata", DATA | R);
+  DidatSec = CreateSection(".didat", DATA | R);
+  RsrcSec = CreateSection(".rsrc", DATA | R);
+  RelocSec = CreateSection(".reloc", DATA | DISCARDABLE | R);
+
+  // Then bin chunks by name and output characteristics.
+  std::map<std::pair<StringRef, uint32_t>, std::vector<Chunk *>> Map;
   for (Chunk *C : Symtab->getChunks()) {
     auto *SC = dyn_cast<SectionChunk>(C);
     if (SC && !SC->isLive()) {
@@ -395,7 +437,7 @@ void Writer::createSections() {
         SC->printDiscardedMessage();
       continue;
     }
-    Map[C->getSectionName()].push_back(C);
+    Map[{C->getSectionName(), C->getOutputCharacteristics()}].push_back(C);
   }
 
   // Process an /order option.
@@ -407,32 +449,54 @@ void Writer::createSections() {
   // '$' and all following characters in input section names are
   // discarded when determining output section. So, .text$foo
   // contributes to .text, for example. See PE/COFF spec 3.2.
-  SmallDenseMap<StringRef, OutputSection *> Sections;
   for (auto Pair : Map) {
-    StringRef Name = getOutputSection(Pair.first);
-    OutputSection *&Sec = Sections[Name];
-    if (!Sec) {
-      Sec = make<OutputSection>(Name);
-      OutputSections.push_back(Sec);
-    }
+    StringRef Name = getOutputSectionName(Pair.first.first);
+    uint32_t OutChars = Pair.first.second;
+
+    // In link.exe, there is a special case for the I386 target where .CRT
+    // sections are treated as if they have output characteristics DATA | R if
+    // their characteristics are DATA | R | W. This implements the same special
+    // case for all architectures.
+    if (Name == ".CRT")
+      OutChars = DATA | R;
+
+    OutputSection *Sec = CreateSection(Name, OutChars);
     std::vector<Chunk *> &Chunks = Pair.second;
-    for (Chunk *C : Chunks) {
+    for (Chunk *C : Chunks)
       Sec->addChunk(C);
-      Sec->addPermissions(C->getPermissions());
-    }
   }
+
+  // Finally, move some output sections to the end.
+  auto SectionOrder = [&](OutputSection *S) {
+    // .reloc should come last of all since it refers to RVAs of data in the
+    // previous sections.
+    if (S == RelocSec)
+      return 3;
+    // Move DISCARDABLE (or non-memory-mapped) sections to the end of file because
+    // the loader cannot handle holes.
+    if (S->Header.Characteristics & IMAGE_SCN_MEM_DISCARDABLE)
+      return 2;
+    // .rsrc should come at the end of the non-discardable sections because its
+    // size may change by the Win32 UpdateResources() function, causing
+    // subsequent sections to move (see https://crbug.com/827082).
+    if (S == RsrcSec)
+      return 1;
+    return 0;
+  };
+  std::stable_sort(OutputSections.begin(), OutputSections.end(),
+                   [&](OutputSection *S, OutputSection *T) {
+                     return SectionOrder(S) < SectionOrder(T);
+                   });
 }
 
 void Writer::createMiscChunks() {
-  OutputSection *RData = createSection(".rdata");
-
   for (auto &P : MergeChunk::Instances)
-    RData->addChunk(P.second);
+    RdataSec->addChunk(P.second);
 
   // Create thunks for locally-dllimported symbols.
   if (!Symtab->LocalImportChunks.empty()) {
     for (Chunk *C : Symtab->LocalImportChunks)
-      RData->addChunk(C);
+      RdataSec->addChunk(C);
   }
 
   // Create Debug Information Chunks
@@ -447,18 +511,18 @@ void Writer::createMiscChunks() {
     BuildId = CVChunk;
     DebugRecords.push_back(CVChunk);
 
-    RData->addChunk(DebugDirectory);
+    RdataSec->addChunk(DebugDirectory);
     for (Chunk *C : DebugRecords)
-      RData->addChunk(C);
+      RdataSec->addChunk(C);
   }
 
   // Create SEH table. x86-only.
   if (Config->Machine == I386)
-    createSEHTable(RData);
+    createSEHTable();
 
   // Create /guard:cf tables if requested.
   if (Config->GuardCF != GuardCFLevel::Off)
-    createGuardCFTables(RData);
+    createGuardCFTables();
 }
 
 // Create .idata section for the DLL-imported symbol table.
@@ -481,13 +545,12 @@ void Writer::createImportTables() {
       Config->DLLOrder[DLL] = Config->DLLOrder.size();
   }
 
-  OutputSection *Text = createSection(".text");
   for (ImportFile *File : ImportFile::Instances) {
     if (!File->Live)
       continue;
 
     if (DefinedImportThunk *Thunk = File->ThunkSym)
-      Text->addChunk(Thunk->getChunk());
+      TextSec->addChunk(Thunk->getChunk());
 
     if (Config->DelayLoads.count(StringRef(File->DLLName).lower())) {
       if (!File->ThunkSym)
@@ -499,33 +562,27 @@ void Writer::createImportTables() {
     }
   }
 
-  if (!Idata.empty()) {
-    OutputSection *Sec = createSection(".idata");
+  if (!Idata.empty())
     for (Chunk *C : Idata.getChunks())
-      Sec->addChunk(C);
-  }
+      IdataSec->addChunk(C);
 
   if (!DelayIdata.empty()) {
     Defined *Helper = cast<Defined>(Config->DelayLoadHelper);
     DelayIdata.create(Helper);
-    OutputSection *Sec = createSection(".didat");
     for (Chunk *C : DelayIdata.getChunks())
-      Sec->addChunk(C);
-    Sec = createSection(".data");
+      DidatSec->addChunk(C);
     for (Chunk *C : DelayIdata.getDataChunks())
-      Sec->addChunk(C);
-    Sec = createSection(".text");
+      DataSec->addChunk(C);
     for (Chunk *C : DelayIdata.getCodeChunks())
-      Sec->addChunk(C);
+      TextSec->addChunk(C);
   }
 }
 
 void Writer::createExportTable() {
   if (Config->Exports.empty())
     return;
-  OutputSection *Sec = createSection(".edata");
   for (Chunk *C : Edata.Chunks)
-    Sec->addChunk(C);
+    EdataSec->addChunk(C);
 }
 
 // The Windows loader doesn't seem to like empty sections,
@@ -614,7 +671,7 @@ void Writer::createSymbolAndStringTable() {
   for (OutputSection *Sec : OutputSections) {
     if (Sec->Name.size() <= COFF::NameSize)
       continue;
-    if ((Sec->getPermissions() & IMAGE_SCN_MEM_DISCARDABLE) == 0)
+    if ((Sec->Header.Characteristics & IMAGE_SCN_MEM_DISCARDABLE) == 0)
       continue;
     Sec->setStringTableOff(addEntryToStringTable(Sec->Name));
   }
@@ -644,6 +701,37 @@ void Writer::createSymbolAndStringTable() {
   FileSize = alignTo(FileOff, SectorSize);
 }
 
+void Writer::mergeSections() {
+  if (!PdataSec->getChunks().empty()) {
+    FirstPdata = PdataSec->getChunks().front();
+    LastPdata = PdataSec->getChunks().back();
+  }
+
+  for (auto &P : Config->Merge) {
+    StringRef ToName = P.second;
+    if (P.first == ToName)
+      continue;
+    StringSet<> Names;
+    while (1) {
+      if (!Names.insert(ToName).second)
+        fatal("/merge: cycle found for section '" + P.first + "'");
+      auto I = Config->Merge.find(ToName);
+      if (I == Config->Merge.end())
+        break;
+      ToName = I->second;
+    }
+    OutputSection *From = findSection(P.first);
+    OutputSection *To = findSection(ToName);
+    if (!From)
+      continue;
+    if (!To) {
+      From->Name = ToName;
+      continue;
+    }
+    To->merge(From);
+  }
+}
+
 // Visits all sections to assign incremental, non-overlapping RVAs and
 // file offsets.
 void Writer::assignAddresses() {
@@ -655,15 +743,10 @@ void Writer::assignAddresses() {
   SizeOfHeaders = alignTo(SizeOfHeaders, SectorSize);
   uint64_t RVA = PageSize; // The first page is kept unmapped.
   FileSize = SizeOfHeaders;
-  // Move DISCARDABLE (or non-memory-mapped) sections to the end of file because
-  // the loader cannot handle holes.
-  std::stable_partition(
-      OutputSections.begin(), OutputSections.end(), [](OutputSection *S) {
-        return (S->getPermissions() & IMAGE_SCN_MEM_DISCARDABLE) == 0;
-      });
+
   for (OutputSection *Sec : OutputSections) {
-    if (Sec->Name == ".reloc")
-      addBaserels(Sec);
+    if (Sec == RelocSec)
+      addBaserels();
     uint64_t RawSize = 0, VirtualSize = 0;
     Sec->Header.VirtualAddress = RVA;
     for (Chunk *C : Sec->getChunks()) {
@@ -780,24 +863,23 @@ template <typename PEHeaderTy> void Writer::writeHeader() {
     PE->DLLCharacteristics |= IMAGE_DLL_CHARACTERISTICS_NO_ISOLATION;
   if (Config->GuardCF != GuardCFLevel::Off)
     PE->DLLCharacteristics |= IMAGE_DLL_CHARACTERISTICS_GUARD_CF;
-  if (Config->Machine == I386 && !SEHTable &&
-      !Symtab->findUnderscore("_load_config_used"))
+  if (SetNoSEHCharacteristic)
     PE->DLLCharacteristics |= IMAGE_DLL_CHARACTERISTICS_NO_SEH;
   if (Config->TerminalServerAware)
     PE->DLLCharacteristics |= IMAGE_DLL_CHARACTERISTICS_TERMINAL_SERVER_AWARE;
   PE->NumberOfRvaAndSize = NumberfOfDataDirectory;
-  if (OutputSection *Text = findSection(".text")) {
-    PE->BaseOfCode = Text->getRVA();
-    PE->SizeOfCode = Text->getRawSize();
+  if (TextSec->getVirtualSize()) {
+    PE->BaseOfCode = TextSec->getRVA();
+    PE->SizeOfCode = TextSec->getRawSize();
   }
   PE->SizeOfInitializedData = getSizeOfInitializedData();
 
   // Write data directory
   auto *Dir = reinterpret_cast<data_directory *>(Buf);
   Buf += sizeof(*Dir) * NumberfOfDataDirectory;
-  if (OutputSection *Sec = findSection(".edata")) {
-    Dir[EXPORT_TABLE].RelativeVirtualAddress = Sec->getRVA();
-    Dir[EXPORT_TABLE].Size = Sec->getVirtualSize();
+  if (!Config->Exports.empty()) {
+    Dir[EXPORT_TABLE].RelativeVirtualAddress = Edata.getRVA();
+    Dir[EXPORT_TABLE].Size = Edata.getSize();
   }
   if (!Idata.empty()) {
     Dir[IMPORT_TABLE].RelativeVirtualAddress = Idata.getDirRVA();
@@ -805,17 +887,18 @@ template <typename PEHeaderTy> void Writer::writeHeader() {
     Dir[IAT].RelativeVirtualAddress = Idata.getIATRVA();
     Dir[IAT].Size = Idata.getIATSize();
   }
-  if (OutputSection *Sec = findSection(".rsrc")) {
-    Dir[RESOURCE_TABLE].RelativeVirtualAddress = Sec->getRVA();
-    Dir[RESOURCE_TABLE].Size = Sec->getVirtualSize();
+  if (RsrcSec->getVirtualSize()) {
+    Dir[RESOURCE_TABLE].RelativeVirtualAddress = RsrcSec->getRVA();
+    Dir[RESOURCE_TABLE].Size = RsrcSec->getVirtualSize();
   }
-  if (OutputSection *Sec = findSection(".pdata")) {
-    Dir[EXCEPTION_TABLE].RelativeVirtualAddress = Sec->getRVA();
-    Dir[EXCEPTION_TABLE].Size = Sec->getVirtualSize();
+  if (FirstPdata) {
+    Dir[EXCEPTION_TABLE].RelativeVirtualAddress = FirstPdata->getRVA();
+    Dir[EXCEPTION_TABLE].Size =
+        LastPdata->getRVA() + LastPdata->getSize() - FirstPdata->getRVA();
   }
-  if (OutputSection *Sec = findSection(".reloc")) {
-    Dir[BASE_RELOCATION_TABLE].RelativeVirtualAddress = Sec->getRVA();
-    Dir[BASE_RELOCATION_TABLE].Size = Sec->getVirtualSize();
+  if (RelocSec->getVirtualSize()) {
+    Dir[BASE_RELOCATION_TABLE].RelativeVirtualAddress = RelocSec->getRVA();
+    Dir[BASE_RELOCATION_TABLE].Size = RelocSec->getVirtualSize();
   }
   if (Symbol *Sym = Symtab->findUnderscore("_tls_used")) {
     if (Defined *B = dyn_cast<Defined>(Sym)) {
@@ -884,7 +967,11 @@ void Writer::openFile(StringRef Path) {
       "failed to open " + Path);
 }
 
-void Writer::createSEHTable(OutputSection *RData) {
+void Writer::createSEHTable() {
+  // Set the no SEH characteristic on x86 binaries unless we find exception
+  // handlers.
+  SetNoSEHCharacteristic = true;
+
   SymbolRVASet Handlers;
   for (ObjFile *File : ObjFile::Instances) {
     // FIXME: We should error here instead of earlier unless /safeseh:no was
@@ -895,7 +982,13 @@ void Writer::createSEHTable(OutputSection *RData) {
     markSymbolsForRVATable(File, File->getSXDataChunks(), Handlers);
   }
 
-  maybeAddRVATable(RData, std::move(Handlers), "__safe_se_handler_table",
+  // Remove the "no SEH" characteristic if all object files were built with
+  // safeseh, we found some exception handlers, and there is a load config in
+  // the object.
+  SetNoSEHCharacteristic =
+      Handlers.empty() || !Symtab->findUnderscore("_load_config_used");
+
+  maybeAddRVATable(std::move(Handlers), "__safe_se_handler_table",
                    "__safe_se_handler_count");
 }
 
@@ -930,7 +1023,7 @@ static void markSymbolsWithRelocations(ObjFile *File,
       if (auto *D = dyn_cast_or_null<Defined>(Ref)) {
         Chunk *RefChunk = D->getChunk();
         OutputSection *OS = RefChunk ? RefChunk->getOutputSection() : nullptr;
-        if (OS && OS->getPermissions() & IMAGE_SCN_MEM_EXECUTE)
+        if (OS && OS->Header.Characteristics & IMAGE_SCN_MEM_EXECUTE)
           addSymbolToRVASet(UsedSymbols, D);
       }
     }
@@ -940,7 +1033,7 @@ static void markSymbolsWithRelocations(ObjFile *File,
 // Create the guard function id table. This is a table of RVAs of all
 // address-taken functions. It is sorted and uniqued, just like the safe SEH
 // table.
-void Writer::createGuardCFTables(OutputSection *RData) {
+void Writer::createGuardCFTables() {
   SymbolRVASet AddressTakenSyms;
   SymbolRVASet LongJmpTargets;
   for (ObjFile *File : ObjFile::Instances) {
@@ -961,12 +1054,12 @@ void Writer::createGuardCFTables(OutputSection *RData) {
   if (Config->Entry)
     addSymbolToRVASet(AddressTakenSyms, cast<Defined>(Config->Entry));
 
-  maybeAddRVATable(RData, std::move(AddressTakenSyms), "__guard_fids_table",
+  maybeAddRVATable(std::move(AddressTakenSyms), "__guard_fids_table",
                    "__guard_fids_count");
 
   // Add the longjmp target table unless the user told us not to.
   if (Config->GuardCF == GuardCFLevel::Full)
-    maybeAddRVATable(RData, std::move(LongJmpTargets), "__guard_longjmp_table",
+    maybeAddRVATable(std::move(LongJmpTargets), "__guard_longjmp_table",
                      "__guard_longjmp_count");
 
   // Set __guard_flags, which will be used in the load config to indicate that
@@ -1023,14 +1116,13 @@ void Writer::markSymbolsForRVATable(ObjFile *File,
 // Replace the absolute table symbol with a synthetic symbol pointing to
 // TableChunk so that we can emit base relocations for it and resolve section
 // relative relocations.
-void Writer::maybeAddRVATable(OutputSection *RData,
-                              SymbolRVASet TableSymbols,
-                              StringRef TableSym, StringRef CountSym) {
+void Writer::maybeAddRVATable(SymbolRVASet TableSymbols, StringRef TableSym,
+                              StringRef CountSym) {
   if (TableSymbols.empty())
     return;
 
   RVATableChunk *TableChunk = make<RVATableChunk>(std::move(TableSymbols));
-  RData->addChunk(TableChunk);
+  RdataSec->addChunk(TableChunk);
 
   Symbol *T = Symtab->findUnderscore(TableSym);
   Symbol *C = Symtab->findUnderscore(CountSym);
@@ -1044,8 +1136,9 @@ void Writer::setSectionPermissions() {
   for (auto &P : Config->Section) {
     StringRef Name = P.first;
     uint32_t Perm = P.second;
-    if (auto *Sec = findSection(Name))
-      Sec->setPermissions(Perm);
+    for (OutputSection *Sec : OutputSections)
+      if (Sec->Name == Name)
+        Sec->setPermissions(Perm);
   }
 }
 
@@ -1061,7 +1154,7 @@ void Writer::writeSections() {
     // Fill gaps between functions in .text with INT3 instructions
     // instead of leaving as NUL bytes (which can be interpreted as
     // ADD instructions).
-    if (Sec->getPermissions() & IMAGE_SCN_CNT_CODE)
+    if (Sec->Header.Characteristics & IMAGE_SCN_CNT_CODE)
       memset(SecBuf, 0xCC, Sec->getRawSize());
     for_each(parallel::par, Sec->getChunks().begin(), Sec->getChunks().end(),
              [&](Chunk *C) { C->writeTo(SecBuf); });
@@ -1117,12 +1210,15 @@ void Writer::writeBuildId() {
 
 // Sort .pdata section contents according to PE/COFF spec 5.5.
 void Writer::sortExceptionTable() {
-  OutputSection *Sec = findSection(".pdata");
-  if (!Sec)
+  if (!FirstPdata)
     return;
   // We assume .pdata contains function table entries only.
-  uint8_t *Begin = Buffer->getBufferStart() + Sec->getFileOff();
-  uint8_t *End = Begin + Sec->getVirtualSize();
+  auto BufAddr = [&](Chunk *C) {
+    return Buffer->getBufferStart() + C->getOutputSection()->getFileOff() +
+           C->getRVA() - C->getOutputSection()->getRVA();
+  };
+  uint8_t *Begin = BufAddr(FirstPdata);
+  uint8_t *End = BufAddr(LastPdata) + LastPdata->getSize();
   if (Config->Machine == AMD64) {
     struct Entry { ulittle32_t Begin, End, Unwind; };
     sort(parallel::par, (Entry *)Begin, (Entry *)End,
@@ -1148,55 +1244,31 @@ OutputSection *Writer::findSection(StringRef Name) {
 uint32_t Writer::getSizeOfInitializedData() {
   uint32_t Res = 0;
   for (OutputSection *S : OutputSections)
-    if (S->getPermissions() & IMAGE_SCN_CNT_INITIALIZED_DATA)
+    if (S->Header.Characteristics & IMAGE_SCN_CNT_INITIALIZED_DATA)
       Res += S->getRawSize();
   return Res;
 }
 
-// Returns an existing section or create a new one if not found.
-OutputSection *Writer::createSection(StringRef Name) {
-  if (auto *Sec = findSection(Name))
-    return Sec;
-  const auto DATA = IMAGE_SCN_CNT_INITIALIZED_DATA;
-  const auto BSS = IMAGE_SCN_CNT_UNINITIALIZED_DATA;
-  const auto CODE = IMAGE_SCN_CNT_CODE;
-  const auto DISCARDABLE = IMAGE_SCN_MEM_DISCARDABLE;
-  const auto R = IMAGE_SCN_MEM_READ;
-  const auto W = IMAGE_SCN_MEM_WRITE;
-  const auto X = IMAGE_SCN_MEM_EXECUTE;
-  uint32_t Perms = StringSwitch<uint32_t>(Name)
-                       .Case(".bss", BSS | R | W)
-                       .Case(".data", DATA | R | W)
-                       .Cases(".didat", ".edata", ".idata", ".rdata", DATA | R)
-                       .Case(".reloc", DATA | DISCARDABLE | R)
-                       .Case(".text", CODE | R | X)
-                       .Default(0);
-  if (!Perms)
-    llvm_unreachable("unknown section name");
-  auto Sec = make<OutputSection>(Name);
-  Sec->addPermissions(Perms);
-  OutputSections.push_back(Sec);
-  return Sec;
-}
-
-// Dest is .reloc section. Add contents to that section.
-void Writer::addBaserels(OutputSection *Dest) {
+// Add base relocations to .reloc section.
+void Writer::addBaserels() {
+  if (!Config->Relocatable)
+    return;
   std::vector<Baserel> V;
   for (OutputSection *Sec : OutputSections) {
-    if (Sec == Dest)
+    if (Sec == RelocSec)
       continue;
     // Collect all locations for base relocations.
     for (Chunk *C : Sec->getChunks())
       C->getBaserels(&V);
     // Add the addresses to .reloc section.
     if (!V.empty())
-      addBaserelBlocks(Dest, V);
+      addBaserelBlocks(V);
     V.clear();
   }
 }
 
 // Add addresses to .reloc section. Note that addresses are grouped by page.
-void Writer::addBaserelBlocks(OutputSection *Dest, std::vector<Baserel> &V) {
+void Writer::addBaserelBlocks(std::vector<Baserel> &V) {
   const uint32_t Mask = ~uint32_t(PageSize - 1);
   uint32_t Page = V[0].RVA & Mask;
   size_t I = 0, J = 1;
@@ -1204,11 +1276,11 @@ void Writer::addBaserelBlocks(OutputSection *Dest, std::vector<Baserel> &V) {
     uint32_t P = V[J].RVA & Mask;
     if (P == Page)
       continue;
-    Dest->addChunk(make<BaserelChunk>(Page, &V[I], &V[0] + J));
+    RelocSec->addChunk(make<BaserelChunk>(Page, &V[I], &V[0] + J));
     I = J;
     Page = P;
   }
   if (I == J)
     return;
-  Dest->addChunk(make<BaserelChunk>(Page, &V[I], &V[0] + J));
+  RelocSec->addChunk(make<BaserelChunk>(Page, &V[I], &V[0] + J));
 }

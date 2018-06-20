@@ -44,6 +44,7 @@
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/TargetRegistry.h"
+#include "llvm/Support/WithColor.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 #include <cstdint>
@@ -108,12 +109,12 @@ collectContributionData(DWARFContext::cu_iterator_range CUs,
   // Sort the contributions so that any invalid ones are placed at
   // the start of the contributions vector. This way they are reported
   // first.
-  std::sort(Contributions.begin(), Contributions.end(),
-            [](const Optional<StrOffsetsContributionDescriptor> &L,
-               const Optional<StrOffsetsContributionDescriptor> &R) {
-              if (L && R) return L->Base < R->Base;
-              return R.hasValue();
-            });
+  llvm::sort(Contributions.begin(), Contributions.end(),
+             [](const Optional<StrOffsetsContributionDescriptor> &L,
+                const Optional<StrOffsetsContributionDescriptor> &R) {
+               if (L && R) return L->Base < R->Base;
+               return R.hasValue();
+             });
 
   // Uniquify contributions, as it is possible that units (specifically
   // type units in dwo or dwp files) share contributions. We don't want
@@ -499,10 +500,10 @@ void DWARFContext::dump(
                                    isLittleEndian(), 0);
     uint32_t Offset = 0;
     while (rnglistData.isValidOffset(Offset)) {
-      DWARFDebugRnglists Rnglists;
+      DWARFDebugRnglistTable Rnglists;
       uint32_t TableOffset = Offset;
       if (Error Err = Rnglists.extract(rnglistData, &Offset)) {
-        errs() << "error: " + toString(std::move(Err)) << '\n';
+        WithColor::error() << toString(std::move(Err)) << '\n';
         uint64_t Length = Rnglists.length();
         // Keep going after an error, if we can, assuming that the length field
         // could be read. If it couldn't, stop reading the section.
@@ -672,7 +673,7 @@ const DWARFDebugLoc *DWARFContext::getDebugLoc() {
     return Loc.get();
 
   Loc.reset(new DWARFDebugLoc);
-  // assume all compile units have the same address byte size
+  // Assume all compile units have the same address byte size.
   if (getNumCompileUnits()) {
     DWARFDataExtractor LocData(*DObj, DObj->getLocSection(), isLittleEndian(),
                                getCompileUnitAtIndex(0)->getAddressByteSize());
@@ -685,9 +686,13 @@ const DWARFDebugLocDWO *DWARFContext::getDebugLocDWO() {
   if (LocDWO)
     return LocDWO.get();
 
-  DataExtractor LocData(DObj->getLocDWOSection().Data, isLittleEndian(), 0);
   LocDWO.reset(new DWARFDebugLocDWO());
-  LocDWO->parse(LocData);
+  // Assume all compile units have the same address byte size.
+  if (getNumCompileUnits()) {
+    DataExtractor LocData(DObj->getLocDWOSection().Data, isLittleEndian(),
+                          getCompileUnitAtIndex(0)->getAddressByteSize());
+    LocDWO->parse(LocData);
+  }
   return LocDWO.get();
 }
 
@@ -1163,7 +1168,7 @@ static bool isRelocScattered(const object::ObjectFile &Obj,
 }
 
 ErrorPolicy DWARFContext::defaultErrorHandler(Error E) {
-  errs() << "error: " + toString(std::move(E)) << '\n';
+  WithColor::error() << toString(std::move(E)) << '\n';
   return ErrorPolicy::Continue;
 }
 

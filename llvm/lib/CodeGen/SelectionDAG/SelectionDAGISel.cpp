@@ -52,6 +52,7 @@
 #include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
+#include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
@@ -70,7 +71,6 @@
 #include "llvm/IR/Type.h"
 #include "llvm/IR/User.h"
 #include "llvm/IR/Value.h"
-#include "llvm/IR/ValueTypes.h"
 #include "llvm/MC/MCInstrDesc.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/Pass.h"
@@ -2121,7 +2121,7 @@ bool SelectionDAGISel::CheckAndMask(SDValue LHS, ConstantSDNode *RHS,
     return true;
 
   // If the actual AND mask is allowing unallowed bits, this doesn't match.
-  if (ActualMask.intersects(~DesiredMask))
+  if (!ActualMask.isSubsetOf(DesiredMask))
     return false;
 
   // Otherwise, the DAG Combiner may have proven that the value coming in is
@@ -2150,7 +2150,7 @@ bool SelectionDAGISel::CheckOrMask(SDValue LHS, ConstantSDNode *RHS,
     return true;
 
   // If the actual AND mask is allowing unallowed bits, this doesn't match.
-  if (ActualMask.intersects(~DesiredMask))
+  if (!ActualMask.isSubsetOf(DesiredMask))
     return false;
 
   // Otherwise, the DAG Combiner may have proven that the value coming in is
@@ -2300,7 +2300,7 @@ bool SelectionDAGISel::IsLegalToFold(SDValue N, SDNode *U, SDNode *Root,
 
   // If Root use can somehow reach N through a path that that doesn't contain
   // U then folding N would create a cycle. e.g. In the following
-  // diagram, Root can reach N through X. If N is folded into into Root, then
+  // diagram, Root can reach N through X. If N is folded into Root, then
   // X is both a predecessor and a successor of U.
   //
   //          [N*]           //

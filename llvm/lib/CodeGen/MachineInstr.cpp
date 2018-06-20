@@ -1235,7 +1235,8 @@ LLVM_DUMP_METHOD void MachineInstr::dump() const {
 #endif
 
 void MachineInstr::print(raw_ostream &OS, bool IsStandalone, bool SkipOpers,
-                         bool SkipDebugLoc, const TargetInstrInfo *TII) const {
+                         bool SkipDebugLoc, bool AddNewLine,
+                         const TargetInstrInfo *TII) const {
   const Module *M = nullptr;
   const Function *F = nullptr;
   if (const MachineFunction *MF = getMFIfAvailable(*this)) {
@@ -1253,7 +1254,7 @@ void MachineInstr::print(raw_ostream &OS, bool IsStandalone, bool SkipOpers,
 
 void MachineInstr::print(raw_ostream &OS, ModuleSlotTracker &MST,
                          bool IsStandalone, bool SkipOpers, bool SkipDebugLoc,
-                         const TargetInstrInfo *TII) const {
+                         bool AddNewLine, const TargetInstrInfo *TII) const {
   // We can be a bit tidier if we know the MachineFunction.
   const MachineFunction *MF = nullptr;
   const TargetRegisterInfo *TRI = nullptr;
@@ -1468,10 +1469,23 @@ void MachineInstr::print(raw_ostream &OS, ModuleSlotTracker &MST,
     return;
 
   bool HaveSemi = false;
+
   // Print debug location information.
+  if (const DebugLoc &DL = getDebugLoc()) {
+    if (!HaveSemi) {
+      OS << ';';
+      HaveSemi = true;
+    }
+    OS << ' ';
+    DL.print(OS);
+  }
+
+  // Print extra comments for DEBUG_VALUE.
   if (isDebugValue() && getOperand(e - 2).isMetadata()) {
-    if (!HaveSemi)
+    if (!HaveSemi) {
       OS << ";";
+      HaveSemi = true;
+    }
     auto *DV = cast<DILocalVariable>(getOperand(e - 2).getMetadata());
     OS << " line no:" <<  DV->getLine();
     if (auto *InlinedAt = debugLoc->getInlinedAt()) {
@@ -1486,7 +1500,8 @@ void MachineInstr::print(raw_ostream &OS, ModuleSlotTracker &MST,
       OS << " indirect";
   }
 
-  OS << '\n';
+  if (AddNewLine)
+    OS << '\n';
 }
 
 bool MachineInstr::addRegisterKilled(unsigned IncomingReg,

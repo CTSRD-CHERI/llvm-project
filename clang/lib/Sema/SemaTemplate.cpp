@@ -7561,10 +7561,6 @@ Sema::ActOnClassTemplateSpecialization(Scope *S, unsigned TagSpec,
       ClassTemplate->AddSpecialization(Specialization, InsertPos);
 
     if (CurContext->isDependentContext()) {
-      // -fms-extensions permits specialization of nested classes without
-      // fully specializing the outer class(es).
-      assert(getLangOpts().MicrosoftExt &&
-             "Only possible with -fms-extensions!");
       TemplateName CanonTemplate = Context.getCanonicalTemplateName(Name);
       CanonType = Context.getTemplateSpecializationType(
           CanonTemplate, Converted);
@@ -7865,7 +7861,7 @@ Sema::CheckSpecializationInstantiationRedecl(SourceLocation NewLoc,
       return false;
 
     case TSK_ExplicitInstantiationDeclaration:
-      // We're explicity instantiating a definition for something for which we
+      // We're explicitly instantiating a definition for something for which we
       // were previously asked to suppress instantiations. That's fine.
 
       // C++0x [temp.explicit]p4:

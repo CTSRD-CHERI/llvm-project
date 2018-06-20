@@ -15,8 +15,8 @@
 
 #include "Analyze.h"
 #include "BytesOutputStyle.h"
-#include "Diff.h"
 #include "DumpOutputStyle.h"
+#include "ExplainOutputStyle.h"
 #include "InputFile.h"
 #include "LinePrinter.h"
 #include "OutputStyle.h"
@@ -50,6 +50,7 @@
 #include "llvm/DebugInfo/PDB/IPDBSession.h"
 #include "llvm/DebugInfo/PDB/Native/DbiModuleDescriptorBuilder.h"
 #include "llvm/DebugInfo/PDB/Native/DbiStreamBuilder.h"
+#include "llvm/DebugInfo/PDB/Native/InfoStream.h"
 #include "llvm/DebugInfo/PDB/Native/InfoStreamBuilder.h"
 #include "llvm/DebugInfo/PDB/Native/NativeSession.h"
 #include "llvm/DebugInfo/PDB/Native/PDBFile.h"
@@ -72,6 +73,7 @@
 #include "llvm/Support/FileOutputBuffer.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Format.h"
+#include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/LineIterator.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -82,7 +84,6 @@
 #include "llvm/Support/ScopedPrinter.h"
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/raw_ostream.h"
-
 
 using namespace llvm;
 using namespace llvm::codeview;
@@ -98,8 +99,6 @@ cl::SubCommand
     PrettySubcommand("pretty",
                      "Dump semantic information about types and symbols");
 
-cl::SubCommand DiffSubcommand("diff", "Diff the contents of 2 PDB files");
-
 cl::SubCommand
     YamlToPdbSubcommand("yaml2pdb",
                         "Generate a PDB file from a YAML description");
@@ -113,6 +112,12 @@ cl::SubCommand
 
 cl::SubCommand MergeSubcommand("merge",
                                "Merge multiple PDBs into a single PDB");
+
+cl::SubCommand ExplainSubcommand("explain",
+                                 "Explain the meaning of a file offset");
+
+cl::SubCommand ExportSubcommand("export",
+                                "Write binary data from a stream to a file");
 
 cl::OptionCategory TypeCategory("Symbol Type Options");
 cl::OptionCategory FilterCategory("Filtering and Sorting Options");
@@ -293,44 +298,6 @@ cl::opt<bool>
 cl::opt<bool> NoEnumDefs("no-enum-definitions",
                          cl::desc("Don't display full enum definitions"),
                          cl::cat(FilterCategory), cl::sub(PrettySubcommand));
-}
-
-namespace diff {
-cl::opt<bool> PrintValueColumns(
-    "values", cl::init(true),
-    cl::desc("Print one column for each PDB with the field value"),
-    cl::Optional, cl::sub(DiffSubcommand));
-cl::opt<bool>
-    PrintResultColumn("result", cl::init(false),
-                      cl::desc("Print a column with the result status"),
-                      cl::Optional, cl::sub(DiffSubcommand));
-
-cl::list<std::string>
-    RawModiEquivalences("modi-equivalence", cl::ZeroOrMore,
-                        cl::value_desc("left,right"),
-                        cl::desc("Modules with the specified indices will be "
-                                 "treated as referring to the same module"),
-                        cl::sub(DiffSubcommand));
-
-cl::opt<std::string> LeftRoot(
-    "left-bin-root", cl::Optional,
-    cl::desc("Treats the specified path as the root of the tree containing "
-             "binaries referenced by the left PDB.  The root is stripped from "
-             "embedded paths when doing equality comparisons."),
-    cl::sub(DiffSubcommand));
-cl::opt<std::string> RightRoot(
-    "right-bin-root", cl::Optional,
-    cl::desc("Treats the specified path as the root of the tree containing "
-             "binaries referenced by the right PDB.  The root is stripped from "
-             "embedded paths when doing equality comparisons"),
-    cl::sub(DiffSubcommand));
-
-cl::opt<std::string> Left(cl::Positional, cl::desc("<left>"),
-                          cl::sub(DiffSubcommand));
-cl::opt<std::string> Right(cl::Positional, cl::desc("<right>"),
-                           cl::sub(DiffSubcommand));
-
-llvm::DenseMap<uint32_t, uint32_t> Equivalences;
 }
 
 cl::OptionCategory FileOptions("Module & File Options");
@@ -646,6 +613,47 @@ cl::opt<std::string>
     PdbOutputFile("pdb", cl::desc("the name of the PDB file to write"),
                   cl::sub(MergeSubcommand));
 }
+
+namespace explain {
+cl::list<std::string> InputFilename(cl::Positional,
+                                    cl::desc("<input PDB file>"), cl::Required,
+                                    cl::sub(ExplainSubcommand));
+
+cl::list<uint64_t> Offsets("offset", cl::desc("The file offset to explain"),
+                           cl::sub(ExplainSubcommand), cl::OneOrMore);
+
+cl::opt<InputFileType> InputType(
+    "input-type", cl::desc("Specify how to interpret the input file"),
+    cl::init(InputFileType::PDBFile), cl::Optional, cl::sub(ExplainSubcommand),
+    cl::values(clEnumValN(InputFileType::PDBFile, "pdb-file",
+                          "Treat input as a PDB file (default)"),
+               clEnumValN(InputFileType::PDBStream, "pdb-stream",
+                          "Treat input as raw contents of PDB stream"),
+               clEnumValN(InputFileType::DBIStream, "dbi-stream",
+                          "Treat input as raw contents of DBI stream"),
+               clEnumValN(InputFileType::Names, "names-stream",
+                          "Treat input as raw contents of /names named stream"),
+               clEnumValN(InputFileType::ModuleStream, "mod-stream",
+                          "Treat input as raw contents of a module stream")));
+} // namespace explain
+
+namespace exportstream {
+cl::list<std::string> InputFilename(cl::Positional,
+                                    cl::desc("<input PDB file>"), cl::Required,
+                                    cl::sub(ExportSubcommand));
+cl::opt<std::string> OutputFile("out",
+                                cl::desc("The file to write the stream to"),
+                                cl::Required, cl::sub(ExportSubcommand));
+cl::opt<std::string>
+    Stream("stream", cl::Required,
+           cl::desc("The index or name of the stream whose contents to export"),
+           cl::sub(ExportSubcommand));
+cl::opt<bool> ForceName("name",
+                        cl::desc("Force the interpretation of -stream as a "
+                                 "string, even if it is a valid integer"),
+                        cl::sub(ExportSubcommand), cl::Optional,
+                        cl::init(false));
+} // namespace exportstream
 }
 
 static ExitOnError ExitOnErr;
@@ -778,7 +786,6 @@ static void pdb2Yaml(StringRef Path) {
 }
 
 static void dumpRaw(StringRef Path) {
-
   InputFile IF = ExitOnErr(InputFile::open(Path));
 
   auto O = llvm::make_unique<DumpOutputStyle>(IF);
@@ -798,18 +805,6 @@ static void dumpAnalysis(StringRef Path) {
   std::unique_ptr<IPDBSession> Session;
   auto &File = loadPDB(Path, Session);
   auto O = llvm::make_unique<AnalysisStyle>(File);
-
-  ExitOnErr(O->dump());
-}
-
-static void diff(StringRef Path1, StringRef Path2) {
-  std::unique_ptr<IPDBSession> Session1;
-  std::unique_ptr<IPDBSession> Session2;
-
-  auto &File1 = loadPDB(Path1, Session1);
-  auto &File2 = loadPDB(Path2, Session2);
-
-  auto O = llvm::make_unique<DiffStyle>(File1, File2);
 
   ExitOnErr(O->dump());
 }
@@ -1017,8 +1012,8 @@ static void dumpPretty(StringRef Path) {
           std::vector<std::unique_ptr<PDBSymbolFunc>> Funcs;
           while (auto Func = Functions->getNext())
             Funcs.push_back(std::move(Func));
-          std::sort(Funcs.begin(), Funcs.end(),
-                    opts::pretty::compareFunctionSymbols);
+          llvm::sort(Funcs.begin(), Funcs.end(),
+                     opts::pretty::compareFunctionSymbols);
           for (const auto &Func : Funcs) {
             Printer.NewLine();
             Dumper.start(*Func, FunctionDumper::PointerType::None);
@@ -1036,8 +1031,8 @@ static void dumpPretty(StringRef Path) {
           std::vector<std::unique_ptr<PDBSymbolData>> Datas;
           while (auto Var = Vars->getNext())
             Datas.push_back(std::move(Var));
-          std::sort(Datas.begin(), Datas.end(),
-                    opts::pretty::compareDataSymbols);
+          llvm::sort(Datas.begin(), Datas.end(),
+                     opts::pretty::compareDataSymbols);
           for (const auto &Var : Datas)
             Dumper.start(*Var);
         }
@@ -1127,6 +1122,58 @@ static void mergePdbs() {
   ExitOnErr(Builder.commit(OutFile));
 }
 
+static void explain() {
+  std::unique_ptr<IPDBSession> Session;
+  InputFile IF =
+      ExitOnErr(InputFile::open(opts::explain::InputFilename.front(), true));
+
+  for (uint64_t Off : opts::explain::Offsets) {
+    auto O = llvm::make_unique<ExplainOutputStyle>(IF, Off);
+
+    ExitOnErr(O->dump());
+  }
+}
+
+static void exportStream() {
+  std::unique_ptr<IPDBSession> Session;
+  PDBFile &File = loadPDB(opts::exportstream::InputFilename.front(), Session);
+
+  std::unique_ptr<MappedBlockStream> SourceStream;
+  uint32_t Index = 0;
+  bool Success = false;
+  std::string OutFileName = opts::exportstream::OutputFile;
+
+  if (!opts::exportstream::ForceName) {
+    // First try to parse it as an integer, if it fails fall back to treating it
+    // as a named stream.
+    if (to_integer(opts::exportstream::Stream, Index)) {
+      if (Index >= File.getNumStreams()) {
+        errs() << "Error: " << Index << " is not a valid stream index.\n";
+        exit(1);
+      }
+      Success = true;
+      outs() << "Dumping contents of stream index " << Index << " to file "
+             << OutFileName << ".\n";
+    }
+  }
+
+  if (!Success) {
+    InfoStream &IS = cantFail(File.getPDBInfoStream());
+    Index = ExitOnErr(IS.getNamedStreamIndex(opts::exportstream::Stream));
+    outs() << "Dumping contents of stream '" << opts::exportstream::Stream
+           << "' (index " << Index << ") to file " << OutFileName << ".\n";
+  }
+
+  SourceStream = MappedBlockStream::createIndexedStream(
+      File.getMsfLayout(), File.getMsfBuffer(), Index, File.getAllocator());
+  auto OutFile = ExitOnErr(
+      FileOutputBuffer::create(OutFileName, SourceStream->getLength()));
+  FileBufferByteStream DestStream(std::move(OutFile), llvm::support::little);
+  BinaryStreamWriter Writer(DestStream);
+  ExitOnErr(Writer.writeStreamRef(*SourceStream));
+  ExitOnErr(DestStream.commit());
+}
+
 static bool parseRange(StringRef Str,
                        Optional<opts::bytes::NumberRange> &Parsed) {
   if (Str.empty())
@@ -1158,21 +1205,11 @@ static void simplifyChunkList(llvm::cl::list<opts::ModuleSubsection> &Chunks) {
   Chunks.push_back(opts::ModuleSubsection::All);
 }
 
-int main(int argc_, const char *argv_[]) {
-  // Print a stack trace if we signal out.
-  sys::PrintStackTraceOnErrorSignal(argv_[0]);
-  PrettyStackTraceProgram X(argc_, argv_);
-
+int main(int Argc, const char **Argv) {
+  InitLLVM X(Argc, Argv);
   ExitOnErr.setBanner("llvm-pdbutil: ");
 
-  SmallVector<const char *, 256> argv;
-  SpecificBumpPtrAllocator<char> ArgAllocator;
-  ExitOnErr(errorCodeToError(sys::Process::GetArgumentVector(
-      argv, makeArrayRef(argv_, argc_), ArgAllocator)));
-
-  llvm_shutdown_obj Y; // Call llvm_shutdown() on exit.
-
-  cl::ParseCommandLineOptions(argv.size(), argv.data(), "LLVM PDB Dumper\n");
+  cl::ParseCommandLineOptions(Argc, Argv, "LLVM PDB Dumper\n");
 
   if (opts::BytesSubcommand) {
     if (!parseRange(opts::bytes::DumpBlockRangeOpt,
@@ -1241,11 +1278,6 @@ int main(int argc_, const char *argv_[]) {
     if (opts::pdb2yaml::DumpModules)
       opts::pdb2yaml::DbiStream = true;
   }
-  if (opts::DiffSubcommand) {
-    if (!opts::diff::PrintResultColumn && !opts::diff::PrintValueColumns) {
-      llvm::errs() << "WARNING: No diff columns specified\n";
-    }
-  }
 
   llvm::sys::InitializeCOMRAII COM(llvm::sys::COMThreadingMode::MultiThreaded);
 
@@ -1300,27 +1332,16 @@ int main(int argc_, const char *argv_[]) {
     llvm::for_each(opts::dump::InputFilenames, dumpRaw);
   } else if (opts::BytesSubcommand) {
     llvm::for_each(opts::bytes::InputFilenames, dumpBytes);
-  } else if (opts::DiffSubcommand) {
-    for (StringRef S : opts::diff::RawModiEquivalences) {
-      StringRef Left;
-      StringRef Right;
-      std::tie(Left, Right) = S.split(',');
-      uint32_t X, Y;
-      if (!to_integer(Left, X) || !to_integer(Right, Y)) {
-        errs() << formatv("invalid value {0} specified for modi equivalence\n",
-                          S);
-        exit(1);
-      }
-      opts::diff::Equivalences[X] = Y;
-    }
-
-    diff(opts::diff::Left, opts::diff::Right);
   } else if (opts::MergeSubcommand) {
     if (opts::merge::InputFilenames.size() < 2) {
       errs() << "merge subcommand requires at least 2 input files.\n";
       exit(1);
     }
     mergePdbs();
+  } else if (opts::ExplainSubcommand) {
+    explain();
+  } else if (opts::ExportSubcommand) {
+    exportStream();
   }
 
   outs().flush();

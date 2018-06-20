@@ -63,6 +63,7 @@ private:
   void readExtern();
   void readGroup();
   void readInclude();
+  void readInput();
   void readMemory();
   void readOutput();
   void readOutputArch();
@@ -233,10 +234,12 @@ void ScriptParser::readLinkerScript() {
       readEntry();
     } else if (Tok == "EXTERN") {
       readExtern();
-    } else if (Tok == "GROUP" || Tok == "INPUT") {
+    } else if (Tok == "GROUP") {
       readGroup();
     } else if (Tok == "INCLUDE") {
       readInclude();
+    } else if (Tok == "INPUT") {
+      readInput();
     } else if (Tok == "MEMORY") {
       readMemory();
     } else if (Tok == "OUTPUT") {
@@ -267,8 +270,7 @@ void ScriptParser::readDefsym(StringRef Name) {
   Expr E = readExpr();
   if (!atEOF())
     setError("EOF expected, but got " + next());
-  SymbolAssignment *Cmd = make<SymbolAssignment>(Name, E, getCurrentLocation(),
-                                                 "" /*CommandString*/);
+  SymbolAssignment *Cmd = make<SymbolAssignment>(Name, E, getCurrentLocation());
   Script->SectionCommands.push_back(Cmd);
 }
 
@@ -327,13 +329,12 @@ void ScriptParser::readExtern() {
 }
 
 void ScriptParser::readGroup() {
-  expect("(");
-  while (!errorCount() && !consume(")")) {
-    if (consume("AS_NEEDED"))
-      readAsNeeded();
-    else
-      addFile(unquote(next()));
-  }
+  bool Orig = InputFile::IsInGroup;
+  InputFile::IsInGroup = true;
+  readInput();
+  InputFile::IsInGroup = Orig;
+  if (!Orig)
+    ++InputFile::NextGroupId;
 }
 
 void ScriptParser::readInclude() {
@@ -350,6 +351,16 @@ void ScriptParser::readInclude() {
     return;
   }
   setError("cannot find linker script " + Tok);
+}
+
+void ScriptParser::readInput() {
+  expect("(");
+  while (!errorCount() && !consume(")")) {
+    if (consume("AS_NEEDED"))
+      readAsNeeded();
+    else
+      addFile(unquote(next()));
+  }
 }
 
 void ScriptParser::readOutput() {
@@ -773,27 +784,31 @@ SymbolAssignment *ScriptParser::readProvideHidden(bool Provide, bool Hidden) {
   Cmd->Provide = Provide;
   Cmd->Hidden = Hidden;
   expect(")");
-  expect(";");
   return Cmd;
 }
 
 SymbolAssignment *ScriptParser::readProvideOrAssignment(StringRef Tok) {
+  size_t OldPos = Pos;
   SymbolAssignment *Cmd = nullptr;
-  if (peek() == "=" || peek() == "+=") {
+  if (peek() == "=" || peek() == "+=")
     Cmd = readAssignment(Tok);
-    expect(";");
-  } else if (Tok == "PROVIDE") {
+  else if (Tok == "PROVIDE")
     Cmd = readProvideHidden(true, false);
-  } else if (Tok == "HIDDEN") {
+  else if (Tok == "HIDDEN")
     Cmd = readProvideHidden(false, true);
-  } else if (Tok == "PROVIDE_HIDDEN") {
+  else if (Tok == "PROVIDE_HIDDEN")
     Cmd = readProvideHidden(true, true);
+
+  if (Cmd) {
+    Cmd->CommandString =
+        Tok.str() + " " +
+        llvm::join(Tokens.begin() + OldPos, Tokens.begin() + Pos, " ");
+    expect(";");
   }
   return Cmd;
 }
 
 SymbolAssignment *ScriptParser::readAssignment(StringRef Name) {
-  size_t OldPos = Pos;
   StringRef Op = next();
   assert(Op == "=" || Op == "+=");
   Expr E = readExpr();
@@ -801,11 +816,7 @@ SymbolAssignment *ScriptParser::readAssignment(StringRef Name) {
     std::string Loc = getCurrentLocation();
     E = [=] { return add(Script->getSymbolValue(Name, Loc), E()); };
   }
-
-  std::string CommandString =
-      Name.str() + " " +
-      llvm::join(Tokens.begin() + OldPos, Tokens.begin() + Pos, " ");
-  return make<SymbolAssignment>(Name, E, getCurrentLocation(), CommandString);
+  return make<SymbolAssignment>(Name, E, getCurrentLocation());
 }
 
 // This is an operator-precedence parser to parse a linker
@@ -1096,6 +1107,16 @@ Expr ScriptParser::readPrimary() {
       checkIfExists(Cmd, Location);
       return Cmd->getLMA();
     };
+  }
+  if (Tok == "MAX" || Tok == "MIN") {
+    expect("(");
+    Expr A = readExpr();
+    expect(",");
+    Expr B = readExpr();
+    expect(")");
+    if (Tok == "MIN")
+      return [=] { return std::min(A().getValue(), B().getValue()); };
+    return [=] { return std::max(A().getValue(), B().getValue()); };
   }
   if (Tok == "ORIGIN") {
     StringRef Name = readParenLiteral();

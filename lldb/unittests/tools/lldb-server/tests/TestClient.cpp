@@ -11,8 +11,8 @@
 #include "lldb/Host/HostInfo.h"
 #include "lldb/Host/common/TCPSocket.h"
 #include "lldb/Host/posix/ConnectionFileDescriptorPosix.h"
-#include "lldb/Interpreter/Args.h"
 #include "lldb/Target/ProcessLaunchInfo.h"
+#include "lldb/Utility/Args.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Testing/Support/Error.h"
@@ -29,6 +29,7 @@ using namespace llgs_tests;
 
 TestClient::TestClient(std::unique_ptr<Connection> Conn) {
   SetConnection(Conn.release());
+  SetPacketTimeout(std::chrono::seconds(10));
 
   SendAck(); // Send this as a handshake.
 }
@@ -37,12 +38,7 @@ TestClient::~TestClient() {
   if (!IsConnected())
     return;
 
-  std::string response;
-  // Debugserver (non-conformingly?) sends a reply to the k packet instead of
-  // simply closing the connection.
-  PacketResult result =
-      IsDebugServer() ? PacketResult::Success : PacketResult::ErrorDisconnected;
-  EXPECT_THAT_ERROR(SendMessage("k", response, result), Succeeded());
+  EXPECT_THAT_ERROR(SendMessage("k"), Succeeded());
 }
 
 Expected<std::unique_ptr<TestClient>> TestClient::launch(StringRef Log) {
@@ -167,13 +163,9 @@ Error TestClient::SendMessage(StringRef message) {
 Error TestClient::SendMessage(StringRef message, std::string &response_string) {
   if (Error E = SendMessage(message, response_string, PacketResult::Success))
     return E;
-  if (response_string[0] == 'E') {
-    return make_error<StringError>(
-        formatv("Error `{0}` while sending message: {1}", response_string,
-                message)
-            .str(),
-        inconvertibleErrorCode());
-  }
+  StringExtractorGDBRemote Extractor(response_string);
+  if (Extractor.IsErrorResponse())
+    return Extractor.GetStatus().ToError();
   return Error::success();
 }
 

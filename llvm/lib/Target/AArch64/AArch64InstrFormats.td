@@ -247,6 +247,17 @@ def simm6_32b : Operand<i32>, ImmLeaf<i32, [{ return Imm >= -32 && Imm < 32; }]>
   let DecoderMethod = "DecodeSImm<6>";
 }
 
+def SImm5Operand : SImmOperand<5>;
+def simm5_64b : Operand<i64>, ImmLeaf<i64, [{ return Imm >= -16 && Imm < 16; }]> {
+  let ParserMatchClass = SImm5Operand;
+  let DecoderMethod = "DecodeSImm<5>";
+}
+
+def simm5_32b : Operand<i32>, ImmLeaf<i32, [{ return Imm >= -16 && Imm < 16; }]> {
+  let ParserMatchClass = SImm5Operand;
+  let DecoderMethod = "DecodeSImm<5>";
+}
+
 // simm7sN predicate - True if the immediate is a multiple of N in the range
 // [-64 * N, 63 * N].
 class SImm7Scaled<int Scale> : AsmOperandClass {
@@ -1244,6 +1255,7 @@ def am_brcond : Operand<OtherVT> {
   let DecoderMethod = "DecodePCRelLabel19";
   let PrintMethod = "printAlignedLabel";
   let ParserMatchClass = PCRelLabel19Operand;
+  let OperandType = "OPERAND_PCREL";
 }
 
 class BranchCond : I<(outs), (ins ccode:$cond, am_brcond:$target),
@@ -1299,6 +1311,7 @@ def am_tbrcond : Operand<OtherVT> {
   let EncoderMethod = "getTestBranchTargetOpValue";
   let PrintMethod = "printAlignedLabel";
   let ParserMatchClass = BranchTarget14Operand;
+  let OperandType = "OPERAND_PCREL";
 }
 
 // AsmOperand classes to emit (or not) special diagnostics
@@ -1375,11 +1388,13 @@ def am_b_target : Operand<OtherVT> {
   let EncoderMethod = "getBranchTargetOpValue";
   let PrintMethod = "printAlignedLabel";
   let ParserMatchClass = BranchTarget26Operand;
+  let OperandType = "OPERAND_PCREL";
 }
 def am_bl_target : Operand<i64> {
   let EncoderMethod = "getBranchTargetOpValue";
   let PrintMethod = "printAlignedLabel";
   let ParserMatchClass = BranchTarget26Operand;
+  let OperandType = "OPERAND_PCREL";
 }
 
 class BImm<bit op, dag iops, string asm, list<dag> pattern>
@@ -2667,6 +2682,7 @@ def am_ldrlit : Operand<iPTR> {
   let DecoderMethod = "DecodePCRelLabel19";
   let PrintMethod = "printAlignedLabel";
   let ParserMatchClass = PCRelLabel19Operand;
+  let OperandType = "OPERAND_PCREL";
 }
 
 let mayLoad = 1, mayStore = 0, hasSideEffects = 0 in
