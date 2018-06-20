@@ -501,12 +501,15 @@ class Reducer(object):
             die("Could not compute input file for crash reproducer")
         return real_in_file
 
-    def _check_crash(self, command, infile, proc_info: subprocess.CompletedProcess=None) -> typing.Optional[ErrorKind]:
+    def _check_crash(self, command, infile, proc_info: subprocess.CompletedProcess=None, force_print_cmd=False) -> typing.Optional[ErrorKind]:
         # command = ["/tmp/crash"]
         full_cmd = command + [str(infile)]
         assert "%s" not in full_cmd, full_cmd
 
-        verbose_print("\nRunning", blue(quote_cmd(full_cmd)))
+        if force_print_cmd:
+            print("\nRunning", blue(quote_cmd(full_cmd)))
+        else:
+            verbose_print("\nRunning", blue(quote_cmd(full_cmd)))
         if self.args.reduce_tool == "noop":
             if proc_info is not None:
                 proc_info.stderr = b"Assertion `noop' failed."
@@ -661,7 +664,7 @@ class Reducer(object):
 
         print("Checking whether reproducer crashes with ", new_command[0], ":", sep="", end="", flush=True)
         crash_info = subprocess.CompletedProcess(None, None)
-        self.options.expected_error_kind = self._check_crash(new_command, infile, crash_info)
+        self.options.expected_error_kind = self._check_crash(new_command, infile, crash_info, force_print_cmd=True)
         if not self.options.expected_error_kind:
             die("Crash reproducer no longer crashes?")
 
