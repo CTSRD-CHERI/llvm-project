@@ -78,13 +78,17 @@ defm WriteJump : X86SchedWritePair;
 def  WriteFLoad  : SchedWrite;
 def  WriteFStore : SchedWrite;
 def  WriteFMove  : SchedWrite;
-defm WriteFAdd   : X86SchedWritePair; // Floating point add/sub/compare.
+defm WriteFAdd   : X86SchedWritePair; // Floating point add/sub.
+defm WriteFCmp   : X86SchedWritePair; // Floating point compare.
+defm WriteFCom   : X86SchedWritePair; // Floating point compare to flags.
 defm WriteFMul   : X86SchedWritePair; // Floating point multiplication.
 defm WriteFDiv   : X86SchedWritePair; // Floating point division.
 defm WriteFSqrt  : X86SchedWritePair; // Floating point square root.
 defm WriteFRcp   : X86SchedWritePair; // Floating point reciprocal estimate.
 defm WriteFRsqrt : X86SchedWritePair; // Floating point reciprocal square root estimate.
 defm WriteFMA    : X86SchedWritePair; // Fused Multiply Add.
+defm WriteFSign : X86SchedWritePair; // Floating point fabs/fchs.
+defm WriteFLogic : X86SchedWritePair; // Floating point and/or/xor logicals.
 defm WriteFShuffle  : X86SchedWritePair; // Floating point vector shuffles.
 defm WriteFVarShuffle  : X86SchedWritePair; // Floating point vector variable shuffles.
 defm WriteFBlend  : X86SchedWritePair; // Floating point vector blends.
@@ -102,6 +106,7 @@ def  WriteVecLoad  : SchedWrite;
 def  WriteVecStore : SchedWrite;
 def  WriteVecMove  : SchedWrite;
 defm WriteVecALU   : X86SchedWritePair; // Vector integer ALU op, no logicals.
+defm WriteVecLogic : X86SchedWritePair; // Vector integer and/or/xor logicals.
 defm WriteVecShift : X86SchedWritePair; // Vector integer shifts.
 defm WriteVecIMul  : X86SchedWritePair; // Vector integer multiply.
 defm WritePMULLD : X86SchedWritePair; // PMULLD
@@ -109,11 +114,14 @@ defm WriteShuffle  : X86SchedWritePair; // Vector shuffles.
 defm WriteVarShuffle  : X86SchedWritePair; // Vector variable shuffles.
 defm WriteBlend  : X86SchedWritePair; // Vector blends.
 defm WriteVarBlend  : X86SchedWritePair; // Vector variable blends.
+defm WritePSADBW : X86SchedWritePair; // Vector PSADBW.
 defm WriteMPSAD : X86SchedWritePair; // Vector MPSAD.
+defm WritePHMINPOS : X86SchedWritePair; // Vector PHMINPOS.
 
-// Vector bitwise operations.
-// These are often used on both floating point and integer vectors.
-defm WriteVecLogic : X86SchedWritePair; // Vector and/or/xor.
+// Vector insert/extract operations.
+defm WriteVecInsert : X86SchedWritePair; // Insert gpr to vector element.
+def  WriteVecExtract : SchedWrite; // Extract vector element to gpr.
+def  WriteVecExtractSt : SchedWrite; // Extract vector element and store.
 
 // MOVMSK operations.
 def WriteFMOVMSK : SchedWrite;
@@ -124,6 +132,7 @@ def WriteMMXMOVMSK : SchedWrite;
 defm WriteCvtF2I : X86SchedWritePair; // Float -> Integer.
 defm WriteCvtI2F : X86SchedWritePair; // Integer -> Float.
 defm WriteCvtF2F : X86SchedWritePair; // Float -> Float size conversion.
+def  WriteCvtF2FSt : SchedWrite; // // Float -> Float + store size conversion.
 
 // CRC32 instruction.
 defm WriteCRC32 : X86SchedWritePair;
@@ -145,6 +154,10 @@ defm WriteAESKeyGen : X86SchedWritePair; // Key Generation.
 
 // Carry-less multiplication instructions.
 defm WriteCLMul : X86SchedWritePair;
+
+// Load/store MXCSR
+def WriteLDMXCSR : SchedWrite;
+def WriteSTMXCSR : SchedWrite;
 
 // Catch-all for expensive system instructions.
 def WriteSystem : SchedWrite;

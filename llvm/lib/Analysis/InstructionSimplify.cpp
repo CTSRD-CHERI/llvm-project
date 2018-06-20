@@ -62,6 +62,8 @@ static Value *SimplifyOrInst(Value *, Value *, const SimplifyQuery &, unsigned);
 static Value *SimplifyXorInst(Value *, Value *, const SimplifyQuery &, unsigned);
 static Value *SimplifyCastInst(unsigned, Value *, Type *,
                                const SimplifyQuery &, unsigned);
+static Value *SimplifyGEPInst(Type *, ArrayRef<Value *>, const SimplifyQuery &,
+                              unsigned);
 
 /// For a boolean type or a vector of boolean type, return false or a vector
 /// with every element false.
@@ -680,14 +682,14 @@ static Value *SimplifySubInst(Value *Op0, Value *Op1, bool isNSW, bool isNUW,
   if (match(Op0, m_Zero())) {
     // 0 - X -> 0 if the sub is NUW.
     if (isNUW)
-      return Op0;
+      return Constant::getNullValue(Op0->getType());
 
     KnownBits Known = computeKnownBits(Op1, Q.DL, 0, Q.AC, Q.CxtI, Q.DT);
     if (Known.Zero.isMaxSignedValue()) {
       // Op1 is either 0 or the minimum signed value. If the sub is NSW, then
       // Op1 must be 0 because negating the minimum signed value is undefined.
       if (isNSW)
-        return Op0;
+        return Constant::getNullValue(Op0->getType());
 
       // 0 - X -> X if X is 0 or the minimum signed value.
       return Op1;
@@ -799,12 +801,9 @@ static Value *SimplifyMulInst(Value *Op0, Value *Op1, const SimplifyQuery &Q,
     return C;
 
   // X * undef -> 0
-  if (match(Op1, m_Undef()))
-    return Constant::getNullValue(Op0->getType());
-
   // X * 0 -> 0
-  if (match(Op1, m_Zero()))
-    return Op1;
+  if (match(Op1, m_CombineOr(m_Undef(), m_Zero())))
+    return Constant::getNullValue(Op0->getType());
 
   // X * 1 -> X
   if (match(Op1, m_One()))
@@ -888,7 +887,7 @@ static Value *simplifyDivRem(Value *Op0, Value *Op1, bool IsDiv) {
   // 0 / X -> 0
   // 0 % X -> 0
   if (match(Op0, m_Zero()))
-    return Op0;
+    return Constant::getNullValue(Op0->getType());
 
   // X / X -> 1
   // X % X -> 0
@@ -1147,7 +1146,7 @@ static Value *SimplifyShift(Instruction::BinaryOps Opcode, Value *Op0,
 
   // 0 shift by X -> 0
   if (match(Op0, m_Zero()))
-    return Op0;
+    return Constant::getNullValue(Op0->getType());
 
   // X shift by 0 -> X
   if (match(Op1, m_Zero()))
@@ -1689,7 +1688,7 @@ static Value *SimplifyAndInst(Value *Op0, Value *Op1, const SimplifyQuery &Q,
 
   // X & 0 = 0
   if (match(Op1, m_Zero()))
-    return Op1;
+    return Constant::getNullValue(Op0->getType());
 
   // X & -1 = X
   if (match(Op1, m_AllOnes()))
@@ -3068,8 +3067,7 @@ static Value *SimplifyICmpInst(unsigned Predicate, Value *LHS, Value *RHS,
   Type *ITy = GetCompareTy(LHS); // The return type.
 
   // icmp X, X -> true/false
-  // X icmp undef -> true/false.  For example, icmp ugt %X, undef -> false
-  // because X could be 0.
+  // icmp X, undef -> true/false because undef could be X.
   if (LHS == RHS || isa<UndefValue>(RHS))
     return ConstantInt::get(ITy, CmpInst::isTrueWhenEqual(Pred));
 
@@ -3529,6 +3527,17 @@ static const Value *SimplifyWithOpReplaced(Value *V, Value *Op, Value *RepOp,
       if (C->getOperand(1) == Op)
         return SimplifyCmpInst(C->getPredicate(), C->getOperand(0), RepOp, Q,
                                MaxRecurse - 1);
+    }
+  }
+
+  // Same for GEPs.
+  if (auto *GEP = dyn_cast<GetElementPtrInst>(I)) {
+    if (MaxRecurse) {
+      SmallVector<Value *, 8> NewOps(GEP->getNumOperands());
+      transform(GEP->operands(), NewOps.begin(),
+                [&](Value *V) { return V == Op ? RepOp : V; });
+      return SimplifyGEPInst(GEP->getSourceElementType(), NewOps, Q,
+                             MaxRecurse - 1);
     }
   }
 

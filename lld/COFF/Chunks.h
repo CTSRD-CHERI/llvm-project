@@ -38,9 +38,11 @@ class ObjFile;
 class OutputSection;
 class Symbol;
 
-// Mask for section types (code, data, bss, disacardable, etc.)
-// and permissions (writable, readable or executable).
-const uint32_t PermMask = 0xFF0000F0;
+// Mask for permissions (discardable, writable, readable, executable, etc).
+const uint32_t PermMask = 0xFE000000;
+
+// Mask for section types (code, data, bss).
+const uint32_t TypeMask = 0x000000E0;
 
 // A Chunk represents a chunk of data that will occupy space in the
 // output (if the resolver chose that). It may or may not be backed by
@@ -75,7 +77,7 @@ public:
   virtual bool hasData() const { return true; }
 
   // Returns readable/writable/executable bits.
-  virtual uint32_t getPermissions() const { return 0; }
+  virtual uint32_t getOutputCharacteristics() const { return 0; }
 
   // Returns the section name if this is a section chunk.
   // It is illegal to call this function on non-section chunks.
@@ -142,7 +144,7 @@ public:
   ArrayRef<uint8_t> getContents() const;
   void writeTo(uint8_t *Buf) const override;
   bool hasData() const override;
-  uint32_t getPermissions() const override;
+  uint32_t getOutputCharacteristics() const override;
   StringRef getSectionName() const override { return SectionName; }
   void getBaserels(std::vector<Baserel> *Res) override;
   bool isCOMDAT() const;
@@ -213,11 +215,11 @@ public:
   // The COMDAT leader symbol if this is a COMDAT chunk.
   DefinedRegular *Sym = nullptr;
 
+  ArrayRef<coff_relocation> Relocs;
+
 private:
   StringRef SectionName;
   std::vector<SectionChunk *> AssocChildren;
-  llvm::iterator_range<const coff_relocation *> Relocs;
-  size_t NumRelocs;
 
   // Used by the garbage collector.
   bool Live;
@@ -242,7 +244,7 @@ public:
   static void addSection(SectionChunk *C);
   void finalizeContents() override;
 
-  uint32_t getPermissions() const override;
+  uint32_t getOutputCharacteristics() const override;
   StringRef getSectionName() const override { return ".rdata"; }
   size_t getSize() const override;
   void writeTo(uint8_t *Buf) const override;
@@ -260,7 +262,7 @@ public:
   CommonChunk(const COFFSymbolRef Sym);
   size_t getSize() const override { return Sym.getValue(); }
   bool hasData() const override { return false; }
-  uint32_t getPermissions() const override;
+  uint32_t getOutputCharacteristics() const override;
   StringRef getSectionName() const override { return ".bss"; }
 
 private:

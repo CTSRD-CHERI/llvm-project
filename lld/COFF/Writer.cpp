@@ -121,14 +121,8 @@ private:
 
 class CVDebugRecordChunk : public Chunk {
 public:
-  CVDebugRecordChunk() {
-    PDBAbsPath = Config->PDBPath;
-    if (!PDBAbsPath.empty())
-      llvm::sys::fs::make_absolute(PDBAbsPath);
-  }
-
   size_t getSize() const override {
-    return sizeof(codeview::DebugInfo) + PDBAbsPath.size() + 1;
+    return sizeof(codeview::DebugInfo) + Config->PDBAltPath.size() + 1;
   }
 
   void writeTo(uint8_t *B) const override {
@@ -138,12 +132,11 @@ public:
 
     // variable sized field (PDB Path)
     char *P = reinterpret_cast<char *>(B + OutputSectionOff + sizeof(*BuildId));
-    if (!PDBAbsPath.empty())
-      memcpy(P, PDBAbsPath.data(), PDBAbsPath.size());
-    P[PDBAbsPath.size()] = '\0';
+    if (!Config->PDBAltPath.empty())
+      memcpy(P, Config->PDBAltPath.data(), Config->PDBAltPath.size());
+    P[Config->PDBAltPath.size()] = '\0';
   }
 
-  SmallString<128> PDBAbsPath;
   mutable codeview::DebugInfo *BuildId = nullptr;
 };
 
@@ -158,6 +151,7 @@ private:
   void createMiscChunks();
   void createImportTables();
   void createExportTable();
+  void mergeSections();
   void assignAddresses();
   void removeEmptySections();
   void createSymbolAndStringTable();
@@ -192,8 +186,7 @@ private:
   IdataContents Idata;
   DelayLoadContents DelayIdata;
   EdataContents Edata;
-  RVATableChunk *GuardFidsTable = nullptr;
-  RVATableChunk *SEHTable = nullptr;
+  bool SetNoSEHCharacteristic = false;
 
   DebugDirectoryChunk *DebugDirectory = nullptr;
   std::vector<Chunk *> DebugRecords;
@@ -209,6 +202,7 @@ private:
   OutputSection *TextSec;
   OutputSection *RdataSec;
   OutputSection *DataSec;
+  OutputSection *PdataSec;
   OutputSection *IdataSec;
   OutputSection *EdataSec;
   OutputSection *DidatSec;
@@ -242,12 +236,16 @@ void OutputSection::addChunk(Chunk *C) {
   C->setOutputSection(this);
 }
 
-void OutputSection::addPermissions(uint32_t C) {
-  Header.Characteristics |= C & PermMask;
+void OutputSection::setPermissions(uint32_t C) {
+  Header.Characteristics &= ~PermMask;
+  Header.Characteristics |= C;
 }
 
-void OutputSection::setPermissions(uint32_t C) {
-  Header.Characteristics = C & PermMask;
+void OutputSection::merge(OutputSection *Other) {
+  for (Chunk *C : Other->Chunks)
+    C->setOutputSection(this);
+  Chunks.insert(Chunks.end(), Other->Chunks.begin(), Other->Chunks.end());
+  Other->Chunks.clear();
 }
 
 // Write the section header to a given buffer.
@@ -337,6 +335,7 @@ void Writer::run() {
   createMiscChunks();
   createImportTables();
   createExportTable();
+  mergeSections();
   assignAddresses();
   removeEmptySections();
   setSectionPermissions();
@@ -407,17 +406,13 @@ void Writer::createSections() {
   const uint32_t W = IMAGE_SCN_MEM_WRITE;
   const uint32_t X = IMAGE_SCN_MEM_EXECUTE;
 
-  SmallDenseMap<StringRef, OutputSection *> Sections;
-  auto CreateSection = [&](StringRef Name, uint32_t Perms) {
-    auto I = Config->Merge.find(Name);
-    if (I != Config->Merge.end())
-      Name = I->second;
-    OutputSection *&Sec = Sections[Name];
+  SmallDenseMap<std::pair<StringRef, uint32_t>, OutputSection *> Sections;
+  auto CreateSection = [&](StringRef Name, uint32_t OutChars) {
+    OutputSection *&Sec = Sections[{Name, OutChars}];
     if (!Sec) {
-      Sec = make<OutputSection>(Name);
+      Sec = make<OutputSection>(Name, OutChars);
       OutputSections.push_back(Sec);
     }
-    Sec->addPermissions(Perms);
     return Sec;
   };
 
@@ -426,15 +421,15 @@ void Writer::createSections() {
   CreateSection(".bss", BSS | R | W);
   RdataSec = CreateSection(".rdata", DATA | R);
   DataSec = CreateSection(".data", DATA | R | W);
-  CreateSection(".pdata", DATA | R);
+  PdataSec = CreateSection(".pdata", DATA | R);
   IdataSec = CreateSection(".idata", DATA | R);
   EdataSec = CreateSection(".edata", DATA | R);
   DidatSec = CreateSection(".didat", DATA | R);
   RsrcSec = CreateSection(".rsrc", DATA | R);
   RelocSec = CreateSection(".reloc", DATA | DISCARDABLE | R);
 
-  // Then bin chunks by name.
-  std::map<StringRef, std::vector<Chunk *>> Map;
+  // Then bin chunks by name and output characteristics.
+  std::map<std::pair<StringRef, uint32_t>, std::vector<Chunk *>> Map;
   for (Chunk *C : Symtab->getChunks()) {
     auto *SC = dyn_cast<SectionChunk>(C);
     if (SC && !SC->isLive()) {
@@ -442,7 +437,7 @@ void Writer::createSections() {
         SC->printDiscardedMessage();
       continue;
     }
-    Map[C->getSectionName()].push_back(C);
+    Map[{C->getSectionName(), C->getOutputCharacteristics()}].push_back(C);
   }
 
   // Process an /order option.
@@ -455,18 +450,20 @@ void Writer::createSections() {
   // discarded when determining output section. So, .text$foo
   // contributes to .text, for example. See PE/COFF spec 3.2.
   for (auto Pair : Map) {
-    StringRef Name = getOutputSectionName(Pair.first);
-    if (Name == ".pdata") {
-      if (!FirstPdata)
-        FirstPdata = Pair.second.front();
-      LastPdata = Pair.second.back();
-    }
-    OutputSection *Sec = CreateSection(Name, 0);
+    StringRef Name = getOutputSectionName(Pair.first.first);
+    uint32_t OutChars = Pair.first.second;
+
+    // In link.exe, there is a special case for the I386 target where .CRT
+    // sections are treated as if they have output characteristics DATA | R if
+    // their characteristics are DATA | R | W. This implements the same special
+    // case for all architectures.
+    if (Name == ".CRT")
+      OutChars = DATA | R;
+
+    OutputSection *Sec = CreateSection(Name, OutChars);
     std::vector<Chunk *> &Chunks = Pair.second;
-    for (Chunk *C : Chunks) {
+    for (Chunk *C : Chunks)
       Sec->addChunk(C);
-      Sec->addPermissions(C->getPermissions());
-    }
   }
 
   // Finally, move some output sections to the end.
@@ -477,7 +474,7 @@ void Writer::createSections() {
       return 3;
     // Move DISCARDABLE (or non-memory-mapped) sections to the end of file because
     // the loader cannot handle holes.
-    if (S->getPermissions() & IMAGE_SCN_MEM_DISCARDABLE)
+    if (S->Header.Characteristics & IMAGE_SCN_MEM_DISCARDABLE)
       return 2;
     // .rsrc should come at the end of the non-discardable sections because its
     // size may change by the Win32 UpdateResources() function, causing
@@ -674,7 +671,7 @@ void Writer::createSymbolAndStringTable() {
   for (OutputSection *Sec : OutputSections) {
     if (Sec->Name.size() <= COFF::NameSize)
       continue;
-    if ((Sec->getPermissions() & IMAGE_SCN_MEM_DISCARDABLE) == 0)
+    if ((Sec->Header.Characteristics & IMAGE_SCN_MEM_DISCARDABLE) == 0)
       continue;
     Sec->setStringTableOff(addEntryToStringTable(Sec->Name));
   }
@@ -702,6 +699,37 @@ void Writer::createSymbolAndStringTable() {
   FileOff += OutputSymtab.size() * sizeof(coff_symbol16);
   FileOff += 4 + Strtab.size();
   FileSize = alignTo(FileOff, SectorSize);
+}
+
+void Writer::mergeSections() {
+  if (!PdataSec->getChunks().empty()) {
+    FirstPdata = PdataSec->getChunks().front();
+    LastPdata = PdataSec->getChunks().back();
+  }
+
+  for (auto &P : Config->Merge) {
+    StringRef ToName = P.second;
+    if (P.first == ToName)
+      continue;
+    StringSet<> Names;
+    while (1) {
+      if (!Names.insert(ToName).second)
+        fatal("/merge: cycle found for section '" + P.first + "'");
+      auto I = Config->Merge.find(ToName);
+      if (I == Config->Merge.end())
+        break;
+      ToName = I->second;
+    }
+    OutputSection *From = findSection(P.first);
+    OutputSection *To = findSection(ToName);
+    if (!From)
+      continue;
+    if (!To) {
+      From->Name = ToName;
+      continue;
+    }
+    To->merge(From);
+  }
 }
 
 // Visits all sections to assign incremental, non-overlapping RVAs and
@@ -835,8 +863,7 @@ template <typename PEHeaderTy> void Writer::writeHeader() {
     PE->DLLCharacteristics |= IMAGE_DLL_CHARACTERISTICS_NO_ISOLATION;
   if (Config->GuardCF != GuardCFLevel::Off)
     PE->DLLCharacteristics |= IMAGE_DLL_CHARACTERISTICS_GUARD_CF;
-  if (Config->Machine == I386 && !SEHTable &&
-      !Symtab->findUnderscore("_load_config_used"))
+  if (SetNoSEHCharacteristic)
     PE->DLLCharacteristics |= IMAGE_DLL_CHARACTERISTICS_NO_SEH;
   if (Config->TerminalServerAware)
     PE->DLLCharacteristics |= IMAGE_DLL_CHARACTERISTICS_TERMINAL_SERVER_AWARE;
@@ -941,6 +968,10 @@ void Writer::openFile(StringRef Path) {
 }
 
 void Writer::createSEHTable() {
+  // Set the no SEH characteristic on x86 binaries unless we find exception
+  // handlers.
+  SetNoSEHCharacteristic = true;
+
   SymbolRVASet Handlers;
   for (ObjFile *File : ObjFile::Instances) {
     // FIXME: We should error here instead of earlier unless /safeseh:no was
@@ -950,6 +981,12 @@ void Writer::createSEHTable() {
 
     markSymbolsForRVATable(File, File->getSXDataChunks(), Handlers);
   }
+
+  // Remove the "no SEH" characteristic if all object files were built with
+  // safeseh, we found some exception handlers, and there is a load config in
+  // the object.
+  SetNoSEHCharacteristic =
+      Handlers.empty() || !Symtab->findUnderscore("_load_config_used");
 
   maybeAddRVATable(std::move(Handlers), "__safe_se_handler_table",
                    "__safe_se_handler_count");
@@ -986,7 +1023,7 @@ static void markSymbolsWithRelocations(ObjFile *File,
       if (auto *D = dyn_cast_or_null<Defined>(Ref)) {
         Chunk *RefChunk = D->getChunk();
         OutputSection *OS = RefChunk ? RefChunk->getOutputSection() : nullptr;
-        if (OS && OS->getPermissions() & IMAGE_SCN_MEM_EXECUTE)
+        if (OS && OS->Header.Characteristics & IMAGE_SCN_MEM_EXECUTE)
           addSymbolToRVASet(UsedSymbols, D);
       }
     }
@@ -1099,8 +1136,9 @@ void Writer::setSectionPermissions() {
   for (auto &P : Config->Section) {
     StringRef Name = P.first;
     uint32_t Perm = P.second;
-    if (auto *Sec = findSection(Name))
-      Sec->setPermissions(Perm);
+    for (OutputSection *Sec : OutputSections)
+      if (Sec->Name == Name)
+        Sec->setPermissions(Perm);
   }
 }
 
@@ -1116,7 +1154,7 @@ void Writer::writeSections() {
     // Fill gaps between functions in .text with INT3 instructions
     // instead of leaving as NUL bytes (which can be interpreted as
     // ADD instructions).
-    if (Sec->getPermissions() & IMAGE_SCN_CNT_CODE)
+    if (Sec->Header.Characteristics & IMAGE_SCN_CNT_CODE)
       memset(SecBuf, 0xCC, Sec->getRawSize());
     for_each(parallel::par, Sec->getChunks().begin(), Sec->getChunks().end(),
              [&](Chunk *C) { C->writeTo(SecBuf); });
@@ -1206,7 +1244,7 @@ OutputSection *Writer::findSection(StringRef Name) {
 uint32_t Writer::getSizeOfInitializedData() {
   uint32_t Res = 0;
   for (OutputSection *S : OutputSections)
-    if (S->getPermissions() & IMAGE_SCN_CNT_INITIALIZED_DATA)
+    if (S->Header.Characteristics & IMAGE_SCN_CNT_INITIALIZED_DATA)
       Res += S->getRawSize();
   return Res;
 }

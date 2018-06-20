@@ -189,6 +189,7 @@ LANGOPT(ShortEnums        , 1, 0, "short enum types")
 
 LANGOPT(OpenCL            , 1, 0, "OpenCL")
 LANGOPT(OpenCLVersion     , 32, 0, "OpenCL C version")
+LANGOPT(OpenCLCPlusPlus   , 1, 0, "OpenCL C++")
 LANGOPT(OpenCLCPlusPlusVersion     , 32, 0, "OpenCL C++ version")
 LANGOPT(NativeHalfType    , 1, 0, "Native half type support")
 LANGOPT(NativeHalfArgsAndReturns, 1, 0, "Native half args and returns")
@@ -288,6 +289,9 @@ LANGOPT(XRayInstrument, 1, 0, "controls whether to do XRay instrumentation")
 LANGOPT(XRayAlwaysEmitCustomEvents, 1, 0,
         "controls whether to always emit intrinsic calls to "
         "__xray_customevent(...) builtin.")
+LANGOPT(XRayAlwaysEmitTypedEvents, 1, 0,
+        "controls whether to always emit intrinsic calls to "
+        "__xray_typedevent(...) builtin.")
 
 BENIGN_LANGOPT(AllowEditorPlaceholders, 1, 0,
                "allow editor placeholders in source")
@@ -295,6 +299,8 @@ BENIGN_LANGOPT(AllowEditorPlaceholders, 1, 0,
 ENUM_LANGOPT(ClangABICompat, ClangABI, 4, ClangABI::Latest,
              "version of Clang that we should attempt to be ABI-compatible "
              "with")
+
+COMPATIBLE_VALUE_LANGOPT(FunctionAlignment, 5, 0, "Default alignment for functions")
 
 #undef LANGOPT
 #undef COMPATIBLE_LANGOPT
@@ -305,4 +311,3 @@ ENUM_LANGOPT(ClangABICompat, ClangABI, 4, ClangABI::Latest,
 #undef VALUE_LANGOPT
 #undef COMPATIBLE_VALUE_LANGOPT
 #undef BENIGN_VALUE_LANGOPT
-

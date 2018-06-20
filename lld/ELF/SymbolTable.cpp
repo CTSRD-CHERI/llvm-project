@@ -339,9 +339,9 @@ static uint8_t getVisibility(uint8_t StOther) { return StOther & 3; }
 // files) form group 2. E forms group 3. I think that you can see how this
 // group assignment rule simulates the traditional linker's semantics.
 static void checkBackrefs(StringRef Name, InputFile *Old, InputFile *New) {
-  if (Config->WarnBackrefs && Old && New->GroupId < Old->GroupId)
-    warn("backward reference detected: " + Name + " in " + toString(Old) +
-         " refers to " + toString(New));
+  if (Config->WarnBackrefs && New && Old->GroupId < New->GroupId)
+    warn("backward reference detected: " + Name + " in " + toString(New) +
+         " refers to " + toString(Old));
 }
 
 template <class ELFT>
@@ -376,7 +376,7 @@ Symbol *SymbolTable::addUndefined(StringRef Name, uint8_t Binding,
       return S;
     }
 
-    checkBackrefs(Name, File, S->File);
+    checkBackrefs(Name, S->File, File);
     fetchLazy<ELFT>(S);
   }
   return S;
@@ -595,14 +595,18 @@ Symbol *SymbolTable::find(StringRef Name) {
   return SymVector[It->second];
 }
 
-template <class ELFT>
-void SymbolTable::addLazyArchive(StringRef Name, ArchiveFile &F,
-                                 const object::Archive::Symbol Sym) {
+// This is used to handle lazy symbols. May replace existent
+// symbol with lazy version or request to Fetch it.
+template <class ELFT, typename LazyT, typename... ArgT>
+void replaceOrFetchLazy(StringRef Name, InputFile &File,
+                        llvm::function_ref<InputFile *()> Fetch,
+                        ArgT &&... Arg) {
   Symbol *S;
   bool WasInserted;
-  std::tie(S, WasInserted) = insert(Name);
+  std::tie(S, WasInserted) = Symtab->insert(Name);
   if (WasInserted) {
-    replaceSymbol<LazyArchive>(S, F, Sym, Symbol::UnknownType);
+    replaceSymbol<LazyT>(S, File, Symbol::UnknownType,
+                         std::forward<ArgT>(Arg)...);
     return;
   }
   if (!S->isUndefined())
@@ -611,34 +615,26 @@ void SymbolTable::addLazyArchive(StringRef Name, ArchiveFile &F,
   // An undefined weak will not fetch archive members. See comment on Lazy in
   // Symbols.h for the details.
   if (S->isWeak()) {
-    replaceSymbol<LazyArchive>(S, F, Sym, S->Type);
+    replaceSymbol<LazyT>(S, File, S->Type, std::forward<ArgT>(Arg)...);
     S->Binding = STB_WEAK;
     return;
   }
-  if (InputFile *File = F.fetch(Sym))
-    addFile<ELFT>(File);
+
+  if (InputFile *F = Fetch())
+    Symtab->addFile<ELFT>(F);
+}
+
+template <class ELFT>
+void SymbolTable::addLazyArchive(StringRef Name, ArchiveFile &F,
+                                 const object::Archive::Symbol Sym) {
+  replaceOrFetchLazy<ELFT, LazyArchive>(Name, F, [&]() { return F.fetch(Sym); },
+                                        Sym);
 }
 
 template <class ELFT>
 void SymbolTable::addLazyObject(StringRef Name, LazyObjFile &Obj) {
-  Symbol *S;
-  bool WasInserted;
-  std::tie(S, WasInserted) = insert(Name);
-  if (WasInserted) {
-    replaceSymbol<LazyObject>(S, Obj, Name, Symbol::UnknownType);
-    return;
-  }
-  if (!S->isUndefined())
-    return;
-
-  // See comment for addLazyArchive above.
-  if (S->isWeak()) {
-    replaceSymbol<LazyObject>(S, Obj, Name, S->Type);
-    S->Binding = STB_WEAK;
-    return;
-  }
-  if (InputFile *F = Obj.fetch())
-    addFile<ELFT>(F);
+  replaceOrFetchLazy<ELFT, LazyObject>(Name, Obj, [&]() { return Obj.fetch(); },
+                                       Name);
 }
 
 template <class ELFT> void SymbolTable::fetchLazy(Symbol *Sym) {

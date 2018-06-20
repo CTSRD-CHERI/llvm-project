@@ -124,28 +124,28 @@ define void @test_fabs() optsize {
 ; BROADWELL-LABEL: test_fabs:
 ; BROADWELL:       # %bb.0:
 ; BROADWELL-NEXT:    #APP
-; BROADWELL-NEXT:    fabs # sched: [1:0.33]
+; BROADWELL-NEXT:    fabs # sched: [1:1.00]
 ; BROADWELL-NEXT:    #NO_APP
 ; BROADWELL-NEXT:    retl # sched: [6:0.50]
 ;
 ; SKYLAKE-LABEL: test_fabs:
 ; SKYLAKE:       # %bb.0:
 ; SKYLAKE-NEXT:    #APP
-; SKYLAKE-NEXT:    fabs # sched: [1:0.33]
+; SKYLAKE-NEXT:    fabs # sched: [1:1.00]
 ; SKYLAKE-NEXT:    #NO_APP
 ; SKYLAKE-NEXT:    retl # sched: [6:0.50]
 ;
 ; SKX-LABEL: test_fabs:
 ; SKX:       # %bb.0:
 ; SKX-NEXT:    #APP
-; SKX-NEXT:    fabs # sched: [1:0.33]
+; SKX-NEXT:    fabs # sched: [1:1.00]
 ; SKX-NEXT:    #NO_APP
 ; SKX-NEXT:    retl # sched: [6:0.50]
 ;
 ; BTVER2-LABEL: test_fabs:
 ; BTVER2:       # %bb.0:
 ; BTVER2-NEXT:    #APP
-; BTVER2-NEXT:    fabs # sched: [1:0.50]
+; BTVER2-NEXT:    fabs # sched: [2:1.00]
 ; BTVER2-NEXT:    #NO_APP
 ; BTVER2-NEXT:    retl # sched: [4:1.00]
 ;
@@ -540,28 +540,28 @@ define void @test_fchs() optsize {
 ; BROADWELL-LABEL: test_fchs:
 ; BROADWELL:       # %bb.0:
 ; BROADWELL-NEXT:    #APP
-; BROADWELL-NEXT:    fchs # sched: [1:0.33]
+; BROADWELL-NEXT:    fchs # sched: [1:1.00]
 ; BROADWELL-NEXT:    #NO_APP
 ; BROADWELL-NEXT:    retl # sched: [6:0.50]
 ;
 ; SKYLAKE-LABEL: test_fchs:
 ; SKYLAKE:       # %bb.0:
 ; SKYLAKE-NEXT:    #APP
-; SKYLAKE-NEXT:    fchs # sched: [1:0.33]
+; SKYLAKE-NEXT:    fchs # sched: [1:1.00]
 ; SKYLAKE-NEXT:    #NO_APP
 ; SKYLAKE-NEXT:    retl # sched: [6:0.50]
 ;
 ; SKX-LABEL: test_fchs:
 ; SKX:       # %bb.0:
 ; SKX-NEXT:    #APP
-; SKX-NEXT:    fchs # sched: [1:0.33]
+; SKX-NEXT:    fchs # sched: [1:1.00]
 ; SKX-NEXT:    #NO_APP
 ; SKX-NEXT:    retl # sched: [6:0.50]
 ;
 ; BTVER2-LABEL: test_fchs:
 ; BTVER2:       # %bb.0:
 ; BTVER2-NEXT:    #APP
-; BTVER2-NEXT:    fchs # sched: [1:0.50]
+; BTVER2-NEXT:    fchs # sched: [2:1.00]
 ; BTVER2-NEXT:    #NO_APP
 ; BTVER2-NEXT:    retl # sched: [4:1.00]
 ;
@@ -1187,16 +1187,16 @@ define void @test_fcomi_fcomip() optsize {
 ; SKYLAKE-LABEL: test_fcomi_fcomip:
 ; SKYLAKE:       # %bb.0:
 ; SKYLAKE-NEXT:    #APP
-; SKYLAKE-NEXT:    fcomi %st(3) # sched: [3:1.00]
-; SKYLAKE-NEXT:    fcompi %st(3) # sched: [3:1.00]
+; SKYLAKE-NEXT:    fcomi %st(3) # sched: [2:1.00]
+; SKYLAKE-NEXT:    fcompi %st(3) # sched: [2:1.00]
 ; SKYLAKE-NEXT:    #NO_APP
 ; SKYLAKE-NEXT:    retl # sched: [6:0.50]
 ;
 ; SKX-LABEL: test_fcomi_fcomip:
 ; SKX:       # %bb.0:
 ; SKX-NEXT:    #APP
-; SKX-NEXT:    fcomi %st(3) # sched: [3:1.00]
-; SKX-NEXT:    fcompi %st(3) # sched: [3:1.00]
+; SKX-NEXT:    fcomi %st(3) # sched: [2:1.00]
+; SKX-NEXT:    fcompi %st(3) # sched: [2:1.00]
 ; SKX-NEXT:    #NO_APP
 ; SKX-NEXT:    retl # sched: [6:0.50]
 ;
@@ -2826,6 +2826,7 @@ define void @test_fld1_fldl2e_fldl2t_fldlg2_fldln2_fldpi_fldz() optsize {
 ; GENERIC-NEXT:    fld1
 ; GENERIC-NEXT:    fldl2e
 ; GENERIC-NEXT:    fldl2t
+; GENERIC-NEXT:    fldlg2
 ; GENERIC-NEXT:    fldln2
 ; GENERIC-NEXT:    fldpi
 ; GENERIC-NEXT:    fldz
@@ -2838,6 +2839,7 @@ define void @test_fld1_fldl2e_fldl2t_fldlg2_fldln2_fldpi_fldz() optsize {
 ; ATOM-NEXT:    fld1 # sched: [6:3.00]
 ; ATOM-NEXT:    fldl2e # sched: [10:5.00]
 ; ATOM-NEXT:    fldl2t # sched: [10:5.00]
+; ATOM-NEXT:    fldlg2 # sched: [10:5.00]
 ; ATOM-NEXT:    fldln2 # sched: [10:5.00]
 ; ATOM-NEXT:    fldpi # sched: [10:5.00]
 ; ATOM-NEXT:    fldz # sched: [1:0.50]
@@ -2850,6 +2852,7 @@ define void @test_fld1_fldl2e_fldl2t_fldlg2_fldln2_fldpi_fldz() optsize {
 ; SLM-NEXT:    fld1 # sched: [1:?]
 ; SLM-NEXT:    fldl2e # sched: [100:1.00]
 ; SLM-NEXT:    fldl2t # sched: [100:1.00]
+; SLM-NEXT:    fldlg2 # sched: [100:1.00]
 ; SLM-NEXT:    fldln2 # sched: [100:1.00]
 ; SLM-NEXT:    fldpi # sched: [100:1.00]
 ; SLM-NEXT:    fldz # sched: [1:?]
@@ -2862,6 +2865,7 @@ define void @test_fld1_fldl2e_fldl2t_fldlg2_fldln2_fldpi_fldz() optsize {
 ; SANDY-NEXT:    fld1 # sched: [1:?]
 ; SANDY-NEXT:    fldl2e # sched: [100:0.33]
 ; SANDY-NEXT:    fldl2t # sched: [100:0.33]
+; SANDY-NEXT:    fldlg2 # sched: [100:0.33]
 ; SANDY-NEXT:    fldln2 # sched: [100:0.33]
 ; SANDY-NEXT:    fldpi # sched: [100:0.33]
 ; SANDY-NEXT:    fldz # sched: [1:?]
@@ -2874,6 +2878,7 @@ define void @test_fld1_fldl2e_fldl2t_fldlg2_fldln2_fldpi_fldz() optsize {
 ; HASWELL-NEXT:    fld1 # sched: [1:?]
 ; HASWELL-NEXT:    fldl2e # sched: [1:0.50]
 ; HASWELL-NEXT:    fldl2t # sched: [1:0.50]
+; HASWELL-NEXT:    fldlg2 # sched: [1:0.50]
 ; HASWELL-NEXT:    fldln2 # sched: [1:0.50]
 ; HASWELL-NEXT:    fldpi # sched: [1:0.50]
 ; HASWELL-NEXT:    fldz # sched: [1:0.50]
@@ -2886,6 +2891,7 @@ define void @test_fld1_fldl2e_fldl2t_fldlg2_fldln2_fldpi_fldz() optsize {
 ; BROADWELL-NEXT:    fld1 # sched: [1:?]
 ; BROADWELL-NEXT:    fldl2e # sched: [100:0.25]
 ; BROADWELL-NEXT:    fldl2t # sched: [100:0.25]
+; BROADWELL-NEXT:    fldlg2 # sched: [100:0.25]
 ; BROADWELL-NEXT:    fldln2 # sched: [100:0.25]
 ; BROADWELL-NEXT:    fldpi # sched: [100:0.25]
 ; BROADWELL-NEXT:    fldz # sched: [1:?]
@@ -2898,6 +2904,7 @@ define void @test_fld1_fldl2e_fldl2t_fldlg2_fldln2_fldpi_fldz() optsize {
 ; SKYLAKE-NEXT:    fld1 # sched: [1:?]
 ; SKYLAKE-NEXT:    fldl2e # sched: [100:0.25]
 ; SKYLAKE-NEXT:    fldl2t # sched: [100:0.25]
+; SKYLAKE-NEXT:    fldlg2 # sched: [100:0.25]
 ; SKYLAKE-NEXT:    fldln2 # sched: [100:0.25]
 ; SKYLAKE-NEXT:    fldpi # sched: [100:0.25]
 ; SKYLAKE-NEXT:    fldz # sched: [1:?]
@@ -2910,6 +2917,7 @@ define void @test_fld1_fldl2e_fldl2t_fldlg2_fldln2_fldpi_fldz() optsize {
 ; SKX-NEXT:    fld1 # sched: [1:?]
 ; SKX-NEXT:    fldl2e # sched: [100:0.25]
 ; SKX-NEXT:    fldl2t # sched: [100:0.25]
+; SKX-NEXT:    fldlg2 # sched: [100:0.25]
 ; SKX-NEXT:    fldln2 # sched: [100:0.25]
 ; SKX-NEXT:    fldpi # sched: [100:0.25]
 ; SKX-NEXT:    fldz # sched: [1:?]
@@ -2922,6 +2930,7 @@ define void @test_fld1_fldl2e_fldl2t_fldlg2_fldln2_fldpi_fldz() optsize {
 ; BTVER2-NEXT:    fld1 # sched: [1:?]
 ; BTVER2-NEXT:    fldl2e # sched: [100:0.50]
 ; BTVER2-NEXT:    fldl2t # sched: [100:0.50]
+; BTVER2-NEXT:    fldlg2 # sched: [100:0.50]
 ; BTVER2-NEXT:    fldln2 # sched: [100:0.50]
 ; BTVER2-NEXT:    fldpi # sched: [100:0.50]
 ; BTVER2-NEXT:    fldz # sched: [1:?]
@@ -2934,12 +2943,13 @@ define void @test_fld1_fldl2e_fldl2t_fldlg2_fldln2_fldpi_fldz() optsize {
 ; ZNVER1-NEXT:    fld1 # sched: [11:1.00]
 ; ZNVER1-NEXT:    fldl2e # sched: [11:1.00]
 ; ZNVER1-NEXT:    fldl2t # sched: [11:1.00]
+; ZNVER1-NEXT:    fldlg2 # sched: [11:1.00]
 ; ZNVER1-NEXT:    fldln2 # sched: [11:1.00]
 ; ZNVER1-NEXT:    fldpi # sched: [11:1.00]
 ; ZNVER1-NEXT:    fldz # sched: [8:0.50]
 ; ZNVER1-NEXT:    #NO_APP
 ; ZNVER1-NEXT:    retl # sched: [1:0.50]
-  tail call void asm sideeffect "fld1 \0A\09 fldl2e \0A\09 fldl2t \0A\09 fldln2 \0A\09 fldpi \0A\09 fldz", ""() nounwind
+  tail call void asm sideeffect "fld1 \0A\09 fldl2e \0A\09 fldl2t \0A\09 fldlg2 \0A\09 fldln2 \0A\09 fldpi \0A\09 fldz", ""() nounwind
   ret void
 }
 
@@ -5073,14 +5083,14 @@ define void @test_ftst() optsize {
 ; SKYLAKE-LABEL: test_ftst:
 ; SKYLAKE:       # %bb.0:
 ; SKYLAKE-NEXT:    #APP
-; SKYLAKE-NEXT:    ftst # sched: [3:1.00]
+; SKYLAKE-NEXT:    ftst # sched: [2:1.00]
 ; SKYLAKE-NEXT:    #NO_APP
 ; SKYLAKE-NEXT:    retl # sched: [6:0.50]
 ;
 ; SKX-LABEL: test_ftst:
 ; SKX:       # %bb.0:
 ; SKX-NEXT:    #APP
-; SKX-NEXT:    ftst # sched: [3:1.00]
+; SKX-NEXT:    ftst # sched: [2:1.00]
 ; SKX-NEXT:    #NO_APP
 ; SKX-NEXT:    retl # sched: [6:0.50]
 ;
@@ -5175,7 +5185,7 @@ define void @test_fucom_fucomp_fucompp() optsize {
 ; SKYLAKE-NEXT:    fucom %st(3) # sched: [1:1.00]
 ; SKYLAKE-NEXT:    fucomp %st(1) # sched: [1:1.00]
 ; SKYLAKE-NEXT:    fucomp %st(3) # sched: [1:1.00]
-; SKYLAKE-NEXT:    fucompp # sched: [3:1.00]
+; SKYLAKE-NEXT:    fucompp # sched: [2:1.00]
 ; SKYLAKE-NEXT:    #NO_APP
 ; SKYLAKE-NEXT:    retl # sched: [6:0.50]
 ;
@@ -5186,7 +5196,7 @@ define void @test_fucom_fucomp_fucompp() optsize {
 ; SKX-NEXT:    fucom %st(3) # sched: [1:1.00]
 ; SKX-NEXT:    fucomp %st(1) # sched: [1:1.00]
 ; SKX-NEXT:    fucomp %st(3) # sched: [1:1.00]
-; SKX-NEXT:    fucompp # sched: [3:1.00]
+; SKX-NEXT:    fucompp # sched: [2:1.00]
 ; SKX-NEXT:    #NO_APP
 ; SKX-NEXT:    retl # sched: [6:0.50]
 ;
@@ -5267,16 +5277,16 @@ define void @test_fucomi_fucomip() optsize {
 ; SKYLAKE-LABEL: test_fucomi_fucomip:
 ; SKYLAKE:       # %bb.0:
 ; SKYLAKE-NEXT:    #APP
-; SKYLAKE-NEXT:    fucomi %st(3) # sched: [3:1.00]
-; SKYLAKE-NEXT:    fucompi %st(3) # sched: [3:1.00]
+; SKYLAKE-NEXT:    fucomi %st(3) # sched: [2:1.00]
+; SKYLAKE-NEXT:    fucompi %st(3) # sched: [2:1.00]
 ; SKYLAKE-NEXT:    #NO_APP
 ; SKYLAKE-NEXT:    retl # sched: [6:0.50]
 ;
 ; SKX-LABEL: test_fucomi_fucomip:
 ; SKX:       # %bb.0:
 ; SKX-NEXT:    #APP
-; SKX-NEXT:    fucomi %st(3) # sched: [3:1.00]
-; SKX-NEXT:    fucompi %st(3) # sched: [3:1.00]
+; SKX-NEXT:    fucomi %st(3) # sched: [2:1.00]
+; SKX-NEXT:    fucompi %st(3) # sched: [2:1.00]
 ; SKX-NEXT:    #NO_APP
 ; SKX-NEXT:    retl # sched: [6:0.50]
 ;

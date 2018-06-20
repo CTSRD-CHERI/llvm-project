@@ -307,6 +307,16 @@ def X86lwpins : SDNode<"X86ISD::LWPINS",
                                             SDTCisVT<2, i32>, SDTCisVT<3, i32>]>,
                        [SDNPHasChain, SDNPMayStore, SDNPMayLoad, SDNPSideEffect]>;
 
+def X86umwait : SDNode<"X86ISD::UMWAIT",
+                       SDTypeProfile<1, 3, [SDTCisVT<0, i32>, SDTCisInt<1>,
+                                            SDTCisVT<2, i32>, SDTCisVT<3, i32>]>,
+                       [SDNPHasChain, SDNPSideEffect]>;
+
+def X86tpause : SDNode<"X86ISD::TPAUSE",
+                       SDTypeProfile<1, 3, [SDTCisVT<0, i32>, SDTCisInt<1>,
+                                            SDTCisVT<2, i32>, SDTCisVT<3, i32>]>,
+                       [SDNPHasChain, SDNPSideEffect]>;
+
 //===----------------------------------------------------------------------===//
 // X86 Operand Definitions.
 //
@@ -891,6 +901,7 @@ def HasCLFLUSHOPT : Predicate<"Subtarget->hasCLFLUSHOPT()">;
 def HasCLWB      : Predicate<"Subtarget->hasCLWB()">;
 def HasWBNOINVD  : Predicate<"Subtarget->hasWBNOINVD()">;
 def HasRDPID     : Predicate<"Subtarget->hasRDPID()">;
+def HasWAITPKG   : Predicate<"Subtarget->hasWAITPKG()">;
 def HasCmpxchg16b: Predicate<"Subtarget->hasCmpxchg16b()">;
 def Not64BitMode : Predicate<"!Subtarget->is64Bit()">,
                              AssemblerPredicate<"!Mode64Bit", "Not 64-bit mode">;
@@ -1315,9 +1326,13 @@ def PUSHA16  : I<0x60, RawFrm, (outs), (ins), "pushaw", []>,
 }
 
 let Constraints = "$src = $dst", SchedRW = [WriteALU] in {
+// This instruction is a consequence of BSWAP32r observing operand size. The
+// encoding is valid, but the behavior is undefined.
+let isCodeGenOnly = 1, ForceDisassemble = 1, hasSideEffects = 0 in
+def BSWAP16r_BAD : I<0xC8, AddRegFrm, (outs GR16:$dst), (ins GR16:$src),
+                     "bswap{w}\t$dst", []>, OpSize16, TB;
 // GR32 = bswap GR32
-def BSWAP32r : I<0xC8, AddRegFrm,
-                 (outs GR32:$dst), (ins GR32:$src),
+def BSWAP32r : I<0xC8, AddRegFrm, (outs GR32:$dst), (ins GR32:$src),
                  "bswap{l}\t$dst",
                  [(set GR32:$dst, (bswap GR32:$src))]>, OpSize32, TB;
 
@@ -1934,81 +1949,101 @@ defm XCHG    : ATOMIC_SWAP<0x86, 0x87, "xchg", "atomic_swap">;
 
 // Swap between registers.
 let SchedRW = [WriteALU] in {
-let Constraints = "$val = $dst" in {
-def XCHG8rr : I<0x86, MRMSrcReg, (outs GR8:$dst), (ins GR8:$val, GR8:$src),
-                "xchg{b}\t{$val, $src|$src, $val}", []>;
-def XCHG16rr : I<0x87, MRMSrcReg, (outs GR16:$dst), (ins GR16:$val, GR16:$src),
-                 "xchg{w}\t{$val, $src|$src, $val}", []>,
+let Constraints = "$src1 = $dst1, $src2 = $dst2", hasSideEffects = 0 in {
+def XCHG8rr : I<0x86, MRMSrcReg, (outs GR8:$dst1, GR8:$dst2),
+                (ins GR8:$src1, GR8:$src2),
+                "xchg{b}\t{$src2, $src1|$src1, $src2}", []>;
+def XCHG16rr : I<0x87, MRMSrcReg, (outs GR16:$dst1, GR16:$dst2),
+                 (ins GR16:$src1, GR16:$src2),
+                 "xchg{w}\t{$src2, $src1|$src1, $src2}", []>,
                  OpSize16;
-def XCHG32rr : I<0x87, MRMSrcReg, (outs GR32:$dst), (ins GR32:$val, GR32:$src),
-                 "xchg{l}\t{$val, $src|$src, $val}", []>,
+def XCHG32rr : I<0x87, MRMSrcReg, (outs GR32:$dst1, GR32:$dst2),
+                 (ins GR32:$src1, GR32:$src2),
+                 "xchg{l}\t{$src2, $src1|$src1, $src2}", []>,
                  OpSize32;
-def XCHG64rr : RI<0x87, MRMSrcReg, (outs GR64:$dst), (ins GR64:$val,GR64:$src),
-                  "xchg{q}\t{$val, $src|$src, $val}", []>;
+def XCHG64rr : RI<0x87, MRMSrcReg, (outs GR64:$dst1, GR64:$dst2),
+                  (ins GR64:$src1 ,GR64:$src2),
+                  "xchg{q}\t{$src2, $src1|$src1, $src2}", []>;
 }
 
 // Swap between EAX and other registers.
+let Constraints = "$src = $dst", hasSideEffects = 0 in {
 let Uses = [AX], Defs = [AX] in
-def XCHG16ar : I<0x90, AddRegFrm, (outs), (ins GR16:$src),
+def XCHG16ar : I<0x90, AddRegFrm, (outs GR16:$dst), (ins GR16:$src),
                   "xchg{w}\t{$src, %ax|ax, $src}", []>, OpSize16;
 let Uses = [EAX], Defs = [EAX] in
-def XCHG32ar : I<0x90, AddRegFrm, (outs), (ins GR32:$src),
-                  "xchg{l}\t{$src, %eax|eax, $src}", []>,
-                  OpSize32;
+def XCHG32ar : I<0x90, AddRegFrm, (outs GR32:$dst), (ins GR32:$src),
+                  "xchg{l}\t{$src, %eax|eax, $src}", []>, OpSize32;
 let Uses = [RAX], Defs = [RAX] in
-def XCHG64ar : RI<0x90, AddRegFrm, (outs), (ins GR64:$src),
+def XCHG64ar : RI<0x90, AddRegFrm, (outs GR64:$dst), (ins GR64:$src),
                   "xchg{q}\t{$src, %rax|rax, $src}", []>;
+}
 } // SchedRW
 
-let SchedRW = [WriteALU] in {
-def XADD8rr : I<0xC0, MRMDestReg, (outs GR8:$dst), (ins GR8:$src),
-                "xadd{b}\t{$src, $dst|$dst, $src}", []>, TB;
-def XADD16rr : I<0xC1, MRMDestReg, (outs GR16:$dst), (ins GR16:$src),
-                 "xadd{w}\t{$src, $dst|$dst, $src}", []>, TB,
-                 OpSize16;
-def XADD32rr  : I<0xC1, MRMDestReg, (outs GR32:$dst), (ins GR32:$src),
-                 "xadd{l}\t{$src, $dst|$dst, $src}", []>, TB,
-                 OpSize32;
-def XADD64rr  : RI<0xC1, MRMDestReg, (outs GR64:$dst), (ins GR64:$src),
-                   "xadd{q}\t{$src, $dst|$dst, $src}", []>, TB;
+let hasSideEffects = 0, Constraints = "$src1 = $dst1, $src2 = $dst2",
+    Defs = [EFLAGS], SchedRW = [WriteALU] in {
+def XADD8rr : I<0xC0, MRMDestReg, (outs GR8:$dst1, GR8:$dst2),
+                (ins GR8:$src1, GR8:$src2),
+                "xadd{b}\t{$src2, $src1|$src1, $src2}", []>, TB;
+def XADD16rr : I<0xC1, MRMDestReg, (outs GR16:$dst1, GR16:$dst2),
+                 (ins GR16:$src1, GR16:$src2),
+                 "xadd{w}\t{$src2, $src1|$src1, $src2}", []>, TB, OpSize16;
+def XADD32rr : I<0xC1, MRMDestReg, (outs GR32:$dst1, GR32:$dst2),
+                  (ins GR32:$src1, GR32:$src2),
+                 "xadd{l}\t{$src2, $src1|$src1, $src2}", []>, TB, OpSize32;
+def XADD64rr : RI<0xC1, MRMDestReg, (outs GR64:$dst1, GR64:$dst2),
+                  (ins GR64:$src1, GR64:$src2),
+                  "xadd{q}\t{$src2, $src1|$src1, $src2}", []>, TB;
 } // SchedRW
 
-let mayLoad = 1, mayStore = 1, SchedRW = [WriteALULd, WriteRMW] in {
-def XADD8rm   : I<0xC0, MRMDestMem, (outs), (ins i8mem:$dst, GR8:$src),
-                 "xadd{b}\t{$src, $dst|$dst, $src}", []>, TB;
-def XADD16rm  : I<0xC1, MRMDestMem, (outs), (ins i16mem:$dst, GR16:$src),
-                 "xadd{w}\t{$src, $dst|$dst, $src}", []>, TB,
+let mayLoad = 1, mayStore = 1, hasSideEffects = 0, Constraints = "$val = $dst",
+    Defs = [EFLAGS], SchedRW = [WriteALULd, WriteRMW] in {
+def XADD8rm   : I<0xC0, MRMSrcMem, (outs GR8:$dst),
+                  (ins GR8:$val, i8mem:$ptr),
+                 "xadd{b}\t{$val, $ptr|$ptr, $val}", []>, TB;
+def XADD16rm  : I<0xC1, MRMSrcMem, (outs GR16:$dst),
+                  (ins GR16:$val, i16mem:$ptr),
+                 "xadd{w}\t{$val, $ptr|$ptr, $val}", []>, TB,
                  OpSize16;
-def XADD32rm  : I<0xC1, MRMDestMem, (outs), (ins i32mem:$dst, GR32:$src),
-                 "xadd{l}\t{$src, $dst|$dst, $src}", []>, TB,
+def XADD32rm  : I<0xC1, MRMSrcMem, (outs GR32:$dst),
+                  (ins GR32:$val, i32mem:$ptr),
+                 "xadd{l}\t{$val, $ptr|$ptr, $val}", []>, TB,
                  OpSize32;
-def XADD64rm  : RI<0xC1, MRMDestMem, (outs), (ins i64mem:$dst, GR64:$src),
-                   "xadd{q}\t{$src, $dst|$dst, $src}", []>, TB;
+def XADD64rm  : RI<0xC1, MRMSrcMem, (outs GR64:$dst),
+                   (ins GR64:$val, i64mem:$ptr),
+                   "xadd{q}\t{$val, $ptr|$ptr, $val}", []>, TB;
 
 }
 
-let SchedRW = [WriteALU] in {
+let SchedRW = [WriteALU], hasSideEffects = 0 in {
+let Defs = [AL, EFLAGS], Uses = [AL] in
 def CMPXCHG8rr : I<0xB0, MRMDestReg, (outs GR8:$dst), (ins GR8:$src),
                    "cmpxchg{b}\t{$src, $dst|$dst, $src}", []>, TB;
+let Defs = [AX, EFLAGS], Uses = [AX] in
 def CMPXCHG16rr : I<0xB1, MRMDestReg, (outs GR16:$dst), (ins GR16:$src),
                     "cmpxchg{w}\t{$src, $dst|$dst, $src}", []>, TB, OpSize16;
+let Defs = [EAX, EFLAGS], Uses = [EAX] in
 def CMPXCHG32rr  : I<0xB1, MRMDestReg, (outs GR32:$dst), (ins GR32:$src),
                      "cmpxchg{l}\t{$src, $dst|$dst, $src}", []>, TB, OpSize32;
+let Defs = [RAX, EFLAGS], Uses = [RAX] in
 def CMPXCHG64rr  : RI<0xB1, MRMDestReg, (outs GR64:$dst), (ins GR64:$src),
                       "cmpxchg{q}\t{$src, $dst|$dst, $src}", []>, TB;
-} // SchedRW
+} // SchedRW, hasSideEffects
 
-let SchedRW = [WriteALULd, WriteRMW] in {
-let mayLoad = 1, mayStore = 1 in {
+let SchedRW = [WriteALULd, WriteRMW], mayLoad = 1, mayStore = 1,
+    hasSideEffects = 0 in {
+let Defs = [AL, EFLAGS], Uses = [AL] in
 def CMPXCHG8rm   : I<0xB0, MRMDestMem, (outs), (ins i8mem:$dst, GR8:$src),
                      "cmpxchg{b}\t{$src, $dst|$dst, $src}", []>, TB;
+let Defs = [AX, EFLAGS], Uses = [AX] in
 def CMPXCHG16rm  : I<0xB1, MRMDestMem, (outs), (ins i16mem:$dst, GR16:$src),
                      "cmpxchg{w}\t{$src, $dst|$dst, $src}", []>, TB, OpSize16;
+let Defs = [EAX, EFLAGS], Uses = [EAX] in
 def CMPXCHG32rm  : I<0xB1, MRMDestMem, (outs), (ins i32mem:$dst, GR32:$src),
                      "cmpxchg{l}\t{$src, $dst|$dst, $src}", []>, TB, OpSize32;
+let Defs = [RAX, EFLAGS], Uses = [RAX] in
 def CMPXCHG64rm  : RI<0xB1, MRMDestMem, (outs), (ins i64mem:$dst, GR64:$src),
                       "cmpxchg{q}\t{$src, $dst|$dst, $src}", []>, TB;
-}
 
 let Defs = [EAX, EDX, EFLAGS], Uses = [EAX, EBX, ECX, EDX] in
 def CMPXCHG8B : I<0xC7, MRM1m, (outs), (ins i64mem:$dst),
@@ -2018,7 +2053,7 @@ let Defs = [RAX, RDX, EFLAGS], Uses = [RAX, RBX, RCX, RDX] in
 def CMPXCHG16B : RI<0xC7, MRM1m, (outs), (ins i128mem:$dst),
                     "cmpxchg16b\t$dst", []>,
                     TB, Requires<[HasCmpxchg16b, In64BitMode]>;
-} // SchedRW
+} // SchedRW, mayLoad, mayStore, hasSideEffects
 
 
 // Lock instruction prefix
@@ -2032,12 +2067,7 @@ def REX64_PREFIX : I<0x48, RawFrm, (outs),  (ins), "rex64", []>,
                      Requires<[In64BitMode]>;
 
 // Data16 instruction prefix
-def DATA16_PREFIX : I<0x66, RawFrm, (outs),  (ins), "data16", []>,
-                     Requires<[Not16BitMode]>;
-
-// Data instruction prefix
-def DATA32_PREFIX : I<0x66, RawFrm, (outs),  (ins), "data32", []>,
-                     Requires<[In16BitMode]>;
+def DATA16_PREFIX : I<0x66, RawFrm, (outs),  (ins), "data16", []>;
 } // SchedRW
 
 // Repeat string operation instruction prefixes
@@ -2620,6 +2650,31 @@ def : InstAlias<"monitorx\t{%rax, %rcx, %rdx|rdx, rcx, rax}", (MONITORXrrr)>,
       Requires<[ In64BitMode ]>;
 
 //===----------------------------------------------------------------------===//
+// WAITPKG Instructions
+//
+let SchedRW = [WriteSystem] in {
+  def UMONITOR16 : I<0xAE, MRM6r, (outs), (ins GR16:$src),
+                     "umonitor\t$src", [(int_x86_umonitor GR16:$src)]>,
+                     XS, AdSize16, Requires<[HasWAITPKG, Not64BitMode]>;
+  def UMONITOR32 : I<0xAE, MRM6r, (outs), (ins GR32:$src),
+                     "umonitor\t$src", [(int_x86_umonitor GR32:$src)]>,
+                     XS, AdSize32, Requires<[HasWAITPKG]>;
+  def UMONITOR64 : I<0xAE, MRM6r, (outs), (ins GR64:$src),
+                     "umonitor\t$src", [(int_x86_umonitor GR64:$src)]>,
+                     XS, AdSize64, Requires<[HasWAITPKG, In64BitMode]>;
+  let Uses = [EAX, EDX], Defs = [EFLAGS] in {
+    def UMWAIT : I<0xAE, MRM6r,
+                     (outs), (ins GR32orGR64:$src), "umwait\t$src",
+                     [(set EFLAGS, (X86umwait GR32orGR64:$src, EDX, EAX))]>,
+                     XD, Requires<[HasWAITPKG]>;
+    def TPAUSE : I<0xAE, MRM6r,
+                     (outs), (ins GR32orGR64:$src), "tpause\t$src",
+                     [(set EFLAGS, (X86tpause GR32orGR64:$src, EDX, EAX))]>,
+                     PD, Requires<[HasWAITPKG]>;
+  }
+} // SchedRW
+
+//===----------------------------------------------------------------------===//
 // CLZERO Instruction
 //
 let SchedRW = [WriteSystem] in {
@@ -2706,8 +2761,9 @@ let Predicates = [HasCLWB], SchedRW = [WriteLoad] in
 def CLWB       : I<0xAE, MRM6m, (outs), (ins i8mem:$src), "clwb\t$src",
                    [(int_x86_clwb addr:$src)]>, PD;
 
+let Predicates = [HasCLDEMOTE], SchedRW = [WriteLoad] in
 def CLDEMOTE : I<0x1C, MRM0m, (outs), (ins i8mem:$src), "cldemote\t$src",
-                   [(int_x86_cldemote addr:$src)]>, TB, Requires<[HasCLDEMOTE]>;
+                   [(int_x86_cldemote addr:$src)]>, TB;
 
 //===----------------------------------------------------------------------===//
 // Subsystems.

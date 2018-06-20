@@ -3043,7 +3043,8 @@ llvm::Function *CGOpenMPRuntimeNVPTX::createParallelDataSharingWrapper(
                                               /*Volatile=*/false,
                                               CGFContext.getPointerType(ElemTy),
                                               CI->getLocation());
-      if (CI->capturesVariableByCopy()) {
+      if (CI->capturesVariableByCopy() &&
+          !CI->getCapturedVar()->getType()->isAnyPointerType()) {
         Arg = castValueToType(CGF, Arg, ElemTy, CGFContext.getUIntPtrType(),
                               CI->getLocation());
       }

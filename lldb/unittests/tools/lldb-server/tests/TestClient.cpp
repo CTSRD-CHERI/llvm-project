@@ -11,8 +11,8 @@
 #include "lldb/Host/HostInfo.h"
 #include "lldb/Host/common/TCPSocket.h"
 #include "lldb/Host/posix/ConnectionFileDescriptorPosix.h"
-#include "lldb/Interpreter/Args.h"
 #include "lldb/Target/ProcessLaunchInfo.h"
+#include "lldb/Utility/Args.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Testing/Support/Error.h"
@@ -29,6 +29,7 @@ using namespace llgs_tests;
 
 TestClient::TestClient(std::unique_ptr<Connection> Conn) {
   SetConnection(Conn.release());
+  SetPacketTimeout(std::chrono::seconds(10));
 
   SendAck(); // Send this as a handshake.
 }

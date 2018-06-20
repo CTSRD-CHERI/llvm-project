@@ -31,8 +31,7 @@ namespace coff {
 
 SectionChunk::SectionChunk(ObjFile *F, const coff_section *H)
     : Chunk(SectionKind), Repl(this), Header(H), File(F),
-      Relocs(File->getCOFFObj()->getRelocations(Header)),
-      NumRelocs(std::distance(Relocs.begin(), Relocs.end())) {
+      Relocs(File->getCOFFObj()->getRelocations(Header)) {
   // Initialize SectionName.
   File->getCOFFObj()->getSectionName(Header, SectionName);
 
@@ -163,7 +162,7 @@ void SectionChunk::applyRelARM(uint8_t *Off, uint16_t Type, OutputSection *OS,
                                uint64_t S, uint64_t P) const {
   // Pointer to thumb code must have the LSB set.
   uint64_t SX = S;
-  if (OS && (OS->getPermissions() & IMAGE_SCN_MEM_EXECUTE))
+  if (OS && (OS->Header.Characteristics & IMAGE_SCN_MEM_EXECUTE))
     SX |= 1;
   switch (Type) {
   case IMAGE_REL_ARM_ADDR32:    add32(Off, SX + Config->ImageBase); break;
@@ -272,7 +271,8 @@ void SectionChunk::writeTo(uint8_t *Buf) const {
     return;
   // Copy section contents from source object file to output file.
   ArrayRef<uint8_t> A = getContents();
-  memcpy(Buf + OutputSectionOff, A.data(), A.size());
+  if (!A.empty())
+    memcpy(Buf + OutputSectionOff, A.data(), A.size());
 
   // Apply relocations.
   size_t InputSize = getSize();
@@ -388,8 +388,8 @@ bool SectionChunk::hasData() const {
   return !(Header->Characteristics & IMAGE_SCN_CNT_UNINITIALIZED_DATA);
 }
 
-uint32_t SectionChunk::getPermissions() const {
-  return Header->Characteristics & PermMask;
+uint32_t SectionChunk::getOutputCharacteristics() const {
+  return Header->Characteristics & (PermMask | TypeMask);
 }
 
 bool SectionChunk::isCOMDAT() const {
@@ -426,7 +426,7 @@ CommonChunk::CommonChunk(const COFFSymbolRef S) : Sym(S) {
   Alignment = std::min(uint64_t(32), PowerOf2Ceil(Sym.getValue()));
 }
 
-uint32_t CommonChunk::getPermissions() const {
+uint32_t CommonChunk::getOutputCharacteristics() const {
   return IMAGE_SCN_CNT_UNINITIALIZED_DATA | IMAGE_SCN_MEM_READ |
          IMAGE_SCN_MEM_WRITE;
 }
@@ -601,7 +601,7 @@ void MergeChunk::finalizeContents() {
   }
 }
 
-uint32_t MergeChunk::getPermissions() const {
+uint32_t MergeChunk::getOutputCharacteristics() const {
   return IMAGE_SCN_MEM_READ | IMAGE_SCN_CNT_INITIALIZED_DATA;
 }
 

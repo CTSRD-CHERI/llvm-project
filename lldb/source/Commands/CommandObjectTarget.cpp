@@ -21,7 +21,6 @@
 #include "lldb/Host/OptionParser.h"
 #include "lldb/Host/StringConvert.h"
 #include "lldb/Host/Symbols.h"
-#include "lldb/Interpreter/Args.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
 #include "lldb/Interpreter/CommandReturnObject.h"
 #include "lldb/Interpreter/OptionArgParser.h"
@@ -51,6 +50,7 @@
 #include "lldb/Target/StackFrame.h"
 #include "lldb/Target/Thread.h"
 #include "lldb/Target/ThreadSpec.h"
+#include "lldb/Utility/Args.h"
 #include "lldb/Utility/Timer.h"
 
 #include "llvm/Support/FileSystem.h"
@@ -1388,7 +1388,8 @@ static size_t DumpModuleObjfileHeaders(Stream &strm, ModuleList &module_list) {
           strm.EOL();
         }
         ObjectFile *objfile = module->GetObjectFile();
-        objfile->Dump(&strm);
+        if (objfile)
+          objfile->Dump(&strm);
       }
     }
     strm.IndentLess();

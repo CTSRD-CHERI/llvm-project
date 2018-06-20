@@ -313,6 +313,17 @@ static bool hasZOption(opt::InputArgList &Args, StringRef Key) {
   return false;
 }
 
+static bool getZFlag(opt::InputArgList &Args, StringRef K1, StringRef K2,
+                     bool Default) {
+  for (auto *Arg : Args.filtered_reverse(OPT_z)) {
+    if (K1 == Arg->getValue())
+      return true;
+    if (K2 == Arg->getValue())
+      return false;
+  }
+  return Default;
+}
+
 void LinkerDriver::main(ArrayRef<const char *> ArgsArr) {
   ELFOptTable Parser;
   opt::InputArgList Args = Parser.parse(ArgsArr.slice(1));
@@ -572,6 +583,45 @@ getBuildId(opt::InputArgList &Args) {
   return {BuildIdKind::None, {}};
 }
 
+static void readCallGraph(MemoryBufferRef MB) {
+  // Build a map from symbol name to section
+  DenseMap<StringRef, const Symbol *> SymbolNameToSymbol;
+  for (InputFile *File : ObjectFiles)
+    for (Symbol *Sym : File->getSymbols())
+      SymbolNameToSymbol[Sym->getName()] = Sym;
+
+  for (StringRef L : args::getLines(MB)) {
+    SmallVector<StringRef, 3> Fields;
+    L.split(Fields, ' ');
+    if (Fields.size() != 3)
+      fatal("parse error");
+    uint64_t Count;
+    if (!to_integer(Fields[2], Count))
+      fatal("parse error");
+    const Symbol *FromSym = SymbolNameToSymbol.lookup(Fields[0]);
+    const Symbol *ToSym = SymbolNameToSymbol.lookup(Fields[1]);
+    if (Config->WarnSymbolOrdering) {
+      if (!FromSym)
+        warn("call graph file: no such symbol: " + Fields[0]);
+      if (!ToSym)
+        warn("call graph file: no such symbol: " + Fields[1]);
+    }
+    if (!FromSym || !ToSym || Count == 0)
+      continue;
+    warnUnorderableSymbol(FromSym);
+    warnUnorderableSymbol(ToSym);
+    const Defined *FromSymD = dyn_cast<Defined>(FromSym);
+    const Defined *ToSymD = dyn_cast<Defined>(ToSym);
+    if (!FromSymD || !ToSymD)
+      continue;
+    const auto *FromSB = dyn_cast_or_null<InputSectionBase>(FromSymD->Section);
+    const auto *ToSB = dyn_cast_or_null<InputSectionBase>(ToSymD->Section);
+    if (!FromSB || !ToSB)
+      continue;
+    Config->CallGraphProfile[std::make_pair(FromSB, ToSB)] += Count;
+  }
+}
+
 static bool getCompressDebugSections(opt::InputArgList &Args) {
   StringRef S = Args.getLastArgValue(OPT_compress_debug_sections, "none");
   if (S == "none")
@@ -709,19 +759,19 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
   Config->WarnCommon = Args.hasFlag(OPT_warn_common, OPT_no_warn_common, false);
   Config->WarnSymbolOrdering =
       Args.hasFlag(OPT_warn_symbol_ordering, OPT_no_warn_symbol_ordering, true);
-  Config->ZCombreloc = !hasZOption(Args, "nocombreloc");
-  Config->ZExecstack = hasZOption(Args, "execstack");
+  Config->ZCombreloc = getZFlag(Args, "combreloc", "nocombreloc", true);
+  Config->ZCopyreloc = getZFlag(Args, "copyreloc", "nocopyreloc", true);
+  Config->ZExecstack = getZFlag(Args, "execstack", "noexecstack", false);
   Config->ZHazardplt = hasZOption(Args, "hazardplt");
-  Config->ZNocopyreloc = hasZOption(Args, "nocopyreloc");
   Config->ZNodelete = hasZOption(Args, "nodelete");
   Config->ZNodlopen = hasZOption(Args, "nodlopen");
-  Config->ZNow = hasZOption(Args, "now");
+  Config->ZNow = getZFlag(Args, "now", "lazy", false);
   Config->ZOrigin = hasZOption(Args, "origin");
-  Config->ZRelro = !hasZOption(Args, "norelro");
+  Config->ZRelro = getZFlag(Args, "relro", "norelro", true);
   Config->ZRetpolineplt = hasZOption(Args, "retpolineplt");
   Config->ZRodynamic = hasZOption(Args, "rodynamic");
   Config->ZStackSize = args::getZOptionValue(Args, OPT_z, "stack-size", 0);
-  Config->ZText = !hasZOption(Args, "notext");
+  Config->ZText = getZFlag(Args, "text", "notext", true);
   Config->ZWxneeded = hasZOption(Args, "wxneeded");
 
   // Parse LTO plugin-related options for compatibility with gold.
@@ -948,12 +998,22 @@ void LinkerDriver::createFiles(opt::InputArgList &Args) {
       if (!InputFile::IsInGroup)
         error("stray --end-group");
       InputFile::IsInGroup = false;
+      ++InputFile::NextGroupId;
       break;
     case OPT_start_lib:
+      if (InLib)
+        error("nested --start-lib");
+      if (InputFile::IsInGroup)
+        error("may not nest --start-lib in --start-group");
       InLib = true;
+      InputFile::IsInGroup = true;
       break;
     case OPT_end_lib:
+      if (!InLib)
+        error("stray --end-lib");
       InLib = false;
+      InputFile::IsInGroup = false;
+      ++InputFile::NextGroupId;
       break;
     }
   }
@@ -1057,18 +1117,6 @@ template <class ELFT> static void handleUndefined(StringRef Name) {
 
   if (Sym->isLazy())
     Symtab->fetchLazy<ELFT>(Sym);
-}
-
-// If all references to a DSO happen to be weak, the DSO is not added
-// to DT_NEEDED. If that happens, we need to eliminate shared symbols
-// created from the DSO. Otherwise, they become dangling references
-// that point to a non-existent DSO.
-template <class ELFT> static void demoteSharedSymbols() {
-  for (Symbol *Sym : Symtab->getSymbols())
-    if (auto *S = dyn_cast<SharedSymbol>(Sym))
-      if (!S->getFile<ELFT>().IsNeeded)
-        replaceSymbol<Undefined>(S, nullptr, S->getName(), STB_WEAK, S->StOther,
-                                 S->Type);
 }
 
 // Do actual linking. Note that when this function is called,
@@ -1231,11 +1279,15 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   // Do size optimizations: garbage collection, merging of SHF_MERGE sections
   // and identical code folding.
   markLive<ELFT>();
-  demoteSharedSymbols<ELFT>();
   decompressSections();
   mergeSections();
   if (Config->ICF)
     doIcf<ELFT>();
+
+  // Read the callgraph now that we know what was gced or icfed
+  if (auto *Arg = Args.getLastArg(OPT_call_graph_ordering_file))
+    if (Optional<MemoryBufferRef> Buffer = readFile(Arg->getValue()))
+      readCallGraph(*Buffer);
 
   // Write the result to the file.
   writeResult<ELFT>();
