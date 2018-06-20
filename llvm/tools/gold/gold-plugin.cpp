@@ -203,6 +203,12 @@ namespace options {
   static std::string objcopy;
   // Directory to store the .dwo files.
   static std::string dwo_dir;
+  /// Statistics output filename.
+  static std::string stats_file;
+
+  // Optimization remarks filename and hotness options
+  static std::string OptRemarksFilename;
+  static bool OptRemarksWithHotness = false;
 
   static void process_plugin_option(const char *opt_)
   {
@@ -270,6 +276,12 @@ namespace options {
       objcopy = opt.substr(strlen("objcopy="));
     } else if (opt.startswith("dwo_dir=")) {
       dwo_dir = opt.substr(strlen("dwo_dir="));
+    } else if (opt.startswith("opt-remarks-filename=")) {
+      OptRemarksFilename = opt.substr(strlen("opt-remarks-filename="));
+    } else if (opt == "opt-remarks-with-hotness") {
+      OptRemarksWithHotness = true;
+    } else if (opt.startswith("stats-file=")) {
+      stats_file = opt.substr(strlen("stats-file="));
     } else {
       // Save this option to pass to the code generator.
       // ParseCommandLineOptions() expects argv[0] to be program name. Lazily
@@ -882,11 +894,16 @@ static std::unique_ptr<LTO> createLTO(IndexWriteCallback OnIndexWrite,
 
   Conf.Objcopy = options::objcopy;
 
+  // Set up optimization remarks handling.
+  Conf.RemarksFilename = options::OptRemarksFilename;
+  Conf.RemarksWithHotness = options::OptRemarksWithHotness;
+
   // Use new pass manager if set in driver
   Conf.UseNewPM = options::new_pass_manager;
   // Debug new pass manager if requested
   Conf.DebugPassManager = options::debug_pass_manager;
 
+  Conf.StatsFile = options::stats_file;
   return llvm::make_unique<LTO>(std::move(Conf), Backend,
                                 options::ParallelCodeGenParallelismLevel);
 }
@@ -1049,8 +1066,7 @@ static ld_plugin_status allSymbolsReadHook() {
     return LDPS_OK;
 
   if (options::thinlto_index_only) {
-    if (llvm::AreStatisticsEnabled())
-      llvm::PrintStatistics();
+    llvm_shutdown();
     cleanup_hook();
     exit(0);
   }

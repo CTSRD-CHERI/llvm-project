@@ -1085,13 +1085,8 @@ void DisassemblerTables::setTableFields(ModRMDecision     &decision,
 
         if(previousInfo.name == "NOOP" && (newInfo.name == "XCHG16ar" ||
                                            newInfo.name == "XCHG32ar" ||
-                                           newInfo.name == "XCHG32ar64" ||
                                            newInfo.name == "XCHG64ar"))
           continue; // special case for XCHG*ar and NOOP
-
-        if (previousInfo.name == "DATA16_PREFIX" &&
-            newInfo.name == "DATA32_PREFIX")
-          continue; // special case for data16 and data32
 
         if (outranks(previousInfo.insnContext, newInfo.insnContext))
           continue;

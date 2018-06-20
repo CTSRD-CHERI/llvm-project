@@ -283,11 +283,8 @@ Error WasmObjectFile::parseNameSection(const uint8_t *Ptr, const uint8_t *End) {
           return make_error<GenericBinaryError>("Invalid name entry",
                                                 object_error::parse_failed);
         DebugNames.push_back(wasm::WasmFunctionName{Index, Name});
-        if (isDefinedFunctionIndex(Index)) {
-          // Override any existing name; the name specified by the "names"
-          // section is the Function's canonical name.
-          getDefinedFunction(Index).Name = Name;
-        }
+        if (isDefinedFunctionIndex(Index))
+          getDefinedFunction(Index).DebugName = Name;
       }
       break;
     }
@@ -409,11 +406,8 @@ Error WasmObjectFile::parseLinkingSectionSymtab(const uint8_t *&Ptr,
         unsigned FuncIndex = Info.ElementIndex - NumImportedFunctions;
         FunctionType = &Signatures[FunctionTypes[FuncIndex]];
         wasm::WasmFunction &Function = Functions[FuncIndex];
-        if (Function.Name.empty()) {
-          // Use the symbol's name to set a name for the Function, but only if
-          // one hasn't already been set.
-          Function.Name = Info.Name;
-        }
+        if (Function.SymbolName.empty())
+          Function.SymbolName = Info.Name;
       } else {
         wasm::WasmImport &Import = *ImportedFunctions[Info.ElementIndex];
         FunctionType = &Signatures[Import.SigIndex];
@@ -437,11 +431,8 @@ Error WasmObjectFile::parseLinkingSectionSymtab(const uint8_t *&Ptr,
         unsigned GlobalIndex = Info.ElementIndex - NumImportedGlobals;
         wasm::WasmGlobal &Global = Globals[GlobalIndex];
         GlobalType = &Global.Type;
-        if (Global.Name.empty()) {
-          // Use the symbol's name to set a name for the Global, but only if
-          // one hasn't already been set.
-          Global.Name = Info.Name;
-        }
+        if (Global.SymbolName.empty())
+          Global.SymbolName = Info.Name;
       } else {
         wasm::WasmImport &Import = *ImportedGlobals[Info.ElementIndex];
         Info.Name = Import.Field;
@@ -533,38 +524,15 @@ Error WasmObjectFile::parseLinkingSectionComdat(const uint8_t *&Ptr,
   return Error::success();
 }
 
-WasmSection* WasmObjectFile::findCustomSectionByName(StringRef Name) {
-  for (WasmSection& Section : Sections) {
-    if (Section.Type == wasm::WASM_SEC_CUSTOM && Section.Name == Name)
-      return &Section;
-  }
-  return nullptr;
-}
-
-WasmSection* WasmObjectFile::findSectionByType(uint32_t Type) {
-  assert(Type != wasm::WASM_SEC_CUSTOM);
-  for (WasmSection& Section : Sections) {
-    if (Section.Type == Type)
-      return &Section;
-  }
-  return nullptr;
-}
-
 Error WasmObjectFile::parseRelocSection(StringRef Name, const uint8_t *Ptr,
                                         const uint8_t *End) {
-  uint8_t SectionCode = readUint8(Ptr);
-  WasmSection* Section = nullptr;
-  if (SectionCode == wasm::WASM_SEC_CUSTOM) {
-    StringRef Name = readString(Ptr);
-    Section = findCustomSectionByName(Name);
-  } else {
-    Section = findSectionByType(SectionCode);
-  }
-  if (!Section)
-    return make_error<GenericBinaryError>("Invalid section code",
+  uint32_t SectionIndex = readVaruint32(Ptr);
+  if (SectionIndex >= Sections.size())
+    return make_error<GenericBinaryError>("Invalid section index",
                                           object_error::parse_failed);
+  WasmSection& Section = Sections[SectionIndex];
   uint32_t RelocCount = readVaruint32(Ptr);
-  uint32_t EndOffset = Section->Content.size();
+  uint32_t EndOffset = Section.Content.size();
   while (RelocCount--) {
     wasm::WasmRelocation Reloc = {};
     Reloc.Type = readVaruint32(Ptr);
@@ -613,7 +581,7 @@ Error WasmObjectFile::parseRelocSection(StringRef Name, const uint8_t *Ptr,
       return make_error<GenericBinaryError>("Bad relocation offset",
                                             object_error::parse_failed);
 
-    Section->Relocations.push_back(Reloc);
+    Section.Relocations.push_back(Reloc);
   }
   if (Ptr != End)
     return make_error<GenericBinaryError>("Reloc section ended prematurely",

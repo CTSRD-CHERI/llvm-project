@@ -47,7 +47,6 @@
 #include "lldb/Host/Symbols.h"
 #include "lldb/Host/ThreadLauncher.h"
 #include "lldb/Host/XML.h"
-#include "lldb/Interpreter/Args.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
 #include "lldb/Interpreter/CommandObject.h"
 #include "lldb/Interpreter/CommandObjectMultiword.h"
@@ -66,6 +65,7 @@
 #include "lldb/Target/Target.h"
 #include "lldb/Target/TargetList.h"
 #include "lldb/Target/ThreadPlanCallFunction.h"
+#include "lldb/Utility/Args.h"
 #include "lldb/Utility/CleanUp.h"
 #include "lldb/Utility/FileSpec.h"
 #include "lldb/Utility/StreamString.h"
@@ -3804,11 +3804,9 @@ thread_result_t ProcessGDBRemote::AsyncThread(void *arg) {
                     response.GetError() == 0x87) {
                   process->SetExitStatus(-1, "cannot attach to process due to "
                                              "System Integrity Protection");
-                }
-                // E01 code from vAttach means that the attach failed
-                if (::strstr(continue_cstr, "vAttach") != NULL &&
-                    response.GetError() == 0x1) {
-                  process->SetExitStatus(-1, "unable to attach");
+                } else if (::strstr(continue_cstr, "vAttach") != NULL &&
+                           response.GetStatus().Fail()) {
+                  process->SetExitStatus(-1, response.GetStatus().AsCString());
                 } else {
                   process->SetExitStatus(-1, "lost connection");
                 }

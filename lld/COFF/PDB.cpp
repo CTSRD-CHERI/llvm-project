@@ -125,9 +125,6 @@ public:
   void addSections(ArrayRef<OutputSection *> OutputSections,
                    ArrayRef<uint8_t> SectionTable);
 
-  void addSectionContrib(pdb::DbiModuleDescriptorBuilder &LinkerModule,
-                         OutputSection *OS, Chunk *C);
-
   /// Write the PDB to disk.
   void commit();
 
@@ -780,6 +777,32 @@ static ArrayRef<uint8_t> relocateDebugChunk(BumpPtrAllocator &Alloc,
                            ".debug$S");
 }
 
+static pdb::SectionContrib createSectionContrib(const Chunk *C, uint32_t Modi) {
+  OutputSection *OS = C->getOutputSection();
+  pdb::SectionContrib SC;
+  memset(&SC, 0, sizeof(SC));
+  SC.ISect = OS->SectionIndex;
+  SC.Off = C->getRVA() - OS->getRVA();
+  SC.Size = C->getSize();
+  if (auto *SecChunk = dyn_cast<SectionChunk>(C)) {
+    SC.Characteristics = SecChunk->Header->Characteristics;
+    SC.Imod = SecChunk->File->ModuleDBI->getModuleIndex();
+    ArrayRef<uint8_t> Contents = SecChunk->getContents();
+    JamCRC CRC(0);
+    ArrayRef<char> CharContents = makeArrayRef(
+        reinterpret_cast<const char *>(Contents.data()), Contents.size());
+    CRC.update(CharContents);
+    SC.DataCrc = CRC.getCRC();
+  } else {
+    SC.Characteristics = OS->Header.Characteristics;
+    // FIXME: When we start creating DBI for import libraries, use those here.
+    SC.Imod = Modi;
+  }
+  SC.RelocCrc = 0; // FIXME
+
+  return SC;
+}
+
 void PDBLinker::addObjFile(ObjFile *File) {
   // Add a module descriptor for every object file. We need to put an absolute
   // path to the object into the PDB. If this is a plain object, we make its
@@ -793,6 +816,17 @@ void PDBLinker::addObjFile(ObjFile *File) {
 
   File->ModuleDBI = &ExitOnErr(Builder.getDbiBuilder().addModuleInfo(Name));
   File->ModuleDBI->setObjFileName(Path);
+
+  auto Chunks = File->getChunks();
+  uint32_t Modi = File->ModuleDBI->getModuleIndex();
+  for (Chunk *C : Chunks) {
+    auto *SecChunk = dyn_cast<SectionChunk>(C);
+    if (!SecChunk || !SecChunk->isLive())
+      continue;
+    pdb::SectionContrib SC = createSectionContrib(SecChunk, Modi);
+    File->ModuleDBI->setFirstSectionContrib(SC);
+    break;
+  }
 
   // Before we can process symbol substreams from .debug$S, we need to process
   // type information, file checksums, and the string table.  Add type info to
@@ -1056,7 +1090,7 @@ static void addLinkerModuleSectionSymbol(pdb::DbiModuleDescriptorBuilder &Mod,
                                          BumpPtrAllocator &Allocator) {
   SectionSym Sym(SymbolRecordKind::SectionSym);
   Sym.Alignment = 12; // 2^12 = 4KB
-  Sym.Characteristics = OS.getCharacteristics();
+  Sym.Characteristics = OS.Header.Characteristics;
   Sym.Length = OS.getVirtualSize();
   Sym.Name = OS.Name;
   Sym.Rva = OS.getRVA();
@@ -1110,31 +1144,6 @@ void PDBLinker::initialize(const llvm::codeview::DebugInfo &BuildId) {
   DbiBuilder.setBuildNumber(14, 11);
 }
 
-void PDBLinker::addSectionContrib(pdb::DbiModuleDescriptorBuilder &LinkerModule,
-                                  OutputSection *OS, Chunk *C) {
-  pdb::SectionContrib SC;
-  memset(&SC, 0, sizeof(SC));
-  SC.ISect = OS->SectionIndex;
-  SC.Off = C->getRVA() - OS->getRVA();
-  SC.Size = C->getSize();
-  if (auto *SecChunk = dyn_cast<SectionChunk>(C)) {
-    SC.Characteristics = SecChunk->Header->Characteristics;
-    SC.Imod = SecChunk->File->ModuleDBI->getModuleIndex();
-    ArrayRef<uint8_t> Contents = SecChunk->getContents();
-    JamCRC CRC(0);
-    ArrayRef<char> CharContents = makeArrayRef(
-        reinterpret_cast<const char *>(Contents.data()), Contents.size());
-    CRC.update(CharContents);
-    SC.DataCrc = CRC.getCRC();
-  } else {
-    SC.Characteristics = OS->getCharacteristics();
-    // FIXME: When we start creating DBI for import libraries, use those here.
-    SC.Imod = LinkerModule.getModuleIndex();
-  }
-  SC.RelocCrc = 0; // FIXME
-  Builder.getDbiBuilder().addSectionContrib(SC);
-}
-
 void PDBLinker::addSections(ArrayRef<OutputSection *> OutputSections,
                             ArrayRef<uint8_t> SectionTable) {
   // It's not entirely clear what this is, but the * Linker * module uses it.
@@ -1150,8 +1159,11 @@ void PDBLinker::addSections(ArrayRef<OutputSection *> OutputSections,
   // Add section contributions. They must be ordered by ascending RVA.
   for (OutputSection *OS : OutputSections) {
     addLinkerModuleSectionSymbol(LinkerModule, *OS, Alloc);
-    for (Chunk *C : OS->getChunks())
-      addSectionContrib(LinkerModule, OS, C);
+    for (Chunk *C : OS->getChunks()) {
+      pdb::SectionContrib SC =
+          createSectionContrib(C, LinkerModule.getModuleIndex());
+      Builder.getDbiBuilder().addSectionContrib(SC);
+    }
   }
 
   // Add Section Map stream.
@@ -1169,4 +1181,146 @@ void PDBLinker::addSections(ArrayRef<OutputSection *> OutputSections,
 void PDBLinker::commit() {
   // Write to a file.
   ExitOnErr(Builder.commit(Config->PDBPath));
+}
+
+static Expected<StringRef>
+getFileName(const DebugStringTableSubsectionRef &Strings,
+            const DebugChecksumsSubsectionRef &Checksums, uint32_t FileID) {
+  auto Iter = Checksums.getArray().at(FileID);
+  if (Iter == Checksums.getArray().end())
+    return make_error<CodeViewError>(cv_error_code::no_records);
+  uint32_t Offset = Iter->FileNameOffset;
+  return Strings.getString(Offset);
+}
+
+static uint32_t getSecrelReloc() {
+  switch (Config->Machine) {
+  case AMD64:
+    return COFF::IMAGE_REL_AMD64_SECREL;
+  case I386:
+    return COFF::IMAGE_REL_I386_SECREL;
+  case ARMNT:
+    return COFF::IMAGE_REL_ARM_SECREL;
+  case ARM64:
+    return COFF::IMAGE_REL_ARM64_SECREL;
+  default:
+    llvm_unreachable("unknown machine type");
+  }
+}
+
+// Try to find a line table for the given offset Addr into the given chunk C.
+// If a line table was found, the line table, the string and checksum tables
+// that are used to interpret the line table, and the offset of Addr in the line
+// table are stored in the output arguments. Returns whether a line table was
+// found.
+static bool findLineTable(const SectionChunk *C, uint32_t Addr,
+                          DebugStringTableSubsectionRef &CVStrTab,
+                          DebugChecksumsSubsectionRef &Checksums,
+                          DebugLinesSubsectionRef &Lines,
+                          uint32_t &OffsetInLinetable) {
+  ExitOnError ExitOnErr;
+  uint32_t SecrelReloc = getSecrelReloc();
+
+  for (SectionChunk *DbgC : C->File->getDebugChunks()) {
+    if (DbgC->getSectionName() != ".debug$S")
+      continue;
+
+    // Build a mapping of SECREL relocations in DbgC that refer to C.
+    DenseMap<uint32_t, uint32_t> Secrels;
+    for (const coff_relocation &R : DbgC->Relocs) {
+      if (R.Type != SecrelReloc)
+        continue;
+
+      if (auto *S = dyn_cast_or_null<DefinedRegular>(
+              C->File->getSymbols()[R.SymbolTableIndex]))
+        if (S->getChunk() == C)
+          Secrels[R.VirtualAddress] = S->getValue();
+    }
+
+    ArrayRef<uint8_t> Contents =
+        consumeDebugMagic(DbgC->getContents(), ".debug$S");
+    DebugSubsectionArray Subsections;
+    BinaryStreamReader Reader(Contents, support::little);
+    ExitOnErr(Reader.readArray(Subsections, Contents.size()));
+
+    for (const DebugSubsectionRecord &SS : Subsections) {
+      switch (SS.kind()) {
+      case DebugSubsectionKind::StringTable: {
+        assert(!CVStrTab.valid() &&
+               "Encountered multiple string table subsections!");
+        ExitOnErr(CVStrTab.initialize(SS.getRecordData()));
+        break;
+      }
+      case DebugSubsectionKind::FileChecksums:
+        assert(!Checksums.valid() &&
+               "Encountered multiple checksum subsections!");
+        ExitOnErr(Checksums.initialize(SS.getRecordData()));
+        break;
+      case DebugSubsectionKind::Lines: {
+        ArrayRef<uint8_t> Bytes;
+        auto Ref = SS.getRecordData();
+        ExitOnErr(Ref.readLongestContiguousChunk(0, Bytes));
+        size_t OffsetInDbgC = Bytes.data() - DbgC->getContents().data();
+
+        // Check whether this line table refers to C.
+        auto I = Secrels.find(OffsetInDbgC);
+        if (I == Secrels.end())
+          break;
+
+        // Check whether this line table covers Addr in C.
+        DebugLinesSubsectionRef LinesTmp;
+        ExitOnErr(LinesTmp.initialize(BinaryStreamReader(Ref)));
+        uint32_t OffsetInC = I->second + LinesTmp.header()->RelocOffset;
+        if (Addr < OffsetInC || Addr >= OffsetInC + LinesTmp.header()->CodeSize)
+          break;
+
+        assert(!Lines.header() &&
+               "Encountered multiple line tables for function!");
+        ExitOnErr(Lines.initialize(BinaryStreamReader(Ref)));
+        OffsetInLinetable = Addr - OffsetInC;
+        break;
+      }
+      default:
+        break;
+      }
+
+      if (CVStrTab.valid() && Checksums.valid() && Lines.header())
+        return true;
+    }
+  }
+
+  return false;
+}
+
+// Use CodeView line tables to resolve a file and line number for the given
+// offset into the given chunk and return them, or {"", 0} if a line table was
+// not found.
+std::pair<StringRef, uint32_t> coff::getFileLine(const SectionChunk *C,
+                                                 uint32_t Addr) {
+  ExitOnError ExitOnErr;
+
+  DebugStringTableSubsectionRef CVStrTab;
+  DebugChecksumsSubsectionRef Checksums;
+  DebugLinesSubsectionRef Lines;
+  uint32_t OffsetInLinetable;
+
+  if (!findLineTable(C, Addr, CVStrTab, Checksums, Lines, OffsetInLinetable))
+    return {"", 0};
+
+  uint32_t NameIndex;
+  uint32_t LineNumber;
+  for (LineColumnEntry &Entry : Lines) {
+    for (const LineNumberEntry &LN : Entry.LineNumbers) {
+      if (LN.Offset > OffsetInLinetable) {
+        StringRef Filename =
+            ExitOnErr(getFileName(CVStrTab, Checksums, NameIndex));
+        return {Filename, LineNumber};
+      }
+      LineInfo LI(LN.Flags);
+      NameIndex = Entry.NameIndex;
+      LineNumber = LI.getStartLine();
+    }
+  }
+  StringRef Filename = ExitOnErr(getFileName(CVStrTab, Checksums, NameIndex));
+  return {Filename, LineNumber};
 }

@@ -13,6 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "hwasan.h"
+#include "hwasan_mapping.h"
 #include "hwasan_thread.h"
 #include "hwasan_poisoning.h"
 #include "sanitizer_common/sanitizer_atomic.h"
@@ -157,6 +158,8 @@ static void HWAsanCheckFailed(const char *file, int line, const char *cond,
 
 using namespace __hwasan;
 
+uptr __hwasan_shadow_memory_dynamic_address;  // Global interface symbol.
+
 void __hwasan_init() {
   CHECK(!hwasan_init_is_running);
   if (hwasan_inited) return;
@@ -179,11 +182,13 @@ void __hwasan_init() {
 
   DisableCoreDumperIfNecessary();
   if (!InitShadow()) {
-    Printf("FATAL: HWAddressSanitizer can not mmap the shadow memory.\n");
-    Printf("FATAL: Make sure to compile with -fPIE and to link with -pie.\n");
-    Printf("FATAL: Disabling ASLR is known to cause this error.\n");
-    Printf("FATAL: If running under GDB, try "
-           "'set disable-randomization off'.\n");
+    Printf("FATAL: HWAddressSanitizer cannot mmap the shadow memory.\n");
+    if (HWASAN_FIXED_MAPPING) {
+      Printf("FATAL: Make sure to compile with -fPIE and to link with -pie.\n");
+      Printf("FATAL: Disabling ASLR is known to cause this error.\n");
+      Printf("FATAL: If running under GDB, try "
+             "'set disable-randomization off'.\n");
+    }
     DumpProcessMap();
     Die();
   }
@@ -306,7 +311,7 @@ __attribute__((always_inline, nodebug)) static void CheckAddressSized(uptr p,
     }
 }
 
-void __hwasan_load(uptr p, uptr sz) {
+void __hwasan_loadN(uptr p, uptr sz) {
   CheckAddressSized<ErrorAction::Abort, AccessType::Load>(p, sz);
 }
 void __hwasan_load1(uptr p) {
@@ -325,7 +330,7 @@ void __hwasan_load16(uptr p) {
   CheckAddress<ErrorAction::Abort, AccessType::Load, 4>(p);
 }
 
-void __hwasan_load_noabort(uptr p, uptr sz) {
+void __hwasan_loadN_noabort(uptr p, uptr sz) {
   CheckAddressSized<ErrorAction::Recover, AccessType::Load>(p, sz);
 }
 void __hwasan_load1_noabort(uptr p) {
@@ -344,7 +349,7 @@ void __hwasan_load16_noabort(uptr p) {
   CheckAddress<ErrorAction::Recover, AccessType::Load, 4>(p);
 }
 
-void __hwasan_store(uptr p, uptr sz) {
+void __hwasan_storeN(uptr p, uptr sz) {
   CheckAddressSized<ErrorAction::Abort, AccessType::Store>(p, sz);
 }
 void __hwasan_store1(uptr p) {
@@ -363,7 +368,7 @@ void __hwasan_store16(uptr p) {
   CheckAddress<ErrorAction::Abort, AccessType::Store, 4>(p);
 }
 
-void __hwasan_store_noabort(uptr p, uptr sz) {
+void __hwasan_storeN_noabort(uptr p, uptr sz) {
   CheckAddressSized<ErrorAction::Recover, AccessType::Store>(p, sz);
 }
 void __hwasan_store1_noabort(uptr p) {

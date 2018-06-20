@@ -9,6 +9,7 @@
 
 #include "Writer.h"
 #include "AArch64ErrataFix.h"
+#include "CallGraphSort.h"
 #include "Config.h"
 #include "Filesystem.h"
 #include "LinkerScript.h"
@@ -852,7 +853,8 @@ template <class ELFT> void Writer<ELFT>::addRelIpltSymbols() {
   addOptionalRegular(S, InX::RelaIplt, 0, STV_HIDDEN, STB_WEAK);
 
   S = Config->IsRela ? "__rela_iplt_end" : "__rel_iplt_end";
-  addOptionalRegular(S, InX::RelaIplt, -1, STV_HIDDEN, STB_WEAK);
+  ElfSym::RelaIpltEnd =
+      addOptionalRegular(S, InX::RelaIplt, 0, STV_HIDDEN, STB_WEAK);
 }
 
 template <class ELFT>
@@ -884,6 +886,9 @@ template <class ELFT> void Writer<ELFT>::setReservedSymbolSections() {
                                 : cast<InputSection>(InX::Got);
     ElfSym::GlobalOffsetTable->Section = GotSection;
   }
+
+  if (ElfSym::RelaIpltEnd)
+    ElfSym::RelaIpltEnd->Value = InX::RelaIplt->getSize();
 
   PhdrEntry *Last = nullptr;
   PhdrEntry *LastRO = nullptr;
@@ -1029,6 +1034,10 @@ findOrphanPos(std::vector<BaseCommand *>::iterator B,
 // Builds section order for handling --symbol-ordering-file.
 static DenseMap<const InputSectionBase *, int> buildSectionOrder() {
   DenseMap<const InputSectionBase *, int> SectionOrder;
+  // Use the rarely used option -call-graph-ordering-file to sort sections.
+  if (!Config->CallGraphProfile.empty())
+    return computeCallGraphProfileOrder();
+
   if (Config->SymbolOrderingFile.empty())
     return SectionOrder;
 
@@ -1053,25 +1062,7 @@ static DenseMap<const InputSectionBase *, int> buildSectionOrder() {
     SymbolOrderEntry &Ent = It->second;
     Ent.Present = true;
 
-    if (Config->WarnSymbolOrdering) {
-      auto *D = dyn_cast<Defined>(&Sym);
-      InputFile *File = Sym.File;
-      if (Sym.isUndefined())
-        warn(toString(File) +
-             ": unable to order undefined symbol: " + Sym.getName());
-      else if (Sym.isShared())
-        warn(toString(File) +
-             ": unable to order shared symbol: " + Sym.getName());
-      else if (D && !D->Section)
-        warn(toString(File) +
-             ": unable to order absolute symbol: " + Sym.getName());
-      else if (D && isa<OutputSection>(D->Section))
-        warn(toString(File) +
-             ": unable to order synthetic symbol: " + Sym.getName());
-      else if (D && !D->Section->Repl->Live)
-        warn(toString(File) +
-             ": unable to order discarded symbol: " + Sym.getName());
-    }
+    warnUnorderableSymbol(&Sym);
 
     if (auto *D = dyn_cast<Defined>(&Sym)) {
       if (auto *Sec = dyn_cast_or_null<InputSectionBase>(D->Section)) {
@@ -1115,7 +1106,7 @@ sortISDBySectionOrder(InputSectionDescription *ISD,
     }
     OrderedSections.push_back({IS, I->second});
   }
-  std::sort(
+  llvm::sort(
       OrderedSections.begin(), OrderedSections.end(),
       [&](std::pair<InputSection *, int> A, std::pair<InputSection *, int> B) {
         return A.second < B.second;
@@ -2065,10 +2056,10 @@ struct SectionOffset {
 // Check whether sections overlap for a specific address range (file offsets,
 // load and virtual adresses).
 static void checkOverlap(StringRef Name, std::vector<SectionOffset> &Sections) {
-  std::sort(Sections.begin(), Sections.end(),
-            [=](const SectionOffset &A, const SectionOffset &B) {
-              return A.Offset < B.Offset;
-            });
+  llvm::sort(Sections.begin(), Sections.end(),
+             [=](const SectionOffset &A, const SectionOffset &B) {
+               return A.Offset < B.Offset;
+             });
 
   // Finding overlap is easy given a vector is sorted by start position.
   // If an element starts before the end of the previous element, they overlap.

@@ -5061,6 +5061,11 @@ AArch64InstrInfo::getOutliningType(MachineBasicBlock::iterator &MIT,
     if (MOP.isCPI() || MOP.isJTI() || MOP.isCFIIndex() || MOP.isFI() ||
         MOP.isTargetIndex())
       return MachineOutlinerInstrType::Illegal;
+
+    // If it uses LR or W30 explicitly, then don't touch it.
+    if (MOP.isReg() && !MOP.isImplicit() &&
+        (MOP.getReg() == AArch64::LR || MOP.getReg() == AArch64::W30))
+      return MachineOutlinerInstrType::Illegal;
   }
 
   // Special cases for instructions that can always be outlined, but will fail
@@ -5325,8 +5330,9 @@ MachineBasicBlock::iterator AArch64InstrInfo::insertOutlinedCall(
   // Are we tail calling?
   if (MInfo.CallConstructionID == MachineOutlinerTailCall) {
     // If yes, then we can just branch to the label.
-    It = MBB.insert(It, BuildMI(MF, DebugLoc(), get(AArch64::B))
-                            .addGlobalAddress(M.getNamedValue(MF.getName())));
+    It = MBB.insert(It, BuildMI(MF, DebugLoc(), get(AArch64::TCRETURNdi))
+                            .addGlobalAddress(M.getNamedValue(MF.getName()))
+                            .addImm(0));
     return It;
   }
 

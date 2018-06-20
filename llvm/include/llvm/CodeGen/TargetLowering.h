@@ -2558,6 +2558,11 @@ protected:
   /// details.
   MachineBasicBlock *emitXRayCustomEvent(MachineInstr &MI,
                                          MachineBasicBlock *MBB) const;
+
+  /// Replace/modify the XRay typed event operands with target-dependent
+  /// details.
+  MachineBasicBlock *emitXRayTypedEvent(MachineInstr &MI,
+                                        MachineBasicBlock *MBB) const;
 };
 
 /// This class defines information used to lower LLVM code to legal SelectionDAG

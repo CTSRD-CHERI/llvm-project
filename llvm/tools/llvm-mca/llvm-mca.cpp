@@ -47,6 +47,7 @@
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/ToolOutputFile.h"
+#include "llvm/Support/WithColor.h"
 
 using namespace llvm;
 
@@ -70,9 +71,10 @@ static cl::opt<std::string>
          cl::desc("Target a specific cpu type (-mcpu=help for details)"),
          cl::value_desc("cpu-name"), cl::init("generic"));
 
-static cl::opt<unsigned>
+static cl::opt<int>
     OutputAsmVariant("output-asm-variant",
-                     cl::desc("Syntax variant to use for output printing"));
+                     cl::desc("Syntax variant to use for output printing"),
+                     cl::init(-1));
 
 static cl::opt<unsigned> Iterations("iterations",
                                     cl::desc("Number of iterations to run"),
@@ -128,10 +130,6 @@ static cl::opt<unsigned> TimelineMaxCycles(
     cl::desc(
         "Maximum number of cycles in the timeline view. Defaults to 80 cycles"),
     cl::init(80));
-
-static cl::opt<bool> PrintModeVerbose("verbose",
-                                      cl::desc("Enable verbose output"),
-                                      cl::init(false));
 
 static cl::opt<bool> AssumeNoAlias(
     "noalias",
@@ -306,7 +304,7 @@ int main(int argc, char **argv) {
   ErrorOr<std::unique_ptr<MemoryBuffer>> BufferPtr =
       MemoryBuffer::getFileOrSTDIN(InputFilename);
   if (std::error_code EC = BufferPtr.getError()) {
-    errs() << InputFilename << ": " << EC.message() << '\n';
+    WithColor::error() << InputFilename << ": " << EC.message() << '\n';
     return 1;
   }
 
@@ -337,29 +335,21 @@ int main(int argc, char **argv) {
     return 1;
 
   if (!STI->getSchedModel().isOutOfOrder()) {
-    errs() << "error: please specify an out-of-order cpu. '" << MCPU
-           << "' is an in-order cpu.\n";
+    WithColor::error() << "please specify an out-of-order cpu. '" << MCPU
+                       << "' is an in-order cpu.\n";
     return 1;
   }
 
   if (!STI->getSchedModel().hasInstrSchedModel()) {
-    errs()
-        << "error: unable to find instruction-level scheduling information for"
+    WithColor::error()
+        << "unable to find instruction-level scheduling information for"
         << " target triple '" << TheTriple.normalize() << "' and cpu '" << MCPU
         << "'.\n";
 
     if (STI->getSchedModel().InstrItineraries)
-      errs() << "note: cpu '" << MCPU << "' provides itineraries. However, "
-             << "instruction itineraries are currently unsupported.\n";
-    return 1;
-  }
-
-  std::unique_ptr<MCInstPrinter> IP(TheTarget->createMCInstPrinter(
-      Triple(TripleName), OutputAsmVariant, *MAI, *MCII, *MRI));
-  if (!IP) {
-    errs() << "error: unable to create instruction printer for target triple '"
-           << TheTriple.normalize() << "' with assembly variant "
-           << OutputAsmVariant << ".\n";
+      WithColor::note()
+          << "cpu '" << MCPU << "' provides itineraries. However, "
+          << "instruction itineraries are currently unsupported.\n";
     return 1;
   }
 
@@ -372,14 +362,27 @@ int main(int argc, char **argv) {
     return 1;
 
   if (Regions.empty()) {
-    errs() << "error: no assembly instructions found.\n";
+    WithColor::error() << "no assembly instructions found.\n";
     return 1;
   }
 
   // Now initialize the output file.
   auto OF = getOutputStream();
   if (std::error_code EC = OF.getError()) {
-    errs() << EC.message() << '\n';
+    WithColor::error() << EC.message() << '\n';
+    return 1;
+  }
+
+  unsigned AssemblerDialect = P->getAssemblerDialect();
+  if (OutputAsmVariant >= 0)
+    AssemblerDialect = static_cast<unsigned>(OutputAsmVariant);
+  std::unique_ptr<MCInstPrinter> IP(TheTarget->createMCInstPrinter(
+      Triple(TripleName), AssemblerDialect, *MAI, *MCII, *MRI));
+  if (!IP) {
+    WithColor::error()
+        << "unable to create instruction printer for target triple '"
+        << TheTriple.normalize() << "' with assembly variant "
+        << AssemblerDialect << ".\n";
     return 1;
   }
 

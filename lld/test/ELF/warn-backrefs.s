@@ -21,6 +21,11 @@
 
 # RUN: not ld.lld --fatal-warnings --warn-backrefs -o %t.exe %t2.a %t1.o 2>&1 | FileCheck %s
 # RUN: not ld.lld --fatal-warnings --warn-backrefs -o %t.exe %t2.a "-(" %t1.o "-)" 2>&1 | FileCheck %s
+# RUN: not ld.lld --fatal-warnings --warn-backrefs -o %t.exe --start-group %t2.a --end-group %t1.o 2>&1 | FileCheck %s
+
+# RUN: echo "GROUP(\"%t2.a\")" > %t3.script
+# RUN: not ld.lld --fatal-warnings --warn-backrefs -o %t.exe %t3.script %t1.o 2>&1 | FileCheck %s
+# RUN: ld.lld --fatal-warnings --warn-backrefs -o %t.exe "-(" %t3.script %t1.o "-)"
 
 # CHECK: backward reference detected: foo in {{.*}}1.o refers to {{.*}}2.a
 
@@ -29,6 +34,10 @@
 
 # RUN: not ld.lld --fatal-warnings --end-group 2>&1 | FileCheck -check-prefix=END %s
 # END: stray --end-group
+
+# RUN: echo ".globl bar; bar:" | llvm-mc -filetype=obj -triple=x86_64-unknown-linux - -o %t3.o
+# RUN: echo ".globl foo; foo: call bar" | llvm-mc -filetype=obj -triple=x86_64-unknown-linux - -o %t4.o
+# RUN: ld.lld --fatal-warnings --warn-backrefs %t1.o --start-lib %t3.o %t4.o --end-lib -o %t.exe
 
 .globl _start, foo
 _start:

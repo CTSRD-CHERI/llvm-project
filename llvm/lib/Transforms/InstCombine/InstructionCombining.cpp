@@ -35,6 +35,7 @@
 
 #include "InstCombineInternal.h"
 #include "llvm-c/Initialization.h"
+#include "llvm-c/Transforms/InstCombine.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
@@ -74,6 +75,7 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Intrinsics.h"
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Operator.h"
 #include "llvm/IR/PassManager.h"
@@ -95,7 +97,6 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/InstCombine/InstCombine.h"
 #include "llvm/Transforms/InstCombine/InstCombineWorklist.h"
-#include "llvm/Transforms/Scalar.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
@@ -1951,14 +1952,34 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
       PtrOp = BC;
   }
 
-  /// See if we can simplify:
-  ///   X = bitcast A* to B*
-  ///   Y = gep X, <...constant indices...>
-  /// into a gep of the original struct.  This is important for SROA and alias
-  /// analysis of unions.  If "A" is also a bitcast, wait for A/X to be merged.
   if (auto *BCI = dyn_cast<BitCastInst>(PtrOp)) {
     Value *SrcOp = BCI->getOperand(0);
     PointerType *SrcType = cast<PointerType>(BCI->getSrcTy());
+    Type *SrcEltType = SrcType->getElementType();
+
+    // GEP directly using the source operand if this GEP is accessing an element
+    // of a bitcasted pointer to vector or array of the same dimensions:
+    // gep (bitcast <c x ty>* X to [c x ty]*), Y, Z --> gep X, Y, Z
+    // gep (bitcast [c x ty]* X to <c x ty>*), Y, Z --> gep X, Y, Z
+    auto areMatchingArrayAndVecTypes = [](Type *ArrTy, Type *VecTy) {
+      return ArrTy->getArrayElementType() == VecTy->getVectorElementType() &&
+             ArrTy->getArrayNumElements() == VecTy->getVectorNumElements();
+    };
+    if (GEP.getNumOperands() == 3 &&
+        ((GEPEltType->isArrayTy() && SrcEltType->isVectorTy() &&
+          areMatchingArrayAndVecTypes(GEPEltType, SrcEltType)) ||
+         (GEPEltType->isVectorTy() && SrcEltType->isArrayTy() &&
+          areMatchingArrayAndVecTypes(SrcEltType, GEPEltType)))) {
+      GEP.setOperand(0, SrcOp);
+      GEP.setSourceElementType(SrcEltType);
+      return &GEP;
+    }
+
+    // See if we can simplify:
+    //   X = bitcast A* to B*
+    //   Y = gep X, <...constant indices...>
+    // into a gep of the original struct. This is important for SROA and alias
+    // analysis of unions. If "A" is also a bitcast, wait for A/X to be merged.
     unsigned OffsetBits = DL.getIndexTypeSizeInBits(GEPType);
     APInt Offset(OffsetBits, 0);
     if (!isa<BitCastInst>(SrcOp) && GEP.accumulateConstantOffset(DL, Offset)) {
@@ -2886,6 +2907,7 @@ Instruction *InstCombiner::visitLandingPadInst(LandingPadInst &LI) {
 /// block.
 static bool TryToSinkInstruction(Instruction *I, BasicBlock *DestBlock) {
   assert(I->hasOneUse() && "Invariants didn't hold!");
+  BasicBlock *SrcBlock = I->getParent();
 
   // Cannot move control-flow-involving, volatile loads, vaarg, etc.
   if (isa<PHINode>(I) || I->isEHPad() || I->mayHaveSideEffects() ||
@@ -2915,10 +2937,20 @@ static bool TryToSinkInstruction(Instruction *I, BasicBlock *DestBlock) {
       if (Scan->mayWriteToMemory())
         return false;
   }
-
   BasicBlock::iterator InsertPos = DestBlock->getFirstInsertionPt();
   I->moveBefore(&*InsertPos);
   ++NumSunkInst;
+
+  // Also sink all related debug uses from the source basic block. Otherwise we
+  // get debug use before the def.
+  SmallVector<DbgInfoIntrinsic *, 1> DbgUsers;
+  findDbgUsers(DbgUsers, I);
+  for (auto *DII : DbgUsers) {
+    if (DII->getParent() == SrcBlock) {
+      DII->moveBefore(&*InsertPos);
+      DEBUG(dbgs() << "SINK: " << *DII << '\n');
+    }
+  }
   return true;
 }
 
@@ -3344,4 +3376,8 @@ void LLVMInitializeInstCombine(LLVMPassRegistryRef R) {
 
 FunctionPass *llvm::createInstructionCombiningPass(bool ExpensiveCombines) {
   return new InstructionCombiningPass(ExpensiveCombines);
+}
+
+void LLVMAddInstructionCombiningPass(LLVMPassManagerRef PM) {
+  unwrap(PM)->add(createInstructionCombiningPass());
 }

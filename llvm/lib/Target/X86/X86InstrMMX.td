@@ -339,11 +339,11 @@ defm MMX_PSUBUSW : MMXI_binop_rm_int<0xD9, "psubusw", int_x86_mmx_psubus_w,
                                    WriteVecALU>;
 
 defm MMX_PHSUBW  : SS3I_binop_rm_int_mm<0x05, "phsubw", int_x86_ssse3_phsub_w,
-                                   WriteVecALU>;
+                                        WritePHAdd>;
 defm MMX_PHSUBD  : SS3I_binop_rm_int_mm<0x06, "phsubd", int_x86_ssse3_phsub_d,
-                                   WriteVecALU>;
+                                        WritePHAdd>;
 defm MMX_PHSUBSW : SS3I_binop_rm_int_mm<0x07, "phsubsw",int_x86_ssse3_phsub_sw,
-                                   WriteVecALU>;
+                                        WritePHAdd>;
 
 // -- Multiplication
 defm MMX_PMULLW  : MMXI_binop_rm_int<0xD5, "pmullw", int_x86_mmx_pmull_w,
@@ -384,7 +384,7 @@ defm MMX_PMAXSW  : MMXI_binop_rm_int<0xEE, "pmaxsw", int_x86_mmx_pmaxs_w,
                                      WriteVecALU, 1>;
 
 defm MMX_PSADBW  : MMXI_binop_rm_int<0xF6, "psadbw", int_x86_mmx_psad_bw,
-                                     WriteVecIMul, 1>;
+                                     WritePSADBW, 1>;
 }
 
 defm MMX_PSIGNB :  SS3I_binop_rm_int_mm<0x08, "psignb", int_x86_ssse3_psign_b,
@@ -528,7 +528,7 @@ def MMX_PEXTRWrr: MMXIi8<0xC5, MRMSrcReg,
                      "pextrw\t{$src2, $src1, $dst|$dst, $src1, $src2}",
                      [(set GR32orGR64:$dst, (int_x86_mmx_pextr_w VR64:$src1,
                                              imm:$src2))]>,
-                     Sched<[WriteShuffle]>;
+                     Sched<[WriteVecExtract]>;
 let Constraints = "$src1 = $dst" in {
 let Predicates = [HasSSE1] in {
   def MMX_PINSRWrr : MMXIi8<0xC4, MRMSrcReg,
@@ -537,7 +537,7 @@ let Predicates = [HasSSE1] in {
                     "pinsrw\t{$src3, $src2, $dst|$dst, $src2, $src3}",
                     [(set VR64:$dst, (int_x86_mmx_pinsr_w VR64:$src1,
                                       GR32orGR64:$src2, imm:$src3))]>,
-                    Sched<[WriteShuffle]>;
+                    Sched<[WriteVecInsert]>;
 
   def MMX_PINSRWrm : MMXIi8<0xC4, MRMSrcMem,
                    (outs VR64:$dst),
@@ -546,7 +546,7 @@ let Predicates = [HasSSE1] in {
                    [(set VR64:$dst, (int_x86_mmx_pinsr_w VR64:$src1,
                                        (i32 (anyext (loadi16 addr:$src2))),
                                      imm:$src3))]>,
-                   Sched<[WriteShuffleLd, ReadAfterLd]>;
+                   Sched<[WriteVecInsertLd, ReadAfterLd]>;
 }
 }
 
