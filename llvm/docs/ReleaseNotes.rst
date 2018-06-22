@@ -62,8 +62,12 @@ Non-comprehensive list of changes in this release
   applied by default.
 
 * Optimization of floating-point casts is improved. This may cause surprising
-  results for code that is relying on undefined behavior. Code sanitizers can
-  be used to detect affected patterns such as this:
+  results for code that is relying on the undefined behavior of overflowing 
+  casts. The optimization can be disabled by specifying a function attribute:
+  "strict-float-cast-overflow"="false". This attribute may be created by the
+  clang option :option:`-fno-strict-float-cast-overflow`.
+  Code sanitizers can be used to detect affected patterns. The option for
+  detecting this problem alone is "-fsanitize=float-cast-overflow":
 
 .. code-block:: c
 
@@ -76,10 +80,13 @@ Non-comprehensive list of changes in this release
 
 .. code-block:: bash
 
-    clang -O1 ftrunc.c -fsanitize=undefined ; ./a.out 
+    clang -O1 ftrunc.c -fsanitize=float-cast-overflow ; ./a.out 
     ftrunc.c:5:15: runtime error: 4.29497e+09 is outside the range of representable values of type 'int'
     junk in the ftrunc: 0.000000
 
+* ``LLVM_ON_WIN32`` is no longer set by ``llvm/Config/config.h`` and
+  ``llvm/Config/llvm-config.h``.  If you used this macro, use the compiler-set
+  ``_WIN32`` instead which is set exactly when ``LLVM_ON_WIN32`` used to be set.
 
 * Note..
 

@@ -46,7 +46,7 @@ enum ResourceStateEvent {
   RS_RESERVED
 };
 
-/// \brief A descriptor for processor resources.
+/// A descriptor for processor resources.
 ///
 /// Each object of class ResourceState is associated to a specific processor
 /// resource. There is an instance of this class for every processor resource
@@ -250,7 +250,7 @@ public:
 #endif
 };
 
-/// \brief A resource unit identifier.
+/// A resource unit identifier.
 ///
 /// This is used to identify a specific processor resource unit using a pair
 /// of indices where the 'first' index is a processor resource mask, and the
@@ -362,7 +362,7 @@ public:
   bool canBeIssued(const InstrDesc &Desc) const;
 
   void issueInstruction(
-      unsigned Index, const InstrDesc &Desc,
+      const InstrDesc &Desc,
       llvm::SmallVectorImpl<std::pair<ResourceRef, double>> &Pipes);
 
   void cycleEvent(llvm::SmallVectorImpl<ResourceRef> &ResourcesFreed);
@@ -465,7 +465,6 @@ public:
   /// Otherwise, a generic HWStallEvent is notified to the listeners.
   bool canBeDispatched(unsigned Idx, const InstrDesc &Desc) const;
   void scheduleInstruction(unsigned Idx, Instruction &MCIS);
-
 
   /// Issue an instruction.
   void issueInstruction(unsigned Index, Instruction &IS);

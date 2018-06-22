@@ -57,6 +57,7 @@
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/ADT/StringSwitch.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/Option/Arg.h"
 #include "llvm/Option/ArgList.h"
 #include "llvm/Option/OptSpecifier.h"
@@ -129,7 +130,8 @@ Driver::Driver(StringRef ClangExecutable, StringRef DefaultTargetTriple,
 
 void Driver::ParseDriverMode(StringRef ProgramName,
                              ArrayRef<const char *> Args) {
-  ClangNameParts = ToolChain::getTargetAndModeFromProgramName(ProgramName);
+  if (ClangNameParts.isEmpty())
+    ClangNameParts = ToolChain::getTargetAndModeFromProgramName(ProgramName);
   setDriverModeFromOption(ClangNameParts.DriverMode);
 
   for (const char *ArgPtr : Args) {
@@ -875,11 +877,14 @@ Compilation *Driver::BuildCompilation(ArrayRef<const char *> ArgList) {
                                               : std::move(*CLOptions));
   if (HasConfigFile)
     for (auto *Opt : *CLOptions) {
+      if (Opt->getOption().matches(options::OPT_config))
+        continue;
+      unsigned Index = Args.MakeIndex(Opt->getSpelling());
       const Arg *BaseArg = &Opt->getBaseArg();
       if (BaseArg == Opt)
         BaseArg = nullptr;
       Arg *Copy = new llvm::opt::Arg(Opt->getOption(), Opt->getSpelling(),
-                                     Args.size(), BaseArg);
+                                     Index, BaseArg);
       Copy->getValues() = Opt->getValues();
       if (Opt->isClaimed())
         Copy->claim();
@@ -1589,7 +1594,13 @@ bool Driver::HandleImmediateArgs(const Compilation &C) {
   }
 
   if (Arg *A = C.getArgs().getLastArg(options::OPT_print_prog_name_EQ)) {
-    llvm::outs() << GetProgramPath(A->getValue(), TC) << "\n";
+    StringRef ProgName = A->getValue();
+
+    // Null program name cannot have a path.
+    if (! ProgName.empty())
+      llvm::outs() << GetProgramPath(ProgName, TC);
+
+    llvm::outs() << "\n";
     return false;
   }
 

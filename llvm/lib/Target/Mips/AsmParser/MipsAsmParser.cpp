@@ -365,6 +365,7 @@ class MipsAsmParser : public MCTargetAsmParser {
   bool parseSetMtDirective();
   bool parseSetNoMtDirective();
   bool parseSetNoCRCDirective();
+  bool parseSetNoVirtDirective();
 
   bool parseSetAssignment();
 
@@ -682,6 +683,10 @@ public:
 
   bool hasCRC() const {
     return getSTI().getFeatureBits()[Mips::FeatureCRC];
+  }
+
+  bool hasVirt() const {
+    return getSTI().getFeatureBits()[Mips::FeatureVirt];
   }
 
   /// Warn if RegIndex is the same as the current AT.
@@ -1406,6 +1411,20 @@ public:
     MCValue Res;
     bool IsReloc = getMemOff()->evaluateAsRelocatable(Res, nullptr, nullptr);
     return IsReloc && isShiftedInt<Bits, ShiftAmount>(Res.getConstant());
+  }
+
+  bool isMemWithPtrSizeOffset() const {
+    if (!isMem())
+      return false;
+    if (!getMemBase()->isGPRAsmReg())
+      return false;
+    const unsigned PtrBits = 32;
+    if (isa<MCTargetExpr>(getMemOff()) ||
+        (isConstantMemOff() && isIntN(PtrBits, getConstantMemOff())))
+      return true;
+    MCValue Res;
+    bool IsReloc = getMemOff()->evaluateAsRelocatable(Res, nullptr, nullptr);
+    return IsReloc && isIntN(PtrBits, Res.getConstant());
   }
 
   bool isMemWithGRPMM16Base() const {
@@ -5719,6 +5738,9 @@ bool MipsAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
   case Match_CheriAsmReg0IsDDC:
     return Error(RefineErrorLoc(IDLoc, Operands, ErrorInfo),
                  "expected general-purpose CHERI register operand or $ddc");
+  case Match_MemSImmPtr:
+    return Error(RefineErrorLoc(IDLoc, Operands, ErrorInfo),
+                 "expected memory with 32-bit signed offset");
   case Match_RequiresPosSizeRange0_32: {
     SMLoc ErrorStart = Operands[3]->getStartLoc();
     SMLoc ErrorEnd = Operands[4]->getEndLoc();
@@ -7211,6 +7233,23 @@ bool MipsAsmParser::parseSetNoCRCDirective() {
   return false;
 }
 
+bool MipsAsmParser::parseSetNoVirtDirective() {
+  MCAsmParser &Parser = getParser();
+  Parser.Lex(); // Eat "novirt".
+
+  // If this is not the end of the statement, report an error.
+  if (getLexer().isNot(AsmToken::EndOfStatement)) {
+    reportParseError("unexpected token, expected end of statement");
+    return false;
+  }
+
+  clearFeatureBits(Mips::FeatureVirt, "virt");
+
+  getTargetStreamer().emitDirectiveSetNoVirt();
+  Parser.Lex(); // Consume the EndOfStatement.
+  return false;
+}
+
 bool MipsAsmParser::parseSetPopDirective() {
   MCAsmParser &Parser = getParser();
   SMLoc Loc = getLexer().getLoc();
@@ -7435,6 +7474,10 @@ bool MipsAsmParser::parseSetFeature(uint64_t Feature) {
   case Mips::FeatureCRC:
     setFeatureBits(Mips::FeatureCRC, "crc");
     getTargetStreamer().emitDirectiveSetCRC();
+    break;
+  case Mips::FeatureVirt:
+    setFeatureBits(Mips::FeatureVirt, "virt");
+    getTargetStreamer().emitDirectiveSetVirt();
     break;
   }
   return false;
@@ -7749,6 +7792,10 @@ bool MipsAsmParser::parseDirectiveSet() {
     return parseSetFeature(Mips::FeatureCRC);
   } else if (Tok.getString() == "nocrc") {
     return parseSetNoCRCDirective();
+  } else if (Tok.getString() == "virt") {
+    return parseSetFeature(Mips::FeatureVirt);
+  } else if (Tok.getString() == "novirt") {
+    return parseSetNoVirtDirective();
   } else {
     // It is just an identifier, look for an assignment.
     parseSetAssignment();
@@ -7996,6 +8043,8 @@ bool MipsAsmParser::parseSSectionDirective(StringRef Section, unsigned Type) {
 ///  ::= .module mt
 ///  ::= .module crc
 ///  ::= .module nocrc
+///  ::= .module virt
+///  ::= .module novirt
 bool MipsAsmParser::parseDirectiveModule() {
   MCAsmParser &Parser = getParser();
   MCAsmLexer &Lexer = getLexer();
@@ -8144,6 +8193,44 @@ bool MipsAsmParser::parseDirectiveModule() {
     // If generating ELF, don't do anything (the .MIPS.abiflags section gets
     // emitted later).
     getTargetStreamer().emitDirectiveModuleNoCRC();
+
+    // If this is not the end of the statement, report an error.
+    if (getLexer().isNot(AsmToken::EndOfStatement)) {
+      reportParseError("unexpected token, expected end of statement");
+      return false;
+    }
+
+    return false; // parseDirectiveModule has finished successfully.
+  } else if (Option == "virt") {
+    setModuleFeatureBits(Mips::FeatureVirt, "virt");
+
+    // Synchronize the ABI Flags information with the FeatureBits information we
+    // updated above.
+    getTargetStreamer().updateABIInfo(*this);
+
+    // If printing assembly, use the recently updated ABI Flags information.
+    // If generating ELF, don't do anything (the .MIPS.abiflags section gets
+    // emitted later).
+    getTargetStreamer().emitDirectiveModuleVirt();
+
+    // If this is not the end of the statement, report an error.
+    if (getLexer().isNot(AsmToken::EndOfStatement)) {
+      reportParseError("unexpected token, expected end of statement");
+      return false;
+    }
+
+    return false; // parseDirectiveModule has finished successfully.
+  } else if (Option == "novirt") {
+    clearModuleFeatureBits(Mips::FeatureVirt, "virt");
+
+    // Synchronize the ABI Flags information with the FeatureBits information we
+    // updated above.
+    getTargetStreamer().updateABIInfo(*this);
+
+    // If printing assembly, use the recently updated ABI Flags information.
+    // If generating ELF, don't do anything (the .MIPS.abiflags section gets
+    // emitted later).
+    getTargetStreamer().emitDirectiveModuleNoVirt();
 
     // If this is not the end of the statement, report an error.
     if (getLexer().isNot(AsmToken::EndOfStatement)) {

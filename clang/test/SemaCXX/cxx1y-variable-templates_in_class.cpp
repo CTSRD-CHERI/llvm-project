@@ -380,3 +380,18 @@ int main() {
 } // end ns PR24473
 #endif // CPP1Y
 
+namespace dependent_static_var_template {
+  struct A {
+    template<int = 0> static int n; // expected-note 2{{here}}
+  };
+  int &r = A::template n; // expected-error {{use of variable template 'n' requires template arguments}}
+
+  template<typename T>
+  int &f() { return T::template n; } // expected-error {{use of variable template 'n' requires template arguments}}
+  int &s = f<A>(); // expected-note {{instantiation of}}
+
+  namespace B {
+    template<int = 0> static int n; // expected-note {{here}}
+  }
+  int &t = B::template n; // expected-error {{use of variable template 'n' requires template arguments}}
+}

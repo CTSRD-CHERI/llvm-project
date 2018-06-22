@@ -407,7 +407,7 @@ CallInst *IRBuilderBase::CreateAssumption(Value *Cond) {
   return createCallHelper(FnAssume, Ops, this);
 }
 
-/// \brief Create a call to a Masked Load intrinsic.
+/// Create a call to a Masked Load intrinsic.
 /// \p Ptr      - base pointer for the load
 /// \p Align    - alignment of the source location
 /// \p Mask     - vector of booleans which indicates what vector lanes should
@@ -430,7 +430,7 @@ CallInst *IRBuilderBase::CreateMaskedLoad(Value *Ptr, unsigned Align,
                                OverloadedTypes, Name);
 }
 
-/// \brief Create a call to a Masked Store intrinsic.
+/// Create a call to a Masked Store intrinsic.
 /// \p Val   - data to be stored,
 /// \p Ptr   - base pointer for the store
 /// \p Align - alignment of the destination location
@@ -459,7 +459,7 @@ CallInst *IRBuilderBase::CreateMaskedIntrinsic(Intrinsic::ID Id,
   return createCallHelper(TheFn, Ops, this, Name);
 }
 
-/// \brief Create a call to a Masked Gather intrinsic.
+/// Create a call to a Masked Gather intrinsic.
 /// \p Ptrs     - vector of pointers for loading
 /// \p Align    - alignment for one element
 /// \p Mask     - vector of booleans which indicates what vector lanes should
@@ -491,7 +491,7 @@ CallInst *IRBuilderBase::CreateMaskedGather(Value *Ptrs, unsigned Align,
                                Name);
 }
 
-/// \brief Create a call to a Masked Scatter intrinsic.
+/// Create a call to a Masked Scatter intrinsic.
 /// \p Data  - data to be stored,
 /// \p Ptrs  - the vector of pointers, where the \p Data elements should be
 ///            stored

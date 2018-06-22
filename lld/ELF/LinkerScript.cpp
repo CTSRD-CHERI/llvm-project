@@ -801,12 +801,6 @@ void LinkerScript::assignOffsets(OutputSection *Sec) {
       continue;
     }
 
-    // Handle ASSERT().
-    if (auto *Cmd = dyn_cast<AssertCommand>(Base)) {
-      Cmd->Expression();
-      continue;
-    }
-
     // Handle a single input section description command.
     // It calculates and assigns the offsets for each section and also
     // updates the output section size.
@@ -1053,12 +1047,6 @@ void LinkerScript::assignAddresses() {
       Cmd->Size = Dot - Cmd->Addr;
       continue;
     }
-
-    if (auto *Cmd = dyn_cast<AssertCommand>(Base)) {
-      Cmd->Expression();
-      continue;
-    }
-
     assignOffsets(cast<OutputSection>(Base));
   }
   Ctx = nullptr;
@@ -1122,9 +1110,9 @@ ExprValue LinkerScript::getSymbolValue(StringRef Name, const Twine &Loc) {
   if (Symbol *Sym = Symtab->find(Name)) {
     if (auto *DS = dyn_cast<Defined>(Sym))
       return {DS->Section, false, DS->Value, Loc};
-    if (auto *SS = dyn_cast<SharedSymbol>(Sym))
-      if (!ErrorOnMissingSection || SS->CopyRelSec)
-        return {SS->CopyRelSec, false, 0, Loc};
+    if (isa<SharedSymbol>(Sym))
+      if (!ErrorOnMissingSection)
+        return {nullptr, false, 0, Loc};
   }
 
   error(Loc + ": symbol not found: " + Name);

@@ -17,6 +17,7 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/Support/ErrorOr.h"
 #include <system_error>
 
@@ -27,15 +28,15 @@ namespace sys {
   // a colon on Unix or a semicolon on Windows.
 #if defined(LLVM_ON_UNIX)
   const char EnvPathSeparator = ':';
-#elif defined (LLVM_ON_WIN32)
+#elif defined (_WIN32)
   const char EnvPathSeparator = ';';
 #endif
 
-/// @brief This struct encapsulates information about a process.
+/// This struct encapsulates information about a process.
 struct ProcessInfo {
 #if defined(LLVM_ON_UNIX)
   typedef pid_t ProcessId;
-#elif defined(LLVM_ON_WIN32)
+#elif defined(_WIN32)
   typedef unsigned long ProcessId; // Must match the type of DWORD on Windows.
   typedef void * HANDLE; // Must match the type of HANDLE on Windows.
   /// The handle to the process (available on Windows only).
@@ -55,7 +56,7 @@ struct ProcessInfo {
   ProcessInfo();
 };
 
-  /// \brief Find the first executable file \p Name in \p Paths.
+  /// Find the first executable file \p Name in \p Paths.
   ///
   /// This does not perform hashing as a shell would but instead stats each PATH
   /// entry individually so should generally be avoided. Core LLVM library

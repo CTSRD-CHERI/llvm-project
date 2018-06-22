@@ -5278,6 +5278,19 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
       return nullptr;
     }
 
+    // PHI nodes have already been selected, so we should know which VReg that
+    // is assigns to already.
+    if (isa<PHINode>(V)) {
+      auto It = FuncInfo.ValueMap.find(V);
+      if (It != FuncInfo.ValueMap.end()) {
+        unsigned Reg = It->second;
+        SDV = DAG.getVRegDbgValue(Variable, Expression, Reg, false, dl,
+                                  SDNodeOrder);
+        DAG.AddDbgValue(SDV, nullptr, false);
+        return nullptr;
+      }
+    }
+
     // TODO: When we get here we will either drop the dbg.value completely, or
     // we try to move it forward by letting it dangle for awhile. So we should
     // probably add an extra DbgValue to the DAG here, with a reference to
@@ -7772,7 +7785,7 @@ SDValue SelectionDAGBuilder::lowerRangeToAssertZExt(SelectionDAG &DAG,
   return DAG.getMergeValues(Ops, SL);
 }
 
-/// \brief Populate a CallLowerinInfo (into \p CLI) based on the properties of
+/// Populate a CallLowerinInfo (into \p CLI) based on the properties of
 /// the call being lowered.
 ///
 /// This is a helper for lowering intrinsics that follow a target calling
@@ -7807,7 +7820,7 @@ void SelectionDAGBuilder::populateCallLoweringInfo(
       .setIsPatchPoint(IsPatchPoint);
 }
 
-/// \brief Add a stack map intrinsic call's live variable operands to a stackmap
+/// Add a stack map intrinsic call's live variable operands to a stackmap
 /// or patchpoint target node's operand list.
 ///
 /// Constants are converted to TargetConstants purely as an optimization to
@@ -7843,7 +7856,7 @@ static void addStackMapLiveVars(ImmutableCallSite CS, unsigned StartIdx,
   }
 }
 
-/// \brief Lower llvm.experimental.stackmap directly to its target opcode.
+/// Lower llvm.experimental.stackmap directly to its target opcode.
 void SelectionDAGBuilder::visitStackmap(const CallInst &CI) {
   // void @llvm.experimental.stackmap(i32 <id>, i32 <numShadowBytes>,
   //                                  [live variables...])
@@ -7906,7 +7919,7 @@ void SelectionDAGBuilder::visitStackmap(const CallInst &CI) {
   FuncInfo.MF->getFrameInfo().setHasStackMap();
 }
 
-/// \brief Lower llvm.experimental.patchpoint directly to its target opcode.
+/// Lower llvm.experimental.patchpoint directly to its target opcode.
 void SelectionDAGBuilder::visitPatchpoint(ImmutableCallSite CS,
                                           const BasicBlock *EHPadBB) {
   // void|i64 @llvm.experimental.patchpoint.void|i64(i64 <id>,

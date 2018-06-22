@@ -38,7 +38,7 @@ bool AArch64TTIImpl::areInlineCompatible(const Function *Caller,
   return (CallerBits & CalleeBits) == CalleeBits;
 }
 
-/// \brief Calculate the cost of materializing a 64-bit value. This helper
+/// Calculate the cost of materializing a 64-bit value. This helper
 /// method might only calculate a fraction of a larger immediate. Therefore it
 /// is valid to return a cost of ZERO.
 int AArch64TTIImpl::getIntImmCost(int64_t Val) {
@@ -54,7 +54,7 @@ int AArch64TTIImpl::getIntImmCost(int64_t Val) {
   return (64 - LZ + 15) / 16;
 }
 
-/// \brief Calculate the cost of materializing the given constant.
+/// Calculate the cost of materializing the given constant.
 int AArch64TTIImpl::getIntImmCost(const APInt &Imm, Type *Ty) {
   assert(Ty->isIntegerTy());
 
@@ -911,4 +911,31 @@ int AArch64TTIImpl::getArithmeticReductionCost(unsigned Opcode, Type *ValTy,
     return LT.first * Entry->Cost;
 
   return BaseT::getArithmeticReductionCost(Opcode, ValTy, IsPairwiseForm);
+}
+
+int AArch64TTIImpl::getShuffleCost(TTI::ShuffleKind Kind, Type *Tp, int Index,
+                                   Type *SubTp) {
+
+  // Transpose shuffle kinds can be performed with 'trn1/trn2' and 'zip1/zip2'
+  // instructions.
+  if (Kind == TTI::SK_Transpose) {
+    static const CostTblEntry TransposeTbl[] = {
+        {ISD::VECTOR_SHUFFLE, MVT::v8i8,  1},
+        {ISD::VECTOR_SHUFFLE, MVT::v16i8, 1},
+        {ISD::VECTOR_SHUFFLE, MVT::v4i16, 1},
+        {ISD::VECTOR_SHUFFLE, MVT::v8i16, 1},
+        {ISD::VECTOR_SHUFFLE, MVT::v2i32, 1},
+        {ISD::VECTOR_SHUFFLE, MVT::v4i32, 1},
+        {ISD::VECTOR_SHUFFLE, MVT::v2i64, 1},
+        {ISD::VECTOR_SHUFFLE, MVT::v2f32, 1},
+        {ISD::VECTOR_SHUFFLE, MVT::v4f32, 1},
+        {ISD::VECTOR_SHUFFLE, MVT::v2f64, 1},
+    };
+    std::pair<int, MVT> LT = TLI->getTypeLegalizationCost(DL, Tp);
+    if (const auto *Entry =
+            CostTableLookup(TransposeTbl, ISD::VECTOR_SHUFFLE, LT.second))
+      return LT.first * Entry->Cost;
+  }
+
+  return BaseT::getShuffleCost(Kind, Tp, Index, SubTp);
 }

@@ -1255,6 +1255,14 @@ are listed below.
    flushed-to-zero number is preserved in the sign of 0, denormals are
    flushed to positive zero, respectively.
 
+.. option:: -f[no-]strict-float-cast-overflow
+
+   When a floating-point value is not representable in a destination integer 
+   type, the code has undefined behavior according to the language standard.
+   By default, Clang will not guarantee any particular result in that case.
+   With the 'no-strict' option, Clang attempts to match the overflowing behavior
+   of the target's native float-to-int conversion instructions.
+
 .. option:: -fwhole-program-vtables
 
    Enable whole-program vtable optimizations, such as single-implementation

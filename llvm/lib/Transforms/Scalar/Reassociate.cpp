@@ -43,6 +43,7 @@
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Operator.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/IR/PatternMatch.h"
@@ -780,6 +781,18 @@ void ReassociatePass::RewriteExprTree(BinaryOperator *I,
 
       if (ExpressionChanged == I)
         break;
+
+      // Discard any debug info related to the expressions that has changed (we
+      // can leave debug infor related to the root, since the result of the
+      // expression tree should be the same even after reassociation).
+      SmallVector<DbgInfoIntrinsic *, 1> DbgUsers;
+      findDbgUsers(DbgUsers, ExpressionChanged);
+      for (auto *DII : DbgUsers) {
+        Value *Undef = UndefValue::get(ExpressionChanged->getType());
+        DII->setOperand(0, MetadataAsValue::get(DII->getContext(),
+                                                ValueAsMetadata::get(Undef)));
+      }
+
       ExpressionChanged->moveBefore(I);
       ExpressionChanged = cast<BinaryOperator>(*ExpressionChanged->user_begin());
     } while (true);
@@ -1621,7 +1634,7 @@ Value *ReassociatePass::OptimizeAdd(Instruction *I,
   return nullptr;
 }
 
-/// \brief Build up a vector of value/power pairs factoring a product.
+/// Build up a vector of value/power pairs factoring a product.
 ///
 /// Given a series of multiplication operands, build a vector of factors and
 /// the powers each is raised to when forming the final product. Sort them in
@@ -1686,7 +1699,7 @@ static bool collectMultiplyFactors(SmallVectorImpl<ValueEntry> &Ops,
   return true;
 }
 
-/// \brief Build a tree of multiplies, computing the product of Ops.
+/// Build a tree of multiplies, computing the product of Ops.
 static Value *buildMultiplyTree(IRBuilder<> &Builder,
                                 SmallVectorImpl<Value*> &Ops) {
   if (Ops.size() == 1)
@@ -1703,7 +1716,7 @@ static Value *buildMultiplyTree(IRBuilder<> &Builder,
   return LHS;
 }
 
-/// \brief Build a minimal multiplication DAG for (a^x)*(b^y)*(c^z)*...
+/// Build a minimal multiplication DAG for (a^x)*(b^y)*(c^z)*...
 ///
 /// Given a vector of values raised to various powers, where no two values are
 /// equal and the powers are sorted in decreasing order, compute the minimal

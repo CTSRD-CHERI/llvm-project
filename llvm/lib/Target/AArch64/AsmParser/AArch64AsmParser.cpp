@@ -140,7 +140,7 @@ private:
   OperandMatchResultTy tryParseGPRSeqPair(OperandVector &Operands);
   template <bool ParseShiftExtend>
   OperandMatchResultTy tryParseGPROperand(OperandVector &Operands);
-  template <bool ParseSuffix>
+  template <bool ParseShiftExtend, bool ParseSuffix>
   OperandMatchResultTy tryParseSVEDataVector(OperandVector &Operands);
   OperandMatchResultTy tryParseSVEPredicateVector(OperandVector &Operands);
   template <RegKind VectorKind>
@@ -506,19 +506,38 @@ public:
 
   template <int Width> bool isSImm() const { return isSImmScaled<Width, 1>(); }
 
-  template <int Bits, int Scale> bool isSImmScaled() const {
+  template <int Bits, int Scale> DiagnosticPredicate isSImmScaled() const {
+    return isImmScaled<Bits, Scale>(true);
+  }
+
+  template <int Bits, int Scale> DiagnosticPredicate isUImmScaled() const {
+    return isImmScaled<Bits, Scale>(false);
+  }
+
+  template <int Bits, int Scale>
+  DiagnosticPredicate isImmScaled(bool Signed) const {
     if (!isImm())
-      return false;
+      return DiagnosticPredicateTy::NoMatch;
+
     const MCConstantExpr *MCE = dyn_cast<MCConstantExpr>(getImm());
     if (!MCE)
-      return false;
+      return DiagnosticPredicateTy::NoMatch;
 
-    int64_t Shift = Bits - 1;
-    int64_t MinVal = (int64_t(1) << Shift) * -Scale;
-    int64_t MaxVal = ((int64_t(1) << Shift) - 1) * Scale;
+    int64_t MinVal, MaxVal;
+    if (Signed) {
+      int64_t Shift = Bits - 1;
+      MinVal = (int64_t(1) << Shift) * -Scale;
+      MaxVal = ((int64_t(1) << Shift) - 1) * Scale;
+    } else {
+      MinVal = 0;
+      MaxVal = ((int64_t(1) << Bits) - 1) * Scale;
+    }
 
     int64_t Val = MCE->getValue();
-    return Val >= MinVal && Val <= MaxVal && (Val % Scale) == 0;
+    if (Val >= MinVal && Val <= MaxVal && (Val % Scale) == 0)
+      return DiagnosticPredicateTy::Match;
+
+    return DiagnosticPredicateTy::NearMatch;
   }
 
   bool isSVEPattern() const {
@@ -857,6 +876,31 @@ public:
            (ElementWidth == 0 || Reg.ElementWidth == ElementWidth);
   }
 
+  template <int ElementWidth, unsigned Class,
+            AArch64_AM::ShiftExtendType ShiftExtendTy, int ShiftWidth,
+            bool ShiftWidthAlwaysSame>
+  DiagnosticPredicate isSVEVectorRegWithShiftExtend() const {
+    if (Kind != k_Register || Reg.Kind != RegKind::SVEDataVector)
+      return DiagnosticPredicateTy::NoMatch;
+
+    if (!isSVEVectorRegOfWidth<ElementWidth, Class>())
+      return DiagnosticPredicateTy::NearMatch;
+
+    // Give a more specific diagnostic when the user has explicitly typed in
+    // a shift-amount that does not match what is expected, but for which
+    // there is also an unscaled addressing mode (e.g. sxtw/uxtw).
+    bool MatchShift = getShiftExtendAmount() == Log2_32(ShiftWidth / 8);
+    if (!MatchShift && (ShiftExtendTy == AArch64_AM::UXTW ||
+                        ShiftExtendTy == AArch64_AM::SXTW) &&
+        !ShiftWidthAlwaysSame && hasShiftExtendAmount() && ShiftWidth == 8)
+      return DiagnosticPredicateTy::NoMatch;
+
+    if (MatchShift && ShiftExtendTy == getShiftExtendType())
+      return DiagnosticPredicateTy::Match;
+
+    return DiagnosticPredicateTy::NearMatch;
+  }
+
   bool isGPR32as64() const {
     return Kind == k_Register && Reg.Kind == RegKind::Scalar &&
       AArch64MCRegisterClasses[AArch64::GPR64RegClassID].contains(Reg.RegNum);
@@ -891,12 +935,14 @@ public:
   }
 
   template <unsigned RegClassID, int ExtWidth>
-  bool isGPR64WithShiftExtend() const {
-    if (!isGPR64<RegClassID>())
-      return false;
+  DiagnosticPredicate isGPR64WithShiftExtend() const {
+    if (Kind != k_Register || Reg.Kind != RegKind::Scalar)
+      return DiagnosticPredicateTy::NoMatch;
 
-    return getShiftExtendType() == AArch64_AM::LSL &&
-           getShiftExtendAmount() == Log2_32(ExtWidth / 8);
+    if (isGPR64<RegClassID>() && getShiftExtendType() == AArch64_AM::LSL &&
+        getShiftExtendAmount() == Log2_32(ExtWidth / 8))
+      return DiagnosticPredicateTy::Match;
+    return DiagnosticPredicateTy::NearMatch;
   }
 
   /// Is this a vector list with the type implicit (presumably attached to the
@@ -1202,27 +1248,7 @@ public:
                                          FirstRegs[(unsigned)RegTy][0]));
   }
 
-  void addVectorIndex1Operands(MCInst &Inst, unsigned N) const {
-    assert(N == 1 && "Invalid number of operands!");
-    Inst.addOperand(MCOperand::createImm(getVectorIndex()));
-  }
-
-  void addVectorIndexBOperands(MCInst &Inst, unsigned N) const {
-    assert(N == 1 && "Invalid number of operands!");
-    Inst.addOperand(MCOperand::createImm(getVectorIndex()));
-  }
-
-  void addVectorIndexHOperands(MCInst &Inst, unsigned N) const {
-    assert(N == 1 && "Invalid number of operands!");
-    Inst.addOperand(MCOperand::createImm(getVectorIndex()));
-  }
-
-  void addVectorIndexSOperands(MCInst &Inst, unsigned N) const {
-    assert(N == 1 && "Invalid number of operands!");
-    Inst.addOperand(MCOperand::createImm(getVectorIndex()));
-  }
-
-  void addVectorIndexDOperands(MCInst &Inst, unsigned N) const {
+  void addVectorIndexOperands(MCInst &Inst, unsigned N) const {
     assert(N == 1 && "Invalid number of operands!");
     Inst.addOperand(MCOperand::createImm(getVectorIndex()));
   }
@@ -1286,127 +1312,6 @@ public:
       return;
     }
     Inst.addOperand(MCOperand::createImm(MCE->getValue() / Scale));
-  }
-
-  void addSImm9Operands(MCInst &Inst, unsigned N) const {
-    assert(N == 1 && "Invalid number of operands!");
-    const MCConstantExpr *MCE = cast<MCConstantExpr>(getImm());
-    Inst.addOperand(MCOperand::createImm(MCE->getValue()));
-  }
-
-  void addSImm10s8Operands(MCInst &Inst, unsigned N) const {
-    assert(N == 1 && "Invalid number of operands!");
-    const MCConstantExpr *MCE = cast<MCConstantExpr>(getImm());
-    Inst.addOperand(MCOperand::createImm(MCE->getValue() / 8));
-  }
-
-  void addSImm7s4Operands(MCInst &Inst, unsigned N) const {
-    assert(N == 1 && "Invalid number of operands!");
-    const MCConstantExpr *MCE = cast<MCConstantExpr>(getImm());
-    Inst.addOperand(MCOperand::createImm(MCE->getValue() / 4));
-  }
-
-  void addSImm7s8Operands(MCInst &Inst, unsigned N) const {
-    assert(N == 1 && "Invalid number of operands!");
-    const MCConstantExpr *MCE = cast<MCConstantExpr>(getImm());
-    Inst.addOperand(MCOperand::createImm(MCE->getValue() / 8));
-  }
-
-  void addSImm7s16Operands(MCInst &Inst, unsigned N) const {
-    assert(N == 1 && "Invalid number of operands!");
-    const MCConstantExpr *MCE = cast<MCConstantExpr>(getImm());
-    Inst.addOperand(MCOperand::createImm(MCE->getValue() / 16));
-  }
-
-  void addImm0_1Operands(MCInst &Inst, unsigned N) const {
-    assert(N == 1 && "Invalid number of operands!");
-    const MCConstantExpr *MCE = cast<MCConstantExpr>(getImm());
-    Inst.addOperand(MCOperand::createImm(MCE->getValue()));
-  }
-
-  void addImm0_7Operands(MCInst &Inst, unsigned N) const {
-    assert(N == 1 && "Invalid number of operands!");
-    const MCConstantExpr *MCE = cast<MCConstantExpr>(getImm());
-    Inst.addOperand(MCOperand::createImm(MCE->getValue()));
-  }
-
-  void addImm1_8Operands(MCInst &Inst, unsigned N) const {
-    assert(N == 1 && "Invalid number of operands!");
-    const MCConstantExpr *MCE = cast<MCConstantExpr>(getImm());
-    Inst.addOperand(MCOperand::createImm(MCE->getValue()));
-  }
-
-  void addImm0_15Operands(MCInst &Inst, unsigned N) const {
-    assert(N == 1 && "Invalid number of operands!");
-    const MCConstantExpr *MCE = cast<MCConstantExpr>(getImm());
-    Inst.addOperand(MCOperand::createImm(MCE->getValue()));
-  }
-
-  void addImm1_16Operands(MCInst &Inst, unsigned N) const {
-    assert(N == 1 && "Invalid number of operands!");
-    const MCConstantExpr *MCE = cast<MCConstantExpr>(getImm());
-    assert(MCE && "Invalid constant immediate operand!");
-    Inst.addOperand(MCOperand::createImm(MCE->getValue()));
-  }
-
-  void addImm0_31Operands(MCInst &Inst, unsigned N) const {
-    assert(N == 1 && "Invalid number of operands!");
-    const MCConstantExpr *MCE = cast<MCConstantExpr>(getImm());
-    Inst.addOperand(MCOperand::createImm(MCE->getValue()));
-  }
-
-  void addImm1_31Operands(MCInst &Inst, unsigned N) const {
-    assert(N == 1 && "Invalid number of operands!");
-    const MCConstantExpr *MCE = cast<MCConstantExpr>(getImm());
-    Inst.addOperand(MCOperand::createImm(MCE->getValue()));
-  }
-
-  void addImm1_32Operands(MCInst &Inst, unsigned N) const {
-    assert(N == 1 && "Invalid number of operands!");
-    const MCConstantExpr *MCE = cast<MCConstantExpr>(getImm());
-    Inst.addOperand(MCOperand::createImm(MCE->getValue()));
-  }
-
-  void addImm0_63Operands(MCInst &Inst, unsigned N) const {
-    assert(N == 1 && "Invalid number of operands!");
-    const MCConstantExpr *MCE = cast<MCConstantExpr>(getImm());
-    Inst.addOperand(MCOperand::createImm(MCE->getValue()));
-  }
-
-  void addImm1_63Operands(MCInst &Inst, unsigned N) const {
-    assert(N == 1 && "Invalid number of operands!");
-    const MCConstantExpr *MCE = cast<MCConstantExpr>(getImm());
-    Inst.addOperand(MCOperand::createImm(MCE->getValue()));
-  }
-
-  void addImm1_64Operands(MCInst &Inst, unsigned N) const {
-    assert(N == 1 && "Invalid number of operands!");
-    const MCConstantExpr *MCE = cast<MCConstantExpr>(getImm());
-    Inst.addOperand(MCOperand::createImm(MCE->getValue()));
-  }
-
-  void addImm0_127Operands(MCInst &Inst, unsigned N) const {
-    assert(N == 1 && "Invalid number of operands!");
-    const MCConstantExpr *MCE = cast<MCConstantExpr>(getImm());
-    Inst.addOperand(MCOperand::createImm(MCE->getValue()));
-  }
-
-  void addImm0_255Operands(MCInst &Inst, unsigned N) const {
-    assert(N == 1 && "Invalid number of operands!");
-    const MCConstantExpr *MCE = cast<MCConstantExpr>(getImm());
-    Inst.addOperand(MCOperand::createImm(MCE->getValue()));
-  }
-
-  void addImm0_65535Operands(MCInst &Inst, unsigned N) const {
-    assert(N == 1 && "Invalid number of operands!");
-    const MCConstantExpr *MCE = cast<MCConstantExpr>(getImm());
-    Inst.addOperand(MCOperand::createImm(MCE->getValue()));
-  }
-
-  void addImm32_63Operands(MCInst &Inst, unsigned N) const {
-    assert(N == 1 && "Invalid number of operands!");
-    const MCConstantExpr *MCE = cast<MCConstantExpr>(getImm());
-    Inst.addOperand(MCOperand::createImm(MCE->getValue()));
   }
 
   template <int Scale>
@@ -3725,7 +3630,7 @@ bool AArch64AsmParser::showMatchError(SMLoc Loc, unsigned ErrCode,
     return Error(Loc, "index must be a multiple of 4 in range [-32, 28].");
   case Match_InvalidMemoryIndexedSImm9:
     return Error(Loc, "index must be an integer in range [-256, 255].");
-  case Match_InvalidMemoryIndexedSImm10:
+  case Match_InvalidMemoryIndexed8SImm10:
     return Error(Loc, "index must be a multiple of 8 in range [-4096, 4088].");
   case Match_InvalidMemoryIndexed4SImm7:
     return Error(Loc, "index must be a multiple of 4 in range [-256, 252].");
@@ -3733,6 +3638,12 @@ bool AArch64AsmParser::showMatchError(SMLoc Loc, unsigned ErrCode,
     return Error(Loc, "index must be a multiple of 8 in range [-512, 504].");
   case Match_InvalidMemoryIndexed16SImm7:
     return Error(Loc, "index must be a multiple of 16 in range [-1024, 1008].");
+  case Match_InvalidMemoryIndexed8UImm5:
+    return Error(Loc, "index must be a multiple of 8 in range [0, 248].");
+  case Match_InvalidMemoryIndexed4UImm5:
+    return Error(Loc, "index must be a multiple of 4 in range [0, 124].");
+  case Match_InvalidMemoryIndexed2UImm5:
+    return Error(Loc, "index must be a multiple of 2 in range [0, 62].");
   case Match_InvalidMemoryWExtend8:
     return Error(Loc,
                  "expected 'uxtw' or 'sxtw' with optional shift of #0");
@@ -3839,6 +3750,38 @@ bool AArch64AsmParser::showMatchError(SMLoc Loc, unsigned ErrCode,
     return Error(Loc, "register must be x0..x30 with required shift 'lsl #2'");
   case Match_InvalidGPR64NoXZRshifted64:
     return Error(Loc, "register must be x0..x30 with required shift 'lsl #3'");
+  case Match_InvalidZPR32UXTW8:
+  case Match_InvalidZPR32SXTW8:
+    return Error(Loc, "invalid shift/extend specified, expected 'z[0..31].s, (uxtw|sxtw)'");
+  case Match_InvalidZPR32UXTW16:
+  case Match_InvalidZPR32SXTW16:
+    return Error(Loc, "invalid shift/extend specified, expected 'z[0..31].s, (uxtw|sxtw) #1'");
+  case Match_InvalidZPR32UXTW32:
+  case Match_InvalidZPR32SXTW32:
+    return Error(Loc, "invalid shift/extend specified, expected 'z[0..31].s, (uxtw|sxtw) #2'");
+  case Match_InvalidZPR32UXTW64:
+  case Match_InvalidZPR32SXTW64:
+    return Error(Loc, "invalid shift/extend specified, expected 'z[0..31].s, (uxtw|sxtw) #3'");
+  case Match_InvalidZPR64UXTW8:
+  case Match_InvalidZPR64SXTW8:
+    return Error(Loc, "invalid shift/extend specified, expected 'z[0..31].d, (uxtw|sxtw)'");
+  case Match_InvalidZPR64UXTW16:
+  case Match_InvalidZPR64SXTW16:
+    return Error(Loc, "invalid shift/extend specified, expected 'z[0..31].d, (lsl|uxtw|sxtw) #1'");
+  case Match_InvalidZPR64UXTW32:
+  case Match_InvalidZPR64SXTW32:
+    return Error(Loc, "invalid shift/extend specified, expected 'z[0..31].d, (lsl|uxtw|sxtw) #2'");
+  case Match_InvalidZPR64UXTW64:
+  case Match_InvalidZPR64SXTW64:
+    return Error(Loc, "invalid shift/extend specified, expected 'z[0..31].d, (lsl|uxtw|sxtw) #3'");
+  case Match_InvalidZPR64LSL8:
+    return Error(Loc, "invalid shift/extend specified, expected 'z[0..31].d'");
+  case Match_InvalidZPR64LSL16:
+    return Error(Loc, "invalid shift/extend specified, expected 'z[0..31].d, lsl #1'");
+  case Match_InvalidZPR64LSL32:
+    return Error(Loc, "invalid shift/extend specified, expected 'z[0..31].d, lsl #2'");
+  case Match_InvalidZPR64LSL64:
+    return Error(Loc, "invalid shift/extend specified, expected 'z[0..31].d, lsl #3'");
   case Match_InvalidSVEPattern:
     return Error(Loc, "invalid predicate pattern");
   case Match_InvalidSVEPredicateAnyReg:
@@ -4260,10 +4203,13 @@ bool AArch64AsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
   case Match_InvalidMemoryIndexed4SImm7:
   case Match_InvalidMemoryIndexed8SImm7:
   case Match_InvalidMemoryIndexed16SImm7:
+  case Match_InvalidMemoryIndexed8UImm5:
+  case Match_InvalidMemoryIndexed4UImm5:
+  case Match_InvalidMemoryIndexed2UImm5:
   case Match_InvalidMemoryIndexedSImm6:
   case Match_InvalidMemoryIndexedSImm5:
   case Match_InvalidMemoryIndexedSImm9:
-  case Match_InvalidMemoryIndexedSImm10:
+  case Match_InvalidMemoryIndexed8SImm10:
   case Match_InvalidImm0_1:
   case Match_InvalidImm0_7:
   case Match_InvalidImm0_15:
@@ -4292,6 +4238,26 @@ bool AArch64AsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
   case Match_InvalidGPR64NoXZRshifted16:
   case Match_InvalidGPR64NoXZRshifted32:
   case Match_InvalidGPR64NoXZRshifted64:
+  case Match_InvalidZPR32UXTW8:
+  case Match_InvalidZPR32UXTW16:
+  case Match_InvalidZPR32UXTW32:
+  case Match_InvalidZPR32UXTW64:
+  case Match_InvalidZPR32SXTW8:
+  case Match_InvalidZPR32SXTW16:
+  case Match_InvalidZPR32SXTW32:
+  case Match_InvalidZPR32SXTW64:
+  case Match_InvalidZPR64UXTW8:
+  case Match_InvalidZPR64SXTW8:
+  case Match_InvalidZPR64UXTW16:
+  case Match_InvalidZPR64SXTW16:
+  case Match_InvalidZPR64UXTW32:
+  case Match_InvalidZPR64SXTW32:
+  case Match_InvalidZPR64UXTW64:
+  case Match_InvalidZPR64SXTW64:
+  case Match_InvalidZPR64LSL8:
+  case Match_InvalidZPR64LSL16:
+  case Match_InvalidZPR64LSL32:
+  case Match_InvalidZPR64LSL64:
   case Match_InvalidSVEPredicateAnyReg:
   case Match_InvalidSVEPattern:
   case Match_InvalidSVEPredicateBReg:
@@ -4897,7 +4863,7 @@ AArch64AsmParser::tryParseGPRSeqPair(OperandVector &Operands) {
   return MatchOperand_Success;
 }
 
-template <bool ParseSuffix>
+template <bool ParseShiftExtend, bool ParseSuffix>
 OperandMatchResultTy
 AArch64AsmParser::tryParseSVEDataVector(OperandVector &Operands) {
   const SMLoc S = getLoc();
@@ -4919,9 +4885,29 @@ AArch64AsmParser::tryParseSVEDataVector(OperandVector &Operands) {
     return MatchOperand_NoMatch;
 
   unsigned ElementWidth = KindRes->second;
+
+  // No shift/extend is the default.
+  if (!ParseShiftExtend || getParser().getTok().isNot(AsmToken::Comma)) {
+    Operands.push_back(AArch64Operand::CreateVectorReg(
+        RegNum, RegKind::SVEDataVector, ElementWidth, S, S, getContext()));
+
+    return MatchOperand_Success;
+  }
+
+  // Eat the comma
+  getParser().Lex();
+
+  // Match the shift
+  SmallVector<std::unique_ptr<MCParsedAsmOperand>, 1> ExtOpnd;
+  Res = tryParseOptionalShiftExtend(ExtOpnd);
+  if (Res != MatchOperand_Success)
+    return Res;
+
+  auto Ext = static_cast<AArch64Operand *>(ExtOpnd.back().get());
   Operands.push_back(AArch64Operand::CreateVectorReg(
-      RegNum, RegKind::SVEDataVector, ElementWidth, S, S,
-      getContext()));
+      RegNum, RegKind::SVEDataVector, ElementWidth, S, Ext->getEndLoc(),
+      getContext(), Ext->getShiftExtendType(), Ext->getShiftExtendAmount(),
+      Ext->hasShiftExtendAmount()));
 
   return MatchOperand_Success;
 }

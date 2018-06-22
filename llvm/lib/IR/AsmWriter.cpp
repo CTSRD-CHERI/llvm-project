@@ -7,7 +7,9 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This library implements the functionality defined in llvm/IR/Writer.h
+// This library implements `print` family of functions in classes like
+// Module, Function, Value, etc. In-memory representation of those classes is
+// converted to IR strings.
 //
 // Note that these routines must be extremely tolerant of various errors in the
 // LLVM code, because it can be used for debugging transformations.
@@ -28,6 +30,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/iterator_range.h"
 #include "llvm/BinaryFormat/Dwarf.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/AssemblyAnnotationWriter.h"
 #include "llvm/IR/Attributes.h"
@@ -762,7 +765,7 @@ private:
   /// CreateFunctionSlot - Insert the specified Value* into the slot table.
   void CreateFunctionSlot(const Value *V);
 
-  /// \brief Insert the specified AttributeSet into the slot table.
+  /// Insert the specified AttributeSet into the slot table.
   void CreateAttributeSetSlot(AttributeSet AS);
 
   /// Add all of the module level global variables (and their initializers)
@@ -2235,7 +2238,7 @@ public:
   void printUseLists(const Function *F);
 
 private:
-  /// \brief Print out metadata attachments.
+  /// Print out metadata attachments.
   void printMetadataAttachments(
       const SmallVectorImpl<std::pair<unsigned, MDNode *>> &MDs,
       StringRef Separator);
@@ -3694,7 +3697,7 @@ void Module::dump() const {
         /*ShouldPreserveUseListOrder=*/false, /*IsForDebug=*/true);
 }
 
-// \brief Allow printing of Comdats from the debugger.
+// Allow printing of Comdats from the debugger.
 LLVM_DUMP_METHOD
 void Comdat::dump() const { print(dbgs(), /*IsForDebug=*/true); }
 

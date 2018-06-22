@@ -272,7 +272,7 @@ namespace llvm {
                                        unsigned UniqueID,
                                        const MCSymbolELF *Associated);
 
-    /// \brief Map of currently defined macros.
+    /// Map of currently defined macros.
     StringMap<MCAsmMacro> MacroMap;
 
   public:
@@ -294,6 +294,10 @@ namespace llvm {
     const MCObjectFileInfo *getObjectFileInfo() const { return MOFI; }
 
     CodeViewContext &getCVContext();
+
+    /// Clear the current cv_loc, if there is one. Avoids lazily creating a
+    /// CodeViewContext if none is needed.
+    void clearCVLocSeen();
 
     void setAllowTemporaryLabels(bool Value) { AllowTemporaryLabels = Value; }
     void setUseNamesOnTempLabels(bool Value) { UseNamesOnTempLabels = Value; }
@@ -338,7 +342,7 @@ namespace llvm {
     /// Gets a symbol that will be defined to the final stack offset of a local
     /// variable after codegen.
     ///
-    /// \param Idx - The index of a local variable passed to @llvm.localescape.
+    /// \param Idx - The index of a local variable passed to \@llvm.localescape.
     MCSymbol *getOrCreateFrameAllocSymbol(StringRef FuncName, unsigned Idx);
 
     MCSymbol *getOrCreateParentFrameOffsetSymbol(StringRef FuncName);
@@ -478,20 +482,20 @@ namespace llvm {
     /// \name Dwarf Management
     /// @{
 
-    /// \brief Get the compilation directory for DW_AT_comp_dir
+    /// Get the compilation directory for DW_AT_comp_dir
     /// The compilation directory should be set with \c setCompilationDir before
     /// calling this function. If it is unset, an empty string will be returned.
     StringRef getCompilationDir() const { return CompilationDir; }
 
-    /// \brief Set the compilation directory for DW_AT_comp_dir
+    /// Set the compilation directory for DW_AT_comp_dir
     void setCompilationDir(StringRef S) { CompilationDir = S.str(); }
 
-    /// \brief Get the main file name for use in error messages and debug
+    /// Get the main file name for use in error messages and debug
     /// info. This can be set to ensure we've got the correct file name
     /// after preprocessing or for -save-temps.
     const std::string &getMainFileName() const { return MainFileName; }
 
-    /// \brief Set the main file name and override the default.
+    /// Set the main file name and override the default.
     void setMainFileName(StringRef S) { MainFileName = S; }
 
     /// Creates an entry in the dwarf file and directory tables.
@@ -649,7 +653,7 @@ namespace llvm {
 
 // operator new and delete aren't allowed inside namespaces.
 // The throw specifications are mandated by the standard.
-/// \brief Placement new for using the MCContext's allocator.
+/// Placement new for using the MCContext's allocator.
 ///
 /// This placement form of operator new uses the MCContext's allocator for
 /// obtaining memory. It is a non-throwing new, which means that it returns
@@ -675,7 +679,7 @@ inline void *operator new(size_t Bytes, llvm::MCContext &C,
                           size_t Alignment = 8) noexcept {
   return C.allocate(Bytes, Alignment);
 }
-/// \brief Placement delete companion to the new above.
+/// Placement delete companion to the new above.
 ///
 /// This operator is just a companion to the new above. There is no way of
 /// invoking it directly; see the new operator for more details. This operator
@@ -709,7 +713,7 @@ inline void *operator new[](size_t Bytes, llvm::MCContext &C,
   return C.allocate(Bytes, Alignment);
 }
 
-/// \brief Placement delete[] companion to the new[] above.
+/// Placement delete[] companion to the new[] above.
 ///
 /// This operator is just a companion to the new[] above. There is no way of
 /// invoking it directly; see the new[] operator for more details. This operator
