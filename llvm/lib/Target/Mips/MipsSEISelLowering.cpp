@@ -1858,10 +1858,8 @@ SDValue MipsSETargetLowering::lowerINTRINSIC_WO_CHAIN(SDValue Op,
   case Intrinsic::mips_fmsub_w:
   case Intrinsic::mips_fmsub_d: {
     // TODO: If intrinsics have fast-math-flags, propagate them.
-    EVT ResTy = Op->getValueType(0);
-    return DAG.getNode(ISD::FSUB, SDLoc(Op), ResTy, Op->getOperand(1),
-                       DAG.getNode(ISD::FMUL, SDLoc(Op), ResTy,
-                                   Op->getOperand(2), Op->getOperand(3)));
+    return DAG.getNode(MipsISD::FMS, SDLoc(Op), Op->getValueType(0),
+                       Op->getOperand(1), Op->getOperand(2), Op->getOperand(3));
   }
   case Intrinsic::mips_frint_w:
   case Intrinsic::mips_frint_d:
@@ -2350,7 +2348,7 @@ SDValue MipsSETargetLowering::lowerINTRINSIC_VOID(SDValue Op,
   }
 }
 
-/// \brief Check if the given BuildVectorSDNode is a splat.
+/// Check if the given BuildVectorSDNode is a splat.
 /// This method currently relies on DAG nodes being reused when equivalent,
 /// so it's possible for this to return false even when isConstantSplat returns
 /// true.

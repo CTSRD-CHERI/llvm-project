@@ -425,7 +425,7 @@ bool EhFrameSection::isFdeLive(EhSectionPiece &Fde, ArrayRef<RelTy> Rels) {
 // one and associates FDEs to the CIE.
 template <class ELFT, class RelTy>
 void EhFrameSection::addSectionAux(EhInputSection *Sec, ArrayRef<RelTy> Rels) {
-  DenseMap<size_t, CieRecord *> OffsetToCie;
+  OffsetToCie.clear();
   for (EhSectionPiece &Piece : Sec->Pieces) {
     // The empty record is the end marker.
     if (Piece.Size == 4)
@@ -460,10 +460,6 @@ template <class ELFT> void EhFrameSection::addSection(InputSectionBase *C) {
   for (auto *DS : Sec->DependentSections)
     DependentSections.push_back(DS);
 
-  // .eh_frame is a sequence of CIE or FDE records. This function
-  // splits it into pieces so that we can call
-  // SplitInputSection::getSectionPiece on the section.
-  Sec->split<ELFT>();
   if (Sec->Pieces.empty())
     return;
 
@@ -887,7 +883,7 @@ GotPltSection::GotPltSection()
                        Target->GotPltEntrySize, ".got.plt") {}
 
 void GotPltSection::addEntry(Symbol &Sym) {
-  Sym.GotPltIndex = Target->GotPltHeaderEntriesNum + Entries.size();
+  assert(Sym.PltIndex == Entries.size());
   Entries.push_back(&Sym);
 }
 
@@ -922,7 +918,7 @@ IgotPltSection::IgotPltSection()
 
 void IgotPltSection::addEntry(Symbol &Sym) {
   Sym.IsInIgot = true;
-  Sym.GotPltIndex = Entries.size();
+  assert(Sym.PltIndex == Entries.size());
   Entries.push_back(&Sym);
 }
 
@@ -1646,6 +1642,8 @@ template <class ELFT> void SymbolTableSection<ELFT>::writeTo(uint8_t *Buf) {
         CommonSec = dyn_cast_or_null<BssSection>(D->Section);
     if (CommonSec)
       ESym->st_shndx = SHN_COMMON;
+    else if (Sym->NeedsPltAddr)
+      ESym->st_shndx = SHN_UNDEF;
     else if (const OutputSection *OutSec = Sym->getOutputSection())
       ESym->st_shndx = OutSec->SectionIndex;
     else if (isa<Defined>(Sym))
@@ -1688,8 +1686,7 @@ template <class ELFT> void SymbolTableSection<ELFT>::writeTo(uint8_t *Buf) {
       if (isMicroMips()) {
         // Set STO_MIPS_MICROMIPS flag and less-significant bit for
         // defined microMIPS symbols and shared symbols with PLT record.
-        if ((Sym->isDefined() && (Sym->StOther & STO_MIPS_MICROMIPS)) ||
-            (Sym->isShared() && Sym->NeedsPltAddr)) {
+        if (Sym->isDefined() && (Sym->StOther & STO_MIPS_MICROMIPS)) {
           if (StrTabSec.isDynamic())
             ESym->st_value |= 1;
           ESym->st_other |= STO_MIPS_MICROMIPS;
@@ -1831,10 +1828,6 @@ void GnuHashTableSection::addSymbols(std::vector<SymbolTableEntry> &V) {
   // its type correctly.
   std::vector<SymbolTableEntry>::iterator Mid =
       std::stable_partition(V.begin(), V.end(), [](const SymbolTableEntry &S) {
-        // Shared symbols that this executable preempts are special. The dynamic
-        // linker has to look them up, so they have to be in the hash table.
-        if (auto *SS = dyn_cast<SharedSymbol>(S.Sym))
-          return SS->CopyRelSec == nullptr && !SS->NeedsPltAddr;
         return !S.Sym->isDefined();
       });
 
@@ -2359,9 +2352,8 @@ VersionNeedSection<ELFT>::VersionNeedSection()
   NextIndex = getVerDefNum() + 1;
 }
 
-template <class ELFT>
-void VersionNeedSection<ELFT>::addSymbol(SharedSymbol *SS) {
-  SharedFile<ELFT> &File = SS->getFile<ELFT>();
+template <class ELFT> void VersionNeedSection<ELFT>::addSymbol(Symbol *SS) {
+  auto &File = cast<SharedFile<ELFT>>(*SS->File);
   if (SS->VerdefIndex == VER_NDX_GLOBAL) {
     SS->VersionId = VER_NDX_GLOBAL;
     return;
@@ -2540,9 +2532,18 @@ static MergeSyntheticSection *createMergeSynthetic(StringRef Name,
 
 // Debug sections may be compressed by zlib. Decompress if exists.
 void elf::decompressSections() {
+  parallelForEach(InputSections,
+                  [](InputSectionBase *Sec) { Sec->maybeDecompress(); });
+}
+
+template <class ELFT> void elf::splitSections() {
+  // splitIntoPieces needs to be called on each MergeInputSection
+  // before calling finalizeContents().
   parallelForEach(InputSections, [](InputSectionBase *Sec) {
-    if (Sec->Live)
-      Sec->maybeDecompress();
+    if (auto *S = dyn_cast<MergeInputSection>(Sec))
+      S->splitIntoPieces();
+    else if (auto *Eh = dyn_cast<EhInputSection>(Sec))
+      Eh->split<ELFT>();
   });
 }
 
@@ -2554,13 +2555,6 @@ void elf::decompressSections() {
 // that it replaces. It then finalizes each synthetic section in order
 // to compute an output offset for each piece of each input section.
 void elf::mergeSections() {
-  // splitIntoPieces needs to be called on each MergeInputSection
-  // before calling finalizeContents(). Do that first.
-  parallelForEach(InputSections, [](InputSectionBase *Sec) {
-    if (auto *S = dyn_cast<MergeInputSection>(Sec))
-      S->splitIntoPieces();
-  });
-
   std::vector<MergeSyntheticSection *> MergeSections;
   for (InputSectionBase *&S : InputSections) {
     MergeInputSection *MS = dyn_cast<MergeInputSection>(S);
@@ -2705,6 +2699,11 @@ template GdbIndexSection *elf::createGdbIndex<ELF32LE>();
 template GdbIndexSection *elf::createGdbIndex<ELF32BE>();
 template GdbIndexSection *elf::createGdbIndex<ELF64LE>();
 template GdbIndexSection *elf::createGdbIndex<ELF64BE>();
+
+template void elf::splitSections<ELF32LE>();
+template void elf::splitSections<ELF32BE>();
+template void elf::splitSections<ELF64LE>();
+template void elf::splitSections<ELF64BE>();
 
 template void EhFrameSection::addSection<ELF32LE>(InputSectionBase *);
 template void EhFrameSection::addSection<ELF32BE>(InputSectionBase *);

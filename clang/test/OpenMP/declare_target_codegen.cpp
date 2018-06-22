@@ -18,7 +18,7 @@
 // CHECK-DAG: @d = global i32 0,
 // CHECK-DAG: @c = external global i32,
 
-// CHECK-DAG: define {{.*}}i32 @{{.*}}{{foo|bar|baz2|baz3}}{{.*}}()
+// CHECK-DAG: define {{.*}}i32 @{{.*}}{{foo|bar|baz2|baz3|FA}}{{.*}}()
 
 #ifndef HEADER
 #define HEADER
@@ -31,7 +31,17 @@ int baz2();
 
 int baz4() { return 5; }
 
+template <typename T>
+T FA() {
+  return T();
+}
+
 #pragma omp declare target
+struct S {
+  int a;
+  S(int a) : a(a) {}
+};
+
 int foo() { return 0; }
 int b = 15;
 int d;
@@ -47,20 +57,20 @@ int maini1() {
 #pragma omp target map(tofrom \
                        : a, b)
   {
+    S s(a);
     static long aaa = 23;
-    a = foo() + bar() + b + c + d + aa + aaa;
+    a = foo() + bar() + b + c + d + aa + aaa + FA<int>();
   }
   return baz4();
 }
 
-int baz3();
+int baz3() { return 2 + baz2(); }
 int baz2() {
 // CHECK-DAG: define void @__omp_offloading_{{.*}}baz2{{.*}}_l[[@LINE+1]](i64 {{.*}})
 #pragma omp target
   ++c;
   return 2 + baz3();
 }
-int baz3() { return 2 + baz2(); }
 
 // CHECK-NOT: define {{.*}}{{baz1|baz4|maini1}}
 #endif // HEADER

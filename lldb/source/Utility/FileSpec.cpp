@@ -62,17 +62,17 @@ bool IsPathSeparator(char value, FileSpec::PathSyntax syntax) {
   return value == '/' || (!PathSyntaxIsPosix(syntax) && value == '\\');
 }
 
-void Normalize(llvm::SmallVectorImpl<char> &path, FileSpec::PathSyntax syntax) {
-  if (PathSyntaxIsPosix(syntax))
-    return;
-
-  std::replace(path.begin(), path.end(), '\\', '/');
-  // Windows path can have \\ slashes which can be changed by replace
-  // call above to //. Here we remove the duplicate.
-  auto iter = std::unique(path.begin(), path.end(), [](char &c1, char &c2) {
-    return (c1 == '/' && c2 == '/');
-  });
-  path.erase(iter, path.end());
+inline llvm::sys::path::Style
+LLVMPathSyntax(FileSpec::PathSyntax lldb_syntax) {
+  switch (lldb_syntax) {
+    case FileSpec::ePathSyntaxPosix:
+      return llvm::sys::path::Style::posix;
+    case FileSpec::ePathSyntaxWindows:
+      return llvm::sys::path::Style::windows;
+    case FileSpec::ePathSyntaxHostNative:
+      return llvm::sys::path::Style::native;
+  };
+  return llvm::sys::path::Style::native;
 }
 
 void Denormalize(llvm::SmallVectorImpl<char> &path,
@@ -166,8 +166,7 @@ void FileSpec::Resolve(llvm::SmallVectorImpl<char> &path) {
 FileSpec::FileSpec() : m_syntax(GetNativeSyntax()) {}
 
 //------------------------------------------------------------------
-// Default constructor that can take an optional full path to a
-// file on disk.
+// Default constructor that can take an optional full path to a file on disk.
 //------------------------------------------------------------------
 FileSpec::FileSpec(llvm::StringRef path, bool resolve_path, PathSyntax syntax)
     : m_syntax(syntax) {
@@ -199,6 +198,100 @@ FileSpec::FileSpec(const FileSpec *rhs) : m_directory(), m_filename() {
 //------------------------------------------------------------------
 FileSpec::~FileSpec() {}
 
+namespace {
+//------------------------------------------------------------------
+/// Safely get a character at the specified index.
+///
+/// @param[in] path
+///     A full, partial, or relative path to a file.
+///
+/// @param[in] i
+///     An index into path which may or may not be valid.
+///
+/// @return
+///   The character at index \a i if the index is valid, or 0 if
+///   the index is not valid.
+//------------------------------------------------------------------
+inline char safeCharAtIndex(const llvm::StringRef &path, size_t i) {
+  if (i < path.size())
+    return path[i];
+  return 0;
+}
+
+//------------------------------------------------------------------
+/// Check if a path needs to be normalized.
+///
+/// Check if a path needs to be normalized. We currently consider a
+/// path to need normalization if any of the following are true
+///  - path contains "/./"
+///  - path contains "/../"
+///  - path contains "//"
+///  - path ends with "/"
+/// Paths that start with "./" or with "../" are not considered to
+/// need normalization since we aren't trying to resolve the path,
+/// we are just trying to remove redundant things from the path.
+///
+/// @param[in] path
+///     A full, partial, or relative path to a file.
+///
+/// @return
+///   Returns \b true if the path needs to be normalized.
+//------------------------------------------------------------------
+bool needsNormalization(const llvm::StringRef &path) {
+  if (path.empty())
+    return false;
+  // We strip off leading "." values so these paths need to be normalized
+  if (path[0] == '.')
+    return true;
+  for (auto i = path.find_first_of("\\/"); i != llvm::StringRef::npos;
+       i = path.find_first_of("\\/", i + 1)) {
+    const auto next = safeCharAtIndex(path, i+1);
+    switch (next) {
+      case 0:
+        // path separator char at the end of the string which should be
+        // stripped unless it is the one and only character
+        return i > 0;
+      case '/':
+      case '\\':
+        // two path separator chars in the middle of a path needs to be
+        // normalized
+        if (i > 0)
+          return true;
+        ++i;
+        break;
+
+      case '.': {
+          const auto next_next = safeCharAtIndex(path, i+2);
+          switch (next_next) {
+            default: break;
+            case 0: return true; // ends with "/."
+            case '/':
+            case '\\':
+              return true; // contains "/./"
+            case '.': {
+              const auto next_next_next = safeCharAtIndex(path, i+3);
+              switch (next_next_next) {
+                default: break;
+                case 0: return true; // ends with "/.."
+                case '/':
+                case '\\':
+                  return true; // contains "/../"
+              }
+              break;
+            }
+          }
+        }
+        break;
+
+      default:
+        break;
+    }
+  }
+  return false;
+}
+
+  
+}
 //------------------------------------------------------------------
 // Assignment operator.
 //------------------------------------------------------------------
@@ -213,15 +306,15 @@ const FileSpec &FileSpec::operator=(const FileSpec &rhs) {
 }
 
 //------------------------------------------------------------------
-// Update the contents of this object with a new path. The path will
-// be split up into a directory and filename and stored as uniqued
-// string values for quick comparison and efficient memory usage.
+// Update the contents of this object with a new path. The path will be split
+// up into a directory and filename and stored as uniqued string values for
+// quick comparison and efficient memory usage.
 //------------------------------------------------------------------
 void FileSpec::SetFile(llvm::StringRef pathname, bool resolve,
                        PathSyntax syntax) {
   // CLEANUP: Use StringRef for string handling.  This function is kind of a
-  // mess and the unclear semantics of RootDirStart and ParentPathEnd make
-  // it very difficult to understand this function.  There's no reason this
+  // mess and the unclear semantics of RootDirStart and ParentPathEnd make it
+  // very difficult to understand this function.  There's no reason this
   // function should be particularly complicated or difficult to understand.
   m_filename.Clear();
   m_directory.Clear();
@@ -238,7 +331,13 @@ void FileSpec::SetFile(llvm::StringRef pathname, bool resolve,
     m_is_resolved = true;
   }
 
-  Normalize(resolved, m_syntax);
+  // Normalize the path by removing ".", ".." and other redundant components.
+  if (needsNormalization(resolved))
+    llvm::sys::path::remove_dots(resolved, true, LLVMPathSyntax(m_syntax));
+
+  // Normalize back slashes to forward slashes
+  if (m_syntax == FileSpec::ePathSyntaxWindows)
+    std::replace(resolved.begin(), resolved.end(), '\\', '/');
 
   llvm::StringRef resolve_path_ref(resolved.c_str());
   size_t dir_end = ParentPathEnd(resolve_path_ref, m_syntax);
@@ -269,8 +368,8 @@ void FileSpec::SetFile(llvm::StringRef path, bool resolve,
 }
 
 //----------------------------------------------------------------------
-// Convert to pointer operator. This allows code to check any FileSpec
-// objects to see if they contain anything valid using code such as:
+// Convert to pointer operator. This allows code to check any FileSpec objects
+// to see if they contain anything valid using code such as:
 //
 //  if (file_spec)
 //  {}
@@ -278,8 +377,8 @@ void FileSpec::SetFile(llvm::StringRef path, bool resolve,
 FileSpec::operator bool() const { return m_filename || m_directory; }
 
 //----------------------------------------------------------------------
-// Logical NOT operator. This allows code to check any FileSpec
-// objects to see if they are invalid using code such as:
+// Logical NOT operator. This allows code to check any FileSpec objects to see
+// if they are invalid using code such as:
 //
 //  if (!file_spec)
 //  {}
@@ -306,12 +405,10 @@ bool FileSpec::operator==(const FileSpec &rhs) const {
     return true;
 
   // TODO: determine if we want to keep this code in here.
-  // The code below was added to handle a case where we were
-  // trying to set a file and line breakpoint and one path
-  // was resolved, and the other not and the directory was
-  // in a mount point that resolved to a more complete path:
-  // "/tmp/a.c" == "/private/tmp/a.c". I might end up pulling
-  // this out...
+  // The code below was added to handle a case where we were trying to set a
+  // file and line breakpoint and one path was resolved, and the other not and
+  // the directory was in a mount point that resolved to a more complete path:
+  // "/tmp/a.c" == "/private/tmp/a.c". I might end up pulling this out...
   if (IsResolved() && rhs.IsResolved()) {
     // Both paths are resolved, no need to look further...
     return false;
@@ -323,8 +420,8 @@ bool FileSpec::operator==(const FileSpec &rhs) const {
   if (!IsResolved()) {
     if (resolved_lhs.ResolvePath()) {
       // This path wasn't resolved but now it is. Check if the resolved
-      // directory is the same as our unresolved directory, and if so,
-      // we can mark this object as resolved to avoid more future resolves
+      // directory is the same as our unresolved directory, and if so, we can
+      // mark this object as resolved to avoid more future resolves
       m_is_resolved = (m_directory == resolved_lhs.m_directory);
     } else
       return false;
@@ -334,16 +431,16 @@ bool FileSpec::operator==(const FileSpec &rhs) const {
   if (!rhs.IsResolved()) {
     if (resolved_rhs.ResolvePath()) {
       // rhs's path wasn't resolved but now it is. Check if the resolved
-      // directory is the same as rhs's unresolved directory, and if so,
-      // we can mark this object as resolved to avoid more future resolves
+      // directory is the same as rhs's unresolved directory, and if so, we can
+      // mark this object as resolved to avoid more future resolves
       rhs.m_is_resolved = (rhs.m_directory == resolved_rhs.m_directory);
     } else
       return false;
   }
 
-  // If we reach this point in the code we were able to resolve both paths
-  // and since we only resolve the paths if the basenames are equal, then
-  // we can just check if both directories are equal...
+  // If we reach this point in the code we were able to resolve both paths and
+  // since we only resolve the paths if the basenames are equal, then we can
+  // just check if both directories are equal...
   return DirectoryEquals(rhs);
 }
 
@@ -368,8 +465,8 @@ Stream &lldb_private::operator<<(Stream &s, const FileSpec &f) {
 }
 
 //------------------------------------------------------------------
-// Clear this object by releasing both the directory and filename
-// string values and making them both the empty string.
+// Clear this object by releasing both the directory and filename string values
+// and making them both the empty string.
 //------------------------------------------------------------------
 void FileSpec::Clear() {
   m_directory.Clear();
@@ -377,15 +474,14 @@ void FileSpec::Clear() {
 }
 
 //------------------------------------------------------------------
-// Compare two FileSpec objects. If "full" is true, then both
-// the directory and the filename must match. If "full" is false,
-// then the directory names for "a" and "b" are only compared if
-// they are both non-empty. This allows a FileSpec object to only
-// contain a filename and it can match FileSpec objects that have
-// matching filenames with different paths.
+// Compare two FileSpec objects. If "full" is true, then both the directory and
+// the filename must match. If "full" is false, then the directory names for
+// "a" and "b" are only compared if they are both non-empty. This allows a
+// FileSpec object to only contain a filename and it can match FileSpec objects
+// that have matching filenames with different paths.
 //
-// Return -1 if the "a" is less than "b", 0 if "a" is equal to "b"
-// and "1" if "a" is greater than "b".
+// Return -1 if the "a" is less than "b", 0 if "a" is equal to "b" and "1" if
+// "a" is greater than "b".
 //------------------------------------------------------------------
 int FileSpec::Compare(const FileSpec &a, const FileSpec &b, bool full) {
   int result = 0;
@@ -395,10 +491,10 @@ int FileSpec::Compare(const FileSpec &a, const FileSpec &b, bool full) {
 
   // If full is true, then we must compare both the directory and filename.
 
-  // If full is false, then if either directory is empty, then we match on
-  // the basename only, and if both directories have valid values, we still
-  // do a full compare. This allows for matching when we just have a filename
-  // in one of the FileSpec objects.
+  // If full is false, then if either directory is empty, then we match on the
+  // basename only, and if both directories have valid values, we still do a
+  // full compare. This allows for matching when we just have a filename in one
+  // of the FileSpec objects.
 
   if (full || (a.m_directory && b.m_directory)) {
     result = ConstString::Compare(a.m_directory, b.m_directory, case_sensitive);
@@ -408,112 +504,28 @@ int FileSpec::Compare(const FileSpec &a, const FileSpec &b, bool full) {
   return ConstString::Compare(a.m_filename, b.m_filename, case_sensitive);
 }
 
-bool FileSpec::Equal(const FileSpec &a, const FileSpec &b, bool full,
-                     bool remove_backups) {
-  static ConstString g_dot_string(".");
-  static ConstString g_dot_dot_string("..");
+bool FileSpec::Equal(const FileSpec &a, const FileSpec &b, bool full) {
 
   // case sensitivity of equality test
   const bool case_sensitive = a.IsCaseSensitive() || b.IsCaseSensitive();
   
-  bool filenames_equal = ConstString::Equals(a.m_filename, 
-                                             b.m_filename, 
-                                             case_sensitive);
+  const bool filenames_equal = ConstString::Equals(a.m_filename,
+                                                   b.m_filename,
+                                                   case_sensitive);
 
-  // The only way two FileSpecs can be equal if their filenames are
-  // unequal is if we are removing backups and one or the other filename
-  // is a backup string:
-
-  if (!filenames_equal && !remove_backups)
+  if (!filenames_equal)
       return false;
-
-  bool last_component_is_dot = ConstString::Equals(a.m_filename, g_dot_string) 
-                               || ConstString::Equals(a.m_filename, 
-                                                      g_dot_dot_string)
-                               || ConstString::Equals(b.m_filename, 
-                                                      g_dot_string)
-                               || ConstString::Equals(b.m_filename, 
-                                                      g_dot_dot_string);
-
-  if (!filenames_equal && !last_component_is_dot)
-    return false;
 
   if (!full && (a.GetDirectory().IsEmpty() || b.GetDirectory().IsEmpty()))
     return filenames_equal;
 
-  if (remove_backups == false)
-    return a == b;
-
-  if (a == b)
-    return true;
-
-  return Equal(a.GetNormalizedPath(), b.GetNormalizedPath(), full, false);
-}
-
-FileSpec FileSpec::GetNormalizedPath() const {
-  // Fast path. Do nothing if the path is not interesting.
-  if (!m_directory.GetStringRef().contains(".") &&
-      !m_directory.GetStringRef().contains("//") &&
-      m_filename.GetStringRef() != ".." && m_filename.GetStringRef() != ".")
-    return *this;
-
-  llvm::SmallString<64> path, result;
-  const bool normalize = false;
-  GetPath(path, normalize);
-  llvm::StringRef rest(path);
-
-  // We will not go below root dir.
-  size_t root_dir_start = RootDirStart(path, m_syntax);
-  const bool absolute = root_dir_start != llvm::StringRef::npos;
-  if (absolute) {
-    result += rest.take_front(root_dir_start + 1);
-    rest = rest.drop_front(root_dir_start + 1);
-  } else {
-    if (m_syntax == ePathSyntaxWindows && path.size() > 2 && path[1] == ':') {
-      result += rest.take_front(2);
-      rest = rest.drop_front(2);
-    }
-  }
-
-  bool anything_added = false;
-  llvm::SmallVector<llvm::StringRef, 0> components, processed;
-  rest.split(components, '/', -1, false);
-  processed.reserve(components.size());
-  for (auto component : components) {
-    if (component == ".")
-      continue; // Skip these.
-    if (component != "..") {
-      processed.push_back(component);
-      continue; // Regular file name.
-    }
-    if (!processed.empty()) {
-      processed.pop_back();
-      continue; // Dots. Go one level up if we can.
-    }
-    if (absolute)
-      continue; // We're at the top level. Cannot go higher than that. Skip.
-
-    result += component; // We're a relative path. We need to keep these.
-    result += '/';
-    anything_added = true;
-  }
-  for (auto component : processed) {
-    result += component;
-    result += '/';
-    anything_added = true;
-  }
-  if (anything_added)
-    result.pop_back(); // Pop last '/'.
-  else if (result.empty())
-    result = ".";
-
-  return FileSpec(result, false, m_syntax);
+  return a == b;
 }
 
 //------------------------------------------------------------------
-// Dump the object to the supplied stream. If the object contains
-// a valid directory name, it will be displayed followed by a
-// directory delimiter, and the filename.
+// Dump the object to the supplied stream. If the object contains a valid
+// directory name, it will be displayed followed by a directory delimiter, and
+// the filename.
 //------------------------------------------------------------------
 void FileSpec::Dump(Stream *s) const {
   if (s) {
@@ -556,8 +568,7 @@ bool FileSpec::ResolveExecutableLocation() {
           return true;
         else {
           // If FindProgramByName found the file, it returns the directory +
-          // filename in its return results.
-          // We need to separate them.
+          // filename in its return results. We need to separate them.
           FileSpec tmp_file(dir_ref.data(), false);
           if (tmp_file.Exists()) {
             m_directory = tmp_file.m_directory;
@@ -619,9 +630,8 @@ ConstString &FileSpec::GetFilename() { return m_filename; }
 const ConstString &FileSpec::GetFilename() const { return m_filename; }
 
 //------------------------------------------------------------------
-// Extract the directory and path into a fixed buffer. This is
-// needed as the directory and path are stored in separate string
-// values.
+// Extract the directory and path into a fixed buffer. This is needed as the
+// directory and path are stored in separate string values.
 //------------------------------------------------------------------
 size_t FileSpec::GetPath(char *path, size_t path_max_len,
                          bool denormalize) const {
@@ -647,12 +657,14 @@ void FileSpec::GetPath(llvm::SmallVectorImpl<char> &path,
                        bool denormalize) const {
   path.append(m_directory.GetStringRef().begin(),
               m_directory.GetStringRef().end());
-  if (m_directory && m_filename &&
-      !IsPathSeparator(m_directory.GetStringRef().back(), m_syntax))
-    path.insert(path.end(), GetPreferredPathSeparator(m_syntax));
+  // Since the path was normalized and all paths use '/' when stored in these
+  // objects, we don't need to look for the actual syntax specific path
+  // separator, we just look for and insert '/'.
+  if (m_directory && m_filename && m_directory.GetStringRef().back() != '/' &&
+      m_filename.GetStringRef().back() != '/')
+    path.insert(path.end(), '/');
   path.append(m_filename.GetStringRef().begin(),
               m_filename.GetStringRef().end());
-  Normalize(path, m_syntax);
   if (denormalize && !path.empty())
     Denormalize(path, m_syntax);
 }
@@ -680,9 +692,8 @@ ConstString FileSpec::GetFileNameStrippingExtension() const {
 }
 
 //------------------------------------------------------------------
-// Return the size in bytes that this object takes in memory. This
-// returns the size in bytes of this object, not any shared string
-// values it may refer to.
+// Return the size in bytes that this object takes in memory. This returns the
+// size in bytes of this object, not any shared string values it may refer to.
 //------------------------------------------------------------------
 size_t FileSpec::MemorySize() const {
   return m_filename.MemorySize() + m_directory.MemorySize();
@@ -943,10 +954,9 @@ void llvm::format_provider<FileSpec>::format(const FileSpec &F,
 
   // Style is either D or empty, either way we need to print the directory.
   if (!dir.empty()) {
-    // Directory is stored in normalized form, which might be different
-    // than preferred form.  In order to handle this, we need to cut off
-    // the filename, then denormalize, then write the entire denorm'ed
-    // directory.
+    // Directory is stored in normalized form, which might be different than
+    // preferred form.  In order to handle this, we need to cut off the
+    // filename, then denormalize, then write the entire denorm'ed directory.
     llvm::SmallString<64> denormalized_dir = dir;
     Denormalize(denormalized_dir, F.GetPathSyntax());
     Stream << denormalized_dir;

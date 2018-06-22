@@ -206,7 +206,7 @@ void AbstractInterpreter::anchor() {}
 
 #if defined(LLVM_ON_UNIX)
 const char EXESuffix[] = "";
-#elif defined(LLVM_ON_WIN32)
+#elif defined(_WIN32)
 const char EXESuffix[] = "exe";
 #endif
 
@@ -215,7 +215,7 @@ const char EXESuffix[] = "exe";
 /// itself. This allows us to find another LLVM tool if it is built in the same
 /// directory. An empty string is returned on error; note that this function
 /// just mainpulates the path and doesn't check for executability.
-/// @brief Find a named executable.
+/// Find a named executable.
 static std::string PrependMainExecutablePath(const std::string &ExeName,
                                              const char *Argv0,
                                              void *MainAddr) {

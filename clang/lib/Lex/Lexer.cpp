@@ -708,12 +708,9 @@ PreambleBounds Lexer::ComputePreamble(StringRef Buffer,
                         TheTok.isAtStartOfLine());
 }
 
-/// AdvanceToTokenCharacter - Given a location that specifies the start of a
-/// token, return a new location that specifies a character within the token.
-SourceLocation Lexer::AdvanceToTokenCharacter(SourceLocation TokStart,
-                                              unsigned CharNo,
-                                              const SourceManager &SM,
-                                              const LangOptions &LangOpts) {
+unsigned Lexer::getTokenPrefixLength(SourceLocation TokStart, unsigned CharNo,
+                                     const SourceManager &SM,
+                                     const LangOptions &LangOpts) {
   // Figure out how many physical characters away the specified expansion
   // character is.  This needs to take into consideration newlines and
   // trigraphs.
@@ -722,7 +719,7 @@ SourceLocation Lexer::AdvanceToTokenCharacter(SourceLocation TokStart,
 
   // If they request the first char of the token, we're trivially done.
   if (Invalid || (CharNo == 0 && Lexer::isObviouslySimpleCharacter(*TokPtr)))
-    return TokStart;
+    return 0;
 
   unsigned PhysOffset = 0;
 
@@ -731,7 +728,7 @@ SourceLocation Lexer::AdvanceToTokenCharacter(SourceLocation TokStart,
   // chars, this method is extremely fast.
   while (Lexer::isObviouslySimpleCharacter(*TokPtr)) {
     if (CharNo == 0)
-      return TokStart.getLocWithOffset(PhysOffset);
+      return PhysOffset;
     ++TokPtr;
     --CharNo;
     ++PhysOffset;
@@ -753,7 +750,7 @@ SourceLocation Lexer::AdvanceToTokenCharacter(SourceLocation TokStart,
   if (!Lexer::isObviouslySimpleCharacter(*TokPtr))
     PhysOffset += Lexer::SkipEscapedNewLines(TokPtr)-TokPtr;
 
-  return TokStart.getLocWithOffset(PhysOffset);
+  return PhysOffset;
 }
 
 /// \brief Computes the source location just past the end of the
@@ -987,7 +984,7 @@ StringRef Lexer::getImmediateMacroName(SourceLocation Loc,
 
     // Loc points to the argument id of the macro definition, move to the
     // macro expansion.
-    Loc = SM.getImmediateExpansionRange(Loc).first;
+    Loc = SM.getImmediateExpansionRange(Loc).getBegin();
     SourceLocation SpellLoc = Expansion.getSpellingLoc();
     if (SpellLoc.isFileID())
       break; // No inner macro.
@@ -1020,7 +1017,7 @@ StringRef Lexer::getImmediateMacroNameForDiagnostics(
   assert(Loc.isMacroID() && "Only reasonable to call this on macros");
   // Walk past macro argument expanions.
   while (SM.isMacroArgExpansion(Loc))
-    Loc = SM.getImmediateExpansionRange(Loc).first;
+    Loc = SM.getImmediateExpansionRange(Loc).getBegin();
 
   // If the macro's spelling has no FileID, then it's actually a token paste
   // or stringization (or similar) and not a macro at all.
@@ -1030,7 +1027,7 @@ StringRef Lexer::getImmediateMacroNameForDiagnostics(
   // Find the spelling location of the start of the non-argument expansion
   // range. This is where the macro name was spelled in order to begin
   // expanding this macro.
-  Loc = SM.getSpellingLoc(SM.getImmediateExpansionRange(Loc).first);
+  Loc = SM.getSpellingLoc(SM.getImmediateExpansionRange(Loc).getBegin());
 
   // Dig out the buffer where the macro name was spelled and the extents of the
   // name so that we can render it into the expansion note.
@@ -1112,10 +1109,9 @@ static SourceLocation GetMappedTokenLoc(Preprocessor &PP,
 
   // Figure out the expansion loc range, which is the range covered by the
   // original _Pragma(...) sequence.
-  std::pair<SourceLocation,SourceLocation> II =
-    SM.getImmediateExpansionRange(FileLoc);
+  CharSourceRange II = SM.getImmediateExpansionRange(FileLoc);
 
-  return SM.createExpansionLoc(SpellingLoc, II.first, II.second, TokLen);
+  return SM.createExpansionLoc(SpellingLoc, II.getBegin(), II.getEnd(), TokLen);
 }
 
 /// getSourceLocation - Return a source location identifier for the specified
@@ -1654,7 +1650,21 @@ FinishIdentifier:
     if (isCodeCompletionPoint(CurPtr)) {
       // Return the code-completion token.
       Result.setKind(tok::code_completion);
-      cutOffLexing();
+      // Skip the code-completion char and all immediate identifier characters.
+      // This ensures we get consistent behavior when completing at any point in
+      // an identifier (i.e. at the start, in the middle, at the end). Note that
+      // only simple cases (i.e. [a-zA-Z0-9_]) are supported to keep the code
+      // simpler.
+      assert(*CurPtr == 0 && "Completion character must be 0");
+      ++CurPtr;
+      // Note that code completion token is not added as a separate character
+      // when the completion point is at the end of the buffer. Therefore, we need
+      // to check if the buffer has ended.
+      if (CurPtr < BufferEnd) {
+        while (isIdentifierBody(*CurPtr))
+          ++CurPtr;
+      }
+      BufferPtr = CurPtr;
       return true;
     }
 

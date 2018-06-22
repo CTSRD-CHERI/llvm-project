@@ -83,6 +83,7 @@
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CFG.h"
@@ -3548,14 +3549,35 @@ ScalarEvolution::getUMaxExpr(SmallVectorImpl<const SCEV *> &Ops) {
 
 const SCEV *ScalarEvolution::getSMinExpr(const SCEV *LHS,
                                          const SCEV *RHS) {
-  // ~smax(~x, ~y) == smin(x, y).
-  return getNotSCEV(getSMaxExpr(getNotSCEV(LHS), getNotSCEV(RHS)));
+  SmallVector<const SCEV *, 2> Ops = { LHS, RHS };
+  return getSMinExpr(Ops);
+}
+
+const SCEV *ScalarEvolution::getSMinExpr(SmallVectorImpl<const SCEV *> &Ops) {
+  // ~smax(~x, ~y, ~z) == smin(x, y, z).
+  SmallVector<const SCEV *, 2> NotOps;
+  for (auto *S : Ops)
+    NotOps.push_back(getNotSCEV(S));
+  return getNotSCEV(getSMaxExpr(NotOps));
 }
 
 const SCEV *ScalarEvolution::getUMinExpr(const SCEV *LHS,
                                          const SCEV *RHS) {
-  // ~umax(~x, ~y) == umin(x, y)
-  return getNotSCEV(getUMaxExpr(getNotSCEV(LHS), getNotSCEV(RHS)));
+  SmallVector<const SCEV *, 2> Ops = { LHS, RHS };
+  return getUMinExpr(Ops);
+}
+
+const SCEV *ScalarEvolution::getUMinExpr(SmallVectorImpl<const SCEV *> &Ops) {
+  assert(!Ops.empty() && "At least one operand must be!");
+  // Trivial case.
+  if (Ops.size() == 1)
+    return Ops[0];
+
+  // ~umax(~x, ~y, ~z) == umin(x, y, z).
+  SmallVector<const SCEV *, 2> NotOps;
+  for (auto *S : Ops)
+    NotOps.push_back(getNotSCEV(S));
+  return getNotSCEV(getUMaxExpr(NotOps));
 }
 
 const SCEV *ScalarEvolution::getSizeOfExpr(Type *IntTy, Type *AllocTy) {
@@ -3943,15 +3965,32 @@ const SCEV *ScalarEvolution::getUMaxFromMismatchedTypes(const SCEV *LHS,
 
 const SCEV *ScalarEvolution::getUMinFromMismatchedTypes(const SCEV *LHS,
                                                         const SCEV *RHS) {
-  const SCEV *PromotedLHS = LHS;
-  const SCEV *PromotedRHS = RHS;
+  SmallVector<const SCEV *, 2> Ops = { LHS, RHS };
+  return getUMinFromMismatchedTypes(Ops);
+}
 
-  if (getTypeSizeInBits(LHS->getType()) > getTypeSizeInBits(RHS->getType()))
-    PromotedRHS = getZeroExtendExpr(RHS, LHS->getType());
-  else
-    PromotedLHS = getNoopOrZeroExtend(LHS, RHS->getType());
+const SCEV *ScalarEvolution::getUMinFromMismatchedTypes(
+    SmallVectorImpl<const SCEV *> &Ops) {
+  assert(!Ops.empty() && "At least one operand must be!");
+  // Trivial case.
+  if (Ops.size() == 1)
+    return Ops[0];
 
-  return getUMinExpr(PromotedLHS, PromotedRHS);
+  // Find the max type first.
+  Type *MaxType = nullptr;
+  for (auto *S : Ops)
+    if (MaxType)
+      MaxType = getWiderType(MaxType, S->getType());
+    else
+      MaxType = S->getType();
+
+  // Extend all ops to max type.
+  SmallVector<const SCEV *, 2> PromotedOps;
+  for (auto *S : Ops)
+    PromotedOps.push_back(getNoopOrZeroExtend(S, MaxType));
+
+  // Generate umin.
+  return getUMinExpr(PromotedOps);
 }
 
 const SCEV *ScalarEvolution::getPointerBase(const SCEV *V) {
@@ -6474,8 +6513,13 @@ ScalarEvolution::getBackedgeTakenInfo(const Loop *L) {
   // must be cleared in this scope.
   BackedgeTakenInfo Result = computeBackedgeTakenCount(L);
 
-  if (Result.getExact(L, this) != getCouldNotCompute()) {
-    assert(isLoopInvariant(Result.getExact(L, this), L) &&
+  // In product build, there are no usage of statistic.
+  (void)NumTripCountsComputed;
+  (void)NumTripCountsNotComputed;
+#if LLVM_ENABLE_STATS || !defined(NDEBUG)
+  const SCEV *BEExact = Result.getExact(L, this);
+  if (BEExact != getCouldNotCompute()) {
+    assert(isLoopInvariant(BEExact, L) &&
            isLoopInvariant(Result.getMax(this), L) &&
            "Computed backedge-taken count isn't loop invariant for loop!");
     ++NumTripCountsComputed;
@@ -6485,6 +6529,7 @@ ScalarEvolution::getBackedgeTakenInfo(const Loop *L) {
     // Only count loops that have phi nodes as not being computable.
     ++NumTripCountsNotComputed;
   }
+#endif // LLVM_ENABLE_STATS || !defined(NDEBUG)
 
   // Now that we know more about the trip count for this loop, forget any
   // existing SCEV values for PHI nodes in this loop since they are only
@@ -6666,7 +6711,6 @@ ScalarEvolution::BackedgeTakenInfo::getExact(const Loop *L, ScalarEvolution *SE,
   if (!isComplete() || ExitNotTaken.empty())
     return SE->getCouldNotCompute();
 
-  const SCEV *BECount = nullptr;
   const BasicBlock *Latch = L->getLoopLatch();
   // All exiting blocks we have collected must dominate the only backedge.
   if (!Latch)
@@ -6674,16 +6718,15 @@ ScalarEvolution::BackedgeTakenInfo::getExact(const Loop *L, ScalarEvolution *SE,
 
   // All exiting blocks we have gathered dominate loop's latch, so exact trip
   // count is simply a minimum out of all these calculated exit counts.
+  SmallVector<const SCEV *, 2> Ops;
   for (auto &ENT : ExitNotTaken) {
-    assert(ENT.ExactNotTaken != SE->getCouldNotCompute() && "Bad exit SCEV!");
+    const SCEV *BECount = ENT.ExactNotTaken;
+    assert(BECount != SE->getCouldNotCompute() && "Bad exit SCEV!");
     assert(SE->DT.dominates(ENT.ExitingBlock, Latch) &&
            "We should only have known counts for exiting blocks that dominate "
            "latch!");
 
-    if (!BECount)
-      BECount = ENT.ExactNotTaken;
-    else if (BECount != ENT.ExactNotTaken)
-      BECount = SE->getUMinFromMismatchedTypes(BECount, ENT.ExactNotTaken);
+    Ops.push_back(BECount);
 
     if (Preds && !ENT.hasAlwaysTruePredicate())
       Preds->add(ENT.Predicate.get());
@@ -6692,8 +6735,7 @@ ScalarEvolution::BackedgeTakenInfo::getExact(const Loop *L, ScalarEvolution *SE,
            "Predicate should be always true!");
   }
 
-  assert(BECount && "Invalid not taken count for loop exit");
-  return BECount;
+  return SE->getUMinFromMismatchedTypes(Ops);
 }
 
 /// Get the exact not taken count for this loop exit.
@@ -6890,12 +6932,63 @@ ScalarEvolution::computeBackedgeTakenCount(const Loop *L,
 ScalarEvolution::ExitLimit
 ScalarEvolution::computeExitLimit(const Loop *L, BasicBlock *ExitingBlock,
                                       bool AllowPredicates) {
-  assert(L->contains(ExitingBlock) && "Exit count for non-loop block?");
-  // If our exiting block does not dominate the latch, then its connection with
-  // loop's exit limit may be far from trivial.
-  const BasicBlock *Latch = L->getLoopLatch();
-  if (!Latch || !DT.dominates(ExitingBlock, Latch))
-    return getCouldNotCompute();
+  // Okay, we've chosen an exiting block.  See what condition causes us to exit
+  // at this block and remember the exit block and whether all other targets
+  // lead to the loop header.
+  bool MustExecuteLoopHeader = true;
+  BasicBlock *Exit = nullptr;
+  for (auto *SBB : successors(ExitingBlock))
+    if (!L->contains(SBB)) {
+      if (Exit) // Multiple exit successors.
+        return getCouldNotCompute();
+      Exit = SBB;
+    } else if (SBB != L->getHeader()) {
+      MustExecuteLoopHeader = false;
+    }
+
+  // At this point, we know we have a conditional branch that determines whether
+  // the loop is exited.  However, we don't know if the branch is executed each
+  // time through the loop.  If not, then the execution count of the branch will
+  // not be equal to the trip count of the loop.
+  //
+  // Currently we check for this by checking to see if the Exit branch goes to
+  // the loop header.  If so, we know it will always execute the same number of
+  // times as the loop.  We also handle the case where the exit block *is* the
+  // loop header.  This is common for un-rotated loops.
+  //
+  // If both of those tests fail, walk up the unique predecessor chain to the
+  // header, stopping if there is an edge that doesn't exit the loop. If the
+  // header is reached, the execution count of the branch will be equal to the
+  // trip count of the loop.
+  //
+  //  More extensive analysis could be done to handle more cases here.
+  //
+  if (!MustExecuteLoopHeader && ExitingBlock != L->getHeader()) {
+    // The simple checks failed, try climbing the unique predecessor chain
+    // up to the header.
+    bool Ok = false;
+    for (BasicBlock *BB = ExitingBlock; BB; ) {
+      BasicBlock *Pred = BB->getUniquePredecessor();
+      if (!Pred)
+        return getCouldNotCompute();
+      TerminatorInst *PredTerm = Pred->getTerminator();
+      for (const BasicBlock *PredSucc : PredTerm->successors()) {
+        if (PredSucc == BB)
+          continue;
+        // If the predecessor has a successor that isn't BB and isn't
+        // outside the loop, assume the worst.
+        if (L->contains(PredSucc))
+          return getCouldNotCompute();
+      }
+      if (Pred == L->getHeader()) {
+        Ok = true;
+        break;
+      }
+      BB = Pred;
+    }
+    if (!Ok)
+      return getCouldNotCompute();
+  }
 
   bool IsOnlyExit = (L->getExitingBlock() != nullptr);
   TerminatorInst *Term = ExitingBlock->getTerminator();
@@ -6910,19 +7003,9 @@ ScalarEvolution::computeExitLimit(const Loop *L, BasicBlock *ExitingBlock,
         /*ControlsExit=*/IsOnlyExit, AllowPredicates);
   }
 
-  if (SwitchInst *SI = dyn_cast<SwitchInst>(Term)) {
-    // For switch, make sure that there is a single exit from the loop.
-    BasicBlock *Exit = nullptr;
-    for (auto *SBB : successors(ExitingBlock))
-      if (!L->contains(SBB)) {
-        if (Exit) // Multiple exit successors.
-          return getCouldNotCompute();
-        Exit = SBB;
-      }
-    assert(Exit && "Exiting block must have at least one exit");
+  if (SwitchInst *SI = dyn_cast<SwitchInst>(Term))
     return computeExitLimitFromSingleExitSwitch(L, SI, Exit,
                                                 /*ControlsExit=*/IsOnlyExit);
-  }
 
   return getCouldNotCompute();
 }

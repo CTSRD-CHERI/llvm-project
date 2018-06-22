@@ -62,7 +62,7 @@ main:
   lcall [rax]
 // CHECK: ljmpl *(%rax)
   jmp FWORD ptr [rax]
-// CHECK: ljmpl *(%rax)
+// CHECK: ljmpq *(%rax)
   ljmp [rax]
 
 // CHECK:	movl	$257, -4(%rsp)
@@ -551,13 +551,9 @@ test [ECX], AL
 
 // CHECK: fnstsw %ax
 // CHECK: fnstsw %ax
-// CHECK: fnstsw %ax
-// CHECK: fnstsw %ax
 // CHECK: fnstsw (%eax)
 fnstsw
 fnstsw AX
-fnstsw EAX
-fnstsw AL
 fnstsw WORD PTR [EAX]
 
 // CHECK: faddp %st(1)
@@ -668,8 +664,8 @@ fdivr ST(1)
 
 // CHECK: fxsave64 (%rax)
 // CHECK: fxrstor64 (%rax)
-fxsave64 opaque ptr [rax]
-fxrstor64 opaque ptr [rax]
+fxsave64 [rax]
+fxrstor64 [rax]
 
 .bss
 .globl _g0
@@ -883,3 +879,12 @@ lsl ebx, word ptr [eax]
 
 // CHECK: lslw (%eax), %bx
 lsl bx, word ptr [eax]
+
+// CHECK: sysexitl
+sysexit
+// CHECK: sysexitq
+sysexitq
+// CHECK: sysretl
+sysret
+// CHECK: sysretq
+sysretq

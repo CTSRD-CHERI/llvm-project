@@ -11,13 +11,6 @@
 // that are not yet supported remain commented out.
 //===----------------------------------------------------------------------===//
 
-def has16BankLDS : Predicate<"Subtarget->getLDSBankCount() == 16">;
-def has32BankLDS : Predicate<"Subtarget->getLDSBankCount() == 32">;
-def HasVGPRIndexMode : Predicate<"Subtarget->hasVGPRIndexMode()">,
-                      AssemblerPredicate<"FeatureVGPRIndexMode">;
-def HasMovrel : Predicate<"Subtarget->hasMovrel()">,
-                AssemblerPredicate<"FeatureMovrel">;
-
 class GCNPat<dag pattern, dag result> : AMDGPUPat<pattern, result> {
   let SubtargetPredicate = isGCN;
 }
@@ -1373,6 +1366,16 @@ def : GCNPat<
   (V_MAX_F64 $src_mods, $src, $src_mods, $src, 0, 0)
 >;
 }
+
+let OtherPredicates = [HasDLInsts] in {
+def : GCNPat <
+  (fma (f32 (VOP3Mods0 f32:$src0, i32:$src0_modifiers, i1:$clamp, i32:$omod)),
+       (f32 (VOP3Mods f32:$src1, i32:$src1_modifiers)),
+       (f32 (VOP3NoMods f32:$src2))),
+  (V_FMAC_F32_e64 $src0_modifiers, $src0, $src1_modifiers, $src1,
+                  SRCMODS.NONE, $src2, $clamp, $omod)
+>;
+} // End OtherPredicates = [HasDLInsts]
 
 
 // Allow integer inputs

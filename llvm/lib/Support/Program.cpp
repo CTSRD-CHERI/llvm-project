@@ -13,7 +13,7 @@
 
 #include "llvm/Support/Program.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/Config/config.h"
+#include "llvm/Config/llvm-config.h"
 #include <system_error>
 using namespace llvm;
 using namespace sys;
@@ -67,6 +67,6 @@ ProcessInfo sys::ExecuteNoWait(StringRef Program, const char **Args,
 #ifdef LLVM_ON_UNIX
 #include "Unix/Program.inc"
 #endif
-#ifdef LLVM_ON_WIN32
+#ifdef _WIN32
 #include "Windows/Program.inc"
 #endif

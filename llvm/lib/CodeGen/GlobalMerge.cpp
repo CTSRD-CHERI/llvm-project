@@ -159,13 +159,13 @@ namespace {
     bool doMerge(SmallVectorImpl<GlobalVariable*> &Globals,
                  Module &M, bool isConst, unsigned AddrSpace) const;
 
-    /// \brief Merge everything in \p Globals for which the corresponding bit
+    /// Merge everything in \p Globals for which the corresponding bit
     /// in \p GlobalSet is set.
     bool doMerge(const SmallVectorImpl<GlobalVariable *> &Globals,
                  const BitVector &GlobalSet, Module &M, bool isConst,
                  unsigned AddrSpace) const;
 
-    /// \brief Check if the given variable has been identified as must keep
+    /// Check if the given variable has been identified as must keep
     /// \pre setMustKeepGlobalVariables must have been called on the Module that
     ///      contains GV
     bool isMustKeepGlobalVariable(const GlobalVariable *GV) const {
@@ -242,7 +242,7 @@ bool GlobalMerge::doMerge(SmallVectorImpl<GlobalVariable*> &Globals,
   // code (currently, a Function) to the set of globals seen so far that are
   // used together in that unit (GlobalUsesByFunction).
   //
-  // When we look at the Nth global, we now that any new set is either:
+  // When we look at the Nth global, we know that any new set is either:
   // - the singleton set {N}, containing this global only, or
   // - the union of {N} and a previously-discovered set, containing some
   //   combination of the previous N-1 globals.

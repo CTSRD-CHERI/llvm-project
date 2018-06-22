@@ -936,11 +936,14 @@ namespace serialization {
       /// \brief The '_Float16' type
       PREDEF_TYPE_FLOAT16_ID = 44,
 
+      /// \brief The C++ 'char8_t' type.
+      PREDEF_TYPE_CHAR8_ID = 45,
+
       /// \brief The '__uintcap_t' type.
-      PREDEF_TYPE_UINTCAP_ID    = 45,
+      PREDEF_TYPE_UINTCAP_ID    = 46,
 
       /// \brief The '__intcap_t' type.
-      PREDEF_TYPE_INTCAP_ID     = 46,
+      PREDEF_TYPE_INTCAP_ID     = 47,
 
       /// \brief OpenCL image types with auto numeration
 #define IMAGE_TYPE(ImgType, Id, SingletonId, Access, Suffix) \

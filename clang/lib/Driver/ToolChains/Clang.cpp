@@ -25,12 +25,12 @@
 #include "clang/Basic/LangOptions.h"
 #include "clang/Basic/ObjCRuntime.h"
 #include "clang/Basic/Version.h"
-#include "clang/Config/config.h"
 #include "clang/Driver/DriverDiagnostic.h"
 #include "clang/Driver/Options.h"
 #include "clang/Driver/SanitizerArgs.h"
 #include "clang/Driver/XRayArgs.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/Option/ArgList.h"
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/Compression.h"
@@ -2312,6 +2312,11 @@ static void RenderFloatingPointOptions(const ToolChain &TC, const Driver &D,
     CmdArgs.push_back("-mfpmath");
     CmdArgs.push_back(A->getValue());
   }
+
+  // Disable a codegen optimization for floating-point casts.
+  if (Args.hasFlag(options::OPT_fno_strict_float_cast_overflow,
+                   options::OPT_fstrict_float_cast_overflow, false))
+    CmdArgs.push_back("-fno-strict-float-cast-overflow");
 }
 
 static void RenderAnalyzerOptions(const ArgList &Args, ArgStringList &CmdArgs,
@@ -2752,6 +2757,9 @@ static void RenderCharacterOptions(const ArgList &Args, const llvm::Triple &T,
   } else if (!isSignedCharDefault(T)) {
     CmdArgs.push_back("-fno-signed-char");
   }
+
+  if (Args.hasFlag(options::OPT_fchar8__t, options::OPT_fno_char8__t, false))
+    CmdArgs.push_back("-fchar8_t");
 
   if (const Arg *A = Args.getLastArg(options::OPT_fshort_wchar,
                                      options::OPT_fno_short_wchar)) {
@@ -4268,7 +4276,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
   if (Args.hasFlag(options::OPT_fregister_global_dtors_with_atexit,
                    options::OPT_fno_register_global_dtors_with_atexit,
-                   RawTriple.isOSDarwin()))
+                   RawTriple.isOSDarwin() && !KernelOrKext))
     CmdArgs.push_back("-fregister-global-dtors-with-atexit");
 
   // -fms-extensions=0 is default.

@@ -99,11 +99,11 @@ public:
 private:
   MCContext &Context;
 
-  MCAsmBackend &Backend;
+  std::unique_ptr<MCAsmBackend> Backend;
 
-  MCCodeEmitter &Emitter;
+  std::unique_ptr<MCCodeEmitter> Emitter;
 
-  MCObjectWriter &Writer;
+  std::unique_ptr<MCObjectWriter> Writer;
 
   SectionListType Sections;
 
@@ -130,7 +130,7 @@ private:
   // refactoring too.
   mutable SmallPtrSet<const MCSymbol *, 32> ThumbFuncs;
 
-  /// \brief The bundle alignment size currently set in the assembler.
+  /// The bundle alignment size currently set in the assembler.
   ///
   /// By default it's 0, which means bundling is disabled.
   unsigned BundleAlignSize;
@@ -178,11 +178,11 @@ private:
   bool fragmentNeedsRelaxation(const MCRelaxableFragment *IF,
                                const MCAsmLayout &Layout) const;
 
-  /// \brief Perform one layout iteration and return true if any offsets
+  /// Perform one layout iteration and return true if any offsets
   /// were adjusted.
   bool layoutOnce(MCAsmLayout &Layout);
 
-  /// \brief Perform one layout iteration of the given section and return true
+  /// Perform one layout iteration of the given section and return true
   /// if any offsets were adjusted.
   bool layoutSectionOnce(MCAsmLayout &Layout, MCSection &Sec);
 
@@ -214,8 +214,9 @@ public:
   // concrete and require clients to pass in a target like object. The other
   // option is to make this abstract, and have targets provide concrete
   // implementations as we do with AsmParser.
-  MCAssembler(MCContext &Context, MCAsmBackend &Backend,
-              MCCodeEmitter &Emitter, MCObjectWriter &Writer);
+  MCAssembler(MCContext &Context, std::unique_ptr<MCAsmBackend> Backend,
+              std::unique_ptr<MCCodeEmitter> Emitter,
+              std::unique_ptr<MCObjectWriter> Writer);
   MCAssembler(const MCAssembler &) = delete;
   MCAssembler &operator=(const MCAssembler &) = delete;
   ~MCAssembler();
@@ -274,11 +275,17 @@ public:
 
   MCContext &getContext() const { return Context; }
 
-  MCAsmBackend &getBackend() const { return Backend; }
+  MCAsmBackend *getBackendPtr() const { return Backend.get(); }
 
-  MCCodeEmitter &getEmitter() const { return Emitter; }
+  MCCodeEmitter *getEmitterPtr() const { return Emitter.get(); }
 
-  MCObjectWriter &getWriter() const { return Writer; }
+  MCObjectWriter *getWriterPtr() const { return Writer.get(); }
+
+  MCAsmBackend &getBackend() const { return *Backend; }
+
+  MCCodeEmitter &getEmitter() const { return *Emitter; }
+
+  MCObjectWriter &getWriter() const { return *Writer; }
 
   MCDwarfLineTableParams getDWARFLinetableParams() const { return LTParams; }
   void setDWARFLinetableParams(MCDwarfLineTableParams P) { LTParams = P; }
@@ -424,7 +431,7 @@ public:
       FileNames.push_back(FileName);
   }
 
-  /// \brief Write the necessary bundle padding to the given object writer.
+  /// Write the necessary bundle padding to the given object writer.
   /// Expects a fragment \p F containing instructions and its size \p FSize.
   void writeFragmentPadding(const MCFragment &F, uint64_t FSize,
                             MCObjectWriter *OW) const;
@@ -434,7 +441,7 @@ public:
   void dump() const;
 };
 
-/// \brief Compute the amount of padding required before the fragment \p F to
+/// Compute the amount of padding required before the fragment \p F to
 /// obey bundling restrictions, where \p FOffset is the fragment's offset in
 /// its section and \p FSize is the fragment's size.
 uint64_t computeBundlePadding(const MCAssembler &Assembler, const MCFragment *F,

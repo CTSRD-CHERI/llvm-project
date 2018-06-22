@@ -68,6 +68,7 @@ set(files
   mmintrin.h
   mm_malloc.h
   module.modulemap
+  movdirintrin.h
   msa.h
   mwaitxintrin.h
   nmmintrin.h
