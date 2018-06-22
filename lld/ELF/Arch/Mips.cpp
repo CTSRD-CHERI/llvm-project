@@ -607,7 +607,7 @@ void MIPS<ELFT>::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
     // by 4). This is the same for 128 and 256 even though they have different
     // capability sizes
     assert((Val & 0xf) == 0 && "Bottom 4 bits should always be zero!");
-    checkInt<11>(Loc, Val >> 4, Type);
+    checkInt(Loc, Val >> 4, 11, Type);
     writeValue<E>(Loc, Val, 11, 4);
     break;
   case R_MIPS_CHERI_CAPTAB20:
@@ -616,7 +616,7 @@ void MIPS<ELFT>::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
     // shifted by 4). This is the same for 128 and 256 even though they have
     // different capability sizes
     assert((Val & 0xf) == 0 && "Bottom 4 bits should always be zero!");
-    checkInt<16>(Loc, Val >> 4, Type);
+    checkInt(Loc, Val >> 4, 16, Type);
     writeValue<E>(Loc, Val, 16, 4);
     break;
 #endif
