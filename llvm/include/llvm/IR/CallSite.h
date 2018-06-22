@@ -31,6 +31,7 @@
 #include "llvm/ADT/iterator_range.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/CallingConv.h"
+#include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Instruction.h"
@@ -105,7 +106,14 @@ public:
   /// Return the function being called if this is a direct call, otherwise
   /// return null (if it's an indirect call).
   FunTy *getCalledFunction() const {
-    return dyn_cast<FunTy>(getCalledValue());
+    auto V = getCalledValue();
+    auto Result = dyn_cast<FunTy>(V);
+    if (!Result)
+      if (auto *CE = dyn_cast<ConstantExpr>(V))
+        if (CE->getOpcode() == Instruction::AddrSpaceCast)
+          Result = dyn_cast<FunTy>(CE->getOperand(0));
+
+    return Result;
   }
 
   /// Return true if the callsite is an indirect call.
