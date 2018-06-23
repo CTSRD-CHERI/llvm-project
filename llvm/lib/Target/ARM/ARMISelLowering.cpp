@@ -4063,8 +4063,10 @@ static SDValue ConvertBooleanCarryToCarryFlag(SDValue BoolCarry,
 
   // This converts the boolean value carry into the carry flag by doing
   // ARMISD::SUBC Carry, 1
-  return DAG.getNode(ARMISD::SUBC, DL, DAG.getVTList(CarryVT, MVT::i32),
-                     BoolCarry, DAG.getConstant(1, DL, CarryVT));
+  SDValue Carry = DAG.getNode(ARMISD::SUBC, DL,
+                              DAG.getVTList(CarryVT, MVT::i32),
+                              BoolCarry, DAG.getConstant(1, DL, CarryVT));
+  return Carry.getValue(1);
 }
 
 static SDValue ConvertCarryFlagToBooleanCarry(SDValue Flags, EVT VT,
@@ -7762,7 +7764,7 @@ static SDValue LowerADDSUBCARRY(SDValue Op, SelectionDAG &DAG) {
 
     // Do the addition proper using the carry flag we wanted.
     Result = DAG.getNode(ARMISD::ADDE, DL, VTs, Op.getOperand(0),
-                         Op.getOperand(1), Carry.getValue(1));
+                         Op.getOperand(1), Carry);
 
     // Now convert the carry flag into a boolean value.
     Carry = ConvertCarryFlagToBooleanCarry(Result.getValue(1), VT, DAG);
@@ -7776,7 +7778,7 @@ static SDValue LowerADDSUBCARRY(SDValue Op, SelectionDAG &DAG) {
 
     // Do the subtraction proper using the carry flag we wanted.
     Result = DAG.getNode(ARMISD::SUBE, DL, VTs, Op.getOperand(0),
-                         Op.getOperand(1), Carry.getValue(1));
+                         Op.getOperand(1), Carry);
 
     // Now convert the carry flag into a boolean value.
     Carry = ConvertCarryFlagToBooleanCarry(Result.getValue(1), VT, DAG);
@@ -14781,6 +14783,18 @@ static bool isHomogeneousAggregate(Type *Ty, HABaseType &Base,
   }
 
   return (Members > 0 && Members <= 4);
+}
+
+/// Return the correct alignment for the current calling convention.
+unsigned
+ARMTargetLowering::getABIAlignmentForCallingConv(Type *ArgTy,
+                                                 DataLayout DL) const {
+  if (!ArgTy->isVectorTy())
+    return DL.getABITypeAlignment(ArgTy);
+
+  // Avoid over-aligning vector parameters. It would require realigning the
+  // stack and waste space for no real benefit.
+  return std::min(DL.getABITypeAlignment(ArgTy), DL.getStackAlignment());
 }
 
 /// Return true if a type is an AAPCS-VFP homogeneous aggregate or one of

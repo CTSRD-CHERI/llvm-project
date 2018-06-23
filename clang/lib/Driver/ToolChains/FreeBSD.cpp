@@ -442,6 +442,7 @@ SanitizerMask FreeBSD::getSupportedSanitizers() const {
     Res |= SanitizerKind::Thread;
   }
   if (IsX86 || IsX86_64) {
+    Res |= SanitizerKind::Function;
     Res |= SanitizerKind::SafeStack;
     Res |= SanitizerKind::Fuzzer;
     Res |= SanitizerKind::FuzzerNoLink;

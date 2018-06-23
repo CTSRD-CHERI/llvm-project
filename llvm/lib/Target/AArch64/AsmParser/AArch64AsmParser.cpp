@@ -3628,6 +3628,8 @@ bool AArch64AsmParser::showMatchError(SMLoc Loc, unsigned ErrCode,
     return Error(Loc, "index must be a multiple of 3 in range [-24, 21].");
   case Match_InvalidMemoryIndexed4SImm4:
     return Error(Loc, "index must be a multiple of 4 in range [-32, 28].");
+  case Match_InvalidMemoryIndexed16SImm4:
+    return Error(Loc, "index must be a multiple of 16 in range [-128, 112].");
   case Match_InvalidMemoryIndexedSImm9:
     return Error(Loc, "index must be an integer in range [-256, 255].");
   case Match_InvalidMemoryIndexed8SImm10:
@@ -3644,6 +3646,14 @@ bool AArch64AsmParser::showMatchError(SMLoc Loc, unsigned ErrCode,
     return Error(Loc, "index must be a multiple of 4 in range [0, 124].");
   case Match_InvalidMemoryIndexed2UImm5:
     return Error(Loc, "index must be a multiple of 2 in range [0, 62].");
+  case Match_InvalidMemoryIndexed8UImm6:
+    return Error(Loc, "index must be a multiple of 8 in range [0, 504].");
+  case Match_InvalidMemoryIndexed4UImm6:
+    return Error(Loc, "index must be a multiple of 4 in range [0, 252].");
+  case Match_InvalidMemoryIndexed2UImm6:
+    return Error(Loc, "index must be a multiple of 2 in range [0, 126].");
+  case Match_InvalidMemoryIndexed1UImm6:
+    return Error(Loc, "index must be in range [0, 63].");
   case Match_InvalidMemoryWExtend8:
     return Error(Loc,
                  "expected 'uxtw' or 'sxtw' with optional shift of #0");
@@ -4200,12 +4210,17 @@ bool AArch64AsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
   case Match_InvalidMemoryIndexed2SImm4:
   case Match_InvalidMemoryIndexed3SImm4:
   case Match_InvalidMemoryIndexed4SImm4:
+  case Match_InvalidMemoryIndexed16SImm4:
   case Match_InvalidMemoryIndexed4SImm7:
   case Match_InvalidMemoryIndexed8SImm7:
   case Match_InvalidMemoryIndexed16SImm7:
   case Match_InvalidMemoryIndexed8UImm5:
   case Match_InvalidMemoryIndexed4UImm5:
   case Match_InvalidMemoryIndexed2UImm5:
+  case Match_InvalidMemoryIndexed1UImm6:
+  case Match_InvalidMemoryIndexed2UImm6:
+  case Match_InvalidMemoryIndexed4UImm6:
+  case Match_InvalidMemoryIndexed8UImm6:
   case Match_InvalidMemoryIndexedSImm6:
   case Match_InvalidMemoryIndexedSImm5:
   case Match_InvalidMemoryIndexedSImm9:

@@ -289,6 +289,9 @@ public:
   bool assumeFunctionsAreConvergent() const {
     return (CUDA && CUDAIsDevice) || OpenCL;
   }
+
+  /// \brief Return the OpenCL C or C++ version as a VersionTuple.
+  VersionTuple getOpenCLVersionTuple() const;
 };
 
 /// \brief Floating point control options

@@ -1476,14 +1476,19 @@ public:
     return CreateConstInBoundsGEP2_32(Ty, Ptr, 0, Idx, Name);
   }
 
+  Value *CreateStructGEP(Value *Ptr, unsigned Idx, const Twine &Name = "") {
+    return CreateConstInBoundsGEP2_32(nullptr, Ptr, 0, Idx, Name);
+  }
+
   /// Same as CreateGlobalString, but return a pointer with "i8*" type
   /// instead of a pointer to array of i8.
-  Value *CreateGlobalStringPtr(StringRef Str, const Twine &Name = "",
-                               unsigned AddressSpace = 0) {
-    GlobalVariable *gv = CreateGlobalString(Str, Name, AddressSpace);
-    Value *zero = ConstantInt::get(Type::getInt32Ty(Context), 0);
-    Value *Args[] = { zero, zero };
-    return CreateInBoundsGEP(gv->getValueType(), gv, Args, Name);
+  Constant *CreateGlobalStringPtr(StringRef Str, const Twine &Name = "",
+                                  unsigned AddressSpace = 0) {
+    GlobalVariable *GV = CreateGlobalString(Str, Name, AddressSpace);
+    Constant *Zero = ConstantInt::get(Type::getInt32Ty(Context), 0);
+    Constant *Indices[] = {Zero, Zero};
+    return ConstantExpr::getInBoundsGetElementPtr(GV->getValueType(), GV,
+                                                  Indices);
   }
 
   //===--------------------------------------------------------------------===//
@@ -1957,28 +1962,26 @@ public:
                            Name);
   }
 
-  /// Create an invariant.group.barrier intrinsic call, that stops
-  /// optimizer to propagate equality using invariant.group metadata.
-  /// If Ptr type is different from pointer to i8, it's casted to pointer to i8
-  /// in the same address space before call and casted back to Ptr type after
-  /// call.
-  Value *CreateInvariantGroupBarrier(Value *Ptr) {
+  /// Create a launder.invariant.group intrinsic call. If Ptr type is
+  /// different from pointer to i8, it's casted to pointer to i8 in the same
+  /// address space before call and casted back to Ptr type after call.
+  Value *CreateLaunderInvariantGroup(Value *Ptr) {
     assert(isa<PointerType>(Ptr->getType()) &&
-           "invariant.group.barrier only applies to pointers.");
+           "launder.invariant.group only applies to pointers.");
     auto *PtrType = Ptr->getType();
     auto *Int8PtrTy = getInt8PtrTy(PtrType->getPointerAddressSpace());
     if (PtrType != Int8PtrTy)
       Ptr = CreateBitCast(Ptr, Int8PtrTy);
     Module *M = BB->getParent()->getParent();
-    Function *FnInvariantGroupBarrier = Intrinsic::getDeclaration(
-        M, Intrinsic::invariant_group_barrier, {Int8PtrTy});
+    Function *FnLaunderInvariantGroup = Intrinsic::getDeclaration(
+        M, Intrinsic::launder_invariant_group, {Int8PtrTy});
 
-    assert(FnInvariantGroupBarrier->getReturnType() == Int8PtrTy &&
-           FnInvariantGroupBarrier->getFunctionType()->getParamType(0) ==
+    assert(FnLaunderInvariantGroup->getReturnType() == Int8PtrTy &&
+           FnLaunderInvariantGroup->getFunctionType()->getParamType(0) ==
                Int8PtrTy &&
-           "InvariantGroupBarrier should take and return the same type");
+           "LaunderInvariantGroup should take and return the same type");
 
-    CallInst *Fn = CreateCall(FnInvariantGroupBarrier, {Ptr});
+    CallInst *Fn = CreateCall(FnLaunderInvariantGroup, {Ptr});
 
     if (PtrType != Int8PtrTy)
       return CreateBitCast(Fn, PtrType);

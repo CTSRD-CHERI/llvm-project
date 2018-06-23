@@ -24,6 +24,7 @@
 #include "lld/Common/LLVM.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/SmallString.h"
+#include "llvm/Support/raw_ostream.h"
 #include <memory>
 #include <vector>
 
@@ -38,6 +39,7 @@ namespace elf {
 
 class BitcodeFile;
 class InputFile;
+class LazyObjFile;
 
 class BitcodeCompiler {
 public:
@@ -52,6 +54,8 @@ private:
   std::vector<SmallString<0>> Buff;
   std::vector<std::unique_ptr<MemoryBuffer>> Files;
   llvm::DenseSet<StringRef> UsedStartStop;
+  std::unique_ptr<llvm::raw_fd_ostream> IndexFile;
+  llvm::StringMap<bool> ObjectToIndexFileState;
 };
 } // namespace elf
 } // namespace lld

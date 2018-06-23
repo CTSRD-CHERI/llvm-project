@@ -289,11 +289,11 @@ static const Expr *IgnoreNarrowingConversion(const Expr *Converted) {
 ///        value of the expression prior to the narrowing conversion.
 /// \param ConstantType  If this is an NK_Constant_Narrowing conversion, the
 ///        type of the expression prior to the narrowing conversion.
-NarrowingKind
-StandardConversionSequence::getNarrowingKind(ASTContext &Ctx,
-                                             const Expr *Converted,
-                                             APValue &ConstantValue,
-                                             QualType &ConstantType) const {
+/// \param IgnoreFloatToIntegralConversion If true type-narrowing conversions
+///        from floating point types to integral types should be ignored.
+NarrowingKind StandardConversionSequence::getNarrowingKind(
+    ASTContext &Ctx, const Expr *Converted, APValue &ConstantValue,
+    QualType &ConstantType, bool IgnoreFloatToIntegralConversion) const {
   assert(Ctx.getLangOpts().CPlusPlus && "narrowing check outside C++");
 
   // C++11 [dcl.init.list]p7:
@@ -334,6 +334,8 @@ StandardConversionSequence::getNarrowingKind(ASTContext &Ctx,
       return NK_Type_Narrowing;
     } else if (FromType->isIntegralOrUnscopedEnumerationType() &&
                ToType->isRealFloatingType()) {
+      if (IgnoreFloatToIntegralConversion)
+        return NK_Not_Narrowing;
       llvm::APSInt IntConstantValue;
       const Expr *Initializer = IgnoreNarrowingConversion(Converted);
       assert(Initializer && "Unknown conversion expression");
@@ -1486,7 +1488,7 @@ bool Sema::IsFunctionConversion(QualType FromType, QualType ToType,
   // Drop 'noexcept' if not present in target type.
   if (const auto *FromFPT = dyn_cast<FunctionProtoType>(FromFn)) {
     const auto *ToFPT = cast<FunctionProtoType>(ToFn);
-    if (FromFPT->isNothrow(Context) && !ToFPT->isNothrow(Context)) {
+    if (FromFPT->isNothrow() && !ToFPT->isNothrow()) {
       FromFn = cast<FunctionType>(
           Context.getFunctionTypeWithExceptionSpec(QualType(FromFPT, 0),
                                                    EST_None)
@@ -2832,9 +2834,9 @@ void Sema::HandleFunctionTypeMismatch(PartialDiagnostic &PDiag,
   // Handle exception specification differences on canonical type (in C++17
   // onwards).
   if (cast<FunctionProtoType>(FromFunction->getCanonicalTypeUnqualified())
-          ->isNothrow(Context) !=
+          ->isNothrow() !=
       cast<FunctionProtoType>(ToFunction->getCanonicalTypeUnqualified())
-          ->isNothrow(Context)) {
+          ->isNothrow()) {
     PDiag << ft_noexcept;
     return;
   }
@@ -8015,7 +8017,8 @@ public:
   //        bool       operator>=(T, T);
   //        bool       operator==(T, T);
   //        bool       operator!=(T, T);
-  void addRelationalPointerOrEnumeralOverloads() {
+  //           R       operator<=>(T, T)
+  void addGenericBinaryPointerOrEnumeralOverloads() {
     // C++ [over.match.oper]p3:
     //   [...]the built-in candidates include all of the candidate operator
     //   functions defined in 13.6 that, compared to the given operator, [...]
@@ -8088,7 +8091,6 @@ public:
             UserDefinedBinaryOperators.count(std::make_pair(CanonType,
                                                             CanonType)))
           continue;
-
         QualType ParamTypes[2] = { *Enum, *Enum };
         S.AddBuiltinCandidate(ParamTypes, Args, CandidateSet);
       }
@@ -8203,6 +8205,41 @@ public:
         S.AddBuiltinCandidate(LandR, Args, CandidateSet);
       }
     }
+  }
+
+  // C++2a [over.built]p14:
+  //
+  //   For every integral type T there exists a candidate operator function
+  //   of the form
+  //
+  //        std::strong_ordering operator<=>(T, T)
+  //
+  // C++2a [over.built]p15:
+  //
+  //   For every pair of floating-point types L and R, there exists a candidate
+  //   operator function of the form
+  //
+  //       std::partial_ordering operator<=>(L, R);
+  //
+  // FIXME: The current specification for integral types doesn't play nice with
+  // the direction of p0946r0, which allows mixed integral and unscoped-enum
+  // comparisons. Under the current spec this can lead to ambiguity during
+  // overload resolution. For example:
+  //
+  //   enum A : int {a};
+  //   auto x = (a <=> (long)42);
+  //
+  //   error: call is ambiguous for arguments 'A' and 'long'.
+  //   note: candidate operator<=>(int, int)
+  //   note: candidate operator<=>(long, long)
+  //
+  // To avoid this error, this function deviates from the specification and adds
+  // the mixed overloads `operator<=>(L, R)` where L and R are promoted
+  // arithmetic types (the same as the generic relational overloads).
+  //
+  // For now this function acts as a placeholder.
+  void addThreeWayArithmeticOverloads() {
+    addGenericBinaryArithmeticOverloads();
   }
 
   // C++ [over.built]p17:
@@ -8777,12 +8814,14 @@ void Sema::AddBuiltinOperatorCandidates(OverloadedOperatorKind Op,
   case OO_Greater:
   case OO_LessEqual:
   case OO_GreaterEqual:
-    OpBuilder.addRelationalPointerOrEnumeralOverloads();
+    OpBuilder.addGenericBinaryPointerOrEnumeralOverloads();
     OpBuilder.addGenericBinaryArithmeticOverloads();
     break;
 
   case OO_Spaceship:
-    llvm_unreachable("<=> expressions not supported yet");
+    OpBuilder.addGenericBinaryPointerOrEnumeralOverloads();
+    OpBuilder.addThreeWayArithmeticOverloads();
+    break;
 
   case OO_Percent:
   case OO_Caret:

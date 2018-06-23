@@ -3588,6 +3588,12 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
     return ExprError();
   }
 
+  if (ValType.isConstQualified()) {
+    Diag(DRE->getLocStart(), diag::err_atomic_builtin_cannot_be_const)
+        << FirstArg->getType() << FirstArg->getSourceRange();
+    return ExprError();
+  }
+
   switch (ValType.getObjCLifetime()) {
   case Qualifiers::OCL_None:
   case Qualifiers::OCL_ExplicitNone:
@@ -8465,7 +8471,7 @@ Sema::CheckReturnValExpr(Expr *RetValExp, QualType lhsType,
     if (Op == OO_New || Op == OO_Array_New) {
       const FunctionProtoType *Proto
         = FD->getType()->castAs<FunctionProtoType>();
-      if (!Proto->isNothrow(Context, /*ResultIfDependent*/true) &&
+      if (!Proto->isNothrow(/*ResultIfDependent*/true) &&
           CheckNonNullExpr(*this, RetValExp))
         Diag(ReturnLoc, diag::warn_operator_new_returns_null)
           << FD << getLangOpts().CPlusPlus11;
@@ -9569,13 +9575,22 @@ static void DiagnoseFloatingImpCast(Sema &S, Expr *E, QualType T,
 
   llvm::APSInt IntegerValue(S.Context.getIntWidth(T),
                             T->hasUnsignedIntegerRepresentation());
-  if (Value.convertToInteger(IntegerValue, llvm::APFloat::rmTowardZero,
-                             &isExact) == llvm::APFloat::opOK &&
-      isExact) {
+  llvm::APFloat::opStatus Result = Value.convertToInteger(
+      IntegerValue, llvm::APFloat::rmTowardZero, &isExact);
+
+  if (Result == llvm::APFloat::opOK && isExact) {
     if (IsLiteral) return;
     return DiagnoseImpCast(S, E, T, CContext, diag::warn_impcast_float_integer,
                            PruneWarnings);
   }
+
+  // Conversion of a floating-point value to a non-bool integer where the
+  // integral part cannot be represented by the integer type is undefined.
+  if (!IsBool && Result == llvm::APFloat::opInvalidOp)
+    return DiagnoseImpCast(
+        S, E, T, CContext,
+        IsLiteral ? diag::warn_impcast_literal_float_to_integer_out_of_range
+                  : diag::warn_impcast_float_to_integer_out_of_range);
 
   unsigned DiagID = 0;
   if (IsLiteral) {

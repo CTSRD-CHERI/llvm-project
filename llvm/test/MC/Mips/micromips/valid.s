@@ -97,11 +97,17 @@ div.d $f0, $f2, $f4         # CHECK: div.d $f0, $f2, $f4    # encoding: [0x54,0x
                             # CHECK-NEXT:                   # <MCInst #{{[0-9]+}} FDIV_D32_MM
 divu $zero, $9, $7          # CHECK: divu $zero, $9, $7     # encoding: [0x00,0xe9,0xbb,0x3c]
 sll $4, $3, 7               # CHECK: sll $4, $3, 7          # encoding: [0x00,0x83,0x38,0x00]
+                            # CHECK-NEXT:                   # <MCInst #{{[0-9]+}} SLL_MM
 sllv $2, $3, $5             # CHECK: sllv $2, $3, $5        # encoding: [0x00,0x65,0x10,0x10]
+                            # CHECK-NEXT:                   # <MCInst #{{[0-9]+}} SLLV_MM
 sra $4, $3, 7               # CHECK: sra $4, $3, 7          # encoding: [0x00,0x83,0x38,0x80]
+                            # CHECK-NEXT:                   # <MCInst #{{[0-9]+}} SRA_MM
 srav $2, $3, $5             # CHECK: srav $2, $3, $5        # encoding: [0x00,0x65,0x10,0x90]
+                            # CHECK-NEXT:                   # <MCInst #{{[0-9]+}} SRAV_MM
 srl $4, $3, 7               # CHECK: srl $4, $3, 7          # encoding: [0x00,0x83,0x38,0x40]
+                            # CHECK-NEXT:                   # <MCInst #{{[0-9]+}} SRL_MM
 srlv $2, $3, $5             # CHECK: srlv $2, $3, $5        # encoding: [0x00,0x65,0x10,0x50]
+                            # CHECK-NEXT:                   # <MCInst #{{[0-9]+}} SRLV_MM
 rotr $9, $6, 7              # CHECK: rotr $9, $6, 7         # encoding: [0x01,0x26,0x38,0xc0]
 rotrv $9, $6, $7            # CHECK: rotrv $9, $6, $7       # encoding: [0x00,0xc7,0x48,0xd0]
 lb $5, 8($4)                # CHECK: lb $5, 8($4)           # encoding: [0x1c,0xa4,0x00,0x08]
@@ -142,11 +148,17 @@ msubu  $4, $5               # CHECK: msubu  $4, $5          # encoding: [0x00,0x
 neg.d $f0, $f2              # CHECK: neg.d $f0, $f2         # encoding: [0x54,0x02,0x2b,0x7b]
                             # CHECK-NEXT:                   # <MCInst #{{[0-9]+}} FNEG_D32_MM
 clz $9, $6                  # CHECK: clz $9, $6             # encoding: [0x01,0x26,0x5b,0x3c]
+                            # CHECK-NEXT:                   # <MCInst #{{.*}} CLZ_MM
 clo $9, $6                  # CHECK: clo $9, $6             # encoding: [0x01,0x26,0x4b,0x3c]
+                            # CHECK-NEXT:                   # <MCInst #{{.*}} CLO_MM
 seb $9, $6                  # CHECK: seb $9, $6             # encoding: [0x01,0x26,0x2b,0x3c]
+                            # CHECK-NEXT:                   # <MCInst #{{[0-9]+}} SEB_MM
 seb $9                      # CHECK: seb $9, $9             # encoding: [0x01,0x29,0x2b,0x3c]
+                            # CHECK-NEXT:                   # <MCInst #{{[0-9]+}} SEB_MM
 seh $9, $6                  # CHECK: seh $9, $6             # encoding: [0x01,0x26,0x3b,0x3c]
+                            # CHECK-NEXT:                   # <MCInst #{{[0-9]+}} SEH_MM
 seh $9                      # CHECK: seh $9, $9             # encoding: [0x01,0x29,0x3b,0x3c]
+                            # CHECK-NEXT:                   # <MCInst #{{[0-9]+}} SEH_MM
 wsbh $9, $6                 # CHECK: wsbh $9, $6            # encoding: [0x01,0x26,0x7b,0x3c]
 ext $9, $6, 3, 7            # CHECK: ext $9, $6, 3, 7       # encoding: [0x01,0x26,0x30,0xec]
 ins $9, $6, 3, 7            # CHECK: ins $9, $6, 3, 7       # encoding: [0x01,0x26,0x48,0xcc]

@@ -1660,8 +1660,8 @@ bool CastExpr::CastConsistency() const {
   return true;
 }
 
-const char *CastExpr::getCastKindName() const {
-  switch (getCastKind()) {
+const char *CastExpr::getCastKindName(CastKind CK) {
+  switch (CK) {
 #define CAST_OPERATION(Name) case CK_##Name: return #Name;
 #include "clang/AST/OperationKinds.def"
   }

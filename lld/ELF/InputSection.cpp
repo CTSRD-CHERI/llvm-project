@@ -376,17 +376,32 @@ void InputSection::copyRelocations(uint8_t *Buf, ArrayRef<RelTy> Rels) {
         continue;
       }
 
-      if (RelTy::IsRela) {
-        P->r_addend =
-            Sym.getVA(getAddend<ELFT>(Rel)) - Section->getOutputSection()->Addr;
-      } else if (Config->Relocatable) {
-        const uint8_t *BufLoc = Sec->Data.begin() + Rel.r_offset;
-        Sec->Relocations.push_back({R_ABS, Type, Rel.r_offset,
-                                    Target->getImplicitAddend(BufLoc, Type),
-                                    &Sym});
-      }
-    }
+      int64_t Addend = getAddend<ELFT>(Rel);
+      const uint8_t *BufLoc = Sec->Data.begin() + Rel.r_offset;
+      if (!RelTy::IsRela)
+        Addend = Target->getImplicitAddend(BufLoc, Type);
 
+      if (Config->EMachine == EM_MIPS && Config->Relocatable &&
+          Target->getRelExpr(Type, Sym, BufLoc) == R_MIPS_GOTREL) {
+        // Some MIPS relocations depend on "gp" value. By default,
+        // this value has 0x7ff0 offset from a .got section. But
+        // relocatable files produced by a complier or a linker
+        // might redefine this default value and we must use it
+        // for a calculation of the relocation result. When we
+        // generate EXE or DSO it's trivial. Generating a relocatable
+        // output is more difficult case because the linker does
+        // not calculate relocations in this mode and loses
+        // individual "gp" values used by each input object file.
+        // As a workaround we add the "gp" value to the relocation
+        // addend and save it back to the file.
+        Addend += Sec->getFile<ELFT>()->MipsGp0;
+      }
+
+      if (RelTy::IsRela)
+        P->r_addend = Sym.getVA(Addend) - Section->getOutputSection()->Addr;
+      else if (Config->Relocatable)
+        Sec->Relocations.push_back({R_ABS, Type, Rel.r_offset, Addend, &Sym});
+    }
   }
 }
 
@@ -566,24 +581,15 @@ static uint64_t getRelocTargetVA(RelType Type, int64_t A, uint64_t P,
   case R_PLT:
     return Sym.getPltVA() + A;
   case R_PLT_PC:
-  case R_PPC_PLT_OPD:
+  case R_PPC_CALL_PLT:
     return Sym.getPltVA() + A - P;
-  case R_PPC_OPD: {
+  case R_PPC_CALL: {
     uint64_t SymVA = Sym.getVA(A);
     // If we have an undefined weak symbol, we might get here with a symbol
     // address of zero. That could overflow, but the code must be unreachable,
     // so don't bother doing anything at all.
     if (!SymVA)
       return 0;
-    if (Out::Opd) {
-      // If this is a local call, and we currently have the address of a
-      // function-descriptor, get the underlying code address instead.
-      uint64_t OpdStart = Out::Opd->Addr;
-      uint64_t OpdEnd = OpdStart + Out::Opd->Size;
-      bool InOpd = OpdStart <= SymVA && SymVA < OpdEnd;
-      if (InOpd)
-        SymVA = read64be(&Out::OpdBuf[SymVA - OpdStart]);
-    }
 
     // PPC64 V2 ABI describes two entry points to a function. The global entry
     // point sets up the TOC base pointer. When calling a local function, the
@@ -749,13 +755,15 @@ void InputSectionBase::relocateAlloc(uint8_t *Buf, uint8_t *BufEnd) {
     case R_RELAX_TLS_GD_TO_IE_END:
       Target->relaxTlsGdToIe(BufLoc, Type, TargetVA);
       break;
-    case R_PPC_PLT_OPD:
+    case R_PPC_CALL:
       // Patch a nop (0x60000000) to a ld.
-      if (BufLoc + 8 > BufEnd || read32(BufLoc + 4) != 0x60000000) {
-        error(getErrorLocation(BufLoc) + "call lacks nop, can't restore toc");
-        break;
+      if (Rel.Sym->NeedsTocRestore) {
+        if (BufLoc + 8 > BufEnd || read32(BufLoc + 4) != 0x60000000) {
+          error(getErrorLocation(BufLoc) + "call lacks nop, can't restore toc");
+          break;
+        }
+        write32(BufLoc + 4, 0xe8410018); // ld %r2, 24(%r1)
       }
-      write32(BufLoc + 4, 0xe8410018); // ld %r2, 24(%r1)
       Target->relocateOne(BufLoc, Type, TargetVA);
       break;
     default:

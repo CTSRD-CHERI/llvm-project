@@ -63,7 +63,7 @@ class SizeClassAllocator32 {
 
   struct TransferBatch {
     static const uptr kMaxNumCached = SizeClassMap::kMaxNumCachedHint - 2;
-    void SetFromArray(uptr region_beg_unused, void *batch[], uptr count) {
+    void SetFromArray(void *batch[], uptr count) {
       count_ = count;
       CHECK_LE(count_, kMaxNumCached);
       for (uptr i = 0; i < count; i++)
@@ -108,7 +108,7 @@ class SizeClassAllocator32 {
   typedef SizeClassAllocator32LocalCache<ThisT> AllocatorCache;
 
   void Init(s32 release_to_os_interval_ms) {
-    possible_regions.TestOnlyInit();
+    possible_regions.Init();
     internal_memset(size_class_info_array, 0, sizeof(size_class_info_array));
   }
 

@@ -38,6 +38,7 @@
 #include "lldb/Target/Process.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Utility/DataBufferHeap.h"
+#include "lldb/Utility/LLDBAssert.h"
 #include "lldb/Utility/Log.h"
 #include "lldb/Utility/Logging.h" // for GetLogIfAn...
 #include "lldb/Utility/RegularExpression.h"
@@ -321,18 +322,28 @@ ObjectFile *Module::GetMemoryObjectFile(const lldb::ProcessSP &process_sp,
 }
 
 const lldb_private::UUID &Module::GetUUID() {
-  if (!m_did_parse_uuid.load()) {
+  if (!m_did_set_uuid.load()) {
     std::lock_guard<std::recursive_mutex> guard(m_mutex);
-    if (!m_did_parse_uuid.load()) {
+    if (!m_did_set_uuid.load()) {
       ObjectFile *obj_file = GetObjectFile();
 
       if (obj_file != nullptr) {
         obj_file->GetUUID(&m_uuid);
-        m_did_parse_uuid = true;
+        m_did_set_uuid = true;
       }
     }
   }
   return m_uuid;
+}
+
+void Module::SetUUID(const lldb_private::UUID &uuid) {
+  std::lock_guard<std::recursive_mutex> guard(m_mutex);
+  if (!m_did_set_uuid) {
+    m_uuid = uuid;
+    m_did_set_uuid = true;
+  } else {
+    lldbassert(0 && "Attempting to overwrite the existing module UUID");
+  }
 }
 
 TypeSystem *Module::GetTypeSystemForLanguage(LanguageType language) {
@@ -986,6 +997,7 @@ size_t Module::FindTypes(
   const bool append = true;
   TypeClass type_class = eTypeClassAny;
   TypeMap typesmap;
+
   if (Type::GetTypeScopeAndBasename(type_name_cstr, type_scope, type_basename,
                                     type_class)) {
     // Check if "name" starts with "::" which means the qualified type starts
@@ -1008,12 +1020,12 @@ size_t Module::FindTypes(
       // The "type_name_cstr" will have been modified if we have a valid type
       // class prefix (like "struct", "class", "union", "typedef" etc).
       FindTypes_Impl(sc, ConstString(type_basename), nullptr, append,
-                     max_matches, searched_symbol_files, typesmap);
+                     UINT_MAX, searched_symbol_files, typesmap);
       typesmap.RemoveMismatchedTypes(type_scope, type_basename, type_class,
                                      exact_match);
       num_matches = typesmap.GetSize();
     } else {
-      num_matches = FindTypes_Impl(sc, name, nullptr, append, max_matches,
+      num_matches = FindTypes_Impl(sc, name, nullptr, append, UINT_MAX,
                                    searched_symbol_files, typesmap);
       if (exact_match) {
         std::string name_str(name.AsCString(""));

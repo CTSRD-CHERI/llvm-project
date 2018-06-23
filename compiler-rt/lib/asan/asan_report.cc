@@ -134,6 +134,10 @@ class ScopedInErrorReport {
   }
 
   ~ScopedInErrorReport() {
+    if (halt_on_error_ && !__sanitizer_acquire_crash_state()) {
+      asanThreadRegistry().Unlock();
+      return;
+    }
     ASAN_ON_ERROR();
     if (current_error_.IsValid()) current_error_.Print();
 
@@ -152,7 +156,7 @@ class ScopedInErrorReport {
 
     // Copy the message buffer so that we could start logging without holding a
     // lock that gets aquired during printing.
-    InternalScopedBuffer<char> buffer_copy(kErrorMessageBufferSize);
+    InternalMmapVector<char> buffer_copy(kErrorMessageBufferSize);
     {
       BlockingMutexLock l(&error_message_buf_mutex);
       internal_memcpy(buffer_copy.data(),

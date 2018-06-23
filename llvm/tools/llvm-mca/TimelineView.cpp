@@ -35,15 +35,16 @@ void TimelineView::initialize(unsigned MaxIterations) {
 }
 
 void TimelineView::onInstructionEvent(const HWInstructionEvent &Event) {
-  if (CurrentCycle >= MaxCycle || Event.Index >= Timeline.size())
+  const unsigned Index = Event.IR.getSourceIndex();
+  if (CurrentCycle >= MaxCycle || Index >= Timeline.size())
     return;
   switch (Event.Type) {
   case HWInstructionEvent::Retired: {
-    TimelineViewEntry &TVEntry = Timeline[Event.Index];
+    TimelineViewEntry &TVEntry = Timeline[Index];
     TVEntry.CycleRetired = CurrentCycle;
 
     // Update the WaitTime entry which corresponds to this Index.
-    WaitTimeEntry &WTEntry = WaitTime[Event.Index % AsmSequence.size()];
+    WaitTimeEntry &WTEntry = WaitTime[Index % AsmSequence.size()];
     WTEntry.Executions++;
     WTEntry.CyclesSpentInSchedulerQueue +=
         TVEntry.CycleIssued - TVEntry.CycleDispatched;
@@ -55,16 +56,16 @@ void TimelineView::onInstructionEvent(const HWInstructionEvent &Event) {
     break;
   }
   case HWInstructionEvent::Ready:
-    Timeline[Event.Index].CycleReady = CurrentCycle;
+    Timeline[Index].CycleReady = CurrentCycle;
     break;
   case HWInstructionEvent::Issued:
-    Timeline[Event.Index].CycleIssued = CurrentCycle;
+    Timeline[Index].CycleIssued = CurrentCycle;
     break;
   case HWInstructionEvent::Executed:
-    Timeline[Event.Index].CycleExecuted = CurrentCycle;
+    Timeline[Index].CycleExecuted = CurrentCycle;
     break;
   case HWInstructionEvent::Dispatched:
-    Timeline[Event.Index].CycleDispatched = CurrentCycle;
+    Timeline[Index].CycleDispatched = CurrentCycle;
     break;
   default:
     return;
@@ -153,28 +154,28 @@ void TimelineView::printTimelineViewEntry(raw_string_ostream &OS,
   OS << '[' << Iteration << ',' << SourceIndex << "]\t";
   for (unsigned I = 0, E = Entry.CycleDispatched; I < E; ++I)
     OS << ((I % 5 == 0) ? '.' : ' ');
-  OS << 'D';
+  OS << TimelineView::DisplayChar::Dispatched;
   if (Entry.CycleDispatched != Entry.CycleExecuted) {
     // Zero latency instructions have the same value for CycleDispatched,
     // CycleIssued and CycleExecuted.
     for (unsigned I = Entry.CycleDispatched + 1, E = Entry.CycleIssued; I < E;
          ++I)
-      OS << '=';
+      OS << TimelineView::DisplayChar::Waiting;
     if (Entry.CycleIssued == Entry.CycleExecuted)
-      OS << 'E';
+      OS << TimelineView::DisplayChar::DisplayChar::Executed;
     else {
       if (Entry.CycleDispatched != Entry.CycleIssued)
-        OS << 'e';
+        OS << TimelineView::DisplayChar::Executing;
       for (unsigned I = Entry.CycleIssued + 1, E = Entry.CycleExecuted; I < E;
            ++I)
-        OS << 'e';
-      OS << 'E';
+        OS << TimelineView::DisplayChar::Executing;
+      OS << TimelineView::DisplayChar::Executed;
     }
   }
 
   for (unsigned I = Entry.CycleExecuted + 1, E = Entry.CycleRetired; I < E; ++I)
-    OS << '-';
-  OS << 'R';
+    OS << TimelineView::DisplayChar::RetireLag;
+  OS << TimelineView::DisplayChar::Retired;
 
   // Skip other columns.
   for (unsigned I = Entry.CycleRetired + 1, E = LastCycle; I <= E; ++I)

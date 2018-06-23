@@ -17,8 +17,9 @@
 
 #include "clang/AST/Attr.h"
 #include "clang/AST/Availability.h"
-#include "clang/AST/DeclarationName.h"
+#include "clang/AST/ComparisonCategories.h"
 #include "clang/AST/DeclTemplate.h"
+#include "clang/AST/DeclarationName.h"
 #include "clang/AST/Expr.h"
 #include "clang/AST/ExprObjC.h"
 #include "clang/AST/ExternalASTSource.h"
@@ -49,6 +50,7 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/SetVector.h"
+#include "llvm/ADT/SmallBitVector.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/TinyPtrVector.h"
@@ -4545,6 +4547,22 @@ public:
   CXXRecordDecl *getStdBadAlloc() const;
   EnumDecl *getStdAlignValT() const;
 
+private:
+  // A cache representing if we've fully checked the various comparison category
+  // types stored in ASTContext. The bit-index corresponds to the integer value
+  // of a ComparisonCategoryType enumerator.
+  llvm::SmallBitVector FullyCheckedComparisonCategories;
+
+public:
+  /// \brief Lookup the specified comparison category types in the standard
+  ///   library, an check the VarDecls possibly returned by the operator<=>
+  ///   builtins for that type.
+  ///
+  /// \return The type of the comparison category type corresponding to the
+  ///   specified Kind, or a null type if an error occurs
+  QualType CheckComparisonCategoryType(ComparisonCategoryType Kind,
+                                       SourceLocation Loc);
+
   /// \brief Tests whether Ty is an instance of std::initializer_list and, if
   /// it is and Element is not NULL, assigns the element type to Element.
   bool isStdInitializerList(QualType Ty, QualType *Element);
@@ -4716,7 +4734,7 @@ public:
 
     /// \brief Get the computed exception specification type.
     ExceptionSpecificationType getExceptionSpecType() const {
-      assert(ComputedEST != EST_ComputedNoexcept &&
+      assert(!isComputedNoexcept(ComputedEST) &&
              "noexcept(expr) should not be a possible result");
       return ComputedEST;
     }
@@ -4744,7 +4762,7 @@ public:
         /// C++11 [except.spec]p14:
         ///   The exception-specification is noexcept(false) if the set of
         ///   potential exceptions of the special member function contains "any"
-        ESI.Type = EST_ComputedNoexcept;
+        ESI.Type = EST_NoexceptFalse;
         ESI.NoexceptExpr = Self->ActOnCXXBoolLiteral(SourceLocation(),
                                                      tok::kw_false).get();
       }
@@ -4794,6 +4812,11 @@ public:
   /// \brief Evaluate the implicit exception specification for a defaulted
   /// special member function.
   void EvaluateImplicitExceptionSpec(SourceLocation Loc, CXXMethodDecl *MD);
+
+  /// Check the given noexcept-specifier, convert its expression, and compute
+  /// the appropriate ExceptionSpecificationType.
+  ExprResult ActOnNoexceptSpec(SourceLocation NoexceptLoc, Expr *NoexceptExpr,
+                               ExceptionSpecificationType &EST);
 
   /// \brief Check the given exception-specification and update the
   /// exception specification information with the results.
@@ -9615,8 +9638,8 @@ public:
     ExprResult &LHS, ExprResult &RHS, SourceLocation Loc,
     BinaryOperatorKind Opc, bool IsCompAssign = false);
   QualType CheckCompareOperands( // C99 6.5.8/9
-    ExprResult &LHS, ExprResult &RHS, SourceLocation Loc,
-    BinaryOperatorKind Opc, bool isRelational);
+      ExprResult &LHS, ExprResult &RHS, SourceLocation Loc,
+      BinaryOperatorKind Opc);
   QualType CheckBitwiseOperands( // C99 6.5.[10...12]
       ExprResult &LHS, ExprResult &RHS, SourceLocation Loc,
       BinaryOperatorKind Opc);

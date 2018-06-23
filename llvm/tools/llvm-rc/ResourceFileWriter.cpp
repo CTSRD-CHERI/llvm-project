@@ -110,6 +110,18 @@ static bool stripQuotes(StringRef &Str, bool &IsLongString) {
   return true;
 }
 
+static UTF16 cp1252ToUnicode(unsigned char C) {
+  static const UTF16 Map80[] = {
+      0x20ac, 0x0081, 0x201a, 0x0192, 0x201e, 0x2026, 0x2020, 0x2021,
+      0x02c6, 0x2030, 0x0160, 0x2039, 0x0152, 0x008d, 0x017d, 0x008f,
+      0x0090, 0x2018, 0x2019, 0x201c, 0x201d, 0x2022, 0x2013, 0x2014,
+      0x02dc, 0x2122, 0x0161, 0x203a, 0x0153, 0x009d, 0x017e, 0x0178,
+  };
+  if (C >= 0x80 && C <= 0x9F)
+    return Map80[C - 0x80];
+  return C;
+}
+
 // Describes a way to handle '\0' characters when processing the string.
 // rc.exe tool sometimes behaves in a weird way in postprocessing.
 // If the string to be output is equivalent to a C-string (e.g. in MENU
@@ -132,10 +144,26 @@ enum class NullHandlingMethod {
 //   * Replace the escape sequences with their processed version.
 // For identifiers, this is no-op.
 static Error processString(StringRef Str, NullHandlingMethod NullHandler,
-                           bool &IsLongString, SmallVectorImpl<UTF16> &Result) {
+                           bool &IsLongString, SmallVectorImpl<UTF16> &Result,
+                           int CodePage) {
   bool IsString = stripQuotes(Str, IsLongString);
   SmallVector<UTF16, 128> Chars;
-  convertUTF8ToUTF16String(Str, Chars);
+
+  // Convert the input bytes according to the chosen codepage.
+  if (CodePage == CpUtf8) {
+    convertUTF8ToUTF16String(Str, Chars);
+  } else if (CodePage == CpWin1252) {
+    for (char C : Str)
+      Chars.push_back(cp1252ToUnicode((unsigned char)C));
+  } else {
+    // For other, unknown codepages, only allow plain ASCII input.
+    for (char C : Str) {
+      if ((unsigned char)C > 0x7F)
+        return createError("Non-ASCII 8-bit codepoint (" + Twine(C) +
+                           ") can't be interpreted in the current codepage");
+      Chars.push_back((unsigned char)C);
+    }
+  }
 
   if (!IsString) {
     // It's an identifier if it's not a string. Make all characters uppercase.
@@ -157,21 +185,35 @@ static Error processString(StringRef Str, NullHandlingMethod NullHandler,
         if (Char > 0xFF)
           return createError("Non-8-bit codepoint (" + Twine(Char) +
                              ") can't occur in a user-defined narrow string");
+      }
+    }
 
+    Result.push_back(Char);
+    return Error::success();
+  };
+  auto AddEscapedChar = [AddRes, IsLongString, CodePage](UTF16 Char) -> Error {
+    if (!IsLongString) {
+      // Escaped chars in narrow strings have to be interpreted according to
+      // the chosen code page.
+      if (Char > 0xFF)
+        return createError("Non-8-bit escaped char (" + Twine(Char) +
+                           ") can't occur in narrow string");
+      if (CodePage == CpUtf8) {
+        if (Char >= 0x80)
+          return createError("Unable to interpret single byte (" + Twine(Char) +
+                             ") as UTF-8");
+      } else if (CodePage == CpWin1252) {
+        Char = cp1252ToUnicode(Char);
       } else {
-        // In case of narrow non-user strings, Windows RC converts
-        // [0x80, 0xFF] chars according to the current codepage.
-        // There is no 'codepage' concept settled in every supported platform,
-        // so we should reject such inputs.
-        if (Char > 0x7F && Char <= 0xFF)
+        // Unknown/unsupported codepage, only allow ASCII input.
+        if (Char > 0x7F)
           return createError("Non-ASCII 8-bit codepoint (" + Twine(Char) +
                              ") can't "
                              "occur in a non-Unicode string");
       }
     }
 
-    Result.push_back(Char);
-    return Error::success();
+    return AddRes(Char);
   };
 
   while (Pos < Chars.size()) {
@@ -223,7 +265,7 @@ static Error processString(StringRef Str, NullHandlingMethod NullHandler,
           --RemainingChars;
         }
 
-        RETURN_IF_ERROR(AddRes(ReadInt));
+        RETURN_IF_ERROR(AddEscapedChar(ReadInt));
         continue;
       }
 
@@ -240,7 +282,7 @@ static Error processString(StringRef Str, NullHandlingMethod NullHandler,
           ++Pos;
         }
 
-        RETURN_IF_ERROR(AddRes(ReadInt));
+        RETURN_IF_ERROR(AddEscapedChar(ReadInt));
 
         continue;
       }
@@ -328,7 +370,8 @@ Error ResourceFileWriter::writeCString(StringRef Str, bool WriteTerminator) {
   SmallVector<UTF16, 128> ProcessedString;
   bool IsLongString;
   RETURN_IF_ERROR(processString(Str, NullHandlingMethod::CutAtNull,
-                                IsLongString, ProcessedString));
+                                IsLongString, ProcessedString,
+                                Params.CodePage));
   for (auto Ch : ProcessedString)
     writeInt<uint16_t>(Ch);
   if (WriteTerminator)
@@ -392,6 +435,10 @@ Error ResourceFileWriter::visitNullResource(const RCResource *Res) {
 
 Error ResourceFileWriter::visitAcceleratorsResource(const RCResource *Res) {
   return writeResource(Res, &ResourceFileWriter::writeAcceleratorsBody);
+}
+
+Error ResourceFileWriter::visitBitmapResource(const RCResource *Res) {
+  return writeResource(Res, &ResourceFileWriter::writeBitmapBody);
 }
 
 Error ResourceFileWriter::visitCursorResource(const RCResource *Res) {
@@ -638,6 +685,29 @@ Error ResourceFileWriter::writeAcceleratorsBody(const RCResource *Base) {
     RETURN_IF_ERROR(
         writeSingleAccelerator(Acc, AcceleratorId == Res->Accelerators.size()));
   }
+  return Error::success();
+}
+
+// --- BitmapResource helpers. --- //
+
+Error ResourceFileWriter::writeBitmapBody(const RCResource *Base) {
+  StringRef Filename = cast<BitmapResource>(Base)->BitmapLoc;
+  bool IsLong;
+  stripQuotes(Filename, IsLong);
+
+  auto File = loadFile(Filename);
+  if (!File)
+    return File.takeError();
+
+  StringRef Buffer = (*File)->getBuffer();
+
+  // Skip the 14 byte BITMAPFILEHEADER.
+  constexpr size_t BITMAPFILEHEADER_size = 14;
+  if (Buffer.size() < BITMAPFILEHEADER_size || Buffer[0] != 'B' ||
+      Buffer[1] != 'M')
+    return createError("Incorrect bitmap file.");
+
+  *FS << Buffer.substr(BITMAPFILEHEADER_size);
   return Error::success();
 }
 
@@ -946,7 +1016,7 @@ Error ResourceFileWriter::writeSingleDialogControl(const Control &Ctl,
   }
 
   // Window class - either 0xFFFF + 16-bit integer or a string.
-  RETURN_IF_ERROR(writeIntOrString(IntOrString(TypeInfo.CtlClass)));
+  RETURN_IF_ERROR(writeIntOrString(Ctl.Class));
 
   // Element caption/reference ID. ID is preceded by 0xFFFF.
   RETURN_IF_ERROR(checkIntOrString(Ctl.Title, "Control reference ID"));
@@ -1142,6 +1212,7 @@ public:
   static bool classof(const RCResource *Res) {
     return Res->getKind() == RkStringTableBundle;
   }
+  Twine getResourceTypeName() const override { return "STRINGTABLE"; }
 };
 
 Error ResourceFileWriter::visitStringTableBundle(const RCResource *Res) {
@@ -1168,7 +1239,7 @@ Error ResourceFileWriter::writeStringTableBundleBody(const RCResource *Base) {
     SmallVector<UTF16, 128> Data;
     RETURN_IF_ERROR(processString(Res->Bundle.Data[ID].getValueOr(StringRef()),
                                   NullHandlingMethod::CutAtDoubleNull,
-                                  IsLongString, Data));
+                                  IsLongString, Data, Params.CodePage));
     if (AppendNull && Res->Bundle.Data[ID])
       Data.push_back('\0');
     RETURN_IF_ERROR(
@@ -1215,9 +1286,9 @@ Error ResourceFileWriter::writeUserDefinedBody(const RCResource *Base) {
 
     SmallVector<UTF16, 128> ProcessedString;
     bool IsLongString;
-    RETURN_IF_ERROR(processString(Elem.getString(),
-                                  NullHandlingMethod::UserResource,
-                                  IsLongString, ProcessedString));
+    RETURN_IF_ERROR(
+        processString(Elem.getString(), NullHandlingMethod::UserResource,
+                      IsLongString, ProcessedString, Params.CodePage));
 
     for (auto Ch : ProcessedString) {
       if (IsLongString) {
@@ -1241,6 +1312,7 @@ Error ResourceFileWriter::writeVersionInfoBlock(const VersionInfoBlock &Blk) {
   bool OutputHeader = Blk.Name != "";
   uint64_t LengthLoc;
 
+  padStream(sizeof(uint32_t));
   if (OutputHeader) {
     LengthLoc = writeInt<uint16_t>(0);
     writeInt<uint16_t>(0);
@@ -1266,7 +1338,6 @@ Error ResourceFileWriter::writeVersionInfoBlock(const VersionInfoBlock &Blk) {
     writeObjectAt(ulittle16_t(CurLoc - LengthLoc), LengthLoc);
   }
 
-  padStream(sizeof(uint32_t));
   return Error::success();
 }
 
@@ -1296,6 +1367,7 @@ Error ResourceFileWriter::writeVersionInfoValue(const VersionInfoValue &Val) {
     return createError(Twine("VALUE ") + Val.Key +
                        " cannot contain both strings and integers");
 
+  padStream(sizeof(uint32_t));
   auto LengthLoc = writeInt<uint16_t>(0);
   auto ValLengthLoc = writeInt<uint16_t>(0);
   writeInt<uint16_t>(HasStrings);
@@ -1325,7 +1397,6 @@ Error ResourceFileWriter::writeVersionInfoValue(const VersionInfoValue &Val) {
   }
   writeObjectAt(ulittle16_t(CurLoc - LengthLoc), LengthLoc);
   writeObjectAt(ulittle16_t(ValueLength), ValLengthLoc);
-  padStream(sizeof(uint32_t));
   return Error::success();
 }
 

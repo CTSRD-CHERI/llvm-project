@@ -375,9 +375,6 @@ void ExprEngine::VisitCXXConstructExpr(const CXXConstructExpr *CE,
          I != E; ++I) {
       ProgramStateRef State = (*I)->getState();
       if (CE->requiresZeroInitialization()) {
-        // Type of the zero doesn't matter.
-        SVal ZeroVal = svalBuilder.makeZeroVal(getContext().CharTy);
-
         // FIXME: Once we properly handle constructors in new-expressions, we'll
         // need to invalidate the region before setting a default value, to make
         // sure there aren't any lingering bindings around. This probably needs
@@ -390,7 +387,7 @@ void ExprEngine::VisitCXXConstructExpr(const CXXConstructExpr *CE,
         // actually make things worse. Placement new makes this tricky as well,
         // since it's then possible to be initializing one part of a multi-
         // dimensional array.
-        State = State->bindDefault(loc::MemRegionVal(Target), ZeroVal, LCtx);
+        State = State->bindDefaultZero(loc::MemRegionVal(Target), LCtx);
       }
 
       State = addAllNecessaryTemporaryInfo(State, CC, LCtx, Target);
@@ -549,7 +546,7 @@ void ExprEngine::VisitCXXNewAllocatorCall(const CXXNewExpr *CNE,
     if (const FunctionDecl *FD = CNE->getOperatorNew()) {
       QualType Ty = FD->getType();
       if (const auto *ProtoType = Ty->getAs<FunctionProtoType>())
-        if (!ProtoType->isNothrow(getContext()))
+        if (!ProtoType->isNothrow())
           State = State->assume(RetVal.castAs<DefinedOrUnknownSVal>(), true);
     }
 
@@ -622,7 +619,7 @@ void ExprEngine::VisitCXXNewExpr(const CXXNewExpr *CNE, ExplodedNode *Pred,
     if (FD) {
       QualType Ty = FD->getType();
       if (const auto *ProtoType = Ty->getAs<FunctionProtoType>())
-        if (!ProtoType->isNothrow(getContext()))
+        if (!ProtoType->isNothrow())
           if (auto dSymVal = symVal.getAs<DefinedOrUnknownSVal>())
             State = State->assume(*dSymVal, true);
     }

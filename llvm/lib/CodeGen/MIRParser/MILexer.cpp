@@ -179,23 +179,6 @@ static Cursor lexName(Cursor C, MIToken &Token, MIToken::TokenKind Type,
   return C;
 }
 
-static Cursor maybeLexIntegerOrScalarType(Cursor C, MIToken &Token) {
-  if ((C.peek() != 'i' && C.peek() != 's' && C.peek() != 'p') ||
-      !isdigit(C.peek(1)))
-    return None;
-  char Kind = C.peek();
-  auto Range = C;
-  C.advance(); // Skip 'i', 's', or 'p'
-  while (isdigit(C.peek()))
-    C.advance();
-
-  Token.reset(Kind == 'i'
-                  ? MIToken::IntegerType
-                  : (Kind == 's' ? MIToken::ScalarType : MIToken::PointerType),
-              Range.upto(C));
-  return C;
-}
-
 static MIToken::TokenKind getIdentifierKind(StringRef Identifier) {
   return StringSwitch<MIToken::TokenKind>(Identifier)
       .Case("_", MIToken::underscore)
@@ -212,6 +195,13 @@ static MIToken::TokenKind getIdentifierKind(StringRef Identifier) {
       .Case("tied-def", MIToken::kw_tied_def)
       .Case("frame-setup", MIToken::kw_frame_setup)
       .Case("frame-destroy", MIToken::kw_frame_destroy)
+      .Case("nnan", MIToken::kw_nnan)
+      .Case("ninf", MIToken::kw_ninf)
+      .Case("nsz", MIToken::kw_nsz)
+      .Case("arcp", MIToken::kw_arcp)
+      .Case("contract", MIToken::kw_contract)
+      .Case("afn", MIToken::kw_afn)
+      .Case("reassoc", MIToken::kw_reassoc)
       .Case("debug-location", MIToken::kw_debug_location)
       .Case("same_value", MIToken::kw_cfi_same_value)
       .Case("offset", MIToken::kw_cfi_offset)
@@ -643,8 +633,6 @@ StringRef llvm::lexMIToken(StringRef Source, MIToken &Token,
     return C.remaining();
   }
 
-  if (Cursor R = maybeLexIntegerOrScalarType(C, Token))
-    return R.remaining();
   if (Cursor R = maybeLexMachineBasicBlock(C, Token, ErrorCallback))
     return R.remaining();
   if (Cursor R = maybeLexIdentifier(C, Token))

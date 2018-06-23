@@ -121,7 +121,7 @@ namespace clang {
     QualType VisitSubstTemplateTypeParmType(const SubstTemplateTypeParmType *T);
     QualType VisitTemplateSpecializationType(const TemplateSpecializationType *T);
     QualType VisitElaboratedType(const ElaboratedType *T);
-    // FIXME: DependentNameType
+    QualType VisitDependentNameType(const DependentNameType *T);
     QualType VisitPackExpansionType(const PackExpansionType *T);
     QualType VisitDependentTemplateSpecializationType(
         const DependentTemplateSpecializationType *T);
@@ -347,8 +347,10 @@ namespace clang {
     Expr *VisitCXXConstructExpr(CXXConstructExpr *E);
     Expr *VisitCXXMemberCallExpr(CXXMemberCallExpr *E);
     Expr *VisitCXXDependentScopeMemberExpr(CXXDependentScopeMemberExpr *E);
+    Expr *VisitDependentScopeDeclRefExpr(DependentScopeDeclRefExpr *E);
     Expr *VisitCXXUnresolvedConstructExpr(CXXUnresolvedConstructExpr *CE);
     Expr *VisitUnresolvedLookupExpr(UnresolvedLookupExpr *E);
+    Expr *VisitUnresolvedMemberExpr(UnresolvedMemberExpr *E);
     Expr *VisitExprWithCleanups(ExprWithCleanups *EWC);
     Expr *VisitCXXThisExpr(CXXThisExpr *E);
     Expr *VisitCXXBoolLiteralExpr(CXXBoolLiteralExpr *E);
@@ -936,6 +938,25 @@ QualType ASTNodeImporter::VisitDependentTemplateSpecializationType(
 
   return Importer.getToContext().getDependentTemplateSpecializationType(
         T->getKeyword(), Qualifier, Name, ToPack);
+}
+
+QualType ASTNodeImporter::VisitDependentNameType(const DependentNameType *T) {
+  NestedNameSpecifier *NNS = Importer.Import(T->getQualifier());
+  if (!NNS && T->getQualifier())
+    return QualType();
+
+  IdentifierInfo *Name = Importer.Import(T->getIdentifier());
+  if (!Name && T->getIdentifier())
+    return QualType();
+
+  QualType Canon = (T == T->getCanonicalTypeInternal().getTypePtr())
+                       ? QualType()
+                       : Importer.Import(T->getCanonicalTypeInternal());
+  if (!Canon.isNull())
+    Canon = Canon.getCanonicalType();
+
+  return Importer.getToContext().getDependentNameType(T->getKeyword(), NNS,
+                                                      Name, Canon);
 }
 
 QualType ASTNodeImporter::VisitObjCInterfaceType(const ObjCInterfaceType *T) {
@@ -2666,8 +2687,8 @@ Decl *ASTNodeImporter::VisitIndirectFieldDecl(IndirectFieldDecl *D) {
       Importer.getToContext(), DC, Loc, Name.getAsIdentifierInfo(), T,
       {NamedChain, D->getChainingSize()});
 
-  for (const auto *Attr : D->attrs())
-    ToIndirectField->addAttr(Attr->clone(Importer.getToContext()));
+  for (const auto *A : D->attrs())
+    ToIndirectField->addAttr(Importer.Import(A));
 
   ToIndirectField->setAccess(D->getAccess());
   ToIndirectField->setLexicalDeclContext(LexicalDC);
@@ -4745,15 +4766,8 @@ Stmt *ASTNodeImporter::VisitAttributedStmt(AttributedStmt *S) {
   SourceLocation ToAttrLoc = Importer.Import(S->getAttrLoc());
   ArrayRef<const Attr*> FromAttrs(S->getAttrs());
   SmallVector<const Attr *, 1> ToAttrs(FromAttrs.size());
-  ASTContext &_ToContext = Importer.getToContext();
-  std::transform(FromAttrs.begin(), FromAttrs.end(), ToAttrs.begin(),
-    [&_ToContext](const Attr *A) -> const Attr * {
-      return A->clone(_ToContext);
-    });
-  for (const auto *ToA : ToAttrs) {
-    if (!ToA)
-      return nullptr;
-  }
+  if (ImportContainerChecked(FromAttrs, ToAttrs))
+    return nullptr;
   Stmt *ToSubStmt = Importer.Import(S->getSubStmt());
   if (!ToSubStmt && S->getSubStmt())
     return nullptr;
@@ -6089,9 +6103,13 @@ Expr *ASTNodeImporter::VisitMemberExpr(MemberExpr *E) {
   if (!ToMember && E->getMemberDecl())
     return nullptr;
 
-  DeclAccessPair ToFoundDecl = DeclAccessPair::make(
-    dyn_cast<NamedDecl>(Importer.Import(E->getFoundDecl().getDecl())),
-    E->getFoundDecl().getAccess());
+  auto *ToDecl =
+      dyn_cast_or_null<NamedDecl>(Importer.Import(E->getFoundDecl().getDecl()));
+  if (!ToDecl && E->getFoundDecl().getDecl())
+    return nullptr;
+
+  DeclAccessPair ToFoundDecl =
+      DeclAccessPair::make(ToDecl, E->getFoundDecl().getAccess());
 
   DeclarationNameInfo ToMemberNameInfo(
     Importer.Import(E->getMemberNameInfo().getName()),
@@ -6183,6 +6201,29 @@ Expr *ASTNodeImporter::VisitCXXDependentScopeMemberExpr(
       cast_or_null<NamedDecl>(ToFQ), MemberNameInfo, ResInfo);
 }
 
+Expr *
+ASTNodeImporter::VisitDependentScopeDeclRefExpr(DependentScopeDeclRefExpr *E) {
+  DeclarationName Name = Importer.Import(E->getDeclName());
+  if (!E->getDeclName().isEmpty() && Name.isEmpty())
+    return nullptr;
+
+  DeclarationNameInfo NameInfo(Name, Importer.Import(E->getExprLoc()));
+  ImportDeclarationNameLoc(E->getNameInfo(), NameInfo);
+
+  TemplateArgumentListInfo ToTAInfo(Importer.Import(E->getLAngleLoc()),
+                                    Importer.Import(E->getRAngleLoc()));
+  TemplateArgumentListInfo *ResInfo = nullptr;
+  if (E->hasExplicitTemplateArgs()) {
+    if (ImportTemplateArgumentListInfo(E->template_arguments(), ToTAInfo))
+      return nullptr;
+    ResInfo = &ToTAInfo;
+  }
+
+  return DependentScopeDeclRefExpr::Create(
+      Importer.getToContext(), Importer.Import(E->getQualifierLoc()),
+      Importer.Import(E->getTemplateKeywordLoc()), NameInfo, ResInfo);
+}
+
 Expr *ASTNodeImporter::VisitCXXUnresolvedConstructExpr(
     CXXUnresolvedConstructExpr *CE) {
   unsigned NumArgs = CE->arg_size();
@@ -6238,6 +6279,47 @@ Expr *ASTNodeImporter::VisitUnresolvedLookupExpr(UnresolvedLookupExpr *E) {
       Importer.getToContext(), NamingClass,
       Importer.Import(E->getQualifierLoc()), NameInfo, E->requiresADL(),
       E->isOverloaded(), ToDecls.begin(), ToDecls.end());
+}
+
+Expr *ASTNodeImporter::VisitUnresolvedMemberExpr(UnresolvedMemberExpr *E) {
+  DeclarationName Name = Importer.Import(E->getName());
+  if (!E->getName().isEmpty() && Name.isEmpty())
+    return nullptr;
+  DeclarationNameInfo NameInfo(Name, Importer.Import(E->getNameLoc()));
+  // Import additional name location/type info.
+  ImportDeclarationNameLoc(E->getNameInfo(), NameInfo);
+
+  QualType BaseType = Importer.Import(E->getType());
+  if (!E->getType().isNull() && BaseType.isNull())
+    return nullptr;
+
+  UnresolvedSet<8> ToDecls;
+  for (Decl *D : E->decls()) {
+    if (NamedDecl *To = cast_or_null<NamedDecl>(Importer.Import(D)))
+      ToDecls.addDecl(To);
+    else
+      return nullptr;
+  }
+
+  TemplateArgumentListInfo ToTAInfo;
+  TemplateArgumentListInfo *ResInfo = nullptr;
+  if (E->hasExplicitTemplateArgs()) {
+    if (ImportTemplateArgumentListInfo(E->template_arguments(), ToTAInfo))
+      return nullptr;
+    ResInfo = &ToTAInfo;
+  }
+
+  Expr *BaseE = E->isImplicitAccess() ? nullptr : Importer.Import(E->getBase());
+  if (!BaseE && !E->isImplicitAccess() && E->getBase()) {
+    return nullptr;
+  }
+
+  return UnresolvedMemberExpr::Create(
+      Importer.getToContext(), E->hasUnresolvedUsing(), BaseE, BaseType,
+      E->isArrow(), Importer.Import(E->getOperatorLoc()),
+      Importer.Import(E->getQualifierLoc()),
+      Importer.Import(E->getTemplateKeywordLoc()), NameInfo, ResInfo,
+      ToDecls.begin(), ToDecls.end());
 }
 
 Expr *ASTNodeImporter::VisitCallExpr(CallExpr *E) {
@@ -6566,6 +6648,12 @@ TypeSourceInfo *ASTImporter::Import(TypeSourceInfo *FromTSI) {
 
   return ToContext.getTrivialTypeSourceInfo(T, 
            Import(FromTSI->getTypeLoc().getLocStart()));
+}
+
+Attr *ASTImporter::Import(const Attr *FromAttr) {
+  Attr *ToAttr = FromAttr->clone(ToContext);
+  ToAttr->setRange(Import(FromAttr->getRange()));
+  return ToAttr;
 }
 
 Decl *ASTImporter::GetAlreadyImportedOrNull(Decl *FromD) {
@@ -7201,8 +7289,8 @@ void ASTImporter::CompleteDecl (Decl *D) {
 
 Decl *ASTImporter::Imported(Decl *From, Decl *To) {
   if (From->hasAttrs()) {
-    for (auto *FromAttr : From->getAttrs())
-      To->addAttr(FromAttr->clone(To->getASTContext()));
+    for (const auto *FromAttr : From->getAttrs())
+      To->addAttr(Import(FromAttr));
   }
   if (From->isUsed()) {
     To->setIsUsed();
