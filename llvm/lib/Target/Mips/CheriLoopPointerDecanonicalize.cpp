@@ -1,11 +1,11 @@
+#include "Mips.h"
+#include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
-#include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/Utils/Local.h"
-#include "llvm/Support/CommandLine.h"
+#include "llvm/IR/Dominators.h"
 #include "llvm/IR/Verifier.h"
-#include "Mips.h"
-
+#include "llvm/Support/CommandLine.h"
 
 using namespace llvm;
 

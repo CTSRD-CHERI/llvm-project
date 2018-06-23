@@ -7848,8 +7848,11 @@ bool MipsAsmParser::parseDirectiveSet() {
   if (IdVal == "hardfloat")
     return parseSetHardFloatDirective();
   if (IdVal == "cheri_sysregs_accessible" || IdVal == "nocheri_sysregs_accessible") {
+    MCAsmParser &Parser = getParser();
+    Parser.Lex();
+    if (getLexer().isNot(AsmToken::EndOfStatement))
+      return reportParseError("unexpected token, expected end of statement");
     AreCheriSysRegsAccessible = IdVal == "cheri_sysregs_accessible";
-    Parser.eatToEndOfStatement();
     return false;
   }
   if (IdVal == "crc")
