@@ -14,6 +14,7 @@
 
 #include "interception/interception.h"
 #include "sanitizer_common/sanitizer_allocator.h"
+#include "sanitizer_common/sanitizer_allocator_report.h"
 #include "sanitizer_common/sanitizer_atomic.h"
 #include "sanitizer_common/sanitizer_common.h"
 #include "sanitizer_common/sanitizer_flags.h"
@@ -121,7 +122,7 @@ INTERCEPTOR(void *, __libc_memalign, uptr alignment, uptr size) {
 INTERCEPTOR(void*, aligned_alloc, uptr alignment, uptr size) {
   ENSURE_LSAN_INITED;
   GET_STACK_TRACE_MALLOC;
-  return lsan_memalign(alignment, size, stack);
+  return lsan_aligned_alloc(alignment, size, stack);
 }
 #define LSAN_MAYBE_INTERCEPT_ALIGNED_ALLOC INTERCEPT_FUNCTION(aligned_alloc)
 #else
@@ -200,21 +201,21 @@ INTERCEPTOR(int, mprobe, void *ptr) {
 
 
 // TODO(alekseys): throw std::bad_alloc instead of dying on OOM.
-#define OPERATOR_NEW_BODY(nothrow)                         \
-  ENSURE_LSAN_INITED;                                      \
-  GET_STACK_TRACE_MALLOC;                                  \
-  void *res = lsan_malloc(size, stack);                    \
-  if (!nothrow && UNLIKELY(!res)) DieOnFailure::OnOOM();   \
+#define OPERATOR_NEW_BODY(nothrow)\
+  ENSURE_LSAN_INITED;\
+  GET_STACK_TRACE_MALLOC;\
+  void *res = lsan_malloc(size, stack);\
+  if (!nothrow && UNLIKELY(!res)) ReportOutOfMemory(size, &stack);\
   return res;
-#define OPERATOR_NEW_BODY_ALIGN(nothrow)                   \
-  ENSURE_LSAN_INITED;                                      \
-  GET_STACK_TRACE_MALLOC;                                  \
-  void *res = lsan_memalign((uptr)align, size, stack);     \
-  if (!nothrow && UNLIKELY(!res)) DieOnFailure::OnOOM();   \
+#define OPERATOR_NEW_BODY_ALIGN(nothrow)\
+  ENSURE_LSAN_INITED;\
+  GET_STACK_TRACE_MALLOC;\
+  void *res = lsan_memalign((uptr)align, size, stack);\
+  if (!nothrow && UNLIKELY(!res)) ReportOutOfMemory(size, &stack);\
   return res;
 
-#define OPERATOR_DELETE_BODY \
-  ENSURE_LSAN_INITED;        \
+#define OPERATOR_DELETE_BODY\
+  ENSURE_LSAN_INITED;\
   lsan_free(ptr);
 
 // On OS X it's not enough to just provide our own 'operator new' and

@@ -7387,6 +7387,11 @@ EvaluateBuiltinClassifyType(QualType T, const LangOptions &LangOpts) {
     case BuiltinType::UIntCap:
       return GCCTypeClass::Integer;
 
+    case BuiltinType::UShortAccum:
+    case BuiltinType::UAccum:
+    case BuiltinType::ULongAccum:
+      return GCCTypeClass::None;
+
     case BuiltinType::NullPtr:
 
     case BuiltinType::ObjCId:

@@ -22,6 +22,7 @@
 #include "lldb/API/SBCommandInterpreter.h"
 #include "lldb/API/SBProcess.h"
 #include "lldb/API/SBStream.h"
+#include "lldb/API/SBThread.h"
 #include "lldb/lldb-enumerations.h"
 
 // In-house headers:
@@ -99,6 +100,19 @@ bool CMICmdCmdExecRun::ParseArgs() {
 bool CMICmdCmdExecRun::Execute() {
   CMICmnLLDBDebugSessionInfo &rSessionInfo(
       CMICmnLLDBDebugSessionInfo::Instance());
+
+  {
+    // Check we have a valid target.
+    // Note: target created via 'file-exec-and-symbols' command.
+    lldb::SBTarget sbTarget = rSessionInfo.GetTarget();
+    if (!sbTarget.IsValid() ||
+        sbTarget == rSessionInfo.GetDebugger().GetDummyTarget()) {
+      SetError(CMIUtilString::Format(MIRSRC(IDS_CMD_ERR_INVALID_TARGET_CURRENT),
+                                     m_cmdData.strMiCmd.c_str()));
+      return MIstatus::failure;
+    }
+  }
+
   lldb::SBError error;
   lldb::SBStream errMsg;
   lldb::SBLaunchInfo launchInfo = rSessionInfo.GetTarget().GetLaunchInfo();
@@ -365,12 +379,17 @@ bool CMICmdCmdExecNext::Execute() {
 
   CMICmnLLDBDebugSessionInfo &rSessionInfo(
       CMICmnLLDBDebugSessionInfo::Instance());
-  lldb::SBDebugger &rDebugger = rSessionInfo.GetDebugger();
-  CMIUtilString strCmd("thread step-over");
-  if (nThreadId != UINT64_MAX)
-    strCmd += CMIUtilString::Format(" %llu", nThreadId);
-  rDebugger.GetCommandInterpreter().HandleCommand(strCmd.c_str(), m_lldbResult,
-                                                  false);
+
+  if (nThreadId != UINT64_MAX) {
+    lldb::SBThread sbThread = rSessionInfo.GetProcess().GetThreadByIndexID(nThreadId);
+    if (!sbThread.IsValid()) {
+      SetError(CMIUtilString::Format(MIRSRC(IDS_CMD_ERR_THREAD_INVALID),
+                                     m_cmdData.strMiCmd.c_str(),
+                                     m_constStrArgThread.c_str()));
+      return MIstatus::failure;
+    }
+    sbThread.StepOver();
+  } else rSessionInfo.GetProcess().GetSelectedThread().StepOver();
 
   return MIstatus::success;
 }

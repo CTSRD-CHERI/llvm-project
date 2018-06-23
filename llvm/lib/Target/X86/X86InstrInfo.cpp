@@ -6852,11 +6852,12 @@ void X86InstrInfo::copyPhysReg(MachineBasicBlock &MBB,
   llvm_unreachable("Cannot emit physreg copy instruction");
 }
 
-bool X86InstrInfo::isCopyInstr(const MachineInstr &MI, MachineOperand &Src,
-                               MachineOperand &Dest) const {
+bool X86InstrInfo::isCopyInstr(const MachineInstr &MI,
+                               const MachineOperand *&Src,
+                               const MachineOperand *&Dest) const {
   if (MI.isMoveReg()) {
-    Dest = MI.getOperand(0);
-    Src = MI.getOperand(1);
+    Dest = &MI.getOperand(0);
+    Src = &MI.getOperand(1);
     return true;
   }
   return false;
@@ -8478,6 +8479,19 @@ MachineInstr *X86InstrInfo::foldMemoryOperandCustom(
   return nullptr;
 }
 
+static bool shouldPreventUndefRegUpdateMemFold(MachineFunction &MF, MachineInstr &MI) {
+  if (MF.getFunction().optForSize() || !hasUndefRegUpdate(MI.getOpcode()) ||
+      !MI.getOperand(1).isReg())
+    return false;
+ 
+  MachineRegisterInfo &RegInfo = MF.getRegInfo();
+  MachineInstr *VRegDef = RegInfo.getUniqueVRegDef(MI.getOperand(1).getReg());
+  if (VRegDef == nullptr)
+    return false;
+  return VRegDef->isImplicitDef();
+}
+
+
 MachineInstr *X86InstrInfo::foldMemoryOperandImpl(
     MachineFunction &MF, MachineInstr &MI, unsigned OpNum,
     ArrayRef<MachineOperand> MOs, MachineBasicBlock::iterator InsertPt,
@@ -8496,10 +8510,10 @@ MachineInstr *X86InstrInfo::foldMemoryOperandImpl(
        MI.getOpcode() == X86::PUSH64r))
     return nullptr;
 
-  // Avoid partial register update stalls unless optimizing for size.
-  // TODO: we should block undef reg update as well.
+  // Avoid partial and undef register update stalls unless optimizing for size.
   if (!MF.getFunction().optForSize() &&
-      hasPartialRegUpdate(MI.getOpcode(), Subtarget))
+      (hasPartialRegUpdate(MI.getOpcode(), Subtarget) ||
+       shouldPreventUndefRegUpdateMemFold(MF, MI)))
     return nullptr;
 
   unsigned NumOps = MI.getDesc().getNumOperands();
@@ -8673,11 +8687,10 @@ X86InstrInfo::foldMemoryOperandImpl(MachineFunction &MF, MachineInstr &MI,
   if (NoFusing)
     return nullptr;
 
-  // Unless optimizing for size, don't fold to avoid partial
-  // register update stalls
-  // TODO: we should block undef reg update as well.
+  // Avoid partial and undef register update stalls unless optimizing for size.
   if (!MF.getFunction().optForSize() &&
-      hasPartialRegUpdate(MI.getOpcode(), Subtarget))
+      (hasPartialRegUpdate(MI.getOpcode(), Subtarget) ||
+       shouldPreventUndefRegUpdateMemFold(MF, MI)))
     return nullptr;
 
   // Don't fold subreg spills, or reloads that use a high subreg.
@@ -8874,10 +8887,10 @@ MachineInstr *X86InstrInfo::foldMemoryOperandImpl(
   // Check switch flag
   if (NoFusing) return nullptr;
 
-  // Avoid partial register update stalls unless optimizing for size.
-  // TODO: we should block undef reg update as well.
+  // Avoid partial and undef register update stalls unless optimizing for size.
   if (!MF.getFunction().optForSize() &&
-      hasPartialRegUpdate(MI.getOpcode(), Subtarget))
+      (hasPartialRegUpdate(MI.getOpcode(), Subtarget) ||
+       shouldPreventUndefRegUpdateMemFold(MF, MI)))
     return nullptr;
 
   // Determine the alignment of the load.
@@ -11139,13 +11152,11 @@ enum MachineOutlinerClass {
   MachineOutlinerTailCall
 };
 
-X86GenInstrInfo::MachineOutlinerInfo
+outliner::TargetCostInfo
 X86InstrInfo::getOutlininingCandidateInfo(
-  std::vector<
-      std::pair<MachineBasicBlock::iterator, MachineBasicBlock::iterator>>
-      &RepeatedSequenceLocs) const {
+  std::vector<outliner::Candidate> &RepeatedSequenceLocs) const {
   unsigned SequenceSize = std::accumulate(
-      RepeatedSequenceLocs[0].first, std::next(RepeatedSequenceLocs[0].second),
+      RepeatedSequenceLocs[0].front(), std::next(RepeatedSequenceLocs[0].back()),
       0, [](unsigned Sum, const MachineInstr &MI) {
         // FIXME: x86 doesn't implement getInstSizeInBytes, so we can't
         // tell the cost.  Just assume each instruction is one byte.
@@ -11155,15 +11166,15 @@ X86InstrInfo::getOutlininingCandidateInfo(
       });
 
   // FIXME: Use real size in bytes for call and ret instructions.
-  if (RepeatedSequenceLocs[0].second->isTerminator())
-    return MachineOutlinerInfo(SequenceSize,
+  if (RepeatedSequenceLocs[0].back()->isTerminator())
+    return outliner::TargetCostInfo(SequenceSize,
                                1, // Number of bytes to emit call.
                                0, // Number of bytes to emit frame.
                                MachineOutlinerTailCall, // Type of call.
                                MachineOutlinerTailCall // Type of frame.
                               );
 
-  return MachineOutlinerInfo(SequenceSize, 1, 1, MachineOutlinerDefault,
+  return outliner::TargetCostInfo(SequenceSize, 1, 1, MachineOutlinerDefault,
                              MachineOutlinerDefault);
 }
 
@@ -11189,31 +11200,31 @@ bool X86InstrInfo::isFunctionSafeToOutlineFrom(MachineFunction &MF,
   return true;
 }
 
-X86GenInstrInfo::MachineOutlinerInstrType
+outliner::InstrType
 X86InstrInfo::getOutliningType(MachineBasicBlock::iterator &MIT,  unsigned Flags) const {
   MachineInstr &MI = *MIT;
   // Don't allow debug values to impact outlining type.
   if (MI.isDebugInstr() || MI.isIndirectDebugValue())
-    return MachineOutlinerInstrType::Invisible;
+    return outliner::InstrType::Invisible;
 
   // At this point, KILL instructions don't really tell us much so we can go
   // ahead and skip over them.
   if (MI.isKill())
-    return MachineOutlinerInstrType::Invisible;
+    return outliner::InstrType::Invisible;
 
   // Is this a tail call? If yes, we can outline as a tail call.
   if (isTailCall(MI))
-    return MachineOutlinerInstrType::Legal;
+    return outliner::InstrType::Legal;
 
   // Is this the terminator of a basic block?
   if (MI.isTerminator() || MI.isReturn()) {
 
     // Does its parent have any successors in its MachineFunction?
     if (MI.getParent()->succ_empty())
-        return MachineOutlinerInstrType::Legal;
+      return outliner::InstrType::Legal;
 
     // It does, so we can't tail call it.
-    return MachineOutlinerInstrType::Illegal;
+    return outliner::InstrType::Illegal;
   }
 
   // Don't outline anything that modifies or reads from the stack pointer.
@@ -11228,33 +11239,33 @@ X86InstrInfo::getOutliningType(MachineBasicBlock::iterator &MIT,  unsigned Flags
   if (MI.modifiesRegister(X86::RSP, &RI) || MI.readsRegister(X86::RSP, &RI) ||
       MI.getDesc().hasImplicitUseOfPhysReg(X86::RSP) ||
       MI.getDesc().hasImplicitDefOfPhysReg(X86::RSP))
-    return MachineOutlinerInstrType::Illegal;
+    return outliner::InstrType::Illegal;
 
   // Outlined calls change the instruction pointer, so don't read from it.
   if (MI.readsRegister(X86::RIP, &RI) ||
       MI.getDesc().hasImplicitUseOfPhysReg(X86::RIP) ||
       MI.getDesc().hasImplicitDefOfPhysReg(X86::RIP))
-    return MachineOutlinerInstrType::Illegal;
+    return outliner::InstrType::Illegal;
 
   // Positions can't safely be outlined.
   if (MI.isPosition())
-    return MachineOutlinerInstrType::Illegal;
+    return outliner::InstrType::Illegal;
 
   // Make sure none of the operands of this instruction do anything tricky.
   for (const MachineOperand &MOP : MI.operands())
     if (MOP.isCPI() || MOP.isJTI() || MOP.isCFIIndex() || MOP.isFI() ||
         MOP.isTargetIndex())
-      return MachineOutlinerInstrType::Illegal;
+      return outliner::InstrType::Illegal;
 
-  return MachineOutlinerInstrType::Legal;
+  return outliner::InstrType::Legal;
 }
 
 void X86InstrInfo::insertOutlinerEpilogue(MachineBasicBlock &MBB,
                                           MachineFunction &MF,
-                                          const MachineOutlinerInfo &MInfo)
+                                          const outliner::TargetCostInfo &TCI)
                                           const {
   // If we're a tail call, we already have a return, so don't do anything.
-  if (MInfo.FrameConstructionID == MachineOutlinerTailCall)
+  if (TCI.FrameConstructionID == MachineOutlinerTailCall)
     return;
 
   // We're a normal call, so our sequence doesn't have a return instruction.
@@ -11265,16 +11276,16 @@ void X86InstrInfo::insertOutlinerEpilogue(MachineBasicBlock &MBB,
 
 void X86InstrInfo::insertOutlinerPrologue(MachineBasicBlock &MBB,
                                           MachineFunction &MF,
-                                          const MachineOutlinerInfo &MInfo)
+                                          const outliner::TargetCostInfo &TCI)
                                           const {}
 
 MachineBasicBlock::iterator
 X86InstrInfo::insertOutlinedCall(Module &M, MachineBasicBlock &MBB,
                                  MachineBasicBlock::iterator &It,
                                  MachineFunction &MF,
-                                 const MachineOutlinerInfo &MInfo) const {
+                                 const outliner::TargetCostInfo &TCI) const {
   // Is it a tail call?
-  if (MInfo.CallConstructionID == MachineOutlinerTailCall) {
+  if (TCI.CallConstructionID == MachineOutlinerTailCall) {
     // Yes, just insert a JMP.
     It = MBB.insert(It,
                   BuildMI(MF, DebugLoc(), get(X86::JMP_1))

@@ -975,7 +975,7 @@ bool ThreadLister::IsAlive(int tid) {
   // proc_task_readdir. See task_state implementation in Linux.
   char path[80];
   internal_snprintf(path, sizeof(path), "/proc/%d/task/%d/status", pid_, tid);
-  if (!ReadFileToBuffer(path, &buffer_) || buffer_.empty())
+  if (!ReadFileToVector(path, &buffer_) || buffer_.empty())
     return false;
   buffer_.push_back(0);
   static const char kPrefix[] = "\nPPid:";
@@ -1952,6 +1952,30 @@ void SignalContext::InitPcSpBp() { GetPcSpBp(context, &pc, &sp, &bp); }
 
 void MaybeReexec() {
   // No need to re-exec on Linux.
+}
+
+void CheckASLR() {
+#if SANITIZER_NETBSD
+  int mib[3];
+  int paxflags;
+  size_t len = sizeof(paxflags);
+
+  mib[0] = CTL_PROC;
+  mib[1] = internal_getpid();
+  mib[2] = PROC_PID_PAXFLAGS;
+
+  if (UNLIKELY(sysctl(mib, 3, &paxflags, &len, NULL, 0) == -1)) {
+    Printf("sysctl failed\n");
+    Die();
+  }
+
+  if (UNLIKELY(paxflags & CTL_PROC_PAXFLAGS_ASLR)) {
+    Printf("This sanitizer is not compatible with enabled ASLR\n");
+    Die();
+  }
+#else
+  // Do nothing
+#endif
 }
 
 void PrintModuleMap() { }

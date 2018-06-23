@@ -83,7 +83,8 @@ void MCELFStreamer::mergeFragment(MCDataFragment *DF,
                                  DF->getContents().size());
     DF->getFixups().push_back(EF->getFixups()[i]);
   }
-  DF->setHasInstructions(true);
+  if (DF->getSubtargetInfo() == nullptr && EF->getSubtargetInfo())
+    DF->setHasInstructions(*EF->getSubtargetInfo());
   DF->getContents().append(EF->getContents().begin(), EF->getContents().end());
 }
 
@@ -355,6 +356,12 @@ void MCELFStreamer::EmitValueToAlignment(unsigned ByteAlignment,
                                          ValueSize, MaxBytesToEmit);
 }
 
+void MCELFStreamer::emitCGProfileEntry(const MCSymbolRefExpr *From,
+                                       const MCSymbolRefExpr *To,
+                                       uint64_t Count) {
+  getAssembler().CGProfile.push_back({From, To, Count});
+}
+
 void MCELFStreamer::EmitIdent(StringRef IdentString) {
   MCSection *Comment = getAssembler().getContext().getELFSection(
       ".comment", ELF::SHT_PROGBITS, ELF::SHF_MERGE | ELF::SHF_STRINGS, 1, "");
@@ -447,6 +454,37 @@ void MCELFStreamer::fixSymbolsInTLSFixups(const MCExpr *expr) {
   }
 }
 
+void MCELFStreamer::finalizeCGProfileEntry(const MCSymbolRefExpr *&SRE) {
+  const MCSymbol *S = &SRE->getSymbol();
+  if (S->isTemporary()) {
+    if (!S->isInSection()) {
+      getContext().reportError(
+          SRE->getLoc(), Twine("Reference to undefined temporary symbol ") +
+                             "`" + S->getName() + "`");
+      return;
+    }
+    S = S->getSection().getBeginSymbol();
+    S->setUsedInReloc();
+    SRE =
+        MCSymbolRefExpr::create(S, SRE->getKind(), getContext(), SRE->getLoc());
+    return;
+  }
+  // Not a temporary, referece it as a weak undefined.
+  bool Created;
+  getAssembler().registerSymbol(*S, &Created);
+  if (Created) {
+    cast<MCSymbolELF>(S)->setBinding(ELF::STB_WEAK);
+    cast<MCSymbolELF>(S)->setExternal(true);
+  }
+}
+
+void MCELFStreamer::finalizeCGProfile() {
+  for (MCAssembler::CGProfileEntry &E : getAssembler().CGProfile) {
+    finalizeCGProfileEntry(E.From);
+    finalizeCGProfileEntry(E.To);
+  }
+}
+
 void MCELFStreamer::EmitInstToFragment(const MCInst &Inst,
                                        const MCSubtargetInfo &STI) {
   this->MCObjectStreamer::EmitInstToFragment(Inst, STI);
@@ -454,6 +492,15 @@ void MCELFStreamer::EmitInstToFragment(const MCInst &Inst,
 
   for (unsigned i = 0, e = F.getFixups().size(); i != e; ++i)
     fixSymbolsInTLSFixups(F.getFixups()[i].getValue());
+}
+
+// A fragment can only have one Subtarget, and when bundling is enabled we
+// sometimes need to use the same fragment. We give an error if there
+// are conflicting Subtargets.
+static void CheckBundleSubtargets(const MCSubtargetInfo *OldSTI,
+                                  const MCSubtargetInfo *NewSTI) {
+  if (OldSTI && NewSTI && OldSTI != NewSTI)
+    report_fatal_error("A Bundle can only have one Subtarget.");
 }
 
 void MCELFStreamer::EmitInstToData(const MCInst &Inst,
@@ -471,7 +518,7 @@ void MCELFStreamer::EmitInstToData(const MCInst &Inst,
   //
   // If bundling is disabled, append the encoded instruction to the current data
   // fragment (or create a new such fragment if the current fragment is not a
-  // data fragment).
+  // data fragment, or the Subtarget has changed).
   //
   // If bundling is enabled:
   // - If we're not in a bundle-locked group, emit the instruction into a
@@ -486,19 +533,23 @@ void MCELFStreamer::EmitInstToData(const MCInst &Inst,
 
   if (Assembler.isBundlingEnabled()) {
     MCSection &Sec = *getCurrentSectionOnly();
-    if (Assembler.getRelaxAll() && isBundleLocked())
+    if (Assembler.getRelaxAll() && isBundleLocked()) {
       // If the -mc-relax-all flag is used and we are bundle-locked, we re-use
       // the current bundle group.
       DF = BundleGroups.back();
+      CheckBundleSubtargets(DF->getSubtargetInfo(), &STI);
+    }
     else if (Assembler.getRelaxAll() && !isBundleLocked())
       // When not in a bundle-locked group and the -mc-relax-all flag is used,
       // we create a new temporary fragment which will be later merged into
       // the current fragment.
       DF = new MCDataFragment();
-    else if (isBundleLocked() && !Sec.isBundleGroupBeforeFirstInst())
+    else if (isBundleLocked() && !Sec.isBundleGroupBeforeFirstInst()) {
       // If we are bundle-locked, we re-use the current fragment.
       // The bundle-locking directive ensures this is a new data fragment.
       DF = cast<MCDataFragment>(getCurrentFragment());
+      CheckBundleSubtargets(DF->getSubtargetInfo(), &STI);
+    }
     else if (!isBundleLocked() && Fixups.size() == 0) {
       // Optimize memory usage by emitting the instruction to a
       // MCCompactEncodedInstFragment when not in a bundle-locked group and
@@ -523,7 +574,7 @@ void MCELFStreamer::EmitInstToData(const MCInst &Inst,
     // to be turned off.
     Sec.setBundleGroupBeforeFirstInst(false);
   } else {
-    DF = getOrCreateDataFragment();
+    DF = getOrCreateDataFragment(&STI);
   }
 
   // Add the fixups and data.
@@ -531,12 +582,12 @@ void MCELFStreamer::EmitInstToData(const MCInst &Inst,
     Fixups[i].setOffset(Fixups[i].getOffset() + DF->getContents().size());
     DF->getFixups().push_back(Fixups[i]);
   }
-  DF->setHasInstructions(true);
+  DF->setHasInstructions(STI);
   DF->getContents().append(Code.begin(), Code.end());
 
   if (Assembler.isBundlingEnabled() && Assembler.getRelaxAll()) {
     if (!isBundleLocked()) {
-      mergeFragment(getOrCreateDataFragment(), DF);
+      mergeFragment(getOrCreateDataFragment(&STI), DF);
       delete DF;
     }
   }
@@ -596,7 +647,7 @@ void MCELFStreamer::EmitBundleUnlock() {
 
     // FIXME: Use more separate fragments for nested groups.
     if (!isBundleLocked()) {
-      mergeFragment(getOrCreateDataFragment(), DF);
+      mergeFragment(getOrCreateDataFragment(DF->getSubtargetInfo()), DF);
       BundleGroups.pop_back();
       delete DF;
     }
@@ -612,6 +663,7 @@ void MCELFStreamer::FinishImpl() {
   MCSection *CurSection = getCurrentSectionOnly();
   setSectionAlignmentForBundling(getAssembler(), CurSection);
 
+  finalizeCGProfile();
   EmitFrames(nullptr);
 
   this->MCObjectStreamer::FinishImpl();

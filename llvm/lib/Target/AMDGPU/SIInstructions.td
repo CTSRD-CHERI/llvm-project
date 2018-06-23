@@ -634,6 +634,11 @@ def : GCNPat <
 >;
 
 def : GCNPat <
+  (f32 (f16_to_fp (i32 (srl_oneuse (and_oneuse i32:$src0, 0x7fff0000), (i32 16))))),
+  (V_CVT_F32_F16_e64 SRCMODS.ABS, (i32 (V_LSHRREV_B32_e64 (i32 16), i32:$src0)), DSTCLAMP.NONE, DSTOMOD.NONE)
+>;
+
+def : GCNPat <
   (f32 (f16_to_fp (or_oneuse i32:$src0, 0x8000))),
   (V_CVT_F32_F16_e64 SRCMODS.NEG_ABS, $src0, DSTCLAMP.NONE, DSTOMOD.NONE)
 >;
@@ -903,7 +908,7 @@ def : GCNPat <
 
 def : GCNPat <
   (fabs f32:$src),
-  (V_AND_B32_e64 $src, (V_MOV_B32_e32 (i32 0x7fffffff)))
+  (S_AND_B32 $src, (S_MOV_B32 (i32 0x7fffffff)))
 >;
 
 def : GCNPat <
@@ -964,12 +969,12 @@ def : GCNPat <
 
 def : GCNPat <
   (fneg f16:$src),
-  (V_XOR_B32_e32 $src, (V_MOV_B32_e32 (i32 0x00008000)))
+  (S_XOR_B32 $src, (S_MOV_B32 (i32 0x00008000)))
 >;
 
 def : GCNPat <
   (fabs f16:$src),
-  (V_AND_B32_e64 $src, (V_MOV_B32_e32 (i32 0x00007fff)))
+  (S_AND_B32 $src, (S_MOV_B32 (i32 0x00007fff)))
 >;
 
 def : GCNPat <
@@ -979,12 +984,12 @@ def : GCNPat <
 
 def : GCNPat <
   (fneg v2f16:$src),
-  (V_XOR_B32_e64 (S_MOV_B32 (i32 0x80008000)), $src)
+  (S_XOR_B32 $src, (S_MOV_B32 (i32 0x80008000)))
 >;
 
 def : GCNPat <
   (fabs v2f16:$src),
-  (V_AND_B32_e64 (S_MOV_B32 (i32 0x7fff7fff)), $src)
+  (S_AND_B32 $src, (S_MOV_B32 (i32 0x7fff7fff)))
 >;
 
 // This is really (fneg (fabs v2f16:$src))
@@ -993,12 +998,12 @@ def : GCNPat <
 // VOP3P instructions, so it is turned into the bit op.
 def : GCNPat <
   (fneg (v2f16 (bitconvert (and_oneuse i32:$src, 0x7fff7fff)))),
-  (S_OR_B32 (S_MOV_B32 (i32 0x80008000)), $src) // Set sign bit
+  (S_OR_B32 $src, (S_MOV_B32 (i32 0x80008000))) // Set sign bit
 >;
 
 def : GCNPat <
   (fneg (v2f16 (fabs v2f16:$src))),
-  (S_OR_B32 (S_MOV_B32 (i32 0x80008000)), $src) // Set sign bit
+  (S_OR_B32 $src, (S_MOV_B32 (i32 0x80008000))) // Set sign bit
 >;
 
 /********** ================== **********/

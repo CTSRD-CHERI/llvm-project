@@ -32,29 +32,30 @@ void ManualDWARFIndex::Index() {
   static Timer::Category func_cat(LLVM_PRETTY_FUNCTION);
   Timer scoped_timer(func_cat, "%p", static_cast<void *>(&debug_info));
 
-  const uint32_t num_compile_units = debug_info.GetNumCompileUnits();
-  if (num_compile_units == 0)
+  std::vector<DWARFUnit *> units_to_index;
+  units_to_index.reserve(debug_info.GetNumCompileUnits());
+  for (size_t U = 0; U < debug_info.GetNumCompileUnits(); ++U) {
+    DWARFUnit *unit = debug_info.GetCompileUnitAtIndex(U);
+    if (unit && m_units_to_avoid.count(unit->GetOffset()) == 0)
+      units_to_index.push_back(unit);
+  }
+  if (units_to_index.empty())
     return;
 
-  std::vector<IndexSet> sets(num_compile_units);
+  std::vector<IndexSet> sets(units_to_index.size());
 
-  // std::vector<bool> might be implemented using bit test-and-set, so use
-  // uint8_t instead.
-  std::vector<uint8_t> clear_cu_dies(num_compile_units, false);
+  //----------------------------------------------------------------------
+  // Keep memory down by clearing DIEs for any compile units if indexing
+  // caused us to load the compile unit's DIEs.
+  //----------------------------------------------------------------------
+  std::vector<llvm::Optional<DWARFUnit::ScopedExtractDIEs>> clear_cu_dies(
+      units_to_index.size());
   auto parser_fn = [&](size_t cu_idx) {
-    DWARFUnit *dwarf_cu = debug_info.GetCompileUnitAtIndex(cu_idx);
-    if (dwarf_cu)
-      IndexUnit(*dwarf_cu, sets[cu_idx]);
+    IndexUnit(*units_to_index[cu_idx], sets[cu_idx]);
   };
 
-  auto extract_fn = [&debug_info, &clear_cu_dies](size_t cu_idx) {
-    DWARFUnit *dwarf_cu = debug_info.GetCompileUnitAtIndex(cu_idx);
-    if (dwarf_cu) {
-      // dwarf_cu->ExtractDIEsIfNeeded() will return false if the DIEs
-      // for a compile unit have already been parsed.
-      if (dwarf_cu->ExtractDIEsIfNeeded())
-        clear_cu_dies[cu_idx] = true;
-    }
+  auto extract_fn = [&units_to_index, &clear_cu_dies](size_t cu_idx) {
+    clear_cu_dies[cu_idx] = units_to_index[cu_idx]->ExtractDIEsScoped();
   };
 
   // Create a task runner that extracts dies for each DWARF compile unit in a
@@ -67,12 +68,12 @@ void ManualDWARFIndex::Index() {
   // to wait until all compile units have been indexed in case a DIE in one
   // compile unit refers to another and the indexes accesses those DIEs.
   //----------------------------------------------------------------------
-  TaskMapOverInt(0, num_compile_units, extract_fn);
+  TaskMapOverInt(0, units_to_index.size(), extract_fn);
 
   // Now create a task runner that can index each DWARF compile unit in a
   // separate thread so we can index quickly.
 
-  TaskMapOverInt(0, num_compile_units, parser_fn);
+  TaskMapOverInt(0, units_to_index.size(), parser_fn);
 
   auto finalize_fn = [this, &sets](NameToDIE(IndexSet::*index)) {
     NameToDIE &result = m_set.*index;
@@ -89,15 +90,6 @@ void ManualDWARFIndex::Index() {
                      [&]() { finalize_fn(&IndexSet::globals); },
                      [&]() { finalize_fn(&IndexSet::types); },
                      [&]() { finalize_fn(&IndexSet::namespaces); });
-
-  //----------------------------------------------------------------------
-  // Keep memory down by clearing DIEs for any compile units if indexing
-  // caused us to load the compile unit's DIEs.
-  //----------------------------------------------------------------------
-  for (uint32_t cu_idx = 0; cu_idx < num_compile_units; ++cu_idx) {
-    if (clear_cu_dies[cu_idx])
-      debug_info.GetCompileUnitAtIndex(cu_idx)->ClearDIEs();
-  }
 }
 
 void ManualDWARFIndex::IndexUnit(DWARFUnit &unit, IndexSet &set) {
@@ -288,22 +280,7 @@ void ManualDWARFIndex::IndexUnitImpl(
           }
           // If we have a mangled name, then the DW_AT_name attribute is
           // usually the method name without the class or any parameters
-          const DWARFDebugInfoEntry *parent = die.GetParent();
-          bool is_method = false;
-          if (parent) {
-            DWARFDIE parent_die(&unit, parent);
-            if (parent_die.IsStructClassOrUnion())
-              is_method = true;
-            else {
-              if (specification_die_form.IsValid()) {
-                DWARFDIE specification_die =
-                    unit.GetSymbolFileDWARF()->DebugInfo()->GetDIE(
-                        DIERef(specification_die_form));
-                if (specification_die.GetParent().IsStructClassOrUnion())
-                  is_method = true;
-              }
-            }
-          }
+          bool is_method = DWARFDIE(&unit, &die).IsMethod();
 
           if (is_method)
             set.function_methods.Insert(ConstString(name),
@@ -370,12 +347,8 @@ void ManualDWARFIndex::IndexUnitImpl(
         // entries
         if (mangled_cstr && name != mangled_cstr &&
             ((mangled_cstr[0] == '_') || (::strcmp(name, mangled_cstr) != 0))) {
-          Mangled mangled(ConstString(mangled_cstr), true);
-          set.globals.Insert(mangled.GetMangledName(),
+          set.globals.Insert(ConstString(mangled_cstr),
                              DIERef(cu_offset, die.GetOffset()));
-          ConstString demangled = mangled.GetDemangledName(cu_language);
-          if (demangled)
-            set.globals.Insert(demangled, DIERef(cu_offset, die.GetOffset()));
         }
       }
       break;
@@ -386,9 +359,9 @@ void ManualDWARFIndex::IndexUnitImpl(
   }
 }
 
-void ManualDWARFIndex::GetGlobalVariables(ConstString name, DIEArray &offsets) {
+void ManualDWARFIndex::GetGlobalVariables(ConstString basename, DIEArray &offsets) {
   Index();
-  m_set.globals.Find(name, offsets);
+  m_set.globals.Find(basename, offsets);
 }
 
 void ManualDWARFIndex::GetGlobalVariables(const RegularExpression &regex,
@@ -432,109 +405,68 @@ void ManualDWARFIndex::GetNamespaces(ConstString name, DIEArray &offsets) {
   m_set.namespaces.Find(name, offsets);
 }
 
-void ManualDWARFIndex::GetFunctions(
-    ConstString name, DWARFDebugInfo &info,
-    llvm::function_ref<bool(const DWARFDIE &die, bool include_inlines,
-                            lldb_private::SymbolContextList &sc_list)>
-        resolve_function,
-    llvm::function_ref<CompilerDeclContext(lldb::user_id_t type_uid)>
-        get_decl_context_containing_uid,
-    const CompilerDeclContext *parent_decl_ctx, uint32_t name_type_mask,
-    bool include_inlines, SymbolContextList &sc_list) {
-
+void ManualDWARFIndex::GetFunctions(ConstString name, DWARFDebugInfo &info,
+                                    const CompilerDeclContext &parent_decl_ctx,
+                                    uint32_t name_type_mask,
+                                    std::vector<DWARFDIE> &dies) {
   Index();
 
-  std::set<const DWARFDebugInfoEntry *> resolved_dies;
-  DIEArray offsets;
   if (name_type_mask & eFunctionNameTypeFull) {
-    uint32_t num_matches = m_set.function_basenames.Find(name, offsets);
-    num_matches += m_set.function_methods.Find(name, offsets);
-    num_matches += m_set.function_fullnames.Find(name, offsets);
-    for (uint32_t i = 0; i < num_matches; i++) {
-      const DIERef &die_ref = offsets[i];
+    DIEArray offsets;
+    m_set.function_basenames.Find(name, offsets);
+    m_set.function_methods.Find(name, offsets);
+    m_set.function_fullnames.Find(name, offsets);
+    for (const DIERef &die_ref: offsets) {
       DWARFDIE die = info.GetDIE(die_ref);
-      if (die) {
-        if (!SymbolFileDWARF::DIEInDeclContext(parent_decl_ctx, die))
-          continue; // The containing decl contexts don't match
-
-        if (resolved_dies.find(die.GetDIE()) == resolved_dies.end()) {
-          if (resolve_function(die, include_inlines, sc_list))
-            resolved_dies.insert(die.GetDIE());
-        }
-      }
+      if (!die)
+        continue;
+      if (SymbolFileDWARF::DIEInDeclContext(&parent_decl_ctx, die))
+        dies.push_back(die);
     }
-    offsets.clear();
   }
   if (name_type_mask & eFunctionNameTypeBase) {
-    uint32_t num_base = m_set.function_basenames.Find(name, offsets);
-    for (uint32_t i = 0; i < num_base; i++) {
-      DWARFDIE die = info.GetDIE(offsets[i]);
-      if (die) {
-        if (!SymbolFileDWARF::DIEInDeclContext(parent_decl_ctx, die))
-          continue; // The containing decl contexts don't match
-
-        // If we get to here, the die is good, and we should add it:
-        if (resolved_dies.find(die.GetDIE()) == resolved_dies.end()) {
-          if (resolve_function(die, include_inlines, sc_list))
-            resolved_dies.insert(die.GetDIE());
-        }
-      }
+    DIEArray offsets;
+    m_set.function_basenames.Find(name, offsets);
+    for (const DIERef &die_ref: offsets) {
+      DWARFDIE die = info.GetDIE(die_ref);
+      if (!die)
+        continue;
+      if (SymbolFileDWARF::DIEInDeclContext(&parent_decl_ctx, die))
+        dies.push_back(die);
     }
     offsets.clear();
   }
 
-  if (name_type_mask & eFunctionNameTypeMethod) {
-    if (parent_decl_ctx && parent_decl_ctx->IsValid())
-      return; // no methods in namespaces
-
-    uint32_t num_base = m_set.function_methods.Find(name, offsets);
-    {
-      for (uint32_t i = 0; i < num_base; i++) {
-        DWARFDIE die = info.GetDIE(offsets[i]);
-        if (die) {
-          // If we get to here, the die is good, and we should add it:
-          if (resolved_dies.find(die.GetDIE()) == resolved_dies.end()) {
-            if (resolve_function(die, include_inlines, sc_list))
-              resolved_dies.insert(die.GetDIE());
-          }
-        }
-      }
+  if (name_type_mask & eFunctionNameTypeMethod && !parent_decl_ctx.IsValid()) {
+    DIEArray offsets;
+    m_set.function_methods.Find(name, offsets);
+    for (const DIERef &die_ref: offsets) {
+      if (DWARFDIE die = info.GetDIE(die_ref))
+        dies.push_back(die);
     }
-    offsets.clear();
   }
 
-  if ((name_type_mask & eFunctionNameTypeSelector) &&
-      (!parent_decl_ctx || !parent_decl_ctx->IsValid())) {
-    uint32_t num_selectors = m_set.function_selectors.Find(name, offsets);
-    for (uint32_t i = 0; i < num_selectors; i++) {
-      DWARFDIE die = info.GetDIE(offsets[i]);
-      if (die) {
-        // If we get to here, the die is good, and we should add it:
-        if (resolved_dies.find(die.GetDIE()) == resolved_dies.end()) {
-          if (resolve_function(die, include_inlines, sc_list))
-            resolved_dies.insert(die.GetDIE());
-        }
-      }
+  if (name_type_mask & eFunctionNameTypeSelector &&
+      !parent_decl_ctx.IsValid()) {
+    DIEArray offsets;
+    m_set.function_selectors.Find(name, offsets);
+    for (const DIERef &die_ref: offsets) {
+      if (DWARFDIE die = info.GetDIE(die_ref))
+        dies.push_back(die);
     }
   }
 }
 
-void ManualDWARFIndex::GetFunctions(
-    const RegularExpression &regex, DWARFDebugInfo &info,
-    llvm::function_ref<bool(const DWARFDIE &die, bool include_inlines,
-                            lldb_private::SymbolContextList &sc_list)>
-        resolve_function,
-    bool include_inlines, SymbolContextList &sc_list) {
+void ManualDWARFIndex::GetFunctions(const RegularExpression &regex,
+                                    DIEArray &offsets) {
   Index();
 
-  DIEArray offsets;
   m_set.function_basenames.Find(regex, offsets);
   m_set.function_fullnames.Find(regex, offsets);
-  ParseFunctions(offsets, info, resolve_function, include_inlines, sc_list);
 }
 
 void ManualDWARFIndex::Dump(Stream &s) {
-  s.Format("DWARF index for ({0}) '{1:F}':",
+  s.Format("Manual DWARF index for ({0}) '{1:F}':",
            m_module.GetArchitecture().GetArchitectureName(),
            m_module.GetObjectFile()->GetFileSpec());
   s.Printf("\nFunction basenames:\n");

@@ -901,6 +901,9 @@ public:
                                 SMLoc Loc = SMLoc());
   virtual void EmitWinEHHandlerData(SMLoc Loc = SMLoc());
 
+  virtual void emitCGProfileEntry(const MCSymbolRefExpr *From,
+                                  const MCSymbolRefExpr *To, uint64_t Count);
+
   /// Get the .pdata section used for the given section. Typically the given
   /// section is either the main .text section or some other COMDAT .text
   /// section, but it may be any section containing code.
@@ -915,7 +918,8 @@ public:
   /// Returns true if the relocation could not be emitted because Name is not
   /// known.
   virtual bool EmitRelocDirective(const MCExpr &Offset, StringRef Name,
-                                  const MCExpr *Expr, SMLoc Loc) {
+                                  const MCExpr *Expr, SMLoc Loc,
+                                  const MCSubtargetInfo &STI) {
     return true;
   }
 

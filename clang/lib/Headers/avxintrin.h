@@ -28,26 +28,26 @@
 #ifndef __AVXINTRIN_H
 #define __AVXINTRIN_H
 
-typedef double __v4df __attribute__ ((__vector_size__ (32))) __attribute__((__aligned__(32)));
-typedef float __v8sf __attribute__ ((__vector_size__ (32))) __attribute__((__aligned__(32)));
-typedef long long __v4di __attribute__ ((__vector_size__ (32))) __attribute__((__aligned__(32)));
-typedef int __v8si __attribute__ ((__vector_size__ (32))) __attribute__((__aligned__(32)));
-typedef short __v16hi __attribute__ ((__vector_size__ (32))) __attribute__((__aligned__(32)));
-typedef char __v32qi __attribute__ ((__vector_size__ (32))) __attribute__((__aligned__(32)));
+typedef double __v4df __attribute__ ((__vector_size__ (32)));
+typedef float __v8sf __attribute__ ((__vector_size__ (32)));
+typedef long long __v4di __attribute__ ((__vector_size__ (32)));
+typedef int __v8si __attribute__ ((__vector_size__ (32)));
+typedef short __v16hi __attribute__ ((__vector_size__ (32)));
+typedef char __v32qi __attribute__ ((__vector_size__ (32)));
 
 /* Unsigned types */
-typedef unsigned long long __v4du __attribute__ ((__vector_size__ (32))) __attribute__((__aligned__(32)));
-typedef unsigned int __v8su __attribute__ ((__vector_size__ (32))) __attribute__((__aligned__(32)));
-typedef unsigned short __v16hu __attribute__ ((__vector_size__ (32))) __attribute__((__aligned__(32)));
-typedef unsigned char __v32qu __attribute__ ((__vector_size__ (32))) __attribute__((__aligned__(32)));
+typedef unsigned long long __v4du __attribute__ ((__vector_size__ (32)));
+typedef unsigned int __v8su __attribute__ ((__vector_size__ (32)));
+typedef unsigned short __v16hu __attribute__ ((__vector_size__ (32)));
+typedef unsigned char __v32qu __attribute__ ((__vector_size__ (32)));
 
 /* We need an explicitly signed variant for char. Note that this shouldn't
  * appear in the interface though. */
-typedef signed char __v32qs __attribute__((__vector_size__(32))) __attribute__((__aligned__(32)));
+typedef signed char __v32qs __attribute__((__vector_size__(32)));
 
-typedef float __m256 __attribute__ ((__vector_size__ (32))) __attribute__((__aligned__(32)));
-typedef double __m256d __attribute__((__vector_size__(32))) __attribute__((__aligned__(32)));
-typedef long long __m256i __attribute__((__vector_size__(32))) __attribute__((__aligned__(32)));
+typedef float __m256 __attribute__ ((__vector_size__ (32)));
+typedef double __m256d __attribute__((__vector_size__(32)));
+typedef long long __m256i __attribute__((__vector_size__(32)));
 
 /* Define the default attributes for the functions in this file. */
 #define __DEFAULT_FN_ATTRS __attribute__((__always_inline__, __nodebug__, __target__("avx")))
@@ -998,9 +998,7 @@ _mm256_permutevar_ps(__m256 __a, __m256i __c)
 ///         returned vector.
 /// \returns A 128-bit vector of [2 x double] containing the copied values.
 #define _mm_permute_pd(A, C) \
-  (__m128d)__builtin_shufflevector((__v2df)(__m128d)(A), \
-                                   (__v2df)_mm_undefined_pd(), \
-                                   ((C) >> 0) & 0x1, ((C) >> 1) & 0x1)
+  (__m128d)__builtin_ia32_vpermilpd((__v2df)(__m128d)(A), (int)(C))
 
 /// Copies the values in a 256-bit vector of [4 x double] as specified by
 ///    the immediate integer operand.
@@ -1040,12 +1038,7 @@ _mm256_permutevar_ps(__m256 __a, __m256i __c)
 ///         returned vector.
 /// \returns A 256-bit vector of [4 x double] containing the copied values.
 #define _mm256_permute_pd(A, C) \
-  (__m256d)__builtin_shufflevector((__v4df)(__m256d)(A), \
-                                   (__v4df)_mm256_undefined_pd(), \
-                                   0 + (((C) >> 0) & 0x1), \
-                                   0 + (((C) >> 1) & 0x1), \
-                                   2 + (((C) >> 2) & 0x1), \
-                                   2 + (((C) >> 3) & 0x1))
+  (__m256d)__builtin_ia32_vpermilpd256((__v4df)(__m256d)(A), (int)(C))
 
 /// Copies the values in a 128-bit vector of [4 x float] as specified by
 ///    the immediate integer operand.
@@ -1101,10 +1094,7 @@ _mm256_permutevar_ps(__m256 __a, __m256i __c)
 ///          returned vector.
 /// \returns A 128-bit vector of [4 x float] containing the copied values.
 #define _mm_permute_ps(A, C) \
-  (__m128)__builtin_shufflevector((__v4sf)(__m128)(A), \
-                                  (__v4sf)_mm_undefined_ps(), \
-                                  ((C) >> 0) & 0x3, ((C) >> 2) & 0x3, \
-                                  ((C) >> 4) & 0x3, ((C) >> 6) & 0x3)
+  (__m128)__builtin_ia32_vpermilps((__v4sf)(__m128)(A), (int)(C))
 
 /// Copies the values in a 256-bit vector of [8 x float] as specified by
 ///    the immediate integer operand.
@@ -1196,16 +1186,7 @@ _mm256_permutevar_ps(__m256 __a, __m256i __c)
 ///          returned vector.
 /// \returns A 256-bit vector of [8 x float] containing the copied values.
 #define _mm256_permute_ps(A, C) \
-  (__m256)__builtin_shufflevector((__v8sf)(__m256)(A), \
-                                  (__v8sf)_mm256_undefined_ps(), \
-                                  0 + (((C) >> 0) & 0x3), \
-                                  0 + (((C) >> 2) & 0x3), \
-                                  0 + (((C) >> 4) & 0x3), \
-                                  0 + (((C) >> 6) & 0x3), \
-                                  4 + (((C) >> 0) & 0x3), \
-                                  4 + (((C) >> 2) & 0x3), \
-                                  4 + (((C) >> 4) & 0x3), \
-                                  4 + (((C) >> 6) & 0x3))
+  (__m256)__builtin_ia32_vpermilps256((__v8sf)(__m256)(A), (int)(C))
 
 /// Permutes 128-bit data values stored in two 256-bit vectors of
 ///    [4 x double], as specified by the immediate integer operand.
@@ -1246,7 +1227,7 @@ _mm256_permutevar_ps(__m256 __a, __m256i __c)
 /// \returns A 256-bit vector of [4 x double] containing the copied values.
 #define _mm256_permute2f128_pd(V1, V2, M) \
   (__m256d)__builtin_ia32_vperm2f128_pd256((__v4df)(__m256d)(V1), \
-                                           (__v4df)(__m256d)(V2), (M))
+                                           (__v4df)(__m256d)(V2), (int)(M))
 
 /// Permutes 128-bit data values stored in two 256-bit vectors of
 ///    [8 x float], as specified by the immediate integer operand.
@@ -1287,7 +1268,7 @@ _mm256_permutevar_ps(__m256 __a, __m256i __c)
 /// \returns A 256-bit vector of [8 x float] containing the copied values.
 #define _mm256_permute2f128_ps(V1, V2, M) \
   (__m256)__builtin_ia32_vperm2f128_ps256((__v8sf)(__m256)(V1), \
-                                          (__v8sf)(__m256)(V2), (M))
+                                          (__v8sf)(__m256)(V2), (int)(M))
 
 /// Permutes 128-bit data values stored in two 256-bit integer vectors,
 ///    as specified by the immediate integer operand.
@@ -1327,7 +1308,7 @@ _mm256_permutevar_ps(__m256 __a, __m256i __c)
 /// \returns A 256-bit integer vector containing the copied values.
 #define _mm256_permute2f128_si256(V1, V2, M) \
   (__m256i)__builtin_ia32_vperm2f128_si256((__v8si)(__m256i)(V1), \
-                                           (__v8si)(__m256i)(V2), (M))
+                                           (__v8si)(__m256i)(V2), (int)(M))
 
 /* Vector Blend */
 /// Merges 64-bit double-precision data values stored in either of the
@@ -1355,12 +1336,8 @@ _mm256_permutevar_ps(__m256 __a, __m256i __c)
 ///    operand \a V2 is copied to the same position in the destination.
 /// \returns A 256-bit vector of [4 x double] containing the copied values.
 #define _mm256_blend_pd(V1, V2, M) \
-  (__m256d)__builtin_shufflevector((__v4df)(__m256d)(V1), \
-                                   (__v4df)(__m256d)(V2), \
-                                   (((M) & 0x01) ? 4 : 0), \
-                                   (((M) & 0x02) ? 5 : 1), \
-                                   (((M) & 0x04) ? 6 : 2), \
-                                   (((M) & 0x08) ? 7 : 3))
+  (__m256d)__builtin_ia32_blendpd256((__v4df)(__m256d)(V1), \
+                                     (__v4df)(__m256d)(V2), (int)(M))
 
 /// Merges 32-bit single-precision data values stored in either of the
 ///    two 256-bit vectors of [8 x float], as specified by the immediate
@@ -1387,16 +1364,8 @@ _mm256_permutevar_ps(__m256 __a, __m256i __c)
 ///    operand \a V2 is copied to the same position in the destination.
 /// \returns A 256-bit vector of [8 x float] containing the copied values.
 #define _mm256_blend_ps(V1, V2, M) \
-  (__m256)__builtin_shufflevector((__v8sf)(__m256)(V1), \
-                                  (__v8sf)(__m256)(V2), \
-                                  (((M) & 0x01) ?  8 : 0), \
-                                  (((M) & 0x02) ?  9 : 1), \
-                                  (((M) & 0x04) ? 10 : 2), \
-                                  (((M) & 0x08) ? 11 : 3), \
-                                  (((M) & 0x10) ? 12 : 4), \
-                                  (((M) & 0x20) ? 13 : 5), \
-                                  (((M) & 0x40) ? 14 : 6), \
-                                  (((M) & 0x80) ? 15 : 7))
+  (__m256)__builtin_ia32_blendps256((__v8sf)(__m256)(V1), \
+                                    (__v8sf)(__m256)(V2), (int)(M))
 
 /// Merges 64-bit double-precision data values stored in either of the
 ///    two 256-bit vectors of [4 x double], as specified by the 256-bit vector
@@ -1547,16 +1516,8 @@ _mm256_blendv_ps(__m256 __a, __m256 __b, __m256 __c)
 ///    11: Bits [127:96] and [255:224] are copied from the selected operand.
 /// \returns A 256-bit vector of [8 x float] containing the shuffled values.
 #define _mm256_shuffle_ps(a, b, mask) \
-  (__m256)__builtin_shufflevector((__v8sf)(__m256)(a), \
-                                  (__v8sf)(__m256)(b), \
-                                  0  + (((mask) >> 0) & 0x3), \
-                                  0  + (((mask) >> 2) & 0x3), \
-                                  8  + (((mask) >> 4) & 0x3), \
-                                  8  + (((mask) >> 6) & 0x3), \
-                                  4  + (((mask) >> 0) & 0x3), \
-                                  4  + (((mask) >> 2) & 0x3), \
-                                  12 + (((mask) >> 4) & 0x3), \
-                                  12 + (((mask) >> 6) & 0x3))
+  (__m256)__builtin_ia32_shufps256((__v8sf)(__m256)(a), \
+                                   (__v8sf)(__m256)(b), (int)(mask))
 
 /// Selects four double-precision values from the 256-bit operands of
 ///    [4 x double], as specified by the immediate value operand.
@@ -1601,12 +1562,8 @@ _mm256_blendv_ps(__m256 __a, __m256 __b, __m256 __c)
 ///    destination.
 /// \returns A 256-bit vector of [4 x double] containing the shuffled values.
 #define _mm256_shuffle_pd(a, b, mask) \
-  (__m256d)__builtin_shufflevector((__v4df)(__m256d)(a), \
-                                   (__v4df)(__m256d)(b), \
-                                   0 + (((mask) >> 0) & 0x1), \
-                                   4 + (((mask) >> 1) & 0x1), \
-                                   2 + (((mask) >> 2) & 0x1), \
-                                   6 + (((mask) >> 3) & 0x1))
+  (__m256d)__builtin_ia32_shufpd256((__v4df)(__m256d)(a), \
+                                    (__v4df)(__m256d)(b), (int)(mask))
 
 /* Compare */
 #define _CMP_EQ_OQ    0x00 /* Equal (ordered, non-signaling)  */
@@ -2015,12 +1972,8 @@ _mm256_blendv_ps(__m256 __a, __m256 __b, __m256 __c)
 ///    element is extracted and returned.
 /// \returns A 32-bit integer containing the extracted 32 bits of extended
 ///    packed data.
-static __inline int __DEFAULT_FN_ATTRS
-_mm256_extract_epi32(__m256i __a, const int __imm)
-{
-  __v8si __b = (__v8si)__a;
-  return __b[__imm & 7];
-}
+#define _mm256_extract_epi32(X, N) \
+  (int)__builtin_ia32_vec_ext_v8si((__v8si)(__m256i)(X), (int)(N))
 
 /// Takes a [16 x i16] vector and returns the vector element value
 ///    indexed by the immediate constant operand.
@@ -2037,12 +1990,9 @@ _mm256_extract_epi32(__m256i __a, const int __imm)
 ///    element is extracted and returned.
 /// \returns A 32-bit integer containing the extracted 16 bits of zero extended
 ///    packed data.
-static __inline int __DEFAULT_FN_ATTRS
-_mm256_extract_epi16(__m256i __a, const int __imm)
-{
-  __v16hi __b = (__v16hi)__a;
-  return (unsigned short)__b[__imm & 15];
-}
+#define _mm256_extract_epi16(X, N) \
+  (int)(unsigned short)__builtin_ia32_vec_ext_v16hi((__v16hi)(__m256i)(X), \
+                                                    (int)(N))
 
 /// Takes a [32 x i8] vector and returns the vector element value
 ///    indexed by the immediate constant operand.
@@ -2059,12 +2009,9 @@ _mm256_extract_epi16(__m256i __a, const int __imm)
 ///    element is extracted and returned.
 /// \returns A 32-bit integer containing the extracted 8 bits of zero extended
 ///    packed data.
-static __inline int __DEFAULT_FN_ATTRS
-_mm256_extract_epi8(__m256i __a, const int __imm)
-{
-  __v32qi __b = (__v32qi)__a;
-  return (unsigned char)__b[__imm & 31];
-}
+#define _mm256_extract_epi8(X, N) \
+  (int)(unsigned char)__builtin_ia32_vec_ext_v32qi((__v32qi)(__m256i)(X), \
+                                                   (int)(N))
 
 #ifdef __x86_64__
 /// Takes a [4 x i64] vector and returns the vector element value
@@ -2082,12 +2029,8 @@ _mm256_extract_epi8(__m256i __a, const int __imm)
 ///    element is extracted and returned.
 /// \returns A 64-bit integer containing the extracted 64 bits of extended
 ///    packed data.
-static __inline long long  __DEFAULT_FN_ATTRS
-_mm256_extract_epi64(__m256i __a, const int __imm)
-{
-  __v4di __b = (__v4di)__a;
-  return __b[__imm & 3];
-}
+#define _mm256_extract_epi64(X, N) \
+  (long long)__builtin_ia32_vec_ext_v4di((__v4di)(__m256i)(X), (int)(N))
 #endif
 
 /// Takes a [8 x i32] vector and replaces the vector element value
@@ -2108,13 +2051,9 @@ _mm256_extract_epi64(__m256i __a, const int __imm)
 ///    replaced.
 /// \returns A copy of vector \a __a, after replacing its element indexed by
 ///    \a __imm with \a __b.
-static __inline __m256i __DEFAULT_FN_ATTRS
-_mm256_insert_epi32(__m256i __a, int __b, int const __imm)
-{
-  __v8si __c = (__v8si)__a;
-  __c[__imm & 7] = __b;
-  return (__m256i)__c;
-}
+#define _mm256_insert_epi32(X, I, N) \
+  (__m256i)__builtin_ia32_vec_set_v8si((__v8si)(__m256i)(X), \
+                                       (int)(I), (int)(N))
 
 
 /// Takes a [16 x i16] vector and replaces the vector element value
@@ -2135,13 +2074,9 @@ _mm256_insert_epi32(__m256i __a, int __b, int const __imm)
 ///    replaced.
 /// \returns A copy of vector \a __a, after replacing its element indexed by
 ///    \a __imm with \a __b.
-static __inline __m256i __DEFAULT_FN_ATTRS
-_mm256_insert_epi16(__m256i __a, int __b, int const __imm)
-{
-  __v16hi __c = (__v16hi)__a;
-  __c[__imm & 15] = __b;
-  return (__m256i)__c;
-}
+#define _mm256_insert_epi16(X, I, N) \
+  (__m256i)__builtin_ia32_vec_set_v16hi((__v16hi)(__m256i)(X), \
+                                        (int)(I), (int)(N))
 
 /// Takes a [32 x i8] vector and replaces the vector element value
 ///    indexed by the immediate constant operand with a new value. Returns the
@@ -2161,13 +2096,9 @@ _mm256_insert_epi16(__m256i __a, int __b, int const __imm)
 ///    replaced.
 /// \returns A copy of vector \a __a, after replacing its element indexed by
 ///    \a __imm with \a __b.
-static __inline __m256i __DEFAULT_FN_ATTRS
-_mm256_insert_epi8(__m256i __a, int __b, int const __imm)
-{
-  __v32qi __c = (__v32qi)__a;
-  __c[__imm & 31] = __b;
-  return (__m256i)__c;
-}
+#define _mm256_insert_epi8(X, I, N) \
+  (__m256i)__builtin_ia32_vec_set_v32qi((__v32qi)(__m256i)(X), \
+                                        (int)(I), (int)(N))
 
 #ifdef __x86_64__
 /// Takes a [4 x i64] vector and replaces the vector element value
@@ -2188,13 +2119,9 @@ _mm256_insert_epi8(__m256i __a, int __b, int const __imm)
 ///    replaced.
 /// \returns A copy of vector \a __a, after replacing its element indexed by
 ///     \a __imm with \a __b.
-static __inline __m256i __DEFAULT_FN_ATTRS
-_mm256_insert_epi64(__m256i __a, long long __b, int const __imm)
-{
-  __v4di __c = (__v4di)__a;
-  __c[__imm & 3] = __b;
-  return (__m256i)__c;
-}
+#define _mm256_insert_epi64(X, I, N) \
+  (__m256i)__builtin_ia32_vec_set_v4di((__v4di)(__m256i)(X), \
+                                       (long long)(I), (int)(N))
 #endif
 
 /* Conversion */
@@ -3111,7 +3038,9 @@ _mm256_broadcast_ss(float const *__a)
 static __inline __m256d __DEFAULT_FN_ATTRS
 _mm256_broadcast_pd(__m128d const *__a)
 {
-  return (__m256d)__builtin_ia32_vbroadcastf128_pd256((__v2df const *)__a);
+  __m128d __b = _mm_loadu_pd((const double *)__a);
+  return (__m256d)__builtin_shufflevector((__v2df)__b, (__v2df)__b,
+                                          0, 1, 0, 1);
 }
 
 /// Loads the data from a 128-bit vector of [4 x float] from the
@@ -3129,7 +3058,9 @@ _mm256_broadcast_pd(__m128d const *__a)
 static __inline __m256 __DEFAULT_FN_ATTRS
 _mm256_broadcast_ps(__m128 const *__a)
 {
-  return (__m256)__builtin_ia32_vbroadcastf128_ps256((__v4sf const *)__a);
+  __m128 __b = _mm_loadu_ps((const float *)__a);
+  return (__m256)__builtin_shufflevector((__v4sf)__b, (__v4sf)__b,
+                                         0, 1, 2, 3, 0, 1, 2, 3);
 }
 
 /* SIMD load ops */
@@ -3589,7 +3520,8 @@ _mm_maskstore_ps(float *__p, __m128i __m, __m128 __a)
 static __inline void __DEFAULT_FN_ATTRS
 _mm256_stream_si256(__m256i *__a, __m256i __b)
 {
-  __builtin_nontemporal_store((__v4di)__b, (__v4di*)__a);
+  typedef __v4di __v4di_aligned __attribute__((aligned(32)));
+  __builtin_nontemporal_store((__v4di_aligned)__b, (__v4di_aligned*)__a);
 }
 
 /// Moves double-precision values from a 256-bit vector of [4 x double]
@@ -3608,7 +3540,8 @@ _mm256_stream_si256(__m256i *__a, __m256i __b)
 static __inline void __DEFAULT_FN_ATTRS
 _mm256_stream_pd(double *__a, __m256d __b)
 {
-  __builtin_nontemporal_store((__v4df)__b, (__v4df*)__a);
+  typedef __v4df __v4df_aligned __attribute__((aligned(32)));
+  __builtin_nontemporal_store((__v4df_aligned)__b, (__v4df_aligned*)__a);
 }
 
 /// Moves single-precision floating point values from a 256-bit vector
@@ -3628,7 +3561,8 @@ _mm256_stream_pd(double *__a, __m256d __b)
 static __inline void __DEFAULT_FN_ATTRS
 _mm256_stream_ps(float *__p, __m256 __a)
 {
-  __builtin_nontemporal_store((__v8sf)__a, (__v8sf*)__p);
+  typedef __v8sf __v8sf_aligned __attribute__((aligned(32)));
+  __builtin_nontemporal_store((__v8sf_aligned)__a, (__v8sf_aligned*)__p);
 }
 
 /* Create vectors */
@@ -4667,17 +4601,8 @@ _mm256_zextsi128_si256(__m128i __a)
 ///    result.
 /// \returns A 256-bit vector of [8 x float] containing the interleaved values.
 #define _mm256_insertf128_ps(V1, V2, M) \
-  (__m256)__builtin_shufflevector( \
-    (__v8sf)(__m256)(V1), \
-    (__v8sf)_mm256_castps128_ps256((__m128)(V2)), \
-    (((M) & 1) ?  0 :  8), \
-    (((M) & 1) ?  1 :  9), \
-    (((M) & 1) ?  2 : 10), \
-    (((M) & 1) ?  3 : 11), \
-    (((M) & 1) ?  8 :  4), \
-    (((M) & 1) ?  9 :  5), \
-    (((M) & 1) ? 10 :  6), \
-    (((M) & 1) ? 11 :  7) )
+  (__m256)__builtin_ia32_vinsertf128_ps256((__v8sf)(__m256)(V1), \
+                                           (__v4sf)(__m128)(V2), (int)(M))
 
 /// Constructs a new 256-bit vector of [4 x double] by first duplicating
 ///    a 256-bit vector of [4 x double] given in the first parameter, and then
@@ -4714,13 +4639,8 @@ _mm256_zextsi128_si256(__m128i __a)
 ///    result.
 /// \returns A 256-bit vector of [4 x double] containing the interleaved values.
 #define _mm256_insertf128_pd(V1, V2, M) \
-  (__m256d)__builtin_shufflevector( \
-    (__v4df)(__m256d)(V1), \
-    (__v4df)_mm256_castpd128_pd256((__m128d)(V2)), \
-    (((M) & 1) ? 0 : 4), \
-    (((M) & 1) ? 1 : 5), \
-    (((M) & 1) ? 4 : 2), \
-    (((M) & 1) ? 5 : 3) )
+  (__m256d)__builtin_ia32_vinsertf128_pd256((__v4df)(__m256d)(V1), \
+                                            (__v2df)(__m128d)(V2), (int)(M))
 
 /// Constructs a new 256-bit integer vector by first duplicating a
 ///    256-bit integer vector given in the first parameter, and then replacing
@@ -4757,13 +4677,8 @@ _mm256_zextsi128_si256(__m128i __a)
 ///    result.
 /// \returns A 256-bit integer vector containing the interleaved values.
 #define _mm256_insertf128_si256(V1, V2, M) \
-  (__m256i)__builtin_shufflevector( \
-    (__v4di)(__m256i)(V1), \
-    (__v4di)_mm256_castsi128_si256((__m128i)(V2)), \
-    (((M) & 1) ? 0 : 4), \
-    (((M) & 1) ? 1 : 5), \
-    (((M) & 1) ? 4 : 2), \
-    (((M) & 1) ? 5 : 3) )
+  (__m256i)__builtin_ia32_vinsertf128_si256((__v8si)(__m256i)(V1), \
+                                            (__v4si)(__m128i)(V2), (int)(M))
 
 /*
    Vector extract.
@@ -4792,13 +4707,7 @@ _mm256_zextsi128_si256(__m128i __a)
 ///    If bit [0] of \a M is 1, bits [255:128] of \a V are copied to the result.
 /// \returns A 128-bit vector of [4 x float] containing the extracted bits.
 #define _mm256_extractf128_ps(V, M) \
-  (__m128)__builtin_shufflevector( \
-    (__v8sf)(__m256)(V), \
-    (__v8sf)(_mm256_undefined_ps()), \
-    (((M) & 1) ? 4 : 0), \
-    (((M) & 1) ? 5 : 1), \
-    (((M) & 1) ? 6 : 2), \
-    (((M) & 1) ? 7 : 3) )
+  (__m128)__builtin_ia32_vextractf128_ps256((__v8sf)(__m256)(V), (int)(M))
 
 /// Extracts either the upper or the lower 128 bits from a 256-bit vector
 ///    of [4 x double], as determined by the immediate integer parameter, and
@@ -4822,11 +4731,7 @@ _mm256_zextsi128_si256(__m128i __a)
 ///    If bit [0] of \a M is 1, bits [255:128] of \a V are copied to the result.
 /// \returns A 128-bit vector of [2 x double] containing the extracted bits.
 #define _mm256_extractf128_pd(V, M) \
-  (__m128d)__builtin_shufflevector( \
-    (__v4df)(__m256d)(V), \
-    (__v4df)(_mm256_undefined_pd()), \
-    (((M) & 1) ? 2 : 0), \
-    (((M) & 1) ? 3 : 1) )
+  (__m128d)__builtin_ia32_vextractf128_pd256((__v4df)(__m256d)(V), (int)(M))
 
 /// Extracts either the upper or the lower 128 bits from a 256-bit
 ///    integer vector, as determined by the immediate integer parameter, and
@@ -4850,11 +4755,7 @@ _mm256_zextsi128_si256(__m128i __a)
 ///    If bit [0] of \a M is 1, bits [255:128] of \a V are copied to the result.
 /// \returns A 128-bit integer vector containing the extracted bits.
 #define _mm256_extractf128_si256(V, M) \
-  (__m128i)__builtin_shufflevector( \
-    (__v4di)(__m256i)(V), \
-    (__v4di)(_mm256_undefined_si256()), \
-    (((M) & 1) ? 2 : 0), \
-    (((M) & 1) ? 3 : 1) )
+  (__m128i)__builtin_ia32_vextractf128_si256((__v8si)(__m256i)(V), (int)(M))
 
 /* SIMD load ops (unaligned) */
 /// Loads two 128-bit floating-point vectors of [4 x float] from

@@ -44,11 +44,19 @@ struct Symbol;
 
 /// Attributes of a symbol that affect how much we like it.
 struct SymbolQualitySignals {
-  unsigned SemaCCPriority = 0; // 1-80, 1 is best. 0 means absent.
-                               // FIXME: this is actually a mix of symbol
-                               //        quality and relevance. Untangle this.
   bool Deprecated = false;
+  bool ReservedName = false; // __foo, _Foo are usually implementation details.
+                             // FIXME: make these findable once user types _.
   unsigned References = 0;
+
+  enum SymbolCategory {
+    Variable,
+    Macro,
+    Type,
+    Function,
+    Namespace,
+    Unknown,
+  } Category = Unknown;
 
   void merge(const CodeCompletionResult &SemaCCResult);
   void merge(const Symbol &IndexResult);
@@ -61,11 +69,27 @@ llvm::raw_ostream &operator<<(llvm::raw_ostream &,
 
 /// Attributes of a symbol-query pair that affect how much we like it.
 struct SymbolRelevanceSignals {
-  // 0-1 fuzzy-match score for unqualified name. Must be explicitly assigned.
+  /// 0-1+ fuzzy-match score for unqualified name. Must be explicitly assigned.
   float NameMatch = 1;
   bool Forbidden = false; // Unavailable (e.g const) or inaccessible (private).
+  /// Proximity between best declaration and the query. [0-1], 1 is closest.
+  float ProximityScore = 0;
+
+  // An approximate measure of where we expect the symbol to be used.
+  enum AccessibleScope {
+    FunctionScope,
+    ClassScope,
+    FileScope,
+    GlobalScope,
+  } Scope = GlobalScope;
+
+  enum QueryType {
+    CodeComplete,
+    Generic,
+  } Query = Generic;
 
   void merge(const CodeCompletionResult &SemaResult);
+  void merge(const Symbol &IndexResult);
 
   // Condense these signals down to a single number, higher is better.
   float evaluate() const;

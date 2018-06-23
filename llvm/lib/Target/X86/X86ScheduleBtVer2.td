@@ -365,10 +365,10 @@ defm : JWriteResFpuPair<WriteFVarShuffle256, [JFPU01, JFPX],  1>; // NOTE: Doesn
 // Conversions.
 ////////////////////////////////////////////////////////////////////////////////
 
-defm : JWriteResFpuPair<WriteCvtSS2I,      [JFPU1, JSTC, JFPA, JALU0], 7, [1,1], 2>;
+defm : JWriteResFpuPair<WriteCvtSS2I,      [JFPU1, JSTC, JFPA, JALU0], 7, [1,1,1,1], 2>;
 defm : JWriteResFpuPair<WriteCvtPS2I,      [JFPU1, JSTC], 3, [1,1], 1>;
 defm : JWriteResYMMPair<WriteCvtPS2IY,     [JFPU1, JSTC], 3, [2,2], 2>;
-defm : JWriteResFpuPair<WriteCvtSD2I,      [JFPU1, JSTC, JFPA, JALU0], 7, [1,1], 2>;
+defm : JWriteResFpuPair<WriteCvtSD2I,      [JFPU1, JSTC, JFPA, JALU0], 7, [1,1,1,1], 2>;
 defm : JWriteResFpuPair<WriteCvtPD2I,      [JFPU1, JSTC], 3, [1,1], 1>;
 defm : JWriteResYMMPair<WriteCvtPD2IY,     [JFPU1, JSTC, JFPX], 6, [2,2,4], 3>;
 
@@ -546,5 +546,71 @@ def JWriteJVZEROUPPER: SchedWriteRes<[]> {
   let NumMicroOps = 37;
 }
 def : InstRW<[JWriteJVZEROUPPER], (instrs VZEROUPPER)>;
-} // SchedModel
 
+///////////////////////////////////////////////////////////////////////////////
+//  SchedWriteVariant definitions.
+///////////////////////////////////////////////////////////////////////////////
+
+def JWriteZeroLatency : SchedWriteRes<[]> {
+  let Latency = 0;
+}
+
+// Certain instructions that use the same register for both source 
+// operands do not have a real dependency on the previous contents of the
+// register, and thus, do not have to wait before completing. They can be
+// optimized out at register renaming stage.
+// Reference: Section 10.8 of the "Software Optimization Guide for AMD Family
+// 15h Processors".
+// Reference: Agner's Fog "The microarchitecture of Intel, AMD and VIA CPUs",
+// Section 21.8 [Dependency-breaking instructions].
+
+def JWriteZeroIdiom : SchedWriteVariant<[
+    SchedVar<MCSchedPredicate<ZeroIdiomPredicate>, [JWriteZeroLatency]>,
+    SchedVar<MCSchedPredicate<TruePred>,           [WriteALU]>
+]>;
+def : InstRW<[JWriteZeroIdiom], (instrs SUB32rr, SUB64rr,
+                                        XOR32rr, XOR64rr)>;
+
+def JWriteFZeroIdiom : SchedWriteVariant<[
+    SchedVar<MCSchedPredicate<ZeroIdiomPredicate>, [JWriteZeroLatency]>,
+    SchedVar<MCSchedPredicate<TruePred>,           [WriteFLogic]>
+]>;
+def : InstRW<[JWriteFZeroIdiom], (instrs XORPSrr, VXORPSrr, XORPDrr, VXORPDrr,
+                                         ANDNPSrr, VANDNPSrr,
+                                         ANDNPDrr, VANDNPDrr)>;
+
+def JWriteVZeroIdiomLogic : SchedWriteVariant<[
+    SchedVar<MCSchedPredicate<ZeroIdiomPredicate>, [JWriteZeroLatency]>,
+    SchedVar<MCSchedPredicate<TruePred>,           [WriteVecLogic]>
+]>;
+def : InstRW<[JWriteVZeroIdiomLogic], (instrs MMX_PXORirr, MMX_PANDNirr)>;
+
+def JWriteVZeroIdiomLogicX : SchedWriteVariant<[
+    SchedVar<MCSchedPredicate<ZeroIdiomPredicate>, [JWriteZeroLatency]>,
+    SchedVar<MCSchedPredicate<TruePred>,           [WriteVecLogicX]>
+]>;
+def : InstRW<[JWriteVZeroIdiomLogicX], (instrs PXORrr, VPXORrr,
+                                               PANDNrr, VPANDNrr)>;
+
+def JWriteVZeroIdiomALU : SchedWriteVariant<[
+    SchedVar<MCSchedPredicate<ZeroIdiomPredicate>, [JWriteZeroLatency]>,
+    SchedVar<MCSchedPredicate<TruePred>,           [WriteVecALU]>
+]>;
+def : InstRW<[JWriteVZeroIdiomALU], (instrs MMX_PSUBBirr, MMX_PSUBDirr,
+                                            MMX_PSUBQirr, MMX_PSUBWirr,
+                                            MMX_PCMPGTBirr, MMX_PCMPGTDirr,
+                                            MMX_PCMPGTWirr)>;
+
+def JWriteVZeroIdiomALUX : SchedWriteVariant<[
+    SchedVar<MCSchedPredicate<ZeroIdiomPredicate>, [JWriteZeroLatency]>,
+    SchedVar<MCSchedPredicate<TruePred>,           [WriteVecALUX]>
+]>;
+def : InstRW<[JWriteVZeroIdiomALUX], (instrs PSUBBrr, VPSUBBrr,
+                                             PSUBDrr, VPSUBDrr,
+                                             PSUBQrr, VPSUBQrr,
+                                             PSUBWrr, VPSUBWrr,
+                                             PCMPGTBrr, VPCMPGTBrr,
+                                             PCMPGTDrr, VPCMPGTDrr,
+                                             PCMPGTQrr, VPCMPGTQrr,
+                                             PCMPGTWrr, VPCMPGTWrr)>;
+} // SchedModel

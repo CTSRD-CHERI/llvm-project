@@ -128,6 +128,26 @@ SIGNED_TYPE(IntCap, IntCapTy)
 // '__int128_t'.  This must be the last integer type defined.
 SIGNED_TYPE(Int128, Int128Ty)
 
+//===- Fixed point types --------------------------------------------------===//
+
+// 'short _Accum'
+SIGNED_TYPE(ShortAccum, ShortAccumTy)
+
+// '_Accum'
+SIGNED_TYPE(Accum, AccumTy)
+
+// 'long _Accum'
+SIGNED_TYPE(LongAccum, LongAccumTy)
+
+// 'unsigned short _Accum'
+UNSIGNED_TYPE(UShortAccum, UnsignedShortAccumTy)
+
+// 'unsigned _Accum'
+UNSIGNED_TYPE(UAccum, UnsignedAccumTy)
+
+// 'unsigned long _Accum'
+UNSIGNED_TYPE(ULongAccum, UnsignedLongAccumTy)
+
 //===- Floating point types -----------------------------------------------===//
 
 // 'half' in OpenCL, '__fp16' in ARM NEON.

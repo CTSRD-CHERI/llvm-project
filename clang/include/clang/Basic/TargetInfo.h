@@ -75,10 +75,13 @@ protected:
   unsigned char LargeArrayMinWidth, LargeArrayAlign;
   unsigned char LongWidth, LongAlign;
   unsigned char LongLongWidth, LongLongAlign;
+  unsigned char ShortAccumWidth, ShortAccumAlign;
+  unsigned char AccumWidth, AccumAlign;
+  unsigned char LongAccumWidth, LongAccumAlign;
   unsigned short SuitableAlign;
   unsigned short DefaultAlignForAttributeAligned;
   unsigned char MinGlobalAlign;
-  unsigned char MaxAtomicPromoteWidth, MaxAtomicInlineWidth;
+  unsigned short MaxAtomicPromoteWidth, MaxAtomicInlineWidth;
   unsigned short MaxVectorAlign;
   unsigned short MaxTLSAlign;
   unsigned short SimdDefaultAlign;
@@ -392,6 +395,21 @@ public:
   /// 'unsigned long long' for this target, in bits.
   unsigned getLongLongWidth() const { return LongLongWidth; }
   unsigned getLongLongAlign() const { return LongLongAlign; }
+
+  /// getShortAccumWidth/Align - Return the size of 'signed short _Accum' and
+  /// 'unsigned short _Accum' for this target, in bits.
+  unsigned getShortAccumWidth() const { return ShortAccumWidth; }
+  unsigned getShortAccumAlign() const { return ShortAccumAlign; }
+
+  /// getAccumWidth/Align - Return the size of 'signed _Accum' and
+  /// 'unsigned _Accum' for this target, in bits.
+  unsigned getAccumWidth() const { return AccumWidth; }
+  unsigned getAccumAlign() const { return AccumAlign; }
+
+  /// getLongAccumWidth/Align - Return the size of 'signed long _Accum' and
+  /// 'unsigned long _Accum' for this target, in bits.
+  unsigned getLongAccumWidth() const { return LongAccumWidth; }
+  unsigned getLongAccumAlign() const { return LongAccumAlign; }
 
   /// Determine whether the __int128 type is supported on this target.
   virtual bool hasInt128Type() const {

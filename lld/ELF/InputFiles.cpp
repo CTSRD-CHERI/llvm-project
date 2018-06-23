@@ -167,10 +167,15 @@ template <class ELFT> void ObjFile<ELFT>::initializeDwarf() {
       // Get the line number on which the variable is declared.
       unsigned Line = dwarf::toUnsigned(Die.find(dwarf::DW_AT_decl_line), 0);
 
-      // Get the name of the variable and add the collected information to
-      // VariableLoc. Usually Name is non-empty, but it can be empty if the
+      // Here we want to take the variable name to add it into VariableLoc.
+      // Variable can have regular and linkage name associated. At first, we try
+      // to get linkage name as it can be different, for example when we have
+      // two variables in different namespaces of the same object. Use common
+      // name otherwise, but handle the case when it also absent in case if the
       // input object file lacks some debug info.
-      StringRef Name = dwarf::toString(Die.find(dwarf::DW_AT_name), "");
+      StringRef Name =
+          dwarf::toString(Die.find(dwarf::DW_AT_linkage_name),
+                          dwarf::toString(Die.find(dwarf::DW_AT_name), ""));
       if (!Name.empty())
         VariableLoc.insert({Name, {LT, File, Line}});
     }
@@ -895,16 +900,12 @@ std::vector<const typename ELFT::Verdef *> SharedFile<ELFT>::parseVerdefs() {
 template <class ELFT>
 uint32_t SharedFile<ELFT>::getAlignment(ArrayRef<Elf_Shdr> Sections,
                                         const Elf_Sym &Sym) {
-  uint64_t Ret = 1;
+  uint64_t Ret = UINT64_MAX;
   if (Sym.st_value)
     Ret = 1ULL << countTrailingZeros((uint64_t)Sym.st_value);
   if (0 < Sym.st_shndx && Sym.st_shndx < Sections.size())
     Ret = std::min<uint64_t>(Ret, Sections[Sym.st_shndx].sh_addralign);
-
-  if (Ret > UINT32_MAX)
-    error(toString(this) + ": alignment too large: " +
-          CHECK(Sym.getName(this->StringTable), this));
-  return Ret;
+  return (Ret > UINT32_MAX) ? 0 : Ret;
 }
 
 // Fully parse the shared object file. This must be called after parseSoName().

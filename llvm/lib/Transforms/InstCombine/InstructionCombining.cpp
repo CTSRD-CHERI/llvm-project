@@ -57,7 +57,7 @@
 #include "llvm/Analysis/OptimizationRemarkEmitter.h"
 #include "llvm/Analysis/TargetFolder.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
-#include "llvm/Analysis/Utils/Local.h"
+#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CFG.h"
@@ -1351,11 +1351,7 @@ Value *InstCombiner::Descale(Value *Val, APInt Scale, bool &NoSignedWrap) {
   } while (true);
 }
 
-/// Makes transformation of binary operation specific for vector types.
-/// \param Inst Binary operator to transform.
-/// \return Pointer to node that must replace the original binary operator, or
-///         null pointer if no transformation was made.
-Value *InstCombiner::SimplifyVectorOp(BinaryOperator &Inst) {
+Instruction *InstCombiner::foldShuffledBinop(BinaryOperator &Inst) {
   if (!Inst.getType()->isVectorTy()) return nullptr;
 
   // It may not be safe to reorder shuffles and things like div, urem, etc.
@@ -1373,7 +1369,7 @@ Value *InstCombiner::SimplifyVectorOp(BinaryOperator &Inst) {
     Value *XY = Builder.CreateBinOp(Inst.getOpcode(), X, Y);
     if (auto *BO = dyn_cast<BinaryOperator>(XY))
       BO->copyIRFlags(&Inst);
-    return Builder.CreateShuffleVector(XY, UndefValue::get(XY->getType()), M);
+    return new ShuffleVectorInst(XY, UndefValue::get(XY->getType()), M);
   };
 
   // If both arguments of the binary operation are shuffles that use the same
@@ -1421,21 +1417,21 @@ Value *InstCombiner::SimplifyVectorOp(BinaryOperator &Inst) {
       }
     }
     if (MayChange) {
-      // It's not safe to use a vector with undef elements because the entire
-      // instruction can be folded to undef (for example, div/rem divisors).
-      // Replace undef lanes with the first non-undef element. Vector demanded
-      // elements can change those back to undef values if that is safe.
-      Constant *SafeDummyConstant = nullptr;
-      for (unsigned i = 0; i < VWidth; ++i) {
-        if (!isa<UndefValue>(NewVecC[i])) {
-          SafeDummyConstant = NewVecC[i];
-          break;
-        }
+      // With integer div/rem instructions, it is not safe to use a vector with
+      // undef elements because the entire instruction can be folded to undef.
+      // So replace undef elements with '1' because that can never induce
+      // undefined behavior. All other binop opcodes are always safe to
+      // speculate, and therefore, it is fine to include undef elements for
+      // unused lanes (and using undefs may help optimization).
+      BinaryOperator::BinaryOps Opcode = Inst.getOpcode();
+      if (Opcode == Instruction::UDiv || Opcode == Instruction::URem ||
+          Opcode == Instruction::SDiv || Opcode == Instruction::SRem) {
+        assert(C->getType()->getScalarType()->isIntegerTy() &&
+               "Not expecting FP opcodes/operands/constants here");
+        for (unsigned i = 0; i < VWidth; ++i)
+          if (isa<UndefValue>(NewVecC[i]))
+            NewVecC[i] = ConstantInt::get(NewVecC[i]->getType(), 1);
       }
-      assert(SafeDummyConstant && "Undef constant vector was not simplified?");
-      for (unsigned i = 0; i < VWidth; ++i)
-        if (isa<UndefValue>(NewVecC[i]))
-          NewVecC[i] = SafeDummyConstant;
 
       // Op(shuffle(V1, Mask), C) -> shuffle(Op(V1, NewC), Mask)
       // Op(C, shuffle(V1, Mask)) -> shuffle(Op(NewC, V1), Mask)

@@ -6751,9 +6751,9 @@ def err_not_tag_in_scope : Error<
   "no %select{struct|interface|union|class|enum}0 named %1 in %2">;
 
 def err_no_typeid_with_fno_rtti : Error<
-  "cannot use typeid with -fno-rtti">;
+  "use of typeid requires -frtti">;
 def err_no_dynamic_cast_with_fno_rtti : Error<
-  "cannot use dynamic_cast with -fno-rtti">;
+  "use of dynamic_cast requires -frtti">;
 
 def err_cannot_form_pointer_to_member_of_reference_type : Error<
   "cannot form a pointer-to-member to member %0 of reference type %1">;
@@ -8305,6 +8305,8 @@ def err_x86_builtin_invalid_rounding : Error<
   "invalid rounding argument">;
 def err_x86_builtin_invalid_scale : Error<
   "scale argument must be 1, 2, 4, or 8">;
+def err_builtin_target_unsupported : Error<
+  "builtin is not supported on this target">;
 
 def err_builtin_longjmp_unsupported : Error<
   "__builtin_longjmp is not supported for the current target">;

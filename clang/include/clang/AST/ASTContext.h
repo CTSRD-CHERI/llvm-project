@@ -1015,6 +1015,9 @@ public:
   CanQualType IntCapTy, UnsignedIntCapTy;
   CanQualType UnsignedLongLongTy, UnsignedInt128Ty;
   CanQualType FloatTy, DoubleTy, LongDoubleTy, Float128Ty;
+  CanQualType ShortAccumTy, AccumTy,
+      LongAccumTy;  // ISO/IEC JTC1 SC22 WG14 N1169 Extension
+  CanQualType UnsignedShortAccumTy, UnsignedAccumTy, UnsignedLongAccumTy;
   CanQualType HalfTy; // [OpenCL 6.1.1.1], ARM NEON
   CanQualType Float16Ty; // C11 extension ISO/IEC TS 18661-3
   CanQualType FloatComplexTy, DoubleComplexTy, LongDoubleComplexTy;

@@ -45,7 +45,7 @@ static llvm::cl::opt<std::string>
                llvm::cl::init(""));
 
 static llvm::cl::opt<std::string>
-    BenchmarkFile("benchmarks-file", llvm::cl::desc(""), llvm::cl::init("-"));
+    BenchmarkFile("benchmarks-file", llvm::cl::desc(""), llvm::cl::init(""));
 
 enum class BenchmarkModeE { Latency, Uops, Analysis };
 static llvm::cl::opt<BenchmarkModeE> BenchmarkMode(
@@ -79,6 +79,8 @@ static llvm::cl::opt<std::string>
 
 namespace exegesis {
 
+static llvm::ExitOnError ExitOnErr;
+
 static unsigned GetOpcodeOrDie(const llvm::MCInstrInfo &MCInstrInfo) {
   if (OpcodeName.empty() && (OpcodeIndex == 0))
     llvm::report_fatal_error(
@@ -90,6 +92,21 @@ static unsigned GetOpcodeOrDie(const llvm::MCInstrInfo &MCInstrInfo) {
     if (MCInstrInfo.getName(I) == OpcodeName)
       return I;
   llvm::report_fatal_error(llvm::Twine("unknown opcode ").concat(OpcodeName));
+}
+
+static BenchmarkResultContext
+getBenchmarkResultContext(const LLVMState &State) {
+  BenchmarkResultContext Ctx;
+
+  const llvm::MCInstrInfo &InstrInfo = State.getInstrInfo();
+  for (unsigned E = InstrInfo.getNumOpcodes(), I = 0; I < E; ++I)
+    Ctx.addInstrEntry(I, InstrInfo.getName(I).data());
+
+  const llvm::MCRegisterInfo &RegInfo = State.getRegInfo();
+  for (unsigned E = RegInfo.getNumRegs(), I = 0; I < E; ++I)
+    Ctx.addRegEntry(I, RegInfo.getName(I));
+
+  return Ctx;
 }
 
 void benchmarkMain() {
@@ -123,8 +140,16 @@ void benchmarkMain() {
   if (NumRepetitions == 0)
     llvm::report_fatal_error("--num-repetitions must be greater than zero");
 
-  Runner->run(GetOpcodeOrDie(State.getInstrInfo()), Filter, NumRepetitions)
-      .writeYamlOrDie(BenchmarkFile);
+  // Write to standard output if file is not set.
+  if (BenchmarkFile.empty())
+    BenchmarkFile = "-";
+
+  const BenchmarkResultContext Context = getBenchmarkResultContext(State);
+  std::vector<InstructionBenchmark> Results = ExitOnErr(Runner->run(
+      GetOpcodeOrDie(State.getInstrInfo()), Filter, NumRepetitions));
+  for (InstructionBenchmark &Result : Results)
+    Result.writeYaml(Context, BenchmarkFile);
+
   exegesis::pfm::pfmTerminate();
 }
 
@@ -132,7 +157,7 @@ void benchmarkMain() {
 // if OutputFilename is non-empty.
 template <typename Pass>
 static void maybeRunAnalysis(const Analysis &Analyzer, const std::string &Name,
-                      const std::string &OutputFilename) {
+                             const std::string &OutputFilename) {
   if (OutputFilename.empty())
     return;
   if (OutputFilename != "-") {
@@ -141,7 +166,8 @@ static void maybeRunAnalysis(const Analysis &Analyzer, const std::string &Name,
   }
   std::error_code ErrorCode;
   llvm::raw_fd_ostream ClustersOS(OutputFilename, ErrorCode,
-                                  llvm::sys::fs::F_RW);
+                                  llvm::sys::fs::FA_Read |
+                                      llvm::sys::fs::FA_Write);
   if (ErrorCode)
     llvm::report_fatal_error("cannot open out file: " + OutputFilename);
   if (auto Err = Analyzer.run<Pass>(ClustersOS))
@@ -149,9 +175,16 @@ static void maybeRunAnalysis(const Analysis &Analyzer, const std::string &Name,
 }
 
 static void analysisMain() {
+  if (BenchmarkFile.empty())
+    llvm::report_fatal_error("--benchmarks-file must be set.");
+
+  llvm::InitializeNativeTarget();
+  llvm::InitializeNativeTargetAsmPrinter();
   // Read benchmarks.
+  const LLVMState State;
   const std::vector<InstructionBenchmark> Points =
-      InstructionBenchmark::readYamlsOrDie(BenchmarkFile);
+      ExitOnErr(InstructionBenchmark::readYamls(
+          getBenchmarkResultContext(State), BenchmarkFile));
   llvm::outs() << "Parsed " << Points.size() << " benchmark points\n";
   if (Points.empty()) {
     llvm::errs() << "no benchmarks to analyze\n";
@@ -159,9 +192,6 @@ static void analysisMain() {
   }
   // FIXME: Check that all points have the same triple/cpu.
   // FIXME: Merge points from several runs (latency and uops).
-
-  llvm::InitializeNativeTarget();
-  llvm::InitializeNativeTargetAsmPrinter();
 
   std::string Error;
   const auto *TheTarget =

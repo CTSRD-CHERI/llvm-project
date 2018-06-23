@@ -48,6 +48,12 @@ using namespace llvm;
 
 namespace {
 
+static cl::opt<bool> WidenLoads(
+  "amdgpu-codegenprepare-widen-constant-loads",
+  cl::desc("Widen sub-dword constant address space loads in AMDGPUCodeGenPrepare"),
+  cl::ReallyHidden,
+  cl::init(true));
+
 class AMDGPUCodeGenPrepare : public FunctionPass,
                              public InstVisitor<AMDGPUCodeGenPrepare, bool> {
   const SISubtarget *ST = nullptr;
@@ -372,13 +378,18 @@ bool AMDGPUCodeGenPrepare::promoteUniformBitreverseToI32(
   return true;
 }
 
-static bool shouldKeepFDivF32(Value *Num, bool UnsafeDiv) {
+static bool shouldKeepFDivF32(Value *Num, bool UnsafeDiv, bool HasDenormals) {
   const ConstantFP *CNum = dyn_cast<ConstantFP>(Num);
   if (!CNum)
-    return false;
+    return HasDenormals;
+
+  if (UnsafeDiv)
+    return true;
+
+  bool IsOne = CNum->isExactlyValue(+1.0) || CNum->isExactlyValue(-1.0);
 
   // Reciprocal f32 is handled separately without denormals.
-  return UnsafeDiv || CNum->isExactlyValue(+1.0);
+  return HasDenormals ^ IsOne;
 }
 
 // Insert an intrinsic for fast fdiv for safe math situations where we can
@@ -404,7 +415,7 @@ bool AMDGPUCodeGenPrepare::visitFDiv(BinaryOperator &FDiv) {
                                       FMF.allowReciprocal();
 
   // With UnsafeDiv node will be optimized to just rcp and mul.
-  if (ST->hasFP32Denormals() || UnsafeDiv)
+  if (UnsafeDiv)
     return false;
 
   IRBuilder<> Builder(FDiv.getParent(), std::next(FDiv.getIterator()), FPMath);
@@ -418,6 +429,7 @@ bool AMDGPUCodeGenPrepare::visitFDiv(BinaryOperator &FDiv) {
 
   Value *NewFDiv = nullptr;
 
+  bool HasDenormals = ST->hasFP32Denormals();
   if (VectorType *VT = dyn_cast<VectorType>(Ty)) {
     NewFDiv = UndefValue::get(VT);
 
@@ -428,7 +440,7 @@ bool AMDGPUCodeGenPrepare::visitFDiv(BinaryOperator &FDiv) {
       Value *DenEltI = Builder.CreateExtractElement(Den, I);
       Value *NewElt;
 
-      if (shouldKeepFDivF32(NumEltI, UnsafeDiv)) {
+      if (shouldKeepFDivF32(NumEltI, UnsafeDiv, HasDenormals)) {
         NewElt = Builder.CreateFDiv(NumEltI, DenEltI);
       } else {
         NewElt = Builder.CreateCall(Decl, { NumEltI, DenEltI });
@@ -437,7 +449,7 @@ bool AMDGPUCodeGenPrepare::visitFDiv(BinaryOperator &FDiv) {
       NewFDiv = Builder.CreateInsertElement(NewFDiv, NewElt, I);
     }
   } else {
-    if (!shouldKeepFDivF32(Num, UnsafeDiv))
+    if (!shouldKeepFDivF32(Num, UnsafeDiv, HasDenormals))
       NewFDiv = Builder.CreateCall(Decl, { Num, Den });
   }
 
@@ -447,7 +459,7 @@ bool AMDGPUCodeGenPrepare::visitFDiv(BinaryOperator &FDiv) {
     FDiv.eraseFromParent();
   }
 
-  return true;
+  return !!NewFDiv;
 }
 
 static bool hasUnsafeFPMath(const Function &F) {
@@ -465,7 +477,10 @@ bool AMDGPUCodeGenPrepare::visitBinaryOperator(BinaryOperator &I) {
   return Changed;
 }
 
-bool AMDGPUCodeGenPrepare::visitLoadInst(LoadInst  &I) {
+bool AMDGPUCodeGenPrepare::visitLoadInst(LoadInst &I) {
+  if (!WidenLoads)
+    return false;
+
   if ((I.getPointerAddressSpace() == AMDGPUASI.CONSTANT_ADDRESS ||
        I.getPointerAddressSpace() == AMDGPUASI.CONSTANT_ADDRESS_32BIT) &&
       canWidenScalarExtLoad(I)) {
@@ -475,7 +490,28 @@ bool AMDGPUCodeGenPrepare::visitLoadInst(LoadInst  &I) {
     Type *I32Ty = Builder.getInt32Ty();
     Type *PT = PointerType::get(I32Ty, I.getPointerAddressSpace());
     Value *BitCast= Builder.CreateBitCast(I.getPointerOperand(), PT);
-    Value *WidenLoad = Builder.CreateLoad(BitCast);
+    LoadInst *WidenLoad = Builder.CreateLoad(BitCast);
+    WidenLoad->copyMetadata(I);
+
+    // If we have range metadata, we need to convert the type, and not make
+    // assumptions about the high bits.
+    if (auto *Range = WidenLoad->getMetadata(LLVMContext::MD_range)) {
+      ConstantInt *Lower =
+        mdconst::extract<ConstantInt>(Range->getOperand(0));
+
+      if (Lower->getValue().isNullValue()) {
+        WidenLoad->setMetadata(LLVMContext::MD_range, nullptr);
+      } else {
+        Metadata *LowAndHigh[] = {
+          ConstantAsMetadata::get(ConstantInt::get(I32Ty, Lower->getValue().zext(32))),
+          // Don't make assumptions about the high bits.
+          ConstantAsMetadata::get(ConstantInt::get(I32Ty, 0))
+        };
+
+        WidenLoad->setMetadata(LLVMContext::MD_range,
+                               MDNode::get(Mod->getContext(), LowAndHigh));
+      }
+    }
 
     int TySize = Mod->getDataLayout().getTypeSizeInBits(I.getType());
     Type *IntNTy = Builder.getIntNTy(TySize);
