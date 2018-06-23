@@ -2355,8 +2355,8 @@ CGObjCGNU::GenerateMessageSendSuper(CodeGenFunction &CGF,
         Class->getSuperClass()->getNameAsString(), /*isWeak*/false);
     if (IsClassMessage)  {
       // Load the isa pointer of the superclass is this is a class method.
-      ReceiverClass = Builder.CreateBitCast(ReceiverClass,
-                                            llvm::PointerType::getUnqual(IdTy));
+      ReceiverClass = Builder.CreateBitCast(
+          ReceiverClass, CGF.CGM.getPointerInDefaultAS(IdTy));
       ReceiverClass =
         Builder.CreateAlignedLoad(ReceiverClass, CGF.getPointerAlign());
     }
@@ -2397,8 +2397,8 @@ CGObjCGNU::GenerateMessageSendSuper(CodeGenFunction &CGF,
     }
     // Cast the pointer to a simplified version of the class structure
     llvm::Type *CastTy = llvm::StructType::get(IdTy, IdTy);
-    ReceiverClass = Builder.CreateBitCast(ReceiverClass,
-                                          llvm::PointerType::getUnqual(CastTy));
+    ReceiverClass = Builder.CreateBitCast(
+        ReceiverClass, CGF.CGM.getPointerInDefaultAS(CastTy));
     // Get the superclass pointer
     ReceiverClass = Builder.CreateStructGEP(CastTy, ReceiverClass, 1);
     // Load the superclass pointer

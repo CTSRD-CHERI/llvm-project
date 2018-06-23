@@ -7275,10 +7275,10 @@ static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &st
           // the predefined __capability macro, but we also cater for when it
           // isn't in the else branch
           if (AttrLoc.isMacroID()) {
-            std::pair<SourceLocation, SourceLocation> expansionRange 
-                        = S.SourceMgr.getImmediateExpansionRange(AttrLoc);
-            AttrRange.setBegin(expansionRange.first);
-            AttrRange.setEnd(expansionRange.second);
+            CharSourceRange expansionRange =
+                S.SourceMgr.getImmediateExpansionRange(AttrLoc);
+            AttrRange.setBegin(expansionRange.getBegin());
+            AttrRange.setEnd(expansionRange.getEnd());
           } else {
             // Calculate extended range to include the preceding
             // __attribute(( and following ))

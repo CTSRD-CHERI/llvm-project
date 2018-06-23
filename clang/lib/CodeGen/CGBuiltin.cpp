@@ -712,8 +712,10 @@ static RValue EmitMSVCRTSetJmp(CodeGenFunction &CGF, MSVCSetJmpKind SJKind,
   } else {
     Name = SJKind == MSVCSetJmpKind::_setjmp ? "_setjmp" : "_setjmpex";
     Arg1Ty = CGF.Int8PtrTy;
-    Arg1 = CGF.Builder.CreateCall(CGF.CGM.getIntrinsic(Intrinsic::frameaddress, {CGM.ProgramInt8PtrTy}),
-                                  llvm::ConstantInt::get(CGF.Int32Ty, 0));
+    Arg1 =
+        CGF.Builder.CreateCall(CGF.CGM.getIntrinsic(Intrinsic::frameaddress,
+                                                    {CGF.CGM.ProgramInt8PtrTy}),
+                               llvm::ConstantInt::get(CGF.Int32Ty, 0));
   }
 
   // Mark the call site and declaration with ReturnsTwice.
@@ -5040,12 +5042,12 @@ Value *CodeGenFunction::EmitCommonNeonBuiltinExpr(
   case NEON::BI__builtin_neon_vld1q_x3_v:
   case NEON::BI__builtin_neon_vld1_x4_v:
   case NEON::BI__builtin_neon_vld1q_x4_v: {
-    llvm::Type *PTy = llvm::PointerType::getUnqual(VTy->getVectorElementType());
+    llvm::Type *PTy = CGM.getPointerInDefaultAS(VTy->getVectorElementType());
     Ops[1] = Builder.CreateBitCast(Ops[1], PTy);
     llvm::Type *Tys[2] = { VTy, PTy };
     Function *F = CGM.getIntrinsic(LLVMIntrinsic, Tys);
     Ops[1] = Builder.CreateCall(F, Ops[1], "vld1xN");
-    Ty = llvm::PointerType::getUnqual(Ops[1]->getType());
+    Ty = CGM.getPointerInDefaultAS(Ops[1]->getType());
     Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
     return Builder.CreateDefaultAlignedStore(Ops[1], Ops[0]);
   }
@@ -5210,7 +5212,7 @@ Value *CodeGenFunction::EmitCommonNeonBuiltinExpr(
   case NEON::BI__builtin_neon_vst1q_x3_v:
   case NEON::BI__builtin_neon_vst1_x4_v:
   case NEON::BI__builtin_neon_vst1q_x4_v: {
-    llvm::Type *PTy = llvm::PointerType::getUnqual(VTy->getVectorElementType());
+    llvm::Type *PTy = CGM.getPointerInDefaultAS(VTy->getVectorElementType());
     // TODO: Currently in AArch32 mode the pointer operand comes first, whereas
     // in AArch64 it comes last. We may want to stick to one or another.
     if (Arch == llvm::Triple::aarch64 || Arch == llvm::Triple::aarch64_be) {
@@ -8590,8 +8592,8 @@ static Value *EmitX86ExpandLoad(CodeGenFunction &CGF,
   llvm::Type *PtrTy = ResultTy->getVectorElementType();
 
   // Cast the pointer to element type.
-  Value *Ptr = CGF.Builder.CreateBitCast(Ops[0],
-                                         llvm::PointerType::getUnqual(PtrTy));
+  Value *Ptr =
+      CGF.Builder.CreateBitCast(Ops[0], CGF.CGM.getPointerInDefaultAS(PtrTy));
 
   Value *MaskVec = getMaskVecValue(CGF, Ops[2],
                                    ResultTy->getVectorNumElements());
@@ -8607,8 +8609,8 @@ static Value *EmitX86CompressStore(CodeGenFunction &CGF,
   llvm::Type *PtrTy = ResultTy->getVectorElementType();
 
   // Cast the pointer to element type.
-  Value *Ptr = CGF.Builder.CreateBitCast(Ops[0],
-                                         llvm::PointerType::getUnqual(PtrTy));
+  Value *Ptr =
+      CGF.Builder.CreateBitCast(Ops[0], CGF.CGM.getPointerInDefaultAS(PtrTy));
 
   Value *MaskVec = getMaskVecValue(CGF, Ops[2],
                                    ResultTy->getVectorNumElements());
