@@ -20,6 +20,8 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/BinaryFormat/ELF.h"
+#include "llvm/Bitcode/BitcodeReader.h"
+#include "llvm/Bitcode/BitcodeWriter.h"
 #include "llvm/IR/DiagnosticPrinter.h"
 #include "llvm/LTO/Caching.h"
 #include "llvm/LTO/Config.h"
@@ -29,7 +31,6 @@
 #include "llvm/Support/Error.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
-#include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 #include <cstddef>
 #include <memory>
@@ -54,11 +55,11 @@ static void saveBuffer(StringRef Buffer, const Twine &Path) {
 }
 
 static void diagnosticHandler(const DiagnosticInfo &DI) {
-  SmallString<128> ErrStorage;
-  raw_svector_ostream OS(ErrStorage);
+  SmallString<128> S;
+  raw_svector_ostream OS(S);
   DiagnosticPrinterRawOStream DP(OS);
   DI.print(DP);
-  warn(ErrStorage);
+  warn(S);
 }
 
 static void checkError(Error E) {
@@ -66,54 +67,91 @@ static void checkError(Error E) {
                   [&](ErrorInfoBase &EIB) { error(EIB.message()); });
 }
 
-static std::unique_ptr<lto::LTO> createLTO() {
-  lto::Config Conf;
-
-  // LLD supports the new relocations.
-  Conf.Options = InitTargetOptionsFromCodeGenFlags();
-  Conf.Options.RelaxELFRelocations = true;
-
-  // Always emit a section per function/datum with LTO.
-  Conf.Options.FunctionSections = true;
-  Conf.Options.DataSections = true;
-
-  if (Config->Relocatable)
-    Conf.RelocModel = None;
-  else if (Config->Pic)
-    Conf.RelocModel = Reloc::PIC_;
-  else
-    Conf.RelocModel = Reloc::Static;
-  Conf.CodeModel = GetCodeModelFromCMModel();
-  Conf.DisableVerify = Config->DisableVerify;
-  Conf.DiagHandler = diagnosticHandler;
-  Conf.OptLevel = Config->LTOO;
-  Conf.CPU = GetCPUStr();
-
-  // Set up a custom pipeline if we've been asked to.
-  Conf.OptPipeline = Config->LTONewPmPasses;
-  Conf.AAPipeline = Config->LTOAAPipeline;
-
-  // Set up optimization remarks if we've been asked to.
-  Conf.RemarksFilename = Config->OptRemarksFilename;
-  Conf.RemarksWithHotness = Config->OptRemarksWithHotness;
-
-  if (Config->SaveTemps)
-    checkError(Conf.addSaveTemps(std::string(Config->OutputFile) + ".",
-                                 /*UseInputModulePath*/ true));
-
-  lto::ThinBackend Backend;
-  if (Config->ThinLTOJobs != -1u)
-    Backend = lto::createInProcessThinBackend(Config->ThinLTOJobs);
-
-  Conf.SampleProfile = Config->LTOSampleProfile;
-  Conf.UseNewPM = Config->LTONewPassManager;
-  Conf.DebugPassManager = Config->LTODebugPassManager;
-
-  return llvm::make_unique<lto::LTO>(std::move(Conf), Backend,
-                                     Config->LTOPartitions);
+// Creates an empty file to store a list of object files for final
+// linking of distributed ThinLTO.
+static std::unique_ptr<raw_fd_ostream> openFile(StringRef File) {
+  std::error_code EC;
+  auto Ret =
+      llvm::make_unique<raw_fd_ostream>(File, EC, sys::fs::OpenFlags::F_None);
+  if (EC) {
+    error("cannot open " + File + ": " + EC.message());
+    return nullptr;
+  }
+  return Ret;
 }
 
-BitcodeCompiler::BitcodeCompiler() : LTOObj(createLTO()) {
+static std::string getThinLTOOutputFile(StringRef ModulePath) {
+  return lto::getThinLTOOutputFile(ModulePath,
+                                   Config->ThinLTOPrefixReplace.first,
+                                   Config->ThinLTOPrefixReplace.second);
+}
+
+static lto::Config createConfig() {
+  lto::Config C;
+
+  // LLD supports the new relocations.
+  C.Options = InitTargetOptionsFromCodeGenFlags();
+  C.Options.RelaxELFRelocations = true;
+
+  // Always emit a section per function/datum with LTO.
+  C.Options.FunctionSections = true;
+  C.Options.DataSections = true;
+
+  if (Config->Relocatable)
+    C.RelocModel = None;
+  else if (Config->Pic)
+    C.RelocModel = Reloc::PIC_;
+  else
+    C.RelocModel = Reloc::Static;
+
+  C.CodeModel = GetCodeModelFromCMModel();
+  C.DisableVerify = Config->DisableVerify;
+  C.DiagHandler = diagnosticHandler;
+  C.OptLevel = Config->LTOO;
+  C.CPU = GetCPUStr();
+
+  // Set up a custom pipeline if we've been asked to.
+  C.OptPipeline = Config->LTONewPmPasses;
+  C.AAPipeline = Config->LTOAAPipeline;
+
+  // Set up optimization remarks if we've been asked to.
+  C.RemarksFilename = Config->OptRemarksFilename;
+  C.RemarksWithHotness = Config->OptRemarksWithHotness;
+
+  C.SampleProfile = Config->LTOSampleProfile;
+  C.UseNewPM = Config->LTONewPassManager;
+  C.DebugPassManager = Config->LTODebugPassManager;
+
+  if (Config->SaveTemps)
+    checkError(C.addSaveTemps(Config->OutputFile.str() + ".",
+                              /*UseInputModulePath*/ true));
+  return C;
+}
+
+BitcodeCompiler::BitcodeCompiler() {
+  // Initialize LTOObj.
+  lto::ThinBackend Backend;
+
+  if (Config->ThinLTOIndexOnly) {
+    StringRef Path = Config->ThinLTOIndexOnlyArg;
+    if (!Path.empty())
+      IndexFile = openFile(Path);
+
+    auto OnIndexWrite = [&](const std::string &Identifier) {
+      ObjectToIndexFileState[Identifier] = true;
+    };
+
+    Backend = lto::createWriteIndexesThinBackend(
+        Config->ThinLTOPrefixReplace.first, Config->ThinLTOPrefixReplace.second,
+        Config->ThinLTOEmitImportsFiles, IndexFile.get(), OnIndexWrite);
+  } else if (Config->ThinLTOJobs != -1U) {
+    Backend = lto::createInProcessThinBackend(Config->ThinLTOJobs);
+  }
+
+  LTOObj = llvm::make_unique<lto::LTO>(createConfig(), Backend,
+                                       Config->LTOPartitions);
+
+  // Initialize UsedStartStop.
   for (Symbol *Sym : Symtab->getSymbols()) {
     StringRef Name = Sym->getName();
     for (StringRef Prefix : {"__start_", "__stop_"})
@@ -131,17 +169,20 @@ static void undefine(Symbol *S) {
 
 void BitcodeCompiler::add(BitcodeFile &F) {
   lto::InputFile &Obj = *F.Obj;
-  unsigned SymNum = 0;
-  std::vector<Symbol *> Syms = F.getSymbols();
+  bool IsExec = !Config->Shared && !Config->Relocatable;
+
+  if (Config->ThinLTOIndexOnly)
+    ObjectToIndexFileState.insert({Obj.getName(), false});
+
+  ArrayRef<Symbol *> Syms = F.getSymbols();
+  ArrayRef<lto::InputFile::Symbol> ObjSyms = Obj.symbols();
   std::vector<lto::SymbolResolution> Resols(Syms.size());
 
-  bool IsExecutable = !Config->Shared && !Config->Relocatable;
-
   // Provide a resolution to the LTO API for each symbol.
-  for (const lto::InputFile::Symbol &ObjSym : Obj.symbols()) {
-    Symbol *Sym = Syms[SymNum];
-    lto::SymbolResolution &R = Resols[SymNum];
-    ++SymNum;
+  for (size_t I = 0, E = Syms.size(); I != E; ++I) {
+    Symbol *Sym = Syms[I];
+    const lto::InputFile::Symbol &ObjSym = ObjSyms[I];
+    lto::SymbolResolution &R = Resols[I];
 
     // Ideally we shouldn't check for SF_Undefined but currently IRObjectFile
     // reports two symbols for module ASM defined. Without this check, lld
@@ -161,7 +202,7 @@ void BitcodeCompiler::add(BitcodeFile &F) {
                             UsedStartStop.count(ObjSym.getSectionName());
     const auto *DR = dyn_cast<Defined>(Sym);
     R.FinalDefinitionInLinkageUnit =
-        (IsExecutable || Sym->Visibility != STV_DEFAULT) && DR &&
+        (IsExec || Sym->Visibility != STV_DEFAULT) && DR &&
         // Skip absolute symbols from ELF objects, otherwise PC-rel relocations
         // will be generated by for them, triggering linker errors.
         // Symbol section is always null for bitcode symbols, hence the check
@@ -183,7 +224,6 @@ void BitcodeCompiler::add(BitcodeFile &F) {
 // Merge all the bitcode files we have seen, codegen the result
 // and return the resulting ObjectFile(s).
 std::vector<InputFile *> BitcodeCompiler::compile() {
-  std::vector<InputFile *> Ret;
   unsigned MaxTasks = LTOObj->getMaxTasks();
   Buff.resize(MaxTasks);
   Files.resize(MaxTasks);
@@ -206,9 +246,53 @@ std::vector<InputFile *> BitcodeCompiler::compile() {
       },
       Cache));
 
+  // Emit empty index files for non-indexed files
+  if (Config->ThinLTOIndexOnly) {
+    for (auto &Identifier : ObjectToIndexFileState)
+      if (!Identifier.getValue()) {
+        std::string Path = getThinLTOOutputFile(Identifier.getKey());
+        openFile(Path + ".thinlto.bc");
+
+        if (Config->ThinLTOEmitImportsFiles)
+          openFile(Path + ".imports");
+      }
+  }
+
+  // If LazyObjFile has not been added to link, emit empty index files.
+  // This is needed because this is what GNU gold plugin does and we have a
+  // distributed build system that depends on that behavior.
+  if (Config->ThinLTOIndexOnly) {
+    for (LazyObjFile *F : LazyObjFiles) {
+      if (F->AddedToLink || !isBitcode(F->MB))
+        continue;
+
+      std::string Path = getThinLTOOutputFile(F->getName());
+      std::unique_ptr<raw_fd_ostream> OS = openFile(Path + ".thinlto.bc");
+      if (!OS)
+        continue;
+
+      ModuleSummaryIndex M(false);
+      M.setSkipModuleByDistributedBackend();
+      WriteIndexToFile(M, *OS);
+
+      if (Config->ThinLTOEmitImportsFiles)
+        openFile(Path + ".imports");
+    }
+
+    if (!Config->LTOObjPath.empty())
+      saveBuffer(Buff[0], Config->LTOObjPath);
+
+    // ThinLTO with index only option is required to generate only the index
+    // files. After that, we exit from linker and ThinLTO backend runs in a
+    // distributed environment.
+    if (IndexFile)
+      IndexFile->close();
+    return {};
+  }
   if (!Config->ThinLTOCacheDir.empty())
     pruneCache(Config->ThinLTOCacheDir, Config->ThinLTOCachePolicy);
 
+  std::vector<InputFile *> Ret;
   for (unsigned I = 0; I != MaxTasks; ++I) {
     if (Buff[I].empty())
       continue;
@@ -225,6 +309,5 @@ std::vector<InputFile *> BitcodeCompiler::compile() {
   for (std::unique_ptr<MemoryBuffer> &File : Files)
     if (File)
       Ret.push_back(createObjectFile(*File));
-
   return Ret;
 }

@@ -1224,8 +1224,12 @@ LLT MachineInstr::getTypeToPrint(unsigned OpIdx, SmallBitVector &PrintedTypes,
   if (PrintedTypes[OpInfo.getGenericTypeIndex()])
     return LLT{};
 
-  PrintedTypes.set(OpInfo.getGenericTypeIndex());
-  return MRI.getType(Op.getReg());
+  LLT TypeToPrint = MRI.getType(Op.getReg());
+  // Don't mark the type index printed if it wasn't actually printed: maybe
+  // another operand with the same type index has an actual type attached:
+  if (TypeToPrint.isValid())
+    PrintedTypes.set(OpInfo.getGenericTypeIndex());
+  return TypeToPrint;
 }
 
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
@@ -1302,6 +1306,20 @@ void MachineInstr::print(raw_ostream &OS, ModuleSlotTracker &MST,
     OS << "frame-setup ";
   if (getFlag(MachineInstr::FrameDestroy))
     OS << "frame-destroy ";
+  if (getFlag(MachineInstr::FmNoNans))
+    OS << "nnan ";
+  if (getFlag(MachineInstr::FmNoInfs))
+    OS << "ninf ";
+  if (getFlag(MachineInstr::FmNsz))
+    OS << "nsz ";
+  if (getFlag(MachineInstr::FmArcp))
+    OS << "arcp ";
+  if (getFlag(MachineInstr::FmContract))
+    OS << "contract ";
+  if (getFlag(MachineInstr::FmAfn))
+    OS << "afn ";
+  if (getFlag(MachineInstr::FmReassoc))
+    OS << "reassoc ";
 
   // Print the opcode name.
   if (TII)

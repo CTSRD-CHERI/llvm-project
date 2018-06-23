@@ -176,6 +176,9 @@ public:
   bool operator==(const LLTCodeGen &B) const { return Ty == B.Ty; }
 };
 
+// Track all types that are used so we can emit the corresponding enum.
+std::set<LLTCodeGen> KnownTypes;
+
 class InstructionMatcher;
 /// Convert an MVT to an equivalent LLT if possible, or the invalid LLT() for
 /// MVTs that don't map cleanly to an LLT (e.g., iPTR, *any, ...).
@@ -285,10 +288,14 @@ static Error isTrivialOperatorNode(const TreePatternNode *N) {
     if (Predicate.isImmediatePattern())
       continue;
 
-    if (Predicate.isNonExtLoad())
+    if (Predicate.isNonExtLoad() || Predicate.isAnyExtLoad() ||
+        Predicate.isSignExtLoad() || Predicate.isZeroExtLoad())
       continue;
 
     if (Predicate.isNonTruncStore())
+      continue;
+
+    if (Predicate.isLoad() && Predicate.getMemoryVT())
       continue;
 
     if (Predicate.isLoad() || Predicate.isStore()) {
@@ -407,6 +414,8 @@ public:
   unsigned size() const { return NumElements; }
 };
 
+class Matcher;
+
 /// Holds the contents of a generated MatchTable to enable formatting and the
 /// necessary index tracking needed to support GIM_Try.
 class MatchTable {
@@ -419,10 +428,11 @@ class MatchTable {
   /// The currently defined labels.
   DenseMap<unsigned, unsigned> LabelMap;
   /// Tracks the sum of MatchTableRecord::NumElements as the table is built.
-  unsigned CurrentSize;
-
+  unsigned CurrentSize = 0;
   /// A unique identifier for a MatchTable label.
-  static unsigned CurrentLabelID;
+  unsigned CurrentLabelID = 0;
+  /// Determines if the table should be instrumented for rule coverage tracking.
+  bool IsWithCoverage;
 
 public:
   static MatchTableRecord LineBreak;
@@ -465,7 +475,12 @@ public:
                                 MatchTableRecord::MTRF_CommaFollows);
   }
 
-  MatchTable(unsigned ID) : ID(ID), CurrentSize(0) {}
+  static MatchTable buildTable(ArrayRef<Matcher *> Rules, bool WithCoverage);
+
+  MatchTable(bool WithCoverage, unsigned ID = 0)
+      : ID(ID), IsWithCoverage(WithCoverage) {}
+
+  bool isWithCoverage() const { return IsWithCoverage; }
 
   void push_back(const MatchTableRecord &Value) {
     if (Value.Flags & MatchTableRecord::MTRF_Label)
@@ -474,7 +489,7 @@ public:
     CurrentSize += Value.size();
   }
 
-  unsigned allocateLabelID() const { return CurrentLabelID++; }
+  unsigned allocateLabelID() { return CurrentLabelID++; }
 
   void defineLabel(unsigned LabelID) {
     LabelMap.insert(std::make_pair(LabelID, CurrentSize));
@@ -518,8 +533,6 @@ public:
     OS << "};\n";
   }
 };
-
-unsigned MatchTable::CurrentLabelID = 0;
 
 MatchTableRecord MatchTable::LineBreak = {
     None, "" /* Emit String */, 0 /* Elements */,
@@ -576,6 +589,15 @@ public:
   virtual void emit(MatchTable &Table) = 0;
   virtual std::unique_ptr<PredicateMatcher> forgetFirstCondition() = 0;
 };
+
+MatchTable MatchTable::buildTable(ArrayRef<Matcher *> Rules,
+                                  bool WithCoverage) {
+  MatchTable Table(WithCoverage);
+  for (Matcher *Rule : Rules)
+    Rule->emit(Table);
+
+  return Table << MatchTable::Opcode("GIM_Reject") << MatchTable::LineBreak;
+}
 
 class GroupMatcher : public Matcher {
   SmallVector<std::unique_ptr<PredicateMatcher>, 8> Conditions;
@@ -848,6 +870,8 @@ public:
     IPM_Opcode,
     IPM_ImmPredicate,
     IPM_AtomicOrderingMMO,
+    IPM_MemoryLLTSize,
+    IPM_MemoryVsLLTSize,
     OPM_SameOperand,
     OPM_ComplexPattern,
     OPM_IntrinsicID,
@@ -949,8 +973,6 @@ protected:
   LLTCodeGen Ty;
 
 public:
-  static std::set<LLTCodeGen> KnownTypes;
-
   LLTOperandMatcher(unsigned InsnVarID, unsigned OpIdx, const LLTCodeGen &Ty)
       : OperandPredicateMatcher(OPM_LLT, InsnVarID, OpIdx), Ty(Ty) {
     KnownTypes.insert(Ty);
@@ -973,8 +995,6 @@ public:
           << MatchTable::LineBreak;
   }
 };
-
-std::set<LLTCodeGen> LLTOperandMatcher::KnownTypes;
 
 /// Generates code to check that an operand is a pointer to any address space.
 ///
@@ -1499,6 +1519,82 @@ public:
     Table << MatchTable::Opcode(Opcode) << MatchTable::Comment("MI")
           << MatchTable::IntValue(InsnVarID) << MatchTable::Comment("Order")
           << MatchTable::NamedValue(("(int64_t)AtomicOrdering::" + Order).str())
+          << MatchTable::LineBreak;
+  }
+};
+
+/// Generates code to check that the size of an MMO is exactly N bytes.
+class MemorySizePredicateMatcher : public InstructionPredicateMatcher {
+protected:
+  unsigned MMOIdx;
+  uint64_t Size;
+
+public:
+  MemorySizePredicateMatcher(unsigned InsnVarID, unsigned MMOIdx, unsigned Size)
+      : InstructionPredicateMatcher(IPM_MemoryLLTSize, InsnVarID),
+        MMOIdx(MMOIdx), Size(Size) {}
+
+  static bool classof(const PredicateMatcher *P) {
+    return P->getKind() == IPM_MemoryLLTSize;
+  }
+  bool isIdentical(const PredicateMatcher &B) const override {
+    return InstructionPredicateMatcher::isIdentical(B) &&
+           MMOIdx == cast<MemorySizePredicateMatcher>(&B)->MMOIdx &&
+           Size == cast<MemorySizePredicateMatcher>(&B)->Size;
+  }
+
+  void emitPredicateOpcodes(MatchTable &Table,
+                            RuleMatcher &Rule) const override {
+    Table << MatchTable::Opcode("GIM_CheckMemorySizeEqualTo")
+          << MatchTable::Comment("MI") << MatchTable::IntValue(InsnVarID)
+          << MatchTable::Comment("MMO") << MatchTable::IntValue(MMOIdx)
+          << MatchTable::Comment("Size") << MatchTable::IntValue(Size)
+          << MatchTable::LineBreak;
+  }
+};
+
+/// Generates code to check that the size of an MMO is less-than, equal-to, or
+/// greater than a given LLT.
+class MemoryVsLLTSizePredicateMatcher : public InstructionPredicateMatcher {
+public:
+  enum RelationKind {
+    GreaterThan,
+    EqualTo,
+    LessThan,
+  };
+
+protected:
+  unsigned MMOIdx;
+  RelationKind Relation;
+  unsigned OpIdx;
+
+public:
+  MemoryVsLLTSizePredicateMatcher(unsigned InsnVarID, unsigned MMOIdx,
+                                  enum RelationKind Relation,
+                                  unsigned OpIdx)
+      : InstructionPredicateMatcher(IPM_MemoryVsLLTSize, InsnVarID),
+        MMOIdx(MMOIdx), Relation(Relation), OpIdx(OpIdx) {}
+
+  static bool classof(const PredicateMatcher *P) {
+    return P->getKind() == IPM_MemoryVsLLTSize;
+  }
+  bool isIdentical(const PredicateMatcher &B) const override {
+    return InstructionPredicateMatcher::isIdentical(B) &&
+           MMOIdx == cast<MemoryVsLLTSizePredicateMatcher>(&B)->MMOIdx &&
+           Relation == cast<MemoryVsLLTSizePredicateMatcher>(&B)->Relation &&
+           OpIdx == cast<MemoryVsLLTSizePredicateMatcher>(&B)->OpIdx;
+  }
+
+  void emitPredicateOpcodes(MatchTable &Table,
+                            RuleMatcher &Rule) const override {
+    Table << MatchTable::Opcode(Relation == EqualTo
+                                    ? "GIM_CheckMemorySizeEqualToLLT"
+                                    : Relation == GreaterThan
+                                          ? "GIM_CheckMemorySizeGreaterThanLLT"
+                                          : "GIM_CheckMemorySizeLessThanLLT")
+          << MatchTable::Comment("MI") << MatchTable::IntValue(InsnVarID)
+          << MatchTable::Comment("MMO") << MatchTable::IntValue(MMOIdx)
+          << MatchTable::Comment("OpIdx") << MatchTable::IntValue(OpIdx)
           << MatchTable::LineBreak;
   }
 };
@@ -2483,7 +2579,7 @@ void RuleMatcher::emit(MatchTable &Table) {
   for (const auto &MA : Actions)
     MA->emitActionOpcodes(Table, *this);
 
-  if (GenerateCoverage)
+  if (Table.isWithCoverage())
     Table << MatchTable::Opcode("GIR_Coverage") << MatchTable::IntValue(RuleID)
           << MatchTable::LineBreak;
 
@@ -2606,6 +2702,8 @@ private:
 
   void gatherNodeEquivs();
   Record *findNodeEquiv(Record *N) const;
+  const CodeGenInstruction *getEquivNode(Record &Equiv,
+                                         const TreePatternNode *N) const;
 
   Error importRulePredicates(RuleMatcher &M, ArrayRef<Predicate> Predicates);
   Expected<InstructionMatcher &> createAndImportSelDAGMatcher(
@@ -2652,9 +2750,6 @@ private:
 
   void declareSubtargetFeature(Record *Predicate);
 
-  TreePatternNode *fixupPatternNode(TreePatternNode *N);
-  void fixupPatternTrees(TreePattern *P);
-
   /// Takes a sequence of \p Rules and group them based on the predicates
   /// they share. \p StorageGroupMatcher is used as a memory container
   /// for the group that are created as part of this process.
@@ -2686,8 +2781,11 @@ private:
   ///   # predicate C
   /// \endverbatim
   std::vector<Matcher *> optimizeRules(
-      const std::vector<Matcher *> &Rules,
+      ArrayRef<Matcher *> Rules,
       std::vector<std::unique_ptr<GroupMatcher>> &StorageGroupMatcher);
+
+  MatchTable buildMatchTable(MutableArrayRef<RuleMatcher> Rules, bool Optimize,
+                             bool WithCoverage);
 };
 
 void GlobalISelEmitter::gatherNodeEquivs() {
@@ -2716,9 +2814,22 @@ Record *GlobalISelEmitter::findNodeEquiv(Record *N) const {
   return NodeEquivs.lookup(N);
 }
 
+const CodeGenInstruction *
+GlobalISelEmitter::getEquivNode(Record &Equiv, const TreePatternNode *N) const {
+  for (const auto &Predicate : N->getPredicateFns()) {
+    if (!Equiv.isValueUnset("IfSignExtend") && Predicate.isLoad() &&
+        Predicate.isSignExtLoad())
+      return &Target.getInstruction(Equiv.getValueAsDef("IfSignExtend"));
+    if (!Equiv.isValueUnset("IfZeroExtend") && Predicate.isLoad() &&
+        Predicate.isZeroExtLoad())
+      return &Target.getInstruction(Equiv.getValueAsDef("IfZeroExtend"));
+  }
+  return &Target.getInstruction(Equiv.getValueAsDef("I"));
+}
+
 GlobalISelEmitter::GlobalISelEmitter(RecordKeeper &RK)
-    : RK(RK), CGP(RK, [&](TreePattern *P) { fixupPatternTrees(P); }),
-      Target(CGP.getTargetInfo()), CGRegs(RK, Target.getHwModes()) {}
+    : RK(RK), CGP(RK), Target(CGP.getTargetInfo()),
+      CGRegs(RK, Target.getHwModes()) {}
 
 //===- Emitter ------------------------------------------------------------===//
 
@@ -2758,7 +2869,7 @@ Expected<InstructionMatcher &> GlobalISelEmitter::createAndImportSelDAGMatcher(
     if (!SrcGIEquivOrNull)
       return failedImport("Pattern operator lacks an equivalent Instruction" +
                           explainOperator(Src->getOperator()));
-    SrcGIOrNull = &Target.getInstruction(SrcGIEquivOrNull->getValueAsDef("I"));
+    SrcGIOrNull = getEquivNode(*SrcGIEquivOrNull, Src);
 
     // The operators look good: match the opcode
     InsnMatcher.addPredicate<InstructionOpcodeMatcher>(SrcGIOrNull);
@@ -2783,8 +2894,26 @@ Expected<InstructionMatcher &> GlobalISelEmitter::createAndImportSelDAGMatcher(
       continue;
     }
 
-    // No check required. G_LOAD by itself is a non-extending load.
-    if (Predicate.isNonExtLoad())
+    // G_LOAD is used for both non-extending and any-extending loads. 
+    if (Predicate.isLoad() && Predicate.isNonExtLoad()) {
+      InsnMatcher.addPredicate<MemoryVsLLTSizePredicateMatcher>(
+          0, MemoryVsLLTSizePredicateMatcher::EqualTo, 0);
+      continue;
+    }
+    if (Predicate.isLoad() && Predicate.isAnyExtLoad()) {
+      InsnMatcher.addPredicate<MemoryVsLLTSizePredicateMatcher>(
+          0, MemoryVsLLTSizePredicateMatcher::LessThan, 0);
+      continue;
+    }
+
+    // No check required. We already did it by swapping the opcode.
+    if (!SrcGIEquivOrNull->isValueUnset("IfSignExtend") &&
+        Predicate.isSignExtLoad())
+      continue;
+
+    // No check required. We already did it by swapping the opcode.
+    if (!SrcGIEquivOrNull->isValueUnset("IfZeroExtend") &&
+        Predicate.isZeroExtLoad())
       continue;
 
     // No check required. G_STORE by itself is a non-extending store.
@@ -2799,8 +2928,13 @@ Expected<InstructionMatcher &> GlobalISelEmitter::createAndImportSelDAGMatcher(
         if (!MemTyOrNone)
           return failedImport("MemVT could not be converted to LLT");
 
-        OperandMatcher &OM = InsnMatcher.getOperand(0);
-        OM.addPredicate<LLTOperandMatcher>(MemTyOrNone.getValue());
+        // MMO's work in bytes so we must take care of unusual types like i1
+        // don't round down.
+        unsigned MemSizeInBits =
+            llvm::alignTo(MemTyOrNone->get().getSizeInBits(), 8);
+
+        InsnMatcher.addPredicate<MemorySizePredicateMatcher>(
+            0, MemSizeInBits / 8);
         continue;
       }
     }
@@ -3388,6 +3522,7 @@ Expected<RuleMatcher> GlobalISelEmitter::runOnPattern(const PatternToMatch &P) {
   M.addAction<DebugCommentAction>(llvm::to_string(*P.getSrcPattern()) +
                                   "  =>  " +
                                   llvm::to_string(*P.getDstPattern()));
+  M.addAction<DebugCommentAction>("Rule ID " + llvm::to_string(M.getRuleID()));
 
   if (auto Error = importRulePredicates(M, P.getPredicates()))
     return std::move(Error);
@@ -3644,7 +3779,7 @@ void GlobalISelEmitter::emitImmPredicates(
 }
 
 std::vector<Matcher *> GlobalISelEmitter::optimizeRules(
-    const std::vector<Matcher *> &Rules,
+    ArrayRef<Matcher *> Rules,
     std::vector<std::unique_ptr<GroupMatcher>> &StorageGroupMatcher) {
   std::vector<Matcher *> OptRules;
   // Start with a stupid grouping for now.
@@ -3673,6 +3808,23 @@ std::vector<Matcher *> GlobalISelEmitter::optimizeRules(
   }
   DEBUG(dbgs() << "NbGroup: " << NbGroup << "\n");
   return OptRules;
+}
+
+MatchTable
+GlobalISelEmitter::buildMatchTable(MutableArrayRef<RuleMatcher> Rules,
+                                   bool Optimize, bool WithCoverage) {
+  std::vector<Matcher *> InputRules;
+  for (Matcher &Rule : Rules)
+    InputRules.push_back(&Rule);
+
+  if (!Optimize)
+    return MatchTable::buildTable(InputRules, WithCoverage);
+
+  std::vector<std::unique_ptr<GroupMatcher>> StorageGroupMatcher;
+  std::vector<Matcher *> OptRules =
+      optimizeRules(InputRules, StorageGroupMatcher);
+
+  return MatchTable::buildTable(OptRules, WithCoverage);
 }
 
 void GlobalISelEmitter::run(raw_ostream &OS) {
@@ -3767,12 +3919,13 @@ void GlobalISelEmitter::run(raw_ostream &OS) {
      << "InstructionSelector::ComplexMatcherMemFn ComplexPredicateFns[];\n"
      << "  static " << Target.getName()
      << "InstructionSelector::CustomRendererFn CustomRenderers[];\n"
-     << "bool testImmPredicate_I64(unsigned PredicateID, int64_t Imm) const "
+     << "  bool testImmPredicate_I64(unsigned PredicateID, int64_t Imm) const "
         "override;\n"
-     << "bool testImmPredicate_APInt(unsigned PredicateID, const APInt &Imm) "
+     << "  bool testImmPredicate_APInt(unsigned PredicateID, const APInt &Imm) "
         "const override;\n"
-     << "bool testImmPredicate_APFloat(unsigned PredicateID, const APFloat "
+     << "  bool testImmPredicate_APFloat(unsigned PredicateID, const APFloat "
         "&Imm) const override;\n"
+     << "  const int64_t *getMatchTable() const override;\n"
      << "#endif // ifdef GET_GLOBALISEL_TEMPORARIES_DECL\n\n";
 
   OS << "#ifdef GET_GLOBALISEL_TEMPORARIES_INIT\n"
@@ -3810,7 +3963,7 @@ void GlobalISelEmitter::run(raw_ostream &OS) {
   // Emit a table containing the LLT objects needed by the matcher and an enum
   // for the matcher to reference them with.
   std::vector<LLTCodeGen> TypeObjects;
-  for (const auto &Ty : LLTOperandMatcher::KnownTypes)
+  for (const auto &Ty : KnownTypes)
     TypeObjects.push_back(Ty);
   llvm::sort(TypeObjects.begin(), TypeObjects.end());
   OS << "// LLT Objects.\n"
@@ -3924,20 +4077,6 @@ void GlobalISelEmitter::run(raw_ostream &OS) {
        << ", // " << Record->getName() << "\n";
   OS << "};\n\n";
 
-  OS << "bool " << Target.getName()
-     << "InstructionSelector::selectImpl(MachineInstr &I, CodeGenCoverage "
-        "&CoverageInfo) const {\n"
-     << "  MachineFunction &MF = *I.getParent()->getParent();\n"
-     << "  MachineRegisterInfo &MRI = MF.getRegInfo();\n"
-     << "  // FIXME: This should be computed on a per-function basis rather "
-        "than per-insn.\n"
-     << "  AvailableFunctionFeatures = computeAvailableFunctionFeatures(&STI, "
-        "&MF);\n"
-     << "  const PredicateBitset AvailableFeatures = getAvailableFeatures();\n"
-     << "  NewMIVector OutMIs;\n"
-     << "  State.MIs.clear();\n"
-     << "  State.MIs.push_back(&I);\n\n";
-
   std::stable_sort(Rules.begin(), Rules.end(), [&](const RuleMatcher &A,
                                                    const RuleMatcher &B) {
     int ScoreA = RuleMatcherScores[A.getRuleID()];
@@ -3954,31 +4093,37 @@ void GlobalISelEmitter::run(raw_ostream &OS) {
     }
     return false;
   });
-  std::vector<std::unique_ptr<GroupMatcher>> StorageGroupMatcher;
 
-  std::vector<Matcher *> InputRules;
-  for (Matcher &Rule : Rules)
-    InputRules.push_back(&Rule);
-
-  std::vector<Matcher *> OptRules =
-      OptimizeMatchTable ? optimizeRules(InputRules, StorageGroupMatcher)
-                         : InputRules;
-
-  MatchTable Table(0);
-  for (Matcher *Rule : OptRules)
-    Rule->emit(Table);
-
-  Table << MatchTable::Opcode("GIM_Reject") << MatchTable::LineBreak;
-  Table.emitDeclaration(OS);
-  OS << "  if (executeMatchTable(*this, OutMIs, State, ISelInfo, ";
-  Table.emitUse(OS);
-  OS << ", TII, MRI, TRI, RBI, AvailableFeatures, CoverageInfo)) {\n"
+  OS << "bool " << Target.getName()
+     << "InstructionSelector::selectImpl(MachineInstr &I, CodeGenCoverage "
+        "&CoverageInfo) const {\n"
+     << "  MachineFunction &MF = *I.getParent()->getParent();\n"
+     << "  MachineRegisterInfo &MRI = MF.getRegInfo();\n"
+     << "  // FIXME: This should be computed on a per-function basis rather "
+        "than per-insn.\n"
+     << "  AvailableFunctionFeatures = computeAvailableFunctionFeatures(&STI, "
+        "&MF);\n"
+     << "  const PredicateBitset AvailableFeatures = getAvailableFeatures();\n"
+     << "  NewMIVector OutMIs;\n"
+     << "  State.MIs.clear();\n"
+     << "  State.MIs.push_back(&I);\n\n"
+     << "  if (executeMatchTable(*this, OutMIs, State, ISelInfo"
+     << ", getMatchTable(), TII, MRI, TRI, RBI, AvailableFeatures"
+     << ", CoverageInfo)) {\n"
      << "    return true;\n"
-     << "  }\n\n";
+     << "  }\n\n"
+     << "  return false;\n"
+     << "}\n\n";
 
-  OS << "  return false;\n"
-     << "}\n"
-     << "#endif // ifdef GET_GLOBALISEL_IMPL\n";
+  const MatchTable Table =
+      buildMatchTable(Rules, OptimizeMatchTable, GenerateCoverage);
+  OS << "const int64_t *" << Target.getName()
+     << "InstructionSelector::getMatchTable() const {\n";
+  Table.emitDeclaration(OS);
+  OS << "  return ";
+  Table.emitUse(OS);
+  OS << ";\n}\n";
+  OS << "#endif // ifdef GET_GLOBALISEL_IMPL\n";
 
   OS << "#ifdef GET_GLOBALISEL_PREDICATES_DECL\n"
      << "PredicateBitset AvailableModuleFeatures;\n"
@@ -4005,81 +4150,6 @@ void GlobalISelEmitter::declareSubtargetFeature(Record *Predicate) {
   if (SubtargetFeatures.count(Predicate) == 0)
     SubtargetFeatures.emplace(
         Predicate, SubtargetFeatureInfo(Predicate, SubtargetFeatures.size()));
-}
-
-TreePatternNode *GlobalISelEmitter::fixupPatternNode(TreePatternNode *N) {
-  if (!N->isLeaf()) {
-    for (unsigned I = 0, E = N->getNumChildren(); I < E; ++I) {
-      TreePatternNode *OrigChild = N->getChild(I);
-      TreePatternNode *NewChild = fixupPatternNode(OrigChild);
-      if (OrigChild != NewChild)
-        N->setChild(I, NewChild);
-    }
-
-    if (N->getOperator()->getName() == "ld") {
-      // If it's a signext-load we need to adapt the pattern slightly. We need
-      // to split the node into (sext (ld ...)), remove the <<signext>> predicate,
-      // and then apply the <<signextTY>> predicate by updating the result type
-      // of the load.
-      //
-      // For example:
-      //   (ld:[i32] [iPTR])<<unindexed>><<signext>><<signexti16>>
-      // must be transformed into:
-      //   (sext:[i32] (ld:[i16] [iPTR])<<unindexed>>)
-      //
-      // Likewise for zeroext-load and anyext-load.
-
-      std::vector<TreePredicateFn> Predicates;
-      bool IsSignExtLoad = false;
-      bool IsZeroExtLoad = false;
-      bool IsAnyExtLoad = false;
-      Record *MemVT = nullptr;
-      for (const auto &P : N->getPredicateFns()) {
-        if (P.isLoad() && P.isSignExtLoad()) {
-          IsSignExtLoad = true;
-          continue;
-        }
-        if (P.isLoad() && P.isZeroExtLoad()) {
-          IsZeroExtLoad = true;
-          continue;
-        }
-        if (P.isLoad() && P.isAnyExtLoad()) {
-          IsAnyExtLoad = true;
-          continue;
-        }
-        if (P.isLoad() && P.getMemoryVT()) {
-          MemVT = P.getMemoryVT();
-          continue;
-        }
-        Predicates.push_back(P);
-      }
-
-      if ((IsSignExtLoad || IsZeroExtLoad || IsAnyExtLoad) && MemVT) {
-        assert((IsSignExtLoad + IsZeroExtLoad + IsAnyExtLoad) == 1 &&
-               "IsSignExtLoad, IsZeroExtLoad, IsAnyExtLoad are mutually exclusive");
-        TreePatternNode *Ext = new TreePatternNode(
-            RK.getDef(IsSignExtLoad ? "sext"
-                                    : IsZeroExtLoad ? "zext" : "anyext"),
-            {N}, 1);
-        Ext->setType(0, N->getType(0));
-        N->clearPredicateFns();
-        N->setPredicateFns(Predicates);
-        N->setType(0, getValueType(MemVT));
-        return Ext;
-      }
-    }
-  }
-
-  return N;
-}
-
-void GlobalISelEmitter::fixupPatternTrees(TreePattern *P) {
-  for (unsigned I = 0, E = P->getNumTrees(); I < E; ++I) {
-    TreePatternNode *OrigTree = P->getTree(I);
-    TreePatternNode *NewTree = fixupPatternNode(OrigTree);
-    if (OrigTree != NewTree)
-      P->setTree(I, NewTree);
-  }
 }
 
 std::unique_ptr<PredicateMatcher> RuleMatcher::forgetFirstCondition() {

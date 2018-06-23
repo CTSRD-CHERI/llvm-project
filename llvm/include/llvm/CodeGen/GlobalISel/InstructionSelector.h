@@ -117,6 +117,19 @@ enum {
   GIM_CheckAtomicOrdering,
   GIM_CheckAtomicOrderingOrStrongerThan,
   GIM_CheckAtomicOrderingWeakerThan,
+  /// Check the size of the memory access for the given machine memory operand.
+  /// - InsnID - Instruction ID
+  /// - MMOIdx - MMO index
+  /// - Size - The size in bytes of the memory access
+  GIM_CheckMemorySizeEqualTo,
+  /// Check the size of the memory access for the given machine memory operand
+  /// against the size of an operand.
+  /// - InsnID - Instruction ID
+  /// - MMOIdx - MMO index
+  /// - OpIdx - The operand index to compare the MMO against
+  GIM_CheckMemorySizeEqualToLLT,
+  GIM_CheckMemorySizeLessThanLLT,
+  GIM_CheckMemorySizeGreaterThanLLT,
 
   /// Check the type for the specified operand
   /// - InsnID - Instruction ID
@@ -221,6 +234,7 @@ enum {
   /// Add a temporary register to the specified instruction
   /// - InsnID - Instruction ID to modify
   /// - TempRegID - The temporary register ID to add
+  /// - TempRegFlags - The register flags to set
   GIR_AddTempRegister,
   /// Add an immediate to the specified instruction
   /// - InsnID - Instruction ID to modify
@@ -246,6 +260,12 @@ enum {
   /// - OldInsnID - Instruction ID to copy from
   /// The operand index is implicitly 1.
   GIR_CopyConstantAsSImm,
+
+  /// Render a G_FCONSTANT operator as a sign-extended immediate.
+  /// - NewInsnID - Instruction ID to modify
+  /// - OldInsnID - Instruction ID to copy from
+  /// The operand index is implicitly 1.
+  GIR_CopyFConstantAsFPImm,
 
   /// Constrain an instruction operand to a register class.
   /// - InsnID - Instruction ID to modify
@@ -276,6 +296,8 @@ enum {
   /// Increment the rule coverage counter.
   /// - RuleID - The ID of the rule that was covered.
   GIR_Coverage,
+
+  GIU_NumOpcodes,
 };
 
 enum {
@@ -340,6 +362,10 @@ protected:
       MachineRegisterInfo &MRI, const TargetRegisterInfo &TRI,
       const RegisterBankInfo &RBI, const PredicateBitset &AvailableFeatures,
       CodeGenCoverage &CoverageInfo) const;
+
+  virtual const int64_t *getMatchTable() const {
+    llvm_unreachable("Should have been overridden by tablegen if used");
+  }
 
   virtual bool testImmPredicate_I64(unsigned, int64_t) const {
     llvm_unreachable("Subclasses must override this to use tablegen");

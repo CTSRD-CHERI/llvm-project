@@ -41,7 +41,6 @@ Configuration files:
     Checks:          '-*,some-check'
     WarningsAsErrors: ''
     HeaderFilterRegex: ''
-    AnalyzeTemporaryDtors: false
     FormatStyle:     none
     User:            user
     CheckOptions:
@@ -182,16 +181,6 @@ report to stderr.
                                         cl::init(false),
                                         cl::cat(ClangTidyCategory));
 
-static cl::opt<bool> AnalyzeTemporaryDtors("analyze-temporary-dtors",
-                                           cl::desc(R"(
-Enable temporary destructor-aware analysis in
-clang-analyzer- checks.
-This option overrides the value read from a
-.clang-tidy file.
-)"),
-                                           cl::init(false),
-                                           cl::cat(ClangTidyCategory));
-
 static cl::opt<std::string> ExportFixes("export-fixes", cl::desc(R"(
 YAML file to store suggested fixes in. The
 stored fixes can be applied to the input source
@@ -247,45 +236,6 @@ static void printStats(const ClangTidyStats &Stats) {
   }
 }
 
-static void printProfileData(const ProfileData &Profile,
-                             llvm::raw_ostream &OS) {
-  // Time is first to allow for sorting by it.
-  std::vector<std::pair<llvm::TimeRecord, StringRef>> Timers;
-  TimeRecord Total;
-
-  for (const auto &P : Profile.Records) {
-    Timers.emplace_back(P.getValue(), P.getKey());
-    Total += P.getValue();
-  }
-
-  std::sort(Timers.begin(), Timers.end());
-
-  std::string Line = "===" + std::string(73, '-') + "===\n";
-  OS << Line;
-
-  if (Total.getUserTime())
-    OS << "   ---User Time---";
-  if (Total.getSystemTime())
-    OS << "   --System Time--";
-  if (Total.getProcessTime())
-    OS << "   --User+System--";
-  OS << "   ---Wall Time---";
-  if (Total.getMemUsed())
-    OS << "  ---Mem---";
-  OS << "  --- Name ---\n";
-
-  // Loop through all of the timing data, printing it out.
-  for (auto I = Timers.rbegin(), E = Timers.rend(); I != E; ++I) {
-    I->first.print(Total, OS);
-    OS << I->second << '\n';
-  }
-
-  Total.print(Total, OS);
-  OS << "Total\n";
-  OS << Line << "\n";
-  OS.flush();
-}
-
 static std::unique_ptr<ClangTidyOptionsProvider> createOptionsProvider(
    llvm::IntrusiveRefCntPtr<vfs::FileSystem> FS) {
   ClangTidyGlobalOptions GlobalOptions;
@@ -300,7 +250,6 @@ static std::unique_ptr<ClangTidyOptionsProvider> createOptionsProvider(
   DefaultOptions.WarningsAsErrors = "";
   DefaultOptions.HeaderFilterRegex = HeaderFilter;
   DefaultOptions.SystemHeaders = SystemHeaders;
-  DefaultOptions.AnalyzeTemporaryDtors = AnalyzeTemporaryDtors;
   DefaultOptions.FormatStyle = FormatStyle;
   DefaultOptions.User = llvm::sys::Process::GetEnv("USER");
   // USERNAME is used on Windows.
@@ -316,8 +265,6 @@ static std::unique_ptr<ClangTidyOptionsProvider> createOptionsProvider(
     OverrideOptions.HeaderFilterRegex = HeaderFilter;
   if (SystemHeaders.getNumOccurrences() > 0)
     OverrideOptions.SystemHeaders = SystemHeaders;
-  if (AnalyzeTemporaryDtors.getNumOccurrences() > 0)
-    OverrideOptions.AnalyzeTemporaryDtors = AnalyzeTemporaryDtors;
   if (FormatStyle.getNumOccurrences() > 0)
     OverrideOptions.FormatStyle = FormatStyle;
 
@@ -438,7 +385,6 @@ static int clangTidyMain(int argc, const char **argv) {
     llvm::cl::PrintHelpMessage(/*Hidden=*/false, /*Categorized=*/true);
     return 1;
   }
-  ProfileData Profile;
 
   llvm::InitializeAllTargetInfos();
   llvm::InitializeAllTargetMCs();
@@ -446,7 +392,7 @@ static int clangTidyMain(int argc, const char **argv) {
 
   ClangTidyContext Context(std::move(OwningOptionsProvider));
   runClangTidy(Context, OptionsParser.getCompilations(), PathList, BaseFS,
-               EnableCheckProfile ? &Profile : nullptr);
+               EnableCheckProfile);
   ArrayRef<ClangTidyError> Errors = Context.getErrors();
   bool FoundErrors = llvm::find_if(Errors, [](const ClangTidyError &E) {
                        return E.DiagLevel == ClangTidyError::Error;
@@ -477,9 +423,6 @@ static int clangTidyMain(int argc, const char **argv) {
           << "Found compiler errors, but -fix-errors was not specified.\n"
              "Fixes have NOT been applied.\n\n";
   }
-
-  if (EnableCheckProfile)
-    printProfileData(Profile, llvm::errs());
 
   if (WErrorCount) {
     if (!Quiet) {

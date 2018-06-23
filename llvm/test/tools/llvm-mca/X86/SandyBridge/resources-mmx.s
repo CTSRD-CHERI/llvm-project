@@ -164,7 +164,7 @@ pxor        (%rax), %mm2
 # CHECK-NEXT: [6]: HasSideEffects
 
 # CHECK:      [1]    [2]    [3]    [4]    [5]    [6]	Instructions:
-# CHECK-NEXT:  1      100   0.33    *      *      * 	emms
+# CHECK-NEXT:  31     31    10.33   *      *      * 	emms
 # CHECK-NEXT:  1      1     0.33                    	movd	%eax, %mm2
 # CHECK-NEXT:  1      5     0.50    *               	movd	(%rax), %mm2
 # CHECK-NEXT:  1      1     0.33                    	movd	%mm0, %ecx
@@ -210,11 +210,11 @@ pxor        (%rax), %mm2
 # CHECK-NEXT:  1      3     1.00                    	pcmpgtw	%mm0, %mm2
 # CHECK-NEXT:  2      8     1.00    *               	pcmpgtw	(%rax), %mm2
 # CHECK-NEXT:  1      5     1.00                    	pmaddwd	%mm0, %mm2
-# CHECK-NEXT:  2      11    1.00    *               	pmaddwd	(%rax), %mm2
+# CHECK-NEXT:  2      10    1.00    *               	pmaddwd	(%rax), %mm2
 # CHECK-NEXT:  1      5     1.00                    	pmulhw	%mm0, %mm2
-# CHECK-NEXT:  2      11    1.00    *               	pmulhw	(%rax), %mm2
+# CHECK-NEXT:  2      10    1.00    *               	pmulhw	(%rax), %mm2
 # CHECK-NEXT:  1      5     1.00                    	pmullw	%mm0, %mm2
-# CHECK-NEXT:  2      11    1.00    *               	pmullw	(%rax), %mm2
+# CHECK-NEXT:  2      10    1.00    *               	pmullw	(%rax), %mm2
 # CHECK-NEXT:  1      1     0.33                    	por	%mm0, %mm2
 # CHECK-NEXT:  2      6     0.50    *               	por	(%rax), %mm2
 # CHECK-NEXT:  1      1     1.00                    	pslld	$1, %mm2
@@ -282,11 +282,11 @@ pxor        (%rax), %mm2
 
 # CHECK:      Resource pressure per iteration:
 # CHECK-NEXT: [0]    [1]    [2]    [3]    [4]    [5]    [6.0]  [6.1]
-# CHECK-NEXT:  -      -     10.33  44.33  2.00   46.33  24.00  24.00
+# CHECK-NEXT:  -      -     20.33  54.33  2.00   56.33  24.00  24.00
 
 # CHECK:      Resource pressure by instruction:
 # CHECK-NEXT: [0]    [1]    [2]    [3]    [4]    [5]    [6.0]  [6.1]  	Instructions:
-# CHECK-NEXT:  -      -     0.33   0.33    -     0.33    -      -     	emms
+# CHECK-NEXT:  -      -     10.33  10.33   -     10.33   -      -     	emms
 # CHECK-NEXT:  -      -     0.33   0.33    -     0.33    -      -     	movd	%eax, %mm2
 # CHECK-NEXT:  -      -      -      -      -      -     0.50   0.50   	movd	(%rax), %mm2
 # CHECK-NEXT:  -      -     0.33   0.33    -     0.33    -      -     	movd	%mm0, %ecx

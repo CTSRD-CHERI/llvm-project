@@ -4168,7 +4168,7 @@ SDValue SITargetLowering::lowerINSERT_VECTOR_ELT(SDValue Op,
 
   // Convert vector index to bit-index.
   SDValue ScaledIdx = DAG.getNode(ISD::SHL, SL, MVT::i32, Idx,
-                                  DAG.getConstant(16, SL, MVT::i32));
+                                  DAG.getConstant(4, SL, MVT::i32));
 
   SDValue BCVec = DAG.getNode(ISD::BITCAST, SL, MVT::i32, Vec);
 
@@ -4216,10 +4216,10 @@ SDValue SITargetLowering::lowerEXTRACT_VECTOR_ELT(SDValue Op,
     return DAG.getNode(ISD::BITCAST, SL, ResultVT, Result);
   }
 
-  SDValue Sixteen = DAG.getConstant(16, SL, MVT::i32);
+  SDValue Four = DAG.getConstant(4, SL, MVT::i32);
 
-  // Convert vector index to bit-index.
-  SDValue ScaledIdx = DAG.getNode(ISD::SHL, SL, MVT::i32, Idx, Sixteen);
+  // Convert vector index to bit-index (* 16)
+  SDValue ScaledIdx = DAG.getNode(ISD::SHL, SL, MVT::i32, Idx, Four);
 
   SDValue BC = DAG.getNode(ISD::BITCAST, SL, MVT::i32, Vec);
   SDValue Elt = DAG.getNode(ISD::SRL, SL, MVT::i32, BC, ScaledIdx);
@@ -5347,8 +5347,7 @@ SDValue SITargetLowering::lowerFastUnsafeFDIV(SDValue Op,
   SDValue RHS = Op.getOperand(1);
   EVT VT = Op.getValueType();
   const SDNodeFlags Flags = Op->getFlags();
-  bool Unsafe = DAG.getTarget().Options.UnsafeFPMath ||
-                Flags.hasUnsafeAlgebra() || Flags.hasAllowReciprocal();
+  bool Unsafe = DAG.getTarget().Options.UnsafeFPMath || Flags.hasAllowReciprocal();
 
   if (!Unsafe && VT == MVT::f32 && Subtarget->hasFP32Denormals())
     return SDValue();
@@ -6698,8 +6697,8 @@ unsigned SITargetLowering::getFusedOpcode(const SelectionDAG &DAG,
 
   const TargetOptions &Options = DAG.getTarget().Options;
   if ((Options.AllowFPOpFusion == FPOpFusion::Fast || Options.UnsafeFPMath ||
-       (N0->getFlags().hasUnsafeAlgebra() &&
-        N1->getFlags().hasUnsafeAlgebra())) &&
+       (N0->getFlags().hasAllowContract() &&
+        N1->getFlags().hasAllowContract())) &&
       isFMAFasterThanFMulAndFAdd(VT)) {
     return ISD::FMA;
   }
@@ -6755,7 +6754,7 @@ SDValue SITargetLowering::performAddCombine(SDNode *N,
     return SDValue();
   }
 
-  if (VT != MVT::i32)
+  if (VT != MVT::i32 || !DCI.isAfterLegalizeDAG())
     return SDValue();
 
   // add x, zext (setcc) => addcarry x, 0, setcc

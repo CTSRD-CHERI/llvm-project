@@ -482,9 +482,6 @@ void SDNode::print_details(raw_ostream &OS, const SelectionDAG *G) const {
   if (getFlags().hasExact())
     OS << " exact";
 
-  if (getFlags().hasUnsafeAlgebra())
-    OS << " unsafe";
-
   if (getFlags().hasNoNaNs())
     OS << " nnan";
 
@@ -499,6 +496,12 @@ void SDNode::print_details(raw_ostream &OS, const SelectionDAG *G) const {
 
   if (getFlags().hasAllowContract())
     OS << " contract";
+
+  if (getFlags().hasApproximateFuncs())
+    OS << " afn";
+
+  if (getFlags().hasAllowReassociation())
+    OS << " reassoc";
 
   if (getFlags().hasVectorReduction())
     OS << " vector-reduction";

@@ -66,16 +66,18 @@ RCParser::ParseType RCParser::parseSingleResource() {
 
   if (TypeToken->equalsLower("ACCELERATORS"))
     Result = parseAcceleratorsResource();
+  else if (TypeToken->equalsLower("BITMAP"))
+    Result = parseBitmapResource();
   else if (TypeToken->equalsLower("CURSOR"))
     Result = parseCursorResource();
   else if (TypeToken->equalsLower("DIALOG"))
     Result = parseDialogResource(false);
   else if (TypeToken->equalsLower("DIALOGEX"))
     Result = parseDialogResource(true);
-  else if (TypeToken->equalsLower("ICON"))
-    Result = parseIconResource();
   else if (TypeToken->equalsLower("HTML"))
     Result = parseHTMLResource();
+  else if (TypeToken->equalsLower("ICON"))
+    Result = parseIconResource();
   else if (TypeToken->equalsLower("MENU"))
     Result = parseMenuResource();
   else if (TypeToken->equalsLower("VERSIONINFO"))
@@ -208,6 +210,12 @@ Expected<RCInt> RCParser::parseIntExpr2() {
 
 Expected<StringRef> RCParser::readString() {
   if (!isNextTokenKind(Kind::String))
+    return getExpectedError("string");
+  return read().value();
+}
+
+Expected<StringRef> RCParser::readFilename() {
+  if (!isNextTokenKind(Kind::String) && !isNextTokenKind(Kind::Identifier))
     return getExpectedError("string");
   return read().value();
 }
@@ -383,7 +391,7 @@ RCParser::ParseType RCParser::parseAcceleratorsResource() {
 }
 
 RCParser::ParseType RCParser::parseCursorResource() {
-  ASSIGN_OR_RETURN(Arg, readString());
+  ASSIGN_OR_RETURN(Arg, readFilename());
   return llvm::make_unique<CursorResource>(*Arg);
 }
 
@@ -425,8 +433,13 @@ RCParser::ParseType RCParser::parseUserDefinedResource(IntOrString Type) {
     return getExpectedError("filename, '{' or BEGIN");
 
   // Check if this is a file resource.
-  if (look().kind() == Kind::String)
+  switch (look().kind()) {
+  case Kind::String:
+  case Kind::Identifier:
     return llvm::make_unique<UserDefinedResource>(Type, read().value());
+  default:
+    break;
+  }
 
   RETURN_IF_ERROR(consumeType(Kind::BlockBegin));
   std::vector<IntOrString> Data;
@@ -473,24 +486,60 @@ Expected<Control> RCParser::parseControl() {
     Caption = *CaptionResult;
   }
 
-  ASSIGN_OR_RETURN(Args, readIntsWithCommas(5, 8));
+  ASSIGN_OR_RETURN(ID, readInt());
+  RETURN_IF_ERROR(consumeType(Kind::Comma));
 
-  auto TakeOptArg = [&Args](size_t Id) -> Optional<uint32_t> {
-    return Args->size() > Id ? (uint32_t)(*Args)[Id] : Optional<uint32_t>();
-  };
+  IntOrString Class;
+  Optional<uint32_t> Style;
+  if (ClassUpper == "CONTROL") {
+    // CONTROL text, id, class, style, x, y, width, height [, exstyle] [, helpID]
+    ASSIGN_OR_RETURN(ClassStr, readString());
+    RETURN_IF_ERROR(consumeType(Kind::Comma));
+    Class = *ClassStr;
+    ASSIGN_OR_RETURN(StyleVal, readInt());
+    RETURN_IF_ERROR(consumeType(Kind::Comma));
+    Style = *StyleVal;
+  } else {
+    Class = CtlInfo->getValue().CtlClass;
+  }
 
-  return Control(*ClassResult, Caption, (*Args)[0], (*Args)[1], (*Args)[2],
-                 (*Args)[3], (*Args)[4], TakeOptArg(5), TakeOptArg(6),
-                 TakeOptArg(7));
+  // x, y, width, height
+  ASSIGN_OR_RETURN(Args, readIntsWithCommas(4, 4));
+
+  if (ClassUpper != "CONTROL") {
+    if (consumeOptionalType(Kind::Comma)) {
+      ASSIGN_OR_RETURN(Val, readInt());
+      Style = *Val;
+    }
+  }
+
+  Optional<uint32_t> ExStyle;
+  if (consumeOptionalType(Kind::Comma)) {
+    ASSIGN_OR_RETURN(Val, readInt());
+    ExStyle = *Val;
+  }
+  Optional<uint32_t> HelpID;
+  if (consumeOptionalType(Kind::Comma)) {
+    ASSIGN_OR_RETURN(Val, readInt());
+    HelpID = *Val;
+  }
+
+  return Control(*ClassResult, Caption, *ID, (*Args)[0], (*Args)[1],
+                 (*Args)[2], (*Args)[3], Style, ExStyle, HelpID, Class);
+}
+
+RCParser::ParseType RCParser::parseBitmapResource() {
+  ASSIGN_OR_RETURN(Arg, readFilename());
+  return llvm::make_unique<BitmapResource>(*Arg);
 }
 
 RCParser::ParseType RCParser::parseIconResource() {
-  ASSIGN_OR_RETURN(Arg, readString());
+  ASSIGN_OR_RETURN(Arg, readFilename());
   return llvm::make_unique<IconResource>(*Arg);
 }
 
 RCParser::ParseType RCParser::parseHTMLResource() {
-  ASSIGN_OR_RETURN(Arg, readString());
+  ASSIGN_OR_RETURN(Arg, readFilename());
   return llvm::make_unique<HTMLResource>(*Arg);
 }
 
@@ -573,6 +622,7 @@ RCParser::ParseType RCParser::parseStringTableResource() {
     // Some examples in documentation suggest that there might be a comma in
     // between, however we strictly adhere to the single statement definition.
     ASSIGN_OR_RETURN(IDResult, readInt());
+    consumeOptionalType(Kind::Comma);
     ASSIGN_OR_RETURN(StrResult, readString());
     Table->addString(*IDResult, *StrResult);
   }

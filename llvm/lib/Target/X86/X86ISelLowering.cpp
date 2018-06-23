@@ -2839,7 +2839,11 @@ X86TargetLowering::LowerMemArgument(SDValue Chain, CallingConv::ID CallConv,
   if (Flags.isByVal()) {
     unsigned Bytes = Flags.getByValSize();
     if (Bytes == 0) Bytes = 1; // Don't create zero-sized stack objects.
-    int FI = MFI.CreateFixedObject(Bytes, VA.getLocMemOffset(), isImmutable);
+
+    // FIXME: For now, all byval parameter objects are marked as aliasing. This
+    // can be improved with deeper analysis.
+    int FI = MFI.CreateFixedObject(Bytes, VA.getLocMemOffset(), isImmutable,
+                                   /*isAliased=*/true);
     // Adjust SP offset of interrupt parameter.
     if (CallConv == CallingConv::X86_INTR) {
       MFI.setObjectOffset(FI, Offset);
@@ -4743,6 +4747,9 @@ bool X86TargetLowering::isMaskAndCmp0FoldingBeneficial(
 }
 
 bool X86TargetLowering::hasAndNotCompare(SDValue Y) const {
+  // A mask and compare against constant is ok for an 'andn' too
+  // even though the BMI instruction doesn't have an immediate form.
+
   if (!Subtarget.hasBMI())
     return false;
 
@@ -4752,6 +4759,14 @@ bool X86TargetLowering::hasAndNotCompare(SDValue Y) const {
     return false;
 
   return true;
+}
+
+bool X86TargetLowering::hasAndNot(SDValue Y) const {
+  // x86 can't form 'andn' with an immediate.
+  if (isa<ConstantSDNode>(Y))
+    return false;
+
+  return hasAndNotCompare(Y);
 }
 
 MVT X86TargetLowering::hasFastEqualityCompare(unsigned NumBits) const {
@@ -17803,7 +17818,6 @@ SDValue X86TargetLowering::getSqrtEstimate(SDValue Op,
   EVT VT = Op.getValueType();
 
   // SSE1 has rsqrtss and rsqrtps. AVX adds a 256-bit variant for rsqrtps.
-  // TODO: Add support for AVX512 (v16f32).
   // It is likely not profitable to do this for f64 because a double-precision
   // rsqrt estimate with refinement on x86 prior to FMA requires at least 16
   // instructions: convert to single, rsqrtss, convert back to double, refine
@@ -17814,12 +17828,15 @@ SDValue X86TargetLowering::getSqrtEstimate(SDValue Op,
   if ((VT == MVT::f32 && Subtarget.hasSSE1()) ||
       (VT == MVT::v4f32 && Subtarget.hasSSE1() && Reciprocal) ||
       (VT == MVT::v4f32 && Subtarget.hasSSE2() && !Reciprocal) ||
-      (VT == MVT::v8f32 && Subtarget.hasAVX())) {
+      (VT == MVT::v8f32 && Subtarget.hasAVX()) ||
+      (VT == MVT::v16f32 && Subtarget.useAVX512Regs())) {
     if (RefinementSteps == ReciprocalEstimate::Unspecified)
       RefinementSteps = 1;
 
     UseOneConstNR = false;
-    return DAG.getNode(X86ISD::FRSQRT, SDLoc(Op), VT, Op);
+    // There is no FSQRT for 512-bits, but there is RSQRT14.
+    unsigned Opcode = VT == MVT::v16f32 ? X86ISD::RSQRT14 : X86ISD::FRSQRT;
+    return DAG.getNode(Opcode, SDLoc(Op), VT, Op);
   }
   return SDValue();
 }
@@ -17832,7 +17849,6 @@ SDValue X86TargetLowering::getRecipEstimate(SDValue Op, SelectionDAG &DAG,
   EVT VT = Op.getValueType();
 
   // SSE1 has rcpss and rcpps. AVX adds a 256-bit variant for rcpps.
-  // TODO: Add support for AVX512 (v16f32).
   // It is likely not profitable to do this for f64 because a double-precision
   // reciprocal estimate with refinement on x86 prior to FMA requires
   // 15 instructions: convert to single, rcpss, convert back to double, refine
@@ -17841,7 +17857,8 @@ SDValue X86TargetLowering::getRecipEstimate(SDValue Op, SelectionDAG &DAG,
 
   if ((VT == MVT::f32 && Subtarget.hasSSE1()) ||
       (VT == MVT::v4f32 && Subtarget.hasSSE1()) ||
-      (VT == MVT::v8f32 && Subtarget.hasAVX())) {
+      (VT == MVT::v8f32 && Subtarget.hasAVX()) ||
+      (VT == MVT::v16f32 && Subtarget.useAVX512Regs())) {
     // Enable estimate codegen with 1 refinement step for vector division.
     // Scalar division estimates are disabled because they break too much
     // real-world code. These defaults are intended to match GCC behavior.
@@ -17851,7 +17868,9 @@ SDValue X86TargetLowering::getRecipEstimate(SDValue Op, SelectionDAG &DAG,
     if (RefinementSteps == ReciprocalEstimate::Unspecified)
       RefinementSteps = 1;
 
-    return DAG.getNode(X86ISD::FRCP, SDLoc(Op), VT, Op);
+    // There is no FSQRT for 512-bits, but there is RCP14.
+    unsigned Opcode = VT == MVT::v16f32 ? X86ISD::RCP14 : X86ISD::FRCP;
+    return DAG.getNode(Opcode, SDLoc(Op), VT, Op);
   }
   return SDValue();
 }

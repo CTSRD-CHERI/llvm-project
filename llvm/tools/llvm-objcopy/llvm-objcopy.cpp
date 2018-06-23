@@ -28,6 +28,7 @@
 #include "llvm/Support/ErrorOr.h"
 #include "llvm/Support/FileOutputBuffer.h"
 #include "llvm/Support/InitLLVM.h"
+#include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 #include <cassert>
@@ -45,17 +46,17 @@ using namespace ELF;
 
 namespace {
 
-enum ID {
+enum ObjcopyID {
   OBJCOPY_INVALID = 0, // This is not an option ID.
 #define OPTION(PREFIX, NAME, ID, KIND, GROUP, ALIAS, ALIASARGS, FLAGS, PARAM,  \
                HELPTEXT, METAVAR, VALUES)                                      \
   OBJCOPY_##ID,
-#include "Opts.inc"
+#include "ObjcopyOpts.inc"
 #undef OPTION
 };
 
 #define PREFIX(NAME, VALUE) const char *const NAME[] = VALUE;
-#include "Opts.inc"
+#include "ObjcopyOpts.inc"
 #undef PREFIX
 
 static const opt::OptTable::Info ObjcopyInfoTable[] = {
@@ -65,13 +66,38 @@ static const opt::OptTable::Info ObjcopyInfoTable[] = {
    METAVAR,         OBJCOPY_##ID, opt::Option::KIND##Class,                    \
    PARAM,           FLAGS,        OBJCOPY_##GROUP,                             \
    OBJCOPY_##ALIAS, ALIASARGS,    VALUES},
-#include "Opts.inc"
+#include "ObjcopyOpts.inc"
 #undef OPTION
 };
 
 class ObjcopyOptTable : public opt::OptTable {
 public:
   ObjcopyOptTable() : OptTable(ObjcopyInfoTable, true) {}
+};
+
+enum StripID {
+  STRIP_INVALID = 0, // This is not an option ID.
+#define OPTION(PREFIX, NAME, ID, KIND, GROUP, ALIAS, ALIASARGS, FLAGS, PARAM,  \
+               HELPTEXT, METAVAR, VALUES)                                      \
+  STRIP_##ID,
+#include "StripOpts.inc"
+#undef OPTION
+};
+
+static const opt::OptTable::Info StripInfoTable[] = {
+#define OPTION(PREFIX, NAME, ID, KIND, GROUP, ALIAS, ALIASARGS, FLAGS, PARAM,  \
+               HELPTEXT, METAVAR, VALUES)                                      \
+  {PREFIX,          NAME,         HELPTEXT,                                    \
+   METAVAR,         STRIP_##ID, opt::Option::KIND##Class,                      \
+   PARAM,           FLAGS,        STRIP_##GROUP,                               \
+   STRIP_##ALIAS, ALIASARGS,    VALUES},
+#include "StripOpts.inc"
+#undef OPTION
+};
+
+class StripOptTable : public opt::OptTable {
+public:
+  StripOptTable() : OptTable(StripInfoTable, true) {}
 };
 
 } // namespace
@@ -122,14 +148,16 @@ struct CopyConfig {
   std::vector<StringRef> SymbolsToGlobalize;
   std::vector<StringRef> SymbolsToWeaken;
   StringMap<StringRef> SymbolsToRename;
-  bool StripAll;
-  bool StripAllGNU;
-  bool StripDebug;
-  bool StripSections;
-  bool StripNonAlloc;
-  bool StripDWO;
-  bool ExtractDWO;
-  bool LocalizeHidden;
+  bool StripAll = false;
+  bool StripAllGNU = false;
+  bool StripDebug = false;
+  bool StripSections = false;
+  bool StripNonAlloc = false;
+  bool StripDWO = false;
+  bool ExtractDWO = false;
+  bool LocalizeHidden = false;
+  bool Weaken = false;
+  bool DiscardAll = false;
 };
 
 using SectionPred = std::function<bool(const SectionBase &Sec)>;
@@ -334,9 +362,21 @@ void HandleArgs(const CopyConfig &Config, Object &Obj, const Reader &Reader,
           Sym.Binding == STB_GLOBAL)
         Sym.Binding = STB_WEAK;
 
+      if (Config.Weaken && Sym.Binding == STB_GLOBAL &&
+          Sym.getShndx() != SHN_UNDEF)
+        Sym.Binding = STB_WEAK;
+
       const auto I = Config.SymbolsToRename.find(Sym.Name);
       if (I != Config.SymbolsToRename.end())
         Sym.Name = I->getValue();
+    });
+
+    Obj.SymbolTable->removeSymbols([&](const Symbol &Sym) {
+      if (Config.DiscardAll && Sym.Binding == STB_LOCAL &&
+          Sym.getShndx() != SHN_UNDEF && Sym.Type != STT_FILE &&
+          Sym.Type != STT_SECTION)
+        return true;
+      return false;
     });
   }
 }
@@ -369,8 +409,13 @@ CopyConfig ParseObjcopyOptions(ArrayRef<const char *> ArgsArr) {
   unsigned MissingArgumentIndex, MissingArgumentCount;
   llvm::opt::InputArgList InputArgs =
       T.ParseArgs(ArgsArr, MissingArgumentIndex, MissingArgumentCount);
-
-  if (InputArgs.size() == 0 || InputArgs.hasArg(OBJCOPY_help)) {
+  
+  if (InputArgs.size() == 0) {
+    T.PrintHelp(errs(), "llvm-objcopy <input> [ <output> ]", "objcopy tool");
+    exit(1);
+  }
+  
+  if (InputArgs.hasArg(OBJCOPY_help)) {
     T.PrintHelp(outs(), "llvm-objcopy <input> [ <output> ]", "objcopy tool");
     exit(0);
   }
@@ -423,6 +468,8 @@ CopyConfig ParseObjcopyOptions(ArrayRef<const char *> ArgsArr) {
   Config.StripNonAlloc = InputArgs.hasArg(OBJCOPY_strip_non_alloc);
   Config.ExtractDWO = InputArgs.hasArg(OBJCOPY_extract_dwo);
   Config.LocalizeHidden = InputArgs.hasArg(OBJCOPY_localize_hidden);
+  Config.Weaken = InputArgs.hasArg(OBJCOPY_weaken);
+  Config.DiscardAll = InputArgs.hasArg(OBJCOPY_discard_all);
   for (auto Arg : InputArgs.filtered(OBJCOPY_localize_symbol))
     Config.SymbolsToLocalize.push_back(Arg->getValue());
   for (auto Arg : InputArgs.filtered(OBJCOPY_globalize_symbol))
@@ -433,10 +480,55 @@ CopyConfig ParseObjcopyOptions(ArrayRef<const char *> ArgsArr) {
   return Config;
 }
 
+// ParseStripOptions returns the config and sets the input arguments. If a
+// help flag is set then ParseStripOptions will print the help messege and
+// exit.
+CopyConfig ParseStripOptions(ArrayRef<const char *> ArgsArr) {
+  StripOptTable T;
+  unsigned MissingArgumentIndex, MissingArgumentCount;
+  llvm::opt::InputArgList InputArgs =
+      T.ParseArgs(ArgsArr, MissingArgumentIndex, MissingArgumentCount);
+
+  if (InputArgs.size() == 0) {
+    T.PrintHelp(errs(), "llvm-strip <input> [ <output> ]", "strip tool");
+    exit(1);
+  }
+  
+  if (InputArgs.hasArg(STRIP_help)) {
+    T.PrintHelp(outs(), "llvm-strip <input> [ <output> ]", "strip tool");
+    exit(0);
+  }
+
+  SmallVector<const char *, 2> Positional;
+  for (auto Arg : InputArgs.filtered(STRIP_UNKNOWN))
+    error("unknown argument '" + Arg->getAsString(InputArgs) + "'");
+  for (auto Arg : InputArgs.filtered(STRIP_INPUT))
+    Positional.push_back(Arg->getValue());
+
+  if (Positional.empty())
+    error("No input file specified");
+
+  if (Positional.size() > 2)
+    error("Support for multiple input files is not implemented yet");
+
+  CopyConfig Config;
+  Config.InputFilename = Positional[0];
+  Config.OutputFilename = Positional[0];
+
+  // Strip debug info only.
+  Config.StripDebug = InputArgs.hasArg(STRIP_strip_debug);
+  if (!Config.StripDebug)
+    Config.StripAll = true;
+  return Config;
+}
+
 int main(int argc, char **argv) {
   InitLLVM X(argc, argv);
   ToolName = argv[0];
-
-  CopyConfig Config = ParseObjcopyOptions(makeArrayRef(argv + 1, argc));
+  CopyConfig Config;
+  if (sys::path::stem(ToolName).endswith_lower("strip"))
+    Config = ParseStripOptions(makeArrayRef(argv + 1, argc));
+  else
+    Config = ParseObjcopyOptions(makeArrayRef(argv + 1, argc));
   ExecuteElfObjcopy(Config);
 }

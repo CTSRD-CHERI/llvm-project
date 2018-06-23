@@ -347,14 +347,15 @@ define i32 @out_constant_varx_mone(i32 %x, i32 %y, i32 %mask) {
 define i32 @in_constant_varx_mone(i32 %x, i32 %y, i32 %mask) {
 ; CHECK-LABEL: in_constant_varx_mone:
 ; CHECK:       // %bb.0:
-; CHECK-NEXT:    and w8, w0, w2
-; CHECK-NEXT:    orn w0, w8, w2
+; CHECK-NEXT:    bic w8, w2, w0
+; CHECK-NEXT:    mvn w0, w8
 ; CHECK-NEXT:    ret
   %n0 = xor i32 %x, -1 ; %x
   %n1 = and i32 %n0, %mask
   %r = xor i32 %n1, -1
   ret i32 %r
 }
+; This is not a canonical form. Testing for completeness only.
 define i32 @out_constant_varx_mone_invmask(i32 %x, i32 %y, i32 %mask) {
 ; CHECK-LABEL: out_constant_varx_mone_invmask:
 ; CHECK:       // %bb.0:
@@ -367,11 +368,13 @@ define i32 @out_constant_varx_mone_invmask(i32 %x, i32 %y, i32 %mask) {
   %r = or i32 %mx, %my
   ret i32 %r
 }
+; This is not a canonical form. Testing for completeness only.
 define i32 @in_constant_varx_mone_invmask(i32 %x, i32 %y, i32 %mask) {
 ; CHECK-LABEL: in_constant_varx_mone_invmask:
 ; CHECK:       // %bb.0:
-; CHECK-NEXT:    bic w8, w0, w2
-; CHECK-NEXT:    orr w0, w8, w2
+; CHECK-NEXT:    mvn w8, w0
+; CHECK-NEXT:    bic w8, w8, w2
+; CHECK-NEXT:    mvn w0, w8
 ; CHECK-NEXT:    ret
   %notmask = xor i32 %mask, -1
   %n0 = xor i32 %x, -1 ; %x
@@ -406,6 +409,7 @@ define i32 @in_constant_varx_42(i32 %x, i32 %y, i32 %mask) {
   %r = xor i32 %n1, 42
   ret i32 %r
 }
+; This is not a canonical form. Testing for completeness only.
 define i32 @out_constant_varx_42_invmask(i32 %x, i32 %y, i32 %mask) {
 ; CHECK-LABEL: out_constant_varx_42_invmask:
 ; CHECK:       // %bb.0:
@@ -420,6 +424,7 @@ define i32 @out_constant_varx_42_invmask(i32 %x, i32 %y, i32 %mask) {
   %r = or i32 %mx, %my
   ret i32 %r
 }
+; This is not a canonical form. Testing for completeness only.
 define i32 @in_constant_varx_42_invmask(i32 %x, i32 %y, i32 %mask) {
 ; CHECK-LABEL: in_constant_varx_42_invmask:
 ; CHECK:       // %bb.0:
@@ -449,14 +454,15 @@ define i32 @out_constant_mone_vary(i32 %x, i32 %y, i32 %mask) {
 define i32 @in_constant_mone_vary(i32 %x, i32 %y, i32 %mask) {
 ; CHECK-LABEL: in_constant_mone_vary:
 ; CHECK:       // %bb.0:
-; CHECK-NEXT:    bic w8, w1, w2
-; CHECK-NEXT:    orr w0, w2, w8
+; CHECK-NEXT:    bic w8, w2, w1
+; CHECK-NEXT:    eor w0, w8, w1
 ; CHECK-NEXT:    ret
   %n0 = xor i32 -1, %y ; %x
   %n1 = and i32 %n0, %mask
   %r = xor i32 %n1, %y
   ret i32 %r
 }
+; This is not a canonical form. Testing for completeness only.
 define i32 @out_constant_mone_vary_invmask(i32 %x, i32 %y, i32 %mask) {
 ; CHECK-LABEL: out_constant_mone_vary_invmask:
 ; CHECK:       // %bb.0:
@@ -469,11 +475,13 @@ define i32 @out_constant_mone_vary_invmask(i32 %x, i32 %y, i32 %mask) {
   %r = or i32 %mx, %my
   ret i32 %r
 }
+; This is not a canonical form. Testing for completeness only.
 define i32 @in_constant_mone_vary_invmask(i32 %x, i32 %y, i32 %mask) {
 ; CHECK-LABEL: in_constant_mone_vary_invmask:
 ; CHECK:       // %bb.0:
-; CHECK-NEXT:    and w8, w1, w2
-; CHECK-NEXT:    orn w0, w8, w2
+; CHECK-NEXT:    mvn w8, w1
+; CHECK-NEXT:    bic w8, w8, w2
+; CHECK-NEXT:    eor w0, w8, w1
 ; CHECK-NEXT:    ret
   %notmask = xor i32 %mask, -1
   %n0 = xor i32 -1, %y ; %x
@@ -508,6 +516,7 @@ define i32 @in_constant_42_vary(i32 %x, i32 %y, i32 %mask) {
   %r = xor i32 %n1, %y
   ret i32 %r
 }
+; This is not a canonical form. Testing for completeness only.
 define i32 @out_constant_42_vary_invmask(i32 %x, i32 %y, i32 %mask) {
 ; CHECK-LABEL: out_constant_42_vary_invmask:
 ; CHECK:       // %bb.0:
@@ -522,6 +531,7 @@ define i32 @out_constant_42_vary_invmask(i32 %x, i32 %y, i32 %mask) {
   %r = or i32 %mx, %my
   ret i32 %r
 }
+; This is not a canonical form. Testing for completeness only.
 define i32 @in_constant_42_vary_invmask(i32 %x, i32 %y, i32 %mask) {
 ; CHECK-LABEL: in_constant_42_vary_invmask:
 ; CHECK:       // %bb.0:

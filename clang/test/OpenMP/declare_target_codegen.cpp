@@ -18,10 +18,20 @@
 // CHECK-DAG: @d = global i32 0,
 // CHECK-DAG: @c = external global i32,
 
-// CHECK-DAG: define {{.*}}i32 @{{.*}}{{foo|bar|baz2|baz3|FA}}{{.*}}()
+// CHECK-DAG: define {{.*}}i32 @{{.*}}{{foo|bar|baz2|baz3|FA|f_method}}{{.*}}()
+// CHECK-DAG: define {{.*}}void @{{.*}}TemplateClass{{.*}}(%class.TemplateClass* %{{.*}})
+// CHECK-DAG: define {{.*}}i32 @{{.*}}TemplateClass{{.*}}f_method{{.*}}(%class.TemplateClass* %{{.*}})
 
 #ifndef HEADER
 #define HEADER
+
+template <typename T>
+class TemplateClass {
+  T a;
+public:
+  TemplateClass() {}
+  T f_method() const { return a; }
+};
 
 int foo();
 
@@ -33,7 +43,8 @@ int baz4() { return 5; }
 
 template <typename T>
 T FA() {
-  return T();
+  TemplateClass<T> s;
+  return s.f_method();
 }
 
 #pragma omp declare target
@@ -53,7 +64,7 @@ int bar() { return 1 + foo() + bar() + baz1() + baz2(); }
 int maini1() {
   int a;
   static long aa = 32;
-// CHECK-DAG: define void @__omp_offloading_{{.*}}maini1{{.*}}_l[[@LINE+1]](i32* dereferenceable{{.*}}, i64 {{.*}}, i64 {{.*}})
+// CHECK-DAG: define weak void @__omp_offloading_{{.*}}maini1{{.*}}_l[[@LINE+1]](i32* dereferenceable{{.*}}, i64 {{.*}}, i64 {{.*}})
 #pragma omp target map(tofrom \
                        : a, b)
   {
@@ -66,7 +77,7 @@ int maini1() {
 
 int baz3() { return 2 + baz2(); }
 int baz2() {
-// CHECK-DAG: define void @__omp_offloading_{{.*}}baz2{{.*}}_l[[@LINE+1]](i64 {{.*}})
+// CHECK-DAG: define weak void @__omp_offloading_{{.*}}baz2{{.*}}_l[[@LINE+1]](i64 {{.*}})
 #pragma omp target
   ++c;
   return 2 + baz3();
