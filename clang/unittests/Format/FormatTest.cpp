@@ -39,8 +39,8 @@ protected:
   std::string format(llvm::StringRef Code,
                      const FormatStyle &Style = getLLVMStyle(),
                      StatusCheck CheckComplete = SC_ExpectComplete) {
-    DEBUG(llvm::errs() << "---\n");
-    DEBUG(llvm::errs() << Code << "\n\n");
+    LLVM_DEBUG(llvm::errs() << "---\n");
+    LLVM_DEBUG(llvm::errs() << Code << "\n\n");
     std::vector<tooling::Range> Ranges(1, tooling::Range(0, Code.size()));
     FormattingAttemptStatus Status;
     tooling::Replacements Replaces =
@@ -53,7 +53,7 @@ protected:
     ReplacementCount = Replaces.size();
     auto Result = applyAllReplacements(Code, Replaces);
     EXPECT_TRUE(static_cast<bool>(Result));
-    DEBUG(llvm::errs() << "\n" << *Result << "\n\n");
+    LLVM_DEBUG(llvm::errs() << "\n" << *Result << "\n\n");
     return *Result;
   }
 
@@ -5475,7 +5475,7 @@ TEST_F(FormatTest, WrapsTemplateDeclarations) {
                "    const typename aaaaaaaaaaaaaaaa aaaaaaaaaaaaaaaaaaa);");
 
   FormatStyle AlwaysBreak = getLLVMStyle();
-  AlwaysBreak.AlwaysBreakTemplateDeclarations = true;
+  AlwaysBreak.AlwaysBreakTemplateDeclarations = FormatStyle::BTDS_Yes;
   verifyFormat("template <typename T>\nclass C {};", AlwaysBreak);
   verifyFormat("template <typename T>\nvoid f();", AlwaysBreak);
   verifyFormat("template <typename T>\nvoid f() {}", AlwaysBreak);
@@ -5493,6 +5493,32 @@ TEST_F(FormatTest, WrapsTemplateDeclarations) {
                "public:\n"
                "  E *f();\n"
                "};");
+
+  FormatStyle NeverBreak = getLLVMStyle();
+  NeverBreak.AlwaysBreakTemplateDeclarations = FormatStyle::BTDS_No;
+  verifyFormat("template <typename T> class C {};", NeverBreak);
+  verifyFormat("template <typename T> void f();", NeverBreak);
+  verifyFormat("template <typename T> void f() {}", NeverBreak);
+  verifyFormat("template <typename T>\nvoid foo(aaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbb) {}",
+               NeverBreak);
+  verifyFormat("void aaaaaaaaaaaaaaaaaaa<aaaaaaaaaaaaaaaaaaaaaaaaaaaaa,\n"
+               "                         bbbbbbbbbbbbbbbbbbbbbbbbbbbb>(\n"
+               "    ccccccccccccccccccccccccccccccccccccccccccccccc);",
+               NeverBreak);
+  verifyFormat("template <template <typename> class Fooooooo,\n"
+               "          template <typename> class Baaaaaaar>\n"
+               "struct C {};",
+               NeverBreak);
+  verifyFormat("template <typename T> // T can be A, B or C.\n"
+               "struct C {};",
+               NeverBreak);
+  verifyFormat("template <enum E> class A {\n"
+               "public:\n"
+               "  E *f();\n"
+               "};", NeverBreak);
+  NeverBreak.PenaltyBreakTemplateDeclaration = 100;
+  verifyFormat("template <typename T> void\nfoo(aaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbb) {}",
+               NeverBreak);
 }
 
 TEST_F(FormatTest, WrapsTemplateParameters) {
@@ -6708,6 +6734,15 @@ TEST_F(FormatTest, LayoutCxx11BraceInitializers) {
                "};");
   verifyFormat("#define A {a, a},");
 
+  // Avoid breaking between equal sign and opening brace
+  FormatStyle AvoidBreakingFirstArgument = getLLVMStyle();
+  AvoidBreakingFirstArgument.PenaltyBreakBeforeFirstCallParameter = 200;
+  verifyFormat("const std::unordered_map<std::string, int> MyHashTable =\n"
+               "    {{\"aaaaaaaaaaaaaaaaaaaaa\", 0},\n"
+               "     {\"bbbbbbbbbbbbbbbbbbbbb\", 1},\n"
+               "     {\"ccccccccccccccccccccc\", 2}};",
+               AvoidBreakingFirstArgument);
+
   // Binpacking only if there is no trailing comma
   verifyFormat("const Aaaaaa aaaaa = {aaaaaaaaaa, bbbbbbbbbb,\n"
                "                      cccccccccc, dddddddddd};",
@@ -6864,6 +6899,21 @@ TEST_F(FormatTest, LayoutCxx11BraceInitializers) {
   verifyFormat("vector<int> foo = { ::SomeGlobalFunction() };", ExtraSpaces);
   verifyFormat("const struct A a = { .a = 1, .b = 2 };", ExtraSpaces);
   verifyFormat("const struct A a = { [0] = 1, [1] = 2 };", ExtraSpaces);
+
+  // Avoid breaking between initializer/equal sign and opening brace
+  ExtraSpaces.PenaltyBreakBeforeFirstCallParameter = 200;
+  verifyFormat("const std::unordered_map<std::string, int> MyHashTable = {\n"
+               "  { \"aaaaaaaaaaaaaaaaaaaaa\", 0 },\n"
+               "  { \"bbbbbbbbbbbbbbbbbbbbb\", 1 },\n"
+               "  { \"ccccccccccccccccccccc\", 2 }\n"
+               "};",
+               ExtraSpaces);
+  verifyFormat("const std::unordered_map<std::string, int> MyHashTable{\n"
+               "  { \"aaaaaaaaaaaaaaaaaaaaa\", 0 },\n"
+               "  { \"bbbbbbbbbbbbbbbbbbbbb\", 1 },\n"
+               "  { \"ccccccccccccccccccccc\", 2 }\n"
+               "};",
+               ExtraSpaces);
 }
 
 TEST_F(FormatTest, FormatsBracedListsInColumnLayout) {
@@ -10416,7 +10466,6 @@ TEST_F(FormatTest, ParsesConfigurationBools) {
   CHECK_PARSE_BOOL(AllowShortCaseLabelsOnASingleLine);
   CHECK_PARSE_BOOL(AllowShortIfStatementsOnASingleLine);
   CHECK_PARSE_BOOL(AllowShortLoopsOnASingleLine);
-  CHECK_PARSE_BOOL(AlwaysBreakTemplateDeclarations);
   CHECK_PARSE_BOOL(BinPackArguments);
   CHECK_PARSE_BOOL(BinPackParameters);
   CHECK_PARSE_BOOL(BreakAfterJavaFieldAnnotations);
@@ -10482,6 +10531,8 @@ TEST_F(FormatTest, ParsesConfiguration) {
               PenaltyBreakAssignment, 1234u);
   CHECK_PARSE("PenaltyBreakBeforeFirstCallParameter: 1234",
               PenaltyBreakBeforeFirstCallParameter, 1234u);
+  CHECK_PARSE("PenaltyBreakTemplateDeclaration: 1234",
+              PenaltyBreakTemplateDeclaration, 1234u);
   CHECK_PARSE("PenaltyExcessCharacter: 1234", PenaltyExcessCharacter, 1234u);
   CHECK_PARSE("PenaltyReturnTypeOnItsOwnLine: 1234",
               PenaltyReturnTypeOnItsOwnLine, 1234u);
@@ -10636,6 +10687,18 @@ TEST_F(FormatTest, ParsesConfiguration) {
               AlwaysBreakAfterReturnType,
               FormatStyle::RTBS_TopLevelDefinitions);
 
+  Style.AlwaysBreakTemplateDeclarations = FormatStyle::BTDS_Yes;
+  CHECK_PARSE("AlwaysBreakTemplateDeclarations: No", AlwaysBreakTemplateDeclarations,
+              FormatStyle::BTDS_No);
+  CHECK_PARSE("AlwaysBreakTemplateDeclarations: MultiLine", AlwaysBreakTemplateDeclarations,
+              FormatStyle::BTDS_MultiLine);
+  CHECK_PARSE("AlwaysBreakTemplateDeclarations: Yes", AlwaysBreakTemplateDeclarations,
+              FormatStyle::BTDS_Yes);
+  CHECK_PARSE("AlwaysBreakTemplateDeclarations: false", AlwaysBreakTemplateDeclarations,
+              FormatStyle::BTDS_MultiLine);
+  CHECK_PARSE("AlwaysBreakTemplateDeclarations: true", AlwaysBreakTemplateDeclarations,
+              FormatStyle::BTDS_Yes);
+
   Style.AlwaysBreakAfterDefinitionReturnType = FormatStyle::DRTBS_All;
   CHECK_PARSE("AlwaysBreakAfterDefinitionReturnType: None",
               AlwaysBreakAfterDefinitionReturnType, FormatStyle::DRTBS_None);
@@ -10665,16 +10728,17 @@ TEST_F(FormatTest, ParsesConfiguration) {
   CHECK_PARSE("ForEachMacros: [BOOST_FOREACH, Q_FOREACH]", ForEachMacros,
               BoostAndQForeach);
 
-  Style.IncludeCategories.clear();
-  std::vector<FormatStyle::IncludeCategory> ExpectedCategories = {{"abc/.*", 2},
-                                                                  {".*", 1}};
+  Style.IncludeStyle.IncludeCategories.clear();
+  std::vector<tooling::IncludeStyle::IncludeCategory> ExpectedCategories = {
+      {"abc/.*", 2}, {".*", 1}};
   CHECK_PARSE("IncludeCategories:\n"
               "  - Regex: abc/.*\n"
               "    Priority: 2\n"
               "  - Regex: .*\n"
               "    Priority: 1",
-              IncludeCategories, ExpectedCategories);
-  CHECK_PARSE("IncludeIsMainRegex: 'abc$'", IncludeIsMainRegex, "abc$");
+              IncludeStyle.IncludeCategories, ExpectedCategories);
+  CHECK_PARSE("IncludeIsMainRegex: 'abc$'", IncludeStyle.IncludeIsMainRegex,
+              "abc$");
 
   Style.RawStringFormats.clear();
   std::vector<FormatStyle::RawStringFormat> ExpectedRawStringFormats = {

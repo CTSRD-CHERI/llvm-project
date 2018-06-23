@@ -87,6 +87,7 @@ protected:
   SDValue performShlCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performSraCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performSrlCombine(SDNode *N, DAGCombinerInfo &DCI) const;
+  SDValue performTruncateCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performMulCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performMulhsCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performMulhuCombine(SDNode *N, DAGCombinerInfo &DCI) const;
@@ -134,6 +135,10 @@ public:
       return Flags.hasNoSignedZeros();
 
     return false;
+  }
+
+  static inline SDValue stripBitcast(SDValue Val) {
+    return Val.getOpcode() == ISD::BITCAST ? Val.getOperand(0) : Val;
   }
 
   static bool allUsesHaveSourceMods(const SDNode *N,

@@ -142,11 +142,11 @@ multiclass sse12_cvt_pint_3addr<bits<8> opc, RegisterClass SrcRC,
   def irr : MMXPI<opc, MRMSrcReg, (outs DstRC:$dst),
                   (ins DstRC:$src1, SrcRC:$src2), asm,
                   [(set DstRC:$dst, (Int DstRC:$src1, SrcRC:$src2))], d>,
-                  Sched<[WriteCvtI2F]>;
+                  Sched<[WriteCvtI2PS]>;
   def irm : MMXPI<opc, MRMSrcMem, (outs DstRC:$dst),
                   (ins DstRC:$src1, x86memop:$src2), asm,
                   [(set DstRC:$dst, (Int DstRC:$src1, (ld_frag addr:$src2)))], d>,
-                  Sched<[WriteCvtI2FLd]>;
+                  Sched<[WriteCvtI2PS.Folded]>;
 }
 
 //===----------------------------------------------------------------------===//
@@ -204,7 +204,7 @@ def MMX_MOVD64to64rr : MMXRI<0x6E, MRMSrcReg, (outs VR64:$dst), (ins GR64:$src),
 let isCodeGenOnly = 1, ForceDisassemble = 1, hasSideEffects = 0, mayLoad = 1 in
 def MMX_MOVD64to64rm : MMXRI<0x6E, MRMSrcMem, (outs VR64:$dst),
                              (ins i64mem:$src), "movq\t{$src, $dst|$dst, $src}",
-                             []>, Sched<[WriteLoad]>;
+                             []>, Sched<[SchedWriteVecMoveLS.MMX.RM]>;
 
 // These are 64 bit moves, but since the OS X assembler doesn't
 // recognize a register-register movq, we write them as
@@ -228,21 +228,21 @@ let isCodeGenOnly = 1, ForceDisassemble = 1, hasSideEffects = 0, mayStore = 1 in
 def MMX_MOVD64from64rm : MMXRI<0x7E, MRMDestMem,
                                (outs), (ins i64mem:$dst, VR64:$src),
                                "movq\t{$src, $dst|$dst, $src}", []>,
-                               Sched<[WriteStore]>;
+                               Sched<[SchedWriteVecMoveLS.MMX.MR]>;
 
-let SchedRW = [WriteLoad] in {
+let SchedRW = [SchedWriteVecMoveLS.MMX.RM] in {
 let canFoldAsLoad = 1 in
 def MMX_MOVQ64rm : MMXI<0x6F, MRMSrcMem, (outs VR64:$dst), (ins i64mem:$src),
                         "movq\t{$src, $dst|$dst, $src}",
                         [(set VR64:$dst, (load_mmx addr:$src))]>;
 } // SchedRW
 
-let SchedRW = [WriteStore] in
+let SchedRW = [SchedWriteVecMoveLS.MMX.MR] in
 def MMX_MOVQ64mr : MMXI<0x7F, MRMDestMem, (outs), (ins i64mem:$dst, VR64:$src),
                         "movq\t{$src, $dst|$dst, $src}",
                         [(store (x86mmx VR64:$src), addr:$dst)]>;
 
-let SchedRW = [WriteVecMove] in {
+let SchedRW = [SchedWriteVecMoveLS.XMM.RR] in {
 def MMX_MOVDQ2Qrr : MMXSDIi8<0xD6, MRMSrcReg, (outs VR64:$dst),
                              (ins VR128:$src), "movdq2q\t{$src, $dst|$dst, $src}",
                              [(set VR64:$dst,
@@ -272,7 +272,7 @@ let Predicates = [HasSSE1] in
 def MMX_MOVNTQmr  : MMXI<0xE7, MRMDestMem, (outs), (ins i64mem:$dst, VR64:$src),
                          "movntq\t{$src, $dst|$dst, $src}",
                          [(int_x86_mmx_movnt_dq addr:$dst, VR64:$src)]>,
-                         Sched<[WriteStore]>;
+                         Sched<[SchedWriteVecMoveLSNT.MMX.MR]>;
 
 let Predicates = [HasMMX] in {
   let AddedComplexity = 15 in
@@ -512,19 +512,19 @@ def MMX_PSHUFWmi : MMXIi8<0x70, MRMSrcMem,
 // -- Conversion Instructions
 defm MMX_CVTPS2PI : sse12_cvt_pint<0x2D, VR128, VR64, int_x86_sse_cvtps2pi,
                       f64mem, load, "cvtps2pi\t{$src, $dst|$dst, $src}",
-                      WriteCvtF2I, SSEPackedSingle>, PS;
+                      WriteCvtPS2I, SSEPackedSingle>, PS;
 defm MMX_CVTPD2PI : sse12_cvt_pint<0x2D, VR128, VR64, int_x86_sse_cvtpd2pi,
                       f128mem, memop, "cvtpd2pi\t{$src, $dst|$dst, $src}",
-                      WriteCvtF2I, SSEPackedDouble>, PD;
+                      WriteCvtPD2I, SSEPackedDouble>, PD;
 defm MMX_CVTTPS2PI : sse12_cvt_pint<0x2C, VR128, VR64, int_x86_sse_cvttps2pi,
                        f64mem, load, "cvttps2pi\t{$src, $dst|$dst, $src}",
-                       WriteCvtF2I, SSEPackedSingle>, PS;
+                       WriteCvtPS2I, SSEPackedSingle>, PS;
 defm MMX_CVTTPD2PI : sse12_cvt_pint<0x2C, VR128, VR64, int_x86_sse_cvttpd2pi,
                        f128mem, memop, "cvttpd2pi\t{$src, $dst|$dst, $src}",
-                       WriteCvtF2I, SSEPackedDouble>, PD;
+                       WriteCvtPD2I, SSEPackedDouble>, PD;
 defm MMX_CVTPI2PD : sse12_cvt_pint<0x2A, VR64, VR128, int_x86_sse_cvtpi2pd,
                          i64mem, load, "cvtpi2pd\t{$src, $dst|$dst, $src}",
-                         WriteCvtI2F, SSEPackedDouble>, PD;
+                         WriteCvtI2PD, SSEPackedDouble>, PD;
 let Constraints = "$src1 = $dst" in {
   defm MMX_CVTPI2PS : sse12_cvt_pint_3addr<0x2A, VR64, VR128,
                          int_x86_sse_cvtpi2ps,

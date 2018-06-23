@@ -184,6 +184,12 @@ TEST(Support, FilenameParent) {
   EXPECT_EQ("\\", path::filename("c:\\", path::Style::windows));
   EXPECT_EQ("c:", path::parent_path("c:\\", path::Style::windows));
 
+  EXPECT_EQ("/", path::filename("///"));
+  EXPECT_EQ("", path::parent_path("///"));
+
+  EXPECT_EQ("\\", path::filename("c:\\\\", path::Style::windows));
+  EXPECT_EQ("c:", path::parent_path("c:\\\\", path::Style::windows));
+
   EXPECT_EQ("bar", path::filename("/foo/bar"));
   EXPECT_EQ("/foo", path::parent_path("/foo/bar"));
 
@@ -204,6 +210,19 @@ TEST(Support, FilenameParent) {
 
   EXPECT_EQ("foo", path::filename("//net/foo"));
   EXPECT_EQ("//net/", path::parent_path("//net/foo"));
+
+  // These checks are just to make sure we do something reasonable with the
+  // paths below. They are not meant to prescribe the one true interpretation of
+  // these paths. Other decompositions (e.g. "//" -> "" + "//") are also
+  // possible.
+  EXPECT_EQ("/", path::filename("//"));
+  EXPECT_EQ("", path::parent_path("//"));
+
+  EXPECT_EQ("\\", path::filename("\\\\", path::Style::windows));
+  EXPECT_EQ("", path::parent_path("\\\\", path::Style::windows));
+
+  EXPECT_EQ("\\", path::filename("\\\\\\", path::Style::windows));
+  EXPECT_EQ("", path::parent_path("\\\\\\", path::Style::windows));
 }
 
 static std::vector<StringRef>
@@ -214,6 +233,8 @@ GetComponents(StringRef Path, path::Style S = path::Style::native) {
 TEST(Support, PathIterator) {
   EXPECT_THAT(GetComponents("/foo"), testing::ElementsAre("/", "foo"));
   EXPECT_THAT(GetComponents("/"), testing::ElementsAre("/"));
+  EXPECT_THAT(GetComponents("//"), testing::ElementsAre("/"));
+  EXPECT_THAT(GetComponents("///"), testing::ElementsAre("/"));
   EXPECT_THAT(GetComponents("c/d/e/foo.txt"),
               testing::ElementsAre("c", "d", "e", "foo.txt"));
   EXPECT_THAT(GetComponents(".c/.d/../."),
@@ -234,10 +255,8 @@ TEST(Support, AbsolutePathIteratorEnd) {
   SmallVector<std::pair<StringRef, path::Style>, 4> Paths;
   Paths.emplace_back("/foo/", path::Style::native);
   Paths.emplace_back("/foo//", path::Style::native);
-  Paths.emplace_back("//net//", path::Style::native);
   Paths.emplace_back("//net/foo/", path::Style::native);
   Paths.emplace_back("c:\\foo\\", path::Style::windows);
-  Paths.emplace_back("c:\\\\", path::Style::windows);
 
   for (auto &Path : Paths) {
     SCOPED_TRACE(Path.first);
@@ -249,6 +268,8 @@ TEST(Support, AbsolutePathIteratorEnd) {
   RootPaths.emplace_back("/", path::Style::native);
   RootPaths.emplace_back("//net/", path::Style::native);
   RootPaths.emplace_back("c:\\", path::Style::windows);
+  RootPaths.emplace_back("//net//", path::Style::native);
+  RootPaths.emplace_back("c:\\\\", path::Style::windows);
 
   for (auto &Path : RootPaths) {
     SCOPED_TRACE(Path.first);
@@ -1125,7 +1146,7 @@ static std::string remove_dots(StringRef path, bool remove_dot_dot,
 TEST(Support, RemoveDots) {
   EXPECT_EQ("foolz\\wat",
             remove_dots(".\\.\\\\foolz\\wat", false, path::Style::windows));
-  EXPECT_EQ("", remove_dots(".\\\\\\\\\\", false, path::Style::windows));
+  EXPECT_EQ(".", remove_dots(".\\\\\\\\\\", false, path::Style::windows));
 
   EXPECT_EQ("a\\..\\b\\c",
             remove_dots(".\\a\\..\\b\\c", false, path::Style::windows));
@@ -1142,7 +1163,8 @@ TEST(Support, RemoveDots) {
 
   EXPECT_EQ("foolz/wat",
             remove_dots("././/foolz/wat", false, path::Style::posix));
-  EXPECT_EQ("", remove_dots("./////", false, path::Style::posix));
+  EXPECT_EQ(".", remove_dots("./////", false, path::Style::posix));
+  EXPECT_EQ(".", remove_dots("", false, path::Style::posix));
 
   EXPECT_EQ("a/../b/c", remove_dots("./a/../b/c", false, path::Style::posix));
   EXPECT_EQ("b/c", remove_dots("./a/../b/c", true, path::Style::posix));

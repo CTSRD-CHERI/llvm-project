@@ -159,9 +159,14 @@ private:
                                 int StreamArg = -1);
   Value *optimizePrintF(CallInst *CI, IRBuilder<> &B);
   Value *optimizeSPrintF(CallInst *CI, IRBuilder<> &B);
+  Value *optimizeSnPrintF(CallInst *CI, IRBuilder<> &B);
   Value *optimizeFPrintF(CallInst *CI, IRBuilder<> &B);
   Value *optimizeFWrite(CallInst *CI, IRBuilder<> &B);
+  Value *optimizeFRead(CallInst *CI, IRBuilder<> &B);
   Value *optimizeFPuts(CallInst *CI, IRBuilder<> &B);
+  Value *optimizeFGets(CallInst *CI, IRBuilder<> &B);
+  Value *optimizeFPutc(CallInst *CI, IRBuilder<> &B);
+  Value *optimizeFGetc(CallInst *CI, IRBuilder<> &B);
   Value *optimizePuts(CallInst *CI, IRBuilder<> &B);
 
   // Helper methods
@@ -172,6 +177,7 @@ private:
                       SmallVectorImpl<CallInst *> &SinCosCalls);
   Value *optimizePrintFString(CallInst *CI, IRBuilder<> &B);
   Value *optimizeSPrintFString(CallInst *CI, IRBuilder<> &B);
+  Value *optimizeSnPrintFString(CallInst *CI, IRBuilder<> &B);
   Value *optimizeFPrintFString(CallInst *CI, IRBuilder<> &B);
 
   /// hasFloatVersion - Checks if there is a float version of the specified

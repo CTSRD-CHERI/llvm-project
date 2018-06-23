@@ -360,8 +360,9 @@ class Test:
         """
         return self.suite.config.is_early
 
-    def getJUnitXML(self):
-        test_name = self.path_in_suite[-1]
+    def writeJUnitXML(self, fil):
+        """Write the test's report xml representation to a file handle."""
+        test_name = escape(self.path_in_suite[-1])
         test_path = self.path_in_suite[:-1]
         safe_test_path = [x.replace(".","_") for x in test_path]
         safe_name = self.suite.name.replace(".","-")
@@ -370,12 +371,17 @@ class Test:
             class_name = safe_name + "." + "/".join(safe_test_path) 
         else:
             class_name = safe_name + "." + safe_name
-
-        xml = "<testcase classname='" + class_name + "' name='" + \
-            test_name + "'"
-        xml += " time='{:.2f}'".format(
-            self.result.elapsed if self.result.elapsed is not None else 0.0)
+        testcase_template = "<testcase classname='{class_name}' name='{test_name}' time='{time:.2f}'"
+        elapsed_time = self.result.elapsed if self.result.elapsed is not None else 0.0
+        testcase_xml = testcase_template.format(class_name=class_name, test_name=test_name, time=elapsed_time)
+        fil.write(testcase_xml)
         if self.result.code.isFailure:
+            fil.write(">\n\t<failure ><![CDATA[")
+            if type(self.result.output) == unicode:
+                encoded_output = self.result.output.encode("utf-8", 'ignore')
+            else:
+                encoded_output = self.result.output
+
             # The Jenkins JUnit XML parser throws an exception if the output
             # contains control characters like \x1b (e.g. if there is some
             # -fcolor-diagnostics output).
@@ -384,13 +390,18 @@ class Test:
             for i in range(31):
                 if chr(i) in ('\t', '\n', '\r'):
                     continue
-                escaped = escaped.replace(chr(i), '\\x' + hex(i)[2:])
-            # Also wrap the output in a CDATA section because escape() only
-            # replaces &, >, < and there may be some other characters in the
-            # output that the parser might not accept outside of CDATA
-            escaped = escaped.replace(']]>', ']]]]><![CDATA[>')
-            xml += ">\n\t<failure >\n<![CDATA[" + escaped + ']]>'
-            xml += "\n\t</failure>\n</testcase>"
+                encoded_output = encoded_output.replace(chr(i), '\\x' + hex(i)[2:])
+            # In the unlikely case that the output contains the CDATA terminator
+            # we wrap it by creating a new CDATA block
+            fil.write(encoded_output.replace("]]>", "]]]]><![CDATA[>"))
+            fil.write("]]></failure>\n</testcase>")
+        elif self.result.code == UNSUPPORTED:
+            unsupported_features = self.getMissingRequiredFeatures()
+            if unsupported_features:
+                skip_message = escape("Skipping because of: " + ", ".join(unsupported_features))
+            else:
+                skip_message = "Skipping because of configuration."
+
+            fil.write(">\n\t<skipped message=\"{}\" />\n</testcase>\n".format(skip_message))
         else:
-            xml += "/>"
-        return xml
+            fil.write("/>")

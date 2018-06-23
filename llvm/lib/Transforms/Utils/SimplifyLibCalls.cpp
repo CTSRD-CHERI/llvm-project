@@ -21,6 +21,7 @@
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/Utils/Local.h"
 #include "llvm/Analysis/ValueTracking.h"
+#include "llvm/Analysis/CaptureTracking.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/IRBuilder.h"
@@ -125,6 +126,28 @@ static Value *convertStrToNumber(CallInst *CI, StringRef &Str, int64_t Base) {
     return nullptr;
 
   return ConstantInt::get(CI->getType(), Result);
+}
+
+static bool isLocallyOpenedFile(Value *File, CallInst *CI, IRBuilder<> &B,
+                                const TargetLibraryInfo *TLI) {
+  CallInst *FOpen = dyn_cast<CallInst>(File);
+  if (!FOpen)
+    return false;
+
+  Function *InnerCallee = FOpen->getCalledFunction();
+  if (!InnerCallee)
+    return false;
+
+  LibFunc Func;
+  if (!TLI->getLibFunc(*InnerCallee, Func) || !TLI->has(Func) ||
+      Func != LibFunc_fopen)
+    return false;
+
+  inferLibFuncAttributes(*CI->getCalledFunction(), *TLI);
+  if (PointerMayBeCaptured(File, true, true))
+    return false;
+
+  return true;
 }
 
 //===----------------------------------------------------------------------===//
@@ -1921,6 +1944,94 @@ Value *LibCallSimplifier::optimizeSPrintF(CallInst *CI, IRBuilder<> &B) {
   return nullptr;
 }
 
+Value *LibCallSimplifier::optimizeSnPrintFString(CallInst *CI, IRBuilder<> &B) {
+  // Check for a fixed format string.
+  StringRef FormatStr;
+  if (!getConstantStringInfo(CI->getArgOperand(2), FormatStr))
+    return nullptr;
+
+  // Check for size
+  ConstantInt *Size = dyn_cast<ConstantInt>(CI->getArgOperand(1));
+  if (!Size)
+    return nullptr;
+
+  uint64_t N = Size->getZExtValue();
+
+  // If we just have a format string (nothing else crazy) transform it.
+  if (CI->getNumArgOperands() == 3) {
+    // Make sure there's no % in the constant array.  We could try to handle
+    // %% -> % in the future if we cared.
+    for (unsigned i = 0, e = FormatStr.size(); i != e; ++i)
+      if (FormatStr[i] == '%')
+        return nullptr; // we found a format specifier, bail out.
+
+    if (N == 0)
+      return ConstantInt::get(CI->getType(), FormatStr.size());
+    else if (N < FormatStr.size() + 1)
+      return nullptr;
+
+    // sprintf(str, size, fmt) -> llvm.memcpy(align 1 str, align 1 fmt,
+    // strlen(fmt)+1)
+    B.CreateMemCpy(
+        CI->getArgOperand(0), 1, CI->getArgOperand(2), 1,
+        ConstantInt::get(DL.getIntPtrType(CI->getContext()),
+                         FormatStr.size() + 1)); // Copy the null byte.
+    return ConstantInt::get(CI->getType(), FormatStr.size());
+  }
+
+  // The remaining optimizations require the format string to be "%s" or "%c"
+  // and have an extra operand.
+  if (FormatStr.size() == 2 && FormatStr[0] == '%' &&
+      CI->getNumArgOperands() == 4) {
+
+    // Decode the second character of the format string.
+    if (FormatStr[1] == 'c') {
+      if (N == 0)
+        return ConstantInt::get(CI->getType(), 1);
+      else if (N == 1)
+        return nullptr;
+
+      // snprintf(dst, size, "%c", chr) --> *(i8*)dst = chr; *((i8*)dst+1) = 0
+      if (!CI->getArgOperand(3)->getType()->isIntegerTy())
+        return nullptr;
+      Value *V = B.CreateTrunc(CI->getArgOperand(3), B.getInt8Ty(), "char");
+      Value *Ptr = castToCStr(CI->getArgOperand(0), B);
+      B.CreateStore(V, Ptr);
+      Ptr = B.CreateGEP(B.getInt8Ty(), Ptr, B.getInt32(1), "nul");
+      B.CreateStore(B.getInt8(0), Ptr);
+
+      return ConstantInt::get(CI->getType(), 1);
+    }
+
+    if (FormatStr[1] == 's') {
+      // snprintf(dest, size, "%s", str) to llvm.memcpy(dest, str, len+1, 1)
+      StringRef Str;
+      if (!getConstantStringInfo(CI->getArgOperand(3), Str))
+        return nullptr;
+
+      if (N == 0)
+        return ConstantInt::get(CI->getType(), Str.size());
+      else if (N < Str.size() + 1)
+        return nullptr;
+
+      B.CreateMemCpy(CI->getArgOperand(0), 1, CI->getArgOperand(3), 1,
+                     ConstantInt::get(CI->getType(), Str.size() + 1));
+
+      // The snprintf result is the unincremented number of bytes in the string.
+      return ConstantInt::get(CI->getType(), Str.size());
+    }
+  }
+  return nullptr;
+}
+
+Value *LibCallSimplifier::optimizeSnPrintF(CallInst *CI, IRBuilder<> &B) {
+  if (Value *V = optimizeSnPrintFString(CI, B)) {
+    return V;
+  }
+
+  return nullptr;
+}
+
 Value *LibCallSimplifier::optimizeFPrintFString(CallInst *CI, IRBuilder<> &B) {
   optimizeErrorReporting(CI, B, 0);
 
@@ -1997,21 +2108,26 @@ Value *LibCallSimplifier::optimizeFWrite(CallInst *CI, IRBuilder<> &B) {
   // Get the element size and count.
   ConstantInt *SizeC = dyn_cast<ConstantInt>(CI->getArgOperand(1));
   ConstantInt *CountC = dyn_cast<ConstantInt>(CI->getArgOperand(2));
-  if (!SizeC || !CountC)
-    return nullptr;
-  uint64_t Bytes = SizeC->getZExtValue() * CountC->getZExtValue();
+  if (SizeC && CountC) {
+    uint64_t Bytes = SizeC->getZExtValue() * CountC->getZExtValue();
 
-  // If this is writing zero records, remove the call (it's a noop).
-  if (Bytes == 0)
-    return ConstantInt::get(CI->getType(), 0);
+    // If this is writing zero records, remove the call (it's a noop).
+    if (Bytes == 0)
+      return ConstantInt::get(CI->getType(), 0);
 
-  // If this is writing one byte, turn it into fputc.
-  // This optimisation is only valid, if the return value is unused.
-  if (Bytes == 1 && CI->use_empty()) { // fwrite(S,1,1,F) -> fputc(S[0],F)
-    Value *Char = B.CreateLoad(castToCStr(CI->getArgOperand(0), B), "char");
-    Value *NewCI = emitFPutC(Char, CI->getArgOperand(3), B, TLI);
-    return NewCI ? ConstantInt::get(CI->getType(), 1) : nullptr;
+    // If this is writing one byte, turn it into fputc.
+    // This optimisation is only valid, if the return value is unused.
+    if (Bytes == 1 && CI->use_empty()) { // fwrite(S,1,1,F) -> fputc(S[0],F)
+      Value *Char = B.CreateLoad(castToCStr(CI->getArgOperand(0), B), "char");
+      Value *NewCI = emitFPutC(Char, CI->getArgOperand(3), B, TLI);
+      return NewCI ? ConstantInt::get(CI->getType(), 1) : nullptr;
+    }
   }
+
+  if (isLocallyOpenedFile(CI->getArgOperand(3), CI, B, TLI))
+    return emitFWriteUnlocked(CI->getArgOperand(0), CI->getArgOperand(1),
+                              CI->getArgOperand(2), CI->getArgOperand(3), B, DL,
+                              TLI);
 
   return nullptr;
 }
@@ -2024,9 +2140,15 @@ Value *LibCallSimplifier::optimizeFPuts(CallInst *CI, IRBuilder<> &B) {
   if (CI->getParent()->getParent()->optForSize())
     return nullptr;
 
-  // We can't optimize if return value is used.
-  if (!CI->use_empty())
-    return nullptr;
+  // Check if has any use
+  if (!CI->use_empty()) {
+    if (isLocallyOpenedFile(CI->getArgOperand(1), CI, B, TLI))
+      return emitFPutSUnlocked(CI->getArgOperand(0), CI->getArgOperand(1), B,
+                               TLI);
+    else
+      // We can't optimize if return value is used.
+      return nullptr;
+  }
 
   // fputs(s,F) --> fwrite(s,1,strlen(s),F)
   uint64_t Len = GetStringLength(CI->getArgOperand(0));
@@ -2038,6 +2160,40 @@ Value *LibCallSimplifier::optimizeFPuts(CallInst *CI, IRBuilder<> &B) {
       CI->getArgOperand(0),
       ConstantInt::get(DL.getIntPtrType(CI->getContext()), Len - 1),
       CI->getArgOperand(1), B, DL, TLI);
+}
+
+Value *LibCallSimplifier::optimizeFPutc(CallInst *CI, IRBuilder<> &B) {
+  optimizeErrorReporting(CI, B, 1);
+
+  if (isLocallyOpenedFile(CI->getArgOperand(1), CI, B, TLI))
+    return emitFPutCUnlocked(CI->getArgOperand(0), CI->getArgOperand(1), B,
+                             TLI);
+
+  return nullptr;
+}
+
+Value *LibCallSimplifier::optimizeFGetc(CallInst *CI, IRBuilder<> &B) {
+  if (isLocallyOpenedFile(CI->getArgOperand(0), CI, B, TLI))
+    return emitFGetCUnlocked(CI->getArgOperand(0), B, TLI);
+
+  return nullptr;
+}
+
+Value *LibCallSimplifier::optimizeFGets(CallInst *CI, IRBuilder<> &B) {
+  if (isLocallyOpenedFile(CI->getArgOperand(2), CI, B, TLI))
+    return emitFGetSUnlocked(CI->getArgOperand(0), CI->getArgOperand(1),
+                             CI->getArgOperand(2), B, TLI);
+
+  return nullptr;
+}
+
+Value *LibCallSimplifier::optimizeFRead(CallInst *CI, IRBuilder<> &B) {
+  if (isLocallyOpenedFile(CI->getArgOperand(3), CI, B, TLI))
+    return emitFReadUnlocked(CI->getArgOperand(0), CI->getArgOperand(1),
+                             CI->getArgOperand(2), CI->getArgOperand(3), B, DL,
+                             TLI);
+
+  return nullptr;
 }
 
 Value *LibCallSimplifier::optimizePuts(CallInst *CI, IRBuilder<> &B) {
@@ -2327,12 +2483,22 @@ Value *LibCallSimplifier::optimizeCall(CallInst *CI) {
       return optimizePrintF(CI, Builder);
     case LibFunc_sprintf:
       return optimizeSPrintF(CI, Builder);
+    case LibFunc_snprintf:
+      return optimizeSnPrintF(CI, Builder);
     case LibFunc_fprintf:
       return optimizeFPrintF(CI, Builder);
     case LibFunc_fwrite:
       return optimizeFWrite(CI, Builder);
+    case LibFunc_fread:
+      return optimizeFRead(CI, Builder);
     case LibFunc_fputs:
       return optimizeFPuts(CI, Builder);
+    case LibFunc_fgets:
+      return optimizeFGets(CI, Builder);
+    case LibFunc_fputc:
+      return optimizeFPutc(CI, Builder);
+    case LibFunc_fgetc:
+      return optimizeFGetc(CI, Builder);
     case LibFunc_puts:
       return optimizePuts(CI, Builder);
     case LibFunc_perror:
@@ -2340,8 +2506,6 @@ Value *LibCallSimplifier::optimizeCall(CallInst *CI) {
     case LibFunc_vfprintf:
     case LibFunc_fiprintf:
       return optimizeErrorReporting(CI, Builder, 0);
-    case LibFunc_fputc:
-      return optimizeErrorReporting(CI, Builder, 1);
     default:
       return nullptr;
     }

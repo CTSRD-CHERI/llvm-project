@@ -124,8 +124,9 @@ void AMDGPUTTIImpl::getUnrollingPreferences(Loop *L, ScalarEvolution &SE,
             continue;
           if (dependsOnLocalPhi(L, Br->getCondition())) {
             UP.Threshold += UnrollThresholdIf;
-            DEBUG(dbgs() << "Set unroll threshold " << UP.Threshold
-                         << " for loop:\n" << *L << " due to " << *Br << '\n');
+            LLVM_DEBUG(dbgs() << "Set unroll threshold " << UP.Threshold
+                              << " for loop:\n"
+                              << *L << " due to " << *Br << '\n');
             if (UP.Threshold >= MaxBoost)
               return;
           }
@@ -201,8 +202,9 @@ void AMDGPUTTIImpl::getUnrollingPreferences(Loop *L, ScalarEvolution &SE,
       // Don't use the maximum allowed value here as it will make some
       // programs way too big.
       UP.Threshold = Threshold;
-      DEBUG(dbgs() << "Set unroll threshold " << Threshold << " for loop:\n"
-                   << *L << " due to " << *GEP << '\n');
+      LLVM_DEBUG(dbgs() << "Set unroll threshold " << Threshold
+                        << " for loop:\n"
+                        << *L << " due to " << *GEP << '\n');
       if (UP.Threshold >= MaxBoost)
         return;
     }
@@ -481,6 +483,22 @@ int AMDGPUTTIImpl::getArithmeticReductionCost(unsigned Opcode, Type *Ty,
 
   std::pair<int, MVT> LT = TLI->getTypeLegalizationCost(DL, Ty);
   return LT.first * getFullRateInstrCost();
+}
+
+int AMDGPUTTIImpl::getMinMaxReductionCost(Type *Ty, Type *CondTy,
+                                          bool IsPairwise,
+                                          bool IsUnsigned) {
+  EVT OrigTy = TLI->getValueType(DL, Ty);
+
+  // Computes cost on targets that have packed math instructions(which support
+  // 16-bit types only).
+  if (IsPairwise ||
+      !ST->hasVOP3PInsts() ||
+      OrigTy.getScalarSizeInBits() != 16)
+    return BaseT::getMinMaxReductionCost(Ty, CondTy, IsPairwise, IsUnsigned);
+
+  std::pair<int, MVT> LT = TLI->getTypeLegalizationCost(DL, Ty);
+  return LT.first * getHalfRateInstrCost();
 }
 
 int AMDGPUTTIImpl::getVectorInstrCost(unsigned Opcode, Type *ValTy,

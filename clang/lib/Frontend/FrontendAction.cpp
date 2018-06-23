@@ -79,7 +79,7 @@ public:
   }
 };
 
-/// \brief Dumps deserialized declarations.
+/// Dumps deserialized declarations.
 class DeserializedDeclsDumper : public DelegatingDeserializationListener {
 public:
   explicit DeserializedDeclsDumper(ASTDeserializationListener *Previous,
@@ -96,7 +96,7 @@ public:
   }
 };
 
-/// \brief Checks deserialized declarations and emits error if a name
+/// Checks deserialized declarations and emits error if a name
 /// matches one given in command-line using -error-on-deserialized-decl.
 class DeserializedDeclsChecker : public DelegatingDeserializationListener {
   ASTContext &Ctx;
@@ -151,6 +151,10 @@ FrontendAction::CreateWrappedASTConsumer(CompilerInstance &CI,
 
   // If there are no registered plugins we don't need to wrap the consumer
   if (FrontendPluginRegistry::begin() == FrontendPluginRegistry::end())
+    return Consumer;
+
+  // If this is a code completion run, avoid invoking the plugin consumers
+  if (CI.hasCodeCompletionConsumer())
     return Consumer;
 
   // Collect the list of plugins that go before the main action (in Consumers)
@@ -282,7 +286,7 @@ static void addHeaderInclude(StringRef HeaderName,
     Includes += "}\n";
 }
 
-/// \brief Collect the set of header includes needed to construct the given 
+/// Collect the set of header includes needed to construct the given 
 /// module and update the TopHeaders file set of the module.
 ///
 /// \param Module The module we're collecting includes from.

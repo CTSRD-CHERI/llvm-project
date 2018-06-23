@@ -1283,7 +1283,7 @@ static bool isCapturedBy(const VarDecl &var, const Expr *e) {
   return false;
 }
 
-/// \brief Determine whether the given initializer is trivial in the sense
+/// Determine whether the given initializer is trivial in the sense
 /// that it requires no code to be generated.
 bool CodeGenFunction::isTrivialInitializer(const Expr *Init) {
   if (!Init)
@@ -1374,7 +1374,7 @@ void CodeGenFunction::EmitAutoVarInit(const AutoVarEmission &emission) {
     llvm::ConstantInt::get(IntPtrTy,
                            getContext().getTypeSizeInChars(type).getQuantity());
 
-  llvm::Type *BP = AllocaInt8PtrTy;
+  llvm::Type *BP = CGM.Int8Ty->getPointerTo(Loc.getAddressSpace());
   if (Loc.getType() != BP)
     Loc = Builder.CreateBitCast(Loc, BP);
 
@@ -1395,11 +1395,10 @@ void CodeGenFunction::EmitAutoVarInit(const AutoVarEmission &emission) {
     // Otherwise, create a temporary global with the initializer then
     // memcpy from the global to the alloca.
     std::string Name = getStaticDeclName(CGM, D);
-    unsigned AS = 0;
-    if (getLangOpts().OpenCL) {
-      AS = CGM.getContext().getTargetAddressSpace(LangAS::opencl_constant);
-      BP = llvm::PointerType::getInt8PtrTy(getLLVMContext(), AS);
-    }
+    unsigned AS = CGM.getContext().getTargetAddressSpace(
+        CGM.getStringLiteralAddressSpace());
+    BP = llvm::PointerType::getInt8PtrTy(getLLVMContext(), AS);
+
     llvm::GlobalVariable *GV =
       new llvm::GlobalVariable(CGM.getModule(), constant->getType(), true,
                                llvm::GlobalValue::PrivateLinkage,
@@ -1955,8 +1954,8 @@ void CodeGenFunction::EmitParmDecl(const VarDecl &D, ParamValue Arg,
     // Push a destructor cleanup for this parameter if the ABI requires it.
     // Don't push a cleanup in a thunk for a method that will also emit a
     // cleanup.
-    if (!IsScalar && !CurFuncIsThunk &&
-        getContext().isParamDestroyedInCallee(Ty)) {
+    if (hasAggregateEvaluationKind(Ty) && !CurFuncIsThunk &&
+        Ty->getAs<RecordType>()->getDecl()->isParamDestroyedInCallee()) {
       if (QualType::DestructionKind DtorKind = Ty.isDestructedType()) {
         assert((DtorKind == QualType::DK_cxx_destructor ||
                 DtorKind == QualType::DK_nontrivial_c_struct) &&

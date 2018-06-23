@@ -1066,7 +1066,7 @@ ARMTargetLowering::ARMTargetLowering(const TargetMachine &TM,
 
   // Thumb-1 cannot currently select ARMISD::SUBE.
   if (!Subtarget->isThumb1Only())
-    setOperationAction(ISD::SETCCE, MVT::i32, Custom);
+    setOperationAction(ISD::SETCCCARRY, MVT::i32, Custom);
 
   setOperationAction(ISD::BRCOND,    MVT::Other, Custom);
   setOperationAction(ISD::BR_CC,     MVT::i32,   Custom);
@@ -5792,16 +5792,22 @@ static SDValue LowerVSETCC(SDValue Op, SelectionDAG &DAG) {
   return Result;
 }
 
-static SDValue LowerSETCCE(SDValue Op, SelectionDAG &DAG) {
+static SDValue LowerSETCCCARRY(SDValue Op, SelectionDAG &DAG) {
   SDValue LHS = Op.getOperand(0);
   SDValue RHS = Op.getOperand(1);
   SDValue Carry = Op.getOperand(2);
   SDValue Cond = Op.getOperand(3);
   SDLoc DL(Op);
 
-  assert(LHS.getSimpleValueType().isInteger() && "SETCCE is integer only.");
+  assert(LHS.getSimpleValueType().isInteger() && "SETCCCARRY is integer only.");
 
-  assert(Carry.getOpcode() != ISD::CARRY_FALSE);
+  // ARMISD::SUBE expects a carry not a borrow like ISD::SUBCARRY so we
+  // have to invert the carry first.
+  Carry = DAG.getNode(ISD::SUB, DL, MVT::i32,
+                      DAG.getConstant(1, DL, MVT::i32), Carry);
+  // This converts the boolean value carry into the carry flag.
+  Carry = ConvertBooleanCarryToCarryFlag(Carry, DAG);
+
   SDVTList VTs = DAG.getVTList(LHS.getValueType(), MVT::i32);
   SDValue Cmp = DAG.getNode(ARMISD::SUBE, DL, VTs, LHS, RHS, Carry);
 
@@ -6835,10 +6841,9 @@ SDValue ARMTargetLowering::ReconstructShuffle(SDValue Op,
   }
 
   // Final sanity check before we try to actually produce a shuffle.
-  DEBUG(
-    for (auto Src : Sources)
-      assert(Src.ShuffleVec.getValueType() == ShuffleVT);
-  );
+  LLVM_DEBUG(for (auto Src
+                  : Sources)
+                 assert(Src.ShuffleVec.getValueType() == ShuffleVT););
 
   // The stars all align, our next step is to produce the mask for the shuffle.
   SmallVector<int, 8> Mask(ShuffleVT.getVectorNumElements(), -1);
@@ -8085,7 +8090,7 @@ static SDValue LowerFPOWI(SDValue Op, const ARMSubtarget &Subtarget,
 }
 
 SDValue ARMTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
-  DEBUG(dbgs() << "Lowering node: "; Op.dump());
+  LLVM_DEBUG(dbgs() << "Lowering node: "; Op.dump());
   switch (Op.getOpcode()) {
   default: llvm_unreachable("Don't know how to custom lower this!");
   case ISD::WRITE_REGISTER: return LowerWRITE_REGISTER(Op, DAG);
@@ -8126,7 +8131,7 @@ SDValue ARMTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
   case ISD::CTTZ_ZERO_UNDEF: return LowerCTTZ(Op.getNode(), DAG, Subtarget);
   case ISD::CTPOP:         return LowerCTPOP(Op.getNode(), DAG, Subtarget);
   case ISD::SETCC:         return LowerVSETCC(Op, DAG);
-  case ISD::SETCCE:        return LowerSETCCE(Op, DAG);
+  case ISD::SETCCCARRY:    return LowerSETCCCARRY(Op, DAG);
   case ISD::ConstantFP:    return LowerConstantFP(Op, DAG, Subtarget);
   case ISD::BUILD_VECTOR:  return LowerBUILD_VECTOR(Op, DAG, Subtarget);
   case ISD::VECTOR_SHUFFLE: return LowerVECTOR_SHUFFLE(Op, DAG);
@@ -10364,6 +10369,7 @@ static SDValue PerformAddcSubcCombine(SDNode *N,
       }
     }
   }
+
   return SDValue();
 }
 
@@ -10532,9 +10538,9 @@ static SDValue PerformSHLSimplify(SDNode *N,
   // Shift left to compensate for the lshr of C1Int.
   SDValue Res = DAG.getNode(ISD::SHL, dl, MVT::i32, BinOp, SHL.getOperand(1));
 
-  DEBUG(dbgs() << "Simplify shl use:\n"; SHL.getOperand(0).dump(); SHL.dump();
-        N->dump());
-  DEBUG(dbgs() << "Into:\n"; X.dump(); BinOp.dump(); Res.dump());
+  LLVM_DEBUG(dbgs() << "Simplify shl use:\n"; SHL.getOperand(0).dump();
+             SHL.dump(); N->dump());
+  LLVM_DEBUG(dbgs() << "Into:\n"; X.dump(); BinOp.dump(); Res.dump());
 
   DAG.ReplaceAllUsesWith(SDValue(N, 0), Res);
   return SDValue(N, 0);
@@ -14809,7 +14815,7 @@ bool ARMTargetLowering::functionArgumentNeedsConsecutiveRegisters(
   HABaseType Base = HA_UNKNOWN;
   uint64_t Members = 0;
   bool IsHA = isHomogeneousAggregate(Ty, Base, Members);
-  DEBUG(dbgs() << "isHA: " << IsHA << " "; Ty->dump());
+  LLVM_DEBUG(dbgs() << "isHA: " << IsHA << " "; Ty->dump());
 
   bool IsIntArray = Ty->isArrayTy() && Ty->getArrayElementType()->isIntegerTy();
   return IsHA || IsIntArray;

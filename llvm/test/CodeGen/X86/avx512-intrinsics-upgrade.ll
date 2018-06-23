@@ -4120,3 +4120,34 @@ define <8 x i64> @test_mul_epu32_rmbkz(<16 x i32> %a, i64* %ptr_b, i8 %mask) {
 }
 
 declare <8 x i64> @llvm.x86.avx512.pmulu.dq.512(<16 x i32>, <16 x i32>)
+
+define <2 x double> @test_x86_avx512_mm_cvtu32_sd(<2 x double> %a, i32 %b)
+; CHECK-LABEL: test_x86_avx512_mm_cvtu32_sd:
+; CHECK:       ## %bb.0:
+; CHECK-NEXT:    vcvtusi2sdl %edi, %xmm0, %xmm0
+; CHECK-NEXT:    retq
+{
+  %res = call <2 x double> @llvm.x86.avx512.cvtusi2sd(<2 x double> %a, i32 %b) ; <<<2 x double>> [#uses=1]
+  ret <2 x double> %res
+}
+declare <2 x double> @llvm.x86.avx512.cvtusi2sd(<2 x double>, i32) nounwind readnone
+
+define <16 x float> @test_x86_vbroadcast_ss_512(i8* %a0) {
+; CHECK-LABEL: test_x86_vbroadcast_ss_512:
+; CHECK:       ## %bb.0:
+; CHECK-NEXT:    vbroadcastss (%rdi), %zmm0
+; CHECK-NEXT:    retq
+  %res = call <16 x float> @llvm.x86.avx512.vbroadcast.ss.512(i8* %a0) ; <<16 x float>> [#uses=1]
+  ret <16 x float> %res
+}
+declare <16 x float> @llvm.x86.avx512.vbroadcast.ss.512(i8*) nounwind readonly
+
+define <8 x double> @test_x86_vbroadcast_sd_512(i8* %a0) {
+; CHECK-LABEL: test_x86_vbroadcast_sd_512:
+; CHECK:       ## %bb.0:
+; CHECK-NEXT:    vbroadcastsd (%rdi), %zmm0
+; CHECK-NEXT:    retq
+  %res = call <8 x double> @llvm.x86.avx512.vbroadcast.sd.512(i8* %a0) ; <<8 x double>> [#uses=1]
+  ret <8 x double> %res
+}
+declare <8 x double> @llvm.x86.avx512.vbroadcast.sd.512(i8*) nounwind readonly

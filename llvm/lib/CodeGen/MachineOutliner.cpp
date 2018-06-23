@@ -1112,11 +1112,11 @@ void MachineOutliner::prune(Candidate &C,
   // Remove C from the CandidateList.
   C.InCandidateList = false;
 
-  DEBUG(dbgs() << "- Removed a Candidate \n";
-        dbgs() << "--- Num fns left for candidate: " << F.getOccurrenceCount()
-               << "\n";
-        dbgs() << "--- Candidate's functions's benefit: " << F.getBenefit()
-               << "\n";);
+  LLVM_DEBUG(dbgs() << "- Removed a Candidate \n";
+             dbgs() << "--- Num fns left for candidate: "
+                    << F.getOccurrenceCount() << "\n";
+             dbgs() << "--- Candidate's functions's benefit: " << F.getBenefit()
+                    << "\n";);
 }
 
 void MachineOutliner::pruneOverlaps(
@@ -1252,6 +1252,14 @@ MachineOutliner::createOutlinedFunction(Module &M, const OutlinedFunction &OF,
   // which gives us better results when we outline from linkonceodr functions.
   F->setLinkage(GlobalValue::InternalLinkage);
   F->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
+
+  // FIXME: Set nounwind, so we don't generate eh_frame? Haven't verified it's
+  // necessary.
+
+  // Set optsize/minsize, so we don't insert padding between outlined
+  // functions.
+  F->addFnAttr(Attribute::OptimizeForSize);
+  F->addFnAttr(Attribute::MinSize);
 
   // Save F so that we can add debug info later if we need to.
   CreatedIRFunctions.push_back(F);
@@ -1441,7 +1449,7 @@ bool MachineOutliner::outline(
     NumOutlined++;
   }
 
-  DEBUG(dbgs() << "OutlinedSomething = " << OutlinedSomething << "\n";);
+  LLVM_DEBUG(dbgs() << "OutlinedSomething = " << OutlinedSomething << "\n";);
 
   return OutlinedSomething;
 }
@@ -1461,8 +1469,9 @@ bool MachineOutliner::runOnModule(Module &M) {
   // Does the target implement the MachineOutliner? If it doesn't, quit here.
   if (!TII->useMachineOutliner()) {
     // No. So we're done.
-    DEBUG(dbgs()
-          << "Skipping pass: Target does not support the MachineOutliner.\n");
+    LLVM_DEBUG(
+        dbgs()
+        << "Skipping pass: Target does not support the MachineOutliner.\n");
     return false;
   }
 

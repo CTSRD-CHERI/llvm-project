@@ -165,18 +165,18 @@ bool BreakFalseDeps::shouldBreakDependence(MachineInstr *MI, unsigned OpIdx,
   unsigned Pref) {
   unsigned reg = MI->getOperand(OpIdx).getReg();
   unsigned Clearance = RDA->getClearance(MI, reg);
-  DEBUG(dbgs() << "Clearance: " << Clearance << ", want " << Pref);
+  LLVM_DEBUG(dbgs() << "Clearance: " << Clearance << ", want " << Pref);
 
   if (Pref > Clearance) {
-    DEBUG(dbgs() << ": Break dependency.\n");
+    LLVM_DEBUG(dbgs() << ": Break dependency.\n");
     return true;
   }
-  DEBUG(dbgs() << ": OK .\n");
+  LLVM_DEBUG(dbgs() << ": OK .\n");
   return false;
 }
 
 void BreakFalseDeps::processDefs(MachineInstr *MI) {
-  assert(!MI->isDebugValue() && "Won't process debug values");
+  assert(!MI->isDebugInstr() && "Won't process debug values");
 
   // Break dependence on undef uses. Do this before updating LiveRegs below.
   unsigned OpNum;
@@ -244,7 +244,7 @@ void BreakFalseDeps::processBasicBlock(MachineBasicBlock *MBB) {
   // and by then we'll have better information, so we can avoid doing the work
   // to try and break dependencies now.
   for (MachineInstr &MI : *MBB) {
-    if (!MI.isDebugValue())
+    if (!MI.isDebugInstr())
       processDefs(&MI);
   }
   processUndefReads(MBB);
@@ -260,7 +260,7 @@ bool BreakFalseDeps::runOnMachineFunction(MachineFunction &mf) {
 
   RegClassInfo.runOnMachineFunction(mf);
 
-  DEBUG(dbgs() << "********** BREAK FALSE DEPENDENCIES **********\n");
+  LLVM_DEBUG(dbgs() << "********** BREAK FALSE DEPENDENCIES **********\n");
 
   // Traverse the basic blocks.
   for (MachineBasicBlock &MBB : mf) {

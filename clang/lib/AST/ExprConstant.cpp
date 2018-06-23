@@ -686,11 +686,11 @@ namespace {
     /// notes attached to it will also be stored, otherwise they will not be.
     bool HasActiveDiagnostic;
 
-    /// \brief Have we emitted a diagnostic explaining why we couldn't constant
+    /// Have we emitted a diagnostic explaining why we couldn't constant
     /// fold (not just why it's not strictly a constant expression)?
     bool HasFoldFailureDiagnostic;
 
-    /// \brief Whether or not we're currently speculatively evaluating.
+    /// Whether or not we're currently speculatively evaluating.
     bool IsSpeculativelyEvaluating;
 
     enum EvaluationMode {
@@ -1720,7 +1720,8 @@ static void NoteLValueLocation(EvalInfo &Info, APValue::LValueBase Base) {
 /// value for an address or reference constant expression. Return true if we
 /// can fold this expression, whether or not it's a constant expression.
 static bool CheckLValueConstantExpression(EvalInfo &Info, SourceLocation Loc,
-                                          QualType Type, const LValue &LVal) {
+                                          QualType Type, const LValue &LVal,
+                                          Expr::ConstExprUsage Usage) {
   bool IsReferenceType = Type->isReferenceType();
 
   APValue::LValueBase Base = LVal.getLValueBase();
@@ -1753,7 +1754,7 @@ static bool CheckLValueConstantExpression(EvalInfo &Info, SourceLocation Loc,
         return false;
 
       // A dllimport variable never acts like a constant.
-      if (Var->hasAttr<DLLImportAttr>())
+      if (Usage == Expr::EvaluateForCodeGen && Var->hasAttr<DLLImportAttr>())
         return false;
     }
     if (const auto *FD = dyn_cast<const FunctionDecl>(VD)) {
@@ -1767,7 +1768,8 @@ static bool CheckLValueConstantExpression(EvalInfo &Info, SourceLocation Loc,
       // The C language has no notion of ODR; furthermore, it has no notion of
       // dynamic initialization.  This means that we are permitted to
       // perform initialization with the address of the thunk.
-      if (Info.getLangOpts().CPlusPlus && FD->hasAttr<DLLImportAttr>())
+      if (Info.getLangOpts().CPlusPlus && Usage == Expr::EvaluateForCodeGen &&
+          FD->hasAttr<DLLImportAttr>())
         return false;
     }
   }
@@ -1800,12 +1802,14 @@ static bool CheckLValueConstantExpression(EvalInfo &Info, SourceLocation Loc,
 static bool CheckMemberPointerConstantExpression(EvalInfo &Info,
                                                  SourceLocation Loc,
                                                  QualType Type,
-                                                 const APValue &Value) {
+                                                 const APValue &Value,
+                                                 Expr::ConstExprUsage Usage) {
   const ValueDecl *Member = Value.getMemberPointerDecl();
   const auto *FD = dyn_cast_or_null<CXXMethodDecl>(Member);
   if (!FD)
     return true;
-  return FD->isVirtual() || !FD->hasAttr<DLLImportAttr>();
+  return Usage == Expr::EvaluateForMangling || FD->isVirtual() ||
+         !FD->hasAttr<DLLImportAttr>();
 }
 
 /// Check that this core constant expression is of literal type, and if not,
@@ -1843,8 +1847,10 @@ static bool CheckLiteralType(EvalInfo &Info, const Expr *E,
 /// Check that this core constant expression value is a valid value for a
 /// constant expression. If not, report an appropriate diagnostic. Does not
 /// check that the expression is of literal type.
-static bool CheckConstantExpression(EvalInfo &Info, SourceLocation DiagLoc,
-                                    QualType Type, const APValue &Value) {
+static bool
+CheckConstantExpression(EvalInfo &Info, SourceLocation DiagLoc, QualType Type,
+                        const APValue &Value,
+                        Expr::ConstExprUsage Usage = Expr::EvaluateForCodeGen) {
   if (Value.isUninit()) {
     Info.FFDiag(DiagLoc, diag::note_constexpr_uninitialized)
       << true << Type;
@@ -1863,28 +1869,28 @@ static bool CheckConstantExpression(EvalInfo &Info, SourceLocation DiagLoc,
     QualType EltTy = Type->castAsArrayTypeUnsafe()->getElementType();
     for (unsigned I = 0, N = Value.getArrayInitializedElts(); I != N; ++I) {
       if (!CheckConstantExpression(Info, DiagLoc, EltTy,
-                                   Value.getArrayInitializedElt(I)))
+                                   Value.getArrayInitializedElt(I), Usage))
         return false;
     }
     if (!Value.hasArrayFiller())
       return true;
-    return CheckConstantExpression(Info, DiagLoc, EltTy,
-                                   Value.getArrayFiller());
+    return CheckConstantExpression(Info, DiagLoc, EltTy, Value.getArrayFiller(),
+                                   Usage);
   }
   if (Value.isUnion() && Value.getUnionField()) {
     return CheckConstantExpression(Info, DiagLoc,
                                    Value.getUnionField()->getType(),
-                                   Value.getUnionValue());
+                                   Value.getUnionValue(), Usage);
   }
   if (Value.isStruct()) {
     RecordDecl *RD = Type->castAs<RecordType>()->getDecl();
     if (const CXXRecordDecl *CD = dyn_cast<CXXRecordDecl>(RD)) {
       unsigned BaseIndex = 0;
-      for (CXXRecordDecl::base_class_const_iterator I = CD->bases_begin(),
-             End = CD->bases_end(); I != End; ++I, ++BaseIndex) {
-        if (!CheckConstantExpression(Info, DiagLoc, I->getType(),
-                                     Value.getStructBase(BaseIndex)))
+      for (const CXXBaseSpecifier &BS : CD->bases()) {
+        if (!CheckConstantExpression(Info, DiagLoc, BS.getType(),
+                                     Value.getStructBase(BaseIndex), Usage))
           return false;
+        ++BaseIndex;
       }
     }
     for (const auto *I : RD->fields()) {
@@ -1892,7 +1898,8 @@ static bool CheckConstantExpression(EvalInfo &Info, SourceLocation DiagLoc,
         continue;
 
       if (!CheckConstantExpression(Info, DiagLoc, I->getType(),
-                                   Value.getStructField(I->getFieldIndex())))
+                                   Value.getStructField(I->getFieldIndex()),
+                                   Usage))
         return false;
     }
   }
@@ -1900,11 +1907,11 @@ static bool CheckConstantExpression(EvalInfo &Info, SourceLocation DiagLoc,
   if (Value.isLValue()) {
     LValue LVal;
     LVal.setFrom(Info.Ctx, Value);
-    return CheckLValueConstantExpression(Info, DiagLoc, Type, LVal);
+    return CheckLValueConstantExpression(Info, DiagLoc, Type, LVal, Usage);
   }
 
   if (Value.isMemberPointer())
-    return CheckMemberPointerConstantExpression(Info, DiagLoc, Type, Value);
+    return CheckMemberPointerConstantExpression(Info, DiagLoc, Type, Value, Usage);
 
   // Everything else is fine.
   return true;
@@ -3271,7 +3278,7 @@ static CompleteObject findCompleteObject(EvalInfo &Info, const Expr *E,
   return CompleteObject(BaseVal, BaseType, LifetimeStartedInEvaluation);
 }
 
-/// \brief Perform an lvalue-to-rvalue conversion on the given glvalue. This
+/// Perform an lvalue-to-rvalue conversion on the given glvalue. This
 /// can also be used for 'lvalue-to-lvalue' conversions for looking up the
 /// glvalue referred to by an entity of reference type.
 ///
@@ -3834,7 +3841,7 @@ static bool EvaluateCond(EvalInfo &Info, const VarDecl *CondDecl,
 }
 
 namespace {
-/// \brief A location where the result (returned value) of evaluating a
+/// A location where the result (returned value) of evaluating a
 /// statement should be stored.
 struct StmtResult {
   /// The APValue that should be filled in with the returned value.
@@ -5553,7 +5560,7 @@ bool LValueExprEvaluator::VisitBinAssign(const BinaryOperator *E) {
 // Pointer Evaluation
 //===----------------------------------------------------------------------===//
 
-/// \brief Attempts to compute the number of bytes available at the pointer
+/// Attempts to compute the number of bytes available at the pointer
 /// returned by a function with the alloc_size attribute. Returns true if we
 /// were successful. Places an unsigned number into `Result`.
 ///
@@ -5602,7 +5609,7 @@ static bool getBytesReturnedByAllocSizeCall(const ASTContext &Ctx,
   return true;
 }
 
-/// \brief Convenience function. LVal's base must be a call to an alloc_size
+/// Convenience function. LVal's base must be a call to an alloc_size
 /// function.
 static bool getBytesReturnedByAllocSizeCall(const ASTContext &Ctx,
                                             const LValue &LVal,
@@ -5614,7 +5621,7 @@ static bool getBytesReturnedByAllocSizeCall(const ASTContext &Ctx,
   return getBytesReturnedByAllocSizeCall(Ctx, CE, Result);
 }
 
-/// \brief Attempts to evaluate the given LValueBase as the result of a call to
+/// Attempts to evaluate the given LValueBase as the result of a call to
 /// a function with the alloc_size attribute. If it was possible to do so, this
 /// function will return true, make Result's Base point to said function call,
 /// and mark Result's Base as invalid.
@@ -6954,8 +6961,8 @@ bool ArrayExprEvaluator::VisitInitListExpr(const InitListExpr *E) {
   if (NumEltsToInit != NumElts && MaybeElementDependentArrayFiller(FillerExpr))
     NumEltsToInit = NumElts;
 
-  DEBUG(llvm::dbgs() << "The number of elements to initialize: " <<
-        NumEltsToInit << ".\n");
+  LLVM_DEBUG(llvm::dbgs() << "The number of elements to initialize: "
+                          << NumEltsToInit << ".\n");
 
   Result = APValue(APValue::UninitArray(), NumEltsToInit, NumElts);
 
@@ -7730,7 +7737,7 @@ static bool determineEndOffset(EvalInfo &Info, SourceLocation ExprLoc,
   return true;
 }
 
-/// \brief Tries to evaluate the __builtin_object_size for @p E. If successful,
+/// Tries to evaluate the __builtin_object_size for @p E. If successful,
 /// returns true and stores the result in @p Size.
 ///
 /// If @p WasError is non-null, this will report whether the failure to evaluate
@@ -8151,7 +8158,7 @@ static bool HasSameBase(const LValue &A, const LValue &B) {
           A.getLValueVersion() == B.getLValueVersion());
 }
 
-/// \brief Determine whether this is a pointer past the end of the complete
+/// Determine whether this is a pointer past the end of the complete
 /// object referred to by the lvalue.
 static bool isOnePastTheEndOfCompleteObject(const ASTContext &Ctx,
                                             const LValue &LV) {
@@ -8180,7 +8187,7 @@ static bool isOnePastTheEndOfCompleteObject(const ASTContext &Ctx,
 
 namespace {
 
-/// \brief Data recursive integer evaluator of certain binary operators.
+/// Data recursive integer evaluator of certain binary operators.
 ///
 /// We use a data recursive algorithm for binary operators so that we are able
 /// to handle extreme cases of chained binary operators without causing stack
@@ -8225,7 +8232,7 @@ public:
   DataRecursiveIntBinOpEvaluator(IntExprEvaluator &IntEval, APValue &Result)
     : IntEval(IntEval), Info(IntEval.getEvalInfo()), FinalResult(Result) { }
 
-  /// \brief True if \param E is a binary operator that we are going to handle
+  /// True if \param E is a binary operator that we are going to handle
   /// data recursively.
   /// We handle binary operators that are comma, logical, or that have operands
   /// with integral or enumeration type.
@@ -8266,7 +8273,7 @@ private:
     return Info.CCEDiag(E, D);
   }
 
-  // \brief Returns true if visiting the RHS is necessary, false otherwise.
+  // Returns true if visiting the RHS is necessary, false otherwise.
   bool VisitBinOpLHSOnly(EvalResult &LHSResult, const BinaryOperator *E,
                          bool &SuppressRHSDiags);
 
@@ -10345,11 +10352,23 @@ bool Expr::EvaluateAsLValue(EvalResult &Result, const ASTContext &Ctx) const {
   LValue LV;
   if (!EvaluateLValue(this, LV, Info) || Result.HasSideEffects ||
       !CheckLValueConstantExpression(Info, getExprLoc(),
-                                     Ctx.getLValueReferenceType(getType()), LV))
+                                     Ctx.getLValueReferenceType(getType()), LV,
+                                     Expr::EvaluateForCodeGen))
     return false;
 
   LV.moveInto(Result.Val);
   return true;
+}
+
+bool Expr::EvaluateAsConstantExpr(EvalResult &Result, ConstExprUsage Usage,
+                                  const ASTContext &Ctx) const {
+  EvalInfo::EvaluationMode EM = EvalInfo::EM_ConstantExpression;
+  EvalInfo Info(Ctx, Result, EM);
+  if (!::Evaluate(Result.Val, Info, this))
+    return false;
+
+  return CheckConstantExpression(Info, getExprLoc(), getType(), Result.Val,
+                                 Usage);
 }
 
 bool Expr::EvaluateAsInitializer(APValue &Value, const ASTContext &Ctx,

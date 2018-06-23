@@ -1259,7 +1259,7 @@ AttrVec& ASTContext::getDeclAttrs(const Decl *D) {
   return *Result;
 }
 
-/// \brief Erase the attributes corresponding to the given declaration.
+/// Erase the attributes corresponding to the given declaration.
 void ASTContext::eraseDeclAttrs(const Decl *D) {
   llvm::DenseMap<const Decl*, AttrVec*>::iterator Pos = DeclAttrs.find(D);
   if (Pos != DeclAttrs.end()) {
@@ -1958,10 +1958,16 @@ TypeInfo ASTContext::getTypeInfoImpl(const Type *T) const {
     Width = Info.Width;
     Align = Info.Align;
 
-    // If the size of the type doesn't exceed the platform's max
-    // atomic promotion width, make the size and alignment more
-    // favorable to atomic operations:
-    if (Width != 0 && Width <= Target->getMaxAtomicPromoteWidth()) {
+    if (!Width) {
+      // An otherwise zero-sized type should still generate an
+      // atomic operation.
+      Width = Target->getCharWidth();
+      assert(Align);
+    } else if (Width <= Target->getMaxAtomicPromoteWidth()) {
+      // If the size of the type doesn't exceed the platform's max
+      // atomic promotion width, make the size and alignment more
+      // favorable to atomic operations:
+
       // Round the size up to a power of 2.
       if (!llvm::isPowerOf2_64(Width))
         Width = llvm::NextPowerOf2(Width);
@@ -2336,7 +2342,7 @@ bool ASTContext::isSentinelNullExpr(const Expr *E) {
   return false;
 }
 
-/// \brief Get the implementation of ObjCInterfaceDecl, or nullptr if none
+/// Get the implementation of ObjCInterfaceDecl, or nullptr if none
 /// exists.
 ObjCImplementationDecl *ASTContext::getObjCImplementation(ObjCInterfaceDecl *D) {
   llvm::DenseMap<ObjCContainerDecl*, ObjCImplDecl*>::iterator
@@ -2346,7 +2352,7 @@ ObjCImplementationDecl *ASTContext::getObjCImplementation(ObjCInterfaceDecl *D) 
   return nullptr;
 }
 
-/// \brief Get the implementation of ObjCCategoryDecl, or nullptr if none
+/// Get the implementation of ObjCCategoryDecl, or nullptr if none
 /// exists.
 ObjCCategoryImplDecl *ASTContext::getObjCImplementation(ObjCCategoryDecl *D) {
   llvm::DenseMap<ObjCContainerDecl*, ObjCImplDecl*>::iterator
@@ -2356,14 +2362,14 @@ ObjCCategoryImplDecl *ASTContext::getObjCImplementation(ObjCCategoryDecl *D) {
   return nullptr;
 }
 
-/// \brief Set the implementation of ObjCInterfaceDecl.
+/// Set the implementation of ObjCInterfaceDecl.
 void ASTContext::setObjCImplementation(ObjCInterfaceDecl *IFaceD,
                            ObjCImplementationDecl *ImplD) {
   assert(IFaceD && ImplD && "Passed null params");
   ObjCImpls[IFaceD] = ImplD;
 }
 
-/// \brief Set the implementation of ObjCCategoryDecl.
+/// Set the implementation of ObjCCategoryDecl.
 void ASTContext::setObjCImplementation(ObjCCategoryDecl *CatD,
                            ObjCCategoryImplDecl *ImplD) {
   assert(CatD && ImplD && "Passed null params");
@@ -2393,7 +2399,7 @@ const ObjCInterfaceDecl *ASTContext::getObjContainingInterface(
   return nullptr;
 }
 
-/// \brief Get the copy initialization expression of VarDecl, or nullptr if
+/// Get the copy initialization expression of VarDecl, or nullptr if
 /// none exists.
 Expr *ASTContext::getBlockVarCopyInits(const VarDecl*VD) {
   assert(VD && "Passed null params");
@@ -2404,7 +2410,7 @@ Expr *ASTContext::getBlockVarCopyInits(const VarDecl*VD) {
   return (I != BlockVarCopyInits.end()) ? I->second : nullptr;
 }
 
-/// \brief Set the copy inialization expression of a block var decl.
+/// Set the copy inialization expression of a block var decl.
 void ASTContext::setBlockVarCopyInits(VarDecl*VD, Expr* Init) {
   assert(VD && Init && "Passed null params");
   assert(VD->hasAttr<BlocksAttr>() && 
@@ -2641,14 +2647,6 @@ void ASTContext::adjustExceptionSpec(
            "TypeLoc size mismatch from updating exception specification");
     TSInfo->overrideType(Updated);
   }
-}
-
-bool ASTContext::isParamDestroyedInCallee(QualType T) const {
-  if (getTargetInfo().getCXXABI().areArgsDestroyedLeftToRightInCallee())
-    return true;
-  if (const auto *RT = T->getBaseElementTypeUnsafe()->getAs<RecordType>())
-    return RT->getDecl()->isParamDestroyedInCallee();
-  return false;
 }
 
 /// getComplexType - Return the uniqued reference to the type for a complex
@@ -3355,7 +3353,7 @@ QualType ASTContext::getDependentAddressSpaceType(QualType PointeeType,
   return QualType(sugaredType, 0);  
 }
 
-/// \brief Determine whether \p T is canonical as the result type of a function.
+/// Determine whether \p T is canonical as the result type of a function.
 static bool isCanonicalResultType(QualType T) {
   return T.isCanonical() &&
          (T.getObjCLifetime() == Qualifiers::OCL_None ||
@@ -3615,6 +3613,12 @@ QualType ASTContext::getPipeType(QualType T, bool ReadOnly) const {
   return QualType(New, 0);
 }
 
+QualType ASTContext::adjustStringLiteralBaseType(QualType Ty) const {
+  // OpenCL v1.1 s6.5.3: a string literal is in the constant address space.
+  return LangOpts.OpenCL ? getAddrSpaceQualType(Ty, LangAS::opencl_constant)
+                         : Ty;
+}
+
 QualType ASTContext::getReadPipeType(QualType T) const {
   return getPipeType(T, true);
 }
@@ -3747,7 +3751,7 @@ QualType ASTContext::getAttributedType(AttributedType::Kind attrKind,
   return QualType(type, 0);
 }
 
-/// \brief Retrieve a substitution-result type.
+/// Retrieve a substitution-result type.
 QualType
 ASTContext::getSubstTemplateTypeParmType(const TemplateTypeParmType *Parm,
                                          QualType Replacement) const {
@@ -3770,7 +3774,7 @@ ASTContext::getSubstTemplateTypeParmType(const TemplateTypeParmType *Parm,
   return QualType(SubstParm, 0);
 }
 
-/// \brief Retrieve a 
+/// Retrieve a 
 QualType ASTContext::getSubstTemplateTypeParmPackType(
                                           const TemplateTypeParmType *Parm,
                                               const TemplateArgument &ArgPack) {
@@ -3804,7 +3808,7 @@ QualType ASTContext::getSubstTemplateTypeParmPackType(
   return QualType(SubstParm, 0);  
 }
 
-/// \brief Retrieve the template type parameter type for a template
+/// Retrieve the template type parameter type for a template
 /// parameter or parameter pack with the given depth, index, and (optionally)
 /// name.
 QualType ASTContext::getTemplateTypeParmType(unsigned Depth, unsigned Index,
@@ -3967,12 +3971,12 @@ QualType ASTContext::getCanonicalTemplateSpecializationType(
   return QualType(Spec, 0);
 }
 
-QualType
-ASTContext::getElaboratedType(ElaboratedTypeKeyword Keyword,
-                              NestedNameSpecifier *NNS,
-                              QualType NamedType) const {
+QualType ASTContext::getElaboratedType(ElaboratedTypeKeyword Keyword,
+                                       NestedNameSpecifier *NNS,
+                                       QualType NamedType,
+                                       TagDecl *OwnedTagDecl) const {
   llvm::FoldingSetNodeID ID;
-  ElaboratedType::Profile(ID, Keyword, NNS, NamedType);
+  ElaboratedType::Profile(ID, Keyword, NNS, NamedType, OwnedTagDecl);
 
   void *InsertPos = nullptr;
   ElaboratedType *T = ElaboratedTypes.FindNodeOrInsertPos(ID, InsertPos);
@@ -3987,7 +3991,8 @@ ASTContext::getElaboratedType(ElaboratedTypeKeyword Keyword,
     (void)CheckT;
   }
 
-  T = new (*this, TypeAlignment) ElaboratedType(Keyword, NNS, NamedType, Canon);
+  T = new (*this, TypeAlignment)
+      ElaboratedType(Keyword, NNS, NamedType, Canon, OwnedTagDecl);
   Types.push_back(T);
   ElaboratedTypes.InsertNode(T, InsertPos);
   return QualType(T, 0);
@@ -4580,7 +4585,7 @@ QualType ASTContext::getTypeOfType(QualType tofType) const {
   return QualType(tot, 0);
 }
 
-/// \brief Unlike many "get<Type>" functions, we don't unique DecltypeType
+/// Unlike many "get<Type>" functions, we don't unique DecltypeType
 /// nodes. This would never be helpful, since each such type has its own
 /// expression, and would not give a significant memory saving, since there
 /// is an Expr tree under each such type.
@@ -4801,14 +4806,14 @@ QualType ASTContext::getPointerDiffType() const {
   return getFromTargetType(Target->getPtrDiffType(0));
 }
 
-/// \brief Return the unique unsigned counterpart of "ptrdiff_t"
+/// Return the unique unsigned counterpart of "ptrdiff_t"
 /// integer type. The standard (C11 7.21.6.1p7) refers to this type
 /// in the definition of %tu format specifier.
 QualType ASTContext::getUnsignedPointerDiffType() const {
   return getFromTargetType(Target->getUnsignedPtrDiffType(0));
 }
 
-/// \brief Return the unique type for "pid_t" defined in
+/// Return the unique type for "pid_t" defined in
 /// <sys/types.h>. We need this to compute the correct type for vfork().
 QualType ASTContext::getProcessIDType() const {
   return getFromTargetType(Target->getProcessIDType());
@@ -5374,7 +5379,7 @@ unsigned ASTContext::getIntegerRank(const Type *T) const {
   }
 }
 
-/// \brief Whether this is a promotable bitfield reference according
+/// Whether this is a promotable bitfield reference according
 /// to C99 6.3.1.1p2, bullet 2 (and GCC extensions).
 ///
 /// \returns the type this bit-field will promote to, or NULL if no
@@ -5468,7 +5473,7 @@ QualType ASTContext::getPromotedIntegerType(QualType Promotable) const {
   return (PromotableSize != IntSize) ? IntTy : UnsignedIntTy;
 }
 
-/// \brief Recurses in pointer/array types until it finds an objc retainable
+/// Recurses in pointer/array types until it finds an objc retainable
 /// type and returns its ownership.
 Qualifiers::ObjCLifetime ASTContext::getInnerObjCOwnership(QualType T) const {
   while (!T.isNull()) {
@@ -7242,7 +7247,7 @@ void ASTContext::setObjCConstantStringInterface(ObjCInterfaceDecl *Decl) {
   ObjCConstantStringType = getObjCInterfaceType(Decl);
 }
 
-/// \brief Retrieve the template name that corresponds to a non-empty
+/// Retrieve the template name that corresponds to a non-empty
 /// lookup.
 TemplateName
 ASTContext::getOverloadedTemplateName(UnresolvedSetIterator Begin,
@@ -7266,7 +7271,7 @@ ASTContext::getOverloadedTemplateName(UnresolvedSetIterator Begin,
   return TemplateName(OT);
 }
 
-/// \brief Retrieve the template name that represents a qualified
+/// Retrieve the template name that represents a qualified
 /// template name such as \c std::vector.
 TemplateName
 ASTContext::getQualifiedTemplateName(NestedNameSpecifier *NNS,
@@ -7290,7 +7295,7 @@ ASTContext::getQualifiedTemplateName(NestedNameSpecifier *NNS,
   return TemplateName(QTN);
 }
 
-/// \brief Retrieve the template name that represents a dependent
+/// Retrieve the template name that represents a dependent
 /// template name such as \c MetaFun::template apply.
 TemplateName
 ASTContext::getDependentTemplateName(NestedNameSpecifier *NNS,
@@ -7326,7 +7331,7 @@ ASTContext::getDependentTemplateName(NestedNameSpecifier *NNS,
   return TemplateName(QTN);
 }
 
-/// \brief Retrieve the template name that represents a dependent
+/// Retrieve the template name that represents a dependent
 /// template name such as \c MetaFun::template operator+.
 TemplateName 
 ASTContext::getDependentTemplateName(NestedNameSpecifier *NNS,
@@ -9760,7 +9765,7 @@ createDynTypedNode(const NestedNameSpecifierLoc &Node) {
 }
 /// @}
 
-  /// \brief A \c RecursiveASTVisitor that builds a map from nodes to their
+  /// A \c RecursiveASTVisitor that builds a map from nodes to their
   /// parents as defined by the \c RecursiveASTVisitor.
   ///
   /// Note that the relationship described here is purely in terms of AST
@@ -9770,7 +9775,7 @@ createDynTypedNode(const NestedNameSpecifierLoc &Node) {
   /// FIXME: Currently only builds up the map using \c Stmt and \c Decl nodes.
   class ParentMapASTVisitor : public RecursiveASTVisitor<ParentMapASTVisitor> {
   public:
-    /// \brief Builds and returns the translation unit's parent map.
+    /// Builds and returns the translation unit's parent map.
     ///
     ///  The caller takes ownership of the returned \c ParentMap.
     static std::pair<ASTContext::ParentMapPointers *,

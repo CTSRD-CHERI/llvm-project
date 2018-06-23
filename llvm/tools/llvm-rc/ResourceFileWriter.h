@@ -62,6 +62,7 @@ public:
 
   Error visitCaptionStmt(const CaptionStmt *) override;
   Error visitCharacteristicsStmt(const CharacteristicsStmt *) override;
+  Error visitClassStmt(const ClassStmt *) override;
   Error visitFontStmt(const FontStmt *) override;
   Error visitLanguageStmt(const LanguageResource *) override;
   Error visitStyleStmt(const StyleStmt *) override;
@@ -88,8 +89,11 @@ public:
       uint32_t Charset;
     };
     Optional<FontInfo> Font;
+    IntOrString Class;
 
-    ObjectInfo() : LanguageInfo(0), Characteristics(0), VersionInfo(0) {}
+    ObjectInfo()
+        : LanguageInfo(0), Characteristics(0), VersionInfo(0),
+          Class(StringRef()) {}
   } ObjectData;
 
   struct StringTableInfo {
@@ -100,7 +104,9 @@ public:
     struct Bundle {
       std::array<Optional<StringRef>, 16> Data;
       ObjectInfo DeclTimeInfo;
-      Bundle(const ObjectInfo &Info) : DeclTimeInfo(Info) {}
+      uint16_t MemoryFlags;
+      Bundle(const ObjectInfo &Info, uint16_t Flags)
+          : DeclTimeInfo(Info), MemoryFlags(Flags) {}
     };
     std::map<BundleKey, Bundle> BundleData;
     // Bundles are listed in the order of their first occurrence.

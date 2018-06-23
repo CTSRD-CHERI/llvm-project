@@ -4351,7 +4351,7 @@ bool LLParser::ParseDICompileUnit(MDNode *&Result, bool IsDistinct) {
 ///                     virtuality: DW_VIRTUALTIY_pure_virtual,
 ///                     virtualIndex: 10, thisAdjustment: 4, flags: 11,
 ///                     isOptimized: false, templateParams: !4, declaration: !5,
-///                     variables: !6, thrownTypes: !7)
+///                     retainedNodes: !6, thrownTypes: !7)
 bool LLParser::ParseDISubprogram(MDNode *&Result, bool IsDistinct) {
   auto Loc = Lex.getLoc();
 #define VISIT_MD_FIELDS(OPTIONAL, REQUIRED)                                    \
@@ -4373,7 +4373,7 @@ bool LLParser::ParseDISubprogram(MDNode *&Result, bool IsDistinct) {
   OPTIONAL(unit, MDField, );                                                   \
   OPTIONAL(templateParams, MDField, );                                         \
   OPTIONAL(declaration, MDField, );                                            \
-  OPTIONAL(variables, MDField, );                                              \
+  OPTIONAL(retainedNodes, MDField, );                                              \
   OPTIONAL(thrownTypes, MDField, );
   PARSE_MD_FIELDS();
 #undef VISIT_MD_FIELDS
@@ -4389,7 +4389,7 @@ bool LLParser::ParseDISubprogram(MDNode *&Result, bool IsDistinct) {
        type.Val, isLocal.Val, isDefinition.Val, scopeLine.Val,
        containingType.Val, virtuality.Val, virtualIndex.Val, thisAdjustment.Val,
        flags.Val, isOptimized.Val, unit.Val, templateParams.Val,
-       declaration.Val, variables.Val, thrownTypes.Val));
+       declaration.Val, retainedNodes.Val, thrownTypes.Val));
   return false;
 }
 
@@ -4569,6 +4569,22 @@ bool LLParser::ParseDILocalVariable(MDNode *&Result, bool IsDistinct) {
   Result = GET_OR_DISTINCT(DILocalVariable,
                            (Context, scope.Val, name.Val, file.Val, line.Val,
                             type.Val, arg.Val, flags.Val, align.Val));
+  return false;
+}
+
+/// ParseDILabel:
+///   ::= !DILabel(scope: !0, name: "foo", file: !1, line: 7)
+bool LLParser::ParseDILabel(MDNode *&Result, bool IsDistinct) {
+#define VISIT_MD_FIELDS(OPTIONAL, REQUIRED)                                    \
+  REQUIRED(scope, MDField, (/* AllowNull */ false));                           \
+  REQUIRED(name, MDStringField, );                                             \
+  REQUIRED(file, MDField, );                                                   \
+  REQUIRED(line, LineField, );
+  PARSE_MD_FIELDS();
+#undef VISIT_MD_FIELDS
+
+  Result = GET_OR_DISTINCT(DILabel,
+                           (Context, scope.Val, name.Val, file.Val, line.Val));
   return false;
 }
 
@@ -6744,8 +6760,8 @@ bool LLParser::sortUseListOrder(Value *V, ArrayRef<unsigned> Indexes,
   if (NumUses < 2)
     return Error(Loc, "value only has one use");
   if (Order.size() != Indexes.size() || NumUses > Indexes.size())
-    return Error(Loc, "wrong number of indexes, expected " +
-                          Twine(std::distance(V->use_begin(), V->use_end())));
+    return Error(Loc,
+                 "wrong number of indexes, expected " + Twine(V->getNumUses()));
 
   V->sortUseList([&](const Use &L, const Use &R) {
     return Order.lookup(&L) < Order.lookup(&R);

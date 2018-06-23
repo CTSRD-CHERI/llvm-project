@@ -700,10 +700,10 @@ void WinEHStatePass::addStateStores(Function &F, WinEHFuncInfo &FuncInfo) {
       Worklist.push_back(BB);
       continue;
     }
-    DEBUG(dbgs() << "X86WinEHState: " << BB->getName()
-                 << " InitialState=" << InitialState << '\n');
-    DEBUG(dbgs() << "X86WinEHState: " << BB->getName()
-                 << " FinalState=" << FinalState << '\n');
+    LLVM_DEBUG(dbgs() << "X86WinEHState: " << BB->getName()
+                      << " InitialState=" << InitialState << '\n');
+    LLVM_DEBUG(dbgs() << "X86WinEHState: " << BB->getName()
+                      << " FinalState=" << FinalState << '\n');
     InitialStates.insert({BB, InitialState});
     FinalStates.insert({BB, FinalState});
   }
@@ -748,8 +748,8 @@ void WinEHStatePass::addStateStores(Function &F, WinEHFuncInfo &FuncInfo) {
       continue;
 
     int PrevState = getPredState(FinalStates, F, ParentBaseState, BB);
-    DEBUG(dbgs() << "X86WinEHState: " << BB->getName()
-                 << " PrevState=" << PrevState << '\n');
+    LLVM_DEBUG(dbgs() << "X86WinEHState: " << BB->getName()
+                      << " PrevState=" << PrevState << '\n');
 
     for (Instruction &I : *BB) {
       CallSite CS(&I);

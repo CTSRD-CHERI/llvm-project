@@ -50,6 +50,9 @@ namespace llvm {
   InstructionSelector *createMipsInstructionSelector(const MipsTargetMachine &,
                                                      MipsSubtarget &,
                                                      MipsRegisterBankInfo &);
+
+  void initializeMipsDelaySlotFillerPass(PassRegistry &);
+  void initializeMipsLongBranchPass(PassRegistry &);
 } // end namespace llvm;
 
 #endif

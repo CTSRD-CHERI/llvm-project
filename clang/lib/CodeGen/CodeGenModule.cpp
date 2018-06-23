@@ -1142,12 +1142,14 @@ void CodeGenModule::SetLLVMFunctionAttributesForDefinition(const Decl *D,
   if (!hasUnwindExceptions(LangOpts))
     B.addAttribute(llvm::Attribute::NoUnwind);
 
-  if (LangOpts.getStackProtector() == LangOptions::SSPOn)
-    B.addAttribute(llvm::Attribute::StackProtect);
-  else if (LangOpts.getStackProtector() == LangOptions::SSPStrong)
-    B.addAttribute(llvm::Attribute::StackProtectStrong);
-  else if (LangOpts.getStackProtector() == LangOptions::SSPReq)
-    B.addAttribute(llvm::Attribute::StackProtectReq);
+  if (!D || !D->hasAttr<NoStackProtectorAttr>()) {
+    if (LangOpts.getStackProtector() == LangOptions::SSPOn)
+      B.addAttribute(llvm::Attribute::StackProtect);
+    else if (LangOpts.getStackProtector() == LangOptions::SSPStrong)
+      B.addAttribute(llvm::Attribute::StackProtectStrong);
+    else if (LangOpts.getStackProtector() == LangOptions::SSPReq)
+      B.addAttribute(llvm::Attribute::StackProtectReq);
+  }
 
   if (!D) {
     // If we don't have a declaration to control inlining, the function isn't
@@ -1548,7 +1550,7 @@ void CodeGenModule::AddDependentLib(StringRef Lib) {
   LinkerOptionsMetadata.push_back(llvm::MDNode::get(getLLVMContext(), MDOpts));
 }
 
-/// \brief Add link options implied by the given module, including modules
+/// Add link options implied by the given module, including modules
 /// it depends on, using a postorder walk.
 static void addLinkOptionsPostorder(CodeGenModule &CGM, Module *Mod,
                                     SmallVectorImpl<llvm::MDNode *> &Metadata,
@@ -3042,6 +3044,39 @@ LangAS CodeGenModule::GetGlobalVarAddressSpace(const VarDecl *D) {
   return getTargetCodeGenInfo().getGlobalVarAddressSpace(*this, D);
 }
 
+LangAS CodeGenModule::getStringLiteralAddressSpace() const {
+  // OpenCL v1.2 s6.5.3: a string literal is in the constant address space.
+  if (LangOpts.OpenCL)
+    return LangAS::opencl_constant;
+  if (auto AS = getTarget().getConstantAddressSpace())
+    return AS.getValue();
+  return LangAS::Default;
+}
+
+// In address space agnostic languages, string literals are in default address
+// space in AST. However, certain targets (e.g. amdgcn) request them to be
+// emitted in constant address space in LLVM IR. To be consistent with other
+// parts of AST, string literal global variables in constant address space
+// need to be casted to default address space before being put into address
+// map and referenced by other part of CodeGen.
+// In OpenCL, string literals are in constant address space in AST, therefore
+// they should not be casted to default address space.
+static llvm::Constant *
+castStringLiteralToDefaultAddressSpace(CodeGenModule &CGM,
+                                       llvm::GlobalVariable *GV) {
+  llvm::Constant *Cast = GV;
+  if (!CGM.getLangOpts().OpenCL) {
+    if (auto AS = CGM.getTarget().getConstantAddressSpace()) {
+      if (AS != LangAS::Default)
+        Cast = CGM.getTargetCodeGenInfo().performAddrSpaceCast(
+            CGM, GV, AS.getValue(), LangAS::Default,
+            GV->getValueType()->getPointerTo(
+                CGM.getContext().getTargetAddressSpace(LangAS::Default)));
+    }
+  }
+  return Cast;
+}
+
 template<typename SomeDecl>
 void CodeGenModule::MaybeHandleStaticInExternC(const SomeDecl *D,
                                                llvm::GlobalValue *GV) {
@@ -4037,10 +4072,8 @@ static llvm::GlobalVariable *
 GenerateStringLiteral(llvm::Constant *C, llvm::GlobalValue::LinkageTypes LT,
                       CodeGenModule &CGM, StringRef GlobalName,
                       CharUnits Alignment) {
-  // OpenCL v1.2 s6.5.3: a string literal is in the constant address space.
-  unsigned AddrSpace = 0;
-  if (CGM.getLangOpts().OpenCL)
-    AddrSpace = CGM.getContext().getTargetAddressSpace(LangAS::opencl_constant);
+  unsigned AddrSpace = CGM.getContext().getTargetAddressSpace(
+      CGM.getStringLiteralAddressSpace());
 
   llvm::Module &M = CGM.getModule();
   // Create a global variable for this string
@@ -4102,7 +4135,9 @@ CodeGenModule::GetAddrOfConstantStringFromLiteral(const StringLiteral *S,
 
   SanitizerMD->reportGlobalToASan(GV, S->getStrTokenLoc(0), "<string literal>",
                                   QualType());
-  return ConstantAddress(GV, Alignment);
+
+  return ConstantAddress(castStringLiteralToDefaultAddressSpace(*this, GV),
+                         Alignment);
 }
 
 /// GetAddrOfConstantStringFromObjCEncode - Return a pointer to a constant
@@ -4146,7 +4181,9 @@ ConstantAddress CodeGenModule::GetAddrOfConstantCString(
                                   GlobalName, Alignment);
   if (Entry)
     *Entry = GV;
-  return ConstantAddress(GV, Alignment);
+
+  return ConstantAddress(castStringLiteralToDefaultAddressSpace(*this, GV),
+                         Alignment);
 }
 
 ConstantAddress CodeGenModule::GetAddrOfGlobalTemporary(

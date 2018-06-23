@@ -1985,5 +1985,374 @@ entry:
   ret <8 x double> %0
 }
 
+define <2 x double> @test_mm_cvtu32_sd(<2 x double> %__A, i32 %__B) {
+; X32-LABEL: test_mm_cvtu32_sd:
+; X32:       # %bb.0: # %entry
+; X32-NEXT:    movl {{[0-9]+}}(%esp), %eax
+; X32-NEXT:    vcvtusi2sdl %eax, %xmm0, %xmm0
+; X32-NEXT:    retl
+;
+; X64-LABEL: test_mm_cvtu32_sd:
+; X64:       # %bb.0: # %entry
+; X64-NEXT:    vcvtusi2sdl %edi, %xmm0, %xmm0
+; X64-NEXT:    retq
+entry:
+  %conv.i = uitofp i32 %__B to double
+  %vecins.i = insertelement <2 x double> %__A, double %conv.i, i32 0
+  ret <2 x double> %vecins.i
+}
+
+define <2 x double> @test_mm_cvtu64_sd(<2 x double> %__A, i64 %__B) {
+; X32-LABEL: test_mm_cvtu64_sd:
+; X32:       # %bb.0: # %entry
+; X32-NEXT:    vmovd {{.*#+}} xmm1 = mem[0],zero,zero,zero
+; X32-NEXT:    vpinsrd $1, {{[0-9]+}}(%esp), %xmm1, %xmm1
+; X32-NEXT:    vpunpckldq {{.*#+}} xmm1 = xmm1[0],mem[0],xmm1[1],mem[1]
+; X32-NEXT:    vsubpd {{\.LCPI.*}}, %xmm1, %xmm1
+; X32-NEXT:    vhaddpd %xmm1, %xmm1, %xmm1
+; X32-NEXT:    vmovsd {{.*#+}} xmm0 = xmm1[0],xmm0[1]
+; X32-NEXT:    retl
+;
+; X64-LABEL: test_mm_cvtu64_sd:
+; X64:       # %bb.0: # %entry
+; X64-NEXT:    vcvtusi2sdq %rdi, %xmm0, %xmm0
+; X64-NEXT:    retq
+entry:
+  %conv.i = uitofp i64 %__B to double
+  %vecins.i = insertelement <2 x double> %__A, double %conv.i, i32 0
+  ret <2 x double> %vecins.i
+}
+
+define <4 x float> @test_mm_cvtu32_ss(<4 x float> %__A, i32 %__B) {
+; X32-LABEL: test_mm_cvtu32_ss:
+; X32:       # %bb.0: # %entry
+; X32-NEXT:    movl {{[0-9]+}}(%esp), %eax
+; X32-NEXT:    vcvtusi2ssl %eax, %xmm0, %xmm0
+; X32-NEXT:    retl
+;
+; X64-LABEL: test_mm_cvtu32_ss:
+; X64:       # %bb.0: # %entry
+; X64-NEXT:    vcvtusi2ssl %edi, %xmm0, %xmm0
+; X64-NEXT:    retq
+entry:
+  %conv.i = uitofp i32 %__B to float
+  %vecins.i = insertelement <4 x float> %__A, float %conv.i, i32 0
+  ret <4 x float> %vecins.i
+}
+
+define <4 x float> @test_mm_cvtu64_ss(<4 x float> %__A, i64 %__B) {
+; X32-LABEL: test_mm_cvtu64_ss:
+; X32:       # %bb.0: # %entry
+; X32-NEXT:    pushl %ebp
+; X32-NEXT:    .cfi_def_cfa_offset 8
+; X32-NEXT:    .cfi_offset %ebp, -8
+; X32-NEXT:    movl %esp, %ebp
+; X32-NEXT:    .cfi_def_cfa_register %ebp
+; X32-NEXT:    andl $-8, %esp
+; X32-NEXT:    subl $16, %esp
+; X32-NEXT:    movl 12(%ebp), %eax
+; X32-NEXT:    vmovd {{.*#+}} xmm1 = mem[0],zero,zero,zero
+; X32-NEXT:    vpinsrd $1, %eax, %xmm1, %xmm1
+; X32-NEXT:    vmovq %xmm1, {{[0-9]+}}(%esp)
+; X32-NEXT:    xorl %ecx, %ecx
+; X32-NEXT:    testl %eax, %eax
+; X32-NEXT:    setns %cl
+; X32-NEXT:    fildll {{[0-9]+}}(%esp)
+; X32-NEXT:    fadds {{\.LCPI.*}}(,%ecx,4)
+; X32-NEXT:    fstps {{[0-9]+}}(%esp)
+; X32-NEXT:    vmovss {{.*#+}} xmm1 = mem[0],zero,zero,zero
+; X32-NEXT:    vmovss {{.*#+}} xmm0 = xmm1[0],xmm0[1,2,3]
+; X32-NEXT:    movl %ebp, %esp
+; X32-NEXT:    popl %ebp
+; X32-NEXT:    .cfi_def_cfa %esp, 4
+; X32-NEXT:    retl
+;
+; X64-LABEL: test_mm_cvtu64_ss:
+; X64:       # %bb.0: # %entry
+; X64-NEXT:    vcvtusi2ssq %rdi, %xmm0, %xmm0
+; X64-NEXT:    retq
+entry:
+  %conv.i = uitofp i64 %__B to float
+  %vecins.i = insertelement <4 x float> %__A, float %conv.i, i32 0
+  ret <4 x float> %vecins.i
+}
+
+define <8 x double> @test_mm512_cvtps_pd(<8 x float> %__A) {
+; X32-LABEL: test_mm512_cvtps_pd:
+; X32:       # %bb.0: # %entry
+; X32-NEXT:    vcvtps2pd %ymm0, %zmm0
+; X32-NEXT:    retl
+;
+; X64-LABEL: test_mm512_cvtps_pd:
+; X64:       # %bb.0: # %entry
+; X64-NEXT:    vcvtps2pd %ymm0, %zmm0
+; X64-NEXT:    retq
+entry:
+  %conv.i = fpext <8 x float> %__A to <8 x double>
+  ret <8 x double> %conv.i
+}
+
+define <8 x double> @test_mm512_cvtpslo_pd(<16 x float> %__A) {
+; X32-LABEL: test_mm512_cvtpslo_pd:
+; X32:       # %bb.0: # %entry
+; X32-NEXT:    vcvtps2pd %ymm0, %zmm0
+; X32-NEXT:    retl
+;
+; X64-LABEL: test_mm512_cvtpslo_pd:
+; X64:       # %bb.0: # %entry
+; X64-NEXT:    vcvtps2pd %ymm0, %zmm0
+; X64-NEXT:    retq
+entry:
+  %shuffle.i.i = shufflevector <16 x float> %__A, <16 x float> undef, <8 x i32> <i32 0, i32 1, i32 2, i32 3, i32 4, i32 5, i32 6, i32 7>
+  %conv.i.i = fpext <8 x float> %shuffle.i.i to <8 x double>
+  ret <8 x double> %conv.i.i
+}
+
+define <8 x double> @test_mm512_mask_cvtps_pd(<8 x double> %__W, i8 zeroext %__U, <8 x float> %__A) {
+; X32-LABEL: test_mm512_mask_cvtps_pd:
+; X32:       # %bb.0: # %entry
+; X32-NEXT:    movb {{[0-9]+}}(%esp), %al
+; X32-NEXT:    kmovw %eax, %k1
+; X32-NEXT:    vcvtps2pd %ymm1, %zmm0 {%k1}
+; X32-NEXT:    retl
+;
+; X64-LABEL: test_mm512_mask_cvtps_pd:
+; X64:       # %bb.0: # %entry
+; X64-NEXT:    kmovw %edi, %k1
+; X64-NEXT:    vcvtps2pd %ymm1, %zmm0 {%k1}
+; X64-NEXT:    retq
+entry:
+  %conv.i.i = fpext <8 x float> %__A to <8 x double>
+  %0 = bitcast i8 %__U to <8 x i1>
+  %1 = select <8 x i1> %0, <8 x double> %conv.i.i, <8 x double> %__W
+  ret <8 x double> %1
+}
+
+define <8 x double> @test_mm512_mask_cvtpslo_pd(<8 x double> %__W, i8 zeroext %__U, <16 x float> %__A) {
+; X32-LABEL: test_mm512_mask_cvtpslo_pd:
+; X32:       # %bb.0: # %entry
+; X32-NEXT:    movb {{[0-9]+}}(%esp), %al
+; X32-NEXT:    kmovw %eax, %k1
+; X32-NEXT:    vcvtps2pd %ymm1, %zmm0 {%k1}
+; X32-NEXT:    retl
+;
+; X64-LABEL: test_mm512_mask_cvtpslo_pd:
+; X64:       # %bb.0: # %entry
+; X64-NEXT:    kmovw %edi, %k1
+; X64-NEXT:    vcvtps2pd %ymm1, %zmm0 {%k1}
+; X64-NEXT:    retq
+entry:
+  %shuffle.i.i = shufflevector <16 x float> %__A, <16 x float> undef, <8 x i32> <i32 0, i32 1, i32 2, i32 3, i32 4, i32 5, i32 6, i32 7>
+  %conv.i.i.i = fpext <8 x float> %shuffle.i.i to <8 x double>
+  %0 = bitcast i8 %__U to <8 x i1>
+  %1 = select <8 x i1> %0, <8 x double> %conv.i.i.i, <8 x double> %__W
+  ret <8 x double> %1
+}
+
+define <8 x double> @test_mm512_maskz_cvtps_pd(i8 zeroext %__U, <8 x float> %__A) {
+; X32-LABEL: test_mm512_maskz_cvtps_pd:
+; X32:       # %bb.0: # %entry
+; X32-NEXT:    movb {{[0-9]+}}(%esp), %al
+; X32-NEXT:    kmovw %eax, %k1
+; X32-NEXT:    vcvtps2pd %ymm0, %zmm0 {%k1} {z}
+; X32-NEXT:    retl
+;
+; X64-LABEL: test_mm512_maskz_cvtps_pd:
+; X64:       # %bb.0: # %entry
+; X64-NEXT:    kmovw %edi, %k1
+; X64-NEXT:    vcvtps2pd %ymm0, %zmm0 {%k1} {z}
+; X64-NEXT:    retq
+entry:
+  %conv.i.i = fpext <8 x float> %__A to <8 x double>
+  %0 = bitcast i8 %__U to <8 x i1>
+  %1 = select <8 x i1> %0, <8 x double> %conv.i.i, <8 x double> zeroinitializer
+  ret <8 x double> %1
+}
+
+define <2 x i64> @test_mm512_cvtepi32_epi8(<8 x i64> %__A) {
+; X32-LABEL: test_mm512_cvtepi32_epi8:
+; X32:       # %bb.0: # %entry
+; X32-NEXT:    vpmovdb %zmm0, %xmm0
+; X32-NEXT:    vzeroupper
+; X32-NEXT:    retl
+;
+; X64-LABEL: test_mm512_cvtepi32_epi8:
+; X64:       # %bb.0: # %entry
+; X64-NEXT:    vpmovdb %zmm0, %xmm0
+; X64-NEXT:    vzeroupper
+; X64-NEXT:    retq
+entry:
+  %0 = bitcast <8 x i64> %__A to <16 x i32>
+  %conv.i = trunc <16 x i32> %0 to <16 x i8>
+  %1 = bitcast <16 x i8> %conv.i to <2 x i64>
+  ret <2 x i64> %1
+}
+
+define <2 x i64> @test_mm512_mask_cvtepi32_epi8(<2 x i64> %__O, i16 zeroext %__M, <8 x i64> %__A) {
+; X32-LABEL: test_mm512_mask_cvtepi32_epi8:
+; X32:       # %bb.0: # %entry
+; X32-NEXT:    kmovw {{[0-9]+}}(%esp), %k1
+; X32-NEXT:    vpmovdb %zmm1, %xmm0 {%k1}
+; X32-NEXT:    vzeroupper
+; X32-NEXT:    retl
+;
+; X64-LABEL: test_mm512_mask_cvtepi32_epi8:
+; X64:       # %bb.0: # %entry
+; X64-NEXT:    kmovw %edi, %k1
+; X64-NEXT:    vpmovdb %zmm1, %xmm0 {%k1}
+; X64-NEXT:    vzeroupper
+; X64-NEXT:    retq
+entry:
+  %0 = bitcast <8 x i64> %__A to <16 x i32>
+  %1 = bitcast <2 x i64> %__O to <16 x i8>
+  %2 = tail call <16 x i8> @llvm.x86.avx512.mask.pmov.db.512(<16 x i32> %0, <16 x i8> %1, i16 %__M)
+  %3 = bitcast <16 x i8> %2 to <2 x i64>
+  ret <2 x i64> %3
+}
+
+define <2 x i64> @test_mm512_maskz_cvtepi32_epi8(i16 zeroext %__M, <8 x i64> %__A) {
+; X32-LABEL: test_mm512_maskz_cvtepi32_epi8:
+; X32:       # %bb.0: # %entry
+; X32-NEXT:    kmovw {{[0-9]+}}(%esp), %k1
+; X32-NEXT:    vpmovdb %zmm0, %xmm0 {%k1} {z}
+; X32-NEXT:    vzeroupper
+; X32-NEXT:    retl
+;
+; X64-LABEL: test_mm512_maskz_cvtepi32_epi8:
+; X64:       # %bb.0: # %entry
+; X64-NEXT:    kmovw %edi, %k1
+; X64-NEXT:    vpmovdb %zmm0, %xmm0 {%k1} {z}
+; X64-NEXT:    vzeroupper
+; X64-NEXT:    retq
+entry:
+  %0 = bitcast <8 x i64> %__A to <16 x i32>
+  %1 = tail call <16 x i8> @llvm.x86.avx512.mask.pmov.db.512(<16 x i32> %0, <16 x i8> zeroinitializer, i16 %__M)
+  %2 = bitcast <16 x i8> %1 to <2 x i64>
+  ret <2 x i64> %2
+}
+
+define <4 x i64> @test_mm512_cvtepi64_epi32(<8 x i64> %__A) {
+; X32-LABEL: test_mm512_cvtepi64_epi32:
+; X32:       # %bb.0: # %entry
+; X32-NEXT:    vpmovqd %zmm0, %ymm0
+; X32-NEXT:    retl
+;
+; X64-LABEL: test_mm512_cvtepi64_epi32:
+; X64:       # %bb.0: # %entry
+; X64-NEXT:    vpmovqd %zmm0, %ymm0
+; X64-NEXT:    retq
+entry:
+  %conv.i = trunc <8 x i64> %__A to <8 x i32>
+  %0 = bitcast <8 x i32> %conv.i to <4 x i64>
+  ret <4 x i64> %0
+}
+
+define <4 x i64> @test_mm512_mask_cvtepi64_epi32(<4 x i64> %__O, i8 zeroext %__M, <8 x i64> %__A) {
+; X32-LABEL: test_mm512_mask_cvtepi64_epi32:
+; X32:       # %bb.0: # %entry
+; X32-NEXT:    movb {{[0-9]+}}(%esp), %al
+; X32-NEXT:    kmovw %eax, %k1
+; X32-NEXT:    vpmovqd %zmm1, %ymm0 {%k1}
+; X32-NEXT:    retl
+;
+; X64-LABEL: test_mm512_mask_cvtepi64_epi32:
+; X64:       # %bb.0: # %entry
+; X64-NEXT:    kmovw %edi, %k1
+; X64-NEXT:    vpmovqd %zmm1, %ymm0 {%k1}
+; X64-NEXT:    retq
+entry:
+  %conv.i.i = trunc <8 x i64> %__A to <8 x i32>
+  %0 = bitcast <4 x i64> %__O to <8 x i32>
+  %1 = bitcast i8 %__M to <8 x i1>
+  %2 = select <8 x i1> %1, <8 x i32> %conv.i.i, <8 x i32> %0
+  %3 = bitcast <8 x i32> %2 to <4 x i64>
+  ret <4 x i64> %3
+}
+
+define <4 x i64> @test_mm512_maskz_cvtepi64_epi32(i8 zeroext %__M, <8 x i64> %__A) {
+; X32-LABEL: test_mm512_maskz_cvtepi64_epi32:
+; X32:       # %bb.0: # %entry
+; X32-NEXT:    movb {{[0-9]+}}(%esp), %al
+; X32-NEXT:    kmovw %eax, %k1
+; X32-NEXT:    vpmovqd %zmm0, %ymm0 {%k1} {z}
+; X32-NEXT:    retl
+;
+; X64-LABEL: test_mm512_maskz_cvtepi64_epi32:
+; X64:       # %bb.0: # %entry
+; X64-NEXT:    kmovw %edi, %k1
+; X64-NEXT:    vpmovqd %zmm0, %ymm0 {%k1} {z}
+; X64-NEXT:    retq
+entry:
+  %conv.i.i = trunc <8 x i64> %__A to <8 x i32>
+  %0 = bitcast i8 %__M to <8 x i1>
+  %1 = select <8 x i1> %0, <8 x i32> %conv.i.i, <8 x i32> zeroinitializer
+  %2 = bitcast <8 x i32> %1 to <4 x i64>
+  ret <4 x i64> %2
+}
+
+define <2 x i64> @test_mm512_cvtepi64_epi16(<8 x i64> %__A) {
+; X32-LABEL: test_mm512_cvtepi64_epi16:
+; X32:       # %bb.0: # %entry
+; X32-NEXT:    vpmovqw %zmm0, %xmm0
+; X32-NEXT:    vzeroupper
+; X32-NEXT:    retl
+;
+; X64-LABEL: test_mm512_cvtepi64_epi16:
+; X64:       # %bb.0: # %entry
+; X64-NEXT:    vpmovqw %zmm0, %xmm0
+; X64-NEXT:    vzeroupper
+; X64-NEXT:    retq
+entry:
+  %conv.i = trunc <8 x i64> %__A to <8 x i16>
+  %0 = bitcast <8 x i16> %conv.i to <2 x i64>
+  ret <2 x i64> %0
+}
+
+define <2 x i64> @test_mm512_mask_cvtepi64_epi16(<2 x i64> %__O, i8 zeroext %__M, <8 x i64> %__A) {
+; X32-LABEL: test_mm512_mask_cvtepi64_epi16:
+; X32:       # %bb.0: # %entry
+; X32-NEXT:    movb {{[0-9]+}}(%esp), %al
+; X32-NEXT:    kmovw %eax, %k1
+; X32-NEXT:    vpmovqw %zmm1, %xmm0 {%k1}
+; X32-NEXT:    vzeroupper
+; X32-NEXT:    retl
+;
+; X64-LABEL: test_mm512_mask_cvtepi64_epi16:
+; X64:       # %bb.0: # %entry
+; X64-NEXT:    kmovw %edi, %k1
+; X64-NEXT:    vpmovqw %zmm1, %xmm0 {%k1}
+; X64-NEXT:    vzeroupper
+; X64-NEXT:    retq
+entry:
+  %0 = bitcast <2 x i64> %__O to <8 x i16>
+  %1 = tail call <8 x i16> @llvm.x86.avx512.mask.pmov.qw.512(<8 x i64> %__A, <8 x i16> %0, i8 %__M)
+  %2 = bitcast <8 x i16> %1 to <2 x i64>
+  ret <2 x i64> %2
+}
+
+define <2 x i64> @test_mm512_maskz_cvtepi64_epi16(i8 zeroext %__M, <8 x i64> %__A) {
+; X32-LABEL: test_mm512_maskz_cvtepi64_epi16:
+; X32:       # %bb.0: # %entry
+; X32-NEXT:    movb {{[0-9]+}}(%esp), %al
+; X32-NEXT:    kmovw %eax, %k1
+; X32-NEXT:    vpmovqw %zmm0, %xmm0 {%k1} {z}
+; X32-NEXT:    vzeroupper
+; X32-NEXT:    retl
+;
+; X64-LABEL: test_mm512_maskz_cvtepi64_epi16:
+; X64:       # %bb.0: # %entry
+; X64-NEXT:    kmovw %edi, %k1
+; X64-NEXT:    vpmovqw %zmm0, %xmm0 {%k1} {z}
+; X64-NEXT:    vzeroupper
+; X64-NEXT:    retq
+entry:
+  %0 = tail call <8 x i16> @llvm.x86.avx512.mask.pmov.qw.512(<8 x i64> %__A, <8 x i16> zeroinitializer, i8 %__M)
+  %1 = bitcast <8 x i16> %0 to <2 x i64>
+  ret <2 x i64> %1
+}
+
+declare <16 x i8> @llvm.x86.avx512.mask.pmov.db.512(<16 x i32>, <16 x i8>, i16)
+declare <8 x i16> @llvm.x86.avx512.mask.pmov.qw.512(<8 x i64>, <8 x i16>, i8)
+
 !0 = !{i32 1}
 

@@ -254,21 +254,24 @@ static CallExpr *create_call_once_funcptr_call(ASTContext &C, ASTMaker M,
 
   QualType Ty = Callback->getType();
   DeclRefExpr *Call = M.makeDeclRefExpr(Callback);
-  CastKind CK;
+  Expr *SubExpr;
   if (Ty->isRValueReferenceType()) {
-    CK = CK_LValueToRValue;
-  } else {
-    assert(Ty->isLValueReferenceType());
-    CK = CK_FunctionToPointerDecay;
+    SubExpr = M.makeImplicitCast(
+        Call, Ty.getNonReferenceType(), CK_LValueToRValue);
+  } else if (Ty->isLValueReferenceType() &&
+             Call->getType()->isFunctionType()) {
     Ty = C.getPointerType(Ty.getNonReferenceType());
+    SubExpr = M.makeImplicitCast(Call, Ty, CK_FunctionToPointerDecay);
+  } else if (Ty->isLValueReferenceType()
+             && Call->getType()->isPointerType()
+             && Call->getType()->getPointeeType()->isFunctionType()){
+    SubExpr = Call;
+  } else {
+    llvm_unreachable("Unexpected state");
   }
 
   return new (C)
-      CallExpr(C, M.makeImplicitCast(Call, Ty.getNonReferenceType(), CK),
-               /*args=*/CallArgs,
-               /*QualType=*/C.VoidTy,
-               /*ExprValueType=*/VK_RValue,
-               /*SourceLocation=*/SourceLocation());
+      CallExpr(C, SubExpr, CallArgs, C.VoidTy, VK_RValue, SourceLocation());
 }
 
 static CallExpr *create_call_once_lambda_call(ASTContext &C, ASTMaker M,
@@ -314,7 +317,7 @@ static CallExpr *create_call_once_lambda_call(ASTContext &C, ASTMaker M,
 /// }
 /// \endcode
 static Stmt *create_call_once(ASTContext &C, const FunctionDecl *D) {
-  DEBUG(llvm::dbgs() << "Generating body for call_once\n");
+  LLVM_DEBUG(llvm::dbgs() << "Generating body for call_once\n");
 
   // We need at least two parameters.
   if (D->param_size() < 2)
@@ -342,9 +345,9 @@ static Stmt *create_call_once(ASTContext &C, const FunctionDecl *D) {
   auto *FlagRecordDecl = dyn_cast_or_null<RecordDecl>(FlagType->getAsTagDecl());
 
   if (!FlagRecordDecl) {
-    DEBUG(llvm::dbgs() << "Flag field is not a record: "
-                       << "unknown std::call_once implementation, "
-                       << "ignoring the call.\n");
+    LLVM_DEBUG(llvm::dbgs() << "Flag field is not a record: "
+                            << "unknown std::call_once implementation, "
+                            << "ignoring the call.\n");
     return nullptr;
   }
 
@@ -359,16 +362,17 @@ static Stmt *create_call_once(ASTContext &C, const FunctionDecl *D) {
   }
 
   if (!FlagFieldDecl) {
-    DEBUG(llvm::dbgs() << "No field _M_once or __state_ found on "
-                       << "std::once_flag struct: unknown std::call_once "
-                       << "implementation, ignoring the call.");
+    LLVM_DEBUG(llvm::dbgs() << "No field _M_once or __state_ found on "
+                            << "std::once_flag struct: unknown std::call_once "
+                            << "implementation, ignoring the call.");
     return nullptr;
   }
 
   bool isLambdaCall = CallbackRecordDecl && CallbackRecordDecl->isLambda();
   if (CallbackRecordDecl && !isLambdaCall) {
-    DEBUG(llvm::dbgs() << "Not supported: synthesizing body for functors when "
-                       << "body farming std::call_once, ignoring the call.");
+    LLVM_DEBUG(llvm::dbgs()
+               << "Not supported: synthesizing body for functors when "
+               << "body farming std::call_once, ignoring the call.");
     return nullptr;
   }
 
@@ -395,9 +399,9 @@ static Stmt *create_call_once(ASTContext &C, const FunctionDecl *D) {
 
   // First two arguments are used for the flag and for the callback.
   if (D->getNumParams() != CallbackFunctionType->getNumParams() + 2) {
-    DEBUG(llvm::dbgs() << "Types of params of the callback do not match "
-                       << "params passed to std::call_once, "
-                       << "ignoring the call\n");
+    LLVM_DEBUG(llvm::dbgs() << "Types of params of the callback do not match "
+                            << "params passed to std::call_once, "
+                            << "ignoring the call\n");
     return nullptr;
   }
 
@@ -411,9 +415,9 @@ static Stmt *create_call_once(ASTContext &C, const FunctionDecl *D) {
                 .getNonReferenceType()
                 .getCanonicalType() !=
             PDecl->getType().getNonReferenceType().getCanonicalType()) {
-      DEBUG(llvm::dbgs() << "Types of params of the callback do not match "
-                         << "params passed to std::call_once, "
-                         << "ignoring the call\n");
+      LLVM_DEBUG(llvm::dbgs() << "Types of params of the callback do not match "
+                              << "params passed to std::call_once, "
+                              << "ignoring the call\n");
       return nullptr;
     }
     Expr *ParamExpr = M.makeDeclRefExpr(PDecl);

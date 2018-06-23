@@ -306,6 +306,18 @@ An example of how to use ``alloc_size``
   }];
 }
 
+def CodeSegDocs : Documentation {
+  let Category = DocCatFunction;
+  let Content = [{
+The ``__declspec(code_seg)`` attribute enables the placement of code into separate
+named segments that can be paged or locked in memory individually. This attribute
+is used to control the placement of instantiated templates and compiler-generated
+code. See the documentation for `__declspec(code_seg)`_ on MSDN.
+
+.. _`__declspec(code_seg)`: http://msdn.microsoft.com/en-us/library/dn636922.aspx
+  }];
+}
+
 def AllocAlignDocs : Documentation {
   let Category = DocCatFunction;
   let Content = [{
@@ -2738,6 +2750,28 @@ The syntax of the declare target directive is as follows:
     declarations-definition-seq
     #pragma omp end declare target new-line
   }];
+}
+
+def NoStackProtectorDocs : Documentation {
+  let Category = DocCatFunction;
+  let Content = [{
+Clang supports the ``__attribute__((no_stack_protector))`` attribute which disables
+the stack protector on the specified function. This attribute is useful for
+selectively disabling the stack protector on some functions when building with
+``-fstack-protector`` compiler option.
+
+For example, it disables the stack protector for the function ``foo`` but function
+``bar`` will still be built with the stack protector with the ``-fstack-protector``
+option.
+
+.. code-block:: c
+
+    int __attribute__((no_stack_protector))
+    foo (int x); // stack protection will be disabled for foo.
+
+    int bar(int y); // bar can be built with the stack protector.
+
+    }];
 }
 
 def NotTailCalledDocs : Documentation {

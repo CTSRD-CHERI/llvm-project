@@ -76,6 +76,11 @@ Improvements to clang-tidy
   Detects and fixes calls to grand-...parent virtual methods instead of calls
   to overridden parent's virtual methods.
 
+- New :doc:`bugprone-terminating-continue
+  <clang-tidy/checks/bugprone-terminating-continue>` check
+
+  Checks if a ``continue`` statement terminates the loop.
+
 - New :doc:`bugprone-throw-keyword-missing
   <clang-tidy/checks/bugprone-throw-keyword-missing>` check.
 
@@ -110,8 +115,13 @@ Improvements to clang-tidy
   Checks whether a ``std::string::find()`` result is compared with 0, and
   suggests replacing with ``absl::StartsWith()``.
 
-- New :doc:`fuchsia-statically-constructed-objects
-  <clang-tidy/checks/fuchsia-statically-constructed-objects>` check.
+- New `fuchsia-restrict-system-includes
+  <http://clang.llvm.org/extra/clang-tidy/checks/fuchsia-restrict-system-includes.html>`_ check
+
+  Checks for allowed system includes and suggests removal of any others.
+
+- New `fuchsia-statically-constructed-objects
+  <http://clang.llvm.org/extra/clang-tidy/checks/fuchsia-statically-constructed-objects.html>`_ check
 
   Warns if global, non-trivial objects with static storage are constructed,
   unless the object is statically initialized with a ``constexpr`` constructor
@@ -140,6 +150,11 @@ Improvements to clang-tidy
 
   Warns or suggests alternatives if SIMD intrinsics are used which can be replaced by
   ``std::experimental::simd`` operations.
+
+- New :doc:`readability-simplify-subscript-expr
+  <clang-tidy/checks/readability-simplify-subscript-expr>` check.
+
+  Simplifies subscript expressions like ``s.data()[i]`` into ``s[i]``.
 
 - New :doc:`zircon-temporary-objects
   <clang-tidy/checks/zircon-temporary-objects>` check.

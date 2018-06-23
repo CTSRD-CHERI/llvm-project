@@ -98,11 +98,13 @@ static const opt::OptTable::Info OptInfo[] = {
 #undef OPTION
 };
 
+namespace {
 class WasmOptTable : public llvm::opt::OptTable {
 public:
   WasmOptTable() : OptTable(OptInfo) {}
   opt::InputArgList parse(ArrayRef<const char *> Argv);
 };
+} // namespace
 
 // Set color diagnostics according to -color-diagnostics={auto,always,never}
 // or -no-color-diagnostics flags.
@@ -111,19 +113,18 @@ static void handleColorDiagnostics(opt::InputArgList &Args) {
                               OPT_no_color_diagnostics);
   if (!Arg)
     return;
-
-  if (Arg->getOption().getID() == OPT_color_diagnostics)
+  if (Arg->getOption().getID() == OPT_color_diagnostics) {
     errorHandler().ColorDiagnostics = true;
-  else if (Arg->getOption().getID() == OPT_no_color_diagnostics)
+  } else if (Arg->getOption().getID() == OPT_no_color_diagnostics) {
     errorHandler().ColorDiagnostics = false;
-  else {
+  } else {
     StringRef S = Arg->getValue();
     if (S == "always")
       errorHandler().ColorDiagnostics = true;
-    if (S == "never")
+    else if (S == "never")
       errorHandler().ColorDiagnostics = false;
-    if (S != "auto")
-      error("unknown option: -color-diagnostics=" + S);
+    else if (S != "auto")
+      error("unknown option: --color-diagnostics=" + S);
   }
 }
 
@@ -293,6 +294,9 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   Config->Relocatable = Args.hasArg(OPT_relocatable);
   Config->GcSections =
       Args.hasFlag(OPT_gc_sections, OPT_no_gc_sections, !Config->Relocatable);
+  Config->MergeDataSegments =
+      Args.hasFlag(OPT_merge_data_segments, OPT_no_merge_data_segments,
+                   !Config->Relocatable);
   Config->PrintGcSections =
       Args.hasFlag(OPT_print_gc_sections, OPT_no_print_gc_sections, false);
   Config->SearchPaths = args::getStrings(Args, OPT_L);
@@ -358,9 +362,11 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
         "__dso_handle", WASM_SYMBOL_VISIBILITY_HIDDEN);
     WasmSym::DataEnd = Symtab->addSyntheticDataSymbol("__data_end", 0);
 
+    // For now, since we don't actually use the start function as the
+    // wasm start symbol, we don't need to care about it signature.
     if (!Config->Entry.empty())
-      EntrySym = Symtab->addUndefinedFunction(Config->Entry, 0, nullptr,
-                                              &NullSignature);
+      EntrySym =
+          Symtab->addUndefinedFunction(Config->Entry, 0, nullptr, nullptr);
 
     // Handle the `--undefined <sym>` options.
     for (auto *Arg : Args.filtered(OPT_undefined))
@@ -384,15 +390,19 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   if (!Config->Relocatable && !Config->AllowUndefined) {
     Symtab->reportRemainingUndefines();
   } else {
-    // When we allow undefined symbols we cannot include those defined in
-    // -u/--undefined since these undefined symbols have only names and no
-    // function signature, which means they cannot be written to the final
-    // output.
+    // Even when using --allow-undefined we still want to report the absence of
+    // our initial set of undefined symbols (i.e. the entry point and symbols
+    // specified via --undefined).
+    // Part of the reason for this is that these function don't have signatures
+    // so which means they cannot be written as wasm function imports.
     for (auto *Arg : Args.filtered(OPT_undefined)) {
       Symbol *Sym = Symtab->find(Arg->getValue());
       if (!Sym->isDefined())
-        error("function forced with --undefined not found: " + Sym->getName());
+        error("symbol forced with --undefined not found: " + Sym->getName());
     }
+    if (EntrySym && !EntrySym->isDefined())
+      error("entry symbol not defined (pass --no-entry to supress): " +
+            EntrySym->getName());
   }
   if (errorCount())
     return;

@@ -372,6 +372,11 @@ bool llvm::wouldInstructionBeTriviallyDead(Instruction *I,
       return false;
     return true;
   }
+  if (DbgLabelInst *DLI = dyn_cast<DbgLabelInst>(I)) {
+    if (DLI->getLabel())
+      return false;
+    return true;
+  }
 
   if (!I->mayHaveSideEffects())
     return true;
@@ -664,8 +669,7 @@ void llvm::MergeBasicBlockIntoOnlyPred(BasicBlock *DestBB, DominatorTree *DT,
   // dominator edges will be redirected to DestBB.
   std::vector <DominatorTree::UpdateType> Updates;
   if (DDT && !ReplaceEntryBB) {
-    Updates.reserve(1 +
-                    (2 * std::distance(pred_begin(PredBB), pred_end(PredBB))));
+    Updates.reserve(1 + (2 * pred_size(PredBB)));
     Updates.push_back({DominatorTree::Delete, PredBB, DestBB});
     for (auto I = pred_begin(PredBB), E = pred_end(PredBB); I != E; ++I) {
       Updates.push_back({DominatorTree::Delete, *I, PredBB});
@@ -736,8 +740,8 @@ static bool CanMergeValues(Value *First, Value *Second) {
 static bool CanPropagatePredecessorsForPHIs(BasicBlock *BB, BasicBlock *Succ) {
   assert(*succ_begin(BB) == Succ && "Succ is not successor of BB!");
 
-  DEBUG(dbgs() << "Looking to fold " << BB->getName() << " into "
-        << Succ->getName() << "\n");
+  LLVM_DEBUG(dbgs() << "Looking to fold " << BB->getName() << " into "
+                    << Succ->getName() << "\n");
   // Shortcut, if there is only a single predecessor it must be BB and merging
   // is always safe
   if (Succ->getSinglePredecessor()) return true;
@@ -760,10 +764,11 @@ static bool CanPropagatePredecessorsForPHIs(BasicBlock *BB, BasicBlock *Succ) {
         if (BBPreds.count(IBB) &&
             !CanMergeValues(BBPN->getIncomingValueForBlock(IBB),
                             PN->getIncomingValue(PI))) {
-          DEBUG(dbgs() << "Can't fold, phi node " << PN->getName() << " in "
-                << Succ->getName() << " is conflicting with "
-                << BBPN->getName() << " with regard to common predecessor "
-                << IBB->getName() << "\n");
+          LLVM_DEBUG(dbgs()
+                     << "Can't fold, phi node " << PN->getName() << " in "
+                     << Succ->getName() << " is conflicting with "
+                     << BBPN->getName() << " with regard to common predecessor "
+                     << IBB->getName() << "\n");
           return false;
         }
       }
@@ -776,9 +781,10 @@ static bool CanPropagatePredecessorsForPHIs(BasicBlock *BB, BasicBlock *Succ) {
         BasicBlock *IBB = PN->getIncomingBlock(PI);
         if (BBPreds.count(IBB) &&
             !CanMergeValues(Val, PN->getIncomingValue(PI))) {
-          DEBUG(dbgs() << "Can't fold, phi node " << PN->getName() << " in "
-                << Succ->getName() << " is conflicting with regard to common "
-                << "predecessor " << IBB->getName() << "\n");
+          LLVM_DEBUG(dbgs() << "Can't fold, phi node " << PN->getName()
+                            << " in " << Succ->getName()
+                            << " is conflicting with regard to common "
+                            << "predecessor " << IBB->getName() << "\n");
           return false;
         }
       }
@@ -966,11 +972,11 @@ bool llvm::TryToSimplifyUncondBranchFromEmptyBlock(BasicBlock *BB,
     }
   }
 
-  DEBUG(dbgs() << "Killing Trivial BB: \n" << *BB);
+  LLVM_DEBUG(dbgs() << "Killing Trivial BB: \n" << *BB);
 
   std::vector<DominatorTree::UpdateType> Updates;
   if (DDT) {
-    Updates.reserve(1 + (2 * std::distance(pred_begin(BB), pred_end(BB))));
+    Updates.reserve(1 + (2 * pred_size(BB)));
     Updates.push_back({DominatorTree::Delete, BB, Succ});
     // All predecessors of BB will be moved to Succ.
     for (auto I = pred_begin(BB), E = pred_end(BB); I != E; ++I) {
@@ -1528,7 +1534,7 @@ void llvm::salvageDebugInfo(Instruction &I) {
         DIExpression::prependOpcodes(DIExpr, Ops, DIExpression::WithStackValue);
     DII->setOperand(0, wrapMD(I.getOperand(0)));
     DII->setOperand(2, MetadataAsValue::get(I.getContext(), DIExpr));
-    DEBUG(dbgs() << "SALVAGE: " << *DII << '\n');
+    LLVM_DEBUG(dbgs() << "SALVAGE: " << *DII << '\n');
   };
 
   auto applyOffset = [&](DbgInfoIntrinsic *DII, uint64_t Offset) {
@@ -1551,7 +1557,7 @@ void llvm::salvageDebugInfo(Instruction &I) {
     MetadataAsValue *CastSrc = wrapMD(I.getOperand(0));
     for (auto *DII : DbgUsers) {
       DII->setOperand(0, CastSrc);
-      DEBUG(dbgs() << "SALVAGE: " << *DII << '\n');
+      LLVM_DEBUG(dbgs() << "SALVAGE: " << *DII << '\n');
     }
   } else if (auto *GEP = dyn_cast<GetElementPtrInst>(&I)) {
     unsigned BitWidth =
@@ -1618,7 +1624,7 @@ void llvm::salvageDebugInfo(Instruction &I) {
       DIExpr = DIExpression::prepend(DIExpr, DIExpression::WithDeref);
       DII->setOperand(0, AddrMD);
       DII->setOperand(2, MetadataAsValue::get(I.getContext(), DIExpr));
-      DEBUG(dbgs() << "SALVAGE:  " << *DII << '\n');
+      LLVM_DEBUG(dbgs() << "SALVAGE:  " << *DII << '\n');
     }
   }
 }
@@ -2081,8 +2087,8 @@ static unsigned replaceDominatedUsesWith(Value *From, Value *To,
     if (!Dominates(Root, U))
       continue;
     U.set(To);
-    DEBUG(dbgs() << "Replace dominated use of '" << From->getName() << "' as "
-                 << *To << " in " << *U << "\n");
+    LLVM_DEBUG(dbgs() << "Replace dominated use of '" << From->getName()
+                      << "' as " << *To << " in " << *U << "\n");
     ++Count;
   }
   return Count;

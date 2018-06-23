@@ -557,7 +557,7 @@ public:
     return -1;
   }
 
-  Value *getIncomingValueForBlock(const BasicBlock *BB) const {
+  MemoryAccess *getIncomingValueForBlock(const BasicBlock *BB) const {
     int Idx = getBasicBlockIndex(BB);
     assert(Idx >= 0 && "Invalid basic block argument!");
     return getIncomingValue(Idx);
@@ -776,8 +776,7 @@ private:
   MemoryPhi *createMemoryPhi(BasicBlock *BB);
   MemoryUseOrDef *createNewAccess(Instruction *);
   MemoryAccess *findDominatingDef(BasicBlock *, enum InsertionPlace);
-  void placePHINodes(const SmallPtrSetImpl<BasicBlock *> &,
-                     const DenseMap<const BasicBlock *, unsigned int> &);
+  void placePHINodes(const SmallPtrSetImpl<BasicBlock *> &);
   MemoryAccess *renameBlock(BasicBlock *, MemoryAccess *, bool);
   void renameSuccessorPhis(BasicBlock *, MemoryAccess *, bool);
   void renamePass(DomTreeNode *, MemoryAccess *IncomingVal,

@@ -15,6 +15,7 @@
 #ifndef LLVM_CLANG_TOOLS_EXTRA_CLANGD_CODECOMPLETE_H
 #define LLVM_CLANG_TOOLS_EXTRA_CLANGD_CODECOMPLETE_H
 
+#include "Headers.h"
 #include "Logger.h"
 #include "Path.h"
 #include "Protocol.h"
@@ -44,10 +45,8 @@ struct CodeCompleteOptions {
   /// Add macros to code completion results.
   bool IncludeMacros = true;
 
-  /// Add brief comments to completion items, if available.
-  /// FIXME(ibiryukov): it looks like turning this option on significantly slows
-  /// down completion, investigate if it can be made faster.
-  bool IncludeBriefComments = true;
+  /// Add comments to code completion results, if available.
+  bool IncludeComments = true;
 
   /// Include results that are not legal completions in the current context.
   /// For example, private members are usually inaccessible.
@@ -69,6 +68,7 @@ struct CodeCompleteOptions {
 CompletionList codeComplete(PathRef FileName,
                             const tooling::CompileCommand &Command,
                             PrecompiledPreamble const *Preamble,
+                            const std::vector<Inclusion> &PreambleInclusions,
                             StringRef Contents, Position Pos,
                             IntrusiveRefCntPtr<vfs::FileSystem> VFS,
                             std::shared_ptr<PCHContainerOperations> PCHs,

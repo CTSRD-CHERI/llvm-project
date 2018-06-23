@@ -616,7 +616,7 @@ static void addDebugCompDirArg(const ArgList &Args, ArgStringList &CmdArgs) {
   }
 }
 
-/// \brief Vectorize at all optimization levels greater than 1 except for -Oz.
+/// Vectorize at all optimization levels greater than 1 except for -Oz.
 /// For -Oz the loop vectorizer is disable, while the slp vectorizer is enabled.
 static bool shouldEnableVectorizerAtOLevel(const ArgList &Args, bool isSlpVec) {
   if (Arg *A = Args.getLastArg(options::OPT_O_Group)) {
@@ -838,7 +838,7 @@ static void addPGOAndCoverageFlags(Compilation &C, const Driver &D,
   }
 }
 
-/// \brief Check whether the given input tree contains any compilation actions.
+/// Check whether the given input tree contains any compilation actions.
 static bool ContainsCompileAction(const Action *A) {
   if (isa<CompileJobAction>(A) || isa<BackendJobAction>(A))
     return true;
@@ -850,7 +850,7 @@ static bool ContainsCompileAction(const Action *A) {
   return false;
 }
 
-/// \brief Check if -relax-all should be passed to the internal assembler.
+/// Check if -relax-all should be passed to the internal assembler.
 /// This is done by default when compiling non-assembler source with -O0.
 static bool UseRelaxAll(Compilation &C, const ArgList &Args) {
   bool RelaxDefault = true;
@@ -4224,9 +4224,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                    IsWindowsMSVC))
     CmdArgs.push_back("-fms-extensions");
 
-  // -fno-use-line-directives is default, except for MSVC targets.
+  // -fno-use-line-directives is default.
   if (Args.hasFlag(options::OPT_fuse_line_directives,
-                   options::OPT_fno_use_line_directives, IsWindowsMSVC))
+                   options::OPT_fno_use_line_directives, false))
     CmdArgs.push_back("-fuse-line-directives");
 
   // -fms-compatibility=0 is default.
@@ -4714,6 +4714,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
     if (Args.hasFlag(options::OPT_fcuda_rdc, options::OPT_fno_cuda_rdc, false))
       CmdArgs.push_back("-fcuda-rdc");
+    if (Args.hasFlag(options::OPT_fcuda_short_ptr,
+                     options::OPT_fno_cuda_short_ptr, false))
+      CmdArgs.push_back("-fcuda-short-ptr");
   }
 
   // OpenMP offloading device jobs take the argument -fopenmp-host-ir-file-path
@@ -5539,6 +5542,10 @@ void OffloadBundler::ConstructJob(Compilation &C, const JobAction &JA,
     Triples += Action::GetOffloadKindName(CurKind);
     Triples += '-';
     Triples += CurTC->getTriple().normalize();
+    if (CurKind == Action::OFK_HIP && CurDep->getOffloadingArch()) {
+      Triples += '-';
+      Triples += CurDep->getOffloadingArch();
+    }
   }
   CmdArgs.push_back(TCArgs.MakeArgString(Triples));
 
@@ -5608,6 +5615,11 @@ void OffloadBundler::ConstructJobMultipleOutputs(
     Triples += Action::GetOffloadKindName(Dep.DependentOffloadKind);
     Triples += '-';
     Triples += Dep.DependentToolChain->getTriple().normalize();
+    if (Dep.DependentOffloadKind == Action::OFK_HIP &&
+        !Dep.DependentBoundArch.empty()) {
+      Triples += '-';
+      Triples += Dep.DependentBoundArch;
+    }
   }
 
   CmdArgs.push_back(TCArgs.MakeArgString(Triples));

@@ -127,6 +127,10 @@ private:
                       MachineInstr &JmpI, CondRegArray &CondRegs);
   void rewriteCopy(MachineInstr &MI, MachineOperand &FlagUse,
                    MachineInstr &CopyDefI);
+  void rewriteSetCarryExtended(MachineBasicBlock &TestMBB,
+                               MachineBasicBlock::iterator TestPos,
+                               DebugLoc TestLoc, MachineInstr &SetBI,
+                               MachineOperand &FlagUse, CondRegArray &CondRegs);
   void rewriteSetCC(MachineBasicBlock &TestMBB,
                     MachineBasicBlock::iterator TestPos, DebugLoc TestLoc,
                     MachineInstr &SetCCI, MachineOperand &FlagUse,
@@ -338,8 +342,8 @@ static MachineBasicBlock &splitBlock(MachineBasicBlock &MBB,
 }
 
 bool X86FlagsCopyLoweringPass::runOnMachineFunction(MachineFunction &MF) {
-  DEBUG(dbgs() << "********** " << getPassName() << " : " << MF.getName()
-               << " **********\n");
+  LLVM_DEBUG(dbgs() << "********** " << getPassName() << " : " << MF.getName()
+                    << " **********\n");
 
   auto &Subtarget = MF.getSubtarget<X86Subtarget>();
   MRI = &MF.getRegInfo();
@@ -381,8 +385,9 @@ bool X86FlagsCopyLoweringPass::runOnMachineFunction(MachineFunction &MF) {
       // instructions. Until we have a motivating test case and fail to avoid
       // it by changing other parts of LLVM's lowering, we refuse to handle
       // this complex case here.
-      DEBUG(dbgs() << "ERROR: Encountered unexpected def of an eflags copy: ";
-            CopyDefI.dump());
+      LLVM_DEBUG(
+          dbgs() << "ERROR: Encountered unexpected def of an eflags copy: ";
+          CopyDefI.dump());
       report_fatal_error(
           "Cannot lower EFLAGS copy unless it is defined in turn by a copy!");
     }
@@ -406,7 +411,7 @@ bool X86FlagsCopyLoweringPass::runOnMachineFunction(MachineFunction &MF) {
     auto TestPos = CopyDefI.getIterator();
     DebugLoc TestLoc = CopyDefI.getDebugLoc();
 
-    DEBUG(dbgs() << "Rewriting copy: "; CopyI->dump());
+    LLVM_DEBUG(dbgs() << "Rewriting copy: "; CopyI->dump());
 
     // Scan for usage of newly set EFLAGS so we can rewrite them. We just buffer
     // jumps because their usage is very constrained.
@@ -443,7 +448,7 @@ bool X86FlagsCopyLoweringPass::runOnMachineFunction(MachineFunction &MF) {
       // other lowering transformation could induce this to happen, we do
       // a hard check even in non-debug builds here.
       if (&TestMBB != &UseMBB && !MDT->dominates(&TestMBB, &UseMBB)) {
-        DEBUG({
+        LLVM_DEBUG({
           dbgs() << "ERROR: Encountered use that is not dominated by our test "
                     "basic block! Rewriting this would require inserting PHI "
                     "nodes to track the flag state across the CFG.\n\nTest "
@@ -477,7 +482,7 @@ bool X86FlagsCopyLoweringPass::runOnMachineFunction(MachineFunction &MF) {
           continue;
         }
 
-        DEBUG(dbgs() << "  Rewriting use: "; MI.dump());
+        LLVM_DEBUG(dbgs() << "  Rewriting use: "; MI.dump());
 
         // Check the kill flag before we rewrite as that may change it.
         if (FlagUse->isKill())
@@ -511,8 +516,7 @@ bool X86FlagsCopyLoweringPass::runOnMachineFunction(MachineFunction &MF) {
         } else if (MI.getOpcode() == TargetOpcode::COPY) {
           rewriteCopy(MI, *FlagUse, CopyDefI);
         } else {
-          // We assume that arithmetic instructions that use flags also def
-          // them.
+          // We assume all other instructions that use flags also def them.
           assert(MI.findRegisterDefOperand(X86::EFLAGS) &&
                  "Expected a def of EFLAGS for this instruction!");
 
@@ -524,7 +528,23 @@ bool X86FlagsCopyLoweringPass::runOnMachineFunction(MachineFunction &MF) {
           // logic.
           FlagsKilled = true;
 
-          rewriteArithmetic(TestMBB, TestPos, TestLoc, MI, *FlagUse, CondRegs);
+          switch (MI.getOpcode()) {
+          case X86::SETB_C8r:
+          case X86::SETB_C16r:
+          case X86::SETB_C32r:
+          case X86::SETB_C64r:
+            // Use custom lowering for arithmetic that is merely extending the
+            // carry flag. We model this as the SETB_C* pseudo instructions.
+            rewriteSetCarryExtended(TestMBB, TestPos, TestLoc, MI, *FlagUse,
+                                    CondRegs);
+            break;
+
+          default:
+            // Generically handle remaining uses as arithmetic instructions.
+            rewriteArithmetic(TestMBB, TestPos, TestLoc, MI, *FlagUse,
+                              CondRegs);
+            break;
+          }
           break;
         }
 
@@ -570,7 +590,8 @@ bool X86FlagsCopyLoweringPass::runOnMachineFunction(MachineFunction &MF) {
       if (MI.getOpcode() == TargetOpcode::COPY &&
           (MI.getOperand(0).getReg() == X86::EFLAGS ||
            MI.getOperand(1).getReg() == X86::EFLAGS)) {
-        DEBUG(dbgs() << "ERROR: Found a COPY involving EFLAGS: "; MI.dump());
+        LLVM_DEBUG(dbgs() << "ERROR: Found a COPY involving EFLAGS: ";
+                   MI.dump());
         llvm_unreachable("Unlowered EFLAGS copy!");
       }
 #endif
@@ -608,7 +629,7 @@ unsigned X86FlagsCopyLoweringPass::promoteCondToReg(
   auto SetI = BuildMI(TestMBB, TestPos, TestLoc,
                       TII->get(X86::getSETFromCond(Cond)), Reg);
   (void)SetI;
-  DEBUG(dbgs() << "    save cond: "; SetI->dump());
+  LLVM_DEBUG(dbgs() << "    save cond: "; SetI->dump());
   ++NumSetCCsInserted;
   return Reg;
 }
@@ -630,15 +651,10 @@ std::pair<unsigned, bool> X86FlagsCopyLoweringPass::getCondOrInverseInReg(
 void X86FlagsCopyLoweringPass::insertTest(MachineBasicBlock &MBB,
                                           MachineBasicBlock::iterator Pos,
                                           DebugLoc Loc, unsigned Reg) {
-  // We emit test instructions as register/immediate test against -1. This
-  // allows register allocation to fold a memory operand if needed (that will
-  // happen often due to the places this code is emitted). But hopefully will
-  // also allow us to select a shorter encoding of `testb %reg, %reg` when that
-  // would be equivalent.
   auto TestI =
       BuildMI(MBB, Pos, Loc, TII->get(X86::TEST8rr)).addReg(Reg).addReg(Reg);
   (void)TestI;
-  DEBUG(dbgs() << "    test cond: "; TestI->dump());
+  LLVM_DEBUG(dbgs() << "    test cond: "; TestI->dump());
   ++NumTestsInserted;
 }
 
@@ -690,7 +706,7 @@ void X86FlagsCopyLoweringPass::rewriteArithmetic(
           .addReg(CondReg)
           .addImm(Addend);
   (void)AddI;
-  DEBUG(dbgs() << "    add cond: "; AddI->dump());
+  LLVM_DEBUG(dbgs() << "    add cond: "; AddI->dump());
   ++NumAddsInserted;
   FlagUse.setIsKill(true);
 }
@@ -720,7 +736,7 @@ void X86FlagsCopyLoweringPass::rewriteCMov(MachineBasicBlock &TestMBB,
       Inverted ? X86::COND_E : X86::COND_NE, TRI->getRegSizeInBits(CMovRC) / 8,
       !CMovI.memoperands_empty())));
   FlagUse.setIsKill(true);
-  DEBUG(dbgs() << "    fixed cmov: "; CMovI.dump());
+  LLVM_DEBUG(dbgs() << "    fixed cmov: "; CMovI.dump());
 }
 
 void X86FlagsCopyLoweringPass::rewriteCondJmp(
@@ -744,7 +760,7 @@ void X86FlagsCopyLoweringPass::rewriteCondJmp(
       X86::GetCondBranchFromCond(Inverted ? X86::COND_E : X86::COND_NE)));
   const int ImplicitEFLAGSOpIdx = 1;
   JmpI.getOperand(ImplicitEFLAGSOpIdx).setIsKill(true);
-  DEBUG(dbgs() << "    fixed jCC: "; JmpI.dump());
+  LLVM_DEBUG(dbgs() << "    fixed jCC: "; JmpI.dump());
 }
 
 void X86FlagsCopyLoweringPass::rewriteCopy(MachineInstr &MI,
@@ -754,6 +770,126 @@ void X86FlagsCopyLoweringPass::rewriteCopy(MachineInstr &MI,
   MRI->replaceRegWith(MI.getOperand(0).getReg(),
                       CopyDefI.getOperand(0).getReg());
   MI.eraseFromParent();
+}
+
+void X86FlagsCopyLoweringPass::rewriteSetCarryExtended(
+    MachineBasicBlock &TestMBB, MachineBasicBlock::iterator TestPos,
+    DebugLoc TestLoc, MachineInstr &SetBI, MachineOperand &FlagUse,
+    CondRegArray &CondRegs) {
+  // This routine is only used to handle pseudos for setting a register to zero
+  // or all ones based on CF. This is essentially the sign extended from 1-bit
+  // form of SETB and modeled with the SETB_C* pseudos. They require special
+  // handling as they aren't normal SETcc instructions and are lowered to an
+  // EFLAGS clobbering operation (SBB typically). One simplifying aspect is that
+  // they are only provided in reg-defining forms. A complicating factor is that
+  // they can define many different register widths.
+  assert(SetBI.getOperand(0).isReg() &&
+         "Cannot have a non-register defined operand to this variant of SETB!");
+
+  // Little helper to do the common final step of replacing the register def'ed
+  // by this SETB instruction with a new register and removing the SETB
+  // instruction.
+  auto RewriteToReg = [&](unsigned Reg) {
+    MRI->replaceRegWith(SetBI.getOperand(0).getReg(), Reg);
+    SetBI.eraseFromParent();
+  };
+
+  // Grab the register class used for this particular instruction.
+  auto &SetBRC = *MRI->getRegClass(SetBI.getOperand(0).getReg());
+
+  MachineBasicBlock &MBB = *SetBI.getParent();
+  auto SetPos = SetBI.getIterator();
+  auto SetLoc = SetBI.getDebugLoc();
+
+  auto AdjustReg = [&](unsigned Reg) {
+    auto &OrigRC = *MRI->getRegClass(Reg);
+    if (&OrigRC == &SetBRC)
+      return Reg;
+
+    unsigned NewReg;
+
+    int OrigRegSize = TRI->getRegSizeInBits(OrigRC) / 8;
+    int TargetRegSize = TRI->getRegSizeInBits(SetBRC) / 8;
+    assert(OrigRegSize <= 8 && "No GPRs larger than 64-bits!");
+    assert(TargetRegSize <= 8 && "No GPRs larger than 64-bits!");
+    int SubRegIdx[] = {X86::NoSubRegister, X86::sub_8bit, X86::sub_16bit,
+                       X86::NoSubRegister, X86::sub_32bit};
+
+    // If the original size is smaller than the target *and* is smaller than 4
+    // bytes, we need to explicitly zero extend it. We always extend to 4-bytes
+    // to maximize the chance of being able to CSE that operation and to avoid
+    // partial dependency stalls extending to 2-bytes.
+    if (OrigRegSize < TargetRegSize && OrigRegSize < 4) {
+      NewReg = MRI->createVirtualRegister(&X86::GR32RegClass);
+      BuildMI(MBB, SetPos, SetLoc, TII->get(X86::MOVZX32rr8), NewReg)
+          .addReg(Reg);
+      if (&SetBRC == &X86::GR32RegClass)
+        return NewReg;
+      Reg = NewReg;
+      OrigRegSize = 4;
+    }
+
+    NewReg = MRI->createVirtualRegister(&SetBRC);
+    if (OrigRegSize < TargetRegSize) {
+      BuildMI(MBB, SetPos, SetLoc, TII->get(TargetOpcode::SUBREG_TO_REG),
+              NewReg)
+          .addImm(0)
+          .addReg(Reg)
+          .addImm(SubRegIdx[OrigRegSize]);
+    } else if (OrigRegSize > TargetRegSize) {
+      BuildMI(MBB, SetPos, SetLoc, TII->get(TargetOpcode::EXTRACT_SUBREG),
+              NewReg)
+          .addReg(Reg)
+          .addImm(SubRegIdx[TargetRegSize]);
+    } else {
+      BuildMI(MBB, SetPos, SetLoc, TII->get(TargetOpcode::COPY), NewReg)
+          .addReg(Reg);
+    }
+    return NewReg;
+  };
+
+  unsigned &CondReg = CondRegs[X86::COND_B];
+  if (!CondReg)
+    CondReg = promoteCondToReg(TestMBB, TestPos, TestLoc, X86::COND_B);
+
+  // Adjust the condition to have the desired register width by zero-extending
+  // as needed.
+  // FIXME: We should use a better API to avoid the local reference and using a
+  // different variable here.
+  unsigned ExtCondReg = AdjustReg(CondReg);
+
+  // Now we need to turn this into a bitmask. We do this by subtracting it from
+  // zero.
+  unsigned ZeroReg = MRI->createVirtualRegister(&X86::GR32RegClass);
+  BuildMI(MBB, SetPos, SetLoc, TII->get(X86::MOV32r0), ZeroReg);
+  ZeroReg = AdjustReg(ZeroReg);
+
+  unsigned Sub;
+  switch (SetBI.getOpcode()) {
+  case X86::SETB_C8r:
+    Sub = X86::SUB8rr;
+    break;
+
+  case X86::SETB_C16r:
+    Sub = X86::SUB16rr;
+    break;
+
+  case X86::SETB_C32r:
+    Sub = X86::SUB32rr;
+    break;
+
+  case X86::SETB_C64r:
+    Sub = X86::SUB64rr;
+    break;
+
+  default:
+    llvm_unreachable("Invalid SETB_C* opcode!");
+  }
+  unsigned ResultReg = MRI->createVirtualRegister(&SetBRC);
+  BuildMI(MBB, SetPos, SetLoc, TII->get(Sub), ResultReg)
+      .addReg(ZeroReg)
+      .addReg(ExtCondReg);
+  return RewriteToReg(ResultReg);
 }
 
 void X86FlagsCopyLoweringPass::rewriteSetCC(MachineBasicBlock &TestMBB,

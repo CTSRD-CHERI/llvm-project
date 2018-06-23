@@ -947,21 +947,25 @@ StateType Process::GetNextEvent(EventSP &event_sp) {
   return state;
 }
 
-void Process::SyncIOHandler(uint32_t iohandler_id, uint64_t timeout_msec) {
+void Process::SyncIOHandler(uint32_t iohandler_id,
+                            const Timeout<std::micro> &timeout) {
   // don't sync (potentially context switch) in case where there is no process
   // IO
   if (!m_process_input_reader)
     return;
 
-  uint32_t new_iohandler_id = 0;
-  m_iohandler_sync.WaitForValueNotEqualTo(
-      iohandler_id, new_iohandler_id, std::chrono::milliseconds(timeout_msec));
+  auto Result = m_iohandler_sync.WaitForValueNotEqualTo(iohandler_id, timeout);
 
   Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_PROCESS));
-  if (log)
-    log->Printf("Process::%s waited for m_iohandler_sync to change from %u, "
-                "new value is %u",
-                __FUNCTION__, iohandler_id, new_iohandler_id);
+  if (Result) {
+    LLDB_LOG(
+        log,
+        "waited from m_iohandler_sync to change from {0}. New value is {1}.",
+        iohandler_id, *Result);
+  } else {
+    LLDB_LOG(log, "timed out waiting for m_iohandler_sync to change from {0}.",
+             iohandler_id);
+  }
 }
 
 StateType Process::WaitForProcessToStop(const Timeout<std::micro> &timeout,
@@ -6160,14 +6164,12 @@ Status Process::UpdateAutomaticSignalFiltering() {
   return Status();
 }
 
-UtilityFunction *Process::GetLoadImageUtilityFunction(Platform *platform) {
+UtilityFunction *Process::GetLoadImageUtilityFunction(
+    Platform *platform,
+    llvm::function_ref<std::unique_ptr<UtilityFunction>()> factory) {
   if (platform != GetTarget().GetPlatform().get())
     return nullptr;
+  std::call_once(m_dlopen_utility_func_flag_once,
+                 [&] { m_dlopen_utility_func_up = factory(); });
   return m_dlopen_utility_func_up.get();
 }
-
-void Process::SetLoadImageUtilityFunction(std::unique_ptr<UtilityFunction> 
-                                          utility_func_up) {
-  m_dlopen_utility_func_up.swap(utility_func_up);
-}
-
