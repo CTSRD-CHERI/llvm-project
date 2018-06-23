@@ -236,9 +236,10 @@ void AsanThread::Init(const InitOptions *options) {
           &local);
 }
 
-// Fuchsia doesn't use ThreadStart.
-// asan_fuchsia.c defines CreateMainThread and SetThreadStackAndTls.
-#if !SANITIZER_FUCHSIA
+// Fuchsia and RTEMS don't use ThreadStart.
+// asan_fuchsia.c/asan_rtems.c define CreateMainThread and
+// SetThreadStackAndTls.
+#if !SANITIZER_FUCHSIA && !SANITIZER_RTEMS
 
 thread_return_t AsanThread::ThreadStart(
     tid_t os_id, atomic_uintptr_t *signal_thread_is_registered) {
@@ -298,12 +299,17 @@ void AsanThread::SetThreadStackAndTls(const InitOptions *options) {
   CHECK(AddrIsInStack((uptr)&local));
 }
 
-#endif  // !SANITIZER_FUCHSIA
+#endif  // !SANITIZER_FUCHSIA && !SANITIZER_RTEMS
 
 void AsanThread::ClearShadowForThreadStackAndTLS() {
   PoisonShadow(stack_bottom_, stack_top_ - stack_bottom_, 0);
-  if (tls_begin_ != tls_end_)
-    PoisonShadow(tls_begin_, tls_end_ - tls_begin_, 0);
+  if (tls_begin_ != tls_end_) {
+    uptr tls_begin_aligned = RoundDownTo(tls_begin_, SHADOW_GRANULARITY);
+    uptr tls_end_aligned = RoundUpTo(tls_end_, SHADOW_GRANULARITY);
+    FastPoisonShadowPartialRightRedzone(tls_begin_aligned,
+                                        tls_end_ - tls_begin_aligned,
+                                        tls_end_aligned - tls_end_, 0);
+  }
 }
 
 bool AsanThread::GetStackFrameAccessByAddr(uptr addr,
@@ -388,6 +394,9 @@ static bool ThreadStackContainsAddress(ThreadContextBase *tctx_base,
 }
 
 AsanThread *GetCurrentThread() {
+  if (SANITIZER_RTEMS && !asan_inited)
+    return nullptr;
+
   AsanThreadContext *context =
       reinterpret_cast<AsanThreadContext *>(AsanTSDGet());
   if (!context) {

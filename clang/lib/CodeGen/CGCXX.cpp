@@ -269,7 +269,6 @@ static CGCallee BuildAppleKextVirtualCall(CodeGenFunction &CGF,
                                           const CXXRecordDecl *RD) {
   assert(!CGF.CGM.getTarget().getCXXABI().isMicrosoft() &&
          "No kext in Microsoft ABI");
-  GD = GD.getCanonicalDecl();
   CodeGenModule &CGM = CGF.CGM;
   llvm::Value *VTable = CGM.getCXXABI().getAddrOfVTable(RD, CharUnits());
   const unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
@@ -286,7 +285,7 @@ static CGCallee BuildAppleKextVirtualCall(CodeGenFunction &CGF,
     CGF.Builder.CreateConstInBoundsGEP1_64(VTable, VTableIndex, "vfnkxt");
   llvm::Value *VFunc =
     CGF.Builder.CreateAlignedLoad(VFuncPtr, CGF.PointerAlignInBytes);
-  CGCallee Callee(GD.getDecl(), VFunc);
+  CGCallee Callee(GD.getDecl()->getCanonicalDecl(), VFunc);
   return Callee;
 }
 

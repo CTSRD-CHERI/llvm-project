@@ -2,7 +2,7 @@
 // RUN: %clang_cc1 -ffreestanding %s -triple=x86_64-apple-darwin -target-feature +avx -fno-signed-char -emit-llvm -o - -Wall -Werror | FileCheck %s
 
 
-#include <x86intrin.h>
+#include <immintrin.h>
 
 // NOTE: This should match the tests in llvm/test/CodeGen/X86/sse-intrinsics-fast-isel.ll
 
@@ -256,7 +256,7 @@ __m256d test_mm256_cvtepi32_pd(__m128i A) {
 
 __m256 test_mm256_cvtepi32_ps(__m256i A) {
   // CHECK-LABEL: test_mm256_cvtepi32_ps
-  // CHECK: call <8 x float> @llvm.x86.avx.cvtdq2.ps.256(<8 x i32> %{{.*}})
+  // CHECK: sitofp <8 x i32> %{{.*}} to <8 x float>
   return _mm256_cvtepi32_ps(A);
 }
 

@@ -501,6 +501,12 @@ private:
         }
         if (StartsObjCMethodExpr && CurrentToken->Previous != Left) {
           CurrentToken->Type = TT_ObjCMethodExpr;
+          // If we haven't seen a colon yet, make sure the last identifier
+          // before the r_square is tagged as a selector name component.
+          if (!ColonFound && CurrentToken->Previous &&
+              CurrentToken->Previous->is(TT_Unknown) &&
+              canBeObjCSelectorComponent(*CurrentToken->Previous))
+            CurrentToken->Previous->Type = TT_SelectorName;
           // determineStarAmpUsage() thinks that '*' '[' is allocating an
           // array of pointers, but if '[' starts a selector then '*' is a
           // binary operator.
@@ -2952,7 +2958,7 @@ bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
       return false;
     if (Left.is(TT_JsTypeColon))
       return true;
-    if (Right.NestingLevel == 0 && Right.is(Keywords.kw_is))
+    if (Right.is(Keywords.kw_is))
       return false;
     if (Left.is(Keywords.kw_in))
       return Style.BreakBeforeBinaryOperators == FormatStyle::BOS_None;

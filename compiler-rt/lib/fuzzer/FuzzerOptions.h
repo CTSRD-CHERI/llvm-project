@@ -45,6 +45,7 @@ struct FuzzingOptions {
   std::string ExactArtifactPath;
   std::string ExitOnSrcPos;
   std::string ExitOnItem;
+  std::string FocusFunction;
   bool SaveArtifacts = true;
   bool PrintNEW = true; // Print a status line when new units are found;
   bool PrintNewCovPcs = false;
@@ -52,6 +53,7 @@ struct FuzzingOptions {
   bool PrintFinalStats = false;
   bool PrintCorpusStats = false;
   bool PrintCoverage = false;
+  bool DumpCoverage = false;
   bool DetectLeaks = true;
   int PurgeAllocatorIntervalSec = 1;
   int UseFeatureFrequency = false;

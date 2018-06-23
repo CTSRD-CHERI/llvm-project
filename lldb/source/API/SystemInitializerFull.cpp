@@ -70,6 +70,9 @@
 #include "Plugins/LanguageRuntime/ObjC/AppleObjCRuntime/AppleObjCRuntimeV2.h"
 #include "Plugins/LanguageRuntime/RenderScript/RenderScriptRuntime/RenderScriptRuntime.h"
 #include "Plugins/MemoryHistory/asan/MemoryHistoryASan.h"
+#include "Plugins/ObjectFile/ELF/ObjectFileELF.h"
+#include "Plugins/ObjectFile/Mach-O/ObjectFileMachO.h"
+#include "Plugins/ObjectFile/PECOFF/ObjectFilePECOFF.h"
 #include "Plugins/OperatingSystem/Go/OperatingSystemGo.h"
 #include "Plugins/OperatingSystem/Python/OperatingSystemPython.h"
 #include "Plugins/Platform/Android/PlatformAndroid.h"
@@ -84,6 +87,7 @@
 #include "Plugins/Platform/gdb-server/PlatformRemoteGDBServer.h"
 #include "Plugins/Process/elf-core/ProcessElfCore.h"
 #include "Plugins/Process/gdb-remote/ProcessGDBRemote.h"
+#include "Plugins/Process/mach-core/ProcessMachCore.h"
 #include "Plugins/Process/minidump/ProcessMinidump.h"
 #include "Plugins/ScriptInterpreter/None/ScriptInterpreterNone.h"
 #include "Plugins/SymbolFile/DWARF/SymbolFileDWARF.h"
@@ -104,7 +108,6 @@
 #include "Plugins/Platform/MacOSX/PlatformRemoteAppleWatch.h"
 #include "Plugins/Platform/MacOSX/PlatformiOSSimulator.h"
 #include "Plugins/Process/MacOSX-Kernel/ProcessKDP.h"
-#include "Plugins/Process/mach-core/ProcessMachCore.h"
 #include "Plugins/SymbolVendor/MacOSX/SymbolVendorMacOSX.h"
 #endif
 #include "Plugins/StructuredData/DarwinLog/StructuredDataDarwinLog.h"
@@ -251,6 +254,11 @@ SystemInitializerFull::~SystemInitializerFull() {}
 
 void SystemInitializerFull::Initialize() {
   SystemInitializerCommon::Initialize();
+
+  ObjectFileELF::Initialize();
+  ObjectFileMachO::Initialize();
+  ObjectFilePECOFF::Initialize();
+
   ScriptInterpreterNone::Initialize();
 
 #ifndef LLDB_DISABLE_PYTHON
@@ -313,6 +321,7 @@ void SystemInitializerFull::Initialize() {
 
   JITLoaderGDB::Initialize();
   ProcessElfCore::Initialize();
+  ProcessMachCore::Initialize();
   minidump::ProcessMinidump::Initialize();
   MemoryHistoryASan::Initialize();
   AddressSanitizerRuntime::Initialize();
@@ -353,7 +362,6 @@ void SystemInitializerFull::Initialize() {
 #if defined(__APPLE__)
   SymbolVendorMacOSX::Initialize();
   ProcessKDP::Initialize();
-  ProcessMachCore::Initialize();
   PlatformAppleTVSimulator::Initialize();
   PlatformAppleWatchSimulator::Initialize();
   PlatformRemoteAppleTV::Initialize();
@@ -440,6 +448,7 @@ void SystemInitializerFull::Terminate() {
 
   JITLoaderGDB::Terminate();
   ProcessElfCore::Terminate();
+  ProcessMachCore::Terminate();
   minidump::ProcessMinidump::Terminate();
   MemoryHistoryASan::Terminate();
   AddressSanitizerRuntime::Terminate();
@@ -471,7 +480,6 @@ void SystemInitializerFull::Terminate() {
 
 #if defined(__APPLE__)
   DynamicLoaderDarwinKernel::Terminate();
-  ProcessMachCore::Terminate();
   ProcessKDP::Terminate();
   SymbolVendorMacOSX::Terminate();
   PlatformAppleTVSimulator::Terminate();
@@ -513,6 +521,10 @@ void SystemInitializerFull::Terminate() {
   PlatformiOSSimulator::Terminate();
   PlatformDarwinKernel::Terminate();
 #endif
+
+  ObjectFileELF::Terminate();
+  ObjectFileMachO::Terminate();
+  ObjectFilePECOFF::Terminate();
 
   // Now shutdown the common parts, in reverse order.
   SystemInitializerCommon::Terminate();

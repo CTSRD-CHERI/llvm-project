@@ -2689,10 +2689,6 @@ bool Sema::CheckX86BuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
     i = 1; l = 0; u = 7;
     break;
   case X86::BI__builtin_ia32_sha1rnds4:
-  case X86::BI__builtin_ia32_shuf_f32x4_256_mask:
-  case X86::BI__builtin_ia32_shuf_f64x2_256_mask:
-  case X86::BI__builtin_ia32_shuf_i32x4_256_mask:
-  case X86::BI__builtin_ia32_shuf_i64x2_256_mask:
     i = 2; l = 0; u = 3;
     break;
   case X86::BI__builtin_ia32_vpermil2pd:
@@ -2808,13 +2804,9 @@ bool Sema::CheckX86BuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
     break;
   case X86::BI__builtin_ia32_palignr128:
   case X86::BI__builtin_ia32_palignr256:
-  case X86::BI__builtin_ia32_palignr512_mask:
+  case X86::BI__builtin_ia32_palignr512:
   case X86::BI__builtin_ia32_vcomisd:
   case X86::BI__builtin_ia32_vcomiss:
-  case X86::BI__builtin_ia32_shuf_f32x4_mask:
-  case X86::BI__builtin_ia32_shuf_f64x2_mask:
-  case X86::BI__builtin_ia32_shuf_i32x4_mask:
-  case X86::BI__builtin_ia32_shuf_i64x2_mask:
   case X86::BI__builtin_ia32_dbpsadbw128_mask:
   case X86::BI__builtin_ia32_dbpsadbw256_mask:
   case X86::BI__builtin_ia32_dbpsadbw512_mask:

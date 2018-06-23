@@ -615,11 +615,14 @@ int FuzzerDriver(int *argc, char ***argv, UserCallback Callback) {
   Options.PrintFinalStats = Flags.print_final_stats;
   Options.PrintCorpusStats = Flags.print_corpus_stats;
   Options.PrintCoverage = Flags.print_coverage;
+  Options.DumpCoverage = Flags.dump_coverage;
   Options.UseFeatureFrequency = Flags.use_feature_frequency;
   if (Flags.exit_on_src_pos)
     Options.ExitOnSrcPos = Flags.exit_on_src_pos;
   if (Flags.exit_on_item)
     Options.ExitOnItem = Flags.exit_on_item;
+  if (Flags.focus_function)
+    Options.FocusFunction = Flags.focus_function;
 
   unsigned Seed = Flags.seed;
   // Initialize Seed.

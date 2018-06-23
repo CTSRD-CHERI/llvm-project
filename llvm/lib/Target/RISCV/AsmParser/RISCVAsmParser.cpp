@@ -105,6 +105,10 @@ public:
   RISCVAsmParser(const MCSubtargetInfo &STI, MCAsmParser &Parser,
                  const MCInstrInfo &MII, const MCTargetOptions &Options)
       : MCTargetAsmParser(Options, STI, MII) {
+    Parser.addAliasForDirective(".half", ".2byte");
+    Parser.addAliasForDirective(".hword", ".2byte");
+    Parser.addAliasForDirective(".word", ".4byte");
+    Parser.addAliasForDirective(".dword", ".8byte");
     setAvailableFeatures(ComputeAvailableFeatures(STI.getFeatureBits()));
   }
 };
@@ -939,7 +943,8 @@ bool RISCVAsmParser::ParseInstruction(ParseInstructionInfo &Info,
     return false;
 
   // Parse first operand
-  if (parseOperand(Operands, Name == "call"))
+  bool ForceImmediate = (Name == "call" || Name == "tail");
+  if (parseOperand(Operands, ForceImmediate))
     return true;
 
   // Parse until end of statement, consuming commas between operands

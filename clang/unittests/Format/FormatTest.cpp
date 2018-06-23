@@ -5521,6 +5521,57 @@ TEST_F(FormatTest, WrapsTemplateDeclarations) {
                NeverBreak);
 }
 
+TEST_F(FormatTest, WrapsTemplateDeclarationsWithComments) {
+  FormatStyle Style = getGoogleStyle(FormatStyle::LK_Cpp);
+  Style.ColumnLimit = 60;
+  EXPECT_EQ("// Baseline - no comments.\n"
+            "template <\n"
+            "    typename aaaaaaaaaaaaaaaaaaaaaa<bbbbbbbbbbbb>::value>\n"
+            "void f() {}",
+            format("// Baseline - no comments.\n"
+                   "template <\n"
+                   "    typename aaaaaaaaaaaaaaaaaaaaaa<bbbbbbbbbbbb>::value>\n"
+                   "void f() {}",
+                   Style));
+
+  EXPECT_EQ("template <\n"
+            "    typename aaaaaaaaaa<bbbbbbbbbbbb>::value>  // trailing\n"
+            "void f() {}",
+            format("template <\n"
+                   "    typename aaaaaaaaaa<bbbbbbbbbbbb>::value> // trailing\n"
+                   "void f() {}",
+                   Style));
+
+  EXPECT_EQ(
+      "template <\n"
+      "    typename aaaaaaaaaa<bbbbbbbbbbbb>::value> /* line */\n"
+      "void f() {}",
+      format("template <typename aaaaaaaaaa<bbbbbbbbbbbb>::value>  /* line */\n"
+             "void f() {}",
+             Style));
+
+  EXPECT_EQ(
+      "template <\n"
+      "    typename aaaaaaaaaa<bbbbbbbbbbbb>::value>  // trailing\n"
+      "                                               // multiline\n"
+      "void f() {}",
+      format("template <\n"
+             "    typename aaaaaaaaaa<bbbbbbbbbbbb>::value> // trailing\n"
+             "                                              // multiline\n"
+             "void f() {}",
+             Style));
+
+  EXPECT_EQ(
+      "template <typename aaaaaaaaaa<\n"
+      "    bbbbbbbbbbbb>::value>  // trailing loooong\n"
+      "void f() {}",
+      format(
+          "template <\n"
+          "    typename aaaaaaaaaa<bbbbbbbbbbbb>::value> // trailing loooong\n"
+          "void f() {}",
+          Style));
+}
+
 TEST_F(FormatTest, WrapsTemplateParameters) {
   FormatStyle Style = getLLVMStyle();
   Style.AlignAfterOpenBracket = FormatStyle::BAS_DontAlign;
@@ -6626,6 +6677,18 @@ TEST_F(FormatTest, IncorrectCodeUnbalancedBraces) {
   verifyFormat("{");
   verifyFormat("#})");
   verifyNoCrash("(/**/[:!] ?[).");
+}
+
+TEST_F(FormatTest, IncorrectUnbalancedBracesInMacrosWithUnicode) {
+  // Found by oss-fuzz:
+  // https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=8212
+  FormatStyle Style = getGoogleStyle(FormatStyle::LK_Cpp);
+  Style.ColumnLimit = 60;
+  verifyNoCrash(
+      "\x23\x47\xff\x20\x28\xff\x3c\xff\x3f\xff\x20\x2f\x7b\x7a\xff\x20"
+      "\xff\xff\xff\xca\xb5\xff\xff\xff\xff\x3a\x7b\x7d\xff\x20\xff\x20"
+      "\xff\x74\xff\x20\x7d\x7d\xff\x7b\x3a\xff\x20\x71\xff\x20\xff\x0a",
+      Style);
 }
 
 TEST_F(FormatTest, IncorrectCodeDoNoWhile) {

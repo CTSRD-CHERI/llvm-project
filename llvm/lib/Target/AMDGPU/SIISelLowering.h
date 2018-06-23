@@ -60,8 +60,10 @@ class SITargetLowering final : public AMDGPUTargetLowering {
   SDValue LowerATOMIC_CMP_SWAP(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerBRCOND(SDValue Op, SelectionDAG &DAG) const;
 
-  SDValue lowerIntrinsicWChain_IllegalReturnType(SDValue Op, SDValue &Chain,
-                                                 SelectionDAG &DAG) const;
+  SDValue adjustLoadValueType(unsigned Opcode, MemSDNode *M,
+                              SelectionDAG &DAG,
+                              bool IsIntrinsic = false) const;
+
   SDValue handleD16VData(SDValue VData, SelectionDAG &DAG) const;
 
   /// Converts \p Op, which must be of floating point type, to the
@@ -129,6 +131,7 @@ class SITargetLowering final : public AMDGPUTargetLowering {
   SDValue performFSubCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performSetCCCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performCvtF32UByteNCombine(SDNode *N, DAGCombinerInfo &DCI) const;
+  SDValue performClampCombine(SDNode *N, DAGCombinerInfo &DCI) const;
 
   bool isLegalFlatAddressingMode(const AddrMode &AM) const;
   bool isLegalGlobalAddressingMode(const AddrMode &AM) const;
@@ -154,6 +157,8 @@ public:
   SITargetLowering(const TargetMachine &tm, const SISubtarget &STI);
 
   const SISubtarget *getSubtarget() const;
+
+  bool isFPExtFoldable(unsigned Opcode, EVT DestVT, EVT SrcVT) const override;
 
   bool isShuffleMaskLegal(ArrayRef<int> /*Mask*/, EVT /*VT*/) const override;
 

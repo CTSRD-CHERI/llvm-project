@@ -11,7 +11,6 @@
 #ifndef LLVM_LIB_TARGET_AMDGPU_AMDGPU_H
 #define LLVM_LIB_TARGET_AMDGPU_AMDGPU_H
 
-#include "MCTargetDesc/AMDGPUMCTargetDesc.h"
 #include "llvm/Target/TargetMachine.h"
 
 namespace llvm {
@@ -72,6 +71,10 @@ extern char &AMDGPUAnnotateKernelFeaturesID;
 ModulePass *createAMDGPULowerIntrinsicsPass();
 void initializeAMDGPULowerIntrinsicsPass(PassRegistry &);
 extern char &AMDGPULowerIntrinsicsID;
+
+ModulePass *createAMDGPULowerKernelAttributesPass();
+void initializeAMDGPULowerKernelAttributesPass(PassRegistry &);
+extern char &AMDGPULowerKernelAttributesID;
 
 void initializeAMDGPURewriteOutArgumentsPass(PassRegistry &);
 extern char &AMDGPURewriteOutArgumentsID;

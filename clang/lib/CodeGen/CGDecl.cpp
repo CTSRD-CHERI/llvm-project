@@ -977,6 +977,9 @@ llvm::Value *CodeGenFunction::EmitLifetimeStart(uint64_t Size,
   if (!ShouldEmitLifetimeMarkers)
     return nullptr;
 
+  assert(Addr->getType()->getPointerAddressSpace() ==
+             CGM.getDataLayout().getAllocaAddrSpace() &&
+         "Pointer should be in alloca address space");
   llvm::Value *SizeV = llvm::ConstantInt::get(Int64Ty, Size);
   Addr = Builder.CreateBitCast(Addr, AllocaInt8PtrTy);
   llvm::CallInst *C =
@@ -986,6 +989,9 @@ llvm::Value *CodeGenFunction::EmitLifetimeStart(uint64_t Size,
 }
 
 void CodeGenFunction::EmitLifetimeEnd(llvm::Value *Size, llvm::Value *Addr) {
+  assert(Addr->getType()->getPointerAddressSpace() ==
+             CGM.getDataLayout().getAllocaAddrSpace() &&
+         "Pointer should be in alloca address space");
   Addr = Builder.CreateBitCast(Addr, AllocaInt8PtrTy);
   llvm::CallInst *C =
       Builder.CreateCall(CGM.getLLVMLifetimeEndFn(), {Size, Addr});
@@ -1070,6 +1076,7 @@ CodeGenFunction::EmitAutoVarAlloca(const VarDecl &D) {
                                  codegenoptions::LimitedDebugInfo;
 
   Address address = Address::invalid();
+  Address AllocaAddr = Address::invalid();
   if (Ty->isConstantSizeType()) {
     bool NRVO = getLangOpts().ElideConstructors &&
       D.isNRVOVariable();
@@ -1164,7 +1171,8 @@ CodeGenFunction::EmitAutoVarAlloca(const VarDecl &D) {
       // Create the alloca.  Note that we set the name separately from
       // building the instruction so that it's there even in no-asserts
       // builds.
-      address = CreateTempAlloca(allocaTy, allocaAlignment, D.getName());
+      address = CreateTempAlloca(allocaTy, allocaAlignment, D.getName(),
+                                 /*ArraySize=*/nullptr, &AllocaAddr);
 
       // Don't emit lifetime markers for MSVC catch parameters. The lifetime of
       // the catch parameter starts in the catchpad instruction, and we can't
@@ -1192,7 +1200,7 @@ CodeGenFunction::EmitAutoVarAlloca(const VarDecl &D) {
             !(!getLangOpts().CPlusPlus && hasLabelBeenSeenInCurrentScope())) {
           uint64_t size = CGM.getDataLayout().getTypeAllocSize(allocaTy);
           emission.SizeForLifetimeMarkers =
-              EmitLifetimeStart(size, address.getPointer());
+              EmitLifetimeStart(size, AllocaAddr.getPointer());
         }
       } else {
         assert(!emission.useLifetimeMarkers());
@@ -1222,7 +1230,8 @@ CodeGenFunction::EmitAutoVarAlloca(const VarDecl &D) {
     llvm::Type *llvmTy = ConvertTypeForMem(VlaSize.Type);
 
     // Allocate memory for the array.
-    address = CreateTempAlloca(llvmTy, alignment, "vla", VlaSize.NumElts);
+    address = CreateTempAlloca(llvmTy, alignment, "vla", VlaSize.NumElts,
+                               &AllocaAddr);
 
     // If we have debug info enabled, properly describe the VLA dimensions for
     // this type by registering the vla size expression for each of the
@@ -1232,6 +1241,7 @@ CodeGenFunction::EmitAutoVarAlloca(const VarDecl &D) {
 
   setAddrOfLocalVar(&D, address);
   emission.Addr = address;
+  emission.AllocaAddr = AllocaAddr;
 
   // Emit debug info for local var declaration.
   if (EmitDebugInfo && HaveInsertPoint()) {
@@ -1245,23 +1255,36 @@ CodeGenFunction::EmitAutoVarAlloca(const VarDecl &D) {
   // Make sure we call @llvm.lifetime.end.
   if (emission.useLifetimeMarkers())
     EHStack.pushCleanup<CallLifetimeEnd>(NormalEHLifetimeMarker,
-                                         emission.getAllocatedAddress(),
+                                         emission.getOriginalAllocatedAddress(),
                                          emission.getSizeForLifetimeMarkers());
 
   return emission;
 }
 
+static bool isCapturedBy(const VarDecl &, const Expr *);
+
+/// Determines whether the given __block variable is potentially
+/// captured by the given statement.
+static bool isCapturedBy(const VarDecl &Var, const Stmt *S) {
+  if (const Expr *E = dyn_cast<Expr>(S))
+    return isCapturedBy(Var, E);
+  for (const Stmt *SubStmt : S->children())
+    if (isCapturedBy(Var, SubStmt))
+      return true;
+  return false;
+}
+
 /// Determines whether the given __block variable is potentially
 /// captured by the given expression.
-static bool isCapturedBy(const VarDecl &var, const Expr *e) {
+static bool isCapturedBy(const VarDecl &Var, const Expr *E) {
   // Skip the most common kinds of expressions that make
   // hierarchy-walking expensive.
-  e = e->IgnoreParenCasts();
+  E = E->IgnoreParenCasts();
 
-  if (const BlockExpr *be = dyn_cast<BlockExpr>(e)) {
-    const BlockDecl *block = be->getBlockDecl();
-    for (const auto &I : block->captures()) {
-      if (I.getVariable() == &var)
+  if (const BlockExpr *BE = dyn_cast<BlockExpr>(E)) {
+    const BlockDecl *Block = BE->getBlockDecl();
+    for (const auto &I : Block->captures()) {
+      if (I.getVariable() == &Var)
         return true;
     }
 
@@ -1269,19 +1292,19 @@ static bool isCapturedBy(const VarDecl &var, const Expr *e) {
     return false;
   }
 
-  if (const StmtExpr *SE = dyn_cast<StmtExpr>(e)) {
+  if (const StmtExpr *SE = dyn_cast<StmtExpr>(E)) {
     const CompoundStmt *CS = SE->getSubStmt();
     for (const auto *BI : CS->body())
-      if (const auto *E = dyn_cast<Expr>(BI)) {
-        if (isCapturedBy(var, E))
-            return true;
+      if (const auto *BIE = dyn_cast<Expr>(BI)) {
+        if (isCapturedBy(Var, BIE))
+          return true;
       }
       else if (const auto *DS = dyn_cast<DeclStmt>(BI)) {
           // special case declarations
           for (const auto *I : DS->decls()) {
               if (const auto *VD = dyn_cast<VarDecl>((I))) {
                 const Expr *Init = VD->getInit();
-                if (Init && isCapturedBy(var, Init))
+                if (Init && isCapturedBy(Var, Init))
                   return true;
               }
           }
@@ -1293,8 +1316,8 @@ static bool isCapturedBy(const VarDecl &var, const Expr *e) {
     return false;
   }
 
-  for (const Stmt *SubStmt : e->children())
-    if (isCapturedBy(var, cast<Expr>(SubStmt)))
+  for (const Stmt *SubStmt : E->children())
+    if (isCapturedBy(Var, SubStmt))
       return true;
 
   return false;

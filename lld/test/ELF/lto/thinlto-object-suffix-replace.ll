@@ -27,15 +27,14 @@
 ; RUN: not ld.lld -m elf_x86_64 --plugin-opt=thinlto-index-only \
 ; RUN: --plugin-opt=thinlto-object-suffix-replace="abc:def" -shared %t1.thinlink.bc \
 ; RUN: -o %t3 2>&1 | FileCheck %s --check-prefix=ERR1
-; ERR1: thinlto-object-suffix-replace expects 'old;new' format, but got abc:def
+; ERR1: --plugin-opt=thinlto-object-suffix-replace= expects 'old;new' format, but got abc:def
 
 ; Ensure lld generates error if old suffix doesn't exist in file name
 ; RUN: rm -f %t1.o
 ; RUN: not ld.lld -m elf_x86_64 --plugin-opt=thinlto-index-only \
 ; RUN: --plugin-opt=thinlto-object-suffix-replace=".abc;.o" -shared %t1.thinlink.bc \
 ; RUN: -o %t3 2>&1 | FileCheck %s --check-prefix=ERR2
-; ERR2: cannot find suffix .abc
-
+; ERR2: error: -thinlto-object-suffix-replace=.abc;.o was given, but {{.*}} does not end with the suffix
 
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-unknown-linux-gnu"

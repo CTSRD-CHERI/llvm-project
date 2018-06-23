@@ -102,6 +102,7 @@ class TracePC {
   void PrintModuleInfo();
 
   void PrintCoverage();
+  void DumpCoverage();
 
   template<class CallBack>
   void IterateCoveredFunctions(CallBack CB);
@@ -130,6 +131,9 @@ class TracePC {
     for (auto PC : ObservedPCs)
       CB(PC);
   }
+
+  void SetFocusFunction(const std::string &FuncName);
+  bool ObservedFocusFunction();
 
 private:
   bool UseCounters = false;
@@ -162,6 +166,9 @@ private:
 
   Set<uintptr_t> ObservedPCs;
   Set<uintptr_t> ObservedFuncs;
+
+  std::pair<size_t, size_t> FocusFunction = {-1, -1};  // Module and PC IDs.
+
 
   ValueBitMap ValueProfileMap;
   uintptr_t InitialStack;

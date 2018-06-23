@@ -312,7 +312,11 @@ DwarfDebug::DwarfDebug(AsmPrinter *A, Module *M)
   } else
     TheAccelTableKind = AccelTables;
 
-  UseInlineStrings = DwarfInlinedStrings == Enable;
+  if (DwarfInlinedStrings == Default)
+    UseInlineStrings = TT.isNVPTX();
+  else
+    UseInlineStrings = DwarfInlinedStrings == Enable;
+
   HasAppleExtensionAttributes = tuneForLLDB();
 
   // Handle split DWARF.
@@ -327,14 +331,18 @@ DwarfDebug::DwarfDebug(AsmPrinter *A, Module *M)
   unsigned DwarfVersionNumber = Asm->TM.Options.MCOptions.DwarfVersion;
   unsigned DwarfVersion = DwarfVersionNumber ? DwarfVersionNumber
                                     : MMI->getModule()->getDwarfVersion();
-  // Use dwarf 4 by default if nothing is requested.
-  DwarfVersion = DwarfVersion ? DwarfVersion : dwarf::DWARF_VERSION;
+  // Use dwarf 4 by default if nothing is requested. For NVPTX, use dwarf 2.
+  DwarfVersion =
+      TT.isNVPTX() ? 2 : (DwarfVersion ? DwarfVersion : dwarf::DWARF_VERSION);
 
-  UsePubSections = !NoDwarfPubSections;
-  UseRangesSection = !NoDwarfRangesSection;
+  UsePubSections = !NoDwarfPubSections && !TT.isNVPTX();
+  UseRangesSection = !NoDwarfRangesSection && !TT.isNVPTX();
 
-  // Use sections as references.
-  UseSectionsAsReferences = DwarfSectionsAsReferences == Enable;
+  // Use sections as references. Force for NVPTX.
+  if (DwarfSectionsAsReferences == Default)
+    UseSectionsAsReferences = TT.isNVPTX();
+  else
+    UseSectionsAsReferences = DwarfSectionsAsReferences == Enable;
 
   // Work around a GDB bug. GDB doesn't support the standard opcode;
   // SCE doesn't support GNU's; LLDB prefers the standard opcode, which
@@ -739,11 +747,15 @@ void DwarfDebug::finalizeModuleInfo() {
       // Emit a unique identifier for this CU.
       uint64_t ID =
           DIEHash(Asm).computeCUSignature(DWOName, TheCU.getUnitDie());
-      TheCU.addUInt(TheCU.getUnitDie(), dwarf::DW_AT_GNU_dwo_id,
-                    dwarf::DW_FORM_data8, ID);
-      SkCU->addUInt(SkCU->getUnitDie(), dwarf::DW_AT_GNU_dwo_id,
-                    dwarf::DW_FORM_data8, ID);
-
+      if (getDwarfVersion() >= 5) {
+        TheCU.setDWOId(ID);
+        SkCU->setDWOId(ID);
+      } else {
+        TheCU.addUInt(TheCU.getUnitDie(), dwarf::DW_AT_GNU_dwo_id,
+                      dwarf::DW_FORM_data8, ID);
+        SkCU->addUInt(SkCU->getUnitDie(), dwarf::DW_AT_GNU_dwo_id,
+                      dwarf::DW_FORM_data8, ID);
+      }
       // We don't keep track of which addresses are used in which CU so this
       // is a bit pessimistic under LTO.
       if (!AddrPool.isEmpty()) {

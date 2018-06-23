@@ -2668,14 +2668,9 @@ void Sema::mergeDeclAttributes(NamedDecl *New, Decl *Old,
         Diag(New->getLocation(), diag::warn_attribute_section_on_redeclaration);
         Diag(Old->getLocation(), diag::note_previous_declaration);
       }
-    } else if (isa<CXXMethodDecl>(New)) {
-      const auto *NewSA = New->getAttr<SectionAttr>();
-      if (!NewSA->isImplicit()) {
-        Diag(New->getLocation(), diag::warn_mismatched_section);
-        Diag(Old->getLocation(), diag::note_previous_declaration);
-      }
     }
   }
+
   if (!Old->hasAttrs())
     return;
 
@@ -8725,18 +8720,18 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
                                                  PragmaClangTextSection.PragmaLocation));
   }
 
-  // Apply an implicit SectionAttr from class declspec or from
-  // #pragma code_seg if active.
-  if (!NewFD->hasAttr<SectionAttr>()) {
-    if (Attr *SAttr = getImplicitSectionAttrForFunction(NewFD,
-                                                        D.isFunctionDefinition())) {
-      NewFD->addAttr(SAttr);
-      if (UnifySection(cast<SectionAttr>(SAttr)->getName(),
-                       ASTContext::PSF_Implicit | ASTContext::PSF_Execute |
-                       ASTContext::PSF_Read,
-                       NewFD))
-        NewFD->dropAttr<SectionAttr>();
-    }
+  // Apply an implicit SectionAttr if #pragma code_seg is active.
+  if (CodeSegStack.CurrentValue && D.isFunctionDefinition() &&
+      !NewFD->hasAttr<SectionAttr>()) {
+    NewFD->addAttr(
+        SectionAttr::CreateImplicit(Context, SectionAttr::Declspec_allocate,
+                                    CodeSegStack.CurrentValue->getString(),
+                                    CodeSegStack.CurrentPragmaLocation));
+    if (UnifySection(CodeSegStack.CurrentValue->getString(),
+                     ASTContext::PSF_Implicit | ASTContext::PSF_Execute |
+                         ASTContext::PSF_Read,
+                     NewFD))
+      NewFD->dropAttr<SectionAttr>();
   }
 
   // Handle attributes.
@@ -9261,64 +9256,6 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
   }
 
   return NewFD;
-}
-
-/// Return a SectionAttr from a containing class.  The Microsoft docs say
-/// when __declspec(code_seg) "is applied to a class, all member functions of
-/// the class and nested classes -- this includes compiler-generated special
-/// member functions -- are put in the specified segment."
-/// The actual behavior is a little more complicated. The Microsoft compiler
-/// won't check outer classes if there is an active value from #pragma code_seg.
-/// The section is always applied from the direct parent but only from outer
-/// classes when the #pragma code_seg stack is empty. See:
-/// https://reviews.llvm.org/D22931, the Microsoft feedback page is no longer
-/// available since MS has removed the page.
-static Attr *getImplicitSectionAttrFromClass(Sema &S, const FunctionDecl *FD) {
-  const auto *Method = dyn_cast<CXXMethodDecl>(FD);
-  if (!Method)
-    return nullptr;
-  const CXXRecordDecl *Parent = Method->getParent();
-  if (const auto *SAttr = Parent->getAttr<SectionAttr>()) {
-    Attr *NewAttr = SAttr->clone(S.getASTContext());
-    NewAttr->setImplicit(true);
-    return NewAttr;
-  }
-
-  // The Microsoft compiler won't check outer classes for the section
-  // when the #pragma code_seg stack is active.
-  if (S.CodeSegStack.CurrentValue)
-    return nullptr;
-
-  while ((Parent = dyn_cast<CXXRecordDecl>(Parent->getParent()))) {
-    if (const auto *SAttr = Parent->getAttr<SectionAttr>()) {
-      Attr *NewAttr = SAttr->clone(S.getASTContext());
-      NewAttr->setImplicit(true);
-      return NewAttr;
-    }
-  }
-  return nullptr;
-}
-
-/// \brief Returns an implicit SectionAttr for a function.
-///
-/// \param FD Function being declared.
-/// \param IsDefinition Whether it is a definition or just a declarartion.
-/// \returns A SectionAttr to apply to the function or nullptr if no
-///          attribute should be added.
-///
-/// First tries to find a SectionAttr on a containing class (from
-/// a __declspec(code_seg)).  If not found on the class, and if the function is
-/// also a definition it will use the current #pragma code_seg value.
-Attr *Sema::getImplicitSectionAttrForFunction(const FunctionDecl *FD, bool IsDefinition) {
-  if (Attr *A = getImplicitSectionAttrFromClass(*this, FD))
-    return A;
-  if (IsDefinition && CodeSegStack.CurrentValue) {
-    return SectionAttr::CreateImplicit(getASTContext(),
-                                       SectionAttr::Declspec_allocate,
-                                       CodeSegStack.CurrentValue->getString(),
-                                       CodeSegStack.CurrentPragmaLocation);
-  }
-  return nullptr;
 }
 
 /// Checks if the new declaration declared in dependent context must be
@@ -15778,6 +15715,10 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
     if (!Completed)
       Record->completeDefinition();
 
+    // Handle attributes before checking the layout.
+    if (Attr)
+      ProcessDeclAttributeList(S, Record, Attr);
+
     // We may have deferred checking for a deleted destructor. Check now.
     if (CXXRecordDecl *CXXRecord = dyn_cast<CXXRecordDecl>(Record)) {
       auto *Dtor = CXXRecord->getDestructor();
@@ -15908,11 +15849,6 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
       CDecl->setIvarRBraceLoc(RBrac);
     }
   }
-
-  if (Attr)
-    ProcessDeclAttributeList(S, Record, Attr);
-
-
   if (Record && Record->hasAttr<PackedAttr>() && !Record->isDependentType()) {
     std::function<bool(const RecordDecl *R)> contains_capabilities =
       [&](const RecordDecl *R) {
@@ -15984,7 +15920,6 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
       }
     }
   }
-
 }
 
 /// Determine whether the given integral value is representable within

@@ -48,14 +48,6 @@ elseif(LLVM_PARALLEL_LINK_JOBS)
   message(WARNING "Job pooling is only available with Ninja generators.")
 endif()
 
-if (LINKER_IS_LLD_LINK)
-  # Pass /MANIFEST:NO so that CMake doesn't run mt.exe on our binaries.  Adding
-  # manifests with mt.exe breaks LLD's symbol tables and takes as much time as
-  # the link. See PR24476.
-  append("/MANIFEST:NO"
-    CMAKE_EXE_LINKER_FLAGS CMAKE_MODULE_LINKER_FLAGS CMAKE_SHARED_LINKER_FLAGS)
-endif()
-
 if( LLVM_ENABLE_ASSERTIONS )
   # MSVC doesn't like _DEBUG on release builds. See PR 4379.
   if( NOT MSVC )
@@ -639,7 +631,7 @@ macro(append_common_sanitizer_flags)
       add_flag_if_supported("-gline-tables-only" GLINE_TABLES_ONLY)
     endif()
     # Use -O1 even in debug mode, otherwise sanitizers slowdown is too large.
-    if (uppercase_CMAKE_BUILD_TYPE STREQUAL "DEBUG")
+    if (uppercase_CMAKE_BUILD_TYPE STREQUAL "DEBUG" AND LLVM_OPTIMIZE_SANITIZED_BUILDS)
       add_flag_if_supported("-O1" O1)
     endif()
   elseif (CLANG_CL)
@@ -720,11 +712,13 @@ add_definitions( -D__STDC_CONSTANT_MACROS )
 add_definitions( -D__STDC_FORMAT_MACROS )
 add_definitions( -D__STDC_LIMIT_MACROS )
 
-# clang doesn't print colored diagnostics when invoked from Ninja
+# clang and gcc don't default-print colored diagnostics when invoked from Ninja.
 if (UNIX AND
-    CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND
-    CMAKE_GENERATOR STREQUAL "Ninja")
-  append("-fcolor-diagnostics" CMAKE_C_FLAGS CMAKE_CXX_FLAGS)
+    CMAKE_GENERATOR STREQUAL "Ninja" AND
+    (CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR
+     (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND
+      NOT (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.9))))
+  append("-fdiagnostics-color" CMAKE_C_FLAGS CMAKE_CXX_FLAGS)
 endif()
 
 # lld doesn't print colored diagnostics when invoked from Ninja

@@ -24,6 +24,7 @@
 #include "SIInstrInfo.h"
 #include "SIMachineFunctionInfo.h"
 #include "SIRegisterInfo.h"
+#include "MCTargetDesc/AMDGPUMCTargetDesc.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
@@ -241,6 +242,7 @@ public:
 INITIALIZE_PASS_BEGIN(AMDGPUDAGToDAGISel, "isel",
                       "AMDGPU DAG->DAG Pattern Instruction Selection", false, false)
 INITIALIZE_PASS_DEPENDENCY(AMDGPUArgumentUsageInfo)
+INITIALIZE_PASS_DEPENDENCY(DivergenceAnalysis)
 INITIALIZE_PASS_END(AMDGPUDAGToDAGISel, "isel",
                     "AMDGPU DAG->DAG Pattern Instruction Selection", false, false)
 
@@ -393,7 +395,6 @@ void AMDGPUDAGToDAGISel::SelectBuildVector(SDNode *N, unsigned RegClassID) {
   EVT VT = N->getValueType(0);
   unsigned NumVectorElts = VT.getVectorNumElements();
   EVT EltVT = VT.getVectorElementType();
-  const AMDGPURegisterInfo *TRI = Subtarget->getRegisterInfo();
   SDLoc DL(N);
   SDValue RegClass = CurDAG->getTargetConstant(RegClassID, DL, MVT::i32);
 
@@ -419,10 +420,9 @@ void AMDGPUDAGToDAGISel::SelectBuildVector(SDNode *N, unsigned RegClassID) {
       IsRegSeq = false;
       break;
     }
+    unsigned Sub = AMDGPURegisterInfo::getSubRegFromChannel(i);
     RegSeqArgs[1 + (2 * i)] = N->getOperand(i);
-    RegSeqArgs[1 + (2 * i) + 1] =
-            CurDAG->getTargetConstant(TRI->getSubRegFromChannel(i), DL,
-                                      MVT::i32);
+    RegSeqArgs[1 + (2 * i) + 1] = CurDAG->getTargetConstant(Sub, DL, MVT::i32);
   }
   if (NOps != NumVectorElts) {
     // Fill in the missing undef elements if this was a scalar_to_vector.
@@ -430,9 +430,10 @@ void AMDGPUDAGToDAGISel::SelectBuildVector(SDNode *N, unsigned RegClassID) {
     MachineSDNode *ImpDef = CurDAG->getMachineNode(TargetOpcode::IMPLICIT_DEF,
                                                    DL, EltVT);
     for (unsigned i = NOps; i < NumVectorElts; ++i) {
+      unsigned Sub = AMDGPURegisterInfo::getSubRegFromChannel(i);
       RegSeqArgs[1 + (2 * i)] = SDValue(ImpDef, 0);
       RegSeqArgs[1 + (2 * i) + 1] =
-        CurDAG->getTargetConstant(TRI->getSubRegFromChannel(i), DL, MVT::i32);
+          CurDAG->getTargetConstant(Sub, DL, MVT::i32);
     }
   }
 

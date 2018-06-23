@@ -44,8 +44,6 @@ typedef unsigned char __v16qu __attribute__((__vector_size__(16)));
  * appear in the interface though. */
 typedef signed char __v16qs __attribute__((__vector_size__(16)));
 
-#include <f16cintrin.h>
-
 /* Define the default attributes for the functions in this file. */
 #define __DEFAULT_FN_ATTRS __attribute__((__always_inline__, __nodebug__, __target__("sse2")))
 
@@ -3424,7 +3422,7 @@ _mm_cvttsd_si64(__m128d __a)
 static __inline__ __m128 __DEFAULT_FN_ATTRS
 _mm_cvtepi32_ps(__m128i __a)
 {
-  return __builtin_ia32_cvtdq2ps((__v4si)__a);
+  return (__m128)__builtin_convertvector((__v4si)__a, __v4sf);
 }
 
 /// Converts a vector of [4 x float] into a vector of [4 x i32].

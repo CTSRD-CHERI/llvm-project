@@ -248,6 +248,28 @@ static void dumpStringOffsetsSection(
   }
 }
 
+// Dump the .debug_rnglists or .debug_rnglists.dwo section (DWARF v5).
+static void dumpRnglistsSection(raw_ostream &OS,
+                                DWARFDataExtractor &rnglistData,
+                                DIDumpOptions DumpOpts) {
+  uint32_t Offset = 0;
+  while (rnglistData.isValidOffset(Offset)) {
+    llvm::DWARFDebugRnglistTable Rnglists;
+    uint32_t TableOffset = Offset;
+    if (Error Err = Rnglists.extract(rnglistData, &Offset)) {
+      WithColor::error() << toString(std::move(Err)) << '\n';
+      uint64_t Length = Rnglists.length();
+      // Keep going after an error, if we can, assuming that the length field
+      // could be read. If it couldn't, stop reading the section.
+      if (Length == 0)
+        break;
+      Offset = TableOffset + Length;
+    } else {
+      Rnglists.dump(OS, DumpOpts);
+    }
+  }
+}
+
 void DWARFContext::dump(
     raw_ostream &OS, DIDumpOptions DumpOpts,
     std::array<Optional<uint64_t>, DIDT_ID_Count> DumpOffsets) {
@@ -363,8 +385,7 @@ void DWARFContext::dump(
       }
       OS << "debug_line[" << format("0x%8.8x", Parser.getOffset()) << "]\n";
       if (DumpOpts.Verbose) {
-        Parser.parseNext(DWARFDebugLine::warn, DWARFDebugLine::warnForError,
-                         &OS);
+        Parser.parseNext(DWARFDebugLine::warn, DWARFDebugLine::warn, &OS);
       } else {
         DWARFDebugLine::LineTable LineTable = Parser.parseNext();
         LineTable.dump(OS, DumpOpts);
@@ -455,24 +476,16 @@ void DWARFContext::dump(
 
   if (shouldDump(Explicit, ".debug_rnglists", DIDT_ID_DebugRnglists,
                  DObj->getRnglistsSection().Data)) {
-    DWARFDataExtractor rnglistData(*DObj, DObj->getRnglistsSection(),
+    DWARFDataExtractor RnglistData(*DObj, DObj->getRnglistsSection(),
                                    isLittleEndian(), 0);
-    uint32_t Offset = 0;
-    while (rnglistData.isValidOffset(Offset)) {
-      DWARFDebugRnglistTable Rnglists;
-      uint32_t TableOffset = Offset;
-      if (Error Err = Rnglists.extract(rnglistData, &Offset)) {
-        WithColor::error() << toString(std::move(Err)) << '\n';
-        uint64_t Length = Rnglists.length();
-        // Keep going after an error, if we can, assuming that the length field
-        // could be read. If it couldn't, stop reading the section.
-        if (Length == 0)
-          break;
-        Offset = TableOffset + Length;
-      } else {
-        Rnglists.dump(OS, DumpOpts);
-      }
-    }
+    dumpRnglistsSection(OS, RnglistData, DumpOpts);
+  }
+
+  if (shouldDump(ExplicitDWO, ".debug_rnglists.dwo", DIDT_ID_DebugRnglists,
+                 DObj->getRnglistsDWOSection().Data)) {
+    DWARFDataExtractor RnglistData(*DObj, DObj->getRnglistsDWOSection(),
+                                   isLittleEndian(), 0);
+    dumpRnglistsSection(OS, RnglistData, DumpOpts);
   }
 
   if (shouldDump(Explicit, ".debug_pubnames", DIDT_ID_DebugPubnames,
@@ -548,9 +561,19 @@ DWARFCompileUnit *DWARFContext::getDWOCompileUnitForHash(uint64_t Hash) {
   // probably only one unless this is something like LTO - though an in-process
   // built/cached lookup table could be used in that case to improve repeated
   // lookups of different CUs in the DWO.
-  for (const auto &DWOCU : dwo_compile_units())
+  for (const auto &DWOCU : dwo_compile_units()) {
+    // Might not have parsed DWO ID yet.
+    if (!DWOCU->getDWOId()) {
+      if (Optional<uint64_t> DWOId =
+          toUnsigned(DWOCU->getUnitDIE().find(DW_AT_GNU_dwo_id)))
+        DWOCU->setDWOId(*DWOId);
+      else
+        // No DWO ID?
+        continue;
+    }
     if (DWOCU->getDWOId() == Hash)
       return DWOCU.get();
+  }
   return nullptr;
 }
 
@@ -750,15 +773,14 @@ DWARFContext::getLineTableForUnit(DWARFUnit *U) {
   Expected<const DWARFDebugLine::LineTable *> ExpectedLineTable =
       getLineTableForUnit(U, DWARFDebugLine::warn);
   if (!ExpectedLineTable) {
-    DWARFDebugLine::warnForError(ExpectedLineTable.takeError());
+    DWARFDebugLine::warn(ExpectedLineTable.takeError());
     return nullptr;
   }
   return *ExpectedLineTable;
 }
 
-Expected<const DWARFDebugLine::LineTable *>
-DWARFContext::getLineTableForUnit(DWARFUnit *U,
-                                  std::function<void(StringRef)> WarnCallback) {
+Expected<const DWARFDebugLine::LineTable *> DWARFContext::getLineTableForUnit(
+    DWARFUnit *U, std::function<void(Error)> RecoverableErrorCallback) {
   if (!Line)
     Line.reset(new DWARFDebugLine);
 
@@ -783,7 +805,7 @@ DWARFContext::getLineTableForUnit(DWARFUnit *U,
   DWARFDataExtractor lineData(*DObj, U->getLineSection(), isLittleEndian(),
                               U->getAddressByteSize());
   return Line->getOrParseLineTable(lineData, stmtOffset, *this, U,
-                                   WarnCallback);
+                                   RecoverableErrorCallback);
 }
 
 void DWARFContext::parseCompileUnits() {
@@ -1173,6 +1195,7 @@ class DWARFObjInMemory final : public DWARFObject {
   DWARFSectionMap LocDWOSection;
   DWARFSectionMap StringOffsetDWOSection;
   DWARFSectionMap RangeDWOSection;
+  DWARFSectionMap RnglistsDWOSection;
   DWARFSectionMap AddrSection;
   DWARFSectionMap AppleNamesSection;
   DWARFSectionMap AppleTypesSection;
@@ -1192,6 +1215,7 @@ class DWARFObjInMemory final : public DWARFObject {
         .Case("debug_loc.dwo", &LocDWOSection)
         .Case("debug_line.dwo", &LineDWOSection)
         .Case("debug_names", &DebugNamesSection)
+        .Case("debug_rnglists.dwo", &RnglistsDWOSection)
         .Case("debug_str_offsets.dwo", &StringOffsetDWOSection)
         .Case("debug_addr", &AddrSection)
         .Case("apple_names", &AppleNamesSection)
@@ -1449,6 +1473,9 @@ public:
   }
   const DWARFSection &getRangeDWOSection() const override {
     return RangeDWOSection;
+  }
+  const DWARFSection &getRnglistsDWOSection() const override {
+    return RnglistsDWOSection;
   }
   const DWARFSection &getAddrSection() const override { return AddrSection; }
   StringRef getCUIndexSection() const override { return CUIndexSection; }
