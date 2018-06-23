@@ -17,7 +17,7 @@
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/MapVector.h"
 #include "llvm/ADT/STLExtras.h"
-#include "llvm/ADT/SmallSet.h"
+#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/AliasAnalysis.h"
@@ -189,7 +189,7 @@ namespace {
     bool PreserveLCSSA;
 
     using SmallInstructionVector = SmallVector<Instruction *, 16>;
-    using SmallInstructionSet = SmallSet<Instruction *, 16>;
+    using SmallInstructionSet = SmallPtrSet<Instruction *, 16>;
 
     // Map between induction variable and its increment
     DenseMap<Instruction *, int64_t> IVToIncMap;

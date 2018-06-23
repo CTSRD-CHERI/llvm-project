@@ -30,6 +30,7 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/GraphTraits.h"
 #include "llvm/ADT/Optional.h"
+#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Twine.h"
@@ -1053,7 +1054,7 @@ private:
   // VPlan. External definitions must be immutable and hold a pointer to its
   // underlying IR that will be used to implement its structural comparison
   // (operators '==' and '<').
-  SmallSet<VPValue *, 16> VPExternalDefs;
+  SmallPtrSet<VPValue *, 16> VPExternalDefs;
 
   /// Holds a mapping between Values and their corresponding VPValue inside
   /// VPlan.

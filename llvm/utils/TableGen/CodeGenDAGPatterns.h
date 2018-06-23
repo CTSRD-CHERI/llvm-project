@@ -543,6 +543,10 @@ public:
   /// ValueType record for the memory VT.
   Record *getScalarMemoryVT() const;
 
+  // If true, indicates that GlobalISel-based C++ code was supplied.
+  bool hasGISelPredicateCode() const;
+  std::string getGISelPredicateCode() const;
+
 private:
   bool hasPredCode() const;
   bool hasImmCode() const;
@@ -814,7 +818,7 @@ public:
   unsigned getNumTrees() const { return Trees.size(); }
   const TreePatternNodePtr &getTree(unsigned i) const { return Trees[i]; }
   void setTree(unsigned i, TreePatternNodePtr Tree) { Trees[i] = Tree; }
-  TreePatternNodePtr getOnlyTree() const {
+  const TreePatternNodePtr &getOnlyTree() const {
     assert(Trees.size() == 1 && "Doesn't have exactly one pattern!");
     return Trees[0];
   }
@@ -998,20 +1002,12 @@ public:
 /// processed to produce isel.
 class PatternToMatch {
 public:
-  PatternToMatch(Record *srcrecord, const std::vector<Predicate> &preds,
+  PatternToMatch(Record *srcrecord, std::vector<Predicate> preds,
                  TreePatternNodePtr src, TreePatternNodePtr dst,
-                 const std::vector<Record *> &dstregs, int complexity,
+                 std::vector<Record *> dstregs, int complexity,
                  unsigned uid, unsigned setmode = 0)
       : SrcRecord(srcrecord), SrcPattern(src), DstPattern(dst),
-        Predicates(preds), Dstregs(std::move(dstregs)),
-        AddedComplexity(complexity), ID(uid), ForceMode(setmode) {}
-
-  PatternToMatch(Record *srcrecord, std::vector<Predicate> &&preds,
-                 TreePatternNodePtr src, TreePatternNodePtr dst,
-                 std::vector<Record *> &&dstregs, int complexity, unsigned uid,
-                 unsigned setmode = 0)
-      : SrcRecord(srcrecord), SrcPattern(src), DstPattern(dst),
-        Predicates(preds), Dstregs(std::move(dstregs)),
+        Predicates(std::move(preds)), Dstregs(std::move(dstregs)),
         AddedComplexity(complexity), ID(uid), ForceMode(setmode) {}
 
   Record          *SrcRecord;   // Originating Record for the pattern.
@@ -1206,7 +1202,7 @@ private:
 
   void AddPatternToMatch(TreePattern *Pattern, PatternToMatch &&PTM);
   void FindPatternInputsAndOutputs(
-      TreePattern *I, TreePatternNodePtr Pat,
+      TreePattern &I, TreePatternNodePtr Pat,
       std::map<std::string, TreePatternNodePtr> &InstInputs,
       std::map<std::string, TreePatternNodePtr> &InstResults,
       std::vector<Record *> &InstImpResults);

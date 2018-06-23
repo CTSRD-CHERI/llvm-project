@@ -4606,20 +4606,6 @@ bool X86TargetLowering::getTgtMemIntrinsic(IntrinsicInfo &Info,
   Info.offset = 0;
 
   switch (IntrData->Type) {
-  case EXPAND_FROM_MEM: {
-    Info.ptrVal = I.getArgOperand(0);
-    Info.memVT = MVT::getVT(I.getType());
-    Info.align = 1;
-    Info.flags |= MachineMemOperand::MOLoad;
-    break;
-  }
-  case COMPRESS_TO_MEM: {
-    Info.ptrVal = I.getArgOperand(0);
-    Info.memVT = MVT::getVT(I.getArgOperand(1)->getType());
-    Info.align = 1;
-    Info.flags |= MachineMemOperand::MOStore;
-    break;
-  }
   case TRUNCATE_TO_MEM_VI8:
   case TRUNCATE_TO_MEM_VI16:
   case TRUNCATE_TO_MEM_VI32: {
@@ -20312,12 +20298,32 @@ SDValue X86TargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op,
     switch(IntrData->Type) {
     case INTR_TYPE_1OP:
       return DAG.getNode(IntrData->Opc0, dl, Op.getValueType(), Op.getOperand(1));
-    case INTR_TYPE_2OP:
-      return DAG.getNode(IntrData->Opc0, dl, Op.getValueType(), Op.getOperand(1),
-        Op.getOperand(2));
+    case INTR_TYPE_2OP: {
+      // We specify 2 possible opcodes for intrinsics with rounding modes.
+      // First, we check if the intrinsic may have non-default rounding mode,
+      // (IntrData->Opc1 != 0), then we check the rounding mode operand.
+      unsigned IntrWithRoundingModeOpcode = IntrData->Opc1;
+      if (IntrWithRoundingModeOpcode != 0) {
+        SDValue Rnd = Op.getOperand(3);
+        if (!isRoundModeCurDirection(Rnd)) {
+          return DAG.getNode(IntrWithRoundingModeOpcode, dl, Op.getValueType(),
+                             Op.getOperand(1), Op.getOperand(2), Rnd);
+        }
+      }
+
+      return DAG.getNode(IntrData->Opc0, dl, Op.getValueType(),
+                         Op.getOperand(1), Op.getOperand(2));
+    }
     case INTR_TYPE_3OP:
-      return DAG.getNode(IntrData->Opc0, dl, Op.getValueType(), Op.getOperand(1),
-        Op.getOperand(2), Op.getOperand(3));
+    case INTR_TYPE_3OP_IMM8: {
+      SDValue Src3 = Op.getOperand(3);
+
+      if (IntrData->Type == INTR_TYPE_3OP_IMM8)
+        Src3 = DAG.getNode(ISD::TRUNCATE, dl, MVT::i8, Src3);
+
+      return DAG.getNode(IntrData->Opc0, dl, Op.getValueType(),
+                         Op.getOperand(1), Op.getOperand(2), Src3);
+    }
     case INTR_TYPE_4OP:
       return DAG.getNode(IntrData->Opc0, dl, Op.getValueType(), Op.getOperand(1),
         Op.getOperand(2), Op.getOperand(3), Op.getOperand(4));
@@ -20482,16 +20488,12 @@ SDValue X86TargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op,
                                               Src2, Src3),
                                   Mask, PassThru, Subtarget, DAG);
     }
-    case INTR_TYPE_3OP_IMM8_MASK:
     case INTR_TYPE_3OP_MASK: {
       SDValue Src1 = Op.getOperand(1);
       SDValue Src2 = Op.getOperand(2);
       SDValue Src3 = Op.getOperand(3);
       SDValue PassThru = Op.getOperand(4);
       SDValue Mask = Op.getOperand(5);
-
-      if (IntrData->Type == INTR_TYPE_3OP_IMM8_MASK)
-        Src3 = DAG.getNode(ISD::TRUNCATE, dl, MVT::i8, Src3);
 
       // We specify 2 possible opcodes for intrinsics with rounding modes.
       // First, we check if the intrinsic may have non-default rounding mode,
@@ -21564,27 +21566,6 @@ static SDValue LowerINTRINSIC_W_CHAIN(SDValue Op, const X86Subtarget &Subtarget,
     SDValue Results[] = { SetCC, Store };
     return DAG.getMergeValues(Results, dl);
   }
-  case COMPRESS_TO_MEM: {
-    SDValue Mask = Op.getOperand(4);
-    SDValue DataToCompress = Op.getOperand(3);
-    SDValue Addr = Op.getOperand(2);
-    SDValue Chain = Op.getOperand(0);
-    MVT VT = DataToCompress.getSimpleValueType();
-
-    MemIntrinsicSDNode *MemIntr = dyn_cast<MemIntrinsicSDNode>(Op);
-    assert(MemIntr && "Expected MemIntrinsicSDNode!");
-
-    if (isAllOnesConstant(Mask)) // return just a store
-      return DAG.getStore(Chain, dl, DataToCompress, Addr,
-                          MemIntr->getMemOperand());
-
-    MVT MaskVT = MVT::getVectorVT(MVT::i1, VT.getVectorNumElements());
-    SDValue VMask = getMaskNode(Mask, MaskVT, Subtarget, DAG, dl);
-
-    return DAG.getMaskedStore(Chain, dl, DataToCompress, Addr, VMask, VT,
-                              MemIntr->getMemOperand(),
-                              false /* truncating */, true /* compressing */);
-  }
   case TRUNCATE_TO_MEM_VI8:
   case TRUNCATE_TO_MEM_VI16:
   case TRUNCATE_TO_MEM_VI32: {
@@ -21627,28 +21608,6 @@ static SDValue LowerINTRINSIC_W_CHAIN(SDValue Op, const X86Subtarget &Subtarget,
     default:
       llvm_unreachable("Unsupported truncstore intrinsic");
     }
-  }
-
-  case EXPAND_FROM_MEM: {
-    SDValue Mask = Op.getOperand(4);
-    SDValue PassThru = Op.getOperand(3);
-    SDValue Addr = Op.getOperand(2);
-    SDValue Chain = Op.getOperand(0);
-    MVT VT = Op.getSimpleValueType();
-
-    MemIntrinsicSDNode *MemIntr = dyn_cast<MemIntrinsicSDNode>(Op);
-    assert(MemIntr && "Expected MemIntrinsicSDNode!");
-
-    if (isAllOnesConstant(Mask)) // Return a regular (unmasked) vector load.
-      return DAG.getLoad(VT, dl, Chain, Addr, MemIntr->getMemOperand());
-    if (X86::isZeroNode(Mask))
-      return DAG.getMergeValues({PassThru, Chain}, dl);
-
-    MVT MaskVT = MVT::getVectorVT(MVT::i1, VT.getVectorNumElements());
-    SDValue VMask = getMaskNode(Mask, MaskVT, Subtarget, DAG, dl);
-    return DAG.getMaskedLoad(VT, dl, Chain, Addr, VMask, PassThru, VT,
-                             MemIntr->getMemOperand(), ISD::NON_EXTLOAD,
-                             true /* expanding */);
   }
   }
 }
@@ -26286,6 +26245,12 @@ bool X86TargetLowering::isShuffleMaskLegal(ArrayRef<int> M, EVT VT) const {
 bool
 X86TargetLowering::isVectorClearMaskLegal(const SmallVectorImpl<int> &Mask,
                                           EVT VT) const {
+  // Don't convert an 'and' into a shuffle that we don't directly support.
+  // vpblendw and vpshufb for 256-bit vectors are not available on AVX1.
+  if (!Subtarget.hasAVX2())
+    if (VT == MVT::v32i8 || VT == MVT::v16i16)
+      return false;
+
   // Just delegate to the generic legality, clear masks aren't special.
   return isShuffleMaskLegal(Mask, VT);
 }
@@ -32407,6 +32372,79 @@ static SDValue combineSelectOfTwoConstants(SDNode *N, SelectionDAG &DAG) {
   return SDValue();
 }
 
+/// If this is a *dynamic* select (non-constant condition) and we can match
+/// this node with one of the variable blend instructions, restructure the
+/// condition so that blends can use the high (sign) bit of each element.
+static SDValue combineVSelectToShrunkBlend(SDNode *N, SelectionDAG &DAG,
+                                           TargetLowering::DAGCombinerInfo &DCI,
+                                           const X86Subtarget &Subtarget) {
+  SDValue Cond = N->getOperand(0);
+  if (N->getOpcode() != ISD::VSELECT ||
+      ISD::isBuildVectorOfConstantSDNodes(Cond.getNode()))
+    return SDValue();
+
+  // Don't optimize before the condition has been transformed to a legal type
+  // and don't ever optimize vector selects that map to AVX512 mask-registers.
+  unsigned BitWidth = Cond.getScalarValueSizeInBits();
+  if (BitWidth < 8 || BitWidth > 64)
+    return SDValue();
+
+  // We can only handle the cases where VSELECT is directly legal on the
+  // subtarget. We custom lower VSELECT nodes with constant conditions and
+  // this makes it hard to see whether a dynamic VSELECT will correctly
+  // lower, so we both check the operation's status and explicitly handle the
+  // cases where a *dynamic* blend will fail even though a constant-condition
+  // blend could be custom lowered.
+  // FIXME: We should find a better way to handle this class of problems.
+  // Potentially, we should combine constant-condition vselect nodes
+  // pre-legalization into shuffles and not mark as many types as custom
+  // lowered.
+  const TargetLowering &TLI = DAG.getTargetLoweringInfo();
+  EVT VT = N->getValueType(0);
+  if (!TLI.isOperationLegalOrCustom(ISD::VSELECT, VT))
+    return SDValue();
+  // FIXME: We don't support i16-element blends currently. We could and
+  // should support them by making *all* the bits in the condition be set
+  // rather than just the high bit and using an i8-element blend.
+  if (VT.getVectorElementType() == MVT::i16)
+    return SDValue();
+  // Dynamic blending was only available from SSE4.1 onward.
+  if (VT.is128BitVector() && !Subtarget.hasSSE41())
+    return SDValue();
+  // Byte blends are only available in AVX2
+  if (VT == MVT::v32i8 && !Subtarget.hasAVX2())
+    return SDValue();
+  // There are no 512-bit blend instructions that use sign bits.
+  if (VT.is512BitVector())
+    return SDValue();
+
+  // TODO: Add other opcodes eventually lowered into BLEND.
+  for (SDNode::use_iterator UI = Cond->use_begin(), UE = Cond->use_end();
+       UI != UE; ++UI)
+    if (UI->getOpcode() != ISD::VSELECT || UI.getOperandNo() != 0)
+      return SDValue();
+
+  APInt DemandedMask(APInt::getSignMask(BitWidth));
+  KnownBits Known;
+  TargetLowering::TargetLoweringOpt TLO(DAG, !DCI.isBeforeLegalize(),
+                                        !DCI.isBeforeLegalizeOps());
+  if (!TLI.SimplifyDemandedBits(Cond, DemandedMask, Known, TLO, 0, true))
+    return SDValue();
+
+  // If we changed the computation somewhere in the DAG, this change will
+  // affect all users of Cond. Update all the nodes so that we do not use
+  // the generic VSELECT anymore. Otherwise, we may perform wrong
+  // optimizations as we messed with the actual expectation for the vector
+  // boolean values.
+  for (SDNode *U : Cond->uses()) {
+    SDValue SB = DAG.getNode(X86ISD::SHRUNKBLEND, SDLoc(U), U->getValueType(0),
+                             Cond, U->getOperand(1), U->getOperand(2));
+    DAG.ReplaceAllUsesOfValueWith(SDValue(U, 0), SB);
+  }
+  DCI.CommitTargetLoweringOpt(TLO);
+  return SDValue(N, 0);
+}
+
 /// Do target-specific dag combines on SELECT and VSELECT nodes.
 static SDValue combineSelect(SDNode *N, SelectionDAG &DAG,
                              TargetLowering::DAGCombinerInfo &DCI,
@@ -32736,80 +32774,8 @@ static SDValue combineSelect(SDNode *N, SelectionDAG &DAG,
   if (SDValue V = combineVSelectWithAllOnesOrZeros(N, DAG, DCI, Subtarget))
     return V;
 
-  // If this is a *dynamic* select (non-constant condition) and we can match
-  // this node with one of the variable blend instructions, restructure the
-  // condition so that blends can use the high (sign) bit of each element and
-  // use SimplifyDemandedBits to simplify the condition operand.
-  if (N->getOpcode() == ISD::VSELECT && DCI.isBeforeLegalizeOps() &&
-      !DCI.isBeforeLegalize() &&
-      !ISD::isBuildVectorOfConstantSDNodes(Cond.getNode())) {
-    unsigned BitWidth = Cond.getScalarValueSizeInBits();
-
-    // Don't optimize vector selects that map to mask-registers.
-    if (BitWidth == 1)
-      return SDValue();
-
-    // We can only handle the cases where VSELECT is directly legal on the
-    // subtarget. We custom lower VSELECT nodes with constant conditions and
-    // this makes it hard to see whether a dynamic VSELECT will correctly
-    // lower, so we both check the operation's status and explicitly handle the
-    // cases where a *dynamic* blend will fail even though a constant-condition
-    // blend could be custom lowered.
-    // FIXME: We should find a better way to handle this class of problems.
-    // Potentially, we should combine constant-condition vselect nodes
-    // pre-legalization into shuffles and not mark as many types as custom
-    // lowered.
-    if (!TLI.isOperationLegalOrCustom(ISD::VSELECT, VT))
-      return SDValue();
-    // FIXME: We don't support i16-element blends currently. We could and
-    // should support them by making *all* the bits in the condition be set
-    // rather than just the high bit and using an i8-element blend.
-    if (VT.getVectorElementType() == MVT::i16)
-      return SDValue();
-    // Dynamic blending was only available from SSE4.1 onward.
-    if (VT.is128BitVector() && !Subtarget.hasSSE41())
-      return SDValue();
-    // Byte blends are only available in AVX2
-    if (VT == MVT::v32i8 && !Subtarget.hasAVX2())
-      return SDValue();
-    // There are no 512-bit blend instructions that use sign bits.
-    if (VT.is512BitVector())
-      return SDValue();
-
-    bool CanShrinkCond = true;
-    for (SDNode::use_iterator UI = Cond->use_begin(), UE = Cond->use_end();
-         UI != UE; ++UI) {
-      // TODO: Add other opcodes eventually lowered into BLEND.
-      if (UI->getOpcode() != ISD::VSELECT || UI.getOperandNo() != 0) {
-        CanShrinkCond = false;
-        break;
-      }
-    }
-
-    if (CanShrinkCond) {
-      assert(BitWidth >= 8 && BitWidth <= 64 && "Invalid mask size");
-      APInt DemandedMask(APInt::getSignMask(BitWidth));
-      KnownBits Known;
-      TargetLowering::TargetLoweringOpt TLO(DAG, !DCI.isBeforeLegalize(),
-                                            !DCI.isBeforeLegalizeOps());
-      if (TLI.SimplifyDemandedBits(Cond, DemandedMask, Known, TLO, 0,
-                                   /*AssumeSingleUse*/true)) {
-        // If we changed the computation somewhere in the DAG, this change will
-        // affect all users of Cond. Update all the nodes so that we do not use
-        // the generic VSELECT anymore. Otherwise, we may perform wrong
-        // optimizations as we messed with the actual expectation for the vector
-        // boolean values.
-        for (SDNode *U : Cond->uses()) {
-          SDValue SB = DAG.getNode(X86ISD::SHRUNKBLEND, SDLoc(U),
-                                   U->getValueType(0), Cond, U->getOperand(1),
-                                   U->getOperand(2));
-          DAG.ReplaceAllUsesOfValueWith(SDValue(U, 0), SB);
-        }
-        DCI.CommitTargetLoweringOpt(TLO);
-        return SDValue(N, 0);
-      }
-    }
-  }
+  if (SDValue V = combineVSelectToShrunkBlend(N, DAG, DCI, Subtarget))
+    return V;
 
   // Custom action for SELECT MMX
   if (VT == MVT::x86mmx) {

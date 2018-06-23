@@ -193,7 +193,7 @@ fd_t OpenFile(const char *filename, FileAccessMode mode, error_t *errno_p) {
   int flags;
   switch (mode) {
     case RdOnly: flags = O_RDONLY; break;
-    case WrOnly: flags = O_WRONLY | O_CREAT; break;
+    case WrOnly: flags = O_WRONLY | O_CREAT | O_TRUNC; break;
     case RdWr: flags = O_RDWR | O_CREAT; break;
   }
   fd_t res = open(filename, flags, 0660);
@@ -239,8 +239,11 @@ bool IsAccessibleMemoryRange(uptr beg, uptr size) {
   return true;
 }
 
-char **GetArgv() { return NULL; }
-const char *GetEnv(const char *name) { return NULL; }
+char **GetArgv() { return nullptr; }
+
+const char *GetEnv(const char *name) {
+  return getenv(name);
+}
 
 uptr ReadBinaryName(/*out*/char *buf, uptr buf_len) {
   internal_strncpy(buf, "StubBinaryName", buf_len);

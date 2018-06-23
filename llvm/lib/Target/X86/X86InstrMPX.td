@@ -42,32 +42,32 @@ multiclass mpx_bound_check<bits<8> opc, string OpcodeStr> {
               OpcodeStr#"\t{$src2, $src1|$src1, $src2}", []>,
               Requires<[HasMPX, In64BitMode]>;
 }
-defm BNDCL : mpx_bound_check<0x1A, "bndcl">, XS;
-defm BNDCU : mpx_bound_check<0x1A, "bndcu">, XD;
-defm BNDCN : mpx_bound_check<0x1B, "bndcn">, XD;
+defm BNDCL : mpx_bound_check<0x1A, "bndcl">, XS, NotMemoryFoldable;
+defm BNDCU : mpx_bound_check<0x1A, "bndcu">, XD, NotMemoryFoldable;
+defm BNDCN : mpx_bound_check<0x1B, "bndcn">, XD, NotMemoryFoldable;
 
 def BNDMOVrr   : I<0x1A, MRMSrcReg, (outs BNDR:$dst), (ins BNDR:$src),
                   "bndmov\t{$src, $dst|$dst, $src}", []>, PD,
-                  Requires<[HasMPX]>;
+                  Requires<[HasMPX]>, NotMemoryFoldable;
 let mayLoad = 1 in {
 def BNDMOV32rm : I<0x1A, MRMSrcMem, (outs BNDR:$dst), (ins i64mem:$src),
                   "bndmov\t{$src, $dst|$dst, $src}", []>, PD,
-                  Requires<[HasMPX, Not64BitMode]>;
+                  Requires<[HasMPX, Not64BitMode]>, NotMemoryFoldable;
 def BNDMOV64rm : I<0x1A, MRMSrcMem, (outs BNDR:$dst), (ins i128mem:$src),
                   "bndmov\t{$src, $dst|$dst, $src}", []>, PD,
-                  Requires<[HasMPX, In64BitMode]>;
+                  Requires<[HasMPX, In64BitMode]>, NotMemoryFoldable;
 }
 let isCodeGenOnly = 1, ForceDisassemble = 1 in
 def BNDMOVrr_REV   : I<0x1B, MRMDestReg, (outs BNDR:$dst), (ins BNDR:$src),
                        "bndmov\t{$src, $dst|$dst, $src}", []>, PD,
-                       Requires<[HasMPX]>;
+                       Requires<[HasMPX]>, NotMemoryFoldable;
 let mayStore = 1 in {
 def BNDMOV32mr : I<0x1B, MRMDestMem, (outs), (ins i64mem:$dst, BNDR:$src),
                   "bndmov\t{$src, $dst|$dst, $src}", []>, PD,
-                  Requires<[HasMPX, Not64BitMode]>;
+                  Requires<[HasMPX, Not64BitMode]>, NotMemoryFoldable;
 def BNDMOV64mr : I<0x1B, MRMDestMem, (outs), (ins i128mem:$dst, BNDR:$src),
                   "bndmov\t{$src, $dst|$dst, $src}", []>, PD,
-                  Requires<[HasMPX, In64BitMode]>;
+                  Requires<[HasMPX, In64BitMode]>, NotMemoryFoldable;
 
 def BNDSTXmr:      I<0x1B, MRMDestMem, (outs), (ins anymem:$dst, BNDR:$src),
                     "bndstx\t{$src, $dst|$dst, $src}", []>, PS,

@@ -255,6 +255,16 @@ CodeGenTypes::arrangeCXXMethodType(const CXXRecordDecl *RD,
       FTP->getCanonicalTypeUnqualified().getAs<FunctionProtoType>(), MD);
 }
 
+/// Set calling convention for CUDA/HIP kernel.
+static void setCUDAKernelCallingConvention(CanQualType &FTy, CodeGenModule &CGM,
+                                           const FunctionDecl *FD) {
+  if (FD->hasAttr<CUDAGlobalAttr>()) {
+    const FunctionType *FT = FTy->getAs<FunctionType>();
+    CGM.getTargetCodeGenInfo().setCUDAKernelCallingConvention(FT);
+    FTy = FT->getCanonicalTypeUnqualified();
+  }
+}
+
 /// Arrange the argument and result information for a declaration or
 /// definition of the given C++ non-static member function.  The
 /// member function must be an ordinary function, i.e. not a
@@ -264,7 +274,9 @@ CodeGenTypes::arrangeCXXMethodDeclaration(const CXXMethodDecl *MD) {
   assert(!isa<CXXConstructorDecl>(MD) && "wrong method for constructors!");
   assert(!isa<CXXDestructorDecl>(MD) && "wrong method for destructors!");
 
-  CanQual<FunctionProtoType> prototype = GetFormalType(MD);
+  CanQualType FT = GetFormalType(MD).getAs<Type>();
+  setCUDAKernelCallingConvention(FT, CGM, MD);
+  auto prototype = FT.getAs<FunctionProtoType>();
 
   if (MD->isInstance()) {
     // The abstract case is perfectly fine.
@@ -424,6 +436,7 @@ CodeGenTypes::arrangeFunctionDeclaration(const FunctionDecl *FD) {
   CanQualType FTy = FD->getType()->getCanonicalTypeUnqualified();
 
   assert(isa<FunctionType>(FTy));
+  setCUDAKernelCallingConvention(FTy, CGM, FD);
 
   // When declaring a function without a prototype, always use a
   // non-variadic type.
@@ -3888,9 +3901,8 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
       assert(NumIRArgs == 1);
       if (!I->isAggregate()) {
         // Make a temporary alloca to pass the argument.
-        Address Addr = CreateMemTemp(I->Ty, ArgInfo.getIndirectAlign(),
-                                     "indirect-arg-temp", /*Alloca=*/nullptr,
-                                     /*Cast=*/false);
+        Address Addr = CreateMemTempWithoutCast(
+            I->Ty, ArgInfo.getIndirectAlign(), "indirect-arg-temp");
         IRCallArgs[FirstIRArg] = Addr.getPointer();
 
         I->copyInto(*this, Addr);
@@ -3935,9 +3947,8 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
         }
         if (NeedCopy) {
           // Create an aligned temporary, and copy to it.
-          Address AI = CreateMemTemp(I->Ty, ArgInfo.getIndirectAlign(),
-                                     "byval-temp", /*Alloca=*/nullptr,
-                                     /*Cast=*/false);
+          Address AI = CreateMemTempWithoutCast(
+              I->Ty, ArgInfo.getIndirectAlign(), "byval-temp");
           IRCallArgs[FirstIRArg] = AI.getPointer();
           I->copyInto(*this, AI);
         } else {

@@ -17,7 +17,6 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallPtrSet.h"
-#include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/Twine.h"
@@ -1756,8 +1755,8 @@ static bool TryToShrinkGlobalToBoolean(GlobalVariable *GV, Constant *OtherVal) {
   return true;
 }
 
-static bool deleteIfDead(GlobalValue &GV,
-                         SmallSet<const Comdat *, 8> &NotDiscardableComdats) {
+static bool deleteIfDead(
+    GlobalValue &GV, SmallPtrSetImpl<const Comdat *> &NotDiscardableComdats) {
   GV.removeDeadConstantUsers();
 
   if (!GV.isDiscardableIfUnused() && !GV.isDeclaration())
@@ -2237,7 +2236,7 @@ OptimizeFunctions(Module &M, TargetLibraryInfo *TLI,
                   function_ref<TargetTransformInfo &(Function &)> GetTTI,
                   function_ref<BlockFrequencyInfo &(Function &)> GetBFI,
                   function_ref<DominatorTree &(Function &)> LookupDomTree,
-                  SmallSet<const Comdat *, 8> &NotDiscardableComdats) {
+                  SmallPtrSetImpl<const Comdat *> &NotDiscardableComdats) {
 
   bool Changed = false;
 
@@ -2332,7 +2331,7 @@ OptimizeFunctions(Module &M, TargetLibraryInfo *TLI,
 static bool
 OptimizeGlobalVars(Module &M, TargetLibraryInfo *TLI,
                    function_ref<DominatorTree &(Function &)> LookupDomTree,
-                   SmallSet<const Comdat *, 8> &NotDiscardableComdats) {
+                   SmallPtrSetImpl<const Comdat *> &NotDiscardableComdats) {
   bool Changed = false;
 
   for (Module::global_iterator GVI = M.global_begin(), E = M.global_end();
@@ -2575,7 +2574,7 @@ static int compareNames(Constant *const *A, Constant *const *B) {
 }
 
 static void setUsedInitializer(GlobalVariable &V,
-                               const SmallPtrSet<GlobalValue *, 8> &Init) {
+                               const SmallPtrSetImpl<GlobalValue *> &Init) {
   if (Init.empty()) {
     V.eraseFromParent();
     return;
@@ -2728,7 +2727,7 @@ static bool hasUsesToReplace(GlobalAlias &GA, const LLVMUsed &U,
 
 static bool
 OptimizeGlobalAliases(Module &M,
-                      SmallSet<const Comdat *, 8> &NotDiscardableComdats) {
+                      SmallPtrSetImpl<const Comdat *> &NotDiscardableComdats) {
   bool Changed = false;
   LLVMUsed Used(M);
 
@@ -2911,7 +2910,7 @@ static bool optimizeGlobalsInModule(
     function_ref<TargetTransformInfo &(Function &)> GetTTI,
     function_ref<BlockFrequencyInfo &(Function &)> GetBFI,
     function_ref<DominatorTree &(Function &)> LookupDomTree) {
-  SmallSet<const Comdat *, 8> NotDiscardableComdats;
+  SmallPtrSet<const Comdat *, 8> NotDiscardableComdats;
   bool Changed = false;
   bool LocalChange = true;
   while (LocalChange) {
