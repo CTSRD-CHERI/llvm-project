@@ -106,6 +106,7 @@ class LLVM_LIBRARY_VISIBILITY X86TargetInfo : public TargetInfo {
   bool HasMOVDIRI = false;
   bool HasMOVDIR64B = false;
   bool HasPTWRITE = false;
+  bool HasINVPCID = false;
 
 protected:
   /// Enumeration of all of the X86 CPUs supported by Clang.
@@ -420,7 +421,6 @@ public:
     LongDoubleWidth = 128;
     LongDoubleAlign = 128;
     SuitableAlign = 128;
-    MaxVectorAlign = 256;
     // The watchOS simulator uses the builtin bool type for Objective-C.
     llvm::Triple T = llvm::Triple(Triple);
     if (T.isWatchOS())
@@ -436,9 +436,6 @@ public:
     if (!DarwinTargetInfo<X86_32TargetInfo>::handleTargetFeatures(Features,
                                                                   Diags))
       return false;
-    // We now know the features we have: we can decide how to align vectors.
-    MaxVectorAlign =
-        hasFeature("avx512f") ? 512 : hasFeature("avx") ? 256 : 128;
     return true;
   }
 };
@@ -801,9 +798,6 @@ public:
     if (!DarwinTargetInfo<X86_64TargetInfo>::handleTargetFeatures(Features,
                                                                   Diags))
       return false;
-    // We now know the features we have: we can decide how to align vectors.
-    MaxVectorAlign =
-        hasFeature("avx512f") ? 512 : hasFeature("avx") ? 256 : 128;
     return true;
   }
 };

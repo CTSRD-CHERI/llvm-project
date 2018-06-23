@@ -13,7 +13,6 @@
 //===----------------------------------------------------------------------===//
 //
 
-#include "AMDGPUMCInstLower.h"
 #include "AMDGPUAsmPrinter.h"
 #include "AMDGPUSubtarget.h"
 #include "AMDGPUTargetMachine.h"
@@ -38,9 +37,43 @@
 
 using namespace llvm;
 
+namespace {
+
+class AMDGPUMCInstLower {
+  MCContext &Ctx;
+  const TargetSubtargetInfo &ST;
+  const AsmPrinter &AP;
+
+  const MCExpr *getLongBranchBlockExpr(const MachineBasicBlock &SrcBB,
+                                       const MachineOperand &MO) const;
+
+public:
+  AMDGPUMCInstLower(MCContext &ctx, const TargetSubtargetInfo &ST,
+                    const AsmPrinter &AP);
+
+  bool lowerOperand(const MachineOperand &MO, MCOperand &MCOp) const;
+
+  /// Lower a MachineInstr to an MCInst
+  void lower(const MachineInstr *MI, MCInst &OutMI) const;
+
+};
+
+class R600MCInstLower : public AMDGPUMCInstLower {
+public:
+  R600MCInstLower(MCContext &ctx, const R600Subtarget &ST,
+                  const AsmPrinter &AP);
+
+  /// Lower a MachineInstr to an MCInst
+  void lower(const MachineInstr *MI, MCInst &OutMI) const;
+};
+
+
+} // End anonymous namespace
+
 #include "AMDGPUGenMCPseudoLowering.inc"
 
-AMDGPUMCInstLower::AMDGPUMCInstLower(MCContext &ctx, const AMDGPUSubtarget &st,
+AMDGPUMCInstLower::AMDGPUMCInstLower(MCContext &ctx,
+                                     const TargetSubtargetInfo &st,
                                      const AsmPrinter &ap):
   Ctx(ctx), ST(st), AP(ap) { }
 
@@ -131,7 +164,7 @@ bool AMDGPUMCInstLower::lowerOperand(const MachineOperand &MO,
 
 void AMDGPUMCInstLower::lower(const MachineInstr *MI, MCInst &OutMI) const {
   unsigned Opcode = MI->getOpcode();
-  const auto *TII = ST.getInstrInfo();
+  const auto *TII = static_cast<const SIInstrInfo*>(ST.getInstrInfo());
 
   // FIXME: Should be able to handle this with emitPseudoExpansionLowering. We
   // need to select it to the subtarget specific version, and there's no way to
@@ -303,9 +336,22 @@ void AMDGPUAsmPrinter::EmitInstruction(const MachineInstr *MI) {
   }
 }
 
+R600MCInstLower::R600MCInstLower(MCContext &Ctx, const R600Subtarget &ST,
+                                 const AsmPrinter &AP) :
+        AMDGPUMCInstLower(Ctx, ST, AP) { }
+
+void R600MCInstLower::lower(const MachineInstr *MI, MCInst &OutMI) const {
+  OutMI.setOpcode(MI->getOpcode());
+  for (const MachineOperand &MO : MI->explicit_operands()) {
+    MCOperand MCOp;
+    lowerOperand(MO, MCOp);
+    OutMI.addOperand(MCOp);
+  }
+}
+
 void R600AsmPrinter::EmitInstruction(const MachineInstr *MI) {
   const R600Subtarget &STI = MF->getSubtarget<R600Subtarget>();
-  AMDGPUMCInstLower MCInstLowering(OutContext, STI, *this);
+  R600MCInstLower MCInstLowering(OutContext, STI, *this);
 
   StringRef Err;
   if (!STI.getInstrInfo()->verifyInstruction(*MI, Err)) {

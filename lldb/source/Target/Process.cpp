@@ -2539,8 +2539,10 @@ Status Process::WriteObjectFile(std::vector<ObjectFile::LoadableData> entries) {
 #define USE_ALLOCATE_MEMORY_CACHE 1
 addr_t Process::AllocateMemory(size_t size, uint32_t permissions,
                                Status &error) {
-  if (GetPrivateState() != eStateStopped)
+  if (GetPrivateState() != eStateStopped) {
+    error.SetErrorToGenericError();
     return LLDB_INVALID_ADDRESS;
+  }
 
 #if defined(USE_ALLOCATE_MEMORY_CACHE)
   return m_allocated_memory_cache.AllocateMemory(size, permissions, error);
@@ -2686,8 +2688,7 @@ StateType
 Process::WaitForProcessStopPrivate(EventSP &event_sp,
                                    const Timeout<std::micro> &timeout) {
   StateType state;
-  // Now wait for the process to launch and return control to us, and then call
-  // DidLaunch:
+
   while (true) {
     event_sp.reset();
     state = GetStateChangedEventsPrivate(event_sp, timeout);
@@ -2765,6 +2766,9 @@ Status Process::Launch(ProcessLaunchInfo &launch_info) {
           }
         } else {
           EventSP event_sp;
+
+          // Now wait for the process to launch and return control to us, and then call
+          // DidLaunch:
           StateType state = WaitForProcessStopPrivate(event_sp, seconds(10));
 
           if (state == eStateInvalid || !event_sp) {

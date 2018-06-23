@@ -44,12 +44,11 @@ namespace clangd {
 
 // Stores Preamble and associated data.
 struct PreambleData {
-  PreambleData(PrecompiledPreamble Preamble,
-               std::vector<serialization::DeclID> TopLevelDeclIDs,
-               std::vector<Diag> Diags, std::vector<Inclusion> Inclusions);
+  PreambleData(PrecompiledPreamble Preamble, std::vector<Diag> Diags,
+               std::vector<Inclusion> Inclusions);
 
+  tooling::CompileCommand CompileCommand;
   PrecompiledPreamble Preamble;
-  std::vector<serialization::DeclID> TopLevelDeclIDs;
   std::vector<Diag> Diags;
   // Processes like code completions and go-to-definitions will need #include
   // information, and their compile action skips preamble range.
@@ -80,6 +79,9 @@ public:
 
   ~ParsedAST();
 
+  /// Note that the returned ast will not contain decls from the preamble that
+  /// were not deserialized during parsing. Clients should expect only decls
+  /// from the main file to be in the AST.
   ASTContext &getASTContext();
   const ASTContext &getASTContext() const;
 
@@ -87,10 +89,9 @@ public:
   std::shared_ptr<Preprocessor> getPreprocessorPtr();
   const Preprocessor &getPreprocessor() const;
 
-  /// This function returns all top-level decls, including those that come
-  /// from Preamble. Decls, coming from Preamble, have to be deserialized, so
-  /// this call might be expensive.
-  ArrayRef<const Decl *> getTopLevelDecls();
+  /// This function returns top-level decls present in the main file of the AST.
+  /// The result does not include the decls that come from the preamble.
+  ArrayRef<const Decl *> getLocalTopLevelDecls();
 
   const std::vector<Diag> &getDiagnostics() const;
 
@@ -103,11 +104,8 @@ private:
   ParsedAST(std::shared_ptr<const PreambleData> Preamble,
             std::unique_ptr<CompilerInstance> Clang,
             std::unique_ptr<FrontendAction> Action,
-            std::vector<const Decl *> TopLevelDecls, std::vector<Diag> Diags,
-            std::vector<Inclusion> Inclusions);
-
-private:
-  void ensurePreambleDeclsDeserialized();
+            std::vector<const Decl *> LocalTopLevelDecls,
+            std::vector<Diag> Diags, std::vector<Inclusion> Inclusions);
 
   // In-memory preambles must outlive the AST, it is important that this member
   // goes before Clang and Action.
@@ -122,58 +120,41 @@ private:
 
   // Data, stored after parsing.
   std::vector<Diag> Diags;
-  std::vector<const Decl *> TopLevelDecls;
-  bool PreambleDeclsDeserialized;
+  // Top-level decls inside the current file. Not that this does not include
+  // top-level decls from the preamble.
+  std::vector<const Decl *> LocalTopLevelDecls;
   std::vector<Inclusion> Inclusions;
 };
 
 using PreambleParsedCallback = std::function<void(
     PathRef Path, ASTContext &, std::shared_ptr<clang::Preprocessor>)>;
 
-/// Manages resources, required by clangd. Allows to rebuild file with new
-/// contents, and provides AST and Preamble for it.
-class CppFile {
-public:
-  CppFile(PathRef FileName, bool StorePreamblesInMemory,
-          std::shared_ptr<PCHContainerOperations> PCHs,
-          PreambleParsedCallback PreambleCallback);
+/// Builds compiler invocation that could be used to build AST or preamble.
+std::unique_ptr<CompilerInvocation>
+buildCompilerInvocation(const ParseInputs &Inputs);
 
-  /// Rebuild the AST and the preamble.
-  /// Returns a list of diagnostics or llvm::None, if an error occured.
-  llvm::Optional<std::vector<Diag>> rebuild(ParseInputs &&Inputs);
-  /// Returns the last built preamble.
-  const std::shared_ptr<const PreambleData> &getPreamble() const;
-  /// Returns the last built AST.
-  ParsedAST *getAST() const;
-  /// Returns an estimated size, in bytes, currently occupied by the AST and the
-  /// Preamble.
-  std::size_t getUsedBytes() const;
+/// Rebuild the preamble for the new inputs unless the old one can be reused.
+/// If \p OldPreamble can be reused, it is returned unchanged.
+/// If \p OldPreamble is null, always builds the preamble.
+/// If \p PreambleCallback is set, it will be run on top of the AST while
+/// building the preamble. Note that if the old preamble was reused, no AST is
+/// built and, therefore, the callback will not be executed.
+std::shared_ptr<const PreambleData>
+buildPreamble(PathRef FileName, CompilerInvocation &CI,
+              std::shared_ptr<const PreambleData> OldPreamble,
+              const tooling::CompileCommand &OldCompileCommand,
+              const ParseInputs &Inputs,
+              std::shared_ptr<PCHContainerOperations> PCHs, bool StoreInMemory,
+              PreambleParsedCallback PreambleCallback);
 
-private:
-  /// Build a new preamble for \p Inputs. If the current preamble can be reused,
-  /// it is returned instead.
-  /// This method is const to ensure we don't incidentally modify any fields.
-  std::shared_ptr<const PreambleData>
-  rebuildPreamble(CompilerInvocation &CI,
-                  const tooling::CompileCommand &Command,
-                  IntrusiveRefCntPtr<vfs::FileSystem> FS,
-                  llvm::MemoryBuffer &ContentsBuffer) const;
-
-  const Path FileName;
-  const bool StorePreamblesInMemory;
-
-  /// The last CompileCommand used to build AST and Preamble.
-  tooling::CompileCommand Command;
-  /// The last parsed AST.
-  llvm::Optional<ParsedAST> AST;
-  /// The last built Preamble.
-  std::shared_ptr<const PreambleData> Preamble;
-  /// Utility class required by clang
-  std::shared_ptr<PCHContainerOperations> PCHs;
-  /// This is called after the file is parsed. This can be nullptr if there is
-  /// no callback.
-  PreambleParsedCallback PreambleCallback;
-};
+/// Build an AST from provided user inputs. This function does not check if
+/// preamble can be reused, as this function expects that \p Preamble is the
+/// result of calling buildPreamble.
+llvm::Optional<ParsedAST>
+buildAST(PathRef FileName, std::unique_ptr<CompilerInvocation> Invocation,
+         const ParseInputs &Inputs,
+         std::shared_ptr<const PreambleData> Preamble,
+         std::shared_ptr<PCHContainerOperations> PCHs);
 
 /// Get the beginning SourceLocation at a specified \p Pos.
 /// May be invalid if Pos is, or if there's no identifier.

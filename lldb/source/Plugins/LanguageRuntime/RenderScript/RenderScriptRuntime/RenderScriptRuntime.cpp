@@ -593,7 +593,7 @@ struct RenderScriptRuntime::Element {
   empirical_type<uint32_t> datum_size;  // Size of a single Element with padding
   empirical_type<uint32_t> padding;     // Number of padding bytes
   empirical_type<uint32_t>
-      array_size;        // Number of items in array, only needed for strucrs
+      array_size;        // Number of items in array, only needed for structs
   ConstString type_name; // Name of type, only needed for structs
 
   static const ConstString &
@@ -2328,7 +2328,7 @@ void RenderScriptRuntime::FindStructTypeName(Element &elem,
   VariableList var_list;
   for (auto module_sp : m_rsmodules)
     module_sp->m_module->FindGlobalVariables(
-        RegularExpression(llvm::StringRef(".")), true, UINT32_MAX, var_list);
+        RegularExpression(llvm::StringRef(".")), UINT32_MAX, var_list);
 
   // Iterate over all the global variables looking for one with a matching type
   // to the Element. We make the assumption a match exists since there needs to
@@ -3392,7 +3392,7 @@ bool RenderScriptRuntime::DumpAllocation(Stream &strm, StackFrame *frame_ptr,
           DumpValueObjectOptions expr_options;
           expr_options.SetHideName(true);
 
-          // Setup expression as derefrencing a pointer cast to element
+          // Setup expression as dereferencing a pointer cast to element
           // address.
           char expr_char_buffer[jit_max_expr_size];
           int written =
@@ -4065,7 +4065,7 @@ void RSModuleDescriptor::Dump(Stream &strm) const {
 void RSGlobalDescriptor::Dump(Stream &strm) const {
   strm.Indent(m_name.AsCString());
   VariableList var_list;
-  m_module->m_module->FindGlobalVariables(m_name, nullptr, true, 1U, var_list);
+  m_module->m_module->FindGlobalVariables(m_name, nullptr, 1U, var_list);
   if (var_list.GetSize() == 1) {
     auto var = var_list.GetVariableAtIndex(0);
     auto type = var->GetType();

@@ -1590,6 +1590,11 @@ SparcTargetLowering::SparcTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::EH_SJLJ_SETJMP, MVT::i32, Custom);
   setOperationAction(ISD::EH_SJLJ_LONGJMP, MVT::Other, Custom);
 
+  setOperationAction(ISD::ADDC, MVT::i32, Custom);
+  setOperationAction(ISD::ADDE, MVT::i32, Custom);
+  setOperationAction(ISD::SUBC, MVT::i32, Custom);
+  setOperationAction(ISD::SUBE, MVT::i32, Custom);
+
   if (Subtarget->is64Bit()) {
     setOperationAction(ISD::ADDC, MVT::i64, Custom);
     setOperationAction(ISD::ADDE, MVT::i64, Custom);
@@ -3510,6 +3515,22 @@ SparcTargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
       char regIdx = '0' + (intVal % 8);
       char tmp[] = { '{', regType, regIdx, '}', 0 };
       std::string newConstraint = std::string(tmp);
+      return TargetLowering::getRegForInlineAsmConstraint(TRI, newConstraint,
+                                                          VT);
+    }
+    if (name.substr(0, 1).equals("f") &&
+        !name.substr(1).getAsInteger(10, intVal) && intVal <= 63) {
+      std::string newConstraint;
+
+      if (VT == MVT::f32 || VT == MVT::Other) {
+        newConstraint = "{f" + utostr(intVal) + "}";
+      } else if (VT == MVT::f64 && (intVal % 2 == 0)) {
+        newConstraint = "{d" + utostr(intVal / 2) + "}";
+      } else if (VT == MVT::f128 && (intVal % 4 == 0)) {
+        newConstraint = "{q" + utostr(intVal / 4) + "}";
+      } else {
+        return std::make_pair(0U, nullptr);
+      }
       return TargetLowering::getRegForInlineAsmConstraint(TRI, newConstraint,
                                                           VT);
     }

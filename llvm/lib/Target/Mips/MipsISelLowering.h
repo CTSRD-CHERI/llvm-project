@@ -301,10 +301,6 @@ extern bool LargeCapTable;
 
     /// Return the register type for a given MVT, ensuring vectors are treated
     /// as a series of gpr sized integers.
-    MVT getRegisterTypeForCallingConv(MVT VT) const override;
-
-    /// Return the register type for a given MVT, ensuring vectors are treated
-    /// as a series of gpr sized integers.
     MVT getRegisterTypeForCallingConv(LLVMContext &Context,
                                       EVT VT) const override;
 

@@ -445,6 +445,8 @@ def no_code_completion_ns_level_decls : Flag<["-"], "no-code-completion-ns-level
   HelpText<"Do not include declarations inside namespaces (incl. global namespace) in the code-completion results.">;
 def code_completion_brief_comments : Flag<["-"], "code-completion-brief-comments">,
   HelpText<"Include brief documentation comments in code-completion results.">;
+def code_completion_with_fixits : Flag<["-"], "code-completion-with-fixits">,
+  HelpText<"Include code completion results which require small fix-its.">;
 def disable_free : Flag<["-"], "disable-free">,
   HelpText<"Disable freeing of memory on exit">;
 def discard_value_names : Flag<["-"], "discard-value-names">,
@@ -561,6 +563,8 @@ def rewrite_macros : Flag<["-"], "rewrite-macros">,
   HelpText<"Expand macros without full preprocessing">;
 def migrate : Flag<["-"], "migrate">,
   HelpText<"Migrate source code">;
+def compiler_options_dump : Flag<["-"], "compiler-options-dump">,
+  HelpText<"Dump the compiler configuration options">;
 }
 
 def emit_llvm_uselists : Flag<["-"], "emit-llvm-uselists">,

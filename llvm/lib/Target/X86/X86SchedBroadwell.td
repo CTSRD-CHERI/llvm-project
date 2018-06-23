@@ -166,6 +166,9 @@ def : InstRW<[WriteMove], (instrs COPY)>;
 defm : BWWriteResPair<WriteJump,  [BWPort06],   1>;
 
 // Floating point. This covers both scalar and vector operations.
+defm : X86WriteRes<WriteFLD0,          [BWPort01], 1, [1], 1>;
+defm : X86WriteRes<WriteFLD1,          [BWPort01], 1, [2], 2>;
+defm : X86WriteRes<WriteFLDC,          [BWPort01], 1, [2], 2>;
 defm : X86WriteRes<WriteFLoad,         [BWPort23], 5, [1], 1>;
 defm : X86WriteRes<WriteFLoadX,        [BWPort23], 5, [1], 1>;
 defm : X86WriteRes<WriteFLoadY,        [BWPort23], 6, [1], 1>;
@@ -1681,6 +1684,8 @@ def BWWriteResGroup202 : SchedWriteRes<[BWPort0,BWPort1,BWPort4,BWPort5,BWPort6,
   let ResourceCycles = [9,9,11,8,1,11,21,30];
 }
 def: InstRW<[BWWriteResGroup202], (instrs FSTENVm)>;
+
+def: InstRW<[WriteZero], (instrs CLC)>;
 
 } // SchedModel
 

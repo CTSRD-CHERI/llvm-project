@@ -161,6 +161,9 @@ def : WriteRes<WriteZero,  []>;
 defm : SKXWriteResPair<WriteJump,  [SKXPort06],   1>;
 
 // Floating point. This covers both scalar and vector operations.
+defm : X86WriteRes<WriteFLD0,          [SKXPort05], 1, [1], 1>;
+defm : X86WriteRes<WriteFLD1,          [SKXPort05], 1, [2], 2>;
+defm : X86WriteRes<WriteFLDC,          [SKXPort05], 1, [2], 2>;
 defm : X86WriteRes<WriteFLoad,         [SKXPort23], 5, [1], 1>;
 defm : X86WriteRes<WriteFLoadX,        [SKXPort23], 6, [1], 1>;
 defm : X86WriteRes<WriteFLoadY,        [SKXPort23], 7, [1], 1>;
@@ -606,7 +609,7 @@ def SKXWriteResGroup10 : SchedWriteRes<[SKXPort0156]> {
   let ResourceCycles = [1];
 }
 def: InstRW<[SKXWriteResGroup10], (instrs CBW, CWDE, CDQE,
-                                          CLC, CMC, STC)>;
+                                          CMC, STC)>;
 def: InstRW<[SKXWriteResGroup10], (instrs LAHF, SAHF)>; // TODO: This doesn't match Agner's data
 def: InstRW<[SKXWriteResGroup10], (instregex "NOOP",
                                              "SGDT64m",
@@ -2550,4 +2553,7 @@ def SKXWriteResGroup267 : SchedWriteRes<[SKXPort6,SKXPort0156]> {
   let ResourceCycles = [1,3];
 }
 def: InstRW<[SKXWriteResGroup267], (instrs PAUSE)>;
+
+def: InstRW<[WriteZero], (instrs CLC)>;
+
 } // SchedModel

@@ -146,14 +146,22 @@ Changes to the AVR Target
 Changes to the OCaml bindings
 -----------------------------
 
- During this release ...
+* Remove ``add_bb_vectorize``.
 
 
 Changes to the C API
 --------------------
 
- During this release ...
+* Remove ``LLVMAddBBVectorizePass``. The implementation was removed and the C
+  interface was made a deprecated no-op in LLVM 5. Use
+  ``LLVMAddSLPVectorizePass`` instead to get the supported SLP vectorizer.
 
+Changes to the DAG infrastructure
+---------------------------------
+* ADDC/ADDE/SUBC/SUBE are now deprecated and will default to expand. Backends
+  that wish to continue to use these opcodes should explicitely request so
+  using ``setOperationAction`` in their ``TargetLowering``. New backends
+  should use UADDO/ADDCARRY/USUBO/SUBCARRY instead of the deprecated opcodes.
 
 External Open Source Projects Using LLVM 7
 ==========================================

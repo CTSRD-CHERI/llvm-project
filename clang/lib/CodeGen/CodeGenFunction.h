@@ -877,7 +877,8 @@ public:
 
   llvm::BasicBlock *getEHResumeBlock(bool isCleanup);
   llvm::BasicBlock *getEHDispatchBlock(EHScopeStack::stable_iterator scope);
-  llvm::BasicBlock *getMSVCDispatchBlock(EHScopeStack::stable_iterator scope);
+  llvm::BasicBlock *
+  getFuncletEHDispatchBlock(EHScopeStack::stable_iterator scope);
 
   /// An object to manage conditionally-evaluated expressions.
   class ConditionalEvaluation {
@@ -3541,6 +3542,10 @@ public:
                                          SmallVectorImpl<llvm::Value *> &Ops,
                                          Address PtrOp0, Address PtrOp1,
                                          llvm::Triple::ArchType Arch);
+
+  llvm::Value *EmitISOVolatileLoad(const CallExpr *E);
+  llvm::Value *EmitISOVolatileStore(const CallExpr *E);
+
   llvm::Function *LookupNeonLLVMIntrinsic(unsigned IntrinsicID,
                                           unsigned Modifier, llvm::Type *ArgTy,
                                           const CallExpr *E);

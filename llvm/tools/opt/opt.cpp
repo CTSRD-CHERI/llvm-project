@@ -447,6 +447,7 @@ int main(int argc, char **argv) {
   initializePostInlineEntryExitInstrumenterPass(Registry);
   initializeUnreachableBlockElimLegacyPassPass(Registry);
   initializeExpandReductionsPass(Registry);
+  initializeWasmEHPreparePass(Registry);
   initializeWriteBitcodePassPass(Registry);
 
   // Add the Cheri IR -> IR passes
