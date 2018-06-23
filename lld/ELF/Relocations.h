@@ -59,8 +59,8 @@ enum RelExpr {
   R_PLT,
   R_PLT_PAGE_PC,
   R_PLT_PC,
-  R_PPC_OPD,
-  R_PPC_PLT_OPD,
+  R_PPC_CALL,
+  R_PPC_CALL_PLT,
   R_PPC_TOC,
   R_RELAX_GOT_PC,
   R_RELAX_GOT_PC_NOPIC,
@@ -77,9 +77,11 @@ enum RelExpr {
   R_TLSDESC,
   R_TLSDESC_CALL,
   R_TLSDESC_PAGE,
-  R_TLSGD,
+  R_TLSGD_GOT,
+  R_TLSGD_GOT_FROM_END,
   R_TLSGD_PC,
-  R_TLSLD,
+  R_TLSLD_GOT_FROM_END,
+  R_TLSLD_GOT,
   R_TLSLD_PC,
   R_CHERI_CAPABILITY,
   R_CHERI_CAPABILITY_TABLE_INDEX,
@@ -155,7 +157,7 @@ private:
 
   void forEachInputSectionDescription(
       ArrayRef<OutputSection *> OutputSections,
-      std::function<void(OutputSection *, InputSectionDescription *)> Fn);
+      llvm::function_ref<void(OutputSection *, InputSectionDescription *)> Fn);
 
   std::pair<Thunk *, bool> getThunk(Symbol &Sym, RelType Type, uint64_t Src);
 

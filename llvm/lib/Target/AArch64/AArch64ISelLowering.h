@@ -335,6 +335,8 @@ public:
   bool isLegalAddImmediate(int64_t) const override;
   bool isLegalICmpImmediate(int64_t) const override;
 
+  bool shouldConsiderGEPOffsetSplit() const override;
+
   EVT getOptimalMemOpType(uint64_t Size, unsigned DstAlign, unsigned SrcAlign,
                           bool IsMemset, bool ZeroMemset, bool MemcpyStrSrc,
                           MachineFunction &MF) const override;
@@ -345,7 +347,7 @@ public:
                              unsigned AS,
                              Instruction *I = nullptr) const override;
 
-  /// \brief Return the cost of the scaling factor used in the addressing
+  /// Return the cost of the scaling factor used in the addressing
   /// mode represented by AM for this target, for a load/store
   /// of the specified type.
   /// If the AM is supported, the return value must be >= 0.
@@ -360,10 +362,10 @@ public:
 
   const MCPhysReg *getScratchRegisters(CallingConv::ID CC) const override;
 
-  /// \brief Returns false if N is a bit extraction pattern of (X >> C) & Mask.
+  /// Returns false if N is a bit extraction pattern of (X >> C) & Mask.
   bool isDesirableToCommuteWithShift(const SDNode *N) const override;
 
-  /// \brief Returns true if it is beneficial to convert a load of a constant
+  /// Returns true if it is beneficial to convert a load of a constant
   /// to just the constant itself.
   bool shouldConvertConstantLoadToIntImm(const APInt &Imm,
                                          Type *Ty) const override;
@@ -441,9 +443,18 @@ public:
 
   bool isMaskAndCmp0FoldingBeneficial(const Instruction &AndI) const override;
 
-  bool hasAndNotCompare(SDValue) const override {
-    // 'bics'
-    return true;
+  bool hasAndNotCompare(SDValue V) const override {
+    // We can use bics for any scalar.
+    return V.getValueType().isScalarInteger();
+  }
+
+  bool hasAndNot(SDValue Y) const override {
+    EVT VT = Y.getValueType();
+
+    if (!VT.isVector())
+      return hasAndNotCompare(Y);
+
+    return VT.getSizeInBits() >= 64; // vector 'bic'
   }
 
   bool hasBitPreservingFPLogic(EVT VT) const override {
@@ -487,11 +498,11 @@ public:
                                                  CallingConv::ID CallConv,
                                                  bool isVarArg) const override;
 private:
-  bool isExtFreeImpl(const Instruction *Ext) const override;
-
   /// Keep a pointer to the AArch64Subtarget around so that we can
   /// make the right decision when generating code for different targets.
   const AArch64Subtarget *Subtarget;
+
+  bool isExtFreeImpl(const Instruction *Ext) const override;
 
   void addTypeForNEON(MVT VT, MVT PromotedBitwiseVT);
   void addDRTypeForNEON(MVT VT);

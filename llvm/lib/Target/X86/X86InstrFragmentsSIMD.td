@@ -226,9 +226,9 @@ def X86vpcomu  : SDNode<"X86ISD::VPCOMU",
 def X86vpermil2 : SDNode<"X86ISD::VPERMIL2",
                         SDTypeProfile<1, 4, [SDTCisVec<0>, SDTCisSameAs<0,1>,
                                              SDTCisSameAs<0,2>,
-                                             SDTCisSameSizeAs<0,3>,
-                                             SDTCisSameNumEltsAs<0, 3>,
                                              SDTCisFP<0>, SDTCisInt<3>,
+                                             SDTCisSameNumEltsAs<0, 3>,
+                                             SDTCisSameSizeAs<0,3>,
                                              SDTCisVT<4, i8>]>>;
 def X86vpperm : SDNode<"X86ISD::VPPERM",
                         SDTypeProfile<1, 3, [SDTCisVT<0, v16i8>, SDTCisSameAs<0,1>,
@@ -284,9 +284,9 @@ def SDTShuff2Op : SDTypeProfile<1, 2, [SDTCisVec<0>, SDTCisSameAs<0,1>,
                                 SDTCisSameAs<0,2>]>;
 
 def SDTShuff2OpM : SDTypeProfile<1, 2, [SDTCisVec<0>, SDTCisSameAs<0,1>,
-                                        SDTCisSameSizeAs<0,2>,
+                                        SDTCisFP<0>, SDTCisInt<2>,
                                         SDTCisSameNumEltsAs<0,2>,
-                                        SDTCisFP<0>, SDTCisInt<2>]>;
+                                        SDTCisSameSizeAs<0,2>]>;
 def SDTShuff2OpI : SDTypeProfile<1, 2, [SDTCisVec<0>,
                                  SDTCisSameAs<0,1>, SDTCisVT<2, i8>]>;
 def SDTShuff3OpI : SDTypeProfile<1, 3, [SDTCisVec<0>, SDTCisSameAs<0,1>,
@@ -417,15 +417,6 @@ def X86VPermt2     : SDNode<"X86ISD::VPERMV3",
                                          SDTCisSameSizeAs<0,2>,
                                          SDTCisSameAs<0,3>]>, []>;
 
-// Even though the index operand should be integer, we need to make it match the
-// destination type so that we can pattern match the masked version where the
-// index is also the passthru operand.
-def X86VPermi2X   : SDNode<"X86ISD::VPERMIV3",
-                    SDTypeProfile<1, 3, [SDTCisVec<0>,
-                                         SDTCisSameAs<0,1>,
-                                         SDTCisSameAs<0,2>,
-                                         SDTCisSameAs<0,3>]>, []>;
-
 def X86vpternlog  : SDNode<"X86ISD::VPTERNLOG", SDTTernlog>;
 
 def X86VPerm2x128 : SDNode<"X86ISD::VPERM2X128", SDTShuff3OpI>;
@@ -554,17 +545,6 @@ def X86RangesRnd    : SDNode<"X86ISD::VRANGES_RND",    SDTFPBinOpImmRound>;
 def X86RndScalesRnd : SDNode<"X86ISD::VRNDSCALES_RND", SDTFPBinOpImmRound>;
 def X86ReducesRnd   : SDNode<"X86ISD::VREDUCES_RND",   SDTFPBinOpImmRound>;
 def X86GetMantsRnd  : SDNode<"X86ISD::VGETMANTS_RND",  SDTFPBinOpImmRound>;
-
-def SDT_PCMPISTRI : SDTypeProfile<2, 3, [SDTCisVT<0, i32>, SDTCisVT<1, i32>,
-                                         SDTCisVT<2, v16i8>, SDTCisVT<3, v16i8>,
-                                         SDTCisVT<4, i8>]>;
-def SDT_PCMPESTRI : SDTypeProfile<2, 5, [SDTCisVT<0, i32>, SDTCisVT<1, i32>,
-                                         SDTCisVT<2, v16i8>, SDTCisVT<3, i32>,
-                                         SDTCisVT<4, v16i8>, SDTCisVT<5, i32>,
-                                         SDTCisVT<6, i8>]>;
-
-def X86pcmpistri : SDNode<"X86ISD::PCMPISTRI", SDT_PCMPISTRI>;
-def X86pcmpestri : SDNode<"X86ISD::PCMPESTRI", SDT_PCMPESTRI>;
 
 def X86compress: SDNode<"X86ISD::COMPRESS", SDTypeProfile<1, 1,
                               [SDTCisSameAs<0, 1>, SDTCisVec<1>]>, []>;

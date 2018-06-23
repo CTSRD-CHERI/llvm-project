@@ -16,18 +16,42 @@
 #ifndef LLVM_TOOLS_LLVM_EXEGESIS_BENCHMARKRUNNER_H
 #define LLVM_TOOLS_LLVM_EXEGESIS_BENCHMARKRUNNER_H
 
+#include "Assembler.h"
 #include "BenchmarkResult.h"
-#include "InMemoryAssembler.h"
 #include "LlvmState.h"
+#include "RegisterAliasing.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/Support/Error.h"
 #include <vector>
 
 namespace exegesis {
 
+// A class representing failures that happened during Benchmark, they are used
+// to report informations to the user.
+class BenchmarkFailure : public llvm::StringError {
+public:
+  BenchmarkFailure(const llvm::Twine &S);
+};
+
+// A collection of instructions that are to be assembled, executed and measured.
+struct BenchmarkConfiguration {
+  // This code is run before the Snippet is iterated. Since it is part of the
+  // measurement it should be as short as possible. It is usually used to setup
+  // the content of the Registers.
+  std::vector<llvm::MCInst> SnippetSetup;
+
+  // The sequence of instructions that are to be repeated.
+  std::vector<llvm::MCInst> Snippet;
+
+  // Informations about how this configuration was built.
+  std::string Info;
+};
+
 // Common code for all benchmark modes.
 class BenchmarkRunner {
 public:
+  explicit BenchmarkRunner(const LLVMState &State);
+
   // Subtargets can disable running benchmarks for some instructions by
   // returning an error here.
   class InstructionFilter {
@@ -42,21 +66,33 @@ public:
 
   virtual ~BenchmarkRunner();
 
-  InstructionBenchmark run(const LLVMState &State, unsigned Opcode,
-                           unsigned NumRepetitions,
-                           const InstructionFilter &Filter) const;
+  llvm::Expected<std::vector<InstructionBenchmark>>
+  run(unsigned Opcode, const InstructionFilter &Filter,
+      unsigned NumRepetitions);
+
+protected:
+  const LLVMState &State;
+  const llvm::MCInstrInfo &MCInstrInfo;
+  const llvm::MCRegisterInfo &MCRegisterInfo;
+  const RegisterAliasingTrackerCache RATC;
 
 private:
-  virtual const char *getDisplayName() const = 0;
+  InstructionBenchmark runOne(const BenchmarkConfiguration &Configuration,
+                              unsigned Opcode, unsigned NumRepetitions) const;
 
-  virtual llvm::Expected<std::vector<llvm::MCInst>>
-  createCode(const LLVMState &State, unsigned OpcodeIndex,
-             unsigned NumRepetitions,
-             const JitFunctionContext &Context) const = 0;
+  virtual InstructionBenchmark::ModeE getMode() const = 0;
+
+  virtual llvm::Expected<std::vector<BenchmarkConfiguration>>
+  createConfigurations(unsigned Opcode) const = 0;
 
   virtual std::vector<BenchmarkMeasure>
-  runMeasurements(const LLVMState &State, const JitFunction &Function,
-                  unsigned NumRepetitions) const = 0;
+  runMeasurements(const ExecutableFunction &EF,
+                  const unsigned NumRepetitions) const = 0;
+
+  llvm::Expected<std::string>
+  writeObjectFile(llvm::ArrayRef<llvm::MCInst> Code) const;
+  llvm::Expected<ExecutableFunction>
+  createExecutableFunction(llvm::ArrayRef<llvm::MCInst> Code) const;
 };
 
 } // namespace exegesis

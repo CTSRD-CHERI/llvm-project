@@ -76,7 +76,7 @@ getLambdaDefaultArgumentDeclContext(const Decl *D) {
   return nullptr;
 }
 
-/// \brief Retrieve the declaration context that should be used when mangling
+/// Retrieve the declaration context that should be used when mangling
 /// the given declaration.
 static const DeclContext *getEffectiveDeclContext(const Decl *D) {
   // The ABI assumes that lambda closure types that occur within
@@ -884,11 +884,13 @@ void MicrosoftCXXNameMangler::mangleUnqualifiedName(const NamedDecl *ND,
         // associate typedef mangled in if they have one.
         Name += "<unnamed-type-";
         Name += TND->getName();
-      } else if (auto *ED = dyn_cast<EnumDecl>(TD)) {
-        auto EnumeratorI = ED->enumerator_begin();
-        assert(EnumeratorI != ED->enumerator_end());
+      } else if (isa<EnumDecl>(TD) &&
+                 cast<EnumDecl>(TD)->enumerator_begin() !=
+                     cast<EnumDecl>(TD)->enumerator_end()) {
+        // Anonymous non-empty enums mangle in the first enumerator.
+        auto *ED = cast<EnumDecl>(TD);
         Name += "<unnamed-enum-";
-        Name += EnumeratorI->getName();
+        Name += ED->enumerator_begin()->getName();
       } else {
         // Otherwise, number the types using a $S prefix.
         Name += "<unnamed-type-$S";
@@ -1370,12 +1372,12 @@ void MicrosoftCXXNameMangler::mangleTemplateArg(const TemplateDecl *TD,
     const NamedDecl *ND = TA.getAsDecl();
     if (isa<FieldDecl>(ND) || isa<IndirectFieldDecl>(ND)) {
       mangleMemberDataPointer(
-          cast<CXXRecordDecl>(ND->getDeclContext())->getMostRecentDecl(),
+          cast<CXXRecordDecl>(ND->getDeclContext())->getMostRecentNonInjectedDecl(),
           cast<ValueDecl>(ND));
     } else if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(ND)) {
       const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(FD);
       if (MD && MD->isInstance()) {
-        mangleMemberFunctionPointer(MD->getParent()->getMostRecentDecl(), MD);
+        mangleMemberFunctionPointer(MD->getParent()->getMostRecentNonInjectedDecl(), MD);
       } else {
         Out << "$1?";
         mangleName(FD);
@@ -1922,8 +1924,36 @@ void MicrosoftCXXNameMangler::mangleType(const BuiltinType *T, Qualifiers,
     mangleArtificalTagType(TTK_Struct, "_Float16", {"__clang"});
     break;
 
-  case BuiltinType::Float128:
-  case BuiltinType::Half: {
+  case BuiltinType::Half:
+    mangleArtificalTagType(TTK_Struct, "_Half", {"__clang"});
+    break;
+
+  case BuiltinType::ShortAccum:
+  case BuiltinType::Accum:
+  case BuiltinType::LongAccum:
+  case BuiltinType::UShortAccum:
+  case BuiltinType::UAccum:
+  case BuiltinType::ULongAccum:
+  case BuiltinType::ShortFract:
+  case BuiltinType::Fract:
+  case BuiltinType::LongFract:
+  case BuiltinType::UShortFract:
+  case BuiltinType::UFract:
+  case BuiltinType::ULongFract:
+  case BuiltinType::SatShortAccum:
+  case BuiltinType::SatAccum:
+  case BuiltinType::SatLongAccum:
+  case BuiltinType::SatUShortAccum:
+  case BuiltinType::SatUAccum:
+  case BuiltinType::SatULongAccum:
+  case BuiltinType::SatShortFract:
+  case BuiltinType::SatFract:
+  case BuiltinType::SatLongFract:
+  case BuiltinType::SatUShortFract:
+  case BuiltinType::SatUFract:
+  case BuiltinType::SatULongFract:
+  case BuiltinType::Char8:
+  case BuiltinType::Float128: {
     DiagnosticsEngine &Diags = Context.getDiags();
     unsigned DiagID = Diags.getCustomDiagID(
         DiagnosticsEngine::Error, "cannot mangle this built-in %0 type yet");

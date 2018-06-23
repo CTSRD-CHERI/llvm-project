@@ -101,13 +101,12 @@ add_lldb_library(liblldb SHARED
     Support
   )
 
-if (LLVM_ENABLE_WERROR)
-  if (MSVC)
-    set_property(SOURCE ${LLDB_WRAP_PYTHON} APPEND_STRING PROPERTY COMPILE_FLAGS " /W0")
-  else()
-    set_property(SOURCE ${LLDB_WRAP_PYTHON} APPEND_STRING PROPERTY COMPILE_FLAGS " -w")
-  endif()
+if (MSVC)
+  set_property(SOURCE ${LLDB_WRAP_PYTHON} APPEND_STRING PROPERTY COMPILE_FLAGS " /W0")
+else()
+  set_property(SOURCE ${LLDB_WRAP_PYTHON} APPEND_STRING PROPERTY COMPILE_FLAGS " -w")
 endif()
+
 set_source_files_properties(${LLDB_WRAP_PYTHON} PROPERTIES GENERATED 1)
 if (CLANG_CL)
   set_property(SOURCE ${LLDB_WRAP_PYTHON} APPEND_STRING
@@ -162,8 +161,7 @@ if (LLDB_WRAP_PYTHON)
 endif()
 
 if(LLDB_BUILD_FRAMEWORK)
-  file(GLOB public_headers ${LLDB_SOURCE_DIR}/include/lldb/API/*.h
-      ${LLDB_SOURCE_DIR}/include/lldb/lldb-*.h)
+  file(GLOB public_headers ${LLDB_SOURCE_DIR}/include/lldb/API/*.h)
   file(GLOB root_public_headers ${LLDB_SOURCE_DIR}/include/lldb/lldb-*.h)
   file(GLOB root_private_headers ${LLDB_SOURCE_DIR}/include/lldb/lldb-private*.h)
   list(REMOVE_ITEM root_public_headers ${root_private_headers})
@@ -188,6 +186,9 @@ if(LLDB_BUILD_FRAMEWORK)
     PUBLIC_HEADER "${framework_headers}")
 
   if(NOT IOS)
+    if (NOT LLDB_BUILT_STANDALONE)
+      add_dependencies(liblldb clang-headers)
+    endif()
     add_custom_command(TARGET liblldb POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_BINARY_DIR}/FrameworkHeaders $<TARGET_FILE_DIR:liblldb>/Headers
       COMMAND ${CMAKE_COMMAND} -E create_symlink Versions/Current/Headers ${CMAKE_BINARY_DIR}/${LLDB_FRAMEWORK_INSTALL_DIR}/LLDB.framework/Headers

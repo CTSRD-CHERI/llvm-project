@@ -1,13 +1,13 @@
 ; RUN: llc -filetype=obj -o %t.o %s
 ; RUN: llc -filetype=obj %S/Inputs/hidden.ll -o %t2.o
 ; RUN: llvm-ar rcs %t2.a %t2.o
-; RUN: wasm-ld --check-signatures %t.o %t2.a -o %t.wasm
+; RUN: wasm-ld %t.o %t2.a -o %t.wasm
 ; RUN: obj2yaml %t.wasm | FileCheck %s
 
 ; Test that hidden symbols are not exported, whether pulled in from an archive
 ; or directly.
 
-target triple = "wasm32-unknown-unknown-wasm"
+target triple = "wasm32-unknown-unknown"
 
 define hidden i32 @objectHidden() {
 entry:

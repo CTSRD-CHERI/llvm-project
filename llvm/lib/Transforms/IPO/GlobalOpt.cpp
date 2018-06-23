@@ -17,7 +17,6 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallPtrSet.h"
-#include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/Twine.h"
@@ -27,7 +26,7 @@
 #include "llvm/Analysis/MemoryBuiltins.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
-#include "llvm/Analysis/Utils/Local.h"
+#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/BasicBlock.h"
@@ -567,7 +566,7 @@ static GlobalVariable *SRAGlobal(GlobalVariable *GV, const DataLayout &DL) {
   if (NewGlobals.empty())
     return nullptr;
 
-  DEBUG(dbgs() << "PERFORMING GLOBAL SRA ON: " << *GV << "\n");
+  LLVM_DEBUG(dbgs() << "PERFORMING GLOBAL SRA ON: " << *GV << "\n");
 
   Constant *NullInt =Constant::getNullValue(Type::getInt32Ty(GV->getContext()));
 
@@ -799,7 +798,8 @@ static bool OptimizeAwayTrappingUsesOfLoads(GlobalVariable *GV, Constant *LV,
   }
 
   if (Changed) {
-    DEBUG(dbgs() << "OPTIMIZED LOADS FROM STORED ONCE POINTER: " << *GV << "\n");
+    LLVM_DEBUG(dbgs() << "OPTIMIZED LOADS FROM STORED ONCE POINTER: " << *GV
+                      << "\n");
     ++NumGlobUses;
   }
 
@@ -813,7 +813,7 @@ static bool OptimizeAwayTrappingUsesOfLoads(GlobalVariable *GV, Constant *LV,
       CleanupConstantGlobalUsers(GV, nullptr, DL, TLI);
     }
     if (GV->use_empty()) {
-      DEBUG(dbgs() << "  *** GLOBAL NOW DEAD!\n");
+      LLVM_DEBUG(dbgs() << "  *** GLOBAL NOW DEAD!\n");
       Changed = true;
       GV->eraseFromParent();
       ++NumDeleted;
@@ -849,7 +849,8 @@ static GlobalVariable *
 OptimizeGlobalAddressOfMalloc(GlobalVariable *GV, CallInst *CI, Type *AllocTy,
                               ConstantInt *NElements, const DataLayout &DL,
                               TargetLibraryInfo *TLI) {
-  DEBUG(errs() << "PROMOTING GLOBAL: " << *GV << "  CALL = " << *CI << '\n');
+  LLVM_DEBUG(errs() << "PROMOTING GLOBAL: " << *GV << "  CALL = " << *CI
+                    << '\n');
 
   Type *GlobalType;
   if (NElements->getZExtValue() == 1)
@@ -1285,7 +1286,8 @@ static void RewriteUsesOfLoadForHeapSRoA(LoadInst *Load,
 static GlobalVariable *PerformHeapAllocSRoA(GlobalVariable *GV, CallInst *CI,
                                             Value *NElems, const DataLayout &DL,
                                             const TargetLibraryInfo *TLI) {
-  DEBUG(dbgs() << "SROA HEAP ALLOC: " << *GV << "  MALLOC = " << *CI << '\n');
+  LLVM_DEBUG(dbgs() << "SROA HEAP ALLOC: " << *GV << "  MALLOC = " << *CI
+                    << '\n');
   Type *MAT = getMallocAllocatedType(CI, TLI);
   StructType *STy = cast<StructType>(MAT);
 
@@ -1624,7 +1626,7 @@ static bool TryToShrinkGlobalToBoolean(GlobalVariable *GV, Constant *OtherVal) {
     if (!isa<LoadInst>(U) && !isa<StoreInst>(U))
       return false;
 
-  DEBUG(dbgs() << "   *** SHRINKING TO BOOL: " << *GV << "\n");
+  LLVM_DEBUG(dbgs() << "   *** SHRINKING TO BOOL: " << *GV << "\n");
 
   // Create the new global, initializing it to false.
   GlobalVariable *NewGV = new GlobalVariable(Type::getInt1Ty(GV->getContext()),
@@ -1668,15 +1670,11 @@ static bool TryToShrinkGlobalToBoolean(GlobalVariable *GV, Constant *OtherVal) {
         // val * (ValOther - ValInit) + ValInit:
         // DW_OP_deref DW_OP_constu <ValMinus>
         // DW_OP_mul DW_OP_constu <ValInit> DW_OP_plus DW_OP_stack_value
-        E = DIExpression::get(NewGV->getContext(),
-                             {dwarf::DW_OP_deref,
-                              dwarf::DW_OP_constu,
-                              ValMinus,
-                              dwarf::DW_OP_mul,
-                              dwarf::DW_OP_constu,
-                              ValInit,
-                              dwarf::DW_OP_plus,
-                              dwarf::DW_OP_stack_value});
+        SmallVector<uint64_t, 12> Ops = {
+            dwarf::DW_OP_deref, dwarf::DW_OP_constu, ValMinus,
+            dwarf::DW_OP_mul,   dwarf::DW_OP_constu, ValInit,
+            dwarf::DW_OP_plus};
+        E = DIExpression::prependOpcodes(E, Ops, DIExpression::WithStackValue);
         DIGlobalVariableExpression *DGVE =
           DIGlobalVariableExpression::get(NewGV->getContext(), DGV, E);
         NewGV->addDebugInfo(DGVE);
@@ -1748,8 +1746,8 @@ static bool TryToShrinkGlobalToBoolean(GlobalVariable *GV, Constant *OtherVal) {
   return true;
 }
 
-static bool deleteIfDead(GlobalValue &GV,
-                         SmallSet<const Comdat *, 8> &NotDiscardableComdats) {
+static bool deleteIfDead(
+    GlobalValue &GV, SmallPtrSetImpl<const Comdat *> &NotDiscardableComdats) {
   GV.removeDeadConstantUsers();
 
   if (!GV.isDiscardableIfUnused() && !GV.isDeclaration())
@@ -1767,7 +1765,7 @@ static bool deleteIfDead(GlobalValue &GV,
   if (!Dead)
     return false;
 
-  DEBUG(dbgs() << "GLOBAL DEAD: " << GV << "\n");
+  LLVM_DEBUG(dbgs() << "GLOBAL DEAD: " << GV << "\n");
   GV.eraseFromParent();
   ++NumDeleted;
   return true;
@@ -1933,7 +1931,7 @@ static bool processInternalGlobal(
                                           LookupDomTree)) {
     const DataLayout &DL = GV->getParent()->getDataLayout();
 
-    DEBUG(dbgs() << "LOCALIZING GLOBAL: " << *GV << "\n");
+    LLVM_DEBUG(dbgs() << "LOCALIZING GLOBAL: " << *GV << "\n");
     Instruction &FirstI = const_cast<Instruction&>(*GS.AccessingFunction
                                                    ->getEntryBlock().begin());
     Type *ElemTy = GV->getValueType();
@@ -1954,7 +1952,7 @@ static bool processInternalGlobal(
   // If the global is never loaded (but may be stored to), it is dead.
   // Delete it now.
   if (!GS.IsLoaded) {
-    DEBUG(dbgs() << "GLOBAL NEVER LOADED: " << *GV << "\n");
+    LLVM_DEBUG(dbgs() << "GLOBAL NEVER LOADED: " << *GV << "\n");
 
     bool Changed;
     if (isLeakCheckerRoot(GV)) {
@@ -1976,7 +1974,7 @@ static bool processInternalGlobal(
 
   }
   if (GS.StoredType <= GlobalStatus::InitializerStored) {
-    DEBUG(dbgs() << "MARKING CONSTANT: " << *GV << "\n");
+    LLVM_DEBUG(dbgs() << "MARKING CONSTANT: " << *GV << "\n");
     GV->setConstant(true);
 
     // Clean up any obviously simplifiable users now.
@@ -1984,8 +1982,8 @@ static bool processInternalGlobal(
 
     // If the global is dead now, just nuke it.
     if (GV->use_empty()) {
-      DEBUG(dbgs() << "   *** Marking constant allowed us to simplify "
-            << "all users and delete global!\n");
+      LLVM_DEBUG(dbgs() << "   *** Marking constant allowed us to simplify "
+                        << "all users and delete global!\n");
       GV->eraseFromParent();
       ++NumDeleted;
       return true;
@@ -2013,8 +2011,8 @@ static bool processInternalGlobal(
         CleanupConstantGlobalUsers(GV, GV->getInitializer(), DL, TLI);
 
         if (GV->use_empty()) {
-          DEBUG(dbgs() << "   *** Substituting initializer allowed us to "
-                       << "simplify all users and delete global!\n");
+          LLVM_DEBUG(dbgs() << "   *** Substituting initializer allowed us to "
+                            << "simplify all users and delete global!\n");
           GV->eraseFromParent();
           ++NumDeleted;
         }
@@ -2229,7 +2227,7 @@ OptimizeFunctions(Module &M, TargetLibraryInfo *TLI,
                   function_ref<TargetTransformInfo &(Function &)> GetTTI,
                   function_ref<BlockFrequencyInfo &(Function &)> GetBFI,
                   function_ref<DominatorTree &(Function &)> LookupDomTree,
-                  SmallSet<const Comdat *, 8> &NotDiscardableComdats) {
+                  SmallPtrSetImpl<const Comdat *> &NotDiscardableComdats) {
 
   bool Changed = false;
 
@@ -2324,7 +2322,7 @@ OptimizeFunctions(Module &M, TargetLibraryInfo *TLI,
 static bool
 OptimizeGlobalVars(Module &M, TargetLibraryInfo *TLI,
                    function_ref<DominatorTree &(Function &)> LookupDomTree,
-                   SmallSet<const Comdat *, 8> &NotDiscardableComdats) {
+                   SmallPtrSetImpl<const Comdat *> &NotDiscardableComdats) {
   bool Changed = false;
 
   for (Module::global_iterator GVI = M.global_begin(), E = M.global_end();
@@ -2549,9 +2547,9 @@ static bool EvaluateStaticConstructor(Function *F, const DataLayout &DL,
     ++NumCtorsEvaluated;
 
     // We succeeded at evaluation: commit the result.
-    DEBUG(dbgs() << "FULLY EVALUATED GLOBAL CTOR FUNCTION '"
-          << F->getName() << "' to " << Eval.getMutatedMemory().size()
-          << " stores.\n");
+    LLVM_DEBUG(dbgs() << "FULLY EVALUATED GLOBAL CTOR FUNCTION '"
+                      << F->getName() << "' to "
+                      << Eval.getMutatedMemory().size() << " stores.\n");
     BatchCommitValueTo(Eval.getMutatedMemory());
     for (GlobalVariable *GV : Eval.getInvariants())
       GV->setConstant(true);
@@ -2567,7 +2565,7 @@ static int compareNames(Constant *const *A, Constant *const *B) {
 }
 
 static void setUsedInitializer(GlobalVariable &V,
-                               const SmallPtrSet<GlobalValue *, 8> &Init) {
+                               const SmallPtrSetImpl<GlobalValue *> &Init) {
   if (Init.empty()) {
     V.eraseFromParent();
     return;
@@ -2720,7 +2718,7 @@ static bool hasUsesToReplace(GlobalAlias &GA, const LLVMUsed &U,
 
 static bool
 OptimizeGlobalAliases(Module &M,
-                      SmallSet<const Comdat *, 8> &NotDiscardableComdats) {
+                      SmallPtrSetImpl<const Comdat *> &NotDiscardableComdats) {
   bool Changed = false;
   LLVMUsed Used(M);
 
@@ -2903,7 +2901,7 @@ static bool optimizeGlobalsInModule(
     function_ref<TargetTransformInfo &(Function &)> GetTTI,
     function_ref<BlockFrequencyInfo &(Function &)> GetBFI,
     function_ref<DominatorTree &(Function &)> LookupDomTree) {
-  SmallSet<const Comdat *, 8> NotDiscardableComdats;
+  SmallPtrSet<const Comdat *, 8> NotDiscardableComdats;
   bool Changed = false;
   bool LocalChange = true;
   while (LocalChange) {

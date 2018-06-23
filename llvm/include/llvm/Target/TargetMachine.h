@@ -154,7 +154,7 @@ public:
     return DL.getPointerSize(DL.getAllocaAddrSpace());
   }
 
-  /// \brief Reset the target options based on the function's attributes.
+  /// Reset the target options based on the function's attributes.
   // FIXME: Remove TargetOptions that affect per-function code generation
   // from TargetMachine.
   void resetTargetOptions(const Function &F) const;
@@ -195,7 +195,7 @@ public:
   /// Returns the optimization level: None, Less, Default, or Aggressive.
   CodeGenOpt::Level getOptLevel() const;
 
-  /// \brief Overrides the optimization level.
+  /// Overrides the optimization level.
   void setOptLevel(CodeGenOpt::Level Level);
 
   void setFastISel(bool Enable) { Options.EnableFastISel = Enable; }
@@ -219,14 +219,14 @@ public:
     return Options.FunctionSections;
   }
 
-  /// \brief Get a \c TargetIRAnalysis appropriate for the target.
+  /// Get a \c TargetIRAnalysis appropriate for the target.
   ///
   /// This is used to construct the new pass manager's target IR analysis pass,
   /// set up appropriately for this target machine. Even the old pass manager
   /// uses this to answer queries about the IR.
   TargetIRAnalysis getTargetIRAnalysis();
 
-  /// \brief Return a TargetTransformInfo for a given function.
+  /// Return a TargetTransformInfo for a given function.
   ///
   /// The returned TargetTransformInfo is specialized to the subtarget
   /// corresponding to \p F.
@@ -252,7 +252,7 @@ public:
   /// \p MMI is an optional parameter that, if set to non-nullptr,
   /// will be used to set the MachineModuloInfo for this PM.
   virtual bool addPassesToEmitFile(PassManagerBase &, raw_pwrite_stream &,
-                                   CodeGenFileType,
+                                   raw_pwrite_stream *, CodeGenFileType,
                                    bool /*DisableVerify*/ = true,
                                    MachineModuleInfo *MMI = nullptr) {
     return true;
@@ -306,7 +306,7 @@ protected: // Can only create subclasses.
   void initAsmInfo();
 
 public:
-  /// \brief Get a TargetTransformInfo implementation for the target.
+  /// Get a TargetTransformInfo implementation for the target.
   ///
   /// The TTI returned uses the common code generator to answer queries about
   /// the IR.
@@ -321,7 +321,8 @@ public:
   /// \p MMI is an optional parameter that, if set to non-nullptr,
   /// will be used to set the MachineModuloInfofor this PM.
   bool addPassesToEmitFile(PassManagerBase &PM, raw_pwrite_stream &Out,
-                           CodeGenFileType FileType, bool DisableVerify = true,
+                           raw_pwrite_stream *DwoOut, CodeGenFileType FileType,
+                           bool DisableVerify = true,
                            MachineModuleInfo *MMI = nullptr) override;
 
   /// Add passes to the specified pass manager to get machine code emitted with
@@ -338,10 +339,11 @@ public:
   /// EXPENSIVE_CHECKS is enabled.
   virtual bool isMachineVerifierClean() const { return true; }
 
-  /// \brief Adds an AsmPrinter pass to the pipeline that prints assembly or
+  /// Adds an AsmPrinter pass to the pipeline that prints assembly or
   /// machine code from the MI representation.
   bool addAsmPrinter(PassManagerBase &PM, raw_pwrite_stream &Out,
-                     CodeGenFileType FileTYpe, MCContext &Context);
+                     raw_pwrite_stream *DwoOut, CodeGenFileType FileTYpe,
+                     MCContext &Context);
 };
 
 } // end namespace llvm

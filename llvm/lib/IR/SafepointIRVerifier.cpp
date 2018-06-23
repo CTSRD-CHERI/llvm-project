@@ -318,6 +318,12 @@ public:
   static void verifyFunction(GCPtrTracker &&Tracker,
                              InstructionVerifier &Verifier);
 
+  /// Returns true for reachable blocks that are verified, the other blocks are
+  /// ignored.
+  bool isMapped(const BasicBlock *BB) const {
+    return BlockMap.find(BB) != BlockMap.end();
+  }
+
 private:
   /// Returns true if the instruction may be safely skipped during verification.
   bool instructionMayBeSkipped(const Instruction *I) const;
@@ -374,12 +380,13 @@ private:
 
 GCPtrTracker::GCPtrTracker(const Function &F, const DominatorTree &DT) : F(F) {
   // First, calculate Contribution of each BB.
-  for (const BasicBlock &BB : F) {
-    BasicBlockState *BBS = new (BSAllocator.Allocate()) BasicBlockState;
-    for (const auto &I : BB)
-      transferInstruction(I, BBS->Cleared, BBS->Contribution);
-    BlockMap[&BB] = BBS;
-  }
+  for (const BasicBlock &BB : F)
+    if (DT.isReachableFromEntry(&BB)) {
+      BasicBlockState *BBS = new (BSAllocator.Allocate()) BasicBlockState;
+      for (const auto &I : BB)
+        transferInstruction(I, BBS->Cleared, BBS->Contribution);
+      BlockMap[&BB] = BBS;
+    }
 
   // Initialize AvailableIn/Out sets of each BB using only information about
   // dominating BBs.
@@ -452,7 +459,8 @@ void GCPtrTracker::recalculateBBsStates() {
 
     size_t OldInCount = BBS->AvailableIn.size();
     for (const BasicBlock *PBB : predecessors(BB))
-      set_intersect(BBS->AvailableIn, BlockMap[PBB]->AvailableOut);
+      if (isMapped(PBB))
+        set_intersect(BBS->AvailableIn, BlockMap[PBB]->AvailableOut);
 
     assert(OldInCount >= BBS->AvailableIn.size() && "invariant!");
 
@@ -491,6 +499,8 @@ bool GCPtrTracker::removeValidUnrelocatedDefs(const BasicBlock *BB,
         bool HasUnrelocatedInputs = false;
         for (unsigned i = 0, e = PN->getNumIncomingValues(); i != e; ++i) {
           const BasicBlock *InBB = PN->getIncomingBlock(i);
+          if (!isMapped(InBB))
+              continue;
           const Value *InValue = PN->getIncomingValue(i);
 
           if (isNotExclusivelyConstantDerived(InValue)) {
@@ -535,16 +545,16 @@ bool GCPtrTracker::removeValidUnrelocatedDefs(const BasicBlock *BB,
       Contribution.erase(&I);
       PoisonedDefs.erase(&I);
       ValidUnrelocatedDefs.insert(&I);
-      DEBUG(dbgs() << "Removing urelocated " << I << " from Contribution of "
-                   << BB->getName() << "\n");
+      LLVM_DEBUG(dbgs() << "Removing urelocated " << I
+                        << " from Contribution of " << BB->getName() << "\n");
       ContributionChanged = true;
     } else if (PoisonedPointerDef) {
       // Mark pointer as poisoned, remove its def from Contribution and trigger
       // update of all successors.
       Contribution.erase(&I);
       PoisonedDefs.insert(&I);
-      DEBUG(dbgs() << "Removing poisoned " << I << " from Contribution of "
-                   << BB->getName() << "\n");
+      LLVM_DEBUG(dbgs() << "Removing poisoned " << I << " from Contribution of "
+                        << BB->getName() << "\n");
       ContributionChanged = true;
     } else {
       bool Cleared = false;
@@ -560,6 +570,7 @@ void GCPtrTracker::gatherDominatingDefs(const BasicBlock *BB,
                                         const DominatorTree &DT) {
   DomTreeNode *DTN = DT[const_cast<BasicBlock *>(BB)];
 
+  assert(DTN && "Unreachable blocks are ignored");
   while (DTN->getIDom()) {
     DTN = DTN->getIDom();
     const auto &Defs = BlockMap[DTN->getBlock()]->Contribution;
@@ -594,11 +605,11 @@ void GCPtrTracker::transferBlock(const BasicBlock *BB, BasicBlockState &BBS,
     AvailableOut = std::move(Temp);
   }
 
-  DEBUG(dbgs() << "Transfered block " << BB->getName() << " from ";
-        PrintValueSet(dbgs(), AvailableIn.begin(), AvailableIn.end());
-        dbgs() << " to ";
-        PrintValueSet(dbgs(), AvailableOut.begin(), AvailableOut.end());
-        dbgs() << "\n";);
+  LLVM_DEBUG(dbgs() << "Transfered block " << BB->getName() << " from ";
+             PrintValueSet(dbgs(), AvailableIn.begin(), AvailableIn.end());
+             dbgs() << " to ";
+             PrintValueSet(dbgs(), AvailableOut.begin(), AvailableOut.end());
+             dbgs() << "\n";);
 }
 
 void GCPtrTracker::transferInstruction(const Instruction &I, bool &Cleared,
@@ -617,6 +628,8 @@ void InstructionVerifier::verifyInstruction(
     if (containsGCPtrType(PN->getType()))
       for (unsigned i = 0, e = PN->getNumIncomingValues(); i != e; ++i) {
         const BasicBlock *InBB = PN->getIncomingBlock(i);
+        if (!Tracker->isMapped(InBB))
+            continue;
         const Value *InValue = PN->getIncomingValue(i);
 
         if (isNotExclusivelyConstantDerived(InValue) &&
@@ -698,7 +711,8 @@ void InstructionVerifier::reportInvalidUse(const Value &V,
 }
 
 static void Verify(const Function &F, const DominatorTree &DT) {
-  DEBUG(dbgs() << "Verifying gc pointers in function: " << F.getName() << "\n");
+  LLVM_DEBUG(dbgs() << "Verifying gc pointers in function: " << F.getName()
+                    << "\n");
   if (PrintOnly)
     dbgs() << "Verifying gc pointers in function: " << F.getName() << "\n";
 

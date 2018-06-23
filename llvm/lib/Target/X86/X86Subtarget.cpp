@@ -231,9 +231,9 @@ void X86Subtarget::initSubtargetFeatures(StringRef CPU, StringRef FS) {
   else
     llvm_unreachable("Not 16-bit, 32-bit or 64-bit mode!");
 
-  DEBUG(dbgs() << "Subtarget features: SSELevel " << X86SSELevel
-               << ", 3DNowLevel " << X863DNowLevel
-               << ", 64bit " << HasX86_64 << "\n");
+  LLVM_DEBUG(dbgs() << "Subtarget features: SSELevel " << X86SSELevel
+                    << ", 3DNowLevel " << X863DNowLevel << ", 64bit "
+                    << HasX86_64 << "\n");
   assert((!In64BitMode || HasX86_64) &&
          "64-bit code requested on a subtarget that doesn't support it!");
 
@@ -263,113 +263,8 @@ void X86Subtarget::initSubtargetFeatures(StringRef CPU, StringRef FS) {
     PreferVectorWidth = 256;
 }
 
-void X86Subtarget::initializeEnvironment() {
-  X86SSELevel = NoSSE;
-  X863DNowLevel = NoThreeDNow;
-  HasX87 = false;
-  HasNOPL = false;
-  HasCMov = false;
-  HasX86_64 = false;
-  HasPOPCNT = false;
-  HasSSE4A = false;
-  HasAES = false;
-  HasVAES = false;
-  HasFXSR = false;
-  HasXSAVE = false;
-  HasXSAVEOPT = false;
-  HasXSAVEC = false;
-  HasXSAVES = false;
-  HasPCLMUL = false;
-  HasVPCLMULQDQ = false;
-  HasGFNI = false;
-  HasFMA = false;
-  HasFMA4 = false;
-  HasXOP = false;
-  HasTBM = false;
-  HasLWP = false;
-  HasMOVBE = false;
-  HasRDRAND = false;
-  HasF16C = false;
-  HasFSGSBase = false;
-  HasLZCNT = false;
-  HasBMI = false;
-  HasBMI2 = false;
-  HasVBMI = false;
-  HasVBMI2 = false;
-  HasIFMA = false;
-  HasRTM = false;
-  HasERI = false;
-  HasCDI = false;
-  HasPFI = false;
-  HasDQI = false;
-  HasVPOPCNTDQ = false;
-  HasBWI = false;
-  HasVLX = false;
-  HasADX = false;
-  HasPKU = false;
-  HasVNNI = false;
-  HasBITALG = false;
-  HasSHA = false;
-  HasPREFETCHWT1 = false;
-  HasPRFCHW = false;
-  HasRDSEED = false;
-  HasLAHFSAHF = false;
-  HasMWAITX = false;
-  HasCLZERO = false;
-  HasCLDEMOTE = false;
-  HasMPX = false;
-  HasSHSTK = false;
-  HasIBT = false;
-  HasSGX = false;
-  HasCLFLUSHOPT = false;
-  HasCLWB = false;
-  HasWBNOINVD = false;
-  HasRDPID = false;
-  HasWAITPKG = false;
-  UseRetpoline = false;
-  UseRetpolineExternalThunk = false;
-  IsPMULLDSlow = false;
-  IsSHLDSlow = false;
-  IsUAMem16Slow = false;
-  IsUAMem32Slow = false;
-  HasSSEUnalignedMem = false;
-  HasCmpxchg16b = false;
-  UseLeaForSP = false;
-  HasPOPCNTFalseDeps = false;
-  HasLZCNTFalseDeps = false;
-  HasFastVariableShuffle = false;
-  HasFastPartialYMMorZMMWrite = false;
-  HasFast11ByteNOP = false;
-  HasFast15ByteNOP = false;
-  HasFastGather = false;
-  HasFastScalarFSQRT = false;
-  HasFastVectorFSQRT = false;
-  HasFastLZCNT = false;
-  HasFastSHLDRotate = false;
-  HasMacroFusion = false;
-  HasERMSB = false;
-  HasSlowDivide32 = false;
-  HasSlowDivide64 = false;
-  PadShortFunctions = false;
-  SlowTwoMemOps = false;
-  LEAUsesAG = false;
-  SlowLEA = false;
-  Slow3OpsLEA = false;
-  SlowIncDec = false;
-  stackAlignment = 4;
-  // FIXME: this is a known good value for Yonah. How about others?
-  MaxInlineSizeThreshold = 128;
-  UseSoftFloat = false;
-  X86ProcFamily = Others;
-  GatherOverhead = 1024;
-  ScatterOverhead = 1024;
-  PreferVectorWidth = UINT32_MAX;
-  Prefer256Bit = false;
-}
-
 X86Subtarget &X86Subtarget::initializeSubtargetDependencies(StringRef CPU,
                                                             StringRef FS) {
-  initializeEnvironment();
   initSubtargetFeatures(CPU, FS);
   return *this;
 }
@@ -379,7 +274,7 @@ X86Subtarget::X86Subtarget(const Triple &TT, StringRef CPU, StringRef FS,
                            unsigned StackAlignOverride,
                            unsigned PreferVectorWidthOverride,
                            unsigned RequiredVectorWidth)
-    : X86GenSubtargetInfo(TT, CPU, FS), X86ProcFamily(Others),
+    : X86GenSubtargetInfo(TT, CPU, FS),
       PICStyle(PICStyles::None), TM(TM), TargetTriple(TT),
       StackAlignOverride(StackAlignOverride),
       PreferVectorWidthOverride(PreferVectorWidthOverride),

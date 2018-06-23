@@ -105,6 +105,7 @@
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -1090,7 +1091,7 @@ bool MatchableInfo::validate(StringRef CommentDelimiter, bool IsAlias) const {
     // Verify that any operand is only mentioned once.
     // We reject aliases and ignore instructions for now.
     if (!IsAlias && Tok[0] == '$' && !OperandNames.insert(Tok).second) {
-      DEBUG({
+      LLVM_DEBUG({
         errs() << "warning: '" << TheDef->getName() << "': "
                << "ignoring instruction with tied operand '"
                << Tok << "'\n";
@@ -1476,7 +1477,7 @@ void AsmMatcherInfo::buildInfo() {
                            SubtargetFeaturePairs.end());
 #ifndef NDEBUG
   for (const auto &Pair : SubtargetFeatures)
-    DEBUG(Pair.second.dump());
+    LLVM_DEBUG(Pair.second.dump());
 #endif // NDEBUG
   assert(SubtargetFeatures.size() <= 64 && "Too many subtarget features!");
 
@@ -2451,14 +2452,20 @@ static void emitValidateOperandClass(AsmMatcherInfo &Info,
       continue;
 
     OS << "  // '" << CI.ClassName << "' class\n";
-    OS << "  case " << CI.Name << ":\n";
-    OS << "    if (Operand." << CI.PredicateMethod << "())\n";
+    OS << "  case " << CI.Name << ": {\n";
+    OS << "    DiagnosticPredicate DP(Operand." << CI.PredicateMethod
+       << "());\n";
+    OS << "    if (DP.isMatch())\n";
     OS << "      return MCTargetAsmParser::Match_Success;\n";
-    if (!CI.DiagnosticType.empty())
-      OS << "    return " << Info.Target.getName() << "AsmParser::Match_"
+    if (!CI.DiagnosticType.empty()) {
+      OS << "    if (DP.isNearMatch())\n";
+      OS << "      return " << Info.Target.getName() << "AsmParser::Match_"
          << CI.DiagnosticType << ";\n";
+      OS << "    break;\n";
+    }
     else
       OS << "    break;\n";
+    OS << "    }\n";
   }
   OS << "  } // end switch (Kind)\n\n";
 
@@ -3759,8 +3766,8 @@ void AsmMatcherEmitter::run(raw_ostream &OS) {
   }
 
   if (!ReportMultipleNearMisses) {
-    OS << "      if (!checkAsmTiedOperandConstraints(it->ConvertFn, Operands, ErrorInfo))\n";
-    OS << "        return Match_InvalidTiedOperand;\n";
+    OS << "    if (!checkAsmTiedOperandConstraints(it->ConvertFn, Operands, ErrorInfo))\n";
+    OS << "      return Match_InvalidTiedOperand;\n";
     OS << "\n";
   }
 

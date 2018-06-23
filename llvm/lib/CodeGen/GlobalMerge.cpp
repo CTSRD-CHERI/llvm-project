@@ -159,13 +159,13 @@ namespace {
     bool doMerge(SmallVectorImpl<GlobalVariable*> &Globals,
                  Module &M, bool isConst, unsigned AddrSpace) const;
 
-    /// \brief Merge everything in \p Globals for which the corresponding bit
+    /// Merge everything in \p Globals for which the corresponding bit
     /// in \p GlobalSet is set.
     bool doMerge(const SmallVectorImpl<GlobalVariable *> &Globals,
                  const BitVector &GlobalSet, Module &M, bool isConst,
                  unsigned AddrSpace) const;
 
-    /// \brief Check if the given variable has been identified as must keep
+    /// Check if the given variable has been identified as must keep
     /// \pre setMustKeepGlobalVariables must have been called on the Module that
     ///      contains GV
     bool isMustKeepGlobalVariable(const GlobalVariable *GV) const {
@@ -242,7 +242,7 @@ bool GlobalMerge::doMerge(SmallVectorImpl<GlobalVariable*> &Globals,
   // code (currently, a Function) to the set of globals seen so far that are
   // used together in that unit (GlobalUsesByFunction).
   //
-  // When we look at the Nth global, we now that any new set is either:
+  // When we look at the Nth global, we know that any new set is either:
   // - the singleton set {N}, containing this global only, or
   // - the union of {N} and a previously-discovered set, containing some
   //   combination of the previous N-1 globals.
@@ -442,9 +442,10 @@ bool GlobalMerge::doMerge(const SmallVectorImpl<GlobalVariable *> &Globals,
   Type *Int32Ty = Type::getInt32Ty(M.getContext());
   auto &DL = M.getDataLayout();
 
-  DEBUG(dbgs() << " Trying to merge set, starts with #"
-               << GlobalSet.find_first() << "\n");
+  LLVM_DEBUG(dbgs() << " Trying to merge set, starts with #"
+                    << GlobalSet.find_first() << "\n");
 
+  bool Changed = false;
   ssize_t i = GlobalSet.find_first();
   while (i != -1) {
     ssize_t j = 0;
@@ -467,6 +468,12 @@ bool GlobalMerge::doMerge(const SmallVectorImpl<GlobalVariable *> &Globals,
         HasExternal = true;
         FirstExternalName = Globals[j]->getName();
       }
+    }
+
+    // Exit early if there is only one global to merge.
+    if (Tys.size() < 2) {
+      i = j;
+      continue;
     }
 
     // If merged variables doesn't have external linkage, we needn't to expose
@@ -493,6 +500,11 @@ bool GlobalMerge::doMerge(const SmallVectorImpl<GlobalVariable *> &Globals,
         GlobalVariable::NotThreadLocal, AddrSpace);
 
     const StructLayout *MergedLayout = DL.getStructLayout(MergedTy);
+    // Set the alignment of the merged struct as the maximum alignment of the
+    // globals to prevent over-alignment. We don't handle globals that are not
+    // default aligned, so the alignment of the MergedLayout struct is
+    // equivalent.
+    MergedGV->setAlignment(MergedLayout->getAlignment());
 
     for (ssize_t k = i, idx = 0; k != j; k = GlobalSet.find_next(k), ++idx) {
       GlobalValue::LinkageTypes Linkage = Globals[k]->getLinkage();
@@ -526,10 +538,11 @@ bool GlobalMerge::doMerge(const SmallVectorImpl<GlobalVariable *> &Globals,
 
       NumMerged++;
     }
+    Changed = true;
     i = j;
   }
 
-  return true;
+  return Changed;
 }
 
 void GlobalMerge::collectUsedGlobalVariables(Module &M) {

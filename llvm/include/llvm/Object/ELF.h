@@ -111,7 +111,7 @@ public:
   void getRelocationTypeName(uint32_t Type,
                              SmallVectorImpl<char> &Result) const;
 
-  /// \brief Get the symbol for a given relocation.
+  /// Get the symbol for a given relocation.
   Expected<const Elf_Sym *> getRelocationSymbol(const Elf_Rel *Rel,
                                                 const Elf_Shdr *SymTab) const;
 
@@ -145,7 +145,7 @@ public:
 
   Expected<std::vector<Elf_Rela>> android_relas(const Elf_Shdr *Sec) const;
 
-  /// \brief Iterate over program header table.
+  /// Iterate over program header table.
   Expected<Elf_Phdr_Range> program_headers() const {
     if (getHeader()->e_phnum && getHeader()->e_phentsize != sizeof(Elf_Phdr))
       return createError("invalid e_phentsize");
@@ -235,6 +235,7 @@ public:
                                         Elf_Sym_Range Symtab,
                                         ArrayRef<Elf_Word> ShndxTable) const;
   Expected<const Elf_Shdr *> getSection(uint32_t Index) const;
+  Expected<const Elf_Shdr *> getSection(const StringRef SectionName) const;
 
   Expected<const Elf_Sym *> getSymbol(const Elf_Shdr *Sec,
                                       uint32_t Index) const;
@@ -496,6 +497,22 @@ ELFFile<ELFT>::getSection(uint32_t Index) const {
   if (!TableOrErr)
     return TableOrErr.takeError();
   return object::getSection<ELFT>(*TableOrErr, Index);
+}
+
+template <class ELFT>
+Expected<const typename ELFT::Shdr *>
+ELFFile<ELFT>::getSection(const StringRef SectionName) const {
+  auto TableOrErr = sections();
+  if (!TableOrErr)
+    return TableOrErr.takeError();
+  for (auto &Sec : *TableOrErr) {
+    auto SecNameOrErr = getSectionName(&Sec);
+    if (!SecNameOrErr)
+      return SecNameOrErr.takeError();
+    if (*SecNameOrErr == SectionName)
+      return &Sec;
+  }
+  return createError("invalid section name");
 }
 
 template <class ELFT>

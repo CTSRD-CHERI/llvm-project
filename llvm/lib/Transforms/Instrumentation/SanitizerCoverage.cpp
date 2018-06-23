@@ -243,6 +243,7 @@ private:
   GlobalVariable *Function8bitCounterArray;  // for inline-8bit-counters.
   GlobalVariable *FunctionPCsArray;  // for pc-table.
   SmallVector<GlobalValue *, 20> GlobalsToAppendToUsed;
+  SmallVector<GlobalValue *, 20> GlobalsToAppendToCompilerUsed;
 
   SanitizerCoverageOptions Options;
 };
@@ -405,6 +406,7 @@ bool SanitizerCoverageModule::runOnModule(Module &M) {
   // so we need to prevent them from being dead stripped.
   if (TargetTriple.isOSBinFormatMachO())
     appendToUsed(M, GlobalsToAppendToUsed);
+  appendToCompilerUsed(M, GlobalsToAppendToCompilerUsed);
   return true;
 }
 
@@ -479,6 +481,8 @@ bool SanitizerCoverageModule::runOnFunction(Function &F) {
   // initialization.
   if (F.getName() == "__local_stdio_printf_options" ||
       F.getName() == "__local_stdio_scanf_options")
+    return false;
+  if (isa<UnreachableInst>(F.getEntryBlock().getTerminator()))
     return false;
   // Don't instrument functions using SEH for now. Splitting basic blocks like
   // we do for coverage breaks WinEHPrepare.
@@ -596,7 +600,9 @@ void SanitizerCoverageModule::CreateFunctionLocalArrays(
   }
   if (Options.PCTable) {
     FunctionPCsArray = CreatePCArray(F, AllBlocks);
-    GlobalsToAppendToUsed.push_back(FunctionPCsArray);
+    GlobalsToAppendToCompilerUsed.push_back(FunctionPCsArray);
+    MDNode *MD = MDNode::get(F.getContext(), ValueAsMetadata::get(&F));
+    FunctionPCsArray->addMetadata(LLVMContext::MD_associated, *MD);
   }
 }
 

@@ -155,6 +155,11 @@ extern ExternalFunctions *EF;
 template<typename T>
   class fuzzer_allocator: public std::allocator<T> {
     public:
+      fuzzer_allocator() = default;
+
+      template<class U>
+      fuzzer_allocator(const fuzzer_allocator<U>&) {}
+
       template<class Other>
       struct rebind { typedef fuzzer_allocator<Other> other;  };
   };
@@ -185,10 +190,6 @@ inline uint64_t Bswap(uint64_t x) { return __builtin_bswap64(x); }
 uint8_t *ExtraCountersBegin();
 uint8_t *ExtraCountersEnd();
 void ClearExtraCounters();
-
-uint64_t *ClangCountersBegin();
-uint64_t *ClangCountersEnd();
-void ClearClangCounters();
 
 }  // namespace fuzzer
 

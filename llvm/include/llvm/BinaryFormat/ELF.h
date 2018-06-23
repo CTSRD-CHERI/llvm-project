@@ -658,8 +658,7 @@ enum : unsigned {
   EF_AMDGPU_MACH_NONE = 0x000,
 
   // R600-based processors.
-  EF_AMDGPU_MACH_R600_FIRST = 0x001,
-  EF_AMDGPU_MACH_R600_LAST = 0x010,
+
   // Radeon HD 2000/3000 Series (R600).
   EF_AMDGPU_MACH_R600_R600 = 0x001,
   EF_AMDGPU_MACH_R600_R630 = 0x002,
@@ -685,9 +684,12 @@ enum : unsigned {
   EF_AMDGPU_MACH_R600_RESERVED_FIRST = 0x011,
   EF_AMDGPU_MACH_R600_RESERVED_LAST = 0x01f,
 
+  // First/last R600-based processors.
+  EF_AMDGPU_MACH_R600_FIRST = EF_AMDGPU_MACH_R600_R600,
+  EF_AMDGPU_MACH_R600_LAST = EF_AMDGPU_MACH_R600_TURKS,
+
   // AMDGCN-based processors.
-  EF_AMDGPU_MACH_AMDGCN_FIRST = 0x020,
-  EF_AMDGPU_MACH_AMDGCN_LAST = 0x02d,
+
   // AMDGCN GFX6.
   EF_AMDGPU_MACH_AMDGCN_GFX600 = 0x020,
   EF_AMDGPU_MACH_AMDGCN_GFX601 = 0x021,
@@ -705,12 +707,16 @@ enum : unsigned {
   // AMDGCN GFX9.
   EF_AMDGPU_MACH_AMDGCN_GFX900 = 0x02c,
   EF_AMDGPU_MACH_AMDGCN_GFX902 = 0x02d,
+  EF_AMDGPU_MACH_AMDGCN_GFX904 = 0x02e,
+  EF_AMDGPU_MACH_AMDGCN_GFX906 = 0x02f,
 
   // Reserved for AMDGCN-based processors.
   EF_AMDGPU_MACH_AMDGCN_RESERVED0 = 0x027,
-  EF_AMDGPU_MACH_AMDGCN_RESERVED1 = 0x02e,
-  EF_AMDGPU_MACH_AMDGCN_RESERVED2 = 0x02f,
-  EF_AMDGPU_MACH_AMDGCN_RESERVED3 = 0x030,
+  EF_AMDGPU_MACH_AMDGCN_RESERVED1 = 0x030,
+
+  // First/last AMDGCN-based processors.
+  EF_AMDGPU_MACH_AMDGCN_FIRST = EF_AMDGPU_MACH_AMDGCN_GFX600,
+  EF_AMDGPU_MACH_AMDGCN_LAST = EF_AMDGPU_MACH_AMDGCN_GFX906,
 
   // Indicates if the xnack target feature is enabled for all code contained in
   // the object.
@@ -797,6 +803,7 @@ enum : unsigned {
   SHT_ANDROID_RELA = 0x60000002,
   SHT_LLVM_ODRTAB = 0x6fff4c00,         // LLVM ODR table.
   SHT_LLVM_LINKER_OPTIONS = 0x6fff4c01, // LLVM Linker Options.
+  SHT_LLVM_CALL_GRAPH_PROFILE = 0x6fff4c02, // LLVM Call Graph Profile.
   SHT_GNU_ATTRIBUTES = 0x6ffffff5,      // Object attributes.
   SHT_GNU_HASH = 0x6ffffff6,            // GNU-style hash table.
   SHT_GNU_verdef = 0x6ffffffd,          // GNU version definitions.
@@ -1299,9 +1306,16 @@ enum {
 };
 
 // Property types used in GNU_PROPERTY_TYPE_0 notes.
-enum {
+enum : unsigned {
   GNU_PROPERTY_STACK_SIZE = 1,
   GNU_PROPERTY_NO_COPY_ON_PROTECTED = 2,
+  GNU_PROPERTY_X86_FEATURE_1_AND = 0xc0000002
+};
+
+// CET properties
+enum {
+  GNU_PROPERTY_X86_FEATURE_1_IBT = 1 << 0,
+  GNU_PROPERTY_X86_FEATURE_1_SHSTK = 1 << 1
 };
 
 // AMDGPU specific notes.

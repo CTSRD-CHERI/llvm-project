@@ -311,13 +311,15 @@ void ReleaseMemoryPagesToOS(uptr beg, uptr end) {
   // FIXME: add madvise-analog when we move to 64-bits.
 }
 
-void NoHugePagesInRegion(uptr addr, uptr size) {
+bool NoHugePagesInRegion(uptr addr, uptr size) {
   // FIXME: probably similar to ReleaseMemoryToOS.
+  return true;
 }
 
-void DontDumpShadowMemory(uptr addr, uptr length) {
+bool DontDumpShadowMemory(uptr addr, uptr length) {
   // This is almost useless on 32-bits.
   // FIXME: add madvise-analog when we move to 64-bits.
+  return true;
 }
 
 uptr FindAvailableMemoryRange(uptr size, uptr alignment, uptr left_padding,
@@ -424,7 +426,7 @@ void DumpProcessMap() {
   modules.init();
   uptr num_modules = modules.size();
 
-  InternalScopedBuffer<ModuleInfo> module_infos(num_modules);
+  InternalMmapVector<ModuleInfo> module_infos(num_modules);
   for (size_t i = 0; i < num_modules; ++i) {
     module_infos[i].filepath = modules[i].full_name();
     module_infos[i].base_address = modules[i].ranges().front()->beg;
@@ -1023,6 +1025,10 @@ void CheckVMASize() {
 
 void MaybeReexec() {
   // No need to re-exec on Windows.
+}
+
+void CheckASLR() {
+  // Do nothing
 }
 
 char **GetArgv() {

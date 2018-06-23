@@ -93,11 +93,11 @@ void ProcessInfo::SetArguments(char const **argv,
   if (first_arg_is_executable) {
     const char *first_arg = m_arguments.GetArgumentAtIndex(0);
     if (first_arg) {
-      // Yes the first argument is an executable, set it as the executable
-      // in the launch options. Don't resolve the file path as the path
-      // could be a remote platform path
+      // Yes the first argument is an executable, set it as the executable in
+      // the launch options. Don't resolve the file path as the path could be a
+      // remote platform path
       const bool resolve = false;
-      m_executable.SetFile(first_arg, resolve);
+      m_executable.SetFile(first_arg, resolve, FileSpec::Style::native);
     }
   }
 }
@@ -110,11 +110,11 @@ void ProcessInfo::SetArguments(const Args &args, bool first_arg_is_executable) {
   if (first_arg_is_executable) {
     const char *first_arg = m_arguments.GetArgumentAtIndex(0);
     if (first_arg) {
-      // Yes the first argument is an executable, set it as the executable
-      // in the launch options. Don't resolve the file path as the path
-      // could be a remote platform path
+      // Yes the first argument is an executable, set it as the executable in
+      // the launch options. Don't resolve the file path as the path could be a
+      // remote platform path
       const bool resolve = false;
-      m_executable.SetFile(first_arg, resolve);
+      m_executable.SetFile(first_arg, resolve, FileSpec::Style::native);
     }
   }
 }

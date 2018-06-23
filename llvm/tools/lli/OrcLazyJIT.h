@@ -57,12 +57,11 @@ public:
   using IndirectStubsManagerBuilder = CODLayerT::IndirectStubsManagerBuilderT;
 
   OrcLazyJIT(std::unique_ptr<TargetMachine> TM,
-             std::unique_ptr<CompileCallbackMgr> CCMgr,
              IndirectStubsManagerBuilder IndirectStubsMgrBuilder,
              bool InlineStubs)
-      : TM(std::move(TM)),
-        DL(this->TM->createDataLayout()),
-        CCMgr(std::move(CCMgr)),
+      : TM(std::move(TM)), DL(this->TM->createDataLayout()),
+        CCMgr(orc::createLocalCompileCallbackManager(
+            this->TM->getTargetTriple(), ES, 0)),
         ObjectLayer(ES,
                     [this](orc::VModuleKey K) {
                       auto ResolverI = Resolvers.find(K);
@@ -174,9 +173,10 @@ public:
             }
             return std::move(*NotFoundViaLegacyLookup);
           },
-          [LegacyLookup](std::shared_ptr<orc::AsynchronousSymbolQuery> Query,
+          [this,
+           LegacyLookup](std::shared_ptr<orc::AsynchronousSymbolQuery> Query,
                          orc::SymbolNameSet Symbols) {
-            return lookupWithLegacyFn(*Query, Symbols, LegacyLookup);
+            return lookupWithLegacyFn(ES, *Query, Symbols, LegacyLookup);
           });
 
       // Add the module to the JIT.

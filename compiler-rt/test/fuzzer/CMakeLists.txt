@@ -1,5 +1,4 @@
 set(LIBFUZZER_TEST_DEPS ${SANITIZER_COMMON_LIT_TEST_DEPS})
-list(REMOVE_ITEM LIBFUZZER_TEST_DEPS SanitizerLintCheck)
 if (NOT COMPILER_RT_STANDALONE_BUILD)
   list(APPEND LIBFUZZER_TEST_DEPS fuzzer asan ubsan)
 endif()
@@ -11,6 +10,8 @@ endif()
 set(EXCLUDE_FROM_ALL ON)
 
 add_custom_target(check-fuzzer)
+set(LIBFUZZER_TEST_IOS "0")
+pythonize_bool(LIBFUZZER_TEST_IOS)
 
 if(COMPILER_RT_INCLUDE_TESTS)
   # libFuzzer unit tests.
@@ -50,14 +51,16 @@ macro(test_fuzzer stdlib)
       ${CMAKE_CURRENT_BINARY_DIR}/${CONFIG_NAME}/lit.site.cfg
       )
 
-    add_lit_testsuite(check-fuzzer-${stdlib_name} "Running Fuzzer ${stdlib} tests"
-      ${CMAKE_CURRENT_BINARY_DIR}/${CONFIG_NAME}
+    add_lit_testsuite(check-fuzzer-${stdlib_name}-${arch}
+      "Running Fuzzer ${stdlib} tests"
+      ${CMAKE_CURRENT_BINARY_DIR}/${CONFIG_NAME}/
       DEPENDS ${LIBFUZZER_TEST_DEPS})
     if(TEST_DEPS)
-      add_dependencies(check-fuzzer-${stdlib_name} ${TEST_DEPS})
+      add_dependencies(check-fuzzer-${stdlib_name}-${arch} ${TEST_DEPS})
     endif()
-    set_target_properties(check-fuzzer-${stdlib_name} PROPERTIES FOLDER "Compiler-RT Tests")
-    add_dependencies(check-fuzzer check-fuzzer-${stdlib_name})
+    set_target_properties(check-fuzzer-${stdlib_name}-${arch}
+        PROPERTIES FOLDER "Compiler-RT Tests")
+    add_dependencies(check-fuzzer check-fuzzer-${stdlib_name}-${arch})
   endforeach()
 endmacro()
 
@@ -69,4 +72,28 @@ if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")
   if(TARGET cxx_static)
     test_fuzzer("static-libc++" DEPS cxx_static)
   endif()
+endif()
+
+if (APPLE)
+  set(EXCLUDE_FROM_ALL ON)
+
+  foreach(arch ${DARWIN_ios_ARCHS})
+    set(LIBFUZZER_TEST_IOS "1")
+    pythonize_bool(LIBFUZZER_TEST_IOS)
+    set(LIBFUZZER_TEST_TARGET_ARCH ${arch})
+    set(LIBFUZZER_TEST_FLAGS "-arch ${arch} -isysroot ${DARWIN_ios_SYSROOT} ${COMPILER_RT_TEST_COMPILER_CFLAGS}")
+    set(LIBFUZZER_TEST_CONFIG_SUFFIX "-${arch}-ios")
+    string(TOUPPER ${arch} ARCH_UPPER_CASE)
+    set(CONFIG_NAME "IOS${ARCH_UPPER_CASE}Config")
+    configure_lit_site_cfg(
+      ${CMAKE_CURRENT_SOURCE_DIR}/lit.site.cfg.in
+      ${CMAKE_CURRENT_BINARY_DIR}/${CONFIG_NAME}/lit.site.cfg
+      )
+    add_lit_testsuite(check-fuzzer-ios-${arch} "libFuzzer iOS ${arch} tests"
+      ${CMAKE_CURRENT_BINARY_DIR}/${CONFIG_NAME}/
+      DEPENDS ${LIBFUZZER_TEST_DEPS})
+
+  endforeach()
+
+  set(EXCLUDE_FROM_ALL OFF)
 endif()

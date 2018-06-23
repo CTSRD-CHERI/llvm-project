@@ -276,6 +276,22 @@ class Value;
   /// pointer, return 'len+1'.  If we can't, return 0.
   uint64_t GetStringLength(const Value *V, unsigned CharSize = 8);
 
+  /// This function returns call pointer argument that is considered the same by
+  /// aliasing rules. You CAN'T use it to replace one value with another.
+  const Value *getArgumentAliasingToReturnedPointer(ImmutableCallSite CS);
+  inline Value *getArgumentAliasingToReturnedPointer(CallSite CS) {
+    return const_cast<Value *>(
+        getArgumentAliasingToReturnedPointer(ImmutableCallSite(CS)));
+  }
+
+  // {launder,strip}.invariant.group returns pointer that aliases its argument,
+  // and it only captures pointer by returning it.
+  // These intrinsics are not marked as nocapture, because returning is
+  // considered as capture. The arguments are not marked as returned neither,
+  // because it would make it useless.
+  bool isIntrinsicReturningPointerAliasingArgumentWithoutCapturing(
+      ImmutableCallSite CS);
+
   /// This method strips off any GEP address adjustments and pointer casts from
   /// the specified value, returning the original object being addressed. Note
   /// that the returned value has pointer type if the specified value does. If
@@ -288,7 +304,7 @@ class Value;
     return GetUnderlyingObject(const_cast<Value *>(V), DL, MaxLookup);
   }
 
-  /// \brief This method is similar to GetUnderlyingObject except that it can
+  /// This method is similar to GetUnderlyingObject except that it can
   /// look through phi and select instructions and return multiple objects.
   ///
   /// If LoopInfo is passed, loop phis are further analyzed.  If a pointer
@@ -384,6 +400,11 @@ class Value;
                                                AssumptionCache *AC,
                                                const Instruction *CxtI,
                                                const DominatorTree *DT);
+  OverflowResult computeOverflowForSignedMul(const Value *LHS, const Value *RHS,
+                                             const DataLayout &DL,
+                                             AssumptionCache *AC,
+                                             const Instruction *CxtI,
+                                             const DominatorTree *DT);
   OverflowResult computeOverflowForUnsignedAdd(const Value *LHS,
                                                const Value *RHS,
                                                const DataLayout &DL,
@@ -401,6 +422,16 @@ class Value;
                                              AssumptionCache *AC = nullptr,
                                              const Instruction *CxtI = nullptr,
                                              const DominatorTree *DT = nullptr);
+  OverflowResult computeOverflowForUnsignedSub(const Value *LHS, const Value *RHS,
+                                               const DataLayout &DL,
+                                               AssumptionCache *AC,
+                                               const Instruction *CxtI,
+                                               const DominatorTree *DT);
+  OverflowResult computeOverflowForSignedSub(const Value *LHS, const Value *RHS,
+                                             const DataLayout &DL,
+                                             AssumptionCache *AC,
+                                             const Instruction *CxtI,
+                                             const DominatorTree *DT);
 
   /// Returns true if the arithmetic part of the \p II 's result is
   /// used only along the paths control dependent on the computation
@@ -461,7 +492,7 @@ class Value;
   /// the parent of I.
   bool programUndefinedIfFullPoison(const Instruction *PoisonI);
 
-  /// \brief Specific patterns of select instructions we can match.
+  /// Specific patterns of select instructions we can match.
   enum SelectPatternFlavor {
     SPF_UNKNOWN = 0,
     SPF_SMIN,                   /// Signed minimum
@@ -474,7 +505,7 @@ class Value;
     SPF_NABS                    /// Negated absolute value
   };
 
-  /// \brief Behavior when a floating point min/max is given one NaN and one
+  /// Behavior when a floating point min/max is given one NaN and one
   /// non-NaN as input.
   enum SelectPatternNaNBehavior {
     SPNB_NA = 0,                /// NaN behavior not applicable.
@@ -501,6 +532,9 @@ class Value;
 
   /// Pattern match integer [SU]MIN, [SU]MAX and ABS idioms, returning the kind
   /// and providing the out parameter results if we successfully match.
+  ///
+  /// For ABS/NABS, LHS will be set to the input to the abs idiom. RHS will be
+  /// the negation instruction from the idiom.
   ///
   /// If CastOp is not nullptr, also match MIN/MAX idioms where the type does
   /// not match that of the original select. If this is the case, the cast

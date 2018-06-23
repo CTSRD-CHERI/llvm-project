@@ -29,13 +29,19 @@ endif ()
 set(LLDB_DISABLE_LIBEDIT ${LLDB_DEFAULT_DISABLE_LIBEDIT} CACHE BOOL "Disables the use of editline.")
 if (LLDB_DISABLE_LIBEDIT)
   add_definitions( -DLLDB_DISABLE_LIBEDIT )
+else()
+  find_package(LibEdit REQUIRED)
 endif()
 
 if(APPLE)
   add_definitions(-DLLDB_USE_OS_LOG)
 endif()
 
-# add_subdirectory(include)
+if(LLDB_BUILD_FRAMEWORK)
+  set(LLDB_FRAMEWORK_DIR
+    ${CMAKE_BINARY_DIR}/${CMAKE_CFG_INTDIR}/${LLDB_FRAMEWORK_INSTALL_DIR})
+endif()
+
 add_subdirectory(docs)
 if (NOT LLDB_DISABLE_PYTHON)
   if(LLDB_USE_SYSTEM_SIX)
@@ -45,8 +51,7 @@ if (NOT LLDB_DISABLE_PYTHON)
   set(LLDB_PYTHON_TARGET_DIR ${LLDB_BINARY_DIR}/scripts)
   set(LLDB_WRAP_PYTHON ${LLDB_BINARY_DIR}/scripts/LLDBWrapPython.cpp)
   if(LLDB_BUILD_FRAMEWORK)
-    set(LLDB_PYTHON_TARGET_DIR
-      ${CMAKE_BINARY_DIR}/${CMAKE_CFG_INTDIR}/${LLDB_FRAMEWORK_INSTALL_DIR})
+    set(LLDB_PYTHON_TARGET_DIR ${LLDB_FRAMEWORK_DIR})
     set(LLDB_WRAP_PYTHON ${LLDB_PYTHON_TARGET_DIR}/LLDBWrapPython.cpp)
   else()
     # Don't set -m when building the framework.
@@ -85,9 +90,43 @@ if(LLDB_INCLUDE_TESTS)
     message(FATAL_ERROR "LLDB test compilers not specified.  Tests will not run")
   endif()
 
+  set(LLDB_TEST_DEPS lldb)
+
+  # darwin-debug is an hard dependency for the testsuite.
+  if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
+    list(APPEND LLDB_TEST_DEPS darwin-debug)
+  endif()
+
+  if(TARGET lldb-server)
+    list(APPEND LLDB_TEST_DEPS lldb-server)
+  endif()
+
+  if(TARGET debugserver)
+    if(NOT CMAKE_HOST_APPLE OR LLDB_CODESIGN_IDENTITY)
+      list(APPEND LLDB_TEST_DEPS debugserver)
+    endif()
+  endif()
+
+  if(TARGET lldb-mi)
+    list(APPEND LLDB_TEST_DEPS lldb-mi)
+  endif()
+
+  if(NOT LLDB_BUILT_STANDALONE)
+    list(APPEND LLDB_TEST_DEPS yaml2obj dsymutil)
+  endif()
+
+  if(TARGET liblldb)
+    list(APPEND LLDB_TEST_DEPS liblldb)
+  endif()
+
+  if(TARGET clang)
+    list(APPEND LLDB_TEST_DEPS clang)
+  endif()
+
   add_subdirectory(test)
   add_subdirectory(unittests)
   add_subdirectory(lit)
+  add_subdirectory(utils/lldb-dotest)
 endif()
 
 if (NOT LLDB_DISABLE_PYTHON)
@@ -98,7 +137,7 @@ if (NOT LLDB_DISABLE_PYTHON)
            ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/finishSwigWrapperClasses.py
                --srcRoot=${LLDB_SOURCE_DIR}
                --targetDir=${LLDB_PYTHON_TARGET_DIR}
-               --cfgBldDir=${CMAKE_CURRENT_BINARY_DIR}/scripts
+               --cfgBldDir=${LLDB_PYTHON_TARGET_DIR}
                --prefix=${CMAKE_BINARY_DIR}
                --cmakeBuildConfiguration=${CMAKE_CFG_INTDIR}
                --lldbLibDir=lib${LLVM_LIBDIR_SUFFIX}
@@ -106,7 +145,7 @@ if (NOT LLDB_DISABLE_PYTHON)
                ${FINISH_EXTRA_ARGS}
         VERBATIM
         DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/scripts/finishSwigWrapperClasses.py
-        DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/scripts/lldb.py
+        DEPENDS ${LLDB_PYTHON_TARGET_DIR}/lldb.py
         COMMENT "Python script sym-linking LLDB Python API")
     # We depend on liblldb being built before we can do this step.
     add_dependencies(finish_swig liblldb lldb-argdumper)

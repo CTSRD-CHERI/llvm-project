@@ -186,16 +186,18 @@ class ObjCDataFormatterTestCase(TestBase):
 
     def nsnumber_data_formatter_commands(self):
         # Now enable AppKit and check we are displaying Cocoa classes correctly
-        self.expect('frame variable num1 num2 num3 num5 num6 num7 num9',
+        self.expect('frame variable num1 num2 num3 num5 num6 num7 num8_Y num8_N num9',
                     substrs=['(NSNumber *) num1 = ', ' (int)5',
                              '(NSNumber *) num2 = ', ' (float)3.1',
                              '(NSNumber *) num3 = ', ' (double)3.14',
                              '(NSNumber *) num5 = ', ' (char)65',
                              '(NSNumber *) num6 = ', ' (long)255',
                              '(NSNumber *) num7 = ', '2000000',
+                             '(NSNumber *) num8_Y = ', 'YES',
+                             '(NSNumber *) num8_N = ', 'NO',
                              '(NSNumber *) num9 = ', ' (short)-31616'])
 
-        
+
         self.runCmd('frame variable num4', check=True)
         output = self.res.GetOutput()
         i128_handled_correctly = False
@@ -212,6 +214,14 @@ class ObjCDataFormatterTestCase(TestBase):
                              '(NSNumber *) num_at2 = ', ' (int)-12',
                              '(NSNumber *) num_at3 = ', ' (double)12.5',
                              '(NSNumber *) num_at4 = ', ' (double)-12.5'])
+
+    def nsdecimalnumber_data_formatter_commands(self):
+        self.expect('frame variable decimal_number decimal_neg_number decimal_one decimal_zero decimal_nan',
+                    substrs=['(NSDecimalNumber *) decimal_number = ', '123456 x 10^-10',
+                             '(NSDecimalNumber *) decimal_neg_number = ', '-123456 x 10^10',
+                             '(NSDecimalNumber *) decimal_one = ', '1 x 10^0',
+                             '(NSDecimalNumber *) decimal_zero = ', '0',
+                             '(NSDecimalNumber *) decimal_nan = ', 'NaN'])
 
     def nscontainers_data_formatter_commands(self):
         self.expect(

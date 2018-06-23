@@ -32,6 +32,20 @@ template <class ELFT> class ObjFile;
 class OutputSection;
 template <class ELFT> class SharedFile;
 
+// This is a StringRef-like container that doesn't run strlen().
+//
+// ELF string tables contain a lot of null-terminated strings. Most of them
+// are not necessary for the linker because they are names of local symbols,
+// and the linker doesn't use local symbol names for name resolution. So, we
+// use this class to represents strings read from string tables.
+struct StringRefZ {
+  StringRefZ(const char *S) : Data(S), Size(-1) {}
+  StringRefZ(StringRef S) : Data(S.data()), Size(S.size()) {}
+
+  const char *Data;
+  const uint32_t Size;
+};
+
 // The base class for real symbol classes.
 class Symbol {
 public:
@@ -45,6 +59,25 @@ public:
 
   Kind kind() const { return static_cast<Kind>(SymbolKind); }
 
+  // The file from which this symbol was created.
+  InputFile *File;
+
+protected:
+  const char *NameData;
+  mutable uint32_t NameSize;
+
+public:
+  uint32_t DynsymIndex = 0;
+  uint32_t GotIndex = -1;
+  uint32_t PltIndex = -1;
+  uint32_t GlobalDynIndex = -1;
+
+  // This field is a index to the symbol's version definition.
+  uint32_t VerdefIndex = -1;
+
+  // Version definition index.
+  uint16_t VersionId;
+
   // Symbol binding. This is not overwritten by replaceSymbol to track
   // changes during resolution. In particular:
   //  - An undefined weak is still weak when it resolves to a shared library.
@@ -52,8 +85,11 @@ public:
   //    remember it is weak.
   uint8_t Binding;
 
-  // Version definition index.
-  uint16_t VersionId;
+  // The following fields have the same meaning as the ELF symbol attributes.
+  uint8_t Type;    // symbol type
+  uint8_t StOther; // st_other field value
+
+  const uint8_t SymbolKind;
 
   // Symbol visibility. This is the computed minimum visibility of all
   // observed non-DSO symbols.
@@ -81,9 +117,6 @@ public:
   // True if this symbol is specified by --trace-symbol option.
   unsigned Traced : 1;
 
-  // The file from which this symbol was created.
-  InputFile *File;
-
   bool includeInDynsym() const;
   uint8_t computeBinding() const;
   bool isWeak() const { return Binding == llvm::ELF::STB_WEAK; }
@@ -97,14 +130,15 @@ public:
     return SymbolKind == LazyArchiveKind || SymbolKind == LazyObjectKind;
   }
 
-  // True if this is an undefined weak symbol. This only works once
-  // all input files have been added.
-  bool isUndefWeak() const {
-    // See comment on lazy symbols for details.
-    return isWeak() && (isUndefined() || isLazy());
+  // True if this is an undefined weak symbol.
+  bool isUndefWeak() const { return isWeak() && isUndefined(); }
+
+  StringRef getName() const {
+    if (NameSize == (uint32_t)-1)
+      NameSize = strlen(NameData);
+    return {NameData, NameSize};
   }
 
-  StringRef getName() const { return Name; }
   void parseSymbolVersion();
 
   bool isInGot() const { return GotIndex != -1U; }
@@ -117,24 +151,18 @@ public:
   uint64_t getGotPltOffset() const;
   uint64_t getGotPltVA() const;
   uint64_t getPltVA() const;
+  uint64_t getPltOffset() const;
   uint64_t getSize() const;
   OutputSection *getOutputSection() const;
-
-  uint32_t DynsymIndex = 0;
-  uint32_t GotIndex = -1;
-  uint32_t GotPltIndex = -1;
-  uint32_t PltIndex = -1;
-  uint32_t GlobalDynIndex = -1;
 
 protected:
   Symbol(Kind K, InputFile *File, StringRefZ Name, uint8_t Binding,
          uint8_t StOther, uint8_t Type)
-      : Binding(Binding), ForceExportDynamic(false), File(File), SymbolKind(K), NeedsPltAddr(false),
+      : File(File), NameData(Name.Data), NameSize(Name.Size), Binding(Binding),
+        Type(Type), StOther(StOther), SymbolKind(K), NeedsPltAddr(false),
         IsInIplt(false), IsInIgot(false), IsPreemptible(false),
         Used(!Config->GcSections), IsSectionStartSymbol(false),
-        Type(Type), StOther(StOther), Name(Name) {}
-
-  const unsigned SymbolKind : 8;
+        NeedsTocRestore(false) {}
 
 public:
   // True the symbol should point to its PLT entry.
@@ -158,9 +186,9 @@ public:
   // building for CHERI
   unsigned IsSectionStartSymbol : 1;
 
-  // The following fields have the same meaning as the ELF symbol attributes.
-  uint8_t Type;    // symbol type
-  uint8_t StOther; // st_other field value
+  // True if a call to this symbol needs to be followed by a restore of the
+  // PPC64 toc pointer.
+  unsigned NeedsTocRestore : 1;
 
   // The Type field may also have this value. It means that we have not yet seen
   // a non-Lazy symbol with this name, so we don't know what its type is. The
@@ -175,9 +203,6 @@ public:
   bool isGnuIFunc() const { return Type == llvm::ELF::STT_GNU_IFUNC; }
   bool isObject() const { return Type == llvm::ELF::STT_OBJECT; }
   bool isFile() const { return Type == llvm::ELF::STT_FILE; }
-
-protected:
-  StringRefZ Name;
 };
 
 // Represents a symbol that is defined in the current output file.
@@ -211,8 +236,9 @@ public:
   SharedSymbol(InputFile &File, StringRef Name, uint8_t Binding,
                uint8_t StOther, uint8_t Type, uint64_t Value, uint64_t Size,
                uint32_t Alignment, uint32_t VerdefIndex)
-      : Symbol(SharedKind, &File, Name, Binding, StOther, Type), Value(Value),
-        Size(Size), VerdefIndex(VerdefIndex), Alignment(Alignment) {
+      : Symbol(SharedKind, &File, Name, Binding, StOther, Type),
+        Alignment(Alignment), Value(Value), Size(Size) {
+    this->VerdefIndex = VerdefIndex;
     // GNU ifunc is a mechanism to allow user-supplied functions to
     // resolve PLT slot values at load-time. This is contrary to the
     // regular symbol resolution scheme in which symbols are resolved just
@@ -237,16 +263,10 @@ public:
     return *cast<SharedFile<ELFT>>(File);
   }
 
-  // If not null, there is a copy relocation to this section.
-  InputSection *CopyRelSec = nullptr;
+  uint32_t Alignment;
 
   uint64_t Value; // st_value
   uint64_t Size;  // st_size
-
-  // This field is a index to the symbol's version definition.
-  uint32_t VerdefIndex;
-
-  uint32_t Alignment;
 };
 
 // LazyArchive and LazyObject represent a symbols that is not yet in the link,

@@ -12,6 +12,7 @@ add_lld_library(lldELF
   Arch/AMDGPU.cpp
   Arch/ARM.cpp
   Arch/AVR.cpp
+  Arch/Hexagon.cpp
   Arch/Mips.cpp
   Arch/Cheri.cpp
   Arch/MipsArchTree.cpp
@@ -47,6 +48,7 @@ add_lld_library(lldELF
   LINK_COMPONENTS
   ${LLVM_TARGETS_TO_BUILD}
   BinaryFormat
+  BitWriter
   Core
   DebugInfoDWARF
   LTO

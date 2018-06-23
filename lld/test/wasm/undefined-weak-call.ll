@@ -1,12 +1,12 @@
 ; RUN: llc -filetype=obj %s -o %t.o
-; RUN: wasm-ld --check-signatures --no-entry --print-gc-sections %t.o \
+; RUN: wasm-ld --no-entry --print-gc-sections %t.o \
 ; RUN:     -o %t.wasm 2>&1 | FileCheck -check-prefix=CHECK-GC %s
 ; RUN: obj2yaml %t.wasm | FileCheck %s
 
 ; Check that calling an undefined weak function generates an appropriate stub
 ; that will fail at runtime with "unreachable".
 
-target triple = "wasm32-unknown-unknown-wasm"
+target triple = "wasm32-unknown-unknown"
 
 declare extern_weak void @weakFunc1()
 declare extern_weak void @weakFunc2()         ; same signature

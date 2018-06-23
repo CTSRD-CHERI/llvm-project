@@ -18,6 +18,8 @@ def kill_at: F<"kill-at">, HelpText<"Remove @n from exported symbols">;
 def l: JoinedOrSeparate<["-"], "l">, MetaVarName<"<libName>">,
   HelpText<"Root name of library to use">;
 def m: JoinedOrSeparate<["-"], "m">, HelpText<"Set target emulation">;
+def map: S<"Map">, HelpText<"Output a linker map">;
+def map_eq: J<"Map=">, Alias<map>;
 def no_whole_archive: F<"no-whole-archive">,
     HelpText<"No longer include all object files for following archives">;
 def large_address_aware: Flag<["--"], "large-address-aware">,
@@ -41,6 +43,7 @@ def verbose: F<"verbose">, HelpText<"Verbose mode">;
 def _HASH_HASH_HASH : Flag<["-"], "###">,
     HelpText<"Print (but do not run) the commands to run for this compilation">;
 def mllvm: S<"mllvm">;
+def pdb: S<"pdb">, HelpText<"Specify output PDB debug information file">;
 def Xlink : J<"Xlink=">, MetaVarName<"<arg>">,
     HelpText<"Pass <arg> to the COFF linker">;
 

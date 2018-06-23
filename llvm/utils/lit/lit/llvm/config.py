@@ -101,10 +101,6 @@ class LLVMConfig(object):
                 self.with_environment(
                     'DYLD_INSERT_LIBRARIES', gmalloc_path_str)
 
-        breaking_checks = getattr(config, 'enable_abi_breaking_checks', None)
-        if lit.util.pythonize_bool(breaking_checks):
-            features.add('abi-breaking-checks')
-
     def with_environment(self, variable, value, append_path=False):
         if append_path:
             # For paths, we should be able to take a list of them and process all
@@ -392,7 +388,7 @@ class LLVMConfig(object):
         builtin_include_dir = self.get_clang_builtin_include_dir(self.config.clang)
         tool_substitutions = [
             ToolSubst('%clang', command=self.config.clang),
-            ToolSubst('%clang_analyze_cc1', command='%clang_cc1', extra_args=['-analyze']),
+            ToolSubst('%clang_analyze_cc1', command='%clang_cc1', extra_args=['-analyze', '%analyze']),
             ToolSubst('%clang_cc1', command=self.config.clang, extra_args=['-cc1', '-internal-isystem', builtin_include_dir, '-nostdsysteminc']),
             ToolSubst('%clang_cpp', command=self.config.clang, extra_args=['--driver-mode=cpp']),
             ToolSubst('%clang_cl', command=self.config.clang, extra_args=['--driver-mode=cl']),

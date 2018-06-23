@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief Contains implementation of BreakableToken class and classes derived
+/// Contains implementation of BreakableToken class and classes derived
 /// from it.
 ///
 //===----------------------------------------------------------------------===//
@@ -44,7 +44,8 @@ static StringRef getLineCommentIndentPrefix(StringRef Comment,
                                             const FormatStyle &Style) {
   static const char *const KnownCStylePrefixes[] = {"///<", "//!<", "///", "//",
                                                     "//!"};
-  static const char *const KnownTextProtoPrefixes[] = {"//", "#"};
+  static const char *const KnownTextProtoPrefixes[] = {"//", "#", "##", "###",
+                                                       "####"};
   ArrayRef<const char *> KnownPrefixes(KnownCStylePrefixes);
   if (Style.Language == FormatStyle::LK_TextProto)
     KnownPrefixes = KnownTextProtoPrefixes;
@@ -67,8 +68,9 @@ static BreakableToken::Split getCommentSplit(StringRef Text,
                                              unsigned ColumnLimit,
                                              unsigned TabWidth,
                                              encoding::Encoding Encoding) {
-  DEBUG(llvm::dbgs() << "Comment split: \"" << Text << ", " << ColumnLimit
-                     << "\", Content start: " << ContentStartColumn << "\n");
+  LLVM_DEBUG(llvm::dbgs() << "Comment split: \"" << Text << ", " << ColumnLimit
+                          << "\", Content start: " << ContentStartColumn
+                          << "\n");
   if (ColumnLimit <= ContentStartColumn + 1)
     return BreakableToken::Split(StringRef::npos, 0);
 
@@ -424,7 +426,7 @@ BreakableBlockComment::BreakableBlockComment(
     }
   }
 
-  DEBUG({
+  LLVM_DEBUG({
     llvm::dbgs() << "IndentAtLineBreak " << IndentAtLineBreak << "\n";
     llvm::dbgs() << "DelimitersOnNewline " << DelimitersOnNewline << "\n";
     for (size_t i = 0; i < Lines.size(); ++i) {
@@ -787,16 +789,47 @@ BreakableComment::Split BreakableLineCommentSection::getReflowSplit(
 
 void BreakableLineCommentSection::reflow(unsigned LineIndex,
                                          WhitespaceManager &Whitespaces) const {
-  // Reflow happens between tokens. Replace the whitespace between the
-  // tokens by the empty string.
-  Whitespaces.replaceWhitespace(
-      *Tokens[LineIndex], /*Newlines=*/0, /*Spaces=*/0,
-      /*StartOfTokenColumn=*/StartColumn, /*InPPDirective=*/false);
+  if (LineIndex > 0 && Tokens[LineIndex] != Tokens[LineIndex - 1]) {
+    // Reflow happens between tokens. Replace the whitespace between the
+    // tokens by the empty string.
+    Whitespaces.replaceWhitespace(
+        *Tokens[LineIndex], /*Newlines=*/0, /*Spaces=*/0,
+        /*StartOfTokenColumn=*/StartColumn, /*InPPDirective=*/false);
+  } else if (LineIndex > 0) {
+    // In case we're reflowing after the '\' in:
+    //
+    //   // line comment \
+    //   // line 2
+    //
+    // the reflow happens inside the single comment token (it is a single line
+    // comment with an unescaped newline).
+    // Replace the whitespace between the '\' and '//' with the empty string.
+    //
+    // Offset points to after the '\' relative to start of the token.
+    unsigned Offset = Lines[LineIndex - 1].data() +
+                      Lines[LineIndex - 1].size() -
+                      tokenAt(LineIndex - 1).TokenText.data();
+    // WhitespaceLength is the number of chars between the '\' and the '//' on
+    // the next line.
+    unsigned WhitespaceLength =
+        Lines[LineIndex].data() - tokenAt(LineIndex).TokenText.data() - Offset;
+    Whitespaces.replaceWhitespaceInToken(*Tokens[LineIndex],
+                                         Offset,
+                                         /*ReplaceChars=*/WhitespaceLength,
+                                         /*PreviousPostfix=*/"",
+                                         /*CurrentPrefix=*/"",
+                                         /*InPPDirective=*/false,
+                                         /*Newlines=*/0,
+                                         /*Spaces=*/0);
+
+  }
   // Replace the indent and prefix of the token with the reflow prefix.
+  unsigned Offset =
+      Lines[LineIndex].data() - tokenAt(LineIndex).TokenText.data();
   unsigned WhitespaceLength =
-      Content[LineIndex].data() - tokenAt(LineIndex).TokenText.data();
+      Content[LineIndex].data() - Lines[LineIndex].data();
   Whitespaces.replaceWhitespaceInToken(*Tokens[LineIndex],
-                                       /*Offset=*/0,
+                                       Offset,
                                        /*ReplaceChars=*/WhitespaceLength,
                                        /*PreviousPostfix=*/"",
                                        /*CurrentPrefix=*/ReflowPrefix,

@@ -33,19 +33,19 @@ using namespace lldb_private;
 
 namespace {
 //----------------------------------------------------------------------
-// The HostInfoBaseFields is a work around for windows not supporting
-// static variables correctly in a thread safe way. Really each of the
-// variables in HostInfoBaseFields should live in the functions in which
-// they are used and each one should be static, but the work around is
-// in place to avoid this restriction. Ick.
+// The HostInfoBaseFields is a work around for windows not supporting static
+// variables correctly in a thread safe way. Really each of the variables in
+// HostInfoBaseFields should live in the functions in which they are used and
+// each one should be static, but the work around is in place to avoid this
+// restriction. Ick.
 //----------------------------------------------------------------------
 
 struct HostInfoBaseFields {
   ~HostInfoBaseFields() {
     if (m_lldb_process_tmp_dir.Exists()) {
       // Remove the LLDB temporary directory if we have one. Set "recurse" to
-      // true to all files that were created for the LLDB process can be cleaned
-      // up.
+      // true to all files that were created for the LLDB process can be
+      // cleaned up.
       llvm::sys::fs::remove_directories(m_lldb_process_tmp_dir.GetPath());
     }
   }
@@ -114,6 +114,8 @@ llvm::Optional<HostInfoBase::ArchitectureKind> HostInfoBase::ParseArchitectureKi
 bool HostInfoBase::GetLLDBPath(lldb::PathType type, FileSpec &file_spec) {
   file_spec.Clear();
 
+  assert(type != lldb::ePathTypeClangDir);
+
 #if defined(LLDB_DISABLE_PYTHON)
   if (type == lldb::ePathTypePythonDir)
     return false;
@@ -176,21 +178,6 @@ bool HostInfoBase::GetLLDBPath(lldb::PathType type, FileSpec &file_spec) {
     if (success)
       result = &g_fields->m_lldb_python_dir;
   } break;
-  case lldb::ePathTypeClangDir: {
-    static llvm::once_flag g_once_flag;
-    static bool success = false;
-    llvm::call_once(g_once_flag, []() {
-      success =
-          HostInfo::ComputeClangDirectory(g_fields->m_lldb_clang_resource_dir);
-      Log *log = lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_HOST);
-      if (log)
-        log->Printf(
-            "HostInfoBase::GetLLDBPath(ePathTypeClangResourceDir) => '%s'",
-            g_fields->m_lldb_clang_resource_dir.GetPath().c_str());
-    });
-    if (success)
-      result = &g_fields->m_lldb_clang_resource_dir;
-  } break;
   case lldb::ePathTypeLLDBSystemPlugins: {
     static llvm::once_flag g_once_flag;
     static bool success = false;
@@ -251,6 +238,8 @@ bool HostInfoBase::GetLLDBPath(lldb::PathType type, FileSpec &file_spec) {
     if (success)
       result = &g_fields->m_lldb_global_tmp_dir;
   } break;
+  default:
+    llvm_unreachable("Unreachable!");
   }
 
   if (!result)
@@ -351,11 +340,9 @@ bool HostInfoBase::ComputeSystemPluginsDirectory(FileSpec &file_spec) {
   return false;
 }
 
-bool HostInfoBase::ComputeClangDirectory(FileSpec &file_spec) { return false; }
-
 bool HostInfoBase::ComputeUserPluginsDirectory(FileSpec &file_spec) {
-  // TODO(zturner): Figure out how to compute the user plugins directory for all
-  // platforms.
+  // TODO(zturner): Figure out how to compute the user plugins directory for
+  // all platforms.
   return false;
 }
 

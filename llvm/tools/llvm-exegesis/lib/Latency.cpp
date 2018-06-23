@@ -8,69 +8,128 @@
 //===----------------------------------------------------------------------===//
 
 #include "Latency.h"
-#include "BenchmarkResult.h"
-#include "InstructionSnippetGenerator.h"
+
+#include "Assembler.h"
+#include "BenchmarkRunner.h"
+#include "MCInstrDescView.h"
 #include "PerfHelper.h"
-#include "llvm/MC/MCInstrDesc.h"
-#include "llvm/Support/Error.h"
-#include <algorithm>
-#include <random>
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/MC/MCInst.h"
+#include "llvm/MC/MCInstBuilder.h"
 
 namespace exegesis {
 
-// FIXME: Handle memory, see PR36905.
-static bool isInvalidOperand(const llvm::MCOperandInfo &OpInfo) {
-  switch (OpInfo.OperandType) {
-  default:
-    return true;
-  case llvm::MCOI::OPERAND_IMMEDIATE:
-  case llvm::MCOI::OPERAND_REGISTER:
-    return false;
-  }
+static bool hasUnknownOperand(const llvm::MCOperandInfo &OpInfo) {
+  return OpInfo.OperandType == llvm::MCOI::OPERAND_UNKNOWN;
 }
 
-static llvm::Error makeError(llvm::Twine Msg) {
-  return llvm::make_error<llvm::StringError>(Msg,
-                                             llvm::inconvertibleErrorCode());
+// FIXME: Handle memory, see PR36905.
+static bool hasMemoryOperand(const llvm::MCOperandInfo &OpInfo) {
+  return OpInfo.OperandType == llvm::MCOI::OPERAND_MEMORY;
 }
 
 LatencyBenchmarkRunner::~LatencyBenchmarkRunner() = default;
 
-const char *LatencyBenchmarkRunner::getDisplayName() const { return "latency"; }
+InstructionBenchmark::ModeE LatencyBenchmarkRunner::getMode() const {
+  return InstructionBenchmark::Latency;
+}
 
-llvm::Expected<std::vector<llvm::MCInst>> LatencyBenchmarkRunner::createCode(
-    const LLVMState &State, const unsigned OpcodeIndex,
-    const unsigned NumRepetitions, const JitFunctionContext &Context) const {
-  std::default_random_engine RandomEngine;
-  const auto GetRandomIndex = [&RandomEngine](size_t Size) {
-    assert(Size > 0 && "trying to get select a random element of an empty set");
-    return std::uniform_int_distribution<>(0, Size - 1)(RandomEngine);
-  };
+llvm::Error LatencyBenchmarkRunner::isInfeasible(
+    const llvm::MCInstrDesc &MCInstrDesc) const {
+  if (MCInstrDesc.isPseudo())
+    return llvm::make_error<BenchmarkFailure>("Infeasible : is pseudo");
+  if (llvm::any_of(MCInstrDesc.operands(), hasUnknownOperand))
+    return llvm::make_error<BenchmarkFailure>(
+        "Infeasible : has unknown operands");
+  if (llvm::any_of(MCInstrDesc.operands(), hasMemoryOperand))
+    return llvm::make_error<BenchmarkFailure>(
+        "Infeasible : has memory operands");
+  return llvm::Error::success();
+}
 
-  const auto &InstrInfo = State.getInstrInfo();
-  const auto &RegInfo = State.getRegInfo();
-  const llvm::MCInstrDesc &InstrDesc = InstrInfo.get(OpcodeIndex);
-  for (const llvm::MCOperandInfo &OpInfo : InstrDesc.operands()) {
-    if (isInvalidOperand(OpInfo))
-      return makeError("Only registers and immediates are supported");
+llvm::Expected<BenchmarkConfiguration>
+LatencyBenchmarkRunner::generateSelfAliasingConfiguration(
+    const Instruction &Instr,
+    const AliasingConfigurations &SelfAliasing) const {
+  BenchmarkConfiguration Conf;
+  InstructionInstance II(Instr);
+  if (SelfAliasing.hasImplicitAliasing()) {
+    Conf.Info = "implicit Self cycles, picking random values.";
+  } else {
+    Conf.Info = "explicit self cycles, selecting one aliasing Conf.";
+    // This is a self aliasing instruction so defs and uses are from the same
+    // instance, hence twice II in the following call.
+    setRandomAliasing(SelfAliasing, II, II);
   }
+  Conf.Snippet = {II.randomizeUnsetVariablesAndBuild()};
+  return Conf;
+}
 
-  const auto Vars = getVariables(RegInfo, InstrDesc, Context.getReservedRegs());
-  const std::vector<AssignmentChain> AssignmentChains =
-      computeSequentialAssignmentChains(RegInfo, Vars);
-  if (AssignmentChains.empty())
-    return makeError("Unable to find a dependency chain.");
-  const std::vector<llvm::MCPhysReg> Regs =
-      getRandomAssignment(Vars, AssignmentChains, GetRandomIndex);
-  const llvm::MCInst Inst = generateMCInst(InstrDesc, Vars, Regs);
-  if (!State.canAssemble(Inst))
-    return makeError("MCInst does not assemble.");
-  return std::vector<llvm::MCInst>(NumRepetitions, Inst);
+llvm::Expected<BenchmarkConfiguration>
+LatencyBenchmarkRunner::generateTwoInstructionConfiguration(
+    const Instruction &Instr,
+    const AliasingConfigurations &SelfAliasing) const {
+  std::vector<unsigned> Opcodes;
+  Opcodes.resize(MCInstrInfo.getNumOpcodes());
+  std::iota(Opcodes.begin(), Opcodes.end(), 0U);
+  std::shuffle(Opcodes.begin(), Opcodes.end(), randomGenerator());
+  for (const unsigned OtherOpcode : Opcodes) {
+    if (OtherOpcode == Instr.Description.Opcode)
+      continue;
+    const auto &OtherInstrDesc = MCInstrInfo.get(OtherOpcode);
+    if (auto E = isInfeasible(OtherInstrDesc)) {
+      llvm::consumeError(std::move(E));
+      continue;
+    }
+    const Instruction OtherInstr(OtherInstrDesc, RATC);
+    const AliasingConfigurations Forward(Instr, OtherInstr);
+    const AliasingConfigurations Back(OtherInstr, Instr);
+    if (Forward.empty() || Back.empty())
+      continue;
+    InstructionInstance ThisII(Instr);
+    InstructionInstance OtherII(OtherInstr);
+    if (!Forward.hasImplicitAliasing())
+      setRandomAliasing(Forward, ThisII, OtherII);
+    if (!Back.hasImplicitAliasing())
+      setRandomAliasing(Back, OtherII, ThisII);
+    BenchmarkConfiguration Conf;
+    Conf.Info = llvm::Twine("creating cycle through ")
+                    .concat(MCInstrInfo.getName(OtherOpcode))
+                    .concat(".")
+                    .str();
+    Conf.Snippet.push_back(ThisII.randomizeUnsetVariablesAndBuild());
+    Conf.Snippet.push_back(OtherII.randomizeUnsetVariablesAndBuild());
+    return Conf;
+  }
+  return llvm::make_error<BenchmarkFailure>(
+      "Infeasible : Didn't find any scheme to make the instruction serial");
+}
+
+llvm::Expected<BenchmarkConfiguration>
+LatencyBenchmarkRunner::generateConfiguration(unsigned Opcode) const {
+  const auto &InstrDesc = MCInstrInfo.get(Opcode);
+  if (auto E = isInfeasible(InstrDesc))
+    return std::move(E);
+  const Instruction Instr(InstrDesc, RATC);
+  const AliasingConfigurations SelfAliasing(Instr, Instr);
+  if (SelfAliasing.empty()) {
+    // No self aliasing, trying to create a dependency through another opcode.
+    return generateTwoInstructionConfiguration(Instr, SelfAliasing);
+  } else {
+    return generateSelfAliasingConfiguration(Instr, SelfAliasing);
+  }
+}
+
+llvm::Expected<std::vector<BenchmarkConfiguration>>
+LatencyBenchmarkRunner::createConfigurations(unsigned Opcode) const {
+  if (auto E = generateConfiguration(Opcode))
+    return std::vector<BenchmarkConfiguration>{E.get()};
+  else
+    return E.takeError();
 }
 
 std::vector<BenchmarkMeasure>
-LatencyBenchmarkRunner::runMeasurements(const LLVMState &State,
-                                        const JitFunction &Function,
+LatencyBenchmarkRunner::runMeasurements(const ExecutableFunction &Function,
                                         const unsigned NumRepetitions) const {
   // Cycle measurements include some overhead from the kernel. Repeat the
   // measure several times and take the minimum value.

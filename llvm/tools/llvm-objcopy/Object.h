@@ -38,6 +38,7 @@ class GnuDebugLinkSection;
 class GroupSection;
 class Segment;
 class Object;
+struct Symbol;
 
 class SectionTableRef {
   MutableArrayRef<std::unique_ptr<SectionBase>> Sections;
@@ -209,7 +210,9 @@ public:
   virtual void initialize(SectionTableRef SecTable);
   virtual void finalize();
   virtual void removeSectionReferences(const SectionBase *Sec);
+  virtual void removeSymbols(function_ref<bool(const Symbol &)> ToRemove);
   virtual void accept(SectionVisitor &Visitor) const = 0;
+  virtual void markSymbols();
 };
 
 class Segment {
@@ -342,6 +345,7 @@ struct Symbol {
   uint8_t Type;
   uint64_t Value;
   uint8_t Visibility;
+  bool Referenced = false;
 
   uint16_t getShndx() const;
 };
@@ -363,13 +367,18 @@ public:
                  SectionBase *DefinedIn, uint64_t Value, uint8_t Visibility,
                  uint16_t Shndx, uint64_t Sz);
   void addSymbolNames();
+  // An 'empty' symbol table still contains a null symbol.
+  bool empty() const { return Symbols.size() == 1; }
   const SectionBase *getStrTab() const { return SymbolNames; }
   const Symbol *getSymbolByIndex(uint32_t Index) const;
+  Symbol *getSymbolByIndex(uint32_t Index);
+  void updateSymbols(function_ref<void(Symbol &)> Callable);
+
   void removeSectionReferences(const SectionBase *Sec) override;
-  void localize(std::function<bool(const Symbol &)> ToLocalize);
   void initialize(SectionTableRef SecTable) override;
   void finalize() override;
   void accept(SectionVisitor &Visitor) const override;
+  void removeSymbols(function_ref<bool(const Symbol &)> ToRemove) override;
 
   static bool classof(const SectionBase *S) {
     return S->Type == ELF::SHT_SYMTAB;
@@ -377,7 +386,7 @@ public:
 };
 
 struct Relocation {
-  const Symbol *RelocSymbol = nullptr;
+  Symbol *RelocSymbol = nullptr;
   uint64_t Offset;
   uint64_t Addend;
   uint32_t Type;
@@ -430,6 +439,8 @@ class RelocationSection
 public:
   void addRelocation(Relocation Rel) { Relocations.push_back(Rel); }
   void accept(SectionVisitor &Visitor) const override;
+  void removeSymbols(function_ref<bool(const Symbol &)> ToRemove) override;
+  void markSymbols() override;
 
   static bool classof(const SectionBase *S) {
     if (S->Flags & ELF::SHF_ALLOC)
@@ -444,7 +455,7 @@ public:
 class GroupSection : public SectionBase {
   MAKE_SEC_WRITER_FRIEND
   const SymbolTableSection *SymTab = nullptr;
-  const Symbol *Sym = nullptr;
+  Symbol *Sym = nullptr;
   ELF::Elf32_Word FlagWord;
   SmallVector<SectionBase *, 3> GroupMembers;
 
@@ -456,13 +467,15 @@ public:
   explicit GroupSection(ArrayRef<uint8_t> Data) : Contents(Data) {}
 
   void setSymTab(const SymbolTableSection *SymTabSec) { SymTab = SymTabSec; }
-  void setSymbol(const Symbol *S) { Sym = S; }
+  void setSymbol(Symbol *S) { Sym = S; }
   void setFlagWord(ELF::Elf32_Word W) { FlagWord = W; }
   void addMember(SectionBase *Sec) { GroupMembers.push_back(Sec); }
 
   void initialize(SectionTableRef SecTable) override{};
   void accept(SectionVisitor &) const override;
   void finalize() override;
+  void removeSymbols(function_ref<bool(const Symbol &)> ToRemove) override;
+  void markSymbols() override;
 
   static bool classof(const SectionBase *S) {
     return S->Type == ELF::SHT_GROUP;
@@ -571,7 +584,6 @@ private:
   using SecPtr = std::unique_ptr<SectionBase>;
   using SegPtr = std::unique_ptr<Segment>;
 
-  std::shared_ptr<MemoryBuffer> OwnedData;
   std::vector<SecPtr> Sections;
   std::vector<SegPtr> Segments;
 
@@ -604,10 +616,6 @@ public:
   StringTableSection *SectionNames = nullptr;
   SymbolTableSection *SymbolTable = nullptr;
 
-  explicit Object(std::shared_ptr<MemoryBuffer> Data)
-      : OwnedData(std::move(Data)) {}
-  virtual ~Object() = default;
-
   void sortSections();
   SectionTableRef sections() { return SectionTableRef(Sections); }
   ConstRange<SectionBase> sections() const {
@@ -617,6 +625,7 @@ public:
   ConstRange<Segment> segments() const { return make_pointee_range(Segments); }
 
   void removeSections(std::function<bool(const SectionBase &)> ToRemove);
+  void removeSymbols(function_ref<bool(const Symbol &)> ToRemove);
   template <class T, class... Ts> T &addSection(Ts &&... Args) {
     auto Sec = llvm::make_unique<T>(std::forward<Ts>(Args)...);
     auto Ptr = Sec.get();

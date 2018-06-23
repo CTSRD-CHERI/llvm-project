@@ -25,12 +25,12 @@
 #include "clang/Basic/LangOptions.h"
 #include "clang/Basic/ObjCRuntime.h"
 #include "clang/Basic/Version.h"
-#include "clang/Config/config.h"
 #include "clang/Driver/DriverDiagnostic.h"
 #include "clang/Driver/Options.h"
 #include "clang/Driver/SanitizerArgs.h"
 #include "clang/Driver/XRayArgs.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/Option/ArgList.h"
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/Compression.h"
@@ -130,6 +130,10 @@ forAllAssociatedToolChains(Compilation &C, const JobAction &JA,
   if (JA.isHostOffloading(Action::OFK_Cuda))
     Work(*C.getSingleOffloadToolChain<Action::OFK_Cuda>());
   else if (JA.isDeviceOffloading(Action::OFK_Cuda))
+    Work(*C.getSingleOffloadToolChain<Action::OFK_Host>());
+  else if (JA.isHostOffloading(Action::OFK_HIP))
+    Work(*C.getSingleOffloadToolChain<Action::OFK_HIP>());
+  else if (JA.isDeviceOffloading(Action::OFK_HIP))
     Work(*C.getSingleOffloadToolChain<Action::OFK_Host>());
 
   if (JA.isHostOffloading(Action::OFK_OpenMP)) {
@@ -408,7 +412,6 @@ static void addExceptionArgs(const ArgList &Args, types::ID InputType,
                              const ToolChain &TC, bool KernelOrKext,
                              const ObjCRuntime &objcRuntime,
                              ArgStringList &CmdArgs) {
-  const Driver &D = TC.getDriver();
   const llvm::Triple &Triple = TC.getTriple();
 
   if (KernelOrKext) {
@@ -450,21 +453,6 @@ static void addExceptionArgs(const ArgList &Args, types::ID InputType,
           ExceptionArg->getOption().matches(options::OPT_fexceptions);
 
     if (CXXExceptionsEnabled) {
-      if (Triple.isPS4CPU()) {
-        ToolChain::RTTIMode RTTIMode = TC.getRTTIMode();
-        assert(ExceptionArg &&
-               "On the PS4 exceptions should only be enabled if passing "
-               "an argument");
-        if (RTTIMode == ToolChain::RM_DisabledExplicitly) {
-          const Arg *RTTIArg = TC.getRTTIArg();
-          assert(RTTIArg && "RTTI disabled explicitly but no RTTIArg!");
-          D.Diag(diag::err_drv_argument_not_allowed_with)
-              << RTTIArg->getAsString(Args) << ExceptionArg->getAsString(Args);
-        } else if (RTTIMode == ToolChain::RM_EnabledImplicitly)
-          D.Diag(diag::warn_drv_enabling_rtti_with_exceptions);
-      } else
-        assert(TC.getRTTIMode() != ToolChain::RM_DisabledImplicitly);
-
       CmdArgs.push_back("-fcxx-exceptions");
 
       EH = true;
@@ -612,7 +600,7 @@ static void addDebugCompDirArg(const ArgList &Args, ArgStringList &CmdArgs) {
   }
 }
 
-/// \brief Vectorize at all optimization levels greater than 1 except for -Oz.
+/// Vectorize at all optimization levels greater than 1 except for -Oz.
 /// For -Oz the loop vectorizer is disable, while the slp vectorizer is enabled.
 static bool shouldEnableVectorizerAtOLevel(const ArgList &Args, bool isSlpVec) {
   if (Arg *A = Args.getLastArg(options::OPT_O_Group)) {
@@ -834,7 +822,7 @@ static void addPGOAndCoverageFlags(Compilation &C, const Driver &D,
   }
 }
 
-/// \brief Check whether the given input tree contains any compilation actions.
+/// Check whether the given input tree contains any compilation actions.
 static bool ContainsCompileAction(const Action *A) {
   if (isa<CompileJobAction>(A) || isa<BackendJobAction>(A))
     return true;
@@ -846,7 +834,7 @@ static bool ContainsCompileAction(const Action *A) {
   return false;
 }
 
-/// \brief Check if -relax-all should be passed to the internal assembler.
+/// Check if -relax-all should be passed to the internal assembler.
 /// This is done by default when compiling non-assembler source with -O0.
 static bool UseRelaxAll(Compilation &C, const ArgList &Args) {
   bool RelaxDefault = true;
@@ -1483,6 +1471,12 @@ void Clang::AddAArch64TargetArgs(const ArgList &Args,
       CmdArgs.push_back("-aarch64-enable-global-merge=false");
     else
       CmdArgs.push_back("-aarch64-enable-global-merge=true");
+  }
+
+  if (!Args.hasArg(options::OPT_mno_outline) &&
+       Args.getLastArg(options::OPT_moutline)) {
+    CmdArgs.push_back("-mllvm");
+    CmdArgs.push_back("-enable-machine-outliner");
   }
 }
 
@@ -2241,6 +2235,11 @@ static void RenderFloatingPointOptions(const ToolChain &TC, const Driver &D,
     CmdArgs.push_back("-mfpmath");
     CmdArgs.push_back(A->getValue());
   }
+
+  // Disable a codegen optimization for floating-point casts.
+  if (Args.hasFlag(options::OPT_fno_strict_float_cast_overflow,
+                   options::OPT_fstrict_float_cast_overflow, false))
+    CmdArgs.push_back("-fno-strict-float-cast-overflow");
 }
 
 static void RenderAnalyzerOptions(const ArgList &Args, ArgStringList &CmdArgs,
@@ -2682,6 +2681,9 @@ static void RenderCharacterOptions(const ArgList &Args, const llvm::Triple &T,
     CmdArgs.push_back("-fno-signed-char");
   }
 
+  if (Args.hasFlag(options::OPT_fchar8__t, options::OPT_fno_char8__t, false))
+    CmdArgs.push_back("-fchar8_t");
+
   if (const Arg *A = Args.getLastArg(options::OPT_fshort_wchar,
                                      options::OPT_fno_short_wchar)) {
     if (A->getOption().matches(options::OPT_fshort_wchar)) {
@@ -2987,7 +2989,7 @@ static void RenderDebugOptions(const ToolChain &TC, const Driver &D,
   // debuggers don't handle missing end columns well, so it's better not to
   // include any column info.
   if (Args.hasFlag(options::OPT_gcolumn_info, options::OPT_gno_column_info,
-                   /*Default=*/!(IsWindowsMSVC && EmitCodeView) &&
+                   /*Default=*/!EmitCodeView &&
                        DebuggerTuning != llvm::DebuggerKind::SCE))
     CmdArgs.push_back("-dwarf-column-info");
 
@@ -3091,13 +3093,14 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // Check number of inputs for sanity. We need at least one input.
   assert(Inputs.size() >= 1 && "Must have at least one input.");
   const InputInfo &Input = Inputs[0];
-  // CUDA compilation may have multiple inputs (source file + results of
+  // CUDA/HIP compilation may have multiple inputs (source file + results of
   // device-side compilations). OpenMP device jobs also take the host IR as a
   // second input. All other jobs are expected to have exactly one
   // input.
   bool IsCuda = JA.isOffloading(Action::OFK_Cuda);
+  bool IsHIP = JA.isOffloading(Action::OFK_HIP);
   bool IsOpenMPDevice = JA.isDeviceOffloading(Action::OFK_OpenMP);
-  assert((IsCuda || (IsOpenMPDevice && Inputs.size() == 2) ||
+  assert((IsCuda || IsHIP || (IsOpenMPDevice && Inputs.size() == 2) ||
           Inputs.size() == 1) &&
          "Unable to handle multiple inputs.");
 
@@ -3109,10 +3112,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   bool IsWindowsMSVC = RawTriple.isWindowsMSVCEnvironment();
   bool IsIAMCU = RawTriple.isOSIAMCU();
 
-  // Adjust IsWindowsXYZ for CUDA compilations.  Even when compiling in device
-  // mode (i.e., getToolchain().getTriple() is NVPTX, not Windows), we need to
-  // pass Windows-specific flags to cc1.
-  if (IsCuda) {
+  // Adjust IsWindowsXYZ for CUDA/HIP compilations.  Even when compiling in
+  // device mode (i.e., getToolchain().getTriple() is NVPTX/AMDGCN, not
+  // Windows), we need to pass Windows-specific flags to cc1.
+  if (IsCuda || IsHIP) {
     IsWindowsMSVC |= AuxTriple && AuxTriple->isWindowsMSVCEnvironment();
     IsWindowsGNU |= AuxTriple && AuxTriple->isWindowsGNUEnvironment();
     IsWindowsCygnus |= AuxTriple && AuxTriple->isWindowsCygwinEnvironment();
@@ -3136,18 +3139,21 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     Args.ClaimAllArgs(options::OPT_MJ);
   }
 
-  if (IsCuda) {
-    // We have to pass the triple of the host if compiling for a CUDA device and
-    // vice-versa.
+  if (IsCuda || IsHIP) {
+    // We have to pass the triple of the host if compiling for a CUDA/HIP device
+    // and vice-versa.
     std::string NormalizedTriple;
-    if (JA.isDeviceOffloading(Action::OFK_Cuda))
+    if (JA.isDeviceOffloading(Action::OFK_Cuda) ||
+        JA.isDeviceOffloading(Action::OFK_HIP))
       NormalizedTriple = C.getSingleOffloadToolChain<Action::OFK_Host>()
                              ->getTriple()
                              .normalize();
     else
-      NormalizedTriple = C.getSingleOffloadToolChain<Action::OFK_Cuda>()
-                             ->getTriple()
-                             .normalize();
+      NormalizedTriple =
+          (IsCuda ? C.getSingleOffloadToolChain<Action::OFK_Cuda>()
+                  : C.getSingleOffloadToolChain<Action::OFK_HIP>())
+              ->getTriple()
+              .normalize();
 
     CmdArgs.push_back("-aux-triple");
     CmdArgs.push_back(Args.MakeArgString(NormalizedTriple));
@@ -3466,6 +3472,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                    options::OPT_fno_strict_vtable_pointers,
                    false))
     CmdArgs.push_back("-fstrict-vtable-pointers");
+  if (Args.hasFlag(options::OPT_fforce_emit_vtables,
+                   options::OPT_fno_force_emit_vtables,
+                   false))
+    CmdArgs.push_back("-fforce-emit-vtables");
   if (!Args.hasFlag(options::OPT_foptimize_sibling_calls,
                     options::OPT_fno_optimize_sibling_calls))
     CmdArgs.push_back("-mdisable-tail-calls");
@@ -3491,8 +3501,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       Args.hasArg(options::OPT_dA))
     CmdArgs.push_back("-masm-verbose");
 
-  if (!Args.hasFlag(options::OPT_fintegrated_as, options::OPT_fno_integrated_as,
-                    IsIntegratedAssemblerDefault))
+  if (!getToolChain().useIntegratedAs())
     CmdArgs.push_back("-no-integrated-as");
 
   if (Args.hasArg(options::OPT_fdebug_pass_structure)) {
@@ -3681,9 +3690,11 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (auto *ABICompatArg = Args.getLastArg(options::OPT_fclang_abi_compat_EQ))
     ABICompatArg->render(Args, CmdArgs);
 
-  // Add runtime flag for PS4 when PGO or Coverage are enabled.
-  if (RawTriple.isPS4CPU())
+  // Add runtime flag for PS4 when PGO, coverage, or sanitizers are enabled.
+  if (RawTriple.isPS4CPU()) {
     PS4cpu::addProfileRTArgs(getToolChain(), Args, CmdArgs);
+    PS4cpu::addSanitizerArgs(getToolChain(), CmdArgs);
+  }
 
   // Pass options for controlling the default header search paths.
   if (Args.hasArg(options::OPT_nostdinc)) {
@@ -3749,6 +3760,11 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-pedantic");
   Args.AddLastArg(CmdArgs, options::OPT_pedantic_errors);
   Args.AddLastArg(CmdArgs, options::OPT_w);
+
+  // Fixed point flags
+  if (Args.hasFlag(options::OPT_ffixed_point, options::OPT_fno_fixed_point,
+                   /*Default=*/false))
+    Args.AddLastArg(CmdArgs, options::OPT_ffixed_point);
 
   // Handle -{std, ansi, trigraphs} -- take the last of -{std, ansi}
   // (-ansi is equivalent to -std=c89 or -std=c++98).
@@ -3983,6 +3999,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       if (!Args.hasFlag(options::OPT_fopenmp_use_tls,
                         options::OPT_fnoopenmp_use_tls, /*Default=*/true))
         CmdArgs.push_back("-fnoopenmp-use-tls");
+      Args.AddLastArg(CmdArgs, options::OPT_fopenmp_simd,
+                      options::OPT_fno_openmp_simd);
       Args.AddAllArgs(CmdArgs, options::OPT_fopenmp_version_EQ);
 
       // When in OpenMP offloading mode with NVPTX target, forward
@@ -4169,8 +4187,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   ToolChain::RTTIMode RTTIMode = getToolChain().getRTTIMode();
 
   if (KernelOrKext || (types::isCXX(InputType) &&
-                       (RTTIMode == ToolChain::RM_DisabledExplicitly ||
-                        RTTIMode == ToolChain::RM_DisabledImplicitly)))
+                       (RTTIMode == ToolChain::RM_Disabled)))
     CmdArgs.push_back("-fno-rtti");
 
   // -fshort-enums=0 is default for all architectures except Hexagon.
@@ -4194,7 +4211,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
   if (Args.hasFlag(options::OPT_fregister_global_dtors_with_atexit,
                    options::OPT_fno_register_global_dtors_with_atexit,
-                   RawTriple.isOSDarwin()))
+                   RawTriple.isOSDarwin() && !KernelOrKext))
     CmdArgs.push_back("-fregister-global-dtors-with-atexit");
 
   // -fms-extensions=0 is default.
@@ -4692,6 +4709,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
     if (Args.hasFlag(options::OPT_fcuda_rdc, options::OPT_fno_cuda_rdc, false))
       CmdArgs.push_back("-fcuda-rdc");
+    if (Args.hasFlag(options::OPT_fcuda_short_ptr,
+                     options::OPT_fno_cuda_short_ptr, false))
+      CmdArgs.push_back("-fcuda-short-ptr");
   }
 
   // OpenMP offloading device jobs take the argument -fopenmp-host-ir-file-path
@@ -4774,6 +4794,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back("-fforce-enable-int128");
   }
 
+  if (Args.hasFlag(options::OPT_fcomplete_member_pointers,
+                   options::OPT_fno_complete_member_pointers, false))
+    CmdArgs.push_back("-fcomplete-member-pointers");
+
   // Finally add the compile command to the compilation.
   if (Args.hasArg(options::OPT__SLASH_fallback) &&
       Output.getType() == types::TY_Object &&
@@ -4791,12 +4815,6 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   } else {
     C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs, Inputs));
   }
-
-  // Handle the debug info splitting at object creation time if we're
-  // creating an object.
-  // TODO: Currently only works on linux with newer objcopy.
-  if (SplitDWARF && Output.getType() == types::TY_Object)
-    SplitDebugInfo(getToolChain(), C, *this, JA, Args, Output, SplitDWARFOut);
 
   if (Arg *A = Args.getLastArg(options::OPT_pg))
     if (Args.hasArg(options::OPT_fomit_frame_pointer))
@@ -4848,6 +4866,13 @@ ObjCRuntime Clang::AddObjCRuntimeArgs(const ArgList &args,
       getToolChain().getDriver().Diag(diag::err_drv_unknown_objc_runtime)
           << value;
     }
+    if ((runtime.getKind() == ObjCRuntime::GNUstep) &&
+        (runtime.getVersion() >= VersionTuple(2, 0)))
+      if (!getToolChain().getTriple().isOSBinFormatELF()) {
+        getToolChain().getDriver().Diag(
+            diag::err_drv_gnustep_objc_runtime_incompatible_binary)
+          << runtime.getVersion().getMajor();
+      }
 
     runtimeArg->render(args, cmdArgs);
     return runtime;
@@ -4941,7 +4966,7 @@ ObjCRuntime Clang::AddObjCRuntimeArgs(const ArgList &args,
     // Legacy behaviour is to target the gnustep runtime if we are in
     // non-fragile mode or the GCC runtime in fragile mode.
     if (isNonFragile)
-      runtime = ObjCRuntime(ObjCRuntime::GNUstep, VersionTuple(1, 6));
+      runtime = ObjCRuntime(ObjCRuntime::GNUstep, VersionTuple(2, 0));
     else
       runtime = ObjCRuntime(ObjCRuntime::GCC, VersionTuple());
   }
@@ -5069,13 +5094,8 @@ void Clang::AddClangCLArgs(const ArgList &Args, types::ID InputType,
     CmdArgs.push_back("--dependent-lib=oldnames");
   }
 
-  // Both /showIncludes and /E (and /EP) write to stdout. Allowing both
-  // would produce interleaved output, so ignore /showIncludes in such cases.
-  if ((!Args.hasArg(options::OPT_E) && !Args.hasArg(options::OPT__SLASH_EP)) ||
-      (Args.hasArg(options::OPT__SLASH_P) &&
-       Args.hasArg(options::OPT__SLASH_EP) && !Args.hasArg(options::OPT_E)))
-    if (Arg *A = Args.getLastArg(options::OPT_show_includes))
-      A->render(Args, CmdArgs);
+  if (Arg *A = Args.getLastArg(options::OPT_show_includes))
+    A->render(Args, CmdArgs);
 
   // This controls whether or not we emit RTTI data for polymorphic types.
   if (Args.hasFlag(options::OPT__SLASH_GR_, options::OPT__SLASH_GR,
@@ -5459,19 +5479,17 @@ void ClangAs::ConstructJob(Compilation &C, const JobAction &JA,
   CmdArgs.push_back("-o");
   CmdArgs.push_back(Output.getFilename());
 
+  if (Args.hasArg(options::OPT_gsplit_dwarf) &&
+      getToolChain().getTriple().isOSLinux()) {
+    CmdArgs.push_back("-split-dwarf-file");
+    CmdArgs.push_back(SplitDebugName(Args, Input));
+  }
+
   assert(Input.isFilename() && "Invalid input.");
   CmdArgs.push_back(Input.getFilename());
 
   const char *Exec = getToolChain().getDriver().getClangProgramPath();
   C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs, Inputs));
-
-  // Handle the debug info splitting at object creation time if we're
-  // creating an object.
-  // TODO: Currently only works on linux with newer objcopy.
-  if (Args.hasArg(options::OPT_gsplit_dwarf) &&
-      getToolChain().getTriple().isOSLinux())
-    SplitDebugInfo(getToolChain(), C, *this, JA, Args, Output,
-                   SplitDebugName(Args, Input));
 }
 
 // Begin OffloadBundler
@@ -5522,6 +5540,10 @@ void OffloadBundler::ConstructJob(Compilation &C, const JobAction &JA,
     Triples += Action::GetOffloadKindName(CurKind);
     Triples += '-';
     Triples += CurTC->getTriple().normalize();
+    if (CurKind == Action::OFK_HIP && CurDep->getOffloadingArch()) {
+      Triples += '-';
+      Triples += CurDep->getOffloadingArch();
+    }
   }
   CmdArgs.push_back(TCArgs.MakeArgString(Triples));
 
@@ -5591,6 +5613,11 @@ void OffloadBundler::ConstructJobMultipleOutputs(
     Triples += Action::GetOffloadKindName(Dep.DependentOffloadKind);
     Triples += '-';
     Triples += Dep.DependentToolChain->getTriple().normalize();
+    if (Dep.DependentOffloadKind == Action::OFK_HIP &&
+        !Dep.DependentBoundArch.empty()) {
+      Triples += '-';
+      Triples += Dep.DependentBoundArch;
+    }
   }
 
   CmdArgs.push_back(TCArgs.MakeArgString(Triples));

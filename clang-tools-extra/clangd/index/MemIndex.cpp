@@ -45,9 +45,11 @@ bool MemIndex::fuzzyFind(
       // Exact match against all possible scopes.
       if (!Req.Scopes.empty() && !llvm::is_contained(Req.Scopes, Sym->Scope))
         continue;
+      if (Req.RestrictForCodeCompletion && !Sym->IsIndexedForCodeCompletion)
+        continue;
 
       if (auto Score = Filter.match(Sym->Name)) {
-        Top.emplace(-*Score, Sym);
+        Top.emplace(-*Score * quality(*Sym), Sym);
         if (Top.size() > Req.MaxCandidateCount) {
           More = true;
           Top.pop();

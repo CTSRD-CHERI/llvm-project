@@ -428,10 +428,6 @@ namespace llvm {
       // Res = VPERMV3 V0, MaskV, V1
       VPERMV3,
 
-      // 3-op Variable Permute overwriting the index (VPERMI2).
-      // Res = VPERMIV3 V0, MaskV, V1
-      VPERMIV3,
-
       // Bitwise ternary logic.
       VPTERNLOG,
       // Fix Up Special Packed Float32/64 values.
@@ -576,8 +572,13 @@ namespace llvm {
       RDSEED,
 
       // SSE42 string comparisons.
-      PCMPISTRI,
-      PCMPESTRI,
+      // These nodes produce 3 results, index, mask, and flags. X86ISelDAGToDAG
+      // will emit one or two instructions based on which results are used. If
+      // flags and index/mask this allows us to use a single instruction since
+      // we won't have to pick and opcode for flags. Instead we can rely on the
+      // DAG to CSE everything and decide at isel.
+      PCMPISTR,
+      PCMPESTR,
 
       // Test if in transactional execution.
       XTEST,
@@ -829,6 +830,8 @@ namespace llvm {
 
     bool hasAndNotCompare(SDValue Y) const override;
 
+    bool hasAndNot(SDValue Y) const override;
+
     bool convertSetCCLogicToBitwiseLogic(EVT VT) const override {
       return VT.isScalarInteger();
     }
@@ -928,7 +931,7 @@ namespace llvm {
     /// the immediate into a register.
     bool isLegalAddImmediate(int64_t Imm) const override;
 
-    /// \brief Return the cost of the scaling factor used in the addressing
+    /// Return the cost of the scaling factor used in the addressing
     /// mode represented by AM for this target, for a load/store
     /// of the specified type.
     /// If the AM is supported, the return value must be >= 0.
@@ -1022,7 +1025,7 @@ namespace llvm {
              (VT == MVT::f32 && X86ScalarSSEf32);   // f32 is when SSE1
     }
 
-    /// \brief Returns true if it is beneficial to convert a load of a constant
+    /// Returns true if it is beneficial to convert a load of a constant
     /// to just the constant itself.
     bool shouldConvertConstantLoadToIntImm(const APInt &Imm,
                                            Type *Ty) const override;
@@ -1091,10 +1094,8 @@ namespace llvm {
 
     bool isNoopAddrSpaceCast(unsigned SrcAS, unsigned DestAS) const override;
 
-    /// \brief Customize the preferred legalization strategy for certain types.
+    /// Customize the preferred legalization strategy for certain types.
     LegalizeTypeAction getPreferredVectorAction(EVT VT) const override;
-
-    MVT getRegisterTypeForCallingConv(MVT VT) const override;
 
     MVT getRegisterTypeForCallingConv(LLVMContext &Context,
                                       EVT VT) const override;
@@ -1112,14 +1113,14 @@ namespace llvm {
 
     unsigned getMaxSupportedInterleaveFactor() const override { return 4; }
 
-    /// \brief Lower interleaved load(s) into target specific
+    /// Lower interleaved load(s) into target specific
     /// instructions/intrinsics.
     bool lowerInterleavedLoad(LoadInst *LI,
                               ArrayRef<ShuffleVectorInst *> Shuffles,
                               ArrayRef<unsigned> Indices,
                               unsigned Factor) const override;
 
-    /// \brief Lower interleaved store(s) into target specific
+    /// Lower interleaved store(s) into target specific
     /// instructions/intrinsics.
     bool lowerInterleavedStore(StoreInst *SI, ShuffleVectorInst *SVI,
                                unsigned Factor) const override;
@@ -1330,8 +1331,14 @@ namespace llvm {
     MachineBasicBlock *emitEHSjLjSetJmp(MachineInstr &MI,
                                         MachineBasicBlock *MBB) const;
 
+    void emitSetJmpShadowStackFix(MachineInstr &MI,
+                                  MachineBasicBlock *MBB) const;
+
     MachineBasicBlock *emitEHSjLjLongJmp(MachineInstr &MI,
                                          MachineBasicBlock *MBB) const;
+
+    MachineBasicBlock *emitLongJmpShadowStackFix(MachineInstr &MI,
+                                                 MachineBasicBlock *MBB) const;
 
     MachineBasicBlock *emitFMA3Instr(MachineInstr &MI,
                                      MachineBasicBlock *MBB) const;

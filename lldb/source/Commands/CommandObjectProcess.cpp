@@ -180,18 +180,18 @@ protected:
     llvm::StringRef target_settings_argv0 = target->GetArg0();
 
     // Determine whether we will disable ASLR or leave it in the default state
-    // (i.e. enabled if the platform supports it).
-    // First check if the process launch options explicitly turn on/off
+    // (i.e. enabled if the platform supports it). First check if the process
+    // launch options explicitly turn on/off
     // disabling ASLR.  If so, use that setting;
     // otherwise, use the 'settings target.disable-aslr' setting.
     bool disable_aslr = false;
     if (m_options.disable_aslr != eLazyBoolCalculate) {
-      // The user specified an explicit setting on the process launch line.  Use
-      // it.
+      // The user specified an explicit setting on the process launch line.
+      // Use it.
       disable_aslr = (m_options.disable_aslr == eLazyBoolYes);
     } else {
-      // The user did not explicitly specify whether to disable ASLR.  Fall back
-      // to the target.disable-aslr setting.
+      // The user did not explicitly specify whether to disable ASLR.  Fall
+      // back to the target.disable-aslr setting.
       disable_aslr = target->GetDisableASLR();
     }
 
@@ -234,11 +234,10 @@ protected:
       ProcessSP process_sp(target->GetProcessSP());
       if (process_sp) {
         // There is a race condition where this thread will return up the call
-        // stack to the main command
-        // handler and show an (lldb) prompt before HandlePrivateEvent (from
-        // PrivateStateThread) has
-        // a chance to call PushProcessIOHandler().
-        process_sp->SyncIOHandler(0, 2000);
+        // stack to the main command handler and show an (lldb) prompt before
+        // HandlePrivateEvent (from PrivateStateThread) has a chance to call
+        // PushProcessIOHandler().
+        process_sp->SyncIOHandler(0, std::chrono::seconds(2));
 
         llvm::StringRef data = stream.GetString();
         if (!data.empty())
@@ -359,7 +358,8 @@ public:
         break;
 
       case 'n':
-        attach_info.GetExecutableFile().SetFile(option_arg, false);
+        attach_info.GetExecutableFile().SetFile(option_arg, false,
+                                                FileSpec::Style::native);
         break;
 
       case 'w':
@@ -401,8 +401,7 @@ public:
         // Are we in the name?
 
         // Look to see if there is a -P argument provided, and if so use that
-        // plugin, otherwise
-        // use the default plugin.
+        // plugin, otherwise use the default plugin.
 
         const char *partial_name = nullptr;
         partial_name = input.GetArgumentAtIndex(opt_arg_pos);
@@ -413,7 +412,7 @@ public:
           ProcessInstanceInfoMatch match_info;
           if (partial_name) {
             match_info.GetProcessInfo().GetExecutableFile().SetFile(
-                partial_name, false);
+                partial_name, false, FileSpec::Style::native);
             match_info.SetNameMatchType(NameMatch::StartsWith);
           }
           platform_sp->FindProcesses(match_info, process_infos);
@@ -453,10 +452,9 @@ protected:
 
     Target *target = m_interpreter.GetDebugger().GetSelectedTarget().get();
     // N.B. The attach should be synchronous.  It doesn't help much to get the
-    // prompt back between initiating the attach
-    // and the target actually stopping.  So even if the interpreter is set to
-    // be asynchronous, we wait for the stop
-    // ourselves here.
+    // prompt back between initiating the attach and the target actually
+    // stopping.  So even if the interpreter is set to be asynchronous, we wait
+    // for the stop ourselves here.
 
     StateType state = eStateInvalid;
     Process *process = m_exe_ctx.GetProcessPtr();
@@ -482,9 +480,8 @@ protected:
     }
 
     // Record the old executable module, we want to issue a warning if the
-    // process of attaching changed the
-    // current executable (like somebody said "file foo" then attached to a PID
-    // whose executable was bar.)
+    // process of attaching changed the current executable (like somebody said
+    // "file foo" then attached to a PID whose executable was bar.)
 
     ModuleSP old_exec_module_sp = target->GetExecutableModule();
     ArchSpec old_arch_spec = target->GetArchitecture();
@@ -553,8 +550,8 @@ protected:
           target->GetArchitecture().GetTriple().getTriple().c_str());
     }
 
-    // This supports the use-case scenario of immediately continuing the process
-    // once attached.
+    // This supports the use-case scenario of immediately continuing the
+    // process once attached.
     if (m_options.attach_info.GetContinueOnceAttached())
       m_interpreter.HandleCommand("process continue", eLazyBoolNo, result);
 
@@ -692,11 +689,10 @@ protected:
 
       if (error.Success()) {
         // There is a race condition where this thread will return up the call
-        // stack to the main command
-        // handler and show an (lldb) prompt before HandlePrivateEvent (from
-        // PrivateStateThread) has
-        // a chance to call PushProcessIOHandler().
-        process->SyncIOHandler(iohandler_id, 2000);
+        // stack to the main command handler and show an (lldb) prompt before
+        // HandlePrivateEvent (from PrivateStateThread) has a chance to call
+        // PushProcessIOHandler().
+        process->SyncIOHandler(iohandler_id, std::chrono::seconds(2));
 
         result.AppendMessageWithFormat("Process %" PRIu64 " resuming\n",
                                        process->GetID());
@@ -988,7 +984,7 @@ public:
       case 'i':
         do_install = true;
         if (!option_arg.empty())
-          install_path.SetFile(option_arg, false);
+          install_path.SetFile(option_arg, false, FileSpec::Style::native);
         break;
       default:
         error.SetErrorStringWithFormat("invalid short option character '%c'",
@@ -1560,8 +1556,7 @@ protected:
         int32_t signo = signals_sp->GetSignalNumberFromName(arg.c_str());
         if (signo != LLDB_INVALID_SIGNAL_NUMBER) {
           // Casting the actions as bools here should be okay, because
-          // VerifyCommandOptionValue guarantees
-          // the value is either 0 or 1.
+          // VerifyCommandOptionValue guarantees the value is either 0 or 1.
           if (stop_action != -1)
             signals_sp->SetShouldStop(signo, stop_action);
           if (pass_action != -1) {

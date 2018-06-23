@@ -48,7 +48,7 @@ public:
   }
 
   // Returns true if a relocation only uses the low bits of a value such that
-  // all those bits are in in the same page. For example, if the relocation
+  // all those bits are in the same page. For example, if the relocation
   // only uses the low 12 bits in a system with 4k pages. If this is true, the
   // bits will always have the same value at runtime and we don't have to emit
   // a dynamic relocation.
@@ -106,8 +106,14 @@ public:
   // On PPC ELF V2 abi, the first entry in the .got is the .TOC.
   unsigned GotHeaderEntriesNum = 0;
 
-  // Set to 0 for variant 2
+  // For TLS variant 1, the TCB is a fixed size specified by the Target.
+  // For variant 2, the TCB is an unspecified size.
+  // Set to 0 for variant 2.
   unsigned TcbSize = 0;
+
+  // Set to the offset (in bytes) that the thread pointer is initialized to
+  // point to, relative to the start of the thread local storage.
+  unsigned TlsTpOffset = 0;
 
   bool NeedsThunks = false;
 
@@ -137,6 +143,7 @@ TargetInfo *getAArch64TargetInfo();
 TargetInfo *getAMDGPUTargetInfo();
 TargetInfo *getARMTargetInfo();
 TargetInfo *getAVRTargetInfo();
+TargetInfo *getHexagonTargetInfo();
 TargetInfo *getPPC64TargetInfo();
 TargetInfo *getPPCTargetInfo();
 TargetInfo *getSPARCV9TargetInfo();

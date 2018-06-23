@@ -259,8 +259,12 @@ CXXRecordDecl::setBases(CXXBaseSpecifier const * const *Bases,
     // C++ [class.virtual]p1:
     //   A class that declares or inherits a virtual function is called a 
     //   polymorphic class.
-    if (BaseClassDecl->isPolymorphic())
+    if (BaseClassDecl->isPolymorphic()) {
       data().Polymorphic = true;
+
+      //   An aggregate is a class with [...] no virtual functions.
+      data().Aggregate = false;
+    }
 
     // C++0x [class]p7:
     //   A standard-layout class is a class that: [...]
@@ -856,10 +860,10 @@ void CXXRecordDecl::addedMember(Decl *D) {
     return;
   }
 
-  ASTContext &Context = getASTContext();
-
   // Handle non-static data members.
   if (const auto *Field = dyn_cast<FieldDecl>(D)) {
+    ASTContext &Context = getASTContext();
+
     // C++2a [class]p7:
     //   A standard-layout class is a class that:
     //    [...]
@@ -872,8 +876,16 @@ void CXXRecordDecl::addedMember(Decl *D) {
     //   A declaration for a bit-field that omits the identifier declares an 
     //   unnamed bit-field. Unnamed bit-fields are not members and cannot be 
     //   initialized.
-    if (Field->isUnnamedBitfield())
+    if (Field->isUnnamedBitfield()) {
+      // C++ [meta.unary.prop]p4: [LWG2358]
+      //   T is a class type [...] with [...] no unnamed bit-fields of non-zero
+      //   length
+      if (data().Empty && !Field->isZeroLengthBitField(Context) &&
+          Context.getLangOpts().getClangABICompat() >
+              LangOptions::ClangABI::Ver6)
+        data().Empty = false;
       return;
+    }
     
     // C++11 [class]p7:
     //   A standard-layout class is a class that:
@@ -1220,12 +1232,8 @@ void CXXRecordDecl::addedMember(Decl *D) {
     }
 
     // C++14 [meta.unary.prop]p4:
-    //   T is a class type [...] with [...] no non-static data members other
-    //   than bit-fields of length 0...
-    if (data().Empty) {
-      if (!Field->isZeroLengthBitField(Context))
-        data().Empty = false;
-    }
+    //   T is a class type [...] with [...] no non-static data members
+    data().Empty = false;
   }
   
   // Handle using declarations of conversion functions.
@@ -2301,7 +2309,7 @@ bool CXXConstructorDecl::isMoveConstructor(unsigned &TypeQuals) const {
     getParamDecl(0)->getType()->isRValueReferenceType();
 }
 
-/// \brief Determine whether this is a copy or move constructor.
+/// Determine whether this is a copy or move constructor.
 bool CXXConstructorDecl::isCopyOrMoveConstructor(unsigned &TypeQuals) const {
   // C++ [class.copy]p2:
   //   A non-template constructor for class X is a copy constructor

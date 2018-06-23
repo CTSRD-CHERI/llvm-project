@@ -49,13 +49,13 @@ namespace {
       // or not, nothing is going to use the vreg types after us. Make sure they
       // disappear.
       auto ClearVRegTypesOnReturn =
-          make_scope_exit([&MF]() { MF.getRegInfo().getVRegToType().clear(); });
+          make_scope_exit([&MF]() { MF.getRegInfo().clearVirtRegTypes(); });
 
       if (MF.getProperties().hasProperty(
               MachineFunctionProperties::Property::FailedISel)) {
         if (AbortOnFailedISel)
           report_fatal_error("Instruction selection failed");
-        DEBUG(dbgs() << "Resetting: " << MF.getName() << '\n');
+        LLVM_DEBUG(dbgs() << "Resetting: " << MF.getName() << '\n');
         ++NumFunctionsReset;
         MF.reset();
         if (EmitFallbackDiag) {

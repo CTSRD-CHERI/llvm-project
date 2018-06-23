@@ -42,6 +42,7 @@ bool InputFile::IsInGroup;
 uint32_t InputFile::NextGroupId;
 std::vector<BinaryFile *> elf::BinaryFiles;
 std::vector<BitcodeFile *> elf::BitcodeFiles;
+std::vector<LazyObjFile *> elf::LazyObjFiles;
 std::vector<InputFile *> elf::ObjectFiles;
 std::vector<InputFile *> elf::SharedFiles;
 
@@ -63,7 +64,7 @@ Optional<MemoryBufferRef> elf::readFile(StringRef Path) {
 
   log(Path);
 
-  auto MBOrErr = MemoryBuffer::getFile(Path);
+  auto MBOrErr = MemoryBuffer::getFile(Path, -1, false);
   if (auto EC = MBOrErr.getError()) {
     error("cannot open " + Path + ": " + EC.message());
     return None;
@@ -125,12 +126,21 @@ std::string InputFile::getSrcMsg(const Symbol &Sym, InputSectionBase &Sec,
 template <class ELFT> void ObjFile<ELFT>::initializeDwarf() {
   Dwarf = llvm::make_unique<DWARFContext>(make_unique<LLDDwarfObj<ELFT>>(this));
   const DWARFObject &Obj = Dwarf->getDWARFObj();
-  DwarfLine.reset(new DWARFDebugLine);
   DWARFDataExtractor LineData(Obj, Obj.getLineSection(), Config->IsLE,
                               Config->Wordsize);
 
   for (std::unique_ptr<DWARFCompileUnit> &CU : Dwarf->compile_units()) {
-    const DWARFDebugLine::LineTable *LT = Dwarf->getLineTableForUnit(CU.get());
+    auto Report = [](Error Err) {
+      handleAllErrors(std::move(Err),
+                      [](ErrorInfoBase &Info) { warn(Info.message()); });
+    };
+    Expected<const DWARFDebugLine::LineTable *> ExpectedLT =
+        Dwarf->getLineTableForUnit(CU.get(), Report);
+    const DWARFDebugLine::LineTable *LT = nullptr;
+    if (ExpectedLT)
+      LT = *ExpectedLT;
+    else
+      Report(ExpectedLT.takeError());
     if (!LT)
       continue;
     LineTables.push_back(LT);
@@ -156,10 +166,15 @@ template <class ELFT> void ObjFile<ELFT>::initializeDwarf() {
       // Get the line number on which the variable is declared.
       unsigned Line = dwarf::toUnsigned(Die.find(dwarf::DW_AT_decl_line), 0);
 
-      // Get the name of the variable and add the collected information to
-      // VariableLoc. Usually Name is non-empty, but it can be empty if the
+      // Here we want to take the variable name to add it into VariableLoc.
+      // Variable can have regular and linkage name associated. At first, we try
+      // to get linkage name as it can be different, for example when we have
+      // two variables in different namespaces of the same object. Use common
+      // name otherwise, but handle the case when it also absent in case if the
       // input object file lacks some debug info.
-      StringRef Name = dwarf::toString(Die.find(dwarf::DW_AT_name), "");
+      StringRef Name =
+          dwarf::toString(Die.find(dwarf::DW_AT_linkage_name),
+                          dwarf::toString(Die.find(dwarf::DW_AT_name), ""));
       if (!Name.empty())
         VariableLoc.insert({Name, {LT, File, Line}});
     }
@@ -399,7 +414,7 @@ void ObjFile<ELFT>::initializeSections(
     DenseSet<CachedHashStringRef> &ComdatGroups) {
   const ELFFile<ELFT> &Obj = this->getObj();
 
-  ArrayRef<Elf_Shdr> ObjSections = CHECK(this->getObj().sections(), this);
+  ArrayRef<Elf_Shdr> ObjSections = CHECK(Obj.sections(), this);
   uint64_t Size = ObjSections.size();
   this->Sections.resize(Size);
   this->SectionStringTable =
@@ -892,16 +907,12 @@ std::vector<const typename ELFT::Verdef *> SharedFile<ELFT>::parseVerdefs() {
 template <class ELFT>
 uint32_t SharedFile<ELFT>::getAlignment(ArrayRef<Elf_Shdr> Sections,
                                         const Elf_Sym &Sym) {
-  uint64_t Ret = 1;
+  uint64_t Ret = UINT64_MAX;
   if (Sym.st_value)
     Ret = 1ULL << countTrailingZeros((uint64_t)Sym.st_value);
   if (0 < Sym.st_shndx && Sym.st_shndx < Sections.size())
     Ret = std::min<uint64_t>(Ret, Sections[Sym.st_shndx].sh_addralign);
-
-  if (Ret > UINT32_MAX)
-    error(toString(this) + ": alignment too large: " +
-          CHECK(Sym.getName(this->StringTable), this));
-  return Ret;
+  return (Ret > UINT32_MAX) ? 0 : Ret;
 }
 
 // Fully parse the shared object file. This must be called after parseSoName().
@@ -1014,8 +1025,9 @@ static uint8_t getBitcodeMachineKind(StringRef Path, const Triple &T) {
   case Triple::x86_64:
     return EM_X86_64;
   default:
-    fatal(Path + ": could not infer e_machine from bitcode target triple " +
+    error(Path + ": could not infer e_machine from bitcode target triple " +
           T.str());
+    return EM_NONE;
   }
 }
 
@@ -1024,17 +1036,21 @@ BitcodeFile::BitcodeFile(MemoryBufferRef MB, StringRef ArchiveName,
     : InputFile(BitcodeKind, MB) {
   this->ArchiveName = ArchiveName;
 
-  // Here we pass a new MemoryBufferRef which is identified by ArchiveName
-  // (the fully resolved path of the archive) + member name + offset of the
-  // member in the archive.
-  // ThinLTO uses the MemoryBufferRef identifier to access its internal
-  // data structures and if two archives define two members with the same name,
-  // this causes a collision which result in only one of the objects being
-  // taken into consideration at LTO time (which very likely causes undefined
-  // symbols later in the link stage).
-  MemoryBufferRef MBRef(MB.getBuffer(),
-                        Saver.save(ArchiveName + MB.getBufferIdentifier() +
-                                   utostr(OffsetInArchive)));
+  std::string Path = MB.getBufferIdentifier().str();
+  if (Config->ThinLTOIndexOnly)
+    Path = replaceThinLTOSuffix(MB.getBufferIdentifier());
+
+  // ThinLTO assumes that all MemoryBufferRefs given to it have a unique
+  // name. If two archives define two members with the same name, this
+  // causes a collision which result in only one of the objects being taken
+  // into consideration at LTO time (which very likely causes undefined
+  // symbols later in the link stage). So we append file offset to make
+  // filename unique.
+  MemoryBufferRef MBRef(
+      MB.getBuffer(),
+      Saver.save(ArchiveName + Path +
+                 (ArchiveName.empty() ? "" : utostr(OffsetInArchive))));
+
   Obj = CHECK(lto::InputFile::create(MBRef), this);
 
   Triple T(Obj->getTargetTriple());
@@ -1058,7 +1074,7 @@ template <class ELFT>
 static Symbol *createBitcodeSymbol(const std::vector<bool> &KeptComdats,
                                    const lto::InputFile::Symbol &ObjSym,
                                    BitcodeFile &F) {
-  StringRef NameRef = Saver.save(ObjSym.getName());
+  StringRef Name = Saver.save(ObjSym.getName());
   uint32_t Binding = ObjSym.isWeak() ? STB_WEAK : STB_GLOBAL;
 
   uint8_t Type = ObjSym.isTLS() ? STT_TLS : STT_NOTYPE;
@@ -1067,20 +1083,20 @@ static Symbol *createBitcodeSymbol(const std::vector<bool> &KeptComdats,
 
   int C = ObjSym.getComdatIndex();
   if (C != -1 && !KeptComdats[C])
-    return Symtab->addUndefined<ELFT>(NameRef, Binding, Visibility, Type,
+    return Symtab->addUndefined<ELFT>(Name, Binding, Visibility, Type,
                                       CanOmitFromDynSym, &F);
 
   if (ObjSym.isUndefined())
-    return Symtab->addUndefined<ELFT>(NameRef, Binding, Visibility, Type,
+    return Symtab->addUndefined<ELFT>(Name, Binding, Visibility, Type,
                                       CanOmitFromDynSym, &F);
 
   if (ObjSym.isCommon())
-    return Symtab->addCommon(NameRef, ObjSym.getCommonSize(),
+    return Symtab->addCommon(Name, ObjSym.getCommonSize(),
                              ObjSym.getCommonAlignment(), Binding, Visibility,
                              STT_OBJECT, F);
 
-  return Symtab->addBitcode(NameRef, Binding, Visibility, Type,
-                            CanOmitFromDynSym, F);
+  return Symtab->addBitcode(Name, Binding, Visibility, Type, CanOmitFromDynSym,
+                            F);
 }
 
 template <class ELFT>
@@ -1136,11 +1152,6 @@ void BinaryFile::parse() {
                      Data.size(), 0, STB_GLOBAL, nullptr, nullptr);
 }
 
-static bool isBitcode(MemoryBufferRef MB) {
-  using namespace sys::fs;
-  return identify_magic(MB.getBuffer()) == file_magic::bitcode;
-}
-
 InputFile *elf::createObjectFile(MemoryBufferRef MB, StringRef ArchiveName,
                                  uint64_t OffsetInArchive) {
   if (isBitcode(MB))
@@ -1176,9 +1187,9 @@ InputFile *elf::createSharedFile(MemoryBufferRef MB, StringRef DefaultSoName) {
 }
 
 MemoryBufferRef LazyObjFile::getBuffer() {
-  if (Seen)
+  if (AddedToLink)
     return MemoryBufferRef();
-  Seen = true;
+  AddedToLink = true;
   return MB;
 }
 
@@ -1240,6 +1251,18 @@ template <class ELFT> void LazyObjFile::addElfSymbols() {
                                     *this);
     return;
   }
+}
+
+std::string elf::replaceThinLTOSuffix(StringRef Path) {
+  StringRef Suffix = Config->ThinLTOObjectSuffixReplace.first;
+  StringRef Repl = Config->ThinLTOObjectSuffixReplace.second;
+
+  if (!Path.endswith(Suffix)) {
+    error("-thinlto-object-suffix-replace=" + Suffix + ";" + Repl +
+          " was given, but " + Path + " does not end with the suffix");
+    return "";
+  }
+  return (Path.drop_back(Suffix.size()) + Repl).str();
 }
 
 template void ArchiveFile::parse<ELF32LE>();

@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief This file sets the p2align operands on load and store instructions.
+/// This file sets the p2align operands on load and store instructions.
 ///
 //===----------------------------------------------------------------------===//
 
@@ -76,7 +76,7 @@ static void RewriteP2Align(MachineInstr &MI, unsigned OperandNo) {
 }
 
 bool WebAssemblySetP2AlignOperands::runOnMachineFunction(MachineFunction &MF) {
-  DEBUG({
+  LLVM_DEBUG({
     dbgs() << "********** Set p2align Operands **********\n"
            << "********** Function: " << MF.getName() << '\n';
   });

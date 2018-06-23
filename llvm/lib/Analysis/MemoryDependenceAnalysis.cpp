@@ -355,8 +355,8 @@ MemDepResult MemoryDependenceResults::getPointerDependencyFrom(
 MemDepResult
 MemoryDependenceResults::getInvariantGroupPointerDependency(LoadInst *LI,
                                                             BasicBlock *BB) {
-  auto *InvariantGroupMD = LI->getMetadata(LLVMContext::MD_invariant_group);
-  if (!InvariantGroupMD)
+
+  if (!LI->getMetadata(LLVMContext::MD_invariant_group))
     return MemDepResult::getUnknown();
 
   // Take the ptr operand after all casts and geps 0. This way we can search
@@ -417,7 +417,7 @@ MemoryDependenceResults::getInvariantGroupPointerDependency(LoadInst *LI,
       // same pointer operand) we can assume that value pointed by pointer
       // operand didn't change.
       if ((isa<LoadInst>(U) || isa<StoreInst>(U)) &&
-          U->getMetadata(LLVMContext::MD_invariant_group) == InvariantGroupMD)
+          U->getMetadata(LLVMContext::MD_invariant_group) != nullptr)
         ClosestDependency = GetClosestDependency(ClosestDependency, U);
     }
   }
@@ -433,6 +433,7 @@ MemoryDependenceResults::getInvariantGroupPointerDependency(LoadInst *LI,
   NonLocalDefsCache.try_emplace(
       LI, NonLocalDepResult(ClosestDependency->getParent(),
                             MemDepResult::getDef(ClosestDependency), nullptr));
+  ReverseNonLocalDefsCache[ClosestDependency].insert(LI);
   return MemDepResult::getNonLocal();
 }
 
@@ -824,7 +825,7 @@ MemoryDependenceResults::getNonLocalCallDependency(CallSite QueryCS) {
   SmallPtrSet<BasicBlock *, 32> Visited;
 
   unsigned NumSortedEntries = Cache.size();
-  DEBUG(AssertSorted(Cache));
+  LLVM_DEBUG(AssertSorted(Cache));
 
   // Iterate while we still have blocks to update.
   while (!DirtyBlocks.empty()) {
@@ -837,7 +838,7 @@ MemoryDependenceResults::getNonLocalCallDependency(CallSite QueryCS) {
 
     // Do a binary search to see if we already have an entry for this block in
     // the cache set.  If so, find it.
-    DEBUG(AssertSorted(Cache, NumSortedEntries));
+    LLVM_DEBUG(AssertSorted(Cache, NumSortedEntries));
     NonLocalDepInfo::iterator Entry =
         std::upper_bound(Cache.begin(), Cache.begin() + NumSortedEntries,
                          NonLocalDepEntry(DirtyBB));
@@ -919,12 +920,12 @@ void MemoryDependenceResults::getNonLocalPointerDependency(
          "Can't get pointer deps of a non-pointer!");
   Result.clear();
   {
-    // Check if there is cached Def with invariant.group. FIXME: cache might be
-    // invalid if cached instruction would be removed between call to
-    // getPointerDependencyFrom and this function.
+    // Check if there is cached Def with invariant.group.
     auto NonLocalDefIt = NonLocalDefsCache.find(QueryInst);
     if (NonLocalDefIt != NonLocalDefsCache.end()) {
-      Result.push_back(std::move(NonLocalDefIt->second));
+      Result.push_back(NonLocalDefIt->second);
+      ReverseNonLocalDefsCache[NonLocalDefIt->second.getResult().getInst()]
+          .erase(QueryInst);
       NonLocalDefsCache.erase(NonLocalDefIt);
       return;
     }
@@ -1210,7 +1211,7 @@ bool MemoryDependenceResults::getNonLocalPointerDepFromBB(
   unsigned NumSortedEntries = Cache->size();
   unsigned WorklistEntries = BlockNumberLimit;
   bool GotWorklistLimit = false;
-  DEBUG(AssertSorted(*Cache));
+  LLVM_DEBUG(AssertSorted(*Cache));
 
   while (!Worklist.empty()) {
     BasicBlock *BB = Worklist.pop_back_val();
@@ -1241,7 +1242,7 @@ bool MemoryDependenceResults::getNonLocalPointerDepFromBB(
 
       // Get the dependency info for Pointer in BB.  If we have cached
       // information, we will use it, otherwise we compute it.
-      DEBUG(AssertSorted(*Cache, NumSortedEntries));
+      LLVM_DEBUG(AssertSorted(*Cache, NumSortedEntries));
       MemDepResult Dep = GetNonLocalInfoForBlock(QueryInst, Loc, isLoad, BB,
                                                  Cache, NumSortedEntries);
 
@@ -1455,13 +1456,33 @@ bool MemoryDependenceResults::getNonLocalPointerDepFromBB(
 
   // Okay, we're done now.  If we added new values to the cache, re-sort it.
   SortNonLocalDepInfoCache(*Cache, NumSortedEntries);
-  DEBUG(AssertSorted(*Cache));
+  LLVM_DEBUG(AssertSorted(*Cache));
   return true;
 }
 
-/// If P exists in CachedNonLocalPointerInfo, remove it.
+/// If P exists in CachedNonLocalPointerInfo or NonLocalDefsCache, remove it.
 void MemoryDependenceResults::RemoveCachedNonLocalPointerDependencies(
     ValueIsLoadPair P) {
+
+  // Most of the time this cache is empty.
+  if (!NonLocalDefsCache.empty()) {
+    auto it = NonLocalDefsCache.find(P.getPointer());
+    if (it != NonLocalDefsCache.end()) {
+      RemoveFromReverseMap(ReverseNonLocalDefsCache,
+                           it->second.getResult().getInst(), P.getPointer());
+      NonLocalDefsCache.erase(it);
+    }
+
+    if (auto *I = dyn_cast<Instruction>(P.getPointer())) {
+      auto toRemoveIt = ReverseNonLocalDefsCache.find(I);
+      if (toRemoveIt != ReverseNonLocalDefsCache.end()) {
+        for (const auto &entry : toRemoveIt->second)
+          NonLocalDefsCache.erase(entry);
+        ReverseNonLocalDefsCache.erase(toRemoveIt);
+      }
+    }
+  }
+
   CachedNonLocalPointerInfo::iterator It = NonLocalPointerDeps.find(P);
   if (It == NonLocalPointerDeps.end())
     return;
@@ -1651,7 +1672,7 @@ void MemoryDependenceResults::removeInstruction(Instruction *RemInst) {
   }
 
   assert(!NonLocalDeps.count(RemInst) && "RemInst got reinserted?");
-  DEBUG(verifyRemoved(RemInst));
+  LLVM_DEBUG(verifyRemoved(RemInst));
 }
 
 /// Verify that the specified instruction does not occur in our internal data

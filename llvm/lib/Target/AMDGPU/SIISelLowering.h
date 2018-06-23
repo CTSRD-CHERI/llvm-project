@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 //
 /// \file
-/// \brief SI DAG Lowering interface definition
+/// SI DAG Lowering interface definition
 //
 //===----------------------------------------------------------------------===//
 
@@ -27,7 +27,7 @@ class SITargetLowering final : public AMDGPUTargetLowering {
   SDValue getImplicitArgPtr(SelectionDAG &DAG, const SDLoc &SL) const;
   SDValue lowerKernargMemParameter(SelectionDAG &DAG, EVT VT, EVT MemVT,
                                    const SDLoc &SL, SDValue Chain,
-                                   uint64_t Offset, bool Signed,
+                                   uint64_t Offset, unsigned Align, bool Signed,
                                    const ISD::InputArg *Arg = nullptr) const;
 
   SDValue lowerStackParameter(SelectionDAG &DAG, CCValAssign &VA,
@@ -46,6 +46,8 @@ class SITargetLowering final : public AMDGPUTargetLowering {
   SDValue LowerINTRINSIC_WO_CHAIN(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerINTRINSIC_W_CHAIN(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerINTRINSIC_VOID(SDValue Op, SelectionDAG &DAG) const;
+
+  SDValue widenLoad(LoadSDNode *Ld, DAGCombinerInfo &DCI) const;
   SDValue LowerLOAD(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerSELECT(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerFastUnsafeFDIV(SDValue Op, SelectionDAG &DAG) const;
@@ -60,11 +62,13 @@ class SITargetLowering final : public AMDGPUTargetLowering {
   SDValue LowerATOMIC_CMP_SWAP(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerBRCOND(SDValue Op, SelectionDAG &DAG) const;
 
-  SDValue lowerIntrinsicWChain_IllegalReturnType(SDValue Op, SDValue &Chain,
-                                                 SelectionDAG &DAG) const;
+  SDValue adjustLoadValueType(unsigned Opcode, MemSDNode *M,
+                              SelectionDAG &DAG,
+                              bool IsIntrinsic = false) const;
+
   SDValue handleD16VData(SDValue VData, SelectionDAG &DAG) const;
 
-  /// \brief Converts \p Op, which must be of floating point type, to the
+  /// Converts \p Op, which must be of floating point type, to the
   /// floating point type \p VT, by either extending or truncating it.
   SDValue getFPExtOrFPTrunc(SelectionDAG &DAG,
                             SDValue Op,
@@ -75,7 +79,7 @@ class SITargetLowering final : public AMDGPUTargetLowering {
     SelectionDAG &DAG, EVT VT, EVT MemVT, const SDLoc &SL, SDValue Val,
     bool Signed, const ISD::InputArg *Arg = nullptr) const;
 
-  /// \brief Custom lowering for ISD::FP_ROUND for MVT::f16.
+  /// Custom lowering for ISD::FP_ROUND for MVT::f16.
   SDValue lowerFP_ROUND(SDValue Op, SelectionDAG &DAG) const;
 
   SDValue getSegmentAperture(unsigned AS, const SDLoc &DL,
@@ -84,7 +88,9 @@ class SITargetLowering final : public AMDGPUTargetLowering {
   SDValue lowerADDRSPACECAST(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerINSERT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerEXTRACT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) const;
+  SDValue lowerBUILD_VECTOR(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerTRAP(SDValue Op, SelectionDAG &DAG) const;
+  SDValue lowerDEBUGTRAP(SDValue Op, SelectionDAG &DAG) const;
 
   SDNode *adjustWritemask(MachineSDNode *&N, SelectionDAG &DAG) const;
 
@@ -127,6 +133,7 @@ class SITargetLowering final : public AMDGPUTargetLowering {
   SDValue performFSubCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performSetCCCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performCvtF32UByteNCombine(SDNode *N, DAGCombinerInfo &DCI) const;
+  SDValue performClampCombine(SDNode *N, DAGCombinerInfo &DCI) const;
 
   bool isLegalFlatAddressingMode(const AddrMode &AM) const;
   bool isLegalGlobalAddressingMode(const AddrMode &AM) const;
@@ -152,6 +159,8 @@ public:
   SITargetLowering(const TargetMachine &tm, const SISubtarget &STI);
 
   const SISubtarget *getSubtarget() const;
+
+  bool isFPExtFoldable(unsigned Opcode, EVT DestVT, EVT SrcVT) const override;
 
   bool isShuffleMaskLegal(ArrayRef<int> /*Mask*/, EVT /*VT*/) const override;
 
@@ -259,7 +268,10 @@ public:
                          EVT VT) const override;
   MVT getScalarShiftAmountTy(const DataLayout &, EVT) const override;
   bool isFMAFasterThanFMulAndFAdd(EVT VT) const override;
+  SDValue splitUnaryVectorOp(SDValue Op, SelectionDAG &DAG) const;
+  SDValue splitBinaryVectorOp(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
+
   void ReplaceNodeResults(SDNode *N, SmallVectorImpl<SDValue> &Results,
                           SelectionDAG &DAG) const override;
 
@@ -288,6 +300,9 @@ public:
                                      const APInt &DemandedElts,
                                      const SelectionDAG &DAG,
                                      unsigned Depth = 0) const override;
+
+  bool isSDNodeSourceOfDivergence(const SDNode *N,
+    FunctionLoweringInfo *FLI, DivergenceAnalysis *DA) const override;
 };
 
 } // End namespace llvm

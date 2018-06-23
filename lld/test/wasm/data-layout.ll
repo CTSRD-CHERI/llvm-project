@@ -1,7 +1,7 @@
 ; RUN: llc -filetype=obj %p/Inputs/hello.ll -o %t.hello.o
 ; RUN: llc -filetype=obj %s -o %t.o
 
-target triple = "wasm32-unknown-unknown-wasm"
+target triple = "wasm32-unknown-unknown"
 
 @foo = hidden global i32 1, align 4
 @aligned_bar = hidden global i32 3, align 16
@@ -13,7 +13,7 @@ target triple = "wasm32-unknown-unknown-wasm"
 @local_struct = hidden global %struct.s zeroinitializer, align 4
 @local_struct_internal_ptr = hidden local_unnamed_addr global i32* getelementptr inbounds (%struct.s, %struct.s* @local_struct, i32 0, i32 1), align 4
 
-; RUN: wasm-ld -no-gc-sections --check-signatures --allow-undefined -o %t.wasm %t.o %t.hello.o
+; RUN: wasm-ld -no-gc-sections --allow-undefined --no-entry -o %t.wasm %t.o %t.hello.o
 ; RUN: obj2yaml %t.wasm | FileCheck %s
 
 ; CHECK:        - Type:            MEMORY
@@ -57,7 +57,7 @@ target triple = "wasm32-unknown-unknown-wasm"
 ; CHECK-NEXT:    - Type:            CUSTOM
 
 
-; RUN: wasm-ld -no-gc-sections --check-signatures --allow-undefined \
+; RUN: wasm-ld -no-gc-sections --allow-undefined --no-entry \
 ; RUN:     --initial-memory=131072 --max-memory=131072 -o %t_max.wasm %t.o \
 ; RUN:     %t.hello.o
 ; RUN: obj2yaml %t_max.wasm | FileCheck %s -check-prefix=CHECK-MAX
@@ -69,7 +69,7 @@ target triple = "wasm32-unknown-unknown-wasm"
 ; CHECK-MAX-NEXT:         Maximum:         0x00000002
 
 
-; RUN: wasm-ld --check-signatures --relocatable -o %t_reloc.wasm %t.o %t.hello.o
+; RUN: wasm-ld --relocatable -o %t_reloc.wasm %t.o %t.hello.o
 ; RUN: obj2yaml %t_reloc.wasm | FileCheck %s -check-prefix=RELOC
 
 ; RELOC:       - Type:            DATA
@@ -119,9 +119,7 @@ target triple = "wasm32-unknown-unknown-wasm"
 ; RELOC-NEXT:           Value:           40
 ; RELOC-NEXT:         Content:         68656C6C6F0A00
 
-; RELOC:        - Type:            CUSTOM
-; RELOC-NEXT:     Name:            linking
-; RELOC-NEXT:     SymbolTable:
+; RELOC:          SymbolTable:
 ; RELOC-NEXT:       - Index:           0
 ; RELOC-NEXT:         Kind:            DATA
 ; RELOC-NEXT:         Name:            foo

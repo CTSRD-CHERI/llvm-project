@@ -107,7 +107,7 @@ public:
   template <class ELFT> void writeTo(uint8_t *Buf);
   template <class ELFT> void maybeCompress();
 
-  void sort(std::function<int(InputSectionBase *S)> Order);
+  void sort(llvm::function_ref<int(InputSectionBase *S)> Order);
   void sortInitFini();
   void sortCtorsDtors();
 
@@ -128,8 +128,6 @@ std::vector<InputSection *> getInputSections(OutputSection* OS);
 // until Writer is initialized.
 struct Out {
   static uint8_t First;
-  static OutputSection *Opd;
-  static uint8_t *OpdBuf;
   static PhdrEntry *TlsPhdr;
   static OutputSection *DebugInfo;
   static OutputSection *ElfHeader;

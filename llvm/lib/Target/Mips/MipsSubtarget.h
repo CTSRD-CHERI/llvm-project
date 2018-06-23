@@ -165,6 +165,12 @@ class MipsSubtarget : public MipsGenSubtargetInfo {
   // HasCRC -- supports R6 CRC ASE
   bool HasCRC;
 
+  // HasVirt -- supports Virtualization ASE
+  bool HasVirt;
+
+  // HasGINV -- supports R6 Global INValidate ASE
+  bool HasGINV;
+
   // Use hazard variants of the jump register instructions for indirect
   // function calls and jump tables.
   bool UseIndirectJumpsHazard;
@@ -290,6 +296,8 @@ public:
   bool hasEVA() const { return HasEVA; }
   bool hasMT() const { return HasMT; }
   bool hasCRC() const { return HasCRC; }
+  bool hasVirt() const { return HasVirt; }
+  bool hasGINV() const { return HasGINV; }
   bool useIndirectJumpsHazard() const {
     return UseIndirectJumpsHazard && hasMips32r2();
   }

@@ -619,7 +619,7 @@ PreservedAnalyses WholeProgramDevirtPass::run(Module &M,
 bool DevirtModule::runForTesting(
     Module &M, function_ref<AAResults &(Function &)> AARGetter,
     function_ref<OptimizationRemarkEmitter &(Function *)> OREGetter) {
-  ModuleSummaryIndex Summary(/*IsPerformingAnalysis=*/false);
+  ModuleSummaryIndex Summary(/*HaveGVs=*/false);
 
   // Handle the command-line summary arguments. This code is for testing
   // purposes only, so we handle errors directly.
@@ -1066,7 +1066,7 @@ Constant *DevirtModule::importConstant(VTableSlot Slot, ArrayRef<uint64_t> Args,
 
   // We only need to set metadata if the global is newly created, in which
   // case it would not have hidden visibility.
-  if (GV->getMetadata(LLVMContext::MD_absolute_symbol))
+  if (GV->hasMetadata(LLVMContext::MD_absolute_symbol))
     return C;
 
   auto SetAbsRange = [&](uint64_t Min, uint64_t Max) {

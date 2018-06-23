@@ -47,7 +47,7 @@
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/ScalarEvolutionAliasAnalysis.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
-#include "llvm/Analysis/Utils/Local.h"
+#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/Constants.h"
@@ -170,7 +170,8 @@ struct LegacyLICMPass : public LoopPass {
   /// loop preheaders be inserted into the CFG...
   ///
   void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.setPreservesCFG();
+    AU.addPreserved<DominatorTreeWrapperPass>();
+    AU.addPreserved<LoopInfoWrapperPass>();
     AU.addRequired<TargetLibraryInfoWrapperPass>();
     if (EnableMSSALoopDependency)
       AU.addRequired<MemorySSAWrapperPass>();
@@ -220,7 +221,10 @@ PreservedAnalyses LICMPass::run(Loop &L, LoopAnalysisManager &AM,
     return PreservedAnalyses::all();
 
   auto PA = getLoopPassPreservedAnalyses();
-  PA.preserveSet<CFGAnalyses>();
+
+  PA.preserve<DominatorTreeAnalysis>();
+  PA.preserve<LoopAnalysis>();
+
   return PA;
 }
 
@@ -392,7 +396,7 @@ bool llvm::sinkRegion(DomTreeNode *N, AliasAnalysis *AA, LoopInfo *LI,
       // If the instruction is dead, we would try to sink it because it isn't
       // used in the loop, instead, just delete it.
       if (isInstructionTriviallyDead(&I, TLI)) {
-        DEBUG(dbgs() << "LICM deleting dead inst: " << I << '\n');
+        LLVM_DEBUG(dbgs() << "LICM deleting dead inst: " << I << '\n');
         salvageDebugInfo(I);
         ++II;
         CurAST->deleteValue(&I);
@@ -446,59 +450,73 @@ bool llvm::hoistRegion(DomTreeNode *N, AliasAnalysis *AA, LoopInfo *LI,
     BasicBlock *BB = DTN->getBlock();
     // Only need to process the contents of this block if it is not part of a
     // subloop (which would already have been processed).
-    if (!inSubLoop(BB, CurLoop, LI))
-      for (BasicBlock::iterator II = BB->begin(), E = BB->end(); II != E;) {
-        Instruction &I = *II++;
-        // Try constant folding this instruction.  If all the operands are
-        // constants, it is technically hoistable, but it would be better to
-        // just fold it.
-        if (Constant *C = ConstantFoldInstruction(
-                &I, I.getModule()->getDataLayout(), TLI)) {
-          DEBUG(dbgs() << "LICM folding inst: " << I << "  --> " << *C << '\n');
-          CurAST->copyValue(&I, C);
-          I.replaceAllUsesWith(C);
-          if (isInstructionTriviallyDead(&I, TLI)) {
-            CurAST->deleteValue(&I);
-            I.eraseFromParent();
-          }
-          Changed = true;
-          continue;
-        }
+    if (inSubLoop(BB, CurLoop, LI))
+      continue;
 
-        // Attempt to remove floating point division out of the loop by
-        // converting it to a reciprocal multiplication.
-        if (I.getOpcode() == Instruction::FDiv &&
-            CurLoop->isLoopInvariant(I.getOperand(1)) &&
-            I.hasAllowReciprocal()) {
-          auto Divisor = I.getOperand(1);
-          auto One = llvm::ConstantFP::get(Divisor->getType(), 1.0);
-          auto ReciprocalDivisor = BinaryOperator::CreateFDiv(One, Divisor);
-          ReciprocalDivisor->setFastMathFlags(I.getFastMathFlags());
-          ReciprocalDivisor->insertBefore(&I);
+    // Keep track of whether the prefix of instructions visited so far are such
+    // that the next instruction visited is guaranteed to execute if the loop
+    // is entered.  
+    bool IsMustExecute = CurLoop->getHeader() == BB;
 
-          auto Product =
-              BinaryOperator::CreateFMul(I.getOperand(0), ReciprocalDivisor);
-          Product->setFastMathFlags(I.getFastMathFlags());
-          Product->insertAfter(&I);
-          I.replaceAllUsesWith(Product);
+    for (BasicBlock::iterator II = BB->begin(), E = BB->end(); II != E;) {
+      Instruction &I = *II++;
+      // Try constant folding this instruction.  If all the operands are
+      // constants, it is technically hoistable, but it would be better to
+      // just fold it.
+      if (Constant *C = ConstantFoldInstruction(
+              &I, I.getModule()->getDataLayout(), TLI)) {
+        LLVM_DEBUG(dbgs() << "LICM folding inst: " << I << "  --> " << *C
+                          << '\n');
+        CurAST->copyValue(&I, C);
+        I.replaceAllUsesWith(C);
+        if (isInstructionTriviallyDead(&I, TLI)) {
+          CurAST->deleteValue(&I);
           I.eraseFromParent();
-
-          hoist(*ReciprocalDivisor, DT, CurLoop, SafetyInfo, ORE);
-          Changed = true;
-          continue;
         }
-
-        // Try hoisting the instruction out to the preheader.  We can only do
-        // this if all of the operands of the instruction are loop invariant and
-        // if it is safe to hoist the instruction.
-        //
-        if (CurLoop->hasLoopInvariantOperands(&I) &&
-            canSinkOrHoistInst(I, AA, DT, CurLoop, CurAST, SafetyInfo, ORE) &&
-            isSafeToExecuteUnconditionally(
-                I, DT, CurLoop, SafetyInfo, ORE,
-                CurLoop->getLoopPreheader()->getTerminator()))
-          Changed |= hoist(I, DT, CurLoop, SafetyInfo, ORE);
+        Changed = true;
+        continue;
       }
+
+      // Attempt to remove floating point division out of the loop by
+      // converting it to a reciprocal multiplication.
+      if (I.getOpcode() == Instruction::FDiv &&
+          CurLoop->isLoopInvariant(I.getOperand(1)) &&
+          I.hasAllowReciprocal()) {
+        auto Divisor = I.getOperand(1);
+        auto One = llvm::ConstantFP::get(Divisor->getType(), 1.0);
+        auto ReciprocalDivisor = BinaryOperator::CreateFDiv(One, Divisor);
+        ReciprocalDivisor->setFastMathFlags(I.getFastMathFlags());
+        ReciprocalDivisor->insertBefore(&I);
+
+        auto Product =
+            BinaryOperator::CreateFMul(I.getOperand(0), ReciprocalDivisor);
+        Product->setFastMathFlags(I.getFastMathFlags());
+        Product->insertAfter(&I);
+        I.replaceAllUsesWith(Product);
+        I.eraseFromParent();
+
+        hoist(*ReciprocalDivisor, DT, CurLoop, SafetyInfo, ORE);
+        Changed = true;
+        continue;
+      }
+
+      // Try hoisting the instruction out to the preheader.  We can only do
+      // this if all of the operands of the instruction are loop invariant and
+      // if it is safe to hoist the instruction.
+      //
+      if (CurLoop->hasLoopInvariantOperands(&I) &&
+          canSinkOrHoistInst(I, AA, DT, CurLoop, CurAST, SafetyInfo, ORE) &&
+          (IsMustExecute ||
+           isSafeToExecuteUnconditionally(
+               I, DT, CurLoop, SafetyInfo, ORE,
+               CurLoop->getLoopPreheader()->getTerminator()))) {
+        Changed |= hoist(I, DT, CurLoop, SafetyInfo, ORE);
+        continue;
+      }
+
+      if (IsMustExecute)
+        IsMustExecute = isGuaranteedToTransferExecutionToSuccessor(&I);
+    }
   }
 
   return Changed;
@@ -914,7 +932,7 @@ static void splitPredecessorsOfLoopExit(PHINode *PN, DominatorTree *DT,
 static bool sink(Instruction &I, LoopInfo *LI, DominatorTree *DT,
                  const Loop *CurLoop, LoopSafetyInfo *SafetyInfo,
                  OptimizationRemarkEmitter *ORE, bool FreeInLoop) {
-  DEBUG(dbgs() << "LICM sinking instruction: " << I << "\n");
+  LLVM_DEBUG(dbgs() << "LICM sinking instruction: " << I << "\n");
   ORE->emit([&]() {
     return OptimizationRemark(DEBUG_TYPE, "InstSunk", &I)
            << "sinking " << ore::NV("Inst", &I);
@@ -1016,8 +1034,8 @@ static bool hoist(Instruction &I, const DominatorTree *DT, const Loop *CurLoop,
                   const LoopSafetyInfo *SafetyInfo,
                   OptimizationRemarkEmitter *ORE) {
   auto *Preheader = CurLoop->getLoopPreheader();
-  DEBUG(dbgs() << "LICM hoisting to " << Preheader->getName() << ": " << I
-               << "\n");
+  LLVM_DEBUG(dbgs() << "LICM hoisting to " << Preheader->getName() << ": " << I
+                    << "\n");
   ORE->emit([&]() {
     return OptimizationRemark(DEBUG_TYPE, "Hoisted", &I) << "hoisting "
                                                          << ore::NV("Inst", &I);
@@ -1397,8 +1415,8 @@ bool llvm::promoteLoopAccessesToScalars(
     return false;
 
   // Otherwise, this is safe to promote, lets do it!
-  DEBUG(dbgs() << "LICM: Promoting value stored to in loop: " << *SomePtr
-               << '\n');
+  LLVM_DEBUG(dbgs() << "LICM: Promoting value stored to in loop: " << *SomePtr
+                    << '\n');
   ORE->emit([&]() {
     return OptimizationRemark(DEBUG_TYPE, "PromoteLoopAccessesToScalar",
                               LoopUses[0])

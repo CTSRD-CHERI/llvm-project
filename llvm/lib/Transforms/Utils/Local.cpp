@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/Analysis/Utils/Local.h"
+#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseMapInfo.h"
@@ -372,6 +372,11 @@ bool llvm::wouldInstructionBeTriviallyDead(Instruction *I,
       return false;
     return true;
   }
+  if (DbgLabelInst *DLI = dyn_cast<DbgLabelInst>(I)) {
+    if (DLI->getLabel())
+      return false;
+    return true;
+  }
 
   if (!I->mayHaveSideEffects())
     return true;
@@ -379,8 +384,9 @@ bool llvm::wouldInstructionBeTriviallyDead(Instruction *I,
   // Special case intrinsics that "may have side effects" but can be deleted
   // when dead.
   if (IntrinsicInst *II = dyn_cast<IntrinsicInst>(I)) {
-    // Safe to delete llvm.stacksave if dead.
-    if (II->getIntrinsicID() == Intrinsic::stacksave)
+    // Safe to delete llvm.stacksave and launder.invariant.group if dead.
+    if (II->getIntrinsicID() == Intrinsic::stacksave ||
+        II->getIntrinsicID() == Intrinsic::launder_invariant_group)
       return true;
 
     // Lifetime intrinsics are dead when their right-hand is undef.
@@ -428,18 +434,31 @@ llvm::RecursivelyDeleteTriviallyDeadInstructions(Value *V,
 
   SmallVector<Instruction*, 16> DeadInsts;
   DeadInsts.push_back(I);
+  RecursivelyDeleteTriviallyDeadInstructions(DeadInsts, TLI);
 
-  do {
-    I = DeadInsts.pop_back_val();
-    salvageDebugInfo(*I);
+  return true;
+}
+
+void llvm::RecursivelyDeleteTriviallyDeadInstructions(
+    SmallVectorImpl<Instruction *> &DeadInsts, const TargetLibraryInfo *TLI) {
+  // Process the dead instruction list until empty.
+  while (!DeadInsts.empty()) {
+    Instruction &I = *DeadInsts.pop_back_val();
+    assert(I.use_empty() && "Instructions with uses are not dead.");
+    assert(isInstructionTriviallyDead(&I, TLI) &&
+           "Live instruction found in dead worklist!");
+
+    // Don't lose the debug info while deleting the instructions.
+    salvageDebugInfo(I);
 
     // Null out all of the instruction's operands to see if any operand becomes
     // dead as we go.
-    for (unsigned i = 0, e = I->getNumOperands(); i != e; ++i) {
-      Value *OpV = I->getOperand(i);
-      I->setOperand(i, nullptr);
+    for (Use &OpU : I.operands()) {
+      Value *OpV = OpU.get();
+      OpU.set(nullptr);
 
-      if (!OpV->use_empty()) continue;
+      if (!OpV->use_empty())
+        continue;
 
       // If the operand is an instruction that became dead as we nulled out the
       // operand, and if it is 'trivially' dead, delete it in a future loop
@@ -449,10 +468,8 @@ llvm::RecursivelyDeleteTriviallyDeadInstructions(Value *V,
           DeadInsts.push_back(OpI);
     }
 
-    I->eraseFromParent();
-  } while (!DeadInsts.empty());
-
-  return true;
+    I.eraseFromParent();
+  }
 }
 
 /// areAllUsesEqual - Check whether the uses of a value are all the same.
@@ -664,8 +681,7 @@ void llvm::MergeBasicBlockIntoOnlyPred(BasicBlock *DestBB, DominatorTree *DT,
   // dominator edges will be redirected to DestBB.
   std::vector <DominatorTree::UpdateType> Updates;
   if (DDT && !ReplaceEntryBB) {
-    Updates.reserve(1 +
-                    (2 * std::distance(pred_begin(PredBB), pred_end(PredBB))));
+    Updates.reserve(1 + (2 * pred_size(PredBB)));
     Updates.push_back({DominatorTree::Delete, PredBB, DestBB});
     for (auto I = pred_begin(PredBB), E = pred_end(PredBB); I != E; ++I) {
       Updates.push_back({DominatorTree::Delete, *I, PredBB});
@@ -736,8 +752,8 @@ static bool CanMergeValues(Value *First, Value *Second) {
 static bool CanPropagatePredecessorsForPHIs(BasicBlock *BB, BasicBlock *Succ) {
   assert(*succ_begin(BB) == Succ && "Succ is not successor of BB!");
 
-  DEBUG(dbgs() << "Looking to fold " << BB->getName() << " into "
-        << Succ->getName() << "\n");
+  LLVM_DEBUG(dbgs() << "Looking to fold " << BB->getName() << " into "
+                    << Succ->getName() << "\n");
   // Shortcut, if there is only a single predecessor it must be BB and merging
   // is always safe
   if (Succ->getSinglePredecessor()) return true;
@@ -760,10 +776,11 @@ static bool CanPropagatePredecessorsForPHIs(BasicBlock *BB, BasicBlock *Succ) {
         if (BBPreds.count(IBB) &&
             !CanMergeValues(BBPN->getIncomingValueForBlock(IBB),
                             PN->getIncomingValue(PI))) {
-          DEBUG(dbgs() << "Can't fold, phi node " << PN->getName() << " in "
-                << Succ->getName() << " is conflicting with "
-                << BBPN->getName() << " with regard to common predecessor "
-                << IBB->getName() << "\n");
+          LLVM_DEBUG(dbgs()
+                     << "Can't fold, phi node " << PN->getName() << " in "
+                     << Succ->getName() << " is conflicting with "
+                     << BBPN->getName() << " with regard to common predecessor "
+                     << IBB->getName() << "\n");
           return false;
         }
       }
@@ -776,9 +793,10 @@ static bool CanPropagatePredecessorsForPHIs(BasicBlock *BB, BasicBlock *Succ) {
         BasicBlock *IBB = PN->getIncomingBlock(PI);
         if (BBPreds.count(IBB) &&
             !CanMergeValues(Val, PN->getIncomingValue(PI))) {
-          DEBUG(dbgs() << "Can't fold, phi node " << PN->getName() << " in "
-                << Succ->getName() << " is conflicting with regard to common "
-                << "predecessor " << IBB->getName() << "\n");
+          LLVM_DEBUG(dbgs() << "Can't fold, phi node " << PN->getName()
+                            << " in " << Succ->getName()
+                            << " is conflicting with regard to common "
+                            << "predecessor " << IBB->getName() << "\n");
           return false;
         }
       }
@@ -791,7 +809,7 @@ static bool CanPropagatePredecessorsForPHIs(BasicBlock *BB, BasicBlock *Succ) {
 using PredBlockVector = SmallVector<BasicBlock *, 16>;
 using IncomingValueMap = DenseMap<BasicBlock *, Value *>;
 
-/// \brief Determines the value to use as the phi node input for a block.
+/// Determines the value to use as the phi node input for a block.
 ///
 /// Select between \p OldVal any value that we know flows from \p BB
 /// to a particular phi on the basis of which one (if either) is not
@@ -820,7 +838,7 @@ static Value *selectIncomingValueForBlock(Value *OldVal, BasicBlock *BB,
   return OldVal;
 }
 
-/// \brief Create a map from block to value for the operands of a
+/// Create a map from block to value for the operands of a
 /// given phi.
 ///
 /// Create a map from block to value for each non-undef value flowing
@@ -839,7 +857,7 @@ static void gatherIncomingValuesToPhi(PHINode *PN,
   }
 }
 
-/// \brief Replace the incoming undef values to a phi with the values
+/// Replace the incoming undef values to a phi with the values
 /// from a block-to-value map.
 ///
 /// \param PN The phi we are replacing the undefs in.
@@ -859,7 +877,7 @@ static void replaceUndefValuesInPhi(PHINode *PN,
   }
 }
 
-/// \brief Replace a value flowing from a block to a phi with
+/// Replace a value flowing from a block to a phi with
 /// potentially multiple instances of that value flowing from the
 /// block's predecessors to the phi.
 ///
@@ -966,11 +984,11 @@ bool llvm::TryToSimplifyUncondBranchFromEmptyBlock(BasicBlock *BB,
     }
   }
 
-  DEBUG(dbgs() << "Killing Trivial BB: \n" << *BB);
+  LLVM_DEBUG(dbgs() << "Killing Trivial BB: \n" << *BB);
 
   std::vector<DominatorTree::UpdateType> Updates;
   if (DDT) {
-    Updates.reserve(1 + (2 * std::distance(pred_begin(BB), pred_end(BB))));
+    Updates.reserve(1 + (2 * pred_size(BB)));
     Updates.push_back({DominatorTree::Delete, BB, Succ});
     // All predecessors of BB will be moved to Succ.
     for (auto I = pred_begin(BB), E = pred_end(BB); I != E; ++I) {
@@ -1210,6 +1228,23 @@ static bool PhiHasDebugValue(DILocalVariable *DIVar,
   return false;
 }
 
+/// Check if the alloc size of \p ValTy is large enough to cover the variable
+/// (or fragment of the variable) described by \p DII.
+///
+/// This is primarily intended as a helper for the different
+/// ConvertDebugDeclareToDebugValue functions. The dbg.declare/dbg.addr that is
+/// converted describes an alloca'd variable, so we need to use the
+/// alloc size of the value when doing the comparison. E.g. an i1 value will be
+/// identified as covering an n-bit fragment, if the store size of i1 is at
+/// least n bits.
+static bool valueCoversEntireFragment(Type *ValTy, DbgInfoIntrinsic *DII) {
+  const DataLayout &DL = DII->getModule()->getDataLayout();
+  uint64_t ValueSize = DL.getTypeAllocSizeInBits(ValTy);
+  if (auto FragmentSize = DII->getFragmentSizeInBits())
+    return ValueSize >= *FragmentSize;
+  return false;
+}
+
 /// Inserts a llvm.dbg.value intrinsic before a store to an alloca'd value
 /// that has an associated llvm.dbg.declare or llvm.dbg.addr intrinsic.
 void llvm::ConvertDebugDeclareToDebugValue(DbgInfoIntrinsic *DII,
@@ -1219,6 +1254,21 @@ void llvm::ConvertDebugDeclareToDebugValue(DbgInfoIntrinsic *DII,
   assert(DIVar && "Missing variable");
   auto *DIExpr = DII->getExpression();
   Value *DV = SI->getOperand(0);
+
+  if (!valueCoversEntireFragment(SI->getValueOperand()->getType(), DII)) {
+    // FIXME: If storing to a part of the variable described by the dbg.declare,
+    // then we want to insert a dbg.value for the corresponding fragment.
+    LLVM_DEBUG(dbgs() << "Failed to convert dbg.declare to dbg.value: "
+                      << *DII << '\n');
+    // For now, when there is a store to parts of the variable (but we do not
+    // know which part) we insert an dbg.value instrinsic to indicate that we
+    // know nothing about the variable's content.
+    DV = UndefValue::get(DV->getType());
+    if (!LdStHasDebugValue(DIVar, DIExpr, SI))
+      Builder.insertDbgValueIntrinsic(DV, DIVar, DIExpr, DII->getDebugLoc(),
+                                      SI);
+    return;
+  }
 
   // If an argument is zero extended then use argument directly. The ZExt
   // may be zapped by an optimization pass in future.
@@ -1263,6 +1313,9 @@ void llvm::ConvertDebugDeclareToDebugValue(DbgInfoIntrinsic *DII,
   if (LdStHasDebugValue(DIVar, DIExpr, LI))
     return;
 
+  assert(valueCoversEntireFragment(LI->getType(), DII) &&
+         "Load is not loading the full variable fragment.");
+
   // We are now tracking the loaded value instead of the address. In the
   // future if multi-location support is added to the IR, it might be
   // preferable to keep tracking both the loaded value and the original
@@ -1282,6 +1335,9 @@ void llvm::ConvertDebugDeclareToDebugValue(DbgInfoIntrinsic *DII,
 
   if (PhiHasDebugValue(DIVar, DIExpr, APN))
     return;
+
+  assert(valueCoversEntireFragment(APN->getType(), DII) &&
+         "PHI node is not describing the full variable.");
 
   BasicBlock *BB = APN->getParent();
   auto InsertionPt = BB->getFirstInsertionPt();
@@ -1522,11 +1578,11 @@ void llvm::salvageDebugInfo(Instruction &I) {
 
   auto doSalvage = [&](DbgInfoIntrinsic *DII, SmallVectorImpl<uint64_t> &Ops) {
     auto *DIExpr = DII->getExpression();
-    DIExpr = DIExpression::doPrepend(DIExpr, Ops,
-                                     DIExpression::WithStackValue);
+    DIExpr =
+        DIExpression::prependOpcodes(DIExpr, Ops, DIExpression::WithStackValue);
     DII->setOperand(0, wrapMD(I.getOperand(0)));
     DII->setOperand(2, MetadataAsValue::get(I.getContext(), DIExpr));
-    DEBUG(dbgs() << "SALVAGE: " << *DII << '\n');
+    LLVM_DEBUG(dbgs() << "SALVAGE: " << *DII << '\n');
   };
 
   auto applyOffset = [&](DbgInfoIntrinsic *DII, uint64_t Offset) {
@@ -1549,7 +1605,7 @@ void llvm::salvageDebugInfo(Instruction &I) {
     MetadataAsValue *CastSrc = wrapMD(I.getOperand(0));
     for (auto *DII : DbgUsers) {
       DII->setOperand(0, CastSrc);
-      DEBUG(dbgs() << "SALVAGE: " << *DII << '\n');
+      LLVM_DEBUG(dbgs() << "SALVAGE: " << *DII << '\n');
     }
   } else if (auto *GEP = dyn_cast<GetElementPtrInst>(&I)) {
     unsigned BitWidth =
@@ -1616,7 +1672,7 @@ void llvm::salvageDebugInfo(Instruction &I) {
       DIExpr = DIExpression::prepend(DIExpr, DIExpression::WithDeref);
       DII->setOperand(0, AddrMD);
       DII->setOperand(2, MetadataAsValue::get(I.getContext(), DIExpr));
-      DEBUG(dbgs() << "SALVAGE:  " << *DII << '\n');
+      LLVM_DEBUG(dbgs() << "SALVAGE:  " << *DII << '\n');
     }
   }
 }
@@ -2079,8 +2135,8 @@ static unsigned replaceDominatedUsesWith(Value *From, Value *To,
     if (!Dominates(Root, U))
       continue;
     U.set(To);
-    DEBUG(dbgs() << "Replace dominated use of '" << From->getName() << "' as "
-                 << *To << " in " << *U << "\n");
+    LLVM_DEBUG(dbgs() << "Replace dominated use of '" << From->getName()
+                      << "' as " << *To << " in " << *U << "\n");
     ++Count;
   }
   return Count;
@@ -2496,7 +2552,7 @@ bool llvm::canReplaceOperandWithVariable(const Instruction *I, unsigned OpIdx) {
     // Static allocas (constant size in the entry block) are handled by
     // prologue/epilogue insertion so they're free anyway. We definitely don't
     // want to make them non-constant.
-    return !dyn_cast<AllocaInst>(I)->isStaticAlloca();
+    return !cast<AllocaInst>(I)->isStaticAlloca();
   case Instruction::GetElementPtr:
     if (OpIdx == 0)
       return true;

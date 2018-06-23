@@ -965,6 +965,9 @@ llvm::Value *CodeGenFunction::EmitLifetimeStart(uint64_t Size,
   if (!ShouldEmitLifetimeMarkers)
     return nullptr;
 
+  assert(Addr->getType()->getPointerAddressSpace() ==
+             CGM.getDataLayout().getAllocaAddrSpace() &&
+         "Pointer should be in alloca address space");
   llvm::Value *SizeV = llvm::ConstantInt::get(Int64Ty, Size);
   Addr = Builder.CreateBitCast(Addr, AllocaInt8PtrTy);
   llvm::CallInst *C =
@@ -974,6 +977,9 @@ llvm::Value *CodeGenFunction::EmitLifetimeStart(uint64_t Size,
 }
 
 void CodeGenFunction::EmitLifetimeEnd(llvm::Value *Size, llvm::Value *Addr) {
+  assert(Addr->getType()->getPointerAddressSpace() ==
+             CGM.getDataLayout().getAllocaAddrSpace() &&
+         "Pointer should be in alloca address space");
   Addr = Builder.CreateBitCast(Addr, AllocaInt8PtrTy);
   llvm::CallInst *C =
       Builder.CreateCall(CGM.getLLVMLifetimeEndFn(), {Size, Addr});
@@ -1058,6 +1064,7 @@ CodeGenFunction::EmitAutoVarAlloca(const VarDecl &D) {
                                  codegenoptions::LimitedDebugInfo;
 
   Address address = Address::invalid();
+  Address AllocaAddr = Address::invalid();
   if (Ty->isConstantSizeType()) {
     bool NRVO = getLangOpts().ElideConstructors &&
       D.isNRVOVariable();
@@ -1148,7 +1155,8 @@ CodeGenFunction::EmitAutoVarAlloca(const VarDecl &D) {
       // Create the alloca.  Note that we set the name separately from
       // building the instruction so that it's there even in no-asserts
       // builds.
-      address = CreateTempAlloca(allocaTy, allocaAlignment, D.getName());
+      address = CreateTempAlloca(allocaTy, allocaAlignment, D.getName(),
+                                 /*ArraySize=*/nullptr, &AllocaAddr);
 
       // Don't emit lifetime markers for MSVC catch parameters. The lifetime of
       // the catch parameter starts in the catchpad instruction, and we can't
@@ -1176,7 +1184,7 @@ CodeGenFunction::EmitAutoVarAlloca(const VarDecl &D) {
             !(!getLangOpts().CPlusPlus && hasLabelBeenSeenInCurrentScope())) {
           uint64_t size = CGM.getDataLayout().getTypeAllocSize(allocaTy);
           emission.SizeForLifetimeMarkers =
-              EmitLifetimeStart(size, address.getPointer());
+              EmitLifetimeStart(size, AllocaAddr.getPointer());
         }
       } else {
         assert(!emission.useLifetimeMarkers());
@@ -1205,7 +1213,8 @@ CodeGenFunction::EmitAutoVarAlloca(const VarDecl &D) {
     llvm::Type *llvmTy = ConvertTypeForMem(VlaSize.Type);
 
     // Allocate memory for the array.
-    address = CreateTempAlloca(llvmTy, alignment, "vla", VlaSize.NumElts);
+    address = CreateTempAlloca(llvmTy, alignment, "vla", VlaSize.NumElts,
+                               &AllocaAddr);
 
     // If we have debug info enabled, properly describe the VLA dimensions for
     // this type by registering the vla size expression for each of the
@@ -1215,6 +1224,7 @@ CodeGenFunction::EmitAutoVarAlloca(const VarDecl &D) {
 
   setAddrOfLocalVar(&D, address);
   emission.Addr = address;
+  emission.AllocaAddr = AllocaAddr;
 
   // Emit debug info for local var declaration.
   if (EmitDebugInfo && HaveInsertPoint()) {
@@ -1228,23 +1238,36 @@ CodeGenFunction::EmitAutoVarAlloca(const VarDecl &D) {
   // Make sure we call @llvm.lifetime.end.
   if (emission.useLifetimeMarkers())
     EHStack.pushCleanup<CallLifetimeEnd>(NormalEHLifetimeMarker,
-                                         emission.getAllocatedAddress(),
+                                         emission.getOriginalAllocatedAddress(),
                                          emission.getSizeForLifetimeMarkers());
 
   return emission;
 }
 
+static bool isCapturedBy(const VarDecl &, const Expr *);
+
+/// Determines whether the given __block variable is potentially
+/// captured by the given statement.
+static bool isCapturedBy(const VarDecl &Var, const Stmt *S) {
+  if (const Expr *E = dyn_cast<Expr>(S))
+    return isCapturedBy(Var, E);
+  for (const Stmt *SubStmt : S->children())
+    if (isCapturedBy(Var, SubStmt))
+      return true;
+  return false;
+}
+
 /// Determines whether the given __block variable is potentially
 /// captured by the given expression.
-static bool isCapturedBy(const VarDecl &var, const Expr *e) {
+static bool isCapturedBy(const VarDecl &Var, const Expr *E) {
   // Skip the most common kinds of expressions that make
   // hierarchy-walking expensive.
-  e = e->IgnoreParenCasts();
+  E = E->IgnoreParenCasts();
 
-  if (const BlockExpr *be = dyn_cast<BlockExpr>(e)) {
-    const BlockDecl *block = be->getBlockDecl();
-    for (const auto &I : block->captures()) {
-      if (I.getVariable() == &var)
+  if (const BlockExpr *BE = dyn_cast<BlockExpr>(E)) {
+    const BlockDecl *Block = BE->getBlockDecl();
+    for (const auto &I : Block->captures()) {
+      if (I.getVariable() == &Var)
         return true;
     }
 
@@ -1252,19 +1275,19 @@ static bool isCapturedBy(const VarDecl &var, const Expr *e) {
     return false;
   }
 
-  if (const StmtExpr *SE = dyn_cast<StmtExpr>(e)) {
+  if (const StmtExpr *SE = dyn_cast<StmtExpr>(E)) {
     const CompoundStmt *CS = SE->getSubStmt();
     for (const auto *BI : CS->body())
-      if (const auto *E = dyn_cast<Expr>(BI)) {
-        if (isCapturedBy(var, E))
-            return true;
+      if (const auto *BIE = dyn_cast<Expr>(BI)) {
+        if (isCapturedBy(Var, BIE))
+          return true;
       }
       else if (const auto *DS = dyn_cast<DeclStmt>(BI)) {
           // special case declarations
           for (const auto *I : DS->decls()) {
               if (const auto *VD = dyn_cast<VarDecl>((I))) {
                 const Expr *Init = VD->getInit();
-                if (Init && isCapturedBy(var, Init))
+                if (Init && isCapturedBy(Var, Init))
                   return true;
               }
           }
@@ -1276,14 +1299,14 @@ static bool isCapturedBy(const VarDecl &var, const Expr *e) {
     return false;
   }
 
-  for (const Stmt *SubStmt : e->children())
-    if (isCapturedBy(var, cast<Expr>(SubStmt)))
+  for (const Stmt *SubStmt : E->children())
+    if (isCapturedBy(Var, SubStmt))
       return true;
 
   return false;
 }
 
-/// \brief Determine whether the given initializer is trivial in the sense
+/// Determine whether the given initializer is trivial in the sense
 /// that it requires no code to be generated.
 bool CodeGenFunction::isTrivialInitializer(const Expr *Init) {
   if (!Init)
@@ -1374,7 +1397,7 @@ void CodeGenFunction::EmitAutoVarInit(const AutoVarEmission &emission) {
     llvm::ConstantInt::get(IntPtrTy,
                            getContext().getTypeSizeInChars(type).getQuantity());
 
-  llvm::Type *BP = AllocaInt8PtrTy;
+  llvm::Type *BP = CGM.Int8Ty->getPointerTo(Loc.getAddressSpace());
   if (Loc.getType() != BP)
     Loc = Builder.CreateBitCast(Loc, BP);
 
@@ -1395,11 +1418,10 @@ void CodeGenFunction::EmitAutoVarInit(const AutoVarEmission &emission) {
     // Otherwise, create a temporary global with the initializer then
     // memcpy from the global to the alloca.
     std::string Name = getStaticDeclName(CGM, D);
-    unsigned AS = 0;
-    if (getLangOpts().OpenCL) {
-      AS = CGM.getContext().getTargetAddressSpace(LangAS::opencl_constant);
-      BP = llvm::PointerType::getInt8PtrTy(getLLVMContext(), AS);
-    }
+    unsigned AS = CGM.getContext().getTargetAddressSpace(
+        CGM.getStringLiteralAddressSpace());
+    BP = llvm::PointerType::getInt8PtrTy(getLLVMContext(), AS);
+
     llvm::GlobalVariable *GV =
       new llvm::GlobalVariable(CGM.getModule(), constant->getType(), true,
                                llvm::GlobalValue::PrivateLinkage,
@@ -1955,13 +1977,15 @@ void CodeGenFunction::EmitParmDecl(const VarDecl &D, ParamValue Arg,
     // Push a destructor cleanup for this parameter if the ABI requires it.
     // Don't push a cleanup in a thunk for a method that will also emit a
     // cleanup.
-    if (!IsScalar && !CurFuncIsThunk &&
-        getContext().isParamDestroyedInCallee(Ty)) {
+    if (hasAggregateEvaluationKind(Ty) && !CurFuncIsThunk &&
+        Ty->getAs<RecordType>()->getDecl()->isParamDestroyedInCallee()) {
       if (QualType::DestructionKind DtorKind = Ty.isDestructedType()) {
         assert((DtorKind == QualType::DK_cxx_destructor ||
                 DtorKind == QualType::DK_nontrivial_c_struct) &&
                "unexpected destructor type");
         pushDestroy(DtorKind, DeclPtr, Ty);
+        CalleeDestructedParamCleanups[cast<ParmVarDecl>(&D)] =
+            EHStack.stable_begin();
       }
     }
   } else {

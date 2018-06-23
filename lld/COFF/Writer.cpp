@@ -543,14 +543,10 @@ void Writer::createImportTables() {
     std::string DLL = StringRef(File->DLLName).lower();
     if (Config->DLLOrder.count(DLL) == 0)
       Config->DLLOrder[DLL] = Config->DLLOrder.size();
-  }
-
-  for (ImportFile *File : ImportFile::Instances) {
-    if (!File->Live)
-      continue;
 
     if (DefinedImportThunk *Thunk = File->ThunkSym)
-      TextSec->addChunk(Thunk->getChunk());
+      if (File->ThunkLive)
+        TextSec->addChunk(Thunk->getChunk());
 
     if (Config->DelayLoads.count(StringRef(File->DLLName).lower())) {
       if (!File->ThunkSym)
@@ -606,19 +602,31 @@ size_t Writer::addEntryToStringTable(StringRef Str) {
 }
 
 Optional<coff_symbol16> Writer::createSymbol(Defined *Def) {
-  // Relative symbols are unrepresentable in a COFF symbol table.
-  if (isa<DefinedSynthetic>(Def))
+  coff_symbol16 Sym;
+  switch (Def->kind()) {
+  case Symbol::DefinedAbsoluteKind:
+    Sym.Value = Def->getRVA();
+    Sym.SectionNumber = IMAGE_SYM_ABSOLUTE;
+    break;
+  case Symbol::DefinedSyntheticKind:
+    // Relative symbols are unrepresentable in a COFF symbol table.
     return None;
-
-  // Don't write dead symbols or symbols in codeview sections to the symbol
-  // table.
-  if (!Def->isLive())
-    return None;
-  if (auto *D = dyn_cast<DefinedRegular>(Def))
-    if (D->getChunk()->isCodeView())
+  default: {
+    // Don't write symbols that won't be written to the output to the symbol
+    // table.
+    Chunk *C = Def->getChunk();
+    if (!C)
+      return None;
+    OutputSection *OS = C->getOutputSection();
+    if (!OS)
       return None;
 
-  coff_symbol16 Sym;
+    Sym.Value = Def->getRVA() - OS->getRVA();
+    Sym.SectionNumber = OS->SectionIndex;
+    break;
+  }
+  }
+
   StringRef Name = Def->getName();
   if (Name.size() > COFF::NameSize) {
     Sym.Name.Offset.Zeroes = 0;
@@ -637,25 +645,6 @@ Optional<coff_symbol16> Writer::createSymbol(Defined *Def) {
     Sym.StorageClass = IMAGE_SYM_CLASS_EXTERNAL;
   }
   Sym.NumberOfAuxSymbols = 0;
-
-  switch (Def->kind()) {
-  case Symbol::DefinedAbsoluteKind:
-    Sym.Value = Def->getRVA();
-    Sym.SectionNumber = IMAGE_SYM_ABSOLUTE;
-    break;
-  default: {
-    uint64_t RVA = Def->getRVA();
-    OutputSection *Sec = nullptr;
-    for (OutputSection *S : OutputSections) {
-      if (S->getRVA() > RVA)
-        break;
-      Sec = S;
-    }
-    Sym.Value = RVA - Sec->getRVA();
-    Sym.SectionNumber = Sec->SectionIndex;
-    break;
-  }
-  }
   return Sym;
 }
 
@@ -863,6 +852,8 @@ template <typename PEHeaderTy> void Writer::writeHeader() {
     PE->DLLCharacteristics |= IMAGE_DLL_CHARACTERISTICS_NO_ISOLATION;
   if (Config->GuardCF != GuardCFLevel::Off)
     PE->DLLCharacteristics |= IMAGE_DLL_CHARACTERISTICS_GUARD_CF;
+  if (Config->IntegrityCheck)
+    PE->DLLCharacteristics |= IMAGE_DLL_CHARACTERISTICS_FORCE_INTEGRITY;
   if (SetNoSEHCharacteristic)
     PE->DLLCharacteristics |= IMAGE_DLL_CHARACTERISTICS_NO_SEH;
   if (Config->TerminalServerAware)
@@ -1196,16 +1187,18 @@ void Writer::writeBuildId() {
       reinterpret_cast<const char *>(Buffer->getBufferStart()),
       Buffer->getBufferSize());
 
-  uint32_t Hash = static_cast<uint32_t>(xxHash64(OutputFileData));
+  uint32_t Timestamp = Config->Timestamp;
+  if (Config->Repro)
+    Timestamp = static_cast<uint32_t>(xxHash64(OutputFileData));
 
   if (DebugDirectory)
-    DebugDirectory->setTimeDateStamp(Hash);
+    DebugDirectory->setTimeDateStamp(Timestamp);
 
   uint8_t *Buf = Buffer->getBufferStart();
   Buf += DOSStubSize + sizeof(PEMagic);
   object::coff_file_header *CoffHeader =
       reinterpret_cast<coff_file_header *>(Buf);
-  CoffHeader->TimeDateStamp = Hash;
+  CoffHeader->TimeDateStamp = Timestamp;
 }
 
 // Sort .pdata section contents according to PE/COFF spec 5.5.

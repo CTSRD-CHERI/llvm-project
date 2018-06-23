@@ -282,6 +282,10 @@ bool LLParser::ParseTopLevelEntities() {
     case lltok::GlobalVar:  if (ParseNamedGlobal()) return true; break;
     case lltok::ComdatVar:  if (parseComdat()) return true; break;
     case lltok::exclaim:    if (ParseStandaloneMetadata()) return true; break;
+    case lltok::SummaryID:
+      if (ParseSummaryEntry())
+        return true;
+      break;
     case lltok::MetadataVar:if (ParseNamedMetadata()) return true; break;
     case lltok::kw_attributes: if (ParseUnnamedAttrGrp()) return true; break;
     case lltok::kw_uselistorder: if (ParseUseListOrder()) return true; break;
@@ -708,6 +712,55 @@ bool LLParser::ParseStandaloneMetadata() {
     NumberedMetadata[MetadataID].reset(Init);
   }
 
+  return false;
+}
+
+// Skips a single module summary entry.
+bool LLParser::SkipModuleSummaryEntry() {
+  // Each module summary entry consists of a tag for the entry
+  // type, followed by a colon, then the fields surrounded by nested sets of
+  // parentheses. The "tag:" looks like a Label. Once parsing support is
+  // in place we will look for the tokens corresponding to the expected tags.
+  if (ParseToken(lltok::LabelStr,
+                 "expected 'label' at start of summary entry") ||
+      ParseToken(lltok::lparen, "expected '(' at start of summary entry"))
+    return true;
+  // Now walk through the parenthesized entry, until the number of open
+  // parentheses goes back down to 0 (the first '(' was parsed above).
+  unsigned NumOpenParen = 1;
+  do {
+    switch (Lex.getKind()) {
+    case lltok::lparen:
+      NumOpenParen++;
+      break;
+    case lltok::rparen:
+      NumOpenParen--;
+      break;
+    case lltok::Eof:
+      return TokError("found end of file while parsing summary entry");
+    default:
+      // Skip everything in between parentheses.
+      break;
+    }
+    Lex.Lex();
+  } while (NumOpenParen > 0);
+  return false;
+}
+
+/// ParseSummaryEntry:
+///   ::= SummaryID '=' ...
+bool LLParser::ParseSummaryEntry() {
+  assert(Lex.getKind() == lltok::SummaryID);
+  // unsigned SummaryID = Lex.getUIntVal();
+
+  Lex.Lex();
+  if (ParseToken(lltok::equal, "expected '=' here"))
+    return true;
+
+  // TODO: Support parsing into a ModuleSummaryIndex object saved in
+  // the LLParser. For now, skip the summary entry.
+  if (SkipModuleSummaryEntry())
+    return true;
   return false;
 }
 
@@ -4347,7 +4400,7 @@ bool LLParser::ParseDICompileUnit(MDNode *&Result, bool IsDistinct) {
 ///                     virtuality: DW_VIRTUALTIY_pure_virtual,
 ///                     virtualIndex: 10, thisAdjustment: 4, flags: 11,
 ///                     isOptimized: false, templateParams: !4, declaration: !5,
-///                     variables: !6, thrownTypes: !7)
+///                     retainedNodes: !6, thrownTypes: !7)
 bool LLParser::ParseDISubprogram(MDNode *&Result, bool IsDistinct) {
   auto Loc = Lex.getLoc();
 #define VISIT_MD_FIELDS(OPTIONAL, REQUIRED)                                    \
@@ -4369,7 +4422,7 @@ bool LLParser::ParseDISubprogram(MDNode *&Result, bool IsDistinct) {
   OPTIONAL(unit, MDField, );                                                   \
   OPTIONAL(templateParams, MDField, );                                         \
   OPTIONAL(declaration, MDField, );                                            \
-  OPTIONAL(variables, MDField, );                                              \
+  OPTIONAL(retainedNodes, MDField, );                                              \
   OPTIONAL(thrownTypes, MDField, );
   PARSE_MD_FIELDS();
 #undef VISIT_MD_FIELDS
@@ -4385,7 +4438,7 @@ bool LLParser::ParseDISubprogram(MDNode *&Result, bool IsDistinct) {
        type.Val, isLocal.Val, isDefinition.Val, scopeLine.Val,
        containingType.Val, virtuality.Val, virtualIndex.Val, thisAdjustment.Val,
        flags.Val, isOptimized.Val, unit.Val, templateParams.Val,
-       declaration.Val, variables.Val, thrownTypes.Val));
+       declaration.Val, retainedNodes.Val, thrownTypes.Val));
   return false;
 }
 
@@ -4565,6 +4618,22 @@ bool LLParser::ParseDILocalVariable(MDNode *&Result, bool IsDistinct) {
   Result = GET_OR_DISTINCT(DILocalVariable,
                            (Context, scope.Val, name.Val, file.Val, line.Val,
                             type.Val, arg.Val, flags.Val, align.Val));
+  return false;
+}
+
+/// ParseDILabel:
+///   ::= !DILabel(scope: !0, name: "foo", file: !1, line: 7)
+bool LLParser::ParseDILabel(MDNode *&Result, bool IsDistinct) {
+#define VISIT_MD_FIELDS(OPTIONAL, REQUIRED)                                    \
+  REQUIRED(scope, MDField, (/* AllowNull */ false));                           \
+  REQUIRED(name, MDStringField, );                                             \
+  REQUIRED(file, MDField, );                                                   \
+  REQUIRED(line, LineField, );
+  PARSE_MD_FIELDS();
+#undef VISIT_MD_FIELDS
+
+  Result = GET_OR_DISTINCT(DILabel,
+                           (Context, scope.Val, name.Val, file.Val, line.Val));
   return false;
 }
 
@@ -6740,8 +6809,8 @@ bool LLParser::sortUseListOrder(Value *V, ArrayRef<unsigned> Indexes,
   if (NumUses < 2)
     return Error(Loc, "value only has one use");
   if (Order.size() != Indexes.size() || NumUses > Indexes.size())
-    return Error(Loc, "wrong number of indexes, expected " +
-                          Twine(std::distance(V->use_begin(), V->use_end())));
+    return Error(Loc,
+                 "wrong number of indexes, expected " + Twine(V->getNumUses()));
 
   V->sortUseList([&](const Use &L, const Use &R) {
     return Order.lookup(&L) < Order.lookup(&R);

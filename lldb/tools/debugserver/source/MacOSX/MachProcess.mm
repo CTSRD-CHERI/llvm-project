@@ -595,7 +595,7 @@ const char *MachProcess::GetDeploymentInfo(const struct load_command& lc,
 
     switch (cmd) {
     case LC_VERSION_MIN_IPHONEOS:
-      return "iphoneos";
+      return "ios";
     case LC_VERSION_MIN_MACOSX:
       return "macosx";
     case LC_VERSION_MIN_TVOS:
@@ -607,6 +607,11 @@ const char *MachProcess::GetDeploymentInfo(const struct load_command& lc,
     }
   }
 #if defined (LC_BUILD_VERSION)
+#ifndef PLATFORM_IOSSIMULATOR
+#define PLATFORM_IOSSIMULATOR 7
+#define PLATFORM_TVOSSIMULATOR 8
+#define PLATFORM_WATCHOSSIMULATOR 9
+#endif
   if (cmd == LC_BUILD_VERSION) {
     struct build_version_command build_vers;
     if (ReadMemory(load_command_address, sizeof(struct build_version_command),
@@ -621,10 +626,13 @@ const char *MachProcess::GetDeploymentInfo(const struct load_command& lc,
     case PLATFORM_MACOS:
       return "macosx";
     case PLATFORM_IOS:
-      return "iphoneos";
+    case PLATFORM_IOSSIMULATOR:
+      return "ios";
     case PLATFORM_TVOS:
+    case PLATFORM_TVOSSIMULATOR:
       return "tvos";
     case PLATFORM_WATCHOS:
+    case PLATFORM_WATCHOSSIMULATOR:
       return "watchos";
     case PLATFORM_BRIDGEOS:
       return "bridgeos";
@@ -1486,7 +1494,7 @@ bool MachProcess::Detach() {
   // Resume our task
   m_task.Resume();
 
-  // NULL our task out as we have already retored all exception ports
+  // NULL our task out as we have already restored all exception ports
   m_task.Clear();
 
   // Clear out any notion of the process we once were
@@ -1797,7 +1805,7 @@ bool MachProcess::DisableBreakpoint(nub_addr_t addr, bool remove) {
           break_op_size) {
         bool verify = false;
         if (bp->IsEnabled()) {
-          // Make sure we have the a breakpoint opcode exists at this address
+          // Make sure a breakpoint opcode exists at this address
           if (memcmp(curr_break_op, break_op, break_op_size) == 0) {
             break_op_found = true;
             // We found a valid breakpoint opcode at this address, now restore

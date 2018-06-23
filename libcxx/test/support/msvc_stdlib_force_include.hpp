@@ -55,10 +55,6 @@ const AssertionDialogAvoider assertion_dialog_avoider{};
     #define __has_attribute(X) _MSVC_HAS_ATTRIBUTE_ ## X
     #define _MSVC_HAS_ATTRIBUTE_vector_size     0
 
-    #ifdef _NOEXCEPT_TYPES_SUPPORTED
-        #define __cpp_noexcept_function_type    201510
-    #endif // _NOEXCEPT_TYPES_SUPPORTED
-
     // Silence compiler warnings.
     #pragma warning(disable: 4180) // qualifier applied to function type has no meaning; ignored
     #pragma warning(disable: 4324) // structure was padded due to alignment specifier
@@ -77,9 +73,6 @@ const AssertionDialogAvoider assertion_dialog_avoider{};
     // atomic_is_lock_free.pass.cpp needs this VS 2015 Update 2 fix.
     #define _ENABLE_ATOMIC_ALIGNMENT_FIX
 
-    // Silence warnings about raw pointers and other unchecked iterators.
-    #define _SCL_SECURE_NO_WARNINGS
-
     // Silence warnings about features that are deprecated in C++17.
     #define _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS
 #endif // _LIBCXX_IN_DEVCRT
@@ -90,14 +83,6 @@ const AssertionDialogAvoider assertion_dialog_avoider{};
     #define TEST_STD_VER 17
 #else // _HAS_CXX17
     #define TEST_STD_VER 14
-#endif // _HAS_CXX17
-
-// Simulate library feature-test macros.
-#define __cpp_lib_invoke                         201411
-#define __cpp_lib_void_t                         201411
-
-#if _HAS_CXX17
-    #define __cpp_lib_atomic_is_always_lock_free 201603
 #endif // _HAS_CXX17
 
 #endif // SUPPORT_MSVC_STDLIB_FORCE_INCLUDE_HPP

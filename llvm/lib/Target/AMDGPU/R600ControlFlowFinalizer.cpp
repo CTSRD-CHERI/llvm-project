@@ -19,6 +19,7 @@
 #include "R600InstrInfo.h"
 #include "R600MachineFunctionInfo.h"
 #include "R600RegisterInfo.h"
+#include "MCTargetDesc/AMDGPUMCTargetDesc.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
@@ -308,7 +309,7 @@ private:
           DstMI = Reg;
         else
           DstMI = TRI->getMatchingSuperReg(Reg,
-              TRI->getSubRegFromChannel(TRI->getHWRegChan(Reg)),
+              AMDGPURegisterInfo::getSubRegFromChannel(TRI->getHWRegChan(Reg)),
               &AMDGPU::R600_Reg128RegClass);
       }
       if (MO.isUse()) {
@@ -317,7 +318,7 @@ private:
           SrcMI = Reg;
         else
           SrcMI = TRI->getMatchingSuperReg(Reg,
-              TRI->getSubRegFromChannel(TRI->getHWRegChan(Reg)),
+              AMDGPURegisterInfo::getSubRegFromChannel(TRI->getHWRegChan(Reg)),
               &AMDGPU::R600_Reg128RegClass);
       }
     }
@@ -531,7 +532,7 @@ public:
       for (MachineBasicBlock::iterator I = MBB.begin(), E = MBB.end();
           I != E;) {
         if (TII->usesTextureCache(*I) || TII->usesVertexCache(*I)) {
-          DEBUG(dbgs() << CfCount << ":"; I->dump(););
+          LLVM_DEBUG(dbgs() << CfCount << ":"; I->dump(););
           FetchClauses.push_back(MakeFetchClause(MBB, I));
           CfCount++;
           LastAlu.back() = nullptr;
@@ -549,7 +550,8 @@ public:
         switch (MI->getOpcode()) {
         case AMDGPU::CF_ALU_PUSH_BEFORE:
           if (RequiresWorkAround) {
-            DEBUG(dbgs() << "Applying bug work-around for ALU_PUSH_BEFORE\n");
+            LLVM_DEBUG(dbgs()
+                       << "Applying bug work-around for ALU_PUSH_BEFORE\n");
             BuildMI(MBB, MI, MBB.findDebugLoc(MI), TII->get(AMDGPU::CF_PUSH_EG))
                 .addImm(CfCount + 1)
                 .addImm(1);
@@ -562,7 +564,7 @@ public:
         case AMDGPU::CF_ALU:
           I = MI;
           AluClauses.push_back(MakeALUClause(MBB, I));
-          DEBUG(dbgs() << CfCount << ":"; MI->dump(););
+          LLVM_DEBUG(dbgs() << CfCount << ":"; MI->dump(););
           CfCount++;
           break;
         case AMDGPU::WHILELOOP: {
@@ -597,7 +599,7 @@ public:
               .addImm(0)
               .addImm(0);
           IfThenElseStack.push_back(MIb);
-          DEBUG(dbgs() << CfCount << ":"; MIb->dump(););
+          LLVM_DEBUG(dbgs() << CfCount << ":"; MIb->dump(););
           MI->eraseFromParent();
           CfCount++;
           break;
@@ -610,7 +612,7 @@ public:
               getHWInstrDesc(CF_ELSE))
               .addImm(0)
               .addImm(0);
-          DEBUG(dbgs() << CfCount << ":"; MIb->dump(););
+          LLVM_DEBUG(dbgs() << CfCount << ":"; MIb->dump(););
           IfThenElseStack.push_back(MIb);
           MI->eraseFromParent();
           CfCount++;
@@ -626,7 +628,7 @@ public:
                 .addImm(CfCount + 1)
                 .addImm(1);
             (void)MIb;
-            DEBUG(dbgs() << CfCount << ":"; MIb->dump(););
+            LLVM_DEBUG(dbgs() << CfCount << ":"; MIb->dump(););
             CfCount++;
           }
 
@@ -673,7 +675,7 @@ public:
         }
         default:
           if (TII->isExport(MI->getOpcode())) {
-            DEBUG(dbgs() << CfCount << ":"; MI->dump(););
+            LLVM_DEBUG(dbgs() << CfCount << ":"; MI->dump(););
             CfCount++;
           }
           break;

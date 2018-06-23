@@ -98,20 +98,12 @@ static uint64_t getSymVA(const Symbol &Sym, int64_t &Addend) {
     }
     return VA;
   }
-  case Symbol::SharedKind: {
-    auto &SS = cast<SharedSymbol>(Sym);
-    if (SS.CopyRelSec)
-      return SS.CopyRelSec->getVA(0);
-    if (SS.NeedsPltAddr)
-      return Sym.getPltVA();
-    return 0;
-  }
+  case Symbol::SharedKind:
   case Symbol::UndefinedKind:
     return 0;
   case Symbol::LazyArchiveKind:
   case Symbol::LazyObjectKind:
-    assert(Sym.IsUsedInRegularObj && "lazy symbol reached writer");
-    return 0;
+    llvm_unreachable("lazy symbol reached writer");
   }
   llvm_unreachable("invalid symbol kind");
 }
@@ -134,13 +126,20 @@ uint64_t Symbol::getGotPltVA() const {
 }
 
 uint64_t Symbol::getGotPltOffset() const {
-  return GotPltIndex * Target->GotPltEntrySize;
+  if (IsInIgot)
+    return PltIndex * Target->GotPltEntrySize;
+  return (PltIndex + Target->GotPltHeaderEntriesNum) * Target->GotPltEntrySize;
 }
 
 uint64_t Symbol::getPltVA() const {
   if (this->IsInIplt)
     return InX::Iplt->getVA() + PltIndex * Target->PltEntrySize;
   return InX::Plt->getVA() + Target->getPltEntryOffset(PltIndex);
+}
+
+uint64_t Symbol::getPltOffset() const {
+  assert(!this->IsInIplt);
+  return Target->getPltEntryOffset(PltIndex);
 }
 
 uint64_t Symbol::getSize() const {
@@ -164,13 +163,6 @@ OutputSection *Symbol::getOutputSection() const {
       return Sec->Repl->getOutputSection();
     return nullptr;
   }
-
-  if (auto *S = dyn_cast<SharedSymbol>(this)) {
-    if (S->CopyRelSec)
-      return S->CopyRelSec->getParent();
-    return nullptr;
-  }
-
   return nullptr;
 }
 
@@ -186,7 +178,7 @@ void Symbol::parseSymbolVersion() {
     return;
 
   // Truncate the symbol name so that it doesn't include the version string.
-  Name = {S.data(), Pos};
+  NameSize = Pos;
 
   // If this is not in this DSO, it is not a definition.
   if (!isDefined())
@@ -212,8 +204,10 @@ void Symbol::parseSymbolVersion() {
   // It is an error if the specified version is not defined.
   // Usually version script is not provided when linking executable,
   // but we may still want to override a versioned symbol from DSO,
-  // so we do not report error in this case.
-  if (Config->Shared)
+  // so we do not report error in this case. We also do not error
+  // if the symbol has a local version as it won't be in the dynamic
+  // symbol table.
+  if (Config->Shared && VersionId != VER_NDX_LOCAL)
     error(toString(File) + ": symbol " + S + " has undefined version " +
           Verstr);
 }
@@ -265,22 +259,22 @@ void elf::printTraceSymbol(Symbol *Sym) {
 void elf::warnUnorderableSymbol(const Symbol *Sym) {
   if (!Config->WarnSymbolOrdering)
     return;
+
   const InputFile *File = Sym->File;
   auto *D = dyn_cast<Defined>(Sym);
+
+  auto Warn = [&](StringRef S) { warn(toString(File) + S + Sym->getName()); };
+
   if (Sym->isUndefined())
-    warn(toString(File) +
-         ": unable to order undefined symbol: " + Sym->getName());
+    Warn(": unable to order undefined symbol: ");
   else if (Sym->isShared())
-    warn(toString(File) + ": unable to order shared symbol: " + Sym->getName());
+    Warn(": unable to order shared symbol: ");
   else if (D && !D->Section)
-    warn(toString(File) +
-         ": unable to order absolute symbol: " + Sym->getName());
+    Warn(": unable to order absolute symbol: ");
   else if (D && isa<OutputSection>(D->Section))
-    warn(toString(File) +
-         ": unable to order synthetic symbol: " + Sym->getName());
+    Warn(": unable to order synthetic symbol: ");
   else if (D && !D->Section->Repl->Live)
-    warn(toString(File) +
-         ": unable to order discarded symbol: " + Sym->getName());
+    Warn(": unable to order discarded symbol: ");
 }
 
 // Returns a symbol for an error message.

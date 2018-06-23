@@ -39,6 +39,16 @@ inline char hexdigit(unsigned X, bool LowerCase = false) {
   return X < 10 ? '0' + X : HexChar + X - 10;
 }
 
+/// Given an array of c-style strings terminated by a null pointer, construct
+/// a vector of StringRefs representing the same strings without the terminating
+/// null string.
+inline std::vector<StringRef> toStringRefArray(const char *const *Strings) {
+  std::vector<StringRef> Result;
+  while (*Strings)
+    Result.push_back(*Strings++);
+  return Result;
+}
+
 /// Construct a string ref from a boolean.
 inline StringRef toStringRef(bool B) { return StringRef(B ? "true" : "false"); }
 
@@ -157,7 +167,7 @@ inline std::string fromHex(StringRef Input) {
   return Output;
 }
 
-/// \brief Convert the string \p S to an integer of the specified type using
+/// Convert the string \p S to an integer of the specified type using
 /// the radix \p Base.  If \p Base is 0, auto-detects the radix.
 /// Returns true if the number was successfully converted, false otherwise.
 template <typename N> bool to_integer(StringRef S, N &Num, unsigned Base = 0) {
@@ -251,9 +261,13 @@ inline StringRef getOrdinalSuffix(unsigned Val) {
   }
 }
 
-/// PrintEscapedString - Print each character of the specified string, escaping
-/// it if it is not printable or if it is an escape char.
-void PrintEscapedString(StringRef Name, raw_ostream &Out);
+/// Print each character of the specified string, escaping it if it is not
+/// printable or if it is an escape char.
+void printEscapedString(StringRef Name, raw_ostream &Out);
+
+/// Print each character of the specified string, escaping HTML special
+/// characters.
+void printHTMLEscaped(StringRef String, raw_ostream &Out);
 
 /// printLowerCase - Print each character as lowercase if it is uppercase.
 void printLowerCase(StringRef String, raw_ostream &Out);

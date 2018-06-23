@@ -21,6 +21,7 @@
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/SelectionDAGISel.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/IR/ConstantRange.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Instructions.h"
@@ -226,13 +227,19 @@ namespace {
                      SDValue &Index, SDValue &Disp,
                      SDValue &Segment);
 
-    // Convience method where P is also root.
+    // Convenience method where P is also root.
     bool tryFoldLoad(SDNode *P, SDValue N,
                      SDValue &Base, SDValue &Scale,
                      SDValue &Index, SDValue &Disp,
                      SDValue &Segment) {
       return tryFoldLoad(P, P, N, Base, Scale, Index, Disp, Segment);
     }
+
+    // Try to fold a vector load. This makes sure the load isn't non-temporal.
+    bool tryFoldVecLoad(SDNode *Root, SDNode *P, SDValue N,
+                        SDValue &Base, SDValue &Scale,
+                        SDValue &Index, SDValue &Disp,
+                        SDValue &Segment);
 
     /// Implement addressing mode selection for inline asm expressions.
     bool SelectInlineAsmMemoryOperand(const SDValue &Op,
@@ -407,7 +414,7 @@ namespace {
       return Subtarget->getInstrInfo();
     }
 
-    /// \brief Address-mode matching performs shift-of-and to and-of-shift
+    /// Address-mode matching performs shift-of-and to and-of-shift
     /// reassociation in order to expose more scaled addressing
     /// opportunities.
     bool ComplexPatternFuncMutatesDAG() const override {
@@ -449,6 +456,12 @@ namespace {
     bool matchBEXTRFromAnd(SDNode *Node);
     bool shrinkAndImmediate(SDNode *N);
     bool isMaskZeroExtended(SDNode *N) const;
+
+    MachineSDNode *emitPCMPISTR(unsigned ROpc, unsigned MOpc, bool MayFoldLoad,
+                                const SDLoc &dl, MVT VT, SDNode *Node);
+    MachineSDNode *emitPCMPESTR(unsigned ROpc, unsigned MOpc, bool MayFoldLoad,
+                                const SDLoc &dl, MVT VT, SDNode *Node,
+                                SDValue &InFlag);
   };
 }
 
@@ -864,9 +877,14 @@ static bool isDispSafeForFrameIndex(int64_t Val) {
 
 bool X86DAGToDAGISel::foldOffsetIntoAddress(uint64_t Offset,
                                             X86ISelAddressMode &AM) {
+  // If there's no offset to fold, we don't need to do any work.
+  if (Offset == 0)
+    return false;
+
   // Cannot combine ExternalSymbol displacements with integer offsets.
-  if (Offset != 0 && (AM.ES || AM.MCSym))
+  if (AM.ES || AM.MCSym)
     return true;
+
   int64_t Val = AM.Disp + Offset;
   CodeModel::Model M = TM.getCodeModel();
   if (Subtarget->is64Bit()) {
@@ -920,94 +938,58 @@ bool X86DAGToDAGISel::matchWrapper(SDValue N, X86ISelAddressMode &AM) {
   if (AM.hasSymbolicDisplacement())
     return true;
 
-  SDValue N0 = N.getOperand(0);
+  bool IsRIPRel = N.getOpcode() == X86ISD::WrapperRIP;
+
+  // Only do this address mode folding for 64-bit if we're in the small code
+  // model.
+  // FIXME: But we can do GOTPCREL addressing in the medium code model.
   CodeModel::Model M = TM.getCodeModel();
+  if (Subtarget->is64Bit() && M != CodeModel::Small && M != CodeModel::Kernel)
+    return true;
 
-  // Handle X86-64 rip-relative addresses.  We check this before checking direct
-  // folding because RIP is preferable to non-RIP accesses.
-  if (Subtarget->is64Bit() && N.getOpcode() == X86ISD::WrapperRIP &&
-      // Under X86-64 non-small code model, GV (and friends) are 64-bits, so
-      // they cannot be folded into immediate fields.
-      // FIXME: This can be improved for kernel and other models?
-      (M == CodeModel::Small || M == CodeModel::Kernel)) {
-    // Base and index reg must be 0 in order to use %rip as base.
-    if (AM.hasBaseOrIndexReg())
-      return true;
-    if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(N0)) {
-      X86ISelAddressMode Backup = AM;
-      AM.GV = G->getGlobal();
-      AM.SymbolFlags = G->getTargetFlags();
-      if (foldOffsetIntoAddress(G->getOffset(), AM)) {
-        AM = Backup;
-        return true;
-      }
-    } else if (ConstantPoolSDNode *CP = dyn_cast<ConstantPoolSDNode>(N0)) {
-      X86ISelAddressMode Backup = AM;
-      AM.CP = CP->getConstVal();
-      AM.Align = CP->getAlignment();
-      AM.SymbolFlags = CP->getTargetFlags();
-      if (foldOffsetIntoAddress(CP->getOffset(), AM)) {
-        AM = Backup;
-        return true;
-      }
-    } else if (ExternalSymbolSDNode *S = dyn_cast<ExternalSymbolSDNode>(N0)) {
-      AM.ES = S->getSymbol();
-      AM.SymbolFlags = S->getTargetFlags();
-    } else if (auto *S = dyn_cast<MCSymbolSDNode>(N0)) {
-      AM.MCSym = S->getMCSymbol();
-    } else if (JumpTableSDNode *J = dyn_cast<JumpTableSDNode>(N0)) {
-      AM.JT = J->getIndex();
-      AM.SymbolFlags = J->getTargetFlags();
-    } else if (BlockAddressSDNode *BA = dyn_cast<BlockAddressSDNode>(N0)) {
-      X86ISelAddressMode Backup = AM;
-      AM.BlockAddr = BA->getBlockAddress();
-      AM.SymbolFlags = BA->getTargetFlags();
-      if (foldOffsetIntoAddress(BA->getOffset(), AM)) {
-        AM = Backup;
-        return true;
-      }
-    } else
-      llvm_unreachable("Unhandled symbol reference node.");
+  // Base and index reg must be 0 in order to use %rip as base.
+  if (IsRIPRel && AM.hasBaseOrIndexReg())
+    return true;
 
-    if (N.getOpcode() == X86ISD::WrapperRIP)
-      AM.setBaseReg(CurDAG->getRegister(X86::RIP, MVT::i64));
-    return false;
+  // Make a local copy in case we can't do this fold.
+  X86ISelAddressMode Backup = AM;
+
+  int64_t Offset = 0;
+  SDValue N0 = N.getOperand(0);
+  if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(N0)) {
+    AM.GV = G->getGlobal();
+    AM.SymbolFlags = G->getTargetFlags();
+    Offset = G->getOffset();
+  } else if (ConstantPoolSDNode *CP = dyn_cast<ConstantPoolSDNode>(N0)) {
+    AM.CP = CP->getConstVal();
+    AM.Align = CP->getAlignment();
+    AM.SymbolFlags = CP->getTargetFlags();
+    Offset = CP->getOffset();
+  } else if (ExternalSymbolSDNode *S = dyn_cast<ExternalSymbolSDNode>(N0)) {
+    AM.ES = S->getSymbol();
+    AM.SymbolFlags = S->getTargetFlags();
+  } else if (auto *S = dyn_cast<MCSymbolSDNode>(N0)) {
+    AM.MCSym = S->getMCSymbol();
+  } else if (JumpTableSDNode *J = dyn_cast<JumpTableSDNode>(N0)) {
+    AM.JT = J->getIndex();
+    AM.SymbolFlags = J->getTargetFlags();
+  } else if (BlockAddressSDNode *BA = dyn_cast<BlockAddressSDNode>(N0)) {
+    AM.BlockAddr = BA->getBlockAddress();
+    AM.SymbolFlags = BA->getTargetFlags();
+    Offset = BA->getOffset();
+  } else
+    llvm_unreachable("Unhandled symbol reference node.");
+
+  if (foldOffsetIntoAddress(Offset, AM)) {
+    AM = Backup;
+    return true;
   }
 
-  // Handle the case when globals fit in our immediate field: This is true for
-  // X86-32 always and X86-64 when in -mcmodel=small mode.  In 64-bit
-  // mode, this only applies to a non-RIP-relative computation.
-  if (!Subtarget->is64Bit() ||
-      M == CodeModel::Small || M == CodeModel::Kernel) {
-    assert(N.getOpcode() != X86ISD::WrapperRIP &&
-           "RIP-relative addressing already handled");
-    if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(N0)) {
-      AM.GV = G->getGlobal();
-      AM.Disp += G->getOffset();
-      AM.SymbolFlags = G->getTargetFlags();
-    } else if (ConstantPoolSDNode *CP = dyn_cast<ConstantPoolSDNode>(N0)) {
-      AM.CP = CP->getConstVal();
-      AM.Align = CP->getAlignment();
-      AM.Disp += CP->getOffset();
-      AM.SymbolFlags = CP->getTargetFlags();
-    } else if (ExternalSymbolSDNode *S = dyn_cast<ExternalSymbolSDNode>(N0)) {
-      AM.ES = S->getSymbol();
-      AM.SymbolFlags = S->getTargetFlags();
-    } else if (auto *S = dyn_cast<MCSymbolSDNode>(N0)) {
-      AM.MCSym = S->getMCSymbol();
-    } else if (JumpTableSDNode *J = dyn_cast<JumpTableSDNode>(N0)) {
-      AM.JT = J->getIndex();
-      AM.SymbolFlags = J->getTargetFlags();
-    } else if (BlockAddressSDNode *BA = dyn_cast<BlockAddressSDNode>(N0)) {
-      AM.BlockAddr = BA->getBlockAddress();
-      AM.Disp += BA->getOffset();
-      AM.SymbolFlags = BA->getTargetFlags();
-    } else
-      llvm_unreachable("Unhandled symbol reference node.");
-    return false;
-  }
+  if (IsRIPRel)
+    AM.setBaseReg(CurDAG->getRegister(X86::RIP, MVT::i64));
 
-  return true;
+  // Commit the changes now that we know this fold is safe.
+  return false;
 }
 
 /// Add the specified node to the specified addressing mode, returning true if
@@ -1295,10 +1277,10 @@ static bool foldMaskAndShiftToScale(SelectionDAG &DAG, SDValue N,
 bool X86DAGToDAGISel::matchAddressRecursively(SDValue N, X86ISelAddressMode &AM,
                                               unsigned Depth) {
   SDLoc dl(N);
-  DEBUG({
-      dbgs() << "MatchAddress: ";
-      AM.dump(CurDAG);
-    });
+  LLVM_DEBUG({
+    dbgs() << "MatchAddress: ";
+    AM.dump(CurDAG);
+  });
   // Limit recursion.
   if (Depth > 5)
     return matchAddressBase(N, AM);
@@ -1798,10 +1780,10 @@ bool X86DAGToDAGISel::selectMOV64Imm32(SDValue N, SDValue &Imm) {
   }
 
   // In static codegen with small code model, we can get the address of a label
-  // into a register with 'movl'. TableGen has already made sure we're looking
-  // at a label of some kind.
-  assert(N->getOpcode() == X86ISD::Wrapper &&
-         "Unexpected node type for MOV32ri64");
+  // into a register with 'movl'
+  if (N->getOpcode() != X86ISD::Wrapper)
+    return false;
+
   N = N.getOperand(0);
 
   // At least GNU as does not accept 'movl' for TPOFF relocations.
@@ -1998,6 +1980,20 @@ bool X86DAGToDAGISel::tryFoldLoad(SDNode *Root, SDNode *P, SDValue N,
                                   SDValue &Index, SDValue &Disp,
                                   SDValue &Segment) {
   if (!ISD::isNON_EXTLoad(N.getNode()) ||
+      !IsProfitableToFold(N, P, Root) ||
+      !IsLegalToFold(N, P, Root, OptLevel))
+    return false;
+
+  return selectAddr(N.getNode(),
+                    N.getOperand(1), Base, Scale, Index, Disp, Segment);
+}
+
+bool X86DAGToDAGISel::tryFoldVecLoad(SDNode *Root, SDNode *P, SDValue N,
+                                     SDValue &Base, SDValue &Scale,
+                                     SDValue &Index, SDValue &Disp,
+                                     SDValue &Segment) {
+  if (!ISD::isNON_EXTLoad(N.getNode()) ||
+      useNonTemporalLoad(cast<LoadSDNode>(N)) ||
       !IsProfitableToFold(N, P, Root) ||
       !IsLegalToFold(N, P, Root, OptLevel))
     return false;
@@ -2563,6 +2559,83 @@ bool X86DAGToDAGISel::matchBEXTRFromAnd(SDNode *Node) {
   return true;
 }
 
+// Emit a PCMISTR(I/M) instruction.
+MachineSDNode *X86DAGToDAGISel::emitPCMPISTR(unsigned ROpc, unsigned MOpc,
+                                             bool MayFoldLoad, const SDLoc &dl,
+                                             MVT VT, SDNode *Node) {
+  SDValue N0 = Node->getOperand(0);
+  SDValue N1 = Node->getOperand(1);
+  SDValue Imm = Node->getOperand(2);
+  const ConstantInt *Val = cast<ConstantSDNode>(Imm)->getConstantIntValue();
+  Imm = CurDAG->getTargetConstant(*Val, SDLoc(Node), Imm.getValueType());
+
+  // If there is a load, it will be behind a bitcast. We don't need to check
+  // alignment on this load.
+  SDValue Tmp0, Tmp1, Tmp2, Tmp3, Tmp4;
+  if (MayFoldLoad && N1->getOpcode() == ISD::BITCAST && N1->hasOneUse() &&
+      tryFoldVecLoad(Node, N1.getNode(), N1.getOperand(0), Tmp0, Tmp1, Tmp2,
+                     Tmp3, Tmp4)) {
+    SDValue Load = N1.getOperand(0);
+    SDValue Ops[] = { N0, Tmp0, Tmp1, Tmp2, Tmp3, Tmp4, Imm,
+                      Load.getOperand(0) };
+    SDVTList VTs = CurDAG->getVTList(VT, MVT::i32, MVT::Other);
+    MachineSDNode *CNode = CurDAG->getMachineNode(MOpc, dl, VTs, Ops);
+    // Update the chain.
+    ReplaceUses(Load.getValue(1), SDValue(CNode, 2));
+    // Record the mem-refs
+    MachineSDNode::mmo_iterator MemOp = MF->allocateMemRefsArray(1);
+    MemOp[0] = cast<LoadSDNode>(Load)->getMemOperand();
+    CNode->setMemRefs(MemOp, MemOp + 1);
+    return CNode;
+  }
+
+  SDValue Ops[] = { N0, N1, Imm };
+  SDVTList VTs = CurDAG->getVTList(VT, MVT::i32);
+  MachineSDNode *CNode = CurDAG->getMachineNode(ROpc, dl, VTs, Ops);
+  return CNode;
+}
+
+// Emit a PCMESTR(I/M) instruction. Also return the Glue result in case we need
+// to emit a second instruction after this one. This is needed since we have two
+// copyToReg nodes glued before this and we need to continue that glue through.
+MachineSDNode *X86DAGToDAGISel::emitPCMPESTR(unsigned ROpc, unsigned MOpc,
+                                             bool MayFoldLoad, const SDLoc &dl,
+                                             MVT VT, SDNode *Node,
+                                             SDValue &InFlag) {
+  SDValue N0 = Node->getOperand(0);
+  SDValue N2 = Node->getOperand(2);
+  SDValue Imm = Node->getOperand(4);
+  const ConstantInt *Val = cast<ConstantSDNode>(Imm)->getConstantIntValue();
+  Imm = CurDAG->getTargetConstant(*Val, SDLoc(Node), Imm.getValueType());
+
+  // If there is a load, it will be behind a bitcast. We don't need to check
+  // alignment on this load.
+  SDValue Tmp0, Tmp1, Tmp2, Tmp3, Tmp4;
+  if (MayFoldLoad && N2->getOpcode() == ISD::BITCAST && N2->hasOneUse() &&
+      tryFoldVecLoad(Node, N2.getNode(), N2.getOperand(0), Tmp0, Tmp1, Tmp2,
+                     Tmp3, Tmp4)) {
+    SDValue Load = N2.getOperand(0);
+    SDValue Ops[] = { N0, Tmp0, Tmp1, Tmp2, Tmp3, Tmp4, Imm,
+                      Load.getOperand(0), InFlag };
+    SDVTList VTs = CurDAG->getVTList(VT, MVT::i32, MVT::Other, MVT::Glue);
+    MachineSDNode *CNode = CurDAG->getMachineNode(MOpc, dl, VTs, Ops);
+    InFlag = SDValue(CNode, 3);
+    // Update the chain.
+    ReplaceUses(Load.getValue(1), SDValue(CNode, 2));
+    // Record the mem-refs
+    MachineSDNode::mmo_iterator MemOp = MF->allocateMemRefsArray(1);
+    MemOp[0] = cast<LoadSDNode>(Load)->getMemOperand();
+    CNode->setMemRefs(MemOp, MemOp + 1);
+    return CNode;
+  }
+
+  SDValue Ops[] = { N0, N2, Imm, InFlag };
+  SDVTList VTs = CurDAG->getVTList(VT, MVT::i32, MVT::Glue);
+  MachineSDNode *CNode = CurDAG->getMachineNode(ROpc, dl, VTs, Ops);
+  InFlag = SDValue(CNode, 2);
+  return CNode;
+}
+
 /// If the high bits of an 'and' operand are known zero, try setting the
 /// high bits of an 'and' constant operand to produce a smaller encoding by
 /// creating a small, sign-extended negative immediate rather than a large
@@ -2635,12 +2708,11 @@ bool X86DAGToDAGISel::shrinkAndImmediate(SDNode *And) {
 
 void X86DAGToDAGISel::Select(SDNode *Node) {
   MVT NVT = Node->getSimpleValueType(0);
-  unsigned Opc, MOpc;
   unsigned Opcode = Node->getOpcode();
   SDLoc dl(Node);
 
   if (Node->isMachineOpcode()) {
-    DEBUG(dbgs() << "== ";  Node->dump(CurDAG); dbgs() << '\n');
+    LLVM_DEBUG(dbgs() << "== "; Node->dump(CurDAG); dbgs() << '\n');
     Node->setNodeId(-1);
     return;   // Already selected.
   }
@@ -2780,7 +2852,7 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
     SDValue N0 = Node->getOperand(0);
     SDValue N1 = Node->getOperand(1);
 
-    Opc = (Opcode == X86ISD::SMUL8 ? X86::IMUL8r : X86::MUL8r);
+    unsigned Opc = (Opcode == X86ISD::SMUL8 ? X86::IMUL8r : X86::MUL8r);
 
     SDValue InFlag = CurDAG->getCopyToReg(CurDAG->getEntryNode(), dl, X86::AL,
                                           N0, SDValue()).getValue(1);
@@ -2797,7 +2869,7 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
     SDValue N0 = Node->getOperand(0);
     SDValue N1 = Node->getOperand(1);
 
-    unsigned LoReg;
+    unsigned LoReg, Opc;
     switch (NVT.SimpleTy) {
     default: llvm_unreachable("Unsupported VT!");
     // MVT::i8 is handled by X86ISD::UMUL8.
@@ -2822,6 +2894,7 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
     SDValue N0 = Node->getOperand(0);
     SDValue N1 = Node->getOperand(1);
 
+    unsigned Opc, MOpc;
     bool isSigned = Opcode == ISD::SMUL_LOHI;
     bool hasBMI2 = Subtarget->hasBMI2();
     if (!isSigned) {
@@ -2921,7 +2994,8 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
         InFlag = ResLo.getValue(2);
       }
       ReplaceUses(SDValue(Node, 0), ResLo);
-      DEBUG(dbgs() << "=> "; ResLo.getNode()->dump(CurDAG); dbgs() << '\n');
+      LLVM_DEBUG(dbgs() << "=> "; ResLo.getNode()->dump(CurDAG);
+                 dbgs() << '\n');
     }
     // Copy the high half of the result, if it is needed.
     if (!SDValue(Node, 1).use_empty()) {
@@ -2932,7 +3006,8 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
         InFlag = ResHi.getValue(2);
       }
       ReplaceUses(SDValue(Node, 1), ResHi);
-      DEBUG(dbgs() << "=> "; ResHi.getNode()->dump(CurDAG); dbgs() << '\n');
+      LLVM_DEBUG(dbgs() << "=> "; ResHi.getNode()->dump(CurDAG);
+                 dbgs() << '\n');
     }
 
     CurDAG->RemoveDeadNode(Node);
@@ -2946,6 +3021,7 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
     SDValue N0 = Node->getOperand(0);
     SDValue N1 = Node->getOperand(1);
 
+    unsigned Opc, MOpc;
     bool isSigned = (Opcode == ISD::SDIVREM ||
                      Opcode == X86ISD::SDIVREM8_SEXT_HREG);
     if (!isSigned) {
@@ -3094,7 +3170,8 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
             CurDAG->getTargetExtractSubreg(X86::sub_8bit, dl, MVT::i8, Result);
       }
       ReplaceUses(SDValue(Node, 1), Result);
-      DEBUG(dbgs() << "=> "; Result.getNode()->dump(CurDAG); dbgs() << '\n');
+      LLVM_DEBUG(dbgs() << "=> "; Result.getNode()->dump(CurDAG);
+                 dbgs() << '\n');
     }
     // Copy the division (low) result, if it is needed.
     if (!SDValue(Node, 0).use_empty()) {
@@ -3102,7 +3179,8 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
                                                 LoReg, NVT, InFlag);
       InFlag = Result.getValue(2);
       ReplaceUses(SDValue(Node, 0), Result);
-      DEBUG(dbgs() << "=> "; Result.getNode()->dump(CurDAG); dbgs() << '\n');
+      LLVM_DEBUG(dbgs() << "=> "; Result.getNode()->dump(CurDAG);
+                 dbgs() << '\n');
     }
     // Copy the remainder (high) result, if it is needed.
     if (!SDValue(Node, 1).use_empty()) {
@@ -3110,7 +3188,8 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
                                               HiReg, NVT, InFlag);
       InFlag = Result.getValue(2);
       ReplaceUses(SDValue(Node, 1), Result);
-      DEBUG(dbgs() << "=> "; Result.getNode()->dump(CurDAG); dbgs() << '\n');
+      LLVM_DEBUG(dbgs() << "=> "; Result.getNode()->dump(CurDAG);
+                 dbgs() << '\n');
     }
     CurDAG->RemoveDeadNode(Node);
     return;
@@ -3184,6 +3263,70 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
     }
     break;
   }
+  case X86ISD::PCMPISTR: {
+    if (!Subtarget->hasSSE42())
+      break;
+
+    bool NeedIndex = !SDValue(Node, 0).use_empty();
+    bool NeedMask = !SDValue(Node, 1).use_empty();
+    // We can't fold a load if we are going to make two instructions.
+    bool MayFoldLoad = !NeedIndex || !NeedMask;
+
+    MachineSDNode *CNode;
+    if (NeedMask) {
+      unsigned ROpc = Subtarget->hasAVX() ? X86::VPCMPISTRMrr : X86::PCMPISTRMrr;
+      unsigned MOpc = Subtarget->hasAVX() ? X86::VPCMPISTRMrm : X86::PCMPISTRMrm;
+      CNode = emitPCMPISTR(ROpc, MOpc, MayFoldLoad, dl, MVT::v16i8, Node);
+      ReplaceUses(SDValue(Node, 1), SDValue(CNode, 0));
+    }
+    if (NeedIndex || !NeedMask) {
+      unsigned ROpc = Subtarget->hasAVX() ? X86::VPCMPISTRIrr : X86::PCMPISTRIrr;
+      unsigned MOpc = Subtarget->hasAVX() ? X86::VPCMPISTRIrm : X86::PCMPISTRIrm;
+      CNode = emitPCMPISTR(ROpc, MOpc, MayFoldLoad, dl, MVT::i32, Node);
+      ReplaceUses(SDValue(Node, 0), SDValue(CNode, 0));
+    }
+
+    // Connect the flag usage to the last instruction created.
+    ReplaceUses(SDValue(Node, 2), SDValue(CNode, 0));
+    CurDAG->RemoveDeadNode(Node);
+    return;
+  }
+  case X86ISD::PCMPESTR: {
+    if (!Subtarget->hasSSE42())
+      break;
+
+    // Copy the two implicit register inputs.
+    SDValue InFlag = CurDAG->getCopyToReg(CurDAG->getEntryNode(), dl, X86::EAX,
+                                          Node->getOperand(1),
+                                          SDValue()).getValue(1);
+    InFlag = CurDAG->getCopyToReg(CurDAG->getEntryNode(), dl, X86::EDX,
+                                  Node->getOperand(3), InFlag).getValue(1);
+
+    bool NeedIndex = !SDValue(Node, 0).use_empty();
+    bool NeedMask = !SDValue(Node, 1).use_empty();
+    // We can't fold a load if we are going to make two instructions.
+    bool MayFoldLoad = !NeedIndex || !NeedMask;
+
+    MachineSDNode *CNode;
+    if (NeedMask) {
+      unsigned ROpc = Subtarget->hasAVX() ? X86::VPCMPESTRMrr : X86::PCMPESTRMrr;
+      unsigned MOpc = Subtarget->hasAVX() ? X86::VPCMPESTRMrm : X86::PCMPESTRMrm;
+      CNode = emitPCMPESTR(ROpc, MOpc, MayFoldLoad, dl, MVT::v16i8, Node,
+                           InFlag);
+      ReplaceUses(SDValue(Node, 1), SDValue(CNode, 0));
+    }
+    if (NeedIndex || !NeedMask) {
+      unsigned ROpc = Subtarget->hasAVX() ? X86::VPCMPESTRIrr : X86::PCMPESTRIrr;
+      unsigned MOpc = Subtarget->hasAVX() ? X86::VPCMPESTRIrm : X86::PCMPESTRIrm;
+      CNode = emitPCMPESTR(ROpc, MOpc, MayFoldLoad, dl, MVT::i32, Node, InFlag);
+      ReplaceUses(SDValue(Node, 0), SDValue(CNode, 0));
+    }
+    // Connect the flag usage to the last instruction created.
+    ReplaceUses(SDValue(Node, 2), SDValue(CNode, 1));
+    CurDAG->RemoveDeadNode(Node);
+    return;
+  }
+
   case ISD::STORE:
     if (foldLoadStoreIntoMemOperand(Node))
       return;

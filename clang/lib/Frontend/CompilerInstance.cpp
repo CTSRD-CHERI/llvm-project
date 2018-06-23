@@ -462,7 +462,7 @@ void CompilerInstance::createPreprocessor(TranslationUnitKind TUKind) {
                            /*ShowDepth=*/false);
   }
 
-  if (DepOpts.PrintShowIncludes) {
+  if (DepOpts.ShowIncludesDest != ShowIncludesDestination::None) {
     AttachHeaderIncludeGen(*PP, DepOpts,
                            /*ShowAllHeaders=*/true, /*OutputPath=*/"",
                            /*ShowDepth=*/true, /*MSStyle=*/true);
@@ -1042,7 +1042,7 @@ bool CompilerInstance::ExecuteAction(FrontendAction &Act) {
   return !getDiagnostics().getClient()->getNumErrors();
 }
 
-/// \brief Determine the appropriate source input kind based on language
+/// Determine the appropriate source input kind based on language
 /// options.
 static InputKind::Language getLanguageFromOptions(const LangOptions &LangOpts) {
   if (LangOpts.OpenCL)
@@ -1054,7 +1054,7 @@ static InputKind::Language getLanguageFromOptions(const LangOptions &LangOpts) {
   return LangOpts.CPlusPlus ? InputKind::CXX : InputKind::C;
 }
 
-/// \brief Compile a module file for the given module, using the options 
+/// Compile a module file for the given module, using the options 
 /// provided by the importing compiler instance. Returns true if the module
 /// was built without errors.
 static bool
@@ -1188,7 +1188,20 @@ compileModuleImpl(CompilerInstance &ImportingInstance, SourceLocation ImportLoc,
   return !Instance.getDiagnostics().hasErrorOccurred();
 }
 
-/// \brief Compile a module file for the given module, using the options 
+static const FileEntry *getPublicModuleMap(const FileEntry *File,
+                                           FileManager &FileMgr) {
+  StringRef Filename = llvm::sys::path::filename(File->getName());
+  SmallString<128> PublicFilename(File->getDir()->getName());
+  if (Filename == "module_private.map")
+    llvm::sys::path::append(PublicFilename, "module.map");
+  else if (Filename == "module.private.modulemap")
+    llvm::sys::path::append(PublicFilename, "module.modulemap");
+  else
+    return nullptr;
+  return FileMgr.getFile(PublicFilename);
+}
+
+/// Compile a module file for the given module, using the options 
 /// provided by the importing compiler instance. Returns true if the module
 /// was built without errors.
 static bool compileModuleImpl(CompilerInstance &ImportingInstance,
@@ -1204,6 +1217,13 @@ static bool compileModuleImpl(CompilerInstance &ImportingInstance,
   bool Result;
   if (const FileEntry *ModuleMapFile =
           ModMap.getContainingModuleMapFile(Module)) {
+    // Canonicalize compilation to start with the public module map. This is
+    // vital for submodules declarations in the private module maps to be
+    // correctly parsed when depending on a top level module in the public one.
+    if (const FileEntry *PublicMMFile = getPublicModuleMap(
+            ModuleMapFile, ImportingInstance.getFileManager()))
+      ModuleMapFile = PublicMMFile;
+
     // Use the module map where this module resides.
     Result = compileModuleImpl(
         ImportingInstance, ImportLoc, Module->getTopLevelModuleName(),
@@ -1330,7 +1350,7 @@ static bool compileAndLoadModule(CompilerInstance &ImportingInstance,
   }
 }
 
-/// \brief Diagnose differences between the current definition of the given
+/// Diagnose differences between the current definition of the given
 /// configuration macro and the definition provided on the command line.
 static void checkConfigMacro(Preprocessor &PP, StringRef ConfigMacro,
                              Module *Mod, SourceLocation ImportLoc) {
@@ -1388,13 +1408,13 @@ static void checkConfigMacro(Preprocessor &PP, StringRef ConfigMacro,
   }
 }
 
-/// \brief Write a new timestamp file with the given path.
+/// Write a new timestamp file with the given path.
 static void writeTimestampFile(StringRef TimestampFile) {
   std::error_code EC;
   llvm::raw_fd_ostream Out(TimestampFile.str(), EC, llvm::sys::fs::F_None);
 }
 
-/// \brief Prune the module cache of modules that haven't been accessed in
+/// Prune the module cache of modules that haven't been accessed in
 /// a long time.
 static void pruneModuleCache(const HeaderSearchOptions &HSOpts) {
   struct stat StatBuf;
@@ -1582,15 +1602,22 @@ bool CompilerInstance::loadModuleFile(StringRef FileName) {
   if (!ModuleManager)
     createModuleManager();
 
+  // If -Wmodule-file-config-mismatch is mapped as an error or worse, allow the
+  // ASTReader to diagnose it, since it can produce better errors that we can.
+  bool ConfigMismatchIsRecoverable =
+      getDiagnostics().getDiagnosticLevel(diag::warn_module_config_mismatch,
+                                          SourceLocation())
+        <= DiagnosticsEngine::Warning;
+
   auto Listener = llvm::make_unique<ReadModuleNames>(*this);
   auto &ListenerRef = *Listener;
   ASTReader::ListenerScope ReadModuleNamesListener(*ModuleManager,
                                                    std::move(Listener));
 
   // Try to load the module file.
-  switch (ModuleManager->ReadAST(FileName, serialization::MK_ExplicitModule,
-                                 SourceLocation(),
-                                 ASTReader::ARR_ConfigurationMismatch)) {
+  switch (ModuleManager->ReadAST(
+      FileName, serialization::MK_ExplicitModule, SourceLocation(),
+      ConfigMismatchIsRecoverable ? ASTReader::ARR_ConfigurationMismatch : 0)) {
   case ASTReader::Success:
     // We successfully loaded the module file; remember the set of provided
     // modules so that we don't try to load implicit modules for them.

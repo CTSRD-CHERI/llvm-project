@@ -142,7 +142,7 @@ static void failIfError(Error E, Twine Context = "") {
   });
 }
 
-SmallVector<const char *, 256> PositionalArgs;
+static SmallVector<const char *, 256> PositionalArgs;
 
 static bool MRI;
 
@@ -390,6 +390,7 @@ static void doExtract(StringRef Name, const object::Archive::Child &C) {
 
   int FD;
   failIfError(sys::fs::openFileForWrite(sys::path::filename(Name), FD,
+                                        sys::fs::CD_CreateAlways,
                                         sys::fs::F_None, Mode),
               Name);
 

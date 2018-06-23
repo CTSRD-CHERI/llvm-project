@@ -67,12 +67,14 @@ ValueObjectSP LibStdcppUniquePtrSyntheticFrontEnd::GetTuple() {
 
   ValueObjectSP obj_child_sp =
       valobj_sp->GetChildMemberWithName(ConstString("_M_t"), true);
+  if (!obj_child_sp)
+      return nullptr;
 
   ValueObjectSP obj_subchild_sp =
       obj_child_sp->GetChildMemberWithName(ConstString("_M_t"), true);
 
-  // if there is a _M_t subchild, the tuple is found in
-  // the obj_subchild_sp (for libstdc++ 6.0.23).
+  // if there is a _M_t subchild, the tuple is found in the obj_subchild_sp
+  // (for libstdc++ 6.0.23).
   if (obj_subchild_sp) {
     return obj_subchild_sp;
   }

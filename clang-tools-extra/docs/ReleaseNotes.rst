@@ -57,6 +57,9 @@ The improvements are...
 Improvements to clang-tidy
 --------------------------
 
+- The checks profiling info can now be stored as JSON files for futher
+  post-processing and analysis.
+
 - New module `abseil` for checks related to the `Abseil <https://abseil.io>`_
   library.
 
@@ -65,88 +68,103 @@ Improvements to clang-tidy
 - New module ``zircon`` for checks related to Fuchsia's Zircon kernel.
 
 - New :doc:`android-comparison-in-temp-failure-retry
-  <clang-tidy/checks/android-comparison-in-temp-failure-retry>` check
+  <clang-tidy/checks/android-comparison-in-temp-failure-retry>` check.
 
   Diagnoses comparisons that appear to be incorrectly placed in the argument to
   the ``TEMP_FAILURE_RETRY`` macro.
 
 - New :doc:`bugprone-parent-virtual-call
-  <clang-tidy/checks/bugprone-parent-virtual-call>` check
+  <clang-tidy/checks/bugprone-parent-virtual-call>` check.
 
   Detects and fixes calls to grand-...parent virtual methods instead of calls
   to overridden parent's virtual methods.
 
+- New :doc:`bugprone-terminating-continue
+  <clang-tidy/checks/bugprone-terminating-continue>` check
+
+  Checks if a ``continue`` statement terminates the loop.
+
 - New :doc:`bugprone-throw-keyword-missing
-  <clang-tidy/checks/bugprone-throw-keyword-missing>` check
+  <clang-tidy/checks/bugprone-throw-keyword-missing>` check.
 
   Diagnoses when a temporary object that appears to be an exception is
   constructed but not thrown.
 
 - New :doc:`bugprone-unused-return-value
-  <clang-tidy/checks/bugprone-unused-return-value>` check
+  <clang-tidy/checks/bugprone-unused-return-value>` check.
 
   Warns on unused function return values.
 
 - New :doc:`cppcoreguidelines-avoid-goto
-  <clang-tidy/checks/cppcoreguidelines-avoid-goto>` check
+  <clang-tidy/checks/cppcoreguidelines-avoid-goto>` check.
 
   The usage of ``goto`` for control flow is error prone and should be replaced
   with looping constructs. Every backward jump is rejected. Forward jumps are
   only allowed in nested loops.
 
-- New alias :doc:`fuchsia-header-anon-namespaces
-  <clang-tidy/checks/fuchsia-header-anon-namespaces>` to :doc:`google-build-namespaces
-  <clang-tidy/checks/google-build-namespaces>`
-  added.
+- New :doc:`cppcoreguidelines-narrowing-conversions
+  <clang-tidy/checks/cppcoreguidelines-narrowing-conversions>` check
+
+  Checks for narrowing conversions, e. g. ``int i = 0; i += 0.1;``.
 
 - New :doc:`fuchsia-multiple-inheritance
-  <clang-tidy/checks/fuchsia-multiple-inheritance>` check
+  <clang-tidy/checks/fuchsia-multiple-inheritance>` check.
 
   Warns if a class inherits from multiple classes that are not pure virtual.
 
 - New :doc:`abseil-string-find-startswith
-  <clang-tidy/checks/abseil-string-find-startswith>` check
+  <clang-tidy/checks/abseil-string-find-startswith>` check.
 
   Checks whether a ``std::string::find()`` result is compared with 0, and
   suggests replacing with ``absl::StartsWith()``.
 
-- New :doc:`fuchsia-statically-constructed-objects
-  <clang-tidy/checks/fuchsia-statically-constructed-objects>` check
+- New `fuchsia-restrict-system-includes
+  <http://clang.llvm.org/extra/clang-tidy/checks/fuchsia-restrict-system-includes.html>`_ check
+
+  Checks for allowed system includes and suggests removal of any others.
+
+- New `fuchsia-statically-constructed-objects
+  <http://clang.llvm.org/extra/clang-tidy/checks/fuchsia-statically-constructed-objects.html>`_ check
 
   Warns if global, non-trivial objects with static storage are constructed,
   unless the object is statically initialized with a ``constexpr`` constructor
   or has no explicit constructor.
 
 - New :doc:`fuchsia-trailing-return
-  <clang-tidy/checks/fuchsia-trailing-return>` check
+  <clang-tidy/checks/fuchsia-trailing-return>` check.
 
   Functions that have trailing returns are disallowed, except for those
   using ``decltype`` specifiers and lambda with otherwise unutterable
   return types.
 
 - New :doc:`hicpp-multiway-paths-covered
-  <clang-tidy/checks/hicpp-multiway-paths-covered>` check
+  <clang-tidy/checks/hicpp-multiway-paths-covered>` check.
 
   Checks on ``switch`` and ``if`` - ``else if`` constructs that do not cover all possible code paths.
 
 - New :doc:`modernize-use-uncaught-exceptions
-  <clang-tidy/checks/modernize-use-uncaught-exceptions>` check
+  <clang-tidy/checks/modernize-use-uncaught-exceptions>` check.
 
   Finds and replaces deprecated uses of ``std::uncaught_exception`` to
   ``std::uncaught_exceptions``.
 
 - New :doc:`portability-simd-intrinsics
-  <clang-tidy/checks/portability-simd-intrinsics>` check
+  <clang-tidy/checks/portability-simd-intrinsics>` check.
 
   Warns or suggests alternatives if SIMD intrinsics are used which can be replaced by
   ``std::experimental::simd`` operations.
 
+- New :doc:`readability-simplify-subscript-expr
+  <clang-tidy/checks/readability-simplify-subscript-expr>` check.
+
+  Simplifies subscript expressions like ``s.data()[i]`` into ``s[i]``.
+
 - New :doc:`zircon-temporary-objects
-  <clang-tidy/checks/zircon-temporary-objects>` check
+  <clang-tidy/checks/zircon-temporary-objects>` check.
 
   Warns on construction of specific temporary objects in the Zircon kernel.
 
-- Adding the missing bitwise assignment operations to 
+- Added the missing bitwise assignment operations to
   :doc:`hicpp-signed-bitwise <clang-tidy/checks/hicpp-signed-bitwise>`.
 
 - New option `MinTypeNameLength` for :doc:`modernize-use-auto
@@ -156,11 +174,19 @@ Improvements to clang-tidy
   replace types with the name length >= 5 letters only (ex. ``double``,
   ``unsigned``).
 
-- Added `VariableThreshold` option to :doc:`readability-function-size
-  <clang-tidy/checks/readability-function-size>` check
+- Add `VariableThreshold` option to :doc:`readability-function-size
+  <clang-tidy/checks/readability-function-size>` check.
 
   Flags functions that have more than a specified number of variables declared
   in the body.
+
+- The `AnalyzeTemporaryDtors` option was removed, since the corresponding
+  `cfg-temporary-dtors` option of the Static Analyzer now defaults to `true`.
+
+- New alias :doc:`fuchsia-header-anon-namespaces
+  <clang-tidy/checks/fuchsia-header-anon-namespaces>` to :doc:`google-build-namespaces
+  <clang-tidy/checks/google-build-namespaces>`
+  added.
 
 - New alias :doc:`hicpp-avoid-goto
   <clang-tidy/checks/hicpp-avoid-goto>` to :doc:`cppcoreguidelines-avoid-goto

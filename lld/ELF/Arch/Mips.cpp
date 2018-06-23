@@ -713,14 +713,21 @@ template <class ELFT> bool MIPS<ELFT>::usesOnlyLowPageBits(RelType Type) const {
 
 // Return true if the symbol is a PIC function.
 template <class ELFT> bool elf::isMipsPIC(const Defined *Sym) {
-  typedef typename ELFT::Ehdr Elf_Ehdr;
-  if (!Sym->Section || !Sym->isFunc())
+  if (!Sym->isFunc())
     return false;
 
-  auto *Sec = cast<InputSectionBase>(Sym->Section);
-  const Elf_Ehdr *Hdr = Sec->template getFile<ELFT>()->getObj().getHeader();
-  return (Sym->StOther & STO_MIPS_MIPS16) == STO_MIPS_PIC ||
-         (Hdr->e_flags & EF_MIPS_PIC);
+  if (Sym->StOther & STO_MIPS_PIC)
+    return true;
+
+  if (!Sym->Section)
+    return false;
+
+  ObjFile<ELFT> *File =
+      cast<InputSectionBase>(Sym->Section)->template getFile<ELFT>();
+  if (!File)
+    return false;
+
+  return File->getObj().getHeader()->e_flags & EF_MIPS_PIC;
 }
 
 template <class ELFT> TargetInfo *elf::getMipsTargetInfo() {

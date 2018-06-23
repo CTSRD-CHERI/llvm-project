@@ -1,6 +1,6 @@
 set(LIBFUZZER_SOURCES
-  FuzzerClangCounters.cpp
   FuzzerCrossOver.cpp
+  FuzzerDataFlowTrace.cpp
   FuzzerDriver.cpp
   FuzzerExtFunctionsDlsym.cpp
   FuzzerExtFunctionsDlsymWin.cpp
@@ -34,7 +34,7 @@ CHECK_CXX_SOURCE_COMPILES("
 
 set(LIBFUZZER_CFLAGS ${SANITIZER_COMMON_CFLAGS})
 
-if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux" AND COMPILER_RT_LIBCXX_PATH)
+if(OS_NAME MATCHES "Linux|Fuchsia" AND COMPILER_RT_LIBCXX_PATH)
   list(APPEND LIBFUZZER_CFLAGS -nostdinc++ -D_LIBCPP_ABI_VERSION=Fuzzer)
   # Remove -stdlib= which is unused when passing -nostdinc++.
   string(REGEX REPLACE "-stdlib=[a-zA-Z+]*" "" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
@@ -50,9 +50,7 @@ if(NOT HAS_THREAD_LOCAL)
   list(APPEND LIBFUZZER_CFLAGS -Dthread_local=__thread)
 endif()
 
-if(APPLE)
-  set(FUZZER_SUPPORTED_OS osx)
-endif()
+set(FUZZER_SUPPORTED_OS ${SANITIZER_COMMON_SUPPORTED_OS})
 
 add_compiler_rt_object_libraries(RTfuzzer
   OS ${FUZZER_SUPPORTED_OS}
@@ -82,7 +80,7 @@ add_compiler_rt_runtime(clang_rt.fuzzer_no_main
   CFLAGS ${LIBFUZZER_CFLAGS}
   PARENT_TARGET fuzzer)
 
-if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux" AND COMPILER_RT_LIBCXX_PATH)
+if(OS_NAME MATCHES "Linux|Fuchsia" AND COMPILER_RT_LIBCXX_PATH)
   macro(partially_link_libcxx name dir arch)
     set(cxx_${arch}_merge_dir "${CMAKE_CURRENT_BINARY_DIR}/cxx_${arch}_merge.dir")
     file(MAKE_DIRECTORY ${cxx_${arch}_merge_dir})
@@ -105,6 +103,7 @@ if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux" AND COMPILER_RT_LIBCXX_PATH)
              -fvisibility=hidden
       CMAKE_ARGS -DCMAKE_CXX_COMPILER_WORKS=ON
                  -DLIBCXX_ENABLE_EXCEPTIONS=OFF
+                 -DLIBCXX_ENABLE_SHARED=OFF
                  -DLIBCXX_CXX_ABI=none)
     target_compile_options(RTfuzzer.${arch} PRIVATE -isystem ${LIBCXX_${arch}_PREFIX}/include/c++/v1)
     add_dependencies(RTfuzzer.${arch} libcxx_fuzzer_${arch}-build)
@@ -112,11 +111,6 @@ if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux" AND COMPILER_RT_LIBCXX_PATH)
     add_dependencies(RTfuzzer_main.${arch} libcxx_fuzzer_${arch}-build)
     partially_link_libcxx(fuzzer_no_main ${LIBCXX_${arch}_PREFIX} ${arch})
     partially_link_libcxx(fuzzer ${LIBCXX_${arch}_PREFIX} ${arch})
-  endforeach()
-elseif("${CMAKE_SYSTEM_NAME}" STREQUAL "Fuchsia" AND HAVE_LIBCXX)
-  foreach(arch ${FUZZER_SUPPORTED_ARCH})
-    add_dependencies(RTfuzzer.${arch} cxx)
-    add_dependencies(RTfuzzer_main.${arch} cxx)
   endforeach()
 endif()
 

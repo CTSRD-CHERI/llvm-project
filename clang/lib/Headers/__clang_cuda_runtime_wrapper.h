@@ -62,7 +62,7 @@
 #include "cuda.h"
 #if !defined(CUDA_VERSION)
 #error "cuda.h did not define CUDA_VERSION"
-#elif CUDA_VERSION < 7000 || CUDA_VERSION > 9010
+#elif CUDA_VERSION < 7000 || CUDA_VERSION > 9020
 #error "Unsupported CUDA version!"
 #endif
 
@@ -100,11 +100,17 @@
 #include "host_config.h"
 #include "host_defines.h"
 
+// Temporarily replace "nv_weak" with weak, so __attribute__((nv_weak)) in
+// cuda_device_runtime_api.h ends up being __attribute__((weak)) which is the
+// functional equivalent of what we need.
+#pragma push_macro("nv_weak")
+#define nv_weak weak
 #undef __CUDABE__
 #undef __CUDA_LIBDEVICE__
 #define __CUDACC__
 #include "cuda_runtime.h"
 
+#pragma pop_macro("nv_weak")
 #undef __CUDACC__
 #define __CUDABE__
 
@@ -199,6 +205,11 @@ inline __host__ double __signbitd(double x) {
 #endif
 
 #if CUDA_VERSION >= 9000
+// CUDA-9.2 needs host-side memcpy for some host functions in
+// device_functions.hpp
+#if CUDA_VERSION >= 9020
+#include <string.h>
+#endif
 #include "crt/math_functions.hpp"
 #else
 #include "math_functions.hpp"

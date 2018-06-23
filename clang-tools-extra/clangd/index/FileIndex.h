@@ -19,6 +19,7 @@
 #include "../ClangdUnit.h"
 #include "Index.h"
 #include "MemIndex.h"
+#include "clang/Lex/Preprocessor.h"
 
 namespace clang {
 namespace clangd {
@@ -55,9 +56,15 @@ private:
 /// \brief This manages symbls from files and an in-memory index on all symbols.
 class FileIndex : public SymbolIndex {
 public:
+  /// If URISchemes is empty, the default schemes in SymbolCollector will be
+  /// used.
+  FileIndex(std::vector<std::string> URISchemes = {});
+
   /// \brief Update symbols in \p Path with symbols in \p AST. If \p AST is
-  /// nullptr, this removes all symbols in the file
-  void update(PathRef Path, ParsedAST *AST);
+  /// nullptr, this removes all symbols in the file.
+  /// If \p AST is not null, \p PP cannot be null and it should be the
+  /// preprocessor that was used to build \p AST.
+  void update(PathRef Path, ASTContext *AST, std::shared_ptr<Preprocessor> PP);
 
   bool
   fuzzyFind(const FuzzyFindRequest &Req,
@@ -69,7 +76,14 @@ public:
 private:
   FileSymbols FSymbols;
   MemIndex Index;
+  std::vector<std::string> URISchemes;
 };
+
+/// Retrieves namespace and class level symbols in \p AST.
+/// Exposed to assist in unit tests.
+/// If URISchemes is empty, the default schemes in SymbolCollector will be used.
+SymbolSlab indexAST(ASTContext &AST, std::shared_ptr<Preprocessor> PP,
+                    llvm::ArrayRef<std::string> URISchemes = {});
 
 } // namespace clangd
 } // namespace clang

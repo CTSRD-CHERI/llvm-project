@@ -13,7 +13,10 @@ function(check_linker_flag flag out_var)
 endfunction()
 
 check_library_exists(c fopen "" COMPILER_RT_HAS_LIBC)
-if (NOT SANITIZER_USE_COMPILER_RT)
+if (COMPILER_RT_RUNTIME_LIBRARY STREQUAL "builtins")
+  include(HandleCompilerRT)
+  find_compiler_rt_library(builtins COMPILER_RT_BUILTINS_LIBRARY)
+else()
   if (ANDROID)
     check_library_exists(gcc __gcc_personality_v0 "" COMPILER_RT_HAS_GCC_LIB)
   else()
@@ -27,9 +30,7 @@ if (COMPILER_RT_HAS_NODEFAULTLIBS_FLAG)
   if (COMPILER_RT_HAS_LIBC)
     list(APPEND CMAKE_REQUIRED_LIBRARIES c)
   endif ()
-  if (SANITIZER_USE_COMPILER_RT)
-    list(APPEND CMAKE_REQUIRED_FLAGS -rtlib=compiler-rt)
-    find_compiler_rt_library(builtins COMPILER_RT_BUILTINS_LIBRARY)
+  if (COMPILER_RT_RUNTIME_LIBRARY STREQUAL "builtins")
     list(APPEND CMAKE_REQUIRED_LIBRARIES "${COMPILER_RT_BUILTINS_LIBRARY}")
   elseif (COMPILER_RT_HAS_GCC_S_LIB)
     list(APPEND CMAKE_REQUIRED_LIBRARIES gcc_s)
@@ -108,6 +109,7 @@ if (ANDROID AND COMPILER_RT_HAS_LIBDL)
   # Android's libstdc++ has a dependency on libdl.
   list(APPEND CMAKE_REQUIRED_LIBRARIES dl)
 endif()
+check_library_exists(c++ __cxa_throw "" COMPILER_RT_HAS_LIBCXX)
 check_library_exists(stdc++ __cxa_throw "" COMPILER_RT_HAS_LIBSTDCXX)
 
 # Linker flags.
@@ -120,13 +122,6 @@ endif()
 
 # List of all architectures we can target.
 set(COMPILER_RT_SUPPORTED_ARCH)
-
-# Try to compile a very simple source file to ensure we can target the given
-# platform. We use the results of these tests to build only the various target
-# runtime libraries supported by our current compilers cross-compiling
-# abilities.
-set(SIMPLE_SOURCE ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/simple.cc)
-file(WRITE ${SIMPLE_SOURCE} "#include <stdlib.h>\n#include <stdio.h>\nint main() { printf(\"hello, world\"); }\n")
 
 # Detect whether the current target platform is 32-bit or 64-bit, and setup
 # the correct commandline flags needed to attempt to target 32-bit and 64-bit.
@@ -174,6 +169,7 @@ endmacro()
 
 set(ARM64 aarch64)
 set(ARM32 arm armhf)
+set(HEXAGON hexagon)
 set(X86 i386)
 set(X86_64 x86_64)
 set(MIPS32 mips mipsel)
@@ -196,7 +192,7 @@ set(ALL_SANITIZER_COMMON_SUPPORTED_ARCH ${X86} ${X86_64} ${PPC64}
 set(ALL_ASAN_SUPPORTED_ARCH ${X86} ${X86_64} ${ARM32} ${ARM64}
     ${MIPS32} ${MIPS64} ${PPC64} ${S390X})
 set(ALL_DFSAN_SUPPORTED_ARCH ${X86_64} ${MIPS64} ${ARM64})
-set(ALL_FUZZER_SUPPORTED_ARCH x86_64)
+set(ALL_FUZZER_SUPPORTED_ARCH ${X86_64} ${ARM64})
 
 if(APPLE)
   set(ALL_LSAN_SUPPORTED_ARCH ${X86} ${X86_64} ${MIPS64} ${ARM64})
@@ -426,7 +422,7 @@ if(APPLE)
     SANITIZER_COMMON_SUPPORTED_ARCH)
   list_intersect(FUZZER_SUPPORTED_ARCH
     ALL_FUZZER_SUPPORTED_ARCH
-    ALL_SANITIZER_COMMON_SUPPORTED_ARCH)
+    SANITIZER_COMMON_SUPPORTED_ARCH)
   list_intersect(XRAY_SUPPORTED_ARCH
     ALL_XRAY_SUPPORTED_ARCH
     SANITIZER_COMMON_SUPPORTED_ARCH)

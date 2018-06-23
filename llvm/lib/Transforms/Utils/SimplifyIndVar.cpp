@@ -26,6 +26,7 @@
 #include "llvm/IR/PatternMatch.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Transforms/Utils/Local.h"
 
 using namespace llvm;
 
@@ -147,8 +148,8 @@ Value *SimplifyIndvar::foldIVUser(Instruction *UseInst, Instruction *IVOperand) 
   if (SE->getSCEV(UseInst) != FoldedExpr)
     return nullptr;
 
-  DEBUG(dbgs() << "INDVARS: Eliminated IV operand: " << *IVOperand
-        << " -> " << *UseInst << '\n');
+  LLVM_DEBUG(dbgs() << "INDVARS: Eliminated IV operand: " << *IVOperand
+                    << " -> " << *UseInst << '\n');
 
   UseInst->setOperand(OperIdx, IVSrc);
   assert(SE->getSCEV(UseInst) == FoldedExpr && "bad SCEV with folded oper");
@@ -221,7 +222,7 @@ bool SimplifyIndvar::makeIVComparisonInvariant(ICmpInst *ICmp,
     // for now.
     return false;
 
-  DEBUG(dbgs() << "INDVARS: Simplified comparison: " << *ICmp << '\n');
+  LLVM_DEBUG(dbgs() << "INDVARS: Simplified comparison: " << *ICmp << '\n');
   ICmp->setPredicate(InvariantPredicate);
   ICmp->setOperand(0, NewLHS);
   ICmp->setOperand(1, NewRHS);
@@ -252,11 +253,11 @@ void SimplifyIndvar::eliminateIVComparison(ICmpInst *ICmp, Value *IVOperand) {
   if (SE->isKnownPredicate(Pred, S, X)) {
     ICmp->replaceAllUsesWith(ConstantInt::getTrue(ICmp->getContext()));
     DeadInsts.emplace_back(ICmp);
-    DEBUG(dbgs() << "INDVARS: Eliminated comparison: " << *ICmp << '\n');
+    LLVM_DEBUG(dbgs() << "INDVARS: Eliminated comparison: " << *ICmp << '\n');
   } else if (SE->isKnownPredicate(ICmpInst::getInversePredicate(Pred), S, X)) {
     ICmp->replaceAllUsesWith(ConstantInt::getFalse(ICmp->getContext()));
     DeadInsts.emplace_back(ICmp);
-    DEBUG(dbgs() << "INDVARS: Eliminated comparison: " << *ICmp << '\n');
+    LLVM_DEBUG(dbgs() << "INDVARS: Eliminated comparison: " << *ICmp << '\n');
   } else if (makeIVComparisonInvariant(ICmp, IVOperand)) {
     // fallthrough to end of function
   } else if (ICmpInst::isSigned(OriginalPred) &&
@@ -267,7 +268,8 @@ void SimplifyIndvar::eliminateIVComparison(ICmpInst *ICmp, Value *IVOperand) {
     // we turn the instruction's predicate to its unsigned version. Note that
     // we cannot rely on Pred here unless we check if we have swapped it.
     assert(ICmp->getPredicate() == OriginalPred && "Predicate changed?");
-    DEBUG(dbgs() << "INDVARS: Turn to unsigned comparison: " << *ICmp << '\n');
+    LLVM_DEBUG(dbgs() << "INDVARS: Turn to unsigned comparison: " << *ICmp
+                      << '\n');
     ICmp->setPredicate(ICmpInst::getUnsignedPredicate(OriginalPred));
   } else
     return;
@@ -293,7 +295,7 @@ bool SimplifyIndvar::eliminateSDiv(BinaryOperator *SDiv) {
         SDiv->getName() + ".udiv", SDiv);
     UDiv->setIsExact(SDiv->isExact());
     SDiv->replaceAllUsesWith(UDiv);
-    DEBUG(dbgs() << "INDVARS: Simplified sdiv: " << *SDiv << '\n');
+    LLVM_DEBUG(dbgs() << "INDVARS: Simplified sdiv: " << *SDiv << '\n');
     ++NumSimplifiedSDiv;
     Changed = true;
     DeadInsts.push_back(SDiv);
@@ -309,7 +311,7 @@ void SimplifyIndvar::replaceSRemWithURem(BinaryOperator *Rem) {
   auto *URem = BinaryOperator::Create(BinaryOperator::URem, N, D,
                                       Rem->getName() + ".urem", Rem);
   Rem->replaceAllUsesWith(URem);
-  DEBUG(dbgs() << "INDVARS: Simplified srem: " << *Rem << '\n');
+  LLVM_DEBUG(dbgs() << "INDVARS: Simplified srem: " << *Rem << '\n');
   ++NumSimplifiedSRem;
   Changed = true;
   DeadInsts.emplace_back(Rem);
@@ -318,7 +320,7 @@ void SimplifyIndvar::replaceSRemWithURem(BinaryOperator *Rem) {
 // i % n  -->  i  if i is in [0,n).
 void SimplifyIndvar::replaceRemWithNumerator(BinaryOperator *Rem) {
   Rem->replaceAllUsesWith(Rem->getOperand(0));
-  DEBUG(dbgs() << "INDVARS: Simplified rem: " << *Rem << '\n');
+  LLVM_DEBUG(dbgs() << "INDVARS: Simplified rem: " << *Rem << '\n');
   ++NumElimRem;
   Changed = true;
   DeadInsts.emplace_back(Rem);
@@ -332,7 +334,7 @@ void SimplifyIndvar::replaceRemWithNumeratorOrZero(BinaryOperator *Rem) {
   SelectInst *Sel =
       SelectInst::Create(ICmp, ConstantInt::get(T, 0), N, "iv.rem", Rem);
   Rem->replaceAllUsesWith(Sel);
-  DEBUG(dbgs() << "INDVARS: Simplified rem: " << *Rem << '\n');
+  LLVM_DEBUG(dbgs() << "INDVARS: Simplified rem: " << *Rem << '\n');
   ++NumElimRem;
   Changed = true;
   DeadInsts.emplace_back(Rem);
@@ -548,8 +550,8 @@ bool SimplifyIndvar::replaceIVUserWithLoopInvariant(Instruction *I) {
   auto *Invariant = Rewriter.expandCodeFor(S, I->getType(), IP);
 
   I->replaceAllUsesWith(Invariant);
-  DEBUG(dbgs() << "INDVARS: Replace IV user: " << *I
-               << " with loop invariant: " << *S << '\n');
+  LLVM_DEBUG(dbgs() << "INDVARS: Replace IV user: " << *I
+                    << " with loop invariant: " << *S << '\n');
   ++NumFoldedUser;
   Changed = true;
   DeadInsts.emplace_back(I);
@@ -589,7 +591,7 @@ bool SimplifyIndvar::eliminateIdentitySCEV(Instruction *UseInst,
   if (!LI->replacementPreservesLCSSAForm(UseInst, IVOperand))
     return false;
 
-  DEBUG(dbgs() << "INDVARS: Eliminated identity: " << *UseInst << '\n');
+  LLVM_DEBUG(dbgs() << "INDVARS: Eliminated identity: " << *UseInst << '\n');
 
   UseInst->replaceAllUsesWith(IVOperand);
   ++NumElimIdentity;
@@ -771,6 +773,15 @@ void SimplifyIndvar::simplifyUsers(PHINode *CurrIV, IVVisitor *V) {
       SimpleIVUsers.pop_back_val();
     Instruction *UseInst = UseOper.first;
 
+    // If a user of the IndVar is trivially dead, we prefer just to mark it dead
+    // rather than try to do some complex analysis or transformation (such as
+    // widening) basing on it.
+    // TODO: Propagate TLI and pass it here to handle more cases.
+    if (isInstructionTriviallyDead(UseInst, /* TLI */ nullptr)) {
+      DeadInsts.emplace_back(UseInst);
+      continue;
+    }
+
     // Bypass back edges to avoid extra work.
     if (UseInst == CurrIV) continue;
 
@@ -783,7 +794,7 @@ void SimplifyIndvar::simplifyUsers(PHINode *CurrIV, IVVisitor *V) {
     for (unsigned N = 0; IVOperand; ++N) {
       assert(N <= Simplified.size() && "runaway iteration");
 
-      Value *NewOper = foldIVUser(UseOper.first, IVOperand);
+      Value *NewOper = foldIVUser(UseInst, IVOperand);
       if (!NewOper)
         break; // done folding
       IVOperand = dyn_cast<Instruction>(NewOper);
@@ -791,12 +802,12 @@ void SimplifyIndvar::simplifyUsers(PHINode *CurrIV, IVVisitor *V) {
     if (!IVOperand)
       continue;
 
-    if (eliminateIVUser(UseOper.first, IVOperand)) {
+    if (eliminateIVUser(UseInst, IVOperand)) {
       pushIVUsers(IVOperand, L, Simplified, SimpleIVUsers);
       continue;
     }
 
-    if (BinaryOperator *BO = dyn_cast<BinaryOperator>(UseOper.first)) {
+    if (BinaryOperator *BO = dyn_cast<BinaryOperator>(UseInst)) {
       if ((isa<OverflowingBinaryOperator>(BO) &&
            strengthenOverflowingOperation(BO, IVOperand)) ||
           (isa<ShlOperator>(BO) && strengthenRightShift(BO, IVOperand))) {
@@ -806,13 +817,13 @@ void SimplifyIndvar::simplifyUsers(PHINode *CurrIV, IVVisitor *V) {
       }
     }
 
-    CastInst *Cast = dyn_cast<CastInst>(UseOper.first);
+    CastInst *Cast = dyn_cast<CastInst>(UseInst);
     if (V && Cast) {
       V->visitCast(Cast);
       continue;
     }
-    if (isSimpleIVUser(UseOper.first, L, SE)) {
-      pushIVUsers(UseOper.first, L, Simplified, SimpleIVUsers);
+    if (isSimpleIVUser(UseInst, L, SE)) {
+      pushIVUsers(UseInst, L, Simplified, SimpleIVUsers);
     }
   }
 }

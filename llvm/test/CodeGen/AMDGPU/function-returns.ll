@@ -121,6 +121,15 @@ define double @f64_func_void() #0 {
   ret double %val
 }
 
+; GCN-LABEL: {{^}}v2f64_func_void:
+; GCN: buffer_load_dwordx4 v[0:3], off
+; GCN-NEXT: s_waitcnt vmcnt(0)
+; GCN-NEXT: s_setpc_b64
+define <2 x double> @v2f64_func_void() #0 {
+  %val = load <2 x double>, <2 x double> addrspace(1)* undef
+  ret <2 x double> %val
+}
+
 ; GCN-LABEL: {{^}}v2i32_func_void:
 ; GCN: buffer_load_dwordx2 v[0:1], off
 ; GCN-NEXT: s_waitcnt vmcnt(0)
@@ -282,10 +291,9 @@ define <2 x i16> @v2i16_func_void() #0 {
 }
 
 ; GCN-LABEL: {{^}}v3i16_func_void:
-; GFX9: buffer_load_dwordx2 v[0:1], off
-; GFX9: s_waitcnt vmcnt(0)
-; GFX9: v_lshrrev_b32
-; GFX9: s_setpc_b64
+; GFX9: buffer_load_dwordx2 v{{\[[0-9]+:[0-9]+\]}}, off
+; GFX9-NEXT: s_waitcnt vmcnt(0)
+; GFX9-NEXT: s_setpc_b64
 define <3 x i16> @v3i16_func_void() #0 {
   %val = load <3 x i16>, <3 x i16> addrspace(1)* undef
   ret <3 x i16> %val
@@ -300,13 +308,21 @@ define <4 x i16> @v4i16_func_void() #0 {
   ret <4 x i16> %val
 }
 
+; GCN-LABEL: {{^}}v4f16_func_void:
+; GFX9: buffer_load_dwordx2 v[0:1], off
+; GFX9-NEXT: s_waitcnt vmcnt(0)
+; GFX9-NEXT: s_setpc_b64
+define <4 x half> @v4f16_func_void() #0 {
+  %val = load <4 x half>, <4 x half> addrspace(1)* undef
+  ret <4 x half> %val
+}
+
 ; FIXME: Should not scalarize
 ; GCN-LABEL: {{^}}v5i16_func_void:
 ; GFX9: buffer_load_dwordx2 v[0:1]
 ; GFX9: buffer_load_ushort v4
+; GFX9: v_lshrrev_b32_e32 v5, 16, v0
 ; GFX9: v_lshrrev_b32_e32 v3, 16, v1
-; GFX9: v_mov_b32_e32 v2, v1
-; GFX9: v_lshrrev_b32_e32 v1, 16, v0
 ; GCN: s_setpc_b64
 define <5 x i16> @v5i16_func_void() #0 {
   %ptr = load volatile <5 x i16> addrspace(1)*, <5 x i16> addrspace(1)* addrspace(4)* undef
@@ -350,10 +366,9 @@ define <16 x i8> @v16i8_func_void() #0 {
 ; FIXME: Should pack
 ; GCN-LABEL: {{^}}v4i8_func_void:
 ; GCN: buffer_load_dword v0
+; GCN-DAG: v_lshrrev_b32_e32 v1, 8, v0
 ; GCN-DAG: v_lshrrev_b32_e32 v2, 16, v0
 ; GCN-DAG: v_lshrrev_b32_e32 v3, 24, v0
-; CI-DAG: v_bfe_u32 v1, v0, 8, 8
-; GFX89-DAG: v_lshrrev_b16_e32 v1, 8, v0
 ; GCN: s_setpc_b64
 define <4  x i8> @v4i8_func_void() #0 {
   %ptr = load volatile <4  x i8> addrspace(1)*, <4  x i8> addrspace(1)* addrspace(4)* undef

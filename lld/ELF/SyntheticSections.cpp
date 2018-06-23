@@ -195,8 +195,6 @@ MipsOptionsSection<ELFT> *MipsOptionsSection<ELFT>::create() {
 
       auto *Opt = reinterpret_cast<const Elf_Mips_Options *>(D.data());
       if (Opt->kind == ODK_REGINFO) {
-        if (Config->Relocatable && Opt->getRegInfo().ri_gp_value)
-          error(Filename + ": unsupported non-zero ri_gp_value");
         Reginfo.ri_gprmask |= Opt->getRegInfo().ri_gprmask;
         Sec->getFile<ELFT>()->MipsGp0 = Opt->getRegInfo().ri_gp_value;
         break;
@@ -247,10 +245,8 @@ MipsReginfoSection<ELFT> *MipsReginfoSection<ELFT>::create() {
       error(toString(Sec->File) + ": invalid size of .reginfo section");
       return nullptr;
     }
-    auto *R = reinterpret_cast<const Elf_Mips_RegInfo *>(Sec->Data.data());
-    if (Config->Relocatable && R->ri_gp_value)
-      error(toString(Sec->File) + ": unsupported non-zero ri_gp_value");
 
+    auto *R = reinterpret_cast<const Elf_Mips_RegInfo *>(Sec->Data.data());
     Reginfo.ri_gprmask |= R->ri_gprmask;
     Sec->getFile<ELFT>()->MipsGp0 = R->ri_gp_value;
   };
@@ -436,7 +432,7 @@ bool EhFrameSection::isFdeLive(EhSectionPiece &Fde, ArrayRef<RelTy> Rels) {
 // one and associates FDEs to the CIE.
 template <class ELFT, class RelTy>
 void EhFrameSection::addSectionAux(EhInputSection *Sec, ArrayRef<RelTy> Rels) {
-  DenseMap<size_t, CieRecord *> OffsetToCie;
+  OffsetToCie.clear();
   for (EhSectionPiece &Piece : Sec->Pieces) {
     // The empty record is the end marker.
     if (Piece.Size == 4)
@@ -475,10 +471,6 @@ template <class ELFT> void EhFrameSection::addSection(InputSectionBase *C) {
   for (auto *DS : Sec->DependentSections)
     DependentSections.push_back(DS);
 
-  // .eh_frame is a sequence of CIE or FDE records. This function
-  // splits it into pieces so that we can call
-  // SplitInputSection::getSectionPiece on the section.
-  Sec->split<ELFT>();
   if (Sec->Pieces.empty())
     return;
 
@@ -516,10 +508,10 @@ void EhFrameSection::finalizeContents() {
   }
 
   // The LSB standard does not allow a .eh_frame section with zero
-  // Call Frame Information records. Therefore add a CIE record length
-  // 0 as a terminator if this .eh_frame section is empty.
-  if (Off == 0)
-    Off = 4;
+  // Call Frame Information records. glibc unwind-dw2-fde.c
+  // classify_object_over_fdes expects there is a CIE record length 0 as a
+  // terminator. Thus we add one unconditionally.
+  Off += 4;
 
   this->Size = Off;
 }
@@ -659,6 +651,14 @@ void GotSection::writeTo(uint8_t *Buf) {
   relocateAlloc(Buf - OutSecOff, Buf - OutSecOff + Size);
 }
 
+static uint64_t getMipsPageAddr(uint64_t Addr) {
+  return (Addr + 0x8000) & ~0xffff;
+}
+
+static uint64_t getMipsPageCount(uint64_t Size) {
+  return (Size + 0xfffe) / 0xffff + 1;
+}
+
 MipsGotSection::MipsGotSection()
     : SyntheticSection(SHF_ALLOC | SHF_WRITE | SHF_MIPS_GPREL, SHT_PROGBITS, 16,
                        ".got") {}
@@ -666,9 +666,12 @@ MipsGotSection::MipsGotSection()
 void MipsGotSection::addEntry(InputFile &File, Symbol &Sym, int64_t Addend,
                               RelExpr Expr) {
   FileGot &G = getGot(File);
-  if (Expr == R_MIPS_GOT_LOCAL_PAGE)
-    G.PagesMap.insert({Sym.getOutputSection(), {}});
-  else if (Sym.isTls())
+  if (Expr == R_MIPS_GOT_LOCAL_PAGE) {
+    if (const OutputSection *OS = Sym.getOutputSection())
+      G.PagesMap.insert({OS, {}});
+    else
+      G.Local16.insert({{nullptr, getMipsPageAddr(Sym.getVA(Addend))}, 0});
+  } else if (Sym.isTls())
     G.Tls.insert({&Sym, 0});
   else if (Sym.IsPreemptible && Expr == R_ABS)
     G.Relocs.insert({&Sym, 0});
@@ -691,14 +694,6 @@ void MipsGotSection::addTlsIndex(InputFile &File) {
 size_t MipsGotSection::FileGot::getEntriesNum() const {
   return getPageEntriesNum() + Local16.size() + Global.size() + Relocs.size() +
          Tls.size() + DynTlsSymbols.size() * 2;
-}
-
-static uint64_t getMipsPageAddr(uint64_t Addr) {
-  return (Addr + 0x8000) & ~0xffff;
-}
-
-static uint64_t getMipsPageCount(uint64_t Size) {
-  return (Size + 0xfffe) / 0xffff + 1;
 }
 
 size_t MipsGotSection::FileGot::getPageEntriesNum() const {
@@ -727,49 +722,52 @@ MipsGotSection::FileGot &MipsGotSection::getGot(InputFile &F) {
   return Gots[*F.MipsGotIndex];
 }
 
-uint64_t MipsGotSection::getPageEntryOffset(const InputFile &F,
+uint64_t MipsGotSection::getPageEntryOffset(const InputFile *F,
                                             const Symbol &Sym,
                                             int64_t Addend) const {
-  const FileGot &G = Gots[*F.MipsGotIndex];
-  const OutputSection *OutSec = Sym.getOutputSection();
-  uint64_t SecAddr = getMipsPageAddr(OutSec->Addr);
-  uint64_t SymAddr = getMipsPageAddr(Sym.getVA(Addend));
-  uint64_t Index =
-      G.PagesMap.lookup(OutSec).FirstIndex + (SymAddr - SecAddr) / 0xffff;
+  const FileGot &G = Gots[*F->MipsGotIndex];
+  uint64_t Index = 0;
+  if (const OutputSection *OutSec = Sym.getOutputSection()) {
+    uint64_t SecAddr = getMipsPageAddr(OutSec->Addr);
+    uint64_t SymAddr = getMipsPageAddr(Sym.getVA(Addend));
+    Index = G.PagesMap.lookup(OutSec).FirstIndex + (SymAddr - SecAddr) / 0xffff;
+  } else {
+    Index = G.Local16.lookup({nullptr, getMipsPageAddr(Sym.getVA(Addend))});
+  }
   return Index * Config->Wordsize;
 }
 
-uint64_t MipsGotSection::getSymEntryOffset(const InputFile &F, const Symbol &S,
+uint64_t MipsGotSection::getSymEntryOffset(const InputFile *F, const Symbol &S,
                                            int64_t Addend) const {
-  const FileGot &G = Gots[*F.MipsGotIndex];
+  const FileGot &G = Gots[*F->MipsGotIndex];
   Symbol *Sym = const_cast<Symbol *>(&S);
   if (Sym->isTls())
-    return G.Tls.find(Sym)->second * Config->Wordsize;
+    return G.Tls.lookup(Sym) * Config->Wordsize;
   if (Sym->IsPreemptible)
-    return G.Global.find(Sym)->second * Config->Wordsize;
-  return G.Local16.find({Sym, Addend})->second * Config->Wordsize;
+    return G.Global.lookup(Sym) * Config->Wordsize;
+  return G.Local16.lookup({Sym, Addend}) * Config->Wordsize;
 }
 
-uint64_t MipsGotSection::getTlsIndexOffset(const InputFile &F) const {
-  const FileGot &G = Gots[*F.MipsGotIndex];
-  return G.DynTlsSymbols.find(nullptr)->second * Config->Wordsize;
+uint64_t MipsGotSection::getTlsIndexOffset(const InputFile *F) const {
+  const FileGot &G = Gots[*F->MipsGotIndex];
+  return G.DynTlsSymbols.lookup(nullptr) * Config->Wordsize;
 }
 
-uint64_t MipsGotSection::getGlobalDynOffset(const InputFile &F,
+uint64_t MipsGotSection::getGlobalDynOffset(const InputFile *F,
                                             const Symbol &S) const {
-  const FileGot &G = Gots[*F.MipsGotIndex];
+  const FileGot &G = Gots[*F->MipsGotIndex];
   Symbol *Sym = const_cast<Symbol *>(&S);
-  return G.DynTlsSymbols.find(Sym)->second * Config->Wordsize;
+  return G.DynTlsSymbols.lookup(Sym) * Config->Wordsize;
 }
 
 const Symbol *MipsGotSection::getFirstGlobalEntry() const {
-  if (!Gots.empty()) {
-    const FileGot &PrimGot = Gots.front();
-    if (!PrimGot.Global.empty())
-      return PrimGot.Global.front().first;
-    if (!PrimGot.Relocs.empty())
-      return PrimGot.Relocs.front().first;
-  }
+  if (Gots.empty())
+    return nullptr;
+  const FileGot &PrimGot = Gots.front();
+  if (!PrimGot.Global.empty())
+    return PrimGot.Global.front().first;
+  if (!PrimGot.Relocs.empty())
+    return PrimGot.Relocs.front().first;
   return nullptr;
 }
 
@@ -925,34 +923,32 @@ template <class ELFT> void MipsGotSection::build() {
   for (FileGot &Got : Gots) {
     // Create dynamic relocations for TLS entries.
     for (std::pair<Symbol *, size_t> &P : Got.Tls) {
+      Symbol *S = P.first;
       uint64_t Offset = P.second * Config->Wordsize;
-      if (P.first->IsPreemptible)
-        InX::RelaDyn->addReloc(
-            {Target->TlsGotRel, this, Offset, false, P.first, 0});
+      if (S->IsPreemptible)
+        InX::RelaDyn->addReloc(Target->TlsGotRel, this, Offset, S);
     }
     for (std::pair<Symbol *, size_t> &P : Got.DynTlsSymbols) {
+      Symbol *S = P.first;
       uint64_t Offset = P.second * Config->Wordsize;
-      if (P.first == nullptr) {
+      if (S == nullptr) {
         if (!Config->Pic)
           continue;
-        InX::RelaDyn->addReloc(
-            {Target->TlsModuleIndexRel, this, Offset, false, nullptr, 0});
+        InX::RelaDyn->addReloc(Target->TlsModuleIndexRel, this, Offset, S);
       } else {
         // When building a shared library we still need a dynamic relocation
         // for the module index. Therefore only checking for
-        // P.first->IsPreemptible is not sufficient (This happens e.g. for
+        // S->IsPreemptible is not sufficient (this happens e.g. for
         // thread-locals that have been marked as local through a linker script)
-        if (!P.first->IsPreemptible && !Config->Pic)
+        if (!S->IsPreemptible && !Config->Pic)
           continue;
-        InX::RelaDyn->addReloc(
-            {Target->TlsModuleIndexRel, this, Offset, false, P.first, 0});
-        // We can always skip writing the TLS offset dynamic reloc for
-        // non-preemptible symbols (even in PIC code)
-        if (!P.first->IsPreemptible)
+        InX::RelaDyn->addReloc(Target->TlsModuleIndexRel, this, Offset, S);
+        // However, we can skip writing the TLS offset reloc for non-preemptible
+        // symbols since it is known even in shared libraries
+        if (!S->IsPreemptible)
           continue;
         Offset += Config->Wordsize;
-        InX::RelaDyn->addReloc(
-            {Target->TlsOffsetRel, this, Offset, false, P.first, 0});
+        InX::RelaDyn->addReloc(Target->TlsOffsetRel, this, Offset, S);
       }
     }
 
@@ -964,8 +960,7 @@ template <class ELFT> void MipsGotSection::build() {
     // Dynamic relocations for "global" entries.
     for (const std::pair<Symbol *, size_t> &P : Got.Global) {
       uint64_t Offset = P.second * Config->Wordsize;
-      InX::RelaDyn->addReloc(
-          {Target->RelativeRel, this, Offset, false, P.first, 0});
+      InX::RelaDyn->addReloc(Target->RelativeRel, this, Offset, P.first);
     }
     if (!Config->Pic)
       continue;
@@ -999,7 +994,7 @@ uint64_t MipsGotSection::getGp(const InputFile *F) const {
   // individual _gp values.
   if (!F || !F->MipsGotIndex.hasValue() || *F->MipsGotIndex == 0)
     return ElfSym::MipsGp->getVA(0);
-  return this->getVA() + Gots[*F->MipsGotIndex].StartIndex * Config->Wordsize +
+  return getVA() + Gots[*F->MipsGotIndex].StartIndex * Config->Wordsize +
          0x7ff0;
 }
 
@@ -1058,10 +1053,8 @@ void MipsGotSection::writeTo(uint8_t *Buf) {
         Write(P.second, nullptr, 1);
       else if (P.first && !P.first->IsPreemptible) {
         // If we are emitting PIC code with relocations we mustn't write
-        // anything to the GOT here since we already added a dynamic relocation.
-        // This doesn’t matter for RELA but if the output is using Elf_Rel
-        // relocations the value 1 will be treated as an addend and will cause
-        // crashes at runtime
+        // anything to the GOT here. When using Elf_Rel relocations the value
+        // one will be treated as an addend and will cause crashes at runtime
         if (!Config->Pic)
           Write(P.second, nullptr, 1);
         Write(P.second + 1, P.first, -0x8000);
@@ -1070,12 +1063,18 @@ void MipsGotSection::writeTo(uint8_t *Buf) {
   }
 }
 
+// On PowerPC the .plt section is used to hold the table of function addresses
+// instead of the .got.plt, and the type is SHT_NOBITS similar to a .bss
+// section. I don't know why we have a BSS style type for the section but it is
+// consitent across both 64-bit PowerPC ABIs as well as the 32-bit PowerPC ABI.
 GotPltSection::GotPltSection()
-    : SyntheticSection(SHF_ALLOC | SHF_WRITE, SHT_PROGBITS,
-                       Target->GotPltEntrySize, ".got.plt") {}
+    : SyntheticSection(SHF_ALLOC | SHF_WRITE,
+                       Config->EMachine == EM_PPC64 ? SHT_NOBITS : SHT_PROGBITS,
+                       Target->GotPltEntrySize,
+                       Config->EMachine == EM_PPC64 ? ".plt" : ".got.plt") {}
 
 void GotPltSection::addEntry(Symbol &Sym) {
-  Sym.GotPltIndex = Target->GotPltHeaderEntriesNum + Entries.size();
+  assert(Sym.PltIndex == Entries.size());
   Entries.push_back(&Sym);
 }
 
@@ -1101,16 +1100,29 @@ bool GotPltSection::empty() const {
          !(ElfSym::GlobalOffsetTable && Target->GotBaseSymInGotPlt);
 }
 
-// On ARM the IgotPltSection is part of the GotSection, on other Targets it is
-// part of the .got.plt
+static StringRef getIgotPltName() {
+  // On ARM the IgotPltSection is part of the GotSection.
+  if (Config->EMachine == EM_ARM)
+    return ".got";
+
+  // On PowerPC64 the GotPltSection is renamed to '.plt' so the IgotPltSection
+  // needs to be named the same.
+  if (Config->EMachine == EM_PPC64)
+    return ".plt";
+
+  return ".got.plt";
+}
+
+// On PowerPC64 the GotPltSection type is SHT_NOBITS so we have to follow suit
+// with the IgotPltSection.
 IgotPltSection::IgotPltSection()
-    : SyntheticSection(SHF_ALLOC | SHF_WRITE, SHT_PROGBITS,
-                       Target->GotPltEntrySize,
-                       Config->EMachine == EM_ARM ? ".got" : ".got.plt") {}
+    : SyntheticSection(SHF_ALLOC | SHF_WRITE,
+                       Config->EMachine == EM_PPC64 ? SHT_NOBITS : SHT_PROGBITS,
+                       Target->GotPltEntrySize, getIgotPltName()) {}
 
 void IgotPltSection::addEntry(Symbol &Sym) {
   Sym.IsInIgot = true;
-  Sym.GotPltIndex = Entries.size();
+  assert(Sym.PltIndex == Entries.size());
   Entries.push_back(&Sym);
 }
 
@@ -1381,6 +1393,15 @@ template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
   if (In<ELFT>::CapRelocs && !In<ELFT>::CapRelocs->empty()) {
     addInSec(DT_CHERI___CAPRELOCS, In<ELFT>::CapRelocs);
     addSize(DT_CHERI___CAPRELOCSSZ, In<ELFT>::CapRelocs->getParent());
+  }
+  // Glink dynamic tag is required by the V2 abi if the plt section isn't empty.
+  if (Config->EMachine == EM_PPC64 && !InX::Plt->empty()) {
+    // The Glink tag points to 32 bytes before the first lazy symbol resolution
+    // stub, which starts directly after the header.
+    Entries.push_back({DT_PPC64_GLINK, [=] {
+                         unsigned Offset = Target->PltHeaderSize - 32;
+                         return InX::Plt->getVA(0) + Offset;
+                       }});
   }
 
   addInt(DT_NULL, 0);
@@ -1713,10 +1734,12 @@ SymbolTableBaseSection::SymbolTableBaseSection(StringTableSection &StrTabSec)
 static bool sortMipsSymbols(const SymbolTableEntry &L,
                             const SymbolTableEntry &R) {
   // Sort entries related to non-local preemptible symbols by GOT indexes.
-  // All other entries go to the first part of GOT in arbitrary order.
-  if (!L.Sym->isInGot() || !R.Sym->isInGot())
-    return !L.Sym->isInGot();
-  return L.Sym->GotIndex < R.Sym->GotIndex;
+  // All other entries go to the beginning of a dynsym in arbitrary order.
+  if (L.Sym->isInGot() && R.Sym->isInGot())
+    return L.Sym->GotIndex < R.Sym->GotIndex;
+  if (!L.Sym->isInGot() && !R.Sym->isInGot())
+    return false;
+  return !L.Sym->isInGot();
 }
 
 void SymbolTableBaseSection::finalizeContents() {
@@ -1842,6 +1865,8 @@ template <class ELFT> void SymbolTableSection<ELFT>::writeTo(uint8_t *Buf) {
         CommonSec = dyn_cast_or_null<BssSection>(D->Section);
     if (CommonSec)
       ESym->st_shndx = SHN_COMMON;
+    else if (Sym->NeedsPltAddr)
+      ESym->st_shndx = SHN_UNDEF;
     else if (const OutputSection *OutSec = Sym->getOutputSection())
       ESym->st_shndx = OutSec->SectionIndex;
     else if (isa<Defined>(Sym))
@@ -1883,9 +1908,11 @@ template <class ELFT> void SymbolTableSection<ELFT>::writeTo(uint8_t *Buf) {
         ESym->st_other |= STO_MIPS_PLT;
       if (isMicroMips()) {
         // Set STO_MIPS_MICROMIPS flag and less-significant bit for
-        // defined microMIPS symbols and shared symbols with PLT record.
-        if ((Sym->isDefined() && (Sym->StOther & STO_MIPS_MICROMIPS)) ||
-            (Sym->isShared() && Sym->NeedsPltAddr)) {
+        // a defined microMIPS symbol and symbol should point to its
+        // PLT entry (in case of microMIPS, PLT entries always contain
+        // microMIPS code).
+        if (Sym->isDefined() &&
+            ((Sym->StOther & STO_MIPS_MICROMIPS) || Sym->NeedsPltAddr)) {
           if (StrTabSec.isDynamic())
             ESym->st_value |= 1;
           ESym->st_other |= STO_MIPS_MICROMIPS;
@@ -2027,10 +2054,6 @@ void GnuHashTableSection::addSymbols(std::vector<SymbolTableEntry> &V) {
   // its type correctly.
   std::vector<SymbolTableEntry>::iterator Mid =
       std::stable_partition(V.begin(), V.end(), [](const SymbolTableEntry &S) {
-        // Shared symbols that this executable preempts are special. The dynamic
-        // linker has to look them up, so they have to be in the hash table.
-        if (auto *SS = dyn_cast<SharedSymbol>(S.Sym))
-          return SS->CopyRelSec == nullptr && !SS->NeedsPltAddr;
         return !S.Sym->isDefined();
       });
 
@@ -2103,8 +2126,11 @@ void HashTableSection::writeTo(uint8_t *Buf) {
   }
 }
 
+// On PowerPC64 the lazy symbol resolvers go into the `global linkage table`
+// in the .glink section, rather then the typical .plt section.
 PltSection::PltSection(bool IsIplt)
-    : SyntheticSection(SHF_ALLOC | SHF_EXECINSTR, SHT_PROGBITS, 16, ".plt"),
+    : SyntheticSection(SHF_ALLOC | SHF_EXECINSTR, SHT_PROGBITS, 16,
+                       Config->EMachine == EM_PPC64 ? ".glink" : ".plt"),
       HeaderSize(IsIplt ? 0 : Target->PltHeaderSize), IsIplt(IsIplt) {
   // The PLT needs to be writable on SPARC as the dynamic linker will
   // modify the instructions in the PLT entries.
@@ -2555,9 +2581,8 @@ VersionNeedSection<ELFT>::VersionNeedSection()
   NextIndex = getVerDefNum() + 1;
 }
 
-template <class ELFT>
-void VersionNeedSection<ELFT>::addSymbol(SharedSymbol *SS) {
-  SharedFile<ELFT> &File = SS->getFile<ELFT>();
+template <class ELFT> void VersionNeedSection<ELFT>::addSymbol(Symbol *SS) {
+  auto &File = cast<SharedFile<ELFT>>(*SS->File);
   if (SS->VerdefIndex == VER_NDX_GLOBAL) {
     SS->VersionId = VER_NDX_GLOBAL;
     return;
@@ -2736,9 +2761,18 @@ static MergeSyntheticSection *createMergeSynthetic(StringRef Name,
 
 // Debug sections may be compressed by zlib. Decompress if exists.
 void elf::decompressSections() {
+  parallelForEach(InputSections,
+                  [](InputSectionBase *Sec) { Sec->maybeDecompress(); });
+}
+
+template <class ELFT> void elf::splitSections() {
+  // splitIntoPieces needs to be called on each MergeInputSection
+  // before calling finalizeContents().
   parallelForEach(InputSections, [](InputSectionBase *Sec) {
-    if (Sec->Live)
-      Sec->maybeDecompress();
+    if (auto *S = dyn_cast<MergeInputSection>(Sec))
+      S->splitIntoPieces();
+    else if (auto *Eh = dyn_cast<EhInputSection>(Sec))
+      Eh->split<ELFT>();
   });
 }
 
@@ -2750,13 +2784,6 @@ void elf::decompressSections() {
 // that it replaces. It then finalizes each synthetic section in order
 // to compute an output offset for each piece of each input section.
 void elf::mergeSections() {
-  // splitIntoPieces needs to be called on each MergeInputSection
-  // before calling finalizeContents(). Do that first.
-  parallelForEach(InputSections, [](InputSectionBase *Sec) {
-    if (auto *S = dyn_cast<MergeInputSection>(Sec))
-      S->splitIntoPieces();
-  });
-
   std::vector<MergeSyntheticSection *> MergeSections;
   for (InputSectionBase *&S : InputSections) {
     MergeInputSection *MS = dyn_cast<MergeInputSection>(S);
@@ -2901,6 +2928,11 @@ template GdbIndexSection *elf::createGdbIndex<ELF32LE>();
 template GdbIndexSection *elf::createGdbIndex<ELF32BE>();
 template GdbIndexSection *elf::createGdbIndex<ELF64LE>();
 template GdbIndexSection *elf::createGdbIndex<ELF64BE>();
+
+template void elf::splitSections<ELF32LE>();
+template void elf::splitSections<ELF32BE>();
+template void elf::splitSections<ELF64LE>();
+template void elf::splitSections<ELF64BE>();
 
 template void EhFrameSection::addSection<ELF32LE>(InputSectionBase *);
 template void EhFrameSection::addSection<ELF32BE>(InputSectionBase *);

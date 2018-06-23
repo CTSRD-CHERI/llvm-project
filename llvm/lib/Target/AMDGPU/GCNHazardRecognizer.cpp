@@ -16,6 +16,7 @@
 #include "SIDefines.h"
 #include "SIInstrInfo.h"
 #include "SIRegisterInfo.h"
+#include "MCTargetDesc/AMDGPUMCTargetDesc.h"
 #include "Utils/AMDGPUBaseInfo.h"
 #include "llvm/ADT/iterator_range.h"
 #include "llvm/CodeGen/MachineFunction.h"
@@ -634,7 +635,7 @@ int GCNHazardRecognizer::checkRFEHazards(MachineInstr *RFE) {
 }
 
 int GCNHazardRecognizer::checkAnyInstHazards(MachineInstr *MI) {
-  if (MI->isDebugValue())
+  if (MI->isDebugInstr())
     return 0;
 
   const SIRegisterInfo *TRI = ST.getRegisterInfo();

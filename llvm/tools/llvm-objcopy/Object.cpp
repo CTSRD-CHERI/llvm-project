@@ -47,8 +47,10 @@ template <class ELFT> void ELFWriter<ELFT>::writePhdr(const Segment &Seg) {
 }
 
 void SectionBase::removeSectionReferences(const SectionBase *Sec) {}
+void SectionBase::removeSymbols(function_ref<bool(const Symbol &)> ToRemove) {}
 void SectionBase::initialize(SectionTableRef SecTable) {}
 void SectionBase::finalize() {}
+void SectionBase::markSymbols() {}
 
 template <class ELFT> void ELFWriter<ELFT>::writeShdr(const SectionBase &Sec) {
   uint8_t *Buf = BufPtr->getBufferStart();
@@ -194,26 +196,25 @@ void SymbolTableSection::removeSectionReferences(const SectionBase *Sec) {
           " cannot be removed because it is referenced by the symbol table " +
           this->Name);
   }
-  auto Iter =
-      std::remove_if(std::begin(Symbols), std::end(Symbols),
-                     [=](const SymPtr &Sym) { return Sym->DefinedIn == Sec; });
-  Size -= (std::end(Symbols) - Iter) * this->EntrySize;
-  Symbols.erase(Iter, std::end(Symbols));
-  assignIndices();
+  removeSymbols([Sec](const Symbol &Sym) { return Sym.DefinedIn == Sec; });
 }
 
-void SymbolTableSection::localize(
-    std::function<bool(const Symbol &)> ToLocalize) {
-  for (const auto &Sym : Symbols) {
-    if (ToLocalize(*Sym))
-      Sym->Binding = STB_LOCAL;
-  }
-
-  // Now that the local symbols aren't grouped at the start we have to reorder
-  // the symbols to respect this property.
+void SymbolTableSection::updateSymbols(function_ref<void(Symbol &)> Callable) {
+  std::for_each(std::begin(Symbols) + 1, std::end(Symbols),
+                [Callable](SymPtr &Sym) { Callable(*Sym); });
   std::stable_partition(
       std::begin(Symbols), std::end(Symbols),
       [](const SymPtr &Sym) { return Sym->Binding == STB_LOCAL; });
+  assignIndices();
+}
+
+void SymbolTableSection::removeSymbols(
+    function_ref<bool(const Symbol &)> ToRemove) {
+  Symbols.erase(
+      std::remove_if(std::begin(Symbols) + 1, std::end(Symbols),
+                     [ToRemove](const SymPtr &Sym) { return ToRemove(*Sym); }),
+      std::end(Symbols));
+  Size = Symbols.size() * EntrySize;
   assignIndices();
 }
 
@@ -253,6 +254,11 @@ const Symbol *SymbolTableSection::getSymbolByIndex(uint32_t Index) const {
   if (Symbols.size() <= Index)
     error("Invalid symbol index: " + Twine(Index));
   return Symbols[Index].get();
+}
+
+Symbol *SymbolTableSection::getSymbolByIndex(uint32_t Index) {
+  return const_cast<Symbol *>(
+      static_cast<const SymbolTableSection *>(this)->getSymbolByIndex(Index));
 }
 
 template <class ELFT>
@@ -344,6 +350,19 @@ void RelocationSection::accept(SectionVisitor &Visitor) const {
   Visitor.visit(*this);
 }
 
+void RelocationSection::removeSymbols(
+    function_ref<bool(const Symbol &)> ToRemove) {
+  for (const Relocation &Reloc : Relocations)
+    if (ToRemove(*Reloc.RelocSymbol))
+      error("not stripping symbol `" + Reloc.RelocSymbol->Name +
+            "' because it is named in a relocation");
+}
+
+void RelocationSection::markSymbols() {
+  for (const Relocation &Reloc : Relocations)
+    Reloc.RelocSymbol->Referenced = true;
+}
+
 void SectionWriter::visit(const DynamicRelocationSection &Sec) {
   std::copy(std::begin(Sec.Contents), std::end(Sec.Contents),
             Out.getBufferStart() + Sec.Offset);
@@ -367,16 +386,32 @@ void GroupSection::finalize() {
   this->Link = SymTab->Index;
 }
 
+void GroupSection::removeSymbols(function_ref<bool(const Symbol &)> ToRemove) {
+  if (ToRemove(*Sym)) {
+    error("Symbol " + Sym->Name +
+          " cannot be removed because it is "
+          "referenced by the section " +
+          this->Name + "[" + Twine(this->Index) + "]");
+  }
+}
+
+void GroupSection::markSymbols() {
+  if (Sym)
+    Sym->Referenced = true;
+}
+
 void Section::initialize(SectionTableRef SecTable) {
-  if (Link != ELF::SHN_UNDEF)
+  if (Link != ELF::SHN_UNDEF) {
     LinkSection =
         SecTable.getSection(Link, "Link field value " + Twine(Link) +
                                       " in section " + Name + " is invalid");
+    if (LinkSection->Type == ELF::SHT_SYMTAB)
+      LinkSection = nullptr;
+  }
 }
 
 void Section::finalize() {
-  if (LinkSection)
-    this->Link = LinkSection->Index;
+  this->Link = LinkSection ? LinkSection->Index : 0;
 }
 
 void GnuDebugLinkSection::init(StringRef File, StringRef Data) {
@@ -800,7 +835,7 @@ ElfType ELFReader::getElfType() const {
 }
 
 std::unique_ptr<Object> ELFReader::create() const {
-  auto Obj = llvm::make_unique<Object>(Data);
+  auto Obj = llvm::make_unique<Object>();
   if (auto *o = dyn_cast<ELFObjectFile<ELF32LE>>(Bin.get())) {
     ELFBuilder<ELF32LE> Builder(*o, *Obj);
     Builder.build();
@@ -904,6 +939,14 @@ void Object::removeSections(std::function<bool(const SectionBase &)> ToRemove) {
   }
   // Now finally get rid of them all togethor.
   Sections.erase(Iter, std::end(Sections));
+}
+
+void Object::removeSymbols(function_ref<bool(const Symbol &)> ToRemove) {
+  if (!SymbolTable)
+    return;
+
+  for (const SecPtr &Sec : Sections)
+    Sec->removeSymbols(ToRemove);
 }
 
 void Object::sortSections() {

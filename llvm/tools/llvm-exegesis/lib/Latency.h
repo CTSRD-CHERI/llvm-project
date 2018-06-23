@@ -16,24 +16,37 @@
 #define LLVM_TOOLS_LLVM_EXEGESIS_LATENCY_H
 
 #include "BenchmarkRunner.h"
+#include "MCInstrDescView.h"
 
 namespace exegesis {
 
 class LatencyBenchmarkRunner : public BenchmarkRunner {
 public:
+  using BenchmarkRunner::BenchmarkRunner;
   ~LatencyBenchmarkRunner() override;
 
-private:
-  const char *getDisplayName() const override;
+  llvm::Expected<BenchmarkConfiguration>
+  generateConfiguration(unsigned Opcode) const;
 
-  llvm::Expected<std::vector<llvm::MCInst>>
-  createCode(const LLVMState &State, unsigned OpcodeIndex,
-             unsigned NumRepetitions,
-             const JitFunctionContext &Context) const override;
+private:
+  llvm::Error isInfeasible(const llvm::MCInstrDesc &MCInstrDesc) const;
+
+  llvm::Expected<BenchmarkConfiguration> generateSelfAliasingConfiguration(
+      const Instruction &Instr,
+      const AliasingConfigurations &SelfAliasing) const;
+
+  llvm::Expected<BenchmarkConfiguration> generateTwoInstructionConfiguration(
+      const Instruction &Instr,
+      const AliasingConfigurations &SelfAliasing) const;
+
+  InstructionBenchmark::ModeE getMode() const override;
+
+  llvm::Expected<std::vector<BenchmarkConfiguration>>
+  createConfigurations(unsigned OpcodeIndex) const override;
 
   std::vector<BenchmarkMeasure>
-  runMeasurements(const LLVMState &State, const JitFunction &Function,
-                  unsigned NumRepetitions) const override;
+  runMeasurements(const ExecutableFunction &EF,
+                  const unsigned NumRepetitions) const override;
 };
 
 } // namespace exegesis

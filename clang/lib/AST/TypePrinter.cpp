@@ -47,7 +47,7 @@ using namespace clang;
 
 namespace {
 
-  /// \brief RAII object that enables printing of the ARC __strong lifetime
+  /// RAII object that enables printing of the ARC __strong lifetime
   /// qualifier.
   class IncludeStrongLifetimeRAII {
     PrintingPolicy &Policy;
@@ -270,7 +270,7 @@ void TypePrinter::printBefore(QualType T, raw_ostream &OS) {
   printBefore(Split.Ty, Quals, OS);
 }
 
-/// \brief Prints the part of the type string before an identifier, e.g. for
+/// Prints the part of the type string before an identifier, e.g. for
 /// "int foo[10]" it prints "int ".
 void TypePrinter::printBefore(const Type *T,Qualifiers Quals, raw_ostream &OS) {
   if (Policy.SuppressSpecifiers && T->isSpecifierType())
@@ -323,7 +323,7 @@ void TypePrinter::printAfter(QualType t, raw_ostream &OS) {
   printAfter(split.Ty, split.Quals, OS);
 }
 
-/// \brief Prints the part of the type string after an identifier, e.g. for
+/// Prints the part of the type string after an identifier, e.g. for
 /// "int foo[10]" it prints "[10]".
 void TypePrinter::printAfter(const Type *T, Qualifiers Quals, raw_ostream &OS) {
   switch (T->getTypeClass()) {
@@ -385,14 +385,23 @@ void TypePrinter::printBlockPointerAfter(const BlockPointerType *T,
   printAfter(T->getPointeeType(), OS);
 }
 
+// When printing a reference, the referenced type might also be a reference.
+// If so, we want to skip that before printing the inner type.
+static QualType skipTopLevelReferences(QualType T) {
+  if (auto *Ref = T->getAs<ReferenceType>())
+    return skipTopLevelReferences(Ref->getPointeeTypeAsWritten());
+  return T;
+}
+
 void TypePrinter::printLValueReferenceBefore(const LValueReferenceType *T,
                                              raw_ostream &OS) {
   IncludeStrongLifetimeRAII Strong(Policy);
   SaveAndRestore<bool> NonEmptyPH(HasEmptyPlaceHolder, false);
-  printBefore(T->getPointeeTypeAsWritten(), OS);
+  QualType Inner = skipTopLevelReferences(T->getPointeeTypeAsWritten());
+  printBefore(Inner, OS);
   // Handle things like 'int (&A)[4];' correctly.
   // FIXME: this should include vectors, but vectors use attributes I guess.
-  if (isa<ArrayType>(T->getPointeeTypeAsWritten()))
+  if (isa<ArrayType>(Inner))
     OS << '(';
   OS << '&';
 }
@@ -401,21 +410,23 @@ void TypePrinter::printLValueReferenceAfter(const LValueReferenceType *T,
                                             raw_ostream &OS) {
   IncludeStrongLifetimeRAII Strong(Policy);
   SaveAndRestore<bool> NonEmptyPH(HasEmptyPlaceHolder, false);
+  QualType Inner = skipTopLevelReferences(T->getPointeeTypeAsWritten());
   // Handle things like 'int (&A)[4];' correctly.
   // FIXME: this should include vectors, but vectors use attributes I guess.
-  if (isa<ArrayType>(T->getPointeeTypeAsWritten()))
+  if (isa<ArrayType>(Inner))
     OS << ')';
-  printAfter(T->getPointeeTypeAsWritten(), OS);
+  printAfter(Inner, OS);
 }
 
 void TypePrinter::printRValueReferenceBefore(const RValueReferenceType *T,
                                              raw_ostream &OS) {
   IncludeStrongLifetimeRAII Strong(Policy);
   SaveAndRestore<bool> NonEmptyPH(HasEmptyPlaceHolder, false);
-  printBefore(T->getPointeeTypeAsWritten(), OS);
+  QualType Inner = skipTopLevelReferences(T->getPointeeTypeAsWritten());
+  printBefore(Inner, OS);
   // Handle things like 'int (&&A)[4];' correctly.
   // FIXME: this should include vectors, but vectors use attributes I guess.
-  if (isa<ArrayType>(T->getPointeeTypeAsWritten()))
+  if (isa<ArrayType>(Inner))
     OS << '(';
   OS << "&&";
 }
@@ -424,11 +435,12 @@ void TypePrinter::printRValueReferenceAfter(const RValueReferenceType *T,
                                             raw_ostream &OS) {
   IncludeStrongLifetimeRAII Strong(Policy);
   SaveAndRestore<bool> NonEmptyPH(HasEmptyPlaceHolder, false);
+  QualType Inner = skipTopLevelReferences(T->getPointeeTypeAsWritten());
   // Handle things like 'int (&&A)[4];' correctly.
   // FIXME: this should include vectors, but vectors use attributes I guess.
-  if (isa<ArrayType>(T->getPointeeTypeAsWritten()))
+  if (isa<ArrayType>(Inner))
     OS << ')';
-  printAfter(T->getPointeeTypeAsWritten(), OS);
+  printAfter(Inner, OS);
 }
 
 void TypePrinter::printMemberPointerBefore(const MemberPointerType *T, 
@@ -660,7 +672,9 @@ FunctionProtoType::printExceptionSpecification(raw_ostream &OS,
     OS << ')';
   } else if (isNoexceptExceptionSpec(getExceptionSpecType())) {
     OS << " noexcept";
-    if (getExceptionSpecType() == EST_ComputedNoexcept) {
+    // FIXME:Is it useful to print out the expression for a non-dependent
+    // noexcept specification?
+    if (isComputedNoexcept(getExceptionSpecType())) {
       OS << '(';
       if (getNoexceptExpr())
         getNoexceptExpr()->printPretty(OS, nullptr, Policy);
@@ -1195,6 +1209,17 @@ void TypePrinter::printInjectedClassNameAfter(const InjectedClassNameType *T,
 
 void TypePrinter::printElaboratedBefore(const ElaboratedType *T,
                                         raw_ostream &OS) {
+  if (Policy.IncludeTagDefinition && T->getOwnedTagDecl()) {
+    TagDecl *OwnedTagDecl = T->getOwnedTagDecl();
+    assert(OwnedTagDecl->getTypeForDecl() == T->getNamedType().getTypePtr() &&
+           "OwnedTagDecl expected to be a declaration for the type");
+    PrintingPolicy SubPolicy = Policy;
+    SubPolicy.IncludeTagDefinition = false;
+    OwnedTagDecl->print(OS, SubPolicy, Indentation);
+    spaceBeforePlaceHolder(OS);
+    return;
+  }
+
   // The tag definition will take care of these.
   if (!Policy.IncludeTagDefinition)
   {
@@ -1212,6 +1237,8 @@ void TypePrinter::printElaboratedBefore(const ElaboratedType *T,
 
 void TypePrinter::printElaboratedAfter(const ElaboratedType *T,
                                         raw_ostream &OS) {
+  if (Policy.IncludeTagDefinition && T->getOwnedTagDecl())
+    return;
   ElaboratedTypePolicyRAII PolicyRAII(Policy);
   printAfter(T->getNamedType(), OS);
 }

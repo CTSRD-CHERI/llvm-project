@@ -1,11 +1,11 @@
 ; RUN: llc -filetype=obj -o %t.o %s
-; RUN: wasm-ld --check-signatures -strip-debug %t.o -o %t.wasm
+; RUN: wasm-ld -strip-debug %t.o -o %t.wasm
 ; RUN: obj2yaml %t.wasm | FileCheck %s
 
 ; Test that undefined weak externals (global_var) and (foo) don't cause
 ; link failures and resolve to zero.
 
-target triple = "wasm32-unknown-unknown-wasm"
+target triple = "wasm32-unknown-unknown"
 
 @global_var = extern_weak global i32, align 4
 

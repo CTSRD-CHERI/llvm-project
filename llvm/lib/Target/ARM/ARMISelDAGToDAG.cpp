@@ -283,7 +283,7 @@ static bool isOpcWithIntImmediate(SDNode *N, unsigned Opc, unsigned& Imm) {
          isInt32Immediate(N->getOperand(1).getNode(), Imm);
 }
 
-/// \brief Check whether a particular node is a constant value representable as
+/// Check whether a particular node is a constant value representable as
 /// (N * Scale) where (N in [\p RangeMin, \p RangeMax).
 ///
 /// \param ScaledConstant [out] - On success, the pre-scaled constant value.
@@ -1496,7 +1496,7 @@ bool ARMDAGToDAGISel::tryT2IndexedLoad(SDNode *N) {
   return false;
 }
 
-/// \brief Form a GPRPair pseudo register from a pair of GPR regs.
+/// Form a GPRPair pseudo register from a pair of GPR regs.
 SDNode *ARMDAGToDAGISel::createGPRPairNode(EVT VT, SDValue V0, SDValue V1) {
   SDLoc dl(V0.getNode());
   SDValue RegClass =
@@ -1507,7 +1507,7 @@ SDNode *ARMDAGToDAGISel::createGPRPairNode(EVT VT, SDValue V0, SDValue V1) {
   return CurDAG->getMachineNode(TargetOpcode::REG_SEQUENCE, dl, VT, Ops);
 }
 
-/// \brief Form a D register from a pair of S registers.
+/// Form a D register from a pair of S registers.
 SDNode *ARMDAGToDAGISel::createSRegPairNode(EVT VT, SDValue V0, SDValue V1) {
   SDLoc dl(V0.getNode());
   SDValue RegClass =
@@ -1518,7 +1518,7 @@ SDNode *ARMDAGToDAGISel::createSRegPairNode(EVT VT, SDValue V0, SDValue V1) {
   return CurDAG->getMachineNode(TargetOpcode::REG_SEQUENCE, dl, VT, Ops);
 }
 
-/// \brief Form a quad register from a pair of D registers.
+/// Form a quad register from a pair of D registers.
 SDNode *ARMDAGToDAGISel::createDRegPairNode(EVT VT, SDValue V0, SDValue V1) {
   SDLoc dl(V0.getNode());
   SDValue RegClass = CurDAG->getTargetConstant(ARM::QPRRegClassID, dl,
@@ -1529,7 +1529,7 @@ SDNode *ARMDAGToDAGISel::createDRegPairNode(EVT VT, SDValue V0, SDValue V1) {
   return CurDAG->getMachineNode(TargetOpcode::REG_SEQUENCE, dl, VT, Ops);
 }
 
-/// \brief Form 4 consecutive D registers from a pair of Q registers.
+/// Form 4 consecutive D registers from a pair of Q registers.
 SDNode *ARMDAGToDAGISel::createQRegPairNode(EVT VT, SDValue V0, SDValue V1) {
   SDLoc dl(V0.getNode());
   SDValue RegClass = CurDAG->getTargetConstant(ARM::QQPRRegClassID, dl,
@@ -1540,7 +1540,7 @@ SDNode *ARMDAGToDAGISel::createQRegPairNode(EVT VT, SDValue V0, SDValue V1) {
   return CurDAG->getMachineNode(TargetOpcode::REG_SEQUENCE, dl, VT, Ops);
 }
 
-/// \brief Form 4 consecutive S registers.
+/// Form 4 consecutive S registers.
 SDNode *ARMDAGToDAGISel::createQuadSRegsNode(EVT VT, SDValue V0, SDValue V1,
                                    SDValue V2, SDValue V3) {
   SDLoc dl(V0.getNode());
@@ -1555,7 +1555,7 @@ SDNode *ARMDAGToDAGISel::createQuadSRegsNode(EVT VT, SDValue V0, SDValue V1,
   return CurDAG->getMachineNode(TargetOpcode::REG_SEQUENCE, dl, VT, Ops);
 }
 
-/// \brief Form 4 consecutive D registers.
+/// Form 4 consecutive D registers.
 SDNode *ARMDAGToDAGISel::createQuadDRegsNode(EVT VT, SDValue V0, SDValue V1,
                                    SDValue V2, SDValue V3) {
   SDLoc dl(V0.getNode());
@@ -1570,7 +1570,7 @@ SDNode *ARMDAGToDAGISel::createQuadDRegsNode(EVT VT, SDValue V0, SDValue V1,
   return CurDAG->getMachineNode(TargetOpcode::REG_SEQUENCE, dl, VT, Ops);
 }
 
-/// \brief Form 4 consecutive Q registers.
+/// Form 4 consecutive Q registers.
 SDNode *ARMDAGToDAGISel::createQuadQRegsNode(EVT VT, SDValue V0, SDValue V1,
                                    SDValue V2, SDValue V3) {
   SDLoc dl(V0.getNode());
@@ -1761,9 +1761,7 @@ void ARMDAGToDAGISel::SelectVLD(SDNode *N, bool isUpdating, unsigned NumVecs,
   case MVT::v4f32:
   case MVT::v4i32: OpcodeIndex = 2; break;
   case MVT::v2f64:
-  case MVT::v2i64: OpcodeIndex = 3;
-    assert(NumVecs == 1 && "v2i64 type only supported for VLD1");
-    break;
+  case MVT::v2i64: OpcodeIndex = 3; break;
   }
 
   EVT ResTy;
@@ -1905,9 +1903,7 @@ void ARMDAGToDAGISel::SelectVST(SDNode *N, bool isUpdating, unsigned NumVecs,
   case MVT::v4f32:
   case MVT::v4i32: OpcodeIndex = 2; break;
   case MVT::v2f64:
-  case MVT::v2i64: OpcodeIndex = 3;
-    assert(NumVecs == 1 && "v2i64 type only supported for VST1");
-    break;
+  case MVT::v2i64: OpcodeIndex = 3; break;
   }
 
   std::vector<EVT> ResTys;
@@ -2461,7 +2457,7 @@ void ARMDAGToDAGISel::SelectCMPZ(SDNode *N, bool &SwitchEQNEToPLMI) {
   SDValue X = And.getOperand(0);
   auto C = dyn_cast<ConstantSDNode>(And.getOperand(1));
 
-  if (!C || !X->hasOneUse())
+  if (!C)
     return;
   auto Range = getContiguousRangeOfSetBits(C->getAPIntValue());
   if (!Range)
@@ -3441,6 +3437,51 @@ void ARMDAGToDAGISel::Select(SDNode *N) {
       return;
     }
 
+    case Intrinsic::arm_neon_vld1x2: {
+      static const uint16_t DOpcodes[] = { ARM::VLD1q8, ARM::VLD1q16,
+                                           ARM::VLD1q32, ARM::VLD1q64 };
+      static const uint16_t QOpcodes[] = { ARM::VLD1d8QPseudo,
+                                           ARM::VLD1d16QPseudo,
+                                           ARM::VLD1d32QPseudo,
+                                           ARM::VLD1d64QPseudo };
+      SelectVLD(N, false, 2, DOpcodes, QOpcodes, nullptr);
+      return;
+    }
+
+    case Intrinsic::arm_neon_vld1x3: {
+      static const uint16_t DOpcodes[] = { ARM::VLD1d8TPseudo,
+                                           ARM::VLD1d16TPseudo,
+                                           ARM::VLD1d32TPseudo,
+                                           ARM::VLD1d64TPseudo };
+      static const uint16_t QOpcodes0[] = { ARM::VLD1q8LowTPseudo_UPD,
+                                            ARM::VLD1q16LowTPseudo_UPD,
+                                            ARM::VLD1q32LowTPseudo_UPD,
+                                            ARM::VLD1q64LowTPseudo_UPD };
+      static const uint16_t QOpcodes1[] = { ARM::VLD1q8HighTPseudo,
+                                            ARM::VLD1q16HighTPseudo,
+                                            ARM::VLD1q32HighTPseudo,
+                                            ARM::VLD1q64HighTPseudo };
+      SelectVLD(N, false, 3, DOpcodes, QOpcodes0, QOpcodes1);
+      return;
+    }
+
+    case Intrinsic::arm_neon_vld1x4: {
+      static const uint16_t DOpcodes[] = { ARM::VLD1d8QPseudo,
+                                           ARM::VLD1d16QPseudo,
+                                           ARM::VLD1d32QPseudo,
+                                           ARM::VLD1d64QPseudo };
+      static const uint16_t QOpcodes0[] = { ARM::VLD1q8LowQPseudo_UPD,
+                                            ARM::VLD1q16LowQPseudo_UPD,
+                                            ARM::VLD1q32LowQPseudo_UPD,
+                                            ARM::VLD1q64LowQPseudo_UPD };
+      static const uint16_t QOpcodes1[] = { ARM::VLD1q8HighQPseudo,
+                                            ARM::VLD1q16HighQPseudo,
+                                            ARM::VLD1q32HighQPseudo,
+                                            ARM::VLD1q64HighQPseudo };
+      SelectVLD(N, false, 4, DOpcodes, QOpcodes0, QOpcodes1);
+      return;
+    }
+
     case Intrinsic::arm_neon_vld2: {
       static const uint16_t DOpcodes[] = { ARM::VLD2d8, ARM::VLD2d16,
                                            ARM::VLD2d32, ARM::VLD1q64 };
@@ -3516,6 +3557,51 @@ void ARMDAGToDAGISel::Select(SDNode *N) {
       static const uint16_t QOpcodes[] = { ARM::VST1q8, ARM::VST1q16,
                                            ARM::VST1q32, ARM::VST1q64 };
       SelectVST(N, false, 1, DOpcodes, QOpcodes, nullptr);
+      return;
+    }
+
+    case Intrinsic::arm_neon_vst1x2: {
+      static const uint16_t DOpcodes[] = { ARM::VST1q8, ARM::VST1q16,
+                                           ARM::VST1q32, ARM::VST1q64 };
+      static const uint16_t QOpcodes[] = { ARM::VST1d8QPseudo,
+                                           ARM::VST1d16QPseudo,
+                                           ARM::VST1d32QPseudo,
+                                           ARM::VST1d64QPseudo };
+      SelectVST(N, false, 2, DOpcodes, QOpcodes, nullptr);
+      return;
+    }
+
+    case Intrinsic::arm_neon_vst1x3: {
+      static const uint16_t DOpcodes[] = { ARM::VST1d8TPseudo,
+                                           ARM::VST1d16TPseudo,
+                                           ARM::VST1d32TPseudo,
+                                           ARM::VST1d64TPseudo };
+      static const uint16_t QOpcodes0[] = { ARM::VST1q8LowTPseudo_UPD,
+                                            ARM::VST1q16LowTPseudo_UPD,
+                                            ARM::VST1q32LowTPseudo_UPD,
+                                            ARM::VST1q64LowTPseudo_UPD };
+      static const uint16_t QOpcodes1[] = { ARM::VST1q8HighTPseudo,
+                                            ARM::VST1q16HighTPseudo,
+                                            ARM::VST1q32HighTPseudo,
+                                            ARM::VST1q64HighTPseudo };
+      SelectVST(N, false, 3, DOpcodes, QOpcodes0, QOpcodes1);
+      return;
+    }
+
+    case Intrinsic::arm_neon_vst1x4: {
+      static const uint16_t DOpcodes[] = { ARM::VST1d8QPseudo,
+                                           ARM::VST1d16QPseudo,
+                                           ARM::VST1d32QPseudo,
+                                           ARM::VST1d64QPseudo };
+      static const uint16_t QOpcodes0[] = { ARM::VST1q8LowQPseudo_UPD,
+                                            ARM::VST1q16LowQPseudo_UPD,
+                                            ARM::VST1q32LowQPseudo_UPD,
+                                            ARM::VST1q64LowQPseudo_UPD };
+      static const uint16_t QOpcodes1[] = { ARM::VST1q8HighQPseudo,
+                                            ARM::VST1q16HighQPseudo,
+                                            ARM::VST1q32HighQPseudo,
+                                            ARM::VST1q64HighQPseudo };
+      SelectVST(N, false, 4, DOpcodes, QOpcodes0, QOpcodes1);
       return;
     }
 

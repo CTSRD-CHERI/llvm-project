@@ -75,7 +75,8 @@ void MCTargetStreamer::emitValue(const MCExpr *Value) {
 void MCTargetStreamer::emitAssignment(MCSymbol *Symbol, const MCExpr *Value) {}
 
 MCStreamer::MCStreamer(MCContext &Ctx)
-    : Context(Ctx), CurrentWinFrameInfo(nullptr) {
+    : Context(Ctx), CurrentWinFrameInfo(nullptr),
+      UseAssemblerInfoForParsing(false) {
   SectionStack.push_back(std::pair<MCSectionSubPair, MCSectionSubPair>());
 }
 
@@ -658,6 +659,10 @@ void MCStreamer::EmitWinEHHandlerData(SMLoc Loc) {
     return;
   if (CurFrame->ChainedParent)
     getContext().reportError(Loc, "Chained unwind areas can't have handlers!");
+}
+
+void MCStreamer::emitCGProfileEntry(const MCSymbolRefExpr *From,
+                                    const MCSymbolRefExpr *To, uint64_t Count) {
 }
 
 static MCSection *getWinCFISection(MCContext &Context, unsigned *NextWinCFIID,

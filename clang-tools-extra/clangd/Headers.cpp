@@ -10,12 +10,11 @@
 #include "Headers.h"
 #include "Compiler.h"
 #include "Logger.h"
+#include "SourceCode.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/CompilerInvocation.h"
 #include "clang/Frontend/FrontendActions.h"
 #include "clang/Lex/HeaderSearch.h"
-#include "clang/Lex/PreprocessorOptions.h"
-#include "clang/Tooling/CompilationDatabase.h"
 #include "llvm/Support/Path.h"
 
 namespace clang {
@@ -24,26 +23,34 @@ namespace {
 
 class RecordHeaders : public PPCallbacks {
 public:
-  RecordHeaders(llvm::StringSet<> &WrittenHeaders,
-                llvm::StringSet<> &ResolvedHeaders)
-      : WrittenHeaders(WrittenHeaders), ResolvedHeaders(ResolvedHeaders) {}
+  RecordHeaders(const SourceManager &SM,
+                std::function<void(Inclusion)> Callback)
+      : SM(SM), Callback(std::move(Callback)) {}
 
-  void InclusionDirective(SourceLocation /*HashLoc*/,
-                          const Token & /*IncludeTok*/,
+  // Record existing #includes - both written and resolved paths. Only #includes
+  // in the main file are collected.
+  void InclusionDirective(SourceLocation HashLoc, const Token & /*IncludeTok*/,
                           llvm::StringRef FileName, bool IsAngled,
-                          CharSourceRange /*FilenameRange*/,
-                          const FileEntry *File, llvm::StringRef /*SearchPath*/,
+                          CharSourceRange FilenameRange, const FileEntry *File,
+                          llvm::StringRef /*SearchPath*/,
                           llvm::StringRef /*RelativePath*/,
-                          const Module * /*Imported*/) override {
-    WrittenHeaders.insert(
-        (IsAngled ? "<" + FileName + ">" : "\"" + FileName + "\"").str());
-    if (File != nullptr && !File->tryGetRealPathName().empty())
-      ResolvedHeaders.insert(File->tryGetRealPathName());
+                          const Module * /*Imported*/,
+                          SrcMgr::CharacteristicKind /*FileType*/) override {
+    // Only inclusion directives in the main file make sense. The user cannot
+    // select directives not in the main file.
+    if (HashLoc.isInvalid() || !SM.isInMainFile(HashLoc))
+      return;
+    std::string Written =
+        (IsAngled ? "<" + FileName + ">" : "\"" + FileName + "\"").str();
+    std::string Resolved = (!File || File->tryGetRealPathName().empty())
+                               ? ""
+                               : File->tryGetRealPathName();
+    Callback({halfOpenToRange(SM, FilenameRange), Written, Resolved});
   }
 
 private:
-  llvm::StringSet<> &WrittenHeaders;
-  llvm::StringSet<> &ResolvedHeaders;
+  const SourceManager &SM;
+  std::function<void(Inclusion)> Callback;
 };
 
 } // namespace
@@ -57,88 +64,53 @@ bool HeaderFile::valid() const {
          (!Verbatim && llvm::sys::path::is_absolute(File));
 }
 
+std::unique_ptr<PPCallbacks>
+collectInclusionsInMainFileCallback(const SourceManager &SM,
+                                    std::function<void(Inclusion)> Callback) {
+  return llvm::make_unique<RecordHeaders>(SM, std::move(Callback));
+}
+
 /// FIXME(ioeric): we might not want to insert an absolute include path if the
 /// path is not shortened.
-llvm::Expected<std::string>
-calculateIncludePath(llvm::StringRef File, llvm::StringRef Code,
-                     const HeaderFile &DeclaringHeader,
-                     const HeaderFile &InsertedHeader,
-                     const tooling::CompileCommand &CompileCommand,
-                     IntrusiveRefCntPtr<vfs::FileSystem> FS) {
-  assert(llvm::sys::path::is_absolute(File));
+bool IncludeInserter::shouldInsertInclude(
+    const HeaderFile &DeclaringHeader, const HeaderFile &InsertedHeader) const {
   assert(DeclaringHeader.valid() && InsertedHeader.valid());
-  if (File == DeclaringHeader.File || File == InsertedHeader.File)
-    return "";
-  FS->setCurrentWorkingDirectory(CompileCommand.Directory);
-
-  // Set up a CompilerInstance and create a preprocessor to collect existing
-  // #include headers in \p Code. Preprocesor also provides HeaderSearch with
-  // which we can calculate the shortest include path for \p Header.
-  std::vector<const char *> Argv;
-  for (const auto &S : CompileCommand.CommandLine)
-    Argv.push_back(S.c_str());
-  IgnoringDiagConsumer IgnoreDiags;
-  auto CI = clang::createInvocationFromCommandLine(
-      Argv,
-      CompilerInstance::createDiagnostics(new DiagnosticOptions(), &IgnoreDiags,
-                                          false),
-      FS);
-  if (!CI)
-    return llvm::make_error<llvm::StringError>(
-        "Failed to create a compiler instance for " + File,
-        llvm::inconvertibleErrorCode());
-  CI->getFrontendOpts().DisableFree = false;
-  // Parse the main file to get all existing #includes in the file, and then we
-  // can make sure the same header (even with different include path) is not
-  // added more than once.
-  CI->getPreprocessorOpts().SingleFileParseMode = true;
-
-  // The diagnostic options must be set before creating a CompilerInstance.
-  CI->getDiagnosticOpts().IgnoreWarnings = true;
-  auto Clang = prepareCompilerInstance(
-      std::move(CI), /*Preamble=*/nullptr,
-      llvm::MemoryBuffer::getMemBuffer(Code, File),
-      std::make_shared<PCHContainerOperations>(), FS, IgnoreDiags);
-
-  if (Clang->getFrontendOpts().Inputs.empty())
-    return llvm::make_error<llvm::StringError>(
-        "Empty frontend action inputs empty for file " + File,
-        llvm::inconvertibleErrorCode());
-  PreprocessOnlyAction Action;
-  if (!Action.BeginSourceFile(*Clang, Clang->getFrontendOpts().Inputs[0]))
-    return llvm::make_error<llvm::StringError>(
-        "Failed to begin preprocessor only action for file " + File,
-        llvm::inconvertibleErrorCode());
-  llvm::StringSet<> WrittenHeaders;
-  llvm::StringSet<> ResolvedHeaders;
-  Clang->getPreprocessor().addPPCallbacks(
-      llvm::make_unique<RecordHeaders>(WrittenHeaders, ResolvedHeaders));
-  if (!Action.Execute())
-    return llvm::make_error<llvm::StringError>(
-        "Failed to execute preprocessor only action for file " + File,
-        llvm::inconvertibleErrorCode());
+  if (FileName == DeclaringHeader.File || FileName == InsertedHeader.File)
+    return false;
+  llvm::StringSet<> IncludedHeaders;
+  for (const auto &Inc : Inclusions) {
+    IncludedHeaders.insert(Inc.Written);
+    if (!Inc.Resolved.empty())
+      IncludedHeaders.insert(Inc.Resolved);
+  }
   auto Included = [&](llvm::StringRef Header) {
-    return WrittenHeaders.find(Header) != WrittenHeaders.end() ||
-           ResolvedHeaders.find(Header) != ResolvedHeaders.end();
+    return IncludedHeaders.find(Header) != IncludedHeaders.end();
   };
-  if (Included(DeclaringHeader.File) || Included(InsertedHeader.File))
-    return "";
+  return !Included(DeclaringHeader.File) && !Included(InsertedHeader.File);
+}
 
-  auto &HeaderSearchInfo = Clang->getPreprocessor().getHeaderSearchInfo();
-  bool IsSystem = false;
-
+std::string
+IncludeInserter::calculateIncludePath(const HeaderFile &DeclaringHeader,
+                                      const HeaderFile &InsertedHeader) const {
+  assert(DeclaringHeader.valid() && InsertedHeader.valid());
   if (InsertedHeader.Verbatim)
     return InsertedHeader.File;
-
+  bool IsSystem = false;
   std::string Suggested = HeaderSearchInfo.suggestPathToFileForDiagnostics(
-      InsertedHeader.File, CompileCommand.Directory, &IsSystem);
+      InsertedHeader.File, BuildDir, &IsSystem);
   if (IsSystem)
     Suggested = "<" + Suggested + ">";
   else
     Suggested = "\"" + Suggested + "\"";
-
-  log("Suggested #include for " + InsertedHeader.File + " is: " + Suggested);
   return Suggested;
+}
+
+Optional<TextEdit> IncludeInserter::insert(StringRef VerbatimHeader) const {
+  Optional<TextEdit> Edit = None;
+  if (auto Insertion = Inserter.insert(VerbatimHeader.trim("\"<>"),
+                                       VerbatimHeader.startswith("<")))
+    Edit = replacementToEdit(Code, *Insertion);
+  return Edit;
 }
 
 } // namespace clangd

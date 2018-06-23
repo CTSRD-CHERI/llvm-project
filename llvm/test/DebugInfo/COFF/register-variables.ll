@@ -92,7 +92,7 @@
 ; OBJ:     VarName: p
 ; OBJ:   }
 ; OBJ:   DefRangeRegisterSym {
-; OBJ:     Register: ECX (0x12)
+; OBJ:     Register: CVRegECX (0x12)
 ; OBJ:     LocalVariableAddrRange {
 ; OBJ:       OffsetStart: .text+0x0
 ; OBJ:       ISectStart: 0x0
@@ -100,7 +100,7 @@
 ; OBJ:     }
 ; OBJ:   }
 ; OBJ:   DefRangeRegisterSym {
-; OBJ:     Register: ESI (0x17)
+; OBJ:     Register: CVRegESI (0x17)
 ; OBJ:     LocalVariableAddrRange {
 ; OBJ:       OffsetStart: .text+0x7
 ; OBJ:       ISectStart: 0x0
@@ -114,7 +114,7 @@
 ; OBJ:     VarName: c
 ; OBJ:   }
 ; OBJ:   DefRangeRegisterSym {
-; OBJ:     Register: EAX (0x11)
+; OBJ:     Register: CVRegEAX (0x11)
 ; OBJ:     LocalVariableAddrRange {
 ; OBJ:       OffsetStart: .text+0xC
 ; OBJ:       ISectStart: 0x0
@@ -128,7 +128,7 @@
 ; OBJ:     VarName: a
 ; OBJ:   }
 ; OBJ:   DefRangeRegisterSym {
-; OBJ:     Register: EAX (0x11)
+; OBJ:     Register: CVRegEAX (0x11)
 ; OBJ:     LocalVariableAddrRange {
 ; OBJ:       OffsetStart: .text+0xC
 ; OBJ:       ISectStart: 0x0
@@ -142,7 +142,7 @@
 ; OBJ:     VarName: b
 ; OBJ:   }
 ; OBJ:   DefRangeRegisterSym {
-; OBJ:     Register: EAX (0x11)
+; OBJ:     Register: CVRegEAX (0x11)
 ; OBJ:     MayHaveNoName: 0
 ; OBJ:       OffsetStart: .text+0x13
 ; OBJ:       ISectStart: 0x0
@@ -162,7 +162,7 @@
 ; OBJ:     VarName: a
 ; OBJ:   }
 ; OBJ:   DefRangeRegisterSym {
-; OBJ:     Register: EAX (0x11)
+; OBJ:     Register: CVRegEAX (0x11)
 ; OBJ:     LocalVariableAddrRange {
 ; OBJ:       OffsetStart: .text+0xC
 ; OBJ:       ISectStart: 0x0
@@ -176,7 +176,7 @@
 ; OBJ:     VarName: b
 ; OBJ:   }
 ; OBJ:   DefRangeRegisterSym {
-; OBJ:     Register: EAX (0x11)
+; OBJ:     Register: CVRegEAX (0x11)
 ; OBJ:     LocalVariableAddrRange {
 ; OBJ:       OffsetStart: .text+0x13
 ; OBJ:       ISectStart: 0x0
@@ -252,7 +252,7 @@ attributes #3 = { nounwind }
 !9 = !{i32 2, !"Debug Info Version", i32 3}
 !10 = !{i32 1, !"PIC Level", i32 2}
 !11 = !{!"clang version 3.9.0 (trunk 260617) (llvm/trunk 260619)"}
-!12 = distinct !DISubprogram(name: "f", scope: !3, file: !3, line: 9, type: !13, isLocal: false, isDefinition: true, scopeLine: 9, flags: DIFlagPrototyped, isOptimized: true, unit: !2, variables: !15)
+!12 = distinct !DISubprogram(name: "f", scope: !3, file: !3, line: 9, type: !13, isLocal: false, isDefinition: true, scopeLine: 9, flags: DIFlagPrototyped, isOptimized: true, unit: !2, retainedNodes: !15)
 !13 = !DISubroutineType(types: !14)
 !14 = !{null, !7}
 !15 = !{!16, !17, !20, !21}
@@ -270,7 +270,7 @@ attributes #3 = { nounwind }
 !27 = !DILocation(line: 10, column: 7, scope: !12)
 !28 = !DILocation(line: 11, column: 9, scope: !18)
 !29 = !DILocalVariable(name: "a", arg: 1, scope: !30, file: !3, line: 4, type: !7)
-!30 = distinct !DISubprogram(name: "inlineinc", scope: !3, file: !3, line: 4, type: !31, isLocal: true, isDefinition: true, scopeLine: 4, flags: DIFlagPrototyped, isOptimized: true, unit: !2, variables: !33)
+!30 = distinct !DISubprogram(name: "inlineinc", scope: !3, file: !3, line: 4, type: !31, isLocal: true, isDefinition: true, scopeLine: 4, flags: DIFlagPrototyped, isOptimized: true, unit: !2, retainedNodes: !33)
 !31 = !DISubroutineType(types: !32)
 !32 = !{!7, !7}
 !33 = !{!29, !34}

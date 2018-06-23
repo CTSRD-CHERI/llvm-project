@@ -31,8 +31,6 @@ using namespace lld;
 using namespace lld::elf;
 
 uint8_t Out::First;
-OutputSection *Out::Opd;
-uint8_t *Out::OpdBuf;
 PhdrEntry *Out::TlsPhdr;
 OutputSection *Out::DebugInfo;
 OutputSection *Out::ElfHeader;
@@ -141,7 +139,7 @@ void OutputSection::addSection(InputSection *IS) {
 }
 
 static void sortByOrder(MutableArrayRef<InputSection *> In,
-                        std::function<int(InputSectionBase *S)> Order) {
+                        llvm::function_ref<int(InputSectionBase *S)> Order) {
   typedef std::pair<int, InputSection *> Pair;
   auto Comp = [](const Pair &A, const Pair &B) { return A.first < B.first; };
 
@@ -164,7 +162,7 @@ bool OutputSection::classof(const BaseCommand *C) {
   return C->Kind == OutputSectionKind;
 }
 
-void OutputSection::sort(std::function<int(InputSectionBase *S)> Order) {
+void OutputSection::sort(llvm::function_ref<int(InputSectionBase *S)> Order) {
   assert(Live);
   for (BaseCommand *B : SectionCommands)
     if (auto *ISD = dyn_cast<InputSectionDescription>(B))

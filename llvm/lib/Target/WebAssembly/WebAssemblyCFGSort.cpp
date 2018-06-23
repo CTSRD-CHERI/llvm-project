@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief This file implements a CFG sorting pass.
+/// This file implements a CFG sorting pass.
 ///
 /// This pass reorders the blocks in a function to put them into topological
 /// order, ignoring loop backedges, and without any loop being interrupted
@@ -264,9 +264,9 @@ static void SortBlocks(MachineFunction &MF, const MachineLoopInfo &MLI,
 }
 
 bool WebAssemblyCFGSort::runOnMachineFunction(MachineFunction &MF) {
-  DEBUG(dbgs() << "********** CFG Sorting **********\n"
-                  "********** Function: "
-               << MF.getName() << '\n');
+  LLVM_DEBUG(dbgs() << "********** CFG Sorting **********\n"
+                       "********** Function: "
+                    << MF.getName() << '\n');
 
   const auto &MLI = getAnalysis<MachineLoopInfo>();
   auto &MDT = getAnalysis<MachineDominatorTree>();

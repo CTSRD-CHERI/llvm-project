@@ -245,12 +245,13 @@ int X86TTIImpl::getArithmeticInstrCost(
   }
 
   if (ISD == ISD::SDIV &&
-      Op2Info == TargetTransformInfo::OK_UniformConstantValue &&
+      (Op2Info == TargetTransformInfo::OK_UniformConstantValue ||
+       Op2Info == TargetTransformInfo::OK_NonUniformConstantValue) &&
       Opd2PropInfo == TargetTransformInfo::OP_PowerOf2) {
     // On X86, vector signed division by constants power-of-two are
     // normally expanded to the sequence SRA + SRL + ADD + SRA.
-    // The OperandValue properties many not be same as that of previous
-    // operation;conservatively assume OP_None.
+    // The OperandValue properties may not be the same as that of the previous
+    // operation; conservatively assume OP_None.
     int Cost = 2 * getArithmeticInstrCost(Instruction::AShr, Ty, Op1Info,
                                           Op2Info, TargetTransformInfo::OP_None,
                                           TargetTransformInfo::OP_None);
@@ -419,12 +420,6 @@ int X86TTIImpl::getArithmeticInstrCost(
     { ISD::MUL,   MVT::v64i8,     11 }, // extend/pmullw/trunc sequence.
     { ISD::MUL,   MVT::v32i8,      4 }, // extend/pmullw/trunc sequence.
     { ISD::MUL,   MVT::v16i8,      4 }, // extend/pmullw/trunc sequence.
-
-    // Vectorizing division is a bad idea. See the SSE2 table for more comments.
-    { ISD::SDIV,  MVT::v64i8,  64*20 },
-    { ISD::SDIV,  MVT::v32i16, 32*20 },
-    { ISD::UDIV,  MVT::v64i8,  64*20 },
-    { ISD::UDIV,  MVT::v32i16, 32*20 }
   };
 
   // Look for AVX512BW lowering tricks for custom cases.
@@ -458,12 +453,6 @@ int X86TTIImpl::getArithmeticInstrCost(
     { ISD::FADD,    MVT::v16f32,     1 }, // Skylake from http://www.agner.org/
     { ISD::FSUB,    MVT::v16f32,     1 }, // Skylake from http://www.agner.org/
     { ISD::FMUL,    MVT::v16f32,     1 }, // Skylake from http://www.agner.org/
-
-    // Vectorizing division is a bad idea. See the SSE2 table for more comments.
-    { ISD::SDIV,    MVT::v16i32, 16*20 },
-    { ISD::SDIV,    MVT::v8i64,   8*20 },
-    { ISD::UDIV,    MVT::v16i32, 16*20 },
-    { ISD::UDIV,    MVT::v8i64,   8*20 }
   };
 
   if (ST->hasAVX512())
@@ -492,7 +481,9 @@ int X86TTIImpl::getArithmeticInstrCost(
          Op2Info == TargetTransformInfo::OK_NonUniformConstantValue))
       // On AVX2, a packed v16i16 shift left by a constant build_vector
       // is lowered into a vector multiply (vpmullw).
-      return LT.first;
+      return getArithmeticInstrCost(Instruction::Mul, Ty, Op1Info, Op2Info,
+                                    TargetTransformInfo::OP_None,
+                                    TargetTransformInfo::OP_None);
 
     if (const auto *Entry = CostTableLookup(AVX2ShiftCostTable, ISD, LT.second))
       return LT.first * Entry->Cost;
@@ -648,16 +639,6 @@ int X86TTIImpl::getArithmeticInstrCost(
     { ISD::FDIV,    MVT::f64,       22 }, // SNB from http://www.agner.org/
     { ISD::FDIV,    MVT::v2f64,     22 }, // SNB from http://www.agner.org/
     { ISD::FDIV,    MVT::v4f64,     44 }, // SNB from http://www.agner.org/
-
-    // Vectorizing division is a bad idea. See the SSE2 table for more comments.
-    { ISD::SDIV,    MVT::v32i8,  32*20 },
-    { ISD::SDIV,    MVT::v16i16, 16*20 },
-    { ISD::SDIV,    MVT::v8i32,   8*20 },
-    { ISD::SDIV,    MVT::v4i64,   4*20 },
-    { ISD::UDIV,    MVT::v32i8,  32*20 },
-    { ISD::UDIV,    MVT::v16i16, 16*20 },
-    { ISD::UDIV,    MVT::v8i32,   8*20 },
-    { ISD::UDIV,    MVT::v4i64,   4*20 },
   };
 
   if (ST->hasAVX())
@@ -749,21 +730,6 @@ int X86TTIImpl::getArithmeticInstrCost(
     { ISD::FDIV, MVT::v4f32,      39 }, // Pentium IV from http://www.agner.org/
     { ISD::FDIV, MVT::f64,        38 }, // Pentium IV from http://www.agner.org/
     { ISD::FDIV, MVT::v2f64,      69 }, // Pentium IV from http://www.agner.org/
-
-    // It is not a good idea to vectorize division. We have to scalarize it and
-    // in the process we will often end up having to spilling regular
-    // registers. The overhead of division is going to dominate most kernels
-    // anyways so try hard to prevent vectorization of division - it is
-    // generally a bad idea. Assume somewhat arbitrarily that we have to be able
-    // to hide "20 cycles" for each lane.
-    { ISD::SDIV,  MVT::v16i8,  16*20 },
-    { ISD::SDIV,  MVT::v8i16,   8*20 },
-    { ISD::SDIV,  MVT::v4i32,   4*20 },
-    { ISD::SDIV,  MVT::v2i64,   2*20 },
-    { ISD::UDIV,  MVT::v16i8,  16*20 },
-    { ISD::UDIV,  MVT::v8i16,   8*20 },
-    { ISD::UDIV,  MVT::v4i32,   4*20 },
-    { ISD::UDIV,  MVT::v2i64,   2*20 },
   };
 
   if (ST->hasSSE2())
@@ -778,6 +744,19 @@ int X86TTIImpl::getArithmeticInstrCost(
   if (ST->hasSSE1())
     if (const auto *Entry = CostTableLookup(SSE1CostTable, ISD, LT.second))
       return LT.first * Entry->Cost;
+
+  // It is not a good idea to vectorize division. We have to scalarize it and
+  // in the process we will often end up having to spilling regular
+  // registers. The overhead of division is going to dominate most kernels
+  // anyways so try hard to prevent vectorization of division - it is
+  // generally a bad idea. Assume somewhat arbitrarily that we have to be able
+  // to hide "20 cycles" for each lane.
+  if ((ISD == ISD::SDIV || ISD == ISD::UDIV) && LT.second.isVector()) {
+    int ScalarCost = getArithmeticInstrCost(
+        Opcode, Ty->getScalarType(), Op1Info, Op2Info,
+        TargetTransformInfo::OP_None, TargetTransformInfo::OP_None);
+    return 20 * LT.first * LT.second.getVectorNumElements() * ScalarCost;
+  }
 
   // Fallback to the default implementation.
   return BaseT::getArithmeticInstrCost(Opcode, Ty, Op1Info, Op2Info);
@@ -933,8 +912,8 @@ int X86TTIImpl::getShuffleCost(TTI::ShuffleKind Kind, Type *Tp, int Index,
     { TTI::SK_Reverse,   MVT::v16i16, 2 }, // vperm2i128 + pshufb
     { TTI::SK_Reverse,   MVT::v32i8,  2 }, // vperm2i128 + pshufb
 
-    { TTI::SK_Alternate, MVT::v16i16, 1 }, // vpblendw
-    { TTI::SK_Alternate, MVT::v32i8,  1 }, // vpblendvb
+    { TTI::SK_Select,    MVT::v16i16, 1 }, // vpblendvb
+    { TTI::SK_Select,    MVT::v32i8,  1 }, // vpblendvb
 
     { TTI::SK_PermuteSingleSrc, MVT::v4f64,  1 }, // vpermpd
     { TTI::SK_PermuteSingleSrc, MVT::v8f32,  1 }, // vpermps
@@ -998,12 +977,12 @@ int X86TTIImpl::getShuffleCost(TTI::ShuffleKind Kind, Type *Tp, int Index,
     { TTI::SK_Reverse,   MVT::v32i8,  4 }, // vextractf128 + 2*pshufb
                                            // + vinsertf128
 
-    { TTI::SK_Alternate, MVT::v4i64,  1 }, // vblendpd
-    { TTI::SK_Alternate, MVT::v4f64,  1 }, // vblendpd
-    { TTI::SK_Alternate, MVT::v8i32,  1 }, // vblendps
-    { TTI::SK_Alternate, MVT::v8f32,  1 }, // vblendps
-    { TTI::SK_Alternate, MVT::v16i16, 3 }, // vpand + vpandn + vpor
-    { TTI::SK_Alternate, MVT::v32i8,  3 }, // vpand + vpandn + vpor
+    { TTI::SK_Select,    MVT::v4i64,  1 }, // vblendpd
+    { TTI::SK_Select,    MVT::v4f64,  1 }, // vblendpd
+    { TTI::SK_Select,    MVT::v8i32,  1 }, // vblendps
+    { TTI::SK_Select,    MVT::v8f32,  1 }, // vblendps
+    { TTI::SK_Select,    MVT::v16i16, 3 }, // vpand + vpandn + vpor
+    { TTI::SK_Select,    MVT::v32i8,  3 }, // vpand + vpandn + vpor
 
     { TTI::SK_PermuteSingleSrc, MVT::v4f64,  3 }, // 2*vperm2f128 + vshufpd
     { TTI::SK_PermuteSingleSrc, MVT::v4i64,  3 }, // 2*vperm2f128 + vshufpd
@@ -1029,12 +1008,12 @@ int X86TTIImpl::getShuffleCost(TTI::ShuffleKind Kind, Type *Tp, int Index,
       return LT.first * Entry->Cost;
 
   static const CostTblEntry SSE41ShuffleTbl[] = {
-    { TTI::SK_Alternate, MVT::v2i64,  1 }, // pblendw
-    { TTI::SK_Alternate, MVT::v2f64,  1 }, // movsd
-    { TTI::SK_Alternate, MVT::v4i32,  1 }, // pblendw
-    { TTI::SK_Alternate, MVT::v4f32,  1 }, // blendps
-    { TTI::SK_Alternate, MVT::v8i16,  1 }, // pblendw
-    { TTI::SK_Alternate, MVT::v16i8,  1 }  // pblendvb
+    { TTI::SK_Select,    MVT::v2i64,  1 }, // pblendw
+    { TTI::SK_Select,    MVT::v2f64,  1 }, // movsd
+    { TTI::SK_Select,    MVT::v4i32,  1 }, // pblendw
+    { TTI::SK_Select,    MVT::v4f32,  1 }, // blendps
+    { TTI::SK_Select,    MVT::v8i16,  1 }, // pblendw
+    { TTI::SK_Select,    MVT::v16i8,  1 }  // pblendvb
   };
 
   if (ST->hasSSE41())
@@ -1048,8 +1027,8 @@ int X86TTIImpl::getShuffleCost(TTI::ShuffleKind Kind, Type *Tp, int Index,
     { TTI::SK_Reverse,   MVT::v8i16,  1 }, // pshufb
     { TTI::SK_Reverse,   MVT::v16i8,  1 }, // pshufb
 
-    { TTI::SK_Alternate, MVT::v8i16,  3 }, // 2*pshufb + por
-    { TTI::SK_Alternate, MVT::v16i8,  3 }, // 2*pshufb + por
+    { TTI::SK_Select,    MVT::v8i16,  3 }, // 2*pshufb + por
+    { TTI::SK_Select,    MVT::v16i8,  3 }, // 2*pshufb + por
 
     { TTI::SK_PermuteSingleSrc, MVT::v8i16, 1 }, // pshufb
     { TTI::SK_PermuteSingleSrc, MVT::v16i8, 1 }, // pshufb
@@ -1076,11 +1055,11 @@ int X86TTIImpl::getShuffleCost(TTI::ShuffleKind Kind, Type *Tp, int Index,
     { TTI::SK_Reverse,   MVT::v16i8,  9 }, // 2*pshuflw + 2*pshufhw
                                            // + 2*pshufd + 2*unpck + packus
 
-    { TTI::SK_Alternate, MVT::v2i64,  1 }, // movsd
-    { TTI::SK_Alternate, MVT::v2f64,  1 }, // movsd
-    { TTI::SK_Alternate, MVT::v4i32,  2 }, // 2*shufps
-    { TTI::SK_Alternate, MVT::v8i16,  3 }, // pand + pandn + por
-    { TTI::SK_Alternate, MVT::v16i8,  3 }, // pand + pandn + por
+    { TTI::SK_Select,    MVT::v2i64,  1 }, // movsd
+    { TTI::SK_Select,    MVT::v2f64,  1 }, // movsd
+    { TTI::SK_Select,    MVT::v4i32,  2 }, // 2*shufps
+    { TTI::SK_Select,    MVT::v8i16,  3 }, // pand + pandn + por
+    { TTI::SK_Select,    MVT::v16i8,  3 }, // pand + pandn + por
 
     { TTI::SK_PermuteSingleSrc, MVT::v2f64,  1 }, // shufpd
     { TTI::SK_PermuteSingleSrc, MVT::v2i64,  1 }, // pshufd
@@ -1104,7 +1083,7 @@ int X86TTIImpl::getShuffleCost(TTI::ShuffleKind Kind, Type *Tp, int Index,
   static const CostTblEntry SSE1ShuffleTbl[] = {
     { TTI::SK_Broadcast,        MVT::v4f32, 1 }, // shufps
     { TTI::SK_Reverse,          MVT::v4f32, 1 }, // shufps
-    { TTI::SK_Alternate,        MVT::v4f32, 2 }, // 2*shufps
+    { TTI::SK_Select,           MVT::v4f32, 2 }, // 2*shufps
     { TTI::SK_PermuteSingleSrc, MVT::v4f32, 1 }, // shufps
     { TTI::SK_PermuteTwoSrc,    MVT::v4f32, 2 }, // 2*shufps
   };
@@ -1962,8 +1941,8 @@ int X86TTIImpl::getMaskedMemoryOpCost(unsigned Opcode, Type *SrcTy,
   if (VT.isSimple() && LT.second != VT.getSimpleVT() &&
       LT.second.getVectorNumElements() == NumElem)
     // Promotion requires expand/truncate for data and a shuffle for mask.
-    Cost += getShuffleCost(TTI::SK_Alternate, SrcVTy, 0, nullptr) +
-            getShuffleCost(TTI::SK_Alternate, MaskTy, 0, nullptr);
+    Cost += getShuffleCost(TTI::SK_Select, SrcVTy, 0, nullptr) +
+            getShuffleCost(TTI::SK_Select, MaskTy, 0, nullptr);
 
   else if (LT.second.getVectorNumElements() > NumElem) {
     VectorType *NewMaskTy = VectorType::get(MaskTy->getVectorElementType(),
@@ -2221,7 +2200,7 @@ int X86TTIImpl::getMinMaxReductionCost(Type *ValTy, Type *CondTy,
   return BaseT::getMinMaxReductionCost(ValTy, CondTy, IsPairwise, IsUnsigned);
 }
 
-/// \brief Calculate the cost of materializing a 64-bit value. This helper
+/// Calculate the cost of materializing a 64-bit value. This helper
 /// method might only calculate a fraction of a larger immediate. Therefore it
 /// is valid to return a cost of ZERO.
 int X86TTIImpl::getIntImmCost(int64_t Val) {

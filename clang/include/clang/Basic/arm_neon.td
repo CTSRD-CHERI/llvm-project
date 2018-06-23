@@ -199,6 +199,13 @@ def OP_SCALAR_HALF_SET_LNQ : Op<(bitcast "float16x8_t",
                                           (bitcast "int16_t", $p0),
                                           (bitcast "int16x8_t", $p1), $p2))>;
 
+def OP_DOT_LN
+    : Op<(call "vdot", $p0, $p1,
+          (bitcast $p1, (splat(bitcast "uint32x2_t", $p2), $p3)))>;
+def OP_DOT_LNQ
+    : Op<(call "vdot", $p0, $p1,
+          (bitcast $p1, (splat(bitcast "uint32x4_t", $p2), $p3)))>;
+
 //===----------------------------------------------------------------------===//
 // Instructions
 //===----------------------------------------------------------------------===//
@@ -331,12 +338,24 @@ def VSLI_N : WInst<"vsli_n", "dddi",
 // E.3.14 Loads and stores of a single vector
 def VLD1      : WInst<"vld1", "dc",
                       "QUcQUsQUiQUlQcQsQiQlQhQfQPcQPsUcUsUiUlcsilhfPcPs">;
+def VLD1_X2   : WInst<"vld1_x2", "2c",
+                      "cfhilsUcUiUlUsQcQfQhQiQlQsQUcQUiQUlQUsPcPsQPcQPs">;
+def VLD1_X3   : WInst<"vld1_x3", "3c",
+                      "cfhilsUcUiUlUsQcQfQhQiQlQsQUcQUiQUlQUsPcPsQPcQPs">;
+def VLD1_X4   : WInst<"vld1_x4", "4c",
+                      "cfhilsUcUiUlUsQcQfQhQiQlQsQUcQUiQUlQUsPcPsQPcQPs">;
 def VLD1_LANE : WInst<"vld1_lane", "dcdi",
                       "QUcQUsQUiQUlQcQsQiQlQhQfQPcQPsUcUsUiUlcsilhfPcPs">;
 def VLD1_DUP  : WInst<"vld1_dup", "dc",
                       "QUcQUsQUiQUlQcQsQiQlQhQfQPcQPsUcUsUiUlcsilhfPcPs">;
 def VST1      : WInst<"vst1", "vpd",
                       "QUcQUsQUiQUlQcQsQiQlQhQfQPcQPsUcUsUiUlcsilhfPcPs">;
+def VST1_X2   : WInst<"vst1_x2", "vp2",
+                      "cfhilsUcUiUlUsQcQfQhQiQlQsQUcQUiQUlQUsPcPsQPcQPs">;
+def VST1_X3   : WInst<"vst1_x3", "vp3",
+                      "cfhilsUcUiUlUsQcQfQhQiQlQsQUcQUiQUlQUsPcPsQPcQPs">;
+def VST1_X4   : WInst<"vst1_x4", "vp4",
+                      "cfhilsUcUiUlUsQcQfQhQiQlQsQUcQUiQUlQUsPcPsQPcQPs">;
 def VST1_LANE : WInst<"vst1_lane", "vpdi",
                       "QUcQUsQUiQUlQcQsQiQlQhQfQPcQPsUcUsUiUlcsilhfPcPs">;
 
@@ -562,18 +581,15 @@ def ST3 : WInst<"vst3", "vp3", "QUlQldQdPlQPl">;
 def ST4 : WInst<"vst4", "vp4", "QUlQldQdPlQPl">;
 
 def LD1_X2 : WInst<"vld1_x2", "2c",
-                   "QUcQUsQUiQcQsQiQhQfQPcQPsUcUsUiUlcsilhfPcPsQUlQldQdPlQPl">;
-def LD3_x3 : WInst<"vld1_x3", "3c",
-                   "QUcQUsQUiQcQsQiQhQfQPcQPsUcUsUiUlcsilhfPcPsQUlQldQdPlQPl">;
-def LD4_x4 : WInst<"vld1_x4", "4c",
-                   "QUcQUsQUiQcQsQiQhQfQPcQPsUcUsUiUlcsilhfPcPsQUlQldQdPlQPl">;
+                   "dQdPlQPl">;
+def LD1_X3 : WInst<"vld1_x3", "3c",
+                   "dQdPlQPl">;
+def LD1_X4 : WInst<"vld1_x4", "4c",
+                   "dQdPlQPl">;
 
-def ST1_X2 : WInst<"vst1_x2", "vp2",
-                   "QUcQUsQUiQcQsQiQhQfQPcQPsUcUsUiUlcsilhfPcPsQUlQldQdPlQPl">;
-def ST1_X3 : WInst<"vst1_x3", "vp3",
-                   "QUcQUsQUiQcQsQiQhQfQPcQPsUcUsUiUlcsilhfPcPsQUlQldQdPlQPl">;
-def ST1_X4 : WInst<"vst1_x4", "vp4",
-                   "QUcQUsQUiQcQsQiQhQfQPcQPsUcUsUiUlcsilhfPcPsQUlQldQdPlQPl">;
+def ST1_X2 : WInst<"vst1_x2", "vp2", "dQdPlQPl">;
+def ST1_X3 : WInst<"vst1_x3", "vp3", "dQdPlQPl">;
+def ST1_X4 : WInst<"vst1_x4", "vp4", "dQdPlQPl">;
 
 def LD1_LANE : WInst<"vld1_lane", "dcdi", "dQdPlQPl">;
 def LD2_LANE : WInst<"vld2_lane", "2c2i", "lUlQcQUcQPcQlQUldQdPlQPl">;
@@ -1578,4 +1594,14 @@ let ArchGuard = "defined(__ARM_FEATURE_FP16_VECTOR_ARITHMETIC) && defined(__aarc
 
   def SCALAR_VDUP_LANEH  : IInst<"vdup_lane", "sdi", "Sh">;
   def SCALAR_VDUP_LANEQH : IInst<"vdup_laneq", "sji", "Sh">;
+}
+
+// v8.2-A dot product instructions.
+let ArchGuard = "defined(__ARM_FEATURE_DOTPROD)" in {
+  def DOT : SInst<"vdot", "dd88", "iQiUiQUi">;
+  def DOT_LANE : SOpInst<"vdot_lane", "dd87i", "iUiQiQUi", OP_DOT_LN>;
+}
+let ArchGuard = "defined(__ARM_FEATURE_DOTPROD) && defined(__aarch64__)" in {
+  // Variants indexing into a 128-bit vector are A64 only.
+  def UDOT_LANEQ : SOpInst<"vdot_laneq", "dd89i", "iUiQiQUi", OP_DOT_LNQ>;
 }

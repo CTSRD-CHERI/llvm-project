@@ -8,7 +8,7 @@
 //==-----------------------------------------------------------------------===//
 //
 /// \file
-/// \brief AMDGPU specific subclass of TargetSubtarget.
+/// AMDGPU specific subclass of TargetSubtarget.
 //
 //===----------------------------------------------------------------------===//
 
@@ -23,7 +23,6 @@
 #include "SIFrameLowering.h"
 #include "SIISelLowering.h"
 #include "SIInstrInfo.h"
-#include "SIMachineFunctionInfo.h"
 #include "Utils/AMDGPUBaseInfo.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/CodeGen/GlobalISel/InstructionSelector.h"
@@ -72,7 +71,9 @@ public:
     ISAVersion8_0_3,
     ISAVersion8_1_0,
     ISAVersion9_0_0,
-    ISAVersion9_0_2
+    ISAVersion9_0_2,
+    ISAVersion9_0_4,
+    ISAVersion9_0_6,
   };
 
   enum TrapHandlerAbi {
@@ -150,6 +151,7 @@ protected:
   bool HasIntClamp;
   bool HasVOP3PInsts;
   bool HasMadMixInsts;
+  bool HasFmaMixInsts;
   bool HasMovrel;
   bool HasVGPRIndexMode;
   bool HasScalarStores;
@@ -162,6 +164,8 @@ protected:
   bool HasSDWAMac;
   bool HasSDWAOutModsVOPC;
   bool HasDPP;
+  bool HasDLInsts;
+  bool D16PreservesUnusedBits;
   bool FlatAddressSpace;
   bool FlatInstOffsets;
   bool FlatGlobalInsts;
@@ -329,6 +333,10 @@ public:
     return HasMadMixInsts;
   }
 
+  bool hasFmaMixInsts() const {
+    return HasFmaMixInsts;
+  }
+
   bool hasCARRY() const {
     return (getGeneration() >= EVERGREEN);
   }
@@ -374,10 +382,7 @@ public:
   /// the given LDS memory size is the only constraint.
   unsigned getOccupancyWithLocalMemSize(uint32_t Bytes, const Function &) const;
 
-  unsigned getOccupancyWithLocalMemSize(const MachineFunction &MF) const {
-    const auto *MFI = MF.getInfo<SIMachineFunctionInfo>();
-    return getOccupancyWithLocalMemSize(MFI->getLDSSize(), MF.getFunction());
-  }
+  unsigned getOccupancyWithLocalMemSize(const MachineFunction &MF) const;
 
   bool hasFP16Denormals() const {
     return FP64FP16Denormals;
@@ -467,6 +472,10 @@ public:
     return FlatScratchInsts;
   }
 
+  bool hasFlatLgkmVMemCountInOrder() const {
+    return getGeneration() > GFX9;
+  }
+
   bool hasD16LoadStore() const {
     return getGeneration() >= GFX9;
   }
@@ -485,17 +494,17 @@ public:
     return HasUnpackedD16VMem;
   }
 
-  bool isMesaKernel(const MachineFunction &MF) const {
-    return isMesa3DOS() && !AMDGPU::isShader(MF.getFunction().getCallingConv());
+  bool isMesaKernel(const Function &F) const {
+    return isMesa3DOS() && !AMDGPU::isShader(F.getCallingConv());
   }
 
   // Covers VS/PS/CS graphics shaders
-  bool isMesaGfxShader(const MachineFunction &MF) const {
-    return isMesa3DOS() && AMDGPU::isShader(MF.getFunction().getCallingConv());
+  bool isMesaGfxShader(const Function &F) const {
+    return isMesa3DOS() && AMDGPU::isShader(F.getCallingConv());
   }
 
-  bool isAmdCodeObjectV2(const MachineFunction &MF) const {
-    return isAmdHsaOS() || isMesaKernel(MF);
+  bool isAmdCodeObjectV2(const Function &F) const {
+    return isAmdHsaOS() || isMesaKernel(F);
   }
 
   bool hasMad64_32() const {
@@ -530,10 +539,22 @@ public:
     return HasSDWAOutModsVOPC;
   }
 
-  /// \brief Returns the offset in bytes from the start of the input buffer
+  bool vmemWriteNeedsExpWaitcnt() const {
+    return getGeneration() < SEA_ISLANDS;
+  }
+
+  bool hasDLInsts() const {
+    return HasDLInsts;
+  }
+
+  bool d16PreservesUnusedBits() const {
+    return D16PreservesUnusedBits;
+  }
+
+  /// Returns the offset in bytes from the start of the input buffer
   ///        of the first explicit kernel argument.
-  unsigned getExplicitKernelArgOffset(const MachineFunction &MF) const {
-    return isAmdCodeObjectV2(MF) ? 0 : 36;
+  unsigned getExplicitKernelArgOffset(const Function &F) const {
+    return isAmdCodeObjectV2(F) ? 0 : 36;
   }
 
   unsigned getAlignmentForImplicitArgPtr() const {
@@ -542,11 +563,10 @@ public:
 
   /// \returns Number of bytes of arguments that are passed to a shader or
   /// kernel in addition to the explicit ones declared for the function.
-  unsigned getImplicitArgNumBytes(const MachineFunction &MF) const {
-    if (isMesaKernel(MF))
+  unsigned getImplicitArgNumBytes(const Function &F) const {
+    if (isMesaKernel(F))
       return 16;
-    return AMDGPU::getIntegerAttribute(
-      MF.getFunction(), "amdgpu-implicitarg-num-bytes", 0);
+    return AMDGPU::getIntegerAttribute(F, "amdgpu-implicitarg-num-bytes", 0);
   }
 
   // Scratch is allocated in 256 dword per wave blocks for the entire
@@ -843,7 +863,7 @@ public:
     return getGeneration() >= AMDGPUSubtarget::VOLCANIC_ISLANDS;
   }
 
-  unsigned getKernArgSegmentSize(const MachineFunction &MF,
+  unsigned getKernArgSegmentSize(const Function &F,
                                  unsigned ExplictArgBytes) const;
 
   /// Return the maximum number of waves per SIMD for kernels using \p SGPRs SGPRs

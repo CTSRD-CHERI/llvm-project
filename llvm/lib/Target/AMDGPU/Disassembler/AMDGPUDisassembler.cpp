@@ -21,6 +21,7 @@
 #include "AMDGPU.h"
 #include "AMDGPURegisterInfo.h"
 #include "SIDefines.h"
+#include "MCTargetDesc/AMDGPUMCTargetDesc.h"
 #include "Utils/AMDGPUBaseInfo.h"
 #include "llvm-c/Disassembler.h"
 #include "llvm/ADT/APInt.h"
@@ -201,7 +202,17 @@ DecodeStatus AMDGPUDisassembler::getInstruction(MCInst &MI, uint64_t &Size,
 
       if (STI.getFeatureBits()[AMDGPU::FeatureUnpackedD16VMem]) {
         Res = tryDecodeInst(DecoderTableGFX80_UNPACKED64, MI, QW, Address);
-        if (Res) break;
+        if (Res)
+          break;
+      }
+
+      // Some GFX9 subtargets repurposed the v_mad_mix_f32, v_mad_mixlo_f16 and
+      // v_mad_mixhi_f16 for FMA variants. Try to decode using this special
+      // table first so we print the correct name.
+      if (STI.getFeatureBits()[AMDGPU::FeatureFmaMixInsts]) {
+        Res = tryDecodeInst(DecoderTableGFX9_DL64, MI, QW, Address);
+        if (Res)
+          break;
       }
     }
 
@@ -233,7 +244,8 @@ DecodeStatus AMDGPUDisassembler::getInstruction(MCInst &MI, uint64_t &Size,
 
   if (Res && (MI.getOpcode() == AMDGPU::V_MAC_F32_e64_vi ||
               MI.getOpcode() == AMDGPU::V_MAC_F32_e64_si ||
-              MI.getOpcode() == AMDGPU::V_MAC_F16_e64_vi)) {
+              MI.getOpcode() == AMDGPU::V_MAC_F16_e64_vi ||
+              MI.getOpcode() == AMDGPU::V_FMAC_F32_e64_vi)) {
     // Insert dummy unused src2_modifiers.
     insertNamedMCOperand(MI, MCOperand::createImm(0),
                          AMDGPU::OpName::src2_modifiers);

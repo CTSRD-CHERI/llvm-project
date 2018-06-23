@@ -401,9 +401,11 @@ void DwarfDebug::addSubprogramNames(const DISubprogram *SP, DIE &Die) {
   if (SP->getName() != "")
     addAccelName(SP->getName(), Die);
 
-  // If the linkage name is different than the name, go ahead and output
-  // that as well into the name table.
-  if (SP->getLinkageName() != "" && SP->getName() != SP->getLinkageName())
+  // If the linkage name is different than the name, go ahead and output that as
+  // well into the name table. Only do that if we are going to actually emit
+  // that name.
+  if (SP->getLinkageName() != "" && SP->getName() != SP->getLinkageName() &&
+      (useAllLinkageNames() || InfoHolder.getAbstractSPDies().lookup(SP)))
     addAccelName(SP->getLinkageName(), Die);
 
   // If this is an Objective-C selector name add it to the ObjC accelerator
@@ -745,11 +747,15 @@ void DwarfDebug::finalizeModuleInfo() {
       // Emit a unique identifier for this CU.
       uint64_t ID =
           DIEHash(Asm).computeCUSignature(DWOName, TheCU.getUnitDie());
-      TheCU.addUInt(TheCU.getUnitDie(), dwarf::DW_AT_GNU_dwo_id,
-                    dwarf::DW_FORM_data8, ID);
-      SkCU->addUInt(SkCU->getUnitDie(), dwarf::DW_AT_GNU_dwo_id,
-                    dwarf::DW_FORM_data8, ID);
-
+      if (getDwarfVersion() >= 5) {
+        TheCU.setDWOId(ID);
+        SkCU->setDWOId(ID);
+      } else {
+        TheCU.addUInt(TheCU.getUnitDie(), dwarf::DW_AT_GNU_dwo_id,
+                      dwarf::DW_FORM_data8, ID);
+        SkCU->addUInt(SkCU->getUnitDie(), dwarf::DW_AT_GNU_dwo_id,
+                      dwarf::DW_FORM_data8, ID);
+      }
       // We don't keep track of which addresses are used in which CU so this
       // is a bit pessimistic under LTO.
       if (!AddrPool.isEmpty()) {
@@ -947,7 +953,7 @@ static DebugLocEntry::Value getDebugLocValue(const MachineInstr *MI) {
   llvm_unreachable("Unexpected 4-operand DBG_VALUE instruction!");
 }
 
-/// \brief If this and Next are describing different fragments of the same
+/// If this and Next are describing different fragments of the same
 /// variable, merge them by appending Next's values to the current
 /// list of values.
 /// Return true if the merge was successful.
@@ -1042,7 +1048,7 @@ DwarfDebug::buildLocationList(SmallVectorImpl<DebugLocEntry> &DebugLoc,
       EndLabel = getLabelBeforeInsn(std::next(I)->first);
     assert(EndLabel && "Forgot label after instruction ending a range!");
 
-    DEBUG(dbgs() << "DotDebugLoc: " << *Begin << "\n");
+    LLVM_DEBUG(dbgs() << "DotDebugLoc: " << *Begin << "\n");
 
     auto Value = getDebugLocValue(Begin);
     DebugLocEntry Loc(StartLabel, EndLabel, Value);
@@ -1071,7 +1077,7 @@ DwarfDebug::buildLocationList(SmallVectorImpl<DebugLocEntry> &DebugLoc,
     // Attempt to coalesce the ranges of two otherwise identical
     // DebugLocEntries.
     auto CurEntry = DebugLoc.rbegin();
-    DEBUG({
+    LLVM_DEBUG({
       dbgs() << CurEntry->getValues().size() << " Values:\n";
       for (auto &Value : CurEntry->getValues())
         Value.dump();
@@ -1210,10 +1216,12 @@ void DwarfDebug::collectVariableInfo(DwarfCompileUnit &TheCU,
   }
 
   // Collect info for variables that were optimized out.
-  for (const DILocalVariable *DV : SP->getVariables()) {
-    if (Processed.insert(InlinedVariable(DV, nullptr)).second)
-      if (LexicalScope *Scope = LScopes.findLexicalScope(DV->getScope()))
-        createConcreteVariable(TheCU, *Scope, InlinedVariable(DV, nullptr));
+  for (const DINode *DN : SP->getRetainedNodes()) {
+    if (auto *DV = dyn_cast<DILocalVariable>(DN)) {
+      if (Processed.insert(InlinedVariable(DV, nullptr)).second)
+        if (LexicalScope *Scope = LScopes.findLexicalScope(DV->getScope()))
+          createConcreteVariable(TheCU, *Scope, InlinedVariable(DV, nullptr));
+    }
   }
 }
 
@@ -1394,14 +1402,16 @@ void DwarfDebug::endFunctionImpl(const MachineFunction *MF) {
   // Construct abstract scopes.
   for (LexicalScope *AScope : LScopes.getAbstractScopesList()) {
     auto *SP = cast<DISubprogram>(AScope->getScopeNode());
-    // Collect info for variables that were optimized out.
-    for (const DILocalVariable *DV : SP->getVariables()) {
-      if (!ProcessedVars.insert(InlinedVariable(DV, nullptr)).second)
-        continue;
-      ensureAbstractVariableIsCreated(TheCU, InlinedVariable(DV, nullptr),
-                                      DV->getScope());
-      assert(LScopes.getAbstractScopesList().size() == NumAbstractScopes
-             && "ensureAbstractVariableIsCreated inserted abstract scopes");
+    for (const DINode *DN : SP->getRetainedNodes()) {
+      if (auto *DV = dyn_cast<DILocalVariable>(DN)) {
+        // Collect info for variables that were optimized out.
+        if (!ProcessedVars.insert(InlinedVariable(DV, nullptr)).second)
+          continue;
+        ensureAbstractVariableIsCreated(TheCU, InlinedVariable(DV, nullptr),
+                                        DV->getScope());
+        assert(LScopes.getAbstractScopesList().size() == NumAbstractScopes
+               && "ensureAbstractVariableIsCreated inserted abstract scopes");
+      }
     }
     constructAbstractSubprogramScopeDIE(TheCU, AScope);
   }

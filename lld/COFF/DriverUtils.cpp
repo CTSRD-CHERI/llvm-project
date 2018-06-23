@@ -61,12 +61,7 @@ public:
     StringRef Exe = Saver.save(*ExeOrErr);
     Args.insert(Args.begin(), Exe);
 
-    std::vector<const char *> Vec;
-    for (StringRef S : Args)
-      Vec.push_back(S.data());
-    Vec.push_back(nullptr);
-
-    if (sys::ExecuteAndWait(Args[0], Vec.data()) != 0)
+    if (sys::ExecuteAndWait(Args[0], Args) != 0)
       fatal("ExecuteAndWait failed: " +
             llvm::join(Args.begin(), Args.end(), " "));
   }
@@ -756,6 +751,28 @@ static const llvm::opt::OptTable::Info InfoTable[] = {
 
 COFFOptTable::COFFOptTable() : OptTable(InfoTable, true) {}
 
+// Set color diagnostics according to --color-diagnostics={auto,always,never}
+// or --no-color-diagnostics flags.
+static void handleColorDiagnostics(opt::InputArgList &Args) {
+  auto *Arg = Args.getLastArg(OPT_color_diagnostics, OPT_color_diagnostics_eq,
+                              OPT_no_color_diagnostics);
+  if (!Arg)
+    return;
+  if (Arg->getOption().getID() == OPT_color_diagnostics) {
+    errorHandler().ColorDiagnostics = true;
+  } else if (Arg->getOption().getID() == OPT_no_color_diagnostics) {
+    errorHandler().ColorDiagnostics = false;
+  } else {
+    StringRef S = Arg->getValue();
+    if (S == "always")
+      errorHandler().ColorDiagnostics = true;
+    else if (S == "never")
+      errorHandler().ColorDiagnostics = false;
+    else if (S != "auto")
+      error("unknown option: --color-diagnostics=" + S);
+  }
+}
+
 static cl::TokenizerCallback getQuotingStyle(opt::InputArgList &Args) {
   if (auto *Arg = Args.getLastArg(OPT_rsp_quoting)) {
     StringRef S = Arg->getValue();
@@ -799,6 +816,9 @@ opt::InputArgList ArgParser::parse(ArrayRef<const char *> Argv) {
 
   if (MissingCount)
     fatal(Twine(Args.getArgString(MissingIndex)) + ": missing argument");
+
+  handleColorDiagnostics(Args);
+
   for (auto *Arg : Args.filtered(OPT_UNKNOWN))
     warn("ignoring unknown argument: " + Arg->getSpelling());
   return Args;

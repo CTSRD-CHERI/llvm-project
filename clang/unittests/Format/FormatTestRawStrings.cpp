@@ -33,8 +33,8 @@ protected:
   std::string format(llvm::StringRef Code,
                      const FormatStyle &Style = getLLVMStyle(),
                      StatusCheck CheckComplete = SC_ExpectComplete) {
-    DEBUG(llvm::errs() << "---\n");
-    DEBUG(llvm::errs() << Code << "\n\n");
+    LLVM_DEBUG(llvm::errs() << "---\n");
+    LLVM_DEBUG(llvm::errs() << Code << "\n\n");
     std::vector<tooling::Range> Ranges(1, tooling::Range(0, Code.size()));
     FormattingAttemptStatus Status;
     tooling::Replacements Replaces =
@@ -47,7 +47,7 @@ protected:
     ReplacementCount = Replaces.size();
     auto Result = applyAllReplacements(Code, Replaces);
     EXPECT_TRUE(static_cast<bool>(Result));
-    DEBUG(llvm::errs() << "\n" << *Result << "\n\n");
+    LLVM_DEBUG(llvm::errs() << "\n" << *Result << "\n\n");
     return *Result;
   }
 
@@ -199,12 +199,6 @@ TEST_F(FormatTestRawStrings, ReformatsShortRawStringsOnSingleLine) {
       format(
           R"test(P p = TP(R"pb(item_1:1 item_2:2)pb");)test",
           getRawStringPbStyleWithColumns(40)));
-  expect_eq(
-      R"test(P p = TP(R"pb(item_1 < 1 > item_2: { 2 })pb");)test",
-      format(
-          R"test(P p = TP(R"pb(item_1<1> item_2:{2})pb");)test",
-          getRawStringPbStyleWithColumns(40)));
-
   // Merge two short lines into one.
   expect_eq(R"test(
 std::string s = R"pb(
@@ -218,6 +212,18 @@ std::string s = R"pb(
 )pb";
 )test",
                    getRawStringPbStyleWithColumns(40)));
+}
+
+TEST_F(FormatTestRawStrings, BreaksShortRawStringsWhenNeeded) {
+  // The raw string contains multiple submessage entries, so break for
+  // readability.
+  expect_eq(R"test(
+P p = TP(R"pb(item_1 < 1 >
+              item_2: { 2 })pb");)test",
+      format(
+          R"test(
+P p = TP(R"pb(item_1<1> item_2:{2})pb");)test",
+          getRawStringPbStyleWithColumns(40)));
 }
 
 TEST_F(FormatTestRawStrings, BreaksRawStringsExceedingColumnLimit) {
@@ -821,6 +827,41 @@ xxxxxxxaaaaax wwwwwww = _Verxrrrrrrrrr(PARSE_TEXT_PROTO(R"pb(
 )pb"));
 )test", Style));
 }
+
+TEST_F(FormatTestRawStrings, KeepsRBraceFolloedByMoreLBracesOnSameLine) {
+  FormatStyle Style = getRawStringPbStyleWithColumns(80);
+
+  expect_eq(
+                    R"test(
+int f() {
+  if (1) {
+    TTTTTTTTTTTTTTTTTTTTT s = PARSE_TEXT_PROTO(R"pb(
+      ttttttttt {
+        ppppppppppppp {
+          [cccccccccc.pppppppppppppp.TTTTTTTTTTTTTTTTTTTT] { field_1: "123_1" }
+          [cccccccccc.pppppppppppppp.TTTTTTTTTTTTTTTTTTTT] { field_2: "123_2" }
+        }
+      }
+    )pb");
+  }
+}
+)test",
+            format(
+                    R"test(
+int f() {
+  if (1) {
+   TTTTTTTTTTTTTTTTTTTTT s = PARSE_TEXT_PROTO(R"pb(
+   ttttttttt {
+   ppppppppppppp {
+   [cccccccccc.pppppppppppppp.TTTTTTTTTTTTTTTTTTTT] { field_1: "123_1" }
+   [cccccccccc.pppppppppppppp.TTTTTTTTTTTTTTTTTTTT] { field_2: "123_2" }}}
+   )pb");
+  }
+}
+)test",
+                    Style));
+}
+
 
 } // end namespace
 } // end namespace format

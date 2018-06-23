@@ -53,6 +53,11 @@ void MachineIRBuilderBase::setInsertPt(MachineBasicBlock &MBB,
   State.II = II;
 }
 
+void MachineIRBuilderBase::recordInsertion(MachineInstr *InsertedInstr) const {
+  if (State.InsertedInstr)
+    State.InsertedInstr(InsertedInstr);
+}
+
 void MachineIRBuilderBase::recordInsertions(
     std::function<void(MachineInstr *)> Inserted) {
   State.InsertedInstr = std::move(Inserted);
@@ -77,8 +82,7 @@ MachineInstrBuilder MachineIRBuilderBase::buildInstrNoInsert(unsigned Opcode) {
 
 MachineInstrBuilder MachineIRBuilderBase::insertInstr(MachineInstrBuilder MIB) {
   getMBB().insert(getInsertPt(), MIB);
-  if (State.InsertedInstr)
-    State.InsertedInstr(MIB);
+  recordInsertion(MIB);
   return MIB;
 }
 
@@ -278,10 +282,16 @@ MachineInstrBuilder MachineIRBuilderBase::buildBrCond(unsigned Tst,
 
 MachineInstrBuilder MachineIRBuilderBase::buildLoad(unsigned Res, unsigned Addr,
                                                     MachineMemOperand &MMO) {
+  return buildLoadInstr(TargetOpcode::G_LOAD, Res, Addr, MMO);
+}
+
+MachineInstrBuilder
+MachineIRBuilderBase::buildLoadInstr(unsigned Opcode, unsigned Res,
+                                     unsigned Addr, MachineMemOperand &MMO) {
   assert(getMRI()->getType(Res).isValid() && "invalid operand type");
   assert(getMRI()->getType(Addr).isPointer() && "invalid operand type");
 
-  return buildInstr(TargetOpcode::G_LOAD)
+  return buildInstr(Opcode)
       .addDef(Res)
       .addUse(Addr)
       .addMemOperand(&MMO);

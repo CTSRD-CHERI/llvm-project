@@ -6,14 +6,23 @@
   addu $3, $4, $5          # CHECK: addu $3, $4, $5     # encoding: [0x00,0xa4,0x19,0x50]
   addiupc $4, 100          # CHECK: lapc $4, 100        # encoding: [0x78,0x80,0x00,0x19]
   addiur1sp $7, 4          # CHECK: addiur1sp $7, 4     # encoding: [0x6f,0x83]
+                           # CHECK:                     # <MCInst #{{.*}} ADDIUR1SP_MM
   addiur2 $6, $7, -1       # CHECK: addiur2 $6, $7, -1  # encoding: [0x6f,0x7e]
+                           # CHECK:                     # <MCInst #{{.*}} ADDIUR2_MM
   addiur2 $6, $7, 12       # CHECK: addiur2 $6, $7, 12  # encoding: [0x6f,0x76]
+                           # CHECK:                     # <MCInst #{{.*}} ADDIUR2_MM
   addius5 $7, -2           # CHECK: addius5 $7, -2      # encoding: [0x4c,0xfc]
+                           # CHECK:                     # <MCInst #{{.*}} ADDIUS5_MM
   addiusp -1028            # CHECK: addiusp -1028       # encoding: [0x4f,0xff]
+                           # CHECK:                     # <MCInst #{{.*}} ADDIUSP_MM
   addiusp -1032            # CHECK: addiusp -1032       # encoding: [0x4f,0xfd]
+                           # CHECK:                     # <MCInst #{{.*}} ADDIUSP_MM
   addiusp 1024             # CHECK: addiusp 1024        # encoding: [0x4c,0x01]
+                           # CHECK:                     # <MCInst #{{.*}} ADDIUSP_MM
   addiusp 1028             # CHECK: addiusp 1028        # encoding: [0x4c,0x03]
+                           # CHECK:                     # <MCInst #{{.*}} ADDIUSP_MM
   addiusp -16              # CHECK: addiusp -16         # encoding: [0x4f,0xf9]
+                           # CHECK:                     # <MCInst #{{.*}} ADDIUSP_MM
   aluipc $3, 56            # CHECK: aluipc $3, 56       # encoding: [0x78,0x7f,0x00,0x38]
   and $3, $4, $5           # CHECK: and $3, $4, $5      # encoding: [0x00,0xa4,0x1a,0x50]
   andi $3, $4, 1234        # CHECK: andi $3, $4, 1234   # encoding: [0xd0,0x64,0x04,0xd2]
@@ -36,16 +45,21 @@
   bnezc   $3, 64           # CHECK: bnezc   $3, 64      # encoding: [0xa0,0x60,0x00,0x10]
   balc 7286128             # CHECK: balc 7286128        # encoding: [0xb4,0x37,0x96,0xb8]
   b 132                    # CHECK: bc16 132            # encoding: [0xcc,0x42]
+                           # CHECK:                     # <MCInst #{{.*}} BC16_MMR6
   bc 7286128               # CHECK: bc 7286128          # encoding: [0x94,0x37,0x96,0xb8]
-                           # CHECK-NEXT:                # <MCInst #{{[0-9]+}} BC_MMR6
+                           # CHECK:                     # <MCInst #{{.*}} BC_MMR6
   bc16 132                 # CHECK: bc16 132            # encoding: [0xcc,0x42]
-  beqzc16 $6, 20           # CHECK: beqzc16 $6, 20      # encoding: [0x8f,0x0a]
-  bnezc16 $6, 20           # CHECK: bnezc16 $6, 20      # encoding: [0xaf,0x0a]
+                           # CHECK:                     # <MCInst #{{.*}} BC16_MMR6
+  beqzc16 $6, 20           # CHECK: beqzc16  $6, 20     # encoding: [0x8f,0x0a]
+                           # CHECK:                     # <MCInst #{{.*}} BEQZC16_MMR6
+  bnezc16 $6, 20           # CHECK: bnezc16  $6, 20     # encoding: [0xaf,0x0a]
+                           # CHECK:                     # <MCInst #{{.*}} BNEZC16_MMR6
   bitswap $4, $2           # CHECK: bitswap $4, $2      # encoding: [0x00,0x44,0x0b,0x3c]
   break                    # CHECK: break               # encoding: [0x00,0x00,0x00,0x07]
   break 7                  # CHECK: break 7             # encoding: [0x00,0x07,0x00,0x07]
   break 7, 5               # CHECK: break 7, 5          # encoding: [0x00,0x07,0x01,0x47]
   cache 1, 8($5)           # CHECK: cache 1, 8($5)      # encoding: [0x20,0x25,0x60,0x08]
+                           # CHECK-NEXT:                # <MCInst #{{.*}} CACHE_MMR6
   clo $11, $a1             # CHECK: clo $11, $5         # encoding: [0x01,0x65,0x4b,0x3c]
   clz $sp, $gp             # CHECK: clz $sp, $gp        # encoding: [0x03,0x80,0xe8,0x50]
   div $3, $4, $5           # CHECK: div $3, $4, $5      # encoding: [0x00,0xa4,0x19,0x18]
@@ -74,6 +88,7 @@
   lwm $16, $17, $ra, 8($sp)   # CHECK: lwm16 $16, $17, $ra, 8($sp) # encoding: [0x45,0x22]
   lwm16 $16, $17, $ra, 8($sp) # CHECK: lwm16 $16, $17, $ra, 8($sp) # encoding: [0x45,0x22]
   ll $2, 8($4)                    # CHECK: ll $2, 8($4)                    # encoding: [0x60,0x44,0x30,0x08]
+                                  # CHECK-NEXT:                            # <MCInst #{{.*}} LL_MMR6
   lwm32 $16, $17, 8($4)           # CHECK: lwm32 $16, $17, 8($4)           # encoding: [0x20,0x44,0x50,0x08]
   lwm32 $16, $17, 8($sp)          # CHECK: lwm32 $16, $17, 8($sp)          # encoding: [0x20,0x5d,0x50,0x08]
   lwm32 $16, $17, $ra, 8($4)      # CHECK: lwm32 $16, $17, $ra, 8($4)      # encoding: [0x22,0x44,0x50,0x08]
@@ -88,6 +103,7 @@
   rotr $9, $6, 7                  # CHECK: rotr $9, $6, 7                  # encoding: [0x01,0x26,0x38,0xc0]
   rotrv $9, $6, $7                # CHECK: rotrv $9, $6, $7                # encoding: [0x00,0xc7,0x48,0xd0]
   sc $2, 8($4)                    # CHECK: sc $2, 8($4)                    # encoding: [0x60,0x44,0xb0,0x08]
+                                  # CHECK-NEXT:                            # <MCInst #{{.*}} SC_MMR6
   sgt $4, $5, $6                  # CHECK: slt $4, $6, $5                  # encoding: [0x00,0xa6,0x23,0x50]
   sgtu $4, $5, $6                 # CHECK: sltu $4, $6, $5                 # encoding: [0x00,0xa6,0x23,0x90]
   sll $4, $5                      # CHECK: sllv $4, $4, $5                 # encoding: [0x00,0x85,0x20,0x10]
@@ -111,10 +127,13 @@
   or $3, $4, $5            # CHECK: or $3, $4, $5       # encoding: [0x00,0xa4,0x1a,0x90]
   ori $3, $4, 1234         # CHECK: ori $3, $4, 1234    # encoding: [0x50,0x64,0x04,0xd2]
   pref 1, 8($5)            # CHECK: pref 1, 8($5)       # encoding: [0x60,0x25,0x20,0x08]
+                           # CHECK-NEXT:                # <MCInst #{{.*}} PREF_MMR6
   sb16 $3, 4($16)          # CHECK: sb16 $3, 4($16)     # encoding: [0x89,0x84]
   seb $3, $4               # CHECK: seb $3, $4          # encoding: [0x00,0x64,0x2b,0x3c]
+                           # CHECK-NEXT:                # <MCInst #{{.*}} SEB_MM
   seb $3                   # CHECK: seb $3, $3          # encoding: [0x00,0x63,0x2b,0x3c]
   seh $3, $4               # CHECK: seh $3, $4          # encoding: [0x00,0x64,0x3b,0x3c]
+                           # CHECK-NEXT:                # <MCInst #{{.*}} SEH_MM
   seh $3                   # CHECK: seh $3, $3          # encoding: [0x00,0x63,0x3b,0x3c]
   seleqz $2,$3,$4          # CHECK: seleqz $2, $3, $4   # encoding: [0x00,0x83,0x11,0x40]
   selnez $2,$3,$4          # CHECK: selnez $2, $3, $4   # encoding: [0x00,0x83,0x11,0x80]
@@ -359,9 +378,11 @@
   bc2eqzc $31, 8           # CHECK: bc2eqzc $31, 8         # encoding: [0x41,0x5f,0x00,0x04]
   bc2nezc $31, 8           # CHECK: bc2nezc $31, 8         # encoding: [0x41,0x7f,0x00,0x04]
   ins $9, $6, 3, 7         # CHECK: ins $9, $6, 3, 7       # encoding: [0x01,0x26,0x48,0xcc]
+                           # CHECK-NEXT:                   # <MCInst #{{.*}} INS_MMR6
   jalrc $4, $5             # CHECK: jalrc $4, $5           # encoding: [0x00,0x85,0x0f,0x3c]
   jalrc $5                 # CHECK: jalrc $5               # encoding: [0x03,0xe5,0x0f,0x3c]
   ext $9, $6, 3, 7         # CHECK: ext $9, $6, 3, 7       # encoding: [0x01,0x26,0x30,0xec]
+                           # CHECK-NEXT:                   # <MCInst #{{.*}} EXT_MMR6
   bovc $2, $4, 24          # CHECK: bovc $2, $4, 24        # encoding: [0x74,0x44,0x00,0x0c]
   bovc $4, $2, 24          # CHECK: bovc $4, $2, 24        # encoding: [0x74,0x44,0x00,0x0c]
   bnvc $2, $4, 24          # CHECK: bnvc $2, $4, 24        # encoding: [0x7c,0x44,0x00,0x0c]
@@ -392,3 +413,7 @@
   blezc $2, 256            # CHECK: blezc $2, 256          # encoding: [0xf4,0x40,0x00,0x40]
   bgezc $16, 512           # CHECK: bgezc $16, 512         # encoding: [0xf6,0x10,0x00,0x80]
   bgtzc $12, 1024          # CHECK: bgtzc $12, 1024        # encoding: [0xd5,0x80,0x01,0x00]
+  neg $4, $5               # CHECK: neg $4, $5             # encoding: [0x00,0xa0,0x21,0x90]
+  neg $4, $4               # CHECK: neg $4, $4             # encoding: [0x00,0x80,0x21,0x90]
+  negu  $4, $5             # CHECK: negu  $4, $5           # encoding: [0x00,0xa0,0x21,0xd0]
+  negu  $4, $4             # CHECK: negu  $4, $4           # encoding: [0x00,0x80,0x21,0xd0]

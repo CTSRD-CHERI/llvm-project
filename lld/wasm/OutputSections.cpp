@@ -85,8 +85,9 @@ CodeSection::CodeSection(ArrayRef<InputFunction *> Functions)
   OS.flush();
   BodySize = CodeSectionHeader.size();
 
-  for (InputChunk *Func : Functions) {
+  for (InputFunction *Func : Functions) {
     Func->OutputOffset = BodySize;
+    Func->calculateSize();
     BodySize += Func->getSize();
   }
 
@@ -223,4 +224,16 @@ void CustomSection::writeTo(uint8_t *Buf) {
   // Write custom sections payload
   parallelForEach(InputSections,
                   [&](const InputSection *Section) { Section->writeTo(Buf); });
+}
+
+uint32_t CustomSection::numRelocations() const {
+  uint32_t Count = 0;
+  for (const InputSection *InputSect : InputSections)
+    Count += InputSect->NumRelocations();
+  return Count;
+}
+
+void CustomSection::writeRelocations(raw_ostream &OS) const {
+  for (const InputSection *S : InputSections)
+    S->writeRelocations(OS);
 }

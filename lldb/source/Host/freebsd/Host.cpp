@@ -75,9 +75,11 @@ GetFreeBSDProcessArgs(const ProcessInstanceInfoMatch *match_info_ptr,
   size_t pathname_len = sizeof(pathname);
   mib[2] = KERN_PROC_PATHNAME;
   if (::sysctl(mib, 4, pathname, &pathname_len, NULL, 0) == 0)
-    process_info.GetExecutableFile().SetFile(pathname, false);
+    process_info.GetExecutableFile().SetFile(pathname, false,
+                                             FileSpec::Style::native);
   else
-    process_info.GetExecutableFile().SetFile(cstr, false);
+    process_info.GetExecutableFile().SetFile(cstr, false,
+                                             FileSpec::Style::native);
 
   if (!(match_info_ptr == NULL ||
         NameMatches(process_info.GetExecutableFile().GetFilename().GetCString(),
@@ -192,9 +194,8 @@ uint32_t Host::FindProcesses(const ProcessInstanceInfoMatch &match_info,
       continue;
 
     // Every thread is a process in FreeBSD, but all the threads of a single
-    // process have the same pid. Do not store the process info in the
-    // result list if a process with given identifier is already registered
-    // there.
+    // process have the same pid. Do not store the process info in the result
+    // list if a process with given identifier is already registered there.
     bool already_registered = false;
     for (uint32_t pi = 0;
          !already_registered && (const int)kinfo.ki_numthreads > 1 &&

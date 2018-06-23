@@ -12,10 +12,11 @@
 #include "Matchers.h"
 #include "SyncAPI.h"
 #include "TestFS.h"
+#include "TestTU.h"
 #include "XRefs.h"
-#include "clang/Frontend/CompilerInvocation.h"
-#include "clang/Frontend/PCHContainerOperations.h"
-#include "clang/Frontend/Utils.h"
+#include "index/FileIndex.h"
+#include "index/SymbolCollector.h"
+#include "clang/Index/IndexingAction.h"
 #include "llvm/Support/Path.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -35,18 +36,6 @@ class IgnoreDiagnostics : public DiagnosticsConsumer {
   void onDiagnosticsReady(PathRef File,
                           std::vector<Diag> Diagnostics) override {}
 };
-
-// FIXME: this is duplicated with FileIndexTests. Share it.
-ParsedAST build(StringRef Code) {
-  auto CI = createInvocationFromCommandLine(
-      {"clang", "-xc++", testPath("Foo.cpp").c_str()});
-  auto Buf = MemoryBuffer::getMemBuffer(Code);
-  auto AST = ParsedAST::Build(std::move(CI), nullptr, std::move(Buf),
-                              std::make_shared<PCHContainerOperations>(),
-                              vfs::getRealFileSystem());
-  assert(AST.hasValue());
-  return std::move(*AST);
-}
 
 // Extracts ranges from an annotated example, and constructs a matcher for a
 // highlight set. Ranges should be named $read/$write as appropriate.
@@ -98,13 +87,74 @@ TEST(HighlightsTest, All) {
   };
   for (const char *Test : Tests) {
     Annotations T(Test);
-    auto AST = build(T.code());
+    auto AST = TestTU::withCode(T.code()).build();
     EXPECT_THAT(findDocumentHighlights(AST, T.point()), HighlightsFrom(T))
         << Test;
   }
 }
 
 MATCHER_P(RangeIs, R, "") { return arg.range == R; }
+
+TEST(GoToDefinition, WithIndex) {
+  Annotations SymbolHeader(R"cpp(
+        class $forward[[Forward]];
+        class $foo[[Foo]] {};
+
+        void $f1[[f1]]();
+
+        inline void $f2[[f2]]() {}
+      )cpp");
+  Annotations SymbolCpp(R"cpp(
+      class $forward[[forward]] {};
+      void  $f1[[f1]]() {}
+    )cpp");
+
+  TestTU TU;
+  TU.Code = SymbolCpp.code();
+  TU.HeaderCode = SymbolHeader.code();
+  auto Index = TU.index();
+  auto runFindDefinitionsWithIndex = [&Index](const Annotations &Main) {
+    auto AST = TestTU::withCode(Main.code()).build();
+    return clangd::findDefinitions(AST, Main.point(), Index.get());
+  };
+
+  Annotations Test(R"cpp(// only declaration in AST.
+        void [[f1]]();
+        int main() {
+          ^f1();
+        }
+      )cpp");
+  EXPECT_THAT(runFindDefinitionsWithIndex(Test),
+              testing::ElementsAreArray(
+                  {RangeIs(SymbolCpp.range("f1")), RangeIs(Test.range())}));
+
+  Test = Annotations(R"cpp(// definition in AST.
+        void [[f1]]() {}
+        int main() {
+          ^f1();
+        }
+      )cpp");
+  EXPECT_THAT(runFindDefinitionsWithIndex(Test),
+              testing::ElementsAreArray(
+                  {RangeIs(Test.range()), RangeIs(SymbolHeader.range("f1"))}));
+
+  Test = Annotations(R"cpp(// forward declaration in AST.
+        class [[Foo]];
+        F^oo* create();
+      )cpp");
+  EXPECT_THAT(runFindDefinitionsWithIndex(Test),
+              testing::ElementsAreArray(
+                  {RangeIs(SymbolHeader.range("foo")), RangeIs(Test.range())}));
+
+  Test = Annotations(R"cpp(// defintion in AST.
+        class [[Forward]] {};
+        F^orward create();
+      )cpp");
+  EXPECT_THAT(runFindDefinitionsWithIndex(Test),
+              testing::ElementsAreArray({
+                  RangeIs(Test.range()), RangeIs(SymbolHeader.range("forward")),
+              }));
+}
 
 TEST(GoToDefinition, All) {
   const char *Tests[] = {
@@ -251,7 +301,7 @@ TEST(GoToDefinition, All) {
   };
   for (const char *Test : Tests) {
     Annotations T(Test);
-    auto AST = build(T.code());
+    auto AST = TestTU::withCode(T.code()).build();
     std::vector<Matcher<Location>> ExpectedLocations;
     for (const auto &R : T.ranges())
       ExpectedLocations.push_back(RangeIs(R));
@@ -579,14 +629,24 @@ TEST(Hover, All) {
           )cpp",
           "Declared in union outer::(anonymous)\n\nint def",
       },
+      {
+          R"cpp(// Nothing
+            void foo() {
+              ^
+            }
+          )cpp",
+          "",
+      },
   };
 
   for (const OneTest &Test : Tests) {
     Annotations T(Test.Input);
-    auto AST = build(T.code());
-    Hover H = getHover(AST, T.point());
-
-    EXPECT_EQ(H.contents.value, Test.ExpectedHover) << Test.Input;
+    auto AST = TestTU::withCode(T.code()).build();
+    if (auto H = getHover(AST, T.point())) {
+      EXPECT_NE("", Test.ExpectedHover) << Test.Input;
+      EXPECT_EQ(H->contents.value, Test.ExpectedHover) << Test.Input;
+    } else
+      EXPECT_EQ("", Test.ExpectedHover) << Test.Input;
   }
 }
 

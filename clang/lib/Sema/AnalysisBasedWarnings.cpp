@@ -122,7 +122,7 @@ static void CheckUnreachable(Sema &S, AnalysisDeclContext &AC) {
 }
 
 namespace {
-/// \brief Warn on logical operator errors in CFGBuilder
+/// Warn on logical operator errors in CFGBuilder
 class LogicalErrorHandler : public CFGCallback {
   Sema &S;
 
@@ -351,7 +351,7 @@ static void checkThrowInNonThrowingFunc(Sema &S, const FunctionDecl *FD,
 
 static bool isNoexcept(const FunctionDecl *FD) {
   const auto *FPT = FD->getType()->castAs<FunctionProtoType>();
-  if (FPT->isNothrow(FD->getASTContext()) || FD->hasAttr<NoThrowAttr>())
+  if (FPT->isNothrow() || FD->hasAttr<NoThrowAttr>())
     return true;
   return false;
 }
@@ -1650,7 +1650,7 @@ class ThreadSafetyReporter : public clang::threadSafety::ThreadSafetyHandler {
 
   void setVerbose(bool b) { Verbose = b; }
 
-  /// \brief Emit all buffered diagnostics in order of sourcelocation.
+  /// Emit all buffered diagnostics in order of sourcelocation.
   /// We need to output diagnostics produced while iterating through
   /// the lockset in deterministic order, so this function orders diagnostics
   /// and outputs them.

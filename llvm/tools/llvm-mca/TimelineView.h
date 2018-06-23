@@ -104,12 +104,13 @@
 #include "View.h"
 #include "llvm/MC/MCInstPrinter.h"
 #include "llvm/MC/MCSubtargetInfo.h"
+#include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/raw_ostream.h"
 #include <map>
 
 namespace mca {
 
-/// \brief This class listens to instruction state transition events
+/// This class listens to instruction state transition events
 /// in order to construct a timeline information.
 ///
 /// For every instruction executed by the Backend, this class constructs
@@ -142,15 +143,25 @@ class TimelineView : public View {
   };
   std::vector<WaitTimeEntry> WaitTime;
 
-  void printTimelineViewEntry(llvm::raw_string_ostream &OS,
+  void printTimelineViewEntry(llvm::formatted_raw_ostream &OS,
                               const TimelineViewEntry &E, unsigned Iteration,
                               unsigned SourceIndex) const;
-  void printWaitTimeEntry(llvm::raw_string_ostream &OS, const WaitTimeEntry &E,
-                          unsigned Index) const;
+  void printWaitTimeEntry(llvm::formatted_raw_ostream &OS,
+                          const WaitTimeEntry &E, unsigned Index) const;
 
   const unsigned DEFAULT_ITERATIONS = 10;
 
   void initialize(unsigned MaxIterations);
+
+  // Display characters for the TimelineView report output.
+  struct DisplayChar {
+    static const char Dispatched = 'D';
+    static const char Executed = 'E';
+    static const char Retired = 'R';
+    static const char Waiting = '='; // Instruction is waiting in the scheduler.
+    static const char Executing = 'e';
+    static const char RetireLag = '-'; // The instruction is waiting to retire.
+  };
 
 public:
   TimelineView(const llvm::MCSubtargetInfo &sti, llvm::MCInstPrinter &Printer,

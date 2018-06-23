@@ -1,11 +1,11 @@
 ; RUN: llc -filetype=obj -o %t.o %s
 ; RUN: llc -filetype=obj %S/Inputs/weak-alias.ll -o %t2.o
-; RUN: wasm-ld --check-signatures %t.o %t2.o -o %t.wasm
+; RUN: wasm-ld %t.o %t2.o -o %t.wasm
 ; RUN: obj2yaml %t.wasm | FileCheck %s
 
 ; Test that weak aliases (alias_fn is a weak alias of direct_fn) are linked correctly
 
-target triple = "wasm32-unknown-unknown-wasm"
+target triple = "wasm32-unknown-unknown"
 
 declare i32 @alias_fn() local_unnamed_addr #1
 
@@ -144,7 +144,7 @@ entry:
 ; CHECK-NEXT:         Name:            call_direct_ptr
 ; CHECK-NEXT: ...
 
-; RUN: wasm-ld --check-signatures --relocatable %t.o %t2.o -o %t.reloc.o
+; RUN: wasm-ld --relocatable %t.o %t2.o -o %t.reloc.o
 ; RUN: obj2yaml %t.reloc.o | FileCheck %s -check-prefix=RELOC
 
 ; RELOC:      --- !WASM
@@ -250,6 +250,7 @@ entry:
 ; RELOC-NEXT:         Body:            23808080800041106B220024808080800020004181808080003602081081808080002101200041106A24808080800020010B
 ; RELOC-NEXT:   - Type:            CUSTOM
 ; RELOC-NEXT:     Name:            linking
+; RELOC-NEXT:     Version:         1
 ; RELOC-NEXT:     SymbolTable:
 ; RELOC-NEXT:       - Index:           0
 ; RELOC-NEXT:         Kind:            FUNCTION

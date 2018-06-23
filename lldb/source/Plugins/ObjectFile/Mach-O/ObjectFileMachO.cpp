@@ -161,8 +161,7 @@ public:
         case 7:
         case 8:
         case 9:
-          // fancy flavors that encapsulate of the above
-          // flavors...
+          // fancy flavors that encapsulate of the above flavors...
           break;
 
         default:
@@ -393,8 +392,7 @@ public:
         case 7:
         case 8:
         case 9:
-          // fancy flavors that encapsulate of the above
-          // flavors...
+          // fancy flavors that encapsulate of the above flavors...
           break;
 
         default:
@@ -517,8 +515,7 @@ public:
         }
 
         // Note that gpr.cpsr is also copied by the above loop; this loop
-        // technically extends
-        // one element past the end of the gpr.r[] array.
+        // technically extends one element past the end of the gpr.r[] array.
 
         SetError(GPRRegSet, Read, 0);
         offset = next_thread_state;
@@ -1168,8 +1165,8 @@ AddressClass ObjectFileMachO::GetAddressClass(lldb::addr_t file_addr) {
 
           case eSectionTypeCode:
             if (m_header.cputype == llvm::MachO::CPU_TYPE_ARM) {
-              // For ARM we have a bit in the n_desc field of the symbol
-              // that tells us ARM/Thumb which is bit 0x0008.
+              // For ARM we have a bit in the n_desc field of the symbol that
+              // tells us ARM/Thumb which is bit 0x0008.
               if (symbol->GetFlags() & MACHO_NLIST_ARM_SYMBOL_IS_THUMB)
                 return eAddressClassCodeAlternateISA;
             }
@@ -1203,15 +1200,18 @@ AddressClass ObjectFileMachO::GetAddressClass(lldb::addr_t file_addr) {
           case eSectionTypeDWARFDebugLoc:
           case eSectionTypeDWARFDebugMacInfo:
           case eSectionTypeDWARFDebugMacro:
+          case eSectionTypeDWARFDebugNames:
           case eSectionTypeDWARFDebugPubNames:
           case eSectionTypeDWARFDebugPubTypes:
           case eSectionTypeDWARFDebugRanges:
           case eSectionTypeDWARFDebugStr:
           case eSectionTypeDWARFDebugStrOffsets:
+          case eSectionTypeDWARFDebugTypes:
           case eSectionTypeDWARFAppleNames:
           case eSectionTypeDWARFAppleTypes:
           case eSectionTypeDWARFAppleNamespaces:
           case eSectionTypeDWARFAppleObjC:
+          case eSectionTypeDWARFGNUDebugAltLink:
             return eAddressClassDebug;
 
           case eSectionTypeEHFrame:
@@ -1242,8 +1242,8 @@ AddressClass ObjectFileMachO::GetAddressClass(lldb::addr_t file_addr) {
       case eSymbolTypeTrampoline:
       case eSymbolTypeResolver:
         if (m_header.cputype == llvm::MachO::CPU_TYPE_ARM) {
-          // For ARM we have a bit in the n_desc field of the symbol
-          // that tells us ARM/Thumb which is bit 0x0008.
+          // For ARM we have a bit in the n_desc field of the symbol that tells
+          // us ARM/Thumb which is bit 0x0008.
           if (symbol->GetFlags() & MACHO_NLIST_ARM_SYMBOL_IS_THUMB)
             return eAddressClassCodeAlternateISA;
         }
@@ -1359,8 +1359,8 @@ ObjectFileMachO::EncryptedFileRanges ObjectFileMachO::GetEncryptedFileRanges() {
     if (m_data.GetU32(&offset, &encryption_cmd, 2) == NULL)
       break;
 
-    // LC_ENCRYPTION_INFO and LC_ENCRYPTION_INFO_64 have the same sizes for
-    // the 3 fields we care about, so treat them the same.
+    // LC_ENCRYPTION_INFO and LC_ENCRYPTION_INFO_64 have the same sizes for the
+    // 3 fields we care about, so treat them the same.
     if (encryption_cmd.cmd == LC_ENCRYPTION_INFO ||
         encryption_cmd.cmd == LC_ENCRYPTION_INFO_64) {
       if (m_data.GetU32(&offset, &encryption_cmd.cryptoff, 3)) {
@@ -1456,10 +1456,12 @@ static lldb::SectionType GetSectionType(uint32_t flags,
   static ConstString g_sect_name_dwarf_debug_line("__debug_line");
   static ConstString g_sect_name_dwarf_debug_loc("__debug_loc");
   static ConstString g_sect_name_dwarf_debug_macinfo("__debug_macinfo");
+  static ConstString g_sect_name_dwarf_debug_names("__debug_names");
   static ConstString g_sect_name_dwarf_debug_pubnames("__debug_pubnames");
   static ConstString g_sect_name_dwarf_debug_pubtypes("__debug_pubtypes");
   static ConstString g_sect_name_dwarf_debug_ranges("__debug_ranges");
   static ConstString g_sect_name_dwarf_debug_str("__debug_str");
+  static ConstString g_sect_name_dwarf_debug_types("__debug_types");
   static ConstString g_sect_name_dwarf_apple_names("__apple_names");
   static ConstString g_sect_name_dwarf_apple_types("__apple_types");
   static ConstString g_sect_name_dwarf_apple_namespaces("__apple_namespac");
@@ -1484,6 +1486,8 @@ static lldb::SectionType GetSectionType(uint32_t flags,
     return eSectionTypeDWARFDebugLoc;
   if (section_name == g_sect_name_dwarf_debug_macinfo)
     return eSectionTypeDWARFDebugMacInfo;
+  if (section_name == g_sect_name_dwarf_debug_names)
+    return eSectionTypeDWARFDebugNames;
   if (section_name == g_sect_name_dwarf_debug_pubnames)
     return eSectionTypeDWARFDebugPubNames;
   if (section_name == g_sect_name_dwarf_debug_pubtypes)
@@ -1492,6 +1496,8 @@ static lldb::SectionType GetSectionType(uint32_t flags,
     return eSectionTypeDWARFDebugRanges;
   if (section_name == g_sect_name_dwarf_debug_str)
     return eSectionTypeDWARFDebugStr;
+  if (section_name == g_sect_name_dwarf_debug_types)
+    return eSectionTypeDWARFDebugTypes;
   if (section_name == g_sect_name_dwarf_apple_names)
     return eSectionTypeDWARFAppleNames;
   if (section_name == g_sect_name_dwarf_apple_types)
@@ -1604,12 +1610,12 @@ void ObjectFileMachO::ProcessSegmentCommand(const load_command &load_cmd_,
       context.UnifiedList.FindSectionByName(const_segname));
   if (is_dsym && unified_section_sp) {
     if (const_segname == GetSegmentNameLINKEDIT()) {
-      // We need to keep the __LINKEDIT segment private to this object
-      // file only
+      // We need to keep the __LINKEDIT segment private to this object file
+      // only
       add_to_unified = false;
     } else {
-      // This is the dSYM file and this section has already been created
-      // by the object file, no need to create it.
+      // This is the dSYM file and this section has already been created by the
+      // object file, no need to create it.
       add_section = false;
     }
   }
@@ -1626,12 +1632,12 @@ void ObjectFileMachO::ProcessSegmentCommand(const load_command &load_cmd_,
   const bool segment_is_encrypted =
       (load_cmd.flags & SG_PROTECTED_VERSION_1) != 0;
 
-  // Keep a list of mach segments around in case we need to
-  // get at data that isn't stored in the abstracted Sections.
+  // Keep a list of mach segments around in case we need to get at data that
+  // isn't stored in the abstracted Sections.
   m_mach_segments.push_back(load_cmd);
 
-  // Use a segment ID of the segment index shifted left by 8 so they
-  // never conflict with any of the sections.
+  // Use a segment ID of the segment index shifted left by 8 so they never
+  // conflict with any of the sections.
   SectionSP segment_sp;
   if (add_section && (const_segname || is_core)) {
     segment_sp.reset(new Section(
@@ -1639,9 +1645,8 @@ void ObjectFileMachO::ProcessSegmentCommand(const load_command &load_cmd_,
         this,      // Object file to which this sections belongs
         ++context.NextSegmentIdx
             << 8, // Section ID is the 1 based segment index
-        // shifted right by 8 bits as not to collide
-        // with any of the 256 section IDs that are
-        // possible
+        // shifted right by 8 bits as not to collide with any of the 256
+        // section IDs that are possible
         const_segname,         // Name of this section
         eSectionTypeContainer, // This section is a container of other
         // sections.
@@ -1664,27 +1669,24 @@ void ObjectFileMachO::ProcessSegmentCommand(const load_command &load_cmd_,
     if (is_dsym && unified_section_sp->GetFileAddress() != load_cmd.vmaddr) {
       // Check to see if the module was read from memory?
       if (module_sp->GetObjectFile()->GetHeaderAddress().IsValid()) {
-        // We have a module that is in memory and needs to have its
-        // file address adjusted. We need to do this because when we
-        // load a file from memory, its addresses will be slid already,
-        // yet the addresses in the new symbol file will still be
-        // unslid.  Since everything is stored as section offset, this
-        // shouldn't cause any problems.
+        // We have a module that is in memory and needs to have its file
+        // address adjusted. We need to do this because when we load a file
+        // from memory, its addresses will be slid already, yet the addresses
+        // in the new symbol file will still be unslid.  Since everything is
+        // stored as section offset, this shouldn't cause any problems.
 
-        // Make sure we've parsed the symbol table from the
-        // ObjectFile before we go around changing its Sections.
+        // Make sure we've parsed the symbol table from the ObjectFile before
+        // we go around changing its Sections.
         module_sp->GetObjectFile()->GetSymtab();
-        // eh_frame would present the same problems but we parse that
-        // on a per-function basis as-needed so it's more difficult to
-        // remove its use of the Sections.  Realistically, the
-        // environments where this code path will be taken will not
-        // have eh_frame sections.
+        // eh_frame would present the same problems but we parse that on a per-
+        // function basis as-needed so it's more difficult to remove its use of
+        // the Sections.  Realistically, the environments where this code path
+        // will be taken will not have eh_frame sections.
 
         unified_section_sp->SetFileAddress(load_cmd.vmaddr);
 
-        // Notify the module that the section addresses have been
-        // changed once we're done so any file-address caches can be
-        // updated.
+        // Notify the module that the section addresses have been changed once
+        // we're done so any file-address caches can be updated.
         context.FileAddressesChanged = true;
       }
     }
@@ -1693,8 +1695,8 @@ void ObjectFileMachO::ProcessSegmentCommand(const load_command &load_cmd_,
 
   struct section_64 sect64;
   ::memset(&sect64, 0, sizeof(sect64));
-  // Push a section into our mach sections for the section at
-  // index zero (NO_SECT) if we don't have any mach sections yet...
+  // Push a section into our mach sections for the section at index zero
+  // (NO_SECT) if we don't have any mach sections yet...
   if (m_mach_sections.empty())
     m_mach_sections.push_back(sect64);
   uint32_t segment_sect_idx;
@@ -1715,8 +1717,8 @@ void ObjectFileMachO::ProcessSegmentCommand(const load_command &load_cmd_,
     if (m_data.GetU32(&offset, &sect64.offset, num_u32s) == NULL)
       break;
 
-    // Keep a list of mach sections around in case we need to
-    // get at data that isn't stored in the abstracted Sections.
+    // Keep a list of mach sections around in case we need to get at data that
+    // isn't stored in the abstracted Sections.
     m_mach_sections.push_back(sect64);
 
     if (add_section) {
@@ -1724,12 +1726,12 @@ void ObjectFileMachO::ProcessSegmentCommand(const load_command &load_cmd_,
           sect64.sectname,
           std::min<size_t>(strlen(sect64.sectname), sizeof(sect64.sectname)));
       if (!const_segname) {
-        // We have a segment with no name so we need to conjure up
-        // segments that correspond to the section's segname if there
-        // isn't already such a section. If there is such a section, we
-        // resize the section so that it spans all sections.  We also
-        // mark these sections as fake so address matches don't hit if
-        // they land in the gaps between the child sections.
+        // We have a segment with no name so we need to conjure up segments
+        // that correspond to the section's segname if there isn't already such
+        // a section. If there is such a section, we resize the section so that
+        // it spans all sections.  We also mark these sections as fake so
+        // address matches don't hit if they land in the gaps between the child
+        // sections.
         const_segname.SetTrimmedCStringWithLength(sect64.segname,
                                                   sizeof(sect64.segname));
         segment_sp = context.UnifiedList.FindSectionByName(const_segname);
@@ -1749,9 +1751,8 @@ void ObjectFileMachO::ProcessSegmentCommand(const load_command &load_cmd_,
             if (new_seg_byte_size > curr_seg_byte_size)
               segment->SetByteSize(new_seg_byte_size);
           } else {
-            // We need to change the base address of the segment and
-            // adjust the child section offsets for all existing
-            // children.
+            // We need to change the base address of the segment and adjust the
+            // child section offsets for all existing children.
             const lldb::addr_t slide_amount =
                 sect64_min_addr - curr_seg_min_addr;
             segment->Slide(slide_amount, false);
@@ -1904,9 +1905,9 @@ class MachSymtabSectionInfo {
 public:
   MachSymtabSectionInfo(SectionList *section_list)
       : m_section_list(section_list), m_section_infos() {
-    // Get the number of sections down to a depth of 1 to include
-    // all segments and their sections, but no other sections that
-    // may be added for debug map or
+    // Get the number of sections down to a depth of 1 to include all segments
+    // and their sections, but no other sections that may be added for debug
+    // map or
     m_section_infos.resize(section_list->GetNumSections(1));
   }
 
@@ -1934,9 +1935,9 @@ public:
       } else if (m_section_infos[n_sect].vm_range.GetByteSize() == 0 &&
                  m_section_infos[n_sect].vm_range.GetBaseAddress() ==
                      file_addr) {
-        // Symbol is in section with zero size, but has the same start
-        // address as the section. This can happen with linker symbols
-        // (symbols that start with the letter 'l' or 'L'.
+        // Symbol is in section with zero size, but has the same start address
+        // as the section. This can happen with linker symbols (symbols that
+        // start with the letter 'l' or 'L'.
         return m_section_infos[n_sect].section_sp;
       }
     }
@@ -2250,10 +2251,9 @@ size_t ObjectFileMachO::ParseSymtab() {
             linkedit_section_sp->GetLoadBaseAddress(&target);
         if (linkedit_load_addr == LLDB_INVALID_ADDRESS) {
           // We might be trying to access the symbol table before the
-          // __LINKEDIT's load
-          // address has been set in the target. We can't fail to read the
-          // symbol table,
-          // so calculate the right address manually
+          // __LINKEDIT's load address has been set in the target. We can't
+          // fail to read the symbol table, so calculate the right address
+          // manually
           linkedit_load_addr = CalculateSectionLoadAddressForMemoryImage(
               m_memory_addr, GetMachHeaderSection(), linkedit_section_sp.get());
         }
@@ -2274,8 +2274,8 @@ size_t ObjectFileMachO::ParseSymtab() {
             process->GetAddressByteSize() == sizeof(void *)) {
           // This mach-o memory file is in the dyld shared cache. If this
           // program is not remote and this is iOS, then this process will
-          // share the same shared cache as the process we are debugging and
-          // we can read the entire __LINKEDIT from the address space in this
+          // share the same shared cache as the process we are debugging and we
+          // can read the entire __LINKEDIT from the address space in this
           // process. This is a needed optimization that is used for local iOS
           // debugging only since all shared libraries in the shared cache do
           // not have corresponding files that exist in the file system of the
@@ -2284,22 +2284,21 @@ size_t ObjectFileMachO::ParseSymtab() {
           // string tables from all of the __LINKEDIT sections from the shared
           // libraries in the shared cache have been merged into a single large
           // symbol and string table. Reading all of this symbol and string
-          // table
-          // data across can slow down debug launch times, so we optimize this
-          // by
-          // reading the memory for the __LINKEDIT section from this process.
+          // table data across can slow down debug launch times, so we optimize
+          // this by reading the memory for the __LINKEDIT section from this
+          // process.
 
-          UUID lldb_shared_cache(GetLLDBSharedCacheUUID());
-          UUID process_shared_cache(GetProcessSharedCacheUUID(process));
+          UUID lldb_shared_cache;
+          addr_t lldb_shared_cache_addr;
+          GetLLDBSharedCacheUUID (lldb_shared_cache_addr, lldb_shared_cache);
+          UUID process_shared_cache;
+          addr_t process_shared_cache_addr;
+          GetProcessSharedCacheUUID(process, process_shared_cache_addr, process_shared_cache);
           bool use_lldb_cache = true;
           if (lldb_shared_cache.IsValid() && process_shared_cache.IsValid() &&
-              lldb_shared_cache != process_shared_cache) {
+              (lldb_shared_cache != process_shared_cache
+               || process_shared_cache_addr != lldb_shared_cache_addr)) {
             use_lldb_cache = false;
-            ModuleSP module_sp(GetModule());
-            if (module_sp)
-              module_sp->ReportWarning("shared cache in process does not match "
-                                       "lldb's own shared cache, startup will "
-                                       "be slow.");
           }
 
           PlatformSP platform_sp(target.GetPlatform());
@@ -2323,10 +2322,9 @@ size_t ObjectFileMachO::ParseSymtab() {
 
         if (!data_was_read) {
           // Always load dyld - the dynamic linker - from memory if we didn't
-          // find a binary anywhere else.
-          // lldb will not register dylib/framework/bundle loads/unloads if we
-          // don't have the dyld symbols,
-          // we force dyld to load from memory despite the user's
+          // find a binary anywhere else. lldb will not register
+          // dylib/framework/bundle loads/unloads if we don't have the dyld
+          // symbols, we force dyld to load from memory despite the user's
           // target.memory-module-load-level setting.
           if (memory_module_load_level == eMemoryModuleLoadLevelComplete ||
               m_header.filetype == llvm::MachO::MH_DYLINKER) {
@@ -2336,10 +2334,9 @@ size_t ObjectFileMachO::ParseSymtab() {
               nlist_data.SetData(nlist_data_sp, 0,
                                  nlist_data_sp->GetByteSize());
             // Load strings individually from memory when loading from memory
-            // since shared cache
-            // string tables contain strings for all symbols from all shared
-            // cached libraries
-            // DataBufferSP strtab_data_sp (ReadMemory (process_sp, strtab_addr,
+            // since shared cache string tables contain strings for all symbols
+            // from all shared cached libraries DataBufferSP strtab_data_sp
+            // (ReadMemory (process_sp, strtab_addr,
             // strtab_data_byte_size));
             // if (strtab_data_sp)
             //    strtab_data.SetData (strtab_data_sp, 0,
@@ -2443,11 +2440,9 @@ size_t ObjectFileMachO::ParseSymtab() {
     const bool is_arm = (m_header.cputype == llvm::MachO::CPU_TYPE_ARM);
 
     // lldb works best if it knows the start address of all functions in a
-    // module.
-    // Linker symbols or debug info are normally the best source of information
-    // for start addr / size but
-    // they may be stripped in a released binary.
-    // Two additional sources of information exist in Mach-O binaries:
+    // module. Linker symbols or debug info are normally the best source of
+    // information for start addr / size but they may be stripped in a released
+    // binary. Two additional sources of information exist in Mach-O binaries:
     //    LC_FUNCTION_STARTS - a list of ULEB128 encoded offsets of each
     //    function's start address in the
     //                         binary, relative to the text section.
@@ -2472,12 +2467,10 @@ size_t ObjectFileMachO::ParseSymtab() {
       }
     } else {
       // If m_type is eTypeDebugInfo, then this is a dSYM - it will have the
-      // load command claiming an eh_frame
-      // but it doesn't actually have the eh_frame content.  And if we have a
-      // dSYM, we don't need to do any
-      // of this fill-in-the-missing-symbols works anyway - the debug info
-      // should give us all the functions in
-      // the module.
+      // load command claiming an eh_frame but it doesn't actually have the
+      // eh_frame content.  And if we have a dSYM, we don't need to do any of
+      // this fill-in-the-missing-symbols works anyway - the debug info should
+      // give us all the functions in the module.
       if (text_section_sp.get() && eh_frame_section_sp.get() &&
           m_type != eTypeDebugInfo) {
         DWARFCallFrameInfo eh_frame(*this, eh_frame_section_sp,
@@ -2501,18 +2494,14 @@ size_t ObjectFileMachO::ParseSymtab() {
     const size_t function_starts_count = function_starts.GetSize();
 
     // For user process binaries (executables, dylibs, frameworks, bundles), if
-    // we don't have
-    // LC_FUNCTION_STARTS/eh_frame section in this binary, we're going to assume
-    // the binary
-    // has been stripped.  Don't allow assembly language instruction emulation
-    // because we don't
-    // know proper function start boundaries.
+    // we don't have LC_FUNCTION_STARTS/eh_frame section in this binary, we're
+    // going to assume the binary has been stripped.  Don't allow assembly
+    // language instruction emulation because we don't know proper function
+    // start boundaries.
     //
     // For all other types of binaries (kernels, stand-alone bare board
-    // binaries, kexts), they
-    // may not have LC_FUNCTION_STARTS / eh_frame sections - we should not make
-    // any assumptions
-    // about them based on that.
+    // binaries, kexts), they may not have LC_FUNCTION_STARTS / eh_frame
+    // sections - we should not make any assumptions about them based on that.
     if (function_starts_count == 0 && CalculateStrata() == eStrataUser) {
       m_allow_assembly_emulation_unwind_plans = false;
       Log *unwind_or_symbol_log(lldb_private::GetLogIfAnyCategoriesSet(
@@ -2544,8 +2533,8 @@ size_t ObjectFileMachO::ParseSymtab() {
     ValueToSymbolIndexMap N_FUN_addr_to_sym_idx;
     ValueToSymbolIndexMap N_STSYM_addr_to_sym_idx;
     ConstNameToSymbolIndexMap N_GSYM_name_to_sym_idx;
-    // Any symbols that get merged into another will get an entry
-    // in this map so we know
+    // Any symbols that get merged into another will get an entry in this map
+    // so we know
     NListIndexToSymbolIndexMap m_nlist_idx_to_sym_idx;
     uint32_t nlist_idx = 0;
     Symbol *symbol_ptr = NULL;
@@ -2584,21 +2573,18 @@ size_t ObjectFileMachO::ParseSymtab() {
     (defined(__arm__) || defined(__arm64__) || defined(__aarch64__))
 
     // Some recent builds of the dyld_shared_cache (hereafter: DSC) have been
-    // optimized by moving LOCAL
-    // symbols out of the memory mapped portion of the DSC. The symbol
-    // information has all been retained,
-    // but it isn't available in the normal nlist data. However, there *are*
-    // duplicate entries of *some*
+    // optimized by moving LOCAL symbols out of the memory mapped portion of
+    // the DSC. The symbol information has all been retained, but it isn't
+    // available in the normal nlist data. However, there *are* duplicate
+    // entries of *some*
     // LOCAL symbols in the normal nlist data. To handle this situation
     // correctly, we must first attempt
     // to parse any DSC unmapped symbol information. If we find any, we set a
-    // flag that tells the normal
-    // nlist parser to ignore all LOCAL symbols.
+    // flag that tells the normal nlist parser to ignore all LOCAL symbols.
 
     if (m_header.flags & 0x80000000u) {
-      // Before we can start mapping the DSC, we need to make certain the target
-      // process is actually
-      // using the cache we can find.
+      // Before we can start mapping the DSC, we need to make certain the
+      // target process is actually using the cache we can find.
 
       // Next we need to determine the correct path for the dyld shared cache.
 
@@ -2627,14 +2613,15 @@ size_t ObjectFileMachO::ParseSymtab() {
 
       UUID dsc_uuid;
       UUID process_shared_cache_uuid;
+      addr_t process_shared_cache_base_addr;
 
       if (process) {
-        process_shared_cache_uuid = GetProcessSharedCacheUUID(process);
+        GetProcessSharedCacheUUID(process, process_shared_cache_base_addr, process_shared_cache_uuid);
       }
 
-      // First see if we can find an exact match for the inferior process shared
-      // cache UUID in
-      // the development or non-development shared caches on disk.
+      // First see if we can find an exact match for the inferior process
+      // shared cache UUID in the development or non-development shared caches
+      // on disk.
       if (process_shared_cache_uuid.IsValid()) {
         if (dsc_development_filespec.Exists()) {
           UUID dsc_development_uuid = GetSharedCacheUUID(
@@ -2699,8 +2686,7 @@ size_t ObjectFileMachO::ParseSymtab() {
           if (process_shared_cache_uuid.IsValid() &&
               dsc_uuid != process_shared_cache_uuid) {
             // The on-disk dyld_shared_cache file is not the same as the one in
-            // this
-            // process' memory, don't use it.
+            // this process' memory, don't use it.
             uuid_match = false;
             ModuleSP module_sp(GetModule());
             if (module_sp)
@@ -2728,11 +2714,9 @@ size_t ObjectFileMachO::ParseSymtab() {
           offset = 0;
 
           // The File addresses (from the in-memory Mach-O load commands) for
-          // the shared libraries
-          // in the shared library cache need to be adjusted by an offset to
-          // match up with the
-          // dylibOffset identifying field in the
-          // dyld_cache_local_symbol_entry's.  This offset is
+          // the shared libraries in the shared library cache need to be
+          // adjusted by an offset to match up with the dylibOffset identifying
+          // field in the dyld_cache_local_symbol_entry's.  This offset is
           // recorded in mapping_offset_value.
           const uint64_t mapping_offset_value =
               dsc_mapping_info_data.GetU64(&offset);
@@ -2826,8 +2810,8 @@ size_t ObjectFileMachO::ParseSymtab() {
 
                       if (symbol_name == NULL) {
                         // No symbol should be NULL, even the symbols with no
-                        // string values should have an offset zero which points
-                        // to an empty C-string
+                        // string values should have an offset zero which
+                        // points to an empty C-string
                         Host::SystemLog(
                             Host::eSystemLogError,
                             "error: DSC unmapped local symbol[%u] has invalid "
@@ -2862,14 +2846,13 @@ size_t ObjectFileMachO::ParseSymtab() {
                           // FIXME: In the .o files, we have a GSYM and a debug
                           // symbol for all the ObjC data.  They
                           // have the same address, but we want to ensure that
-                          // we always find only the real symbol,
-                          // 'cause we don't currently correctly attribute the
+                          // we always find only the real symbol, 'cause we
+                          // don't currently correctly attribute the
                           // GSYM one to the ObjCClass/Ivar/MetaClass
-                          // symbol type.  This is a temporary hack to make sure
-                          // the ObjectiveC symbols get treated
-                          // correctly.  To do this right, we should coalesce
-                          // all the GSYM & global symbols that have the
-                          // same address.
+                          // symbol type.  This is a temporary hack to make
+                          // sure the ObjectiveC symbols get treated correctly.
+                          // To do this right, we should coalesce all the GSYM
+                          // & global symbols that have the same address.
 
                           is_gsym = true;
                           sym[sym_idx].SetExternal(true);
@@ -2923,25 +2906,24 @@ size_t ObjectFileMachO::ParseSymtab() {
                             N_FUN_addr_to_sym_idx.insert(
                                 std::make_pair(nlist.n_value, sym_idx));
                             // We use the current number of symbols in the
-                            // symbol table in lieu of
-                            // using nlist_idx in case we ever start trimming
-                            // entries out
+                            // symbol table in lieu of using nlist_idx in case
+                            // we ever start trimming entries out
                             N_FUN_indexes.push_back(sym_idx);
                           } else {
                             type = eSymbolTypeCompiler;
 
                             if (!N_FUN_indexes.empty()) {
-                              // Copy the size of the function into the original
+                              // Copy the size of the function into the
+                              // original
                               // STAB entry so we don't have
                               // to hunt for it later
                               symtab->SymbolAtIndex(N_FUN_indexes.back())
                                   ->SetByteSize(nlist.n_value);
                               N_FUN_indexes.pop_back();
                               // We don't really need the end function STAB as
-                              // it contains the size which
-                              // we already placed with the original symbol, so
-                              // don't add it if we want a
-                              // minimal symbol table
+                              // it contains the size which we already placed
+                              // with the original symbol, so don't add it if
+                              // we want a minimal symbol table
                               add_nlist = false;
                             }
                           }
@@ -2968,19 +2950,17 @@ size_t ObjectFileMachO::ParseSymtab() {
 
                         case N_BNSYM:
                           // We use the current number of symbols in the symbol
-                          // table in lieu of
-                          // using nlist_idx in case we ever start trimming
-                          // entries out
-                          // Skip these if we want minimal symbol tables
+                          // table in lieu of using nlist_idx in case we ever
+                          // start trimming entries out Skip these if we want
+                          // minimal symbol tables
                           add_nlist = false;
                           break;
 
                         case N_ENSYM:
                           // Set the size of the N_BNSYM to the terminating
-                          // index of this N_ENSYM
-                          // so that we can always skip the entire symbol if we
-                          // need to navigate
-                          // more quickly at the source level when parsing STABS
+                          // index of this N_ENSYM so that we can always skip
+                          // the entire symbol if we need to navigate more
+                          // quickly at the source level when parsing STABS
                           // Skip these if we want minimal symbol tables
                           add_nlist = false;
                           break;
@@ -3014,11 +2994,9 @@ size_t ObjectFileMachO::ParseSymtab() {
                             add_nlist = false;
                             if (N_SO_index != UINT32_MAX) {
                               // Set the size of the N_SO to the terminating
-                              // index of this N_SO
-                              // so that we can always skip the entire N_SO if
-                              // we need to navigate
-                              // more quickly at the source level when parsing
-                              // STABS
+                              // index of this N_SO so that we can always skip
+                              // the entire N_SO if we need to navigate more
+                              // quickly at the source level when parsing STABS
                               symbol_ptr = symtab->SymbolAtIndex(N_SO_index);
                               symbol_ptr->SetByteSize(sym_idx);
                               symbol_ptr->SetSizeIsSibling(true);
@@ -3031,17 +3009,16 @@ size_t ObjectFileMachO::ParseSymtab() {
                             N_SO_index = UINT32_MAX;
                           } else {
                             // We use the current number of symbols in the
-                            // symbol table in lieu of
-                            // using nlist_idx in case we ever start trimming
-                            // entries out
+                            // symbol table in lieu of using nlist_idx in case
+                            // we ever start trimming entries out
                             const bool N_SO_has_full_path =
                                 symbol_name[0] == '/';
                             if (N_SO_has_full_path) {
                               if ((N_SO_index == sym_idx - 1) &&
                                   ((sym_idx - 1) < num_syms)) {
                                 // We have two consecutive N_SO entries where
-                                // the first contains a directory
-                                // and the second contains a full path.
+                                // the first contains a directory and the
+                                // second contains a full path.
                                 sym[sym_idx - 1].GetMangled().SetValue(
                                     ConstString(symbol_name), false);
                                 m_nlist_idx_to_sym_idx[nlist_idx] = sym_idx - 1;
@@ -3055,9 +3032,9 @@ size_t ObjectFileMachO::ParseSymtab() {
                             } else if ((N_SO_index == sym_idx - 1) &&
                                        ((sym_idx - 1) < num_syms)) {
                               // This is usually the second N_SO entry that
-                              // contains just the filename,
-                              // so here we combine it with the first one if we
-                              // are minimizing the symbol table
+                              // contains just the filename, so here we combine
+                              // it with the first one if we are minimizing the
+                              // symbol table
                               const char *so_path =
                                   sym[sym_idx - 1]
                                       .GetMangled()
@@ -3071,11 +3048,11 @@ size_t ObjectFileMachO::ParseSymtab() {
                                 if (double_slash_pos != std::string::npos) {
                                   // The linker has been generating bad N_SO
                                   // entries with doubled up paths
-                                  // in the format "%s%s" where the first string
-                                  // in the DW_AT_comp_dir,
-                                  // and the second is the directory for the
-                                  // source file so you end up with
-                                  // a path that looks like "/tmp/src//tmp/src/"
+                                  // in the format "%s%s" where the first
+                                  // string in the DW_AT_comp_dir, and the
+                                  // second is the directory for the source
+                                  // file so you end up with a path that looks
+                                  // like "/tmp/src//tmp/src/"
                                   FileSpec so_dir(so_path, false);
                                   if (!so_dir.Exists()) {
                                     so_dir.SetFile(
@@ -3117,11 +3094,10 @@ size_t ObjectFileMachO::ParseSymtab() {
                         // INCL scopes
                         //----------------------------------------------------------------------
                         case N_BINCL:
-                          // include file beginning: name,,NO_SECT,0,sum
-                          // We use the current number of symbols in the symbol
-                          // table in lieu of
-                          // using nlist_idx in case we ever start trimming
-                          // entries out
+                          // include file beginning: name,,NO_SECT,0,sum We use
+                          // the current number of symbols in the symbol table
+                          // in lieu of using nlist_idx in case we ever start
+                          // trimming entries out
                           N_INCL_indexes.push_back(sym_idx);
                           type = eSymbolTypeScopeBegin;
                           break;
@@ -3129,10 +3105,9 @@ size_t ObjectFileMachO::ParseSymtab() {
                         case N_EINCL:
                           // include file end: name,,NO_SECT,0,0
                           // Set the size of the N_BINCL to the terminating
-                          // index of this N_EINCL
-                          // so that we can always skip the entire symbol if we
-                          // need to navigate
-                          // more quickly at the source level when parsing STABS
+                          // index of this N_EINCL so that we can always skip
+                          // the entire symbol if we need to navigate more
+                          // quickly at the source level when parsing STABS
                           if (!N_INCL_indexes.empty()) {
                             symbol_ptr =
                                 symtab->SymbolAtIndex(N_INCL_indexes.back());
@@ -3182,11 +3157,10 @@ size_t ObjectFileMachO::ParseSymtab() {
                         // Left and Right Braces
                         //----------------------------------------------------------------------
                         case N_LBRAC:
-                          // left bracket: 0,,NO_SECT,nesting level,address
-                          // We use the current number of symbols in the symbol
-                          // table in lieu of
-                          // using nlist_idx in case we ever start trimming
-                          // entries out
+                          // left bracket: 0,,NO_SECT,nesting level,address We
+                          // use the current number of symbols in the symbol
+                          // table in lieu of using nlist_idx in case we ever
+                          // start trimming entries out
                           symbol_section = section_info.GetSection(
                               nlist.n_sect, nlist.n_value);
                           N_BRAC_indexes.push_back(sym_idx);
@@ -3196,10 +3170,9 @@ size_t ObjectFileMachO::ParseSymtab() {
                         case N_RBRAC:
                           // right bracket: 0,,NO_SECT,nesting level,address
                           // Set the size of the N_LBRAC to the terminating
-                          // index of this N_RBRAC
-                          // so that we can always skip the entire symbol if we
-                          // need to navigate
-                          // more quickly at the source level when parsing STABS
+                          // index of this N_RBRAC so that we can always skip
+                          // the entire symbol if we need to navigate more
+                          // quickly at the source level when parsing STABS
                           symbol_section = section_info.GetSection(
                               nlist.n_sect, nlist.n_value);
                           if (!N_BRAC_indexes.empty()) {
@@ -3223,9 +3196,8 @@ size_t ObjectFileMachO::ParseSymtab() {
                         case N_BCOMM:
                           // begin common: name,,NO_SECT,0,0
                           // We use the current number of symbols in the symbol
-                          // table in lieu of
-                          // using nlist_idx in case we ever start trimming
-                          // entries out
+                          // table in lieu of using nlist_idx in case we ever
+                          // start trimming entries out
                           type = eSymbolTypeScopeBegin;
                           N_COMM_indexes.push_back(sym_idx);
                           break;
@@ -3239,10 +3211,10 @@ size_t ObjectFileMachO::ParseSymtab() {
                         case N_ECOMM:
                           // end common: name,,n_sect,0,0
                           // Set the size of the N_BCOMM to the terminating
-                          // index of this N_ECOMM/N_ECOML
-                          // so that we can always skip the entire symbol if we
-                          // need to navigate
-                          // more quickly at the source level when parsing STABS
+                          // index of this N_ECOMM/N_ECOML so that we can
+                          // always skip the entire symbol if we need to
+                          // navigate more quickly at the source level when
+                          // parsing STABS
                           if (!N_COMM_indexes.empty()) {
                             symbol_ptr =
                                 symtab->SymbolAtIndex(N_COMM_indexes.back());
@@ -3532,16 +3504,16 @@ size_t ObjectFileMachO::ParseSymtab() {
                               function_starts_count > 0) {
                             addr_t symbol_lookup_file_addr = nlist.n_value;
                             // Do an exact address match for non-ARM addresses,
-                            // else get the closest since
-                            // the symbol might be a thumb symbol which has an
-                            // address with bit zero set
+                            // else get the closest since the symbol might be a
+                            // thumb symbol which has an address with bit zero
+                            // set
                             FunctionStarts::Entry *func_start_entry =
                                 function_starts.FindEntry(
                                     symbol_lookup_file_addr, !is_arm);
                             if (is_arm && func_start_entry) {
                               // Verify that the function start address is the
-                              // symbol address (ARM)
-                              // or the symbol address + 1 (thumb)
+                              // symbol address (ARM) or the symbol address + 1
+                              // (thumb)
                               if (func_start_entry->addr !=
                                       symbol_lookup_file_addr &&
                                   func_start_entry->addr !=
@@ -3573,8 +3545,8 @@ size_t ObjectFileMachO::ParseSymtab() {
                                 addr_t next_symbol_file_addr =
                                     next_func_start_entry->addr;
                                 // Be sure the clear the Thumb address bit when
-                                // we calculate the size
-                                // from the current and next address
+                                // we calculate the size from the current and
+                                // next address
                                 if (is_arm)
                                   next_symbol_file_addr &=
                                       THUMB_ADDRESS_BIT_MASK;
@@ -3593,12 +3565,10 @@ size_t ObjectFileMachO::ParseSymtab() {
                         if (is_debug == false) {
                           if (type == eSymbolTypeCode) {
                             // See if we can find a N_FUN entry for any code
-                            // symbols.
-                            // If we do find a match, and the name matches, then
-                            // we
-                            // can merge the two into just the function symbol
-                            // to avoid
-                            // duplicate entries in the symbol table
+                            // symbols. If we do find a match, and the name
+                            // matches, then we can merge the two into just the
+                            // function symbol to avoid duplicate entries in
+                            // the symbol table
                             std::pair<ValueToSymbolIndexMap::const_iterator,
                                       ValueToSymbolIndexMap::const_iterator>
                                 range;
@@ -3646,12 +3616,10 @@ size_t ObjectFileMachO::ParseSymtab() {
                                      type == eSymbolTypeObjCMetaClass ||
                                      type == eSymbolTypeObjCIVar) {
                             // See if we can find a N_STSYM entry for any data
-                            // symbols.
-                            // If we do find a match, and the name matches, then
-                            // we
-                            // can merge the two into just the Static symbol to
-                            // avoid
-                            // duplicate entries in the symbol table
+                            // symbols. If we do find a match, and the name
+                            // matches, then we can merge the two into just the
+                            // Static symbol to avoid duplicate entries in the
+                            // symbol table
                             std::pair<ValueToSymbolIndexMap::const_iterator,
                                       ValueToSymbolIndexMap::const_iterator>
                                 range;
@@ -3693,8 +3661,8 @@ size_t ObjectFileMachO::ParseSymtab() {
                                                Mangled::ePreferMangled)
                                       .GetCString();
                               if (gsym_name) {
-                                // Combine N_GSYM stab entries with the non stab
-                                // symbol
+                                // Combine N_GSYM stab entries with the non
+                                // stab symbol
                                 ConstNameToSymbolIndexMap::const_iterator pos =
                                     N_GSYM_name_to_sym_idx.find(gsym_name);
                                 if (pos != N_GSYM_name_to_sym_idx.end()) {
@@ -3810,9 +3778,8 @@ size_t ObjectFileMachO::ParseSymtab() {
           symbol_name = strtab_data.PeekCStr(nlist.n_strx);
 
           if (symbol_name == NULL) {
-            // No symbol should be NULL, even the symbols with no
-            // string values should have an offset zero which points
-            // to an empty C-string
+            // No symbol should be NULL, even the symbols with no string values
+            // should have an offset zero which points to an empty C-string
             Host::SystemLog(Host::eSystemLogError,
                             "error: symbol[%u] has invalid string table offset "
                             "0x%x in %s, ignoring symbol\n",
@@ -3851,14 +3818,12 @@ size_t ObjectFileMachO::ParseSymtab() {
             // FIXME: In the .o files, we have a GSYM and a debug symbol for all
             // the ObjC data.  They
             // have the same address, but we want to ensure that we always find
-            // only the real symbol,
-            // 'cause we don't currently correctly attribute the GSYM one to the
-            // ObjCClass/Ivar/MetaClass
-            // symbol type.  This is a temporary hack to make sure the
-            // ObjectiveC symbols get treated
-            // correctly.  To do this right, we should coalesce all the GSYM &
-            // global symbols that have the
-            // same address.
+            // only the real symbol, 'cause we don't currently correctly
+            // attribute the GSYM one to the ObjCClass/Ivar/MetaClass symbol
+            // type.  This is a temporary hack to make sure the ObjectiveC
+            // symbols get treated correctly.  To do this right, we should
+            // coalesce all the GSYM & global symbols that have the same
+            // address.
             is_gsym = true;
             sym[sym_idx].SetExternal(true);
 
@@ -3905,24 +3870,21 @@ size_t ObjectFileMachO::ParseSymtab() {
               N_FUN_addr_to_sym_idx.insert(
                   std::make_pair(nlist.n_value, sym_idx));
               // We use the current number of symbols in the symbol table in
-              // lieu of
-              // using nlist_idx in case we ever start trimming entries out
+              // lieu of using nlist_idx in case we ever start trimming entries
+              // out
               N_FUN_indexes.push_back(sym_idx);
             } else {
               type = eSymbolTypeCompiler;
 
               if (!N_FUN_indexes.empty()) {
-                // Copy the size of the function into the original STAB entry so
-                // we don't have
-                // to hunt for it later
+                // Copy the size of the function into the original STAB entry
+                // so we don't have to hunt for it later
                 symtab->SymbolAtIndex(N_FUN_indexes.back())
                     ->SetByteSize(nlist.n_value);
                 N_FUN_indexes.pop_back();
-                // We don't really need the end function STAB as it contains the
-                // size which
-                // we already placed with the original symbol, so don't add it
-                // if we want a
-                // minimal symbol table
+                // We don't really need the end function STAB as it contains
+                // the size which we already placed with the original symbol,
+                // so don't add it if we want a minimal symbol table
                 add_nlist = false;
               }
             }
@@ -3949,18 +3911,15 @@ size_t ObjectFileMachO::ParseSymtab() {
 
           case N_BNSYM:
             // We use the current number of symbols in the symbol table in lieu
-            // of
-            // using nlist_idx in case we ever start trimming entries out
+            // of using nlist_idx in case we ever start trimming entries out
             // Skip these if we want minimal symbol tables
             add_nlist = false;
             break;
 
           case N_ENSYM:
             // Set the size of the N_BNSYM to the terminating index of this
-            // N_ENSYM
-            // so that we can always skip the entire symbol if we need to
-            // navigate
-            // more quickly at the source level when parsing STABS
+            // N_ENSYM so that we can always skip the entire symbol if we need
+            // to navigate more quickly at the source level when parsing STABS
             // Skip these if we want minimal symbol tables
             add_nlist = false;
             break;
@@ -3994,10 +3953,9 @@ size_t ObjectFileMachO::ParseSymtab() {
               add_nlist = false;
               if (N_SO_index != UINT32_MAX) {
                 // Set the size of the N_SO to the terminating index of this
-                // N_SO
-                // so that we can always skip the entire N_SO if we need to
-                // navigate
-                // more quickly at the source level when parsing STABS
+                // N_SO so that we can always skip the entire N_SO if we need
+                // to navigate more quickly at the source level when parsing
+                // STABS
                 symbol_ptr = symtab->SymbolAtIndex(N_SO_index);
                 symbol_ptr->SetByteSize(sym_idx);
                 symbol_ptr->SetSizeIsSibling(true);
@@ -4010,30 +3968,27 @@ size_t ObjectFileMachO::ParseSymtab() {
               N_SO_index = UINT32_MAX;
             } else {
               // We use the current number of symbols in the symbol table in
-              // lieu of
-              // using nlist_idx in case we ever start trimming entries out
+              // lieu of using nlist_idx in case we ever start trimming entries
+              // out
               const bool N_SO_has_full_path = symbol_name[0] == '/';
               if (N_SO_has_full_path) {
                 if ((N_SO_index == sym_idx - 1) && ((sym_idx - 1) < num_syms)) {
                   // We have two consecutive N_SO entries where the first
-                  // contains a directory
-                  // and the second contains a full path.
+                  // contains a directory and the second contains a full path.
                   sym[sym_idx - 1].GetMangled().SetValue(
                       ConstString(symbol_name), false);
                   m_nlist_idx_to_sym_idx[nlist_idx] = sym_idx - 1;
                   add_nlist = false;
                 } else {
-                  // This is the first entry in a N_SO that contains a directory
-                  // or
-                  // a full path to the source file
+                  // This is the first entry in a N_SO that contains a
+                  // directory or a full path to the source file
                   N_SO_index = sym_idx;
                 }
               } else if ((N_SO_index == sym_idx - 1) &&
                          ((sym_idx - 1) < num_syms)) {
                 // This is usually the second N_SO entry that contains just the
-                // filename,
-                // so here we combine it with the first one if we are minimizing
-                // the symbol table
+                // filename, so here we combine it with the first one if we are
+                // minimizing the symbol table
                 const char *so_path =
                     sym[sym_idx - 1]
                         .GetMangled()
@@ -4044,16 +3999,14 @@ size_t ObjectFileMachO::ParseSymtab() {
                   const size_t double_slash_pos = full_so_path.find("//");
                   if (double_slash_pos != std::string::npos) {
                     // The linker has been generating bad N_SO entries with
-                    // doubled up paths
-                    // in the format "%s%s" where the first string in the
-                    // DW_AT_comp_dir,
-                    // and the second is the directory for the source file so
-                    // you end up with
-                    // a path that looks like "/tmp/src//tmp/src/"
+                    // doubled up paths in the format "%s%s" where the first
+                    // string in the DW_AT_comp_dir, and the second is the
+                    // directory for the source file so you end up with a path
+                    // that looks like "/tmp/src//tmp/src/"
                     FileSpec so_dir(so_path, false);
                     if (!so_dir.Exists()) {
-                      so_dir.SetFile(&full_so_path[double_slash_pos + 1],
-                                     false);
+                      so_dir.SetFile(&full_so_path[double_slash_pos + 1], false,
+                                     FileSpec::Style::native);
                       if (so_dir.Exists()) {
                         // Trim off the incorrect path
                         full_so_path.erase(0, double_slash_pos + 1);
@@ -4089,10 +4042,9 @@ size_t ObjectFileMachO::ParseSymtab() {
           // INCL scopes
           //----------------------------------------------------------------------
           case N_BINCL:
-            // include file beginning: name,,NO_SECT,0,sum
-            // We use the current number of symbols in the symbol table in lieu
-            // of
-            // using nlist_idx in case we ever start trimming entries out
+            // include file beginning: name,,NO_SECT,0,sum We use the current
+            // number of symbols in the symbol table in lieu of using nlist_idx
+            // in case we ever start trimming entries out
             N_INCL_indexes.push_back(sym_idx);
             type = eSymbolTypeScopeBegin;
             break;
@@ -4100,10 +4052,8 @@ size_t ObjectFileMachO::ParseSymtab() {
           case N_EINCL:
             // include file end: name,,NO_SECT,0,0
             // Set the size of the N_BINCL to the terminating index of this
-            // N_EINCL
-            // so that we can always skip the entire symbol if we need to
-            // navigate
-            // more quickly at the source level when parsing STABS
+            // N_EINCL so that we can always skip the entire symbol if we need
+            // to navigate more quickly at the source level when parsing STABS
             if (!N_INCL_indexes.empty()) {
               symbol_ptr = symtab->SymbolAtIndex(N_INCL_indexes.back());
               symbol_ptr->SetByteSize(sym_idx + 1);
@@ -4152,10 +4102,9 @@ size_t ObjectFileMachO::ParseSymtab() {
           // Left and Right Braces
           //----------------------------------------------------------------------
           case N_LBRAC:
-            // left bracket: 0,,NO_SECT,nesting level,address
-            // We use the current number of symbols in the symbol table in lieu
-            // of
-            // using nlist_idx in case we ever start trimming entries out
+            // left bracket: 0,,NO_SECT,nesting level,address We use the
+            // current number of symbols in the symbol table in lieu of using
+            // nlist_idx in case we ever start trimming entries out
             symbol_section =
                 section_info.GetSection(nlist.n_sect, nlist.n_value);
             N_BRAC_indexes.push_back(sym_idx);
@@ -4163,12 +4112,10 @@ size_t ObjectFileMachO::ParseSymtab() {
             break;
 
           case N_RBRAC:
-            // right bracket: 0,,NO_SECT,nesting level,address
-            // Set the size of the N_LBRAC to the terminating index of this
-            // N_RBRAC
-            // so that we can always skip the entire symbol if we need to
-            // navigate
-            // more quickly at the source level when parsing STABS
+            // right bracket: 0,,NO_SECT,nesting level,address Set the size of
+            // the N_LBRAC to the terminating index of this N_RBRAC so that we
+            // can always skip the entire symbol if we need to navigate more
+            // quickly at the source level when parsing STABS
             symbol_section =
                 section_info.GetSection(nlist.n_sect, nlist.n_value);
             if (!N_BRAC_indexes.empty()) {
@@ -4191,8 +4138,7 @@ size_t ObjectFileMachO::ParseSymtab() {
           case N_BCOMM:
             // begin common: name,,NO_SECT,0,0
             // We use the current number of symbols in the symbol table in lieu
-            // of
-            // using nlist_idx in case we ever start trimming entries out
+            // of using nlist_idx in case we ever start trimming entries out
             type = eSymbolTypeScopeBegin;
             N_COMM_indexes.push_back(sym_idx);
             break;
@@ -4206,10 +4152,9 @@ size_t ObjectFileMachO::ParseSymtab() {
           case N_ECOMM:
             // end common: name,,n_sect,0,0
             // Set the size of the N_BCOMM to the terminating index of this
-            // N_ECOMM/N_ECOML
-            // so that we can always skip the entire symbol if we need to
-            // navigate
-            // more quickly at the source level when parsing STABS
+            // N_ECOMM/N_ECOML so that we can always skip the entire symbol if
+            // we need to navigate more quickly at the source level when
+            // parsing STABS
             if (!N_COMM_indexes.empty()) {
               symbol_ptr = symtab->SymbolAtIndex(N_COMM_indexes.back());
               symbol_ptr->SetByteSize(sym_idx + 1);
@@ -4469,15 +4414,13 @@ size_t ObjectFileMachO::ParseSymtab() {
             if (symbol_byte_size == 0 && function_starts_count > 0) {
               addr_t symbol_lookup_file_addr = nlist.n_value;
               // Do an exact address match for non-ARM addresses, else get the
-              // closest since
-              // the symbol might be a thumb symbol which has an address with
-              // bit zero set
+              // closest since the symbol might be a thumb symbol which has an
+              // address with bit zero set
               FunctionStarts::Entry *func_start_entry =
                   function_starts.FindEntry(symbol_lookup_file_addr, !is_arm);
               if (is_arm && func_start_entry) {
                 // Verify that the function start address is the symbol address
-                // (ARM)
-                // or the symbol address + 1 (thumb)
+                // (ARM) or the symbol address + 1 (thumb)
                 if (func_start_entry->addr != symbol_lookup_file_addr &&
                     func_start_entry->addr != (symbol_lookup_file_addr + 1)) {
                   // Not the right entry, NULL it out...
@@ -4498,8 +4441,7 @@ size_t ObjectFileMachO::ParseSymtab() {
                 if (next_func_start_entry) {
                   addr_t next_symbol_file_addr = next_func_start_entry->addr;
                   // Be sure the clear the Thumb address bit when we calculate
-                  // the size
-                  // from the current and next address
+                  // the size from the current and next address
                   if (is_arm)
                     next_symbol_file_addr &= THUMB_ADDRESS_BIT_MASK;
                   symbol_byte_size = std::min<lldb::addr_t>(
@@ -4515,10 +4457,10 @@ size_t ObjectFileMachO::ParseSymtab() {
 
           if (is_debug == false) {
             if (type == eSymbolTypeCode) {
-              // See if we can find a N_FUN entry for any code symbols.
-              // If we do find a match, and the name matches, then we
-              // can merge the two into just the function symbol to avoid
-              // duplicate entries in the symbol table
+              // See if we can find a N_FUN entry for any code symbols. If we
+              // do find a match, and the name matches, then we can merge the
+              // two into just the function symbol to avoid duplicate entries
+              // in the symbol table
               std::pair<ValueToSymbolIndexMap::const_iterator,
                         ValueToSymbolIndexMap::const_iterator>
                   range;
@@ -4535,9 +4477,8 @@ size_t ObjectFileMachO::ParseSymtab() {
                           Mangled::ePreferMangled)) {
                     m_nlist_idx_to_sym_idx[nlist_idx] = pos->second;
                     // We just need the flags from the linker symbol, so put
-                    // these flags
-                    // into the N_FUN flags to avoid duplicate symbols in the
-                    // symbol table
+                    // these flags into the N_FUN flags to avoid duplicate
+                    // symbols in the symbol table
                     sym[pos->second].SetExternal(sym[sym_idx].IsExternal());
                     sym[pos->second].SetFlags(nlist.n_type << 16 |
                                               nlist.n_desc);
@@ -4560,10 +4501,10 @@ size_t ObjectFileMachO::ParseSymtab() {
                        type == eSymbolTypeObjCClass ||
                        type == eSymbolTypeObjCMetaClass ||
                        type == eSymbolTypeObjCIVar) {
-              // See if we can find a N_STSYM entry for any data symbols.
-              // If we do find a match, and the name matches, then we
-              // can merge the two into just the Static symbol to avoid
-              // duplicate entries in the symbol table
+              // See if we can find a N_STSYM entry for any data symbols. If we
+              // do find a match, and the name matches, then we can merge the
+              // two into just the Static symbol to avoid duplicate entries in
+              // the symbol table
               std::pair<ValueToSymbolIndexMap::const_iterator,
                         ValueToSymbolIndexMap::const_iterator>
                   range;
@@ -4580,9 +4521,8 @@ size_t ObjectFileMachO::ParseSymtab() {
                           Mangled::ePreferMangled)) {
                     m_nlist_idx_to_sym_idx[nlist_idx] = pos->second;
                     // We just need the flags from the linker symbol, so put
-                    // these flags
-                    // into the N_STSYM flags to avoid duplicate symbols in the
-                    // symbol table
+                    // these flags into the N_STSYM flags to avoid duplicate
+                    // symbols in the symbol table
                     sym[pos->second].SetExternal(sym[sym_idx].IsExternal());
                     sym[pos->second].SetFlags(nlist.n_type << 16 |
                                               nlist.n_desc);
@@ -4606,16 +4546,15 @@ size_t ObjectFileMachO::ParseSymtab() {
                   if (pos != N_GSYM_name_to_sym_idx.end()) {
                     const uint32_t GSYM_sym_idx = pos->second;
                     m_nlist_idx_to_sym_idx[nlist_idx] = GSYM_sym_idx;
-                    // Copy the address, because often the N_GSYM address has an
-                    // invalid address of zero
-                    // when the global is a common symbol
+                    // Copy the address, because often the N_GSYM address has
+                    // an invalid address of zero when the global is a common
+                    // symbol
                     sym[GSYM_sym_idx].GetAddressRef().SetSection(
                         symbol_section);
                     sym[GSYM_sym_idx].GetAddressRef().SetOffset(symbol_value);
                     // We just need the flags from the linker symbol, so put
-                    // these flags
-                    // into the N_GSYM flags to avoid duplicate symbols in the
-                    // symbol table
+                    // these flags into the N_GSYM flags to avoid duplicate
+                    // symbols in the symbol table
                     sym[GSYM_sym_idx].SetFlags(nlist.n_type << 16 |
                                                nlist.n_desc);
                     sym[sym_idx].Clear();
@@ -4722,8 +4661,8 @@ size_t ObjectFileMachO::ParseSymtab() {
       }
     }
 
-    // Trim our symbols down to just what we ended up with after
-    // removing any symbols.
+    // Trim our symbols down to just what we ended up with after removing any
+    // symbols.
     if (sym_idx < num_syms) {
       num_syms = sym_idx;
       sym = symtab->Resize(num_syms);
@@ -4771,13 +4710,12 @@ size_t ObjectFileMachO::ParseSymtab() {
                     m_nlist_idx_to_sym_idx.find(stub_sym_id);
                 Symbol *stub_symbol = NULL;
                 if (index_pos != end_index_pos) {
-                  // We have a remapping from the original nlist index to
-                  // a current symbol index, so just look this up by index
+                  // We have a remapping from the original nlist index to a
+                  // current symbol index, so just look this up by index
                   stub_symbol = symtab->SymbolAtIndex(index_pos->second);
                 } else {
-                  // We need to lookup a symbol using the original nlist
-                  // symbol index since this index is coming from the
-                  // S_SYMBOL_STUBS
+                  // We need to lookup a symbol using the original nlist symbol
+                  // index since this index is coming from the S_SYMBOL_STUBS
                   stub_symbol = symtab->FindSymbolByID(stub_sym_id);
                 }
 
@@ -4786,12 +4724,9 @@ size_t ObjectFileMachO::ParseSymtab() {
 
                   if (stub_symbol->GetType() == eSymbolTypeUndefined) {
                     // Change the external symbol into a trampoline that makes
-                    // sense
-                    // These symbols were N_UNDF N_EXT, and are useless to us,
-                    // so we
-                    // can re-use them so we don't have to make up a synthetic
-                    // symbol
-                    // for no good reason.
+                    // sense These symbols were N_UNDF N_EXT, and are useless
+                    // to us, so we can re-use them so we don't have to make up
+                    // a synthetic symbol for no good reason.
                     if (resolver_addresses.find(symbol_stub_addr) ==
                         resolver_addresses.end())
                       stub_symbol->SetType(eSymbolTypeTrampoline);
@@ -4836,8 +4771,8 @@ size_t ObjectFileMachO::ParseSymtab() {
     if (!trie_entries.empty()) {
       for (const auto &e : trie_entries) {
         if (e.entry.import_name) {
-          // Only add indirect symbols from the Trie entries if we
-          // didn't have a N_INDR nlist entry for this already
+          // Only add indirect symbols from the Trie entries if we didn't have
+          // a N_INDR nlist entry for this already
           if (indirect_symbol_names.find(e.entry.name) ==
               indirect_symbol_names.end()) {
             // Make a synthetic symbol to describe re-exported symbol.
@@ -4888,7 +4823,7 @@ void ObjectFileMachO::Dump(Stream *s) {
     GetArchitecture(header_arch);
 
     *s << ", file = '" << m_file
-       << "', arch = " << header_arch.GetArchitectureName() << "\n";
+       << "', triple = " << header_arch.GetTriple().getTriple() << "\n";
 
     SectionList *sections = GetSectionList();
     if (sections)
@@ -4936,6 +4871,21 @@ bool ObjectFileMachO::GetUUID(const llvm::MachO::mach_header &header,
   return false;
 }
 
+static const char *GetOSName(uint32_t cmd) {
+  switch (cmd) {
+  case llvm::MachO::LC_VERSION_MIN_IPHONEOS:
+    return "ios";
+  case llvm::MachO::LC_VERSION_MIN_MACOSX:
+    return "macosx";
+  case llvm::MachO::LC_VERSION_MIN_TVOS:
+    return "tvos";
+  case llvm::MachO::LC_VERSION_MIN_WATCHOS:
+    return "watchos";
+  default:
+    llvm_unreachable("unexpected LC_VERSION load command");
+  }
+}
+
 bool ObjectFileMachO::GetArchitecture(const llvm::MachO::mach_header &header,
                                       const lldb_private::DataExtractor &data,
                                       lldb::offset_t lc_offset,
@@ -4951,16 +4901,16 @@ bool ObjectFileMachO::GetArchitecture(const llvm::MachO::mach_header &header,
 
     if (header.filetype == MH_PRELOAD) {
       if (header.cputype == CPU_TYPE_ARM) {
-        // If this is a 32-bit arm binary, and it's a standalone binary,
-        // force the Vendor to Apple so we don't accidentally pick up
-        // the generic armv7 ABI at runtime.  Apple's armv7 ABI always uses
-        // r7 for the frame pointer register; most other armv7 ABIs use a
-        // combination of r7 and r11.
+        // If this is a 32-bit arm binary, and it's a standalone binary, force
+        // the Vendor to Apple so we don't accidentally pick up the generic
+        // armv7 ABI at runtime.  Apple's armv7 ABI always uses r7 for the
+        // frame pointer register; most other armv7 ABIs use a combination of
+        // r7 and r11.
         triple.setVendor(llvm::Triple::Apple);
       } else {
         // Set vendor to an unspecified unknown or a "*" so it can match any
-        // vendor
-        // This is required for correct behavior of EFI debugging on x86_64
+        // vendor This is required for correct behavior of EFI debugging on
+        // x86_64
         triple.setVendor(llvm::Triple::UnknownVendor);
         triple.setVendorName(llvm::StringRef());
       }
@@ -4974,23 +4924,29 @@ bool ObjectFileMachO::GetArchitecture(const llvm::MachO::mach_header &header,
         if (data.GetU32(&offset, &load_cmd, 2) == NULL)
           break;
 
+        uint32_t major, minor, patch;
+        struct version_min_command version_min;
+
+        llvm::SmallString<16> os_name;
+        llvm::raw_svector_ostream os(os_name);
+
         switch (load_cmd.cmd) {
         case llvm::MachO::LC_VERSION_MIN_IPHONEOS:
-          triple.setOS(llvm::Triple::IOS);
-          return true;
-
         case llvm::MachO::LC_VERSION_MIN_MACOSX:
-          triple.setOS(llvm::Triple::MacOSX);
-          return true;
-
         case llvm::MachO::LC_VERSION_MIN_TVOS:
-          triple.setOS(llvm::Triple::TvOS);
-          return true;
-
         case llvm::MachO::LC_VERSION_MIN_WATCHOS:
-          triple.setOS(llvm::Triple::WatchOS);
+          if (load_cmd.cmdsize != sizeof(version_min))
+            break;
+          data.ExtractBytes(cmd_offset,
+                            sizeof(version_min), data.GetByteOrder(),
+                            &version_min);
+          major = version_min.version >> 16;
+          minor = (version_min.version >> 8) & 0xffu;
+          patch = version_min.version & 0xffu;
+          os << GetOSName(load_cmd.cmd) << major << '.' << minor << '.'
+             << patch;
+          triple.setOSName(os.str());
           return true;
-
         default:
           break;
         }
@@ -5031,7 +4987,8 @@ uint32_t ObjectFileMachO::GetDependentModules(FileSpecList &files) {
     std::vector<std::string> rpath_relative_paths;
     std::vector<std::string> at_exec_relative_paths;
     const bool resolve_path = false; // Don't resolve the dependent file paths
-                                     // since they may not reside on this system
+                                     // since they may not reside on this
+                                     // system
     uint32_t i;
     for (i = 0; i < m_header.ncmds; ++i) {
       const uint32_t cmd_offset = offset;
@@ -5095,12 +5052,9 @@ uint32_t ObjectFileMachO::GetDependentModules(FileSpecList &files) {
         for (const auto &rpath : rpath_paths) {
           std::string path = rpath;
           path += rpath_relative_path;
-          // It is OK to resolve this path because we must find a file on
-          // disk for us to accept it anyway if it is rpath relative.
+          // It is OK to resolve this path because we must find a file on disk
+          // for us to accept it anyway if it is rpath relative.
           FileSpec file_spec(path, true);
-          // Remove any redundant parts of the path (like "../foo") since
-          // LC_RPATH values often contain "..".
-          file_spec = file_spec.GetNormalizedPath();
           if (file_spec.Exists() && files.AppendIfUnique(file_spec)) {
             count++;
             break;
@@ -5118,7 +5072,6 @@ uint32_t ObjectFileMachO::GetDependentModules(FileSpecList &files) {
       for (const auto &at_exec_relative_path : at_exec_relative_paths) {
         FileSpec file_spec = 
             exec_dir.CopyByAppendingPathComponent(at_exec_relative_path);
-        file_spec = file_spec.GetNormalizedPath();
         if (file_spec.Exists() && files.AppendIfUnique(file_spec))
           count++;
       }
@@ -5129,17 +5082,15 @@ uint32_t ObjectFileMachO::GetDependentModules(FileSpecList &files) {
 
 lldb_private::Address ObjectFileMachO::GetEntryPointAddress() {
   // If the object file is not an executable it can't hold the entry point.
-  // m_entry_point_address
-  // is initialized to an invalid address, so we can just return that.
-  // If m_entry_point_address is valid it means we've found it already, so
-  // return the cached value.
+  // m_entry_point_address is initialized to an invalid address, so we can just
+  // return that. If m_entry_point_address is valid it means we've found it
+  // already, so return the cached value.
 
   if (!IsExecutable() || m_entry_point_address.IsValid())
     return m_entry_point_address;
 
   // Otherwise, look for the UnixThread or Thread command.  The data for the
-  // Thread command is given in
-  // /usr/include/mach-o.h, but it is basically:
+  // Thread command is given in /usr/include/mach-o.h, but it is basically:
   //
   //  uint32_t flavor  - this is the flavor argument you would pass to
   //  thread_get_state
@@ -5153,9 +5104,9 @@ lldb_private::Address ObjectFileMachO::GetEntryPointAddress() {
   // FIXME: We will need to have a "RegisterContext data provider" class at some
   // point that can get all the registers
   // out of data in this form & attach them to a given thread.  That should
-  // underlie the MacOS X User process plugin,
-  // and we'll also need it for the MacOS X Core File process plugin.  When we
-  // have that we can also use it here.
+  // underlie the MacOS X User process plugin, and we'll also need it for the
+  // MacOS X Core File process plugin.  When we have that we can also use it
+  // here.
   //
   // For now we hard-code the offsets and flavors we need:
   //
@@ -5260,16 +5211,14 @@ lldb_private::Address ObjectFileMachO::GetEntryPointAddress() {
 
     if (start_address != LLDB_INVALID_ADDRESS) {
       // We got the start address from the load commands, so now resolve that
-      // address in the sections
-      // of this ObjectFile:
+      // address in the sections of this ObjectFile:
       if (!m_entry_point_address.ResolveAddressUsingFileSections(
               start_address, GetSectionList())) {
         m_entry_point_address.Clear();
       }
     } else {
       // We couldn't read the UnixThread load command - maybe it wasn't there.
-      // As a fallback look for the
-      // "start" symbol in the main executable.
+      // As a fallback look for the "start" symbol in the main executable.
 
       ModuleSP module_sp(GetModule());
 
@@ -5334,8 +5283,8 @@ std::string ObjectFileMachO::GetIdentifierString() {
   if (module_sp) {
     std::lock_guard<std::recursive_mutex> guard(module_sp->GetMutex());
 
-    // First, look over the load commands for an LC_NOTE load command
-    // with data_owner string "kern ver str" & use that if found.
+    // First, look over the load commands for an LC_NOTE load command with
+    // data_owner string "kern ver str" & use that if found.
     lldb::offset_t offset = MachHeaderSizeFromMagic(m_header.magic);
     for (uint32_t i = 0; i < m_header.ncmds; ++i) {
       const uint32_t cmd_offset = offset;
@@ -5351,8 +5300,8 @@ std::string ObjectFileMachO::GetIdentifierString() {
           uint64_t fileoff = m_data.GetU64_unchecked (&offset);
           uint64_t size = m_data.GetU64_unchecked (&offset);
 
-          // "kern ver str" has a uint32_t version and then a
-          // nul terminated c-string.
+          // "kern ver str" has a uint32_t version and then a nul terminated
+          // c-string.
           if (strcmp ("kern ver str", data_owner) == 0)
           {
               offset = fileoff;
@@ -5379,8 +5328,8 @@ std::string ObjectFileMachO::GetIdentifierString() {
       offset = cmd_offset + lc.cmdsize;
     }
 
-    // Second, make a pass over the load commands looking for an
-    // obsolete LC_IDENT load command.
+    // Second, make a pass over the load commands looking for an obsolete
+    // LC_IDENT load command.
     offset = MachHeaderSizeFromMagic(m_header.magic);
     for (uint32_t i = 0; i < m_header.ncmds; ++i) {
       const uint32_t cmd_offset = offset;
@@ -5425,7 +5374,8 @@ bool ObjectFileMachO::GetCorefileMainBinaryInfo (addr_t &address, UUID &uuid) {
           uint64_t fileoff = m_data.GetU64_unchecked (&offset);
           uint64_t size = m_data.GetU64_unchecked (&offset);
 
-          // "main bin spec" (main binary specification) data payload is formatted:
+          // "main bin spec" (main binary specification) data payload is
+          // formatted:
           //    uint32_t version       [currently 1]
           //    uint32_t type          [0 == unspecified, 1 == kernel, 2 == user process]
           //    uint64_t address       [ UINT64_MAX if address not specified ]
@@ -5506,9 +5456,9 @@ ObjectFile::Type ObjectFileMachO::CalculateType() {
       // UUID load command.
       UUID uuid;
       if (GetUUID(&uuid)) {
-        // this checking for the UUID load command is not enough
-        // we could eventually look for the symbol named
-        // "OSKextGetCurrentIdentifier" as this is required of kexts
+        // this checking for the UUID load command is not enough we could
+        // eventually look for the symbol named "OSKextGetCurrentIdentifier" as
+        // this is required of kexts
         if (m_strata == eStrataInvalid)
           m_strata = eStrataKernel;
         return eTypeSharedLibrary;
@@ -5550,9 +5500,9 @@ ObjectFile::Strata ObjectFileMachO::CalculateStrata() {
     // UUID load command.
     UUID uuid;
     if (GetUUID(&uuid)) {
-      // this checking for the UUID load command is not enough
-      // we could eventually look for the symbol named
-      // "OSKextGetCurrentIdentifier" as this is required of kexts
+      // this checking for the UUID load command is not enough we could
+      // eventually look for the symbol named "OSKextGetCurrentIdentifier" as
+      // this is required of kexts
       if (m_type == eTypeInvalid)
         m_type = eTypeSharedLibrary;
 
@@ -5639,8 +5589,8 @@ uint32_t ObjectFileMachO::GetVersion(uint32_t *versions,
         for (i = 3; i < num_versions; ++i)
           versions[i] = UINT32_MAX;
       }
-      // The LC_ID_DYLIB load command has a version with 3 version numbers
-      // in it, so always return 3
+      // The LC_ID_DYLIB load command has a version with 3 version numbers in
+      // it, so always return 3
       return 3;
     }
   }
@@ -5657,24 +5607,40 @@ bool ObjectFileMachO::GetArchitecture(ArchSpec &arch) {
   return false;
 }
 
-UUID ObjectFileMachO::GetProcessSharedCacheUUID(Process *process) {
-  UUID uuid;
+void ObjectFileMachO::GetProcessSharedCacheUUID(Process *process, addr_t &base_addr, UUID &uuid) {
+  uuid.Clear();
+  base_addr = LLDB_INVALID_ADDRESS;
   if (process && process->GetDynamicLoader()) {
     DynamicLoader *dl = process->GetDynamicLoader();
-    addr_t load_address;
     LazyBool using_shared_cache;
     LazyBool private_shared_cache;
-    dl->GetSharedCacheInformation(load_address, uuid, using_shared_cache,
+    dl->GetSharedCacheInformation(base_addr, uuid, using_shared_cache,
                                   private_shared_cache);
   }
-  Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_SYMBOLS | LIBLLDB_LOG_PROCESS));
+  Log *log(lldb_private::GetLogIfAnyCategoriesSet(LIBLLDB_LOG_SYMBOLS | LIBLLDB_LOG_PROCESS));
   if (log)
-    log->Printf("inferior process shared cache has a UUID of %s", uuid.GetAsString().c_str());
-  return uuid;
+    log->Printf("inferior process shared cache has a UUID of %s, base address 0x%" PRIx64 , uuid.GetAsString().c_str(), base_addr);
 }
 
-UUID ObjectFileMachO::GetLLDBSharedCacheUUID() {
-  UUID uuid;
+// From dyld SPI header dyld_process_info.h
+typedef void *dyld_process_info;
+struct lldb_copy__dyld_process_cache_info {
+  uuid_t cacheUUID;          // UUID of cache used by process
+  uint64_t cacheBaseAddress; // load address of dyld shared cache
+  bool noCache;              // process is running without a dyld cache
+  bool privateCache; // process is using a private copy of its dyld cache
+};
+
+// #including mach/mach.h pulls in machine.h & CPU_TYPE_ARM etc conflicts with llvm
+// enum definitions llvm::MachO::CPU_TYPE_ARM turning them into compile errors.
+// So we need to use the actual underlying types of task_t and kern_return_t
+// below.
+extern "C" unsigned int /*task_t*/ mach_task_self(); 
+
+void ObjectFileMachO::GetLLDBSharedCacheUUID(addr_t &base_addr, UUID &uuid) {
+  uuid.Clear();
+  base_addr = LLDB_INVALID_ADDRESS;
+
 #if defined(__APPLE__) &&                                                      \
     (defined(__arm__) || defined(__arm64__) || defined(__aarch64__))
   uint8_t *(*dyld_get_all_image_infos)(void);
@@ -5692,30 +5658,54 @@ UUID ObjectFileMachO::GetLLDBSharedCacheUUID() {
           sharedCacheUUID_address =
               (uuid_t *)((uint8_t *)dyld_all_image_infos_address +
                          160); // sharedCacheUUID <mach-o/dyld_images.h>
+          if (*version >= 15)
+            base_addr = *(uint64_t *) ((uint8_t *) dyld_all_image_infos_address 
+                          + 176); // sharedCacheBaseAddress <mach-o/dyld_images.h>
         } else {
           sharedCacheUUID_address =
               (uuid_t *)((uint8_t *)dyld_all_image_infos_address +
                          84); // sharedCacheUUID <mach-o/dyld_images.h>
+          if (*version >= 15) {
+            base_addr = 0;
+            base_addr = *(uint32_t *) ((uint8_t *) dyld_all_image_infos_address 
+                          + 100); // sharedCacheBaseAddress <mach-o/dyld_images.h>
+          }
         }
         uuid.SetBytes(sharedCacheUUID_address);
       }
     }
   } else {
     // Exists in macOS 10.12 and later, iOS 10.0 and later - dyld SPI
-    bool *(*dyld_get_shared_cache_uuid)(uuid_t);
-    dyld_get_shared_cache_uuid = (bool *(*)(uuid_t))
-        dlsym(RTLD_DEFAULT, "_dyld_get_shared_cache_uuid");
-    if (dyld_get_shared_cache_uuid) {
-      uuid_t tmp_uuid;
-      if (dyld_get_shared_cache_uuid(tmp_uuid))
-        uuid.SetBytes(tmp_uuid);
+    dyld_process_info (*dyld_process_info_create)(unsigned int /* task_t */ task, uint64_t timestamp, unsigned int /*kern_return_t*/ *kernelError);
+    void (*dyld_process_info_get_cache)(void *info, void *cacheInfo);
+    void (*dyld_process_info_release)(dyld_process_info info);
+
+    dyld_process_info_create = (void *(*)(unsigned int /* task_t */, uint64_t, unsigned int /*kern_return_t*/ *))
+               dlsym (RTLD_DEFAULT, "_dyld_process_info_create");
+    dyld_process_info_get_cache = (void (*)(void *, void *))
+               dlsym (RTLD_DEFAULT, "_dyld_process_info_get_cache");
+    dyld_process_info_release = (void (*)(void *))
+               dlsym (RTLD_DEFAULT, "_dyld_process_info_release");
+
+    if (dyld_process_info_create && dyld_process_info_get_cache) {
+      unsigned int /*kern_return_t */ kern_ret;
+		  dyld_process_info process_info = dyld_process_info_create(::mach_task_self(), 0, &kern_ret);
+      if (process_info) {
+        struct lldb_copy__dyld_process_cache_info sc_info;
+        memset (&sc_info, 0, sizeof (struct lldb_copy__dyld_process_cache_info));
+        dyld_process_info_get_cache (process_info, &sc_info);
+        if (sc_info.cacheBaseAddress != 0) {
+          base_addr = sc_info.cacheBaseAddress;
+          uuid.SetBytes (sc_info.cacheUUID);
+        }
+        dyld_process_info_release (process_info);
+      }
     }
   }
-  Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_SYMBOLS | LIBLLDB_LOG_PROCESS));
+  Log *log(lldb_private::GetLogIfAnyCategoriesSet(LIBLLDB_LOG_SYMBOLS | LIBLLDB_LOG_PROCESS));
   if (log && uuid.IsValid())
-    log->Printf("lldb's in-memory shared cache has a UUID of %s", uuid.GetAsString().c_str());
+    log->Printf("lldb's in-memory shared cache has a UUID of %s base address of 0x%" PRIx64, uuid.GetAsString().c_str(), base_addr);
 #endif
-  return uuid;
 }
 
 uint32_t ObjectFileMachO::GetMinimumOSVersion(uint32_t *versions,
@@ -5840,9 +5830,9 @@ lldb_private::ConstString ObjectFileMachO::GetPluginName() {
 uint32_t ObjectFileMachO::GetPluginVersion() { return 1; }
 
 Section *ObjectFileMachO::GetMachHeaderSection() {
-  // Find the first address of the mach header which is the first non-zero
-  // file sized section whose file offset is zero. This is the base file address
-  // of the mach-o file which can be subtracted from the vmaddr of the other
+  // Find the first address of the mach header which is the first non-zero file
+  // sized section whose file offset is zero. This is the base file address of
+  // the mach-o file which can be subtracted from the vmaddr of the other
   // segments found in memory and added to the load address
   ModuleSP module_sp = GetModule();
   if (module_sp) {
@@ -5880,8 +5870,8 @@ lldb::addr_t ObjectFileMachO::CalculateSectionLoadAddressForMemoryImage(
           module_sp.get() == section->GetModule().get()) {
         // Ignore __LINKEDIT and __DWARF segments
         if (section->GetName() == GetSegmentNameLINKEDIT()) {
-          // Only map __LINKEDIT if we have an in memory image and this isn't
-          // a kernel binary like a kext or mach_kernel.
+          // Only map __LINKEDIT if we have an in memory image and this isn't a
+          // kernel binary like a kext or mach_kernel.
           const bool is_memory_image = (bool)m_process_wp.lock();
           const Strata strata = GetStrata();
           if (is_memory_image == false || strata == eStrataKernel)
@@ -5907,9 +5897,8 @@ bool ObjectFileMachO::SetLoadAddress(Target &target, lldb::addr_t value,
       if (value_is_offset) {
         // "value" is an offset to apply to each top level segment
         for (size_t sect_idx = 0; sect_idx < num_sections; ++sect_idx) {
-          // Iterate through the object file sections to find all
-          // of the sections that size on disk (to avoid __PAGEZERO)
-          // and load them
+          // Iterate through the object file sections to find all of the
+          // sections that size on disk (to avoid __PAGEZERO) and load them
           SectionSP section_sp(section_list->GetSectionAtIndex(sect_idx));
           if (section_sp && section_sp->GetFileSize() > 0 &&
               section_sp->IsThreadSpecific() == false &&
@@ -5917,8 +5906,7 @@ bool ObjectFileMachO::SetLoadAddress(Target &target, lldb::addr_t value,
             // Ignore __LINKEDIT and __DWARF segments
             if (section_sp->GetName() == GetSegmentNameLINKEDIT()) {
               // Only map __LINKEDIT if we have an in memory image and this
-              // isn't
-              // a kernel binary like a kext or mach_kernel.
+              // isn't a kernel binary like a kext or mach_kernel.
               const bool is_memory_image = (bool)m_process_wp.lock();
               const Strata strata = GetStrata();
               if (is_memory_image == false || strata == eStrataKernel)
@@ -6068,10 +6056,10 @@ bool ObjectFileMachO::SaveCore(const lldb::ProcessSP &process_sp,
           ThreadList &thread_list = process_sp->GetThreadList();
           const uint32_t num_threads = thread_list.GetSize();
 
-          // Make an array of LC_THREAD data items. Each one contains
-          // the contents of the LC_THREAD load command. The data doesn't
-          // contain the load command + load command size, we will
-          // add the load command and load command size as we emit the data.
+          // Make an array of LC_THREAD data items. Each one contains the
+          // contents of the LC_THREAD load command. The data doesn't contain
+          // the load command + load command size, we will add the load command
+          // and load command size as we emit the data.
           std::vector<StreamString> LC_THREAD_datas(num_threads);
           for (auto &LC_THREAD_data : LC_THREAD_datas) {
             LC_THREAD_data.GetFlags().Set(Stream::eBinary);
@@ -6231,8 +6219,8 @@ bool ObjectFileMachO::SaveCore(const lldb::ProcessSP &process_sp,
                     bytes_left -= bytes_read;
                     addr += bytes_read;
                   } else {
-                    // Some pages within regions are not readable, those
-                    // should be zero filled
+                    // Some pages within regions are not readable, those should
+                    // be zero filled
                     memset(bytes, 0, bytes_to_read);
                     size_t bytes_written = bytes_to_read;
                     error = core_file.Write(bytes, bytes_written);

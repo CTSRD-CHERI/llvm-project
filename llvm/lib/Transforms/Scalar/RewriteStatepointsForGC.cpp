@@ -28,7 +28,7 @@
 #include "llvm/ADT/iterator_range.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
-#include "llvm/Analysis/Utils/Local.h"
+#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/BasicBlock.h"
@@ -616,8 +616,8 @@ static Value *findBaseDefiningValueCached(Value *I, DefiningValueMapTy &Cache) {
   Value *&Cached = Cache[I];
   if (!Cached) {
     Cached = findBaseDefiningValue(I).BDV;
-    DEBUG(dbgs() << "fBDV-cached: " << I->getName() << " -> "
-                 << Cached->getName() << "\n");
+    LLVM_DEBUG(dbgs() << "fBDV-cached: " << I->getName() << " -> "
+                      << Cached->getName() << "\n");
   }
   assert(Cache[I] != nullptr);
   return Cached;
@@ -848,9 +848,9 @@ static Value *findBasePointer(Value *I, DefiningValueMapTy &Cache) {
   }
 
 #ifndef NDEBUG
-  DEBUG(dbgs() << "States after initialization:\n");
+  LLVM_DEBUG(dbgs() << "States after initialization:\n");
   for (auto Pair : States) {
-    DEBUG(dbgs() << " " << Pair.second << " for " << *Pair.first << "\n");
+    LLVM_DEBUG(dbgs() << " " << Pair.second << " for " << *Pair.first << "\n");
   }
 #endif
 
@@ -923,9 +923,9 @@ static Value *findBasePointer(Value *I, DefiningValueMapTy &Cache) {
   }
 
 #ifndef NDEBUG
-  DEBUG(dbgs() << "States after meet iteration:\n");
+  LLVM_DEBUG(dbgs() << "States after meet iteration:\n");
   for (auto Pair : States) {
-    DEBUG(dbgs() << " " << Pair.second << " for " << *Pair.first << "\n");
+    LLVM_DEBUG(dbgs() << " " << Pair.second << " for " << *Pair.first << "\n");
   }
 #endif
 
@@ -966,7 +966,7 @@ static Value *findBasePointer(Value *I, DefiningValueMapTy &Cache) {
     auto MakeBaseInstPlaceholder = [](Instruction *I) -> Instruction* {
       if (isa<PHINode>(I)) {
         BasicBlock *BB = I->getParent();
-        int NumPreds = std::distance(pred_begin(BB), pred_end(BB));
+        int NumPreds = pred_size(BB);
         assert(NumPreds > 0 && "how did we reach here");
         std::string Name = suffixed_name_or(I, ".base", "base_phi");
         return PHINode::Create(I->getType(), NumPreds, Name, I);
@@ -1124,10 +1124,11 @@ static Value *findBasePointer(Value *I, DefiningValueMapTy &Cache) {
     assert(BDV && Base);
     assert(!isKnownBaseResult(BDV) && "why did it get added?");
 
-    DEBUG(dbgs() << "Updating base value cache"
-                 << " for: " << BDV->getName() << " from: "
-                 << (Cache.count(BDV) ? Cache[BDV]->getName().str() : "none")
-                 << " to: " << Base->getName() << "\n");
+    LLVM_DEBUG(
+        dbgs() << "Updating base value cache"
+               << " for: " << BDV->getName() << " from: "
+               << (Cache.count(BDV) ? Cache[BDV]->getName().str() : "none")
+               << " to: " << Base->getName() << "\n");
 
     if (Cache.count(BDV)) {
       assert(isKnownBaseResult(Base) &&
@@ -1375,7 +1376,7 @@ public:
 
     assert(OldI != NewI && "Disallowed at construction?!");
     assert((!IsDeoptimize || !New) &&
-           "Deoptimize instrinsics are not replaced!");
+           "Deoptimize intrinsics are not replaced!");
 
     Old = nullptr;
     New = nullptr;
@@ -1385,7 +1386,7 @@ public:
 
     if (IsDeoptimize) {
       // Note: we've inserted instructions, so the call to llvm.deoptimize may
-      // not necessarilly be followed by the matching return.
+      // not necessarily be followed by the matching return.
       auto *RI = cast<ReturnInst>(OldI->getParent()->getTerminator());
       new UnreachableInst(RI->getContext(), RI);
       RI->eraseFromParent();
@@ -1811,7 +1812,7 @@ static void relocationViaAlloca(
 
     SmallVector<Instruction *, 20> Uses;
     // PERF: trade a linear scan for repeated reallocation
-    Uses.reserve(std::distance(Def->user_begin(), Def->user_end()));
+    Uses.reserve(Def->getNumUses());
     for (User *U : Def->users()) {
       if (!isa<ConstantExpr>(U)) {
         // If the def has a ConstantExpr use, then the def is either a
@@ -1983,7 +1984,7 @@ chainToBasePointerCost(SmallVectorImpl<Instruction*> &Chain,
         Cost += 2;
 
     } else {
-      llvm_unreachable("unsupported instruciton type during rematerialization");
+      llvm_unreachable("unsupported instruction type during rematerialization");
     }
   }
 
@@ -2030,7 +2031,7 @@ static void rematerializeLiveValues(CallSite CS,
   SmallVector<Value *, 32> LiveValuesToBeDeleted;
 
   for (Value *LiveValue: Info.LiveSet) {
-    // For each live pointer find it's defining chain
+    // For each live pointer find its defining chain
     SmallVector<Instruction *, 3> ChainToBase;
     assert(Info.PointerToBase.count(LiveValue));
     Value *RootOfChain =

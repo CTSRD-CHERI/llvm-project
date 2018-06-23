@@ -1608,7 +1608,7 @@ bool PPCInstrInfo::optimizeCompareInstr(MachineInstr &CmpInstr, unsigned SrcReg,
   int OpC = CmpInstr.getOpcode();
   unsigned CRReg = CmpInstr.getOperand(0).getReg();
 
-  // FP record forms set CR1 based on the execption status bits, not a
+  // FP record forms set CR1 based on the exception status bits, not a
   // comparison with zero.
   if (OpC == PPC::FCMPUS || OpC == PPC::FCMPUD)
     return false;
@@ -1731,7 +1731,7 @@ bool PPCInstrInfo::optimizeCompareInstr(MachineInstr &CmpInstr, unsigned SrcReg,
     unsigned PredHint = PPC::getPredicateHint(Pred);
     int16_t Immed = (int16_t)Value;
 
-    // When modyfing the condition in the predicate, we propagate hint bits
+    // When modifying the condition in the predicate, we propagate hint bits
     // from the original predicate to the new one.
     if (Immed == -1 && PredCond == PPC::PRED_GT)
       // We convert "greater than -1" into "greater than or equal to 0",
@@ -2233,7 +2233,7 @@ MachineInstr *PPCInstrInfo::getConstantDefMI(MachineInstr &MI,
   MachineInstr *DefMI = nullptr;
   MachineRegisterInfo *MRI = &MI.getParent()->getParent()->getRegInfo();
   const TargetRegisterInfo *TRI = &getRegisterInfo();
-  // If we'ere in SSA, get the defs through the MRI. Otherwise, only look
+  // If we're in SSA, get the defs through the MRI. Otherwise, only look
   // within the basic block to see if the register is defined using an LI/LI8.
   if (MRI->isSSA()) {
     for (int i = 1, e = MI.getNumOperands(); i < e; i++) {
@@ -2418,16 +2418,17 @@ bool PPCInstrInfo::convertToImmediateForm(MachineInstr &MI,
         CompareUseMI.RemoveOperand(2);
         continue;
       }
-      DEBUG(dbgs() << "Found LI -> CMPI -> ISEL, replacing with a copy.\n");
-      DEBUG(DefMI->dump(); MI.dump(); CompareUseMI.dump());
-      DEBUG(dbgs() << "Is converted to:\n");
+      LLVM_DEBUG(
+          dbgs() << "Found LI -> CMPI -> ISEL, replacing with a copy.\n");
+      LLVM_DEBUG(DefMI->dump(); MI.dump(); CompareUseMI.dump());
+      LLVM_DEBUG(dbgs() << "Is converted to:\n");
       // Convert to copy and remove unneeded operands.
       CompareUseMI.setDesc(get(PPC::COPY));
       CompareUseMI.RemoveOperand(3);
       CompareUseMI.RemoveOperand(RegToCopy == TrueReg ? 2 : 1);
       CmpIselsConverted++;
       Changed = true;
-      DEBUG(CompareUseMI.dump());
+      LLVM_DEBUG(CompareUseMI.dump());
     }
     if (Changed)
       return true;
@@ -2528,10 +2529,10 @@ bool PPCInstrInfo::convertToImmediateForm(MachineInstr &MI,
   }
 
   if (ReplaceWithLI) {
-    DEBUG(dbgs() << "Replacing instruction:\n");
-    DEBUG(MI.dump());
-    DEBUG(dbgs() << "Fed by:\n");
-    DEBUG(DefMI->dump());
+    LLVM_DEBUG(dbgs() << "Replacing instruction:\n");
+    LLVM_DEBUG(MI.dump());
+    LLVM_DEBUG(dbgs() << "Fed by:\n");
+    LLVM_DEBUG(DefMI->dump());
     LoadImmediateInfo LII;
     LII.Imm = NewImm;
     LII.Is64Bit = Is64BitLI;
@@ -2541,8 +2542,8 @@ bool PPCInstrInfo::convertToImmediateForm(MachineInstr &MI,
     if (KilledDef && SetCR)
       *KilledDef = nullptr;
     replaceInstrWithLI(MI, LII);
-    DEBUG(dbgs() << "With:\n");
-    DEBUG(MI.dump());
+    LLVM_DEBUG(dbgs() << "With:\n");
+    LLVM_DEBUG(MI.dump());
     return true;
   }
   return false;
@@ -3184,7 +3185,7 @@ bool PPCInstrInfo::isTOCSaveMI(const MachineInstr &MI) const {
 }
 
 // We limit the max depth to track incoming values of PHIs or binary ops
-// (e.g. AND) to avoid exsessive cost.
+// (e.g. AND) to avoid excessive cost.
 const unsigned MAX_DEPTH = 1;
 
 bool

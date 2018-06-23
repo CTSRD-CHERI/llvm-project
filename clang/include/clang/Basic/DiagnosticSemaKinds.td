@@ -203,6 +203,8 @@ def ext_imaginary_constant : Extension<
 def ext_integer_complex : Extension<
   "complex integer types are a GNU extension">, InGroup<GNUComplexInteger>;
 
+def err_invalid_saturation_spec : Error<"'_Sat' specifier is only valid on "
+  "'_Fract' or '_Accum', not '%0'">;
 def err_invalid_sign_spec : Error<"'%0' cannot be signed or unsigned">;
 def err_invalid_width_spec : Error<
   "'%select{|short|long|long long}0 %1' is invalid">;
@@ -1622,13 +1624,16 @@ def warn_call_to_pure_virtual_member_function_from_ctor_dtor : Warning<
   "overrides of %0 in subclasses are not available in the "
   "%select{constructor|destructor}1 of %2">;
 
+def select_special_member_kind : TextSubstitution<
+  "%select{default constructor|copy constructor|move constructor|"
+  "copy assignment operator|move assignment operator|destructor}0">;
+
 def note_member_declared_at : Note<"member is declared here">;
 def note_ivar_decl : Note<"instance variable is declared here">;
 def note_bitfield_decl : Note<"bit-field is declared here">;
 def note_implicit_param_decl : Note<"%0 is an implicit parameter">;
 def note_member_synthesized_at : Note<
-  "in implicit %select{default constructor|copy constructor|move constructor|"
-  "copy assignment operator|move assignment operator|destructor}0 for %1 "
+  "in implicit %sub{select_special_member_kind}0 for %1 "
   "first required here">;
 def err_missing_default_ctor : Error<
   "%select{constructor for %1 must explicitly initialize the|"
@@ -1641,12 +1646,10 @@ def note_due_to_dllexported_class : Note<
 
 def err_illegal_union_or_anon_struct_member : Error<
   "%select{anonymous struct|union}0 member %1 has a non-trivial "
-  "%select{constructor|copy constructor|move constructor|copy assignment "
-  "operator|move assignment operator|destructor}2">;
+  "%sub{select_special_member_kind}2">;
 def warn_cxx98_compat_nontrivial_union_or_anon_struct_member : Warning<
   "%select{anonymous struct|union}0 member %1 with a non-trivial "
-  "%select{constructor|copy constructor|move constructor|copy assignment "
-  "operator|move assignment operator|destructor}2 is incompatible with C++98">,
+  "%sub{select_special_member_kind}2 is incompatible with C++98">,
   InGroup<CXX98Compat>, DefaultIgnore;
 
 def note_nontrivial_virtual_dtor : Note<
@@ -1665,8 +1668,7 @@ def note_nontrivial_no_copy : Note<
   "%select{base class|field|an object}0 of type %3">;
 def note_nontrivial_user_provided : Note<
   "because %select{base class of |field of |}0type %1 has a user-provided "
-  "%select{default constructor|copy constructor|move constructor|"
-  "copy assignment operator|move assignment operator|destructor}2">;
+  "%sub{select_special_member_kind}2">;
 def note_nontrivial_in_class_init : Note<
   "because field %0 has an initializer">;
 def note_nontrivial_param_type : Note<
@@ -1733,9 +1735,7 @@ def err_covariant_return_type_class_type_more_qualified : Error<
 
 // C++ implicit special member functions
 def note_in_declaration_of_implicit_special_member : Note<
-  "while declaring the implicit "
-  "%select{default constructor|copy constructor|move constructor|"
-  "copy assignment operator|move assignment operator|destructor}1"
+  "while declaring the implicit %sub{select_special_member_kind}1"
   " for %0">;
 
 // C++ constructors
@@ -2117,9 +2117,16 @@ def err_deduction_guide_explicit_mismatch : Error<
 def err_deduction_guide_specialized : Error<"deduction guide cannot be "
   "%select{explicitly instantiated|explicitly specialized}0">;
 def err_deduction_guide_template_not_deducible : Error<
-    "deduction guide template contains "
-    "%select{a template parameter|template parameters}0 that cannot be "
-    "deduced">;
+  "deduction guide template contains "
+  "%select{a template parameter|template parameters}0 that cannot be "
+  "deduced">;
+def err_deduction_guide_wrong_access : Error<
+  "deduction guide has different access from the corresponding "
+  "member template">;
+def note_deduction_guide_template_access : Note<
+  "member template declared %0 here">;
+def note_deduction_guide_access : Note<
+  "deduction guide declared %0 by intervening access specifier">;
 
 // C++1y deduced return types
 def err_auto_fn_deduction_failure : Error<
@@ -2381,6 +2388,8 @@ def note_non_literal_user_provided_dtor : Note<
   "%0 is not literal because it has a user-provided destructor">;
 def note_non_literal_nontrivial_dtor : Note<
   "%0 is not literal because it has a non-trivial destructor">;
+def note_non_literal_lambda : Note<
+  "lambda closure types are non-literal types before C++17">;
 def warn_private_extern : Warning<
   "use of __private_extern__ on a declaration may not produce external symbol "
   "private to the linkage unit and is deprecated">, InGroup<PrivateExtern>;
@@ -2421,6 +2430,9 @@ def err_template_different_associated_constraints : Error<
 def warn_cxx98_compat_unicode_type : Warning<
   "'%0' type specifier is incompatible with C++98">,
   InGroup<CXX98Compat>, DefaultIgnore;
+def warn_cxx17_compat_unicode_type : Warning<
+  "'char8_t' type specifier is incompatible with C++ standards before C++20">,
+  InGroup<CXXPre2aCompat>, DefaultIgnore;
 
 // __make_integer_seq
 def err_integer_sequence_negative_length : Error<
@@ -2817,7 +2829,7 @@ def warn_alias_with_section : Warning<
   "%select{alias|ifunc}1 will not be in section '%0' but in the same section as the %select{aliasee|resolver}2">,
   InGroup<IgnoredAttributes>;
 def err_duplicate_mangled_name : Error<
-  "definition with same mangled name as another definition">;
+  "definition with same mangled name '%0' as another definition">;
 def err_cyclic_alias : Error<
   "%select{alias|ifunc}0 definition is part of a cycle">;
 def err_ifunc_resolver_return : Error<
@@ -3137,13 +3149,18 @@ def warn_impcast_bitfield_precision_constant : Warning<
 def warn_impcast_literal_float_to_integer : Warning<
   "implicit conversion from %0 to %1 changes value from %2 to %3">,
   InGroup<LiteralConversion>;
+def warn_impcast_literal_float_to_integer_out_of_range : Warning<
+  "implicit conversion of out of range value from %0 to %1 is undefined">,
+  InGroup<LiteralConversion>;
 def warn_impcast_float_integer : Warning<
   "implicit conversion turns floating-point number into integer: %0 to %1">,
   InGroup<FloatConversion>, DefaultIgnore;
 
 def warn_impcast_float_to_integer : Warning<
-  "implicit conversion of out of range value from %0 to %1 changes value "
-  "from %2 to %3">,
+  "implicit conversion from %0 to %1 changes value from %2 to %3">,
+  InGroup<FloatOverflowConversion>, DefaultIgnore;
+def warn_impcast_float_to_integer_out_of_range : Warning<
+  "implicit conversion of out of range value from %0 to %1 is undefined">,
   InGroup<FloatOverflowConversion>, DefaultIgnore;
 def warn_impcast_float_to_integer_zero : Warning<
   "implicit conversion from %0 to %1 changes non-zero value from %2 to %3">,
@@ -3333,6 +3350,9 @@ def err_attribute_not_supported_in_lang : Error<
   "%0 attribute is not supported in %select{C|C++|Objective-C}1">;
 def err_attribute_not_supported_on_arch
     : Error<"%0 attribute is not supported on '%1'">;
+def warn_gcc_ignores_type_attr : Warning<
+  "GCC does not allow the %0 attribute to be written on a type">,
+  InGroup<GccCompat>;
 
 // Clang-Specific Attributes
 def warn_attribute_iboutlet : Warning<
@@ -3514,27 +3534,29 @@ def err_ovl_deleted_member_call : Error<
 def note_ovl_too_many_candidates : Note<
     "remaining %0 candidate%s0 omitted; "
     "pass -fshow-overloads=all to show them">;
-def note_ovl_candidate : Note<"candidate "
-    "%select{function|function|constructor|"
-    "function |function |constructor |"
-    "is the implicit default constructor|"
-    "is the implicit copy constructor|"
-    "is the implicit move constructor|"
-    "is the implicit copy assignment operator|"
-    "is the implicit move assignment operator|"
-    "inherited constructor|"
-    "inherited constructor }0%2"
-    "%select{| has different class%diff{ (expected $ but has $)|}4,5"
-    "| has different number of parameters (expected %4 but has %5)"
-    "| has type mismatch at %ordinal4 parameter"
-    "%diff{ (expected $ but has $)|}5,6"
-    "| has different return type%diff{ ($ expected but has $)|}4,5"
+
+def select_ovl_candidate_kind : TextSubstitution<
+  "%select{function|function|constructor|"
+    "constructor (the implicit default constructor)|"
+    "constructor (the implicit copy constructor)|"
+    "constructor (the implicit move constructor)|"
+    "function (the implicit copy assignment operator)|"
+    "function (the implicit move assignment operator)|"
+    "inherited constructor}0%select{| template| %2}1">;
+
+def note_ovl_candidate : Note<
+    "candidate %sub{select_ovl_candidate_kind}0,1,3"
+    "%select{| has different class%diff{ (expected $ but has $)|}5,6"
+    "| has different number of parameters (expected %5 but has %6)"
+    "| has type mismatch at %ordinal5 parameter"
+    "%diff{ (expected $ but has $)|}6,7"
+    "| has different return type%diff{ ($ expected but has $)|}5,6"
     "| has different qualifiers (expected "
     "%select{none|const|restrict|const and restrict|volatile|const and volatile"
-    "|volatile and restrict|const, volatile, and restrict}4 but found "
+    "|volatile and restrict|const, volatile, and restrict}5 but found "
     "%select{none|const|restrict|const and restrict|volatile|const and volatile"
-    "|volatile and restrict|const, volatile, and restrict}5)"
-    "| has different exception specification}3">;
+    "|volatile and restrict|const, volatile, and restrict}6)"
+    "| has different exception specification}4">;
 
 def note_ovl_candidate_inherited_constructor : Note<
     "constructor from base class %0 inherited here">;
@@ -3604,233 +3626,99 @@ def note_ovl_candidate_non_deduced_mismatch_qualified : Note<
 
 // Note that we don't treat templates differently for this diagnostic.
 def note_ovl_candidate_arity : Note<"candidate "
-    "%select{function|function|constructor|function|function|constructor|"
-    "constructor (the implicit default constructor)|"
-    "constructor (the implicit copy constructor)|"
-    "constructor (the implicit move constructor)|"
-    "function (the implicit copy assignment operator)|"
-    "function (the implicit move assignment operator)|"
-    "inherited constructor|"
-    "inherited constructor}0 %select{|template }1"
-    "not viable: requires%select{ at least| at most|}2 %3 argument%s3, but %4 "
-    "%plural{1:was|:were}4 provided">;
+    "%sub{select_ovl_candidate_kind}0,1,2 not viable: "
+    "requires%select{ at least| at most|}3 %4 argument%s4, but %5 "
+    "%plural{1:was|:were}5 provided">;
 
 def note_ovl_candidate_arity_one : Note<"candidate "
-    "%select{function|function|constructor|function|function|constructor|"
-    "constructor (the implicit default constructor)|"
-    "constructor (the implicit copy constructor)|"
-    "constructor (the implicit move constructor)|"
-    "function (the implicit copy assignment operator)|"
-    "function (the implicit move assignment operator)|"
-    "inherited constructor|"
-    "inherited constructor}0 %select{|template }1not viable: "
-    "%select{requires at least|allows at most single|requires single}2 "
-    "argument %3, but %plural{0:no|:%4}4 arguments were provided">;
+    "%sub{select_ovl_candidate_kind}0,1,2 not viable: "
+    "%select{requires at least|allows at most single|requires single}3 "
+    "argument %4, but %plural{0:no|:%5}5 arguments were provided">;
 
 def note_ovl_candidate_deleted : Note<
-    "candidate %select{function|function|constructor|"
-    "function |function |constructor |"
-    "constructor (the implicit default constructor)|"
-    "constructor (the implicit copy constructor)|"
-    "constructor (the implicit move constructor)|"
-    "function (the implicit copy assignment operator)|"
-    "function (the implicit move assignment operator)|"
-    "inherited constructor|"
-    "inherited constructor }0%1 has been "
+    "candidate %sub{select_ovl_candidate_kind}0,1,2 has been "
     "%select{explicitly made unavailable|explicitly deleted|"
-    "implicitly deleted}2">;
+    "implicitly deleted}3">;
 
 // Giving the index of the bad argument really clutters this message, and
 // it's relatively unimportant because 1) it's generally obvious which
 // argument(s) are of the given object type and 2) the fix is usually
 // to complete the type, which doesn't involve changes to the call line
 // anyway.  If people complain, we can change it.
-def note_ovl_candidate_bad_conv_incomplete : Note<"candidate "
-    "%select{function|function|constructor|"
-    "function |function |constructor |"
-    "constructor (the implicit default constructor)|"
-    "constructor (the implicit copy constructor)|"
-    "constructor (the implicit move constructor)|"
-    "function (the implicit copy assignment operator)|"
-    "function (the implicit move assignment operator)|"
-    "inherited constructor|"
-    "inherited constructor }0%1 "
-    "not viable: cannot convert argument of incomplete type "
-    "%diff{$ to $|to parameter type}2,3 for "
-    "%select{%ordinal5 argument|object argument}4"
+def note_ovl_candidate_bad_conv_incomplete : Note<
+    "candidate %sub{select_ovl_candidate_kind}0,1,2 not viable: "
+    "cannot convert argument of incomplete type "
+    "%diff{$ to $|to parameter type}3,4 for "
+    "%select{%ordinal6 argument|object argument}5"
     "%select{|; dereference the argument with *|"
     "; take the address of the argument with &|"
     "; remove *|"
-    "; remove &}6">;
-def note_ovl_candidate_bad_list_argument : Note<"candidate "
-    "%select{function|function|constructor|"
-    "function |function |constructor |"
-    "constructor (the implicit default constructor)|"
-    "constructor (the implicit copy constructor)|"
-    "constructor (the implicit move constructor)|"
-    "function (the implicit copy assignment operator)|"
-    "function (the implicit move assignment operator)|"
-    "inherited constructor|"
-    "inherited constructor }0%1 "
-    "not viable: cannot convert initializer list argument to %3">;
-def note_ovl_candidate_bad_overload : Note<"candidate "
-    "%select{function|function|constructor|"
-    "function |function |constructor |"
-    "constructor (the implicit default constructor)|"
-    "constructor (the implicit copy constructor)|"
-    "constructor (the implicit move constructor)|"
-    "function (the implicit copy assignment operator)|"
-    "function (the implicit move assignment operator)|"
-    "inherited constructor|"
-    "inherited constructor }0%1"
-    " not viable: no overload of %3 matching %2 for %ordinal4 argument">;
-def note_ovl_candidate_bad_conv : Note<"candidate "
-    "%select{function|function|constructor|"
-    "function |function |constructor |"
-    "constructor (the implicit default constructor)|"
-    "constructor (the implicit copy constructor)|"
-    "constructor (the implicit move constructor)|"
-    "function (the implicit copy assignment operator)|"
-    "function (the implicit move assignment operator)|"
-    "inherited constructor|"
-    "inherited constructor }0%1"
-    " not viable: no known conversion "
-    "%diff{from $ to $|from argument type to parameter type}2,3 for "
-    "%select{%ordinal5 argument|object argument}4"
+    "; remove &}7">;
+def note_ovl_candidate_bad_list_argument : Note<
+    "candidate %sub{select_ovl_candidate_kind}0,1,2 not viable: "
+    "cannot convert initializer list argument to %4">;
+def note_ovl_candidate_bad_overload : Note<
+    "candidate %sub{select_ovl_candidate_kind}0,1,2 not viable: "
+    "no overload of %4 matching %3 for %ordinal5 argument">;
+def note_ovl_candidate_bad_conv : Note<
+    "candidate %sub{select_ovl_candidate_kind}0,1,2 not viable: "
+    "no known conversion "
+    "%diff{from $ to $|from argument type to parameter type}3,4 for "
+    "%select{%ordinal6 argument|object argument}5"
     "%select{|; dereference the argument with *|"
     "; take the address of the argument with &|"
     "; remove *|"
-    "; remove &}6">;
-def note_ovl_candidate_bad_arc_conv : Note<"candidate "
-    "%select{function|function|constructor|"
-    "function |function |constructor |"
-    "constructor (the implicit default constructor)|"
-    "constructor (the implicit copy constructor)|"
-    "constructor (the implicit move constructor)|"
-    "function (the implicit copy assignment operator)|"
-    "function (the implicit move assignment operator)|"
-    "inherited constructor|"
-    "inherited constructor }0%1"
-    " not viable: cannot implicitly convert argument "
-    "%diff{of type $ to $|type to parameter type}2,3 for "
-    "%select{%ordinal5 argument|object argument}4 under ARC">;
-def note_ovl_candidate_bad_lvalue : Note<"candidate "
-    "%select{function|function|constructor|"
-    "function |function |constructor |"
-    "constructor (the implicit default constructor)|"
-    "constructor (the implicit copy constructor)|"
-    "constructor (the implicit move constructor)|"
-    "function (the implicit copy assignment operator)|"
-    "function (the implicit move assignment operator)|"
-    "inherited constructor|"
-    "inherited constructor }0%1"
-    " not viable: expects an l-value for "
-    "%select{%ordinal3 argument|object argument}2">;
-def note_ovl_candidate_bad_addrspace : Note<"candidate "
-    "%select{function|function|constructor|"
-    "function |function |constructor |"
-    "constructor (the implicit default constructor)|"
-    "constructor (the implicit copy constructor)|"
-    "constructor (the implicit move constructor)|"
-    "function (the implicit copy assignment operator)|"
-    "function (the implicit move assignment operator)|"
-    "inherited constructor|"
-    "inherited constructor }0%1 not viable: "
-    "%select{%ordinal6|'this'}5 argument (%2) is in "
-    "address space %3, but parameter must be in address space %4">;
-def note_ovl_candidate_bad_gc : Note<"candidate "
-    "%select{function|function|constructor|"
-    "function |function |constructor |"
-    "constructor (the implicit default constructor)|"
-    "constructor (the implicit copy constructor)|"
-    "constructor (the implicit move constructor)|"
-    "function (the implicit copy assignment operator)|"
-    "function (the implicit move assignment operator)|"
-    "inherited constructor|"
-    "inherited constructor }0%1 not viable: "
-    "%select{%ordinal6|'this'}5 argument (%2) has %select{no|__weak|__strong}3 "
-    "ownership, but parameter has %select{no|__weak|__strong}4 ownership">;
-def note_ovl_candidate_bad_ownership : Note<"candidate "
-    "%select{function|function|constructor|"
-    "function |function |constructor |"
-    "constructor (the implicit default constructor)|"
-    "constructor (the implicit copy constructor)|"
-    "constructor (the implicit move constructor)|"
-    "function (the implicit copy assignment operator)|"
-    "function (the implicit move assignment operator)|"
-    "inherited constructor|"
-    "inherited constructor }0%1 not viable: "
-    "%select{%ordinal6|'this'}5 argument (%2) has "
-    "%select{no|__unsafe_unretained|__strong|__weak|__autoreleasing}3 ownership,"
+    "; remove &}7">;
+def note_ovl_candidate_bad_arc_conv : Note<
+    "candidate %sub{select_ovl_candidate_kind}0,1,2 not viable: "
+    "cannot implicitly convert argument "
+    "%diff{of type $ to $|type to parameter type}3,4 for "
+    "%select{%ordinal6 argument|object argument}5 under ARC">;
+def note_ovl_candidate_bad_lvalue : Note<
+    "candidate %sub{select_ovl_candidate_kind}0,1,2 not viable: "
+    "expects an l-value for "
+    "%select{%ordinal4 argument|object argument}3">;
+def note_ovl_candidate_bad_addrspace : Note<
+    "candidate %sub{select_ovl_candidate_kind}0,1,2 not viable: "
+    "%select{%ordinal7|'this'}6 argument (%3) is in "
+    "address space %4, but parameter must be in address space %5">;
+def note_ovl_candidate_bad_gc : Note<
+    "candidate %sub{select_ovl_candidate_kind}0,1,2 not viable: "
+    "%select{%ordinal7|'this'}6 argument (%3) has %select{no|__weak|__strong}4 "
+    "ownership, but parameter has %select{no|__weak|__strong}5 ownership">;
+def note_ovl_candidate_bad_ownership : Note<
+    "candidate %sub{select_ovl_candidate_kind}0,1,2 not viable: "
+    "%select{%ordinal7|'this'}6 argument (%3) has "
+    "%select{no|__unsafe_unretained|__strong|__weak|__autoreleasing}4 ownership,"
     " but parameter has %select{no|__unsafe_unretained|__strong|__weak|"
-    "__autoreleasing}4 ownership">;
-def note_ovl_candidate_bad_cvr_this : Note<"candidate "
-    "%select{|function|||function|||||"
-    "function (the implicit copy assignment operator)|"
-    "function (the implicit move assignment operator)||}0 not viable: "
-    "'this' argument has type %2, but method is not marked "
+    "__autoreleasing}5 ownership">;
+def note_ovl_candidate_bad_cvr_this : Note<
+    "candidate %sub{select_ovl_candidate_kind}0,1,2 not viable: "
+    "'this' argument has type %3, but method is not marked "
     "%select{const|restrict|const or restrict|volatile|const or volatile|"
-    "volatile or restrict|const, volatile, or restrict}3">;
-def note_ovl_candidate_bad_cvr : Note<"candidate "
-    "%select{function|function|constructor|"
-    "function |function |constructor |"
-    "constructor (the implicit default constructor)|"
-    "constructor (the implicit copy constructor)|"
-    "constructor (the implicit move constructor)|"
-    "function (the implicit copy assignment operator)|"
-    "function (the implicit move assignment operator)|"
-    "inherited constructor|"
-    "inherited constructor }0%1 not viable: "
-    "%ordinal4 argument (%2) would lose "
+    "volatile or restrict|const, volatile, or restrict}4">;
+def note_ovl_candidate_bad_cvr : Note<
+    "candidate %sub{select_ovl_candidate_kind}0,1,2 not viable: "
+    "%ordinal5 argument (%3) would lose "
     "%select{const|restrict|const and restrict|volatile|const and volatile|"
-    "volatile and restrict|const, volatile, and restrict}3 qualifier"
-    "%select{||s||s|s|s}3">;
-def note_ovl_candidate_bad_unaligned : Note<"candidate "
-    "%select{function|function|constructor|"
-    "function |function |constructor |"
-    "constructor (the implicit default constructor)|"
-    "constructor (the implicit copy constructor)|"
-    "constructor (the implicit move constructor)|"
-    "function (the implicit copy assignment operator)|"
-    "function (the implicit move assignment operator)|"
-    "inherited constructor|"
-    "inherited constructor }0%1 not viable: "
-    "%ordinal4 argument (%2) would lose __unaligned qualifier">;
-def note_ovl_candidate_bad_base_to_derived_conv : Note<"candidate "
-    "%select{function|function|constructor|"
-    "function |function |constructor |"
-    "constructor (the implicit default constructor)|"
-    "constructor (the implicit copy constructor)|"
-    "constructor (the implicit move constructor)|"
-    "function (the implicit copy assignment operator)|"
-    "function (the implicit move assignment operator)|"
-    "inherited constructor|"
-    "inherited constructor }0%1 not viable: "
-    "cannot %select{convert from|convert from|bind}2 "
-    "%select{base class pointer|superclass|base class object of type}2 %3 to "
-    "%select{derived class pointer|subclass|derived class reference}2 %4 for "
-    "%ordinal5 argument">;
+    "volatile and restrict|const, volatile, and restrict}4 qualifier"
+    "%select{||s||s|s|s}4">;
+def note_ovl_candidate_bad_unaligned : Note<
+    "candidate %sub{select_ovl_candidate_kind}0,1,2 not viable: "
+    "%ordinal5 argument (%3) would lose __unaligned qualifier">;
+def note_ovl_candidate_bad_base_to_derived_conv : Note<
+    "candidate %sub{select_ovl_candidate_kind}0,1,2 not viable: "
+    "cannot %select{convert from|convert from|bind}3 "
+    "%select{base class pointer|superclass|base class object of type}3 %4 to "
+    "%select{derived class pointer|subclass|derived class reference}3 %5 for "
+    "%ordinal6 argument">;
 def note_ovl_candidate_bad_target : Note<
-    "candidate %select{function|function|constructor|"
-    "function|function|constructor|"
-    "constructor (the implicit default constructor)|"
-    "constructor (the implicit copy constructor)|"
-    "constructor (the implicit move constructor)|"
-    "function (the implicit copy assignment operator)|"
-    "function (the implicit move assignment operator)|"
-    "inherited constructor|"
-    "inherited constructor}0 not viable: "
+    "candidate %sub{select_ovl_candidate_kind}0,1,2 not viable: "
     "call to "
-    "%select{__device__|__global__|__host__|__host__ __device__|invalid}1 function from"
-    " %select{__device__|__global__|__host__|__host__ __device__|invalid}2 function">;
+    "%select{__device__|__global__|__host__|__host__ __device__|invalid}3 function from"
+    " %select{__device__|__global__|__host__|__host__ __device__|invalid}4 function">;
 def note_implicit_member_target_infer_collision : Note<
-    "implicit %select{"
-    "default constructor|"
-    "copy constructor|"
-    "move constructor|"
-    "copy assignment operator|"
-    "move assignment operator|"
-    "destructor}0 inferred target collision: call to both "
+    "implicit %sub{select_special_member_kind}0 inferred target collision: call to both "
     "%select{__device__|__global__|__host__|__host__ __device__}1 and "
     "%select{__device__|__global__|__host__|__host__ __device__}2 members">;
 
@@ -3872,9 +3760,7 @@ def err_ovl_deleted_oper : Error<
   "overload resolution selected %select{unavailable|deleted}0 operator '%1'%2">;
 def err_ovl_deleted_special_oper : Error<
   "object of type %0 cannot be %select{constructed|copied|moved|assigned|"
-  "assigned|destroyed}1 because its %select{default constructor|"
-  "copy constructor|move constructor|copy assignment operator|"
-  "move assignment operator|destructor}1 is implicitly deleted">;
+  "assigned|destroyed}1 because its %sub{select_special_member_kind}1 is implicitly deleted">;
 def err_ovl_no_viable_subscript :
     Error<"no viable overloaded operator[] for type %0">;
 def err_ovl_no_oper :
@@ -3991,8 +3877,6 @@ def err_template_member_noparams : Error<
   "extraneous 'template<>' in declaration of member %0">;
 def err_template_tag_noparams : Error<
   "extraneous 'template<>' in declaration of %0 %1">;
-def err_template_decl_ref : Error<
-  "cannot refer to %select{class|variable}0 template %1 without a template argument list">;
 
 // C++ Template Argument Lists
 def err_template_missing_args : Error<
@@ -4496,6 +4380,8 @@ def note_using_value_decl_missing_typename : Note<
 
 def err_template_kw_refers_to_non_template : Error<
   "%0 following the 'template' keyword does not refer to a template">;
+def note_template_kw_refers_to_non_template : Note<
+  "declared as a non-template here">;
 def err_template_kw_refers_to_class_template : Error<
   "'%0%1' instantiated to a class template, not a function template">;
 def note_referenced_class_template : Note<
@@ -5422,8 +5308,6 @@ def warn_block_capture_autoreleasing : Warning<
   "block captures an autoreleasing out-parameter, which may result in "
   "use-after-free bugs">,
   InGroup<BlockCaptureAutoReleasing>;
-def note_declare_parameter_autoreleasing : Note<
-  "declare the parameter __autoreleasing explicitly to suppress this warning">;
 def note_declare_parameter_strong : Note<
   "declare the parameter __strong or capture a __block __strong variable to "
   "keep values alive across autorelease pools">;
@@ -5824,6 +5708,13 @@ def err_array_init_wide_string_into_char : Error<
   "initializing char array with wide string literal">;
 def err_array_init_incompat_wide_string_into_wchar : Error<
   "initializing wide char array with incompatible wide string literal">;
+def err_array_init_plain_string_into_char8_t : Error<
+  "initializing 'char8_t' array with plain string literal">;
+def note_array_init_plain_string_into_char8_t : Note<
+  "add 'u8' prefix to form a 'char8_t' string literal">;
+def err_array_init_utf8_string_into_char : Error<
+  "initialization of char array with UTF-8 string literal is not permitted "
+  "by '-fchar8_t'">;
 def err_array_init_different_type : Error<
   "cannot initialize array %diff{of type $ with array of type $|"
   "with different type of array}0,1">;
@@ -5921,7 +5812,8 @@ def ext_typecheck_ordered_comparison_of_pointer_and_zero : Extension<
 def err_typecheck_ordered_comparison_of_pointer_and_zero : Error<
   "ordered comparison between pointer and zero (%0 and %1)">;
 def ext_typecheck_ordered_comparison_of_function_pointers : ExtWarn<
-  "ordered comparison of function pointers (%0 and %1)">;
+  "ordered comparison of function pointers (%0 and %1)">,
+  InGroup<DiagGroup<"ordered-compare-function-pointers">>;
 def ext_typecheck_comparison_of_fptr_to_void : Extension<
   "equality comparison between function pointer and void pointer (%0 and %1)">;
 def err_typecheck_comparison_of_fptr_to_void : Error<
@@ -6467,6 +6359,8 @@ def err_bad_memptr_rhs : Error<
 def err_bad_memptr_lhs : Error<
   "left hand operand to %0 must be a %select{|pointer to }1class "
   "compatible with the right hand operand, but is %2">;
+def err_memptr_incomplete : Error<
+  "member pointer has incomplete base type %0">;
 def warn_exception_caught_by_earlier_handler : Warning<
   "exception of type %0 will be caught by earlier handler">,
   InGroup<Exceptions>;
@@ -6715,9 +6609,9 @@ def err_not_tag_in_scope : Error<
   "no %select{struct|interface|union|class|enum}0 named %1 in %2">;
 
 def err_no_typeid_with_fno_rtti : Error<
-  "cannot use typeid with -fno-rtti">;
+  "use of typeid requires -frtti">;
 def err_no_dynamic_cast_with_fno_rtti : Error<
-  "cannot use dynamic_cast with -fno-rtti">;
+  "use of dynamic_cast requires -frtti">;
 
 def err_cannot_form_pointer_to_member_of_reference_type : Error<
   "cannot form a pointer-to-member to member %0 of reference type %1">;
@@ -7082,6 +6976,8 @@ def err_atomic_builtin_must_be_pointer : Error<
 def err_atomic_builtin_must_be_pointer_intptr : Error<
   "address argument to atomic builtin must be a pointer to integer or pointer"
   " (%0 invalid)">;
+def err_atomic_builtin_cannot_be_const : Error<
+  "address argument to atomic builtin cannot be const-qualified (%0 invalid)">;
 def err_atomic_builtin_must_be_pointer_intfltptr : Error<
   "address argument to atomic builtin must be a pointer to integer,"
   " floating-point or pointer (%0 invalid)">;
@@ -7106,6 +7002,8 @@ def err_atomic_op_needs_trivial_copy : Error<
 def err_atomic_op_needs_atomic_int_or_ptr : Error<
   "address argument to atomic operation must be a pointer to %select{|atomic }0"
   "integer or pointer (%1 invalid)">;
+def err_atomic_op_needs_int32_or_ptr : Error<
+  "address argument to atomic operation must be a pointer to signed or unsigned 32-bit integer">;
 def err_atomic_op_bitwise_needs_atomic_int : Error<
   "address argument to bitwise atomic operation must be a pointer to "
   "%select{|atomic }0integer (%1 invalid)">;
@@ -7744,9 +7642,8 @@ def err_defaulted_special_member_quals : Error<
   "an explicitly-defaulted %select{copy|move}0 assignment operator may not "
   "have 'const'%select{, 'constexpr'|}1 or 'volatile' qualifiers">;
 def err_defaulted_special_member_volatile_param : Error<
-  "the parameter for an explicitly-defaulted %select{<<ERROR>>|"
-  "copy constructor|move constructor|copy assignment operator|"
-  "move assignment operator|<<ERROR>>}0 may not be volatile">;
+  "the parameter for an explicitly-defaulted %sub{select_special_member_kind}0 "
+  "may not be volatile">;
 def err_defaulted_special_member_move_const_param : Error<
   "the parameter for an explicitly-defaulted move "
   "%select{constructor|assignment operator}0 may not be const">;
@@ -7758,17 +7655,13 @@ def err_defaulted_copy_assign_not_ref : Error<
   "the parameter for an explicitly-defaulted copy assignment operator must be an "
   "lvalue reference type">;
 def err_incorrect_defaulted_exception_spec : Error<
-  "exception specification of explicitly defaulted %select{default constructor|"
-  "copy constructor|move constructor|copy assignment operator|move assignment "
-  "operator|destructor}0 does not match the "
-  "calculated one">;
+  "exception specification of explicitly defaulted "
+  "%sub{select_special_member_kind}0 does not match the calculated one">;
 def err_incorrect_defaulted_constexpr : Error<
-  "defaulted definition of %select{default constructor|copy constructor|"
-  "move constructor|copy assignment operator|move assignment operator}0 "
+  "defaulted definition of %sub{select_special_member_kind}0 "
   "is not constexpr">;
 def err_out_of_line_default_deletes : Error<
-  "defaulting this %select{default constructor|copy constructor|move "
-  "constructor|copy assignment operator|move assignment operator|destructor}0 "
+  "defaulting this %sub{select_special_member_kind}0 "
   "would delete it after its first declaration">;
 def warn_vbase_moved_multiple_times : Warning<
   "defaulted move assignment operator of %0 will move assign virtual base "
@@ -8253,6 +8146,8 @@ def err_systemz_invalid_tabort_code : Error<
   "invalid transaction abort code">;
 def err_64_bit_builtin_32_bit_tgt : Error<
   "this builtin is only available on 64-bit targets">;
+def err_32_bit_builtin_64_bit_tgt : Error<
+  "this builtin is only available on 32-bit targets">;
 def err_builtin_x64_aarch64_only : Error<
   "this builtin is only available on x86-64 and aarch64 targets">;
 def err_ppc_builtin_only_on_pwr7 : Error<
@@ -8261,6 +8156,8 @@ def err_x86_builtin_invalid_rounding : Error<
   "invalid rounding argument">;
 def err_x86_builtin_invalid_scale : Error<
   "scale argument must be 1, 2, 4, or 8">;
+def err_builtin_target_unsupported : Error<
+  "builtin is not supported on this target">;
 
 def err_builtin_longjmp_unsupported : Error<
   "__builtin_longjmp is not supported for the current target">;
@@ -8540,7 +8437,7 @@ def err_reference_pipe_type : Error <
   "pipes packet types cannot be of reference type">;
 def err_opencl_no_main : Error<"%select{function|kernel}0 cannot be called 'main'">;
 def err_opencl_kernel_attr :
-  Error<"attribute %0 can only be applied to a kernel function">;
+  Error<"attribute %0 can only be applied to an OpenCL kernel function">;
 def err_opencl_return_value_with_address_space : Error<
   "return value cannot be qualified with address space">;
 def err_opencl_constant_no_init : Error<
@@ -8588,7 +8485,8 @@ def note_opencl_typedef_access_qualifier : Note<
 
 // OpenCL Section 6.8.g
 def err_opencl_unknown_type_specifier : Error<
-  "OpenCL version %0 does not support the '%1' %select{type qualifier|storage class specifier}2">;
+  "OpenCL %select{C|C++}0 version %1 does not support the '%2' "
+  "%select{type qualifier|storage class specifier}3">;
 
 // OpenCL v2.0 s6.12.5 Blocks restrictions
 def err_opencl_block_storage_type : Error<
@@ -9402,4 +9300,18 @@ def err_multiversion_not_allowed_on_main : Error<
 def err_multiversion_not_supported : Error<
  "function multiversioning is not supported on the current target">;
 
+// three-way comparison operator diagnostics
+def err_implied_comparison_category_type_not_found : Error<
+  "cannot deduce return type of 'operator<=>' because type '%0' was not found; "
+  "include <compare>">;
+def err_spaceship_argument_narrowing : Error<
+  "argument to 'operator<=>' "
+  "%select{cannot be narrowed from type %1 to %2|"
+  "evaluates to %1, which cannot be narrowed to type %2}0">;
+def err_std_compare_type_not_supported : Error<
+  "standard library implementation of %0 is not supported; "
+   "%select{member '%2' does not have expected form|"
+   "member '%2' is missing|"
+   "the type is not trivially copyable|"
+   "the type does not have the expected form}1">;
 } // end of sema component.

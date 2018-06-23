@@ -90,6 +90,9 @@ class TargetRegisterClass;
       // Thread Pointer
       ThreadPointer,
 
+      // Vector Floating Point Multiply and Subtract
+      FMS,
+
       // Floating Point Branch Conditional
       FPBrcond,
 
@@ -276,10 +279,6 @@ class TargetRegisterClass;
 
     bool isCheapToSpeculateCttz() const override;
     bool isCheapToSpeculateCtlz() const override;
-
-    /// Return the register type for a given MVT, ensuring vectors are treated
-    /// as a series of gpr sized integers.
-    MVT getRegisterTypeForCallingConv(MVT VT) const override;
 
     /// Return the register type for a given MVT, ensuring vectors are treated
     /// as a series of gpr sized integers.

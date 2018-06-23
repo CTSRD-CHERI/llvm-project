@@ -21,7 +21,7 @@
 #include "clang/Sema/Scope.h"
 using namespace clang;
 
-/// \brief Parse a template declaration, explicit instantiation, or
+/// Parse a template declaration, explicit instantiation, or
 /// explicit specialization.
 Decl *
 Parser::ParseDeclarationStartingWithTemplate(DeclaratorContext Context,
@@ -41,7 +41,7 @@ Parser::ParseDeclarationStartingWithTemplate(DeclaratorContext Context,
 
 
 
-/// \brief Parse a template declaration or an explicit specialization.
+/// Parse a template declaration or an explicit specialization.
 ///
 /// Template declarations include one or more template parameter lists
 /// and either the function or class template declaration. Explicit
@@ -157,7 +157,7 @@ Parser::ParseTemplateDeclarationOrSpecialization(DeclaratorContext Context,
                                              DeclEnd, AS, AccessAttrs);
 }
 
-/// \brief Parse a single declaration that declares a template,
+/// Parse a single declaration that declares a template,
 /// template specialization, or explicit instantiation of a template.
 ///
 /// \param DeclEnd will receive the source location of the last token
@@ -403,7 +403,7 @@ Parser::ParseTemplateParameterList(const unsigned Depth,
   return true;
 }
 
-/// \brief Determine whether the parser is at the start of a template
+/// Determine whether the parser is at the start of a template
 /// type parameter.
 bool Parser::isStartOfTemplateTypeParameter() {
   if (Tok.is(tok::kw_class)) {
@@ -754,7 +754,7 @@ void Parser::DiagnoseMisplacedEllipsisInDeclarator(SourceLocation EllipsisLoc,
                             AlreadyHasEllipsis, D.hasName());
 }
 
-/// \brief Parses a '>' at the end of a template list.
+/// Parses a '>' at the end of a template list.
 ///
 /// If this function encounters '>>', '>>>', '>=', or '>>=', it tries
 /// to determine if these tokens were supposed to be a '>' followed by
@@ -775,6 +775,7 @@ bool Parser::ParseGreaterThanInTemplateList(SourceLocation &RAngleLoc,
   // What will be left once we've consumed the '>'.
   tok::TokenKind RemainingToken;
   const char *ReplacementStr = "> >";
+  bool MergeWithNextToken = false;
 
   switch (Tok.getKind()) {
   default:
@@ -800,6 +801,15 @@ bool Parser::ParseGreaterThanInTemplateList(SourceLocation &RAngleLoc,
   case tok::greaterequal:
     RemainingToken = tok::equal;
     ReplacementStr = "> =";
+
+    // Join two adjacent '=' tokens into one, for cases like:
+    //   void (*p)() = f<int>;
+    //   return f<int>==p;
+    if (NextToken().is(tok::equal) &&
+        areTokensAdjacent(Tok, NextToken())) {
+      RemainingToken = tok::equalequal;
+      MergeWithNextToken = true;
+    }
     break;
 
   case tok::greatergreaterequal:
@@ -807,22 +817,35 @@ bool Parser::ParseGreaterThanInTemplateList(SourceLocation &RAngleLoc,
     break;
   }
 
-  // This template-id is terminated by a token which starts with a '>'. Outside
-  // C++11, this is now error recovery, and in C++11, this is error recovery if
-  // the token isn't '>>' or '>>>'.
-  // '>>>' is for CUDA, where this sequence of characters is parsed into
-  // tok::greatergreatergreater, rather than two separate tokens.
+  // This template-id is terminated by a token that starts with a '>'.
+  // Outside C++11 and Objective-C, this is now error recovery.
   //
-  // We always allow this for Objective-C type parameter and type argument
-  // lists.
-  RAngleLoc = Tok.getLocation();
+  // C++11 allows this when the token is '>>', and in CUDA + C++11 mode, we
+  // extend that treatment to also apply to the '>>>' token.
+  //
+  // Objective-C allows this in its type parameter / argument lists.
+
+  SourceLocation TokBeforeGreaterLoc = PrevTokLocation;
+  SourceLocation TokLoc = Tok.getLocation();
   Token Next = NextToken();
+
+  // Whether splitting the current token after the '>' would undesirably result
+  // in the remaining token pasting with the token after it. This excludes the
+  // MergeWithNextToken cases, which we've already handled.
+  bool PreventMergeWithNextToken =
+      (RemainingToken == tok::greater ||
+       RemainingToken == tok::greatergreater) &&
+      (Next.isOneOf(tok::greater, tok::greatergreater,
+                    tok::greatergreatergreater, tok::equal, tok::greaterequal,
+                    tok::greatergreaterequal, tok::equalequal)) &&
+      areTokensAdjacent(Tok, Next);
+
+  // Diagnose this situation as appropriate.
   if (!ObjCGenericList) {
-    // The source range of the '>>' or '>=' at the start of the token.
-    CharSourceRange ReplacementRange =
-        CharSourceRange::getCharRange(RAngleLoc,
-            Lexer::AdvanceToTokenCharacter(RAngleLoc, 2, PP.getSourceManager(),
-                                           getLangOpts()));
+    // The source range of the replaced token(s).
+    CharSourceRange ReplacementRange = CharSourceRange::getCharRange(
+        TokLoc, Lexer::AdvanceToTokenCharacter(TokLoc, 2, PP.getSourceManager(),
+                                               getLangOpts()));
 
     // A hint to put a space between the '>>'s. In order to make the hint as
     // clear as possible, we include the characters either side of the space in
@@ -833,13 +856,7 @@ bool Parser::ParseGreaterThanInTemplateList(SourceLocation &RAngleLoc,
     // A hint to put another space after the token, if it would otherwise be
     // lexed differently.
     FixItHint Hint2;
-    if ((RemainingToken == tok::greater ||
-         RemainingToken == tok::greatergreater) &&
-        (Next.isOneOf(tok::greater, tok::greatergreater,
-                      tok::greatergreatergreater, tok::equal,
-                      tok::greaterequal, tok::greatergreaterequal,
-                      tok::equalequal)) &&
-        areTokensAdjacent(Tok, Next))
+    if (PreventMergeWithNextToken)
       Hint2 = FixItHint::CreateInsertion(Next.getLocation(), " ");
 
     unsigned DiagId = diag::err_two_right_angle_brackets_need_space;
@@ -848,55 +865,68 @@ bool Parser::ParseGreaterThanInTemplateList(SourceLocation &RAngleLoc,
       DiagId = diag::warn_cxx98_compat_two_right_angle_brackets;
     else if (Tok.is(tok::greaterequal))
       DiagId = diag::err_right_angle_bracket_equal_needs_space;
-    Diag(Tok.getLocation(), DiagId) << Hint1 << Hint2;
+    Diag(TokLoc, DiagId) << Hint1 << Hint2;
   }
+
+  // Find the "length" of the resulting '>' token. This is not always 1, as it
+  // can contain escaped newlines.
+  unsigned GreaterLength = Lexer::getTokenPrefixLength(
+      TokLoc, 1, PP.getSourceManager(), getLangOpts());
+
+  // Annotate the source buffer to indicate that we split the token after the
+  // '>'. This allows us to properly find the end of, and extract the spelling
+  // of, the '>' token later.
+  RAngleLoc = PP.SplitToken(TokLoc, GreaterLength);
 
   // Strip the initial '>' from the token.
-  Token PrevTok = Tok;
-  if (RemainingToken == tok::equal && Next.is(tok::equal) &&
-      areTokensAdjacent(Tok, Next)) {
-    // Join two adjacent '=' tokens into one, for cases like:
-    //   void (*p)() = f<int>;
-    //   return f<int>==p;
+  bool CachingTokens = PP.IsPreviousCachedToken(Tok);
+
+  Token Greater = Tok;
+  Greater.setLocation(RAngleLoc);
+  Greater.setKind(tok::greater);
+  Greater.setLength(GreaterLength);
+
+  unsigned OldLength = Tok.getLength();
+  if (MergeWithNextToken) {
     ConsumeToken();
-    Tok.setKind(tok::equalequal);
-    Tok.setLength(Tok.getLength() + 1);
-  } else {
-    Tok.setKind(RemainingToken);
-    Tok.setLength(Tok.getLength() - 1);
+    OldLength += Tok.getLength();
   }
-  Tok.setLocation(Lexer::AdvanceToTokenCharacter(RAngleLoc, 1,
-                                                 PP.getSourceManager(),
-                                                 getLangOpts()));
 
-  // The advance from '>>' to '>' in a ObjectiveC template argument list needs
-  // to be properly reflected in the token cache to allow correct interaction
-  // between annotation and backtracking.
-  if (ObjCGenericList && PrevTok.getKind() == tok::greatergreater &&
-      RemainingToken == tok::greater && PP.IsPreviousCachedToken(PrevTok)) {
-    PrevTok.setKind(RemainingToken);
-    PrevTok.setLength(1);
-    // Break tok::greatergreater into two tok::greater but only add the second
-    // one in case the client asks to consume the last token.
+  Tok.setKind(RemainingToken);
+  Tok.setLength(OldLength - GreaterLength);
+
+  // Split the second token if lexing it normally would lex a different token
+  // (eg, the fifth token in 'A<B>>>' should re-lex as '>', not '>>').
+  SourceLocation AfterGreaterLoc = TokLoc.getLocWithOffset(GreaterLength);
+  if (PreventMergeWithNextToken)
+    AfterGreaterLoc = PP.SplitToken(AfterGreaterLoc, Tok.getLength());
+  Tok.setLocation(AfterGreaterLoc);
+
+  // Update the token cache to match what we just did if necessary.
+  if (CachingTokens) {
+    // If the previous cached token is being merged, delete it.
+    if (MergeWithNextToken)
+      PP.ReplacePreviousCachedToken({});
+
     if (ConsumeLastToken)
-      PP.ReplacePreviousCachedToken({PrevTok, Tok});
+      PP.ReplacePreviousCachedToken({Greater, Tok});
     else
-      PP.ReplacePreviousCachedToken({PrevTok});
+      PP.ReplacePreviousCachedToken({Greater});
   }
 
-  if (!ConsumeLastToken) {
-    // Since we're not supposed to consume the '>' token, we need to push
-    // this token and revert the current token back to the '>'.
+  if (ConsumeLastToken) {
+    PrevTokLocation = RAngleLoc;
+  } else {
+    PrevTokLocation = TokBeforeGreaterLoc;
     PP.EnterToken(Tok);
-    Tok.setKind(tok::greater);
-    Tok.setLength(1);
-    Tok.setLocation(RAngleLoc);
+    Tok = Greater;
   }
+
   return false;
 }
 
 
-/// \brief Parses a template-id that after the template name has
+/// Parses a template-id that after the template name has
 /// already been parsed.
 ///
 /// This routine takes care of parsing the enclosed template argument
@@ -938,7 +968,7 @@ Parser::ParseTemplateIdAfterTemplateName(bool ConsumeLastToken,
                                         /*ObjCGenericList=*/false);
 }
 
-/// \brief Replace the tokens that form a simple-template-id with an
+/// Replace the tokens that form a simple-template-id with an
 /// annotation token containing the complete template-id.
 ///
 /// The first token in the stream must be the name of a template that
@@ -1059,7 +1089,7 @@ bool Parser::AnnotateTemplateIdToken(TemplateTy Template, TemplateNameKind TNK,
   return false;
 }
 
-/// \brief Replaces a template-id annotation token with a type
+/// Replaces a template-id annotation token with a type
 /// annotation token.
 ///
 /// If there was a failure when forming the type from the template-id,
@@ -1104,12 +1134,12 @@ void Parser::AnnotateTemplateIdTokenAsType(bool IsClassName) {
   PP.AnnotateCachedTokens(Tok);
 }
 
-/// \brief Determine whether the given token can end a template argument.
+/// Determine whether the given token can end a template argument.
 static bool isEndOfTemplateArgument(Token Tok) {
   return Tok.isOneOf(tok::comma, tok::greater, tok::greatergreater);
 }
 
-/// \brief Parse a C++ template template argument.
+/// Parse a C++ template template argument.
 ParsedTemplateArgument Parser::ParseTemplateTemplateArgument() {
   if (!Tok.is(tok::identifier) && !Tok.is(tok::coloncolon) &&
       !Tok.is(tok::annot_cxxscope))
@@ -1237,7 +1267,7 @@ ParsedTemplateArgument Parser::ParseTemplateArgument() {
                                 ExprArg.get(), Loc);
 }
 
-/// \brief Determine whether the current tokens can only be parsed as a 
+/// Determine whether the current tokens can only be parsed as a 
 /// template argument list (starting with the '<') and never as a '<' 
 /// expression.
 bool Parser::IsTemplateArgumentList(unsigned Skip) {
@@ -1299,7 +1329,7 @@ Parser::ParseTemplateArgumentList(TemplateArgList &TemplateArgs) {
   return false;
 }
 
-/// \brief Parse a C++ explicit template instantiation
+/// Parse a C++ explicit template instantiation
 /// (C++ [temp.explicit]).
 ///
 ///       explicit-instantiation:
@@ -1337,7 +1367,7 @@ void Parser::LateTemplateParserCallback(void *P, LateParsedTemplate &LPT) {
   ((Parser *)P)->ParseLateTemplatedFuncDef(LPT);
 }
 
-/// \brief Late parse a C++ function template in Microsoft mode.
+/// Late parse a C++ function template in Microsoft mode.
 void Parser::ParseLateTemplatedFuncDef(LateParsedTemplate &LPT) {
   if (!LPT.D)
      return;
@@ -1428,7 +1458,7 @@ void Parser::ParseLateTemplatedFuncDef(LateParsedTemplate &LPT) {
     delete *I;
 }
 
-/// \brief Lex a delayed template function for late parsing.
+/// Lex a delayed template function for late parsing.
 void Parser::LexTemplateFunctionForLateParsing(CachedTokens &Toks) {
   tok::TokenKind kind = Tok.getKind();
   if (!ConsumeAndStoreFunctionPrologue(Toks)) {

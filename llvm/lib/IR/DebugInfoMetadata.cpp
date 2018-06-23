@@ -489,7 +489,7 @@ DISubprogram *DISubprogram::getImpl(
     bool IsLocalToUnit, bool IsDefinition, unsigned ScopeLine,
     Metadata *ContainingType, unsigned Virtuality, unsigned VirtualIndex,
     int ThisAdjustment, DIFlags Flags, bool IsOptimized, Metadata *Unit,
-    Metadata *TemplateParams, Metadata *Declaration, Metadata *Variables,
+    Metadata *TemplateParams, Metadata *Declaration, Metadata *RetainedNodes,
     Metadata *ThrownTypes, StorageType Storage, bool ShouldCreate) {
   assert(isCanonical(Name) && "Expected canonical MDString");
   assert(isCanonical(LinkageName) && "Expected canonical MDString");
@@ -497,10 +497,10 @@ DISubprogram *DISubprogram::getImpl(
       DISubprogram, (Scope, Name, LinkageName, File, Line, Type, IsLocalToUnit,
                      IsDefinition, ScopeLine, ContainingType, Virtuality,
                      VirtualIndex, ThisAdjustment, Flags, IsOptimized, Unit,
-                     TemplateParams, Declaration, Variables, ThrownTypes));
+                     TemplateParams, Declaration, RetainedNodes, ThrownTypes));
   SmallVector<Metadata *, 11> Ops = {
-      File,        Scope,     Name,           LinkageName,    Type,       Unit,
-      Declaration, Variables, ContainingType, TemplateParams, ThrownTypes};
+      File,        Scope,         Name,           LinkageName,    Type,       Unit,
+      Declaration, RetainedNodes, ContainingType, TemplateParams, ThrownTypes};
   if (!ThrownTypes) {
     Ops.pop_back();
     if (!TemplateParams) {
@@ -653,6 +653,18 @@ Optional<uint64_t> DIVariable::getSizeInBits() const {
   return None;
 }
 
+DILabel *DILabel::getImpl(LLVMContext &Context, Metadata *Scope,
+                          MDString *Name, Metadata *File, unsigned Line,
+                          StorageType Storage,
+                          bool ShouldCreate) {
+  assert(Scope && "Expected scope");
+  assert(isCanonical(Name) && "Expected canonical MDString");
+  DEFINE_GETIMPL_LOOKUP(DILabel,
+                        (Scope, Name, File, Line));
+  Metadata *Ops[] = {Scope, Name, File};
+  DEFINE_GETIMPL_STORE(DILabel, (Line), Ops);
+}
+
 DIExpression *DIExpression::getImpl(LLVMContext &Context,
                                     ArrayRef<uint64_t> Elements,
                                     StorageType Storage, bool ShouldCreate) {
@@ -785,12 +797,12 @@ DIExpression *DIExpression::prepend(const DIExpression *Expr, bool DerefBefore,
   if (DerefAfter)
     Ops.push_back(dwarf::DW_OP_deref);
 
-  return doPrepend(Expr, Ops, StackValue);
+  return prependOpcodes(Expr, Ops, StackValue);
 }
 
-DIExpression *DIExpression::doPrepend(const DIExpression *Expr,
-                                      SmallVectorImpl<uint64_t> &Ops,
-                                      bool StackValue) {
+DIExpression *DIExpression::prependOpcodes(const DIExpression *Expr,
+                                           SmallVectorImpl<uint64_t> &Ops,
+                                           bool StackValue) {
   if (Expr)
     for (auto Op : Expr->expr_ops()) {
       // A DW_OP_stack_value comes at the end, but before a DW_OP_LLVM_fragment.
@@ -830,9 +842,9 @@ Optional<DIExpression *> DIExpression::createFragmentExpression(
       case dwarf::DW_OP_LLVM_fragment: {
         // Make the new offset point into the existing fragment.
         uint64_t FragmentOffsetInBits = Op.getArg(0);
-        // Op.getArg(0) is FragmentOffsetInBits.
-        // Op.getArg(1) is FragmentSizeInBits.
-        assert((OffsetInBits + SizeInBits <= Op.getArg(0) + Op.getArg(1)) &&
+        uint64_t FragmentSizeInBits = Op.getArg(1);
+        (void)FragmentSizeInBits;
+        assert((OffsetInBits + SizeInBits <= FragmentSizeInBits) &&
                "new fragment outside of original fragment");
         OffsetInBits += FragmentOffsetInBits;
         continue;

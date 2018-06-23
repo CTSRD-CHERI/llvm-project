@@ -96,7 +96,7 @@ template <> struct ilist_callback_traits<MachineBasicBlock> {
 struct MachineFunctionInfo {
   virtual ~MachineFunctionInfo();
 
-  /// \brief Factory function: default behavior is to call new using the
+  /// Factory function: default behavior is to call new using the
   /// supplied allocator.
   ///
   /// This function can be overridden in a derive class.
@@ -319,6 +319,7 @@ class MachineFunction {
 
   bool CallsEHReturn = false;
   bool CallsUnwindInit = false;
+  bool HasEHScopes = false;
   bool HasEHFunclets = false;
 
   /// List of C++ TypeInfo used.
@@ -349,11 +350,12 @@ public:
   struct VariableDbgInfo {
     const DILocalVariable *Var;
     const DIExpression *Expr;
-    unsigned Slot;
+    // The Slot can be negative for fixed stack objects.
+    int Slot;
     const DILocation *Loc;
 
     VariableDbgInfo(const DILocalVariable *Var, const DIExpression *Expr,
-                    unsigned Slot, const DILocation *Loc)
+                    int Slot, const DILocation *Loc)
         : Var(Var), Expr(Expr), Slot(Slot), Loc(Loc) {}
   };
   using VariableDbgInfoMapTy = SmallVector<VariableDbgInfo, 4>;
@@ -609,7 +611,7 @@ public:
   //===--------------------------------------------------------------------===//
   // Internal functions used to automatically number MachineBasicBlocks
 
-  /// \brief Adds the MBB to the internal numbering. Returns the unique number
+  /// Adds the MBB to the internal numbering. Returns the unique number
   /// assigned to the MBB.
   unsigned addToMBBNumbering(MachineBasicBlock *MBB) {
     MBBNumbering.push_back(MBB);
@@ -695,7 +697,7 @@ public:
     OperandRecycler.deallocate(Cap, Array);
   }
 
-  /// \brief Allocate and initialize a register mask with @p NumRegister bits.
+  /// Allocate and initialize a register mask with @p NumRegister bits.
   uint32_t *allocateRegisterMask(unsigned NumRegister) {
     unsigned Size = (NumRegister + 31) / 32;
     uint32_t *Mask = Allocator.Allocate<uint32_t>(Size);
@@ -758,6 +760,9 @@ public:
 
   bool callsUnwindInit() const { return CallsUnwindInit; }
   void setCallsUnwindInit(bool b) { CallsUnwindInit = b; }
+
+  bool hasEHScopes() const { return HasEHScopes; }
+  void setHasEHScopes(bool V) { HasEHScopes = V; }
 
   bool hasEHFunclets() const { return HasEHFunclets; }
   void setHasEHFunclets(bool V) { HasEHFunclets = V; }
@@ -860,7 +865,7 @@ public:
 
   /// Collect information used to emit debugging information of a variable.
   void setVariableDbgInfo(const DILocalVariable *Var, const DIExpression *Expr,
-                          unsigned Slot, const DILocation *Loc) {
+                          int Slot, const DILocation *Loc) {
     VariableDbgInfos.emplace_back(Var, Expr, Slot, Loc);
   }
 

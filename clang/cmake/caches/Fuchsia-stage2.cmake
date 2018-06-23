@@ -27,27 +27,29 @@ set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "")
 set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O3 -gline-tables-only -DNDEBUG" CACHE STRING "")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -gline-tables-only -DNDEBUG" CACHE STRING "")
 
+set(FUCHSIA_BUILTINS_BUILD_TYPE Release CACHE STRING "")
+set(FUCHSIA_RUNTIMES_BUILD_TYPE Release CACHE STRING "")
+set(FUCHSIA_RUNTIMES_ENABLE_ASSERTIONS ON CACHE BOOL "")
+
 set(LLVM_BUILTIN_TARGETS "default;x86_64-fuchsia;aarch64-fuchsia" CACHE STRING "")
 
 # Set the per-target builtins options.
 foreach(target x86_64;aarch64)
-  set(BUILTINS_${target}-fuchsia_CMAKE_SYSROOT ${FUCHSIA_${target}_SYSROOT} CACHE PATH "")
   set(BUILTINS_${target}-fuchsia_CMAKE_SYSTEM_NAME Fuchsia CACHE STRING "")
+  set(BUILTINS_${target}-fuchsia_CMAKE_BUILD_TYPE ${FUCHSIA_BUILTINS_BUILD_TYPE} CACHE STRING "")
+  set(BUILTINS_${target}-fuchsia_CMAKE_ASM_FLAGS ${FUCHSIA_${target}_C_FLAGS} CACHE PATH "")
+  set(BUILTINS_${target}-fuchsia_CMAKE_C_FLAGS ${FUCHSIA_${target}_C_FLAGS} CACHE PATH "")
+  set(BUILTINS_${target}-fuchsia_CMAKE_CXX_FLAGS ${FUCHSIA_${target}_CXX_FLAGS} CACHE PATH "")
+  set(BUILTINS_${target}-fuchsia_CMAKE_EXE_LINKER_FLAGS ${FUCHSIA_${target}_LINKER_FLAGS} CACHE PATH "")
+  set(BUILTINS_${target}-fuchsia_CMAKE_SHARED_LINKER_FLAGS ${FUCHSIA_${target}_LINKER_FLAGS} CACHE PATH "")
+  set(BUILTINS_${target}-fuchsia_CMAKE_MODULE_LINKER_FLAGS ${FUCHSIA_${target}_LINKER_FLAGS} CACHE PATH "")
+  set(BUILTINS_${target}-fuchsia_CMAKE_SYSROOT ${FUCHSIA_${target}_SYSROOT} CACHE PATH "")
 endforeach()
 
 set(LLVM_RUNTIME_TARGETS "default;x86_64-fuchsia;aarch64-fuchsia;x86_64-fuchsia-asan:x86_64-fuchsia;aarch64-fuchsia-asan:aarch64-fuchsia" CACHE STRING "")
 
 # Set the default target runtimes options.
-if(APPLE)
-  # Disable installing libc++, libc++abi or libunwind on Darwin, since Clang
-  # driver doesn't know how to use libraries that are part of the toolchain.
-  set(LIBUNWIND_INSTALL_HEADERS OFF CACHE BOOL "")
-  set(LIBUNWIND_INSTALL_LIBRARY OFF CACHE BOOL "")
-  set(LIBCXXABI_INSTALL_HEADERS OFF CACHE BOOL "")
-  set(LIBCXXABI_INSTALL_LIBRARY OFF CACHE BOOL "")
-  set(LIBCXX_INSTALL_HEADERS OFF CACHE BOOL "")
-  set(LIBCXX_INSTALL_LIBRARY OFF CACHE BOOL "")
-else()
+if(NOT APPLE)
   set(LIBUNWIND_ENABLE_SHARED OFF CACHE BOOL "")
   set(LIBUNWIND_USE_COMPILER_RT ON CACHE BOOL "")
   set(LIBUNWIND_INSTALL_LIBRARY OFF CACHE BOOL "")
@@ -63,10 +65,17 @@ endif()
 
 # Set the per-target runtimes options.
 foreach(target x86_64;aarch64)
-  set(RUNTIMES_${target}-fuchsia_CMAKE_BUILD_WITH_INSTALL_RPATH ON CACHE BOOL "")
-  set(RUNTIMES_${target}-fuchsia_CMAKE_SYSROOT ${FUCHSIA_${target}_SYSROOT} CACHE PATH "")
   set(RUNTIMES_${target}-fuchsia_CMAKE_SYSTEM_NAME Fuchsia CACHE STRING "")
-  set(RUNTIMES_${target}-fuchsia_UNIX 1 CACHE BOOL "")
+  set(RUNTIMES_${target}-fuchsia_CMAKE_BUILD_TYPE ${FUCHSIA_RUNTIMES_BUILD_TYPE} CACHE STRING "")
+  set(RUNTIMES_${target}-fuchsia_CMAKE_BUILD_WITH_INSTALL_RPATH ON CACHE STRING "")
+  set(RUNTIMES_${target}-fuchsia_CMAKE_ASM_FLAGS ${FUCHSIA_${target}_C_FLAGS} CACHE PATH "")
+  set(RUNTIMES_${target}-fuchsia_CMAKE_C_FLAGS ${FUCHSIA_${target}_C_FLAGS} CACHE PATH "")
+  set(RUNTIMES_${target}-fuchsia_CMAKE_CXX_FLAGS ${FUCHSIA_${target}_CXX_FLAGS} CACHE PATH "")
+  set(RUNTIMES_${target}-fuchsia_CMAKE_EXE_LINKER_FLAGS ${FUCHSIA_${target}_LINKER_FLAGS} CACHE PATH "")
+  set(RUNTIMES_${target}-fuchsia_CMAKE_SHARED_LINKER_FLAGS ${FUCHSIA_${target}_LINKER_FLAGS} CACHE PATH "")
+  set(RUNTIMES_${target}-fuchsia_CMAKE_MODULE_LINKER_FLAGS ${FUCHSIA_${target}_LINKER_FLAGS} CACHE PATH "")
+  set(RUNTIMES_${target}-fuchsia_CMAKE_SYSROOT ${FUCHSIA_${target}_SYSROOT} CACHE PATH "")
+  set(RUNTIMES_${target}-fuchsia_LLVM_ENABLE_ASSERTIONS ${FUCHSIA_RUNTIMES_ENABLE_ASSERTIONS} CACHE BOOL "")
   set(RUNTIMES_${target}-fuchsia_LIBUNWIND_USE_COMPILER_RT ON CACHE BOOL "")
   set(RUNTIMES_${target}-fuchsia_LIBUNWIND_ENABLE_STATIC OFF CACHE BOOL "")
   set(RUNTIMES_${target}-fuchsia_LIBCXXABI_USE_COMPILER_RT ON CACHE BOOL "")
@@ -100,6 +109,7 @@ set(LLVM_TOOLCHAIN_TOOLS
   llvm-readelf
   llvm-readobj
   llvm-size
+  llvm-strip
   llvm-symbolizer
   opt
   sancov

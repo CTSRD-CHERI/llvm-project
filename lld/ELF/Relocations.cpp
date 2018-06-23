@@ -54,6 +54,7 @@
 #include "Writer.h"
 #include "lld/Common/Memory.h"
 #include "lld/Common/Strings.h"
+#include "llvm/ADT/SmallSet.h"
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Support/raw_ostream.h"
@@ -190,7 +191,7 @@ handleTlsRelocation(RelType Type, Symbol &Sym, InputSectionBase &C,
     return 1;
   }
 
-  if (isRelExprOneOf<R_TLSLD_PC, R_TLSLD>(Expr)) {
+  if (isRelExprOneOf<R_TLSLD_GOT, R_TLSLD_GOT_FROM_END, R_TLSLD_PC>(Expr)) {
     // Local-Dynamic relocs can be relaxed to Local-Exec.
     if (!Config->Shared) {
       C.Relocations.push_back(
@@ -205,13 +206,14 @@ handleTlsRelocation(RelType Type, Symbol &Sym, InputSectionBase &C,
   }
 
   // Local-Dynamic relocs can be relaxed to Local-Exec.
-  if (isRelExprOneOf<R_ABS, R_TLSLD, R_TLSLD_PC>(Expr) && !Config->Shared) {
+  if (isRelExprOneOf<R_ABS, R_TLSLD_GOT_FROM_END, R_TLSLD_PC>(Expr) &&
+      !Config->Shared) {
     C.Relocations.push_back({R_RELAX_TLS_LD_TO_LE, Type, Offset, Addend, &Sym});
     return 1;
   }
 
-  if (isRelExprOneOf<R_TLSDESC, R_TLSDESC_PAGE, R_TLSDESC_CALL, R_TLSGD,
-                     R_TLSGD_PC>(Expr)) {
+  if (isRelExprOneOf<R_TLSDESC, R_TLSDESC_PAGE, R_TLSDESC_CALL, R_TLSGD_GOT,
+                     R_TLSGD_GOT_FROM_END, R_TLSGD_PC>(Expr)) {
     if (Config->Shared) {
       if (InX::Got->addDynTlsEntry(Sym)) {
         uint64_t Off = InX::Got->getGlobalDynOffset(Sym);
@@ -304,7 +306,7 @@ static bool isAbsoluteValue(const Symbol &Sym) {
 
 // Returns true if Expr refers a PLT entry.
 static bool needsPlt(RelExpr Expr) {
-  return isRelExprOneOf<R_PLT_PC, R_PPC_PLT_OPD, R_PLT, R_PLT_PAGE_PC>(Expr);
+  return isRelExprOneOf<R_PLT_PC, R_PPC_CALL_PLT, R_PLT, R_PLT_PAGE_PC>(Expr);
 }
 
 // Returns true if Expr refers a GOT entry. Note that this function
@@ -320,8 +322,8 @@ static bool needsGot(RelExpr Expr) {
 // file (PC, or GOT for example).
 static bool isRelExpr(RelExpr Expr) {
   return isRelExprOneOf<R_PC, R_GOTREL, R_GOTREL_FROM_END, R_MIPS_GOTREL,
-                        R_PAGE_PC, R_RELAX_GOT_PC,
-                        R_CHERI_CAPABILITY_TABLE_REL>(Expr);
+                        R_PPC_CALL, R_PPC_CALL_PLT, R_PAGE_PC,
+                        R_RELAX_GOT_PC, R_CHERI_CAPABILITY_TABLE_REL>(Expr);
 }
 
 // Returns true if a given relocation can be computed at link-time.
@@ -339,9 +341,10 @@ static bool isStaticLinkTimeConstant(RelExpr E, RelType Type, const Symbol &Sym,
   if (isRelExprOneOf<R_GOT_FROM_END, R_GOT_OFF, R_MIPS_GOT_LOCAL_PAGE,
                      R_MIPS_GOTREL, R_MIPS_GOT_OFF, R_MIPS_GOT_OFF32,
                      R_MIPS_GOT_GP_PC, R_MIPS_TLSGD, R_GOT_PAGE_PC, R_GOT_PC,
-                     R_GOTONLY_PC, R_GOTONLY_PC_FROM_END, R_PLT_PC, R_TLSGD_PC,
-                     R_TLSGD, R_PPC_PLT_OPD, R_TLSDESC_CALL, R_TLSDESC_PAGE,
-                     R_HINT, R_CHERI_CAPABILITY_TABLE_INDEX,
+                     R_GOTONLY_PC, R_GOTONLY_PC_FROM_END, R_PLT_PC, R_TLSGD_GOT,
+                     R_TLSGD_GOT_FROM_END, R_TLSGD_PC, R_PPC_CALL_PLT,
+                     R_TLSDESC_CALL, R_TLSDESC_PAGE, R_HINT,
+                     R_CHERI_CAPABILITY_TABLE_INDEX,
                      R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE,
                      R_CHERI_CAPABILITY_TABLE_REL>(E))
     return true;
@@ -397,8 +400,8 @@ static bool isStaticLinkTimeConstant(RelExpr E, RelType Type, const Symbol &Sym,
 
 static RelExpr toPlt(RelExpr Expr) {
   switch (Expr) {
-  case R_PPC_OPD:
-    return R_PPC_PLT_OPD;
+  case R_PPC_CALL:
+    return R_PPC_CALL_PLT;
   case R_PC:
     return R_PLT_PC;
   case R_PAGE_PC:
@@ -416,8 +419,8 @@ static RelExpr fromPlt(RelExpr Expr) {
   switch (Expr) {
   case R_PLT_PC:
     return R_PC;
-  case R_PPC_PLT_OPD:
-    return R_PPC_OPD;
+  case R_PPC_CALL_PLT:
+    return R_PPC_CALL;
   case R_PLT:
     return R_ABS;
   default:
@@ -443,14 +446,14 @@ template <class ELFT> static bool isReadOnly(SharedSymbol &SS) {
 //
 // If two or more symbols are at the same offset, and at least one of
 // them are copied by a copy relocation, all of them need to be copied.
-// Otherwise, they would refer different places at runtime.
+// Otherwise, they would refer to different places at runtime.
 template <class ELFT>
-static std::vector<SharedSymbol *> getSymbolsAt(SharedSymbol &SS) {
+static SmallSet<SharedSymbol *, 4> getSymbolsAt(SharedSymbol &SS) {
   typedef typename ELFT::Sym Elf_Sym;
 
   SharedFile<ELFT> &File = SS.getFile<ELFT>();
 
-  std::vector<SharedSymbol *> Ret;
+  SmallSet<SharedSymbol *, 4> Ret;
   for (const Elf_Sym &S : File.getGlobalELFSyms()) {
     if (S.st_shndx == SHN_UNDEF || S.st_shndx == SHN_ABS ||
         S.st_value != SS.Value)
@@ -458,9 +461,28 @@ static std::vector<SharedSymbol *> getSymbolsAt(SharedSymbol &SS) {
     StringRef Name = check(S.getName(File.getStringTable()));
     Symbol *Sym = Symtab->find(Name);
     if (auto *Alias = dyn_cast_or_null<SharedSymbol>(Sym))
-      Ret.push_back(Alias);
+      Ret.insert(Alias);
   }
   return Ret;
+}
+
+// When a symbol is copy relocated or we create a canonical plt entry, it is
+// effectively a defined symbol. In the case of copy relocation the symbol is
+// in .bss and in the case of a canonical plt entry it is in .plt. This function
+// replaces the existing symbol with a Defined pointing to the appropriate
+// location.
+static void replaceWithDefined(Symbol &Sym, SectionBase *Sec, uint64_t Value,
+                               uint64_t Size) {
+  Symbol Old = Sym;
+  replaceSymbol<Defined>(&Sym, Sym.File, Sym.getName(), Sym.Binding,
+                         Sym.StOther, Sym.Type, Value, Size, Sec);
+  Sym.PltIndex = Old.PltIndex;
+  Sym.GotIndex = Old.GotIndex;
+  Sym.VerdefIndex = Old.VerdefIndex;
+  Sym.IsPreemptible = true;
+  Sym.ExportDynamic = true;
+  Sym.IsUsedInRegularObj = true;
+  Sym.Used = true;
 }
 
 // Reserve space in .bss or .bss.rel.ro for copy relocation.
@@ -508,7 +530,7 @@ static std::vector<SharedSymbol *> getSymbolsAt(SharedSymbol &SS) {
 template <class ELFT> static void addCopyRelSymbol(SharedSymbol &SS) {
   // Copy relocation against zero-sized symbol doesn't make sense.
   uint64_t SymSize = SS.getSize();
-  if (SymSize == 0)
+  if (SymSize == 0 || SS.Alignment == 0)
     fatal("cannot create a copy relocation for symbol " + toString(SS));
 
   // See if this symbol is in a read-only segment. If so, preserve the symbol's
@@ -524,11 +546,8 @@ template <class ELFT> static void addCopyRelSymbol(SharedSymbol &SS) {
   // Look through the DSO's dynamic symbol table for aliases and create a
   // dynamic symbol for each one. This causes the copy relocation to correctly
   // interpose any aliases.
-  for (SharedSymbol *Sym : getSymbolsAt<ELFT>(SS)) {
-    Sym->CopyRelSec = Sec;
-    Sym->IsUsedInRegularObj = true;
-    Sym->Used = true;
-  }
+  for (SharedSymbol *Sym : getSymbolsAt<ELFT>(SS))
+    replaceWithDefined(*Sym, Sec, 0, Sym->Size);
 
   InX::RelaDyn->addReloc(Target->CopyRel, Sec, 0, &SS);
 }
@@ -764,12 +783,12 @@ static bool canDefineSymbolInExecutable(Symbol &Sym) {
 // complicates things for the dynamic linker and means we would have to reserve
 // space for the extra PT_LOAD even if we end up not using it.
 template <class ELFT, class RelTy>
-static RelExpr processRelocAux(InputSectionBase &Sec, RelExpr Expr,
-                               RelType Type, uint64_t Offset, Symbol &Sym,
-                               const RelTy &Rel, int64_t Addend) {
+static void processRelocAux(InputSectionBase &Sec, RelExpr Expr, RelType Type,
+                            uint64_t Offset, Symbol &Sym, const RelTy &Rel,
+                            int64_t Addend) {
   if (isStaticLinkTimeConstant(Expr, Type, Sym, Sec, Offset)) {
     Sec.Relocations.push_back({Expr, Type, Offset, Addend, &Sym});
-    return Expr;
+    return;
   }
   bool CanWrite = (Sec.Flags & SHF_WRITE) || !Config->ZText;
   // HACK: clang emits a read-only __cap_relocs, but for PIC code we need to
@@ -778,7 +797,7 @@ static RelExpr processRelocAux(InputSectionBase &Sec, RelExpr Expr,
     if (!Config->ProcessCapRelocs)
       error("capsizefix will not work with dynamic libraries, please remove "
               "-no-process-cap-relocs from the linker invocation!");
-    return Expr;
+    return;
   }
 
   if (Expr == R_CHERI_CAPABILITY) {
@@ -790,12 +809,12 @@ static RelExpr processRelocAux(InputSectionBase &Sec, RelExpr Expr,
     };
     if (!CanWrite) {
       readOnlyCapRelocsError(Sym, getRelocTargetLocation());
-      return Expr;
+      return;
     }
     addCapabilityRelocation<ELFT>(Sym, Type, &Sec, Offset, Expr, Addend,
                                   getRelocTargetLocation);
     // TODO: check if it is a call and needs a plt stub
-    return Expr;
+    return;
   }
 
   if (CanWrite) {
@@ -813,7 +832,7 @@ static RelExpr processRelocAux(InputSectionBase &Sec, RelExpr Expr,
     if (!IsPreemptibleValue) {
       InX::RelaDyn->addReloc(Target->RelativeRel, &Sec, Offset, &Sym, Addend,
                              Expr, Type);
-      return Expr;
+      return;
     } else if (RelType Rel = Target->getDynRel(Type)) {
       InX::RelaDyn->addReloc(Rel, &Sec, Offset, &Sym, Addend, R_ADDEND, Type);
 
@@ -834,7 +853,7 @@ static RelExpr processRelocAux(InputSectionBase &Sec, RelExpr Expr,
       // ftp://www.linux-mips.org/pub/linux/mips/doc/ABI/mipsabi.pdf p.4-19
       if (Config->EMachine == EM_MIPS)
         InX::MipsGot->addEntry(*Sec.File, Sym, Addend, Expr);
-      return Expr;
+      return;
     }
   }
 
@@ -844,7 +863,7 @@ static RelExpr processRelocAux(InputSectionBase &Sec, RelExpr Expr,
     if (Expr == R_CHERI_CAPABILITY)
       error("Not implemented yet");
     Sec.Relocations.push_back({Expr, Type, Offset, Addend, &Sym});
-    return Expr;
+    return;
   }
 
   if (!CanWrite && (Config->Pic && !isRelExpr(Expr))) {
@@ -854,7 +873,7 @@ static RelExpr processRelocAux(InputSectionBase &Sec, RelExpr Expr,
         " in readonly segment; recompile object files with -fPIC "
         "or pass '-Wl,-z,notext' to allow text relocations in the output" +
         getLocation(Sec, Sym, Offset));
-    return Expr;
+    return;
   }
 
   // Copy relocations are only possible if we are creating an executable.
@@ -862,34 +881,31 @@ static RelExpr processRelocAux(InputSectionBase &Sec, RelExpr Expr,
     errorOrWarn("relocation " + toString(Type) +
                 " cannot be used against symbol " + toString(Sym) +
                 "; recompile with -fPIC" + getLocation(Sec, Sym, Offset));
-    return Expr;
+    return;
   }
 
   // If the symbol is undefined we already reported any relevant errors.
-  if (!Sym.isShared()) {
-    assert(Sym.isUndefined());
-    return Expr;
-  }
+  if (Sym.isUndefined())
+    return;
 
   if (!canDefineSymbolInExecutable(Sym)) {
     error("cannot preempt symbol: " + toString(Sym) +
           getLocation(Sec, Sym, Offset));
-    return Expr;
+    return;
   }
 
   if (Sym.isObject()) {
     // Produce a copy relocation.
-    auto &SS = cast<SharedSymbol>(Sym);
-    if (!SS.CopyRelSec) {
+    if (auto *SS = dyn_cast<SharedSymbol>(&Sym)) {
       if (!Config->ZCopyreloc)
         error("unresolvable relocation " + toString(Type) +
-              " against symbol '" + toString(SS) +
+              " against symbol '" + toString(*SS) +
               "'; recompile with -fPIC or remove '-z nocopyreloc'" +
               getLocation(Sec, Sym, Offset));
-      addCopyRelSymbol<ELFT>(SS);
+      addCopyRelSymbol<ELFT>(*SS);
     }
     Sec.Relocations.push_back({Expr, Type, Offset, Addend, &Sym});
-    return Expr;
+    return;
   }
 
   if (Sym.isFunc()) {
@@ -924,15 +940,18 @@ static RelExpr processRelocAux(InputSectionBase &Sec, RelExpr Expr,
       errorOrWarn("symbol '" + toString(Sym) +
                   "' cannot be preempted; recompile with -fPIE" +
                   getLocation(Sec, Sym, Offset));
+    if (!Sym.isInPlt())
+      addPltEntry<ELFT>(InX::Plt, InX::GotPlt, InX::RelaPlt, Target->PltRel,
+                        Sym);
+    if (!Sym.isDefined())
+      replaceWithDefined(Sym, InX::Plt, Sym.getPltOffset(), 0);
     Sym.NeedsPltAddr = true;
-    Expr = toPlt(Expr);
     Sec.Relocations.push_back({Expr, Type, Offset, Addend, &Sym});
-    return Expr;
+    return;
   }
 
   errorOrWarn("symbol '" + toString(Sym) + "' has no type" +
               getLocation(Sec, Sym, Offset));
-  return Expr;
 }
 
 template <class ELFT, class RelTy>
@@ -1012,7 +1031,6 @@ static void scanReloc(InputSectionBase &Sec, OffsetGetter &GetOffset, RelTy *&I,
     return;
   }
 
-  Expr = processRelocAux<ELFT>(Sec, Expr, Type, Offset, Sym, Rel, Addend);
   // If a relocation needs PLT, we create PLT and GOTPLT slots for the symbol.
   if (needsPlt(Expr) && !Sym.isInPlt()) {
     if (Sym.isGnuIFunc() && !Sym.IsPreemptible)
@@ -1038,6 +1056,8 @@ static void scanReloc(InputSectionBase &Sec, OffsetGetter &GetOffset, RelTy *&I,
       addGotEntry<ELFT>(Sym);
     }
   }
+
+  processRelocAux<ELFT>(Sec, Expr, Type, Offset, Sym, Rel, Addend);
 }
 
 template <class ELFT, class RelTy>
@@ -1335,7 +1355,7 @@ std::pair<Thunk *, bool> ThunkCreator::getThunk(Symbol &Sym, RelType Type,
 // InputSectionDescription::Sections.
 void ThunkCreator::forEachInputSectionDescription(
     ArrayRef<OutputSection *> OutputSections,
-    std::function<void(OutputSection *, InputSectionDescription *)> Fn) {
+    llvm::function_ref<void(OutputSection *, InputSectionDescription *)> Fn) {
   for (OutputSection *OS : OutputSections) {
     if (!(OS->Flags & SHF_ALLOC) || !(OS->Flags & SHF_EXECINSTR))
       continue;

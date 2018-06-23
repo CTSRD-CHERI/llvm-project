@@ -40,8 +40,8 @@ protected:
 
   std::string format(llvm::StringRef Code,
                      StatusCheck CheckComplete = SC_ExpectComplete) {
-    DEBUG(llvm::errs() << "---\n");
-    DEBUG(llvm::errs() << Code << "\n\n");
+    LLVM_DEBUG(llvm::errs() << "---\n");
+    LLVM_DEBUG(llvm::errs() << Code << "\n\n");
     std::vector<tooling::Range> Ranges(1, tooling::Range(0, Code.size()));
     FormattingAttemptStatus Status;
     tooling::Replacements Replaces =
@@ -53,7 +53,7 @@ protected:
     }
     auto Result = applyAllReplacements(Code, Replaces);
     EXPECT_TRUE(static_cast<bool>(Result));
-    DEBUG(llvm::errs() << "\n" << *Result << "\n\n");
+    LLVM_DEBUG(llvm::errs() << "\n" << *Result << "\n\n");
     return *Result;
   }
 
@@ -328,7 +328,14 @@ TEST_F(FormatTestObjC, FormatObjCInterface) {
                "}\n"
                "+ (id)init;\n"
                "@end");
-
+  verifyFormat("@interface Foo\n"
+               "- (void)foo {\n"
+               "}\n"
+               "@end\n"
+               "@implementation Bar\n"
+               "- (void)bar {\n"
+               "}\n"
+               "@end");
   Style.ColumnLimit = 40;
   verifyFormat("@interface ccccccccccccc () <\n"
                "    ccccccccccccc, ccccccccccccc,\n"
@@ -792,6 +799,10 @@ TEST_F(FormatTestObjC, FormatObjCMethodExpr) {
                "      a = 42;\n"
                "    }];");
 
+  // Space between cast rparen and selector name component.
+  verifyFormat("[((Foo *)foo) bar];");
+  verifyFormat("[((Foo *)foo) bar:1 blech:2];");
+
   Style.ColumnLimit = 70;
   verifyFormat(
       "void f() {\n"
@@ -945,7 +956,7 @@ TEST_F(FormatTestObjC, ObjCForIn) {
                "     }]) {\n}");
 }
 
-TEST_F(FormatTestObjC, ObjCNew) {
+TEST_F(FormatTestObjC, ObjCCxxKeywords) {
   verifyFormat("+ (instancetype)new {\n"
                "  return nil;\n"
                "}\n");
@@ -954,6 +965,70 @@ TEST_F(FormatTestObjC, ObjCNew) {
                "}\n");
   verifyFormat("SEL NewSelector(void) { return @selector(new); }\n");
   verifyFormat("SEL MacroSelector(void) { return MACRO(new); }\n");
+  verifyFormat("+ (instancetype)delete {\n"
+               "  return nil;\n"
+               "}\n");
+  verifyFormat("+ (instancetype)myDelete {\n"
+               "  return [self delete];\n"
+               "}\n");
+  verifyFormat("SEL DeleteSelector(void) { return @selector(delete); }\n");
+  verifyFormat("SEL MacroSelector(void) { return MACRO(delete); }\n");
+  verifyFormat("MACRO(new:)\n");
+  verifyFormat("MACRO(delete:)\n");
+  verifyFormat("foo = @{MACRO(new:) : MACRO(delete:)}\n");
+  verifyFormat("@implementation Foo\n"
+               "// Testing\n"
+               "- (Class)class {\n"
+               "}\n"
+               "- (void)foo {\n"
+               "}\n"
+               "@end\n");
+  verifyFormat("@implementation Foo\n"
+               "- (Class)class {\n"
+               "}\n"
+               "- (void)foo {\n"
+               "}\n"
+               "@end");
+  verifyFormat("@implementation Foo\n"
+               "+ (Class)class {\n"
+               "}\n"
+               "- (void)foo {\n"
+               "}\n"
+               "@end");
+  verifyFormat("@implementation Foo\n"
+               "- (Class)class:(Class)klass {\n"
+               "}\n"
+               "- (void)foo {\n"
+               "}\n"
+               "@end");
+  verifyFormat("@implementation Foo\n"
+               "+ (Class)class:(Class)klass {\n"
+               "}\n"
+               "- (void)foo {\n"
+               "}\n"
+               "@end");
+
+  verifyFormat("@interface Foo\n"
+               "// Testing\n"
+               "- (Class)class;\n"
+               "- (void)foo;\n"
+               "@end\n");
+  verifyFormat("@interface Foo\n"
+               "- (Class)class;\n"
+               "- (void)foo;\n"
+               "@end");
+  verifyFormat("@interface Foo\n"
+               "+ (Class)class;\n"
+               "- (void)foo;\n"
+               "@end");
+  verifyFormat("@interface Foo\n"
+               "- (Class)class:(Class)klass;\n"
+               "- (void)foo;\n"
+               "@end");
+  verifyFormat("@interface Foo\n"
+               "+ (Class)class:(Class)klass;\n"
+               "- (void)foo;\n"
+               "@end");
 }
 
 TEST_F(FormatTestObjC, ObjCLiterals) {
@@ -1131,6 +1206,29 @@ TEST_F(FormatTestObjC, ObjCArrayLiterals) {
                "  @\"aaaaaaaaaaaaaaaaaaaaaaaaaa\"\n"
                "];\n");
 }
+
+TEST_F(FormatTestObjC, BreaksCallStatementWhereSemiJustOverTheLimit) {
+  Style.ColumnLimit = 60;
+  // If the statement starting with 'a = ...' is put on a single line, the ';'
+  // is at line 61.
+  verifyFormat("int f(int a) {\n"
+               "  a = [self aaaaaaaaaa:bbbbbbbbb\n"
+               "             ccccccccc:dddddddd\n"
+               "                    ee:fddd];\n"
+               "}");
+}
+
+TEST_F(FormatTestObjC, AlwaysBreakBeforeMultilineStrings) {
+  Style = getGoogleStyle(FormatStyle::LK_ObjC);
+  Style.ColumnLimit = 40;
+  verifyFormat("aaaa = @\"bbbb\"\n"
+               "       @\"cccc\";");
+  verifyFormat("aaaa(@\"bbbb\"\n"
+               "     @\"cccc\");");
+  verifyFormat("aaaa(qqq, @\"bbbb\"\n"
+               "          @\"cccc\");");
+}
+
 } // end namespace
 } // end namespace format
 } // end namespace clang

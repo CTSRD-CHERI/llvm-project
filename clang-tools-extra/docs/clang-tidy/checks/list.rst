@@ -49,6 +49,7 @@ Clang-Tidy Checks
    bugprone-suspicious-semicolon
    bugprone-suspicious-string-compare
    bugprone-swapped-arguments
+   bugprone-terminating-continue
    bugprone-throw-keyword-missing
    bugprone-undefined-memory-manipulation
    bugprone-undelegated-constructor
@@ -77,6 +78,7 @@ Clang-Tidy Checks
    cppcoreguidelines-avoid-goto
    cppcoreguidelines-c-copy-assignment-signature (redirects to misc-unconventional-assign-operator) <cppcoreguidelines-c-copy-assignment-signature>
    cppcoreguidelines-interfaces-global-init
+   cppcoreguidelines-narrowing-conversions
    cppcoreguidelines-no-malloc
    cppcoreguidelines-owning-memory
    cppcoreguidelines-pro-bounds-array-to-pointer-decay
@@ -95,6 +97,7 @@ Clang-Tidy Checks
    fuchsia-default-arguments
    fuchsia-multiple-inheritance
    fuchsia-overloaded-operator
+   fuchsia-restrict-system-includes
    fuchsia-statically-constructed-objects
    fuchsia-trailing-return
    fuchsia-virtual-inheritance
@@ -225,6 +228,7 @@ Clang-Tidy Checks
    readability-redundant-string-cstr
    readability-redundant-string-init
    readability-simplify-boolean-expr
+   readability-simplify-subscript-expr
    readability-static-accessed-through-instance
    readability-static-definition-in-anonymous-namespace
    readability-string-compare

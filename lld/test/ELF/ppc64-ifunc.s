@@ -1,33 +1,69 @@
 # REQUIRES: ppc
+
 # RUN: llvm-mc -filetype=obj -triple=powerpc64le-unknown-linux %s -o %t.o
-# RUN: llvm-mc -filetype=obj -triple=powerpc64le-unknown-linux %p/Inputs/shared-ppc64le.s -o %t2.o
+# RUN: llvm-mc -filetype=obj -triple=powerpc64le-unknown-linux %p/Inputs/shared-ppc64.s -o %t2.o
 # RUN: ld.lld -shared %t2.o -o %t2.so
 # RUN: ld.lld %t.o %t2.so -o %t
-# RUN: llvm-objdump -d %t | FileCheck %s
+# RUN: llvm-objdump -D %t | FileCheck %s
+# RUN: llvm-readelf -dynamic-table %t | FileCheck --check-prefix=DT %s
+# RUN: llvm-readelf -dyn-relocations %t | FileCheck --check-prefix=DYNREL %s
 
-# CHECK:      _start:
-# CHECK-NEXT: 10010004:       1d 00 00 48     bl .+28
-# CHECK-NEXT: 10010008:       18 00 41 e8     ld 2, 24(1)
-# CHECK-NEXT: 1001000c:       35 00 00 48     bl .+52
-# CHECK-NEXT: 10010010:       18 00 41 e8     ld 2, 24(1)
+# RUN: llvm-mc -filetype=obj -triple=powerpc64-unknown-linux %s -o %t.o
+# RUN: llvm-mc -filetype=obj -triple=powerpc64-unknown-linux %p/Inputs/shared-ppc64.s -o %t2.o
+# RUN: ld.lld -shared %t2.o -o %t2.so
+# RUN: ld.lld %t.o %t2.so -o %t
+# RUN: llvm-objdump -D %t | FileCheck %s
+# RUN: llvm-readelf -dynamic-table %t | FileCheck --check-prefix=DT %s
+# RUN: llvm-readelf -dyn-relocations %t | FileCheck --check-prefix=DYNREL %s
 
-# 0x10010004 + 28 = 0x10010020 (PLT entry 0)
-# 0x1001000c + 52 = 0x10010040 (PLT entry 1)
+# CHECK: Disassembly of section .text:
 
-# CHECK:     Disassembly of section .plt:
-# CHECK-NEXT: .plt:
-# CHECK-NEXT: 10010020:       18 00 41 f8     std 2, 24(1)
-# CHECK-NEXT: 10010024:       02 10 82 3d     addis 12, 2, 4098
-# CHECK-NEXT: 10010028:       10 80 8c e9     ld 12, -32752(12)
-# CHECK-NEXT: 1001002c:       a6 03 89 7d     mtctr 12
-# CHECK-NEXT: 10010030:       20 04 80 4e     bctr
-# CHECK-NEXT: 10010034:       08 00 e0 7f     trap
-# CHECK-NEXT: 10010038:       08 00 e0 7f     trap
-# CHECK-NEXT: 1001003c:       08 00 e0 7f     trap
-# CHECK-NEXT: 10010040:       18 00 41 f8     std 2, 24(1)
-# CHECK-NEXT: 10010044:       02 10 82 3d     addis 12, 2, 4098
-# CHECK-NEXT: 10010048:       18 80 8c e9     ld 12, -32744(12)
-# CHECK-NEXT: 1001004c:       a6 03 89 7d     mtctr 12
+# Tocbase    + (0 << 16) + 32560
+# 0x100280e0 +  0        + 32560 = 0x10030010 (.plt[2])
+# CHECK: __plt_foo:
+# CHECK-NEXT:     std 2, 24(1)
+# CHECK-NEXT:     addis 12, 2, 0
+# CHECK-NEXT:     ld 12, 32560(12)
+# CHECK-NEXT:     mtctr 12
+# CHECK-NEXT:     bctr
+
+# Tocbase    + (0 << 16)  +  32568
+# 0x100280e0 +  0          + 32568 = 0x1003018 (.plt[3])
+# CHECK: __plt_ifunc:
+# CHECK-NEXT:     std 2, 24(1)
+# CHECK-NEXT:     addis 12, 2, 0
+# CHECK-NEXT:     ld 12, 32568(12)
+# CHECK-NEXT:     mtctr 12
+# CHECK-NEXT:     bctr
+
+# CHECK: ifunc:
+# CHECK-NEXT: 10010028:  {{.*}} nop
+
+# CHECK: _start:
+# CHECK-NEXT:     addis 2, 12, 2
+# CHECK-NEXT:     addi 2, 2, -32588
+# CHECK-NEXT:     bl .+67108812
+# CHECK-NEXT:     ld 2, 24(1)
+# CHECK-NEXT:     bl .+67108824
+# CHECK-NEXT:     ld 2, 24(1)
+
+# Check tocbase
+# CHECK:       Disassembly of section .got:
+# CHECK-NEXT:    .got:
+# CHECK-NEXT:    100200e0
+
+# Check .plt address
+# DT_PLTGOT should point to the start of the .plt section.
+# DT: 0x0000000000000003 PLTGOT 0x10030000
+
+# Check that we emit the correct dynamic relocation type for an ifunc
+# DYNREL: 'PLT' relocation section at offset 0x{{[0-9a-f]+}} contains 48 bytes:
+# 48 bytes --> 2 Elf64_Rela relocations
+# DYNREL-NEXT: Offset        Info           Type               Symbol's Value  Symbol's Name + Addend
+# DYNREL-NEXT: {{[0-9a-f]+}} {{[0-9a-f]+}}  R_PPC64_JMP_SLOT      {{0+}}            foo + 0
+# DYNREL-NEXT: {{[0-9a-f]+}} {{[0-9a-f]+}}  R_PPC64_IRELATIVE     10010028
+
+
     .text
     .abiversion 2
 
@@ -36,8 +72,15 @@
 ifunc:
  nop
 
-.global _start
+    .global _start
+    .type   _start,@function
+
 _start:
+.Lfunc_gep0:
+  addis 2, 12, .TOC.-.Lfunc_gep0@ha
+  addi 2, 2, .TOC.-.Lfunc_gep0@l
+.Lfunc_lep0:
+  .localentry     _start, .Lfunc_lep0-.Lfunc_gep0
   bl foo
   nop
   bl ifunc

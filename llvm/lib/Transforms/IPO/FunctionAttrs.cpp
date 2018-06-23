@@ -18,7 +18,6 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallPtrSet.h"
-#include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/AliasAnalysis.h"
@@ -406,7 +405,7 @@ static Attribute::AttrKind
 determinePointerReadAttrs(Argument *A,
                           const SmallPtrSet<Argument *, 8> &SCCNodes) {
   SmallVector<Use *, 32> Worklist;
-  SmallSet<Use *, 32> Visited;
+  SmallPtrSet<Use *, 32> Visited;
 
   // inalloca arguments are always clobbered by the call.
   if (A->hasInAllocaAttr())
@@ -1013,7 +1012,8 @@ static bool addNonNullAttrs(const SCCNodeSet &SCCNodes) {
       if (!Speculative) {
         // Mark the function eagerly since we may discover a function
         // which prevents us from speculating about the entire SCC
-        DEBUG(dbgs() << "Eagerly marking " << F->getName() << " as nonnull\n");
+        LLVM_DEBUG(dbgs() << "Eagerly marking " << F->getName()
+                          << " as nonnull\n");
         F->addAttribute(AttributeList::ReturnIndex, Attribute::NonNull);
         ++NumNonNullReturn;
         MadeChange = true;
@@ -1032,7 +1032,7 @@ static bool addNonNullAttrs(const SCCNodeSet &SCCNodes) {
           !F->getReturnType()->isPointerTy())
         continue;
 
-      DEBUG(dbgs() << "SCC marking " << F->getName() << " as nonnull\n");
+      LLVM_DEBUG(dbgs() << "SCC marking " << F->getName() << " as nonnull\n");
       F->addAttribute(AttributeList::ReturnIndex, Attribute::NonNull);
       ++NumNonNullReturn;
       MadeChange = true;
@@ -1218,8 +1218,8 @@ static bool inferAttrsFromFunctionBodies(const SCCNodeSet &SCCNodes) {
         return InstrBreaksNonConvergent(I, SCCNodes);
       },
       [](Function &F) {
-        DEBUG(dbgs() << "Removing convergent attr from fn " << F.getName()
-                     << "\n");
+        LLVM_DEBUG(dbgs() << "Removing convergent attr from fn " << F.getName()
+                          << "\n");
         F.setNotConvergent();
       },
       /* RequiresExactDefinition= */ false});
@@ -1239,7 +1239,8 @@ static bool inferAttrsFromFunctionBodies(const SCCNodeSet &SCCNodes) {
           return InstrBreaksNonThrowing(I, SCCNodes);
         },
         [](Function &F) {
-          DEBUG(dbgs() << "Adding nounwind attr to fn " << F.getName() << "\n");
+          LLVM_DEBUG(dbgs()
+                     << "Adding nounwind attr to fn " << F.getName() << "\n");
           F.setDoesNotThrow();
           ++NumNoUnwind;
         },

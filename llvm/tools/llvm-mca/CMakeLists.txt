@@ -13,8 +13,10 @@ add_llvm_tool(llvm-mca
   Backend.cpp
   BackendPrinter.cpp
   CodeRegion.cpp
-  Dispatch.cpp
+  DispatchStage.cpp
   DispatchStatistics.cpp
+  ExecuteStage.cpp
+  FetchStage.cpp
   HWEventListener.cpp
   InstrBuilder.cpp
   Instruction.cpp
@@ -22,11 +24,15 @@ add_llvm_tool(llvm-mca
   InstructionTables.cpp
   LSUnit.cpp
   llvm-mca.cpp
+  RegisterFile.cpp
   RegisterFileStatistics.cpp
   ResourcePressureView.cpp
+  RetireControlUnit.cpp
   RetireControlUnitStatistics.cpp
+  RetireStage.cpp
   Scheduler.cpp
   SchedulerStatistics.cpp
+  Stage.cpp
   Support.cpp
   SummaryView.cpp
   TimelineView.cpp

@@ -85,166 +85,6 @@ static void replaceLoopUsesWithConstant(Loop &L, Value &LIC,
   }
 }
 
-/// Update the IDom for a basic block whose predecessor set has changed.
-///
-/// This routine is designed to work when the domtree update is relatively
-/// localized by leveraging a known common dominator, often a loop header.
-///
-/// FIXME: Should consider hand-rolling a slightly more efficient non-DFS
-/// approach here as we can do that easily by persisting the candidate IDom's
-/// dominating set between each predecessor.
-///
-/// FIXME: Longer term, many uses of this can be replaced by an incremental
-/// domtree update strategy that starts from a known dominating block and
-/// rebuilds that subtree.
-static bool updateIDomWithKnownCommonDominator(BasicBlock *BB,
-                                               BasicBlock *KnownDominatingBB,
-                                               DominatorTree &DT) {
-  assert(pred_begin(BB) != pred_end(BB) &&
-         "This routine does not handle unreachable blocks!");
-
-  BasicBlock *OrigIDom = DT[BB]->getIDom()->getBlock();
-
-  BasicBlock *IDom = *pred_begin(BB);
-  assert(DT.dominates(KnownDominatingBB, IDom) &&
-         "Bad known dominating block!");
-
-  // Walk all of the other predecessors finding the nearest common dominator
-  // until all predecessors are covered or we reach the loop header. The loop
-  // header necessarily dominates all loop exit blocks in loop simplified form
-  // so we can early-exit the moment we hit that block.
-  for (auto PI = std::next(pred_begin(BB)), PE = pred_end(BB);
-       PI != PE && IDom != KnownDominatingBB; ++PI) {
-    assert(DT.dominates(KnownDominatingBB, *PI) &&
-           "Bad known dominating block!");
-    IDom = DT.findNearestCommonDominator(IDom, *PI);
-  }
-
-  if (IDom == OrigIDom)
-    return false;
-
-  DT.changeImmediateDominator(BB, IDom);
-  return true;
-}
-
-// Note that we don't currently use the IDFCalculator here for two reasons:
-// 1) It computes dominator tree levels for the entire function on each run
-//    of 'compute'. While this isn't terrible, given that we expect to update
-//    relatively small subtrees of the domtree, it isn't necessarily the right
-//    tradeoff.
-// 2) The interface doesn't fit this usage well. It doesn't operate in
-//    append-only, and builds several sets that we don't need.
-//
-// FIXME: Neither of these issues are a big deal and could be addressed with
-// some amount of refactoring of IDFCalculator. That would allow us to share
-// the core logic here (which is solving the same core problem).
-static void appendDomFrontier(DomTreeNode *Node,
-                              SmallSetVector<BasicBlock *, 4> &Worklist,
-                              SmallVectorImpl<DomTreeNode *> &DomNodes,
-                              SmallPtrSetImpl<BasicBlock *> &DomSet) {
-  assert(DomNodes.empty() && "Must start with no dominator nodes.");
-  assert(DomSet.empty() && "Must start with an empty dominator set.");
-
-  // First flatten this subtree into sequence of nodes by doing a pre-order
-  // walk.
-  DomNodes.push_back(Node);
-  // We intentionally re-evaluate the size as each node can add new children.
-  // Because this is a tree walk, this cannot add any duplicates.
-  for (int i = 0; i < (int)DomNodes.size(); ++i)
-    DomNodes.insert(DomNodes.end(), DomNodes[i]->begin(), DomNodes[i]->end());
-
-  // Now create a set of the basic blocks so we can quickly test for
-  // dominated successors. We could in theory use the DFS numbers of the
-  // dominator tree for this, but we want this to remain predictably fast
-  // even while we mutate the dominator tree in ways that would invalidate
-  // the DFS numbering.
-  for (DomTreeNode *InnerN : DomNodes)
-    DomSet.insert(InnerN->getBlock());
-
-  // Now re-walk the nodes, appending every successor of every node that isn't
-  // in the set. Note that we don't append the node itself, even though if it
-  // is a successor it does not strictly dominate itself and thus it would be
-  // part of the dominance frontier. The reason we don't append it is that
-  // the node passed in came *from* the worklist and so it has already been
-  // processed.
-  for (DomTreeNode *InnerN : DomNodes)
-    for (BasicBlock *SuccBB : successors(InnerN->getBlock()))
-      if (!DomSet.count(SuccBB))
-        Worklist.insert(SuccBB);
-
-  DomNodes.clear();
-  DomSet.clear();
-}
-
-/// Update the dominator tree after unswitching a particular former exit block.
-///
-/// This handles the full update of the dominator tree after hoisting a block
-/// that previously was an exit block (or split off of an exit block) up to be
-/// reached from the new immediate dominator of the preheader.
-///
-/// The common case is simple -- we just move the unswitched block to have an
-/// immediate dominator of the old preheader. But in complex cases, there may
-/// be other blocks reachable from the unswitched block that are immediately
-/// dominated by some node between the unswitched one and the old preheader.
-/// All of these also need to be hoisted in the dominator tree. We also want to
-/// minimize queries to the dominator tree because each step of this
-/// invalidates any DFS numbers that would make queries fast.
-static void updateDTAfterUnswitch(BasicBlock *UnswitchedBB, BasicBlock *OldPH,
-                                  DominatorTree &DT) {
-  DomTreeNode *OldPHNode = DT[OldPH];
-  DomTreeNode *UnswitchedNode = DT[UnswitchedBB];
-  // If the dominator tree has already been updated for this unswitched node,
-  // we're done. This makes it easier to use this routine if there are multiple
-  // paths to the same unswitched destination.
-  if (UnswitchedNode->getIDom() == OldPHNode)
-    return;
-
-  // First collect the domtree nodes that we are hoisting over. These are the
-  // set of nodes which may have children that need to be hoisted as well.
-  SmallPtrSet<DomTreeNode *, 4> DomChain;
-  for (auto *IDom = UnswitchedNode->getIDom(); IDom != OldPHNode;
-       IDom = IDom->getIDom())
-    DomChain.insert(IDom);
-
-  // The unswitched block ends up immediately dominated by the old preheader --
-  // regardless of whether it is the loop exit block or split off of the loop
-  // exit block.
-  DT.changeImmediateDominator(UnswitchedNode, OldPHNode);
-
-  // For everything that moves up the dominator tree, we need to examine the
-  // dominator frontier to see if it additionally should move up the dominator
-  // tree. This lambda appends the dominator frontier for a node on the
-  // worklist.
-  SmallSetVector<BasicBlock *, 4> Worklist;
-
-  // Scratch data structures reused by domfrontier finding.
-  SmallVector<DomTreeNode *, 4> DomNodes;
-  SmallPtrSet<BasicBlock *, 4> DomSet;
-
-  // Append the initial dom frontier nodes.
-  appendDomFrontier(UnswitchedNode, Worklist, DomNodes, DomSet);
-
-  // Walk the worklist. We grow the list in the loop and so must recompute size.
-  for (int i = 0; i < (int)Worklist.size(); ++i) {
-    auto *BB = Worklist[i];
-
-    DomTreeNode *Node = DT[BB];
-    assert(!DomChain.count(Node) &&
-           "Cannot be dominated by a block you can reach!");
-
-    // If this block had an immediate dominator somewhere in the chain
-    // we hoisted over, then its position in the domtree needs to move as it is
-    // reachable from a node hoisted over this chain.
-    if (!DomChain.count(Node->getIDom()))
-      continue;
-
-    DT.changeImmediateDominator(Node, OldPHNode);
-
-    // Now add this node's dominator frontier to the worklist as well.
-    appendDomFrontier(Node, Worklist, DomNodes, DomSet);
-  }
-}
-
 /// Check that all the LCSSA PHI nodes in the loop exit block have trivial
 /// incoming values along this edge.
 static bool areLoopExitPHIsLoopInvariant(Loop &L, BasicBlock &ExitingBB,
@@ -344,19 +184,13 @@ static void rewritePHINodesForExitAndUnswitchedBlocks(BasicBlock &ExitBB,
 static bool unswitchTrivialBranch(Loop &L, BranchInst &BI, DominatorTree &DT,
                                   LoopInfo &LI) {
   assert(BI.isConditional() && "Can only unswitch a conditional branch!");
-  DEBUG(dbgs() << "  Trying to unswitch branch: " << BI << "\n");
+  LLVM_DEBUG(dbgs() << "  Trying to unswitch branch: " << BI << "\n");
 
   Value *LoopCond = BI.getCondition();
 
   // Need a trivial loop condition to unswitch.
   if (!L.isLoopInvariant(LoopCond))
     return false;
-
-  // FIXME: We should compute this once at the start and update it!
-  SmallVector<BasicBlock *, 16> ExitBlocks;
-  L.getExitBlocks(ExitBlocks);
-  SmallPtrSet<BasicBlock *, 16> ExitBlockSet(ExitBlocks.begin(),
-                                             ExitBlocks.end());
 
   // Check to see if a successor of the branch is guaranteed to
   // exit through a unique exit block without having any
@@ -366,23 +200,20 @@ static bool unswitchTrivialBranch(Loop &L, BranchInst &BI, DominatorTree &DT,
   ConstantInt *Replacement = ConstantInt::getFalse(BI.getContext());
   int LoopExitSuccIdx = 0;
   auto *LoopExitBB = BI.getSuccessor(0);
-  if (!ExitBlockSet.count(LoopExitBB)) {
+  if (L.contains(LoopExitBB)) {
     std::swap(CondVal, Replacement);
     LoopExitSuccIdx = 1;
     LoopExitBB = BI.getSuccessor(1);
-    if (!ExitBlockSet.count(LoopExitBB))
+    if (L.contains(LoopExitBB))
       return false;
   }
   auto *ContinueBB = BI.getSuccessor(1 - LoopExitSuccIdx);
-  assert(L.contains(ContinueBB) &&
-         "Cannot have both successors exit and still be in the loop!");
-
   auto *ParentBB = BI.getParent();
   if (!areLoopExitPHIsLoopInvariant(L, *ParentBB, *LoopExitBB))
     return false;
 
-  DEBUG(dbgs() << "    unswitching trivial branch when: " << CondVal
-               << " == " << LoopCond << "\n");
+  LLVM_DEBUG(dbgs() << "    unswitching trivial branch when: " << CondVal
+                    << " == " << LoopCond << "\n");
 
   // Split the preheader, so that we know that there is a safe place to insert
   // the conditional branch. We will change the preheader to have a conditional
@@ -424,12 +255,8 @@ static bool unswitchTrivialBranch(Loop &L, BranchInst &BI, DominatorTree &DT,
                                               *ParentBB, *OldPH);
 
   // Now we need to update the dominator tree.
-  updateDTAfterUnswitch(UnswitchedBB, OldPH, DT);
-  // But if we split something off of the loop exit block then we also removed
-  // one of the predecessors for the loop exit block and may need to update its
-  // idom.
-  if (UnswitchedBB != LoopExitBB)
-    updateIDomWithKnownCommonDominator(LoopExitBB, L.getHeader(), DT);
+  DT.applyUpdates(
+      {{DT.Delete, ParentBB, UnswitchedBB}, {DT.Insert, OldPH, UnswitchedBB}});
 
   // Since this is an i1 condition we can also trivially replace uses of it
   // within the loop with a constant.
@@ -465,7 +292,7 @@ static bool unswitchTrivialBranch(Loop &L, BranchInst &BI, DominatorTree &DT,
 /// branch. Still more cleanup can be done with some simplify-cfg like pass.
 static bool unswitchTrivialSwitch(Loop &L, SwitchInst &SI, DominatorTree &DT,
                                   LoopInfo &LI) {
-  DEBUG(dbgs() << "  Trying to unswitch switch: " << SI << "\n");
+  LLVM_DEBUG(dbgs() << "  Trying to unswitch switch: " << SI << "\n");
   Value *LoopCond = SI.getCondition();
 
   // If this isn't switching on an invariant condition, we can't unswitch it.
@@ -474,28 +301,22 @@ static bool unswitchTrivialSwitch(Loop &L, SwitchInst &SI, DominatorTree &DT,
 
   auto *ParentBB = SI.getParent();
 
-  // FIXME: We should compute this once at the start and update it!
-  SmallVector<BasicBlock *, 16> ExitBlocks;
-  L.getExitBlocks(ExitBlocks);
-  SmallPtrSet<BasicBlock *, 16> ExitBlockSet(ExitBlocks.begin(),
-                                             ExitBlocks.end());
-
   SmallVector<int, 4> ExitCaseIndices;
   for (auto Case : SI.cases()) {
     auto *SuccBB = Case.getCaseSuccessor();
-    if (ExitBlockSet.count(SuccBB) &&
+    if (!L.contains(SuccBB) &&
         areLoopExitPHIsLoopInvariant(L, *ParentBB, *SuccBB))
       ExitCaseIndices.push_back(Case.getCaseIndex());
   }
   BasicBlock *DefaultExitBB = nullptr;
-  if (ExitBlockSet.count(SI.getDefaultDest()) &&
+  if (!L.contains(SI.getDefaultDest()) &&
       areLoopExitPHIsLoopInvariant(L, *ParentBB, *SI.getDefaultDest()) &&
       !isa<UnreachableInst>(SI.getDefaultDest()->getTerminator()))
     DefaultExitBB = SI.getDefaultDest();
   else if (ExitCaseIndices.empty())
     return false;
 
-  DEBUG(dbgs() << "    unswitching trivial cases...\n");
+  LLVM_DEBUG(dbgs() << "    unswitching trivial cases...\n");
 
   SmallVector<std::pair<ConstantInt *, BasicBlock *>, 4> ExitCases;
   ExitCases.reserve(ExitCaseIndices.size());
@@ -574,7 +395,6 @@ static bool unswitchTrivialSwitch(Loop &L, SwitchInst &SI, DominatorTree &DT,
           SplitBlock(DefaultExitBB, &DefaultExitBB->front(), &DT, &LI);
       rewritePHINodesForExitAndUnswitchedBlocks(*DefaultExitBB, *SplitBB,
                                                 *ParentBB, *OldPH);
-      updateIDomWithKnownCommonDominator(DefaultExitBB, L.getHeader(), DT);
       DefaultExitBB = SplitExitBBMap[DefaultExitBB] = SplitBB;
     }
   }
@@ -601,7 +421,6 @@ static bool unswitchTrivialSwitch(Loop &L, SwitchInst &SI, DominatorTree &DT,
       SplitExitBB = SplitBlock(ExitBB, &ExitBB->front(), &DT, &LI);
       rewritePHINodesForExitAndUnswitchedBlocks(*ExitBB, *SplitExitBB,
                                                 *ParentBB, *OldPH);
-      updateIDomWithKnownCommonDominator(ExitBB, L.getHeader(), DT);
     }
     // Update the case pair to point to the split block.
     CasePair.second = SplitExitBB;
@@ -614,14 +433,12 @@ static bool unswitchTrivialSwitch(Loop &L, SwitchInst &SI, DominatorTree &DT,
     BasicBlock *UnswitchedBB = CasePair.second;
 
     NewSI->addCase(CaseVal, UnswitchedBB);
-    updateDTAfterUnswitch(UnswitchedBB, OldPH, DT);
   }
 
   // If the default was unswitched, re-point it and add explicit cases for
   // entering the loop.
   if (DefaultExitBB) {
     NewSI->setDefaultDest(DefaultExitBB);
-    updateDTAfterUnswitch(DefaultExitBB, OldPH, DT);
 
     // We removed all the exit cases, so we just copy the cases to the
     // unswitched switch.
@@ -638,6 +455,22 @@ static bool unswitchTrivialSwitch(Loop &L, SwitchInst &SI, DominatorTree &DT,
     SI.eraseFromParent();
     BranchInst::Create(CommonSuccBB, BB);
   }
+
+  // Walk the unswitched exit blocks and the unswitched split blocks and update
+  // the dominator tree based on the CFG edits. While we are walking unordered
+  // containers here, the API for applyUpdates takes an unordered list of
+  // updates and requires them to not contain duplicates.
+  SmallVector<DominatorTree::UpdateType, 4> DTUpdates;
+  for (auto *UnswitchedExitBB : UnswitchedExitBBs) {
+    DTUpdates.push_back({DT.Delete, ParentBB, UnswitchedExitBB});
+    DTUpdates.push_back({DT.Insert, OldPH, UnswitchedExitBB});
+  }
+  for (auto SplitUnswitchedPair : SplitExitBBMap) {
+    auto *UnswitchedBB = SplitUnswitchedPair.second;
+    DTUpdates.push_back({DT.Delete, ParentBB, UnswitchedBB});
+    DTUpdates.push_back({DT.Insert, OldPH, UnswitchedBB});
+  }
+  DT.applyUpdates(DTUpdates);
 
   assert(DT.verify(DominatorTree::VerificationLevel::Fast));
   ++NumTrivial;
@@ -690,7 +523,7 @@ static bool unswitchAllTrivialConditions(Loop &L, DominatorTree &DT,
         return Changed;
 
       if (!unswitchTrivialSwitch(L, *SI, DT, LI))
-        // Coludn't unswitch this one so we're done.
+        // Couldn't unswitch this one so we're done.
         return Changed;
 
       // Mark that we managed to unswitch something.
@@ -766,8 +599,9 @@ static BasicBlock *buildClonedLoopBlocks(
     ArrayRef<BasicBlock *> ExitBlocks, BasicBlock *ParentBB,
     BasicBlock *UnswitchedSuccBB, BasicBlock *ContinueSuccBB,
     const SmallPtrSetImpl<BasicBlock *> &SkippedLoopAndExitBlocks,
-    ValueToValueMapTy &VMap, AssumptionCache &AC, DominatorTree &DT,
-    LoopInfo &LI) {
+    ValueToValueMapTy &VMap,
+    SmallVectorImpl<DominatorTree::UpdateType> &DTUpdates, AssumptionCache &AC,
+    DominatorTree &DT, LoopInfo &LI) {
   SmallVector<BasicBlock *, 4> NewBlocks;
   NewBlocks.reserve(L.getNumBlocks() + ExitBlocks.size());
 
@@ -781,10 +615,6 @@ static BasicBlock *buildClonedLoopBlocks(
     // Record this block and the mapping.
     NewBlocks.push_back(NewBB);
     VMap[OldBB] = NewBB;
-
-    // Add the block to the domtree. We'll move it to the correct position
-    // below.
-    DT.addNewBlock(NewBB, SplitBB);
 
     return NewBB;
   };
@@ -823,17 +653,6 @@ static BasicBlock *buildClonedLoopBlocks(
            "Exit block should have been split to have one successor!");
     assert(ClonedExitBB->getTerminator()->getSuccessor(0) == MergeBB &&
            "Cloned exit block has the wrong successor!");
-
-    // Move the merge block's idom to be the split point as one exit is
-    // dominated by one header, and the other by another, so we know the split
-    // point dominates both. While the dominator tree isn't fully accurate, we
-    // want sub-trees within the original loop to be correctly reflect
-    // dominance within that original loop (at least) and that requires moving
-    // the merge block out of that subtree.
-    // FIXME: This is very brittle as we essentially have a partial contract on
-    // the dominator tree. We really need to instead update it and keep it
-    // valid or stop relying on it.
-    DT.changeImmediateDominator(MergeBB, SplitBB);
 
     // Remap any cloned instructions and create a merge phi node for them.
     for (auto ZippedInsts : llvm::zip_first(
@@ -895,6 +714,15 @@ static BasicBlock *buildClonedLoopBlocks(
         if (auto *ClonedSuccBB = cast_or_null<BasicBlock>(VMap.lookup(SuccBB)))
           for (PHINode &PN : ClonedSuccBB->phis())
             PN.removeIncomingValue(LoopBB, /*DeletePHIIfEmpty*/ false);
+
+  // Record the domtree updates for the new blocks.
+  SmallPtrSet<BasicBlock *, 4> SuccSet;
+  for (auto *ClonedBB : NewBlocks) {
+    for (auto *SuccBB : successors(ClonedBB))
+      if (SuccSet.insert(SuccBB).second)
+        DTUpdates.push_back({DominatorTree::Insert, ClonedBB, SuccBB});
+    SuccSet.clear();
+  }
 
   return ClonedPH;
 }
@@ -964,9 +792,9 @@ static Loop *cloneLoopNest(Loop &OrigRootL, Loop *RootParentL,
 /// original loop, multiple cloned sibling loops may be created. All of them
 /// are returned so that the newly introduced loop nest roots can be
 /// identified.
-static Loop *buildClonedLoops(Loop &OrigL, ArrayRef<BasicBlock *> ExitBlocks,
-                              const ValueToValueMapTy &VMap, LoopInfo &LI,
-                              SmallVectorImpl<Loop *> &NonChildClonedLoops) {
+static void buildClonedLoops(Loop &OrigL, ArrayRef<BasicBlock *> ExitBlocks,
+                             const ValueToValueMapTy &VMap, LoopInfo &LI,
+                             SmallVectorImpl<Loop *> &NonChildClonedLoops) {
   Loop *ClonedL = nullptr;
 
   auto *OrigPH = OrigL.getLoopPreheader();
@@ -1059,6 +887,7 @@ static Loop *buildClonedLoops(Loop &OrigL, ArrayRef<BasicBlock *> ExitBlocks,
     } else {
       LI.addTopLevelLoop(ClonedL);
     }
+    NonChildClonedLoops.push_back(ClonedL);
 
     ClonedL->reserveBlocks(BlocksInClonedLoop.size());
     // We don't want to just add the cloned loop blocks based on how we
@@ -1212,37 +1041,20 @@ static Loop *buildClonedLoops(Loop &OrigL, ArrayRef<BasicBlock *> ExitBlocks,
     NonChildClonedLoops.push_back(cloneLoopNest(
         *ChildL, ExitLoopMap.lookup(ClonedChildHeader), VMap, LI));
   }
-
-  // Return the main cloned loop if any.
-  return ClonedL;
 }
 
-static void deleteDeadBlocksFromLoop(Loop &L, BasicBlock *DeadSubtreeRoot,
-                                     SmallVectorImpl<BasicBlock *> &ExitBlocks,
-                                     DominatorTree &DT, LoopInfo &LI) {
-  // Walk the dominator tree to build up the set of blocks we will delete here.
-  // The order is designed to allow us to always delete bottom-up and avoid any
-  // dangling uses.
-  SmallSetVector<BasicBlock *, 16> DeadBlocks;
-  DeadBlocks.insert(DeadSubtreeRoot);
-  for (int i = 0; i < (int)DeadBlocks.size(); ++i)
-    for (DomTreeNode *ChildN : *DT[DeadBlocks[i]]) {
-      // FIXME: This assert should pass and that means we don't change nearly
-      // as much below! Consider rewriting all of this to avoid deleting
-      // blocks. They are always cloned before being deleted, and so instead
-      // could just be moved.
-      // FIXME: This in turn means that we might actually be more able to
-      // update the domtree.
-      assert((L.contains(ChildN->getBlock()) ||
-              llvm::find(ExitBlocks, ChildN->getBlock()) != ExitBlocks.end()) &&
-             "Should never reach beyond the loop and exits when deleting!");
-      DeadBlocks.insert(ChildN->getBlock());
-    }
+static void
+deleteDeadBlocksFromLoop(Loop &L,
+                         const SmallVectorImpl<BasicBlock *> &DeadBlocks,
+                         SmallVectorImpl<BasicBlock *> &ExitBlocks,
+                         DominatorTree &DT, LoopInfo &LI) {
+  SmallPtrSet<BasicBlock *, 16> DeadBlockSet(DeadBlocks.begin(),
+                                             DeadBlocks.end());
 
   // Filter out the dead blocks from the exit blocks list so that it can be
   // used in the caller.
   llvm::erase_if(ExitBlocks,
-                 [&](BasicBlock *BB) { return DeadBlocks.count(BB); });
+                 [&](BasicBlock *BB) { return DeadBlockSet.count(BB); });
 
   // Remove these blocks from their successors.
   for (auto *BB : DeadBlocks)
@@ -1254,18 +1066,18 @@ static void deleteDeadBlocksFromLoop(Loop &L, BasicBlock *DeadSubtreeRoot,
     for (auto *BB : DeadBlocks)
       ParentL->getBlocksSet().erase(BB);
     llvm::erase_if(ParentL->getBlocksVector(),
-                   [&](BasicBlock *BB) { return DeadBlocks.count(BB); });
+                   [&](BasicBlock *BB) { return DeadBlockSet.count(BB); });
   }
 
   // Now delete the dead child loops. This raw delete will clear them
   // recursively.
   llvm::erase_if(L.getSubLoopsVector(), [&](Loop *ChildL) {
-    if (!DeadBlocks.count(ChildL->getHeader()))
+    if (!DeadBlockSet.count(ChildL->getHeader()))
       return false;
 
     assert(llvm::all_of(ChildL->blocks(),
                         [&](BasicBlock *ChildBB) {
-                          return DeadBlocks.count(ChildBB);
+                          return DeadBlockSet.count(ChildBB);
                         }) &&
            "If the child loop header is dead all blocks in the child loop must "
            "be dead as well!");
@@ -1273,19 +1085,20 @@ static void deleteDeadBlocksFromLoop(Loop &L, BasicBlock *DeadSubtreeRoot,
     return true;
   });
 
-  // Remove the mappings for the dead blocks.
-  for (auto *BB : DeadBlocks)
+  // Remove the loop mappings for the dead blocks and drop all the references
+  // from these blocks to others to handle cyclic references as we start
+  // deleting the blocks themselves.
+  for (auto *BB : DeadBlocks) {
+    // Check that the dominator tree has already been updated.
+    assert(!DT.getNode(BB) && "Should already have cleared domtree!");
     LI.changeLoopFor(BB, nullptr);
-
-  // Drop all the references from these blocks to others to handle cyclic
-  // references as we start deleting the blocks themselves.
-  for (auto *BB : DeadBlocks)
     BB->dropAllReferences();
-
-  for (auto *BB : llvm::reverse(DeadBlocks)) {
-    DT.eraseNode(BB);
-    BB->eraseFromParent();
   }
+
+  // Actually delete the blocks now that they've been fully unhooked from the
+  // IR.
+  for (auto *BB : DeadBlocks)
+    BB->eraseFromParent();
 }
 
 /// Recompute the set of blocks in a loop after unswitching.
@@ -1651,7 +1464,7 @@ void visitDomSubTree(DominatorTree &DT, BasicBlock *BB, CallableT Callable) {
 static bool unswitchInvariantBranch(
     Loop &L, BranchInst &BI, DominatorTree &DT, LoopInfo &LI,
     AssumptionCache &AC,
-    function_ref<void(bool, ArrayRef<Loop *>)> NonTrivialUnswitchCB) {
+    function_ref<void(bool, ArrayRef<Loop *>)> UnswitchCB) {
   assert(BI.isConditional() && "Can only unswitch a conditional branch!");
   assert(L.isLoopInvariant(BI.getCondition()) &&
          "Can only unswitch an invariant branch condition!");
@@ -1737,17 +1550,13 @@ static bool unswitchInvariantBranch(
   // Keep a mapping for the cloned values.
   ValueToValueMapTy VMap;
 
+  // Keep track of the dominator tree updates needed.
+  SmallVector<DominatorTree::UpdateType, 4> DTUpdates;
+
   // Build the cloned blocks from the loop.
   auto *ClonedPH = buildClonedLoopBlocks(
       L, LoopPH, SplitBB, ExitBlocks, ParentBB, UnswitchedSuccBB,
-      ContinueSuccBB, SkippedLoopAndExitBlocks, VMap, AC, DT, LI);
-
-  // Build the cloned loop structure itself. This may be substantially
-  // different from the original structure due to the simplified CFG. This also
-  // handles inserting all the cloned blocks into the correct loops.
-  SmallVector<Loop *, 4> NonChildClonedLoops;
-  Loop *ClonedL =
-      buildClonedLoops(L, ExitBlocks, VMap, LI, NonChildClonedLoops);
+      ContinueSuccBB, SkippedLoopAndExitBlocks, VMap, DTUpdates, AC, DT, LI);
 
   // Remove the parent as a predecessor of the unswitched successor.
   UnswitchedSuccBB->removePredecessor(ParentBB, /*DontDeleteUselessPHIs*/ true);
@@ -1763,23 +1572,56 @@ static bool unswitchInvariantBranch(
   // the one cloned).
   BranchInst::Create(ContinueSuccBB, ParentBB);
 
+  // Before we update the dominator tree, collect the dead blocks if we're going
+  // to end up deleting the unswitched successor.
+  SmallVector<BasicBlock *, 16> DeadBlocks;
+  if (DeleteUnswitchedSucc) {
+    DeadBlocks.push_back(UnswitchedSuccBB);
+    for (int i = 0; i < (int)DeadBlocks.size(); ++i) {
+      // If we reach an exit block, stop recursing as the unswitched loop will
+      // end up reaching the merge block which we make the successor of the
+      // exit.
+      if (ExitBlockSet.count(DeadBlocks[i]))
+        continue;
+
+      // Insert the children that are within the loop or exit block set. Other
+      // children may reach out of the loop. While we don't expect these to be
+      // dead (as the unswitched clone should reach them) we don't try to prove
+      // that here.
+      for (DomTreeNode *ChildN : *DT[DeadBlocks[i]])
+        if (L.contains(ChildN->getBlock()) ||
+            ExitBlockSet.count(ChildN->getBlock()))
+          DeadBlocks.push_back(ChildN->getBlock());
+    }
+  }
+
+  // Add the remaining edges to our updates and apply them to get an up-to-date
+  // dominator tree. Note that this will cause the dead blocks above to be
+  // unreachable and no longer in the dominator tree.
+  DTUpdates.push_back({DominatorTree::Delete, ParentBB, UnswitchedSuccBB});
+  DTUpdates.push_back({DominatorTree::Insert, SplitBB, ClonedPH});
+  DT.applyUpdates(DTUpdates);
+
+  // Build the cloned loop structure itself. This may be substantially
+  // different from the original structure due to the simplified CFG. This also
+  // handles inserting all the cloned blocks into the correct loops.
+  SmallVector<Loop *, 4> NonChildClonedLoops;
+  buildClonedLoops(L, ExitBlocks, VMap, LI, NonChildClonedLoops);
+
   // Delete anything that was made dead in the original loop due to
   // unswitching.
-  if (DeleteUnswitchedSucc)
-    deleteDeadBlocksFromLoop(L, UnswitchedSuccBB, ExitBlocks, DT, LI);
+  if (!DeadBlocks.empty())
+    deleteDeadBlocksFromLoop(L, DeadBlocks, ExitBlocks, DT, LI);
 
   SmallVector<Loop *, 4> HoistedLoops;
   bool IsStillLoop = rebuildLoopAfterUnswitch(L, ExitBlocks, LI, HoistedLoops);
 
-  // This will have completely invalidated the dominator tree. We can't easily
-  // bound how much is invalid because in some cases we will refine the
-  // predecessor set of exit blocks of the loop which can move large unrelated
-  // regions of code into a new subtree.
-  //
-  // FIXME: Eventually, we should use an incremental update utility that
-  // leverages the existing information in the dominator tree (and potentially
-  // the nature of the change) to more efficiently update things.
-  DT.recalculate(*SplitBB->getParent());
+  // This transformation has a high risk of corrupting the dominator tree, and
+  // the below steps to rebuild loop structures will result in hard to debug
+  // errors in that case so verify that the dominator tree is sane first.
+  // FIXME: Remove this when the bugs stop showing up and rely on existing
+  // verification steps.
+  assert(DT.verify(DominatorTree::VerificationLevel::Fast));
 
   // We can change which blocks are exit blocks of all the cloned sibling
   // loops, the current loop, and any parent loops which shared exit blocks
@@ -1793,7 +1635,7 @@ static bool unswitchInvariantBranch(
   // also need to cover any intervening loops. We add all of these loops to
   // a list and sort them by loop depth to achieve this without updating
   // unnecessary loops.
-  auto UpdateLCSSA = [&](Loop &UpdateL) {
+  auto UpdateLoop = [&](Loop &UpdateL) {
 #ifndef NDEBUG
     UpdateL.verifyLoop();
     for (Loop *ChildL : UpdateL) {
@@ -1802,51 +1644,41 @@ static bool unswitchInvariantBranch(
              "Perturbed a child loop's LCSSA form!");
     }
 #endif
+    // First build LCSSA for this loop so that we can preserve it when
+    // forming dedicated exits. We don't want to perturb some other loop's
+    // LCSSA while doing that CFG edit.
     formLCSSA(UpdateL, DT, &LI, nullptr);
+
+    // For loops reached by this loop's original exit blocks we may
+    // introduced new, non-dedicated exits. At least try to re-form dedicated
+    // exits for these loops. This may fail if they couldn't have dedicated
+    // exits to start with.
+    formDedicatedExitBlocks(&UpdateL, &DT, &LI, /*PreserveLCSSA*/ true);
   };
 
   // For non-child cloned loops and hoisted loops, we just need to update LCSSA
   // and we can do it in any order as they don't nest relative to each other.
-  for (Loop *UpdatedL : llvm::concat<Loop *>(NonChildClonedLoops, HoistedLoops))
-    UpdateLCSSA(*UpdatedL);
+  //
+  // Also check if any of the loops we have updated have become top-level loops
+  // as that will necessitate widening the outer loop scope.
+  for (Loop *UpdatedL :
+       llvm::concat<Loop *>(NonChildClonedLoops, HoistedLoops)) {
+    UpdateLoop(*UpdatedL);
+    if (!UpdatedL->getParentLoop())
+      OuterExitL = nullptr;
+  }
+  if (IsStillLoop) {
+    UpdateLoop(L);
+    if (!L.getParentLoop())
+      OuterExitL = nullptr;
+  }
 
   // If the original loop had exit blocks, walk up through the outer most loop
   // of those exit blocks to update LCSSA and form updated dedicated exits.
-  if (OuterExitL != &L) {
-    SmallVector<Loop *, 4> OuterLoops;
-    // We start with the cloned loop and the current loop if they are loops and
-    // move toward OuterExitL. Also, if either the cloned loop or the current
-    // loop have become top level loops we need to walk all the way out.
-    if (ClonedL) {
-      OuterLoops.push_back(ClonedL);
-      if (!ClonedL->getParentLoop())
-        OuterExitL = nullptr;
-    }
-    if (IsStillLoop) {
-      OuterLoops.push_back(&L);
-      if (!L.getParentLoop())
-        OuterExitL = nullptr;
-    }
-    // Grab all of the enclosing loops now.
+  if (OuterExitL != &L)
     for (Loop *OuterL = ParentL; OuterL != OuterExitL;
          OuterL = OuterL->getParentLoop())
-      OuterLoops.push_back(OuterL);
-
-    // Finally, update our list of outer loops. This is nicely ordered to work
-    // inside-out.
-    for (Loop *OuterL : OuterLoops) {
-      // First build LCSSA for this loop so that we can preserve it when
-      // forming dedicated exits. We don't want to perturb some other loop's
-      // LCSSA while doing that CFG edit.
-      UpdateLCSSA(*OuterL);
-
-      // For loops reached by this loop's original exit blocks we may
-      // introduced new, non-dedicated exits. At least try to re-form dedicated
-      // exits for these loops. This may fail if they couldn't have dedicated
-      // exits to start with.
-      formDedicatedExitBlocks(OuterL, &DT, &LI, /*PreserveLCSSA*/ true);
-    }
-  }
+      UpdateLoop(*OuterL);
 
 #ifndef NDEBUG
   // Verify the entire loop structure to catch any incorrect updates before we
@@ -1861,7 +1693,7 @@ static bool unswitchInvariantBranch(
   for (Loop *UpdatedL : llvm::concat<Loop *>(NonChildClonedLoops, HoistedLoops))
     if (UpdatedL->getParentLoop() == ParentL)
       SibLoops.push_back(UpdatedL);
-  NonTrivialUnswitchCB(IsStillLoop, SibLoops);
+  UnswitchCB(IsStillLoop, SibLoops);
 
   ++NumBranches;
   return true;
@@ -1909,23 +1741,27 @@ computeDomSubtreeCost(DomTreeNode &N,
 static bool
 unswitchLoop(Loop &L, DominatorTree &DT, LoopInfo &LI, AssumptionCache &AC,
              TargetTransformInfo &TTI, bool NonTrivial,
-             function_ref<void(bool, ArrayRef<Loop *>)> NonTrivialUnswitchCB) {
+             function_ref<void(bool, ArrayRef<Loop *>)> UnswitchCB) {
   assert(L.isRecursivelyLCSSAForm(DT, LI) &&
          "Loops must be in LCSSA form before unswitching.");
-  bool Changed = false;
 
   // Must be in loop simplified form: we need a preheader and dedicated exits.
   if (!L.isLoopSimplifyForm())
     return false;
 
   // Try trivial unswitch first before loop over other basic blocks in the loop.
-  Changed |= unswitchAllTrivialConditions(L, DT, LI);
+  if (unswitchAllTrivialConditions(L, DT, LI)) {
+    // If we unswitched successfully we will want to clean up the loop before
+    // processing it further so just mark it as unswitched and return.
+    UnswitchCB(/*CurrentLoopValid*/ true, {});
+    return true;
+  }
 
   // If we're not doing non-trivial unswitching, we're done. We both accept
   // a parameter but also check a local flag that can be used for testing
   // a debugging.
   if (!NonTrivial && !EnableNonTrivialUnswitch)
-    return Changed;
+    return false;
 
   // Collect all remaining invariant branch conditions within this loop (as
   // opposed to an inner loop which would be handled when visiting that inner
@@ -1940,21 +1776,22 @@ unswitchLoop(Loop &L, DominatorTree &DT, LoopInfo &LI, AssumptionCache &AC,
 
   // If we didn't find any candidates, we're done.
   if (UnswitchCandidates.empty())
-    return Changed;
+    return false;
 
   // Check if there are irreducible CFG cycles in this loop. If so, we cannot
   // easily unswitch non-trivial edges out of the loop. Doing so might turn the
   // irreducible control flow into reducible control flow and introduce new
   // loops "out of thin air". If we ever discover important use cases for doing
   // this, we can add support to loop unswitch, but it is a lot of complexity
-  // for what seems little or no real world benifit.
+  // for what seems little or no real world benefit.
   LoopBlocksRPO RPOT(&L);
   RPOT.perform(&LI);
   if (containsIrreducibleCFG<const BasicBlock *>(RPOT, LI))
-    return Changed;
+    return false;
 
-  DEBUG(dbgs() << "Considering " << UnswitchCandidates.size()
-               << " non-trivial loop invariant conditions for unswitching.\n");
+  LLVM_DEBUG(
+      dbgs() << "Considering " << UnswitchCandidates.size()
+             << " non-trivial loop invariant conditions for unswitching.\n");
 
   // Given that unswitching these terminators will require duplicating parts of
   // the loop, so we need to be able to model that cost. Compute the ephemeral
@@ -1978,10 +1815,10 @@ unswitchLoop(Loop &L, DominatorTree &DT, LoopInfo &LI, AssumptionCache &AC,
         continue;
 
       if (I.getType()->isTokenTy() && I.isUsedOutsideOfBlock(BB))
-        return Changed;
+        return false;
       if (auto CS = CallSite(&I))
         if (CS.isConvergent() || CS.cannotDuplicate())
-          return Changed;
+          return false;
 
       Cost += TTI.getUserCost(&I);
     }
@@ -1990,7 +1827,7 @@ unswitchLoop(Loop &L, DominatorTree &DT, LoopInfo &LI, AssumptionCache &AC,
     assert(LoopCost >= 0 && "Must not have negative loop costs!");
     BBCostMap[BB] = Cost;
   }
-  DEBUG(dbgs() << "  Total loop cost: " << LoopCost << "\n");
+  LLVM_DEBUG(dbgs() << "  Total loop cost: " << LoopCost << "\n");
 
   // Now we find the best candidate by searching for the one with the following
   // properties in order:
@@ -2044,26 +1881,25 @@ unswitchLoop(Loop &L, DominatorTree &DT, LoopInfo &LI, AssumptionCache &AC,
   int BestUnswitchCost;
   for (TerminatorInst *CandidateTI : UnswitchCandidates) {
     int CandidateCost = ComputeUnswitchedCost(CandidateTI);
-    DEBUG(dbgs() << "  Computed cost of " << CandidateCost
-                 << " for unswitch candidate: " << *CandidateTI << "\n");
+    LLVM_DEBUG(dbgs() << "  Computed cost of " << CandidateCost
+                      << " for unswitch candidate: " << *CandidateTI << "\n");
     if (!BestUnswitchTI || CandidateCost < BestUnswitchCost) {
       BestUnswitchTI = CandidateTI;
       BestUnswitchCost = CandidateCost;
     }
   }
 
-  if (BestUnswitchCost < UnswitchThreshold) {
-    DEBUG(dbgs() << "  Trying to unswitch non-trivial (cost = "
-                 << BestUnswitchCost << ") branch: " << *BestUnswitchTI
-                 << "\n");
-    Changed |= unswitchInvariantBranch(L, cast<BranchInst>(*BestUnswitchTI), DT,
-                                       LI, AC, NonTrivialUnswitchCB);
-  } else {
-    DEBUG(dbgs() << "Cannot unswitch, lowest cost found: " << BestUnswitchCost
-                 << "\n");
+  if (BestUnswitchCost >= UnswitchThreshold) {
+    LLVM_DEBUG(dbgs() << "Cannot unswitch, lowest cost found: "
+                      << BestUnswitchCost << "\n");
+    return false;
   }
 
-  return Changed;
+  LLVM_DEBUG(dbgs() << "  Trying to unswitch non-trivial (cost = "
+                    << BestUnswitchCost << ") branch: " << *BestUnswitchTI
+                    << "\n");
+  return unswitchInvariantBranch(L, cast<BranchInst>(*BestUnswitchTI), DT, LI,
+                                 AC, UnswitchCB);
 }
 
 PreservedAnalyses SimpleLoopUnswitchPass::run(Loop &L, LoopAnalysisManager &AM,
@@ -2072,16 +1908,18 @@ PreservedAnalyses SimpleLoopUnswitchPass::run(Loop &L, LoopAnalysisManager &AM,
   Function &F = *L.getHeader()->getParent();
   (void)F;
 
-  DEBUG(dbgs() << "Unswitching loop in " << F.getName() << ": " << L << "\n");
+  LLVM_DEBUG(dbgs() << "Unswitching loop in " << F.getName() << ": " << L
+                    << "\n");
 
   // Save the current loop name in a variable so that we can report it even
   // after it has been deleted.
   std::string LoopName = L.getName();
 
-  auto NonTrivialUnswitchCB = [&L, &U, &LoopName](bool CurrentLoopValid,
-                                                  ArrayRef<Loop *> NewLoops) {
+  auto UnswitchCB = [&L, &U, &LoopName](bool CurrentLoopValid,
+                                        ArrayRef<Loop *> NewLoops) {
     // If we did a non-trivial unswitch, we have added new (cloned) loops.
-    U.addSiblingLoops(NewLoops);
+    if (!NewLoops.empty())
+      U.addSiblingLoops(NewLoops);
 
     // If the current loop remains valid, we should revisit it to catch any
     // other unswitch opportunities. Otherwise, we need to mark it as deleted.
@@ -2092,7 +1930,7 @@ PreservedAnalyses SimpleLoopUnswitchPass::run(Loop &L, LoopAnalysisManager &AM,
   };
 
   if (!unswitchLoop(L, AR.DT, AR.LI, AR.AC, AR.TTI, NonTrivial,
-                    NonTrivialUnswitchCB))
+                    UnswitchCB))
     return PreservedAnalyses::all();
 
   // Historically this pass has had issues with the dominator tree so verify it
@@ -2132,15 +1970,16 @@ bool SimpleLoopUnswitchLegacyPass::runOnLoop(Loop *L, LPPassManager &LPM) {
 
   Function &F = *L->getHeader()->getParent();
 
-  DEBUG(dbgs() << "Unswitching loop in " << F.getName() << ": " << *L << "\n");
+  LLVM_DEBUG(dbgs() << "Unswitching loop in " << F.getName() << ": " << *L
+                    << "\n");
 
   auto &DT = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
   auto &LI = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
   auto &AC = getAnalysis<AssumptionCacheTracker>().getAssumptionCache(F);
   auto &TTI = getAnalysis<TargetTransformInfoWrapperPass>().getTTI(F);
 
-  auto NonTrivialUnswitchCB = [&L, &LPM](bool CurrentLoopValid,
-                                         ArrayRef<Loop *> NewLoops) {
+  auto UnswitchCB = [&L, &LPM](bool CurrentLoopValid,
+                               ArrayRef<Loop *> NewLoops) {
     // If we did a non-trivial unswitch, we have added new (cloned) loops.
     for (auto *NewL : NewLoops)
       LPM.addLoop(*NewL);
@@ -2155,7 +1994,7 @@ bool SimpleLoopUnswitchLegacyPass::runOnLoop(Loop *L, LPPassManager &LPM) {
   };
 
   bool Changed =
-      unswitchLoop(*L, DT, LI, AC, TTI, NonTrivial, NonTrivialUnswitchCB);
+      unswitchLoop(*L, DT, LI, AC, TTI, NonTrivial, UnswitchCB);
 
   // If anything was unswitched, also clear any cached information about this
   // loop.

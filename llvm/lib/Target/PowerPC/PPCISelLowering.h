@@ -71,6 +71,9 @@ namespace llvm {
       /// unsigned integers with round toward zero.
       FCTIDUZ, FCTIWUZ,
 
+      /// Floating-point-to-interger conversion instructions
+      FP_TO_UINT_IN_VSR, FP_TO_SINT_IN_VSR,
+
       /// VEXTS, ByteWidth - takes an input in VSFRC and produces an output in
       /// VSFRC that is sign-extended from ByteWidth to a 64-byte integer.
       VEXTS,
@@ -426,6 +429,9 @@ namespace llvm {
       /// an xxswapd.
       STXVD2X,
 
+      /// Store scalar integers from VSR.
+      ST_VSR_SCAL_INT,
+
       /// QBRC, CHAIN = QVLFSb CHAIN, Ptr
       /// The 4xf32 load used for v4i1 constants.
       QVLFSb,
@@ -765,7 +771,7 @@ namespace llvm {
 
     bool isFPExtFree(EVT DestVT, EVT SrcVT) const override;
 
-    /// \brief Returns true if it is beneficial to convert a load of a constant
+    /// Returns true if it is beneficial to convert a load of a constant
     /// to just the constant itself.
     bool shouldConvertConstantLoadToIntImm(const APInt &Imm,
                                            Type *Ty) const override;
@@ -822,7 +828,7 @@ namespace llvm {
     FastISel *createFastISel(FunctionLoweringInfo &FuncInfo,
                              const TargetLibraryInfo *LibInfo) const override;
 
-    /// \brief Returns true if an argument of type Ty needs to be passed in a
+    /// Returns true if an argument of type Ty needs to be passed in a
     /// contiguous block of registers in calling convention CallConv.
     bool functionArgumentNeedsConsecutiveRegisters(
       Type *Ty, CallingConv::ID CallConv, bool isVarArg) const override {
@@ -1063,6 +1069,7 @@ namespace llvm {
     SDValue DAGCombineExtBoolTrunc(SDNode *N, DAGCombinerInfo &DCI) const;
     SDValue DAGCombineBuildVector(SDNode *N, DAGCombinerInfo &DCI) const;
     SDValue DAGCombineTruncBoolExt(SDNode *N, DAGCombinerInfo &DCI) const;
+    SDValue combineStoreFPToInt(SDNode *N, DAGCombinerInfo &DCI) const;
     SDValue combineFPToIntToFP(SDNode *N, DAGCombinerInfo &DCI) const;
     SDValue combineSHL(SDNode *N, DAGCombinerInfo &DCI) const;
     SDValue combineSRA(SDNode *N, DAGCombinerInfo &DCI) const;
@@ -1101,6 +1108,7 @@ namespace llvm {
     // tail call. This will cause the optimizers to attempt to move, or
     // duplicate return instructions to help enable tail call optimizations.
     bool mayBeEmittedAsTailCall(const CallInst *CI) const override;
+    bool isMaskAndCmp0FoldingBeneficial(const Instruction &AndI) const override;
   }; // end class PPCTargetLowering
 
   namespace PPC {

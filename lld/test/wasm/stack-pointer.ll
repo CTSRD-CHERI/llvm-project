@@ -1,8 +1,8 @@
 ; RUN: llc -filetype=obj %s -o %t.o
-; RUN: wasm-ld --check-signatures --relocatable -o %t.wasm %t.o
+; RUN: wasm-ld --relocatable -o %t.wasm %t.o
 ; RUN: obj2yaml %t.wasm | FileCheck %s
 
-target triple = "wasm32-unknown-unknown-wasm"
+target triple = "wasm32-unknown-unknown"
 
 ; Function Attrs: nounwind
 define i32 @_start() local_unnamed_addr {
@@ -50,6 +50,7 @@ entry:
 ; CHECK-NEXT:         Body:            23808080800041106B1A41000B
 ; CHECK-NEXT:   - Type:            CUSTOM
 ; CHECK-NEXT:     Name:            linking
+; CHECK-NEXT:     Version:         1
 ; CHECK-NEXT:     SymbolTable:
 ; CHECK-NEXT:       - Index:           0
 ; CHECK-NEXT:         Kind:            FUNCTION

@@ -16,7 +16,7 @@
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/Loads.h"
-#include "llvm/Analysis/Utils/Local.h"
+#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/IR/ConstantRange.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/IntrinsicInst.h"
@@ -270,7 +270,7 @@ void PointerReplacer::findLoadAndReplace(Instruction &I) {
     auto *Inst = dyn_cast<Instruction>(&*U);
     if (!Inst)
       return;
-    DEBUG(dbgs() << "Found pointer user: " << *U << '\n');
+    LLVM_DEBUG(dbgs() << "Found pointer user: " << *U << '\n');
     if (isa<LoadInst>(Inst)) {
       for (auto P : Path)
         replace(P);
@@ -405,8 +405,8 @@ Instruction *InstCombiner::visitAllocaInst(AllocaInst &AI) {
           Copy->getSource(), AI.getAlignment(), DL, &AI, &AC, &DT);
       if (AI.getAlignment() <= SourceAlign &&
           isDereferenceableForAllocaSize(Copy->getSource(), &AI, DL)) {
-        DEBUG(dbgs() << "Found alloca equal to global: " << AI << '\n');
-        DEBUG(dbgs() << "  memcpy = " << *Copy << '\n');
+        LLVM_DEBUG(dbgs() << "Found alloca equal to global: " << AI << '\n');
+        LLVM_DEBUG(dbgs() << "  memcpy = " << *Copy << '\n');
         for (unsigned i = 0, e = ToDelete.size(); i != e; ++i)
           eraseInstFromFunction(*ToDelete[i]);
         Constant *TheSrc = cast<Constant>(Copy->getSource());
@@ -440,7 +440,7 @@ static bool isSupportedAtomicType(Type *Ty) {
   return Ty->isIntegerTy() || Ty->isPointerTy() || Ty->isFloatingPointTy();
 }
 
-/// \brief Helper to combine a load to a new type.
+/// Helper to combine a load to a new type.
 ///
 /// This just does the work of combining a load to a new type. It handles
 /// metadata, etc., and returns the new instruction. The \c NewTy should be the
@@ -453,15 +453,20 @@ static LoadInst *combineLoadToNewType(InstCombiner &IC, LoadInst &LI, Type *NewT
                                       const Twine &Suffix = "") {
   assert((!LI.isAtomic() || isSupportedAtomicType(NewTy)) &&
          "can't fold an atomic load to requested type");
-  
+
   Value *Ptr = LI.getPointerOperand();
   unsigned AS = LI.getPointerAddressSpace();
   SmallVector<std::pair<unsigned, MDNode *>, 8> MD;
   LI.getAllMetadata(MD);
 
+  Value *NewPtr = nullptr;
+  if (!(match(Ptr, m_BitCast(m_Value(NewPtr))) &&
+        NewPtr->getType()->getPointerElementType() == NewTy &&
+        NewPtr->getType()->getPointerAddressSpace() == AS))
+    NewPtr = IC.Builder.CreateBitCast(Ptr, NewTy->getPointerTo(AS));
+
   LoadInst *NewLoad = IC.Builder.CreateAlignedLoad(
-      IC.Builder.CreateBitCast(Ptr, NewTy->getPointerTo(AS)),
-      LI.getAlignment(), LI.isVolatile(), LI.getName() + Suffix);
+      NewPtr, LI.getAlignment(), LI.isVolatile(), LI.getName() + Suffix);
   NewLoad->setAtomic(LI.getOrdering(), LI.getSyncScopeID());
   MDBuilder MDB(NewLoad->getContext());
   for (const auto &MDPair : MD) {
@@ -507,7 +512,7 @@ static LoadInst *combineLoadToNewType(InstCombiner &IC, LoadInst &LI, Type *NewT
   return NewLoad;
 }
 
-/// \brief Combine a store to a new type.
+/// Combine a store to a new type.
 ///
 /// Returns the newly created store instruction.
 static StoreInst *combineStoreToNewValue(InstCombiner &IC, StoreInst &SI, Value *V) {
@@ -584,7 +589,7 @@ static bool isMinMaxWithLoads(Value *V) {
           match(L2, m_Load(m_Specific(LHS))));
 }
 
-/// \brief Combine loads to match the type of their uses' value after looking
+/// Combine loads to match the type of their uses' value after looking
 /// through intervening bitcasts.
 ///
 /// The core idea here is that if the result of a load is used in an operation,
@@ -1087,7 +1092,7 @@ Instruction *InstCombiner::visitLoadInst(LoadInst &LI) {
   return nullptr;
 }
 
-/// \brief Look for extractelement/insertvalue sequence that acts like a bitcast.
+/// Look for extractelement/insertvalue sequence that acts like a bitcast.
 ///
 /// \returns underlying value that was "cast", or nullptr otherwise.
 ///
@@ -1142,7 +1147,7 @@ static Value *likeBitCastFromVector(InstCombiner &IC, Value *V) {
   return U;
 }
 
-/// \brief Combine stores to match the type of value being stored.
+/// Combine stores to match the type of value being stored.
 ///
 /// The core idea here is that the memory does not have any intrinsic type and
 /// where we can we should match the type of a store to the type of value being

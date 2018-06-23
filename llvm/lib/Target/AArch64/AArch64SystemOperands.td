@@ -175,6 +175,35 @@ def : PRFM<"pstl3keep", 0x14>;
 def : PRFM<"pstl3strm", 0x15>;
 
 //===----------------------------------------------------------------------===//
+// SVE Prefetch instruction options.
+//===----------------------------------------------------------------------===//
+
+class SVEPRFM<string name, bits<4> encoding> : SearchableTable {
+  let SearchableFields = ["Name", "Encoding"];
+  let EnumValueField = "Encoding";
+
+  string Name = name;
+  bits<4> Encoding;
+  let Encoding = encoding;
+  code Requires = [{ {} }];
+}
+
+let Requires = [{ {AArch64::FeatureSVE} }] in {
+def : SVEPRFM<"pldl1keep", 0x00>;
+def : SVEPRFM<"pldl1strm", 0x01>;
+def : SVEPRFM<"pldl2keep", 0x02>;
+def : SVEPRFM<"pldl2strm", 0x03>;
+def : SVEPRFM<"pldl3keep", 0x04>;
+def : SVEPRFM<"pldl3strm", 0x05>;
+def : SVEPRFM<"pstl1keep", 0x08>;
+def : SVEPRFM<"pstl1strm", 0x09>;
+def : SVEPRFM<"pstl2keep", 0x0a>;
+def : SVEPRFM<"pstl2strm", 0x0b>;
+def : SVEPRFM<"pstl3keep", 0x0c>;
+def : SVEPRFM<"pstl3strm", 0x0d>;
+}
+
+//===----------------------------------------------------------------------===//
 // SVE Predicate patterns
 //===----------------------------------------------------------------------===//
 
@@ -204,6 +233,27 @@ def : SVEPREDPAT<"vl256", 0x0d>;
 def : SVEPREDPAT<"mul4",  0x1d>;
 def : SVEPREDPAT<"mul3",  0x1e>;
 def : SVEPREDPAT<"all",   0x1f>;
+
+//===----------------------------------------------------------------------===//
+// Exact FP Immediates.
+//
+// These definitions are used to create a lookup table with FP Immediates that
+// is used for a few instructions that only accept a limited set of exact FP
+// immediates values.
+//===----------------------------------------------------------------------===//
+class ExactFPImm<string name, string repr, bits<4> enum > : SearchableTable {
+  let SearchableFields = ["Enum", "Repr"];
+  let EnumValueField = "Enum";
+
+  string Name = name;
+  bits<4> Enum = enum;
+  string Repr = repr;
+}
+
+def : ExactFPImm<"zero", "0.0", 0x0>;
+def : ExactFPImm<"half", "0.5", 0x1>;
+def : ExactFPImm<"one",  "1.0", 0x2>;
+def : ExactFPImm<"two",  "2.0", 0x3>;
 
 //===----------------------------------------------------------------------===//
 // PState instruction options.

@@ -105,6 +105,11 @@ RelExpr X86_64<ELFT>::getRelExpr(RelType Type, const Symbol &S,
   case R_X86_64_REX_GOTPCRELX:
   case R_X86_64_GOTTPOFF:
     return R_GOT_PC;
+  case R_X86_64_GOTOFF64:
+    return R_GOTREL_FROM_END;
+  case R_X86_64_GOTPC32:
+  case R_X86_64_GOTPC64:
+    return R_GOTONLY_PC_FROM_END;
   case R_X86_64_NONE:
     return R_NONE;
   default:
@@ -123,7 +128,7 @@ template <class ELFT> void X86_64<ELFT>::writeGotPltHeader(uint8_t *Buf) const {
 template <class ELFT>
 void X86_64<ELFT>::writeGotPlt(uint8_t *Buf, const Symbol &S) const {
   // See comments in X86::writeGotPlt.
-  write32le(Buf, S.getPltVA() + 6);
+  write64le(Buf, S.getPltVA() + 6);
 }
 
 template <class ELFT> void X86_64<ELFT>::writePltHeader(uint8_t *Buf) const {
@@ -300,6 +305,7 @@ void X86_64<ELFT>::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
   case R_X86_64_32S:
   case R_X86_64_TPOFF32:
   case R_X86_64_GOT32:
+  case R_X86_64_GOTPC32:
   case R_X86_64_GOTPCREL:
   case R_X86_64_GOTPCRELX:
   case R_X86_64_REX_GOTPCRELX:
@@ -319,6 +325,8 @@ void X86_64<ELFT>::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
   case R_X86_64_PC64:
   case R_X86_64_SIZE64:
   case R_X86_64_GOT64:
+  case R_X86_64_GOTOFF64:
+  case R_X86_64_GOTPC64:
     write64le(Loc, Val);
     break;
   default:
@@ -461,6 +469,15 @@ void X86_64<ELFT>::relaxGot(uint8_t *Loc, uint64_t Val) const {
   write32le(Loc - 1, Val + 1);
 }
 
+// These nonstandard PLT entries are to migtigate Spectre v2 security
+// vulnerability. In order to mitigate Spectre v2, we want to avoid indirect
+// branch instructions such as `jmp *GOTPLT(%rip)`. So, in the following PLT
+// entries, we use a CALL followed by MOV and RET to do the same thing as an
+// indirect jump. That instruction sequence is so-called "retpoline".
+//
+// We have two types of retpoline PLTs as a size optimization. If `-z now`
+// is specified, all dynamic symbols are resolved at load-time. Thus, when
+// that option is given, we can omit code for symbol lazy resolution.
 namespace {
 template <class ELFT> class Retpoline : public X86_64<ELFT> {
 public:
@@ -488,7 +505,7 @@ template <class ELFT> Retpoline<ELFT>::Retpoline() {
 
 template <class ELFT>
 void Retpoline<ELFT>::writeGotPlt(uint8_t *Buf, const Symbol &S) const {
-  write32le(Buf, S.getPltVA() + 17);
+  write64le(Buf, S.getPltVA() + 17);
 }
 
 template <class ELFT> void Retpoline<ELFT>::writePltHeader(uint8_t *Buf) const {
@@ -573,7 +590,7 @@ void RetpolineZNow<ELFT>::writePlt(uint8_t *Buf, uint64_t GotPltEntryAddr,
   write32le(Buf + 8, -TargetInfo::getPltEntryOffset(Index) - 12);
 }
 
-template <class ELFT> TargetInfo *getTargetInfo() {
+template <class ELFT> static TargetInfo *getTargetInfo() {
   if (Config->ZRetpolineplt) {
     if (Config->ZNow) {
       static RetpolineZNow<ELFT> T;

@@ -33,7 +33,7 @@ std::string getArchName(StringRef Arch) {
   return Arch;
 }
 
-static bool runLipo(StringRef SDKPath, SmallVectorImpl<const char *> &Args) {
+static bool runLipo(StringRef SDKPath, SmallVectorImpl<StringRef> &Args) {
   auto Path = sys::findProgramByName("lipo", makeArrayRef(SDKPath));
   if (!Path)
     Path = sys::findProgramByName("lipo");
@@ -44,8 +44,7 @@ static bool runLipo(StringRef SDKPath, SmallVectorImpl<const char *> &Args) {
   }
 
   std::string ErrMsg;
-  int result =
-      sys::ExecuteAndWait(*Path, Args.data(), nullptr, {}, 0, 0, &ErrMsg);
+  int result = sys::ExecuteAndWait(*Path, Args, None, {}, 0, 0, &ErrMsg);
   if (result) {
     WithColor::error() << "lipo: " << ErrMsg << "\n";
     return false;
@@ -73,29 +72,29 @@ bool generateUniversalBinary(SmallVectorImpl<ArchAndFilename> &ArchFiles,
     return true;
   }
 
-  SmallVector<const char *, 8> Args;
+  SmallVector<StringRef, 8> Args;
   Args.push_back("lipo");
   Args.push_back("-create");
 
   for (auto &Thin : ArchFiles)
-    Args.push_back(Thin.Path.c_str());
+    Args.push_back(Thin.Path);
 
   // Align segments to match dsymutil-classic alignment
   for (auto &Thin : ArchFiles) {
     Thin.Arch = getArchName(Thin.Arch);
     Args.push_back("-segalign");
-    Args.push_back(Thin.Arch.c_str());
+    Args.push_back(Thin.Arch);
     Args.push_back("20");
   }
 
   Args.push_back("-output");
   Args.push_back(OutputFileName.data());
-  Args.push_back(nullptr);
 
   if (Options.Verbose) {
     outs() << "Running lipo\n";
     for (auto Arg : Args)
-      outs() << ' ' << ((Arg == nullptr) ? "\n" : Arg);
+      outs() << ' ' << Arg;
+    outs() << "\n";
   }
 
   return Options.NoOutput ? true : runLipo(SDKPath, Args);
@@ -225,7 +224,7 @@ getSection(const object::MachOObjectFile &Obj,
 template <typename SegmentTy>
 static void transferSegmentAndSections(
     const object::MachOObjectFile::LoadCommandInfo &LCI, SegmentTy Segment,
-    const object::MachOObjectFile &Obj, MCObjectWriter &Writer,
+    const object::MachOObjectFile &Obj, MachObjectWriter &Writer,
     uint64_t LinkeditOffset, uint64_t LinkeditSize, uint64_t DwarfSegmentSize,
     uint64_t &GapForDwarf, uint64_t &EndAddress) {
   if (StringRef("__DWARF") == Segment.segname)
@@ -255,14 +254,13 @@ static void transferSegmentAndSections(
   unsigned nsects = Segment.nsects;
   if (Obj.isLittleEndian() != sys::IsLittleEndianHost)
     MachO::swapStruct(Segment);
-  Writer.writeBytes(
-      StringRef(reinterpret_cast<char *>(&Segment), sizeof(Segment)));
+  Writer.W.OS.write(reinterpret_cast<char *>(&Segment), sizeof(Segment));
   for (unsigned i = 0; i < nsects; ++i) {
     auto Sect = getSection(Obj, Segment, LCI, i);
     Sect.offset = Sect.reloff = Sect.nreloc = 0;
     if (Obj.isLittleEndian() != sys::IsLittleEndianHost)
       MachO::swapStruct(Sect);
-    Writer.writeBytes(StringRef(reinterpret_cast<char *>(&Sect), sizeof(Sect)));
+    Writer.W.OS.write(reinterpret_cast<char *>(&Sect), sizeof(Sect));
   }
 }
 
@@ -429,10 +427,9 @@ bool generateDsymCompanion(const DebugMap &DM, MCStreamer &MS,
   // Write the load commands.
   assert(OutFile.tell() == HeaderSize);
   if (UUIDCmd.cmd != 0) {
-    Writer.write32(UUIDCmd.cmd);
-    Writer.write32(UUIDCmd.cmdsize);
-    Writer.writeBytes(
-        StringRef(reinterpret_cast<const char *>(UUIDCmd.uuid), 16));
+    Writer.W.write<uint32_t>(UUIDCmd.cmd);
+    Writer.W.write<uint32_t>(UUIDCmd.cmdsize);
+    OutFile.write(reinterpret_cast<const char *>(UUIDCmd.uuid), 16);
     assert(OutFile.tell() == HeaderSize + sizeof(UUIDCmd));
   }
 
@@ -479,12 +476,12 @@ bool generateDsymCompanion(const DebugMap &DM, MCStreamer &MS,
                      NumDwarfSections, Layout, Writer);
 
   assert(OutFile.tell() == LoadCommandSize + HeaderSize);
-  Writer.WriteZeros(SymtabStart - (LoadCommandSize + HeaderSize));
+  OutFile.write_zeros(SymtabStart - (LoadCommandSize + HeaderSize));
   assert(OutFile.tell() == SymtabStart);
 
   // Transfer symbols.
   if (ShouldEmitSymtab) {
-    Writer.writeBytes(NewSymtab.str());
+    OutFile << NewSymtab.str();
     assert(OutFile.tell() == StringStart);
 
     // Transfer string table.
@@ -492,21 +489,20 @@ bool generateDsymCompanion(const DebugMap &DM, MCStreamer &MS,
     // dsymutil-classic starts the reconstructed string table with 2 of these.
     // Reproduce that behavior for now (there is corresponding code in
     // transferSymbol).
-    Writer.WriteZeros(1);
+    OutFile << '\0';
     std::vector<DwarfStringPoolEntryRef> Strings = NewStrings.getEntries();
     for (auto EntryRef : Strings) {
       if (EntryRef.getIndex() == -1U)
         break;
-      StringRef ZeroTerminated(EntryRef.getString().data(),
-                               EntryRef.getString().size() + 1);
-      Writer.writeBytes(ZeroTerminated);
+      OutFile.write(EntryRef.getString().data(),
+                    EntryRef.getString().size() + 1);
     }
   }
 
   assert(OutFile.tell() == StringStart + NewStringsSize);
 
   // Pad till the Dwarf segment start.
-  Writer.WriteZeros(DwarfSegmentStart - (StringStart + NewStringsSize));
+  OutFile.write_zeros(DwarfSegmentStart - (StringStart + NewStringsSize));
   assert(OutFile.tell() == DwarfSegmentStart);
 
   // Emit the Dwarf sections contents.
@@ -515,8 +511,8 @@ bool generateDsymCompanion(const DebugMap &DM, MCStreamer &MS,
       continue;
 
     uint64_t Pos = OutFile.tell();
-    Writer.WriteZeros(alignTo(Pos, Sec.getAlignment()) - Pos);
-    MCAsm.writeSectionData(&Sec, Layout);
+    OutFile.write_zeros(alignTo(Pos, Sec.getAlignment()) - Pos);
+    MCAsm.writeSectionData(OutFile, &Sec, Layout);
   }
 
   return true;

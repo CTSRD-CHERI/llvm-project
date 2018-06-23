@@ -105,7 +105,9 @@ static std::future<MBErrPair> createFutureForFile(std::string Path) {
   auto Strategy = std::launch::deferred;
 #endif
   return std::async(Strategy, [=]() {
-    auto MBOrErr = MemoryBuffer::getFile(Path);
+    auto MBOrErr = MemoryBuffer::getFile(Path,
+                                         /*FileSize*/ -1,
+                                         /*RequiresNullTerminator*/ false);
     if (!MBOrErr)
       return MBErrPair{nullptr, MBOrErr.getError()};
     return MBErrPair{std::move(*MBOrErr), std::error_code()};
@@ -330,13 +332,24 @@ StringRef LinkerDriver::doFindFile(StringRef Filename) {
   return Filename;
 }
 
+static Optional<sys::fs::UniqueID> getUniqueID(StringRef Path) {
+  sys::fs::UniqueID Ret;
+  if (sys::fs::getUniqueID(Path, Ret))
+    return None;
+  return Ret;
+}
+
 // Resolves a file path. This never returns the same path
 // (in that case, it returns None).
 Optional<StringRef> LinkerDriver::findFile(StringRef Filename) {
   StringRef Path = doFindFile(Filename);
-  bool Seen = !VisitedFiles.insert(Path.lower()).second;
-  if (Seen)
-    return None;
+
+  if (Optional<sys::fs::UniqueID> ID = getUniqueID(Path)) {
+    bool Seen = !VisitedFiles.insert(*ID).second;
+    if (Seen)
+      return None;
+  }
+
   if (Path.endswith_lower(".lib"))
     VisitedLibs.insert(sys::path::filename(Path));
   return Path;
@@ -359,11 +372,14 @@ Optional<StringRef> LinkerDriver::findLib(StringRef Filename) {
     return None;
   if (!VisitedLibs.insert(Filename.lower()).second)
     return None;
+
   StringRef Path = doFindLib(Filename);
   if (Config->NoDefaultLibs.count(Path))
     return None;
-  if (!VisitedFiles.insert(Path.lower()).second)
-    return None;
+
+  if (Optional<sys::fs::UniqueID> ID = getUniqueID(Path))
+    if (!VisitedFiles.insert(*ID).second)
+      return None;
   return Path;
 }
 
@@ -557,16 +573,17 @@ static void createImportLibrary(bool AsLib) {
 
   if (!Config->Incremental) {
     HandleError(writeImportLibrary(LibName, Path, Exports, Config->Machine,
-                                   false, Config->MinGW));
+                                   Config->MinGW));
     return;
   }
 
   // If the import library already exists, replace it only if the contents
   // have changed.
-  ErrorOr<std::unique_ptr<MemoryBuffer>> OldBuf = MemoryBuffer::getFile(Path);
+  ErrorOr<std::unique_ptr<MemoryBuffer>> OldBuf = MemoryBuffer::getFile(
+      Path, /*FileSize*/ -1, /*RequiresNullTerminator*/ false);
   if (!OldBuf) {
     HandleError(writeImportLibrary(LibName, Path, Exports, Config->Machine,
-                                   false, Config->MinGW));
+                                   Config->MinGW));
     return;
   }
 
@@ -577,12 +594,13 @@ static void createImportLibrary(bool AsLib) {
           EC.message());
 
   if (Error E = writeImportLibrary(LibName, TmpName, Exports, Config->Machine,
-                                   false, Config->MinGW)) {
+                                   Config->MinGW)) {
     HandleError(std::move(E));
     return;
   }
 
-  std::unique_ptr<MemoryBuffer> NewBuf = check(MemoryBuffer::getFile(TmpName));
+  std::unique_ptr<MemoryBuffer> NewBuf = check(MemoryBuffer::getFile(
+      TmpName, /*FileSize*/ -1, /*RequiresNullTerminator*/ false));
   if ((*OldBuf)->getBuffer() != NewBuf->getBuffer()) {
     OldBuf->reset();
     HandleError(errorCodeToError(sys::fs::rename(TmpName, Path)));
@@ -621,9 +639,18 @@ static void parseModuleDefs(StringRef Path) {
 
   for (COFFShortExport E1 : M.Exports) {
     Export E2;
+    // In simple cases, only Name is set. Renamed exports are parsed
+    // and set as "ExtName = Name". If Name has the form "OtherDll.Func",
+    // it shouldn't be a normal exported function but a forward to another
+    // DLL instead. This is supported by both MS and GNU linkers.
+    if (E1.ExtName != E1.Name && StringRef(E1.Name).contains('.')) {
+      E2.Name = Saver.save(E1.ExtName);
+      E2.ForwardTo = Saver.save(E1.Name);
+      Config->Exports.push_back(E2);
+      continue;
+    }
     E2.Name = Saver.save(E1.Name);
-    if (E1.isWeak())
-      E2.ExtName = Saver.save(E1.ExtName);
+    E2.ExtName = Saver.save(E1.ExtName);
     E2.Ordinal = E1.Ordinal;
     E2.Noname = E1.Noname;
     E2.Data = E1.Data;
@@ -1020,6 +1047,23 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
     parseSubsystem(Arg->getValue(), &Config->Subsystem, &Config->MajorOSVersion,
                    &Config->MinorOSVersion);
 
+  // Handle /timestamp
+  if (llvm::opt::Arg *Arg = Args.getLastArg(OPT_timestamp, OPT_repro)) {
+    if (Arg->getOption().getID() == OPT_repro) {
+      Config->Timestamp = 0;
+      Config->Repro = true;
+    } else {
+      Config->Repro = false;
+      StringRef Value(Arg->getValue());
+      if (Value.getAsInteger(0, Config->Timestamp))
+        fatal(Twine("invalid timestamp: ") + Value +
+              ".  Expected 32-bit integer");
+    }
+  } else {
+    Config->Repro = false;
+    Config->Timestamp = time(nullptr);
+  }
+
   // Handle /alternatename
   for (auto *Arg : Args.filtered(OPT_alternatename))
     parseAlternateName(Arg->getValue());
@@ -1036,6 +1080,7 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   bool DoGC = !Args.hasArg(OPT_debug) || Args.hasArg(OPT_profile);
   unsigned ICFLevel =
       Args.hasArg(OPT_profile) ? 0 : 1; // 0: off, 1: limited, 2: on
+  unsigned TailMerge = 1;
   for (auto *Arg : Args.filtered(OPT_opt)) {
     std::string Str = StringRef(Arg->getValue()).lower();
     SmallVector<StringRef, 1> Vec;
@@ -1049,14 +1094,18 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
         ICFLevel = 2;
       } else if (S == "noicf") {
         ICFLevel = 0;
+      } else if (S == "lldtailmerge") {
+        TailMerge = 2;
+      } else if (S == "nolldtailmerge") {
+        TailMerge = 0;
       } else if (S.startswith("lldlto=")) {
         StringRef OptLevel = S.substr(7);
-        if (OptLevel.getAsInteger(10, Config->LTOOptLevel) ||
-            Config->LTOOptLevel > 3)
+        if (OptLevel.getAsInteger(10, Config->LTOO) || Config->LTOO > 3)
           error("/opt:lldlto: invalid optimization level: " + OptLevel);
       } else if (S.startswith("lldltojobs=")) {
         StringRef Jobs = S.substr(11);
-        if (Jobs.getAsInteger(10, Config->LTOJobs) || Config->LTOJobs == 0)
+        if (Jobs.getAsInteger(10, Config->ThinLTOJobs) ||
+            Config->ThinLTOJobs == 0)
           error("/opt:lldltojobs: invalid job count: " + Jobs);
       } else if (S.startswith("lldltopartitions=")) {
         StringRef N = S.substr(17);
@@ -1077,6 +1126,7 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
     ICFLevel = 0;
   Config->DoGC = DoGC;
   Config->DoICF = ICFLevel > 0;
+  Config->TailMerge = (TailMerge == 1 && Config->DoICF) || TailMerge == 2;
 
   // Handle /lldsavetemps
   if (Args.hasArg(OPT_lldsavetemps))
@@ -1160,8 +1210,11 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
       Args.hasFlag(OPT_incremental, OPT_incremental_no,
                    !Config->DoGC && !Config->DoICF && !Args.hasArg(OPT_order) &&
                        !Args.hasArg(OPT_profile));
+  Config->IntegrityCheck =
+      Args.hasFlag(OPT_integritycheck, OPT_integritycheck_no, false);
   Config->NxCompat = Args.hasFlag(OPT_nxcompat, OPT_nxcompat_no, true);
-  Config->TerminalServerAware = Args.hasFlag(OPT_tsaware, OPT_tsaware_no, true);
+  Config->TerminalServerAware =
+      !Config->DLL && Args.hasFlag(OPT_tsaware, OPT_tsaware_no, true);
   Config->DebugDwarf = Args.hasArg(OPT_debug_dwarf);
   Config->DebugGHashes = Args.hasArg(OPT_debug_ghash);
 
@@ -1192,22 +1245,30 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   if (errorCount())
     return;
 
-  bool WholeArchiveFlag = Args.hasArg(OPT_wholearchive_flag);
+  std::set<sys::fs::UniqueID> WholeArchives;
+  for (auto *Arg : Args.filtered(OPT_wholearchive_file))
+    if (Optional<StringRef> Path = doFindFile(Arg->getValue()))
+      if (Optional<sys::fs::UniqueID> ID = getUniqueID(*Path))
+        WholeArchives.insert(*ID);
+
+  // A predicate returning true if a given path is an argument for
+  // /wholearchive:, or /wholearchive is enabled globally.
+  // This function is a bit tricky because "foo.obj /wholearchive:././foo.obj"
+  // needs to be handled as "/wholearchive:foo.obj foo.obj".
+  auto IsWholeArchive = [&](StringRef Path) -> bool {
+    if (Args.hasArg(OPT_wholearchive_flag))
+      return true;
+    if (Optional<sys::fs::UniqueID> ID = getUniqueID(Path))
+      return WholeArchives.count(*ID);
+    return false;
+  };
+
   // Create a list of input files. Files can be given as arguments
   // for /defaultlib option.
-  std::vector<MemoryBufferRef> MBs;
-  for (auto *Arg : Args.filtered(OPT_INPUT, OPT_wholearchive_file)) {
-    switch (Arg->getOption().getID()) {
-    case OPT_INPUT:
-      if (Optional<StringRef> Path = findFile(Arg->getValue()))
-        enqueuePath(*Path, WholeArchiveFlag);
-      break;
-    case OPT_wholearchive_file:
-      if (Optional<StringRef> Path = findFile(Arg->getValue()))
-        enqueuePath(*Path, true);
-      break;
-    }
-  }
+  for (auto *Arg : Args.filtered(OPT_INPUT, OPT_wholearchive_file))
+    if (Optional<StringRef> Path = findFile(Arg->getValue()))
+      enqueuePath(*Path, IsWholeArchive(*Path));
+
   for (auto *Arg : Args.filtered(OPT_defaultlib))
     if (Optional<StringRef> Path = findLib(Arg->getValue()))
       enqueuePath(*Path, false);

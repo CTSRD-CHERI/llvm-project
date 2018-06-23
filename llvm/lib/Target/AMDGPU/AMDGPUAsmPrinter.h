@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 //
 /// \file
-/// \brief AMDGPU Assembly printer class.
+/// AMDGPU Assembly printer class.
 //
 //===----------------------------------------------------------------------===//
 
@@ -20,6 +20,7 @@
 #include "MCTargetDesc/AMDGPUHSAMetadataStreamer.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/CodeGen/AsmPrinter.h"
+#include "llvm/Support/AMDHSAKernelDescriptor.h"
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -29,6 +30,7 @@
 
 namespace llvm {
 
+class AMDGPUMachineFunction;
 class AMDGPUTargetStreamer;
 class MCOperand;
 class SISubtarget;
@@ -135,9 +137,8 @@ private:
       const MachineFunction &MF,
       const SIProgramInfo &ProgramInfo) const;
 
-  /// \brief Emit register usage information so that the GPU driver
+  /// Emit register usage information so that the GPU driver
   /// can correctly setup the GPU state.
-  void EmitProgramInfoR600(const MachineFunction &MF);
   void EmitProgramInfoSI(const MachineFunction &MF,
                          const SIProgramInfo &KernelInfo);
   void EmitPALMetadata(const MachineFunction &MF,
@@ -145,7 +146,15 @@ private:
   void emitCommonFunctionComments(uint32_t NumVGPR,
                                   uint32_t NumSGPR,
                                   uint64_t ScratchSize,
-                                  uint64_t CodeSize);
+                                  uint64_t CodeSize,
+                                  const AMDGPUMachineFunction* MFI);
+
+  uint16_t getAmdhsaKernelCodeProperties(
+      const MachineFunction &MF) const;
+
+  amdhsa::kernel_descriptor_t getAmdhsaKernelDescriptor(
+      const MachineFunction &MF,
+      const SIProgramInfo &PI) const;
 
 public:
   explicit AMDGPUAsmPrinter(TargetMachine &TM,
@@ -160,16 +169,16 @@ public:
   bool doFinalization(Module &M) override;
   bool runOnMachineFunction(MachineFunction &MF) override;
 
-  /// \brief Wrapper for MCInstLowering.lowerOperand() for the tblgen'erated
+  /// Wrapper for MCInstLowering.lowerOperand() for the tblgen'erated
   /// pseudo lowering.
   bool lowerOperand(const MachineOperand &MO, MCOperand &MCOp) const;
 
-  /// \brief Lower the specified LLVM Constant to an MCExpr.
+  /// Lower the specified LLVM Constant to an MCExpr.
   /// The AsmPrinter::lowerConstantof does not know how to lower
   /// addrspacecast, therefore they should be lowered by this function.
   const MCExpr *lowerConstant(const Constant *CV) override;
 
-  /// \brief tblgen'erated driver function for lowering simple MI->MC pseudo
+  /// tblgen'erated driver function for lowering simple MI->MC pseudo
   /// instructions.
   bool emitPseudoExpansionLowering(MCStreamer &OutStreamer,
                                    const MachineInstr *MI);
@@ -178,6 +187,8 @@ public:
   void EmitInstruction(const MachineInstr *MI) override;
 
   void EmitFunctionBodyStart() override;
+
+  void EmitFunctionBodyEnd() override;
 
   void EmitFunctionEntryLabel() override;
 

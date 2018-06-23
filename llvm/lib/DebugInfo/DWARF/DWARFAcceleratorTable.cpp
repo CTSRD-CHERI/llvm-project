@@ -312,6 +312,7 @@ void AppleAcceleratorTable::ValueIterator::Next() {
   if (Data >= NumData ||
       !AccelSection.isValidOffsetForDataOfSize(DataOffset, 4)) {
     NumData = 0;
+    DataOffset = 0;
     return;
   }
   Current.extract(*AccelTable, &DataOffset);
@@ -555,14 +556,6 @@ Optional<uint64_t> DWARFDebugNames::Entry::getCUOffset() const {
   return NameIdx->getCUOffset(*Index);
 }
 
-Optional<uint64_t> DWARFDebugNames::Entry::getDIESectionOffset() const {
-  Optional<uint64_t> CUOff = getCUOffset();
-  Optional<uint64_t> DIEOff = getDIEUnitOffset();
-  if (CUOff && DIEOff)
-    return *CUOff + *DIEOff;
-  return None;
-}
-
 void DWARFDebugNames::Entry::dump(ScopedPrinter &W) const {
   W.printHex("Abbrev", Abbr->Code);
   W.startLine() << formatv("Tag: {0}\n", Abbr->Tag);
@@ -634,7 +627,7 @@ DWARFDebugNames::NameIndex::getNameTableEntry(uint32_t Index) const {
   uint32_t StringOffset = AS.getRelocatedValue(4, &StringOffsetOffset);
   uint32_t EntryOffset = AS.getU32(&EntryOffsetOffset);
   EntryOffset += EntriesBase;
-  return {StringOffset, EntryOffset};
+  return {Section.StringSection, Index, StringOffset, EntryOffset};
 }
 
 uint32_t
@@ -669,19 +662,18 @@ bool DWARFDebugNames::NameIndex::dumpEntry(ScopedPrinter &W,
   return true;
 }
 
-void DWARFDebugNames::NameIndex::dumpName(ScopedPrinter &W, uint32_t Index,
+void DWARFDebugNames::NameIndex::dumpName(ScopedPrinter &W,
+                                          const NameTableEntry &NTE,
                                           Optional<uint32_t> Hash) const {
-  const DataExtractor &SS = Section.StringSection;
-  NameTableEntry NTE = getNameTableEntry(Index);
-
-  DictScope NameScope(W, ("Name " + Twine(Index)).str());
+  DictScope NameScope(W, ("Name " + Twine(NTE.getIndex())).str());
   if (Hash)
     W.printHex("Hash", *Hash);
 
-  W.startLine() << format("String: 0x%08x", NTE.StringOffset);
-  W.getOStream() << " \"" << SS.getCStr(&NTE.StringOffset) << "\"\n";
+  W.startLine() << format("String: 0x%08x", NTE.getStringOffset());
+  W.getOStream() << " \"" << NTE.getString() << "\"\n";
 
-  while (dumpEntry(W, &NTE.EntryOffset))
+  uint32_t EntryOffset = NTE.getEntryOffset();
+  while (dumpEntry(W, &EntryOffset))
     /*empty*/;
 }
 
@@ -735,7 +727,7 @@ void DWARFDebugNames::NameIndex::dumpBucket(ScopedPrinter &W,
     if (Hash % Hdr.BucketCount != Bucket)
       break;
 
-    dumpName(W, Index, Hash);
+    dumpName(W, getNameTableEntry(Index), Hash);
   }
 }
 
@@ -754,8 +746,8 @@ LLVM_DUMP_METHOD void DWARFDebugNames::NameIndex::dump(ScopedPrinter &W) const {
   }
 
   W.startLine() << "Hash table not present\n";
-  for (uint32_t Index = 1; Index <= Hdr.NameCount; ++Index)
-    dumpName(W, Index, None);
+  for (NameTableEntry NTE : *this)
+    dumpName(W, NTE, None);
 }
 
 llvm::Error DWARFDebugNames::extract() {
@@ -770,6 +762,11 @@ llvm::Error DWARFDebugNames::extract() {
   return Error::success();
 }
 
+iterator_range<DWARFDebugNames::ValueIterator>
+DWARFDebugNames::NameIndex::equal_range(StringRef Key) const {
+  return make_range(ValueIterator(*this, Key), ValueIterator());
+}
+
 LLVM_DUMP_METHOD void DWARFDebugNames::dump(raw_ostream &OS) const {
   ScopedPrinter W(OS);
   for (const NameIndex &NI : NameIndices)
@@ -781,10 +778,9 @@ DWARFDebugNames::ValueIterator::findEntryOffsetInCurrentIndex() {
   const Header &Hdr = CurrentIndex->Hdr;
   if (Hdr.BucketCount == 0) {
     // No Hash Table, We need to search through all names in the Name Index.
-    for (uint32_t Index = 1; Index <= Hdr.NameCount; ++Index) {
-      NameTableEntry NTE = CurrentIndex->getNameTableEntry(Index);
-      if (CurrentIndex->Section.StringSection.getCStr(&NTE.StringOffset) == Key)
-        return NTE.EntryOffset;
+    for (NameTableEntry NTE : *CurrentIndex) {
+      if (NTE.getString() == Key)
+        return NTE.getEntryOffset();
     }
     return None;
   }
@@ -804,8 +800,8 @@ DWARFDebugNames::ValueIterator::findEntryOffsetInCurrentIndex() {
       return None; // End of bucket
 
     NameTableEntry NTE = CurrentIndex->getNameTableEntry(Index);
-    if (CurrentIndex->Section.StringSection.getCStr(&NTE.StringOffset) == Key)
-      return NTE.EntryOffset;
+    if (NTE.getString() == Key)
+      return NTE.getEntryOffset();
   }
   return None;
 }
@@ -844,15 +840,28 @@ void DWARFDebugNames::ValueIterator::next() {
   if (getEntryAtCurrentOffset())
     return;
 
-  // Try the next Name Index.
+  // If we're a local iterator or we have reached the last Index, we're done.
+  if (IsLocal || CurrentIndex == &CurrentIndex->Section.NameIndices.back()) {
+    setEnd();
+    return;
+  }
+
+  // Otherwise, try the next index.
   ++CurrentIndex;
   searchFromStartOfCurrentIndex();
 }
 
 DWARFDebugNames::ValueIterator::ValueIterator(const DWARFDebugNames &AccelTable,
                                               StringRef Key)
-    : CurrentIndex(AccelTable.NameIndices.begin()), Key(Key) {
+    : CurrentIndex(AccelTable.NameIndices.begin()), IsLocal(false), Key(Key) {
   searchFromStartOfCurrentIndex();
+}
+
+DWARFDebugNames::ValueIterator::ValueIterator(
+    const DWARFDebugNames::NameIndex &NI, StringRef Key)
+    : CurrentIndex(&NI), IsLocal(true), Key(Key) {
+  if (!findInCurrentIndex())
+    setEnd();
 }
 
 iterator_range<DWARFDebugNames::ValueIterator>
@@ -860,4 +869,15 @@ DWARFDebugNames::equal_range(StringRef Key) const {
   if (NameIndices.empty())
     return make_range(ValueIterator(), ValueIterator());
   return make_range(ValueIterator(*this, Key), ValueIterator());
+}
+
+const DWARFDebugNames::NameIndex *
+DWARFDebugNames::getCUNameIndex(uint32_t CUOffset) {
+  if (CUToNameIndex.size() == 0 && NameIndices.size() > 0) {
+    for (const auto &NI : *this) {
+      for (uint32_t CU = 0; CU < NI.getCUCount(); ++CU)
+        CUToNameIndex.try_emplace(NI.getCUOffset(CU), &NI);
+    }
+  }
+  return CUToNameIndex.lookup(CUOffset);
 }

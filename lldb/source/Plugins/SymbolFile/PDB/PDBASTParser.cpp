@@ -59,13 +59,14 @@ lldb::Encoding TranslateBuiltinEncoding(PDB_BuiltinType type) {
   case PDB_BuiltinType::Int:
   case PDB_BuiltinType::Long:
   case PDB_BuiltinType::Char:
-  case PDB_BuiltinType::Char16:
-  case PDB_BuiltinType::Char32:
     return lldb::eEncodingSint;
   case PDB_BuiltinType::Bool:
+  case PDB_BuiltinType::Char16:
+  case PDB_BuiltinType::Char32:
   case PDB_BuiltinType::UInt:
   case PDB_BuiltinType::ULong:
   case PDB_BuiltinType::HResult:
+  case PDB_BuiltinType::WCharT:
     return lldb::eEncodingUint;
   default:
     return lldb::eEncodingInvalid;
@@ -137,8 +138,8 @@ GetBuiltinTypeForPDBEncodingAndBitSize(ClangASTContext &clang_ast,
     // represented by the one generated for `double`.
     break;
   }
-  // If there is no match on PDB_BuiltinType, fall back to default search
-  // by encoding and width only
+  // If there is no match on PDB_BuiltinType, fall back to default search by
+  // encoding and width only
   return clang_ast.GetBuiltinTypeForEncodingAndBitSize(encoding, width);
 }
 
@@ -208,9 +209,9 @@ PDBASTParser::~PDBASTParser() {}
 
 lldb::TypeSP PDBASTParser::CreateLLDBTypeFromPDBType(const PDBSymbol &type) {
   // PDB doesn't maintain enough information to robustly rebuild the entire
-  // tree, and this is most problematic when it comes to figure out the
-  // right DeclContext to put a type in.  So for now, everything goes in
-  // the translation unit decl as a fully qualified type.
+  // tree, and this is most problematic when it comes to figure out the right
+  // DeclContext to put a type in.  So for now, everything goes in the
+  // translation unit decl as a fully qualified type.
   clang::DeclContext *tu_decl_ctx = m_ast.GetTranslationUnitDecl();
   Declaration decl;
 

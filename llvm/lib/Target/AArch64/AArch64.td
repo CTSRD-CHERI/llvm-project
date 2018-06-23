@@ -76,6 +76,10 @@ def FeatureReserveX18 : SubtargetFeature<"reserve-x18", "ReserveX18", "true",
                                          "Reserve X18, making it unavailable "
                                          "as a GPR">;
 
+def FeatureReserveX20 : SubtargetFeature<"reserve-x20", "ReserveX20", "true",
+                                         "Reserve X20, making it unavailable "
+                                         "as a GPR">;
+
 def FeatureUseAA : SubtargetFeature<"use-aa", "UseAA", "true",
                                     "Use alias analysis during codegen">;
 
@@ -487,6 +491,7 @@ def : ProcessorModel<"cyclone", CycloneModel, [ProcCyclone]>;
 def : ProcessorModel<"exynos-m1", ExynosM1Model, [ProcExynosM1]>;
 def : ProcessorModel<"exynos-m2", ExynosM1Model, [ProcExynosM2]>;
 def : ProcessorModel<"exynos-m3", ExynosM3Model, [ProcExynosM3]>;
+def : ProcessorModel<"exynos-m4", ExynosM3Model, [ProcExynosM3]>;
 def : ProcessorModel<"falkor", FalkorModel, [ProcFalkor]>;
 def : ProcessorModel<"saphira", FalkorModel, [ProcSaphira]>;
 def : ProcessorModel<"kryo", KryoModel, [ProcKryo]>;

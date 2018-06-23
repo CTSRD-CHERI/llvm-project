@@ -300,6 +300,11 @@ def VirtualCallChecker : Checker<"VirtualCall">,
 
 let ParentPackage = CplusplusAlpha in {
 
+def DanglingInternalBufferChecker : Checker<"DanglingInternalBuffer">,
+  HelpText<"Check for internal raw pointers of C++ standard library containers "
+           "used after deallocation">,
+  DescFile<"DanglingInternalBufferChecker.cpp">;
+
 def DeleteWithNonVirtualDtorChecker : Checker<"DeleteWithNonVirtualDtor">,
   HelpText<"Reports destructions of polymorphic objects with a non-virtual "
            "destructor in their base class">,
@@ -373,6 +378,15 @@ def PaddingChecker : Checker<"Padding">,
 //===----------------------------------------------------------------------===//
 
 let ParentPackage = InsecureAPI in {
+  def bcmp : Checker<"bcmp">,
+    HelpText<"Warn on uses of the 'bcmp' function">,
+    DescFile<"CheckSecuritySyntaxOnly.cpp">;
+  def bcopy : Checker<"bcopy">,
+    HelpText<"Warn on uses of the 'bcopy' function">,
+    DescFile<"CheckSecuritySyntaxOnly.cpp">;
+  def bzero : Checker<"bzero">,
+    HelpText<"Warn on uses of the 'bzero' function">,
+    DescFile<"CheckSecuritySyntaxOnly.cpp">;
   def gets : Checker<"gets">,
     HelpText<"Warn on uses of the 'gets' function">,
     DescFile<"CheckSecuritySyntaxOnly.cpp">;

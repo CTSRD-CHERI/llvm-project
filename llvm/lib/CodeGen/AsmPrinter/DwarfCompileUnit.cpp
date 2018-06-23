@@ -230,8 +230,13 @@ DIE *DwarfCompileUnit::getOrCreateGlobalVariableDIE(
         addOpAddress(*Loc, Sym);
       }
     }
-    if (Expr)
-      DwarfExpr->addExpression(Expr);
+    // Global variables attached to symbols are memory locations.
+    // It would be better if this were unconditional, but malformed input that
+    // mixes non-fragments and fragments for the same variable is too expensive
+    // to detect in the verifier.
+    if (DwarfExpr->isUnknownLocation())
+      DwarfExpr->setMemoryLocationKind();
+    DwarfExpr->addExpression(Expr);
   }
   if (Loc)
     addBlock(*VariableDIE, dwarf::DW_AT_location, DwarfExpr->finalize());
@@ -244,7 +249,8 @@ DIE *DwarfCompileUnit::getOrCreateGlobalVariableDIE(
 
     // If the linkage name is different than the name, go ahead and output
     // that as well into the name table.
-    if (GV->getLinkageName() != "" && GV->getName() != GV->getLinkageName())
+    if (GV->getLinkageName() != "" && GV->getName() != GV->getLinkageName() &&
+        DD->useAllLinkageNames())
       DD->addAccelName(GV->getLinkageName(), *VariableDIE);
   }
 
@@ -849,6 +855,8 @@ void DwarfCompileUnit::emitHeader(bool UseOffsets) {
                                 : DD->useSplitDwarf() ? dwarf::DW_UT_skeleton
                                                       : dwarf::DW_UT_compile;
   DwarfUnit::emitCommonHeader(UseOffsets, UT);
+  if (DD->getDwarfVersion() >= 5 && UT != dwarf::DW_UT_compile)
+    Asm->emitInt64(getDWOId());
 }
 
 bool DwarfCompileUnit::hasDwarfPubSections() const {

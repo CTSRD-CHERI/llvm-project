@@ -31,6 +31,13 @@ raw_ostream &operator<<(raw_ostream &OS, const SymbolID &ID) {
   return OS;
 }
 
+std::string SymbolID::str() const {
+  std::string ID;
+  llvm::raw_string_ostream OS(ID);
+  OS << *this;
+  return OS.str();
+}
+
 void operator>>(StringRef Str, SymbolID &ID) {
   std::string HexString = fromHex(Str);
   assert(HexString.size() == ID.HashValue.size());
@@ -39,6 +46,14 @@ void operator>>(StringRef Str, SymbolID &ID) {
 
 raw_ostream &operator<<(raw_ostream &OS, const Symbol &S) {
   return OS << S.Scope << S.Name;
+}
+
+double quality(const Symbol &S) {
+  // This avoids a sharp gradient for tail symbols, and also neatly avoids the
+  // question of whether 0 references means a bad symbol or missing data.
+  if (S.References < 3)
+    return 1;
+  return std::log(S.References);
 }
 
 SymbolSlab::const_iterator SymbolSlab::find(const SymbolID &ID) const {

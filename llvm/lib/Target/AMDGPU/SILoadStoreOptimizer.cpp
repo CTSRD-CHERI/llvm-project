@@ -45,6 +45,7 @@
 #include "AMDGPUSubtarget.h"
 #include "SIInstrInfo.h"
 #include "SIRegisterInfo.h"
+#include "MCTargetDesc/AMDGPUMCTargetDesc.h"
 #include "Utils/AMDGPUBaseInfo.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
@@ -553,7 +554,7 @@ MachineBasicBlock::iterator  SILoadStoreOptimizer::mergeRead2Pair(
   CI.I->eraseFromParent();
   CI.Paired->eraseFromParent();
 
-  DEBUG(dbgs() << "Inserted read2: " << *Read2 << '\n');
+  LLVM_DEBUG(dbgs() << "Inserted read2: " << *Read2 << '\n');
   return Next;
 }
 
@@ -631,7 +632,7 @@ MachineBasicBlock::iterator SILoadStoreOptimizer::mergeWrite2Pair(
   CI.I->eraseFromParent();
   CI.Paired->eraseFromParent();
 
-  DEBUG(dbgs() << "Inserted write2 inst: " << *Write2 << '\n');
+  LLVM_DEBUG(dbgs() << "Inserted write2 inst: " << *Write2 << '\n');
   return Next;
 }
 
@@ -950,7 +951,7 @@ bool SILoadStoreOptimizer::runOnMachineFunction(MachineFunction &MF) {
 
   assert(MRI->isSSA() && "Must be run on SSA");
 
-  DEBUG(dbgs() << "Running SILoadStoreOptimizer\n");
+  LLVM_DEBUG(dbgs() << "Running SILoadStoreOptimizer\n");
 
   bool Modified = false;
 

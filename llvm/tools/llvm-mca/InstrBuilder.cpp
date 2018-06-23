@@ -13,9 +13,11 @@
 //===----------------------------------------------------------------------===//
 
 #include "InstrBuilder.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/WithColor.h"
 
 #define DEBUG_TYPE "llvm-mca"
 
@@ -32,6 +34,19 @@ static void initializeUsedResources(InstrDesc &ID,
   // Populate resources consumed.
   using ResourcePlusCycles = std::pair<uint64_t, ResourceUsage>;
   std::vector<ResourcePlusCycles> Worklist;
+
+  // Track cycles contributed by resources that are in a "Super" relationship.
+  // This is required if we want to correctly match the behavior of method
+  // SubtargetEmitter::ExpandProcResource() in Tablegen. When computing the set
+  // of "consumed" processor resources and resource cycles, the logic in
+  // ExpandProcResource() doesn't update the number of resource cycles
+  // contributed by a "Super" resource to a group.
+  // We need to take this into account when we find that a processor resource is
+  // part of a group, and it is also used as the "Super" of other resources.
+  // This map stores the number of cycles contributed by sub-resources that are
+  // part of a "Super" resource. The key value is the "Super" resource mask ID.
+  DenseMap<uint64_t, unsigned> SuperResources;
+
   for (unsigned I = 0, E = SCDesc.NumWriteProcResEntries; I < E; ++I) {
     const MCWriteProcResEntry *PRE = STI.getWriteProcResBegin(&SCDesc) + I;
     const MCProcResourceDesc &PR = *SM.getProcResource(PRE->ProcResourceIdx);
@@ -40,6 +55,10 @@ static void initializeUsedResources(InstrDesc &ID,
       ID.Buffers.push_back(Mask);
     CycleSegment RCy(0, PRE->Cycles, false);
     Worklist.emplace_back(ResourcePlusCycles(Mask, ResourceUsage(RCy)));
+    if (PR.SuperIdx) {
+      uint64_t Super = ProcResourceMasks[PR.SuperIdx];
+      SuperResources[Super] += PRE->Cycles;
+    }
   }
 
   // Sort elements by mask popcount, so that we prioritize resource units over
@@ -79,7 +98,7 @@ static void initializeUsedResources(InstrDesc &ID,
     for (unsigned J = I + 1; J < E; ++J) {
       ResourcePlusCycles &B = Worklist[J];
       if ((NormalizedMask & B.first) == NormalizedMask) {
-        B.second.CS.Subtract(A.second.size());
+        B.second.CS.Subtract(A.second.size() - SuperResources[A.first]);
         if (countPopulation(B.first) > 1)
           B.second.NumUnits++;
       }
@@ -112,7 +131,7 @@ static void initializeUsedResources(InstrDesc &ID,
     }
   }
 
-  DEBUG({
+  LLVM_DEBUG({
     for (const std::pair<uint64_t, ResourceUsage> &R : ID.Resources)
       dbgs() << "\t\tMask=" << R.first << ", cy=" << R.second.size() << '\n';
     for (const uint64_t R : ID.Buffers)
@@ -139,8 +158,6 @@ static void populateWrites(InstrDesc &ID, const MCInst &MCI,
                            const MCInstrDesc &MCDesc,
                            const MCSchedClassDesc &SCDesc,
                            const MCSubtargetInfo &STI) {
-  computeMaxLatency(ID, MCDesc, SCDesc, STI);
-
   // Set if writes through this opcode may update super registers.
   // TODO: on x86-64, a 4 byte write of a general purpose register always
   // fully updates the super-register.
@@ -260,7 +277,7 @@ static void populateWrites(InstrDesc &ID, const MCInst &MCI,
     }
     Write.FullyUpdatesSuperRegs = FullyUpdatesSuperRegisters;
     Write.IsOptionalDef = false;
-    DEBUG({
+    LLVM_DEBUG({
       dbgs() << "\t\tOpIdx=" << Write.OpIndex << ", Latency=" << Write.Latency
              << ", WriteResourceID=" << Write.SClassOrWriteResourceID << '\n';
     });
@@ -291,10 +308,10 @@ static void populateWrites(InstrDesc &ID, const MCInst &MCI,
 
     Write.IsOptionalDef = false;
     assert(Write.RegisterID != 0 && "Expected a valid phys register!");
-    DEBUG(dbgs() << "\t\tOpIdx=" << Write.OpIndex << ", PhysReg="
-                 << Write.RegisterID << ", Latency=" << Write.Latency
-                 << ", WriteResourceID=" << Write.SClassOrWriteResourceID
-                 << '\n');
+    LLVM_DEBUG(dbgs() << "\t\tOpIdx=" << Write.OpIndex << ", PhysReg="
+                      << Write.RegisterID << ", Latency=" << Write.Latency
+                      << ", WriteResourceID=" << Write.SClassOrWriteResourceID
+                      << '\n');
   }
 
   if (MCDesc.hasOptionalDef()) {
@@ -353,7 +370,7 @@ static void populateReads(InstrDesc &ID, const MCInst &MCI,
     Read.UseIndex = CurrentUse;
     Read.HasReadAdvanceEntries = HasReadAdvanceEntries;
     Read.SchedClassID = SchedClassID;
-    DEBUG(dbgs() << "\t\tOpIdx=" << Read.OpIndex);
+    LLVM_DEBUG(dbgs() << "\t\tOpIdx=" << Read.OpIndex);
   }
 
   for (unsigned CurrentUse = 0; CurrentUse < NumImplicitUses; ++CurrentUse) {
@@ -363,12 +380,12 @@ static void populateReads(InstrDesc &ID, const MCInst &MCI,
     Read.RegisterID = MCDesc.getImplicitUses()[CurrentUse];
     Read.HasReadAdvanceEntries = HasReadAdvanceEntries;
     Read.SchedClassID = SchedClassID;
-    DEBUG(dbgs() << "\t\tOpIdx=" << Read.OpIndex
-                 << ", RegisterID=" << Read.RegisterID << '\n');
+    LLVM_DEBUG(dbgs() << "\t\tOpIdx=" << Read.OpIndex
+                      << ", RegisterID=" << Read.RegisterID << '\n');
   }
 }
 
-void InstrBuilder::createInstrDescImpl(const MCInst &MCI) {
+const InstrDesc &InstrBuilder::createInstrDescImpl(const MCInst &MCI) {
   assert(STI.getSchedModel().hasInstrSchedModel() &&
          "Itineraries are not yet supported!");
 
@@ -378,31 +395,35 @@ void InstrBuilder::createInstrDescImpl(const MCInst &MCI) {
   const MCSchedModel &SM = STI.getSchedModel();
 
   // Then obtain the scheduling class information from the instruction.
-  const MCSchedClassDesc &SCDesc =
-      *SM.getSchedClassDesc(MCDesc.getSchedClass());
+  unsigned SchedClassID = MCDesc.getSchedClass();
+  unsigned CPUID = SM.getProcessorID();
+
+  // Try to solve variant scheduling classes.
+  if (SchedClassID) {
+    while (SchedClassID && SM.getSchedClassDesc(SchedClassID)->isVariant())
+      SchedClassID = STI.resolveVariantSchedClass(SchedClassID, &MCI, CPUID);
+
+    if (!SchedClassID)
+      llvm::report_fatal_error("unable to resolve this variant class.");
+  }
 
   // Create a new empty descriptor.
   std::unique_ptr<InstrDesc> ID = llvm::make_unique<InstrDesc>();
 
-  if (SCDesc.isVariant()) {
-    errs() << "warning: don't know how to model variant opcodes.\n"
-           << "note: assume 1 micro opcode.\n";
-    ID->NumMicroOps = 1U;
-  } else {
-    ID->NumMicroOps = SCDesc.NumMicroOps;
-  }
+  const MCSchedClassDesc &SCDesc = *SM.getSchedClassDesc(SchedClassID);
+  ID->NumMicroOps = SCDesc.NumMicroOps;
 
   if (MCDesc.isCall()) {
     // We don't correctly model calls.
-    errs() << "warning: found a call in the input assembly sequence.\n"
-           << "note: call instructions are not correctly modeled. Assume a "
-              "latency of 100cy.\n";
+    WithColor::warning() << "found a call in the input assembly sequence.\n";
+    WithColor::note() << "call instructions are not correctly modeled. "
+                      << "Assume a latency of 100cy.\n";
   }
 
   if (MCDesc.isReturn()) {
-    errs() << "warning: found a return instruction in the input assembly "
-              "sequence.\n"
-           << "note: program counter updates are ignored.\n";
+    WithColor::warning() << "found a return instruction in the input"
+                         << " assembly sequence.\n";
+    WithColor::note() << "program counter updates are ignored.\n";
   }
 
   ID->MayLoad = MCDesc.mayLoad();
@@ -410,28 +431,40 @@ void InstrBuilder::createInstrDescImpl(const MCInst &MCI) {
   ID->HasSideEffects = MCDesc.hasUnmodeledSideEffects();
 
   initializeUsedResources(*ID, SCDesc, STI, ProcResourceMasks);
+  computeMaxLatency(*ID, MCDesc, SCDesc, STI);
   populateWrites(*ID, MCI, MCDesc, SCDesc, STI);
   populateReads(*ID, MCI, MCDesc, SCDesc, STI);
 
-  DEBUG(dbgs() << "\t\tMaxLatency=" << ID->MaxLatency << '\n');
-  DEBUG(dbgs() << "\t\tNumMicroOps=" << ID->NumMicroOps << '\n');
+  LLVM_DEBUG(dbgs() << "\t\tMaxLatency=" << ID->MaxLatency << '\n');
+  LLVM_DEBUG(dbgs() << "\t\tNumMicroOps=" << ID->NumMicroOps << '\n');
 
   // Now add the new descriptor.
-  Descriptors[Opcode] = std::move(ID);
+  SchedClassID = MCDesc.getSchedClass();
+  if (!SM.getSchedClassDesc(SchedClassID)->isVariant()) {
+    Descriptors[MCI.getOpcode()] = std::move(ID);
+    return *Descriptors[MCI.getOpcode()];
+  }
+
+  VariantDescriptors[&MCI] = std::move(ID);
+  return *VariantDescriptors[&MCI];
 }
 
 const InstrDesc &InstrBuilder::getOrCreateInstrDesc(const MCInst &MCI) {
-  if (Descriptors.find_as(MCI.getOpcode()) == Descriptors.end())
-    createInstrDescImpl(MCI);
-  return *Descriptors[MCI.getOpcode()];
+  if (Descriptors.find_as(MCI.getOpcode()) != Descriptors.end())
+    return *Descriptors[MCI.getOpcode()];
+
+  if (VariantDescriptors.find(&MCI) != VariantDescriptors.end())
+    return *VariantDescriptors[&MCI];
+
+  return createInstrDescImpl(MCI);
 }
 
 std::unique_ptr<Instruction>
-InstrBuilder::createInstruction(unsigned Idx, const MCInst &MCI) {
+InstrBuilder::createInstruction(const MCInst &MCI) {
   const InstrDesc &D = getOrCreateInstrDesc(MCI);
   std::unique_ptr<Instruction> NewIS = llvm::make_unique<Instruction>(D);
 
-  // Populate Reads first.
+  // Initialize Reads first.
   for (const ReadDescriptor &RD : D.Reads) {
     int RegID = -1;
     if (RD.OpIndex != -1) {
@@ -455,7 +488,7 @@ InstrBuilder::createInstruction(unsigned Idx, const MCInst &MCI) {
     NewIS->getUses().emplace_back(llvm::make_unique<ReadState>(RD, RegID));
   }
 
-  // Now populate writes.
+  // Initialize writes.
   for (const WriteDescriptor &WD : D.Writes) {
     unsigned RegID =
         WD.OpIndex == -1 ? WD.RegisterID : MCI.getOperand(WD.OpIndex).getReg();

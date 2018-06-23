@@ -171,33 +171,44 @@ class OrcMCJITReplacement : public ExecutionEngine {
     SymbolNameSet lookup(std::shared_ptr<AsynchronousSymbolQuery> Query,
                          SymbolNameSet Symbols) override {
       SymbolNameSet UnresolvedSymbols;
+      bool NewSymbolsResolved = false;
 
       for (auto &S : Symbols) {
         if (auto Sym = M.findMangledSymbol(*S)) {
-          if (auto Addr = Sym.getAddress())
+          if (auto Addr = Sym.getAddress()) {
             Query->resolve(S, JITEvaluatedSymbol(*Addr, Sym.getFlags()));
-          else {
-            Query->notifyMaterializationFailed(Addr.takeError());
+            Query->notifySymbolReady();
+            NewSymbolsResolved = true;
+          } else {
+            M.ES.failQuery(*Query, Addr.takeError());
             return SymbolNameSet();
           }
         } else if (auto Err = Sym.takeError()) {
-          Query->notifyMaterializationFailed(std::move(Err));
+          M.ES.failQuery(*Query, std::move(Err));
           return SymbolNameSet();
         } else {
           if (auto Sym2 = M.ClientResolver->findSymbol(*S)) {
-            if (auto Addr = Sym2.getAddress())
+            if (auto Addr = Sym2.getAddress()) {
               Query->resolve(S, JITEvaluatedSymbol(*Addr, Sym2.getFlags()));
-            else {
-              Query->notifyMaterializationFailed(Addr.takeError());
+              Query->notifySymbolReady();
+              NewSymbolsResolved = true;
+            } else {
+              M.ES.failQuery(*Query, Addr.takeError());
               return SymbolNameSet();
             }
           } else if (auto Err = Sym2.takeError()) {
-            Query->notifyMaterializationFailed(std::move(Err));
+            M.ES.failQuery(*Query, std::move(Err));
             return SymbolNameSet();
           } else
             UnresolvedSymbols.insert(S);
         }
       }
+
+      if (NewSymbolsResolved && Query->isFullyResolved())
+        Query->handleFullyResolved();
+
+      if (NewSymbolsResolved && Query->isFullyReady())
+        Query->handleFullyReady();
 
       return UnresolvedSymbols;
     }
@@ -431,7 +442,10 @@ private:
   public:
     NotifyFinalizedT(OrcMCJITReplacement &M) : M(M) {}
 
-    void operator()(VModuleKey K) { M.UnfinalizedSections.erase(K); }
+    void operator()(VModuleKey K, const object::ObjectFile &Obj,
+                    const RuntimeDyld::LoadedObjectInfo &Info) {
+      M.UnfinalizedSections.erase(K);
+    }
 
   private:
     OrcMCJITReplacement &M;

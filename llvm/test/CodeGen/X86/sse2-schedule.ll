@@ -88,13 +88,13 @@ define <2 x double> @test_addpd(<2 x double> %a0, <2 x double> %a1, <2 x double>
 ;
 ; SKX-SSE-LABEL: test_addpd:
 ; SKX-SSE:       # %bb.0:
-; SKX-SSE-NEXT:    addpd %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    addpd %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    addpd (%rdi), %xmm0 # sched: [10:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_addpd:
 ; SKX:       # %bb.0:
-; SKX-NEXT:    vaddpd %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vaddpd %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    vaddpd (%rdi), %xmm0, %xmm0 # sched: [10:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
@@ -196,13 +196,13 @@ define double @test_addsd(double %a0, double %a1, double *%a2) {
 ;
 ; SKX-SSE-LABEL: test_addsd:
 ; SKX-SSE:       # %bb.0:
-; SKX-SSE-NEXT:    addsd %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    addsd %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    addsd (%rdi), %xmm0 # sched: [9:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_addsd:
 ; SKX:       # %bb.0:
-; SKX-NEXT:    vaddsd %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vaddsd %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    vaddsd (%rdi), %xmm0, %xmm0 # sched: [9:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
@@ -317,14 +317,14 @@ define <2 x double> @test_andpd(<2 x double> %a0, <2 x double> %a1, <2 x double>
 ; SKX-SSE:       # %bb.0:
 ; SKX-SSE-NEXT:    andpd %xmm1, %xmm0 # sched: [1:0.33]
 ; SKX-SSE-NEXT:    andpd (%rdi), %xmm0 # sched: [7:0.50]
-; SKX-SSE-NEXT:    addpd %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    addpd %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_andpd:
 ; SKX:       # %bb.0:
 ; SKX-NEXT:    vandpd %xmm1, %xmm0, %xmm0 # sched: [1:0.33]
 ; SKX-NEXT:    vandpd (%rdi), %xmm0, %xmm0 # sched: [7:0.50]
-; SKX-NEXT:    vaddpd %xmm0, %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vaddpd %xmm0, %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
 ; BTVER2-SSE-LABEL: test_andpd:
@@ -447,14 +447,14 @@ define <2 x double> @test_andnotpd(<2 x double> %a0, <2 x double> %a1, <2 x doub
 ; SKX-SSE:       # %bb.0:
 ; SKX-SSE-NEXT:    andnpd %xmm1, %xmm0 # sched: [1:0.33]
 ; SKX-SSE-NEXT:    andnpd (%rdi), %xmm0 # sched: [7:0.50]
-; SKX-SSE-NEXT:    addpd %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    addpd %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_andnotpd:
 ; SKX:       # %bb.0:
 ; SKX-NEXT:    vandnpd %xmm1, %xmm0, %xmm0 # sched: [1:0.33]
 ; SKX-NEXT:    vandnpd (%rdi), %xmm0, %xmm0 # sched: [7:0.50]
-; SKX-NEXT:    vaddpd %xmm0, %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vaddpd %xmm0, %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
 ; BTVER2-SSE-LABEL: test_andnotpd:
@@ -673,14 +673,14 @@ define <2 x double> @test_cmppd(<2 x double> %a0, <2 x double> %a1, <2 x double>
 ;
 ; SKX-SSE-LABEL: test_cmppd:
 ; SKX-SSE:       # %bb.0:
-; SKX-SSE-NEXT:    cmpeqpd %xmm0, %xmm1 # sched: [4:0.33]
+; SKX-SSE-NEXT:    cmpeqpd %xmm0, %xmm1 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    cmpeqpd (%rdi), %xmm0 # sched: [10:0.50]
 ; SKX-SSE-NEXT:    orpd %xmm1, %xmm0 # sched: [1:0.33]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_cmppd:
 ; SKX:       # %bb.0:
-; SKX-NEXT:    vcmpeqpd %xmm1, %xmm0, %xmm1 # sched: [4:0.33]
+; SKX-NEXT:    vcmpeqpd %xmm1, %xmm0, %xmm1 # sched: [4:0.50]
 ; SKX-NEXT:    vcmpeqpd (%rdi), %xmm0, %xmm0 # sched: [10:0.50]
 ; SKX-NEXT:    vorpd %xmm0, %xmm1, %xmm0 # sched: [1:0.33]
 ; SKX-NEXT:    retq # sched: [7:1.00]
@@ -790,13 +790,13 @@ define double @test_cmpsd(double %a0, double %a1, double *%a2) {
 ;
 ; SKX-SSE-LABEL: test_cmpsd:
 ; SKX-SSE:       # %bb.0:
-; SKX-SSE-NEXT:    cmpeqsd %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    cmpeqsd %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    cmpeqsd (%rdi), %xmm0 # sched: [9:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_cmpsd:
 ; SKX:       # %bb.0:
-; SKX-NEXT:    vcmpeqsd %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vcmpeqsd %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    vcmpeqsd (%rdi), %xmm0, %xmm0 # sched: [9:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
@@ -1162,16 +1162,16 @@ define <2 x double> @test_cvtdq2pd(<4 x i32> %a0, <4 x i32> *%a1) {
 ;
 ; SKX-SSE-LABEL: test_cvtdq2pd:
 ; SKX-SSE:       # %bb.0:
-; SKX-SSE-NEXT:    cvtdq2pd %xmm0, %xmm1 # sched: [5:1.00]
+; SKX-SSE-NEXT:    cvtdq2pd %xmm0, %xmm1 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    cvtdq2pd (%rdi), %xmm0 # sched: [11:1.00]
-; SKX-SSE-NEXT:    addpd %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    addpd %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_cvtdq2pd:
 ; SKX:       # %bb.0:
-; SKX-NEXT:    vcvtdq2pd %xmm0, %xmm0 # sched: [5:1.00]
+; SKX-NEXT:    vcvtdq2pd %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    vcvtdq2pd (%rdi), %xmm1 # sched: [11:1.00]
-; SKX-NEXT:    vaddpd %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vaddpd %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
 ; BTVER2-SSE-LABEL: test_cvtdq2pd:
@@ -1291,16 +1291,16 @@ define <4 x float> @test_cvtdq2ps(<4 x i32> %a0, <4 x i32> *%a1) {
 ;
 ; SKX-SSE-LABEL: test_cvtdq2ps:
 ; SKX-SSE:       # %bb.0:
-; SKX-SSE-NEXT:    cvtdq2ps %xmm0, %xmm1 # sched: [4:0.33]
+; SKX-SSE-NEXT:    cvtdq2ps %xmm0, %xmm1 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    cvtdq2ps (%rdi), %xmm0 # sched: [10:0.50]
-; SKX-SSE-NEXT:    addps %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    addps %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_cvtdq2ps:
 ; SKX:       # %bb.0:
-; SKX-NEXT:    vcvtdq2ps %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vcvtdq2ps %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    vcvtdq2ps (%rdi), %xmm1 # sched: [10:0.50]
-; SKX-NEXT:    vaddps %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vaddps %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
 ; BTVER2-SSE-LABEL: test_cvtdq2ps:
@@ -1427,7 +1427,7 @@ define <4 x i32> @test_cvtpd2dq(<2 x double> %a0, <2 x double> *%a1) {
 ; SKX-LABEL: test_cvtpd2dq:
 ; SKX:       # %bb.0:
 ; SKX-NEXT:    vcvtpd2dq %xmm0, %xmm0 # sched: [5:1.00]
-; SKX-NEXT:    vcvtpd2dqx (%rdi), %xmm1 # sched: [8:1.00]
+; SKX-NEXT:    vcvtpd2dqx (%rdi), %xmm1 # sched: [8:0.50]
 ; SKX-NEXT:    vpaddd %xmm1, %xmm0, %xmm0 # sched: [1:0.33]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
@@ -1550,14 +1550,14 @@ define <4 x float> @test_cvtpd2ps(<2 x double> %a0, <2 x double> *%a1) {
 ; SKX-SSE:       # %bb.0:
 ; SKX-SSE-NEXT:    cvtpd2ps %xmm0, %xmm1 # sched: [5:1.00]
 ; SKX-SSE-NEXT:    cvtpd2ps (%rdi), %xmm0 # sched: [11:1.00]
-; SKX-SSE-NEXT:    addps %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    addps %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_cvtpd2ps:
 ; SKX:       # %bb.0:
 ; SKX-NEXT:    vcvtpd2ps %xmm0, %xmm0 # sched: [5:1.00]
 ; SKX-NEXT:    vcvtpd2psx (%rdi), %xmm1 # sched: [8:1.00]
-; SKX-NEXT:    vaddps %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vaddps %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
 ; BTVER2-SSE-LABEL: test_cvtpd2ps:
@@ -1676,14 +1676,14 @@ define <4 x i32> @test_cvtps2dq(<4 x float> %a0, <4 x float> *%a1) {
 ;
 ; SKX-SSE-LABEL: test_cvtps2dq:
 ; SKX-SSE:       # %bb.0:
-; SKX-SSE-NEXT:    cvtps2dq %xmm0, %xmm1 # sched: [4:0.33]
+; SKX-SSE-NEXT:    cvtps2dq %xmm0, %xmm1 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    cvtps2dq (%rdi), %xmm0 # sched: [10:0.50]
 ; SKX-SSE-NEXT:    paddd %xmm1, %xmm0 # sched: [1:0.33]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_cvtps2dq:
 ; SKX:       # %bb.0:
-; SKX-NEXT:    vcvtps2dq %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vcvtps2dq %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    vcvtps2dq (%rdi), %xmm1 # sched: [10:0.50]
 ; SKX-NEXT:    vpaddd %xmm1, %xmm0, %xmm0 # sched: [1:0.33]
 ; SKX-NEXT:    retq # sched: [7:1.00]
@@ -1806,27 +1806,27 @@ define <2 x double> @test_cvtps2pd(<4 x float> %a0, <4 x float> *%a1) {
 ; SKX-SSE:       # %bb.0:
 ; SKX-SSE-NEXT:    cvtps2pd %xmm0, %xmm1 # sched: [5:1.00]
 ; SKX-SSE-NEXT:    cvtps2pd (%rdi), %xmm0 # sched: [9:0.50]
-; SKX-SSE-NEXT:    addpd %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    addpd %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_cvtps2pd:
 ; SKX:       # %bb.0:
 ; SKX-NEXT:    vcvtps2pd %xmm0, %xmm0 # sched: [5:1.00]
 ; SKX-NEXT:    vcvtps2pd (%rdi), %xmm1 # sched: [9:0.50]
-; SKX-NEXT:    vaddpd %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vaddpd %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
 ; BTVER2-SSE-LABEL: test_cvtps2pd:
 ; BTVER2-SSE:       # %bb.0:
-; BTVER2-SSE-NEXT:    cvtps2pd %xmm0, %xmm1 # sched: [3:1.00]
-; BTVER2-SSE-NEXT:    cvtps2pd (%rdi), %xmm0 # sched: [8:1.00]
+; BTVER2-SSE-NEXT:    cvtps2pd %xmm0, %xmm1 # sched: [2:1.00]
+; BTVER2-SSE-NEXT:    cvtps2pd (%rdi), %xmm0 # sched: [7:1.00]
 ; BTVER2-SSE-NEXT:    addpd %xmm1, %xmm0 # sched: [3:1.00]
 ; BTVER2-SSE-NEXT:    retq # sched: [4:1.00]
 ;
 ; BTVER2-LABEL: test_cvtps2pd:
 ; BTVER2:       # %bb.0:
-; BTVER2-NEXT:    vcvtps2pd (%rdi), %xmm1 # sched: [8:1.00]
-; BTVER2-NEXT:    vcvtps2pd %xmm0, %xmm0 # sched: [3:1.00]
+; BTVER2-NEXT:    vcvtps2pd (%rdi), %xmm1 # sched: [7:1.00]
+; BTVER2-NEXT:    vcvtps2pd %xmm0, %xmm0 # sched: [2:1.00]
 ; BTVER2-NEXT:    vaddpd %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
 ; BTVER2-NEXT:    retq # sched: [4:1.00]
 ;
@@ -2205,7 +2205,7 @@ define float @test_cvtsd2ss(double %a0, double *%a1) {
 ; SKX-SSE-NEXT:    cvtsd2ss %xmm0, %xmm1 # sched: [5:1.00]
 ; SKX-SSE-NEXT:    movsd {{.*#+}} xmm0 = mem[0],zero sched: [5:0.50]
 ; SKX-SSE-NEXT:    cvtsd2ss %xmm0, %xmm0 # sched: [5:1.00]
-; SKX-SSE-NEXT:    addss %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    addss %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_cvtsd2ss:
@@ -2213,7 +2213,7 @@ define float @test_cvtsd2ss(double %a0, double *%a1) {
 ; SKX-NEXT:    vcvtsd2ss %xmm0, %xmm0, %xmm0 # sched: [5:1.00]
 ; SKX-NEXT:    vmovsd {{.*#+}} xmm1 = mem[0],zero sched: [5:0.50]
 ; SKX-NEXT:    vcvtsd2ss %xmm1, %xmm1, %xmm1 # sched: [5:1.00]
-; SKX-NEXT:    vaddss %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vaddss %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
 ; BTVER2-SSE-LABEL: test_cvtsd2ss:
@@ -2336,14 +2336,14 @@ define double @test_cvtsi2sd(i32 %a0, i32 *%a1) {
 ; SKX-SSE:       # %bb.0:
 ; SKX-SSE-NEXT:    cvtsi2sdl %edi, %xmm1 # sched: [5:1.00]
 ; SKX-SSE-NEXT:    cvtsi2sdl (%rsi), %xmm0 # sched: [9:1.00]
-; SKX-SSE-NEXT:    addsd %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    addsd %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_cvtsi2sd:
 ; SKX:       # %bb.0:
 ; SKX-NEXT:    vcvtsi2sdl %edi, %xmm0, %xmm0 # sched: [5:1.00]
 ; SKX-NEXT:    vcvtsi2sdl (%rsi), %xmm1, %xmm1 # sched: [9:1.00]
-; SKX-NEXT:    vaddsd %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vaddsd %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
 ; BTVER2-SSE-LABEL: test_cvtsi2sd:
@@ -2462,14 +2462,14 @@ define double @test_cvtsi2sdq(i64 %a0, i64 *%a1) {
 ; SKX-SSE:       # %bb.0:
 ; SKX-SSE-NEXT:    cvtsi2sdq %rdi, %xmm1 # sched: [5:1.00]
 ; SKX-SSE-NEXT:    cvtsi2sdq (%rsi), %xmm0 # sched: [9:1.00]
-; SKX-SSE-NEXT:    addsd %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    addsd %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_cvtsi2sdq:
 ; SKX:       # %bb.0:
 ; SKX-NEXT:    vcvtsi2sdq %rdi, %xmm0, %xmm0 # sched: [5:1.00]
 ; SKX-NEXT:    vcvtsi2sdq (%rsi), %xmm1, %xmm1 # sched: [9:1.00]
-; SKX-NEXT:    vaddsd %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vaddsd %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
 ; BTVER2-SSE-LABEL: test_cvtsi2sdq:
@@ -2603,7 +2603,7 @@ define double @test_cvtss2sd(float %a0, float *%a1) {
 ; SKX-SSE-NEXT:    cvtss2sd %xmm0, %xmm1 # sched: [5:1.00]
 ; SKX-SSE-NEXT:    movss {{.*#+}} xmm0 = mem[0],zero,zero,zero sched: [5:0.50]
 ; SKX-SSE-NEXT:    cvtss2sd %xmm0, %xmm0 # sched: [5:1.00]
-; SKX-SSE-NEXT:    addsd %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    addsd %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_cvtss2sd:
@@ -2611,7 +2611,7 @@ define double @test_cvtss2sd(float %a0, float *%a1) {
 ; SKX-NEXT:    vcvtss2sd %xmm0, %xmm0, %xmm0 # sched: [5:1.00]
 ; SKX-NEXT:    vmovss {{.*#+}} xmm1 = mem[0],zero,zero,zero sched: [5:0.50]
 ; SKX-NEXT:    vcvtss2sd %xmm1, %xmm1, %xmm1 # sched: [5:1.00]
-; SKX-NEXT:    vaddsd %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vaddsd %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
 ; BTVER2-SSE-LABEL: test_cvtss2sd:
@@ -2742,7 +2742,7 @@ define <4 x i32> @test_cvttpd2dq(<2 x double> %a0, <2 x double> *%a1) {
 ; SKX-LABEL: test_cvttpd2dq:
 ; SKX:       # %bb.0:
 ; SKX-NEXT:    vcvttpd2dq %xmm0, %xmm0 # sched: [5:1.00]
-; SKX-NEXT:    vcvttpd2dqx (%rdi), %xmm1 # sched: [8:1.00]
+; SKX-NEXT:    vcvttpd2dqx (%rdi), %xmm1 # sched: [8:0.50]
 ; SKX-NEXT:    vpaddd %xmm1, %xmm0, %xmm0 # sched: [1:0.33]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
@@ -2863,14 +2863,14 @@ define <4 x i32> @test_cvttps2dq(<4 x float> %a0, <4 x float> *%a1) {
 ;
 ; SKX-SSE-LABEL: test_cvttps2dq:
 ; SKX-SSE:       # %bb.0:
-; SKX-SSE-NEXT:    cvttps2dq %xmm0, %xmm1 # sched: [4:0.33]
+; SKX-SSE-NEXT:    cvttps2dq %xmm0, %xmm1 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    cvttps2dq (%rdi), %xmm0 # sched: [10:0.50]
 ; SKX-SSE-NEXT:    paddd %xmm1, %xmm0 # sched: [1:0.33]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_cvttps2dq:
 ; SKX:       # %bb.0:
-; SKX-NEXT:    vcvttps2dq %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vcvttps2dq %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    vcvttps2dq (%rdi), %xmm1 # sched: [10:0.50]
 ; SKX-NEXT:    vpaddd %xmm1, %xmm0, %xmm0 # sched: [1:0.33]
 ; SKX-NEXT:    retq # sched: [7:1.00]
@@ -3651,12 +3651,12 @@ define void @test_maskmovdqu(<16 x i8> %a0, <16 x i8> %a1, i8* %a2) {
 ;
 ; ZNVER1-SSE-LABEL: test_maskmovdqu:
 ; ZNVER1-SSE:       # %bb.0:
-; ZNVER1-SSE-NEXT:    maskmovdqu %xmm1, %xmm0 # sched: [100:?]
+; ZNVER1-SSE-NEXT:    maskmovdqu %xmm1, %xmm0 # sched: [100:0.25]
 ; ZNVER1-SSE-NEXT:    retq # sched: [1:0.50]
 ;
 ; ZNVER1-LABEL: test_maskmovdqu:
 ; ZNVER1:       # %bb.0:
-; ZNVER1-NEXT:    vmaskmovdqu %xmm1, %xmm0 # sched: [100:?]
+; ZNVER1-NEXT:    vmaskmovdqu %xmm1, %xmm0 # sched: [100:0.25]
 ; ZNVER1-NEXT:    retq # sched: [1:0.50]
   call void @llvm.x86.sse2.maskmov.dqu(<16 x i8> %a0, <16 x i8> %a1, i8* %a2)
   ret void
@@ -3732,13 +3732,13 @@ define <2 x double> @test_maxpd(<2 x double> %a0, <2 x double> %a1, <2 x double>
 ;
 ; SKX-SSE-LABEL: test_maxpd:
 ; SKX-SSE:       # %bb.0:
-; SKX-SSE-NEXT:    maxpd %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    maxpd %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    maxpd (%rdi), %xmm0 # sched: [10:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_maxpd:
 ; SKX:       # %bb.0:
-; SKX-NEXT:    vmaxpd %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vmaxpd %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    vmaxpd (%rdi), %xmm0, %xmm0 # sched: [10:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
@@ -3841,13 +3841,13 @@ define <2 x double> @test_maxsd(<2 x double> %a0, <2 x double> %a1, <2 x double>
 ;
 ; SKX-SSE-LABEL: test_maxsd:
 ; SKX-SSE:       # %bb.0:
-; SKX-SSE-NEXT:    maxsd %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    maxsd %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    maxsd (%rdi), %xmm0 # sched: [9:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_maxsd:
 ; SKX:       # %bb.0:
-; SKX-NEXT:    vmaxsd %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vmaxsd %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    vmaxsd (%rdi), %xmm0, %xmm0 # sched: [9:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
@@ -3950,13 +3950,13 @@ define <2 x double> @test_minpd(<2 x double> %a0, <2 x double> %a1, <2 x double>
 ;
 ; SKX-SSE-LABEL: test_minpd:
 ; SKX-SSE:       # %bb.0:
-; SKX-SSE-NEXT:    minpd %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    minpd %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    minpd (%rdi), %xmm0 # sched: [10:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_minpd:
 ; SKX:       # %bb.0:
-; SKX-NEXT:    vminpd %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vminpd %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    vminpd (%rdi), %xmm0, %xmm0 # sched: [10:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
@@ -4059,13 +4059,13 @@ define <2 x double> @test_minsd(<2 x double> %a0, <2 x double> %a1, <2 x double>
 ;
 ; SKX-SSE-LABEL: test_minsd:
 ; SKX-SSE:       # %bb.0:
-; SKX-SSE-NEXT:    minsd %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    minsd %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    minsd (%rdi), %xmm0 # sched: [9:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_minsd:
 ; SKX:       # %bb.0:
-; SKX-NEXT:    vminsd %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vminsd %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    vminsd (%rdi), %xmm0, %xmm0 # sched: [9:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
@@ -4180,14 +4180,14 @@ define void @test_movapd(<2 x double> *%a0, <2 x double> *%a1) {
 ; SKX-SSE-LABEL: test_movapd:
 ; SKX-SSE:       # %bb.0:
 ; SKX-SSE-NEXT:    movapd (%rdi), %xmm0 # sched: [6:0.50]
-; SKX-SSE-NEXT:    addpd %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    addpd %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    movapd %xmm0, (%rsi) # sched: [1:1.00]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_movapd:
 ; SKX:       # %bb.0:
 ; SKX-NEXT:    vmovapd (%rdi), %xmm0 # sched: [6:0.50]
-; SKX-NEXT:    vaddpd %xmm0, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vaddpd %xmm0, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    vmovapd %xmm0, (%rsi) # sched: [1:1.00]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
@@ -4608,21 +4608,21 @@ define i32 @test_movd(<4 x i32> %a0, i32 %a1, i32 *%a2) {
 ; BTVER2-SSE-LABEL: test_movd:
 ; BTVER2-SSE:       # %bb.0:
 ; BTVER2-SSE-NEXT:    movd {{.*#+}} xmm2 = mem[0],zero,zero,zero sched: [5:1.00]
-; BTVER2-SSE-NEXT:    movd %edi, %xmm1 # sched: [1:0.50]
-; BTVER2-SSE-NEXT:    paddd %xmm0, %xmm1 # sched: [1:0.50]
-; BTVER2-SSE-NEXT:    movd %xmm1, (%rsi) # sched: [1:1.00]
+; BTVER2-SSE-NEXT:    movd %edi, %xmm1 # sched: [8:0.50]
 ; BTVER2-SSE-NEXT:    paddd %xmm0, %xmm2 # sched: [1:0.50]
-; BTVER2-SSE-NEXT:    movd %xmm2, %eax # sched: [1:0.50]
+; BTVER2-SSE-NEXT:    movd %xmm2, %eax # sched: [4:1.00]
+; BTVER2-SSE-NEXT:    paddd %xmm0, %xmm1 # sched: [1:0.50]
+; BTVER2-SSE-NEXT:    movd %xmm1, (%rsi) # sched: [2:1.00]
 ; BTVER2-SSE-NEXT:    retq # sched: [4:1.00]
 ;
 ; BTVER2-LABEL: test_movd:
 ; BTVER2:       # %bb.0:
+; BTVER2-NEXT:    vmovd %edi, %xmm1 # sched: [8:0.50]
 ; BTVER2-NEXT:    vmovd {{.*#+}} xmm2 = mem[0],zero,zero,zero sched: [5:1.00]
-; BTVER2-NEXT:    vmovd %edi, %xmm1 # sched: [1:0.50]
 ; BTVER2-NEXT:    vpaddd %xmm1, %xmm0, %xmm1 # sched: [1:0.50]
-; BTVER2-NEXT:    vmovd %xmm1, (%rsi) # sched: [1:1.00]
 ; BTVER2-NEXT:    vpaddd %xmm2, %xmm0, %xmm0 # sched: [1:0.50]
-; BTVER2-NEXT:    vmovd %xmm0, %eax # sched: [1:0.50]
+; BTVER2-NEXT:    vmovd %xmm0, %eax # sched: [4:1.00]
+; BTVER2-NEXT:    vmovd %xmm1, (%rsi) # sched: [2:1.00]
 ; BTVER2-NEXT:    retq # sched: [4:1.00]
 ;
 ; ZNVER1-SSE-LABEL: test_movd:
@@ -4789,31 +4789,31 @@ define i64 @test_movd_64(<2 x i64> %a0, i64 %a1, i64 *%a2) {
 ; BTVER2-SSE-LABEL: test_movd_64:
 ; BTVER2-SSE:       # %bb.0:
 ; BTVER2-SSE-NEXT:    movq {{.*#+}} xmm2 = mem[0],zero sched: [5:1.00]
-; BTVER2-SSE-NEXT:    movq %rdi, %xmm1 # sched: [1:0.50]
-; BTVER2-SSE-NEXT:    paddq %xmm0, %xmm1 # sched: [1:0.50]
-; BTVER2-SSE-NEXT:    movq %xmm1, (%rsi) # sched: [1:1.00]
+; BTVER2-SSE-NEXT:    movq %rdi, %xmm1 # sched: [8:0.50]
 ; BTVER2-SSE-NEXT:    paddq %xmm0, %xmm2 # sched: [1:0.50]
-; BTVER2-SSE-NEXT:    movq %xmm2, %rax # sched: [1:0.50]
+; BTVER2-SSE-NEXT:    movq %xmm2, %rax # sched: [4:1.00]
+; BTVER2-SSE-NEXT:    paddq %xmm0, %xmm1 # sched: [1:0.50]
+; BTVER2-SSE-NEXT:    movq %xmm1, (%rsi) # sched: [2:1.00]
 ; BTVER2-SSE-NEXT:    retq # sched: [4:1.00]
 ;
 ; BTVER2-LABEL: test_movd_64:
 ; BTVER2:       # %bb.0:
+; BTVER2-NEXT:    vmovq %rdi, %xmm1 # sched: [8:0.50]
 ; BTVER2-NEXT:    vmovq {{.*#+}} xmm2 = mem[0],zero sched: [5:1.00]
-; BTVER2-NEXT:    vmovq %rdi, %xmm1 # sched: [1:0.50]
 ; BTVER2-NEXT:    vpaddq %xmm1, %xmm0, %xmm1 # sched: [1:0.50]
-; BTVER2-NEXT:    vmovq %xmm1, (%rsi) # sched: [1:1.00]
 ; BTVER2-NEXT:    vpaddq %xmm2, %xmm0, %xmm0 # sched: [1:0.50]
-; BTVER2-NEXT:    vmovq %xmm0, %rax # sched: [1:0.50]
+; BTVER2-NEXT:    vmovq %xmm0, %rax # sched: [4:1.00]
+; BTVER2-NEXT:    vmovq %xmm1, (%rsi) # sched: [2:1.00]
 ; BTVER2-NEXT:    retq # sched: [4:1.00]
 ;
 ; ZNVER1-SSE-LABEL: test_movd_64:
 ; ZNVER1-SSE:       # %bb.0:
 ; ZNVER1-SSE-NEXT:    movq {{.*#+}} xmm2 = mem[0],zero sched: [8:0.50]
-; ZNVER1-SSE-NEXT:    movq %rdi, %xmm1 # sched: [1:0.25]
+; ZNVER1-SSE-NEXT:    movq %rdi, %xmm1 # sched: [3:1.00]
 ; ZNVER1-SSE-NEXT:    paddq %xmm0, %xmm1 # sched: [1:0.25]
 ; ZNVER1-SSE-NEXT:    movq %xmm1, (%rsi) # sched: [1:0.50]
 ; ZNVER1-SSE-NEXT:    paddq %xmm0, %xmm2 # sched: [1:0.25]
-; ZNVER1-SSE-NEXT:    movq %xmm2, %rax # sched: [1:0.25]
+; ZNVER1-SSE-NEXT:    movq %xmm2, %rax # sched: [2:1.00]
 ; ZNVER1-SSE-NEXT:    retq # sched: [1:0.50]
 ;
 ; ZNVER1-LABEL: test_movd_64:
@@ -4917,14 +4917,14 @@ define void @test_movhpd(<2 x double> %a0, <2 x double> %a1, x86_mmx *%a2) {
 ; SKX-SSE-LABEL: test_movhpd:
 ; SKX-SSE:       # %bb.0:
 ; SKX-SSE-NEXT:    movhpd {{.*#+}} xmm1 = xmm1[0],mem[0] sched: [6:1.00]
-; SKX-SSE-NEXT:    addpd %xmm0, %xmm1 # sched: [4:0.33]
+; SKX-SSE-NEXT:    addpd %xmm0, %xmm1 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    movhpd %xmm1, (%rdi) # sched: [1:1.00]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_movhpd:
 ; SKX:       # %bb.0:
 ; SKX-NEXT:    vmovhpd {{.*#+}} xmm1 = xmm1[0],mem[0] sched: [6:1.00]
-; SKX-NEXT:    vaddpd %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vaddpd %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    vmovhpd %xmm0, (%rdi) # sched: [1:1.00]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
@@ -4932,14 +4932,14 @@ define void @test_movhpd(<2 x double> %a0, <2 x double> %a1, x86_mmx *%a2) {
 ; BTVER2-SSE:       # %bb.0:
 ; BTVER2-SSE-NEXT:    movhpd {{.*#+}} xmm1 = xmm1[0],mem[0] sched: [6:1.00]
 ; BTVER2-SSE-NEXT:    addpd %xmm0, %xmm1 # sched: [3:1.00]
-; BTVER2-SSE-NEXT:    movhpd %xmm1, (%rdi) # sched: [1:1.00]
+; BTVER2-SSE-NEXT:    movhpd %xmm1, (%rdi) # sched: [2:1.00]
 ; BTVER2-SSE-NEXT:    retq # sched: [4:1.00]
 ;
 ; BTVER2-LABEL: test_movhpd:
 ; BTVER2:       # %bb.0:
 ; BTVER2-NEXT:    vmovhpd {{.*#+}} xmm1 = xmm1[0],mem[0] sched: [6:1.00]
 ; BTVER2-NEXT:    vaddpd %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
-; BTVER2-NEXT:    vmovhpd %xmm0, (%rdi) # sched: [1:1.00]
+; BTVER2-NEXT:    vmovhpd %xmm0, (%rdi) # sched: [2:1.00]
 ; BTVER2-NEXT:    retq # sched: [4:1.00]
 ;
 ; ZNVER1-SSE-LABEL: test_movhpd:
@@ -5045,14 +5045,14 @@ define void @test_movlpd(<2 x double> %a0, <2 x double> %a1, x86_mmx *%a2) {
 ; SKX-SSE-LABEL: test_movlpd:
 ; SKX-SSE:       # %bb.0:
 ; SKX-SSE-NEXT:    movlpd {{.*#+}} xmm1 = mem[0],xmm1[1] sched: [6:1.00]
-; SKX-SSE-NEXT:    addpd %xmm0, %xmm1 # sched: [4:0.33]
+; SKX-SSE-NEXT:    addpd %xmm0, %xmm1 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    movlpd %xmm1, (%rdi) # sched: [1:1.00]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_movlpd:
 ; SKX:       # %bb.0:
 ; SKX-NEXT:    vmovlpd {{.*#+}} xmm1 = mem[0],xmm1[1] sched: [6:1.00]
-; SKX-NEXT:    vaddpd %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vaddpd %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    vmovlpd %xmm0, (%rdi) # sched: [1:1.00]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
@@ -5060,14 +5060,14 @@ define void @test_movlpd(<2 x double> %a0, <2 x double> %a1, x86_mmx *%a2) {
 ; BTVER2-SSE:       # %bb.0:
 ; BTVER2-SSE-NEXT:    movlpd {{.*#+}} xmm1 = mem[0],xmm1[1] sched: [6:1.00]
 ; BTVER2-SSE-NEXT:    addpd %xmm0, %xmm1 # sched: [3:1.00]
-; BTVER2-SSE-NEXT:    movlpd %xmm1, (%rdi) # sched: [1:1.00]
+; BTVER2-SSE-NEXT:    movlpd %xmm1, (%rdi) # sched: [2:1.00]
 ; BTVER2-SSE-NEXT:    retq # sched: [4:1.00]
 ;
 ; BTVER2-LABEL: test_movlpd:
 ; BTVER2:       # %bb.0:
 ; BTVER2-NEXT:    vmovlpd {{.*#+}} xmm1 = mem[0],xmm1[1] sched: [6:1.00]
 ; BTVER2-NEXT:    vaddpd %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
-; BTVER2-NEXT:    vmovlpd %xmm0, (%rdi) # sched: [1:1.00]
+; BTVER2-NEXT:    vmovlpd %xmm0, (%rdi) # sched: [2:1.00]
 ; BTVER2-NEXT:    retq # sched: [4:1.00]
 ;
 ; ZNVER1-SSE-LABEL: test_movlpd:
@@ -5362,13 +5362,13 @@ define void @test_movntpd(<2 x double> %a0, <2 x double> *%a1) {
 ;
 ; SKX-SSE-LABEL: test_movntpd:
 ; SKX-SSE:       # %bb.0:
-; SKX-SSE-NEXT:    addpd %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    addpd %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    movntpd %xmm0, (%rdi) # sched: [1:1.00]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_movntpd:
 ; SKX:       # %bb.0:
-; SKX-NEXT:    vaddpd %xmm0, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vaddpd %xmm0, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    vmovntpd %xmm0, (%rdi) # sched: [1:1.00]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
@@ -5496,14 +5496,14 @@ define <2 x i64> @test_movq_mem(<2 x i64> %a0, i64 *%a1) {
 ; BTVER2-SSE:       # %bb.0:
 ; BTVER2-SSE-NEXT:    movq {{.*#+}} xmm1 = mem[0],zero sched: [5:1.00]
 ; BTVER2-SSE-NEXT:    paddq %xmm1, %xmm0 # sched: [1:0.50]
-; BTVER2-SSE-NEXT:    movq %xmm0, (%rdi) # sched: [1:1.00]
+; BTVER2-SSE-NEXT:    movq %xmm0, (%rdi) # sched: [2:1.00]
 ; BTVER2-SSE-NEXT:    retq # sched: [4:1.00]
 ;
 ; BTVER2-LABEL: test_movq_mem:
 ; BTVER2:       # %bb.0:
 ; BTVER2-NEXT:    vmovq {{.*#+}} xmm1 = mem[0],zero sched: [5:1.00]
 ; BTVER2-NEXT:    vpaddq %xmm1, %xmm0, %xmm0 # sched: [1:0.50]
-; BTVER2-NEXT:    vmovq %xmm0, (%rdi) # sched: [1:1.00]
+; BTVER2-NEXT:    vmovq %xmm0, (%rdi) # sched: [2:1.00]
 ; BTVER2-NEXT:    retq # sched: [4:1.00]
 ;
 ; ZNVER1-SSE-LABEL: test_movq_mem:
@@ -5717,14 +5717,14 @@ define void @test_movsd_mem(double* %a0, double* %a1) {
 ; SKX-SSE-LABEL: test_movsd_mem:
 ; SKX-SSE:       # %bb.0:
 ; SKX-SSE-NEXT:    movsd {{.*#+}} xmm0 = mem[0],zero sched: [5:0.50]
-; SKX-SSE-NEXT:    addsd %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    addsd %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    movsd %xmm0, (%rsi) # sched: [1:1.00]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_movsd_mem:
 ; SKX:       # %bb.0:
 ; SKX-NEXT:    vmovsd {{.*#+}} xmm0 = mem[0],zero sched: [5:0.50]
-; SKX-NEXT:    vaddsd %xmm0, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vaddsd %xmm0, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    vmovsd %xmm0, (%rsi) # sched: [1:1.00]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
@@ -5732,14 +5732,14 @@ define void @test_movsd_mem(double* %a0, double* %a1) {
 ; BTVER2-SSE:       # %bb.0:
 ; BTVER2-SSE-NEXT:    movsd {{.*#+}} xmm0 = mem[0],zero sched: [5:1.00]
 ; BTVER2-SSE-NEXT:    addsd %xmm0, %xmm0 # sched: [3:1.00]
-; BTVER2-SSE-NEXT:    movsd %xmm0, (%rsi) # sched: [1:1.00]
+; BTVER2-SSE-NEXT:    movsd %xmm0, (%rsi) # sched: [2:1.00]
 ; BTVER2-SSE-NEXT:    retq # sched: [4:1.00]
 ;
 ; BTVER2-LABEL: test_movsd_mem:
 ; BTVER2:       # %bb.0:
 ; BTVER2-NEXT:    vmovsd {{.*#+}} xmm0 = mem[0],zero sched: [5:1.00]
 ; BTVER2-NEXT:    vaddsd %xmm0, %xmm0, %xmm0 # sched: [3:1.00]
-; BTVER2-NEXT:    vmovsd %xmm0, (%rsi) # sched: [1:1.00]
+; BTVER2-NEXT:    vmovsd %xmm0, (%rsi) # sched: [2:1.00]
 ; BTVER2-NEXT:    retq # sched: [4:1.00]
 ;
 ; ZNVER1-SSE-LABEL: test_movsd_mem:
@@ -5945,14 +5945,14 @@ define void @test_movupd(<2 x double> *%a0, <2 x double> *%a1) {
 ; SKX-SSE-LABEL: test_movupd:
 ; SKX-SSE:       # %bb.0:
 ; SKX-SSE-NEXT:    movupd (%rdi), %xmm0 # sched: [6:0.50]
-; SKX-SSE-NEXT:    addpd %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    addpd %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    movupd %xmm0, (%rsi) # sched: [1:1.00]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_movupd:
 ; SKX:       # %bb.0:
 ; SKX-NEXT:    vmovupd (%rdi), %xmm0 # sched: [6:0.50]
-; SKX-NEXT:    vaddpd %xmm0, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vaddpd %xmm0, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    vmovupd %xmm0, (%rsi) # sched: [1:1.00]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
@@ -6058,13 +6058,13 @@ define <2 x double> @test_mulpd(<2 x double> %a0, <2 x double> %a1, <2 x double>
 ;
 ; SKX-SSE-LABEL: test_mulpd:
 ; SKX-SSE:       # %bb.0:
-; SKX-SSE-NEXT:    mulpd %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    mulpd %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    mulpd (%rdi), %xmm0 # sched: [10:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_mulpd:
 ; SKX:       # %bb.0:
-; SKX-NEXT:    vmulpd %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vmulpd %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    vmulpd (%rdi), %xmm0, %xmm0 # sched: [10:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
@@ -6166,13 +6166,13 @@ define double @test_mulsd(double %a0, double %a1, double *%a2) {
 ;
 ; SKX-SSE-LABEL: test_mulsd:
 ; SKX-SSE:       # %bb.0:
-; SKX-SSE-NEXT:    mulsd %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    mulsd %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    mulsd (%rdi), %xmm0 # sched: [9:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_mulsd:
 ; SKX:       # %bb.0:
-; SKX-NEXT:    vmulsd %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vmulsd %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    vmulsd (%rdi), %xmm0, %xmm0 # sched: [9:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
@@ -6287,14 +6287,14 @@ define <2 x double> @test_orpd(<2 x double> %a0, <2 x double> %a1, <2 x double> 
 ; SKX-SSE:       # %bb.0:
 ; SKX-SSE-NEXT:    orpd %xmm1, %xmm0 # sched: [1:0.33]
 ; SKX-SSE-NEXT:    orpd (%rdi), %xmm0 # sched: [7:0.50]
-; SKX-SSE-NEXT:    addpd %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    addpd %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_orpd:
 ; SKX:       # %bb.0:
 ; SKX-NEXT:    vorpd %xmm1, %xmm0, %xmm0 # sched: [1:0.33]
 ; SKX-NEXT:    vorpd (%rdi), %xmm0, %xmm0 # sched: [7:0.50]
-; SKX-NEXT:    vaddpd %xmm0, %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vaddpd %xmm0, %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
 ; BTVER2-SSE-LABEL: test_orpd:
@@ -7122,7 +7122,6 @@ define <16 x i8> @test_paddsb(<16 x i8> %a0, <16 x i8> %a1, <16 x i8> *%a2) {
 }
 declare <16 x i8> @llvm.x86.sse2.padds.b(<16 x i8>, <16 x i8>) nounwind readnone
 
-
 define <8 x i16> @test_paddsw(<8 x i16> %a0, <8 x i16> %a1, <8 x i16> *%a2) {
 ; GENERIC-LABEL: test_paddsw:
 ; GENERIC:       # %bb.0:
@@ -7229,25 +7228,12 @@ define <8 x i16> @test_paddsw(<8 x i16> %a0, <8 x i16> %a1, <8 x i16> *%a2) {
 ; ZNVER1-NEXT:    vpaddsw %xmm1, %xmm0, %xmm0 # sched: [1:0.25]
 ; ZNVER1-NEXT:    vpaddsw (%rdi), %xmm0, %xmm0 # sched: [8:0.50]
 ; ZNVER1-NEXT:    retq # sched: [1:0.50]
-  %1 = sext <8 x i16> %a0 to <8 x i32>
-  %2 = sext <8 x i16> %a1 to <8 x i32>
-  %3 = add nsw <8 x i32> %1, %2
-  %4 = icmp slt <8 x i32> %3, <i32 32767, i32 32767, i32 32767, i32 32767, i32 32767, i32 32767, i32 32767, i32 32767>
-  %5 = select <8 x i1> %4, <8 x i32> %3, <8 x i32> <i32 32767, i32 32767, i32 32767, i32 32767, i32 32767, i32 32767, i32 32767, i32 32767>
-  %6 = icmp sgt <8 x i32> %5, <i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768>
-  %7 = select <8 x i1> %6, <8 x i32> %5, <8 x i32> <i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768>
-  %8 = trunc <8 x i32> %7 to <8 x i16>
-  %9 = load <8 x i16>, <8 x i16> *%a2, align 16
-  %10 = sext <8 x i16> %8 to <8 x i32>
-  %11 = sext <8 x i16> %9 to <8 x i32>
-  %12 = add nsw <8 x i32> %10, %11
-  %13 = icmp slt <8 x i32> %12, <i32 32767, i32 32767, i32 32767, i32 32767, i32 32767, i32 32767, i32 32767, i32 32767>
-  %14 = select <8 x i1> %13, <8 x i32> %12, <8 x i32> <i32 32767, i32 32767, i32 32767, i32 32767, i32 32767, i32 32767, i32 32767, i32 32767>
-  %15 = icmp sgt <8 x i32> %14, <i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768>
-  %16 = select <8 x i1> %15, <8 x i32> %14, <8 x i32> <i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768>
-  %17 = trunc <8 x i32> %16 to <8 x i16>
-  ret <8 x i16> %17
+  %1 = call <8 x i16> @llvm.x86.sse2.padds.w(<8 x i16> %a0, <8 x i16> %a1)
+  %2 = load <8 x i16>, <8 x i16> *%a2, align 16
+  %3 = call <8 x i16> @llvm.x86.sse2.padds.w(<8 x i16> %1, <8 x i16> %2)
+  ret <8 x i16> %3
 }
+declare <8 x i16> @llvm.x86.sse2.padds.w(<8 x i16>, <8 x i16>) nounwind readnone
 
 define <16 x i8> @test_paddusb(<16 x i8> %a0, <16 x i8> %a1, <16 x i8> *%a2) {
 ; GENERIC-LABEL: test_paddusb:
@@ -7355,21 +7341,12 @@ define <16 x i8> @test_paddusb(<16 x i8> %a0, <16 x i8> %a1, <16 x i8> *%a2) {
 ; ZNVER1-NEXT:    vpaddusb %xmm1, %xmm0, %xmm0 # sched: [1:0.25]
 ; ZNVER1-NEXT:    vpaddusb (%rdi), %xmm0, %xmm0 # sched: [8:0.50]
 ; ZNVER1-NEXT:    retq # sched: [1:0.50]
-  %1 = zext <16 x i8> %a0 to <16 x i16>
-  %2 = zext <16 x i8> %a1 to <16 x i16>
-  %3 = add nsw <16 x i16> %1, %2
-  %4 = icmp ult <16 x i16> %3, <i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255>
-  %5 = select <16 x i1> %4, <16 x i16> %3, <16 x i16> <i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255>
-  %6 = trunc <16 x i16> %5 to <16 x i8>
-  %7 = load <16 x i8>, <16 x i8> *%a2, align 16
-  %8 = zext <16 x i8> %6 to <16 x i16>
-  %9 = zext <16 x i8> %7 to <16 x i16>
-  %10 = add nsw <16 x i16> %8, %9
-  %11 = icmp ult <16 x i16> %10, <i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255>
-  %12 = select <16 x i1> %11, <16 x i16> %10, <16 x i16> <i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255, i16 255>
-  %13 = trunc <16 x i16> %12 to <16 x i8>
-  ret <16 x i8> %13
+  %1 = call <16 x i8> @llvm.x86.sse2.paddus.b(<16 x i8> %a0, <16 x i8> %a1)
+  %2 = load <16 x i8>, <16 x i8> *%a2, align 16
+  %3 = call <16 x i8> @llvm.x86.sse2.paddus.b(<16 x i8> %1, <16 x i8> %2)
+  ret <16 x i8> %3
 }
+declare <16 x i8> @llvm.x86.sse2.paddus.b(<16 x i8>, <16 x i8>) nounwind readnone
 
 define <8 x i16> @test_paddusw(<8 x i16> %a0, <8 x i16> %a1, <8 x i16> *%a2) {
 ; GENERIC-LABEL: test_paddusw:
@@ -7477,21 +7454,12 @@ define <8 x i16> @test_paddusw(<8 x i16> %a0, <8 x i16> %a1, <8 x i16> *%a2) {
 ; ZNVER1-NEXT:    vpaddusw %xmm1, %xmm0, %xmm0 # sched: [1:0.25]
 ; ZNVER1-NEXT:    vpaddusw (%rdi), %xmm0, %xmm0 # sched: [8:0.50]
 ; ZNVER1-NEXT:    retq # sched: [1:0.50]
-  %1 = zext <8 x i16> %a0 to <8 x i32>
-  %2 = zext <8 x i16> %a1 to <8 x i32>
-  %3 = add nsw <8 x i32> %1, %2
-  %4 = icmp ult <8 x i32> %3, <i32 65535, i32 65535, i32 65535, i32 65535, i32 65535, i32 65535, i32 65535, i32 65535>
-  %5 = select <8 x i1> %4, <8 x i32> %3, <8 x i32> <i32 65535, i32 65535, i32 65535, i32 65535, i32 65535, i32 65535, i32 65535, i32 65535>
-  %6 = trunc <8 x i32> %5 to <8 x i16>
-  %7 = load <8 x i16>, <8 x i16> *%a2, align 16
-  %8 = zext <8 x i16> %6 to <8 x i32>
-  %9 = zext <8 x i16> %7 to <8 x i32>
-  %10 = add nsw <8 x i32> %8, %9
-  %11 = icmp ult <8 x i32> %10, <i32 65535, i32 65535, i32 65535, i32 65535, i32 65535, i32 65535, i32 65535, i32 65535>
-  %12 = select <8 x i1> %11, <8 x i32> %10, <8 x i32> <i32 65535, i32 65535, i32 65535, i32 65535, i32 65535, i32 65535, i32 65535, i32 65535>
-  %13 = trunc <8 x i32> %12 to <8 x i16>
-  ret <8 x i16> %13
+  %1 = call <8 x i16> @llvm.x86.sse2.paddus.w(<8 x i16> %a0, <8 x i16> %a1)
+  %2 = load <8 x i16>, <8 x i16> *%a2, align 16
+  %3 = call <8 x i16> @llvm.x86.sse2.paddus.w(<8 x i16> %1, <8 x i16> %2)
+  ret <8 x i16> %3
 }
+declare <8 x i16> @llvm.x86.sse2.paddus.w(<8 x i16>, <8 x i16>) nounwind readnone
 
 define <8 x i16> @test_paddw(<8 x i16> %a0, <8 x i16> %a1, <8 x i16> *%a2) {
 ; GENERIC-LABEL: test_paddw:
@@ -9112,14 +9080,14 @@ define <8 x i16> @test_pinsrw(<8 x i16> %a0, i16 %a1, i16 *%a2) {
 ;
 ; BTVER2-SSE-LABEL: test_pinsrw:
 ; BTVER2-SSE:       # %bb.0:
-; BTVER2-SSE-NEXT:    pinsrw $1, %edi, %xmm0 # sched: [1:0.50]
-; BTVER2-SSE-NEXT:    pinsrw $3, (%rsi), %xmm0 # sched: [6:1.00]
+; BTVER2-SSE-NEXT:    pinsrw $1, %edi, %xmm0 # sched: [7:0.50]
+; BTVER2-SSE-NEXT:    pinsrw $3, (%rsi), %xmm0 # sched: [4:1.00]
 ; BTVER2-SSE-NEXT:    retq # sched: [4:1.00]
 ;
 ; BTVER2-LABEL: test_pinsrw:
 ; BTVER2:       # %bb.0:
-; BTVER2-NEXT:    vpinsrw $1, %edi, %xmm0, %xmm0 # sched: [1:0.50]
-; BTVER2-NEXT:    vpinsrw $3, (%rsi), %xmm0, %xmm0 # sched: [6:1.00]
+; BTVER2-NEXT:    vpinsrw $1, %edi, %xmm0, %xmm0 # sched: [7:0.50]
+; BTVER2-NEXT:    vpinsrw $3, (%rsi), %xmm0, %xmm0 # sched: [4:1.00]
 ; BTVER2-NEXT:    retq # sched: [4:1.00]
 ;
 ; ZNVER1-SSE-LABEL: test_pinsrw:
@@ -9208,13 +9176,13 @@ define <4 x i32> @test_pmaddwd(<8 x i16> %a0, <8 x i16> %a1, <8 x i16> *%a2) {
 ;
 ; SKX-SSE-LABEL: test_pmaddwd:
 ; SKX-SSE:       # %bb.0:
-; SKX-SSE-NEXT:    pmaddwd %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    pmaddwd %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    pmaddwd (%rdi), %xmm0 # sched: [10:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_pmaddwd:
 ; SKX:       # %bb.0:
-; SKX-NEXT:    vpmaddwd %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vpmaddwd %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    vpmaddwd (%rdi), %xmm0, %xmm0 # sched: [10:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
@@ -9862,13 +9830,13 @@ define <8 x i16> @test_pmulhuw(<8 x i16> %a0, <8 x i16> %a1, <8 x i16> *%a2) {
 ;
 ; SKX-SSE-LABEL: test_pmulhuw:
 ; SKX-SSE:       # %bb.0:
-; SKX-SSE-NEXT:    pmulhuw %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    pmulhuw %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    pmulhuw (%rdi), %xmm0 # sched: [10:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_pmulhuw:
 ; SKX:       # %bb.0:
-; SKX-NEXT:    vpmulhuw %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vpmulhuw %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    vpmulhuw (%rdi), %xmm0, %xmm0 # sched: [10:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
@@ -9971,13 +9939,13 @@ define <8 x i16> @test_pmulhw(<8 x i16> %a0, <8 x i16> %a1, <8 x i16> *%a2) {
 ;
 ; SKX-SSE-LABEL: test_pmulhw:
 ; SKX-SSE:       # %bb.0:
-; SKX-SSE-NEXT:    pmulhw %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    pmulhw %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    pmulhw (%rdi), %xmm0 # sched: [10:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_pmulhw:
 ; SKX:       # %bb.0:
-; SKX-NEXT:    vpmulhw %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vpmulhw %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    vpmulhw (%rdi), %xmm0, %xmm0 # sched: [10:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
@@ -10080,13 +10048,13 @@ define <8 x i16> @test_pmullw(<8 x i16> %a0, <8 x i16> %a1, <8 x i16> *%a2) {
 ;
 ; SKX-SSE-LABEL: test_pmullw:
 ; SKX-SSE:       # %bb.0:
-; SKX-SSE-NEXT:    pmullw %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    pmullw %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    pmullw (%rdi), %xmm0 # sched: [10:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_pmullw:
 ; SKX:       # %bb.0:
-; SKX-NEXT:    vpmullw %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vpmullw %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    vpmullw (%rdi), %xmm0, %xmm0 # sched: [10:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
@@ -10188,13 +10156,13 @@ define <2 x i64> @test_pmuludq(<4 x i32> %a0, <4 x i32> %a1, <4 x i32> *%a2) {
 ;
 ; SKX-SSE-LABEL: test_pmuludq:
 ; SKX-SSE:       # %bb.0:
-; SKX-SSE-NEXT:    pmuludq %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    pmuludq %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    pmuludq (%rdi), %xmm0 # sched: [10:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_pmuludq:
 ; SKX:       # %bb.0:
-; SKX-NEXT:    vpmuludq %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vpmuludq %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    vpmuludq (%rdi), %xmm0, %xmm0 # sched: [10:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
@@ -12617,25 +12585,12 @@ define <8 x i16> @test_psubsw(<8 x i16> %a0, <8 x i16> %a1, <8 x i16> *%a2) {
 ; ZNVER1-NEXT:    vpsubsw %xmm1, %xmm0, %xmm0 # sched: [1:0.25]
 ; ZNVER1-NEXT:    vpsubsw (%rdi), %xmm0, %xmm0 # sched: [8:0.50]
 ; ZNVER1-NEXT:    retq # sched: [1:0.50]
-  %1 = sext <8 x i16> %a0 to <8 x i32>
-  %2 = sext <8 x i16> %a1 to <8 x i32>
-  %3 = sub nsw <8 x i32> %1, %2
-  %4 = icmp slt <8 x i32> %3, <i32 32767, i32 32767, i32 32767, i32 32767, i32 32767, i32 32767, i32 32767, i32 32767>
-  %5 = select <8 x i1> %4, <8 x i32> %3, <8 x i32> <i32 32767, i32 32767, i32 32767, i32 32767, i32 32767, i32 32767, i32 32767, i32 32767>
-  %6 = icmp sgt <8 x i32> %5, <i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768>
-  %7 = select <8 x i1> %6, <8 x i32> %5, <8 x i32> <i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768>
-  %8 = trunc <8 x i32> %7 to <8 x i16>
-  %9 = load <8 x i16>, <8 x i16> *%a2, align 16
-  %10 = sext <8 x i16> %8 to <8 x i32>
-  %11 = sext <8 x i16> %9 to <8 x i32>
-  %12 = sub nsw <8 x i32> %10, %11
-  %13 = icmp slt <8 x i32> %12, <i32 32767, i32 32767, i32 32767, i32 32767, i32 32767, i32 32767, i32 32767, i32 32767>
-  %14 = select <8 x i1> %13, <8 x i32> %12, <8 x i32> <i32 32767, i32 32767, i32 32767, i32 32767, i32 32767, i32 32767, i32 32767, i32 32767>
-  %15 = icmp sgt <8 x i32> %14, <i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768>
-  %16 = select <8 x i1> %15, <8 x i32> %14, <8 x i32> <i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768, i32 -32768>
-  %17 = trunc <8 x i32> %16 to <8 x i16>
-  ret <8 x i16> %17
+  %1 = call <8 x i16> @llvm.x86.sse2.psubs.w(<8 x i16> %a0, <8 x i16> %a1)
+  %2 = load <8 x i16>, <8 x i16> *%a2, align 16
+  %3 = call <8 x i16> @llvm.x86.sse2.psubs.w(<8 x i16> %1, <8 x i16> %2)
+  ret <8 x i16> %3
 }
+declare <8 x i16> @llvm.x86.sse2.psubs.w(<8 x i16>, <8 x i16>) nounwind readnone
 
 define <16 x i8> @test_psubusb(<16 x i8> %a0, <16 x i8> %a1, <16 x i8> *%a2) {
 ; GENERIC-LABEL: test_psubusb:
@@ -12743,15 +12698,12 @@ define <16 x i8> @test_psubusb(<16 x i8> %a0, <16 x i8> %a1, <16 x i8> *%a2) {
 ; ZNVER1-NEXT:    vpsubusb %xmm1, %xmm0, %xmm0 # sched: [1:0.25]
 ; ZNVER1-NEXT:    vpsubusb (%rdi), %xmm0, %xmm0 # sched: [8:0.50]
 ; ZNVER1-NEXT:    retq # sched: [1:0.50]
-  %1 = icmp ugt <16 x i8> %a0, %a1
-  %2 = select <16 x i1> %1, <16 x i8> %a0, <16 x i8> %a1
-  %3 = sub <16 x i8> %2, %a1
-  %4 = load <16 x i8>, <16 x i8> *%a2, align 16
-  %5 = icmp ugt <16 x i8> %3, %4
-  %6 = select <16 x i1> %5, <16 x i8> %3, <16 x i8> %4
-  %7 = sub <16 x i8> %6, %4
-  ret <16 x i8> %7
+  %1 = call <16 x i8> @llvm.x86.sse2.psubus.b(<16 x i8> %a0, <16 x i8> %a1)
+  %2 = load <16 x i8>, <16 x i8> *%a2, align 16
+  %3 = call <16 x i8> @llvm.x86.sse2.psubus.b(<16 x i8> %1, <16 x i8> %2)
+  ret <16 x i8> %3
 }
+declare <16 x i8> @llvm.x86.sse2.psubus.b(<16 x i8>, <16 x i8>) nounwind readnone
 
 define <8 x i16> @test_psubusw(<8 x i16> %a0, <8 x i16> %a1, <8 x i16> *%a2) {
 ; GENERIC-LABEL: test_psubusw:
@@ -12859,15 +12811,12 @@ define <8 x i16> @test_psubusw(<8 x i16> %a0, <8 x i16> %a1, <8 x i16> *%a2) {
 ; ZNVER1-NEXT:    vpsubusw %xmm1, %xmm0, %xmm0 # sched: [1:0.25]
 ; ZNVER1-NEXT:    vpsubusw (%rdi), %xmm0, %xmm0 # sched: [8:0.50]
 ; ZNVER1-NEXT:    retq # sched: [1:0.50]
-  %1 = icmp ugt <8 x i16> %a0, %a1
-  %2 = select <8 x i1> %1, <8 x i16> %a0, <8 x i16> %a1
-  %3 = sub <8 x i16> %2, %a1
-  %4 = load <8 x i16>, <8 x i16> *%a2, align 16
-  %5 = icmp ugt <8 x i16> %3, %4
-  %6 = select <8 x i1> %5, <8 x i16> %3, <8 x i16> %4
-  %7 = sub <8 x i16> %6, %4
-  ret <8 x i16> %7
+  %1 = call <8 x i16> @llvm.x86.sse2.psubus.w(<8 x i16> %a0, <8 x i16> %a1)
+  %2 = load <8 x i16>, <8 x i16> *%a2, align 16
+  %3 = call <8 x i16> @llvm.x86.sse2.psubus.w(<8 x i16> %1, <8 x i16> %2)
+  ret <8 x i16> %3
 }
+declare <8 x i16> @llvm.x86.sse2.psubus.w(<8 x i16>, <8 x i16>) nounwind readnone
 
 define <8 x i16> @test_psubw(<8 x i16> %a0, <8 x i16> %a1, <8 x i16> *%a2) {
 ; GENERIC-LABEL: test_psubw:
@@ -14145,14 +14094,14 @@ define <2 x double> @test_shufpd(<2 x double> %a0, <2 x double> %a1, <2 x double
 ; SKX-SSE:       # %bb.0:
 ; SKX-SSE-NEXT:    shufpd {{.*#+}} xmm0 = xmm0[1],xmm1[0] sched: [1:1.00]
 ; SKX-SSE-NEXT:    shufpd {{.*#+}} xmm1 = xmm1[1],mem[0] sched: [7:1.00]
-; SKX-SSE-NEXT:    addpd %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    addpd %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_shufpd:
 ; SKX:       # %bb.0:
 ; SKX-NEXT:    vshufpd {{.*#+}} xmm0 = xmm0[1],xmm1[0] sched: [1:1.00]
 ; SKX-NEXT:    vshufpd {{.*#+}} xmm1 = xmm1[1],mem[0] sched: [7:1.00]
-; SKX-NEXT:    vaddpd %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vaddpd %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
 ; BTVER2-SSE-LABEL: test_shufpd:
@@ -14272,14 +14221,14 @@ define <2 x double> @test_sqrtpd(<2 x double> %a0, <2 x double> *%a1) {
 ; SKX-SSE:       # %bb.0:
 ; SKX-SSE-NEXT:    sqrtpd %xmm0, %xmm1 # sched: [18:6.00]
 ; SKX-SSE-NEXT:    sqrtpd (%rdi), %xmm0 # sched: [24:6.00]
-; SKX-SSE-NEXT:    addpd %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    addpd %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_sqrtpd:
 ; SKX:       # %bb.0:
 ; SKX-NEXT:    vsqrtpd %xmm0, %xmm0 # sched: [18:6.00]
 ; SKX-NEXT:    vsqrtpd (%rdi), %xmm1 # sched: [24:6.00]
-; SKX-NEXT:    vaddpd %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vaddpd %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
 ; BTVER2-SSE-LABEL: test_sqrtpd:
@@ -14298,15 +14247,15 @@ define <2 x double> @test_sqrtpd(<2 x double> %a0, <2 x double> *%a1) {
 ;
 ; ZNVER1-SSE-LABEL: test_sqrtpd:
 ; ZNVER1-SSE:       # %bb.0:
-; ZNVER1-SSE-NEXT:    sqrtpd %xmm0, %xmm1 # sched: [20:1.00]
-; ZNVER1-SSE-NEXT:    sqrtpd (%rdi), %xmm0 # sched: [27:1.00]
+; ZNVER1-SSE-NEXT:    sqrtpd %xmm0, %xmm1 # sched: [20:20.00]
+; ZNVER1-SSE-NEXT:    sqrtpd (%rdi), %xmm0 # sched: [27:20.00]
 ; ZNVER1-SSE-NEXT:    addpd %xmm1, %xmm0 # sched: [3:1.00]
 ; ZNVER1-SSE-NEXT:    retq # sched: [1:0.50]
 ;
 ; ZNVER1-LABEL: test_sqrtpd:
 ; ZNVER1:       # %bb.0:
-; ZNVER1-NEXT:    vsqrtpd (%rdi), %xmm1 # sched: [27:1.00]
-; ZNVER1-NEXT:    vsqrtpd %xmm0, %xmm0 # sched: [20:1.00]
+; ZNVER1-NEXT:    vsqrtpd (%rdi), %xmm1 # sched: [27:20.00]
+; ZNVER1-NEXT:    vsqrtpd %xmm0, %xmm0 # sched: [20:20.00]
 ; ZNVER1-NEXT:    vaddpd %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
 ; ZNVER1-NEXT:    retq # sched: [1:0.50]
   %1 = call <2 x double> @llvm.x86.sse2.sqrt.pd(<2 x double> %a0)
@@ -14413,7 +14362,7 @@ define <2 x double> @test_sqrtsd(<2 x double> %a0, <2 x double> *%a1) {
 ; SKX-SSE-NEXT:    sqrtsd %xmm0, %xmm0 # sched: [18:6.00]
 ; SKX-SSE-NEXT:    movapd (%rdi), %xmm1 # sched: [6:0.50]
 ; SKX-SSE-NEXT:    sqrtsd %xmm1, %xmm1 # sched: [18:6.00]
-; SKX-SSE-NEXT:    addpd %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    addpd %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_sqrtsd:
@@ -14421,7 +14370,7 @@ define <2 x double> @test_sqrtsd(<2 x double> %a0, <2 x double> *%a1) {
 ; SKX-NEXT:    vsqrtsd %xmm0, %xmm0, %xmm0 # sched: [18:6.00]
 ; SKX-NEXT:    vmovapd (%rdi), %xmm1 # sched: [6:0.50]
 ; SKX-NEXT:    vsqrtsd %xmm1, %xmm1, %xmm1 # sched: [18:6.00]
-; SKX-NEXT:    vaddpd %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vaddpd %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
 ; BTVER2-SSE-LABEL: test_sqrtsd:
@@ -14443,16 +14392,16 @@ define <2 x double> @test_sqrtsd(<2 x double> %a0, <2 x double> *%a1) {
 ; ZNVER1-SSE-LABEL: test_sqrtsd:
 ; ZNVER1-SSE:       # %bb.0:
 ; ZNVER1-SSE-NEXT:    movapd (%rdi), %xmm1 # sched: [8:0.50]
-; ZNVER1-SSE-NEXT:    sqrtsd %xmm0, %xmm0 # sched: [20:1.00]
-; ZNVER1-SSE-NEXT:    sqrtsd %xmm1, %xmm1 # sched: [20:1.00]
+; ZNVER1-SSE-NEXT:    sqrtsd %xmm0, %xmm0 # sched: [20:20.00]
+; ZNVER1-SSE-NEXT:    sqrtsd %xmm1, %xmm1 # sched: [20:20.00]
 ; ZNVER1-SSE-NEXT:    addpd %xmm1, %xmm0 # sched: [3:1.00]
 ; ZNVER1-SSE-NEXT:    retq # sched: [1:0.50]
 ;
 ; ZNVER1-LABEL: test_sqrtsd:
 ; ZNVER1:       # %bb.0:
 ; ZNVER1-NEXT:    vmovapd (%rdi), %xmm1 # sched: [8:0.50]
-; ZNVER1-NEXT:    vsqrtsd %xmm0, %xmm0, %xmm0 # sched: [20:1.00]
-; ZNVER1-NEXT:    vsqrtsd %xmm1, %xmm1, %xmm1 # sched: [20:1.00]
+; ZNVER1-NEXT:    vsqrtsd %xmm0, %xmm0, %xmm0 # sched: [20:20.00]
+; ZNVER1-NEXT:    vsqrtsd %xmm1, %xmm1, %xmm1 # sched: [20:20.00]
 ; ZNVER1-NEXT:    vaddpd %xmm1, %xmm0, %xmm0 # sched: [3:1.00]
 ; ZNVER1-NEXT:    retq # sched: [1:0.50]
   %1 = call <2 x double> @llvm.x86.sse2.sqrt.sd(<2 x double> %a0)
@@ -14532,13 +14481,13 @@ define <2 x double> @test_subpd(<2 x double> %a0, <2 x double> %a1, <2 x double>
 ;
 ; SKX-SSE-LABEL: test_subpd:
 ; SKX-SSE:       # %bb.0:
-; SKX-SSE-NEXT:    subpd %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    subpd %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    subpd (%rdi), %xmm0 # sched: [10:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_subpd:
 ; SKX:       # %bb.0:
-; SKX-NEXT:    vsubpd %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vsubpd %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    vsubpd (%rdi), %xmm0, %xmm0 # sched: [10:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
@@ -14640,13 +14589,13 @@ define double @test_subsd(double %a0, double %a1, double *%a2) {
 ;
 ; SKX-SSE-LABEL: test_subsd:
 ; SKX-SSE:       # %bb.0:
-; SKX-SSE-NEXT:    subsd %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    subsd %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    subsd (%rdi), %xmm0 # sched: [9:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_subsd:
 ; SKX:       # %bb.0:
-; SKX-NEXT:    vsubsd %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vsubsd %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    vsubsd (%rdi), %xmm0, %xmm0 # sched: [9:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
@@ -15007,14 +14956,14 @@ define <2 x double> @test_unpckhpd(<2 x double> %a0, <2 x double> %a1, <2 x doub
 ; SKX-SSE:       # %bb.0:
 ; SKX-SSE-NEXT:    unpckhpd {{.*#+}} xmm0 = xmm0[1],xmm1[1] sched: [1:1.00]
 ; SKX-SSE-NEXT:    unpckhpd {{.*#+}} xmm1 = xmm1[1],mem[1] sched: [7:1.00]
-; SKX-SSE-NEXT:    addpd %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    addpd %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_unpckhpd:
 ; SKX:       # %bb.0:
 ; SKX-NEXT:    vunpckhpd {{.*#+}} xmm0 = xmm0[1],xmm1[1] sched: [1:1.00]
 ; SKX-NEXT:    vunpckhpd {{.*#+}} xmm1 = xmm1[1],mem[1] sched: [7:1.00]
-; SKX-NEXT:    vaddpd %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vaddpd %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
 ; BTVER2-SSE-LABEL: test_unpckhpd:
@@ -15148,7 +15097,7 @@ define <2 x double> @test_unpcklpd(<2 x double> %a0, <2 x double> %a1, <2 x doub
 ; SKX-SSE-NEXT:    unpcklpd {{.*#+}} xmm0 = xmm0[0],xmm1[0] sched: [1:1.00]
 ; SKX-SSE-NEXT:    movapd %xmm0, %xmm1 # sched: [1:0.33]
 ; SKX-SSE-NEXT:    unpcklpd {{.*#+}} xmm1 = xmm1[0],mem[0] sched: [7:1.00]
-; SKX-SSE-NEXT:    addpd %xmm0, %xmm1 # sched: [4:0.33]
+; SKX-SSE-NEXT:    addpd %xmm0, %xmm1 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    movapd %xmm1, %xmm0 # sched: [1:0.33]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
@@ -15156,7 +15105,7 @@ define <2 x double> @test_unpcklpd(<2 x double> %a0, <2 x double> %a1, <2 x doub
 ; SKX:       # %bb.0:
 ; SKX-NEXT:    vunpcklpd {{.*#+}} xmm0 = xmm0[0],xmm1[0] sched: [1:1.00]
 ; SKX-NEXT:    vunpcklpd {{.*#+}} xmm1 = xmm0[0],mem[0] sched: [7:1.00]
-; SKX-NEXT:    vaddpd %xmm1, %xmm0, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vaddpd %xmm1, %xmm0, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
 ; BTVER2-SSE-LABEL: test_unpcklpd:
@@ -15279,14 +15228,14 @@ define <2 x double> @test_xorpd(<2 x double> %a0, <2 x double> %a1, <2 x double>
 ; SKX-SSE:       # %bb.0:
 ; SKX-SSE-NEXT:    xorpd %xmm1, %xmm0 # sched: [1:0.33]
 ; SKX-SSE-NEXT:    xorpd (%rdi), %xmm0 # sched: [7:0.50]
-; SKX-SSE-NEXT:    addpd %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-SSE-NEXT:    addpd %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-SSE-NEXT:    retq # sched: [7:1.00]
 ;
 ; SKX-LABEL: test_xorpd:
 ; SKX:       # %bb.0:
 ; SKX-NEXT:    vxorpd %xmm1, %xmm0, %xmm0 # sched: [1:0.33]
 ; SKX-NEXT:    vxorpd (%rdi), %xmm0, %xmm0 # sched: [7:0.50]
-; SKX-NEXT:    vaddpd %xmm0, %xmm1, %xmm0 # sched: [4:0.33]
+; SKX-NEXT:    vaddpd %xmm0, %xmm1, %xmm0 # sched: [4:0.50]
 ; SKX-NEXT:    retq # sched: [7:1.00]
 ;
 ; BTVER2-SSE-LABEL: test_xorpd:

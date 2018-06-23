@@ -1934,6 +1934,12 @@ Set the default symbol visibility for all global declarations
 
 Enables whole-program vtable optimization. Requires -flto
 
+.. option:: -fforce-emit-vtables, -fno-force-emit-vtables
+
+In order to improve devirtualization, forces emitting of vtables even in
+modules where it isn't necessary. It causes more inline virtual functions
+to be emitted.
+
 .. option:: -fwrapv, -fno-wrapv
 
 Treat signed integer overflow as two's complement
@@ -2296,6 +2302,10 @@ AARCH64
 
 Reserve the x18 register (AArch64 only)
 
+.. option:: -ffixed-x20
+
+Reserve the x20 register (AArch64 only)
+
 .. option:: -mfix-cortex-a53-835769, -mno-fix-cortex-a53-835769
 
 Workaround Cortex-A53 erratum 835769 (AArch64 only)
@@ -2486,8 +2496,6 @@ X86
 
 .. option:: -mgfni, -mno-gfni
 
-.. option:: -mibt, -mno-ibt
-
 .. option:: -mlwp, -mno-lwp
 
 .. option:: -mlzcnt, -mno-lzcnt
@@ -2495,6 +2503,10 @@ X86
 .. option:: -mmmx, -mno-mmx
 
 .. option:: -mmovbe, -mno-movbe
+
+.. option:: -mmovdiri, -mno-movdiri
+
+.. option:: -mmovdir64b, -mno-movdir64b
 
 .. option:: -mmpx, -mno-mpx
 

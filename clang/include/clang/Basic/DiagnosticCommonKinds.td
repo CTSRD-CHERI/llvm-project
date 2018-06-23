@@ -168,6 +168,8 @@ def ext_clang_enable_if : Extension<"'enable_if' is a clang extension">,
                           InGroup<GccCompat>;
 def ext_clang_diagnose_if : Extension<"'diagnose_if' is a clang extension">,
                             InGroup<GccCompat>;
+def err_fixed_point_not_enabled : Error<"compile with "
+  "'-ffixed-point' to enable fixed point types">;
 
 // SEH
 def err_seh_expected_handler : Error<
@@ -206,6 +208,8 @@ def err_opt_not_valid_with_opt : Error<
   "option '%0' cannot be specified with '%1'">;
 def err_opt_not_valid_without_opt : Error<
   "option '%0' cannot be specified without '%1'">;
+def err_opt_not_valid_on_target : Error<
+  "option '%0' cannot be specified on this target">;
 
 // Source manager
 def err_cannot_open_file : Error<"cannot open file '%0': %1">, DefaultFatal;
@@ -231,6 +235,10 @@ def note_mt_message : Note<"[rewriter] %0">;
 // ARCMigrate
 def warn_arcmt_nsalloc_realloc : Warning<"[rewriter] call returns pointer to GC managed memory; it will become unmanaged in ARC">;
 def err_arcmt_nsinvocation_ownership : Error<"NSInvocation's %0 is not safe to be used with an object with ownership other than __unsafe_unretained">;
+
+// OpenCL C++.
+def err_openclcxx_not_supported : Error<
+  "'%0' is not supported in OpenCL C++">;
 
 // OpenMP
 def err_omp_more_one_clause : Error<

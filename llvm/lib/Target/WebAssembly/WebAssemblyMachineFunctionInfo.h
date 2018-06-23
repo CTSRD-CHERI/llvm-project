@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief This file declares WebAssembly-specific per-machine-function
+/// This file declares WebAssembly-specific per-machine-function
 /// information.
 ///
 //===----------------------------------------------------------------------===//
@@ -59,6 +59,8 @@ class WebAssemblyFunctionInfo final : public MachineFunctionInfo {
 
   void addResult(MVT VT) { Results.push_back(VT); }
   const std::vector<MVT> &getResults() const { return Results; }
+
+  void clearParamsAndResults() { Params.clear(); Results.clear(); }
 
   void setNumLocals(size_t NumLocals) { Locals.resize(NumLocals, MVT::i32); }
   void setLocal(size_t i, MVT VT) { Locals[i] = VT; }

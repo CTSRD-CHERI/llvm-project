@@ -45,19 +45,25 @@ MemoryAccess *MemorySSAUpdater::getPreviousDefRecursive(
   auto Cached = CachedPreviousDef.find(BB);
   if (Cached != CachedPreviousDef.end()) {
     return Cached->second;
-  } else if (BasicBlock *Pred = BB->getSinglePredecessor()) {
+  }
+
+  if (BasicBlock *Pred = BB->getSinglePredecessor()) {
     // Single predecessor case, just recurse, we can only have one definition.
     MemoryAccess *Result = getPreviousDefFromEnd(Pred, CachedPreviousDef);
     CachedPreviousDef.insert({BB, Result});
     return Result;
-  } else if (VisitedBlocks.count(BB)) {
+  }
+
+  if (VisitedBlocks.count(BB)) {
     // We hit our node again, meaning we had a cycle, we must insert a phi
     // node to break it so we have an operand. The only case this will
     // insert useless phis is if we have irreducible control flow.
     MemoryAccess *Result = MSSA->createMemoryPhi(BB);
     CachedPreviousDef.insert({BB, Result});
     return Result;
-  } else if (VisitedBlocks.insert(BB).second) {
+  }
+
+  if (VisitedBlocks.insert(BB).second) {
     // Mark us visited so we can detect a cycle
     SmallVector<MemoryAccess *, 8> PhiOps;
 
@@ -424,7 +430,7 @@ void MemorySSAUpdater::moveToPlace(MemoryUseOrDef *What, BasicBlock *BB,
   return moveTo(What, BB, Where);
 }
 
-/// \brief If all arguments of a MemoryPHI are defined by the same incoming
+/// If all arguments of a MemoryPHI are defined by the same incoming
 /// argument, return that argument.
 static MemoryAccess *onlySingleValue(MemoryPhi *MP) {
   MemoryAccess *MA = nullptr;

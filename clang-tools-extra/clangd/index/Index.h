@@ -34,12 +34,6 @@ struct SymbolLocation {
 
   // The URI of the source file where a symbol occurs.
   llvm::StringRef FileURI;
-  // The 0-based offsets of the symbol from the beginning of the source file,
-  // using half-open range, [StartOffset, EndOffset).
-  // DO NOT use these fields, as they will be removed immediately.
-  // FIXME(hokein): remove these fields in favor of Position.
-  unsigned StartOffset = 0;
-  unsigned EndOffset = 0;
 
   /// The symbol range, using half-open range [Start, End).
   Position Start;
@@ -68,6 +62,9 @@ public:
   bool operator<(const SymbolID &Sym) const {
     return HashValue < Sym.HashValue;
   }
+
+  // Returns a 40-bytes hex encoded string.
+  std::string str() const;
 
 private:
   static constexpr unsigned HashByteLength = 20;
@@ -152,9 +149,11 @@ struct Symbol {
   // The number of translation units that reference this symbol from their main
   // file. This number is only meaningful if aggregated in an index.
   unsigned References = 0;
-
+  /// Whether or not this symbol is meant to be used for the code completion.
+  /// See also isIndexedForCodeCompletion().
+  bool IsIndexedForCodeCompletion = false;
   /// A brief description of the symbol that can be displayed in the completion
-  /// candidate list. For example, "Foo(X x, Y y) const" is a labal for a
+  /// candidate list. For example, "Foo(X x, Y y) const" is a label for a
   /// function.
   llvm::StringRef CompletionLabel;
   /// The piece of text that the user is expected to type to match the
@@ -196,6 +195,12 @@ struct Symbol {
 };
 llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, const Symbol &S);
 
+// Computes query-independent quality score for a Symbol.
+// This currently falls in the range [1, ln(#indexed documents)].
+// FIXME: this should probably be split into symbol -> signals
+//        and signals -> score, so it can be reused for Sema completions.
+double quality(const Symbol &S);
+
 // An immutable symbol container that stores a set of symbols.
 // The container will maintain the lifetime of the symbols.
 class SymbolSlab {
@@ -219,27 +224,27 @@ public:
   // SymbolSlab::Builder is a mutable container that can 'freeze' to SymbolSlab.
   // The frozen SymbolSlab will use less memory.
   class Builder {
-   public:
-     // Adds a symbol, overwriting any existing one with the same ID.
-     // This is a deep copy: underlying strings will be owned by the slab.
-     void insert(const Symbol& S);
+  public:
+    // Adds a symbol, overwriting any existing one with the same ID.
+    // This is a deep copy: underlying strings will be owned by the slab.
+    void insert(const Symbol &S);
 
-     // Returns the symbol with an ID, if it exists. Valid until next insert().
-     const Symbol* find(const SymbolID &ID) {
-       auto I = SymbolIndex.find(ID);
-       return I == SymbolIndex.end() ? nullptr : &Symbols[I->second];
-     }
+    // Returns the symbol with an ID, if it exists. Valid until next insert().
+    const Symbol *find(const SymbolID &ID) {
+      auto I = SymbolIndex.find(ID);
+      return I == SymbolIndex.end() ? nullptr : &Symbols[I->second];
+    }
 
-     // Consumes the builder to finalize the slab.
-     SymbolSlab build() &&;
+    // Consumes the builder to finalize the slab.
+    SymbolSlab build() &&;
 
-   private:
-     llvm::BumpPtrAllocator Arena;
-     // Intern table for strings. Contents are on the arena.
-     llvm::DenseSet<llvm::StringRef> Strings;
-     std::vector<Symbol> Symbols;
-     // Values are indices into Symbols vector.
-     llvm::DenseMap<SymbolID, size_t> SymbolIndex;
+  private:
+    llvm::BumpPtrAllocator Arena;
+    // Intern table for strings. Contents are on the arena.
+    llvm::DenseSet<llvm::StringRef> Strings;
+    std::vector<Symbol> Symbols;
+    // Values are indices into Symbols vector.
+    llvm::DenseMap<SymbolID, size_t> SymbolIndex;
   };
 
 private:
@@ -264,6 +269,11 @@ struct FuzzyFindRequest {
   /// \brief The number of top candidates to return. The index may choose to
   /// return more than this, e.g. if it doesn't know which candidates are best.
   size_t MaxCandidateCount = UINT_MAX;
+  /// If set to true, only symbols for completion support will be considered.
+  bool RestrictForCodeCompletion = false;
+  /// Contextually relevant files (e.g. the file we're code-completing in).
+  /// Paths should be absolute.
+  std::vector<std::string> ProximityPaths;
 };
 
 struct LookupRequest {

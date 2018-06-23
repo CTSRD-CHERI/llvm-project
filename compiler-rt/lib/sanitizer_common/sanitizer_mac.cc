@@ -340,6 +340,10 @@ void ReExec() {
   UNIMPLEMENTED();
 }
 
+void CheckASLR() {
+  // Do nothing
+}
+
 uptr GetPageSize() {
   return sysconf(_SC_PAGESIZE);
 }
@@ -1032,9 +1036,10 @@ void FormatUUID(char *out, uptr size, const u8 *uuid) {
 void PrintModuleMap() {
   Printf("Process module map:\n");
   MemoryMappingLayout memory_mapping(false);
-  InternalMmapVector<LoadedModule> modules(/*initial_capacity*/ 128);
+  InternalMmapVector<LoadedModule> modules;
+  modules.reserve(128);
   memory_mapping.DumpListOfModules(&modules);
-  InternalSort(&modules, modules.size(), CompareBaseAddress);
+  Sort(modules.data(), modules.size(), CompareBaseAddress);
   for (uptr i = 0; i < modules.size(); ++i) {
     char uuid_str[128];
     FormatUUID(uuid_str, sizeof(uuid_str), modules[i].uuid());

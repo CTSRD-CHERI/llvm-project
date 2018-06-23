@@ -8,183 +8,217 @@
 //===----------------------------------------------------------------------===//
 
 #include "Uops.h"
-#include "BenchmarkResult.h"
-#include "InstructionSnippetGenerator.h"
+
+#include "Assembler.h"
+#include "BenchmarkRunner.h"
+#include "MCInstrDescView.h"
 #include "PerfHelper.h"
-#include "llvm/ADT/StringExtras.h"
-#include "llvm/MC/MCInstrDesc.h"
-#include "llvm/MC/MCSchedule.h"
-#include "llvm/Support/Error.h"
-#include <algorithm>
-#include <random>
-#include <unordered_map>
-#include <unordered_set>
+
+// FIXME: Load constants into registers (e.g. with fld1) to not break
+// instructions like x87.
+
+// Ideally we would like the only limitation on executing uops to be the issue
+// ports. Maximizing port pressure increases the likelihood that the load is
+// distributed evenly across possible ports.
+
+// To achieve that, one approach is to generate instructions that do not have
+// data dependencies between them.
+//
+// For some instructions, this is trivial:
+//    mov rax, qword ptr [rsi]
+//    mov rax, qword ptr [rsi]
+//    mov rax, qword ptr [rsi]
+//    mov rax, qword ptr [rsi]
+// For the above snippet, haswell just renames rax four times and executes the
+// four instructions two at a time on P23 and P0126.
+//
+// For some instructions, we just need to make sure that the source is
+// different from the destination. For example, IDIV8r reads from GPR and
+// writes to AX. We just need to ensure that the Var is assigned a
+// register which is different from AX:
+//    idiv bx
+//    idiv bx
+//    idiv bx
+//    idiv bx
+// The above snippet will be able to fully saturate the ports, while the same
+// with ax would issue one uop every `latency(IDIV8r)` cycles.
+//
+// Some instructions make this harder because they both read and write from
+// the same register:
+//    inc rax
+//    inc rax
+//    inc rax
+//    inc rax
+// This has a data dependency from each instruction to the next, limit the
+// number of instructions that can be issued in parallel.
+// It turns out that this is not a big issue on recent Intel CPUs because they
+// have heuristics to balance port pressure. In the snippet above, subsequent
+// instructions will end up evenly distributed on {P0,P1,P5,P6}, but some CPUs
+// might end up executing them all on P0 (just because they can), or try
+// avoiding P5 because it's usually under high pressure from vector
+// instructions.
+// This issue is even more important for high-latency instructions because
+// they increase the idle time of the CPU, e.g. :
+//    imul rax, rbx
+//    imul rax, rbx
+//    imul rax, rbx
+//    imul rax, rbx
+//
+// To avoid that, we do the renaming statically by generating as many
+// independent exclusive assignments as possible (until all possible registers
+// are exhausted) e.g.:
+//    imul rax, rbx
+//    imul rcx, rbx
+//    imul rdx, rbx
+//    imul r8,  rbx
+//
+// Some instruction even make the above static renaming impossible because
+// they implicitly read and write from the same operand, e.g. ADC16rr reads
+// and writes from EFLAGS.
+// In that case we just use a greedy register assignment and hope for the
+// best.
 
 namespace exegesis {
 
-// FIXME: Handle memory (see PR36906)
-static bool isInvalidOperand(const llvm::MCOperandInfo &OpInfo) {
-  switch (OpInfo.OperandType) {
-  default:
-    return true;
-  case llvm::MCOI::OPERAND_IMMEDIATE:
-  case llvm::MCOI::OPERAND_REGISTER:
-    return false;
-  }
+static bool hasUnknownOperand(const llvm::MCOperandInfo &OpInfo) {
+  return OpInfo.OperandType == llvm::MCOI::OPERAND_UNKNOWN;
 }
 
-static llvm::Error makeError(llvm::Twine Msg) {
-  return llvm::make_error<llvm::StringError>(Msg,
-                                             llvm::inconvertibleErrorCode());
+// FIXME: Handle memory, see PR36905.
+static bool hasMemoryOperand(const llvm::MCOperandInfo &OpInfo) {
+  return OpInfo.OperandType == llvm::MCOI::OPERAND_MEMORY;
 }
 
-static std::vector<llvm::MCInst> generateIndependentAssignments(
-    const LLVMState &State, const llvm::MCInstrDesc &InstrDesc,
-    llvm::SmallVector<Variable, 8> Vars, int MaxAssignments) {
-  std::unordered_set<llvm::MCPhysReg> IsUsedByAnyVar;
-  for (const Variable &Var : Vars) {
-    if (Var.IsUse) {
-      IsUsedByAnyVar.insert(Var.PossibleRegisters.begin(),
-                            Var.PossibleRegisters.end());
-    }
-  }
+llvm::Error
+UopsBenchmarkRunner::isInfeasible(const llvm::MCInstrDesc &MCInstrDesc) const {
+  if (MCInstrDesc.isPseudo())
+    return llvm::make_error<BenchmarkFailure>("Infeasible : is pseudo");
+  if (llvm::any_of(MCInstrDesc.operands(), hasUnknownOperand))
+    return llvm::make_error<BenchmarkFailure>(
+        "Infeasible : has unknown operands");
+  if (llvm::any_of(MCInstrDesc.operands(), hasMemoryOperand))
+    return llvm::make_error<BenchmarkFailure>(
+        "Infeasible : has memory operands");
+  return llvm::Error::success();
+}
 
-  std::vector<llvm::MCInst> Pattern;
-  for (int A = 0; A < MaxAssignments; ++A) {
-    // FIXME: This is a bit pessimistic. We should get away with an
-    // assignment that ensures that the set of assigned registers for uses and
-    // the set of assigned registers for defs do not intersect (registers
-    // for uses (resp defs) do not have to be all distinct).
-    const std::vector<llvm::MCPhysReg> Regs = getExclusiveAssignment(Vars);
-    if (Regs.empty())
-      break;
-    // Remove all assigned registers defs that are used by at least one other
-    // variable from the list of possible variable registers. This ensures that
-    // we never create a RAW hazard that would lead to serialization.
-    for (size_t I = 0, E = Vars.size(); I < E; ++I) {
-      llvm::MCPhysReg Reg = Regs[I];
-      if (Vars[I].IsDef && IsUsedByAnyVar.count(Reg)) {
-        Vars[I].PossibleRegisters.remove(Reg);
-      }
-    }
-    // Create an MCInst and check assembly.
-    llvm::MCInst Inst = generateMCInst(InstrDesc, Vars, Regs);
-    if (!State.canAssemble(Inst))
-      continue;
-    Pattern.push_back(std::move(Inst));
+// Returns whether this Variable ties Use and Def operands together.
+static bool hasTiedOperands(const Variable &Var) {
+  bool HasUse = false;
+  bool HasDef = false;
+  for (const Operand *Op : Var.TiedOperands) {
+    if (Op->IsDef)
+      HasDef = true;
+    else
+      HasUse = true;
   }
-  return Pattern;
+  return HasUse && HasDef;
+}
+
+static llvm::SmallVector<const Variable *, 8>
+getTiedVariables(const Instruction &Instr) {
+  llvm::SmallVector<const Variable *, 8> Result;
+  for (const auto &Var : Instr.Variables)
+    if (hasTiedOperands(Var))
+      Result.push_back(&Var);
+  return Result;
+}
+
+static void remove(llvm::BitVector &a, const llvm::BitVector &b) {
+  assert(a.size() == b.size());
+  for (auto I : b.set_bits())
+    a.reset(I);
 }
 
 UopsBenchmarkRunner::~UopsBenchmarkRunner() = default;
 
-const char *UopsBenchmarkRunner::getDisplayName() const { return "uops"; }
+InstructionBenchmark::ModeE UopsBenchmarkRunner::getMode() const {
+  return InstructionBenchmark::Uops;
+}
 
-llvm::Expected<std::vector<llvm::MCInst>> UopsBenchmarkRunner::createCode(
-    const LLVMState &State, const unsigned OpcodeIndex,
-    const unsigned NumRepetitions, const JitFunctionContext &Context) const {
-  const auto &InstrInfo = State.getInstrInfo();
-  const auto &RegInfo = State.getRegInfo();
-  const llvm::MCInstrDesc &InstrDesc = InstrInfo.get(OpcodeIndex);
-  for (const llvm::MCOperandInfo &OpInfo : InstrDesc.operands()) {
-    if (isInvalidOperand(OpInfo))
-      return makeError("Only registers and immediates are supported");
+llvm::Expected<BenchmarkConfiguration>
+UopsBenchmarkRunner::generateConfiguration(unsigned Opcode) const {
+  const auto &InstrDesc = MCInstrInfo.get(Opcode);
+  if (auto E = isInfeasible(InstrDesc))
+    return std::move(E);
+  const Instruction Instr(InstrDesc, RATC);
+  const AliasingConfigurations SelfAliasing(Instr, Instr);
+  if (SelfAliasing.empty()) {
+    InstructionInstance II(Instr);
+    BenchmarkConfiguration Conf;
+    Conf.Info = "instruction is parallel, repeating a random one.";
+    Conf.Snippet = {II.randomizeUnsetVariablesAndBuild()};
+    return Conf;
   }
-
-  // FIXME: Load constants into registers (e.g. with fld1) to not break
-  // instructions like x87.
-
-  // Ideally we would like the only limitation on executing uops to be the issue
-  // ports. Maximizing port pressure increases the likelihood that the load is
-  // distributed evenly across possible ports.
-
-  // To achieve that, one approach is to generate instructions that do not have
-  // data dependencies between them.
-  //
-  // For some instructions, this is trivial:
-  //    mov rax, qword ptr [rsi]
-  //    mov rax, qword ptr [rsi]
-  //    mov rax, qword ptr [rsi]
-  //    mov rax, qword ptr [rsi]
-  // For the above snippet, haswell just renames rax four times and executes the
-  // four instructions two at a time on P23 and P0126.
-  //
-  // For some instructions, we just need to make sure that the source is
-  // different from the destination. For example, IDIV8r reads from GPR and
-  // writes to AX. We just need to ensure that the variable is assigned a
-  // register which is different from AX:
-  //    idiv bx
-  //    idiv bx
-  //    idiv bx
-  //    idiv bx
-  // The above snippet will be able to fully saturate the ports, while the same
-  // with ax would issue one uop every `latency(IDIV8r)` cycles.
-  //
-  // Some instructions make this harder because they both read and write from
-  // the same register:
-  //    inc rax
-  //    inc rax
-  //    inc rax
-  //    inc rax
-  // This has a data dependency from each instruction to the next, limit the
-  // number of instructions that can be issued in parallel.
-  // It turns out that this is not a big issue on recent Intel CPUs because they
-  // have heuristics to balance port pressure. In the snippet above, subsequent
-  // instructions will end up evenly distributed on {P0,P1,P5,P6}, but some CPUs
-  // might end up executing them all on P0 (just because they can), or try
-  // avoiding P5 because it's usually under high pressure from vector
-  // instructions.
-  // This issue is even more important for high-latency instructions because
-  // they increase the idle time of the CPU, e.g. :
-  //    imul rax, rbx
-  //    imul rax, rbx
-  //    imul rax, rbx
-  //    imul rax, rbx
-  //
-  // To avoid that, we do the renaming statically by generating as many
-  // independent exclusive assignments as possible (until all possible registers
-  // are exhausted) e.g.:
-  //    imul rax, rbx
-  //    imul rcx, rbx
-  //    imul rdx, rbx
-  //    imul r8,  rbx
-  //
-  // Some instruction even make the above static renaming impossible because
-  // they implicitly read and write from the same operand, e.g. ADC16rr reads
-  // and writes from EFLAGS.
-  // In that case we just use a greedy register assignment and hope for the
-  // best.
-
-  const auto Vars = getVariables(RegInfo, InstrDesc, Context.getReservedRegs());
-
-  // Generate as many independent exclusive assignments as possible.
-  constexpr const int MaxStaticRenames = 20;
-  std::vector<llvm::MCInst> Pattern =
-      generateIndependentAssignments(State, InstrDesc, Vars, MaxStaticRenames);
-  if (Pattern.empty()) {
-    // We don't even have a single exclusive assignment, fallback to a greedy
-    // assignment.
-    // FIXME: Tell the user about this decision to help debugging.
-    const std::vector<llvm::MCPhysReg> Regs = getGreedyAssignment(Vars);
-    if (!Vars.empty() && Regs.empty())
-      return makeError("No feasible greedy assignment");
-    llvm::MCInst Inst = generateMCInst(InstrDesc, Vars, Regs);
-    if (!State.canAssemble(Inst))
-      return makeError("Cannot assemble greedy assignment");
-    Pattern.push_back(std::move(Inst));
+  if (SelfAliasing.hasImplicitAliasing()) {
+    InstructionInstance II(Instr);
+    BenchmarkConfiguration Conf;
+    Conf.Info = "instruction is serial, repeating a random one.";
+    Conf.Snippet = {II.randomizeUnsetVariablesAndBuild()};
+    return Conf;
   }
+  const auto TiedVariables = getTiedVariables(Instr);
+  if (!TiedVariables.empty()) {
+    if (TiedVariables.size() > 1)
+      return llvm::make_error<llvm::StringError>(
+          "Infeasible : don't know how to handle several tied variables",
+          llvm::inconvertibleErrorCode());
+    BenchmarkConfiguration Conf;
+    Conf.Info = "instruction has tied variables using static renaming.";
+    const Variable *Var = TiedVariables.front();
+    assert(Var);
+    assert(!Var->TiedOperands.empty());
+    const Operand &Operand = *Var->TiedOperands.front();
+    assert(Operand.Tracker);
+    for (const llvm::MCPhysReg Reg : Operand.Tracker->sourceBits().set_bits()) {
+      InstructionInstance II(Instr);
+      II.getValueFor(*Var) = llvm::MCOperand::createReg(Reg);
+      Conf.Snippet.push_back(II.randomizeUnsetVariablesAndBuild());
+    }
+    return Conf;
+  }
+  InstructionInstance II(Instr);
+  // No tied variables, we pick random values for defs.
+  llvm::BitVector Defs(MCRegisterInfo.getNumRegs());
+  for (const auto &Op : Instr.Operands) {
+    if (Op.Tracker && Op.IsExplicit && Op.IsDef) {
+      auto PossibleRegisters = Op.Tracker->sourceBits();
+      remove(PossibleRegisters, RATC.reservedRegisters());
+      assert(PossibleRegisters.any() && "No register left to choose from");
+      const auto RandomReg = randomBit(PossibleRegisters);
+      Defs.set(RandomReg);
+      II.getValueFor(Op) = llvm::MCOperand::createReg(RandomReg);
+    }
+  }
+  // And pick random use values that are not reserved and don't alias with defs.
+  const auto DefAliases = getAliasedBits(MCRegisterInfo, Defs);
+  for (const auto &Op : Instr.Operands) {
+    if (Op.Tracker && Op.IsExplicit && !Op.IsDef) {
+      auto PossibleRegisters = Op.Tracker->sourceBits();
+      remove(PossibleRegisters, RATC.reservedRegisters());
+      remove(PossibleRegisters, DefAliases);
+      assert(PossibleRegisters.any() && "No register left to choose from");
+      const auto RandomReg = randomBit(PossibleRegisters);
+      II.getValueFor(Op) = llvm::MCOperand::createReg(RandomReg);
+    }
+  }
+  BenchmarkConfiguration Conf;
+  Conf.Info =
+      "instruction has no tied variables picking Uses different from defs";
+  Conf.Snippet = {II.randomizeUnsetVariablesAndBuild()};
+  return Conf;
+}
 
-  // Generate repetitions of the pattern until benchmark_iterations is reached.
-  std::vector<llvm::MCInst> Result;
-  Result.reserve(NumRepetitions);
-  for (unsigned I = 0; I < NumRepetitions; ++I)
-    Result.push_back(Pattern[I % Pattern.size()]);
-  return Result;
+llvm::Expected<std::vector<BenchmarkConfiguration>>
+UopsBenchmarkRunner::createConfigurations(unsigned Opcode) const {
+  if (auto E = generateConfiguration(Opcode))
+    return std::vector<BenchmarkConfiguration>{E.get()};
+  else
+    return E.takeError();
 }
 
 std::vector<BenchmarkMeasure>
-UopsBenchmarkRunner::runMeasurements(const LLVMState &State,
-                                     const JitFunction &Function,
+UopsBenchmarkRunner::runMeasurements(const ExecutableFunction &Function,
                                      const unsigned NumRepetitions) const {
   const auto &SchedModel = State.getSubtargetInfo().getSchedModel();
 
@@ -195,14 +229,24 @@ UopsBenchmarkRunner::runMeasurements(const LLVMState &State,
                                         .PfmCounters.IssueCounters[ProcResIdx];
     if (!PfmCounters)
       continue;
-    // FIXME: Sum results when there are several counters for a single ProcRes
+    // We sum counts when there are several counters for a single ProcRes
     // (e.g. P23 on SandyBridge).
-    pfm::Counter Counter{pfm::PerfEvent(PfmCounters)};
-    Counter.start();
-    Function();
-    Counter.stop();
+    int64_t CounterValue = 0;
+    llvm::SmallVector<llvm::StringRef, 2> CounterNames;
+    llvm::StringRef(PfmCounters).split(CounterNames, ',');
+    for (const auto &CounterName : CounterNames) {
+      pfm::PerfEvent UopPerfEvent(CounterName);
+      if (!UopPerfEvent.valid())
+        llvm::report_fatal_error(
+            llvm::Twine("invalid perf event ").concat(PfmCounters));
+      pfm::Counter Counter(UopPerfEvent);
+      Counter.start();
+      Function();
+      Counter.stop();
+      CounterValue += Counter.read();
+    }
     Result.push_back({llvm::itostr(ProcResIdx),
-                      static_cast<double>(Counter.read()) / NumRepetitions,
+                      static_cast<double>(CounterValue) / NumRepetitions,
                       SchedModel.getProcResource(ProcResIdx)->Name});
   }
   return Result;

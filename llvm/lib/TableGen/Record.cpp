@@ -19,6 +19,7 @@
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/Support/Allocator.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Compiler.h"
@@ -1195,14 +1196,16 @@ Init *TernOpInit::resolveReferences(Resolver &R) const {
 
 std::string TernOpInit::getAsString() const {
   std::string Result;
+  bool UnquotedLHS = false;
   switch (getOpcode()) {
   case SUBST: Result = "!subst"; break;
-  case FOREACH: Result = "!foreach"; break;
+  case FOREACH: Result = "!foreach"; UnquotedLHS = true; break;
   case IF: Result = "!if"; break;
   case DAG: Result = "!dag"; break;
   }
-  return Result + "(" + LHS->getAsString() + ", " + MHS->getAsString() + ", " +
-         RHS->getAsString() + ")";
+  return (Result + "(" +
+          (UnquotedLHS ? LHS->getAsUnquotedString() : LHS->getAsString()) +
+          ", " + MHS->getAsString() + ", " + RHS->getAsString() + ")");
 }
 
 static void ProfileFoldOpInit(FoldingSetNodeID &ID, Init *A, Init *B,
@@ -1569,10 +1572,8 @@ DefInit *VarDefInit::instantiate() {
     Record *NewRec = NewRecOwner.get();
 
     // Copy values from class to instance
-    for (const RecordVal &Val : Class->getValues()) {
-      if (Val.getName() != "NAME")
-        NewRec->addValue(Val);
-    }
+    for (const RecordVal &Val : Class->getValues())
+      NewRec->addValue(Val);
 
     // Substitute and resolve template arguments
     ArrayRef<Init *> TArgs = Class->getTemplateArgs();
@@ -1841,14 +1842,6 @@ void RecordVal::print(raw_ostream &OS, bool PrintSem) const {
 }
 
 unsigned Record::LastID = 0;
-
-void Record::init() {
-  checkName();
-
-  // Every record potentially has a def at the top.  This value is
-  // replaced with the top-level def name at instantiation time.
-  addValue(RecordVal(StringInit::get("NAME"), StringRecTy::get(), false));
-}
 
 void Record::checkName() {
   // Ensure the record name has string type.
@@ -2256,4 +2249,11 @@ Init *TrackUnresolvedResolver::resolve(Init *VarName) {
   if (!I)
     FoundUnresolved = true;
   return I;
+}
+
+Init *HasReferenceResolver::resolve(Init *VarName)
+{
+  if (VarName == VarNameToTrack)
+    Found = true;
+  return nullptr;
 }

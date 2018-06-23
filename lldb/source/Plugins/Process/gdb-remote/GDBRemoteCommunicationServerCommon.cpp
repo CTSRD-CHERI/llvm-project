@@ -299,9 +299,9 @@ GDBRemoteCommunicationServerCommon::Handle_qHostInfo(
 #if defined(__APPLE__)
 
 #if defined(__arm__) || defined(__arm64__) || defined(__aarch64__)
-  // For iOS devices, we are connected through a USB Mux so we never pretend
-  // to actually have a hostname as far as the remote lldb that is connecting
-  // to this lldb-platform is concerned
+  // For iOS devices, we are connected through a USB Mux so we never pretend to
+  // actually have a hostname as far as the remote lldb that is connecting to
+  // this lldb-platform is concerned
   response.PutCString("hostname:");
   response.PutCStringAsRawHex8("127.0.0.1");
   response.PutChar(';');
@@ -361,7 +361,8 @@ GDBRemoteCommunicationServerCommon::Handle_qfProcessInfo(
         StringExtractor extractor(value);
         std::string file;
         extractor.GetHexByteString(file);
-        match_info.GetProcessInfo().GetExecutableFile().SetFile(file, false);
+        match_info.GetProcessInfo().GetExecutableFile().SetFile(
+            file, false, FileSpec::Style::native);
       } else if (key.equals("name_match")) {
         NameMatch name_match = llvm::StringSwitch<NameMatch>(value)
                                    .Case("equals", NameMatch::Equals)
@@ -419,8 +420,8 @@ GDBRemoteCommunicationServerCommon::Handle_qfProcessInfo(
   }
 
   if (Host::FindProcesses(match_info, m_proc_infos)) {
-    // We found something, return the first item by calling the get
-    // subsequent process info packet handler...
+    // We found something, return the first item by calling the get subsequent
+    // process info packet handler...
     return Handle_qsProcessInfo(packet);
   }
   return SendErrorResponse(3);
@@ -735,14 +736,13 @@ GDBRemoteCommunicationServerCommon::Handle_qPlatform_shell(
     if (packet.GetChar() == ',') {
       // FIXME: add timeout to qPlatform_shell packet
       // uint32_t timeout = packet.GetHexMaxU32(false, 32);
-      uint32_t timeout = 10;
       if (packet.GetChar() == ',')
         packet.GetHexByteString(working_dir);
       int status, signo;
       std::string output;
-      Status err =
-          Host::RunShellCommand(path.c_str(), FileSpec{working_dir, true},
-                                &status, &signo, &output, timeout);
+      Status err = Host::RunShellCommand(
+          path.c_str(), FileSpec{working_dir, true}, &status, &signo, &output,
+          std::chrono::seconds(10));
       StreamGDBRemote response;
       if (err.Fail()) {
         response.PutCString("F,");
@@ -984,11 +984,11 @@ GDBRemoteCommunicationServerCommon::Handle_QLaunchArch(
 
 GDBRemoteCommunication::PacketResult
 GDBRemoteCommunicationServerCommon::Handle_A(StringExtractorGDBRemote &packet) {
-  // The 'A' packet is the most over designed packet ever here with
-  // redundant argument indexes, redundant argument lengths and needed hex
-  // encoded argument string values. Really all that is needed is a comma
-  // separated hex encoded argument value list, but we will stay true to the
-  // documented version of the 'A' packet here...
+  // The 'A' packet is the most over designed packet ever here with redundant
+  // argument indexes, redundant argument lengths and needed hex encoded
+  // argument string values. Really all that is needed is a comma separated hex
+  // encoded argument value list, but we will stay true to the documented
+  // version of the 'A' packet here...
 
   Log *log(GetLogIfAnyCategoriesSet(LIBLLDB_LOG_PROCESS));
   int actual_arg_index = 0;
@@ -996,8 +996,8 @@ GDBRemoteCommunicationServerCommon::Handle_A(StringExtractorGDBRemote &packet) {
   packet.SetFilePos(1); // Skip the 'A'
   bool success = true;
   while (success && packet.GetBytesLeft() > 0) {
-    // Decode the decimal argument string length. This length is the
-    // number of hex nibbles in the argument string value.
+    // Decode the decimal argument string length. This length is the number of
+    // hex nibbles in the argument string value.
     const uint32_t arg_len = packet.GetU32(UINT32_MAX);
     if (arg_len == UINT32_MAX)
       success = false;
@@ -1006,8 +1006,8 @@ GDBRemoteCommunicationServerCommon::Handle_A(StringExtractorGDBRemote &packet) {
       if (packet.GetChar() != ',')
         success = false;
       else {
-        // Decode the argument index. We ignore this really because
-        // who would really send down the arguments in a random order???
+        // Decode the argument index. We ignore this really because who would
+        // really send down the arguments in a random order???
         const uint32_t arg_idx = packet.GetU32(UINT32_MAX);
         if (arg_idx == UINT32_MAX)
           success = false;
@@ -1016,9 +1016,9 @@ GDBRemoteCommunicationServerCommon::Handle_A(StringExtractorGDBRemote &packet) {
           if (packet.GetChar() != ',')
             success = false;
           else {
-            // Decode the argument string value from hex bytes
-            // back into a UTF8 string and make sure the length
-            // matches the one supplied in the packet
+            // Decode the argument string value from hex bytes back into a UTF8
+            // string and make sure the length matches the one supplied in the
+            // packet
             std::string arg;
             if (packet.GetHexByteStringFixedLength(arg, arg_len) !=
                 (arg_len / 2))
@@ -1032,7 +1032,8 @@ GDBRemoteCommunicationServerCommon::Handle_A(StringExtractorGDBRemote &packet) {
 
               if (success) {
                 if (arg_idx == 0)
-                  m_process_launch_info.GetExecutableFile().SetFile(arg, false);
+                  m_process_launch_info.GetExecutableFile().SetFile(
+                      arg, false, FileSpec::Style::native);
                 m_process_launch_info.GetArguments().AppendArgument(arg);
                 if (log)
                   log->Printf("LLGSPacketHandler::%s added arg %d: \"%s\"",
@@ -1257,8 +1258,8 @@ void GDBRemoteCommunicationServerCommon::
       // Nothing.
       break;
     }
-    // In case of MIPS64, pointer size is depend on ELF ABI
-    // For N32 the pointer size is 4 and for N64 it is 8
+    // In case of MIPS64, pointer size is depend on ELF ABI For N32 the pointer
+    // size is 4 and for N64 it is 8
     std::string abi = proc_arch.GetTargetABI();
     if (!abi.empty())
       response.Printf("elf_abi:%s;", abi.c_str());

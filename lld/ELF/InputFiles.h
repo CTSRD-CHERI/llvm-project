@@ -124,6 +124,9 @@ public:
   static bool IsInGroup;
   static uint32_t NextGroupId;
 
+  // Index of MIPS GOT built for this file.
+  llvm::Optional<size_t> MipsGotIndex;
+
 protected:
   InputFile(Kind K, MemoryBufferRef M);
   std::vector<InputSectionBase *> Sections;
@@ -233,7 +236,6 @@ private:
   // parse it only once for each object file we link.
   std::unique_ptr<llvm::DWARFContext> Dwarf;
   std::vector<const llvm::DWARFDebugLine::LineTable *> LineTables;
-  std::unique_ptr<llvm::DWARFDebugLine> DwarfLine;
   struct VarLoc {
     const llvm::DWARFDebugLine::LineTable *LT;
     unsigned File;
@@ -263,11 +265,11 @@ public:
   template <class ELFT> void parse();
   MemoryBufferRef getBuffer();
   InputFile *fetch();
+  bool AddedToLink = false;
 
 private:
   template <class ELFT> void addElfSymbols();
 
-  bool Seen = false;
   uint64_t OffsetInArchive;
 };
 
@@ -355,8 +357,15 @@ InputFile *createObjectFile(MemoryBufferRef MB, StringRef ArchiveName = "",
                             uint64_t OffsetInArchive = 0);
 InputFile *createSharedFile(MemoryBufferRef MB, StringRef DefaultSoName);
 
+inline bool isBitcode(MemoryBufferRef MB) {
+  return identify_magic(MB.getBuffer()) == llvm::file_magic::bitcode;
+}
+
+std::string replaceThinLTOSuffix(StringRef Path);
+
 extern std::vector<BinaryFile *> BinaryFiles;
 extern std::vector<BitcodeFile *> BitcodeFiles;
+extern std::vector<LazyObjFile *> LazyObjFiles;
 extern std::vector<InputFile *> ObjectFiles;
 extern std::vector<InputFile *> SharedFiles;
 

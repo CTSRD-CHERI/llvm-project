@@ -6,6 +6,11 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
+///
+/// \file
+/// A class to set up and access common LLVM objects.
+///
+//===----------------------------------------------------------------------===//
 
 #ifndef LLVM_TOOLS_LLVM_EXEGESIS_LLVMSTATE_H
 #define LLVM_TOOLS_LLVM_EXEGESIS_LLVMSTATE_H
@@ -26,6 +31,9 @@ namespace exegesis {
 class LLVMState {
 public:
   LLVMState();
+
+  LLVMState(const std::string &Triple,
+            const std::string &CpuName); // For tests.
 
   llvm::StringRef getTriple() const { return TheTriple; }
   llvm::StringRef getCpuName() const { return CpuName; }

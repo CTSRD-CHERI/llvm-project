@@ -11,13 +11,6 @@
 // that are not yet supported remain commented out.
 //===----------------------------------------------------------------------===//
 
-def has16BankLDS : Predicate<"Subtarget->getLDSBankCount() == 16">;
-def has32BankLDS : Predicate<"Subtarget->getLDSBankCount() == 32">;
-def HasVGPRIndexMode : Predicate<"Subtarget->hasVGPRIndexMode()">,
-                      AssemblerPredicate<"FeatureVGPRIndexMode">;
-def HasMovrel : Predicate<"Subtarget->hasMovrel()">,
-                AssemblerPredicate<"FeatureMovrel">;
-
 class GCNPat<dag pattern, dag result> : AMDGPUPat<pattern, result> {
   let SubtargetPredicate = isGCN;
 }
@@ -572,11 +565,6 @@ def : GCNPat<
   (SI_ELSE $src, $target, 0)
 >;
 
-def : GCNPat <
-  (int_AMDGPU_kilp),
-  (SI_KILL_I1_PSEUDO (i1 0), 0)
->;
-
 def : Pat <
   // -1.0 as i32 (LowerINTRINSIC_VOID converts all other constants to -1.0)
   (AMDGPUkill (i32 -1082130432)),
@@ -643,6 +631,11 @@ def : GCNPat <
 def : GCNPat <
   (f32 (f16_to_fp (and_oneuse i32:$src0, 0x7fff))),
   (V_CVT_F32_F16_e64 SRCMODS.ABS, $src0, DSTCLAMP.NONE, DSTOMOD.NONE)
+>;
+
+def : GCNPat <
+  (f32 (f16_to_fp (i32 (srl_oneuse (and_oneuse i32:$src0, 0x7fff0000), (i32 16))))),
+  (V_CVT_F32_F16_e64 SRCMODS.ABS, (i32 (V_LSHRREV_B32_e64 (i32 16), i32:$src0)), DSTCLAMP.NONE, DSTOMOD.NONE)
 >;
 
 def : GCNPat <
@@ -802,6 +795,27 @@ foreach Index = 0-15 in {
   >;
 }
 
+
+def : Pat <
+  (extract_subvector v4i16:$vec, (i32 0)),
+  (v2i16 (EXTRACT_SUBREG v4i16:$vec, sub0))
+>;
+
+def : Pat <
+  (extract_subvector v4i16:$vec, (i32 2)),
+  (v2i16 (EXTRACT_SUBREG v4i16:$vec, sub1))
+>;
+
+def : Pat <
+  (extract_subvector v4f16:$vec, (i32 0)),
+  (v2f16 (EXTRACT_SUBREG v4f16:$vec, sub0))
+>;
+
+def : Pat <
+  (extract_subvector v4f16:$vec, (i32 2)),
+  (v2f16 (EXTRACT_SUBREG v4f16:$vec, sub1))
+>;
+
 let SubtargetPredicate = isGCN in {
 
 // FIXME: Why do only some of these type combinations for SReg and
@@ -841,6 +855,26 @@ def : BitConvert <f64, v2f32, VReg_64>;
 def : BitConvert <v2f32, f64, VReg_64>;
 def : BitConvert <f64, v2i32, VReg_64>;
 def : BitConvert <v2i32, f64, VReg_64>;
+
+// FIXME: Make SGPR
+def : BitConvert <v2i32, v4f16, VReg_64>;
+def : BitConvert <v4f16, v2i32, VReg_64>;
+def : BitConvert <v2i32, v4f16, VReg_64>;
+def : BitConvert <v2i32, v4i16, VReg_64>;
+def : BitConvert <v4i16, v2i32, VReg_64>;
+def : BitConvert <v2f32, v4f16, VReg_64>;
+def : BitConvert <v4f16, v2f32, VReg_64>;
+def : BitConvert <v2f32, v4i16, VReg_64>;
+def : BitConvert <v4i16, v2f32, VReg_64>;
+def : BitConvert <v4i16, f64, VReg_64>;
+def : BitConvert <v4f16, f64, VReg_64>;
+def : BitConvert <f64, v4i16, VReg_64>;
+def : BitConvert <f64, v4f16, VReg_64>;
+def : BitConvert <v4i16, i64, VReg_64>;
+def : BitConvert <v4f16, i64, VReg_64>;
+def : BitConvert <i64, v4i16, VReg_64>;
+def : BitConvert <i64, v4f16, VReg_64>;
+
 def : BitConvert <v4i32, v4f32, VReg_128>;
 def : BitConvert <v4f32, v4i32, VReg_128>;
 
@@ -883,11 +917,13 @@ def : ClampPat<V_MAX_F32_e64, f32>;
 def : ClampPat<V_MAX_F64, f64>;
 def : ClampPat<V_MAX_F16_e64, f16>;
 
+let SubtargetPredicate = HasVOP3PInsts in {
 def : GCNPat <
   (v2f16 (AMDGPUclamp (VOP3PMods v2f16:$src0, i32:$src0_modifiers))),
   (V_PK_MAX_F16 $src0_modifiers, $src0,
                 $src0_modifiers, $src0, DSTCLAMP.ENABLE)
 >;
+}
 
 /********** ================================ **********/
 /********** Floating point absolute/negative **********/
@@ -913,7 +949,7 @@ def : GCNPat <
 
 def : GCNPat <
   (fabs f32:$src),
-  (V_AND_B32_e64 $src, (V_MOV_B32_e32 (i32 0x7fffffff)))
+  (S_AND_B32 $src, (S_MOV_B32 (i32 0x7fffffff)))
 >;
 
 def : GCNPat <
@@ -974,12 +1010,12 @@ def : GCNPat <
 
 def : GCNPat <
   (fneg f16:$src),
-  (V_XOR_B32_e32 $src, (V_MOV_B32_e32 (i32 0x00008000)))
+  (S_XOR_B32 $src, (S_MOV_B32 (i32 0x00008000)))
 >;
 
 def : GCNPat <
   (fabs f16:$src),
-  (V_AND_B32_e64 $src, (V_MOV_B32_e32 (i32 0x00007fff)))
+  (S_AND_B32 $src, (S_MOV_B32 (i32 0x00007fff)))
 >;
 
 def : GCNPat <
@@ -989,12 +1025,12 @@ def : GCNPat <
 
 def : GCNPat <
   (fneg v2f16:$src),
-  (V_XOR_B32_e64 (S_MOV_B32 (i32 0x80008000)), $src)
+  (S_XOR_B32 $src, (S_MOV_B32 (i32 0x80008000)))
 >;
 
 def : GCNPat <
   (fabs v2f16:$src),
-  (V_AND_B32_e64 (S_MOV_B32 (i32 0x7fff7fff)), $src)
+  (S_AND_B32 $src, (S_MOV_B32 (i32 0x7fff7fff)))
 >;
 
 // This is really (fneg (fabs v2f16:$src))
@@ -1003,7 +1039,12 @@ def : GCNPat <
 // VOP3P instructions, so it is turned into the bit op.
 def : GCNPat <
   (fneg (v2f16 (bitconvert (and_oneuse i32:$src, 0x7fff7fff)))),
-  (S_OR_B32 (S_MOV_B32 (i32 0x80008000)), $src) // Set sign bit
+  (S_OR_B32 $src, (S_MOV_B32 (i32 0x80008000))) // Set sign bit
+>;
+
+def : GCNPat <
+  (fneg (v2f16 (fabs v2f16:$src))),
+  (S_OR_B32 $src, (S_MOV_B32 (i32 0x80008000))) // Set sign bit
 >;
 
 /********** ================== **********/
@@ -1345,10 +1386,12 @@ def : GCNPat<
   (V_MAX_F16_e64 $src_mods, $src, $src_mods, $src, 0, 0)
 >;
 
+let SubtargetPredicate = HasVOP3PInsts in {
 def : GCNPat<
   (fcanonicalize (v2f16 (VOP3PMods v2f16:$src, i32:$src_mods))),
   (V_PK_MAX_F16 $src_mods, $src, $src_mods, $src, DSTCLAMP.NONE)
 >;
+}
 }
 
 let OtherPredicates = [NoFP32Denormals] in {
@@ -1379,6 +1422,16 @@ def : GCNPat<
 >;
 }
 
+let OtherPredicates = [HasDLInsts] in {
+def : GCNPat <
+  (fma (f32 (VOP3Mods0 f32:$src0, i32:$src0_modifiers, i1:$clamp, i32:$omod)),
+       (f32 (VOP3Mods f32:$src1, i32:$src1_modifiers)),
+       (f32 (VOP3NoMods f32:$src2))),
+  (V_FMAC_F32_e64 $src0_modifiers, $src0, $src1_modifiers, $src1,
+                  SRCMODS.NONE, $src2, $clamp, $omod)
+>;
+} // End OtherPredicates = [HasDLInsts]
+
 
 // Allow integer inputs
 class ExpPattern<SDPatternOperator node, ValueType vt, Instruction Inst> : GCNPat<
@@ -1389,16 +1442,18 @@ class ExpPattern<SDPatternOperator node, ValueType vt, Instruction Inst> : GCNPa
 def : ExpPattern<AMDGPUexport, i32, EXP>;
 def : ExpPattern<AMDGPUexport_done, i32, EXP_DONE>;
 
-def : GCNPat <
-  (v2i16 (build_vector i16:$src0, i16:$src1)),
-  (v2i16 (S_PACK_LL_B32_B16 $src0, $src1))
->;
-
 // COPY_TO_REGCLASS is workaround tablegen bug from multiple outputs
 // from S_LSHL_B32's multiple outputs from implicit scc def.
 def : GCNPat <
   (v2i16 (build_vector (i16 0), i16:$src1)),
   (v2i16 (COPY_TO_REGCLASS (S_LSHL_B32 i16:$src1, (i16 16)), SReg_32_XM0))
+>;
+
+
+let SubtargetPredicate = HasVOP3PInsts in {
+def : GCNPat <
+  (v2i16 (build_vector i16:$src0, i16:$src1)),
+  (v2i16 (S_PACK_LL_B32_B16 $src0, $src1))
 >;
 
 // With multiple uses of the shift, this will duplicate the shift and
@@ -1407,6 +1462,7 @@ def : GCNPat <
   (v2i16 (build_vector i16:$src0, (i16 (trunc (srl_oneuse i32:$src1, (i32 16)))))),
   (v2i16 (S_PACK_LH_B32_B16 i16:$src0, i32:$src1))
 >;
+
 
 def : GCNPat <
   (v2i16 (build_vector (i16 (trunc (srl_oneuse i32:$src0, (i32 16)))),
@@ -1419,6 +1475,9 @@ def : GCNPat <
   (v2f16 (build_vector f16:$src0, f16:$src1)),
   (v2f16 (S_PACK_LL_B32_B16 $src0, $src1))
 >;
+
+} // End SubtargetPredicate = HasVOP3PInsts
+
 
 // def : GCNPat <
 //   (v2f16 (scalar_to_vector f16:$src0)),

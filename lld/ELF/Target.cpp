@@ -72,6 +72,8 @@ TargetInfo *elf::getTarget() {
     return getARMTargetInfo();
   case EM_AVR:
     return getAVRTargetInfo();
+  case EM_HEXAGON:
+    return getHexagonTargetInfo();
   case EM_MIPS:
     if (Config->isCheriABI())
       return getMipsTargetInfo<ELF64BE>(); // TODO: custom target info?

@@ -21,7 +21,7 @@
 ; CHECK: ret;
 ; CHECK: }
 
-; CHECK: .file 1 "test/t.c"
+; CHECK: .file 1 "test{{(/|\\\\)}}t.c"
 
 ; CHECK: // .section .debug_abbrev
 ; CHECK: // {
@@ -238,7 +238,7 @@ attributes #1 = { nounwind readnone speculatable }
 !4 = !{i32 2, !"Debug Info Version", i32 3}
 !5 = !{i32 1, !"wchar_size", i32 4}
 !6 = !{!"clang"}
-!7 = distinct !DISubprogram(name: "use_dbg_declare", scope: !1, file: !1, line: 3, type: !8, isLocal: false, isDefinition: true, scopeLine: 3, flags: DIFlagPrototyped, isOptimized: false, unit: !0, variables: !2)
+!7 = distinct !DISubprogram(name: "use_dbg_declare", scope: !1, file: !1, line: 3, type: !8, isLocal: false, isDefinition: true, scopeLine: 3, flags: DIFlagPrototyped, isOptimized: false, unit: !0, retainedNodes: !2)
 !8 = !DISubroutineType(types: !9)
 !9 = !{null}
 !10 = !DILocalVariable(name: "o", scope: !7, file: !1, line: 4, type: !11)

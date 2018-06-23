@@ -84,27 +84,28 @@ static bool ShouldUpgradeX86Intrinsic(Function *F, StringRef Name) {
   // like to use this information to remove upgrade code for some older
   // intrinsics. It is currently undecided how we will determine that future
   // point.
-  if (Name.startswith("sse2.padds") || // Added in 7.0
-      Name.startswith("sse2.paddus") || // Added in 7.0
-      Name.startswith("sse2.psubs") || // Added in 7.0
-      Name.startswith("sse2.psubus") || // Added in 7.0
-      Name.startswith("avx2.padds") || // Added in 7.0
-      Name.startswith("avx2.paddus") || // Added in 7.0
-      Name.startswith("avx2.psubs") || // Added in 7.0
-      Name.startswith("avx2.psubus") || // Added in 7.0
-      Name.startswith("avx512.mask.padds") || // Added in 7.0
-      Name.startswith("avx512.mask.paddus") || // Added in 7.0
-      Name.startswith("avx512.mask.psubs") || // Added in 7.0
-      Name.startswith("avx512.mask.psubus") || // Added in 7.0
-      Name=="ssse3.pabs.b.128" || // Added in 6.0
+  if (Name=="ssse3.pabs.b.128" || // Added in 6.0
       Name=="ssse3.pabs.w.128" || // Added in 6.0
       Name=="ssse3.pabs.d.128" || // Added in 6.0
+      Name.startswith("fma.vfmsub.") || // Added in 7.0
+      Name.startswith("fma.vfmsubadd.") || // Added in 7.0
+      Name.startswith("fma.vfnmadd.") || // Added in 7.0
+      Name.startswith("fma.vfnmsub.") || // Added in 7.0
       Name.startswith("avx512.mask.shuf.i") || // Added in 6.0
       Name.startswith("avx512.mask.shuf.f") || // Added in 6.0
       Name.startswith("avx512.kunpck") || //added in 6.0 
       Name.startswith("avx2.pabs.") || // Added in 6.0
       Name.startswith("avx512.mask.pabs.") || // Added in 6.0
       Name.startswith("avx512.broadcastm") || // Added in 6.0
+      Name == "sse.sqrt.ss" || // Added in 7.0
+      Name == "sse2.sqrt.sd" || // Added in 7.0
+      Name == "avx512.mask.sqrt.ps.128" || // Added in 7.0
+      Name == "avx512.mask.sqrt.ps.256" || // Added in 7.0
+      Name == "avx512.mask.sqrt.pd.128" || // Added in 7.0
+      Name == "avx512.mask.sqrt.pd.256" || // Added in 7.0
+      Name.startswith("avx.sqrt.p") || // Added in 7.0
+      Name.startswith("sse2.sqrt.p") || // Added in 7.0
+      Name.startswith("sse.sqrt.p") || // Added in 7.0
       Name.startswith("avx512.mask.pbroadcast") || // Added in 6.0
       Name.startswith("sse2.pcmpeq.") || // Added in 3.1
       Name.startswith("sse2.pcmpgt.") || // Added in 3.1
@@ -180,6 +181,24 @@ static bool ShouldUpgradeX86Intrinsic(Function *F, StringRef Name) {
       Name.startswith("avx512.mask.pmull.") || // Added in 4.0
       Name.startswith("avx512.mask.cvtdq2pd.") || // Added in 4.0
       Name.startswith("avx512.mask.cvtudq2pd.") || // Added in 4.0
+      Name == "avx512.mask.cvtudq2ps.128" || // Added in 7.0
+      Name == "avx512.mask.cvtudq2ps.256" || // Added in 7.0
+      Name == "avx512.mask.cvtqq2pd.128" || // Added in 7.0
+      Name == "avx512.mask.cvtqq2pd.256" || // Added in 7.0
+      Name == "avx512.mask.cvtuqq2pd.128" || // Added in 7.0
+      Name == "avx512.mask.cvtuqq2pd.256" || // Added in 7.0
+      Name == "avx512.mask.cvtdq2ps.128" || // Added in 7.0
+      Name == "avx512.mask.cvtdq2ps.256" || // Added in 7.0
+      Name == "avx512.mask.cvtpd2dq.256" || // Added in 7.0
+      Name == "avx512.mask.cvtpd2ps.256" || // Added in 7.0
+      Name == "avx512.mask.cvttpd2dq.256" || // Added in 7.0
+      Name == "avx512.mask.cvttps2dq.128" || // Added in 7.0
+      Name == "avx512.mask.cvttps2dq.256" || // Added in 7.0
+      Name == "avx512.mask.cvtps2pd.128" || // Added in 7.0
+      Name == "avx512.mask.cvtps2pd.256" || // Added in 7.0
+      Name == "avx512.cvtusi2sd" || // Added in 7.0
+      Name.startswith("avx512.mask.permvar.") || // Added in 7.0
+      Name.startswith("avx512.mask.permvar.") || // Added in 7.0
       Name == "sse2.pmulu.dq" || // Added in 7.0
       Name == "sse41.pmuldq" || // Added in 7.0
       Name == "avx2.pmulu.dq" || // Added in 7.0
@@ -206,22 +225,6 @@ static bool ShouldUpgradeX86Intrinsic(Function *F, StringRef Name) {
       Name.startswith("avx512.cvtw2mask.") || // Added in 7.0
       Name.startswith("avx512.cvtd2mask.") || // Added in 7.0
       Name.startswith("avx512.cvtq2mask.") || // Added in 7.0
-      Name == "avx512.mask.add.pd.128" || // Added in 4.0
-      Name == "avx512.mask.add.pd.256" || // Added in 4.0
-      Name == "avx512.mask.add.ps.128" || // Added in 4.0
-      Name == "avx512.mask.add.ps.256" || // Added in 4.0
-      Name == "avx512.mask.div.pd.128" || // Added in 4.0
-      Name == "avx512.mask.div.pd.256" || // Added in 4.0
-      Name == "avx512.mask.div.ps.128" || // Added in 4.0
-      Name == "avx512.mask.div.ps.256" || // Added in 4.0
-      Name == "avx512.mask.mul.pd.128" || // Added in 4.0
-      Name == "avx512.mask.mul.pd.256" || // Added in 4.0
-      Name == "avx512.mask.mul.ps.128" || // Added in 4.0
-      Name == "avx512.mask.mul.ps.256" || // Added in 4.0
-      Name == "avx512.mask.sub.pd.128" || // Added in 4.0
-      Name == "avx512.mask.sub.pd.256" || // Added in 4.0
-      Name == "avx512.mask.sub.ps.128" || // Added in 4.0
-      Name == "avx512.mask.sub.ps.256" || // Added in 4.0
       Name == "avx512.mask.max.pd.128" || // Added in 5.0
       Name == "avx512.mask.max.pd.256" || // Added in 5.0
       Name == "avx512.mask.max.ps.128" || // Added in 5.0
@@ -253,9 +256,38 @@ static bool ShouldUpgradeX86Intrinsic(Function *F, StringRef Name) {
       Name.startswith("avx512.mask.pmovsx") || // Added in 4.0
       Name.startswith("avx512.mask.pmovzx") || // Added in 4.0
       Name.startswith("avx512.mask.lzcnt.") || // Added in 5.0
+      Name.startswith("avx512.mask.pternlog.") || // Added in 7.0
+      Name.startswith("avx512.maskz.pternlog.") || // Added in 7.0
+      Name.startswith("avx512.mask.vpmadd52") || // Added in 7.0
+      Name.startswith("avx512.maskz.vpmadd52") || // Added in 7.0
+      Name.startswith("avx512.mask.vpermi2var.") || // Added in 7.0
+      Name.startswith("avx512.mask.vpermt2var.") || // Added in 7.0
+      Name.startswith("avx512.maskz.vpermt2var.") || // Added in 7.0
+      Name.startswith("avx512.mask.vpdpbusd.") || // Added in 7.0
+      Name.startswith("avx512.maskz.vpdpbusd.") || // Added in 7.0
+      Name.startswith("avx512.mask.vpdpbusds.") || // Added in 7.0
+      Name.startswith("avx512.maskz.vpdpbusds.") || // Added in 7.0
+      Name.startswith("avx512.mask.vpdpwssd.") || // Added in 7.0
+      Name.startswith("avx512.maskz.vpdpwssd.") || // Added in 7.0
+      Name.startswith("avx512.mask.vpdpwssds.") || // Added in 7.0
+      Name.startswith("avx512.maskz.vpdpwssds.") || // Added in 7.0
+      Name.startswith("avx512.mask.dbpsadbw.") || // Added in 7.0
+      Name.startswith("avx512.mask.vpshld.") || // Added in 7.0
+      Name.startswith("avx512.mask.vpshrd.") || // Added in 7.0
+      Name.startswith("avx512.mask.add.p") || // Added in 7.0
+      Name.startswith("avx512.mask.sub.p") || // Added in 7.0
+      Name.startswith("avx512.mask.mul.p") || // Added in 7.0
+      Name.startswith("avx512.mask.div.p") || // Added in 7.0
+      Name == "sse.cvtsi2ss" || // Added in 7.0
+      Name == "sse.cvtsi642ss" || // Added in 7.0
+      Name == "sse2.cvtsi2sd" || // Added in 7.0
+      Name == "sse2.cvtsi642sd" || // Added in 7.0
+      Name == "sse2.cvtss2sd" || // Added in 7.0
       Name == "sse2.cvtdq2pd" || // Added in 3.9
+      Name == "sse2.cvtdq2ps" || // Added in 7.0
       Name == "sse2.cvtps2pd" || // Added in 3.9
       Name == "avx.cvtdq2.pd.256" || // Added in 3.9
+      Name == "avx.cvtdq2.ps.256" || // Added in 7.0
       Name == "avx.cvt.ps2.pd.256" || // Added in 3.9
       Name.startswith("avx.vinsertf128.") || // Added in 3.7
       Name == "avx2.vinserti128" || // Added in 3.7
@@ -279,10 +311,14 @@ static bool ShouldUpgradeX86Intrinsic(Function *F, StringRef Name) {
       Name.startswith("avx512.mask.store.w.") || // Added in 3.9
       Name.startswith("avx512.mask.store.d.") || // Added in 3.9
       Name.startswith("avx512.mask.store.q.") || // Added in 3.9
+      Name == "avx512.mask.store.ss" || // Added in 7.0
       Name.startswith("avx512.mask.loadu.") || // Added in 3.9
       Name.startswith("avx512.mask.load.") || // Added in 3.9
+      Name.startswith("avx512.mask.expand.load.") || // Added in 7.0
+      Name.startswith("avx512.mask.compress.store.") || // Added in 7.0
       Name == "sse42.crc32.64.8" || // Added in 3.4
       Name.startswith("avx.vbroadcast.s") || // Added in 3.5
+      Name.startswith("avx512.vbroadcast.s") || // Added in 7.0
       Name.startswith("avx512.mask.palignr.") || // Added in 3.9
       Name.startswith("avx512.mask.valign.") || // Added in 4.0
       Name.startswith("sse2.psll.dq") || // Added in 3.7
@@ -540,6 +576,17 @@ static bool UpgradeIntrinsicFunction1(Function *F, Function *&NewFn) {
         return true;
       }
     }
+    if (Name.startswith("invariant.group.barrier")) {
+      // Rename invariant.group.barrier to launder.invariant.group
+      auto Args = F->getFunctionType()->params();
+      Type* ObjectPtr[1] = {Args[0]};
+      rename(F);
+      NewFn = Intrinsic::getDeclaration(F->getParent(),
+          Intrinsic::launder_invariant_group, ObjectPtr);
+      return true;
+
+    }
+
     break;
   }
   case 'm': {
@@ -857,77 +904,6 @@ static Value *UpgradeX86ALIGNIntrinsics(IRBuilder<> &Builder, Value *Op0,
   return EmitX86Select(Builder, Mask, Align, Passthru);
 }
 
-static Value *UpgradeX86AddSubSatIntrinsics(IRBuilder<> &Builder, CallInst &CI,
-                                            bool IsSigned, bool IsAddition) {
-  // Get elements.
-  Value *Op0 = CI.getArgOperand(0);
-  Value *Op1 = CI.getArgOperand(1);
-
-  // Extend elements.
-  Type *ResultType = CI.getType();
-  unsigned NumElts = ResultType->getVectorNumElements();
-
-  Value *Res;
-  if (!IsAddition && !IsSigned) {
-    Value *ICmp = Builder.CreateICmp(ICmpInst::ICMP_UGT, Op0, Op1);
-    Value *Select = Builder.CreateSelect(ICmp, Op0, Op1);
-    Res = Builder.CreateSub(Select, Op1);
-  } else {
-    Type *EltType = ResultType->getVectorElementType();
-    Type *ExtEltType = EltType == Builder.getInt8Ty() ? Builder.getInt16Ty()
-                                                      : Builder.getInt32Ty();
-    Type *ExtVT = VectorType::get(ExtEltType, NumElts);
-    Op0 = IsSigned ? Builder.CreateSExt(Op0, ExtVT)
-                   : Builder.CreateZExt(Op0, ExtVT);
-    Op1 = IsSigned ? Builder.CreateSExt(Op1, ExtVT)
-                   : Builder.CreateZExt(Op1, ExtVT);
-
-    // Perform addition/substraction.
-    Res = IsAddition ? Builder.CreateAdd(Op0, Op1)
-                     : Builder.CreateSub(Op0, Op1);
-
-    // Create a vector of maximum values of not extended type
-    // (if overflow occurs, it will be saturated to that value).
-    unsigned EltSizeInBits = EltType->getPrimitiveSizeInBits();
-    APInt MaxInt = IsSigned ? APInt::getSignedMaxValue(EltSizeInBits)
-                            : APInt::getMaxValue(EltSizeInBits);
-    Value *MaxVec = ConstantInt::get(ResultType, MaxInt);
-    // Extend so that it can be compared to result of add/sub.
-    MaxVec = IsSigned ? Builder.CreateSExt(MaxVec, ExtVT)
-                      : Builder.CreateZExt(MaxVec, ExtVT);
-
-    // Saturate overflow.
-    ICmpInst::Predicate Pred = IsSigned ? ICmpInst::ICMP_SLE
-                                        : ICmpInst::ICMP_ULE;
-    Value *Cmp = Builder.CreateICmp(Pred, Res,
-                                    MaxVec); // 1 if no overflow.
-    Res = Builder.CreateSelect(Cmp, Res,
-                               MaxVec); // If overflowed, copy from max vec.
-
-    // Saturate underflow.
-    if (IsSigned) {
-      APInt MinInt = APInt::getSignedMinValue(EltSizeInBits);
-      Value *MinVec = ConstantInt::get(ResultType, MinInt);
-      // Extend so that it can be compared to result of add/sub.
-      MinVec = Builder.CreateSExt(MinVec, ExtVT);
-      Value *Cmp = Builder.CreateICmp(ICmpInst::ICMP_SGT, Res,
-                                      MinVec); // 1 if no underflow.
-      Res = Builder.CreateSelect(Cmp, Res,
-                                 MinVec); // If underflowed, copy from min vec.
-    }
-
-    // Truncate to original type.
-    Res = Builder.CreateTrunc(Res, ResultType);
-  }
-
-  if (CI.getNumArgOperands() == 4) { // For masked intrinsics.
-    Value *VecSRC = CI.getArgOperand(2);
-    Value *Mask = CI.getArgOperand(3);
-    Res = EmitX86Select(Builder, Mask, Res, VecSRC);
-  }
-  return Res;
-}
-
 static Value *UpgradeMaskedStore(IRBuilder<> &Builder,
                                  Value *Ptr, Value *Data, Value *Mask,
                                  bool Aligned) {
@@ -1242,13 +1218,111 @@ static bool upgradeAVX512MaskToSelect(StringRef Name, IRBuilder<> &Builder,
       IID = Intrinsic::x86_avx512_vpermilvar_pd_512;
     else
       llvm_unreachable("Unexpected intrinsic");
+  } else if (Name == "cvtpd2dq.256") {
+    IID = Intrinsic::x86_avx_cvt_pd2dq_256;
+  } else if (Name == "cvtpd2ps.256") {
+    IID = Intrinsic::x86_avx_cvt_pd2_ps_256;
+  } else if (Name == "cvttpd2dq.256") {
+    IID = Intrinsic::x86_avx_cvtt_pd2dq_256;
+  } else if (Name == "cvttps2dq.128") {
+    IID = Intrinsic::x86_sse2_cvttps2dq;
+  } else if (Name == "cvttps2dq.256") {
+    IID = Intrinsic::x86_avx_cvtt_ps2dq_256;
+  } else if (Name.startswith("permvar.")) {
+    bool IsFloat = CI.getType()->isFPOrFPVectorTy();
+    if (VecWidth == 256 && EltWidth == 32 && IsFloat)
+      IID = Intrinsic::x86_avx2_permps;
+    else if (VecWidth == 256 && EltWidth == 32 && !IsFloat)
+      IID = Intrinsic::x86_avx2_permd;
+    else if (VecWidth == 256 && EltWidth == 64 && IsFloat)
+      IID = Intrinsic::x86_avx512_permvar_df_256;
+    else if (VecWidth == 256 && EltWidth == 64 && !IsFloat)
+      IID = Intrinsic::x86_avx512_permvar_di_256;
+    else if (VecWidth == 512 && EltWidth == 32 && IsFloat)
+      IID = Intrinsic::x86_avx512_permvar_sf_512;
+    else if (VecWidth == 512 && EltWidth == 32 && !IsFloat)
+      IID = Intrinsic::x86_avx512_permvar_si_512;
+    else if (VecWidth == 512 && EltWidth == 64 && IsFloat)
+      IID = Intrinsic::x86_avx512_permvar_df_512;
+    else if (VecWidth == 512 && EltWidth == 64 && !IsFloat)
+      IID = Intrinsic::x86_avx512_permvar_di_512;
+    else if (VecWidth == 128 && EltWidth == 16)
+      IID = Intrinsic::x86_avx512_permvar_hi_128;
+    else if (VecWidth == 256 && EltWidth == 16)
+      IID = Intrinsic::x86_avx512_permvar_hi_256;
+    else if (VecWidth == 512 && EltWidth == 16)
+      IID = Intrinsic::x86_avx512_permvar_hi_512;
+    else if (VecWidth == 128 && EltWidth == 8)
+      IID = Intrinsic::x86_avx512_permvar_qi_128;
+    else if (VecWidth == 256 && EltWidth == 8)
+      IID = Intrinsic::x86_avx512_permvar_qi_256;
+    else if (VecWidth == 512 && EltWidth == 8)
+      IID = Intrinsic::x86_avx512_permvar_qi_512;
+    else
+      llvm_unreachable("Unexpected intrinsic");
+  } else if (Name.startswith("dbpsadbw.")) {
+    if (VecWidth == 128)
+      IID = Intrinsic::x86_avx512_dbpsadbw_128;
+    else if (VecWidth == 256)
+      IID = Intrinsic::x86_avx512_dbpsadbw_256;
+    else if (VecWidth == 512)
+      IID = Intrinsic::x86_avx512_dbpsadbw_512;
+    else
+      llvm_unreachable("Unexpected intrinsic");
+  } else if (Name.startswith("vpshld.")) {
+    if (VecWidth == 128 && Name[7] == 'q')
+      IID = Intrinsic::x86_avx512_vpshld_q_128;
+    else if (VecWidth == 128 && Name[7] == 'd')
+      IID = Intrinsic::x86_avx512_vpshld_d_128;
+    else if (VecWidth == 128 && Name[7] == 'w')
+      IID = Intrinsic::x86_avx512_vpshld_w_128;
+    else if (VecWidth == 256 && Name[7] == 'q')
+      IID = Intrinsic::x86_avx512_vpshld_q_256;
+    else if (VecWidth == 256 && Name[7] == 'd')
+      IID = Intrinsic::x86_avx512_vpshld_d_256;
+    else if (VecWidth == 256 && Name[7] == 'w')
+      IID = Intrinsic::x86_avx512_vpshld_w_256;
+    else if (VecWidth == 512 && Name[7] == 'q')
+      IID = Intrinsic::x86_avx512_vpshld_q_512;
+    else if (VecWidth == 512 && Name[7] == 'd')
+      IID = Intrinsic::x86_avx512_vpshld_d_512;
+    else if (VecWidth == 512 && Name[7] == 'w')
+      IID = Intrinsic::x86_avx512_vpshld_w_512;
+    else
+      llvm_unreachable("Unexpected intrinsic");
+  } else if (Name.startswith("vpshrd.")) {
+    if (VecWidth == 128 && Name[7] == 'q')
+      IID = Intrinsic::x86_avx512_vpshrd_q_128;
+    else if (VecWidth == 128 && Name[7] == 'd')
+      IID = Intrinsic::x86_avx512_vpshrd_d_128;
+    else if (VecWidth == 128 && Name[7] == 'w')
+      IID = Intrinsic::x86_avx512_vpshrd_w_128;
+    else if (VecWidth == 256 && Name[7] == 'q')
+      IID = Intrinsic::x86_avx512_vpshrd_q_256;
+    else if (VecWidth == 256 && Name[7] == 'd')
+      IID = Intrinsic::x86_avx512_vpshrd_d_256;
+    else if (VecWidth == 256 && Name[7] == 'w')
+      IID = Intrinsic::x86_avx512_vpshrd_w_256;
+    else if (VecWidth == 512 && Name[7] == 'q')
+      IID = Intrinsic::x86_avx512_vpshrd_q_512;
+    else if (VecWidth == 512 && Name[7] == 'd')
+      IID = Intrinsic::x86_avx512_vpshrd_d_512;
+    else if (VecWidth == 512 && Name[7] == 'w')
+      IID = Intrinsic::x86_avx512_vpshrd_w_512;
+    else
+      llvm_unreachable("Unexpected intrinsic");
   } else
     return false;
 
+  SmallVector<Value *, 4> Args(CI.arg_operands().begin(),
+                               CI.arg_operands().end());
+  Args.pop_back();
+  Args.pop_back();
   Rep = Builder.CreateCall(Intrinsic::getDeclaration(CI.getModule(), IID),
-                           { CI.getArgOperand(0), CI.getArgOperand(1) });
-  Rep = EmitX86Select(Builder, CI.getArgOperand(3), Rep,
-                      CI.getArgOperand(2));
+                           Args);
+  unsigned NumArgs = CI.getNumArgOperands();
+  Rep = EmitX86Select(Builder, CI.getArgOperand(NumArgs - 1), Rep,
+                      CI.getArgOperand(NumArgs - 2));
   return true;
 }
 
@@ -1372,6 +1446,16 @@ void llvm::UpgradeIntrinsicCall(CallInst *CI, Function *NewFn) {
       return;
     }
 
+    if (IsX86 && Name == "avx512.mask.store.ss") {
+      Value *Mask = Builder.CreateAnd(CI->getArgOperand(2), Builder.getInt8(1));
+      UpgradeMaskedStore(Builder, CI->getArgOperand(0), CI->getArgOperand(1),
+                         Mask, false);
+
+      // Remove intrinsic.
+      CI->eraseFromParent();
+      return;
+    }
+
     if (IsX86 && (Name.startswith("avx512.mask.store"))) {
       // "avx512.mask.storeu." or "avx512.mask.store."
       bool Aligned = Name[17] != 'u'; // "avx512.mask.storeu".
@@ -1400,6 +1484,29 @@ void llvm::UpgradeIntrinsicCall(CallInst *CI, Function *NewFn) {
                          ExtTy->getPrimitiveSizeInBits();
       Rep = Builder.CreateZExt(CI->getArgOperand(0), ExtTy);
       Rep = Builder.CreateVectorSplat(NumElts, Rep);
+    } else if (IsX86 && (Name == "sse.sqrt.ss" ||
+                         Name == "sse2.sqrt.sd")) {
+      Value *Vec = CI->getArgOperand(0);
+      Value *Elt0 = Builder.CreateExtractElement(Vec, (uint64_t)0);
+      Function *Intr = Intrinsic::getDeclaration(F->getParent(),
+                                                 Intrinsic::sqrt, Elt0->getType());
+      Elt0 = Builder.CreateCall(Intr, Elt0);
+      Rep = Builder.CreateInsertElement(Vec, Elt0, (uint64_t)0);
+    } else if (IsX86 && (Name.startswith("avx.sqrt.p") ||
+                         Name.startswith("sse2.sqrt.p") ||
+                         Name.startswith("sse.sqrt.p"))) {
+      Rep = Builder.CreateCall(Intrinsic::getDeclaration(F->getParent(),
+                                                         Intrinsic::sqrt,
+                                                         CI->getType()),
+                               {CI->getArgOperand(0)});
+    } else if (IsX86 && (Name.startswith("avx512.mask.sqrt.p") &&
+                         !Name.endswith("512"))) {
+        Rep = Builder.CreateCall(Intrinsic::getDeclaration(F->getParent(),
+                                                           Intrinsic::sqrt,
+                                                           CI->getType()),
+                                 {CI->getArgOperand(0)});
+        Rep = EmitX86Select(Builder, CI->getArgOperand(2), Rep,
+                            CI->getArgOperand(1));
     } else if (IsX86 && (Name.startswith("avx512.ptestm") ||
                          Name.startswith("avx512.ptestnm"))) {
       Value *Op0 = CI->getArgOperand(0);
@@ -1577,35 +1684,57 @@ void llvm::UpgradeIntrinsicCall(CallInst *CI, Function *NewFn) {
                          Name == "avx512.pmul.dq.512" ||
                          Name.startswith("avx512.mask.pmul.dq."))) {
       Rep = upgradePMULDQ(Builder, *CI, /*Signed*/true);
+    } else if (IsX86 && (Name == "sse.cvtsi2ss" ||
+                         Name == "sse2.cvtsi2sd" ||
+                         Name == "sse.cvtsi642ss" ||
+                         Name == "sse2.cvtsi642sd")) {
+      Rep = Builder.CreateSIToFP(CI->getArgOperand(1),
+                                 CI->getType()->getVectorElementType());
+      Rep = Builder.CreateInsertElement(CI->getArgOperand(0), Rep, (uint64_t)0);
+    } else if (IsX86 && Name == "avx512.cvtusi2sd") {
+      Rep = Builder.CreateUIToFP(CI->getArgOperand(1),
+                                 CI->getType()->getVectorElementType());
+      Rep = Builder.CreateInsertElement(CI->getArgOperand(0), Rep, (uint64_t)0);
+    } else if (IsX86 && Name == "sse2.cvtss2sd") {
+      Rep = Builder.CreateExtractElement(CI->getArgOperand(1), (uint64_t)0);
+      Rep = Builder.CreateFPExt(Rep, CI->getType()->getVectorElementType());
+      Rep = Builder.CreateInsertElement(CI->getArgOperand(0), Rep, (uint64_t)0);
     } else if (IsX86 && (Name == "sse2.cvtdq2pd" ||
-                         Name == "sse2.cvtps2pd" ||
+                         Name == "sse2.cvtdq2ps" ||
                          Name == "avx.cvtdq2.pd.256" ||
-                         Name == "avx.cvt.ps2.pd.256" ||
+                         Name == "avx.cvtdq2.ps.256" ||
                          Name.startswith("avx512.mask.cvtdq2pd.") ||
-                         Name.startswith("avx512.mask.cvtudq2pd."))) {
-      // Lossless i32/float to double conversion.
-      // Extract the bottom elements if necessary and convert to double vector.
-      Value *Src = CI->getArgOperand(0);
-      VectorType *SrcTy = cast<VectorType>(Src->getType());
-      VectorType *DstTy = cast<VectorType>(CI->getType());
+                         Name.startswith("avx512.mask.cvtudq2pd.") ||
+                         Name == "avx512.mask.cvtdq2ps.128" ||
+                         Name == "avx512.mask.cvtdq2ps.256" ||
+                         Name == "avx512.mask.cvtudq2ps.128" ||
+                         Name == "avx512.mask.cvtudq2ps.256" ||
+                         Name == "avx512.mask.cvtqq2pd.128" ||
+                         Name == "avx512.mask.cvtqq2pd.256" ||
+                         Name == "avx512.mask.cvtuqq2pd.128" ||
+                         Name == "avx512.mask.cvtuqq2pd.256" ||
+                         Name == "sse2.cvtps2pd" ||
+                         Name == "avx.cvt.ps2.pd.256" ||
+                         Name == "avx512.mask.cvtps2pd.128" ||
+                         Name == "avx512.mask.cvtps2pd.256")) {
+      Type *DstTy = CI->getType();
       Rep = CI->getArgOperand(0);
 
-      unsigned NumDstElts = DstTy->getNumElements();
-      if (NumDstElts < SrcTy->getNumElements()) {
+      unsigned NumDstElts = DstTy->getVectorNumElements();
+      if (NumDstElts < Rep->getType()->getVectorNumElements()) {
         assert(NumDstElts == 2 && "Unexpected vector size");
         uint32_t ShuffleMask[2] = { 0, 1 };
-        Rep = Builder.CreateShuffleVector(Rep, UndefValue::get(SrcTy),
-                                          ShuffleMask);
+        Rep = Builder.CreateShuffleVector(Rep, Rep, ShuffleMask);
       }
 
-      bool SInt2Double = (StringRef::npos != Name.find("cvtdq2"));
-      bool UInt2Double = (StringRef::npos != Name.find("cvtudq2"));
-      if (SInt2Double)
-        Rep = Builder.CreateSIToFP(Rep, DstTy, "cvtdq2pd");
-      else if (UInt2Double)
-        Rep = Builder.CreateUIToFP(Rep, DstTy, "cvtudq2pd");
-      else
+      bool IsPS2PD = (StringRef::npos != Name.find("ps2"));
+      bool IsUnsigned = (StringRef::npos != Name.find("cvtu"));
+      if (IsPS2PD)
         Rep = Builder.CreateFPExt(Rep, DstTy, "cvtps2pd");
+      else if (IsUnsigned)
+        Rep = Builder.CreateUIToFP(Rep, DstTy, "cvt");
+      else
+        Rep = Builder.CreateSIToFP(Rep, DstTy, "cvt");
 
       if (CI->getNumArgOperands() == 3)
         Rep = EmitX86Select(Builder, CI->getArgOperand(2), Rep,
@@ -1618,6 +1747,36 @@ void llvm::UpgradeIntrinsicCall(CallInst *CI, Function *NewFn) {
       Rep = UpgradeMaskedLoad(Builder, CI->getArgOperand(0),
                               CI->getArgOperand(1),CI->getArgOperand(2),
                               /*Aligned*/true);
+    } else if (IsX86 && Name.startswith("avx512.mask.expand.load.")) {
+      Type *ResultTy = CI->getType();
+      Type *PtrTy = ResultTy->getVectorElementType();
+
+      // Cast the pointer to element type.
+      Value *Ptr = Builder.CreateBitCast(CI->getOperand(0),
+                                         llvm::PointerType::getUnqual(PtrTy));
+
+      Value *MaskVec = getX86MaskVec(Builder, CI->getArgOperand(2),
+                                     ResultTy->getVectorNumElements());
+
+      Function *ELd = Intrinsic::getDeclaration(F->getParent(),
+                                                Intrinsic::masked_expandload,
+                                                ResultTy);
+      Rep = Builder.CreateCall(ELd, { Ptr, MaskVec, CI->getOperand(1) });
+    } else if (IsX86 && Name.startswith("avx512.mask.compress.store.")) {
+      Type *ResultTy = CI->getArgOperand(1)->getType();
+      Type *PtrTy = ResultTy->getVectorElementType();
+
+      // Cast the pointer to element type.
+      Value *Ptr = Builder.CreateBitCast(CI->getOperand(0),
+                                         llvm::PointerType::getUnqual(PtrTy));
+
+      Value *MaskVec = getX86MaskVec(Builder, CI->getArgOperand(2),
+                                     ResultTy->getVectorNumElements());
+
+      Function *CSt = Intrinsic::getDeclaration(F->getParent(),
+                                                Intrinsic::masked_compressstore,
+                                                ResultTy);
+      Rep = Builder.CreateCall(CSt, { CI->getArgOperand(1), Ptr, MaskVec });
     } else if (IsX86 && Name.startswith("xop.vpcom")) {
       Intrinsic::ID intID;
       if (Name.endswith("ub"))
@@ -1676,7 +1835,8 @@ void llvm::UpgradeIntrinsicCall(CallInst *CI, Function *NewFn) {
       Value *Trunc0 = Builder.CreateTrunc(CI->getArgOperand(0), Type::getInt32Ty(C));
       Rep = Builder.CreateCall(CRC32, {Trunc0, CI->getArgOperand(1)});
       Rep = Builder.CreateZExt(Rep, CI->getType(), "");
-    } else if (IsX86 && Name.startswith("avx.vbroadcast.s")) {
+    } else if (IsX86 && (Name.startswith("avx.vbroadcast.s") ||
+                         Name.startswith("avx512.vbroadcast.s"))) {
       // Replace broadcasts with a series of insertelements.
       Type *VecTy = CI->getType();
       Type *EltTy = VecTy->getVectorElementType();
@@ -1766,26 +1926,6 @@ void llvm::UpgradeIntrinsicCall(CallInst *CI, Function *NewFn) {
                                         ShuffleMask);
       Rep = EmitX86Select(Builder, CI->getArgOperand(2), Rep,
                           CI->getArgOperand(1));
-    } else if (IsX86 && (Name.startswith("sse2.padds") ||
-                         Name.startswith("avx2.padds") ||
-                         Name.startswith("avx512.mask.padds"))) {
-      Rep = UpgradeX86AddSubSatIntrinsics(Builder, *CI,
-                                          true, true); // Signed add.
-    } else if (IsX86 && (Name.startswith("sse2.paddus") ||
-                         Name.startswith("avx2.paddus") ||
-                         Name.startswith("avx512.mask.paddus"))) {
-      Rep = UpgradeX86AddSubSatIntrinsics(Builder, *CI,
-                                          false, true); // Unsigned add.
-    } else if (IsX86 && (Name.startswith("sse2.psubs") ||
-                         Name.startswith("avx2.psubs") ||
-                         Name.startswith("avx512.mask.psubs"))) {
-      Rep = UpgradeX86AddSubSatIntrinsics(Builder, *CI,
-                                          true, false); // Signed sub.
-    } else if (IsX86 && (Name.startswith("sse2.psubus") ||
-                         Name.startswith("avx2.psubus") ||
-                         Name.startswith("avx512.mask.psubus"))) {
-      Rep = UpgradeX86AddSubSatIntrinsics(Builder, *CI,
-                                          false, false); // Unsigned sub.
     } else if (IsX86 && (Name.startswith("avx2.pbroadcast") ||
                          Name.startswith("avx2.vbroadcast") ||
                          Name.startswith("avx512.pbroadcast") ||
@@ -1796,6 +1936,7 @@ void llvm::UpgradeIntrinsicCall(CallInst *CI, Function *NewFn) {
       Type *MaskTy = VectorType::get(Type::getInt32Ty(C), NumElts);
       Rep = Builder.CreateShuffleVector(Op, UndefValue::get(Op->getType()),
                                         Constant::getNullValue(MaskTy));
+
       if (CI->getNumArgOperands() == 3)
         Rep = EmitX86Select(Builder, CI->getArgOperand(2), Rep,
                             CI->getArgOperand(1));
@@ -2178,20 +2319,68 @@ void llvm::UpgradeIntrinsicCall(CallInst *CI, Function *NewFn) {
       Rep = Builder.CreateMul(CI->getArgOperand(0), CI->getArgOperand(1));
       Rep = EmitX86Select(Builder, CI->getArgOperand(3), Rep,
                           CI->getArgOperand(2));
-    } else if (IsX86 && (Name.startswith("avx512.mask.add.p"))) {
-      Rep = Builder.CreateFAdd(CI->getArgOperand(0), CI->getArgOperand(1));
+    } else if (IsX86 && Name.startswith("avx512.mask.add.p")) {
+      if (Name.endswith(".512")) {
+        Intrinsic::ID IID;
+        if (Name[17] == 's')
+          IID = Intrinsic::x86_avx512_add_ps_512;
+        else
+          IID = Intrinsic::x86_avx512_add_pd_512;
+
+        Rep = Builder.CreateCall(Intrinsic::getDeclaration(F->getParent(), IID),
+                                 { CI->getArgOperand(0), CI->getArgOperand(1),
+                                   CI->getArgOperand(4) });
+      } else {
+        Rep = Builder.CreateFAdd(CI->getArgOperand(0), CI->getArgOperand(1));
+      }
       Rep = EmitX86Select(Builder, CI->getArgOperand(3), Rep,
                           CI->getArgOperand(2));
     } else if (IsX86 && Name.startswith("avx512.mask.div.p")) {
-      Rep = Builder.CreateFDiv(CI->getArgOperand(0), CI->getArgOperand(1));
+      if (Name.endswith(".512")) {
+        Intrinsic::ID IID;
+        if (Name[17] == 's')
+          IID = Intrinsic::x86_avx512_div_ps_512;
+        else
+          IID = Intrinsic::x86_avx512_div_pd_512;
+
+        Rep = Builder.CreateCall(Intrinsic::getDeclaration(F->getParent(), IID),
+                                 { CI->getArgOperand(0), CI->getArgOperand(1),
+                                   CI->getArgOperand(4) });
+      } else {
+        Rep = Builder.CreateFDiv(CI->getArgOperand(0), CI->getArgOperand(1));
+      }
       Rep = EmitX86Select(Builder, CI->getArgOperand(3), Rep,
                           CI->getArgOperand(2));
     } else if (IsX86 && Name.startswith("avx512.mask.mul.p")) {
-      Rep = Builder.CreateFMul(CI->getArgOperand(0), CI->getArgOperand(1));
+      if (Name.endswith(".512")) {
+        Intrinsic::ID IID;
+        if (Name[17] == 's')
+          IID = Intrinsic::x86_avx512_mul_ps_512;
+        else
+          IID = Intrinsic::x86_avx512_mul_pd_512;
+
+        Rep = Builder.CreateCall(Intrinsic::getDeclaration(F->getParent(), IID),
+                                 { CI->getArgOperand(0), CI->getArgOperand(1),
+                                   CI->getArgOperand(4) });
+      } else {
+        Rep = Builder.CreateFMul(CI->getArgOperand(0), CI->getArgOperand(1));
+      }
       Rep = EmitX86Select(Builder, CI->getArgOperand(3), Rep,
                           CI->getArgOperand(2));
     } else if (IsX86 && Name.startswith("avx512.mask.sub.p")) {
-      Rep = Builder.CreateFSub(CI->getArgOperand(0), CI->getArgOperand(1));
+      if (Name.endswith(".512")) {
+        Intrinsic::ID IID;
+        if (Name[17] == 's')
+          IID = Intrinsic::x86_avx512_sub_ps_512;
+        else
+          IID = Intrinsic::x86_avx512_sub_pd_512;
+
+        Rep = Builder.CreateCall(Intrinsic::getDeclaration(F->getParent(), IID),
+                                 { CI->getArgOperand(0), CI->getArgOperand(1),
+                                   CI->getArgOperand(4) });
+      } else {
+        Rep = Builder.CreateFSub(CI->getArgOperand(0), CI->getArgOperand(1));
+      }
       Rep = EmitX86Select(Builder, CI->getArgOperand(3), Rep,
                           CI->getArgOperand(2));
     } else if (IsX86 && Name.startswith("avx512.mask.lzcnt.")) {
@@ -2440,6 +2629,262 @@ void llvm::UpgradeIntrinsicCall(CallInst *CI, Function *NewFn) {
         Rep = EmitX86Select(Builder, CI->getArgOperand(3), Rep,
                             CI->getArgOperand(2));
       }
+    } else if (IsX86 && Name.startswith("fma.vfmsub")) {
+      // Handle FMSUB and FSUBADD.
+      unsigned VecWidth = CI->getType()->getPrimitiveSizeInBits();
+      unsigned EltWidth = CI->getType()->getScalarSizeInBits();
+      Intrinsic::ID IID;
+      if (Name[10] == '.' && Name[11] == 'p') {
+        // Packed FMSUB
+        if (VecWidth == 128 && EltWidth == 32)
+          IID = Intrinsic::x86_fma_vfmadd_ps;
+        else if (VecWidth == 128 && EltWidth == 64)
+          IID = Intrinsic::x86_fma_vfmadd_pd;
+        else if (VecWidth == 256 && EltWidth == 32)
+          IID = Intrinsic::x86_fma_vfmadd_ps_256;
+        else if (VecWidth == 256 && EltWidth == 64)
+          IID = Intrinsic::x86_fma_vfmadd_pd_256;
+        else
+          llvm_unreachable("Unexpected intrinsic");
+      } else if (Name[10] == '.' && Name[11] == 's') {
+        // Scalar FMSUB
+        if (EltWidth == 32)
+          IID = Intrinsic::x86_fma_vfmadd_ss;
+        else if (EltWidth == 64)
+          IID = Intrinsic::x86_fma_vfmadd_sd;
+        else
+          llvm_unreachable("Unexpected intrinsic");
+      } else {
+        // FMSUBADD
+        if (VecWidth == 128 && EltWidth == 32)
+          IID = Intrinsic::x86_fma_vfmaddsub_ps;
+        else if (VecWidth == 128 && EltWidth == 64)
+          IID = Intrinsic::x86_fma_vfmaddsub_pd;
+        else if (VecWidth == 256 && EltWidth == 32)
+          IID = Intrinsic::x86_fma_vfmaddsub_ps_256;
+        else if (VecWidth == 256 && EltWidth == 64)
+          IID = Intrinsic::x86_fma_vfmaddsub_pd_256;
+        else
+          llvm_unreachable("Unexpected intrinsic");
+      }
+      Value *Arg2 = Builder.CreateFNeg(CI->getArgOperand(2));
+      Value *Ops[] = { CI->getArgOperand(0), CI->getArgOperand(1), Arg2 };
+      Rep = Builder.CreateCall(Intrinsic::getDeclaration(CI->getModule(), IID),
+                                                         Ops);
+    } else if (IsX86 && (Name.startswith("fma.vfnmadd.") ||
+                         Name.startswith("fma.vfnmsub."))) {
+      Value *Arg0 = CI->getArgOperand(0);
+      Value *Arg1 = CI->getArgOperand(1);
+      Value *Arg2 = CI->getArgOperand(2);
+      unsigned VecWidth = CI->getType()->getPrimitiveSizeInBits();
+      unsigned EltWidth = CI->getType()->getScalarSizeInBits();
+      Intrinsic::ID IID;
+      if (Name[12] == 'p') {
+        // Packed FNMADD/FNSUB
+        Arg0 = Builder.CreateFNeg(Arg0);
+        if (VecWidth == 128 && EltWidth == 32)
+          IID = Intrinsic::x86_fma_vfmadd_ps;
+        else if (VecWidth == 128 && EltWidth == 64)
+          IID = Intrinsic::x86_fma_vfmadd_pd;
+        else if (VecWidth == 256 && EltWidth == 32)
+          IID = Intrinsic::x86_fma_vfmadd_ps_256;
+        else if (VecWidth == 256 && EltWidth == 64)
+          IID = Intrinsic::x86_fma_vfmadd_pd_256;
+        else
+          llvm_unreachable("Unexpected intrinsic");
+      } else {
+        // Scalar FNMADD/FNMSUB
+        Arg1 = Builder.CreateFNeg(Arg1); // Arg0 is passthru so invert Arg1.
+        if (EltWidth == 32)
+          IID = Intrinsic::x86_fma_vfmadd_ss;
+        else if (EltWidth == 64)
+          IID = Intrinsic::x86_fma_vfmadd_sd;
+        else
+          llvm_unreachable("Unexpected intrinsic");
+      }
+      // Invert for FNMSUB.
+      if (Name[8] == 's')
+        Arg2 = Builder.CreateFNeg(Arg2);
+      Value *Ops[] = { Arg0, Arg1, Arg2 };
+      Rep = Builder.CreateCall(Intrinsic::getDeclaration(CI->getModule(), IID),
+                                                         Ops);
+    } else if (IsX86 && (Name.startswith("avx512.mask.pternlog.") ||
+                         Name.startswith("avx512.maskz.pternlog."))) {
+      bool ZeroMask = Name[11] == 'z';
+      unsigned VecWidth = CI->getType()->getPrimitiveSizeInBits();
+      unsigned EltWidth = CI->getType()->getScalarSizeInBits();
+      Intrinsic::ID IID;
+      if (VecWidth == 128 && EltWidth == 32)
+        IID = Intrinsic::x86_avx512_pternlog_d_128;
+      else if (VecWidth == 256 && EltWidth == 32)
+        IID = Intrinsic::x86_avx512_pternlog_d_256;
+      else if (VecWidth == 512 && EltWidth == 32)
+        IID = Intrinsic::x86_avx512_pternlog_d_512;
+      else if (VecWidth == 128 && EltWidth == 64)
+        IID = Intrinsic::x86_avx512_pternlog_q_128;
+      else if (VecWidth == 256 && EltWidth == 64)
+        IID = Intrinsic::x86_avx512_pternlog_q_256;
+      else if (VecWidth == 512 && EltWidth == 64)
+        IID = Intrinsic::x86_avx512_pternlog_q_512;
+      else
+        llvm_unreachable("Unexpected intrinsic");
+
+      Value *Args[] = { CI->getArgOperand(0) , CI->getArgOperand(1),
+                        CI->getArgOperand(2), CI->getArgOperand(3) };
+      Rep = Builder.CreateCall(Intrinsic::getDeclaration(CI->getModule(), IID),
+                               Args);
+      Value *PassThru = ZeroMask ? ConstantAggregateZero::get(CI->getType())
+                                 : CI->getArgOperand(0);
+      Rep = EmitX86Select(Builder, CI->getArgOperand(4), Rep, PassThru);
+    } else if (IsX86 && (Name.startswith("avx512.mask.vpmadd52") ||
+                         Name.startswith("avx512.maskz.vpmadd52"))) {
+      bool ZeroMask = Name[11] == 'z';
+      bool High = Name[20] == 'h' || Name[21] == 'h';
+      unsigned VecWidth = CI->getType()->getPrimitiveSizeInBits();
+      Intrinsic::ID IID;
+      if (VecWidth == 128 && !High)
+        IID = Intrinsic::x86_avx512_vpmadd52l_uq_128;
+      else if (VecWidth == 256 && !High)
+        IID = Intrinsic::x86_avx512_vpmadd52l_uq_256;
+      else if (VecWidth == 512 && !High)
+        IID = Intrinsic::x86_avx512_vpmadd52l_uq_512;
+      else if (VecWidth == 128 && High)
+        IID = Intrinsic::x86_avx512_vpmadd52h_uq_128;
+      else if (VecWidth == 256 && High)
+        IID = Intrinsic::x86_avx512_vpmadd52h_uq_256;
+      else if (VecWidth == 512 && High)
+        IID = Intrinsic::x86_avx512_vpmadd52h_uq_512;
+      else
+        llvm_unreachable("Unexpected intrinsic");
+
+      Value *Args[] = { CI->getArgOperand(0) , CI->getArgOperand(1),
+                        CI->getArgOperand(2) };
+      Rep = Builder.CreateCall(Intrinsic::getDeclaration(CI->getModule(), IID),
+                               Args);
+      Value *PassThru = ZeroMask ? ConstantAggregateZero::get(CI->getType())
+                                 : CI->getArgOperand(0);
+      Rep = EmitX86Select(Builder, CI->getArgOperand(3), Rep, PassThru);
+    } else if (IsX86 && (Name.startswith("avx512.mask.vpermi2var.") ||
+                         Name.startswith("avx512.mask.vpermt2var.") ||
+                         Name.startswith("avx512.maskz.vpermt2var."))) {
+      bool ZeroMask = Name[11] == 'z';
+      bool IndexForm = Name[17] == 'i';
+      unsigned VecWidth = CI->getType()->getPrimitiveSizeInBits();
+      unsigned EltWidth = CI->getType()->getScalarSizeInBits();
+      bool IsFloat = CI->getType()->isFPOrFPVectorTy();
+      Intrinsic::ID IID;
+      if (VecWidth == 128 && EltWidth == 32 && IsFloat)
+        IID = Intrinsic::x86_avx512_vpermi2var_ps_128;
+      else if (VecWidth == 128 && EltWidth == 32 && !IsFloat)
+        IID = Intrinsic::x86_avx512_vpermi2var_d_128;
+      else if (VecWidth == 128 && EltWidth == 64 && IsFloat)
+        IID = Intrinsic::x86_avx512_vpermi2var_pd_128;
+      else if (VecWidth == 128 && EltWidth == 64 && !IsFloat)
+        IID = Intrinsic::x86_avx512_vpermi2var_q_128;
+      else if (VecWidth == 256 && EltWidth == 32 && IsFloat)
+        IID = Intrinsic::x86_avx512_vpermi2var_ps_256;
+      else if (VecWidth == 256 && EltWidth == 32 && !IsFloat)
+        IID = Intrinsic::x86_avx512_vpermi2var_d_256;
+      else if (VecWidth == 256 && EltWidth == 64 && IsFloat)
+        IID = Intrinsic::x86_avx512_vpermi2var_pd_256;
+      else if (VecWidth == 256 && EltWidth == 64 && !IsFloat)
+        IID = Intrinsic::x86_avx512_vpermi2var_q_256;
+      else if (VecWidth == 512 && EltWidth == 32 && IsFloat)
+        IID = Intrinsic::x86_avx512_vpermi2var_ps_512;
+      else if (VecWidth == 512 && EltWidth == 32 && !IsFloat)
+        IID = Intrinsic::x86_avx512_vpermi2var_d_512;
+      else if (VecWidth == 512 && EltWidth == 64 && IsFloat)
+        IID = Intrinsic::x86_avx512_vpermi2var_pd_512;
+      else if (VecWidth == 512 && EltWidth == 64 && !IsFloat)
+        IID = Intrinsic::x86_avx512_vpermi2var_q_512;
+      else if (VecWidth == 128 && EltWidth == 16)
+        IID = Intrinsic::x86_avx512_vpermi2var_hi_128;
+      else if (VecWidth == 256 && EltWidth == 16)
+        IID = Intrinsic::x86_avx512_vpermi2var_hi_256;
+      else if (VecWidth == 512 && EltWidth == 16)
+        IID = Intrinsic::x86_avx512_vpermi2var_hi_512;
+      else if (VecWidth == 128 && EltWidth == 8)
+        IID = Intrinsic::x86_avx512_vpermi2var_qi_128;
+      else if (VecWidth == 256 && EltWidth == 8)
+        IID = Intrinsic::x86_avx512_vpermi2var_qi_256;
+      else if (VecWidth == 512 && EltWidth == 8)
+        IID = Intrinsic::x86_avx512_vpermi2var_qi_512;
+      else
+        llvm_unreachable("Unexpected intrinsic");
+
+      Value *Args[] = { CI->getArgOperand(0) , CI->getArgOperand(1),
+                        CI->getArgOperand(2) };
+
+      // If this isn't index form we need to swap operand 0 and 1.
+      if (!IndexForm)
+        std::swap(Args[0], Args[1]);
+
+      Rep = Builder.CreateCall(Intrinsic::getDeclaration(CI->getModule(), IID),
+                               Args);
+      Value *PassThru = ZeroMask ? ConstantAggregateZero::get(CI->getType())
+                                 : Builder.CreateBitCast(CI->getArgOperand(1),
+                                                         CI->getType());
+      Rep = EmitX86Select(Builder, CI->getArgOperand(3), Rep, PassThru);
+    } else if (IsX86 && (Name.startswith("avx512.mask.vpdpbusd.") ||
+                         Name.startswith("avx512.maskz.vpdpbusd.") ||
+                         Name.startswith("avx512.mask.vpdpbusds.") ||
+                         Name.startswith("avx512.maskz.vpdpbusds."))) {
+      bool ZeroMask = Name[11] == 'z';
+      bool IsSaturating = Name[ZeroMask ? 21 : 20] == 's';
+      unsigned VecWidth = CI->getType()->getPrimitiveSizeInBits();
+      Intrinsic::ID IID;
+      if (VecWidth == 128 && !IsSaturating)
+        IID = Intrinsic::x86_avx512_vpdpbusd_128;
+      else if (VecWidth == 256 && !IsSaturating)
+        IID = Intrinsic::x86_avx512_vpdpbusd_256;
+      else if (VecWidth == 512 && !IsSaturating)
+        IID = Intrinsic::x86_avx512_vpdpbusd_512;
+      else if (VecWidth == 128 && IsSaturating)
+        IID = Intrinsic::x86_avx512_vpdpbusds_128;
+      else if (VecWidth == 256 && IsSaturating)
+        IID = Intrinsic::x86_avx512_vpdpbusds_256;
+      else if (VecWidth == 512 && IsSaturating)
+        IID = Intrinsic::x86_avx512_vpdpbusds_512;
+      else
+        llvm_unreachable("Unexpected intrinsic");
+
+      Value *Args[] = { CI->getArgOperand(0), CI->getArgOperand(1),
+                        CI->getArgOperand(2)  };
+      Rep = Builder.CreateCall(Intrinsic::getDeclaration(CI->getModule(), IID),
+                               Args);
+      Value *PassThru = ZeroMask ? ConstantAggregateZero::get(CI->getType())
+                                 : CI->getArgOperand(0);
+      Rep = EmitX86Select(Builder, CI->getArgOperand(3), Rep, PassThru);
+    } else if (IsX86 && (Name.startswith("avx512.mask.vpdpwssd.") ||
+                         Name.startswith("avx512.maskz.vpdpwssd.") ||
+                         Name.startswith("avx512.mask.vpdpwssds.") ||
+                         Name.startswith("avx512.maskz.vpdpwssds."))) {
+      bool ZeroMask = Name[11] == 'z';
+      bool IsSaturating = Name[ZeroMask ? 21 : 20] == 's';
+      unsigned VecWidth = CI->getType()->getPrimitiveSizeInBits();
+      Intrinsic::ID IID;
+      if (VecWidth == 128 && !IsSaturating)
+        IID = Intrinsic::x86_avx512_vpdpwssd_128;
+      else if (VecWidth == 256 && !IsSaturating)
+        IID = Intrinsic::x86_avx512_vpdpwssd_256;
+      else if (VecWidth == 512 && !IsSaturating)
+        IID = Intrinsic::x86_avx512_vpdpwssd_512;
+      else if (VecWidth == 128 && IsSaturating)
+        IID = Intrinsic::x86_avx512_vpdpwssds_128;
+      else if (VecWidth == 256 && IsSaturating)
+        IID = Intrinsic::x86_avx512_vpdpwssds_256;
+      else if (VecWidth == 512 && IsSaturating)
+        IID = Intrinsic::x86_avx512_vpdpwssds_512;
+      else
+        llvm_unreachable("Unexpected intrinsic");
+
+      Value *Args[] = { CI->getArgOperand(0), CI->getArgOperand(1),
+                        CI->getArgOperand(2)  };
+      Rep = Builder.CreateCall(Intrinsic::getDeclaration(CI->getModule(), IID),
+                               Args);
+      Value *PassThru = ZeroMask ? ConstantAggregateZero::get(CI->getType())
+                                 : CI->getArgOperand(0);
+      Rep = EmitX86Select(Builder, CI->getArgOperand(3), Rep, PassThru);
     } else if (IsX86 && Name.startswith("avx512.mask.") &&
                upgradeAVX512MaskToSelect(Name, Builder, *CI, Rep)) {
       // Rep will be updated by the call in the condition.

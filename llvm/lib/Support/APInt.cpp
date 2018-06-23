@@ -18,6 +18,7 @@
 #include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
@@ -167,7 +168,7 @@ void APInt::Profile(FoldingSetNodeID& ID) const {
     ID.AddInteger(U.pVal[i]);
 }
 
-/// @brief Prefix increment operator. Increments the APInt by one.
+/// Prefix increment operator. Increments the APInt by one.
 APInt& APInt::operator++() {
   if (isSingleWord())
     ++U.VAL;
@@ -176,7 +177,7 @@ APInt& APInt::operator++() {
   return clearUnusedBits();
 }
 
-/// @brief Prefix decrement operator. Decrements the APInt by one.
+/// Prefix decrement operator. Decrements the APInt by one.
 APInt& APInt::operator--() {
   if (isSingleWord())
     --U.VAL;
@@ -187,7 +188,7 @@ APInt& APInt::operator--() {
 
 /// Adds the RHS APint to this APInt.
 /// @returns this, after addition of RHS.
-/// @brief Addition assignment operator.
+/// Addition assignment operator.
 APInt& APInt::operator+=(const APInt& RHS) {
   assert(BitWidth == RHS.BitWidth && "Bit widths must be the same");
   if (isSingleWord())
@@ -207,7 +208,7 @@ APInt& APInt::operator+=(uint64_t RHS) {
 
 /// Subtracts the RHS APInt from this APInt
 /// @returns this, after subtraction
-/// @brief Subtraction assignment operator.
+/// Subtraction assignment operator.
 APInt& APInt::operator-=(const APInt& RHS) {
   assert(BitWidth == RHS.BitWidth && "Bit widths must be the same");
   if (isSingleWord())
@@ -325,7 +326,7 @@ void APInt::setBitsSlowCase(unsigned loBit, unsigned hiBit) {
     U.pVal[word] = WORD_MAX;
 }
 
-/// @brief Toggle every bit to its opposite value.
+/// Toggle every bit to its opposite value.
 void APInt::flipAllBitsSlowCase() {
   tcComplement(U.pVal, getNumWords());
   clearUnusedBits();
@@ -333,7 +334,7 @@ void APInt::flipAllBitsSlowCase() {
 
 /// Toggle a given bit to its opposite value whose position is given
 /// as "bitPosition".
-/// @brief Toggles a given bit to its opposite value.
+/// Toggles a given bit to its opposite value.
 void APInt::flipBit(unsigned bitPosition) {
   assert(bitPosition < BitWidth && "Out of the bit-width range!");
   if ((*this)[bitPosition]) clearBit(bitPosition);
@@ -907,13 +908,13 @@ APInt APInt::sextOrSelf(unsigned width) const {
 }
 
 /// Arithmetic right-shift this APInt by shiftAmt.
-/// @brief Arithmetic right-shift function.
+/// Arithmetic right-shift function.
 void APInt::ashrInPlace(const APInt &shiftAmt) {
   ashrInPlace((unsigned)shiftAmt.getLimitedValue(BitWidth));
 }
 
 /// Arithmetic right-shift this APInt by shiftAmt.
-/// @brief Arithmetic right-shift function.
+/// Arithmetic right-shift function.
 void APInt::ashrSlowCase(unsigned ShiftAmt) {
   // Don't bother performing a no-op shift.
   if (!ShiftAmt)
@@ -956,19 +957,19 @@ void APInt::ashrSlowCase(unsigned ShiftAmt) {
 }
 
 /// Logical right-shift this APInt by shiftAmt.
-/// @brief Logical right-shift function.
+/// Logical right-shift function.
 void APInt::lshrInPlace(const APInt &shiftAmt) {
   lshrInPlace((unsigned)shiftAmt.getLimitedValue(BitWidth));
 }
 
 /// Logical right-shift this APInt by shiftAmt.
-/// @brief Logical right-shift function.
+/// Logical right-shift function.
 void APInt::lshrSlowCase(unsigned ShiftAmt) {
   tcShiftRight(U.pVal, getNumWords(), ShiftAmt);
 }
 
 /// Left-shift this APInt by shiftAmt.
-/// @brief Left-shift function.
+/// Left-shift function.
 APInt &APInt::operator<<=(const APInt &shiftAmt) {
   // It's undefined behavior in C to shift by BitWidth or greater.
   *this <<= (unsigned)shiftAmt.getLimitedValue(BitWidth);
@@ -1252,18 +1253,20 @@ static void KnuthDiv(uint32_t *u, uint32_t *v, uint32_t *q, uint32_t* r,
 
 // The DEBUG macros here tend to be spam in the debug output if you're not
 // debugging this code. Disable them unless KNUTH_DEBUG is defined.
-#pragma push_macro("DEBUG")
+#pragma push_macro("LLVM_DEBUG")
 #ifndef KNUTH_DEBUG
-#undef DEBUG
-#define DEBUG(X) do {} while (false)
+#undef LLVM_DEBUG
+#define LLVM_DEBUG(X)                                                          \
+  do {                                                                         \
+  } while (false)
 #endif
 
-  DEBUG(dbgs() << "KnuthDiv: m=" << m << " n=" << n << '\n');
-  DEBUG(dbgs() << "KnuthDiv: original:");
-  DEBUG(for (int i = m+n; i >=0; i--) dbgs() << " " << u[i]);
-  DEBUG(dbgs() << " by");
-  DEBUG(for (int i = n; i >0; i--) dbgs() << " " << v[i-1]);
-  DEBUG(dbgs() << '\n');
+  LLVM_DEBUG(dbgs() << "KnuthDiv: m=" << m << " n=" << n << '\n');
+  LLVM_DEBUG(dbgs() << "KnuthDiv: original:");
+  LLVM_DEBUG(for (int i = m + n; i >= 0; i--) dbgs() << " " << u[i]);
+  LLVM_DEBUG(dbgs() << " by");
+  LLVM_DEBUG(for (int i = n; i > 0; i--) dbgs() << " " << v[i - 1]);
+  LLVM_DEBUG(dbgs() << '\n');
   // D1. [Normalize.] Set d = b / (v[n-1] + 1) and multiply all the digits of
   // u and v by d. Note that we have taken Knuth's advice here to use a power
   // of 2 value for d such that d * v[n-1] >= b/2 (b is the base). A power of
@@ -1289,16 +1292,16 @@ static void KnuthDiv(uint32_t *u, uint32_t *v, uint32_t *q, uint32_t* r,
   }
   u[m+n] = u_carry;
 
-  DEBUG(dbgs() << "KnuthDiv:   normal:");
-  DEBUG(for (int i = m+n; i >=0; i--) dbgs() << " " << u[i]);
-  DEBUG(dbgs() << " by");
-  DEBUG(for (int i = n; i >0; i--) dbgs() << " " << v[i-1]);
-  DEBUG(dbgs() << '\n');
+  LLVM_DEBUG(dbgs() << "KnuthDiv:   normal:");
+  LLVM_DEBUG(for (int i = m + n; i >= 0; i--) dbgs() << " " << u[i]);
+  LLVM_DEBUG(dbgs() << " by");
+  LLVM_DEBUG(for (int i = n; i > 0; i--) dbgs() << " " << v[i - 1]);
+  LLVM_DEBUG(dbgs() << '\n');
 
   // D2. [Initialize j.]  Set j to m. This is the loop counter over the places.
   int j = m;
   do {
-    DEBUG(dbgs() << "KnuthDiv: quotient digit #" << j << '\n');
+    LLVM_DEBUG(dbgs() << "KnuthDiv: quotient digit #" << j << '\n');
     // D3. [Calculate q'.].
     //     Set qp = (u[j+n]*b + u[j+n-1]) / v[n-1]. (qp=qprime=q')
     //     Set rp = (u[j+n]*b + u[j+n-1]) % v[n-1]. (rp=rprime=r')
@@ -1308,7 +1311,7 @@ static void KnuthDiv(uint32_t *u, uint32_t *v, uint32_t *q, uint32_t* r,
     // value qp is one too large, and it eliminates all cases where qp is two
     // too large.
     uint64_t dividend = Make_64(u[j+n], u[j+n-1]);
-    DEBUG(dbgs() << "KnuthDiv: dividend == " << dividend << '\n');
+    LLVM_DEBUG(dbgs() << "KnuthDiv: dividend == " << dividend << '\n');
     uint64_t qp = dividend / v[n-1];
     uint64_t rp = dividend % v[n-1];
     if (qp == b || qp*v[n-2] > b*rp + u[j+n-2]) {
@@ -1317,7 +1320,7 @@ static void KnuthDiv(uint32_t *u, uint32_t *v, uint32_t *q, uint32_t* r,
       if (rp < b && (qp == b || qp*v[n-2] > b*rp + u[j+n-2]))
         qp--;
     }
-    DEBUG(dbgs() << "KnuthDiv: qp == " << qp << ", rp == " << rp << '\n');
+    LLVM_DEBUG(dbgs() << "KnuthDiv: qp == " << qp << ", rp == " << rp << '\n');
 
     // D4. [Multiply and subtract.] Replace (u[j+n]u[j+n-1]...u[j]) with
     // (u[j+n]u[j+n-1]..u[j]) - qp * (v[n-1]...v[1]v[0]). This computation
@@ -1333,15 +1336,15 @@ static void KnuthDiv(uint32_t *u, uint32_t *v, uint32_t *q, uint32_t* r,
       int64_t subres = int64_t(u[j+i]) - borrow - Lo_32(p);
       u[j+i] = Lo_32(subres);
       borrow = Hi_32(p) - Hi_32(subres);
-      DEBUG(dbgs() << "KnuthDiv: u[j+i] = " << u[j+i]
-                   << ", borrow = " << borrow << '\n');
+      LLVM_DEBUG(dbgs() << "KnuthDiv: u[j+i] = " << u[j + i]
+                        << ", borrow = " << borrow << '\n');
     }
     bool isNeg = u[j+n] < borrow;
     u[j+n] -= Lo_32(borrow);
 
-    DEBUG(dbgs() << "KnuthDiv: after subtraction:");
-    DEBUG(for (int i = m+n; i >=0; i--) dbgs() << " " << u[i]);
-    DEBUG(dbgs() << '\n');
+    LLVM_DEBUG(dbgs() << "KnuthDiv: after subtraction:");
+    LLVM_DEBUG(for (int i = m + n; i >= 0; i--) dbgs() << " " << u[i]);
+    LLVM_DEBUG(dbgs() << '\n');
 
     // D5. [Test remainder.] Set q[j] = qp. If the result of step D4 was
     // negative, go to step D6; otherwise go on to step D7.
@@ -1362,16 +1365,16 @@ static void KnuthDiv(uint32_t *u, uint32_t *v, uint32_t *q, uint32_t* r,
       }
       u[j+n] += carry;
     }
-    DEBUG(dbgs() << "KnuthDiv: after correction:");
-    DEBUG(for (int i = m+n; i >=0; i--) dbgs() << " " << u[i]);
-    DEBUG(dbgs() << "\nKnuthDiv: digit result = " << q[j] << '\n');
+    LLVM_DEBUG(dbgs() << "KnuthDiv: after correction:");
+    LLVM_DEBUG(for (int i = m + n; i >= 0; i--) dbgs() << " " << u[i]);
+    LLVM_DEBUG(dbgs() << "\nKnuthDiv: digit result = " << q[j] << '\n');
 
-  // D7. [Loop on j.]  Decrease j by one. Now if j >= 0, go back to D3.
+    // D7. [Loop on j.]  Decrease j by one. Now if j >= 0, go back to D3.
   } while (--j >= 0);
 
-  DEBUG(dbgs() << "KnuthDiv: quotient:");
-  DEBUG(for (int i = m; i >=0; i--) dbgs() <<" " << q[i]);
-  DEBUG(dbgs() << '\n');
+  LLVM_DEBUG(dbgs() << "KnuthDiv: quotient:");
+  LLVM_DEBUG(for (int i = m; i >= 0; i--) dbgs() << " " << q[i]);
+  LLVM_DEBUG(dbgs() << '\n');
 
   // D8. [Unnormalize]. Now q[...] is the desired quotient, and the desired
   // remainder may be obtained by dividing u[...] by d. If r is non-null we
@@ -1382,23 +1385,23 @@ static void KnuthDiv(uint32_t *u, uint32_t *v, uint32_t *q, uint32_t* r,
     // shift right here.
     if (shift) {
       uint32_t carry = 0;
-      DEBUG(dbgs() << "KnuthDiv: remainder:");
+      LLVM_DEBUG(dbgs() << "KnuthDiv: remainder:");
       for (int i = n-1; i >= 0; i--) {
         r[i] = (u[i] >> shift) | carry;
         carry = u[i] << (32 - shift);
-        DEBUG(dbgs() << " " << r[i]);
+        LLVM_DEBUG(dbgs() << " " << r[i]);
       }
     } else {
       for (int i = n-1; i >= 0; i--) {
         r[i] = u[i];
-        DEBUG(dbgs() << " " << r[i]);
+        LLVM_DEBUG(dbgs() << " " << r[i]);
       }
     }
-    DEBUG(dbgs() << '\n');
+    LLVM_DEBUG(dbgs() << '\n');
   }
-  DEBUG(dbgs() << '\n');
+  LLVM_DEBUG(dbgs() << '\n');
 
-#pragma pop_macro("DEBUG")
+#pragma pop_macro("LLVM_DEBUG")
 }
 
 void APInt::divide(const WordType *LHS, unsigned lhsWords, const WordType *RHS,

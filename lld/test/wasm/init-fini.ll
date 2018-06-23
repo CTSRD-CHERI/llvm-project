@@ -1,7 +1,7 @@
 ; RUN: llc -filetype=obj -o %t.o %s
 ; RUN: llc -filetype=obj %S/Inputs/global-ctor-dtor.ll -o %t.global-ctor-dtor.o
 
-target triple = "wasm32-unknown-unknown-wasm"
+target triple = "wasm32-unknown-unknown"
 
 define hidden void @func1() {
 entry:
@@ -49,7 +49,7 @@ entry:
   { i32, void ()*, i8* } { i32 4000, void ()* @externDtor, i8* null }
 ]
 
-; RUN: wasm-ld --check-signatures --allow-undefined %t.o %t.global-ctor-dtor.o -o %t.wasm
+; RUN: wasm-ld --allow-undefined %t.o %t.global-ctor-dtor.o -o %t.wasm
 ; RUN: obj2yaml %t.wasm | FileCheck %s
 
 ; CHECK:        - Type:            IMPORT
@@ -128,11 +128,10 @@ entry:
 ; CHECK-NEXT: ...
 
 
-; RUN: wasm-ld --check-signatures -r %t.o %t.global-ctor-dtor.o -o %t.reloc.wasm
+; RUN: wasm-ld -r %t.o %t.global-ctor-dtor.o -o %t.reloc.wasm
 ; RUN: obj2yaml %t.reloc.wasm | FileCheck -check-prefix=RELOC %s
 
-; RELOC:          Name:            linking
-; RELOC-NEXT:     SymbolTable:
+; RELOC:          SymbolTable:
 ; RELOC-NEXT:       - Index:           0
 ; RELOC-NEXT:         Kind:            FUNCTION
 ; RELOC-NEXT:         Name:            func1

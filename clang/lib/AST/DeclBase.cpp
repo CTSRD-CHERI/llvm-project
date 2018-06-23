@@ -34,7 +34,6 @@
 #include "clang/Basic/PartialDiagnostic.h"
 #include "clang/Basic/SourceLocation.h"
 #include "clang/Basic/TargetInfo.h"
-#include "clang/Basic/VersionTuple.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/PointerIntPair.h"
 #include "llvm/ADT/SmallVector.h"
@@ -42,6 +41,7 @@
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
+#include "llvm/Support/VersionTuple.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 #include <cassert>
@@ -493,7 +493,7 @@ static StringRef getRealizedPlatform(const AvailabilityAttr *A,
   return RealizedPlatform;
 }
 
-/// \brief Determine the availability of the given declaration based on
+/// Determine the availability of the given declaration based on
 /// the target platform.
 ///
 /// When it returns an availability result other than \c AR_Available,
@@ -550,7 +550,6 @@ static AvailabilityResult CheckAvailability(ASTContext &Context,
       Message->clear();
       llvm::raw_string_ostream Out(*Message);
       VersionTuple VTI(A->getIntroduced());
-      VTI.UseDotAsSeparator();
       Out << "introduced in " << PrettyPlatformName << ' ' 
           << VTI << HintMessage;
     }
@@ -564,7 +563,6 @@ static AvailabilityResult CheckAvailability(ASTContext &Context,
       Message->clear();
       llvm::raw_string_ostream Out(*Message);
       VersionTuple VTO(A->getObsoleted());
-      VTO.UseDotAsSeparator();
       Out << "obsoleted in " << PrettyPlatformName << ' ' 
           << VTO << HintMessage;
     }
@@ -578,7 +576,6 @@ static AvailabilityResult CheckAvailability(ASTContext &Context,
       Message->clear();
       llvm::raw_string_ostream Out(*Message);
       VersionTuple VTD(A->getDeprecated());
-      VTD.UseDotAsSeparator();
       Out << "first deprecated in " << PrettyPlatformName << ' '
           << VTD << HintMessage;
     }
@@ -590,9 +587,11 @@ static AvailabilityResult CheckAvailability(ASTContext &Context,
 }
 
 AvailabilityResult Decl::getAvailability(std::string *Message,
-                                         VersionTuple EnclosingVersion) const {
+                                         VersionTuple EnclosingVersion,
+                                         StringRef *RealizedPlatform) const {
   if (auto *FTD = dyn_cast<FunctionTemplateDecl>(this))
-    return FTD->getTemplatedDecl()->getAvailability(Message, EnclosingVersion);
+    return FTD->getTemplatedDecl()->getAvailability(Message, EnclosingVersion,
+                                                    RealizedPlatform);
 
   AvailabilityResult Result = AR_Available;
   std::string ResultMessage;
@@ -619,8 +618,11 @@ AvailabilityResult Decl::getAvailability(std::string *Message,
       AvailabilityResult AR = CheckAvailability(getASTContext(), Availability,
                                                 Message, EnclosingVersion);
 
-      if (AR == AR_Unavailable)
+      if (AR == AR_Unavailable) {
+        if (RealizedPlatform)
+          *RealizedPlatform = Availability->getPlatform()->getName();
         return AR_Unavailable;
+      }
 
       if (AR > Result) {
         Result = AR;
@@ -998,7 +1000,7 @@ bool DeclContext::classof(const Decl *D) {
 
 DeclContext::~DeclContext() = default;
 
-/// \brief Find the parent context of this context that will be
+/// Find the parent context of this context that will be
 /// used for unqualified name lookup.
 ///
 /// Generally, the parent lookup context is the semantic context. However, for
@@ -1216,7 +1218,7 @@ DeclContext::BuildDeclChain(ArrayRef<Decl *> Decls,
   return std::make_pair(FirstNewDecl, PrevDecl);
 }
 
-/// \brief We have just acquired external visible storage, and we already have
+/// We have just acquired external visible storage, and we already have
 /// built a lookup map. For every name in the map, pull in the new names from
 /// the external storage.
 void DeclContext::reconcileExternalVisibleStorage() const {
@@ -1227,7 +1229,7 @@ void DeclContext::reconcileExternalVisibleStorage() const {
     Lookup.second.setHasExternalDecls();
 }
 
-/// \brief Load the declarations within this lexical storage from an
+/// Load the declarations within this lexical storage from an
 /// external source.
 /// \return \c true if any declarations were added.
 bool
@@ -1345,6 +1347,32 @@ bool DeclContext::containsDecl(Decl *D) const {
           (D->NextInContextAndBits.getPointer() || D == LastDecl));
 }
 
+/// shouldBeHidden - Determine whether a declaration which was declared
+/// within its semantic context should be invisible to qualified name lookup.
+static bool shouldBeHidden(NamedDecl *D) {
+  // Skip unnamed declarations.
+  if (!D->getDeclName())
+    return true;
+
+  // Skip entities that can't be found by name lookup into a particular
+  // context.
+  if ((D->getIdentifierNamespace() == 0 && !isa<UsingDirectiveDecl>(D)) ||
+      D->isTemplateParameter())
+    return true;
+
+  // Skip template specializations.
+  // FIXME: This feels like a hack. Should DeclarationName support
+  // template-ids, or is there a better way to keep specializations
+  // from being visible?
+  if (isa<ClassTemplateSpecializationDecl>(D))
+    return true;
+  if (auto *FD = dyn_cast<FunctionDecl>(D))
+    if (FD->isFunctionTemplateSpecialization())
+      return true;
+
+  return false;
+}
+
 void DeclContext::removeDecl(Decl *D) {
   assert(D->getLexicalDeclContext() == this &&
          "decl being removed from non-lexical context");
@@ -1367,7 +1395,7 @@ void DeclContext::removeDecl(Decl *D) {
       }
     }
   }
-  
+
   // Mark that D is no longer in the decl chain.
   D->NextInContextAndBits.setPointer(nullptr);
 
@@ -1375,8 +1403,14 @@ void DeclContext::removeDecl(Decl *D) {
   if (isa<NamedDecl>(D)) {
     auto *ND = cast<NamedDecl>(D);
 
+    // Do not try to remove the declaration if that is invisible to qualified
+    // lookup.  E.g. template specializations are skipped.
+    if (shouldBeHidden(ND))
+      return;
+
     // Remove only decls that have a name
-    if (!ND->getDeclName()) return;
+    if (!ND->getDeclName())
+      return;
 
     auto *DC = D->getDeclContext();
     do {
@@ -1431,32 +1465,6 @@ void DeclContext::addDeclInternal(Decl *D) {
   if (auto *ND = dyn_cast<NamedDecl>(D))
     ND->getDeclContext()->getPrimaryContext()->
         makeDeclVisibleInContextWithFlags(ND, true, true);
-}
-
-/// shouldBeHidden - Determine whether a declaration which was declared
-/// within its semantic context should be invisible to qualified name lookup.
-static bool shouldBeHidden(NamedDecl *D) {
-  // Skip unnamed declarations.
-  if (!D->getDeclName())
-    return true;
-
-  // Skip entities that can't be found by name lookup into a particular
-  // context.
-  if ((D->getIdentifierNamespace() == 0 && !isa<UsingDirectiveDecl>(D)) ||
-      D->isTemplateParameter())
-    return true;
-
-  // Skip template specializations.
-  // FIXME: This feels like a hack. Should DeclarationName support
-  // template-ids, or is there a better way to keep specializations
-  // from being visible?
-  if (isa<ClassTemplateSpecializationDecl>(D))
-    return true;
-  if (auto *FD = dyn_cast<FunctionDecl>(D))
-    if (FD->isFunctionTemplateSpecialization())
-      return true;
-
-  return false;
 }
 
 /// buildLookup - Build the lookup data structure with all of the

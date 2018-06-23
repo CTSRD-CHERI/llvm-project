@@ -50,11 +50,10 @@ bool HostInfoWindows::GetOSVersion(uint32_t &major, uint32_t &minor,
   info.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEX);
 #pragma warning(push)
 #pragma warning(disable : 4996)
-  // Starting with Microsoft SDK for Windows 8.1, this function is deprecated in
-  // favor of the
-  // new Windows Version Helper APIs.  Since we don't specify a minimum SDK
-  // version, it's easier
-  // to simply disable the warning rather than try to support both APIs.
+  // Starting with Microsoft SDK for Windows 8.1, this function is deprecated
+  // in favor of the new Windows Version Helper APIs.  Since we don't specify a
+  // minimum SDK version, it's easier to simply disable the warning rather than
+  // try to support both APIs.
   if (GetVersionEx((LPOSVERSIONINFO)&info) == 0) {
     return false;
   }
@@ -98,7 +97,7 @@ FileSpec HostInfoWindows::GetProgramFileSpec() {
     ::GetModuleFileNameW(NULL, buffer.data(), buffer.size());
     std::string path;
     llvm::convertWideToUTF8(buffer.data(), path);
-    m_program_filespec.SetFile(path, false);
+    m_program_filespec.SetFile(path, false, FileSpec::Style::native);
   });
   return m_program_filespec;
 }

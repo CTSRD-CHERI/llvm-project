@@ -154,6 +154,7 @@ public:
   /// \name Control where instructions we create are recorded (typically for
   /// visiting again later during legalization).
   /// @{
+  void recordInsertion(MachineInstr *InsertedInstr) const;
   void recordInsertions(std::function<void(MachineInstr *)> InsertedInstr);
   void stopRecordingInsertions();
   /// @}
@@ -520,6 +521,18 @@ public:
   /// \return a MachineInstrBuilder for the newly created instruction.
   MachineInstrBuilder buildLoad(unsigned Res, unsigned Addr,
                                 MachineMemOperand &MMO);
+
+  /// Build and insert `Res = <opcode> Addr, MMO`.
+  ///
+  /// Loads the value stored at \p Addr. Puts the result in \p Res.
+  ///
+  /// \pre setBasicBlock or setMI must have been called.
+  /// \pre \p Res must be a generic virtual register.
+  /// \pre \p Addr must be a generic virtual register with pointer type.
+  ///
+  /// \return a MachineInstrBuilder for the newly created instruction.
+  MachineInstrBuilder buildLoadInstr(unsigned Opcode, unsigned Res,
+                                     unsigned Addr, MachineMemOperand &MMO);
 
   /// Build and insert `G_STORE Val, Addr, MMO`.
   ///

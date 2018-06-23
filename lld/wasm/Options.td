@@ -21,7 +21,7 @@ def color_diagnostics: F<"color-diagnostics">,
   HelpText<"Use colors in diagnostics">;
 
 def color_diagnostics_eq: J<"color-diagnostics=">,
-  HelpText<"Use colors in diagnostics">;
+  HelpText<"Use colors in diagnostics; one of 'always', 'never', 'auto'">;
 
 defm demangle: B<"demangle",
     "Demangle symbol names",
@@ -39,6 +39,10 @@ def fatal_warnings: F<"fatal-warnings">,
 defm gc_sections: B<"gc-sections",
     "Enable garbage collection of unused sections",
     "Disable garbage collection of unused sections">;
+
+defm merge_data_segments: B<"merge-data-segments",
+    "Enable merging data segments",
+    "Disable merging data segments">;
 
 def help: F<"help">, HelpText<"Print option help">;
 
@@ -60,6 +64,8 @@ def no_fatal_warnings: F<"no-fatal-warnings">;
 
 def o: JoinedOrSeparate<["-"], "o">, MetaVarName<"<path>">,
   HelpText<"Path to file to write output">;
+
+def O: JoinedOrSeparate<["-"], "O">, HelpText<"Optimize output file size">;
 
 defm print_gc_sections: B<"print-gc-sections",
     "List removed unused sections",
@@ -96,12 +102,11 @@ def allow_undefined_file: J<"allow-undefined-file=">,
 def allow_undefined_file_s: Separate<["-"], "allow-undefined-file">,
   Alias<allow_undefined_file>;
 
-defm check_signatures: B<"check-signatures",
-    "Check function signatures",
-    "Don't check function signatures">;
-
 defm export: Eq<"export">,
   HelpText<"Force a symbol to be exported">;
+
+def export_all: F<"export-all">,
+  HelpText<"Export all symbols (normally combined with --no-gc-sections)">;
 
 def export_table: F<"export-table">,
   HelpText<"Export function table to the environment">;
@@ -124,6 +129,9 @@ def max_memory: J<"max-memory=">,
 def no_entry: F<"no-entry">,
   HelpText<"Do not output any entry point">;
 
+def stack_first: F<"stack-first">,
+  HelpText<"Place stack at start of linear memory rather than after data">;
+
 // Aliases
 def alias_entry_e: JoinedOrSeparate<["-"], "e">, Alias<entry>;
 def alias_entry_entry: J<"entry=">, Alias<entry>;
@@ -131,3 +139,16 @@ def alias_initial_memory_i: Flag<["-"], "i">, Alias<initial_memory>;
 def alias_max_memory_m: Flag<["-"], "m">, Alias<max_memory>;
 def alias_relocatable_r: Flag<["-"], "r">, Alias<relocatable>;
 def alias_undefined_u: JoinedOrSeparate<["-"], "u">, Alias<undefined>;
+
+// LTO-related options.
+def lto_O: J<"lto-O">, MetaVarName<"<opt-level>">,
+  HelpText<"Optimization level for LTO">;
+def lto_partitions: J<"lto-partitions=">,
+  HelpText<"Number of LTO codegen partitions">;
+def disable_verify: F<"disable-verify">;
+def save_temps: F<"save-temps">;
+def thinlto_cache_dir: J<"thinlto-cache-dir=">,
+  HelpText<"Path to ThinLTO cached object file directory">;
+defm thinlto_cache_policy: Eq<"thinlto-cache-policy">,
+  HelpText<"Pruning policy for the ThinLTO cache">;
+def thinlto_jobs: J<"thinlto-jobs=">, HelpText<"Number of ThinLTO jobs">;

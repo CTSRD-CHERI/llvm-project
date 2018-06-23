@@ -332,7 +332,7 @@ template <class ELFT> void InputSection::copyShtGroup(uint8_t *Buf) {
     *To++ = Sections[Idx]->getOutputSection()->SectionIndex;
 }
 
-InputSectionBase *InputSection::getRelocatedSection() {
+InputSectionBase *InputSection::getRelocatedSection() const {
   if (!File || (Type != SHT_RELA && Type != SHT_REL))
     return nullptr;
   ArrayRef<InputSectionBase *> Sections = File->getSections();
@@ -383,17 +383,32 @@ void InputSection::copyRelocations(uint8_t *Buf, ArrayRef<RelTy> Rels) {
         continue;
       }
 
-      if (RelTy::IsRela) {
-        P->r_addend =
-            Sym.getVA(getAddend<ELFT>(Rel)) - Section->getOutputSection()->Addr;
-      } else if (Config->Relocatable) {
-        const uint8_t *BufLoc = Sec->Data.begin() + Rel.r_offset;
-        Sec->Relocations.push_back({R_ABS, Type, Rel.r_offset,
-                                    Target->getImplicitAddend(BufLoc, Type),
-                                    &Sym});
-      }
-    }
+      int64_t Addend = getAddend<ELFT>(Rel);
+      const uint8_t *BufLoc = Sec->Data.begin() + Rel.r_offset;
+      if (!RelTy::IsRela)
+        Addend = Target->getImplicitAddend(BufLoc, Type);
 
+      if (Config->EMachine == EM_MIPS && Config->Relocatable &&
+          Target->getRelExpr(Type, Sym, BufLoc) == R_MIPS_GOTREL) {
+        // Some MIPS relocations depend on "gp" value. By default,
+        // this value has 0x7ff0 offset from a .got section. But
+        // relocatable files produced by a complier or a linker
+        // might redefine this default value and we must use it
+        // for a calculation of the relocation result. When we
+        // generate EXE or DSO it's trivial. Generating a relocatable
+        // output is more difficult case because the linker does
+        // not calculate relocations in this mode and loses
+        // individual "gp" values used by each input object file.
+        // As a workaround we add the "gp" value to the relocation
+        // addend and save it back to the file.
+        Addend += Sec->getFile<ELFT>()->MipsGp0;
+      }
+
+      if (RelTy::IsRela)
+        P->r_addend = Sym.getVA(Addend) - Section->getOutputSection()->Addr;
+      else if (Config->Relocatable)
+        Sec->Relocations.push_back({R_ABS, Type, Rel.r_offset, Addend, &Sym});
+    }
   }
 }
 
@@ -469,7 +484,7 @@ static uint64_t getARMStaticBase(const Symbol &Sym) {
   return OS->PtLoad->FirstSec->Addr;
 }
 
-static uint64_t getRelocTargetVA(const InputFile &File, RelType Type, int64_t A,
+static uint64_t getRelocTargetVA(const InputFile *File, RelType Type, int64_t A,
                                  uint64_t P, const Symbol &Sym, RelExpr Expr) {
   switch (Expr) {
   case R_INVALID:
@@ -508,9 +523,9 @@ static uint64_t getRelocTargetVA(const InputFile &File, RelType Type, int64_t A,
   case R_TLSDESC_CALL:
     llvm_unreachable("cannot relocate hint relocs");
   case R_MIPS_GOTREL:
-    return Sym.getVA(A) - InX::MipsGot->getGp(&File);
+    return Sym.getVA(A) - InX::MipsGot->getGp(File);
   case R_MIPS_GOT_GP:
-    return InX::MipsGot->getGp(&File) + A;
+    return InX::MipsGot->getGp(File) + A;
   case R_MIPS_GOT_GP_PC: {
     // R_MIPS_LO16 expression has R_MIPS_GOT_GP_PC type iif the target
     // is _gp_disp symbol. In that case we should use the following
@@ -519,7 +534,7 @@ static uint64_t getRelocTargetVA(const InputFile &File, RelType Type, int64_t A,
     // microMIPS variants of these relocations use slightly different
     // expressions: AHL + GP - P + 3 for %lo() and AHL + GP - P - 1 for %hi()
     // to correctly handle less-sugnificant bit of the microMIPS symbol.
-    uint64_t V = InX::MipsGot->getGp(&File) + A - P;
+    uint64_t V = InX::MipsGot->getGp(File) + A - P;
     if (Type == R_MIPS_LO16 || Type == R_MICROMIPS_LO16)
       V += 4;
     if (Type == R_MICROMIPS_LO16 || Type == R_MICROMIPS_HI16)
@@ -532,7 +547,7 @@ static uint64_t getRelocTargetVA(const InputFile &File, RelType Type, int64_t A,
     // of sum the symbol's value and the addend.
     return InX::MipsGot->getVA() +
            InX::MipsGot->getPageEntryOffset(File, Sym, A) -
-           InX::MipsGot->getGp(&File);
+           InX::MipsGot->getGp(File);
   case R_MIPS_GOT_OFF:
   case R_MIPS_GOT_OFF32:
     // In case of MIPS if a GOT relocation has non-zero addend this addend
@@ -540,14 +555,13 @@ static uint64_t getRelocTargetVA(const InputFile &File, RelType Type, int64_t A,
     // That is why we use separate expression type.
     return InX::MipsGot->getVA() +
            InX::MipsGot->getSymEntryOffset(File, Sym, A) -
-           InX::MipsGot->getGp(&File);
+           InX::MipsGot->getGp(File);
   case R_MIPS_TLSGD:
-    return InX::MipsGot->getVA() +
-           InX::MipsGot->getGlobalDynOffset(File, Sym) -
-           InX::MipsGot->getGp(&File);
+    return InX::MipsGot->getVA() + InX::MipsGot->getGlobalDynOffset(File, Sym) -
+           InX::MipsGot->getGp(File);
   case R_MIPS_TLSLD:
     return InX::MipsGot->getVA() + InX::MipsGot->getTlsIndexOffset(File) -
-           InX::MipsGot->getGp(&File);
+           InX::MipsGot->getGp(File);
   case R_PAGE_PC:
   case R_PLT_PAGE_PC: {
     uint64_t Dest;
@@ -576,25 +590,27 @@ static uint64_t getRelocTargetVA(const InputFile &File, RelType Type, int64_t A,
   case R_PLT:
     return Sym.getPltVA() + A;
   case R_PLT_PC:
-  case R_PPC_PLT_OPD:
+  case R_PPC_CALL_PLT:
     return Sym.getPltVA() + A - P;
-  case R_PPC_OPD: {
+  case R_PPC_CALL: {
     uint64_t SymVA = Sym.getVA(A);
     // If we have an undefined weak symbol, we might get here with a symbol
     // address of zero. That could overflow, but the code must be unreachable,
     // so don't bother doing anything at all.
     if (!SymVA)
       return 0;
-    if (Out::Opd) {
-      // If this is a local call, and we currently have the address of a
-      // function-descriptor, get the underlying code address instead.
-      uint64_t OpdStart = Out::Opd->Addr;
-      uint64_t OpdEnd = OpdStart + Out::Opd->Size;
-      bool InOpd = OpdStart <= SymVA && SymVA < OpdEnd;
-      if (InOpd)
-        SymVA = read64be(&Out::OpdBuf[SymVA - OpdStart]);
-    }
-    return SymVA - P;
+
+    // PPC64 V2 ABI describes two entry points to a function. The global entry
+    // point sets up the TOC base pointer. When calling a local function, the
+    // call should branch to the local entry point rather than the global entry
+    // point. Section 3.4.1 describes using the 3 most significant bits of the
+    // st_other field to find out how many instructions there are between the
+    // local and global entry point.
+    uint8_t StOther = (Sym.StOther >> 5) & 7;
+    if (StOther == 0 || StOther == 1)
+      return SymVA - P;
+
+    return SymVA - P + (1LL << StOther);
   }
   case R_PPC_TOC:
     return getPPC64TocBase() + A;
@@ -611,8 +627,23 @@ static uint64_t getRelocTargetVA(const InputFile &File, RelType Type, int64_t A,
     // statically to zero.
     if (Sym.isTls() && Sym.isUndefWeak())
       return 0;
-    if (Target->TcbSize)
+
+    // For TLS variant 1 the TCB is a fixed size, whereas for TLS variant 2 the
+    // TCB is on unspecified size and content. Targets that implement variant 1
+    // should set TcbSize.
+    if (Target->TcbSize) {
+      // PPC64 V2 ABI has the thread pointer offset into the middle of the TLS
+      // storage area by TlsTpOffset for efficient addressing TCB and up to
+      // 4KB – 8 B of other thread library information (placed before the TCB).
+      // Subtracting this offset will get the address of the first TLS block.
+      if (Target->TlsTpOffset)
+        return Sym.getVA(A) - Target->TlsTpOffset;
+
+      // If thread pointer is not offset into the middle, the first thing in the
+      // TLS storage area is the TCB. Add the TcbSize to get the address of the
+      // first TLS block.
       return Sym.getVA(A) + alignTo(Target->TcbSize, Out::TlsPhdr->p_align);
+    }
     return Sym.getVA(A) - Out::TlsPhdr->p_memsz;
   case R_RELAX_TLS_GD_TO_LE_NEG:
   case R_NEG_TLS:
@@ -624,12 +655,16 @@ static uint64_t getRelocTargetVA(const InputFile &File, RelType Type, int64_t A,
   case R_TLSDESC_PAGE:
     return getAArch64Page(InX::Got->getGlobalDynAddr(Sym) + A) -
            getAArch64Page(P);
-  case R_TLSGD:
+  case R_TLSGD_GOT:
+    return InX::Got->getGlobalDynOffset(Sym) + A;
+  case R_TLSGD_GOT_FROM_END:
     return InX::Got->getGlobalDynOffset(Sym) + A - InX::Got->getSize();
   case R_TLSGD_PC:
     return InX::Got->getGlobalDynAddr(Sym) + A - P;
-  case R_TLSLD:
+  case R_TLSLD_GOT_FROM_END:
     return InX::Got->getTlsIndexOff() + A - InX::Got->getSize();
+  case R_TLSLD_GOT:
+      return InX::Got->getTlsIndexOff() + A;
   case R_TLSLD_PC:
     return InX::Got->getTlsIndexVA() + A - P;
   case R_CHERI_CAPABILITY:
@@ -733,7 +768,7 @@ void InputSectionBase::relocateAlloc(uint8_t *Buf, uint8_t *BufEnd) {
     uint64_t AddrLoc = getOutputSection()->Addr + Offset;
     RelExpr Expr = Rel.Expr;
     uint64_t TargetVA = SignExtend64(
-        getRelocTargetVA(*File, Type, Rel.Addend, AddrLoc, *Rel.Sym, Expr),
+        getRelocTargetVA(File, Type, Rel.Addend, AddrLoc, *Rel.Sym, Expr),
         Bits);
 
     switch (Expr) {
@@ -757,13 +792,15 @@ void InputSectionBase::relocateAlloc(uint8_t *Buf, uint8_t *BufEnd) {
     case R_RELAX_TLS_GD_TO_IE_END:
       Target->relaxTlsGdToIe(BufLoc, Type, TargetVA);
       break;
-    case R_PPC_PLT_OPD:
+    case R_PPC_CALL:
       // Patch a nop (0x60000000) to a ld.
-      if (BufLoc + 8 > BufEnd || read32(BufLoc + 4) != 0x60000000) {
-        error(getErrorLocation(BufLoc) + "call lacks nop, can't restore toc");
-        break;
+      if (Rel.Sym->NeedsTocRestore) {
+        if (BufLoc + 8 > BufEnd || read32(BufLoc + 4) != 0x60000000) {
+          error(getErrorLocation(BufLoc) + "call lacks nop, can't restore toc");
+          break;
+        }
+        write32(BufLoc + 4, 0xe8410018); // ld %r2, 24(%r1)
       }
-      write32(BufLoc + 4, 0xe8410018); // ld %r2, 24(%r1)
       Target->relocateOne(BufLoc, Type, TargetVA);
       break;
     default:
@@ -918,10 +955,6 @@ static unsigned getReloc(IntTy Begin, IntTy Size, const ArrayRef<RelTy> &Rels,
 // .eh_frame is a sequence of CIE or FDE records.
 // This function splits an input section into records and returns them.
 template <class ELFT> void EhInputSection::split() {
-  // Early exit if already split.
-  if (!Pieces.empty())
-    return;
-
   if (AreRelocsRela)
     split<ELFT>(relas<ELFT>());
   else
@@ -1019,10 +1052,6 @@ void MergeInputSection::splitIntoPieces() {
   OffsetMap.reserve(Pieces.size());
   for (size_t I = 0, E = Pieces.size(); I != E; ++I)
     OffsetMap[Pieces[I].InputOff] = I;
-
-  if (Config->GcSections && (Flags & SHF_ALLOC))
-    for (uint32_t Off : LiveOffsets)
-      getSectionPiece(Off)->Live = true;
 }
 
 template <class It, class T, class Compare>

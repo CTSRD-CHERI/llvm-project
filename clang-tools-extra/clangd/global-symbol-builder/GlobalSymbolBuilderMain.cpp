@@ -73,15 +73,18 @@ public:
         return WrapperFrontendAction::CreateASTConsumer(CI, InFile);
       }
 
+      bool BeginInvocation(CompilerInstance &CI) override {
+        // We want all comments, not just the doxygen ones.
+        CI.getLangOpts().CommentOpts.ParseAllComments = true;
+        return WrapperFrontendAction::BeginInvocation(CI);
+      }
+
       void EndSourceFileAction() override {
         WrapperFrontendAction::EndSourceFileAction();
 
         auto Symbols = Collector->takeSymbols();
         for (const auto &Sym : Symbols) {
-          std::string IDStr;
-          llvm::raw_string_ostream OS(IDStr);
-          OS << Sym.ID;
-          Ctx->reportResult(OS.str(), SymbolToYAML(Sym));
+          Ctx->reportResult(Sym.ID.str(), SymbolToYAML(Sym));
         }
       }
 

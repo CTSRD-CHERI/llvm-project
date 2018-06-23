@@ -15,6 +15,7 @@
 #include "msan.h"
 #include "msan_chained_origin_depot.h"
 #include "msan_origin.h"
+#include "msan_report.h"
 #include "msan_thread.h"
 #include "msan_poisoning.h"
 #include "sanitizer_common/sanitizer_atomic.h"
@@ -397,6 +398,7 @@ void __msan_init() {
   InitTlsSize();
 
   CacheBinaryName();
+  CheckASLR();
   InitializeFlags();
 
   // Install tool-specific callbacks in sanitizer_common.

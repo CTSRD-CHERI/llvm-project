@@ -30,6 +30,7 @@ set(SANITIZER_SOURCES_NOTERMINATION
   sanitizer_procmaps_linux.cc
   sanitizer_procmaps_mac.cc
   sanitizer_procmaps_solaris.cc
+  sanitizer_rtems.cc
   sanitizer_solaris.cc
   sanitizer_stoptheworld_mac.cc
   sanitizer_suppressions.cc
@@ -68,15 +69,17 @@ set(SANITIZER_COVERAGE_SOURCES
   sanitizer_coverage_win_sections.cc)
 
 set(SANITIZER_SYMBOLIZER_SOURCES
+  sanitizer_allocator_report.cc
   sanitizer_stackdepot.cc
   sanitizer_stacktrace.cc
   sanitizer_stacktrace_libcdep.cc
   sanitizer_stacktrace_printer.cc
+  sanitizer_stacktrace_sparc.cc
   sanitizer_symbolizer.cc
-  sanitizer_symbolizer_fuchsia.cc
   sanitizer_symbolizer_libbacktrace.cc
   sanitizer_symbolizer_libcdep.cc
   sanitizer_symbolizer_mac.cc
+  sanitizer_symbolizer_markup.cc
   sanitizer_symbolizer_posix_libcdep.cc
   sanitizer_symbolizer_report.cc
   sanitizer_symbolizer_win.cc
@@ -96,6 +99,7 @@ set(SANITIZER_HEADERS
   sanitizer_allocator_local_cache.h
   sanitizer_allocator_primary32.h
   sanitizer_allocator_primary64.h
+  sanitizer_allocator_report.h
   sanitizer_allocator_secondary.h
   sanitizer_allocator_size_class_map.h
   sanitizer_allocator_stats.h
@@ -139,6 +143,7 @@ set(SANITIZER_HEADERS
   sanitizer_procmaps.h
   sanitizer_quarantine.h
   sanitizer_report_decorator.h
+  sanitizer_rtems.h
   sanitizer_stackdepot.h
   sanitizer_stackdepotbase.h
   sanitizer_stacktrace.h
@@ -146,9 +151,11 @@ set(SANITIZER_HEADERS
   sanitizer_stoptheworld.h
   sanitizer_suppressions.h
   sanitizer_symbolizer.h
+  sanitizer_symbolizer_fuchsia.h
   sanitizer_symbolizer_internal.h
   sanitizer_symbolizer_libbacktrace.h
   sanitizer_symbolizer_mac.h
+  sanitizer_symbolizer_rtems.h
   sanitizer_syscall_generic.inc
   sanitizer_syscall_linux_x86_64.inc
   sanitizer_syscall_linux_aarch64.inc

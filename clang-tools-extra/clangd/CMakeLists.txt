@@ -14,7 +14,6 @@ add_clang_library(clangDaemon
   ClangdUnit.cpp
   CodeComplete.cpp
   CodeCompletionStrings.cpp
-  CompileArgsCache.cpp
   Compiler.cpp
   Context.cpp
   Diagnostics.cpp
@@ -28,6 +27,7 @@ add_clang_library(clangDaemon
   Logger.cpp
   Protocol.cpp
   ProtocolHandlers.cpp
+  Quality.cpp
   SourceCode.cpp
   Threading.cpp
   Trace.cpp
@@ -46,6 +46,7 @@ add_clang_library(clangDaemon
   clangAST
   clangASTMatchers
   clangBasic
+  clangDriver
   clangFormat
   clangFrontend
   clangIndex
@@ -54,6 +55,7 @@ add_clang_library(clangDaemon
   clangSerialization
   clangTooling
   clangToolingCore
+  clangToolingInclusions
   clangToolingRefactor
   ${LLVM_PTHREAD_LIB}
   ${CLANGD_ATOMIC_LIB}

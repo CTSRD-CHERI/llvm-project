@@ -190,7 +190,8 @@ static bool GetProcessAndStatInfo(::pid_t pid,
     return false;
 
   process_info.SetProcessID(pid);
-  process_info.GetExecutableFile().SetFile(PathRef, false);
+  process_info.GetExecutableFile().SetFile(PathRef, false,
+                                           FileSpec::Style::native);
 
   llvm::StringRef Rest = Environ->getBuffer();
   while (!Rest.empty()) {
@@ -246,8 +247,8 @@ uint32_t Host::FindProcesses(const ProcessInstanceInfoMatch &match_info,
       if (State == ProcessState::Zombie)
         continue;
 
-      // Check for user match if we're not matching all users and not running as
-      // root.
+      // Check for user match if we're not matching all users and not running
+      // as root.
       if (!all_users && (our_uid != 0) && (process_info.GetUserID() != our_uid))
         continue;
 
