@@ -804,7 +804,7 @@ public:
   }
 
   //------------------------------------------------------------------
-  // FUTURE WORK: {Set,Get}LoadImageUtilityFunction are the first use we've
+  // FUTURE WORK: GetLoadImageUtilityFunction are the first use we've
   // had of having other plugins cache data in the Process.  This is handy for
   // long-living plugins - like the Platform - which manage interactions whose
   // lifetime is governed by the Process lifetime.  If we find we need to do
@@ -820,34 +820,23 @@ public:
   // We are postponing designing this till we have at least a second use case.
   //------------------------------------------------------------------
   //------------------------------------------------------------------
-  /// Set the cached UtilityFunction that assists in loading binary images
-  /// into the process.
-  ///
-  /// This UtilityFunction is maintained in the Process since the Platforms
-  /// don't track the lifespan of the Targets/Processes that use them.   But
-  /// it is not intended to be comprehended by the Process, it's up to the
-  /// Platform that set it to do it right.
-  ///
-  /// @param[in] utility_func_up
-  ///     The incoming utility_function.  The process will manage the function's
-  ///     lifetime.
-  ///
-  //------------------------------------------------------------------
-  void SetLoadImageUtilityFunction(std::unique_ptr<UtilityFunction> 
-                                   utility_func_up);
-  
-  //------------------------------------------------------------------
   /// Get the cached UtilityFunction that assists in loading binary images
   /// into the process.
   ///
   /// @param[in] platform
   ///     The platform fetching the UtilityFunction.
-  /// 
+  /// @param[in] factory
+  ///     A function that will be called only once per-process in a
+  ///     thread-safe way to create the UtilityFunction if it has not
+  ///     been initialized yet.
+  ///
   /// @return
   ///     The cached utility function or null if the platform is not the
   ///     same as the target's platform.
   //------------------------------------------------------------------
-  UtilityFunction *GetLoadImageUtilityFunction(Platform *platform);
+  UtilityFunction *GetLoadImageUtilityFunction(
+      Platform *platform,
+      llvm::function_ref<std::unique_ptr<UtilityFunction>()> factory);
 
   //------------------------------------------------------------------
   /// Get the dynamic loader plug-in for this process.
@@ -2443,11 +2432,11 @@ public:
   /// The main purpose of this is to implement an interlock waiting for
   /// HandlePrivateEvent to push an IOHandler.
   ///
-  /// @param[in] timeout_msec
+  /// @param[in] timeout
   ///     The maximum time length to wait for the process to transition to the
-  ///     eStateRunning state, specified in milliseconds.
+  ///     eStateRunning state.
   //--------------------------------------------------------------------------------------
-  void SyncIOHandler(uint32_t iohandler_id, uint64_t timeout_msec);
+  void SyncIOHandler(uint32_t iohandler_id, const Timeout<std::micro> &timeout);
 
   lldb::StateType GetStateChangedEvents(
       lldb::EventSP &event_sp, const Timeout<std::micro> &timeout,
@@ -3127,6 +3116,7 @@ protected:
   enum { eCanJITDontKnow = 0, eCanJITYes, eCanJITNo } m_can_jit;
   
   std::unique_ptr<UtilityFunction> m_dlopen_utility_func_up;
+  std::once_flag m_dlopen_utility_func_flag_once;
 
   size_t RemoveBreakpointOpcodesFromBuffer(lldb::addr_t addr, size_t size,
                                            uint8_t *buf) const;

@@ -197,8 +197,6 @@ void AMDGPUAsmPrinter::EmitFunctionBodyStart() {
   amd_kernel_code_t KernelCode;
   if (STM.isAmdCodeObjectV2(*MF)) {
     getAmdKernelCode(KernelCode, CurrentProgramInfo, *MF);
-
-    OutStreamer->SwitchSection(getObjFileLowering().getTextSection());
     getTargetStreamer()->EmitAMDKernelCodeT(KernelCode);
   }
 
@@ -511,7 +509,7 @@ uint64_t AMDGPUAsmPrinter::getFunctionCodeSize(const MachineFunction &MF) const 
       // TODO: CodeSize should account for multiple functions.
 
       // TODO: Should we count size of debug info?
-      if (MI.isDebugValue())
+      if (MI.isDebugInstr())
         continue;
 
       CodeSize += TII->getInstSizeInBytes(MI);
@@ -652,7 +650,7 @@ AMDGPUAsmPrinter::SIFunctionResourceInfo AMDGPUAsmPrinter::analyzeResourceUsage(
           continue;
 
         case AMDGPU::NoRegister:
-          assert(MI.isDebugValue());
+          assert(MI.isDebugInstr());
           continue;
 
         case AMDGPU::VCC:

@@ -3089,7 +3089,8 @@ void CodeGenFunction::EmitDelegateCallArg(CallArgList &args,
 
   // Deactivate the cleanup for the callee-destructed param that was pushed.
   if (hasAggregateEvaluationKind(type) && !CurFuncIsThunk &&
-      getContext().isParamDestroyedInCallee(type) && type.isDestructedType()) {
+      type->getAs<RecordType>()->getDecl()->isParamDestroyedInCallee() &&
+      type.isDestructedType()) {
     EHScopeStack::stable_iterator cleanup =
         CalleeDestructedParamCleanups.lookup(cast<ParmVarDecl>(param));
     assert(cleanup.isValid() &&
@@ -3573,7 +3574,8 @@ void CodeGenFunction::EmitCallArg(CallArgList &args, const Expr *E,
   // In the Microsoft C++ ABI, aggregate arguments are destructed by the callee.
   // However, we still have to push an EH-only cleanup in case we unwind before
   // we make it to the call.
-  if (HasAggregateEvalKind && getContext().isParamDestroyedInCallee(type)) {
+  if (HasAggregateEvalKind &&
+      type->getAs<RecordType>()->getDecl()->isParamDestroyedInCallee()) {
     // If we're using inalloca, use the argument memory.  Otherwise, use a
     // temporary.
     AggValueSlot Slot;

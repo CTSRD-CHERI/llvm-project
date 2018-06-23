@@ -380,8 +380,9 @@ Value *StructurizeCFG::invert(Value *Condition) {
     return ConstantExpr::getNot(C);
 
   // Second: If the condition is already inverted, return the original value
-  if (match(Condition, m_Not(m_Value(Condition))))
-    return Condition;
+  Value *NotCondition;
+  if (match(Condition, m_Not(m_Value(NotCondition))))
+    return NotCondition;
 
   if (Instruction *Inst = dyn_cast<Instruction>(Condition)) {
     // Third: Check all the users for an invert
@@ -489,10 +490,10 @@ void StructurizeCFG::collectInfos() {
   Visited.clear();
 
   for (RegionNode *RN : reverse(Order)) {
-    DEBUG(dbgs() << "Visiting: "
-                 << (RN->isSubRegion() ? "SubRegion with entry: " : "")
-                 << RN->getEntry()->getName() << " Loop Depth: "
-                 << LI->getLoopDepth(RN->getEntry()) << "\n");
+    LLVM_DEBUG(dbgs() << "Visiting: "
+                      << (RN->isSubRegion() ? "SubRegion with entry: " : "")
+                      << RN->getEntry()->getName() << " Loop Depth: "
+                      << LI->getLoopDepth(RN->getEntry()) << "\n");
 
     // Analyze all the conditions leading to a node
     gatherPredicates(RN);
@@ -901,8 +902,8 @@ static bool hasOnlyUniformBranches(Region *R, unsigned UniformMDKindID,
 
       if (!DA.isUniform(Br))
         return false;
-      DEBUG(dbgs() << "BB: " << Br->getParent()->getName()
-                   << " has uniform terminator\n");
+      LLVM_DEBUG(dbgs() << "BB: " << Br->getParent()->getName()
+                        << " has uniform terminator\n");
     } else {
       // Explicitly refuse to treat regions as uniform if they have non-uniform
       // subregions. We cannot rely on DivergenceAnalysis for branches in
@@ -943,7 +944,8 @@ bool StructurizeCFG::runOnRegion(Region *R, RGPassManager &RGM) {
     DA = &getAnalysis<DivergenceAnalysis>();
 
     if (hasOnlyUniformBranches(R, UniformMDKindID, *DA)) {
-      DEBUG(dbgs() << "Skipping region with uniform control flow: " << *R << '\n');
+      LLVM_DEBUG(dbgs() << "Skipping region with uniform control flow: " << *R
+                        << '\n');
 
       // Mark all direct child block terminators as having been treated as
       // uniform. To account for a possible future in which non-uniform

@@ -533,7 +533,7 @@ void ScheduleDAGInstrs::initSUnits() {
   SUnits.reserve(NumRegionInstrs);
 
   for (MachineInstr &MI : make_range(RegionBegin, RegionEnd)) {
-    if (MI.isDebugValue())
+    if (MI.isDebugInstr())
       continue;
 
     SUnit *SU = newSUnit(&MI);
@@ -764,6 +764,9 @@ void ScheduleDAGInstrs::buildSchedGraph(AliasAnalysis *AA,
       DbgMI = &MI;
       continue;
     }
+    if (MI.isDebugLabel())
+      continue;
+
     SUnit *SU = MISUnitMap[&MI];
     assert(SU && "No SUnit mapped to this MI");
 
@@ -846,8 +849,8 @@ void ScheduleDAGInstrs::buildSchedGraph(AliasAnalysis *AA,
         BarrierChain->addPredBarrier(SU);
       BarrierChain = SU;
 
-      DEBUG(dbgs() << "Global memory object and new barrier chain: SU("
-            << BarrierChain->NodeNum << ").\n";);
+      LLVM_DEBUG(dbgs() << "Global memory object and new barrier chain: SU("
+                        << BarrierChain->NodeNum << ").\n";);
 
       // Add dependencies against everything below it and clear maps.
       addBarrierChain(Stores);
@@ -935,11 +938,12 @@ void ScheduleDAGInstrs::buildSchedGraph(AliasAnalysis *AA,
 
     // Reduce maps if they grow huge.
     if (Stores.size() + Loads.size() >= HugeRegion) {
-      DEBUG(dbgs() << "Reducing Stores and Loads maps.\n";);
+      LLVM_DEBUG(dbgs() << "Reducing Stores and Loads maps.\n";);
       reduceHugeMemNodeMaps(Stores, Loads, getReductionSize());
     }
     if (NonAliasStores.size() + NonAliasLoads.size() >= HugeRegion) {
-      DEBUG(dbgs() << "Reducing NonAliasStores and NonAliasLoads maps.\n";);
+      LLVM_DEBUG(
+          dbgs() << "Reducing NonAliasStores and NonAliasLoads maps.\n";);
       reduceHugeMemNodeMaps(NonAliasStores, NonAliasLoads, getReductionSize());
     }
   }
@@ -979,10 +983,8 @@ void ScheduleDAGInstrs::Value2SUsMap::dump() {
 
 void ScheduleDAGInstrs::reduceHugeMemNodeMaps(Value2SUsMap &stores,
                                               Value2SUsMap &loads, unsigned N) {
-  DEBUG(dbgs() << "Before reduction:\nStoring SUnits:\n";
-        stores.dump();
-        dbgs() << "Loading SUnits:\n";
-        loads.dump());
+  LLVM_DEBUG(dbgs() << "Before reduction:\nStoring SUnits:\n"; stores.dump();
+             dbgs() << "Loading SUnits:\n"; loads.dump());
 
   // Insert all SU's NodeNums into a vector and sort it.
   std::vector<unsigned> NodeNums;
@@ -1008,12 +1010,12 @@ void ScheduleDAGInstrs::reduceHugeMemNodeMaps(Value2SUsMap &stores,
     if (newBarrierChain->NodeNum < BarrierChain->NodeNum) {
       BarrierChain->addPredBarrier(newBarrierChain);
       BarrierChain = newBarrierChain;
-      DEBUG(dbgs() << "Inserting new barrier chain: SU("
-            << BarrierChain->NodeNum << ").\n";);
+      LLVM_DEBUG(dbgs() << "Inserting new barrier chain: SU("
+                        << BarrierChain->NodeNum << ").\n";);
     }
     else
-      DEBUG(dbgs() << "Keeping old barrier chain: SU("
-            << BarrierChain->NodeNum << ").\n";);
+      LLVM_DEBUG(dbgs() << "Keeping old barrier chain: SU("
+                        << BarrierChain->NodeNum << ").\n";);
   }
   else
     BarrierChain = newBarrierChain;
@@ -1021,10 +1023,8 @@ void ScheduleDAGInstrs::reduceHugeMemNodeMaps(Value2SUsMap &stores,
   insertBarrierChain(stores);
   insertBarrierChain(loads);
 
-  DEBUG(dbgs() << "After reduction:\nStoring SUnits:\n";
-        stores.dump();
-        dbgs() << "Loading SUnits:\n";
-        loads.dump());
+  LLVM_DEBUG(dbgs() << "After reduction:\nStoring SUnits:\n"; stores.dump();
+             dbgs() << "Loading SUnits:\n"; loads.dump());
 }
 
 static void toggleKills(const MachineRegisterInfo &MRI, LivePhysRegs &LiveRegs,
@@ -1045,14 +1045,14 @@ static void toggleKills(const MachineRegisterInfo &MRI, LivePhysRegs &LiveRegs,
 }
 
 void ScheduleDAGInstrs::fixupKills(MachineBasicBlock &MBB) {
-  DEBUG(dbgs() << "Fixup kills for " << printMBBReference(MBB) << '\n');
+  LLVM_DEBUG(dbgs() << "Fixup kills for " << printMBBReference(MBB) << '\n');
 
   LiveRegs.init(*TRI);
   LiveRegs.addLiveOuts(MBB);
 
   // Examine block from end to start...
   for (MachineInstr &MI : make_range(MBB.rbegin(), MBB.rend())) {
-    if (MI.isDebugValue())
+    if (MI.isDebugInstr())
       continue;
 
     // Update liveness.  Registers that are defed but not used in this
@@ -1088,7 +1088,7 @@ void ScheduleDAGInstrs::fixupKills(MachineBasicBlock &MBB) {
       while (I->isBundledWithSucc())
         ++I;
       do {
-        if (!I->isDebugValue())
+        if (!I->isDebugInstr())
           toggleKills(MRI, LiveRegs, *I, true);
         --I;
       } while(I != First);
@@ -1246,11 +1246,11 @@ public:
     }
     R.SubtreeConnections.resize(SubtreeClasses.getNumClasses());
     R.SubtreeConnectLevels.resize(SubtreeClasses.getNumClasses());
-    DEBUG(dbgs() << R.getNumSubtrees() << " subtrees:\n");
+    LLVM_DEBUG(dbgs() << R.getNumSubtrees() << " subtrees:\n");
     for (unsigned Idx = 0, End = R.DFSNodeData.size(); Idx != End; ++Idx) {
       R.DFSNodeData[Idx].SubtreeID = SubtreeClasses[Idx];
-      DEBUG(dbgs() << "  SU(" << Idx << ") in tree "
-            << R.DFSNodeData[Idx].SubtreeID << '\n');
+      LLVM_DEBUG(dbgs() << "  SU(" << Idx << ") in tree "
+                        << R.DFSNodeData[Idx].SubtreeID << '\n');
     }
     for (const std::pair<const SUnit*, const SUnit*> &P : ConnectionPairs) {
       unsigned PredTree = SubtreeClasses[P.first->NodeNum];
@@ -1405,8 +1405,8 @@ void SchedDFSResult::scheduleTree(unsigned SubtreeID) {
   for (const Connection &C : SubtreeConnections[SubtreeID]) {
     SubtreeConnectLevels[C.TreeID] =
       std::max(SubtreeConnectLevels[C.TreeID], C.Level);
-    DEBUG(dbgs() << "  Tree: " << C.TreeID
-          << " @" << SubtreeConnectLevels[C.TreeID] << '\n');
+    LLVM_DEBUG(dbgs() << "  Tree: " << C.TreeID << " @"
+                      << SubtreeConnectLevels[C.TreeID] << '\n');
   }
 }
 

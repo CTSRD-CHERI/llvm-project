@@ -80,6 +80,8 @@ RCParser::ParseType RCParser::parseSingleResource() {
     Result = parseIconResource();
   else if (TypeToken->equalsLower("MENU"))
     Result = parseMenuResource();
+  else if (TypeToken->equalsLower("RCDATA"))
+    Result = parseUserDefinedResource(RkRcData);
   else if (TypeToken->equalsLower("VERSIONINFO"))
     Result = parseVersionInfoResource();
   else
@@ -327,6 +329,37 @@ Expected<uint32_t> RCParser::parseFlags(ArrayRef<StringRef> FlagDesc,
   return Result;
 }
 
+uint16_t RCParser::parseMemoryFlags(uint16_t Flags) {
+  while (!isEof()) {
+    const RCToken &Token = look();
+    if (Token.kind() != Kind::Identifier)
+      return Flags;
+    const StringRef Ident = Token.value();
+    if (Ident.equals_lower("PRELOAD"))
+      Flags |= MfPreload;
+    else if (Ident.equals_lower("LOADONCALL"))
+      Flags &= ~MfPreload;
+    else if (Ident.equals_lower("FIXED"))
+      Flags &= ~(MfMoveable | MfDiscardable);
+    else if (Ident.equals_lower("MOVEABLE"))
+      Flags |= MfMoveable;
+    else if (Ident.equals_lower("DISCARDABLE"))
+      Flags |= MfDiscardable | MfMoveable | MfPure;
+    else if (Ident.equals_lower("PURE"))
+      Flags |= MfPure;
+    else if (Ident.equals_lower("IMPURE"))
+      Flags &= ~(MfPure | MfDiscardable);
+    else if (Ident.equals_lower("SHARED"))
+      Flags |= MfPure;
+    else if (Ident.equals_lower("NONSHARED"))
+      Flags &= ~(MfPure | MfDiscardable);
+    else
+      return Flags;
+    consume();
+  }
+  return Flags;
+}
+
 Expected<OptionalStmtList>
 RCParser::parseOptionalStatements(OptStmtType StmtsType) {
   OptionalStmtList Result;
@@ -353,6 +386,8 @@ RCParser::parseSingleOptionalStatement(OptStmtType StmtsType) {
   if (StmtsType != OptStmtType::BasicStmt) {
     if (TypeToken->equals_lower("CAPTION"))
       return parseCaptionStmt();
+    if (TypeToken->equals_lower("CLASS"))
+      return parseClassStmt();
     if (TypeToken->equals_lower("FONT"))
       return parseFontStmt(StmtsType);
     if (TypeToken->equals_lower("STYLE"))
@@ -370,11 +405,13 @@ RCParser::ParseType RCParser::parseLanguageResource() {
 }
 
 RCParser::ParseType RCParser::parseAcceleratorsResource() {
+  uint16_t MemoryFlags =
+      parseMemoryFlags(AcceleratorsResource::getDefaultMemoryFlags());
   ASSIGN_OR_RETURN(OptStatements, parseOptionalStatements());
   RETURN_IF_ERROR(consumeType(Kind::BlockBegin));
 
-  auto Accels =
-      llvm::make_unique<AcceleratorsResource>(std::move(*OptStatements));
+  auto Accels = llvm::make_unique<AcceleratorsResource>(
+      std::move(*OptStatements), MemoryFlags);
 
   while (!consumeOptionalType(Kind::BlockEnd)) {
     ASSIGN_OR_RETURN(EventResult, readIntOrString());
@@ -391,11 +428,15 @@ RCParser::ParseType RCParser::parseAcceleratorsResource() {
 }
 
 RCParser::ParseType RCParser::parseCursorResource() {
+  uint16_t MemoryFlags =
+      parseMemoryFlags(CursorResource::getDefaultMemoryFlags());
   ASSIGN_OR_RETURN(Arg, readFilename());
-  return llvm::make_unique<CursorResource>(*Arg);
+  return llvm::make_unique<CursorResource>(*Arg, MemoryFlags);
 }
 
 RCParser::ParseType RCParser::parseDialogResource(bool IsExtended) {
+  uint16_t MemoryFlags =
+      parseMemoryFlags(DialogResource::getDefaultMemoryFlags());
   // Dialog resources have the following format of the arguments:
   //  DIALOG:   x, y, width, height [opt stmts...] {controls...}
   //  DIALOGEX: x, y, width, height [, helpID] [opt stmts...] {controls...}
@@ -418,7 +459,7 @@ RCParser::ParseType RCParser::parseDialogResource(bool IsExtended) {
 
   auto Dialog = llvm::make_unique<DialogResource>(
       (*LocResult)[0], (*LocResult)[1], (*LocResult)[2], (*LocResult)[3],
-      HelpID, std::move(*OptStatements), IsExtended);
+      HelpID, std::move(*OptStatements), IsExtended, MemoryFlags);
 
   while (!consumeOptionalType(Kind::BlockEnd)) {
     ASSIGN_OR_RETURN(ControlDefResult, parseControl());
@@ -429,6 +470,8 @@ RCParser::ParseType RCParser::parseDialogResource(bool IsExtended) {
 }
 
 RCParser::ParseType RCParser::parseUserDefinedResource(IntOrString Type) {
+  uint16_t MemoryFlags =
+      parseMemoryFlags(UserDefinedResource::getDefaultMemoryFlags());
   if (isEof())
     return getExpectedError("filename, '{' or BEGIN");
 
@@ -436,7 +479,8 @@ RCParser::ParseType RCParser::parseUserDefinedResource(IntOrString Type) {
   switch (look().kind()) {
   case Kind::String:
   case Kind::Identifier:
-    return llvm::make_unique<UserDefinedResource>(Type, read().value());
+    return llvm::make_unique<UserDefinedResource>(Type, read().value(),
+                                                  MemoryFlags);
   default:
     break;
   }
@@ -455,14 +499,17 @@ RCParser::ParseType RCParser::parseUserDefinedResource(IntOrString Type) {
     Data.push_back(*Item);
   }
 
-  return llvm::make_unique<UserDefinedResource>(Type, std::move(Data));
+  return llvm::make_unique<UserDefinedResource>(Type, std::move(Data),
+                                                MemoryFlags);
 }
 
 RCParser::ParseType RCParser::parseVersionInfoResource() {
+  uint16_t MemoryFlags =
+      parseMemoryFlags(VersionInfoResource::getDefaultMemoryFlags());
   ASSIGN_OR_RETURN(FixedResult, parseVersionInfoFixed());
   ASSIGN_OR_RETURN(BlockResult, parseVersionInfoBlockContents(StringRef()));
-  return llvm::make_unique<VersionInfoResource>(std::move(**BlockResult),
-                                                std::move(*FixedResult));
+  return llvm::make_unique<VersionInfoResource>(
+      std::move(**BlockResult), std::move(*FixedResult), MemoryFlags);
 }
 
 Expected<Control> RCParser::parseControl() {
@@ -529,25 +576,33 @@ Expected<Control> RCParser::parseControl() {
 }
 
 RCParser::ParseType RCParser::parseBitmapResource() {
+  uint16_t MemoryFlags =
+      parseMemoryFlags(BitmapResource::getDefaultMemoryFlags());
   ASSIGN_OR_RETURN(Arg, readFilename());
-  return llvm::make_unique<BitmapResource>(*Arg);
+  return llvm::make_unique<BitmapResource>(*Arg, MemoryFlags);
 }
 
 RCParser::ParseType RCParser::parseIconResource() {
+  uint16_t MemoryFlags =
+      parseMemoryFlags(IconResource::getDefaultMemoryFlags());
   ASSIGN_OR_RETURN(Arg, readFilename());
-  return llvm::make_unique<IconResource>(*Arg);
+  return llvm::make_unique<IconResource>(*Arg, MemoryFlags);
 }
 
 RCParser::ParseType RCParser::parseHTMLResource() {
+  uint16_t MemoryFlags =
+      parseMemoryFlags(HTMLResource::getDefaultMemoryFlags());
   ASSIGN_OR_RETURN(Arg, readFilename());
-  return llvm::make_unique<HTMLResource>(*Arg);
+  return llvm::make_unique<HTMLResource>(*Arg, MemoryFlags);
 }
 
 RCParser::ParseType RCParser::parseMenuResource() {
+  uint16_t MemoryFlags =
+      parseMemoryFlags(MenuResource::getDefaultMemoryFlags());
   ASSIGN_OR_RETURN(OptStatements, parseOptionalStatements());
   ASSIGN_OR_RETURN(Items, parseMenuItemsList());
   return llvm::make_unique<MenuResource>(std::move(*OptStatements),
-                                         std::move(*Items));
+                                         std::move(*Items), MemoryFlags);
 }
 
 Expected<MenuDefinitionList> RCParser::parseMenuItemsList() {
@@ -610,11 +665,13 @@ Expected<MenuDefinitionList> RCParser::parseMenuItemsList() {
 }
 
 RCParser::ParseType RCParser::parseStringTableResource() {
+  uint16_t MemoryFlags =
+      parseMemoryFlags(StringTableResource::getDefaultMemoryFlags());
   ASSIGN_OR_RETURN(OptStatements, parseOptionalStatements());
   RETURN_IF_ERROR(consumeType(Kind::BlockBegin));
 
-  auto Table =
-      llvm::make_unique<StringTableResource>(std::move(*OptStatements));
+  auto Table = llvm::make_unique<StringTableResource>(std::move(*OptStatements),
+                                                      MemoryFlags);
 
   // Read strings until we reach the end of the block.
   while (!consumeOptionalType(Kind::BlockEnd)) {
@@ -722,6 +779,11 @@ RCParser::ParseOptionType RCParser::parseVersionStmt() {
 RCParser::ParseOptionType RCParser::parseCaptionStmt() {
   ASSIGN_OR_RETURN(Arg, readString());
   return llvm::make_unique<CaptionStmt>(*Arg);
+}
+
+RCParser::ParseOptionType RCParser::parseClassStmt() {
+  ASSIGN_OR_RETURN(Arg, readIntOrString());
+  return llvm::make_unique<ClassStmt>(*Arg);
 }
 
 RCParser::ParseOptionType RCParser::parseFontStmt(OptStmtType DialogType) {

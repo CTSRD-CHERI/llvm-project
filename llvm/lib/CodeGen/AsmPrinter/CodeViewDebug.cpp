@@ -2099,8 +2099,7 @@ CodeViewDebug::lowerRecordFieldList(const DICompositeType *Ty) {
   for (const DIDerivedType *I : Info.Inheritance) {
     if (I->getFlags() & DINode::FlagVirtual) {
       // Virtual base.
-      // FIXME: Emit VBPtrOffset when the frontend provides it.
-      unsigned VBPtrOffset = 0;
+      unsigned VBPtrOffset = I->getVBPtrOffset();
       // FIXME: Despite the accessor name, the offset is really in bytes.
       unsigned VBTableIndex = I->getOffsetInBits() / 4;
       auto RecordKind = (I->getFlags() & DINode::FlagIndirectVirtualBase) == DINode::FlagIndirectVirtualBase
@@ -2589,8 +2588,8 @@ void CodeViewDebug::endFunctionImpl(const MachineFunction *MF) {
 void CodeViewDebug::beginInstruction(const MachineInstr *MI) {
   DebugHandlerBase::beginInstruction(MI);
 
-  // Ignore DBG_VALUE locations and function prologue.
-  if (!Asm || !CurFn || MI->isDebugValue() ||
+  // Ignore DBG_VALUE and DBG_LABEL locations and function prologue.
+  if (!Asm || !CurFn || MI->isDebugInstr() ||
       MI->getFlag(MachineInstr::FrameSetup))
     return;
 
@@ -2599,7 +2598,7 @@ void CodeViewDebug::beginInstruction(const MachineInstr *MI) {
   DebugLoc DL = MI->getDebugLoc();
   if (!DL && MI->getParent() != PrevInstBB) {
     for (const auto &NextMI : *MI->getParent()) {
-      if (NextMI.isDebugValue())
+      if (NextMI.isDebugInstr())
         continue;
       DL = NextMI.getDebugLoc();
       if (DL)

@@ -190,7 +190,7 @@ static RValue EmitBinaryAtomicPost(CodeGenFunction &CGF,
   return RValue::get(Result);
 }
 
-/// @brief Utility to insert an atomic cmpxchg instruction.
+/// Utility to insert an atomic cmpxchg instruction.
 ///
 /// @param CGF The current codegen function.
 /// @param E   Builtin call expression to convert to cmpxchg.
@@ -320,7 +320,7 @@ static RValue emitLibraryCall(CodeGenFunction &CGF, const FunctionDecl *FD,
   return CGF.EmitCall(E->getCallee()->getType(), CGCallee(FD, calleeValue), E, ReturnValueSlot());
 }
 
-/// \brief Emit a call to llvm.{sadd,uadd,ssub,usub,smul,umul}.with.overflow.*
+/// Emit a call to llvm.{sadd,uadd,ssub,usub,smul,umul}.with.overflow.*
 /// depending on IntrinsicID.
 ///
 /// \arg CGF The current codegen function.
@@ -1413,20 +1413,14 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
 
     llvm::Type *ArgType = Val->getType();
     Shift = Builder.CreateIntCast(Shift, ArgType, false);
-    unsigned ArgWidth = cast<llvm::IntegerType>(ArgType)->getBitWidth();
-    Value *ArgTypeSize = llvm::ConstantInt::get(ArgType, ArgWidth);
-    Value *ArgZero = llvm::Constant::getNullValue(ArgType);
-
+    unsigned ArgWidth = ArgType->getIntegerBitWidth();
     Value *Mask = llvm::ConstantInt::get(ArgType, ArgWidth - 1);
-    Shift = Builder.CreateAnd(Shift, Mask);
-    Value *LeftShift = Builder.CreateSub(ArgTypeSize, Shift);
 
-    Value *RightShifted = Builder.CreateLShr(Val, Shift);
-    Value *LeftShifted = Builder.CreateShl(Val, LeftShift);
-    Value *Rotated = Builder.CreateOr(LeftShifted, RightShifted);
-
-    Value *ShiftIsZero = Builder.CreateICmpEQ(Shift, ArgZero);
-    Value *Result = Builder.CreateSelect(ShiftIsZero, Val, Rotated);
+    Value *RightShiftAmt = Builder.CreateAnd(Shift, Mask);
+    Value *RightShifted = Builder.CreateLShr(Val, RightShiftAmt);
+    Value *LeftShiftAmt = Builder.CreateAnd(Builder.CreateNeg(Shift), Mask);
+    Value *LeftShifted = Builder.CreateShl(Val, LeftShiftAmt);
+    Value *Result = Builder.CreateOr(LeftShifted, RightShifted);
     return RValue::get(Result);
   }
   case Builtin::BI_rotl8:
@@ -1439,20 +1433,14 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
 
     llvm::Type *ArgType = Val->getType();
     Shift = Builder.CreateIntCast(Shift, ArgType, false);
-    unsigned ArgWidth = cast<llvm::IntegerType>(ArgType)->getBitWidth();
-    Value *ArgTypeSize = llvm::ConstantInt::get(ArgType, ArgWidth);
-    Value *ArgZero = llvm::Constant::getNullValue(ArgType);
-
+    unsigned ArgWidth = ArgType->getIntegerBitWidth();
     Value *Mask = llvm::ConstantInt::get(ArgType, ArgWidth - 1);
-    Shift = Builder.CreateAnd(Shift, Mask);
-    Value *RightShift = Builder.CreateSub(ArgTypeSize, Shift);
 
-    Value *LeftShifted = Builder.CreateShl(Val, Shift);
-    Value *RightShifted = Builder.CreateLShr(Val, RightShift);
-    Value *Rotated = Builder.CreateOr(LeftShifted, RightShifted);
-
-    Value *ShiftIsZero = Builder.CreateICmpEQ(Shift, ArgZero);
-    Value *Result = Builder.CreateSelect(ShiftIsZero, Val, Rotated);
+    Value *LeftShiftAmt = Builder.CreateAnd(Shift, Mask);
+    Value *LeftShifted = Builder.CreateShl(Val, LeftShiftAmt);
+    Value *RightShiftAmt = Builder.CreateAnd(Builder.CreateNeg(Shift), Mask);
+    Value *RightShifted = Builder.CreateLShr(Val, RightShiftAmt);
+    Value *Result = Builder.CreateOr(LeftShifted, RightShifted);
     return RValue::get(Result);
   }
   case Builtin::BI__builtin_unpredictable: {
@@ -3236,10 +3224,10 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
       return Ptr;
     };
 
-    // Could have events and/or vaargs.
+    // Could have events and/or varargs.
     if (E->getArg(3)->getType()->isBlockPointerType()) {
       // No events passed, but has variadic arguments.
-      Name = "__enqueue_kernel_vaargs";
+      Name = "__enqueue_kernel_varargs";
       auto Info =
           CGM.getOpenCLRuntime().emitOpenCLEnqueuedBlock(*this, E->getArg(3));
       llvm::Value *Kernel =
@@ -3307,7 +3295,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
       // Pass the number of variadics to the runtime function too.
       Args.push_back(ConstantInt::get(Int32Ty, NumArgs - 7));
       ArgTys.push_back(Int32Ty);
-      Name = "__enqueue_kernel_events_vaargs";
+      Name = "__enqueue_kernel_events_varargs";
 
       auto *PtrToSizeArray = CreateArrayForSizeVar(7);
       Args.push_back(PtrToSizeArray);
@@ -3348,7 +3336,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
         CGM.CreateRuntimeFunction(
             llvm::FunctionType::get(IntTy, {GenericVoidPtrTy, GenericVoidPtrTy},
                                     false),
-            "__get_kernel_preferred_work_group_multiple_impl"),
+            "__get_kernel_preferred_work_group_size_multiple_impl"),
         {Kernel, Arg}));
   }
   case Builtin::BIget_kernel_max_sub_group_size_for_ndrange:
@@ -3741,7 +3729,7 @@ Value *CodeGenFunction::EmitNeonShiftVector(Value *V, llvm::Type *Ty,
   return ConstantInt::get(Ty, neg ? -SV : SV);
 }
 
-// \brief Right-shift a vector by a constant.
+// Right-shift a vector by a constant.
 Value *CodeGenFunction::EmitNeonRShiftImm(Value *Vec, Value *Shift,
                                           llvm::Type *Ty, bool usgn,
                                           const char *name) {
@@ -8825,7 +8813,7 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
 
   case X86::BI__builtin_ia32_storess128_mask:
   case X86::BI__builtin_ia32_storesd128_mask: {
-    return EmitX86MaskedStore(*this, Ops, 16);
+    return EmitX86MaskedStore(*this, Ops, 1);
   }
   case X86::BI__builtin_ia32_vpopcntb_128:
   case X86::BI__builtin_ia32_vpopcntd_128:
@@ -8909,7 +8897,7 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
 
   case X86::BI__builtin_ia32_loadss128_mask:
   case X86::BI__builtin_ia32_loadsd128_mask:
-    return EmitX86MaskedLoad(*this, Ops, 16);
+    return EmitX86MaskedLoad(*this, Ops, 1);
 
   case X86::BI__builtin_ia32_loadaps128_mask:
   case X86::BI__builtin_ia32_loadaps256_mask:

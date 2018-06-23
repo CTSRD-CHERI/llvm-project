@@ -1,7 +1,7 @@
 ; ModuleID = 'hi_foo.c'
 source_filename = "hi_foo.c"
 target datalayout = "e-m:e-p:32:32-i64:64-n32:64-S128"
-target triple = "wasm32-unknown-unknown-wasm"
+target triple = "wasm32-unknown-unknown"
 
 ; // hi_foo.c:
 ; int y[2] = {23, 41};
@@ -48,7 +48,7 @@ attributes #1 = { nounwind readnone speculatable }
 !11 = !{i32 2, !"Debug Info Version", i32 3}
 !12 = !{i32 1, !"wchar_size", i32 4}
 !13 = !{!"clang version 7.0.0 (trunk 331321)"}
-!14 = distinct !DISubprogram(name: "foo", scope: !3, file: !3, line: 3, type: !15, isLocal: false, isDefinition: true, scopeLine: 3, flags: DIFlagPrototyped, isOptimized: true, unit: !2, variables: !17)
+!14 = distinct !DISubprogram(name: "foo", scope: !3, file: !3, line: 3, type: !15, isLocal: false, isDefinition: true, scopeLine: 3, flags: DIFlagPrototyped, isOptimized: true, unit: !2, retainedNodes: !17)
 !15 = !DISubroutineType(types: !16)
 !16 = !{null, !7}
 !17 = !{!18}

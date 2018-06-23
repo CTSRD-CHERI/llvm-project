@@ -78,7 +78,7 @@ namespace clang {
 
   public:
     explicit ASTNodeImporter(ASTImporter &Importer) : Importer(Importer) {}
-    
+
     using TypeVisitor<ASTNodeImporter, QualType>::Visit;
     using DeclVisitor<ASTNodeImporter, Decl *>::Visit;
     using StmtVisitor<ASTNodeImporter, Stmt *>::Visit;
@@ -146,17 +146,17 @@ namespace clang {
 
     Optional<LambdaCapture> ImportLambdaCapture(const LambdaCapture &From);
                         
-    /// \brief What we should import from the definition.
+    /// What we should import from the definition.
     enum ImportDefinitionKind { 
-      /// \brief Import the default subset of the definition, which might be
+      /// Import the default subset of the definition, which might be
       /// nothing (if minimal import is set) or might be everything (if minimal
       /// import is not set).
       IDK_Default,
 
-      /// \brief Import everything.
+      /// Import everything.
       IDK_Everything,
 
-      /// \brief Import only the bare bones needed to establish a valid
+      /// Import only the bare bones needed to establish a valid
       /// DeclContext.
       IDK_Basic
     };
@@ -908,8 +908,14 @@ QualType ASTNodeImporter::VisitElaboratedType(const ElaboratedType *T) {
   if (ToNamedType.isNull())
     return {};
 
+  TagDecl *OwnedTagDecl =
+      cast_or_null<TagDecl>(Importer.Import(T->getOwnedTagDecl()));
+  if (!OwnedTagDecl && T->getOwnedTagDecl())
+    return {};
+
   return Importer.getToContext().getElaboratedType(T->getKeyword(),
-                                                   ToQualifier, ToNamedType);
+                                                   ToQualifier, ToNamedType,
+                                                   OwnedTagDecl);
 }
 
 QualType ASTNodeImporter::VisitPackExpansionType(const PackExpansionType *T) {
@@ -4102,8 +4108,14 @@ Decl *ASTNodeImporter::VisitClassTemplateDecl(ClassTemplateDecl *D) {
       if (auto *FoundTemplate = dyn_cast<ClassTemplateDecl>(Found)) {
         if (IsStructuralMatch(D, FoundTemplate)) {
           // The class templates structurally match; call it the same template.
-          // FIXME: We may be filling in a forward declaration here. Handle
-          // this case!
+
+          // We found a forward declaration but the class to be imported has a
+          // definition.
+          // FIXME Add this forward declaration to the redeclaration chain.
+          if (D->isThisDeclarationADefinition() &&
+              !FoundTemplate->isThisDeclarationADefinition())
+            continue;
+
           Importer.Imported(D->getTemplatedDecl(), 
                             FoundTemplate->getTemplatedDecl());
           return Importer.Imported(D, FoundTemplate);

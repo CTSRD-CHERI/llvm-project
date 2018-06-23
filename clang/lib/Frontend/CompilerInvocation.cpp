@@ -395,7 +395,7 @@ static llvm::Reloc::Model getRelocModel(ArgList &Args,
   return llvm::Reloc::PIC_;
 }
 
-/// \brief Create a new Regex instance out of the string value in \p RpassArg.
+/// Create a new Regex instance out of the string value in \p RpassArg.
 /// It returns a pointer to the newly generated Regex instance.
 static std::shared_ptr<llvm::Regex>
 GenerateOptimizationRemarkRegex(DiagnosticsEngine &Diags, ArgList &Args,
@@ -2644,7 +2644,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   // Set the flag to prevent the implementation from emitting device exception
   // handling code for those requiring so.
   Opts.OpenMPHostCXXExceptions = Opts.Exceptions && Opts.CXXExceptions;
-  if (Opts.OpenMPIsDevice && T.isNVPTX()) {
+  if ((Opts.OpenMPIsDevice && T.isNVPTX()) || Opts.OpenCLCPlusPlus) {
     Opts.Exceptions = 0;
     Opts.CXXExceptions = 0;
   }
@@ -2991,6 +2991,8 @@ static void ParseTargetArgs(TargetOptions &Opts, ArgList &Args,
     A->claim();
   }
   Opts.ForceEnableInt128 = Args.hasArg(OPT_fforce_enable_int128);
+  Opts.NVPTXUseShortPointers = Args.hasFlag(
+      options::OPT_fcuda_short_ptr, options::OPT_fno_cuda_short_ptr, false);
 }
 
 bool CompilerInvocation::CreateFromArgs(CompilerInvocation &Res,

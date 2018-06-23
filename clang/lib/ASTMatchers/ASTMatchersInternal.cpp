@@ -118,7 +118,7 @@ private:
   const IntrusiveRefCntPtr<DynMatcherInterface> InnerMatcher;
 };
 
-/// \brief A matcher that always returns true.
+/// A matcher that always returns true.
 ///
 /// We only ever need one instance of this matcher, so we create a global one
 /// and reuse it to reduce the overhead of the matcher and increase the chance
@@ -626,6 +626,8 @@ const internal::VariadicDynCastAllOfMatcher<Decl, ObjCCategoryImplDecl>
     objcCategoryImplDecl;
 const internal::VariadicDynCastAllOfMatcher<Decl, ObjCMethodDecl>
     objcMethodDecl;
+const internal::VariadicDynCastAllOfMatcher<Decl, BlockDecl>
+    blockDecl;
 const internal::VariadicDynCastAllOfMatcher<Decl, ObjCIvarDecl> objcIvarDecl;
 const internal::VariadicDynCastAllOfMatcher<Decl, ObjCPropertyDecl>
     objcPropertyDecl;

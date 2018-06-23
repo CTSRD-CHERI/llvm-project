@@ -1742,7 +1742,7 @@ namespace {
  };
 } // end anonymous namespace
 
-/// \brief Emit all code that comes at the end of class's
+/// Emit all code that comes at the end of class's
 /// destructor. This is to call destructors on members and base classes
 /// in reverse order of their construction.
 ///

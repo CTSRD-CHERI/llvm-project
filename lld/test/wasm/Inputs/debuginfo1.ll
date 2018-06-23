@@ -1,7 +1,7 @@
 ; ModuleID = 'hi.c'
 source_filename = "hi.c"
 target datalayout = "e-m:e-p:32:32-i64:64-n32:64-S128"
-target triple = "wasm32-unknown-unknown-wasm"
+target triple = "wasm32-unknown-unknown"
 
 ; // hi.c:
 ; extern void foo(int);
@@ -52,7 +52,7 @@ attributes #4 = { nounwind }
 !4 = !{i32 2, !"Debug Info Version", i32 3}
 !5 = !{i32 1, !"wchar_size", i32 4}
 !6 = !{!"clang version 7.0.0 (trunk 331321)"}
-!7 = distinct !DISubprogram(name: "test", scope: !1, file: !1, line: 3, type: !8, isLocal: false, isDefinition: true, scopeLine: 3, flags: DIFlagPrototyped, isOptimized: true, unit: !0, variables: !11)
+!7 = distinct !DISubprogram(name: "test", scope: !1, file: !1, line: 3, type: !8, isLocal: false, isDefinition: true, scopeLine: 3, flags: DIFlagPrototyped, isOptimized: true, unit: !0, retainedNodes: !11)
 !8 = !DISubroutineType(types: !9)
 !9 = !{!10, !10}
 !10 = !DIBasicType(name: "int", size: 32, encoding: DW_ATE_signed)
@@ -61,7 +61,7 @@ attributes #4 = { nounwind }
 !13 = !DILocation(line: 3, column: 14, scope: !7)
 !14 = !DILocation(line: 4, column: 12, scope: !7)
 !15 = !DILocation(line: 4, column: 3, scope: !7)
-!16 = distinct !DISubprogram(name: "_start", scope: !1, file: !1, line: 7, type: !17, isLocal: false, isDefinition: true, scopeLine: 7, isOptimized: true, unit: !0, variables: !2)
+!16 = distinct !DISubprogram(name: "_start", scope: !1, file: !1, line: 7, type: !17, isLocal: false, isDefinition: true, scopeLine: 7, isOptimized: true, unit: !0, retainedNodes: !2)
 !17 = !DISubroutineType(types: !18)
 !18 = !{!10}
 !19 = !DILocation(line: 8, column: 3, scope: !16)

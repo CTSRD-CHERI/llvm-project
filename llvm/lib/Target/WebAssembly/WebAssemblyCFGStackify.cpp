@@ -265,7 +265,7 @@ static void FixEndsAtEndOfFunction(
 
   for (MachineBasicBlock &MBB : reverse(MF)) {
     for (MachineInstr &MI : reverse(MBB)) {
-      if (MI.isPosition() || MI.isDebugValue())
+      if (MI.isPosition() || MI.isDebugInstr())
         continue;
       if (MI.getOpcode() == WebAssembly::END_BLOCK) {
         BlockTops[&MI]->getOperand(0).setImm(int32_t(retType));
@@ -366,9 +366,9 @@ static void PlaceMarkers(MachineFunction &MF, const MachineLoopInfo &MLI,
 }
 
 bool WebAssemblyCFGStackify::runOnMachineFunction(MachineFunction &MF) {
-  DEBUG(dbgs() << "********** CFG Stackifying **********\n"
-                  "********** Function: "
-               << MF.getName() << '\n');
+  LLVM_DEBUG(dbgs() << "********** CFG Stackifying **********\n"
+                       "********** Function: "
+                    << MF.getName() << '\n');
 
   const auto &MLI = getAnalysis<MachineLoopInfo>();
   auto &MDT = getAnalysis<MachineDominatorTree>();

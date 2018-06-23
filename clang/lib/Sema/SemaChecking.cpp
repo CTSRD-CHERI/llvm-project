@@ -780,7 +780,7 @@ static bool checkOpenCLPipePacketType(Sema &S, CallExpr *Call, unsigned Idx) {
   return false;
 }
 
-// \brief Performs semantic analysis for the read/write_pipe call.
+// Performs semantic analysis for the read/write_pipe call.
 // \param S Reference to the semantic analyzer.
 // \param Call A pointer to the builtin call.
 // \return True if a semantic error has been found, false otherwise.
@@ -834,7 +834,7 @@ static bool SemaBuiltinRWPipe(Sema &S, CallExpr *Call) {
   return false;
 }
 
-// \brief Performs a semantic analysis on the {work_group_/sub_group_
+// Performs a semantic analysis on the {work_group_/sub_group_
 //        /_}reserve_{read/write}_pipe
 // \param S Reference to the semantic analyzer.
 // \param Call The call to the builtin function to be analyzed.
@@ -863,7 +863,7 @@ static bool SemaBuiltinReserveRWPipe(Sema &S, CallExpr *Call) {
   return false;
 }
 
-// \brief Performs a semantic analysis on {work_group_/sub_group_
+// Performs a semantic analysis on {work_group_/sub_group_
 //        /_}commit_{read/write}_pipe
 // \param S Reference to the semantic analyzer.
 // \param Call The call to the builtin function to be analyzed.
@@ -886,7 +886,7 @@ static bool SemaBuiltinCommitRWPipe(Sema &S, CallExpr *Call) {
   return false;
 }
 
-// \brief Performs a semantic analysis on the call to built-in Pipe
+// Performs a semantic analysis on the call to built-in Pipe
 //        Query Functions.
 // \param S Reference to the semantic analyzer.
 // \param Call The call to the builtin function to be analyzed.
@@ -904,8 +904,8 @@ static bool SemaBuiltinPipePackets(Sema &S, CallExpr *Call) {
   return false;
 }
 
-// \brief OpenCL v2.0 s6.13.9 - Address space qualifier functions.
-// \brief Performs semantic analysis for the to_global/local/private call.
+// OpenCL v2.0 s6.13.9 - Address space qualifier functions.
+// Performs semantic analysis for the to_global/local/private call.
 // \param S Reference to the semantic analyzer.
 // \param BuiltinID ID of the builtin function.
 // \param Call A pointer to the builtin call.
@@ -1409,11 +1409,15 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
         if (CheckAArch64BuiltinFunctionCall(BuiltinID, TheCall))
           return ExprError();
         break;
-      case llvm::Triple::cheri:
+      case llvm::Triple::hexagon:
+        if (CheckHexagonBuiltinFunctionCall(BuiltinID, TheCall))
+          return ExprError();
+        break;
       case llvm::Triple::mips:
       case llvm::Triple::mipsel:
       case llvm::Triple::mips64:
       case llvm::Triple::mips64el:
+      case llvm::Triple::cheri:
         if (CheckMipsBuiltinFunctionCall(BuiltinID, TheCall))
           return ExprError();
         break;
@@ -1784,6 +1788,225 @@ bool Sema::CheckAArch64BuiltinFunctionCall(unsigned BuiltinID,
   }
 
   return SemaBuiltinConstantArgRange(TheCall, i, l, u + l);
+}
+
+bool Sema::CheckHexagonBuiltinFunctionCall(unsigned BuiltinID,
+                                           CallExpr *TheCall) {
+  struct ArgInfo {
+    ArgInfo(unsigned O, bool S, unsigned W, unsigned A)
+      : OpNum(O), IsSigned(S), BitWidth(W), Align(A) {}
+    unsigned OpNum = 0;
+    bool IsSigned = false;
+    unsigned BitWidth = 0;
+    unsigned Align = 0;
+  };
+
+  static const std::map<unsigned, std::vector<ArgInfo>> Infos = {
+    { Hexagon::BI__builtin_circ_ldd,                  {{ 3, true,  4,  3 }} },
+    { Hexagon::BI__builtin_circ_ldw,                  {{ 3, true,  4,  2 }} },
+    { Hexagon::BI__builtin_circ_ldh,                  {{ 3, true,  4,  1 }} },
+    { Hexagon::BI__builtin_circ_lduh,                 {{ 3, true,  4,  0 }} },
+    { Hexagon::BI__builtin_circ_ldb,                  {{ 3, true,  4,  0 }} },
+    { Hexagon::BI__builtin_circ_ldub,                 {{ 3, true,  4,  0 }} },
+    { Hexagon::BI__builtin_circ_std,                  {{ 3, true,  4,  3 }} },
+    { Hexagon::BI__builtin_circ_stw,                  {{ 3, true,  4,  2 }} },
+    { Hexagon::BI__builtin_circ_sth,                  {{ 3, true,  4,  1 }} },
+    { Hexagon::BI__builtin_circ_sthhi,                {{ 3, true,  4,  1 }} },
+    { Hexagon::BI__builtin_circ_stb,                  {{ 3, true,  4,  0 }} },
+
+    { Hexagon::BI__builtin_HEXAGON_L2_loadrub_pci,    {{ 1, true,  4,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_L2_loadrb_pci,     {{ 1, true,  4,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_L2_loadruh_pci,    {{ 1, true,  4,  1 }} },
+    { Hexagon::BI__builtin_HEXAGON_L2_loadrh_pci,     {{ 1, true,  4,  1 }} },
+    { Hexagon::BI__builtin_HEXAGON_L2_loadri_pci,     {{ 1, true,  4,  2 }} },
+    { Hexagon::BI__builtin_HEXAGON_L2_loadrd_pci,     {{ 1, true,  4,  3 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_storerb_pci,    {{ 1, true,  4,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_storerh_pci,    {{ 1, true,  4,  1 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_storerf_pci,    {{ 1, true,  4,  1 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_storeri_pci,    {{ 1, true,  4,  2 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_storerd_pci,    {{ 1, true,  4,  3 }} },
+
+    { Hexagon::BI__builtin_HEXAGON_A2_combineii,      {{ 1, true,  8,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_A2_tfrih,          {{ 1, false, 16, 0 }} },
+    { Hexagon::BI__builtin_HEXAGON_A2_tfril,          {{ 1, false, 16, 0 }} },
+    { Hexagon::BI__builtin_HEXAGON_A2_tfrpi,          {{ 0, true,  8,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_A4_bitspliti,      {{ 1, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_A4_cmpbeqi,        {{ 1, false, 8,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_A4_cmpbgti,        {{ 1, true,  8,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_A4_cround_ri,      {{ 1, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_A4_round_ri,       {{ 1, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_A4_round_ri_sat,   {{ 1, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_A4_vcmpbeqi,       {{ 1, false, 8,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_A4_vcmpbgti,       {{ 1, true,  8,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_A4_vcmpbgtui,      {{ 1, false, 7,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_A4_vcmpheqi,       {{ 1, true,  8,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_A4_vcmphgti,       {{ 1, true,  8,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_A4_vcmphgtui,      {{ 1, false, 7,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_A4_vcmpweqi,       {{ 1, true,  8,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_A4_vcmpwgti,       {{ 1, true,  8,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_A4_vcmpwgtui,      {{ 1, false, 7,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_C2_bitsclri,       {{ 1, false, 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_C2_muxii,          {{ 2, true,  8,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_C4_nbitsclri,      {{ 1, false, 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_F2_dfclass,        {{ 1, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_F2_dfimm_n,        {{ 0, false, 10, 0 }} },
+    { Hexagon::BI__builtin_HEXAGON_F2_dfimm_p,        {{ 0, false, 10, 0 }} },
+    { Hexagon::BI__builtin_HEXAGON_F2_sfclass,        {{ 1, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_F2_sfimm_n,        {{ 0, false, 10, 0 }} },
+    { Hexagon::BI__builtin_HEXAGON_F2_sfimm_p,        {{ 0, false, 10, 0 }} },
+    { Hexagon::BI__builtin_HEXAGON_M4_mpyri_addi,     {{ 2, false, 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_M4_mpyri_addr_u2,  {{ 1, false, 6,  2 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_addasl_rrri,    {{ 2, false, 3,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asl_i_p_acc,    {{ 2, false, 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asl_i_p_and,    {{ 2, false, 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asl_i_p,        {{ 1, false, 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asl_i_p_nac,    {{ 2, false, 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asl_i_p_or,     {{ 2, false, 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asl_i_p_xacc,   {{ 2, false, 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asl_i_r_acc,    {{ 2, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asl_i_r_and,    {{ 2, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asl_i_r,        {{ 1, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asl_i_r_nac,    {{ 2, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asl_i_r_or,     {{ 2, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asl_i_r_sat,    {{ 1, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asl_i_r_xacc,   {{ 2, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asl_i_vh,       {{ 1, false, 4,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asl_i_vw,       {{ 1, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asr_i_p_acc,    {{ 2, false, 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asr_i_p_and,    {{ 2, false, 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asr_i_p,        {{ 1, false, 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asr_i_p_nac,    {{ 2, false, 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asr_i_p_or,     {{ 2, false, 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asr_i_p_rnd_goodsyntax,
+                                                      {{ 1, false, 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asr_i_p_rnd,    {{ 1, false, 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asr_i_r_acc,    {{ 2, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asr_i_r_and,    {{ 2, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asr_i_r,        {{ 1, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asr_i_r_nac,    {{ 2, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asr_i_r_or,     {{ 2, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asr_i_r_rnd_goodsyntax,
+                                                      {{ 1, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asr_i_r_rnd,    {{ 1, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asr_i_svw_trun, {{ 1, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asr_i_vh,       {{ 1, false, 4,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_asr_i_vw,       {{ 1, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_clrbit_i,       {{ 1, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_extractu,       {{ 1, false, 5,  0 },
+                                                       { 2, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_extractup,      {{ 1, false, 6,  0 },
+                                                       { 2, false, 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_insert,         {{ 2, false, 5,  0 },
+                                                       { 3, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_insertp,        {{ 2, false, 6,  0 },
+                                                       { 3, false, 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_lsr_i_p_acc,    {{ 2, false, 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_lsr_i_p_and,    {{ 2, false, 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_lsr_i_p,        {{ 1, false, 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_lsr_i_p_nac,    {{ 2, false, 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_lsr_i_p_or,     {{ 2, false, 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_lsr_i_p_xacc,   {{ 2, false, 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_lsr_i_r_acc,    {{ 2, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_lsr_i_r_and,    {{ 2, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_lsr_i_r,        {{ 1, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_lsr_i_r_nac,    {{ 2, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_lsr_i_r_or,     {{ 2, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_lsr_i_r_xacc,   {{ 2, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_lsr_i_vh,       {{ 1, false, 4,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_lsr_i_vw,       {{ 1, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_setbit_i,       {{ 1, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_tableidxb_goodsyntax,
+                                                      {{ 2, false, 4,  0 },
+                                                       { 3, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_tableidxd_goodsyntax,
+                                                      {{ 2, false, 4,  0 },
+                                                       { 3, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_tableidxh_goodsyntax,
+                                                      {{ 2, false, 4,  0 },
+                                                       { 3, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_tableidxw_goodsyntax,
+                                                      {{ 2, false, 4,  0 },
+                                                       { 3, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_togglebit_i,    {{ 1, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_tstbit_i,       {{ 1, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_valignib,       {{ 2, false, 3,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S2_vspliceib,      {{ 2, false, 3,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S4_addi_asl_ri,    {{ 2, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S4_addi_lsr_ri,    {{ 2, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S4_andi_asl_ri,    {{ 2, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S4_andi_lsr_ri,    {{ 2, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S4_clbaddi,        {{ 1, true , 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S4_clbpaddi,       {{ 1, true,  6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S4_extract,        {{ 1, false, 5,  0 },
+                                                       { 2, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S4_extractp,       {{ 1, false, 6,  0 },
+                                                       { 2, false, 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S4_lsli,           {{ 0, true,  6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S4_ntstbit_i,      {{ 1, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S4_ori_asl_ri,     {{ 2, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S4_ori_lsr_ri,     {{ 2, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S4_subi_asl_ri,    {{ 2, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S4_subi_lsr_ri,    {{ 2, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S4_vrcrotate_acc,  {{ 3, false, 2,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S4_vrcrotate,      {{ 2, false, 2,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S5_asrhub_rnd_sat_goodsyntax,
+                                                      {{ 1, false, 4,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S5_asrhub_sat,     {{ 1, false, 4,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S5_vasrhrnd_goodsyntax,
+                                                      {{ 1, false, 4,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S6_rol_i_p,        {{ 1, false, 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S6_rol_i_p_acc,    {{ 2, false, 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S6_rol_i_p_and,    {{ 2, false, 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S6_rol_i_p_nac,    {{ 2, false, 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S6_rol_i_p_or,     {{ 2, false, 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S6_rol_i_p_xacc,   {{ 2, false, 6,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S6_rol_i_r,        {{ 1, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S6_rol_i_r_acc,    {{ 2, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S6_rol_i_r_and,    {{ 2, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S6_rol_i_r_nac,    {{ 2, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S6_rol_i_r_or,     {{ 2, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_S6_rol_i_r_xacc,   {{ 2, false, 5,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_V6_valignbi,       {{ 2, false, 3,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_V6_valignbi_128B,  {{ 2, false, 3,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlalignbi,      {{ 2, false, 3,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlalignbi_128B, {{ 2, false, 3,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpybusi,      {{ 2, false, 1,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpybusi_128B, {{ 2, false, 1,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpybusi_acc,  {{ 3, false, 1,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpybusi_acc_128B,
+                                                      {{ 3, false, 1,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpyubi,       {{ 2, false, 1,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpyubi_128B,  {{ 2, false, 1,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpyubi_acc,   {{ 3, false, 1,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpyubi_acc_128B,
+                                                      {{ 3, false, 1,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrsadubi,       {{ 2, false, 1,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrsadubi_128B,  {{ 2, false, 1,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrsadubi_acc,   {{ 3, false, 1,  0 }} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrsadubi_acc_128B,
+                                                      {{ 3, false, 1,  0 }} },
+  };
+
+  auto F = Infos.find(BuiltinID);
+  if (F == Infos.end())
+    return false;
+
+  bool Error = false;
+
+  for (const ArgInfo &A : F->second) {
+    int32_t Min = A.IsSigned ? -(1 << (A.BitWidth-1)) : 0;
+    int32_t Max = (1 << (A.IsSigned ? A.BitWidth-1 : A.BitWidth)) - 1;
+    if (!A.Align) {
+      Error |= SemaBuiltinConstantArgRange(TheCall, A.OpNum, Min, Max);
+    } else {
+      unsigned M = 1 << A.Align;
+      Min *= M;
+      Max *= M;
+      Error |= SemaBuiltinConstantArgRange(TheCall, A.OpNum, Min, Max) |
+               SemaBuiltinConstantArgMultiple(TheCall, A.OpNum, M);
+    }
+  }
+  return Error;
 }
 
 // CheckMipsBuiltinFunctionCall - Checks the constant value passed to the
@@ -2688,7 +2911,7 @@ bool Sema::getFormatStringInfo(const FormatAttr *Format, bool IsCXXMember,
 
 /// Checks if a the given expression evaluates to null.
 ///
-/// \brief Returns true if the value evaluates to null.
+/// Returns true if the value evaluates to null.
 static bool CheckNonNullExpr(Sema &S, const Expr *Expr) {
   // If the expression has non-null type, it doesn't evaluate to null.
   if (auto nullability
@@ -2732,7 +2955,7 @@ bool Sema::GetFormatNSStringIdx(const FormatAttr *Format, unsigned &Idx) {
   return false;
 }
 
-/// \brief Diagnose use of %s directive in an NSString which is being passed
+/// Diagnose use of %s directive in an NSString which is being passed
 /// as formatting string to formatting method.
 static void
 DiagnoseCStringFormatDirectiveInCFAPI(Sema &S,
@@ -3152,6 +3375,7 @@ ExprResult Sema::SemaAtomicOpsOverloaded(ExprResult TheCallResult,
              Op == AtomicExpr::AO__atomic_exchange_n ||
              Op == AtomicExpr::AO__atomic_compare_exchange_n;
   bool IsAddSub = false;
+  bool IsMinMax = false;
 
   switch (Op) {
   case AtomicExpr::AO__c11_atomic_init:
@@ -3202,6 +3426,12 @@ ExprResult Sema::SemaAtomicOpsOverloaded(ExprResult TheCallResult,
   case AtomicExpr::AO__atomic_or_fetch:
   case AtomicExpr::AO__atomic_xor_fetch:
   case AtomicExpr::AO__atomic_nand_fetch:
+    Form = Arithmetic;
+    break;
+
+  case AtomicExpr::AO__atomic_fetch_min:
+  case AtomicExpr::AO__atomic_fetch_max:
+    IsMinMax = true;
     Form = Arithmetic;
     break;
 
@@ -3287,12 +3517,21 @@ ExprResult Sema::SemaAtomicOpsOverloaded(ExprResult TheCallResult,
   // For an arithmetic operation, the implied arithmetic must be well-formed.
   if (Form == Arithmetic) {
     // gcc does not enforce these rules for GNU atomics, but we do so for sanity.
-    if (IsAddSub && !ValType->isIntegerType() && !ValType->isPointerType()) {
+    if (IsAddSub && !ValType->isIntegerType()
+        && !ValType->isPointerType()) {
       Diag(DRE->getLocStart(), diag::err_atomic_op_needs_atomic_int_or_ptr)
         << IsC11 << Ptr->getType() << Ptr->getSourceRange();
       return ExprError();
     }
-    if (!IsAddSub && !ValType->isIntegerType()) {
+    if (IsMinMax) {
+      const BuiltinType *BT = ValType->getAs<BuiltinType>();
+      if (!BT || (BT->getKind() != BuiltinType::Int &&
+                  BT->getKind() != BuiltinType::UInt)) {
+        Diag(DRE->getLocStart(), diag::err_atomic_op_needs_int32_or_ptr);
+        return ExprError();
+      }
+    }
+    if (!IsAddSub && !IsMinMax && !ValType->isIntegerType()) {
       Diag(DRE->getLocStart(), diag::err_atomic_op_bitwise_needs_atomic_int)
         << IsC11 << Ptr->getType() << Ptr->getSourceRange();
       return ExprError();
@@ -5849,7 +6088,7 @@ void CheckFormatHandler::EmitFormatDiagnostic(PartialDiagnostic PDiag,
                        Loc, IsStringLocation, StringRange, FixIt);
 }
 
-/// \brief If the format string is not within the function call, emit a note
+/// If the format string is not within the function call, emit a note
 /// so that the function call and string are in diagnostic messages.
 ///
 /// \param InFunctionCall if true, the format string is within the function
@@ -7462,7 +7701,7 @@ void Sema::CheckMaxUnsignedZero(const CallExpr *Call,
 
 //===--- CHECK: Standard memory functions ---------------------------------===//
 
-/// \brief Takes the expression passed to the size_t parameter of functions
+/// Takes the expression passed to the size_t parameter of functions
 /// such as memcmp, strncat, etc and warns if it's a comparison.
 ///
 /// This is to catch typos like `if (memcmp(&a, &b, sizeof(a) > 0))`.
@@ -7493,7 +7732,7 @@ static bool CheckMemorySizeofForComparison(Sema &S, const Expr *E,
   return true;
 }
 
-/// \brief Determine whether the given type is or contains a dynamic class type
+/// Determine whether the given type is or contains a dynamic class type
 /// (e.g., whether it has a vtable).
 static const CXXRecordDecl *getContainedDynamicClass(QualType T,
                                                      bool &IsContained) {
@@ -7524,7 +7763,7 @@ static const CXXRecordDecl *getContainedDynamicClass(QualType T,
   return nullptr;
 }
 
-/// \brief If E is a sizeof expression, returns its argument expression,
+/// If E is a sizeof expression, returns its argument expression,
 /// otherwise returns NULL.
 static const Expr *getSizeOfExprArg(const Expr *E) {
   if (const UnaryExprOrTypeTraitExpr *SizeOf =
@@ -7535,7 +7774,7 @@ static const Expr *getSizeOfExprArg(const Expr *E) {
   return nullptr;
 }
 
-/// \brief If E is a sizeof expression, returns its argument type.
+/// If E is a sizeof expression, returns its argument type.
 static QualType getSizeOfArgType(const Expr *E) {
   if (const UnaryExprOrTypeTraitExpr *SizeOf =
       dyn_cast<UnaryExprOrTypeTraitExpr>(E))
@@ -7637,7 +7876,7 @@ struct SearchNonTrivialToCopyField
 
 }
 
-/// \brief Check for dangerous or invalid arguments to memset().
+/// Check for dangerous or invalid arguments to memset().
 ///
 /// This issues warnings on known problematic, dangerous or unspecified
 /// arguments to the standard 'memset', 'memcpy', 'memmove', and 'memcmp'
@@ -9233,7 +9472,7 @@ static void AnalyzeImpConvsInComparison(Sema &S, BinaryOperator *E) {
   AnalyzeImplicitConversions(S, E->getRHS(), E->getOperatorLoc());
 }
 
-/// \brief Implements -Wsign-compare.
+/// Implements -Wsign-compare.
 ///
 /// \param E the binary operator to check for warnings
 static void AnalyzeComparison(Sema &S, BinaryOperator *E) {
@@ -9590,7 +9829,8 @@ static void DiagnoseFloatingImpCast(Sema &S, Expr *E, QualType T,
     return DiagnoseImpCast(
         S, E, T, CContext,
         IsLiteral ? diag::warn_impcast_literal_float_to_integer_out_of_range
-                  : diag::warn_impcast_float_to_integer_out_of_range);
+                  : diag::warn_impcast_float_to_integer_out_of_range,
+        PruneWarnings);
 
   unsigned DiagID = 0;
   if (IsLiteral) {
@@ -10353,7 +10593,7 @@ static bool IsInAnyMacroBody(const SourceManager &SM, SourceLocation Loc) {
   return false;
 }
 
-/// \brief Diagnose pointers that are always non-null.
+/// Diagnose pointers that are always non-null.
 /// \param E the expression containing the pointer
 /// \param NullKind NPCK_NotNull if E is a cast to bool, otherwise, E is
 /// compared to a null pointer
@@ -10600,12 +10840,12 @@ void Sema::CheckForIntOverflow (Expr *E) {
 
 namespace {
 
-/// \brief Visitor for expressions which looks for unsequenced operations on the
+/// Visitor for expressions which looks for unsequenced operations on the
 /// same object.
 class SequenceChecker : public EvaluatedExprVisitor<SequenceChecker> {
   using Base = EvaluatedExprVisitor<SequenceChecker>;
 
-  /// \brief A tree of sequenced regions within an expression. Two regions are
+  /// A tree of sequenced regions within an expression. Two regions are
   /// unsequenced if one is an ancestor or a descendent of the other. When we
   /// finish processing an expression with sequencing, such as a comma
   /// expression, we fold its tree nodes into its parent, since they are
@@ -10619,7 +10859,7 @@ class SequenceChecker : public EvaluatedExprVisitor<SequenceChecker> {
     SmallVector<Value, 8> Values;
 
   public:
-    /// \brief A region within an expression which may be sequenced with respect
+    /// A region within an expression which may be sequenced with respect
     /// to some other region.
     class Seq {
       friend class SequenceTree;
@@ -10635,7 +10875,7 @@ class SequenceChecker : public EvaluatedExprVisitor<SequenceChecker> {
     SequenceTree() { Values.push_back(Value(0)); }
     Seq root() const { return Seq(0); }
 
-    /// \brief Create a new sequence of operations, which is an unsequenced
+    /// Create a new sequence of operations, which is an unsequenced
     /// subset of \p Parent. This sequence of operations is sequenced with
     /// respect to other children of \p Parent.
     Seq allocate(Seq Parent) {
@@ -10643,12 +10883,12 @@ class SequenceChecker : public EvaluatedExprVisitor<SequenceChecker> {
       return Seq(Values.size() - 1);
     }
 
-    /// \brief Merge a sequence of operations into its parent.
+    /// Merge a sequence of operations into its parent.
     void merge(Seq S) {
       Values[S.Index].Merged = true;
     }
 
-    /// \brief Determine whether two operations are unsequenced. This operation
+    /// Determine whether two operations are unsequenced. This operation
     /// is asymmetric: \p Cur should be the more recent sequence, and \p Old
     /// should have been merged into its parent as appropriate.
     bool isUnsequenced(Seq Cur, Seq Old) {
@@ -10663,7 +10903,7 @@ class SequenceChecker : public EvaluatedExprVisitor<SequenceChecker> {
     }
 
   private:
-    /// \brief Pick a representative for a sequence.
+    /// Pick a representative for a sequence.
     unsigned representative(unsigned K) {
       if (Values[K].Merged)
         // Perform path compression as we go.
@@ -10784,7 +11024,7 @@ class SequenceChecker : public EvaluatedExprVisitor<SequenceChecker> {
     bool EvalOK = true;
   } *EvalTracker = nullptr;
 
-  /// \brief Find the object which is produced by the specified expression,
+  /// Find the object which is produced by the specified expression,
   /// if any.
   Object getObject(Expr *E, bool Mod) const {
     E = E->IgnoreParenCasts();
@@ -10806,7 +11046,7 @@ class SequenceChecker : public EvaluatedExprVisitor<SequenceChecker> {
     return nullptr;
   }
 
-  /// \brief Note that an object was modified or used by an expression.
+  /// Note that an object was modified or used by an expression.
   void addUsage(UsageInfo &UI, Object O, Expr *Ref, UsageKind UK) {
     Usage &U = UI.Uses[UK];
     if (!U.Use || !Tree.isUnsequenced(Region, U.Seq)) {
@@ -10817,7 +11057,7 @@ class SequenceChecker : public EvaluatedExprVisitor<SequenceChecker> {
     }
   }
 
-  /// \brief Check whether a modification or use conflicts with a prior usage.
+  /// Check whether a modification or use conflicts with a prior usage.
   void checkUsage(Object O, UsageInfo &UI, Expr *Ref, UsageKind OtherKind,
                   bool IsModMod) {
     if (UI.Diagnosed)
@@ -11204,7 +11444,7 @@ bool Sema::CheckParmsForFunctionDef(ArrayRef<ParmVarDecl *> Parameters,
         if (!ClassDecl->isInvalidDecl() &&
             !ClassDecl->hasIrrelevantDestructor() &&
             !ClassDecl->isDependentContext() &&
-            Context.isParamDestroyedInCallee(Param->getType())) {
+            ClassDecl->isParamDestroyedInCallee()) {
           CXXDestructorDecl *Destructor = LookupDestructor(ClassDecl);
           MarkFunctionReferenced(Param->getLocation(), Destructor);
           DiagnoseUseOfDecl(Destructor, Param->getLocation());
@@ -11290,7 +11530,7 @@ void Sema::CheckCastAlign(Expr *Op, QualType T, SourceRange TRange) {
     << TRange << Op->getSourceRange();
 }
 
-/// \brief Check whether this array fits the idiom of a size-one tail padded
+/// Check whether this array fits the idiom of a size-one tail padded
 /// array member of a struct.
 ///
 /// We avoid emitting out-of-bounds access warnings for such arrays as they are
@@ -12306,7 +12546,7 @@ void Sema::DiagnoseSelfMove(const Expr *LHSExpr, const Expr *RHSExpr,
 
 static bool isLayoutCompatible(ASTContext &C, QualType T1, QualType T2);
 
-/// \brief Check if two enumeration types are layout-compatible.
+/// Check if two enumeration types are layout-compatible.
 static bool isLayoutCompatible(ASTContext &C, EnumDecl *ED1, EnumDecl *ED2) {
   // C++11 [dcl.enum] p8:
   // Two enumeration types are layout-compatible if they have the same
@@ -12315,7 +12555,7 @@ static bool isLayoutCompatible(ASTContext &C, EnumDecl *ED1, EnumDecl *ED2) {
          C.hasSameType(ED1->getIntegerType(), ED2->getIntegerType());
 }
 
-/// \brief Check if two fields are layout-compatible.
+/// Check if two fields are layout-compatible.
 static bool isLayoutCompatible(ASTContext &C, FieldDecl *Field1,
                                FieldDecl *Field2) {
   if (!isLayoutCompatible(C, Field1->getType(), Field2->getType()))
@@ -12336,7 +12576,7 @@ static bool isLayoutCompatible(ASTContext &C, FieldDecl *Field1,
   return true;
 }
 
-/// \brief Check if two standard-layout structs are layout-compatible.
+/// Check if two standard-layout structs are layout-compatible.
 /// (C++11 [class.mem] p17)
 static bool isLayoutCompatibleStruct(ASTContext &C, RecordDecl *RD1,
                                      RecordDecl *RD2) {
@@ -12380,7 +12620,7 @@ static bool isLayoutCompatibleStruct(ASTContext &C, RecordDecl *RD1,
   return true;
 }
 
-/// \brief Check if two standard-layout unions are layout-compatible.
+/// Check if two standard-layout unions are layout-compatible.
 /// (C++11 [class.mem] p18)
 static bool isLayoutCompatibleUnion(ASTContext &C, RecordDecl *RD1,
                                     RecordDecl *RD2) {
@@ -12419,7 +12659,7 @@ static bool isLayoutCompatible(ASTContext &C, RecordDecl *RD1,
     return isLayoutCompatibleStruct(C, RD1, RD2);
 }
 
-/// \brief Check if two types are layout-compatible in C++11 sense.
+/// Check if two types are layout-compatible in C++11 sense.
 static bool isLayoutCompatible(ASTContext &C, QualType T1, QualType T2) {
   if (T1.isNull() || T2.isNull())
     return false;
@@ -12457,7 +12697,7 @@ static bool isLayoutCompatible(ASTContext &C, QualType T1, QualType T2) {
 
 //===--- CHECK: pointer_with_type_tag attribute: datatypes should match ----//
 
-/// \brief Given a type tag expression find the type tag itself.
+/// Given a type tag expression find the type tag itself.
 ///
 /// \param TypeExpr Type tag expression, as it appears in user's code.
 ///
@@ -12528,7 +12768,7 @@ static bool FindTypeTagExpr(const Expr *TypeExpr, const ASTContext &Ctx,
   }
 }
 
-/// \brief Retrieve the C type corresponding to type tag TypeExpr.
+/// Retrieve the C type corresponding to type tag TypeExpr.
 ///
 /// \param TypeExpr Expression that specifies a type tag.
 ///

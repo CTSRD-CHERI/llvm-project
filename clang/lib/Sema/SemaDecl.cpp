@@ -116,7 +116,7 @@ class TypeNameValidatorCCC : public CorrectionCandidateCallback {
 
 } // end anonymous namespace
 
-/// \brief Determine whether the token kind starts a simple-type-specifier.
+/// Determine whether the token kind starts a simple-type-specifier.
 bool Sema::isSimpleTypeSpecifier(tok::TokenKind Kind) const {
   switch (Kind) {
   // FIXME: Take into account the current language when deciding whether a
@@ -167,7 +167,7 @@ enum class UnqualifiedTypeNameLookupResult {
 };
 } // end anonymous namespace
 
-/// \brief Tries to perform unqualified lookup of the type decls in bases for
+/// Tries to perform unqualified lookup of the type decls in bases for
 /// dependent class.
 /// \return \a NotFound if no any decls is found, \a FoundNotType if found not a
 /// type decl, \a FoundType if only type decls are found.
@@ -267,7 +267,7 @@ static ParsedType recoverFromTypeInKnownDependentBase(Sema &S,
   return S.CreateParsedType(T, Builder.getTypeSourceInfo(Context, T));
 }
 
-/// \brief If the identifier refers to a type name within this scope,
+/// If the identifier refers to a type name within this scope,
 /// return the declaration of that type.
 ///
 /// This routine performs ordinary name lookup of the identifier II
@@ -761,7 +761,7 @@ void Sema::DiagnoseUnknownTypeName(IdentifierInfo *&II,
   }
 }
 
-/// \brief Determine whether the given result set contains either a type name
+/// Determine whether the given result set contains either a type name
 /// or
 static bool isResultTypeOrTemplate(LookupResult &R, const Token &NextToken) {
   bool CheckTemplate = R.getSema().getLangOpts().CPlusPlus &&
@@ -1316,7 +1316,7 @@ void Sema::ActOnExitFunctionContext() {
   assert(CurContext && "Popped translation unit!");
 }
 
-/// \brief Determine whether we allow overloading of the function
+/// Determine whether we allow overloading of the function
 /// PrevDecl with another declaration.
 ///
 /// This routine determines whether overloading is possible, not
@@ -1502,7 +1502,7 @@ static void RemoveUsingDecls(LookupResult &R) {
   F.done();
 }
 
-/// \brief Check for this common pattern:
+/// Check for this common pattern:
 /// @code
 /// class S {
 ///   S(const S&); // DO NOT IMPLEMENT
@@ -1839,7 +1839,7 @@ void Sema::ActOnPopScope(SourceLocation Loc, Scope *S) {
   }
 }
 
-/// \brief Look for an Objective-C class in the translation unit.
+/// Look for an Objective-C class in the translation unit.
 ///
 /// \param Id The name of the Objective-C class we're looking for. If
 /// typo-correction fixes this name, the Id will be updated
@@ -1909,7 +1909,7 @@ Scope *Sema::getNonFieldDeclScope(Scope *S) {
   return S;
 }
 
-/// \brief Looks up the declaration of "struct objc_super" and
+/// Looks up the declaration of "struct objc_super" and
 /// saves it for later use in building builtin declaration of
 /// objc_msgSendSuper and objc_msgSendSuper_stret. If no such
 /// pre-existing declaration exists no action takes place.
@@ -2668,9 +2668,14 @@ void Sema::mergeDeclAttributes(NamedDecl *New, Decl *Old,
         Diag(New->getLocation(), diag::warn_attribute_section_on_redeclaration);
         Diag(Old->getLocation(), diag::note_previous_declaration);
       }
+    } else if (isa<CXXMethodDecl>(New)) {
+      const auto *NewSA = New->getAttr<SectionAttr>();
+      if (!NewSA->isImplicit()) {
+        Diag(New->getLocation(), diag::warn_mismatched_section);
+        Diag(Old->getLocation(), diag::note_previous_declaration);
+      }
     }
   }
-
   if (!Old->hasAttrs())
     return;
 
@@ -2871,7 +2876,7 @@ static bool haveIncompatibleLanguageLinkages(const T *Old, const T *New) {
 template<typename T> static bool isExternC(T *D) { return D->isExternC(); }
 static bool isExternC(VarTemplateDecl *) { return false; }
 
-/// \brief Check whether a redeclaration of an entity introduced by a
+/// Check whether a redeclaration of an entity introduced by a
 /// using-declaration is valid, given that we know it's not an overload
 /// (nor a hidden tag declaration).
 template<typename ExpectedDecl>
@@ -3564,7 +3569,7 @@ bool Sema::MergeFunctionDecl(FunctionDecl *New, NamedDecl *&OldD,
   return true;
 }
 
-/// \brief Completes the merge of two function declarations that are
+/// Completes the merge of two function declarations that are
 /// known to be compatible.
 ///
 /// This routine handles the merging of attributes and other
@@ -4939,7 +4944,7 @@ DeclarationNameInfo Sema::GetNameForDeclarator(Declarator &D) {
   return GetNameFromUnqualifiedId(D.getName());
 }
 
-/// \brief Retrieves the declaration name from a parsed unqualified-id.
+/// Retrieves the declaration name from a parsed unqualified-id.
 DeclarationNameInfo
 Sema::GetNameFromUnqualifiedId(const UnqualifiedId &Name) {
   DeclarationNameInfo NameInfo;
@@ -5226,7 +5231,7 @@ bool Sema::DiagnoseClassNameShadow(DeclContext *DC,
   return false;
 }
 
-/// \brief Diagnose a declaration whose declarator-id has the given
+/// Diagnose a declaration whose declarator-id has the given
 /// nested-name-specifier.
 ///
 /// \param SS The nested-name-specifier of the declarator-id.
@@ -5664,7 +5669,7 @@ TryToFixInvalidVariablyModifiedTypeSourceInfo(TypeSourceInfo *TInfo,
   return FixedTInfo;
 }
 
-/// \brief Register the given locally-scoped extern "C" declaration so
+/// Register the given locally-scoped extern "C" declaration so
 /// that it can be found later for redeclarations. We include any extern "C"
 /// declaration that is not visible in the translation unit here, not just
 /// function-scope declarations.
@@ -5685,7 +5690,7 @@ NamedDecl *Sema::findLocallyScopedExternCDecl(DeclarationName Name) {
   return Result.empty() ? nullptr : *Result.begin();
 }
 
-/// \brief Diagnose function specifiers on a declaration of an identifier that
+/// Diagnose function specifiers on a declaration of an identifier that
 /// does not identify a function.
 void Sema::DiagnoseFunctionSpecifiers(const DeclSpec &DS) {
   // FIXME: We should probably indicate the identifier in question to avoid
@@ -5830,7 +5835,7 @@ Sema::ActOnTypedefNameDecl(Scope *S, DeclContext *DC, TypedefNameDecl *NewTD,
   return NewTD;
 }
 
-/// \brief Determines whether the given declaration is an out-of-scope
+/// Determines whether the given declaration is an out-of-scope
 /// previous declaration.
 ///
 /// This routine should be invoked when name lookup has found a
@@ -6255,7 +6260,7 @@ bool Sema::adjustContextForLocalExternDecl(DeclContext *&DC) {
   return true;
 }
 
-/// \brief Returns true if given declaration has external C language linkage.
+/// Returns true if given declaration has external C language linkage.
 static bool isDeclExternC(const Decl *D) {
   if (const auto *FD = dyn_cast<FunctionDecl>(D))
     return FD->isExternC();
@@ -6360,6 +6365,20 @@ NamedDecl *Sema::ActOnVariableDeclarator(
         Diag(D.getLocStart(), diag::err_event_t_addr_space_qual);
         D.setInvalidType();
       }
+    }
+
+    // OpenCL C++ 1.0 s2.9: the thread_local storage qualifier is not
+    // supported.  OpenCL C does not support thread_local either, and
+    // also reject all other thread storage class specifiers.
+    DeclSpec::TSCS TSC = D.getDeclSpec().getThreadStorageClassSpec();
+    if (TSC != TSCS_unspecified) {
+      bool IsCXX = getLangOpts().OpenCLCPlusPlus;
+      Diag(D.getDeclSpec().getThreadStorageClassSpecLoc(),
+           diag::err_opencl_unknown_type_specifier)
+          << IsCXX << getLangOpts().getOpenCLVersionTuple().getAsString()
+          << DeclSpec::getSpecifierName(TSC) << 1;
+      D.setInvalidType();
+      return nullptr;
     }
   }
 
@@ -6962,7 +6981,7 @@ static bool shouldWarnIfShadowedDecl(const DiagnosticsEngine &Diags,
   return !Diags.isIgnored(diag::warn_decl_shadow, R.getNameLoc());
 }
 
-/// \brief Return the declaration shadowed by the given variable \p D, or null
+/// Return the declaration shadowed by the given variable \p D, or null
 /// if it doesn't shadow any declaration or shadowing warnings are disabled.
 NamedDecl *Sema::getShadowedDeclaration(const VarDecl *D,
                                         const LookupResult &R) {
@@ -6979,7 +6998,7 @@ NamedDecl *Sema::getShadowedDeclaration(const VarDecl *D,
              : nullptr;
 }
 
-/// \brief Return the declaration shadowed by the given typedef \p D, or null
+/// Return the declaration shadowed by the given typedef \p D, or null
 /// if it doesn't shadow any declaration or shadowing warnings are disabled.
 NamedDecl *Sema::getShadowedDeclaration(const TypedefNameDecl *D,
                                         const LookupResult &R) {
@@ -6994,7 +7013,7 @@ NamedDecl *Sema::getShadowedDeclaration(const TypedefNameDecl *D,
   return isa<TypedefNameDecl>(ShadowedDecl) ? ShadowedDecl : nullptr;
 }
 
-/// \brief Diagnose variable or built-in function shadowing.  Implements
+/// Diagnose variable or built-in function shadowing.  Implements
 /// -Wshadow.
 ///
 /// This method is called whenever a VarDecl is added to a "useful"
@@ -7125,7 +7144,7 @@ void Sema::DiagnoseShadowingLambdaDecls(const LambdaScopeInfo *LSI) {
   }
 }
 
-/// \brief Check -Wshadow without the advantage of a previous lookup.
+/// Check -Wshadow without the advantage of a previous lookup.
 void Sema::CheckShadow(Scope *S, VarDecl *D) {
   if (Diags.isIgnored(diag::warn_decl_shadow, D->getLocation()))
     return;
@@ -7283,8 +7302,7 @@ void Sema::CheckVariableDeclarationType(VarDecl *NewVD) {
   if (NewVD->isInvalidDecl())
     return;
 
-  TypeSourceInfo *TInfo = NewVD->getTypeSourceInfo();
-  QualType T = TInfo->getType();
+  QualType T = NewVD->getType();
 
   // Defer checking an 'auto' type until its initializer is attached.
   if (T->isUndeducedType())
@@ -7428,10 +7446,18 @@ void Sema::CheckVariableDeclarationType(VarDecl *NewVD) {
       (T->isVariableArrayType() && NewVD->hasGlobalStorage())) {
     bool SizeIsNegative;
     llvm::APSInt Oversized;
-    TypeSourceInfo *FixedTInfo =
-      TryToFixInvalidVariablyModifiedTypeSourceInfo(TInfo, Context,
-                                                    SizeIsNegative, Oversized);
-    if (!FixedTInfo && T->isVariableArrayType()) {
+    TypeSourceInfo *FixedTInfo = TryToFixInvalidVariablyModifiedTypeSourceInfo(
+        NewVD->getTypeSourceInfo(), Context, SizeIsNegative, Oversized);
+    QualType FixedT;
+    if (FixedTInfo &&  T == NewVD->getTypeSourceInfo()->getType())
+      FixedT = FixedTInfo->getType();
+    else if (FixedTInfo) {
+      // Type and type-as-written are canonically different. We need to fix up
+      // both types separately.
+      FixedT = TryToFixInvalidVariablyModifiedType(T, Context, SizeIsNegative,
+                                                   Oversized);
+    }
+    if ((!FixedTInfo || FixedT.isNull()) && T->isVariableArrayType()) {
       const VariableArrayType *VAT = Context.getAsVariableArrayType(T);
       // FIXME: This won't give the correct result for
       // int a[10][n];
@@ -7460,7 +7486,7 @@ void Sema::CheckVariableDeclarationType(VarDecl *NewVD) {
     }
 
     Diag(NewVD->getLocation(), diag::warn_illegal_constant_array_size);
-    NewVD->setType(FixedTInfo->getType());
+    NewVD->setType(FixedT);
     NewVD->setTypeSourceInfo(FixedTInfo);
   }
 
@@ -7495,7 +7521,7 @@ void Sema::CheckVariableDeclarationType(VarDecl *NewVD) {
   }
 }
 
-/// \brief Perform semantic checking on a newly-created variable
+/// Perform semantic checking on a newly-created variable
 /// declaration.
 ///
 /// This routine performs all of the type-checking required for a
@@ -7566,7 +7592,7 @@ struct FindOverriddenMethod {
 enum OverrideErrorKind { OEK_All, OEK_NonDeleted, OEK_Deleted };
 } // end anonymous namespace
 
-/// \brief Report an error regarding overriding, along with any relevant
+/// Report an error regarding overriding, along with any relevant
 /// overridden methods.
 ///
 /// \param DiagID the primary error to report.
@@ -7682,7 +7708,7 @@ void Sema::MarkTypoCorrectedFunctionDefinition(const NamedDecl *F) {
   TypoCorrectedFunctionDefinitions.insert(F);
 }
 
-/// \brief Generate diagnostics for an invalid function redeclaration.
+/// Generate diagnostics for an invalid function redeclaration.
 ///
 /// This routine handles generating the diagnostic messages for an invalid
 /// function redeclaration, including finding possible similar declarations
@@ -8699,18 +8725,18 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
                                                  PragmaClangTextSection.PragmaLocation));
   }
 
-  // Apply an implicit SectionAttr if #pragma code_seg is active.
-  if (CodeSegStack.CurrentValue && D.isFunctionDefinition() &&
-      !NewFD->hasAttr<SectionAttr>()) {
-    NewFD->addAttr(
-        SectionAttr::CreateImplicit(Context, SectionAttr::Declspec_allocate,
-                                    CodeSegStack.CurrentValue->getString(),
-                                    CodeSegStack.CurrentPragmaLocation));
-    if (UnifySection(CodeSegStack.CurrentValue->getString(),
-                     ASTContext::PSF_Implicit | ASTContext::PSF_Execute |
-                         ASTContext::PSF_Read,
-                     NewFD))
-      NewFD->dropAttr<SectionAttr>();
+  // Apply an implicit SectionAttr from class declspec or from
+  // #pragma code_seg if active.
+  if (!NewFD->hasAttr<SectionAttr>()) {
+    if (Attr *SAttr = getImplicitSectionAttrForFunction(NewFD,
+                                                        D.isFunctionDefinition())) {
+      NewFD->addAttr(SAttr);
+      if (UnifySection(cast<SectionAttr>(SAttr)->getName(),
+                       ASTContext::PSF_Implicit | ASTContext::PSF_Execute |
+                       ASTContext::PSF_Read,
+                       NewFD))
+        NewFD->dropAttr<SectionAttr>();
+    }
   }
 
   // Handle attributes.
@@ -9237,7 +9263,65 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
   return NewFD;
 }
 
-/// \brief Checks if the new declaration declared in dependent context must be
+/// Return a SectionAttr from a containing class.  The Microsoft docs say
+/// when __declspec(code_seg) "is applied to a class, all member functions of
+/// the class and nested classes -- this includes compiler-generated special
+/// member functions -- are put in the specified segment."
+/// The actual behavior is a little more complicated. The Microsoft compiler
+/// won't check outer classes if there is an active value from #pragma code_seg.
+/// The section is always applied from the direct parent but only from outer
+/// classes when the #pragma code_seg stack is empty. See:
+/// https://reviews.llvm.org/D22931, the Microsoft feedback page is no longer
+/// available since MS has removed the page.
+static Attr *getImplicitSectionAttrFromClass(Sema &S, const FunctionDecl *FD) {
+  const auto *Method = dyn_cast<CXXMethodDecl>(FD);
+  if (!Method)
+    return nullptr;
+  const CXXRecordDecl *Parent = Method->getParent();
+  if (const auto *SAttr = Parent->getAttr<SectionAttr>()) {
+    Attr *NewAttr = SAttr->clone(S.getASTContext());
+    NewAttr->setImplicit(true);
+    return NewAttr;
+  }
+
+  // The Microsoft compiler won't check outer classes for the section
+  // when the #pragma code_seg stack is active.
+  if (S.CodeSegStack.CurrentValue)
+    return nullptr;
+
+  while ((Parent = dyn_cast<CXXRecordDecl>(Parent->getParent()))) {
+    if (const auto *SAttr = Parent->getAttr<SectionAttr>()) {
+      Attr *NewAttr = SAttr->clone(S.getASTContext());
+      NewAttr->setImplicit(true);
+      return NewAttr;
+    }
+  }
+  return nullptr;
+}
+
+/// \brief Returns an implicit SectionAttr for a function.
+///
+/// \param FD Function being declared.
+/// \param IsDefinition Whether it is a definition or just a declarartion.
+/// \returns A SectionAttr to apply to the function or nullptr if no
+///          attribute should be added.
+///
+/// First tries to find a SectionAttr on a containing class (from
+/// a __declspec(code_seg)).  If not found on the class, and if the function is
+/// also a definition it will use the current #pragma code_seg value.
+Attr *Sema::getImplicitSectionAttrForFunction(const FunctionDecl *FD, bool IsDefinition) {
+  if (Attr *A = getImplicitSectionAttrFromClass(*this, FD))
+    return A;
+  if (IsDefinition && CodeSegStack.CurrentValue) {
+    return SectionAttr::CreateImplicit(getASTContext(),
+                                       SectionAttr::Declspec_allocate,
+                                       CodeSegStack.CurrentValue->getString(),
+                                       CodeSegStack.CurrentPragmaLocation);
+  }
+  return nullptr;
+}
+
+/// Checks if the new declaration declared in dependent context must be
 /// put in the same redeclaration chain as the specified declaration.
 ///
 /// \param D Declaration that is checked.
@@ -9263,7 +9347,7 @@ bool Sema::shouldLinkDependentDeclWithPrevious(Decl *D, Decl *PrevDecl) {
            D->getFriendObjectKind() != Decl::FOK_None);
 }
 
-/// \brief Check the target attribute of the function for MultiVersion
+/// Check the target attribute of the function for MultiVersion
 /// validity.
 ///
 /// Returns true if there was an error, false otherwise.
@@ -9414,7 +9498,7 @@ static bool CheckMultiVersionAdditionalRules(Sema &S, const FunctionDecl *OldFD,
   return false;
 }
 
-/// \brief Check the validity of a mulitversion function declaration.
+/// Check the validity of a mulitversion function declaration.
 /// Also sets the multiversion'ness' of the function itself.
 ///
 /// This sets NewFD->isInvalidDecl() to true if there was an error.
@@ -9598,7 +9682,7 @@ static bool CheckMultiVersionFunction(Sema &S, FunctionDecl *NewFD,
   return false;
 }
 
-/// \brief Perform semantic checking of a new function declaration.
+/// Perform semantic checking of a new function declaration.
 ///
 /// Performs semantic analysis of the new function declaration
 /// NewFD. This routine performs all semantic checking that does not
@@ -11645,7 +11729,7 @@ void Sema::CheckCompleteVariableDeclaration(VarDecl *var) {
     Context.addModuleInitializer(ModuleScopes.back().Module, var);
 }
 
-/// \brief Determines if a variable's alignment is dependent.
+/// Determines if a variable's alignment is dependent.
 static bool hasDependentAlignment(VarDecl *VD) {
   if (VD->getType()->isDependentType())
     return true;
@@ -12162,7 +12246,7 @@ Decl *Sema::ActOnParamDeclarator(Scope *S, Declarator &D) {
   return New;
 }
 
-/// \brief Synthesizes a variable for a parameter arising from a
+/// Synthesizes a variable for a parameter arising from a
 /// typedef.
 ParmVarDecl *Sema::BuildParmVarDeclForTypedef(DeclContext *DC,
                                               SourceLocation Loc,
@@ -12665,7 +12749,7 @@ Decl *Sema::ActOnStartOfFunctionDef(Scope *FnBodyScope, Decl *D,
   return D;
 }
 
-/// \brief Given the set of return statements within a function body,
+/// Given the set of return statements within a function body,
 /// compute the variables that are subject to the named return value
 /// optimization.
 ///
@@ -13170,7 +13254,7 @@ NamedDecl *Sema::ImplicitlyDefineFunction(SourceLocation Loc,
   return FD;
 }
 
-/// \brief Adds any function attributes that we know a priori based on
+/// Adds any function attributes that we know a priori based on
 /// the declaration of this function.
 ///
 /// These attributes can apply both to implicitly-declared builtins
@@ -13362,7 +13446,7 @@ TypedefDecl *Sema::ParseTypedefDecl(Scope *S, Declarator &D, QualType T,
   return NewTD;
 }
 
-/// \brief Check that this is a valid underlying type for an enum declaration.
+/// Check that this is a valid underlying type for an enum declaration.
 bool Sema::CheckEnumUnderlyingType(TypeSourceInfo *TI) {
   SourceLocation UnderlyingLoc = TI->getTypeLoc().getBeginLoc();
   QualType T = TI->getType();
@@ -13412,7 +13496,7 @@ bool Sema::CheckEnumRedeclaration(SourceLocation EnumLoc, bool IsScoped,
   return false;
 }
 
-/// \brief Get diagnostic %select index for tag kind for
+/// Get diagnostic %select index for tag kind for
 /// redeclaration diagnostic message.
 /// WARNING: Indexes apply to particular diagnostics only!
 ///
@@ -13426,7 +13510,7 @@ static unsigned getRedeclDiagFromTagKind(TagTypeKind Tag) {
   }
 }
 
-/// \brief Determine if tag kind is a class-key compatible with
+/// Determine if tag kind is a class-key compatible with
 /// class for redeclaration (class, struct, or __interface).
 ///
 /// \returns true iff the tag kind is compatible.
@@ -13460,7 +13544,7 @@ Sema::NonTagKind Sema::getNonTagTypeDeclKind(const Decl *PrevDecl,
   llvm_unreachable("invalid TTK");
 }
 
-/// \brief Determine whether a tag with a given kind is acceptable
+/// Determine whether a tag with a given kind is acceptable
 /// as a redeclaration of the given tag declaration.
 ///
 /// \returns true if the new tag kind is acceptable, false otherwise.
@@ -13596,7 +13680,7 @@ static FixItHint createFriendTagNNSFixIt(Sema &SemaRef, NamedDecl *ND, Scope *S,
   return FixItHint::CreateInsertion(NameLoc, Insertion);
 }
 
-/// \brief Determine whether a tag originally declared in context \p OldDC can
+/// Determine whether a tag originally declared in context \p OldDC can
 /// be redeclared with an unqualified name in \p NewDC (assuming name lookup
 /// found a declaration in \p OldDC as a previous decl, perhaps through a
 /// using-declaration).
@@ -13617,7 +13701,7 @@ static bool isAcceptableTagRedeclContext(Sema &S, DeclContext *OldDC,
   return false;
 }
 
-/// \brief This is invoked when we see 'struct foo' or 'struct {'.  In the
+/// This is invoked when we see 'struct foo' or 'struct {'.  In the
 /// former case, Name will be non-null.  In the later case, Name will be null.
 /// TagSpec indicates what kind of tag this is. TUK indicates whether this is a
 /// reference/declaration/definition of a tag.
@@ -14959,7 +15043,7 @@ FieldDecl *Sema::HandleField(Scope *S, RecordDecl *Record,
   return NewFD;
 }
 
-/// \brief Build a new FieldDecl and check its well-formedness.
+/// Build a new FieldDecl and check its well-formedness.
 ///
 /// This routine builds a new FieldDecl given the fields name, type,
 /// record, etc. \p PrevDecl should refer to any previous declaration
@@ -15903,7 +15987,7 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
 
 }
 
-/// \brief Determine whether the given integral value is representable within
+/// Determine whether the given integral value is representable within
 /// the given type T.
 static bool isRepresentableIntegerValue(ASTContext &Context,
                                         llvm::APSInt &Value,
@@ -15920,7 +16004,7 @@ static bool isRepresentableIntegerValue(ASTContext &Context,
   return Value.getMinSignedBits() <= BitWidth;
 }
 
-// \brief Given an integral type, return the next larger integral type
+// Given an integral type, return the next larger integral type
 // (or a NULL type of no such type exists).
 static QualType getNextLargerIntegralType(ASTContext &Context, QualType T) {
   // FIXME: Int128/UInt128 support, which also needs to be introduced into

@@ -377,7 +377,7 @@ int FunctionComparator::cmpConstants(const Constant *L,
     }
   }
   default: // Unknown constant, abort.
-    DEBUG(dbgs() << "Looking at valueID " << L->getValueID() << "\n");
+    LLVM_DEBUG(dbgs() << "Looking at valueID " << L->getValueID() << "\n");
     llvm_unreachable("Constant ValueID not recognized.");
     return -1;
   }
@@ -710,7 +710,7 @@ int FunctionComparator::cmpInlineAsm(const InlineAsm *L,
     return Res;
   if (int Res = cmpNumbers(L->getDialect(), R->getDialect()))
     return Res;
-  llvm_unreachable("InlineAsm blocks were not uniqued.");
+  assert(L->getFunctionType() != R->getFunctionType());
   return 0;
 }
 

@@ -86,6 +86,7 @@ struct Configuration {
   llvm::StringRef Init;
   llvm::StringRef LTOAAPipeline;
   llvm::StringRef LTONewPmPasses;
+  llvm::StringRef LTOObjPath;
   llvm::StringRef LTOSampleProfile;
   llvm::StringRef MapFile;
   llvm::StringRef OutputFile;
@@ -95,6 +96,7 @@ struct Configuration {
   llvm::StringRef Sysroot;
   llvm::StringRef ThinLTOCacheDir;
   llvm::StringRef ThinLTOIndexOnlyArg;
+  std::pair<llvm::StringRef, llvm::StringRef> ThinLTOObjectSuffixReplace;
   std::pair<llvm::StringRef, llvm::StringRef> ThinLTOPrefixReplace;
   std::string Rpath;
   std::vector<VersionDefinition> VersionDefinitions;
@@ -170,6 +172,7 @@ struct Configuration {
   bool ZCopyreloc;
   bool ZExecstack;
   bool ZHazardplt;
+  bool ZKeepTextSectionPrefix;
   bool ZNodelete;
   bool ZNodlopen;
   bool ZNow;

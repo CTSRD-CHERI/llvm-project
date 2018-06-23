@@ -106,7 +106,7 @@ private:
   std::vector<const Symbol *> ImportedSymbols;
   unsigned NumImportedFunctions = 0;
   unsigned NumImportedGlobals = 0;
-  std::vector<Symbol *> ExportedSymbols;
+  std::vector<WasmExport> Exports;
   std::vector<const DefinedData *> DefinedFakeGlobals;
   std::vector<InputGlobal *> InputGlobals;
   std::vector<InputFunction *> InputFunctions;
@@ -264,41 +264,15 @@ void Writer::createTableSection() {
 }
 
 void Writer::createExportSection() {
-  bool ExportMemory = !Config->Relocatable && !Config->ImportMemory;
-  bool ExportTable = !Config->Relocatable && Config->ExportTable;
-
-  uint32_t NumExports =
-      (ExportMemory ? 1 : 0) + (ExportTable ? 1 : 0) + ExportedSymbols.size();
-  if (!NumExports)
+  if (!Exports.size())
     return;
 
   SyntheticSection *Section = createSyntheticSection(WASM_SEC_EXPORT);
   raw_ostream &OS = Section->getStream();
 
-  writeUleb128(OS, NumExports, "export count");
-
-  if (ExportMemory)
-    writeExport(OS, {"memory", WASM_EXTERNAL_MEMORY, 0});
-  if (ExportTable)
-    writeExport(OS, {kFunctionTableName, WASM_EXTERNAL_TABLE, 0});
-
-  unsigned FakeGlobalIndex = NumImportedGlobals + InputGlobals.size();
-
-  for (const Symbol *Sym : ExportedSymbols) {
-    StringRef Name = Sym->getName();
-    WasmExport Export;
-    DEBUG(dbgs() << "Export: " << Name << "\n");
-
-    if (auto *F = dyn_cast<DefinedFunction>(Sym))
-      Export = {Name, WASM_EXTERNAL_FUNCTION, F->getFunctionIndex()};
-    else if (auto *G = dyn_cast<DefinedGlobal>(Sym))
-      Export = {Name, WASM_EXTERNAL_GLOBAL, G->getGlobalIndex()};
-    else if (isa<DefinedData>(Sym))
-      Export = {Name, WASM_EXTERNAL_GLOBAL, FakeGlobalIndex++};
-    else
-      llvm_unreachable("unexpected symbol type");
+  writeUleb128(OS, Exports.size(), "export count");
+  for (const WasmExport &Export : Exports)
     writeExport(OS, Export);
-  }
 }
 
 void Writer::calculateCustomSections() {
@@ -330,7 +304,7 @@ void Writer::createCustomSections() {
       P->second->setOutputSectionIndex(SectionIndex);
     }
 
-    DEBUG(dbgs() << "createCustomSection: " << Name << "\n");
+    LLVM_DEBUG(dbgs() << "createCustomSection: " << Name << "\n");
     OutputSections.push_back(make<CustomSection>(Name, Pair.second));
   }
 }
@@ -742,7 +716,7 @@ void Writer::calculateImports() {
     if (!Sym->isLive())
       continue;
 
-    DEBUG(dbgs() << "import: " << Sym->getName() << "\n");
+    LLVM_DEBUG(dbgs() << "import: " << Sym->getName() << "\n");
     ImportedSymbols.emplace_back(Sym);
     if (auto *F = dyn_cast<FunctionSymbol>(Sym))
       F->setFunctionIndex(NumImportedFunctions++);
@@ -755,6 +729,14 @@ void Writer::calculateExports() {
   if (Config->Relocatable)
     return;
 
+  if (!Config->Relocatable && !Config->ImportMemory)
+    Exports.push_back(WasmExport{"memory", WASM_EXTERNAL_MEMORY, 0});
+
+  if (!Config->Relocatable && Config->ExportTable)
+    Exports.push_back(WasmExport{kFunctionTableName, WASM_EXTERNAL_TABLE, 0});
+
+  unsigned FakeGlobalIndex = NumImportedGlobals + InputGlobals.size();
+
   for (Symbol *Sym : Symtab->getSymbols()) {
     if (!Sym->isDefined())
       continue;
@@ -763,11 +745,20 @@ void Writer::calculateExports() {
     if (!Sym->isLive())
       continue;
 
-    DEBUG(dbgs() << "exporting sym: " << Sym->getName() << "\n");
-
-    if (auto *D = dyn_cast<DefinedData>(Sym))
+    StringRef Name = Sym->getName();
+    WasmExport Export;
+    if (auto *F = dyn_cast<DefinedFunction>(Sym)) {
+      Export = {Name, WASM_EXTERNAL_FUNCTION, F->getFunctionIndex()};
+    } else if (auto *G = dyn_cast<DefinedGlobal>(Sym)) {
+      Export = {Name, WASM_EXTERNAL_GLOBAL, G->getGlobalIndex()};
+    } else {
+      auto *D = cast<DefinedData>(Sym);
       DefinedFakeGlobals.emplace_back(D);
-    ExportedSymbols.emplace_back(Sym);
+      Export = {Name, WASM_EXTERNAL_GLOBAL, FakeGlobalIndex++};
+    }
+
+    LLVM_DEBUG(dbgs() << "Export: " << Name << "\n");
+    Exports.push_back(Export);
   }
 }
 
@@ -779,7 +770,7 @@ void Writer::assignSymtab() {
 
   unsigned SymbolIndex = SymtabEntries.size();
   for (ObjFile *File : Symtab->ObjectFiles) {
-    DEBUG(dbgs() << "Symtab entries: " << File->getName() << "\n");
+    LLVM_DEBUG(dbgs() << "Symtab entries: " << File->getName() << "\n");
     for (Symbol *Sym : File->getSymbols()) {
       if (Sym->getFile() != File)
         continue;
@@ -826,7 +817,7 @@ uint32_t Writer::lookupType(const WasmSignature &Sig) {
 uint32_t Writer::registerType(const WasmSignature &Sig) {
   auto Pair = TypeIndices.insert(std::make_pair(Sig, Types.size()));
   if (Pair.second) {
-    DEBUG(dbgs() << "type " << toString(Sig) << "\n");
+    LLVM_DEBUG(dbgs() << "type " << toString(Sig) << "\n");
     Types.push_back(&Sig);
   }
   return Pair.first->second;
@@ -866,7 +857,7 @@ void Writer::assignIndexes() {
     AddDefinedFunction(Func);
 
   for (ObjFile *File : Symtab->ObjectFiles) {
-    DEBUG(dbgs() << "Functions: " << File->getName() << "\n");
+    LLVM_DEBUG(dbgs() << "Functions: " << File->getName() << "\n");
     for (InputFunction *Func : File->Functions)
       AddDefinedFunction(Func);
   }
@@ -894,7 +885,7 @@ void Writer::assignIndexes() {
   };
 
   for (ObjFile *File : Symtab->ObjectFiles) {
-    DEBUG(dbgs() << "Handle relocs: " << File->getName() << "\n");
+    LLVM_DEBUG(dbgs() << "Handle relocs: " << File->getName() << "\n");
     for (InputChunk *Chunk : File->Functions)
       HandleRelocs(Chunk);
     for (InputChunk *Chunk : File->Segments)
@@ -906,7 +897,7 @@ void Writer::assignIndexes() {
   uint32_t GlobalIndex = NumImportedGlobals + InputGlobals.size();
   auto AddDefinedGlobal = [&](InputGlobal *Global) {
     if (Global->Live) {
-      DEBUG(dbgs() << "AddDefinedGlobal: " << GlobalIndex << "\n");
+      LLVM_DEBUG(dbgs() << "AddDefinedGlobal: " << GlobalIndex << "\n");
       Global->setGlobalIndex(GlobalIndex++);
       InputGlobals.push_back(Global);
     }
@@ -916,14 +907,14 @@ void Writer::assignIndexes() {
     AddDefinedGlobal(Global);
 
   for (ObjFile *File : Symtab->ObjectFiles) {
-    DEBUG(dbgs() << "Globals: " << File->getName() << "\n");
+    LLVM_DEBUG(dbgs() << "Globals: " << File->getName() << "\n");
     for (InputGlobal *Global : File->Globals)
       AddDefinedGlobal(Global);
   }
 }
 
 static StringRef getOutputDataSegmentName(StringRef Name) {
-  if (Config->Relocatable)
+  if (!Config->MergeDataSegments)
     return Name;
   if (Name.startswith(".text."))
     return ".text";
@@ -942,12 +933,12 @@ void Writer::createOutputSegments() {
       StringRef Name = getOutputDataSegmentName(Segment->getName());
       OutputSegment *&S = SegmentMap[Name];
       if (S == nullptr) {
-        DEBUG(dbgs() << "new segment: " << Name << "\n");
+        LLVM_DEBUG(dbgs() << "new segment: " << Name << "\n");
         S = make<OutputSegment>(Name, Segments.size());
         Segments.push_back(S);
       }
       S->addInputSegment(Segment);
-      DEBUG(dbgs() << "added data: " << Name << ": " << S->Size << "\n");
+      LLVM_DEBUG(dbgs() << "added data: " << Name << ": " << S->Size << "\n");
     }
   }
 }

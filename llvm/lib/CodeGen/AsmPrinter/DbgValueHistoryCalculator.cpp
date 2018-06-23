@@ -50,8 +50,8 @@ void DbgValueHistoryMap::startInstrRange(InlinedVariable Var,
   auto &Ranges = VarInstrRanges[Var];
   if (!Ranges.empty() && Ranges.back().second == nullptr &&
       Ranges.back().first->isIdenticalTo(MI)) {
-    DEBUG(dbgs() << "Coalescing identical DBG_VALUE entries:\n"
-                 << "\t" << Ranges.back().first << "\t" << MI << "\n");
+    LLVM_DEBUG(dbgs() << "Coalescing identical DBG_VALUE entries:\n"
+                      << "\t" << Ranges.back().first << "\t" << MI << "\n");
     return;
   }
   Ranges.push_back(std::make_pair(&MI, nullptr));
@@ -198,7 +198,7 @@ void llvm::calculateDbgValueHistory(const MachineFunction *MF,
   RegDescribedVarsMap RegVars;
   for (const auto &MBB : *MF) {
     for (const auto &MI : MBB) {
-      if (!MI.isDebugValue()) {
+      if (!MI.isDebugInstr()) {
         // Not a DBG_VALUE instruction. It may clobber registers which describe
         // some variables.
         for (const MachineOperand &MO : MI.operands()) {
@@ -233,6 +233,10 @@ void llvm::calculateDbgValueHistory(const MachineFunction *MF,
         }
         continue;
       }
+
+      // Skip DBG_LABEL instructions.
+      if (MI.isDebugLabel())
+        continue;
 
       assert(MI.getNumOperands() > 1 && "Invalid DBG_VALUE instruction!");
       // Use the base variable (without any DW_OP_piece expressions)

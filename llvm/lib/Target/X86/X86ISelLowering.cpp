@@ -16035,6 +16035,34 @@ static SDValue LowerShiftParts(SDValue Op, SelectionDAG &DAG) {
   return DAG.getMergeValues(Ops, dl);
 }
 
+// Try to use a packed vector operation to handle i64 on 32-bit targets when
+// AVX512DQ is enabled.
+static SDValue LowerI64IntToFP_AVX512DQ(SDValue Op, SelectionDAG &DAG,
+                                        const X86Subtarget &Subtarget) {
+  assert((Op.getOpcode() == ISD::SINT_TO_FP ||
+          Op.getOpcode() == ISD::UINT_TO_FP) && "Unexpected opcode!");
+  SDValue Src = Op.getOperand(0);
+  MVT SrcVT = Src.getSimpleValueType();
+  MVT VT = Op.getSimpleValueType();
+
+   if (!Subtarget.hasDQI() || SrcVT != MVT::i64 || Subtarget.is64Bit() ||
+       (VT != MVT::f32 && VT != MVT::f64))
+    return SDValue();
+
+  // Pack the i64 into a vector, do the operation and extract.
+
+  // Using 256-bit to ensure result is 128-bits for f32 case.
+  unsigned NumElts = Subtarget.hasVLX() ? 4 : 8;
+  MVT VecInVT = MVT::getVectorVT(MVT::i64, NumElts);
+  MVT VecVT = MVT::getVectorVT(VT, NumElts);
+
+  SDLoc dl(Op);
+  SDValue InVec = DAG.getNode(ISD::SCALAR_TO_VECTOR, dl, VecInVT, Src);
+  SDValue CvtVec = DAG.getNode(Op.getOpcode(), dl, VecVT, InVec);
+  return DAG.getNode(ISD::EXTRACT_VECTOR_ELT, dl, VT, CvtVec,
+                     DAG.getIntPtrConstant(0, dl));
+}
+
 SDValue X86TargetLowering::LowerSINT_TO_FP(SDValue Op,
                                            SelectionDAG &DAG) const {
   SDValue Src = Op.getOperand(0);
@@ -16056,15 +16084,17 @@ SDValue X86TargetLowering::LowerSINT_TO_FP(SDValue Op,
 
   // These are really Legal; return the operand so the caller accepts it as
   // Legal.
-  if (SrcVT == MVT::i32 && isScalarFPTypeInSSEReg(Op.getValueType()))
+  if (SrcVT == MVT::i32 && isScalarFPTypeInSSEReg(VT))
     return Op;
-  if (SrcVT == MVT::i64 && isScalarFPTypeInSSEReg(Op.getValueType()) &&
-      Subtarget.is64Bit()) {
+  if (SrcVT == MVT::i64 && isScalarFPTypeInSSEReg(VT) && Subtarget.is64Bit()) {
     return Op;
   }
 
+  if (SDValue V = LowerI64IntToFP_AVX512DQ(Op, DAG, Subtarget))
+    return V;
+
   SDValue ValueToStore = Op.getOperand(0);
-  if (SrcVT == MVT::i64 && isScalarFPTypeInSSEReg(Op.getValueType()) &&
+  if (SrcVT == MVT::i64 && isScalarFPTypeInSSEReg(VT) &&
       !Subtarget.is64Bit())
     // Bitcasting to f64 here allows us to do a single 64-bit store from
     // an SSE register, avoiding the store forwarding penalty that would come
@@ -16414,6 +16444,9 @@ SDValue X86TargetLowering::LowerUINT_TO_FP(SDValue Op,
     // using VCVTUSI2SS/SD.  Same for i64 in 64-bit mode.
     return Op;
   }
+
+  if (SDValue V = LowerI64IntToFP_AVX512DQ(Op, DAG, Subtarget))
+    return V;
 
   if (SrcVT == MVT::i64 && DstVT == MVT::f64 && X86ScalarSSEf64)
     return LowerUINT_TO_FP_i64(Op, DAG, Subtarget);
@@ -23420,22 +23453,45 @@ static SDValue LowerShift(SDValue Op, const X86Subtarget &Subtarget,
         break;
       }
       // The SSE2 shifts use the lower i64 as the same shift amount for
-      // all lanes and the upper i64 is ignored. These shuffle masks
-      // optimally zero-extend each lanes on SSE2/SSE41/AVX targets.
-      SDValue Z = getZeroVector(VT, Subtarget, DAG, dl);
-      Amt0 = DAG.getVectorShuffle(VT, dl, Amt, Z, {0, 4, -1, -1});
-      Amt1 = DAG.getVectorShuffle(VT, dl, Amt, Z, {1, 5, -1, -1});
-      Amt2 = DAG.getVectorShuffle(VT, dl, Amt, Z, {2, 6, -1, -1});
-      Amt3 = DAG.getVectorShuffle(VT, dl, Amt, Z, {3, 7, -1, -1});
+      // all lanes and the upper i64 is ignored. On AVX we're better off
+      // just zero-extending, but for SSE just duplicating the top 16-bits is
+      // cheaper and has the same effect for out of range values.
+      if (Subtarget.hasAVX()) {
+        SDValue Z = getZeroVector(VT, Subtarget, DAG, dl);
+        Amt0 = DAG.getVectorShuffle(VT, dl, Amt, Z, {0, 4, -1, -1});
+        Amt1 = DAG.getVectorShuffle(VT, dl, Amt, Z, {1, 5, -1, -1});
+        Amt2 = DAG.getVectorShuffle(VT, dl, Amt, Z, {2, 6, -1, -1});
+        Amt3 = DAG.getVectorShuffle(VT, dl, Amt, Z, {3, 7, -1, -1});
+      } else {
+        SDValue Amt01 = DAG.getBitcast(MVT::v8i16, Amt);
+        SDValue Amt23 = DAG.getVectorShuffle(MVT::v8i16, dl, Amt01, Amt01,
+                                             {4, 5, 6, 7, -1, -1, -1, -1});
+        Amt0 = DAG.getVectorShuffle(MVT::v8i16, dl, Amt01, Amt01,
+                                    {0, 1, 1, 1, -1, -1, -1, -1});
+        Amt1 = DAG.getVectorShuffle(MVT::v8i16, dl, Amt01, Amt01,
+                                    {2, 3, 3, 3, -1, -1, -1, -1});
+        Amt2 = DAG.getVectorShuffle(MVT::v8i16, dl, Amt23, Amt23,
+                                    {0, 1, 1, 1, -1, -1, -1, -1});
+        Amt3 = DAG.getVectorShuffle(MVT::v8i16, dl, Amt23, Amt23,
+                                    {2, 3, 3, 3, -1, -1, -1, -1});
+      }
     }
 
-    SDValue R0 = DAG.getNode(Opc, dl, VT, R, Amt0);
-    SDValue R1 = DAG.getNode(Opc, dl, VT, R, Amt1);
-    SDValue R2 = DAG.getNode(Opc, dl, VT, R, Amt2);
-    SDValue R3 = DAG.getNode(Opc, dl, VT, R, Amt3);
-    SDValue R02 = DAG.getVectorShuffle(VT, dl, R0, R2, {0, -1, 6, -1});
-    SDValue R13 = DAG.getVectorShuffle(VT, dl, R1, R3, {-1, 1, -1, 7});
-    return DAG.getVectorShuffle(VT, dl, R02, R13, {0, 5, 2, 7});
+    SDValue R0 = DAG.getNode(Opc, dl, VT, R, DAG.getBitcast(VT, Amt0));
+    SDValue R1 = DAG.getNode(Opc, dl, VT, R, DAG.getBitcast(VT, Amt1));
+    SDValue R2 = DAG.getNode(Opc, dl, VT, R, DAG.getBitcast(VT, Amt2));
+    SDValue R3 = DAG.getNode(Opc, dl, VT, R, DAG.getBitcast(VT, Amt3));
+
+    // Merge the shifted lane results optimally with/without PBLENDW.
+    // TODO - ideally shuffle combining would handle this.
+    if (Subtarget.hasSSE41()) {
+      SDValue R02 = DAG.getVectorShuffle(VT, dl, R0, R2, {0, -1, 6, -1});
+      SDValue R13 = DAG.getVectorShuffle(VT, dl, R1, R3, {-1, 1, -1, 7});
+      return DAG.getVectorShuffle(VT, dl, R02, R13, {0, 5, 2, 7});
+    }
+    SDValue R01 = DAG.getVectorShuffle(VT, dl, R0, R1, {0, -1, -1, 5});
+    SDValue R23 = DAG.getVectorShuffle(VT, dl, R2, R3, {2, -1, -1, 7});
+    return DAG.getVectorShuffle(VT, dl, R01, R23, {0, 3, 4, 7});
   }
 
   // It's worth extending once and using the vXi16/vXi32 shifts for smaller
@@ -25191,12 +25247,14 @@ void X86TargetLowering::ReplaceNodeResults(SDNode *N,
   case ISD::FP_TO_SINT:
   case ISD::FP_TO_UINT: {
     bool IsSigned = N->getOpcode() == ISD::FP_TO_SINT;
+    EVT VT = N->getValueType(0);
+    SDValue Src = N->getOperand(0);
+    EVT SrcVT = Src.getValueType();
 
-    if (N->getValueType(0) == MVT::v2i32) {
+    if (VT == MVT::v2i32) {
       assert((IsSigned || Subtarget.hasAVX512()) &&
              "Can only handle signed conversion without AVX512");
       assert(Subtarget.hasSSE2() && "Requires at least SSE2!");
-      SDValue Src = N->getOperand(0);
       if (Src.getValueType() == MVT::v2f64) {
         MVT ResVT = MVT::v4i32;
         unsigned Opc = IsSigned ? X86ISD::CVTTP2SI : X86ISD::CVTTP2UI;
@@ -25217,7 +25275,7 @@ void X86TargetLowering::ReplaceNodeResults(SDNode *N,
         Results.push_back(Res);
         return;
       }
-      if (Src.getValueType() == MVT::v2f32) {
+      if (SrcVT == MVT::v2f32) {
         SDValue Idx = DAG.getIntPtrConstant(0, dl);
         SDValue Res = DAG.getNode(ISD::CONCAT_VECTORS, dl, MVT::v4f32, Src,
                                   DAG.getUNDEF(MVT::v2f32));
@@ -25234,11 +25292,30 @@ void X86TargetLowering::ReplaceNodeResults(SDNode *N,
       return;
     }
 
+    if (Subtarget.hasDQI() && VT == MVT::i64 &&
+        (SrcVT == MVT::f32 || SrcVT == MVT::f64)) {
+      assert(!Subtarget.is64Bit() && "i64 should be legal");
+      unsigned NumElts = Subtarget.hasVLX() ? 4 : 8;
+      // Using a 256-bit input here to guarantee 128-bit input for f32 case.
+      // TODO: Use 128-bit vectors for f64 case?
+      // TODO: Use 128-bit vectors for f32 by using CVTTP2SI/CVTTP2UI.
+      MVT VecVT = MVT::getVectorVT(MVT::i64, NumElts);
+      MVT VecInVT = MVT::getVectorVT(SrcVT.getSimpleVT(), NumElts);
+
+      SDValue ZeroIdx = DAG.getIntPtrConstant(0, dl);
+      SDValue Res = DAG.getNode(ISD::INSERT_VECTOR_ELT, dl, VecInVT,
+                                DAG.getConstantFP(0.0, dl, VecInVT), Src,
+                                ZeroIdx);
+      Res = DAG.getNode(N->getOpcode(), SDLoc(N), VecVT, Res);
+      Res = DAG.getNode(ISD::EXTRACT_VECTOR_ELT, dl, VT, Res, ZeroIdx);
+      Results.push_back(Res);
+      return;
+    }
+
     std::pair<SDValue,SDValue> Vals =
         FP_TO_INTHelper(SDValue(N, 0), DAG, IsSigned, /*IsReplace=*/ true);
     SDValue FIST = Vals.first, StackSlot = Vals.second;
     if (FIST.getNode()) {
-      EVT VT = N->getValueType(0);
       // Return a load from the stack slot.
       if (StackSlot.getNode())
         Results.push_back(
@@ -27766,7 +27843,7 @@ X86TargetLowering::EmitSjLjDispatchBlock(MachineInstr &MI,
 
     MCSymbol *Sym = nullptr;
     for (const auto &MI : MBB) {
-      if (MI.isDebugValue())
+      if (MI.isDebugInstr())
         continue;
 
       assert(MI.isEHLabel() && "expected EH_LABEL");
@@ -31093,6 +31170,16 @@ static SDValue combineBitcast(SDNode *N, SelectionDAG &DAG,
       SrcVT.isVector() && SrcVT.getVectorElementType() == MVT::i1 &&
       ISD::isBuildVectorOfConstantSDNodes(N0.getNode())) {
     return combinevXi1ConstantToInteger(N0, DAG);
+  }
+
+  if (Subtarget.hasAVX512() && SrcVT.isScalarInteger() &&
+      VT.isVector() && VT.getVectorElementType() == MVT::i1 &&
+      isa<ConstantSDNode>(N0)) {
+    auto *C = cast<ConstantSDNode>(N0);
+    if (C->isAllOnesValue())
+      return DAG.getConstant(1, SDLoc(N0), VT);
+    if (C->isNullValue())
+      return DAG.getConstant(0, SDLoc(N0), VT);
   }
 
   // Try to remove bitcasts from input and output of mask arithmetic to
@@ -34561,24 +34648,57 @@ static bool isSATValidOnAVX512Subtarget(EVT SrcVT, EVT DstVT,
   return false;
 }
 
-/// Detect a pattern of truncation with unsigned saturation:
-/// (truncate (umin (x, unsigned_max_of_dest_type)) to dest_type).
-/// Return the source value to be truncated or SDValue() if the pattern was not
-/// matched.
-static SDValue detectUSatPattern(SDValue In, EVT VT) {
-  if (In.getOpcode() != ISD::UMIN)
-    return SDValue();
+/// Detect patterns of truncation with unsigned saturation:
+///
+/// 1. (truncate (umin (x, unsigned_max_of_dest_type)) to dest_type).
+///   Return the source value x to be truncated or SDValue() if the pattern was
+///   not matched.
+///
+/// 2. (truncate (smin (smax (x, C1), C2)) to dest_type),
+///   where C1 >= 0 and C2 is unsigned max of destination type.
+///
+///    (truncate (smax (smin (x, C2), C1)) to dest_type)
+///   where C1 >= 0, C2 is unsigned max of destination type and C1 <= C2.
+///
+///   These two patterns are equivalent to:
+///   (truncate (umin (smax(x, C1), unsigned_max_of_dest_type)) to dest_type)
+///   So return the smax(x, C1) value to be truncated or SDValue() if the
+///   pattern was not matched.
+static SDValue detectUSatPattern(SDValue In, EVT VT, SelectionDAG &DAG,
+                                 const SDLoc &DL) {
+  EVT InVT = In.getValueType();
 
   // Saturation with truncation. We truncate from InVT to VT.
-  assert(In.getScalarValueSizeInBits() > VT.getScalarSizeInBits() &&
+  assert(InVT.getScalarSizeInBits() > VT.getScalarSizeInBits() &&
          "Unexpected types for truncate operation");
 
-  APInt C;
-  if (ISD::isConstantSplatVector(In.getOperand(1).getNode(), C)) {
-    // C should be equal to UINT32_MAX / UINT16_MAX / UINT8_MAX according
+  // Match min/max and return limit value as a parameter.
+  auto MatchMinMax = [](SDValue V, unsigned Opcode, APInt &Limit) -> SDValue {
+    if (V.getOpcode() == Opcode &&
+        ISD::isConstantSplatVector(V.getOperand(1).getNode(), Limit))
+      return V.getOperand(0);
+    return SDValue();
+  };
+
+  APInt C1, C2;
+  if (SDValue UMin = MatchMinMax(In, ISD::UMIN, C2))
+    // C2 should be equal to UINT32_MAX / UINT16_MAX / UINT8_MAX according
     // the element size of the destination type.
-    return C.isMask(VT.getScalarSizeInBits()) ? In.getOperand(0) : SDValue();
-  }
+    if (C2.isMask(VT.getScalarSizeInBits()))
+      return UMin;
+
+  if (SDValue SMin = MatchMinMax(In, ISD::SMIN, C2))
+    if (MatchMinMax(SMin, ISD::SMAX, C1))
+      if (C1.isNonNegative() && C2.isMask(VT.getScalarSizeInBits()))
+        return SMin;
+
+  if (SDValue SMax = MatchMinMax(In, ISD::SMAX, C1))
+    if (SDValue SMin = MatchMinMax(SMax, ISD::SMIN, C2))
+      if (C1.isNonNegative() && C2.isMask(VT.getScalarSizeInBits()) &&
+          C2.uge(C1)) {
+        return DAG.getNode(ISD::SMAX, DL, InVT, SMin, In.getOperand(1));
+      }
+
   return SDValue();
 }
 
@@ -34644,14 +34764,15 @@ static SDValue detectAVX512SSatPattern(SDValue In, EVT VT,
 /// The types should allow to use VPMOVUS* instruction on AVX512.
 /// Return the source value to be truncated or SDValue() if the pattern was not
 /// matched.
-static SDValue detectAVX512USatPattern(SDValue In, EVT VT,
+static SDValue detectAVX512USatPattern(SDValue In, EVT VT, SelectionDAG &DAG,
+                                       const SDLoc &DL,
                                        const X86Subtarget &Subtarget,
                                        const TargetLowering &TLI) {
   if (!TLI.isTypeLegal(In.getValueType()))
     return SDValue();
   if (!isSATValidOnAVX512Subtarget(In.getValueType(), VT, Subtarget))
     return SDValue();
-  return detectUSatPattern(In, VT);
+  return detectUSatPattern(In, VT, DAG, DL);
 }
 
 static SDValue combineTruncateWithSat(SDValue In, EVT VT, const SDLoc &DL,
@@ -34665,7 +34786,7 @@ static SDValue combineTruncateWithSat(SDValue In, EVT VT, const SDLoc &DL,
       isSATValidOnAVX512Subtarget(InVT, VT, Subtarget)) {
     if (auto SSatVal = detectSSatPattern(In, VT))
       return DAG.getNode(X86ISD::VTRUNCS, DL, VT, SSatVal);
-    if (auto USatVal = detectUSatPattern(In, VT))
+    if (auto USatVal = detectUSatPattern(In, VT, DAG, DL))
       return DAG.getNode(X86ISD::VTRUNCUS, DL, VT, USatVal);
   }
   if (VT.isVector() && isPowerOf2_32(VT.getVectorNumElements()) &&
@@ -35340,9 +35461,8 @@ static SDValue combineStore(SDNode *N, SelectionDAG &DAG,
       return EmitTruncSStore(true /* Signed saturation */, St->getChain(),
                              dl, Val, St->getBasePtr(),
                              St->getMemoryVT(), St->getMemOperand(), DAG);
-    if (SDValue Val =
-        detectAVX512USatPattern(St->getValue(), St->getMemoryVT(), Subtarget,
-                                TLI))
+    if (SDValue Val = detectAVX512USatPattern(St->getValue(), St->getMemoryVT(),
+                                              DAG, dl, Subtarget, TLI))
       return EmitTruncSStore(false /* Unsigned saturation */, St->getChain(),
                              dl, Val, St->getBasePtr(),
                              St->getMemoryVT(), St->getMemOperand(), DAG);
@@ -36354,8 +36474,6 @@ static SDValue combineFMinNumFMaxNum(SDNode *N, SelectionDAG &DAG,
   if (Subtarget.useSoftFloat())
     return SDValue();
 
-  // TODO: Check for global or instruction-level "nnan". In that case, we
-  //       should be able to lower to FMAX/FMIN alone.
   // TODO: If an operand is already known to be a NaN or not a NaN, this
   //       should be an optional swap and FMAX/FMIN.
 
@@ -36365,14 +36483,21 @@ static SDValue combineFMinNumFMaxNum(SDNode *N, SelectionDAG &DAG,
         (Subtarget.hasAVX() && (VT == MVT::v8f32 || VT == MVT::v4f64))))
     return SDValue();
 
-  // This takes at least 3 instructions, so favor a library call when operating
-  // on a scalar and minimizing code size.
-  if (!VT.isVector() && DAG.getMachineFunction().getFunction().optForMinSize())
-    return SDValue();
-
   SDValue Op0 = N->getOperand(0);
   SDValue Op1 = N->getOperand(1);
   SDLoc DL(N);
+  auto MinMaxOp = N->getOpcode() == ISD::FMAXNUM ? X86ISD::FMAX : X86ISD::FMIN;
+
+  // If we don't have to respect NaN inputs, this is a direct translation to x86
+  // min/max instructions.
+  if (DAG.getTarget().Options.NoNaNsFPMath || N->getFlags().hasNoNaNs())
+    return DAG.getNode(MinMaxOp, DL, VT, Op0, Op1, N->getFlags());
+
+  // If we have to respect NaN inputs, this takes at least 3 instructions.
+  // Favor a library call when operating on a scalar and minimizing code size.
+  if (!VT.isVector() && DAG.getMachineFunction().getFunction().optForMinSize())
+    return SDValue();
+
   EVT SetCCType = DAG.getTargetLoweringInfo().getSetCCResultType(
       DAG.getDataLayout(), *DAG.getContext(), VT);
 
@@ -36395,9 +36520,8 @@ static SDValue combineFMinNumFMaxNum(SDNode *N, SelectionDAG &DAG,
   // use those instructions for fmaxnum by selecting away a NaN input.
 
   // If either operand is NaN, the 2nd source operand (Op0) is passed through.
-  auto MinMaxOp = N->getOpcode() == ISD::FMAXNUM ? X86ISD::FMAX : X86ISD::FMIN;
   SDValue MinOrMax = DAG.getNode(MinMaxOp, DL, VT, Op1, Op0);
-  SDValue IsOp0Nan = DAG.getSetCC(DL, SetCCType , Op0, Op0, ISD::SETUO);
+  SDValue IsOp0Nan = DAG.getSetCC(DL, SetCCType, Op0, Op0, ISD::SETUO);
 
   // If Op0 is a NaN, select Op1. Otherwise, select the max. If both operands
   // are NaN, the NaN value of Op1 is the result.

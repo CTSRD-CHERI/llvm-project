@@ -7,11 +7,11 @@
 ; RUN:   FileCheck %s -check-prefix=CHECK-REPEAT
 
 ; RUN: opt -debugify -check-debugify -S -o - < %s | \
-; RUN:   FileCheck %s -implicit-check-not="CheckDebugify: FAIL"
+; RUN:   FileCheck %s -implicit-check-not="CheckModuleDebugify: FAIL"
 ; RUN: opt -passes=debugify,check-debugify -S -o - < %s | \
-; RUN:   FileCheck %s -implicit-check-not="CheckDebugify: FAIL"
+; RUN:   FileCheck %s -implicit-check-not="CheckModuleDebugify: FAIL"
 ; RUN: opt -enable-debugify -passes=verify -S -o - < %s | \
-; RUN:   FileCheck %s -implicit-check-not="CheckDebugify: FAIL"
+; RUN:   FileCheck %s -implicit-check-not="CheckModuleDebugify: FAIL"
 
 ; RUN: opt -debugify -strip -check-debugify -S -o - < %s | \
 ; RUN:   FileCheck %s -check-prefix=CHECK-FAIL
@@ -50,8 +50,8 @@ define weak_odr zeroext i1 @baz() {
 
 ; CHECK-DAG: ![[CU]] = distinct !DICompileUnit(language: DW_LANG_C, file: {{.*}}, producer: "debugify", isOptimized: true, runtimeVersion: 0, emissionKind: FullDebug, enums: {{.*}})
 ; CHECK-DAG: !DIFile(filename: "<stdin>", directory: "/")
-; CHECK-DAG: distinct !DISubprogram(name: "foo", linkageName: "foo", scope: null, file: {{.*}}, line: 1, type: {{.*}}, isLocal: false, isDefinition: true, scopeLine: 1, isOptimized: true, unit: {{.*}}, variables: {{.*}})
-; CHECK-DAG: distinct !DISubprogram(name: "bar", linkageName: "bar", scope: null, file: {{.*}}, line: 2, type: {{.*}}, isLocal: false, isDefinition: true, scopeLine: 2, isOptimized: true, unit: {{.*}}, variables: {{.*}})
+; CHECK-DAG: distinct !DISubprogram(name: "foo", linkageName: "foo", scope: null, file: {{.*}}, line: 1, type: {{.*}}, isLocal: false, isDefinition: true, scopeLine: 1, isOptimized: true, unit: {{.*}}, retainedNodes: {{.*}})
+; CHECK-DAG: distinct !DISubprogram(name: "bar", linkageName: "bar", scope: null, file: {{.*}}, line: 2, type: {{.*}}, isLocal: false, isDefinition: true, scopeLine: 2, isOptimized: true, unit: {{.*}}, retainedNodes: {{.*}})
 
 ; --- DILocations
 ; CHECK-DAG: ![[RET1]] = !DILocation(line: 1, column: 1
@@ -68,18 +68,18 @@ define weak_odr zeroext i1 @baz() {
 ; CHECK-DAG: ![[NUM_VARS]] = !{i32 1}
 
 ; --- Repeat case
-; CHECK-REPEAT: Debugify: Skipping module with debug info
+; CHECK-REPEAT: ModuleDebugify: Skipping module with debug info
 
 ; --- Failure case
-; CHECK-FAIL: ERROR: Instruction with empty DebugLoc --   ret void
-; CHECK-FAIL: ERROR: Instruction with empty DebugLoc --   call void @foo()
-; CHECK-FAIL: ERROR: Instruction with empty DebugLoc --   {{.*}} add i32 0, 1
-; CHECK-FAIL: ERROR: Instruction with empty DebugLoc --   ret i32 0
+; CHECK-FAIL: ERROR: Instruction with empty DebugLoc in function foo --   ret void
+; CHECK-FAIL: ERROR: Instruction with empty DebugLoc in function bar --   call void @foo()
+; CHECK-FAIL: ERROR: Instruction with empty DebugLoc in function bar --   {{.*}} add i32 0, 1
+; CHECK-FAIL: ERROR: Instruction with empty DebugLoc in function bar --   ret i32 0
 ; CHECK-FAIL: WARNING: Missing line 1
 ; CHECK-FAIL: WARNING: Missing line 2
 ; CHECK-FAIL: WARNING: Missing line 3
 ; CHECK-FAIL: WARNING: Missing line 4
 ; CHECK-FAIL: ERROR: Missing variable 1
-; CHECK-FAIL: CheckDebugify: FAIL
+; CHECK-FAIL: CheckModuleDebugify [{{.*}}]: FAIL
 
-; PASS: CheckDebugify: PASS
+; PASS: CheckModuleDebugify [{{.*}}]: PASS

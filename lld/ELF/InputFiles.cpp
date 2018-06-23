@@ -131,7 +131,14 @@ template <class ELFT> void ObjFile<ELFT>::initializeDwarf() {
                               Config->Wordsize);
 
   for (std::unique_ptr<DWARFCompileUnit> &CU : Dwarf->compile_units()) {
-    const DWARFDebugLine::LineTable *LT = Dwarf->getLineTableForUnit(CU.get());
+    Expected<const DWARFDebugLine::LineTable *> ExpectedLT =
+        Dwarf->getLineTableForUnit(CU.get(), warn);
+    const DWARFDebugLine::LineTable *LT = nullptr;
+    if (ExpectedLT)
+      LT = *ExpectedLT;
+    else
+      handleAllErrors(ExpectedLT.takeError(),
+                      [](ErrorInfoBase &Err) { warn(Err.message()); });
     if (!LT)
       continue;
     LineTables.push_back(LT);
@@ -399,7 +406,7 @@ void ObjFile<ELFT>::initializeSections(
     DenseSet<CachedHashStringRef> &ComdatGroups) {
   const ELFFile<ELFT> &Obj = this->getObj();
 
-  ArrayRef<Elf_Shdr> ObjSections = CHECK(this->getObj().sections(), this);
+  ArrayRef<Elf_Shdr> ObjSections = CHECK(Obj.sections(), this);
   uint64_t Size = ObjSections.size();
   this->Sections.resize(Size);
   this->SectionStringTable =
@@ -1025,9 +1032,13 @@ BitcodeFile::BitcodeFile(MemoryBufferRef MB, StringRef ArchiveName,
   // this causes a collision which result in only one of the objects being
   // taken into consideration at LTO time (which very likely causes undefined
   // symbols later in the link stage).
+  std::string Path = MB.getBufferIdentifier().str();
+  if (Config->ThinLTOIndexOnly)
+    Path = updateSuffixInPath(MB.getBufferIdentifier());
+
   MemoryBufferRef MBRef(
       MB.getBuffer(),
-      Saver.save(ArchiveName + MB.getBufferIdentifier() +
+      Saver.save(ArchiveName + Path +
                  (ArchiveName.empty() ? "" : utostr(OffsetInArchive))));
   Obj = CHECK(lto::InputFile::create(MBRef), this);
 

@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 //
 /// \file
-/// \brief Defines types useful for describing an Objective-C runtime.
+/// Defines types useful for describing an Objective-C runtime.
 //
 //===----------------------------------------------------------------------===//
 
@@ -24,10 +24,10 @@
 
 namespace clang {
 
-/// \brief The basic abstraction for the target Objective-C runtime.
+/// The basic abstraction for the target Objective-C runtime.
 class ObjCRuntime {
 public:
-  /// \brief The basic Objective-C runtimes that we know about.
+  /// The basic Objective-C runtimes that we know about.
   enum Kind {
     /// 'macosx' is the Apple-provided NeXT-derived runtime on Mac OS
     /// X platforms that use the non-fragile ABI; the version is a
@@ -77,7 +77,7 @@ public:
   Kind getKind() const { return TheKind; }
   const VersionTuple &getVersion() const { return Version; }
 
-  /// \brief Does this runtime follow the set of implied behaviors for a
+  /// Does this runtime follow the set of implied behaviors for a
   /// "non-fragile" ABI?
   bool isNonFragile() const {
     switch (getKind()) {
@@ -121,7 +121,7 @@ public:
     return true;
   }
 
-  /// \brief Is this runtime basically of the GNU family of runtimes?
+  /// Is this runtime basically of the GNU family of runtimes?
   bool isGNUFamily() const {
     switch (getKind()) {
     case FragileMacOSX:
@@ -137,14 +137,14 @@ public:
     llvm_unreachable("bad kind");
   }
 
-  /// \brief Is this runtime basically of the NeXT family of runtimes?
+  /// Is this runtime basically of the NeXT family of runtimes?
   bool isNeXTFamily() const {
     // For now, this is just the inverse of isGNUFamily(), but that's
     // not inherently true.
     return !isGNUFamily();
   }
 
-  /// \brief Does this runtime allow ARC at all?
+  /// Does this runtime allow ARC at all?
   bool allowsARC() const {
     switch (getKind()) {
     case FragileMacOSX:
@@ -160,7 +160,7 @@ public:
     llvm_unreachable("bad kind");
   }
 
-  /// \brief Does this runtime natively provide the ARC entrypoints? 
+  /// Does this runtime natively provide the ARC entrypoints? 
   ///
   /// ARC cannot be directly supported on a platform that does not provide
   /// these entrypoints, although it may be supportable via a stub
@@ -179,7 +179,7 @@ public:
     llvm_unreachable("bad kind");
   }
 
-  /// \brief Does this runtime supports optimized setter entrypoints?
+  /// Does this runtime supports optimized setter entrypoints?
   bool hasOptimizedSetter() const {
     switch (getKind()) {
       case MacOSX:
@@ -200,7 +200,7 @@ public:
     return hasNativeWeak();
   }
 
-  /// \brief Does this runtime natively provide ARC-compliant 'weak'
+  /// Does this runtime natively provide ARC-compliant 'weak'
   /// entrypoints?
   bool hasNativeWeak() const {
     // Right now, this is always equivalent to whether the runtime
@@ -208,7 +208,7 @@ public:
     return hasNativeARC();
   }
 
-  /// \brief Does this runtime directly support the subscripting methods?
+  /// Does this runtime directly support the subscripting methods?
   ///
   /// This is really a property of the library, not the runtime.
   bool hasSubscripting() const {
@@ -228,12 +228,12 @@ public:
     llvm_unreachable("bad kind");
   }
 
-  /// \brief Does this runtime allow sizeof or alignof on object types?
+  /// Does this runtime allow sizeof or alignof on object types?
   bool allowsSizeofAlignof() const {
     return isFragile();
   }
 
-  /// \brief Does this runtime allow pointer arithmetic on objects?
+  /// Does this runtime allow pointer arithmetic on objects?
   ///
   /// This covers +, -, ++, --, and (if isSubscriptPointerArithmetic()
   /// yields true) [].
@@ -252,12 +252,12 @@ public:
     llvm_unreachable("bad kind");
   }
 
-  /// \brief Is subscripting pointer arithmetic?
+  /// Is subscripting pointer arithmetic?
   bool isSubscriptPointerArithmetic() const {
     return allowsPointerArithmetic();
   }
 
-  /// \brief Does this runtime provide an objc_terminate function?
+  /// Does this runtime provide an objc_terminate function?
   ///
   /// This is used in handlers for exceptions during the unwind process;
   /// without it, abort() must be used in pure ObjC files.
@@ -274,7 +274,7 @@ public:
     llvm_unreachable("bad kind");
   }
 
-  /// \brief Does this runtime support weakly importing classes?
+  /// Does this runtime support weakly importing classes?
   bool hasWeakClassImport() const {
     switch (getKind()) {
     case MacOSX: return true;
@@ -288,7 +288,7 @@ public:
     llvm_unreachable("bad kind");
   }
 
-  /// \brief Does this runtime use zero-cost exceptions?
+  /// Does this runtime use zero-cost exceptions?
   bool hasUnwindExceptions() const {
     switch (getKind()) {
     case MacOSX: return true;
@@ -346,7 +346,7 @@ public:
     }
   }
 
-  /// \brief Try to parse an Objective-C runtime specification from the given
+  /// Try to parse an Objective-C runtime specification from the given
   /// string.
   ///
   /// \return true on error.

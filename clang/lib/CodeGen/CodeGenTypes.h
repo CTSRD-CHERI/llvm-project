@@ -185,7 +185,7 @@ public:
   /// ConvertType - Convert type T into a llvm::Type.
   llvm::Type *ConvertType(QualType T);
 
-  /// \brief Converts the GlobalDecl into an llvm::Type. This should be used
+  /// Converts the GlobalDecl into an llvm::Type. This should be used
   /// when we know the target of the function we want to convert.  This is
   /// because some functions (explicitly, those with pass_object_size
   /// parameters) may not have the same signature as their type portrays, and
@@ -226,7 +226,7 @@ public:
   /// replace the 'opaque' type we previously made for it if applicable.
   void UpdateCompletedType(const TagDecl *TD);
 
-  /// \brief Remove stale types from the type cache when an inheritance model
+  /// Remove stale types from the type cache when an inheritance model
   /// gets assigned to a class.
   void RefreshTypeCacheForClass(const CXXRecordDecl *RD);
 
@@ -336,7 +336,7 @@ public:
                     ArrayRef<FunctionProtoType::ExtParameterInfo> paramInfos,
                                                 RequiredArgs args);
 
-  /// \brief Compute a new LLVM record layout object for the given record.
+  /// Compute a new LLVM record layout object for the given record.
   CGRecordLayout *ComputeRecordLayout(const RecordDecl *D,
                                       llvm::StructType *Ty);
 

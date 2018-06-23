@@ -166,7 +166,7 @@ bool CallEvent::isGlobalCFunction(StringRef FunctionName) const {
   return CheckerContext::isCLibraryFunction(FD, FunctionName);
 }
 
-/// \brief Returns true if a type is a pointer-to-const or reference-to-const
+/// Returns true if a type is a pointer-to-const or reference-to-const
 /// with no further indirection.
 static bool isPointerToConst(QualType Ty) {
   QualType PointeeTy = Ty->getPointeeType();
@@ -399,10 +399,10 @@ RuntimeDefinition AnyFunctionCall::getRuntimeDefinition() const {
     getManager()->getContext(FD);
   bool IsAutosynthesized;
   Stmt* Body = AD->getBody(IsAutosynthesized);
-  DEBUG({
-      if (IsAutosynthesized)
-        llvm::dbgs() << "Using autosynthesized body for " << FD->getName()
-                     << "\n";
+  LLVM_DEBUG({
+    if (IsAutosynthesized)
+      llvm::dbgs() << "Using autosynthesized body for " << FD->getName()
+                   << "\n";
   });
   if (Body) {
     const Decl* Decl = AD->getDecl();
