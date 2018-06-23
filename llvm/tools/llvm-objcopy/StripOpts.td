@@ -14,6 +14,15 @@ defm output : Eq<"o">,
 def strip_debug : Flag<["-", "--"], "strip-debug">,
                   HelpText<"Remove debugging symbols only">;
 
+def d : Flag<["-"], "d">,
+        Alias<strip_debug>;
+
+def g : Flag<["-"], "g">,
+        Alias<strip_debug>;
+
+def S : Flag<["-"], "S">,
+        Alias<strip_debug>;
+
 defm remove_section : Eq<"remove-section">,
                       MetaVarName<"section">,
                       HelpText<"Remove <section>">;
@@ -27,3 +36,11 @@ defm keep_symbol : Eq<"keep-symbol">,
 
 def K : JoinedOrSeparate<["-"], "K">,
         Alias<keep_symbol>;
+
+def discard_all : Flag<["-", "--"], "discard-all">,
+                  HelpText<"Remove all local symbols except file and section symbols">;
+def x : Flag<["-"], "x">,
+        Alias<discard_all>;
+
+def strip_unneeded : Flag<["-", "--"], "strip-unneeded">,
+                      HelpText<"Remove all symbols not needed by relocations">;

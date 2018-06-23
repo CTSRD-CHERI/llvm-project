@@ -46,6 +46,7 @@ typedef signed char __v16qs __attribute__((__vector_size__(16)));
 
 /* Define the default attributes for the functions in this file. */
 #define __DEFAULT_FN_ATTRS __attribute__((__always_inline__, __nodebug__, __target__("sse2")))
+#define __DEFAULT_FN_ATTRS_MMX __attribute__((__always_inline__, __nodebug__, __target__("mmx,sse2")))
 
 /// Adds lower double-precision values in both operands and returns the
 ///    sum in the lower 64 bits of the result. The upper 64 bits of the result
@@ -1514,7 +1515,7 @@ _mm_cvttsd_si32(__m128d __a)
 /// \param __a
 ///    A 128-bit vector of [2 x double].
 /// \returns A 64-bit vector of [2 x i32] containing the converted values.
-static __inline__ __m64 __DEFAULT_FN_ATTRS
+static __inline__ __m64 __DEFAULT_FN_ATTRS_MMX
 _mm_cvtpd_pi32(__m128d __a)
 {
   return (__m64)__builtin_ia32_cvtpd2pi((__v2df)__a);
@@ -1534,7 +1535,7 @@ _mm_cvtpd_pi32(__m128d __a)
 /// \param __a
 ///    A 128-bit vector of [2 x double].
 /// \returns A 64-bit vector of [2 x i32] containing the converted values.
-static __inline__ __m64 __DEFAULT_FN_ATTRS
+static __inline__ __m64 __DEFAULT_FN_ATTRS_MMX
 _mm_cvttpd_pi32(__m128d __a)
 {
   return (__m64)__builtin_ia32_cvttpd2pi((__v2df)__a);
@@ -1551,7 +1552,7 @@ _mm_cvttpd_pi32(__m128d __a)
 /// \param __a
 ///    A 64-bit vector of [2 x i32].
 /// \returns A 128-bit vector of [2 x double] containing the converted values.
-static __inline__ __m128d __DEFAULT_FN_ATTRS
+static __inline__ __m128d __DEFAULT_FN_ATTRS_MMX
 _mm_cvtpi32_pd(__m64 __a)
 {
   return __builtin_ia32_cvtpi2pd((__v2si)__a);
@@ -2142,7 +2143,7 @@ _mm_add_epi32(__m128i __a, __m128i __b)
 /// \param __b
 ///    A 64-bit integer.
 /// \returns A 64-bit integer containing the sum of both parameters.
-static __inline__ __m64 __DEFAULT_FN_ATTRS
+static __inline__ __m64 __DEFAULT_FN_ATTRS_MMX
 _mm_add_si64(__m64 __a, __m64 __b)
 {
   return (__m64)__builtin_ia32_paddq((__v1di)__a, (__v1di)__b);
@@ -2482,7 +2483,7 @@ _mm_mullo_epi16(__m128i __a, __m128i __b)
 /// \param __b
 ///    A 64-bit integer containing one of the source operands.
 /// \returns A 64-bit integer vector containing the product of both operands.
-static __inline__ __m64 __DEFAULT_FN_ATTRS
+static __inline__ __m64 __DEFAULT_FN_ATTRS_MMX
 _mm_mul_su32(__m64 __a, __m64 __b)
 {
   return __builtin_ia32_pmuludq((__v2si)__a, (__v2si)__b);
@@ -2596,7 +2597,7 @@ _mm_sub_epi32(__m128i __a, __m128i __b)
 ///    A 64-bit integer vector containing the subtrahend.
 /// \returns A 64-bit integer vector containing the difference of the values in
 ///    the operands.
-static __inline__ __m64 __DEFAULT_FN_ATTRS
+static __inline__ __m64 __DEFAULT_FN_ATTRS_MMX
 _mm_sub_si64(__m64 __a, __m64 __b)
 {
   return (__m64)__builtin_ia32_psubq((__v1di)__a, (__v1di)__b);
@@ -2793,28 +2794,10 @@ _mm_xor_si128(__m128i __a, __m128i __b)
 ///    \a a.
 /// \returns A 128-bit integer vector containing the left-shifted value.
 #define _mm_slli_si128(a, imm) \
-  (__m128i)__builtin_shufflevector(                                          \
-                                 (__v16qi)_mm_setzero_si128(),               \
-                                 (__v16qi)(__m128i)(a),                      \
-                                 ((char)(imm)&0xF0) ?  0 : 16 - (char)(imm), \
-                                 ((char)(imm)&0xF0) ?  1 : 17 - (char)(imm), \
-                                 ((char)(imm)&0xF0) ?  2 : 18 - (char)(imm), \
-                                 ((char)(imm)&0xF0) ?  3 : 19 - (char)(imm), \
-                                 ((char)(imm)&0xF0) ?  4 : 20 - (char)(imm), \
-                                 ((char)(imm)&0xF0) ?  5 : 21 - (char)(imm), \
-                                 ((char)(imm)&0xF0) ?  6 : 22 - (char)(imm), \
-                                 ((char)(imm)&0xF0) ?  7 : 23 - (char)(imm), \
-                                 ((char)(imm)&0xF0) ?  8 : 24 - (char)(imm), \
-                                 ((char)(imm)&0xF0) ?  9 : 25 - (char)(imm), \
-                                 ((char)(imm)&0xF0) ? 10 : 26 - (char)(imm), \
-                                 ((char)(imm)&0xF0) ? 11 : 27 - (char)(imm), \
-                                 ((char)(imm)&0xF0) ? 12 : 28 - (char)(imm), \
-                                 ((char)(imm)&0xF0) ? 13 : 29 - (char)(imm), \
-                                 ((char)(imm)&0xF0) ? 14 : 30 - (char)(imm), \
-                                 ((char)(imm)&0xF0) ? 15 : 31 - (char)(imm))
+  (__m128i)__builtin_ia32_pslldqi128((__v2di)(__m128i)(a), (int)(imm) * 8)
 
 #define _mm_bslli_si128(a, imm) \
-  _mm_slli_si128((a), (imm))
+  (__m128i)__builtin_ia32_pslldqi128((__v2di)(__m128i)(a), (int)(imm) * 8)
 
 /// Left-shifts each 16-bit value in the 128-bit integer vector operand
 ///    by the specified number of bits. Low-order bits are cleared.
@@ -3028,28 +3011,10 @@ _mm_sra_epi32(__m128i __a, __m128i __count)
 ///    \a a.
 /// \returns A 128-bit integer vector containing the right-shifted value.
 #define _mm_srli_si128(a, imm) \
-  (__m128i)__builtin_shufflevector(                                          \
-                                 (__v16qi)(__m128i)(a),                      \
-                                 (__v16qi)_mm_setzero_si128(),               \
-                                 ((char)(imm)&0xF0) ? 16 : (char)(imm) + 0,  \
-                                 ((char)(imm)&0xF0) ? 17 : (char)(imm) + 1,  \
-                                 ((char)(imm)&0xF0) ? 18 : (char)(imm) + 2,  \
-                                 ((char)(imm)&0xF0) ? 19 : (char)(imm) + 3,  \
-                                 ((char)(imm)&0xF0) ? 20 : (char)(imm) + 4,  \
-                                 ((char)(imm)&0xF0) ? 21 : (char)(imm) + 5,  \
-                                 ((char)(imm)&0xF0) ? 22 : (char)(imm) + 6,  \
-                                 ((char)(imm)&0xF0) ? 23 : (char)(imm) + 7,  \
-                                 ((char)(imm)&0xF0) ? 24 : (char)(imm) + 8,  \
-                                 ((char)(imm)&0xF0) ? 25 : (char)(imm) + 9,  \
-                                 ((char)(imm)&0xF0) ? 26 : (char)(imm) + 10, \
-                                 ((char)(imm)&0xF0) ? 27 : (char)(imm) + 11, \
-                                 ((char)(imm)&0xF0) ? 28 : (char)(imm) + 12, \
-                                 ((char)(imm)&0xF0) ? 29 : (char)(imm) + 13, \
-                                 ((char)(imm)&0xF0) ? 30 : (char)(imm) + 14, \
-                                 ((char)(imm)&0xF0) ? 31 : (char)(imm) + 15)
+  (__m128i)__builtin_ia32_psrldqi128((__v2di)(__m128i)(a), (int)(imm) * 8)
 
 #define _mm_bsrli_si128(a, imm) \
-  _mm_srli_si128((a), (imm))
+  (__m128i)__builtin_ia32_psrldqi128((__v2di)(__m128i)(a), (int)(imm) * 8)
 
 /// Right-shifts each of 16-bit values in the 128-bit integer vector
 ///    operand by the specified number of bits. High-order bits are cleared.
@@ -4303,12 +4268,9 @@ _mm_packus_epi16(__m128i __a, __m128i __b)
 ///    111: assign values from bits [127:112] of \a __a.
 /// \returns An integer, whose lower 16 bits are selected from the 128-bit
 ///    integer vector parameter and the remaining bits are assigned zeros.
-static __inline__ int __DEFAULT_FN_ATTRS
-_mm_extract_epi16(__m128i __a, int __imm)
-{
-  __v8hi __b = (__v8hi)__a;
-  return (unsigned short)__b[__imm & 7];
-}
+#define _mm_extract_epi16(a, imm) \
+  (int)(unsigned short)__builtin_ia32_vec_ext_v8hi((__v8hi)(__m128i)(a), \
+                                                   (int)(imm))
 
 /// Constructs a 128-bit integer vector by first making a copy of the
 ///    128-bit integer vector parameter, and then inserting the lower 16 bits
@@ -4330,13 +4292,9 @@ _mm_extract_epi16(__m128i __a, int __imm)
 ///    An immediate value specifying the bit offset in the result at which the
 ///    lower 16 bits of \a __b are written.
 /// \returns A 128-bit integer vector containing the constructed values.
-static __inline__ __m128i __DEFAULT_FN_ATTRS
-_mm_insert_epi16(__m128i __a, int __b, int __imm)
-{
-  __v8hi __c = (__v8hi)__a;
-  __c[__imm & 7] = __b;
-  return (__m128i)__c;
-}
+#define _mm_insert_epi16(a, b, imm) \
+  (__m128i)__builtin_ia32_vec_set_v8hi((__v8hi)(__m128i)(a), (int)(b), \
+                                       (int)(imm))
 
 /// Copies the values of the most significant bits from each 8-bit
 ///    element in a 128-bit integer vector of [16 x i8] to create a 16-bit mask
@@ -4385,10 +4343,7 @@ _mm_movemask_epi8(__m128i __a)
 ///    11: assign values from bits [127:96] of \a a.
 /// \returns A 128-bit integer vector containing the shuffled values.
 #define _mm_shuffle_epi32(a, imm) \
-  (__m128i)__builtin_shufflevector((__v4si)(__m128i)(a), \
-                                   (__v4si)_mm_undefined_si128(), \
-                                   ((imm) >> 0) & 0x3, ((imm) >> 2) & 0x3, \
-                                   ((imm) >> 4) & 0x3, ((imm) >> 6) & 0x3)
+  (__m128i)__builtin_ia32_pshufd((__v4si)(__m128i)(a), (int)(imm))
 
 /// Constructs a 128-bit integer vector by shuffling four lower 16-bit
 ///    elements of a 128-bit integer vector of [8 x i16], using the immediate
@@ -4418,11 +4373,7 @@ _mm_movemask_epi8(__m128i __a)
 ///    11: assign values from bits [63:48] of \a a. \n
 /// \returns A 128-bit integer vector containing the shuffled values.
 #define _mm_shufflelo_epi16(a, imm) \
-  (__m128i)__builtin_shufflevector((__v8hi)(__m128i)(a), \
-                                   (__v8hi)_mm_undefined_si128(), \
-                                   ((imm) >> 0) & 0x3, ((imm) >> 2) & 0x3, \
-                                   ((imm) >> 4) & 0x3, ((imm) >> 6) & 0x3, \
-                                   4, 5, 6, 7)
+  (__m128i)__builtin_ia32_pshuflw((__v8hi)(__m128i)(a), (int)(imm))
 
 /// Constructs a 128-bit integer vector by shuffling four upper 16-bit
 ///    elements of a 128-bit integer vector of [8 x i16], using the immediate
@@ -4452,13 +4403,7 @@ _mm_movemask_epi8(__m128i __a)
 ///    11: assign values from bits [127:112] of \a a. \n
 /// \returns A 128-bit integer vector containing the shuffled values.
 #define _mm_shufflehi_epi16(a, imm) \
-  (__m128i)__builtin_shufflevector((__v8hi)(__m128i)(a), \
-                                   (__v8hi)_mm_undefined_si128(), \
-                                   0, 1, 2, 3, \
-                                   4 + (((imm) >> 0) & 0x3), \
-                                   4 + (((imm) >> 2) & 0x3), \
-                                   4 + (((imm) >> 4) & 0x3), \
-                                   4 + (((imm) >> 6) & 0x3))
+  (__m128i)__builtin_ia32_pshufhw((__v8hi)(__m128i)(a), (int)(imm))
 
 /// Unpacks the high-order (index 8-15) values from two 128-bit vectors
 ///    of [16 x i8] and interleaves them into a 128-bit vector of [16 x i8].
@@ -4812,9 +4757,8 @@ _mm_movemask_pd(__m128d __a)
 ///    Bit[1] = 1: upper element of \a b copied to upper element of result. \n
 /// \returns A 128-bit vector of [2 x double] containing the shuffled values.
 #define _mm_shuffle_pd(a, b, i) \
-  (__m128d)__builtin_shufflevector((__v2df)(__m128d)(a), (__v2df)(__m128d)(b), \
-                                   0 + (((i) >> 0) & 0x1), \
-                                   2 + (((i) >> 1) & 0x1))
+  (__m128d)__builtin_ia32_shufpd((__v2df)(__m128d)(a), (__v2df)(__m128d)(b), \
+                                 (int)(i))
 
 /// Casts a 128-bit floating-point vector of [2 x double] into a 128-bit
 ///    floating-point vector of [4 x float].
@@ -4935,6 +4879,7 @@ void _mm_pause(void);
 } // extern "C"
 #endif
 #undef __DEFAULT_FN_ATTRS
+#undef __DEFAULT_FN_ATTRS_MMX
 
 #define _MM_SHUFFLE2(x, y) (((x) << 1) | (y))
 

@@ -25,11 +25,11 @@ public:
   ~UopsBenchmarkRunner() override;
 
 private:
-  const char *getDisplayName() const override;
+  InstructionBenchmark::ModeE getMode() const override;
 
-  llvm::Expected<std::vector<llvm::MCInst>>
-  createSnippet(RegisterAliasingTrackerCache &RATC, unsigned Opcode,
-                llvm::raw_ostream &Info) const override;
+  llvm::Expected<std::vector<BenchmarkConfiguration>>
+  createConfigurations(RegisterAliasingTrackerCache &RATC,
+                       unsigned Opcode) const override;
 
   std::vector<BenchmarkMeasure>
   runMeasurements(const ExecutableFunction &EF,

@@ -159,7 +159,8 @@ int main(int argc, char *argv[]) {
   llvm::Optional<llvm::raw_fd_ostream> InputMirrorStream;
   if (!InputMirrorFile.empty()) {
     std::error_code EC;
-    InputMirrorStream.emplace(InputMirrorFile, /*ref*/ EC, llvm::sys::fs::F_RW);
+    InputMirrorStream.emplace(InputMirrorFile, /*ref*/ EC,
+                              llvm::sys::fs::FA_Read | llvm::sys::fs::FA_Write);
     if (EC) {
       InputMirrorStream.reset();
       llvm::errs() << "Error while opening an input mirror file: "
@@ -174,7 +175,8 @@ int main(int argc, char *argv[]) {
   std::unique_ptr<trace::EventTracer> Tracer;
   if (auto *TraceFile = getenv("CLANGD_TRACE")) {
     std::error_code EC;
-    TraceStream.emplace(TraceFile, /*ref*/ EC, llvm::sys::fs::F_RW);
+    TraceStream.emplace(TraceFile, /*ref*/ EC,
+                        llvm::sys::fs::FA_Read | llvm::sys::fs::FA_Write);
     if (EC) {
       TraceStream.reset();
       llvm::errs() << "Error while opening trace file " << TraceFile << ": "
@@ -238,5 +240,5 @@ int main(int argc, char *argv[]) {
   llvm::set_thread_name("clangd.main");
   // Change stdin to binary to not lose \r\n on windows.
   llvm::sys::ChangeStdinToBinary();
-  return LSPServer.run(std::cin, InputStyle) ? 0 : NoShutdownRequestErrorCode;
+  return LSPServer.run(stdin, InputStyle) ? 0 : NoShutdownRequestErrorCode;
 }

@@ -316,6 +316,8 @@ public:
   DIEInDeclContext(const lldb_private::CompilerDeclContext *parent_decl_ctx,
                    const DWARFDIE &die);
 
+  void Dump(lldb_private::Stream &s) override;
+
 protected:
   typedef llvm::DenseMap<const DWARFDebugInfoEntry *, lldb_private::Type *>
       DIEToTypePtr;
@@ -383,9 +385,6 @@ protected:
   bool ClassOrStructIsVirtual(const DWARFDIE &die);
 
   // Given a die_offset, figure out the symbol context representing that die.
-  bool ResolveFunction(const DIERef &die_ref, bool include_inlines,
-                       lldb_private::SymbolContextList &sc_list);
-
   bool ResolveFunction(const DWARFDIE &die, bool include_inlines,
                        lldb_private::SymbolContextList &sc_list);
 
@@ -401,8 +400,6 @@ protected:
 
   lldb::TypeSP GetTypeForDIE(const DWARFDIE &die,
                              bool resolve_function_context = false);
-
-  void DumpIndexes();
 
   void SetDebugMapModule(const lldb::ModuleSP &module_sp) {
     m_debug_map_module_wp = module_sp;

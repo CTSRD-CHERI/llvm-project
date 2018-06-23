@@ -35,8 +35,25 @@ using namespace llvm;
 
 namespace {
 
+cl::opt<bool> Quiet("debugify-quiet",
+                    cl::desc("Suppress verbose debugify output"));
+
+raw_ostream &dbg() { return Quiet ? nulls() : errs(); }
+
 bool isFunctionSkipped(Function &F) {
   return F.isDeclaration() || !F.hasExactDefinition();
+}
+
+/// Find the basic block's terminating instruction.
+///
+/// Special care is needed to handle musttail and deopt calls, as these behave
+/// like (but are in fact not) terminators.
+Instruction *findTerminatingInstruction(BasicBlock &BB) {
+  if (auto *I = BB.getTerminatingMustTailCall())
+    return I;
+  if (auto *I = BB.getTerminatingDeoptimizeCall())
+    return I;
+  return BB.getTerminator();
 }
 
 bool applyDebugifyMetadata(Module &M,
@@ -44,7 +61,7 @@ bool applyDebugifyMetadata(Module &M,
                            StringRef Banner) {
   // Skip modules with debug info.
   if (M.getNamedMetadata("llvm.dbg.cu")) {
-    errs() << Banner << "Skipping module with debug info\n";
+    dbg() << Banner << "Skipping module with debug info\n";
     return false;
   }
 
@@ -67,8 +84,8 @@ bool applyDebugifyMetadata(Module &M,
   unsigned NextLine = 1;
   unsigned NextVar = 1;
   auto File = DIB.createFile(M.getName(), "/");
-  auto CU = DIB.createCompileUnit(dwarf::DW_LANG_C, File,
-                            "debugify", /*isOptimized=*/true, "", 0);
+  auto CU = DIB.createCompileUnit(dwarf::DW_LANG_C, File, "debugify",
+                                  /*isOptimized=*/true, "", 0);
 
   // Visit each instruction.
   for (Function &F : Functions) {
@@ -87,23 +104,39 @@ bool applyDebugifyMetadata(Module &M,
       for (Instruction &I : BB)
         I.setDebugLoc(DILocation::get(Ctx, NextLine++, 1, SP));
 
+      // Inserting debug values into EH pads can break IR invariants.
+      if (BB.isEHPad())
+        continue;
+
+      // Find the terminating instruction, after which no debug values are
+      // attached.
+      Instruction *LastInst = findTerminatingInstruction(BB);
+      assert(LastInst && "Expected basic block with a terminator");
+
+      // Maintain an insertion point which can't be invalidated when updates
+      // are made.
+      BasicBlock::iterator InsertPt = BB.getFirstInsertionPt();
+      assert(InsertPt != BB.end() && "Expected to find an insertion point");
+      Instruction *InsertBefore = &*InsertPt;
+
       // Attach debug values.
-      for (Instruction &I : BB) {
+      for (Instruction *I = &*BB.begin(); I != LastInst; I = I->getNextNode()) {
         // Skip void-valued instructions.
-        if (I.getType()->isVoidTy())
+        if (I->getType()->isVoidTy())
           continue;
 
-        // Skip the terminator instruction and any just-inserted intrinsics.
-        if (isa<TerminatorInst>(&I) || isa<DbgValueInst>(&I))
-          break;
+        // Phis and EH pads must be grouped at the beginning of the block.
+        // Only advance the insertion point when we finish visiting these.
+        if (!isa<PHINode>(I) && !I->isEHPad())
+          InsertBefore = I->getNextNode();
 
         std::string Name = utostr(NextVar++);
-        const DILocation *Loc = I.getDebugLoc().get();
+        const DILocation *Loc = I->getDebugLoc().get();
         auto LocalVar = DIB.createAutoVariable(SP, Name, File, Loc->getLine(),
-                                               getCachedDIType(I.getType()),
+                                               getCachedDIType(I->getType()),
                                                /*AlwaysPreserve=*/true);
-        DIB.insertDbgValueIntrinsic(&I, LocalVar, DIB.createExpression(), Loc,
-                                    BB.getTerminator());
+        DIB.insertDbgValueIntrinsic(I, LocalVar, DIB.createExpression(), Loc,
+                                    InsertBefore);
       }
     }
     DIB.finalizeSubprogram(SP);
@@ -132,13 +165,12 @@ bool applyDebugifyMetadata(Module &M,
 
 bool checkDebugifyMetadata(Module &M,
                            iterator_range<Module::iterator> Functions,
-                           StringRef NameOfWrappedPass,
-                           StringRef Banner,
+                           StringRef NameOfWrappedPass, StringRef Banner,
                            bool Strip) {
   // Skip modules without debugify metadata.
   NamedMDNode *NMD = M.getNamedMetadata("llvm.debugify");
   if (!NMD) {
-    errs() << Banner << "Skipping module without debugify metadata\n";
+    dbg() << Banner << "Skipping module without debugify metadata\n";
     return false;
   }
 
@@ -169,10 +201,10 @@ bool checkDebugifyMetadata(Module &M,
         continue;
       }
 
-      errs() << "ERROR: Instruction with empty DebugLoc in function ";
-      errs() << F.getName() << " --";
-      I.print(errs());
-      errs() << "\n";
+      dbg() << "ERROR: Instruction with empty DebugLoc in function ";
+      dbg() << F.getName() << " --";
+      I.print(dbg());
+      dbg() << "\n";
       HasErrors = true;
     }
 
@@ -191,20 +223,16 @@ bool checkDebugifyMetadata(Module &M,
 
   // Print the results.
   for (unsigned Idx : MissingLines.set_bits())
-    errs() << "WARNING: Missing line " << Idx + 1 << "\n";
+    dbg() << "WARNING: Missing line " << Idx + 1 << "\n";
 
   for (unsigned Idx : MissingVars.set_bits())
-    errs() << "ERROR: Missing variable " << Idx + 1 << "\n";
+    dbg() << "ERROR: Missing variable " << Idx + 1 << "\n";
   HasErrors |= MissingVars.count() > 0;
 
-  errs() << Banner;
+  dbg() << Banner;
   if (!NameOfWrappedPass.empty())
-    errs() << " [" << NameOfWrappedPass << "]";
-  errs() << ": " << (HasErrors ? "FAIL" : "PASS") << '\n';
-  if (HasErrors) {
-    errs() << "Module IR Dump\n";
-    M.print(errs(), nullptr, false);
-  }
+    dbg() << " [" << NameOfWrappedPass << "]";
+  dbg() << ": " << (HasErrors ? "FAIL" : "PASS") << '\n';
 
   // Strip the Debugify Metadata if required.
   if (Strip) {
@@ -239,7 +267,7 @@ struct DebugifyFunctionPass : public FunctionPass {
     Module &M = *F.getParent();
     auto FuncIt = F.getIterator();
     return applyDebugifyMetadata(M, make_range(FuncIt, std::next(FuncIt)),
-                     "FunctionDebugify: ");
+                                 "FunctionDebugify: ");
   }
 
   DebugifyFunctionPass() : FunctionPass(ID) {}
@@ -261,6 +289,10 @@ struct CheckDebugifyModulePass : public ModulePass {
 
   CheckDebugifyModulePass(bool Strip = false, StringRef NameOfWrappedPass = "")
       : ModulePass(ID), Strip(Strip), NameOfWrappedPass(NameOfWrappedPass) {}
+
+  void getAnalysisUsage(AnalysisUsage &AU) const override {
+    AU.setPreservesAll();
+  }
 
   static char ID; // Pass identification.
 
@@ -297,9 +329,7 @@ private:
 
 } // end anonymous namespace
 
-ModulePass *createDebugifyModulePass() {
-  return new DebugifyModulePass();
-}
+ModulePass *createDebugifyModulePass() { return new DebugifyModulePass(); }
 
 FunctionPass *createDebugifyFunctionPass() {
   return new DebugifyFunctionPass();
@@ -310,11 +340,13 @@ PreservedAnalyses NewPMDebugifyPass::run(Module &M, ModuleAnalysisManager &) {
   return PreservedAnalyses::all();
 }
 
-ModulePass *createCheckDebugifyModulePass(bool Strip, StringRef NameOfWrappedPass) {
+ModulePass *createCheckDebugifyModulePass(bool Strip,
+                                          StringRef NameOfWrappedPass) {
   return new CheckDebugifyModulePass(Strip, NameOfWrappedPass);
 }
 
-FunctionPass *createCheckDebugifyFunctionPass(bool Strip, StringRef NameOfWrappedPass) {
+FunctionPass *createCheckDebugifyFunctionPass(bool Strip,
+                                              StringRef NameOfWrappedPass) {
   return new CheckDebugifyFunctionPass(Strip, NameOfWrappedPass);
 }
 
@@ -326,16 +358,16 @@ PreservedAnalyses NewPMCheckDebugifyPass::run(Module &M,
 
 char DebugifyModulePass::ID = 0;
 static RegisterPass<DebugifyModulePass> DM("debugify",
-                                    "Attach debug info to everything");
+                                           "Attach debug info to everything");
 
 char CheckDebugifyModulePass::ID = 0;
-static RegisterPass<CheckDebugifyModulePass> CDM("check-debugify",
-                                         "Check debug info from -debugify");
+static RegisterPass<CheckDebugifyModulePass>
+    CDM("check-debugify", "Check debug info from -debugify");
 
 char DebugifyFunctionPass::ID = 0;
 static RegisterPass<DebugifyFunctionPass> DF("debugify-function",
-                                    "Attach debug info to a function");
+                                             "Attach debug info to a function");
 
 char CheckDebugifyFunctionPass::ID = 0;
-static RegisterPass<CheckDebugifyFunctionPass> CDF("check-debugify-function",
-                                         "Check debug info from -debugify-function");
+static RegisterPass<CheckDebugifyFunctionPass>
+    CDF("check-debugify-function", "Check debug info from -debugify-function");

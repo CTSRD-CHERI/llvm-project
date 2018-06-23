@@ -77,6 +77,9 @@ def _parse_args():
 
   _configure_warnings(args)
 
+  if not args.llvm_mca_binary:
+    raise Error('--llvm-mca-binary value cannot be empty string')
+
   if os.path.basename(args.llvm_mca_binary) != 'llvm-mca':
     _warn('unexpected binary name: {}'.format(args.llvm_mca_binary))
 
@@ -409,7 +412,7 @@ def _write_output(test_path, input_lines, prefix_list, block_infos,  # noqa
       continue
 
   # Add a blank line before the new checks if required.
-  if output_lines[-1]:
+  if len(output_lines) > 0 and output_lines[-1]:
     output_lines.append('')
 
   output_check_lines = []
@@ -441,6 +444,10 @@ def _write_output(test_path, input_lines, prefix_list, block_infos,  # noqa
     output_lines.insert(0, ADVERT)
     output_lines.extend(output_check_lines)
 
+  # The file should not end with two newlines. It creates unnecessary churn.
+  while len(output_lines) > 0 and output_lines[-1] == '':
+    output_lines.pop()
+
   if input_lines == output_lines:
     sys.stderr.write('            [unchanged]\n')
     return
@@ -451,9 +458,7 @@ def _write_output(test_path, input_lines, prefix_list, block_infos,  # noqa
         'Writing {} lines to {}...\n\n'.format(len(output_lines), test_path))
 
   with open(test_path, 'wb') as f:
-    for line in output_lines:
-      f.write('{}\n'.format(line.rstrip()).encode())
-
+    f.writelines(['{}\n'.format(l).encode() for l in output_lines])
 
 def main():
   args = _parse_args()

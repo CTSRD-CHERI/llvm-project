@@ -11,6 +11,7 @@
 #define LLDB_DWARFINDEX_H
 
 #include "Plugins/SymbolFile/DWARF/DIERef.h"
+#include "Plugins/SymbolFile/DWARF/DWARFDIE.h"
 #include "Plugins/SymbolFile/DWARF/DWARFFormValue.h"
 
 class DWARFDebugInfo;
@@ -25,7 +26,11 @@ public:
 
   virtual void Preload() = 0;
 
-  virtual void GetGlobalVariables(ConstString name, DIEArray &offsets) = 0;
+  /// Finds global variables with the given base name. Any additional filtering
+  /// (e.g., to only retrieve variables from a given context) should be done by
+  /// the consumer.
+  virtual void GetGlobalVariables(ConstString basename, DIEArray &offsets) = 0;
+
   virtual void GetGlobalVariables(const RegularExpression &regex,
                                   DIEArray &offsets) = 0;
   virtual void GetGlobalVariables(const DWARFUnit &cu, DIEArray &offsets) = 0;
@@ -36,21 +41,12 @@ public:
   virtual void GetTypes(ConstString name, DIEArray &offsets) = 0;
   virtual void GetTypes(const DWARFDeclContext &context, DIEArray &offsets) = 0;
   virtual void GetNamespaces(ConstString name, DIEArray &offsets) = 0;
-  virtual void GetFunctions(
-      ConstString name, DWARFDebugInfo &info,
-      llvm::function_ref<bool(const DWARFDIE &die, bool include_inlines,
-                              lldb_private::SymbolContextList &sc_list)>
-          resolve_function,
-      llvm::function_ref<CompilerDeclContext(lldb::user_id_t type_uid)>
-          get_decl_context_containing_uid,
-      const CompilerDeclContext *parent_decl_ctx, uint32_t name_type_mask,
-      bool include_inlines, SymbolContextList &sc_list) = 0;
-  virtual void GetFunctions(
-      const RegularExpression &regex, DWARFDebugInfo &info,
-      llvm::function_ref<bool(const DWARFDIE &die, bool include_inlines,
-                              lldb_private::SymbolContextList &sc_list)>
-          resolve_function,
-      bool include_inlines, SymbolContextList &sc_list) = 0;
+  virtual void GetFunctions(ConstString name, DWARFDebugInfo &info,
+                            const CompilerDeclContext &parent_decl_ctx,
+                            uint32_t name_type_mask,
+                            std::vector<DWARFDIE> &dies) = 0;
+  virtual void GetFunctions(const RegularExpression &regex,
+                            DIEArray &offsets) = 0;
 
   virtual void ReportInvalidDIEOffset(dw_offset_t offset,
                                       llvm::StringRef name) = 0;
@@ -59,12 +55,14 @@ public:
 protected:
   Module &m_module;
 
-  void ParseFunctions(
-      const DIEArray &offsets, DWARFDebugInfo &info,
-      llvm::function_ref<bool(const DWARFDIE &die, bool include_inlines,
-                              lldb_private::SymbolContextList &sc_list)>
-          resolve_function,
-      bool include_inlines, SymbolContextList &sc_list);
+  /// Helper function implementing common logic for processing function dies. If
+  /// the function given by "ref" matches search criteria given by
+  /// "parent_decl_ctx" and "name_type_mask", it is inserted into the "dies"
+  /// vector.
+  void ProcessFunctionDIE(llvm::StringRef name, DIERef ref,
+                          DWARFDebugInfo &info,
+                          const CompilerDeclContext &parent_decl_ctx,
+                          uint32_t name_type_mask, std::vector<DWARFDIE> &dies);
 };
 } // namespace lldb_private
 

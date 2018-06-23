@@ -9,6 +9,7 @@
 
 #include "InstPrinter/X86IntelInstPrinter.h"
 #include "MCTargetDesc/X86BaseInfo.h"
+#include "MCTargetDesc/X86MCExpr.h"
 #include "MCTargetDesc/X86TargetStreamer.h"
 #include "X86AsmInstrumentation.h"
 #include "X86AsmParserCommon.h"
@@ -952,6 +953,8 @@ public:
   bool ParseRegister(unsigned &RegNo, SMLoc &StartLoc, SMLoc &EndLoc) override;
 
   void SetFrameRegister(unsigned RegNo) override;
+
+  bool parseAssignmentExpression(const MCExpr *&Res, SMLoc &EndLoc) override;
 
   bool ParseInstruction(ParseInstructionInfo &Info, StringRef Name,
                         SMLoc NameLoc, OperandVector &Operands) override;
@@ -2018,6 +2021,9 @@ std::unique_ptr<X86Operand> X86AsmParser::ParseMemOperand(unsigned SegReg,
   if (getLexer().isNot(AsmToken::LParen)) {
     SMLoc ExprEnd;
     if (getParser().parseExpression(Disp, ExprEnd)) return nullptr;
+    // Disp may be a variable, handle register values.
+    if (auto *RE = dyn_cast<X86MCExpr>(Disp))
+      return X86Operand::CreateReg(RE->getRegNo(), MemStart, ExprEnd);
 
     // After parsing the base expression we could either have a parenthesized
     // memory address or not.  If not, return now.  If so, eat the (.
@@ -2180,6 +2186,25 @@ std::unique_ptr<X86Operand> X86AsmParser::ParseMemOperand(unsigned SegReg,
     return X86Operand::CreateMem(getPointerWidth(), SegReg, Disp, BaseReg,
                                  IndexReg, Scale, MemStart, MemEnd);
   return X86Operand::CreateMem(getPointerWidth(), Disp, MemStart, MemEnd);
+}
+
+// Parse either a standard expression or a register.
+bool X86AsmParser::parseAssignmentExpression(const MCExpr *&Res,
+                                             SMLoc &EndLoc) {
+  MCAsmParser &Parser = getParser();
+  if (Parser.parseExpression(Res, EndLoc)) {
+    SMLoc StartLoc = Parser.getTok().getLoc();
+    // Normal Expression parse fails, check if it could be a register.
+    unsigned RegNo;
+    if (Parser.getTargetParser().ParseRegister(RegNo, StartLoc, EndLoc))
+      return true;
+    // Clear previous parse error and return correct expression.
+    Parser.clearPendingErrors();
+    Res = X86MCExpr::create(RegNo, Parser.getContext());
+    return false;
+  }
+
+  return false;
 }
 
 bool X86AsmParser::ParseInstruction(ParseInstructionInfo &Info, StringRef Name,
@@ -2710,6 +2735,39 @@ bool X86AsmParser::validateInstruction(MCInst &Inst, const OperandVector &Ops) {
     if (Dest == Index)
       return Warning(Ops[0]->getStartLoc(), "index and destination registers "
                                             "should be distinct");
+    break;
+  }
+  case X86::V4FMADDPSrm:
+  case X86::V4FMADDPSrmk:
+  case X86::V4FMADDPSrmkz:
+  case X86::V4FMADDSSrm:
+  case X86::V4FMADDSSrmk:
+  case X86::V4FMADDSSrmkz:
+  case X86::V4FNMADDPSrm:
+  case X86::V4FNMADDPSrmk:
+  case X86::V4FNMADDPSrmkz:
+  case X86::V4FNMADDSSrm:
+  case X86::V4FNMADDSSrmk:
+  case X86::V4FNMADDSSrmkz:
+  case X86::VP4DPWSSDSrm:
+  case X86::VP4DPWSSDSrmk:
+  case X86::VP4DPWSSDSrmkz:
+  case X86::VP4DPWSSDrm:
+  case X86::VP4DPWSSDrmk:
+  case X86::VP4DPWSSDrmkz: {
+    unsigned Src2 = Inst.getOperand(Inst.getNumOperands() -
+                                    X86::AddrNumOperands - 1).getReg();
+    unsigned Src2Enc = MRI->getEncodingValue(Src2);
+    if (Src2Enc % 4 != 0) {
+      StringRef RegName = X86IntelInstPrinter::getRegisterName(Src2);
+      unsigned GroupStart = (Src2Enc / 4) * 4;
+      unsigned GroupEnd = GroupStart + 3;
+      return Warning(Ops[0]->getStartLoc(),
+                     "source register '" + RegName + "' implicitly denotes '" +
+                     RegName.take_front(3) + Twine(GroupStart) + "' to '" +
+                     RegName.take_front(3) + Twine(GroupEnd) +
+                     "' source group");
+    }
     break;
   }
   }

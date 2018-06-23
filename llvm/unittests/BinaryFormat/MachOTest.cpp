@@ -31,7 +31,7 @@ TEST(MachOTest, UnalignedLC) {
   mach_header *Header =
       reinterpret_cast<mach_header *>(Valid32BitMachO);
   if (!sys::IsLittleEndianHost)
-    sys::swapByteOrder(Header->magic);
+    swapStruct(*Header);
   ASSERT_EQ(Header->magic, MH_MAGIC);
   unsigned char *Current = Valid32BitMachO + sizeof(mach_header);
   unsigned char *BufferEnd =

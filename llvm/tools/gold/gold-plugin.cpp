@@ -787,7 +787,7 @@ static int getOutputFileName(StringRef InFilename, bool TempOutFile,
     if (TaskID > 0)
       NewFilename += utostr(TaskID);
     std::error_code EC =
-        sys::fs::openFileForWrite(NewFilename, FD, sys::fs::F_None);
+        sys::fs::openFileForWrite(NewFilename, FD, sys::fs::CD_CreateAlways);
     if (EC)
       message(LDPL_FATAL, "Could not open file %s: %s", NewFilename.c_str(),
               EC.message().c_str());
@@ -927,7 +927,7 @@ static void writeEmptyDistributedBuildOutputs(const std::string &ModulePath,
               (NewModulePath + ".thinlto.bc").c_str(), EC.message().c_str());
 
     if (SkipModule) {
-      ModuleSummaryIndex Index(false);
+      ModuleSummaryIndex Index(/*HaveGVs*/ false);
       Index.setSkipModuleByDistributedBackend();
       WriteIndexToFile(Index, OS, nullptr);
     }

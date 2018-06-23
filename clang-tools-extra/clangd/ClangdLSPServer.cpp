@@ -365,7 +365,7 @@ void ClangdLSPServer::onDocumentHighlight(TextDocumentPositionParams &Params) {
 
 void ClangdLSPServer::onHover(TextDocumentPositionParams &Params) {
   Server.findHover(Params.textDocument.uri.file(), Params.position,
-                   [](llvm::Expected<Hover> H) {
+                   [](llvm::Expected<llvm::Optional<Hover>> H) {
                      if (!H) {
                        replyError(ErrorCode::InternalError,
                                   llvm::toString(H.takeError()));
@@ -396,7 +396,7 @@ ClangdLSPServer::ClangdLSPServer(JSONOutput &Out,
       SupportedSymbolKinds(defaultSymbolKinds()),
       Server(CDB, FSProvider, /*DiagConsumer=*/*this, Opts) {}
 
-bool ClangdLSPServer::run(std::istream &In, JSONStreamStyle InputStyle) {
+bool ClangdLSPServer::run(std::FILE *In, JSONStreamStyle InputStyle) {
   assert(!IsDone && "Run was called before");
 
   // Set up JSONRPCDispatcher.

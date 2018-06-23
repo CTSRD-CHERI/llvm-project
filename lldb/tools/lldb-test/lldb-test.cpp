@@ -21,6 +21,8 @@
 #include "lldb/Interpreter/CommandReturnObject.h"
 #include "lldb/Symbol/ClangASTContext.h"
 #include "lldb/Symbol/ClangASTImporter.h"
+#include "lldb/Symbol/CompileUnit.h"
+#include "lldb/Symbol/LineTable.h"
 #include "lldb/Symbol/SymbolVendor.h"
 #include "lldb/Symbol/TypeList.h"
 #include "lldb/Symbol/VariableList.h"
@@ -143,6 +145,9 @@ static FunctionNameType getFunctionNameFlags() {
   return Result;
 }
 
+static cl::opt<bool> Verify("verify", cl::desc("Verify symbol information."),
+                            cl::sub(SymbolsSubcommand));
+
 static Expected<CompilerDeclContext> getDeclContext(SymbolVendor &Vendor);
 
 static Error findFunctions(lldb_private::Module &Module);
@@ -150,6 +155,7 @@ static Error findNamespaces(lldb_private::Module &Module);
 static Error findTypes(lldb_private::Module &Module);
 static Error findVariables(lldb_private::Module &Module);
 static Error dumpModule(lldb_private::Module &Module);
+static Error verify(lldb_private::Module &Module);
 
 static int dumpSymbols(Debugger &Dbg);
 }
@@ -167,13 +173,25 @@ static cl::opt<bool> UseHostOnlyAllocationPolicy(
     cl::init(false), cl::sub(IRMemoryMapSubcommand));
 
 using AllocationT = std::pair<addr_t, addr_t>;
-bool areAllocationsOverlapping(const AllocationT &L, const AllocationT &R);
 using AddrIntervalMap =
       IntervalMap<addr_t, unsigned, 8, IntervalMapHalfOpenInfo<addr_t>>;
-bool evalMalloc(IRMemoryMap &IRMemMap, StringRef Line,
-                AddrIntervalMap &AllocatedIntervals);
-bool evalFree(IRMemoryMap &IRMemMap, StringRef Line,
-              AddrIntervalMap &AllocatedIntervals);
+
+struct IRMemoryMapTestState {
+  TargetSP Target;
+  IRMemoryMap Map;
+
+  AddrIntervalMap::Allocator IntervalMapAllocator;
+  AddrIntervalMap Allocations;
+
+  StringMap<addr_t> Label2AddrMap;
+
+  IRMemoryMapTestState(TargetSP Target)
+      : Target(Target), Map(Target), Allocations(IntervalMapAllocator) {}
+};
+
+bool areAllocationsOverlapping(const AllocationT &L, const AllocationT &R);
+bool evalMalloc(StringRef Line, IRMemoryMapTestState &State);
+bool evalFree(StringRef Line, IRMemoryMapTestState &State);
 int evaluateMemoryMapCommands(Debugger &Dbg);
 } // namespace irmemorymap
 
@@ -400,7 +418,75 @@ Error opts::symbols::dumpModule(lldb_private::Module &Module) {
   return Error::success();
 }
 
+Error opts::symbols::verify(lldb_private::Module &Module) {
+  SymbolVendor *plugin = Module.GetSymbolVendor();
+  if (!plugin)
+    return make_error<StringError>("Can't get a symbol vendor.",
+                                   inconvertibleErrorCode());
+
+  SymbolFile *symfile = plugin->GetSymbolFile();
+  if (!symfile)
+    return make_error<StringError>("Can't get a symbol file.",
+                                   inconvertibleErrorCode());
+
+  uint32_t comp_units_count = symfile->GetNumCompileUnits();
+
+  outs() << "Found " << comp_units_count << " compile units.\n";
+
+  for (uint32_t i = 0; i < comp_units_count; i++) {
+    lldb::CompUnitSP comp_unit = symfile->ParseCompileUnitAtIndex(i);
+    if (!comp_unit)
+      return make_error<StringError>("Can't get a compile unit.",
+                                     inconvertibleErrorCode());
+
+    outs() << "Processing '" << comp_unit->GetFilename().AsCString() <<
+      "' compile unit.\n";
+
+    LineTable *lt = comp_unit->GetLineTable();
+    if (!lt)
+      return make_error<StringError>(
+        "Can't get a line table of a compile unit.",
+        inconvertibleErrorCode());
+
+    uint32_t count = lt->GetSize();
+
+    outs() << "The line table contains " << count << " entries.\n";
+
+    if (count == 0)
+      continue;
+
+    LineEntry le;
+    if (!lt->GetLineEntryAtIndex(0, le))
+      return make_error<StringError>(
+          "Can't get a line entry of a compile unit",
+          inconvertibleErrorCode());
+
+    for (uint32_t i = 1; i < count; i++) {
+      lldb::addr_t curr_end =
+        le.range.GetBaseAddress().GetFileAddress() + le.range.GetByteSize();
+
+      if (!lt->GetLineEntryAtIndex(i, le))
+        return make_error<StringError>(
+            "Can't get a line entry of a compile unit",
+            inconvertibleErrorCode());
+
+      if (curr_end > le.range.GetBaseAddress().GetFileAddress())
+        return make_error<StringError>(
+            "Line table of a compile unit is inconsistent",
+            inconvertibleErrorCode());
+    }
+  }
+
+  outs() << "The symbol information is verified.\n";
+
+  return Error::success();
+}
+
 int opts::symbols::dumpSymbols(Debugger &Dbg) {
+  if (Verify && Find != FindType::None) {
+    WithColor::error() << "Cannot both search and verify symbol information.\n";
+    return 1;
+  }
   if (Find != FindType::None && Regex && !Context.empty()) {
     WithColor::error()
         << "Cannot search using both regular expressions and context.\n";
@@ -423,23 +509,26 @@ int opts::symbols::dumpSymbols(Debugger &Dbg) {
   }
 
   Error (*Action)(lldb_private::Module &);
-  switch (Find) {
-  case FindType::Function:
-    Action = findFunctions;
-    break;
-  case FindType::Namespace:
-    Action = findNamespaces;
-    break;
-  case FindType::Type:
-    Action = findTypes;
-    break;
-  case FindType::Variable:
-    Action = findVariables;
-    break;
-  case FindType::None:
-    Action = dumpModule;
-    break;
-  }
+  if (!Verify) {
+    switch (Find) {
+    case FindType::Function:
+      Action = findFunctions;
+      break;
+    case FindType::Namespace:
+      Action = findNamespaces;
+      break;
+    case FindType::Type:
+      Action = findTypes;
+      break;
+    case FindType::Variable:
+      Action = findVariables;
+      break;
+    case FindType::None:
+      Action = dumpModule;
+      break;
+    }
+  } else
+    Action = verify;
 
   int HadErrors = 0;
   for (const auto &File : InputFilenames) {
@@ -514,17 +603,23 @@ bool opts::irmemorymap::areAllocationsOverlapping(const AllocationT &L,
   return R.first < L.second && L.first < R.second;
 }
 
-bool opts::irmemorymap::evalMalloc(IRMemoryMap &IRMemMap, StringRef Line,
-                                   AddrIntervalMap &AllocatedIntervals) {
-  // ::= malloc <size> <alignment>
+bool opts::irmemorymap::evalMalloc(StringRef Line,
+                                   IRMemoryMapTestState &State) {
+  // ::= <label> = malloc <size> <alignment>
+  StringRef Label;
+  std::tie(Label, Line) = Line.split('=');
+  if (Line.empty())
+    return false;
+  Label = Label.trim();
+  Line = Line.trim();
   size_t Size;
   uint8_t Alignment;
   int Matches = sscanf(Line.data(), "malloc %zu %hhu", &Size, &Alignment);
   if (Matches != 2)
     return false;
 
-  outs() << formatv("Command: malloc(size={0}, alignment={1})\n", Size,
-                    Alignment);
+  outs() << formatv("Command: {0} = malloc(size={1}, alignment={2})\n", Label,
+                    Size, Alignment);
   if (!isPowerOf2_32(Alignment)) {
     outs() << "Malloc error: alignment is not a power of 2\n";
     exit(1);
@@ -539,7 +634,7 @@ bool opts::irmemorymap::evalMalloc(IRMemoryMap &IRMemMap, StringRef Line,
   const bool ZeroMemory = false;
   Status ST;
   addr_t Addr =
-      IRMemMap.Malloc(Size, Alignment, Permissions, AP, ZeroMemory, ST);
+      State.Map.Malloc(Size, Alignment, Permissions, AP, ZeroMemory, ST);
   if (ST.Fail()) {
     outs() << formatv("Malloc error: {0}\n", ST);
     return true;
@@ -557,10 +652,10 @@ bool opts::irmemorymap::evalMalloc(IRMemoryMap &IRMemMap, StringRef Line,
   // Check that the allocation does not overlap another allocation. Do so by
   // testing each allocation which may cover the interval [Addr, EndOfRegion).
   addr_t EndOfRegion = Addr + Size;
-  auto Probe = AllocatedIntervals.begin();
+  auto Probe = State.Allocations.begin();
   Probe.advanceTo(Addr); //< First interval s.t stop >= Addr.
   AllocationT NewAllocation = {Addr, EndOfRegion};
-  while (Probe != AllocatedIntervals.end() && Probe.start() < EndOfRegion) {
+  while (Probe != State.Allocations.end() && Probe.start() < EndOfRegion) {
     AllocationT ProbeAllocation = {Probe.start(), Probe.stop()};
     if (areAllocationsOverlapping(ProbeAllocation, NewAllocation)) {
       outs() << "Malloc error: overlapping allocation detected"
@@ -575,41 +670,42 @@ bool opts::irmemorymap::evalMalloc(IRMemoryMap &IRMemMap, StringRef Line,
   // to inhibit interval coalescing.
   static unsigned AllocationID = 0;
   if (Size)
-    AllocatedIntervals.insert(Addr, EndOfRegion, AllocationID++);
+    State.Allocations.insert(Addr, EndOfRegion, AllocationID++);
+
+  // Store the label -> address mapping.
+  State.Label2AddrMap[Label] = Addr;
 
   return true;
 }
 
-bool opts::irmemorymap::evalFree(IRMemoryMap &IRMemMap, StringRef Line,
-                                 AddrIntervalMap &AllocatedIntervals) {
-  // ::= free <allocation-index>
-  size_t AllocIndex;
-  int Matches = sscanf(Line.data(), "free %zu", &AllocIndex);
-  if (Matches != 1)
+bool opts::irmemorymap::evalFree(StringRef Line, IRMemoryMapTestState &State) {
+  // ::= free <label>
+  if (!Line.consume_front("free"))
     return false;
+  StringRef Label = Line.trim();
 
-  outs() << formatv("Command: free(allocation-index={0})\n", AllocIndex);
-
-  // Find and free the AllocIndex-th allocation.
-  auto Probe = AllocatedIntervals.begin();
-  for (size_t I = 0; I < AllocIndex && Probe != AllocatedIntervals.end(); ++I)
-    ++Probe;
-
-  if (Probe == AllocatedIntervals.end()) {
-    outs() << "Free error: Invalid allocation index\n";
+  outs() << formatv("Command: free({0})\n", Label);
+  auto LabelIt = State.Label2AddrMap.find(Label);
+  if (LabelIt == State.Label2AddrMap.end()) {
+    outs() << "Free error: Invalid allocation label\n";
     exit(1);
   }
 
   Status ST;
-  IRMemMap.Free(Probe.start(), ST);
+  addr_t Addr = LabelIt->getValue();
+  State.Map.Free(Addr, ST);
   if (ST.Fail()) {
     outs() << formatv("Free error: {0}\n", ST);
     exit(1);
   }
 
   // Erase the allocation from the live interval map.
-  outs() << formatv("Free: [{0:x}, {1:x})\n", Probe.start(), Probe.stop());
-  Probe.erase();
+  auto Interval = State.Allocations.find(Addr);
+  if (Interval != State.Allocations.end()) {
+    outs() << formatv("Free: [{0:x}, {1:x})\n", Interval.start(),
+                      Interval.stop());
+    Interval.erase();
+  }
 
   return true;
 }
@@ -638,9 +734,7 @@ int opts::irmemorymap::evaluateMemoryMapCommands(Debugger &Dbg) {
   }
 
   // Set up an IRMemoryMap and associated testing state.
-  IRMemoryMap IRMemMap(Target);
-  AddrIntervalMap::Allocator AIMapAllocator;
-  AddrIntervalMap AllocatedIntervals(AIMapAllocator);
+  IRMemoryMapTestState State(Target);
 
   // Parse and apply commands from the command file.
   std::unique_ptr<MemoryBuffer> MB = opts::openFile(irmemorymap::CommandFile);
@@ -653,10 +747,10 @@ int opts::irmemorymap::evaluateMemoryMapCommands(Debugger &Dbg) {
     if (Line.empty() || Line[0] == '#')
       continue;
 
-    if (evalMalloc(IRMemMap, Line, AllocatedIntervals))
+    if (evalMalloc(Line, State))
       continue;
 
-    if (evalFree(IRMemMap, Line, AllocatedIntervals))
+    if (evalFree(Line, State))
       continue;
 
     errs() << "Could not parse line: " << Line << "\n";
