@@ -353,7 +353,7 @@ bool Pattern::ParsePattern(StringRef PatternStr, StringRef Prefix,
     RegExStr += '$';
   }
 
-  // DEBUG(dbgs() << "Line match regex: '" << RegExStr << "'\n");
+  // LLVM_DEBUG(dbgs() << "Line match regex: '" << RegExStr << "'\n");
 
   return false;
 }
@@ -386,7 +386,7 @@ public:
   FileCheckExprLexer(StringRef Expr, const SourceMgr &SM)
       : FullExpr(Expr), SM(SM) {
     Tokens = tokenize(FullExpr);
-    DEBUG(dbgs() << "Tokenized '" << FullExpr << "' is ["
+    LLVM_DEBUG(dbgs() << "Tokenized '" << FullExpr << "' is ["
                   << join(Tokens.begin(), Tokens.end(), ", ") << "]\n");
   }
 
@@ -552,7 +552,7 @@ public:
   }
 private:
   void printEvaluationDebug() const {
-    DEBUG(dbgs() << "  ExprResult: " << debugString() << "\n");
+    LLVM_DEBUG(dbgs() << "  ExprResult: " << debugString() << "\n");
   }
   ResultKind Kind;
   APInt IntValue;
@@ -569,7 +569,7 @@ public:
     : FileCheckExprLexer(Expr, SM), Variables(Variables) {}
 
   Optional<std::string> evaluate() {
-    DEBUG(dbgs() << "Evaluating '" << FullExpr << "'\n");
+    LLVM_DEBUG(dbgs() << "Evaluating '" << FullExpr << "'\n");
     if (hasError()) {
       return None;
     }
@@ -583,7 +583,7 @@ public:
       return None;
     }
     std::string Ret = Result.convertToString();
-    DEBUG(dbgs() << "--> Result is '" << Ret << "'\n");
+    LLVM_DEBUG(dbgs() << "--> Result is '" << Ret << "'\n");
     return Ret;
   }
 
@@ -681,7 +681,7 @@ private:
   // Evaluate an identifier expr, which may be a symbol, or a call to
   // one of the builtin functions.
   ExprResult evalIdentifierExpr(StringRef Symbol) {
-    DEBUG(dbgs() << "  Indentifier: " << Symbol << "\n");
+    LLVM_DEBUG(dbgs() << "  Indentifier: " << Symbol << "\n");
     if (Symbol == "hex") {
       return evalToBase(16);
     } else if (Symbol == "dec") {
@@ -711,7 +711,7 @@ private:
         Symbol = Symbol.ltrim('{');
         Symbol = Symbol.rtrim('}');
       }
-      DEBUG(dbgs() << "Looking up variable " << Symbol << "\n");
+      LLVM_DEBUG(dbgs() << "Looking up variable " << Symbol << "\n");
       auto it = Variables.find(Symbol);
       if (it == Variables.end()) {
         // If the variable is undefined, return an error.
@@ -744,13 +744,13 @@ private:
   ExprResult evalParensExpr() {
     assert(currentTok() == "(" && "Not a parenthesized expression");
     OpenParens++;
-    DEBUG(dbgs() << "  Paren " << OpenParens << " opened\n");
+    LLVM_DEBUG(dbgs() << "  Paren " << OpenParens << " opened\n");
 
     ExprResult SubExprResult = nextExpression();
     if (SubExprResult.isError())
       return SubExprResult;
     expect(")", &SubExprResult);
-    DEBUG(dbgs() << "  Paren " << OpenParens << " closed\n");
+    LLVM_DEBUG(dbgs() << "  Paren " << OpenParens << " closed\n");
     OpenParens--;
     return SubExprResult;
   }
@@ -787,11 +787,11 @@ private:
 
     // Otherwise check if this is a binary expressioan.
     StringRef Cur = peek();
-    DEBUG(dbgs() << "  ComplexExpr: Op = " << Cur << "\n");
+    LLVM_DEBUG(dbgs() << "  ComplexExpr: Op = " << Cur << "\n");
     const char* BinOps[] = {"+", "-", "/", "*", "&", "|", "<<", ">>"};
     if (!any_of(BinOps, [=](const char* S) { return Cur == S; })) {
       // not a binary operation so just return
-      DEBUG(dbgs() << "  '" << Cur << "' is not a valid operator -> return\n");
+      LLVM_DEBUG(dbgs() << "  '" << Cur << "' is not a valid operator -> return\n");
       return LHSResult;
     }
     Cur = next(); // consume the token
@@ -906,7 +906,7 @@ size_t Pattern::Match(StringRef Buffer, size_t &MatchLen, const SourceMgr &SM,
 
   SmallVector<StringRef, 4> MatchInfo;
   if (!Regex(RegExToMatch, Regex::Newline).match(Buffer, &MatchInfo)) {
-    DEBUG(dbgs() << "Failed regex match: '" << RegExToMatch << "'\n");
+    LLVM_DEBUG(dbgs() << "Failed regex match: '" << RegExToMatch << "'\n");
     return StringRef::npos;
   }
 
