@@ -9357,66 +9357,77 @@ enum OverloadCandidateKind {
   oc_function,
   oc_method,
   oc_constructor,
-  oc_function_template,
-  oc_method_template,
-  oc_constructor_template,
   oc_implicit_default_constructor,
   oc_implicit_copy_constructor,
   oc_implicit_move_constructor,
   oc_implicit_copy_assignment,
   oc_implicit_move_assignment,
-  oc_inherited_constructor,
-  oc_inherited_constructor_template
+  oc_inherited_constructor
 };
 
-static OverloadCandidateKind
+enum OverloadCandidateSelect {
+  ocs_non_template,
+  ocs_template,
+  ocs_described_template,
+};
+
+static std::pair<OverloadCandidateKind, OverloadCandidateSelect>
 ClassifyOverloadCandidate(Sema &S, NamedDecl *Found, FunctionDecl *Fn,
                           std::string &Description) {
-  bool isTemplate = false;
 
+  bool isTemplate = Fn->isTemplateDecl() || Found->isTemplateDecl();
   if (FunctionTemplateDecl *FunTmpl = Fn->getPrimaryTemplate()) {
     isTemplate = true;
     Description = S.getTemplateArgumentBindingsText(
-      FunTmpl->getTemplateParameters(), *Fn->getTemplateSpecializationArgs());
+        FunTmpl->getTemplateParameters(), *Fn->getTemplateSpecializationArgs());
   }
 
-  if (CXXConstructorDecl *Ctor = dyn_cast<CXXConstructorDecl>(Fn)) {
-    if (!Ctor->isImplicit()) {
-      if (isa<ConstructorUsingShadowDecl>(Found))
-        return isTemplate ? oc_inherited_constructor_template
-                          : oc_inherited_constructor;
-      else
-        return isTemplate ? oc_constructor_template : oc_constructor;
+  OverloadCandidateSelect Select = [&]() {
+    if (!Description.empty())
+      return ocs_described_template;
+    return isTemplate ? ocs_template : ocs_non_template;
+  }();
+
+  OverloadCandidateKind Kind = [&]() {
+    if (CXXConstructorDecl *Ctor = dyn_cast<CXXConstructorDecl>(Fn)) {
+      if (!Ctor->isImplicit()) {
+        if (isa<ConstructorUsingShadowDecl>(Found))
+          return oc_inherited_constructor;
+        else
+          return oc_constructor;
+      }
+
+      if (Ctor->isDefaultConstructor())
+        return oc_implicit_default_constructor;
+
+      if (Ctor->isMoveConstructor())
+        return oc_implicit_move_constructor;
+
+      assert(Ctor->isCopyConstructor() &&
+             "unexpected sort of implicit constructor");
+      return oc_implicit_copy_constructor;
     }
 
-    if (Ctor->isDefaultConstructor())
-      return oc_implicit_default_constructor;
+    if (CXXMethodDecl *Meth = dyn_cast<CXXMethodDecl>(Fn)) {
+      // This actually gets spelled 'candidate function' for now, but
+      // it doesn't hurt to split it out.
+      if (!Meth->isImplicit())
+        return oc_method;
 
-    if (Ctor->isMoveConstructor())
-      return oc_implicit_move_constructor;
+      if (Meth->isMoveAssignmentOperator())
+        return oc_implicit_move_assignment;
 
-    assert(Ctor->isCopyConstructor() &&
-           "unexpected sort of implicit constructor");
-    return oc_implicit_copy_constructor;
-  }
+      if (Meth->isCopyAssignmentOperator())
+        return oc_implicit_copy_assignment;
 
-  if (CXXMethodDecl *Meth = dyn_cast<CXXMethodDecl>(Fn)) {
-    // This actually gets spelled 'candidate function' for now, but
-    // it doesn't hurt to split it out.
-    if (!Meth->isImplicit())
-      return isTemplate ? oc_method_template : oc_method;
+      assert(isa<CXXConversionDecl>(Meth) && "expected conversion");
+      return oc_method;
+    }
 
-    if (Meth->isMoveAssignmentOperator())
-      return oc_implicit_move_assignment;
+    return oc_function;
+  }();
 
-    if (Meth->isCopyAssignmentOperator())
-      return oc_implicit_copy_assignment;
-
-    assert(isa<CXXConversionDecl>(Meth) && "expected conversion");
-    return oc_method;
-  }
-
-  return isTemplate ? oc_function_template : oc_function;
+  return std::make_pair(Kind, Select);
 }
 
 void MaybeEmitInheritedConstructorNote(Sema &S, Decl *FoundDecl) {
@@ -9508,9 +9519,11 @@ void Sema::NoteOverloadCandidate(NamedDecl *Found, FunctionDecl *Fn,
     return;
 
   std::string FnDesc;
-  OverloadCandidateKind K = ClassifyOverloadCandidate(*this, Found, Fn, FnDesc);
+  std::pair<OverloadCandidateKind, OverloadCandidateSelect> KSPair =
+      ClassifyOverloadCandidate(*this, Found, Fn, FnDesc);
   PartialDiagnostic PD = PDiag(diag::note_ovl_candidate)
-                             << (unsigned) K << Fn << FnDesc;
+                         << (unsigned)KSPair.first << (unsigned)KSPair.second
+                         << Fn << FnDesc;
 
   HandleFunctionTypeMismatch(PD, Fn->getType(), DestType);
   Diag(Fn->getLocation(), PD);
@@ -9584,7 +9597,7 @@ static void DiagnoseBadConversion(Sema &S, OverloadCandidate *Cand,
   }
 
   std::string FnDesc;
-  OverloadCandidateKind FnKind =
+  std::pair<OverloadCandidateKind, OverloadCandidateSelect> FnKindPair =
       ClassifyOverloadCandidate(S, Cand->FoundDecl, Fn, FnDesc);
 
   Expr *FromExpr = Conv.Bad.FromExpr;
@@ -9599,9 +9612,9 @@ static void DiagnoseBadConversion(Sema &S, OverloadCandidate *Cand,
     DeclarationName Name = cast<OverloadExpr>(E)->getName();
 
     S.Diag(Fn->getLocation(), diag::note_ovl_candidate_bad_overload)
-      << (unsigned) FnKind << FnDesc
-      << (FromExpr ? FromExpr->getSourceRange() : SourceRange())
-      << ToTy << Name << I+1;
+        << (unsigned)FnKindPair.first << (unsigned)FnKindPair.second << FnDesc
+        << (FromExpr ? FromExpr->getSourceRange() : SourceRange()) << ToTy
+        << Name << I + 1;
     MaybeEmitInheritedConstructorNote(S, Cand->FoundDecl);
     return;
   }
@@ -9628,43 +9641,40 @@ static void DiagnoseBadConversion(Sema &S, OverloadCandidate *Cand,
 
     if (FromQs.getAddressSpace() != ToQs.getAddressSpace()) {
       S.Diag(Fn->getLocation(), diag::note_ovl_candidate_bad_addrspace)
-        << (unsigned) FnKind << FnDesc
-        << (FromExpr ? FromExpr->getSourceRange() : SourceRange())
-        << FromTy
-        << FromQs.getAddressSpaceAttributePrintValue()
-        << ToQs.getAddressSpaceAttributePrintValue()
-        << (unsigned) isObjectArgument << I+1;
+          << (unsigned)FnKindPair.first << (unsigned)FnKindPair.second << FnDesc
+          << (FromExpr ? FromExpr->getSourceRange() : SourceRange()) << FromTy
+          << FromQs.getAddressSpaceAttributePrintValue()
+          << ToQs.getAddressSpaceAttributePrintValue()
+          << (unsigned)isObjectArgument << I + 1;
       MaybeEmitInheritedConstructorNote(S, Cand->FoundDecl);
       return;
     }
 
     if (FromQs.getObjCLifetime() != ToQs.getObjCLifetime()) {
       S.Diag(Fn->getLocation(), diag::note_ovl_candidate_bad_ownership)
-        << (unsigned) FnKind << FnDesc
-        << (FromExpr ? FromExpr->getSourceRange() : SourceRange())
-        << FromTy
-        << FromQs.getObjCLifetime() << ToQs.getObjCLifetime()
-        << (unsigned) isObjectArgument << I+1;
+          << (unsigned)FnKindPair.first << (unsigned)FnKindPair.second << FnDesc
+          << (FromExpr ? FromExpr->getSourceRange() : SourceRange()) << FromTy
+          << FromQs.getObjCLifetime() << ToQs.getObjCLifetime()
+          << (unsigned)isObjectArgument << I + 1;
       MaybeEmitInheritedConstructorNote(S, Cand->FoundDecl);
       return;
     }
 
     if (FromQs.getObjCGCAttr() != ToQs.getObjCGCAttr()) {
       S.Diag(Fn->getLocation(), diag::note_ovl_candidate_bad_gc)
-      << (unsigned) FnKind << FnDesc
-      << (FromExpr ? FromExpr->getSourceRange() : SourceRange())
-      << FromTy
-      << FromQs.getObjCGCAttr() << ToQs.getObjCGCAttr()
-      << (unsigned) isObjectArgument << I+1;
+          << (unsigned)FnKindPair.first << (unsigned)FnKindPair.second << FnDesc
+          << (FromExpr ? FromExpr->getSourceRange() : SourceRange()) << FromTy
+          << FromQs.getObjCGCAttr() << ToQs.getObjCGCAttr()
+          << (unsigned)isObjectArgument << I + 1;
       MaybeEmitInheritedConstructorNote(S, Cand->FoundDecl);
       return;
     }
 
     if (FromQs.hasUnaligned() != ToQs.hasUnaligned()) {
       S.Diag(Fn->getLocation(), diag::note_ovl_candidate_bad_unaligned)
-        << (unsigned) FnKind << FnDesc
-        << (FromExpr ? FromExpr->getSourceRange() : SourceRange())
-        << FromTy << FromQs.hasUnaligned() << I+1;
+          << (unsigned)FnKindPair.first << (unsigned)FnKindPair.second << FnDesc
+          << (FromExpr ? FromExpr->getSourceRange() : SourceRange()) << FromTy
+          << FromQs.hasUnaligned() << I + 1;
       MaybeEmitInheritedConstructorNote(S, Cand->FoundDecl);
       return;
     }
@@ -9674,14 +9684,14 @@ static void DiagnoseBadConversion(Sema &S, OverloadCandidate *Cand,
 
     if (isObjectArgument) {
       S.Diag(Fn->getLocation(), diag::note_ovl_candidate_bad_cvr_this)
-        << (unsigned) FnKind << FnDesc
-        << (FromExpr ? FromExpr->getSourceRange() : SourceRange())
-        << FromTy << (CVR - 1);
+          << (unsigned)FnKindPair.first << (unsigned)FnKindPair.second << FnDesc
+          << (FromExpr ? FromExpr->getSourceRange() : SourceRange()) << FromTy
+          << (CVR - 1);
     } else {
       S.Diag(Fn->getLocation(), diag::note_ovl_candidate_bad_cvr)
-        << (unsigned) FnKind << FnDesc
-        << (FromExpr ? FromExpr->getSourceRange() : SourceRange())
-        << FromTy << (CVR - 1) << I+1;
+          << (unsigned)FnKindPair.first << (unsigned)FnKindPair.second << FnDesc
+          << (FromExpr ? FromExpr->getSourceRange() : SourceRange()) << FromTy
+          << (CVR - 1) << I + 1;
     }
     MaybeEmitInheritedConstructorNote(S, Cand->FoundDecl);
     return;
@@ -9690,12 +9700,12 @@ static void DiagnoseBadConversion(Sema &S, OverloadCandidate *Cand,
   // Special diagnostic for failure to convert an initializer list, since
   // telling the user that it has type void is not useful.
   if (FromExpr && isa<InitListExpr>(FromExpr)) {
-    S.Diag(Fn->getLocation(), diag::note_ovl_candidate_bad_list_argument)
-      << (unsigned) FnKind << FnDesc
-      << (FromExpr ? FromExpr->getSourceRange() : SourceRange())
-      << FromTy << ToTy << (unsigned) isObjectArgument << I+1;
     // XXXAR: it would be nice if we could somehow diagnose capability -> pointer
     // narrowing conversions here instead of just printing candidate not viable
+    S.Diag(Fn->getLocation(), diag::note_ovl_candidate_bad_list_argument)
+        << (unsigned)FnKindPair.first << (unsigned)FnKindPair.second << FnDesc
+        << (FromExpr ? FromExpr->getSourceRange() : SourceRange()) << FromTy
+        << ToTy << (unsigned)isObjectArgument << I + 1;
     MaybeEmitInheritedConstructorNote(S, Cand->FoundDecl);
     return;
   }
@@ -9709,10 +9719,10 @@ static void DiagnoseBadConversion(Sema &S, OverloadCandidate *Cand,
   if (TempFromTy->isIncompleteType()) {
     // Emit the generic diagnostic and, optionally, add the hints to it.
     S.Diag(Fn->getLocation(), diag::note_ovl_candidate_bad_conv_incomplete)
-      << (unsigned) FnKind << FnDesc
-      << (FromExpr ? FromExpr->getSourceRange() : SourceRange())
-      << FromTy << ToTy << (unsigned) isObjectArgument << I+1
-      << (unsigned) (Cand->Fix.Kind);
+        << (unsigned)FnKindPair.first << (unsigned)FnKindPair.second << FnDesc
+        << (FromExpr ? FromExpr->getSourceRange() : SourceRange()) << FromTy
+        << ToTy << (unsigned)isObjectArgument << I + 1
+        << (unsigned)(Cand->Fix.Kind);
 
     MaybeEmitInheritedConstructorNote(S, Cand->FoundDecl);
     return;
@@ -9750,21 +9760,19 @@ static void DiagnoseBadConversion(Sema &S, OverloadCandidate *Cand,
                ToTy.getNonReferenceType().getCanonicalType() ==
                FromTy.getNonReferenceType().getCanonicalType()) {
       S.Diag(Fn->getLocation(), diag::note_ovl_candidate_bad_lvalue)
-        << (unsigned) FnKind << FnDesc
-        << (FromExpr ? FromExpr->getSourceRange() : SourceRange())
-        << (unsigned) isObjectArgument << I + 1;
+          << (unsigned)FnKindPair.first << (unsigned)FnKindPair.second << FnDesc
+          << (unsigned)isObjectArgument << I + 1
+          << (FromExpr ? FromExpr->getSourceRange() : SourceRange());
       MaybeEmitInheritedConstructorNote(S, Cand->FoundDecl);
       return;
     }
   }
 
   if (BaseToDerivedConversion) {
-    S.Diag(Fn->getLocation(),
-           diag::note_ovl_candidate_bad_base_to_derived_conv)
-      << (unsigned) FnKind << FnDesc
-      << (FromExpr ? FromExpr->getSourceRange() : SourceRange())
-      << (BaseToDerivedConversion - 1)
-      << FromTy << ToTy << I+1;
+    S.Diag(Fn->getLocation(), diag::note_ovl_candidate_bad_base_to_derived_conv)
+        << (unsigned)FnKindPair.first << (unsigned)FnKindPair.second << FnDesc
+        << (FromExpr ? FromExpr->getSourceRange() : SourceRange())
+        << (BaseToDerivedConversion - 1) << FromTy << ToTy << I + 1;
     MaybeEmitInheritedConstructorNote(S, Cand->FoundDecl);
     return;
   }
@@ -9775,9 +9783,9 @@ static void DiagnoseBadConversion(Sema &S, OverloadCandidate *Cand,
       Qualifiers ToQs = CToTy.getQualifiers();
       if (FromQs.getObjCLifetime() != ToQs.getObjCLifetime()) {
         S.Diag(Fn->getLocation(), diag::note_ovl_candidate_bad_arc_conv)
-        << (unsigned) FnKind << FnDesc
-        << (FromExpr ? FromExpr->getSourceRange() : SourceRange())
-        << FromTy << ToTy << (unsigned) isObjectArgument << I+1;
+            << (unsigned)FnKindPair.first << (unsigned)FnKindPair.second
+            << FnDesc << (FromExpr ? FromExpr->getSourceRange() : SourceRange())
+            << FromTy << ToTy << (unsigned)isObjectArgument << I + 1;
         MaybeEmitInheritedConstructorNote(S, Cand->FoundDecl);
         return;
       }
@@ -9789,10 +9797,10 @@ static void DiagnoseBadConversion(Sema &S, OverloadCandidate *Cand,
 
   // Emit the generic diagnostic and, optionally, add the hints to it.
   PartialDiagnostic FDiag = S.PDiag(diag::note_ovl_candidate_bad_conv);
-  FDiag << (unsigned) FnKind << FnDesc
-    << (FromExpr ? FromExpr->getSourceRange() : SourceRange())
-    << FromTy << ToTy << (unsigned) isObjectArgument << I + 1
-    << (unsigned) (Cand->Fix.Kind);
+  FDiag << (unsigned)FnKindPair.first << (unsigned)FnKindPair.second << FnDesc
+        << (FromExpr ? FromExpr->getSourceRange() : SourceRange()) << FromTy
+        << ToTy << (unsigned)isObjectArgument << I + 1
+        << (unsigned)(Cand->Fix.Kind);
 
   // If we can fix the conversion, suggest the FixIts.
   for (std::vector<FixItHint>::iterator HI = Cand->Fix.Hints.begin(),
@@ -9865,17 +9873,18 @@ static void DiagnoseArityMismatch(Sema &S, NamedDecl *Found, Decl *D,
   }
 
   std::string Description;
-  OverloadCandidateKind FnKind =
+  std::pair<OverloadCandidateKind, OverloadCandidateSelect> FnKindPair =
       ClassifyOverloadCandidate(S, Found, Fn, Description);
 
   if (modeCount == 1 && Fn->getParamDecl(0)->getDeclName())
     S.Diag(Fn->getLocation(), diag::note_ovl_candidate_arity_one)
-      << (unsigned) FnKind << (Fn->getDescribedFunctionTemplate() != nullptr)
-      << mode << Fn->getParamDecl(0) << NumFormalArgs;
+        << (unsigned)FnKindPair.first << (unsigned)FnKindPair.second
+        << Description << mode << Fn->getParamDecl(0) << NumFormalArgs;
   else
     S.Diag(Fn->getLocation(), diag::note_ovl_candidate_arity)
-      << (unsigned) FnKind << (Fn->getDescribedFunctionTemplate() != nullptr)
-      << mode << modeCount << NumFormalArgs;
+        << (unsigned)FnKindPair.first << (unsigned)FnKindPair.second
+        << Description << mode << modeCount << NumFormalArgs;
+
   MaybeEmitInheritedConstructorNote(S, Found);
 }
 
@@ -10150,11 +10159,13 @@ static void DiagnoseBadTarget(Sema &S, OverloadCandidate *Cand) {
                            CalleeTarget = S.IdentifyCUDATarget(Callee);
 
   std::string FnDesc;
-  OverloadCandidateKind FnKind =
+  std::pair<OverloadCandidateKind, OverloadCandidateSelect> FnKindPair =
       ClassifyOverloadCandidate(S, Cand->FoundDecl, Callee, FnDesc);
 
   S.Diag(Callee->getLocation(), diag::note_ovl_candidate_bad_target)
-      << (unsigned)FnKind << CalleeTarget << CallerTarget;
+      << (unsigned)FnKindPair.first << (unsigned)ocs_non_template
+      << FnDesc /* Ignored */
+      << CalleeTarget << CallerTarget;
 
   // This could be an implicit constructor for which we could not infer the
   // target due to a collsion. Diagnose that case.
@@ -10163,7 +10174,7 @@ static void DiagnoseBadTarget(Sema &S, OverloadCandidate *Cand) {
     CXXRecordDecl *ParentClass = Meth->getParent();
     Sema::CXXSpecialMember CSM;
 
-    switch (FnKind) {
+    switch (FnKindPair.first) {
     default:
       return;
     case oc_implicit_default_constructor:
@@ -10235,12 +10246,12 @@ static void NoteFunctionCandidate(Sema &S, OverloadCandidate *Cand,
   if (Cand->Viable) {
     if (Fn->isDeleted() || S.isFunctionConsideredUnavailable(Fn)) {
       std::string FnDesc;
-      OverloadCandidateKind FnKind =
-        ClassifyOverloadCandidate(S, Cand->FoundDecl, Fn, FnDesc);
+      std::pair<OverloadCandidateKind, OverloadCandidateSelect> FnKindPair =
+          ClassifyOverloadCandidate(S, Cand->FoundDecl, Fn, FnDesc);
 
       S.Diag(Fn->getLocation(), diag::note_ovl_candidate_deleted)
-        << FnKind << FnDesc
-        << (Fn->isDeleted() ? (Fn->isDeletedAsWritten() ? 1 : 2) : 0);
+          << (unsigned)FnKindPair.first << (unsigned)FnKindPair.second << FnDesc
+          << (Fn->isDeleted() ? (Fn->isDeletedAsWritten() ? 1 : 2) : 0);
       MaybeEmitInheritedConstructorNote(S, Cand->FoundDecl);
       return;
     }
@@ -11134,9 +11145,9 @@ private:
         MatchesCopy.begin(), MatchesCopy.end(), FailedCandidates,
         SourceExpr->getLocStart(), S.PDiag(),
         S.PDiag(diag::err_addr_ovl_ambiguous)
-          << Matches[0].second->getDeclName(),
+            << Matches[0].second->getDeclName(),
         S.PDiag(diag::note_ovl_candidate)
-          << (unsigned)oc_function_template,
+            << (unsigned)oc_function << (unsigned)ocs_described_template,
         Complain, TargetFunctionType);
 
     if (Result != MatchesCopy.end()) {

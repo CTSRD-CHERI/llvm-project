@@ -207,6 +207,9 @@ static DecodeStatus DecodeSVELogicalImmInstruction(llvm::MCInst &Inst,
 template<int Bits>
 static DecodeStatus DecodeSImm(llvm::MCInst &Inst, uint64_t Imm,
                                uint64_t Address, const void *Decoder);
+template <int ElementWidth>
+static DecodeStatus DecodeImm8OptLsl(MCInst &Inst, unsigned Imm,
+                                     uint64_t Addr, const void *Decoder);
 
 static bool Check(DecodeStatus &Out, DecodeStatus In) {
   switch (In) {
@@ -1756,7 +1759,8 @@ static DecodeStatus DecodeSVELogicalImmInstruction(llvm::MCInst &Inst,
 
   // The same (tied) operand is added twice to the instruction.
   DecodeZPRRegisterClass(Inst, Zdn, Addr, Decoder);
-  DecodeZPRRegisterClass(Inst, Zdn, Addr, Decoder);
+  if (Inst.getOpcode() != AArch64::DUPM_ZI)
+    DecodeZPRRegisterClass(Inst, Zdn, Addr, Decoder);
   Inst.addOperand(MCOperand::createImm(imm));
   return Success;
 }
@@ -1775,3 +1779,15 @@ static DecodeStatus DecodeSImm(llvm::MCInst &Inst, uint64_t Imm,
   return Success;
 }
 
+// Decode 8-bit signed/unsigned immediate for a given element width.
+template <int ElementWidth>
+static DecodeStatus DecodeImm8OptLsl(MCInst &Inst, unsigned Imm,
+                                      uint64_t Addr, const void *Decoder) {
+  unsigned Val = (uint8_t)Imm;
+  unsigned Shift = (Imm & 0x100) ? 8 : 0;
+  if (ElementWidth == 8 && Shift)
+    return Fail;
+  Inst.addOperand(MCOperand::createImm(Val));
+  Inst.addOperand(MCOperand::createImm(Shift));
+  return Success;
+}

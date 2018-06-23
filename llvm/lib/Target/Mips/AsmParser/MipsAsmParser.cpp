@@ -146,9 +146,14 @@ class MipsAsmParser : public MCTargetAsmParser {
   /// If true, then CpSaveLocation is a register, otherwise it's an offset.
   bool     CpSaveLocationIsRegister;
 
+  // Map of register aliases created via the .set directive.
+  StringMap<AsmToken> RegisterSets;
+
   // Print a warning along with its fix-it message at the given range.
   void printWarningWithFixIt(const Twine &Msg, const Twine &FixMsg,
                              SMRange Range, bool ShowColors = true);
+
+  void ConvertXWPOperands(MCInst &Inst, const OperandVector &Operands);
 
 #define GET_ASSEMBLER_HEADER
 #include "MipsGenAsmMatcher.inc"
@@ -181,6 +186,9 @@ class MipsAsmParser : public MCTargetAsmParser {
   OperandMatchResultTy
   matchAnyRegisterNameWithoutDollar(OperandVector &Operands,
                                     StringRef Identifier, SMLoc S);
+  OperandMatchResultTy matchAnyRegisterWithoutDollar(OperandVector &Operands,
+                                                     const AsmToken &Token,
+                                                     SMLoc S);
   OperandMatchResultTy matchAnyRegisterWithoutDollar(OperandVector &Operands,
                                                      SMLoc S);
   OperandMatchResultTy parseAnyRegister(OperandVector &Operands);
@@ -236,12 +244,6 @@ class MipsAsmParser : public MCTargetAsmParser {
 
   void expandMemInst(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out,
                      const MCSubtargetInfo *STI, bool IsLoad);
-
-  void expandLoadInst(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out,
-                      const MCSubtargetInfo *STI);
-
-  void expandStoreInst(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out,
-                       const MCSubtargetInfo *STI);
 
   bool expandLoadStoreMultiple(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out,
                                const MCSubtargetInfo *STI);
@@ -1318,7 +1320,7 @@ public:
       return false;
     if (!getMemBase()->isGPRAsmReg())
       return false;
-    const unsigned PtrBits = 32;
+    const unsigned PtrBits = AsmParser.getABI().ArePtrs64bit() ? 64 : 32;
     if (isa<MCTargetExpr>(getMemOff()) ||
         (isConstantMemOff() && isIntN(PtrBits, getConstantMemOff())))
       return true;
@@ -2135,7 +2137,7 @@ bool MipsAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
           (OpInfo.OperandType == MCOI::OPERAND_UNKNOWN)) {
         MCOperand &Op = Inst.getOperand(i);
         if (Op.isImm()) {
-          int MemOffset = Op.getImm();
+          int64_t MemOffset = Op.getImm();
           if (MemOffset < -32768 || MemOffset > 32767) {
             // Offset can't exceed 16bit value.
             expandMemInst(Inst, IDLoc, Out, STI, MCID.mayLoad());
@@ -2161,7 +2163,7 @@ bool MipsAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
   }   // if load/store
 
   if (inMicroMipsMode()) {
-    if (MCID.mayLoad()) {
+    if (MCID.mayLoad() && Inst.getOpcode() != Mips::LWP_MM) {
       // Try to create 16-bit GP relative load instruction.
       for (unsigned i = 0; i < MCID.getNumOperands(); i++) {
         const MCOperandInfo &OpInfo = MCID.OpInfo[i];
@@ -2278,12 +2280,17 @@ bool MipsAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
           return Error(IDLoc, "immediate operand value out of range");
         break;
       case Mips::ADDIUPC_MM:
-        MCOperand Opnd = Inst.getOperand(1);
+        Opnd = Inst.getOperand(1);
         if (!Opnd.isImm())
           return Error(IDLoc, "expected immediate operand kind");
-        int Imm = Opnd.getImm();
+        Imm = Opnd.getImm();
         if ((Imm % 4 != 0) || !isInt<25>(Imm))
           return Error(IDLoc, "immediate operand value out of range");
+        break;
+      case Mips::LWP_MM:
+      case Mips::SWP_MM:
+        if (Inst.getOperand(0).getReg() == Mips::RA)
+          return Error(IDLoc, "invalid operand for instruction");
         break;
     }
   }
@@ -3556,14 +3563,6 @@ bool MipsAsmParser::expandBranchImm(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out,
 
 void MipsAsmParser::expandMemInst(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out,
                                   const MCSubtargetInfo *STI, bool IsLoad) {
-  if (IsLoad)
-    expandLoadInst(Inst, IDLoc, Out, STI);
-  else
-    expandStoreInst(Inst, IDLoc, Out, STI);
-}
-
-void MipsAsmParser::expandLoadInst(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out,
-                                   const MCSubtargetInfo *STI) {
   const MCOperand &DstRegOp = Inst.getOperand(0);
   assert(DstRegOp.isReg() && "expected register operand kind");
   const MCOperand &BaseRegOp = Inst.getOperand(1);
@@ -3582,7 +3581,7 @@ void MipsAsmParser::expandLoadInst(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out,
   bool IsGPR = (DstRegClassID == Mips::GPR32RegClassID) ||
                (DstRegClassID == Mips::GPR64RegClassID);
 
-  if (!IsGPR || (BaseReg == DstReg)) {
+  if (!IsLoad || !IsGPR || (BaseReg == DstReg)) {
     // At this point we need AT to perform the expansions
     // and we exit if it is not available.
     TmpReg = getATReg(IDLoc);
@@ -3591,8 +3590,27 @@ void MipsAsmParser::expandLoadInst(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out,
   }
 
   if (OffsetOp.isImm()) {
-    TOut.emitLoadWithImmOffset(Inst.getOpcode(), DstReg, BaseReg,
-                               OffsetOp.getImm(), TmpReg, IDLoc, STI);
+    int64_t LoOffset = OffsetOp.getImm() & 0xffff;
+    int64_t HiOffset = OffsetOp.getImm() & ~0xffff;
+
+    // If msb of LoOffset is 1(negative number) we must increment
+    // HiOffset to account for the sign-extension of the low part.
+    if (LoOffset & 0x8000)
+      HiOffset += 0x10000;
+
+    bool IsLargeOffset = HiOffset != 0;
+
+    if (IsLargeOffset) {
+      bool Is32BitImm = (HiOffset >> 32) == 0;
+      if (loadImmediate(HiOffset, TmpReg, Mips::NoRegister, Is32BitImm, true,
+                        IDLoc, Out, STI))
+        return;
+    }
+
+    if (BaseReg != Mips::ZERO && BaseReg != Mips::ZERO_64)
+      TOut.emitRRR(isGP64bit() ? Mips::DADDu : Mips::ADDu, TmpReg, TmpReg,
+                   BaseReg, IDLoc, STI);
+    TOut.emitRRI(Inst.getOpcode(), DstReg, TmpReg, LoOffset, IDLoc, STI);
   } else {
     assert(OffsetOp.isExpr() && "expected expression operand kind");
     const MCExpr *ExprOffset = OffsetOp.getExpr();
@@ -3600,42 +3618,14 @@ void MipsAsmParser::expandLoadInst(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out,
         MipsMCExpr::create(MipsMCExpr::MEK_LO, ExprOffset, getContext()));
     MCOperand HiOperand = MCOperand::createExpr(
         MipsMCExpr::create(MipsMCExpr::MEK_HI, ExprOffset, getContext()));
-    TOut.emitLoadWithSymOffset(Inst.getOpcode(), DstReg, BaseReg, HiOperand,
-                               LoOperand, TmpReg, IDLoc, STI);
+
+    if (IsLoad)
+      TOut.emitLoadWithSymOffset(Inst.getOpcode(), DstReg, BaseReg, HiOperand,
+                                 LoOperand, TmpReg, IDLoc, STI);
+    else
+      TOut.emitStoreWithSymOffset(Inst.getOpcode(), DstReg, BaseReg, HiOperand,
+                                  LoOperand, TmpReg, IDLoc, STI);
   }
-}
-
-void MipsAsmParser::expandStoreInst(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out,
-                                    const MCSubtargetInfo *STI) {
-  const MCOperand &SrcRegOp = Inst.getOperand(0);
-  assert(SrcRegOp.isReg() && "expected register operand kind");
-  const MCOperand &BaseRegOp = Inst.getOperand(1);
-  assert(BaseRegOp.isReg() && "expected register operand kind");
-  const MCOperand &OffsetOp = Inst.getOperand(2);
-
-  MipsTargetStreamer &TOut = getTargetStreamer();
-  unsigned SrcReg = SrcRegOp.getReg();
-  unsigned BaseReg = BaseRegOp.getReg();
-
-  if (OffsetOp.isImm()) {
-    TOut.emitStoreWithImmOffset(Inst.getOpcode(), SrcReg, BaseReg,
-                                OffsetOp.getImm(),
-                                [&]() { return getATReg(IDLoc); }, IDLoc, STI);
-    return;
-  }
-
-  unsigned ATReg = getATReg(IDLoc);
-  if (!ATReg)
-    return;
-
-  assert(OffsetOp.isExpr() && "expected expression operand kind");
-  const MCExpr *ExprOffset = OffsetOp.getExpr();
-  MCOperand LoOperand = MCOperand::createExpr(
-      MipsMCExpr::create(MipsMCExpr::MEK_LO, ExprOffset, getContext()));
-  MCOperand HiOperand = MCOperand::createExpr(
-      MipsMCExpr::create(MipsMCExpr::MEK_HI, ExprOffset, getContext()));
-  TOut.emitStoreWithSymOffset(Inst.getOpcode(), SrcReg, BaseReg, HiOperand,
-                              LoOperand, ATReg, IDLoc, STI);
 }
 
 bool MipsAsmParser::expandLoadStoreMultiple(MCInst &Inst, SMLoc IDLoc,
@@ -5171,7 +5161,6 @@ unsigned MipsAsmParser::checkTargetMatchPredicate(MCInst &Inst) {
       return Match_RequiresDifferentSrcAndDst;
     return Match_Success;
   case Mips::LWP_MM:
-  case Mips::LWP_MMR6:
     if (Inst.getOperand(0).getReg() == Inst.getOperand(2).getReg())
       return Match_RequiresDifferentSrcAndDst;
     return Match_Success;
@@ -5510,6 +5499,17 @@ void MipsAsmParser::warnIfRegIndexIsAT(unsigned RegIndex, SMLoc Loc) {
 void MipsAsmParser::warnIfNoMacro(SMLoc Loc) {
   if (!AssemblerOptions.back()->isMacro())
     Warning(Loc, "macro instruction expanded into multiple instructions");
+}
+
+void MipsAsmParser::ConvertXWPOperands(MCInst &Inst,
+                                       const OperandVector &Operands) {
+  assert(
+      (Inst.getOpcode() == Mips::LWP_MM || Inst.getOpcode() == Mips::SWP_MM) &&
+      "Unexpected instruction!");
+  ((MipsOperand &)*Operands[1]).addGPR32ZeroAsmRegOperands(Inst, 1);
+  int NextReg = nextReg(((MipsOperand &)*Operands[1]).getGPR32Reg());
+  Inst.addOperand(MCOperand::createReg(NextReg));
+  ((MipsOperand &)*Operands[2]).addMemOperands(Inst, 2);
 }
 
 void
@@ -5954,13 +5954,12 @@ MipsAsmParser::parseMemOperand(OperandVector &Operands) {
 bool MipsAsmParser::searchSymbolAlias(OperandVector &Operands) {
   MCAsmParser &Parser = getParser();
   MCSymbol *Sym = getContext().lookupSymbol(Parser.getTok().getIdentifier());
-  if (Sym) {
-    SMLoc S = Parser.getTok().getLoc();
-    const MCExpr *Expr;
-    if (Sym->isVariable())
-      Expr = Sym->getVariableValue();
-    else
-      return false;
+  if (!Sym)
+    return false;
+
+  SMLoc S = Parser.getTok().getLoc();
+  if (Sym->isVariable()) {
+    const MCExpr *Expr = Sym->getVariableValue();
     if (Expr->getKind() == MCExpr::SymbolRef) {
       const MCSymbolRefExpr *Ref = static_cast<const MCSymbolRefExpr *>(Expr);
       StringRef DefSymbol = Ref->getSymbol().getName();
@@ -5970,12 +5969,26 @@ bool MipsAsmParser::searchSymbolAlias(OperandVector &Operands) {
         if (ResTy == MatchOperand_Success) {
           Parser.Lex();
           return true;
-        } else if (ResTy == MatchOperand_ParseFail)
+        }
+        if (ResTy == MatchOperand_ParseFail)
           llvm_unreachable("Should never ParseFail");
-        return false;
+      }
+    }
+  } else if (Sym->isUnset()) {
+    // If symbol is unset, it might be created in the `parseSetAssignment`
+    // routine as an alias for a numeric register name.
+    // Lookup in the aliases list.
+    auto Entry = RegisterSets.find(Sym->getName());
+    if (Entry != RegisterSets.end()) {
+      OperandMatchResultTy ResTy =
+          matchAnyRegisterWithoutDollar(Operands, Entry->getValue(), S);
+      if (ResTy == MatchOperand_Success) {
+        Parser.Lex();
+        return true;
       }
     }
   }
+
   return false;
 }
 
@@ -6043,10 +6056,8 @@ MipsAsmParser::matchAnyRegisterNameWithoutDollar(OperandVector &Operands,
 }
 
 OperandMatchResultTy
-MipsAsmParser::matchAnyRegisterWithoutDollar(OperandVector &Operands, SMLoc S) {
-  MCAsmParser &Parser = getParser();
-  auto Token = Parser.getLexer().peekTok(false);
-
+MipsAsmParser::matchAnyRegisterWithoutDollar(OperandVector &Operands,
+                                             const AsmToken &Token, SMLoc S) {
   if (Token.is(AsmToken::Identifier)) {
     LLVM_DEBUG(dbgs() << ".. identifier\n");
     StringRef Identifier = Token.getIdentifier();
@@ -6068,9 +6079,15 @@ MipsAsmParser::matchAnyRegisterWithoutDollar(OperandVector &Operands, SMLoc S) {
     return MatchOperand_Success;
   }
 
-  LLVM_DEBUG(dbgs() << Parser.getTok().getKind() << "\n");
+  LLVM_DEBUG(dbgs() << Token.getKind() << "\n");
 
   return MatchOperand_NoMatch;
+}
+
+OperandMatchResultTy
+MipsAsmParser::matchAnyRegisterWithoutDollar(OperandVector &Operands, SMLoc S) {
+  auto Token = getLexer().peekTok(false);
+  return matchAnyRegisterWithoutDollar(Operands, Token, S);
 }
 
 OperandMatchResultTy
@@ -6826,17 +6843,30 @@ bool MipsAsmParser::parseSetAssignment() {
   MCAsmParser &Parser = getParser();
 
   if (Parser.parseIdentifier(Name))
-    reportParseError("expected identifier after .set");
+    return reportParseError("expected identifier after .set");
 
   if (getLexer().isNot(AsmToken::Comma))
     return reportParseError("unexpected token, expected comma");
   Lex(); // Eat comma
 
-  if (Parser.parseExpression(Value))
+  if (getLexer().is(AsmToken::Dollar) &&
+      getLexer().peekTok().is(AsmToken::Integer)) {
+    // Parse assignment of a numeric register:
+    //   .set r1,$1
+    Parser.Lex(); // Eat $.
+    RegisterSets[Name] = Parser.getTok();
+    Parser.Lex(); // Eat identifier.
+    getContext().getOrCreateSymbol(Name);
+  } else if (!Parser.parseExpression(Value)) {
+    // Parse assignment of an expression including
+    // symbolic registers:
+    //   .set  $tmp, $BB0-$BB1
+    //   .set  r2, $f2
+    MCSymbol *Sym = getContext().getOrCreateSymbol(Name);
+    Sym->setVariableValue(Value);
+  } else {
     return reportParseError("expected valid expression after comma");
-
-  MCSymbol *Sym = getContext().getOrCreateSymbol(Name);
-  Sym->setVariableValue(Value);
+  }
 
   return false;
 }
@@ -7193,131 +7223,131 @@ bool MipsAsmParser::parseDirectiveNaN() {
 }
 
 bool MipsAsmParser::parseDirectiveSet() {
-  MCAsmParser &Parser = getParser();
-  // Get the next token.
-  const AsmToken &Tok = Parser.getTok();
+  const AsmToken &Tok = getParser().getTok();
+  StringRef IdVal = Tok.getString();
+  SMLoc Loc = Tok.getLoc();
 
-  if (Tok.getString() == "noat") {
+  if (IdVal == "noat")
     return parseSetNoAtDirective();
-  } else if (Tok.getString() == "at") {
+  if (IdVal == "at")
     return parseSetAtDirective();
-  } else if (Tok.getString() == "arch") {
+  if (IdVal == "arch")
     return parseSetArchDirective();
-  } else if (Tok.getString() == "bopt") {
-    Warning(Tok.getLoc(), "'bopt' feature is unsupported");
+  if (IdVal == "bopt") {
+    Warning(Loc, "'bopt' feature is unsupported");
     getParser().Lex();
     return false;
-  } else if (Tok.getString() == "nobopt") {
+  }
+  if (IdVal == "nobopt") {
     // We're already running in nobopt mode, so nothing to do.
     getParser().Lex();
     return false;
-  } else if (Tok.getString() == "fp") {
+  }
+  if (IdVal == "fp")
     return parseSetFpDirective();
-  } else if (Tok.getString() == "oddspreg") {
+  if (IdVal == "oddspreg")
     return parseSetOddSPRegDirective();
-  } else if (Tok.getString() == "nooddspreg") {
+  if (IdVal == "nooddspreg")
     return parseSetNoOddSPRegDirective();
-  } else if (Tok.getString() == "pop") {
+  if (IdVal == "pop")
     return parseSetPopDirective();
-  } else if (Tok.getString() == "push") {
+  if (IdVal == "push")
     return parseSetPushDirective();
-  } else if (Tok.getString() == "reorder") {
+  if (IdVal == "reorder")
     return parseSetReorderDirective();
-  } else if (Tok.getString() == "noreorder") {
+  if (IdVal == "noreorder")
     return parseSetNoReorderDirective();
-  } else if (Tok.getString() == "macro") {
+  if (IdVal == "macro")
     return parseSetMacroDirective();
-  } else if (Tok.getString() == "nomacro") {
+  if (IdVal == "nomacro")
     return parseSetNoMacroDirective();
-  } else if (Tok.getString() == "mips16") {
+  if (IdVal == "mips16")
     return parseSetMips16Directive();
-  } else if (Tok.getString() == "nomips16") {
+  if (IdVal == "nomips16")
     return parseSetNoMips16Directive();
-  } else if (Tok.getString() == "nomicromips") {
+  if (IdVal == "nomicromips") {
     clearFeatureBits(Mips::FeatureMicroMips, "micromips");
     getTargetStreamer().emitDirectiveSetNoMicroMips();
-    Parser.eatToEndOfStatement();
+    getParser().eatToEndOfStatement();
     return false;
-  } else if (Tok.getString() == "micromips") {
+  }
+  if (IdVal == "micromips") {
     if (hasMips64r6()) {
-      Error(Tok.getLoc(),
-            ".set micromips directive is not supported with MIPS64R6");
+      Error(Loc, ".set micromips directive is not supported with MIPS64R6");
       return false;
     }
     return parseSetFeature(Mips::FeatureMicroMips);
-  } else if (Tok.getString() == "mips0") {
+  }
+  if (IdVal == "mips0")
     return parseSetMips0Directive();
-  } else if (Tok.getString() == "mips1") {
+  if (IdVal == "mips1")
     return parseSetFeature(Mips::FeatureMips1);
-  } else if (Tok.getString() == "mips2") {
+  if (IdVal == "mips2")
     return parseSetFeature(Mips::FeatureMips2);
-  } else if (Tok.getString() == "mips3") {
+  if (IdVal == "mips3")
     return parseSetFeature(Mips::FeatureMips3);
-  } else if (Tok.getString() == "mips4") {
+  if (IdVal == "mips4")
     return parseSetFeature(Mips::FeatureMips4);
-  } else if (Tok.getString() == "mips5") {
+  if (IdVal == "mips5")
     return parseSetFeature(Mips::FeatureMips5);
-  } else if (Tok.getString() == "mips32") {
+  if (IdVal == "mips32")
     return parseSetFeature(Mips::FeatureMips32);
-  } else if (Tok.getString() == "mips32r2") {
+  if (IdVal == "mips32r2")
     return parseSetFeature(Mips::FeatureMips32r2);
-  } else if (Tok.getString() == "mips32r3") {
+  if (IdVal == "mips32r3")
     return parseSetFeature(Mips::FeatureMips32r3);
-  } else if (Tok.getString() == "mips32r5") {
+  if (IdVal == "mips32r5")
     return parseSetFeature(Mips::FeatureMips32r5);
-  } else if (Tok.getString() == "mips32r6") {
+  if (IdVal == "mips32r6")
     return parseSetFeature(Mips::FeatureMips32r6);
-  } else if (Tok.getString() == "mips64") {
+  if (IdVal == "mips64")
     return parseSetFeature(Mips::FeatureMips64);
-  } else if (Tok.getString() == "mips64r2") {
+  if (IdVal == "mips64r2")
     return parseSetFeature(Mips::FeatureMips64r2);
-  } else if (Tok.getString() == "mips64r3") {
+  if (IdVal == "mips64r3")
     return parseSetFeature(Mips::FeatureMips64r3);
-  } else if (Tok.getString() == "mips64r5") {
+  if (IdVal == "mips64r5")
     return parseSetFeature(Mips::FeatureMips64r5);
-  } else if (Tok.getString() == "mips64r6") {
+  if (IdVal == "mips64r6") {
     if (inMicroMipsMode()) {
-      Error(Tok.getLoc(), "MIPS64R6 is not supported with microMIPS");
+      Error(Loc, "MIPS64R6 is not supported with microMIPS");
       return false;
     }
     return parseSetFeature(Mips::FeatureMips64r6);
-  } else if (Tok.getString() == "dsp") {
-    return parseSetFeature(Mips::FeatureDSP);
-  } else if (Tok.getString() == "dspr2") {
-    return parseSetFeature(Mips::FeatureDSPR2);
-  } else if (Tok.getString() == "nodsp") {
-    return parseSetNoDspDirective();
-  } else if (Tok.getString() == "msa") {
-    return parseSetMsaDirective();
-  } else if (Tok.getString() == "nomsa") {
-    return parseSetNoMsaDirective();
-  } else if (Tok.getString() == "mt") {
-    return parseSetMtDirective();
-  } else if (Tok.getString() == "nomt") {
-    return parseSetNoMtDirective();
-  } else if (Tok.getString() == "softfloat") {
-    return parseSetSoftFloatDirective();
-  } else if (Tok.getString() == "hardfloat") {
-    return parseSetHardFloatDirective();
-  } else if (Tok.getString() == "crc") {
-    return parseSetFeature(Mips::FeatureCRC);
-  } else if (Tok.getString() == "nocrc") {
-    return parseSetNoCRCDirective();
-  } else if (Tok.getString() == "virt") {
-    return parseSetFeature(Mips::FeatureVirt);
-  } else if (Tok.getString() == "novirt") {
-    return parseSetNoVirtDirective();
-  } else if (Tok.getString() == "ginv") {
-    return parseSetFeature(Mips::FeatureGINV);
-  } else if (Tok.getString() == "noginv") {
-    return parseSetNoGINVDirective();
-  } else {
-    // It is just an identifier, look for an assignment.
-    parseSetAssignment();
-    return false;
   }
+  if (IdVal == "dsp")
+    return parseSetFeature(Mips::FeatureDSP);
+  if (IdVal == "dspr2")
+    return parseSetFeature(Mips::FeatureDSPR2);
+  if (IdVal == "nodsp")
+    return parseSetNoDspDirective();
+  if (IdVal == "msa")
+    return parseSetMsaDirective();
+  if (IdVal == "nomsa")
+    return parseSetNoMsaDirective();
+  if (IdVal == "mt")
+    return parseSetMtDirective();
+  if (IdVal == "nomt")
+    return parseSetNoMtDirective();
+  if (IdVal == "softfloat")
+    return parseSetSoftFloatDirective();
+  if (IdVal == "hardfloat")
+    return parseSetHardFloatDirective();
+  if (IdVal == "crc")
+    return parseSetFeature(Mips::FeatureCRC);
+  if (IdVal == "nocrc")
+    return parseSetNoCRCDirective();
+  if (IdVal == "virt")
+    return parseSetFeature(Mips::FeatureVirt);
+  if (IdVal == "novirt")
+    return parseSetNoVirtDirective();
+  if (IdVal == "ginv")
+    return parseSetFeature(Mips::FeatureGINV);
+  if (IdVal == "noginv")
+    return parseSetNoGINVDirective();
 
-  return true;
+  // It is just an identifier, look for an assignment.
+  return parseSetAssignment();
 }
 
 /// parseDataDirective

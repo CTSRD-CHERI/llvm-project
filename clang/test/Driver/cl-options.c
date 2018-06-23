@@ -567,6 +567,8 @@
 // RUN:     --driver-mode=cl \
 // RUN:     -fcolor-diagnostics \
 // RUN:     -fno-color-diagnostics \
+// RUN:     -fcoverage-mapping \
+// RUN:     -fno-coverage-mapping \
 // RUN:     -fdiagnostics-color \
 // RUN:     -fno-diagnostics-color \
 // RUN:     -fdiagnostics-parseable-fixits \
@@ -589,6 +591,7 @@
 // RUN:     -flimit-debug-info \
 // RUN:     -flto \
 // RUN:     -fmerge-all-constants \
+// RUN:     -no-canonical-prefixes \
 // RUN:     --version \
 // RUN:     -Werror /Zs -- %s 2>&1
 

@@ -308,9 +308,7 @@ GCNScheduleDAGMILive::GCNScheduleDAGMILive(MachineSchedContext *C,
   ScheduleDAGMILive(C, std::move(S)),
   ST(MF.getSubtarget<SISubtarget>()),
   MFI(*MF.getInfo<SIMachineFunctionInfo>()),
-  StartingOccupancy(std::min(ST.getOccupancyWithLocalMemSize(MFI.getLDSSize(),
-                                                             MF.getFunction()),
-                             MFI.getMaxWavesPerEU())),
+  StartingOccupancy(MFI.getOccupancy()),
   MinOccupancy(StartingOccupancy), Stage(0), RegionIdx(0) {
 
   LLVM_DEBUG(dbgs() << "Starting occupancy is " << StartingOccupancy << ".\n");
@@ -372,13 +370,22 @@ void GCNScheduleDAGMILive::schedule() {
   // We could not keep current target occupancy because of the just scheduled
   // region. Record new occupancy for next scheduling cycle.
   unsigned NewOccupancy = std::max(WavesAfter, WavesBefore);
+  // Allow memory bound functions to drop to 4 waves if not limited by an
+  // attribute.
+  if (WavesAfter < WavesBefore && WavesAfter < MinOccupancy &&
+      WavesAfter >= MFI.getMinAllowedOccupancy()) {
+    LLVM_DEBUG(dbgs() << "Function is memory bound, allow occupancy drop up to "
+                      << MFI.getMinAllowedOccupancy() << " waves\n");
+    NewOccupancy = WavesAfter;
+  }
   if (NewOccupancy < MinOccupancy) {
     MinOccupancy = NewOccupancy;
+    MFI.limitOccupancy(MinOccupancy);
     LLVM_DEBUG(dbgs() << "Occupancy lowered for the function to "
                       << MinOccupancy << ".\n");
   }
 
-  if (WavesAfter >= WavesBefore) {
+  if (WavesAfter >= MinOccupancy) {
     Pressure[RegionIdx] = PressureAfter;
     return;
   }

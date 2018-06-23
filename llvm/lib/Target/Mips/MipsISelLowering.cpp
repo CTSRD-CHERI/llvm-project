@@ -110,12 +110,6 @@ static bool isShiftedMask(uint64_t I, uint64_t &Pos, uint64_t &Size) {
 
 // The MIPS MSA ABI passes vector arguments in the integer register set.
 // The number of integer registers used is dependant on the ABI used.
-MVT MipsTargetLowering::getRegisterTypeForCallingConv(MVT VT) const {
-  if (VT.isVector() && Subtarget.hasMSA())
-    return Subtarget.isABI_O32() ? MVT::i32 : MVT::i64;
-  return MipsTargetLowering::getRegisterType(VT);
-}
-
 MVT MipsTargetLowering::getRegisterTypeForCallingConv(LLVMContext &Context,
                                                       EVT VT) const {
   if (VT.isVector()) {
@@ -399,17 +393,10 @@ MipsTargetLowering::MipsTargetLowering(const MipsTargetMachine &TM,
   setOperationAction(ISD::UDIV, MVT::i64, Expand);
   setOperationAction(ISD::UREM, MVT::i64, Expand);
 
-  if (!(Subtarget.hasDSP() && Subtarget.hasMips32r2())) {
-    setOperationAction(ISD::ADDC, MVT::i32, Expand);
-    setOperationAction(ISD::ADDE, MVT::i32, Expand);
+  if (Subtarget.hasDSP() && Subtarget.hasMips32r2()) {
+    setOperationAction(ISD::ADDC, MVT::i32, Legal);
+    setOperationAction(ISD::ADDE, MVT::i32, Legal);
   }
-
-  setOperationAction(ISD::ADDC, MVT::i64, Expand);
-  setOperationAction(ISD::ADDE, MVT::i64, Expand);
-  setOperationAction(ISD::SUBC, MVT::i32, Expand);
-  setOperationAction(ISD::SUBE, MVT::i32, Expand);
-  setOperationAction(ISD::SUBC, MVT::i64, Expand);
-  setOperationAction(ISD::SUBE, MVT::i64, Expand);
 
   // Operations not directly supported by Mips.
   setOperationAction(ISD::BR_CC,             MVT::f32,   Expand);

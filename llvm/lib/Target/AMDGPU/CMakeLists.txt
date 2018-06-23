@@ -58,6 +58,7 @@ add_llvm_target(AMDGPUCodeGen
   AMDGPUUnifyDivergentExitNodes.cpp
   AMDGPUUnifyMetadata.cpp
   AMDGPUInline.cpp
+  AMDGPUPerfHintAnalysis.cpp
   AMDILCFGStructurizer.cpp
   GCNHazardRecognizer.cpp
   GCNIterativeScheduler.cpp
@@ -84,6 +85,7 @@ add_llvm_target(AMDGPUCodeGen
   SIFixVGPRCopies.cpp
   SIFixWWMLiveness.cpp
   SIFoldOperands.cpp
+  SIFormMemoryClauses.cpp
   SIFrameLowering.cpp
   SIInsertSkips.cpp
   SIInsertWaitcnts.cpp

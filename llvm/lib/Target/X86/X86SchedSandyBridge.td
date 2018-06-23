@@ -148,6 +148,9 @@ defm : SBWriteResPair<WriteBEXTR, [SBPort05,SBPort1], 2, [1,1], 2>;
 defm : SBWriteResPair<WriteBZHI, [SBPort1], 1>;
 
 // Scalar and vector floating point.
+defm : X86WriteRes<WriteFLD0,          [SBPort5], 1, [1], 1>;
+defm : X86WriteRes<WriteFLD1,          [SBPort0,SBPort5], 1, [1,1], 2>;
+defm : X86WriteRes<WriteFLDC,          [SBPort0,SBPort1], 1, [1,1], 2>;
 defm : X86WriteRes<WriteFLoad,         [SBPort23], 5, [1], 1>;
 defm : X86WriteRes<WriteFLoadX,        [SBPort23], 6, [1], 1>;
 defm : X86WriteRes<WriteFLoadY,        [SBPort23], 7, [1], 1>;
@@ -288,7 +291,7 @@ defm : X86WriteRes<WriteVecStoreNTY,     [SBPort23,SBPort4], 1, [1,1], 1>;
 defm : X86WriteRes<WriteVecMaskedStore,  [SBPort4,SBPort01,SBPort23], 5, [1,1,1], 3>;
 defm : X86WriteRes<WriteVecMaskedStoreY, [SBPort4,SBPort01,SBPort23], 5, [1,1,1], 3>;
 defm : X86WriteRes<WriteVecMove,         [SBPort05], 1, [1], 1>;
-defm : X86WriteRes<WriteVecMoveX,        [SBPort05], 1, [1], 1>;
+defm : X86WriteRes<WriteVecMoveX,        [SBPort015], 1, [1], 1>;
 defm : X86WriteRes<WriteVecMoveY,        [SBPort05], 1, [1], 1>;
 defm : X86WriteRes<WriteVecMoveToGpr,    [SBPort0], 2, [1], 1>;
 defm : X86WriteRes<WriteVecMoveFromGpr,  [SBPort5], 1, [1], 1>;
@@ -525,14 +528,6 @@ def: InstRW<[SBWriteResGroup5], (instregex "MMX_PABS(B|D|W)rr",
                                            "MMX_PADDQirr",
                                            "MMX_PALIGNRrri",
                                            "MMX_PSIGN(B|D|W)rr")>;
-
-def SBWriteResGroup6 : SchedWriteRes<[SBPort015]> {
-  let Latency = 1;
-  let NumMicroOps = 1;
-  let ResourceCycles = [1];
-}
-def: InstRW<[SBWriteResGroup6], (instregex "MMX_MOVQ2DQrr",
-                                           "MOVDQ(A|U)rr")>; // NOTE: Different port requirements to VEX equivalents
 
 def SBWriteResGroup9 : SchedWriteRes<[SBPort05]> {
   let Latency = 2;
@@ -1151,5 +1146,7 @@ def SBWriteResGroup131 : SchedWriteRes<[SBPort0,SBPort1,SBPort23]> {
   let ResourceCycles = [1,1,1];
 }
 def: InstRW<[SBWriteResGroup131], (instregex "DIV(R?)_FI(16|32)m")>;
+
+def: InstRW<[WriteZero], (instrs CLC)>;
 
 } // SchedModel

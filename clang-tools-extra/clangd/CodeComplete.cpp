@@ -235,6 +235,7 @@ struct CompletionCandidate {
                        llvm::StringRef SemaDocComment) const {
     assert(bool(SemaResult) == bool(SemaCCS));
     CompletionItem I;
+    bool ShouldInsertInclude = true;
     if (SemaResult) {
       I.kind = toCompletionItemKind(SemaResult->Kind, SemaResult->CursorKind);
       getLabelAndInsertText(*SemaCCS, &I.label, &I.insertText,
@@ -242,6 +243,20 @@ struct CompletionCandidate {
       I.filterText = getFilterText(*SemaCCS);
       I.documentation = formatDocumentation(*SemaCCS, SemaDocComment);
       I.detail = getDetail(*SemaCCS);
+      // Avoid inserting new #include if the declaration is found in the current
+      // file e.g. the symbol is forward declared.
+      if (SemaResult->Kind == CodeCompletionResult::RK_Declaration) {
+        if (const auto *D = SemaResult->getDeclaration()) {
+          const auto &SM = D->getASTContext().getSourceManager();
+          ShouldInsertInclude =
+              ShouldInsertInclude &&
+              std::none_of(D->redecls_begin(), D->redecls_end(),
+                           [&SM](const Decl *RD) {
+                             return SM.isInMainFile(
+                                 SM.getExpansionLoc(RD->getLocStart()));
+                           });
+        }
+      }
     }
     if (IndexResult) {
       if (I.kind == CompletionItemKind::Missing)
@@ -263,7 +278,7 @@ struct CompletionCandidate {
           I.documentation = D->Documentation;
         if (I.detail.empty())
           I.detail = D->CompletionDetail;
-        if (Includes && !D->IncludeHeader.empty()) {
+        if (ShouldInsertInclude && Includes && !D->IncludeHeader.empty()) {
           auto Edit = [&]() -> Expected<Optional<TextEdit>> {
             auto ResolvedDeclaring = toHeaderFile(
                 IndexResult->CanonicalDeclaration.FileURI, FileName);
@@ -359,13 +374,13 @@ struct SpecifiedScope {
 
 // Get all scopes that will be queried in indexes.
 std::vector<std::string> getQueryScopes(CodeCompletionContext &CCContext,
-                                        const SourceManager& SM) {
-  auto GetAllAccessibleScopes = [](CodeCompletionContext& CCContext) {
+                                        const SourceManager &SM) {
+  auto GetAllAccessibleScopes = [](CodeCompletionContext &CCContext) {
     SpecifiedScope Info;
-    for (auto* Context : CCContext.getVisitedContexts()) {
+    for (auto *Context : CCContext.getVisitedContexts()) {
       if (isa<TranslationUnitDecl>(Context))
         Info.AccessibleScopes.push_back(""); // global namespace
-      else if (const auto*NS = dyn_cast<NamespaceDecl>(Context))
+      else if (const auto *NS = dyn_cast<NamespaceDecl>(Context))
         Info.AccessibleScopes.push_back(NS->getQualifiedNameAsString() + "::");
     }
     return Info;
@@ -397,8 +412,9 @@ std::vector<std::string> getQueryScopes(CodeCompletionContext &CCContext,
   Info.AccessibleScopes.push_back(""); // global namespace
 
   Info.UnresolvedQualifier =
-      Lexer::getSourceText(CharSourceRange::getCharRange((*SS)->getRange()),
-                           SM, clang::LangOptions()).ltrim("::");
+      Lexer::getSourceText(CharSourceRange::getCharRange((*SS)->getRange()), SM,
+                           clang::LangOptions())
+          .ltrim("::");
   // Sema excludes the trailing "::".
   if (!Info.UnresolvedQualifier->empty())
     *Info.UnresolvedQualifier += "::";
@@ -590,7 +606,7 @@ public:
       SigHelp.signatures.push_back(ProcessOverloadCandidate(
           Candidate, *CCS,
           getParameterDocComment(S.getASTContext(), Candidate, CurrentArg,
-                                 /*CommentsFromHeader=*/false)));
+                                 /*CommentsFromHeaders=*/false)));
     }
   }
 
@@ -696,29 +712,16 @@ bool semaCodeComplete(std::unique_ptr<CodeCompleteConsumer> Consumer,
                                           &DummyDiagsConsumer, false),
       Input.VFS);
   if (!CI) {
-    log("Couldn't create CompilerInvocation");;
+    log("Couldn't create CompilerInvocation");
     return false;
   }
-  CI->getFrontendOpts().DisableFree = false;
-  CI->getLangOpts()->CommentOpts.ParseAllComments = true;
-
-  std::unique_ptr<llvm::MemoryBuffer> ContentsBuffer =
-      llvm::MemoryBuffer::getMemBufferCopy(Input.Contents, Input.FileName);
-
-  // The diagnostic options must be set before creating a CompilerInstance.
-  CI->getDiagnosticOpts().IgnoreWarnings = true;
-  // We reuse the preamble whether it's valid or not. This is a
-  // correctness/performance tradeoff: building without a preamble is slow, and
-  // completion is latency-sensitive.
-  auto Clang = prepareCompilerInstance(
-      std::move(CI), Input.Preamble, std::move(ContentsBuffer),
-      std::move(Input.PCHs), std::move(Input.VFS), DummyDiagsConsumer);
-
-  // Disable typo correction in Sema.
-  Clang->getLangOpts().SpellChecking = false;
-
-  auto &FrontendOpts = Clang->getFrontendOpts();
+  auto &FrontendOpts = CI->getFrontendOpts();
+  FrontendOpts.DisableFree = false;
   FrontendOpts.SkipFunctionBodies = true;
+  CI->getLangOpts()->CommentOpts.ParseAllComments = true;
+  // Disable typo correction in Sema.
+  CI->getLangOpts()->SpellChecking = false;
+  // Setup code completion.
   FrontendOpts.CodeCompleteOpts = Options;
   FrontendOpts.CodeCompletionAt.FileName = Input.FileName;
   auto Offset = positionToOffset(Input.Contents, Input.Pos);
@@ -731,6 +734,18 @@ bool semaCodeComplete(std::unique_ptr<CodeCompleteConsumer> Consumer,
            FrontendOpts.CodeCompletionAt.Column) =
       offsetToClangLineColumn(Input.Contents, *Offset);
 
+  std::unique_ptr<llvm::MemoryBuffer> ContentsBuffer =
+      llvm::MemoryBuffer::getMemBufferCopy(Input.Contents, Input.FileName);
+  // The diagnostic options must be set before creating a CompilerInstance.
+  CI->getDiagnosticOpts().IgnoreWarnings = true;
+  // We reuse the preamble whether it's valid or not. This is a
+  // correctness/performance tradeoff: building without a preamble is slow, and
+  // completion is latency-sensitive.
+  // NOTE: we must call BeginSourceFile after prepareCompilerInstance. Otherwise
+  // the remapped buffers do not get freed.
+  auto Clang = prepareCompilerInstance(
+      std::move(CI), Input.Preamble, std::move(ContentsBuffer),
+      std::move(Input.PCHs), std::move(Input.VFS), DummyDiagsConsumer);
   Clang->setCodeCompletionConsumer(Consumer.release());
 
   SyntaxOnlyAction Action;
@@ -1014,7 +1029,7 @@ private:
     LLVM_DEBUG(llvm::dbgs()
                << "CodeComplete: " << C.Name << (IndexResult ? " (index)" : "")
                << (SemaResult ? " (sema)" : "") << " = " << Scores.finalScore
-               << "\n" 
+               << "\n"
                << Quality << Relevance << "\n");
 
     NSema += bool(SemaResult);
@@ -1036,7 +1051,8 @@ private:
                                    /*CommentsFromHeader=*/false);
       }
     }
-    return Candidate.build(FileName, Scores, Opts, SemaCCS, Includes.get(), DocComment);
+    return Candidate.build(FileName, Scores, Opts, SemaCCS, Includes.get(),
+                           DocComment);
   }
 };
 

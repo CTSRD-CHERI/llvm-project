@@ -2455,6 +2455,10 @@ bool Sema::CheckX86BuiltinRoundingOrSAE(unsigned BuiltinID, CallExpr *TheCall) {
   case X86::BI__builtin_ia32_cvtuqq2ps512_mask:
   case X86::BI__builtin_ia32_sqrtpd512_mask:
   case X86::BI__builtin_ia32_sqrtps512_mask:
+  case X86::BI__builtin_ia32_vfmaddpd512:
+  case X86::BI__builtin_ia32_vfmaddps512:
+  case X86::BI__builtin_ia32_vfmaddsubpd512:
+  case X86::BI__builtin_ia32_vfmaddsubps512:
     ArgNum = 3;
     HasRC = true;
     break;
@@ -2483,28 +2487,6 @@ bool Sema::CheckX86BuiltinRoundingOrSAE(unsigned BuiltinID, CallExpr *TheCall) {
   case X86::BI__builtin_ia32_cvtsd2ss_round_mask:
   case X86::BI__builtin_ia32_sqrtsd_round_mask:
   case X86::BI__builtin_ia32_sqrtss_round_mask:
-  case X86::BI__builtin_ia32_vfmaddpd512_mask:
-  case X86::BI__builtin_ia32_vfmaddpd512_mask3:
-  case X86::BI__builtin_ia32_vfmaddpd512_maskz:
-  case X86::BI__builtin_ia32_vfmaddps512_mask:
-  case X86::BI__builtin_ia32_vfmaddps512_mask3:
-  case X86::BI__builtin_ia32_vfmaddps512_maskz:
-  case X86::BI__builtin_ia32_vfmaddsubpd512_mask:
-  case X86::BI__builtin_ia32_vfmaddsubpd512_mask3:
-  case X86::BI__builtin_ia32_vfmaddsubpd512_maskz:
-  case X86::BI__builtin_ia32_vfmaddsubps512_mask:
-  case X86::BI__builtin_ia32_vfmaddsubps512_mask3:
-  case X86::BI__builtin_ia32_vfmaddsubps512_maskz:
-  case X86::BI__builtin_ia32_vfmsubpd512_mask3:
-  case X86::BI__builtin_ia32_vfmsubps512_mask3:
-  case X86::BI__builtin_ia32_vfmsubaddpd512_mask3:
-  case X86::BI__builtin_ia32_vfmsubaddps512_mask3:
-  case X86::BI__builtin_ia32_vfnmaddpd512_mask:
-  case X86::BI__builtin_ia32_vfnmaddps512_mask:
-  case X86::BI__builtin_ia32_vfnmsubpd512_mask:
-  case X86::BI__builtin_ia32_vfnmsubpd512_mask3:
-  case X86::BI__builtin_ia32_vfnmsubps512_mask:
-  case X86::BI__builtin_ia32_vfnmsubps512_mask3:
   case X86::BI__builtin_ia32_vfmaddsd3_mask:
   case X86::BI__builtin_ia32_vfmaddsd3_maskz:
   case X86::BI__builtin_ia32_vfmaddsd3_mask3:
@@ -3566,9 +3548,10 @@ ExprResult Sema::SemaAtomicOpsOverloaded(ExprResult TheCallResult,
     return ExprError();
   }
 
-  // atomic_fetch_or takes a pointer to a volatile 'A'.  We shouldn't let the
-  // volatile-ness of the pointee-type inject itself into the result or the
-  // other operands. Similarly atomic_load can take a pointer to a const 'A'.
+  // All atomic operations have an overload which takes a pointer to a volatile
+  // 'A'.  We shouldn't let the volatile-ness of the pointee-type inject itself
+  // into the result or the other operands. Similarly atomic_load takes a
+  // pointer to a const 'A'.
   ValType.removeLocalVolatile();
   ValType.removeLocalConst();
   QualType ResultType = ValType;
@@ -3581,16 +3564,27 @@ ExprResult Sema::SemaAtomicOpsOverloaded(ExprResult TheCallResult,
   // The type of a parameter passed 'by value'. In the GNU atomics, such
   // arguments are actually passed as pointers.
   QualType ByValType = ValType; // 'CP'
-  if (!IsC11 && !IsN)
+  bool IsPassedByAddress = false;
+  if (!IsC11 && !IsN) {
     ByValType = Ptr->getType();
+    IsPassedByAddress = true;
+  }
 
-  // The first argument --- the pointer --- has a fixed type; we
-  // deduce the types of the rest of the arguments accordingly.  Walk
-  // the remaining arguments, converting them to the deduced value type.
-  for (unsigned i = 1; i != TheCall->getNumArgs(); ++i) {
+  // The first argument's non-CV pointer type is used to deduce the type of
+  // subsequent arguments, except for:
+  //  - weak flag (always converted to bool)
+  //  - memory order (always converted to int)
+  //  - scope  (always converted to int)
+  for (unsigned i = 0; i != TheCall->getNumArgs(); ++i) {
     QualType Ty;
     if (i < NumVals[Form] + 1) {
       switch (i) {
+      case 0:
+        // The first argument is always a pointer. It has a fixed type.
+        // It is always dereferenced, a nullptr is undefined.
+        CheckNonNullArgument(*this, TheCall->getArg(i), DRE->getLocStart());
+        // Nothing else to do: we already know all we want about this pointer.
+        continue;
       case 1:
         // The second argument is the non-atomic operand. For arithmetic, this
         // is always passed by value, and for a compare_exchange it is always
@@ -3599,14 +3593,16 @@ ExprResult Sema::SemaAtomicOpsOverloaded(ExprResult TheCallResult,
         assert(Form != Load);
         if (Form == Init || (Form == Arithmetic && ValType->isIntegerType()))
           Ty = ValType;
-        else if (Form == Copy || Form == Xchg)
+        else if (Form == Copy || Form == Xchg) {
+          if (IsPassedByAddress)
+            // The value pointer is always dereferenced, a nullptr is undefined.
+            CheckNonNullArgument(*this, TheCall->getArg(i), DRE->getLocStart());
           Ty = ByValType;
-        else if (Form == Arithmetic)
+        } else if (Form == Arithmetic)
           Ty = Context.getPointerDiffType();
         else {
           Expr *ValArg = TheCall->getArg(i);
-          // Treat this argument as _Nonnull as we want to show a warning if
-          // NULL is passed into it.
+          // The value pointer is always dereferenced, a nullptr is undefined.
           CheckNonNullArgument(*this, ValArg, DRE->getLocStart());
           LangAS AS = LangAS::Default;
           // Keep address space of non-atomic pointer type.
@@ -3619,8 +3615,10 @@ ExprResult Sema::SemaAtomicOpsOverloaded(ExprResult TheCallResult,
         }
         break;
       case 2:
-        // The third argument to compare_exchange / GNU exchange is a
-        // (pointer to a) desired value.
+        // The third argument to compare_exchange / GNU exchange is the desired
+        // value, either by-value (for the C11 and *_n variant) or as a pointer.
+        if (IsPassedByAddress)
+          CheckNonNullArgument(*this, TheCall->getArg(i), DRE->getLocStart());
         Ty = ByValType;
         break;
       case 3:
@@ -4030,7 +4028,7 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
     ResultType = Context.BoolTy;
     break;
       
-  case Builtin::BI__sync_lock_test_and_set: 
+  case Builtin::BI__sync_lock_test_and_set:
   case Builtin::BI__sync_lock_test_and_set_1:
   case Builtin::BI__sync_lock_test_and_set_2:
   case Builtin::BI__sync_lock_test_and_set_4:

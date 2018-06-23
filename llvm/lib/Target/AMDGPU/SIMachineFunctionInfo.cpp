@@ -55,6 +55,9 @@ SIMachineFunctionInfo::SIMachineFunctionInfo(const MachineFunction &MF)
   FlatWorkGroupSizes = ST.getFlatWorkGroupSizes(F);
   WavesPerEU = ST.getWavesPerEU(F);
 
+  Occupancy = getMaxWavesPerEU();
+  limitOccupancy(MF);
+
   if (!isEntryFunction()) {
     // Non-entry functions have no special inputs for now, other registers
     // required for scratch access.
@@ -71,8 +74,11 @@ SIMachineFunctionInfo::SIMachineFunctionInfo(const MachineFunction &MF)
     if (F.hasFnAttribute("amdgpu-implicitarg-ptr"))
       ImplicitArgPtr = true;
   } else {
-    if (F.hasFnAttribute("amdgpu-implicitarg-ptr"))
+    if (F.hasFnAttribute("amdgpu-implicitarg-ptr")) {
       KernargSegmentPtr = true;
+      assert(MaxKernArgAlign == 0);
+      MaxKernArgAlign =  ST.getAlignmentForImplicitArgPtr();
+    }
   }
 
   CallingConv::ID CC = F.getCallingConv();
@@ -134,7 +140,7 @@ SIMachineFunctionInfo::SIMachineFunctionInfo(const MachineFunction &MF)
     }
   }
 
-  bool IsCOV2 = ST.isAmdCodeObjectV2(MF);
+  bool IsCOV2 = ST.isAmdCodeObjectV2(F);
   if (IsCOV2) {
     if (HasStackObjects || MaySpill)
       PrivateSegmentBuffer = true;
@@ -147,7 +153,7 @@ SIMachineFunctionInfo::SIMachineFunctionInfo(const MachineFunction &MF)
 
     if (F.hasFnAttribute("amdgpu-dispatch-id"))
       DispatchID = true;
-  } else if (ST.isMesaGfxShader(MF)) {
+  } else if (ST.isMesaGfxShader(F)) {
     if (HasStackObjects || MaySpill)
       ImplicitBufferPtr = true;
   }
@@ -171,6 +177,13 @@ SIMachineFunctionInfo::SIMachineFunctionInfo(const MachineFunction &MF)
   S = A.getValueAsString();
   if (!S.empty())
     S.consumeInteger(0, HighBitsOf32BitAddress);
+}
+
+void SIMachineFunctionInfo::limitOccupancy(const MachineFunction &MF) {
+  limitOccupancy(getMaxWavesPerEU());
+  const SISubtarget& ST = MF.getSubtarget<SISubtarget>();
+  limitOccupancy(ST.getOccupancyWithLocalMemSize(getLDSSize(),
+                 MF.getFunction()));
 }
 
 unsigned SIMachineFunctionInfo::addPrivateSegmentBuffer(

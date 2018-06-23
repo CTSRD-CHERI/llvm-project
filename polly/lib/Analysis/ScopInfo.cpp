@@ -1312,22 +1312,15 @@ void ScopStmt::realignParams() {
   Domain = Domain.gist_params(Ctx);
 }
 
-/// Add @p BSet to the set @p User if @p BSet is bounded.
-static isl_stat collectBoundedParts(__isl_take isl_basic_set *BSet,
-                                    void *User) {
-  isl_set **BoundedParts = static_cast<isl_set **>(User);
-  if (isl_basic_set_is_bounded(BSet))
-    *BoundedParts = isl_set_union(*BoundedParts, isl_set_from_basic_set(BSet));
-  else
-    isl_basic_set_free(BSet);
-  return isl_stat_ok;
-}
-
-/// Return the bounded parts of @p S.
-static __isl_give isl_set *collectBoundedParts(__isl_take isl_set *S) {
-  isl_set *BoundedParts = isl_set_empty(isl_set_get_space(S));
-  isl_set_foreach_basic_set(S, collectBoundedParts, &BoundedParts);
-  isl_set_free(S);
+/// Add @p BSet to set @p BoundedParts if @p BSet is bounded.
+static isl::set collectBoundedParts(isl::set S) {
+  isl::set BoundedParts = isl::set::empty(S.get_space());
+  S.foreach_basic_set([&BoundedParts](isl::basic_set BSet) -> isl::stat {
+    if (BSet.is_bounded()) {
+      BoundedParts = BoundedParts.unite(isl::set(BSet));
+    }
+    return isl::stat::ok;
+  });
   return BoundedParts;
 }
 
@@ -1335,41 +1328,41 @@ static __isl_give isl_set *collectBoundedParts(__isl_take isl_set *S) {
 ///
 /// @returns A separation of @p S into first an unbounded then a bounded subset,
 ///          both with regards to the dimension @p Dim.
-static std::pair<__isl_give isl_set *, __isl_give isl_set *>
-partitionSetParts(__isl_take isl_set *S, unsigned Dim) {
-  for (unsigned u = 0, e = isl_set_n_dim(S); u < e; u++)
-    S = isl_set_lower_bound_si(S, isl_dim_set, u, 0);
+static std::pair<isl::set, isl::set> partitionSetParts(isl::set S,
+                                                       unsigned Dim) {
+  for (unsigned u = 0, e = S.n_dim(); u < e; u++)
+    S = S.lower_bound_si(isl::dim::set, u, 0);
 
-  unsigned NumDimsS = isl_set_n_dim(S);
-  isl_set *OnlyDimS = isl_set_copy(S);
+  unsigned NumDimsS = S.n_dim();
+  isl::set OnlyDimS = S;
 
   // Remove dimensions that are greater than Dim as they are not interesting.
   assert(NumDimsS >= Dim + 1);
-  OnlyDimS =
-      isl_set_project_out(OnlyDimS, isl_dim_set, Dim + 1, NumDimsS - Dim - 1);
+  OnlyDimS = OnlyDimS.project_out(isl::dim::set, Dim + 1, NumDimsS - Dim - 1);
 
   // Create artificial parametric upper bounds for dimensions smaller than Dim
   // as we are not interested in them.
-  OnlyDimS = isl_set_insert_dims(OnlyDimS, isl_dim_param, 0, Dim);
+  OnlyDimS = OnlyDimS.insert_dims(isl::dim::param, 0, Dim);
+
   for (unsigned u = 0; u < Dim; u++) {
-    isl_constraint *C = isl_inequality_alloc(
-        isl_local_space_from_space(isl_set_get_space(OnlyDimS)));
-    C = isl_constraint_set_coefficient_si(C, isl_dim_param, u, 1);
-    C = isl_constraint_set_coefficient_si(C, isl_dim_set, u, -1);
-    OnlyDimS = isl_set_add_constraint(OnlyDimS, C);
+    isl::constraint C = isl::constraint::alloc_inequality(
+        isl::local_space(OnlyDimS.get_space()));
+    C = C.set_coefficient_si(isl::dim::param, u, 1);
+    C = C.set_coefficient_si(isl::dim::set, u, -1);
+    OnlyDimS = OnlyDimS.add_constraint(C);
   }
 
   // Collect all bounded parts of OnlyDimS.
-  isl_set *BoundedParts = collectBoundedParts(OnlyDimS);
+  isl::set BoundedParts = collectBoundedParts(OnlyDimS);
 
   // Create the dimensions greater than Dim again.
-  BoundedParts = isl_set_insert_dims(BoundedParts, isl_dim_set, Dim + 1,
-                                     NumDimsS - Dim - 1);
+  BoundedParts =
+      BoundedParts.insert_dims(isl::dim::set, Dim + 1, NumDimsS - Dim - 1);
 
   // Remove the artificial upper bound parameters again.
-  BoundedParts = isl_set_remove_dims(BoundedParts, isl_dim_param, 0, Dim);
+  BoundedParts = BoundedParts.remove_dims(isl::dim::param, 0, Dim);
 
-  isl_set *UnboundedParts = isl_set_subtract(S, isl_set_copy(BoundedParts));
+  isl::set UnboundedParts = S.subtract(BoundedParts);
   return std::make_pair(UnboundedParts, BoundedParts);
 }
 
@@ -2112,29 +2105,23 @@ void Scop::addUserContext() {
   if (UserContextStr.empty())
     return;
 
-  isl_set *UserContext =
-      isl_set_read_from_str(getIslCtx().get(), UserContextStr.c_str());
-  isl_space *Space = getParamSpace().release();
-  if (isl_space_dim(Space, isl_dim_param) !=
-      isl_set_dim(UserContext, isl_dim_param)) {
-    auto SpaceStr = isl_space_to_str(Space);
+  isl::set UserContext = isl::set(getIslCtx(), UserContextStr.c_str());
+  isl::space Space = getParamSpace();
+  if (Space.dim(isl::dim::param) != UserContext.dim(isl::dim::param)) {
+    std::string SpaceStr = Space.to_str();
     errs() << "Error: the context provided in -polly-context has not the same "
            << "number of dimensions than the computed context. Due to this "
            << "mismatch, the -polly-context option is ignored. Please provide "
            << "the context in the parameter space: " << SpaceStr << ".\n";
-    free(SpaceStr);
-    isl_set_free(UserContext);
-    isl_space_free(Space);
     return;
   }
 
-  for (unsigned i = 0; i < isl_space_dim(Space, isl_dim_param); i++) {
+  for (unsigned i = 0; i < Space.dim(isl::dim::param); i++) {
     std::string NameContext = Context.get_dim_name(isl::dim::param, i);
-    std::string NameUserContext =
-        isl_set_get_dim_name(UserContext, isl_dim_param, i);
+    std::string NameUserContext = UserContext.get_dim_name(isl::dim::param, i);
 
     if (NameContext != NameUserContext) {
-      auto SpaceStr = isl_space_to_str(Space);
+      std::string SpaceStr = Space.to_str();
       errs() << "Error: the name of dimension " << i
              << " provided in -polly-context "
              << "is '" << NameUserContext << "', but the name in the computed "
@@ -2142,19 +2129,14 @@ void Scop::addUserContext() {
              << "'. Due to this name mismatch, "
              << "the -polly-context option is ignored. Please provide "
              << "the context in the parameter space: " << SpaceStr << ".\n";
-      free(SpaceStr);
-      isl_set_free(UserContext);
-      isl_space_free(Space);
       return;
     }
 
-    UserContext =
-        isl_set_set_dim_id(UserContext, isl_dim_param, i,
-                           isl_space_get_dim_id(Space, isl_dim_param, i));
+    UserContext = UserContext.set_dim_id(isl::dim::param, i,
+                                         Space.get_dim_id(isl::dim::param, i));
   }
 
-  Context = Context.intersect(isl::manage(UserContext));
-  isl_space_free(Space);
+  Context = Context.intersect(UserContext);
 }
 
 void Scop::buildInvariantEquivalenceClasses() {
@@ -3038,18 +3020,16 @@ bool Scop::addLoopBoundsToHeaderDomain(
   HeaderBBDom = HeaderBBDom.subtract(UnionBackedgeConditionComplement);
   HeaderBBDom = HeaderBBDom.apply(NextIterationMap);
 
-  auto Parts = partitionSetParts(HeaderBBDom.copy(), LoopDepth);
-  HeaderBBDom = isl::manage(Parts.second);
+  auto Parts = partitionSetParts(HeaderBBDom, LoopDepth);
+  HeaderBBDom = Parts.second;
 
   // Check if there is a <nsw> tagged AddRec for this loop and if so do not add
   // the bounded assumptions to the context as they are already implied by the
   // <nsw> tag.
-  if (Affinator.hasNSWAddRecForLoop(L)) {
-    isl_set_free(Parts.first);
+  if (Affinator.hasNSWAddRecForLoop(L))
     return true;
-  }
 
-  isl::set UnboundedCtx = isl::manage(Parts.first).params();
+  isl::set UnboundedCtx = Parts.first.params();
   recordAssumption(INFINITELOOP, UnboundedCtx,
                    HeaderBB->getTerminator()->getDebugLoc(), AS_RESTRICTION);
   return true;
