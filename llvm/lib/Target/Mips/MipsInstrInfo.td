@@ -256,6 +256,8 @@ def HasCRC   : Predicate<"Subtarget->hasCRC()">,
                AssemblerPredicate<"FeatureCRC">;
 def HasVirt  : Predicate<"Subtarget->hasVirt()">,
                AssemblerPredicate<"FeatureVirt">;
+def HasGINV  : Predicate<"Subtarget->hasGINV()">,
+               AssemblerPredicate<"FeatureGINV">;
 // TODO: Add support for FPOpFusion::Standard
 def AllowFPOpFusion : Predicate<"TM.Options.AllowFPOpFusion =="
                                 " FPOpFusion::Fast">;
@@ -470,6 +472,10 @@ class ASE_CRC {
 
 class ASE_VIRT {
   list <Predicate> ASEPredicate = [HasVirt];
+}
+
+class ASE_GINV {
+  list <Predicate> ASEPredicate = [HasGINV];
 }
 
 // Class used for separating microMIPSr6 and microMIPS (r3) instruction.
@@ -1774,6 +1780,7 @@ class MoveFromLOHI<string opstr, RegisterOperand RO, Register UseReg>:
          FrmR, opstr> {
   let Uses = [UseReg];
   let hasSideEffects = 0;
+  let isMoveReg = 1;
 }
 
 class PseudoMTLOHI<RegisterClass DstRC, RegisterClass SrcRC>
@@ -1786,6 +1793,7 @@ class MoveToLOHI<string opstr, RegisterOperand RO, list<Register> DefRegs>:
   FrmR, opstr> {
   let Defs = DefRegs;
   let hasSideEffects = 0;
+  let isMoveReg = 1;
 }
 
 class EffectiveAddress<string opstr, RegisterOperand RO> :
@@ -2460,10 +2468,12 @@ class CacheOp<string instr_asm, Operand MemOpnd,
   let DecoderMethod = "DecodeCacheOp";
 }
 
-def CACHE : MMRel, CacheOp<"cache", mem, II_CACHE>, CACHEOP_FM<0b101111>,
-            INSN_MIPS3_32_NOT_32R6_64R6;
-def PREF :  MMRel, CacheOp<"pref", mem, II_PREF>, CACHEOP_FM<0b110011>,
-            INSN_MIPS3_32_NOT_32R6_64R6;
+let AdditionalPredicates = [NotInMicroMips] in {
+  def CACHE : MMRel, CacheOp<"cache", mem, II_CACHE>, CACHEOP_FM<0b101111>,
+              INSN_MIPS3_32_NOT_32R6_64R6;
+  def PREF :  MMRel, CacheOp<"pref", mem, II_PREF>, CACHEOP_FM<0b110011>,
+              INSN_MIPS3_32_NOT_32R6_64R6;
+}
 // FIXME: We are missing the prefx instruction.
 def ROL : MipsAsmPseudoInst<(outs),
                             (ins GPR32Opnd:$rs, GPR32Opnd:$rt, GPR32Opnd:$rd),

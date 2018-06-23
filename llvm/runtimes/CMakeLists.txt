@@ -252,6 +252,7 @@ else() # if this is included from LLVM's CMake
                                         -DCMAKE_C_COMPILER_WORKS=ON
                                         -DCMAKE_ASM_COMPILER_WORKS=ON
                              PASSTHROUGH_PREFIXES COMPILER_RT
+                                                  CLANG_DEFAULT
                              USE_TOOLCHAIN
                              ${EXTRA_ARGS})
   endfunction()
@@ -283,6 +284,7 @@ else() # if this is included from LLVM's CMake
                                         -DCMAKE_ASM_COMPILER_WORKS=ON
                                         -DCOMPILER_RT_DEFAULT_TARGET_ONLY=ON
                                         ${${target}_extra_args}
+                             PASSTHROUGH_PREFIXES CLANG_DEFAULT
                              TOOLCHAIN_TOOLS clang lld llvm-ar llvm-ranlib
                              USE_TOOLCHAIN
                              ${EXTRA_ARGS})
@@ -352,6 +354,11 @@ else() # if this is included from LLVM's CMake
         list(APPEND test_targets check-${runtime_name})
       endif()
     endforeach()
+    foreach(component ${LLVM_RUNTIME_DISTRIBUTION_COMPONENTS})
+      if(NOT ${component} IN_LIST SUB_COMPONENTS)
+        list(APPEND extra_targets ${component} install-${component} install-${component}-stripped)
+      endif()
+    endforeach()
 
     if(LLVM_INCLUDE_TESTS)
       list(APPEND test_targets runtimes-test-depends check-runtimes)
@@ -371,6 +378,7 @@ else() # if this is included from LLVM's CMake
                                         -DCMAKE_CXX_COMPILER_WORKS=ON
                                         -DCMAKE_ASM_COMPILER_WORKS=ON
                              PASSTHROUGH_PREFIXES LLVM_ENABLE_RUNTIMES
+                                                  CLANG_DEFAULT
                                                   ${ARG_PREFIXES}
                              EXTRA_TARGETS ${extra_targets}
                                            ${test_targets}
@@ -405,6 +413,14 @@ else() # if this is included from LLVM's CMake
 
     foreach(target_name IN LISTS SUB_COMPONENTS SUB_INSTALL_TARGETS)
       list(APPEND ${name}_extra_targets "${target_name}:${target_name}-${name}")
+    endforeach()
+
+    foreach(component ${LLVM_RUNTIME_DISTRIBUTION_COMPONENTS})
+      if(NOT "${target_name}:${target_name}-${component}" IN_LIST extra_targets)
+        list(APPEND ${name}_extra_targets
+          "${target_name}:${target_name}-${component}"
+          "${target_name}:${target_name}-install-${component}")
+      endif()
     endforeach()
 
     if(LLVM_INCLUDE_TESTS)
@@ -446,6 +462,7 @@ else() # if this is included from LLVM's CMake
                                         -DLLVM_RUNTIMES_TARGET=${name}
                                         ${${name}_extra_args}
                              PASSTHROUGH_PREFIXES LLVM_ENABLE_RUNTIMES
+                                                  CLANG_DEFAULT
                              TOOLCHAIN_TOOLS clang lld llvm-ar llvm-ranlib
                              EXTRA_TARGETS ${${name}_extra_targets}
                                            ${${name}_test_targets}
@@ -477,6 +494,12 @@ else() # if this is included from LLVM's CMake
           add_custom_target(check-runtimes)
           add_custom_target(runtimes-test-depends)
           set(test_targets "")
+        endif()
+        if(LLVM_RUNTIME_DISTRIBUTION_COMPONENTS)
+          foreach(component ${LLVM_RUNTIME_DISTRIBUTION_COMPONENTS})
+            add_custom_target(${component})
+            add_custom_target(install-${component})
+          endforeach()
         endif()
       endif()
 

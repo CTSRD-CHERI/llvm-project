@@ -99,10 +99,10 @@ Improvements to clang-tidy
   with looping constructs. Every backward jump is rejected. Forward jumps are
   only allowed in nested loops.
 
-- New alias :doc:`fuchsia-header-anon-namespaces
-  <clang-tidy/checks/fuchsia-header-anon-namespaces>` to :doc:`google-build-namespaces
-  <clang-tidy/checks/google-build-namespaces>`
-  added.
+- New :doc:`cppcoreguidelines-narrowing-conversions
+  <clang-tidy/checks/cppcoreguidelines-narrowing-conversions>` check
+
+  Checks for narrowing conversions, e. g. ``int i = 0; i += 0.1;``.
 
 - New :doc:`fuchsia-multiple-inheritance
   <clang-tidy/checks/fuchsia-multiple-inheritance>` check.
@@ -179,6 +179,11 @@ Improvements to clang-tidy
 
 - The `AnalyzeTemporaryDtors` option was removed, since the corresponding
   `cfg-temporary-dtors` option of the Static Analyzer now defaults to `true`.
+
+- New alias :doc:`fuchsia-header-anon-namespaces
+  <clang-tidy/checks/fuchsia-header-anon-namespaces>` to :doc:`google-build-namespaces
+  <clang-tidy/checks/google-build-namespaces>`
+  added.
 
 - New alias :doc:`hicpp-avoid-goto
   <clang-tidy/checks/hicpp-avoid-goto>` to :doc:`cppcoreguidelines-avoid-goto

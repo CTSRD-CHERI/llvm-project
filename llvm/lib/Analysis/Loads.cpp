@@ -108,8 +108,8 @@ static bool isDereferenceableAndAlignedPointer(
                                               DL, CtxI, DT, Visited);
 
   if (auto CS = ImmutableCallSite(V))
-    if (const Value *RV = CS.getReturnedArgOperand())
-      return isDereferenceableAndAlignedPointer(RV, Align, Size, DL, CtxI, DT,
+    if (auto *RP = getArgumentAliasingToReturnedPointer(CS))
+      return isDereferenceableAndAlignedPointer(RP, Align, Size, DL, CtxI, DT,
                                                 Visited);
 
   // If we don't know, assume the worst.

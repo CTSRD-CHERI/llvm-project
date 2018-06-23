@@ -34,8 +34,7 @@ namespace llvm {
   FunctionPass *createMipsModuleISelDagPass();
   FunctionPass *createMipsOptimizePICCallPass();
   FunctionPass *createMipsDelaySlotFillerPass();
-  FunctionPass *createMipsHazardSchedule();
-  FunctionPass *createMipsLongBranchPass();
+  FunctionPass *createMipsBranchExpansion();
   FunctionPass *createMipsConstantIslandPass();
   FunctionPass *createMicroMipsSizeReductionPass();
 
@@ -52,7 +51,7 @@ namespace llvm {
                                                      MipsRegisterBankInfo &);
 
   void initializeMipsDelaySlotFillerPass(PassRegistry &);
-  void initializeMipsLongBranchPass(PassRegistry &);
+  void initializeMipsBranchExpansionPass(PassRegistry &);
 } // end namespace llvm;
 
 #endif

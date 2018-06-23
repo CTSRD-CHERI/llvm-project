@@ -38,6 +38,9 @@ def RetFlag      : SDNode<"RISCVISD::RET_FLAG", SDTNone,
                           [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
 def SelectCC     : SDNode<"RISCVISD::SELECT_CC", SDT_RISCVSelectCC,
                           [SDNPInGlue]>;
+def Tail         : SDNode<"RISCVISD::TAIL", SDT_RISCVCall,
+                          [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue,
+                           SDNPVariadic]>;
 
 //===----------------------------------------------------------------------===//
 // Operand and SDNode transformation definitions.
@@ -267,7 +270,7 @@ class Priv<string opcodestr, bits<7> funct7>
 // Instructions
 //===----------------------------------------------------------------------===//
 
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
+let hasSideEffects = 0, isReMaterializable = 1, mayLoad = 0, mayStore = 0 in {
 def LUI : RVInstU<OPC_LUI, (outs GPR:$rd), (ins uimm20:$imm20),
                   "lui", "$rd, $imm20">;
 
@@ -301,7 +304,11 @@ def SB : Store_rri<0b000, "sb">;
 def SH : Store_rri<0b001, "sh">;
 def SW : Store_rri<0b010, "sw">;
 
+// ADDI isn't always rematerializable, but isReMaterializable will be used as
+// a hint which is verified in isReallyTriviallyReMaterializable.
+let isReMaterializable = 1 in
 def ADDI  : ALU_ri<0b000, "addi">;
+
 def SLTI  : ALU_ri<0b010, "slti">;
 def SLTIU : ALU_ri<0b011, "sltiu">;
 def XORI  : ALU_ri<0b100, "xori">;
@@ -656,6 +663,24 @@ def PseudoCALLIndirect : Pseudo<(outs), (ins GPR:$rs1), [(Call GPR:$rs1)]>,
 let isBarrier = 1, isReturn = 1, isTerminator = 1 in
 def PseudoRET : Pseudo<(outs), (ins), [(RetFlag)]>,
                 PseudoInstExpansion<(JALR X0, X1, 0)>;
+
+// PseudoTAIL is a pseudo instruction similar to PseudoCALL and will eventually
+// expand to auipc and jalr while encoding.
+// Define AsmString to print "tail" when compile with -S flag.
+let isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [X2],
+    isCodeGenOnly = 0 in
+def PseudoTAIL : Pseudo<(outs), (ins bare_symbol:$dst), []> {
+  let AsmString = "tail\t$dst";
+}
+
+let isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [X2] in
+def PseudoTAILIndirect : Pseudo<(outs), (ins GPRTC:$rs1), [(Tail GPRTC:$rs1)]>,
+                         PseudoInstExpansion<(JALR X0, GPR:$rs1, 0)>;
+
+def : Pat<(Tail (iPTR tglobaladdr:$dst)),
+          (PseudoTAIL texternalsym:$dst)>;
+def : Pat<(Tail (iPTR texternalsym:$dst)),
+          (PseudoTAIL texternalsym:$dst)>;
 
 /// Loads
 

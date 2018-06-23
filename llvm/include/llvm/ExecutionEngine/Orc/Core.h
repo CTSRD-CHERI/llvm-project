@@ -16,6 +16,7 @@
 
 #include "llvm/ExecutionEngine/JITSymbol.h"
 #include "llvm/ExecutionEngine/Orc/SymbolStringPool.h"
+#include "llvm/IR/Module.h"
 
 #include <list>
 #include <map>
@@ -64,39 +65,29 @@ using SymbolDependenceMap = std::map<VSO *, SymbolNameSet>;
 /// Render a SymbolDependendeMap.
 raw_ostream &operator<<(raw_ostream &OS, const SymbolDependenceMap &Deps);
 
-/// A base class for materialization failures that allows the failing
-/// symbols to be obtained for logging.
+/// Used to notify a VSO that the given set of symbols failed to materialize.
 class FailedToMaterialize : public ErrorInfo<FailedToMaterialize> {
 public:
   static char ID;
-  virtual const SymbolNameSet &getSymbols() const = 0;
-};
 
-/// Used to notify a VSO that the given set of symbols failed to resolve.
-class FailedToResolve : public ErrorInfo<FailedToResolve, FailedToMaterialize> {
-public:
-  static char ID;
-
-  FailedToResolve(SymbolNameSet Symbols);
+  FailedToMaterialize(SymbolNameSet Symbols);
   std::error_code convertToErrorCode() const override;
   void log(raw_ostream &OS) const override;
-  const SymbolNameSet &getSymbols() const override { return Symbols; }
+  const SymbolNameSet &getSymbols() const { return Symbols; }
 
 private:
   SymbolNameSet Symbols;
 };
 
-/// Used to notify a VSO that the given set of symbols failed to
-/// finalize.
-class FailedToFinalize
-    : public ErrorInfo<FailedToFinalize, FailedToMaterialize> {
+/// Used to notify clients when symbols can not be found during a lookup.
+class SymbolsNotFound : public ErrorInfo<SymbolsNotFound> {
 public:
   static char ID;
 
-  FailedToFinalize(SymbolNameSet Symbols);
+  SymbolsNotFound(SymbolNameSet Symbols);
   std::error_code convertToErrorCode() const override;
   void log(raw_ostream &OS) const override;
-  const SymbolNameSet &getSymbols() const override { return Symbols; }
+  const SymbolNameSet &getSymbols() const { return Symbols; }
 
 private:
   SymbolNameSet Symbols;
@@ -110,11 +101,8 @@ private:
 /// finalize symbols, or abandon materialization by notifying any unmaterialized
 /// symbols of an error.
 class MaterializationResponsibility {
+  friend class MaterializationUnit;
 public:
-  /// Create a MaterializationResponsibility for the given VSO and
-  ///        initial symbols.
-  MaterializationResponsibility(VSO &V, SymbolFlagsMap SymbolFlags);
-
   MaterializationResponsibility(MaterializationResponsibility &&) = default;
   MaterializationResponsibility &
   operator=(MaterializationResponsibility &&) = default;
@@ -147,7 +135,7 @@ public:
   /// Notify all unfinalized symbols that an error has occurred.
   /// This will remove all symbols covered by this MaterializationResponsibilty
   /// from V, and send an error to any queries waiting on these symbols.
-  void failMaterialization(std::function<Error()> GenerateError);
+  void failMaterialization();
 
   /// Transfers responsibility to the given MaterializationUnit for all
   /// symbols defined by that MaterializationUnit. This allows
@@ -160,6 +148,10 @@ public:
   void addDependencies(const SymbolDependenceMap &Dependencies);
 
 private:
+  /// Create a MaterializationResponsibility for the given VSO and
+  ///        initial symbols.
+  MaterializationResponsibility(VSO &V, SymbolFlagsMap SymbolFlags);
+
   VSO &V;
   SymbolFlagsMap SymbolFlags;
 };
@@ -174,8 +166,8 @@ private:
 /// definition is added or already present.
 class MaterializationUnit {
 public:
-  MaterializationUnit(SymbolFlagsMap SymbolFlags)
-      : SymbolFlags(std::move(SymbolFlags)) {}
+  MaterializationUnit(SymbolFlagsMap InitalSymbolFlags)
+      : SymbolFlags(std::move(InitalSymbolFlags)) {}
 
   virtual ~MaterializationUnit() {}
 
@@ -196,6 +188,9 @@ public:
     discard(V, std::move(Name));
   }
 
+protected:
+  SymbolFlagsMap SymbolFlags;
+
 private:
   virtual void anchor();
 
@@ -209,8 +204,6 @@ private:
   ///        symbol is a function, delete the function body or mark it available
   ///        externally).
   virtual void discard(const VSO &V, SymbolStringPtr Name) = 0;
-
-  SymbolFlagsMap SymbolFlags;
 };
 
 /// A MaterializationUnit implementation for pre-existing absolute symbols.
@@ -387,6 +380,8 @@ private:
 
   void removeQueryDependence(VSO &V, const SymbolStringPtr &Name);
 
+  bool canStillFail();
+
   void handleFailed(Error Err);
 
   void detach();
@@ -473,6 +468,7 @@ createSymbolResolver(LookupFlagsFn &&LookupFlags, LookupFn &&Lookup) {
 class VSO {
   friend class AsynchronousSymbolQuery;
   friend class ExecutionSession;
+  friend class MaterializationResponsibility;
 public:
   using AsynchronousSymbolQuerySet =
       std::set<std::shared_ptr<AsynchronousSymbolQuery>>;
@@ -516,41 +512,6 @@ public:
       return Error::success();
     });
   }
-
-  /// Define a set of symbols already in the materializing state.
-  Error defineMaterializing(const SymbolFlagsMap &SymbolFlags);
-
-  /// Replace the definition of a set of materializing symbols with a new
-  /// MaterializationUnit.
-  ///
-  /// All symbols being replaced must be in the materializing state. If any
-  /// symbol being replaced has pending queries then the MU will be returned
-  /// for materialization. Otherwise it will be stored in the VSO and all
-  /// symbols covered by MU moved back to the lazy state.
-  void replace(std::unique_ptr<MaterializationUnit> MU);
-
-  /// Record dependencies between symbols in this VSO and symbols in
-  ///        other VSOs.
-  void addDependencies(const SymbolFlagsMap &Dependents,
-                       const SymbolDependenceMap &Dependencies);
-
-  /// Resolve the given symbols.
-  ///
-  /// Returns the list of queries that become fully resolved as a consequence of
-  /// this operation.
-  void resolve(const SymbolMap &Resolved);
-
-  /// Finalize the given symbols.
-  ///
-  /// Returns the list of queries that become fully ready as a consequence of
-  /// this operation.
-  void finalize(const SymbolFlagsMap &Finalized);
-
-  /// Fail to materialize the given symbols.
-  ///
-  /// Returns the list of queries that fail as a consequence.
-  void notifyFailed(const SymbolFlagsMap &Failed,
-                    std::function<Error()> GenerateError);
 
   /// Search the given VSO for the symbols in Symbols. If found, store
   ///        the flags for each symbol in Flags. Returns any unresolved symbols.
@@ -609,6 +570,19 @@ private:
   void transferFinalizedNodeDependencies(MaterializingInfo &DependantMI,
                                          const SymbolStringPtr &DependantName,
                                          MaterializingInfo &FinalizedMI);
+
+  Error defineMaterializing(const SymbolFlagsMap &SymbolFlags);
+
+  void replace(std::unique_ptr<MaterializationUnit> MU);
+
+  void addDependencies(const SymbolFlagsMap &Dependents,
+                       const SymbolDependenceMap &Dependencies);
+
+  void resolve(const SymbolMap &Resolved);
+
+  void finalize(const SymbolFlagsMap &Finalized);
+
+  void notifyFailed(const SymbolNameSet &FailedSymbols);
 };
 
 /// An ExecutionSession represents a running JIT program.
@@ -636,19 +610,11 @@ private:
 /// VSOs will be searched in order and no VSO pointer may be null.
 /// All symbols must be found within the given VSOs or an error
 /// will be returned.
-///
-/// If this lookup is being performed on behalf of a
-/// MaterializationResponsibility then it must be passed in as R
-/// (in order to record the symbol dependencies).
-/// If this lookup is not being performed on behalf of a
-/// MaterializationResponsibility then R should be left null.
-Expected<SymbolMap> lookup(const std::vector<VSO *> &VSOs, SymbolNameSet Names,
-                           MaterializationResponsibility *R);
+Expected<SymbolMap> lookup(const std::vector<VSO *> &VSOs, SymbolNameSet Names);
 
 /// Look up a symbol by searching a list of VSOs.
 Expected<JITEvaluatedSymbol> lookup(const std::vector<VSO *> VSOs,
-                                    SymbolStringPtr Name,
-                                    MaterializationResponsibility *R);
+                                    SymbolStringPtr Name);
 
 } // End namespace orc
 } // End namespace llvm

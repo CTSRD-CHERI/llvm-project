@@ -645,6 +645,19 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
     if (LangOpts.ObjCRuntime.isNeXTFamily())
       Builder.defineMacro("__NEXT_RUNTIME__");
 
+    if (LangOpts.ObjCRuntime.getKind() == ObjCRuntime::GNUstep) {
+      auto version = LangOpts.ObjCRuntime.getVersion();
+      std::string versionString = "1";
+      // Don't rely on the tuple argument, because we can be asked to target
+      // later ABIs than we actually support, so clamp these values to those
+      // currently supported
+      if (version >= VersionTuple(2, 0))
+        Builder.defineMacro("__OBJC_GNUSTEP_RUNTIME_ABI__", "20");
+      else
+        Builder.defineMacro("__OBJC_GNUSTEP_RUNTIME_ABI__",
+            "1" + Twine(std::min(8U, version.getMinor().getValueOr(0))));
+    }
+
     if (LangOpts.ObjCRuntime.getKind() == ObjCRuntime::ObjFW) {
       VersionTuple tuple = LangOpts.ObjCRuntime.getVersion();
 
@@ -1027,19 +1040,21 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
   //   macro name is defined to have the decimal value yyyymm where
   //   yyyy and mm are the year and the month designations of the
   //   version of the OpenMP API that the implementation support.
-  switch (LangOpts.OpenMP) {
-  case 0:
-    break;
-  case 40:
-    Builder.defineMacro("_OPENMP", "201307");
-    break;
-  case 45:
-    Builder.defineMacro("_OPENMP", "201511");
-    break;
-  default:
-    // Default version is OpenMP 3.1, in Simd only mode - 4.5
-    Builder.defineMacro("_OPENMP", LangOpts.OpenMPSimd ? "201511" : "201107");
-    break;
+  if (!LangOpts.OpenMPSimd) {
+    switch (LangOpts.OpenMP) {
+    case 0:
+      break;
+    case 40:
+      Builder.defineMacro("_OPENMP", "201307");
+      break;
+    case 45:
+      Builder.defineMacro("_OPENMP", "201511");
+      break;
+    default:
+      // Default version is OpenMP 3.1
+      Builder.defineMacro("_OPENMP", "201107");
+      break;
+    }
   }
 
   // CUDA device path compilaton

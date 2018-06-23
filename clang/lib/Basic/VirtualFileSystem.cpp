@@ -139,6 +139,11 @@ std::error_code FileSystem::makeAbsolute(SmallVectorImpl<char> &Path) const {
   return llvm::sys::fs::make_absolute(WorkingDir.get(), Path);
 }
 
+std::error_code FileSystem::getRealPath(const Twine &Path,
+                                        SmallVectorImpl<char> &Output) const {
+  return errc::operation_not_permitted;
+}
+
 bool FileSystem::exists(const Twine &Path) {
   auto Status = status(Path);
   return Status && Status->exists();
@@ -236,6 +241,8 @@ public:
 
   llvm::ErrorOr<std::string> getCurrentWorkingDirectory() const override;
   std::error_code setCurrentWorkingDirectory(const Twine &Path) override;
+  std::error_code getRealPath(const Twine &Path,
+                              SmallVectorImpl<char> &Output) const override;
 };
 
 } // namespace
@@ -272,6 +279,12 @@ std::error_code RealFileSystem::setCurrentWorkingDirectory(const Twine &Path) {
   // switched during runtime of the tool. Fixing this depends on having a
   // file system abstraction that allows openat() style interactions.
   return llvm::sys::fs::set_current_path(Path);
+}
+
+std::error_code
+RealFileSystem::getRealPath(const Twine &Path,
+                            SmallVectorImpl<char> &Output) const {
+  return llvm::sys::fs::real_path(Path, Output);
 }
 
 IntrusiveRefCntPtr<FileSystem> vfs::getRealFileSystem() {
@@ -366,6 +379,15 @@ OverlayFileSystem::setCurrentWorkingDirectory(const Twine &Path) {
     if (std::error_code EC = FS->setCurrentWorkingDirectory(Path))
       return EC;
   return {};
+}
+
+std::error_code
+OverlayFileSystem::getRealPath(const Twine &Path,
+                               SmallVectorImpl<char> &Output) const {
+  for (auto &FS : FSList)
+    if (FS->exists(Path))
+      return FS->getRealPath(Path, Output);
+  return errc::no_such_file_or_directory;
 }
 
 clang::vfs::detail::DirIterImpl::~DirIterImpl() = default;
@@ -763,6 +785,19 @@ std::error_code InMemoryFileSystem::setCurrentWorkingDirectory(const Twine &P) {
 
   if (!Path.empty())
     WorkingDirectory = Path.str();
+  return {};
+}
+
+std::error_code
+InMemoryFileSystem::getRealPath(const Twine &Path,
+                                SmallVectorImpl<char> &Output) const {
+  auto CWD = getCurrentWorkingDirectory();
+  if (!CWD || CWD->empty())
+    return errc::operation_not_permitted;
+  Path.toVector(Output);
+  if (auto EC = makeAbsolute(Output))
+    return EC;
+  llvm::sys::path::remove_dots(Output, /*remove_dot_dot=*/true);
   return {};
 }
 

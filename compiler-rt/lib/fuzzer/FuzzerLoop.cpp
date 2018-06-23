@@ -159,6 +159,7 @@ Fuzzer::Fuzzer(UserCallback CB, InputCorpus &Corpus, MutationDispatcher &MD,
   AllocateCurrentUnitData();
   CurrentUnitSize = 0;
   memset(BaseSha1, 0, sizeof(BaseSha1));
+  TPC.SetFocusFunction(Options.FocusFunction);
 }
 
 Fuzzer::~Fuzzer() {}
@@ -333,6 +334,8 @@ void Fuzzer::PrintStats(const char *Where, const char *End, size_t Units) {
       else
         Printf("/%zdMb", N >> 20);
     }
+    if (size_t FF = Corpus.NumInputsThatTouchFocusFunction())
+      Printf(" focus: %zd", FF);
   }
   if (TmpMaxMutationLen)
     Printf(" lim: %zd", TmpMaxMutationLen);
@@ -347,6 +350,8 @@ void Fuzzer::PrintStats(const char *Where, const char *End, size_t Units) {
 void Fuzzer::PrintFinalStats() {
   if (Options.PrintCoverage)
     TPC.PrintCoverage();
+  if (Options.DumpCoverage)
+    TPC.DumpCoverage();
   if (Options.PrintCorpusStats)
     Corpus.PrintStats();
   if (!Options.PrintFinalStats)
@@ -464,6 +469,7 @@ bool Fuzzer::RunOne(const uint8_t *Data, size_t Size, bool MayDeleteFile,
   if (NumNewFeatures) {
     TPC.UpdateObservedPCs();
     Corpus.AddToCorpus({Data, Data + Size}, NumNewFeatures, MayDeleteFile,
+                       TPC.ObservedFocusFunction(),
                        UniqFeatureSetTmp);
     return true;
   }
@@ -733,7 +739,11 @@ void Fuzzer::ReadAndExecuteSeedCorpora(const Vector<std::string> &CorpusDirs) {
   }
 
   PrintStats("INITED");
-  if (Corpus.empty()) {
+  if (!Options.FocusFunction.empty())
+    Printf("INFO: %zd/%zd inputs touch the focus function\n",
+           Corpus.NumInputsThatTouchFocusFunction(), Corpus.size());
+
+  if (Corpus.empty() && Options.MaxNumberOfRuns) {
     Printf("ERROR: no interesting inputs were found. "
            "Is the code instrumented for coverage? Exiting.\n");
     exit(1);

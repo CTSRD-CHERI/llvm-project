@@ -23,6 +23,7 @@
 #include "llvm/MC/MCCodeEmitter.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCInstrInfo.h"
+#include "llvm/MC/MCObjectWriter.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/Support/CommandLine.h"
@@ -120,8 +121,10 @@ addPassesToGenerateCode(LLVMTargetMachine *TM, PassManagerBase &PM,
 }
 
 bool LLVMTargetMachine::addAsmPrinter(PassManagerBase &PM,
-    raw_pwrite_stream &Out, CodeGenFileType FileType,
-    MCContext &Context) {
+                                      raw_pwrite_stream &Out,
+                                      raw_pwrite_stream *DwoOut,
+                                      CodeGenFileType FileType,
+                                      MCContext &Context) {
   if (Options.MCOptions.MCSaveTempLabels)
     Context.setAllowTemporaryLabels(false);
 
@@ -166,7 +169,9 @@ bool LLVMTargetMachine::addAsmPrinter(PassManagerBase &PM,
 
     Triple T(getTargetTriple().str());
     AsmStreamer.reset(getTarget().createMCObjectStreamer(
-        T, Context, std::unique_ptr<MCAsmBackend>(MAB), Out,
+        T, Context, std::unique_ptr<MCAsmBackend>(MAB),
+        DwoOut ? MAB->createDwoObjectWriter(Out, *DwoOut)
+               : MAB->createObjectWriter(Out),
         std::unique_ptr<MCCodeEmitter>(MCE), STI, Options.MCOptions.MCRelaxAll,
         Options.MCOptions.MCIncrementalLinkerCompatible,
         /*DWARFMustBeAtTheEnd*/ true));
@@ -191,6 +196,7 @@ bool LLVMTargetMachine::addAsmPrinter(PassManagerBase &PM,
 
 bool LLVMTargetMachine::addPassesToEmitFile(PassManagerBase &PM,
                                             raw_pwrite_stream &Out,
+                                            raw_pwrite_stream *DwoOut,
                                             CodeGenFileType FileType,
                                             bool DisableVerify,
                                             MachineModuleInfo *MMI) {
@@ -201,7 +207,8 @@ bool LLVMTargetMachine::addPassesToEmitFile(PassManagerBase &PM,
   if (!Context)
     return true;
 
-  if (WillCompleteCodeGenPipeline && addAsmPrinter(PM, Out, FileType, *Context))
+  if (WillCompleteCodeGenPipeline &&
+      addAsmPrinter(PM, Out, DwoOut, FileType, *Context))
     return true;
 
   PM.add(createFreeMachineFunctionPass());
@@ -241,7 +248,7 @@ bool LLVMTargetMachine::addPassesToEmitMC(PassManagerBase &PM, MCContext *&Ctx,
 
   const Triple &T = getTargetTriple();
   std::unique_ptr<MCStreamer> AsmStreamer(getTarget().createMCObjectStreamer(
-      T, *Ctx, std::unique_ptr<MCAsmBackend>(MAB), Out,
+      T, *Ctx, std::unique_ptr<MCAsmBackend>(MAB), MAB->createObjectWriter(Out),
       std::unique_ptr<MCCodeEmitter>(MCE), STI, Options.MCOptions.MCRelaxAll,
       Options.MCOptions.MCIncrementalLinkerCompatible,
       /*DWARFMustBeAtTheEnd*/ true));

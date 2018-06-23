@@ -20,8 +20,7 @@ namespace llvm {
 namespace orc {
 
 char FailedToMaterialize::ID = 0;
-char FailedToResolve::ID = 0;
-char FailedToFinalize::ID = 0;
+char SymbolsNotFound::ID = 0;
 
 void MaterializationUnit::anchor() {}
 void SymbolResolver::anchor() {}
@@ -99,37 +98,44 @@ raw_ostream &operator<<(raw_ostream &OS, const SymbolDependenceMap &Deps) {
   return OS;
 }
 
-FailedToResolve::FailedToResolve(SymbolNameSet Symbols)
+FailedToMaterialize::FailedToMaterialize(SymbolNameSet Symbols)
     : Symbols(std::move(Symbols)) {
   assert(!this->Symbols.empty() && "Can not fail to resolve an empty set");
 }
 
-std::error_code FailedToResolve::convertToErrorCode() const {
+std::error_code FailedToMaterialize::convertToErrorCode() const {
   return orcError(OrcErrorCode::UnknownORCError);
 }
 
-void FailedToResolve::log(raw_ostream &OS) const {
-  OS << "Failed to resolve symbols: " << Symbols;
+void FailedToMaterialize::log(raw_ostream &OS) const {
+  OS << "Failed to materialize symbols: " << Symbols;
 }
 
-FailedToFinalize::FailedToFinalize(SymbolNameSet Symbols)
+SymbolsNotFound::SymbolsNotFound(SymbolNameSet Symbols)
     : Symbols(std::move(Symbols)) {
-  assert(!this->Symbols.empty() && "Can not fail to finalize an empty set");
+  assert(!this->Symbols.empty() && "Can not fail to resolve an empty set");
 }
 
-std::error_code FailedToFinalize::convertToErrorCode() const {
+std::error_code SymbolsNotFound::convertToErrorCode() const {
   return orcError(OrcErrorCode::UnknownORCError);
 }
 
-void FailedToFinalize::log(raw_ostream &OS) const {
-  OS << "Failed to finalize symbols: " << Symbols;
+void SymbolsNotFound::log(raw_ostream &OS) const {
+  OS << "Symbols not found: " << Symbols;
 }
 
 void ExecutionSessionBase::failQuery(AsynchronousSymbolQuery &Q, Error Err) {
+  bool DeliveredError = true;
   runSessionLocked([&]() -> void {
     Q.detach();
-    Q.handleFailed(std::move(Err));
+    if (Q.canStillFail())
+      Q.handleFailed(std::move(Err));
+    else
+      DeliveredError = false;
   });
+
+  if (!DeliveredError)
+    reportError(std::move(Err));
 }
 
 AsynchronousSymbolQuery::AsynchronousSymbolQuery(
@@ -173,6 +179,10 @@ void AsynchronousSymbolQuery::handleFullyReady() {
   assert(!NotifySymbolsResolved && "Resolution not applied yet");
   NotifySymbolsReady(Error::success());
   NotifySymbolsReady = SymbolsReadyCallback();
+}
+
+bool AsynchronousSymbolQuery::canStillFail() {
+  return (NotifySymbolsResolved || NotifySymbolsReady);
 }
 
 void AsynchronousSymbolQuery::handleFailed(Error Err) {
@@ -266,9 +276,13 @@ Error MaterializationResponsibility::defineMaterializing(
   return V.defineMaterializing(NewSymbolFlags);
 }
 
-void MaterializationResponsibility::failMaterialization(
-    std::function<Error()> GenerateError) {
-  V.notifyFailed(SymbolFlags, std::move(GenerateError));
+void MaterializationResponsibility::failMaterialization() {
+
+  SymbolNameSet FailedSymbols;
+  for (auto &KV : SymbolFlags)
+    FailedSymbols.insert(KV.first);
+
+  V.notifyFailed(FailedSymbols);
   SymbolFlags.clear();
 }
 
@@ -442,9 +456,10 @@ void VSO::resolve(const SymbolMap &Resolved) {
              "Resolved flags should match the declared flags");
 
       // Once resolved, symbols can never be weak.
-      Sym.getFlags() = static_cast<JITSymbolFlags::FlagNames>(
-          Sym.getFlags() & ~JITSymbolFlags::Weak);
-      I->second = Sym;
+      JITSymbolFlags ResolvedFlags = Sym.getFlags();
+      ResolvedFlags &= ~JITSymbolFlags::Weak;
+      ResolvedFlags |= JITSymbolFlags::Materializing;
+      I->second = JITEvaluatedSymbol(Sym.getAddress(), ResolvedFlags);
 
       auto &MI = MaterializingInfos[Name];
       for (auto &Q : MI.PendingQueries) {
@@ -550,14 +565,14 @@ void VSO::finalize(const SymbolFlagsMap &Finalized) {
   }
 }
 
-void VSO::notifyFailed(const SymbolFlagsMap &Failed,
-                       std::function<Error()> GenerateError) {
+void VSO::notifyFailed(const SymbolNameSet &FailedSymbols) {
+
+  // FIXME: This should fail any transitively dependant symbols too.
+
   auto FailedQueriesToNotify = ES.runSessionLocked([&, this]() {
     AsynchronousSymbolQuerySet FailedQueries;
 
-    for (auto &KV : Failed) {
-      const auto &Name = KV.first;
-
+    for (auto &Name : FailedSymbols) {
       auto I = Symbols.find(Name);
       assert(I != Symbols.end() && "Symbol not present in this VSO");
       Symbols.erase(I);
@@ -589,7 +604,7 @@ void VSO::notifyFailed(const SymbolFlagsMap &Failed,
   });
 
   for (auto &Q : FailedQueriesToNotify)
-    Q->handleFailed(GenerateError());
+    Q->handleFailed(make_error<FailedToMaterialize>(FailedSymbols));
 }
 
 SymbolNameSet VSO::lookupFlags(SymbolFlagsMap &Flags,
@@ -854,8 +869,7 @@ VSO &ExecutionSession::createVSO(std::string Name) {
   });
 }
 
-Expected<SymbolMap> lookup(const std::vector<VSO *> &VSOs, SymbolNameSet Names,
-                           MaterializationResponsibility *R) {
+Expected<SymbolMap> lookup(const std::vector<VSO *> &VSOs, SymbolNameSet Names) {
 #if LLVM_ENABLE_THREADS
   // In the threaded case we use promises to return the results.
   std::promise<SymbolMap> PromisedResult;
@@ -865,11 +879,9 @@ Expected<SymbolMap> lookup(const std::vector<VSO *> &VSOs, SymbolNameSet Names,
   Error ReadyError = Error::success();
   auto OnResolve =
       [&](Expected<AsynchronousSymbolQuery::ResolutionResult> Result) {
-        if (Result) {
-          if (R)
-            R->addDependencies(Result->Dependencies);
+        if (Result)
           PromisedResult.set_value(std::move(Result->Symbols));
-        } else {
+        else {
           {
             ErrorAsOutParameter _(&ResolutionError);
             std::lock_guard<std::mutex> Lock(ErrMutex);
@@ -891,14 +903,12 @@ Expected<SymbolMap> lookup(const std::vector<VSO *> &VSOs, SymbolNameSet Names,
   Error ResolutionError = Error::success();
   Error ReadyError = Error::success();
 
-  auto OnResolve = [&](Expected<AsynchronousSymbolQuery::ResolutionResult> RR) {
+  auto OnResolve = [&](Expected<AsynchronousSymbolQuery::ResolutionResult> R) {
     ErrorAsOutParameter _(&ResolutionError);
-    if (RR) {
-      if (R)
-        R->addDependencies(RR->Dependencies);
-      Result = std::move(RR->Symbols);
-    } else
-      ResolutionError = RR.takeError();
+    if (R)
+      Result = std::move(R->Symbols);
+    else
+      ResolutionError = R.takeError();
   };
   auto OnReady = [&](Error Err) {
     ErrorAsOutParameter _(&ReadyError);
@@ -918,7 +928,13 @@ Expected<SymbolMap> lookup(const std::vector<VSO *> &VSOs, SymbolNameSet Names,
     UnresolvedSymbols = V->lookup(Query, UnresolvedSymbols);
   }
 
-  // FIXME: Error out if there are remaining unresolved symbols.
+  if (!UnresolvedSymbols.empty()) {
+    // If there are unresolved symbols then the query will never return.
+    // Fail it with ES.failQuery.
+    auto &ES = (*VSOs.begin())->getExecutionSession();
+    ES.failQuery(*Query,
+                 make_error<SymbolsNotFound>(std::move(UnresolvedSymbols)));
+  }
 
 #if LLVM_ENABLE_THREADS
   auto ResultFuture = PromisedResult.get_future();
@@ -960,10 +976,9 @@ Expected<SymbolMap> lookup(const std::vector<VSO *> &VSOs, SymbolNameSet Names,
 
 /// Look up a symbol by searching a list of VSOs.
 Expected<JITEvaluatedSymbol> lookup(const std::vector<VSO *> VSOs,
-                                    SymbolStringPtr Name,
-                                    MaterializationResponsibility *R) {
+                                    SymbolStringPtr Name) {
   SymbolNameSet Names({Name});
-  if (auto ResultMap = lookup(VSOs, std::move(Names), R)) {
+  if (auto ResultMap = lookup(VSOs, std::move(Names))) {
     assert(ResultMap->size() == 1 && "Unexpected number of results");
     assert(ResultMap->count(Name) && "Missing result for symbol");
     return std::move(ResultMap->begin()->second);

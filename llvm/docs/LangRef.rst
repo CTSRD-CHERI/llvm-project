@@ -80,7 +80,7 @@ identifiers, for different purposes:
    characters may be escaped using ``"\xx"`` where ``xx`` is the ASCII
    code for the character in hexadecimal. In this way, any character can
    be used in a name value, even quotes themselves. The ``"\01"`` prefix
-   can be used on global variables to suppress mangling.
+   can be used on global values to suppress mangling.
 #. Unnamed values are represented as an unsigned numeric value with
    their prefix. For example, ``%12``, ``@2``, ``%44``.
 #. Constants, which are described in the section Constants_ below.
@@ -5314,10 +5314,10 @@ Irreducible loop header weights are typically based on profile data.
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The experimental ``invariant.group`` metadata may be attached to 
-``load``/``store`` instructions.
+``load``/``store`` instructions referencing a single metadata with no entries.
 The existence of the ``invariant.group`` metadata on the instruction tells
 the optimizer that every ``load`` and ``store`` to the same pointer operand
-within the same invariant group can be assumed to load or store the same
+can be assumed to load or store the same
 value (but see the ``llvm.launder.invariant.group`` intrinsic which affects
 when two pointers are considered the same). Pointers returned by bitcast or
 getelementptr with only zero indices are considered the same.
@@ -5334,7 +5334,6 @@ Examples:
 
    %a = load i8, i8* %ptr, !invariant.group !0 ; Can assume that value under %ptr didn't change
    call void @foo(i8* %ptr)
-   %b = load i8, i8* %ptr, !invariant.group !1 ; Can't assume anything, because group changed
 
    %newPtr = call i8* @getPointer(i8* %ptr)
    %c = load i8, i8* %newPtr, !invariant.group !0 ; Can't assume anything, because we only have information about %ptr
@@ -5351,8 +5350,7 @@ Examples:
    declare i8* @getPointer(i8*)
    declare i8* @llvm.launder.invariant.group(i8*)
 
-   !0 = !{!"magic ptr"}
-   !1 = !{!"other ptr"}
+   !0 = !{}
 
 The invariant.group metadata must be dropped when replacing one pointer by
 another based on aliasing information. This is because invariant.group is tied
@@ -7637,7 +7635,8 @@ referenced by the load contains the same value at all points in the
 program where the memory location is known to be dereferenceable.
 
 The optional ``!invariant.group`` metadata must reference a single metadata name
- ``<index>`` corresponding to a metadata node. See ``invariant.group`` metadata.
+ ``<index>`` corresponding to a metadata node with no entries.
+ See ``invariant.group`` metadata.
 
 The optional ``!nonnull`` metadata must reference a single
 metadata name ``<index>`` corresponding to a metadata node with no

@@ -2798,28 +2798,20 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
 
   case Intrinsic::x86_avx2_permd:
   case Intrinsic::x86_avx2_permps:
+  case Intrinsic::x86_avx512_permvar_df_256:
+  case Intrinsic::x86_avx512_permvar_df_512:
+  case Intrinsic::x86_avx512_permvar_di_256:
+  case Intrinsic::x86_avx512_permvar_di_512:
+  case Intrinsic::x86_avx512_permvar_hi_128:
+  case Intrinsic::x86_avx512_permvar_hi_256:
+  case Intrinsic::x86_avx512_permvar_hi_512:
+  case Intrinsic::x86_avx512_permvar_qi_128:
+  case Intrinsic::x86_avx512_permvar_qi_256:
+  case Intrinsic::x86_avx512_permvar_qi_512:
+  case Intrinsic::x86_avx512_permvar_sf_512:
+  case Intrinsic::x86_avx512_permvar_si_512:
     if (Value *V = simplifyX86vpermv(*II, Builder))
       return replaceInstUsesWith(*II, V);
-    break;
-
-  case Intrinsic::x86_avx512_mask_permvar_df_256:
-  case Intrinsic::x86_avx512_mask_permvar_df_512:
-  case Intrinsic::x86_avx512_mask_permvar_di_256:
-  case Intrinsic::x86_avx512_mask_permvar_di_512:
-  case Intrinsic::x86_avx512_mask_permvar_hi_128:
-  case Intrinsic::x86_avx512_mask_permvar_hi_256:
-  case Intrinsic::x86_avx512_mask_permvar_hi_512:
-  case Intrinsic::x86_avx512_mask_permvar_qi_128:
-  case Intrinsic::x86_avx512_mask_permvar_qi_256:
-  case Intrinsic::x86_avx512_mask_permvar_qi_512:
-  case Intrinsic::x86_avx512_mask_permvar_sf_512:
-  case Intrinsic::x86_avx512_mask_permvar_si_512:
-    if (Value *V = simplifyX86vpermv(*II, Builder)) {
-      // We simplified the permuting, now create a select for the masking.
-      V = emitX86MaskSelect(II->getArgOperand(3), V, II->getArgOperand(2),
-                            Builder);
-      return replaceInstUsesWith(*II, V);
-    }
     break;
 
   case Intrinsic::x86_avx_maskload_ps:
@@ -2985,6 +2977,23 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
           return CastInst::CreateIntegerCast(Arg0, II->getType(),
                                              /*isSigned=*/!Zext);
 
+    break;
+  }
+  case Intrinsic::arm_neon_aesd:
+  case Intrinsic::arm_neon_aese:
+  case Intrinsic::aarch64_crypto_aesd:
+  case Intrinsic::aarch64_crypto_aese: {
+    Value *DataArg = II->getArgOperand(0);
+    Value *KeyArg  = II->getArgOperand(1);
+
+    // Try to use the builtin XOR in AESE and AESD to eliminate a prior XOR
+    Value *Data, *Key;
+    if (match(KeyArg, m_ZeroInt()) &&
+        match(DataArg, m_Xor(m_Value(Data), m_Value(Key)))) {
+      II->setArgOperand(0, Data);
+      II->setArgOperand(1, Key);
+      return II;
+    }
     break;
   }
   case Intrinsic::amdgcn_rcp: {
@@ -3427,6 +3436,23 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
 
     // amdgcn.kill(i1 1) is a no-op
     return eraseInstFromFunction(CI);
+  }
+  case Intrinsic::amdgcn_update_dpp: {
+    Value *Old = II->getArgOperand(0);
+
+    auto BC = dyn_cast<ConstantInt>(II->getArgOperand(5));
+    auto RM = dyn_cast<ConstantInt>(II->getArgOperand(3));
+    auto BM = dyn_cast<ConstantInt>(II->getArgOperand(4));
+    if (!BC || !RM || !BM ||
+        BC->isZeroValue() ||
+        RM->getZExtValue() != 0xF ||
+        BM->getZExtValue() != 0xF ||
+        isa<UndefValue>(Old))
+      break;
+
+    // If bound_ctrl = 1, row mask = bank mask = 0xf we can omit old value.
+    II->setOperand(0, UndefValue::get(Old->getType()));
+    return II;
   }
   case Intrinsic::stackrestore: {
     // If the save is right next to the restore, remove the restore.  This can

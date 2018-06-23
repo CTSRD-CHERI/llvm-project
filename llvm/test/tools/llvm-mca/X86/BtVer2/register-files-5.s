@@ -35,11 +35,12 @@
   vaddps %ymm3, %ymm0, %ymm5
   vaddps %ymm3, %ymm0, %ymm6
 
-# CHECK:      Iterations:     1
-# CHECK-NEXT: Instructions:   33
-# CHECK-NEXT: Total Cycles:   70
-# CHECK-NEXT: Dispatch Width: 2
-# CHECK-NEXT: IPC:            0.47
+# CHECK:      Iterations:        1
+# CHECK-NEXT: Instructions:      33
+# CHECK-NEXT: Total Cycles:      70
+# CHECK-NEXT: Dispatch Width:    2
+# CHECK-NEXT: IPC:               0.47
+# CHECK-NEXT: Block RThroughput: 64.0
 
 # CHECK:      Dynamic Dispatch Stall Cycles:
 # CHECK-NEXT: RAT     - Register unavailable:                      0
@@ -58,12 +59,12 @@
 # CHECK-NEXT: Total number of mappings created:    66
 # CHECK-NEXT: Max number of mappings used:         64
 
-# CHECK:      *  Register File #1 -- FpuPRF:
+# CHECK:      *  Register File #1 -- JFpuPRF:
 # CHECK-NEXT:    Number of physical registers:     72
 # CHECK-NEXT:    Total number of mappings created: 66
 # CHECK-NEXT:    Max number of mappings used:      64
 
-# CHECK:      *  Register File #2 -- IntegerPRF:
+# CHECK:      *  Register File #2 -- JIntegerPRF:
 # CHECK-NEXT:    Number of physical registers:     64
 # CHECK-NEXT:    Total number of mappings created: 0
 # CHECK-NEXT:    Max number of mappings used:      0

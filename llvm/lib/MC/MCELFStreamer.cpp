@@ -41,9 +41,10 @@ using namespace llvm;
 
 MCELFStreamer::MCELFStreamer(MCContext &Context,
                              std::unique_ptr<MCAsmBackend> TAB,
-                             raw_pwrite_stream &OS,
+                             std::unique_ptr<MCObjectWriter> OW,
                              std::unique_ptr<MCCodeEmitter> Emitter)
-    : MCObjectStreamer(Context, std::move(TAB), OS, std::move(Emitter)) {}
+    : MCObjectStreamer(Context, std::move(TAB), std::move(OW),
+                       std::move(Emitter)) {}
 
 bool MCELFStreamer::isBundleLocked() const {
   return getCurrentSectionOnly()->isBundleLocked();
@@ -68,13 +69,8 @@ void MCELFStreamer::mergeFragment(MCDataFragment *DF,
     if (RequiredBundlePadding > 0) {
       SmallString<256> Code;
       raw_svector_ostream VecOS(Code);
-      {
-        auto OW = Assembler.getBackend().createObjectWriter(VecOS);
-
-        EF->setBundlePadding(static_cast<uint8_t>(RequiredBundlePadding));
-
-        Assembler.writeFragmentPadding(*EF, FSize, OW.get());
-      }
+      EF->setBundlePadding(static_cast<uint8_t>(RequiredBundlePadding));
+      Assembler.writeFragmentPadding(VecOS, *EF, FSize);
 
       DF->getContents().append(Code.begin(), Code.end());
     }
@@ -192,17 +188,6 @@ static unsigned CombineSymbolTypes(unsigned T1, unsigned T2) {
 
 bool MCELFStreamer::EmitSymbolAttribute(MCSymbol *S, MCSymbolAttr Attribute) {
   auto *Symbol = cast<MCSymbolELF>(S);
-  // Indirect symbols are handled differently, to match how 'as' handles
-  // them. This makes writing matching .o files easier.
-  if (Attribute == MCSA_IndirectSymbol) {
-    // Note that we intentionally cannot use the symbol data here; this is
-    // important for matching the string table that 'as' generates.
-    IndirectSymbolData ISD;
-    ISD.Symbol = Symbol;
-    ISD.Section = getCurrentSectionOnly();
-    getAssembler().getIndirectSymbols().push_back(ISD);
-    return true;
-  }
 
   // Adding a symbol attribute always introduces the symbol, note that an
   // important side effect of calling registerSymbol here is to register
@@ -652,11 +637,11 @@ void MCELFStreamer::EmitTBSSSymbol(MCSection *Section, MCSymbol *Symbol,
 
 MCStreamer *llvm::createELFStreamer(MCContext &Context,
                                     std::unique_ptr<MCAsmBackend> &&MAB,
-                                    raw_pwrite_stream &OS,
+                                    std::unique_ptr<MCObjectWriter> &&OW,
                                     std::unique_ptr<MCCodeEmitter> &&CE,
                                     bool RelaxAll) {
   MCELFStreamer *S =
-      new MCELFStreamer(Context, std::move(MAB), OS, std::move(CE));
+      new MCELFStreamer(Context, std::move(MAB), std::move(OW), std::move(CE));
   if (RelaxAll)
     S->getAssembler().setRelaxAll(true);
   return S;

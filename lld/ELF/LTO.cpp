@@ -45,28 +45,6 @@ using namespace llvm::ELF;
 using namespace lld;
 using namespace lld::elf;
 
-// This is for use when debugging LTO.
-static void saveBuffer(StringRef Buffer, const Twine &Path) {
-  std::error_code EC;
-  raw_fd_ostream OS(Path.str(), EC, sys::fs::OpenFlags::F_None);
-  if (EC)
-    error("cannot create " + Path + ": " + EC.message());
-  OS << Buffer;
-}
-
-static void diagnosticHandler(const DiagnosticInfo &DI) {
-  SmallString<128> S;
-  raw_svector_ostream OS(S);
-  DiagnosticPrinterRawOStream DP(OS);
-  DI.print(DP);
-  warn(S);
-}
-
-static void checkError(Error E) {
-  handleAllErrors(std::move(E),
-                  [&](ErrorInfoBase &EIB) { error(EIB.message()); });
-}
-
 // Creates an empty file to store a list of object files for final
 // linking of distributed ThinLTO.
 static std::unique_ptr<raw_fd_ostream> openFile(StringRef File) {
@@ -221,11 +199,28 @@ void BitcodeCompiler::add(BitcodeFile &F) {
   checkError(LTOObj->add(std::move(F.Obj), Resols));
 }
 
+static void createEmptyIndex(StringRef ModulePath) {
+  std::string Path = replaceThinLTOSuffix(getThinLTOOutputFile(ModulePath));
+  if (Path.empty())
+    return;
+
+  std::unique_ptr<raw_fd_ostream> OS = openFile(Path + ".thinlto.bc");
+  if (!OS)
+    return;
+
+  ModuleSummaryIndex M(false);
+  M.setSkipModuleByDistributedBackend();
+  WriteIndexToFile(M, *OS);
+
+  if (Config->ThinLTOEmitImportsFiles)
+    openFile(Path + ".imports");
+}
+
 // Merge all the bitcode files we have seen, codegen the result
 // and return the resulting ObjectFile(s).
 std::vector<InputFile *> BitcodeCompiler::compile() {
   unsigned MaxTasks = LTOObj->getMaxTasks();
-  Buff.resize(MaxTasks);
+  Buf.resize(MaxTasks);
   Files.resize(MaxTasks);
 
   // The --thinlto-cache-dir option specifies the path to a directory in which
@@ -242,7 +237,7 @@ std::vector<InputFile *> BitcodeCompiler::compile() {
   checkError(LTOObj->run(
       [&](size_t Task) {
         return llvm::make_unique<lto::NativeObjectStream>(
-            llvm::make_unique<raw_svector_ostream>(Buff[Task]));
+            llvm::make_unique<raw_svector_ostream>(Buf[Task]));
       },
       Cache));
 
@@ -262,26 +257,12 @@ std::vector<InputFile *> BitcodeCompiler::compile() {
   // This is needed because this is what GNU gold plugin does and we have a
   // distributed build system that depends on that behavior.
   if (Config->ThinLTOIndexOnly) {
-    for (LazyObjFile *F : LazyObjFiles) {
-      if (F->AddedToLink || !isBitcode(F->MB))
-        continue;
-
-      std::string Path = updateSuffixInPath(getThinLTOOutputFile(F->getName()));
-
-      std::unique_ptr<raw_fd_ostream> OS = openFile(Path + ".thinlto.bc");
-      if (!OS)
-        continue;
-
-      ModuleSummaryIndex M(false);
-      M.setSkipModuleByDistributedBackend();
-      WriteIndexToFile(M, *OS);
-
-      if (Config->ThinLTOEmitImportsFiles)
-        openFile(Path + ".imports");
-    }
+    for (LazyObjFile *F : LazyObjFiles)
+      if (!F->AddedToLink && isBitcode(F->MB))
+        createEmptyIndex(F->getName());
 
     if (!Config->LTOObjPath.empty())
-      saveBuffer(Buff[0], Config->LTOObjPath);
+      saveBuffer(Buf[0], Config->LTOObjPath);
 
     // ThinLTO with index only option is required to generate only the index
     // files. After that, we exit from linker and ThinLTO backend runs in a
@@ -290,20 +271,21 @@ std::vector<InputFile *> BitcodeCompiler::compile() {
       IndexFile->close();
     return {};
   }
+
   if (!Config->ThinLTOCacheDir.empty())
     pruneCache(Config->ThinLTOCacheDir, Config->ThinLTOCachePolicy);
 
   std::vector<InputFile *> Ret;
   for (unsigned I = 0; I != MaxTasks; ++I) {
-    if (Buff[I].empty())
+    if (Buf[I].empty())
       continue;
     if (Config->SaveTemps) {
       if (I == 0)
-        saveBuffer(Buff[I], Config->OutputFile + ".lto.o");
+        saveBuffer(Buf[I], Config->OutputFile + ".lto.o");
       else
-        saveBuffer(Buff[I], Config->OutputFile + Twine(I) + ".lto.o");
+        saveBuffer(Buf[I], Config->OutputFile + Twine(I) + ".lto.o");
     }
-    InputFile *Obj = createObjectFile(MemoryBufferRef(Buff[I], "lto.tmp"));
+    InputFile *Obj = createObjectFile(MemoryBufferRef(Buf[I], "lto.tmp"));
     Ret.push_back(Obj);
   }
 

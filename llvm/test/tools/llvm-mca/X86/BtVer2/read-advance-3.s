@@ -5,11 +5,12 @@
   add (%rsp), %rsi
   add %rdx, %r8
 
-# CHECK:      Iterations:     1
-# CHECK-NEXT: Instructions:   3
-# CHECK-NEXT: Total Cycles:   7
-# CHECK-NEXT: Dispatch Width: 3
-# CHECK-NEXT: IPC:            0.43
+# CHECK:      Iterations:        1
+# CHECK-NEXT: Instructions:      3
+# CHECK-NEXT: Total Cycles:      7
+# CHECK-NEXT: Dispatch Width:    3
+# CHECK-NEXT: IPC:               0.43
+# CHECK-NEXT: Block RThroughput: 1.5
 
 # CHECK:      Instruction Info:
 # CHECK-NEXT: [1]: #uOps
@@ -25,8 +26,7 @@
 # CHECK-NEXT:  1      1     0.50                        addq	%rdx, %r8
 
 # CHECK:      Timeline view:
-
-# CHECK:      Index     0123456
+# CHECK-NEXT: Index     0123456
 
 # CHECK:      [0,0]     DeER ..   addq	%rdi, %rsi
 # CHECK-NEXT: [0,1]     DeeeeER   addq	(%rsp), %rsi

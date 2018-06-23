@@ -226,6 +226,7 @@ template <typename T> class ArrayRef;
     bool isIndirectBranch : 1;
     bool isCompare : 1;
     bool isMoveImm : 1;
+    bool isMoveReg : 1;
     bool isBitcast : 1;
     bool isSelect : 1;
     bool isBarrier : 1;
@@ -258,6 +259,7 @@ template <typename T> class ArrayRef;
     bool isInsertSubreg : 1;
     bool isConvergent : 1;
     bool hasNoSchedulingInfo : 1;
+    bool FastISelShouldIgnore : 1;
 
     std::string DeprecatedReason;
     bool HasComplexDeprecationPredicate;

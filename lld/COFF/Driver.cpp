@@ -1033,6 +1033,23 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
     parseSubsystem(Arg->getValue(), &Config->Subsystem, &Config->MajorOSVersion,
                    &Config->MinorOSVersion);
 
+  // Handle /timestamp
+  if (llvm::opt::Arg *Arg = Args.getLastArg(OPT_timestamp, OPT_repro)) {
+    if (Arg->getOption().getID() == OPT_repro) {
+      Config->Timestamp = 0;
+      Config->Repro = true;
+    } else {
+      Config->Repro = false;
+      StringRef Value(Arg->getValue());
+      if (Value.getAsInteger(0, Config->Timestamp))
+        fatal(Twine("invalid timestamp: ") + Value +
+              ".  Expected 32-bit integer");
+    }
+  } else {
+    Config->Repro = false;
+    Config->Timestamp = time(nullptr);
+  }
+
   // Handle /alternatename
   for (auto *Arg : Args.filtered(OPT_alternatename))
     parseAlternateName(Arg->getValue());
@@ -1069,12 +1086,12 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
         TailMerge = 0;
       } else if (S.startswith("lldlto=")) {
         StringRef OptLevel = S.substr(7);
-        if (OptLevel.getAsInteger(10, Config->LTOOptLevel) ||
-            Config->LTOOptLevel > 3)
+        if (OptLevel.getAsInteger(10, Config->LTOO) || Config->LTOO > 3)
           error("/opt:lldlto: invalid optimization level: " + OptLevel);
       } else if (S.startswith("lldltojobs=")) {
         StringRef Jobs = S.substr(11);
-        if (Jobs.getAsInteger(10, Config->LTOJobs) || Config->LTOJobs == 0)
+        if (Jobs.getAsInteger(10, Config->ThinLTOJobs) ||
+            Config->ThinLTOJobs == 0)
           error("/opt:lldltojobs: invalid job count: " + Jobs);
       } else if (S.startswith("lldltopartitions=")) {
         StringRef N = S.substr(17);

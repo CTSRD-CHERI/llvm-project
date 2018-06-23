@@ -61,10 +61,8 @@ LLVM_YAML_IS_DOCUMENT_LIST_VECTOR(exegesis::InstructionBenchmark)
 
 namespace exegesis {
 
-namespace {
-
 template <typename ObjectOrList>
-ObjectOrList readYamlOrDieCommon(llvm::StringRef Filename) {
+static ObjectOrList readYamlOrDieCommon(llvm::StringRef Filename) {
   std::unique_ptr<llvm::MemoryBuffer> MemBuffer = llvm::cantFail(
       llvm::errorOrToExpected(llvm::MemoryBuffer::getFile(Filename)));
   llvm::yaml::Input Yin(*MemBuffer);
@@ -72,8 +70,6 @@ ObjectOrList readYamlOrDieCommon(llvm::StringRef Filename) {
   Yin >> Benchmark;
   return Benchmark;
 }
-
-} // namespace
 
 InstructionBenchmark
 InstructionBenchmark::readYamlOrDie(llvm::StringRef Filename) {
@@ -85,20 +81,37 @@ InstructionBenchmark::readYamlsOrDie(llvm::StringRef Filename) {
   return readYamlOrDieCommon<std::vector<InstructionBenchmark>>(Filename);
 }
 
+void InstructionBenchmark::writeYamlTo(llvm::raw_ostream &S) {
+  llvm::yaml::Output Yout(S);
+  Yout << *this;
+}
+
+void InstructionBenchmark::readYamlFrom(llvm::StringRef InputContent) {
+  llvm::yaml::Input Yin(InputContent);
+  Yin >> *this;
+}
+
+// FIXME: Change the API to let the caller handle errors.
 void InstructionBenchmark::writeYamlOrDie(const llvm::StringRef Filename) {
   if (Filename == "-") {
-    llvm::yaml::Output Yout(llvm::outs());
-    Yout << *this;
+    writeYamlTo(llvm::outs());
   } else {
-    llvm::SmallString<1024> Buffer;
-    llvm::raw_svector_ostream Ostr(Buffer);
-    llvm::yaml::Output Yout(Ostr);
-    Yout << *this;
-    std::unique_ptr<llvm::FileOutputBuffer> File =
-        llvm::cantFail(llvm::FileOutputBuffer::create(Filename, Buffer.size()));
-    memcpy(File->getBufferStart(), Buffer.data(), Buffer.size());
-    llvm::cantFail(File->commit());
+    int ResultFD = 0;
+    llvm::cantFail(llvm::errorCodeToError(
+        openFileForWrite(Filename, ResultFD, llvm::sys::fs::F_Text)));
+    llvm::raw_fd_ostream Ostr(ResultFD, true /*shouldClose*/);
+    writeYamlTo(Ostr);
   }
+}
+
+void BenchmarkMeasureStats::push(const BenchmarkMeasure &BM) {
+  if (Key.empty())
+    Key = BM.Key;
+  assert(Key == BM.Key);
+  ++NumValues;
+  SumValues += BM.Value;
+  MaxValue = std::max(MaxValue, BM.Value);
+  MinValue = std::min(MinValue, BM.Value);
 }
 
 } // namespace exegesis

@@ -412,7 +412,6 @@ static void addExceptionArgs(const ArgList &Args, types::ID InputType,
                              const ToolChain &TC, bool KernelOrKext,
                              const ObjCRuntime &objcRuntime,
                              ArgStringList &CmdArgs) {
-  const Driver &D = TC.getDriver();
   const llvm::Triple &Triple = TC.getTriple();
 
   if (KernelOrKext) {
@@ -454,21 +453,6 @@ static void addExceptionArgs(const ArgList &Args, types::ID InputType,
           ExceptionArg->getOption().matches(options::OPT_fexceptions);
 
     if (CXXExceptionsEnabled) {
-      if (Triple.isPS4CPU()) {
-        ToolChain::RTTIMode RTTIMode = TC.getRTTIMode();
-        assert(ExceptionArg &&
-               "On the PS4 exceptions should only be enabled if passing "
-               "an argument");
-        if (RTTIMode == ToolChain::RM_DisabledExplicitly) {
-          const Arg *RTTIArg = TC.getRTTIArg();
-          assert(RTTIArg && "RTTI disabled explicitly but no RTTIArg!");
-          D.Diag(diag::err_drv_argument_not_allowed_with)
-              << RTTIArg->getAsString(Args) << ExceptionArg->getAsString(Args);
-        } else if (RTTIMode == ToolChain::RM_EnabledImplicitly)
-          D.Diag(diag::warn_drv_enabling_rtti_with_exceptions);
-      } else
-        assert(TC.getRTTIMode() != ToolChain::RM_DisabledImplicitly);
-
       CmdArgs.push_back("-fcxx-exceptions");
 
       EH = true;
@@ -4005,6 +3989,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       if (!Args.hasFlag(options::OPT_fopenmp_use_tls,
                         options::OPT_fnoopenmp_use_tls, /*Default=*/true))
         CmdArgs.push_back("-fnoopenmp-use-tls");
+      Args.AddLastArg(CmdArgs, options::OPT_fopenmp_simd,
+                      options::OPT_fno_openmp_simd);
       Args.AddAllArgs(CmdArgs, options::OPT_fopenmp_version_EQ);
 
       // When in OpenMP offloading mode with NVPTX target, forward
@@ -4191,8 +4177,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   ToolChain::RTTIMode RTTIMode = getToolChain().getRTTIMode();
 
   if (KernelOrKext || (types::isCXX(InputType) &&
-                       (RTTIMode == ToolChain::RM_DisabledExplicitly ||
-                        RTTIMode == ToolChain::RM_DisabledImplicitly)))
+                       (RTTIMode == ToolChain::RM_Disabled)))
     CmdArgs.push_back("-fno-rtti");
 
   // -fshort-enums=0 is default for all architectures except Hexagon.
@@ -4817,12 +4802,6 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs, Inputs));
   }
 
-  // Handle the debug info splitting at object creation time if we're
-  // creating an object.
-  // TODO: Currently only works on linux with newer objcopy.
-  if (SplitDWARF && Output.getType() == types::TY_Object)
-    SplitDebugInfo(getToolChain(), C, *this, JA, Args, Output, SplitDWARFOut);
-
   if (Arg *A = Args.getLastArg(options::OPT_pg))
     if (Args.hasArg(options::OPT_fomit_frame_pointer))
       D.Diag(diag::err_drv_argument_not_allowed_with) << "-fomit-frame-pointer"
@@ -4873,6 +4852,13 @@ ObjCRuntime Clang::AddObjCRuntimeArgs(const ArgList &args,
       getToolChain().getDriver().Diag(diag::err_drv_unknown_objc_runtime)
           << value;
     }
+    if ((runtime.getKind() == ObjCRuntime::GNUstep) &&
+        (runtime.getVersion() >= VersionTuple(2, 0)))
+      if (!getToolChain().getTriple().isOSBinFormatELF()) {
+        getToolChain().getDriver().Diag(
+            diag::err_drv_gnustep_objc_runtime_incompatible_binary)
+          << runtime.getVersion().getMajor();
+      }
 
     runtimeArg->render(args, cmdArgs);
     return runtime;
@@ -4966,7 +4952,7 @@ ObjCRuntime Clang::AddObjCRuntimeArgs(const ArgList &args,
     // Legacy behaviour is to target the gnustep runtime if we are in
     // non-fragile mode or the GCC runtime in fragile mode.
     if (isNonFragile)
-      runtime = ObjCRuntime(ObjCRuntime::GNUstep, VersionTuple(1, 6));
+      runtime = ObjCRuntime(ObjCRuntime::GNUstep, VersionTuple(2, 0));
     else
       runtime = ObjCRuntime(ObjCRuntime::GCC, VersionTuple());
   }
@@ -5479,19 +5465,17 @@ void ClangAs::ConstructJob(Compilation &C, const JobAction &JA,
   CmdArgs.push_back("-o");
   CmdArgs.push_back(Output.getFilename());
 
+  if (Args.hasArg(options::OPT_gsplit_dwarf) &&
+      getToolChain().getTriple().isOSLinux()) {
+    CmdArgs.push_back("-split-dwarf-file");
+    CmdArgs.push_back(SplitDebugName(Args, Input));
+  }
+
   assert(Input.isFilename() && "Invalid input.");
   CmdArgs.push_back(Input.getFilename());
 
   const char *Exec = getToolChain().getDriver().getClangProgramPath();
   C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs, Inputs));
-
-  // Handle the debug info splitting at object creation time if we're
-  // creating an object.
-  // TODO: Currently only works on linux with newer objcopy.
-  if (Args.hasArg(options::OPT_gsplit_dwarf) &&
-      getToolChain().getTriple().isOSLinux())
-    SplitDebugInfo(getToolChain(), C, *this, JA, Args, Output,
-                   SplitDebugName(Args, Input));
 }
 
 // Begin OffloadBundler

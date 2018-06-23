@@ -889,6 +889,23 @@ class POOL32A_MFTC0_FM_MMR6<string instr_asm, bits<5> funct, bits<6> opcode>
   let Inst{5-0}   = opcode;
 }
 
+class POOL32A_GINV_FM_MMR6<string instr_asm, bits<2> ginv>
+    : MMR6Arch<instr_asm>, MipsR6Inst {
+  bits<5> rs;
+  bits<2> type;
+
+  bits<32> Inst;
+
+  let Inst{31-26} = 0x0;
+  let Inst{25-21} = 0x0;
+  let Inst{20-16} = rs;
+  let Inst{15-13} = 0b011;
+  let Inst{12-11} = ginv;
+  let Inst{10-9}  = type;
+  let Inst{8-6}   = 0b101;
+  let Inst{5-0}   = 0b111100;
+}
+
 class POOL32F_MFTC1_FM_MMR6<string instr_asm, bits<8> funct>
     : MMR6Arch<instr_asm> {
   bits<5> rt;
@@ -1014,4 +1031,22 @@ class POOL32B_LDWC2_SDWC2_FM_MMR6<string instr_asm, bits<4> funct>
   let Inst{15-12} = funct;
   let Inst{11}    = 0;
   let Inst{10-0}  = offset;
+}
+
+class POOL32C_LL_E_SC_E_FM_MMR6<string instr_asm, bits<4> majorFunc,
+                                bits<3> minorFunc>
+    : MMR6Arch<instr_asm>, MipsR6Inst {
+  bits<5> rt;
+  bits<21> addr;
+  bits<5> base = addr{20-16};
+  bits<9> offset = addr{8-0};
+
+  bits<32> Inst;
+
+  let Inst{31-26} = 0b011000;
+  let Inst{25-21} = rt;
+  let Inst{20-16} = base;
+  let Inst{15-12} = majorFunc;
+  let Inst{11-9}  = minorFunc;
+  let Inst{8-0}   = offset;
 }
