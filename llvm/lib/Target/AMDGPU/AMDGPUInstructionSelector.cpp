@@ -159,6 +159,19 @@ bool AMDGPUInstructionSelector::selectG_GEP(MachineInstr &I) const {
   return selectG_ADD(I);
 }
 
+bool AMDGPUInstructionSelector::selectG_INTRINSIC(MachineInstr &I,
+                                          CodeGenCoverage &CoverageInfo) const {
+  unsigned IntrinsicID =  I.getOperand(1).getIntrinsicID();
+
+  switch (IntrinsicID) {
+  default:
+    break;
+  case Intrinsic::amdgcn_cvt_pkrtz:
+    return selectImpl(I, CoverageInfo);
+  }
+  return false;
+}
+
 bool AMDGPUInstructionSelector::selectG_STORE(MachineInstr &I) const {
   MachineBasicBlock *BB = I.getParent();
   MachineFunction *MF = BB->getParent();
@@ -508,6 +521,8 @@ bool AMDGPUInstructionSelector::select(MachineInstr &I,
   switch (I.getOpcode()) {
   default:
     break;
+  case TargetOpcode::G_FMUL:
+  case TargetOpcode::G_FADD:
   case TargetOpcode::G_FPTOUI:
   case TargetOpcode::G_OR:
     return selectImpl(I, CoverageInfo);
@@ -520,6 +535,8 @@ bool AMDGPUInstructionSelector::select(MachineInstr &I,
     return selectG_CONSTANT(I);
   case TargetOpcode::G_GEP:
     return selectG_GEP(I);
+  case TargetOpcode::G_INTRINSIC:
+    return selectG_INTRINSIC(I, CoverageInfo);
   case TargetOpcode::G_LOAD:
     return selectG_LOAD(I);
   case TargetOpcode::G_STORE:
@@ -545,5 +562,13 @@ AMDGPUInstructionSelector::selectVOP3Mods0(MachineOperand &Root) const {
       [=](MachineInstrBuilder &MIB) { MIB.addImm(0); }, // src0_mods
       [=](MachineInstrBuilder &MIB) { MIB.addImm(0); }, // clamp
       [=](MachineInstrBuilder &MIB) { MIB.addImm(0); }  // omod
+  }};
+}
+
+InstructionSelector::ComplexRendererFns
+AMDGPUInstructionSelector::selectVOP3Mods(MachineOperand &Root) const {
+  return {{
+      [=](MachineInstrBuilder &MIB) { MIB.add(Root); },
+      [=](MachineInstrBuilder &MIB) { MIB.addImm(0); }  // src_mods
   }};
 }

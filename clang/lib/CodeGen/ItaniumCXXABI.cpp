@@ -1806,11 +1806,19 @@ bool ItaniumCXXABI::canSpeculativelyEmitVTable(const CXXRecordDecl *RD) const {
   if (CGM.getLangOpts().AppleKext)
     return false;
 
-  // If we don't have any not emitted inline virtual function, and if vtable is
-  // not hidden, then we are safe to emit available_externally copy of vtable.
+  // If the vtable is hidden then it is not safe to emit an available_externally
+  // copy of vtable.
+  if (isVTableHidden(RD))
+    return false;
+
+  if (CGM.getCodeGenOpts().ForceEmitVTables)
+    return true;
+
+  // If we don't have any not emitted inline virtual function then we are safe
+  // to emit an available_externally copy of vtable.
   // FIXME we can still emit a copy of the vtable if we
   // can emit definition of the inline functions.
-  return !hasAnyUnusedVirtualInlineFunction(RD) && !isVTableHidden(RD);
+  return !hasAnyUnusedVirtualInlineFunction(RD);
 }
 static llvm::Value *performTypeAdjustment(CodeGenFunction &CGF,
                                           Address InitialPtr,
@@ -2860,6 +2868,24 @@ static bool TypeInfoIsInStandardLibrary(const BuiltinType *Ty) {
     case BuiltinType::UShortAccum:
     case BuiltinType::UAccum:
     case BuiltinType::ULongAccum:
+    case BuiltinType::ShortFract:
+    case BuiltinType::Fract:
+    case BuiltinType::LongFract:
+    case BuiltinType::UShortFract:
+    case BuiltinType::UFract:
+    case BuiltinType::ULongFract:
+    case BuiltinType::SatShortAccum:
+    case BuiltinType::SatAccum:
+    case BuiltinType::SatLongAccum:
+    case BuiltinType::SatUShortAccum:
+    case BuiltinType::SatUAccum:
+    case BuiltinType::SatULongAccum:
+    case BuiltinType::SatShortFract:
+    case BuiltinType::SatFract:
+    case BuiltinType::SatLongFract:
+    case BuiltinType::SatUShortFract:
+    case BuiltinType::SatUFract:
+    case BuiltinType::SatULongFract:
       return false;
 
     case BuiltinType::Dependent:

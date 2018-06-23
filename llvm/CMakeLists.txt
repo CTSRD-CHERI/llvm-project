@@ -92,7 +92,7 @@ if(CMAKE_HOST_APPLE AND APPLE)
 
     foreach(lang ${languages})
       set(CMAKE_${lang}_CREATE_STATIC_LIBRARY
-        "${CMAKE_LIBTOOL} -static ${LIBTOOL_NO_WARNING_FLAG} -o <TARGET> \
+        "\"${CMAKE_LIBTOOL}\" -static ${LIBTOOL_NO_WARNING_FLAG} -o <TARGET> \
         <LINK_FLAGS> <OBJECTS> ")
     endforeach()
   endif()
@@ -985,6 +985,7 @@ if (NOT LLVM_INSTALL_TOOLCHAIN_ONLY)
 
   if (NOT CMAKE_CONFIGURATION_TYPES)
     add_llvm_install_targets(install-llvm-headers
+                             DEPENDS llvm-headers
                              COMPONENT llvm-headers)
   endif()
 endif()

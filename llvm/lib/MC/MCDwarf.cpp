@@ -350,7 +350,7 @@ void MCDwarfLineTableHeader::emitV2FileDirTables(MCStreamer *MCOS) const {
 }
 
 static void emitOneV5FileEntry(MCStreamer *MCOS, const MCDwarfFile &DwarfFile,
-                               bool HasMD5, bool HasSource,
+                               bool EmitMD5, bool HasSource,
                                Optional<MCDwarfLineStr> &LineStr) {
   assert(!DwarfFile.Name.empty());
   if (LineStr)
@@ -360,7 +360,7 @@ static void emitOneV5FileEntry(MCStreamer *MCOS, const MCDwarfFile &DwarfFile,
     MCOS->EmitBytes(StringRef("\0", 1)); // its null terminator.
   }
   MCOS->EmitULEB128IntValue(DwarfFile.DirIndex); // Directory number.
-  if (HasMD5) {
+  if (EmitMD5) {
     MD5::MD5Result *Cksum = DwarfFile.Checksum;
     MCOS->EmitBinaryData(
         StringRef(reinterpret_cast<const char *>(Cksum->Bytes.data()),
@@ -378,7 +378,8 @@ static void emitOneV5FileEntry(MCStreamer *MCOS, const MCDwarfFile &DwarfFile,
 }
 
 void MCDwarfLineTableHeader::emitV5FileDirTables(
-    MCStreamer *MCOS, Optional<MCDwarfLineStr> &LineStr) const {
+    MCStreamer *MCOS, Optional<MCDwarfLineStr> &LineStr,
+    StringRef CtxCompilationDir) const {
   // The directory format, which is just a list of the directory paths.  In a
   // non-split object, these are references to .debug_line_str; in a split
   // object, they are inline strings.
@@ -387,14 +388,17 @@ void MCDwarfLineTableHeader::emitV5FileDirTables(
   MCOS->EmitULEB128IntValue(LineStr ? dwarf::DW_FORM_line_strp
                                     : dwarf::DW_FORM_string);
   MCOS->EmitULEB128IntValue(MCDwarfDirs.size() + 1);
+  // Try not to emit an empty compilation directory.
+  const StringRef &CompDir =
+      CompilationDir.empty() ? CtxCompilationDir : CompilationDir;
   if (LineStr) {
     // Record path strings, emit references here.
-    LineStr->emitRef(MCOS, CompilationDir);
+    LineStr->emitRef(MCOS, CompDir);
     for (auto &Dir : MCDwarfDirs)
       LineStr->emitRef(MCOS, Dir);
   } else {
-    // The list of directory paths.  CompilationDir comes first.
-    MCOS->EmitBytes(CompilationDir);
+    // The list of directory paths.  Compilation directory comes first.
+    MCOS->EmitBytes(CompDir);
     MCOS->EmitBytes(StringRef("\0", 1));
     for (auto &Dir : MCDwarfDirs) {
       MCOS->EmitBytes(Dir);                // The DirectoryName, and...
@@ -406,7 +410,7 @@ void MCDwarfLineTableHeader::emitV5FileDirTables(
   // directory index.  We don't track file size/timestamp so don't emit them
   // in the v5 table.  Emit MD5 checksums and source if we have them.
   uint64_t Entries = 2;
-  if (HasMD5)
+  if (HasAllMD5)
     Entries += 1;
   if (HasSource)
     Entries += 1;
@@ -416,7 +420,7 @@ void MCDwarfLineTableHeader::emitV5FileDirTables(
                                     : dwarf::DW_FORM_string);
   MCOS->EmitULEB128IntValue(dwarf::DW_LNCT_directory_index);
   MCOS->EmitULEB128IntValue(dwarf::DW_FORM_udata);
-  if (HasMD5) {
+  if (HasAllMD5) {
     MCOS->EmitULEB128IntValue(dwarf::DW_LNCT_MD5);
     MCOS->EmitULEB128IntValue(dwarf::DW_FORM_data16);
   }
@@ -426,11 +430,14 @@ void MCDwarfLineTableHeader::emitV5FileDirTables(
                                       : dwarf::DW_FORM_string);
   }
   // Then the counted list of files. The root file is file #0, then emit the
-  // files as provide by .file directives.
+  // files as provide by .file directives.  To accommodate assembler source
+  // written for DWARF v4 but trying to emit v5, if we didn't see a root file
+  // explicitly, replicate file #1.
   MCOS->EmitULEB128IntValue(MCDwarfFiles.size());
-  emitOneV5FileEntry(MCOS, RootFile, HasMD5, HasSource, LineStr);
+  emitOneV5FileEntry(MCOS, RootFile.Name.empty() ? MCDwarfFiles[1] : RootFile,
+                     HasAllMD5, HasSource, LineStr);
   for (unsigned i = 1; i < MCDwarfFiles.size(); ++i)
-    emitOneV5FileEntry(MCOS, MCDwarfFiles[i], HasMD5, HasSource, LineStr);
+    emitOneV5FileEntry(MCOS, MCDwarfFiles[i], HasAllMD5, HasSource, LineStr);
 }
 
 std::pair<MCSymbol *, MCSymbol *>
@@ -501,7 +508,7 @@ MCDwarfLineTableHeader::Emit(MCStreamer *MCOS, MCDwarfLineTableParams Params,
   // Put out the directory and file tables.  The formats vary depending on
   // the version.
   if (LineTableVersion >= 5)
-    emitV5FileDirTables(MCOS, LineStr);
+    emitV5FileDirTables(MCOS, LineStr, context.getCompilationDir());
   else
     emitV2FileDirTables(MCOS);
 
@@ -547,9 +554,10 @@ MCDwarfLineTableHeader::tryGetFile(StringRef &Directory,
     Directory = "";
   }
   assert(!FileName.empty());
-  // If any files have an MD5 checksum or embedded source, they all must.
+  // Keep track of whether any or all files have an MD5 checksum.
+  // If any files have embedded source, they all must.
   if (MCDwarfFiles.empty()) {
-    HasMD5 = (Checksum != nullptr);
+    trackMD5Usage(Checksum);
     HasSource = (Source != None);
   }
   if (FileNumber == 0) {
@@ -575,10 +583,6 @@ MCDwarfLineTableHeader::tryGetFile(StringRef &Directory,
     return make_error<StringError>("file number already allocated",
                                    inconvertibleErrorCode());
 
-  // If any files have an MD5 checksum, they all must.
-  if (HasMD5 != (Checksum != nullptr))
-    return make_error<StringError>("inconsistent use of MD5 checksums",
-                                   inconvertibleErrorCode());
   // If any files have embedded source, they all must.
   if (HasSource != (Source != None))
     return make_error<StringError>("inconsistent use of embedded source",
@@ -618,8 +622,7 @@ MCDwarfLineTableHeader::tryGetFile(StringRef &Directory,
   File.Name = FileName;
   File.DirIndex = DirIndex;
   File.Checksum = Checksum;
-  if (Checksum)
-    HasMD5 = true;
+  trackMD5Usage(Checksum);
   File.Source = Source;
   if (Source)
     HasSource = true;

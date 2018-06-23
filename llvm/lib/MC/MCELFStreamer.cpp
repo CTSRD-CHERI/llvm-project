@@ -411,6 +411,8 @@ void MCELFStreamer::fixSymbolsInTLSFixups(const MCExpr *expr) {
     case MCSymbolRefExpr::VK_PPC_TPREL_LO:
     case MCSymbolRefExpr::VK_PPC_TPREL_HI:
     case MCSymbolRefExpr::VK_PPC_TPREL_HA:
+    case MCSymbolRefExpr::VK_PPC_TPREL_HIGH:
+    case MCSymbolRefExpr::VK_PPC_TPREL_HIGHA:
     case MCSymbolRefExpr::VK_PPC_TPREL_HIGHER:
     case MCSymbolRefExpr::VK_PPC_TPREL_HIGHERA:
     case MCSymbolRefExpr::VK_PPC_TPREL_HIGHEST:
@@ -418,6 +420,8 @@ void MCELFStreamer::fixSymbolsInTLSFixups(const MCExpr *expr) {
     case MCSymbolRefExpr::VK_PPC_DTPREL_LO:
     case MCSymbolRefExpr::VK_PPC_DTPREL_HI:
     case MCSymbolRefExpr::VK_PPC_DTPREL_HA:
+    case MCSymbolRefExpr::VK_PPC_DTPREL_HIGH:
+    case MCSymbolRefExpr::VK_PPC_DTPREL_HIGHA:
     case MCSymbolRefExpr::VK_PPC_DTPREL_HIGHER:
     case MCSymbolRefExpr::VK_PPC_DTPREL_HIGHERA:
     case MCSymbolRefExpr::VK_PPC_DTPREL_HIGHEST:
@@ -557,6 +561,7 @@ void MCELFStreamer::EmitInstToData(const MCInst &Inst,
       MCCompactEncodedInstFragment *CEIF = new MCCompactEncodedInstFragment();
       insert(CEIF);
       CEIF->getContents().append(Code.begin(), Code.end());
+      CEIF->setHasInstructions(STI);
       return;
     } else {
       DF = new MCDataFragment();

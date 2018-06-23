@@ -10,6 +10,7 @@
 #include "Analysis.h"
 #include "BenchmarkResult.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/MC/MCAsmInfo.h"
 #include "llvm/Support/FormatVariadic.h"
 #include <unordered_set>
 #include <vector>
@@ -20,7 +21,7 @@ static const char kCsvSep = ',';
 
 namespace {
 
-enum EscapeTag { kEscapeCsv, kEscapeHtml };
+enum EscapeTag { kEscapeCsv, kEscapeHtml, kEscapeHtmlString };
 
 template <EscapeTag Tag>
 void writeEscaped(llvm::raw_ostream &OS, const llvm::StringRef S);
@@ -56,6 +57,17 @@ void writeEscaped<kEscapeHtml>(llvm::raw_ostream &OS, const llvm::StringRef S) {
   }
 }
 
+template <>
+void writeEscaped<kEscapeHtmlString>(llvm::raw_ostream &OS,
+                                     const llvm::StringRef S) {
+  for (const char C : S) {
+    if (C == '"')
+      OS << "\\\"";
+    else
+      OS << C;
+  }
+}
+
 } // namespace
 
 template <EscapeTag Tag>
@@ -75,6 +87,33 @@ static void writeMeasurementValue(llvm::raw_ostream &OS, const double Value) {
   writeEscaped<Tag>(OS, llvm::formatv("{0:F}", Value).str());
 }
 
+template <typename EscapeTag, EscapeTag Tag>
+void Analysis::writeSnippet(llvm::raw_ostream &OS,
+                            llvm::ArrayRef<uint8_t> Bytes,
+                            const char *Separator) const {
+  llvm::SmallVector<std::string, 3> Lines;
+  // Parse the asm snippet and print it.
+  while (!Bytes.empty()) {
+    llvm::MCInst MI;
+    uint64_t MISize = 0;
+    if (!Disasm_->getInstruction(MI, MISize, Bytes, 0, llvm::nulls(),
+                                 llvm::nulls())) {
+      writeEscaped<Tag>(OS, llvm::join(Lines, Separator));
+      writeEscaped<Tag>(OS, Separator);
+      writeEscaped<Tag>(OS, "[error decoding asm snippet]");
+      return;
+    }
+    Lines.emplace_back();
+    std::string &Line = Lines.back();
+    llvm::raw_string_ostream OSS(Line);
+    InstPrinter_->printInst(&MI, OSS, "", *SubtargetInfo_);
+    Bytes = Bytes.drop_front(MISize);
+    OSS.flush();
+    Line = llvm::StringRef(Line).trim().str();
+  }
+  writeEscaped<Tag>(OS, llvm::join(Lines, Separator));
+}
+
 // Prints a row representing an instruction, along with scheduling info and
 // point coordinates (measurements).
 void Analysis::printInstructionRowCsv(const size_t PointId,
@@ -82,25 +121,22 @@ void Analysis::printInstructionRowCsv(const size_t PointId,
   const InstructionBenchmark &Point = Clustering_.getPoints()[PointId];
   writeClusterId<kEscapeCsv>(OS, Clustering_.getClusterIdForPoint(PointId));
   OS << kCsvSep;
-  writeEscaped<kEscapeCsv>(OS, Point.Key.OpcodeName);
+  writeSnippet<EscapeTag, kEscapeCsv>(OS, Point.AssembledSnippet, "; ");
   OS << kCsvSep;
   writeEscaped<kEscapeCsv>(OS, Point.Key.Config);
   OS << kCsvSep;
-  const auto OpcodeIt = MnemonicToOpcode_.find(Point.Key.OpcodeName);
-  if (OpcodeIt != MnemonicToOpcode_.end()) {
-    const unsigned SchedClassId =
-        InstrInfo_->get(OpcodeIt->second).getSchedClass();
+  assert(!Point.Key.Instructions.empty());
+  // FIXME: Resolve variant classes.
+  const unsigned SchedClassId =
+      InstrInfo_->get(Point.Key.Instructions[0].getOpcode()).getSchedClass();
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
-    const auto &SchedModel = SubtargetInfo_->getSchedModel();
-    const llvm::MCSchedClassDesc *const SCDesc =
-        SchedModel.getSchedClassDesc(SchedClassId);
-    writeEscaped<kEscapeCsv>(OS, SCDesc->Name);
+  const auto &SchedModel = SubtargetInfo_->getSchedModel();
+  const llvm::MCSchedClassDesc *const SCDesc =
+      SchedModel.getSchedClassDesc(SchedClassId);
+  writeEscaped<kEscapeCsv>(OS, SCDesc->Name);
 #else
-    OS << SchedClassId;
+  OS << SchedClassId;
 #endif
-  }
-  // FIXME: Print the sched class once InstructionBenchmark separates key into
-  // (mnemonic, mode, opaque).
   for (const auto &Measurement : Point.Measurements) {
     OS << kCsvSep;
     writeMeasurementValue<kEscapeCsv>(OS, Measurement.Value);
@@ -114,14 +150,21 @@ Analysis::Analysis(const llvm::Target &Target,
   if (Clustering.getPoints().empty())
     return;
 
-  InstrInfo_.reset(Target.createMCInstrInfo());
   const InstructionBenchmark &FirstPoint = Clustering.getPoints().front();
+  InstrInfo_.reset(Target.createMCInstrInfo());
+  RegInfo_.reset(Target.createMCRegInfo(FirstPoint.LLVMTriple));
+  AsmInfo_.reset(Target.createMCAsmInfo(*RegInfo_, FirstPoint.LLVMTriple));
   SubtargetInfo_.reset(Target.createMCSubtargetInfo(FirstPoint.LLVMTriple,
                                                     FirstPoint.CpuName, ""));
+  InstPrinter_.reset(Target.createMCInstPrinter(
+      llvm::Triple(FirstPoint.LLVMTriple), 0 /*default variant*/, *AsmInfo_,
+      *InstrInfo_, *RegInfo_));
 
-  // Build an index of mnemonic->opcode.
-  for (int I = 0, E = InstrInfo_->getNumOpcodes(); I < E; ++I)
-    MnemonicToOpcode_.emplace(InstrInfo_->getName(I), I);
+  Context_ = llvm::make_unique<llvm::MCContext>(AsmInfo_.get(), RegInfo_.get(),
+                                                &ObjectFileInfo_);
+  Disasm_.reset(Target.createMCDisassembler(*SubtargetInfo_, *Context_));
+  assert(Disasm_ && "cannot create MCDisassembler. missing call to "
+                    "InitializeXXXTargetDisassembler ?");
 }
 
 template <>
@@ -158,14 +201,41 @@ Analysis::makePointsPerSchedClass() const {
     const InstructionBenchmark &Point = Points[PointId];
     if (!Point.Error.empty())
       continue;
-    const auto OpcodeIt = MnemonicToOpcode_.find(Point.Key.OpcodeName);
-    if (OpcodeIt == MnemonicToOpcode_.end())
-      continue;
-    const unsigned SchedClassId =
-        InstrInfo_->get(OpcodeIt->second).getSchedClass();
-    PointsPerSchedClass[SchedClassId].push_back(PointId);
+    assert(!Point.Key.Instructions.empty());
+    const auto Opcode = Point.Key.Instructions[0].getOpcode();
+    // FIXME: Resolve variant classes.
+    PointsPerSchedClass[InstrInfo_->get(Opcode).getSchedClass()].push_back(
+        PointId);
   }
   return PointsPerSchedClass;
+}
+
+// Uops repeat the same opcode over again. Just show this opcode and show the
+// whole snippet only on hover.
+static void writeUopsSnippetHtml(llvm::raw_ostream &OS,
+                                 const std::vector<llvm::MCInst> &Instructions,
+                                 const llvm::MCInstrInfo &InstrInfo) {
+  if (Instructions.empty())
+    return;
+  writeEscaped<kEscapeHtml>(OS, InstrInfo.getName(Instructions[0].getOpcode()));
+  if (Instructions.size() > 1)
+    OS << " (x" << Instructions.size() << ")";
+}
+
+// Latency tries to find a serial path. Just show the opcode path and show the
+// whole snippet only on hover.
+static void
+writeLatencySnippetHtml(llvm::raw_ostream &OS,
+                        const std::vector<llvm::MCInst> &Instructions,
+                        const llvm::MCInstrInfo &InstrInfo) {
+  bool First = true;
+  for (const llvm::MCInst &Instr : Instructions) {
+    if (First)
+      First = false;
+    else
+      OS << " &rarr; ";
+    writeEscaped<kEscapeHtml>(OS, InstrInfo.getName(Instr.getOpcode()));
+  }
 }
 
 void Analysis::printSchedClassClustersHtml(
@@ -195,8 +265,20 @@ void Analysis::printSchedClassClustersHtml(
     OS << "</td><td><ul>";
     for (const size_t PointId : Cluster.getPointIds()) {
       const auto &Point = Points[PointId];
-      OS << "<li><span class=\"mono\">";
-      writeEscaped<kEscapeHtml>(OS, Point.Key.OpcodeName);
+      OS << "<li><span class=\"mono\" title=\"";
+      writeSnippet<EscapeTag, kEscapeHtmlString>(OS, Point.AssembledSnippet,
+                                                 "\n");
+      OS << "\">";
+      switch (Point.Mode) {
+      case InstructionBenchmark::Latency:
+        writeLatencySnippetHtml(OS, Point.Key.Instructions, *InstrInfo_);
+        break;
+      case InstructionBenchmark::Uops:
+        writeUopsSnippetHtml(OS, Point.Key.Instructions, *InstrInfo_);
+        break;
+      default:
+        llvm_unreachable("invalid mode");
+      }
       OS << "</span> <span class=\"mono\">";
       writeEscaped<kEscapeHtml>(OS, Point.Key.Config);
       OS << "</span></li>";
@@ -292,7 +374,7 @@ getNonRedundantWriteProcRes(const llvm::MCSchedClassDesc &SCDesc,
 
 Analysis::SchedClass::SchedClass(const llvm::MCSchedClassDesc &SD,
                                  const llvm::MCSubtargetInfo &STI)
-    : SCDesc(SD),
+    : SCDesc(&SD),
       NonRedundantWriteProcRes(getNonRedundantWriteProcRes(SD, STI)),
       IdealizedProcResPressure(computeIdealizedProcResPressure(
           STI.getSchedModel(), NonRedundantWriteProcRes)) {}
@@ -329,9 +411,9 @@ bool Analysis::SchedClassCluster::measurementsMatch(
     }
     // Find the latency.
     SchedClassPoint[0].Value = 0.0;
-    for (unsigned I = 0; I < SC.SCDesc.NumWriteLatencyEntries; ++I) {
+    for (unsigned I = 0; I < SC.SCDesc->NumWriteLatencyEntries; ++I) {
       const llvm::MCWriteLatencyEntry *const WLE =
-          STI.getWriteLatencyEntry(&SC.SCDesc, I);
+          STI.getWriteLatencyEntry(SC.SCDesc, I);
       SchedClassPoint[0].Value =
           std::max<double>(SchedClassPoint[0].Value, WLE->Cycles);
     }
@@ -372,19 +454,19 @@ void Analysis::printSchedClassDescHtml(const SchedClass &SC,
         "th><th>WriteProcRes</th><th title=\"This is the idealized unit "
         "resource (port) pressure assuming ideal distribution\">Idealized "
         "Resource Pressure</th></tr>";
-  if (SC.SCDesc.isValid()) {
+  if (SC.SCDesc->isValid()) {
     const auto &SM = SubtargetInfo_->getSchedModel();
     OS << "<tr><td>&#10004;</td>";
-    OS << "<td>" << (SC.SCDesc.isVariant() ? "&#10004;" : "&#10005;")
+    OS << "<td>" << (SC.SCDesc->isVariant() ? "&#10004;" : "&#10005;")
        << "</td>";
-    OS << "<td>" << SC.SCDesc.NumMicroOps << "</td>";
+    OS << "<td>" << SC.SCDesc->NumMicroOps << "</td>";
     // Latencies.
     OS << "<td><ul>";
-    for (int I = 0, E = SC.SCDesc.NumWriteLatencyEntries; I < E; ++I) {
+    for (int I = 0, E = SC.SCDesc->NumWriteLatencyEntries; I < E; ++I) {
       const auto *const Entry =
-          SubtargetInfo_->getWriteLatencyEntry(&SC.SCDesc, I);
+          SubtargetInfo_->getWriteLatencyEntry(SC.SCDesc, I);
       OS << "<li>" << Entry->Cycles;
-      if (SC.SCDesc.NumWriteLatencyEntries > 1) {
+      if (SC.SCDesc->NumWriteLatencyEntries > 1) {
         // Dismabiguate if more than 1 latency.
         OS << " (WriteResourceID " << Entry->WriteResourceID << ")";
       }

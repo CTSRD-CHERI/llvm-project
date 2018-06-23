@@ -2876,6 +2876,17 @@ Parser::DiagnoseMissingSemiAfterTagDefinition(DeclSpec &DS, AccessSpecifier AS,
   return false;
 }
 
+// Choose the apprpriate diagnostic error for why fixed point types are
+// disabled, set the previous specifier, and mark as invalid.
+static void SetupFixedPointError(const LangOptions &LangOpts,
+                                 const char *&PrevSpec, unsigned &DiagID,
+                                 bool &isInvalid) {
+  assert(!LangOpts.FixedPoint);
+  DiagID = diag::err_fixed_point_not_enabled;
+  PrevSpec = "";  // Not used by diagnostic
+  isInvalid = true;
+}
+
 /// ParseDeclarationSpecifiers
 ///       declaration-specifiers: [C99 6.7]
 ///         storage-class-specifier declaration-specifiers[opt]
@@ -3582,12 +3593,25 @@ void Parser::ParseDeclarationSpecifiers(DeclSpec &DS,
       break;
     case tok::kw__Accum:
       if (!getLangOpts().FixedPoint) {
-        DiagID = diag::err_fixed_point_not_enabled;
-        PrevSpec = "";  // Not used by diagnostic
-        isInvalid = true;
+        SetupFixedPointError(getLangOpts(), PrevSpec, DiagID, isInvalid);
       } else {
         isInvalid = DS.SetTypeSpecType(DeclSpec::TST_accum, Loc, PrevSpec,
                                        DiagID, Policy);
+      }
+      break;
+    case tok::kw__Fract:
+      if (!getLangOpts().FixedPoint) {
+        SetupFixedPointError(getLangOpts(), PrevSpec, DiagID, isInvalid);
+      } else {
+        isInvalid = DS.SetTypeSpecType(DeclSpec::TST_fract, Loc, PrevSpec,
+                                       DiagID, Policy);
+      }
+      break;
+    case tok::kw__Sat:
+      if (!getLangOpts().FixedPoint) {
+        SetupFixedPointError(getLangOpts(), PrevSpec, DiagID, isInvalid);
+      } else {
+        isInvalid = DS.SetTypeSpecSat(Loc, PrevSpec, DiagID);
       }
       break;
     case tok::kw___float128:
@@ -4623,6 +4647,7 @@ bool Parser::isKnownToBeTypeSpecifier(const Token &Tok) const {
   case tok::kw_float:
   case tok::kw_double:
   case tok::kw__Accum:
+  case tok::kw__Fract:
   case tok::kw__Float16:
   case tok::kw___float128:
   case tok::kw_bool:
@@ -4701,6 +4726,7 @@ bool Parser::isTypeSpecifierQualifier() {
   case tok::kw_float:
   case tok::kw_double:
   case tok::kw__Accum:
+  case tok::kw__Fract:
   case tok::kw__Float16:
   case tok::kw___float128:
   case tok::kw_bool:
@@ -4725,6 +4751,7 @@ bool Parser::isTypeSpecifierQualifier() {
   case tok::kw_volatile:
   case tok::kw_restrict:
   case tok::kw___output:
+  case tok::kw__Sat:
 
     // Debugger support.
   case tok::kw___unknown_anytype:
@@ -4861,6 +4888,7 @@ bool Parser::isDeclarationSpecifier(bool DisambiguatingWithExpression) {
   case tok::kw_float:
   case tok::kw_double:
   case tok::kw__Accum:
+  case tok::kw__Fract:
   case tok::kw__Float16:
   case tok::kw___float128:
   case tok::kw_bool:
@@ -4883,6 +4911,7 @@ bool Parser::isDeclarationSpecifier(bool DisambiguatingWithExpression) {
   case tok::kw_volatile:
   case tok::kw_restrict:
   case tok::kw___output:
+  case tok::kw__Sat:
 
     // function-specifier
   case tok::kw_inline:

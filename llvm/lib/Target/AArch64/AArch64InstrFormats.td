@@ -167,7 +167,7 @@ def ExtendOperandLSL64 : AsmOperandClass {
 // 8-bit floating-point immediate encodings.
 def FPImmOperand : AsmOperandClass {
   let Name = "FPImm";
-  let ParserMethod = "tryParseFPImm";
+  let ParserMethod = "tryParseFPImm<true>";
   let DiagnosticType = "InvalidFPImm";
 }
 
@@ -7938,10 +7938,10 @@ multiclass SIMDFPScalarRShift<bit U, bits<5> opc, string asm> {
     let Inst{21-16} = imm{5-0};
     let Inst{23-22} = 0b11;
   }
-  def DHr : BaseSIMDScalarShift<U, opc, {?,?,?,?,?,?,?},
+  def DHr : BaseSIMDScalarShift<U, opc, {1,1,1,?,?,?,?},
                                 FPR64, FPR16, vecshiftR64, asm, []> {
     let Inst{21-16} = imm{5-0};
-    let Inst{23-22} = 0b11;
+    let Inst{23-22} = 0b01;
     let Inst{31} = 1;
   }
   def h : BaseSIMDScalarShift<U, opc, {0,0,1,?,?,?,?},

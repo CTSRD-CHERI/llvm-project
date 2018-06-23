@@ -19,7 +19,6 @@
 #include "llvm/ADT/SetOperations.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallPtrSet.h"
-#include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/StringRef.h"
@@ -5710,7 +5709,7 @@ static bool TryToMergeLandingPad(LandingPadInst *LPad, BranchInst *BI,
 
     // We've found an identical block.  Update our predecessors to take that
     // path instead and make ourselves dead.
-    SmallSet<BasicBlock *, 16> Preds;
+    SmallPtrSet<BasicBlock *, 16> Preds;
     Preds.insert(pred_begin(BB), pred_end(BB));
     for (BasicBlock *Pred : Preds) {
       InvokeInst *II = cast<InvokeInst>(Pred->getTerminator());
@@ -5728,7 +5727,7 @@ static bool TryToMergeLandingPad(LandingPadInst *LPad, BranchInst *BI,
         Inst.eraseFromParent();
     }
 
-    SmallSet<BasicBlock *, 16> Succs;
+    SmallPtrSet<BasicBlock *, 16> Succs;
     Succs.insert(succ_begin(BB), succ_end(BB));
     for (BasicBlock *Succ : Succs) {
       Succ->removePredecessor(BB);

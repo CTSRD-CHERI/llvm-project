@@ -23,6 +23,9 @@
 
 namespace exegesis {
 
+BenchmarkFailure::BenchmarkFailure(const llvm::Twine &S)
+    : llvm::StringError(S, llvm::inconvertibleErrorCode()) {}
+
 BenchmarkRunner::InstructionFilter::~InstructionFilter() = default;
 
 BenchmarkRunner::BenchmarkRunner(const LLVMState &State)
@@ -38,14 +41,13 @@ BenchmarkRunner::run(unsigned Opcode, const InstructionFilter &Filter,
                      unsigned NumRepetitions) {
   // Ignore instructions that we cannot run.
   if (State.getInstrInfo().get(Opcode).isPseudo())
-    return llvm::make_error<llvm::StringError>("Unsupported opcode: isPseudo",
-                                               llvm::inconvertibleErrorCode());
+    return llvm::make_error<BenchmarkFailure>("Unsupported opcode: isPseudo");
 
   if (llvm::Error E = Filter.shouldRun(State, Opcode))
     return std::move(E);
 
   llvm::Expected<std::vector<BenchmarkConfiguration>> ConfigurationOrError =
-      createConfigurations(RATC, Opcode);
+      createConfigurations(Opcode);
 
   if (llvm::Error E = ConfigurationOrError.takeError())
     return std::move(E);
@@ -60,7 +62,6 @@ InstructionBenchmark
 BenchmarkRunner::runOne(const BenchmarkConfiguration &Configuration,
                         unsigned Opcode, unsigned NumRepetitions) const {
   InstructionBenchmark InstrBenchmark;
-  InstrBenchmark.Key.OpcodeName = State.getInstrInfo().getName(Opcode);
   InstrBenchmark.Mode = getMode();
   InstrBenchmark.CpuName = State.getCpuName();
   InstrBenchmark.LLVMTriple = State.getTriple();
@@ -73,24 +74,41 @@ BenchmarkRunner::runOne(const BenchmarkConfiguration &Configuration,
     return InstrBenchmark;
   }
 
-  for (const auto &MCInst : Snippet)
-    InstrBenchmark.Key.Instructions.push_back(MCInst);
+  InstrBenchmark.Key.Instructions = Snippet;
 
-  std::vector<llvm::MCInst> Code;
-  for (int I = 0; I < InstrBenchmark.NumRepetitions; ++I)
-    Code.push_back(Snippet[I % Snippet.size()]);
+  // Repeat the snippet until there are at least NumInstructions in the
+  // resulting code. The snippet is always repeated at least once.
+  const auto GenerateInstructions = [&Snippet](const int MinInstructions) {
+    std::vector<llvm::MCInst> Code = Snippet;
+    for (int I = 0; I < MinInstructions; ++I)
+      Code.push_back(Snippet[I % Snippet.size()]);
+    return Code;
+  };
 
-  auto ExpectedObjectPath = writeObjectFile(Code);
-  if (llvm::Error E = ExpectedObjectPath.takeError()) {
+  // Assemble at least kMinInstructionsForSnippet instructions by repeating the
+  // snippet for debug/analysis. This is so that the user clearly understands
+  // that the inside instructions are repeated.
+  constexpr const int kMinInstructionsForSnippet = 16;
+  {
+    auto EF = createExecutableFunction(
+        GenerateInstructions(kMinInstructionsForSnippet));
+    if (llvm::Error E = EF.takeError()) {
+      InstrBenchmark.Error = llvm::toString(std::move(E));
+      return InstrBenchmark;
+    }
+    const auto FnBytes = EF->getFunctionBytes();
+    InstrBenchmark.AssembledSnippet.assign(FnBytes.begin(), FnBytes.end());
+  }
+
+  // Assemble NumRepetitions instructions repetitions of the snippet for
+  // measurements.
+  auto EF = createExecutableFunction(
+      GenerateInstructions(InstrBenchmark.NumRepetitions));
+  if (llvm::Error E = EF.takeError()) {
     InstrBenchmark.Error = llvm::toString(std::move(E));
     return InstrBenchmark;
   }
-
-  // FIXME: Check if TargetMachine or ExecutionEngine can be reused instead of
-  // creating one everytime.
-  const ExecutableFunction EF(State.createTargetMachine(),
-                              getObjectFromFile(*ExpectedObjectPath));
-  InstrBenchmark.Measurements = runMeasurements(EF, NumRepetitions);
+  InstrBenchmark.Measurements = runMeasurements(*EF, NumRepetitions);
 
   return InstrBenchmark;
 }
@@ -107,6 +125,19 @@ BenchmarkRunner::writeObjectFile(llvm::ArrayRef<llvm::MCInst> Code) const {
   llvm::outs() << "Check generated assembly with: /usr/bin/objdump -d "
                << ResultPath << "\n";
   return ResultPath.str();
+}
+
+llvm::Expected<ExecutableFunction> BenchmarkRunner::createExecutableFunction(
+    llvm::ArrayRef<llvm::MCInst> Code) const {
+  auto ExpectedObjectPath = writeObjectFile(Code);
+  if (llvm::Error E = ExpectedObjectPath.takeError()) {
+    return std::move(E);
+  }
+
+  // FIXME: Check if TargetMachine or ExecutionEngine can be reused instead of
+  // creating one everytime.
+  return ExecutableFunction(State.createTargetMachine(),
+                            getObjectFromFile(*ExpectedObjectPath));
 }
 
 } // namespace exegesis

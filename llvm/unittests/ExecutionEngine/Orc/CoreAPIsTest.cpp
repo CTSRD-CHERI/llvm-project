@@ -10,6 +10,7 @@
 #include "OrcTestCommon.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/ExecutionEngine/Orc/Core.h"
+#include "llvm/ExecutionEngine/Orc/OrcError.h"
 #include "gtest/gtest.h"
 
 #include <set>
@@ -301,9 +302,16 @@ TEST(CoreAPIsTest, TestCircularDependenceInOneVSO) {
     EXPECT_TRUE(Unresolved.empty()) << "Failed to resolve \"Baz\"";
   }
 
+  // Add a circular dependency: Foo -> Bar, Bar -> Baz, Baz -> Foo.
   FooR->addDependencies({{&V, SymbolNameSet({Bar})}});
   BarR->addDependencies({{&V, SymbolNameSet({Baz})}});
   BazR->addDependencies({{&V, SymbolNameSet({Foo})}});
+
+  // Add self-dependencies for good measure. This tests that the implementation
+  // of addDependencies filters these out.
+  FooR->addDependencies({{&V, SymbolNameSet({Foo})}});
+  BarR->addDependencies({{&V, SymbolNameSet({Bar})}});
+  BazR->addDependencies({{&V, SymbolNameSet({Baz})}});
 
   EXPECT_FALSE(FooResolved) << "\"Foo\" should not be resolved yet";
   EXPECT_FALSE(BarResolved) << "\"Bar\" should not be resolved yet";
@@ -506,6 +514,33 @@ TEST(CoreAPIsTest, DefineMaterializingSymbol) {
   V.lookup(std::move(Q2), {Bar});
 
   EXPECT_TRUE(BarResolved) << "Bar should have been resolved";
+}
+
+TEST(CoreAPIsTest, FallbackDefinitionGeneratorTest) {
+  constexpr JITTargetAddress FakeFooAddr = 0xdeadbeef;
+  constexpr JITTargetAddress FakeBarAddr = 0xcafef00d;
+
+  ExecutionSession ES;
+  auto Foo = ES.getSymbolStringPool().intern("foo");
+  auto Bar = ES.getSymbolStringPool().intern("bar");
+
+  auto FooSym = JITEvaluatedSymbol(FakeFooAddr, JITSymbolFlags::Exported);
+  auto BarSym = JITEvaluatedSymbol(FakeBarAddr, JITSymbolFlags::Exported);
+
+  auto &V = ES.createVSO("V");
+
+  cantFail(V.define(absoluteSymbols({{Foo, FooSym}})));
+
+  V.setFallbackDefinitionGenerator([&](VSO &W, const SymbolNameSet &Names) {
+    cantFail(W.define(absoluteSymbols({{Bar, BarSym}})));
+    return SymbolNameSet({Bar});
+  });
+
+  auto Result = cantFail(lookup({&V}, {Foo, Bar}));
+
+  EXPECT_EQ(Result.count(Bar), 1U) << "Expected to find fallback def for 'bar'";
+  EXPECT_EQ(Result[Bar].getAddress(), FakeBarAddr)
+      << "Expected address of fallback def for 'bar' to be " << FakeBarAddr;
 }
 
 TEST(CoreAPIsTest, FailResolution) {
@@ -732,6 +767,52 @@ TEST(CoreAPIsTest, TestGetRequestedSymbolsAndDelegate) {
   EXPECT_EQ(BarSymResult.getAddress(), BarSym.getAddress())
       << "Address mismatch for Bar";
   EXPECT_TRUE(BarMaterialized) << "Bar should be materialized now";
+}
+
+TEST(CoreAPIsTest, TestMaterializeWeakSymbol) {
+  // Confirm that once a weak definition is selected for materialization it is
+  // treated as strong.
+
+  constexpr JITTargetAddress FakeFooAddr = 0xdeadbeef;
+  JITSymbolFlags FooFlags = JITSymbolFlags::Exported;
+  FooFlags &= JITSymbolFlags::Weak;
+  auto FooSym = JITEvaluatedSymbol(FakeFooAddr, FooFlags);
+
+  ExecutionSession ES;
+  auto Foo = ES.getSymbolStringPool().intern("foo");
+
+  auto &V = ES.createVSO("V");
+
+  std::unique_ptr<MaterializationResponsibility> FooResponsibility;
+  auto MU = llvm::make_unique<SimpleMaterializationUnit>(
+      SymbolFlagsMap({{Foo, FooFlags}}), [&](MaterializationResponsibility R) {
+        FooResponsibility =
+            llvm::make_unique<MaterializationResponsibility>(std::move(R));
+      });
+
+  cantFail(V.define(MU));
+  auto Q = std::make_shared<AsynchronousSymbolQuery>(
+      SymbolNameSet({Foo}),
+      [](Expected<AsynchronousSymbolQuery::ResolutionResult> R) {
+        cantFail(std::move(R));
+      },
+      [](Error Err) { cantFail(std::move(Err)); });
+  V.lookup(std::move(Q), SymbolNameSet({Foo}));
+
+  auto MU2 = llvm::make_unique<SimpleMaterializationUnit>(
+      SymbolFlagsMap({{Foo, JITSymbolFlags::Exported}}),
+      [](MaterializationResponsibility R) {
+        llvm_unreachable("This unit should never be materialized");
+      });
+
+  auto Err = V.define(MU2);
+  EXPECT_TRUE(!!Err) << "Expected failure value";
+  EXPECT_TRUE(Err.isA<DuplicateDefinition>())
+      << "Expected a duplicate definition error";
+  consumeError(std::move(Err));
+
+  FooResponsibility->resolve(SymbolMap({{Foo, FooSym}}));
+  FooResponsibility->finalize();
 }
 
 } // namespace

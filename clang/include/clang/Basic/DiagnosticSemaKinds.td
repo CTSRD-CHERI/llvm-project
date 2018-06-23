@@ -207,6 +207,8 @@ def ext_imaginary_constant : Extension<
 def ext_integer_complex : Extension<
   "complex integer types are a GNU extension">, InGroup<GNUComplexInteger>;
 
+def err_invalid_saturation_spec : Error<"'_Sat' specifier is only valid on "
+  "'_Fract' or '_Accum', not '%0'">;
 def err_invalid_sign_spec : Error<"'%0' cannot be signed or unsigned">;
 def err_invalid_width_spec : Error<
   "'%select{|short|long|long long}0 %1' is invalid">;
@@ -8586,7 +8588,7 @@ def err_reference_pipe_type : Error <
   "pipes packet types cannot be of reference type">;
 def err_opencl_no_main : Error<"%select{function|kernel}0 cannot be called 'main'">;
 def err_opencl_kernel_attr :
-  Error<"attribute %0 can only be applied to a kernel function">;
+  Error<"attribute %0 can only be applied to an OpenCL kernel function">;
 def err_opencl_return_value_with_address_space : Error<
   "return value cannot be qualified with address space">;
 def err_opencl_constant_no_init : Error<

@@ -16,8 +16,6 @@
 #include <algorithm>
 #include <mutex>
 
-// Other libraries and framework includes
-#include "clang/Basic/VersionTuple.h"
 // Project includes
 #include "lldb/Breakpoint/BreakpointLocation.h"
 #include "lldb/Breakpoint/BreakpointSite.h"
@@ -42,6 +40,7 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Threading.h"
+#include "llvm/Support/VersionTuple.h"
 
 #if defined(__APPLE__)
 #include <TargetConditionals.h> // for TARGET_OS_TV, TARGET_OS_WATCH
@@ -1168,7 +1167,7 @@ const char *PlatformDarwin::GetDeveloperDirectory() {
       if (xcode_select_prefix_dir)
         xcode_dir_path.append(xcode_select_prefix_dir);
       xcode_dir_path.append("/usr/share/xcode-select/xcode_dir_path");
-      temp_file_spec.SetFile(xcode_dir_path, false);
+      temp_file_spec.SetFile(xcode_dir_path, false, FileSpec::Style::native);
       auto dir_buffer =
           DataBufferLLVM::CreateFromPath(temp_file_spec.GetPath());
       if (dir_buffer && dir_buffer->GetByteSize() > 0) {
@@ -1216,7 +1215,8 @@ const char *PlatformDarwin::GetDeveloperDirectory() {
     }
 
     if (developer_dir_path_valid) {
-      temp_file_spec.SetFile(developer_dir_path, false);
+      temp_file_spec.SetFile(developer_dir_path, false,
+                             FileSpec::Style::native);
       if (temp_file_spec.Exists()) {
         m_developer_directory.assign(developer_dir_path);
         return m_developer_directory.c_str();
@@ -1612,19 +1612,19 @@ void PlatformDarwin::AddClangModuleCompilationOptionsForSDKType(
     case SDKType::iPhoneOS:
       minimum_version_option.PutCString("-mios-version-min=");
       minimum_version_option.PutCString(
-          clang::VersionTuple(versions[0], versions[1], versions[2])
+          llvm::VersionTuple(versions[0], versions[1], versions[2])
               .getAsString());
       break;
     case SDKType::iPhoneSimulator:
       minimum_version_option.PutCString("-mios-simulator-version-min=");
       minimum_version_option.PutCString(
-          clang::VersionTuple(versions[0], versions[1], versions[2])
+          llvm::VersionTuple(versions[0], versions[1], versions[2])
               .getAsString());
       break;
     case SDKType::MacOSX:
       minimum_version_option.PutCString("-mmacosx-version-min=");
       minimum_version_option.PutCString(
-          clang::VersionTuple(versions[0], versions[1], versions[2])
+          llvm::VersionTuple(versions[0], versions[1], versions[2])
               .getAsString());
     }
     options.push_back(minimum_version_option.GetString());

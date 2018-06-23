@@ -994,18 +994,6 @@ the configuration (without a prefix: ``Auto``).
 
 
 
-**BreakBeforeInheritanceComma** (``bool``)
-  If ``true``, in the class inheritance expression clang-format will
-  break before ``:`` and ``,`` if there is multiple inheritance.
-
-  .. code-block:: c++
-
-     true:                                  false:
-     class MyClass                  vs.     class MyClass : public X, public Y {
-         : public X                         };
-         , public Y {
-     };
-
 **BreakBeforeTernaryOperators** (``bool``)
   If ``true``, ternary operators will be placed after line breaks.
 
@@ -1031,9 +1019,9 @@ the configuration (without a prefix: ``Auto``).
 
     .. code-block:: c++
 
-    Constructor()
-        : initializer1(),
-          initializer2()
+       Constructor()
+           : initializer1(),
+             initializer2()
 
   * ``BCIS_BeforeComma`` (in configuration: ``BeforeComma``)
     Break constructor initializers before the colon and commas, and align
@@ -1041,18 +1029,56 @@ the configuration (without a prefix: ``Auto``).
 
     .. code-block:: c++
 
-    Constructor()
-        : initializer1()
-        , initializer2()
+       Constructor()
+           : initializer1()
+           , initializer2()
 
   * ``BCIS_AfterColon`` (in configuration: ``AfterColon``)
     Break constructor initializers after the colon and commas.
 
     .. code-block:: c++
 
-    Constructor() :
-        initializer1(),
-        initializer2()
+       Constructor() :
+           initializer1(),
+           initializer2()
+
+
+
+**BreakInheritanceList** (``BreakInheritanceListStyle``)
+  The inheritance list style to use.
+
+  Possible values:
+
+  * ``BILS_BeforeColon`` (in configuration: ``BeforeColon``)
+    Break inheritance list before the colon and after the commas.
+
+    .. code-block:: c++
+
+       class Foo
+           : Base1,
+             Base2
+       {};
+
+  * ``BILS_BeforeComma`` (in configuration: ``BeforeComma``)
+    Break inheritance list before the colon and commas, and align
+    the commas with the colon.
+
+    .. code-block:: c++
+
+       class Foo
+           : Base1
+           , Base2
+       {};
+
+  * ``BILS_AfterColon`` (in configuration: ``AfterColon``)
+    Break inheritance list after the colon and commas.
+
+    .. code-block:: c++
+
+       class Foo :
+           Base1,
+           Base2
+       {};
 
 
 
@@ -1122,7 +1148,7 @@ the configuration (without a prefix: ``Auto``).
 
 **ConstructorInitializerIndentWidth** (``unsigned``)
   The number of characters to use for indentation of constructor
-  initializer lists.
+  initializer lists as well as inheritance lists.
 
 **ContinuationIndentWidth** (``unsigned``)
   Indent width for line continuations.
@@ -1766,6 +1792,18 @@ the configuration (without a prefix: ``Auto``).
      true:                                  false:
      int a = 5;                     vs.     int a=5;
      a += 42                                a+=42;
+
+**SpaceBeforeCpp11BracedList** (``bool``)
+  If ``true``, a space will be inserted before a C++11 braced list
+  used to initialize an object (after the preceding identifier or type).
+
+  .. code-block:: c++
+
+     true:                                  false:
+     Foo foo { bar };               vs.     Foo foo{ bar };
+     Foo {};                                Foo{};
+     vector<int> { 1, 2, 3 };               vector<int>{ 1, 2, 3 };
+     new int[3] { 1, 2, 3 };                new int[3]{ 1, 2, 3 };
 
 **SpaceBeforeCtorInitializerColon** (``bool``)
   If ``false``, spaces will be removed before constructor initializer

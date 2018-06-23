@@ -349,7 +349,7 @@ public:
   /// as 'used', and having internal linkage.
   virtual bool shouldEmitStaticExternCAliases() const { return true; }
 
-  virtual void setCUDAKernelCallingConvention(llvm::Function *F) const {}
+  virtual void setCUDAKernelCallingConvention(const FunctionType *&FT) const {}
 };
 
 } // namespace CodeGen

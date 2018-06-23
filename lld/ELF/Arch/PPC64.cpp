@@ -21,6 +21,7 @@ using namespace lld;
 using namespace lld::elf;
 
 static uint64_t PPC64TocOffset = 0x8000;
+static uint64_t DynamicThreadPointerOffset = 0x8000;
 
 uint64_t elf::getPPC64TocBase() {
   // The TOC consists of sections .got, .toc, .tocbss, .plt in that order. The
@@ -57,13 +58,13 @@ public:
 // #higher(value), #highera(value), #highest(value), and #highesta(value)
 // macros defined in section 4.5.1. Relocation Types of the PPC-elf64abi
 // document.
-static uint16_t applyPPCLo(uint64_t V) { return V; }
-static uint16_t applyPPCHi(uint64_t V) { return V >> 16; }
-static uint16_t applyPPCHa(uint64_t V) { return (V + 0x8000) >> 16; }
-static uint16_t applyPPCHigher(uint64_t V) { return V >> 32; }
-static uint16_t applyPPCHighera(uint64_t V) { return (V + 0x8000) >> 32; }
-static uint16_t applyPPCHighest(uint64_t V) { return V >> 48; }
-static uint16_t applyPPCHighesta(uint64_t V) { return (V + 0x8000) >> 48; }
+static uint16_t lo(uint64_t V) { return V; }
+static uint16_t hi(uint64_t V) { return V >> 16; }
+static uint16_t ha(uint64_t V) { return (V + 0x8000) >> 16; }
+static uint16_t higher(uint64_t V) { return V >> 32; }
+static uint16_t highera(uint64_t V) { return (V + 0x8000) >> 32; }
+static uint16_t highest(uint64_t V) { return V >> 48; }
+static uint16_t highesta(uint64_t V) { return (V + 0x8000) >> 48; }
 
 PPC64::PPC64() {
   GotRel = R_PPC64_GLOB_DAT;
@@ -200,6 +201,18 @@ RelExpr PPC64::getRelExpr(RelType Type, const Symbol &S,
   case R_PPC64_TPREL16_HIGHEST:
   case R_PPC64_TPREL16_HIGHESTA:
     return R_TLS;
+  case R_PPC64_DTPREL16:
+  case R_PPC64_DTPREL16_DS:
+  case R_PPC64_DTPREL16_HA:
+  case R_PPC64_DTPREL16_HI:
+  case R_PPC64_DTPREL16_HIGHER:
+  case R_PPC64_DTPREL16_HIGHERA:
+  case R_PPC64_DTPREL16_HIGHEST:
+  case R_PPC64_DTPREL16_HIGHESTA:
+  case R_PPC64_DTPREL16_LO:
+  case R_PPC64_DTPREL16_LO_DS:
+  case R_PPC64_DTPREL64:
+    return R_ABS;
   case R_PPC64_TLSGD:
   case R_PPC64_TLSLD:
   case R_PPC64_TLS:
@@ -245,32 +258,62 @@ void PPC64::writePlt(uint8_t *Buf, uint64_t GotPltEntryAddr,
 }
 
 static std::pair<RelType, uint64_t> toAddr16Rel(RelType Type, uint64_t Val) {
-  uint64_t V = Val - PPC64TocOffset;
+  // Relocations relative to the toc-base need to be adjusted by the Toc offset.
+  uint64_t TocBiasedVal = Val - PPC64TocOffset;
+  // Relocations relative to dtv[dtpmod] need to be adjusted by the DTP offset.
+  uint64_t DTPBiasedVal = Val - DynamicThreadPointerOffset;
+
   switch (Type) {
+  // TOC biased relocation.
   case R_PPC64_GOT_TLSGD16:
   case R_PPC64_GOT_TLSLD16:
   case R_PPC64_TOC16:
-    return {R_PPC64_ADDR16, V};
+    return {R_PPC64_ADDR16, TocBiasedVal};
   case R_PPC64_TOC16_DS:
   case R_PPC64_GOT_TPREL16_DS:
-    return {R_PPC64_ADDR16_DS, V};
+    return {R_PPC64_ADDR16_DS, TocBiasedVal};
   case R_PPC64_GOT_TLSGD16_HA:
   case R_PPC64_GOT_TLSLD16_HA:
   case R_PPC64_GOT_TPREL16_HA:
   case R_PPC64_TOC16_HA:
-    return {R_PPC64_ADDR16_HA, V};
+    return {R_PPC64_ADDR16_HA, TocBiasedVal};
   case R_PPC64_GOT_TLSGD16_HI:
   case R_PPC64_GOT_TLSLD16_HI:
   case R_PPC64_GOT_TPREL16_HI:
   case R_PPC64_TOC16_HI:
-    return {R_PPC64_ADDR16_HI, V};
+    return {R_PPC64_ADDR16_HI, TocBiasedVal};
   case R_PPC64_GOT_TLSGD16_LO:
   case R_PPC64_GOT_TLSLD16_LO:
   case R_PPC64_TOC16_LO:
-    return {R_PPC64_ADDR16_LO, V};
+    return {R_PPC64_ADDR16_LO, TocBiasedVal};
   case R_PPC64_TOC16_LO_DS:
   case R_PPC64_GOT_TPREL16_LO_DS:
-    return {R_PPC64_ADDR16_LO_DS, V};
+    return {R_PPC64_ADDR16_LO_DS, TocBiasedVal};
+
+  // Dynamic Thread pointer biased relocation types.
+  case R_PPC64_DTPREL16:
+    return {R_PPC64_ADDR16, DTPBiasedVal};
+  case R_PPC64_DTPREL16_DS:
+    return {R_PPC64_ADDR16_DS, DTPBiasedVal};
+  case R_PPC64_DTPREL16_HA:
+    return {R_PPC64_ADDR16_HA, DTPBiasedVal};
+  case R_PPC64_DTPREL16_HI:
+    return {R_PPC64_ADDR16_HI, DTPBiasedVal};
+  case R_PPC64_DTPREL16_HIGHER:
+    return {R_PPC64_ADDR16_HIGHER, DTPBiasedVal};
+  case R_PPC64_DTPREL16_HIGHERA:
+    return {R_PPC64_ADDR16_HIGHERA, DTPBiasedVal};
+  case R_PPC64_DTPREL16_HIGHEST:
+    return {R_PPC64_ADDR16_HIGHEST, DTPBiasedVal};
+  case R_PPC64_DTPREL16_HIGHESTA:
+    return {R_PPC64_ADDR16_HIGHESTA, DTPBiasedVal};
+  case R_PPC64_DTPREL16_LO:
+    return {R_PPC64_ADDR16_LO, DTPBiasedVal};
+  case R_PPC64_DTPREL16_LO_DS:
+    return {R_PPC64_ADDR16_LO_DS, DTPBiasedVal};
+  case R_PPC64_DTPREL64:
+    return {R_PPC64_ADDR64, DTPBiasedVal};
+
   default:
     return {Type, Val};
   }
@@ -302,37 +345,37 @@ void PPC64::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
   case R_PPC64_ADDR16_HA:
   case R_PPC64_REL16_HA:
   case R_PPC64_TPREL16_HA:
-    write16(Loc, applyPPCHa(Val));
+    write16(Loc, ha(Val));
     break;
   case R_PPC64_ADDR16_HI:
   case R_PPC64_REL16_HI:
   case R_PPC64_TPREL16_HI:
-    write16(Loc, applyPPCHi(Val));
+    write16(Loc, hi(Val));
     break;
   case R_PPC64_ADDR16_HIGHER:
   case R_PPC64_TPREL16_HIGHER:
-    write16(Loc, applyPPCHigher(Val));
+    write16(Loc, higher(Val));
     break;
   case R_PPC64_ADDR16_HIGHERA:
   case R_PPC64_TPREL16_HIGHERA:
-    write16(Loc, applyPPCHighera(Val));
+    write16(Loc, highera(Val));
     break;
   case R_PPC64_ADDR16_HIGHEST:
   case R_PPC64_TPREL16_HIGHEST:
-    write16(Loc, applyPPCHighest(Val));
+    write16(Loc, highest(Val));
     break;
   case R_PPC64_ADDR16_HIGHESTA:
   case R_PPC64_TPREL16_HIGHESTA:
-    write16(Loc, applyPPCHighesta(Val));
+    write16(Loc, highesta(Val));
     break;
   case R_PPC64_ADDR16_LO:
   case R_PPC64_REL16_LO:
   case R_PPC64_TPREL16_LO:
-    write16(Loc, applyPPCLo(Val));
+    write16(Loc, lo(Val));
     break;
   case R_PPC64_ADDR16_LO_DS:
   case R_PPC64_TPREL16_LO_DS:
-    write16(Loc, (read16(Loc) & 3) | (applyPPCLo(Val) & ~3));
+    write16(Loc, (read16(Loc) & 3) | (lo(Val) & ~3));
     break;
   case R_PPC64_ADDR32:
   case R_PPC64_REL32:

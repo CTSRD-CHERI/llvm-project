@@ -32,7 +32,6 @@ struct BenchmarkResultContext; // Forward declaration.
 
 struct InstructionBenchmarkKey {
   // The LLVM opcode name.
-  std::string OpcodeName; // FIXME: Deprecated, use Instructions below.
   std::vector<llvm::MCInst> Instructions;
   // An opaque configuration, that can be used to separate several benchmarks of
   // the same instruction under different configurations.
@@ -52,10 +51,14 @@ struct InstructionBenchmark {
   ModeE Mode;
   std::string CpuName;
   std::string LLVMTriple;
+  // The number of instructions inside the repeated snippet. For example, if a
+  // snippet of 3 instructions is repeated 4 times, this is 12.
   int NumRepetitions = 0;
+  // Note that measurements are per instruction.
   std::vector<BenchmarkMeasure> Measurements;
   std::string Error;
   std::string Info;
+  std::vector<uint8_t> AssembledSnippet;
 
   // Read functions.
   static llvm::Expected<InstructionBenchmark>

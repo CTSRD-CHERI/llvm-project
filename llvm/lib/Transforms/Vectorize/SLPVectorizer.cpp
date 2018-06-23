@@ -313,7 +313,7 @@ isShuffle(ArrayRef<Value *> VL) {
   if ((CommonShuffleMode == FirstAlternate ||
        CommonShuffleMode == SecondAlternate) &&
       Vec2)
-    return TargetTransformInfo::SK_Alternate;
+    return TargetTransformInfo::SK_Select;
   // If Vec2 was never used, we have a permutation of a single vector, otherwise
   // we have permutation of 2 vectors.
   return Vec2 ? TargetTransformInfo::SK_PermuteTwoSrc
@@ -363,40 +363,6 @@ static Value *isOneOf(Value *OpValue, Value *Op) {
 
 namespace {
 
-/// Contains data for the instructions going to be vectorized.
-struct RawInstructionsData {
-  /// Main Opcode of the instructions going to be vectorized.
-  unsigned Opcode = 0;
-
-  /// The list of instructions have some instructions with alternate opcodes.
-  bool HasAltOpcodes = false;
-};
-
-} // end anonymous namespace
-
-/// Checks the list of the vectorized instructions \p VL and returns info about
-/// this list.
-static RawInstructionsData getMainOpcode(ArrayRef<Value *> VL) {
-  auto *I0 = dyn_cast<Instruction>(VL[0]);
-  if (!I0)
-    return {};
-  RawInstructionsData Res;
-  unsigned Opcode = I0->getOpcode();
-  // Walk through the list of the vectorized instructions
-  // in order to check its structure described by RawInstructionsData.
-  for (unsigned Cnt = 0, E = VL.size(); Cnt != E; ++Cnt) {
-    auto *I = dyn_cast<Instruction>(VL[Cnt]);
-    if (!I)
-      return {};
-    if (Opcode != I->getOpcode())
-      Res.HasAltOpcodes = true;
-  }
-  Res.Opcode = Opcode;
-  return Res;
-}
-
-namespace {
-
 /// Main data required for vectorization of instructions.
 struct InstructionsState {
   /// The very first instruction in the list with the main opcode.
@@ -419,25 +385,26 @@ struct InstructionsState {
 /// InstructionsState, the Opcode that we suppose the whole list 
 /// could be vectorized even if its structure is diverse.
 static InstructionsState getSameOpcode(ArrayRef<Value *> VL) {
-  auto Res = getMainOpcode(VL);
-  unsigned Opcode = Res.Opcode;
-  if (!Res.HasAltOpcodes)
-    return InstructionsState(VL[0], Opcode, false);
-  auto *OpInst = cast<Instruction>(VL[0]);
-  unsigned AltOpcode = getAltOpcode(Opcode);
-  // Examine each element in the list instructions VL to determine
-  // if some operations there could be considered as an alternative
-  // (for example as subtraction relates to addition operation).
-  for (int Cnt = 0, E = VL.size(); Cnt < E; Cnt++) {
-    auto *I = cast<Instruction>(VL[Cnt]);
-    unsigned InstOpcode = I->getOpcode();
-    if ((Res.HasAltOpcodes &&
-         InstOpcode != (isOdd(Cnt) ? AltOpcode : Opcode)) ||
-        (!Res.HasAltOpcodes && InstOpcode != Opcode)) {
-      return InstructionsState(OpInst, 0, false);
+  // Make sure these are all Instructions.
+  if (llvm::any_of(VL, [](Value *V) { return !isa<Instruction>(V); }))
+    return InstructionsState(VL[0], 0, false);
+
+  unsigned Opcode = cast<Instruction>(VL[0])->getOpcode();
+  bool HasAltOpcodes = llvm::any_of(VL, [Opcode](Value *V) {
+    return Opcode != cast<Instruction>(V)->getOpcode();
+  });
+
+  // Check for an alternate opcode pattern.
+  if (HasAltOpcodes) {
+    unsigned AltOpcode = getAltOpcode(Opcode);
+    for (int Cnt = 0, E = VL.size(); Cnt < E; Cnt++) {
+      unsigned InstOpcode = cast<Instruction>(VL[Cnt])->getOpcode();
+      if (InstOpcode != (isOdd(Cnt) ? AltOpcode : Opcode))
+        return InstructionsState(VL[0], 0, false);
     }
   }
-  return InstructionsState(OpInst, Opcode, Res.HasAltOpcodes);
+
+  return InstructionsState(VL[0], Opcode, HasAltOpcodes);
 }
 
 /// \returns true if all of the values in \p VL have the same type or false
@@ -2461,8 +2428,7 @@ int BoUpSLP::getEntryCost(TreeEntry *E) {
       Instruction *I1 = cast<Instruction>(VL[1]);
       VecCost +=
           TTI->getArithmeticInstrCost(I1->getOpcode(), VecTy, Op1VK, Op2VK);
-      VecCost +=
-          TTI->getShuffleCost(TargetTransformInfo::SK_Alternate, VecTy, 0);
+      VecCost += TTI->getShuffleCost(TargetTransformInfo::SK_Select, VecTy, 0);
       return ReuseShuffleCost + VecCost - ScalarCost;
     }
     default:
@@ -2615,7 +2581,7 @@ int BoUpSLP::getTreeCost() {
     Cost += C;
   }
 
-  SmallSet<Value *, 16> ExtractCostCalculated;
+  SmallPtrSet<Value *, 16> ExtractCostCalculated;
   int ExtractCost = 0;
   for (ExternalUser &EU : ExternalUses) {
     // We only add extract cost once for the same scalar.
@@ -3132,7 +3098,7 @@ Value *BoUpSLP::vectorizeTree(TreeEntry *E) {
 
       // PHINodes may have multiple entries from the same block. We want to
       // visit every block once.
-      SmallSet<BasicBlock*, 4> VisitedBBs;
+      SmallPtrSet<BasicBlock*, 4> VisitedBBs;
 
       for (unsigned i = 0, e = PH->getNumIncomingValues(); i < e; ++i) {
         ValueList Operands;
@@ -6071,7 +6037,7 @@ static bool tryToVectorizeHorReductionOrInstOperands(
   // Interrupt the process if the Root instruction itself was vectorized or all
   // sub-trees not higher that RecursionMaxDepth were analyzed/vectorized.
   SmallVector<std::pair<WeakTrackingVH, unsigned>, 8> Stack(1, {Root, 0});
-  SmallSet<Value *, 8> VisitedInstrs;
+  SmallPtrSet<Value *, 8> VisitedInstrs;
   bool Res = false;
   while (!Stack.empty()) {
     Value *V;
@@ -6212,7 +6178,7 @@ bool SLPVectorizerPass::vectorizeSimpleInstructions(
 bool SLPVectorizerPass::vectorizeChainsInBlock(BasicBlock *BB, BoUpSLP &R) {
   bool Changed = false;
   SmallVector<Value *, 4> Incoming;
-  SmallSet<Value *, 16> VisitedInstrs;
+  SmallPtrSet<Value *, 16> VisitedInstrs;
 
   bool HaveVectorizedPhiNodes = true;
   while (HaveVectorizedPhiNodes) {

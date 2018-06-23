@@ -2145,7 +2145,8 @@ bool Sema::CheckAllocatedType(QualType AllocType, SourceLocation Loc,
   else if (AllocType->isVariablyModifiedType())
     return Diag(Loc, diag::err_variably_modified_new_type)
              << AllocType;
-  else if (AllocType.getAddressSpace() != LangAS::Default)
+  else if (AllocType.getAddressSpace() != LangAS::Default &&
+           !getLangOpts().OpenCLCPlusPlus)
     return Diag(Loc, diag::err_address_space_qualified_new)
       << AllocType.getUnqualifiedType()
       << AllocType.getQualifiers().getAddressSpaceAttributePrintValue();
@@ -2359,6 +2360,11 @@ bool Sema::FindAllocationFunctions(SourceLocation StartLoc, SourceRange Range,
         return true;
 
       LookupQualifiedName(R, Context.getTranslationUnitDecl());
+    }
+
+    if (getLangOpts().OpenCLCPlusPlus && R.empty()) {
+      Diag(StartLoc, diag::err_openclcxx_not_supported) << "default new";
+      return true;
     }
 
     assert(!R.empty() && "implicitly declared allocation functions not found");
@@ -2594,6 +2600,11 @@ bool Sema::FindAllocationFunctions(SourceLocation StartLoc, SourceRange Range,
 /// declared. Their use requires including \<new\>.
 void Sema::DeclareGlobalNewDelete() {
   if (GlobalNewDeleteDeclared)
+    return;
+
+  // OpenCL C++ 1.0 s2.9: the implicitly declared new and delete operators
+  // are not supported.
+  if (getLangOpts().OpenCLCPlusPlus)
     return;
 
   // C++ [basic.std.dynamic]p2:
@@ -3229,7 +3240,8 @@ Sema::ActOnCXXDelete(SourceLocation StartLoc, bool UseGlobal,
     QualType Pointee = Type->getAs<PointerType>()->getPointeeType();
     QualType PointeeElem = Context.getBaseElementType(Pointee);
 
-    if (Pointee.getAddressSpace() != LangAS::Default)
+    if (Pointee.getAddressSpace() != LangAS::Default &&
+        !getLangOpts().OpenCLCPlusPlus)
       return Diag(Ex.get()->getLocStart(),
                   diag::err_address_space_qualified_delete)
                << Pointee.getUnqualifiedType()
@@ -3304,6 +3316,11 @@ Sema::ActOnCXXDelete(SourceLocation StartLoc, bool UseGlobal,
     }
 
     if (!OperatorDelete) {
+      if (getLangOpts().OpenCLCPlusPlus) {
+        Diag(StartLoc, diag::err_openclcxx_not_supported) << "default delete";
+        return ExprError();
+      }
+
       bool IsComplete = isCompleteType(StartLoc, Pointee);
       bool CanProvideSize =
           IsComplete && (!ArrayForm || UsualArrayDeleteWantsSize ||

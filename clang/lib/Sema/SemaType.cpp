@@ -1396,36 +1396,49 @@ static QualType ConvertDeclSpecToType(TypeProcessingState &state) {
     break;
   }
   case DeclSpec::TST_accum: {
-    if (DS.getTypeSpecSign() != DeclSpec::TSS_unsigned) {
-      switch (DS.getTypeSpecWidth()) {
-        case DeclSpec::TSW_short:
-          Result = Context.ShortAccumTy;
-          break;
-        case DeclSpec::TSW_unspecified:
-          Result = Context.AccumTy;
-          break;
-        case DeclSpec::TSW_long:
-          Result = Context.LongAccumTy;
-          break;
-        case DeclSpec::TSW_longlong:
-          // Unreachable b/c this is caught in final analysis of the DeclSpec.
-          llvm_unreachable("Unable to specify long long as _Accum width");
-      }
-    } else {
-      switch (DS.getTypeSpecWidth()) {
-        case DeclSpec::TSW_short:
-          Result = Context.UnsignedShortAccumTy;
-          break;
-        case DeclSpec::TSW_unspecified:
-          Result = Context.UnsignedAccumTy;
-          break;
-        case DeclSpec::TSW_long:
-          Result = Context.UnsignedLongAccumTy;
-          break;
-        case DeclSpec::TSW_longlong:
-          llvm_unreachable("Unable to specify long long as _Accum width");
-      }
+    switch (DS.getTypeSpecWidth()) {
+      case DeclSpec::TSW_short:
+        Result = Context.ShortAccumTy;
+        break;
+      case DeclSpec::TSW_unspecified:
+        Result = Context.AccumTy;
+        break;
+      case DeclSpec::TSW_long:
+        Result = Context.LongAccumTy;
+        break;
+      case DeclSpec::TSW_longlong:
+        llvm_unreachable("Unable to specify long long as _Accum width");
     }
+
+    if (DS.getTypeSpecSign() == DeclSpec::TSS_unsigned)
+      Result = Context.getCorrespondingUnsignedType(Result);
+
+    if (DS.isTypeSpecSat())
+      Result = Context.getCorrespondingSaturatedType(Result);
+
+    break;
+  }
+  case DeclSpec::TST_fract: {
+    switch (DS.getTypeSpecWidth()) {
+      case DeclSpec::TSW_short:
+        Result = Context.ShortFractTy;
+        break;
+      case DeclSpec::TSW_unspecified:
+        Result = Context.FractTy;
+        break;
+      case DeclSpec::TSW_long:
+        Result = Context.LongFractTy;
+        break;
+      case DeclSpec::TSW_longlong:
+        llvm_unreachable("Unable to specify long long as _Fract width");
+    }
+
+    if (DS.getTypeSpecSign() == DeclSpec::TSS_unsigned)
+      Result = Context.getCorrespondingUnsignedType(Result);
+
+    if (DS.isTypeSpecSat())
+      Result = Context.getCorrespondingSaturatedType(Result);
+
     break;
   }
   case DeclSpec::TST_int128:
@@ -1595,6 +1608,15 @@ static QualType ConvertDeclSpecToType(TypeProcessingState &state) {
   if (S.getLangOpts().OpenCL &&
       S.checkOpenCLDisabledTypeDeclSpec(DS, Result))
     declarator.setInvalidType(true);
+
+  bool IsFixedPointType = DS.getTypeSpecType() == DeclSpec::TST_accum ||
+                          DS.getTypeSpecType() == DeclSpec::TST_fract;
+
+  // Only fixed point types can be saturated
+  if (DS.isTypeSpecSat() && !IsFixedPointType)
+    S.Diag(DS.getTypeSpecSatLoc(), diag::err_invalid_saturation_spec)
+        << DS.getSpecifierName(DS.getTypeSpecType(),
+                               Context.getPrintingPolicy());
 
   // Handle complex types.
   if (DS.getTypeSpecComplex() == DeclSpec::TSC_complex) {
@@ -7387,8 +7409,9 @@ static void deduceOpenCLImplicitAddrSpace(TypeProcessingState &State,
   // The default address space name for arguments to a function in a
   // program, or local variables of a function is __private. All function
   // arguments shall be in the __private address space.
-  if (State.getSema().getLangOpts().OpenCLVersion <= 120) {
-      ImpAddr = LangAS::opencl_private;
+  if (State.getSema().getLangOpts().OpenCLVersion <= 120 &&
+      !State.getSema().getLangOpts().OpenCLCPlusPlus) {
+    ImpAddr = LangAS::opencl_private;
   } else {
     // If address space is not set, OpenCL 2.0 defines non private default
     // address spaces for some cases:

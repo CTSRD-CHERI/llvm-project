@@ -22,10 +22,16 @@ llvm_map_components_to_libnames(libs
   ExecutionEngine
   GlobalISel
   MC
+  MCDisassembler
   MCJIT
   Object
+  ObjectYAML
   Support
   )
+
+if(LLVM_ENABLE_LIBPFM AND HAVE_LIBPFM)
+  list(APPEND libs pfm)
+endif()
 
 target_link_libraries(LLVMExegesis ${libs})
 set_target_properties(LLVMExegesis PROPERTIES FOLDER "Libraries")
