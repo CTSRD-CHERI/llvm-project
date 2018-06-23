@@ -1766,18 +1766,18 @@ public:
     bool Result = isRegIdx() && RegIdx.Kind & RegKind_Cheri &&
                   RegIdx.RegInfo->getRegClass(Mips::CheriGPROrCNullRegClassID)
                       .contains(RegIdx.RealRegister);
-    DEBUG(dbgs() << __func__ << " CheriGPROrCNullRegClassID contains("
-                 << RegIdx.RegInfo->getName(RegIdx.RealRegister) << "="
-                 << RegIdx.RealRegister << "): " << Result << "\n");
+    LLVM_DEBUG(dbgs() << __func__ << " CheriGPROrCNullRegClassID contains("
+                      << RegIdx.RegInfo->getName(RegIdx.RealRegister) << "="
+                      << RegIdx.RealRegister << "): " << Result << "\n");
     return Result;
   }
   bool isCheriAsmReg0IsDDC() const {
     bool Result = isRegIdx() && RegIdx.Kind & RegKind_Cheri &&
                   RegIdx.RegInfo->getRegClass(Mips::CheriGPROrDDCRegClassID)
                       .contains(RegIdx.RealRegister);
-    DEBUG(dbgs() << __func__ << " CheriGPROrDDCRegClassID contains("
-                 << RegIdx.RegInfo->getName(RegIdx.RealRegister) << "="
-                 << RegIdx.RealRegister << "): " << Result << "\n");
+    LLVM_DEBUG(dbgs() << __func__ << " CheriGPROrDDCRegClassID contains("
+                      << RegIdx.RegInfo->getName(RegIdx.RealRegister) << "="
+                      << RegIdx.RealRegister << "): " << Result << "\n");
     return Result;
   }
   bool isCheriHWAsmReg() const {
@@ -5899,14 +5899,15 @@ static bool isCRegZeroDDC(const OperandVector &Operands,
     return false;
   const auto& FirstOp = Operands[0];
   if (!FirstOp->isToken()) {
-    DEBUG(dbgs() << "Access to $c0 not allowed since mnemonic is not known\n");
+    LLVM_DEBUG(
+        dbgs() << "Access to $c0 not allowed since mnemonic is not known\n");
     return false;
   }
   MipsOperand* MipsOp = static_cast<MipsOperand*>(FirstOp.get());
   StringRef Mnemonic =  MipsOp->getToken();
   size_t OperandIndex = Operands.size();
-  DEBUG(dbgs() << "Checking if " << Mnemonic << " accepts register $"
-               << RegSpelling << " as operand " << OperandIndex << ": ");
+  LLVM_DEBUG(dbgs() << "Checking if " << Mnemonic << " accepts register $"
+                    << RegSpelling << " as operand " << OperandIndex << ": ");
   assert(RegSpelling == "c0" || RegSpelling == "ddc" || RegSpelling == "cnull");
   // TODO: can I somehow get this information from the tablegen'd code?
   size_t AllowedIndex =
@@ -5920,11 +5921,13 @@ static bool isCRegZeroDDC(const OperandVector &Operands,
           .Cases("cfromptr", "cbuildcap", "ctestsubset", 2)
           .Case("ctoptr", 3) // XXXAR: inconsisten with the insns above
           .Default(std::numeric_limits<size_t>::max());
-  DEBUG(dbgs() << (OperandIndex == AllowedIndex ? "true" : "false") << " ");
-  DEBUG(for (auto&& X : enumerate(Operands)) {
+  LLVM_DEBUG(dbgs() << (OperandIndex == AllowedIndex ? "true" : "false")
+                    << " ");
+  LLVM_DEBUG(for (auto &&X
+                  : enumerate(Operands)) {
     dbgs() << " Op" << X.index() << "=" << *(X.value());
   });
-  DEBUG(dbgs() << "\n");
+  LLVM_DEBUG(dbgs() << "\n");
 
   return OperandIndex == AllowedIndex;
 }
@@ -6035,7 +6038,7 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name,
 }
 
 int MipsAsmParser::matchCheriHWRegsRegisterName(StringRef Name) {
-  DEBUG(dbgs() << "matchCheriHWRegsRegisterName(" << Name << ")\n");
+  LLVM_DEBUG(dbgs() << "matchCheriHWRegsRegisterName(" << Name << ")\n");
   if (!Name.startswith("chwr_"))
     return -1;
 
@@ -6044,7 +6047,7 @@ int MipsAsmParser::matchCheriHWRegsRegisterName(StringRef Name) {
     StringRef RegName = MipsInstPrinter::getRegisterName(Reg);
     if (RegName.startswith("chwr_") && Name == RegName) {
       Result = Reg - Mips::CAPHWR0;
-      DEBUG(dbgs() << "-> CheriHWReg " << Result << ")\n");
+      LLVM_DEBUG(dbgs() << "-> CheriHWReg " << Result << ")\n");
       break;
     }
   }
@@ -6411,7 +6414,7 @@ OperandMatchResultTy
 MipsAsmParser::matchAnyRegisterNameWithoutDollar(OperandVector &Operands,
                                                  StringRef Identifier,
                                                  SMLoc S) {
-  DEBUG(dbgs() << "matchAnyRegisterNameWithoutDollar\n");
+  LLVM_DEBUG(dbgs() << "matchAnyRegisterNameWithoutDollar\n");
   int Index = matchCPURegisterName(Identifier);
   if (Index != -1) {
     Operands.push_back(MipsOperand::createGPRReg(

@@ -100,7 +100,8 @@ bool MipsSEDAGToDAGISel::replaceUsesWithCheriNullReg(
     // saved register (e.g. $c18 and then move it to other registers). This is
     // stupid since it will often spill to the stack and add additional
     // instructions when we can just use a CGetNull to the destination register
-    DEBUG(dbgs() << "Trying to replace uses of CGetNull: "; GetNullMI.dump());
+    LLVM_DEBUG(dbgs() << "Trying to replace uses of CGetNull: ";
+               GetNullMI.dump());
     SrcReg = GetNullMI.getOperand(0).getReg();
   }
 
@@ -118,14 +119,15 @@ bool MipsSEDAGToDAGISel::replaceUsesWithCheriNullReg(
     assert(UseMI.getOpcode() != Mips::CMove &&
            "Should not have been expanded yet!");
     if (UseMI.getOpcode() != TargetOpcode::COPY) {
-      DEBUG(dbgs() << "Found use of NULL register, but cannot replace yet:";
-            UseMI.dump(););
+      LLVM_DEBUG(
+          dbgs() << "Found use of NULL register, but cannot replace yet:";
+          UseMI.dump(););
       continue;
     }
     UsesToReplace.push_back(&UseMI);
   }
   for (MachineInstr *UseMI : UsesToReplace) {
-    DEBUG(dbgs() << "Replacing copy of synthesized NULL: "; UseMI->dump());
+    LLVM_DEBUG(dbgs() << "Replacing copy of synthesized NULL: "; UseMI->dump());
     MachineBasicBlock *MBB = UseMI->getParent();
     auto TargetReg = UseMI->getOperand(0).getReg();
     // FIXME: this assert only works with virtregs so not for $c13
@@ -165,8 +167,8 @@ bool MipsSEDAGToDAGISel::replaceUsesWithCheriNullReg(
 
   // If there are no more uses of the NULL vreg after this pass we can delete it
   if (MRI->use_empty(SrcReg)) {
-    DEBUG(dbgs() << "Was able to remove all uses of GetNull instruction: ";
-          GetNullMI.dump());
+    LLVM_DEBUG(dbgs() << "Was able to remove all uses of GetNull instruction: ";
+               GetNullMI.dump());
     return true;
   }
 
@@ -222,8 +224,9 @@ bool MipsSEDAGToDAGISel::replaceUsesWithZeroReg(MachineRegisterInfo *MRI,
   }
 
   if (MRI->use_empty(DstReg)) {
-    DEBUG(dbgs() << "Was able to remove all uses of get zero instruction: ";
-          MI.dump());
+    LLVM_DEBUG(
+        dbgs() << "Was able to remove all uses of get zero instruction: ";
+        MI.dump());
     return false; // TODO: return true and fix all the test cases;
   }
 

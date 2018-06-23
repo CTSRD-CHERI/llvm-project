@@ -3645,9 +3645,10 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
       if (MF.getRegInfo().isLiveIn(Mips::C13))
         ShouldClearC13 = true;
       if (ShouldClearC13) {
-        DEBUG(dbgs() << "Clearing $c13 in " << MF.getName() << "(is varargs: "
-                     << MF.getFunction().isVarArg() << ") callee = ");
-        DEBUG(Callee.dump(&DAG););
+        LLVM_DEBUG(dbgs() << "Clearing $c13 in " << MF.getName()
+                          << "(is varargs: " << MF.getFunction().isVarArg()
+                          << ") callee = ");
+        LLVM_DEBUG(Callee.dump(&DAG););
       }
       // We always clear $c13 if we are compiling at -O0 or -O1 since this helps
       // us catch errors with calling convention mismatches.
@@ -4297,9 +4298,9 @@ MipsTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
     // all functions without on-stack arguments can assume that $c13 is null
     // on entry
     if (MF.getRegInfo().isLiveIn(Mips::C13) || IsVarArg) {
-      DEBUG(dbgs() << "Lowering return for function with $c13 live-in: "
-                   << MF.getName()
-                   << "(is varargs: " << MF.getFunction().isVarArg() << ")\n");
+      LLVM_DEBUG(dbgs() << "Lowering return for function with $c13 live-in: "
+                        << MF.getName() << "(is varargs: "
+                        << MF.getFunction().isVarArg() << ")\n");
       Chain = DAG.getCopyToReg(Chain, DL, Mips::C13,
                                        DAG.getConstant(0, DL, CapType), Flag);
       Flag = Chain.getValue(1);
