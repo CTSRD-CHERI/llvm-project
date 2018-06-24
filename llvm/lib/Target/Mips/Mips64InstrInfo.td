@@ -564,7 +564,7 @@ def DMTC2_OCTEON : MFC2OP<"dmtc2", GPR64Opnd, II_DMTC2>, MFC2OP_FM<0x12, 5>,
 }
 
 /// Move between CPU and coprocessor registers
-let DecoderNamespace = "Mips64", Predicates = [HasMips64] in {
+let DecoderNamespace = "Mips64", Predicates = [IsGP64bit] in {
 def DMFC0 : MFC3OP<"dmfc0", GPR64Opnd, COP0Opnd, II_DMFC0>,
             MFC3OP_FM<0x10, 1, 0>, ISA_MIPS3;
 def DMTC0 : MTC3OP<"dmtc0", COP0Opnd, GPR64Opnd, II_DMTC0>,
