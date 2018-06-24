@@ -418,6 +418,14 @@ bool MipsInstrInfo::isBranchOffsetInRange(unsigned BranchOpc, int64_t BrOffset) 
   case Mips::BBIT132:
     return isInt<18>(BrOffset);
 
+  // CHERI branches:
+  case Mips::CBTU:
+  case Mips::CBTS:
+  case Mips::CBEZ:
+  case Mips::CBNZ:
+    return isInt<18>(BrOffset);
+
+
   // MSA branches.
   case Mips::BZ_B:
   case Mips::BZ_H:
