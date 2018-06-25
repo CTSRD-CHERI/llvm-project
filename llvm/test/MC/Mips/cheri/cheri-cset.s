@@ -59,12 +59,9 @@
 	CGetDefault	$c1
 
 .ifdef BAD
-# WARN: warning: Direct access to KR1C is deprecated: use C(Get/Set)KR1C instead.
-# WARN-SAME: In kernel code you can use  `.set cheri_sysregs_accessible` to silence this warning.
-# WARN-NEXT:	CMove	$c1, $kr1c
+# WARN: error: Register $kr1c is no longer a general-purpose CHERI register.
 	CMove	$c1, $kr1c
-# WARN: warning: Direct access to KR1C is deprecated: use C(Get/Set)KR1C instead.
-# WARN-NEXT:	CMove	$kr1c, $c1
+# WARN: error: Register $kr1c is no longer a general-purpose CHERI register.
 	CMove	$kr1c, $c1
 # WARN: warning: Direct access to KR1C is deprecated: use C(Get/Set)KR1C instead.
 # WARN-NEXT:	CMove	$c27, $c1
@@ -73,12 +70,9 @@
 # WARN-NEXT:	CMove	$c1, $c27
 	CMove	$c1, $c27
 
-# WARN: warning: Direct access to KR2C is deprecated: use C(Get/Set)KR2C instead.
-# WARN-SAME: In kernel code you can use  `.set cheri_sysregs_accessible` to silence this warning.
-# WARN-NEXT:	CMove	$c1, $kr2c
+# WARN: error: Register $kr2c is no longer a general-purpose CHERI register.
 	CMove	$c1, $kr2c
-# WARN: warning: Direct access to KR2C is deprecated: use C(Get/Set)KR2C instead.
-# WARN-NEXT:	CMove	$kr2c, $c1
+# WARN: error: Register $kr2c is no longer a general-purpose CHERI register.
 	CMove	$kr2c, $c1
 # WARN: warning: Direct access to KR2C is deprecated: use C(Get/Set)KR2C instead.
 # WARN-NEXT:	CMove	$c28, $c1
@@ -87,12 +81,9 @@
 # WARN-NEXT:	CMove	$c1, $c28
 	CMove	$c1, $c28
 
-# WARN: warning: Direct access to KCC is deprecated: use C(Get/Set)KCC instead.
-# WARN-SAME: In kernel code you can use  `.set cheri_sysregs_accessible` to silence this warning.
-# WARN-NEXT:	CMove	$c1, $kcc
+# WARN: error: Register $kcc is no longer a general-purpose CHERI register.
 	CMove	$c1, $kcc
-# WARN: warning: Direct access to KCC is deprecated: use C(Get/Set)KCC instead.
-# WARN-NEXT:	CMove	$kcc, $c1
+# WARN: error: Register $kcc is no longer a general-purpose CHERI register.
 	CMove	$kcc, $c1
 # WARN: warning: Direct access to KCC is deprecated: use C(Get/Set)KCC instead.
 # WARN-NEXT:	CMove	$c29, $c1
@@ -101,12 +92,9 @@
 # WARN-NEXT:	CMove	$c1, $c29
 	CMove	$c1, $c29
 
-# WARN: warning: Direct access to KDC is deprecated: use C(Get/Set)KDC instead.
-# WARN-SAME: In kernel code you can use  `.set cheri_sysregs_accessible` to silence this warning.
-# WARN-NEXT:	CMove	$c1, $kdc
+# WARN: error: Register $kdc is no longer a general-purpose CHERI register.
 	CMove	$c1, $kdc
-# WARN: warning: Direct access to KDC is deprecated: use C(Get/Set)KDC instead.
-# WARN-NEXT:	CMove	$kdc, $c1
+# WARN: error: Register $kdc is no longer a general-purpose CHERI register.
 	CMove	$kdc, $c1
 # WARN: warning: Direct access to KDC is deprecated: use C(Get/Set)KDC instead.
 # WARN-NEXT:	CMove	$c30, $c1
@@ -116,12 +104,9 @@
 	CMove	$c1, $c30
 
 # EPCC can no longer be accessed using $c31
-
-# WARN: [[@LINE+2]]:13: warning: Direct access to EPCC is deprecated: use C(Get/Set)EPCC instead.
-# WARN-NEXT:	CMove	$c1, $epcc
+# WARN: error: Register $epcc is no longer a general-purpose CHERI register.
 	CMove	$c1, $epcc
-# WARN: [[@LINE+2]]:8: warning: Direct access to EPCC is deprecated: use C(Get/Set)EPCC instead.
-# WARN-NEXT:	CMove	$epcc, $c1
+# WARN: error: Register $epcc is no longer a general-purpose CHERI register.
 	CMove	$epcc, $c1
 # WARN: [[@LINE+2]]:8: warning: Direct access to EPCC is deprecated: use C(Get/Set)EPCC instead.
 # WARN-NEXT:	CMove	$c31, $c1
@@ -153,16 +138,11 @@
 	.set cheri_sysregs_accessible
 	# WARN-NOT: warning:
 	# WARN-NOT: error:
-	CMove	$c1, $kr1c
-	CMove	$c1, $kr2c
-	CMove	$c1, $kcc
-	CMove	$c1, $kdc
 	CMove	$c1, $c27
 	CMove	$c1, $c28
 	CMove	$c1, $c29
 	CMove	$c1, $c30
 	CMove	$c1, $c31
-	CMove	$c1, $epcc
 
   # And $C0 should also not have changed:
   # WARN: [[@LINE+3]]:13: error: register name $c0 is invalid as this operand. It will no longer refer to $ddc but instead be NULL.
@@ -173,9 +153,9 @@
   # Check that disabling works:
 	.set nocheri_sysregs_accessible
 	# WARN: warning: Direct access to KR1C is deprecated: use C(Get/Set)KR1C instead.
-  # WARN-SAME: In kernel code you can use  `.set cheri_sysregs_accessible` to silence this warning.
-  # WARN-NEXT:	CMove	$c1, $kr1c
-	CMove	$c1, $kr1c
+  # WARN-SAME: If you really meant to access $c27 you can use `.set cheri_sysregs_accessible` to silence this warning.
+  # WARN-NEXT:	CMove	$c1, $c27
+	CMove	$c1, $c27
 
 
 	# Typo in the .set:

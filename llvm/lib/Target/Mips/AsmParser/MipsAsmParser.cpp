@@ -5969,14 +5969,27 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name,
           CC = Mips::C1 + IntVal - 1;
       }
     } else {
+      int InvalidReg = StringSwitch<int>(Name)
+                           .Case("kr1c", 27)
+                           .Case("kr2c", 28)
+                           .Case("kcc", 29)
+                           .Case("kdc", 30)
+                           .Case("epcc", 31)
+                           .Default(0);
+      if (InvalidReg) {
+        Error(Parser.getTok().getLoc(),
+              "Register $" + Name +
+                  " is no longer a general-purpose CHERI register. If you want "
+                  "to access the special register use c{get,set}" +
+                  Name + " instead. If you really want to access $c" +
+                  Twine(InvalidReg) +
+                  " this is available with `.set cheri_sysregs_accessible` .",
+              Parser.getTok().getLocRange());
+        return -1;
+      }
       CC = StringSwitch<unsigned>(Name)
                .Case("ddc", Mips::DDC)
                .Case("idc", Mips::C26)
-               .Case("kr1c", Mips::C27)
-               .Case("kr2c", Mips::C28)
-               .Case("kcc", Mips::C29)
-               .Case("kdc", Mips::C30)
-               .Case("epcc", Mips::C31)
                .Default(-1);
     }
   }
@@ -5992,8 +6005,9 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name,
             .str();
 
     if (AffectedBySysregsAccessible) {
-      Msg += " In kernel code you can use  `.set cheri_sysregs_accessible`"
-               " to silence this warning.";
+      Msg += (" If you really meant to access $c" + Twine(CC - Mips::C1 + 1) +
+              " you can use  `.set cheri_sysregs_accessible` to silence this"
+              " warning.").str();
       Warning(Parser.getTok().getLoc(), Msg);
     }
     return CC;
