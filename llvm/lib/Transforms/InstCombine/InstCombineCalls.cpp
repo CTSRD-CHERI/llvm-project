@@ -143,7 +143,8 @@ Instruction *InstCombiner::SimplifyAnyMemTransfer(AnyMemTransferInst *MI) {
       return nullptr;  // If not 1/2/4/8 bytes, exit.
     uint64_t PtrCpySize = DL.getPointerSize(200);
     uint64_t PtrCpyAlign = DL.getPointerPrefAlignment(200);
-    if ((Size > PtrCpySize) || (MI->getDestAlignment() < PtrCpyAlign))
+    if ((Size > PtrCpySize) || (CopyDstAlign < PtrCpyAlign) ||
+        (CopySrcAlign < PtrCpyAlign))
       return nullptr;
     CpyTy = Type::getInt8PtrTy(MI->getContext(), 200);
   }
