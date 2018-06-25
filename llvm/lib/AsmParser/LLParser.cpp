@@ -2687,6 +2687,14 @@ static bool isValidVariableType(Module *M, Type *Ty, Value *Val, bool IsCall) {
         M->getDataLayout().getProgramAddressSpace());
     if (Val->getType() == TyInProgAS)
       return true;
+    // HACK: Also allow CHERI .ll files to be parsed without having a target
+    // datalayout = string: This is needed because llc parses the assembly
+    // before the target can set the default datalayout if there isn't an
+    // explicit one in the .ll file
+    Type *TyInCHERIAS =
+        cast<PointerType>(Ty)->getElementType()->getPointerTo(200);
+    if (Val->getType() == TyInCHERIAS)
+      return true;
   }
   return false;
 }
