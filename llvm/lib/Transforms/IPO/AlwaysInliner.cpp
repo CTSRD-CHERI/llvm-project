@@ -33,7 +33,7 @@ using namespace llvm;
 #define DEBUG_TYPE "inline"
 
 PreservedAnalyses AlwaysInlinerPass::run(Module &M, ModuleAnalysisManager &) {
-  DEBUG(dbgs() << "AlwaysInlinerPass running\n");
+  LLVM_DEBUG(dbgs() << "AlwaysInlinerPass running\n");
   InlineFunctionInfo IFI;
   SmallSetVector<CallSite, 16> Calls;
   bool Changed = false;
@@ -41,12 +41,12 @@ PreservedAnalyses AlwaysInlinerPass::run(Module &M, ModuleAnalysisManager &) {
   for (Function &F : M) {
     if (!F.isDeclaration() && F.hasFnAttribute(Attribute::AlwaysInline)) {
       if (!isInlineViable(F)) {
-        DEBUG(dbgs() << "always_inline function not viable for inlining: "
+        LLVM_DEBUG(dbgs() << "always_inline function not viable for inlining: "
                      << F.getName() << "\n");
         continue;
       }
 
-      DEBUG(dbgs() << "AlwaysInlinerPass running on " << F.getName() << "\n");
+      LLVM_DEBUG(dbgs() << "AlwaysInlinerPass running on " << F.getName() << "\n");
       Calls.clear();
 
       for (User *U : F.users())
@@ -157,7 +157,7 @@ Pass *llvm::createAlwaysInlinerLegacyPass(bool InsertLifetime) {
 /// likely not worth it in practice.
 InlineCost AlwaysInlinerLegacyPass::getInlineCost(CallSite CS) {
   Function *Callee = CS.getCalledFunction();
-  // DEBUG(dbgs() << "Calling AlwaysInlinerLegacyPass::getInlineCost for "
+  // LLVM_DEBUG(dbgs() << "Calling AlwaysInlinerLegacyPass::getInlineCost for "
   //              << (Callee ? Callee->getName() : "<null>") << "\n");
 
   // Only inline direct calls to functions with always-inline attributes
@@ -168,7 +168,7 @@ InlineCost AlwaysInlinerLegacyPass::getInlineCost(CallSite CS) {
     if (isInlineViable(*Callee)) {
       return InlineCost::getAlways();
     } else {
-      DEBUG(dbgs() << "always_inline function not viable for inlining: "
+      LLVM_DEBUG(dbgs() << "always_inline function not viable for inlining: "
                    << Callee->getName() << "\n");
     }
   }
