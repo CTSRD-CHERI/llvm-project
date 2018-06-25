@@ -103,8 +103,8 @@ TYPE align_up(TYPE ptr, unsigned align) {
 TYPE p2align_up(TYPE ptr, unsigned p2align) {
   // CHECK-LABEL: @p2align_up(
   // CAP:       [[VAR:%.+]] = {{(tail )?}}call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* [[SRC:%.+]])
-  // CAP:       %alignment = shl i64 1, %pow2
-  // CAP-NEXT:  %mask = {{(sub i64 %alignment, 1)|(add i64 %alignment, -1)}}
+  // CAP-SLOW:  %alignment = shl i64 1, %pow2
+  // CAP:       %mask = {{(sub i64 %alignment, 1)|(add i64 %alignment, -1)}}
   // CAP-NEXT:  %unaligned_bits = and i64 [[VAR]], %mask
   // CAP-NEXT:  %is_aligned = icmp eq i64 %unaligned_bits, 0
   // CAP-NEXT:  %missing_bits = sub {{(nsw )?}}i64 %alignment, %unaligned_bits
@@ -150,16 +150,19 @@ TYPE align_down(TYPE ptr, unsigned align) {
 TYPE p2align_down(TYPE ptr, unsigned p2align) {
   // CHECK-LABEL: @p2align_down(
   // CAP:       [[VAR:%.+]] = {{(tail )?}}call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* [[SRC:%.+]])
-  // CAP:       %alignment = shl i64 1, %pow2
-  // CAP-NEXT:  %mask = {{(sub i64 %alignment, 1)|(add i64 %alignment, -1)}}
-  // CAP-NEXT:  %unaligned_bits = and i64 [[VAR]], %mask
+  // PTR:       [[VAR:%.+]] = ptrtoint i8* %{{.+}} to i64
+  // LONG-SLOW: [[VAR:%.+]] = load i64
+
+
+  // SLOW:      %alignment = shl i64 1, %pow2
+  // CAP-OPT:   %notmask = shl nsw i64 -1, %pow2
+  // CAP-SLOW:  %mask = {{(sub i64 %alignment, 1)|(add i64 %alignment, -1)}}
+  // CAP-OPT:   %mask = xor i64 %notmask, -1
+  // CAP:       %unaligned_bits = and i64 [[VAR]], %mask
   // CAP-NEXT:  %sub = sub i64 0, %unaligned_bits
   // CAP-NEXT:  %aligned_cap = getelementptr inbounds i8, i8 addrspace(200)* [[SRC]], i64 %sub
   // CAP-NEXT:  ret i8 addrspace(200)* %aligned_cap
 
-  // PTR:       [[VAR:%.+]] = ptrtoint i8* %{{.+}} to i64
-  // LONG-SLOW: [[VAR:%.+]] = load i64
-  // NOCAP-IR:  %alignment = shl i64 1, %pow2
   // NOCAP-IR:  %mask = {{(sub i64 %alignment, 1)|(add i64 %alignment, -1)}}
   // NOCAP-IR:  %negated_mask = xor i64 %mask, -1
   // NOCAP-IR:  [[MASKED:%.+]] = and i64 [[VAR:%.+]], %negated_mask

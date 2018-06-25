@@ -5,8 +5,8 @@ char* test1(char* c, int b) {
   return __builtin_p2align_down(c, b);
   // CHECK:      [[VAR0:%.+]] = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* [[C:%.+]])
   // CHECK-NEXT: [[POW2:%.+]] = zext i32 [[B:%.+]] to i64
-  // CHECK-NEXT: [[ALIGNMENT:%.+]] = shl i64 1, [[POW2]]
-  // CHECK-NEXT: [[MASK:%.+]] = add i64 [[ALIGNMENT]], -1
+  // CHECK-NEXT: [[NOTMASK:%.+]] =  shl nsw i64 -1, [[POW2]]
+  // CHECK-NEXT: [[MASK:%.+]] = xor i64 [[NOTMASK]], -1
   // CHECK-NEXT: [[UNALIGNED_BITS:%.+]] = and i64 [[VAR0]], [[MASK]]
   // CHECK-NEXT: [[SUB:%.+]] = sub i64 0, [[UNALIGNED_BITS]]
   // CHECK-NEXT: [[ALIGNED_CAP:%.+]] = getelementptr inbounds i8, i8 addrspace(200)* [[C]], i64 [[SUB]]
