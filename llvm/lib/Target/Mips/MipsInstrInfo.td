@@ -2086,7 +2086,10 @@ def SWL : MMRel, StoreLeftRight<"swl", MipsSWL, GPR32Opnd, II_SWL>, LW_FM<0x2a>,
 def SWR : MMRel, StoreLeftRight<"swr", MipsSWR, GPR32Opnd, II_SWR>, LW_FM<0x2e>,
           ISA_MIPS1_NOT_32R6_64R6;
 
-let AdditionalPredicates=[NotCHERI] in {
+// XXXAR: let AdditionalPredicates= replaces and doesn't add another predicate
+// so we also need to include the NotInMicroMips from above:
+// These opcodes conflict with CHERI instructions so we need to disable them:
+let AdditionalPredicates=[NotInMicroMips,NotCHERI] in {
 // COP2 Memory Instructions
 def LWC2 : StdMMR6Rel, LW_FT2<"lwc2", COP2Opnd, II_LWC2, load>, LW_FM<0x32>,
            ISA_MIPS1_NOT_32R6_64R6;
