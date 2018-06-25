@@ -163,8 +163,11 @@ InlineCost AlwaysInlinerLegacyPass::getInlineCost(CallSite CS) {
   // Only inline direct calls to functions with always-inline attributes
   // that are viable for inlining. FIXME: We shouldn't even get here for
   // declarations.
+  // XXXAR: for the CHERI case we need to check both CS.hasFnAttr and the Callee
+  // since the hasFnAttr will no look through addresspacecasts
   if (Callee && !Callee->isDeclaration() &&
-      Callee->hasFnAttribute(Attribute::AlwaysInline)) {
+      (CS.hasFnAttr(Attribute::AlwaysInline) ||
+       Callee->hasFnAttribute(Attribute::AlwaysInline))) {
     if (isInlineViable(*Callee)) {
       return InlineCost::getAlways();
     } else {
