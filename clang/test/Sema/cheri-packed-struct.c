@@ -58,7 +58,7 @@ struct bad_uintptr_array_1 { // expected-note-re {{Add __attribute__((aligned({{
   char after[1];
 } __attribute__((packed));
 
-struct bad_uintptr_array_2 { // expected-note-re {{Add __attribute__((aligned({{16|32}}))) to ensure sufficient alignment}}
+struct bad_uintptr_array_2 { // expected-note-re {{Add __attribute__((aligned({{16|32}}))) to ensure sufficient alignment}} expected-warning-re{{alignment (8) of 'struct bad_uintptr_array_2' is less than the required capability alignment ({{16|32}})}}
   char before[sizeof(void*)];
   __UINTPTR_TYPE__ cap; // expected-warning-re {{Capability field at offset {{16|32}} in packed structure will trap if structure is used in an array}}
   char after[1];
@@ -77,7 +77,7 @@ struct bad_cap_struct_array_1 { // expected-note-re{{Add __attribute__((aligned(
   char after[1];
 } __attribute__((packed));
 
-struct bad_cap_struct_array_2 { // expected-note-re{{Add __attribute__((aligned({{16|32}}))) to ensure sufficient alignment}}
+struct bad_cap_struct_array_2 { // expected-note-re{{Add __attribute__((aligned({{16|32}}))) to ensure sufficient alignment}} expected-warning-re{{alignment (8) of 'struct bad_cap_struct_array_2' is less than the required capability alignment ({{16|32}})}}
   char before[sizeof(void*)];
   struct cap_struct cap; // expected-warning-re {{Capability field at offset {{16|32}} in packed structure will trap if structure is used in an array}}
   char after[1];

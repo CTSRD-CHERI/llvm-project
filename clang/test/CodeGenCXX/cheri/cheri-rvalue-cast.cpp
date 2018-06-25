@@ -15,7 +15,7 @@ namespace PR20227 {
 
 #ifdef CHECK_ERROR
   // RTTI should be off by default with CHERI
-  B &&b = dynamic_cast<C&&>(dynamic_cast<B&&>(C{}));  // expected-error {{cannot use dynamic_cast with -fno-rtti}}
+  B &&b = dynamic_cast<C&&>(dynamic_cast<B&&>(C{}));  // expected-error {{use of dynamic_cast requires -frtti}}
 #endif
 
   B &&c = static_cast<C&&>(static_cast<B&&>(C{}));
