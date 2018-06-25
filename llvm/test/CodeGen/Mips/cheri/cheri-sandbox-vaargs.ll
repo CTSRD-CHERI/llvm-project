@@ -1,4 +1,4 @@
-; RUN: %cheri_purecap_llc %s -o - -O1 | %cheri_FileCheck %s
+; RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -o - -O1 | %cheri_FileCheck %s
 ; ModuleID = 'va.c'
 target datalayout = "E-m:m-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
 target triple = "cheri-unknown-freebsd"
@@ -15,8 +15,7 @@ entry:
   %0 = bitcast i8 addrspace(200)* addrspace(200)* %v to i8 addrspace(200)*
   ; Load the address of va_cpy
   ; CHECK: cmove [[VA_LIST:\$c[0-9]+]],  $c13
-  ; CHECK: 	ld	[[VADDR:\$[0-9]+]], %got_disp(va_cpy)($1)
-  ; CHECK: cfromddc $c[[CPYADDR:[0-9]+]], [[VADDR]]
+  ; CHECK: clcbi   $c[[CPYADDR:[0-9]+]], %captab20(va_cpy)($c26)
   ; Store the va_list (passed in $c13) in the global
   ; CHECK: cgetnull $c13
   ; CHECK: csc	[[VA_LIST]], $zero, 0($c[[CPYADDR]])
@@ -51,10 +50,9 @@ entry:
   ; Check that va_copy can copy from a global to a register
   %v = alloca i8 addrspace(200)*, align 32, addrspace(200)
   ; Load the address of the global
-  ; CHECK: 	ld	$1, %got_disp(va_cpy)($1)
-  ; CHECK: cfromddc $c1, $1
+  ; CHECK: clcbi [[CPYADDR:\$c[0-9]+]], %captab20(va_cpy)($c26)
   ; Load the va_list into the return capability
-  ; CHECK: clc	$c3, $zero, 0($c1)
+  ; CHECK: clc	$c3, $zero, 0([[CPYADDR]])
   %0 = bitcast i8 addrspace(200)* addrspace(200)* %v to i8 addrspace(200)*
   call void @llvm.lifetime.start.p200i8(i64 32, i8 addrspace(200)* %0) #1
   call void @llvm.va_copy.p200i8.p200i8(i8 addrspace(200)* %0, i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @va_cpy to i8 addrspace(200)*))
@@ -70,10 +68,11 @@ entry:
   ; When calling from a variadic function to one that takes a va_list, we
   ; should simply move the va capability from $c13 to the relevant argument
   ; register.
-  ; TODO: CodeGen is a bit stupid here since $c13 is zeroed before moving $c13 to $c3 we are inserting another copy instead of moving to $c3 first and then zeroing
-  ; CHECK: cmove	[[VA_LIST:\$c[0-9]+]], $c13
-  ; CHECK: cgetnull        $c13
-  ; CHECK: cmove	$c3, [[VA_LIST]]
+  ; CHECK: cmove	$c3, $c13
+  ; CHECK: clcbi   $c12, %capcall20(g)($c26)
+  ; Call the non-variadic function and clear $c13 in the delay slot:
+  ; CHECK: cjalr $c12, $c17
+  ; CHECK-NEXT: cgetnull $c13
 
   %v = alloca i8 addrspace(200)*, align 32, addrspace(200)
   %0 = bitcast i8 addrspace(200)* addrspace(200)* %v to i8 addrspace(200)*
