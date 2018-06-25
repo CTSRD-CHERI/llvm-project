@@ -52,7 +52,7 @@
   hypcall $4, $5, 0($4)   # CHECK: :[[@LINE]]:11: error: expected 10-bit unsigned immediate
   hypcall 2048            # CHECK: :[[@LINE]]:11: error: expected 10-bit unsigned immediate
   hypcall -1              # CHECK: :[[@LINE]]:11: error: expected 10-bit unsigned immediate
-  hypcall 0($4)           # CHECK: :[[@LINE]]:12: error: unexpected token in argument list
+  hypcall 0($4)           # CHECK: :[[@LINE]]:12: error: invalid operand for instruction
   tlbginv 0               # CHECK: :[[@LINE]]:11: error: invalid operand for instruction
   tlbginv $4              # CHECK: :[[@LINE]]:11: error: invalid operand for instruction
   tlbginv 0, $4           # CHECK: :[[@LINE]]:11: error: invalid operand for instruction

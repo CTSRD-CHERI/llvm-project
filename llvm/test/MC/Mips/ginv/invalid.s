@@ -12,7 +12,7 @@
   ginvi 0          # CHECK: :[[@LINE]]:9: error: invalid operand for instruction
   ginvi $4, 0      # CHECK: :[[@LINE]]:13: error: invalid operand for instruction
   ginvi $4, $5     # CHECK: :[[@LINE]]:13: error: invalid operand for instruction
-  ginvi 0($4)      # CHECK: :[[@LINE]]:10: error: unexpected token in argument list
+  ginvi 0($4)      # CHECK: :[[@LINE]]:9: error: invalid operand for instruction
   ginvt            # CHECK: :[[@LINE]]:3: error: too few operands for instruction
   ginvt 0          # CHECK: :[[@LINE]]:9: error: invalid operand for instruction
   ginvt $4         # CHECK: :[[@LINE]]:3: error: too few operands for instruction
