@@ -22,7 +22,7 @@ CWriteHwr $c1, $31
 .ifdef BAD
 CWriteHwr $c1, $hwr_cpunum  # ERR: [[@LINE]]:16: error: invalid operand for instruction
 CWriteHwr $c1, $c2          # ERR: [[@LINE]]:16: error: invalid operand for instruction
-CWriteHwr $c1, $32          # ERR: [[@LINE]]:16: error: invalid operand for instruction
+CWriteHwr $c1, $32          # ERR: [[@LINE]]:16: error: invalid register number
 CWriteHwr $c1, 0            # ERR: [[@LINE]]:16: error: invalid operand for instruction
 CWriteHwr $c1, -1           # ERR: [[@LINE]]:16: error: invalid operand for instruction
 CWriteHwr $c1, $chwr_foo    # ERR: [[@LINE]]:16: error: invalid operand for instruction
