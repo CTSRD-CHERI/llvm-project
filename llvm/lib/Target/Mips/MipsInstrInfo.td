@@ -2214,9 +2214,12 @@ let AdditionalPredicates = [NotInMicroMips, NoIndirectJumpGuards] in {
   def JALRPseudo : JumpLinkRegPseudo<GPR32Opnd, JALR, RA>, ISA_MIPS1;
 }
 
-let AdditionalPredicates = [NotInMicroMips] in {
+// JALX is reused by clc big immediate
+let AdditionalPredicates = [NotInMicroMips,NotCHERI] in {
   def JALX : MMRel, JumpLink<"jalx", calltarget>, FJ<0x1D>,
              ISA_MIPS32_NOT_32R6_64R6;
+}
+let AdditionalPredicates = [NotInMicroMips] in {
   def BGEZAL : MMRel, BGEZAL_FT<"bgezal", brtarget, GPR32Opnd>, BGEZAL_FM<0x11>,
                ISA_MIPS1_NOT_32R6_64R6;
   def BGEZALL : MMRel, BGEZAL_FT<"bgezall", brtarget, GPR32Opnd>,
