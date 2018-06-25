@@ -3,8 +3,6 @@
 
 ; ModuleID = '/Users/alex/cheri/llvm/tools/clang/test/CodeGen/CHERI/cap-table-call-extern.c'
 source_filename = "/Users/alex/cheri/llvm/tools/clang/test/CodeGen/CHERI/cap-table-call-extern.c"
-target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
-target triple = "cheri-unknown-freebsd"
 
 @fn = local_unnamed_addr addrspace(200) global void () addrspace(200)* addrspacecast (void ()* @extern_func to void () addrspace(200)*), align 32
 @fn2 = internal unnamed_addr addrspace(200) global void () addrspace(200)* addrspacecast (void ()* @extern_func to void () addrspace(200)*), align 32

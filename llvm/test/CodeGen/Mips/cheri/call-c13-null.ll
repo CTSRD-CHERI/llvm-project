@@ -251,7 +251,7 @@ entry:
 define void @call_variadic_onstack_and_no_stack_fn_from_nostack_fn(i8 addrspace(200)* %in_arg1) {
 ; Calling a varargs function without onstack args from a varargs function should clear $c13
 ; CHECK-LABEL: call_variadic_onstack_and_no_stack_fn_from_nostack_fn:
-; CHECK:       cincoffset	$c3, $c18, 77
+; CHECK:       cincoffset	$c3, $c3, 77
 ; CHECK:       candperm        $c13, $c1, $1
 ; Since the variadic fn clears $c13 on return we should not have another cgetnull here!
 ; OPT-NOT:   $c13
