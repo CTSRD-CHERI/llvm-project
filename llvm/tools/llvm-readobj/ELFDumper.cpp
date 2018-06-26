@@ -2429,7 +2429,7 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
     bool isFunction = Perms & (1ULL << 63);
     const char *PermStr = isFunction ? "Function" : "Object";
     // Perms &= 0xffffffff;
-    StringRef BaseSymbol = "Unknown symbol";
+    StringRef BaseSymbol = "<unknown symbol>";
     if (Base == 0) {
       // Base is 0 -> either it is really NULL or (more likely) there is a
       // dynamic relocation that will set the real address
@@ -2448,7 +2448,7 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
     }
     StringRef LocationSym;
     if (SymbolNames.find(Target) != SymbolNames.end())
-      BaseSymbol = SymbolNames[Target];
+      LocationSym = SymbolNames[Target];
     // TODO: If base == 0 find the dynamic relocation target
     if (opts::ExpandRelocs) {
       DictScope L(W, "Relocation");
@@ -2465,7 +2465,7 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
       raw_ostream &OS = W.startLine();
       OS << format(" 0x%06lx", static_cast<unsigned long>(Target));
       if (!LocationSym.empty())
-        OS << " (" << LocationSym << ")";
+        OS << left_justify((" (" + LocationSym + ")").str(), 16);
       OS << format(" Base: 0x%lx (", static_cast<unsigned long>(Base))
          << BaseSymbol;
       if (Offset >= 0)
