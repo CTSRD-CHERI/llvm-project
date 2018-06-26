@@ -12,7 +12,7 @@ entry:
   ret void
   ; TODO: it would be nice if we could have function pointers inlined into the GOT
   ; CHECK:      csc	$c17, $zero, 0($c11)
-  ; CHECK-NEXT: .cfi_offset 89, -16
+  ; CHECK-NEXT: .cfi_offset 89, -[[$CAP_SIZE]]
   ; BIG-NEXT: lui	$1, %captab_hi(fn)
   ; BIG-NEXT: daddiu	$1, $1, %captab_lo(fn)
   ; BIG-NEXT: clc	$c1, $1, 0($c26)
