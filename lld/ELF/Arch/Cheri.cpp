@@ -363,7 +363,7 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &Location,
     // Section end symbols like __preinit_array_end, etc. should actually be
     // zero size symbol since they are just markers for the end of a section
     // and not usable as a valid pointer
-    if (isSectionEndSymbol(Name))
+    if (isSectionEndSymbol(Name) || isSectionStartSymbol(Name))
       return TargetSize;
 
     bool IsAbsoluteSym = TargetSym->getOutputSection() == nullptr;

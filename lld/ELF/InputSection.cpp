@@ -845,8 +845,9 @@ static void fillGlobalSizesSection(InputSection* IS, uint8_t* Buf, uint8_t* BufE
         assert(!Target->getOutputSection() ||
                Target->getOutputSection()->Size == 0);
         SizeIsUnknown = false; // output section is empty -> size 0 is fine
-      } else if (isSectionEndSymbol(RealSymName)) {
-        SizeIsUnknown = false; // zero size is fine for section end symbols
+      } else if (isSectionEndSymbol(RealSymName) ||
+                 isSectionStartSymbol(RealSymName)) {
+        SizeIsUnknown = false; // zero size is fine for section start/end
       } else if (Config->Shared &&
                  (RealSymName == "__progname" || RealSymName == "environ")) {
         message("Using .global_size for symbol " + RealSymName +

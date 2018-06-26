@@ -1883,10 +1883,13 @@ template <class ELFT> void Writer<ELFT>::addStartEndSymbols() {
       addOptionalRegular(Start, OS, 0);
       addOptionalRegular(End, OS, -1);
     } else {
-      addOptionalRegular(Start, OS, 0, STV_HIDDEN, STB_GLOBAL,
-                         /*CanBeSectionStart=*/true);
+      // Since this is an empty section we don't want to set CanBeSectionStart
+      // Iterating over this should terminate immediately so setting the size
+      // to zero is fine
+      addOptionalRegular(Start, Default, 0, STV_HIDDEN, STB_GLOBAL,
+                         /*CanBeSectionStart=*/false);
       // End is not a section start symbol even though it has value 0:
-      addOptionalRegular(End, OS, 0, STV_HIDDEN, STB_GLOBAL,
+      addOptionalRegular(End, Default, 0, STV_HIDDEN, STB_GLOBAL,
                          /*CanBeSectionStart=*/false);
     }
   };

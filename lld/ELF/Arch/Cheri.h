@@ -176,6 +176,15 @@ inline bool isSectionEndSymbol(StringRef Name) {
          Name == "edata" || Name == "_edata";
 }
 
+inline bool isSectionStartSymbol(StringRef Name) {
+  // Section end symbols like __preinit_array_start, might end up pointing to
+  // .text (see commments in Writer.cpp) if they are emtpy to avoid relocation
+  // overflow. In that case returning a size of 0 is fine too.
+  return Name.startswith("__start_") ||
+         (Name.startswith("__") && Name.endswith("_start")) ||
+         Name == "_DYNAMIC";
+}
+
 inline void readOnlyCapRelocsError(Symbol &Sym, const Twine &SourceMsg) {
   error("attempting to add a capability relocation against " +
         (Sym.getName().empty() ? "local symbol" : "symbol " + toString(Sym)) +

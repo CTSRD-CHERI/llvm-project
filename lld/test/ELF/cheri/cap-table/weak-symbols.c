@@ -32,10 +32,11 @@ int __start(void) {
   return 0;
 }
 // DYNAMIC-EXE: 0000000000000238 .dynamic		 00000160 .hidden _DYNAMIC
-// DYNAMIC-EXE: 0000000000000000 *ABS* 00000000 .hidden __init_array_end
-// DYNAMIC-EXE: 0000000000000000 *ABS* 00000000 .hidden __init_array_start
-// STATIC-EXE: 0000000         *ABS*		 00000000 .hidden __init_array_end
-// STATIC-EXE: 0000000         *ABS*		 00000000 .hidden __init_array_start
+// DYNAMIC-EXE: 0000000000010000 .text 00000000 .hidden __init_array_end
+// DYNAMIC-EXE: 0000000000010000 .text 00000000 .hidden __init_array_start
+// STATIC-EXE: 0000000120010000 .text 00000000 .hidden __init_array_end
+// STATIC-EXE: 0000000120010000 .text 00000000 .hidden __init_array_start
+//                      ^------- Start of .text segment (actual value doesn't matter as long as iteration terminates immediately)
 // EXE: 0030008         .preinit_array		 00000000 .hidden __preinit_array_end
 // EXE: 0030000         .preinit_array		 00000008 .hidden __preinit_array_start
 // EXE: 0030010         .cap_table		 000000b0 _CHERI_CAPABILITY_TABLE_
