@@ -1879,16 +1879,16 @@ SDValue DAGCombiner::foldBinOpIntoSelect(SDNode *BO) {
           BinOpcode == ISD::FDIV || BinOpcode == ISD::FREM) &&
          "Unexpected binary operator");
 
-  // Bail out if any constants are opaque because we can't constant fold those.
-  SDValue C1 = BO->getOperand(1);
-  if (!isConstantOrConstantVector(C1, true) &&
-      !isConstantFPBuildVectorOrConstantFP(C1))
-    return SDValue();
-
   // Don't do this unless the old select is going away. We want to eliminate the
   // binary operator, not replace a binop with a select.
   // TODO: Handle ISD::SELECT_CC.
+  unsigned SelOpNo = 0;
   SDValue Sel = BO->getOperand(0);
+  if (Sel.getOpcode() != ISD::SELECT || !Sel.hasOneUse()) {
+    SelOpNo = 1;
+    Sel = BO->getOperand(1);
+  }
+
   if (Sel.getOpcode() != ISD::SELECT || !Sel.hasOneUse())
     return SDValue();
 
@@ -1902,24 +1902,92 @@ SDValue DAGCombiner::foldBinOpIntoSelect(SDNode *BO) {
       !isConstantFPBuildVectorOrConstantFP(CF))
     return SDValue();
 
+  // Bail out if any constants are opaque because we can't constant fold those.
+  // The exception is "and" and "or" with either 0 or -1 in which case we can
+  // propagate non constant operands into select. I.e.:
+  // and (select Cond, 0, -1), X --> select Cond, 0, X
+  // or X, (select Cond, -1, 0) --> select Cond, -1, X
+  bool CanFoldNonConst = (BinOpcode == ISD::AND || BinOpcode == ISD::OR) &&
+                         (isNullConstantOrNullSplatConstant(CT) ||
+                          isAllOnesConstantOrAllOnesSplatConstant(CT)) &&
+                         (isNullConstantOrNullSplatConstant(CF) ||
+                          isAllOnesConstantOrAllOnesSplatConstant(CF));
+
+  SDValue CBO = BO->getOperand(SelOpNo ^ 1);
+  if (!CanFoldNonConst &&
+      !isConstantOrConstantVector(CBO, true) &&
+      !isConstantFPBuildVectorOrConstantFP(CBO))
+    return SDValue();
+
+  EVT VT = Sel.getValueType();
+
+  // In case of shift value and shift amount may have different VT. For instance
+  // on x86 shift amount is i8 regardles of LHS type. Bail out if we have
+  // swapped operands and value types do not match. NB: x86 is fine if operands
+  // are not swapped with shift amount VT being not bigger than shifted value.
+  // TODO: that is possible to check for a shift operation, correct VTs and
+  // still perform optimization on x86 if needed.
+  if (SelOpNo && VT != CBO.getValueType())
+    return SDValue();
+
   // We have a select-of-constants followed by a binary operator with a
   // constant. Eliminate the binop by pulling the constant math into the select.
-  // Example: add (select Cond, CT, CF), C1 --> select Cond, CT + C1, CF + C1
-  EVT VT = Sel.getValueType();
+  // Example: add (select Cond, CT, CF), CBO --> select Cond, CT + CBO, CF + CBO
   SDLoc DL(Sel);
-  SDValue NewCT = DAG.getNode(BinOpcode, DL, VT, CT, C1);
-  if (!NewCT.isUndef() &&
+  SDValue NewCT = SelOpNo ? DAG.getNode(BinOpcode, DL, VT, CBO, CT)
+                          : DAG.getNode(BinOpcode, DL, VT, CT, CBO);
+  if (!CanFoldNonConst && !NewCT.isUndef() &&
       !isConstantOrConstantVector(NewCT, true) &&
       !isConstantFPBuildVectorOrConstantFP(NewCT))
     return SDValue();
 
-  SDValue NewCF = DAG.getNode(BinOpcode, DL, VT, CF, C1);
-  if (!NewCF.isUndef() &&
+  SDValue NewCF = SelOpNo ? DAG.getNode(BinOpcode, DL, VT, CBO, CF)
+                          : DAG.getNode(BinOpcode, DL, VT, CF, CBO);
+  if (!CanFoldNonConst && !NewCF.isUndef() &&
       !isConstantOrConstantVector(NewCF, true) &&
       !isConstantFPBuildVectorOrConstantFP(NewCF))
     return SDValue();
 
   return DAG.getSelect(DL, VT, Sel.getOperand(0), NewCT, NewCF);
+}
+
+static SDValue foldAddSubBoolOfMaskedVal(SDNode *N, SelectionDAG &DAG) {
+  assert((N->getOpcode() == ISD::ADD || N->getOpcode() == ISD::SUB) &&
+         "Expecting add or sub");
+
+  // Match a constant operand and a zext operand for the math instruction:
+  // add Z, C
+  // sub C, Z
+  bool IsAdd = N->getOpcode() == ISD::ADD;
+  SDValue C = IsAdd ? N->getOperand(1) : N->getOperand(0);
+  SDValue Z = IsAdd ? N->getOperand(0) : N->getOperand(1);
+  auto *CN = dyn_cast<ConstantSDNode>(C);
+  if (!CN || Z.getOpcode() != ISD::ZERO_EXTEND)
+    return SDValue();
+
+  // Match the zext operand as a setcc of a boolean.
+  if (Z.getOperand(0).getOpcode() != ISD::SETCC ||
+      Z.getOperand(0).getValueType() != MVT::i1)
+    return SDValue();
+
+  // Match the compare as: setcc (X & 1), 0, eq.
+  SDValue SetCC = Z.getOperand(0);
+  ISD::CondCode CC = cast<CondCodeSDNode>(SetCC->getOperand(2))->get();
+  if (CC != ISD::SETEQ || !isNullConstant(SetCC.getOperand(1)) ||
+      SetCC.getOperand(0).getOpcode() != ISD::AND ||
+      !isOneConstant(SetCC.getOperand(0).getOperand(1)))
+    return SDValue();
+
+  // We are adding/subtracting a constant and an inverted low bit. Turn that
+  // into a subtract/add of the low bit with incremented/decremented constant:
+  // add (zext i1 (seteq (X & 1), 0)), C --> sub C+1, (zext (X & 1))
+  // sub C, (zext i1 (seteq (X & 1), 0)) --> add C-1, (zext (X & 1))
+  EVT VT = C.getValueType();
+  SDLoc DL(N);
+  SDValue LowBit = DAG.getZExtOrTrunc(SetCC.getOperand(0), DL, VT);
+  SDValue C1 = IsAdd ? DAG.getConstant(CN->getAPIntValue() + 1, DL, VT) :
+                       DAG.getConstant(CN->getAPIntValue() - 1, DL, VT);
+  return DAG.getNode(IsAdd ? ISD::SUB : ISD::ADD, DL, VT, C1, LowBit);
 }
 
 SDValue DAGCombiner::visitPTRADD(SDNode *N) {
@@ -2063,6 +2131,9 @@ SDValue DAGCombiner::visitADD(SDNode *N) {
                          DAG.getNode(ISD::ADD, SDLoc(N0), VT, N00, N10),
                          DAG.getNode(ISD::ADD, SDLoc(N1), VT, N01, N11));
   }
+
+  if (SDValue V = foldAddSubBoolOfMaskedVal(N, DAG))
+    return V;
 
   if (SimplifyDemandedBits(SDValue(N, 0)))
     return SDValue(N, 0);
@@ -2562,6 +2633,9 @@ SDValue DAGCombiner::visitSUB(SDNode *N) {
     return N0;
   if (N1.isUndef())
     return N1;
+
+  if (SDValue V = foldAddSubBoolOfMaskedVal(N, DAG))
+    return V;
 
   // fold Y = sra (X, size(X)-1); sub (xor (X, Y), Y) -> (abs X)
   if (TLI.isOperationLegalOrCustom(ISD::ABS, VT)) {
@@ -6741,9 +6815,9 @@ SDValue DAGCombiner::foldSelectOfConstants(SDNode *N) {
   // in another basic block or it could require searching a complicated
   // expression.
   if (CondVT.isInteger() &&
-      TLI.getBooleanContents(false, true) ==
+      TLI.getBooleanContents(/*isVec*/false, /*isFloat*/true) ==
           TargetLowering::ZeroOrOneBooleanContent &&
-      TLI.getBooleanContents(false, false) ==
+      TLI.getBooleanContents(/*isVec*/false, /*isFloat*/false) ==
           TargetLowering::ZeroOrOneBooleanContent &&
       C1->isNullValue() && C2->isOne()) {
     SDValue NotCond =
@@ -8704,8 +8778,9 @@ SDValue DAGCombiner::ReduceLoadWidth(SDNode *N) {
         if (ShiftMask.isMask()) {
           EVT MaskedVT = EVT::getIntegerVT(*DAG.getContext(),
                                            ShiftMask.countTrailingOnes());
-          // Recompute the type.
-          if (TLI.isLoadExtLegal(ExtType, N0.getValueType(), MaskedVT))
+          // If the mask is smaller, recompute the type.
+          if ((ExtVT.getSizeInBits() > MaskedVT.getSizeInBits()) &&
+              TLI.isLoadExtLegal(ExtType, N0.getValueType(), MaskedVT))
             ExtVT = MaskedVT;
         }
       }
@@ -10343,34 +10418,42 @@ SDValue DAGCombiner::visitFADD(SDNode *N) {
     return DAG.getNode(ISD::FSUB, DL, VT, N1IsFMul ? N0 : N1, Add, Flags);
   }
 
-  // FIXME: Auto-upgrade the target/function-level option.
-  if (Options.NoSignedZerosFPMath || N->getFlags().hasNoSignedZeros()) {
-    // fold (fadd A, 0) -> A
-    if (ConstantFPSDNode *N1C = isConstOrConstSplatFP(N1))
-      if (N1C->isZero())
-        return N0;
+  ConstantFPSDNode *N1C = isConstOrConstSplatFP(N1);
+  if (N1C && N1C->isZero()) {
+    if (N1C->isNegative() || Options.UnsafeFPMath ||
+        Flags.hasNoSignedZeros()) {
+      // fold (fadd A, 0) -> A
+      return N0;
+    }
   }
 
-  // If 'unsafe math' is enabled, fold lots of things.
-  if (Options.UnsafeFPMath) {
-    // No FP constant should be created after legalization as Instruction
-    // Selection pass has a hard time dealing with FP constants.
-    bool AllowNewConst = (Level < AfterLegalizeDAG);
+  // No FP constant should be created after legalization as Instruction
+  // Selection pass has a hard time dealing with FP constants.
+  bool AllowNewConst = (Level < AfterLegalizeDAG);
 
+  // If 'unsafe math' or nnan is enabled, fold lots of things.
+  if ((Options.UnsafeFPMath || Flags.hasNoNaNs()) && AllowNewConst) {
+    // If allowed, fold (fadd (fneg x), x) -> 0.0
+    if (N0.getOpcode() == ISD::FNEG && N0.getOperand(0) == N1)
+      return DAG.getConstantFP(0.0, DL, VT);
+
+    // If allowed, fold (fadd x, (fneg x)) -> 0.0
+    if (N1.getOpcode() == ISD::FNEG && N1.getOperand(0) == N0)
+      return DAG.getConstantFP(0.0, DL, VT);
+  }
+
+  // If 'unsafe math' or reassoc and nsz, fold lots of things.
+  // TODO: break out portions of the transformations below for which Unsafe is
+  //       considered and which do not require both nsz and reassoc
+  if ((Options.UnsafeFPMath ||
+       (Flags.hasAllowReassociation() && Flags.hasNoSignedZeros())) &&
+      AllowNewConst) {
     // fadd (fadd x, c1), c2 -> fadd x, c1 + c2
     if (N1CFP && N0.getOpcode() == ISD::FADD &&
         isConstantFPBuildVectorOrConstantFP(N0.getOperand(1))) {
       SDValue NewC = DAG.getNode(ISD::FADD, DL, VT, N0.getOperand(1), N1, Flags);
       return DAG.getNode(ISD::FADD, DL, VT, N0.getOperand(0), NewC, Flags);
     }
-
-    // If allowed, fold (fadd (fneg x), x) -> 0.0
-    if (AllowNewConst && N0.getOpcode() == ISD::FNEG && N0.getOperand(0) == N1)
-      return DAG.getConstantFP(0.0, DL, VT);
-
-    // If allowed, fold (fadd x, (fneg x)) -> 0.0
-    if (AllowNewConst && N1.getOpcode() == ISD::FNEG && N1.getOperand(0) == N0)
-      return DAG.getConstantFP(0.0, DL, VT);
 
     // We can fold chains of FADD's of the same value into multiplications.
     // This transform is not safe in general because we are reducing the number
@@ -10418,7 +10501,7 @@ SDValue DAGCombiner::visitFADD(SDNode *N) {
         }
       }
 
-      if (N0.getOpcode() == ISD::FADD && AllowNewConst) {
+      if (N0.getOpcode() == ISD::FADD) {
         bool CFP00 = isConstantFPBuildVectorOrConstantFP(N0.getOperand(0));
         // (fadd (fadd x, x), x) -> (fmul x, 3.0)
         if (!CFP00 && N0.getOperand(0) == N0.getOperand(1) &&
@@ -10428,7 +10511,7 @@ SDValue DAGCombiner::visitFADD(SDNode *N) {
         }
       }
 
-      if (N1.getOpcode() == ISD::FADD && AllowNewConst) {
+      if (N1.getOpcode() == ISD::FADD) {
         bool CFP10 = isConstantFPBuildVectorOrConstantFP(N1.getOperand(0));
         // (fadd x, (fadd x, x)) -> (fmul x, 3.0)
         if (!CFP10 && N1.getOperand(0) == N1.getOperand(1) &&
@@ -10439,8 +10522,7 @@ SDValue DAGCombiner::visitFADD(SDNode *N) {
       }
 
       // (fadd (fadd x, x), (fadd x, x)) -> (fmul x, 4.0)
-      if (AllowNewConst &&
-          N0.getOpcode() == ISD::FADD && N1.getOpcode() == ISD::FADD &&
+      if (N0.getOpcode() == ISD::FADD && N1.getOpcode() == ISD::FADD &&
           N0.getOperand(0) == N0.getOperand(1) &&
           N1.getOperand(0) == N1.getOperand(1) &&
           N0.getOperand(0) == N1.getOperand(0)) {
@@ -12221,13 +12303,14 @@ SDValue DAGCombiner::visitLOAD(SDNode *N) {
   // Try to infer better alignment information than the load already has.
   if (OptLevel != CodeGenOpt::None && LD->isUnindexed()) {
     if (unsigned Align = DAG.InferPtrAlignment(Ptr)) {
-      if (Align > LD->getMemOperand()->getBaseAlignment()) {
+      if (Align > LD->getAlignment() && LD->getSrcValueOffset() % Align == 0) {
         SDValue NewLoad = DAG.getExtLoad(
             LD->getExtensionType(), SDLoc(N), LD->getValueType(0), Chain, Ptr,
             LD->getPointerInfo(), LD->getMemoryVT(), Align,
             LD->getMemOperand()->getFlags(), LD->getAAInfo());
-        if (NewLoad.getNode() != N)
-          return CombineTo(N, NewLoad, SDValue(NewLoad.getNode(), 1), true);
+        // NewLoad will always be N as we are only refining the alignment
+        assert(NewLoad.getNode() == N);
+        (void)NewLoad;
       }
     }
   }
@@ -14226,13 +14309,14 @@ SDValue DAGCombiner::visitSTORE(SDNode *N) {
   // Try to infer better alignment information than the store already has.
   if (OptLevel != CodeGenOpt::None && ST->isUnindexed()) {
     if (unsigned Align = DAG.InferPtrAlignment(Ptr)) {
-      if (Align > ST->getAlignment()) {
+      if (Align > ST->getAlignment() && ST->getSrcValueOffset() % Align == 0) {
         SDValue NewStore =
             DAG.getTruncStore(Chain, SDLoc(N), Value, Ptr, ST->getPointerInfo(),
                               ST->getMemoryVT(), Align,
                               ST->getMemOperand()->getFlags(), ST->getAAInfo());
-        if (NewStore.getNode() != N)
-          return CombineTo(ST, NewStore, true);
+        // NewStore will always be N as we are only refining the alignment
+        assert(NewStore.getNode() == N);
+        (void)NewStore;
       }
     }
   }

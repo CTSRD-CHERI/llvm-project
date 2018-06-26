@@ -590,12 +590,10 @@ unsigned CodeGenInstAlias::ResultOperand::getMINumOperands() const {
   return MIOpInfo->getNumArgs();
 }
 
-CodeGenInstAlias::CodeGenInstAlias(Record *R, unsigned Variant,
-                                   CodeGenTarget &T)
+CodeGenInstAlias::CodeGenInstAlias(Record *R, CodeGenTarget &T)
     : TheDef(R) {
   Result = R->getValueAsDag("ResultInst");
   AsmString = R->getValueAsString("AsmString");
-  AsmString = CodeGenInstruction::FlattenAsmStringVariants(AsmString, Variant);
 
 
   // Verify that the root of the result is an instruction.
@@ -632,8 +630,14 @@ CodeGenInstAlias::CodeGenInstAlias(Record *R, unsigned Variant,
     // of a complex operand, in which case we include them anyways, as we
     // don't have any other way to specify the whole operand.
     if (ResultInst->Operands[i].MINumOperands == 1 &&
-        ResultInst->Operands[i].getTiedRegister() != -1)
-      continue;
+        ResultInst->Operands[i].getTiedRegister() != -1) {
+      // Tied operands of different RegisterClass should be explicit within an
+      // instruction's syntax and so cannot be skipped.
+      int TiedOpNum = ResultInst->Operands[i].getTiedRegister();
+      if (ResultInst->Operands[i].Rec->getName() ==
+          ResultInst->Operands[TiedOpNum].Rec->getName())
+        continue;
+    }
 
     if (AliasOpNo >= Result->getNumArgs())
       PrintFatalError(R->getLoc(), "not enough arguments for instruction!");

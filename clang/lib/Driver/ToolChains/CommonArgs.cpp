@@ -416,6 +416,12 @@ void tools::AddGoldPlugin(const ToolChain &ToolChain, const ArgList &Args,
       CmdArgs.push_back(Args.MakeArgString(Twine("-plugin-opt=O") + OOpt));
   }
 
+  if (Args.hasArg(options::OPT_gsplit_dwarf)) {
+    CmdArgs.push_back(
+        Args.MakeArgString(Twine("-plugin-opt=dwo_dir=") +
+            Output.getFilename() + "_dwo"));
+  }
+
   if (IsThinLTO)
     CmdArgs.push_back("-plugin-opt=thinlto");
 
@@ -593,14 +599,17 @@ collectSanitizerRuntimes(const ToolChain &TC, const ArgList &Args,
         HelperStaticRuntimes.push_back("asan-preinit");
     }
     if (SanArgs.needsUbsanRt()) {
-      if (SanArgs.requiresMinimalRuntime()) {
+      if (SanArgs.requiresMinimalRuntime())
         SharedRuntimes.push_back("ubsan_minimal");
-      } else {
+      else
         SharedRuntimes.push_back("ubsan_standalone");
-      }
     }
-    if (SanArgs.needsScudoRt())
-      SharedRuntimes.push_back("scudo");
+    if (SanArgs.needsScudoRt()) {
+      if (SanArgs.requiresMinimalRuntime())
+        SharedRuntimes.push_back("scudo_minimal");
+      else
+        SharedRuntimes.push_back("scudo");
+    }
     if (SanArgs.needsHwasanRt())
       SharedRuntimes.push_back("hwasan");
   }
@@ -666,9 +675,15 @@ collectSanitizerRuntimes(const ToolChain &TC, const ArgList &Args,
   if (SanArgs.needsEsanRt())
     StaticRuntimes.push_back("esan");
   if (SanArgs.needsScudoRt()) {
-    StaticRuntimes.push_back("scudo");
-    if (SanArgs.linkCXXRuntimes())
-      StaticRuntimes.push_back("scudo_cxx");
+    if (SanArgs.requiresMinimalRuntime()) {
+      StaticRuntimes.push_back("scudo_minimal");
+      if (SanArgs.linkCXXRuntimes())
+        StaticRuntimes.push_back("scudo_cxx_minimal");
+    } else {
+      StaticRuntimes.push_back("scudo");
+      if (SanArgs.linkCXXRuntimes())
+        StaticRuntimes.push_back("scudo_cxx");
+    }
   }
 }
 
@@ -1021,10 +1036,7 @@ tools::ParsePICArgs(const ToolChain &ToolChain, const ArgList &Args) {
   if ((ROPI || RWPI) && (PIC || PIE))
     ToolChain.getDriver().Diag(diag::err_drv_ropi_rwpi_incompatible_with_pic);
 
-  if (Triple.getArch() == llvm::Triple::mips ||
-       Triple.getArch() == llvm::Triple::mipsel ||
-       Triple.getArch() == llvm::Triple::mips64 ||
-       Triple.getArch() == llvm::Triple::mips64el) {
+  if (Triple.isMIPS()) {
     StringRef CPUName;
     StringRef ABIName;
     mips::getMipsCPUAndABI(Args, Triple, CPUName, ABIName);

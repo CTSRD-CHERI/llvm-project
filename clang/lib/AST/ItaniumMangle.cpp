@@ -3503,6 +3503,7 @@ recurse:
   case Expr::AsTypeExprClass:
   case Expr::PseudoObjectExprClass:
   case Expr::AtomicExprClass:
+  case Expr::FixedPointLiteralClass:
   {
     if (!NullOut) {
       // As bad as this diagnostic is, it's better than crashing.

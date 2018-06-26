@@ -55,6 +55,7 @@ AMDGPULegalizerInfo::AMDGPULegalizerInfo(const SISubtarget &ST,
   };
 
   setAction({G_ADD, S32}, Legal);
+  setAction({G_ASHR, S32}, Legal);
   setAction({G_SUB, S32}, Legal);
   setAction({G_MUL, S32}, Legal);
   setAction({G_AND, S32}, Legal);
@@ -69,7 +70,11 @@ AMDGPULegalizerInfo::AMDGPULegalizerInfo(const SISubtarget &ST,
 
   getActionDefinitionsBuilder(G_FCONSTANT)
     .legalFor({S32, S64});
-  getActionDefinitionsBuilder({G_IMPLICIT_DEF, G_CONSTANT})
+  getActionDefinitionsBuilder(G_IMPLICIT_DEF)
+    .legalFor({S1, S32, S64,
+               GlobalPtr, ConstantPtr, LocalPtr, FlatPtr, PrivatePtr});
+
+  getActionDefinitionsBuilder(G_CONSTANT)
     .legalFor({S1, S32, S64});
 
   // FIXME: i1 operands to intrinsics should always be legal, but other i1
@@ -90,6 +95,9 @@ AMDGPULegalizerInfo::AMDGPULegalizerInfo(const SISubtarget &ST,
 
   setAction({G_FPTOSI, S32}, Legal);
   setAction({G_FPTOSI, 1, S32}, Legal);
+
+  setAction({G_SITOFP, S32}, Legal);
+  setAction({G_SITOFP, 1, S32}, Legal);
 
   setAction({G_FPTOUI, S32}, Legal);
   setAction({G_FPTOUI, 1, S32}, Legal);

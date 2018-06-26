@@ -19,6 +19,7 @@
 #include "Assembler.h"
 #include "BenchmarkResult.h"
 #include "LlvmState.h"
+#include "MCInstrDescView.h"
 #include "RegisterAliasing.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/Support/Error.h"
@@ -38,7 +39,10 @@ struct BenchmarkConfiguration {
   // This code is run before the Snippet is iterated. Since it is part of the
   // measurement it should be as short as possible. It is usually used to setup
   // the content of the Registers.
-  std::vector<llvm::MCInst> SnippetSetup;
+  struct Setup {
+    std::vector<unsigned> RegsToDef;
+  };
+  Setup SnippetSetup;
 
   // The sequence of instructions that are to be repeated.
   std::vector<llvm::MCInst> Snippet;
@@ -70,29 +74,35 @@ public:
   run(unsigned Opcode, const InstructionFilter &Filter,
       unsigned NumRepetitions);
 
+  // Given a snippet, computes which registers the setup code needs to define.
+  std::vector<unsigned>
+  computeRegsToDef(const std::vector<InstructionInstance> &Snippet) const;
+
 protected:
   const LLVMState &State;
-  const llvm::MCInstrInfo &MCInstrInfo;
-  const llvm::MCRegisterInfo &MCRegisterInfo;
   const RegisterAliasingTrackerCache RATC;
 
 private:
   InstructionBenchmark runOne(const BenchmarkConfiguration &Configuration,
                               unsigned Opcode, unsigned NumRepetitions) const;
 
+  // Calls generatePrototype and expands the SnippetPrototype into one or more
+  // BenchmarkConfiguration.
+  llvm::Expected<std::vector<BenchmarkConfiguration>>
+  generateConfigurations(unsigned Opcode) const;
+
   virtual InstructionBenchmark::ModeE getMode() const = 0;
 
-  virtual llvm::Expected<std::vector<BenchmarkConfiguration>>
-  createConfigurations(unsigned Opcode) const = 0;
+  virtual llvm::Expected<SnippetPrototype>
+  generatePrototype(unsigned Opcode) const = 0;
 
   virtual std::vector<BenchmarkMeasure>
   runMeasurements(const ExecutableFunction &EF,
                   const unsigned NumRepetitions) const = 0;
 
   llvm::Expected<std::string>
-  writeObjectFile(llvm::ArrayRef<llvm::MCInst> Code) const;
-  llvm::Expected<ExecutableFunction>
-  createExecutableFunction(llvm::ArrayRef<llvm::MCInst> Code) const;
+  writeObjectFile(const BenchmarkConfiguration::Setup &Setup,
+                  llvm::ArrayRef<llvm::MCInst> Code) const;
 };
 
 } // namespace exegesis

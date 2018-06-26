@@ -1775,8 +1775,7 @@ Constant *ConstantExpr::getAddrSpaceCast(Constant *C, Type *DstTy,
 Constant *ConstantExpr::get(unsigned Opcode, Constant *C1, Constant *C2,
                             unsigned Flags, Type *OnlyIfReducedTy) {
   // Check the operands for consistency first.
-  assert(Opcode >= Instruction::BinaryOpsBegin &&
-         Opcode <  Instruction::BinaryOpsEnd   &&
+  assert(Instruction::isBinaryOp(Opcode) &&
          "Invalid opcode in binary constant expression");
   assert(C1->getType() == C2->getType() &&
          "Operand types in binary constant expression should match");

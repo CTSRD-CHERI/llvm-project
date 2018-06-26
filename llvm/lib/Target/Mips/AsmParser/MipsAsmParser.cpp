@@ -534,14 +534,13 @@ public:
     CpRestoreOffset = -1;
 
     const Triple &TheTriple = sti.getTargetTriple();
-    if ((TheTriple.getArch() == Triple::mips) ||
-        (TheTriple.getArch() == Triple::mips64))
-      IsLittleEndian = false;
-    else
-      IsLittleEndian = true;
+    IsLittleEndian = TheTriple.isLittleEndian();
 
     if (getSTI().getCPU() == "mips64r6" && inMicroMipsMode())
       report_fatal_error("microMIPS64R6 is not supported", false);
+
+    if (!isABI_O32() && inMicroMipsMode())
+      report_fatal_error("microMIPS64 is not supported", false);
   }
 
   /// True if all of $fcc0 - $fcc7 exist for the current ISA.

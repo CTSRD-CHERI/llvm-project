@@ -1258,7 +1258,7 @@ SDValue SelectionDAG::getConstant(const ConstantInt &Val, const SDLoc &DL,
       return SDValue(N, 0);
 
   if (!N) {
-    N = newSDNode<ConstantSDNode>(isT, isO, Elt, DL.getDebugLoc(), EltVT);
+    N = newSDNode<ConstantSDNode>(isT, isO, Elt, EltVT);
     CSEMap.InsertNode(N, IP);
     InsertNode(N);
     NewSDValueDbgMsg(SDValue(N, 0), "Creating constant: ", this);
@@ -1301,7 +1301,7 @@ SDValue SelectionDAG::getConstantFP(const ConstantFP &V, const SDLoc &DL,
       return SDValue(N, 0);
 
   if (!N) {
-    N = newSDNode<ConstantFPSDNode>(isTarget, &V, DL.getDebugLoc(), EltVT);
+    N = newSDNode<ConstantFPSDNode>(isTarget, &V, EltVT);
     CSEMap.InsertNode(N, IP);
     InsertNode(N);
   }
@@ -4464,24 +4464,6 @@ SDValue SelectionDAG::getNode(unsigned Opcode, const SDLoc &DL, EVT VT,
   case ISD::FMUL:
   case ISD::FDIV:
   case ISD::FREM:
-    if (getTarget().Options.UnsafeFPMath) {
-      if (Opcode == ISD::FADD) {
-        // x+0 --> x
-        if (N2CFP && N2CFP->getValueAPF().isZero())
-          return N1;
-      } else if (Opcode == ISD::FSUB) {
-        // x-0 --> x
-        if (N2CFP && N2CFP->getValueAPF().isZero())
-          return N1;
-      } else if (Opcode == ISD::FMUL) {
-        // x*0 --> 0
-        if (N2CFP && N2CFP->isZero())
-          return N2;
-        // x*1 --> x
-        if (N2CFP && N2CFP->isExactlyValue(1.0))
-          return N1;
-      }
-    }
     assert(VT.isFloatingPoint() && "This operator only applies to FP types!");
     assert(N1.getValueType() == N2.getValueType() &&
            N1.getValueType() == VT && "Binary operator types must match!");

@@ -75,8 +75,9 @@ llvm::Optional<std::string> toURI(const SourceManager &SM, StringRef Path,
     }
   } else if (!Opts.FallbackDir.empty()) {
     llvm::sys::fs::make_absolute(Opts.FallbackDir, AbsolutePath);
-    llvm::sys::path::remove_dots(AbsolutePath, /*remove_dot_dot=*/true);
   }
+
+  llvm::sys::path::remove_dots(AbsolutePath, /*remove_dot_dot=*/true);
 
   std::string ErrMsg;
   for (const auto &Scheme : Opts.URISchemes) {
@@ -128,51 +129,6 @@ bool isPrivateProtoDecl(const NamedDecl &ND) {
   // user-defined names) and can be improved.
   return (ND.getKind() != Decl::EnumConstant) ||
          std::any_of(Name.begin(), Name.end(), islower);
-}
-
-bool shouldFilterDecl(const NamedDecl *ND, ASTContext *ASTCtx,
-                      const SymbolCollector::Options &Opts) {
-  using namespace clang::ast_matchers;
-  if (ND->isImplicit())
-    return true;
-  // Skip anonymous declarations, e.g (anonymous enum/class/struct).
-  if (ND->getDeclName().isEmpty())
-    return true;
-
-  // FIXME: figure out a way to handle internal linkage symbols (e.g. static
-  // variables, function) defined in the .cc files. Also we skip the symbols
-  // in anonymous namespace as the qualifier names of these symbols are like
-  // `foo::<anonymous>::bar`, which need a special handling.
-  // In real world projects, we have a relatively large set of header files
-  // that define static variables (like "static const int A = 1;"), we still
-  // want to collect these symbols, although they cause potential ODR
-  // violations.
-  if (ND->isInAnonymousNamespace())
-    return true;
-
-  // We want most things but not "local" symbols such as symbols inside
-  // FunctionDecl, BlockDecl, ObjCMethodDecl and OMPDeclareReductionDecl.
-  // FIXME: Need a matcher for ExportDecl in order to include symbols declared
-  // within an export.
-  auto InNonLocalContext = hasDeclContext(anyOf(
-      translationUnitDecl(), namespaceDecl(), linkageSpecDecl(), recordDecl(),
-      enumDecl(), objcProtocolDecl(), objcInterfaceDecl(), objcCategoryDecl(),
-      objcCategoryImplDecl(), objcImplementationDecl()));
-  // Don't index template specializations and expansions in main files.
-  auto IsSpecialization =
-      anyOf(functionDecl(isExplicitTemplateSpecialization()),
-            cxxRecordDecl(isExplicitTemplateSpecialization()),
-            varDecl(isExplicitTemplateSpecialization()));
-  if (match(decl(allOf(unless(isExpansionInMainFile()), InNonLocalContext,
-                       unless(IsSpecialization))),
-            *ND, *ASTCtx)
-          .empty())
-    return true;
-
-  // Avoid indexing internal symbols in protobuf generated headers.
-  if (isPrivateProtoDecl(*ND))
-    return true;
-  return false;
 }
 
 // We only collect #include paths for symbols that are suitable for global code
@@ -283,6 +239,52 @@ void SymbolCollector::initialize(ASTContext &Ctx) {
       llvm::make_unique<CodeCompletionTUInfo>(CompletionAllocator);
 }
 
+bool SymbolCollector::shouldCollectSymbol(const NamedDecl &ND,
+                                          ASTContext &ASTCtx,
+                                          const Options &Opts) {
+  using namespace clang::ast_matchers;
+  if (ND.isImplicit())
+    return false;
+  // Skip anonymous declarations, e.g (anonymous enum/class/struct).
+  if (ND.getDeclName().isEmpty())
+    return false;
+
+  // FIXME: figure out a way to handle internal linkage symbols (e.g. static
+  // variables, function) defined in the .cc files. Also we skip the symbols
+  // in anonymous namespace as the qualifier names of these symbols are like
+  // `foo::<anonymous>::bar`, which need a special handling.
+  // In real world projects, we have a relatively large set of header files
+  // that define static variables (like "static const int A = 1;"), we still
+  // want to collect these symbols, although they cause potential ODR
+  // violations.
+  if (ND.isInAnonymousNamespace())
+    return false;
+
+  // We want most things but not "local" symbols such as symbols inside
+  // FunctionDecl, BlockDecl, ObjCMethodDecl and OMPDeclareReductionDecl.
+  // FIXME: Need a matcher for ExportDecl in order to include symbols declared
+  // within an export.
+  auto InNonLocalContext = hasDeclContext(anyOf(
+      translationUnitDecl(), namespaceDecl(), linkageSpecDecl(), recordDecl(),
+      enumDecl(), objcProtocolDecl(), objcInterfaceDecl(), objcCategoryDecl(),
+      objcCategoryImplDecl(), objcImplementationDecl()));
+  // Don't index template specializations and expansions in main files.
+  auto IsSpecialization =
+      anyOf(functionDecl(isExplicitTemplateSpecialization()),
+            cxxRecordDecl(isExplicitTemplateSpecialization()),
+            varDecl(isExplicitTemplateSpecialization()));
+  if (match(decl(allOf(unless(isExpansionInMainFile()), InNonLocalContext,
+                       unless(IsSpecialization))),
+            ND, ASTCtx)
+          .empty())
+    return false;
+
+  // Avoid indexing internal symbols in protobuf generated headers.
+  if (isPrivateProtoDecl(ND))
+    return false;
+  return true;
+}
+
 // Always return true to continue indexing.
 bool SymbolCollector::handleDeclOccurence(
     const Decl *D, index::SymbolRoleSet Roles,
@@ -319,7 +321,7 @@ bool SymbolCollector::handleDeclOccurence(
   if (!(Roles & static_cast<unsigned>(index::SymbolRole::Declaration) ||
         Roles & static_cast<unsigned>(index::SymbolRole::Definition)))
     return true;
-  if (shouldFilterDecl(ND, ASTCtx, Opts))
+  if (!shouldCollectSymbol(*ND, *ASTCtx, Opts))
     return true;
 
   llvm::SmallString<128> USR;
@@ -362,21 +364,12 @@ const Symbol *SymbolCollector::addDeclaration(const NamedDecl &ND,
   auto &Ctx = ND.getASTContext();
   auto &SM = Ctx.getSourceManager();
 
-  std::string QName;
-  llvm::raw_string_ostream OS(QName);
-  PrintingPolicy Policy(ASTCtx->getLangOpts());
-  // Note that inline namespaces are treated as transparent scopes. This
-  // reflects the way they're most commonly used for lookup. Ideally we'd
-  // include them, but at query time it's hard to find all the inline
-  // namespaces to query: the preamble doesn't have a dedicated list.
-  Policy.SuppressUnwrittenScope = true;
-  ND.printQualifiedName(OS, Policy);
-  OS.flush();
-  assert(!StringRef(QName).startswith("::"));
-
   Symbol S;
   S.ID = std::move(ID);
+  std::string QName = printQualifiedName(ND);
   std::tie(S.Scope, S.Name) = splitQualifiedName(QName);
+  // FIXME: this returns foo:bar: for objective-C methods, we prefer only foo:
+  // for consistency with CodeCompletionString and a clean name/signature split.
 
   S.IsIndexedForCodeCompletion = isIndexedForCodeCompletion(ND, Ctx);
   S.SymInfo = index::getSymbolInfo(&ND);
@@ -394,19 +387,13 @@ const Symbol *SymbolCollector::addDeclaration(const NamedDecl &ND,
       *ASTCtx, *PP, CodeCompletionContext::CCC_Name, *CompletionAllocator,
       *CompletionTUInfo,
       /*IncludeBriefComments*/ false);
-  std::string Label;
-  std::string SnippetInsertText;
-  std::string IgnoredLabel;
-  std::string PlainInsertText;
-  getLabelAndInsertText(*CCS, &Label, &SnippetInsertText,
-                        /*EnableSnippets=*/true);
-  getLabelAndInsertText(*CCS, &IgnoredLabel, &PlainInsertText,
-                        /*EnableSnippets=*/false);
-  std::string FilterText = getFilterText(*CCS);
+  std::string Signature;
+  std::string SnippetSuffix;
+  getSignature(*CCS, &Signature, &SnippetSuffix);
   std::string Documentation =
       formatDocumentation(*CCS, getDocComment(Ctx, SymbolCompletion,
                                               /*CommentsFromHeaders=*/true));
-  std::string CompletionDetail = getDetail(*CCS);
+  std::string ReturnType = getReturnType(*CCS);
 
   std::string Include;
   if (Opts.CollectIncludePath && shouldCollectIncludePath(S.SymInfo.Kind)) {
@@ -416,13 +403,11 @@ const Symbol *SymbolCollector::addDeclaration(const NamedDecl &ND,
             QName, SM, SM.getExpansionLoc(ND.getLocation()), Opts))
       Include = std::move(*Header);
   }
-  S.CompletionFilterText = FilterText;
-  S.CompletionLabel = Label;
-  S.CompletionPlainInsertText = PlainInsertText;
-  S.CompletionSnippetInsertText = SnippetInsertText;
+  S.Signature = Signature;
+  S.CompletionSnippetSuffix = SnippetSuffix;
   Symbol::Details Detail;
   Detail.Documentation = Documentation;
-  Detail.CompletionDetail = CompletionDetail;
+  Detail.ReturnType = ReturnType;
   Detail.IncludeHeader = Include;
   S.Detail = &Detail;
 

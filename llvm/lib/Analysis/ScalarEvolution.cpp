@@ -1756,6 +1756,20 @@ ScalarEvolution::getZeroExtendExpr(const SCEV *Op, Type *Ty, unsigned Depth) {
       }
     }
 
+  // zext(A % B) --> zext(A) % zext(B)
+  {
+    const SCEV *LHS;
+    const SCEV *RHS;
+    if (matchURem(Op, LHS, RHS))
+      return getURemExpr(getZeroExtendExpr(LHS, Ty, Depth + 1),
+                         getZeroExtendExpr(RHS, Ty, Depth + 1));
+  }
+
+  // zext(A / B) --> zext(A) / zext(B).
+  if (auto *Div = dyn_cast<SCEVUDivExpr>(Op))
+    return getUDivExpr(getZeroExtendExpr(Div->getLHS(), Ty, Depth + 1),
+                       getZeroExtendExpr(Div->getRHS(), Ty, Depth + 1));
+
   if (auto *SA = dyn_cast<SCEVAddExpr>(Op)) {
     // zext((A + B + ...)<nuw>) --> (zext(A) + zext(B) + ...)<nuw>
     if (SA->hasNoUnsignedWrap()) {
@@ -2233,32 +2247,19 @@ StrengthenNoWrapFlags(ScalarEvolution *SE, SCEVTypes Type,
 
   SignOrUnsignWrap = ScalarEvolution::maskFlags(Flags, SignOrUnsignMask);
 
-  if (SignOrUnsignWrap != SignOrUnsignMask &&
-      (Type == scAddExpr || Type == scMulExpr) && Ops.size() == 2 &&
-      isa<SCEVConstant>(Ops[0])) {
+  if (SignOrUnsignWrap != SignOrUnsignMask && Type == scAddExpr &&
+      Ops.size() == 2 && isa<SCEVConstant>(Ops[0])) {
 
-    auto Opcode = [&] {
-      switch (Type) {
-      case scAddExpr:
-        return Instruction::Add;
-      case scMulExpr:
-        return Instruction::Mul;
-      default:
-        llvm_unreachable("Unexpected SCEV op.");
-      }
-    }();
+    // (A + C) --> (A + C)<nsw> if the addition does not sign overflow
+    // (A + C) --> (A + C)<nuw> if the addition does not unsign overflow
 
     const APInt &C = cast<SCEVConstant>(Ops[0])->getAPInt();
-
-    // (A <opcode> C) --> (A <opcode> C)<nsw> if the op doesn't sign overflow.
     if (!(SignOrUnsignWrap & SCEV::FlagNSW)) {
       auto NSWRegion = ConstantRange::makeGuaranteedNoWrapRegion(
-          Opcode, C, OBO::NoSignedWrap);
+          Instruction::Add, C, OBO::NoSignedWrap);
       if (NSWRegion.contains(SE->getSignedRange(Ops[1])))
         Flags = ScalarEvolution::setFlags(Flags, SCEV::FlagNSW);
     }
-
-    // (A <opcode> C) --> (A <opcode> C)<nuw> if the op doesn't unsign overflow.
     if (!(SignOrUnsignWrap & SCEV::FlagNUW)) {
       auto NUWRegion = ConstantRange::makeGuaranteedNoWrapRegion(
           Instruction::Add, C, OBO::NoUnsignedWrap);
@@ -12170,4 +12171,44 @@ void PredicatedScalarEvolution::print(raw_ostream &OS, unsigned Depth) const {
       OS.indent(Depth + 2) << *Expr << "\n";
       OS.indent(Depth + 2) << "--> " << *II->second.second << "\n";
     }
+}
+
+// Match the mathematical pattern A - (A / B) * B, where A and B can be
+// arbitrary expressions.
+// It's not always easy, as A and B can be folded (imagine A is X / 2, and B is
+// 4, A / B becomes X / 8).
+bool ScalarEvolution::matchURem(const SCEV *Expr, const SCEV *&LHS,
+                                const SCEV *&RHS) {
+  const auto *Add = dyn_cast<SCEVAddExpr>(Expr);
+  if (Add == nullptr || Add->getNumOperands() != 2)
+    return false;
+
+  const SCEV *A = Add->getOperand(1);
+  const auto *Mul = dyn_cast<SCEVMulExpr>(Add->getOperand(0));
+
+  if (Mul == nullptr)
+    return false;
+
+  const auto MatchURemWithDivisor = [&](const SCEV *B) {
+    // (SomeExpr + (-(SomeExpr / B) * B)).
+    if (Expr == getURemExpr(A, B)) {
+      LHS = A;
+      RHS = B;
+      return true;
+    }
+    return false;
+  };
+
+  // (SomeExpr + (-1 * (SomeExpr / B) * B)).
+  if (Mul->getNumOperands() == 3 && isa<SCEVConstant>(Mul->getOperand(0)))
+    return MatchURemWithDivisor(Mul->getOperand(1)) ||
+           MatchURemWithDivisor(Mul->getOperand(2));
+
+  // (SomeExpr + ((-SomeExpr / B) * B)) or (SomeExpr + ((SomeExpr / B) * -B)).
+  if (Mul->getNumOperands() == 2)
+    return MatchURemWithDivisor(Mul->getOperand(1)) ||
+           MatchURemWithDivisor(Mul->getOperand(0)) ||
+           MatchURemWithDivisor(getNegativeSCEV(Mul->getOperand(1))) ||
+           MatchURemWithDivisor(getNegativeSCEV(Mul->getOperand(0)));
+  return false;
 }

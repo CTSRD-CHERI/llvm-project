@@ -749,11 +749,11 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   Opts.ProfileSampleAccurate = Args.hasArg(OPT_fprofile_sample_accurate);
 
   Opts.PrepareForLTO = Args.hasArg(OPT_flto, OPT_flto_EQ);
-  Opts.EmitSummaryIndex = false;
+  Opts.PrepareForThinLTO = false;
   if (Arg *A = Args.getLastArg(OPT_flto_EQ)) {
     StringRef S = A->getValue();
     if (S == "thin")
-      Opts.EmitSummaryIndex = true;
+      Opts.PrepareForThinLTO = true;
     else if (S != "full")
       Diags.Report(diag::err_drv_invalid_value) << A->getAsString(Args) << S;
   }
@@ -2338,6 +2338,10 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.FixedPoint =
       Args.hasFlag(OPT_ffixed_point, OPT_fno_fixed_point, /*Default=*/false) &&
       !Opts.CPlusPlus;
+  Opts.SameFBits =
+      Args.hasFlag(OPT_fsame_fbits, OPT_fno_same_fbits,
+                   /*Default=*/false) &&
+      Opts.FixedPoint;
 
   // Handle exception personalities
   Arg *A = Args.getLastArg(options::OPT_fsjlj_exceptions,
@@ -2772,6 +2776,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   }
 
   Opts.CompleteMemberPointers = Args.hasArg(OPT_fcomplete_member_pointers);
+  Opts.BuildingPCHWithObjectFile = Args.hasArg(OPT_building_pch_with_obj);
 }
 
 static bool isStrictlyPreprocessorAction(frontend::ActionKind Action) {

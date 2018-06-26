@@ -268,17 +268,12 @@ Instruction *InstCombiner::commonCastTransforms(CastInst &CI) {
       // the second cast (CI). CSrc will then have a good chance of being dead.
       auto *Res = CastInst::Create(NewOpc, CSrc->getOperand(0), CI.getType());
 
-      // If the eliminable cast has debug users, insert a debug value after the
-      // cast pointing to the new Value.
-      SmallVector<DbgInfoIntrinsic *, 1> CSrcDbgInsts;
-      findDbgUsers(CSrcDbgInsts, CSrc);
-      if (CSrcDbgInsts.size()) {
-        DIBuilder DIB(*CI.getModule());
-        for (auto *DII : CSrcDbgInsts)
-          DIB.insertDbgValueIntrinsic(
-              Res, DII->getVariable(), DII->getExpression(),
-              DII->getDebugLoc().get(), &*std::next(CI.getIterator()));
-      }
+      // Replace debug users of the eliminable cast by emitting debug values
+      // which refer to the new cast.
+      insertReplacementDbgValues(
+          *CSrc, *Res, *std::next(CI.getIterator()),
+          [](DbgInfoIntrinsic &OldDII) { return OldDII.getExpression(); });
+
       return Res;
     }
   }
@@ -1196,22 +1191,19 @@ Instruction *InstCombiner::transformSExtICmp(ICmpInst *ICI, Instruction &CI) {
   if (!Op1->getType()->isIntOrIntVectorTy())
     return nullptr;
 
-  if (Constant *Op1C = dyn_cast<Constant>(Op1)) {
+  if ((Pred == ICmpInst::ICMP_SLT && match(Op1, m_ZeroInt())) ||
+      (Pred == ICmpInst::ICMP_SGT && match(Op1, m_AllOnes()))) {
     // (x <s  0) ? -1 : 0 -> ashr x, 31        -> all ones if negative
     // (x >s -1) ? -1 : 0 -> not (ashr x, 31)  -> all ones if positive
-    if ((Pred == ICmpInst::ICMP_SLT && Op1C->isNullValue()) ||
-        (Pred == ICmpInst::ICMP_SGT && Op1C->isAllOnesValue())) {
+    Value *Sh = ConstantInt::get(Op0->getType(),
+                                 Op0->getType()->getScalarSizeInBits() - 1);
+    Value *In = Builder.CreateAShr(Op0, Sh, Op0->getName() + ".lobit");
+    if (In->getType() != CI.getType())
+      In = Builder.CreateIntCast(In, CI.getType(), true /*SExt*/);
 
-      Value *Sh = ConstantInt::get(Op0->getType(),
-                                   Op0->getType()->getScalarSizeInBits()-1);
-      Value *In = Builder.CreateAShr(Op0, Sh, Op0->getName() + ".lobit");
-      if (In->getType() != CI.getType())
-        In = Builder.CreateIntCast(In, CI.getType(), true /*SExt*/);
-
-      if (Pred == ICmpInst::ICMP_SGT)
-        In = Builder.CreateNot(In, In->getName() + ".not");
-      return replaceInstUsesWith(CI, In);
-    }
+    if (Pred == ICmpInst::ICMP_SGT)
+      In = Builder.CreateNot(In, In->getName() + ".not");
+    return replaceInstUsesWith(CI, In);
   }
 
   if (ConstantInt *Op1C = dyn_cast<ConstantInt>(Op1)) {

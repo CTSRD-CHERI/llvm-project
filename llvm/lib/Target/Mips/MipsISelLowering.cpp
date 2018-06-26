@@ -802,7 +802,7 @@ static SDValue performSELECTCombine(SDNode *N, SelectionDAG &DAG,
     return DAG.getNode(ISD::ADD, DL, SetCC.getValueType(), SetCC, True);
   }
 
-  // Couldn't optimize.
+  // Could not optimize.
   return SDValue();
 }
 

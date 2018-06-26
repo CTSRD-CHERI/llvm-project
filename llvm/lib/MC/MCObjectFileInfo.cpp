@@ -547,9 +547,7 @@ void MCObjectFileInfo::initELFMCObjectFileInfo(const Triple &T, bool Large) {
   // MIPS .debug_* sections should have SHT_MIPS_DWARF section type
   // to distinguish among sections contain DWARF and ECOFF debug formats.
   // Sections with ECOFF debug format are obsoleted and marked by SHT_PROGBITS.
-  if (T.getArch() == Triple::mips || T.getArch() == Triple::mipsel ||
-      T.getArch() == Triple::mips64 || T.getArch() == Triple::mips64el ||
-      T.getArch() == Triple::cheri)
+  if (T.isMIPS())
     DebugSecType = ELF::SHT_MIPS_DWARF;
 
   // Debug Info Sections.
@@ -966,4 +964,25 @@ void MCObjectFileInfo::InitMCObjectFileInfo(const Triple &TheTriple, bool PIC,
 MCSection *MCObjectFileInfo::getDwarfTypesSection(uint64_t Hash) const {
   return Ctx->getELFSection(".debug_types", ELF::SHT_PROGBITS, ELF::SHF_GROUP,
                             0, utostr(Hash));
+}
+
+MCSection *
+MCObjectFileInfo::getStackSizesSection(const MCSection &TextSec) const {
+  if (Env != IsELF)
+    return StackSizesSection;
+
+  const MCSectionELF &ElfSec = static_cast<const MCSectionELF &>(TextSec);
+  unsigned Flags = ELF::SHF_LINK_ORDER;
+  StringRef GroupName;
+  if (const MCSymbol *Group = ElfSec.getGroup()) {
+    GroupName = Group->getName();
+    Flags |= ELF::SHF_GROUP;
+  }
+
+  const MCSymbol *Link = TextSec.getBeginSymbol();
+  auto It = StackSizesUniquing.insert({Link, StackSizesUniquing.size()});
+  unsigned UniqueID = It.first->second;
+
+  return Ctx->getELFSection(".stack_sizes", ELF::SHT_PROGBITS, Flags, 0,
+                            GroupName, UniqueID, cast<MCSymbolELF>(Link));
 }

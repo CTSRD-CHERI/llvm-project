@@ -1098,7 +1098,7 @@ bool HexagonPacketizerList::isSoloInstruction(const MachineInstr &MI) {
 static bool cannotCoexistAsymm(const MachineInstr &MI, const MachineInstr &MJ,
       const HexagonInstrInfo &HII) {
   const MachineFunction *MF = MI.getParent()->getParent();
-  if (MF->getSubtarget<HexagonSubtarget>().hasV60TOpsOnly() &&
+  if (MF->getSubtarget<HexagonSubtarget>().hasV60OpsOnly() &&
       HII.isHVXMemWithAIndirect(MI, MJ))
     return true;
 
@@ -1115,6 +1115,10 @@ static bool cannotCoexistAsymm(const MachineInstr &MI, const MachineInstr &MJ,
   case Hexagon::S4_stored_locked:
   case Hexagon::L2_loadw_locked:
   case Hexagon::L4_loadd_locked:
+  case Hexagon::Y2_dccleana:
+  case Hexagon::Y2_dccleaninva:
+  case Hexagon::Y2_dcinva:
+  case Hexagon::Y2_dczeroa:
   case Hexagon::Y4_l2fetch:
   case Hexagon::Y5_l2fetch: {
     // These instructions can only be grouped with ALU32 or non-floating-point
@@ -1516,7 +1520,7 @@ bool HexagonPacketizerList::isLegalToPacketizeTogether(SUnit *SUI, SUnit *SUJ) {
       bool IsVecJ = HII->isHVXVec(J);
       bool IsVecI = HII->isHVXVec(I);
 
-      if (Slot1Store && MF.getSubtarget<HexagonSubtarget>().hasV65TOps() &&
+      if (Slot1Store && MF.getSubtarget<HexagonSubtarget>().hasV65Ops() &&
           ((LoadJ && StoreI && !NVStoreI) ||
            (StoreJ && LoadI && !NVStoreJ)) &&
           (J.getOpcode() != Hexagon::S2_allocframe &&
