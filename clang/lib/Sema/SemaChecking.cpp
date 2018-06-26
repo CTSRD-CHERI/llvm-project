@@ -1071,6 +1071,9 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
   case Builtin::BI__builtin_isinf_sign:
   case Builtin::BI__builtin_isnan:
   case Builtin::BI__builtin_isnormal:
+  case Builtin::BI__builtin_signbit:
+  case Builtin::BI__builtin_signbitf:
+  case Builtin::BI__builtin_signbitl:
     if (SemaBuiltinFPClassification(TheCall, 1))
       return ExprError();
     break;
@@ -2410,6 +2413,12 @@ bool Sema::CheckX86BuiltinRoundingOrSAE(unsigned BuiltinID, CallExpr *TheCall) {
   case X86::BI__builtin_ia32_vcvttss2usi64:
     ArgNum = 1;
     break;
+  case X86::BI__builtin_ia32_maxpd512:
+  case X86::BI__builtin_ia32_maxps512:
+  case X86::BI__builtin_ia32_minpd512:
+  case X86::BI__builtin_ia32_minps512:
+    ArgNum = 2;
+    break;
   case X86::BI__builtin_ia32_cvtps2pd512_mask:
   case X86::BI__builtin_ia32_cvttpd2dq512_mask:
   case X86::BI__builtin_ia32_cvttpd2qq512_mask:
@@ -2439,12 +2448,8 @@ bool Sema::CheckX86BuiltinRoundingOrSAE(unsigned BuiltinID, CallExpr *TheCall) {
   case X86::BI__builtin_ia32_cvtss2sd_round_mask:
   case X86::BI__builtin_ia32_getexpsd128_round_mask:
   case X86::BI__builtin_ia32_getexpss128_round_mask:
-  case X86::BI__builtin_ia32_maxpd512_mask:
-  case X86::BI__builtin_ia32_maxps512_mask:
   case X86::BI__builtin_ia32_maxsd_round_mask:
   case X86::BI__builtin_ia32_maxss_round_mask:
-  case X86::BI__builtin_ia32_minpd512_mask:
-  case X86::BI__builtin_ia32_minps512_mask:
   case X86::BI__builtin_ia32_minsd_round_mask:
   case X86::BI__builtin_ia32_minss_round_mask:
   case X86::BI__builtin_ia32_rcp28sd_round_mask:
@@ -3047,7 +3052,12 @@ bool Sema::CheckX86BuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
     i = 4; l = 0; u = 255;
     break;
   }
-  return SemaBuiltinConstantArgRange(TheCall, i, l, u);
+
+  // Note that we don't force a hard error on the range check here, allowing
+  // template-generated or macro-generated dead code to potentially have out-of-
+  // range values. These need to code generate, but don't need to necessarily
+  // make any sense. We use a warning that defaults to an error.
+  return SemaBuiltinConstantArgRange(TheCall, i, l, u, /*RangeIsError*/ false);
 }
 
 /// Given a FunctionDecl's FormatAttr, attempts to populate the FomatStringInfo
@@ -4735,15 +4745,19 @@ bool Sema::SemaBuiltinFPClassification(CallExpr *TheCall, unsigned NumArgs) {
                 diag::err_typecheck_call_invalid_unary_fp)
       << OrigArg->getType() << OrigArg->getSourceRange();
 
-  // If this is an implicit conversion from float -> float or double, remove it.
+  // If this is an implicit conversion from float -> float, double, or
+  // long double, remove it.
   if (ImplicitCastExpr *Cast = dyn_cast<ImplicitCastExpr>(OrigArg)) {
     // Only remove standard FloatCasts, leaving other casts inplace
     if (Cast->getCastKind() == CK_FloatingCast) {
       Expr *CastArg = Cast->getSubExpr();
       if (CastArg->getType()->isSpecificBuiltinType(BuiltinType::Float)) {
-          assert((Cast->getType()->isSpecificBuiltinType(BuiltinType::Double) ||
-                  Cast->getType()->isSpecificBuiltinType(BuiltinType::Float)) &&
-               "promotion from float to either float or double is the only expected cast here");
+        assert(
+            (Cast->getType()->isSpecificBuiltinType(BuiltinType::Double) ||
+             Cast->getType()->isSpecificBuiltinType(BuiltinType::Float) ||
+             Cast->getType()->isSpecificBuiltinType(BuiltinType::LongDouble)) &&
+            "promotion from float to either float, double, or long double is "
+            "the only expected cast here");
         Cast->setSubExpr(nullptr);
         TheCall->setArg(NumArgs-1, CastArg);
       }
@@ -5139,7 +5153,7 @@ bool Sema::SemaBuiltinConstantArg(CallExpr *TheCall, int ArgNum,
 /// SemaBuiltinConstantArgRange - Handle a check if argument ArgNum of CallExpr
 /// TheCall is a constant expression in the range [Low, High].
 bool Sema::SemaBuiltinConstantArgRange(CallExpr *TheCall, int ArgNum,
-                                       int Low, int High) {
+                                       int Low, int High, bool RangeIsError) {
   llvm::APSInt Result;
 
   // We can't check the value of a dependent argument.
@@ -5151,9 +5165,18 @@ bool Sema::SemaBuiltinConstantArgRange(CallExpr *TheCall, int ArgNum,
   if (SemaBuiltinConstantArg(TheCall, ArgNum, Result))
     return true;
 
-  if (Result.getSExtValue() < Low || Result.getSExtValue() > High)
-    return Diag(TheCall->getLocStart(), diag::err_argument_invalid_range)
-      << Low << High << Arg->getSourceRange();
+  if (Result.getSExtValue() < Low || Result.getSExtValue() > High) {
+    if (RangeIsError)
+      return Diag(TheCall->getLocStart(), diag::err_argument_invalid_range)
+             << Result.toString(10) << Low << High << Arg->getSourceRange();
+    else
+      // Defer the warning until we know if the code will be emitted so that
+      // dead code can ignore this.
+      DiagRuntimeBehavior(TheCall->getLocStart(), TheCall,
+                            PDiag(diag::warn_argument_invalid_range)
+                                << Result.toString(10) << Low << High
+                                << Arg->getSourceRange());
+  }
 
   return false;
 }
@@ -6925,11 +6948,11 @@ CheckPrintfHandler::checkFormatExpr(const analyze_printf::PrintfSpecifier &FS,
     ExprTy = TET->getUnderlyingExpr()->getType();
   }
 
-  analyze_printf::ArgType::MatchKind match = AT.matchesType(S.Context, ExprTy);
-
-  if (match == analyze_printf::ArgType::Match) {
+  const analyze_printf::ArgType::MatchKind Match =
+      AT.matchesType(S.Context, ExprTy);
+  bool Pedantic = Match == analyze_printf::ArgType::NoMatchPedantic;
+  if (Match == analyze_printf::ArgType::Match)
     return true;
-  }
 
   // Look through argument promotions for our error message's reported type.
   // This includes the integral and floating promotions, but excludes array
@@ -7005,6 +7028,11 @@ CheckPrintfHandler::checkFormatExpr(const analyze_printf::PrintfSpecifier &FS,
     QualType CastTy;
     std::tie(CastTy, CastTyName) = shouldNotPrintDirectly(S.Context, IntendedTy, E);
     if (!CastTy.isNull()) {
+      // %zi/%zu are OK to use for NSInteger/NSUInteger of type int
+      // (long in ASTContext). Only complain to pedants.
+      if ((CastTyName == "NSInteger" || CastTyName == "NSUInteger") &&
+          AT.isSizeT() && AT.matchesType(S.Context, CastTy))
+        Pedantic = true;
       IntendedTy = CastTy;
       ShouldNotPrintDirectly = true;
     }
@@ -7012,10 +7040,10 @@ CheckPrintfHandler::checkFormatExpr(const analyze_printf::PrintfSpecifier &FS,
 
   // We may be able to offer a FixItHint if it is a supported type.
   PrintfSpecifier fixedFS = FS;
-  bool success =
+  bool Success =
       fixedFS.fixType(IntendedTy, S.getLangOpts(), S.Context, isObjCContext());
 
-  if (success) {
+  if (Success) {
     // Get the fix string from the fixed format specifier
     SmallString<16> buf;
     llvm::raw_svector_ostream os(buf);
@@ -7024,13 +7052,13 @@ CheckPrintfHandler::checkFormatExpr(const analyze_printf::PrintfSpecifier &FS,
     CharSourceRange SpecRange = getSpecifierRange(StartSpecifier, SpecifierLen);
 
     if (IntendedTy == ExprTy && !ShouldNotPrintDirectly) {
-      unsigned diag = diag::warn_format_conversion_argument_type_mismatch;
-      if (match == analyze_format_string::ArgType::NoMatchPedantic) {
-        diag = diag::warn_format_conversion_argument_type_mismatch_pedantic;
-      }
+      unsigned Diag =
+          Pedantic
+              ? diag::warn_format_conversion_argument_type_mismatch_pedantic
+              : diag::warn_format_conversion_argument_type_mismatch;
       // In this case, the specifier is wrong and should be changed to match
       // the argument.
-      EmitFormatDiagnostic(S.PDiag(diag)
+      EmitFormatDiagnostic(S.PDiag(Diag)
                                << AT.getRepresentativeTypeName(S.Context)
                                << IntendedTy << IsEnum << E->getSourceRange(),
                            E->getLocStart(),
@@ -7083,9 +7111,11 @@ CheckPrintfHandler::checkFormatExpr(const analyze_printf::PrintfSpecifier &FS,
           Name = TypedefTy->getDecl()->getName();
         else
           Name = CastTyName;
-        EmitFormatDiagnostic(S.PDiag(diag::warn_format_argument_needs_cast)
-                               << Name << IntendedTy << IsEnum
-                               << E->getSourceRange(),
+        unsigned Diag = Pedantic
+                            ? diag::warn_format_argument_needs_cast_pedantic
+                            : diag::warn_format_argument_needs_cast;
+        EmitFormatDiagnostic(S.PDiag(Diag) << Name << IntendedTy << IsEnum
+                                           << E->getSourceRange(),
                              E->getLocStart(), /*IsStringLocation=*/false,
                              SpecRange, Hints);
       } else {
@@ -7109,13 +7139,13 @@ CheckPrintfHandler::checkFormatExpr(const analyze_printf::PrintfSpecifier &FS,
     switch (S.isValidVarArgType(ExprTy)) {
     case Sema::VAK_Valid:
     case Sema::VAK_ValidInCXX11: {
-      unsigned diag = diag::warn_format_conversion_argument_type_mismatch;
-      if (match == analyze_printf::ArgType::NoMatchPedantic) {
-        diag = diag::warn_format_conversion_argument_type_mismatch_pedantic;
-      }
+      unsigned Diag =
+          Pedantic
+              ? diag::warn_format_conversion_argument_type_mismatch_pedantic
+              : diag::warn_format_conversion_argument_type_mismatch;
 
       EmitFormatDiagnostic(
-          S.PDiag(diag) << AT.getRepresentativeTypeName(S.Context) << ExprTy
+          S.PDiag(Diag) << AT.getRepresentativeTypeName(S.Context) << ExprTy
                         << IsEnum << CSR << E->getSourceRange(),
           E->getLocStart(), /*IsStringLocation*/ false, CSR);
       break;
@@ -7298,29 +7328,28 @@ bool CheckScanfHandler::HandleScanfSpecifier(
     return true;
   }
 
-  analyze_format_string::ArgType::MatchKind match =
+  analyze_format_string::ArgType::MatchKind Match =
       AT.matchesType(S.Context, Ex->getType());
-  if (match == analyze_format_string::ArgType::Match) {
+  bool Pedantic = Match == analyze_format_string::ArgType::NoMatchPedantic;
+  if (Match == analyze_format_string::ArgType::Match)
     return true;
-  }
 
   ScanfSpecifier fixedFS = FS;
-  bool success = fixedFS.fixType(Ex->getType(), Ex->IgnoreImpCasts()->getType(),
+  bool Success = fixedFS.fixType(Ex->getType(), Ex->IgnoreImpCasts()->getType(),
                                  S.getLangOpts(), S.Context);
 
-  unsigned diag = diag::warn_format_conversion_argument_type_mismatch;
-  if (match == analyze_format_string::ArgType::NoMatchPedantic) {
-    diag = diag::warn_format_conversion_argument_type_mismatch_pedantic;
-  }
+  unsigned Diag =
+      Pedantic ? diag::warn_format_conversion_argument_type_mismatch_pedantic
+               : diag::warn_format_conversion_argument_type_mismatch;
 
-  if (success) {
+  if (Success) {
     // Get the fix string from the fixed format specifier.
     SmallString<128> buf;
     llvm::raw_svector_ostream os(buf);
     fixedFS.toString(os);
 
     EmitFormatDiagnostic(
-        S.PDiag(diag) << AT.getRepresentativeTypeName(S.Context)
+        S.PDiag(Diag) << AT.getRepresentativeTypeName(S.Context)
                       << Ex->getType() << false << Ex->getSourceRange(),
         Ex->getLocStart(),
         /*IsStringLocation*/ false,
@@ -7328,7 +7357,7 @@ bool CheckScanfHandler::HandleScanfSpecifier(
         FixItHint::CreateReplacement(
             getSpecifierRange(startSpecifier, specifierLen), os.str()));
   } else {
-    EmitFormatDiagnostic(S.PDiag(diag)
+    EmitFormatDiagnostic(S.PDiag(Diag)
                              << AT.getRepresentativeTypeName(S.Context)
                              << Ex->getType() << false << Ex->getSourceRange(),
                          Ex->getLocStart(),

@@ -60,6 +60,11 @@ static llvm::cl::opt<unsigned>
                    llvm::cl::desc("number of time to repeat the asm snippet"),
                    llvm::cl::init(10000));
 
+static llvm::cl::opt<bool> IgnoreInvalidSchedClass(
+    "ignore-invalid-sched-class",
+    llvm::cl::desc("ignore instructions that do not define a sched class"),
+    llvm::cl::init(false));
+
 static llvm::cl::opt<unsigned> AnalysisNumPoints(
     "analysis-numpoints",
     llvm::cl::desc("minimum number of points in an analysis cluster"),
@@ -80,6 +85,10 @@ static llvm::cl::opt<std::string>
 namespace exegesis {
 
 static llvm::ExitOnError ExitOnErr;
+
+#ifdef LLVM_EXEGESIS_INITIALIZE_NATIVE_TARGET
+void LLVM_EXEGESIS_INITIALIZE_NATIVE_TARGET();
+#endif
 
 static unsigned GetOpcodeOrDie(const llvm::MCInstrInfo &MCInstrInfo) {
   if (OpcodeName.empty() && (OpcodeIndex == 0))
@@ -115,11 +124,23 @@ void benchmarkMain() {
 
   llvm::InitializeNativeTarget();
   llvm::InitializeNativeTargetAsmPrinter();
+#ifdef LLVM_EXEGESIS_INITIALIZE_NATIVE_TARGET
+  LLVM_EXEGESIS_INITIALIZE_NATIVE_TARGET();
+#endif
 
   // FIXME: Target-specific filter.
   X86Filter Filter;
 
   const LLVMState State;
+  const auto Opcode = GetOpcodeOrDie(State.getInstrInfo());
+
+  // Ignore instructions without a sched class if -ignore-invalid-sched-class is
+  // passed.
+  if (IgnoreInvalidSchedClass &&
+      State.getInstrInfo().get(Opcode).getSchedClass() == 0) {
+    llvm::errs() << "ignoring instruction without sched class\n";
+    return;
+  }
 
   // FIXME: Do not require SchedModel for latency.
   if (!State.getSubtargetInfo().getSchedModel().hasExtraProcessorInfo())
@@ -145,8 +166,8 @@ void benchmarkMain() {
     BenchmarkFile = "-";
 
   const BenchmarkResultContext Context = getBenchmarkResultContext(State);
-  std::vector<InstructionBenchmark> Results = ExitOnErr(Runner->run(
-      GetOpcodeOrDie(State.getInstrInfo()), Filter, NumRepetitions));
+  std::vector<InstructionBenchmark> Results =
+      ExitOnErr(Runner->run(Opcode, Filter, NumRepetitions));
   for (InstructionBenchmark &Result : Results)
     ExitOnErr(Result.writeYaml(Context, BenchmarkFile));
 

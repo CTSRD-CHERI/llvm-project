@@ -215,7 +215,7 @@ namespace {
     bool selectTLSADDRAddr(SDValue N, SDValue &Base,
                            SDValue &Scale, SDValue &Index, SDValue &Disp,
                            SDValue &Segment);
-    bool selectScalarSSELoad(SDNode *Root, SDValue N,
+    bool selectScalarSSELoad(SDNode *Root, SDNode *Parent, SDValue N,
                              SDValue &Base, SDValue &Scale,
                              SDValue &Index, SDValue &Disp,
                              SDValue &Segment,
@@ -470,7 +470,7 @@ namespace {
 // type.
 static bool isLegalMaskCompare(SDNode *N, const X86Subtarget *Subtarget) {
   unsigned Opcode = N->getOpcode();
-  if (Opcode == X86ISD::CMPM || Opcode == X86ISD::CMPMU ||
+  if (Opcode == X86ISD::CMPM || Opcode == ISD::SETCC ||
       Opcode == X86ISD::CMPM_RND || Opcode == X86ISD::VFPCLASS) {
     // We can get 256-bit 8 element types here without VLX being enabled. When
     // this happens we will use 512-bit operations and the mask will not be
@@ -940,11 +940,13 @@ bool X86DAGToDAGISel::matchWrapper(SDValue N, X86ISelAddressMode &AM) {
 
   bool IsRIPRel = N.getOpcode() == X86ISD::WrapperRIP;
 
-  // Only do this address mode folding for 64-bit if we're in the small code
-  // model.
-  // FIXME: But we can do GOTPCREL addressing in the medium code model.
+  // We can't use an addressing mode in the 64-bit large code model. In the
+  // medium code model, we use can use an mode when RIP wrappers are present.
+  // That signifies access to globals that are known to be "near", such as the
+  // GOT itself.
   CodeModel::Model M = TM.getCodeModel();
-  if (Subtarget->is64Bit() && M != CodeModel::Small && M != CodeModel::Kernel)
+  if (Subtarget->is64Bit() &&
+      (M == CodeModel::Large || (M == CodeModel::Medium && !IsRIPRel)))
     return true;
 
   // Base and index reg must be 0 in order to use %rip as base.
@@ -1685,8 +1687,7 @@ bool X86DAGToDAGISel::selectAddr(SDNode *Parent, SDValue N, SDValue &Base,
 // We can only fold a load if all nodes between it and the root node have a
 // single use. If there are additional uses, we could end up duplicating the
 // load.
-static bool hasSingleUsesFromRoot(SDNode *Root, SDNode *N) {
-  SDNode *User = *N->use_begin();
+static bool hasSingleUsesFromRoot(SDNode *Root, SDNode *User) {
   while (User != Root) {
     if (!User->hasOneUse())
       return false;
@@ -1703,17 +1704,19 @@ static bool hasSingleUsesFromRoot(SDNode *Root, SDNode *N) {
 /// We also return:
 ///   PatternChainNode: this is the matched node that has a chain input and
 ///   output.
-bool X86DAGToDAGISel::selectScalarSSELoad(SDNode *Root,
+bool X86DAGToDAGISel::selectScalarSSELoad(SDNode *Root, SDNode *Parent,
                                           SDValue N, SDValue &Base,
                                           SDValue &Scale, SDValue &Index,
                                           SDValue &Disp, SDValue &Segment,
                                           SDValue &PatternNodeWithChain) {
+  if (!hasSingleUsesFromRoot(Root, Parent))
+    return false;
+
   // We can allow a full vector load here since narrowing a load is ok.
   if (ISD::isNON_EXTLoad(N.getNode())) {
     PatternNodeWithChain = N;
     if (IsProfitableToFold(PatternNodeWithChain, N.getNode(), Root) &&
-        IsLegalToFold(PatternNodeWithChain, *N->use_begin(), Root, OptLevel) &&
-        hasSingleUsesFromRoot(Root, N.getNode())) {
+        IsLegalToFold(PatternNodeWithChain, Parent, Root, OptLevel)) {
       LoadSDNode *LD = cast<LoadSDNode>(PatternNodeWithChain);
       return selectAddr(LD, LD->getBasePtr(), Base, Scale, Index, Disp,
                         Segment);
@@ -1724,8 +1727,7 @@ bool X86DAGToDAGISel::selectScalarSSELoad(SDNode *Root,
   if (N.getOpcode() == X86ISD::VZEXT_LOAD) {
     PatternNodeWithChain = N;
     if (IsProfitableToFold(PatternNodeWithChain, N.getNode(), Root) &&
-        IsLegalToFold(PatternNodeWithChain, *N->use_begin(), Root, OptLevel) &&
-        hasSingleUsesFromRoot(Root, N.getNode())) {
+        IsLegalToFold(PatternNodeWithChain, Parent, Root, OptLevel)) {
       auto *MI = cast<MemIntrinsicSDNode>(PatternNodeWithChain);
       return selectAddr(MI, MI->getBasePtr(), Base, Scale, Index, Disp,
                         Segment);
@@ -1739,8 +1741,7 @@ bool X86DAGToDAGISel::selectScalarSSELoad(SDNode *Root,
     PatternNodeWithChain = N.getOperand(0);
     if (ISD::isNON_EXTLoad(PatternNodeWithChain.getNode()) &&
         IsProfitableToFold(PatternNodeWithChain, N.getNode(), Root) &&
-        IsLegalToFold(PatternNodeWithChain, N.getNode(), Root, OptLevel) &&
-        hasSingleUsesFromRoot(Root, N.getNode())) {
+        IsLegalToFold(PatternNodeWithChain, N.getNode(), Root, OptLevel)) {
       LoadSDNode *LD = cast<LoadSDNode>(PatternNodeWithChain);
       return selectAddr(LD, LD->getBasePtr(), Base, Scale, Index, Disp,
                         Segment);
@@ -1756,8 +1757,7 @@ bool X86DAGToDAGISel::selectScalarSSELoad(SDNode *Root,
     PatternNodeWithChain = N.getOperand(0).getOperand(0);
     if (ISD::isNON_EXTLoad(PatternNodeWithChain.getNode()) &&
         IsProfitableToFold(PatternNodeWithChain, N.getNode(), Root) &&
-        IsLegalToFold(PatternNodeWithChain, N.getNode(), Root, OptLevel) &&
-        hasSingleUsesFromRoot(Root, N.getNode())) {
+        IsLegalToFold(PatternNodeWithChain, N.getNode(), Root, OptLevel)) {
       // Okay, this is a zero extending load.  Fold it.
       LoadSDNode *LD = cast<LoadSDNode>(PatternNodeWithChain);
       return selectAddr(LD, LD->getBasePtr(), Base, Scale, Index, Disp,

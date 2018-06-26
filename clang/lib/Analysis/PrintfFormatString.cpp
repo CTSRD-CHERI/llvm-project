@@ -468,7 +468,7 @@ ArgType PrintfSpecifier::getArgType(ASTContext &Ctx,
       case LengthModifier::AsIntPtr:
         return ArgType(Ctx.getIntPtrType(), "intptr_t");
       case LengthModifier::AsSizeT:
-        return ArgType(Ctx.getSignedSizeType(), "ssize_t");
+        return ArgType::makeSizeT(ArgType(Ctx.getSignedSizeType(), "ssize_t"));
       case LengthModifier::AsInt3264:
         return Ctx.getTargetInfo().getTriple().isArch64Bit()
                    ? ArgType(Ctx.LongLongTy, "__int64")
@@ -503,7 +503,7 @@ ArgType PrintfSpecifier::getArgType(ASTContext &Ctx,
       case LengthModifier::AsIntPtr:
         return ArgType(Ctx.getUIntPtrType(), "uintptr_t");
       case LengthModifier::AsSizeT:
-        return ArgType(Ctx.getSizeType(), "size_t");
+        return ArgType::makeSizeT(ArgType(Ctx.getSizeType(), "size_t"));
       case LengthModifier::AsInt3264:
         return Ctx.getTargetInfo().getTriple().isArch64Bit()
                    ? ArgType(Ctx.UnsignedLongLongTy, "unsigned __int64")

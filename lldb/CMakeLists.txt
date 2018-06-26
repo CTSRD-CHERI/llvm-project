@@ -37,7 +37,25 @@ if(APPLE)
   add_definitions(-DLLDB_USE_OS_LOG)
 endif()
 
+# lldb-suite is a dummy target that encompasses all the necessary tools and
+# libraries for building a fully-functioning liblldb.
+add_custom_target(lldb-suite)
+
+option(LLDB_BUILD_FRAMEWORK "Build the Darwin LLDB.framework" Off)
 if(LLDB_BUILD_FRAMEWORK)
+  if (CMAKE_VERSION VERSION_LESS 3.7)
+    message(FATAL_ERROR "LLDB_BUILD_FRAMEWORK is not supported on CMake < 3.7")
+  endif()
+  if (NOT APPLE)
+    message(FATAL_ERROR "LLDB.framework can only be generated when targeting Apple platforms")
+  endif()
+
+  # These are used to fill out LLDB-Info.plist. These are relevant when building
+  # the framework, and must be defined before building liblldb.
+  set(PRODUCT_NAME "LLDB")
+  set(EXECUTABLE_NAME "LLDB")
+  set(CURRENT_PROJECT_VERSION "360.99.0")
+
   set(LLDB_FRAMEWORK_DIR
     ${CMAKE_BINARY_DIR}/${CMAKE_CFG_INTDIR}/${LLDB_FRAMEWORK_INSTALL_DIR})
 endif()
@@ -129,6 +147,13 @@ if(LLDB_INCLUDE_TESTS)
   add_subdirectory(utils/lldb-dotest)
 endif()
 
+if (LLDB_BUILD_FRAMEWORK)
+  add_custom_target(lldb-framework)
+  include(LLDBFramework)
+  add_dependencies(lldb-suite lldb-framework)
+endif()
+add_dependencies(lldb-suite liblldb)
+
 if (NOT LLDB_DISABLE_PYTHON)
     # Add a Post-Build Event to copy over Python files and create the symlink
     # to liblldb.so for the Python API(hardlink on Windows)
@@ -147,8 +172,9 @@ if (NOT LLDB_DISABLE_PYTHON)
         DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/scripts/finishSwigWrapperClasses.py
         DEPENDS ${LLDB_PYTHON_TARGET_DIR}/lldb.py
         COMMENT "Python script sym-linking LLDB Python API")
-    # We depend on liblldb being built before we can do this step.
-    add_dependencies(finish_swig liblldb lldb-argdumper)
+
+    # We depend on liblldb and lldb-argdumper being built before we can do this step.
+    add_dependencies(finish_swig lldb-suite)
 
     # If we build the readline module, we depend on that happening
     # first.
@@ -159,8 +185,8 @@ if (NOT LLDB_DISABLE_PYTHON)
     # Ensure we do the python post-build step when building lldb.
     add_dependencies(lldb finish_swig)
 
-    if(LLDB_BUILD_FRAMEWORK)
-      # The target to install libLLDB needs to depend on finish swig so that the
+    if (LLDB_BUILD_FRAMEWORK)
+      # The target to install libLLDB needs to depend on finish_swig so that the
       # framework build properly copies over the Python files.
       add_dependencies(install-liblldb finish_swig)
     endif()

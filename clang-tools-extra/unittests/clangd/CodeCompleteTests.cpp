@@ -44,6 +44,7 @@ class IgnoreDiagnostics : public DiagnosticsConsumer {
 
 // GMock helpers for matching completion items.
 MATCHER_P(Named, Name, "") { return arg.insertText == Name; }
+MATCHER_P(Scope, Name, "") { return arg.SymbolScope == Name; }
 MATCHER_P(Labeled, Label, "") {
   std::string Indented;
   if (!StringRef(Label).startswith(
@@ -163,9 +164,6 @@ Symbol sym(StringRef QName, index::SymbolKind Kind, StringRef USRFormat) {
   }
   USR += Regex("^.*$").sub(USRFormat, Sym.Name); // e.g. func -> @F@func#
   Sym.ID = SymbolID(USR);
-  Sym.CompletionPlainInsertText = Sym.Name;
-  Sym.CompletionSnippetInsertText = Sym.Name;
-  Sym.CompletionLabel = Sym.Name;
   Sym.SymInfo.Kind = Kind;
   Sym.IsIndexedForCodeCompletion = true;
   return Sym;
@@ -1212,6 +1210,9 @@ TEST(CompletionTest, NonDocComments) {
       int a = comments^;
     }
   )cpp");
+  // FIXME: Auto-completion in a template requires disabling delayed template
+  // parsing.
+  CDB.ExtraClangFlags.push_back("-fno-delayed-template-parsing");
   Server.addDocument(FooCpp, Source.code(), WantDiagnostics::Yes);
   CompletionList Completions = cantFail(runCodeComplete(
       Server, FooCpp, Source.point(), clangd::CodeCompleteOptions()));
@@ -1248,6 +1249,17 @@ TEST(CompletionTest, CompleteOnInvalidLine) {
       Failed());
 }
 
+TEST(CompletionTest, QualifiedNames) {
+  auto Results = completions(
+      R"cpp(
+          namespace ns { int local; void both(); }
+          void f() { ::ns::^ }
+      )cpp",
+      {func("ns::both"), cls("ns::Index")});
+  // We get results from both index and sema, with no duplicates.
+  EXPECT_THAT(Results.items, UnorderedElementsAre(Scope("ns::"), Scope("ns::"),
+                                                  Scope("ns::")));
+}
 
 } // namespace
 } // namespace clangd

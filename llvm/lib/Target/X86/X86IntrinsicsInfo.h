@@ -20,7 +20,6 @@
 namespace llvm {
 
 enum IntrinsicType : uint16_t {
-  INTR_NO_TYPE,
   GATHER, SCATTER, PREFETCH, RDSEED, RDRAND, RDPMC, RDTSC, XTEST, XGETBV, ADX, FPCLASS, FPCLASSS,
   INTR_TYPE_1OP, INTR_TYPE_2OP, INTR_TYPE_3OP, INTR_TYPE_4OP,
   INTR_TYPE_3OP_RM, INTR_TYPE_3OP_IMM8,
@@ -52,6 +51,9 @@ struct IntrinsicData {
   }
   bool operator==(const IntrinsicData &RHS) const {
     return RHS.Id == Id;
+  }
+  friend bool operator<(const IntrinsicData &LHS, unsigned Id) {
+    return LHS.Id < Id;
   }
 };
 
@@ -279,13 +281,11 @@ static const IntrinsicData IntrinsicsWithChain[] = {
 /*
  * Find Intrinsic data by intrinsic ID
  */
-static const IntrinsicData* getIntrinsicWithChain(uint16_t IntNo) {
-
-  IntrinsicData IntrinsicToFind = {IntNo, INTR_NO_TYPE, 0, 0 };
+static const IntrinsicData* getIntrinsicWithChain(unsigned IntNo) {
   const IntrinsicData *Data =  std::lower_bound(std::begin(IntrinsicsWithChain),
                                                 std::end(IntrinsicsWithChain),
-                                                IntrinsicToFind);
-  if (Data != std::end(IntrinsicsWithChain) && *Data == IntrinsicToFind)
+                                                IntNo);
+  if (Data != std::end(IntrinsicsWithChain) && Data->Id == IntNo)
     return Data;
   return nullptr;
 }
@@ -668,18 +668,10 @@ static const IntrinsicData  IntrinsicsWithoutChain[] = {
                      X86ISD::VGETMANTS, X86ISD::VGETMANTS_RND),
   X86_INTRINSIC_DATA(avx512_mask_getmant_ss, INTR_TYPE_3OP_SCALAR_MASK,
                      X86ISD::VGETMANTS, X86ISD::VGETMANTS_RND),
-  X86_INTRINSIC_DATA(avx512_mask_max_pd_512, INTR_TYPE_2OP_MASK, X86ISD::FMAX,
-                     X86ISD::FMAX_RND),
-  X86_INTRINSIC_DATA(avx512_mask_max_ps_512, INTR_TYPE_2OP_MASK, X86ISD::FMAX,
-                     X86ISD::FMAX_RND),
   X86_INTRINSIC_DATA(avx512_mask_max_sd_round, INTR_TYPE_SCALAR_MASK,
                      X86ISD::FMAXS, X86ISD::FMAXS_RND),
   X86_INTRINSIC_DATA(avx512_mask_max_ss_round, INTR_TYPE_SCALAR_MASK,
                      X86ISD::FMAXS, X86ISD::FMAXS_RND),
-  X86_INTRINSIC_DATA(avx512_mask_min_pd_512, INTR_TYPE_2OP_MASK, X86ISD::FMIN,
-                     X86ISD::FMIN_RND),
-  X86_INTRINSIC_DATA(avx512_mask_min_ps_512, INTR_TYPE_2OP_MASK, X86ISD::FMIN,
-                     X86ISD::FMIN_RND),
   X86_INTRINSIC_DATA(avx512_mask_min_sd_round, INTR_TYPE_SCALAR_MASK,
                      X86ISD::FMINS, X86ISD::FMINS_RND),
   X86_INTRINSIC_DATA(avx512_mask_min_ss_round, INTR_TYPE_SCALAR_MASK,
@@ -1085,6 +1077,10 @@ static const IntrinsicData  IntrinsicsWithoutChain[] = {
   X86_INTRINSIC_DATA(avx512_maskz_vpshrdv_w_256, FMA_OP_MASKZ, X86ISD::VSHRDV, 0),
   X86_INTRINSIC_DATA(avx512_maskz_vpshrdv_w_512, FMA_OP_MASKZ, X86ISD::VSHRDV, 0),
 
+  X86_INTRINSIC_DATA(avx512_max_pd_512, INTR_TYPE_2OP, X86ISD::FMAX, X86ISD::FMAX_RND),
+  X86_INTRINSIC_DATA(avx512_max_ps_512, INTR_TYPE_2OP, X86ISD::FMAX, X86ISD::FMAX_RND),
+  X86_INTRINSIC_DATA(avx512_min_pd_512, INTR_TYPE_2OP, X86ISD::FMIN, X86ISD::FMIN_RND),
+  X86_INTRINSIC_DATA(avx512_min_ps_512, INTR_TYPE_2OP, X86ISD::FMIN, X86ISD::FMIN_RND),
   X86_INTRINSIC_DATA(avx512_mul_pd_512, INTR_TYPE_2OP, ISD::FMUL, X86ISD::FMUL_RND),
   X86_INTRINSIC_DATA(avx512_mul_ps_512, INTR_TYPE_2OP, ISD::FMUL, X86ISD::FMUL_RND),
   X86_INTRINSIC_DATA(avx512_packssdw_512, INTR_TYPE_2OP, X86ISD::PACKSS, 0),
@@ -1427,12 +1423,11 @@ static const IntrinsicData  IntrinsicsWithoutChain[] = {
  * Retrieve data for Intrinsic without chain.
  * Return nullptr if intrinsic is not defined in the table.
  */
-static const IntrinsicData* getIntrinsicWithoutChain(uint16_t IntNo) {
-  IntrinsicData IntrinsicToFind = { IntNo, INTR_NO_TYPE, 0, 0 };
+static const IntrinsicData* getIntrinsicWithoutChain(unsigned IntNo) {
   const IntrinsicData *Data = std::lower_bound(std::begin(IntrinsicsWithoutChain),
                                                std::end(IntrinsicsWithoutChain),
-                                               IntrinsicToFind);
-  if (Data != std::end(IntrinsicsWithoutChain) && *Data == IntrinsicToFind)
+                                               IntNo);
+  if (Data != std::end(IntrinsicsWithoutChain) && Data->Id == IntNo)
     return Data;
   return nullptr;
 }

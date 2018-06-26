@@ -26,11 +26,11 @@
 
 namespace mca {
 
-class Backend;
+class Pipeline;
 
 class ExecuteStage : public Stage {
   // Owner will go away when we move listeners/eventing to the stages.
-  Backend *Owner;
+  Pipeline *Owner;
   RetireControlUnit &RCU;
   Scheduler &HWS;
 
@@ -40,10 +40,14 @@ class ExecuteStage : public Stage {
   void issueReadyInstructions();
 
 public:
-  ExecuteStage(Backend *B, RetireControlUnit &R, Scheduler &S)
-      : Stage(), Owner(B), RCU(R), HWS(S) {}
+  ExecuteStage(Pipeline *P, RetireControlUnit &R, Scheduler &S)
+      : Stage(), Owner(P), RCU(R), HWS(S) {}
   ExecuteStage(const ExecuteStage &Other) = delete;
   ExecuteStage &operator=(const ExecuteStage &Other) = delete;
+
+  // The ExecuteStage will always complete all of its work per call to
+  // execute(), so it is never left in a 'to-be-processed' state.
+  virtual bool hasWorkToComplete() const override final { return false; }
 
   virtual void preExecute(const InstRef &IR) override final;
   virtual bool execute(InstRef &IR) override final;

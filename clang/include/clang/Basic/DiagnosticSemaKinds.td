@@ -2603,6 +2603,9 @@ def err_attribute_address_space_too_high : Error<
   "address space is larger than the maximum supported (%0)">;
 def err_attribute_address_multiple_qualifiers : Error<
   "multiple address spaces specified for type">;
+def warn_attribute_address_multiple_identical_qualifiers : Warning<
+  "multiple identical address spaces specified for type">,
+  InGroup<DuplicateDeclSpecifier>;
 def err_attribute_address_function_type : Error<
   "function type may not be qualified with an address space">;
 def err_as_qualified_auto_decl : Error<
@@ -3720,8 +3723,8 @@ def note_ovl_candidate_bad_lvalue : Note<
     "%select{%ordinal4 argument|object argument}3">;
 def note_ovl_candidate_bad_addrspace : Note<
     "candidate %sub{select_ovl_candidate_kind}0,1,2 not viable: "
-    "%select{%ordinal7|'this'}6 argument (%3) is in "
-    "address space %4, but parameter must be in address space %5">;
+    "address space mismatch in %select{%ordinal6|'this'}5 argument (%3), "
+    "parameter type must be %4">;
 def note_ovl_candidate_bad_gc : Note<
     "candidate %sub{select_ovl_candidate_kind}0,1,2 not viable: "
     "%select{%ordinal7|'this'}6 argument (%3) has %select{no|__weak|__strong}4 "
@@ -7867,6 +7870,10 @@ def warn_format_argument_needs_cast : Warning<
   "%select{values of type|enum values with underlying type}2 '%0' should not "
   "be used as format arguments; add an explicit cast to %1 instead">,
   InGroup<Format>;
+def warn_format_argument_needs_cast_pedantic : Warning<
+  "%select{values of type|enum values with underlying type}2 '%0' should not "
+  "be used as format arguments; add an explicit cast to %1 instead">,
+  InGroup<FormatPedantic>, DefaultIgnore;
 def warn_printf_positional_arg_exceeds_data_args : Warning <
   "data argument position '%0' exceeds the number of data arguments (%1)">,
   InGroup<Format>;
@@ -8280,7 +8287,10 @@ def err_altivec_empty_initializer : Error<"expected initializer">;
 def err_invalid_neon_type_code : Error<
   "incompatible constant for this __builtin_neon function">; 
 def err_argument_invalid_range : Error<
-  "argument should be a value from %0 to %1">;
+  "argument value %0 is outside the valid range [%1, %2]">;
+def warn_argument_invalid_range : Warning<
+  "argument value %0 is outside the valid range [%1, %2]">, DefaultError,
+  InGroup<DiagGroup<"argument-outside-range">>;
 def err_argument_not_multiple : Error<
   "argument should be a multiple of %0">;
 def warn_neon_vector_initializer_non_portable : Warning<
