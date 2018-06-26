@@ -82,7 +82,7 @@ void __start(void) {}
 
 // DUMP-CAPRELOCS-LABEL: Contents of section .global_sizes:
 // DUMP-CAPRELOCS-NEXT:   00000000 00000004                    ........
-// DUMP-CAPRELOCS-NEXT:  Contents of section .MIPS.abiflags:
+// DUMP-CAPRELOCS-NEXT:  Contents of section
 
 // DUMP-CAPRELOCS-LABEL: SYMBOL TABLE:
 // DUMP-CAPRELOCS: 0000000000000000         *UND*           00000000

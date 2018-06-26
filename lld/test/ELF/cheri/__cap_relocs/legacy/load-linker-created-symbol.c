@@ -44,6 +44,7 @@ void __start(void) {
 // WITH-CTORS:       .ctors        00000008 0000000120030000 DATA
 // WITH-CTORS-LABEL: SYMBOL TABLE:
 // WITH-CTORS-NEXT:  0000000000000000         *UND*		 00000000
+// WITH-CTORS-NEXT:  0000000000000000 l df    *ABS* 00000000 load-linker-created-symbol.c
 // WITH-CTORS-NEXT:  0000000120030008         .ctors		 00000000 .hidden __ctors_end
 // WITH-CTORS-NEXT:  0000000120030000         .ctors		 00000008 .hidden __ctors_start
 
@@ -51,5 +52,6 @@ void __start(void) {
 // EMPTY-CTORS-NOT: .ctors
 // EMPTY-CTORS-LABEL: SYMBOL TABLE:
 // EMPTY-CTORS-NEXT:  0000000000000000         *UND*		 00000000
+// EMPTY-CTORS-NEXT:  0000000000000000 l df    *ABS* 00000000 load-linker-created-symbol.c
 // EMPTY-CTORS-NEXT:  0000000000000000         *ABS*		 00000000 .hidden __ctors_end
 // EMPTY-CTORS-NEXT:  0000000000000000         *ABS*		 00000000 .hidden __ctors_start

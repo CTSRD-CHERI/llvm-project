@@ -72,7 +72,7 @@ void __start(void) {
 // DUMP-EXE-LABEL: Sections:
 // DUMP-EXE: .global_sizes 00000030 0000000120000158 DATA
 // DUMP-SHLIB-LABEL: Sections:
-// DUMP-SHLIB: .global_sizes 00000030 0000000000000190 DATA
+// DUMP-SHLIB: .global_sizes 00000030 00000000000003a8 DATA
 
 // GLOBAL_SIZES-LABEL: Contents of section .global_sizes:
 // .size.external_cap then .size.external_buffer (0x10 or 0x20)
@@ -104,8 +104,8 @@ void __start(void) {
 // DUMP-EXE: 0000000120000180 gw      .global_sizes           00000008 .size.other_var
 
 // DUMP-SHLIB-LABEL: SYMBOL TABLE:
-// DUMP-SHLIB: 00000000000001a0 gw      .global_sizes           00000008 .size.bar
-// DUMP-SHLIB: 0000000000000198 gw      .global_sizes           00000008 .size.external_buffer
-// DUMP-SHLIB: 0000000000000190 gw      .global_sizes           00000008 .size.external_cap
-// DUMP-SHLIB: 00000000000001a8 gw      .global_sizes           00000008 .size.foo
-// DUMP-SHLIB: 00000000000001b8 gw      .global_sizes           00000008 .size.other_var
+// DUMP-SHLIB: 00000000000003b8 gw      .global_sizes           00000008 .size.bar
+// DUMP-SHLIB: 00000000000003b0 gw      .global_sizes           00000008 .size.external_buffer
+// DUMP-SHLIB: 00000000000003a8 gw      .global_sizes           00000008 .size.external_cap
+// DUMP-SHLIB: 00000000000003c0 gw      .global_sizes           00000008 .size.foo
+// DUMP-SHLIB: 00000000000003d0 gw      .global_sizes           00000008 .size.other_var

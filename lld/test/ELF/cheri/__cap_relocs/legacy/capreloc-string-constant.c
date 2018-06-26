@@ -100,18 +100,18 @@ struct option options_table[] = {
 // STATIC-NEXT: 0x0000000120010{{120|090}}     Base: <Unnamed symbol> (0x0000000120000196)     Offset: 0x0000000000000001      Length: 0x0000000000000011      Permissions: 0x00000000{{$}}
 
 // PIE exe amd shlib should have dynamic relocations and only the offset values
-// DYNAMIC-NEXT: 0x00000000000100{{20|10}}      Base: <Unnamed symbol> (0x00000000000001c8)     Offset: 0x0000000000000000      Length: 0x0000000000000017      Permissions: 0x00000000
-// DYNAMIC-NEXT: 0x00000000000100{{60|30}}      Base: <Unnamed symbol> (0x00000000000001d8)     Offset: 0x0000000000000004      Length: 0x0000000000000007      Permissions: 0x00000000
-// DYNAMIC-NEXT: 0x00000000000100{{a0|50}}      Base: <Unnamed symbol> (0x00000000000001ce)     Offset: 0x0000000000000000      Length: 0x0000000000000011      Permissions: 0x00000000
-// DYNAMIC-NEXT: 0x00000000000100{{e0|70}}      Base: <Unnamed symbol> (0x00000000000001ce)     Offset: 0x0000000000000000      Length: 0x0000000000000011      Permissions: 0x00000000
-// DYNAMIC-NEXT: 0x0000000000010{{120|090}}     Base: <Unnamed symbol> (0x00000000000001ce)     Offset: 0x0000000000000001      Length: 0x0000000000000011      Permissions: 0x00000000{{$}}
+// DYNAMIC-NEXT: 0x00000000000100{{20|10}}      Base: <Unnamed symbol> (0x0000000000000{{1e1|207}})     Offset: 0x0000000000000000      Length: 0x0000000000000017      Permissions: 0x00000000
+// DYNAMIC-NEXT: 0x00000000000100{{60|30}}      Base: <Unnamed symbol> (0x0000000000000{{1f1|217}})     Offset: 0x0000000000000004      Length: 0x0000000000000007      Permissions: 0x00000000
+// DYNAMIC-NEXT: 0x00000000000100{{a0|50}}      Base: <Unnamed symbol> (0x0000000000000{{1e7|20d}})     Offset: 0x0000000000000000      Length: 0x0000000000000011      Permissions: 0x00000000
+// DYNAMIC-NEXT: 0x00000000000100{{e0|70}}      Base: <Unnamed symbol> (0x0000000000000{{1e7|20d}})     Offset: 0x0000000000000000      Length: 0x0000000000000011      Permissions: 0x00000000
+// DYNAMIC-NEXT: 0x0000000000010{{120|090}}     Base: <Unnamed symbol> (0x0000000000000{{1e7|20d}})     Offset: 0x0000000000000001      Length: 0x0000000000000011      Permissions: 0x00000000{{$}}
 
 
 // The external capsizefix doesn;t set the length correctly:
-// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x00000001200100{{20|10}}      Base: <Unnamed symbol> (0x0000000120000190)     Offset: 0x0000000000000000      Length: 0x0000000000000000      Permissions: 0x00000000
-// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x00000001200100{{60|30}}      Base: <Unnamed symbol> (0x00000001200001a0)     Offset: 0x0000000000000004      Length: 0x0000000000000017      Permissions: 0x00000000
-// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x00000001200100{{a0|50}}      Base: <Unnamed symbol> (0x0000000120000196)     Offset: 0x0000000000000000      Length: 0x0000000000000017      Permissions: 0x00000000
-// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x00000001200100{{e0|70}}      Base: <Unnamed symbol> (0x0000000120000196)     Offset: 0x0000000000000000      Length: 0x0000000000000017      Permissions: 0x00000000
-// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x0000000120010{{120|090}}      Base: <Unnamed symbol> (0x0000000120000196)     Offset: 0x0000000000000001      Length: 0x0000000000000017      Permissions: 0x00000000{{$}}
+// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x00000001200100{{20|10}}      Base: <Unnamed symbol> (0x0000000120000158)     Offset: 0x0000000000000000      Length: 0x0000000000000000      Permissions: 0x00000000
+// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x00000001200100{{60|30}}      Base: <Unnamed symbol> (0x0000000120000168)     Offset: 0x0000000000000004      Length: 0x0000000000000017      Permissions: 0x00000000
+// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x00000001200100{{a0|50}}      Base: <Unnamed symbol> (0x000000012000015e)     Offset: 0x0000000000000000      Length: 0x0000000000000017      Permissions: 0x00000000
+// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x00000001200100{{e0|70}}      Base: <Unnamed symbol> (0x000000012000015e)     Offset: 0x0000000000000000      Length: 0x0000000000000017      Permissions: 0x00000000
+// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x0000000120010{{120|090}}     Base: <Unnamed symbol> (0x000000012000015e)     Offset: 0x0000000000000001      Length: 0x0000000000000017      Permissions: 0x00000000{{$}}
 
 // DUMP-CAPRELOCS-SAME:{{[[:space:]]$}}

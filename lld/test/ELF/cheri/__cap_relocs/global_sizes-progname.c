@@ -31,4 +31,4 @@ char* getenv(void) {
 // PHDRS-NEXT:   05
 
 // DUMP:      Contents of section .global_sizes:
-// DUMP-NEXT: 0190 00000000 000000{{1|2}}0 00000000 000000{{1|2}}0
+// DUMP-NEXT: 00000000 000000{{1|2}}0 00000000 000000{{1|2}}0
