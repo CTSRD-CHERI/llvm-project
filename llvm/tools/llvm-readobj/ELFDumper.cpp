@@ -22,9 +22,9 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/PointerIntPair.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
@@ -57,6 +57,7 @@
 #include <memory>
 #include <string>
 #include <system_error>
+#include <unordered_map>
 #include <vector>
 
 using namespace llvm;
@@ -161,6 +162,7 @@ public:
   void printMipsABIFlags() override;
   void printMipsReginfo() override;
   void printMipsOptions() override;
+  void printCheriCapRelocs() override;
 
   void printStackMap() const override;
 
@@ -2348,6 +2350,132 @@ template <class ELFT> void ELFDumper<ELFT>::printMipsABIFlags() {
   W.printNumber("CPR2 size", getMipsRegisterSize(Flags->cpr2_size));
   W.printFlags("Flags 1", Flags->flags1, makeArrayRef(ElfMipsFlags1));
   W.printHex("Flags 2", Flags->flags2);
+}
+
+static const EnumEntry<uint64_t> CapRelocsPermsFlags[] = {
+    {"Function", 0x8000000000000000ULL}};
+
+template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
+  const Elf_Shdr *Shdr = findSectionByName(*Obj, "__cap_relocs");
+  if (!Shdr) {
+    W.startLine() << "There is no __cap_relocs section in the file.\n";
+    return;
+  }
+  // TODO: get symbol name for __cap_reloc
+  ArrayRef<uint8_t> Data = unwrapOrError(Obj->getSectionContents(Shdr));
+  const uint64_t CapRelocsFileOffset = Shdr->sh_offset;
+  const uint64_t CapRelocsEnd = Shdr->sh_offset + Shdr->sh_size;
+  const size_t entry_size = 40;
+  if (Data.size() % entry_size != 0) {
+    W.startLine() << "The __cap_relocs section has a wrong size: "
+                  << Data.size() << "\n";
+    return;
+  }
+  ListScope L(W, "CHERI __cap_relocs");
+#if 0
+  errs() << "Cap relocs section from 0x" << utohexstr(CapRelocsFileOffset)
+         << " to 0x" << utohexstr(CapRelocsEnd)
+         << " size =" << (CapRelocsEnd - CapRelocsFileOffset) << "\n";
+#endif
+  // Create a map of all dynamic relocations that point into the
+  // __cap_relocs section to add a symbol name to unresolved values
+  // FIXME: this hardcodes REL so won't work for architectures that use RELA
+  using Elf_Rel = typename ELFT::Rel;
+  // typedef Elf64_Rel Elf_Rel;
+  DenseMap<uint64_t, Elf_Rel> CapRelocsDynRels;
+  for (const Elf_Rel &R : dyn_rels()) {
+    if (R.r_offset >= CapRelocsFileOffset && R.r_offset < CapRelocsEnd) {
+      // No need to store relocations aginst symbol zero since they don't have
+      // a name
+      if (R.getSymbol(Obj->isMips64EL()) != 0)
+        CapRelocsDynRels.insert(std::make_pair((uint64_t)R.r_offset, R));
+    }
+  }
+
+  // Use the .symtab section if available otherwise use .dynsym:
+  typename ELFT::SymRange Syms;
+  StringRef StrTable;
+  bool UsingDynsym = false;
+  if (DotSymtabSec) {
+    StrTable = unwrapOrError(Obj->getStringTableForSymtab(*DotSymtabSec));
+    Syms = unwrapOrError(Obj->symbols(DotSymtabSec));
+  } else {
+    StrTable = DynamicStringTable;
+    Syms = dynamic_symbols();
+    UsingDynsym = true;
+  }
+  std::unordered_map<uint64_t, std::string> SymbolNames;
+  for (const auto &Sym : Syms) {
+    uint64_t Start = Sym.st_value;
+    if (!Start)
+      continue;
+    std::string Name = getFullSymbolName(&Sym, StrTable, UsingDynsym);
+    SymbolNames.insert({Start, Name});
+  }
+  // errs() << "Found " << CapRelocsDynRels.size()
+  //        << " dynamic relocations pointing to __cap_relocs section\n";
+
+  for (int i = 0, e = Data.size() / entry_size; i < e; i++) {
+    const uint64_t CurrentOffset = entry_size * i;
+    const uint8_t *entry = Data.data() + CurrentOffset;
+    uint64_t Target = support::endian::read<uint64_t, support::big, 1>(entry);
+    uint64_t Base = support::endian::read<uint64_t, support::big, 1>(entry + 8);
+    int64_t Offset =
+        support::endian::read<int64_t, support::big, 1>(entry + 16);
+    uint64_t Length =
+        support::endian::read<uint64_t, support::big, 1>(entry + 24);
+    uint64_t Perms =
+        support::endian::read<uint64_t, support::big, 1>(entry + 32);
+    bool isFunction = Perms & (1ULL << 63);
+    const char *PermStr = isFunction ? "Function" : "Object";
+    // Perms &= 0xffffffff;
+    StringRef BaseSymbol = "Unknown symbol";
+    if (Base == 0) {
+      // Base is 0 -> either it is really NULL or (more likely) there is a
+      // dynamic relocation that will set the real address
+      auto it = CapRelocsDynRels.find(CapRelocsFileOffset + CurrentOffset + 8);
+      if (it != CapRelocsDynRels.end()) {
+        Elf_Rel R = it->second;
+        uint32_t SymIndex = R.getSymbol(Obj->isMips64EL());
+        const Elf_Sym *Sym = dynamic_symbols().begin() + SymIndex;
+        BaseSymbol = unwrapOrError(Sym->getName(getDynamicStringTable()));
+        // errs() << "Found dyn_rel for base: 0x" << utohexstr(R.r_offset) << "
+        // Name=" << SymbolName << "\n";
+      }
+    } else {
+      if (SymbolNames.find(Base) != SymbolNames.end())
+        BaseSymbol = SymbolNames[Base];
+    }
+    StringRef LocationSym;
+    if (SymbolNames.find(Target) != SymbolNames.end())
+      BaseSymbol = SymbolNames[Target];
+    // TODO: If base == 0 find the dynamic relocation target
+    if (opts::ExpandRelocs) {
+      DictScope L(W, "Relocation");
+      raw_ostream &OS = W.startLine();
+      OS << "Location: 0x" << utohexstr(Target);
+      if (!LocationSym.empty())
+        OS << " (" << LocationSym << ")";
+      OS << "\n";
+      W.printHex("Base", BaseSymbol, Base);
+      W.printNumber("Offset", Offset);
+      W.printNumber("Length", Length);
+      W.printHex("Permissions", PermStr, Perms);
+    } else {
+      raw_ostream &OS = W.startLine();
+      OS << format(" 0x%06lx", static_cast<unsigned long>(Target));
+      if (!LocationSym.empty())
+        OS << " (" << LocationSym << ")";
+      OS << format(" Base: 0x%lx (", static_cast<unsigned long>(Base))
+         << BaseSymbol;
+      if (Offset >= 0)
+        OS << "+";
+      OS << Offset;
+      OS << format(") Length: %ld", static_cast<unsigned long>(Length));
+      OS << " Perms: " << PermStr;
+      OS << "\n";
+    }
+  }
 }
 
 template <class ELFT>

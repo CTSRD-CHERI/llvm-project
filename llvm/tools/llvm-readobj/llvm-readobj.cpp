@@ -201,6 +201,13 @@ namespace opts {
   cl::opt<bool> MipsOptions("mips-options",
                             cl::desc("Display the MIPS .MIPS.options section"));
 
+  cl::opt<bool>
+      CheriCapRelocs("cheri-caprelocs",
+                     cl::desc("Display the CHERI __cap_relocs section"));
+  cl::alias CheriCapRelocsShort("C",
+    cl::desc("Alias for --cheri-caprelocs"),
+    cl::aliasopt(CheriCapRelocs));
+
   // -coff-imports
   cl::opt<bool>
   COFFImports("coff-imports", cl::desc("Display the PE/COFF import table"));
@@ -449,6 +456,8 @@ static void dumpObject(const ObjectFile *Obj, ScopedPrinter &Writer) {
         Dumper->printMipsReginfo();
       if (opts::MipsOptions)
         Dumper->printMipsOptions();
+      if (opts::CheriCapRelocs)
+        Dumper->printCheriCapRelocs();
     }
     if (opts::SectionGroups)
       Dumper->printGroupSections();
