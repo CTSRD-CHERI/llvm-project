@@ -775,7 +775,9 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
   bool UseLibcall = ((Ptr.getAlignment() % sizeChars) != 0 ||
                      getContext().toBits(sizeChars) > MaxInlineWidthInBits);
 
-  if (UseLibcall)
+  // Silence this warning for CHERI caps since it is known to be broken
+  // https://github.com/CTSRD-CHERI/clang/issues/201
+  if (UseLibcall && !AtomicTy->isCHERICapabilityType(CGM.getContext()))
     CGM.getDiags().Report(E->getLocStart(), diag::warn_atomic_op_misaligned);
 
   llvm::Value *Order = EmitScalarExpr(E->getOrder());
@@ -891,6 +893,22 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
     Dest = CreateMemTemp(RValTy, "cmpxchg.bool");
   else if (!RValTy->isVoidType())
     Dest = Atomics.emitCastToAtomicIntPointer(Atomics.CreateTempAlloca());
+
+  bool IsStore = E->getOp() == AtomicExpr::AO__c11_atomic_store ||
+                 E->getOp() == AtomicExpr::AO__opencl_atomic_store ||
+                 E->getOp() == AtomicExpr::AO__atomic_store ||
+                 E->getOp() == AtomicExpr::AO__atomic_store_n;
+  bool IsLoad = E->getOp() == AtomicExpr::AO__c11_atomic_load ||
+                E->getOp() == AtomicExpr::AO__opencl_atomic_load ||
+                E->getOp() == AtomicExpr::AO__atomic_load ||
+                E->getOp() == AtomicExpr::AO__atomic_load_n;
+
+  // For CHERI we can lower load/store to atomic ops but currently need to use
+  // libcalls for non-load/store operations
+  // See https://github.com/CTSRD-CHERI/clang/issues/201
+  if ((!IsLoad && !IsStore) && AtomicTy->isCHERICapabilityType(CGM.getContext()))
+    UseLibcall = true;
+
 
   // Use a library call.  See: http://gcc.gnu.org/wiki/Atomic/GCCMM/LIbrary .
   if (UseLibcall) {
@@ -1201,15 +1219,6 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
             ConvertTypeForMem(RValTy)->getPointerTo(AS)),
         RValTy, E->getExprLoc());
   }
-
-  bool IsStore = E->getOp() == AtomicExpr::AO__c11_atomic_store ||
-                 E->getOp() == AtomicExpr::AO__opencl_atomic_store ||
-                 E->getOp() == AtomicExpr::AO__atomic_store ||
-                 E->getOp() == AtomicExpr::AO__atomic_store_n;
-  bool IsLoad = E->getOp() == AtomicExpr::AO__c11_atomic_load ||
-                E->getOp() == AtomicExpr::AO__opencl_atomic_load ||
-                E->getOp() == AtomicExpr::AO__atomic_load ||
-                E->getOp() == AtomicExpr::AO__atomic_load_n;
 
   if (isa<llvm::ConstantInt>(Order)) {
     auto ord = cast<llvm::ConstantInt>(Order)->getZExtValue();
