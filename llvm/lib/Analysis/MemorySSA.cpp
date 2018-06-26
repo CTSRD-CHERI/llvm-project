@@ -1573,19 +1573,18 @@ void MemorySSA::removeFromLookups(MemoryAccess *MA) {
   assert(MA->use_empty() &&
          "Trying to remove memory access that still has uses");
   BlockNumbering.erase(MA);
-  if (MemoryUseOrDef *MUD = dyn_cast<MemoryUseOrDef>(MA))
+  if (auto *MUD = dyn_cast<MemoryUseOrDef>(MA))
     MUD->setDefiningAccess(nullptr);
   // Invalidate our walker's cache if necessary
   if (!isa<MemoryUse>(MA))
     Walker->invalidateInfo(MA);
-  // The call below to erase will destroy MA, so we can't change the order we
-  // are doing things here
+
   Value *MemoryInst;
-  if (MemoryUseOrDef *MUD = dyn_cast<MemoryUseOrDef>(MA)) {
+  if (const auto *MUD = dyn_cast<MemoryUseOrDef>(MA))
     MemoryInst = MUD->getMemoryInst();
-  } else {
+  else
     MemoryInst = MA->getBlock();
-  }
+
   auto VMA = ValueToMemoryAccess.find(MemoryInst);
   if (VMA->second == MA)
     ValueToMemoryAccess.erase(VMA);
@@ -1634,7 +1633,46 @@ void MemorySSA::verifyMemorySSA() const {
   verifyDefUses(F);
   verifyDomination(F);
   verifyOrdering(F);
+  verifyDominationNumbers(F);
   Walker->verify(this);
+}
+
+/// Verify that all of the blocks we believe to have valid domination numbers
+/// actually have valid domination numbers.
+void MemorySSA::verifyDominationNumbers(const Function &F) const {
+#ifndef NDEBUG
+  if (BlockNumberingValid.empty())
+    return;
+
+  SmallPtrSet<const BasicBlock *, 16> ValidBlocks = BlockNumberingValid;
+  for (const BasicBlock &BB : F) {
+    if (!ValidBlocks.count(&BB))
+      continue;
+
+    ValidBlocks.erase(&BB);
+
+    const AccessList *Accesses = getBlockAccesses(&BB);
+    // It's correct to say an empty block has valid numbering.
+    if (!Accesses)
+      continue;
+
+    // Block numbering starts at 1.
+    unsigned long LastNumber = 0;
+    for (const MemoryAccess &MA : *Accesses) {
+      auto ThisNumberIter = BlockNumbering.find(&MA);
+      assert(ThisNumberIter != BlockNumbering.end() &&
+             "MemoryAccess has no domination number in a valid block!");
+
+      unsigned long ThisNumber = ThisNumberIter->second;
+      assert(ThisNumber > LastNumber &&
+             "Domination numbers should be strictly increasing!");
+      LastNumber = ThisNumber;
+    }
+  }
+
+  assert(ValidBlocks.empty() &&
+         "All valid BasicBlocks should exist in F -- dangling pointers?");
+#endif
 }
 
 /// Verify that the order and existence of MemoryAccesses matches the
@@ -1746,8 +1784,12 @@ void MemorySSA::verifyDefUses(Function &F) const {
       assert(Phi->getNumOperands() == static_cast<unsigned>(std::distance(
                                           pred_begin(&B), pred_end(&B))) &&
              "Incomplete MemoryPhi Node");
-      for (unsigned I = 0, E = Phi->getNumIncomingValues(); I != E; ++I)
+      for (unsigned I = 0, E = Phi->getNumIncomingValues(); I != E; ++I) {
         verifyUseInDefs(Phi->getIncomingValue(I), Phi);
+        assert(find(predecessors(&B), Phi->getIncomingBlock(I)) !=
+                   pred_end(&B) &&
+               "Incoming phi block not a block predecessor");
+      }
     }
 
     for (Instruction &I : B) {

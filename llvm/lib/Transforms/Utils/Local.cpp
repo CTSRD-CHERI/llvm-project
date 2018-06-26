@@ -1242,6 +1242,14 @@ static bool valueCoversEntireFragment(Type *ValTy, DbgInfoIntrinsic *DII) {
   uint64_t ValueSize = DL.getTypeAllocSizeInBits(ValTy);
   if (auto FragmentSize = DII->getFragmentSizeInBits())
     return ValueSize >= *FragmentSize;
+  // We can't always calculate the size of the DI variable (e.g. if it is a
+  // VLA). Try to use the size of the alloca that the dbg intrinsic describes
+  // intead.
+  if (DII->isAddressOfVariable())
+    if (auto *AI = dyn_cast_or_null<AllocaInst>(DII->getVariableLocation()))
+      if (auto FragmentSize = AI->getAllocationSizeInBits(DL))
+        return ValueSize >= *FragmentSize;
+  // Could not determine size of variable. Conservatively return false.
   return false;
 }
 
@@ -1313,8 +1321,14 @@ void llvm::ConvertDebugDeclareToDebugValue(DbgInfoIntrinsic *DII,
   if (LdStHasDebugValue(DIVar, DIExpr, LI))
     return;
 
-  assert(valueCoversEntireFragment(LI->getType(), DII) &&
-         "Load is not loading the full variable fragment.");
+  if (!valueCoversEntireFragment(LI->getType(), DII)) {
+    // FIXME: If only referring to a part of the variable described by the
+    // dbg.declare, then we want to insert a dbg.value for the corresponding
+    // fragment.
+    LLVM_DEBUG(dbgs() << "Failed to convert dbg.declare to dbg.value: "
+                      << *DII << '\n');
+    return;
+  }
 
   // We are now tracking the loaded value instead of the address. In the
   // future if multi-location support is added to the IR, it might be
@@ -1336,8 +1350,14 @@ void llvm::ConvertDebugDeclareToDebugValue(DbgInfoIntrinsic *DII,
   if (PhiHasDebugValue(DIVar, DIExpr, APN))
     return;
 
-  assert(valueCoversEntireFragment(APN->getType(), DII) &&
-         "PHI node is not describing the full variable.");
+  if (!valueCoversEntireFragment(APN->getType(), DII)) {
+    // FIXME: If only referring to a part of the variable described by the
+    // dbg.declare, then we want to insert a dbg.value for the corresponding
+    // fragment.
+    LLVM_DEBUG(dbgs() << "Failed to convert dbg.declare to dbg.value: "
+                      << *DII << '\n');
+    return;
+  }
 
   BasicBlock *BB = APN->getParent();
   auto InsertionPt = BB->getFirstInsertionPt();
@@ -1675,6 +1695,24 @@ void llvm::salvageDebugInfo(Instruction &I) {
       LLVM_DEBUG(dbgs() << "SALVAGE:  " << *DII << '\n');
     }
   }
+}
+
+void llvm::insertReplacementDbgValues(
+    Value &From, Value &To, Instruction &InsertBefore,
+    function_ref<DIExpression *(DbgInfoIntrinsic &OldDII)> RewriteExpr) {
+  // Collect all debug users of From.
+  SmallVector<DbgInfoIntrinsic *, 1> Users;
+  findDbgUsers(Users, &From);
+  if (Users.empty())
+    return;
+
+  // Insert a replacement debug value for each old debug user. It's assumed
+  // that the old debug users will be erased later.
+  DIBuilder DIB(*InsertBefore.getModule());
+  for (auto *OldDII : Users)
+    if (DIExpression *Expr = RewriteExpr(*OldDII))
+      DIB.insertDbgValueIntrinsic(&To, OldDII->getVariable(), Expr,
+                                  OldDII->getDebugLoc().get(), &InsertBefore);
 }
 
 unsigned llvm::removeAllNonTerminatorAndEHPadInstructions(BasicBlock *BB) {

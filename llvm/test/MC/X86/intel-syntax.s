@@ -888,3 +888,17 @@ sysexitq
 sysret
 // CHECK: sysretq
 sysretq
+
+// CHECK: leaq (%rsp,%rax), %rax
+lea rax, [rax+rsp]
+// CHECK: leaq (%rsp,%rax), %rax
+lea rax, [rsp+rax]
+// CHECK: leal (%esp,%eax), %eax
+lea eax, [eax+esp]
+// CHECK: leal (%esp,%eax), %eax
+lea eax, [esp+eax]
+
+// CHECK: vpgatherdq      %ymm2, (%rdi,%xmm1), %ymm0
+vpgatherdq ymm0, [rdi+xmm1], ymm2
+// CHECK: vpgatherdq      %ymm2, (%rdi,%xmm1), %ymm0
+vpgatherdq ymm0, [xmm1+rdi], ymm2

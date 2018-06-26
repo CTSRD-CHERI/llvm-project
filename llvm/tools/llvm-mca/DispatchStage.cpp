@@ -17,8 +17,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "DispatchStage.h"
-#include "Backend.h"
 #include "HWEventListener.h"
+#include "Pipeline.h"
 #include "Scheduler.h"
 #include "llvm/Support/Debug.h"
 
@@ -92,8 +92,6 @@ void DispatchStage::updateRAWDependencies(ReadState &RS,
     int ReadAdvance = STI.getReadAdvanceCycles(SC, RD.UseIndex, WriteResID);
     WS->addUser(&RS, ReadAdvance);
   }
-  // Prepare the set for another round.
-  DependentWrites.clear();
 }
 
 void DispatchStage::dispatch(InstRef IR) {

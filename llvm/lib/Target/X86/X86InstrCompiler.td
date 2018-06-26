@@ -37,6 +37,10 @@ let hasSideEffects = 0, isNotDuplicable = 1, Uses = [ESP, SSP],
   def MOVPC32r : Ii32<0xE8, Pseudo, (outs GR32:$reg), (ins i32imm:$label),
                       "", []>;
 
+// 64-bit large code model PIC base construction.
+let hasSideEffects = 0, mayLoad = 1, isNotDuplicable = 1, SchedRW = [WriteJump] in
+  def MOVGOT64r : PseudoI<(outs GR64:$reg),
+                          (ins GR64:$scratch, i64i32imm_pcrel:$got), []>;
 
 // ADJCALLSTACKDOWN/UP implicitly use/def ESP because they may be expanded into
 // a stack adjustment and the codegen must know that they may modify the stack
@@ -1360,6 +1364,44 @@ def ADD64ri32_DB : I<0, Pseudo,
 }
 } // AddedComplexity, SchedRW
 
+//===----------------------------------------------------------------------===//
+// Pattern match SUB as XOR
+//===----------------------------------------------------------------------===//
+
+// An immediate in the LHS of a subtract can't be encoded in the instruction.
+// If there is no possibility of a borrow we can use an XOR instead of a SUB
+// to enable the immediate to be folded.
+// TODO: Move this to a DAG combine?
+
+def sub_is_xor : PatFrag<(ops node:$lhs, node:$rhs), (sub node:$lhs, node:$rhs),[{
+  if (ConstantSDNode *CN = dyn_cast<ConstantSDNode>(N->getOperand(0))) {
+    KnownBits Known;
+    CurDAG->computeKnownBits(N->getOperand(1), Known);
+
+    // If all possible ones in the RHS are set in the LHS then there can't be
+    // a borrow and we can use xor.
+    return (~Known.Zero).isSubsetOf(CN->getAPIntValue());
+  }
+
+  return false;
+}]>;
+
+let AddedComplexity = 5 in {
+def : Pat<(sub_is_xor imm:$src2, GR8:$src1),
+          (XOR8ri GR8:$src1, imm:$src2)>;
+def : Pat<(sub_is_xor i16immSExt8:$src2, GR16:$src1),
+          (XOR16ri8 GR16:$src1, i16immSExt8:$src2)>;
+def : Pat<(sub_is_xor imm:$src2, GR16:$src1),
+          (XOR16ri GR16:$src1, imm:$src2)>;
+def : Pat<(sub_is_xor i32immSExt8:$src2, GR32:$src1),
+          (XOR32ri8 GR32:$src1, i32immSExt8:$src2)>;
+def : Pat<(sub_is_xor imm:$src2, GR32:$src1),
+          (XOR32ri GR32:$src1, imm:$src2)>;
+def : Pat<(sub_is_xor i64immSExt8:$src2, GR64:$src1),
+          (XOR64ri8 GR64:$src1, i64immSExt8:$src2)>;
+def : Pat<(sub_is_xor i64immSExt32:$src2, GR64:$src1),
+          (XOR64ri32 GR64:$src1, i64immSExt32:$src2)>;
+}
 
 //===----------------------------------------------------------------------===//
 // Some peepholes
@@ -1778,6 +1820,7 @@ def : Pat<(i32 (anyext (i16 (X86setcc_c X86_COND_B, EFLAGS)))),
 def : Pat<(add GR8 :$src1, GR8 :$src2), (ADD8rr  GR8 :$src1, GR8 :$src2)>;
 def : Pat<(add GR16:$src1, GR16:$src2), (ADD16rr GR16:$src1, GR16:$src2)>;
 def : Pat<(add GR32:$src1, GR32:$src2), (ADD32rr GR32:$src1, GR32:$src2)>;
+def : Pat<(add GR64:$src1, GR64:$src2), (ADD64rr GR64:$src1, GR64:$src2)>;
 
 // add reg, mem
 def : Pat<(add GR8:$src1, (loadi8 addr:$src2)),
@@ -1786,6 +1829,8 @@ def : Pat<(add GR16:$src1, (loadi16 addr:$src2)),
           (ADD16rm GR16:$src1, addr:$src2)>;
 def : Pat<(add GR32:$src1, (loadi32 addr:$src2)),
           (ADD32rm GR32:$src1, addr:$src2)>;
+def : Pat<(add GR64:$src1, (loadi64 addr:$src2)),
+          (ADD64rm GR64:$src1, addr:$src2)>;
 
 // add reg, imm
 def : Pat<(add GR8 :$src1, imm:$src2), (ADD8ri  GR8:$src1 , imm:$src2)>;
@@ -1795,11 +1840,16 @@ def : Pat<(add GR16:$src1, i16immSExt8:$src2),
           (ADD16ri8 GR16:$src1, i16immSExt8:$src2)>;
 def : Pat<(add GR32:$src1, i32immSExt8:$src2),
           (ADD32ri8 GR32:$src1, i32immSExt8:$src2)>;
+def : Pat<(add GR64:$src1, i64immSExt8:$src2),
+          (ADD64ri8 GR64:$src1, i64immSExt8:$src2)>;
+def : Pat<(add GR64:$src1, i64immSExt32:$src2),
+          (ADD64ri32 GR64:$src1, i64immSExt32:$src2)>;
 
 // sub reg, reg
 def : Pat<(sub GR8 :$src1, GR8 :$src2), (SUB8rr  GR8 :$src1, GR8 :$src2)>;
 def : Pat<(sub GR16:$src1, GR16:$src2), (SUB16rr GR16:$src1, GR16:$src2)>;
 def : Pat<(sub GR32:$src1, GR32:$src2), (SUB32rr GR32:$src1, GR32:$src2)>;
+def : Pat<(sub GR64:$src1, GR64:$src2), (SUB64rr GR64:$src1, GR64:$src2)>;
 
 // sub reg, mem
 def : Pat<(sub GR8:$src1, (loadi8 addr:$src2)),
@@ -1808,6 +1858,8 @@ def : Pat<(sub GR16:$src1, (loadi16 addr:$src2)),
           (SUB16rm GR16:$src1, addr:$src2)>;
 def : Pat<(sub GR32:$src1, (loadi32 addr:$src2)),
           (SUB32rm GR32:$src1, addr:$src2)>;
+def : Pat<(sub GR64:$src1, (loadi64 addr:$src2)),
+          (SUB64rm GR64:$src1, addr:$src2)>;
 
 // sub reg, imm
 def : Pat<(sub GR8:$src1, imm:$src2),
@@ -1820,6 +1872,10 @@ def : Pat<(sub GR16:$src1, i16immSExt8:$src2),
           (SUB16ri8 GR16:$src1, i16immSExt8:$src2)>;
 def : Pat<(sub GR32:$src1, i32immSExt8:$src2),
           (SUB32ri8 GR32:$src1, i32immSExt8:$src2)>;
+def : Pat<(sub GR64:$src1, i64immSExt8:$src2),
+          (SUB64ri8 GR64:$src1, i64immSExt8:$src2)>;
+def : Pat<(sub GR64:$src1, i64immSExt32:$src2),
+          (SUB64ri32 GR64:$src1, i64immSExt32:$src2)>;
 
 // sub 0, reg
 def : Pat<(X86sub_flag 0, GR8 :$src), (NEG8r  GR8 :$src)>;
@@ -1838,12 +1894,16 @@ def : Pat<(mul GR16:$src1, GR16:$src2),
           (IMUL16rr GR16:$src1, GR16:$src2)>;
 def : Pat<(mul GR32:$src1, GR32:$src2),
           (IMUL32rr GR32:$src1, GR32:$src2)>;
+def : Pat<(mul GR64:$src1, GR64:$src2),
+          (IMUL64rr GR64:$src1, GR64:$src2)>;
 
 // mul reg, mem
 def : Pat<(mul GR16:$src1, (loadi16 addr:$src2)),
           (IMUL16rm GR16:$src1, addr:$src2)>;
 def : Pat<(mul GR32:$src1, (loadi32 addr:$src2)),
           (IMUL32rm GR32:$src1, addr:$src2)>;
+def : Pat<(mul GR64:$src1, (loadi64 addr:$src2)),
+          (IMUL64rm GR64:$src1, addr:$src2)>;
 
 // mul reg, imm
 def : Pat<(mul GR16:$src1, imm:$src2),
@@ -1854,6 +1914,10 @@ def : Pat<(mul GR16:$src1, i16immSExt8:$src2),
           (IMUL16rri8 GR16:$src1, i16immSExt8:$src2)>;
 def : Pat<(mul GR32:$src1, i32immSExt8:$src2),
           (IMUL32rri8 GR32:$src1, i32immSExt8:$src2)>;
+def : Pat<(mul GR64:$src1, i64immSExt8:$src2),
+          (IMUL64rri8 GR64:$src1, i64immSExt8:$src2)>;
+def : Pat<(mul GR64:$src1, i64immSExt32:$src2),
+          (IMUL64rri32 GR64:$src1, i64immSExt32:$src2)>;
 
 // reg = mul mem, imm
 def : Pat<(mul (loadi16 addr:$src1), imm:$src2),
@@ -1864,38 +1928,6 @@ def : Pat<(mul (loadi16 addr:$src1), i16immSExt8:$src2),
           (IMUL16rmi8 addr:$src1, i16immSExt8:$src2)>;
 def : Pat<(mul (loadi32 addr:$src1), i32immSExt8:$src2),
           (IMUL32rmi8 addr:$src1, i32immSExt8:$src2)>;
-
-// Patterns for nodes that do not produce flags, for instructions that do.
-
-// addition
-def : Pat<(add GR64:$src1, GR64:$src2),
-          (ADD64rr GR64:$src1, GR64:$src2)>;
-def : Pat<(add GR64:$src1, i64immSExt8:$src2),
-          (ADD64ri8 GR64:$src1, i64immSExt8:$src2)>;
-def : Pat<(add GR64:$src1, i64immSExt32:$src2),
-          (ADD64ri32 GR64:$src1, i64immSExt32:$src2)>;
-def : Pat<(add GR64:$src1, (loadi64 addr:$src2)),
-          (ADD64rm GR64:$src1, addr:$src2)>;
-
-// subtraction
-def : Pat<(sub GR64:$src1, GR64:$src2),
-          (SUB64rr GR64:$src1, GR64:$src2)>;
-def : Pat<(sub GR64:$src1, (loadi64 addr:$src2)),
-          (SUB64rm GR64:$src1, addr:$src2)>;
-def : Pat<(sub GR64:$src1, i64immSExt8:$src2),
-          (SUB64ri8 GR64:$src1, i64immSExt8:$src2)>;
-def : Pat<(sub GR64:$src1, i64immSExt32:$src2),
-          (SUB64ri32 GR64:$src1, i64immSExt32:$src2)>;
-
-// Multiply
-def : Pat<(mul GR64:$src1, GR64:$src2),
-          (IMUL64rr GR64:$src1, GR64:$src2)>;
-def : Pat<(mul GR64:$src1, (loadi64 addr:$src2)),
-          (IMUL64rm GR64:$src1, addr:$src2)>;
-def : Pat<(mul GR64:$src1, i64immSExt8:$src2),
-          (IMUL64rri8 GR64:$src1, i64immSExt8:$src2)>;
-def : Pat<(mul GR64:$src1, i64immSExt32:$src2),
-          (IMUL64rri32 GR64:$src1, i64immSExt32:$src2)>;
 def : Pat<(mul (loadi64 addr:$src1), i64immSExt8:$src2),
           (IMUL64rmi8 addr:$src1, i64immSExt8:$src2)>;
 def : Pat<(mul (loadi64 addr:$src1), i64immSExt32:$src2),

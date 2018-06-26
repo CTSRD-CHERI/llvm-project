@@ -19,7 +19,7 @@ namespace exegesis {
 
 Instruction::Instruction(const llvm::MCInstrDesc &MCInstrDesc,
                          const RegisterAliasingTrackerCache &RATC)
-    : Description(MCInstrDesc) {
+    : Description(&MCInstrDesc) {
   unsigned OpIndex = 0;
   for (; OpIndex < MCInstrDesc.getNumOperands(); ++OpIndex) {
     const auto &OpInfo = MCInstrDesc.opInfo_begin()[OpIndex];
@@ -71,7 +71,7 @@ Instruction::Instruction(const llvm::MCInstrDesc &MCInstrDesc,
   // Assigning Operands to Variables.
   for (auto &Op : Operands)
     if (Op.VariableIndex >= 0)
-      Variables[Op.VariableIndex].TiedOperands.push_back(&Op);
+      Variables[Op.VariableIndex].TiedOperands.push_back(Op.Index);
   // Processing Aliasing.
   DefRegisters = RATC.emptyRegisters();
   UseRegisters = RATC.emptyRegisters();
@@ -86,7 +86,21 @@ Instruction::Instruction(const llvm::MCInstrDesc &MCInstrDesc,
 InstructionInstance::InstructionInstance(const Instruction &Instr)
     : Instr(Instr), VariableValues(Instr.Variables.size()) {}
 
+InstructionInstance::InstructionInstance(InstructionInstance &&) = default;
+
+InstructionInstance &InstructionInstance::
+operator=(InstructionInstance &&) = default;
+
+unsigned InstructionInstance::getOpcode() const {
+  return Instr.Description->getOpcode();
+}
+
 llvm::MCOperand &InstructionInstance::getValueFor(const Variable &Var) {
+  return VariableValues[Var.Index];
+}
+
+const llvm::MCOperand &
+InstructionInstance::getValueFor(const Variable &Var) const {
   return VariableValues[Var.Index];
 }
 
@@ -95,22 +109,46 @@ llvm::MCOperand &InstructionInstance::getValueFor(const Operand &Op) {
   return getValueFor(Instr.Variables[Op.VariableIndex]);
 }
 
-// forward declaration.
-static void randomize(const Variable &Var, llvm::MCOperand &AssignedValue);
+const llvm::MCOperand &
+InstructionInstance::getValueFor(const Operand &Op) const {
+  assert(Op.VariableIndex >= 0);
+  return getValueFor(Instr.Variables[Op.VariableIndex]);
+}
 
-llvm::MCInst InstructionInstance::randomizeUnsetVariablesAndBuild() {
+// forward declaration.
+static void randomize(const Instruction &Instr, const Variable &Var,
+                      llvm::MCOperand &AssignedValue);
+
+bool InstructionInstance::hasImmediateVariables() const {
+  return llvm::any_of(Instr.Variables, [this](const Variable &Var) {
+    assert(!Var.TiedOperands.empty());
+    const unsigned OpIndex = Var.TiedOperands[0];
+    const Operand &Op = Instr.Operands[OpIndex];
+    assert(Op.Info);
+    return Op.Info->OperandType == llvm::MCOI::OPERAND_IMMEDIATE;
+  });
+}
+
+void InstructionInstance::randomizeUnsetVariables() {
   for (const Variable &Var : Instr.Variables) {
     llvm::MCOperand &AssignedValue = getValueFor(Var);
     if (!AssignedValue.isValid())
-      randomize(Var, AssignedValue);
+      randomize(Instr, Var, AssignedValue);
   }
+}
+
+llvm::MCInst InstructionInstance::build() const {
   llvm::MCInst Result;
-  Result.setOpcode(Instr.Description.Opcode);
+  Result.setOpcode(Instr.Description->Opcode);
   for (const auto &Op : Instr.Operands)
     if (Op.IsExplicit)
       Result.addOperand(getValueFor(Op));
   return Result;
 }
+
+SnippetPrototype::SnippetPrototype(SnippetPrototype &&) = default;
+
+SnippetPrototype &SnippetPrototype::operator=(SnippetPrototype &&) = default;
 
 bool RegisterOperandAssignment::
 operator==(const RegisterOperandAssignment &Other) const {
@@ -183,10 +221,10 @@ static auto randomElement(const C &Container) -> decltype(Container[0]) {
   return Container[randomIndex(Container.size())];
 }
 
-static void randomize(const Variable &Var, llvm::MCOperand &AssignedValue) {
+static void randomize(const Instruction &Instr, const Variable &Var,
+                      llvm::MCOperand &AssignedValue) {
   assert(!Var.TiedOperands.empty());
-  assert(Var.TiedOperands.front() != nullptr);
-  const Operand &Op = *Var.TiedOperands.front();
+  const Operand &Op = Instr.Operands[Var.TiedOperands.front()];
   assert(Op.Info != nullptr);
   const auto &OpInfo = *Op.Info;
   switch (OpInfo.OperandType) {

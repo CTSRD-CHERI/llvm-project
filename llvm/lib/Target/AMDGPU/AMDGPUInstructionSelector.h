@@ -15,6 +15,7 @@
 #define LLVM_LIB_TARGET_AMDGPU_AMDGPUINSTRUCTIONSELECTOR_H
 
 #include "AMDGPU.h"
+#include "AMDGPUArgumentUsageInfo.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/GlobalISel/InstructionSelector.h"
@@ -34,6 +35,7 @@ class MachineInstr;
 class MachineOperand;
 class MachineRegisterInfo;
 class SIInstrInfo;
+class SIMachineFunctionInfo;
 class SIRegisterInfo;
 class SISubtarget;
 
@@ -63,6 +65,7 @@ private:
   bool selectG_CONSTANT(MachineInstr &I) const;
   bool selectG_ADD(MachineInstr &I) const;
   bool selectG_GEP(MachineInstr &I) const;
+  bool selectG_IMPLICIT_DEF(MachineInstr &I) const;
   bool selectG_INTRINSIC(MachineInstr &I, CodeGenCoverage &CoverageInfo) const;
   bool hasVgprParts(ArrayRef<GEPInfo> AddrInfo) const;
   void getAddrModeInfo(const MachineInstr &Load, const MachineRegisterInfo &MRI,
@@ -72,10 +75,15 @@ private:
   bool selectG_STORE(MachineInstr &I) const;
 
   InstructionSelector::ComplexRendererFns
+  selectVCSRC(MachineOperand &Root) const;
+
+  InstructionSelector::ComplexRendererFns
   selectVSRC0(MachineOperand &Root) const;
 
   InstructionSelector::ComplexRendererFns
   selectVOP3Mods0(MachineOperand &Root) const;
+  InstructionSelector::ComplexRendererFns
+  selectVOP3OMods(MachineOperand &Root) const;
   InstructionSelector::ComplexRendererFns
   selectVOP3Mods(MachineOperand &Root) const;
 

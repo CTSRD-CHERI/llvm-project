@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 /// \file
 ///
-/// This file defines abstractions used by the Backend to model register reads,
+/// This file defines abstractions used by the Pipeline to model register reads,
 /// register writes and instructions.
 ///
 //===----------------------------------------------------------------------===//
@@ -31,50 +31,17 @@ class ReadState;
 
 constexpr int UNKNOWN_CYCLES = -512;
 
-class Instruction;
-
-/// An InstRef contains both a SourceMgr index and Instruction pair.  The index
-/// is used as a unique identifier for the instruction.  MCA will make use of
-/// this index as a key throughout MCA.
-class InstRef : public std::pair<unsigned, Instruction *> {
-public:
-  InstRef() : std::pair<unsigned, Instruction *>(0, nullptr) {}
-  InstRef(unsigned Index, Instruction *I)
-      : std::pair<unsigned, Instruction *>(Index, I) {}
-
-  unsigned getSourceIndex() const { return first; }
-  Instruction *getInstruction() { return second; }
-  const Instruction *getInstruction() const { return second; }
-
-  /// Returns true if  this InstRef has been populated.
-  bool isValid() const { return second != nullptr; }
-
-#ifndef NDEBUG
-  void print(llvm::raw_ostream &OS) const { OS << getSourceIndex(); }
-#endif
-};
-
-#ifndef NDEBUG
-inline llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, const InstRef &IR) {
-  IR.print(OS);
-  return OS;
-}
-#endif
-
 /// A register write descriptor.
 struct WriteDescriptor {
-  // Operand index. -1 if this is an implicit write.
+  // Operand index. The index is negative for implicit writes only.
+  // For implicit writes, the actual operand index is computed performing
+  // a bitwise not of the OpIndex.
   int OpIndex;
   // Write latency. Number of cycles before write-back stage.
   int Latency;
   // This field is set to a value different than zero only if this
   // is an implicit definition.
   unsigned RegisterID;
-  // True if this write generates a partial update of a super-registers.
-  // On X86, this flag is set by byte/word writes on GPR registers. Also,
-  // a write of an XMM register only partially updates the corresponding
-  // YMM super-register if the write is associated to a legacy SSE instruction.
-  bool FullyUpdatesSuperRegs;
   // Instruction itineraries would set this field to the SchedClass ID.
   // Otherwise, it defaults to the WriteResourceID from the MCWriteLatencyEntry
   // element associated to this write.
@@ -88,12 +55,15 @@ struct WriteDescriptor {
   // Optional definitions are allowed to reference regID zero (i.e. "no
   // register").
   bool IsOptionalDef;
+
+  bool isImplicitWrite() const { return OpIndex < 0; };
 };
 
 /// A register read descriptor.
 struct ReadDescriptor {
   // A MCOperand index. This is used by the Dispatch logic to identify register
-  // reads. This field defaults to -1 if this is an implicit read.
+  // reads. Implicit reads have negative indices. The actual operand index of an
+  // implicit read is the bitwise not of field OpIndex.
   int OpIndex;
   // The actual "UseIdx". This is used to query the ReadAdvance table. Explicit
   // uses always come first in the sequence of uses.
@@ -108,6 +78,8 @@ struct ReadDescriptor {
   // used to dynamically check at Instruction creation time, if the input
   // operands can benefit from a ReadAdvance bonus.
   bool HasReadAdvanceEntries;
+
+  bool isImplicitRead() const { return OpIndex < 0; };
 };
 
 /// Tracks uses of a register definition (e.g. register write).
@@ -129,6 +101,10 @@ class WriteState {
   // field RegisterID from WD.
   unsigned RegisterID;
 
+  // True if this write implicitly clears the upper portion of RegisterID's
+  // super-registers.
+  bool ClearsSuperRegs;
+
   // A list of dependent reads. Users is a set of dependent
   // reads. A dependent read is added to the set only if CyclesLeft
   // is "unknown". As soon as CyclesLeft is 'known', each user in the set
@@ -138,8 +114,10 @@ class WriteState {
   std::set<std::pair<ReadState *, int>> Users;
 
 public:
-  WriteState(const WriteDescriptor &Desc, unsigned RegID)
-      : WD(Desc), CyclesLeft(UNKNOWN_CYCLES), RegisterID(RegID) {}
+  WriteState(const WriteDescriptor &Desc, unsigned RegID,
+             bool clearsSuperRegs = false)
+      : WD(Desc), CyclesLeft(UNKNOWN_CYCLES), RegisterID(RegID),
+        ClearsSuperRegs(clearsSuperRegs) {}
   WriteState(const WriteState &Other) = delete;
   WriteState &operator=(const WriteState &Other) = delete;
 
@@ -148,7 +126,7 @@ public:
   unsigned getRegisterID() const { return RegisterID; }
 
   void addUser(ReadState *Use, int ReadAdvance);
-  bool fullyUpdatesSuperRegs() const { return WD.FullyUpdatesSuperRegs; }
+  bool clearsSuperRegisters() const { return ClearsSuperRegs; }
 
   // On every cycle, update CyclesLeft and notify dependent users.
   void cycleEvent();
@@ -197,6 +175,7 @@ public:
   const ReadDescriptor &getDescriptor() const { return RD; }
   unsigned getSchedClass() const { return RD.SchedClassID; }
   unsigned getRegisterID() const { return RegisterID; }
+
   void cycleEvent();
   void writeStartEvent(unsigned Cycles);
   void setDependentWrites(unsigned Writes) { DependentWrites = Writes; }
@@ -285,10 +264,10 @@ struct InstrDesc {
   bool isZeroLatency() const { return !MaxLatency && Resources.empty(); }
 };
 
-/// An instruction dispatched to the out-of-order backend.
+/// An instruction propagated through the simulated instruction pipeline.
 ///
-/// This class is used to monitor changes in the internal state of instructions
-/// that are dispatched by the DispatchUnit to the hardware schedulers.
+/// This class is used to monitor changes to the internal state of instructions
+/// that are sent to the various components of the simulated hardware pipeline.
 class Instruction {
   const InstrDesc &Desc;
 
@@ -367,6 +346,35 @@ public:
 
   void cycleEvent();
 };
+
+/// An InstRef contains both a SourceMgr index and Instruction pair.  The index
+/// is used as a unique identifier for the instruction.  MCA will make use of
+/// this index as a key throughout MCA.
+class InstRef : public std::pair<unsigned, Instruction *> {
+public:
+  InstRef() : std::pair<unsigned, Instruction *>(0, nullptr) {}
+  InstRef(unsigned Index, Instruction *I)
+      : std::pair<unsigned, Instruction *>(Index, I) {}
+
+  unsigned getSourceIndex() const { return first; }
+  Instruction *getInstruction() { return second; }
+  const Instruction *getInstruction() const { return second; }
+
+  /// Returns true if  this InstRef has been populated.
+  bool isValid() const { return second != nullptr; }
+
+#ifndef NDEBUG
+  void print(llvm::raw_ostream &OS) const { OS << getSourceIndex(); }
+#endif
+};
+
+#ifndef NDEBUG
+inline llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, const InstRef &IR) {
+  IR.print(OS);
+  return OS;
+}
+#endif
+
 } // namespace mca
 
 #endif

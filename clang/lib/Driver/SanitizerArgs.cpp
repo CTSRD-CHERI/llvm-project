@@ -44,8 +44,9 @@ enum : SanitizerMask {
   TrappingSupported = (Undefined & ~Vptr) | UnsignedIntegerOverflow |
                       Nullability | LocalBounds | CFI,
   TrappingDefault = CFI,
-  CFIClasses = CFIVCall | CFINVCall | CFIDerivedCast | CFIUnrelatedCast,
-  CompatibleWithMinimalRuntime = TrappingSupported,
+  CFIClasses =
+      CFIVCall | CFINVCall | CFIMFCall | CFIDerivedCast | CFIUnrelatedCast,
+  CompatibleWithMinimalRuntime = TrappingSupported | Scudo,
 };
 
 enum CoverageFeature {
@@ -179,7 +180,8 @@ static SanitizerMask parseSanitizeTrapArgs(const Driver &D,
 bool SanitizerArgs::needsUbsanRt() const {
   // All of these include ubsan.
   if (needsAsanRt() || needsMsanRt() || needsHwasanRt() || needsTsanRt() ||
-      needsDfsanRt() || needsLsanRt() || needsCfiDiagRt() || needsScudoRt())
+      needsDfsanRt() || needsLsanRt() || needsCfiDiagRt() ||
+      (needsScudoRt() && !requiresMinimalRuntime()))
     return false;
 
   return (Sanitizers.Mask & NeedsUbsanRt & ~TrapSanitizers.Mask) ||
@@ -218,6 +220,10 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
                                      // Used to deduplicate diagnostics.
   SanitizerMask Kinds = 0;
   const SanitizerMask Supported = setGroupBits(TC.getSupportedSanitizers());
+
+  CfiCrossDso = Args.hasFlag(options::OPT_fsanitize_cfi_cross_dso,
+                             options::OPT_fno_sanitize_cfi_cross_dso, false);
+
   ToolChain::RTTIMode RTTIMode = TC.getRTTIMode();
 
   const Driver &D = TC.getDriver();
@@ -277,6 +283,24 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
         Add &= ~NotAllowedWithMinimalRuntime;
       }
 
+      // FIXME: Make CFI on member function calls compatible with cross-DSO CFI.
+      // There are currently two problems:
+      // - Virtual function call checks need to pass a pointer to the function
+      //   address to llvm.type.test and a pointer to the address point to the
+      //   diagnostic function. Currently we pass the same pointer to both
+      //   places.
+      // - Non-virtual function call checks may need to check multiple type
+      //   identifiers.
+      // Fixing both of those may require changes to the cross-DSO CFI
+      // interface.
+      if (CfiCrossDso && (Add & CFIMFCall & ~DiagnosedKinds)) {
+        D.Diag(diag::err_drv_argument_not_allowed_with)
+            << "-fsanitize=cfi-mfcall"
+            << "-fsanitize-cfi-cross-dso";
+        Add &= ~CFIMFCall;
+        DiagnosedKinds |= CFIMFCall;
+      }
+
       if (SanitizerMask KindsToDiagnose = Add & ~Supported & ~DiagnosedKinds) {
         std::string Desc = describeSanitizeArg(*I, KindsToDiagnose);
         D.Diag(diag::err_drv_unsupported_opt_for_target)
@@ -315,6 +339,8 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
       if (MinimalRuntime) {
         Add &= ~NotAllowedWithMinimalRuntime;
       }
+      if (CfiCrossDso)
+        Add &= ~CFIMFCall;
       Add &= Supported;
 
       if (Add & Fuzzer)
@@ -553,8 +579,6 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
   }
 
   if (AllAddedKinds & CFI) {
-    CfiCrossDso = Args.hasFlag(options::OPT_fsanitize_cfi_cross_dso,
-                               options::OPT_fno_sanitize_cfi_cross_dso, false);
     // Without PIE, external function address may resolve to a PLT record, which
     // can not be verified by the target module.
     NeedPIE |= CfiCrossDso;

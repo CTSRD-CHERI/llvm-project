@@ -14,6 +14,7 @@
 #ifndef LLVM_EXECUTIONENGINE_ORC_CORE_H
 #define LLVM_EXECUTIONENGINE_ORC_CORE_H
 
+#include "llvm/ADT/BitmaskEnum.h"
 #include "llvm/ExecutionEngine/JITSymbol.h"
 #include "llvm/ExecutionEngine/Orc/SymbolStringPool.h"
 #include "llvm/IR/Module.h"
@@ -114,7 +115,7 @@ public:
 
   /// Returns the target VSO that these symbols are being materialized
   ///        into.
-  const VSO &getTargetVSO() const { return V; }
+  VSO &getTargetVSO() const { return V; }
 
   /// Returns the names of any symbols covered by this
   /// MaterializationResponsibility object that have queries pending. This
@@ -242,6 +243,46 @@ inline std::unique_ptr<AbsoluteSymbolsMaterializationUnit>
 absoluteSymbols(SymbolMap Symbols) {
   return llvm::make_unique<AbsoluteSymbolsMaterializationUnit>(
       std::move(Symbols));
+}
+
+struct SymbolAliasMapEntry {
+  SymbolStringPtr Aliasee;
+  JITSymbolFlags AliasFlags;
+};
+
+/// A map of Symbols to (Symbol, Flags) pairs.
+using SymbolAliasMap = std::map<SymbolStringPtr, SymbolAliasMapEntry>;
+
+/// A materialization unit for symbol aliases. Allows existing symbols to be
+/// aliased with alternate flags.
+class SymbolAliasesMaterializationUnit : public MaterializationUnit {
+public:
+  SymbolAliasesMaterializationUnit(SymbolAliasMap Aliases);
+
+private:
+  void materialize(MaterializationResponsibility R) override;
+  void discard(const VSO &V, SymbolStringPtr Name) override;
+  static SymbolFlagsMap extractFlags(const SymbolAliasMap &Aliases);
+
+  SymbolAliasMap Aliases;
+};
+
+/// Create a SymbolAliasesMaterializationUnit with the given aliases.
+/// Useful for defining symbol aliases.: E.g., given a VSO V containing symbols
+/// "foo" and "bar", we can define aliases "baz" (for "foo") and "qux" (for
+/// "bar") with:
+/// \code{.cpp}
+///   SymbolStringPtr Baz = ...;
+///   SymbolStringPtr Qux = ...;
+///   if (auto Err = V.define(symbolAliases({
+///       {Baz, { Foo, JITSymbolFlags::Exported }},
+///       {Qux, { Bar, JITSymbolFlags::Weak }}}))
+///     return Err;
+/// \endcode
+inline std::unique_ptr<SymbolAliasesMaterializationUnit>
+symbolAliases(SymbolAliasMap Aliases) {
+  return llvm::make_unique<SymbolAliasesMaterializationUnit>(
+      std::move(Aliases));
 }
 
 /// Base utilities for ExecutionSession.
@@ -570,6 +611,13 @@ private:
 
   using MaterializingInfosMap = std::map<SymbolStringPtr, MaterializingInfo>;
 
+  using LookupImplActionFlags = enum {
+    None = 0,
+    NotifyFullyResolved = 1 << 0U,
+    NotifyFullyReady = 1 << 1U,
+    LLVM_MARK_AS_BITMASK_ENUM(NotifyFullyReady)
+  };
+
   VSO(ExecutionSessionBase &ES, std::string Name)
       : ES(ES), VSOName(std::move(Name)) {}
 
@@ -585,9 +633,10 @@ private:
   SymbolNameSet lookupFlagsImpl(SymbolFlagsMap &Flags,
                                 const SymbolNameSet &Names);
 
-  void lookupImpl(std::shared_ptr<AsynchronousSymbolQuery> &Q,
-                  std::vector<std::unique_ptr<MaterializationUnit>> &MUs,
-                  SymbolNameSet &Unresolved);
+  LookupImplActionFlags
+  lookupImpl(std::shared_ptr<AsynchronousSymbolQuery> &Q,
+             std::vector<std::unique_ptr<MaterializationUnit>> &MUs,
+             SymbolNameSet &Unresolved);
 
   void detachQueryHelper(AsynchronousSymbolQuery &Q,
                          const SymbolNameSet &QuerySymbols);

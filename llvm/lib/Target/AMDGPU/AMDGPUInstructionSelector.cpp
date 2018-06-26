@@ -18,6 +18,7 @@
 #include "AMDGPURegisterInfo.h"
 #include "AMDGPUSubtarget.h"
 #include "AMDGPUTargetMachine.h"
+#include "SIMachineFunctionInfo.h"
 #include "MCTargetDesc/AMDGPUMCTargetDesc.h"
 #include "llvm/CodeGen/GlobalISel/InstructionSelector.h"
 #include "llvm/CodeGen/GlobalISel/InstructionSelectorImpl.h"
@@ -159,6 +160,19 @@ bool AMDGPUInstructionSelector::selectG_GEP(MachineInstr &I) const {
   return selectG_ADD(I);
 }
 
+bool AMDGPUInstructionSelector::selectG_IMPLICIT_DEF(MachineInstr &I) const {
+  MachineBasicBlock *BB = I.getParent();
+  MachineFunction *MF = BB->getParent();
+  MachineRegisterInfo &MRI = MF->getRegInfo();
+  const MachineOperand &MO = I.getOperand(0);
+  const TargetRegisterClass *RC =
+      TRI.getConstrainedRegClassForOperand(MO, MRI);
+  if (RC)
+    RBI.constrainGenericRegister(MO.getReg(), *RC, MRI);
+  I.setDesc(TII.get(TargetOpcode::IMPLICIT_DEF));
+  return true;
+}
+
 bool AMDGPUInstructionSelector::selectG_INTRINSIC(MachineInstr &I,
                                           CodeGenCoverage &CoverageInfo) const {
   unsigned IntrinsicID =  I.getOperand(1).getIntrinsicID();
@@ -168,6 +182,26 @@ bool AMDGPUInstructionSelector::selectG_INTRINSIC(MachineInstr &I,
     break;
   case Intrinsic::amdgcn_cvt_pkrtz:
     return selectImpl(I, CoverageInfo);
+
+  case Intrinsic::amdgcn_kernarg_segment_ptr: {
+    MachineFunction *MF = I.getParent()->getParent();
+    MachineRegisterInfo &MRI = MF->getRegInfo();
+    const SIMachineFunctionInfo *MFI = MF->getInfo<SIMachineFunctionInfo>();
+    const ArgDescriptor *InputPtrReg;
+    const TargetRegisterClass *RC;
+    const DebugLoc &DL = I.getDebugLoc();
+
+    std::tie(InputPtrReg, RC)
+      = MFI->getPreloadedValue(AMDGPUFunctionArgInfo::KERNARG_SEGMENT_PTR);
+    if (!InputPtrReg)
+      report_fatal_error("missing kernarg segment ptr");
+
+    BuildMI(*I.getParent(), &I, DL, TII.get(AMDGPU::COPY))
+      .add(I.getOperand(0))
+      .addReg(MRI.getLiveInVirtReg(InputPtrReg->getRegister()));
+    I.eraseFromParent();
+    return true;
+  }
   }
   return false;
 }
@@ -515,16 +549,14 @@ bool AMDGPUInstructionSelector::selectG_LOAD(MachineInstr &I) const {
 bool AMDGPUInstructionSelector::select(MachineInstr &I,
                                        CodeGenCoverage &CoverageInfo) const {
 
-  if (!isPreISelGenericOpcode(I.getOpcode()))
+  if (!isPreISelGenericOpcode(I.getOpcode())) {
+    if (I.isCopy())
+      return selectCOPY(I);
     return true;
+  }
 
   switch (I.getOpcode()) {
   default:
-    break;
-  case TargetOpcode::G_FMUL:
-  case TargetOpcode::G_FADD:
-  case TargetOpcode::G_FPTOUI:
-  case TargetOpcode::G_OR:
     return selectImpl(I, CoverageInfo);
   case TargetOpcode::G_ADD:
     return selectG_ADD(I);
@@ -535,6 +567,8 @@ bool AMDGPUInstructionSelector::select(MachineInstr &I,
     return selectG_CONSTANT(I);
   case TargetOpcode::G_GEP:
     return selectG_GEP(I);
+  case TargetOpcode::G_IMPLICIT_DEF:
+    return selectG_IMPLICIT_DEF(I);
   case TargetOpcode::G_INTRINSIC:
     return selectG_INTRINSIC(I, CoverageInfo);
   case TargetOpcode::G_LOAD:
@@ -543,6 +577,14 @@ bool AMDGPUInstructionSelector::select(MachineInstr &I,
     return selectG_STORE(I);
   }
   return false;
+}
+
+InstructionSelector::ComplexRendererFns
+AMDGPUInstructionSelector::selectVCSRC(MachineOperand &Root) const {
+  return {{
+      [=](MachineInstrBuilder &MIB) { MIB.add(Root); }
+  }};
+
 }
 
 ///
@@ -560,6 +602,14 @@ AMDGPUInstructionSelector::selectVOP3Mods0(MachineOperand &Root) const {
   return {{
       [=](MachineInstrBuilder &MIB) { MIB.add(Root); },
       [=](MachineInstrBuilder &MIB) { MIB.addImm(0); }, // src0_mods
+      [=](MachineInstrBuilder &MIB) { MIB.addImm(0); }, // clamp
+      [=](MachineInstrBuilder &MIB) { MIB.addImm(0); }  // omod
+  }};
+}
+InstructionSelector::ComplexRendererFns
+AMDGPUInstructionSelector::selectVOP3OMods(MachineOperand &Root) const {
+  return {{
+      [=](MachineInstrBuilder &MIB) { MIB.add(Root); },
       [=](MachineInstrBuilder &MIB) { MIB.addImm(0); }, // clamp
       [=](MachineInstrBuilder &MIB) { MIB.addImm(0); }  // omod
   }};

@@ -1084,6 +1084,10 @@ void Clang::AddPreprocessingOptions(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(Args.MakeArgString(Twine("-find-pch-source=") +
                                          Inputs[0].second->getValue()));
   }
+  if (YcIndex != -1 && JA.getKind() >= Action::PrecompileJobClass &&
+      JA.getKind() <= Action::AssembleJobClass) {
+    CmdArgs.push_back(Args.MakeArgString("-building-pch-with-obj"));
+  }
 
   bool RenderedImplicitInclude = false;
   int AI = -1;
@@ -1473,10 +1477,17 @@ void Clang::AddAArch64TargetArgs(const ArgList &Args,
       CmdArgs.push_back("-aarch64-enable-global-merge=true");
   }
 
-  if (!Args.hasArg(options::OPT_mno_outline) &&
-       Args.getLastArg(options::OPT_moutline)) {
+  if (Args.hasFlag(options::OPT_moutline, options::OPT_mno_outline, false)) {
     CmdArgs.push_back("-mllvm");
     CmdArgs.push_back("-enable-machine-outliner");
+
+    // The outliner shouldn't compete with linkers that dedupe linkonceodr
+    // functions in LTO. Enable that behaviour by default when compiling with
+    // LTO.
+    if (getToolChain().getDriver().isUsingLTO()) {
+      CmdArgs.push_back("-mllvm");
+      CmdArgs.push_back("-enable-linkonceodr-outlining");
+    }
   }
 }
 
@@ -3765,6 +3776,11 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (Args.hasFlag(options::OPT_ffixed_point, options::OPT_fno_fixed_point,
                    /*Default=*/false))
     Args.AddLastArg(CmdArgs, options::OPT_ffixed_point);
+
+  if (Args.hasFlag(options::OPT_fsame_fbits,
+                   options::OPT_fno_same_fbits,
+                   /*Default=*/false))
+    Args.AddLastArg(CmdArgs, options::OPT_fsame_fbits);
 
   // Handle -{std, ansi, trigraphs} -- take the last of -{std, ansi}
   // (-ansi is equivalent to -std=c89 or -std=c++98).
