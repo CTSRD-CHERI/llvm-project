@@ -65,10 +65,10 @@ value_of_HAS__DYNAMIC:
 
 
 # DYNAMIC-LABEL: Contents of section .data:
-# DYNAMIC-PIE-NEXT:    20000 00000000 [[DYNAMIC_ADDR:00000200]] 12345678 90abcdef
-# DYNAMIC-SHLIB-NEXT:  20000 00000000 [[DYNAMIC_ADDR:00000290]] 12345678 90abcdef
+# DYNAMIC-PIE-NEXT:    20000 00000000 [[DYNAMIC_ADDR:00000[0-9a-f]+]] 12345678 90abcdef
+# DYNAMIC-SHLIB-NEXT:  20000 00000000 [[DYNAMIC_ADDR:00000[0-9a-f]+]] 12345678 90abcdef
 #                        ^----- _DYNAMIC == relocbase + 0x1f8 (addend 0x1f8 is written here since we use REL)
-# DYNAMIC-NONPIC-NEXT: 30000 00000000 [[DYNAMIC_ADDR:00010260]] 12345678 90abcdef
+# DYNAMIC-NONPIC-NEXT: 30000 00000000 [[DYNAMIC_ADDR:000[0-9a-f]+]] 12345678 90abcdef
 #                        ^----- absolute value for _DYNAMIC in non-pie executable with shlibs
 # DYNAMIC-NEXT: {{3|2}}0010 00000000 00000001 fedcba09 87654321
 #                        ^----- _HAS__DYNAMIC == 1
