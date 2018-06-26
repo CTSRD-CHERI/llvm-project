@@ -33,20 +33,13 @@ using namespace llvm;
 #define DEBUG_TYPE "inline"
 
 PreservedAnalyses AlwaysInlinerPass::run(Module &M, ModuleAnalysisManager &) {
-  DEBUG(dbgs() << "AlwaysInlinerPass running\n");
   InlineFunctionInfo IFI;
   SmallSetVector<CallSite, 16> Calls;
   bool Changed = false;
   SmallVector<Function *, 16> InlinedFunctions;
-  for (Function &F : M) {
-    if (!F.isDeclaration() && F.hasFnAttribute(Attribute::AlwaysInline)) {
-      if (!isInlineViable(F)) {
-        DEBUG(dbgs() << "always_inline function not viable for inlining: "
-                     << F.getName() << "\n");
-        continue;
-      }
-
-      DEBUG(dbgs() << "AlwaysInlinerPass running on " << F.getName() << "\n");
+  for (Function &F : M)
+    if (!F.isDeclaration() && F.hasFnAttribute(Attribute::AlwaysInline) &&
+        isInlineViable(F)) {
       Calls.clear();
 
       for (User *U : F.users())
@@ -54,24 +47,18 @@ PreservedAnalyses AlwaysInlinerPass::run(Module &M, ModuleAnalysisManager &) {
           if (CS.getCalledFunction() == &F)
             Calls.insert(CS);
 
-      for (CallSite CS : Calls) {
+      for (CallSite CS : Calls)
         // FIXME: We really shouldn't be able to fail to inline at this point!
         // We should do something to log or check the inline failures here.
-        bool Inlined =
+        Changed |=
             InlineFunction(CS, IFI, /*CalleeAAR=*/nullptr, InsertLifetime);
-        if (!Inlined) {
-          errs() << "Failed to inline an always_inline function: "
-                 << F.getName();
-        }
-        Changed |= Inlined;
-      }
 
       // Remember to try and delete this function afterward. This both avoids
       // re-walking the rest of the module and avoids dealing with any iterator
       // invalidation issues while deleting functions.
       InlinedFunctions.push_back(&F);
     }
-  }
+
   // Remove any live functions.
   erase_if(InlinedFunctions, [&](Function *F) {
     F->removeDeadConstantUsers();
@@ -157,21 +144,13 @@ Pass *llvm::createAlwaysInlinerLegacyPass(bool InsertLifetime) {
 /// likely not worth it in practice.
 InlineCost AlwaysInlinerLegacyPass::getInlineCost(CallSite CS) {
   Function *Callee = CS.getCalledFunction();
-  // DEBUG(dbgs() << "Calling AlwaysInlinerLegacyPass::getInlineCost for "
-  //              << (Callee ? Callee->getName() : "<null>") << "\n");
 
   // Only inline direct calls to functions with always-inline attributes
   // that are viable for inlining. FIXME: We shouldn't even get here for
   // declarations.
   if (Callee && !Callee->isDeclaration() &&
-      Callee->hasFnAttribute(Attribute::AlwaysInline)) {
-    if (isInlineViable(*Callee)) {
-      return InlineCost::getAlways();
-    } else {
-      DEBUG(dbgs() << "always_inline function not viable for inlining: "
-                   << Callee->getName() << "\n");
-    }
-  }
+      CS.hasFnAttr(Attribute::AlwaysInline) && isInlineViable(*Callee))
+    return InlineCost::getAlways();
 
   return InlineCost::getNever();
 }
