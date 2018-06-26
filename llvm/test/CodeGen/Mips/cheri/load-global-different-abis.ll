@@ -32,13 +32,13 @@ entry:
 
 ; MIPS-NEXT: liveins: $t9_64
 ; MIPS-NEXT: %{{5|3}}:gpr64 = LUi64 target-flags(mips-gpoff-hi) @test
-; MIPS-NEXT: %{{6|4}}:gpr64 = DADDu %{{5|3}}, $t9_64
-; MIPS-NEXT: %0:gpr64 = DADDiu %{{6|4}}, target-flags(mips-gpoff-lo) @test
+; MIPS-NEXT: %{{6|4}}:gpr64 = DADDu %{{5|3}}:gpr64, $t9_64
+; MIPS-NEXT: %0:gpr64 = DADDiu %{{6|4}}:gpr64, target-flags(mips-gpoff-lo) @test
 ; MIPS-MXGOT-NEXT: %1:gpr64 = LUi64 target-flags(mips-got-hi16) @global
-; MIPS-MXGOT-NEXT: %2:gpr64 = DADDu killed %1, %0
-; MIPS-MXGOT-NEXT: [[ADDR:%3]]:gpr64 = LD killed %2, target-flags(mips-got-lo16) @global, implicit $ddc; mem:LD8[GOT]
-; MIPS-SMALLGOT-NEXT: [[ADDR:%1]]:gpr64 = LD %0, target-flags(mips-got-disp) @global, implicit $ddc; mem:LD8[GOT]
-; MIPS-NEXT: [[RESULT:%.+]]:gpr64 = LD killed [[ADDR]], 0, implicit $ddc; mem:LD8[@global](dereferenceable)
+; MIPS-MXGOT-NEXT: %2:gpr64 = DADDu killed %1:gpr64, %0
+; MIPS-MXGOT-NEXT: [[ADDR:%3]]:gpr64 = LD killed %2:gpr64, target-flags(mips-got-lo16) @global, implicit $ddc :: (load 8 from got)
+; MIPS-SMALLGOT-NEXT: [[ADDR:%1]]:gpr64 = LD %0:gpr64, target-flags(mips-got-disp) @global, implicit $ddc :: (load 8 from got)
+; MIPS-NEXT: [[RESULT:%.+]]:gpr64 = LD killed [[ADDR]]:gpr64, 0, implicit $ddc :: (dereferenceable load 8 from @global)
 
 
 ; Legacy loads the vaddr of global from the got then loads .size.global and
@@ -46,39 +46,39 @@ entry:
 ; LEGACY-NEXT:   liveins: $c12
 ; LEGACY-NEXT:   $t9_64 = CGetOffset $c12
 ; LEGACY-NEXT:   %11:gpr64 = LUi64 target-flags(mips-gpoff-hi) @test
-; LEGACY-NEXT:   %12:gpr64 = DADDu %11, $t9_64
-; LEGACY-NEXT:   %0:gpr64 = DADDiu %12, target-flags(mips-gpoff-lo) @test
-; LEGACY-NEXT:   %1:gpr64 = DADDiu %0, target-flags(mips-got-disp) @.size.global
+; LEGACY-NEXT:   %12:gpr64 = DADDu %11:gpr64, $t9_64
+; LEGACY-NEXT:   %0:gpr64 = DADDiu %12:gpr64, target-flags(mips-gpoff-lo) @test
+; LEGACY-NEXT:   %1:gpr64 = DADDiu %0:gpr64, target-flags(mips-got-disp) @.size.global
 ; LEGACY-NEXT:   %2:cherigpr = CFromPtr $ddc, killed %1
-; LEGACY-NEXT:   %3:gpr64 = CAPLOAD64 $zero_64, 0, killed %2; mem:LD8[GOT]
-; LEGACY-NEXT:   %4:gpr64 = LD killed %3, 0, implicit $ddc; mem:LD8[@.size.global]
-; LEGACY-NEXT:   %5:gpr64 = DADDiu %0, target-flags(mips-got-disp) @global
+; LEGACY-NEXT:   %3:gpr64 = CAPLOAD64 $zero_64, 0, killed %2:cherigpr :: (load 8 from got)
+; LEGACY-NEXT:   %4:gpr64 = LD killed %3:gpr64, 0, implicit $ddc :: (load 8 from @.size.global)
+; LEGACY-NEXT:   %5:gpr64 = DADDiu %0:gpr64, target-flags(mips-got-disp) @global
 ; LEGACY-NEXT:   %6:cherigpr = CFromPtr $ddc, killed %5
-; LEGACY-NEXT:   %7:gpr64 = CAPLOAD64 $zero_64, 0, killed %6; mem:LD8[GOT]
+; LEGACY-NEXT:   %7:gpr64 = CAPLOAD64 $zero_64, 0, killed %6:cherigpr :: (load 8 from got)
 ; LEGACY-NEXT:   %8:cherigpr = CFromPtr $ddc, killed %7
-; LEGACY-NEXT:   %9:cherigpr = CSetBounds killed %8, killed %4
-; LEGACY-NEXT:   [[RESULT:%10]]:gpr64 = CAPLOAD64 $zero_64, 0, killed %9; mem:LD8[@global(addrspace=200)](dereferenceable)
+; LEGACY-NEXT:   %9:cherigpr = CSetBounds killed %8:cherigpr, killed %4:gpr64
+; LEGACY-NEXT:   [[RESULT:%10]]:gpr64 = CAPLOAD64 $zero_64, 0, killed %9:cherigpr :: (dereferenceable load 8 from @global, addrspace 200)
 
 
 ; Due to the $cgp live-in the PLT and FNDESC functions are much shorter:
 
 ; PLT-NEXT: liveins: $c26
 ; PLT-NEXT: %0:cherigpr = COPY $c26
-; PLT-NEXT: %1:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @global, %0; mem:LD[[$CAP_SIZE]][JumpTable]
-; PLT-NEXT: [[RESULT:%2]]:gpr64 = CAPLOAD64 $zero_64, 0, killed %1; mem:LD8[@global(addrspace=200)](dereferenceable)
+; PLT-NEXT: %1:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @global, %0:cherigpr :: (load [[$CAP_SIZE]] from cap-table)
+; PLT-NEXT: [[RESULT:%2]]:gpr64 = CAPLOAD64 $zero_64, 0, killed %1:cherigpr :: (dereferenceable load 8 from @global, addrspace 200)
 
 ; FNDESC-NEXT:  liveins: $c26
 ; FNDESC-NEXT:  %0:cherigpr = COPY $c26
-; FNDESC-NEXT:  %1:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @global, %0; mem:LD[[$CAP_SIZE]][JumpTable]
-; FNDESC-NEXT:  [[RESULT:%2]]:gpr64 = CAPLOAD64 $zero_64, 0, killed %1; mem:LD8[@global(addrspace=200)](dereferenceable)
+; FNDESC-NEXT:  %1:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @global, %0:cherigpr :: (load [[$CAP_SIZE]] from cap-table)
+; FNDESC-NEXT:  [[RESULT:%2]]:gpr64 = CAPLOAD64 $zero_64, 0, killed %1:cherigpr :: (dereferenceable load 8 from @global, addrspace 200)
 
 ; PCREL-NEXT: liveins: $c12
 ; PCREL-NEXT: %3:gpr64 = LUi64 target-flags(mips-captable-off-hi) @test
-; PCREL-NEXT: %4:gpr64 = DADDiu %3, target-flags(mips-captable-off-lo) @test
-; PCREL-NEXT: $c26 = CIncOffset $c12, %4
+; PCREL-NEXT: %4:gpr64 = DADDiu %3:gpr64, target-flags(mips-captable-off-lo) @test
+; PCREL-NEXT: $c26 = CIncOffset $c12, %4:gpr64
 ; PCREL-NEXT: %0:cherigpr = COPY $c26
-; PCREL-NEXT: %1:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @global, %0; mem:LD[[$CAP_SIZE]][JumpTable]
-; PCREL-NEXT: [[RESULT:%2]]:gpr64 = CAPLOAD64 $zero_64, 0, killed %1; mem:LD8[@global(addrspace=200)](dereferenceable)
+; PCREL-NEXT: %1:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @global, %0:cherigpr :: (load [[$CAP_SIZE]] from cap-table)
+; PCREL-NEXT: [[RESULT:%2]]:gpr64 = CAPLOAD64 $zero_64, 0, killed %1:cherigpr :: (dereferenceable load 8 from @global, addrspace 200)
 
 
 ; COMMON-NEXT:   $v0_64 = COPY [[RESULT]]

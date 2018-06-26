@@ -33,42 +33,42 @@ entry:
 
 ; MIPS-NEXT:  liveins: $t9_64
 ; MIPS-NEXT:  %9:gpr64 = LUi64 target-flags(mips-gpoff-hi) @test
-; MIPS-NEXT:  %10:gpr64 = DADDu %9, $t9_64
-; MIPS-NEXT:  %0:gpr64 = DADDiu %10, target-flags(mips-gpoff-lo) @test
+; MIPS-NEXT:  %10:gpr64 = DADDu %9:gpr64, $t9_64
+; MIPS-NEXT:  %0:gpr64 = DADDiu %10:gpr64, target-flags(mips-gpoff-lo) @test
 ; MIPS-NEXT:  %1:gpr64 = RDHWR64 $hwr29
 ; MIPS-NEXT:  $v1_64 = COPY %1
-; MIPS-NEXT:  %2:gpr64 = LD %0, target-flags(mips-gottprel) @global_tls, implicit $ddc; mem:LD8[<unknown>]
+; MIPS-NEXT:  %2:gpr64 = LD %0:gpr64, target-flags(mips-gottprel) @global_tls, implicit $ddc :: (load 8)
 ; MIPS-NEXT:  %3:gpr64 = COPY $v1_64
-; MIPS-NEXT:  %4:gpr64 = DADDu %3, killed %2
-; MIPS-NEXT:  %5:gpr64 = LD killed %4, 0, implicit $ddc; mem:LD8[@global_tls](dereferenceable)
-; MIPS-NEXT:  %6:gpr64 = LD %0, target-flags(mips-got-disp) @global_normal, implicit $ddc; mem:LD8[GOT]
-; MIPS-NEXT:  %7:gpr64 = LD killed %6, 0, implicit $ddc; mem:LD8[@global_normal](dereferenceable)
-; MIPS-NEXT:  [[RESULT:%8]]:gpr64 = DADDu killed %5, killed %7
+; MIPS-NEXT:  %4:gpr64 = DADDu %3:gpr64, killed %2
+; MIPS-NEXT:  %5:gpr64 = LD killed %4:gpr64, 0, implicit $ddc :: (dereferenceable load 8 from @global_tls)
+; MIPS-NEXT:  %6:gpr64 = LD %0:gpr64, target-flags(mips-got-disp) @global_normal, implicit $ddc :: (load 8 from got)
+; MIPS-NEXT:  %7:gpr64 = LD killed %6:gpr64, 0, implicit $ddc :: (dereferenceable load 8 from @global_normal)
+; MIPS-NEXT:  [[RESULT:%8]]:gpr64 = DADDu killed %5:gpr64, killed %7
 
 ; We currently use the same legacy hack of using the MIPS hwr29 for all ABIs:
 
 ; LEGACY-NEXT:  liveins: $c12
 ; LEGACY-NEXT:  $t9_64 = CGetOffset $c12
 ; LEGACY-NEXT:  %17:gpr64 = LUi64 target-flags(mips-gpoff-hi) @test
-; LEGACY-NEXT:  %18:gpr64 = DADDu %17, $t9_64
-; LEGACY-NEXT:  %0:gpr64 = DADDiu %18, target-flags(mips-gpoff-lo) @test
+; LEGACY-NEXT:  %18:gpr64 = DADDu %17:gpr64, $t9_64
+; LEGACY-NEXT:  %0:gpr64 = DADDiu %18:gpr64, target-flags(mips-gpoff-lo) @test
 ; LEGACY-NEXT:  %1:gpr64 = RDHWR64 $hwr29
 ; LEGACY-NEXT:  $v1_64 = COPY %1
-; LEGACY-NEXT:  %2:gpr64 = LD %0, target-flags(mips-gottprel) @global_tls, implicit $ddc; mem:LD8[<unknown>]
+; LEGACY-NEXT:  %2:gpr64 = LD %0:gpr64, target-flags(mips-gottprel) @global_tls, implicit $ddc :: (load 8)
 ; LEGACY-NEXT:  %3:gpr64 = COPY $v1_64
-; LEGACY-NEXT:  %4:gpr64 = DADDu %3, killed %2
-; LEGACY-NEXT:  %5:gpr64 = LD killed %4, 0, implicit $ddc; mem:LD8[@global_tls](dereferenceable)
-; LEGACY-NEXT:  %6:gpr64 = DADDiu %0, target-flags(mips-got-disp) @.size.global_normal
+; LEGACY-NEXT:  %4:gpr64 = DADDu %3:gpr64, killed %2
+; LEGACY-NEXT:  %5:gpr64 = LD killed %4:gpr64, 0, implicit $ddc :: (dereferenceable load 8 from @global_tls)
+; LEGACY-NEXT:  %6:gpr64 = DADDiu %0:gpr64, target-flags(mips-got-disp) @.size.global_normal
 ; LEGACY-NEXT:  %7:cherigpr = CFromPtr $ddc, killed %6
-; LEGACY-NEXT:  %8:gpr64 = CAPLOAD64 $zero_64, 0, killed %7; mem:LD8[GOT]
-; LEGACY-NEXT:  %9:gpr64 = LD killed %8, 0, implicit $ddc; mem:LD8[@.size.global_normal]
-; LEGACY-NEXT:  %10:gpr64 = DADDiu %0, target-flags(mips-got-disp) @global_normal
+; LEGACY-NEXT:  %8:gpr64 = CAPLOAD64 $zero_64, 0, killed %7:cherigpr :: (load 8 from got)
+; LEGACY-NEXT:  %9:gpr64 = LD killed %8:gpr64, 0, implicit $ddc :: (load 8 from @.size.global_normal)
+; LEGACY-NEXT:  %10:gpr64 = DADDiu %0:gpr64, target-flags(mips-got-disp) @global_normal
 ; LEGACY-NEXT:  %11:cherigpr = CFromPtr $ddc, killed %10
-; LEGACY-NEXT:  %12:gpr64 = CAPLOAD64 $zero_64, 0, killed %11; mem:LD8[GOT]
+; LEGACY-NEXT:  %12:gpr64 = CAPLOAD64 $zero_64, 0, killed %11:cherigpr :: (load 8 from got)
 ; LEGACY-NEXT:  %13:cherigpr = CFromPtr $ddc, killed %12
-; LEGACY-NEXT:  %14:cherigpr = CSetBounds killed %13, killed %9
-; LEGACY-NEXT:  %15:gpr64 = CAPLOAD64 $zero_64, 0, killed %14; mem:LD8[@global_normal(addrspace=200)](dereferenceable)
-; LEGACY-NEXT:  [[RESULT:%16]]:gpr64 = DADDu killed %5, killed %15
+; LEGACY-NEXT:  %14:cherigpr = CSetBounds killed %13:cherigpr, killed %9:gpr64
+; LEGACY-NEXT:  %15:gpr64 = CAPLOAD64 $zero_64, 0, killed %14:cherigpr :: (dereferenceable load 8 from @global_normal, addrspace 200)
+; LEGACY-NEXT:  [[RESULT:%16]]:gpr64 = DADDu killed %5:gpr64, killed %15
 
 
 ; PCREL, PLT and FNDESC only differ in the prologue since they all use the same hack:
@@ -78,25 +78,25 @@ entry:
 ; FNDESC-NEXT:  %0:cherigpr = COPY $c26
 ; PCREL needs to derive $cgp so it's not live-in:
 ; PCREL-NEXT: liveins: $c12
-; PCREL-NEXT:  %12:gpr64 = LUi64 target-flags(mips-captable-off-hi) @test
-; PCREL-NEXT: %13:gpr64 = DADDiu %12, target-flags(mips-captable-off-lo) @test
-; PCREL-NEXT: $c26 = CIncOffset $c12, %13
+; PCREL-NEXT: %12:gpr64 = LUi64 target-flags(mips-captable-off-hi) @test
+; PCREL-NEXT: %13:gpr64 = DADDiu %12:gpr64, target-flags(mips-captable-off-lo) @test
+; PCREL-NEXT: $c26 = CIncOffset $c12, %13:gpr64
 ; PCREL-NEXT: %0:cherigpr = COPY $c26
 
 
 ; CAP-TABLE-HACK-NEXT:  $t9_64 = CGetOffset $c12
 ; CAP-TABLE-HACK-NEXT:  %10:gpr64 = LUi64 target-flags(mips-gpoff-hi) @test
-; CAP-TABLE-HACK-NEXT:  %11:gpr64 = DADDu %10, $t9_64
-; CAP-TABLE-HACK-NEXT:  %1:gpr64 = DADDiu %11, target-flags(mips-gpoff-lo) @test
+; CAP-TABLE-HACK-NEXT:  %11:gpr64 = DADDu %10:gpr64, $t9_64
+; CAP-TABLE-HACK-NEXT:  %1:gpr64 = DADDiu %11:gpr64, target-flags(mips-gpoff-lo) @test
 ; CAP-TABLE-HACK-NEXT:  %2:gpr64 = RDHWR64 $hwr29
 ; CAP-TABLE-HACK-NEXT:  $v1_64 = COPY %2
-; CAP-TABLE-HACK-NEXT:  %3:gpr64 = LD %1, target-flags(mips-gottprel) @global_tls, implicit $ddc; mem:LD8[<unknown>]
+; CAP-TABLE-HACK-NEXT:  %3:gpr64 = LD %1:gpr64, target-flags(mips-gottprel) @global_tls, implicit $ddc :: (load 8)
 ; CAP-TABLE-HACK-NEXT:  %4:gpr64 = COPY $v1_64
-; CAP-TABLE-HACK-NEXT:  %5:gpr64 = DADDu %4, killed %3
-; CAP-TABLE-HACK-NEXT:  %6:gpr64 = LD killed %5, 0, implicit $ddc; mem:LD8[@global_tls](dereferenceable)
-; CAP-TABLE-HACK-NEXT:  %7:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @global_normal, %0; mem:LD[[$CAP_SIZE]][JumpTable]
-; CAP-TABLE-HACK-NEXT:  %8:gpr64 = CAPLOAD64 $zero_64, 0, killed %7; mem:LD8[@global_normal(addrspace=200)](dereferenceable)
-; CAP-TABLE-HACK-NEXT:  [[RESULT:%9]]:gpr64 = DADDu killed %6, killed %8
+; CAP-TABLE-HACK-NEXT:  %5:gpr64 = DADDu %4:gpr64, killed %3
+; CAP-TABLE-HACK-NEXT:  %6:gpr64 = LD killed %5:gpr64, 0, implicit $ddc :: (dereferenceable load 8 from @global_tls)
+; CAP-TABLE-HACK-NEXT:  %7:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @global_normal, %0:cherigpr :: (load {{16|32}} from cap-table)
+; CAP-TABLE-HACK-NEXT:  %8:gpr64 = CAPLOAD64 $zero_64, 0, killed %7:cherigpr :: (dereferenceable load 8 from @global_normal, addrspace 200)
+; CAP-TABLE-HACK-NEXT:  [[RESULT:%9]]:gpr64 = DADDu killed %6:gpr64, killed %8:gpr64
 
 
 ; COMMON-NEXT:   $v0_64 = COPY [[RESULT]]
