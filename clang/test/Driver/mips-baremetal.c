@@ -10,7 +10,7 @@
 
 
 // CHECK: "-cc1" "-triple" "{{(mips64|cheri)}}-none--elf" "-emit-obj"
-// CHECK-SAME: "-no-integrated-as"
+// CHECK-NOT: "-no-integrated-as"
 // CHECK-SAME: "-target-abi" "[[ABI:(n64|purecap)]]"
 // CHECK-SAME: "-resource-dir" "[[RESOURCE_DIR:[^"]+]]"
 // SYSROOT-SAME: "-isysroot" "[[SYSROOT:[^"]+]]"
