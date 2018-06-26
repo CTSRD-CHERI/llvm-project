@@ -4,18 +4,16 @@
 // RUN: llvm-readobj -r %t.o | FileCheck -check-prefix READOBJ %s
 
 // RUN: ld.lld -preemptible-caprelocs=legacy %t.o -static -o %t-static.exe 2>&1 | FileCheck -check-prefixes UNKNOWN_LENGTH %s
-// RUN: llvm-objdump -C %t-static.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC %s
+// RUN: llvm-readobj -C %t-static.exe | FileCheck -check-prefixes STATIC %s
 
 // same again for statically dynamically linked exe:
 // RUN: %cheri_purecap_clang %S/Inputs/dummy_shlib.c -c -o %T/integrated_dummy_shlib.o
 // RUN: ld.lld -preemptible-caprelocs=legacy -pie -Bdynamic %t.o -o %t-dynamic.exe
-// RUN: llvm-objdump -C %t-dynamic.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC %s
-// RUN: llvm-readobj -r -s %t-dynamic.exe | FileCheck -check-prefixes DYNAMIC-RELOCS %s
+// RUN: llvm-readobj -r -s -C  %t-dynamic.exe | FileCheck -check-prefixes DYNAMIC %s
 
 // Look at shared libraries:
 // RUN: ld.lld -preemptible-caprelocs=legacy %t.o -shared -o %t.so
-// RUN: llvm-readobj -r -s %t.so | FileCheck -check-prefixes DYNAMIC-RELOCS %s
-// RUN: llvm-objdump -C -t %t.so | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC %s
+// RUN: llvm-readobj -r -s -C %t.so | FileCheck -check-prefixes DYNAMIC-RELOCS %s
 
 
 // FIXME: it would be good if we could set bounds here instead of having it as -1
@@ -66,20 +64,23 @@ struct option options_table[] = {
 // DYNAMIC-RELOCS-NEXT:   }
 // DYNAMIC-RELOCS-NEXT: ]
 
-
-// DUMP-CAPRELOCS-LABEL: CAPABILITY RELOCATION RECORDS:
-// STATIC-NEXT: 0x00000001200100{{20|10}}      Base: <Unnamed symbol> (0x0000000120000190)     Offset: 0x0000000000000000      Length: 0x0000000000000006      Permissions: 0x00000000
-// STATIC-NEXT: 0x00000001200100{{60|30}}      Base: <Unnamed symbol> (0x00000001200001a0)     Offset: 0x0000000000000004      Length: 0x0000000000000007      Permissions: 0x00000000
-// STATIC-NEXT: 0x00000001200100{{a0|50}}      Base: <Unnamed symbol> (0x0000000120000196)     Offset: 0x0000000000000000      Length: 0x000000000000000a      Permissions: 0x00000000
-// STATIC-NEXT: 0x00000001200100{{e0|70}}      Base: <Unnamed symbol> (0x0000000120000196)     Offset: 0x0000000000000000      Length: 0x000000000000000a      Permissions: 0x00000000
-// STATIC-NEXT: 0x0000000120010{{120|090}}      Base: <Unnamed symbol> (0x0000000120000196)     Offset: 0x0000000000000001      Length: 0x000000000000000a      Permissions: 0x00000000{{$}}
-
-// PIE exe amd shlib should have dynamic relocations and only the offset values
-// DYNAMIC-NEXT: 0x00000000000100{{20|10}}      Base: <Unnamed symbol> (0x00000000000001c8)     Offset: 0x0000000000000000      Length: 0x0000000000000006      Permissions: 0x00000000
-// DYNAMIC-NEXT: 0x00000000000100{{60|30}}      Base: <Unnamed symbol> (0x00000000000001d8)     Offset: 0x0000000000000004      Length: 0x0000000000000007      Permissions: 0x00000000
-// DYNAMIC-NEXT: 0x00000000000100{{a0|50}}      Base: <Unnamed symbol> (0x00000000000001ce)     Offset: 0x0000000000000000      Length: 0x000000000000000a      Permissions: 0x00000000
-// DYNAMIC-NEXT: 0x00000000000100{{e0|70}}      Base: <Unnamed symbol> (0x00000000000001ce)     Offset: 0x0000000000000000      Length: 0x000000000000000a      Permissions: 0x00000000
-// DYNAMIC-NEXT: 0x0000000000010{{120|090}}      Base: <Unnamed symbol> (0x00000000000001ce)     Offset: 0x0000000000000001      Length: 0x000000000000000a      Permissions: 0x00000000{{$}}
+// STATIC-LABEL: CHERI __cap_relocs [
+// STATIC-NEXT:    0x120010020 Base: 0x120000190 (<unknown symbol>+0) Length: 6 Perms: Object
+// STATIC-NEXT:    0x120010060 Base: 0x1200001a0 (<unknown symbol>+4) Length: 7 Perms: Object
+// STATIC-NEXT:    0x1200100a0 Base: 0x120000196 (<unknown symbol>+0) Length: 10 Perms: Object
+// STATIC-NEXT:    0x1200100e0 Base: 0x120000196 (<unknown symbol>+0) Length: 10 Perms: Object
+// STATIC-NEXT:    0x120010120 Base: 0x120000196 (<unknown symbol>+1) Length: 10 Perms: Object
+// STATIC-NEXT: ]
 
 
-// DUMP-CAPRELOCS-SAME:{{[[:space:]]$}}
+// PIE exe amd shlib should have a dynamic relocations and only have the offset+length values filled in:
+// DYNAMIC-LABEL: CHERI __cap_relocs [
+// DYNAMIC-NEXT:    0x010020 Base: 0x1e1 (<unknown symbol>+0) Length: 6 Perms: Object
+// DYNAMIC-NEXT:    0x010060 Base: 0x1f1 (<unknown symbol>+4) Length: 7 Perms: Object
+// DYNAMIC-NEXT:    0x0100a0 Base: 0x1e7 (<unknown symbol>+0) Length: 10 Perms: Object
+// DYNAMIC-NEXT:    0x0100e0 Base: 0x1e7 (<unknown symbol>+0) Length: 10 Perms: Object
+// DYNAMIC-NEXT:    0x010120 Base: 0x1e7 (<unknown symbol>+1) Length: 10 Perms: Object
+// DYNAMIC-NEXT: ]
+
+
+

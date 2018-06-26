@@ -24,7 +24,7 @@ char* getenv(void) {
 // PHDRS-LABEL: Section to Segment mapping:
 // PHDRS-NEXT:  Segment Sections...
 // PHDRS-NEXT:   00
-// PHDRS-NEXT:   01     .global_sizes .MIPS.abiflags .MIPS.options .dynsym .hash .dynamic .dynstr
+// PHDRS-NEXT:   01     .dynsym .dynstr .global_sizes .MIPS.abiflags .MIPS.options .hash .dynamic
 // PHDRS-NEXT:   02     .text
 // PHDRS-NEXT:   03     .data .got
 // PHDRS-NEXT:   04     .dynamic

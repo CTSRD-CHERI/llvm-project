@@ -28,7 +28,7 @@ int* __error() {
 // UNDEFINED-LABEL: Section to Segment mapping:
 // UNDEFINED-NEXT:  Segment Sections...
 // UNDEFINED-NEXT:   00
-// UNDEFINED-NEXT:   01     .MIPS.abiflags .MIPS.options .dynsym .hash .dynamic .dynstr
+// UNDEFINED-NEXT:   01     .dynsym .dynstr .MIPS.abiflags .MIPS.options .hash .dynamic
 // UNDEFINED-NEXT:   02     .text
 // UNDEFINED-NEXT:   03     .global_sizes .data .got
 // UNDEFINED-NEXT:   04     .dynamic
@@ -42,11 +42,11 @@ int* __error() {
 // DEFINED-MAPPING-LABEL: Section to Segment mapping:
 // DEFINED-MAPPING-NEXT:  Segment Sections...
 // DEFINED-MAPPING-NEXT:   00
-// DEFINED-MAPPING-NEXT:   01     .global_sizes .MIPS.abiflags .MIPS.options .dynsym .hash .dynamic .dynstr
+// DEFINED-MAPPING-NEXT:   01     .dynsym .dynstr .global_sizes .MIPS.abiflags .MIPS.options .hash .dynamic
 // DEFINED-MAPPING-NEXT:   02     .text
 // DEFINED-MAPPING-NEXT:   03     .data .got
 // DEFINED-MAPPING-NEXT:   04     .dynamic
 // DEFINED-MAPPING-NEXT:   05
 
 // DEFINED-DUMP:      Contents of section .global_sizes:
-// DEFINED-DUMP-NEXT: 0190 00000000 00000004                    ........
+// DEFINED-DUMP-NEXT: 0210 00000000 00000004                    ........

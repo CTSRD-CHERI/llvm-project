@@ -31,9 +31,9 @@ TEST(_DYNAMIC)
 int __start(void) {
   return 0;
 }
-// DYNAMIC-EXE: 0000000000000230 .dynamic		 00000160 .hidden _DYNAMIC
-// DYNAMIC-EXE: 0000000000000000 .MIPS.abiflags 00000000 .hidden __init_array_end
-// DYNAMIC-EXE: 0000000000000000 .MIPS.abiflags 00000040 .hidden __init_array_start
+// DYNAMIC-EXE: 0000000000000238 .dynamic		 00000160 .hidden _DYNAMIC
+// DYNAMIC-EXE: 0000000000000000 *ABS* 00000000 .hidden __init_array_end
+// DYNAMIC-EXE: 0000000000000000 *ABS* 00000000 .hidden __init_array_start
 // STATIC-EXE: 0000000         *ABS*		 00000000 .hidden __init_array_end
 // STATIC-EXE: 0000000         *ABS*		 00000000 .hidden __init_array_start
 // EXE: 0030008         .preinit_array		 00000000 .hidden __preinit_array_end

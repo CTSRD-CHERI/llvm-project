@@ -51,10 +51,10 @@
 // SHLIB-RELOCS-UNSORTED1-NEXT:    Section (16) .rel.dyn {
 // SHLIB-RELOCS-UNSORTED1-NEXT:      0x20040 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 // SHLIB-RELOCS-UNSORTED1-NEXT:      0x20068 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// SHLIB-RELOCS-UNSORTED1-NEXT:      0x20070 R_MIPS_CHERI_ABSPTR/R_MIPS_64/R_MIPS_NONE bar 0x0 (real addend unknown)
-// SHLIB-RELOCS-UNSORTED1-NEXT:      0x20080 R_MIPS_CHERI_SIZE/R_MIPS_64/R_MIPS_NONE bar 0x0 (real addend unknown)
 // SHLIB-RELOCS-UNSORTED1-NEXT:      0x20048 R_MIPS_CHERI_ABSPTR/R_MIPS_64/R_MIPS_NONE foo 0x0 (real addend unknown)
 // SHLIB-RELOCS-UNSORTED1-NEXT:      0x20058 R_MIPS_CHERI_SIZE/R_MIPS_64/R_MIPS_NONE foo 0x0 (real addend unknown)
+// SHLIB-RELOCS-UNSORTED1-NEXT:      0x20070 R_MIPS_CHERI_ABSPTR/R_MIPS_64/R_MIPS_NONE bar 0x0 (real addend unknown)
+// SHLIB-RELOCS-UNSORTED1-NEXT:      0x20080 R_MIPS_CHERI_SIZE/R_MIPS_64/R_MIPS_NONE bar 0x0 (real addend unknown)
 // SHLIB-RELOCS-UNSORTED1-NEXT:    }
 // SHLIB-RELOCS-UNSORTED1-NEXT:  ]
 
@@ -75,10 +75,10 @@
 // SHLIB-RELOCS-UNSORTED2-NEXT:    Section (16) .rel.dyn {
 // SHLIB-RELOCS-UNSORTED2-NEXT:      0x20040 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 // SHLIB-RELOCS-UNSORTED2-NEXT:      0x20068 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// SHLIB-RELOCS-UNSORTED2-NEXT:      0x20070 R_MIPS_CHERI_ABSPTR/R_MIPS_64/R_MIPS_NONE foo 0x0 (real addend unknown)
-// SHLIB-RELOCS-UNSORTED2-NEXT:      0x20080 R_MIPS_CHERI_SIZE/R_MIPS_64/R_MIPS_NONE foo 0x0 (real addend unknown)
 // SHLIB-RELOCS-UNSORTED2-NEXT:      0x20048 R_MIPS_CHERI_ABSPTR/R_MIPS_64/R_MIPS_NONE bar 0x0 (real addend unknown)
 // SHLIB-RELOCS-UNSORTED2-NEXT:      0x20058 R_MIPS_CHERI_SIZE/R_MIPS_64/R_MIPS_NONE bar 0x0 (real addend unknown)
+// SHLIB-RELOCS-UNSORTED2-NEXT:      0x20070 R_MIPS_CHERI_ABSPTR/R_MIPS_64/R_MIPS_NONE foo 0x0 (real addend unknown)
+// SHLIB-RELOCS-UNSORTED2-NEXT:      0x20080 R_MIPS_CHERI_SIZE/R_MIPS_64/R_MIPS_NONE foo 0x0 (real addend unknown)
 // SHLIB-RELOCS-UNSORTED2-NEXT:    }
 // SHLIB-RELOCS-UNSORTED2-NEXT:  ]
 
@@ -91,6 +91,8 @@
 // RUN: ld.lld -preemptible-caprelocs=legacy %t2.o %t1.o -shared -o %t.so --script=%t.script --sort-cap-relocs
 // RUN: llvm-objdump -s --section=__cap_relocs -C -h %t.so | FileCheck %s -check-prefix SHLIB-UNSORTED2
 // RUN: llvm-readobj -r %t.so | FileCheck %s -check-prefix SHLIB-RELOCS-UNSORTED2
+// RUN: llvm-readobj -cheri-caprelocs -dyn-relocations  %t.so
+
 
 
 .ifdef FIRST

@@ -4,9 +4,9 @@
 
 // create a n64 output that doesn't have any cap-table entries
 // RUN: %cheri_cc1 %s -emit-obj -x c -O3 -o %t.o
-// RUN: llvm-objdump -t -d -s -h %t.o | FileCheck -check-prefix OBJ %s
+// RUN: llvm-objdump -t %t.o | FileCheck -check-prefix OBJ %s
 // RUN: ld.lld %t.o -o %t.exe
-// RUN: llvm-objdump -t -d -s -h %t.exe | FileCheck %s
+// RUN: llvm-objdump -t %t.exe | FileCheck %s
 
 int global = 1;
 long global2 = 3;
@@ -23,6 +23,7 @@ static int __start(void) {
 
 // CHECK-LABEL: SYMBOL TABLE:
 // CHECK-NEXT: 0000000000000000         *UND*		 00000000
+// CHECK-NEXT: 0000000000000000 l    df *ABS*    00000000 cap-table-broken-mips-output.c
 // CHECK-NEXT: 0000000000028000         .got		 00000000 .hidden _gp
 // CHECK-NEXT: 0000000000020000 g       .data		 00000004 global
 // CHECK-NEXT: 0000000000020008 g       .data		 00000008 global2

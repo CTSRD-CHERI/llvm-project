@@ -96,9 +96,9 @@ local_var:
 
 # ELF-BOTH-ELF-RELOCS:      Relocations [
 # ELF-BOTH-ELF-RELOCS-NEXT:   Section (7) .rel.dyn {
-# ELF-BOTH-ELF-RELOCS-NEXT:     0x30000 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE preemptible_var 0x0 (real addend unknown)
-#                                   ^---- preemptible_var@CAPTABLE
 # ELF-BOTH-ELF-RELOCS-NEXT:     0x30010 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE local_var 0x0 (real addend unknown)
 #                                    ^---- local_var@CAPTABLE
+# ELF-BOTH-ELF-RELOCS-NEXT:     0x30000 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE preemptible_var 0x0 (real addend unknown)
+#                                   ^---- preemptible_var@CAPTABLE
 # ELF-BOTH-ELF-RELOCS-NEXT:   }
 # ELF-BOTH-ELF-RELOCS-NEXT: ]
