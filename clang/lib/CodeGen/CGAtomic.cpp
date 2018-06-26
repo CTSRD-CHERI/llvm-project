@@ -1342,7 +1342,7 @@ Address AtomicInfo::emitCastToAtomicIntPointer(Address addr) const {
   auto addrTy = cast<llvm::PointerType>(addr.getPointer()->getType());
   llvm::Type *ty;
   if (AtomicTy->isCHERICapabilityType(CGF.getContext())) {
-    addrspace = CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
+    addrspace = CGF.CGM.getTargetCodeGenInfo().getDefaultAS();
     if (addrTy->getAddressSpace() == addrspace) {
       return addr;
     }
