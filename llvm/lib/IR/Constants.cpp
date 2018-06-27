@@ -1494,12 +1494,28 @@ static Constant *getFoldedCast(Instruction::CastOps opc, Constant *C, Type *Ty,
   return pImpl->ExprConstants.getOrCreate(Ty, Key);
 }
 
+#if !defined(NDEBUG)
+#define assertCastIsValid(op, S, Ty, msg)                                      \
+  do {                                                                         \
+    if (LLVM_UNLIKELY(!CastInst::castIsValid((op), (S), (Ty)))) {              \
+      errs() << msg << ": op=" << ((int)op) << " S = ";                        \
+      (S)->getType()->dump();                                                  \
+      errs() << "Ty = ";                                                       \
+      (Ty)->dump();                                                            \
+      assert(false && msg);                                                    \
+    }                                                                          \
+  } while (false)
+#else
+#define assertCastIsValid(op, S, Ty, msg)                                      \
+  assert(CastInst::castIsValid((op), (S), (Ty)) && msg)
+#endif
+
 Constant *ConstantExpr::getCast(unsigned oc, Constant *C, Type *Ty,
                                 bool OnlyIfReduced) {
   Instruction::CastOps opc = Instruction::CastOps(oc);
   assert(Instruction::isCast(opc) && "opcode out of range");
   assert(C && Ty && "Null arguments to getCast");
-  assert(CastInst::castIsValid(opc, C, Ty) && "Invalid constantexpr cast!");
+  assertCastIsValid(opc, C, Ty, "Invalid constantexpr cast!");
 
   switch (opc) {
   default:
@@ -1741,8 +1757,8 @@ Constant *ConstantExpr::getIntToPtr(Constant *C, Type *DstTy,
 
 Constant *ConstantExpr::getBitCast(Constant *C, Type *DstTy,
                                    bool OnlyIfReduced) {
-  assert(CastInst::castIsValid(Instruction::BitCast, C, DstTy) &&
-         "Invalid constantexpr bitcast!");
+  assertCastIsValid(Instruction::BitCast, C, DstTy,
+                    "Invalid constantexpr bitcast!");
 
   // It is common to ask for a bitcast of a value to its own type, handle this
   // speedily.
@@ -1753,8 +1769,8 @@ Constant *ConstantExpr::getBitCast(Constant *C, Type *DstTy,
 
 Constant *ConstantExpr::getAddrSpaceCast(Constant *C, Type *DstTy,
                                          bool OnlyIfReduced) {
-  assert(CastInst::castIsValid(Instruction::AddrSpaceCast, C, DstTy) &&
-         "Invalid constantexpr addrspacecast!");
+  assertCastIsValid(Instruction::AddrSpaceCast, C, DstTy,
+                    "Invalid constantexpr addrspacecast!");
 
   // Canonicalize addrspacecasts between different pointer types by first
   // bitcasting the pointer type and then converting the address space.
