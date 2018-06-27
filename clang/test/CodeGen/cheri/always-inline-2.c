@@ -2,18 +2,18 @@
 // REQUIRES: asserts
 
 // CHeck that -O0 inlines only the always_inline function
-// RUN: %cheri_cc1 -emit-llvm %s -O0 -o - -mllvm -stats | FileCheck %s -check-prefixes CHECK,NOOPT,N64,N64-NOOPT
-// RUN: %cheri_purecap_cc1 -emit-llvm -mllvm -cheri-cap-table-abi=pcrel %s -O0 -o - -mllvm -stats | FileCheck %s -check-prefixes CHECK,NOOPT,PURECAP,PURECAP-CAPTABLE-NOOPT,PURECAP-CAPTABLE
-// RUN: %cheri_purecap_cc1 -emit-llvm -mllvm -cheri-cap-table-abi=legacy %s -O0 -o - -mllvm -stats | FileCheck %s -check-prefixes CHECK,NOOPT,PURECAP,PURECAP-LEGACY-NOOPT,PURECAP-LEGACY
+// RUN: %cheri_cc1 -emit-llvm %s -O0 -o - | FileCheck %s -check-prefixes CHECK,NOOPT,N64,N64-NOOPT
+// RUN: %cheri_purecap_cc1 -emit-llvm -mllvm -cheri-cap-table-abi=pcrel %s -O0 -o - | FileCheck %s -check-prefixes CHECK,NOOPT,PURECAP,PURECAP-CAPTABLE-NOOPT,PURECAP-CAPTABLE
+// RUN: %cheri_purecap_cc1 -emit-llvm -mllvm -cheri-cap-table-abi=legacy %s -O0 -o - | FileCheck %s -check-prefixes CHECK,NOOPT,PURECAP,PURECAP-LEGACY-NOOPT,PURECAP-LEGACY
 
 // at -O1/O2 the maybe_inline function should be inlined
-// RUN: %cheri_cc1 -emit-llvm %s -O1 -o - -mllvm -stats | FileCheck %s -check-prefixes CHECK,OPT,N64
-// RUN: %cheri_cc1 -emit-llvm %s -O2 -o - -mllvm -stats | FileCheck %s -check-prefixes CHECK,OPT,N64
-// RUN: %cheri_purecap_cc1 -emit-llvm -mllvm -cheri-cap-table-abi=pcrel %s -O2 -o - -mllvm -stats | FileCheck %s -check-prefixes CHECK,OPT,PURECAP,PURECAP-CAPTABLE
-// RUN: %cheri_purecap_cc1 -emit-llvm -mllvm -cheri-cap-table-abi=legacy %s -O2 -o - -mllvm -stats | FileCheck %s -check-prefixes CHECK,OPT,PURECAP,PURECAP-LEGACY
-// At -O1 the maybe_inline function is not inlined in purecap
-// TODO: RsUN: %cheri_purecap_cc1 -emit-llvm -mllvm -cheri-cap-table-abi=pcrel %s -O1 -o - -mllvm -stats | FileCheck %s -check-prefixes CHECK,OPT,PURECAP,PURECAP-CAPTABLE
-// TODO: RsUN: %cheri_purecap_cc1 -emit-llvm -mllvm -cheri-cap-table-abi=legacy %s -O1 -o - -mllvm -stats | FileCheck %s -check-prefixes CHECK,OPT,PURECAP,PURECAP-LEGACY
+// RUN: %cheri_cc1 -emit-llvm %s -O1 -o - | FileCheck %s -check-prefixes CHECK,OPT,N64
+// RUN: %cheri_cc1 -emit-llvm %s -O2 -o - | FileCheck %s -check-prefixes CHECK,OPT,N64
+// RUN: %cheri_purecap_cc1 -emit-llvm -mllvm -cheri-cap-table-abi=pcrel %s -O2 -o - | FileCheck %s -check-prefixes CHECK,OPT,PURECAP,PURECAP-CAPTABLE
+// RUN: %cheri_purecap_cc1 -emit-llvm -mllvm -cheri-cap-table-abi=legacy %s -O2 -o - | FileCheck %s -check-prefixes CHECK,OPT,PURECAP,PURECAP-LEGACY
+// RUN: %cheri_purecap_cc1 -emit-llvm -mllvm -cheri-cap-table-abi=pcrel %s -O1 -o - | FileCheck %s -check-prefixes CHECK,OPT,PURECAP,PURECAP-CAPTABLE
+// At -O1 the CHERI legacy calls are not inlined:
+// RUsN: %cheri_purecap_cc1 -emit-llvm -mllvm -cheri-cap-table-abi=legacy %s -O1 -o - | FileCheck %s -check-prefixes CHECK,OPT,PURECAP,PURECAP-LEGACY
 
 static __attribute__((always_inline)) int always_inlined(void) {
   return 5;
@@ -51,7 +51,7 @@ int call_not_inlined(void) {
 // OPT-NEXT:                    [[CALL:%.+]] = {{(tail )?}}call i32 @not_inlined(i32 signext 0)
 // N64-NOOPT-NEXT:              [[CALL:%.+]] = {{(tail )?}}call i32 @not_inlined(i32 signext 0)
 // PURECAP-LEGACY-NOOPT-NEXT:   [[CALL:%.+]] = {{(tail )?}}call i32 @not_inlined(i32 signext 0)
-// PURECAP-CAPTABLE-NOOPT-NEXT: [[CALL:%.+]] = {{(tail )?}}call {{(fastcc )?}}i32 addrspacecast (i32 (i32)* @not_inlined to i32 (i32) addrspace(200)*)(i32 signext 0)
+// PURECAP-CAPTABLE-NOOPT-NEXT: [[CALL:%.+]] = {{(tail )?}}call i32 @not_inlined(i32 signext 0)
 // CHECK-NEXT:    ret i32 [[CALL]]
 // CHECK-NEXT: }
 
@@ -70,7 +70,7 @@ int call_maybe_inlined(void) {
 // OPT-NEXT:     ret i32 7
 // N64-NOOPT-NEXT:              [[CALL:%.+]] = call i32 @maybe_inlined(i32 signext 0)
 // PURECAP-LEGACY-NOOPT-NEXT:   [[CALL:%.+]] = call i32 @maybe_inlined(i32 signext 0)
-// PURECAP-CAPTABLE-NOOPT-NEXT: [[CALL:%.+]] = call i32 addrspacecast (i32 (i32)* @maybe_inlined to i32 (i32) addrspace(200)*)(i32 signext 0)
+// PURECAP-CAPTABLE-NOOPT-NEXT: [[CALL:%.+]] = call i32 @maybe_inlined(i32 signext 0)
 // NOOPT-NEXT:   ret i32 [[CALL]]
 // CHECK-NEXT: }
 // OPT-NOT: maybe_inlined

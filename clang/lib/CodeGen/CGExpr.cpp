@@ -2425,15 +2425,21 @@ static LValue EmitGlobalVarDeclLValue(CodeGenFunction &CGF,
 
 llvm::Value *CodeGenFunction::FunctionAddressToCapability(CodeGenFunction &CGF,
                                                           llvm::Value *Addr,
-                                                          llvm::Type *CapTy) {
+                                                          llvm::Type *CapTy,
+                                                          bool IsDirectCall) {
   auto* VTy = cast<llvm::PointerType>(Addr->getType());
   unsigned CapAS = CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
   if (!CapTy)
     CapTy = VTy->getElementType()->getPointerTo(CapAS);
   if (VTy->getPointerAddressSpace() == CapAS)
     return CGF.Builder.CreateBitCast(Addr, CapTy);
-  if (llvm::MCTargetOptions::cheriUsesCapabilityTable())
+  if (llvm::MCTargetOptions::cheriUsesCapabilityTable()) {
+    if (IsDirectCall) {
+      assert(isa<llvm::FunctionType>(VTy->getPointerElementType()));
+      return Addr; // Don't add a cast for direct calls
+    }
     return CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(Addr, CapTy);
+  }
 
   // Without a cap table we need to get the function address using $pcc
   llvm::Value *V = CGF.Builder.CreatePtrToInt(Addr, CGF.Int64Ty);
@@ -2451,7 +2457,8 @@ llvm::Value *CodeGenFunction::FunctionAddressToCapability(CodeGenFunction &CGF,
 }
 
 static llvm::Value *EmitFunctionDeclPointer(CodeGenFunction &CGF,
-                                               const FunctionDecl *FD) {
+                                            const FunctionDecl *FD,
+                                            bool IsDirectCall) {
   CodeGenModule &CGM = CGF.CGM;
   if (FD->hasAttr<WeakRefAttr>()) {
     ConstantAddress aliasee = CGM.GetWeakRefReference(FD);
@@ -2461,7 +2468,8 @@ static llvm::Value *EmitFunctionDeclPointer(CodeGenFunction &CGF,
   llvm::Value *V = CGM.GetAddrOfFunction(FD);
   auto &TI = CGF.getContext().getTargetInfo();
   if (TI.areAllPointersCapabilities())
-    V = CodeGenFunction::FunctionAddressToCapability(CGF, V);
+    V = CodeGenFunction::FunctionAddressToCapability(CGF, V, nullptr,
+                                                     IsDirectCall);
 
   if (!FD->hasPrototype()) {
     if (const FunctionProtoType *Proto =
@@ -2481,7 +2489,7 @@ static llvm::Value *EmitFunctionDeclPointer(CodeGenFunction &CGF,
 
 static LValue EmitFunctionDeclLValue(CodeGenFunction &CGF,
                                      const Expr *E, const FunctionDecl *FD) {
-  llvm::Value *V = EmitFunctionDeclPointer(CGF, FD);
+  llvm::Value *V = EmitFunctionDeclPointer(CGF, FD, /*IsDirectCall=*/false);
   CharUnits Alignment = CGF.getContext().getDeclAlign(FD);
   return CGF.MakeAddrLValue(V, E->getType(), Alignment,
                             AlignmentSource::Decl);
@@ -4493,7 +4501,7 @@ static CGCallee EmitDirectCallee(CodeGenFunction &CGF, const FunctionDecl *FD) {
     return CGCallee::forBuiltin(builtinID, FD);
   }
 
-  llvm::Value *calleePtr = EmitFunctionDeclPointer(CGF, FD);
+  llvm::Value *calleePtr = EmitFunctionDeclPointer(CGF, FD, /*IsDirectCall=*/true);
   return CGCallee(FD, calleePtr);
 }
 
