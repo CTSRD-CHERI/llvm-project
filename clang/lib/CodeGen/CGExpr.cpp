@@ -2480,7 +2480,7 @@ static llvm::Value *EmitFunctionDeclPointer(CodeGenFunction &CGF,
       QualType NoProtoType =
           CGM.getContext().getFunctionNoProtoType(Proto->getReturnType());
       NoProtoType = CGM.getContext().getPointerType(NoProtoType);
-      V = CGF.Builder.CreateBitCast(V, 
+      V = CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(V,
                                       CGM.getTypes().ConvertType(NoProtoType));
     }
   }
