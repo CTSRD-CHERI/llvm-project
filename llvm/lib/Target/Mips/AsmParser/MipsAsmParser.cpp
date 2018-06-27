@@ -5433,7 +5433,7 @@ unsigned MipsAsmParser::checkTargetMatchPredicate(MCInst &Inst) {
   case Mips::MTC0:
   case Mips::MTC2:
   case Mips::MFC2:
-    if (Inst.getOperand(2).getImm() != 0 && !hasMips32())
+    if (Inst.getOperand(2).getImm() != 0 && !hasMips32() && !isCheri() && STI->getCPU() != "beri")
       return Match_NonZeroOperandForMTCX;
     return Match_Success;
   // As described the MIPSR6 spec, the compact branches that compare registers
@@ -5586,7 +5586,7 @@ bool MipsAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
     return Error(IDLoc,
                  "s-type must be zero or unspecified for pre-MIPS32 ISAs");
   case Match_NonZeroOperandForMTCX:
-    return Error(IDLoc, "selector must be zero for pre-MIPS32 ISAs");
+    return Error(IDLoc, "selector must be zero for pre-MIPS32 ISAs / non-BERI CPUs");
   case Match_MnemonicFail:
     return Error(IDLoc, "invalid instruction");
   case Match_RequiresDifferentSrcAndDst:
