@@ -1,6 +1,6 @@
-// RUN: %cheri_cc1 %s -emit-llvm -o - -verify | FileCheck %s -check-prefixes CHECK,N64
+// RUN: %cheri_cc1 %s -emit-llvm -o - -verify | %cheri_FileCheck %s -check-prefixes CHECK,N64
 // RUN: %cheri_cc1 -w -DCODEGEN %s -S -o - -O2 | FileCheck %s -check-prefixes ASM,N64-ASM
-// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=plt %s -emit-llvm -o - -verify | FileCheck %s -check-prefixes CHECK,PURECAP
+// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=plt %s -emit-llvm -o - -verify | %cheri_FileCheck %s -check-prefixes CHECK,PURECAP
 // RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=plt -DCODEGEN -w %s -S -o - -O2 | FileCheck %s -check-prefixes ASM,PURECAP-ASM
 // The new warning "misaligned or large atomic operation" was causing -Werror failures for CheriBSD
 // It is not a false positive since we need libcalls for CHERI cap (cmp)xchg but since this is
@@ -28,8 +28,8 @@ void func1(void **p) {
   // PURECAP: load atomic i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* {{%.+}} seq_cst
   // PURECAP: store atomic i8 addrspace(200)* {{%.+}}, i8 addrspace(200)* addrspace(200)* {{%.+}} seq_cst
   // libcalls for the xchg/cmpxchg
-  // PURECAP: call void @__atomic_exchange(i64 zeroext 16, i8 addrspace(200)* {{%.+}}, i8 addrspace(200)* {{%.+}}, i8 addrspace(200)* {{%.+}}, i32 signext 5)
-  // PURECAP: call zeroext i1 @__atomic_compare_exchange(i64 zeroext 16, i8 addrspace(200)* {{%.+}}, i8 addrspace(200)* {{%.+}}, i8 addrspace(200)* {{%.+}}, i32 signext 5, i32 signext 5)
+  // PURECAP: call void @__atomic_exchange(i64 zeroext [[$CAP_SIZE]], i8 addrspace(200)* {{%.+}}, i8 addrspace(200)* {{%.+}}, i8 addrspace(200)* {{%.+}}, i32 signext 5)
+  // PURECAP: call zeroext i1 @__atomic_compare_exchange(i64 zeroext [[$CAP_SIZE]], i8 addrspace(200)* {{%.+}}, i8 addrspace(200)* {{%.+}}, i8 addrspace(200)* {{%.+}}, i32 signext 5, i32 signext 5)
 
 
 
@@ -64,15 +64,15 @@ void func2(void* __capability *p) {
   // CHECK-LABEL: @func2(
   // PURECAP: load atomic i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* {{%.+}} seq_cst
   // PURECAP: store atomic i8 addrspace(200)* {{%.+}}, i8 addrspace(200)* addrspace(200)* {{%.+}} seq_cst
-  // PURECAP: call void @__atomic_exchange(i64 zeroext 16, i8 addrspace(200)* {{%.+}}, i8 addrspace(200)* {{%.+}}, i8 addrspace(200)* {{%.+}}, i32 signext 5)
-  // PURECAP: call zeroext i1 @__atomic_compare_exchange(i64 zeroext 16, i8 addrspace(200)* {{%.+}}, i8 addrspace(200)* {{%.+}}, i8 addrspace(200)* {{%.+}}, i32 signext 5, i32 signext 5)
+  // PURECAP: call void @__atomic_exchange(i64 zeroext [[$CAP_SIZE]], i8 addrspace(200)* {{%.+}}, i8 addrspace(200)* {{%.+}}, i8 addrspace(200)* {{%.+}}, i32 signext 5)
+  // PURECAP: call zeroext i1 @__atomic_compare_exchange(i64 zeroext [[$CAP_SIZE]], i8 addrspace(200)* {{%.+}}, i8 addrspace(200)* {{%.+}}, i8 addrspace(200)* {{%.+}}, i32 signext 5, i32 signext 5)
 
   // hybrid code uses a libcall here and casts the i8 addrspace(200)** to i8* for the libcall
   // N64: [[PTR1:%.+]] = bitcast i8 addrspace(200)** %{{.+}} to i8*
-  // N64: call void @__atomic_load(i64 zeroext 16, i8* [[PTR1]], i8* %{{.+}}, i32 signext 5)
-  // N64: call void @__atomic_store(i64 zeroext 16, i8* %{{.+}}, i8* %{{.+}}, i32 signext 5)
-  // N64: call void @__atomic_exchange(i64 zeroext 16, i8* %{{.+}}, i8* %{{.+}}, i8* %{{.+}}, i32 signext 5)
-  // N64: call zeroext i1 @__atomic_compare_exchange(i64 zeroext 16, i8* %{{.+}}, i8* %{{.+}}, i8* %{{.+}}, i32 signext 5, i32 signext 5)
+  // N64: call void @__atomic_load(i64 zeroext [[$CAP_SIZE]], i8* [[PTR1]], i8* %{{.+}}, i32 signext 5)
+  // N64: call void @__atomic_store(i64 zeroext [[$CAP_SIZE]], i8* %{{.+}}, i8* %{{.+}}, i32 signext 5)
+  // N64: call void @__atomic_exchange(i64 zeroext [[$CAP_SIZE]], i8* %{{.+}}, i8* %{{.+}}, i8* %{{.+}}, i32 signext 5)
+  // N64: call zeroext i1 @__atomic_compare_exchange(i64 zeroext [[$CAP_SIZE]], i8* %{{.+}}, i8* %{{.+}}, i8* %{{.+}}, i32 signext 5, i32 signext 5)
 
   void* __capability res;
   void* __capability res2;
@@ -103,15 +103,15 @@ void func3(__uintcap_t *p) {
   // CHECK-LABEL: @func3(
   // PURECAP: load atomic i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* {{%.+}} seq_cst
   // PURECAP: store atomic i8 addrspace(200)* {{%.+}}, i8 addrspace(200)* addrspace(200)* {{%.+}} seq_cst
-  // PURECAP: call void @__atomic_exchange(i64 zeroext 16, i8 addrspace(200)* {{%.+}}, i8 addrspace(200)* {{%.+}}, i8 addrspace(200)* {{%.+}}, i32 signext 5)
-  // PURECAP: call zeroext i1 @__atomic_compare_exchange(i64 zeroext 16, i8 addrspace(200)* {{%.+}}, i8 addrspace(200)* {{%.+}}, i8 addrspace(200)* {{%.+}}, i32 signext 5, i32 signext 5)
+  // PURECAP: call void @__atomic_exchange(i64 zeroext [[$CAP_SIZE]], i8 addrspace(200)* {{%.+}}, i8 addrspace(200)* {{%.+}}, i8 addrspace(200)* {{%.+}}, i32 signext 5)
+  // PURECAP: call zeroext i1 @__atomic_compare_exchange(i64 zeroext [[$CAP_SIZE]], i8 addrspace(200)* {{%.+}}, i8 addrspace(200)* {{%.+}}, i8 addrspace(200)* {{%.+}}, i32 signext 5, i32 signext 5)
 
   // hybrid code uses a libcall here and casts the i8 addrspace(200)** to i8* for the libcall
   // N64: [[PTR1:%.+]] = bitcast i8 addrspace(200)** %{{.+}} to i8*
-  // N64: call void @__atomic_load(i64 zeroext 16, i8* [[PTR1]], i8* %{{.+}}, i32 signext 5)
-  // N64: call void @__atomic_store(i64 zeroext 16, i8* %{{.+}}, i8* %{{.+}}, i32 signext 5)
-  // N64: call void @__atomic_exchange(i64 zeroext 16, i8* %{{.+}}, i8* %{{.+}}, i8* %{{.+}}, i32 signext 5)
-  // N64: call zeroext i1 @__atomic_compare_exchange(i64 zeroext 16, i8* %{{.+}}, i8* %{{.+}}, i8* %{{.+}}, i32 signext 5, i32 signext 5)
+  // N64: call void @__atomic_load(i64 zeroext [[$CAP_SIZE]], i8* [[PTR1]], i8* %{{.+}}, i32 signext 5)
+  // N64: call void @__atomic_store(i64 zeroext [[$CAP_SIZE]], i8* %{{.+}}, i8* %{{.+}}, i32 signext 5)
+  // N64: call void @__atomic_exchange(i64 zeroext [[$CAP_SIZE]], i8* %{{.+}}, i8* %{{.+}}, i8* %{{.+}}, i32 signext 5)
+  // N64: call zeroext i1 @__atomic_compare_exchange(i64 zeroext [[$CAP_SIZE]], i8* %{{.+}}, i8* %{{.+}}, i8* %{{.+}}, i32 signext 5, i32 signext 5)
 
 
   __uintcap_t res;
