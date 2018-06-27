@@ -61,8 +61,8 @@ __attribute__((noreturn)) void exit(int code) {
 // WITH_CTORS-NEXT:       0x12003{{.+}} (__fini_array_end@CAPTABLE) Base: 0x120030030 (__cap_table_start+0) Length: 0 Perms: Object
 // CHECK-NEXT:            0x12003{{.+}} (__CTOR_LIST__@CAPTABLE.17) Base: 0x120030000 (__CTOR_LIST__+0) Length: 8 Perms: Object
 // CHECK-NEXT:            0x12003{{.+}} (__CTOR_END__@CAPTABLE) Base: 0x120030008 (__CTOR_END__+0) Length: 8 Perms: Object
-// CHECK-NEXT:            0x12003{{.+}} (__start___cap_relocs@CAPTABLE) Base: 0x1200301{{8|9}}0 (__cap_table_end+0) Length: 920 Perms: Object
-// CHECK-NEXT:            0x12003{{.+}} (__stop___cap_relocs@CAPTABLE) Base: 0x1200305{{1|2}}8 (__stop___cap_relocs+0) Length: 0 Perms: Object
+// CHECK-NEXT:            0x12003{{.+}} (__start___cap_relocs@CAPTABLE) Base: 0x120000210 (__start___cap_relocs+0) Length: 920 Perms: Object
+// CHECK-NEXT:            0x12003{{.+}} (__stop___cap_relocs@CAPTABLE) Base: 0x1200005a8 (crt_noinit_tag+0) Length: 0 Perms: Object
 // CHECK-NEXT:            0x12003{{.+}} (_int@CAPTABLE) Base: 0x120040010 (_int+0) Length: 4 Perms: Object
 // CHECK-NEXT: ]
 
@@ -79,5 +79,5 @@ __attribute__((noreturn)) void exit(int code) {
 // WITH_CTORS-SYMS:    0000000120030020       .init_array    00000008 .hidden __init_array_start
 // CHECK-SYMS:         0000000120010000       .text          00000000 .hidden __preinit_array_end
 // CHECK-SYMS:         0000000120010000       .text          00000000 .hidden __preinit_array_start
-// CHECK-SYMS:         00000001200301{{8|9}}0         __cap_relocs		 00000398 __start___cap_relocs
-// CHECK-SYMS:         00000001200305{{1|2}}8         __cap_relocs		 00000000 __stop___cap_relocs
+// CHECK-SYMS:         0000000120000210         __cap_relocs		 00000398 __start___cap_relocs
+// CHECK-SYMS:         00000001200005a8         __cap_relocs		 00000000 __stop___cap_relocs

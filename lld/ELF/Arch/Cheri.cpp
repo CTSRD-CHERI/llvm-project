@@ -20,7 +20,7 @@ namespace lld {
 namespace elf {
 template <class ELFT>
 CheriCapRelocsSection<ELFT>::CheriCapRelocsSection()
-    : SyntheticSection(SHF_ALLOC | SHF_WRITE, /* XXX: actually RELRO */
+    : SyntheticSection(SHF_ALLOC | (Config->Pic ? SHF_WRITE : 0), /* XXX: actually RELRO */
                        SHT_PROGBITS, 8, "__cap_relocs") {
   this->Entsize = RelocSize;
 }

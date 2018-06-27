@@ -42,9 +42,11 @@ int __start(void) {
 // EXE: 0030010         .cap_table		 000000b0 _CHERI_CAPABILITY_TABLE_
 // STATIC-EXE: 0000000000000000  w      *UND*		 00000000 _DYNAMIC
 // EXE: 00100b0 g     F .text		 00000008 __start
-// EXE: 0030278         __cap_relocs		 00000000 _edata
+// DYNAMIC-EXE:  0030278         __cap_relocs		 00000000 _edata
+// STATIC-EXE: 00300c0         .cap_table		 00000000 _edata
 // EXE: 0040000         .bss		 00000000 _end
 // EXE: 00100b8         .text		 00000000 _etext
-// EXE: 0030278         __cap_relocs		 00000000 edata
+// DYNAMIC-EXE: 0030278         __cap_relocs		 00000000 edata
+// STATIC-EXE: 00300c0         .cap_table		 00000000 edata
 // EXE: 0040000         .bss		 00000000 end
 // EXE: 00100b8         .text		 00000000 etext

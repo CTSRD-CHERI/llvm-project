@@ -65,11 +65,11 @@ struct option options_table[] = {
 // DYNAMIC-RELOCS-NEXT: ]
 
 // STATIC-LABEL: CHERI __cap_relocs [
-// STATIC-NEXT:    0x120010020 Base: 0x120000190 (<unknown symbol>+0) Length: 6 Perms: Object
-// STATIC-NEXT:    0x120010060 Base: 0x1200001a0 (<unknown symbol>+4) Length: 7 Perms: Object
-// STATIC-NEXT:    0x1200100a0 Base: 0x120000196 (<unknown symbol>+0) Length: 10 Perms: Object
-// STATIC-NEXT:    0x1200100e0 Base: 0x120000196 (<unknown symbol>+0) Length: 10 Perms: Object
-// STATIC-NEXT:    0x120010120 Base: 0x120000196 (<unknown symbol>+1) Length: 10 Perms: Object
+// STATIC-NEXT:    0x120010020 Base: 0x120000158 (<unknown symbol>+0) Length: 6 Perms: Object
+// STATIC-NEXT:    0x120010060 Base: 0x120000168 (<unknown symbol>+4) Length: 7 Perms: Object
+// STATIC-NEXT:    0x1200100a0 Base: 0x12000015e (<unknown symbol>+0) Length: 10 Perms: Object
+// STATIC-NEXT:    0x1200100e0 Base: 0x12000015e (<unknown symbol>+0) Length: 10 Perms: Object
+// STATIC-NEXT:    0x120010120 Base: 0x12000015e (<unknown symbol>+1) Length: 10 Perms: Object
 // STATIC-NEXT: ]
 
 
