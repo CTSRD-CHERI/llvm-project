@@ -7,10 +7,10 @@
 // RUNNOT: llvm-readobj -r %t.o
 // RUN: not ld.lld -shared %t.o -o %t.so 2>&1 | FileCheck %s
 // RUN: ld.lld -shared %t.o -o %t.so -z notext
-// RUN: llvm-objdump -C -s -t %t.so | FileCheck %s -check-prefix SHLIB
+// RUN: llvm-readobj -C %t.so | FileCheck %s -check-prefix SHLIB
 // RUN: not ld.lld -static %t.o -o %t.exe 2>&1 | FileCheck %s
 // RUN: ld.lld -static %t.o -o %t.exe -z notext
-// RUN: llvm-objdump -C -s -t %t.exe | FileCheck %s -check-prefix EXE
+// RUN: llvm-readobj -C %t.exe | FileCheck %s -check-prefix EXE
 
 
 __attribute((visibility("protected"))) int __start(int x) {
@@ -24,9 +24,10 @@ __attribute((section(".rodata"))) const int(*foo)(int) = &__start + 4;
 // CHECK-NEXT: >>> referenced by object foo
 // CHECK-NEXT: >>> defined in capability-in-rodata2.c ({{.+}}capability-in-rodata2.c.tmp.o:(foo))
 
-// EXE: CAPABILITY RELOCATION RECORDS:
-// EXE: 0x0000000120000{{1c0|1a0}} Base: __start (0x0000000120010000)	Offset: 0x0000000000000004	Length: 0x0000000000000028	Permissions: 0x8000000000000000 (Function)
+// EXE: CHERI __cap_relocs [
+// EXE-NEXT: 0x{{[0-9a-f]+}} (foo)           Base: 0x120010000 (__start+4) Length: 40 Perms: Function
+// EXE-NEXT: ]
 
-// SHLIB: CAPABILITY RELOCATION RECORDS:
-// SHLIB: 0x0000000000000{{260|250}} Base: __start (0x0000000000010000)	Offset: 0x0000000000000004	Length: 0x0000000000000028	Permissions: 0x8000000000000000 (Function)
-
+// SHLIB: CHERI __cap_relocs [
+// SHLIB-NEXT: 0x{{[0-9a-f]+}} (foo)           Base: 0x10000 (__start+4) Length: 40 Perms: Function
+// SHLIB-NEXT: ]
