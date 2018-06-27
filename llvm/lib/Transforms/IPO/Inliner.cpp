@@ -555,16 +555,12 @@ inlineCallsImpl(CallGraphSCC &SCC, CallGraph &CG,
 
       Function *Caller = CS.getCaller();
       Function *Callee = CS.getCalledFunction();
-      if (!Callee) {
-        LLVM_DEBUG(dbgs() << "Could not get callee for inlining of value ";
-              CS.getCalledValue()->dump());
-      }
+
       // We can only inline direct calls to non-declarations.
       if (!Callee || Callee->isDeclaration())
         continue;
 
       Instruction *Instr = CS.getInstruction();
-      LLVM_DEBUG(dbgs() << "Trying to inline: "; CS.getInstruction()->dump());
 
       bool IsTriviallyDead = isInstructionTriviallyDead(Instr, &TLI);
 
