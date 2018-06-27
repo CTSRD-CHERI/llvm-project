@@ -30,6 +30,7 @@
 #include "llvm/Pass.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/CHERICap.h"
+#include "llvm/Transforms/Utils/Local.h"
 
 using namespace llvm;
 using namespace PatternMatch;
@@ -52,7 +53,7 @@ class CHERICapFoldIntrinsics : public ModulePass {
       return;
     // Calling eraseFromParent() inside the following loop causes iterators
     // to be invalidated and crashes -> collect and erase instead
-    std::vector<CallInst *> ToErase;
+    SmallVector<Instruction *, 8> ToErase;
     for (Value *Use : Func->users()) {
       CallInst *CI = cast<CallInst>(Use);
       if (Value *Replacement = infer(CI->getOperand(0), CI, NullValue)) {
@@ -62,9 +63,7 @@ class CHERICapFoldIntrinsics : public ModulePass {
         Modified = true;
       }
     }
-    for (CallInst *CI : ToErase) {
-      CI->eraseFromParent();
-    }
+    RecursivelyDeleteTriviallyDeadInstructions(ToErase);
   }
 
   void foldGetIntrinisics(Module *M) {
@@ -316,8 +315,8 @@ class CHERICapFoldIntrinsics : public ModulePass {
         Modified = true;
       }
     }
-    for (Instruction *I : ToErase)
-      I->eraseFromParent();
+    for (Instruction* I : ToErase)
+      RecursivelyDeleteTriviallyDeadInstructions(I);
   }
 
   void foldSetAddressOnNull(Module* M) {
@@ -356,8 +355,8 @@ class CHERICapFoldIntrinsics : public ModulePass {
       // fold chains of inc-offset, (inc-offset/GEP)+ into a single inc-offset
       foldIncOffsetSetOffsetOnlyUserIncrement(CI, ToErase);
     }
-    for (Instruction *I : ToErase)
-      I->eraseFromParent();
+    for (Instruction* I : ToErase)
+      RecursivelyDeleteTriviallyDeadInstructions(I);
   }
 
 public:
