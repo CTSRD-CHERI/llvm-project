@@ -1,4 +1,6 @@
 # Since https://reviews.llvm.org/D41662 non-zero mtc0 selectors are rejected for pre-MIPS32 ISAs
+# However, we need this for BERI statcounters and other special registers so make sure it works
+# if the CHERI feature is enabled or the CPU is "beri"
 # RUN: llvm-mc %s -triple=mips-unknown-linux -show-encoding -mcpu=cheri128 | FileCheck %s
 # RUN: llvm-mc %s -triple=mips-unknown-linux -show-encoding -mcpu=mips4 -mattr=+cheri128 | FileCheck %s
 # RUN: llvm-mc %s -triple=mips-unknown-linux -show-encoding -mcpu=beri | FileCheck %s
