@@ -1,7 +1,7 @@
 // RUN: %clang_cc1 %s -triple=x86_64-pc-linux -emit-llvm -o - | FileCheck %s
 
 // Test that this is not hidden.
-// CHECK: @_ZTVN10__cxxabiv120__si_class_type_infoE = external global
+// CHECK: @_ZTVN10__cxxabiv120__si_class_type_infoE = external constant
 
 class foo {
   virtual void baz();
