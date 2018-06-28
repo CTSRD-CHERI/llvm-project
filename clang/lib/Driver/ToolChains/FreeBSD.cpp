@@ -139,6 +139,10 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       IsCHERIPureCapABI = StringRef(A->getValue()).lower() == "purecap";
     }
 
+  // Silence warning for -cheri=NNN
+  Args.ClaimAllArgs(options::OPT_cheri_EQ);
+  Args.ClaimAllArgs(options::OPT_cheri);
+
   // Silence warning for "clang -g foo.o -o foo"
   Args.ClaimAllArgs(options::OPT_g_Group);
   // and "clang -emit-llvm foo.o -o foo"
