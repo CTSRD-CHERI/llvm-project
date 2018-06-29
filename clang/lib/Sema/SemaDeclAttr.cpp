@@ -3644,7 +3644,8 @@ void Sema::CheckAlignasUnderalignment(Decl *D) {
   //   would otherwise be required for the entity being declared.
   AlignedAttr *AlignasAttr = nullptr;
   unsigned Align = 0;
-  bool hasAlignOverride = false;
+  // A decl has an alignment override if it has an aligned or packed attribute
+  bool hasAlignOverride = D->hasAttr<PackedAttr>();
   for (auto *I : D->specific_attrs<AlignedAttr>()) {
     if (I->isAlignmentDependent())
       return;
@@ -3661,7 +3662,7 @@ void Sema::CheckAlignasUnderalignment(Decl *D) {
   // typedef type it sets it instead. According to comments in
   // ASTContext::getTypeInfoImpl() this is due to GCC compatibility...
   bool ShouldDiagnoseCheriAlign =
-      Context.getTargetInfo().SupportsCapabilities() && hasAlignOverride;
+      Context.getTargetInfo().SupportsCapabilities();
   if (ShouldDiagnoseCheriAlign && (isa<RecordDecl>(D) || isa<FieldDecl>(D))) {
     // If the attribute is applied to a record declaration declaration we only
     // need to warn if it also has the packed attribute
@@ -3672,17 +3673,16 @@ void Sema::CheckAlignasUnderalignment(Decl *D) {
         ShouldDiagnoseCheriAlign = false;
     }
   }
-  if (ShouldDiagnoseCheriAlign) {
+  if (hasAlignOverride && ShouldDiagnoseCheriAlign) {
     CharUnits CapAlign = Context.toCharUnitsFromBits(
         Context.getTargetInfo().getCHERICapabilityAlign());
-    CharUnits MinAlign;
+    CharUnits MinAlign =
+        Align ? Context.toCharUnitsFromBits(Align) : CharUnits::One();
     if (const auto *Field = dyn_cast<FieldDecl>(D)) {
-      // For fields we can only look at the aligned attribute since
-      // Context.getDeclAlign() requires a full definition
+      // Context.getDeclAlign() requires a full definition so for fields we
+      // can usually only look at the aligned attribute
       if (Field->getParent()->getDefinition())
         MinAlign = Context.getDeclAlign(D);
-      else
-        MinAlign = Context.toCharUnitsFromBits(Align);
     } else {
       // Not a field -> we have the full definition and can use
       MinAlign = Context.getDeclAlign(D);

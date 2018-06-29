@@ -55,10 +55,24 @@ struct DBT5 dbt5;
 // __BIGGEST_ALIGNMENT__ should be fine even for CHERI256
 struct DBT6 {
         void    *data;
- } __attribute__((packed, aligned(__BIGGEST_ALIGNMENT__)));
+} __attribute__((packed, aligned(__BIGGEST_ALIGNMENT__)));
 _Static_assert(__BIGGEST_ALIGNMENT__ == sizeof(void* __capability), "__BIGGEST_ALIGNMENT__ wrong?");
 struct DBT6 dbt6;
 // IR: @dbt6 = common addrspace(200) global %struct.DBT6 zeroinitializer, align [[$CAP_SIZE]]
+
+// packed implies alignment 1:
+struct DBT7 { // expected-warning-re{{alignment (1) of 'struct DBT7' is less than the required capability alignment ({{8|16|32}})}}
+              // expected-note@-1{{If you are certain that this is correct you can silence the warning by adding __attribute__((annotate("underaligned_capability")))}}
+  void *data;
+} __attribute__((packed));
+struct DBT7 dbt7;
+// IR: @dbt7 = common addrspace(200) global %struct.DBT7 zeroinitializer, align 1
+struct DBT8 {
+  __attribute__((packed)) void *data; // expected-warning-re{{alignment (1) of 'void * __capability' is less than the required capability alignment ({{8|16|32}})}}
+                                      // expected-note@-1{{If you are certain that this is correct you can silence the warning by adding __attribute__((annotate("underaligned_capability")))}}
+};
+struct DBT8 dbt8;
+// IR: @dbt8 = common addrspace(200) global %struct.DBT8 zeroinitializer, align 1
 
 #ifndef SKIP_ERRORS
 // _Alignas gives sensible errors:
