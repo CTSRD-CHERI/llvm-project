@@ -10,7 +10,7 @@ struct packed_T_and_cap {
 #else
   // expected-warning-re@-4 3 {{Under aligned capability field at offset {{4|8|15}} in packed structure will trap if accessed}}
 #endif
-} __attribute__((packed));
+} __attribute__((packed,annotate("underaligned_capability")));
 
 struct inherit_from_template_good : public packed_T_and_cap<char[sizeof(void*)]> {
   char pad[sizeof(void*)];
@@ -22,7 +22,7 @@ struct inherit_from_template_bad : public packed_T_and_cap<char[sizeof(void*) - 
 
 struct inherit_from_template_bad_array : public packed_T_and_cap<__uintcap_t> {
   char bad;
-} __attribute__((packed));
+} __attribute__((packed,annotate("underaligned_capability")));
 
 int main() {
   inherit_from_template_bad a;

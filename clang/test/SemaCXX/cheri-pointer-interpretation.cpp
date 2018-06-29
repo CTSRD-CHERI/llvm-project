@@ -5,7 +5,7 @@ struct foo_cap { // expected-note {{Add __attribute__((aligned(32))) to ensure s
 	void *a; // expected-warning {{Capability field at offset 0 in packed structure will trap if structure is used in an array}}
 	long d;
 	long e;
-} __attribute__((packed));  // make it 48 instead of 64
+} __attribute__((packed,annotate("underaligned_capability")));  // make it 48 instead of 64
 _Pragma("pointer_interpretation push")
 _Pragma("pointer_interpretation integer")
 // Exactly the same as above
@@ -31,7 +31,7 @@ _Static_assert(sizeof(int&&) == 4, "Reference size incorrect");
 // RUN: %cheri256_cc1 "-target-abi" "purecap" -fsyntax-only -triple cheri-unknown-freebsd %s -std=c++11 -ast-dump | FileCheck %s
 
 // CHECK:     |-CXXRecordDecl {{.*}} <{{.*}}/cheri-pointer-interpretation.cpp:4:1, line:8:1> line:4:8 referenced struct foo_cap definition
-// CHECK:     | |-PackedAttr {{.*}} <line:8:18>
+// CHECK:     | |-PackedAttr {{.*}} <col:18>
 // CHECK-NEXT:| |-CXXRecordDecl {{.*}} <line:4:1, col:8> col:8 implicit struct foo_cap
 // CHECK-NEXT:| |-FieldDecl {{.*}} <line:5:2, col:8> col:8 a 'void * __capability'
 // CHECK-NEXT:| |-FieldDecl {{.*}} <line:6:2, col:7> col:7 d 'long'
