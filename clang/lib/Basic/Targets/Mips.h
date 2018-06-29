@@ -112,9 +112,11 @@ public:
         case 64: CPU = "cheri64"; break;
         case 256: CPU = "cheri256"; break;
       }
-      SuitableAlign = CapSize;
-      DefaultAlignForAttributeAligned =
-          std::max(DefaultAlignForAttributeAligned, (unsigned short)CapSize);
+      if (CapSize > 0) {
+        SuitableAlign = CapSize;
+        DefaultAlignForAttributeAligned =
+            std::max(DefaultAlignForAttributeAligned, (unsigned short)CapSize);
+      }
     }
     CanUseBSDABICalls = Triple.getOS() == llvm::Triple::FreeBSD ||
                         Triple.getOS() == llvm::Triple::OpenBSD;
@@ -182,7 +184,7 @@ public:
       LongDoubleFormat = &llvm::APFloat::IEEEdouble();
     }
     MaxAtomicPromoteWidth = MaxAtomicInlineWidth = 64;
-    if (IsCHERI)
+    if (IsCHERI && CapSize > 0)
       MaxAtomicInlineWidth = std::max(MaxAtomicInlineWidth, (unsigned short)CapSize);
     SuitableAlign = std::max(CapSize, 128);
   }

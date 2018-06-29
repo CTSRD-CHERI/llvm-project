@@ -3684,7 +3684,7 @@ void Sema::CheckAlignasUnderalignment(Decl *D) {
       if (Field->getParent()->getDefinition())
         MinAlign = Context.getDeclAlign(D);
     } else {
-      // Not a field -> we have the full definition and can use
+      // Not a field -> we have the full definition and can use it
       MinAlign = Context.getDeclAlign(D);
     }
     if ((MinAlign < CapAlign) && Context.containsCapabilities(UnderlyingTy)) {
