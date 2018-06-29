@@ -417,12 +417,15 @@ public:
       else if (Feature == "+cheri64") {
         CapSizeFeatureFound = true;
         CapSize = 64;
+        IsCHERI = true;
       } else if (Feature == "+cheri128") {
         CapSizeFeatureFound = true;
         CapSize = 128;
+        IsCHERI = true;
       } else if (Feature == "+cheri256") {
         CapSizeFeatureFound = true;
         CapSize = 256;
+        IsCHERI = true;
       } else if (Feature == "-nan2008")
         IsNan2008 = false;
       else if (Feature == "+abs2008")
@@ -441,7 +444,10 @@ public:
         Features.push_back("+cheri128");
         CapSize = 128;
       }
-      SuitableAlign = CapSize;
+      assert(CapSize > 0);
+      SuitableAlign = std::max(SuitableAlign, (unsigned short)CapSize);
+      DefaultAlignForAttributeAligned =
+          std::max(DefaultAlignForAttributeAligned, (unsigned short)CapSize);
     }
 
     setDataLayout();

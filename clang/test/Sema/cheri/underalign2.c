@@ -1,8 +1,8 @@
 // Check that __attribute__((__aligned__)) aligns to sizeof(void* __capability) even for Cheri256
-// RUN: %cheri128_cc1 -mllvm -cheri-cap-table-abi=pcrel -std=c11 %s -verify -emit-llvm -o - | FileCheck '-D$CAP_SIZE=16' '-D$GLOBALS_AS=' %s
-// RUN: %cheri256_cc1 -mllvm -cheri-cap-table-abi=pcrel -std=c11 %s -verify -emit-llvm -o - | FileCheck '-D$CAP_SIZE=32' '-D$GLOBALS_AS=' %s
-// RUN: %cheri128_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel -std=c11 %s -verify -emit-llvm -o - | FileCheck '-D$CAP_SIZE=16' '-D$GLOBALS_AS=addrspace(200) ' %s
-// RUN: %cheri256_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel -std=c11 %s -verify -emit-llvm -o - | FileCheck '-D$CAP_SIZE=32' '-D$GLOBALS_AS=addrspace(200) ' %s
+// RUN: %cheri128_cc1 -target-cpu mips4 -mllvm -cheri-cap-table-abi=pcrel -std=c11 %s -verify -emit-llvm -o - | FileCheck '-D$CAP_SIZE=16' '-D$GLOBALS_AS=' %s
+// RUN: %cheri256_cc1 -target-cpu mips4 -mllvm -cheri-cap-table-abi=pcrel -std=c11 %s -verify -emit-llvm -o - | FileCheck '-D$CAP_SIZE=32' '-D$GLOBALS_AS=' %s
+// RUN: %cheri128_purecap_cc1 -target-cpu mips4 -mllvm -cheri-cap-table-abi=pcrel -std=c11 %s -verify -emit-llvm -o - | FileCheck '-D$CAP_SIZE=16' '-D$GLOBALS_AS=addrspace(200) ' %s
+// RUN: %cheri256_purecap_cc1 -target-cpu mips4 -mllvm -cheri-cap-table-abi=pcrel -std=c11 %s -verify -emit-llvm -o - | FileCheck '-D$CAP_SIZE=32' '-D$GLOBALS_AS=addrspace(200) ' %s
 
 struct no_caps {
   int i;

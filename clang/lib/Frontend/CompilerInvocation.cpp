@@ -3017,16 +3017,16 @@ static void ParseTargetArgs(TargetOptions &Opts, ArgList &Args,
   }
 
   if (const Arg *A = Args.getLastArg(OPT_cheri_size)) {
-    StringRef CheriCPUName;
-    auto &F = Opts.Features;
-    F.push_back("chericap");
-    switch (std::stoi(A->getValue())) {
-      default: llvm_unreachable("Invalid -cheri= value");
-      case 64: CheriCPUName = "cheri64"; break;
-      case 128: CheriCPUName = "cheri128"; break;
-      case 256: CheriCPUName =  "cheri256"; break;
-    }
-    F.push_back(CheriCPUName);
+    // NOTE: Opts.Features is cleared after this so we need to add it to FeaturesAsWritten!
+    Opts.FeaturesAsWritten.push_back("+chericap");
+    StringRef CheriCPUName = llvm::StringSwitch<StringRef>(A->getValue())
+      .Case("64", "+cheri64")
+      .Case("128", "+cheri128")
+      .Case("256", "+cheri256")
+      .Default("");
+    if (CheriCPUName.empty())
+      Diags.Report(diag::err_drv_invalid_value) << A->getAsString(Args) << A->getValue();
+    Opts.FeaturesAsWritten.push_back(CheriCPUName);
     A->claim();
   }
   Opts.ForceEnableInt128 = Args.hasArg(OPT_fforce_enable_int128);

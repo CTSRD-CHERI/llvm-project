@@ -5,8 +5,7 @@ public:
   virtual ~a();
 };
 const int i = __BIGGEST_ALIGNMENT__;
-const int* j = &i;
+const int *j = &i;
 void b() {
   throw a();
 }
-
