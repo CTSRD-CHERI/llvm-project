@@ -266,7 +266,7 @@ def CClearTag  : CheriFmt2Op<0xb, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2),
 def CReadHwr : CheriFmt2Op<0xd, (outs CheriOpnd:$r1), (ins CheriHWRegsOpnd:$r2),
                               "creadhwr\t$r1, $r2",
                               []>;
-def CWriteHwr : CheriFmt2Op<0xe, (outs), (ins CheriOpnd:$r1, CheriHWRegsOpnd:$r2),
+def CWriteHwr : CheriFmt2Op<0xe, (outs CheriHWRegsOpnd:$r2), (ins CheriOpnd:$r1),
                               "cwritehwr\t$r1, $r2",
                               []>;
 
@@ -522,18 +522,18 @@ defm : StoreViaCap0<CSDC1, FGR64Opnd, store>;
 // Set Emit = 0 here to show that creadhwr is used in the disasm
 // TODO: change this to 1?
 def : InstAlias<"cgetdefault $dst", (CReadHwr CheriOpnd:$dst, CAPHWR0), 0>;
-def : InstAlias<"csetdefault $src", (CWriteHwr CheriOpnd:$src, CAPHWR0), 0>;
+def : InstAlias<"csetdefault $src", (CWriteHwr CAPHWR0, CheriOpnd:$src), 0>;
 def : InstAlias<"cgetkcc $dst",     (CReadHwr CheriOpnd:$dst, CAPHWR29), 0>;
-def : InstAlias<"csetkcc $src",     (CWriteHwr CheriOpnd:$src, CAPHWR29), 0>;
+def : InstAlias<"csetkcc $src",     (CWriteHwr CAPHWR29, CheriOpnd:$src), 0>;
 def : InstAlias<"cgetkdc $dst",     (CReadHwr CheriOpnd:$dst, CAPHWR30), 0>;
-def : InstAlias<"csetkdc $src",     (CWriteHwr CheriOpnd:$src, CAPHWR30), 0>;
+def : InstAlias<"csetkdc $src",     (CWriteHwr CAPHWR30, CheriOpnd:$src), 0>;
 def : InstAlias<"cgetepcc $dst",    (CReadHwr CheriOpnd:$dst, CAPHWR31), 0>;
-def : InstAlias<"csetepcc $src",    (CWriteHwr CheriOpnd:$src, CAPHWR31), 0>;
+def : InstAlias<"csetepcc $src",    (CWriteHwr CAPHWR31, CheriOpnd:$src), 0>;
 // Access to the two scratch hardware registers:
 def : InstAlias<"cgetkr1c $dst",    (CReadHwr CheriOpnd:$dst, CAPHWR22), 0>;
-def : InstAlias<"csetkr1c $src",    (CWriteHwr CheriOpnd:$src, CAPHWR22), 0>;
+def : InstAlias<"csetkr1c $src",    (CWriteHwr CAPHWR22, CheriOpnd:$src), 0>;
 def : InstAlias<"cgetkr2c $dst",    (CReadHwr CheriOpnd:$dst, CAPHWR23), 0>;
-def : InstAlias<"csetkr2c $src",    (CWriteHwr CheriOpnd:$src, CAPHWR23), 0>;
+def : InstAlias<"csetkr2c $src",    (CWriteHwr CAPHWR23, CheriOpnd:$src), 0>;
 
 
 // Must come before cfromddc to have a higher priority when disassembling
