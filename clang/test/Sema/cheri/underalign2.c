@@ -50,15 +50,21 @@ __attribute__((__aligned__(2))) struct { int *__capability i; } with_cap_global_
 // CHECK: @no_caps_global_align2 = common [[$GLOBALS_AS]]global %struct.anon zeroinitializer, align 2
 // CHECK: @with_cap_global_align2 = common [[$GLOBALS_AS]]global %struct.anon.0 zeroinitializer, align 2
 
+// But not if the location of the annotation is after the struct decl
+struct { int i; } __attribute__((__aligned__(2))) no_caps_global_align3;
+struct { int *__capability i; } __attribute__((__aligned__(2))) with_cap_global_align3;
+// CHECK: @no_caps_global_align3 = common [[$GLOBALS_AS]]global %struct.anon.{{[0-9]+}} zeroinitializer, align 4
+// CHECK: @with_cap_global_align3 = common [[$GLOBALS_AS]]global %struct.anon.{{[0-9]+}} zeroinitializer, align [[$CAP_SIZE]]
+
 // Without an argument attribute aligned should be max(CAP_SIZE, 16)
 __attribute__((__aligned__)) struct { int i; } no_caps_global_default_align;
 __attribute__((__aligned__)) struct { int *__capability i; } with_cap_global_default_align;
-// CHECK: @no_caps_global_default_align = common [[$GLOBALS_AS]]global %struct.anon.1 zeroinitializer, align [[$CAP_SIZE]]
-// CHECK: @with_cap_global_default_align = common [[$GLOBALS_AS]]global %struct.anon.2 zeroinitializer, align [[$CAP_SIZE]]
+// CHECK: @no_caps_global_default_align = common [[$GLOBALS_AS]]global %struct.anon.{{[0-9]+}} zeroinitializer, align [[$CAP_SIZE]]
+// CHECK: @with_cap_global_default_align = common [[$GLOBALS_AS]]global %struct.anon.{{[0-9]+}} zeroinitializer, align [[$CAP_SIZE]]
 
 // same for __BIGGEST_ALIGNENT__
 _Static_assert(__BIGGEST_ALIGNMENT__ == sizeof(void *__capability), "__BIGGEST_ALIGNMENT__ wrong?");
 __attribute__((__aligned__(__BIGGEST_ALIGNMENT__))) struct { int i; } no_caps_global_biggest_align;
 __attribute__((__aligned__(__BIGGEST_ALIGNMENT__))) struct { int *__capability i; } with_cap_global_biggest_align;
-// CHECK: @no_caps_global_biggest_align = common [[$GLOBALS_AS]]global %struct.anon.3 zeroinitializer, align [[$CAP_SIZE]]
-// CHECK: @with_cap_global_biggest_align = common [[$GLOBALS_AS]]global %struct.anon.4 zeroinitializer, align [[$CAP_SIZE]]
+// CHECK: @no_caps_global_biggest_align = common [[$GLOBALS_AS]]global %struct.anon.{{[0-9]+}} zeroinitializer, align [[$CAP_SIZE]]
+// CHECK: @with_cap_global_biggest_align = common [[$GLOBALS_AS]]global %struct.anon.{{[0-9]+}} zeroinitializer, align [[$CAP_SIZE]]
