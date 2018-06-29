@@ -3660,7 +3660,18 @@ void Sema::CheckAlignasUnderalignment(Decl *D) {
   // when applied to record declarations. However, when it is applied to a
   // typedef type it sets it instead. According to comments in
   // ASTContext::getTypeInfoImpl() this is due to GCC compatibility...
-  if (hasAlignOverride && !isa<RecordDecl>(D) && Context.getTargetInfo().SupportsCapabilities()) {
+  bool ShouldDiagnoseCheriAlign = hasAlignOverride;
+  if (auto * RD = dyn_cast<RecordDecl>(D)) {
+    // If the attribute is applied to a record declaration declaration we only
+    // need to warn if it also has the packed attribute
+    ShouldDiagnoseCheriAlign = RD->hasAttr<PackedAttr>();
+    // Allow using the annotate attribute instead of a pragma warning silence
+    if (auto* AA = RD->getAttr<AnnotateAttr>()) {
+      if (AA->getAnnotation() == "underaligned_capability")
+        ShouldDiagnoseCheriAlign = false;
+    }
+  }
+  if (ShouldDiagnoseCheriAlign && Context.getTargetInfo().SupportsCapabilities()) {
     CharUnits CapAlign = Context.toCharUnitsFromBits(
         Context.getTargetInfo().getCHERICapabilityAlign());
     CharUnits MinAlign = Context.getDeclAlign(D);
