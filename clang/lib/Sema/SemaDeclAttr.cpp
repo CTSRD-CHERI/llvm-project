@@ -3660,21 +3660,33 @@ void Sema::CheckAlignasUnderalignment(Decl *D) {
   // when applied to record declarations. However, when it is applied to a
   // typedef type it sets it instead. According to comments in
   // ASTContext::getTypeInfoImpl() this is due to GCC compatibility...
-  bool ShouldDiagnoseCheriAlign = hasAlignOverride;
-  if (auto * RD = dyn_cast<RecordDecl>(D)) {
+  bool ShouldDiagnoseCheriAlign =
+      Context.getTargetInfo().SupportsCapabilities() && hasAlignOverride;
+  if (ShouldDiagnoseCheriAlign && (isa<RecordDecl>(D) || isa<FieldDecl>(D))) {
     // If the attribute is applied to a record declaration declaration we only
     // need to warn if it also has the packed attribute
-    ShouldDiagnoseCheriAlign = RD->hasAttr<PackedAttr>();
+    ShouldDiagnoseCheriAlign = D->hasAttr<PackedAttr>();
     // Allow using the annotate attribute instead of a pragma warning silence
-    if (auto* AA = RD->getAttr<AnnotateAttr>()) {
+    if (auto *AA = D->getAttr<AnnotateAttr>()) {
       if (AA->getAnnotation() == "underaligned_capability")
         ShouldDiagnoseCheriAlign = false;
     }
   }
-  if (ShouldDiagnoseCheriAlign && Context.getTargetInfo().SupportsCapabilities()) {
+  if (ShouldDiagnoseCheriAlign) {
     CharUnits CapAlign = Context.toCharUnitsFromBits(
         Context.getTargetInfo().getCHERICapabilityAlign());
-    CharUnits MinAlign = Context.getDeclAlign(D);
+    CharUnits MinAlign;
+    if (const auto *Field = dyn_cast<FieldDecl>(D)) {
+      // For fields we can only look at the aligned attribute since
+      // Context.getDeclAlign() requires a full definition
+      if (Field->getParent()->getDefinition())
+        MinAlign = Context.getDeclAlign(D);
+      else
+        MinAlign = Context.toCharUnitsFromBits(Align);
+    } else {
+      // Not a field -> we have the full definition and can use
+      MinAlign = Context.getDeclAlign(D);
+    }
     if ((MinAlign < CapAlign) && Context.containsCapabilities(UnderlyingTy)) {
       Diag(D->getLocation(), diag::warn_cheri_underalign)
           << (unsigned)MinAlign.getQuantity() << DiagTy
@@ -3682,7 +3694,6 @@ void Sema::CheckAlignasUnderalignment(Decl *D) {
       Diag(D->getLocation(), diag::note_cheri_underalign_annotate_fixit);
     }
   }
-
 
   if (AlignasAttr && Align) {
     CharUnits RequestedAlign = Context.toCharUnitsFromBits(Align);
