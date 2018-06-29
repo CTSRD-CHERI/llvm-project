@@ -520,7 +520,7 @@ class Reducer(object):
             proc = subprocess.run(full_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
                                   timeout=infinite_loop_timeout)
             error_kind = None
-            if proc.returncode < 0:
+            if proc.returncode < 0 or proc.returncode == 254:
                 error_kind = ErrorKind.CRASH
             else:
                 verbose_print("Exit code", proc.returncode, "was not a crash, checking stderr for known error.")
