@@ -38,6 +38,7 @@ with_cap_td b_td;
 typedef __attribute__((__aligned__(2))) struct { int i; } no_caps_td2;
 no_caps_td2 a_td2;
 typedef __attribute__((__aligned__(2))) struct { int *__capability i; } with_cap_td2; // expected-warning{{alignment (2) of 'with_cap_td2' is less than the required capability alignment}}
+// expected-note@-1{{If you are certain that this is correct you can silence the warning by adding __attribute__((annotate("underaligned_capability")))}}
 with_cap_td2 b_td2;
 // CHECK: @a_td2 = common [[$GLOBALS_AS]]global %struct.no_caps_td2 zeroinitializer, align 2
 // CHECK: @b_td2 = common [[$GLOBALS_AS]]global %struct.with_cap_td2 zeroinitializer, align 2
@@ -45,6 +46,7 @@ with_cap_td2 b_td2;
 // annotation on a variable also sets alignemnt
 __attribute__((__aligned__(2))) struct { int i; } no_caps_global_align2;
 __attribute__((__aligned__(2))) struct { int *__capability i; } with_cap_global_align2; // expected-warning-re{{alignment (2) of 'struct (anonymous struct at {{.+}}' is less than the required capability alignment}}
+// expected-note@-1{{If you are certain that this is correct you can silence the warning by adding __attribute__((annotate("underaligned_capability")))}}
 // CHECK: @no_caps_global_align2 = common [[$GLOBALS_AS]]global %struct.anon zeroinitializer, align 2
 // CHECK: @with_cap_global_align2 = common [[$GLOBALS_AS]]global %struct.anon.0 zeroinitializer, align 2
 

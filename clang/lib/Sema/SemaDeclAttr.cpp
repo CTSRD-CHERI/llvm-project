@@ -3675,10 +3675,12 @@ void Sema::CheckAlignasUnderalignment(Decl *D) {
     CharUnits CapAlign = Context.toCharUnitsFromBits(
         Context.getTargetInfo().getCHERICapabilityAlign());
     CharUnits MinAlign = Context.getDeclAlign(D);
-    if ((MinAlign < CapAlign) && Context.containsCapabilities(UnderlyingTy))
+    if ((MinAlign < CapAlign) && Context.containsCapabilities(UnderlyingTy)) {
       Diag(D->getLocation(), diag::warn_cheri_underalign)
           << (unsigned)MinAlign.getQuantity() << DiagTy
           << (unsigned)CapAlign.getQuantity();
+      Diag(D->getLocation(), diag::note_cheri_underalign_annotate_fixit);
+    }
   }
 
 

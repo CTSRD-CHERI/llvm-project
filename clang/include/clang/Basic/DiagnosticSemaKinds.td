@@ -5980,6 +5980,9 @@ def warn_capability_integer_cast : Warning<
 def warn_cheri_underalign : Warning<
   "alignment (%0) of %1 is less than the required capability alignment (%2)">,
   InGroup<CHERICaps>;
+def note_cheri_underalign_annotate_fixit : Note<
+  "If you are certain that this is correct you can silence the warning by "
+  "adding __attribute__((annotate(\"underaligned_capability\")))">;
 def warn_capability_pointer_cast : Warning<
   "cast from capability type %0 to non-capability type %1 is most likely an "
    "error; use __cheri_fromcap to convert between pointers and capabilities">,
