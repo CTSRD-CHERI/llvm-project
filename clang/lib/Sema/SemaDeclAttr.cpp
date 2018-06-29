@@ -3654,12 +3654,20 @@ void Sema::CheckAlignasUnderalignment(Decl *D) {
     hasAlignOverride = true;
   }
   // If this target supports capabilities, then warn if we're requesting
-  // lss-than-capability alignment for a type containing capabilities.
-  if (hasAlignOverride && Context.getTargetInfo().SupportsCapabilities()) {
-    unsigned CapAlign = Context.getTargetInfo().getCHERICapabilityAlign();
-    if ((Align < CapAlign) && Context.containsCapabilities(UnderlyingTy))
+  // less-than-capability alignment for a type containing capabilities.
+  // Only looking at the align attribute value will not give the correct
+  // result since __attribute__((__aligned())) only increases the alignment
+  // when applied to record declarations. However, when it is applied to a
+  // typedef type it sets it instead. According to comments in
+  // ASTContext::getTypeInfoImpl() this is due to GCC compatibility...
+  if (hasAlignOverride && !isa<RecordDecl>(D) && Context.getTargetInfo().SupportsCapabilities()) {
+    CharUnits CapAlign = Context.toCharUnitsFromBits(
+        Context.getTargetInfo().getCHERICapabilityAlign());
+    CharUnits MinAlign = Context.getDeclAlign(D);
+    if ((MinAlign < CapAlign) && Context.containsCapabilities(UnderlyingTy))
       Diag(D->getLocation(), diag::warn_cheri_underalign)
-          << (Align / 8) << DiagTy << (CapAlign / 8);
+          << (unsigned)MinAlign.getQuantity() << DiagTy
+          << (unsigned)CapAlign.getQuantity();
   }
 
 
