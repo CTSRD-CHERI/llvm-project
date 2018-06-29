@@ -113,6 +113,8 @@ public:
         case 256: CPU = "cheri256"; break;
       }
       SuitableAlign = CapSize;
+      DefaultAlignForAttributeAligned =
+          std::max(DefaultAlignForAttributeAligned, (unsigned short)CapSize);
     }
     CanUseBSDABICalls = Triple.getOS() == llvm::Triple::FreeBSD ||
                         Triple.getOS() == llvm::Triple::OpenBSD;
@@ -182,7 +184,7 @@ public:
     MaxAtomicPromoteWidth = MaxAtomicInlineWidth = 64;
     if (IsCHERI)
       MaxAtomicInlineWidth = std::max(MaxAtomicInlineWidth, (unsigned short)CapSize);
-    SuitableAlign = 128;
+    SuitableAlign = std::max(CapSize, 128);
   }
 
   void setN64ABITypes() {
