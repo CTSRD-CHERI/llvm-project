@@ -820,6 +820,12 @@ void Sema::checkVariadicArgument(const Expr *E, VariadicCallType CT) {
   const QualType &Ty = E->getType();
   VarArgKind VAK = isValidVarArgType(Ty);
 
+  if (Ty->isCHERICapabilityType(Context))
+    if (Context.getTargetInfo().getTriple().isMIPS() &&
+        !Context.getTargetInfo().areAllPointersCapabilities())
+      Diag(E->getLocStart(), diag::warn_capabilities_broken_in_hybrid_varargs)
+          << E->getSourceRange();
+
   // Complain about passing non-POD types through varargs.
   switch (VAK) {
   case VAK_ValidInCXX11:
