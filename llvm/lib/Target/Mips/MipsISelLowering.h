@@ -697,6 +697,9 @@ extern bool LargeCapTable;
     SDValue LowerCall(TargetLowering::CallLoweringInfo &CLI,
                       SmallVectorImpl<SDValue> &InVals) const override;
 
+    SDValue deriveFromPCC(SelectionDAG &DAG, const SDLoc DL,
+                          SDValue Callee) const;
+
     bool CanLowerReturn(CallingConv::ID CallConv, MachineFunction &MF,
                         bool isVarArg,
                         const SmallVectorImpl<ISD::OutputArg> &Outs,

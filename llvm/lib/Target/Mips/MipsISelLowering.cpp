@@ -411,6 +411,10 @@ MipsTargetLowering::MipsTargetLowering(const MipsTargetMachine &TM,
   if (Subtarget.isGP64bit()) {
     setOperationAction(ISD::GlobalAddress,      MVT::i64,   Custom);
     setOperationAction(ISD::BlockAddress,       MVT::i64,   Custom);
+    // Handle blockaddress in AS200:
+    if (ABI.IsCheriPureCap())
+      setOperationAction(ISD::BlockAddress, CapType, Custom);
+
     setOperationAction(ISD::GlobalTLSAddress,   MVT::i64,   Custom);
     setOperationAction(ISD::JumpTable,          MVT::i64,   Custom);
     setOperationAction(ISD::ConstantPool,       MVT::i64,   Custom);
@@ -2359,7 +2363,24 @@ SDValue MipsTargetLowering::lowerBlockAddress(SDValue Op,
     return Subtarget.hasSym32() ? getAddrNonPIC(N, SDLoc(N), Ty, DAG)
                                 : getAddrNonPICSym64(N, SDLoc(N), Ty, DAG);
 
-  return getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64(), /*IsForTls=*/false);
+  if (ABI.UsesCapabilityTable()) {
+    if (N->getBlockAddress()->getFunction() !=
+        &DAG.getMachineFunction().getFunction())
+      report_fatal_error(
+          "Should only get a blockaddress for the current function");
+    // FIXME: derive from C12 instead of loading from the captable
+    auto PtrInfo = MachinePointerInfo::getCapTable(DAG.getMachineFunction());
+    return getFromCapTable(true, N, SDLoc(N), Ty, DAG, DAG.getEntryNode(),
+                           PtrInfo);
+  }
+  // XXXAR: keep supporting the legacy ABI for now
+  if (ABI.IsCheriPureCap())
+    Ty = MVT::i64;
+  auto Result = getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64(),
+                             /*IsForTls=*/false);
+  if (ABI.IsCheriPureCap())
+    Result = deriveFromPCC(DAG, SDLoc(N), Result);
+  return Result;
 }
 
 SDValue MipsTargetLowering::
@@ -3762,11 +3783,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   if (ABI.IsCheriPureCap() && (!Callee.getValueType().isFatPointer())) {
     if (CheriCapTable)
       llvm_unreachable("Should not derive address from PCC with cap table");
-    auto GetPCC = DAG.getConstant(Intrinsic::cheri_pcc_get, DL, MVT::i64);
-    auto SetOffset = DAG.getConstant(Intrinsic::cheri_cap_offset_set, DL, MVT::i64);
-    auto PCC = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, CapType, GetPCC);
-    Callee = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, CapType,
-        SetOffset, PCC, Callee);
+    Callee = deriveFromPCC(DAG, DL, Callee);
   }
 
 
@@ -3818,6 +3835,17 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   // return.
   return LowerCallResult(Chain, InFlag, CallConv, IsVarArg, Ins, DL, DAG,
                          InVals, CLI);
+}
+
+SDValue MipsTargetLowering::deriveFromPCC(SelectionDAG &DAG, const SDLoc DL,
+                                          SDValue Callee) const {
+  auto GetPCC = DAG.getConstant(Intrinsic::cheri_pcc_get, DL, MVT::i64);
+  auto SetOffset =
+      DAG.getConstant(Intrinsic::cheri_cap_offset_set, DL, MVT::i64);
+  auto PCC = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, CapType, GetPCC);
+  Callee =
+      DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, CapType, SetOffset, PCC, Callee);
+  return Callee;
 }
 
 /// LowerCallResult - Lower the result values of a call into the
