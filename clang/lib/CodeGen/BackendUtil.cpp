@@ -529,8 +529,9 @@ void EmitAssemblyHelper::CreatePasses(legacy::PassManager &MPM,
     bool InsertLifetimeIntrinsics = (CodeGenOpts.OptimizationLevel != 0 &&
                                      !CodeGenOpts.DisableLifetimeMarkers);
     PMBuilder.Inliner = createAlwaysInlinerLegacyPass(InsertLifetimeIntrinsics);
-    PMBuilder.addExtension(PassManagerBuilder::EP_EarlyAsPossible,
-                           addCHERICapDirectCallsPass);
+    if (!llvm::MCTargetOptions::cheriUsesCapabilityTable())
+      PMBuilder.addExtension(PassManagerBuilder::EP_EarlyAsPossible,
+                             addCHERICapDirectCallsPass);
   } else {
     // We do not want to inline hot callsites for SamplePGO module-summary build
     // because profile annotation will happen again in ThinLTO backend, and we
@@ -571,8 +572,9 @@ void EmitAssemblyHelper::CreatePasses(legacy::PassManager &MPM,
     PMBuilder.addExtension(PassManagerBuilder::EP_ScalarOptimizerLate,
                            addObjCARCOptPass);
   }
-  PMBuilder.addExtension(PassManagerBuilder::EP_EarlyAsPossible,
-                         addCHERICapDirectCallsPass);
+  if (!llvm::MCTargetOptions::cheriUsesCapabilityTable())
+    PMBuilder.addExtension(PassManagerBuilder::EP_EarlyAsPossible,
+                           addCHERICapDirectCallsPass);
   PMBuilder.addExtension(PassManagerBuilder::EP_ModuleOptimizerEarly,
                          addCHERICapFoldIntrinsicsPass);
   PMBuilder.addExtension(PassManagerBuilder::EP_ScalarOptimizerLate,
