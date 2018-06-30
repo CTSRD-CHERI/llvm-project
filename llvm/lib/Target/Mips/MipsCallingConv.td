@@ -196,7 +196,9 @@ def CC_MipsN_VarArg : CallingConv<[
 
   // All stack parameter slots become 64-bit doublewords and are 8-byte aligned.
   CCIfType<[f32], CCAssignToStack<4, 8>>,
-  CCIfType<[i64, f64], CCAssignToStack<8, 8>>
+  CCIfType<[i64, f64], CCAssignToStack<8, 8>>,
+  // All capability arguments are passed on the stack:
+  CCIfType<[iFATPTR64, iFATPTR128, iFATPTR256, iFATPTR512], CCDelegateTo<CC_MipsCheriCapOnStack>>
 ]>;
 
 // In purecap mode, all variadic arguments are passed on the stack.
