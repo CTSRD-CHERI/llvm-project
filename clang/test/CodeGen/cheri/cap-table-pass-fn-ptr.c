@@ -5,8 +5,8 @@ extern int a(void (*fn)(void));
 
 void snprintf_func(void) {
   a(snprintf_func);
-    // CHECK-LABEL: define void @snprintf_func()
-    // CHECK:       %call = tail call i32 @a(void () addrspace(200)* addrspacecast (void ()* @snprintf_func to void () addrspace(200)*)) #2
+  // CHECK-LABEL: define void @snprintf_func()
+  // CHECK:       %call = tail call i32 @a(void () addrspace(200)* nonnull @snprintf_func) #2
 }
 
 // ASM:      clcbi	$c3, %capcall20(snprintf_func)($c26)

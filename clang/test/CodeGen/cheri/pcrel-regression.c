@@ -8,5 +8,5 @@
 void a(b) {
    a();
    // LEGACY: call void bitcast (void (i32)* @a to void ()*)()
-   // CAPTABLE: call void addrspacecast (void ()* bitcast (void (i32)* @a to void ()*) to void () addrspace(200)*)()
+   // CAPTABLE: call void bitcast (void (i32) addrspace(200)* @a to void () addrspace(200)*)()
 }

@@ -2431,17 +2431,20 @@ llvm::Value *CodeGenFunction::FunctionAddressToCapability(CodeGenFunction &CGF,
   unsigned CapAS = CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
   if (!CapTy)
     CapTy = VTy->getElementType()->getPointerTo(CapAS);
-  if (VTy->getPointerAddressSpace() == CapAS)
-    return CGF.Builder.CreateBitCast(Addr, CapTy);
+  const bool IsFunction = isa<llvm::FunctionType>(VTy->getPointerElementType());
   if (llvm::MCTargetOptions::cheriUsesCapabilityTable()) {
     if (IsDirectCall) {
-      assert(isa<llvm::FunctionType>(VTy->getPointerElementType()));
+      assert(IsFunction);
       return Addr; // Don't add a cast for direct calls
     }
     return CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(Addr, CapTy);
   }
 
   // Without a cap table we need to get the function address using $pcc
+  if (!IsFunction && VTy->getPointerAddressSpace() == CapAS)
+    // For data we don't need any special handling:
+    return CGF.Builder.CreateBitCast(Addr, CapTy);
+
   llvm::Value *V = CGF.Builder.CreatePtrToInt(Addr, CGF.Int64Ty);
   llvm::Value *PCC = CGF.Builder.CreateCall(
           CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_pcc_get), {});

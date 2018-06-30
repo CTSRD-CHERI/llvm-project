@@ -17,7 +17,7 @@ int a() {
   // ASM-LEGACY: ld	$1, %got_page(a.b)($1)
   // ASM-LEGACY-NEXT: daddiu	$1, $1, %got_ofst(a.b)
   // ASM-LEGACY-NEXT: cfromddc	$c12, $1
-  // ASM-LEGACY-NEXT: csetbounds	$c12, $c12, 16
+  // ASM-LEGACY-NEXT: csetbounds	$c12, $c12, {{16|32}}
   // ASM-LEGACY-NEXT: clc	$c12, $zero, 0($c12)
   // ASM:     .Ltmp0:
   // ASM-NEXT: .LBB0_1:

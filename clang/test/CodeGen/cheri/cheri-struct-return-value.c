@@ -1,5 +1,5 @@
 // RUN: %cheri_purecap_cc1 -std=c11 -O2 -emit-llvm -o - %s | %cheri_FileCheck %s -enable-var-scope
-// RUN: %cheri_purecap_cc1 -std=c11 -O2 -S -o - %s | %cheri_FileCheck -D\$CAP_SIZE=32 -check-prefixes=ASM,%cheri_type-ASM %s
+// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel -std=c11 -O2 -S -o - %s | %cheri_FileCheck -D\$CAP_SIZE=32 -check-prefixes=ASM,%cheri_type-ASM %s
 int global;
 
 unsigned long sizeof_cap(void) {
@@ -89,12 +89,7 @@ IntCapSizeUnion intcap_size_union() {
   // CHECK-LABEL: define inreg i8 addrspace(200)* @intcap_size_union() local_unnamed_addr
   // CHECK: ret i8 addrspace(200)* bitcast (i32 addrspace(200)* @global to i8 addrspace(200)*)
   // ASM-LABEL: intcap_size_union
-  // ASM:       ld      [[SIZE_PTR:\$[0-9]+]], %got_disp(.size.global)($1)
-  // ASM-NEXT:  ld      [[GLOBAL_PTR:\$[0-9]+]], %got_disp(global)($1)
-  // ASM-NEXT:  ld      [[LENGTH:\$[0-9]+]], 0([[SIZE_PTR]])
-  // ASM-NEXT:  cfromddc        $c1, [[GLOBAL_PTR]]
-  // ASM-NEXT:  cjr     $c17
-  // ASM-NEXT:  csetbounds      $c3, $c1, [[LENGTH]]
+  // ASM: clcbi $c3, %captab20(global)($c26)
 }
 
 // Check that a union with size > intcap_t is not returned as a value
@@ -115,11 +110,7 @@ GreaterThanIntCapSizeUnion greater_than_intcap_size_union() {
   // CHECK: store i8 addrspace(200)* bitcast (i32 addrspace(200)* @global to i8 addrspace(200)*), i8 addrspace(200)* addrspace(200)* [[CAP_MEMBER]], align [[$CAP_SIZE]]
   // CHECK: ret void
   // ASM-LABEL: greater_than_intcap_size_union
-  // ASM:       ld      $2, %got_disp(.size.global)($1)
-  // ASM-NEXT:  ld      $1, %got_disp(global)($1)
-  // ASM-NEXT:  ld      $2, 0($2)
-  // ASM-NEXT:  cfromddc        $c1, $1
-  // ASM-NEXT:  csetbounds      $c1, $c1, $2
+  // ASM:       clcbi $c1, %captab20(global)($c26)
   // ASM-NEXT:  cjr     $c17
   // ASM-NEXT:  csc     $c1, $zero, 0($c3)
 }
@@ -166,20 +157,17 @@ ThreeLongs three_longs() {
   // CHECK-LABEL: define void @three_longs(%struct.ThreeLongs addrspace(200)* noalias nocapture sret %agg.result) local_unnamed_addr
   // ASM-LABEL: three_longs
   // Clang now uses a memcpy from a global for cheri128
-  // CHERI128-ASM: ld      ${{[0-9]+}}, %got_page(.Lthree_longs.t)($gp)
-  // CHERI128-ASM: ld      ${{[0-9]+}}, %call16(memcpy)($gp)
+  // CHERI128-ASM: clcbi $c4, %captab20(.Lthree_longs.t)($c26)
+  // CHERI128-ASM: clcbi   $c12, %capcall20(memcpy)($c26)
   // For cheri256 clang will inline the memcpy from a global (since it is smaller than 1 cap)
-  // CHERI256-ASM:      ld	[[REG:\$[0-9]+]], %got_page(.Lthree_longs.t)(${{.+}})
-  // CHERI256-ASM-NEXT: daddiu	[[REG]], [[REG]], %got_ofst(.Lthree_longs.t)
-  // CHERI256-ASM-NEXT: cfromddc	$c1, [[REG]]
-  // CHERI256-ASM-NEXT: csetbounds	$c1, $c1, 24
-  // CHERI256-ASM-NEXT: cld	$1, $zero, 0($c1)
-  // CHERI256-ASM-NEXT: cld	$2, $zero, 16($c1)
-  // CHERI256-ASM-NEXT: cld	$3, $zero, 8($c1)
-  // CHERI256-ASM-NEXT: csd	$1, $zero, 0($c3)
-  // CHERI256-ASM-NEXT: csd	$2, $zero, 16($c3)
+  // CHERI256-ASM:      clcbi $c1, %captab20(.Lthree_longs.t)($c26)
+  // CHERI256-ASM-NEXT: cld	$1, $zero, 16($c1)
+  // CHERI256-ASM-NEXT: cld	$2, $zero, 8($c1)
+  // CHERI256-ASM-NEXT: cld	$3, $zero, 0($c1)
+  // CHERI256-ASM-NEXT: csd	$1, $zero, 16($c3)
+  // CHERI256-ASM-NEXT: csd	$2, $zero, 8($c3)
   // CHERI256-ASM-NEXT: cjr	$c17
-  // CHERI256-ASM-NEXT: csd	$3, $zero, 8($c3)
+  // CHERI256-ASM-NEXT: csd	$3, $zero, 0($c3)
 }
 
 typedef struct {

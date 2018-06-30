@@ -631,6 +631,15 @@ public:
   const llvm::DataLayout &getDataLayout() const {
     return TheModule.getDataLayout();
   }
+  // This is the same as DataLayout::getProgramAddressSpace() except that it
+  // also includes a hack for the legacy CHERI ABI: functions must still be in
+  // address space 0 even though all code pointers are in AS200
+  unsigned getFunctionAddrSpace() const {
+    if (LLVM_UNLIKELY(getTarget().areAllPointersCapabilities() &&
+                      !llvm::MCTargetOptions::cheriUsesCapabilityTable()))
+      return 0;
+    return getDataLayout().getProgramAddressSpace();
+  }
   const TargetInfo &getTarget() const { return Target; }
   const llvm::Triple &getTriple() const { return Target.getTriple(); }
   bool supportsCOMDAT() const;

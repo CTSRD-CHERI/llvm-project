@@ -1065,7 +1065,9 @@ void CodeGenModule::EmitCtorList(CtorList &Fns, const char *GlobalName) {
 
   // Ctor function type is void()*.
   llvm::FunctionType* CtorFTy = llvm::FunctionType::get(VoidTy, false);
-  // AS0 OKAY: ctor pointers are always in AS0
+  // And the pointers to the ctors are always AS0 (even for CHERI). We could
+  // theoretically make them AS200 but right now RTLD/csu expects that
+  // .init_array contains virtual addresses and not capabilities
   unsigned CtorPtrAS = 0;
   llvm::Type *CtorPFTy = llvm::PointerType::get(CtorFTy, CtorPtrAS);
 
@@ -1079,7 +1081,8 @@ void CodeGenModule::EmitCtorList(CtorList &Fns, const char *GlobalName) {
   for (const auto &I : Fns) {
     auto ctor = ctors.beginStruct(CtorStructTy);
     ctor.addInt(Int32Ty, I.Priority);
-    ctor.add(llvm::ConstantExpr::getBitCast(I.Initializer, CtorPFTy));
+    ctor.add(llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(I.Initializer,
+                                                                  CtorPFTy));
     if (I.AssociatedData)
       ctor.add(llvm::ConstantExpr::getBitCast(I.AssociatedData, VoidPtrTy));
     else
@@ -2421,7 +2424,6 @@ llvm::Constant *CodeGenModule::GetOrCreateLLVMFunction(
     bool DontDefer, bool IsThunk, llvm::AttributeList ExtraAttrs,
     ForDefinition_t IsForDefinition) {
   const Decl *D = GD.getDecl();
-
   // Any attempts to use a MultiVersion function should result in retrieving
   // the iFunc instead. Name Mangling will handle the rest of the changes.
   if (const FunctionDecl *FD = cast_or_null<FunctionDecl>(D)) {
@@ -2488,8 +2490,8 @@ llvm::Constant *CodeGenModule::GetOrCreateLLVMFunction(
     // (If function is requested for a definition, we always need to create a new
     // function, not just return a bitcast.)
     if (!IsForDefinition) {
-      // AS0 OKAY: LLVM functions are always in AS0
-      return llvm::ConstantExpr::getBitCast(Entry, Ty->getPointerTo(0));
+      return llvm::ConstantExpr::getBitCast(
+          Entry, Ty->getPointerTo(getFunctionAddrSpace()));
     }
   }
 
@@ -2530,9 +2532,9 @@ llvm::Constant *CodeGenModule::GetOrCreateLLVMFunction(
       Entry->removeDeadConstantUsers();
     }
 
-    // AS0 OKAY: LLVM functions are always in AS0
     llvm::Constant *BC = llvm::ConstantExpr::getBitCast(
-        F, Entry->getType()->getElementType()->getPointerTo(0));
+        F, Entry->getType()->getElementType()->getPointerTo(
+               getFunctionAddrSpace()));
 
     addGlobalValReplacement(Entry, BC);
   }
@@ -2595,8 +2597,7 @@ llvm::Constant *CodeGenModule::GetOrCreateLLVMFunction(
     assert(F->getType()->getElementType() == Ty);
     return F;
   }
-  // AS0 OKAY: LLVM functions are always in AS0
-  llvm::Type *PTy = llvm::PointerType::get(Ty, 0);
+  llvm::Type *PTy = llvm::PointerType::get(Ty, getFunctionAddrSpace());
   return llvm::ConstantExpr::getBitCast(F, PTy);
 }
 

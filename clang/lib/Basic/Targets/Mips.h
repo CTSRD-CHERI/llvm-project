@@ -23,6 +23,8 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Compiler.h"
 
+extern llvm::cl::opt<bool> IgnoreProgramASForFunctions;
+
 namespace clang {
 namespace targets {
 
@@ -49,10 +51,16 @@ class LLVM_LIBRARY_VISIBILITY MipsTargetInfo : public TargetInfo {
 
     StringRef PurecapOptions = "";
     // Only set globals address space to 200 for cap-table mode
-    if (CapabilityABI)
-      PurecapOptions = llvm::MCTargetOptions::cheriUsesCapabilityTable()
-                           ? "-A200-P200-G200"
-                           : "-A200-P200";
+    if (CapabilityABI) {
+      if (llvm::MCTargetOptions::cheriUsesCapabilityTable()) {
+        PurecapOptions = "-A200-P200-G200";
+      } else {
+        // We also want program AS 200, but the legacy ABI still needs every
+        // llvm::Function* to be in AS0
+        IgnoreProgramASForFunctions = true;
+        PurecapOptions = "-A200-P200";
+      }
+    }
 
     if (BigEndian)
       resetDataLayout(
