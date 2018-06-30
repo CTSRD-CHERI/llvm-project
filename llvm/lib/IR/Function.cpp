@@ -202,15 +202,26 @@ unsigned Function::getInstructionCount() {
   return NumInstrs;
 }
 
+
+cl::opt<bool> IgnoreProgramASForFunctions(
+    "ignore-program-as-for-functions", cl::Hidden, cl::init(false),
+    cl::desc("This is a hack to keep the legacy CHERI ABI working"));
+
+static inline unsigned DefaultAddrSpaceForFunctions(Module& M) {
+  if (IgnoreProgramASForFunctions)
+    return 0;
+  return M.getDataLayout().getProgramAddressSpace();
+}
+
 Function *Function::Create(FunctionType *Ty, LinkageTypes Linkage,
                            const Twine &N, Module &M) {
-  return Create(Ty, Linkage, M.getDataLayout().getProgramAddressSpace(), N, &M);
+  return Create(Ty, Linkage, DefaultAddrSpaceForFunctions(M), N, &M);
 }
 
 Function *Function::CreateBefore(Function &InsertBefore, FunctionType *Ty,
                                  LinkageTypes Linkage, const Twine &N) {
   auto &M = *InsertBefore.getParent();
-  unsigned AddrSpace = M.getDataLayout().getProgramAddressSpace();
+  unsigned AddrSpace = DefaultAddrSpaceForFunctions(M);
   Function *F = Create(Ty, Linkage, AddrSpace, N);
 
   M.getFunctionList().insert(InsertBefore.getIterator(), F);
@@ -228,12 +239,14 @@ void Function::eraseFromParent() {
 //===----------------------------------------------------------------------===//
 // Function Implementation
 //===----------------------------------------------------------------------===//
-
 static unsigned computeAddrSpace(unsigned AddrSpace, Module *M) {
   // If AS == -1 and we are passed a valid module pointer we place the function
   // in the program address space and otherwise we default to AS0
+  // TODO: assert(M || AddrSpace != static_cast<unsigned>(-1));
   if (AddrSpace == static_cast<unsigned>(-1))
-    return M ? M->getDataLayout().getProgramAddressSpace() : 0;
+    return M ? DefaultAddrSpaceForFunctions(*M) : 0;
+  if (IgnoreProgramASForFunctions)
+    return 0;
   return AddrSpace;
 }
 
