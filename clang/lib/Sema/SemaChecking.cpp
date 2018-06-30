@@ -3995,17 +3995,10 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   // This is not a probalem for capabilities as we don't used LL/SC here but
   // instead fall back to the library calls
   if (!IsCapabilityAtomicOp) {
-    switch (Context.getTargetInfo().getTriple().getArch()) {
-      case llvm::Triple::mips:
-      case llvm::Triple::mips64:
-      case llvm::Triple::mipsel:
-      case llvm::Triple::mips64el:
-      case llvm::Triple::cheri:
-        if (!getLangOpts().Optimize && !getLangOpts().OptimizeSize)
-          Diag(DRE->getLocStart(), diag::warn_atomic_builtins_broken_mips)
+    if (Context.getTargetInfo().getTriple().isMIPS()) {
+      if (!getLangOpts().Optimize && !getLangOpts().OptimizeSize)
+        Diag(DRE->getLocStart(), diag::warn_atomic_builtins_broken_mips)
             << pointerType->getPointeeType() << FirstArg->getSourceRange();
-      default:
-        break;
     }
   }
 
