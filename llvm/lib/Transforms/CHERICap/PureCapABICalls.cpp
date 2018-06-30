@@ -64,6 +64,7 @@ public:
     if (CalledValue->getType() != Func->getType()) {
       if (auto *CalledValPtrTy = dyn_cast<PointerType>(CalledValue->getType())) {
         IRBuilder<> B(CS.getInstruction());
+        // XXXAR: the legacy ABI expects all functions to be in AS0 even though program AS is 200!
         auto *NewCalledValue = B.CreateBitCast(Func, PointerType::get(CalledValPtrTy->getElementType(), 0));
         CS.setCalledFunction(NewCalledValue);
       }
