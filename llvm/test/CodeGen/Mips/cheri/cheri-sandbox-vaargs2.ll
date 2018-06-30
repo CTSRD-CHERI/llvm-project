@@ -1,4 +1,3 @@
-; RUN: %cheri128_purecap_llc -cheri-cap-table-abi=pcrel -print-before-allg -O2 -o - %s
 ; RUN: %cheri128_purecap_llc -cheri-cap-table-abi=pcrel -O2 -o - %s | FileCheck %s -check-prefixes CHECK,PCREL
 ; RUN: %cheri128_purecap_llc -cheri-cap-table-abi=legacy -O2 -o - %s | FileCheck %s -check-prefixes CHECK,LEGACY
 ; ModuleID = 'libxo.i'
@@ -22,11 +21,9 @@ define void @xo_emit(i8 addrspace(200)* %fmt, ...) {
 ; LEGACY:  ld [[ADDR_OF_B:\$[0-9]+]], %got_disp(b)($1)
 ; LEGACY:  cfromddc	[[TMP:\$c[0-9]+]], [[ADDR_OF_B]]
 ; LEGACY:  csetbounds	[[CAP_FOR_B:\$c[0-9]+]], [[TMP]], [[SIZE_OF_B]]
-
 ; Now store in the global:
-; FIXME: we should just use the capability here instead of doing a ctoptr relative to $ddc
-; CHECK: ctoptr $1, [[CAP_FOR_B]], $ddc
-; CHECK: csc	[[VARARGS_CAP]], $1, 0($ddc)
+; CHECK: csc	[[VARARGS_CAP]], $zero, 0([[CAP_FOR_B]])
+
 entry:
   %fmt.addr = alloca i8 addrspace(200)*, align 32, addrspace(200)
   %c = alloca %struct.xo_handle_s addrspace(200)*, align 32, addrspace(200)
@@ -34,15 +31,15 @@ entry:
   store %struct.xo_handle_s addrspace(200)* @b, %struct.xo_handle_s addrspace(200)* addrspace(200)* %c, align 32
   %0 = load %struct.xo_handle_s addrspace(200)*, %struct.xo_handle_s addrspace(200)* addrspace(200)* %c, align 32
   %xo_vap = getelementptr inbounds %struct.xo_handle_s, %struct.xo_handle_s addrspace(200)* %0, i32 0, i32 0
-  %xo_vap1 = addrspacecast i8 addrspace(200)* addrspace(200)* %xo_vap to i8*
+  %xo_vap1 = bitcast i8 addrspace(200)* addrspace(200)* %xo_vap to i8 addrspace(200)*
   ; Load the address of b
   ; Store the va_list (passed in $c13) in the global
-  call void @llvm.va_start.p200i8(i8* %xo_vap1)
+  call void @llvm.va_start.p200i8(i8 addrspace(200)* %xo_vap1)
   ret void
 }
 
 ; Function Attrs: nounwind
-declare void @llvm.va_start.p200i8(i8*) #0
+declare void @llvm.va_start.p200i8(i8 addrspace(200)*) #0
 
 attributes #0 = { nounwind }
 

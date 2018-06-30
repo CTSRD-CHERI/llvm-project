@@ -448,7 +448,7 @@ private:
   void visitExtractElementInst(ExtractElementInst &EI);
   void visitInsertElementInst(InsertElementInst &EI);
   void visitShuffleVectorInst(ShuffleVectorInst &EI);
-  void visitVAArgInst(VAArgInst &VAA) { visitInstruction(VAA); }
+  void visitVAArgInst(VAArgInst &VAA);
   void visitCallInst(CallInst &CI);
   void visitInvokeInst(InvokeInst &II);
   void visitGetElementPtrInst(GetElementPtrInst &GEP);
@@ -547,6 +547,13 @@ static void forEachUser(const Value *User,
   for (const Value *TheNextUser : User->materialized_users())
     if (Callback(TheNextUser))
       forEachUser(TheNextUser, Visited, Callback);
+}
+
+void Verifier::visitVAArgInst(VAArgInst &VAA) {
+  Assert(VAA.getPointerOperand()->getType()->getPointerAddressSpace() ==
+             DL.getAllocaAddrSpace(),
+         "va_arg not in alloca AS?", &VAA);
+  visitInstruction(VAA);
 }
 
 void Verifier::visitGlobalValue(const GlobalValue &GV) {
@@ -4417,6 +4424,16 @@ void Verifier::visitIntrinsicCallSite(Intrinsic::ID ID, CallSite CS) {
     Assert(CS.countOperandBundlesOfType(LLVMContext::OB_deopt) == 1,
            "experimental_guard must have exactly one "
            "\"deopt\" operand bundle");
+    break;
+  }
+
+  case Intrinsic::vastart:
+  case Intrinsic::vacopy:
+  case Intrinsic::vaend: {
+    Assert(CS.isCall(), "variadic argument intrinsics cannot be invoked", CS);
+    Value *Val = CS.getArgOperand(0);
+    Assert(Val->getType()->getPointerAddressSpace() == DL.getAllocaAddrSpace(),
+           "variadic argument intrinsics must be in alloca address space", CS);
     break;
   }
 

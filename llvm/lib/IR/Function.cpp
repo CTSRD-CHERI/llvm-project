@@ -1275,6 +1275,13 @@ Optional<Function*> Intrinsic::remangleIntrinsicFunction(Function *F) {
   if (Name == Intrinsic::getName(ID, ArgTys))
     return None;
 
+  // Don't remangle va_start, etc if it already had an address space qualifier
+  if (ID == Intrinsic::vastart || ID == Intrinsic::vaend ||
+      ID == Intrinsic::vacopy) {
+    if (Name.contains('.'))
+      return None;
+  }
+
   auto NewDecl = Intrinsic::getDeclaration(F->getParent(), ID, ArgTys);
   NewDecl->setCallingConv(F->getCallingConv());
   assert(NewDecl->getFunctionType() == FTy && "Shouldn't change the signature");
