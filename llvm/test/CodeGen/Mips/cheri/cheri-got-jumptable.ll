@@ -1,4 +1,5 @@
-; RUN: %cheri_purecap_llc -mxgot -o - %s | FileCheck %s
+; RUN: %cheri_purecap_llc -cheri-cap-table-abi=legacy -mxgot -o - %s | FileCheck %s -check-prefix LEGACY
+; RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel -mxcaptable -o - %s | FileCheck %s -check-prefix PCREL
 ; ModuleID = 'cheri-got-jumptable.c'
 source_filename = "cheri-got-jumptable.c"
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
@@ -17,8 +18,10 @@ entry:
   %2 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %f, align 32
   %3 = load i8, i8 addrspace(200)* %2, align 1
   %conv = sext i8 %3 to i32
-  ; CHECK: got_hi
-  ; CHECK: got_lo
+  ; LEGACY: %got_hi(.LJTI0_0)
+  ; LEGACY: %got_lo(.LJTI0_0)
+  ; PCREL: %captab_hi(.LJTI0_0)
+  ; PCREL: %captab_lo(.LJTI0_0)
   switch i32 %conv, label %sw.epilog [
     i32 104, label %sw.bb
     i32 113, label %sw.bb1

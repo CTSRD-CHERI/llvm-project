@@ -10,9 +10,9 @@
 # RUN: %cheri_purecap_llvm-mc -cheri-cap-table-abi=fn-desc -filetype=obj %s -o - | llvm-readobj -mips-abi-flags - | FileCheck %s -check-prefix FNDESC
 # FNDESC: ISA Extension: CHERI purecap (function descriptor) (0xC4)
 
-# The default is still legacy:
+# The default is pc-relative legacy:
 # RUN: %cheri_purecap_llvm-mc -filetype=obj %s -o - | llvm-readobj -mips-abi-flags - | FileCheck %s -check-prefix DEFAULT
-# DEFAULT: ISA Extension: CHERI purecap (legacy) (0xC1)
+# DEFAULT: ISA Extension: CHERI purecap (pc-relative) (0xC3)
 
 .text
 __start:

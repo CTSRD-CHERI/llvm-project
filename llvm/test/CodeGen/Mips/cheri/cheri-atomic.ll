@@ -1,4 +1,4 @@
-; RUN: %cheri_purecap_llc %s -o - | FileCheck %s
+; RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -o - | FileCheck %s -enable-var-scope
 ; ModuleID = 'atomic.c'
 target datalayout = "E-m:m-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
 target triple = "cheri-unknown-freebsd"
@@ -95,8 +95,8 @@ entry:
 define i32 @swapd(i64 addrspace(200)* nocapture %e, i64 signext %n) #0 {
 entry:
 
-; CHECK: cld $[[OLDVAL:[0-9]+]], $zero, 0($c{{.*}})
-; CHECK: csetbounds $[[CR:c[0-9]+]], $[[CR:c[0-9]+]], ${{.*}}
+; CHECK: cld     $[[OLDVAL:[0-9]+]], $zero, 0($c3)
+; CHECK: clcbi   $[[CR:c[0-9]+]], %captab20(d)($c26)
 ; CHECK: [[BB0:(\$|\.L)[A-Z_0-9]+]]:
 ; CHECK:      clld    $[[DST:[0-9]+]], $[[CR]]
 ; CHECK-NEXT: bne     $[[DST]], $[[OLDVAL]], [[BB1:(\$|\.L)[A-Z_0-9]+]]
@@ -123,8 +123,8 @@ cmpxchg.continue:                                 ; preds = %cmpxchg.store_expec
 ; CHECK-LABEL: swapw:
 define i32 @swapw(i32 addrspace(200)* nocapture %e, i32 signext %n) #0 {
 entry:
-; CHECK: clw $[[OLDVAL:[0-9]+]], $zero, 0($c{{.*}})
-; CHECK: csetbounds $[[CR:c[0-9]+]], $[[CR:c[0-9]+]], ${{.*}}
+; CHECK: clw     $[[OLDVAL:[0-9]+]], $zero, 0($c3)
+; CHECK: clcbi   $[[CR:c[0-9]+]], %captab20(w)($c26)
 ; CHECK: [[BB0:(\$|\.L)[A-Z_0-9]+]]:
 ; CHECK: cllw    $[[DST:[0-9]+]], $[[CR]]
 ; CHECK: bne     $[[DST]], $[[OLDVAL]], [[BB1:(\$|\.L)[A-Z_0-9]+]]
@@ -149,7 +149,7 @@ cmpxchg.continue:                                 ; preds = %cmpxchg.store_expec
 ; CHECK-LABEL: swaph:
 define i32 @swaph(i16 addrspace(200)* nocapture %e, i16 signext %n) #0 {
 ; CHECK: clh $[[OLDVAL:[0-9]+]], $zero, 0($c{{.*}})
-; CHECK: csetbounds $[[CR:c[0-9]+]], $[[CR:c[0-9]+]], ${{.*}}
+; CHECK: clcbi   $[[CR:c[0-9]+]], %captab20(h)($c26)
 ; CHECK: [[BB0:(\$|\.L)[A-Z_0-9]+]]:
 ; CHECK: cllh    $[[DST:[0-9]+]], $[[CR]]
 ; CHECK: bne     $[[DST]], $[[OLDVAL]], [[BB1:(\$|\.L)[A-Z_0-9]+]]
@@ -176,7 +176,7 @@ cmpxchg.continue:                                 ; preds = %cmpxchg.store_expec
 define i32 @swapb(i8 addrspace(200)* nocapture %e, i8 signext %n) #0 {
 entry:
 ; CHECK: clb $[[OLDVAL:[0-9]+]], $zero, 0($c{{.*}})
-; CHECK: csetbounds $[[CR:c[0-9]+]], $[[CR:c[0-9]+]], ${{.*}}
+; CHECK: clcbi   $[[CR:c[0-9]+]], %captab20(b)($c26)
 ; CHECK: [[BB0:(\$|\.L)[A-Z_0-9]+]]:
 ; CHECK: cllb    $[[DST:[0-9]+]], $[[CR]]
 ; CHECK: bne     $[[DST]], $[[OLDVAL]], [[BB1:(\$|\.L)[A-Z_0-9]+]]

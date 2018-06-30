@@ -1,5 +1,6 @@
 ; REQUIRES: clang
-; RUN: %cheri_purecap_cc1 -O2 -S -o - %s | FileCheck %s
+; RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=legacy -O2 -S -o - %s | FileCheck %s -check-prefixes=CHECK,LEGACY
+; RUN: %cheri_purecap_cc1 -O2 -S -o - %s | FileCheck %s -check-prefixes=CHECK,NEW
 ; ModuleID = 'ocsp_cl.i'
 target datalayout = "E-m:m-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
 target triple = "cheri-unknown-freebsd"
@@ -15,11 +16,12 @@ target triple = "cheri-unknown-freebsd"
 define void @fn1() #0 {
 entry:
   ; Load the address of a
-  ; CHECK: ld	$[[AADDR:[0-9]+]], %got_disp(a)($gp)
-  ; CHECK: cfromddc $c1, $[[AADDR]]
-  ; CHECK: ld	$[[FN2ADDR:([0-9]+|sp)]], %call16(fn2)($gp)
+  ; LEGACY: ld	$[[AADDR:[0-9]+]], %got_disp(a)($gp)
+  ; LEGACY: cfromddc $c1, $[[AADDR]]
+  ; LEGACY: ld	$[[FN2ADDR:([0-9]+|sp)]], %call16(fn2)($gp)
   ; Call fn2
-  ; CHECK: cgetpccsetoffset	$c12, $[[FN2ADDR]]
+  ; LEGACY: cgetpccsetoffset	$c12, $[[FN2ADDR]]
+  ; NEW: clcbi $c3, %captab20(a)($c26)
   ; CHECK: cjalr	$c12, $c17
   tail call void @fn2(%struct.ASN1_ITEM_st addrspace(200)* @a) #2
   ret void
