@@ -2038,8 +2038,8 @@ TEST(LazyCallGraphTest, ReplaceNodeFunction) {
 
   // Now we need to build a new function 'e' with the same signature as 'd'.
   Function &D = DN.getFunction();
-  Function &E = *Function::Create(D.getFunctionType(), D.getLinkage(), "e");
-  D.getParent()->getFunctionList().insert(D.getIterator(), &E);
+  Function &E =
+      *Function::CreateBefore(D, D.getFunctionType(), D.getLinkage(), "e");
 
   // Change each use of 'd' to use 'e'. This is particularly easy as they have
   // the same type.

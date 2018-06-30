@@ -213,7 +213,8 @@ doPromotion(Function *F, SmallPtrSetImpl<Argument *> &ArgsToPromote,
   FunctionType *NFTy = FunctionType::get(RetTy, Params, FTy->isVarArg());
 
   // Create the new function body and insert it into the module.
-  Function *NF = Function::Create(NFTy, F->getLinkage(), F->getName());
+  Function *NF =
+      Function::CreateBefore(*F, NFTy, F->getLinkage(), F->getName());
   NF->copyAttributesFrom(F);
 
   // Patch the pointer to LLVM function in debug info descriptor.
@@ -229,7 +230,6 @@ doPromotion(Function *F, SmallPtrSetImpl<Argument *> &ArgsToPromote,
                                        PAL.getRetAttributes(), ArgAttrVec));
   ArgAttrVec.clear();
 
-  F->getParent()->getFunctionList().insert(F->getIterator(), NF);
   NF->takeName(F);
 
   // Loop over all of the callers of the function, transforming the call sites

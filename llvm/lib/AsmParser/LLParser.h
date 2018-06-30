@@ -181,8 +181,9 @@ namespace llvm {
     /// GetGlobalVal - Get a value with the specified name or ID, creating a
     /// forward reference record if needed.  This can return null if the value
     /// exists but does not have the right type.
-    GlobalValue *GetGlobalVal(const std::string &N, Type *Ty, LocTy Loc);
-    GlobalValue *GetGlobalVal(unsigned ID, Type *Ty, LocTy Loc);
+    GlobalValue *GetGlobalVal(const std::string &N, Type *Ty, LocTy Loc,
+                              bool IsCall);
+    GlobalValue *GetGlobalVal(unsigned ID, Type *Ty, LocTy Loc, bool IsCall);
 
     /// Get a Comdat with the specified name, creating a forward reference
     /// record if needed.
@@ -384,6 +385,9 @@ namespace llvm {
 
     bool ConvertValIDToValue(Type *Ty, ValID &ID, Value *&V,
                              PerFunctionState *PFS, bool IsCall);
+
+    Value *checkValidVariableType(LocTy Loc, const Twine &Name, Type *Ty,
+                                  Value *Val, bool IsCall);
 
     bool parseConstantValue(Type *Ty, Constant *&C);
     bool ParseValue(Type *Ty, Value *&V, PerFunctionState *PFS);
