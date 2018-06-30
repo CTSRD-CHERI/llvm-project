@@ -630,14 +630,22 @@ void Verifier::visitGlobalVariable(const GlobalVariable &GV) {
     // visitGlobalValue will complain on appending non-array.
     if (ArrayType *ATy = dyn_cast<ArrayType>(GV.getValueType())) {
       StructType *STy = dyn_cast<StructType>(ATy->getElementType());
+      // For initializers/destructors the code pointer is always in AS0
       PointerType *FuncPtrTy =
-          FunctionType::get(Type::getVoidTy(Context), false)->getPointerTo();
+          FunctionType::get(Type::getVoidTy(Context), false)->getPointerTo(0);
       // FIXME: Reject the 2-field form in LLVM 4.0.
       Assert(STy &&
                  (STy->getNumElements() == 2 || STy->getNumElements() == 3) &&
-                 STy->getTypeAtIndex(0u)->isIntegerTy(32) &&
-                 STy->getTypeAtIndex(1) == FuncPtrTy,
+                 STy->getTypeAtIndex(0u)->isIntegerTy(32),
              "wrong type for intrinsic global variable", &GV);
+      Assert(STy->getTypeAtIndex(1)->isPointerTy() &&
+                 STy->getTypeAtIndex(1)->getPointerAddressSpace() == 0,
+             "llvm.global_ctors/llvm.global_dtors second parameter must be a "
+             "pointer in AS0",
+             &GV);
+      Assert(STy->getTypeAtIndex(1) == FuncPtrTy,
+             "wrong type for llvm.global_ctors/llvm.global_dtors parameter 2",
+             STy->getTypeAtIndex(1));
       if (STy->getNumElements() == 3) {
         Type *ETy = STy->getTypeAtIndex(2);
         Assert(ETy->isPointerTy() &&
