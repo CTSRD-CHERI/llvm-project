@@ -73,6 +73,7 @@ private:
         return visitBpf(Rel, R, Value);
       case Triple::mips64el:
       case Triple::mips64:
+      case Triple::cheri:
         return visitMips64(Rel, R, Value);
       case Triple::ppc64le:
       case Triple::ppc64:
@@ -84,6 +85,7 @@ private:
       case Triple::amdgcn:
         return visitAmdgpu(Rel, R, Value);
       default:
+        assert(false && "Unknown triple for 64-bit arch");
         HasError = true;
         return 0;
       }
@@ -111,6 +113,7 @@ private:
     case Triple::hexagon:
       return visitHexagon(Rel, R, Value);
     default:
+      assert(false && "Unknown triple for 64-bit arch");
       HasError = true;
       return 0;
     }
