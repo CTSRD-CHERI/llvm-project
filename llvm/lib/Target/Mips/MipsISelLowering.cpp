@@ -2258,8 +2258,12 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
     if (CanUseCapTable) {
       // FIXME: or should this be something else? like in lowerCall?
       auto PtrInfo = MachinePointerInfo::getCapTable(DAG.getMachineFunction());
-      return getFromCapTable(IsFnPtr, N, SDLoc(N), GlobalTy, DAG,
-                             DAG.getEntryNode(), PtrInfo);
+      auto Addr = getFromCapTable(IsFnPtr, N, SDLoc(N), GlobalTy, DAG, DAG.getEntryNode(), PtrInfo);
+      // Also handle the case where a ptrtoint is used on a global:
+      if (Ty.isFatPointer())
+        return Addr;
+      assert(GlobalTy == CapType && Ty == MVT::i64 && "Should only have a ptrtoint node here");
+      return DAG.getNode(ISD::PTRTOINT, SDLoc(N), Ty, Addr);
     } else {
       llvm::errs() << "Not using capability table for " <<  GV->getName() << "\n";
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)

@@ -1,5 +1,6 @@
-; RUN: %cheri_purecap_llc %s -o - | %cheri_FileCheck %s
-; RUN: %cheri256_purecap_llc %s -legacy-cheri-cap-relocs -o - | FileCheck %s -check-prefix LEGACY
+; RUN: %cheri_purecap_llc -cheri-cap-table-abi=legacy %s -o - | %cheri_FileCheck %s -check-prefixes CHECK,LEGACY_ABI
+; RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -o - | %cheri_FileCheck %s -check-prefixes CHECK,NEW_ABI
+; RUsN: %cheri256_purecap_llc %s -legacy-cheri-cap-relocs -o - | FileCheck %s -check-prefix REALLY_OLD_STUFF
 ; ModuleID = 'cheri-member-pointer-init.cpp'
 source_filename = "cheri-member-pointer-init.cpp"
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
@@ -32,29 +33,28 @@ target triple = "cheri-unknown-freebsd"
 ; CHECK-NEXT:  .chericap       _ZN1A5virt2Ev
 ; CHECK-NEXT:  .size   _ZTV1A, [[@EXPR 4 * $CAP_SIZE]]
 
-; FIXME: we shouldn't need these anymore with cap-table
-; CHECK-LABEL: .size.global_nonvirt_ptr:
-; CHECK-LABEL: .size.global_fn_ptr:
-; CHECK-LABEL: .size._ZTV1A:
+; LEGACY_ABI-LABEL: .size.global_nonvirt_ptr:
+; LEGACY_ABI-LABEL: .size.global_fn_ptr:
+; LEGACY_ABI-LABEL: .size._ZTV1A:
 
 
-; LEGACY: 	.section	__cap_relocs,"a",@progbits
-; LEGACY-NEXT: 	.8byte	.L
-; LEGACY-NEXT: 	.8byte	_ZN1A7nonvirtEv
-; LEGACY-NEXT: 	.8byte	0
-; LEGACY-NEXT: 	.space	16
-; LEGACY-NEXT: 	.8byte	.L
-; LEGACY-NEXT: 	.8byte	_Z9global_fnv
-; LEGACY-NEXT: 	.8byte	0
-; LEGACY-NEXT: 	.space	16
-; LEGACY-NEXT: 	.8byte	.L
-; LEGACY-NEXT: 	.8byte	_ZN1A4virtEv
-; LEGACY-NEXT: 	.8byte	0
-; LEGACY-NEXT: 	.space	16
-; LEGACY-NEXT: 	.8byte	.L
-; LEGACY-NEXT: 	.8byte	_ZN1A5virt2Ev
-; LEGACY-NEXT: 	.8byte	0
-; LEGACY-NEXT: 	.space	16
+; REALLY_OLD_STUFF: 	.section	__cap_relocs,"a",@progbits
+; REALLY_OLD_STUFF-NEXT: 	.8byte	.L
+; REALLY_OLD_STUFF-NEXT: 	.8byte	_ZN1A7nonvirtEv
+; REALLY_OLD_STUFF-NEXT: 	.8byte	0
+; REALLY_OLD_STUFF-NEXT: 	.space	16
+; REALLY_OLD_STUFF-NEXT: 	.8byte	.L
+; REALLY_OLD_STUFF-NEXT: 	.8byte	_Z9global_fnv
+; REALLY_OLD_STUFF-NEXT: 	.8byte	0
+; REALLY_OLD_STUFF-NEXT: 	.space	16
+; REALLY_OLD_STUFF-NEXT: 	.8byte	.L
+; REALLY_OLD_STUFF-NEXT: 	.8byte	_ZN1A4virtEv
+; REALLY_OLD_STUFF-NEXT: 	.8byte	0
+; REALLY_OLD_STUFF-NEXT: 	.space	16
+; REALLY_OLD_STUFF-NEXT: 	.8byte	.L
+; REALLY_OLD_STUFF-NEXT: 	.8byte	_ZN1A5virt2Ev
+; REALLY_OLD_STUFF-NEXT: 	.8byte	0
+; REALLY_OLD_STUFF-NEXT: 	.space	16
 
 %class.A = type { i32 (...) addrspace(200)* addrspace(200)* }
 
