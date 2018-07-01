@@ -1,4 +1,4 @@
-// RUN: %cheri_purecap_cc1 -emit-obj %s -o %t.o
+// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=legacy -emit-obj %s -o %t.o
 // RUN: ld.lld --fatal-warnings -shared -o %t.so %t.o -verbose-cap-relocs 2>&1 | FileCheck %s -check-prefix LINKER-MSG
 // LINKER-MSG: Using .global_size for symbol __progname in shared lib (assuming size==sizeof(void* __capability)
 // LINKER-MSG-NEXT: Writing size 0x{{1|2}}0 for <undefined> (in GOT) __progname

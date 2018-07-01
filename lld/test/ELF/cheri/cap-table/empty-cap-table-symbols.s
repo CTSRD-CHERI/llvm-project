@@ -16,6 +16,7 @@
 .text
 .global __start
 __start:
+  .option pic0
   dla $a0, _CHERI_CAPABILITY_TABLE_
 
 # CHECK-LABEL: Sections:

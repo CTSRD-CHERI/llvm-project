@@ -1,7 +1,7 @@
 // REQUIRES: clang
 
-// RUN: %cheri256_purecap_cc1 -emit-obj %S/Inputs/external_lib_user.c -o %t.o
-// RUN: %cheri256_purecap_cc1 -emit-obj %S/Inputs/external_lib.c -o %t-externs.o
+// RUN: %cheri256_purecap_cc1 -mllvm -cheri-cap-table-abi=legacy -emit-obj %S/Inputs/external_lib_user.c -o %t.o
+// RUN: %cheri256_purecap_cc1 -mllvm -cheri-cap-table-abi=legacy -emit-obj %S/Inputs/external_lib.c -o %t-externs.o
 
 // RUN: ld.lld -preemptible-caprelocs=legacy %t.o %t-externs.o -static -o %t-static.exe -e entry
 // RUN: llvm-objdump -h -r -t -C %t-static.exe | FileCheck -check-prefixes DUMP-EXE,STATIC %s

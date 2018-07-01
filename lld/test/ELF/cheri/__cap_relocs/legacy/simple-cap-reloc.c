@@ -1,6 +1,6 @@
 // REQUIRES: clang
 
-// RUN: %cheri_purecap_cc1 %legacy_caprelocs_flag %s -emit-obj -o %t.o
+// RUN: %cheri_purecap_cc1 %legacy_caprelocs_flag_cc1 %s -emit-obj -o %t.o
 // RUN: llvm-readobj -s -r %t.o | FileCheck -check-prefix READOBJ %S/simple-cap-reloc-common.check
 // RUN: llvm-objdump -C -r %t.o | FileCheck -check-prefix DUMP-OBJ %S/simple-cap-reloc-common.check
 

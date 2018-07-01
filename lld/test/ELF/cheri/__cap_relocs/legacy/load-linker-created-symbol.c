@@ -1,8 +1,8 @@
-// RUN: %cheri_purecap_cc1 %legacy_caprelocs_flag %s -emit-obj -o %t.o
+// RUN: %cheri_purecap_cc1 %legacy_caprelocs_flag_cc1 %s -emit-obj -o %t.o
 // RUN: ld.lld -process-cap-relocs %t.o -static -o %t.exe --fatal-warnings
 // RUN: llvm-objdump -h -r -t -C %t.exe | FileCheck -check-prefix WITH-CTORS %s
 
-// RUN: %cheri_purecap_cc1 %legacy_caprelocs_flag %s -DEMPTY_CTORS=1 -emit-obj -o %t-with-ctors.o
+// RUN: %cheri_purecap_cc1 %legacy_caprelocs_flag_cc1 %s -DEMPTY_CTORS=1 -emit-obj -o %t-with-ctors.o
 // RUN: ld.lld -process-cap-relocs %t-with-ctors.o -static -o %t-with-ctors.exe --fatal-warnings
 // RUN: llvm-objdump -h -r -t -C %t-with-ctors.exe | FileCheck -check-prefix EMPTY-CTORS %s
 
