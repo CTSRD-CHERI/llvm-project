@@ -1,7 +1,8 @@
 // taken from temporaries.cpp (which crashed when run with target cheri)
 
 // RUN: %cheri_cc1 -fno-rtti  -target-abi purecap -std=c++11 -DCHECK_ERROR -fsyntax-only -verify %s
-// RUN: %cheri_cc1 -fno-rtti -emit-llvm %s -o -  -target-abi purecap -std=c++11 | %cheri_FileCheck %s
+// RUN: %cheri_cc1 -fno-rtti -mllvm -cheri-cap-table-abi=legacy -emit-llvm %s -o -  -target-abi purecap -std=c++11 | %cheri_FileCheck %s -check-prefixes CHECK,LEGACY
+// RUN: %cheri_cc1 -fno-rtti -emit-llvm %s -o -  -target-abi purecap -std=c++11 | %cheri_FileCheck %s -check-prefixes CHECK,NEWABI
 
 
 namespace PR20227 {
@@ -25,22 +26,28 @@ namespace PR20227 {
 }
 
 
-// CHECK: define internal void @__cxx_global_var_init() #0 {
-// CHECK:   [[PCC:%.+]] = call i8 addrspace(200)* @llvm.cheri.pcc.get()
-// CHECK:   [[WITH_OFFSET:%.+]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* [[PCC]], i64 ptrtoint (void (%"struct.PR20227::A" addrspace(200)*)* @_ZN7PR202271AD1Ev to i64))
-// CHECK:   [[AS_I8:%.+]] = bitcast i8 addrspace(200)* [[WITH_OFFSET]] to void (i8 addrspace(200)*) addrspace(200)*
-// CHECK:   {{%.+}} = call i32 @__cxa_atexit(void (i8 addrspace(200)*) addrspace(200)* [[AS_I8]], i8 addrspace(200)* getelementptr inbounds (%"struct.PR20227::A", %"struct.PR20227::A" addrspace(200)* @_ZGRN7PR202271aE_, i32 0, i32 0), i8 addrspace(200)* @__dso_handle) #2
+// CHECK-LABEL: define internal void @__cxx_global_var_init()
+// LEGACY:   [[PCC:%.+]] = call i8 addrspace(200)* @llvm.cheri.pcc.get()
+// LEGACY:   [[WITH_OFFSET:%.+]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* [[PCC]], i64 ptrtoint (void (%"struct.PR20227::A" addrspace(200)*)* @_ZN7PR202271AD1Ev to i64))
+// LEGACY:   [[AS_I8:%.+]] = bitcast i8 addrspace(200)* [[WITH_OFFSET]] to void (i8 addrspace(200)*) addrspace(200)*
+// CHECK: call i32 @__cxa_atexit(void (i8 addrspace(200)*) addrspace(200)*
+// LEGACY-SAME: [[AS_I8]],
+// NEWABI-SAME: bitcast (void (%"struct.PR20227::A" addrspace(200)*) addrspace(200)* @_ZN7PR202271AD1Ev to void (i8 addrspace(200)*) addrspace(200)*),
+// CHECK-SAME:  i8 addrspace(200)* getelementptr inbounds (%"struct.PR20227::A", %"struct.PR20227::A" addrspace(200)* @_ZGRN7PR202271aE_, i32 0, i32 0), i8 addrspace(200)* @__dso_handle) #2
 // CHECK:   store %"struct.PR20227::A" addrspace(200)* @_ZGRN7PR202271aE_, %"struct.PR20227::A" addrspace(200)* addrspace(200)* @_ZN7PR202271aE, align [[$CAP_SIZE]]
 // CHECK:   ret void
 
-// CHECK: declare i32 @__cxa_atexit(void (i8 addrspace(200)*) addrspace(200)*, i8 addrspace(200)*, i8 addrspace(200)*) #2
+// CHECK: declare i32 @__cxa_atexit(void (i8 addrspace(200)*) addrspace(200)*, i8 addrspace(200)*, i8 addrspace(200)*)
 
-// CHECK: define internal void @__cxx_global_var_init.1() #0 {
+// CHECK-LABEL: define internal void @__cxx_global_var_init.1()
 // CHECK:    call void @llvm.memset.p200i8.i64(i8 addrspace(200)* align [[$CAP_SIZE]] bitcast (%"struct.PR20227::C" addrspace(200)* @_ZGRN7PR202271cE_ to i8 addrspace(200)*), i8 0, i64 [[$CAP_SIZE]], i1 false)
 // CHECK:    call void @_ZN7PR202271CC1Ev(%"struct.PR20227::C" addrspace(200)* @_ZGRN7PR202271cE_) #2
-// CHECK:    [[PCC:%.+]] = call i8 addrspace(200)* @llvm.cheri.pcc.get()
-// CHECK:    [[WITH_OFFSET:%.+]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* [[PCC]], i64 ptrtoint (void (%"struct.PR20227::C" addrspace(200)*)* @_ZN7PR202271CD1Ev to i64))
-// CHECK:    [[AS_I8:%.+]] = bitcast i8 addrspace(200)* [[WITH_OFFSET]] to void (i8 addrspace(200)*) addrspace(200)*
-// CHECK:    {{%.+}} = call i32 @__cxa_atexit(void (i8 addrspace(200)*) addrspace(200)* [[AS_I8]], i8 addrspace(200)* bitcast (%"struct.PR20227::C" addrspace(200)* @_ZGRN7PR202271cE_ to i8 addrspace(200)*), i8 addrspace(200)* @__dso_handle) #2
+// LEGACY:    [[PCC:%.+]] = call i8 addrspace(200)* @llvm.cheri.pcc.get()
+// LEGACY:    [[WITH_OFFSET:%.+]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* [[PCC]], i64 ptrtoint (void (%"struct.PR20227::C" addrspace(200)*)* @_ZN7PR202271CD1Ev to i64))
+// LEGACY:    [[AS_I8:%.+]] = bitcast i8 addrspace(200)* [[WITH_OFFSET]] to void (i8 addrspace(200)*) addrspace(200)*
+// CHECK:    call i32 @__cxa_atexit(void (i8 addrspace(200)*) addrspace(200)*
+// LEGACY-SAME: [[AS_I8]],
+// NEWABI-SAME: bitcast (void (%"struct.PR20227::C" addrspace(200)*) addrspace(200)* @_ZN7PR202271CD1Ev to void (i8 addrspace(200)*) addrspace(200)*),
+// CHECK-SAME:  i8 addrspace(200)* bitcast (%"struct.PR20227::C" addrspace(200)* @_ZGRN7PR202271cE_ to i8 addrspace(200)*), i8 addrspace(200)* @__dso_handle) #2
 // CHECK:    store %"struct.PR20227::B" addrspace(200)* getelementptr inbounds (%"struct.PR20227::C", %"struct.PR20227::C" addrspace(200)* @_ZGRN7PR202271cE_, i32 0, i32 0), %"struct.PR20227::B" addrspace(200)* addrspace(200)* @_ZN7PR202271cE, align [[$CAP_SIZE]]
 // CHECK:    ret void

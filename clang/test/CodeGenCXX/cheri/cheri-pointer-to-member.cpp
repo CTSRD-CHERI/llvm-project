@@ -1,4 +1,5 @@
-// RUN: %cheri_purecap_cc1 %s -fno-rtti -std=c++11 -o - -emit-llvm | %cheri_FileCheck %s "-implicit-check-not=alloca { i64, i64 }" -enable-var-scope
+// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=legacy %s -fno-rtti -std=c++11 -o - -emit-llvm | %cheri_FileCheck %s "-implicit-check-not=alloca { i64, i64 }" -enable-var-scope -check-prefixes CHECK,LEGACY
+// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel %s -fno-rtti -std=c++11 -o - -emit-llvm | %cheri_FileCheck %s "-implicit-check-not=alloca { i64, i64 }" -enable-var-scope -check-prefixes CHECK,CAPTABLE
 // RUN: %cheri_cc1 %s -target-abi n64 -fno-rtti -std=c++11 -o - -emit-llvm -O2 | %cheri_FileCheck %s -check-prefix N64
 // RUN: %cheri_cc1 %s -target-abi n64 -fno-rtti -std=c++11 -o - -S -O2 | %cheri_FileCheck %s -check-prefix N64-ASM
 
@@ -21,7 +22,9 @@ void func(void) {}
 mem_fn_ptr virt = { (void*)32, 1 };
 mem_fn_ptr nonvirt = { (void*)&func, 1 };
 // CHECK: @virt = addrspace(200) global { i8 addrspace(200)*, i64 } { i8 addrspace(200)* inttoptr (i64 32 to i8 addrspace(200)*), i64 1 }, align [[$CAP_SIZE]]
-// CHECK: @nonvirt = addrspace(200) global { i8 addrspace(200)*, i64 } { i8 addrspace(200)* addrspacecast (i8* bitcast (void ()* @_Z4funcv to i8*) to i8 addrspace(200)*), i64 1 }, align [[$CAP_SIZE]]
+// CHECK: @nonvirt = addrspace(200) global { i8 addrspace(200)*, i64 } {
+// LEGACY-SAME: i8 addrspace(200)* addrspacecast (i8* bitcast (void ()* @_Z4funcv to i8*) to i8 addrspace(200)*), i64 1 }, align [[$CAP_SIZE]]
+// CAPTABLE-SAME: i8 addrspace(200)* bitcast (void () addrspace(200)* @_Z4funcv to i8 addrspace(200)*), i64 1 }, align [[$CAP_SIZE]]
 
 // now the real thing
 typedef int (A::* AMemberFuncPtr)();
@@ -33,7 +36,9 @@ AMemberFuncPtr global_virt_func_ptr = &A::bar_virtual;
 // CHECK: @global_null_func_ptr = addrspace(200) global { i8 addrspace(200)*, i64 } zeroinitializer, align [[$CAP_SIZE]]
 // Offet is 20 for 128 and 36 for 256:
 // CHECK: @global_data_ptr = addrspace(200) global i64 [[$A_Y_OFFSET:20|36]], align 8
-// CHECK: @global_nonvirt_func_ptr = addrspace(200) global { i8 addrspace(200)*, i64 } { i8 addrspace(200)* addrspacecast (i8* bitcast (i32 (%class.A addrspace(200)*)* @_ZN1A3barEv to i8*) to i8 addrspace(200)*), i64 0 }, align [[$CAP_SIZE]]
+// CHECK: @global_nonvirt_func_ptr = addrspace(200) global { i8 addrspace(200)*, i64 } {
+// LEGACY-SAME: i8 addrspace(200)* addrspacecast (i8* bitcast (i32 (%class.A addrspace(200)*)* @_ZN1A3barEv to i8*) to i8 addrspace(200)*), i64 0 }, align [[$CAP_SIZE]]
+// CAPTABLE-SAME: i8 addrspace(200)* bitcast (i32 (%class.A addrspace(200)*) addrspace(200)* @_ZN1A3barEv to i8 addrspace(200)*), i64 0 }, align [[$CAP_SIZE]]
 // CHECK: @global_virt_func_ptr = addrspace(200) global { i8 addrspace(200)*, i64 } { i8 addrspace(200)* inttoptr (i64 [[$CAP_SIZE]] to i8 addrspace(200)*), i64 1 }, align [[$CAP_SIZE]]
 
 
@@ -62,20 +67,22 @@ int main() {
 
   AMemberFuncPtr func_ptr = &A::foo;
   // This IR is pretty horrible, maybe we can create something nicer
-  // CHECK: [[PCC:%.*]] = call i8 addrspace(200)* @llvm.cheri.pcc.get()
-  // CHECK: [[NONVIRT_PTR:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* [[PCC]], i64 ptrtoint (i32 (%class.A addrspace(200)*)* @_ZN1A3fooEv to i64))
+  // LEGACY: [[PCC:%.*]] = call i8 addrspace(200)* @llvm.cheri.pcc.get()
+  // LEGACY: [[NONVIRT_PTR:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* [[PCC]], i64 ptrtoint (i32 (%class.A addrspace(200)*)* @_ZN1A3fooEv to i64))
   // CHECK: [[TMP:%.*]] = getelementptr inbounds { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* [[MEMPTR_TMP]], i32 0, i32 0
-  // CHECK: store i8 addrspace(200)* [[NONVIRT_PTR]], i8 addrspace(200)* addrspace(200)* [[TMP]], align [[$CAP_SIZE]]
+  // LEGACY: store i8 addrspace(200)* [[NONVIRT_PTR]], i8 addrspace(200)* addrspace(200)* [[TMP]], align [[$CAP_SIZE]]
+  // CAPTABLE: store i8 addrspace(200)* bitcast (i32 (%class.A addrspace(200)*) addrspace(200)* @_ZN1A3fooEv to i8 addrspace(200)*), i8 addrspace(200)* addrspace(200)* [[TMP]], align [[$CAP_SIZE]]
   // CHECK: [[TMP:%.*]] = getelementptr inbounds { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* [[MEMPTR_TMP]], i32 0, i32 1
   // CHECK: store i64 0, i64 addrspace(200)* [[TMP]], align [[$CAP_SIZE]]
   // CHECK: [[TMP:%.*]] = load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* [[MEMPTR_TMP]], align [[$CAP_SIZE]]
   // CHECK: store { i8 addrspace(200)*, i64 } [[TMP]], { i8 addrspace(200)*, i64 } addrspace(200)* [[FUNC_PTR]], align [[$CAP_SIZE]]
 
   AMemberFuncPtr func_ptr_2 = &A::bar;
-  // CHECK: [[PCC:%.*]] = call i8 addrspace(200)* @llvm.cheri.pcc.get()
-  // CHECK: [[NONVIRT_PTR:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* [[PCC]], i64 ptrtoint (i32 (%class.A addrspace(200)*)* @_ZN1A3barEv to i64))
+  // LEGACY: [[PCC:%.*]] = call i8 addrspace(200)* @llvm.cheri.pcc.get()
+  // LEGACY: [[NONVIRT_PTR:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* [[PCC]], i64 ptrtoint (i32 (%class.A addrspace(200)*)* @_ZN1A3barEv to i64))
   // CHECK: [[TMP:%.*]] = getelementptr inbounds { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* [[MEMPTR_TMP1]], i32 0, i32 0
-  // CHECK: store i8 addrspace(200)* [[NONVIRT_PTR]], i8 addrspace(200)* addrspace(200)* [[TMP]], align [[$CAP_SIZE]]
+  // LEGACY: store i8 addrspace(200)* [[NONVIRT_PTR]], i8 addrspace(200)* addrspace(200)* [[TMP]], align [[$CAP_SIZE]]
+  // CAPTABLE: store i8 addrspace(200)* bitcast (i32 (%class.A addrspace(200)*) addrspace(200)* @_ZN1A3barEv to i8 addrspace(200)*), i8 addrspace(200)* addrspace(200)* [[TMP]], align [[$CAP_SIZE]]
   // CHECK: [[TMP:%.*]] = getelementptr inbounds { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* [[MEMPTR_TMP1]], i32 0, i32 1
   // CHECK: store i64 0, i64 addrspace(200)* [[TMP]], align [[$CAP_SIZE]]
   // CHECK: [[TMP:%.*]] = load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* [[MEMPTR_TMP1]], align [[$CAP_SIZE]]
@@ -378,7 +385,9 @@ namespace PR7556 {
 
     // C can't be zero-initialized due to pointer to data member:
     // CHECK-NEXT: [[C_AS_I8:%.+]] = bitcast %"struct.PR7556::C" addrspace(200)* [[STRUCT_C]] to i8 addrspace(200)*
-    // CHECK-NEXT: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 8 [[C_AS_I8]], i8 addrspace(200)* align 8 addrspacecast (i8* bitcast (%"struct.PR7556::C"* @0 to i8*) to i8 addrspace(200)*), i64 8, i1 false)
+    // CHECK-NEXT: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 8 [[C_AS_I8]],
+    // LEGACY-SAME: i8 addrspace(200)* align 8 addrspacecast (i8* bitcast (%"struct.PR7556::C"* @0 to i8*) to i8 addrspace(200)*), i64 8, i1 false)
+    // CAPTABLE-SAME: i8 addrspace(200)* align 8 bitcast (%"struct.PR7556::C" addrspace(200)* @0 to i8 addrspace(200)*), i64 8, i1 false)
     // CHECK-NEXT: call void @_ZN6PR75561CD1Ev(%"struct.PR7556::C" addrspace(200)* [[STRUCT_C]])
     C();
     // CHECK: ret void
