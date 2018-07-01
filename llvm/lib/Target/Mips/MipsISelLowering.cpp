@@ -2498,7 +2498,8 @@ lowerConstantPool(SDValue Op, SelectionDAG &DAG) const
   ConstantPoolSDNode *N = cast<ConstantPoolSDNode>(Op);
   EVT Ty = Op.getValueType();
 
-  assert(!ABI.UsesCapabilityTable());
+  if (ABI.UsesCapabilityTable())
+    report_fatal_error("Cannot handle constant pools in captable ABI. Try compiling with -msoft-float instead.");
 
   if (!isPositionIndependent()) {
     const MipsTargetObjectFile *TLOF =

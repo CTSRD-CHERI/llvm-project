@@ -1,4 +1,6 @@
-; RUN: %cheri_purecap_llc %s -o -
+; RUN: %cheri_purecap_llc -cheri-cap-table-abi=legacy %s -o /dev/null
+; RUN: not %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -o - 2>&1 | FileCheck %s
+; CHECK: LLVM ERROR: Cannot handle constant pools in captable ABI. Try compiling with -msoft-float instead.
 ; ModuleID = 'bugpoint-reduced-simplified.bc'
 target datalayout = "E-m:m-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
 target triple = "cheri-unknown-freebsd"
