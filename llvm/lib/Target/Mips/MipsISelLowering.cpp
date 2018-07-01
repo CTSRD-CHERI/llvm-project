@@ -2253,6 +2253,7 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
                << GV->getName()
                << ". This should not happen, assuming it is AS200 for now\n";
         CanUseCapTable = true;
+        Ty = CapType;  // Ensure that we load a capability and not an i64
       }
     }
     if (CanUseCapTable) {
