@@ -1252,6 +1252,28 @@ static void createSwiftErrorEntriesInEntryBlock(FunctionLoweringInfo *FuncInfo,
   }
 }
 
+static const AllocaInst *findAllocaForDbgDeclare(const Value *Address) {
+  if (const auto *AI = dyn_cast<AllocaInst>(Address))
+    return AI;
+  // Look through any csetbounds/mipsstacktocap instructions to find the alloca.
+  // This is needed because the MIPS CHERI PurecapABI pass inserts a setbounds
+  // for every stack allocation
+  // TODO: should we just not update the dbg.declare statements instead of
+  // working around it here?
+  if (const auto *CI = dyn_cast<CallInst>(Address))
+    if (const auto *F = CI->getCalledFunction())
+      if (F->getIntrinsicID() == Intrinsic::cheri_cap_bounds_set ||
+          F->getIntrinsicID() == Intrinsic::mips_stack_to_cap)
+        return findAllocaForDbgDeclare(CI->getArgOperand(0));
+  // We also need to ignore the bitcast that is used in order to call the
+  // stacktocap/bounds_set
+  if (auto *O = dyn_cast<Operator>(Address))
+    if (O->getOpcode() == Instruction::BitCast ||
+        O->getOpcode() == Instruction::AddrSpaceCast)
+      return findAllocaForDbgDeclare(O->getOperand(0));
+  return nullptr;
+}
+
 /// Collect llvm.dbg.declare information. This is done after argument lowering
 /// in case the declarations refer to arguments.
 static void processDbgDeclares(FunctionLoweringInfo *FuncInfo) {
@@ -1278,7 +1300,10 @@ static void processDbgDeclares(FunctionLoweringInfo *FuncInfo) {
       // argument passed in memory. If it is not, then we will ignore this
       // intrinsic and handle this during isel like dbg.value.
       int FI = std::numeric_limits<int>::max();
-      if (const auto *AI = dyn_cast<AllocaInst>(Address)) {
+      // XXXAR: we can't just do a dyn_cast here since the CheriPurecap pass
+      // will insert csetbounds instructions for each alloca and updates
+      // the dbg.declare to no longer point to the alloca
+      if (const auto *AI = findAllocaForDbgDeclare(Address)) {
         auto SI = FuncInfo->StaticAllocaMap.find(AI);
         if (SI != FuncInfo->StaticAllocaMap.end())
           FI = SI->second;

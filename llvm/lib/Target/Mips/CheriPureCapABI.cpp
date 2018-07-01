@@ -101,6 +101,7 @@ public:
         BitCast = cast<Instruction>(Alloca);
       Alloca = B.CreateCall(SetLenFun, {Alloca, Size});
       Alloca = B.CreateBitCast(Alloca, AllocaTy);
+      // FIXME: this breaks the debuginfo:
       AI->replaceAllUsesWith(Alloca);
       BitCast->setOperand(0, AI);
     }
