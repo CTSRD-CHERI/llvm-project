@@ -206,6 +206,15 @@ static bool isORCopyInst(const MachineInstr &MI) {
   return false;
 }
 
+static bool isCIncOffsetCopyInst(const MachineInstr &MI) {
+  if (MI.getOpcode() == Mips::CIncOffset &&
+      MI.getOperand(2).getReg() == Mips::ZERO_64)
+    return true;
+  if (MI.getOpcode() == Mips::CIncOffsetImm && MI.getOperand(2).getImm() == 0)
+    return true;
+  return false;
+}
+
 /// If @MI is WRDSP/RRDSP instruction return true with @isWrite set to true
 /// if it is WRDSP instruction.
 static bool isReadOrWriteToDSPReg(const MachineInstr &MI, bool &isWrite) {
@@ -233,6 +242,8 @@ bool MipsSEInstrInfo::isCopyInstr(const MachineInstr &MI,
   bool isDSPControlWrite = false;
   // Condition is made to match the creation of WRDSP/RDDSP copy instruction
   // from copyPhysReg function.
+
+  // FIXME: Handle CRead/WriteHWR here as well?
   if (isReadOrWriteToDSPReg(MI, isDSPControlWrite)) {
     if (!MI.getOperand(1).isImm() || MI.getOperand(1).getImm() != (1<<4))
       return false;
@@ -244,7 +255,7 @@ bool MipsSEInstrInfo::isCopyInstr(const MachineInstr &MI,
       Src = &MI.getOperand(2);
     }
     return true;
-  } else if (MI.isMoveReg() || isORCopyInst(MI)) {
+  } else if (MI.isMoveReg() || isORCopyInst(MI) || isCIncOffsetCopyInst(MI)) {
     Dest = &MI.getOperand(0);
     Src = &MI.getOperand(1);
     return true;

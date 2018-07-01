@@ -301,9 +301,10 @@ def CToPtr32 : CheriFmt3Op<0x12, (outs GPR32Opnd:$r1), (ins CheriOpnd0IsDDC:$r3,
 }
 def CSub : CheriFmt3Op<0xa, (outs GPR64Opnd:$r1), (ins CheriOpnd:$r2, CheriOpnd:$r3),
   "csub\t$r1, $r2, $r3", [(set GPR64Opnd:$r1, (int_cheri_cap_diff CheriOpnd:$r2, CheriOpnd:$r3))]>;
-def CMove : CheriFmt2Op<0xa, (outs CheriOpnd: $r1), (ins CheriOpnd:$r2),
-  "cmove\t$r1,  $r2",
-  []>;
+
+def CMove : CheriFmt2Op<0xa, (outs CheriOpnd: $r1), (ins CheriOpnd:$r2), "cmove\t$r1,  $r2", []> {
+  let isMoveReg = 1;
+}
 
 
 
