@@ -1,6 +1,6 @@
-; RUsN: %cheri_llc -relocation-model pic -o - %s
-; RUN: %cheri_llc -o - %s
-; For some reason the capability argument is not being passed on the stack but in $c3 instead
+; RUN: %cheri128_llc -o - %s | FileCheck %s
+; The capability argument was not being passed on the stack but in $c3 instead
+; Note: passing capabilities to variadics in the pure ABI is completely broken.
 ; https://github.com/CTSRD-CHERI/llvm/issues/271
 ; ModuleID = 'test.c'
 
@@ -39,17 +39,17 @@ entry:
   call void @llvm.lifetime.end.p0i8(i64 8, i8* nonnull %0) #2
   ret i32 0
 
-  // The capability argument should be loaded from the stack:
-  // CHECK: daddiu	$2, $sp, 24
-  // CHECK: sd	$2, 8($sp)
-  // CHECK: daddiu	$3, $2, 8
-  // CHECK: sd	$3, 8($sp)
-  // CHECK: lw	$6, 28($sp)
-  // CHECK: daddiu	$2, $2, 23
-  // CHECK: daddiu	$3, $zero, -16
-  // CHECK: and	$2, $2, $3
-  // load from stack:
-  // CHECK: clc	$c1, $2, 0($ddc)
+  ; The capability argument should be loaded from the stack:
+  ; CHECK: daddiu	$2, $sp, 24
+  ; CHECK: sd	$2, 8($sp)
+  ; CHECK: daddiu	$3, $2, 8
+  ; CHECK: sd	$3, 8($sp)
+  ; CHECK: lw	$6, 28($sp)
+  ; CHECK: daddiu	$2, $2, 23
+  ; CHECK: daddiu	$3, $zero, -16
+  ; CHECK: and	$2, $2, $3
+  ; load from stack:
+  ; CHECK: clc	$c1, $2, 0($ddc)
 }
 
 declare i32 @test_non_variadic(i8* %i1, i32 %i2, i8 addrspace(200)* nonnull %cap1, i32 %i3) local_unnamed_addr #0
