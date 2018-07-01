@@ -928,7 +928,7 @@ ItaniumCXXABI::BuildMemberPointer(const CXXMethodDecl *MD,
       }
       else {
         // llvm::errs() << "emitting global member pointer to " << MD->getQualifiedNameAsString() << "\n";
-        addr = llvm::ConstantExpr::getAddrSpaceCast(addr, CGM.VoidPtrTy);
+        addr = llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(addr, CGM.VoidPtrTy);
       }
       MemPtr[0] = addr;
     } else {
