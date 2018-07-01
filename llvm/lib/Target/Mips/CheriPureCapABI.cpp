@@ -102,7 +102,8 @@ public:
       Alloca = B.CreateCall(SetLenFun, {Alloca, Size});
       Alloca = B.CreateBitCast(Alloca, AllocaTy);
       // FIXME: this breaks the debuginfo:
-      AI->replaceAllUsesWith(Alloca);
+      // FIXME is this correct?
+      AI->replaceNonMetadataUsesWith(Alloca);
       BitCast->setOperand(0, AI);
     }
     return true;

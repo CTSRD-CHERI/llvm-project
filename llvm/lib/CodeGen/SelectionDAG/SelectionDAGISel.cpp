@@ -1255,6 +1255,7 @@ static void createSwiftErrorEntriesInEntryBlock(FunctionLoweringInfo *FuncInfo,
 static const AllocaInst *findAllocaForDbgDeclare(const Value *Address) {
   if (const auto *AI = dyn_cast<AllocaInst>(Address))
     return AI;
+#if 0
   // Look through any csetbounds/mipsstacktocap instructions to find the alloca.
   // This is needed because the MIPS CHERI PurecapABI pass inserts a setbounds
   // for every stack allocation
@@ -1271,6 +1272,7 @@ static const AllocaInst *findAllocaForDbgDeclare(const Value *Address) {
     if (O->getOpcode() == Instruction::BitCast ||
         O->getOpcode() == Instruction::AddrSpaceCast)
       return findAllocaForDbgDeclare(O->getOperand(0));
+#endif
   return nullptr;
 }
 
