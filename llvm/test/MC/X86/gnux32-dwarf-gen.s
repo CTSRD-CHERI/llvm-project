@@ -1,8 +1,8 @@
 # RUN: llvm-mc -g -filetype=obj -triple x86_64-pc-linux-gnu %s -o %t.64
-# RUN: llvm-dwarfdump -debug-info %t.64 | FileCheck -check-prefix=DEFAULTABI %s
+# RUN: llvm-dwarfdump -debug-info %t.64 2>&1 | FileCheck -check-prefix=DEFAULTABI %s -implicit-check-not "failed to compute relocation"
 
 # RUN: llvm-mc -g -filetype=obj -triple x86_64-pc-linux-gnux32 %s -o %t.32
-# RUN: llvm-dwarfdump -debug-info %t.32 | FileCheck -check-prefix=X32ABI %s
+# RUN: llvm-dwarfdump -debug-info %t.32 2>&1 | FileCheck -check-prefix=X32ABI %s -implicit-check-not "failed to compute relocation"
 
 # This test checks the dwarf info section emitted to the output object by the
 # assembler, looking at the difference between the x32 ABI and default x86-64

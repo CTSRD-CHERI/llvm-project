@@ -98,6 +98,8 @@ private:
     switch (ObjToVisit.getArch()) {
     case Triple::x86:
       return visitX86(Rel, R, Value);
+    case Triple::x86_64:
+      return visitX86_64(Rel, R, Value); // x32 ABI
     case Triple::ppc:
       return visitPPC32(Rel, R, Value);
     case Triple::arm:
