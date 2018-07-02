@@ -1,6 +1,6 @@
 ; REQUIRES: clang
 ; RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=legacy -O2 -S -o - %s | FileCheck %s -check-prefixes=CHECK,LEGACY
-; RUN: %cheri_purecap_cc1 -O2 -S -o - %s | FileCheck %s -check-prefixes=CHECK,NEW
+; RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel -O2 -S -o - %s | FileCheck %s -check-prefixes=CHECK,NEW
 ; ModuleID = 'ocsp_cl.i'
 target datalayout = "E-m:m-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
 target triple = "cheri-unknown-freebsd"

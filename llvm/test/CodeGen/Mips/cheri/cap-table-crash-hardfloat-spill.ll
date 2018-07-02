@@ -1,4 +1,5 @@
-; RUN: %cheri_purecap_llc -o - %s
+; RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel -o - %s
+; RUN: %cheri_purecap_llc -cheri-cap-table-abi=legacy -o - %s
 ; XFAIL: *
 ; SDValue MipsTargetLowering::lowerConstantPool(SDValue Op, SelectionDAG &DAG) const needs updating
 %struct.a = type { }

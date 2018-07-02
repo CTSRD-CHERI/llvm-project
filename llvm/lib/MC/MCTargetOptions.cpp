@@ -15,7 +15,7 @@ using namespace llvm;
 
 static cl::opt<CheriCapabilityTableABI> CapTableABI(
     "cheri-cap-table-abi", cl::desc("ABI to use for :"),
-    cl::init(CheriCapabilityTableABI::Pcrel),
+    cl::init(CheriCapabilityTableABI::Legacy),
     cl::values(clEnumValN(CheriCapabilityTableABI::Legacy, "legacy",
                           "Disable capability table and use the legacy ABI"),
                clEnumValN(CheriCapabilityTableABI::PLT, "plt",

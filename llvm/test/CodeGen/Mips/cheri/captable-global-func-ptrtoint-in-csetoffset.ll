@@ -1,4 +1,4 @@
-; RUN: %cheri_purecap_llc -o - -verify-machineinstrs %s | FileCheck %s
+; RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel -o - -verify-machineinstrs %s | FileCheck %s
 ; Check that we don't accidentally create a nonsense COPY node ($at_64 = COPY killed renamable $c1)
 ; when the result of the GlobalAddr goes through a ptrtoint
 

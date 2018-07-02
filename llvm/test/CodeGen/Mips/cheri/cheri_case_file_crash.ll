@@ -1,4 +1,5 @@
-; RUN: %cheri_purecap_llc %s -o -
+; RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -o -
+; RUN: %cheri_purecap_llc -cheri-cap-table-abi=legacy -ignore-program-as-for-functions %s -o -
 ; ModuleID = '<stdin>'
 source_filename = "bugpoint-output-4bb8cd9.bc"
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"

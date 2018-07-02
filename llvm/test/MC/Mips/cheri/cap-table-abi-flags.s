@@ -12,7 +12,7 @@
 
 # The default is pc-relative legacy:
 # RUN: %cheri_purecap_llvm-mc -filetype=obj %s -o - | llvm-readobj -mips-abi-flags - | FileCheck %s -check-prefix DEFAULT
-# DEFAULT: ISA Extension: CHERI purecap (pc-relative) (0xC3)
+# DEFAULT: ISA Extension: CHERI purecap (legacy) (0xC1)
 
 .text
 __start:
