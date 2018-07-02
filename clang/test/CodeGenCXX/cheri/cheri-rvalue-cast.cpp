@@ -1,8 +1,8 @@
 // taken from temporaries.cpp (which crashed when run with target cheri)
 
-// RUN: %cheri_cc1 -fno-rtti  -target-abi purecap -std=c++11 -DCHECK_ERROR -fsyntax-only -verify %s
+// RUN: %cheri_cc1 -fno-rtti -target-abi purecap -std=c++11 -DCHECK_ERROR -fsyntax-only -verify %s
 // RUN: %cheri_cc1 -fno-rtti -mllvm -cheri-cap-table-abi=legacy -emit-llvm %s -o -  -target-abi purecap -std=c++11 | %cheri_FileCheck %s -check-prefixes CHECK,LEGACY
-// RUN: %cheri_cc1 -fno-rtti -emit-llvm %s -o -  -target-abi purecap -std=c++11 | %cheri_FileCheck %s -check-prefixes CHECK,NEWABI
+// RUN: %cheri_cc1 -fno-rtti -mllvm -cheri-cap-table-abi=pcrel -emit-llvm %s -o -  -target-abi purecap -std=c++11 | %cheri_FileCheck %s -check-prefixes CHECK,NEWABI
 
 
 namespace PR20227 {

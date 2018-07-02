@@ -1,5 +1,5 @@
 // RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=legacy -std=c++11 -emit-llvm %s -o - | %cheri_FileCheck %s -check-prefixes CHECK,LEGACY
-// RUN: %cheri_purecap_cc1 -std=c++11 -emit-llvm %s -o - | %cheri_FileCheck %s -check-prefixes CHECK,NEWABI
+// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel -std=c++11 -emit-llvm %s -o - | %cheri_FileCheck %s -check-prefixes CHECK,NEWABI
 template <class Functor>
 void invoke(Functor&& f);
 

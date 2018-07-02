@@ -1,5 +1,5 @@
 // RUN:  %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=legacy -emit-llvm -std=c++11 -o - %s | FileCheck %s
-// RUN:  %cheri_purecap_cc1 -emit-llvm -std=c++11 -o - %s | FileCheck %s -check-prefix NEWABI
+// RUN:  %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel -emit-llvm -std=c++11 -o - %s | FileCheck %s -check-prefix NEWABI
 
 // CHECK-LABEL: define internal void @__cxx_global_var_init()
 // CHECK: [[TMP0:%[0-9]+]] = call i8 addrspace(200)* @llvm.cheri.pcc.get()
