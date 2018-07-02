@@ -141,7 +141,7 @@ public:
 
   // TODO: remove this once all users have been updated to pass an AddrSpace
   static Function *Create(FunctionType *Ty, LinkageTypes Linkage,
-                          const Twine &N = "", Module *M = nullptr) {
+                          const Twine &N, Module *M = nullptr) {
     return new Function(Ty, Linkage, static_cast<unsigned>(-1), N, M);
   }
 
