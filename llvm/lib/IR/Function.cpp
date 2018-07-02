@@ -249,9 +249,6 @@ static unsigned computeAddrSpace(unsigned AddrSpace, Module *M) {
   }
   if (IgnoreProgramASForFunctions)
     return 0;
-  if (AddrSpace == 0) {
-    assert(!M || DefaultAddrSpaceForFunctions(*M) == 0);
-  }
   return AddrSpace;
 }
 
