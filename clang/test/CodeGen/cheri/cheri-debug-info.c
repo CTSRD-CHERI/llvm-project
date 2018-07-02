@@ -142,7 +142,7 @@ int foo(int* i) { // CHECK-IR:  call void @llvm.dbg.declare(metadata i32{{( addr
 // DEBUG-INFO-OPT-NEXT:               DW_AT_language	(DW_LANG_C99)
 // DEBUG-INFO-OPT-NEXT:               DW_AT_name	("{{.+}}/test/CodeGen/cheri/<stdin>")
 // DEBUG-INFO-OPT-NEXT:               DW_AT_stmt_list	(0x00000000)
-// DEBUG-INFO-OPT-NEXT:               DW_AT_comp_dir	("{{.+}}/test/CodeGen/CHERI")
+// DEBUG-INFO-OPT-NEXT:               DW_AT_comp_dir	("{{.+}}")
 // DEBUG-INFO-OPT-NEXT:               DW_AT_GNU_pubnames	(0x01)
 // DEBUG-INFO-OPT-NEXT:               DW_AT_low_pc	(0x0000000000000000)
 // MIPS has one instruction less
@@ -180,6 +180,6 @@ int foo(int* i) { // CHECK-IR:  call void @llvm.dbg.declare(metadata i32{{( addr
 // DEBUG-INFO-OPT-EMPTY:
 // DEBUG-INFO-OPT-NEXT: 0x00000065:   DW_TAG_pointer_type
 // DEBUG-INFO-OPT-NEXT:                 DW_AT_type	(0x0000002f "int")
-// CHERI-DEBUG-INFO-OPT-NEXT:           DW_AT_byte_size	(0x10)
+// CHERI-DEBUG-INFO-OPT-NEXT:           DW_AT_byte_size	(0x{{10|20}})
 // DEBUG-INFO-OPT-EMPTY:
 // DEBUG-INFO-OPT-NEXT: 0x0000006{{a|b}}:   NULL
