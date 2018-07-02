@@ -40,7 +40,7 @@
 // CHECK-EMPTY:
 // CHECK-NEXT: DW_TAG_formal_parameter
 // MIPS-NEXT:              DW_AT_location	(DW_OP_fbreg +16)
-// CHERI-NEXT:             DW_AT_location	(DW_OP_fbreg +80)
+// CHERI-NEXT:             DW_AT_location	(DW_OP_fbreg +{{80|192}})
 // CHECK-NEXT:                   DW_AT_name	("i")
 // CHECK-NEXT:                   DW_AT_decl_file	("/src/test/CodeGen/cheri/cheri-debug-info.c")
 // CHECK-NEXT:                   DW_AT_decl_line	(20)
@@ -54,7 +54,7 @@
 // CHECK-EMPTY:
 // CHECK-NEXT: DW_TAG_variable
 // MIPS-NEXT:                      DW_AT_location	(DW_OP_fbreg +12)
-// CHERI-NEXT:                     DW_AT_location	(DW_OP_fbreg +76)
+// CHERI-NEXT:                     DW_AT_location	(DW_OP_fbreg +{{76|188}})
 // CHECK-NEXT:                     DW_AT_name	("j")
 // CHECK-NEXT:                     DW_AT_decl_file	("/src/test/CodeGen/cheri/cheri-debug-info.c")
 // CHECK-NEXT:                     DW_AT_decl_line	(22)
@@ -70,7 +70,7 @@
 // CHECK-EMPTY:
 // CHECK-NEXT:  DW_TAG_variable
 // MIPS-NEXT:                      DW_AT_location	(DW_OP_fbreg +8)
-// CHERI-NEXT:                     DW_AT_location	(DW_OP_fbreg +72)
+// CHERI-NEXT:                     DW_AT_location	(DW_OP_fbreg +{{72|184}})
 // CHECK-NEXT:                     DW_AT_name	("j")
 // CHECK-NEXT:                     DW_AT_decl_file	("{{.+}}/CodeGen/cheri/cheri-debug-info.c")
 // CHECK-NEXT:                     DW_AT_decl_line	(25)
