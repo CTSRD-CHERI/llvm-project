@@ -3782,10 +3782,11 @@ void CodeGenModule::EmitAliasDefinition(GlobalDecl GD) {
   // if a deferred decl.
   llvm::Constant *Aliasee;
   unsigned AS = 0;
-  if (isa<llvm::FunctionType>(DeclTy))
+  if (isa<llvm::FunctionType>(DeclTy)) {
+    AS = getFunctionAddrSpace();
     Aliasee = GetOrCreateLLVMFunction(AA->getAliasee(), DeclTy, GD,
                                       /*ForVTable=*/false);
-  else {
+  } else {
     AS = getTargetCodeGenInfo().getDefaultAS();
     Aliasee = GetOrCreateLLVMGlobal(AA->getAliasee(),
                                     llvm::PointerType::get(DeclTy, AS),
