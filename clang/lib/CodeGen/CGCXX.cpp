@@ -182,8 +182,9 @@ bool CodeGenModule::TryEmitBaseDestructorAsAlias(const CXXDestructorDecl *D) {
     return true;
 
   // Create the alias with no name.
-  auto *Alias = llvm::GlobalAlias::create(AliasValueType, 0, Linkage, "",
-                                          Aliasee, &getModule());
+  auto *Alias =
+      llvm::GlobalAlias::create(AliasValueType, getFunctionAddrSpace(), Linkage,
+                                "", Aliasee, &getModule());
 
   // Destructors are always unnamed_addr.
   Alias->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
