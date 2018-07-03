@@ -133,9 +133,8 @@ bool CodeGenModule::TryEmitBaseDestructorAsAlias(const CXXDestructorDecl *D) {
 
   // Derive the type for the alias.
   llvm::Type *AliasValueType = getTypes().GetFunctionType(AliasDecl);
-  // We always want aliases to functions in AS 0 for now, because LLVM doesn't
-  // support functions in a non-zero AS.
-  llvm::PointerType *AliasType = AliasValueType->getPointerTo(0);
+  llvm::PointerType *AliasType =
+      AliasValueType->getPointerTo(getFunctionAddrSpace());
 
   // Find the referent.  Some aliases might require a bitcast, in
   // which case the caller is responsible for ensuring the soundness
