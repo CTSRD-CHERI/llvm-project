@@ -1027,7 +1027,7 @@ bool DevirtModule::shouldExportConstantsAsAbsoluteSymbols() {
 
 void DevirtModule::exportGlobal(VTableSlot Slot, ArrayRef<uint64_t> Args,
                                 StringRef Name, Constant *C) {
-  GlobalAlias *GA = GlobalAlias::create(Int8Ty, 0, GlobalValue::ExternalLinkage,
+  GlobalAlias *GA = GlobalAlias::create(Int8Ty, M.getDataLayout().getGlobalsAddressSpace(), GlobalValue::ExternalLinkage,
                                         getGlobalName(Slot, Args, Name), C, &M);
   GA->setVisibility(GlobalValue::HiddenVisibility);
 }
@@ -1307,7 +1307,7 @@ void DevirtModule::rebuildGlobal(VTableBits &B) {
   // Build an alias named after the original global, pointing at the second
   // element (the original initializer).
   auto Alias = GlobalAlias::create(
-      B.GV->getInitializer()->getType(), 0, B.GV->getLinkage(), "",
+      B.GV->getInitializer()->getType(), M.getDataLayout().getGlobalsAddressSpace(), B.GV->getLinkage(), "",
       ConstantExpr::getGetElementPtr(
           NewInit->getType(), NewGV,
           ArrayRef<Constant *>{ConstantInt::get(Int32Ty, 0),
