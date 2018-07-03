@@ -728,6 +728,14 @@ class Reducer(object):
             generate_ir_cmd.remove("-emit-obj")
         if self._check_crash(generate_ir_cmd, infile):
             new_command = generate_ir_cmd
+            # Try to remove the flags that were added:
+            new_command = generate_ir_cmd
+            new_command = self._try_remove_args(
+                new_command, infile, "Trying to simplify common for frontend crash reduction:",
+                noargs_opts_to_remove=["-disable-O0-optnone"],
+                noargs_opts_to_remove_startswith=["-O"],
+                extra_args=["-O0"]
+            )
             print("Must be a", blue("frontend crash.", style="bold"), "Will need to use creduce for test case reduction")
             return self._simplify_frontend_crash_cmd(new_command, infile)
         else:
@@ -862,7 +870,7 @@ class Reducer(object):
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without various MIPS flags crashes:",
             noargs_opts_to_remove=["-cheri-linker"],
-            one_arg_opts_to_remove_if={"-mllvm": lambda a: a.startswith("-mips-ssection-threshold=") or a == "-mxgot"}
+            one_arg_opts_to_remove_if={"-mllvm": lambda a: a.startswith("-mips-ssection-threshold=") or a == "-mxgot" or a.startswith("-mxcaptable")}
         )
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without -mrelax-all crashes:",
