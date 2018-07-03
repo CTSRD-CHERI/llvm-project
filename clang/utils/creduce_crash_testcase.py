@@ -719,8 +719,8 @@ class Reducer(object):
             noargs_opts_to_remove_startswith=["-debug-info-kind=", "-dwarf-version=", "-debugger-tuning="],
         )
         # try emitting llvm-ir (i.e. frontend bug):
-        print("Checking whether -O0 -emit-llvm crashes:", end="", flush=True)
-        generate_ir_cmd = new_command + ["-O0", "-emit-llvm"]
+        print("Checking whether -emit-llvm crashes:", end="", flush=True)
+        generate_ir_cmd = new_command + ["-emit-llvm"]
         if "-cc1" in generate_ir_cmd:
             # Don't add the optnone attribute to the generated IR function
             generate_ir_cmd.append("-disable-O0-optnone")
@@ -731,7 +731,7 @@ class Reducer(object):
             # Try to remove the flags that were added:
             new_command = generate_ir_cmd
             new_command = self._try_remove_args(
-                new_command, infile, "Trying to simplify common for frontend crash reduction:",
+                new_command, infile, "Checking if it also crashes at -O0:",
                 noargs_opts_to_remove=["-disable-O0-optnone"],
                 noargs_opts_to_remove_startswith=["-O"],
                 extra_args=["-O0"]
@@ -791,14 +791,19 @@ class Reducer(object):
             pass
 
     def _simplify_frontend_crash_cmd(self, new_command: list, infile: Path):
-        print("Checking whether compiling without warnings crashes:", end="", flush=True)
-        no_warnings_cmd = self._filter_args(new_command, noargs_opts_to_remove=["-w"],
-                                            noargs_opts_to_remove_startswith=["-W"])
-        no_warnings_cmd.append("-w")  # disable all warnigns
-        no_warnings_cmd.append("-Werror=implicit-int")
-        if self._check_crash(no_warnings_cmd, infile):
-            new_command = no_warnings_cmd[:-2]
-        new_command.append("-Werror=implicit-int")
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether compiling without warnings crashes:",
+            noargs_opts_to_remove=["-w"], noargs_opts_to_remove_startswith=["-W"], extra_args=["-w"])
+        # Try to make implicit int an error to generate more sensible test output
+        # If we don't add this we get really obscure code that doesn't look like it should compile
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether compiling without -Werror=implicit-int crashes:",
+            extra_args=["-Werror=implicit-int"])
+        # speed up test case reduction by aborting the compilation on the first error
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether compiling with -Wfatal-errors crashes:",
+            extra_args=["-Wfatal-errors"]
+        )
 
         # Removing all the #ifdefs and #defines that get added by the #included headers can speed up reduction a lot
         print("Generating preprocessed source")
@@ -897,13 +902,21 @@ class Reducer(object):
                 new_command, infile, "Checking whether compiling without exceptions crashes:",
                 noargs_opts_to_remove=["-fexceptions", "-fcxx-exceptions"])
 
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether misc C++ options can be removed:",
+            noargs_opts_to_remove=["-fno-rtti", "-mconstructor-aliases", "-nostdinc++"])
+
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether misc optimization options can be removed:",
+            noargs_opts_to_remove=["-vectorize-loops", "-vectorize-slp"],
+            noargs_opts_to_remove_startswith=["-ftls-model="])
+
         # try to remove some arguments that should not be needed
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether misc diagnostic options can be removed:",
             noargs_opts_to_remove=["-disable-free", "-discard-value-names", "-masm-verbose",
-                                   "-mconstructor-aliases", "-vectorize-loops", "-vectorize-slp",
                                    "-fdeprecated-macro", "-fcolor-diagnostics"],
-            noargs_opts_to_remove_startswith=["-fdiagnostics-", "-fobjc-runtime=", "-ftls-model="],
+            noargs_opts_to_remove_startswith=["-fdiagnostics-", "-fobjc-runtime="],
             one_arg_opts_to_remove=["-main-file-name", "-ferror-limit", "-fmessage-length", "-fvisibility"]
         )
         return new_command, infile
