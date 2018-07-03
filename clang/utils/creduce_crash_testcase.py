@@ -884,13 +884,19 @@ class Reducer(object):
                 new_command, infile, "Checking whether compiling without -disable-llvm-verifier crashes:",
                 noargs_opts_to_remove=["-disable-llvm-verifier"])
 
+        if "-fcxx-exceptions" in new_command or "-fexceptions" in new_command:
+            new_command = self._try_remove_args(
+                new_command, infile, "Checking whether compiling without exceptions crashes:",
+                noargs_opts_to_remove=["-fexceptions", "-fcxx-exceptions"])
+
         # try to remove some arguments that should not be needed
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether misc diagnostic options can be removed:",
             noargs_opts_to_remove=["-disable-free", "-discard-value-names", "-masm-verbose",
-                                   "-mconstructor-aliases"],
-            noargs_opts_to_remove_startswith=["-fdiagnostics-", "-fobjc-runtime="],
-            one_arg_opts_to_remove=["-main-file-name", "-ferror-limit", "-fmessage-length"]
+                                   "-mconstructor-aliases", "-vectorize-loops", "-vectorize-slp",
+                                   "-fdeprecated-macro", "-fcolor-diagnostics"],
+            noargs_opts_to_remove_startswith=["-fdiagnostics-", "-fobjc-runtime=", "-ftls-model="],
+            one_arg_opts_to_remove=["-main-file-name", "-ferror-limit", "-fmessage-length", "-fvisibility"]
         )
         return new_command, infile
 
