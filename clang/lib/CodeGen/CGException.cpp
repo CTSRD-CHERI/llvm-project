@@ -250,7 +250,9 @@ static llvm::Constant *getPersonalityFn(CodeGenModule &CGM,
 static llvm::Constant *getOpaquePersonalityFn(CodeGenModule &CGM,
                                         const EHPersonality &Personality) {
   llvm::Constant *Fn = getPersonalityFn(CGM, Personality);
-  return llvm::ConstantExpr::getBitCast(Fn, CGM.Int8Ty->getPointerTo(0));
+  // FIXME: not sure if this needs to remain in AS0
+  return llvm::ConstantExpr::getBitCast(
+      Fn, CGM.Int8Ty->getPointerTo(CGM.getFunctionAddrSpace()));
 }
 
 /// Check whether a landingpad instruction only uses C++ features.
