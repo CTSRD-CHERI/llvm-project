@@ -38,6 +38,7 @@ namespace llvm {
   FunctionPass *createMipsBranchExpansion();
   FunctionPass *createMipsConstantIslandPass();
   FunctionPass *createMicroMipsSizeReducePass();
+  FunctionPass *createMipsExpandPseudoPass();
 
   FunctionPass *createCheriInvalidatePass();
   FunctionPass *createCheriRangeChecker();
