@@ -69,7 +69,7 @@ TEST(Local, RemoveDuplicatePHINodes) {
 
   std::unique_ptr<Function> F(
       Function::Create(FunctionType::get(B.getVoidTy(), false),
-                       GlobalValue::ExternalLinkage, "F"));
+                       GlobalValue::ExternalLinkage, 0, "F"));
   BasicBlock *Entry(BasicBlock::Create(C, "", F.get()));
   BasicBlock *BB(BasicBlock::Create(C, "", F.get()));
   BranchInst::Create(BB, Entry);
