@@ -305,15 +305,13 @@ static Address emitVoidPtrDirectVAArg(CodeGenFunction &CGF,
   if (AllowHigherAlign && DirectAlign > SlotSize) {
     llvm::Value *PtrAsInt = Ptr;
     if (CGF.getTarget().SupportsCapabilities() &&
-        Ptr->getType()->getPointerAddressSpace() ==
-        (unsigned)CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS()) {
-      PtrAsInt = CGF.getCapabilityIntegerValue(PtrAsInt);
+        CGF.CGM.getDataLayout().isFatPointer(Ptr->getType())) {
+      PtrAsInt = CGF.getPointerAddress(PtrAsInt);
       PtrAsInt = CGF.Builder.CreateAdd(PtrAsInt,
             llvm::ConstantInt::get(CGF.IntPtrTy, DirectAlign.getQuantity() - 1));
       PtrAsInt = CGF.Builder.CreateAnd(PtrAsInt,
                llvm::ConstantInt::get(CGF.IntPtrTy, -DirectAlign.getQuantity()));
-      Addr = Address(CGF.setPointerOffset(Ptr, PtrAsInt),
-                     DirectAlign);
+      Addr = Address(CGF.setPointerAddress(Ptr, PtrAsInt), DirectAlign);
     } else
       Addr = Address(emitRoundPointerUpToAlignment(CGF, Ptr, DirectAlign),
                                                  DirectAlign);
