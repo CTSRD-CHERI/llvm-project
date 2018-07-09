@@ -264,15 +264,17 @@ def CClearTag  : CheriFmt2Op<0xb, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2),
                               [(set CheriOpnd:$r1, (int_cheri_cap_tag_clear CheriOpnd:$r2))]>;
 
 
+let isMoveReg = 1 in {
 def CReadHwr : CheriFmt2Op<0xd, (outs CheriOpnd:$r1), (ins CheriHWRegsOpnd:$r2),
                               "creadhwr\t$r1, $r2",
                               []>;
-// CWriteHwr can change $ddc so we should probably not be reordering it
-let hasSideEffects = 1 in {
 def CWriteHwr : CheriFmt2Op<0xe, (outs CheriHWRegsOpnd:$r2), (ins CheriOpnd:$r1),
                               "cwritehwr\t$r1, $r2",
-                              []>;
+                              []> {
+  // CWriteHwr can change $ddc so we should probably not be reordering it
+  let hasSideEffects = 1;
 }
+} // isMoveReg = 1
 
 // PCC access
 def CGetPCC : CheriFmt1Op<0x0, (outs CheriOpnd:$r1), (ins),
