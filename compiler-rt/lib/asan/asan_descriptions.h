@@ -102,6 +102,7 @@ struct ChunkAccess {
   sptr offset;
   uptr chunk_begin;
   uptr chunk_size;
+  u32 user_requested_alignment : 12;
   u32 access_type : 2;
   u32 alloc_type : 2;
 };
@@ -145,6 +146,10 @@ struct GlobalAddressDescription {
   u8 size;
 
   void Print(const char *bug_type = "") const;
+
+  // Returns true when this descriptions points inside the same global variable
+  // as other. Descriptions can have different address within the variable
+  bool PointsInsideTheSameVariable(const GlobalAddressDescription &other) const;
 };
 
 bool GetGlobalAddressInformation(uptr addr, uptr access_size,

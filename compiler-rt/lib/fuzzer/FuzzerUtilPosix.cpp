@@ -40,6 +40,10 @@ static void InterruptHandler(int, siginfo_t *, void *) {
   Fuzzer::StaticInterruptCallback();
 }
 
+static void GracefulExitHandler(int, siginfo_t *, void *) {
+  Fuzzer::StaticGracefulExitCallback();
+}
+
 static void FileSizeExceedHandler(int, siginfo_t *, void *) {
   Fuzzer::StaticFileSizeExceedCallback();
 }
@@ -98,6 +102,10 @@ void SetSignalHandler(const FuzzingOptions& Options) {
     SetSigaction(SIGFPE, CrashHandler);
   if (Options.HandleXfsz)
     SetSigaction(SIGXFSZ, FileSizeExceedHandler);
+  if (Options.HandleUsr1)
+    SetSigaction(SIGUSR1, GracefulExitHandler);
+  if (Options.HandleUsr2)
+    SetSigaction(SIGUSR2, GracefulExitHandler);
 }
 
 void SleepSeconds(int Seconds) {
@@ -110,7 +118,8 @@ size_t GetPeakRSSMb() {
   struct rusage usage;
   if (getrusage(RUSAGE_SELF, &usage))
     return 0;
-  if (LIBFUZZER_LINUX) {
+  if (LIBFUZZER_LINUX || LIBFUZZER_FREEBSD || LIBFUZZER_NETBSD ||
+      LIBFUZZER_OPENBSD) {
     // ru_maxrss is in KiB
     return usage.ru_maxrss >> 10;
   } else if (LIBFUZZER_APPLE) {

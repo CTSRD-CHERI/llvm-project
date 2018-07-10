@@ -10,11 +10,13 @@
 #ifndef LLVM_CLANG_TOOLS_EXTRA_CLANGD_JSONRPCDISPATCHER_H
 #define LLVM_CLANG_TOOLS_EXTRA_CLANGD_JSONRPCDISPATCHER_H
 
+#include "JSONExpr.h"
 #include "Logger.h"
+#include "Protocol.h"
+#include "Trace.h"
 #include "clang/Basic/LLVM.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringMap.h"
-#include "llvm/Support/YAMLParser.h"
 #include <iosfwd>
 #include <mutex>
 
@@ -24,22 +26,26 @@ namespace clangd {
 /// Encapsulates output and logs streams and provides thread-safe access to
 /// them.
 class JSONOutput : public Logger {
+  // FIXME(ibiryukov): figure out if we can shrink the public interface of
+  // JSONOutput now that we pass Context everywhere.
 public:
   JSONOutput(llvm::raw_ostream &Outs, llvm::raw_ostream &Logs,
-             llvm::raw_ostream *InputMirror = nullptr)
-      : Outs(Outs), Logs(Logs), InputMirror(InputMirror) {}
+             llvm::raw_ostream *InputMirror = nullptr, bool Pretty = false)
+      : Pretty(Pretty), Outs(Outs), Logs(Logs), InputMirror(InputMirror) {}
 
   /// Emit a JSONRPC message.
-  void writeMessage(const Twine &Message);
+  void writeMessage(const json::Expr &Result);
 
-  /// Write to the logging stream.
-  /// No newline is implicitly added. (TODO: we should fix this!)
+  /// Write a line to the logging stream.
   void log(const Twine &Message) override;
 
   /// Mirror \p Message into InputMirror stream. Does nothing if InputMirror is
   /// null.
   /// Unlike other methods of JSONOutput, mirrorInput is not thread-safe.
   void mirrorInput(const Twine &Message);
+
+  // Whether output should be pretty-printed.
+  const bool Pretty;
 
 private:
   llvm::raw_ostream &Outs;
@@ -49,28 +55,22 @@ private:
   std::mutex StreamMutex;
 };
 
-/// Context object passed to handlers to allow replies.
-class RequestContext {
-public:
-  RequestContext(JSONOutput &Out, StringRef ID) : Out(Out), ID(ID) {}
-
-  /// Sends a successful reply. Result should be well-formed JSON.
-  void reply(const Twine &Result);
-  /// Sends an error response to the client, and logs it.
-  void replyError(int code, const llvm::StringRef &Message);
-
-private:
-  JSONOutput &Out;
-  llvm::SmallString<64> ID; // Valid JSON, or empty for a notification.
-};
+/// Sends a successful reply.
+/// Current context must derive from JSONRPCDispatcher::Handler.
+void reply(json::Expr &&Result);
+/// Sends an error response to the client, and logs it.
+/// Current context must derive from JSONRPCDispatcher::Handler.
+void replyError(ErrorCode code, const llvm::StringRef &Message);
+/// Sends a request to the client.
+/// Current context must derive from JSONRPCDispatcher::Handler.
+void call(llvm::StringRef Method, json::Expr &&Params);
 
 /// Main JSONRPC entry point. This parses the JSONRPC "header" and calls the
 /// registered Handler for the method received.
 class JSONRPCDispatcher {
 public:
   // A handler responds to requests for a particular method name.
-  using Handler =
-      std::function<void(RequestContext, llvm::yaml::MappingNode *)>;
+  using Handler = std::function<void(const json::Expr &)>;
 
   /// Create a new JSONRPCDispatcher. UnknownHandler is called when an unknown
   /// method is received.
@@ -81,11 +81,19 @@ public:
   void registerHandler(StringRef Method, Handler H);
 
   /// Parses a JSONRPC message and calls the Handler for it.
-  bool call(StringRef Content, JSONOutput &Out) const;
+  bool call(const json::Expr &Message, JSONOutput &Out) const;
 
 private:
   llvm::StringMap<Handler> Handlers;
   Handler UnknownHandler;
+};
+
+/// Controls the way JSON-RPC messages are encoded (both input and output).
+enum JSONStreamStyle {
+  /// Encoding per the LSP specification, with mandatory Content-Length header.
+  Standard,
+  /// Messages are delimited by a '---' line. Comment lines start with #.
+  Delimited
 };
 
 /// Parses input queries from LSP client (coming from \p In) and runs call
@@ -94,7 +102,10 @@ private:
 /// if it is.
 /// Input stream(\p In) must be opened in binary mode to avoid preliminary
 /// replacements of \r\n with \n.
-void runLanguageServerLoop(std::istream &In, JSONOutput &Out,
+/// We use C-style FILE* for reading as std::istream has unclear interaction
+/// with signals, which are sent by debuggers on some OSs.
+void runLanguageServerLoop(std::FILE *In, JSONOutput &Out,
+                           JSONStreamStyle InputStyle,
                            JSONRPCDispatcher &Dispatcher, bool &IsDone);
 
 } // namespace clangd

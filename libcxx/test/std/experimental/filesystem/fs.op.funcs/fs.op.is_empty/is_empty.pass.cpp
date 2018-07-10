@@ -12,9 +12,9 @@
 // <experimental/filesystem>
 
 // bool is_empty(path const& p);
-// bool is_empty(path const& p, std::error_code& ec) noexcept;
+// bool is_empty(path const& p, std::error_code& ec);
 
-#include <experimental/filesystem>
+#include "filesystem_include.hpp"
 #include <type_traits>
 #include <cassert>
 
@@ -22,7 +22,7 @@
 #include "rapid-cxx-test.hpp"
 #include "filesystem_test_helper.hpp"
 
-using namespace std::experimental::filesystem;
+using namespace fs;
 
 TEST_SUITE(is_empty_test_suite)
 
@@ -30,7 +30,7 @@ TEST_CASE(signature_test)
 {
     const path p; ((void)p);
     std::error_code ec; ((void)ec);
-    ASSERT_NOEXCEPT(is_empty(p, ec));
+    ASSERT_NOT_NOEXCEPT(is_empty(p, ec));
     ASSERT_NOT_NOEXCEPT(is_empty(p));
 }
 

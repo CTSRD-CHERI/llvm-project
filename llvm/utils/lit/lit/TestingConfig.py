@@ -2,6 +2,15 @@ import os
 import sys
 
 
+class CheriTestMode(object):
+    INCLUDE = "include"
+    EXCLUDE = "exclude"
+    ONLY = "only"
+
+    feature_include_cheri_tests = "include-cheri-tests"
+    feature_cheri_tests_only = "cheri-tests-only"
+
+
 class TestingConfig:
     """"
     TestingConfig - Information on the tests inside a suite.
@@ -14,6 +23,8 @@ class TestingConfig:
 
         Create a TestingConfig object with default values.
         """
+        import lit.LitConfig
+        assert isinstance(litConfig, lit.LitConfig.LitConfig)
         # Set the environment based on the command line arguments.
         environment = {
             'PATH' : os.pathsep.join(litConfig.path +
@@ -22,7 +33,7 @@ class TestingConfig:
             }
 
         pass_vars = ['LIBRARY_PATH', 'LD_LIBRARY_PATH', 'SYSTEMROOT', 'TERM',
-                     'LD_PRELOAD', 'ASAN_OPTIONS', 'UBSAN_OPTIONS',
+                     'CLANG', 'LD_PRELOAD', 'ASAN_OPTIONS', 'UBSAN_OPTIONS',
                      'LSAN_OPTIONS', 'ADB', 'ANDROID_SERIAL',
                      'SANITIZER_IGNORE_CVE_2016_2143', 'TMPDIR', 'TMP', 'TEMP',
                      'TEMPDIR', 'AVRLIT_BOARD', 'AVRLIT_PORT']
@@ -44,6 +55,19 @@ class TestingConfig:
 
         # Set the default available features based on the LitConfig.
         available_features = []
+        if litConfig.cheri_test_mode == CheriTestMode.INCLUDE:
+            # run the cheri tests as well
+            available_features.append(CheriTestMode.feature_include_cheri_tests)
+        elif litConfig.cheri_test_mode == CheriTestMode.ONLY:
+            # run the cheri tests and exclude all that don't use %cheri_foo
+            available_features.append(CheriTestMode.feature_cheri_tests_only)
+            available_features.append(CheriTestMode.feature_include_cheri_tests)
+        elif litConfig.cheri_test_mode == CheriTestMode.EXCLUDE:
+            litConfig.warning("Not running CHERI tests (is this intended?)")
+            assert CheriTestMode.INCLUDE not in available_features
+        else:
+            litConfig.fatal("Invalid value for litConfig.cheri_test_mode " +
+                            litConfig.cheri_test_mode)
         if litConfig.useValgrind:
             available_features.append('valgrind')
             if litConfig.valgrindLeakCheck:
@@ -151,4 +175,29 @@ class TestingConfig:
             return self
         else:
             return self.parent.root
+
+class SubstituteCaptures:
+    """
+    Helper class to indicate that the substitutions contains backreferences.
+
+    This can be used as the following in lit.cfg to mark subsitutions as having
+    back-references::
+
+        config.substutions.append(('\b[^ ]*.cpp', SubstituteCaptures('\0.txt')))
+
+    """
+    def __init__(self, substitution):
+        self.substitution = substitution
+
+    def replace(self, pattern, replacement):
+        return self.substitution
+
+    def __str__(self):
+        return self.substitution
+
+    def __len__(self):
+        return len(self.substitution)
+
+    def __getitem__(self, item):
+        return self.substitution.__getitem__(item)
 

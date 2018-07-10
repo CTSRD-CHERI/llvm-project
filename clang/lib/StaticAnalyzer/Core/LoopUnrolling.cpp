@@ -97,9 +97,7 @@ changeIntBoundNode(internal::Matcher<Decl> VarNodeMatcher) {
       unaryOperator(anyOf(hasOperatorName("--"), hasOperatorName("++")),
                     hasUnaryOperand(ignoringParenImpCasts(
                         declRefExpr(to(varDecl(VarNodeMatcher)))))),
-      binaryOperator(anyOf(hasOperatorName("="), hasOperatorName("+="),
-                           hasOperatorName("/="), hasOperatorName("*="),
-                           hasOperatorName("-=")),
+      binaryOperator(isAssignmentOperator(),
                      hasLHS(ignoringParenImpCasts(
                          declRefExpr(to(varDecl(VarNodeMatcher)))))));
 }
@@ -143,13 +141,15 @@ static internal::Matcher<Stmt> forLoopMatcher() {
   return forStmt(
              hasCondition(simpleCondition("initVarName")),
              // Initialization should match the form: 'int i = 6' or 'i = 42'.
-             hasLoopInit(anyOf(
-                 declStmt(hasSingleDecl(varDecl(
-                     allOf(hasInitializer(integerLiteral().bind("initNum")),
-                           equalsBoundNode("initVarName"))))),
-                 binaryOperator(hasLHS(declRefExpr(to(
-                                    varDecl(equalsBoundNode("initVarName"))))),
-                                hasRHS(integerLiteral().bind("initNum"))))),
+             hasLoopInit(
+                 anyOf(declStmt(hasSingleDecl(
+                           varDecl(allOf(hasInitializer(ignoringParenImpCasts(
+                                             integerLiteral().bind("initNum"))),
+                                         equalsBoundNode("initVarName"))))),
+                       binaryOperator(hasLHS(declRefExpr(to(varDecl(
+                                          equalsBoundNode("initVarName"))))),
+                                      hasRHS(ignoringParenImpCasts(
+                                          integerLiteral().bind("initNum")))))),
              // Incrementation should be a simple increment or decrement
              // operator call.
              hasIncrement(unaryOperator(
@@ -208,9 +208,16 @@ bool shouldCompletelyUnroll(const Stmt *LoopStmt, ASTContext &ASTCtx,
     return false;
 
   auto CounterVar = Matches[0].getNodeAs<VarDecl>("initVarName");
-  auto BoundNum = Matches[0].getNodeAs<IntegerLiteral>("boundNum")->getValue();
-  auto InitNum = Matches[0].getNodeAs<IntegerLiteral>("initNum")->getValue();
+  llvm::APInt BoundNum =
+      Matches[0].getNodeAs<IntegerLiteral>("boundNum")->getValue();
+  llvm::APInt InitNum =
+      Matches[0].getNodeAs<IntegerLiteral>("initNum")->getValue();
   auto CondOp = Matches[0].getNodeAs<BinaryOperator>("conditionOperator");
+  if (InitNum.getBitWidth() != BoundNum.getBitWidth()) {
+    InitNum = InitNum.zextOrSelf(BoundNum.getBitWidth());
+    BoundNum = BoundNum.zextOrSelf(InitNum.getBitWidth());
+  }
+
   if (CondOp->getOpcode() == BO_GE || CondOp->getOpcode() == BO_LE)
     maxStep = (BoundNum - InitNum + 1).abs().getZExtValue();
   else

@@ -145,7 +145,8 @@ Constant *Module::getOrInsertFunction(StringRef Name, FunctionType *Ty,
   GlobalValue *F = getNamedValue(Name);
   if (!F) {
     // Nope, add it
-    Function *New = Function::Create(Ty, GlobalVariable::ExternalLinkage, Name);
+    Function *New = Function::Create(Ty, GlobalVariable::ExternalLinkage,
+                                     DL.getProgramAddressSpace(), Name);
     if (!New->isIntrinsic())       // Intrinsics get attrs set on construction
       New->setAttributes(AttributeList);
     FunctionList.push_back(New);
@@ -154,8 +155,9 @@ Constant *Module::getOrInsertFunction(StringRef Name, FunctionType *Ty,
 
   // If the function exists but has the wrong type, return a bitcast to the
   // right type.
-  if (F->getType() != PointerType::getUnqual(Ty))
-    return ConstantExpr::getBitCast(F, PointerType::getUnqual(Ty));
+  auto *PTy = PointerType::get(Ty, F->getAddressSpace());
+  if (F->getType() != PTy)
+    return ConstantExpr::getBitCast(F, PTy);
 
   // Otherwise, we just found the existing function or a prototype.
   return F;
@@ -199,14 +201,14 @@ GlobalVariable *Module::getGlobalVariable(StringRef Name,
 ///      with a constantexpr cast to the right type.
 ///   3. Finally, if the existing global is the correct declaration, return the
 ///      existing global.
-Constant *Module::getOrInsertGlobal(StringRef Name, Type *Ty/* TODO:, unsigned AS*/) {
+Constant *Module::getOrInsertGlobal(StringRef Name, Type *Ty) {
   // See if we have a definition for the specified global already.
   GlobalVariable *GV = dyn_cast_or_null<GlobalVariable>(getNamedValue(Name));
   if (!GV) {
     // Nope, add it
     GlobalVariable *New =
       new GlobalVariable(*this, Ty, false, GlobalVariable::ExternalLinkage,
-                         nullptr, Name/*TODO: , nullptr, GlobalVariable::NotThreadLocal, AS*/);
+                         nullptr, Name);
      return New;                    // Return the new declaration.
   }
 
@@ -464,6 +466,13 @@ unsigned Module::getCodeViewFlag() const {
   return cast<ConstantInt>(Val->getValue())->getZExtValue();
 }
 
+unsigned Module::getInstructionCount() {
+  unsigned NumInstrs = 0;
+  for (Function &F : FunctionList)
+    NumInstrs += F.getInstructionCount();
+  return NumInstrs;
+}
+
 Comdat *Module::getOrInsertComdat(StringRef Name) {
   auto &Entry = *ComdatSymTab.insert(std::make_pair(Name, Comdat())).first;
   Entry.second.Name = &Entry;
@@ -508,6 +517,15 @@ Metadata *Module::getProfileSummary() {
 
 void Module::setOwnedMemoryBuffer(std::unique_ptr<MemoryBuffer> MB) {
   OwnedMemoryBuffer = std::move(MB);
+}
+
+bool Module::getRtLibUseGOT() const {
+  auto *Val = cast_or_null<ConstantAsMetadata>(getModuleFlag("RtLibUseGOT"));
+  return Val && (cast<ConstantInt>(Val->getValue())->getZExtValue() > 0);
+}
+
+void Module::setRtLibUseGOT() {
+  addModuleFlag(ModFlagBehavior::Max, "RtLibUseGOT", 1);
 }
 
 GlobalVariable *llvm::collectUsedGlobalVariables(

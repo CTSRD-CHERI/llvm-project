@@ -11,7 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#if SANITIZER_FREEBSD || SANITIZER_MAC || SANITIZER_NETBSD
+#if SANITIZER_FREEBSD || SANITIZER_MAC || SANITIZER_NETBSD || \
+  SANITIZER_OPENBSD || SANITIZER_SOLARIS
 # define SYSCALL(name) SYS_ ## name
 #else
 # define SYSCALL(name) __NR_ ## name
@@ -36,6 +37,7 @@
 # define SYS_sigaltstack SYS___sigaltstack14
 # define SYS_sigprocmask SYS___sigprocmask14
 # define SYS_nanosleep SYS___nanosleep50
+# define SYS_clock_gettime SYS___clock_gettime50
 # if SANITIZER_WORDSIZE == 64
 #  define internal_syscall_ptr  __syscall
 # else
@@ -43,8 +45,12 @@
 # endif
 #elif defined(__x86_64__) && (SANITIZER_FREEBSD || SANITIZER_MAC)
 # define internal_syscall __syscall
+# define internal_syscall64 __syscall
+# define internal_syscall_ptr __syscall
 # else
 # define internal_syscall syscall
+# define internal_syscall64 syscall
+# define internal_syscall_ptr syscall
 #endif
 
 bool internal_iserror(uptr retval, int *rverrno) {

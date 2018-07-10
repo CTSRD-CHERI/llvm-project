@@ -28,11 +28,19 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
   abort();
 }
 
+TEST(Fuzzer, Basename) {
+  EXPECT_EQ(Basename("foo/bar"), "bar");
+  EXPECT_EQ(Basename("bar"), "bar");
+  EXPECT_EQ(Basename("/bar"), "bar");
+  EXPECT_EQ(Basename("foo/x"), "x");
+  EXPECT_EQ(Basename("foo/"), "");
+}
+
 TEST(Fuzzer, CrossOver) {
   std::unique_ptr<ExternalFunctions> t(new ExternalFunctions());
   fuzzer::EF = t.get();
   Random Rand(0);
-  MutationDispatcher MD(Rand, {});
+  std::unique_ptr<MutationDispatcher> MD(new MutationDispatcher(Rand, {}));
   Unit A({0, 1, 2}), B({5, 6, 7});
   Unit C;
   Unit Expected[] = {
@@ -75,8 +83,8 @@ TEST(Fuzzer, CrossOver) {
     Set<Unit> FoundUnits, ExpectedUnitsWitThisLength;
     for (int Iter = 0; Iter < 3000; Iter++) {
       C.resize(Len);
-      size_t NewSize = MD.CrossOver(A.data(), A.size(), B.data(), B.size(),
-                                    C.data(), C.size());
+      size_t NewSize = MD->CrossOver(A.data(), A.size(), B.data(), B.size(),
+                                     C.data(), C.size());
       C.resize(NewSize);
       FoundUnits.insert(C);
     }
@@ -120,11 +128,11 @@ void TestEraseBytes(Mutator M, int NumIter) {
 
 
   Random Rand(0);
-  MutationDispatcher MD(Rand, {});
+  std::unique_ptr<MutationDispatcher> MD(new MutationDispatcher(Rand, {}));
   int FoundMask = 0;
   for (int i = 0; i < NumIter; i++) {
     uint8_t T[8] = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77};
-    size_t NewSize = (MD.*M)(T, sizeof(T), sizeof(T));
+    size_t NewSize = (*MD.*M)(T, sizeof(T), sizeof(T));
     if (NewSize == 7 && !memcmp(REM0, T, 7)) FoundMask |= 1 << 0;
     if (NewSize == 7 && !memcmp(REM1, T, 7)) FoundMask |= 1 << 1;
     if (NewSize == 7 && !memcmp(REM2, T, 7)) FoundMask |= 1 << 2;
@@ -156,7 +164,7 @@ void TestInsertByte(Mutator M, int NumIter) {
   std::unique_ptr<ExternalFunctions> t(new ExternalFunctions());
   fuzzer::EF = t.get();
   Random Rand(0);
-  MutationDispatcher MD(Rand, {});
+  std::unique_ptr<MutationDispatcher> MD(new MutationDispatcher(Rand, {}));
   int FoundMask = 0;
   uint8_t INS0[8] = {0xF1, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66};
   uint8_t INS1[8] = {0x00, 0xF2, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66};
@@ -168,7 +176,7 @@ void TestInsertByte(Mutator M, int NumIter) {
   uint8_t INS7[8] = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0xF8};
   for (int i = 0; i < NumIter; i++) {
     uint8_t T[8] = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66};
-    size_t NewSize = (MD.*M)(T, 7, 8);
+    size_t NewSize = (*MD.*M)(T, 7, 8);
     if (NewSize == 8 && !memcmp(INS0, T, 8)) FoundMask |= 1 << 0;
     if (NewSize == 8 && !memcmp(INS1, T, 8)) FoundMask |= 1 << 1;
     if (NewSize == 8 && !memcmp(INS2, T, 8)) FoundMask |= 1 << 2;
@@ -192,7 +200,7 @@ void TestInsertRepeatedBytes(Mutator M, int NumIter) {
   std::unique_ptr<ExternalFunctions> t(new ExternalFunctions());
   fuzzer::EF = t.get();
   Random Rand(0);
-  MutationDispatcher MD(Rand, {});
+  std::unique_ptr<MutationDispatcher> MD(new MutationDispatcher(Rand, {}));
   int FoundMask = 0;
   uint8_t INS0[7] = {0x00, 0x11, 0x22, 0x33, 'a', 'a', 'a'};
   uint8_t INS1[7] = {0x00, 0x11, 0x22, 'a', 'a', 'a', 0x33};
@@ -208,7 +216,7 @@ void TestInsertRepeatedBytes(Mutator M, int NumIter) {
 
   for (int i = 0; i < NumIter; i++) {
     uint8_t T[8] = {0x00, 0x11, 0x22, 0x33};
-    size_t NewSize = (MD.*M)(T, 4, 8);
+    size_t NewSize = (*MD.*M)(T, 4, 8);
     if (NewSize == 7 && !memcmp(INS0, T, 7)) FoundMask |= 1 << 0;
     if (NewSize == 7 && !memcmp(INS1, T, 7)) FoundMask |= 1 << 1;
     if (NewSize == 7 && !memcmp(INS2, T, 7)) FoundMask |= 1 << 2;
@@ -236,7 +244,7 @@ void TestChangeByte(Mutator M, int NumIter) {
   std::unique_ptr<ExternalFunctions> t(new ExternalFunctions());
   fuzzer::EF = t.get();
   Random Rand(0);
-  MutationDispatcher MD(Rand, {});
+  std::unique_ptr<MutationDispatcher> MD(new MutationDispatcher(Rand, {}));
   int FoundMask = 0;
   uint8_t CH0[8] = {0xF0, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77};
   uint8_t CH1[8] = {0x00, 0xF1, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77};
@@ -248,7 +256,7 @@ void TestChangeByte(Mutator M, int NumIter) {
   uint8_t CH7[8] = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0xF7};
   for (int i = 0; i < NumIter; i++) {
     uint8_t T[9] = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77};
-    size_t NewSize = (MD.*M)(T, 8, 9);
+    size_t NewSize = (*MD.*M)(T, 8, 9);
     if (NewSize == 8 && !memcmp(CH0, T, 8)) FoundMask |= 1 << 0;
     if (NewSize == 8 && !memcmp(CH1, T, 8)) FoundMask |= 1 << 1;
     if (NewSize == 8 && !memcmp(CH2, T, 8)) FoundMask |= 1 << 2;
@@ -272,7 +280,7 @@ void TestChangeBit(Mutator M, int NumIter) {
   std::unique_ptr<ExternalFunctions> t(new ExternalFunctions());
   fuzzer::EF = t.get();
   Random Rand(0);
-  MutationDispatcher MD(Rand, {});
+  std::unique_ptr<MutationDispatcher> MD(new MutationDispatcher(Rand, {}));
   int FoundMask = 0;
   uint8_t CH0[8] = {0x01, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77};
   uint8_t CH1[8] = {0x00, 0x13, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77};
@@ -284,7 +292,7 @@ void TestChangeBit(Mutator M, int NumIter) {
   uint8_t CH7[8] = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0xF7};
   for (int i = 0; i < NumIter; i++) {
     uint8_t T[9] = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77};
-    size_t NewSize = (MD.*M)(T, 8, 9);
+    size_t NewSize = (*MD.*M)(T, 8, 9);
     if (NewSize == 8 && !memcmp(CH0, T, 8)) FoundMask |= 1 << 0;
     if (NewSize == 8 && !memcmp(CH1, T, 8)) FoundMask |= 1 << 1;
     if (NewSize == 8 && !memcmp(CH2, T, 8)) FoundMask |= 1 << 2;
@@ -308,7 +316,7 @@ void TestShuffleBytes(Mutator M, int NumIter) {
   std::unique_ptr<ExternalFunctions> t(new ExternalFunctions());
   fuzzer::EF = t.get();
   Random Rand(0);
-  MutationDispatcher MD(Rand, {});
+  std::unique_ptr<MutationDispatcher> MD(new MutationDispatcher(Rand, {}));
   int FoundMask = 0;
   uint8_t CH0[7] = {0x00, 0x22, 0x11, 0x33, 0x44, 0x55, 0x66};
   uint8_t CH1[7] = {0x11, 0x00, 0x33, 0x22, 0x44, 0x55, 0x66};
@@ -317,7 +325,7 @@ void TestShuffleBytes(Mutator M, int NumIter) {
   uint8_t CH4[7] = {0x00, 0x11, 0x22, 0x33, 0x55, 0x44, 0x66};
   for (int i = 0; i < NumIter; i++) {
     uint8_t T[7] = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66};
-    size_t NewSize = (MD.*M)(T, 7, 7);
+    size_t NewSize = (*MD.*M)(T, 7, 7);
     if (NewSize == 7 && !memcmp(CH0, T, 7)) FoundMask |= 1 << 0;
     if (NewSize == 7 && !memcmp(CH1, T, 7)) FoundMask |= 1 << 1;
     if (NewSize == 7 && !memcmp(CH2, T, 7)) FoundMask |= 1 << 2;
@@ -328,7 +336,7 @@ void TestShuffleBytes(Mutator M, int NumIter) {
 }
 
 TEST(FuzzerMutate, ShuffleBytes1) {
-  TestShuffleBytes(&MutationDispatcher::Mutate_ShuffleBytes, 1 << 16);
+  TestShuffleBytes(&MutationDispatcher::Mutate_ShuffleBytes, 1 << 17);
 }
 TEST(FuzzerMutate, ShuffleBytes2) {
   TestShuffleBytes(&MutationDispatcher::Mutate, 1 << 20);
@@ -338,7 +346,7 @@ void TestCopyPart(Mutator M, int NumIter) {
   std::unique_ptr<ExternalFunctions> t(new ExternalFunctions());
   fuzzer::EF = t.get();
   Random Rand(0);
-  MutationDispatcher MD(Rand, {});
+  std::unique_ptr<MutationDispatcher> MD(new MutationDispatcher(Rand, {}));
   int FoundMask = 0;
   uint8_t CH0[7] = {0x00, 0x11, 0x22, 0x33, 0x44, 0x00, 0x11};
   uint8_t CH1[7] = {0x55, 0x66, 0x22, 0x33, 0x44, 0x55, 0x66};
@@ -348,7 +356,7 @@ void TestCopyPart(Mutator M, int NumIter) {
 
   for (int i = 0; i < NumIter; i++) {
     uint8_t T[7] = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66};
-    size_t NewSize = (MD.*M)(T, 7, 7);
+    size_t NewSize = (*MD.*M)(T, 7, 7);
     if (NewSize == 7 && !memcmp(CH0, T, 7)) FoundMask |= 1 << 0;
     if (NewSize == 7 && !memcmp(CH1, T, 7)) FoundMask |= 1 << 1;
     if (NewSize == 7 && !memcmp(CH2, T, 7)) FoundMask |= 1 << 2;
@@ -364,7 +372,7 @@ void TestCopyPart(Mutator M, int NumIter) {
 
   for (int i = 0; i < NumIter; i++) {
     uint8_t T[8] = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77};
-    size_t NewSize = (MD.*M)(T, 5, 8);
+    size_t NewSize = (*MD.*M)(T, 5, 8);
     if (NewSize == 8 && !memcmp(CH5, T, 8)) FoundMask |= 1 << 5;
     if (NewSize == 8 && !memcmp(CH6, T, 8)) FoundMask |= 1 << 6;
     if (NewSize == 8 && !memcmp(CH7, T, 8)) FoundMask |= 1 << 7;
@@ -381,16 +389,31 @@ TEST(FuzzerMutate, CopyPart1) {
 TEST(FuzzerMutate, CopyPart2) {
   TestCopyPart(&MutationDispatcher::Mutate, 1 << 13);
 }
+TEST(FuzzerMutate, CopyPartNoInsertAtMaxSize) {
+  // This (non exhaustively) tests if `Mutate_CopyPart` tries to perform an
+  // insert on an input of size `MaxSize`.  Performing an insert in this case
+  // will lead to the mutation failing.
+  std::unique_ptr<ExternalFunctions> t(new ExternalFunctions());
+  fuzzer::EF = t.get();
+  Random Rand(0);
+  std::unique_ptr<MutationDispatcher> MD(new MutationDispatcher(Rand, {}));
+  uint8_t Data[8] = {0x00, 0x11, 0x22, 0x33, 0x44, 0x00, 0x11, 0x22};
+  size_t MaxSize = sizeof(Data);
+  for (int count = 0; count < (1 << 18); ++count) {
+    size_t NewSize = MD->Mutate_CopyPart(Data, MaxSize, MaxSize);
+    ASSERT_EQ(NewSize, MaxSize);
+  }
+}
 
 void TestAddWordFromDictionary(Mutator M, int NumIter) {
   std::unique_ptr<ExternalFunctions> t(new ExternalFunctions());
   fuzzer::EF = t.get();
   Random Rand(0);
-  MutationDispatcher MD(Rand, {});
+  std::unique_ptr<MutationDispatcher> MD(new MutationDispatcher(Rand, {}));
   uint8_t Word1[4] = {0xAA, 0xBB, 0xCC, 0xDD};
   uint8_t Word2[3] = {0xFF, 0xEE, 0xEF};
-  MD.AddWordToManualDictionary(Word(Word1, sizeof(Word1)));
-  MD.AddWordToManualDictionary(Word(Word2, sizeof(Word2)));
+  MD->AddWordToManualDictionary(Word(Word1, sizeof(Word1)));
+  MD->AddWordToManualDictionary(Word(Word2, sizeof(Word2)));
   int FoundMask = 0;
   uint8_t CH0[7] = {0x00, 0x11, 0x22, 0xAA, 0xBB, 0xCC, 0xDD};
   uint8_t CH1[7] = {0x00, 0x11, 0xAA, 0xBB, 0xCC, 0xDD, 0x22};
@@ -402,7 +425,7 @@ void TestAddWordFromDictionary(Mutator M, int NumIter) {
   uint8_t CH7[6] = {0xFF, 0xEE, 0xEF, 0x00, 0x11, 0x22};
   for (int i = 0; i < NumIter; i++) {
     uint8_t T[7] = {0x00, 0x11, 0x22};
-    size_t NewSize = (MD.*M)(T, 3, 7);
+    size_t NewSize = (*MD.*M)(T, 3, 7);
     if (NewSize == 7 && !memcmp(CH0, T, 7)) FoundMask |= 1 << 0;
     if (NewSize == 7 && !memcmp(CH1, T, 7)) FoundMask |= 1 << 1;
     if (NewSize == 7 && !memcmp(CH2, T, 7)) FoundMask |= 1 << 2;
@@ -428,7 +451,7 @@ void TestChangeASCIIInteger(Mutator M, int NumIter) {
   std::unique_ptr<ExternalFunctions> t(new ExternalFunctions());
   fuzzer::EF = t.get();
   Random Rand(0);
-  MutationDispatcher MD(Rand, {});
+  std::unique_ptr<MutationDispatcher> MD(new MutationDispatcher(Rand, {}));
 
   uint8_t CH0[8] = {'1', '2', '3', '4', '5', '6', '7', '7'};
   uint8_t CH1[8] = {'1', '2', '3', '4', '5', '6', '7', '9'};
@@ -437,7 +460,7 @@ void TestChangeASCIIInteger(Mutator M, int NumIter) {
   int FoundMask = 0;
   for (int i = 0; i < NumIter; i++) {
     uint8_t T[8] = {'1', '2', '3', '4', '5', '6', '7', '8'};
-    size_t NewSize = (MD.*M)(T, 8, 8);
+    size_t NewSize = (*MD.*M)(T, 8, 8);
     /**/ if (NewSize == 8 && !memcmp(CH0, T, 8)) FoundMask |= 1 << 0;
     else if (NewSize == 8 && !memcmp(CH1, T, 8)) FoundMask |= 1 << 1;
     else if (NewSize == 8 && !memcmp(CH2, T, 8)) FoundMask |= 1 << 2;
@@ -460,7 +483,7 @@ void TestChangeBinaryInteger(Mutator M, int NumIter) {
   std::unique_ptr<ExternalFunctions> t(new ExternalFunctions());
   fuzzer::EF = t.get();
   Random Rand(0);
-  MutationDispatcher MD(Rand, {});
+  std::unique_ptr<MutationDispatcher> MD(new MutationDispatcher(Rand, {}));
 
   uint8_t CH0[8] = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x79};
   uint8_t CH1[8] = {0x00, 0x11, 0x22, 0x31, 0x44, 0x55, 0x66, 0x77};
@@ -474,7 +497,7 @@ void TestChangeBinaryInteger(Mutator M, int NumIter) {
   int FoundMask = 0;
   for (int i = 0; i < NumIter; i++) {
     uint8_t T[8] = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77};
-    size_t NewSize = (MD.*M)(T, 8, 8);
+    size_t NewSize = (*MD.*M)(T, 8, 8);
     /**/ if (NewSize == 8 && !memcmp(CH0, T, 8)) FoundMask |= 1 << 0;
     else if (NewSize == 8 && !memcmp(CH1, T, 8)) FoundMask |= 1 << 1;
     else if (NewSize == 8 && !memcmp(CH2, T, 8)) FoundMask |= 1 << 2;
@@ -559,12 +582,13 @@ TEST(FuzzerUtil, Base64) {
 }
 
 TEST(Corpus, Distribution) {
+  DataFlowTrace DFT;
   Random Rand(0);
   std::unique_ptr<InputCorpus> C(new InputCorpus(""));
   size_t N = 10;
   size_t TriesPerUnit = 1<<16;
   for (size_t i = 0; i < N; i++)
-    C->AddToCorpus(Unit{ static_cast<uint8_t>(i) }, 1, false, {});
+    C->AddToCorpus(Unit{ static_cast<uint8_t>(i) }, 1, false, false, {}, DFT);
 
   Vector<size_t> Hist(N);
   for (size_t i = 0; i < N * TriesPerUnit; i++) {
@@ -764,6 +788,166 @@ TEST(Fuzzer, ForEachNonZeroByte) {
   Expected = {          {109, 2}, {118, 3}, {120, 4},
               {135, 5}, {137, 6}, {146, 7}};
   EXPECT_EQ(Res, Expected);
+}
+
+// FuzzerCommand unit tests. The arguments in the two helper methods below must
+// match.
+static void makeCommandArgs(Vector<std::string> *ArgsToAdd) {
+  assert(ArgsToAdd);
+  ArgsToAdd->clear();
+  ArgsToAdd->push_back("foo");
+  ArgsToAdd->push_back("-bar=baz");
+  ArgsToAdd->push_back("qux");
+  ArgsToAdd->push_back(Command::ignoreRemainingArgs());
+  ArgsToAdd->push_back("quux");
+  ArgsToAdd->push_back("-grault=garply");
+}
+
+static std::string makeCmdLine(const char *separator, const char *suffix) {
+  std::string CmdLine("foo -bar=baz qux ");
+  if (strlen(separator) != 0) {
+    CmdLine += separator;
+    CmdLine += " ";
+  }
+  CmdLine += Command::ignoreRemainingArgs();
+  CmdLine += " quux -grault=garply";
+  if (strlen(suffix) != 0) {
+    CmdLine += " ";
+    CmdLine += suffix;
+  }
+  return CmdLine;
+}
+
+TEST(FuzzerCommand, Create) {
+  std::string CmdLine;
+
+  // Default constructor
+  Command DefaultCmd;
+
+  CmdLine = DefaultCmd.toString();
+  EXPECT_EQ(CmdLine, "");
+
+  // Explicit constructor
+  Vector<std::string> ArgsToAdd;
+  makeCommandArgs(&ArgsToAdd);
+  Command InitializedCmd(ArgsToAdd);
+
+  CmdLine = InitializedCmd.toString();
+  EXPECT_EQ(CmdLine, makeCmdLine("", ""));
+
+  // Compare each argument
+  auto InitializedArgs = InitializedCmd.getArguments();
+  auto i = ArgsToAdd.begin();
+  auto j = InitializedArgs.begin();
+  while (i != ArgsToAdd.end() && j != InitializedArgs.end()) {
+    EXPECT_EQ(*i++, *j++);
+  }
+  EXPECT_EQ(i, ArgsToAdd.end());
+  EXPECT_EQ(j, InitializedArgs.end());
+
+  // Copy constructor
+  Command CopiedCmd(InitializedCmd);
+
+  CmdLine = CopiedCmd.toString();
+  EXPECT_EQ(CmdLine, makeCmdLine("", ""));
+
+  // Assignment operator
+  Command AssignedCmd;
+  AssignedCmd = CopiedCmd;
+
+  CmdLine = AssignedCmd.toString();
+  EXPECT_EQ(CmdLine, makeCmdLine("", ""));
+}
+
+TEST(FuzzerCommand, ModifyArguments) {
+  Vector<std::string> ArgsToAdd;
+  makeCommandArgs(&ArgsToAdd);
+  Command Cmd;
+  std::string CmdLine;
+
+  Cmd.addArguments(ArgsToAdd);
+  CmdLine = Cmd.toString();
+  EXPECT_EQ(CmdLine, makeCmdLine("", ""));
+
+  Cmd.addArgument("waldo");
+  EXPECT_TRUE(Cmd.hasArgument("waldo"));
+
+  CmdLine = Cmd.toString();
+  EXPECT_EQ(CmdLine, makeCmdLine("waldo", ""));
+
+  Cmd.removeArgument("waldo");
+  EXPECT_FALSE(Cmd.hasArgument("waldo"));
+
+  CmdLine = Cmd.toString();
+  EXPECT_EQ(CmdLine, makeCmdLine("", ""));
+}
+
+TEST(FuzzerCommand, ModifyFlags) {
+  Vector<std::string> ArgsToAdd;
+  makeCommandArgs(&ArgsToAdd);
+  Command Cmd(ArgsToAdd);
+  std::string Value, CmdLine;
+  ASSERT_FALSE(Cmd.hasFlag("fred"));
+
+  Value = Cmd.getFlagValue("fred");
+  EXPECT_EQ(Value, "");
+
+  CmdLine = Cmd.toString();
+  EXPECT_EQ(CmdLine, makeCmdLine("", ""));
+
+  Cmd.addFlag("fred", "plugh");
+  EXPECT_TRUE(Cmd.hasFlag("fred"));
+
+  Value = Cmd.getFlagValue("fred");
+  EXPECT_EQ(Value, "plugh");
+
+  CmdLine = Cmd.toString();
+  EXPECT_EQ(CmdLine, makeCmdLine("-fred=plugh", ""));
+
+  Cmd.removeFlag("fred");
+  EXPECT_FALSE(Cmd.hasFlag("fred"));
+
+  Value = Cmd.getFlagValue("fred");
+  EXPECT_EQ(Value, "");
+
+  CmdLine = Cmd.toString();
+  EXPECT_EQ(CmdLine, makeCmdLine("", ""));
+}
+
+TEST(FuzzerCommand, SetOutput) {
+  Vector<std::string> ArgsToAdd;
+  makeCommandArgs(&ArgsToAdd);
+  Command Cmd(ArgsToAdd);
+  std::string CmdLine;
+  ASSERT_FALSE(Cmd.hasOutputFile());
+  ASSERT_FALSE(Cmd.isOutAndErrCombined());
+
+  Cmd.combineOutAndErr(true);
+  EXPECT_TRUE(Cmd.isOutAndErrCombined());
+
+  CmdLine = Cmd.toString();
+  EXPECT_EQ(CmdLine, makeCmdLine("", "2>&1"));
+
+  Cmd.combineOutAndErr(false);
+  EXPECT_FALSE(Cmd.isOutAndErrCombined());
+
+  Cmd.setOutputFile("xyzzy");
+  EXPECT_TRUE(Cmd.hasOutputFile());
+
+  CmdLine = Cmd.toString();
+  EXPECT_EQ(CmdLine, makeCmdLine("", ">xyzzy"));
+
+  Cmd.setOutputFile("thud");
+  EXPECT_TRUE(Cmd.hasOutputFile());
+
+  CmdLine = Cmd.toString();
+  EXPECT_EQ(CmdLine, makeCmdLine("", ">thud"));
+
+  Cmd.combineOutAndErr();
+  EXPECT_TRUE(Cmd.isOutAndErrCombined());
+
+  CmdLine = Cmd.toString();
+  EXPECT_EQ(CmdLine, makeCmdLine("", ">thud 2>&1"));
 }
 
 int main(int argc, char **argv) {

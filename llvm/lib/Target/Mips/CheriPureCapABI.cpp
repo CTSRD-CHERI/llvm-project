@@ -11,7 +11,7 @@
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/InstVisitor.h"
-#include "llvm/Transforms/Utils/Local.h"
+#include "llvm/Analysis/Utils/Local.h"
 
 #include <string>
 #include <utility>
@@ -28,11 +28,11 @@ class CheriPureCapABI : public ModulePass, public InstVisitor<CheriPureCapABI> {
   llvm::SmallVector<AllocaInst *, 16> Allocas;
   bool IsCheri128;
 
-  virtual StringRef getPassName() const { return "CHERI sandbox ABI setup"; }
 
 public:
   static char ID;
   CheriPureCapABI() : ModulePass(ID) {}
+  virtual StringRef getPassName() const { return "CHERI sandbox ABI setup"; }
   void visitAllocaInst(AllocaInst &AI) { Allocas.push_back(&AI); }
   virtual bool runOnModule(Module &Mod) {
     M = &Mod;
@@ -101,7 +101,9 @@ public:
         BitCast = cast<Instruction>(Alloca);
       Alloca = B.CreateCall(SetLenFun, {Alloca, Size});
       Alloca = B.CreateBitCast(Alloca, AllocaTy);
-      AI->replaceAllUsesWith(Alloca);
+      // FIXME: this breaks the debuginfo:
+      // FIXME is this correct?
+      AI->replaceNonMetadataUsesWith(Alloca);
       BitCast->setOperand(0, AI);
     }
     return true;

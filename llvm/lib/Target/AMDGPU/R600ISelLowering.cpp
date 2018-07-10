@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 //
 /// \file
-/// \brief Custom DAG lowering for R600
+/// Custom DAG lowering for R600
 //
 //===----------------------------------------------------------------------===//
 
@@ -20,6 +20,7 @@
 #include "R600FrameLowering.h"
 #include "R600InstrInfo.h"
 #include "R600MachineFunctionInfo.h"
+#include "MCTargetDesc/AMDGPUMCTargetDesc.h"
 #include "Utils/AMDGPUBaseInfo.h"
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/APInt.h"
@@ -35,13 +36,13 @@
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineMemOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
-#include "llvm/CodeGen/MachineValueType.h"
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/MachineValueType.h"
 #include <cassert>
 #include <cstdint>
 #include <iterator>
@@ -211,6 +212,11 @@ R600TargetLowering::R600TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SRL_PARTS, MVT::i32, Custom);
   setOperationAction(ISD::SRA_PARTS, MVT::i32, Custom);
 
+  if (!Subtarget->hasFMA()) {
+    setOperationAction(ISD::FMA, MVT::f32, Expand);
+    setOperationAction(ISD::FMA, MVT::f64, Expand);
+  }
+
   setOperationAction(ISD::GlobalAddress, MVT::i32, Custom);
 
   const MVT ScalarIntVTs[] = { MVT::i32, MVT::i64 };
@@ -281,13 +287,6 @@ R600TargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
       return AMDGPUTargetLowering::EmitInstrWithCustomInserter(MI, BB);
     }
     break;
-  case AMDGPU::CLAMP_R600: {
-    MachineInstr *NewMI = TII->buildDefaultInstruction(
-        *BB, I, AMDGPU::MOV, MI.getOperand(0).getReg(),
-        MI.getOperand(1).getReg());
-    TII->addFlag(*NewMI, 0, MO_FLAG_CLAMP);
-    break;
-  }
 
   case AMDGPU::FABS_R600: {
     MachineInstr *NewMI = TII->buildDefaultInstruction(
@@ -473,7 +472,7 @@ SDValue R600TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const 
     unsigned IntrinsicID =
                          cast<ConstantSDNode>(Op.getOperand(1))->getZExtValue();
     switch (IntrinsicID) {
-    case AMDGPUIntrinsic::r600_store_swizzle: {
+    case Intrinsic::r600_store_swizzle: {
       SDLoc DL(Op);
       const SDValue Args[8] = {
         Chain,
@@ -500,14 +499,14 @@ SDValue R600TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const 
     EVT VT = Op.getValueType();
     SDLoc DL(Op);
     switch (IntrinsicID) {
-    case AMDGPUIntrinsic::r600_tex:
-    case AMDGPUIntrinsic::r600_texc: {
+    case Intrinsic::r600_tex:
+    case Intrinsic::r600_texc: {
       unsigned TextureOp;
       switch (IntrinsicID) {
-      case AMDGPUIntrinsic::r600_tex:
+      case Intrinsic::r600_tex:
         TextureOp = 0;
         break;
-      case AMDGPUIntrinsic::r600_texc:
+      case Intrinsic::r600_texc:
         TextureOp = 1;
         break;
       default:
@@ -537,7 +536,7 @@ SDValue R600TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const 
       };
       return DAG.getNode(AMDGPUISD::TEXTURE_FETCH, DL, MVT::v4f32, TexArgs);
     }
-    case AMDGPUIntrinsic::r600_dot4: {
+    case Intrinsic::r600_dot4: {
       SDValue Args[8] = {
       DAG.getNode(ISD::EXTRACT_VECTOR_ELT, DL, MVT::f32, Op.getOperand(1),
           DAG.getConstant(0, DL, MVT::i32)),
@@ -1148,7 +1147,9 @@ SDValue R600TargetLowering::lowerPrivateTruncStore(StoreSDNode *Store,
 
   // Load dword
   // TODO: can we be smarter about machine pointer info?
-  SDValue Dst = DAG.getLoad(MVT::i32, DL, Chain, Ptr, MachinePointerInfo());
+  MachinePointerInfo PtrInfo(UndefValue::get(
+      Type::getInt32PtrTy(*DAG.getContext(), AMDGPUASI.PRIVATE_ADDRESS)));
+  SDValue Dst = DAG.getLoad(MVT::i32, DL, Chain, Ptr, PtrInfo);
 
   Chain = Dst.getValue(1);
 
@@ -1187,7 +1188,7 @@ SDValue R600TargetLowering::lowerPrivateTruncStore(StoreSDNode *Store,
 
   // Store dword
   // TODO: Can we be smarter about MachinePointerInfo?
-  SDValue NewStore = DAG.getStore(Chain, DL, Value, Ptr, MachinePointerInfo());
+  SDValue NewStore = DAG.getStore(Chain, DL, Value, Ptr, PtrInfo);
 
   // If we are part of expanded vector, make our neighbors depend on this store
   if (VectorTrunc) {
@@ -1311,39 +1312,39 @@ SDValue R600TargetLowering::LowerSTORE(SDValue Op, SelectionDAG &DAG) const {
 
 // return (512 + (kc_bank << 12)
 static int
-ConstantAddressBlock(unsigned AddressSpace, AMDGPUAS AMDGPUASI) {
+ConstantAddressBlock(unsigned AddressSpace) {
   switch (AddressSpace) {
-  case AMDGPUASI.CONSTANT_BUFFER_0:
+  case AMDGPUAS::CONSTANT_BUFFER_0:
     return 512;
-  case AMDGPUASI.CONSTANT_BUFFER_1:
+  case AMDGPUAS::CONSTANT_BUFFER_1:
     return 512 + 4096;
-  case AMDGPUASI.CONSTANT_BUFFER_2:
+  case AMDGPUAS::CONSTANT_BUFFER_2:
     return 512 + 4096 * 2;
-  case AMDGPUASI.CONSTANT_BUFFER_3:
+  case AMDGPUAS::CONSTANT_BUFFER_3:
     return 512 + 4096 * 3;
-  case AMDGPUASI.CONSTANT_BUFFER_4:
+  case AMDGPUAS::CONSTANT_BUFFER_4:
     return 512 + 4096 * 4;
-  case AMDGPUASI.CONSTANT_BUFFER_5:
+  case AMDGPUAS::CONSTANT_BUFFER_5:
     return 512 + 4096 * 5;
-  case AMDGPUASI.CONSTANT_BUFFER_6:
+  case AMDGPUAS::CONSTANT_BUFFER_6:
     return 512 + 4096 * 6;
-  case AMDGPUASI.CONSTANT_BUFFER_7:
+  case AMDGPUAS::CONSTANT_BUFFER_7:
     return 512 + 4096 * 7;
-  case AMDGPUASI.CONSTANT_BUFFER_8:
+  case AMDGPUAS::CONSTANT_BUFFER_8:
     return 512 + 4096 * 8;
-  case AMDGPUASI.CONSTANT_BUFFER_9:
+  case AMDGPUAS::CONSTANT_BUFFER_9:
     return 512 + 4096 * 9;
-  case AMDGPUASI.CONSTANT_BUFFER_10:
+  case AMDGPUAS::CONSTANT_BUFFER_10:
     return 512 + 4096 * 10;
-  case AMDGPUASI.CONSTANT_BUFFER_11:
+  case AMDGPUAS::CONSTANT_BUFFER_11:
     return 512 + 4096 * 11;
-  case AMDGPUASI.CONSTANT_BUFFER_12:
+  case AMDGPUAS::CONSTANT_BUFFER_12:
     return 512 + 4096 * 12;
-  case AMDGPUASI.CONSTANT_BUFFER_13:
+  case AMDGPUAS::CONSTANT_BUFFER_13:
     return 512 + 4096 * 13;
-  case AMDGPUASI.CONSTANT_BUFFER_14:
+  case AMDGPUAS::CONSTANT_BUFFER_14:
     return 512 + 4096 * 14;
-  case AMDGPUASI.CONSTANT_BUFFER_15:
+  case AMDGPUAS::CONSTANT_BUFFER_15:
     return 512 + 4096 * 15;
   default:
     return -1;
@@ -1374,7 +1375,9 @@ SDValue R600TargetLowering::lowerPrivateExtLoad(SDValue Op,
 
   // Load dword
   // TODO: can we be smarter about machine pointer info?
-  SDValue Read = DAG.getLoad(MVT::i32, DL, Chain, Ptr, MachinePointerInfo());
+  MachinePointerInfo PtrInfo(UndefValue::get(
+      Type::getInt32PtrTy(*DAG.getContext(), AMDGPUASI.PRIVATE_ADDRESS)));
+  SDValue Read = DAG.getLoad(MVT::i32, DL, Chain, Ptr, PtrInfo);
 
   // Get offset within the register.
   SDValue ByteIdx = DAG.getNode(ISD::AND, DL, MVT::i32,
@@ -1427,8 +1430,7 @@ SDValue R600TargetLowering::LowerLOAD(SDValue Op, SelectionDAG &DAG) const {
       return scalarizeVectorLoad(LoadNode, DAG);
   }
 
-  int ConstantBlock = ConstantAddressBlock(LoadNode->getAddressSpace(),
-      AMDGPUASI);
+  int ConstantBlock = ConstantAddressBlock(LoadNode->getAddressSpace());
   if (ConstantBlock > -1 &&
       ((LoadNode->getExtensionType() == ISD::NON_EXTLOAD) ||
        (LoadNode->getExtensionType() == ISD::ZEXTLOAD))) {
@@ -1597,7 +1599,8 @@ SDValue R600TargetLowering::LowerFormalArguments(
 
     unsigned ValBase = ArgLocs[In.getOrigArgIndex()].getLocMemOffset();
     unsigned PartOffset = VA.getLocMemOffset();
-    unsigned Offset = Subtarget->getExplicitKernelArgOffset(MF) + VA.getLocMemOffset();
+    unsigned Offset = Subtarget->getExplicitKernelArgOffset(MF.getFunction()) +
+                      VA.getLocMemOffset();
 
     MachinePointerInfo PtrInfo(UndefValue::get(PtrTy), PartOffset - ValBase);
     SDValue Arg = DAG.getLoad(
@@ -2111,7 +2114,7 @@ bool R600TargetLowering::FoldOperand(SDNode *ParentNode, unsigned SrcIdx,
   }
 }
 
-/// \brief Fold the instructions after selecting them
+/// Fold the instructions after selecting them
 SDNode *R600TargetLowering::PostISelFolding(MachineSDNode *Node,
                                             SelectionDAG &DAG) const {
   const R600InstrInfo *TII = getSubtarget()->getInstrInfo();
@@ -2174,20 +2177,6 @@ SDNode *R600TargetLowering::PostISelFolding(MachineSDNode *Node,
       if (FoldOperand(Node, i, Src, FakeOp, FakeOp, FakeOp, FakeOp, DAG))
         return DAG.getMachineNode(Opcode, SDLoc(Node), Node->getVTList(), Ops);
     }
-  } else if (Opcode == AMDGPU::CLAMP_R600) {
-    SDValue Src = Node->getOperand(0);
-    if (!Src.isMachineOpcode() ||
-        !TII->hasInstrModifiers(Src.getMachineOpcode()))
-      return Node;
-    int ClampIdx = TII->getOperandIdx(Src.getMachineOpcode(),
-        AMDGPU::OpName::clamp);
-    if (ClampIdx < 0)
-      return Node;
-    SDLoc DL(Node);
-    std::vector<SDValue> Ops(Src->op_begin(), Src->op_end());
-    Ops[ClampIdx - 1] = DAG.getTargetConstant(1, DL, MVT::i32);
-    return DAG.getMachineNode(Src.getMachineOpcode(), DL,
-                              Node->getVTList(), Ops);
   } else {
     if (!TII->hasInstrModifiers(Opcode))
       return Node;

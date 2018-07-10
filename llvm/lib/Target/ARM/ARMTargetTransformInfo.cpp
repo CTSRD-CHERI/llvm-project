@@ -13,8 +13,8 @@
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Analysis/LoopInfo.h"
+#include "llvm/CodeGen/CostTable.h"
 #include "llvm/CodeGen/ISDOpcodes.h"
-#include "llvm/CodeGen/MachineValueType.h"
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CallSite.h"
@@ -25,7 +25,7 @@
 #include "llvm/IR/Type.h"
 #include "llvm/MC/SubtargetFeature.h"
 #include "llvm/Support/Casting.h"
-#include "llvm/Target/CostTable.h"
+#include "llvm/Support/MachineValueType.h"
 #include "llvm/Target/TargetMachine.h"
 #include <algorithm>
 #include <cassert>
@@ -125,6 +125,10 @@ int ARMTTIImpl::getIntImmCost(unsigned Opcode, unsigned Idx, const APInt &Imm,
       // icmp X, #-C -> adds X, #C
       return 0;
   }
+
+  // xor a, -1 can always be folded to MVN
+  if (Opcode == Instruction::Xor && Imm.isAllOnesValue())
+    return 0;
 
   return getIntImmCost(Imm, Ty);
 }
@@ -351,7 +355,7 @@ int ARMTTIImpl::getVectorInstrCost(unsigned Opcode, Type *ValTy,
 int ARMTTIImpl::getCmpSelInstrCost(unsigned Opcode, Type *ValTy, Type *CondTy,
                                    const Instruction *I) {
   int ISD = TLI->InstructionOpcodeToISD(Opcode);
-  // On NEON a a vector select gets lowered to vbsl.
+  // On NEON a vector select gets lowered to vbsl.
   if (ST->hasNEON() && ValTy->isVectorTy() && ISD == ISD::SELECT) {
     // Lowering of some vector selects is currently far from perfect.
     static const TypeConversionCostTblEntry NEONVectorSelectTbl[] = {
@@ -394,29 +398,10 @@ int ARMTTIImpl::getAddressComputationCost(Type *Ty, ScalarEvolution *SE,
   return 1;
 }
 
-int ARMTTIImpl::getFPOpCost(Type *Ty) {
-  // Use similar logic that's in ARMISelLowering:
-  // Any ARM CPU with VFP2 has floating point, but Thumb1 didn't have access
-  // to VFP.
-
-  if (ST->hasVFP2() && !ST->isThumb1Only()) {
-    if (Ty->isFloatTy()) {
-      return TargetTransformInfo::TCC_Basic;
-    }
-
-    if (Ty->isDoubleTy()) {
-      return ST->isFPOnlySP() ? TargetTransformInfo::TCC_Expensive :
-        TargetTransformInfo::TCC_Basic;
-    }
-  }
-
-  return TargetTransformInfo::TCC_Expensive;
-}
-
 int ARMTTIImpl::getShuffleCost(TTI::ShuffleKind Kind, Type *Tp, int Index,
                                Type *SubTp) {
-  // We only handle costs of reverse and alternate shuffles for now.
-  if (Kind != TTI::SK_Reverse && Kind != TTI::SK_Alternate)
+  // We only handle costs of reverse and select shuffles for now.
+  if (Kind != TTI::SK_Reverse && Kind != TTI::SK_Select)
     return BaseT::getShuffleCost(Kind, Tp, Index, SubTp);
 
   if (Kind == TTI::SK_Reverse) {
@@ -441,9 +426,9 @@ int ARMTTIImpl::getShuffleCost(TTI::ShuffleKind Kind, Type *Tp, int Index,
 
     return BaseT::getShuffleCost(Kind, Tp, Index, SubTp);
   }
-  if (Kind == TTI::SK_Alternate) {
-    static const CostTblEntry NEONAltShuffleTbl[] = {
-        // Alt shuffle cost table for ARM. Cost is the number of instructions
+  if (Kind == TTI::SK_Select) {
+    static const CostTblEntry NEONSelShuffleTbl[] = {
+        // Select shuffle cost table for ARM. Cost is the number of instructions
         // required to create the shuffled vector.
 
         {ISD::VECTOR_SHUFFLE, MVT::v2f32, 1},
@@ -460,7 +445,7 @@ int ARMTTIImpl::getShuffleCost(TTI::ShuffleKind Kind, Type *Tp, int Index,
         {ISD::VECTOR_SHUFFLE, MVT::v16i8, 32}};
 
     std::pair<int, MVT> LT = TLI->getTypeLegalizationCost(DL, Tp);
-    if (const auto *Entry = CostTableLookup(NEONAltShuffleTbl,
+    if (const auto *Entry = CostTableLookup(NEONSelShuffleTbl,
                                             ISD::VECTOR_SHUFFLE, LT.second))
       return LT.first * Entry->Cost;
     return BaseT::getShuffleCost(Kind, Tp, Index, SubTp);
@@ -586,33 +571,52 @@ void ARMTTIImpl::getUnrollingPreferences(Loop *L, ScalarEvolution &SE,
   if (!ST->isMClass())
     return BasicTTIImplBase::getUnrollingPreferences(L, SE, UP);
 
-  // Only enable on Thumb-2 targets for simple loops.
-  if (!ST->isThumb2() || L->getNumBlocks() != 1)
-    return;
-
   // Disable loop unrolling for Oz and Os.
   UP.OptSizeThreshold = 0;
   UP.PartialOptSizeThreshold = 0;
-  BasicBlock *BB = L->getLoopLatch();
-  if (BB->getParent()->optForSize())
+  if (L->getHeader()->getParent()->optForSize())
+    return;
+
+  // Only enable on Thumb-2 targets.
+  if (!ST->isThumb2())
+    return;
+
+  SmallVector<BasicBlock*, 4> ExitingBlocks;
+  L->getExitingBlocks(ExitingBlocks);
+  LLVM_DEBUG(dbgs() << "Loop has:\n"
+                    << "Blocks: " << L->getNumBlocks() << "\n"
+                    << "Exit blocks: " << ExitingBlocks.size() << "\n");
+
+  // Only allow another exit other than the latch. This acts as an early exit
+  // as it mirrors the profitability calculation of the runtime unroller.
+  if (ExitingBlocks.size() > 2)
+    return;
+
+  // Limit the CFG of the loop body for targets with a branch predictor.
+  // Allowing 4 blocks permits if-then-else diamonds in the body.
+  if (ST->hasBranchPredictor() && L->getNumBlocks() > 4)
     return;
 
   // Scan the loop: don't unroll loops with calls as this could prevent
   // inlining.
   unsigned Cost = 0;
-  for (auto &I : *BB) {
-    if (isa<CallInst>(I) || isa<InvokeInst>(I)) {
-      ImmutableCallSite CS(&I);
-      if (const Function *F = CS.getCalledFunction()) {
-        if (!isLoweredToCall(F))
-          continue;
+  for (auto *BB : L->getBlocks()) {
+    for (auto &I : *BB) {
+      if (isa<CallInst>(I) || isa<InvokeInst>(I)) {
+        ImmutableCallSite CS(&I);
+        if (const Function *F = CS.getCalledFunction()) {
+          if (!isLoweredToCall(F))
+            continue;
+        }
+        return;
       }
-      return;
+      SmallVector<const Value*, 4> Operands(I.value_op_begin(),
+                                            I.value_op_end());
+      Cost += getUserCost(&I, Operands);
     }
-    SmallVector<const Value*, 4> Operands(I.value_op_begin(),
-                                          I.value_op_end());
-    Cost += getUserCost(&I, Operands);
   }
+
+  LLVM_DEBUG(dbgs() << "Cost of loop: " << Cost << "\n");
 
   UP.Partial = true;
   UP.Runtime = true;

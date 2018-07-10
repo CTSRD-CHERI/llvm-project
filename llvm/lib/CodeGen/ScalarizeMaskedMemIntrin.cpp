@@ -16,6 +16,7 @@
 
 #include "llvm/ADT/Twine.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constant.h"
 #include "llvm/IR/Constants.h"
@@ -31,7 +32,6 @@
 #include "llvm/IR/Value.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/Casting.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 #include <algorithm>
 #include <cassert>
 
@@ -586,9 +586,6 @@ static void scalarizeMaskedScatter(CallInst *CI) {
 }
 
 bool ScalarizeMaskedMemIntrin::runOnFunction(Function &F) {
-  if (skipFunction(F))
-    return false;
-
   bool EverMadeChange = false;
 
   TTI = &getAnalysis<TargetTransformInfoWrapperPass>().getTTI(F);

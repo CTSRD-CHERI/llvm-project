@@ -1,4 +1,4 @@
-; RUN: llc -O0 -filetype=obj -o - %s | llvm-dwarfdump -v - | FileCheck %s
+; RUN: llc -O0 -fast-isel -filetype=obj -o - %s | llvm-dwarfdump -v - | FileCheck %s
 ;
 ; Derived from (clang -O0 -g -fsanitize=address -fobjc-arc)
 ;   @protocol NSObject
@@ -14,7 +14,7 @@
 ;   @interface Object : NSObject
 ;   - (instancetype)initWithSize:(CGSize)size;
 ;   - (id)aMessage;
-;   @end            
+;   @end
 ;   @implementation MyObject
 ;   + (id)doWithSize:(CGSize)imageSize andObject:(id)object {
 ;     return [object aMessage];
@@ -28,9 +28,9 @@
 ; CHECK: "_cmd"
 ; CHECK: DW_TAG_formal_parameter
 ; CHECK-NEXT: DW_AT_location
-; CHECK-NEXT:   0x{{0*}} - 0x{{.*}}:
+; CHECK-NEXT:   [0x{{0*}}, 0x{{.*}}):
 ; CHECK-NOT:    DW_AT_
-; CHECK:        0x{{.*}} - [[FN_END]]:
+; CHECK:        [0x{{.*}}, [[FN_END]]):
 ; CHECK-NEXT: DW_AT_name {{.*}}"imageSize"
 
 ; ModuleID = 'm.m'
@@ -279,7 +279,7 @@ attributes #3 = { nounwind }
 !11 = !{i32 2, !"Debug Info Version", i32 3}
 !12 = !{i32 1, !"PIC Level", i32 2}
 !13 = !{!"clang version 5.0.0 (trunk 295779) (llvm/trunk 295777)"}
-!14 = distinct !DISubprogram(name: "+[MyObject doWithSize:]", scope: !1, file: !1, line: 16, type: !15, isLocal: true, isDefinition: true, scopeLine: 16, flags: DIFlagPrototyped, isOptimized: false, unit: !0, variables: !2)
+!14 = distinct !DISubprogram(name: "+[MyObject doWithSize:]", scope: !1, file: !1, line: 16, type: !15, isLocal: true, isDefinition: true, scopeLine: 16, flags: DIFlagPrototyped, isOptimized: false, unit: !0, retainedNodes: !2)
 !15 = !DISubroutineType(types: !16)
 !16 = !{!17, !24, !26, !29}
 !17 = !DIDerivedType(tag: DW_TAG_typedef, name: "id", file: !1, baseType: !18)

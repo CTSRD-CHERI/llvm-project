@@ -84,6 +84,11 @@ protected:
   /// directive for emitting thread local BSS Symbols.  Default is false.
   bool HasMachoTBSSDirective = false;
 
+  /// True if this is a non-GNU COFF target. The COFF port of the GNU linker
+  /// doesn't handle associative comdats in the way that we would like to use
+  /// them.
+  bool HasCOFFAssociativeComdats = false;
+
   /// This is the maximum possible length of an instruction, which is needed to
   /// compute the size of an inline asm.  Defaults to 4.
   unsigned MaxInstLength = 4;
@@ -165,7 +170,8 @@ protected:
   const char *ZeroDirective;
 
   /// This directive allows emission of an ascii string with the standard C
-  /// escape characters embedded into it.  Defaults to "\t.ascii\t"
+  /// escape characters embedded into it.  If a target doesn't support this, it
+  /// can be set to null. Defaults to "\t.ascii\t"
   const char *AsciiDirective;
 
   /// If not null, this allows for special handling of zero terminated strings
@@ -343,6 +349,10 @@ protected:
   /// For example, foo(plt) instead of foo@plt.  Defaults to false.
   bool UseParensForSymbolVariant = false;
 
+  /// True if the target supports flags in ".loc" directive, false if only
+  /// location is allowed.
+  bool SupportsExtendedDwarfLocDirective = true;
+
   //===--- Prologue State ----------------------------------------------===//
 
   std::vector<MCCFIInstruction> InitialFrameState;
@@ -373,10 +383,6 @@ protected:
   // If true, then the lexer and expression parser will support %neg(),
   // %hi(), and similar unary operators.
   bool HasMipsExpressions = false;
-
-  // Whether CHERI specific instructions are supported (i.e. the linker understands CHERI)
-  bool SupportsCHERI = false;
-  unsigned CHERICapSize = 0;
 
 public:
   explicit MCAsmInfo();
@@ -419,7 +425,7 @@ public:
     return nullptr;
   }
 
-  /// \brief True if the section is atomized using the symbols in it.
+  /// True if the section is atomized using the symbols in it.
   /// This is false if the section is not atomized at all (most ELF sections) or
   /// if it is atomized based on its contents (MachO' __TEXT,__cstring for
   /// example).
@@ -462,6 +468,7 @@ public:
 
   bool hasMachoZeroFillDirective() const { return HasMachoZeroFillDirective; }
   bool hasMachoTBSSDirective() const { return HasMachoTBSSDirective; }
+  bool hasCOFFAssociativeComdats() const { return HasCOFFAssociativeComdats; }
   unsigned getMaxInstLength() const { return MaxInstLength; }
   unsigned getMinInstAlignment() const { return MinInstAlignment; }
   bool getDollarIsPC() const { return DollarIsPC; }
@@ -582,6 +589,9 @@ public:
   bool doDwarfFDESymbolsUseAbsDiff() const { return DwarfFDESymbolsUseAbsDiff; }
   bool useDwarfRegNumForCFI() const { return DwarfRegNumForCFI; }
   bool useParensForSymbolVariant() const { return UseParensForSymbolVariant; }
+  bool supportsExtendedDwarfLocDirective() const {
+    return SupportsExtendedDwarfLocDirective;
+  }
 
   void addInitialFrameState(const MCCFIInstruction &Inst) {
     InitialFrameState.push_back(Inst);
@@ -620,9 +630,6 @@ public:
   bool canRelaxRelocations() const { return RelaxELFRelocations; }
   void setRelaxELFRelocations(bool V) { RelaxELFRelocations = V; }
   bool hasMipsExpressions() const { return HasMipsExpressions; }
-  bool supportsCHERI() const { return SupportsCHERI; }
-  bool sizeofCHERICap() const { return CHERICapSize; }
-
 };
 
 } // end namespace llvm

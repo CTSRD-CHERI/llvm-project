@@ -14,17 +14,11 @@
 #include "Plugins/Instruction/MIPS64/EmulateInstructionMIPS64.h"
 #include "Plugins/ObjectContainer/BSD-Archive/ObjectContainerBSDArchive.h"
 #include "Plugins/ObjectContainer/Universal-Mach-O/ObjectContainerUniversalMachO.h"
-#include "Plugins/ObjectFile/ELF/ObjectFileELF.h"
-#include "Plugins/ObjectFile/PECOFF/ObjectFilePECOFF.h"
 #include "Plugins/Process/gdb-remote/ProcessGDBRemoteLog.h"
 #include "lldb/Host/Host.h"
 #include "lldb/Host/HostInfo.h"
 #include "lldb/Utility/Log.h"
 #include "lldb/Utility/Timer.h"
-
-#if defined(__APPLE__)
-#include "Plugins/ObjectFile/Mach-O/ObjectFileMachO.h"
-#endif
 
 #if defined(__linux__) || defined(__FreeBSD__) || defined(__NetBSD__)
 #include "Plugins/Process/POSIX/ProcessPOSIXLog.h"
@@ -69,8 +63,10 @@ void SystemInitializerCommon::Initialize() {
   }
 #endif
 
+#if not defined(__APPLE__)
   llvm::EnablePrettyStackTrace();
-  InitializeLog();
+#endif
+  Log::Initialize();
   HostInfo::Initialize();
   static Timer::Category func_cat(LLVM_PRETTY_FUNCTION);
   Timer scoped_timer(func_cat, LLVM_PRETTY_FUNCTION);
@@ -79,8 +75,6 @@ void SystemInitializerCommon::Initialize() {
 
   // Initialize plug-ins
   ObjectContainerBSDArchive::Initialize();
-  ObjectFileELF::Initialize();
-  ObjectFilePECOFF::Initialize();
 
   EmulateInstructionARM::Initialize();
   EmulateInstructionMIPS::Initialize();
@@ -91,9 +85,6 @@ void SystemInitializerCommon::Initialize() {
   //----------------------------------------------------------------------
   ObjectContainerUniversalMachO::Initialize();
 
-#if defined(__APPLE__)
-  ObjectFileMachO::Initialize();
-#endif
 #if defined(__linux__) || defined(__FreeBSD__) || defined(__NetBSD__)
   ProcessPOSIXLog::Initialize();
 #endif
@@ -106,17 +97,12 @@ void SystemInitializerCommon::Terminate() {
   static Timer::Category func_cat(LLVM_PRETTY_FUNCTION);
   Timer scoped_timer(func_cat, LLVM_PRETTY_FUNCTION);
   ObjectContainerBSDArchive::Terminate();
-  ObjectFileELF::Terminate();
-  ObjectFilePECOFF::Terminate();
 
   EmulateInstructionARM::Terminate();
   EmulateInstructionMIPS::Terminate();
   EmulateInstructionMIPS64::Terminate();
 
   ObjectContainerUniversalMachO::Terminate();
-#if defined(__APPLE__)
-  ObjectFileMachO::Terminate();
-#endif
 
 #if defined(_MSC_VER)
   ProcessWindowsLog::Terminate();

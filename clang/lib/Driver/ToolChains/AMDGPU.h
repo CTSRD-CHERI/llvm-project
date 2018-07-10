@@ -19,7 +19,6 @@
 namespace clang {
 namespace driver {
 namespace tools {
-
 namespace amdgpu {
 
 class LLVM_LIBRARY_VISIBILITY Linker : public GnuTool {
@@ -32,6 +31,9 @@ public:
                     const llvm::opt::ArgList &TCArgs,
                     const char *LinkingOutput) const override;
 };
+
+void getAMDGPUTargetFeatures(const Driver &D, const llvm::opt::ArgList &Args,
+                             std::vector<StringRef> &Features);
 
 } // end namespace amdgpu
 } // end namespace tools
@@ -54,7 +56,7 @@ protected:
 public:
   AMDGPUToolChain(const Driver &D, const llvm::Triple &Triple,
                   const llvm::opt::ArgList &Args);
-  unsigned GetDefaultDwarfVersion() const override { return 2; }
+  unsigned GetDefaultDwarfVersion() const override { return 5; }
   bool IsIntegratedAssemblerDefault() const override { return true; }
   llvm::opt::DerivedArgList *
   TranslateArgs(const llvm::opt::DerivedArgList &Args, StringRef BoundArch,

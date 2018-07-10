@@ -4,11 +4,11 @@
 #include "MipsTargetMachine.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Target/TargetMachine.h"
-#include "llvm/Target/TargetInstrInfo.h"
-#include "llvm/Target/TargetRegisterInfo.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/Statistic.h"
@@ -27,6 +27,7 @@ class CheriInvalidatePass : public MachineFunctionPass {
 public:
   static char ID;
   CheriInvalidatePass() : MachineFunctionPass(ID) {}
+  StringRef getPassName() const override { return "CHERI invalidate pass"; }
 
   void runOnMachineBasicBlock(MachineBasicBlock &MBB) {
     if (!InstrInfo)
@@ -43,7 +44,7 @@ public:
     }
   }
 
-  virtual bool runOnMachineFunction(MachineFunction &F) {
+  bool runOnMachineFunction(MachineFunction &F) override{
     if (!InstrInfo)
       InstrInfo = F.getSubtarget<MipsSubtarget>().getInstrInfo();
 
@@ -68,7 +69,7 @@ public:
       if (!foundFunction) return false;
 
 
-      DEBUG(dbgs() << "Zeroing stack spills\n");
+      LLVM_DEBUG(dbgs() << "Zeroing stack spills\n");
       StackStores.clear();
       Returns.clear();
       SmallSet<int, 16> ZeroedLocations;
@@ -99,14 +100,14 @@ public:
               .addReg(Mips::ZERO)
               .addFrameIndex(FI).addImm(Store->getOperand(2).getImm())
               .addMemOperand(InstrInfo->GetMemOperand(MBB, FI, MachineMemOperand::MOStore));
-            DEBUG(dbgs() << "Zeroing capability spill\n");
+            LLVM_DEBUG(dbgs() << "Zeroing capability spill\n");
           } else {
             // For other stores, we do the same type of store as was used for the spill, now with zeros.
             BuildMI(MBB, Ret, Ret->getDebugLoc(), InstrInfo->get(Opc))
               .addReg(Mips::ZERO)
               .addFrameIndex(FI).addImm(Store->getOperand(2).getImm())
               .addMemOperand(InstrInfo->GetMemOperand(MBB, FI, MachineMemOperand::MOStore));
-            DEBUG(dbgs() << "Zeroing non-capability spill\n");
+            LLVM_DEBUG(dbgs() << "Zeroing non-capability spill\n");
           }
         }
       }

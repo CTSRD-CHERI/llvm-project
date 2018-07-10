@@ -43,13 +43,13 @@ define i16 @test2_addrspacecast() {
 ; FIXME: Should be able to load through a constant addrspacecast.
 ; 0xBEEF
 ; LE-LABEL: @test2_addrspacecast(
-; LE: ret i16 -16657
-; UPSTREAM-LE: load i16, i16 addrspace(1)* addrspacecast
+; XLE: ret i16 -16657
+; LE: load i16, i16 addrspace(1)* addrspacecast
 
 ; 0xDEAD
 ; BE-LABEL: @test2_addrspacecast(
-; BE: ret i16 -8531
-; UPSTREAM-BE: load i16, i16 addrspace(1)* addrspacecast
+; XBE: ret i16 -8531
+; BE: load i16, i16 addrspace(1)* addrspacecast
 }
 
 ; Load of second 16 bits of 32-bit value.

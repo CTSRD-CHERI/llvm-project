@@ -15,6 +15,7 @@
 #include "msan.h"
 #include "msan_chained_origin_depot.h"
 #include "msan_origin.h"
+#include "msan_report.h"
 #include "sanitizer_common/sanitizer_allocator_internal.h"
 #include "sanitizer_common/sanitizer_common.h"
 #include "sanitizer_common/sanitizer_flags.h"
@@ -30,8 +31,8 @@ namespace __msan {
 class Decorator: public __sanitizer::SanitizerCommonDecorator {
  public:
   Decorator() : SanitizerCommonDecorator() { }
-  const char *Origin()     { return Magenta(); }
-  const char *Name()   { return Green(); }
+  const char *Origin() const { return Magenta(); }
+  const char *Name() const { return Green(); }
 };
 
 static void DescribeStackOrigin(const char *so, uptr pc) {
@@ -98,7 +99,7 @@ static void DescribeOrigin(u32 id) {
 void ReportUMR(StackTrace *stack, u32 origin) {
   if (!__msan::flags()->report_umrs) return;
 
-  SpinMutexLock l(&CommonSanitizerReportMutex);
+  ScopedErrorReportLock l;
 
   Decorator d;
   Printf("%s", d.Warning());
@@ -112,14 +113,14 @@ void ReportUMR(StackTrace *stack, u32 origin) {
 }
 
 void ReportExpectedUMRNotFound(StackTrace *stack) {
-  SpinMutexLock l(&CommonSanitizerReportMutex);
+  ScopedErrorReportLock l;
 
   Printf("WARNING: Expected use of uninitialized value not found\n");
   stack->Print();
 }
 
 void ReportStats() {
-  SpinMutexLock l(&CommonSanitizerReportMutex);
+  ScopedErrorReportLock l;
 
   if (__msan_get_track_origins() > 0) {
     StackDepotStats *stack_depot_stats = StackDepotGetStats();
@@ -137,7 +138,7 @@ void ReportStats() {
 }
 
 void ReportAtExitStatistics() {
-  SpinMutexLock l(&CommonSanitizerReportMutex);
+  ScopedErrorReportLock l;
 
   if (msan_report_count > 0) {
     Decorator d;

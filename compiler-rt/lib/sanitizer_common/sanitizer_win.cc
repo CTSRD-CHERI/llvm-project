@@ -23,13 +23,10 @@
 #include <stdlib.h>
 
 #include "sanitizer_common.h"
-#include "sanitizer_dbghelp.h"
 #include "sanitizer_file.h"
 #include "sanitizer_libc.h"
 #include "sanitizer_mutex.h"
 #include "sanitizer_placement_new.h"
-#include "sanitizer_stacktrace.h"
-#include "sanitizer_symbolizer.h"
 #include "sanitizer_win_defs.h"
 
 // A macro to tell the compiler that this part of the code cannot be reached,
@@ -64,10 +61,14 @@ uptr GetMmapGranularity() {
   return si.dwAllocationGranularity;
 }
 
-uptr GetMaxVirtualAddress() {
+uptr GetMaxUserVirtualAddress() {
   SYSTEM_INFO si;
   GetSystemInfo(&si);
   return (uptr)si.lpMaximumApplicationAddress;
+}
+
+uptr GetMaxVirtualAddress() {
+  return GetMaxUserVirtualAddress();
 }
 
 bool FileExists(const char *filename) {
@@ -235,6 +236,25 @@ void *MmapFixedOrDie(uptr fixed_addr, uptr size) {
   return p;
 }
 
+// Uses fixed_addr for now.
+// Will use offset instead once we've implemented this function for real.
+uptr ReservedAddressRange::Map(uptr fixed_addr, uptr size) {
+  return reinterpret_cast<uptr>(MmapFixedOrDieOnFatalError(fixed_addr, size));
+}
+
+uptr ReservedAddressRange::MapOrDie(uptr fixed_addr, uptr size) {
+  return reinterpret_cast<uptr>(MmapFixedOrDie(fixed_addr, size));
+}
+
+void ReservedAddressRange::Unmap(uptr addr, uptr size) {
+  // Only unmap if it covers the entire range.
+  CHECK((addr == reinterpret_cast<uptr>(base_)) && (size == size_));
+  // We unmap the whole range, just null out the base.
+  base_ = nullptr;
+  size_ = 0;
+  UnmapOrDie(reinterpret_cast<void*>(addr), size);
+}
+
 void *MmapFixedOrDieOnFatalError(uptr fixed_addr, uptr size) {
   void *p = VirtualAlloc((LPVOID)fixed_addr, size,
       MEM_COMMIT, PAGE_READWRITE);
@@ -251,6 +271,15 @@ void *MmapNoReserveOrDie(uptr size, const char *mem_type) {
   // FIXME: make this really NoReserve?
   return MmapOrDie(size, mem_type);
 }
+
+uptr ReservedAddressRange::Init(uptr size, const char *name, uptr fixed_addr) {
+  base_ = fixed_addr ? MmapFixedNoAccess(fixed_addr, size) : MmapNoAccess(size);
+  size_ = size;
+  name_ = name;
+  (void)os_handle_;  // unsupported
+  return reinterpret_cast<uptr>(base_);
+}
+
 
 void *MmapFixedNoAccess(uptr fixed_addr, uptr size, const char *name) {
   (void)name; // unsupported
@@ -282,17 +311,20 @@ void ReleaseMemoryPagesToOS(uptr beg, uptr end) {
   // FIXME: add madvise-analog when we move to 64-bits.
 }
 
-void NoHugePagesInRegion(uptr addr, uptr size) {
+bool NoHugePagesInRegion(uptr addr, uptr size) {
   // FIXME: probably similar to ReleaseMemoryToOS.
+  return true;
 }
 
-void DontDumpShadowMemory(uptr addr, uptr length) {
+bool DontDumpShadowMemory(uptr addr, uptr length) {
   // This is almost useless on 32-bits.
   // FIXME: add madvise-analog when we move to 64-bits.
+  return true;
 }
 
 uptr FindAvailableMemoryRange(uptr size, uptr alignment, uptr left_padding,
-                              uptr *largest_gap_found) {
+                              uptr *largest_gap_found,
+                              uptr *max_occupied_addr) {
   uptr address = 0;
   while (true) {
     MEMORY_BASIC_INFORMATION info;
@@ -379,7 +411,7 @@ struct ModuleInfo {
 
 #if !SANITIZER_GO
 int CompareModulesBase(const void *pl, const void *pr) {
-  const ModuleInfo *l = (ModuleInfo *)pl, *r = (ModuleInfo *)pr;
+  const ModuleInfo *l = (const ModuleInfo *)pl, *r = (const ModuleInfo *)pr;
   if (l->base_address < r->base_address)
     return -1;
   return l->base_address > r->base_address;
@@ -394,7 +426,7 @@ void DumpProcessMap() {
   modules.init();
   uptr num_modules = modules.size();
 
-  InternalScopedBuffer<ModuleInfo> module_infos(num_modules);
+  InternalMmapVector<ModuleInfo> module_infos(num_modules);
   for (size_t i = 0; i < num_modules; ++i) {
     module_infos[i].filepath = modules[i].full_name();
     module_infos[i].base_address = modules[i].ranges().front()->beg;
@@ -427,8 +459,7 @@ void ReExec() {
   UNIMPLEMENTED();
 }
 
-void PrepareForSandboxing(__sanitizer_sandbox_arguments *args) {
-}
+void PlatformPrepareForSandboxing(__sanitizer_sandbox_arguments *args) {}
 
 bool StackSizeIsUnlimited() {
   UNIMPLEMENTED();
@@ -463,8 +494,19 @@ void SleepForMillis(int millis) {
 }
 
 u64 NanoTime() {
-  return 0;
+  static LARGE_INTEGER frequency = {};
+  LARGE_INTEGER counter;
+  if (UNLIKELY(frequency.QuadPart == 0)) {
+    QueryPerformanceFrequency(&frequency);
+    CHECK_NE(frequency.QuadPart, 0);
+  }
+  QueryPerformanceCounter(&counter);
+  counter.QuadPart *= 1000ULL * 1000000ULL;
+  counter.QuadPart /= frequency.QuadPart;
+  return counter.QuadPart;
 }
+
+u64 MonotonicNanoTime() { return NanoTime(); }
 
 void Abort() {
   internal__exit(3);
@@ -713,7 +755,10 @@ uptr internal_ftruncate(fd_t fd, uptr size) {
 }
 
 uptr GetRSS() {
-  return 0;
+  PROCESS_MEMORY_COUNTERS counters;
+  if (!GetProcessMemoryInfo(GetCurrentProcess(), &counters, sizeof(counters)))
+    return 0;
+  return counters.WorkingSetSize;
 }
 
 void *internal_start_thread(void (*func)(void *arg), void *arg) { return 0; }
@@ -786,54 +831,6 @@ void GetThreadStackAndTls(bool main, uptr *stk_addr, uptr *stk_size,
   *tls_size = 0;
 #endif
 }
-
-#if !SANITIZER_GO
-void BufferedStackTrace::SlowUnwindStack(uptr pc, u32 max_depth) {
-  CHECK_GE(max_depth, 2);
-  // FIXME: CaptureStackBackTrace might be too slow for us.
-  // FIXME: Compare with StackWalk64.
-  // FIXME: Look at LLVMUnhandledExceptionFilter in Signals.inc
-  size = CaptureStackBackTrace(1, Min(max_depth, kStackTraceMax),
-                               (void**)trace, 0);
-  if (size == 0)
-    return;
-
-  // Skip the RTL frames by searching for the PC in the stacktrace.
-  uptr pc_location = LocatePcInTrace(pc);
-  PopStackFrames(pc_location);
-}
-
-void BufferedStackTrace::SlowUnwindStackWithContext(uptr pc, void *context,
-                                                    u32 max_depth) {
-  CONTEXT ctx = *(CONTEXT *)context;
-  STACKFRAME64 stack_frame;
-  memset(&stack_frame, 0, sizeof(stack_frame));
-
-  InitializeDbgHelpIfNeeded();
-
-  size = 0;
-#if defined(_WIN64)
-  int machine_type = IMAGE_FILE_MACHINE_AMD64;
-  stack_frame.AddrPC.Offset = ctx.Rip;
-  stack_frame.AddrFrame.Offset = ctx.Rbp;
-  stack_frame.AddrStack.Offset = ctx.Rsp;
-#else
-  int machine_type = IMAGE_FILE_MACHINE_I386;
-  stack_frame.AddrPC.Offset = ctx.Eip;
-  stack_frame.AddrFrame.Offset = ctx.Ebp;
-  stack_frame.AddrStack.Offset = ctx.Esp;
-#endif
-  stack_frame.AddrPC.Mode = AddrModeFlat;
-  stack_frame.AddrFrame.Mode = AddrModeFlat;
-  stack_frame.AddrStack.Mode = AddrModeFlat;
-  while (StackWalk64(machine_type, GetCurrentProcess(), GetCurrentThread(),
-                     &stack_frame, &ctx, NULL, SymFunctionTableAccess64,
-                     SymGetModuleBase64, NULL) &&
-         size < Min(max_depth, kStackTraceMax)) {
-    trace_buffer[size++] = (uptr)stack_frame.AddrPC.Offset;
-  }
-}
-#endif  // #if !SANITIZER_GO
 
 void ReportFile::Write(const char *buffer, uptr length) {
   SpinMutexLock l(mu);
@@ -917,7 +914,7 @@ bool IsAccessibleMemoryRange(uptr beg, uptr size) {
 }
 
 bool SignalContext::IsStackOverflow() const {
-  return GetType() == EXCEPTION_STACK_OVERFLOW;
+  return (DWORD)GetType() == EXCEPTION_STACK_OVERFLOW;
 }
 
 void SignalContext::InitPcSpBp() {
@@ -1030,6 +1027,10 @@ void MaybeReexec() {
   // No need to re-exec on Windows.
 }
 
+void CheckASLR() {
+  // Do nothing
+}
+
 char **GetArgv() {
   // FIXME: Actually implement this function.
   return 0;
@@ -1061,6 +1062,12 @@ void CheckNoDeepBind(const char *filename, int flag) {
 // FIXME: implement on this platform.
 bool GetRandom(void *buffer, uptr length, bool blocking) {
   UNIMPLEMENTED();
+}
+
+u32 GetNumberOfCPUs() {
+  SYSTEM_INFO sysinfo = {};
+  GetNativeSystemInfo(&sysinfo);
+  return sysinfo.dwNumberOfProcessors;
 }
 
 }  // namespace __sanitizer

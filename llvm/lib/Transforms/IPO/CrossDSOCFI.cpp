@@ -13,7 +13,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Transforms/IPO/CrossDSOCFI.h"
-#include "llvm/ADT/EquivalenceClasses.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/Triple.h"
@@ -32,7 +31,6 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/IPO.h"
-#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 
 using namespace llvm;
 
@@ -164,9 +162,6 @@ void CrossDSOCFI::buildCFICheck(Module &M) {
 }
 
 bool CrossDSOCFI::runOnModule(Module &M) {
-  if (skipModule(M))
-    return false;
-
   VeryLikelyWeights =
     MDBuilder(M.getContext()).createBranchWeights((1U << 20) - 1, 1);
   if (M.getModuleFlag("Cross-DSO CFI") == nullptr)

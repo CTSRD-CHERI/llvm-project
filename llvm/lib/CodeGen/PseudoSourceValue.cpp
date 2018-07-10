@@ -14,7 +14,7 @@
 #include "llvm/CodeGen/PseudoSourceValue.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
-#include "llvm/Target/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -109,7 +109,7 @@ PseudoSourceValueManager::PseudoSourceValueManager(
     : TII(TIInfo),
       StackPSV(PseudoSourceValue::Stack, TII),
       GOTPSV(PseudoSourceValue::GOT, TII),
-      CapTablePSV(PseudoSourceValue::GOT, TII),
+      CapTablePSV(PseudoSourceValue::CapTable, TII),
       JumpTablePSV(PseudoSourceValue::JumpTable, TII),
       ConstantPoolPSV(PseudoSourceValue::ConstantPool, TII) {}
 

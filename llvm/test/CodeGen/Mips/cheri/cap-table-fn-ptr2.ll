@@ -1,10 +1,8 @@
-; RUN: %cheri_purecap_llc -cheri-cap-table %s -mxcaptable=true  -o - | %cheri_FileCheck %s -check-prefixes CHECK,BIGTABLE
-; RUN: %cheri_purecap_llc -cheri-cap-table %s -mxcaptable=false -o - | %cheri_FileCheck %s -check-prefixes CHECK,SMALLTABLE
+; RUN: %cheri_purecap_llc -cheri-cap-table-abi=plt %s -mxcaptable=true  -o - | %cheri_FileCheck %s -check-prefixes CHECK,BIGTABLE
+; RUN: %cheri_purecap_llc -cheri-cap-table-abi=plt %s -mxcaptable=false -o - | %cheri_FileCheck %s -check-prefixes CHECK,SMALLTABLE
 
 ; ModuleID = '/Users/alex/cheri/llvm/tools/clang/test/CodeGen/CHERI/cap-table-call-extern.c'
 source_filename = "/Users/alex/cheri/llvm/tools/clang/test/CodeGen/CHERI/cap-table-call-extern.c"
-target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
-target triple = "cheri-unknown-freebsd"
 
 @fn = local_unnamed_addr addrspace(200) global void () addrspace(200)* addrspacecast (void ()* @extern_func to void () addrspace(200)*), align 32
 @fn2 = internal unnamed_addr addrspace(200) global void () addrspace(200)* addrspacecast (void ()* @extern_func to void () addrspace(200)*), align 32
@@ -28,11 +26,11 @@ entry:
   ; SMALLTABLE-NEXT: clcbi $c2, %captab20(fn2)($c26)
   ; load fn for call:
   ; CHECK-NEXT: clc	$c12, $zero, 0($c1)
-  ; save %arg to fn2
-  ; CHECK-NEXT: csc	$c3, $zero, 0($c2)
-  tail call void %0() #2
   ; call fn:
   ; CHECK-NEXT: cjalr	$c12, $c17
+  ; save %arg to fn2 (delay slot)
+  ; CHECK-NEXT: csc	$c3, $zero, 0($c2)
+  tail call void %0() #2
   ret void
 }
 

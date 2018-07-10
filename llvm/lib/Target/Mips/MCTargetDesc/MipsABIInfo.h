@@ -13,6 +13,7 @@
 #include "llvm/ADT/Triple.h"
 #include "llvm/IR/CallingConv.h"
 #include "llvm/MC/MCRegisterInfo.h"
+#include "llvm/MC/MCTargetOptions.h"
 
 namespace llvm {
 
@@ -67,6 +68,10 @@ public:
   bool UsesCapabilityTable() const;
   const TemporalABILayout* GetTABILayout() const;
   uint32_t GetCapSize() const {return CapSize;}
+  CheriCapabilityTableABI CapabilityTableABI() const {
+    assert(IsCheriPureCap());
+    return MCTargetOptions::cheriCapabilityTableABI();
+  }
   unsigned StackAddrSpace() const { return isCheriPureCap ? 200 : 0; }
   ABI GetEnumValue() const { return ThisABI; }
 

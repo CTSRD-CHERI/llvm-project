@@ -122,6 +122,7 @@ static void GetAccessToHeapChunkInformation(ChunkAccess *descr,
   }
   descr->chunk_begin = chunk.Beg();
   descr->chunk_size = chunk.UsedSize();
+  descr->user_requested_alignment = chunk.UserRequestedAlignment();
   descr->alloc_type = chunk.GetAllocType();
 }
 
@@ -335,6 +336,26 @@ void GlobalAddressDescription::Print(const char *bug_type) const {
   }
 }
 
+bool GlobalAddressDescription::PointsInsideTheSameVariable(
+    const GlobalAddressDescription &other) const {
+  if (size == 0 || other.size == 0) return false;
+
+  for (uptr i = 0; i < size; i++) {
+    const __asan_global &a = globals[i];
+    for (uptr j = 0; j < other.size; j++) {
+      const __asan_global &b = other.globals[j];
+      if (a.beg == b.beg &&
+          a.beg <= addr &&
+          b.beg <= other.addr &&
+          (addr + access_size) < (a.beg + a.size) &&
+          (other.addr + other.access_size) < (b.beg + b.size))
+        return true;
+    }
+  }
+
+  return false;
+}
+
 void StackAddressDescription::Print() const {
   Decorator d;
   char tname[128];
@@ -359,7 +380,8 @@ void StackAddressDescription::Print() const {
   StackTrace alloca_stack(&frame_pc, 1);
   alloca_stack.Print();
 
-  InternalMmapVector<StackVarDescr> vars(16);
+  InternalMmapVector<StackVarDescr> vars;
+  vars.reserve(16);
   if (!ParseFrameDescription(frame_descr, &vars)) {
     Printf(
         "AddressSanitizer can't parse the stack frame "
@@ -381,7 +403,7 @@ void StackAddressDescription::Print() const {
   }
   Printf(
       "HINT: this may be a false positive if your program uses "
-      "some custom stack unwind mechanism or swapcontext\n");
+      "some custom stack unwind mechanism, swapcontext or vfork\n");
   if (SANITIZER_WINDOWS)
     Printf("      (longjmp, SEH and C++ exceptions *are* supported)\n");
   else

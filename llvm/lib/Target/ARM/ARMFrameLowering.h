@@ -11,7 +11,7 @@
 #define LLVM_LIB_TARGET_ARM_ARMFRAMELOWERING_H
 
 #include "llvm/CodeGen/MachineBasicBlock.h"
-#include "llvm/Target/TargetFrameLowering.h"
+#include "llvm/CodeGen/TargetFrameLowering.h"
 #include <vector>
 
 namespace llvm {
@@ -43,6 +43,8 @@ public:
                                   const TargetRegisterInfo *TRI) const override;
 
   bool noFramePointerElim(const MachineFunction &MF) const override;
+
+  bool enableCalleeSaveSkip(const MachineFunction &MF) const override;
 
   bool hasFP(const MachineFunction &MF) const override;
   bool hasReservedCallFrame(const MachineFunction &MF) const override;

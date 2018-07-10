@@ -73,6 +73,7 @@ class SlotIndexes;
 class TargetMachine;
 class TargetRegisterClass;
 class TargetSubtargetInfo;
+struct WasmEHFuncInfo;
 struct WinEHFuncInfo;
 
 template <> struct ilist_alloc_traits<MachineBasicBlock> {
@@ -96,7 +97,7 @@ template <> struct ilist_callback_traits<MachineBasicBlock> {
 struct MachineFunctionInfo {
   virtual ~MachineFunctionInfo();
 
-  /// \brief Factory function: default behavior is to call new using the
+  /// Factory function: default behavior is to call new using the
   /// supplied allocator.
   ///
   /// This function can be overridden in a derive class.
@@ -223,7 +224,7 @@ struct LandingPadInfo {
 };
 
 class MachineFunction {
-  const Function *Fn;
+  const Function &F;
   const TargetMachine &Target;
   const TargetSubtargetInfo *STI;
   MCContext &Ctx;
@@ -244,6 +245,10 @@ class MachineFunction {
 
   // Keep track of jump tables for switch instructions
   MachineJumpTableInfo *JumpTableInfo;
+
+  // Keeps track of Wasm exception handling related data. This will be null for
+  // functions that aren't using a wasm EH personality.
+  WasmEHFuncInfo *WasmEHInfo = nullptr;
 
   // Keeps track of Windows exception handling related data. This will be null
   // for functions that aren't using a funclet-based EH personality.
@@ -322,6 +327,7 @@ class MachineFunction {
 
   bool CallsEHReturn = false;
   bool CallsUnwindInit = false;
+  bool HasEHScopes = false;
   bool HasEHFunclets = false;
 
   /// List of C++ TypeInfo used.
@@ -352,18 +358,20 @@ public:
   struct VariableDbgInfo {
     const DILocalVariable *Var;
     const DIExpression *Expr;
-    unsigned Slot;
+    // The Slot can be negative for fixed stack objects.
+    int Slot;
     const DILocation *Loc;
 
     VariableDbgInfo(const DILocalVariable *Var, const DIExpression *Expr,
-                    unsigned Slot, const DILocation *Loc)
+                    int Slot, const DILocation *Loc)
         : Var(Var), Expr(Expr), Slot(Slot), Loc(Loc) {}
   };
   using VariableDbgInfoMapTy = SmallVector<VariableDbgInfo, 4>;
   VariableDbgInfoMapTy VariableDbgInfos;
 
-  MachineFunction(const Function *Fn, const TargetMachine &TM,
-                  unsigned FunctionNum, MachineModuleInfo &MMI);
+  MachineFunction(const Function &F, const TargetMachine &TM,
+                  const TargetSubtargetInfo &STI, unsigned FunctionNum,
+                  MachineModuleInfo &MMI);
   MachineFunction(const MachineFunction &) = delete;
   MachineFunction &operator=(const MachineFunction &) = delete;
   ~MachineFunction();
@@ -387,8 +395,8 @@ public:
   /// Return the DataLayout attached to the Module associated to this MF.
   const DataLayout &getDataLayout() const;
 
-  /// getFunction - Return the LLVM function that this machine code represents
-  const Function *getFunction() const { return Fn; }
+  /// Return the LLVM function that this machine code represents
+  const Function &getFunction() const { return F; }
 
   /// getName - Return the name of the corresponding LLVM function.
   StringRef getName() const;
@@ -436,6 +444,12 @@ public:
   /// function.
   MachineConstantPool *getConstantPool() { return ConstantPool; }
   const MachineConstantPool *getConstantPool() const { return ConstantPool; }
+
+  /// getWasmEHFuncInfo - Return information about how the current function uses
+  /// Wasm exception handling. Returns null for functions that don't use wasm
+  /// exception handling.
+  const WasmEHFuncInfo *getWasmEHFuncInfo() const { return WasmEHInfo; }
+  WasmEHFuncInfo *getWasmEHFuncInfo() { return WasmEHInfo; }
 
   /// getWinEHFuncInfo - Return information about how the current function uses
   /// Windows exception handling. Returns null for functions that don't use
@@ -616,7 +630,7 @@ public:
   //===--------------------------------------------------------------------===//
   // Internal functions used to automatically number MachineBasicBlocks
 
-  /// \brief Adds the MBB to the internal numbering. Returns the unique number
+  /// Adds the MBB to the internal numbering. Returns the unique number
   /// assigned to the MBB.
   unsigned addToMBBNumbering(MachineBasicBlock *MBB) {
     MBBNumbering.push_back(MBB);
@@ -702,7 +716,7 @@ public:
     OperandRecycler.deallocate(Cap, Array);
   }
 
-  /// \brief Allocate and initialize a register mask with @p NumRegister bits.
+  /// Allocate and initialize a register mask with @p NumRegister bits.
   uint32_t *allocateRegisterMask(unsigned NumRegister) {
     unsigned Size = (NumRegister + 31) / 32;
     uint32_t *Mask = Allocator.Allocate<uint32_t>(Size);
@@ -765,6 +779,9 @@ public:
 
   bool callsUnwindInit() const { return CallsUnwindInit; }
   void setCallsUnwindInit(bool b) { CallsUnwindInit = b; }
+
+  bool hasEHScopes() const { return HasEHScopes; }
+  void setHasEHScopes(bool V) { HasEHScopes = V; }
 
   bool hasEHFunclets() const { return HasEHFunclets; }
   void setHasEHFunclets(bool V) { HasEHFunclets = V; }
@@ -867,7 +884,7 @@ public:
 
   /// Collect information used to emit debugging information of a variable.
   void setVariableDbgInfo(const DILocalVariable *Var, const DIExpression *Expr,
-                          unsigned Slot, const DILocation *Loc) {
+                          int Slot, const DILocation *Loc) {
     VariableDbgInfos.emplace_back(Var, Expr, Slot, Loc);
   }
 

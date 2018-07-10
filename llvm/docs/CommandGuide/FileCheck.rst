@@ -86,6 +86,11 @@ OPTIONS
 
   All other variables get undefined after each encountered ``CHECK-LABEL``.
 
+.. option:: -D<VAR=VALUE>
+
+  Sets a filecheck variable ``VAR`` with value ``VALUE`` that can be used in
+  ``CHECK:`` lines.
+
 .. option:: -version
 
  Show the version number of this program.
@@ -234,6 +239,25 @@ For example, the following works like you'd expect:
 
 "``CHECK-SAME:``" directives reject the input if there are any newlines between
 it and the previous directive.  A "``CHECK-SAME:``" cannot be the first
+directive in a file.
+
+The "CHECK-EMPTY:" directive
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If you need to check that the next line has nothing on it, not even whitespace,
+you can use the "``CHECK-EMPTY:``" directive.
+
+.. code-block:: llvm
+
+   foo
+
+   bar
+   ; CHECK: foo
+   ; CHECK-EMPTY:
+   ; CHECK-NEXT: bar
+
+Just like "``CHECK-NEXT:``" the directive will fail if there is more than one
+newline before it finds the next blank line, and it cannot be the first
 directive in a file.
 
 The "CHECK-NOT:" directive

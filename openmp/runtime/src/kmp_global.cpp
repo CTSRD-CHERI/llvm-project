@@ -2,7 +2,6 @@
  * kmp_global.cpp -- KPTS global variables for runtime support library
  */
 
-
 //===----------------------------------------------------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
@@ -11,7 +10,6 @@
 // Source Licenses. See LICENSE.txt for details.
 //
 //===----------------------------------------------------------------------===//
-
 
 #include "kmp.h"
 #include "kmp_affinity.h"
@@ -32,7 +30,7 @@ kmp_tas_lock_t __kmp_stats_lock;
 kmp_stats_list *__kmp_stats_list;
 
 // thread local pointer to stats node within list
-__thread kmp_stats_list *__kmp_stats_thread_ptr = NULL;
+KMP_THREAD_LOCAL kmp_stats_list *__kmp_stats_thread_ptr = NULL;
 
 // gives reference tick for all events (considered the 0 tick)
 tsc_tick_count __kmp_stats_start_time;
@@ -78,25 +76,16 @@ size_t __kmp_malloc_pool_incr = KMP_DEFAULT_MALLOC_POOL_INCR;
 
 // Barrier method defaults, settings, and strings.
 // branch factor = 2^branch_bits (only relevant for tree & hyper barrier types)
-#if KMP_ARCH_X86_64
 kmp_uint32 __kmp_barrier_gather_bb_dflt = 2;
 /* branch_factor = 4 */ /* hyper2: C78980 */
 kmp_uint32 __kmp_barrier_release_bb_dflt = 2;
 /* branch_factor = 4 */ /* hyper2: C78980 */
-#else
-kmp_uint32 __kmp_barrier_gather_bb_dflt = 2;
-/* branch_factor = 4 */ /* communication in core for MIC */
-kmp_uint32 __kmp_barrier_release_bb_dflt = 2;
-/* branch_factor = 4 */ /* communication in core for MIC */
-#endif // KMP_ARCH_X86_64
-#if KMP_ARCH_X86_64
-kmp_bar_pat_e __kmp_barrier_gather_pat_dflt = bp_hyper_bar; /* hyper2: C78980 */
-kmp_bar_pat_e __kmp_barrier_release_pat_dflt =
-    bp_hyper_bar; /* hyper2: C78980 */
-#else
-kmp_bar_pat_e __kmp_barrier_gather_pat_dflt = bp_linear_bar;
-kmp_bar_pat_e __kmp_barrier_release_pat_dflt = bp_linear_bar;
-#endif
+
+kmp_bar_pat_e __kmp_barrier_gather_pat_dflt = bp_hyper_bar;
+/* hyper2: C78980 */
+kmp_bar_pat_e __kmp_barrier_release_pat_dflt = bp_hyper_bar;
+/* hyper2: C78980 */
+
 kmp_uint32 __kmp_barrier_gather_branch_bits[bs_last_barrier] = {0};
 kmp_uint32 __kmp_barrier_release_branch_bits[bs_last_barrier] = {0};
 kmp_bar_pat_e __kmp_barrier_gather_pattern[bs_last_barrier] = {bp_linear_bar};
@@ -126,7 +115,6 @@ char const *__kmp_barrier_pattern_name[bp_last_bar] = {"linear", "tree",
 
 int __kmp_allThreadsSpecified = 0;
 size_t __kmp_align_alloc = CACHE_LINE;
-
 
 int __kmp_generate_warnings = kmp_warnings_low;
 int __kmp_reserve_warn = 0;
@@ -185,12 +173,7 @@ int __kmp_gtid_mode = 0; /* select method to get gtid based on #threads */
 int __kmp_adjust_gtid_mode = TRUE;
 #endif /* KMP_OS_LINUX && defined(KMP_TDATA_GTID) */
 #ifdef KMP_TDATA_GTID
-#if KMP_OS_WINDOWS
-__declspec(thread) int __kmp_gtid = KMP_GTID_DNE;
-#else
-__thread int __kmp_gtid = KMP_GTID_DNE;
-#endif /* KMP_OS_WINDOWS - workaround because Intel(R) Many Integrated Core    \
-          compiler 20110316 doesn't accept __declspec */
+KMP_THREAD_LOCAL int __kmp_gtid = KMP_GTID_DNE;
 #endif /* KMP_TDATA_GTID */
 int __kmp_tls_gtid_min = INT_MAX;
 int __kmp_foreign_tp = TRUE;
@@ -251,6 +234,8 @@ KMPAffinity *__kmp_affinity_dispatch = NULL;
 #if KMP_USE_HWLOC
 int __kmp_hwloc_error = FALSE;
 hwloc_topology_t __kmp_hwloc_topology = NULL;
+int __kmp_numa_detected = FALSE;
+int __kmp_tile_depth = 0;
 #endif
 
 #if KMP_OS_WINDOWS
@@ -279,7 +264,7 @@ char *__kmp_affinity_proclist = NULL;
 kmp_affin_mask_t *__kmp_affinity_masks = NULL;
 unsigned __kmp_affinity_num_masks = 0;
 
-char const *__kmp_cpuinfo_file = NULL;
+char *__kmp_cpuinfo_file = NULL;
 
 #endif /* KMP_AFFINITY_SUPPORTED */
 
@@ -313,8 +298,7 @@ kmp_uint64 __kmp_taskloop_min_tasks = 0;
    be redefined to have exactly 32 bits. */
 KMP_BUILD_ASSERT(sizeof(kmp_tasking_flags_t) == 4);
 
-kmp_int32 __kmp_task_stealing_constraint =
-    1; /* Constrain task stealing by default */
+int __kmp_task_stealing_constraint = 1; /* Constrain task stealing by default */
 
 #ifdef DEBUG_SUSPEND
 int __kmp_suspend_count = 0;
@@ -518,4 +502,7 @@ int _You_must_link_with_Intel_OpenMP_library = 1;
 int _You_must_link_with_Microsoft_OpenMP_library = 1;
 #endif
 
+#if OMP_50_ENABLED
+kmp_target_offload_kind_t __kmp_target_offload = tgt_default;
+#endif
 // end of file //

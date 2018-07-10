@@ -283,6 +283,22 @@ public:
   }
 };
 
+class NewAllocator {
+  template <typename CHECKER>
+  static void _checkNewAllocator(void *checker, const CXXNewExpr *NE,
+                                 SVal Target, CheckerContext &C) {
+    ((const CHECKER *)checker)->checkNewAllocator(NE, Target, C);
+  }
+
+public:
+  template <typename CHECKER>
+  static void _register(CHECKER *checker, CheckerManager &mgr) {
+    mgr._registerForNewAllocator(
+        CheckerManager::CheckNewAllocatorFunc(checker,
+                                              _checkNewAllocator<CHECKER>));
+  }
+};
+
 class LiveSymbols {
   template <typename CHECKER>
   static void _checkLiveSymbols(void *checker, ProgramStateRef state,
@@ -532,7 +548,7 @@ public:
   }
 };
 
-/// \brief We dereferenced a location that may be null.
+/// We dereferenced a location that may be null.
 struct ImplicitNullDerefEvent {
   SVal Location;
   bool IsLoad;
@@ -544,7 +560,7 @@ struct ImplicitNullDerefEvent {
   bool IsDirectDereference;
 };
 
-/// \brief A helper class which wraps a boolean value set to false by default.
+/// A helper class which wraps a boolean value set to false by default.
 ///
 /// This class should behave exactly like 'bool' except that it doesn't need to
 /// be explicitly initialized.

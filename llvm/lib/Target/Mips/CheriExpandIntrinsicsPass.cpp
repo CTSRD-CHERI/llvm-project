@@ -1,4 +1,7 @@
+#define DEBUG_TYPE "cheri-expand-intrinsics"   // This goes before any #includes.
+
 #include "llvm/Pass.h"
+#include "llvm/ADT/Statistic.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/LLVMContext.h"
@@ -11,17 +14,14 @@
 
 #include <string>
 
-#ifndef NDEBUG
-#include "llvm/IR/Verifier.h"
-#endif
-
 using namespace llvm;
 
-/// Expand the @llvm.cheri.cap.address.get() instrinsic to base + offset
+/// Expand the @llvm.cheri.cap.address.set() instrinsic to getaddr + sub + cincoffset
 namespace {
-class CheriExpandIntrinsicsPass : public ModulePass {
-  Function* GetBase;
-  Function* GetOffset;
+
+STATISTIC(NumSetAddrCalls, "Number of CHERI SetAddr uses");
+
+class CHERIExpandCapIntrinsics : public ModulePass {
 
   StringRef getPassName() const override {
     return "CHERI expand instrinsics";
@@ -29,17 +29,28 @@ class CheriExpandIntrinsicsPass : public ModulePass {
 
 public:
   static char ID;
-  CheriExpandIntrinsicsPass() : ModulePass(ID) {}
+  CHERIExpandCapIntrinsics() : ModulePass(ID) {}
 
-  void expandAddrGet(Module &M, bool* Modified) {
+  void expandAddrSet(Module &M, bool *Modified) {
+    Function *SetAddr =
+        M.getFunction(Intrinsic::getName(Intrinsic::cheri_cap_address_set));
+    if (!SetAddr)
+      return;
+
     Function* GetAddr = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_address_get);
+    Function *IncOffset =
+        Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_offset_increment);
+
     std::vector<CallInst*> ToErase;
-    for (Value* V : GetAddr->users()) {
+    for (Value* V : SetAddr->users()) {
+      NumSetAddrCalls += 1;
+
       CallInst *CI = cast<CallInst>(V);
       Value* Cap = CI->getOperand(0);
+      Value* NewAddr = CI->getOperand(1);
       IRBuilder<> B(CI);
-      Value *Replacement = B.CreateAdd(B.CreateCall(GetBase, {Cap}),
-                                       B.CreateCall(GetOffset, {Cap}));
+      Value *Difference = B.CreateSub(NewAddr, B.CreateCall(GetAddr, {Cap}));
+      Value *Replacement = B.CreateCall(IncOffset, {Cap, Difference});
       CI->replaceAllUsesWith(Replacement);
       // Seems like this causes the users() iterator to be invalidated
       // CI->eraseFromParent();
@@ -54,19 +65,19 @@ public:
 
   bool runOnModule(Module &M) override {
     bool Modified = false;
-    GetBase = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_base_get);
-    GetOffset = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_offset_get);
-    expandAddrGet(M, &Modified);
+    expandAddrSet(M, &Modified);
     return Modified;
   }
 };
 
 } // anonymous namespace
 
-char CheriExpandIntrinsicsPass::ID;
+char CHERIExpandCapIntrinsics::ID = 0;
+INITIALIZE_PASS(CHERIExpandCapIntrinsics, "cheri-expand-intrinsics",
+                "Expand CHERI intrinsics", false, false)
 
 namespace llvm {
 ModulePass *createCheriExpandIntrinsicsPass(void) {
-  return new CheriExpandIntrinsicsPass();
+  return new CHERIExpandCapIntrinsics();
 }
 }

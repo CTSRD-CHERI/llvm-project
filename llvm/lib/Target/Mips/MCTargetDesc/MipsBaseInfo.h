@@ -103,6 +103,10 @@ namespace MipsII {
     MO_CAPTAB_HI16,
     MO_CAPTAB_CALL_LO16,
     MO_CAPTAB_CALL_HI16,
+
+    // Offset to the capability table
+    MO_CAPTABLE_OFF_HI,
+    MO_CAPTABLE_OFF_LO,
   };
 
   enum {

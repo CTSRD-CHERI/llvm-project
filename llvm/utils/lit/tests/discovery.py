@@ -150,5 +150,6 @@
 #      CHECK-ASEXEC-INTREE:   exec-discovery-in-tree-suite - 1 tests
 # CHECK-ASEXEC-INTREE-NEXT:     Source Root: {{.*[/\\]exec-discovery-in-tree$}}
 # CHECK-ASEXEC-INTREE-NEXT:     Exec Root  : {{.*[/\\]exec-discovery-in-tree[/\\]obj$}}
+# CHECK-ASEXEC-INTREE-NEXT:     Available Features : include-cheri-tests
 # CHECK-ASEXEC-INTREE-NEXT: -- Available Tests --
 # CHECK-ASEXEC-INTREE-NEXT: exec-discovery-in-tree-suite :: test-one

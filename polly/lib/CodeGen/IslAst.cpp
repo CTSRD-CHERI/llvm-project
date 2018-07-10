@@ -122,7 +122,6 @@ struct AstBuildUserInfo {
   /// The last iterator id created for the current SCoP.
   isl_id *LastForNodeId = nullptr;
 };
-
 } // namespace polly
 
 /// Free an IslAstUserPayload object pointed to by @p Ptr.
@@ -217,14 +216,23 @@ static bool astScheduleDimIsParallel(__isl_keep isl_ast_build *Build,
     return false;
 
   isl_union_map *Schedule = isl_ast_build_get_schedule(Build);
-  isl_union_map *Deps = D->getDependences(
-      Dependences::TYPE_RAW | Dependences::TYPE_WAW | Dependences::TYPE_WAR);
+  isl_union_map *Deps =
+      D->getDependences(Dependences::TYPE_RAW | Dependences::TYPE_WAW |
+                        Dependences::TYPE_WAR)
+          .release();
 
-  if (!D->isParallel(Schedule, Deps, &NodeInfo->MinimalDependenceDistance) &&
-      !isl_union_map_free(Schedule))
+  if (!D->isParallel(Schedule, Deps)) {
+    isl_union_map *DepsAll =
+        D->getDependences(Dependences::TYPE_RAW | Dependences::TYPE_WAW |
+                          Dependences::TYPE_WAR | Dependences::TYPE_TC_RED)
+            .release();
+    D->isParallel(Schedule, DepsAll, &NodeInfo->MinimalDependenceDistance);
+    isl_union_map_free(Schedule);
     return false;
+  }
 
-  isl_union_map *RedDeps = D->getDependences(Dependences::TYPE_TC_RED);
+  isl_union_map *RedDeps =
+      D->getDependences(Dependences::TYPE_TC_RED).release();
   if (!D->isParallel(Schedule, RedDeps))
     NodeInfo->IsReductionParallel = true;
 
@@ -351,10 +359,10 @@ static isl::ast_expr buildCondition(Scop &S, isl::ast_build Build,
                                     const Scop::MinMaxAccessTy *It0,
                                     const Scop::MinMaxAccessTy *It1) {
 
-  isl::pw_multi_aff AFirst = isl::manage(isl_pw_multi_aff_copy(It0->first));
-  isl::pw_multi_aff ASecond = isl::manage(isl_pw_multi_aff_copy(It0->second));
-  isl::pw_multi_aff BFirst = isl::manage(isl_pw_multi_aff_copy(It1->first));
-  isl::pw_multi_aff BSecond = isl::manage(isl_pw_multi_aff_copy(It1->second));
+  isl::pw_multi_aff AFirst = It0->first;
+  isl::pw_multi_aff ASecond = It0->second;
+  isl::pw_multi_aff BFirst = It1->first;
+  isl::pw_multi_aff BSecond = It1->second;
 
   isl::id Left = AFirst.get_tuple_id(isl::dim::set);
   isl::id Right = BFirst.get_tuple_id(isl::dim::set);
@@ -439,14 +447,12 @@ IslAst::buildRunCondition(Scop &S, __isl_keep isl_ast_build *Build) {
       for (auto RWAccIt1 = RWAccIt0 + 1; RWAccIt1 != RWAccEnd; ++RWAccIt1)
         RunCondition = isl_ast_expr_and(
             RunCondition,
-            buildCondition(S, isl::manage(isl_ast_build_copy(Build)), RWAccIt0,
-                           RWAccIt1)
+            buildCondition(S, isl::manage_copy(Build), RWAccIt0, RWAccIt1)
                 .release());
       for (const Scop::MinMaxAccessTy &ROAccIt : MinMaxReadOnly)
         RunCondition = isl_ast_expr_and(
             RunCondition,
-            buildCondition(S, isl::manage(isl_ast_build_copy(Build)), RWAccIt0,
-                           &ROAccIt)
+            buildCondition(S, isl::manage_copy(Build), RWAccIt0, &ROAccIt)
                 .release());
     }
   }
@@ -529,10 +535,9 @@ void IslAst::init(const Dependences &D) {
   // We can not perform the dependence analysis and, consequently,
   // the parallel code generation in case the schedule tree contains
   // extension nodes.
-  auto *ScheduleTree = S.getScheduleTree().release();
+  auto ScheduleTree = S.getScheduleTree();
   PerformParallelTest =
       PerformParallelTest && !S.containsExtensionNode(ScheduleTree);
-  isl_schedule_free(ScheduleTree);
 
   // Skip AST and code generation if there was no benefit achieved.
   if (!benefitsFromPolly(S, PerformParallelTest))
@@ -543,9 +548,9 @@ void IslAst::init(const Dependences &D) {
   BeneficialAffineLoops += ScopStats.NumAffineLoops;
   BeneficialBoxedLoops += ScopStats.NumBoxedLoops;
 
-  isl_ctx *Ctx = S.getIslCtx();
-  isl_options_set_ast_build_atomic_upper_bound(Ctx, true);
-  isl_options_set_ast_build_detect_min_max(Ctx, true);
+  auto Ctx = S.getIslCtx();
+  isl_options_set_ast_build_atomic_upper_bound(Ctx.get(), true);
+  isl_options_set_ast_build_detect_min_max(Ctx.get(), true);
   isl_ast_build *Build;
   AstBuildUserInfo BuildInfo;
 
@@ -684,7 +689,7 @@ static __isl_give isl_printer *cbPrintUser(__isl_take isl_printer *P,
                                            __isl_take isl_ast_print_options *O,
                                            __isl_keep isl_ast_node *Node,
                                            void *User) {
-  isl::ast_node AstNode = isl::manage(isl_ast_node_copy(Node));
+  isl::ast_node AstNode = isl::manage_copy(Node);
   isl::ast_expr NodeExpr = AstNode.user_get_expr();
   isl::ast_expr CallExpr = NodeExpr.get_op_arg(0);
   isl::id CallExprId = CallExpr.get_id();
@@ -704,8 +709,7 @@ static __isl_give isl_printer *cbPrintUser(__isl_take isl_printer *P,
     else
       P = isl_printer_print_str(P, "/* write */  ");
 
-    isl::ast_build Build =
-        isl::manage(isl_ast_build_copy(IslAstInfo::getBuild(Node)));
+    isl::ast_build Build = isl::manage_copy(IslAstInfo::getBuild(Node));
     if (MemAcc->isAffine()) {
       isl_pw_multi_aff *PwmaPtr =
           MemAcc->applyScheduleToAccessRelation(Build.get_schedule()).release();
@@ -749,14 +753,14 @@ void IslAstInfo::print(raw_ostream &OS) {
   isl_ast_expr *RunCondition = Ast.getRunCondition();
   char *RtCStr, *AstStr;
 
-  Options = isl_ast_print_options_alloc(S.getIslCtx());
+  Options = isl_ast_print_options_alloc(S.getIslCtx().get());
 
   if (PrintAccesses)
     Options =
         isl_ast_print_options_set_print_user(Options, cbPrintUser, nullptr);
   Options = isl_ast_print_options_set_print_for(Options, cbPrintFor, nullptr);
 
-  isl_printer *P = isl_printer_to_str(S.getIslCtx());
+  isl_printer *P = isl_printer_to_str(S.getIslCtx().get());
   P = isl_printer_set_output_format(P, ISL_FORMAT_C);
   P = isl_printer_print_ast_expr(P, RunCondition);
   RtCStr = isl_printer_get_str(P);
@@ -767,7 +771,7 @@ void IslAstInfo::print(raw_ostream &OS) {
 
   auto *Schedule = S.getScheduleTree().release();
 
-  DEBUG({
+  LLVM_DEBUG({
     dbgs() << S.getContextStr() << "\n";
     dbgs() << stringFromIslObj(Schedule);
   });
@@ -807,14 +811,15 @@ bool IslAstInfoWrapperPass::runOnScop(Scop &Scop) {
       getAnalysis<DependenceInfo>().getDependences(Dependences::AL_Statement);
 
   if (D.getSharedIslCtx() != Scop.getSharedIslCtx()) {
-    DEBUG(dbgs() << "Got dependence analysis for different SCoP/isl_ctx\n");
+    LLVM_DEBUG(
+        dbgs() << "Got dependence analysis for different SCoP/isl_ctx\n");
     Ast.reset();
     return false;
   }
 
   Ast.reset(new IslAstInfo(Scop, D));
 
-  DEBUG(printScop(dbgs(), Scop));
+  LLVM_DEBUG(printScop(dbgs(), Scop));
   return false;
 }
 

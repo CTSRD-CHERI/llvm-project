@@ -15,7 +15,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "GdbIndex.h"
-#include "Memory.h"
+#include "Symbols.h"
+#include "lld/Common/Memory.h"
 #include "llvm/DebugInfo/DWARF/DWARFDebugPubTable.h"
 #include "llvm/Object/ELFObjectFile.h"
 
@@ -33,7 +34,7 @@ template <class ELFT> LLDDwarfObj<ELFT>::LLDDwarfObj(ObjFile<ELFT> *Obj) {
                                  .Case(".debug_ranges", &RangeSection)
                                  .Case(".debug_line", &LineSection)
                                  .Default(nullptr)) {
-      Sec->maybeUncompress();
+      Sec->maybeDecompress();
       M->Data = toStringRef(Sec->Data);
       M->Sec = Sec;
       continue;
@@ -44,6 +45,8 @@ template <class ELFT> LLDDwarfObj<ELFT>::LLDDwarfObj(ObjFile<ELFT> *Obj) {
       GnuPubNamesSection = toStringRef(Sec->Data);
     else if (Sec->Name == ".debug_gnu_pubtypes")
       GnuPubTypesSection = toStringRef(Sec->Data);
+    else if (Sec->Name == ".debug_str")
+      StrSection = toStringRef(Sec->Data);
   }
 }
 
@@ -66,14 +69,19 @@ LLDDwarfObj<ELFT>::findAux(const InputSectionBase &Sec, uint64_t Pos,
   uint32_t SymIndex = Rel.getSymbol(Config->IsMips64EL);
   const typename ELFT::Sym &Sym = File->getELFSyms()[SymIndex];
   uint32_t SecIndex = File->getSectionIndex(Sym);
-  SymbolBody &B = File->getRelocTargetSym(Rel);
-  auto &DR = cast<DefinedRegular>(B);
-  uint64_t Val = DR.Value + getAddend<ELFT>(Rel);
+
+  // Broken debug info can point to a non-Defined symbol.
+  auto *DR = dyn_cast<Defined>(&File->getRelocTargetSym(Rel));
+  if (!DR) {
+    error("unsupported relocation target while parsing debug info");
+    return None;
+  }
+  uint64_t Val = DR->Value + getAddend<ELFT>(Rel);
 
   // FIXME: We should be consistent about always adding the file
   // offset or not.
-  if (DR.Section->Flags & ELF::SHF_ALLOC)
-    Val += cast<InputSection>(DR.Section)->getOffsetInFile();
+  if (DR->Section->Flags & ELF::SHF_ALLOC)
+    Val += cast<InputSection>(DR->Section)->getOffsetInFile();
 
   return RelocAddrEntry{SecIndex, Val};
 }

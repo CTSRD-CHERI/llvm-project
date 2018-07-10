@@ -28,7 +28,7 @@ TEST(WaymarkTest, NativeArray) {
   });
   FunctionType *FT = FunctionType::get(Type::getVoidTy(Context), true);
   std::unique_ptr<Function> F(
-      Function::Create(FT, GlobalValue::ExternalLinkage));
+      Function::Create(FT, GlobalValue::ExternalLinkage, 0));
   const CallInst *A = CallInst::Create(F.get(), makeArrayRef(values));
   ASSERT_NE(A, (const CallInst*)nullptr);
   ASSERT_EQ(1U + 22, A->getNumOperands());

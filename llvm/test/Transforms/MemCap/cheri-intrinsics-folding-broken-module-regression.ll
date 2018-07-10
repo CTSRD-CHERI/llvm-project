@@ -1,9 +1,9 @@
 ; In order to reproduce the broken function crash we need to run the intrinsics
 ; folder more than once and also run other passes:
 ; RUN: %cheri_purecap_opt -S -cheri-fold-intrisics -O3 %s -o %t1.ll
-; RUN: %cheri_purecap_opt -S -cheri-fold-intrisics -O3 %t1.ll -o -
-; RUN: %cheri_purecap_llc -O2 %s -o -
-; RUN: %cheri_purecap_llc -O2 %t1.ll -o -
+; RUN: %cheri_purecap_opt -S -cheri-fold-intrisics -O3 %t1.ll -o /dev/null
+; RUN: %cheri_purecap_llc -O2 %s -o /dev/null
+; RUN: %cheri_purecap_llc -O2 %t1.ll -o /dev/null
 target datalayout = "E-m:e-pf200:128:128-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
 target triple = "cheri-unknown-freebsd"
 

@@ -12,7 +12,6 @@
 #include "lldb/Utility/SafeMachO.h"
 
 #include "lldb/Breakpoint/Watchpoint.h"
-#include "lldb/Core/ArchSpec.h"
 #include "lldb/Core/State.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Target/Process.h"
@@ -20,6 +19,7 @@
 #include "lldb/Target/StopInfo.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Unwind.h"
+#include "lldb/Utility/ArchSpec.h"
 #include "lldb/Utility/DataExtractor.h"
 #include "lldb/Utility/StreamString.h"
 
@@ -54,8 +54,8 @@ void ThreadMachCore::RefreshStateAfterStop() {
   // context by the time this function gets called. The KDPRegisterContext
   // class has been made smart enough to detect when it needs to invalidate
   // which registers are valid by putting hooks in the register read and
-  // register supply functions where they check the process stop ID and do
-  // the right thing.
+  // register supply functions where they check the process stop ID and do the
+  // right thing.
   const bool force = false;
   GetRegisterContext()->InvalidateIfNeeded(force);
 }

@@ -175,15 +175,19 @@ Expected<StringRef> ArchiveMemberHeader::getName(uint64_t Size) const {
                             "the end of the string table for archive member "
                             "header at offset " + Twine(ArchiveOffset));
     }
-    const char *addr = Parent->getStringTable().begin() + StringOffset;
 
     // GNU long file names end with a "/\n".
     if (Parent->kind() == Archive::K_GNU ||
         Parent->kind() == Archive::K_GNU64) {
-      StringRef::size_type End = StringRef(addr).find('\n');
-      return StringRef(addr, End - 1);
+      size_t End = Parent->getStringTable().find('\n', /*From=*/StringOffset);
+      if (End == StringRef::npos || End < 1 ||
+          Parent->getStringTable()[End - 1] != '/') {
+        return malformedError("string table at long name offset " +
+                              Twine(StringOffset) + "not terminated");
+      }
+      return Parent->getStringTable().slice(StringOffset, End - 1);
     }
-    return addr;
+    return Parent->getStringTable().begin() + StringOffset;
   }
 
   if (Name.startswith("#1/")) {
@@ -801,7 +805,7 @@ Expected<Archive::Child> Archive::Symbol::getMember() const {
     Offsets += sizeof(uint64_t);
   else
     Offsets += sizeof(uint32_t);
-  uint32_t Offset = 0;
+  uint64_t Offset = 0;
   if (Parent->kind() == K_GNU) {
     Offset = read32be(Offsets + SymbolIndex * 4);
   } else if (Parent->kind() == K_GNU64) {

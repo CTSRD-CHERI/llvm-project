@@ -36,9 +36,11 @@ Using Clang as a Compiler
    ControlFlowIntegrity
    LTOVisibility
    SafeStack
+   ShadowCallStack
    SourceBasedCodeCoverage
    Modules
    MSVCCompatibility
+   OpenMPSupport
    ThinLTO
    CommandGuide/index
    FAQ
@@ -84,6 +86,7 @@ Design Documents
    PTHInternals
    PCHInternals
    ItaniumMangleAbiTags
+   HardwareAssistedAddressSanitizerDesign.rst
 
 
 Indices and tables

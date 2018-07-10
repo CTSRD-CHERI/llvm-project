@@ -20,7 +20,6 @@
 #include "llvm/Support/raw_ostream.h"
 
 #include <set>
-#include <sstream>
 #include <string>
 
 using namespace llvm;
@@ -85,7 +84,7 @@ void ValueTypeByHwMode::writeToStream(raw_ostream &OS) const {
   std::vector<const PairType*> Pairs;
   for (const auto &P : Map)
     Pairs.push_back(&P);
-  std::sort(Pairs.begin(), Pairs.end(), deref<std::less<PairType>>());
+  llvm::sort(Pairs.begin(), Pairs.end(), deref<std::less<PairType>>());
 
   OS << '{';
   for (unsigned i = 0, e = Pairs.size(); i != e; ++i) {
@@ -177,7 +176,7 @@ void RegSizeInfoByHwMode::writeToStream(raw_ostream &OS) const {
   std::vector<const PairType*> Pairs;
   for (const auto &P : Map)
     Pairs.push_back(&P);
-  std::sort(Pairs.begin(), Pairs.end(), deref<std::less<PairType>>());
+  llvm::sort(Pairs.begin(), Pairs.end(), deref<std::less<PairType>>());
 
   OS << '{';
   for (unsigned i = 0, e = Pairs.size(); i != e; ++i) {

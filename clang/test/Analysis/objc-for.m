@@ -32,6 +32,7 @@ typedef unsigned long NSUInteger;
 
 @interface NSDictionary (SomeCategory)
 - (void)categoryMethodOnNSDictionary;
+- (id) allKeys;
 @end
 
 @interface NSMutableDictionary : NSDictionary
@@ -128,7 +129,7 @@ int collectionIsNotEmptyNSArray(NSArray *A) {
   int count = [A count];
   if (count > 0) {
     int i;
-    int j;
+    int j = 0;
     for (NSString *a in A) {
       i = 1;
       j++;
@@ -141,7 +142,7 @@ int collectionIsNotEmptyNSArray(NSArray *A) {
 void onlySuppressExitAfterZeroIterations(NSMutableDictionary *D) {
   if (D.count > 0) {
     int *x;
-    int i;
+    int i = 0;
     for (NSString *key in D) {
       x = 0;
       i++;
@@ -155,7 +156,7 @@ void onlySuppressExitAfterZeroIterations(NSMutableDictionary *D) {
 void onlySuppressLoopExitAfterZeroIterations_WithContinue(NSMutableDictionary *D) {
   if (D.count > 0) {
     int *x;
-    int i;
+    int i = 0;
     for (NSString *key in D) {
       x = 0;
       i++;
@@ -342,4 +343,11 @@ void boxedArrayEscape(NSMutableArray *array) {
   globalDictionary = @{ @"array" : array };
   for (id key in array)
     clang_analyzer_warnIfReached(); // expected-warning{{REACHABLE}}
+}
+
+int not_reachable_on_iteration_through_nil() {
+  NSDictionary* d = nil;
+  for (NSString* s in [d allKeys])
+    clang_analyzer_warnIfReached(); // no-warning
+  return 0;
 }

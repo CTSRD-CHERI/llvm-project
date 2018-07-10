@@ -1,3 +1,4 @@
+# REQUIRES: x86
 # RUN: echo -e '.section .bss,"bw",discard,main_global\n.global main_global\n main_global:\n .long 0' | \
 # RUN:     llvm-mc - -filetype=obj -o %t1.obj -triple x86_64-windows-msvc
 # RUN: llvm-mc %s -filetype=obj -o %t2.obj -triple x86_64-windows-msvc
@@ -18,7 +19,6 @@ main_global:
 
 	.section	.CRT$XCU,"dr",associative,main_global
 	.p2align	3
-	.globl assoc_global
 assoc_global:
 	.quad	main_global
 

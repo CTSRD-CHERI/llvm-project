@@ -57,11 +57,10 @@ void freebsd::Assembler::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-mabi");
     CmdArgs.push_back(mips::getGnuCompatibleMipsABIName(ABIName).data());
 
-    if (getToolChain().getArch() == llvm::Triple::mips ||
-        getToolChain().getArch() == llvm::Triple::mips64)
-      CmdArgs.push_back("-EB");
-    else
+    if (getToolChain().getTriple().isLittleEndian())
       CmdArgs.push_back("-EL");
+    else
+      CmdArgs.push_back("-EB");
 
     if (Arg *A = Args.getLastArg(options::OPT_G)) {
       StringRef v = A->getValue();
@@ -179,10 +178,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   }
 
   if (Arg *A = Args.getLastArg(options::OPT_G)) {
-    if (ToolChain.getArch() == llvm::Triple::mips ||
-      ToolChain.getArch() == llvm::Triple::mipsel ||
-      ToolChain.getArch() == llvm::Triple::mips64 ||
-      ToolChain.getArch() == llvm::Triple::mips64el) {
+    if (ToolChain.getTriple().isMIPS()) {
       StringRef v = A->getValue();
       CmdArgs.push_back(Args.MakeArgString("-G" + v));
       A->claim();
@@ -231,10 +227,14 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   Args.AddAllArgs(CmdArgs, options::OPT_Z_Flag);
   Args.AddAllArgs(CmdArgs, options::OPT_r);
 
-  if (D.isUsingLTO())
-    AddGoldPlugin(ToolChain, Args, CmdArgs, D.getLTOMode() == LTOK_Thin, D);
+  if (D.isUsingLTO()) {
+    assert(!Inputs.empty() && "Must have at least one input.");
+    AddGoldPlugin(ToolChain, Args, CmdArgs, Output, Inputs[0],
+                  D.getLTOMode() == LTOK_Thin);
+  }
 
   bool NeedsSanitizerDeps = addSanitizerRuntimes(ToolChain, Args, CmdArgs);
+  bool NeedsXRayDeps = addXRayRuntime(ToolChain, Args, CmdArgs);
   AddLinkerInputs(ToolChain, Inputs, Args, CmdArgs, JA);
 
   if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
@@ -249,6 +249,8 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     }
     if (NeedsSanitizerDeps)
       linkSanitizerRuntimeDeps(ToolChain, CmdArgs);
+    if (NeedsXRayDeps)
+      linkXRayRuntimeDeps(ToolChain, CmdArgs);
     // FIXME: For some reason GCC passes -lgcc and -lgcc_s before adding
     // the default system libraries. Just mimic this for now.
     if (Args.hasArg(options::OPT_pg))
@@ -316,7 +318,7 @@ FreeBSD::FreeBSD(const Driver &D, const llvm::Triple &Triple,
 
   // When targeting 32-bit platforms, look for '/usr/lib32/crt1.o' and fall
   // back to '/usr/lib' if it doesn't exist.
-  if ((Triple.getArch() == llvm::Triple::x86 ||
+  if ((Triple.getArch() == llvm::Triple::x86 || Triple.isMIPS32() ||
        Triple.getArch() == llvm::Triple::ppc) &&
       D.getVFS().exists(getDriver().SysRoot + "/usr/lib32/crt1.o"))
     getFilePaths().push_back(getDriver().SysRoot + "/usr/lib32");
@@ -359,17 +361,18 @@ Tool *FreeBSD::buildAssembler() const {
 
 Tool *FreeBSD::buildLinker() const { return new tools::freebsd::Linker(*this); }
 
-bool FreeBSD::UseSjLjExceptions(const ArgList &Args) const {
+llvm::ExceptionHandling FreeBSD::GetExceptionModel(const ArgList &Args) const {
   // FreeBSD uses SjLj exceptions on ARM oabi.
   switch (getTriple().getEnvironment()) {
   case llvm::Triple::GNUEABIHF:
   case llvm::Triple::GNUEABI:
   case llvm::Triple::EABI:
-    return false;
-
+    return llvm::ExceptionHandling::None;
   default:
-    return (getTriple().getArch() == llvm::Triple::arm ||
-            getTriple().getArch() == llvm::Triple::thumb);
+    if (getTriple().getArch() == llvm::Triple::arm ||
+        getTriple().getArch() == llvm::Triple::thumb)
+      return llvm::ExceptionHandling::SjLj;
+    return llvm::ExceptionHandling::None;
   }
 }
 
@@ -380,8 +383,7 @@ bool FreeBSD::isPIEDefault() const { return getSanitizerArgs().requiresPIE(); }
 SanitizerMask FreeBSD::getSupportedSanitizers() const {
   const bool IsX86 = getTriple().getArch() == llvm::Triple::x86;
   const bool IsX86_64 = getTriple().getArch() == llvm::Triple::x86_64;
-  const bool IsMIPS64 = getTriple().getArch() == llvm::Triple::mips64 ||
-                        getTriple().getArch() == llvm::Triple::mips64el;
+  const bool IsMIPS64 = getTriple().isMIPS32();
   SanitizerMask Res = ToolChain::getSupportedSanitizers();
   Res |= SanitizerKind::Address;
   Res |= SanitizerKind::Vptr;
@@ -390,7 +392,12 @@ SanitizerMask FreeBSD::getSupportedSanitizers() const {
     Res |= SanitizerKind::Thread;
   }
   if (IsX86 || IsX86_64) {
+    Res |= SanitizerKind::Function;
     Res |= SanitizerKind::SafeStack;
+    Res |= SanitizerKind::Fuzzer;
+    Res |= SanitizerKind::FuzzerNoLink;
   }
+  if (IsX86_64)
+    Res |= SanitizerKind::Memory;
   return Res;
 }

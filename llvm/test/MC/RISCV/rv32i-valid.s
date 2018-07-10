@@ -1,11 +1,13 @@
-# RUN: llvm-mc %s -triple=riscv32 -show-encoding \
+# RUN: llvm-mc %s -triple=riscv32 -riscv-no-aliases -show-encoding \
 # RUN:     | FileCheck -check-prefixes=CHECK,CHECK-INST %s
-# RUN: llvm-mc %s -triple=riscv64 -show-encoding \
+# RUN: llvm-mc %s -triple=riscv64 -riscv-no-aliases -show-encoding \
 # RUN:     | FileCheck -check-prefixes=CHECK,CHECK-INST %s
 # RUN: llvm-mc -filetype=obj -triple riscv32 < %s \
-# RUN:     | llvm-objdump -d - | FileCheck -check-prefix=CHECK-INST %s
+# RUN:     | llvm-objdump -riscv-no-aliases -d - \
+# RUN:     | FileCheck -check-prefix=CHECK-INST %s
 # RUN: llvm-mc -filetype=obj -triple riscv64 < %s \
-# RUN:     | llvm-objdump -d - | FileCheck -check-prefix=CHECK-INST %s
+# RUN:     | llvm-objdump -riscv-no-aliases -d - \
+# RUN:     | FileCheck -check-prefix=CHECK-INST %s
 
 # CHECK-INST: lui a0, 2
 # CHECK: encoding: [0x37,0x25,0x00,0x00]
@@ -203,6 +205,9 @@ fence r,w
 # CHECK-INST: fence w, ir
 # CHECK: encoding: [0x0f,0x00,0xa0,0x01]
 fence w,ir
+# CHECK-INST: fence.tso
+# CHECK: encoding: [0x0f,0x00,0x30,0x83]
+fence.tso
 
 # CHECK-INST: fence.i
 # CHECK: encoding: [0x0f,0x10,0x00,0x00]

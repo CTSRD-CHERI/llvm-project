@@ -62,6 +62,18 @@ ELF_RELOC(R_MIPS_PC19_S2,            63)
 ELF_RELOC(R_MIPS_PCHI16,             64)
 ELF_RELOC(R_MIPS_PCLO16,             65)
 
+// XXXAR: We use this to write an absolute value to a given offset. Plain MIPS does
+// this by writing the value to GOT slot and using a R_MIPS_REL32 where the r_symndx points
+// to the GOT entry that should have been relocated to point to the correct value and then load that to write the value.
+// This seems a) unnecessarily complicated and b) not to always work since somehow we were getting
+// those relocations emitted where r_symndx pointed to the local part of the GOT so the relocation
+// would just add the load address. Furthermore for CheriABI we really don't want a GOT but still want to be able
+// to write absolute 64-bit values
+ELF_RELOC(R_MIPS_CHERI_ABSPTR,       70)
+// A dynamic relocation that writes the st_size of a symbol (currently used to
+// support __cap_relocs and .global_sizes against unresolved symbols)
+ELF_RELOC(R_MIPS_CHERI_SIZE,         71)
+
 
 // Low 16 bits GCT index into GPR
 ELF_RELOC(R_MIPS_CHERI_CAPTAB_LO16,     80)
@@ -80,6 +92,10 @@ ELF_RELOC(R_MIPS_CHERI_CAPTAB20,   86)
 ELF_RELOC(R_MIPS_CHERI_CAPCALL20,  87)
 ELF_RELOC(R_MIPS_CHERI_CAPTAB_TLS20,  88)
 
+// Difference between symbol and _CHERI_CAPABILITY_TABLE_ (used to derive $cgp
+// from $pcc)
+ELF_RELOC(R_MIPS_CHERI_CAPTABLEREL16,  88)
+
 // RTLD should set the following to a capability pointing to symbol. This can be
 // preemptible and if not we can optimize it to a
 // R_MIPS_CHERI_SETTAG/R_MIPS_CHERI_SETTAG_LOADADDR
@@ -87,7 +103,7 @@ ELF_RELOC(R_MIPS_CHERI_CAPABILITY,      90)
 // The same as R_MIPS_CHERI_CAPABILITY but must not be preemptible
 // The linker should always be able to optimize this into a
 // R_MIPS_CHERI_SETTAG_LOADADDR or R_MIPS_CHERI_SETTAG
-ELF_RELOC(R_MIPS_CHERI_LOCAL_CAPABILITY,91)
+ELF_RELOC(R_MIPS_CHERI_LOCAL_CAPABILITY,91)  // XXXAR: probably not needed
 // Set the tag bit on the referenced data (must point within the current object)
 // Must not be preemtible!
 ELF_RELOC(R_MIPS_CHERI_SETTAG,          92)
@@ -100,6 +116,9 @@ ELF_RELOC(R_MIPS_CHERI_SETTAG_LOADADDR, 93)
 // R_MIPS_CHERI_SETTAG_LOADADDR relocation
 ELF_RELOC(R_MIPS_CHERI_GLOBALS_TABLE,   94)
 
+// So that I can have only one LLD brach:
+#define HAVE_R_MIPS_CHERI_CAPABILITY    1
+#define HAVE_CHERI_CAPTABLE_RELOCATIONS 1
 
 ELF_RELOC(R_MIPS16_26,               100)
 ELF_RELOC(R_MIPS16_GPREL,            101)

@@ -21,12 +21,25 @@ enum class ExceptionHandling {
   SjLj,     /// setjmp/longjmp based exceptions
   ARM,      /// ARM EHABI
   WinEH,    /// Windows Exception Handling
+  Wasm,     /// WebAssembly Exception Handling
 };
 
 enum class DebugCompressionType {
   None, /// No compression
   GNU,  /// zlib-gnu style compression
   Z,    /// zlib style complession
+};
+
+enum class CheriCapabilityTableABI {
+  Legacy, /// Use legacy ABI instead (load from got and use .size.foo to get the
+          /// size)
+  PLT, /// Use PLT stubs to set reserved register $cgp (functions assume $cgp is
+       /// set correctly)
+  Pcrel, /// Derive register $cgp from $pcc (does not need to be set on function
+         /// entry)
+  FunctionDescriptor /// Use function descriptors to get $cgp (functions assume
+                     /// $cgp is set correctly) (TODO: different approaches
+                     /// possible here)
 };
 
 class StringRef;
@@ -75,6 +88,7 @@ public:
 
   // HACK to make the cheri cap table setting visible to clang:
   static bool cheriUsesCapabilityTable();
+  static CheriCapabilityTableABI cheriCapabilityTableABI();
 };
 
 } // end namespace llvm

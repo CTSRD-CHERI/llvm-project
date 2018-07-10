@@ -14,8 +14,9 @@
 
 #include "sanitizer_common/sanitizer_platform.h"
 
-// asan_fuchsia.cc has its own InitializeShadowMemory implementation.
-#if !SANITIZER_FUCHSIA
+// asan_fuchsia.cc and asan_rtems.cc have their own
+// InitializeShadowMemory implementation.
+#if !SANITIZER_FUCHSIA && !SANITIZER_RTEMS
 
 #include "asan_internal.h"
 #include "asan_mapping.h"
@@ -99,17 +100,21 @@ void InitializeShadowMemory() {
   // when necessary. When dynamic address is used, the macro |kLowShadowBeg|
   // expands to |__asan_shadow_memory_dynamic_address| which is
   // |kDefaultShadowSentinel|.
+  bool full_shadow_is_available = false;
   if (shadow_start == kDefaultShadowSentinel) {
     __asan_shadow_memory_dynamic_address = 0;
     CHECK_EQ(0, kLowShadowBeg);
     shadow_start = FindDynamicShadowStart();
+    if (SANITIZER_LINUX) full_shadow_is_available = true;
   }
   // Update the shadow memory address (potentially) used by instrumentation.
   __asan_shadow_memory_dynamic_address = shadow_start;
 
   if (kLowShadowBeg) shadow_start -= GetMmapGranularity();
-  bool full_shadow_is_available =
-      MemoryRangeIsAvailable(shadow_start, kHighShadowEnd);
+
+  if (!full_shadow_is_available)
+    full_shadow_is_available =
+        MemoryRangeIsAvailable(shadow_start, kHighShadowEnd);
 
 #if SANITIZER_LINUX && defined(__x86_64__) && defined(_LP64) && \
     !ASAN_FIXED_MAPPING
@@ -158,4 +163,4 @@ void InitializeShadowMemory() {
 
 }  // namespace __asan
 
-#endif  // !SANITIZER_FUCHSIA
+#endif  // !SANITIZER_FUCHSIA && !SANITIZER_RTEMS

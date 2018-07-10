@@ -26,7 +26,7 @@ class MCAsmBackend;
 class raw_ostream;
 class raw_pwrite_stream;
 
-/// \brief Streaming object file generation interface.
+/// Streaming object file generation interface.
 ///
 /// This class provides an implementation of the MCStreamer interface which is
 /// suitable for use with the assembler backend. Specific object file formats
@@ -34,9 +34,6 @@ class raw_pwrite_stream;
 /// to that file format or custom semantics expected by the object writer
 /// implementation.
 class MCObjectStreamer : public MCStreamer {
-  std::unique_ptr<MCObjectWriter> ObjectWriter;
-  std::unique_ptr<MCAsmBackend> TAB;
-  std::unique_ptr<MCCodeEmitter> Emitter;
   std::unique_ptr<MCAssembler> Assembler;
   MCSection::iterator CurInsertionPoint;
   bool EmitEHFrame;
@@ -47,10 +44,11 @@ class MCObjectStreamer : public MCStreamer {
   void EmitCFIStartProcImpl(MCDwarfFrameInfo &Frame) override;
   void EmitCFIEndProcImpl(MCDwarfFrameInfo &Frame) override;
   MCSymbol *EmitCFILabel() override;
+  void EmitInstructionImpl(const MCInst &Inst, const MCSubtargetInfo &STI);
 
 protected:
   MCObjectStreamer(MCContext &Context, std::unique_ptr<MCAsmBackend> TAB,
-                   raw_pwrite_stream &OS,
+                   std::unique_ptr<MCObjectWriter> OW,
                    std::unique_ptr<MCCodeEmitter> Emitter);
   ~MCObjectStreamer();
 
@@ -75,7 +73,10 @@ public:
 
   /// Get a data fragment to write into, creating a new one if the current
   /// fragment is not a data fragment.
-  MCDataFragment *getOrCreateDataFragment();
+  /// Optionally a \p STI can be passed in so that a new fragment is created
+  /// if the Subtarget differs from the current fragment.
+  MCDataFragment *getOrCreateDataFragment(const MCSubtargetInfo* STI = nullptr);
+  MCPaddingFragment *getOrCreatePaddingFragment();
 
 protected:
   bool changeSectionImpl(MCSection *Section, const MCExpr *Subsection);
@@ -90,7 +91,7 @@ public:
   void visitUsedSymbol(const MCSymbol &Sym) override;
 
   MCAssembler &getAssembler() { return *Assembler; }
-
+  MCAssembler *getAssemblerPtr() override;
   /// \name MCStreamer Interface
   /// @{
 
@@ -106,7 +107,7 @@ public:
   void EmitInstruction(const MCInst &Inst, const MCSubtargetInfo &STI,
                        bool = false) override;
 
-  /// \brief Emit an instruction to a special fragment, because this instruction
+  /// Emit an instruction to a special fragment, because this instruction
   /// can change its size during relaxation.
   virtual void EmitInstToFragment(const MCInst &Inst, const MCSubtargetInfo &);
 
@@ -121,6 +122,10 @@ public:
                          unsigned MaxBytesToEmit = 0) override;
   void emitValueToOffset(const MCExpr *Offset, unsigned char Value,
                          SMLoc Loc) override;
+  void
+  EmitCodePaddingBasicBlockStart(const MCCodePaddingContext &Context) override;
+  void
+  EmitCodePaddingBasicBlockEnd(const MCCodePaddingContext &Context) override;
   void EmitDwarfLocDirective(unsigned FileNo, unsigned Line,
                              unsigned Column, unsigned Flags,
                              unsigned Isa, unsigned Discriminator,
@@ -153,9 +158,9 @@ public:
   void EmitGPRel32Value(const MCExpr *Value) override;
   void EmitGPRel64Value(const MCExpr *Value) override;
   bool EmitRelocDirective(const MCExpr &Offset, StringRef Name,
-                          const MCExpr *Expr, SMLoc Loc) override;
+                          const MCExpr *Expr, SMLoc Loc,
+                          const MCSubtargetInfo &STI) override;
   using MCStreamer::emitFill;
-  void emitFill(uint64_t NumBytes, uint8_t FillValue) override;
   void emitFill(const MCExpr &NumBytes, uint64_t FillValue,
                 SMLoc Loc = SMLoc()) override;
   void emitFill(const MCExpr &NumValues, int64_t Size, int64_t Expr,
@@ -173,6 +178,9 @@ public:
   /// \pre Offset of \c Hi is greater than the offset \c Lo.
   void emitAbsoluteSymbolDiff(const MCSymbol *Hi, const MCSymbol *Lo,
                               unsigned Size) override;
+
+  void emitAbsoluteSymbolDiffAsULEB128(const MCSymbol *Hi,
+                                       const MCSymbol *Lo) override;
 
   bool mayHaveInstructions(MCSection &Sec) const override;
 };

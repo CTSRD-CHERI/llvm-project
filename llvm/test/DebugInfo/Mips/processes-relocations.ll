@@ -2,6 +2,10 @@
 ; RUN:      llvm-dwarfdump - 2>&1 | FileCheck %s
 ; RUN: llc -filetype=obj -O0 < %s -mtriple mips64-unknown-linux | \
 ; RUN:      llvm-dwarfdump - 2>&1 | FileCheck %s
+; RUN: %cheri_llc -filetype=obj -O0 < %s | \
+; RUN:      llvm-dwarfdump - 2>&1 | FileCheck %s
+; RUN: %cheri_purecap_llc -filetype=obj -O0 < %s | \
+; RUN:      llvm-dwarfdump - 2>&1 | FileCheck %s
 
 ; CHECK-NOT: failed to compute relocation
 

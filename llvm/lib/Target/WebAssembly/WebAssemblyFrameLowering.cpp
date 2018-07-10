@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief This file contains the WebAssembly implementation of
+/// This file contains the WebAssembly implementation of
 /// TargetFrameLowering class.
 ///
 /// On WebAssembly, there aren't a lot of things to do here. There are no
@@ -94,7 +94,7 @@ bool WebAssemblyFrameLowering::needsSPWriteback(
     const MachineFunction &MF, const MachineFrameInfo &MFI) const {
   assert(needsSP(MF, MFI));
   return MFI.getStackSize() > RedZoneSize || MFI.hasCalls() ||
-         MF.getFunction()->hasFnAttribute(Attribute::NoRedZone);
+         MF.getFunction().hasFnAttribute(Attribute::NoRedZone);
 }
 
 static void writeSPToMemory(unsigned SrcReg, MachineFunction &MF,

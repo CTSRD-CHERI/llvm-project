@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/MC/MCStreamer.h"
+#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
@@ -23,8 +24,8 @@
 #include "llvm/MC/MCInstPrinter.h"
 #include "llvm/MC/MCObjectFileInfo.h"
 #include "llvm/MC/MCSection.h"
-#include "llvm/MC/MCSectionELF.h"
 #include "llvm/MC/MCSectionCOFF.h"
+#include "llvm/MC/MCSectionELF.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/MCWin64EH.h"
 #include "llvm/MC/MCWinEH.h"
@@ -52,18 +53,41 @@ void MCTargetStreamer::emitLabel(MCSymbol *Symbol) {}
 
 void MCTargetStreamer::finish() {}
 
+void MCTargetStreamer::changeSection(const MCSection *CurSection,
+                                     MCSection *Section,
+                                     const MCExpr *Subsection,
+                                     raw_ostream &OS) {
+  Section->PrintSwitchToSection(
+      *Streamer.getContext().getAsmInfo(),
+      Streamer.getContext().getObjectFileInfo()->getTargetTriple(), OS,
+      Subsection);
+}
+
+void MCTargetStreamer::emitDwarfFileDirective(StringRef Directive) {
+  Streamer.EmitRawText(Directive);
+}
+
+void MCTargetStreamer::emitValue(const MCExpr *Value) {
+  SmallString<128> Str;
+  raw_svector_ostream OS(Str);
+
+  Value->print(OS, Streamer.getContext().getAsmInfo());
+  Streamer.EmitRawText(OS.str());
+}
+
 void MCTargetStreamer::emitAssignment(MCSymbol *Symbol, const MCExpr *Value) {}
 
 static cl::opt<bool> LegacyCheriCapRelocs(
-  "legacy-cheri-cap-relocs", cl::init(false), cl::Hidden,
-  cl::desc("Use the legacy __cap_relocs hack when emitting capabilities"));
+    "legacy-cheri-cap-relocs", cl::init(false), cl::Hidden,
+    cl::desc("Use the legacy __cap_relocs hack when emitting capabilities"));
 
 bool MCTargetStreamer::useLegacyCapRelocs() const {
   return LegacyCheriCapRelocs;
 }
 
 MCStreamer::MCStreamer(MCContext &Ctx)
-    : Context(Ctx), CurrentWinFrameInfo(nullptr) {
+    : Context(Ctx), CurrentWinFrameInfo(nullptr),
+      UseAssemblerInfoForParsing(false) {
   SectionStack.push_back(std::pair<MCSectionSubPair, MCSectionSubPair>());
 }
 
@@ -109,20 +133,16 @@ void MCStreamer::EmitIntValue(uint64_t Value, unsigned Size) {
   EmitBytes(StringRef(buf, Size));
 }
 
-/// EmitULEB128Value - Special case of EmitULEB128Value that avoids the
+/// EmitULEB128IntValue - Special case of EmitULEB128Value that avoids the
 /// client having to pass in a MCExpr for constant integers.
-void MCStreamer::EmitPaddedULEB128IntValue(uint64_t Value, unsigned PadTo) {
+void MCStreamer::EmitULEB128IntValue(uint64_t Value) {
   SmallString<128> Tmp;
   raw_svector_ostream OSE(Tmp);
-  encodeULEB128(Value, OSE, PadTo);
+  encodeULEB128(Value, OSE);
   EmitBytes(OSE.str());
 }
 
-void MCStreamer::EmitULEB128IntValue(uint64_t Value) {
-  EmitPaddedULEB128IntValue(Value, 0);
-}
-
-/// EmitSLEB128Value - Special case of EmitSLEB128Value that avoids the
+/// EmitSLEB128IntValue - Special case of EmitSLEB128Value that avoids the
 /// client having to pass in a MCExpr for constant integers.
 void MCStreamer::EmitSLEB128IntValue(int64_t Value) {
   SmallString<128> Tmp;
@@ -132,10 +152,13 @@ void MCStreamer::EmitSLEB128IntValue(int64_t Value) {
 }
 
 void MCStreamer::EmitValue(const MCExpr *Value, unsigned Size, SMLoc Loc) {
+  assert(Size <= 8);
+#if 0
   if (Size > 8) // FIXME: shouldn't ever be called
     EmitLegacyCHERICapability(Value, Size, Loc);
   else
-    EmitValueImpl(Value, Size, Loc);
+#endif
+  EmitValueImpl(Value, Size, Loc);
 }
 
 void MCStreamer::EmitSymbolValue(const MCSymbol *Sym, unsigned Size,
@@ -173,38 +196,45 @@ void MCStreamer::EmitGPRel32Value(const MCExpr *Value) {
   report_fatal_error("unsupported directive in streamer");
 }
 
-void MCStreamer::EmitLegacyCHERICapability(const MCExpr *Value, unsigned CapSize,
-                                     SMLoc Loc) {
+void MCStreamer::EmitCheriCapability(const MCSymbol *Value, int64_t Addend,
+                                     unsigned CapSize, SMLoc Loc) {
+  if (LLVM_UNLIKELY(TargetStreamer->useLegacyCapRelocs())) {
+    // XXXAR: The legacy path still exists to allow comparing bounds quality vs
+    // the R_CHERI_CAPABILITY approach.
+    // TODO: remove this at some point in the future
+    assert(Value);
+    auto *E = MCBinaryExpr::createAdd(MCSymbolRefExpr::create(Value, Context),
+                                      MCConstantExpr::create(Addend, Context),
+                                      Context);
+    EmitLegacyCHERICapability(E, CapSize, Loc);
+  } else {
+    EmitCheriCapabilityImpl(Value, Addend, CapSize, Loc);
+  }
+}
+
+void MCStreamer::EmitLegacyCHERICapability(const MCExpr *Value,
+                                           unsigned CapSize, SMLoc Loc) {
   assert(TargetStreamer->useLegacyCapRelocs());
-  if (!this->getContext().getAsmInfo()->supportsCHERI())
-    report_fatal_error("CHERI is not supported by this target!");
-  // MCStreamers with proper capability support will emit real relocations
-  // instead of using the __cap_relocs hack
   if (const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(Value)) {
-    assert(CapSize == 32 || CapSize == 16);
-    EmitIntValue(0, 8);
-    EmitIntValue(CE->getValue(), 8);
-    if (CapSize == 32) {
-      EmitIntValue(0, 8);
-      EmitIntValue(0, 8);
-    }
+    EmitCheriIntcap(CE->getValue(), CapSize);
     return;
   }
+  assert(CapSize == 32 || CapSize == 16);
+  // MCStreamers with proper capability support will emit real relocations
+  // instead of using the __cap_relocs hack
   MCSymbol *Here = Context.createTempSymbol();
   EmitLabel(Here);
   const MCSectionELF *Section =
-    dyn_cast<const MCSectionELF>(SectionStack.back().first.first);
+      dyn_cast<const MCSectionELF>(SectionStack.back().first.first);
   const MCSymbolELF *Group = nullptr;
   if (Section && Section->getGroup())
     Group = Section->getGroup();
 
   if (Group) {
     Context.getELFSection("__cap_relocs", ELF::SHT_PROGBITS,
-                          ELF::SHF_ALLOC | ELF::SHF_GROUP,
-                          0, Group->getName());
+                          ELF::SHF_ALLOC | ELF::SHF_GROUP, 0, Group->getName());
     FatRelocs.push_back(std::make_tuple(Here, Value, Group->getName()));
-  }
-  else {
+  } else {
     Context.getELFSection("__cap_relocs", ELF::SHT_PROGBITS, ELF::SHF_ALLOC);
     FatRelocs.push_back(std::make_tuple(Here, Value, StringRef()));
   }
@@ -212,26 +242,19 @@ void MCStreamer::EmitLegacyCHERICapability(const MCExpr *Value, unsigned CapSize
   EmitZeros(CapSize);
 }
 
-void MCStreamer::EmitCHERICapability(const MCSymbol *Value, int64_t Addend,
-                                     unsigned CapSize, SMLoc Loc) {
-  report_fatal_error("EmitCHERICapability is not implemented for this target!");
+void MCStreamer::EmitCheriCapabilityImpl(const MCSymbol *Value, int64_t Addend,
+                                         unsigned CapSize, SMLoc Loc) {
+  report_fatal_error("EmitCheriCapability is not implemented for this target!");
+}
+
+void MCStreamer::EmitCheriIntcap(int64_t Value, unsigned CapSize, SMLoc Loc) {
+  report_fatal_error("EmitCheriCapability is not implemented for this target!");
 }
 
 /// Emit NumBytes bytes worth of the value specified by FillValue.
 /// This implements directives such as '.space'.
 void MCStreamer::emitFill(uint64_t NumBytes, uint8_t FillValue) {
-  for (uint64_t i = 0, e = NumBytes; i != e; ++i)
-    EmitIntValue(FillValue, 1);
-}
-
-void MCStreamer::emitFill(uint64_t NumValues, int64_t Size, int64_t Expr) {
-  int64_t NonZeroSize = Size > 4 ? 4 : Size;
-  Expr &= ~0ULL >> (64 - NonZeroSize * 8);
-  for (uint64_t i = 0, e = NumValues; i != e; ++i) {
-    EmitIntValue(Expr, NonZeroSize);
-    if (NonZeroSize < Size)
-      EmitIntValue(0, Size - NonZeroSize);
-  }
+  emitFill(*MCConstantExpr::create(NumBytes, getContext()), FillValue);
 }
 
 /// The implementation in this class just redirects to emitFill.
@@ -239,10 +262,23 @@ void MCStreamer::EmitZeros(uint64_t NumBytes) {
   emitFill(NumBytes, 0);
 }
 
-unsigned MCStreamer::EmitDwarfFileDirective(unsigned FileNo,
-                                            StringRef Directory,
-                                            StringRef Filename, unsigned CUID) {
-  return getContext().getDwarfFile(Directory, Filename, FileNo, CUID);
+Expected<unsigned>
+MCStreamer::tryEmitDwarfFileDirective(unsigned FileNo, StringRef Directory,
+                                      StringRef Filename,
+                                      MD5::MD5Result *Checksum,
+                                      Optional<StringRef> Source,
+                                      unsigned CUID) {
+  return getContext().getDwarfFile(Directory, Filename, FileNo, Checksum,
+                                   Source, CUID);
+}
+
+void MCStreamer::emitDwarfFile0Directive(StringRef Directory,
+                                         StringRef Filename,
+                                         MD5::MD5Result *Checksum,
+                                         Optional<StringRef> Source,
+                                         unsigned CUID) {
+  getContext().setMCLineTableRootFile(CUID, Directory, Filename, Checksum,
+                                      Source);
 }
 
 void MCStreamer::EmitDwarfLocDirective(unsigned FileNo, unsigned Line,
@@ -697,6 +733,10 @@ void MCStreamer::EmitWinEHHandlerData(SMLoc Loc) {
     getContext().reportError(Loc, "Chained unwind areas can't have handlers!");
 }
 
+void MCStreamer::emitCGProfileEntry(const MCSymbolRefExpr *From,
+                                    const MCSymbolRefExpr *To, uint64_t Count) {
+}
+
 static MCSection *getWinCFISection(MCContext &Context, unsigned *NextWinCFIID,
                                    MCSection *MainCFISec,
                                    const MCSection *TextSec) {
@@ -705,16 +745,31 @@ static MCSection *getWinCFISection(MCContext &Context, unsigned *NextWinCFIID,
     return MainCFISec;
 
   const auto *TextSecCOFF = cast<MCSectionCOFF>(TextSec);
+  auto *MainCFISecCOFF = cast<MCSectionCOFF>(MainCFISec);
   unsigned UniqueID = TextSecCOFF->getOrAssignWinCFISectionID(NextWinCFIID);
 
   // If this section is COMDAT, this unwind section should be COMDAT associative
   // with its group.
   const MCSymbol *KeySym = nullptr;
-  if (TextSecCOFF->getCharacteristics() & COFF::IMAGE_SCN_LNK_COMDAT)
+  if (TextSecCOFF->getCharacteristics() & COFF::IMAGE_SCN_LNK_COMDAT) {
     KeySym = TextSecCOFF->getCOMDATSymbol();
 
-  return Context.getAssociativeCOFFSection(cast<MCSectionCOFF>(MainCFISec),
-                                           KeySym, UniqueID);
+    // In a GNU environment, we can't use associative comdats. Instead, do what
+    // GCC does, which is to make plain comdat selectany section named like
+    // ".[px]data$_Z3foov".
+    if (!Context.getAsmInfo()->hasCOFFAssociativeComdats()) {
+      std::string SectionName =
+          (MainCFISecCOFF->getSectionName() + "$" +
+           TextSecCOFF->getSectionName().split('$').second)
+              .str();
+      return Context.getCOFFSection(
+          SectionName,
+          MainCFISecCOFF->getCharacteristics() | COFF::IMAGE_SCN_LNK_COMDAT,
+          MainCFISecCOFF->getKind(), "", COFF::IMAGE_COMDAT_SELECT_ANY);
+    }
+  }
+
+  return Context.getAssociativeCOFFSection(MainCFISecCOFF, KeySym, UniqueID);
 }
 
 MCSection *MCStreamer::getAssociatedPDataSection(const MCSection *TextSec) {
@@ -840,6 +895,8 @@ void MCStreamer::EmitWinCFIEndProlog(SMLoc Loc) {
 void MCStreamer::EmitCOFFSafeSEH(MCSymbol const *Symbol) {
 }
 
+void MCStreamer::EmitCOFFSymbolIndex(MCSymbol const *Symbol) {}
+
 void MCStreamer::EmitCOFFSectionIndex(MCSymbol const *Symbol) {
 }
 
@@ -863,10 +920,11 @@ void MCStreamer::EmitWindowsUnwindTables() {
 }
 
 void MCStreamer::Finish() {
-  if (!DwarfFrameInfos.empty() && !DwarfFrameInfos.back().End)
+  if ((!DwarfFrameInfos.empty() && !DwarfFrameInfos.back().End) ||
+      (!WinFrameInfos.empty() && !WinFrameInfos.back()->End)) {
     getContext().reportError(SMLoc(), "Unfinished frame!");
-  if (!WinFrameInfos.empty() && !WinFrameInfos.back()->End)
-    getContext().reportError(SMLoc(), "Unfinished frame!");
+    return;
+  }
 
   if (!FatRelocs.empty()) {
     MCSection *DefaultRelocSection = Context.getELFSection("__cap_relocs",
@@ -981,6 +1039,16 @@ void MCStreamer::emitAbsoluteSymbolDiff(const MCSymbol *Hi, const MCSymbol *Lo,
   EmitSymbolValue(SetLabel, Size);
 }
 
+void MCStreamer::emitAbsoluteSymbolDiffAsULEB128(const MCSymbol *Hi,
+                                                 const MCSymbol *Lo) {
+  // Get the Hi-Lo expression.
+  const MCExpr *Diff =
+      MCBinaryExpr::createSub(MCSymbolRefExpr::create(Hi, Context),
+                              MCSymbolRefExpr::create(Lo, Context), Context);
+
+  EmitULEB128Value(Diff);
+}
+
 void MCStreamer::EmitAssemblerFlag(MCAssemblerFlag Flag) {}
 void MCStreamer::EmitThumbFunc(MCSymbol *Func) {}
 void MCStreamer::EmitSymbolDesc(MCSymbol *Symbol, unsigned DescValue) {}
@@ -998,7 +1066,7 @@ void MCStreamer::EmitCOFFSymbolType(int Type) {
   llvm_unreachable("this directive only supported on COFF targets");
 }
 void MCStreamer::emitELFSize(MCSymbol *Symbol, const MCExpr *Value) {}
-void MCStreamer::emitELFSymverDirective(MCSymbol *Alias,
+void MCStreamer::emitELFSymverDirective(StringRef AliasName,
                                         const MCSymbol *Aliasee) {}
 void MCStreamer::EmitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
                                        unsigned ByteAlignment) {}
@@ -1052,4 +1120,33 @@ MCSymbol *MCStreamer::endSection(MCSection *Section) {
   SwitchSection(Section);
   EmitLabel(Sym);
   return Sym;
+}
+
+void MCStreamer::EmitVersionForTarget(const Triple &Target) {
+  if (!Target.isOSBinFormatMachO() || !Target.isOSDarwin())
+    return;
+  // Do we even know the version?
+  if (Target.getOSMajorVersion() == 0)
+    return;
+
+  unsigned Major;
+  unsigned Minor;
+  unsigned Update;
+  MCVersionMinType VersionType;
+  if (Target.isWatchOS()) {
+    VersionType = MCVM_WatchOSVersionMin;
+    Target.getWatchOSVersion(Major, Minor, Update);
+  } else if (Target.isTvOS()) {
+    VersionType = MCVM_TvOSVersionMin;
+    Target.getiOSVersion(Major, Minor, Update);
+  } else if (Target.isMacOSX()) {
+    VersionType = MCVM_OSXVersionMin;
+    if (!Target.getMacOSXVersion(Major, Minor, Update))
+      Major = 0;
+  } else {
+    VersionType = MCVM_IOSVersionMin;
+    Target.getiOSVersion(Major, Minor, Update);
+  }
+  if (Major != 0)
+    EmitVersionMin(VersionType, Major, Minor, Update);
 }

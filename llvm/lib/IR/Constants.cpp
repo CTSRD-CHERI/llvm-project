@@ -16,7 +16,6 @@
 #include "LLVMContextImpl.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/GetElementPtrTypeIterator.h"
@@ -201,6 +200,58 @@ bool Constant::isNotMinSignedValue() const {
 
   // It *may* contain INT_MIN, we can't tell.
   return false;
+}
+
+bool Constant::isFiniteNonZeroFP() const {
+  if (auto *CFP = dyn_cast<ConstantFP>(this))
+    return CFP->getValueAPF().isFiniteNonZero();
+  if (!getType()->isVectorTy())
+    return false;
+  for (unsigned i = 0, e = getType()->getVectorNumElements(); i != e; ++i) {
+    auto *CFP = dyn_cast_or_null<ConstantFP>(this->getAggregateElement(i));
+    if (!CFP || !CFP->getValueAPF().isFiniteNonZero())
+      return false;
+  }
+  return true;
+}
+
+bool Constant::isNormalFP() const {
+  if (auto *CFP = dyn_cast<ConstantFP>(this))
+    return CFP->getValueAPF().isNormal();
+  if (!getType()->isVectorTy())
+    return false;
+  for (unsigned i = 0, e = getType()->getVectorNumElements(); i != e; ++i) {
+    auto *CFP = dyn_cast_or_null<ConstantFP>(this->getAggregateElement(i));
+    if (!CFP || !CFP->getValueAPF().isNormal())
+      return false;
+  }
+  return true;
+}
+
+bool Constant::hasExactInverseFP() const {
+  if (auto *CFP = dyn_cast<ConstantFP>(this))
+    return CFP->getValueAPF().getExactInverse(nullptr);
+  if (!getType()->isVectorTy())
+    return false;
+  for (unsigned i = 0, e = getType()->getVectorNumElements(); i != e; ++i) {
+    auto *CFP = dyn_cast_or_null<ConstantFP>(this->getAggregateElement(i));
+    if (!CFP || !CFP->getValueAPF().getExactInverse(nullptr))
+      return false;
+  }
+  return true;
+}
+
+bool Constant::isNaN() const {
+  if (auto *CFP = dyn_cast<ConstantFP>(this))
+    return CFP->isNaN();
+  if (!getType()->isVectorTy())
+    return false;
+  for (unsigned i = 0, e = getType()->getVectorNumElements(); i != e; ++i) {
+    auto *CFP = dyn_cast_or_null<ConstantFP>(this->getAggregateElement(i));
+    if (!CFP || !CFP->isNaN())
+      return false;
+  }
+  return true;
 }
 
 /// Constructor to create a '0' constant of arbitrary type.
@@ -636,6 +687,17 @@ Constant *ConstantFP::get(Type *Ty, double V) {
   return C;
 }
 
+Constant *ConstantFP::get(Type *Ty, const APFloat &V) {
+  ConstantFP *C = get(Ty->getContext(), V);
+  assert(C->getType() == Ty->getScalarType() &&
+         "ConstantFP type doesn't match the type implied by its value!");
+
+  // For vectors, broadcast the value.
+  if (auto *VTy = dyn_cast<VectorType>(Ty))
+    return ConstantVector::getSplat(VTy->getNumElements(), C);
+
+  return C;
+}
 
 Constant *ConstantFP::get(Type *Ty, StringRef Str) {
   LLVMContext &Context = Ty->getContext();
@@ -1347,8 +1409,10 @@ BlockAddress *BlockAddress::get(Function *F, BasicBlock *BB) {
 }
 
 BlockAddress::BlockAddress(Function *F, BasicBlock *BB)
-: Constant(Type::getInt8PtrTy(F->getContext()), Value::BlockAddressVal,
-           &Op<0>(), 2) {
+    : Constant(Type::getInt8PtrTy(
+                   F->getContext(),
+                   F->getParent()->getDataLayout().getProgramAddressSpace()),
+               Value::BlockAddressVal, &Op<0>(), 2) {
   setOperand(0, F);
   setOperand(1, BB);
   BB->AdjustBlockAddressRefCount(1);
@@ -1432,12 +1496,28 @@ static Constant *getFoldedCast(Instruction::CastOps opc, Constant *C, Type *Ty,
   return pImpl->ExprConstants.getOrCreate(Ty, Key);
 }
 
+#if !defined(NDEBUG)
+#define assertCastIsValid(op, S, Ty, msg)                                      \
+  do {                                                                         \
+    if (LLVM_UNLIKELY(!CastInst::castIsValid((op), (S), (Ty)))) {              \
+      errs() << msg << ": op=" << ((int)op) << " S = ";                        \
+      (S)->getType()->dump();                                                  \
+      errs() << "Ty = ";                                                       \
+      (Ty)->dump();                                                            \
+      assert(false && msg);                                                    \
+    }                                                                          \
+  } while (false)
+#else
+#define assertCastIsValid(op, S, Ty, msg)                                      \
+  assert(CastInst::castIsValid((op), (S), (Ty)) && msg)
+#endif
+
 Constant *ConstantExpr::getCast(unsigned oc, Constant *C, Type *Ty,
                                 bool OnlyIfReduced) {
   Instruction::CastOps opc = Instruction::CastOps(oc);
   assert(Instruction::isCast(opc) && "opcode out of range");
   assert(C && Ty && "Null arguments to getCast");
-  assert(CastInst::castIsValid(opc, C, Ty) && "Invalid constantexpr cast!");
+  assertCastIsValid(opc, C, Ty, "Invalid constantexpr cast!");
 
   switch (opc) {
   default:
@@ -1679,8 +1759,8 @@ Constant *ConstantExpr::getIntToPtr(Constant *C, Type *DstTy,
 
 Constant *ConstantExpr::getBitCast(Constant *C, Type *DstTy,
                                    bool OnlyIfReduced) {
-  assert(CastInst::castIsValid(Instruction::BitCast, C, DstTy) &&
-         "Invalid constantexpr bitcast!");
+  assertCastIsValid(Instruction::BitCast, C, DstTy,
+                    "Invalid constantexpr bitcast!");
 
   // It is common to ask for a bitcast of a value to its own type, handle this
   // speedily.
@@ -1691,8 +1771,8 @@ Constant *ConstantExpr::getBitCast(Constant *C, Type *DstTy,
 
 Constant *ConstantExpr::getAddrSpaceCast(Constant *C, Type *DstTy,
                                          bool OnlyIfReduced) {
-  assert(CastInst::castIsValid(Instruction::AddrSpaceCast, C, DstTy) &&
-         "Invalid constantexpr addrspacecast!");
+  assertCastIsValid(Instruction::AddrSpaceCast, C, DstTy,
+                    "Invalid constantexpr addrspacecast!");
 
   // Canonicalize addrspacecasts between different pointer types by first
   // bitcasting the pointer type and then converting the address space.
@@ -1713,8 +1793,7 @@ Constant *ConstantExpr::getAddrSpaceCast(Constant *C, Type *DstTy,
 Constant *ConstantExpr::get(unsigned Opcode, Constant *C1, Constant *C2,
                             unsigned Flags, Type *OnlyIfReducedTy) {
   // Check the operands for consistency first.
-  assert(Opcode >= Instruction::BinaryOpsBegin &&
-         Opcode <  Instruction::BinaryOpsEnd   &&
+  assert(Instruction::isBinaryOp(Opcode) &&
          "Invalid opcode in binary constant expression");
   assert(C1->getType() == C2->getType() &&
          "Operand types in binary constant expression should match");
@@ -2390,40 +2469,6 @@ void ConstantDataSequential::destroyConstantImpl() {
   // If we were part of a list, make sure that we don't delete the list that is
   // still owned by the uniquing map.
   Next = nullptr;
-}
-
-/// get() constructors - Return a constant with array type with an element
-/// count and element type matching the ArrayRef passed in.  Note that this
-/// can return a ConstantAggregateZero object.
-Constant *ConstantDataArray::get(LLVMContext &Context, ArrayRef<uint8_t> Elts) {
-  Type *Ty = ArrayType::get(Type::getInt8Ty(Context), Elts.size());
-  const char *Data = reinterpret_cast<const char *>(Elts.data());
-  return getImpl(StringRef(Data, Elts.size() * 1), Ty);
-}
-Constant *ConstantDataArray::get(LLVMContext &Context, ArrayRef<uint16_t> Elts){
-  Type *Ty = ArrayType::get(Type::getInt16Ty(Context), Elts.size());
-  const char *Data = reinterpret_cast<const char *>(Elts.data());
-  return getImpl(StringRef(Data, Elts.size() * 2), Ty);
-}
-Constant *ConstantDataArray::get(LLVMContext &Context, ArrayRef<uint32_t> Elts){
-  Type *Ty = ArrayType::get(Type::getInt32Ty(Context), Elts.size());
-  const char *Data = reinterpret_cast<const char *>(Elts.data());
-  return getImpl(StringRef(Data, Elts.size() * 4), Ty);
-}
-Constant *ConstantDataArray::get(LLVMContext &Context, ArrayRef<uint64_t> Elts){
-  Type *Ty = ArrayType::get(Type::getInt64Ty(Context), Elts.size());
-  const char *Data = reinterpret_cast<const char *>(Elts.data());
-  return getImpl(StringRef(Data, Elts.size() * 8), Ty);
-}
-Constant *ConstantDataArray::get(LLVMContext &Context, ArrayRef<float> Elts) {
-  Type *Ty = ArrayType::get(Type::getFloatTy(Context), Elts.size());
-  const char *Data = reinterpret_cast<const char *>(Elts.data());
-  return getImpl(StringRef(Data, Elts.size() * 4), Ty);
-}
-Constant *ConstantDataArray::get(LLVMContext &Context, ArrayRef<double> Elts) {
-  Type *Ty = ArrayType::get(Type::getDoubleTy(Context), Elts.size());
-  const char *Data = reinterpret_cast<const char *>(Elts.data());
-  return getImpl(StringRef(Data, Elts.size() * 8), Ty);
 }
 
 /// getFP() constructors - Return a constant with array type with an element

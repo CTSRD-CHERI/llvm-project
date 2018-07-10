@@ -30,8 +30,9 @@ class SanitizerArgs {
   std::vector<std::string> ExtraDeps;
   int CoverageFeatures = 0;
   int MsanTrackOrigins = 0;
-  bool MsanUseAfterDtor = false;
+  bool MsanUseAfterDtor = true;
   bool CfiCrossDso = false;
+  bool CfiICallGeneralizePointers = false;
   int AsanFieldPadding = 0;
   bool SharedRuntime = false;
   bool AsanUseAfterScope = true;
@@ -44,6 +45,8 @@ class SanitizerArgs {
   bool TsanFuncEntryExit = true;
   bool TsanAtomics = true;
   bool MinimalRuntime = false;
+  // True if cross-dso CFI support if provided by the system (i.e. Android).
+  bool ImplicitCfiRuntime = false;
 
  public:
   /// Parses the sanitizer arguments from an argument list.
@@ -52,12 +55,14 @@ class SanitizerArgs {
   bool needsSharedRt() const { return SharedRuntime; }
 
   bool needsAsanRt() const { return Sanitizers.has(SanitizerKind::Address); }
+  bool needsHwasanRt() const { return Sanitizers.has(SanitizerKind::HWAddress); }
   bool needsTsanRt() const { return Sanitizers.has(SanitizerKind::Thread); }
   bool needsMsanRt() const { return Sanitizers.has(SanitizerKind::Memory); }
   bool needsFuzzer() const { return Sanitizers.has(SanitizerKind::Fuzzer); }
   bool needsLsanRt() const {
     return Sanitizers.has(SanitizerKind::Leak) &&
-           !Sanitizers.has(SanitizerKind::Address);
+           !Sanitizers.has(SanitizerKind::Address) &&
+           !Sanitizers.has(SanitizerKind::HWAddress);
   }
   bool needsUbsanRt() const;
   bool requiresMinimalRuntime() const { return MinimalRuntime; }
@@ -69,6 +74,7 @@ class SanitizerArgs {
   bool needsEsanRt() const {
     return Sanitizers.hasOneOf(SanitizerKind::Efficiency);
   }
+  bool needsScudoRt() const { return Sanitizers.has(SanitizerKind::Scudo); }
 
   bool requiresPIE() const;
   bool needsUnwindTables() const;

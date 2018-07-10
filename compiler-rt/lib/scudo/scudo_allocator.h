@@ -39,16 +39,15 @@ enum ChunkState : u8 {
 typedef u64 PackedHeader;
 struct UnpackedHeader {
   u64 Checksum          : 16;
-  u64 SizeOrUnusedBytes : 19;  // Size for Primary backed allocations, amount of
+  u64 ClassId           : 8;
+  u64 SizeOrUnusedBytes : 20;  // Size for Primary backed allocations, amount of
                                // unused bytes in the chunk for Secondary ones.
-  u64 FromPrimary       : 1;
   u64 State             : 2;   // available, allocated, or quarantined
   u64 AllocType         : 2;   // malloc, new, new[], or memalign
   u64 Offset            : 16;  // Offset from the beginning of the backend
                                // allocation to the beginning of the chunk
                                // itself, in multiples of MinAlignment. See
                                // comment about its maximum value and in init().
-  u64 Salt              : 8;
 };
 
 typedef atomic_uint64_t AtomicPackedHeader;
@@ -60,9 +59,17 @@ const uptr MaxAlignmentLog = 24;  // 16 MB
 const uptr MinAlignment = 1 << MinAlignmentLog;
 const uptr MaxAlignment = 1 << MaxAlignmentLog;
 
-const uptr ChunkHeaderSize = sizeof(PackedHeader);
-const uptr AlignedChunkHeaderSize =
-    (ChunkHeaderSize + MinAlignment - 1) & ~(MinAlignment - 1);
+// constexpr version of __sanitizer::RoundUp without the extraneous CHECK.
+// This way we can use it in constexpr variables and functions declarations.
+constexpr uptr RoundUpTo(uptr Size, uptr Boundary) {
+  return (Size + Boundary - 1) & ~(Boundary - 1);
+}
+
+namespace Chunk {
+  constexpr uptr getHeaderSize() {
+    return RoundUpTo(sizeof(PackedHeader), MinAlignment);
+  }
+}
 
 #if SANITIZER_CAN_USE_ALLOCATOR64
 const uptr AllocatorSpace = ~0ULL;
@@ -77,9 +84,6 @@ struct AP64 {
 };
 typedef SizeClassAllocator64<AP64> PrimaryAllocator;
 #else
-// Currently, the 32-bit Sanitizer allocator has not yet benefited from all the
-// security improvements brought to the 64-bit one. This makes the 32-bit
-// version of Scudo slightly less toughened.
 static const uptr NumRegions = SANITIZER_MMAP_RANGE_SIZE >> RegionSizeLog;
 # if SANITIZER_WORDSIZE == 32
 typedef FlatByteMap<NumRegions> ByteMap;
@@ -101,11 +105,6 @@ struct AP32 {
 typedef SizeClassAllocator32<AP32> PrimaryAllocator;
 #endif  // SANITIZER_CAN_USE_ALLOCATOR64
 
-// __sanitizer::RoundUp has a CHECK that is extraneous for us. Use our own.
-INLINE uptr RoundUpTo(uptr Size, uptr Boundary) {
-  return (Size + Boundary - 1) & ~(Boundary - 1);
-}
-
 #include "scudo_allocator_secondary.h"
 #include "scudo_allocator_combined.h"
 
@@ -116,12 +115,10 @@ typedef ScudoCombinedAllocator<PrimaryAllocator, AllocatorCache,
 
 void initScudo();
 
-void *scudoMalloc(uptr Size, AllocType Type);
-void scudoFree(void *Ptr, AllocType Type);
-void scudoSizedFree(void *Ptr, uptr Size, AllocType Type);
+void *scudoAllocate(uptr Size, uptr Alignment, AllocType Type);
+void scudoDeallocate(void *Ptr, uptr Size, uptr Alignment, AllocType Type);
 void *scudoRealloc(void *Ptr, uptr Size);
 void *scudoCalloc(uptr NMemB, uptr Size);
-void *scudoMemalign(uptr Alignment, uptr Size);
 void *scudoValloc(uptr Size);
 void *scudoPvalloc(uptr Size);
 int scudoPosixMemalign(void **MemPtr, uptr Alignment, uptr Size);

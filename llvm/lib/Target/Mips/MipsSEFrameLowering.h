@@ -43,7 +43,6 @@ public:
 
   void determineCalleeSaves(MachineFunction &MF, BitVector &SavedRegs,
                             RegScavenger *RS) const override;
-  unsigned ehDataReg(unsigned I) const;
   bool assignCalleeSavedSpillSlots(MachineFunction &MF, const
     TargetRegisterInfo *TRI, std::vector<CalleeSavedInfo> &CSI) const override;
 

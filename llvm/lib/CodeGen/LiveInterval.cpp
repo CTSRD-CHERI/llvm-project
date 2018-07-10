@@ -26,17 +26,18 @@
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/iterator_range.h"
-#include "llvm/CodeGen/LiveIntervalAnalysis.h"
+#include "llvm/CodeGen/LiveIntervals.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/SlotIndexes.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/MC/LaneBitmask.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetRegisterInfo.h"
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
@@ -986,11 +987,12 @@ void LiveInterval::SubRange::print(raw_ostream &OS) const {
 }
 
 void LiveInterval::print(raw_ostream &OS) const {
-  OS << PrintReg(reg) << ' ';
+  OS << printReg(reg) << ' ';
   super::print(OS);
   // Print subranges
   for (const SubRange &SR : subranges())
     OS << SR;
+  OS << " weight:" << weight;
 }
 
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)

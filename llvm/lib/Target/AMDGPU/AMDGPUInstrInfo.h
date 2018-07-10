@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 //
 /// \file
-/// \brief Contains the definition of a TargetInstrInfo class that is common
+/// Contains the definition of a TargetInstrInfo class that is common
 /// to all AMD GPUs.
 //
 //===----------------------------------------------------------------------===//
@@ -18,10 +18,11 @@
 
 #include "AMDGPU.h"
 #include "Utils/AMDGPUBaseInfo.h"
-#include "llvm/Target/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
 
 #define GET_INSTRINFO_HEADER
 #include "AMDGPUGenInstrInfo.inc"
+#undef GET_INSTRINFO_HEADER
 
 namespace llvm {
 
@@ -45,15 +46,37 @@ public:
                                int64_t Offset1, int64_t Offset2,
                                unsigned NumLoads) const override;
 
-  /// \brief Return a target-specific opcode if Opcode is a pseudo instruction.
+  /// Return a target-specific opcode if Opcode is a pseudo instruction.
   /// Return -1 if the target-specific opcode for the pseudo instruction does
   /// not exist. If Opcode is not a pseudo instruction, this is identity.
   int pseudoToMCOpcode(int Opcode) const;
 
-  /// \brief Given a MIMG \p Opcode that writes all 4 channels, return the
-  /// equivalent opcode that writes \p Channels Channels.
-  int getMaskedMIMGOp(uint16_t Opcode, unsigned Channels) const;
+  static bool isUniformMMO(const MachineMemOperand *MMO);
 };
+
+namespace AMDGPU {
+
+struct RsrcIntrinsic {
+  unsigned Intr;
+  uint8_t RsrcArg;
+  bool IsImage;
+};
+const RsrcIntrinsic *lookupRsrcIntrinsic(unsigned Intr);
+
+struct D16ImageDimIntrinsic {
+  unsigned Intr;
+  unsigned D16HelperIntr;
+};
+const D16ImageDimIntrinsic *lookupD16ImageDimIntrinsic(unsigned Intr);
+
+struct ImageDimIntrinsicInfo {
+  unsigned Intr;
+  unsigned BaseOpcode;
+  MIMGDim Dim;
+};
+const ImageDimIntrinsicInfo *getImageDimIntrinsicInfo(unsigned Intr);
+
+} // end AMDGPU namespace
 } // End llvm namespace
 
 #endif

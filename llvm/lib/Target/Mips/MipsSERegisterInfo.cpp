@@ -24,6 +24,8 @@
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/RegisterScavenging.h"
+#include "llvm/CodeGen/TargetFrameLowering.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/Function.h"
@@ -31,8 +33,6 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetFrameLowering.h"
-#include "llvm/Target/TargetInstrInfo.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
 
@@ -40,8 +40,8 @@ using namespace llvm;
 
 #define DEBUG_TYPE "mips-reg-info"
 
-MipsSERegisterInfo::MipsSERegisterInfo(unsigned HwMode) :
-  MipsRegisterInfo(HwMode) {}
+MipsSERegisterInfo::MipsSERegisterInfo(const MipsSubtarget &STI) :
+  MipsRegisterInfo(STI) {}
 
 bool MipsSERegisterInfo::
 requiresRegisterScavenging(const MachineFunction &MF) const {
@@ -106,10 +106,8 @@ static inline unsigned getLoadStoreOffsetSizeInBits(const unsigned Opcode,
   case Mips::SCE:
     return 16;
   case Mips::LLE_MM:
-  case Mips::LLE_MMR6:
   case Mips::LL_MM:
   case Mips::SCE_MM:
-  case Mips::SCE_MMR6:
   case Mips::SC_MM:
     return 12;
   case Mips::LL64_R6:
@@ -118,6 +116,8 @@ static inline unsigned getLoadStoreOffsetSizeInBits(const unsigned Opcode,
   case Mips::SC64_R6:
   case Mips::SCD_R6:
   case Mips::SC_R6:
+  case Mips::LL_MMR6:
+  case Mips::SC_MMR6:
     return 9;
   case Mips::INLINEASM: {
     unsigned ConstraintID = InlineAsm::getMemoryConstraintID(MO.getImm());
@@ -256,7 +256,14 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
   if (MI.getOperand(ImmOpNo).isImm())
     Offset += MI.getOperand(ImmOpNo).getImm();
 
-  DEBUG(errs() << "Offset     : " << Offset << "\n" << "<--------->\n");
+  // For CHERI spills, we store the offset as an immediate operand from the
+  // FrameIndex where the register operand should go and then replace it with
+  // the real register here.
+  if (MI.getOperand(RegOpNo).isImm())
+    Offset += MI.getOperand(RegOpNo).getImm();
+
+  LLVM_DEBUG(errs() << "Offset     : " << Offset << "\n"
+                    << "<--------->\n");
 
   if (!MI.isDebugValue()) {
     // Make sure Offset fits within the field available.
@@ -266,7 +273,7 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
         getLoadStoreOffsetSizeInBits(MI.getOpcode(), MI.getOperand(OpNo - 1));
     unsigned OffsetAlign = getLoadStoreOffsetAlign(MI.getOpcode());
 
-    auto *STI = TM.getSubtargetImpl(*MF.getFunction());
+    auto *STI = TM.getSubtargetImpl(MF.getFunction());
     const MipsSEInstrInfo &TII = *static_cast<const MipsSEInstrInfo *>(
           STI->getInstrInfo());
     DebugLoc DL = II->getDebugLoc();

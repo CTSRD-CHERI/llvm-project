@@ -20,6 +20,7 @@
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstr.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/Support/Casting.h"
@@ -49,7 +50,7 @@ void LexicalScopes::reset() {
 void LexicalScopes::initialize(const MachineFunction &Fn) {
   reset();
   // Don't attempt any lexical scope creation for a NoDebug compile unit.
-  if (Fn.getFunction()->getSubprogram()->getUnit()->getEmissionKind() ==
+  if (Fn.getFunction().getSubprogram()->getUnit()->getEmissionKind() ==
       DICompileUnit::NoDebug)
     return;
   MF = &Fn;
@@ -173,7 +174,7 @@ LexicalScopes::getOrCreateRegularScope(const DILocalScope *Scope) {
                                                     false)).first;
 
   if (!Parent) {
-    assert(cast<DISubprogram>(Scope)->describes(MF->getFunction()));
+    assert(cast<DISubprogram>(Scope)->describes(&MF->getFunction()));
     assert(!CurrentFnLexicalScope);
     CurrentFnLexicalScope = &I->second;
   }

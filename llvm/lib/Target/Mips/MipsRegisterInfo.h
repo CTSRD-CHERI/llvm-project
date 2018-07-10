@@ -24,6 +24,7 @@
 namespace llvm {
 
 class TargetRegisterClass;
+class MipsSubtarget;
 
 class MipsRegisterInfo : public MipsGenRegisterInfo {
 public:
@@ -39,7 +40,7 @@ public:
     GlobalPointer = 3,
   };
 
-  MipsRegisterInfo(unsigned HwMode);
+  MipsRegisterInfo(const MipsSubtarget &STI);
 
   /// Get PIC indirect call register
   static unsigned getPICCallReg();
@@ -57,6 +58,8 @@ public:
 
   BitVector getReservedRegs(const MachineFunction &MF) const override;
 
+  bool enableMultipleCopyHints() const override { return true; }
+
   bool requiresRegisterScavenging(const MachineFunction &MF) const override;
 
   bool trackLivenessAfterRegAlloc(const MachineFunction &MF) const override;
@@ -72,7 +75,7 @@ public:
   /// Debug information queries.
   unsigned getFrameRegister(const MachineFunction &MF) const override;
 
-  /// \brief Return GPR register class.
+  /// Return GPR register class.
   virtual const TargetRegisterClass *intRegClass(unsigned Size) const = 0;
 
 private:

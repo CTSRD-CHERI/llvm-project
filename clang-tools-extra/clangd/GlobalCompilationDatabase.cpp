@@ -16,106 +16,140 @@
 namespace clang {
 namespace clangd {
 
-static void addExtraFlags(tooling::CompileCommand &Command,
-                          const std::vector<std::string> &ExtraFlags) {
-  if (ExtraFlags.empty())
-    return;
-  assert(Command.CommandLine.size() >= 2 &&
-         "Expected a command line containing at least 2 arguments, the "
-         "compiler binary and the output file");
-  // The last argument of CommandLine is the name of the input file.
-  // Add ExtraFlags before it.
-  auto It = Command.CommandLine.end();
-  --It;
-  Command.CommandLine.insert(It, ExtraFlags.begin(), ExtraFlags.end());
-}
-
-tooling::CompileCommand getDefaultCompileCommand(PathRef File) {
-  std::vector<std::string> CommandLine{"clang", "-fsyntax-only", File.str()};
+tooling::CompileCommand
+GlobalCompilationDatabase::getFallbackCommand(PathRef File) const {
+  std::vector<std::string> Argv = {"clang"};
+  // Clang treats .h files as C by default, resulting in unhelpful diagnostics.
+  // Parsing as Objective C++ is friendly to more cases.
+  if (llvm::sys::path::extension(File) == ".h")
+    Argv.push_back("-xobjective-c++-header");
+  Argv.push_back(File);
   return tooling::CompileCommand(llvm::sys::path::parent_path(File),
-                                 llvm::sys::path::filename(File), CommandLine,
+                                 llvm::sys::path::filename(File),
+                                 std::move(Argv),
                                  /*Output=*/"");
 }
 
 DirectoryBasedGlobalCompilationDatabase::
     DirectoryBasedGlobalCompilationDatabase(
-        clangd::Logger &Logger, llvm::Optional<Path> CompileCommandsDir)
-    : Logger(Logger), CompileCommandsDir(std::move(CompileCommandsDir)) {}
+        llvm::Optional<Path> CompileCommandsDir)
+    : CompileCommandsDir(std::move(CompileCommandsDir)) {}
 
-std::vector<tooling::CompileCommand>
-DirectoryBasedGlobalCompilationDatabase::getCompileCommands(PathRef File) {
-  std::vector<tooling::CompileCommand> Commands;
+DirectoryBasedGlobalCompilationDatabase::
+    ~DirectoryBasedGlobalCompilationDatabase() = default;
 
-  auto CDB = getCompilationDatabase(File);
-  if (CDB)
-    Commands = CDB->getCompileCommands(File);
-  if (Commands.empty())
-    Commands.push_back(getDefaultCompileCommand(File));
-
-  auto It = ExtraFlagsForFile.find(File);
-  if (It != ExtraFlagsForFile.end()) {
-    // Append the user-specified flags to the compile commands.
-    for (tooling::CompileCommand &Command : Commands)
-      addExtraFlags(Command, It->second);
+llvm::Optional<tooling::CompileCommand>
+DirectoryBasedGlobalCompilationDatabase::getCompileCommand(PathRef File) const {
+  if (auto CDB = getCDBForFile(File)) {
+    auto Candidates = CDB->getCompileCommands(File);
+    if (!Candidates.empty()) {
+      addExtraFlags(File, Candidates.front());
+      return std::move(Candidates.front());
+    }
+  } else {
+    log("Failed to find compilation database for " + Twine(File));
   }
+  return llvm::None;
+}
 
-  return Commands;
+tooling::CompileCommand
+DirectoryBasedGlobalCompilationDatabase::getFallbackCommand(
+    PathRef File) const {
+  auto C = GlobalCompilationDatabase::getFallbackCommand(File);
+  addExtraFlags(File, C);
+  return C;
+}
+
+void DirectoryBasedGlobalCompilationDatabase::setCompileCommandsDir(Path P) {
+  std::lock_guard<std::mutex> Lock(Mutex);
+  CompileCommandsDir = P;
+  CompilationDatabases.clear();
 }
 
 void DirectoryBasedGlobalCompilationDatabase::setExtraFlagsForFile(
     PathRef File, std::vector<std::string> ExtraFlags) {
+  std::lock_guard<std::mutex> Lock(Mutex);
   ExtraFlagsForFile[File] = std::move(ExtraFlags);
 }
 
+void DirectoryBasedGlobalCompilationDatabase::addExtraFlags(
+    PathRef File, tooling::CompileCommand &C) const {
+  std::lock_guard<std::mutex> Lock(Mutex);
+
+  auto It = ExtraFlagsForFile.find(File);
+  if (It == ExtraFlagsForFile.end())
+    return;
+
+  auto &Args = C.CommandLine;
+  assert(Args.size() >= 2 && "Expected at least [compiler, source file]");
+  // The last argument of CommandLine is the name of the input file.
+  // Add ExtraFlags before it.
+  Args.insert(Args.end() - 1, It->second.begin(), It->second.end());
+}
+
 tooling::CompilationDatabase *
-DirectoryBasedGlobalCompilationDatabase::tryLoadDatabaseFromPath(PathRef File) {
+DirectoryBasedGlobalCompilationDatabase::getCDBInDirLocked(PathRef Dir) const {
+  // FIXME(ibiryukov): Invalidate cached compilation databases on changes
+  auto CachedIt = CompilationDatabases.find(Dir);
+  if (CachedIt != CompilationDatabases.end())
+    return CachedIt->second.get();
+  std::string Error = "";
+  auto CDB = tooling::CompilationDatabase::loadFromDirectory(Dir, Error);
+  if (CDB)
+    CDB = tooling::inferMissingCompileCommands(std::move(CDB));
+  auto Result = CDB.get();
+  CompilationDatabases.insert(std::make_pair(Dir, std::move(CDB)));
+  return Result;
+}
 
+tooling::CompilationDatabase *
+DirectoryBasedGlobalCompilationDatabase::getCDBForFile(PathRef File) const {
   namespace path = llvm::sys::path;
-  auto CachedIt = CompilationDatabases.find(File);
-
   assert((path::is_absolute(File, path::Style::posix) ||
           path::is_absolute(File, path::Style::windows)) &&
          "path must be absolute");
 
-  if (CachedIt != CompilationDatabases.end())
-    return CachedIt->second.get();
-  std::string Error = "";
-  auto CDB = tooling::CompilationDatabase::loadFromDirectory(File, Error);
-  if (CDB && Error.empty()) {
-    auto Result = CDB.get();
-    CompilationDatabases.insert(std::make_pair(File, std::move(CDB)));
-    return Result;
-  }
-
+  std::lock_guard<std::mutex> Lock(Mutex);
+  if (CompileCommandsDir)
+    return getCDBInDirLocked(*CompileCommandsDir);
+  for (auto Path = path::parent_path(File); !Path.empty();
+       Path = path::parent_path(Path))
+    if (auto CDB = getCDBInDirLocked(Path))
+      return CDB;
   return nullptr;
 }
 
-tooling::CompilationDatabase *
-DirectoryBasedGlobalCompilationDatabase::getCompilationDatabase(PathRef File) {
-  std::lock_guard<std::mutex> Lock(Mutex);
+CachingCompilationDb::CachingCompilationDb(
+    const GlobalCompilationDatabase &InnerCDB)
+    : InnerCDB(InnerCDB) {}
 
-  namespace path = llvm::sys::path;
-  if (CompileCommandsDir.hasValue()) {
-    tooling::CompilationDatabase *ReturnValue =
-        tryLoadDatabaseFromPath(CompileCommandsDir.getValue());
-    if (ReturnValue == nullptr)
-      Logger.log("Failed to find compilation database for " + Twine(File) +
-                 "in overriden directory " + CompileCommandsDir.getValue() +
-                 "\n");
-    return ReturnValue;
-  }
+llvm::Optional<tooling::CompileCommand>
+CachingCompilationDb::getCompileCommand(PathRef File) const {
+  std::unique_lock<std::mutex> Lock(Mut);
+  auto It = Cached.find(File);
+  if (It != Cached.end())
+    return It->second;
 
-  for (auto Path = path::parent_path(File); !Path.empty();
-       Path = path::parent_path(Path)) {
-    auto CDB = tryLoadDatabaseFromPath(Path);
-    if (!CDB)
-      continue;
-    // FIXME(ibiryukov): Invalidate cached compilation databases on changes
-    return CDB;
-  }
+  Lock.unlock();
+  llvm::Optional<tooling::CompileCommand> Command =
+      InnerCDB.getCompileCommand(File);
+  Lock.lock();
+  return Cached.try_emplace(File, std::move(Command)).first->getValue();
+}
 
-  Logger.log("Failed to find compilation database for " + Twine(File) + "\n");
-  return nullptr;
+tooling::CompileCommand
+CachingCompilationDb::getFallbackCommand(PathRef File) const {
+  return InnerCDB.getFallbackCommand(File);
+}
+
+void CachingCompilationDb::invalidate(PathRef File) {
+  std::unique_lock<std::mutex> Lock(Mut);
+  Cached.erase(File);
+}
+
+void CachingCompilationDb::clear() {
+  std::unique_lock<std::mutex> Lock(Mut);
+  Cached.clear();
 }
 
 } // namespace clangd

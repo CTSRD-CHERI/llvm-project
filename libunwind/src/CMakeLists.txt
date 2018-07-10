@@ -30,6 +30,7 @@ set(LIBUNWIND_HEADERS
     DwarfParser.hpp
     libunwind_ext.h
     Registers.hpp
+    RWMutex.hpp
     UnwindCursor.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../include/libunwind.h
     ${CMAKE_CURRENT_SOURCE_DIR}/../include/unwind.h)
@@ -90,9 +91,9 @@ string(REPLACE ";" " " LIBUNWIND_C_FLAGS "${LIBUNWIND_C_FLAGS}")
 string(REPLACE ";" " " LIBUNWIND_LINK_FLAGS "${LIBUNWIND_LINK_FLAGS}")
 
 set_property(SOURCE ${LIBUNWIND_CXX_SOURCES}
-             APPEND_STRING PROPERTY COMPILE_FLAGS " ${CMAKE_CXX_FLAGS} ${LIBUNWIND_CXX_FLAGS}")
+             APPEND_STRING PROPERTY COMPILE_FLAGS " ${LIBUNWIND_CXX_FLAGS}")
 set_property(SOURCE ${LIBUNWIND_C_SOURCES}
-             APPEND_STRING PROPERTY COMPILE_FLAGS " ${CMAKE_C_FLAGS} ${LIBUNWIND_C_FLAGS}")
+             APPEND_STRING PROPERTY COMPILE_FLAGS " ${LIBUNWIND_C_FLAGS}")
 
 # Add a object library that contains the compiled source files.
 add_library(unwind_objects OBJECT ${LIBUNWIND_SOURCES} ${LIBUNWIND_HEADERS})
@@ -107,6 +108,9 @@ set(LIBUNWIND_TARGETS)
 # Build the shared library.
 if (LIBUNWIND_ENABLE_SHARED)
   add_library(unwind_shared SHARED $<TARGET_OBJECTS:unwind_objects>)
+  if(COMMAND llvm_setup_rpath)
+    llvm_setup_rpath(unwind_shared)
+  endif()
   target_link_libraries(unwind_shared ${libraries})
   set_target_properties(unwind_shared
                         PROPERTIES
@@ -131,7 +135,22 @@ endif()
 # Add a meta-target for both libraries.
 add_custom_target(unwind DEPENDS ${LIBUNWIND_TARGETS})
 
-install(TARGETS ${LIBUNWIND_TARGETS}
-  LIBRARY DESTINATION ${LIBUNWIND_INSTALL_PREFIX}lib${LIBUNWIND_LIBDIR_SUFFIX}
-  ARCHIVE DESTINATION ${LIBUNWIND_INSTALL_PREFIX}lib${LIBUNWIND_LIBDIR_SUFFIX})
+if (LIBUNWIND_INSTALL_LIBRARY)
+  install(TARGETS ${LIBUNWIND_TARGETS}
+    LIBRARY DESTINATION ${LIBUNWIND_INSTALL_PREFIX}lib${LIBUNWIND_LIBDIR_SUFFIX} COMPONENT unwind
+    ARCHIVE DESTINATION ${LIBUNWIND_INSTALL_PREFIX}lib${LIBUNWIND_LIBDIR_SUFFIX} COMPONENT unwind)
+endif()
 
+if (NOT CMAKE_CONFIGURATION_TYPES AND LIBUNWIND_INSTALL_LIBRARY)
+  add_custom_target(install-unwind
+    DEPENDS unwind
+    COMMAND "${CMAKE_COMMAND}"
+            -DCMAKE_INSTALL_COMPONENT=unwind
+            -P "${LIBUNWIND_BINARY_DIR}/cmake_install.cmake")
+  add_custom_target(install-unwind-stripped
+    DEPENDS unwind
+    COMMAND "${CMAKE_COMMAND}"
+            -DCMAKE_INSTALL_COMPONENT=unwind
+            -DCMAKE_INSTALL_DO_STRIP=1
+            -P "${LIBUNWIND_BINARY_DIR}/cmake_install.cmake")
+endif()

@@ -9,7 +9,7 @@
 //
 /// \file
 ///
-/// \brief The R600 code emitter produces machine code that can be executed
+/// The R600 code emitter produces machine code that can be executed
 /// directly on the GPU device.
 //
 //===----------------------------------------------------------------------===//
@@ -45,7 +45,7 @@ public:
   R600MCCodeEmitter(const R600MCCodeEmitter &) = delete;
   R600MCCodeEmitter &operator=(const R600MCCodeEmitter &) = delete;
 
-  /// \brief Encode the instruction and write it to the OS.
+  /// Encode the instruction and write it to the OS.
   void encodeInstruction(const MCInst &MI, raw_ostream &OS,
                          SmallVectorImpl<MCFixup> &Fixups,
                          const MCSubtargetInfo &STI) const override;
@@ -148,11 +148,11 @@ void R600MCCodeEmitter::encodeInstruction(const MCInst &MI, raw_ostream &OS,
 }
 
 void R600MCCodeEmitter::Emit(uint32_t Value, raw_ostream &OS) const {
-  support::endian::Writer<support::little>(OS).write(Value);
+  support::endian::write(OS, Value, support::little);
 }
 
 void R600MCCodeEmitter::Emit(uint64_t Value, raw_ostream &OS) const {
-  support::endian::Writer<support::little>(OS).write(Value);
+  support::endian::write(OS, Value, support::little);
 }
 
 unsigned R600MCCodeEmitter::getHWReg(unsigned RegNo) const {

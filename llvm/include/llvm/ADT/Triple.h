@@ -203,10 +203,9 @@ public:
     MSVC,
     Itanium,
     Cygnus,
-    AMDOpenCL,
     CoreCLR,
-    OpenCL,
-    LastEnvironmentType = OpenCL
+    Simulator,  // Simulator variants of other systems, e.g., Apple's iOS
+    LastEnvironmentType = Simulator
   };
   enum ObjectFormatType {
     UnknownObjectFormat,
@@ -471,6 +470,10 @@ public:
     return isMacOSX() || isiOS() || isWatchOS();
   }
 
+  bool isSimulatorEnvironment() const {
+    return getEnvironment() == Triple::Simulator;
+  }
+
   bool isOSNetBSD() const {
     return getOS() == Triple::NetBSD;
   }
@@ -496,6 +499,8 @@ public:
   bool isOSIAMCU() const {
     return getOS() == Triple::ELFIAMCU;
   }
+
+  bool isOSUnknown() const { return getOS() == Triple::UnknownOS; }
 
   bool isGNUEnvironment() const {
     EnvironmentType Env = getEnvironment();
@@ -649,8 +654,36 @@ public:
     return getArch() == Triple::arm || getArch() == Triple::armeb;
   }
 
-  /// Tests wether the target supports comdat
-  bool supportsCOMDAT() const { return !isOSBinFormatMachO(); }
+  /// Tests whether the target is AArch64 (little and big endian).
+  bool isAArch64() const {
+    return getArch() == Triple::aarch64 || getArch() == Triple::aarch64_be;
+  }
+
+  /// Tests whether the target is MIPS 32-bit (little and big endian).
+  bool isMIPS32() const {
+    return getArch() == Triple::mips || getArch() == Triple::mipsel;
+  }
+
+  /// Tests whether the target is MIPS 64-bit (little and big endian).
+  bool isMIPS64() const {
+    return getArch() == Triple::mips64 || getArch() == Triple::mips64el ||
+           getArch() == Triple::cheri;
+  }
+
+  /// Tests whether the target is MIPS (little and big endian, 32- or 64-bit).
+  bool isMIPS() const {
+    return isMIPS32() || isMIPS64();
+  }
+
+  /// Tests whether the target supports comdat
+  bool supportsCOMDAT() const {
+    return !isOSBinFormatMachO();
+  }
+
+  /// Tests whether the target uses emulated TLS as default.
+  bool hasDefaultEmulatedTLS() const {
+    return isAndroid() || isOSOpenBSD() || isWindowsCygwinEnvironment();
+  }
 
   /// @}
   /// @name Mutators

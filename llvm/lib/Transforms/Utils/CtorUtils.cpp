@@ -16,7 +16,6 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalVariable.h"
-#include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
@@ -50,7 +49,7 @@ void removeGlobalCtors(GlobalVariable *GCL, const BitVector &CtorsToRemove) {
   GlobalVariable *NGV =
       new GlobalVariable(CA->getType(), GCL->isConstant(), GCL->getLinkage(),
                          CA, "", GCL->getThreadLocalMode(),
-                         GCL->getType()->getPointerAddressSpace());
+                         GCL->getType()->getAddressSpace());
   GCL->getParent()->getGlobalList().insert(GCL->getIterator(), NGV);
   NGV->takeName(GCL);
 
@@ -140,7 +139,7 @@ bool optimizeGlobalCtorsList(Module &M,
     if (!F)
       continue;
 
-    DEBUG(dbgs() << "Optimizing Global Constructor: " << *F << "\n");
+    LLVM_DEBUG(dbgs() << "Optimizing Global Constructor: " << *F << "\n");
 
     // We cannot simplify external ctor functions.
     if (F->empty())

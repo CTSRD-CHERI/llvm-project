@@ -1017,8 +1017,7 @@ NonLocalizedStringBRVisitor::VisitNode(const ExplodedNode *Succ,
   if (!LiteralExpr)
     return nullptr;
 
-  ProgramStateRef State = Succ->getState();
-  SVal LiteralSVal = State->getSVal(LiteralExpr, Succ->getLocationContext());
+  SVal LiteralSVal = Succ->getSVal(LiteralExpr);
   if (LiteralSVal.getAsRegion() != NonLocalizedString)
     return nullptr;
 
@@ -1108,7 +1107,7 @@ void EmptyLocalizationContextChecker::checkASTDecl(
 void EmptyLocalizationContextChecker::MethodCrawler::VisitObjCMessageExpr(
     const ObjCMessageExpr *ME) {
 
-  // FIXME: We may be able to use PPCallbacks to check for empy context
+  // FIXME: We may be able to use PPCallbacks to check for empty context
   // comments as part of preprocessing and avoid this re-lexing hack.
   const ObjCInterfaceDecl *OD = ME->getReceiverInterface();
   if (!OD)
@@ -1389,7 +1388,7 @@ void PluralMisuseChecker::MethodCrawler::reportPluralMisuseError(
   // Generate the bug report.
   BR.EmitBasicReport(AC->getDecl(), Checker, "Plural Misuse",
                      "Localizability Issue (Apple)",
-                     "Plural cases are not supported accross all languages. "
+                     "Plural cases are not supported across all languages. "
                      "Use a .stringsdict file instead",
                      PathDiagnosticLocation(S, BR.getSourceManager(), AC));
 }

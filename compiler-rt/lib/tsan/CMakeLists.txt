@@ -5,7 +5,10 @@ include_directories(..)
 set(TSAN_CFLAGS ${SANITIZER_COMMON_CFLAGS})
 # SANITIZER_COMMON_CFLAGS contains -fPIC, but it's performance-critical for
 # TSan runtime to be built with -fPIE to reduce the number of register spills.
-append_list_if(COMPILER_RT_HAS_FPIE_FLAG -fPIE TSAN_CFLAGS)
+# On FreeBSD however it provokes linkage issue thus we disable it.
+if(NOT CMAKE_SYSTEM MATCHES "FreeBSD")
+  append_list_if(COMPILER_RT_HAS_FPIE_FLAG -fPIE TSAN_CFLAGS)
+endif()
 append_rtti_flag(OFF TSAN_CFLAGS)
 
 if(COMPILER_RT_TSAN_DEBUG_OUTPUT)
@@ -93,21 +96,13 @@ set(TSAN_HEADERS
   rtl/tsan_symbolize.h
   rtl/tsan_sync.h
   rtl/tsan_trace.h
-  rtl/tsan_update_shadow_word_inl.h
-  rtl/tsan_vector.h)
+  rtl/tsan_update_shadow_word_inl.h)
 
 set(TSAN_RUNTIME_LIBRARIES)
 add_compiler_rt_component(tsan)
 
 if(APPLE)
-  set(TSAN_ASM_SOURCES rtl/tsan_rtl_amd64.S rtl/tsan_rtl_aarch64.S)
-  # Xcode will try to compile this file as C ('clang -x c'), and that will fail.
-  if (${CMAKE_GENERATOR} STREQUAL "Xcode")
-    enable_language(ASM)
-  else()
-    # Pass ASM file directly to the C++ compiler.
-    set_source_files_properties(${TSAN_ASM_SOURCES} PROPERTIES LANGUAGE C)
-  endif()
+  add_asm_sources(TSAN_ASM_SOURCES rtl/tsan_rtl_amd64.S rtl/tsan_rtl_aarch64.S)
 
   set(TSAN_LINK_LIBS ${SANITIZER_COMMON_LINK_LIBS})
 
@@ -122,10 +117,12 @@ if(APPLE)
     OBJECT_LIBS RTInterception
                 RTSanitizerCommon
                 RTSanitizerCommonLibc
+                RTSanitizerCommonCoverage
+                RTSanitizerCommonSymbolizer
                 RTUbsan
     CFLAGS ${TSAN_RTL_CFLAGS}
     LINK_FLAGS ${SANITIZER_COMMON_LINK_FLAGS} ${WEAK_SYMBOL_LINK_FLAGS}
-    LINK_LIBS ${TSAN_LINK_LIBS}
+    LINK_LIBS ${TSAN_LINK_LIBS} objc
     PARENT_TARGET tsan)
   add_compiler_rt_object_libraries(RTTsan_dynamic
     OS ${TSAN_SUPPORTED_OS}
@@ -145,10 +142,7 @@ if(APPLE)
 else()
   foreach(arch ${TSAN_SUPPORTED_ARCH})
     if(arch STREQUAL "x86_64")
-      set(TSAN_ASM_SOURCES rtl/tsan_rtl_amd64.S)
-      # Pass ASM file directly to the C++ compiler.
-      set_source_files_properties(${TSAN_ASM_SOURCES} PROPERTIES
-        LANGUAGE C)
+      add_asm_sources(TSAN_ASM_SOURCES rtl/tsan_rtl_amd64.S)
       # Sanity check for Go runtime.
       set(BUILDGO_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/go/buildgo.sh)
       add_custom_target(GotsanRuntimeCheck
@@ -159,20 +153,20 @@ else()
         COMMENT "Checking TSan Go runtime..."
         VERBATIM)
     elseif(arch STREQUAL "aarch64")
-      set(TSAN_ASM_SOURCES rtl/tsan_rtl_aarch64.S)
-      # Pass ASM file directly to the C++ compiler.
-      set_source_files_properties(${TSAN_ASM_SOURCES} PROPERTIES
-        LANGUAGE C)
-   elseif(arch MATCHES "powerpc64|powerpc64le")
-     set(TSAN_ASM_SOURCES rtl/tsan_rtl_ppc64.S)
-     # Pass ASM file directly to the C++ compiler.
-     set_source_files_properties(${TSAN_ASM_SOURCES} PROPERTIES
-       LANGUAGE C)
+      add_asm_sources(TSAN_ASM_SOURCES rtl/tsan_rtl_aarch64.S)
+    elseif(arch MATCHES "powerpc64|powerpc64le")
+      add_asm_sources(TSAN_ASM_SOURCES rtl/tsan_rtl_ppc64.S)
+      # Sanity check for Go runtime.
+      set(BUILDGO_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/go/buildgo.sh)
+      add_custom_target(GotsanRuntimeCheck
+	COMMAND env "CC=${CMAKE_C_COMPILER} ${CMAKE_C_COMPILER_ARG1}"
+		IN_TMPDIR=1 SILENT=1 ${BUILDGO_SCRIPT}
+	DEPENDS clang_rt.tsan-${arch} ${BUILDGO_SCRIPT}
+	WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/go
+	COMMENT "Checking TSan Go runtime..."
+	VERBATIM)
     elseif(arch MATCHES "mips64|mips64le")
-     set(TSAN_ASM_SOURCES rtl/tsan_rtl_mips64.S)
-     # Pass ASM file directly to the C++ compiler.
-     set_source_files_properties(${TSAN_ASM_SOURCES} PROPERTIES
-       LANGUAGE C)
+      add_asm_sources(TSAN_ASM_SOURCES rtl/tsan_rtl_mips64.S)
     else()
       set(TSAN_ASM_SOURCES)
     endif()
@@ -183,14 +177,18 @@ else()
               $<TARGET_OBJECTS:RTInterception.${arch}>
               $<TARGET_OBJECTS:RTSanitizerCommon.${arch}>
               $<TARGET_OBJECTS:RTSanitizerCommonLibc.${arch}>
+              $<TARGET_OBJECTS:RTSanitizerCommonCoverage.${arch}>
+              $<TARGET_OBJECTS:RTSanitizerCommonSymbolizer.${arch}>
               $<TARGET_OBJECTS:RTUbsan.${arch}>
-      CFLAGS ${TSAN_RTL_CFLAGS})
+      CFLAGS ${TSAN_RTL_CFLAGS}
+      PARENT_TARGET tsan)
     add_compiler_rt_runtime(clang_rt.tsan_cxx
       STATIC
       ARCHS ${arch}
       SOURCES ${TSAN_CXX_SOURCES}
               $<TARGET_OBJECTS:RTUbsan_cxx.${arch}>
-      CFLAGS ${TSAN_RTL_CFLAGS})
+      CFLAGS ${TSAN_RTL_CFLAGS}
+      PARENT_TARGET tsan)
     list(APPEND TSAN_RUNTIME_LIBRARIES clang_rt.tsan-${arch}
                                        clang_rt.tsan_cxx-${arch})
     add_sanitizer_rt_symbols(clang_rt.tsan
@@ -221,7 +219,7 @@ if(COMPILER_RT_HAS_SYSROOT_FLAG AND NOT CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
 endif()
 
 # Build libcxx instrumented with TSan.
-if(COMPILER_RT_HAS_LIBCXX_SOURCES AND
+if(COMPILER_RT_LIBCXX_PATH AND
    COMPILER_RT_TEST_COMPILER_ID STREQUAL "Clang" AND
    NOT ANDROID)
   set(libcxx_tsan_deps)
@@ -230,8 +228,9 @@ if(COMPILER_RT_HAS_LIBCXX_SOURCES AND
     set(LIBCXX_PREFIX ${CMAKE_CURRENT_BINARY_DIR}/libcxx_tsan_${arch})
     add_custom_libcxx(libcxx_tsan_${arch} ${LIBCXX_PREFIX}
       DEPS ${TSAN_RUNTIME_LIBRARIES}
-      CFLAGS ${TARGET_CFLAGS} -fsanitize=thread)
-    list(APPEND libcxx_tsan_deps libcxx_tsan_${arch})
+      CFLAGS ${TARGET_CFLAGS} -fsanitize=thread
+      USE_TOOLCHAIN)
+    list(APPEND libcxx_tsan_deps libcxx_tsan_${arch}-build)
   endforeach()
 
   add_custom_target(libcxx_tsan DEPENDS ${libcxx_tsan_deps})

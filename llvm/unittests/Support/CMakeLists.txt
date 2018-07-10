@@ -13,12 +13,14 @@ add_llvm_unittest(SupportTests
   CachePruningTest.cpp
   CrashRecoveryTest.cpp
   Casting.cpp
+  CheckedArithmeticTest.cpp
   Chrono.cpp
   CommandLineTest.cpp
   CompressionTest.cpp
   ConvertUTFTest.cpp
   DataExtractorTest.cpp
   DebugTest.cpp
+  DJBTest.cpp
   EndianStreamTest.cpp
   EndianTest.cpp
   ErrnoTest.cpp
@@ -51,6 +53,7 @@ add_llvm_unittest(SupportTests
   SwapByteOrderTest.cpp
   TarWriterTest.cpp
   TargetParserTest.cpp
+  TaskQueueTest.cpp
   ThreadLocalTest.cpp
   ThreadPool.cpp
   Threading.cpp
@@ -59,6 +62,7 @@ add_llvm_unittest(SupportTests
   TrailingObjectsTest.cpp
   TrigramIndexTest.cpp
   UnicodeTest.cpp
+  VersionTupleTest.cpp
   YAMLIOTest.cpp
   YAMLParserTest.cpp
   formatted_raw_ostream_test.cpp
@@ -68,12 +72,14 @@ add_llvm_unittest(SupportTests
   xxhashTest.cpp
   )
 
+target_link_libraries(SupportTests PRIVATE LLVMTestingSupport)
+
 # Disable all warning for AlignOfTest.cpp,
 # as it does things intentionally, and there is no reliable way of
 # disabling all warnings for all the compilers by using pragmas.
 set_source_files_properties(AlignOfTest.cpp PROPERTIES COMPILE_FLAGS -w)
 
 # ManagedStatic.cpp uses <pthread>.
-target_link_libraries(SupportTests LLVMTestingSupport ${LLVM_PTHREAD_LIB})
+target_link_libraries(SupportTests PRIVATE LLVMTestingSupport ${LLVM_PTHREAD_LIB})
 
 add_subdirectory(DynamicLibrary)

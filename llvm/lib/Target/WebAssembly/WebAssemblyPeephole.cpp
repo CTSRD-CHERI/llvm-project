@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief Late peephole optimizations for WebAssembly.
+/// Late peephole optimizations for WebAssembly.
 ///
 //===----------------------------------------------------------------------===//
 
@@ -50,6 +50,9 @@ public:
 } // end anonymous namespace
 
 char WebAssemblyPeephole::ID = 0;
+INITIALIZE_PASS(WebAssemblyPeephole, DEBUG_TYPE,
+                "WebAssembly peephole optimizations", false, false)
+
 FunctionPass *llvm::createWebAssemblyPeephole() {
   return new WebAssemblyPeephole();
 }
@@ -113,7 +116,7 @@ static bool MaybeRewriteToFallthrough(MachineInstr &MI, MachineBasicBlock &MBB,
 }
 
 bool WebAssemblyPeephole::runOnMachineFunction(MachineFunction &MF) {
-  DEBUG({
+  LLVM_DEBUG({
     dbgs() << "********** Peephole **********\n"
            << "********** Function: " << MF.getName() << '\n';
   });

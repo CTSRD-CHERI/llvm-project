@@ -25,12 +25,15 @@ def SIEncodingFamily {
   int VI = 1;
   int SDWA = 2;
   int SDWA9 = 3;
-  int GFX9 = 4;
+  int GFX80 = 4;
+  int GFX9 = 5;
 }
 
 //===----------------------------------------------------------------------===//
 // SI DAG Nodes
 //===----------------------------------------------------------------------===//
+
+def AMDGPUclamp : SDNode<"AMDGPUISD::CLAMP", SDTFPUnaryOp>;
 
 def SIload_constant : SDNode<"AMDGPUISD::LOAD_CONSTANT",
   SDTypeProfile<1, 2, [SDTCisVT<0, f32>, SDTCisVT<1, v4i32>, SDTCisVT<2, i32>]>,
@@ -45,21 +48,40 @@ def SIatomic_dec : SDNode<"AMDGPUISD::ATOMIC_DEC", SDTAtomic2,
   [SDNPMayLoad, SDNPMayStore, SDNPMemOperand, SDNPHasChain]
 >;
 
-def SItbuffer_load : SDNode<"AMDGPUISD::TBUFFER_LOAD_FORMAT",
-  SDTypeProfile<1, 9,
-    [                     // vdata
-     SDTCisVT<1, v4i32>,  // rsrc
-     SDTCisVT<2, i32>,    // vindex(VGPR)
-     SDTCisVT<3, i32>,    // voffset(VGPR)
-     SDTCisVT<4, i32>,    // soffset(SGPR)
-     SDTCisVT<5, i32>,    // offset(imm)
-     SDTCisVT<6, i32>,    // dfmt(imm)
-     SDTCisVT<7, i32>,    // nfmt(imm)
-     SDTCisVT<8, i32>,    // glc(imm)
-     SDTCisVT<9, i32>     // slc(imm)
-    ]>,
-  [SDNPMayLoad, SDNPMemOperand, SDNPHasChain]
+def SDTAtomic2_f32 : SDTypeProfile<1, 2, [
+  SDTCisSameAs<0,2>, SDTCisFP<0>, SDTCisPtrTy<1>
+]>;
+
+def SIatomic_fadd : SDNode<"AMDGPUISD::ATOMIC_LOAD_FADD", SDTAtomic2_f32,
+  [SDNPMayLoad, SDNPMayStore, SDNPMemOperand, SDNPHasChain]
 >;
+
+def SIatomic_fmin : SDNode<"AMDGPUISD::ATOMIC_LOAD_FMIN", SDTAtomic2_f32,
+  [SDNPMayLoad, SDNPMayStore, SDNPMemOperand, SDNPHasChain]
+>;
+
+def SIatomic_fmax : SDNode<"AMDGPUISD::ATOMIC_LOAD_FMAX", SDTAtomic2_f32,
+  [SDNPMayLoad, SDNPMayStore, SDNPMemOperand, SDNPHasChain]
+>;
+
+def SDTbuffer_load : SDTypeProfile<1, 9,
+  [                     // vdata
+   SDTCisVT<1, v4i32>,  // rsrc
+   SDTCisVT<2, i32>,    // vindex(VGPR)
+   SDTCisVT<3, i32>,    // voffset(VGPR)
+   SDTCisVT<4, i32>,    // soffset(SGPR)
+   SDTCisVT<5, i32>,    // offset(imm)
+   SDTCisVT<6, i32>,    // dfmt(imm)
+   SDTCisVT<7, i32>,    // nfmt(imm)
+   SDTCisVT<8, i32>,    // glc(imm)
+   SDTCisVT<9, i32>     // slc(imm)
+  ]>;
+
+def SItbuffer_load :   SDNode<"AMDGPUISD::TBUFFER_LOAD_FORMAT", SDTbuffer_load,
+                              [SDNPMayLoad, SDNPMemOperand, SDNPHasChain]>;
+def SItbuffer_load_d16 : SDNode<"AMDGPUISD::TBUFFER_LOAD_FORMAT_D16",
+                                SDTbuffer_load,
+                                [SDNPMayLoad, SDNPMemOperand, SDNPHasChain]>;
 
 def SDTtbuffer_store : SDTypeProfile<0, 10,
     [                     // vdata
@@ -79,6 +101,9 @@ def SItbuffer_store : SDNode<"AMDGPUISD::TBUFFER_STORE_FORMAT", SDTtbuffer_store
 def SItbuffer_store_x3 : SDNode<"AMDGPUISD::TBUFFER_STORE_FORMAT_X3",
                                 SDTtbuffer_store,
                                 [SDNPMayStore, SDNPMemOperand, SDNPHasChain]>;
+def SItbuffer_store_d16 : SDNode<"AMDGPUISD::TBUFFER_STORE_FORMAT_D16",
+                                SDTtbuffer_store,
+                                [SDNPMayStore, SDNPMemOperand, SDNPHasChain]>;
 
 def SDTBufferLoad : SDTypeProfile<1, 5,
     [                    // vdata
@@ -92,20 +117,94 @@ def SIbuffer_load : SDNode <"AMDGPUISD::BUFFER_LOAD", SDTBufferLoad,
                             [SDNPMemOperand, SDNPHasChain, SDNPMayLoad]>;
 def SIbuffer_load_format : SDNode <"AMDGPUISD::BUFFER_LOAD_FORMAT", SDTBufferLoad,
                             [SDNPMemOperand, SDNPHasChain, SDNPMayLoad]>;
+def SIbuffer_load_format_d16 : SDNode <"AMDGPUISD::BUFFER_LOAD_FORMAT_D16",
+                                SDTBufferLoad,
+                                [SDNPMemOperand, SDNPHasChain, SDNPMayLoad]>;
 
-class SDSample<string opcode> : SDNode <opcode,
-  SDTypeProfile<1, 4, [SDTCisVT<0, v4f32>, SDTCisVT<2, v8i32>,
-                       SDTCisVT<3, v4i32>, SDTCisVT<4, i32>]>
+def SDTBufferStore : SDTypeProfile<0, 6,
+    [                    // vdata
+     SDTCisVT<1, v4i32>, // rsrc
+     SDTCisVT<2, i32>,   // vindex
+     SDTCisVT<3, i32>,   // offset
+     SDTCisVT<4, i1>,    // glc
+     SDTCisVT<5, i1>]>;  // slc
+
+def SIbuffer_store : SDNode <"AMDGPUISD::BUFFER_STORE", SDTBufferStore,
+                             [SDNPMayStore, SDNPMemOperand, SDNPHasChain]>;
+def SIbuffer_store_format : SDNode <"AMDGPUISD::BUFFER_STORE_FORMAT",
+                            SDTBufferStore,
+                            [SDNPMayStore, SDNPMemOperand, SDNPHasChain]>;
+def SIbuffer_store_format_d16 : SDNode <"AMDGPUISD::BUFFER_STORE_FORMAT_D16",
+                            SDTBufferStore,
+                            [SDNPMayStore, SDNPMemOperand, SDNPHasChain]>;
+
+class SDBufferAtomic<string opcode> : SDNode <opcode,
+  SDTypeProfile<1, 5,
+      [SDTCisVT<0, i32>,   // dst
+       SDTCisVT<1, i32>,   // vdata
+       SDTCisVT<2, v4i32>, // rsrc
+       SDTCisVT<3, i32>,   // vindex
+       SDTCisVT<4, i32>,   // offset
+       SDTCisVT<5, i1>]>,  // slc
+  [SDNPMemOperand, SDNPHasChain, SDNPMayLoad, SDNPMayStore]
 >;
 
-def SIsample : SDSample<"AMDGPUISD::SAMPLE">;
-def SIsampleb : SDSample<"AMDGPUISD::SAMPLEB">;
-def SIsampled : SDSample<"AMDGPUISD::SAMPLED">;
-def SIsamplel : SDSample<"AMDGPUISD::SAMPLEL">;
+def SIbuffer_atomic_swap : SDBufferAtomic <"AMDGPUISD::BUFFER_ATOMIC_SWAP">;
+def SIbuffer_atomic_add : SDBufferAtomic <"AMDGPUISD::BUFFER_ATOMIC_ADD">;
+def SIbuffer_atomic_sub : SDBufferAtomic <"AMDGPUISD::BUFFER_ATOMIC_SUB">;
+def SIbuffer_atomic_smin : SDBufferAtomic <"AMDGPUISD::BUFFER_ATOMIC_SMIN">;
+def SIbuffer_atomic_umin : SDBufferAtomic <"AMDGPUISD::BUFFER_ATOMIC_UMIN">;
+def SIbuffer_atomic_smax : SDBufferAtomic <"AMDGPUISD::BUFFER_ATOMIC_SMAX">;
+def SIbuffer_atomic_umax : SDBufferAtomic <"AMDGPUISD::BUFFER_ATOMIC_UMAX">;
+def SIbuffer_atomic_and : SDBufferAtomic <"AMDGPUISD::BUFFER_ATOMIC_AND">;
+def SIbuffer_atomic_or : SDBufferAtomic <"AMDGPUISD::BUFFER_ATOMIC_OR">;
+def SIbuffer_atomic_xor : SDBufferAtomic <"AMDGPUISD::BUFFER_ATOMIC_XOR">;
+
+def SIbuffer_atomic_cmpswap : SDNode <"AMDGPUISD::BUFFER_ATOMIC_CMPSWAP",
+  SDTypeProfile<1, 6,
+    [SDTCisVT<0, i32>,   // dst
+     SDTCisVT<1, i32>,   // src
+     SDTCisVT<2, i32>,   // cmp
+     SDTCisVT<3, v4i32>, // rsrc
+     SDTCisVT<4, i32>,   // vindex
+     SDTCisVT<5, i32>,   // offset
+     SDTCisVT<6, i1>]>,  // slc
+  [SDNPMemOperand, SDNPHasChain, SDNPMayLoad, SDNPMayStore]
+>;
 
 def SIpc_add_rel_offset : SDNode<"AMDGPUISD::PC_ADD_REL_OFFSET",
   SDTypeProfile<1, 2, [SDTCisVT<0, iPTR>, SDTCisSameAs<0,1>, SDTCisSameAs<0,2>]>
 >;
+
+//===----------------------------------------------------------------------===//
+// ValueType helpers
+//===----------------------------------------------------------------------===//
+
+// Returns 1 if the source arguments have modifiers, 0 if they do not.
+// XXX - do f16 instructions?
+class isFloatType<ValueType SrcVT> {
+  bit ret =
+    !if(!eq(SrcVT.Value, f16.Value), 1,
+    !if(!eq(SrcVT.Value, f32.Value), 1,
+    !if(!eq(SrcVT.Value, f64.Value), 1,
+    !if(!eq(SrcVT.Value, v2f16.Value), 1,
+    0))));
+}
+
+class isIntType<ValueType SrcVT> {
+  bit ret =
+    !if(!eq(SrcVT.Value, i16.Value), 1,
+    !if(!eq(SrcVT.Value, i32.Value), 1,
+    !if(!eq(SrcVT.Value, i64.Value), 1,
+    0)));
+}
+
+class isPackedType<ValueType SrcVT> {
+  bit ret =
+    !if(!eq(SrcVT.Value, v2i16.Value), 1,
+      !if(!eq(SrcVT.Value, v2f16.Value), 1, 0)
+    );
+}
 
 //===----------------------------------------------------------------------===//
 // PatFrags for global memory operations
@@ -113,6 +212,12 @@ def SIpc_add_rel_offset : SDNode<"AMDGPUISD::PC_ADD_REL_OFFSET",
 
 defm atomic_inc_global : global_binary_atomic_op<SIatomic_inc>;
 defm atomic_dec_global : global_binary_atomic_op<SIatomic_dec>;
+
+def atomic_inc_local : local_binary_atomic_op<SIatomic_inc>;
+def atomic_dec_local : local_binary_atomic_op<SIatomic_dec>;
+def atomic_load_fadd_local : local_binary_atomic_op<SIatomic_fadd>;
+def atomic_load_fmin_local : local_binary_atomic_op<SIatomic_fmin>;
+def atomic_load_fmax_local : local_binary_atomic_op<SIatomic_fmax>;
 
 //===----------------------------------------------------------------------===//
 // SDNodes PatFrags for loads/stores with a glue input.
@@ -128,6 +233,10 @@ def AMDGPUld_glue : SDNode <"ISD::LOAD", SDTLoad,
   [SDNPHasChain, SDNPMayLoad, SDNPMemOperand, SDNPInGlue]
 >;
 
+def AMDGPUatomic_ld_glue : SDNode <"ISD::ATOMIC_LOAD", SDTAtomicLoad,
+  [SDNPHasChain, SDNPMayLoad, SDNPMemOperand, SDNPInGlue]
+>;
+
 def unindexedload_glue : PatFrag <(ops node:$ptr), (AMDGPUld_glue node:$ptr), [{
   return cast<LoadSDNode>(N)->getAddressingMode() == ISD::UNINDEXED;
 }]>;
@@ -135,6 +244,18 @@ def unindexedload_glue : PatFrag <(ops node:$ptr), (AMDGPUld_glue node:$ptr), [{
 def load_glue : PatFrag <(ops node:$ptr), (unindexedload_glue node:$ptr), [{
   return cast<LoadSDNode>(N)->getExtensionType() == ISD::NON_EXTLOAD;
 }]>;
+
+def atomic_load_32_glue : PatFrag<(ops node:$ptr),
+  (AMDGPUatomic_ld_glue node:$ptr)> {
+  let IsAtomic = 1;
+  let MemoryVT = i32;
+}
+
+def atomic_load_64_glue : PatFrag<(ops node:$ptr),
+  (AMDGPUatomic_ld_glue node:$ptr)> {
+  let IsAtomic = 1;
+  let MemoryVT = i64;
+}
 
 def extload_glue : PatFrag<(ops node:$ptr), (load_glue node:$ptr), [{
   return cast<LoadSDNode>(N)->getExtensionType() == ISD::EXTLOAD;
@@ -169,6 +290,9 @@ def sextloadi16_glue : PatFrag<(ops node:$ptr), (sextload_glue node:$ptr), [{
 def load_glue_align8 : Aligned8Bytes <
   (ops node:$ptr), (load_glue node:$ptr)
 >;
+def load_glue_align16 : Aligned16Bytes <
+  (ops node:$ptr), (load_glue node:$ptr)
+>;
 
 
 def load_local_m0 : LoadFrag<load_glue>, LocalAddress;
@@ -177,11 +301,22 @@ def sextloadi16_local_m0 : LoadFrag<sextloadi16_glue>, LocalAddress;
 def az_extloadi8_local_m0 : LoadFrag<az_extloadi8_glue>, LocalAddress;
 def az_extloadi16_local_m0 : LoadFrag<az_extloadi16_glue>, LocalAddress;
 def load_align8_local_m0 : LoadFrag <load_glue_align8>, LocalAddress;
+def load_align16_local_m0 : LoadFrag <load_glue_align16>, LocalAddress;
+def atomic_load_32_local_m0 : LoadFrag<atomic_load_32_glue>, LocalAddress;
+def atomic_load_64_local_m0 : LoadFrag<atomic_load_64_glue>, LocalAddress;
 
 
 def AMDGPUst_glue : SDNode <"ISD::STORE", SDTStore,
   [SDNPHasChain, SDNPMayStore, SDNPMemOperand, SDNPInGlue]
 >;
+
+def AMDGPUatomic_st_glue : SDNode <"ISD::ATOMIC_STORE", SDTAtomicStore,
+  [SDNPHasChain, SDNPMayStore, SDNPMemOperand, SDNPInGlue]
+>;
+
+def atomic_store_glue : PatFrag<(ops node:$ptr, node:$val),
+  (AMDGPUatomic_st_glue node:$ptr, node:$val)> {
+}
 
 def unindexedstore_glue : PatFrag<(ops node:$val, node:$ptr),
                                    (AMDGPUst_glue node:$val, node:$ptr), [{
@@ -212,11 +347,17 @@ def store_glue_align8 : Aligned8Bytes <
   (ops node:$value, node:$ptr), (store_glue node:$value, node:$ptr)
 >;
 
+def store_glue_align16 : Aligned16Bytes <
+  (ops node:$value, node:$ptr), (store_glue node:$value, node:$ptr)
+>;
+
 def store_local_m0 : StoreFrag<store_glue>, LocalAddress;
 def truncstorei8_local_m0 : StoreFrag<truncstorei8_glue>, LocalAddress;
 def truncstorei16_local_m0 : StoreFrag<truncstorei16_glue>, LocalAddress;
+def atomic_store_local_m0 : StoreFrag<AMDGPUatomic_st_glue>, LocalAddress;
 
 def store_align8_local_m0 : StoreFrag<store_glue_align8>, LocalAddress;
+def store_align16_local_m0 : StoreFrag<store_glue_align16>, LocalAddress;
 
 def si_setcc_uniform : PatFrag <
   (ops node:$lhs, node:$rhs, node:$cond),
@@ -247,34 +388,39 @@ def lshl_rev : PatFrag <
   (shl $src0, $src1)
 >;
 
-multiclass SIAtomicM0Glue2 <string op_name, bit is_amdgpu = 0> {
+multiclass SIAtomicM0Glue2 <string op_name, bit is_amdgpu = 0,
+                            SDTypeProfile tc = SDTAtomic2> {
 
   def _glue : SDNode <
-    !if(is_amdgpu, "AMDGPUISD", "ISD")#"::ATOMIC_"#op_name, SDTAtomic2,
+    !if(is_amdgpu, "AMDGPUISD", "ISD")#"::ATOMIC_"#op_name, tc,
     [SDNPHasChain, SDNPMayStore, SDNPMayLoad, SDNPMemOperand, SDNPInGlue]
   >;
 
-  def _local : local_binary_atomic_op <!cast<SDNode>(NAME#"_glue")>;
+  def _local_m0 : local_binary_atomic_op <!cast<SDNode>(NAME#"_glue")>;
 }
 
-defm si_atomic_load_add : SIAtomicM0Glue2 <"LOAD_ADD">;
-defm si_atomic_load_sub : SIAtomicM0Glue2 <"LOAD_SUB">;
-defm si_atomic_inc : SIAtomicM0Glue2 <"INC", 1>;
-defm si_atomic_dec : SIAtomicM0Glue2 <"DEC", 1>;
-defm si_atomic_load_and : SIAtomicM0Glue2 <"LOAD_AND">;
-defm si_atomic_load_min : SIAtomicM0Glue2 <"LOAD_MIN">;
-defm si_atomic_load_max : SIAtomicM0Glue2 <"LOAD_MAX">;
-defm si_atomic_load_or : SIAtomicM0Glue2 <"LOAD_OR">;
-defm si_atomic_load_xor : SIAtomicM0Glue2 <"LOAD_XOR">;
-defm si_atomic_load_umin : SIAtomicM0Glue2 <"LOAD_UMIN">;
-defm si_atomic_load_umax : SIAtomicM0Glue2 <"LOAD_UMAX">;
-defm si_atomic_swap : SIAtomicM0Glue2 <"SWAP">;
+defm atomic_load_add : SIAtomicM0Glue2 <"LOAD_ADD">;
+defm atomic_load_sub : SIAtomicM0Glue2 <"LOAD_SUB">;
+defm atomic_inc : SIAtomicM0Glue2 <"INC", 1>;
+defm atomic_dec : SIAtomicM0Glue2 <"DEC", 1>;
+defm atomic_load_and : SIAtomicM0Glue2 <"LOAD_AND">;
+defm atomic_load_min : SIAtomicM0Glue2 <"LOAD_MIN">;
+defm atomic_load_max : SIAtomicM0Glue2 <"LOAD_MAX">;
+defm atomic_load_or : SIAtomicM0Glue2 <"LOAD_OR">;
+defm atomic_load_xor : SIAtomicM0Glue2 <"LOAD_XOR">;
+defm atomic_load_umin : SIAtomicM0Glue2 <"LOAD_UMIN">;
+defm atomic_load_umax : SIAtomicM0Glue2 <"LOAD_UMAX">;
+defm atomic_swap : SIAtomicM0Glue2 <"SWAP">;
+defm atomic_load_fadd : SIAtomicM0Glue2 <"LOAD_FADD", 1, SDTAtomic2_f32>;
+defm atomic_load_fmin : SIAtomicM0Glue2 <"LOAD_FMIN", 1, SDTAtomic2_f32>;
+defm atomic_load_fmax : SIAtomicM0Glue2 <"LOAD_FMAX", 1, SDTAtomic2_f32>;
 
-def si_atomic_cmp_swap_glue : SDNode <"ISD::ATOMIC_CMP_SWAP", SDTAtomic3,
+def atomic_cmp_swap_glue : SDNode <"ISD::ATOMIC_CMP_SWAP", SDTAtomic3,
   [SDNPHasChain, SDNPMayStore, SDNPMayLoad, SDNPMemOperand, SDNPInGlue]
 >;
 
-defm si_atomic_cmp_swap : AtomicCmpSwapLocal <si_atomic_cmp_swap_glue>;
+def atomic_cmp_swap_local_m0 : AtomicCmpSwapLocal<atomic_cmp_swap_glue>;
+
 
 def as_i1imm : SDNodeXForm<imm, [{
   return CurDAG->getTargetConstant(N->getZExtValue(), SDLoc(N), MVT::i1);
@@ -296,6 +442,10 @@ def as_i64imm: SDNodeXForm<imm, [{
   return CurDAG->getTargetConstant(N->getSExtValue(), SDLoc(N), MVT::i64);
 }]>;
 
+def cond_as_i32imm: SDNodeXForm<cond, [{
+  return CurDAG->getTargetConstant(N->get(), SDLoc(N), MVT::i32);
+}]>;
+
 // Copied from the AArch64 backend:
 def bitcast_fpimm_to_i32 : SDNodeXForm<fpimm, [{
 return CurDAG->getTargetConstant(
@@ -311,6 +461,12 @@ def frameindex_to_targetframeindex : SDNodeXForm<frameindex, [{
 def bitcast_fpimm_to_i64 : SDNodeXForm<fpimm, [{
 return CurDAG->getTargetConstant(
   N->getValueAPF().bitcastToAPInt().getZExtValue(), SDLoc(N), MVT::i64);
+}]>;
+
+class bitextract_imm<int bitnum> : SDNodeXForm<imm, [{
+  uint64_t Imm = N->getZExtValue();
+  unsigned Bit = (Imm >> }] # bitnum # [{ ) & 1;
+  return CurDAG->getTargetConstant(Bit, SDLoc(N), MVT::i1);
 }]>;
 
 def SIMM16bit : PatLeaf <(imm),
@@ -497,19 +653,18 @@ def ExpSrc3 : RegisterOperand<VGPR_32> {
   let ParserMatchClass = VReg32OrOffClass;
 }
 
-class SDWASrc : RegisterOperand<VS_32> {
+class SDWASrc<ValueType vt> : RegisterOperand<VS_32> {
   let OperandNamespace = "AMDGPU";
-  let OperandType = "OPERAND_SDWA_SRC";
+  string Type = !if(isFloatType<vt>.ret, "FP", "INT");
+  let OperandType = "OPERAND_REG_INLINE_C_"#Type#vt.Size;
+  let DecoderMethod = "decodeSDWASrc"#vt.Size;
   let EncoderMethod = "getSDWASrcEncoding";
 }
 
-def SDWASrc32 : SDWASrc {
-  let DecoderMethod = "decodeSDWASrc32";
-}
-
-def SDWASrc16 : SDWASrc {
-  let DecoderMethod = "decodeSDWASrc16";
-}
+def SDWASrc_i32 : SDWASrc<i32>;
+def SDWASrc_i16 : SDWASrc<i16>;
+def SDWASrc_f32 : SDWASrc<f32>;
+def SDWASrc_f16 : SDWASrc<f16>;
 
 def SDWAVopcDst : VOPDstOperand<SReg_64> {
   let OperandNamespace = "AMDGPU";
@@ -582,19 +737,20 @@ def clampmod : NamedOperandBit<"ClampSI", NamedMatchClass<"ClampSI">>;
 def highmod : NamedOperandBit<"High", NamedMatchClass<"High">>;
 
 def GLC : NamedOperandBit<"GLC", NamedMatchClass<"GLC">>;
-def slc : NamedOperandBit<"SLC", NamedMatchClass<"SLC">>;
-def tfe : NamedOperandBit<"TFE", NamedMatchClass<"TFE">>;
-def unorm : NamedOperandBit<"UNorm", NamedMatchClass<"UNorm">>;
-def da : NamedOperandBit<"DA", NamedMatchClass<"DA">>;
-def r128 : NamedOperandBit<"R128", NamedMatchClass<"R128">>;
-def lwe : NamedOperandBit<"LWE", NamedMatchClass<"LWE">>;
+def SLC : NamedOperandBit<"SLC", NamedMatchClass<"SLC">>;
+def TFE : NamedOperandBit<"TFE", NamedMatchClass<"TFE">>;
+def UNorm : NamedOperandBit<"UNorm", NamedMatchClass<"UNorm">>;
+def DA : NamedOperandBit<"DA", NamedMatchClass<"DA">>;
+def R128 : NamedOperandBit<"R128", NamedMatchClass<"R128">>;
+def D16 : NamedOperandBit<"D16", NamedMatchClass<"D16">>;
+def LWE : NamedOperandBit<"LWE", NamedMatchClass<"LWE">>;
 def exp_compr : NamedOperandBit<"ExpCompr", NamedMatchClass<"ExpCompr">>;
 def exp_vm : NamedOperandBit<"ExpVM", NamedMatchClass<"ExpVM">>;
 
 def DFMT : NamedOperandU8<"DFMT", NamedMatchClass<"DFMT">>;
 def NFMT : NamedOperandU8<"NFMT", NamedMatchClass<"NFMT">>;
 
-def dmask : NamedOperandU16<"DMask", NamedMatchClass<"DMask">>;
+def DMask : NamedOperandU16<"DMask", NamedMatchClass<"DMask">>;
 
 def dpp_ctrl : NamedOperandU32<"DPPCtrl", NamedMatchClass<"DPPCtrl", 0>>;
 def row_mask : NamedOperandU32<"RowMask", NamedMatchClass<"RowMask">>;
@@ -692,15 +848,22 @@ class OpSelModsMatchClass : AsmOperandClass {
 def IntOpSelModsMatchClass : OpSelModsMatchClass;
 def IntOpSelMods : InputMods<IntOpSelModsMatchClass>;
 
-def FPRegSDWAInputModsMatchClass : AsmOperandClass {
-  let Name = "SDWARegWithFPInputMods";
-  let ParserMethod = "parseRegWithFPInputMods";
-  let PredicateMethod = "isSDWARegKind";
+class FPSDWAInputModsMatchClass <int opSize> : AsmOperandClass {
+  let Name = "SDWAWithFP"#opSize#"InputMods";
+  let ParserMethod = "parseRegOrImmWithFPInputMods";
+  let PredicateMethod = "isSDWAFP"#opSize#"Operand";
 }
 
-def FPRegSDWAInputMods : InputMods <FPRegSDWAInputModsMatchClass> {
+def FP16SDWAInputModsMatchClass : FPSDWAInputModsMatchClass<16>;
+def FP32SDWAInputModsMatchClass : FPSDWAInputModsMatchClass<32>;
+
+class FPSDWAInputMods <FPSDWAInputModsMatchClass matchClass> :
+  InputMods <matchClass> {
   let PrintMethod = "printOperandAndFPInputMods";
 }
+
+def FP16SDWAInputMods : FPSDWAInputMods<FP16SDWAInputModsMatchClass>;
+def FP32SDWAInputMods : FPSDWAInputMods<FP32SDWAInputModsMatchClass>;
 
 def FPVRegInputModsMatchClass : AsmOperandClass {
   let Name = "VRegWithFPInputMods";
@@ -712,16 +875,22 @@ def FPVRegInputMods : InputMods <FPVRegInputModsMatchClass> {
   let PrintMethod = "printOperandAndFPInputMods";
 }
 
-
-def IntRegSDWAInputModsMatchClass : AsmOperandClass {
-  let Name = "SDWARegWithIntInputMods";
-  let ParserMethod = "parseRegWithIntInputMods";
-  let PredicateMethod = "isSDWARegKind";
+class IntSDWAInputModsMatchClass <int opSize> : AsmOperandClass {
+  let Name = "SDWAWithInt"#opSize#"InputMods";
+  let ParserMethod = "parseRegOrImmWithIntInputMods";
+  let PredicateMethod = "isSDWAInt"#opSize#"Operand";
 }
 
-def IntRegSDWAInputMods : InputMods <IntRegSDWAInputModsMatchClass> {
+def Int16SDWAInputModsMatchClass : IntSDWAInputModsMatchClass<16>;
+def Int32SDWAInputModsMatchClass : IntSDWAInputModsMatchClass<32>;
+
+class IntSDWAInputMods <IntSDWAInputModsMatchClass matchClass> :
+  InputMods <matchClass> {
   let PrintMethod = "printOperandAndIntInputMods";
 }
+
+def Int16SDWAInputMods : IntSDWAInputMods<Int16SDWAInputModsMatchClass>;
+def Int32SDWAInputMods : IntSDWAInputMods<Int32SDWAInputModsMatchClass>;
 
 def IntVRegInputModsMatchClass : AsmOperandClass {
   let Name = "VRegWithIntInputMods";
@@ -790,6 +959,9 @@ def VOP3OpSelMods  : ComplexPattern<untyped, 2, "SelectVOP3OpSelMods">;
 def VOP3OpSelMods0 : ComplexPattern<untyped, 3, "SelectVOP3OpSelMods0">;
 
 def VOP3PMadMixMods  : ComplexPattern<untyped, 2, "SelectVOP3PMadMixMods">;
+
+
+def Hi16Elt  : ComplexPattern<untyped, 1, "SelectHi16Elt">;
 
 //===----------------------------------------------------------------------===//
 // SI assembler operands
@@ -965,7 +1137,12 @@ class getVregSrcForVT<ValueType VT> {
 }
 
 class getSDWASrcForVT <ValueType VT> {
-  RegisterOperand ret = !if(!eq(VT.Size, 16), SDWASrc16, SDWASrc32);
+  bit isFP = !if(!eq(VT.Value, f16.Value), 1,
+             !if(!eq(VT.Value, f32.Value), 1,
+             0));
+  RegisterOperand retFlt = !if(!eq(VT.Size, 16), SDWASrc_f16, SDWASrc_f32);
+  RegisterOperand retInt = !if(!eq(VT.Size, 16), SDWASrc_i16, SDWASrc_i32);
+  RegisterOperand ret = !if(isFP, retFlt, retInt);
 }
 
 // Returns the register class to use for sources of VOP3 instructions for the
@@ -1004,32 +1181,6 @@ class getVOP3SrcForVT<ValueType VT> {
         )
      )
   );
-}
-
-// Returns 1 if the source arguments have modifiers, 0 if they do not.
-// XXX - do f16 instructions?
-class isFloatType<ValueType SrcVT> {
-  bit ret =
-    !if(!eq(SrcVT.Value, f16.Value), 1,
-    !if(!eq(SrcVT.Value, f32.Value), 1,
-    !if(!eq(SrcVT.Value, f64.Value), 1,
-    !if(!eq(SrcVT.Value, v2f16.Value), 1,
-    0))));
-}
-
-class isIntType<ValueType SrcVT> {
-  bit ret =
-    !if(!eq(SrcVT.Value, i16.Value), 1,
-    !if(!eq(SrcVT.Value, i32.Value), 1,
-    !if(!eq(SrcVT.Value, i64.Value), 1,
-    0)));
-}
-
-class isPackedType<ValueType SrcVT> {
-  bit ret =
-    !if(!eq(SrcVT.Value, v2i16.Value), 1,
-      !if(!eq(SrcVT.Value, v2f16.Value), 1, 0)
-    );
 }
 
 // Float or packed int
@@ -1076,11 +1227,10 @@ class getSrcModExt <ValueType VT> {
 
 // Return type of input modifiers operand specified input operand for SDWA
 class getSrcModSDWA <ValueType VT> {
-    bit isFP = !if(!eq(VT.Value, f16.Value), 1,
-               !if(!eq(VT.Value, f32.Value), 1,
-               !if(!eq(VT.Value, f64.Value), 1,
-               0)));
-  Operand ret = !if(isFP, FPRegSDWAInputMods, IntRegSDWAInputMods);
+  Operand ret = !if(!eq(VT.Value, f16.Value), FP16SDWAInputMods,
+                !if(!eq(VT.Value, f32.Value), FP32SDWAInputMods,
+                !if(!eq(VT.Value, i16.Value), Int16SDWAInputMods,
+                Int32SDWAInputMods)));
 }
 
 // Returns the input arguments for VOP[12C] instructions for the given SrcVT.
@@ -1675,6 +1825,9 @@ def VOP_I32_F32_I32_I32 : VOPProfile <[i32, f32, i32, i32]>;
 def VOP_I64_I64_I32_I64 : VOPProfile <[i64, i64, i32, i64]>;
 def VOP_V4I32_I64_I32_V4I32 : VOPProfile <[v4i32, i64, i32, v4i32]>;
 
+def VOP_F32_V2F16_V2F16_F32 : VOPProfile <[f32, v2f16, v2f16, f32]>;
+def VOP_I32_V2I16_V2I16_I32 : VOPProfile <[i32, v2i16, v2i16, i32]>;
+
 class Commutable_REV <string revOp, bit isOrig> {
   string RevOp = revOp;
   bit IsOrig = isOrig;
@@ -1688,6 +1841,8 @@ class AtomicNoRet <string noRetOp, bit isRet> {
 //===----------------------------------------------------------------------===//
 // Interpolation opcodes
 //===----------------------------------------------------------------------===//
+
+class VINTRPDstOperand <RegisterClass rc> : RegisterOperand <rc, "printVINTRPDst">;
 
 class VINTRP_Pseudo <string opName, dag outs, dag ins, list<dag> pattern> :
   VINTRPCommon <outs, ins, "", pattern>,
@@ -1765,14 +1920,6 @@ def getBasicFromSDWAOp : InstrMapping {
   let ValueCols = [["Default"]];
 }
 
-def getMaskedMIMGOp : InstrMapping {
-  let FilterClass = "MIMG_Mask";
-  let RowFields = ["Op"];
-  let ColFields = ["Channels"];
-  let KeyCol = ["4"];
-  let ValueCols = [["1"], ["2"], ["3"] ];
-}
-
 // Maps an commuted opcode to its original version
 def getCommuteOrig : InstrMapping {
   let FilterClass = "Commutable_REV";
@@ -1800,6 +1947,11 @@ def getMCOpcodeGen : InstrMapping {
                    [!cast<string>(SIEncodingFamily.VI)],
                    [!cast<string>(SIEncodingFamily.SDWA)],
                    [!cast<string>(SIEncodingFamily.SDWA9)],
+                   // GFX80 encoding is added to work around a multiple matching
+                   // issue for buffer instructions with unpacked d16 data. This
+                   // does not actually change the encoding, and thus may be
+                   // removed later.
+                   [!cast<string>(SIEncodingFamily.GFX80)],
                    [!cast<string>(SIEncodingFamily.GFX9)]];
 }
 
@@ -1818,6 +1970,14 @@ def getAddr64Inst : InstrMapping {
   let ColFields = ["IsAddr64"];
   let KeyCol = ["0"];
   let ValueCols = [["1"]];
+}
+
+def getMUBUFNoLdsInst : InstrMapping {
+  let FilterClass = "MUBUFLdsTable";
+  let RowFields = ["OpName"];
+  let ColFields = ["IsLds"];
+  let KeyCol = ["1"];
+  let ValueCols = [["0"]];
 }
 
 // Maps an atomic opcode to its version with a return value.

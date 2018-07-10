@@ -2,7 +2,6 @@
  * kmp_i18n.cpp
  */
 
-
 //===----------------------------------------------------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
@@ -11,7 +10,6 @@
 // Source Licenses. See LICENSE.txt for details.
 //
 //===----------------------------------------------------------------------===//
-
 
 #include "kmp_i18n.h"
 
@@ -36,9 +34,11 @@
 #define get_section(id) ((id) >> 16)
 #define get_number(id) ((id)&0xFFFF)
 
-kmp_msg_t __kmp_msg_empty = {kmp_mt_dummy, 0, "", 0};
 kmp_msg_t __kmp_msg_null = {kmp_mt_dummy, 0, NULL, 0};
 static char const *no_message_available = "(No message available)";
+
+static void __kmp_msg(kmp_msg_severity_t severity, kmp_msg_t message,
+                      va_list ap);
 
 enum kmp_i18n_cat_status {
   KMP_I18N_CLOSED, // Not yet opened or closed.
@@ -786,9 +786,7 @@ kmp_msg_t __kmp_msg_error_mesg(char const *mesg) {
 } // __kmp_msg_error_mesg
 
 // -----------------------------------------------------------------------------
-void __kmp_msg(kmp_msg_severity_t severity, kmp_msg_t message, ...) {
-
-  va_list args;
+void __kmp_msg(kmp_msg_severity_t severity, kmp_msg_t message, va_list args) {
   kmp_i18n_id_t format; // format identifier
   kmp_msg_t fmsg; // formatted message
   kmp_str_buf_t buffer;
@@ -817,30 +815,28 @@ void __kmp_msg(kmp_msg_severity_t severity, kmp_msg_t message, ...) {
   __kmp_str_free(&fmsg.str);
 
   // Format other messages.
-  va_start(args, message);
   for (;;) {
     message = va_arg(args, kmp_msg_t);
     if (message.type == kmp_mt_dummy && message.str == NULL) {
       break;
     }
-    if (message.type == kmp_mt_dummy && message.str == __kmp_msg_empty.str) {
-      continue;
-    }
     switch (message.type) {
     case kmp_mt_hint: {
       format = kmp_i18n_fmt_Hint;
+      // we cannot skip %1$ and only use %2$ to print the message without the
+      // number
+      fmsg = __kmp_msg_format(format, message.str);
     } break;
     case kmp_mt_syserr: {
       format = kmp_i18n_fmt_SysErr;
+      fmsg = __kmp_msg_format(format, message.num, message.str);
     } break;
     default: { KMP_DEBUG_ASSERT(0); }
     }
-    fmsg = __kmp_msg_format(format, message.num, message.str);
     __kmp_str_free(&message.str);
     __kmp_str_buf_cat(&buffer, fmsg.str, fmsg.len);
     __kmp_str_free(&fmsg.str);
   }
-  va_end(args);
 
   // Print formatted messages.
   // This lock prevents multiple fatal errors on the same problem.
@@ -854,8 +850,18 @@ void __kmp_msg(kmp_msg_severity_t severity, kmp_msg_t message, ...) {
 
 } // __kmp_msg
 
+void __kmp_msg(kmp_msg_severity_t severity, kmp_msg_t message, ...) {
+  va_list args;
+  va_start(args, message);
+  __kmp_msg(severity, message, args);
+  va_end(args);
+}
+
 void __kmp_fatal(kmp_msg_t message, ...) {
-  __kmp_msg(kmp_ms_fatal, message, __kmp_msg_null);
+  va_list args;
+  va_start(args, message);
+  __kmp_msg(kmp_ms_fatal, message, args);
+  va_end(args);
 #if KMP_OS_WINDOWS
   // Delay to give message a chance to appear before reaping
   __kmp_thread_sleep(500);

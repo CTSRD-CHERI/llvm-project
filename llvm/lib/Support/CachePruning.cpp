@@ -113,6 +113,10 @@ llvm::parseCachePruningPolicy(StringRef PolicyStr) {
         return make_error<StringError>("'" + Value + "' not an integer",
                                        inconvertibleErrorCode());
       Policy.MaxSizeBytes = Size * Mult;
+    } else if (Key == "cache_size_files") {
+      if (Value.getAsInteger(0, Policy.MaxSizeFiles))
+        return make_error<StringError>("'" + Value + "' not an integer",
+                                       inconvertibleErrorCode());
     } else {
       return make_error<StringError>("Unknown key: '" + Key + "'",
                                      inconvertibleErrorCode());
@@ -141,8 +145,8 @@ bool llvm::pruneCache(StringRef Path, CachePruningPolicy Policy) {
 
   if (Policy.Expiration == seconds(0) &&
       Policy.MaxSizePercentageOfAvailableSpace == 0 &&
-      Policy.MaxSizeBytes == 0) {
-    DEBUG(dbgs() << "No pruning settings set, exit early\n");
+      Policy.MaxSizeBytes == 0 && Policy.MaxSizeFiles == 0) {
+    LLVM_DEBUG(dbgs() << "No pruning settings set, exit early\n");
     // Nothing will be pruned, early exit
     return false;
   }
@@ -161,15 +165,17 @@ bool llvm::pruneCache(StringRef Path, CachePruningPolicy Policy) {
       return false;
     }
   } else {
-    if (Policy.Interval == seconds(0)) {
+    if (!Policy.Interval)
+      return false;
+    if (Policy.Interval != seconds(0)) {
       // Check whether the time stamp is older than our pruning interval.
       // If not, do nothing.
       const auto TimeStampModTime = FileStatus.getLastModificationTime();
       auto TimeStampAge = CurrentTime - TimeStampModTime;
-      if (TimeStampAge <= Policy.Interval) {
-        DEBUG(dbgs() << "Timestamp file too recent ("
-                     << duration_cast<seconds>(TimeStampAge).count()
-                     << "s old), do not prune.\n");
+      if (TimeStampAge <= *Policy.Interval) {
+        LLVM_DEBUG(dbgs() << "Timestamp file too recent ("
+                          << duration_cast<seconds>(TimeStampAge).count()
+                          << "s old), do not prune.\n");
         return false;
       }
     }
@@ -178,9 +184,6 @@ bool llvm::pruneCache(StringRef Path, CachePruningPolicy Policy) {
     // notice at the same time that the timestamp is out-of-date.
     writeTimestampFile(TimestampFile);
   }
-
-  bool ShouldComputeSize =
-      (Policy.MaxSizePercentageOfAvailableSpace > 0 || Policy.MaxSizeBytes > 0);
 
   // Keep track of space. Needs to be kept ordered by size for determinism.
   std::set<std::pair<uint64_t, std::string>> FileSizes;
@@ -204,29 +207,48 @@ bool llvm::pruneCache(StringRef Path, CachePruningPolicy Policy) {
     // there.
     ErrorOr<sys::fs::basic_file_status> StatusOrErr = File->status();
     if (!StatusOrErr) {
-      DEBUG(dbgs() << "Ignore " << File->path() << " (can't stat)\n");
+      LLVM_DEBUG(dbgs() << "Ignore " << File->path() << " (can't stat)\n");
       continue;
     }
 
     // If the file hasn't been used recently enough, delete it
     const auto FileAccessTime = StatusOrErr->getLastAccessedTime();
     auto FileAge = CurrentTime - FileAccessTime;
-    if (FileAge > Policy.Expiration) {
-      DEBUG(dbgs() << "Remove " << File->path() << " ("
-                   << duration_cast<seconds>(FileAge).count() << "s old)\n");
+    if (Policy.Expiration != seconds(0) && FileAge > Policy.Expiration) {
+      LLVM_DEBUG(dbgs() << "Remove " << File->path() << " ("
+                        << duration_cast<seconds>(FileAge).count()
+                        << "s old)\n");
       sys::fs::remove(File->path());
       continue;
     }
 
     // Leave it here for now, but add it to the list of size-based pruning.
-    if (!ShouldComputeSize)
-      continue;
     TotalSize += StatusOrErr->getSize();
     FileSizes.insert({StatusOrErr->getSize(), std::string(File->path())});
   }
 
+  auto FileAndSize = FileSizes.rbegin();
+  size_t NumFiles = FileSizes.size();
+
+  auto RemoveCacheFile = [&]() {
+    // Remove the file.
+    sys::fs::remove(FileAndSize->second);
+    // Update size
+    TotalSize -= FileAndSize->first;
+    NumFiles--;
+    LLVM_DEBUG(dbgs() << " - Remove " << FileAndSize->second << " (size "
+                      << FileAndSize->first << "), new occupancy is "
+                      << TotalSize << "%\n");
+    ++FileAndSize;
+  };
+
+  // Prune for number of files.
+  if (Policy.MaxSizeFiles)
+    while (NumFiles > Policy.MaxSizeFiles)
+      RemoveCacheFile();
+
   // Prune for size now if needed
-  if (ShouldComputeSize) {
+  if (Policy.MaxSizePercentageOfAvailableSpace > 0 || Policy.MaxSizeBytes > 0) {
     auto ErrOrSpaceInfo = sys::fs::disk_space(Path);
     if (!ErrOrSpaceInfo) {
       report_fatal_error("Can't get available size");
@@ -242,22 +264,14 @@ bool llvm::pruneCache(StringRef Path, CachePruningPolicy Policy) {
         AvailableSpace * Policy.MaxSizePercentageOfAvailableSpace / 100ull,
         Policy.MaxSizeBytes);
 
-    DEBUG(dbgs() << "Occupancy: " << ((100 * TotalSize) / AvailableSpace)
-                 << "% target is: " << Policy.MaxSizePercentageOfAvailableSpace
-                 << "%, " << Policy.MaxSizeBytes << " bytes\n");
+    LLVM_DEBUG(dbgs() << "Occupancy: " << ((100 * TotalSize) / AvailableSpace)
+                      << "% target is: "
+                      << Policy.MaxSizePercentageOfAvailableSpace << "%, "
+                      << Policy.MaxSizeBytes << " bytes\n");
 
-    auto FileAndSize = FileSizes.rbegin();
-    // Remove the oldest accessed files first, till we get below the threshold
-    while (TotalSize > TotalSizeTarget && FileAndSize != FileSizes.rend()) {
-      // Remove the file.
-      sys::fs::remove(FileAndSize->second);
-      // Update size
-      TotalSize -= FileAndSize->first;
-      DEBUG(dbgs() << " - Remove " << FileAndSize->second << " (size "
-                   << FileAndSize->first << "), new occupancy is " << TotalSize
-                   << "%\n");
-      ++FileAndSize;
-    }
+    // Remove the oldest accessed files first, till we get below the threshold.
+    while (TotalSize > TotalSizeTarget && FileAndSize != FileSizes.rend())
+      RemoveCacheFile();
   }
   return true;
 }

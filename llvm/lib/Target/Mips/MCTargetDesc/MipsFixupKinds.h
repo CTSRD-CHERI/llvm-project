@@ -96,10 +96,14 @@ namespace Mips {
     fixup_Mips_Branch_PCRel,
 
     // resulting in - R_MIPS_GPREL16/R_MIPS_SUB/R_MIPS_HI16
+    //                R_MICROMIPS_GPREL16/R_MICROMIPS_SUB/R_MICROMIPS_HI16
     fixup_Mips_GPOFF_HI,
+    fixup_MICROMIPS_GPOFF_HI,
 
     // resulting in - R_MIPS_GPREL16/R_MIPS_SUB/R_MIPS_LO16
+    //                R_MICROMIPS_GPREL16/R_MICROMIPS_SUB/R_MICROMIPS_LO16
     fixup_Mips_GPOFF_LO,
+    fixup_MICROMIPS_GPOFF_LO,
 
     // resulting in - R_MIPS_PAGE
     fixup_Mips_GOT_PAGE,
@@ -110,11 +114,13 @@ namespace Mips {
     // resulting in - R_MIPS_GOT_DISP
     fixup_Mips_GOT_DISP,
 
-    // resulting in - R_MIPS_GOT_HIGHER
+    // resulting in - R_MIPS_HIGHER/R_MICROMIPS_HIGHER 
     fixup_Mips_HIGHER,
+    fixup_MICROMIPS_HIGHER,
 
-    // resulting in - R_MIPS_HIGHEST
+    // resulting in - R_MIPS_HIGHEST/R_MICROMIPS_HIGHEST
     fixup_Mips_HIGHEST,
+    fixup_MICROMIPS_HIGHEST,
 
     // resulting in - R_MIPS_GOT_HI16
     fixup_Mips_GOT_HI16,
@@ -229,6 +235,13 @@ namespace Mips {
 
     // resulting in - R_MIPS_CHERI_CAPABILITY
     fixup_CHERI_CAPABILITY,
+
+    // 16 bit fixup for _CHERI_CAPABILITY_TABLE offest resulting in - R_MIPS_CHERI_CAPTABLEREL16.
+    fixup_Mips_CAPTABLEREL16,
+    // resulting in - R_MIPS_CHERI_CAPTABLEREL16/R_MIPS_SUB/R_MIPS_HI16
+    fixup_Mips_CAPTABLEOFF_HI,
+    // resulting in - R_MIPS_CHERI_CAPTABLEREL16/R_MIPS_SUB/R_MIPS_LO16
+    fixup_Mips_CAPTABLEOFF_LO,
 
     // Marker
     LastTargetFixupKind,

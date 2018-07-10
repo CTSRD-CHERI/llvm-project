@@ -133,7 +133,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
     MachineRegisterInfo &RI = MF.getRegInfo();
     std::set<MachineInstr *> IncOffsets;
     std::set<MachineInstr *> Adds;
-    llvm::SmallVector<std::pair<MachineInstr *, MachineInstr *>, 8> C0Ops;
+    llvm::SmallVector<std::pair<MachineInstr *, MachineInstr *>, 8> DDCOps;
     std::set<MachineInstr *> GetPCCs;
     bool modified = false;
     for (auto &MBB : MF)
@@ -197,8 +197,8 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         if (IncOffset->getOpcode() == Mips::CFromPtr) {
           if ((Op == Mips::LOADCAP) || (Op == Mips::STORECAP))
             continue;
-          if (IncOffset->getOperand(1).getReg() == Mips::C0)
-            C0Ops.emplace_back(&MI, IncOffset);
+          if (IncOffset->getOperand(1).getReg() == Mips::DDC)
+            DDCOps.emplace_back(&MI, IncOffset);
           continue;
         }
 
@@ -280,7 +280,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         IncOffsets.insert(IncOffset);
         modified = true;
       }
-    for (auto &I : C0Ops) {
+    for (auto &I : DDCOps) {
       IncOffsets.insert(I.second);
       unsigned BaseReg = I.second->getOperand(2).getReg();
       // This can't be a symbolic address (yet) because we don't have
@@ -300,30 +300,10 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         }
       } else
         AddInst = nullptr;
-      auto InsertPoint = I.first;
       MachineBasicBlock *InsertBlock = I.first->getParent();
-      // If this is a load of a GOT offset and it's in a loop then we want to
-      // try to hoist it out of the loop.
-      if (Offset.isGlobal()) {
-        auto Loop = MLI.getLoopFor(InsertBlock);
-        if (Loop && Loop->getLoopPreheader()) {
-          auto *Preheader = Loop->getLoopPreheader();
-          // If all paths to this block go through the preheader then hoist.
-          // Note: It might be worth doing this recursively and pushing out of
-          // nested loops.
-          if (Preheader->terminators().begin() != Preheader->terminators().end()) {
-            MachineInstr *End = &*Preheader->getFirstTerminator();
-            if (MDT.dominates(Preheader, InsertBlock))
-              if (MDT.dominates(End, I.first)) {
-                InsertBlock = Preheader;
-                InsertPoint = End;
-              }
-          }
-        }
-      }
       auto FirstOperand = I.first->getOperand(0);
       unsigned FirstReg = FirstOperand.getReg();
-      BuildMI(*InsertBlock, InsertPoint, I.first->getDebugLoc(),
+      BuildMI(*InsertBlock, I.first, I.first->getDebugLoc(),
           InstrInfo->get(MipsOpForCHERIOp(I.first->getOpcode())))
         .addReg(FirstReg, getDefRegState(FirstOperand.isDef()))
         .addReg(BaseReg).add(Offset);

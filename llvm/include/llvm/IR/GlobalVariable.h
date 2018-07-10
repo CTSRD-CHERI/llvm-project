@@ -52,10 +52,13 @@ class GlobalVariable : public GlobalObject, public ilist_node<GlobalVariable> {
 public:
   /// GlobalVariable ctor - If a parent module is specified, the global is
   /// automatically inserted into the end of the specified modules global list.
-  LLVM_ATTRIBUTE_DEPRECATED(GlobalVariable(Type *Ty, bool isConstant, LinkageTypes Linkage,
-                 Constant *Initializer = nullptr, const Twine &Name = "",
-                 ThreadLocalMode = NotThreadLocal),
-                 "use the overload with an explicit address space");
+  LLVM_ATTRIBUTE_DEPRECATED(
+      GlobalVariable(Type *Ty, bool isConstant, LinkageTypes Linkage,
+                     Constant *Initializer = nullptr, const Twine &Name = "",
+                     ThreadLocalMode TLMode = NotThreadLocal),
+      "use the overload with a Module& or an explicit address space")
+      : GlobalVariable(Ty, isConstant, Linkage, Initializer, Name, TLMode, 0,
+                       false) {}
 
   GlobalVariable(Type *Ty, bool isConstant, LinkageTypes Linkage,
                  Constant *Initializer, const Twine &Name,
@@ -63,29 +66,32 @@ public:
                  bool isExternallyInitialized = false);
   /// GlobalVariable ctor - This creates a global and inserts it before the
   /// specified other global.
-  LLVM_ATTRIBUTE_DEPRECATED(GlobalVariable(Module &M, Type *Ty, bool isConstant,
-                 LinkageTypes Linkage, Constant *Initializer,
-                 const Twine &Name = "", GlobalVariable *InsertBefore = nullptr,
-                 ThreadLocalMode = NotThreadLocal),
-                "use the overload with an explicit address space");
-  GlobalVariable(Module &M, Type *Ty, bool isConstant,
-                 LinkageTypes Linkage, Constant *Initializer,
-                 const Twine &Name, GlobalVariable *InsertBefore,
-                 ThreadLocalMode, unsigned AddressSpace,
+  GlobalVariable(Module &M, Type *Ty, bool isConstant, LinkageTypes Linkage,
+                 Constant *Initializer, const Twine &Name = "",
+                 GlobalVariable *InsertBefore = nullptr,
+                 ThreadLocalMode = NotThreadLocal,
+                 unsigned AddressSpace = UINT_MAX,
                  bool isExternallyInitialized = false);
   GlobalVariable(const GlobalVariable &) = delete;
   GlobalVariable &operator=(const GlobalVariable &) = delete;
 
   ~GlobalVariable() {
     dropAllReferences();
-
-    // FIXME: needed by operator delete
-    setGlobalVariableNumOperands(1);
   }
 
   // allocate space for exactly one operand
   void *operator new(size_t s) {
     return User::operator new(s, 1);
+  }
+
+  // delete space for exactly one operand as created in the corresponding new operator
+  void operator delete(void *ptr){
+    assert(ptr != nullptr && "must not be nullptr");
+    User *Obj = static_cast<User *>(ptr);
+    // Number of operands can be set to 0 after construction and initialization. Make sure
+    // that number of operands is reset to 1, as this is needed in User::operator delete
+    Obj->setGlobalVariableNumOperands(1);
+    User::operator delete(Obj);
   }
 
   /// Provide fast operand accessors

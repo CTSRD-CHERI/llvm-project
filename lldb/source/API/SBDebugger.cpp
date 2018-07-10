@@ -11,6 +11,9 @@
 // C++ Includes
 // Other libraries and framework includes
 // Project includes
+
+#include "SystemInitializerFull.h"
+
 #include "lldb/API/SBDebugger.h"
 
 #include "lldb/lldb-private.h"
@@ -35,7 +38,6 @@
 #include "lldb/API/SBTypeNameSpecifier.h"
 #include "lldb/API/SBTypeSummary.h"
 #include "lldb/API/SBTypeSynthetic.h"
-#include "lldb/API/SystemInitializerFull.h"
 
 #include "lldb/Core/Debugger.h"
 #include "lldb/Core/PluginManager.h"
@@ -43,12 +45,14 @@
 #include "lldb/Core/StreamFile.h"
 #include "lldb/Core/StructuredDataImpl.h"
 #include "lldb/DataFormatters/DataVisualization.h"
+#include "lldb/Host/XML.h"
 #include "lldb/Initialization/SystemLifetimeManager.h"
-#include "lldb/Interpreter/Args.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
+#include "lldb/Interpreter/OptionArgParser.h"
 #include "lldb/Interpreter/OptionGroupPlatform.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/TargetList.h"
+#include "lldb/Utility/Args.h"
 
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringRef.h"
@@ -72,7 +76,7 @@ static llvm::sys::DynamicLibrary LoadPlugin(const lldb::DebuggerSP &debugger_sp,
     // TODO: mangle this differently for your system - on OSX, the first
     // underscore needs to be removed and the second one stays
     LLDBCommandPluginInit init_func =
-        (LLDBCommandPluginInit)dynlib.getAddressOfSymbol(
+        (LLDBCommandPluginInit)(uintptr_t)dynlib.getAddressOfSymbol(
             "_ZN4lldb16PluginInitializeENS_10SBDebuggerE");
     if (init_func) {
       if (init_func(debugger_sb))
@@ -166,14 +170,10 @@ SBDebugger SBDebugger::Create(bool source_init_files,
   SBDebugger debugger;
 
   // Currently we have issues if this function is called simultaneously on two
-  // different
-  // threads. The issues mainly revolve around the fact that the
-  // lldb_private::FormatManager
-  // uses global collections and having two threads parsing the .lldbinit files
-  // can cause
-  // mayhem. So to get around this for now we need to use a mutex to prevent bad
-  // things
-  // from happening.
+  // different threads. The issues mainly revolve around the fact that the
+  // lldb_private::FormatManager uses global collections and having two threads
+  // parsing the .lldbinit files can cause mayhem. So to get around this for
+  // now we need to use a mutex to prevent bad things from happening.
   static std::recursive_mutex g_mutex;
   std::lock_guard<std::recursive_mutex> guard(g_mutex);
 
@@ -218,10 +218,10 @@ void SBDebugger::Destroy(SBDebugger &debugger) {
 }
 
 void SBDebugger::MemoryPressureDetected() {
-  // Since this function can be call asynchronously, we allow it to be
-  // non-mandatory. We have seen deadlocks with this function when called
-  // so we need to safeguard against this until we can determine what is
-  // causing the deadlocks.
+  // Since this function can be call asynchronously, we allow it to be non-
+  // mandatory. We have seen deadlocks with this function when called so we
+  // need to safeguard against this until we can determine what is causing the
+  // deadlocks.
   Log *log(GetLogIfAllCategoriesSet(LIBLLDB_LOG_API));
 
   const bool mandatory = false;
@@ -254,9 +254,9 @@ void SBDebugger::SkipAppInitFiles(bool b) {
     m_opaque_sp->GetCommandInterpreter().SkipAppInitFiles(b);
 }
 
-// Shouldn't really be settable after initialization as this could cause lots of
-// problems; don't want users
-// trying to switch modes in the middle of a debugging session.
+// Shouldn't really be settable after initialization as this could cause lots
+// of problems; don't want users trying to switch modes in the middle of a
+// debugging session.
 void SBDebugger::SetInputFileHandle(FILE *fh, bool transfer_ownership) {
   Log *log(GetLogIfAllCategoriesSet(LIBLLDB_LOG_API));
 
@@ -479,8 +479,8 @@ bool SBDebugger::SetDefaultArchitecture(const char *arch_name) {
 ScriptLanguage
 SBDebugger::GetScriptingLanguage(const char *script_language_name) {
   if (!script_language_name) return eScriptLanguageDefault;
-  return Args::StringToScriptLanguage(llvm::StringRef(script_language_name),
-                                      eScriptLanguageDefault, nullptr);
+  return OptionArgParser::ToScriptLanguage(
+      llvm::StringRef(script_language_name), eScriptLanguageDefault, nullptr);
 }
 
 const char *SBDebugger::GetVersionString() {
@@ -489,6 +489,26 @@ const char *SBDebugger::GetVersionString() {
 
 const char *SBDebugger::StateAsCString(StateType state) {
   return lldb_private::StateAsCString(state);
+}
+
+static void AddBoolConfigEntry(StructuredData::Dictionary &dict,
+                               llvm::StringRef name, bool value,
+                               llvm::StringRef description) {
+  auto entry_up = llvm::make_unique<StructuredData::Dictionary>();
+  entry_up->AddBooleanItem("value", value);
+  entry_up->AddStringItem("description", description);
+  dict.AddItem(name, std::move(entry_up));
+}
+
+SBStructuredData SBDebugger::GetBuildConfiguration() {
+  auto config_up = llvm::make_unique<StructuredData::Dictionary>();
+  AddBoolConfigEntry(
+      *config_up, "xml", XMLDocument::XMLEnabled(),
+      "A boolean value that indicates if XML support is enabled in LLDB");
+
+  SBStructuredData data;
+  data.m_impl_up->SetObjectSP(std::move(config_up));
+  return data;
 }
 
 bool SBDebugger::StateIsRunningState(StateType state) {
@@ -694,8 +714,8 @@ SBTarget SBDebugger::FindTargetWithFileAndArch(const char *filename,
   SBTarget sb_target;
   if (m_opaque_sp && filename && filename[0]) {
     // No need to lock, the target list is thread safe
-    ArchSpec arch(arch_name,
-                  m_opaque_sp->GetPlatformList().GetSelectedPlatform().get());
+    ArchSpec arch = Platform::GetAugmentedArchSpec(
+        m_opaque_sp->GetPlatformList().GetSelectedPlatform().get(), arch_name);
     TargetSP target_sp(
         m_opaque_sp->GetTargetList().FindTargetWithExecutableAndArchitecture(
             FileSpec(filename, false), arch_name ? &arch : nullptr));

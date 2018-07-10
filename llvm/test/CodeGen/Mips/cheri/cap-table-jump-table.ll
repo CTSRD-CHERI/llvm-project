@@ -1,8 +1,8 @@
 ; MIPS is inefficient and generates a mul instruction....
-; RUNNOT: %cheri_llc %s -O2 -mxgot -target-abi n64 -relocation-model=pic -cheri-cap-table -o -
-; RUN: %cheri_purecap_llc %s -O2 -cheri-cap-table -o - -mxcaptable=true | %cheri_FileCheck %s
-; RUN: %cheri_purecap_llc %s -O2 -cheri-cap-table -o - -mxcaptable=false | %cheri_FileCheck %s -check-prefix SMALLTABLE
-; RUN: %cheri_purecap_llc %s -O0 -cheri-cap-table -o - -mxcaptable=true | %cheri_FileCheck %s -check-prefixes NO-OPT
+; RUNNOT: %cheri_llc %s -O2 -mxgot -target-abi n64 -relocation-model=pic -cheri-cap-table-abi=plt -o -
+; RUN: %cheri_purecap_llc %s -O2 -cheri-cap-table-abi=plt -o - -mxcaptable=true | %cheri_FileCheck %s
+; RUN: %cheri_purecap_llc %s -O2 -cheri-cap-table-abi=plt -o - -mxcaptable=false | %cheri_FileCheck %s -check-prefix SMALLTABLE
+; RUN: %cheri_purecap_llc %s -O0 -cheri-cap-table-abi=plt -o - -mxcaptable=true | %cheri_FileCheck %s -check-prefix NO-OPT
 ; ModuleID = '/Users/alex/cheri/build/llvm-256-build/cap-table-jump-table-reduce.ll-reduced-simplified.bc'
 source_filename = "cap-table-jump-table-reduce.ll-output-7f90547.bc"
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
@@ -29,7 +29,7 @@ default:
 
 sw.bb:
   ret i64 1
-
+; FUXME: I SHOULD NOT BE DOING THIS SHIT HERE
 sw.bb1:
   ret i64 0
 }
@@ -40,8 +40,8 @@ sw.bb1:
 ; SMALLTABLE:    clcbi $c1, %captab20(.LJTI0_0)($c26)
 
 
-
-; CHECK-LABEL:# BB#0:                                 # %entry
+; CHECK-LABEL: c:
+; CHECK-LABEL: %bb.0:                                 # %entry
 ; CHECK-NEXT:	sltiu	$1, $4, 11
 ; CHECK-NEXT:	beqz	$1, .LBB0_3
 ; CHECK-NEXT:	nop
@@ -52,11 +52,14 @@ sw.bb1:
 ; CHECK-NEXT:	clc	$c1, $1, 0($c26)
 ; CHECK-NEXT:	dsll	$1, $4, 2
 ; CHECK-NEXT:	clw	$1, $1, 0($c1)
-; CHECK-NEXT:	cincoffset	$c1, $c1, $1
 ; TODO: this is not ideal but we need to derive an executable capability
-; CHECK-NEXT:	cgetpcc	$c2
-; CHECK-NEXT:	csub	$1, $c1, $c2
-; CHECK-NEXT:	cincoffset	$c1, $c2, $1
+; TODO: it is even slower now
+; CHECK-NEXT:	cgetaddr $2, $c1
+; CHECK-NEXT:	daddu $1, $2, $1
+; CHECK-NEXT:	cgetpcc	$c1
+; CHECK-NEXT:	cgetaddr $2, $c1
+; CHECK-NEXT:	dsubu $1, $1, $2
+; CHECK-NEXT:	cincoffset $c1, $c1, $1
 ; CHECK-NEXT:	cjr	$c1
 ; CHECK-NEXT:	nop
 
@@ -89,7 +92,7 @@ sw.bb1:
 ; CHECK-NEXT: 	.4byte	.LBB0_4-.LJTI0_0
 
 
-; NO-OPT-LABEL: # BB#0:                                 # %entry
+; NO-OPT-LABEL: %bb.0:                                 # %entry
 ; NO-OPT-NEXT:	cincoffset	$c11, $c11, -[[@EXPR 3 * $CAP_SIZE]]
 ; NO-OPT-NEXT:	cmove	$c1,  $c26
 ; NO-OPT-NEXT:	move	 $1, $4
@@ -107,14 +110,16 @@ sw.bb1:
 ; NO-OPT-NEXT:	clc	$c1, $zero, [[$CAP_SIZE]]($c11)    # [[$CAP_SIZE]]-byte Folded Reload
 ; NO-OPT-NEXT:	clc	$c2, $3, 0($c1)
 ; NO-OPT-NEXT:	clw	$2, $2, 0($c2)
-; NO-OPT-NEXT:	cincoffset	$c2, $c2, $2
-; NO-OPT-NEXT:	cgetpcc	$c3
-; NO-OPT-NEXT:	csub	$2, $c2, $c3
-; NO-OPT-NEXT:	cincoffset	$c2, $c3, $2
+; NO-OPT-NEXT:	cgetaddr $3, $c2
+; NO-OPT-NEXT:	daddu $2, $3, $2
+; NO-OPT-NEXT:	cgetpcc	$c2
+; NO-OPT-NEXT:	cgetaddr $3, $c2
+; NO-OPT-NEXT:	dsubu $2, $2, $3
+; NO-OPT-NEXT:	cincoffset $c2, $c2, $2
 ; NO-OPT-NEXT:	cjr	$c2
 ; NO-OPT-NEXT:	nop
 
-attributes #0 = { noreturn nounwind "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="false" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="false" "stack-protector-buffer-size"="8" "target-features"="+cheri" "unsafe-fp-math"="false" "use-soft-float"="false" }
+attributes #0 = { noreturn nounwind }
 
 !llvm.ident = !{!0}
 

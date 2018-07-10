@@ -7,12 +7,12 @@
 ; size are emitted with size information in DWARF.
 
 ; CHECK: 0x{{[0-9a-f]+}}:   DW_TAG_pointer_type
-; CHECK-NEXT: DW_AT_type (cu + 0x{{[0-9a-f]+}} "int")
+; CHECK-NEXT: DW_AT_type (0x{{[0-9a-f]+}} "int")
 ; CHECK-NEXT: DW_AT_byte_size (0x10)
 ; CHECK-NOT: DW_TAG_pointer_type
 
 ; CHECK: 0x{{[0-9a-f]+}}:   DW_TAG_reference_type
-; CHECK-NEXT: DW_AT_type (cu + 0x{{[0-9a-f]+}} "int")
+; CHECK-NEXT: DW_AT_type (0x{{[0-9a-f]+}} "int")
 ; CHECK-NEXT: DW_AT_byte_size (0x10)
 ; CHECK-NOT: DW_TAG_reference_type
 
@@ -32,8 +32,8 @@ entry:
 !0 = distinct !DICompileUnit(language: DW_LANG_C99, file: !1, producer: "clang", isOptimized: false, runtimeVersion: 0, emissionKind: FullDebug, enums: !2, retainedTypes: !2, globals: !2, imports: !2)
 !1 = !DIFile(filename: "dwarf-test.c", directory: "test")
 !2 = !{}
-!4 = distinct !DISubprogram(name: "foo", scope: !0, file: !1, line: 6, type: !6, isLocal: false, isDefinition: true, scopeLine: 6, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, variables: !2)
-!5 = distinct !DISubprogram(name: "bar", scope: !0, file: !1, line: 6, type: !15, isLocal: false, isDefinition: true, scopeLine: 6, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, variables: !2)
+!4 = distinct !DISubprogram(name: "foo", scope: !0, file: !1, line: 6, type: !6, isLocal: false, isDefinition: true, scopeLine: 6, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0)
+!5 = distinct !DISubprogram(name: "bar", scope: !0, file: !1, line: 6, type: !15, isLocal: false, isDefinition: true, scopeLine: 6, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0)
 !6 = !DISubroutineType(types: !7)
 !7 = !{!9}
 !8 = !DIBasicType(name: "int", size: 32, align: 32, encoding: DW_ATE_signed)

@@ -1,3 +1,4 @@
+// REQUIRES: x86
 // RUN: llvm-mc %s -o %t.o -filetype=obj -triple=x86_64-pc-linux
 // RUN: ld.lld %t.o -o %t.so -shared
 // RUN: ld.lld %t.o -o %t.gc.so -shared --gc-sections
@@ -18,7 +19,7 @@
 // CHECK-NEXT: Link: 0
 // CHECK-NEXT: Info: 0
 // CHECK-NEXT: AddressAlignment: 1
-// CHECK-NEXT: EntrySize: 0
+// CHECK-NEXT: EntrySize: 1
 // CHECK-NEXT: SectionData (
 // CHECK-NEXT:   0000: 666F6F00 62617200                    |foo.bar.|
 // CHECK-NEXT: )
@@ -36,7 +37,7 @@
 // GC-NEXT: Link: 0
 // GC-NEXT: Info: 0
 // GC-NEXT: AddressAlignment: 1
-// GC-NEXT: EntrySize: 0
+// GC-NEXT: EntrySize: 1
 // GC-NEXT: SectionData (
 // GC-NEXT:   0000: 666F6F00                                |foo.|
 // GC-NEXT: )

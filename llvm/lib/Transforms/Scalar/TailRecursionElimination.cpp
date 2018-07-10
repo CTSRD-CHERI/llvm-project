@@ -79,7 +79,6 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
-#include "llvm/Transforms/Utils/Local.h"
 using namespace llvm;
 
 #define DEBUG_TYPE "tailcallelim"
@@ -88,7 +87,7 @@ STATISTIC(NumEliminated, "Number of tail calls removed");
 STATISTIC(NumRetDuped,   "Number of return duplicated");
 STATISTIC(NumAccumAdded, "Number of accumulators introduced");
 
-/// \brief Scan the specified function for alloca instructions.
+/// Scan the specified function for alloca instructions.
 /// If it contains any dynamic allocas, returns false.
 static bool canTRE(Function &F) {
   // Because of PR962, we don't TRE dynamic allocas.
@@ -230,7 +229,7 @@ static bool markTails(Function &F, bool &AllCallsAreTailCalls,
         Escaped = ESCAPED;
 
       CallInst *CI = dyn_cast<CallInst>(&I);
-      if (!CI || CI->isTailCall())
+      if (!CI || CI->isTailCall() || isa<DbgInfoIntrinsic>(&I))
         continue;
 
       bool IsNoTail = CI->isNoTailCall() || CI->hasOperandBundles();
@@ -303,10 +302,7 @@ static bool markTails(Function &F, bool &AllCallsAreTailCalls,
     if (Visited[CI->getParent()] != ESCAPED) {
       // If the escape point was part way through the block, calls after the
       // escape point wouldn't have been put into DeferredTails.
-      ORE->emit([&]() {
-        return OptimizationRemark(DEBUG_TYPE, "tailcall", CI)
-               << "marked as tail call candidate";
-      });
+      LLVM_DEBUG(dbgs() << "Marked as tail call candidate: " << *CI << "\n");
       CI->setTailCall();
       Modified = true;
     } else {
@@ -335,7 +331,7 @@ static bool canMoveAboveCall(Instruction *I, CallInst *CI, AliasAnalysis *AA) {
       // Writes to memory only matter if they may alias the pointer
       // being loaded from.
       const DataLayout &DL = L->getModule()->getDataLayout();
-      if ((AA->getModRefInfo(CI, MemoryLocation::get(L)) & MRI_Mod) ||
+      if (isModSet(AA->getModRefInfo(CI, MemoryLocation::get(L))) ||
           !isSafeToLoadUnconditionally(L->getPointerOperand(),
                                        L->getAlignment(), DL, L))
         return false;
@@ -703,8 +699,8 @@ static bool foldReturnAndProcessPred(
     BranchInst *BI = UncondBranchPreds.pop_back_val();
     BasicBlock *Pred = BI->getParent();
     if (CallInst *CI = findTRECandidate(BI, CannotTailCallElimCallsMarkedTail, TTI)){
-      DEBUG(dbgs() << "FOLDING: " << *BB
-            << "INTO UNCOND BRANCH PRED: " << *Pred);
+      LLVM_DEBUG(dbgs() << "FOLDING: " << *BB
+                        << "INTO UNCOND BRANCH PRED: " << *Pred);
       ReturnInst *RI = FoldReturnIntoUncondBranch(Ret, BB, Pred);
 
       // Cleanup: if all predecessors of BB have been eliminated by

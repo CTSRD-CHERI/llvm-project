@@ -86,8 +86,8 @@ define i1 @test_simplify7(i32 %C) {
 ; CHECK-NEXT: [[SHL:%.*]] = shl i16 1, [[TRUNC]]
 ; CHECK-NEXT: [[AND:%.*]] = and i16 [[SHL]], 9217
 ; CHECK-NEXT: %memchr.bits = icmp ne i16 [[AND]], 0
-; CHECK-NEXT: %memchr1 = and i1 %memchr.bounds, %memchr.bits
-; CHECK-NEXT: ret i1 %memchr1
+; CHECK-NEXT: [[NOT:%.*]] = and i1 %memchr.bounds, %memchr.bits
+; CHECK-NEXT: ret i1 [[NOT]]
 
   %dst = call i8* @strchr(i8* getelementptr inbounds ([3 x i8], [3 x i8]* @newlines, i64 0, i64 0), i32 %C)
   %cmp = icmp ne i8* %dst, null

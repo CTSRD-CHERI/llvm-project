@@ -12,12 +12,12 @@
 
 #include "llvm/ADT/MapVector.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/IR/DebugInfoMetadata.h"
 #include <utility>
 
 namespace llvm {
 
 class DILocalVariable;
-class DILocation;
 class MachineFunction;
 class MachineInstr;
 class TargetRegisterInfo;
@@ -52,6 +52,10 @@ public:
   void clear() { VarInstrRanges.clear(); }
   InstrRangesMap::const_iterator begin() const { return VarInstrRanges.begin(); }
   InstrRangesMap::const_iterator end() const { return VarInstrRanges.end(); }
+
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
+  LLVM_DUMP_METHOD void dump() const;
+#endif
 };
 
 void calculateDbgValueHistory(const MachineFunction *MF,

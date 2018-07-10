@@ -31,7 +31,7 @@ class GlobalObject : public GlobalValue {
 protected:
   GlobalObject(Type *Ty, ValueTy VTy, Use *Ops, unsigned NumOps,
                LinkageTypes Linkage, const Twine &Name,
-               unsigned AddressSpace = 0)
+               unsigned AddressSpace)
       : GlobalValue(Ty, VTy, Ops, NumOps, Linkage, Name, AddressSpace),
         ObjComdat(nullptr) {
     setGlobalValueSubClassData(0);
@@ -105,6 +105,14 @@ public:
   /// Check if this has any metadata.
   bool hasMetadata() const { return hasMetadataHashEntry(); }
 
+  /// Check if this has any metadata of the given kind.
+  bool hasMetadata(unsigned KindID) const {
+    return getMetadata(KindID) != nullptr;
+  }
+  bool hasMetadata(StringRef Kind) const {
+    return getMetadata(Kind) != nullptr;
+  }
+
   /// Get the current metadata attachments for the given kind, if any.
   ///
   /// These functions require that the function have at most a single attachment
@@ -143,7 +151,9 @@ public:
   getAllMetadata(SmallVectorImpl<std::pair<unsigned, MDNode *>> &MDs) const;
 
   /// Erase all metadata attachments with the given kind.
-  void eraseMetadata(unsigned KindID);
+  ///
+  /// \returns true if any metadata was removed.
+  bool eraseMetadata(unsigned KindID);
 
   /// Copy metadata from Src, adjusting offsets by Offset.
   void copyMetadata(const GlobalObject *Src, unsigned Offset);

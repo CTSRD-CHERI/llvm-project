@@ -146,11 +146,11 @@ public:
   bool empty() const { return getSubLoops().empty(); }
 
   /// Get a list of the basic blocks which make up this loop.
-  const std::vector<BlockT *> &getBlocks() const {
+  ArrayRef<BlockT *> getBlocks() const {
     assert(!isInvalid() && "Loop not in a valid state!");
     return Blocks;
   }
-  typedef typename std::vector<BlockT *>::const_iterator block_iterator;
+  typedef typename ArrayRef<BlockT *>::const_iterator block_iterator;
   block_iterator block_begin() const { return getBlocks().begin(); }
   block_iterator block_end() const { return getBlocks().end(); }
   inline iterator_range<block_iterator> blocks() const {
@@ -163,6 +163,25 @@ public:
   unsigned getNumBlocks() const {
     assert(!isInvalid() && "Loop not in a valid state!");
     return Blocks.size();
+  }
+
+  /// Return a direct, mutable handle to the blocks vector so that we can
+  /// mutate it efficiently with techniques like `std::remove`.
+  std::vector<BlockT *> &getBlocksVector() {
+    assert(!isInvalid() && "Loop not in a valid state!");
+    return Blocks;
+  }
+  /// Return a direct, mutable handle to the blocks set so that we can
+  /// mutate it efficiently.
+  SmallPtrSetImpl<const BlockT *> &getBlocksSet() {
+    assert(!isInvalid() && "Loop not in a valid state!");
+    return DenseBlockSet;
+  }
+
+  /// Return a direct, immutable handle to the blocks set.
+  const SmallPtrSetImpl<const BlockT *> &getBlocksSet() const {
+    assert(!isInvalid() && "Loop not in a valid state!");
+    return DenseBlockSet;
   }
 
   /// Return true if this loop is no longer valid.  The only valid use of this
@@ -314,6 +333,12 @@ public:
     return Child;
   }
 
+  /// This removes the specified child from being a subloop of this loop. The
+  /// loop is not deleted, as it will presumably be inserted into another loop.
+  LoopT *removeChildLoop(LoopT *Child) {
+    return removeChildLoop(llvm::find(*this, Child));
+  }
+
   /// This adds a basic block directly to the basic block list.
   /// This should only be used by transformations that create new loops.  Other
   /// transformations should use addBasicBlockToLoop.
@@ -419,7 +444,7 @@ extern template class LoopBase<BasicBlock, Loop>;
 /// in the CFG are necessarily loops.
 class Loop : public LoopBase<BasicBlock, Loop> {
 public:
-  /// \brief A range representing the start and end location of a loop.
+  /// A range representing the start and end location of a loop.
   class LocRange {
     DebugLoc Start;
     DebugLoc End;
@@ -433,7 +458,7 @@ public:
     const DebugLoc &getStart() const { return Start; }
     const DebugLoc &getEnd() const { return End; }
 
-    /// \brief Check for null.
+    /// Check for null.
     ///
     explicit operator bool() const { return Start && End; }
   };
@@ -508,7 +533,7 @@ public:
   ///
   /// If this loop contains the same llvm.loop metadata on each branch to the
   /// header then the node is returned. If any latch instruction does not
-  /// contain llvm.loop or or if multiple latches contain different nodes then
+  /// contain llvm.loop or if multiple latches contain different nodes then
   /// 0 is returned.
   MDNode *getLoopID() const;
   /// Set the llvm.loop loop id metadata for this loop.
@@ -744,9 +769,16 @@ public:
 
   void verify(const DominatorTreeBase<BlockT, false> &DomTree) const;
 
-protected:
-  // Calls the destructor for \p L but keeps the memory for \p L around so that
-  // the pointer value does not get re-used.
+  /// Destroy a loop that has been removed from the `LoopInfo` nest.
+  ///
+  /// This runs the destructor of the loop object making it invalid to
+  /// reference afterward. The memory is retained so that the *pointer* to the
+  /// loop remains valid.
+  ///
+  /// The caller is responsible for removing this loop from the loop nest and
+  /// otherwise disconnecting it from the broader `LoopInfo` data structures.
+  /// Callers that don't naturally handle this themselves should probably call
+  /// `erase' instead.
   void destroy(LoopT *L) {
     L->~LoopT();
 
@@ -903,7 +935,7 @@ template <> struct GraphTraits<Loop *> {
   static ChildIteratorType child_end(NodeRef N) { return N->end(); }
 };
 
-/// \brief Analysis pass that exposes the \c LoopInfo for a function.
+/// Analysis pass that exposes the \c LoopInfo for a function.
 class LoopAnalysis : public AnalysisInfoMixin<LoopAnalysis> {
   friend AnalysisInfoMixin<LoopAnalysis>;
   static AnalysisKey Key;
@@ -914,7 +946,7 @@ public:
   LoopInfo run(Function &F, FunctionAnalysisManager &AM);
 };
 
-/// \brief Printer pass for the \c LoopAnalysis results.
+/// Printer pass for the \c LoopAnalysis results.
 class LoopPrinterPass : public PassInfoMixin<LoopPrinterPass> {
   raw_ostream &OS;
 
@@ -923,12 +955,12 @@ public:
   PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
 };
 
-/// \brief Verifier pass for the \c LoopAnalysis results.
+/// Verifier pass for the \c LoopAnalysis results.
 struct LoopVerifierPass : public PassInfoMixin<LoopVerifierPass> {
   PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
 };
 
-/// \brief The legacy pass manager's analysis pass to compute loop information.
+/// The legacy pass manager's analysis pass to compute loop information.
 class LoopInfoWrapperPass : public FunctionPass {
   LoopInfo LI;
 
@@ -942,7 +974,7 @@ public:
   LoopInfo &getLoopInfo() { return LI; }
   const LoopInfo &getLoopInfo() const { return LI; }
 
-  /// \brief Calculate the natural loop information for a given function.
+  /// Calculate the natural loop information for a given function.
   bool runOnFunction(Function &F) override;
 
   void verifyAnalysis() const override;

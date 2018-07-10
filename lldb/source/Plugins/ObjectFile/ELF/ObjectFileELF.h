@@ -16,10 +16,8 @@
 // C++ Includes
 #include <vector>
 
-// Other libraries and framework includes
-// Project includes
-#include "lldb/Core/ArchSpec.h"
 #include "lldb/Symbol/ObjectFile.h"
+#include "lldb/Utility/ArchSpec.h"
 #include "lldb/Utility/FileSpec.h"
 #include "lldb/Utility/UUID.h"
 #include "lldb/lldb-private.h"
@@ -56,10 +54,10 @@ struct ELFNote {
 
 //------------------------------------------------------------------------------
 /// @class ObjectFileELF
-/// @brief Generic ELF object file reader.
+/// Generic ELF object file reader.
 ///
-/// This class provides a generic ELF (32/64 bit) reader plugin implementing the
-/// ObjectFile protocol.
+/// This class provides a generic ELF (32/64 bit) reader plugin implementing
+/// the ObjectFile protocol.
 class ObjectFileELF : public lldb_private::ObjectFile {
 public:
   ~ObjectFileELF() override;
@@ -142,6 +140,13 @@ public:
 
   ObjectFile::Strata CalculateStrata() override;
 
+  size_t ReadSectionData(lldb_private::Section *section,
+                         lldb::offset_t section_offset, void *dst,
+                         size_t dst_len) override;
+
+  size_t ReadSectionData(lldb_private::Section *section,
+                         lldb_private::DataExtractor &section_data) override;
+
   // Returns number of program headers found in the ELF file.
   size_t GetProgramHeaderCount();
 
@@ -155,6 +160,11 @@ public:
   StripLinkerSymbolAnnotations(llvm::StringRef symbol_name) const override;
 
   void RelocateSection(lldb_private::Section *section) override;
+
+protected:
+
+  std::vector<LoadableData>
+  GetLoadableData(lldb_private::Target &target) override;
 
 private:
   ObjectFileELF(const lldb::ModuleSP &module_sp, lldb::DataBufferSP &data_sp,
@@ -250,8 +260,8 @@ private:
                                  uint64_t length,
                                  lldb_private::ArchSpec &arch_spec);
 
-  /// Parses the elf section headers and returns the uuid, debug link name, crc,
-  /// archspec.
+  /// Parses the elf section headers and returns the uuid, debug link name,
+  /// crc, archspec.
   static size_t GetSectionHeaderInfo(SectionHeaderColl &section_headers,
                                      lldb_private::DataExtractor &object_data,
                                      const elf::ELFHeader &header,
@@ -378,6 +388,8 @@ private:
   RefineModuleDetailsFromNote(lldb_private::DataExtractor &data,
                               lldb_private::ArchSpec &arch_spec,
                               lldb_private::UUID &uuid);
+
+  bool AnySegmentHasPhysicalAddress();
 };
 
 #endif // liblldb_ObjectFileELF_h_

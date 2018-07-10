@@ -12,7 +12,7 @@
 
 #include "AMDGPUSubtarget.h"
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/CodeGen/LiveIntervalAnalysis.h"
+#include "llvm/CodeGen/LiveIntervals.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/SlotIndexes.h"
@@ -105,6 +105,9 @@ protected:
   mutable const MachineRegisterInfo *MRI = nullptr;
 
   GCNRPTracker(const LiveIntervals &LIS_) : LIS(LIS_) {}
+
+  void reset(const MachineInstr &MI, const LiveRegSet *LiveRegsCopy,
+             bool After);
 
 public:
   // live regs for the current state

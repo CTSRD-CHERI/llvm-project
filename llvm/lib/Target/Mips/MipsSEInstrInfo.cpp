@@ -28,7 +28,7 @@ using namespace llvm;
 
 MipsSEInstrInfo::MipsSEInstrInfo(const MipsSubtarget &STI)
     : MipsInstrInfo(STI, STI.isPositionIndependent() ? Mips::B : Mips::J),
-      RI(STI.getHwMode()) {}
+      RI(STI) {}
 
 const MipsRegisterInfo &MipsSEInstrInfo::getRegisterInfo() const {
   return RI;
@@ -155,13 +155,22 @@ void MipsSEInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
       Opc = Mips::MTLO64, DestReg = 0;
     else if (Mips::FGR64RegClass.contains(DestReg))
       Opc = Mips::DMTC1;
- } else if (Mips::CheriRegsRegClass.contains(SrcReg)) {
-   BuildMI(MBB, I, DL, get(Mips::CMove))
-   .addReg(DestReg, RegState::Define)
-   .addReg(SrcReg, getKillRegState(KillSrc));
-   return;
-  }
-  else if (Mips::MSA128BRegClass.contains(DestReg)) { // Copy to MSA reg
+  } else if (Mips::CheriGPROrCNullRegClass.contains(SrcReg)) {
+    BuildMI(MBB, I, DL, get(Mips::CMove))
+        .addReg(DestReg, RegState::Define)
+        .addReg(SrcReg, getKillRegState(KillSrc));
+    return;
+  } else if (Mips::CheriHWRegsRegClass.contains(SrcReg)) {
+    BuildMI(MBB, I, DL, get(Mips::CReadHwr))
+        .addReg(DestReg, RegState::Define)
+        .addReg(SrcReg, getKillRegState(KillSrc));
+    return;
+  } else if (Mips::CheriHWRegsRegClass.contains(DestReg)) {
+    BuildMI(MBB, I, DL, get(Mips::CWriteHwr))
+        .addReg(SrcReg, RegState::Define)
+        .addReg(DestReg, getKillRegState(KillSrc));
+    return;
+  } else if (Mips::MSA128BRegClass.contains(DestReg)) { // Copy to MSA reg
     if (Mips::MSA128BRegClass.contains(SrcReg))
       Opc = Mips::MOVE_V;
   }
@@ -178,6 +187,80 @@ void MipsSEInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
 
   if (ZeroReg)
     MIB.addReg(ZeroReg);
+}
+
+static bool isORCopyInst(const MachineInstr &MI) {
+  switch (MI.getOpcode()) {
+  default:
+    break;
+  case Mips::OR_MM:
+  case Mips::OR:
+    if (MI.getOperand(2).getReg() == Mips::ZERO)
+      return true;
+    break;
+  case Mips::OR64:
+    if (MI.getOperand(2).getReg() == Mips::ZERO_64)
+      return true;
+    break;
+  }
+  return false;
+}
+
+static bool isCIncOffsetCopyInst(const MachineInstr &MI) {
+  if (MI.getOpcode() == Mips::CIncOffset &&
+      MI.getOperand(2).getReg() == Mips::ZERO_64)
+    return true;
+  if (MI.getOpcode() == Mips::CIncOffsetImm && MI.getOperand(2).getImm() == 0)
+    return true;
+  return false;
+}
+
+/// If @MI is WRDSP/RRDSP instruction return true with @isWrite set to true
+/// if it is WRDSP instruction.
+static bool isReadOrWriteToDSPReg(const MachineInstr &MI, bool &isWrite) {
+  switch (MI.getOpcode()) {
+  default:
+   return false;
+  case Mips::WRDSP:
+  case Mips::WRDSP_MM:
+    isWrite = true;
+    break;
+  case Mips::RDDSP:
+  case Mips::RDDSP_MM:
+    isWrite = false;
+    break;
+  }
+  return true;
+}
+
+/// We check for the common case of 'or', as it's MIPS' preferred instruction
+/// for GPRs but we have to check the operands to ensure that is the case.
+/// Other move instructions for MIPS are directly identifiable.
+bool MipsSEInstrInfo::isCopyInstr(const MachineInstr &MI,
+                                  const MachineOperand *&Src,
+                                  const MachineOperand *&Dest) const {
+  bool isDSPControlWrite = false;
+  // Condition is made to match the creation of WRDSP/RDDSP copy instruction
+  // from copyPhysReg function.
+
+  // FIXME: Handle CRead/WriteHWR here as well?
+  if (isReadOrWriteToDSPReg(MI, isDSPControlWrite)) {
+    if (!MI.getOperand(1).isImm() || MI.getOperand(1).getImm() != (1<<4))
+      return false;
+    else if (isDSPControlWrite) {
+      Src = &MI.getOperand(0);
+      Dest = &MI.getOperand(2);
+    } else {
+      Dest = &MI.getOperand(0);
+      Src = &MI.getOperand(2);
+    }
+    return true;
+  } else if (MI.isMoveReg() || isORCopyInst(MI) || isCIncOffsetCopyInst(MI)) {
+    Dest = &MI.getOperand(0);
+    Src = &MI.getOperand(1);
+    return true;
+  }
+  return false;
 }
 
 void MipsSEInstrInfo::
@@ -208,8 +291,7 @@ storeRegToStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
       BuildMI(MBB, I, DL, get(Mips::CAPSTORE64)).addReg(IntReg, getKillRegState(true))
         .addReg(Mips::ZERO_64).addFrameIndex(FI).addImm(Offset).addMemOperand(MMO);
       return;
-    }
-    else if (Mips::CheriRegsRegClass.hasSubClassEq(RC)) {
+    } else if (Mips::CheriGPROrCNullRegClass.hasSubClassEq(RC)) {
       Opc = Mips::STORECAP;
       // Ensure that capabilities have a 32-byte alignment
       // FIXME: This shouldn't be needed.  Whatever is allocating the frame index
@@ -252,19 +334,21 @@ storeRegToStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
   else if (TRI->isTypeLegalForClass(*RC, MVT::v2i64) ||
            TRI->isTypeLegalForClass(*RC, MVT::v2f64))
     Opc = Mips::ST_D;
-  else if (Mips::CheriRegsRegClass.hasSubClassEq(RC)) {
+  else if (Mips::CheriGPROrCNullRegClass.hasSubClassEq(RC)) {
     Opc = Mips::STORECAP;
     // Ensure that capabilities have a 32-byte alignment
     // FIXME: This shouldn't be needed.  Whatever is allocating the frame index
     // ought to set it.
     MachineFrameInfo &MFI = MBB.getParent()->getFrameInfo();
     MFI.setObjectAlignment(FI, Subtarget.isCheri128() ? 16 : 32);
-    BuildMI(MBB, I, DL, get(Opc)).addReg(SrcReg, getKillRegState(isKill))
-      .addFrameIndex(FI).addImm(Offset).addMemOperand(MMO)
-      .addReg(Mips::C0);
+    BuildMI(MBB, I, DL, get(Opc))
+        .addReg(SrcReg, getKillRegState(isKill))
+        .addFrameIndex(FI)
+        .addImm(Offset)
+        .addMemOperand(MMO)
+        .addReg(Mips::DDC);
     return;
-  }
-  else if (Mips::LO32RegClass.hasSubClassEq(RC))
+  } else if (Mips::LO32RegClass.hasSubClassEq(RC))
     Opc = Mips::SW;
   else if (Mips::LO64RegClass.hasSubClassEq(RC))
     Opc = Mips::SD;
@@ -277,8 +361,8 @@ storeRegToStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
 
   // Hi, Lo are normally caller save but they are callee save
   // for interrupt handling.
-  const Function *Func = MBB.getParent()->getFunction();
-  if (Func->hasFnAttribute("interrupt")) {
+  const Function &Func = MBB.getParent()->getFunction();
+  if (Func.hasFnAttribute("interrupt")) {
     if (Mips::HI32RegClass.hasSubClassEq(RC)) {
       BuildMI(MBB, I, DL, get(Mips::MFHI), Mips::K0);
       SrcReg = Mips::K0;
@@ -327,7 +411,7 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
       BuildMI(MBB, I, DL, get(Mips::DMTC1), DestReg)
         .addReg(IntReg, getKillRegState(true));
       return;
-    } else if (Mips::CheriRegsRegClass.hasSubClassEq(RC)) {
+    } else if (Mips::CheriGPROrCNullRegClass.hasSubClassEq(RC)) {
       Opc = Mips::LOADCAP;
     } else {
       llvm_unreachable("Unexpected register type for CHERI!");
@@ -337,8 +421,8 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
       .addMemOperand(MMO);
     return;
   }
-  const Function *Func = MBB.getParent()->getFunction();
-  bool ReqIndirectLoad = Func->hasFnAttribute("interrupt") &&
+  const Function &Func = MBB.getParent()->getFunction();
+  bool ReqIndirectLoad = Func.hasFnAttribute("interrupt") &&
                          (DestReg == Mips::LO0 || DestReg == Mips::LO0_64 ||
                           DestReg == Mips::HI0 || DestReg == Mips::HI0_64);
 
@@ -371,11 +455,13 @@ loadRegFromStack(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
   else if (TRI->isTypeLegalForClass(*RC, MVT::v2i64) ||
            TRI->isTypeLegalForClass(*RC, MVT::v2f64))
     Opc = Mips::LD_D;
-  else if (Mips::CheriRegsRegClass.hasSubClassEq(RC)) {
+  else if (Mips::CheriGPROrCNullRegClass.hasSubClassEq(RC)) {
     Opc = Mips::LOADCAP;
     BuildMI(MBB, I, DL, get(Opc), DestReg)
-      .addFrameIndex(FI).addImm(Offset).addMemOperand(MMO)
-      .addReg(Mips::C0);
+        .addFrameIndex(FI)
+        .addImm(Offset)
+        .addMemOperand(MMO)
+        .addReg(Mips::DDC);
     return;
   } else if (Mips::HI32RegClass.hasSubClassEq(RC))
     Opc = Mips::LW;
@@ -461,28 +547,30 @@ bool MipsSEInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     expandCvtFPInt(MBB, MI, Mips::CVT_S_W, Mips::MTC1, false);
     break;
   case Mips::PseudoCVT_D32_W:
-    expandCvtFPInt(MBB, MI, Mips::CVT_D32_W, Mips::MTC1, false);
+    Opc = isMicroMips ? Mips::CVT_D32_W_MM : Mips::CVT_D32_W;
+    expandCvtFPInt(MBB, MI, Opc, Mips::MTC1, false);
     break;
   case Mips::PseudoCVT_S_L:
     expandCvtFPInt(MBB, MI, Mips::CVT_S_L, Mips::DMTC1, true);
     break;
   case Mips::PseudoCVT_D64_W:
-    expandCvtFPInt(MBB, MI, Mips::CVT_D64_W, Mips::MTC1, true);
+    Opc = isMicroMips ? Mips::CVT_D64_W_MM : Mips::CVT_D64_W;
+    expandCvtFPInt(MBB, MI, Opc, Mips::MTC1, true);
     break;
   case Mips::PseudoCVT_D64_L:
     expandCvtFPInt(MBB, MI, Mips::CVT_D64_L, Mips::DMTC1, true);
     break;
   case Mips::BuildPairF64:
-    expandBuildPairF64(MBB, MI, false);
+    expandBuildPairF64(MBB, MI, isMicroMips, false);
     break;
   case Mips::BuildPairF64_64:
-    expandBuildPairF64(MBB, MI, true);
+    expandBuildPairF64(MBB, MI, isMicroMips, true);
     break;
   case Mips::ExtractElementF64:
-    expandExtractElementF64(MBB, MI, false);
+    expandExtractElementF64(MBB, MI, isMicroMips, false);
     break;
   case Mips::ExtractElementF64_64:
-    expandExtractElementF64(MBB, MI, true);
+    expandExtractElementF64(MBB, MI, isMicroMips, true);
     break;
   case Mips::MIPSeh_return32:
   case Mips::MIPSeh_return64:
@@ -519,6 +607,10 @@ unsigned MipsSEInstrInfo::getOppositeBranchOpc(unsigned Opc) const {
   case Mips::BGEZ:   return Mips::BLTZ;
   case Mips::BLTZ:   return Mips::BGEZ;
   case Mips::BLEZ:   return Mips::BGTZ;
+  case Mips::BGTZ_MM:   return Mips::BLEZ_MM;
+  case Mips::BGEZ_MM:   return Mips::BLTZ_MM;
+  case Mips::BLTZ_MM:   return Mips::BGEZ_MM;
+  case Mips::BLEZ_MM:   return Mips::BGTZ_MM;
   case Mips::BEQ64:  return Mips::BNE64;
   case Mips::BNE64:  return Mips::BEQ64;
   case Mips::BGTZ64: return Mips::BLEZ64;
@@ -527,20 +619,40 @@ unsigned MipsSEInstrInfo::getOppositeBranchOpc(unsigned Opc) const {
   case Mips::BLEZ64: return Mips::BGTZ64;
   case Mips::BC1T:   return Mips::BC1F;
   case Mips::BC1F:   return Mips::BC1T;
-  case Mips::BEQZC_MM: return Mips::BNEZC_MM;
-  case Mips::BNEZC_MM: return Mips::BEQZC_MM;
-  case Mips::CBTS:   return Mips::CBTU;
-  case Mips::CBTU:   return Mips::CBTS;
-  case Mips::CBEZ:   return Mips::CBNZ;
-  case Mips::CBNZ:   return Mips::CBEZ;
+  case Mips::BC1T_MM:   return Mips::BC1F_MM;
+  case Mips::BC1F_MM:   return Mips::BC1T_MM;
+  case Mips::BEQZ16_MM: return Mips::BNEZ16_MM;
+  case Mips::BNEZ16_MM: return Mips::BEQZ16_MM;
+  case Mips::BEQZC_MM:  return Mips::BNEZC_MM;
+  case Mips::BNEZC_MM:  return Mips::BEQZC_MM;
   case Mips::BEQZC:  return Mips::BNEZC;
   case Mips::BNEZC:  return Mips::BEQZC;
+  case Mips::BLEZC:  return Mips::BGTZC;
+  case Mips::BGEZC:  return Mips::BLTZC;
+  case Mips::BGEC:   return Mips::BLTC;
+  case Mips::BGTZC:  return Mips::BLEZC;
+  case Mips::BLTZC:  return Mips::BGEZC;
+  case Mips::BLTC:   return Mips::BGEC;
+  case Mips::BGEUC:  return Mips::BLTUC;
+  case Mips::BLTUC:  return Mips::BGEUC;
   case Mips::BEQC:   return Mips::BNEC;
   case Mips::BNEC:   return Mips::BEQC;
-  case Mips::BGTZC:  return Mips::BLEZC;
-  case Mips::BGEZC:  return Mips::BLTZC;
-  case Mips::BLTZC:  return Mips::BGEZC;
-  case Mips::BLEZC:  return Mips::BGTZC;
+  case Mips::BC1EQZ: return Mips::BC1NEZ;
+  case Mips::BC1NEZ: return Mips::BC1EQZ;
+  case Mips::BEQZC_MMR6:  return Mips::BNEZC_MMR6;
+  case Mips::BNEZC_MMR6:  return Mips::BEQZC_MMR6;
+  case Mips::BLEZC_MMR6:  return Mips::BGTZC_MMR6;
+  case Mips::BGEZC_MMR6:  return Mips::BLTZC_MMR6;
+  case Mips::BGEC_MMR6:   return Mips::BLTC_MMR6;
+  case Mips::BGTZC_MMR6:  return Mips::BLEZC_MMR6;
+  case Mips::BLTZC_MMR6:  return Mips::BGEZC_MMR6;
+  case Mips::BLTC_MMR6:   return Mips::BGEC_MMR6;
+  case Mips::BGEUC_MMR6:  return Mips::BLTUC_MMR6;
+  case Mips::BLTUC_MMR6:  return Mips::BGEUC_MMR6;
+  case Mips::BEQC_MMR6:   return Mips::BNEC_MMR6;
+  case Mips::BNEC_MMR6:   return Mips::BEQC_MMR6;
+  case Mips::BC1EQZC_MMR6: return Mips::BC1NEZC_MMR6;
+  case Mips::BC1NEZC_MMR6: return Mips::BC1EQZC_MMR6;
   case Mips::BEQZC64:  return Mips::BNEZC64;
   case Mips::BNEZC64:  return Mips::BEQZC64;
   case Mips::BEQC64:   return Mips::BNEC64;
@@ -557,6 +669,20 @@ unsigned MipsSEInstrInfo::getOppositeBranchOpc(unsigned Opc) const {
   case Mips::BBIT1:  return Mips::BBIT0;
   case Mips::BBIT032:  return Mips::BBIT132;
   case Mips::BBIT132:  return Mips::BBIT032;
+  case Mips::BZ_B:   return Mips::BNZ_B;
+  case Mips::BZ_H:   return Mips::BNZ_H;
+  case Mips::BZ_W:   return Mips::BNZ_W;
+  case Mips::BZ_D:   return Mips::BNZ_D;
+  case Mips::BZ_V:   return Mips::BNZ_V;
+  case Mips::BNZ_B:  return Mips::BZ_B;
+  case Mips::BNZ_H:  return Mips::BZ_H;
+  case Mips::BNZ_W:  return Mips::BZ_W;
+  case Mips::BNZ_D:  return Mips::BZ_D;
+  case Mips::BNZ_V:  return Mips::BZ_V;
+  case Mips::CBTS:   return Mips::CBTU;
+  case Mips::CBTU:   return Mips::CBTS;
+  case Mips::CBEZ:   return Mips::CBNZ;
+  case Mips::CBNZ:   return Mips::CBEZ;
   }
 }
 
@@ -649,18 +775,24 @@ unsigned MipsSEInstrInfo::getAnalyzableBrOpc(unsigned Opc) const {
           Opc == Mips::CBTS   || Opc == Mips::CBTU   || Opc == Mips::CBEZ   ||
           Opc == Mips::CBNZ   ||
           Opc == Mips::BC1F   || Opc == Mips::B      || Opc == Mips::J      ||
-          Opc == Mips::BEQZC_MM || Opc == Mips::BNEZC_MM || Opc == Mips::BEQC ||
-          Opc == Mips::BNEC   || Opc == Mips::BLTC   || Opc == Mips::BGEC   ||
-          Opc == Mips::BLTUC  || Opc == Mips::BGEUC  || Opc == Mips::BGTZC  ||
-          Opc == Mips::BLEZC  || Opc == Mips::BGEZC  || Opc == Mips::BLTZC  ||
-          Opc == Mips::BEQZC  || Opc == Mips::BNEZC  || Opc == Mips::BEQZC64 ||
-          Opc == Mips::BNEZC64 || Opc == Mips::BEQC64 || Opc == Mips::BNEC64 ||
-          Opc == Mips::BGEC64 || Opc == Mips::BGEUC64 || Opc == Mips::BLTC64 ||
-          Opc == Mips::BLTUC64 || Opc == Mips::BGTZC64 ||
-          Opc == Mips::BGEZC64 || Opc == Mips::BLTZC64 ||
-          Opc == Mips::BLEZC64 || Opc == Mips::BC || Opc == Mips::BBIT0 ||
-          Opc == Mips::BBIT1 || Opc == Mips::BBIT032 ||
-          Opc == Mips::BBIT132) ? Opc : 0;
+          Opc == Mips::B_MM   || Opc == Mips::BEQZC_MM ||
+          Opc == Mips::BNEZC_MM || Opc == Mips::BEQC || Opc == Mips::BNEC   ||
+          Opc == Mips::BLTC   || Opc == Mips::BGEC   || Opc == Mips::BLTUC  ||
+          Opc == Mips::BGEUC  || Opc == Mips::BGTZC  || Opc == Mips::BLEZC  ||
+          Opc == Mips::BGEZC  || Opc == Mips::BLTZC  || Opc == Mips::BEQZC  ||
+          Opc == Mips::BNEZC  || Opc == Mips::BEQZC64 || Opc == Mips::BNEZC64 ||
+          Opc == Mips::BEQC64 || Opc == Mips::BNEC64 || Opc == Mips::BGEC64 ||
+          Opc == Mips::BGEUC64 || Opc == Mips::BLTC64 || Opc == Mips::BLTUC64 ||
+          Opc == Mips::BGTZC64 || Opc == Mips::BGEZC64 ||
+          Opc == Mips::BLTZC64 || Opc == Mips::BLEZC64 || Opc == Mips::BC ||
+          Opc == Mips::BBIT0 || Opc == Mips::BBIT1 || Opc == Mips::BBIT032 ||
+          Opc == Mips::BBIT132 ||  Opc == Mips::BC_MMR6 ||
+          Opc == Mips::BEQC_MMR6 || Opc == Mips::BNEC_MMR6 ||
+          Opc == Mips::BLTC_MMR6 || Opc == Mips::BGEC_MMR6 ||
+          Opc == Mips::BLTUC_MMR6 || Opc == Mips::BGEUC_MMR6 ||
+          Opc == Mips::BGTZC_MMR6 || Opc == Mips::BLEZC_MMR6 ||
+          Opc == Mips::BGEZC_MMR6 || Opc == Mips::BLTZC_MMR6 ||
+          Opc == Mips::BEQZC_MMR6 || Opc == Mips::BNEZC_MMR6) ? Opc : 0;
 }
 
 void MipsSEInstrInfo::expandRetRA(MachineBasicBlock &MBB,
@@ -760,6 +892,7 @@ void MipsSEInstrInfo::expandCvtFPInt(MachineBasicBlock &MBB,
 
 void MipsSEInstrInfo::expandExtractElementF64(MachineBasicBlock &MBB,
                                               MachineBasicBlock::iterator I,
+                                              bool isMicroMips,
                                               bool FP64) const {
   unsigned DstReg = I->getOperand(0).getReg();
   unsigned SrcReg = I->getOperand(1).getReg();
@@ -791,7 +924,10 @@ void MipsSEInstrInfo::expandExtractElementF64(MachineBasicBlock &MBB,
     //        We therefore pretend that it reads the bottom 32-bits to
     //        artificially create a dependency and prevent the scheduler
     //        changing the behaviour of the code.
-    BuildMI(MBB, I, dl, get(FP64 ? Mips::MFHC1_D64 : Mips::MFHC1_D32), DstReg)
+    BuildMI(MBB, I, dl,
+            get(isMicroMips ? (FP64 ? Mips::MFHC1_D64_MM : Mips::MFHC1_D32_MM)
+                            : (FP64 ? Mips::MFHC1_D64 : Mips::MFHC1_D32)),
+            DstReg)
         .addReg(SrcReg);
   } else
     BuildMI(MBB, I, dl, get(Mips::MFC1), DstReg).addReg(SubReg);
@@ -799,7 +935,7 @@ void MipsSEInstrInfo::expandExtractElementF64(MachineBasicBlock &MBB,
 
 void MipsSEInstrInfo::expandBuildPairF64(MachineBasicBlock &MBB,
                                          MachineBasicBlock::iterator I,
-                                         bool FP64) const {
+                                         bool isMicroMips, bool FP64) const {
   unsigned DstReg = I->getOperand(0).getReg();
   unsigned LoReg = I->getOperand(1).getReg(), HiReg = I->getOperand(2).getReg();
   const MCInstrDesc& Mtc1Tdd = get(Mips::MTC1);
@@ -844,7 +980,10 @@ void MipsSEInstrInfo::expandBuildPairF64(MachineBasicBlock &MBB,
     //        We therefore pretend that it reads the bottom 32-bits to
     //        artificially create a dependency and prevent the scheduler
     //        changing the behaviour of the code.
-    BuildMI(MBB, I, dl, get(FP64 ? Mips::MTHC1_D64 : Mips::MTHC1_D32), DstReg)
+    BuildMI(MBB, I, dl,
+            get(isMicroMips ? (FP64 ? Mips::MTHC1_D64_MM : Mips::MTHC1_D32_MM)
+                            : (FP64 ? Mips::MTHC1_D64 : Mips::MTHC1_D32)),
+            DstReg)
         .addReg(DstReg)
         .addReg(HiReg);
   } else if (Subtarget.isABI_FPXX())
@@ -909,13 +1048,13 @@ void MipsSEInstrInfo::expandCPSETUP(MachineBasicBlock &MBB,
   assert(GP != Mips::T9_64);
   DebugLoc DL = I->getDebugLoc();
   const TargetInstrInfo *TII = Subtarget.getInstrInfo();
-  const GlobalValue *FName = MBB.getParent()->getFunction();
+  const GlobalValue& FName = MBB.getParent()->getFunction();
   BuildMI(MBB, I, DL, TII->get(Mips::LUi64), GP)
-    .addGlobalAddress(FName, 0, MipsII::MO_GPOFF_HI);
+    .addGlobalAddress(&FName, 0, MipsII::MO_GPOFF_HI);
   BuildMI(MBB, I, DL, TII->get(Mips::DADDu), GP).addReg(GP)
     .addReg(Mips::T9_64);
   BuildMI(MBB, I, DL, TII->get(Mips::DADDiu), GP).addReg(GP)
-    .addGlobalAddress(FName, 0, MipsII::MO_GPOFF_LO);
+    .addGlobalAddress(&FName, 0, MipsII::MO_GPOFF_LO);
 }
 
 const MipsInstrInfo *llvm::createMipsSEInstrInfo(const MipsSubtarget &STI) {

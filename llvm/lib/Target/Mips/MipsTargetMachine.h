@@ -45,7 +45,7 @@ public:
                     CodeGenOpt::Level OL, bool JIT, bool isLittle);
   ~MipsTargetMachine() override;
 
-  TargetIRAnalysis getTargetIRAnalysis() override;
+  TargetTransformInfo getTargetTransformInfo(const Function &F) override;
 
   const MipsSubtarget *getSubtargetImpl() const {
     if (Subtarget)
@@ -55,7 +55,7 @@ public:
 
   const MipsSubtarget *getSubtargetImpl(const Function &F) const override;
 
-  /// \brief Reset the subtarget for the Mips target.
+  /// Reset the subtarget for the Mips target.
   void resetSubtarget(MachineFunction *MF);
 
   // Pass Pipeline Configuration
@@ -107,11 +107,29 @@ public:
                         Optional<Reloc::Model> RM, Optional<CodeModel::Model> CM,
                         CodeGenOpt::Level OL, bool JIT);
   bool isCompatibleDataLayout(const DataLayout &Candidate) const override {
+    if (!isCapabilitySizeCompatible(Candidate))
+      return false;
     if (TargetMachine::isCompatibleDataLayout(Candidate))
       return true;
     DataLayout MutableCandidate(Candidate);
     MutableCandidate.setAllocaAS(createDataLayout().getAllocaAddrSpace());
     return TargetMachine::isCompatibleDataLayout(MutableCandidate);
+  }
+
+private:
+  bool isCapabilitySizeCompatible(const DataLayout &Candidate) const {
+    if (!getSubtargetImpl()->isCheri())
+      return true;
+    switch (Candidate.getPointerSizeInBits(200)) {
+    case 64:
+      return getSubtargetImpl()->isCheri64();
+    case 128:
+      return getSubtargetImpl()->isCheri128();
+    case 256:
+      return getSubtargetImpl()->isCheri256();
+    default:
+      llvm_unreachable("DataLayout does not have a valid size for AS200");
+    }
   }
 };
 

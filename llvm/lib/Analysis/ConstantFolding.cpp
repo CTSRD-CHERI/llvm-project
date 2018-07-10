@@ -287,8 +287,7 @@ bool llvm::IsConstantOffsetFromGlobal(Constant *C, GlobalValue *&GV,
                                       bool LookThroughAddrSpaces) {
   // Trivial case, constant is the global.
   if ((GV = dyn_cast<GlobalValue>(C))) {
-    unsigned BitWidth =
-      DL.getPointerBaseSizeInBits(GV->getType()->getPointerAddressSpace());
+    unsigned BitWidth = DL.getIndexTypeSizeInBits(GV->getType());
     Offset = APInt(BitWidth, 0);
     return true;
   }
@@ -299,7 +298,6 @@ bool llvm::IsConstantOffsetFromGlobal(Constant *C, GlobalValue *&GV,
 
   // For CHERI we also need to look through AddrSpaceCasts
   // Look through ptr->int and ptr->ptr casts.
-  // FIXME: add boolean parameter
   if (CE->getOpcode() == Instruction::PtrToInt ||
       CE->getOpcode() == Instruction::BitCast ||
       (LookThroughAddrSpaces && CE->getOpcode() == Instruction::AddrSpaceCast))
@@ -310,12 +308,11 @@ bool llvm::IsConstantOffsetFromGlobal(Constant *C, GlobalValue *&GV,
   if (!GEP)
     return false;
 
-  unsigned BitWidth =
-    DL.getPointerBaseSizeInBits(GEP->getType()->getPointerAddressSpace());
+  unsigned BitWidth = DL.getIndexTypeSizeInBits(GEP->getType());
   APInt TmpOffset(BitWidth, 0);
 
   // If the base isn't a global+constant, we aren't either.
-  if (!IsConstantOffsetFromGlobal(CE->getOperand(0), GV, TmpOffset, DL, false))
+  if (!IsConstantOffsetFromGlobal(CE->getOperand(0), GV, TmpOffset, DL, LookThroughAddrSpaces))
     return false;
 
   // Otherwise, add any offset that our operands provide.
@@ -324,6 +321,41 @@ bool llvm::IsConstantOffsetFromGlobal(Constant *C, GlobalValue *&GV,
 
   Offset = TmpOffset;
   return true;
+}
+
+Constant *llvm::ConstantFoldLoadThroughBitcast(Constant *C, Type *DestTy,
+                                         const DataLayout &DL) {
+  do {
+    Type *SrcTy = C->getType();
+
+    // If the type sizes are the same and a cast is legal, just directly
+    // cast the constant.
+    if (DL.getTypeSizeInBits(DestTy) == DL.getTypeSizeInBits(SrcTy)) {
+      Instruction::CastOps Cast = Instruction::BitCast;
+      // If we are going from a pointer to int or vice versa, we spell the cast
+      // differently.
+      if (SrcTy->isIntegerTy() && DestTy->isPointerTy())
+        Cast = Instruction::IntToPtr;
+      else if (SrcTy->isPointerTy() && DestTy->isIntegerTy())
+        Cast = Instruction::PtrToInt;
+
+      if (CastInst::castIsValid(Cast, C, DestTy))
+        return ConstantExpr::getCast(Cast, C, DestTy);
+    }
+
+    // If this isn't an aggregate type, there is nothing we can do to drill down
+    // and find a bitcastable constant.
+    if (!SrcTy->isAggregateType())
+      return nullptr;
+
+    // We're simulating a load through a pointer that was bitcast to point to
+    // a different type, so we can try to walk down through the initial
+    // elements of an aggregate to see if some part of th e aggregate is
+    // castable to implement the "load" semantic model.
+    C = C->getAggregateElement(0u);
+  } while (C);
+
+  return nullptr;
 }
 
 namespace {
@@ -543,8 +575,8 @@ Constant *FoldReinterpretLoadFromConstPtr(Constant *C, Type *LoadTy,
   return ConstantInt::get(IntType->getContext(), ResultVal);
 }
 
-Constant *ConstantFoldLoadThroughBitcast(ConstantExpr *CE, Type *DestTy,
-                                         const DataLayout &DL) {
+Constant *ConstantFoldLoadThroughBitcastExpr(ConstantExpr *CE, Type *DestTy,
+                                             const DataLayout &DL) {
   auto *SrcPtr = CE->getOperand(0);
   auto *SrcPtrTy = dyn_cast<PointerType>(SrcPtr->getType());
   if (!SrcPtrTy)
@@ -555,37 +587,7 @@ Constant *ConstantFoldLoadThroughBitcast(ConstantExpr *CE, Type *DestTy,
   if (!C)
     return nullptr;
 
-  do {
-    Type *SrcTy = C->getType();
-
-    // If the type sizes are the same and a cast is legal, just directly
-    // cast the constant.
-    if (DL.getTypeSizeInBits(DestTy) == DL.getTypeSizeInBits(SrcTy)) {
-      Instruction::CastOps Cast = Instruction::BitCast;
-      // If we are going from a pointer to int or vice versa, we spell the cast
-      // differently.
-      if (SrcTy->isIntegerTy() && DestTy->isPointerTy())
-        Cast = Instruction::IntToPtr;
-      else if (SrcTy->isPointerTy() && DestTy->isIntegerTy())
-        Cast = Instruction::PtrToInt;
-
-      if (CastInst::castIsValid(Cast, C, DestTy))
-        return ConstantExpr::getCast(Cast, C, DestTy);
-    }
-
-    // If this isn't an aggregate type, there is nothing we can do to drill down
-    // and find a bitcastable constant.
-    if (!SrcTy->isAggregateType())
-      return nullptr;
-
-    // We're simulating a load through a pointer that was bitcast to point to
-    // a different type, so we can try to walk down through the initial
-    // elements of an aggregate to see if some part of th e aggregate is
-    // castable to implement the "load" semantic model.
-    C = C->getAggregateElement(0u);
-  } while (C);
-
-  return nullptr;
+  return llvm::ConstantFoldLoadThroughBitcast(C, DestTy, DL);
 }
 
 } // end anonymous namespace
@@ -617,7 +619,7 @@ Constant *llvm::ConstantFoldLoadFromConstPtr(Constant *C, Type *Ty,
   }
 
   if (CE->getOpcode() == Instruction::BitCast)
-    if (Constant *LoadedC = ConstantFoldLoadThroughBitcast(CE, Ty, DL))
+    if (Constant *LoadedC = ConstantFoldLoadThroughBitcastExpr(CE, Ty, DL))
       return LoadedC;
 
   // Instead of loading constant c string, use corresponding integer value
@@ -814,26 +816,26 @@ Constant *SymbolicallyEvaluateGEP(const GEPOperator *GEP,
   // If this is a constant expr gep that is effectively computing an
   // "offsetof", fold it into 'cast int Size to T*' instead of 'gep 0, 0, 12'
   for (unsigned i = 1, e = Ops.size(); i != e; ++i)
-    if (!isa<ConstantInt>(Ops[i])) {
+      if (!isa<ConstantInt>(Ops[i])) {
 
-      // If this is "gep i8* Ptr, (sub 0, V)", fold this as:
-      // "inttoptr (sub (ptrtoint Ptr), V)"
-      if (Ops.size() == 2 && ResElemTy->isIntegerTy(8)) {
-        auto *CE = dyn_cast<ConstantExpr>(Ops[1]);
-        assert((!CE || CE->getType() == IntPtrTy) &&
-               "CastGEPIndices didn't canonicalize index types!");
-        if (CE && CE->getOpcode() == Instruction::Sub &&
-            CE->getOperand(0)->isNullValue()) {
-          Constant *Res = ConstantExpr::getPtrToInt(Ptr, CE->getType());
-          Res = ConstantExpr::getSub(Res, CE->getOperand(1));
-          Res = ConstantExpr::getIntToPtr(Res, ResTy);
-          if (auto *FoldedRes = ConstantFoldConstant(Res, DL, TLI))
-            Res = FoldedRes;
-          return Res;
+        // If this is "gep i8* Ptr, (sub 0, V)", fold this as:
+        // "inttoptr (sub (ptrtoint Ptr), V)"
+        if (Ops.size() == 2 && ResElemTy->isIntegerTy(8)) {
+          auto *CE = dyn_cast<ConstantExpr>(Ops[1]);
+          assert((!CE || CE->getType() == IntPtrTy) &&
+                 "CastGEPIndices didn't canonicalize index types!");
+          if (CE && CE->getOpcode() == Instruction::Sub &&
+              CE->getOperand(0)->isNullValue()) {
+            Constant *Res = ConstantExpr::getPtrToInt(Ptr, CE->getType());
+            Res = ConstantExpr::getSub(Res, CE->getOperand(1));
+            Res = ConstantExpr::getIntToPtr(Res, ResTy);
+            if (auto *FoldedRes = ConstantFoldConstant(Res, DL, TLI))
+              Res = FoldedRes;
+            return Res;
+          }
         }
+        return nullptr;
       }
-      return nullptr;
-    }
 
   unsigned BitWidth = DL.getTypeSizeInBits(IntPtrTy);
   APInt Offset =
@@ -1393,6 +1395,7 @@ bool llvm::canConstantFoldCallTo(ImmutableCallSite CS, const Function *F) {
   case Intrinsic::fma:
   case Intrinsic::fmuladd:
   case Intrinsic::copysign:
+  case Intrinsic::launder_invariant_group:
   case Intrinsic::round:
   case Intrinsic::masked_load:
   case Intrinsic::sadd_with_overflow:
@@ -1595,9 +1598,19 @@ Constant *ConstantFoldScalarCall(StringRef Name, unsigned IntrinsicID, Type *Ty,
       if (IntrinsicID == Intrinsic::cos)
         return Constant::getNullValue(Ty);
       if (IntrinsicID == Intrinsic::bswap ||
-          IntrinsicID == Intrinsic::bitreverse)
+          IntrinsicID == Intrinsic::bitreverse ||
+          IntrinsicID == Intrinsic::launder_invariant_group)
         return Operands[0];
     }
+
+    if (isa<ConstantPointerNull>(Operands[0]) &&
+        Operands[0]->getType()->getPointerAddressSpace() == 0) {
+      // launder(null) == null iff in addrspace 0
+      if (IntrinsicID == Intrinsic::launder_invariant_group)
+        return Operands[0];
+      return nullptr;
+    }
+
     if (auto *Op = dyn_cast<ConstantFP>(Operands[0])) {
       if (IntrinsicID == Intrinsic::convert_to_fp16) {
         APFloat Val(Op->getValueAPF());

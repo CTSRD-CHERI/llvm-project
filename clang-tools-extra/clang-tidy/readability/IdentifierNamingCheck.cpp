@@ -109,6 +109,7 @@ namespace readability {
     m(TemplateParameter) \
     m(TypeAlias) \
     m(MacroDefinition) \
+    m(ObjcIvar) \
 
 enum StyleKind {
 #define ENUMERATE(v) SK_ ## v,
@@ -384,6 +385,9 @@ static StyleKind findStyleKind(
     const NamedDecl *D,
     const std::vector<llvm::Optional<IdentifierNamingCheck::NamingStyle>>
         &NamingStyles) {
+  if (isa<ObjCIvarDecl>(D) && NamingStyles[SK_ObjcIvar])
+    return SK_ObjcIvar;
+  
   if (isa<TypedefDecl>(D) && NamingStyles[SK_Typedef])
     return SK_Typedef;
 
@@ -449,13 +453,13 @@ static StyleKind findStyleKind(
   if (const auto *Decl = dyn_cast<FieldDecl>(D)) {
     QualType Type = Decl->getType();
 
-    if (!Type.isNull() && Type.isLocalConstQualified() &&
-        NamingStyles[SK_ConstantMember])
-      return SK_ConstantMember;
+    if (!Type.isNull() && Type.isConstQualified()) {
+      if (NamingStyles[SK_ConstantMember])
+        return SK_ConstantMember;
 
-    if (!Type.isNull() && Type.isLocalConstQualified() &&
-        NamingStyles[SK_Constant])
-      return SK_Constant;
+      if (NamingStyles[SK_Constant])
+        return SK_Constant;
+    }
 
     if (Decl->getAccess() == AS_private && NamingStyles[SK_PrivateMember])
       return SK_PrivateMember;
@@ -478,13 +482,13 @@ static StyleKind findStyleKind(
     if (Decl->isConstexpr() && NamingStyles[SK_ConstexprVariable])
       return SK_ConstexprVariable;
 
-    if (!Type.isNull() && Type.isLocalConstQualified() &&
-        NamingStyles[SK_ConstantParameter])
-      return SK_ConstantParameter;
+    if (!Type.isNull() && Type.isConstQualified()) {
+      if (NamingStyles[SK_ConstantParameter])
+        return SK_ConstantParameter;
 
-    if (!Type.isNull() && Type.isLocalConstQualified() &&
-        NamingStyles[SK_Constant])
-      return SK_Constant;
+      if (NamingStyles[SK_Constant])
+        return SK_Constant;
+    }
 
     if (Decl->isParameterPack() && NamingStyles[SK_ParameterPack])
       return SK_ParameterPack;
@@ -501,29 +505,25 @@ static StyleKind findStyleKind(
     if (Decl->isConstexpr() && NamingStyles[SK_ConstexprVariable])
       return SK_ConstexprVariable;
 
-    if (!Type.isNull() && Type.isLocalConstQualified() &&
-        Decl->isStaticDataMember() && NamingStyles[SK_ClassConstant])
-      return SK_ClassConstant;
+    if (!Type.isNull() && Type.isConstQualified()) {
+      if (Decl->isStaticDataMember() && NamingStyles[SK_ClassConstant])
+        return SK_ClassConstant;
 
-    if (!Type.isNull() && Type.isLocalConstQualified() &&
-        Decl->isFileVarDecl() && NamingStyles[SK_GlobalConstant])
-      return SK_GlobalConstant;
+      if (Decl->isFileVarDecl() && NamingStyles[SK_GlobalConstant])
+        return SK_GlobalConstant;
 
-    if (!Type.isNull() && Type.isLocalConstQualified() &&
-        Decl->isStaticLocal() && NamingStyles[SK_StaticConstant])
-      return SK_StaticConstant;
+      if (Decl->isStaticLocal() && NamingStyles[SK_StaticConstant])
+        return SK_StaticConstant;
 
-    if (!Type.isNull() && Type.isLocalConstQualified() &&
-        Decl->isLocalVarDecl() && NamingStyles[SK_LocalConstant])
-      return SK_LocalConstant;
+      if (Decl->isLocalVarDecl() && NamingStyles[SK_LocalConstant])
+        return SK_LocalConstant;
 
-    if (!Type.isNull() && Type.isLocalConstQualified() &&
-        Decl->isFunctionOrMethodVarDecl() && NamingStyles[SK_LocalConstant])
-      return SK_LocalConstant;
+      if (Decl->isFunctionOrMethodVarDecl() && NamingStyles[SK_LocalConstant])
+        return SK_LocalConstant;
 
-    if (!Type.isNull() && Type.isLocalConstQualified() &&
-        NamingStyles[SK_Constant])
-      return SK_Constant;
+      if (NamingStyles[SK_Constant])
+        return SK_Constant;
+    }
 
     if (Decl->isStaticDataMember() && NamingStyles[SK_ClassMember])
       return SK_ClassMember;
@@ -681,8 +681,9 @@ static void addUsage(IdentifierNamingCheck::NamingCheckFailureMap &Failures,
 static void addUsage(IdentifierNamingCheck::NamingCheckFailureMap &Failures,
                      const NamedDecl *Decl, SourceRange Range,
                      SourceManager *SourceMgr = nullptr) {
-  return addUsage(Failures, IdentifierNamingCheck::NamingCheckId(
-                                Decl->getLocation(), Decl->getNameAsString()),
+  return addUsage(Failures,
+                  IdentifierNamingCheck::NamingCheckId(Decl->getLocation(),
+                                                       Decl->getNameAsString()),
                   Range, SourceMgr);
 }
 
@@ -699,7 +700,8 @@ void IdentifierNamingCheck::check(const MatchFinder::MatchResult &Result) {
       if (!Init->isWritten() || Init->isInClassMemberInitializer())
         continue;
       if (const auto *FD = Init->getAnyMember())
-        addUsage(NamingCheckFailures, FD, SourceRange(Init->getMemberLocation()));
+        addUsage(NamingCheckFailures, FD,
+                 SourceRange(Init->getMemberLocation()));
       // Note: delegating constructors and base class initializers are handled
       // via the "typeLoc" matcher.
     }
@@ -838,10 +840,10 @@ void IdentifierNamingCheck::check(const MatchFinder::MatchResult &Result) {
     std::string Fixup = fixupWithStyle(Name, Style);
     if (StringRef(Fixup).equals(Name)) {
       if (!IgnoreFailedSplit) {
-        DEBUG(llvm::dbgs()
-              << Decl->getLocStart().printToString(*Result.SourceManager)
-              << llvm::format(": unable to split words for %s '%s'\n",
-                              KindName.c_str(), Name.str().c_str()));
+        LLVM_DEBUG(llvm::dbgs()
+                   << Decl->getLocStart().printToString(*Result.SourceManager)
+                   << llvm::format(": unable to split words for %s '%s'\n",
+                                   KindName.c_str(), Name.str().c_str()));
       }
     } else {
       NamingCheckFailure &Failure = NamingCheckFailures[NamingCheckId(
@@ -875,10 +877,10 @@ void IdentifierNamingCheck::checkMacro(SourceManager &SourceMgr,
   std::string Fixup = fixupWithStyle(Name, Style);
   if (StringRef(Fixup).equals(Name)) {
     if (!IgnoreFailedSplit) {
-      DEBUG(
-          llvm::dbgs() << MacroNameTok.getLocation().printToString(SourceMgr)
-                       << llvm::format(": unable to split words for %s '%s'\n",
-                                       KindName.c_str(), Name.str().c_str()));
+      LLVM_DEBUG(llvm::dbgs()
+                 << MacroNameTok.getLocation().printToString(SourceMgr)
+                 << llvm::format(": unable to split words for %s '%s'\n",
+                                 KindName.c_str(), Name.str().c_str()));
     }
   } else {
     NamingCheckId ID(MI->getDefinitionLoc(), Name);

@@ -13,11 +13,11 @@
 
 #include "clang/Parse/Parser.h"
 #include "clang/AST/ASTContext.h"
+#include "clang/AST/PrettyDeclStackTrace.h"
 #include "clang/Basic/CharInfo.h"
 #include "clang/Parse/ParseDiagnostic.h"
 #include "clang/Parse/RAIIObjectsForParser.h"
 #include "clang/Sema/DeclSpec.h"
-#include "clang/Sema/PrettyDeclStackTrace.h"
 #include "clang/Sema/Scope.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringExtras.h"
@@ -45,7 +45,8 @@ void Parser::MaybeSkipAttributes(tok::ObjCKeywordKind Kind) {
 /// [OBJC]  objc-protocol-definition
 /// [OBJC]  objc-method-definition
 /// [OBJC]  '@' 'end'
-Parser::DeclGroupPtrTy Parser::ParseObjCAtDirectives() {
+Parser::DeclGroupPtrTy
+Parser::ParseObjCAtDirectives(ParsedAttributesWithRange &Attrs) {
   SourceLocation AtLoc = ConsumeToken(); // the "@"
 
   if (Tok.is(tok::code_completion)) {
@@ -58,15 +59,11 @@ Parser::DeclGroupPtrTy Parser::ParseObjCAtDirectives() {
   switch (Tok.getObjCKeywordID()) {
   case tok::objc_class:
     return ParseObjCAtClassDeclaration(AtLoc);
-  case tok::objc_interface: {
-    ParsedAttributes attrs(AttrFactory);
-    SingleDecl = ParseObjCAtInterfaceDeclaration(AtLoc, attrs);
+  case tok::objc_interface:
+    SingleDecl = ParseObjCAtInterfaceDeclaration(AtLoc, Attrs);
     break;
-  }
-  case tok::objc_protocol: {
-    ParsedAttributes attrs(AttrFactory);
-    return ParseObjCAtProtocolDeclaration(AtLoc, attrs);
-  }
+  case tok::objc_protocol:
+    return ParseObjCAtProtocolDeclaration(AtLoc, Attrs);
   case tok::objc_implementation:
     return ParseObjCAtImplementationDeclaration(AtLoc);
   case tok::objc_end:
@@ -81,8 +78,10 @@ Parser::DeclGroupPtrTy Parser::ParseObjCAtDirectives() {
     SingleDecl = ParseObjCPropertyDynamic(AtLoc);
     break;
   case tok::objc_import:
-    if (getLangOpts().Modules || getLangOpts().DebuggerSupport)
-      return ParseModuleImport(AtLoc);
+    if (getLangOpts().Modules || getLangOpts().DebuggerSupport) {
+      SingleDecl = ParseModuleImport(AtLoc);
+      break;
+    }
     Diag(AtLoc, diag::err_atimport);
     SkipUntil(tok::semi);
     return Actions.ConvertDeclToDeclGroup(nullptr);
@@ -1138,14 +1137,14 @@ bool Parser::isTokIdentifier_in() const {
 ///     'null_unspecified'
 ///
 void Parser::ParseObjCTypeQualifierList(ObjCDeclSpec &DS,
-                                        Declarator::TheContext Context) {
-  assert(Context == Declarator::ObjCParameterContext ||
-         Context == Declarator::ObjCResultContext);
+                                        DeclaratorContext Context) {
+  assert(Context == DeclaratorContext::ObjCParameterContext ||
+         Context == DeclaratorContext::ObjCResultContext);
 
   while (1) {
     if (Tok.is(tok::code_completion)) {
       Actions.CodeCompleteObjCPassingType(getCurScope(), DS, 
-                          Context == Declarator::ObjCParameterContext);
+                          Context == DeclaratorContext::ObjCParameterContext);
       return cutOffParsing();
     }
     
@@ -1240,12 +1239,12 @@ static void takeDeclAttributes(ParsedAttributes &attrs,
 ///     '(' objc-type-qualifiers[opt] ')'
 ///
 ParsedType Parser::ParseObjCTypeName(ObjCDeclSpec &DS, 
-                                     Declarator::TheContext context,
+                                     DeclaratorContext context,
                                      ParsedAttributes *paramAttrs) {
-  assert(context == Declarator::ObjCParameterContext ||
-         context == Declarator::ObjCResultContext);
+  assert(context == DeclaratorContext::ObjCParameterContext ||
+         context == DeclaratorContext::ObjCResultContext);
   assert((paramAttrs != nullptr) ==
-         (context == Declarator::ObjCParameterContext));
+         (context == DeclaratorContext::ObjCParameterContext));
 
   assert(Tok.is(tok::l_paren) && "expected (");
 
@@ -1263,9 +1262,9 @@ ParsedType Parser::ParseObjCTypeName(ObjCDeclSpec &DS,
     // Parse an abstract declarator.
     DeclSpec declSpec(AttrFactory);
     declSpec.setObjCQualifiers(&DS);
-    DeclSpecContext dsContext = DSC_normal;
-    if (context == Declarator::ObjCResultContext)
-      dsContext = DSC_objc_method_result;
+    DeclSpecContext dsContext = DeclSpecContext::DSC_normal;
+    if (context == DeclaratorContext::ObjCResultContext)
+      dsContext = DeclSpecContext::DSC_objc_method_result;
     ParseSpecifierQualifierList(declSpec, AS_none, dsContext);
     Declarator declarator(declSpec, context);
     ParseDeclarator(declarator);
@@ -1286,7 +1285,7 @@ ParsedType Parser::ParseObjCTypeName(ObjCDeclSpec &DS,
 
       // If we're parsing a parameter, steal all the decl attributes
       // and add them to the decl spec.
-      if (context == Declarator::ObjCParameterContext)
+      if (context == DeclaratorContext::ObjCParameterContext)
         takeDeclAttributes(*paramAttrs, declarator);
     }
   }
@@ -1350,13 +1349,14 @@ Decl *Parser::ParseObjCMethodDecl(SourceLocation mLoc,
   ParsedType ReturnType;
   ObjCDeclSpec DSRet;
   if (Tok.is(tok::l_paren))
-    ReturnType = ParseObjCTypeName(DSRet, Declarator::ObjCResultContext,
+    ReturnType = ParseObjCTypeName(DSRet, DeclaratorContext::ObjCResultContext,
                                    nullptr);
 
   // If attributes exist before the method, parse them.
   ParsedAttributes methodAttrs(AttrFactory);
   if (getLangOpts().ObjC2)
     MaybeParseGNUAttributes(methodAttrs);
+  MaybeParseCXX11Attributes(methodAttrs);
 
   if (Tok.is(tok::code_completion)) {
     Actions.CodeCompleteObjCMethodDecl(getCurScope(), mType == tok::minus, 
@@ -1383,6 +1383,7 @@ Decl *Parser::ParseObjCMethodDecl(SourceLocation mLoc,
     // If attributes exist after the method, parse them.
     if (getLangOpts().ObjC2)
       MaybeParseGNUAttributes(methodAttrs);
+    MaybeParseCXX11Attributes(methodAttrs);
 
     Selector Sel = PP.getSelectorTable().getNullarySelector(SelIdent);
     Decl *Result
@@ -1414,16 +1415,15 @@ Decl *Parser::ParseObjCMethodDecl(SourceLocation mLoc,
     ArgInfo.Type = nullptr;
     if (Tok.is(tok::l_paren)) // Parse the argument type if present.
       ArgInfo.Type = ParseObjCTypeName(ArgInfo.DeclSpec,
-                                       Declarator::ObjCParameterContext,
+                                       DeclaratorContext::ObjCParameterContext,
                                        &paramAttrs);
 
     // If attributes exist before the argument name, parse them.
     // Regardless, collect all the attributes we've parsed so far.
-    ArgInfo.ArgAttrs = nullptr;
-    if (getLangOpts().ObjC2) {
+    if (getLangOpts().ObjC2)
       MaybeParseGNUAttributes(paramAttrs);
-      ArgInfo.ArgAttrs = paramAttrs.getList();
-    }
+    MaybeParseCXX11Attributes(paramAttrs);
+    ArgInfo.ArgAttrs = paramAttrs.getList();
 
     // Code completion for the next piece of the selector.
     if (Tok.is(tok::code_completion)) {
@@ -1492,7 +1492,7 @@ Decl *Parser::ParseObjCMethodDecl(SourceLocation mLoc,
     DeclSpec DS(AttrFactory);
     ParseDeclarationSpecifiers(DS);
     // Parse the declarator.
-    Declarator ParmDecl(DS, Declarator::PrototypeContext);
+    Declarator ParmDecl(DS, DeclaratorContext::PrototypeContext);
     ParseDeclarator(ParmDecl);
     IdentifierInfo *ParmII = ParmDecl.getIdentifier();
     Decl *Param = Actions.ActOnParamDeclarator(getCurScope(), ParmDecl);
@@ -1506,7 +1506,8 @@ Decl *Parser::ParseObjCMethodDecl(SourceLocation mLoc,
   // If attributes exist after the method, parse them.
   if (getLangOpts().ObjC2)
     MaybeParseGNUAttributes(methodAttrs);
-  
+  MaybeParseCXX11Attributes(methodAttrs);
+
   if (KeyIdents.size() == 0)
     return nullptr;
 
@@ -1701,7 +1702,7 @@ void Parser::parseObjCTypeArgsOrProtocolQualifiers(
                          typeArg, Actions.getASTContext().getPrintingPolicy());
 
       // Form a declarator to turn this into a type.
-      Declarator D(DS, Declarator::TypeNameContext);
+      Declarator D(DS, DeclaratorContext::TypeNameContext);
       TypeResult fullTypeArg = Actions.ActOnTypeName(getCurScope(), D);
       if (fullTypeArg.isUsable()) {
         typeArgs.push_back(fullTypeArg.get());
@@ -2271,7 +2272,7 @@ void Parser::ObjCImplParsingDataRAII::finish(SourceRange AtEnd) {
       P.ParseLexedObjCMethodDefs(*LateParsedObjCMethods[i], 
                                  false/*c-functions*/);
   
-  /// \brief Clear and free the cached objc methods.
+  /// Clear and free the cached objc methods.
   for (LateParsedObjCMethodContainer::iterator
          I = LateParsedObjCMethods.begin(),
          E = LateParsedObjCMethods.end(); I != E; ++I)
@@ -2541,7 +2542,7 @@ StmtResult Parser::ParseObjCTryStmt(SourceLocation atLoc) {
         if (Tok.isNot(tok::ellipsis)) {
           DeclSpec DS(AttrFactory);
           ParseDeclarationSpecifiers(DS);
-          Declarator ParmDecl(DS, Declarator::ObjCCatchContext);
+          Declarator ParmDecl(DS, DeclaratorContext::ObjCCatchContext);
           ParseDeclarator(ParmDecl);
 
           // Inform the actions module about the declarator, so it
@@ -2584,13 +2585,26 @@ StmtResult Parser::ParseObjCTryStmt(SourceLocation atLoc) {
       ParseScope FinallyScope(this,
                               Scope::DeclScope | Scope::CompoundStmtScope);
 
+      bool ShouldCapture =
+          getTargetInfo().getTriple().isWindowsMSVCEnvironment();
+      if (ShouldCapture)
+        Actions.ActOnCapturedRegionStart(Tok.getLocation(), getCurScope(),
+                                         CR_ObjCAtFinally, 1);
+
       StmtResult FinallyBody(true);
       if (Tok.is(tok::l_brace))
         FinallyBody = ParseCompoundStatementBody();
       else
         Diag(Tok, diag::err_expected) << tok::l_brace;
-      if (FinallyBody.isInvalid())
+
+      if (FinallyBody.isInvalid()) {
         FinallyBody = Actions.ActOnNullStmt(Tok.getLocation());
+        if (ShouldCapture)
+          Actions.ActOnCapturedRegionError();
+      } else if (ShouldCapture) {
+        FinallyBody = Actions.ActOnCapturedRegionEnd(FinallyBody.get());
+      }
+
       FinallyStmt = Actions.ActOnObjCAtFinallyStmt(AtCatchFinallyLoc,
                                                    FinallyBody.get());
       catch_or_finally_seen = true;
@@ -2679,7 +2693,7 @@ void Parser::StashAwayMethodOrFunctionBodyTokens(Decl *MDecl) {
 Decl *Parser::ParseObjCMethodDefinition() {
   Decl *MDecl = ParseObjCMethodPrototype();
 
-  PrettyDeclStackTraceEntry CrashInfo(Actions, MDecl, Tok.getLocation(),
+  PrettyDeclStackTraceEntry CrashInfo(Actions.Context, MDecl, Tok.getLocation(),
                                       "parsing Objective-C method");
 
   // parse optional ';'
@@ -2863,7 +2877,7 @@ ExprResult Parser::ParseObjCAtExpression(SourceLocation AtLoc) {
   }
 }
 
-/// \brief Parse the receiver of an Objective-C++ message send.
+/// Parse the receiver of an Objective-C++ message send.
 ///
 /// This routine parses the receiver of a message send in
 /// Objective-C++ either as a type or as an expression. Note that this
@@ -2943,7 +2957,7 @@ bool Parser::ParseObjCXXMessageReceiver(bool &IsExpr, void *&TypeOrExpr) {
   // We have a class message. Turn the simple-type-specifier or
   // typename-specifier we parsed into a type and parse the
   // remainder of the class message.
-  Declarator DeclaratorInfo(DS, Declarator::TypeNameContext);
+  Declarator DeclaratorInfo(DS, DeclaratorContext::TypeNameContext);
   TypeResult Type = Actions.ActOnTypeName(getCurScope(), DeclaratorInfo);
   if (Type.isInvalid())
     return true;
@@ -2953,7 +2967,7 @@ bool Parser::ParseObjCXXMessageReceiver(bool &IsExpr, void *&TypeOrExpr) {
   return false;
 }
 
-/// \brief Determine whether the parser is currently referring to a an
+/// Determine whether the parser is currently referring to a an
 /// Objective-C message send, using a simplified heuristic to avoid overhead.
 ///
 /// This routine will only return true for a subset of valid message-send
@@ -3098,7 +3112,7 @@ ExprResult Parser::ParseObjCMessageExpression() {
                                         Res.get());
 }
 
-/// \brief Parse the remainder of an Objective-C message following the
+/// Parse the remainder of an Objective-C message following the
 /// '[' objc-receiver.
 ///
 /// This routine handles sends to super, class messages (sent to a

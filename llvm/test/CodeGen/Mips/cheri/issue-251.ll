@@ -19,11 +19,11 @@ entry:
   %2 = load volatile i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %1, align 32
   store i8 addrspace(200)* %2, i8 addrspace(200)* addrspace(200)* %testCap, align 32
   ret void
-  ; CHECK-NOFOLD: cfromptr $c2, $c0, $zero
+  ; CHECK-NOFOLD: cgetnull $c2
   ; CHECK-NOFOLD-NEXT: daddiu  $1, $zero, 4096
   ; CHECK-NOFOLD-NEXT: csetoffset $c2, $c2, $1
   ; CHECK-NOFOLD-NEXT: clc $c2, $zero, 0($c2)
-  ; CHECK-OPT: clc $c1, $zero, 4096($c0)
+  ; CHECK-OPT: clc $c1, $zero, 4096($ddc)
 }
 
 ; Function Attrs: nounwind readnone

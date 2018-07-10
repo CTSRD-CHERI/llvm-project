@@ -11,6 +11,7 @@
 #include "AMDGPUArgumentUsageInfo.h"
 #include "AMDGPUSubtarget.h"
 #include "SIRegisterInfo.h"
+#include "MCTargetDesc/AMDGPUMCTargetDesc.h"
 #include "Utils/AMDGPUBaseInfo.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
@@ -28,17 +29,12 @@ using namespace llvm;
 
 SIMachineFunctionInfo::SIMachineFunctionInfo(const MachineFunction &MF)
   : AMDGPUMachineFunction(MF),
-    BufferPSV(*(MF.getSubtarget().getInstrInfo())),
-    ImagePSV(*(MF.getSubtarget().getInstrInfo())),
     PrivateSegmentBuffer(false),
     DispatchPtr(false),
     QueuePtr(false),
     KernargSegmentPtr(false),
     DispatchID(false),
     FlatScratchInit(false),
-    GridWorkgroupCountX(false),
-    GridWorkgroupCountY(false),
-    GridWorkgroupCountZ(false),
     WorkGroupIDX(false),
     WorkGroupIDY(false),
     WorkGroupIDZ(false),
@@ -49,11 +45,15 @@ SIMachineFunctionInfo::SIMachineFunctionInfo(const MachineFunction &MF)
     WorkItemIDZ(false),
     ImplicitBufferPtr(false),
     ImplicitArgPtr(false),
-    GITPtrHigh(0xffffffff) {
+    GITPtrHigh(0xffffffff),
+    HighBitsOf32BitAddress(0) {
   const SISubtarget &ST = MF.getSubtarget<SISubtarget>();
-  const Function *F = MF.getFunction();
-  FlatWorkGroupSizes = ST.getFlatWorkGroupSizes(*F);
-  WavesPerEU = ST.getWavesPerEU(*F);
+  const Function &F = MF.getFunction();
+  FlatWorkGroupSizes = ST.getFlatWorkGroupSizes(F);
+  WavesPerEU = ST.getWavesPerEU(F);
+
+  Occupancy = getMaxWavesPerEU();
+  limitOccupancy(MF);
 
   if (!isEntryFunction()) {
     // Non-entry functions have no special inputs for now, other registers
@@ -68,21 +68,24 @@ SIMachineFunctionInfo::SIMachineFunctionInfo(const MachineFunction &MF)
     ArgInfo.PrivateSegmentWaveByteOffset =
       ArgDescriptor::createRegister(ScratchWaveOffsetReg);
 
-    if (F->hasFnAttribute("amdgpu-implicitarg-ptr"))
+    if (F.hasFnAttribute("amdgpu-implicitarg-ptr"))
       ImplicitArgPtr = true;
   } else {
-    if (F->hasFnAttribute("amdgpu-implicitarg-ptr"))
+    if (F.hasFnAttribute("amdgpu-implicitarg-ptr")) {
       KernargSegmentPtr = true;
+      assert(MaxKernArgAlign == 0);
+      MaxKernArgAlign =  ST.getAlignmentForImplicitArgPtr();
+    }
   }
 
-  CallingConv::ID CC = F->getCallingConv();
+  CallingConv::ID CC = F.getCallingConv();
   if (CC == CallingConv::AMDGPU_KERNEL || CC == CallingConv::SPIR_KERNEL) {
-    if (!F->arg_empty())
+    if (!F.arg_empty())
       KernargSegmentPtr = true;
     WorkGroupIDX = true;
     WorkItemIDX = true;
   } else if (CC == CallingConv::AMDGPU_PS) {
-    PSInputAddr = AMDGPU::getInitialPSInputAddr(*F);
+    PSInputAddr = AMDGPU::getInitialPSInputAddr(F);
   }
 
   if (ST.debuggerEmitPrologue()) {
@@ -94,27 +97,27 @@ SIMachineFunctionInfo::SIMachineFunctionInfo(const MachineFunction &MF)
     WorkItemIDY = true;
     WorkItemIDZ = true;
   } else {
-    if (F->hasFnAttribute("amdgpu-work-group-id-x"))
+    if (F.hasFnAttribute("amdgpu-work-group-id-x"))
       WorkGroupIDX = true;
 
-    if (F->hasFnAttribute("amdgpu-work-group-id-y"))
+    if (F.hasFnAttribute("amdgpu-work-group-id-y"))
       WorkGroupIDY = true;
 
-    if (F->hasFnAttribute("amdgpu-work-group-id-z"))
+    if (F.hasFnAttribute("amdgpu-work-group-id-z"))
       WorkGroupIDZ = true;
 
-    if (F->hasFnAttribute("amdgpu-work-item-id-x"))
+    if (F.hasFnAttribute("amdgpu-work-item-id-x"))
       WorkItemIDX = true;
 
-    if (F->hasFnAttribute("amdgpu-work-item-id-y"))
+    if (F.hasFnAttribute("amdgpu-work-item-id-y"))
       WorkItemIDY = true;
 
-    if (F->hasFnAttribute("amdgpu-work-item-id-z"))
+    if (F.hasFnAttribute("amdgpu-work-item-id-z"))
       WorkItemIDZ = true;
   }
 
   const MachineFrameInfo &FrameInfo = MF.getFrameInfo();
-  bool MaySpill = ST.isVGPRSpillingEnabled(*F);
+  bool MaySpill = ST.isVGPRSpillingEnabled(F);
   bool HasStackObjects = FrameInfo.hasStackObjects();
 
   if (isEntryFunction()) {
@@ -134,38 +137,50 @@ SIMachineFunctionInfo::SIMachineFunctionInfo(const MachineFunction &MF)
     }
   }
 
-  bool IsCOV2 = ST.isAmdCodeObjectV2(MF);
+  bool IsCOV2 = ST.isAmdCodeObjectV2(F);
   if (IsCOV2) {
     if (HasStackObjects || MaySpill)
       PrivateSegmentBuffer = true;
 
-    if (F->hasFnAttribute("amdgpu-dispatch-ptr"))
+    if (F.hasFnAttribute("amdgpu-dispatch-ptr"))
       DispatchPtr = true;
 
-    if (F->hasFnAttribute("amdgpu-queue-ptr"))
+    if (F.hasFnAttribute("amdgpu-queue-ptr"))
       QueuePtr = true;
 
-    if (F->hasFnAttribute("amdgpu-dispatch-id"))
+    if (F.hasFnAttribute("amdgpu-dispatch-id"))
       DispatchID = true;
-  } else if (ST.isMesaGfxShader(MF)) {
+  } else if (ST.isMesaGfxShader(F)) {
     if (HasStackObjects || MaySpill)
       ImplicitBufferPtr = true;
   }
 
-  if (F->hasFnAttribute("amdgpu-kernarg-segment-ptr"))
+  if (F.hasFnAttribute("amdgpu-kernarg-segment-ptr"))
     KernargSegmentPtr = true;
 
   if (ST.hasFlatAddressSpace() && isEntryFunction() && IsCOV2) {
     // TODO: This could be refined a lot. The attribute is a poor way of
     // detecting calls that may require it before argument lowering.
-    if (HasStackObjects || F->hasFnAttribute("amdgpu-flat-scratch"))
+    if (HasStackObjects || F.hasFnAttribute("amdgpu-flat-scratch"))
       FlatScratchInit = true;
   }
 
-  Attribute A = F->getFnAttribute("amdgpu-git-ptr-high");
+  Attribute A = F.getFnAttribute("amdgpu-git-ptr-high");
   StringRef S = A.getValueAsString();
   if (!S.empty())
     S.consumeInteger(0, GITPtrHigh);
+
+  A = F.getFnAttribute("amdgpu-32bit-address-high-bits");
+  S = A.getValueAsString();
+  if (!S.empty())
+    S.consumeInteger(0, HighBitsOf32BitAddress);
+}
+
+void SIMachineFunctionInfo::limitOccupancy(const MachineFunction &MF) {
+  limitOccupancy(getMaxWavesPerEU());
+  const SISubtarget& ST = MF.getSubtarget<SISubtarget>();
+  limitOccupancy(ST.getOccupancyWithLocalMemSize(getLDSSize(),
+                 MF.getFunction()));
 }
 
 unsigned SIMachineFunctionInfo::addPrivateSegmentBuffer(
@@ -269,10 +284,9 @@ bool SIMachineFunctionInfo::allocateSGPRSpillToVGPR(MachineFunction &MF,
       }
 
       Optional<int> CSRSpillFI;
-      if (FrameInfo.hasCalls() && CSRegs && isCalleeSavedReg(CSRegs, LaneVGPR)) {
-        // TODO: Should this be a CreateSpillStackObject? This is technically a
-        // weird CSR spill.
-        CSRSpillFI = FrameInfo.CreateStackObject(4, 4, false);
+      if ((FrameInfo.hasCalls() || !isEntryFunction()) && CSRegs &&
+          isCalleeSavedReg(CSRegs, LaneVGPR)) {
+        CSRSpillFI = FrameInfo.CreateSpillStackObject(4, 4);
       }
 
       SpillVGPRs.push_back(SGPRSpillVGPRCSR(LaneVGPR, CSRSpillFI));
@@ -294,4 +308,30 @@ bool SIMachineFunctionInfo::allocateSGPRSpillToVGPR(MachineFunction &MF,
 void SIMachineFunctionInfo::removeSGPRToVGPRFrameIndices(MachineFrameInfo &MFI) {
   for (auto &R : SGPRToVGPRSpills)
     MFI.RemoveStackObject(R.first);
+}
+
+
+/// \returns VGPR used for \p Dim' work item ID.
+unsigned SIMachineFunctionInfo::getWorkItemIDVGPR(unsigned Dim) const {
+  switch (Dim) {
+  case 0:
+    assert(hasWorkItemIDX());
+    return AMDGPU::VGPR0;
+  case 1:
+    assert(hasWorkItemIDY());
+    return AMDGPU::VGPR1;
+  case 2:
+    assert(hasWorkItemIDZ());
+    return AMDGPU::VGPR2;
+  }
+  llvm_unreachable("unexpected dimension");
+}
+
+MCPhysReg SIMachineFunctionInfo::getNextUserSGPR() const {
+  assert(NumSystemSGPRs == 0 && "System SGPRs must be added after user SGPRs");
+  return AMDGPU::SGPR0 + NumUserSGPRs;
+}
+
+MCPhysReg SIMachineFunctionInfo::getNextSystemSGPR() const {
+  return AMDGPU::SGPR0 + NumUserSGPRs + NumSystemSGPRs;
 }

@@ -45,14 +45,16 @@ class LLVMConfig(object):
             features.add('shell')
 
         # Running on Darwin OS
-        if platform.system() in ['Darwin']:
+        if platform.system() == 'Darwin':
             # FIXME: lld uses the first, other projects use the second.
             # We should standardize on the former.
             features.add('system-linker-mach-o')
             features.add('system-darwin')
-        elif platform.system() in ['Windows']:
+        elif platform.system() == 'Windows':
             # For tests that require Windows to run.
             features.add('system-windows')
+        elif platform.system() == "Linux":
+            features.add('system-linux')
 
         # Native compilation: host arch == default triple arch
         # Both of these values should probably be in every site config (e.g. as
@@ -98,10 +100,6 @@ class LLVMConfig(object):
             if gmalloc_path_str is not None:
                 self.with_environment(
                     'DYLD_INSERT_LIBRARIES', gmalloc_path_str)
-
-        breaking_checks = getattr(config, 'enable_abi_breaking_checks', None)
-        if lit.util.pythonize_bool(breaking_checks):
-            features.add('abi-breaking-checks')
 
     def with_environment(self, variable, value, append_path=False):
         if append_path:
@@ -221,12 +219,15 @@ class LLVMConfig(object):
             return True
 
         if re.match(r'^x86_64.*-apple', triple):
-            version_number = int(
-                re.search(r'version ([0-9]+)\.', version_string).group(1))
+            version_regex = re.search(r'version ([0-9]+)\.([0-9]+).([0-9]+)', version_string)
+            major_version_number = int(version_regex.group(1))
+            minor_version_number = int(version_regex.group(2))
+            patch_version_number = int(version_regex.group(3))
             if 'Apple LLVM' in version_string:
-                return version_number >= 9
+                # Apple LLVM doesn't yet support LSan
+                return False
             else:
-                return version_number >= 5
+                return major_version_number >= 5
 
         return False
 
@@ -310,10 +311,10 @@ class LLVMConfig(object):
     def _add_cheri_tool_substitution(self, tool):
         assert tool in ('llc', 'opt', 'llvm-mc'), 'Invalid tool: ' + tool
         default_cheri_size = self.lit_config.params['CHERI_CAP_SIZE']
-        self.config.substitutions.append((tool + r".+\-target-abi\s+purecap\b",
+        self.config.substitutions.append((r"\b{tool}\b.+\-target-abi\s+purecap\b",
               "\"---Don't use {tool} -target-abi purecap, "
               "use %cheri[128/256]_purecap_{tool} instead ---\"".format(tool=tool)))
-        self.config.substitutions.append((tool + r".+\-mcpu=cheri.+",
+        self.config.substitutions.append((r"\b{tool}\b.+\-mcpu=cheri.+",
               "\"---Don't use {tool} -mcpu=cheri, "
               "use %cheri[128/256]_{tool} instead ---\"".format(tool=tool)))
 
@@ -328,9 +329,11 @@ class LLVMConfig(object):
 
         if default_cheri_size == '16':
             self.config.available_features.add("cheri_is_128")
+            self.config.substitutions.append(('%cheri_type', 'CHERI128'))
             default_args = cheri128_args
         else:
             assert default_cheri_size == '32', "Invalid -DCHERI_CAP_SIZE=" + default_cheri_size
+            self.config.substitutions.append(('%cheri_type', 'CHERI256'))
             self.config.available_features.add("cheri_is_256")
             default_args = cheri256_args
         tool_patterns = [
@@ -362,7 +365,7 @@ class LLVMConfig(object):
                 return tool
 
         # Otherwise look in the path.
-        tool = lit.util.which(name, self.config.llvm_tools_dir)
+        tool = lit.util.which(name, self.config.environment['PATH'])
 
         if required and not tool:
             message = "couldn't find '{}' program".format(name)
@@ -413,10 +416,10 @@ class LLVMConfig(object):
         self.clear_environment(possibly_dangerous_env_vars)
 
         # Tweak the PATH to include the tools dir and the scripts dir.
-        paths = [self.config.llvm_tools_dir]
-        tools = getattr(self.config, 'clang_tools_dir', None)
-        if tools:
-            paths = paths + [tools]
+        # Put Clang first to avoid LLVM from overriding out-of-tree clang builds.
+        possible_paths = ['clang_tools_dir', 'llvm_tools_dir']
+        paths = [getattr(self.config, pp) for pp in possible_paths
+                 if getattr(self.config, pp, None)]
         self.with_environment('PATH', paths, append_path=True)
 
         paths = [self.config.llvm_shlib_dir, self.config.llvm_libs_dir]
@@ -471,7 +474,7 @@ class LLVMConfig(object):
             ToolSubst('%plain_clang_cheri_triple_allowed', command=self.config.clang),
 
             ToolSubst('%clang', command=self.config.clang),
-            ToolSubst('%clang_analyze_cc1', command='%clang_cc1', extra_args=['-analyze']),
+            ToolSubst('%clang_analyze_cc1', command='%clang_cc1', extra_args=['-analyze', '%analyze']),
             ToolSubst('%clang_cc1', command=self.config.clang, extra_args=clang_cc1_args),
             ToolSubst('%clang_cpp', command=self.config.clang, extra_args=['--driver-mode=cpp']),
             ToolSubst('%clang_cl', command=self.config.clang, extra_args=['--driver-mode=cl']),
@@ -494,7 +497,6 @@ class LLVMConfig(object):
         else:
             self.config.substitutions.append(
                 ('%target_itanium_abi_host_triple', ''))
-
         if hasattr(self.config, "clang_src_dir"):
             self.config.substitutions.append(
                 ('%src_include_dir', self.config.clang_src_dir + '/include'))
@@ -553,9 +555,6 @@ class LLVMConfig(object):
         self.with_environment('PATH', tool_dirs, append_path=True)
         self.with_environment('LD_LIBRARY_PATH', lib_dirs, append_path=True)
 
-        self.config.substitutions.append(
-            (r"\bld.lld\b", 'ld.lld --full-shutdown'))
-
-        tool_patterns = ['ld.lld', 'lld-link', 'lld']
+        tool_patterns = ['lld', 'ld.lld', 'lld-link', 'ld64.lld', 'wasm-ld']
 
         self.add_tool_substitutions(tool_patterns, tool_dirs)

@@ -26,7 +26,8 @@
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/Analysis/TargetTransformInfoImpl.h"
 #include "llvm/CodeGen/ISDOpcodes.h"
-#include "llvm/CodeGen/MachineValueType.h"
+#include "llvm/CodeGen/TargetLowering.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CallSite.h"
@@ -45,9 +46,8 @@
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/MachineValueType.h"
 #include "llvm/Support/MathExtras.h"
-#include "llvm/Target/TargetLowering.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
@@ -65,7 +65,7 @@ class TargetMachine;
 
 extern cl::opt<unsigned> PartialUnrollingThreshold;
 
-/// \brief Base class which can be used to help build a TTI implementation.
+/// Base class which can be used to help build a TTI implementation.
 ///
 /// This class provides as much implementation of the TTI interface as is
 /// possible using the target independent parts of the code generator.
@@ -101,14 +101,30 @@ private:
     return Cost;
   }
 
-  /// \brief Local query method delegates up to T which *must* implement this!
+  /// Local query method delegates up to T which *must* implement this!
   const TargetSubtargetInfo *getST() const {
     return static_cast<const T *>(this)->getST();
   }
 
-  /// \brief Local query method delegates up to T which *must* implement this!
+  /// Local query method delegates up to T which *must* implement this!
   const TargetLoweringBase *getTLI() const {
     return static_cast<const T *>(this)->getTLI();
+  }
+
+  static ISD::MemIndexedMode getISDIndexedMode(TTI::MemIndexedMode M) {
+    switch (M) {
+      case TTI::MIM_Unindexed:
+        return ISD::UNINDEXED;
+      case TTI::MIM_PreInc:
+        return ISD::PRE_INC;
+      case TTI::MIM_PreDec:
+        return ISD::PRE_DEC;
+      case TTI::MIM_PostInc:
+        return ISD::POST_INC;
+      case TTI::MIM_PostDec:
+        return ISD::POST_DEC;
+    }
+    llvm_unreachable("Unexpected MemIndexedMode");
   }
 
 protected:
@@ -157,6 +173,18 @@ public:
     return getTLI()->isLegalAddressingMode(DL, AM, Ty, AddrSpace, I);
   }
 
+  bool isIndexedLoadLegal(TTI::MemIndexedMode M, Type *Ty,
+                          const DataLayout &DL) const {
+    EVT VT = getTLI()->getValueType(DL, Ty);
+    return getTLI()->isIndexedLoadLegal(getISDIndexedMode(M), VT);
+  }
+
+  bool isIndexedStoreLegal(TTI::MemIndexedMode M, Type *Ty,
+                           const DataLayout &DL) const {
+    EVT VT = getTLI()->getValueType(DL, Ty);
+    return getTLI()->isIndexedStoreLegal(getISDIndexedMode(M), VT);
+  }
+
   bool isLSRCostLess(TTI::LSRCost C1, TTI::LSRCost C2) {
     return TargetTransformInfoImplBase::isLSRCostLess(C1, C2);
   }
@@ -178,6 +206,8 @@ public:
   bool isProfitableToHoist(Instruction *I) {
     return getTLI()->isProfitableToHoist(I);
   }
+
+  bool useAA() const { return getST()->useAA(); }
 
   bool isTypeLegal(Type *Ty) {
     EVT VT = getTLI()->getValueType(DL, Ty);
@@ -241,7 +271,7 @@ public:
 
     // Early exit if both a jump table and bit test are not allowed.
     // XXXAR: AS0 hardcoded
-    if (N < 1 || (!IsJTAllowed && DL.getPointerBaseSizeInBits(0u) < N))
+    if (N < 1 || (!IsJTAllowed && DL.getIndexSizeInBits(0u) < N))
       return N;
 
     APInt MaxCaseVal = SI.case_begin()->getCaseValue()->getValue();
@@ -256,7 +286,7 @@ public:
 
     // Check if suitable for a bit test
     // XXXAR: AS0 hardcoded
-    if (N <= DL.getPointerBaseSizeInBits(0u)) {
+    if (N <= DL.getIndexSizeInBits(0u)) {
       SmallPtrSet<const BasicBlock *, 4> Dests;
       for (auto I : SI.cases())
         Dests.insert(I.getCaseSuccessor());
@@ -299,10 +329,18 @@ public:
            TLI->isOperationLegalOrCustom(ISD::FSQRT, VT);
   }
 
+  bool isFCmpOrdCheaperThanFCmpZero(Type *Ty) {
+    return true;
+  }
+
   unsigned getFPOpCost(Type *Ty) {
-    // By default, FP instructions are no more expensive since they are
-    // implemented in HW.  Target specific TTI can override this.
-    return TargetTransformInfo::TCC_Basic;
+    // Check whether FADD is available, as a proxy for floating-point in
+    // general.
+    const TargetLoweringBase *TLI = getTLI();
+    EVT VT = TLI->getValueType(DL, Ty);
+    if (TLI->isOperationLegalOrCustomOrPromote(ISD::FADD, VT))
+      return TargetTransformInfo::TCC_Basic;
+    return TargetTransformInfo::TCC_Expensive;
   }
 
   unsigned getOperationCost(unsigned Opcode, Type *Ty, Type *OpTy) {
@@ -517,11 +555,15 @@ public:
 
   unsigned getShuffleCost(TTI::ShuffleKind Kind, Type *Tp, int Index,
                           Type *SubTp) {
-    if (Kind == TTI::SK_Alternate || Kind == TTI::SK_PermuteTwoSrc ||
-        Kind == TTI::SK_PermuteSingleSrc) {
+    switch (Kind) {
+    case TTI::SK_Select:
+    case TTI::SK_Transpose:
+    case TTI::SK_PermuteSingleSrc:
+    case TTI::SK_PermuteTwoSrc:
       return getPermuteShuffleOverhead(Tp);
+    default:
+      return 1;
     }
-    return 1;
   }
 
   unsigned getCastInstrCost(unsigned Opcode, Type *Dst, Type *Src,
@@ -608,7 +650,7 @@ public:
       }
 
       // If we are legalizing by splitting, query the concrete TTI for the cost
-      // of casting the original vector twice. We also need to factor int the
+      // of casting the original vector twice. We also need to factor in the
       // cost of the split itself. Count that as 1, to be consistent with
       // TLI->getTypeLegalizationCost().
       if ((TLI->getTypeAction(Src->getContext(), TLI->getValueType(DL, Src)) ==
@@ -910,6 +952,20 @@ public:
                                                        RetTy, Args[0], VarMask,
                                                        Alignment);
     }
+    case Intrinsic::experimental_vector_reduce_add:
+    case Intrinsic::experimental_vector_reduce_mul:
+    case Intrinsic::experimental_vector_reduce_and:
+    case Intrinsic::experimental_vector_reduce_or:
+    case Intrinsic::experimental_vector_reduce_xor:
+    case Intrinsic::experimental_vector_reduce_fadd:
+    case Intrinsic::experimental_vector_reduce_fmul:
+    case Intrinsic::experimental_vector_reduce_smax:
+    case Intrinsic::experimental_vector_reduce_smin:
+    case Intrinsic::experimental_vector_reduce_fmax:
+    case Intrinsic::experimental_vector_reduce_fmin:
+    case Intrinsic::experimental_vector_reduce_umax:
+    case Intrinsic::experimental_vector_reduce_umin:
+      return getIntrinsicInstrCost(IID, RetTy, Args[0]->getType(), FMF);
     }
   }
 
@@ -1025,6 +1081,7 @@ public:
     // FIXME: We should return 0 whenever getIntrinsicCost == TCC_Free.
     case Intrinsic::lifetime_start:
     case Intrinsic::lifetime_end:
+    case Intrinsic::sideeffect:
       return 0;
     case Intrinsic::masked_store:
       return static_cast<T *>(this)
@@ -1032,6 +1089,39 @@ public:
     case Intrinsic::masked_load:
       return static_cast<T *>(this)
           ->getMaskedMemoryOpCost(Instruction::Load, RetTy, 0, 0);
+    case Intrinsic::experimental_vector_reduce_add:
+      return static_cast<T *>(this)->getArithmeticReductionCost(
+          Instruction::Add, Tys[0], /*IsPairwiseForm=*/false);
+    case Intrinsic::experimental_vector_reduce_mul:
+      return static_cast<T *>(this)->getArithmeticReductionCost(
+          Instruction::Mul, Tys[0], /*IsPairwiseForm=*/false);
+    case Intrinsic::experimental_vector_reduce_and:
+      return static_cast<T *>(this)->getArithmeticReductionCost(
+          Instruction::And, Tys[0], /*IsPairwiseForm=*/false);
+    case Intrinsic::experimental_vector_reduce_or:
+      return static_cast<T *>(this)->getArithmeticReductionCost(
+          Instruction::Or, Tys[0], /*IsPairwiseForm=*/false);
+    case Intrinsic::experimental_vector_reduce_xor:
+      return static_cast<T *>(this)->getArithmeticReductionCost(
+          Instruction::Xor, Tys[0], /*IsPairwiseForm=*/false);
+    case Intrinsic::experimental_vector_reduce_fadd:
+      return static_cast<T *>(this)->getArithmeticReductionCost(
+          Instruction::FAdd, Tys[0], /*IsPairwiseForm=*/false);
+    case Intrinsic::experimental_vector_reduce_fmul:
+      return static_cast<T *>(this)->getArithmeticReductionCost(
+          Instruction::FMul, Tys[0], /*IsPairwiseForm=*/false);
+    case Intrinsic::experimental_vector_reduce_smax:
+    case Intrinsic::experimental_vector_reduce_smin:
+    case Intrinsic::experimental_vector_reduce_fmax:
+    case Intrinsic::experimental_vector_reduce_fmin:
+      return static_cast<T *>(this)->getMinMaxReductionCost(
+          Tys[0], CmpInst::makeCmpResultType(Tys[0]), /*IsPairwiseForm=*/false,
+          /*IsSigned=*/true);
+    case Intrinsic::experimental_vector_reduce_umax:
+    case Intrinsic::experimental_vector_reduce_umin:
+      return static_cast<T *>(this)->getMinMaxReductionCost(
+          Tys[0], CmpInst::makeCmpResultType(Tys[0]), /*IsPairwiseForm=*/false,
+          /*IsSigned=*/false);
     case Intrinsic::ctpop:
       ISDs.push_back(ISD::CTPOP);
       // In case of legalization use TCC_Expensive. This is cheaper than a
@@ -1116,7 +1206,7 @@ public:
     return SingleCallCost;
   }
 
-  /// \brief Compute a cost of the given call instruction.
+  /// Compute a cost of the given call instruction.
   ///
   /// Compute the cost of calling function F with return type RetTy and
   /// argument types Tys. F might be nullptr, in this case the cost of an
@@ -1277,7 +1367,7 @@ public:
   /// @}
 };
 
-/// \brief Concrete BasicTTIImpl that can be used if no further customization
+/// Concrete BasicTTIImpl that can be used if no further customization
 /// is needed.
 class BasicTTIImpl : public BasicTTIImplBase<BasicTTIImpl> {
   using BaseT = BasicTTIImplBase<BasicTTIImpl>;

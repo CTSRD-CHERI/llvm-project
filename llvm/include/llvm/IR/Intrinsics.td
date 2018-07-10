@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 include "llvm/CodeGen/ValueTypes.td"
+include "llvm/CodeGen/SDNodeProperties.td"
 
 //===----------------------------------------------------------------------===//
 //  Properties we keep track of for intrinsics.
@@ -116,6 +117,7 @@ def IntrHasSideEffects : IntrinsicProperty;
 
 class LLVMType<ValueType vt> {
   ValueType VT = vt;
+  int isAny = 0;
 }
 
 class LLVMQualPointerType<LLVMType elty, int addrspace>
@@ -130,6 +132,8 @@ class LLVMPointerType<LLVMType elty>
 class LLVMAnyPointerType<LLVMType elty>
   : LLVMType<iPTRAny>{
   LLVMType ElTy = elty;
+
+  let isAny = 1;
 }
 
 class LLVMFatPointerType<LLVMType elty>
@@ -167,10 +171,12 @@ class LLVMVectorOfAnyPointersToElt<int num> : LLVMMatchType<num>;
 class LLVMHalfElementsVectorType<int num> : LLVMMatchType<num>;
 
 def llvm_void_ty       : LLVMType<isVoid>;
-def llvm_any_ty        : LLVMType<Any>;
-def llvm_anyint_ty     : LLVMType<iAny>;
-def llvm_anyfloat_ty   : LLVMType<fAny>;
-def llvm_anyvector_ty  : LLVMType<vAny>;
+let isAny = 1 in {
+  def llvm_any_ty        : LLVMType<Any>;
+  def llvm_anyint_ty     : LLVMType<iAny>;
+  def llvm_anyfloat_ty   : LLVMType<fAny>;
+  def llvm_anyvector_ty  : LLVMType<vAny>;
+}
 def llvm_i1_ty         : LLVMType<i1>;
 def llvm_i8_ty         : LLVMType<i8>;
 def llvm_i16_ty        : LLVMType<i16>;
@@ -254,7 +260,6 @@ def llvm_v8f64_ty      : LLVMType<v8f64>;    //  8 x double
 
 def llvm_vararg_ty     : LLVMType<isVoid>;   // this means vararg here
 
-
 //===----------------------------------------------------------------------===//
 // Intrinsic Definitions.
 //===----------------------------------------------------------------------===//
@@ -270,16 +275,17 @@ def llvm_vararg_ty     : LLVMType<isVoid>;   // this means vararg here
 //    intrinsic.
 //  * Properties can be set to describe the behavior of the intrinsic.
 //
-class SDPatternOperator;
 class Intrinsic<list<LLVMType> ret_types,
                 list<LLVMType> param_types = [],
-                list<IntrinsicProperty> properties = [],
-                string name = ""> : SDPatternOperator {
+                list<IntrinsicProperty> intr_properties = [],
+                string name = "",
+                list<SDNodeProperty> sd_properties = []> : SDPatternOperator {
   string LLVMName = name;
   string TargetPrefix = "";   // Set to a prefix for target-specific intrinsics.
   list<LLVMType> RetTypes = ret_types;
   list<LLVMType> ParamTypes = param_types;
-  list<IntrinsicProperty> IntrProperties = properties;
+  list<IntrinsicProperty> IntrProperties = intr_properties;
+  let Properties = sd_properties;
 
   bit isTarget = 0;
 }
@@ -322,10 +328,9 @@ def int_gcwrite : Intrinsic<[],
 
 //===--------------------- Code Generator Intrinsics ----------------------===//
 //
-def int_returnaddress : Intrinsic<[llvm_ptr_ty], [llvm_i32_ty], [IntrNoMem]>;
-def int_returncapability : Intrinsic<[llvm_fatptr_ty], [llvm_i32_ty], [IntrNoMem]>;
-def int_addressofreturnaddress : Intrinsic<[llvm_ptr_ty], [], [IntrNoMem]>;
-def int_frameaddress  : Intrinsic<[llvm_ptr_ty], [llvm_i32_ty], [IntrNoMem]>;
+def int_returnaddress : Intrinsic<[llvm_anyptr_ty], [llvm_i32_ty], [IntrNoMem]>;
+def int_addressofreturnaddress : Intrinsic<[llvm_anyptr_ty], [], [IntrNoMem]>;
+def int_frameaddress  : Intrinsic<[llvm_anyptr_ty], [llvm_i32_ty], [IntrNoMem]>;
 def int_read_register  : Intrinsic<[llvm_anyint_ty], [llvm_metadata_ty],
                                    [IntrReadMem], "llvm.read_register">;
 def int_write_register : Intrinsic<[], [llvm_metadata_ty, llvm_anyint_ty],
@@ -400,17 +405,17 @@ def int_instrprof_value_profile : Intrinsic<[],
 
 def int_memcpy  : Intrinsic<[],
                              [llvm_anyptr_ty, llvm_anyptr_ty, llvm_anyint_ty,
-                              llvm_i32_ty, llvm_i1_ty],
+                              llvm_i1_ty],
                             [IntrArgMemOnly, NoCapture<0>, NoCapture<1>,
                              WriteOnly<0>, ReadOnly<1>]>;
 def int_memmove : Intrinsic<[],
                             [llvm_anyptr_ty, llvm_anyptr_ty, llvm_anyint_ty,
-                             llvm_i32_ty, llvm_i1_ty],
+                             llvm_i1_ty],
                             [IntrArgMemOnly, NoCapture<0>, NoCapture<1>,
                              ReadOnly<1>]>;
 def int_memset  : Intrinsic<[],
                             [llvm_anyptr_ty, llvm_i8_ty, llvm_anyint_ty,
-                             llvm_i32_ty, llvm_i1_ty],
+                             llvm_i1_ty],
                             [IntrArgMemOnly, NoCapture<0>, WriteOnly<0>]>;
 
 // FIXME: Add version of these floating point intrinsics which allow non-default
@@ -461,10 +466,10 @@ def int_maxnum : Intrinsic<[llvm_anyfloat_ty],
 >;
 
 // NOTE: these are internal interfaces.
-def int_setjmp     : Intrinsic<[llvm_i32_ty],  [llvm_ptr_ty]>;
-def int_longjmp    : Intrinsic<[], [llvm_ptr_ty, llvm_i32_ty], [IntrNoReturn]>;
-def int_sigsetjmp  : Intrinsic<[llvm_i32_ty] , [llvm_ptr_ty, llvm_i32_ty]>;
-def int_siglongjmp : Intrinsic<[], [llvm_ptr_ty, llvm_i32_ty], [IntrNoReturn]>;
+def int_setjmp     : Intrinsic<[llvm_i32_ty],  [llvm_anyptr_ty]>;
+def int_longjmp    : Intrinsic<[], [llvm_anyptr_ty, llvm_i32_ty], [IntrNoReturn]>;
+def int_sigsetjmp  : Intrinsic<[llvm_i32_ty] , [llvm_anyptr_ty, llvm_i32_ty]>;
+def int_siglongjmp : Intrinsic<[], [llvm_anyptr_ty, llvm_i32_ty], [IntrNoReturn]>;
 
 // Internal interface for object size checking
 def int_objectsize : Intrinsic<[llvm_anyint_ty],
@@ -605,6 +610,8 @@ let IntrProperties = [IntrNoMem, IntrSpeculatable] in {
                                        [llvm_metadata_ty,
                                         llvm_metadata_ty,
                                         llvm_metadata_ty]>;
+  def int_dbg_label        : Intrinsic<[],
+                                       [llvm_metadata_ty]>;
 }
 
 //===------------------ Exception Handling Intrinsics----------------------===//
@@ -716,16 +723,21 @@ def int_invariant_end   : Intrinsic<[],
                                      llvm_anyptr_ty],
                                     [IntrArgMemOnly, NoCapture<2>]>;
 
-// invariant.group.barrier can't be marked with 'readnone' (IntrNoMem),
+// launder.invariant.group can't be marked with 'readnone' (IntrNoMem),
 // because it would cause CSE of two barriers with the same argument.
-// Readonly and argmemonly says that barrier only reads its argument and
-// it can be CSE only if memory didn't change between 2 barriers call,
-// which is valid.
+// Inaccessiblememonly says that the barrier doesn't read the argument,
+// but it changes state not accessible to this module. This way
+// we can DSE through the barrier because it doesn't read the value
+// after store. Although the barrier doesn't modify any memory it
+// can't be marked as readonly, because it would be possible to
+// CSE 2 barriers with store in between.
 // The argument also can't be marked with 'returned' attribute, because
 // it would remove barrier.
-def int_invariant_group_barrier : Intrinsic<[llvm_ptr_ty],
-                                            [llvm_ptr_ty],
-                                            [IntrReadMem, IntrArgMemOnly]>;
+// Note that it is still experimental, which means that its semantics
+// might change in the future.
+def int_launder_invariant_group : Intrinsic<[llvm_anyptr_ty],
+                                            [LLVMMatchType<0>],
+                                            [IntrInaccessibleMemOnly, IntrSpeculatable]>;
 
 //===------------------------ Stackmap Intrinsics -------------------------===//
 //
@@ -778,6 +790,7 @@ def int_coro_free : Intrinsic<[llvm_ptr_ty], [llvm_token_ty, llvm_ptr_ty],
 def int_coro_end : Intrinsic<[llvm_i1_ty], [llvm_ptr_ty, llvm_i1_ty], []>;
 
 def int_coro_frame : Intrinsic<[llvm_ptr_ty], [], [IntrNoMem]>;
+def int_coro_noop : Intrinsic<[llvm_ptr_ty], [], [IntrNoMem]>;
 def int_coro_size : Intrinsic<[llvm_anyint_ty], [], [IntrNoMem]>;
 
 def int_coro_save : Intrinsic<[llvm_token_ty], [llvm_ptr_ty], []>;
@@ -821,6 +834,12 @@ def int_experimental_guard : Intrinsic<[], [llvm_i1_ty, llvm_vararg_ty],
 
 // NOP: calls/invokes to this intrinsic are removed by codegen
 def int_donothing : Intrinsic<[], [], [IntrNoMem]>;
+
+// This instruction has no actual effect, though it is treated by the optimizer
+// has having opaque side effects. This may be inserted into loops to ensure
+// that they are not removed even if they turn out to be empty, for languages
+// which specify that infinite loops must be preserved.
+def int_sideeffect : Intrinsic<[], [], [IntrInaccessibleMemOnly]>;
 
 // Intrisics to support half precision floating point format
 let IntrProperties = [IntrNoMem] in {
@@ -878,6 +897,10 @@ def int_type_checked_load : Intrinsic<[llvm_ptr_ty, llvm_i1_ty],
                                       [llvm_ptr_ty, llvm_i32_ty, llvm_metadata_ty],
                                       [IntrNoMem]>;
 
+// Create a branch funnel that implements an indirect call to a limited set of
+// callees. This needs to be a musttail call.
+def int_icall_branch_funnel : Intrinsic<[], [llvm_vararg_ty], []>;
+
 def int_load_relative: Intrinsic<[llvm_ptr_ty], [llvm_ptr_ty, llvm_anyint_ty],
                                  [IntrReadMem, IntrArgMemOnly]>;
 
@@ -887,6 +910,10 @@ def int_load_relative: Intrinsic<[llvm_ptr_ty], [llvm_ptr_ty, llvm_anyint_ty],
 // Takes a pointer to a string and the length of the string.
 def int_xray_customevent : Intrinsic<[], [llvm_ptr_ty, llvm_i32_ty],
                                      [NoCapture<0>, ReadOnly<0>, IntrWriteMem]>;
+// Typed event logging for x-ray.
+// Takes a numeric type tag, a pointer to a string and the length of the string.
+def int_xray_typedevent : Intrinsic<[], [llvm_i16_ty, llvm_ptr_ty, llvm_i32_ty],
+                                        [NoCapture<1>, ReadOnly<1>, IntrWriteMem]>;
 //===----------------------------------------------------------------------===//
 
 //===------ Memory intrinsics with element-wise atomicity guarantees ------===//

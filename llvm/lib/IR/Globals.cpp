@@ -12,7 +12,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include <llvm/MC/MCTargetOptions.h>
 #include "LLVMContextImpl.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/Triple.h"
@@ -68,6 +67,7 @@ void GlobalValue::copyAttributesFrom(const GlobalValue *Src) {
   setVisibility(Src->getVisibility());
   setUnnamedAddr(Src->getUnnamedAddr());
   setDLLStorageClass(Src->getDLLStorageClass());
+  setDSOLocal(Src->isDSOLocal());
 }
 
 void GlobalValue::removeFromParent() {
@@ -106,6 +106,11 @@ unsigned GlobalValue::getAlignment() const {
     return 0;
   }
   return cast<GlobalObject>(this)->getAlignment();
+}
+
+unsigned GlobalValue::getAddressSpace() const {
+  PointerType *PtrTy = getType();
+  return PtrTy->getAddressSpace();
 }
 
 void GlobalObject::setAlignment(unsigned Align) {
@@ -281,21 +286,27 @@ Optional<ConstantRange> GlobalValue::getAbsoluteSymbolRange() const {
   return getConstantRangeFromMetadata(*MD);
 }
 
+bool GlobalValue::canBeOmittedFromSymbolTable() const {
+  if (!hasLinkOnceODRLinkage())
+    return false;
+
+  // We assume that anyone who sets global unnamed_addr on a non-constant
+  // knows what they're doing.
+  if (hasGlobalUnnamedAddr())
+    return true;
+
+  // If it is a non constant variable, it needs to be uniqued across shared
+  // objects.
+  if (auto *Var = dyn_cast<GlobalVariable>(this))
+    if (!Var->isConstant())
+      return false;
+
+  return hasAtLeastLocalUnnamedAddr();
+}
+
 //===----------------------------------------------------------------------===//
 // GlobalVariable Implementation
 //===----------------------------------------------------------------------===//
-// XXXAR: the dummy forwarding ctors for non-addressspace overloads
-GlobalVariable::GlobalVariable(Type *Ty, bool constant, LinkageTypes Link,
-                               Constant *InitVal, const Twine &Name,
-                               ThreadLocalMode TLMode)
-  : GlobalVariable(Ty, constant, Link, InitVal, Name, TLMode, 0, false) {}
-
-GlobalVariable::GlobalVariable(Module &M, Type *Ty, bool constant,
-                               LinkageTypes Link, Constant *InitVal,
-                               const Twine &Name, GlobalVariable *Before,
-                               ThreadLocalMode TLMode)
-  : GlobalVariable(M, Ty, constant, Link, InitVal, Name, nullptr, TLMode, 0, false) {}
-
 
 GlobalVariable::GlobalVariable(Type *Ty, bool constant, LinkageTypes Link,
                                Constant *InitVal, const Twine &Name,
@@ -323,7 +334,10 @@ GlobalVariable::GlobalVariable(Module &M, Type *Ty, bool constant,
                                bool isExternallyInitialized)
     : GlobalObject(Ty, Value::GlobalVariableVal,
                    OperandTraits<GlobalVariable>::op_begin(this),
-                   InitVal != nullptr, Link, Name, AddressSpace),
+                   InitVal != nullptr, Link, Name,
+                   AddressSpace == UINT_MAX
+                       ? M.getDataLayout().getGlobalsAddressSpace()
+                       : AddressSpace),
       isConstantGlobal(constant),
       isExternallyInitializedConstant(isExternallyInitialized) {
   assert(!Ty->isFunctionTy() && PointerType::isValidElementType(Ty) &&

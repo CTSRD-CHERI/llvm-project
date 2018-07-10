@@ -15,19 +15,17 @@
 #ifndef LLVM_COV_COVERAGESUMMARYINFO_H
 #define LLVM_COV_COVERAGESUMMARYINFO_H
 
-#include "llvm/ADT/iterator.h"
-#include "llvm/ADT/iterator_range.h"
 #include "llvm/ProfileData/Coverage/CoverageMapping.h"
 #include "llvm/Support/raw_ostream.h"
 
 namespace llvm {
 
-/// \brief Provides information about region coverage for a function/file.
+/// Provides information about region coverage for a function/file.
 class RegionCoverageInfo {
-  /// \brief The number of regions that were executed at least once.
+  /// The number of regions that were executed at least once.
   size_t Covered;
 
-  /// \brief The total number of regions in a function/file.
+  /// The total number of regions in a function/file.
   size_t NumRegions;
 
 public:
@@ -63,12 +61,12 @@ public:
   }
 };
 
-/// \brief Provides information about line coverage for a function/file.
+/// Provides information about line coverage for a function/file.
 class LineCoverageInfo {
-  /// \brief The number of lines that were executed at least once.
+  /// The number of lines that were executed at least once.
   size_t Covered;
 
-  /// \brief The total number of lines in a function/file.
+  /// The total number of lines in a function/file.
   size_t NumLines;
 
 public:
@@ -104,12 +102,12 @@ public:
   }
 };
 
-/// \brief Provides information about function coverage for a file.
+/// Provides information about function coverage for a file.
 class FunctionCoverageInfo {
-  /// \brief The number of functions that were executed.
+  /// The number of functions that were executed.
   size_t Executed;
 
-  /// \brief The total number of functions in this file.
+  /// The total number of functions in this file.
   size_t NumFunctions;
 
 public:
@@ -117,6 +115,12 @@ public:
 
   FunctionCoverageInfo(size_t Executed, size_t NumFunctions)
       : Executed(Executed), NumFunctions(NumFunctions) {}
+
+  FunctionCoverageInfo &operator+=(const FunctionCoverageInfo &RHS) {
+    Executed += RHS.Executed;
+    NumFunctions += RHS.NumFunctions;
+    return *this;
+  }
 
   void addFunction(bool Covered) {
     if (Covered)
@@ -138,94 +142,7 @@ public:
   }
 };
 
-/// \brief Coverage statistics for a single line.
-class LineCoverageStats {
-  uint64_t ExecutionCount;
-  bool HasMultipleRegions;
-  bool Mapped;
-  unsigned Line;
-  ArrayRef<const coverage::CoverageSegment *> LineSegments;
-  const coverage::CoverageSegment *WrappedSegment;
-
-  friend class LineCoverageIterator;
-  LineCoverageStats() = default;
-
-public:
-  LineCoverageStats(ArrayRef<const coverage::CoverageSegment *> LineSegments,
-                    const coverage::CoverageSegment *WrappedSegment,
-                    unsigned Line);
-
-  uint64_t getExecutionCount() const { return ExecutionCount; }
-
-  bool hasMultipleRegions() const { return HasMultipleRegions; }
-
-  bool isMapped() const { return Mapped; }
-
-  unsigned getLine() const { return Line; }
-
-  ArrayRef<const coverage::CoverageSegment *> getLineSegments() const {
-    return LineSegments;
-  }
-
-  const coverage::CoverageSegment *getWrappedSegment() const {
-    return WrappedSegment;
-  }
-};
-
-/// Iterates over LineCoverageStats for each line described by a CoverageData
-/// object.
-class LineCoverageIterator
-    : public iterator_facade_base<
-          LineCoverageIterator, std::forward_iterator_tag, LineCoverageStats> {
-public:
-  LineCoverageIterator(const coverage::CoverageData &CD)
-      : LineCoverageIterator(CD, CD.begin()->Line) {}
-
-  LineCoverageIterator(const coverage::CoverageData &CD, unsigned Line)
-      : CD(CD), WrappedSegment(nullptr), Next(CD.begin()), Ended(false),
-        Line(Line), Segments(), Stats() {
-    this->operator++();
-  }
-
-  LineCoverageIterator &operator=(const LineCoverageIterator &R) = default;
-
-  bool operator==(const LineCoverageIterator &R) const {
-    return &CD == &R.CD && Next == R.Next && Ended == R.Ended;
-  }
-
-  const LineCoverageStats &operator*() const { return Stats; }
-
-  LineCoverageStats &operator*() { return Stats; }
-
-  LineCoverageIterator &operator++();
-
-  LineCoverageIterator getEnd() const {
-    auto EndIt = *this;
-    EndIt.Next = CD.end();
-    EndIt.Ended = true;
-    return EndIt;
-  }
-
-private:
-  const coverage::CoverageData &CD;
-  const coverage::CoverageSegment *WrappedSegment;
-  std::vector<coverage::CoverageSegment>::const_iterator Next;
-  bool Ended;
-  unsigned Line;
-  SmallVector<const coverage::CoverageSegment *, 4> Segments;
-  LineCoverageStats Stats;
-};
-
-/// Get a range of LineCoverageStats for each line described by a CoverageData
-/// object.
-static inline iterator_range<LineCoverageIterator>
-getLineCoverageStats(const coverage::CoverageData &CD) {
-  auto Begin = LineCoverageIterator(CD);
-  auto End = Begin.getEnd();
-  return make_range(Begin, End);
-}
-
-/// \brief A summary of function's code coverage.
+/// A summary of function's code coverage.
 struct FunctionCoverageSummary {
   std::string Name;
   uint64_t ExecutionCount;
@@ -241,7 +158,7 @@ struct FunctionCoverageSummary {
       : Name(Name), ExecutionCount(ExecutionCount),
         RegionCoverage(RegionCoverage), LineCoverage(LineCoverage) {}
 
-  /// \brief Compute the code coverage summary for the given function coverage
+  /// Compute the code coverage summary for the given function coverage
   /// mapping record.
   static FunctionCoverageSummary get(const coverage::CoverageMapping &CM,
                                      const coverage::FunctionRecord &Function);
@@ -253,7 +170,7 @@ struct FunctionCoverageSummary {
       ArrayRef<FunctionCoverageSummary> Summaries);
 };
 
-/// \brief A summary of file's code coverage.
+/// A summary of file's code coverage.
 struct FileCoverageSummary {
   StringRef Name;
   RegionCoverageInfo RegionCoverage;
@@ -264,6 +181,14 @@ struct FileCoverageSummary {
   FileCoverageSummary(StringRef Name)
       : Name(Name), RegionCoverage(), LineCoverage(), FunctionCoverage(),
         InstantiationCoverage() {}
+
+  FileCoverageSummary &operator+=(const FileCoverageSummary &RHS) {
+    RegionCoverage += RHS.RegionCoverage;
+    LineCoverage += RHS.LineCoverage;
+    FunctionCoverage += RHS.FunctionCoverage;
+    InstantiationCoverage += RHS.InstantiationCoverage;
+    return *this;
+  }
 
   void addFunction(const FunctionCoverageSummary &Function) {
     RegionCoverage += Function.RegionCoverage;
@@ -276,11 +201,11 @@ struct FileCoverageSummary {
   }
 };
 
-/// \brief A cache for demangled symbols.
+/// A cache for demangled symbols.
 struct DemangleCache {
   StringMap<std::string> DemangledNames;
 
-  /// \brief Demangle \p Sym if possible. Otherwise, just return \p Sym.
+  /// Demangle \p Sym if possible. Otherwise, just return \p Sym.
   StringRef demangle(StringRef Sym) const {
     const auto DemangledName = DemangledNames.find(Sym);
     if (DemangledName == DemangledNames.end())

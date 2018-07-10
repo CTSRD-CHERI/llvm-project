@@ -239,9 +239,8 @@ bool Variable::LocationIsValidForFrame(StackFrame *frame) {
               target_sp.get());
       if (loclist_base_load_addr == LLDB_INVALID_ADDRESS)
         return false;
-      // It is a location list. We just need to tell if the location
-      // list contains the current address when converted to a load
-      // address
+      // It is a location list. We just need to tell if the location list
+      // contains the current address when converted to a load address
       return m_location.LocationListContainsAddress(
           loclist_base_load_addr,
           frame->GetFrameCodeAddress().GetLoadAddress(target_sp.get()));
@@ -251,8 +250,8 @@ bool Variable::LocationIsValidForFrame(StackFrame *frame) {
 }
 
 bool Variable::LocationIsValidForAddress(const Address &address) {
-  // Be sure to resolve the address to section offset prior to
-  // calling this function.
+  // Be sure to resolve the address to section offset prior to calling this
+  // function.
   if (address.IsSectionOffset()) {
     SymbolContext sc;
     CalculateSymbolContext(&sc);
@@ -268,9 +267,8 @@ bool Variable::LocationIsValidForAddress(const Address &address) {
             sc.function->GetAddressRange().GetBaseAddress().GetFileAddress();
         if (loclist_base_file_addr == LLDB_INVALID_ADDRESS)
           return false;
-        // It is a location list. We just need to tell if the location
-        // list contains the current address when converted to a load
-        // address
+        // It is a location list. We just need to tell if the location list
+        // contains the current address when converted to a load address
         return m_location.LocationListContainsAddress(loclist_base_file_addr,
                                                       address.GetFileAddress());
       }
@@ -294,8 +292,8 @@ bool Variable::IsInScope(StackFrame *frame) {
   case eValueTypeVariableArgument:
   case eValueTypeVariableLocal:
     if (frame) {
-      // We don't have a location list, we just need to see if the block
-      // that this variable was defined in is currently
+      // We don't have a location list, we just need to see if the block that
+      // this variable was defined in is currently
       Block *deepest_frame_block =
           frame->GetSymbolContext(eSymbolContextBlock).block;
       if (deepest_frame_block) {
@@ -313,8 +311,7 @@ bool Variable::IsInScope(StackFrame *frame) {
           return false;
 
         // If no scope range is specified then it means that the scope is the
-        // same as the
-        // scope of the enclosing lexical block.
+        // same as the scope of the enclosing lexical block.
         if (m_scope_range.IsEmpty())
           return true;
 
@@ -425,14 +422,8 @@ Status Variable::GetValuesForVariableExpressionPath(
       llvm::StringRef variable_sub_expr_path =
           variable_expr_path.drop_front(variable_name.size());
       if (!variable_sub_expr_path.empty()) {
-        ValueObject::ExpressionPathScanEndReason reason_to_stop;
-        ValueObject::ExpressionPathEndResultType final_value_type;
-        ValueObject::GetValueForExpressionPathOptions options;
-        ValueObject::ExpressionPathAftermath final_task_on_target;
-
         valobj_sp = variable_valobj_sp->GetValueForExpressionPath(
-            variable_sub_expr_path, &reason_to_stop, &final_value_type, options,
-            &final_task_on_target);
+            variable_sub_expr_path);
         if (!valobj_sp) {
           error.SetErrorStringWithFormat(
               "invalid expression path '%s' for variable '%s'",
@@ -461,8 +452,8 @@ Status Variable::GetValuesForVariableExpressionPath(
 }
 
 bool Variable::DumpLocationForAddress(Stream *s, const Address &address) {
-  // Be sure to resolve the address to section offset prior to
-  // calling this function.
+  // Be sure to resolve the address to section offset prior to calling this
+  // function.
   if (address.IsSectionOffset()) {
     SymbolContext sc;
     CalculateSymbolContext(&sc);

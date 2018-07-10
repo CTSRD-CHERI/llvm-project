@@ -1,5 +1,5 @@
 # RUN: %cheri_llvm-mc %s -show-encoding | FileCheck %s
-# RUN: not %cheri_llvm-mc %s -defsym=BAD=1 -show-encoding 2>&1 | FileCheck %s -check-prefix BAD
+# RUN: not %cheri_llvm-mc %s -defsym=BAD=1 -show-encoding 2>&1 | FileCheck %s -check-prefix BAD -implicit-check-not "error:"
 
 .ifndef BAD
 	clcbi		$c1, 0($c1)
@@ -41,4 +41,10 @@ clcbi		$c1, 0x80000($c1) # one out of range
 # BAD: [[@LINE-1]]:13: error: invalid operand for instruction
 clcbi		$c1, -0x80010($c1) # one out of range
 # BAD: [[@LINE-1]]:13: error: invalid operand for instruction
+
+# Check that jalx doesn't work
+foo:
+  jalx foo
+# BAD: [[@LINE-1]]:3: error: instruction requires a CPU feature not currently enabled
+  nop
 .endif

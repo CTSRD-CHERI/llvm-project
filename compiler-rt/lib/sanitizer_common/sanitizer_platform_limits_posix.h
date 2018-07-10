@@ -24,7 +24,7 @@
 // FreeBSD's dlopen() returns a pointer to an Obj_Entry structure that
 // incorporates the map structure.
 # define GET_LINK_MAP_BY_DLOPEN_HANDLE(handle) \
-    ((link_map*)((handle) == nullptr ? nullptr : ((char*)(handle) + 544)))
+    ((link_map*)((handle) == nullptr ? nullptr : ((char*)(handle) + 560)))
 // Get sys/_types.h, because that tells us whether 64-bit inodes are
 // used in struct dirent below.
 #include <sys/_types.h>
@@ -46,6 +46,7 @@ namespace __sanitizer {
   extern unsigned siginfo_t_sz;
   extern unsigned struct_itimerval_sz;
   extern unsigned pthread_t_sz;
+  extern unsigned pthread_mutex_t_sz;
   extern unsigned pthread_cond_t_sz;
   extern unsigned pid_t_sz;
   extern unsigned timeval_sz;
@@ -413,6 +414,18 @@ namespace __sanitizer {
   typedef long __sanitizer_time_t;
 #endif
 
+  typedef long __sanitizer_suseconds_t;
+
+  struct __sanitizer_timeval {
+    __sanitizer_time_t tv_sec;
+    __sanitizer_suseconds_t tv_usec;
+  };
+
+  struct __sanitizer_itimerval {
+    struct __sanitizer_timeval it_interval;
+    struct __sanitizer_timeval it_value;
+  };
+
   struct __sanitizer_timeb {
     __sanitizer_time_t time;
     unsigned short millitm;
@@ -447,6 +460,12 @@ namespace __sanitizer {
     int mnt_freq;
     int mnt_passno;
   };
+
+  struct __sanitizer_file_handle {
+    unsigned int handle_bytes;
+    int handle_type;
+    unsigned char f_handle[1];  // variable sized
+  };
 #endif
 
 #if SANITIZER_MAC || SANITIZER_FREEBSD
@@ -478,6 +497,13 @@ namespace __sanitizer {
     uptr cmsg_len;
     int cmsg_level;
     int cmsg_type;
+  };
+#endif
+
+#if SANITIZER_LINUX
+  struct __sanitizer_mmsghdr {
+    __sanitizer_msghdr msg_hdr;
+    unsigned int msg_len;
   };
 #endif
 
@@ -533,7 +559,7 @@ namespace __sanitizer {
   typedef long __sanitizer_clock_t;
 #endif
 
-#if SANITIZER_LINUX
+#if SANITIZER_LINUX || SANITIZER_FREEBSD
   typedef int __sanitizer_clockid_t;
 #endif
 
@@ -594,13 +620,22 @@ namespace __sanitizer {
   };
 #endif
 
+  struct __sanitizer_siginfo {
+    // The size is determined by looking at sizeof of real siginfo_t on linux.
+    u64 opaque[128 / sizeof(u64)];
+  };
+
+  using __sanitizer_sighandler_ptr = void (*)(int sig);
+  using __sanitizer_sigactionhandler_ptr =
+      void (*)(int sig, __sanitizer_siginfo *siginfo, void *uctx);
+
   // Linux system headers define the 'sa_handler' and 'sa_sigaction' macros.
 #if SANITIZER_ANDROID && (SANITIZER_WORDSIZE == 64)
   struct __sanitizer_sigaction {
     unsigned sa_flags;
     union {
-      void (*sigaction)(int sig, void *siginfo, void *uctx);
-      void (*handler)(int sig);
+      __sanitizer_sigactionhandler_ptr sigaction;
+      __sanitizer_sighandler_ptr handler;
     };
     __sanitizer_sigset_t sa_mask;
     void (*sa_restorer)();
@@ -609,16 +644,16 @@ namespace __sanitizer {
   struct __sanitizer_sigaction {
     unsigned sa_flags;
     union {
-      void (*sigaction)(int sig, void *siginfo, void *uctx);
-      void (*handler)(int sig);
+      __sanitizer_sigactionhandler_ptr sigaction;
+      __sanitizer_sighandler_ptr handler;
     };
     __sanitizer_sigset_t sa_mask;
   };
 #elif SANITIZER_ANDROID && (SANITIZER_WORDSIZE == 32)
   struct __sanitizer_sigaction {
     union {
-      void (*sigaction)(int sig, void *siginfo, void *uctx);
-      void (*handler)(int sig);
+      __sanitizer_sigactionhandler_ptr sigaction;
+      __sanitizer_sighandler_ptr handler;
     };
     __sanitizer_sigset_t sa_mask;
     uptr sa_flags;
@@ -630,8 +665,8 @@ namespace __sanitizer {
     unsigned int sa_flags;
 #endif
     union {
-      void (*sigaction)(int sig, void *siginfo, void *uctx);
-      void (*handler)(int sig);
+      __sanitizer_sigactionhandler_ptr sigaction;
+      __sanitizer_sighandler_ptr handler;
     };
 #if SANITIZER_FREEBSD
     int sa_flags;
@@ -690,7 +725,7 @@ namespace __sanitizer {
     unsigned int sa_flags;
     union {
       void (*handler)(int signo);
-      void (*sigaction)(int signo, void *info, void *ctx);
+      void (*sigaction)(int signo, __sanitizer_siginfo *info, void *ctx);
     };
     __sanitizer_kernel_sigset_t sa_mask;
     void (*sa_restorer)(void);
@@ -699,7 +734,7 @@ namespace __sanitizer {
   struct __sanitizer_kernel_sigaction_t {
     union {
       void (*handler)(int signo);
-      void (*sigaction)(int signo, void *info, void *ctx);
+      void (*sigaction)(int signo, __sanitizer_siginfo *info, void *ctx);
     };
     unsigned long sa_flags;
     void (*sa_restorer)(void);
@@ -707,9 +742,10 @@ namespace __sanitizer {
   };
 #endif
 
-  extern uptr sig_ign;
-  extern uptr sig_dfl;
-  extern uptr sa_siginfo;
+  extern const uptr sig_ign;
+  extern const uptr sig_dfl;
+  extern const uptr sig_err;
+  extern const uptr sa_siginfo;
 
 #if SANITIZER_LINUX
   extern int e_tabsz;
@@ -1486,6 +1522,8 @@ struct __sanitizer_cookie_io_functions_t {
                  sizeof(((struct CLASS *) NULL)->MEMBER));                \
   COMPILER_CHECK(offsetof(struct __sanitizer_##CLASS, MEMBER) ==          \
                  offsetof(struct CLASS, MEMBER))
+
+#define SIGACTION_SYMNAME sigaction
 
 #endif  // SANITIZER_FREEBSD || SANITIZER_LINUX || SANITIZER_MAC
 

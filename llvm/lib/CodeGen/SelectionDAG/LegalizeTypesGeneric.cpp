@@ -383,7 +383,7 @@ SDValue DAGTypeLegalizer::ExpandOp_BUILD_VECTOR(SDNode *N) {
 
   // Build a vector of twice the length out of the expanded elements.
   // For example <3 x i64> -> <6 x i32>.
-  std::vector<SDValue> NewElts;
+  SmallVector<SDValue, 16> NewElts;
   NewElts.reserve(NumElts*2);
 
   for (unsigned i = 0; i < NumElts; ++i) {
@@ -483,7 +483,7 @@ SDValue DAGTypeLegalizer::ExpandOp_NormalStore(SDNode *N, unsigned OpNo) {
   Lo = DAG.getStore(Chain, dl, Lo, Ptr, St->getPointerInfo(), Alignment,
                     St->getMemOperand()->getFlags(), AAInfo);
 
-  Ptr = DAG.getPointerAdd(dl, Ptr, IncrementSize);
+  Ptr = DAG.getObjectPtrOffset(dl, Ptr, IncrementSize);
   Hi = DAG.getStore(Chain, dl, Hi, Ptr,
                     St->getPointerInfo().getWithOffset(IncrementSize),
                     MinAlign(Alignment, IncrementSize),

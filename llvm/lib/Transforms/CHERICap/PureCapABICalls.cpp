@@ -13,21 +13,22 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/Pass.h"
-#include "llvm/IR/Function.h"
-#include "llvm/IR/Module.h"
-#include "llvm/IR/LLVMContext.h"
-#include "llvm/IR/Instructions.h"
-#include "llvm/IR/IRBuilder.h"
-#include "llvm/IR/Intrinsics.h"
-#include "llvm/IR/Constants.h"
-#include "llvm/IR/GlobalVariable.h"
-#include "llvm/IR/DataLayout.h"
 #include "llvm/ADT/StringSwitch.h"
+#include "llvm/Analysis/Utils/Local.h"
 #include "llvm/IR/CallSite.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/DataLayout.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/GlobalVariable.h"
+#include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InstVisitor.h"
-#include "llvm/Transforms/Utils/Local.h"
+#include "llvm/IR/Instructions.h"
+#include "llvm/IR/Intrinsics.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Module.h"
+#include "llvm/Pass.h"
 #include "llvm/Transforms/CHERICap.h"
+#include "llvm/Transforms/Utils/Local.h"
 
 using namespace llvm;
 
@@ -36,7 +37,9 @@ class CHERICapDirectCalls : public FunctionPass,
                           public InstVisitor<CHERICapDirectCalls> {
   bool Modified = false;
   SmallVector<Value*,32> DeadInstructions;
-
+  StringRef getPassName() const override {
+    return "Contract CHERI pure-capability calls";
+  }
 public:
   static char ID;
   CHERICapDirectCalls() : FunctionPass(ID) {}
@@ -57,8 +60,19 @@ public:
     if (!Func)
       return;
     auto *CalledValue = CS.getCalledValue();
-    CS.setCalledFunction(Func);
-    CS.mutateFunctionType(cast<FunctionType>(Func->getType()->getElementType()));
+    // insert a bitcast if the type of CalledValue and Func are different
+    if (CalledValue->getType() != Func->getType()) {
+      if (auto *CalledValPtrTy = dyn_cast<PointerType>(CalledValue->getType())) {
+        IRBuilder<> B(CS.getInstruction());
+        // XXXAR: the legacy ABI expects all functions to be in AS0 even though program AS is 200!
+        auto *NewCalledValue = B.CreateBitCast(Func, PointerType::get(CalledValPtrTy->getElementType(), 0));
+        CS.setCalledFunction(NewCalledValue);
+      }
+    }
+    else {
+      CS.setCalledFunction(Func);
+      CS.mutateFunctionType(cast<FunctionType>(Func->getType()->getElementType()));
+    }
     if (CalledValue->use_begin() == CalledValue->use_end()) {
       DeadInstructions.push_back(CalledValue);
     } else {

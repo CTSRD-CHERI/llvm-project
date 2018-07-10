@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 //
 /// \file
-/// \brief R600 Implementation of TargetInstrInfo.
+/// R600 Implementation of TargetInstrInfo.
 //
 //===----------------------------------------------------------------------===//
 
@@ -19,6 +19,7 @@
 #include "R600Defines.h"
 #include "R600FrameLowering.h"
 #include "R600RegisterInfo.h"
+#include "MCTargetDesc/AMDGPUMCTargetDesc.h"
 #include "Utils/AMDGPUBaseInfo.h"
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/SmallSet.h"
@@ -30,9 +31,9 @@
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/Support/ErrorHandling.h"
-#include "llvm/Target/TargetRegisterInfo.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
@@ -72,7 +73,7 @@ void R600InstrInfo::copyPhysReg(MachineBasicBlock &MBB,
 
   if (VectorComponents > 0) {
     for (unsigned I = 0; I < VectorComponents; I++) {
-      unsigned SubRegIndex = RI.getSubRegFromChannel(I);
+      unsigned SubRegIndex = AMDGPURegisterInfo::getSubRegFromChannel(I);
       buildDefaultInstruction(MBB, MI, AMDGPU::MOV,
                               RI.getSubReg(DestReg, SubRegIndex),
                               RI.getSubReg(SrcReg, SubRegIndex))
@@ -197,7 +198,7 @@ bool R600InstrInfo::usesVertexCache(unsigned Opcode) const {
 
 bool R600InstrInfo::usesVertexCache(const MachineInstr &MI) const {
   const MachineFunction *MF = MI.getParent()->getParent();
-  return !AMDGPU::isCompute(MF->getFunction()->getCallingConv()) &&
+  return !AMDGPU::isCompute(MF->getFunction().getCallingConv()) &&
          usesVertexCache(MI.getOpcode());
 }
 
@@ -207,7 +208,7 @@ bool R600InstrInfo::usesTextureCache(unsigned Opcode) const {
 
 bool R600InstrInfo::usesTextureCache(const MachineInstr &MI) const {
   const MachineFunction *MF = MI.getParent()->getParent();
-  return (AMDGPU::isCompute(MF->getFunction()->getCallingConv()) &&
+  return (AMDGPU::isCompute(MF->getFunction().getCallingConv()) &&
           usesVertexCache(MI.getOpcode())) ||
           usesTextureCache(MI.getOpcode());
 }
@@ -1082,7 +1083,8 @@ bool R600InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
 }
 
 void R600InstrInfo::reserveIndirectRegisters(BitVector &Reserved,
-                                             const MachineFunction &MF) const {
+                                             const MachineFunction &MF,
+                                             const R600RegisterInfo &TRI) const {
   const R600Subtarget &ST = MF.getSubtarget<R600Subtarget>();
   const R600FrameLowering *TFL = ST.getFrameLowering();
 
@@ -1093,11 +1095,9 @@ void R600InstrInfo::reserveIndirectRegisters(BitVector &Reserved,
     return;
 
   for (int Index = getIndirectIndexBegin(MF); Index <= End; ++Index) {
-    unsigned SuperReg = AMDGPU::R600_Reg128RegClass.getRegister(Index);
-    Reserved.set(SuperReg);
     for (unsigned Chan = 0; Chan < StackWidth; ++Chan) {
       unsigned Reg = AMDGPU::R600_TReg32RegClass.getRegister((4 * Index) + Chan);
-      Reserved.set(Reg);
+      TRI.reserveRegisterTuples(Reserved, Reg);
     }
   }
 }
@@ -1186,10 +1186,8 @@ int R600InstrInfo::getIndirectIndexBegin(const MachineFunction &MF) const {
   }
 
   const TargetRegisterClass *IndirectRC = getIndirectAddrRegClass();
-  for (MachineRegisterInfo::livein_iterator LI = MRI.livein_begin(),
-                                            LE = MRI.livein_end();
-                                            LI != LE; ++LI) {
-    unsigned Reg = LI->first;
+  for (std::pair<unsigned, unsigned> LI : MRI.liveins()) {
+    unsigned Reg = LI.first;
     if (TargetRegisterInfo::isVirtualRegister(Reg) ||
         !IndirectRC->contains(Reg))
       continue;
@@ -1494,4 +1492,25 @@ void R600InstrInfo::clearFlag(MachineInstr &MI, unsigned Operand,
     InstFlags &= ~(Flag << (NUM_MO_FLAGS * Operand));
     FlagOp.setImm(InstFlags);
   }
+}
+
+unsigned R600InstrInfo::getAddressSpaceForPseudoSourceKind(
+    PseudoSourceValue::PSVKind Kind) const {
+  switch (Kind) {
+  case PseudoSourceValue::Stack:
+  case PseudoSourceValue::FixedStack:
+    return AMDGPUASI.PRIVATE_ADDRESS;
+  case PseudoSourceValue::ConstantPool:
+  case PseudoSourceValue::GOT:
+  case PseudoSourceValue::JumpTable:
+  case PseudoSourceValue::GlobalValueCallEntry:
+  case PseudoSourceValue::ExternalSymbolCallEntry:
+  case PseudoSourceValue::TargetCustom:
+  // CapTable is not used on AMDGPU but we still need to handle it to
+  // avoid assertions during PseudoSourceValueManager ctor
+  case PseudoSourceValue::CapTable:
+    return AMDGPUASI.CONSTANT_ADDRESS;
+  }
+  llvm_unreachable("Invalid pseudo source kind");
+  return AMDGPUASI.PRIVATE_ADDRESS;
 }

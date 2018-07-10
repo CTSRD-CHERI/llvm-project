@@ -58,6 +58,7 @@ add_llvm_library(LLVMAnalysis
   MemorySSAUpdater.cpp
   ModuleDebugInfoPrinter.cpp
   ModuleSummaryAnalysis.cpp
+  MustExecute.cpp
   ObjCARCAliasAnalysis.cpp
   ObjCARCAnalysisUtils.cpp
   ObjCARCInstKind.cpp
@@ -74,6 +75,7 @@ add_llvm_library(LLVMAnalysis
   ScalarEvolutionAliasAnalysis.cpp
   ScalarEvolutionExpander.cpp
   ScalarEvolutionNormalization.cpp
+  SyntheticCountsUtils.cpp
   TargetLibraryInfo.cpp
   TargetTransformInfo.cpp
   Trace.cpp

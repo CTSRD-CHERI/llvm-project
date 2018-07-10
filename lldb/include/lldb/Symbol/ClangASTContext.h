@@ -253,6 +253,9 @@ public:
           &type_fields,
       bool packed = false);
 
+  static bool IsOperator(const char *name,
+                         clang::OverloadedOperatorKind &op_kind);
+
   //------------------------------------------------------------------
   // Structure, Unions, Classes
   //------------------------------------------------------------------
@@ -301,6 +304,9 @@ public:
   CreateClassTemplateDecl(clang::DeclContext *decl_ctx,
                           lldb::AccessType access_type, const char *class_name,
                           int kind, const TemplateParameterInfos &infos);
+
+  clang::TemplateTemplateParmDecl *
+  CreateTemplateTemplateParmDecl(const char *template_name);
 
   clang::ClassTemplateSpecializationDecl *CreateClassTemplateSpecializationDecl(
       clang::DeclContext *decl_ctx,
@@ -397,7 +403,8 @@ public:
   CompilerType CreateEnumerationType(const char *name,
                                      clang::DeclContext *decl_ctx,
                                      const Declaration &decl,
-                                     const CompilerType &integer_qual_type);
+                                     const CompilerType &integer_qual_type,
+                                     bool is_scoped);
 
   //------------------------------------------------------------------
   // Integer type functions
@@ -631,8 +638,7 @@ public:
   //----------------------------------------------------------------------
 
   // Using the current type, create a new typedef to that type using
-  // "typedef_name"
-  // as the name and "decl_ctx" as the decl context.
+  // "typedef_name" as the name and "decl_ctx" as the decl context.
   static CompilerType
   CreateTypedefType(const CompilerType &type, const char *typedef_name,
                     const CompilerDeclContext &compiler_decl_ctx);
@@ -649,8 +655,7 @@ public:
   GetFullyUnqualifiedType(lldb::opaque_compiler_type_t type) override;
 
   // Returns -1 if this isn't a function of if the function doesn't have a
-  // prototype
-  // Returns a value >= 0 if there is a prototype.
+  // prototype Returns a value >= 0 if there is a prototype.
   int GetFunctionArgumentCount(lldb::opaque_compiler_type_t type) override;
 
   CompilerType GetFunctionArgumentTypeAtIndex(lldb::opaque_compiler_type_t type,
@@ -762,8 +767,8 @@ public:
       bool &child_is_base_class, bool &child_is_deref_of_parent,
       ValueObject *valobj, uint64_t &language_flags) override;
 
-  // Lookup a child given a name. This function will match base class names
-  // and member member names in "clang_type" only, not descendants.
+  // Lookup a child given a name. This function will match base class names and
+  // member member names in "clang_type" only, not descendants.
   uint32_t GetIndexOfChildWithName(lldb::opaque_compiler_type_t type,
                                    const char *name,
                                    bool omit_empty_base_classes) override;
@@ -781,15 +786,20 @@ public:
 
   size_t GetNumTemplateArguments(lldb::opaque_compiler_type_t type) override;
 
-  CompilerType GetTemplateArgument(lldb::opaque_compiler_type_t type,
-                                   size_t idx,
-                                   lldb::TemplateArgumentKind &kind) override;
+  lldb::TemplateArgumentKind
+  GetTemplateArgumentKind(lldb::opaque_compiler_type_t type,
+                          size_t idx) override;
+  CompilerType GetTypeTemplateArgument(lldb::opaque_compiler_type_t type,
+                                       size_t idx) override;
+  llvm::Optional<CompilerType::IntegralTemplateArgument>
+  GetIntegralTemplateArgument(lldb::opaque_compiler_type_t type,
+                              size_t idx) override;
 
   CompilerType GetTypeForFormatters(void *type) override;
 
 #define LLDB_INVALID_DECL_LEVEL UINT32_MAX
-  // LLDB_INVALID_DECL_LEVEL is returned by CountDeclLevels if
-  // child_decl_ctx could not be found in decl_ctx.
+  // LLDB_INVALID_DECL_LEVEL is returned by CountDeclLevels if child_decl_ctx
+  // could not be found in decl_ctx.
   uint32_t CountDeclLevels(clang::DeclContext *frame_decl_ctx,
                            clang::DeclContext *child_decl_ctx,
                            ConstString *child_name = nullptr,
@@ -815,6 +825,7 @@ public:
 
   clang::CXXMethodDecl *
   AddMethodToCXXRecordType(lldb::opaque_compiler_type_t type, const char *name,
+                           const char *mangled_name,
                            const CompilerType &method_type,
                            lldb::AccessType access, bool is_virtual,
                            bool is_static, bool is_inline, bool is_explicit,
@@ -879,13 +890,13 @@ public:
   // Pointers & References
   //------------------------------------------------------------------
 
-  // Call this function using the class type when you want to make a
-  // member pointer type to pointee_type.
+  // Call this function using the class type when you want to make a member
+  // pointer type to pointee_type.
   static CompilerType CreateMemberPointerType(const CompilerType &type,
                                               const CompilerType &pointee_type);
 
-  // Converts "s" to a floating point value and place resulting floating
-  // point bytes in the "dst" buffer.
+  // Converts "s" to a floating point value and place resulting floating point
+  // bytes in the "dst" buffer.
   size_t ConvertStringToFloatValue(lldb::opaque_compiler_type_t type,
                                    const char *s, uint8_t *dst,
                                    size_t dst_size) override;
@@ -970,6 +981,9 @@ public:
     return m_origins;
   }
 protected:
+  const clang::ClassTemplateSpecializationDecl *
+  GetAsTemplateSpecialization(lldb::opaque_compiler_type_t type);
+
   //------------------------------------------------------------------
   // Classes that inherit from ClangASTContext can see and modify these
   //------------------------------------------------------------------

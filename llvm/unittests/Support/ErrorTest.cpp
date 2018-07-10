@@ -12,6 +12,8 @@
 #include "llvm/ADT/Twine.h"
 #include "llvm/Support/Errc.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Testing/Support/Error.h"
+#include "gtest/gtest-spi.h"
 #include "gtest/gtest.h"
 #include <memory>
 
@@ -712,6 +714,80 @@ TEST(Error, ErrorMessage) {
                 .compare("CustomError { 0}\n"
                          "CustomError { 1}"),
             0);
+}
+
+TEST(Error, ErrorMatchers) {
+  EXPECT_THAT_ERROR(Error::success(), Succeeded());
+  EXPECT_NONFATAL_FAILURE(
+      EXPECT_THAT_ERROR(make_error<CustomError>(0), Succeeded()),
+      "Expected: succeeded\n  Actual: failed  (CustomError { 0})");
+
+  EXPECT_THAT_ERROR(make_error<CustomError>(0), Failed());
+  EXPECT_NONFATAL_FAILURE(EXPECT_THAT_ERROR(Error::success(), Failed()),
+                          "Expected: failed\n  Actual: succeeded");
+
+  EXPECT_THAT_ERROR(make_error<CustomError>(0), Failed<CustomError>());
+  EXPECT_NONFATAL_FAILURE(
+      EXPECT_THAT_ERROR(Error::success(), Failed<CustomError>()),
+      "Expected: failed with Error of given type\n  Actual: succeeded");
+  EXPECT_NONFATAL_FAILURE(
+      EXPECT_THAT_ERROR(make_error<CustomError>(0), Failed<CustomSubError>()),
+      "Error was not of given type");
+  EXPECT_NONFATAL_FAILURE(
+      EXPECT_THAT_ERROR(
+          joinErrors(make_error<CustomError>(0), make_error<CustomError>(1)),
+          Failed<CustomError>()),
+      "multiple errors");
+
+  EXPECT_THAT_ERROR(
+      make_error<CustomError>(0),
+      Failed<CustomError>(testing::Property(&CustomError::getInfo, 0)));
+  EXPECT_NONFATAL_FAILURE(
+      EXPECT_THAT_ERROR(
+          make_error<CustomError>(0),
+          Failed<CustomError>(testing::Property(&CustomError::getInfo, 1))),
+      "Expected: failed with Error of given type and the error is an object "
+      "whose given property is equal to 1\n"
+      "  Actual: failed  (CustomError { 0})");
+  EXPECT_THAT_ERROR(make_error<CustomError>(0), Failed<ErrorInfoBase>());
+
+  EXPECT_THAT_EXPECTED(Expected<int>(0), Succeeded());
+  EXPECT_NONFATAL_FAILURE(
+      EXPECT_THAT_EXPECTED(Expected<int>(make_error<CustomError>(0)),
+                           Succeeded()),
+      "Expected: succeeded\n  Actual: failed  (CustomError { 0})");
+
+  EXPECT_THAT_EXPECTED(Expected<int>(make_error<CustomError>(0)), Failed());
+  EXPECT_NONFATAL_FAILURE(
+      EXPECT_THAT_EXPECTED(Expected<int>(0), Failed()),
+      "Expected: failed\n  Actual: succeeded with value 0");
+
+  EXPECT_THAT_EXPECTED(Expected<int>(0), HasValue(0));
+  EXPECT_NONFATAL_FAILURE(
+      EXPECT_THAT_EXPECTED(Expected<int>(make_error<CustomError>(0)),
+                           HasValue(0)),
+      "Expected: succeeded with value (is equal to 0)\n"
+      "  Actual: failed  (CustomError { 0})");
+  EXPECT_NONFATAL_FAILURE(
+      EXPECT_THAT_EXPECTED(Expected<int>(1), HasValue(0)),
+      "Expected: succeeded with value (is equal to 0)\n"
+      "  Actual: succeeded with value 1, (isn't equal to 0)");
+
+  EXPECT_THAT_EXPECTED(Expected<int &>(make_error<CustomError>(0)), Failed());
+  int a = 1;
+  EXPECT_THAT_EXPECTED(Expected<int &>(a), Succeeded());
+  EXPECT_THAT_EXPECTED(Expected<int &>(a), HasValue(testing::Eq(1)));
+
+  EXPECT_THAT_EXPECTED(Expected<int>(1), HasValue(testing::Gt(0)));
+  EXPECT_NONFATAL_FAILURE(
+      EXPECT_THAT_EXPECTED(Expected<int>(0), HasValue(testing::Gt(1))),
+      "Expected: succeeded with value (is > 1)\n"
+      "  Actual: succeeded with value 0, (isn't > 1)");
+  EXPECT_NONFATAL_FAILURE(
+      EXPECT_THAT_EXPECTED(Expected<int>(make_error<CustomError>(0)),
+                           HasValue(testing::Gt(1))),
+      "Expected: succeeded with value (is > 1)\n"
+      "  Actual: failed  (CustomError { 0})");
 }
 
 } // end anon namespace

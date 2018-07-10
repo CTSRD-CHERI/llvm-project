@@ -17,11 +17,11 @@
 
 namespace lld {
 namespace elf {
-class SymbolBody;
+class Symbol;
 class InputSection;
 class InputSectionBase;
 class OutputSection;
-class OutputSection;
+class SectionBase;
 
 // Represents a relocation type, such as R_X86_64_PC32 or R_ARM_THM_CALL.
 typedef uint32_t RelType;
@@ -32,6 +32,7 @@ typedef uint32_t RelType;
 enum RelExpr {
   R_INVALID,
   R_ABS,
+  R_ADDEND,
   R_ARM_SBREL,
   R_GOT,
   R_GOTONLY_PC,
@@ -58,8 +59,8 @@ enum RelExpr {
   R_PLT,
   R_PLT_PAGE_PC,
   R_PLT_PC,
-  R_PPC_OPD,
-  R_PPC_PLT_OPD,
+  R_PPC_CALL,
+  R_PPC_CALL_PLT,
   R_PPC_TOC,
   R_RELAX_GOT_PC,
   R_RELAX_GOT_PC_NOPIC,
@@ -76,9 +77,11 @@ enum RelExpr {
   R_TLSDESC,
   R_TLSDESC_CALL,
   R_TLSDESC_PAGE,
-  R_TLSGD,
+  R_TLSGD_GOT,
+  R_TLSGD_GOT_FROM_END,
   R_TLSGD_PC,
-  R_TLSLD,
+  R_TLSLD_GOT_FROM_END,
+  R_TLSLD_GOT,
   R_TLSLD_PC,
 };
 
@@ -118,13 +121,14 @@ struct Relocation {
   RelType Type;
   uint64_t Offset;
   int64_t Addend;
-  SymbolBody *Sym;
+  Symbol *Sym;
 };
 
 template <class ELFT> void scanRelocations(InputSectionBase &);
 
 class ThunkSection;
 class Thunk;
+struct InputSectionDescription;
 
 class ThunkCreator {
 public:
@@ -137,40 +141,41 @@ public:
   uint32_t Pass = 0;
 
 private:
-  void mergeThunks();
-  ThunkSection *getOSThunkSec(OutputSection *OS,
-                              std::vector<InputSection *> *ISR);
+  void mergeThunks(ArrayRef<OutputSection *> OutputSections);
+
+  ThunkSection *getISDThunkSec(OutputSection *OS, InputSection *IS,
+                               InputSectionDescription *ISD, uint32_t Type,
+                               uint64_t Src);
+
   ThunkSection *getISThunkSec(InputSection *IS);
-  void forEachExecInputSection(
+
+  void createInitialThunkSections(ArrayRef<OutputSection *> OutputSections);
+
+  void forEachInputSectionDescription(
       ArrayRef<OutputSection *> OutputSections,
-      std::function<void(OutputSection *, std::vector<InputSection *> *,
-                         InputSection *)>
-          Fn);
-  std::pair<Thunk *, bool> getThunk(SymbolBody &Body, RelType Type);
-  ThunkSection *addThunkSection(OutputSection *OS,
-                                std::vector<InputSection *> *, uint64_t Off);
+      llvm::function_ref<void(OutputSection *, InputSectionDescription *)> Fn);
+
+  std::pair<Thunk *, bool> getThunk(Symbol &Sym, RelType Type, uint64_t Src);
+
+  ThunkSection *addThunkSection(OutputSection *OS, InputSectionDescription *,
+                                uint64_t Off);
+
+  bool normalizeExistingThunk(Relocation &Rel, uint64_t Src);
+
   // Record all the available Thunks for a Symbol
-  llvm::DenseMap<SymbolBody *, std::vector<Thunk *>> ThunkedSymbols;
+  llvm::DenseMap<std::pair<SectionBase *, uint64_t>, std::vector<Thunk *>>
+      ThunkedSymbolsBySection;
+  llvm::DenseMap<Symbol *, std::vector<Thunk *>> ThunkedSymbols;
 
   // Find a Thunk from the Thunks symbol definition, we can use this to find
   // the Thunk from a relocation to the Thunks symbol definition.
-  llvm::DenseMap<SymbolBody *, Thunk *> Thunks;
+  llvm::DenseMap<Symbol *, Thunk *> Thunks;
 
   // Track InputSections that have an inline ThunkSection placed in front
   // an inline ThunkSection may have control fall through to the section below
   // so we need to make sure that there is only one of them.
   // The Mips LA25 Thunk is an example of an inline ThunkSection.
   llvm::DenseMap<InputSection *, ThunkSection *> ThunkedSections;
-
-  // All the ThunkSections that we have created, organised by OutputSection
-  // will contain a mix of ThunkSections that have been created this pass, and
-  // ThunkSections that have been merged into the OutputSection on previous
-  // passes
-  std::map<std::vector<InputSection *> *, std::vector<ThunkSection *>>
-      ThunkSections;
-
-  // The ThunkSection for this vector of InputSections
-  ThunkSection *CurTS;
 };
 
 // Return a int64_t to make sure we get the sign extension out of the way as

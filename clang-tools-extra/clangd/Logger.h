@@ -15,6 +15,11 @@
 namespace clang {
 namespace clangd {
 
+/// Main logging function.
+/// Logs messages to a global logger, which can be set up by LoggingSesssion.
+/// If no logger is registered, writes to llvm::errs().
+void log(const llvm::Twine &Message);
+
 /// Interface to allow custom logging in clangd.
 class Logger {
 public:
@@ -24,15 +29,17 @@ public:
   virtual void log(const llvm::Twine &Message) = 0;
 };
 
-/// Logger implementation that ignores all messages.
-class EmptyLogger : public Logger {
+/// Only one LoggingSession can be active at a time.
+class LoggingSession {
 public:
-  static EmptyLogger &getInstance();
+  LoggingSession(clangd::Logger &Instance);
+  ~LoggingSession();
 
-  void log(const llvm::Twine &Message) override;
+  LoggingSession(LoggingSession &&) = delete;
+  LoggingSession &operator=(LoggingSession &&) = delete;
 
-private:
-  EmptyLogger() = default;
+  LoggingSession(LoggingSession const &) = delete;
+  LoggingSession &operator=(LoggingSession const &) = delete;
 };
 
 } // namespace clangd

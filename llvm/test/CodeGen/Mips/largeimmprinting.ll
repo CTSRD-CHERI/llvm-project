@@ -1,9 +1,8 @@
-; RUN: llc -march=mipsel -relocation-model=pic  -verify-machineinstrs < %s |  \
-; RUN:     FileCheck %s -check-prefix=32
-; RUN: llc -march=mips64el -mcpu=mips4 -target-abi=n64 -relocation-model=pic  \
-; RUN:     -verify-machineinstrs < %s | FileCheck %s -check-prefix=64
-; RUN: llc -march=mips64el -mcpu=mips64 -target-abi=n64 -relocation-model=pic \
-; RUN:     -verify-machineinstrs < %s | FileCheck %s -check-prefix=64
+; RUN: llc -march=mipsel -relocation-model=pic < %s | FileCheck %s -check-prefix=32
+; RUN: llc -march=mips64el -mcpu=mips4 -target-abi=n64 -relocation-model=pic < %s | \
+; RUN:     FileCheck %s -check-prefix=64
+; RUN: llc -march=mips64el -mcpu=mips64 -target-abi=n64 -relocation-model=pic < %s | \
+; RUN:     FileCheck %s -check-prefix=64
 
 %struct.S1 = type { [65536 x i8] }
 
@@ -27,11 +26,11 @@ entry:
 
   %agg.tmp = alloca %struct.S1, align 1
   %tmp = getelementptr inbounds %struct.S1, %struct.S1* %agg.tmp, i32 0, i32 0, i32 0
-  call void @llvm.memcpy.p0i8.p0i8.i32(i8* %tmp, i8* getelementptr inbounds (%struct.S1, %struct.S1* @s1, i32 0, i32 0, i32 0), i32 65536, i32 1, i1 false)
+  call void @llvm.memcpy.p0i8.p0i8.i32(i8* align 1 %tmp, i8* align 1 getelementptr inbounds (%struct.S1, %struct.S1* @s1, i32 0, i32 0, i32 0), i32 65536, i1 false)
   call void @f2(%struct.S1* byval %agg.tmp) nounwind
   ret void
 }
 
 declare void @f2(%struct.S1* byval)
 
-declare void @llvm.memcpy.p0i8.p0i8.i32(i8* nocapture, i8* nocapture, i32, i32, i1) nounwind
+declare void @llvm.memcpy.p0i8.p0i8.i32(i8* nocapture, i8* nocapture, i32, i1) nounwind

@@ -24,10 +24,9 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Error.h"
+#include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/MemoryBuffer.h"
-#include "llvm/Support/PrettyStackTrace.h"
 #include "llvm/Support/Regex.h"
-#include "llvm/Support/Signals.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
@@ -103,6 +102,7 @@ enum CheckType {
   CheckNot,
   CheckDAG,
   CheckLabel,
+  CheckEmpty,
 
   /// Indicates the pattern only matches the end of file. This is used for
   /// trailing CHECK-NOTs.
@@ -192,10 +192,23 @@ bool Pattern::ParsePattern(StringRef PatternStr, StringRef Prefix,
       PatternStr = PatternStr.substr(0, PatternStr.size() - 1);
 
   // Check that there is something on the line.
-  if (PatternStr.empty()) {
+  if (PatternStr.empty() && CheckTy != Check::CheckEmpty) {
     SM.PrintMessage(PatternLoc, SourceMgr::DK_Error,
                     "found empty check string with prefix '" + Prefix + ":'");
     return true;
+  }
+
+  if (!PatternStr.empty() && CheckTy == Check::CheckEmpty) {
+    SM.PrintMessage(
+        PatternLoc, SourceMgr::DK_Error,
+        "found non-empty check string for empty check with prefix '" + Prefix +
+            ":'");
+    return true;
+  }
+
+  if (CheckTy == Check::CheckEmpty) {
+    RegExStr = "(\n$)";
+    return false;
   }
 
   // Check to see if this is a fixed string, or if it has regex pieces.
@@ -354,7 +367,7 @@ bool Pattern::ParsePattern(StringRef PatternStr, StringRef Prefix,
     RegExStr += '$';
   }
 
-  // DEBUG(dbgs() << "Line match regex: '" << RegExStr << "'\n");
+  // LLVM_DEBUG(dbgs() << "Line match regex: '" << RegExStr << "'\n");
 
   return false;
 }
@@ -387,7 +400,7 @@ public:
   FileCheckExprLexer(StringRef Expr, const SourceMgr &SM)
       : FullExpr(Expr), SM(SM) {
     Tokens = tokenize(FullExpr);
-    DEBUG(dbgs() << "Tokenized '" << FullExpr << "' is ["
+    LLVM_DEBUG(dbgs() << "Tokenized '" << FullExpr << "' is ["
                   << join(Tokens.begin(), Tokens.end(), ", ") << "]\n");
   }
 
@@ -553,7 +566,7 @@ public:
   }
 private:
   void printEvaluationDebug() const {
-    DEBUG(dbgs() << "  ExprResult: " << debugString() << "\n");
+    LLVM_DEBUG(dbgs() << "  ExprResult: " << debugString() << "\n");
   }
   ResultKind Kind;
   APInt IntValue;
@@ -570,7 +583,7 @@ public:
     : FileCheckExprLexer(Expr, SM), Variables(Variables) {}
 
   Optional<std::string> evaluate() {
-    DEBUG(dbgs() << "Evaluating '" << FullExpr << "'\n");
+    LLVM_DEBUG(dbgs() << "Evaluating '" << FullExpr << "'\n");
     if (hasError()) {
       return None;
     }
@@ -584,7 +597,7 @@ public:
       return None;
     }
     std::string Ret = Result.convertToString();
-    DEBUG(dbgs() << "--> Result is '" << Ret << "'\n");
+    LLVM_DEBUG(dbgs() << "--> Result is '" << Ret << "'\n");
     return Ret;
   }
 
@@ -682,7 +695,7 @@ private:
   // Evaluate an identifier expr, which may be a symbol, or a call to
   // one of the builtin functions.
   ExprResult evalIdentifierExpr(StringRef Symbol) {
-    DEBUG(dbgs() << "  Indentifier: " << Symbol << "\n");
+    LLVM_DEBUG(dbgs() << "  Indentifier: " << Symbol << "\n");
     if (Symbol == "hex") {
       return evalToBase(16);
     } else if (Symbol == "dec") {
@@ -712,7 +725,7 @@ private:
         Symbol = Symbol.ltrim('{');
         Symbol = Symbol.rtrim('}');
       }
-      DEBUG(dbgs() << "Looking up variable " << Symbol << "\n");
+      LLVM_DEBUG(dbgs() << "Looking up variable " << Symbol << "\n");
       auto it = Variables.find(Symbol);
       if (it == Variables.end()) {
         // If the variable is undefined, return an error.
@@ -745,13 +758,13 @@ private:
   ExprResult evalParensExpr() {
     assert(currentTok() == "(" && "Not a parenthesized expression");
     OpenParens++;
-    DEBUG(dbgs() << "  Paren " << OpenParens << " opened\n");
+    LLVM_DEBUG(dbgs() << "  Paren " << OpenParens << " opened\n");
 
     ExprResult SubExprResult = nextExpression();
     if (SubExprResult.isError())
       return SubExprResult;
     expect(")", &SubExprResult);
-    DEBUG(dbgs() << "  Paren " << OpenParens << " closed\n");
+    LLVM_DEBUG(dbgs() << "  Paren " << OpenParens << " closed\n");
     OpenParens--;
     return SubExprResult;
   }
@@ -788,11 +801,11 @@ private:
 
     // Otherwise check if this is a binary expressioan.
     StringRef Cur = peek();
-    DEBUG(dbgs() << "  ComplexExpr: Op = " << Cur << "\n");
-    ArrayRef<const char*> BinOps = {"+", "-", "/", "*", "&", "|", "<<", ">>"};
-    if (!any_of(BinOps, [&](const char* S) { return Cur == S; })) {
+    LLVM_DEBUG(dbgs() << "  ComplexExpr: Op = " << Cur << "\n");
+    const char* BinOps[] = {"+", "-", "/", "*", "&", "|", "<<", ">>"};
+    if (!any_of(BinOps, [=](const char* S) { return Cur == S; })) {
       // not a binary operation so just return
-      DEBUG(dbgs() << "  '" << Cur << "' is not a valid operator -> return\n");
+      LLVM_DEBUG(dbgs() << "  '" << Cur << "' is not a valid operator -> return\n");
       return LHSResult;
     }
     Cur = next(); // consume the token
@@ -907,7 +920,7 @@ size_t Pattern::Match(StringRef Buffer, size_t &MatchLen, const SourceMgr &SM,
 
   SmallVector<StringRef, 4> MatchInfo;
   if (!Regex(RegExToMatch, Regex::Newline).match(Buffer, &MatchInfo)) {
-    DEBUG(dbgs() << "Failed regex match: '" << RegExToMatch << "'\n");
+    LLVM_DEBUG(dbgs() << "Failed regex match: '" << RegExToMatch << "'\n");
     return StringRef::npos;
   }
 
@@ -1168,6 +1181,9 @@ static size_t CheckTypeSize(Check::CheckType Ty) {
   case Check::CheckLabel:
     return sizeof("-LABEL:") - 1;
 
+  case Check::CheckEmpty:
+    return sizeof("-EMPTY:") - 1;
+
   case Check::CheckEOF:
     llvm_unreachable("Should not be using EOF size");
   }
@@ -1176,6 +1192,9 @@ static size_t CheckTypeSize(Check::CheckType Ty) {
 }
 
 static Check::CheckType FindCheckType(StringRef Buffer, StringRef Prefix) {
+  if (Buffer.size() <= Prefix.size())
+    return Check::CheckNone;
+
   char NextChar = Buffer[Prefix.size()];
 
   // Verify that the : is present after the prefix.
@@ -1201,10 +1220,14 @@ static Check::CheckType FindCheckType(StringRef Buffer, StringRef Prefix) {
   if (Rest.startswith("LABEL:"))
     return Check::CheckLabel;
 
+  if (Rest.startswith("EMPTY:"))
+    return Check::CheckEmpty;
+
   // You can't combine -NOT with another suffix.
   if (Rest.startswith("DAG-NOT:") || Rest.startswith("NOT-DAG:") ||
       Rest.startswith("NEXT-NOT:") || Rest.startswith("NOT-NEXT:") ||
-      Rest.startswith("SAME-NOT:") || Rest.startswith("NOT-SAME:"))
+      Rest.startswith("SAME-NOT:") || Rest.startswith("NOT-SAME:") ||
+      Rest.startswith("EMPTY-NOT:") || Rest.startswith("NOT-EMPTY:"))
     return Check::CheckBadNot;
 
   return Check::CheckNone;
@@ -1364,10 +1387,13 @@ static bool ReadCheckFile(SourceMgr &SM, StringRef Buffer, Regex &PrefixRE,
 
     Buffer = Buffer.substr(EOL);
 
-    // Verify that CHECK-NEXT lines have at least one CHECK line before them.
-    if ((CheckTy == Check::CheckNext || CheckTy == Check::CheckSame) &&
+    // Verify that CHECK-NEXT/SAME/EMPTY lines have at least one CHECK line before them.
+    if ((CheckTy == Check::CheckNext || CheckTy == Check::CheckSame ||
+         CheckTy == Check::CheckEmpty) &&
         CheckStrings.empty()) {
-      StringRef Type = CheckTy == Check::CheckNext ? "NEXT" : "SAME";
+      StringRef Type = CheckTy == Check::CheckNext
+                           ? "NEXT"
+                           : CheckTy == Check::CheckEmpty ? "EMPTY" : "SAME";
       SM.PrintMessage(SMLoc::getFromPointer(UsedPrefixStart),
                       SourceMgr::DK_Error,
                       "found '" + UsedPrefix + "-" + Type +
@@ -1513,22 +1539,32 @@ size_t CheckString::Check(const SourceMgr &SM, StringRef Buffer,
 
 /// Verify there is a single line in the given buffer.
 bool CheckString::CheckNext(const SourceMgr &SM, StringRef Buffer) const {
-  if (Pat.getCheckTy() != Check::CheckNext)
+  if (Pat.getCheckTy() != Check::CheckNext &&
+      Pat.getCheckTy() != Check::CheckEmpty)
     return false;
+
+  Twine CheckName =
+      Prefix +
+      Twine(Pat.getCheckTy() == Check::CheckEmpty ? "-EMPTY" : "-NEXT");
 
   // Count the number of newlines between the previous match and this one.
   assert(Buffer.data() !=
              SM.getMemoryBuffer(SM.FindBufferContainingLoc(
                                     SMLoc::getFromPointer(Buffer.data())))
                  ->getBufferStart() &&
-         "CHECK-NEXT can't be the first check in a file");
+         "CHECK-NEXT and CHECK-EMPTY can't be the first check in a file");
 
   const char *FirstNewLine = nullptr;
   unsigned NumNewLines = CountNumNewlinesBetween(Buffer, FirstNewLine);
 
+  // For CHECK-EMPTY, the preceding new line is consumed by the pattern, so
+  // this needs to be re-added.
+  if (Pat.getCheckTy() == Check::CheckEmpty)
+    ++NumNewLines;
+
   if (NumNewLines == 0) {
     SM.PrintMessage(Loc, SourceMgr::DK_Error,
-                    Prefix + "-NEXT: is on the same line as previous match");
+                    CheckName + ": is on the same line as previous match");
     SM.PrintMessage(SMLoc::getFromPointer(Buffer.end()), SourceMgr::DK_Note,
                     "'next' match was here");
     SM.PrintMessage(SMLoc::getFromPointer(Buffer.data()), SourceMgr::DK_Note,
@@ -1538,8 +1574,8 @@ bool CheckString::CheckNext(const SourceMgr &SM, StringRef Buffer) const {
 
   if (NumNewLines != 1) {
     SM.PrintMessage(Loc, SourceMgr::DK_Error,
-                    Prefix +
-                        "-NEXT: is not on the line after the previous match");
+                    CheckName +
+                        ": is not on the line after the previous match");
     SM.PrintMessage(SMLoc::getFromPointer(Buffer.end()), SourceMgr::DK_Note,
                     "'next' match was here");
     SM.PrintMessage(SMLoc::getFromPointer(Buffer.data()), SourceMgr::DK_Note,
@@ -1815,8 +1851,7 @@ bool CheckInput(SourceMgr &SM, StringRef Buffer,
 }
 
 int main(int argc, char **argv) {
-  sys::PrintStackTraceOnErrorSignal(argv[0]);
-  PrettyStackTraceProgram X(argc, argv);
+  InitLLVM X(argc, argv);
   cl::ParseCommandLineOptions(argc, argv);
 
   if (!ValidateCheckPrefixes()) {

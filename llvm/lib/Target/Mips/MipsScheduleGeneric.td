@@ -25,8 +25,11 @@ def MipsGenericModel : SchedMachineModel {
   int HighLatency = 37;
   list<Predicate> UnsupportedFeatures = [];
 
-  let CompleteModel = 1;
+  let CompleteModel = 0;
   let PostRAScheduler = 1;
+
+  // FIXME: Remove when all errors have been fixed.
+  let FullInstRWOverlapCheck = 0;
 }
 
 let SchedModel = MipsGenericModel in {
@@ -71,12 +74,12 @@ def : ItinRW<[GenericWriteMDUtoGPR], [II_MUL]>;
 def GenericWriteDIV : SchedWriteRes<[GenericIssueDIV]> {
   // Estimated worst case
   let Latency = 33;
-  let ResourceCycles = [1, 33];
+  let ResourceCycles = [33];
 }
 def GenericWriteDIVU : SchedWriteRes<[GenericIssueDIV]> {
   // Estimated worst case
   let Latency = 31;
-  let ResourceCycles = [1, 31];
+  let ResourceCycles = [31];
 }
 
 def : ItinRW<[GenericWriteDIV], [II_DIV]>;
@@ -268,9 +271,11 @@ def : ItinRW<[GenericWriteLoad], [II_LWLE, II_LWRE]>;
 // MIPS MT instructions
 // ====================
 
-def : ItinRW<[GenericWriteMove], [II_DMT, II_DVPE, II_EMT, II_EVPE]>;
+def : ItinRW<[GenericWriteMove], [II_DMT, II_DVPE, II_EMT, II_EVPE, II_MFTR,
+                                  II_MTTR]>;
 
 def : ItinRW<[GenericReadWriteCOP0Long], [II_YIELD]>;
+
 def : ItinRW<[GenericWriteCOP0Short], [II_FORK]>;
 
 // MIPS32R6 and MIPS16e
@@ -736,6 +741,7 @@ def : InstRW<[GenericDSPShort], (instregex "^MFHI_DSP_MM$")>;
 def : InstRW<[GenericDSPShort], (instregex "^MFLO_DSP_MM$")>;
 def : InstRW<[GenericDSPShort], (instregex "^MODSUB_MM$")>;
 def : InstRW<[GenericDSPShort], (instregex "^MOVEP_MM$")>;
+def : InstRW<[GenericDSPShort], (instregex "^MOVEP_MMR6$")>;
 def : InstRW<[GenericDSPShort], (instregex "^MOVN_I_MM$")>;
 def : InstRW<[GenericDSPShort], (instregex "^MOVZ_I_MM$")>;
 def : InstRW<[GenericDSPShort], (instregex "^MSUBU_DSP_MM$")>;

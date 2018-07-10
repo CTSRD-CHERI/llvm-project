@@ -264,7 +264,7 @@ SparcTargetLowering::LowerReturn_32(SDValue Chain, CallingConv::ID CallConv,
 
   unsigned RetAddrOffset = 8; // Call Inst + Delay Slot
   // If the function returns a struct, copy the SRetReturnReg to I0
-  if (MF.getFunction()->hasStructRetAttr()) {
+  if (MF.getFunction().hasStructRetAttr()) {
     SparcMachineFunctionInfo *SFI = MF.getInfo<SparcMachineFunctionInfo>();
     unsigned Reg = SFI->getSRetReturnReg();
     if (!Reg)
@@ -519,7 +519,7 @@ SDValue SparcTargetLowering::LowerFormalArguments_32(
     InVals.push_back(Load);
   }
 
-  if (MF.getFunction()->hasStructRetAttr()) {
+  if (MF.getFunction().hasStructRetAttr()) {
     // Copy the SRet Argument to SRetReturnReg.
     SparcMachineFunctionInfo *SFI = MF.getInfo<SparcMachineFunctionInfo>();
     unsigned Reg = SFI->getSRetReturnReg();
@@ -701,8 +701,8 @@ static bool hasReturnsTwiceAttr(SelectionDAG &DAG, SDValue Callee,
     CalleeFn = dyn_cast<Function>(G->getGlobal());
   } else if (ExternalSymbolSDNode *E =
              dyn_cast<ExternalSymbolSDNode>(Callee)) {
-    const Function *Fn = DAG.getMachineFunction().getFunction();
-    const Module *M = Fn->getParent();
+    const Function &Fn = DAG.getMachineFunction().getFunction();
+    const Module *M = Fn.getParent();
     const char *CalleeName = E->getSymbol();
     CalleeFn = M->getFunction(CalleeName);
   }
@@ -1057,8 +1057,8 @@ SparcTargetLowering::getSRetArgSize(SelectionDAG &DAG, SDValue Callee) const
     CalleeFn = dyn_cast<Function>(G->getGlobal());
   } else if (ExternalSymbolSDNode *E =
              dyn_cast<ExternalSymbolSDNode>(Callee)) {
-    const Function *Fn = DAG.getMachineFunction().getFunction();
-    const Module *M = Fn->getParent();
+    const Function &F = DAG.getMachineFunction().getFunction();
+    const Module *M = F.getParent();
     const char *CalleeName = E->getSymbol();
     CalleeFn = M->getFunction(CalleeName);
     if (!CalleeFn && isFP128ABICall(CalleeName))
@@ -1450,7 +1450,7 @@ static SPCC::CondCodes FPCondCCodeToFCC(ISD::CondCode CC) {
 SparcTargetLowering::SparcTargetLowering(const TargetMachine &TM,
                                          const SparcSubtarget &STI)
     : TargetLowering(TM), Subtarget(&STI) {
-  MVT PtrVT = MVT::getIntegerVT(8 * TM.getPointerSize());
+  MVT PtrVT = MVT::getIntegerVT(8 * TM.getPointerSize(0));
 
   // Instructions which use registers as conditionals examine all the
   // bits (as does the pseudo SELECT_CC expansion). I don't think it
@@ -1589,6 +1589,11 @@ SparcTargetLowering::SparcTargetLowering(const TargetMachine &TM,
 
   setOperationAction(ISD::EH_SJLJ_SETJMP, MVT::i32, Custom);
   setOperationAction(ISD::EH_SJLJ_LONGJMP, MVT::Other, Custom);
+
+  setOperationAction(ISD::ADDC, MVT::i32, Custom);
+  setOperationAction(ISD::ADDE, MVT::i32, Custom);
+  setOperationAction(ISD::SUBC, MVT::i32, Custom);
+  setOperationAction(ISD::SUBE, MVT::i32, Custom);
 
   if (Subtarget->is64Bit()) {
     setOperationAction(ISD::ADDC, MVT::i64, Custom);
@@ -1975,11 +1980,22 @@ SDValue SparcTargetLowering::makeAddress(SDValue Op, SelectionDAG &DAG) const {
 
   // Handle PIC mode first. SPARC needs a got load for every variable!
   if (isPositionIndependent()) {
-    // This is the pic32 code model, the GOT is known to be smaller than 4GB.
-    SDValue HiLo = makeHiLoPair(Op, SparcMCExpr::VK_Sparc_GOT22,
-                                SparcMCExpr::VK_Sparc_GOT10, DAG);
+    const Module *M = DAG.getMachineFunction().getFunction().getParent();
+    PICLevel::Level picLevel = M->getPICLevel();
+    SDValue Idx;
+
+    if (picLevel == PICLevel::SmallPIC) {
+      // This is the pic13 code model, the GOT is known to be smaller than 8KiB.
+      Idx = DAG.getNode(SPISD::Lo, DL, Op.getValueType(),
+                        withTargetFlags(Op, SparcMCExpr::VK_Sparc_GOT13, DAG));
+    } else {
+      // This is the pic32 code model, the GOT is known to be smaller than 4GB.
+      Idx = makeHiLoPair(Op, SparcMCExpr::VK_Sparc_GOT22,
+                         SparcMCExpr::VK_Sparc_GOT10, DAG);
+    }
+
     SDValue GlobalBase = DAG.getNode(SPISD::GLOBAL_BASE_REG, DL, VT);
-    SDValue AbsAddr = DAG.getNode(ISD::ADD, DL, VT, GlobalBase, HiLo);
+    SDValue AbsAddr = DAG.getNode(ISD::ADD, DL, VT, GlobalBase, Idx);
     // GLOBAL_BASE_REG codegen'ed with call. Inform MFI that this
     // function has calls.
     MachineFrameInfo &MFI = DAG.getMachineFunction().getFrameInfo();
@@ -2036,7 +2052,7 @@ SDValue SparcTargetLowering::LowerGlobalTLSAddress(SDValue Op,
                                                    SelectionDAG &DAG) const {
 
   GlobalAddressSDNode *GA = cast<GlobalAddressSDNode>(Op);
-  if (DAG.getTarget().Options.EmulatedTLS)
+  if (DAG.getTarget().useEmulatedTLS())
     return LowerToTLSEmulatedModel(GA, DAG);
 
   SDLoc DL(GA);
@@ -3510,6 +3526,22 @@ SparcTargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
       char regIdx = '0' + (intVal % 8);
       char tmp[] = { '{', regType, regIdx, '}', 0 };
       std::string newConstraint = std::string(tmp);
+      return TargetLowering::getRegForInlineAsmConstraint(TRI, newConstraint,
+                                                          VT);
+    }
+    if (name.substr(0, 1).equals("f") &&
+        !name.substr(1).getAsInteger(10, intVal) && intVal <= 63) {
+      std::string newConstraint;
+
+      if (VT == MVT::f32 || VT == MVT::Other) {
+        newConstraint = "{f" + utostr(intVal) + "}";
+      } else if (VT == MVT::f64 && (intVal % 2 == 0)) {
+        newConstraint = "{d" + utostr(intVal / 2) + "}";
+      } else if (VT == MVT::f128 && (intVal % 4 == 0)) {
+        newConstraint = "{q" + utostr(intVal / 4) + "}";
+      } else {
+        return std::make_pair(0U, nullptr);
+      }
       return TargetLowering::getRegForInlineAsmConstraint(TRI, newConstraint,
                                                           VT);
     }

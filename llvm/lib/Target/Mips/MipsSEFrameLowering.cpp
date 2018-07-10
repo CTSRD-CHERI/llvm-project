@@ -29,6 +29,9 @@
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/RegisterScavenging.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/DebugLoc.h"
 #include "llvm/IR/Function.h"
 #include "llvm/MC/MCDwarf.h"
@@ -37,9 +40,6 @@
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
-#include "llvm/Target/TargetInstrInfo.h"
-#include "llvm/Target/TargetRegisterInfo.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 #include <cassert>
 #include <cstdint>
 #include <utility>
@@ -435,7 +435,7 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
   unsigned CRD = ABI.GetReturnData();
   // C0 is always live in.  In non-CHERI MIPS, C0 is treated as a read-only
   // register that is implicitly read by loads and stores.
-  MBB.addLiveIn(Mips::C0);
+  MBB.addLiveIn(Mips::DDC);
 
   bool NeedAuxEntry = ABI.IsCheriPureCap() &&  MF.getFunction()->hasExternalLinkage();
 
@@ -566,7 +566,7 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
   BuildMI(MBB, MBBI, dl, TII.get(TargetOpcode::CFI_INSTRUCTION))
       .addCFIIndex(CFIIndex);
 
-  if (MF.getFunction()->hasFnAttribute("interrupt"))
+  if (MF.getFunction().hasFnAttribute("interrupt"))
     emitInterruptPrologueStub(MF, MBB);
 
   bool IsRASpilled = false;
@@ -741,7 +741,7 @@ void MipsSEFrameLowering::emitInterruptPrologueStub(
 
   // Perform ISR handling like GCC
   StringRef IntKind =
-      MF.getFunction()->getFnAttribute("interrupt").getValueAsString();
+      MF.getFunction().getFnAttribute("interrupt").getValueAsString();
   const TargetRegisterClass *PtrRC = &Mips::GPR32RegClass;
 
   // EIC interrupt handling needs to read the Cause register to disable
@@ -889,7 +889,7 @@ void MipsSEFrameLowering::emitEpilogue(MachineFunction &MF,
     }
   }
 
-  if (MF.getFunction()->hasFnAttribute("interrupt"))
+  if (MF.getFunction().hasFnAttribute("interrupt"))
     emitInterruptEpilogueStub(MF, MBB);
 
   // Get the number of bytes from FrameInfo
@@ -1060,8 +1060,8 @@ spillCalleeSavedRegisters(MachineBasicBlock &MBB,
     // spilled to the stack frame.
     bool IsLOHI = (Reg == Mips::LO0 || Reg == Mips::LO0_64 ||
                    Reg == Mips::HI0 || Reg == Mips::HI0_64);
-    const Function *Func = MBB.getParent()->getFunction();
-    if (IsLOHI && Func->hasFnAttribute("interrupt")) {
+    const Function &Func = MBB.getParent()->getFunction();
+    if (IsLOHI && Func.hasFnAttribute("interrupt")) {
       DebugLoc DL = MI->getDebugLoc();
 
       unsigned Op = 0;
@@ -1133,9 +1133,10 @@ void MipsSEFrameLowering::determineCalleeSaves(MachineFunction &MF,
   // Expand pseudo instructions which load, store or copy accumulators.
   // Add an emergency spill slot if a pseudo was expanded.
   if (ExpandPseudo(MF).expand()) {
-    // The spill slot should be half the size of the accumulator. If target is
-    // mips64, it should be 64-bit, otherwise it should be 32-bt.
-    const TargetRegisterClass &RC = STI.hasMips64() ?
+    // The spill slot should be half the size of the accumulator. If target have
+    // general-purpose registers 64 bits wide, it should be 64-bit, otherwise
+    // it should be 32-bit.
+    const TargetRegisterClass &RC = STI.isGP64bit() ?
       Mips::GPR64RegClass : Mips::GPR32RegClass;
     int FI = MF.getFrameInfo().CreateStackObject(TRI->getSpillSize(RC),
                                                  TRI->getSpillAlignment(RC),
@@ -1144,8 +1145,7 @@ void MipsSEFrameLowering::determineCalleeSaves(MachineFunction &MF,
   }
 
   // Set scavenging frame index if necessary.
-  uint64_t MaxSPOffset = MF.getInfo<MipsFunctionInfo>()->getIncomingArgSize() +
-    estimateStackSize(MF);
+  uint64_t MaxSPOffset = estimateStackSize(MF);
 
   // We will need the emergency spill slot if we have any stack offsets that
   // don't fit in an immediate.  In normal MIPS code, this means a 16-bit
@@ -1153,13 +1153,18 @@ void MipsSEFrameLowering::determineCalleeSaves(MachineFunction &MF,
   // csc / cld, but only 8-bit immediates (plus a 3-bit shift) for c[ls]x
   // instructions for other spills.  The latter only matters if we're using the
   // capability-stack ABI.
+  // XXXAR: no longer true if we have the big immediate CLC enabled
   if (STI.isCheri()) {
     if (STI.isABI_CheriPureCap()) {
       if (isInt<10>(MaxSPOffset))
         return;
     } else if (isInt<15>(MaxSPOffset))
       return;
-  } else if (isInt<16>(MaxSPOffset))
+  }
+  // MSA has a minimum offset of 10 bits signed. If there is a variable
+  // sized object on the stack, the estimation cannot account for it.
+  else if (isIntN(STI.hasMSA() ? 10 : 16, MaxSPOffset) &&
+      !MF.getFrameInfo().hasVarSizedObjects())
     return;
 
   const TargetRegisterClass &RC =

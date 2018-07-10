@@ -7,38 +7,188 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_OBJCOPY_OBJECT_H
-#define LLVM_OBJCOPY_OBJECT_H
+#ifndef LLVM_TOOLS_OBJCOPY_OBJECT_H
+#define LLVM_TOOLS_OBJCOPY_OBJECT_H
 
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/Twine.h"
+#include "llvm/BinaryFormat/ELF.h"
 #include "llvm/MC/StringTableBuilder.h"
 #include "llvm/Object/ELFObjectFile.h"
 #include "llvm/Support/FileOutputBuffer.h"
-
+#include "llvm/Support/JamCRC.h"
+#include <cstddef>
+#include <cstdint>
+#include <functional>
 #include <memory>
 #include <set>
+#include <vector>
 
-class Segment;
+namespace llvm {
+
 class SectionBase;
+class Section;
+class OwnedDataSection;
+class StringTableSection;
+class SymbolTableSection;
+class RelocationSection;
+class DynamicRelocationSection;
+class GnuDebugLinkSection;
+class GroupSection;
+class Segment;
+class Object;
+struct Symbol;
 
 class SectionTableRef {
-private:
-  llvm::ArrayRef<std::unique_ptr<SectionBase>> Sections;
+  MutableArrayRef<std::unique_ptr<SectionBase>> Sections;
 
 public:
-  SectionTableRef(llvm::ArrayRef<std::unique_ptr<SectionBase>> Secs)
+  using iterator = pointee_iterator<std::unique_ptr<SectionBase> *>;
+
+  explicit SectionTableRef(MutableArrayRef<std::unique_ptr<SectionBase>> Secs)
       : Sections(Secs) {}
   SectionTableRef(const SectionTableRef &) = default;
 
-  SectionBase *getSection(uint16_t Index, llvm::Twine ErrMsg);
+  iterator begin() { return iterator(Sections.data()); }
+  iterator end() { return iterator(Sections.data() + Sections.size()); }
+
+  SectionBase *getSection(uint16_t Index, Twine ErrMsg);
 
   template <class T>
-  T *getSectionOfType(uint16_t Index, llvm::Twine IndexErrMsg,
-                      llvm::Twine TypeErrMsg);
+  T *getSectionOfType(uint16_t Index, Twine IndexErrMsg, Twine TypeErrMsg);
+};
+
+enum ElfType { ELFT_ELF32LE, ELFT_ELF64LE, ELFT_ELF32BE, ELFT_ELF64BE };
+
+class SectionVisitor {
+public:
+  virtual ~SectionVisitor();
+
+  virtual void visit(const Section &Sec) = 0;
+  virtual void visit(const OwnedDataSection &Sec) = 0;
+  virtual void visit(const StringTableSection &Sec) = 0;
+  virtual void visit(const SymbolTableSection &Sec) = 0;
+  virtual void visit(const RelocationSection &Sec) = 0;
+  virtual void visit(const DynamicRelocationSection &Sec) = 0;
+  virtual void visit(const GnuDebugLinkSection &Sec) = 0;
+  virtual void visit(const GroupSection &Sec) = 0;
+};
+
+class SectionWriter : public SectionVisitor {
+protected:
+  FileOutputBuffer &Out;
+
+public:
+  virtual ~SectionWriter(){};
+
+  void visit(const Section &Sec) override;
+  void visit(const OwnedDataSection &Sec) override;
+  void visit(const StringTableSection &Sec) override;
+  void visit(const DynamicRelocationSection &Sec) override;
+  virtual void visit(const SymbolTableSection &Sec) override = 0;
+  virtual void visit(const RelocationSection &Sec) override = 0;
+  virtual void visit(const GnuDebugLinkSection &Sec) override = 0;
+  virtual void visit(const GroupSection &Sec) override = 0;
+
+  SectionWriter(FileOutputBuffer &Buf) : Out(Buf) {}
+};
+
+template <class ELFT> class ELFSectionWriter : public SectionWriter {
+private:
+  using Elf_Word = typename ELFT::Word;
+  using Elf_Rel = typename ELFT::Rel;
+  using Elf_Rela = typename ELFT::Rela;
+
+public:
+  virtual ~ELFSectionWriter() {}
+  void visit(const SymbolTableSection &Sec) override;
+  void visit(const RelocationSection &Sec) override;
+  void visit(const GnuDebugLinkSection &Sec) override;
+  void visit(const GroupSection &Sec) override;
+
+  ELFSectionWriter(FileOutputBuffer &Buf) : SectionWriter(Buf) {}
+};
+
+#define MAKE_SEC_WRITER_FRIEND                                                 \
+  friend class SectionWriter;                                                  \
+  template <class ELFT> friend class ELFSectionWriter;
+
+class BinarySectionWriter : public SectionWriter {
+public:
+  virtual ~BinarySectionWriter() {}
+
+  void visit(const SymbolTableSection &Sec) override;
+  void visit(const RelocationSection &Sec) override;
+  void visit(const GnuDebugLinkSection &Sec) override;
+  void visit(const GroupSection &Sec) override;
+
+  BinarySectionWriter(FileOutputBuffer &Buf) : SectionWriter(Buf) {}
+};
+
+class Writer {
+protected:
+  StringRef File;
+  Object &Obj;
+  std::unique_ptr<FileOutputBuffer> BufPtr;
+
+  void createBuffer(uint64_t Size);
+
+public:
+  virtual ~Writer();
+
+  virtual void finalize() = 0;
+  virtual void write() = 0;
+
+  Writer(StringRef File, Object &Obj) : File(File), Obj(Obj) {}
+};
+
+template <class ELFT> class ELFWriter : public Writer {
+private:
+  using Elf_Shdr = typename ELFT::Shdr;
+  using Elf_Phdr = typename ELFT::Phdr;
+  using Elf_Ehdr = typename ELFT::Ehdr;
+
+  void writeEhdr();
+  void writePhdr(const Segment &Seg);
+  void writeShdr(const SectionBase &Sec);
+
+  void writePhdrs();
+  void writeShdrs();
+  void writeSectionData();
+
+  void assignOffsets();
+
+  std::unique_ptr<ELFSectionWriter<ELFT>> SecWriter;
+
+  size_t totalSize() const;
+
+public:
+  virtual ~ELFWriter() {}
+  bool WriteSectionHeaders = true;
+
+  void finalize() override;
+  void write() override;
+  ELFWriter(StringRef File, Object &Obj, bool WSH)
+      : Writer(File, Obj), WriteSectionHeaders(WSH) {}
+};
+
+class BinaryWriter : public Writer {
+private:
+  std::unique_ptr<BinarySectionWriter> SecWriter;
+
+  uint64_t TotalSize;
+
+public:
+  ~BinaryWriter() {}
+  void finalize() override;
+  void write() override;
+  BinaryWriter(StringRef File, Object &Obj) : Writer(File, Obj) {}
 };
 
 class SectionBase {
 public:
-  llvm::StringRef Name;
+  StringRef Name;
   Segment *ParentSegment = nullptr;
   uint64_t HeaderOffset;
   uint64_t OriginalOffset;
@@ -49,18 +199,20 @@ public:
   uint32_t EntrySize = 0;
   uint64_t Flags = 0;
   uint64_t Info = 0;
-  uint64_t Link = llvm::ELF::SHN_UNDEF;
+  uint64_t Link = ELF::SHN_UNDEF;
   uint64_t NameIndex = 0;
   uint64_t Offset = 0;
   uint64_t Size = 0;
-  uint64_t Type = llvm::ELF::SHT_NULL;
+  uint64_t Type = ELF::SHT_NULL;
 
-  virtual ~SectionBase() {}
+  virtual ~SectionBase() = default;
+
   virtual void initialize(SectionTableRef SecTable);
   virtual void finalize();
   virtual void removeSectionReferences(const SectionBase *Sec);
-  template <class ELFT> void writeHeader(llvm::FileOutputBuffer &Out) const;
-  virtual void writeSection(llvm::FileOutputBuffer &Out) const = 0;
+  virtual void removeSymbols(function_ref<bool(const Symbol &)> ToRemove);
+  virtual void accept(SectionVisitor &Visitor) const = 0;
+  virtual void markSymbols();
 };
 
 class Segment {
@@ -77,7 +229,7 @@ private:
   };
 
   std::set<const SectionBase *, SectionCompare> Sections;
-  llvm::ArrayRef<uint8_t> Contents;
+  ArrayRef<uint8_t> Contents;
 
 public:
   uint64_t Align;
@@ -93,25 +245,49 @@ public:
   uint64_t OriginalOffset;
   Segment *ParentSegment = nullptr;
 
-  Segment(llvm::ArrayRef<uint8_t> Data) : Contents(Data) {}
+  explicit Segment(ArrayRef<uint8_t> Data) : Contents(Data) {}
+  Segment() {}
+
   const SectionBase *firstSection() const {
     if (!Sections.empty())
       return *Sections.begin();
     return nullptr;
   }
+
   void removeSection(const SectionBase *Sec) { Sections.erase(Sec); }
   void addSection(const SectionBase *Sec) { Sections.insert(Sec); }
-  template <class ELFT> void writeHeader(llvm::FileOutputBuffer &Out) const;
-  void writeSegment(llvm::FileOutputBuffer &Out) const;
 };
 
 class Section : public SectionBase {
-private:
-  llvm::ArrayRef<uint8_t> Contents;
+  MAKE_SEC_WRITER_FRIEND
+
+  ArrayRef<uint8_t> Contents;
+  SectionBase *LinkSection = nullptr;
 
 public:
-  Section(llvm::ArrayRef<uint8_t> Data) : Contents(Data) {}
-  void writeSection(llvm::FileOutputBuffer &Out) const override;
+  explicit Section(ArrayRef<uint8_t> Data) : Contents(Data) {}
+
+  void accept(SectionVisitor &Visitor) const override;
+  void removeSectionReferences(const SectionBase *Sec) override;
+  void initialize(SectionTableRef SecTable) override;
+  void finalize() override;
+};
+
+class OwnedDataSection : public SectionBase {
+  MAKE_SEC_WRITER_FRIEND
+
+  std::vector<uint8_t> Data;
+
+public:
+  OwnedDataSection(StringRef SecName, ArrayRef<uint8_t> Data)
+      : Data(std::begin(Data), std::end(Data)) {
+    Name = SecName;
+    Type = ELF::SHT_PROGBITS;
+    Size = Data.size();
+    OriginalOffset = std::numeric_limits<uint64_t>::max();
+  }
+
+  void accept(SectionVisitor &Sec) const override;
 };
 
 // There are two types of string tables that can exist, dynamic and not dynamic.
@@ -123,22 +299,24 @@ public:
 // classof method checks that the particular instance is not allocated. This
 // then agrees with the makeSection method used to construct most sections.
 class StringTableSection : public SectionBase {
-private:
-  llvm::StringTableBuilder StrTabBuilder;
+  MAKE_SEC_WRITER_FRIEND
+
+  StringTableBuilder StrTabBuilder;
 
 public:
-  StringTableSection() : StrTabBuilder(llvm::StringTableBuilder::ELF) {
-    Type = llvm::ELF::SHT_STRTAB;
+  StringTableSection() : StrTabBuilder(StringTableBuilder::ELF) {
+    Type = ELF::SHT_STRTAB;
   }
 
-  void addString(llvm::StringRef Name);
-  uint32_t findIndex(llvm::StringRef Name) const;
+  void addString(StringRef Name);
+  uint32_t findIndex(StringRef Name) const;
   void finalize() override;
-  void writeSection(llvm::FileOutputBuffer &Out) const override;
+  void accept(SectionVisitor &Visitor) const override;
+
   static bool classof(const SectionBase *S) {
-    if (S->Flags & llvm::ELF::SHF_ALLOC)
+    if (S->Flags & ELF::SHF_ALLOC)
       return false;
-    return S->Type == llvm::ELF::SHT_STRTAB;
+    return S->Type == ELF::SHT_STRTAB;
   }
 };
 
@@ -148,12 +326,12 @@ public:
 // SYMBOL_SIMPLE_INDEX means that the st_shndx is just an index of a section.
 enum SymbolShndxType {
   SYMBOL_SIMPLE_INDEX = 0,
-  SYMBOL_ABS = llvm::ELF::SHN_ABS,
-  SYMBOL_COMMON = llvm::ELF::SHN_COMMON,
-  SYMBOL_HEXAGON_SCOMMON = llvm::ELF::SHN_HEXAGON_SCOMMON,
-  SYMBOL_HEXAGON_SCOMMON_2 = llvm::ELF::SHN_HEXAGON_SCOMMON_2,
-  SYMBOL_HEXAGON_SCOMMON_4 = llvm::ELF::SHN_HEXAGON_SCOMMON_4,
-  SYMBOL_HEXAGON_SCOMMON_8 = llvm::ELF::SHN_HEXAGON_SCOMMON_8,
+  SYMBOL_ABS = ELF::SHN_ABS,
+  SYMBOL_COMMON = ELF::SHN_COMMON,
+  SYMBOL_HEXAGON_SCOMMON = ELF::SHN_HEXAGON_SCOMMON,
+  SYMBOL_HEXAGON_SCOMMON_2 = ELF::SHN_HEXAGON_SCOMMON_2,
+  SYMBOL_HEXAGON_SCOMMON_4 = ELF::SHN_HEXAGON_SCOMMON_4,
+  SYMBOL_HEXAGON_SCOMMON_8 = ELF::SHN_HEXAGON_SCOMMON_8,
 };
 
 struct Symbol {
@@ -161,44 +339,54 @@ struct Symbol {
   SectionBase *DefinedIn = nullptr;
   SymbolShndxType ShndxType;
   uint32_t Index;
-  llvm::StringRef Name;
+  StringRef Name;
   uint32_t NameIndex;
   uint64_t Size;
   uint8_t Type;
   uint64_t Value;
+  uint8_t Visibility;
+  bool Referenced = false;
 
   uint16_t getShndx() const;
 };
 
 class SymbolTableSection : public SectionBase {
+  MAKE_SEC_WRITER_FRIEND
+
+  void setStrTab(StringTableSection *StrTab) { SymbolNames = StrTab; }
+  void assignIndices();
+
 protected:
   std::vector<std::unique_ptr<Symbol>> Symbols;
   StringTableSection *SymbolNames = nullptr;
 
-  typedef std::unique_ptr<Symbol> SymPtr;
+  using SymPtr = std::unique_ptr<Symbol>;
 
 public:
-  void setStrTab(StringTableSection *StrTab) { SymbolNames = StrTab; }
-  void addSymbol(llvm::StringRef Name, uint8_t Bind, uint8_t Type,
-                 SectionBase *DefinedIn, uint64_t Value, uint16_t Shndx,
-                 uint64_t Sz);
+  void addSymbol(StringRef Name, uint8_t Bind, uint8_t Type,
+                 SectionBase *DefinedIn, uint64_t Value, uint8_t Visibility,
+                 uint16_t Shndx, uint64_t Sz);
   void addSymbolNames();
+  // An 'empty' symbol table still contains a null symbol.
+  bool empty() const { return Symbols.size() == 1; }
+  const SectionBase *getStrTab() const { return SymbolNames; }
   const Symbol *getSymbolByIndex(uint32_t Index) const;
+  Symbol *getSymbolByIndex(uint32_t Index);
+  void updateSymbols(function_ref<void(Symbol &)> Callable);
+
   void removeSectionReferences(const SectionBase *Sec) override;
   void initialize(SectionTableRef SecTable) override;
   void finalize() override;
+  void accept(SectionVisitor &Visitor) const override;
+  void removeSymbols(function_ref<bool(const Symbol &)> ToRemove) override;
+
   static bool classof(const SectionBase *S) {
-    return S->Type == llvm::ELF::SHT_SYMTAB;
+    return S->Type == ELF::SHT_SYMTAB;
   }
 };
 
-// Only writeSection depends on the ELF type so we implement it in a subclass.
-template <class ELFT> class SymbolTableSectionImpl : public SymbolTableSection {
-  void writeSection(llvm::FileOutputBuffer &Out) const override;
-};
-
 struct Relocation {
-  const Symbol *RelocSymbol = nullptr;
+  Symbol *RelocSymbol = nullptr;
   uint64_t Offset;
   uint64_t Addend;
   uint32_t Type;
@@ -222,7 +410,7 @@ public:
   void setSection(SectionBase *Sec) { SecToApplyRel = Sec; }
 
   static bool classof(const SectionBase *S) {
-    return S->Type == llvm::ELF::SHT_REL || S->Type == llvm::ELF::SHT_RELA;
+    return S->Type == ELF::SHT_REL || S->Type == ELF::SHT_RELA;
   }
 };
 
@@ -230,115 +418,193 @@ public:
 // that code between the two symbol table types.
 template <class SymTabType>
 class RelocSectionWithSymtabBase : public RelocationSectionBase {
-private:
   SymTabType *Symbols = nullptr;
+  void setSymTab(SymTabType *SymTab) { Symbols = SymTab; }
 
 protected:
-  RelocSectionWithSymtabBase() {}
+  RelocSectionWithSymtabBase() = default;
 
 public:
-  void setSymTab(SymTabType *StrTab) { Symbols = StrTab; }
-
   void removeSectionReferences(const SectionBase *Sec) override;
   void initialize(SectionTableRef SecTable) override;
   void finalize() override;
 };
 
-template <class ELFT>
 class RelocationSection
     : public RelocSectionWithSymtabBase<SymbolTableSection> {
-private:
-  typedef typename ELFT::Rel Elf_Rel;
-  typedef typename ELFT::Rela Elf_Rela;
+  MAKE_SEC_WRITER_FRIEND
 
   std::vector<Relocation> Relocations;
 
-  template <class T> void writeRel(T *Buf) const;
-
 public:
   void addRelocation(Relocation Rel) { Relocations.push_back(Rel); }
-  void writeSection(llvm::FileOutputBuffer &Out) const override;
+  void accept(SectionVisitor &Visitor) const override;
+  void removeSymbols(function_ref<bool(const Symbol &)> ToRemove) override;
+  void markSymbols() override;
 
   static bool classof(const SectionBase *S) {
-    if (S->Flags & llvm::ELF::SHF_ALLOC)
+    if (S->Flags & ELF::SHF_ALLOC)
       return false;
-    return S->Type == llvm::ELF::SHT_REL || S->Type == llvm::ELF::SHT_RELA;
+    return S->Type == ELF::SHT_REL || S->Type == ELF::SHT_RELA;
   }
 };
 
-class SectionWithStrTab : public Section {
-private:
-  const SectionBase *StrTab = nullptr;
+// TODO: The way stripping and groups interact is complicated
+// and still needs to be worked on.
+
+class GroupSection : public SectionBase {
+  MAKE_SEC_WRITER_FRIEND
+  const SymbolTableSection *SymTab = nullptr;
+  Symbol *Sym = nullptr;
+  ELF::Elf32_Word FlagWord;
+  SmallVector<SectionBase *, 3> GroupMembers;
 
 public:
-  SectionWithStrTab(llvm::ArrayRef<uint8_t> Data) : Section(Data) {}
-  void setStrTab(const SectionBase *StringTable) { StrTab = StringTable; }
-  void removeSectionReferences(const SectionBase *Sec) override;
-  void initialize(SectionTableRef SecTable) override;
+  // TODO: Contents is present in several classes of the hierarchy.
+  // This needs to be refactored to avoid duplication.
+  ArrayRef<uint8_t> Contents;
+
+  explicit GroupSection(ArrayRef<uint8_t> Data) : Contents(Data) {}
+
+  void setSymTab(const SymbolTableSection *SymTabSec) { SymTab = SymTabSec; }
+  void setSymbol(Symbol *S) { Sym = S; }
+  void setFlagWord(ELF::Elf32_Word W) { FlagWord = W; }
+  void addMember(SectionBase *Sec) { GroupMembers.push_back(Sec); }
+
+  void initialize(SectionTableRef SecTable) override{};
+  void accept(SectionVisitor &) const override;
   void finalize() override;
-  static bool classof(const SectionBase *S);
-};
+  void removeSymbols(function_ref<bool(const Symbol &)> ToRemove) override;
+  void markSymbols() override;
 
-class DynamicSymbolTableSection : public SectionWithStrTab {
-public:
-  DynamicSymbolTableSection(llvm::ArrayRef<uint8_t> Data)
-      : SectionWithStrTab(Data) {}
   static bool classof(const SectionBase *S) {
-    return S->Type == llvm::ELF::SHT_DYNSYM;
+    return S->Type == ELF::SHT_GROUP;
   }
 };
 
-class DynamicSection : public SectionWithStrTab {
+class DynamicSymbolTableSection : public Section {
 public:
-  DynamicSection(llvm::ArrayRef<uint8_t> Data) : SectionWithStrTab(Data) {}
+  explicit DynamicSymbolTableSection(ArrayRef<uint8_t> Data) : Section(Data) {}
+
   static bool classof(const SectionBase *S) {
-    return S->Type == llvm::ELF::SHT_DYNAMIC;
+    return S->Type == ELF::SHT_DYNSYM;
+  }
+};
+
+class DynamicSection : public Section {
+public:
+  explicit DynamicSection(ArrayRef<uint8_t> Data) : Section(Data) {}
+
+  static bool classof(const SectionBase *S) {
+    return S->Type == ELF::SHT_DYNAMIC;
   }
 };
 
 class DynamicRelocationSection
     : public RelocSectionWithSymtabBase<DynamicSymbolTableSection> {
+  MAKE_SEC_WRITER_FRIEND
+
 private:
-  llvm::ArrayRef<uint8_t> Contents;
+  ArrayRef<uint8_t> Contents;
 
 public:
-  DynamicRelocationSection(llvm::ArrayRef<uint8_t> Data) : Contents(Data) {}
-  void writeSection(llvm::FileOutputBuffer &Out) const override;
+  explicit DynamicRelocationSection(ArrayRef<uint8_t> Data) : Contents(Data) {}
+
+  void accept(SectionVisitor &) const override;
+
   static bool classof(const SectionBase *S) {
-    if (!(S->Flags & llvm::ELF::SHF_ALLOC))
+    if (!(S->Flags & ELF::SHF_ALLOC))
       return false;
-    return S->Type == llvm::ELF::SHT_REL || S->Type == llvm::ELF::SHT_RELA;
+    return S->Type == ELF::SHT_REL || S->Type == ELF::SHT_RELA;
   }
 };
 
-template <class ELFT> class Object {
+class GnuDebugLinkSection : public SectionBase {
+  MAKE_SEC_WRITER_FRIEND
+
 private:
-  typedef std::unique_ptr<SectionBase> SecPtr;
-  typedef std::unique_ptr<Segment> SegPtr;
+  StringRef FileName;
+  uint32_t CRC32;
 
-  typedef typename ELFT::Shdr Elf_Shdr;
-  typedef typename ELFT::Ehdr Elf_Ehdr;
-  typedef typename ELFT::Phdr Elf_Phdr;
+  void init(StringRef File, StringRef Data);
 
-  void initSymbolTable(const llvm::object::ELFFile<ELFT> &ElfFile,
-                       SymbolTableSection *SymTab, SectionTableRef SecTable);
-  SecPtr makeSection(const llvm::object::ELFFile<ELFT> &ElfFile,
-                     const Elf_Shdr &Shdr);
-  void readProgramHeaders(const llvm::object::ELFFile<ELFT> &ElfFile);
-  SectionTableRef readSectionHeaders(const llvm::object::ELFFile<ELFT> &ElfFile);
+public:
+  // If we add this section from an external source we can use this ctor.
+  explicit GnuDebugLinkSection(StringRef File);
+  void accept(SectionVisitor &Visitor) const override;
+};
 
-protected:
-  StringTableSection *SectionNames = nullptr;
-  SymbolTableSection *SymbolTable = nullptr;
+class Reader {
+public:
+  virtual ~Reader();
+  virtual std::unique_ptr<Object> create() const = 0;
+};
+
+using object::Binary;
+using object::ELFFile;
+using object::ELFObjectFile;
+using object::OwningBinary;
+
+template <class ELFT> class ELFBuilder {
+private:
+  using Elf_Addr = typename ELFT::Addr;
+  using Elf_Shdr = typename ELFT::Shdr;
+  using Elf_Ehdr = typename ELFT::Ehdr;
+
+  const ELFFile<ELFT> &ElfFile;
+  Object &Obj;
+
+  void setParentSegment(Segment &Child);
+  void readProgramHeaders();
+  void initGroupSection(GroupSection *GroupSec);
+  void initSymbolTable(SymbolTableSection *SymTab);
+  void readSectionHeaders();
+  SectionBase &makeSection(const Elf_Shdr &Shdr);
+
+public:
+  ELFBuilder(const ELFObjectFile<ELFT> &ElfObj, Object &Obj)
+      : ElfFile(*ElfObj.getELFFile()), Obj(Obj) {}
+
+  void build();
+};
+
+class ELFReader : public Reader {
+private:
+  std::unique_ptr<Binary> Bin;
+  std::shared_ptr<MemoryBuffer> Data;
+
+public:
+  ElfType getElfType() const;
+  std::unique_ptr<Object> create() const override;
+  ELFReader(StringRef File);
+};
+
+class Object {
+private:
+  using SecPtr = std::unique_ptr<SectionBase>;
+  using SegPtr = std::unique_ptr<Segment>;
+
   std::vector<SecPtr> Sections;
   std::vector<SegPtr> Segments;
 
-  void writeHeader(llvm::FileOutputBuffer &Out) const;
-  void writeProgramHeaders(llvm::FileOutputBuffer &Out) const;
-  void writeSectionData(llvm::FileOutputBuffer &Out) const;
-  void writeSectionHeaders(llvm::FileOutputBuffer &Out) const;
-
 public:
+  template <class T>
+  using Range = iterator_range<
+      pointee_iterator<typename std::vector<std::unique_ptr<T>>::iterator>>;
+
+  template <class T>
+  using ConstRange = iterator_range<pointee_iterator<
+      typename std::vector<std::unique_ptr<T>>::const_iterator>>;
+
+  // It is often the case that the ELF header and the program header table are
+  // not present in any segment. This could be a problem during file layout,
+  // because other segments may get assigned an offset where either of the
+  // two should reside, which will effectively corrupt the resulting binary.
+  // Other than that we use these segments to track program header offsets
+  // when they may not follow the ELF header.
+  Segment ElfHdrSegment;
+  Segment ProgramHdrSegment;
+
   uint8_t Ident[16];
   uint64_t Entry;
   uint64_t SHOffset;
@@ -346,47 +612,31 @@ public:
   uint32_t Machine;
   uint32_t Version;
   uint32_t Flags;
-  bool WriteSectionHeaders = true;
 
-  Object(const llvm::object::ELFObjectFile<ELFT> &Obj);
-  void removeSections(std::function<bool(const SectionBase &)> ToRemove);
-  virtual size_t totalSize() const = 0;
-  virtual void finalize() = 0;
-  virtual void write(llvm::FileOutputBuffer &Out) const = 0;
-  virtual ~Object() = default;
-};
-
-template <class ELFT> class ELFObject : public Object<ELFT> {
-private:
-  typedef std::unique_ptr<SectionBase> SecPtr;
-  typedef std::unique_ptr<Segment> SegPtr;
-
-  typedef typename ELFT::Shdr Elf_Shdr;
-  typedef typename ELFT::Ehdr Elf_Ehdr;
-  typedef typename ELFT::Phdr Elf_Phdr;
+  StringTableSection *SectionNames = nullptr;
+  SymbolTableSection *SymbolTable = nullptr;
 
   void sortSections();
-  void assignOffsets();
+  SectionTableRef sections() { return SectionTableRef(Sections); }
+  ConstRange<SectionBase> sections() const {
+    return make_pointee_range(Sections);
+  }
+  Range<Segment> segments() { return make_pointee_range(Segments); }
+  ConstRange<Segment> segments() const { return make_pointee_range(Segments); }
 
-public:
-  ELFObject(const llvm::object::ELFObjectFile<ELFT> &Obj) : Object<ELFT>(Obj) {}
-  void finalize() override;
-  size_t totalSize() const override;
-  void write(llvm::FileOutputBuffer &Out) const override;
+  void removeSections(std::function<bool(const SectionBase &)> ToRemove);
+  void removeSymbols(function_ref<bool(const Symbol &)> ToRemove);
+  template <class T, class... Ts> T &addSection(Ts &&... Args) {
+    auto Sec = llvm::make_unique<T>(std::forward<Ts>(Args)...);
+    auto Ptr = Sec.get();
+    Sections.emplace_back(std::move(Sec));
+    return *Ptr;
+  }
+  Segment &addSegment(ArrayRef<uint8_t> Data) {
+    Segments.emplace_back(llvm::make_unique<Segment>(Data));
+    return *Segments.back();
+  }
 };
+} // end namespace llvm
 
-template <class ELFT> class BinaryObject : public Object<ELFT> {
-private:
-  typedef std::unique_ptr<SectionBase> SecPtr;
-  typedef std::unique_ptr<Segment> SegPtr;
-
-  uint64_t TotalSize;
-
-public:
-  BinaryObject(const llvm::object::ELFObjectFile<ELFT> &Obj)
-      : Object<ELFT>(Obj) {}
-  void finalize() override;
-  size_t totalSize() const override;
-  void write(llvm::FileOutputBuffer &Out) const override;
-};
-#endif
+#endif // LLVM_TOOLS_OBJCOPY_OBJECT_H

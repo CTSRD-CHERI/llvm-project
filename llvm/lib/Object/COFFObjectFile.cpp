@@ -895,7 +895,7 @@ StringRef COFFObjectFile::getFileFormatName() const {
   }
 }
 
-unsigned COFFObjectFile::getArch() const {
+Triple::ArchType COFFObjectFile::getArch() const {
   switch (getMachine()) {
   case COFF::IMAGE_FILE_MACHINE_I386:
     return Triple::x86;
@@ -944,7 +944,7 @@ COFFObjectFile::getPE32PlusHeader(const pe32plus_header *&Res) const {
 std::error_code
 COFFObjectFile::getDataDirectory(uint32_t Index,
                                  const data_directory *&Res) const {
-  // Error if if there's no data directory or the index is out of range.
+  // Error if there's no data directory or the index is out of range.
   if (!DataDirectory) {
     Res = nullptr;
     return object_error::parse_failed;
@@ -1147,13 +1147,10 @@ COFFObjectFile::getCOFFRelocation(const RelocationRef &Reloc) const {
   return toRel(Reloc.getRawDataRefImpl());
 }
 
-iterator_range<const coff_relocation *>
+ArrayRef<coff_relocation>
 COFFObjectFile::getRelocations(const coff_section *Sec) const {
-  const coff_relocation *I = getFirstReloc(Sec, Data, base());
-  const coff_relocation *E = I;
-  if (I)
-    E += getNumberOfRelocations(Sec, Data, base());
-  return make_range(I, E);
+  return {getFirstReloc(Sec, Data, base()),
+          getNumberOfRelocations(Sec, Data, base())};
 }
 
 #define LLVM_COFF_SWITCH_RELOC_TYPE_NAME(reloc_type)                           \

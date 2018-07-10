@@ -10,10 +10,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "ARM.h"
-#include "ARMSubtarget.h"
-#include "ARMMacroFusion.h"
 #include "ARMTargetMachine.h"
+#include "ARM.h"
+#include "ARMMacroFusion.h"
+#include "ARMSubtarget.h"
 #include "ARMTargetObjectFile.h"
 #include "ARMTargetTransformInfo.h"
 #include "MCTargetDesc/ARMMCTargetDesc.h"
@@ -22,7 +22,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
-#include "llvm/CodeGen/ExecutionDepsFix.h"
+#include "llvm/CodeGen/ExecutionDomainFix.h"
 #include "llvm/CodeGen/GlobalISel/CallLowering.h"
 #include "llvm/CodeGen/GlobalISel/IRTranslator.h"
 #include "llvm/CodeGen/GlobalISel/InstructionSelect.h"
@@ -75,7 +75,7 @@ EnableGlobalMerge("arm-global-merge", cl::Hidden,
                   cl::desc("Enable the global merge pass"));
 
 namespace llvm {
-  void initializeARMExecutionDepsFixPass(PassRegistry&);
+  void initializeARMExecutionDomainFixPass(PassRegistry&);
 }
 
 extern "C" void LLVMInitializeARMTarget() {
@@ -90,8 +90,9 @@ extern "C" void LLVMInitializeARMTarget() {
   initializeARMLoadStoreOptPass(Registry);
   initializeARMPreAllocLoadStoreOptPass(Registry);
   initializeARMConstantIslandsPass(Registry);
-  initializeARMExecutionDepsFixPass(Registry);
+  initializeARMExecutionDomainFixPass(Registry);
   initializeARMExpandPseudoPass(Registry);
+  initializeThumb2SizeReducePass(Registry);
 }
 
 static std::unique_ptr<TargetLoweringObjectFile> createTLOF(const Triple &TT) {
@@ -237,6 +238,9 @@ ARMBaseTargetMachine::ARMBaseTargetMachine(const Target &T, const Triple &TT,
       this->Options.EABIVersion = EABI::EABI5;
   }
 
+  if (TT.isOSBinFormatMachO())
+    this->Options.TrapUnreachable = true;
+
   initAsmInfo();
 }
 
@@ -282,10 +286,9 @@ ARMBaseTargetMachine::getSubtargetImpl(const Function &F) const {
   return I.get();
 }
 
-TargetIRAnalysis ARMBaseTargetMachine::getTargetIRAnalysis() {
-  return TargetIRAnalysis([this](const Function &F) {
-    return TargetTransformInfo(ARMTTIImpl(this, F));
-  });
+TargetTransformInfo
+ARMBaseTargetMachine::getTargetTransformInfo(const Function &F) {
+  return TargetTransformInfo(ARMTTIImpl(this, F));
 }
 
 ARMLETargetMachine::ARMLETargetMachine(const Target &T, const Triple &TT,
@@ -310,7 +313,14 @@ namespace {
 class ARMPassConfig : public TargetPassConfig {
 public:
   ARMPassConfig(ARMBaseTargetMachine &TM, PassManagerBase &PM)
-    : TargetPassConfig(TM, PM) {}
+      : TargetPassConfig(TM, PM) {
+    if (TM.getOptLevel() != CodeGenOpt::None) {
+      ARMGenSubtargetInfo STI(TM.getTargetTriple(), TM.getTargetCPU(),
+                              TM.getTargetFeatureString());
+      if (STI.hasFeature(ARM::FeatureUseMISched))
+        substitutePass(&PostRASchedulerID, &PostMachineSchedulerID);
+    }
+  }
 
   ARMBaseTargetMachine &getARMTargetMachine() const {
     return getTM<ARMBaseTargetMachine>();
@@ -348,20 +358,23 @@ public:
   void addPreEmitPass() override;
 };
 
-class ARMExecutionDepsFix : public ExecutionDepsFix {
+class ARMExecutionDomainFix : public ExecutionDomainFix {
 public:
   static char ID;
-  ARMExecutionDepsFix() : ExecutionDepsFix(ID, ARM::DPRRegClass) {}
+  ARMExecutionDomainFix() : ExecutionDomainFix(ID, ARM::DPRRegClass) {}
   StringRef getPassName() const override {
-    return "ARM Execution Dependency Fix";
+    return "ARM Execution Domain Fix";
   }
 };
-char ARMExecutionDepsFix::ID;
+char ARMExecutionDomainFix::ID;
 
 } // end anonymous namespace
 
-INITIALIZE_PASS(ARMExecutionDepsFix, "arm-execution-deps-fix",
-                "ARM Execution Dependency Fix", false, false)
+INITIALIZE_PASS_BEGIN(ARMExecutionDomainFix, "arm-execution-domain-fix",
+  "ARM Execution Domain Fix", false, false)
+INITIALIZE_PASS_DEPENDENCY(ReachingDefAnalysis)
+INITIALIZE_PASS_END(ARMExecutionDomainFix, "arm-execution-domain-fix",
+  "ARM Execution Domain Fix", false, false)
 
 TargetPassConfig *ARMBaseTargetMachine::createPassConfig(PassManagerBase &PM) {
   return new ARMPassConfig(*this, PM);
@@ -377,10 +390,11 @@ void ARMPassConfig::addIRPasses() {
   // determine whether it succeeded. We can exploit existing control-flow in
   // ldrex/strex loops to simplify this, but it needs tidying up.
   if (TM->getOptLevel() != CodeGenOpt::None && EnableAtomicTidy)
-    addPass(createCFGSimplificationPass(-1, [this](const Function &F) {
-      const auto &ST = this->TM->getSubtarget<ARMSubtarget>(F);
-      return ST.hasAnyDataBarrier() && !ST.isThumb1Only();
-    }));
+    addPass(createCFGSimplificationPass(
+        1, false, false, true, true, [this](const Function &F) {
+          const auto &ST = this->TM->getSubtarget<ARMSubtarget>(F);
+          return ST.hasAnyDataBarrier() && !ST.isThumb1Only();
+        }));
 
   TargetPassConfig::addIRPasses();
 
@@ -454,7 +468,8 @@ void ARMPassConfig::addPreSched2() {
     if (EnableARMLoadStoreOpt)
       addPass(createARMLoadStoreOptimizationPass());
 
-    addPass(new ARMExecutionDepsFix());
+    addPass(new ARMExecutionDomainFix());
+    addPass(createBreakFalseDeps());
   }
 
   // Expand some pseudo instructions into multiple instructions to allow

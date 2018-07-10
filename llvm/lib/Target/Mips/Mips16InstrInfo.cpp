@@ -22,13 +22,13 @@
 #include "llvm/CodeGen/MachineMemOperand.h"
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/RegisterScavenging.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/IR/DebugLoc.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetRegisterInfo.h"
 #include <cassert>
 #include <cctype>
 #include <cstdint>
@@ -42,7 +42,7 @@ using namespace llvm;
 #define DEBUG_TYPE "mips16-instrinfo"
 
 Mips16InstrInfo::Mips16InstrInfo(const MipsSubtarget &STI)
-    : MipsInstrInfo(STI, Mips::Bimm16), RI(STI.getHwMode()) {}
+    : MipsInstrInfo(STI, Mips::Bimm16), RI(STI) {}
 
 const MipsRegisterInfo &Mips16InstrInfo::getRegisterInfo() const {
   return RI;
@@ -96,6 +96,17 @@ void Mips16InstrInfo::copyPhysReg(MachineBasicBlock &MBB,
 
   if (SrcReg)
     MIB.addReg(SrcReg, getKillRegState(KillSrc));
+}
+
+bool Mips16InstrInfo::isCopyInstr(const MachineInstr &MI,
+                                  const MachineOperand *&Src,
+                                  const MachineOperand *&Dest) const {
+  if (MI.isMoveReg()) {
+    Dest = &MI.getOperand(0);
+    Src = &MI.getOperand(1);
+    return true;
+  }
+  return false;
 }
 
 void Mips16InstrInfo::storeRegToStack(MachineBasicBlock &MBB,

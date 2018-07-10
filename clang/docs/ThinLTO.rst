@@ -156,7 +156,7 @@ A policy string is a series of key-value pairs separated by ``:`` characters.
 Possible key-value pairs are:
 
 - ``cache_size=X%``: The maximum size for the cache directory is ``X`` percent
-  of the available space on the the disk. Set to 100 to indicate no limit,
+  of the available space on the disk. Set to 100 to indicate no limit,
   50 to indicate that the cache size will not be left over half the available
   disk space. A value over 100 is invalid. A value of 0 disables the percentage
   size-based pruning. The default is 75%.
@@ -172,6 +172,10 @@ Possible key-value pairs are:
   and changing one does not affect the other. For example, a policy of
   ``cache_size_bytes=1g`` on its own will cause both the 1GB and default 75%
   policies to be applied unless the default ``cache_size`` is overridden.
+
+- ``cache_size_files=X``:
+  Set the maximum number of files in the cache directory. Set to 0 to indicate
+  no limit. The default is 1000000 files.
 
 - ``prune_after=Xs``, ``prune_after=Xm``, ``prune_after=Xh``: Sets the
   expiration time for cache files to ``X`` seconds (or minutes, hours

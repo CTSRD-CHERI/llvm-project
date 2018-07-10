@@ -13,10 +13,14 @@
 
 #include "RISCVInstPrinter.h"
 #include "MCTargetDesc/RISCVBaseInfo.h"
+#include "MCTargetDesc/RISCVMCExpr.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
+#include "llvm/MC/MCRegisterInfo.h"
+#include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/MCSymbol.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FormattedStream.h"
 using namespace llvm;
@@ -24,11 +28,30 @@ using namespace llvm;
 #define DEBUG_TYPE "asm-printer"
 
 // Include the auto-generated portion of the assembly writer.
+#define PRINT_ALIAS_INSTR
 #include "RISCVGenAsmWriter.inc"
+
+// Include the auto-generated portion of the compress emitter.
+#define GEN_UNCOMPRESS_INSTR
+#include "RISCVGenCompressInstEmitter.inc"
+
+static cl::opt<bool>
+NoAliases("riscv-no-aliases",
+            cl::desc("Disable the emission of assembler pseudo instructions"),
+            cl::init(false),
+            cl::Hidden);
 
 void RISCVInstPrinter::printInst(const MCInst *MI, raw_ostream &O,
                                  StringRef Annot, const MCSubtargetInfo &STI) {
-  printInstruction(MI, O);
+  bool Res = false;
+  const MCInst *NewMI = MI;
+  MCInst UncompressedMI;
+  if (!NoAliases)
+    Res = uncompressInst(UncompressedMI, *MI, MRI, STI);
+  if (Res)
+    NewMI = const_cast<MCInst*>(&UncompressedMI);
+  if (NoAliases || !printAliasInstr(NewMI, STI, O))
+    printInstruction(NewMI, STI, O);
   printAnnotation(O, Annot);
 }
 
@@ -37,6 +60,7 @@ void RISCVInstPrinter::printRegName(raw_ostream &O, unsigned RegNo) const {
 }
 
 void RISCVInstPrinter::printOperand(const MCInst *MI, unsigned OpNo,
+                                    const MCSubtargetInfo &STI,
                                     raw_ostream &O, const char *Modifier) {
   assert((Modifier == 0 || Modifier[0] == 0) && "No modifiers supported");
   const MCOperand &MO = MI->getOperand(OpNo);
@@ -56,6 +80,7 @@ void RISCVInstPrinter::printOperand(const MCInst *MI, unsigned OpNo,
 }
 
 void RISCVInstPrinter::printFenceArg(const MCInst *MI, unsigned OpNo,
+                                     const MCSubtargetInfo &STI,
                                      raw_ostream &O) {
   unsigned FenceArg = MI->getOperand(OpNo).getImm();
   if ((FenceArg & RISCVFenceField::I) != 0)
@@ -66,4 +91,12 @@ void RISCVInstPrinter::printFenceArg(const MCInst *MI, unsigned OpNo,
     O << 'r';
   if ((FenceArg & RISCVFenceField::W) != 0)
     O << 'w';
+}
+
+void RISCVInstPrinter::printFRMArg(const MCInst *MI, unsigned OpNo,
+                                   const MCSubtargetInfo &STI,
+                                   raw_ostream &O) {
+  auto FRMArg =
+      static_cast<RISCVFPRndMode::RoundingMode>(MI->getOperand(OpNo).getImm());
+  O << RISCVFPRndMode::roundingModeToString(FRMArg);
 }

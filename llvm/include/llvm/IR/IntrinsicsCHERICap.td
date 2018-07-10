@@ -74,6 +74,11 @@ def int_cheri_cap_seal :
   Intrinsic<[llvm_fatptr_ty],
             [llvm_fatptr_ty, llvm_fatptr_ty],
             [IntrNoMem]>;
+def int_cheri_cap_conditional_seal :
+  GCCBuiltin<"__builtin_cheri_conditional_seal">,
+  Intrinsic<[llvm_fatptr_ty],
+            [llvm_fatptr_ty, llvm_fatptr_ty],
+            [IntrNoMem]>;
 def int_cheri_cap_unseal  :
   GCCBuiltinAlias<"__builtin_mips_cheri_unseal_cap">,
   GCCBuiltin<"__builtin_cheri_unseal">,
@@ -129,9 +134,22 @@ def int_cheri_cap_diff:
 def int_cheri_cap_address_get:
   GCCBuiltin<"__builtin_cheri_address_get">,
   Intrinsic<[llvm_i64_ty], [llvm_fatptr_ty], [IntrNoMem]>;
+def int_cheri_cap_address_set:
+  GCCBuiltin<"__builtin_cheri_address_set">,
+  Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_i64_ty], [IntrNoMem]>;
+
 
 def int_cheri_cap_to_pointer:
   Intrinsic<[llvm_i64_ty], [llvm_fatptr_ty, llvm_fatptr_ty], [IntrNoMem]>;
 def int_cheri_cap_from_pointer:
   Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_i64_ty], [IntrNoMem]>;
 
+////////////////////////////////////////////////////////////////////////////////
+// Building capabilities from untagged data
+////////////////////////////////////////////////////////////////////////////////
+def int_cheri_cap_build:
+  GCCBuiltin<"__builtin_cheri_cap_build">,
+  Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_fatptr_ty], [IntrNoMem]>;
+def int_cheri_cap_type_copy:
+  GCCBuiltin<"__builtin_cheri_cap_type_copy">,
+  Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_fatptr_ty], [IntrNoMem]>;

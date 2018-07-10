@@ -135,6 +135,10 @@ void MCObjectFileInfo::initMachOMCObjectFileInfo(const Triple &T) {
   // "__DATA/__datacoal_nt" => section "__DATA/__data"
   Triple::ArchType ArchTy = T.getArch();
 
+  ConstDataSection  // .const_data
+    = Ctx->getMachOSection("__DATA", "__const", 0,
+                           SectionKind::getReadOnlyWithRel());
+
   if (ArchTy == Triple::ppc || ArchTy == Triple::ppc64) {
     TextCoalSection
       = Ctx->getMachOSection("__TEXT", "__textcoal_nt",
@@ -147,15 +151,14 @@ void MCObjectFileInfo::initMachOMCObjectFileInfo(const Triple &T) {
                              SectionKind::getReadOnly());
     DataCoalSection = Ctx->getMachOSection(
         "__DATA", "__datacoal_nt", MachO::S_COALESCED, SectionKind::getData());
+    ConstDataCoalSection = DataCoalSection;
   } else {
     TextCoalSection = TextSection;
     ConstTextCoalSection = ReadOnlySection;
     DataCoalSection = DataSection;
+    ConstDataCoalSection = ConstDataSection;
   }
 
-  ConstDataSection  // .const_data
-    = Ctx->getMachOSection("__DATA", "__const", 0,
-                           SectionKind::getReadOnlyWithRel());
   DataCommonSection
     = Ctx->getMachOSection("__DATA","__common",
                            MachO::S_ZEROFILL,
@@ -185,6 +188,7 @@ void MCObjectFileInfo::initMachOMCObjectFileInfo(const Triple &T) {
 
   COFFDebugSymbolsSection = nullptr;
   COFFDebugTypesSection = nullptr;
+  COFFGlobalTypeHashesSection = nullptr;
 
   if (useCompactUnwind(T)) {
     CompactUnwindSection =
@@ -200,6 +204,9 @@ void MCObjectFileInfo::initMachOMCObjectFileInfo(const Triple &T) {
   }
 
   // Debug Information.
+  DwarfDebugNamesSection =
+      Ctx->getMachOSection("__DWARF", "__debug_names", MachO::S_ATTR_DEBUG,
+                           SectionKind::getMetadata(), "debug_names_begin");
   DwarfAccelNamesSection =
       Ctx->getMachOSection("__DWARF", "__apple_names", MachO::S_ATTR_DEBUG,
                            SectionKind::getMetadata(), "names_begin");
@@ -227,6 +234,9 @@ void MCObjectFileInfo::initMachOMCObjectFileInfo(const Triple &T) {
   DwarfLineSection =
       Ctx->getMachOSection("__DWARF", "__debug_line", MachO::S_ATTR_DEBUG,
                            SectionKind::getMetadata(), "section_line");
+  DwarfLineStrSection =
+      Ctx->getMachOSection("__DWARF", "__debug_line_str", MachO::S_ATTR_DEBUG,
+                           SectionKind::getMetadata(), "section_line_str");
   DwarfFrameSection =
       Ctx->getMachOSection("__DWARF", "__debug_frame", MachO::S_ATTR_DEBUG,
                            SectionKind::getMetadata());
@@ -289,6 +299,8 @@ void MCObjectFileInfo::initELFMCObjectFileInfo(const Triple &T, bool Large) {
   case Triple::cheri:
     FDECFIEncoding = dwarf::DW_EH_PE_sdata8;
     break;
+  case Triple::ppc64:
+  case Triple::ppc64le:
   case Triple::x86_64:
     FDECFIEncoding = dwarf::DW_EH_PE_pcrel |
                      (Large ? dwarf::DW_EH_PE_sdata8 : dwarf::DW_EH_PE_sdata4);
@@ -463,6 +475,22 @@ void MCObjectFileInfo::initELFMCObjectFileInfo(const Triple &T, bool Large) {
   if (T.isOSSolaris() && T.getArch() != Triple::x86_64)
     EHSectionFlags |= ELF::SHF_WRITE;
 
+  // This is (currently) also true for MIPS
+  // TODO: add a T.isMIPS()?
+  switch (T.getArch()) {
+    case Triple::mips:
+    case Triple::mipsel:
+    case Triple::mips64:
+    case Triple::mips64el:
+    case Triple::cheri:
+      if (PositionIndependent) {
+        EHSectionFlags |= ELF::SHF_WRITE;
+      }
+      break;
+    default:
+      break;
+  }
+
   // ELF
   BSSSection = Ctx->getELFSection(".bss", ELF::SHT_NOBITS,
                                   ELF::SHF_WRITE | ELF::SHF_ALLOC);
@@ -519,9 +547,7 @@ void MCObjectFileInfo::initELFMCObjectFileInfo(const Triple &T, bool Large) {
   // MIPS .debug_* sections should have SHT_MIPS_DWARF section type
   // to distinguish among sections contain DWARF and ECOFF debug formats.
   // Sections with ECOFF debug format are obsoleted and marked by SHT_PROGBITS.
-  if (T.getArch() == Triple::mips || T.getArch() == Triple::mipsel ||
-      T.getArch() == Triple::mips64 || T.getArch() == Triple::mips64el ||
-      T.getArch() == Triple::cheri)
+  if (T.isMIPS())
     DebugSecType = ELF::SHT_MIPS_DWARF;
 
   // Debug Info Sections.
@@ -529,6 +555,9 @@ void MCObjectFileInfo::initELFMCObjectFileInfo(const Triple &T, bool Large) {
       Ctx->getELFSection(".debug_abbrev", DebugSecType, 0);
   DwarfInfoSection = Ctx->getELFSection(".debug_info", DebugSecType, 0);
   DwarfLineSection = Ctx->getELFSection(".debug_line", DebugSecType, 0);
+  DwarfLineStrSection =
+      Ctx->getELFSection(".debug_line_str", DebugSecType,
+                         ELF::SHF_MERGE | ELF::SHF_STRINGS, 1, "");
   DwarfFrameSection = Ctx->getELFSection(".debug_frame", DebugSecType, 0);
   DwarfPubNamesSection =
       Ctx->getELFSection(".debug_pubnames", DebugSecType, 0);
@@ -552,6 +581,8 @@ void MCObjectFileInfo::initELFMCObjectFileInfo(const Triple &T, bool Large) {
   // DWARF5 Experimental Debug Info
 
   // Accelerator Tables
+  DwarfDebugNamesSection =
+      Ctx->getELFSection(".debug_names", ELF::SHT_PROGBITS, 0);
   DwarfAccelNamesSection =
       Ctx->getELFSection(".apple_names", ELF::SHT_PROGBITS, 0);
   DwarfAccelObjCSection =
@@ -597,6 +628,8 @@ void MCObjectFileInfo::initELFMCObjectFileInfo(const Triple &T, bool Large) {
 
   EHFrameSection =
       Ctx->getELFSection(".eh_frame", EHSectionType, EHSectionFlags);
+
+  StackSizesSection = Ctx->getELFSection(".stack_sizes", ELF::SHT_PROGBITS, 0);
 }
 
 void MCObjectFileInfo::initCOFFMCObjectFileInfo(const Triple &T) {
@@ -656,6 +689,11 @@ void MCObjectFileInfo::initCOFFMCObjectFileInfo(const Triple &T) {
                                        COFF::IMAGE_SCN_CNT_INITIALIZED_DATA |
                                        COFF::IMAGE_SCN_MEM_READ),
                           SectionKind::getMetadata());
+  COFFGlobalTypeHashesSection = Ctx->getCOFFSection(
+      ".debug$H",
+      (COFF::IMAGE_SCN_MEM_DISCARDABLE | COFF::IMAGE_SCN_CNT_INITIALIZED_DATA |
+       COFF::IMAGE_SCN_MEM_READ),
+      SectionKind::getMetadata());
 
   DwarfAbbrevSection = Ctx->getCOFFSection(
       ".debug_abbrev",
@@ -672,7 +710,11 @@ void MCObjectFileInfo::initCOFFMCObjectFileInfo(const Triple &T) {
       COFF::IMAGE_SCN_MEM_DISCARDABLE | COFF::IMAGE_SCN_CNT_INITIALIZED_DATA |
           COFF::IMAGE_SCN_MEM_READ,
       SectionKind::getMetadata(), "section_line");
-
+  DwarfLineStrSection = Ctx->getCOFFSection(
+      ".debug_line_str",
+      COFF::IMAGE_SCN_MEM_DISCARDABLE | COFF::IMAGE_SCN_CNT_INITIALIZED_DATA |
+          COFF::IMAGE_SCN_MEM_READ,
+      SectionKind::getMetadata(), "section_line_str");
   DwarfFrameSection = Ctx->getCOFFSection(
       ".debug_frame",
       COFF::IMAGE_SCN_MEM_DISCARDABLE | COFF::IMAGE_SCN_CNT_INITIALIZED_DATA |
@@ -778,6 +820,11 @@ void MCObjectFileInfo::initCOFFMCObjectFileInfo(const Triple &T) {
       COFF::IMAGE_SCN_MEM_DISCARDABLE | COFF::IMAGE_SCN_CNT_INITIALIZED_DATA |
           COFF::IMAGE_SCN_MEM_READ,
       SectionKind::getMetadata());
+  DwarfDebugNamesSection = Ctx->getCOFFSection(
+      ".debug_names",
+      COFF::IMAGE_SCN_MEM_DISCARDABLE | COFF::IMAGE_SCN_CNT_INITIALIZED_DATA |
+          COFF::IMAGE_SCN_MEM_READ,
+      SectionKind::getMetadata(), "debug_names_begin");
   DwarfAccelNamesSection = Ctx->getCOFFSection(
       ".apple_names",
       COFF::IMAGE_SCN_MEM_DISCARDABLE | COFF::IMAGE_SCN_CNT_INITIALIZED_DATA |
@@ -814,6 +861,11 @@ void MCObjectFileInfo::initCOFFMCObjectFileInfo(const Triple &T) {
   SXDataSection = Ctx->getCOFFSection(".sxdata", COFF::IMAGE_SCN_LNK_INFO,
                                       SectionKind::getMetadata());
 
+  GFIDsSection = Ctx->getCOFFSection(".gfids$y",
+                                     COFF::IMAGE_SCN_CNT_INITIALIZED_DATA |
+                                         COFF::IMAGE_SCN_MEM_READ,
+                                     SectionKind::getMetadata());
+
   TLSDataSection = Ctx->getCOFFSection(
       ".tls$", COFF::IMAGE_SCN_CNT_INITIALIZED_DATA | COFF::IMAGE_SCN_MEM_READ |
                    COFF::IMAGE_SCN_MEM_WRITE,
@@ -826,25 +878,32 @@ void MCObjectFileInfo::initCOFFMCObjectFileInfo(const Triple &T) {
 }
 
 void MCObjectFileInfo::initWasmMCObjectFileInfo(const Triple &T) {
-  // TODO: Set the section types and flags.
-  TextSection = Ctx->getWasmSection(".text", wasm::WASM_SEC_CODE);
-  DataSection = Ctx->getWasmSection(".data", wasm::WASM_SEC_DATA);
+  TextSection = Ctx->getWasmSection(".text", SectionKind::getText());
+  DataSection = Ctx->getWasmSection(".data", SectionKind::getData());
 
-  // TODO: Set the section types and flags.
-  DwarfLineSection = Ctx->getWasmSection(".debug_line", wasm::WASM_SEC_DATA);
-  DwarfStrSection = Ctx->getWasmSection(".debug_str", wasm::WASM_SEC_DATA);
-  DwarfLocSection = Ctx->getWasmSection(".debug_loc", wasm::WASM_SEC_DATA);
-  DwarfAbbrevSection = Ctx->getWasmSection(".debug_abbrev", wasm::WASM_SEC_DATA, "section_abbrev");
-  DwarfARangesSection = Ctx->getWasmSection(".debug_aranges", wasm::WASM_SEC_DATA);
-  DwarfRangesSection = Ctx->getWasmSection(".debug_ranges", wasm::WASM_SEC_DATA, "debug_range");
-  DwarfMacinfoSection = Ctx->getWasmSection(".debug_macinfo", wasm::WASM_SEC_DATA, "debug_macinfo");
-  DwarfAddrSection = Ctx->getWasmSection(".debug_addr", wasm::WASM_SEC_DATA);
-  DwarfCUIndexSection = Ctx->getWasmSection(".debug_cu_index", wasm::WASM_SEC_DATA);
-  DwarfTUIndexSection = Ctx->getWasmSection(".debug_tu_index", wasm::WASM_SEC_DATA);
-  DwarfInfoSection = Ctx->getWasmSection(".debug_info", wasm::WASM_SEC_DATA, "section_info");
-  DwarfFrameSection = Ctx->getWasmSection(".debug_frame", wasm::WASM_SEC_DATA);
-  DwarfPubNamesSection = Ctx->getWasmSection(".debug_pubnames", wasm::WASM_SEC_DATA);
-  DwarfPubTypesSection = Ctx->getWasmSection(".debug_pubtypes", wasm::WASM_SEC_DATA);
+  DwarfLineSection =
+      Ctx->getWasmSection(".debug_line", SectionKind::getMetadata());
+  DwarfLineStrSection =
+      Ctx->getWasmSection(".debug_line_str", SectionKind::getMetadata());
+  DwarfStrSection =
+      Ctx->getWasmSection(".debug_str", SectionKind::getMetadata());
+  DwarfLocSection =
+      Ctx->getWasmSection(".debug_loc", SectionKind::getMetadata());
+  DwarfAbbrevSection =
+      Ctx->getWasmSection(".debug_abbrev", SectionKind::getMetadata());
+  DwarfARangesSection = Ctx->getWasmSection(".debug_aranges", SectionKind::getMetadata());
+  DwarfRangesSection =
+      Ctx->getWasmSection(".debug_ranges", SectionKind::getMetadata());
+  DwarfMacinfoSection =
+      Ctx->getWasmSection(".debug_macinfo", SectionKind::getMetadata());
+  DwarfAddrSection = Ctx->getWasmSection(".debug_addr", SectionKind::getMetadata());
+  DwarfCUIndexSection = Ctx->getWasmSection(".debug_cu_index", SectionKind::getMetadata());
+  DwarfTUIndexSection = Ctx->getWasmSection(".debug_tu_index", SectionKind::getMetadata());
+  DwarfInfoSection =
+      Ctx->getWasmSection(".debug_info", SectionKind::getMetadata());
+  DwarfFrameSection = Ctx->getWasmSection(".debug_frame", SectionKind::getMetadata());
+  DwarfPubNamesSection = Ctx->getWasmSection(".debug_pubnames", SectionKind::getMetadata());
+  DwarfPubTypesSection = Ctx->getWasmSection(".debug_pubtypes", SectionKind::getMetadata());
 
   // TODO: Define more sections.
 }
@@ -905,4 +964,25 @@ void MCObjectFileInfo::InitMCObjectFileInfo(const Triple &TheTriple, bool PIC,
 MCSection *MCObjectFileInfo::getDwarfTypesSection(uint64_t Hash) const {
   return Ctx->getELFSection(".debug_types", ELF::SHT_PROGBITS, ELF::SHF_GROUP,
                             0, utostr(Hash));
+}
+
+MCSection *
+MCObjectFileInfo::getStackSizesSection(const MCSection &TextSec) const {
+  if (Env != IsELF)
+    return StackSizesSection;
+
+  const MCSectionELF &ElfSec = static_cast<const MCSectionELF &>(TextSec);
+  unsigned Flags = ELF::SHF_LINK_ORDER;
+  StringRef GroupName;
+  if (const MCSymbol *Group = ElfSec.getGroup()) {
+    GroupName = Group->getName();
+    Flags |= ELF::SHF_GROUP;
+  }
+
+  const MCSymbol *Link = TextSec.getBeginSymbol();
+  auto It = StackSizesUniquing.insert({Link, StackSizesUniquing.size()});
+  unsigned UniqueID = It.first->second;
+
+  return Ctx->getELFSection(".stack_sizes", ELF::SHT_PROGBITS, Flags, 0,
+                            GroupName, UniqueID, cast<MCSymbolELF>(Link));
 }

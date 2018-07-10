@@ -8,12 +8,14 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief This file implements a clang-refactor tool that performs various
+/// This file implements a clang-refactor tool that performs various
 /// source transformations.
 ///
 //===----------------------------------------------------------------------===//
 
 #include "TestSupport.h"
+#include "clang/Frontend/CommandLineSourceLoc.h"
+#include "clang/Frontend/TextDiagnosticPrinter.h"
 #include "clang/Rewrite/Core/Rewriter.h"
 #include "clang/Tooling/CommonOptionsParser.h"
 #include "clang/Tooling/Refactoring.h"
@@ -23,6 +25,7 @@
 #include "clang/Tooling/Tooling.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/Signals.h"
 #include "llvm/Support/raw_ostream.h"
 #include <string>
 
@@ -38,6 +41,11 @@ static cl::OptionCategory CommonRefactorOptions("Refactoring options");
 static cl::opt<bool> Verbose("v", cl::desc("Use verbose output"),
                              cl::cat(cl::GeneralCategory),
                              cl::sub(*cl::AllSubCommands));
+
+static cl::opt<bool> Inplace("i", cl::desc("Inplace edit <file>s"),
+                             cl::cat(cl::GeneralCategory),
+                             cl::sub(*cl::AllSubCommands));
+
 } // end namespace opts
 
 namespace {
@@ -54,7 +62,7 @@ public:
 
   /// Prints any additional state associated with the selection argument to
   /// the given output stream.
-  virtual void print(raw_ostream &OS) = 0;
+  virtual void print(raw_ostream &OS) {}
 
   /// Returns a replacement refactoring result consumer (if any) that should
   /// consume the results of a refactoring operation.
@@ -64,7 +72,8 @@ public:
   /// logic into the refactoring operation. The test-specific consumer
   /// ensures that the individual results in a particular test group are
   /// identical.
-  virtual std::unique_ptr<RefactoringResultConsumer> createCustomConsumer() {
+  virtual std::unique_ptr<ClangRefactorToolConsumerInterface>
+  createCustomConsumer() {
     return nullptr;
   }
 
@@ -84,7 +93,8 @@ public:
 
   void print(raw_ostream &OS) override { TestSelections.dump(OS); }
 
-  std::unique_ptr<RefactoringResultConsumer> createCustomConsumer() override {
+  std::unique_ptr<ClangRefactorToolConsumerInterface>
+  createCustomConsumer() override {
     return TestSelections.createConsumer();
   }
 
@@ -99,6 +109,41 @@ private:
   TestSelectionRangesInFile TestSelections;
 };
 
+/// Stores the parsed -selection=filename:line:column[-line:column] option.
+class SourceRangeSelectionArgument final : public SourceSelectionArgument {
+public:
+  SourceRangeSelectionArgument(ParsedSourceRange Range)
+      : Range(std::move(Range)) {}
+
+  bool forAllRanges(const SourceManager &SM,
+                    llvm::function_ref<void(SourceRange R)> Callback) override {
+    const FileEntry *FE = SM.getFileManager().getFile(Range.FileName);
+    FileID FID = FE ? SM.translateFile(FE) : FileID();
+    if (!FE || FID.isInvalid()) {
+      llvm::errs() << "error: -selection=" << Range.FileName
+                   << ":... : given file is not in the target TU\n";
+      return true;
+    }
+
+    SourceLocation Start = SM.getMacroArgExpandedLocation(
+        SM.translateLineCol(FID, Range.Begin.first, Range.Begin.second));
+    SourceLocation End = SM.getMacroArgExpandedLocation(
+        SM.translateLineCol(FID, Range.End.first, Range.End.second));
+    if (Start.isInvalid() || End.isInvalid()) {
+      llvm::errs() << "error: -selection=" << Range.FileName << ':'
+                   << Range.Begin.first << ':' << Range.Begin.second << '-'
+                   << Range.End.first << ':' << Range.End.second
+                   << " : invalid source location\n";
+      return true;
+    }
+    Callback(SourceRange(Start, End));
+    return false;
+  }
+
+private:
+  ParsedSourceRange Range;
+};
+
 std::unique_ptr<SourceSelectionArgument>
 SourceSelectionArgument::fromString(StringRef Value) {
   if (Value.startswith("test:")) {
@@ -110,10 +155,12 @@ SourceSelectionArgument::fromString(StringRef Value) {
     return llvm::make_unique<TestSourceSelectionArgument>(
         std::move(*ParsedTestSelection));
   }
-  // FIXME: Support true selection ranges.
+  Optional<ParsedSourceRange> Range = ParsedSourceRange::fromString(Value);
+  if (Range)
+    return llvm::make_unique<SourceRangeSelectionArgument>(std::move(*Range));
   llvm::errs() << "error: '-selection' option must be specified using "
                   "<file>:<line>:<column> or "
-                  "<file>:<line>:<column>-<line>:<column> format";
+                  "<file>:<line>:<column>-<line>:<column> format\n";
   return nullptr;
 }
 
@@ -212,18 +259,17 @@ public:
       : SubCommand(Action->getCommand(), Action->getDescription()),
         Action(std::move(Action)), ActionRules(std::move(ActionRules)) {
     // Check if the selection option is supported.
-    bool HasSelection = false;
     for (const auto &Rule : this->ActionRules) {
-      if ((HasSelection = Rule->hasSelectionRequirement()))
+      if (Rule->hasSelectionRequirement()) {
+        Selection = llvm::make_unique<cl::opt<std::string>>(
+            "selection",
+            cl::desc(
+                "The selected source range in which the refactoring should "
+                "be initiated (<file>:<line>:<column>-<line>:<column> or "
+                "<file>:<line>:<column>)"),
+            cl::cat(Category), cl::sub(*this));
         break;
-    }
-    if (HasSelection) {
-      Selection = llvm::make_unique<cl::opt<std::string>>(
-          "selection",
-          cl::desc("The selected source range in which the refactoring should "
-                   "be initiated (<file>:<line>:<column>-<line>:<column> or "
-                   "<file>:<line>:<column>)"),
-          cl::cat(Category), cl::sub(*this));
+      }
     }
     // Create the refactoring options.
     for (const auto &Rule : this->ActionRules) {
@@ -237,10 +283,10 @@ public:
 
   const RefactoringActionRules &getActionRules() const { return ActionRules; }
 
-  /// Parses the command-line arguments that are specific to this rule.
+  /// Parses the "-selection" command-line argument.
   ///
   /// \returns true on error, false otherwise.
-  bool parseArguments() {
+  bool parseSelectionArgument() {
     if (Selection) {
       ParsedSelection = SourceSelectionArgument::fromString(*Selection);
       if (!ParsedSelection)
@@ -266,20 +312,40 @@ private:
   RefactoringActionCommandLineOptions Options;
 };
 
-class ClangRefactorConsumer : public RefactoringResultConsumer {
+class ClangRefactorConsumer final : public ClangRefactorToolConsumerInterface {
 public:
-  void handleError(llvm::Error Err) {
-    llvm::errs() << llvm::toString(std::move(Err)) << "\n";
+  ClangRefactorConsumer(AtomicChanges &Changes) : SourceChanges(&Changes) {}
+
+  void handleError(llvm::Error Err) override {
+    Optional<PartialDiagnosticAt> Diag = DiagnosticError::take(Err);
+    if (!Diag) {
+      llvm::errs() << llvm::toString(std::move(Err)) << "\n";
+      return;
+    }
+    llvm::cantFail(std::move(Err)); // This is a success.
+    DiagnosticBuilder DB(
+        getDiags().Report(Diag->first, Diag->second.getDiagID()));
+    Diag->second.Emit(DB);
   }
 
-  // FIXME: Consume atomic changes and apply them to files.
+  void handle(AtomicChanges Changes) override {
+    SourceChanges->insert(SourceChanges->begin(), Changes.begin(),
+                          Changes.end());
+  }
+
+  void handle(SymbolOccurrences Occurrences) override {
+    llvm_unreachable("symbol occurrence results are not handled yet");
+  }
+
+private:
+  AtomicChanges *SourceChanges;
 };
 
 class ClangRefactorTool {
 public:
-  std::vector<std::unique_ptr<RefactoringActionSubcommand>> SubCommands;
-
-  ClangRefactorTool() {
+  ClangRefactorTool()
+      : SelectedSubcommand(nullptr), MatchingRule(nullptr),
+        Consumer(new ClangRefactorConsumer(Changes)), HasFailed(false) {
     std::vector<std::unique_ptr<RefactoringAction>> Actions =
         createRefactoringActions();
 
@@ -302,45 +368,154 @@ public:
     }
   }
 
-  using TUCallbackType = llvm::function_ref<void(ASTContext &)>;
+  // Initializes the selected subcommand and refactoring rule based on the
+  // command line options.
+  llvm::Error Init() {
+    auto Subcommand = getSelectedSubcommand();
+    if (!Subcommand)
+      return Subcommand.takeError();
+    auto Rule = getMatchingRule(**Subcommand);
+    if (!Rule)
+      return Rule.takeError();
 
-  /// Parses the translation units that were given to the subcommand using
-  /// the 'sources' option and invokes the callback for each parsed
-  /// translation unit.
-  bool foreachTranslationUnit(const CompilationDatabase &DB,
-                              ArrayRef<std::string> Sources,
-                              TUCallbackType Callback) {
+    SelectedSubcommand = *Subcommand;
+    MatchingRule = *Rule;
+
+    return llvm::Error::success();
+  }
+
+  bool hasFailed() const { return HasFailed; }
+
+  using TUCallbackType = std::function<void(ASTContext &)>;
+
+  // Callback of an AST action. This invokes the matching rule on the given AST.
+  void callback(ASTContext &AST) {
+    assert(SelectedSubcommand && MatchingRule && Consumer);
+    RefactoringRuleContext Context(AST.getSourceManager());
+    Context.setASTContext(AST);
+
+    // If the selection option is test specific, we use a test-specific
+    // consumer.
+    std::unique_ptr<ClangRefactorToolConsumerInterface> TestConsumer;
+    bool HasSelection = MatchingRule->hasSelectionRequirement();
+    if (HasSelection)
+      TestConsumer = SelectedSubcommand->getSelection()->createCustomConsumer();
+    ClangRefactorToolConsumerInterface *ActiveConsumer =
+        TestConsumer ? TestConsumer.get() : Consumer.get();
+    ActiveConsumer->beginTU(AST);
+
+    auto InvokeRule = [&](RefactoringResultConsumer &Consumer) {
+      if (opts::Verbose)
+        logInvocation(*SelectedSubcommand, Context);
+      MatchingRule->invoke(*ActiveConsumer, Context);
+    };
+    if (HasSelection) {
+      assert(SelectedSubcommand->getSelection() &&
+             "Missing selection argument?");
+      if (opts::Verbose)
+        SelectedSubcommand->getSelection()->print(llvm::outs());
+      if (SelectedSubcommand->getSelection()->forAllRanges(
+              Context.getSources(), [&](SourceRange R) {
+                Context.setSelectionRange(R);
+                InvokeRule(*ActiveConsumer);
+              }))
+        HasFailed = true;
+      ActiveConsumer->endTU();
+      return;
+    }
+    InvokeRule(*ActiveConsumer);
+    ActiveConsumer->endTU();
+  }
+
+  llvm::Expected<std::unique_ptr<FrontendActionFactory>>
+  getFrontendActionFactory() {
     class ToolASTConsumer : public ASTConsumer {
     public:
       TUCallbackType Callback;
-      ToolASTConsumer(TUCallbackType Callback) : Callback(Callback) {}
+      ToolASTConsumer(TUCallbackType Callback)
+          : Callback(std::move(Callback)) {}
 
       void HandleTranslationUnit(ASTContext &Context) override {
         Callback(Context);
       }
     };
-    class ActionWrapper {
+    class ToolASTAction : public ASTFrontendAction {
     public:
-      TUCallbackType Callback;
-      ActionWrapper(TUCallbackType Callback) : Callback(Callback) {}
+      explicit ToolASTAction(TUCallbackType Callback)
+          : Callback(std::move(Callback)) {}
 
-      std::unique_ptr<ASTConsumer> newASTConsumer() {
-        return llvm::make_unique<ToolASTConsumer>(Callback);
+    protected:
+      std::unique_ptr<clang::ASTConsumer>
+      CreateASTConsumer(clang::CompilerInstance &compiler,
+                        StringRef /* dummy */) override {
+        std::unique_ptr<clang::ASTConsumer> Consumer{
+            new ToolASTConsumer(Callback)};
+        return Consumer;
       }
+
+    private:
+      TUCallbackType Callback;
     };
 
-    ClangTool Tool(DB, Sources);
-    ActionWrapper ToolAction(Callback);
-    std::unique_ptr<tooling::FrontendActionFactory> Factory =
-        tooling::newFrontendActionFactory(&ToolAction);
-    return Tool.run(Factory.get());
+    class ToolActionFactory : public FrontendActionFactory {
+    public:
+      ToolActionFactory(TUCallbackType Callback)
+          : Callback(std::move(Callback)) {}
+
+      FrontendAction *create() override { return new ToolASTAction(Callback); }
+
+    private:
+      TUCallbackType Callback;
+    };
+
+    return llvm::make_unique<ToolActionFactory>(
+        [this](ASTContext &AST) { return callback(AST); });
   }
 
+  // FIXME(ioeric): this seems to only works for changes in a single file at
+  // this point.
+  bool applySourceChanges() {
+    std::set<std::string> Files;
+    for (const auto &Change : Changes)
+      Files.insert(Change.getFilePath());
+    // FIXME: Add automatic formatting support as well.
+    tooling::ApplyChangesSpec Spec;
+    // FIXME: We should probably cleanup the result by default as well.
+    Spec.Cleanup = false;
+    for (const auto &File : Files) {
+      llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> BufferErr =
+          llvm::MemoryBuffer::getFile(File);
+      if (!BufferErr) {
+        llvm::errs() << "error: failed to open " << File << " for rewriting\n";
+        return true;
+      }
+      auto Result = tooling::applyAtomicChanges(File, (*BufferErr)->getBuffer(),
+                                                Changes, Spec);
+      if (!Result) {
+        llvm::errs() << toString(Result.takeError());
+        return true;
+      }
+
+      if (opts::Inplace) {
+        std::error_code EC;
+        llvm::raw_fd_ostream OS(File, EC, llvm::sys::fs::F_Text);
+        if (EC) {
+          llvm::errs() << EC.message() << "\n";
+          return true;
+        }
+        OS << *Result;
+        continue;
+      }
+
+      llvm::outs() << *Result;
+    }
+    return false;
+  }
+
+private:
   /// Logs an individual refactoring action invocation to STDOUT.
   void logInvocation(RefactoringActionSubcommand &Subcommand,
                      const RefactoringRuleContext &Context) {
-    if (!opts::Verbose)
-      return;
     llvm::outs() << "invoking action '" << Subcommand.getName() << "':\n";
     if (Context.getSelectionRange().isValid()) {
       SourceRange R = Context.getSelectionRange();
@@ -352,115 +527,112 @@ public:
     }
   }
 
-  bool invokeAction(RefactoringActionSubcommand &Subcommand,
-                    const CompilationDatabase &DB,
-                    ArrayRef<std::string> Sources) {
-    // Find a set of matching rules.
+  llvm::Expected<RefactoringActionRule *>
+  getMatchingRule(RefactoringActionSubcommand &Subcommand) {
     SmallVector<RefactoringActionRule *, 4> MatchingRules;
     llvm::StringSet<> MissingOptions;
 
-    bool HasSelection = false;
     for (const auto &Rule : Subcommand.getActionRules()) {
-      bool SelectionMatches = true;
-      if (Rule->hasSelectionRequirement()) {
-        HasSelection = true;
-        if (!Subcommand.getSelection()) {
-          MissingOptions.insert("selection");
-          SelectionMatches = false;
-        }
-      }
       CommandLineRefactoringOptionVisitor Visitor(Subcommand.getOptions());
       Rule->visitRefactoringOptions(Visitor);
-      if (SelectionMatches && Visitor.getMissingRequiredOptions().empty()) {
-        MatchingRules.push_back(Rule.get());
-        continue;
+      if (Visitor.getMissingRequiredOptions().empty()) {
+        if (!Rule->hasSelectionRequirement()) {
+          MatchingRules.push_back(Rule.get());
+        } else {
+          Subcommand.parseSelectionArgument();
+          if (Subcommand.getSelection()) {
+            MatchingRules.push_back(Rule.get());
+          } else {
+            MissingOptions.insert("selection");
+          }
+        }
       }
       for (const RefactoringOption *Opt : Visitor.getMissingRequiredOptions())
         MissingOptions.insert(Opt->getName());
     }
     if (MatchingRules.empty()) {
-      llvm::errs() << "error: '" << Subcommand.getName()
-                   << "' can't be invoked with the given arguments:\n";
+      std::string Error;
+      llvm::raw_string_ostream OS(Error);
+      OS << "ERROR: '" << Subcommand.getName()
+         << "' can't be invoked with the given arguments:\n";
       for (const auto &Opt : MissingOptions)
-        llvm::errs() << "  missing '-" << Opt.getKey() << "' option\n";
-      return true;
+        OS << "  missing '-" << Opt.getKey() << "' option\n";
+      OS.flush();
+      return llvm::make_error<llvm::StringError>(
+          Error, llvm::inconvertibleErrorCode());
     }
-
-    bool HasFailed = false;
-    ClangRefactorConsumer Consumer;
-    if (foreachTranslationUnit(DB, Sources, [&](ASTContext &AST) {
-          RefactoringRuleContext Context(AST.getSourceManager());
-          Context.setASTContext(AST);
-
-          auto InvokeRule = [&](RefactoringResultConsumer &Consumer) {
-            logInvocation(Subcommand, Context);
-            for (RefactoringActionRule *Rule : MatchingRules) {
-              if (!Rule->hasSelectionRequirement())
-                continue;
-              Rule->invoke(Consumer, Context);
-              return;
-            }
-            // FIXME (Alex L): If more than one initiation succeeded, then the
-            // rules are ambiguous.
-            llvm_unreachable(
-                "The action must have at least one selection rule");
-          };
-
-          if (HasSelection) {
-            assert(Subcommand.getSelection() && "Missing selection argument?");
-            if (opts::Verbose)
-              Subcommand.getSelection()->print(llvm::outs());
-            auto CustomConsumer =
-                Subcommand.getSelection()->createCustomConsumer();
-            if (Subcommand.getSelection()->forAllRanges(
-                    Context.getSources(), [&](SourceRange R) {
-                      Context.setSelectionRange(R);
-                      InvokeRule(CustomConsumer ? *CustomConsumer : Consumer);
-                    }))
-              HasFailed = true;
-            return;
-          }
-          // FIXME (Alex L): Implement non-selection based invocation path.
-        }))
-      return true;
-    return HasFailed;
+    if (MatchingRules.size() != 1) {
+      return llvm::make_error<llvm::StringError>(
+          llvm::Twine("ERROR: more than one matching rule of action") +
+              Subcommand.getName() + "was found with given options.",
+          llvm::inconvertibleErrorCode());
+    }
+    return MatchingRules.front();
   }
+  // Figure out which action is specified by the user. The user must specify the
+  // action using a command-line subcommand, e.g. the invocation `clang-refactor
+  // local-rename` corresponds to the `LocalRename` refactoring action. All
+  // subcommands must have a unique names. This allows us to figure out which
+  // refactoring action should be invoked by looking at the first subcommand
+  // that's enabled by LLVM's command-line parser.
+  llvm::Expected<RefactoringActionSubcommand *> getSelectedSubcommand() {
+    auto It = llvm::find_if(
+        SubCommands,
+        [](const std::unique_ptr<RefactoringActionSubcommand> &SubCommand) {
+          return !!(*SubCommand);
+        });
+    if (It == SubCommands.end()) {
+      std::string Error;
+      llvm::raw_string_ostream OS(Error);
+      OS << "error: no refactoring action given\n";
+      OS << "note: the following actions are supported:\n";
+      for (const auto &Subcommand : SubCommands)
+        OS.indent(2) << Subcommand->getName() << "\n";
+      OS.flush();
+      return llvm::make_error<llvm::StringError>(
+          Error, llvm::inconvertibleErrorCode());
+    }
+    RefactoringActionSubcommand *Subcommand = &(**It);
+    return Subcommand;
+  }
+
+  std::vector<std::unique_ptr<RefactoringActionSubcommand>> SubCommands;
+  RefactoringActionSubcommand *SelectedSubcommand;
+  RefactoringActionRule *MatchingRule;
+  std::unique_ptr<ClangRefactorToolConsumerInterface> Consumer;
+  AtomicChanges Changes;
+  bool HasFailed;
 };
 
 } // end anonymous namespace
 
 int main(int argc, const char **argv) {
-  ClangRefactorTool Tool;
+  llvm::sys::PrintStackTraceOnErrorSignal(argv[0]);
+
+  ClangRefactorTool RefactorTool;
 
   CommonOptionsParser Options(
       argc, argv, cl::GeneralCategory, cl::ZeroOrMore,
       "Clang-based refactoring tool for C, C++ and Objective-C");
 
-  // Figure out which action is specified by the user. The user must specify
-  // the action using a command-line subcommand, e.g. the invocation
-  // `clang-refactor local-rename` corresponds to the `LocalRename` refactoring
-  // action. All subcommands must have a unique names. This allows us to figure
-  // out which refactoring action should be invoked by looking at the first
-  // subcommand that's enabled by LLVM's command-line parser.
-  auto It = llvm::find_if(
-      Tool.SubCommands,
-      [](const std::unique_ptr<RefactoringActionSubcommand> &SubCommand) {
-        return !!(*SubCommand);
-      });
-  if (It == Tool.SubCommands.end()) {
-    llvm::errs() << "error: no refactoring action given\n";
-    llvm::errs() << "note: the following actions are supported:\n";
-    for (const auto &Subcommand : Tool.SubCommands)
-      llvm::errs().indent(2) << Subcommand->getName() << "\n";
+  if (auto Err = RefactorTool.Init()) {
+    llvm::errs() << llvm::toString(std::move(Err)) << "\n";
     return 1;
   }
-  RefactoringActionSubcommand &ActionCommand = **It;
 
-  if (ActionCommand.parseArguments())
+  auto ActionFactory = RefactorTool.getFrontendActionFactory();
+  if (!ActionFactory) {
+    llvm::errs() << llvm::toString(ActionFactory.takeError()) << "\n";
     return 1;
-  if (Tool.invokeAction(ActionCommand, Options.getCompilations(),
-                        Options.getSourcePathList()))
-    return 1;
-
-  return 0;
+  }
+  ClangTool Tool(Options.getCompilations(), Options.getSourcePathList());
+  bool Failed = false;
+  if (Tool.run(ActionFactory->get()) != 0) {
+    llvm::errs() << "Failed to run refactoring action on files\n";
+    // It is possible that TUs are broken while changes are generated correctly,
+    // so we still try applying changes.
+    Failed = true;
+  }
+  return RefactorTool.applySourceChanges() || Failed ||
+         RefactorTool.hasFailed();
 }

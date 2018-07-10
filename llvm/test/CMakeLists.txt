@@ -8,7 +8,9 @@ llvm_canonicalize_cmake_booleans(
   HAVE_LIBXAR
   LLVM_ENABLE_DIA_SDK
   LLVM_ENABLE_FFI
-  BUILD_SHARED_LIBS)
+  BUILD_SHARED_LIBS
+  LLVM_LINK_LLVM_DYLIB
+  )
 
 configure_lit_site_cfg(
   ${CMAKE_CURRENT_SOURCE_DIR}/lit.site.cfg.py.in
@@ -45,15 +47,16 @@ set(LLVM_TEST_DEPENDS
           llvm-bcanalyzer
           llvm-c-test
           llvm-cat
-          llvm-cxxfilt
+          llvm-cfi-verify
           llvm-config
           llvm-cov
-          llvm-cxxdump
           llvm-cvtres
+          llvm-cxxdump
+          llvm-cxxfilt
           llvm-diff
           llvm-dis
           llvm-dlltool
-          llvm-dsymutil
+          dsymutil
           llvm-dwarfdump
           llvm-dwp
           llvm-extract
@@ -62,12 +65,13 @@ set(LLVM_TEST_DEPENDS
           llvm-link
           llvm-lto2
           llvm-mc
-          llvm-mcmarkup
+          llvm-mca
           llvm-modextract
           llvm-mt
           llvm-nm
           llvm-objcopy
           llvm-objdump
+          llvm-opt-fuzzer
           llvm-opt-report
           llvm-pdbutil
           llvm-profdata
@@ -79,6 +83,7 @@ set(LLVM_TEST_DEPENDS
           llvm-size
           llvm-split
           llvm-strings
+          llvm-strip
           llvm-symbolizer
           llvm-tblgen
           llvm-xray
@@ -150,7 +155,7 @@ endif()
 add_custom_target(llvm-test-depends DEPENDS ${LLVM_TEST_DEPENDS})
 set_target_properties(llvm-test-depends PROPERTIES FOLDER "Tests")
 
-add_lit_testsuite(check-llvm "Running the LLVM regression tests"
+add_lit_testsuite_with_cheri_selectors(check-llvm "Running the LLVM regression tests"
   ${CMAKE_CURRENT_BINARY_DIR}
   DEPENDS ${LLVM_TEST_DEPENDS}
   )

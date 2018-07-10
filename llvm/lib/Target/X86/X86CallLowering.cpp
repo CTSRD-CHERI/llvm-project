@@ -33,7 +33,8 @@
 #include "llvm/CodeGen/MachineMemOperand.h"
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
-#include "llvm/CodeGen/MachineValueType.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/DataLayout.h"
@@ -41,8 +42,7 @@
 #include "llvm/IR/Value.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/Support/LowLevelTypeImpl.h"
-#include "llvm/Target/TargetInstrInfo.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
+#include "llvm/Support/MachineValueType.h"
 #include <cassert>
 #include <cstdint>
 
@@ -126,7 +126,25 @@ struct OutgoingValueHandler : public CallLowering::ValueHandler {
   void assignValueToReg(unsigned ValVReg, unsigned PhysReg,
                         CCValAssign &VA) override {
     MIB.addUse(PhysReg, RegState::Implicit);
-    unsigned ExtReg = extendRegister(ValVReg, VA);
+
+    unsigned ExtReg;
+    // If we are copying the value to a physical register with the
+    // size larger than the size of the value itself - build AnyExt
+    // to the size of the register first and only then do the copy.
+    // The example of that would be copying from s32 to xmm0, for which
+    // case ValVT == LocVT == MVT::f32. If LocSize and ValSize are not equal
+    // we expect normal extendRegister mechanism to work.
+    unsigned PhysRegSize =
+        MRI.getTargetRegisterInfo()->getRegSizeInBits(PhysReg, MRI);
+    unsigned ValSize = VA.getValVT().getSizeInBits();
+    unsigned LocSize = VA.getLocVT().getSizeInBits();
+    if (PhysRegSize > ValSize && LocSize == ValSize) {
+      assert((PhysRegSize == 128 || PhysRegSize == 80)  && "We expect that to be 128 bit");
+      auto MIB = MIRBuilder.buildAnyExt(LLT::scalar(PhysRegSize), ValVReg);
+      ExtReg = MIB->getOperand(0).getReg();
+    } else
+      ExtReg = extendRegister(ValVReg, VA);
+
     MIRBuilder.buildCopy(PhysReg, ExtReg);
   }
 
@@ -177,7 +195,7 @@ bool X86CallLowering::lowerReturn(MachineIRBuilder &MIRBuilder,
     MachineFunction &MF = MIRBuilder.getMF();
     MachineRegisterInfo &MRI = MF.getRegInfo();
     auto &DL = MF.getDataLayout();
-    const Function &F = *MF.getFunction();
+    const Function &F = MF.getFunction();
 
     ArgInfo OrigArg{VReg, Val->getType()};
     setArgFlags(OrigArg, AttributeList::ReturnIndex, DL, F);
@@ -229,10 +247,28 @@ struct IncomingValueHandler : public CallLowering::ValueHandler {
   void assignValueToReg(unsigned ValVReg, unsigned PhysReg,
                         CCValAssign &VA) override {
     markPhysRegUsed(PhysReg);
+
     switch (VA.getLocInfo()) {
-    default:
+    default: {
+      // If we are copying the value from a physical register with the
+      // size larger than the size of the value itself - build the copy
+      // of the phys reg first and then build the truncation of that copy.
+      // The example of that would be copying from xmm0 to s32, for which
+      // case ValVT == LocVT == MVT::f32. If LocSize and ValSize are not equal
+      // we expect this to be handled in SExt/ZExt/AExt case.
+      unsigned PhysRegSize =
+          MRI.getTargetRegisterInfo()->getRegSizeInBits(PhysReg, MRI);
+      unsigned ValSize = VA.getValVT().getSizeInBits();
+      unsigned LocSize = VA.getLocVT().getSizeInBits();
+      if (PhysRegSize > ValSize && LocSize == ValSize) {
+        auto Copy = MIRBuilder.buildCopy(LLT::scalar(PhysRegSize), PhysReg);
+        MIRBuilder.buildTrunc(ValVReg, Copy);
+        return;
+      }
+
       MIRBuilder.buildCopy(ValVReg, PhysReg);
       break;
+    }
     case CCValAssign::LocInfo::SExt:
     case CCValAssign::LocInfo::ZExt:
     case CCValAssign::LocInfo::AExt: {
@@ -334,7 +370,7 @@ bool X86CallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
                                 const ArgInfo &OrigRet,
                                 ArrayRef<ArgInfo> OrigArgs) const {
   MachineFunction &MF = MIRBuilder.getMF();
-  const Function &F = *MF.getFunction();
+  const Function &F = MF.getFunction();
   MachineRegisterInfo &MRI = MF.getRegInfo();
   auto &DL = F.getParent()->getDataLayout();
   const X86Subtarget &STI = MF.getSubtarget<X86Subtarget>();
@@ -402,8 +438,7 @@ bool X86CallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
   if (Callee.isReg())
     MIB->getOperand(0).setReg(constrainOperandRegClass(
         MF, *TRI, MRI, *MF.getSubtarget().getInstrInfo(),
-        *MF.getSubtarget().getRegBankInfo(), *MIB, MIB->getDesc(),
-        Callee.getReg(), 0));
+        *MF.getSubtarget().getRegBankInfo(), *MIB, MIB->getDesc(), Callee, 0));
 
   // Finally we can copy the returned value back into its virtual-register. In
   // symmetry with the arguments, the physical register must be an

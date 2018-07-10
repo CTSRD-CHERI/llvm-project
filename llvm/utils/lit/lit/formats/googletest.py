@@ -7,6 +7,7 @@ import lit.Test
 import lit.TestRunner
 import lit.util
 from .base import TestFormat
+from lit.TestRunner import CheriTestMode
 
 kIsWindows = sys.platform in ['win32', 'cygwin']
 
@@ -31,6 +32,13 @@ class GoogleTest(TestFormat):
           path: String path to a gtest executable
           litConfig: LitConfig instance
           localConfig: TestingConfig instance"""
+
+        # Could also skip google tests here instead of reporting them as unsupported
+        # if False and litConfig.cheri_test_mode != CheriTestMode.INCLUDE:
+        #     litConfig.note(
+        #         "Skipping gtests because cheri-tests-filter=" +
+        #         litConfig.cheri_test_mode)
+        #     raise StopIteration
 
         list_test_cmd = self.maybeAddPythonToCmd([path, '--gtest_list_tests'])
 
@@ -108,6 +116,13 @@ class GoogleTest(TestFormat):
         cmd = self.maybeAddPythonToCmd(cmd)
         if litConfig.useValgrind:
             cmd = litConfig.valgrindArgs + cmd
+
+        # XXXAR: HACK: assume that no gtest tests are Cheri tests:
+        if litConfig.cheri_test_mode == CheriTestMode.ONLY:
+            #  litConfig.note(
+            #      "Skipping gtests because cheri-tests-filter=" +
+            #      litConfig.cheri_test_mode)
+            return lit.Test.UNSUPPORTED, "Skipping gtests because cheri-tests-filter=" + litConfig.cheri_test_mode
 
         if litConfig.noExecute:
             return lit.Test.PASS, ''

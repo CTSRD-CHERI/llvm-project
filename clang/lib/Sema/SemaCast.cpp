@@ -267,6 +267,12 @@ Sema::BuildCXXNamedCast(SourceLocation OpLoc, tok::TokenKind Kind,
                                                 AngleBrackets));
 
   case tok::kw_dynamic_cast: {
+    // OpenCL C++ 1.0 s2.9: dynamic_cast is not supported.
+    if (getLangOpts().OpenCLCPlusPlus) {
+      return ExprError(Diag(OpLoc, diag::err_openclcxx_not_supported)
+                       << "dynamic_cast");
+    }
+
     if (!TypeDependent) {
       Op.CheckDynamicCast();
       if (Op.SrcExpr.isInvalid())
@@ -1145,7 +1151,7 @@ static TryCastResult TryStaticCast(Sema &Self, ExprResult &SrcExpr,
       }
     }
   }
-  // Allow arbitray objective-c pointer conversion with static casts.
+  // Allow arbitrary objective-c pointer conversion with static casts.
   if (SrcType->isObjCObjectPointerType() &&
       DestType->isObjCObjectPointerType()) {
     Kind = CK_BitCast;

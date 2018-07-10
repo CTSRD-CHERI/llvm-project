@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief This file defines WebAssembly-specific target streamer classes.
+/// This file defines WebAssembly-specific target streamer classes.
 /// These are for implementing support for target-specific assembly directives.
 ///
 //===----------------------------------------------------------------------===//
@@ -31,7 +31,7 @@ WebAssemblyTargetStreamer::WebAssemblyTargetStreamer(MCStreamer &S)
     : MCTargetStreamer(S) {}
 
 void WebAssemblyTargetStreamer::emitValueType(wasm::ValType Type) {
-  Streamer.EmitSLEB128IntValue(int32_t(Type));
+  Streamer.EmitIntValue(uint8_t(Type), 1);
 }
 
 WebAssemblyTargetAsmStreamer::WebAssemblyTargetAsmStreamer(
@@ -87,31 +87,6 @@ void WebAssemblyTargetAsmStreamer::emitLocal(ArrayRef<MVT> Types) {
   }
 }
 
-void WebAssemblyTargetAsmStreamer::emitGlobal(
-    ArrayRef<wasm::Global> Globals) {
-  if (!Globals.empty()) {
-    OS << "\t.globalvar  \t";
-
-    bool First = true;
-    for (const wasm::Global &G : Globals) {
-      if (First)
-        First = false;
-      else
-        OS << ", ";
-      OS << WebAssembly::TypeToString(G.Type);
-      if (!G.InitialModule.empty())
-        OS << '=' << G.InitialModule << ':' << G.InitialName;
-      else
-        OS << '=' << G.InitialValue;
-    }
-    OS << '\n';
-  }
-}
-
-void WebAssemblyTargetAsmStreamer::emitStackPointer(uint32_t Index) {
-  OS << "\t.stack_pointer\t" << Index << '\n';
-}
-
 void WebAssemblyTargetAsmStreamer::emitEndFunc() { OS << "\t.endfunc\n"; }
 
 void WebAssemblyTargetAsmStreamer::emitIndirectFunctionType(
@@ -130,6 +105,11 @@ void WebAssemblyTargetAsmStreamer::emitIndirectFunctionType(
 
 void WebAssemblyTargetAsmStreamer::emitGlobalImport(StringRef name) {
   OS << "\t.import_global\t" << name << '\n';
+}
+
+void WebAssemblyTargetAsmStreamer::emitImportModule(MCSymbolWasm *Sym,
+                                                    StringRef ModuleName) {
+  OS << "\t.import_module\t" << Sym->getName() << ", " << ModuleName << '\n';
 }
 
 void WebAssemblyTargetAsmStreamer::emitIndIdx(const MCExpr *Value) {
@@ -152,16 +132,6 @@ void WebAssemblyTargetELFStreamer::emitLocal(ArrayRef<MVT> Types) {
     emitValueType(WebAssembly::toValType(Type));
 }
 
-void WebAssemblyTargetELFStreamer::emitGlobal(
-    ArrayRef<wasm::Global> Globals) {
-  llvm_unreachable(".globalvar encoding not yet implemented");
-}
-
-void WebAssemblyTargetELFStreamer::emitStackPointer(
-    uint32_t Index) {
-  llvm_unreachable(".stack_pointer encoding not yet implemented");
-}
-
 void WebAssemblyTargetELFStreamer::emitEndFunc() {
   Streamer.EmitIntValue(WebAssembly::End, 1);
 }
@@ -177,6 +147,11 @@ void WebAssemblyTargetELFStreamer::emitIndirectFunctionType(
 }
 
 void WebAssemblyTargetELFStreamer::emitGlobalImport(StringRef name) {
+}
+
+void WebAssemblyTargetELFStreamer::emitImportModule(MCSymbolWasm *Sym,
+                                                    StringRef ModuleName) {
+  llvm_unreachable(".import_module encoding not yet implemented");
 }
 
 void WebAssemblyTargetWasmStreamer::emitParam(MCSymbol *Symbol,
@@ -213,39 +188,6 @@ void WebAssemblyTargetWasmStreamer::emitLocal(ArrayRef<MVT> Types) {
   }
 }
 
-void WebAssemblyTargetWasmStreamer::emitGlobal(
-    ArrayRef<wasm::Global> Globals) {
-  // Encode the globals use by the funciton into the special .global_variables
-  // section. This will later be decoded and turned into contents for the
-  // Globals Section.
-  Streamer.PushSection();
-  Streamer.SwitchSection(Streamer.getContext()
-                                 .getWasmSection(".global_variables", 0, 0));
-  for (const wasm::Global &G : Globals) {
-    Streamer.EmitIntValue(int32_t(G.Type), 1);
-    Streamer.EmitIntValue(G.Mutable, 1);
-    if (G.InitialModule.empty()) {
-      Streamer.EmitIntValue(0, 1); // indicate that we have an int value
-      Streamer.EmitSLEB128IntValue(0);
-    } else {
-      Streamer.EmitIntValue(1, 1); // indicate that we have a module import
-      Streamer.EmitBytes(G.InitialModule);
-      Streamer.EmitIntValue(0, 1); // nul-terminate
-      Streamer.EmitBytes(G.InitialName);
-      Streamer.EmitIntValue(0, 1); // nul-terminate
-    }
-  }
-  Streamer.PopSection();
-}
-
-void WebAssemblyTargetWasmStreamer::emitStackPointer(uint32_t Index) {
-  Streamer.PushSection();
-  Streamer.SwitchSection(Streamer.getContext()
-                                 .getWasmSection(".stack_pointer", 0, 0));
-  Streamer.EmitIntValue(Index, 4);
-  Streamer.PopSection();
-}
-
 void WebAssemblyTargetWasmStreamer::emitEndFunc() {
   llvm_unreachable(".end_func is not needed for direct wasm output");
 }
@@ -273,8 +215,14 @@ void WebAssemblyTargetWasmStreamer::emitIndirectFunctionType(
 
   WasmSym->setParams(std::move(ValParams));
   WasmSym->setReturns(std::move(ValResults));
-  WasmSym->setIsFunction(true);
+  WasmSym->setType(wasm::WASM_SYMBOL_TYPE_FUNCTION);
 }
 
 void WebAssemblyTargetWasmStreamer::emitGlobalImport(StringRef name) {
+  llvm_unreachable(".global_import is not needed for direct wasm output");
+}
+
+void WebAssemblyTargetWasmStreamer::emitImportModule(MCSymbolWasm *Sym,
+                                                     StringRef ModuleName) {
+  Sym->setModuleName(ModuleName);
 }

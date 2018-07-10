@@ -23,6 +23,7 @@
 #include "llvm/Object/ELFObjectFile.h"
 #include "llvm/Object/MachO.h"
 #include "llvm/Object/ObjectFile.h"
+#include "llvm/Object/Wasm.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <cstdint>
@@ -31,7 +32,7 @@
 namespace llvm {
 namespace object {
 
-/// @brief Base class for object file relocation visitors.
+/// Base class for object file relocation visitors.
 class RelocVisitor {
 public:
   explicit RelocVisitor(const ObjectFile &Obj) : ObjToVisit(Obj) {}
@@ -46,6 +47,8 @@ public:
       return visitCOFF(Rel, R, Value);
     if (isa<MachOObjectFile>(ObjToVisit))
       return visitMachO(Rel, R, Value);
+    if (isa<WasmObjectFile>(ObjToVisit))
+      return visitWasm(Rel, R, Value);
 
     HasError = true;
     return 0;
@@ -70,6 +73,7 @@ private:
         return visitBpf(Rel, R, Value);
       case Triple::mips64el:
       case Triple::mips64:
+      case Triple::cheri:
         return visitMips64(Rel, R, Value);
       case Triple::ppc64le:
       case Triple::ppc64:
@@ -81,6 +85,7 @@ private:
       case Triple::amdgcn:
         return visitAmdgpu(Rel, R, Value);
       default:
+        assert(false && "Unknown triple for 64-bit arch");
         HasError = true;
         return 0;
       }
@@ -93,6 +98,8 @@ private:
     switch (ObjToVisit.getArch()) {
     case Triple::x86:
       return visitX86(Rel, R, Value);
+    case Triple::x86_64:
+      return visitX86_64(Rel, R, Value); // x32 ABI
     case Triple::ppc:
       return visitPPC32(Rel, R, Value);
     case Triple::arm:
@@ -108,6 +115,7 @@ private:
     case Triple::hexagon:
       return visitHexagon(Rel, R, Value);
     default:
+      assert(false && "Unknown triple for 64-bit arch");
       HasError = true;
       return 0;
     }
@@ -302,6 +310,8 @@ private:
         return Value;
       }
       break;
+    default:
+      break;
     }
     HasError = true;
     return 0;
@@ -311,6 +321,27 @@ private:
     if (ObjToVisit.getArch() == Triple::x86_64 &&
         Rel == MachO::X86_64_RELOC_UNSIGNED)
       return Value;
+    HasError = true;
+    return 0;
+  }
+
+  uint64_t visitWasm(uint32_t Rel, RelocationRef R, uint64_t Value) {
+    if (ObjToVisit.getArch() == Triple::wasm32) {
+      switch (Rel) {
+      case wasm::R_WEBASSEMBLY_FUNCTION_INDEX_LEB:
+      case wasm::R_WEBASSEMBLY_TABLE_INDEX_SLEB:
+      case wasm::R_WEBASSEMBLY_TABLE_INDEX_I32:
+      case wasm::R_WEBASSEMBLY_MEMORY_ADDR_LEB:
+      case wasm::R_WEBASSEMBLY_MEMORY_ADDR_SLEB:
+      case wasm::R_WEBASSEMBLY_MEMORY_ADDR_I32:
+      case wasm::R_WEBASSEMBLY_TYPE_INDEX_LEB:
+      case wasm::R_WEBASSEMBLY_GLOBAL_INDEX_LEB:
+      case wasm::R_WEBASSEMBLY_FUNCTION_OFFSET_I32:
+      case wasm::R_WEBASSEMBLY_SECTION_OFFSET_I32:
+        // For wasm section, its offset at 0 -- ignoring Value
+        return 0;
+      }
+    }
     HasError = true;
     return 0;
   }

@@ -23,14 +23,14 @@
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/CodeGen/TargetFrameLowering.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/Function.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetFrameLowering.h"
-#include "llvm/Target/TargetRegisterInfo.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 #include <cstdint>
 
 using namespace llvm;
@@ -50,8 +50,9 @@ Cheri8("cheri8", cl::NotHidden,
 #define GET_REGINFO_TARGET_DESC
 #include "MipsGenRegisterInfo.inc"
 
-MipsRegisterInfo::MipsRegisterInfo(unsigned HwMode) :
-  MipsGenRegisterInfo(Mips::RA, 0, 0, 0, HwMode) {}
+MipsRegisterInfo::MipsRegisterInfo(const MipsSubtarget &STI) :
+  MipsGenRegisterInfo(STI.isABI_CheriPureCap() ?
+          Mips::C17 : Mips::RA, 0, 0, 0, STI.getHwMode()) {}
 
 unsigned MipsRegisterInfo::getPICCallReg() { return Mips::T9; }
 
@@ -65,11 +66,10 @@ MipsRegisterInfo::getPointerRegClass(const MachineFunction &MF,
   case MipsPtrClass::Default:
     return ABI.ArePtrs64bit() ? &Mips::GPR64RegClass : &Mips::GPR32RegClass;
   case MipsPtrClass::GPR16MM:
-    return ABI.ArePtrs64bit() ? &Mips::GPRMM16_64RegClass
-                              : &Mips::GPRMM16RegClass;
+    return &Mips::GPRMM16RegClass;
   case MipsPtrClass::StackPointer:
     return ABI.ArePtrs64bit() ? &Mips::SP64RegClass : &Mips::SP32RegClass;
-  case MipsPtrClass::GlobalPointer:                              
+  case MipsPtrClass::GlobalPointer:
     return ABI.ArePtrs64bit() ? &Mips::GP64RegClass : &Mips::GP32RegClass;
   }
 
@@ -105,8 +105,8 @@ MipsRegisterInfo::getRegPressureLimit(const TargetRegisterClass *RC,
 const MCPhysReg *
 MipsRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
   const MipsSubtarget &Subtarget = MF->getSubtarget<MipsSubtarget>();
-  const Function *F = MF->getFunction();
-  if (F->hasFnAttribute("interrupt")) {
+  const Function &F = MF->getFunction();
+  if (F.hasFnAttribute("interrupt")) {
     if (Subtarget.hasMips64())
       return Subtarget.hasMips64r6() ? CSR_Interrupt_64R6_SaveList
                                      : CSR_Interrupt_64_SaveList;
@@ -182,8 +182,24 @@ getReservedRegs(const MachineFunction &MF) const {
   };
 
   static const uint16_t ReservedCheriRegs[] = {
-    Mips::C0, Mips::C25, Mips::C26, Mips::C27, Mips::C28, Mips::C29, Mips::C30,
-    Mips::C31
+      Mips::CNULL,
+      Mips::DDC,
+      Mips::C25,
+      Mips::C26,
+      Mips::C27,
+      Mips::C28,
+      Mips::C29,
+      Mips::C30,
+      Mips::C31,
+      // Mark the capability HWRegs as reserved to avoid machine verifier errors
+      Mips::CAPHWR0,
+      Mips::CAPHWR1,
+      Mips::CAPHWR8,
+      Mips::CAPHWR22,
+      Mips::CAPHWR23,
+      Mips::CAPHWR29,
+      Mips::CAPHWR30,
+      Mips::CAPHWR31,
   };
 
   // C1-C7, C11, C12, C17-C23 allowed
@@ -266,7 +282,7 @@ getReservedRegs(const MachineFunction &MF) const {
       for (unsigned I = 0; I < array_lengthof(ReservedCheri16Regs); ++I)
         Reserved.set(ReservedCheri16Regs[I]);
   } else
-    Reserved.set(Mips::C0);
+    Reserved.set(Mips::DDC);
 
   // Reserve FP if this function should have a dedicated frame pointer register.
   if (Subtarget.getFrameLowering()->hasFP(MF)) {
@@ -314,7 +330,7 @@ getReservedRegs(const MachineFunction &MF) const {
     Reserved.set(Mips::RA_64);
     Reserved.set(Mips::T0);
     Reserved.set(Mips::T1);
-    if (MF.getFunction()->hasFnAttribute("saveS2") || MipsFI->hasSaveS2())
+    if (MF.getFunction().hasFnAttribute("saveS2") || MipsFI->hasSaveS2())
       Reserved.set(Mips::S2);
   }
 
@@ -351,18 +367,20 @@ eliminateFrameIndex(MachineBasicBlock::iterator II, int SPAdj,
   MachineInstr &MI = *II;
   MachineFunction &MF = *MI.getParent()->getParent();
 
-  DEBUG(errs() << "\nFunction : " << MF.getName() << "\n";
-        errs() << "<--------->\n" << MI);
+  LLVM_DEBUG(errs() << "\nFunction : " << MF.getName() << "\n";
+             errs() << "<--------->\n"
+                    << MI);
 
   int FrameIndex = MI.getOperand(FIOperandNum).getIndex();
   uint64_t stackSize = MF.getFrameInfo().getStackSize();
   int64_t spOffset = MF.getFrameInfo().getObjectOffset(FrameIndex);
 
-  DEBUG(errs() << "FrameIndex : " << FrameIndex << "\n"
-               << "spOffset   : " << spOffset << "\n"
-               << "stackSize  : " << stackSize << "\n"
-               << "alignment  : "
-               << MF.getFrameInfo().getObjectAlignment(FrameIndex) << "\n");
+  LLVM_DEBUG(errs() << "FrameIndex : " << FrameIndex << "\n"
+                    << "spOffset   : " << spOffset << "\n"
+                    << "stackSize  : " << stackSize << "\n"
+                    << "alignment  : "
+                    << MF.getFrameInfo().getObjectAlignment(FrameIndex)
+                    << "\n");
 
   eliminateFI(MI, FIOperandNum, FrameIndex, stackSize, spOffset, RS);
 }

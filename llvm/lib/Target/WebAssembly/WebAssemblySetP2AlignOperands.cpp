@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief This file sets the p2align operands on load and store instructions.
+/// This file sets the p2align operands on load and store instructions.
 ///
 //===----------------------------------------------------------------------===//
 
@@ -46,6 +46,10 @@ public:
 } // end anonymous namespace
 
 char WebAssemblySetP2AlignOperands::ID = 0;
+INITIALIZE_PASS(WebAssemblySetP2AlignOperands, DEBUG_TYPE,
+                "Set the p2align operands for WebAssembly loads and stores",
+                false, false)
+
 FunctionPass *llvm::createWebAssemblySetP2AlignOperands() {
   return new WebAssemblySetP2AlignOperands();
 }
@@ -72,7 +76,7 @@ static void RewriteP2Align(MachineInstr &MI, unsigned OperandNo) {
 }
 
 bool WebAssemblySetP2AlignOperands::runOnMachineFunction(MachineFunction &MF) {
-  DEBUG({
+  LLVM_DEBUG({
     dbgs() << "********** Set p2align Operands **********\n"
            << "********** Function: " << MF.getName() << '\n';
   });

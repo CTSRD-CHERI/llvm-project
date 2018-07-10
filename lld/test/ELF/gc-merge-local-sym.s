@@ -1,3 +1,4 @@
+// REQUIRES: x86
 // RUN: llvm-mc %s -o %t.o -filetype=obj -triple=x86_64-pc-linux
 // RUN: ld.lld %t.o -o %t.so -shared -O3 --gc-sections
 // RUN: llvm-readobj -s -section-data -t %t.so | FileCheck %s
@@ -9,13 +10,13 @@
 // CHECK-NEXT:   SHF_MERGE
 // CHECK-NEXT:   SHF_STRINGS
 // CHECK-NEXT: ]
-// CHECK-NEXT: Address: 0x1C8
+// CHECK-NEXT: Address: 0x1FD
 // CHECK-NEXT: Offset:
 // CHECK-NEXT: Size: 4
 // CHECK-NEXT: Link: 0
 // CHECK-NEXT: Info: 0
 // CHECK-NEXT: AddressAlignment: 1
-// CHECK-NEXT: EntrySize: 0
+// CHECK-NEXT: EntrySize: 1
 // CHECK-NEXT: SectionData (
 // CHECK-NEXT:   0000: 61626300 |abc.|
 // CHECK-NEXT: )

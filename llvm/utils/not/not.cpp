@@ -38,8 +38,12 @@ int main(int argc, const char **argv) {
     return 1;
   }
 
+  std::vector<StringRef> Argv;
+  Argv.reserve(argc);
+  for (int i = 0; i < argc; ++i)
+    Argv.push_back(argv[i]);
   std::string ErrMsg;
-  int Result = sys::ExecuteAndWait(*Program, argv, nullptr, {}, 0, 0, &ErrMsg);
+  int Result = sys::ExecuteAndWait(*Program, Argv, None, {}, 0, 0, &ErrMsg);
 #ifdef _WIN32
   // Handle abort() in msvcrt -- It has exit code as 3.  abort(), aka
   // unreachable, should be recognized as a crash.  However, some binaries use
@@ -48,7 +52,7 @@ int main(int argc, const char **argv) {
   if (ExpectCrash && Result == 3)
     Result = -3;
 #endif
-  if (Result < 0 || Result == 70) {
+  if (Result < 0) {
     errs() << "Error: " << ErrMsg << "\n";
     if (ExpectCrash)
       return 0;

@@ -8,15 +8,20 @@ set(LLVM_LINK_COMPONENTS
   Target
   )
 
-add_llvm_tool(llvm-dsymutil
+add_llvm_tool(dsymutil
   dsymutil.cpp
   BinaryHolder.cpp
+  CFBundle.cpp
   DebugMap.cpp
   DwarfLinker.cpp
   MachODebugMapParser.cpp
   MachOUtils.cpp
+  NonRelocatableStringpool.cpp
 
   DEPENDS
   intrinsics_gen
   )
 
+if(APPLE)
+  target_link_libraries(dsymutil PRIVATE "-framework CoreFoundation")
+endif(APPLE)

@@ -13,7 +13,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "asan_errors.h"
-#include <signal.h>
 #include "asan_descriptions.h"
 #include "asan_mapping.h"
 #include "asan_report.h"
@@ -37,8 +36,7 @@ static void OnStackUnwind(const SignalContext &sig,
   // corresponding code in the sanitizer_common and we use this callback to
   // print it.
   static_cast<const ScarinessScoreBase *>(callback_context)->Print();
-  GetStackTraceWithPcBpAndContext(stack, kStackTraceMax, sig.pc, sig.bp,
-                                  sig.context, fast);
+  GetStackTrace(stack, kStackTraceMax, sig.pc, sig.bp, sig.context, fast);
 }
 
 void ErrorDeadlySignal::Print() {
@@ -63,7 +61,7 @@ void ErrorDoubleFree::Print() {
   ReportErrorSummary(scariness.GetDescription(), &stack);
 }
 
-void ErrorNewDeleteSizeMismatch::Print() {
+void ErrorNewDeleteTypeMismatch::Print() {
   Decorator d;
   Printf("%s", d.Warning());
   char tname[128];
@@ -73,10 +71,28 @@ void ErrorNewDeleteSizeMismatch::Print() {
       scariness.GetDescription(), addr_description.addr, tid,
       ThreadNameWithParenthesis(tid, tname, sizeof(tname)));
   Printf("%s  object passed to delete has wrong type:\n", d.Default());
-  Printf(
-      "  size of the allocated type:   %zd bytes;\n"
-      "  size of the deallocated type: %zd bytes.\n",
-      addr_description.chunk_access.chunk_size, delete_size);
+  if (delete_size != 0) {
+    Printf(
+        "  size of the allocated type:   %zd bytes;\n"
+        "  size of the deallocated type: %zd bytes.\n",
+        addr_description.chunk_access.chunk_size, delete_size);
+  }
+  const uptr user_alignment =
+      addr_description.chunk_access.user_requested_alignment;
+  if (delete_alignment != user_alignment) {
+    char user_alignment_str[32];
+    char delete_alignment_str[32];
+    internal_snprintf(user_alignment_str, sizeof(user_alignment_str),
+                      "%zd bytes", user_alignment);
+    internal_snprintf(delete_alignment_str, sizeof(delete_alignment_str),
+                      "%zd bytes", delete_alignment);
+    static const char *kDefaultAlignment = "default-aligned";
+    Printf(
+        "  alignment of the allocated type:   %s;\n"
+        "  alignment of the deallocated type: %s.\n",
+        user_alignment > 0 ? user_alignment_str : kDefaultAlignment,
+        delete_alignment > 0 ? delete_alignment_str : kDefaultAlignment);
+  }
   CHECK_GT(free_stack->size, 0);
   scariness.Print();
   GET_STACK_TRACE_FATAL(free_stack->trace[0], free_stack->top_frame_bp);
@@ -153,6 +169,128 @@ void ErrorSanitizerGetAllocatedSizeNotOwned::Print() {
   Printf("%s", d.Default());
   stack->Print();
   addr_description.Print();
+  ReportErrorSummary(scariness.GetDescription(), stack);
+}
+
+void ErrorCallocOverflow::Print() {
+  Decorator d;
+  Printf("%s", d.Warning());
+  char tname[128];
+  Report(
+      "ERROR: AddressSanitizer: calloc parameters overflow: count * size "
+      "(%zd * %zd) cannot be represented in type size_t (thread T%d%s)\n",
+      count, size, tid, ThreadNameWithParenthesis(tid, tname, sizeof(tname)));
+  Printf("%s", d.Default());
+  stack->Print();
+  PrintHintAllocatorCannotReturnNull();
+  ReportErrorSummary(scariness.GetDescription(), stack);
+}
+
+void ErrorPvallocOverflow::Print() {
+  Decorator d;
+  Printf("%s", d.Warning());
+  char tname[128];
+  Report(
+      "ERROR: AddressSanitizer: pvalloc parameters overflow: size 0x%zx "
+      "rounded up to system page size 0x%zx cannot be represented in type "
+      "size_t (thread T%d%s)\n",
+      size, GetPageSizeCached(), tid,
+      ThreadNameWithParenthesis(tid, tname, sizeof(tname)));
+  Printf("%s", d.Default());
+  stack->Print();
+  PrintHintAllocatorCannotReturnNull();
+  ReportErrorSummary(scariness.GetDescription(), stack);
+}
+
+void ErrorInvalidAllocationAlignment::Print() {
+  Decorator d;
+  Printf("%s", d.Warning());
+  char tname[128];
+  Report(
+      "ERROR: AddressSanitizer: invalid allocation alignment: %zd, "
+      "alignment must be a power of two (thread T%d%s)\n",
+      alignment, tid, ThreadNameWithParenthesis(tid, tname, sizeof(tname)));
+  Printf("%s", d.Default());
+  stack->Print();
+  PrintHintAllocatorCannotReturnNull();
+  ReportErrorSummary(scariness.GetDescription(), stack);
+}
+
+void ErrorInvalidAlignedAllocAlignment::Print() {
+  Decorator d;
+  Printf("%s", d.Warning());
+  char tname[128];
+#if SANITIZER_POSIX
+  Report("ERROR: AddressSanitizer: invalid alignment requested in "
+         "aligned_alloc: %zd, alignment must be a power of two and the "
+         "requested size 0x%zx must be a multiple of alignment "
+         "(thread T%d%s)\n", alignment, size, tid,
+         ThreadNameWithParenthesis(tid, tname, sizeof(tname)));
+#else
+  Report("ERROR: AddressSanitizer: invalid alignment requested in "
+         "aligned_alloc: %zd, the requested size 0x%zx must be a multiple of "
+         "alignment (thread T%d%s)\n", alignment, size, tid,
+         ThreadNameWithParenthesis(tid, tname, sizeof(tname)));
+#endif
+  Printf("%s", d.Default());
+  stack->Print();
+  PrintHintAllocatorCannotReturnNull();
+  ReportErrorSummary(scariness.GetDescription(), stack);
+}
+
+void ErrorInvalidPosixMemalignAlignment::Print() {
+  Decorator d;
+  Printf("%s", d.Warning());
+  char tname[128];
+  Report(
+      "ERROR: AddressSanitizer: invalid alignment requested in posix_memalign: "
+      "%zd, alignment must be a power of two and a multiple of sizeof(void*) "
+      "== %zd (thread T%d%s)\n",
+      alignment, sizeof(void*), tid,  // NOLINT
+      ThreadNameWithParenthesis(tid, tname, sizeof(tname)));
+  Printf("%s", d.Default());
+  stack->Print();
+  PrintHintAllocatorCannotReturnNull();
+  ReportErrorSummary(scariness.GetDescription(), stack);
+}
+
+void ErrorAllocationSizeTooBig::Print() {
+  Decorator d;
+  Printf("%s", d.Warning());
+  char tname[128];
+  Report(
+      "ERROR: AddressSanitizer: requested allocation size 0x%zx (0x%zx after "
+      "adjustments for alignment, red zones etc.) exceeds maximum supported "
+      "size of 0x%zx (thread T%d%s)\n",
+      user_size, total_size, max_size, tid,
+      ThreadNameWithParenthesis(tid, tname, sizeof(tname)));
+  Printf("%s", d.Default());
+  stack->Print();
+  PrintHintAllocatorCannotReturnNull();
+  ReportErrorSummary(scariness.GetDescription(), stack);
+}
+
+void ErrorRssLimitExceeded::Print() {
+  Decorator d;
+  Printf("%s", d.Warning());
+  Report(
+      "ERROR: AddressSanitizer: specified RSS limit exceeded, currently set to "
+      "soft_rss_limit_mb=%zd\n", common_flags()->soft_rss_limit_mb);
+  Printf("%s", d.Default());
+  stack->Print();
+  PrintHintAllocatorCannotReturnNull();
+  ReportErrorSummary(scariness.GetDescription(), stack);
+}
+
+void ErrorOutOfMemory::Print() {
+  Decorator d;
+  Printf("%s", d.Warning());
+  Report(
+      "ERROR: AddressSanitizer: allocator is out of memory trying to allocate "
+      "0x%zx bytes\n", requested_size);
+  Printf("%s", d.Default());
+  stack->Print();
+  PrintHintAllocatorCannotReturnNull();
   ReportErrorSummary(scariness.GetDescription(), stack);
 }
 
@@ -398,6 +536,7 @@ static void PrintLegend(InternalScopedString *str) {
   PrintShadowByte(str, "  ASan internal:           ", kAsanInternalHeapMagic);
   PrintShadowByte(str, "  Left alloca redzone:     ", kAsanAllocaLeftMagic);
   PrintShadowByte(str, "  Right alloca redzone:    ", kAsanAllocaRightMagic);
+  PrintShadowByte(str, "  Shadow gap:              ", kAsanShadowGap);
 }
 
 static void PrintShadowBytes(InternalScopedString *str, const char *before,
@@ -422,9 +561,14 @@ static void PrintShadowMemoryForAddress(uptr addr) {
   InternalScopedString str(4096 * 8);
   str.append("Shadow bytes around the buggy address:\n");
   for (int i = -5; i <= 5; i++) {
+    uptr row_shadow_addr = aligned_shadow + i * n_bytes_per_row;
+    // Skip rows that would be outside the shadow range. This can happen when
+    // the user address is near the bottom, top, or shadow gap of the address
+    // space.
+    if (!AddrIsInShadow(row_shadow_addr)) continue;
     const char *prefix = (i == 0) ? "=>" : "  ";
-    PrintShadowBytes(&str, prefix, (u8 *)(aligned_shadow + i * n_bytes_per_row),
-                     (u8 *)shadow_addr, n_bytes_per_row);
+    PrintShadowBytes(&str, prefix, (u8 *)row_shadow_addr, (u8 *)shadow_addr,
+                     n_bytes_per_row);
   }
   if (flags()->print_legend) PrintLegend(&str);
   Printf("%s", str.data());

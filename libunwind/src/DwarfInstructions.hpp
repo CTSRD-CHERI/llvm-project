@@ -82,10 +82,10 @@ typename A::pint_t DwarfInstructions<A, R>::getSavedRegister(
     const RegisterLocation &savedReg) {
   switch (savedReg.location) {
   case CFI_Parser<A>::kRegisterInCFA:
-    return addressSpace.getP(cfa + (pint_t)savedReg.value);
+    return addressSpace.getRegister(cfa + (pint_t)savedReg.value);
 
   case CFI_Parser<A>::kRegisterAtExpression:
-    return addressSpace.getP(
+    return addressSpace.getRegister(
         evaluateExpression((pint_t)savedReg.value, addressSpace,
                             registers, cfa));
 
@@ -167,7 +167,7 @@ int DwarfInstructions<A, R>::stepWithDwarf(A &addressSpace, pint_t pc,
       R newRegisters = registers;
       pint_t returnAddress = 0;
       const int lastReg = R::lastDwarfRegNum();
-      assert((int)CFI_Parser<A>::kMaxRegisterNumber > lastReg &&
+      assert(static_cast<int>(CFI_Parser<A>::kMaxRegisterNumber) >= lastReg &&
              "register range too large");
       assert(lastReg >= (int)cieInfo.returnAddressRegister &&
              "register range does not contain return address register");

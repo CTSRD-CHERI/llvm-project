@@ -1,4 +1,4 @@
-; RUN: opt -constprop < %s
+; RUN: opt -constprop -o /dev/null < %s
 
 ; Make sure we don't crash on this one
 

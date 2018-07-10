@@ -9,8 +9,6 @@
 
 #include "llvm/DebugInfo/DWARF/DWARFExpression.h"
 #include "llvm/BinaryFormat/Dwarf.h"
-#include "llvm/DebugInfo/DWARF/DWARFCompileUnit.h"
-#include "llvm/DebugInfo/DWARF/DWARFContext.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/Support/Format.h"
 #include <cassert>
@@ -104,7 +102,9 @@ static DescVector getDescriptions() {
 static DWARFExpression::Operation::Description getOpDesc(unsigned OpCode) {
   // FIXME: Make this constexpr once all compilers are smart enough to do it.
   static DescVector Descriptions = getDescriptions();
-  assert(OpCode < Descriptions.size());
+  // Handle possible corrupted or unsupported operation.
+  if (OpCode >= Descriptions.size())
+    return {};
   return Descriptions[OpCode];
 }
 
@@ -117,8 +117,10 @@ bool DWARFExpression::Operation::extract(DataExtractor Data, uint16_t Version,
   Opcode = Data.getU8(&Offset);
 
   Desc = getOpDesc(Opcode);
-  if (Desc.Version == Operation::DwarfNA)
+  if (Desc.Version == Operation::DwarfNA) {
+    EndOffset = Offset;
     return false;
+  }
 
   for (unsigned Operand = 0; Operand < 2; ++Operand) {
     unsigned Size = Desc.Op[Operand];
@@ -221,7 +223,7 @@ bool DWARFExpression::Operation::print(raw_ostream &OS,
                                        const MCRegisterInfo *RegInfo,
                                        bool isEH) {
   if (Error) {
-    OS << "decoding error.";
+    OS << "<decoding error>";
     return false;
   }
 
@@ -256,9 +258,10 @@ bool DWARFExpression::Operation::print(raw_ostream &OS,
   return true;
 }
 
-void DWARFExpression::print(raw_ostream &OS, const MCRegisterInfo *RegInfo) {
+void DWARFExpression::print(raw_ostream &OS, const MCRegisterInfo *RegInfo,
+                            bool IsEH) const {
   for (auto &Op : *this) {
-    if (!Op.print(OS, this, RegInfo, /* isEH */ false)) {
+    if (!Op.print(OS, this, RegInfo, IsEH)) {
       uint32_t FailOffset = Op.getEndOffset();
       while (FailOffset < Data.getData().size())
         OS << format(" %02x", Data.getU8(&FailOffset));

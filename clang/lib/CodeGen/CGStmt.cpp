@@ -74,6 +74,15 @@ void CodeGenFunction::EmitStmt(const Stmt *S, ArrayRef<const Attr *> Attrs) {
   // Generate a stoppoint if we are emitting debug info.
   EmitStopPoint(S);
 
+  // Ignore all OpenMP directives except for simd if OpenMP with Simd is
+  // enabled.
+  if (getLangOpts().OpenMP && getLangOpts().OpenMPSimd) {
+    if (const auto *D = dyn_cast<OMPExecutableDirective>(S)) {
+      EmitSimpleOMPExecutableDirective(*D);
+      return;
+    }
+  }
+
   switch (S->getStmtClass()) {
   case Stmt::NoStmtClass:
   case Stmt::CXXCatchStmtClass:
@@ -599,7 +608,7 @@ void CodeGenFunction::EmitIfStmt(const IfStmt &S) {
     EmitStmt(S.getInit());
 
   if (S.getConditionVariable())
-    EmitAutoVarDecl(*S.getConditionVariable());
+    EmitDecl(*S.getConditionVariable());
 
   // If the condition constant folds and can be elided, try to avoid emitting
   // the condition and the dead arm of the if/else.
@@ -696,7 +705,7 @@ void CodeGenFunction::EmitWhileStmt(const WhileStmt &S,
   RunCleanupsScope ConditionScope(*this);
 
   if (S.getConditionVariable())
-    EmitAutoVarDecl(*S.getConditionVariable());
+    EmitDecl(*S.getConditionVariable());
 
   // Evaluate the conditional in the while header.  C99 6.8.5.1: The
   // evaluation of the controlling expression takes place before each
@@ -856,7 +865,7 @@ void CodeGenFunction::EmitForStmt(const ForStmt &S,
     // If the for statement has a condition scope, emit the local variable
     // declaration.
     if (S.getConditionVariable()) {
-      EmitAutoVarDecl(*S.getConditionVariable());
+      EmitDecl(*S.getConditionVariable());
     }
 
     llvm::BasicBlock *ExitBlock = LoopExit.getBlock();
@@ -996,7 +1005,9 @@ void CodeGenFunction::EmitReturnOfRValue(RValue RV, QualType Ty) {
   if (RV.isScalar()) {
     Builder.CreateStore(RV.getScalarVal(), ReturnValue);
   } else if (RV.isAggregate()) {
-    EmitAggregateCopy(ReturnValue, RV.getAggregateAddress(), Ty);
+    LValue Dest = MakeAddrLValue(ReturnValue, Ty);
+    LValue Src = MakeAddrLValue(RV.getAggregateAddress(), Ty);
+    EmitAggregateCopy(Dest, Src, Ty, overlapForReturnValue());
   } else {
     EmitStoreOfComplex(RV.getComplexVal(), MakeAddrLValue(ReturnValue, Ty),
                        /*init*/ true);
@@ -1026,7 +1037,7 @@ void CodeGenFunction::EmitReturnStmt(const ReturnStmt &S) {
     Builder.ClearInsertionPoint();
   }
 
-  // Emit the result value, even if unused, to evalute the side effects.
+  // Emit the result value, even if unused, to evaluate the side effects.
   const Expr *RV = S.getRetValue();
 
   // Treat block literals in a return expression as if they appeared
@@ -1074,11 +1085,12 @@ void CodeGenFunction::EmitReturnStmt(const ReturnStmt &S) {
                                 /*isInit*/ true);
       break;
     case TEK_Aggregate:
-      EmitAggExpr(RV, AggValueSlot::forAddr(ReturnValue,
-                                            Qualifiers(),
-                                            AggValueSlot::IsDestructed,
-                                            AggValueSlot::DoesNotNeedGCBarriers,
-                                            AggValueSlot::IsNotAliased));
+      EmitAggExpr(RV, AggValueSlot::forAddr(
+                          ReturnValue, Qualifiers(),
+                          AggValueSlot::IsDestructed,
+                          AggValueSlot::DoesNotNeedGCBarriers,
+                          AggValueSlot::IsNotAliased,
+                          overlapForReturnValue()));
       break;
     }
   }
@@ -1563,7 +1575,7 @@ void CodeGenFunction::EmitSwitchStmt(const SwitchStmt &S) {
       // Emit the condition variable if needed inside the entire cleanup scope
       // used by this special case for constant folded switches.
       if (S.getConditionVariable())
-        EmitAutoVarDecl(*S.getConditionVariable());
+        EmitDecl(*S.getConditionVariable());
 
       // At this point, we are no longer "within" a switch instance, so
       // we can temporarily enforce this to ensure that any embedded case
@@ -1592,7 +1604,7 @@ void CodeGenFunction::EmitSwitchStmt(const SwitchStmt &S) {
     EmitStmt(S.getInit());
 
   if (S.getConditionVariable())
-    EmitAutoVarDecl(*S.getConditionVariable());
+    EmitDecl(*S.getConditionVariable());
   llvm::Value *CondV = EmitScalarExpr(S.getCond());
 
   // Create basic block to hold stuff that comes after switch
@@ -1915,7 +1927,7 @@ void CodeGenFunction::EmitAsmStmt(const AsmStmt &S) {
     // Simplify the output constraint.
     std::string OutputConstraint(S.getOutputConstraint(i));
     OutputConstraint = SimplifyConstraint(OutputConstraint.c_str() + 1,
-                                          getTarget());
+                                          getTarget(), &OutputConstraintInfos);
 
     const Expr *OutExpr = S.getOutputExpr(i);
     OutExpr = OutExpr->IgnoreParenNoopCasts(getContext());
@@ -2122,7 +2134,8 @@ void CodeGenFunction::EmitAsmStmt(const AsmStmt &S) {
   llvm::InlineAsm *IA =
     llvm::InlineAsm::get(FTy, AsmString, Constraints, HasSideEffect,
                          /* IsAlignStack */ false, AsmDialect);
-  llvm::CallInst *Result = Builder.CreateCall(IA, Args);
+  llvm::CallInst *Result =
+      Builder.CreateCall(IA, Args, getBundlesForFunclet(IA));
   Result->addAttribute(llvm::AttributeList::FunctionIndex,
                        llvm::Attribute::NoUnwind);
 
@@ -2149,10 +2162,11 @@ void CodeGenFunction::EmitAsmStmt(const AsmStmt &S) {
                                           llvm::ConstantAsMetadata::get(Loc)));
   }
 
-  if (getLangOpts().CUDA && getLangOpts().CUDAIsDevice) {
-    // Conservatively, mark all inline asm blocks in CUDA as convergent
-    // (meaning, they may call an intrinsically convergent op, such as bar.sync,
-    // and so can't have certain optimizations applied around them).
+  if (getLangOpts().assumeFunctionsAreConvergent()) {
+    // Conservatively, mark all inline asm blocks in CUDA or OpenCL as
+    // convergent (meaning, they may call an intrinsically convergent op, such
+    // as bar.sync, and so can't have certain optimizations applied around
+    // them).
     Result->addAttribute(llvm::AttributeList::FunctionIndex,
                          llvm::Attribute::Convergent);
   }
@@ -2267,7 +2281,6 @@ CodeGenFunction::GenerateCapturedStmtFunction(const CapturedStmt &S) {
   Args.append(CD->param_begin(), CD->param_end());
 
   // Create the function declaration.
-  FunctionType::ExtInfo ExtInfo;
   const CGFunctionInfo &FuncInfo =
     CGM.getTypes().arrangeBuiltinFunctionDeclaration(Ctx.VoidTy, Args);
   llvm::FunctionType *FuncLLVMTy = CGM.getTypes().GetFunctionType(FuncInfo);

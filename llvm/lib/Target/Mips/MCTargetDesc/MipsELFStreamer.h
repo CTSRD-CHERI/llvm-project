@@ -34,7 +34,7 @@ class MipsELFStreamer : public MCELFStreamer {
 
 public:
   MipsELFStreamer(MCContext &Context, std::unique_ptr<MCAsmBackend> MAB,
-                  raw_pwrite_stream &OS,
+                  std::unique_ptr<MCObjectWriter> OW,
                   std::unique_ptr<MCCodeEmitter> Emitter);
 
   /// Overriding this function allows us to add arbitrary behaviour before the
@@ -61,16 +61,19 @@ public:
   /// Emits all the option records stored up until the point it's called.
   void EmitMipsOptionRecords();
 
-  void EmitCHERICapability(const MCSymbol *Symbol, int64_t Offset,
-                           unsigned CapSize, SMLoc Loc) override;
+  void EmitCheriIntcap(int64_t Value, unsigned CapSize, SMLoc Loc) override;
 
   /// Mark labels as microMIPS, if necessary for the subtarget.
   void createPendingLabelRelocs();
+
+protected:
+  void EmitCheriCapabilityImpl(const MCSymbol *Symbol, int64_t Offset,
+                               unsigned CapSize, SMLoc Loc) override;
 };
 
 MCELFStreamer *createMipsELFStreamer(MCContext &Context,
                                      std::unique_ptr<MCAsmBackend> MAB,
-                                     raw_pwrite_stream &OS,
+                                     std::unique_ptr<MCObjectWriter> OW,
                                      std::unique_ptr<MCCodeEmitter> Emitter,
                                      bool RelaxAll);
 } // end namespace llvm

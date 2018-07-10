@@ -17,6 +17,7 @@
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/Function.h"
@@ -26,7 +27,6 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetRegisterInfo.h"
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -60,12 +60,8 @@ HexagonEvaluator::HexagonEvaluator(const HexagonRegisterInfo &tri,
   // der the initial sequence of formal parameters that are known to be
   // passed via registers.
   unsigned InVirtReg, InPhysReg = 0;
-  const Function &F = *MF.getFunction();
 
-  using arg_iterator = Function::const_arg_iterator;
-
-  for (arg_iterator I = F.arg_begin(), E = F.arg_end(); I != E; ++I) {
-    const Argument &Arg = *I;
+  for (const Argument &Arg : MF.getFunction().args()) {
     Type *ATy = Arg.getType();
     unsigned Width = 0;
     if (ATy->isIntegerTy())
@@ -108,7 +104,7 @@ BT::BitMask HexagonEvaluator::mask(unsigned Reg, unsigned Sub) const {
       break;
   }
 #ifndef NDEBUG
-  dbgs() << PrintReg(Reg, &TRI, Sub) << " in reg class "
+  dbgs() << printReg(Reg, &TRI, Sub) << " in reg class "
          << TRI.getRegClassName(&RC) << '\n';
 #endif
   llvm_unreachable("Unexpected register/subregister");
@@ -190,8 +186,7 @@ bool HexagonEvaluator::evaluate(const MachineInstr &MI,
   unsigned NumDefs = 0;
 
   // Sanity verification: there should not be any defs with subregisters.
-  for (unsigned i = 0, n = MI.getNumOperands(); i < n; ++i) {
-    const MachineOperand &MO = MI.getOperand(i);
+  for (const MachineOperand &MO : MI.operands()) {
     if (!MO.isReg() || !MO.isDef())
       continue;
     NumDefs++;
@@ -240,8 +235,7 @@ bool HexagonEvaluator::evaluate(const MachineInstr &MI,
   // checking what kind of operand a given instruction has individually
   // for each instruction, do it here. Global symbols as operands gene-
   // rally do not provide any useful information.
-  for (unsigned i = 0, n = MI.getNumOperands(); i < n; ++i) {
-    const MachineOperand &MO = MI.getOperand(i);
+  for (const MachineOperand &MO : MI.operands()) {
     if (MO.isGlobal() || MO.isBlockAddress() || MO.isSymbol() || MO.isJTI() ||
         MO.isCPI())
       return false;
@@ -331,7 +325,7 @@ bool HexagonEvaluator::evaluate(const MachineInstr &MI,
       int FI = op(1).getIndex();
       int Off = op(2).getImm();
       unsigned A = MFI.getObjectAlignment(FI) + std::abs(Off);
-      unsigned L = Log2_32(A);
+      unsigned L = countTrailingZeros(A);
       RegisterCell RC = RegisterCell::self(Reg[0].Reg, W0);
       RC.fill(0, L, BT::BitValue::Zero);
       return rr0(RC, Outputs);
@@ -1254,11 +1248,8 @@ unsigned HexagonEvaluator::getNextPhysReg(unsigned PReg, unsigned Width) const {
 }
 
 unsigned HexagonEvaluator::getVirtRegFor(unsigned PReg) const {
-  using iterator = MachineRegisterInfo::livein_iterator;
-
-  for (iterator I = MRI.livein_begin(), E = MRI.livein_end(); I != E; ++I) {
-    if (I->first == PReg)
-      return I->second;
-  }
+  for (std::pair<unsigned,unsigned> P : MRI.liveins())
+    if (P.first == PReg)
+      return P.second;
   return 0;
 }

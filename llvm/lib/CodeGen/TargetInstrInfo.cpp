@@ -11,7 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/Target/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineMemOperand.h"
@@ -19,6 +19,9 @@
 #include "llvm/CodeGen/PseudoSourceValue.h"
 #include "llvm/CodeGen/ScoreboardHazardRecognizer.h"
 #include "llvm/CodeGen/StackMaps.h"
+#include "llvm/CodeGen/TargetFrameLowering.h"
+#include "llvm/CodeGen/TargetLowering.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/CodeGen/TargetSchedule.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/MC/MCAsmInfo.h"
@@ -26,10 +29,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetFrameLowering.h"
-#include "llvm/Target/TargetLowering.h"
 #include "llvm/Target/TargetMachine.h"
-#include "llvm/Target/TargetRegisterInfo.h"
 #include <cctype>
 
 using namespace llvm;
@@ -174,6 +174,14 @@ MachineInstr *TargetInstrInfo::commuteInstructionImpl(MachineInstr &MI,
   bool Reg2IsUndef = MI.getOperand(Idx2).isUndef();
   bool Reg1IsInternal = MI.getOperand(Idx1).isInternalRead();
   bool Reg2IsInternal = MI.getOperand(Idx2).isInternalRead();
+  // Avoid calling isRenamable for virtual registers since we assert that
+  // renamable property is only queried/set for physical registers.
+  bool Reg1IsRenamable = TargetRegisterInfo::isPhysicalRegister(Reg1)
+                             ? MI.getOperand(Idx1).isRenamable()
+                             : false;
+  bool Reg2IsRenamable = TargetRegisterInfo::isPhysicalRegister(Reg2)
+                             ? MI.getOperand(Idx2).isRenamable()
+                             : false;
   // If destination is tied to either of the commuted source register, then
   // it must be updated.
   if (HasDef && Reg0 == Reg1 &&
@@ -211,6 +219,12 @@ MachineInstr *TargetInstrInfo::commuteInstructionImpl(MachineInstr &MI,
   CommutedMI->getOperand(Idx1).setIsUndef(Reg2IsUndef);
   CommutedMI->getOperand(Idx2).setIsInternalRead(Reg1IsInternal);
   CommutedMI->getOperand(Idx1).setIsInternalRead(Reg2IsInternal);
+  // Avoid calling setIsRenamable for virtual registers since we assert that
+  // renamable property is only queried/set for physical registers.
+  if (TargetRegisterInfo::isPhysicalRegister(Reg1))
+    CommutedMI->getOperand(Idx2).setIsRenamable(Reg1IsRenamable);
+  if (TargetRegisterInfo::isPhysicalRegister(Reg2))
+    CommutedMI->getOperand(Idx1).setIsRenamable(Reg2IsRenamable);
   return CommutedMI;
 }
 
@@ -1151,6 +1165,8 @@ bool TargetInstrInfo::getRegSequenceInputs(
   for (unsigned OpIdx = 1, EndOpIdx = MI.getNumOperands(); OpIdx != EndOpIdx;
        OpIdx += 2) {
     const MachineOperand &MOReg = MI.getOperand(OpIdx);
+    if (MOReg.isUndef())
+      continue;
     const MachineOperand &MOSubIdx = MI.getOperand(OpIdx + 1);
     assert(MOSubIdx.isImm() &&
            "One of the subindex of the reg_sequence is not an immediate");
@@ -1174,6 +1190,8 @@ bool TargetInstrInfo::getExtractSubregInputs(
   // Def = EXTRACT_SUBREG v0.sub1, sub0.
   assert(DefIdx == 0 && "EXTRACT_SUBREG only has one def");
   const MachineOperand &MOReg = MI.getOperand(1);
+  if (MOReg.isUndef())
+    return false;
   const MachineOperand &MOSubIdx = MI.getOperand(2);
   assert(MOSubIdx.isImm() &&
          "The subindex of the extract_subreg is not an immediate");
@@ -1198,6 +1216,8 @@ bool TargetInstrInfo::getInsertSubregInputs(
   assert(DefIdx == 0 && "INSERT_SUBREG only has one def");
   const MachineOperand &MOBaseReg = MI.getOperand(1);
   const MachineOperand &MOInsertedReg = MI.getOperand(2);
+  if (MOInsertedReg.isUndef())
+    return false;
   const MachineOperand &MOSubIdx = MI.getOperand(3);
   assert(MOSubIdx.isImm() &&
          "One of the subindex of the reg_sequence is not an immediate");

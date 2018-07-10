@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 //
 /// \file
-/// \brief This file provides AMDGPU specific target descriptions.
+/// This file provides AMDGPU specific target descriptions.
 //
 //===----------------------------------------------------------------------===//
 
@@ -22,6 +22,7 @@
 #include "llvm/MC/MCCodeEmitter.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCInstrInfo.h"
+#include "llvm/MC/MCObjectWriter.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSubtargetInfo.h"
@@ -76,15 +77,15 @@ static MCTargetStreamer *createAMDGPUAsmTargetStreamer(MCStreamer &S,
 static MCTargetStreamer * createAMDGPUObjectTargetStreamer(
                                                    MCStreamer &S,
                                                    const MCSubtargetInfo &STI) {
-  return new AMDGPUTargetELFStreamer(S);
+  return new AMDGPUTargetELFStreamer(S, STI);
 }
 
 static MCStreamer *createMCStreamer(const Triple &T, MCContext &Context,
                                     std::unique_ptr<MCAsmBackend> &&MAB,
-                                    raw_pwrite_stream &OS,
+                                    std::unique_ptr<MCObjectWriter> &&OW,
                                     std::unique_ptr<MCCodeEmitter> &&Emitter,
                                     bool RelaxAll) {
-  return createAMDGPUELFStreamer(T, Context, std::move(MAB), OS,
+  return createAMDGPUELFStreamer(T, Context, std::move(MAB), std::move(OW),
                                  std::move(Emitter), RelaxAll);
 }
 
@@ -103,6 +104,8 @@ extern "C" void LLVMInitializeAMDGPUTargetMC() {
   // R600 specific registration
   TargetRegistry::RegisterMCCodeEmitter(getTheAMDGPUTarget(),
                                         createR600MCCodeEmitter);
+  TargetRegistry::RegisterObjectTargetStreamer(
+      getTheAMDGPUTarget(), createAMDGPUObjectTargetStreamer);
 
   // GCN specific registration
   TargetRegistry::RegisterMCCodeEmitter(getTheGCNTarget(),

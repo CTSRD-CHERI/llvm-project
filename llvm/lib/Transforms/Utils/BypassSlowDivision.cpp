@@ -1,4 +1,4 @@
-//===-- BypassSlowDivision.cpp - Bypass slow division ---------------------===//
+//===- BypassSlowDivision.cpp - Bypass slow division ----------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -17,19 +17,33 @@
 
 #include "llvm/Transforms/Utils/BypassSlowDivision.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/None.h"
+#include "llvm/ADT/Optional.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallPtrSet.h"
+#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Analysis/ValueTracking.h"
+#include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/Type.h"
+#include "llvm/IR/Value.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/KnownBits.h"
-#include "llvm/Transforms/Utils/Local.h"
+#include <cassert>
+#include <cstdint>
 
 using namespace llvm;
 
 #define DEBUG_TYPE "bypass-slow-division"
 
 namespace {
+
   struct QuotRemPair {
     Value *Quotient;
     Value *Remainder;
@@ -46,15 +60,11 @@ namespace {
     Value *Quotient = nullptr;
     Value *Remainder = nullptr;
   };
-}
 
-namespace llvm {
-  typedef DenseMap<DivRemMapKey, QuotRemPair> DivCacheTy;
-  typedef DenseMap<unsigned, unsigned> BypassWidthsTy;
-  typedef SmallPtrSet<Instruction *, 4> VisitedSetTy;
-}
+using DivCacheTy = DenseMap<DivRemMapKey, QuotRemPair>;
+using BypassWidthsTy = DenseMap<unsigned, unsigned>;
+using VisitedSetTy = SmallPtrSet<Instruction *, 4>;
 
-namespace {
 enum ValueRange {
   /// Operand definitely fits into BypassType. No runtime checks are needed.
   VALRNG_KNOWN_SHORT,
@@ -84,17 +94,21 @@ class FastDivInsertionTask {
     return SlowDivOrRem->getOpcode() == Instruction::SDiv ||
            SlowDivOrRem->getOpcode() == Instruction::SRem;
   }
+
   bool isDivisionOp() {
     return SlowDivOrRem->getOpcode() == Instruction::SDiv ||
            SlowDivOrRem->getOpcode() == Instruction::UDiv;
   }
+
   Type *getSlowType() { return SlowDivOrRem->getType(); }
 
 public:
   FastDivInsertionTask(Instruction *I, const BypassWidthsTy &BypassWidths);
+
   Value *getReplacement(DivCacheTy &Cache);
 };
-} // anonymous namespace
+
+} // end anonymous namespace
 
 FastDivInsertionTask::FastDivInsertionTask(Instruction *I,
                                            const BypassWidthsTy &BypassWidths) {
@@ -159,7 +173,7 @@ Value *FastDivInsertionTask::getReplacement(DivCacheTy &Cache) {
   return isDivisionOp() ? Value.Quotient : Value.Remainder;
 }
 
-/// \brief Check if a value looks like a hash.
+/// Check if a value looks like a hash.
 ///
 /// The routine is expected to detect values computed using the most common hash
 /// algorithms. Typically, hash computations end with one of the following
@@ -193,7 +207,7 @@ bool FastDivInsertionTask::isHashLikeValue(Value *V, VisitedSetTy &Visited) {
       C = dyn_cast<ConstantInt>(cast<BitCastInst>(Op1)->getOperand(0));
     return C && C->getValue().getMinSignedBits() > BypassType->getBitWidth();
   }
-  case Instruction::PHI: {
+  case Instruction::PHI:
     // Stop IR traversal in case of a crazy input code. This limits recursion
     // depth.
     if (Visited.size() >= 16)
@@ -209,7 +223,6 @@ bool FastDivInsertionTask::isHashLikeValue(Value *V, VisitedSetTy &Visited) {
       return getValueRange(V, Visited) == VALRNG_LIKELY_LONG ||
              isa<UndefValue>(V);
     });
-  }
   default:
     return false;
   }
@@ -339,11 +352,6 @@ Optional<QuotRemPair> FastDivInsertionTask::insertFastDivAndRem() {
   Value *Dividend = SlowDivOrRem->getOperand(0);
   Value *Divisor = SlowDivOrRem->getOperand(1);
 
-  if (isa<ConstantInt>(Divisor)) {
-    // Keep division by a constant for DAGCombiner.
-    return None;
-  }
-
   VisitedSetTy SetL;
   ValueRange DividendRange = getValueRange(Dividend, SetL);
   if (DividendRange == VALRNG_LIKELY_LONG)
@@ -359,7 +367,9 @@ Optional<QuotRemPair> FastDivInsertionTask::insertFastDivAndRem() {
 
   if (DividendShort && DivisorShort) {
     // If both operands are known to be short then just replace the long
-    // division with a short one in-place.
+    // division with a short one in-place.  Since we're not introducing control
+    // flow in this case, narrowing the division is always a win, even if the
+    // divisor is a constant (and will later get replaced by a multiplication).
 
     IRBuilder<> Builder(SlowDivOrRem);
     Value *TruncDividend = Builder.CreateTrunc(Dividend, BypassType);
@@ -369,7 +379,16 @@ Optional<QuotRemPair> FastDivInsertionTask::insertFastDivAndRem() {
     Value *ExtDiv = Builder.CreateZExt(TruncDiv, getSlowType());
     Value *ExtRem = Builder.CreateZExt(TruncRem, getSlowType());
     return QuotRemPair(ExtDiv, ExtRem);
-  } else if (DividendShort && !isSignedOp()) {
+  }
+
+  if (isa<ConstantInt>(Divisor)) {
+    // If the divisor is not a constant, DAGCombiner will convert it to a
+    // multiplication by a magic constant.  It isn't clear if it is worth
+    // introducing control flow to get a narrower multiply.
+    return None;
+  }
+
+  if (DividendShort && !isSignedOp()) {
     // If the division is unsigned and Dividend is known to be short, then
     // either
     // 1) Divisor is less or equal to Dividend, and the result can be computed

@@ -287,7 +287,7 @@ static __isl_give isl_id_to_ast_expr *pollyBuildAstExprForStmt(
   if (!Stmt || !Build_C)
     return NULL;
 
-  isl::ast_build Build = isl::manage(isl_ast_build_copy(Build_C));
+  isl::ast_build Build = isl::manage_copy(Build_C);
   isl::ctx Ctx = Build.get_ctx();
   isl::id_to_ast_expr RefToExpr = isl::id_to_ast_expr::alloc(Ctx, 0);
 
@@ -414,6 +414,8 @@ private:
   ///
   /// @param UserStmt The ast node to generate code for.
   virtual void createUser(__isl_take isl_ast_node *UserStmt);
+
+  virtual void createFor(__isl_take isl_ast_node *Node);
 
   enum DataDirection { HOST_TO_DEVICE, DEVICE_TO_HOST };
 
@@ -1101,8 +1103,7 @@ Value *GPUNodeBuilder::getArraySize(gpu_array_info *Array) {
   Value *ArraySize = ConstantInt::get(Builder.getInt64Ty(), Array->size);
 
   if (!gpu_array_is_scalar(Array)) {
-    isl::multi_pw_aff ArrayBound =
-        isl::manage(isl_multi_pw_aff_copy(Array->bound));
+    isl::multi_pw_aff ArrayBound = isl::manage_copy(Array->bound);
 
     isl::pw_aff OffsetDimZero = ArrayBound.get_pw_aff(0);
     isl::ast_expr Res = Build.expr_from(OffsetDimZero);
@@ -1127,7 +1128,7 @@ Value *GPUNodeBuilder::getArrayOffset(gpu_array_info *Array) {
 
   isl::ast_build Build = isl::ast_build::from_context(S.getContext());
 
-  isl::set Min = isl::manage(isl_set_copy(Array->extent)).lexmin();
+  isl::set Min = isl::manage_copy(Array->extent).lexmin();
 
   isl::set ZeroSet = isl::set::universe(Min.get_space());
 
@@ -1284,8 +1285,12 @@ void GPUNodeBuilder::createUser(__isl_take isl_ast_node *UserStmt) {
 
   isl_ast_expr_free(Expr);
   isl_ast_node_free(UserStmt);
-  return;
 }
+
+void GPUNodeBuilder::createFor(__isl_take isl_ast_node *Node) {
+  createForSequential(Node, false);
+}
+
 void GPUNodeBuilder::createKernelCopy(ppcg_kernel_stmt *KernelStmt) {
   isl_ast_expr *LocalIndex = isl_ast_expr_copy(KernelStmt->u.c.local_index);
   LocalIndex = isl_ast_expr_address_of(LocalIndex);
@@ -1393,7 +1398,7 @@ const std::map<std::string, std::string> IntrinsicToLibdeviceFunc = {
     {"llvm.powi.f64", "powi"},
     {"llvm.powi.f32", "powif"}};
 
-/// Return the corresponding CUDA libdevice function name for @p F.
+/// Return the corresponding CUDA libdevice function name @p Name.
 /// Note that this function will try to convert instrinsics in the list
 /// IntrinsicToLibdeviceFunc into libdevice functions.
 /// This is because some intrinsics such as `exp`
@@ -1402,17 +1407,13 @@ const std::map<std::string, std::string> IntrinsicToLibdeviceFunc = {
 /// so that we use intrinsics whenever possible.
 ///
 /// Return "" if we are not compiling for CUDA.
-std::string getCUDALibDeviceFuntion(Function *F) {
-  const std::string FnName = [&] {
-    auto It = IntrinsicToLibdeviceFunc.find(F->getName());
-    if (It != IntrinsicToLibdeviceFunc.end())
-      return It->second;
+std::string getCUDALibDeviceFuntion(StringRef Name) {
+  auto It = IntrinsicToLibdeviceFunc.find(Name);
+  if (It != IntrinsicToLibdeviceFunc.end())
+    return getCUDALibDeviceFuntion(It->second);
 
-    return std::string(F->getName());
-  }();
-
-  if (CUDALibDeviceFunctions.count(FnName))
-    return "__nv_" + FnName;
+  if (CUDALibDeviceFunctions.count(Name))
+    return ("__nv_" + Name).str();
 
   return "";
 }
@@ -1425,7 +1426,7 @@ static bool isValidFunctionInKernel(llvm::Function *F, bool AllowLibDevice) {
   // "llvm.copysign".
   const StringRef Name = F->getName();
 
-  if (AllowLibDevice && getCUDALibDeviceFuntion(F).length() > 0)
+  if (AllowLibDevice && getCUDALibDeviceFuntion(Name).length() > 0)
     return true;
 
   return F->isIntrinsic() &&
@@ -1558,20 +1559,21 @@ void GPUNodeBuilder::clearScalarEvolution(Function *F) {
 }
 
 void GPUNodeBuilder::clearLoops(Function *F) {
+  SmallSet<Loop *, 1> WorkList;
   for (BasicBlock &BB : *F) {
     Loop *L = LI.getLoopFor(&BB);
     if (L)
-      SE.forgetLoop(L);
-    LI.removeBlock(&BB);
+      WorkList.insert(L);
   }
+  for (auto *L : WorkList)
+    LI.erase(L);
 }
 
 std::tuple<Value *, Value *> GPUNodeBuilder::getGridSizes(ppcg_kernel *Kernel) {
   std::vector<Value *> Sizes;
   isl::ast_build Context = isl::ast_build::from_context(S.getContext());
 
-  isl::multi_pw_aff GridSizePwAffs =
-      isl::manage(isl_multi_pw_aff_copy(Kernel->grid_size));
+  isl::multi_pw_aff GridSizePwAffs = isl::manage_copy(Kernel->grid_size);
   for (long i = 0; i < Kernel->n_grid; i++) {
     isl::pw_aff Size = GridSizePwAffs.get_pw_aff(i);
     isl::ast_expr GridSize = Context.expr_from(Size);
@@ -2006,8 +2008,7 @@ GPUNodeBuilder::createKernelFunctionDecl(ppcg_kernel *Kernel,
     Arg->setName(Kernel->array[i].array->name);
 
     isl_id *Id = isl_space_get_tuple_id(Prog->array[i].space, isl_dim_set);
-    const ScopArrayInfo *SAI =
-        ScopArrayInfo::getFromId(isl::manage(isl_id_copy(Id)));
+    const ScopArrayInfo *SAI = ScopArrayInfo::getFromId(isl::manage_copy(Id));
     Type *EleTy = SAI->getElementType();
     Value *Val = &*Arg;
     SmallVector<const SCEV *, 4> Sizes;
@@ -2138,8 +2139,7 @@ void GPUNodeBuilder::prepareKernelArguments(ppcg_kernel *Kernel, Function *FN) {
       continue;
 
     isl_id *Id = isl_space_get_tuple_id(Prog->array[i].space, isl_dim_set);
-    const ScopArrayInfo *SAI =
-        ScopArrayInfo::getFromId(isl::manage(isl_id_copy(Id)));
+    const ScopArrayInfo *SAI = ScopArrayInfo::getFromId(isl::manage_copy(Id));
     isl_id_free(Id);
 
     if (SAI->getNumberOfDimensions() > 0) {
@@ -2172,8 +2172,7 @@ void GPUNodeBuilder::finalizeKernelArguments(ppcg_kernel *Kernel) {
       continue;
 
     isl_id *Id = isl_space_get_tuple_id(Prog->array[i].space, isl_dim_set);
-    const ScopArrayInfo *SAI =
-        ScopArrayInfo::getFromId(isl::manage(isl_id_copy(Id)));
+    const ScopArrayInfo *SAI = ScopArrayInfo::getFromId(isl::manage_copy(Id));
     isl_id_free(Id);
 
     if (SAI->getNumberOfDimensions() > 0) {
@@ -2204,7 +2203,7 @@ void GPUNodeBuilder::finalizeKernelArguments(ppcg_kernel *Kernel) {
     /// memory store or at least before each kernel barrier.
     if (Kernel->n_block != 0 || Kernel->n_grid != 0) {
       BuildSuccessful = 0;
-      DEBUG(
+      LLVM_DEBUG(
           dbgs() << getUniqueScopName(&S)
                  << " has a store to a scalar value that"
                     " would be undefined to run in parallel. Bailing out.\n";);
@@ -2255,7 +2254,7 @@ void GPUNodeBuilder::createKernelVariables(ppcg_kernel *Kernel, Function *FN) {
     }
     SAI =
         S.getOrCreateScopArrayInfo(Allocation, EleTy, Sizes, MemoryKind::Array);
-    Id = isl_id_alloc(S.getIslCtx(), Var.name, nullptr);
+    Id = isl_id_alloc(S.getIslCtx().get(), Var.name, nullptr);
     IDToValue[Id] = Allocation;
     LocalArrays.push_back(Allocation);
     KernelIds.push_back(Id);
@@ -2368,8 +2367,9 @@ std::string GPUNodeBuilder::createKernelASM() {
 
   PM.add(createTargetTransformInfoWrapperPass(TargetM->getTargetIRAnalysis()));
 
-  if (TargetM->addPassesToEmitFile(
-          PM, ASMStream, TargetMachine::CGFT_AssemblyFile, true /* verify */)) {
+  if (TargetM->addPassesToEmitFile(PM, ASMStream, nullptr,
+                                   TargetMachine::CGFT_AssemblyFile,
+                                   true /* verify */)) {
     errs() << "The target does not support generation of this file type!\n";
     return "";
   }
@@ -2385,7 +2385,7 @@ bool GPUNodeBuilder::requiresCUDALibDevice() {
     if (!F.isDeclaration())
       continue;
 
-    const std::string CUDALibDeviceFunc = getCUDALibDeviceFuntion(&F);
+    const std::string CUDALibDeviceFunc = getCUDALibDeviceFuntion(F.getName());
     if (CUDALibDeviceFunc.length() != 0) {
       // We need to handle the case where a module looks like this:
       // @expf(..)
@@ -2439,10 +2439,10 @@ void GPUNodeBuilder::addCUDALibDevice() {
 std::string GPUNodeBuilder::finalizeKernelFunction() {
 
   if (verifyModule(*GPUModule)) {
-    DEBUG(dbgs() << "verifyModule failed on module:\n";
-          GPUModule->print(dbgs(), nullptr); dbgs() << "\n";);
-    DEBUG(dbgs() << "verifyModule Error:\n";
-          verifyModule(*GPUModule, &dbgs()););
+    LLVM_DEBUG(dbgs() << "verifyModule failed on module:\n";
+               GPUModule->print(dbgs(), nullptr); dbgs() << "\n";);
+    LLVM_DEBUG(dbgs() << "verifyModule Error:\n";
+               verifyModule(*GPUModule, &dbgs()););
 
     if (FailOnVerifyModuleFailure)
       llvm_unreachable("VerifyModule failed.");
@@ -2678,9 +2678,9 @@ public:
   /// @returns Retun a map from collected ids to 'zero' ast expressions.
   __isl_give isl_id_to_ast_expr *getNames() {
     auto *Names = isl_id_to_ast_expr_alloc(
-        S->getIslCtx(),
+        S->getIslCtx().get(),
         S->getNumParams() + std::distance(S->array_begin(), S->array_end()));
-    auto *Zero = isl_ast_expr_from_val(isl_val_zero(S->getIslCtx()));
+    auto *Zero = isl_ast_expr_from_val(isl_val_zero(S->getIslCtx().get()));
 
     for (const SCEV *P : S->parameters()) {
       isl_id *Id = S->getIdForParam(P).release();
@@ -2729,8 +2729,8 @@ public:
     PPCGScop->tagged_must_writes = getTaggedMustWrites();
     PPCGScop->must_writes = S->getMustWrites().release();
     PPCGScop->live_out = nullptr;
-    PPCGScop->tagged_must_kills = KillsInfo.TaggedMustKills.take();
-    PPCGScop->must_kills = KillsInfo.MustKills.take();
+    PPCGScop->tagged_must_kills = KillsInfo.TaggedMustKills.release();
+    PPCGScop->must_kills = KillsInfo.MustKills.release();
 
     PPCGScop->tagger = nullptr;
     PPCGScop->independence =
@@ -2746,7 +2746,7 @@ public:
     // If we have something non-trivial to kill, add it to the schedule
     if (KillsInfo.KillsSchedule.get())
       PPCGScop->schedule = isl_schedule_sequence(
-          PPCGScop->schedule, KillsInfo.KillsSchedule.take());
+          PPCGScop->schedule, KillsInfo.KillsSchedule.release());
 
     PPCGScop->names = getNames();
     PPCGScop->pet = nullptr;
@@ -2767,7 +2767,8 @@ public:
     gpu_stmt_access *Accesses = nullptr;
 
     for (MemoryAccess *Acc : Stmt) {
-      auto Access = isl_alloc_type(S->getIslCtx(), struct gpu_stmt_access);
+      auto Access =
+          isl_alloc_type(S->getIslCtx().get(), struct gpu_stmt_access);
       Access->read = Acc->isRead();
       Access->write = Acc->isWrite();
       Access->access = Acc->getAccessRelation().release();
@@ -2800,7 +2801,7 @@ public:
   ///
   /// @returns A linked-list of statements.
   gpu_stmt *getStatements() {
-    gpu_stmt *Stmts = isl_calloc_array(S->getIslCtx(), struct gpu_stmt,
+    gpu_stmt *Stmts = isl_calloc_array(S->getIslCtx().get(), struct gpu_stmt,
                                        std::distance(S->begin(), S->end()));
 
     int i = 0;
@@ -2972,7 +2973,7 @@ public:
     assert(AlignSpace && "alignPwAffs did not initialise AlignSpace");
 
     isl_pw_aff_list *BoundsList =
-        createPwAffList(S->getIslCtx(), std::move(AlignedBounds));
+        createPwAffList(S->getIslCtx().get(), std::move(AlignedBounds));
 
     isl_space *BoundsSpace = isl_set_get_space(PPCGArray.extent);
     BoundsSpace = isl_space_align_params(BoundsSpace, AlignSpace);
@@ -3053,9 +3054,9 @@ public:
     if (!PPCGScop)
       return nullptr;
 
-    auto PPCGProg = isl_calloc_type(S->getIslCtx(), struct gpu_prog);
+    auto PPCGProg = isl_calloc_type(S->getIslCtx().get(), struct gpu_prog);
 
-    PPCGProg->ctx = S->getIslCtx();
+    PPCGProg->ctx = S->getIslCtx().get();
     PPCGProg->scop = PPCGScop;
     PPCGProg->context = isl_set_copy(PPCGScop->context);
     PPCGProg->read = isl_union_map_copy(PPCGScop->reads);
@@ -3084,8 +3085,8 @@ public:
 
     PPCGProg->n_array =
         ValidSAIs.size(); // std::distance(S->array_begin(), S->array_end());
-    PPCGProg->array = isl_calloc_array(S->getIslCtx(), struct gpu_array_info,
-                                       PPCGProg->n_array);
+    PPCGProg->array = isl_calloc_array(
+        S->getIslCtx().get(), struct gpu_array_info, PPCGProg->n_array);
 
     createArrays(PPCGProg, ValidSAIs);
 
@@ -3149,9 +3150,9 @@ public:
   ///
   /// @param Kernel The kernel to print
   void printKernel(ppcg_kernel *Kernel) {
-    auto *P = isl_printer_to_str(S->getIslCtx());
+    auto *P = isl_printer_to_str(S->getIslCtx().get());
     P = isl_printer_set_output_format(P, ISL_FORMAT_C);
-    auto *Options = isl_ast_print_options_alloc(S->getIslCtx());
+    auto *Options = isl_ast_print_options_alloc(S->getIslCtx().get());
     P = isl_ast_node_print(Kernel->tree, P, Options);
     char *String = isl_printer_get_str(P);
     printf("%s\n", String);
@@ -3164,13 +3165,13 @@ public:
   /// @param Tree An AST describing GPU code
   /// @param PPCGProg The PPCG program from which @Tree has been constructed.
   void printGPUTree(isl_ast_node *Tree, gpu_prog *PPCGProg) {
-    auto *P = isl_printer_to_str(S->getIslCtx());
+    auto *P = isl_printer_to_str(S->getIslCtx().get());
     P = isl_printer_set_output_format(P, ISL_FORMAT_C);
 
     PrintGPUUserData Data;
     Data.PPCGProg = PPCGProg;
 
-    auto *Options = isl_ast_print_options_alloc(S->getIslCtx());
+    auto *Options = isl_ast_print_options_alloc(S->getIslCtx().get());
     Options =
         isl_ast_print_options_set_print_user(Options, printHostUser, &Data);
     P = isl_ast_node_print(Tree, P, Options);
@@ -3199,9 +3200,9 @@ public:
   // strategy directly from this pass.
   gpu_gen *generateGPU(ppcg_scop *PPCGScop, gpu_prog *PPCGProg) {
 
-    auto PPCGGen = isl_calloc_type(S->getIslCtx(), struct gpu_gen);
+    auto PPCGGen = isl_calloc_type(S->getIslCtx().get(), struct gpu_gen);
 
-    PPCGGen->ctx = S->getIslCtx();
+    PPCGGen->ctx = S->getIslCtx().get();
     PPCGGen->options = PPCGScop->options;
     PPCGGen->print = nullptr;
     PPCGGen->print_user = nullptr;
@@ -3228,8 +3229,8 @@ public:
 
     if (!has_permutable || has_permutable < 0) {
       Schedule = isl_schedule_free(Schedule);
-      DEBUG(dbgs() << getUniqueScopName(S)
-                   << " does not have permutable bands. Bailing out\n";);
+      LLVM_DEBUG(dbgs() << getUniqueScopName(S)
+                        << " does not have permutable bands. Bailing out\n";);
     } else {
       const bool CreateTransferToFromDevice = !PollyManagedMemory;
       Schedule = map_to_device(PPCGGen, Schedule, CreateTransferToFromDevice);
@@ -3237,7 +3238,7 @@ public:
     }
 
     if (DumpSchedule) {
-      isl_printer *P = isl_printer_to_str(S->getIslCtx());
+      isl_printer *P = isl_printer_to_str(S->getIslCtx().get());
       P = isl_printer_set_yaml_style(P, ISL_YAML_STYLE_BLOCK);
       P = isl_printer_print_str(P, "Schedule\n");
       P = isl_printer_print_str(P, "========\n");
@@ -3349,7 +3350,7 @@ public:
       }
     }
 
-    isl_val *InstVal = isl_val_int_from_si(S->getIslCtx(), InstCount);
+    isl_val *InstVal = isl_val_int_from_si(S->getIslCtx().get(), InstCount);
     auto *InstExpr = isl_ast_expr_from_val(InstVal);
     return isl_ast_expr_mul(InstExpr, Iterations);
   }
@@ -3365,7 +3366,7 @@ public:
   getNumberOfIterations(Scop &S, __isl_keep isl_ast_build *Build) {
     isl_ast_expr *Instructions;
 
-    isl_val *Zero = isl_val_int_from_si(S.getIslCtx(), 0);
+    isl_val *Zero = isl_val_int_from_si(S.getIslCtx().get(), 0);
     Instructions = isl_ast_expr_from_val(Zero);
 
     for (ScopStmt &Stmt : S) {
@@ -3385,7 +3386,7 @@ public:
   __isl_give isl_ast_expr *
   createSufficientComputeCheck(Scop &S, __isl_keep isl_ast_build *Build) {
     auto Iterations = getNumberOfIterations(S, Build);
-    auto *MinComputeVal = isl_val_int_from_si(S.getIslCtx(), MinCompute);
+    auto *MinComputeVal = isl_val_int_from_si(S.getIslCtx().get(), MinCompute);
     auto *MinComputeExpr = isl_ast_expr_from_val(MinComputeVal);
     return isl_ast_expr_ge(Iterations, MinComputeExpr);
   }
@@ -3407,8 +3408,8 @@ public:
         // Look for (<func-type>*) among operands of Inst
         if (auto PtrTy = dyn_cast<PointerType>(Op->getType())) {
           if (isa<FunctionType>(PtrTy->getElementType())) {
-            DEBUG(dbgs() << Inst
-                         << " has illegal use of function in kernel.\n");
+            LLVM_DEBUG(dbgs()
+                       << Inst << " has illegal use of function in kernel.\n");
             return true;
           }
         }
@@ -3471,7 +3472,7 @@ public:
     auto SplitBlock = StartBlock->getSinglePredecessor();
     Builder.SetInsertPoint(SplitBlock->getTerminator());
 
-    isl_ast_build *Build = isl_ast_build_alloc(S->getIslCtx());
+    isl_ast_build *Build = isl_ast_build_alloc(S->getIslCtx().get());
     isl_ast_expr *Condition = IslAst::buildRunCondition(*S, Build);
     isl_ast_expr *SufficientCompute = createSufficientComputeCheck(*S, Build);
     Condition = isl_ast_expr_and(Condition, SufficientCompute);
@@ -3486,9 +3487,9 @@ public:
       auto *SplitBBTerm = Builder.GetInsertBlock()->getTerminator();
       SplitBBTerm->setOperand(0, FalseI1);
 
-      DEBUG(dbgs() << "preloading invariant loads failed in function: " +
-                          S->getFunction().getName() +
-                          " | Scop Region: " + S->getNameStr());
+      LLVM_DEBUG(dbgs() << "preloading invariant loads failed in function: " +
+                               S->getFunction().getName() +
+                               " | Scop Region: " + S->getNameStr());
       // adjust the dominator tree accordingly.
       auto *ExitingBlock = StartBlock->getUniqueSuccessor();
       assert(ExitingBlock);
@@ -3548,8 +3549,8 @@ public:
     DL = &S->getRegion().getEntry()->getModule()->getDataLayout();
     RI = &getAnalysis<RegionInfoPass>().getRegionInfo();
 
-    DEBUG(dbgs() << "PPCGCodeGen running on : " << getUniqueScopName(S)
-                 << " | loop depth: " << S->getMaxLoopDepth() << "\n");
+    LLVM_DEBUG(dbgs() << "PPCGCodeGen running on : " << getUniqueScopName(S)
+                      << " | loop depth: " << S->getMaxLoopDepth() << "\n");
 
     // We currently do not support functions other than intrinsics inside
     // kernels, as code generation will need to offload function calls to the
@@ -3558,7 +3559,7 @@ public:
     // address of an intrinsic function to send to the kernel.
     if (containsInvalidKernelFunction(CurrentScop,
                                       Architecture == GPUArch::NVPTX64)) {
-      DEBUG(
+      LLVM_DEBUG(
           dbgs() << getUniqueScopName(S)
                  << " contains function which cannot be materialised in a GPU "
                     "kernel. Bailing out.\n";);
@@ -3573,8 +3574,8 @@ public:
       generateCode(isl_ast_node_copy(PPCGGen->tree), PPCGProg);
       CurrentScop.markAsToBeSkipped();
     } else {
-      DEBUG(dbgs() << getUniqueScopName(S)
-                   << " has empty PPCGGen->tree. Bailing out.\n");
+      LLVM_DEBUG(dbgs() << getUniqueScopName(S)
+                        << " has empty PPCGGen->tree. Bailing out.\n");
     }
 
     freeOptions(PPCGScop);

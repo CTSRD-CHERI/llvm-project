@@ -19,5 +19,5 @@
 type = Library
 name = MipsAsmParser
 parent = Mips
-required_libraries = MC MCParser MipsDesc MipsInfo Support MipsCodeGen
+required_libraries = MC MCParser MipsDesc MipsInfo Support MipsCodeGen MipsAsmPrinter
 add_to_library_groups = Mips

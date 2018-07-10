@@ -11,12 +11,13 @@
 #define LLD_ELF_LINKER_SCRIPT_H
 
 #include "Config.h"
-#include "Strings.h"
 #include "Writer.h"
 #include "lld/Common/LLVM.h"
+#include "lld/Common/Strings.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/MapVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include <cstddef>
@@ -28,12 +29,11 @@
 namespace lld {
 namespace elf {
 
-class DefinedRegular;
-class SymbolBody;
+class Defined;
+class Symbol;
 class InputSectionBase;
 class InputSection;
 class OutputSection;
-class OutputSectionFactory;
 class InputSectionBase;
 class SectionBase;
 
@@ -75,7 +75,6 @@ enum SectionsCommandKind {
   AssignmentKind, // . = expr or <sym> = expr
   OutputSectionKind,
   InputSectionKind,
-  AssertKind, // ASSERT(expr)
   ByteKind    // BYTE(expr), SHORT(expr), LONG(expr) or QUAD(expr)
 };
 
@@ -95,7 +94,7 @@ struct SymbolAssignment : BaseCommand {
 
   // The LHS of an expression. Name is either a symbol name or ".".
   StringRef Name;
-  DefinedRegular *Sym = nullptr;
+  Defined *Sym = nullptr;
 
   // The RHS of an expression.
   Expr Expression;
@@ -106,6 +105,16 @@ struct SymbolAssignment : BaseCommand {
 
   // Holds file name and line number for error reporting.
   std::string Location;
+
+  // A string representation of this command. We use this for -Map.
+  std::string CommandString;
+
+  // Address of this assignment command.
+  unsigned Addr;
+
+  // Size of this assignment command. This is usually 0, but if
+  // you move '.' this may be greater than 0.
+  unsigned Size;
 };
 
 // Linker scripts allow additional constraints to be put on ouput sections.
@@ -118,11 +127,17 @@ enum class ConstraintKind { NoConstraint, ReadOnly, ReadWrite };
 // target memory. Instances of the struct are created by parsing the
 // MEMORY command.
 struct MemoryRegion {
+  MemoryRegion(StringRef Name, uint64_t Origin, uint64_t Length, uint32_t Flags,
+               uint32_t NegFlags)
+      : Name(Name), Origin(Origin), Length(Length), Flags(Flags),
+        NegFlags(NegFlags) {}
+
   std::string Name;
   uint64_t Origin;
   uint64_t Length;
   uint32_t Flags;
   uint32_t NegFlags;
+  uint64_t CurPos = 0;
 };
 
 // This struct represents one section match pattern in SECTIONS() command.
@@ -138,6 +153,7 @@ struct SectionPattern {
   SortSectionPolicy SortInner;
 };
 
+class ThunkSection;
 struct InputSectionDescription : BaseCommand {
   InputSectionDescription(StringRef FilePattern)
       : BaseCommand(InputSectionKind), FilePat(FilePattern) {}
@@ -153,26 +169,30 @@ struct InputSectionDescription : BaseCommand {
   std::vector<SectionPattern> SectionPatterns;
 
   std::vector<InputSection *> Sections;
-};
 
-// Represents an ASSERT().
-struct AssertCommand : BaseCommand {
-  AssertCommand(Expr E) : BaseCommand(AssertKind), Expression(E) {}
-
-  static bool classof(const BaseCommand *C) { return C->Kind == AssertKind; }
-
-  Expr Expression;
+  // Temporary record of synthetic ThunkSection instances and the pass that
+  // they were created in. This is used to insert newly created ThunkSections
+  // into Sections at the end of a createThunks() pass.
+  std::vector<std::pair<ThunkSection *, uint32_t>> ThunkSections;
 };
 
 // Represents BYTE(), SHORT(), LONG(), or QUAD().
 struct ByteCommand : BaseCommand {
-  ByteCommand(Expr E, unsigned Size)
-      : BaseCommand(ByteKind), Expression(E), Size(Size) {}
+  ByteCommand(Expr E, unsigned Size, std::string CommandString)
+      : BaseCommand(ByteKind), CommandString(CommandString), Expression(E),
+        Size(Size) {}
 
   static bool classof(const BaseCommand *C) { return C->Kind == ByteKind; }
 
+  // Keeps string representing the command. Used for -Map" is perhaps better.
+  std::string CommandString;
+
   Expr Expression;
+
+  // This is just an offset of this assignment command in the output section.
   unsigned Offset;
+
+  // Size of this data command.
   unsigned Size;
 };
 
@@ -194,8 +214,8 @@ class LinkerScript final {
     uint64_t ThreadBssOffset = 0;
     OutputSection *OutSec = nullptr;
     MemoryRegion *MemRegion = nullptr;
-    llvm::DenseMap<const MemoryRegion *, uint64_t> MemRegionOffset;
-    std::function<uint64_t()> LMAOffset;
+    MemoryRegion *LMARegion = nullptr;
+    uint64_t LMAOffset = 0;
   };
 
   llvm::DenseMap<StringRef, OutputSection *> NameToOutputSection;
@@ -203,6 +223,8 @@ class LinkerScript final {
   void addSymbol(SymbolAssignment *Cmd);
   void assignSymbol(SymbolAssignment *Cmd, bool InSec);
   void setDot(Expr E, const Twine &Loc, bool InSec);
+  void expandOutputSection(uint64_t Size);
+  void expandMemoryRegions(uint64_t Size);
 
   std::vector<InputSection *>
   computeInputSections(const InputSectionDescription *);
@@ -217,7 +239,16 @@ class LinkerScript final {
   uint64_t advance(uint64_t Size, unsigned Align);
   void output(InputSection *Sec);
 
-  std::unique_ptr<AddressState> Ctx;
+  void assignOffsets(OutputSection *Sec);
+
+  // Ctx captures the local AddressState and makes it accessible
+  // deliberately. This is needed as there are some cases where we cannot just
+  // thread the current state through to a lambda function created by the
+  // script parser.
+  // This should remain a plain pointer as its lifetime is smaller than
+  // LinkerScript.
+  AddressState *Ctx = nullptr;
+
   OutputSection *Aether;
 
   uint64_t Dot;
@@ -232,9 +263,7 @@ public:
 
   ExprValue getSymbolValue(StringRef Name, const Twine &Loc);
 
-  void fabricateDefaultCommands();
-  void addOrphanSections(OutputSectionFactory &Factory);
-  void removeEmptyCommands();
+  void addOrphanSections();
   void adjustSectionsBeforeSorting();
   void adjustSectionsAfterSorting();
 
@@ -242,10 +271,13 @@ public:
   bool needsInterpSection();
 
   bool shouldKeep(InputSectionBase *S);
-  void assignOffsets(OutputSection *Sec);
   void assignAddresses();
   void allocateHeaders(std::vector<PhdrEntry *> &Phdrs);
-  void processSectionCommands(OutputSectionFactory &Factory);
+  void processSectionCommands();
+  void declareSymbols();
+
+  // Used to handle INSERT AFTER statements.
+  void processInsertCommands();
 
   // SECTIONS command list.
   std::vector<BaseCommand *> SectionCommands;
@@ -261,10 +293,15 @@ public:
   std::vector<InputSectionDescription *> KeptSections;
 
   // A map from memory region name to a memory region descriptor.
-  llvm::DenseMap<llvm::StringRef, MemoryRegion *> MemoryRegions;
+  llvm::MapVector<llvm::StringRef, MemoryRegion *> MemoryRegions;
 
   // A list of symbols referenced by the script.
   std::vector<llvm::StringRef> ReferencedSymbols;
+
+  // Used to implement INSERT [AFTER|BEFORE]. Contains commands that need
+  // to be inserted into SECTIONS commands list.
+  llvm::DenseMap<StringRef, std::vector<BaseCommand *>> InsertAfterCommands;
+  llvm::DenseMap<StringRef, std::vector<BaseCommand *>> InsertBeforeCommands;
 };
 
 extern LinkerScript *Script;

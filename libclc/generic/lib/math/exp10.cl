@@ -1,8 +1,6 @@
 #include <clc/clc.h>
+#include <math/clc_exp10.h>
 
-#ifdef cl_khr_fp64
-#pragma OPENCL EXTENSION cl_khr_fp64 : enable
-#endif
-
-#define __CLC_BODY <exp10.inc>
+#define __CLC_FUNC exp10
+#define __CLC_BODY <clc_sw_unary.inc>
 #include <clc/math/gentype.inc>

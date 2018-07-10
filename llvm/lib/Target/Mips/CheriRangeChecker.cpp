@@ -90,7 +90,8 @@ class CheriRangeChecker : public FunctionPass,
 public:
   static char ID;
   CheriRangeChecker() : FunctionPass(ID) {}
-  virtual bool doInitialization(Module &Mod) {
+  StringRef getPassName() const override { return "CHERI range checker"; }
+  bool doInitialization(Module &Mod) override {
     M = &Mod;
     TD = new DataLayout(M);
     Int64Ty = IntegerType::get(M->getContext(), 64);
@@ -175,7 +176,7 @@ public:
       }
     }
   }
-  virtual bool runOnFunction(Function &F) {
+  bool runOnFunction(Function &F) override{
     Casts.clear();
     ConstantCasts.clear();
 

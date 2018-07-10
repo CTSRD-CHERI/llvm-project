@@ -230,8 +230,6 @@ declare void @g.f1()
 ; Aliases -- DLLStorageClass
 @a.dlldefault = default alias i32, i32* @g.dlldefault
 ; CHECK: @a.dlldefault = alias i32, i32* @g.dlldefault
-@a.dllimport = dllimport alias i32, i32* @g1
-; CHECK: @a.dllimport = dllimport alias i32, i32* @g1
 @a.dllexport = dllexport alias i32, i32* @g.dllexport
 ; CHECK: @a.dllexport = dllexport alias i32, i32* @g.dllexport
 
@@ -775,6 +773,10 @@ define void @fastmathflags(float %op1, float %op2) {
   ; CHECK: %f.arcp = fadd arcp float %op1, %op2
   %f.contract = fadd contract float %op1, %op2
   ; CHECK: %f.contract = fadd contract float %op1, %op2
+  %f.afn = fadd afn float %op1, %op2
+  ; CHECK: %f.afn = fadd afn float %op1, %op2
+  %f.reassoc = fadd reassoc float %op1, %op2
+  ; CHECK: %f.reassoc = fadd reassoc float %op1, %op2
   %f.fast = fadd fast float %op1, %op2
   ; CHECK: %f.fast = fadd fast float %op1, %op2
   ret void
@@ -1392,9 +1394,9 @@ declare void @llvm.instrprof_increment(i8*, i64, i32, i32)
 !10 = !{!"rax"}
 define void @intrinsics.codegen() {
   call i8* @llvm.returnaddress(i32 1)
-  ; CHECK: call i8* @llvm.returnaddress(i32 1)
+  ; CHECK: call i8* @llvm.returnaddress.p0i8(i32 1)
   call i8* @llvm.frameaddress(i32 1)
-  ; CHECK: call i8* @llvm.frameaddress(i32 1)
+  ; CHECK: call i8* @llvm.frameaddress.p0i8(i32 1)
 
   call i32 @llvm.read_register.i32(metadata !10)
   ; CHECK: call i32 @llvm.read_register.i32(metadata !10)
@@ -1406,9 +1408,9 @@ define void @intrinsics.codegen() {
   ; CHECK: call void @llvm.write_register.i64(metadata !10, i64 0)
 
   %stack = call i8* @llvm.stacksave()
-  ; CHECK: %stack = call i8* @llvm.stacksave()
+  ; CHECK: %stack = call i8* @llvm.stacksave.p0i8()
   call void @llvm.stackrestore(i8* %stack)
-  ; CHECK: call void @llvm.stackrestore(i8* %stack)
+  ; CHECK: call void @llvm.stackrestore.p0i8(i8* %stack)
 
   call void @llvm.prefetch(i8* %stack, i32 0, i32 3, i32 0)
   ; CHECK: call void @llvm.prefetch(i8* %stack, i32 0, i32 3, i32 0)

@@ -19,16 +19,17 @@
 #include "MCTargetDesc/MipsBaseInfo.h"
 #include "MCTargetDesc/MipsMCTargetDesc.h"
 #include "Mips.h"
+#include "llvm/CodeGen/CallingConvLower.h"
 #include "llvm/CodeGen/ISDOpcodes.h"
 #include "llvm/CodeGen/MachineMemOperand.h"
-#include "llvm/CodeGen/MachineValueType.h"
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
+#include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/CallingConv.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Type.h"
-#include "llvm/Target/TargetLowering.h"
+#include "llvm/Support/MachineValueType.h"
 #include "llvm/Target/TargetMachine.h"
 #include <algorithm>
 #include <cassert>
@@ -90,6 +91,9 @@ extern bool LargeCapTable;
 
       // Thread Pointer
       ThreadPointer,
+
+      // Vector Floating Point Multiply and Subtract
+      FMS,
 
       // Floating Point Branch Conditional
       FPBrcond,
@@ -233,12 +237,6 @@ extern bool LargeCapTable;
       VCLT_S,
       VCLT_U,
 
-      // Element-wise vector max/min.
-      VSMAX,
-      VSMIN,
-      VUMAX,
-      VUMIN,
-
       // Vector Shuffle with mask as an operand
       VSHF,  // Generic shuffle
       SHF,   // 4-element set shuffle.
@@ -300,10 +298,6 @@ extern bool LargeCapTable;
 
     bool isCheapToSpeculateCttz() const override;
     bool isCheapToSpeculateCtlz() const override;
-
-    /// Return the register type for a given MVT, ensuring vectors are treated
-    /// as a series of gpr sized integers.
-    MVT getRegisterTypeForCallingConv(MVT VT) const override;
 
     /// Return the register type for a given MVT, ensuring vectors are treated
     /// as a series of gpr sized integers.
@@ -392,6 +386,10 @@ extern bool LargeCapTable;
     bool isJumpTableRelative() const override {
       return getTargetMachine().isPositionIndependent();
     }
+
+   CCAssignFn *CCAssignFnForCall() const;
+
+   CCAssignFn *CCAssignFnForReturn() const;
 
   protected:
     SDValue getGlobalReg(SelectionDAG &DAG, EVT Ty, bool IsForTls) const;
@@ -672,13 +670,13 @@ extern bool LargeCapTable;
                        MipsCCState &State) const;
 
     /// passByValArg - Pass a byval argument in registers or on stack.
-    SDValue passByValArg(SDValue Chain, const SDLoc &DL,
-                         std::deque<std::pair<unsigned, SDValue>> &RegsToPass,
-                         SmallVectorImpl<SDValue> &MemOpChains,
-                         SDValue StackPtr, MachineFrameInfo &MFI,
-                         SelectionDAG &DAG, SDValue Arg, unsigned FirstReg,
-                         unsigned LastReg, const ISD::ArgFlagsTy &Flags,
-                         bool isLittle, const CCValAssign &VA) const;
+    void passByValArg(SDValue Chain, const SDLoc &DL,
+                      std::deque<std::pair<unsigned, SDValue>> &RegsToPass,
+                      SmallVectorImpl<SDValue> &MemOpChains, SDValue StackPtr,
+                      MachineFrameInfo &MFI, SelectionDAG &DAG, SDValue Arg,
+                      unsigned FirstReg, unsigned LastReg,
+                      const ISD::ArgFlagsTy &Flags, bool isLittle,
+                      const CCValAssign &VA) const;
 
     /// writeVarArgRegs - Write variable function arguments passed in registers
     /// to the stack. Also create a stack frame object for the first variable
@@ -699,6 +697,9 @@ extern bool LargeCapTable;
 
     SDValue LowerCall(TargetLowering::CallLoweringInfo &CLI,
                       SmallVectorImpl<SDValue> &InVals) const override;
+
+    SDValue deriveFromPCC(SelectionDAG &DAG, const SDLoc DL,
+                          SDValue Callee) const;
 
     bool CanLowerReturn(CallingConv::ID CallConv, MachineFunction &MF,
                         bool isVarArg,

@@ -1,7 +1,6 @@
 ; RUN: llc -target-abi n64 -relocation-model=pic -mxgot -o /dev/null %s
 ; Crash when compiling WebKit LowLevelInterpreter.cpp
 
-; XFAIL: *
 ; https://github.com/CTSRD-CHERI/llvm/issues/225
 
 ; ModuleID = 'new-webkit2.creduce.test.creduce.ll-reduced-simplified.bc'

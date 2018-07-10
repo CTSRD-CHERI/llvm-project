@@ -175,7 +175,7 @@ TEST(ValueMapperTest, mapMetadataNullMapGlobalWithIgnoreMissingLocals) {
   FunctionType *FTy =
       FunctionType::get(Type::getVoidTy(C), Type::getInt8Ty(C), false);
   std::unique_ptr<Function> F(
-      Function::Create(FTy, GlobalValue::ExternalLinkage, "F"));
+      Function::Create(FTy, GlobalValue::ExternalLinkage, 0, "F"));
 
   ValueToValueMapTy VM;
   RemapFlags Flags = RF_IgnoreMissingLocals | RF_NullMapMissingGlobalValues;
@@ -234,7 +234,7 @@ TEST(ValueMapperTest, mapMetadataConstantAsMetadata) {
   FunctionType *FTy =
       FunctionType::get(Type::getVoidTy(C), Type::getInt8Ty(C), false);
   std::unique_ptr<Function> F(
-      Function::Create(FTy, GlobalValue::ExternalLinkage, "F"));
+      Function::Create(FTy, GlobalValue::ExternalLinkage, 0, "F"));
 
   auto *CAM = ConstantAsMetadata::get(F.get());
   {
@@ -253,7 +253,7 @@ TEST(ValueMapperTest, mapMetadataConstantAsMetadata) {
   }
 
   std::unique_ptr<Function> F2(
-      Function::Create(FTy, GlobalValue::ExternalLinkage, "F2"));
+      Function::Create(FTy, GlobalValue::ExternalLinkage, 0, "F2"));
   ValueToValueMapTy VM;
   VM[F.get()] = F2.get();
   auto *F2MD = ValueMapper(VM).mapMetadata(*CAM);
@@ -269,7 +269,7 @@ TEST(ValueMapperTest, mapMetadataLocalAsMetadata) {
   FunctionType *FTy =
       FunctionType::get(Type::getVoidTy(C), Type::getInt8Ty(C), false);
   std::unique_ptr<Function> F(
-      Function::Create(FTy, GlobalValue::ExternalLinkage, "F"));
+      Function::Create(FTy, GlobalValue::ExternalLinkage, 0, "F"));
   Argument &A = *F->arg_begin();
 
   // mapMetadata doesn't support LocalAsMetadata.  The only valid container for
@@ -288,7 +288,7 @@ TEST(ValueMapperTest, mapValueLocalAsMetadata) {
   FunctionType *FTy =
       FunctionType::get(Type::getVoidTy(C), Type::getInt8Ty(C), false);
   std::unique_ptr<Function> F(
-      Function::Create(FTy, GlobalValue::ExternalLinkage, "F"));
+      Function::Create(FTy, GlobalValue::ExternalLinkage, 0, "F"));
   Argument &A = *F->arg_begin();
 
   auto *LAM = LocalAsMetadata::get(&A);
@@ -330,7 +330,7 @@ TEST(ValueMapperTest, mapValueLocalAsMetadataToConstant) {
   auto *Int8 = Type::getInt8Ty(Context);
   FunctionType *FTy = FunctionType::get(Type::getVoidTy(Context), Int8, false);
   std::unique_ptr<Function> F(
-      Function::Create(FTy, GlobalValue::ExternalLinkage, "F"));
+      Function::Create(FTy, GlobalValue::ExternalLinkage, 0, "F"));
 
   // Map a local value to a constant.
   Argument &A = *F->arg_begin();

@@ -1,15 +1,40 @@
 # REQUIRES: x86,ppc
 
-# RUN: echo ".globl foo" > %te.s
+# RUN: echo ".globl foo; .data; .dc.a foo" > %te.s
 # RUN: llvm-mc -filetype=obj -triple=i386-pc-linux      %te.s -o %te-i386.o
 # RUN: llvm-mc -filetype=obj -triple=i386-pc-linux      %s    -o %t-i386.o
 # RUN: llvm-mc -filetype=obj -triple=x86_64-pc-linux    %s    -o %t-x86_64.o
-# RUN: llvm-mc -filetype=obj -triple=powerpc64-pc-linux %s    -o %t-ppc64.o
+# RUN: llvm-mc -filetype=obj -triple=powerpc64le-unknown-linux %s    -o %t-ppc64le.o
+# RUN: llvm-mc -filetype=obj -triple=powerpc64-unknown-linux %s    -o %t-ppc64.o
+
+# RUN: echo ".global zed; zed:" > %t2.s
+# RUN: llvm-mc -filetype=obj -triple=i386-pc-linux      %t2.s -o %t2-i386.o
+# RUN: llvm-mc -filetype=obj -triple=x86_64-pc-linux    %t2.s -o %t2-x86_64.o
+# RUN: llvm-mc -filetype=obj -triple=powerpc64le-unknown-linux %t2.s -o %t2-ppc64le.o
+# RUN: llvm-mc -filetype=obj -triple=powerpc64-unknown-linux %t2.s -o %t2-ppc64.o
+
+# RUN: rm -f %t2-i386.a %t2-x86_64.a %t2-ppc64.a
+# RUN: llvm-ar rc %t2-i386.a %t2-i386.o
+# RUN: llvm-ar rc %t2-x86_64.a %t2-x86_64.o
+# RUN: llvm-ar rc %t2-ppc64le.a %t2-ppc64le.o
+# RUN: llvm-ar rc %t2-ppc64.a %t2-ppc64.o
+
+# RUN: echo ".global xyz; xyz:" > %t3.s
+# RUN: llvm-mc -filetype=obj -triple=i386-pc-linux      %t3.s -o %t3-i386.o
+# RUN: llvm-mc -filetype=obj -triple=x86_64-pc-linux    %t3.s -o %t3-x86_64.o
+# RUN: llvm-mc -filetype=obj -triple=powerpc64le-unknown-linux %t3.s -o %t3-ppc64le.o
+# RUN: llvm-mc -filetype=obj -triple=powerpc64-unknown-linux %t3.s -o %t3-ppc64.o
+
+# RUN: ld.lld -shared %t3-i386.o   -o %t3-i386.so
+# RUN: ld.lld -shared %t3-x86_64.o -o %t3-x86_64.so
+# RUN: ld.lld -shared %t3-ppc64le.o  -o %t3-ppc64le.so
+# RUN: ld.lld -shared %t3-ppc64.o  -o %t3-ppc64.so
 
 # RUN: ld.lld -shared --hash-style=gnu  -o %te-i386.so  %te-i386.o
-# RUN: ld.lld -shared  -hash-style=gnu  -o %t-i386.so   %t-i386.o
-# RUN: ld.lld -shared  -hash-style=gnu  -o %t-x86_64.so %t-x86_64.o
-# RUN: ld.lld -shared --hash-style both -o %t-ppc64.so  %t-ppc64.o
+# RUN: ld.lld -shared  -hash-style=gnu  -o %t-i386.so   %t-i386.o   %t2-i386.a   %t3-i386.so
+# RUN: ld.lld -shared  -hash-style=gnu  -o %t-x86_64.so %t-x86_64.o %t2-x86_64.a %t3-x86_64.so
+# RUN: ld.lld -shared --hash-style both -o %t-ppc64le.so  %t-ppc64le.o  %t2-ppc64le.a  %t3-ppc64le.so
+# RUN: ld.lld -shared --hash-style both -o %t-ppc64.so  %t-ppc64.o  %t2-ppc64.a  %t3-ppc64.so
 
 # RUN: llvm-readobj -dyn-symbols -gnu-hash-table %te-i386.so \
 # RUN:   | FileCheck %s -check-prefix=EMPTY
@@ -17,6 +42,8 @@
 # RUN:   | FileCheck %s -check-prefix=I386
 # RUN: llvm-readobj -sections -dyn-symbols -gnu-hash-table %t-x86_64.so \
 # RUN:   | FileCheck %s -check-prefix=X86_64
+# RUN: llvm-readobj -sections -dyn-symbols -gnu-hash-table %t-ppc64le.so \
+# RUN:   | FileCheck %s -check-prefix=PPC64
 # RUN: llvm-readobj -sections -dyn-symbols -gnu-hash-table %t-ppc64.so \
 # RUN:   | FileCheck %s -check-prefix=PPC64
 
@@ -32,12 +59,12 @@
 # EMPTY-NEXT:   }
 # EMPTY-NEXT: ]
 # EMPTY:      GnuHashTable {
-# EMPTY-NEXT:   Num Buckets: 0
+# EMPTY-NEXT:   Num Buckets: 1
 # EMPTY-NEXT:   First Hashed Symbol Index: 2
 # EMPTY-NEXT:   Num Mask Words: 1
-# EMPTY-NEXT:   Shift Count: 5
+# EMPTY-NEXT:   Shift Count: 6
 # EMPTY-NEXT:   Bloom Filter: [0x0]
-# EMPTY-NEXT:   Buckets: []
+# EMPTY-NEXT:   Buckets: [0]
 # EMPTY-NEXT:   Values: []
 # EMPTY-NEXT: }
 
@@ -70,6 +97,16 @@
 # I386:          Section: Undefined
 # I386:        }
 # I386:        Symbol {
+# I386:          Name: xyz@
+# I386:          Binding: Global
+# I386:          Section: Undefined
+# I386:        }
+# I386:        Symbol {
+# I386:          Name: zed@
+# I386:          Binding: Weak
+# I386:          Section: Undefined
+# I386:        }
+# I386:        Symbol {
 # I386:          Name: bar@
 # I386:          Binding: Global
 # I386:          Section: .text
@@ -82,11 +119,11 @@
 # I386:      ]
 # I386:      GnuHashTable {
 # I386-NEXT:   Num Buckets: 1
-# I386-NEXT:   First Hashed Symbol Index: 2
+# I386-NEXT:   First Hashed Symbol Index: 4
 # I386-NEXT:   Num Mask Words: 1
-# I386-NEXT:   Shift Count: 5
-# I386-NEXT:   Bloom Filter: [0x14000220]
-# I386-NEXT:   Buckets: [2]
+# I386-NEXT:   Shift Count: 6
+# I386-NEXT:   Bloom Filter: [0x4004204]
+# I386-NEXT:   Buckets: [4]
 # I386-NEXT:   Values: [0xB8860BA, 0xB887389]
 # I386-NEXT: }
 
@@ -120,6 +157,16 @@
 # X86_64:          Section: Undefined
 # X86_64:        }
 # X86_64:        Symbol {
+# X86_64:          Name: xyz@
+# X86_64:          Binding: Global
+# X86_64:          Section: Undefined
+# X86_64:        }
+# X86_64:        Symbol {
+# X86_64:          Name: zed@
+# X86_64:          Binding: Weak
+# X86_64:          Section: Undefined
+# X86_64:        }
+# X86_64:        Symbol {
 # X86_64:          Name: bar@
 # X86_64:          Binding: Global
 # X86_64:          Section: .text
@@ -132,11 +179,11 @@
 # X86_64:      ]
 # X86_64:      GnuHashTable {
 # X86_64-NEXT:   Num Buckets: 1
-# X86_64-NEXT:   First Hashed Symbol Index: 2
+# X86_64-NEXT:   First Hashed Symbol Index: 4
 # X86_64-NEXT:   Num Mask Words: 1
 # X86_64-NEXT:   Shift Count: 6
 # X86_64-NEXT:   Bloom Filter: [0x400000000004204]
-# X86_64-NEXT:   Buckets: [2]
+# X86_64-NEXT:   Buckets: [4]
 # X86_64-NEXT:   Values: [0xB8860BA, 0xB887389]
 # X86_64-NEXT: }
 
@@ -170,6 +217,16 @@
 # PPC64:          Section: Undefined
 # PPC64:        }
 # PPC64:        Symbol {
+# PPC64:          Name: xyz@
+# PPC64:          Binding: Global
+# PPC64:          Section: Undefined
+# PPC64:        }
+# PPC64:        Symbol {
+# PPC64:          Name: zed@
+# PPC64:          Binding: Weak
+# PPC64:          Section: Undefined
+# PPC64:        }
+# PPC64:        Symbol {
 # PPC64:          Name: bar@
 # PPC64:          Binding: Global
 # PPC64:          Section: .text
@@ -182,14 +239,18 @@
 # PPC64:      ]
 # PPC64:      GnuHashTable {
 # PPC64-NEXT:   Num Buckets: 1
-# PPC64-NEXT:   First Hashed Symbol Index: 2
+# PPC64-NEXT:   First Hashed Symbol Index: 4
 # PPC64-NEXT:   Num Mask Words: 1
 # PPC64-NEXT:   Shift Count: 6
 # PPC64-NEXT:   Bloom Filter: [0x400000000004204]
-# PPC64-NEXT:   Buckets: [2]
+# PPC64-NEXT:   Buckets: [4]
 # PPC64-NEXT:   Values: [0xB8860BA, 0xB887389]
 # PPC64-NEXT: }
 
 .globl foo,bar,baz
 foo:
 bar:
+.weak zed
+.global xyz
+.data
+  .dc.a baz

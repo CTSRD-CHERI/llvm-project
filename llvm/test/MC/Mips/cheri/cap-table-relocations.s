@@ -61,6 +61,13 @@
 # CHECK:      encoding: [0x78,0x23,A,A]
 # CHECK-NEXT: fixup A - offset: 0, value: %capcall20(foo), kind: fixup_CHERI_CAPCALL20
 
+lui	$1, %hi(%neg(%captab_rel(foo)))
+# CHECK:      encoding: [0x3c,0x01,A,A]
+# CHECK-NEXT: fixup A - offset: 0, value: %hi(%neg(%captab_rel(foo))), kind: fixup_Mips_CAPTABLEREL_HI
+daddiu	$1, $1, %lo(%neg(%captab_rel(foo)))
+# CHECK:      encoding: [0x64,0x21,A,A]
+# CHECK-NEXT: fixup A - offset: 0, value: %lo(%neg(%captab_rel(foo))), kind: fixup_Mips_CAPTABLEREL_LO
+
         .data
         .word 0
 foo:
@@ -100,3 +107,7 @@ foo:
 # DUMP-NEXT:           0000000000000038:  R_MIPS_CHERI_CAPTAB20/R_MIPS_NONE/R_MIPS_NONE        foo
 # DUMP-NEXT: 3c:       78 23 00 00     cscbi   $c1, 0($c3)
 # DUMP-NEXT:           000000000000003c:  R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE       foo
+# DUMP-NEXT: 40:       3c 01 00 00     lui $1, 0
+# DUMP-NEXT:           0000000000000040:  R_MIPS_CHERI_CAPTABLEREL16/R_MIPS_SUB/R_MIPS_HI16    foo
+# DUMP-NEXT: 44:       64 21 00 00     daddiu  $1, $1, 0
+# DUMP-NEXT:           0000000000000044:  R_MIPS_CHERI_CAPTABLEREL16/R_MIPS_SUB/R_MIPS_LO16    foo

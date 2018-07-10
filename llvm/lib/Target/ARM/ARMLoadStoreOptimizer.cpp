@@ -41,10 +41,15 @@
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/RegisterClassInfo.h"
+#include "llvm/CodeGen/TargetFrameLowering.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetLowering.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/DataLayout.h"
+#include "llvm/IR/DebugLoc.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
-#include "llvm/IR/DebugLoc.h"
 #include "llvm/IR/Type.h"
 #include "llvm/MC/MCInstrDesc.h"
 #include "llvm/Pass.h"
@@ -53,11 +58,6 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetFrameLowering.h"
-#include "llvm/Target/TargetInstrInfo.h"
-#include "llvm/Target/TargetLowering.h"
-#include "llvm/Target/TargetRegisterInfo.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
@@ -1198,7 +1198,7 @@ findIncDecBefore(MachineBasicBlock::iterator MBBI, unsigned Reg,
 
   // Skip debug values.
   MachineBasicBlock::iterator PrevMBBI = std::prev(MBBI);
-  while (PrevMBBI->isDebugValue() && PrevMBBI != BeginMBBI)
+  while (PrevMBBI->isDebugInstr() && PrevMBBI != BeginMBBI)
     --PrevMBBI;
 
   Offset = isIncrementOrDecrement(*PrevMBBI, Reg, Pred, PredReg);
@@ -1214,7 +1214,7 @@ findIncDecAfter(MachineBasicBlock::iterator MBBI, unsigned Reg,
   MachineBasicBlock::iterator EndMBBI = MBB.end();
   MachineBasicBlock::iterator NextMBBI = std::next(MBBI);
   // Skip debug values.
-  while (NextMBBI != EndMBBI && NextMBBI->isDebugValue())
+  while (NextMBBI != EndMBBI && NextMBBI->isDebugInstr())
     ++NextMBBI;
   if (NextMBBI == EndMBBI)
     return EndMBBI;
@@ -1273,7 +1273,7 @@ bool ARMLoadStoreOpt::MergeBaseUpdateLSMultiple(MachineInstr *MI) {
       // can still change to a writeback form as that will save us 2 bytes
       // of code size. It can create WAW hazards though, so only do it if
       // we're minimizing code size.
-      if (!MBB.getParent()->getFunction()->optForMinSize() || !BaseKill)
+      if (!MBB.getParent()->getFunction().optForMinSize() || !BaseKill)
         return false;
       
       bool HighRegsUsed = false;
@@ -1697,7 +1697,7 @@ bool ARMLoadStoreOpt::FixInvalidRegPairOp(MachineBasicBlock &MBB,
       if (OddReg == EvenReg && EvenDeadKill) {
         // If the two source operands are the same, the kill marker is
         // probably on the first one. e.g.
-        // t2STRDi8 %R5<kill>, %R5, %R9<kill>, 0, 14, %reg0
+        // t2STRDi8 killed %r5, %r5, killed %r9, 0, 14, %reg0
         EvenDeadKill = false;
         OddDeadKill = true;
       }
@@ -1807,7 +1807,7 @@ bool ARMLoadStoreOpt::LoadStoreMultipleOpti(MachineBasicBlock &MBB) {
       MBBI = I;
       --Position;
       // Fallthrough to look into existing chain.
-    } else if (MBBI->isDebugValue()) {
+    } else if (MBBI->isDebugInstr()) {
       continue;
     } else if (MBBI->getOpcode() == ARM::t2LDRDi8 ||
                MBBI->getOpcode() == ARM::t2STRDi8) {
@@ -1834,7 +1834,7 @@ bool ARMLoadStoreOpt::LoadStoreMultipleOpti(MachineBasicBlock &MBB) {
   auto LessThan = [](const MergeCandidate* M0, const MergeCandidate *M1) {
     return M0->InsertPos < M1->InsertPos;
   };
-  std::sort(Candidates.begin(), Candidates.end(), LessThan);
+  llvm::sort(Candidates.begin(), Candidates.end(), LessThan);
 
   // Go through list of candidates and merge.
   bool Changed = false;
@@ -1891,8 +1891,8 @@ bool ARMLoadStoreOpt::MergeReturnIntoLDM(MachineBasicBlock &MBB) {
        MBBI->getOpcode() == ARM::tBX_RET ||
        MBBI->getOpcode() == ARM::MOVPCLR)) {
     MachineBasicBlock::iterator PrevI = std::prev(MBBI);
-    // Ignore any DBG_VALUE instructions.
-    while (PrevI->isDebugValue() && PrevI != MBB.begin())
+    // Ignore any debug instructions.
+    while (PrevI->isDebugInstr() && PrevI != MBB.begin())
       --PrevI;
     MachineInstr &PrevMI = *PrevI;
     unsigned Opcode = PrevMI.getOpcode();
@@ -1953,7 +1953,7 @@ bool ARMLoadStoreOpt::CombineMovBx(MachineBasicBlock &MBB) {
 }
 
 bool ARMLoadStoreOpt::runOnMachineFunction(MachineFunction &Fn) {
-  if (skipFunction(*Fn.getFunction()))
+  if (skipFunction(Fn.getFunction()))
     return false;
 
   MF = &Fn;
@@ -2035,7 +2035,7 @@ INITIALIZE_PASS(ARMPreAllocLoadStoreOpt, "arm-prera-ldst-opt",
                 ARM_PREALLOC_LOAD_STORE_OPT_NAME, false, false)
 
 bool ARMPreAllocLoadStoreOpt::runOnMachineFunction(MachineFunction &Fn) {
-  if (AssumeMisalignedLoadStores || skipFunction(*Fn.getFunction()))
+  if (AssumeMisalignedLoadStores || skipFunction(Fn.getFunction()))
     return false;
 
   TD = &Fn.getDataLayout();
@@ -2063,7 +2063,7 @@ static bool IsSafeAndProfitableToMove(bool isLd, unsigned Base,
   // Are there stores / loads / calls between them?
   SmallSet<unsigned, 4> AddedRegPressure;
   while (++I != E) {
-    if (I->isDebugValue() || MemOps.count(&*I))
+    if (I->isDebugInstr() || MemOps.count(&*I))
       continue;
     if (I->isCall() || I->isTerminator() || I->hasUnmodeledSideEffects())
       return false;
@@ -2130,9 +2130,9 @@ ARMPreAllocLoadStoreOpt::CanFormLdStDWord(MachineInstr *Op0, MachineInstr *Op1,
     return false;
 
   unsigned Align = (*Op0->memoperands_begin())->getAlignment();
-  const Function *Func = MF->getFunction();
+  const Function &Func = MF->getFunction();
   unsigned ReqAlign = STI->hasV6Ops()
-    ? TD->getABITypeAlignment(Type::getInt64Ty(Func->getContext()))
+    ? TD->getABITypeAlignment(Type::getInt64Ty(Func.getContext()))
     : 8;  // Pre-v6 need 8-byte align
   if (Align < ReqAlign)
     return false;
@@ -2172,13 +2172,13 @@ bool ARMPreAllocLoadStoreOpt::RescheduleOps(MachineBasicBlock *MBB,
   bool RetVal = false;
 
   // Sort by offset (in reverse order).
-  std::sort(Ops.begin(), Ops.end(),
-            [](const MachineInstr *LHS, const MachineInstr *RHS) {
-              int LOffset = getMemoryOpOffset(*LHS);
-              int ROffset = getMemoryOpOffset(*RHS);
-              assert(LHS == RHS || LOffset != ROffset);
-              return LOffset > ROffset;
-            });
+  llvm::sort(Ops.begin(), Ops.end(),
+             [](const MachineInstr *LHS, const MachineInstr *RHS) {
+               int LOffset = getMemoryOpOffset(*LHS);
+               int ROffset = getMemoryOpOffset(*RHS);
+               assert(LHS == RHS || LOffset != ROffset);
+               return LOffset > ROffset;
+             });
 
   // The loads / stores of the same base are in order. Scan them from first to
   // last and check for the following:
@@ -2253,7 +2253,7 @@ bool ARMPreAllocLoadStoreOpt::RescheduleOps(MachineBasicBlock *MBB,
         // This is the new location for the loads / stores.
         MachineBasicBlock::iterator InsertPos = isLd ? FirstOp : LastOp;
         while (InsertPos != MBB->end() &&
-               (MemOps.count(&*InsertPos) || InsertPos->isDebugValue()))
+               (MemOps.count(&*InsertPos) || InsertPos->isDebugInstr()))
           ++InsertPos;
 
         // If we are moving a pair of loads / stores, see if it makes sense
@@ -2291,7 +2291,7 @@ bool ARMPreAllocLoadStoreOpt::RescheduleOps(MachineBasicBlock *MBB,
               MIB.addReg(0);
             MIB.addImm(Offset).addImm(Pred).addReg(PredReg);
             MIB.setMemRefs(Op0->mergeMemRefsWith(*Op1));
-            DEBUG(dbgs() << "Formed " << *MIB << "\n");
+            LLVM_DEBUG(dbgs() << "Formed " << *MIB << "\n");
             ++NumLDRDFormed;
           } else {
             MachineInstrBuilder MIB = BuildMI(*MBB, InsertPos, dl, MCID)
@@ -2305,7 +2305,7 @@ bool ARMPreAllocLoadStoreOpt::RescheduleOps(MachineBasicBlock *MBB,
               MIB.addReg(0);
             MIB.addImm(Offset).addImm(Pred).addReg(PredReg);
             MIB.setMemRefs(Op0->mergeMemRefsWith(*Op1));
-            DEBUG(dbgs() << "Formed " << *MIB << "\n");
+            LLVM_DEBUG(dbgs() << "Formed " << *MIB << "\n");
             ++NumSTRDFormed;
           }
           MBB->erase(Op0);
@@ -2355,7 +2355,7 @@ ARMPreAllocLoadStoreOpt::RescheduleLoadStoreInstrs(MachineBasicBlock *MBB) {
         break;
       }
 
-      if (!MI.isDebugValue())
+      if (!MI.isDebugInstr())
         MI2LocMap[&MI] = ++Loc;
 
       if (!isMemoryOp(MI))

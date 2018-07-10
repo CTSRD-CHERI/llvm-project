@@ -270,6 +270,14 @@ def t_addrmode_sp : MemOperand,
   let MIOperandInfo = (ops GPR:$base, i32imm:$offsimm);
 }
 
+// Inspects parent to determine whether an or instruction can be implemented as
+// an add (i.e. whether we know overflow won't occur in the add).
+def AddLikeOrOp : ComplexPattern<i32, 1, "SelectAddLikeOr", [],
+                                 [SDNPWantParent]>;
+
+// Pattern to exclude immediates from matching
+def non_imm32 : PatLeaf<(i32 GPR), [{ return !isa<ConstantSDNode>(N); }]>;
+
 //===----------------------------------------------------------------------===//
 //  Miscellaneous Instructions.
 //
@@ -338,7 +346,7 @@ def tHLT : T1I<(outs), (ins imm0_63:$val), NoItinerary, "hlt\t$val",
 }
 
 def tSETEND : T1I<(outs), (ins setend_op:$end), NoItinerary, "setend\t$end",
-                  []>, T1Encoding<0b101101>, Requires<[IsNotMClass]>, Deprecated<HasV8Ops> {
+                  []>, T1Encoding<0b101101>, Requires<[IsThumb, IsNotMClass]>, Deprecated<HasV8Ops> {
   bits<1> end;
   // A8.6.156
   let Inst{9-5} = 0b10010;
@@ -997,6 +1005,15 @@ let isAdd = 1 in {
   }
 }
 
+// Thumb has more flexible short encodings for ADD than ORR, so use those where
+// possible.
+def : T1Pat<(or AddLikeOrOp:$Rn, imm0_7:$imm), (tADDi3 $Rn, imm0_7:$imm)>;
+
+def : T1Pat<(or AddLikeOrOp:$Rn, imm8_255:$imm), (tADDi8 $Rn, imm8_255:$imm)>;
+
+def : T1Pat<(or AddLikeOrOp:$Rn, tGPR:$Rm), (tADDrr $Rn, $Rm)>;
+
+
 def : tInstAlias <"add${s}${p} $Rdn, $Rm",
                  (tADDrr tGPR:$Rdn,s_cc_out:$s, tGPR:$Rdn, tGPR:$Rm, pred:$p)>;
 
@@ -1154,7 +1171,7 @@ def : tInstAlias <"movs $Rdn, $imm",
 
 // A7-73: MOV(2) - mov setting flag.
 
-let hasSideEffects = 0 in {
+let hasSideEffects = 0, isMoveReg = 1 in {
 def tMOVr : Thumb1pI<(outs GPR:$Rd), (ins GPR:$Rm), AddrModeNone,
                       2, IIC_iMOVr,
                       "mov", "\t$Rd, $Rm", "", []>,
@@ -1509,7 +1526,7 @@ def tLDRLIT_ga_pcrel : PseudoInst<(outs tGPR:$dst), (ins i32imm:$addr),
                                   IIC_iLoadiALU,
                                   [(set tGPR:$dst,
                                         (ARMWrapperPIC tglobaladdr:$addr))]>,
-                       Requires<[IsThumb, DontUseMovt]>;
+                       Requires<[IsThumb, DontUseMovtInPic]>;
 
 def tLDRLIT_ga_abs : PseudoInst<(outs tGPR:$dst), (ins i32imm:$src),
                                 IIC_iLoad_i,
@@ -1520,7 +1537,7 @@ def tLDRLIT_ga_abs : PseudoInst<(outs tGPR:$dst), (ins i32imm:$src),
 // TLS globals
 def : Pat<(ARMWrapperPIC tglobaltlsaddr:$addr),
           (tLDRLIT_ga_pcrel tglobaltlsaddr:$addr)>,
-      Requires<[IsThumb, DontUseMovt]>;
+      Requires<[IsThumb, DontUseMovtInPic]>;
 def : Pat<(ARMWrapper tglobaltlsaddr:$addr),
           (tLDRLIT_ga_abs tglobaltlsaddr:$addr)>,
       Requires<[IsThumb, DontUseMovt]>;
@@ -1670,13 +1687,6 @@ let isBranch = 1, isTerminator = 1, isBarrier = 1, isIndirectBranch = 1 in {
 // encoding is available on ARMv6K, but we don't differentiate that finely.
 def : InstAlias<"nop", (tMOVr R8, R8, 14, 0), 0>, Requires<[IsThumb, IsThumb1Only]>;
 
-
-// For round-trip assembly/disassembly, we have to handle a CPS instruction
-// without any iflags. That's not, strictly speaking, valid syntax, but it's
-// a useful extension and assembles to defined behaviour (the insn does
-// nothing).
-def : tInstAlias<"cps$imod", (tCPS imod_op:$imod, 0)>;
-def : tInstAlias<"cps$imod", (tCPS imod_op:$imod, 0)>;
 
 // "neg" is and alias for "rsb rd, rn, #0"
 def : tInstAlias<"neg${s}${p} $Rd, $Rm",

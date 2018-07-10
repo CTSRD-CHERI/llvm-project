@@ -21,9 +21,9 @@
 #include "lldb/Host/OptionParser.h"
 #include "lldb/Host/StringConvert.h"
 #include "lldb/Host/Symbols.h"
-#include "lldb/Interpreter/Args.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
 #include "lldb/Interpreter/CommandReturnObject.h"
+#include "lldb/Interpreter/OptionArgParser.h"
 #include "lldb/Interpreter/OptionGroupArchitecture.h"
 #include "lldb/Interpreter/OptionGroupBoolean.h"
 #include "lldb/Interpreter/OptionGroupFile.h"
@@ -45,13 +45,16 @@
 #include "lldb/Symbol/VariableList.h"
 #include "lldb/Target/ABI.h"
 #include "lldb/Target/Process.h"
+#include "lldb/Target/RegisterContext.h"
 #include "lldb/Target/SectionLoadList.h"
 #include "lldb/Target/StackFrame.h"
 #include "lldb/Target/Thread.h"
 #include "lldb/Target/ThreadSpec.h"
+#include "lldb/Utility/Args.h"
 #include "lldb/Utility/Timer.h"
 
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/FormatAdapters.h"
 
 // C Includes
 // C++ Includes
@@ -133,25 +136,6 @@ static uint32_t DumpTargetList(TargetList &target_list,
     }
   }
   return num_targets;
-}
-
-// TODO: Remove this once llvm can pretty-print time points
-static void DumpTimePoint(llvm::sys::TimePoint<> tp, Stream &s, uint32_t width) {
-#ifndef LLDB_DISABLE_POSIX
-  char time_buf[32];
-  time_t time = llvm::sys::toTimeT(tp);
-  char *time_cstr = ::ctime_r(&time, time_buf);
-  if (time_cstr) {
-    char *newline = ::strpbrk(time_cstr, "\n\r");
-    if (newline)
-      *newline = '\0';
-    if (width > 0)
-      s.Printf("%-*s", width, time_cstr);
-    else
-      s.PutCString(time_cstr);
-  } else if (width > 0)
-    s.Printf("%-*s", width, "");
-#endif
 }
 
 #pragma mark CommandObjectTargetCreate
@@ -274,7 +258,7 @@ protected:
       FileSpec file_spec;
 
       if (file_path)
-        file_spec.SetFile(file_path, true);
+        file_spec.SetFile(file_path, true, FileSpec::Style::native);
 
       bool must_set_platform_path = false;
 
@@ -290,10 +274,8 @@ protected:
 
       if (target_sp) {
         // Only get the platform after we create the target because we might
-        // have
-        // switched platforms depending on what the arguments were to
-        // CreateTarget()
-        // we can't rely on the selected platform.
+        // have switched platforms depending on what the arguments were to
+        // CreateTarget() we can't rely on the selected platform.
 
         PlatformSP platform_sp = target_sp->GetPlatform();
 
@@ -384,8 +366,8 @@ protected:
                 &core_file));
 
             if (process_sp) {
-              // Seems weird that we Launch a core file, but that is
-              // what we do!
+              // Seems weird that we Launch a core file, but that is what we
+              // do!
               error = process_sp->LoadCore();
 
               if (error.Fail()) {
@@ -634,8 +616,8 @@ protected:
       target_list.DeleteTarget(target_sp);
       target_sp->Destroy();
     }
-    // If "--clean" was specified, prune any orphaned shared modules from
-    // the global shared module list
+    // If "--clean" was specified, prune any orphaned shared modules from the
+    // global shared module list
     if (m_cleanup_option.GetOptionValue()) {
       const bool mandatory = true;
       ModuleList::RemoveOrphanSharedModules(mandatory);
@@ -770,7 +752,7 @@ public:
                                     VariableList &variable_list) {
     Target *target = static_cast<Target *>(baton);
     if (target) {
-      return target->GetImages().FindGlobalVariables(ConstString(name), true,
+      return target->GetImages().FindGlobalVariables(ConstString(name),
                                                      UINT32_MAX, variable_list);
     }
     return 0;
@@ -836,8 +818,8 @@ protected:
             return false;
           }
           use_var_name = true;
-          matches = target->GetImages().FindGlobalVariables(
-              regex, true, UINT32_MAX, variable_list);
+          matches = target->GetImages().FindGlobalVariables(regex, UINT32_MAX,
+                                                            variable_list);
         } else {
           Status error(Variable::GetValuesForVariableExpressionPath(
               arg, m_exe_ctx.GetBestExecutionContextScope(),
@@ -965,8 +947,8 @@ protected:
                     llvm::StringRef(
                         ".")); // Any global with at least one character
                 VariableList variable_list;
-                sc.module_sp->FindGlobalVariables(all_globals_regex, append,
-                                                  UINT32_MAX, variable_list);
+                sc.module_sp->FindGlobalVariables(all_globals_regex, UINT32_MAX,
+                                                  variable_list);
                 DumpGlobalVariableList(m_exe_ctx, sc, variable_list, s);
               }
             }
@@ -1013,10 +995,9 @@ public:
     new_prefix_arg.arg_type = eArgTypeNewPathPrefix;
     new_prefix_arg.arg_repetition = eArgRepeatPairPlus;
 
-    // There are two required arguments that must always occur together, i.e. an
-    // argument "pair".  Because they
-    // must always occur together, they are treated as two variants of one
-    // argument rather than two independent
+    // There are two required arguments that must always occur together, i.e.
+    // an argument "pair".  Because they must always occur together, they are
+    // treated as two variants of one argument rather than two independent
     // arguments.  Push them both into the first argument position for
     // m_arguments...
 
@@ -1127,10 +1108,9 @@ public:
     new_prefix_arg.arg_type = eArgTypeNewPathPrefix;
     new_prefix_arg.arg_repetition = eArgRepeatPairPlus;
 
-    // There are two required arguments that must always occur together, i.e. an
-    // argument "pair".  Because they
-    // must always occur together, they are treated as two variants of one
-    // argument rather than two independent
+    // There are two required arguments that must always occur together, i.e.
+    // an argument "pair".  Because they must always occur together, they are
+    // treated as two variants of one argument rather than two independent
     // arguments.  Push them both into the same argument position for
     // m_arguments...
 
@@ -1404,7 +1384,12 @@ static size_t DumpModuleObjfileHeaders(Stream &strm, ModuleList &module_list) {
           strm.EOL();
         }
         ObjectFile *objfile = module->GetObjectFile();
-        objfile->Dump(&strm);
+        if (objfile)
+          objfile->Dump(&strm);
+        else {
+          strm.Format("No object file for module: {0:F}\n",
+                      module->GetFileSpec());
+        }
       }
     }
     strm.IndentLess();
@@ -1650,8 +1635,8 @@ static size_t LookupTypeInModule(CommandInterpreter &interpreter, Stream &strm,
       strm.PutCString(":\n");
       for (TypeSP type_sp : type_list.Types()) {
         if (type_sp) {
-          // Resolve the clang type so that any forward references
-          // to types that haven't yet been parsed will get parsed.
+          // Resolve the clang type so that any forward references to types
+          // that haven't yet been parsed will get parsed.
           type_sp->GetFullCompilerType();
           type_sp->GetDescription(&strm, eDescriptionLevelFull, true);
           // Print all typedef chains
@@ -1701,8 +1686,8 @@ static size_t LookupTypeHere(CommandInterpreter &interpreter, Stream &strm,
 
     TypeSP type_sp(type_list.GetTypeAtIndex(0));
     if (type_sp) {
-      // Resolve the clang type so that any forward references
-      // to types that haven't yet been parsed will get parsed.
+      // Resolve the clang type so that any forward references to types that
+      // haven't yet been parsed will get parsed.
       type_sp->GetFullCompilerType();
       type_sp->GetDescription(&strm, eDescriptionLevelFull, true);
       // Print all typedef chains
@@ -1780,9 +1765,8 @@ static size_t FindModulesByName(Target *target, const char *module_name,
       const size_t num_matches =
           target->GetImages().FindModules(module_spec, module_list);
 
-      // Not found in our module list for our target, check the main
-      // shared module list in case it is a extra file used somewhere
-      // else
+      // Not found in our module list for our target, check the main shared
+      // module list in case it is a extra file used somewhere else
       if (num_matches == 0) {
         module_spec.GetArchitecture() = target->GetArchitecture();
         ModuleList::FindSharedModules(module_spec, module_list);
@@ -2000,7 +1984,7 @@ public:
 
       switch (short_option) {
       case 's':
-        m_sort_order = (SortOrder)Args::StringToOptionEnum(
+        m_sort_order = (SortOrder)OptionArgParser::ToOptionEnum(
             option_arg, GetDefinitions()[option_idx].enum_values,
             eSortOrderNone, error);
         break;
@@ -2586,7 +2570,7 @@ public:
                       "Fullpath or basename for module to load.", ""),
         m_load_option(LLDB_OPT_SET_1, false, "load", 'l',
                       "Write file contents to the memory.", false, true),
-        m_pc_option(LLDB_OPT_SET_1, false, "--set-pc-to-entry", 'p',
+        m_pc_option(LLDB_OPT_SET_1, false, "set-pc-to-entry", 'p',
                     "Set PC to the entry point."
                     " Only applicable with '--load' option.",
                     false, true),
@@ -2622,8 +2606,7 @@ protected:
       ModuleSpec module_spec;
       bool search_using_module_spec = false;
 
-      // Allow "load" option to work without --file or --uuid
-      // option.
+      // Allow "load" option to work without --file or --uuid option.
       if (load) {
         if (!m_file_option.GetOptionValue().OptionWasSet() &&
             !m_uuid_option_group.GetOptionValue().OptionWasSet()) {
@@ -2764,10 +2747,33 @@ protected:
                     process->Flush();
                 }
                 if (load) {
-                  Status error = module->LoadInMemory(*target, set_pc);
+                  ProcessSP process = target->CalculateProcess();
+                  Address file_entry = objfile->GetEntryPointAddress();
+                  if (!process) {
+                    result.AppendError("No process");
+                    return false;
+                  }
+                  if (set_pc && !file_entry.IsValid()) {
+                    result.AppendError("No entry address in object file");
+                    return false;
+                  }
+                  std::vector<ObjectFile::LoadableData> loadables(
+                      objfile->GetLoadableData(*target));
+                  if (loadables.size() == 0) {
+                    result.AppendError("No loadable sections");
+                    return false;
+                  }
+                  Status error = process->WriteObjectFile(std::move(loadables));
                   if (error.Fail()) {
                     result.AppendError(error.AsCString());
                     return false;
+                  }
+                  if (set_pc) {
+                    ThreadList &thread_list = process->GetThreadList();
+                    ThreadSP curr_thread(thread_list.GetSelectedThread());
+                    RegisterContextSP reg_context(
+                        curr_thread->GetRegisterContext());
+                    reg_context->SetPC(file_entry.GetLoadAddress(target));
                   }
                 }
               } else {
@@ -2879,8 +2885,8 @@ public:
       if (short_option == 'g') {
         m_use_global_module_list = true;
       } else if (short_option == 'a') {
-        m_module_addr = Args::StringToAddress(execution_context, option_arg,
-                                              LLDB_INVALID_ADDRESS, &error);
+        m_module_addr = OptionArgParser::ToAddress(
+            execution_context, option_arg, LLDB_INVALID_ADDRESS, &error);
       } else {
         unsigned long width = 0;
         option_arg.getAsInteger(0, width);
@@ -2922,9 +2928,8 @@ protected:
     Target *target = m_interpreter.GetDebugger().GetSelectedTarget().get();
     const bool use_global_module_list = m_options.m_use_global_module_list;
     // Define a local module list here to ensure it lives longer than any
-    // "locker"
-    // object which might lock its contents below (through the "module_list_ptr"
-    // variable).
+    // "locker" object which might lock its contents below (through the
+    // "module_list_ptr" variable).
     ModuleList module_list;
     if (target == nullptr && !use_global_module_list) {
       result.AppendError("invalid target, create a debug target using the "
@@ -2972,10 +2977,9 @@ protected:
       size_t num_modules = 0;
 
       // This locker will be locked on the mutex in module_list_ptr if it is
-      // non-nullptr.
-      // Otherwise it will lock the AllocationModuleCollectionMutex when
-      // accessing
-      // the global module list directly.
+      // non-nullptr. Otherwise it will lock the
+      // AllocationModuleCollectionMutex when accessing the global module list
+      // directly.
       std::unique_lock<std::recursive_mutex> guard(
           Module::GetAllocationModuleCollectionMutex(), std::defer_lock);
 
@@ -3176,7 +3180,8 @@ protected:
       } break;
 
       case 'm':
-        DumpTimePoint(module->GetModificationTime(), strm, width);
+        strm.Format("{0:%c}", llvm::fmt_align(module->GetModificationTime(),
+                                              llvm::AlignStyle::Left, width));
         break;
 
       case 'p':
@@ -3244,8 +3249,8 @@ public:
       case 'a': {
         m_str = option_arg;
         m_type = eLookupTypeAddress;
-        m_addr = Args::StringToAddress(execution_context, option_arg,
-                                       LLDB_INVALID_ADDRESS, &error);
+        m_addr = OptionArgParser::ToAddress(execution_context, option_arg,
+                                            LLDB_INVALID_ADDRESS, &error);
         if (m_addr == LLDB_INVALID_ADDRESS)
           error.SetErrorStringWithFormat("invalid address string '%s'",
                                          option_arg.str().c_str());
@@ -3560,8 +3565,8 @@ public:
       switch (short_option) {
       case 'a': {
         m_type = eLookupTypeAddress;
-        m_addr = Args::StringToAddress(execution_context, option_arg,
-                                       LLDB_INVALID_ADDRESS, &error);
+        m_addr = OptionArgParser::ToAddress(execution_context, option_arg,
+                                            LLDB_INVALID_ADDRESS, &error);
       } break;
 
       case 'o':
@@ -3576,7 +3581,7 @@ public:
         break;
 
       case 'f':
-        m_file.SetFile(option_arg, false);
+        m_file.SetFile(option_arg, false, FileSpec::Style::native);
         m_type = eLookupTypeFileLine;
         break;
 
@@ -3822,9 +3827,9 @@ protected:
       if (command.GetArgumentCount() == 0) {
         ModuleSP current_module;
 
-        // Where it is possible to look in the current symbol context
-        // first, try that.  If this search was successful and --all
-        // was not passed, don't print anything else.
+        // Where it is possible to look in the current symbol context first,
+        // try that.  If this search was successful and --all was not passed,
+        // don't print anything else.
         if (LookupHere(m_interpreter, result, syntax_error)) {
           result.GetOutputStream().EOL();
           num_successful_lookups++;
@@ -4036,10 +4041,9 @@ protected:
         if (!module_spec.GetFileSpec() && !module_spec.GetPlatformFileSpec())
           module_spec.GetFileSpec().GetFilename() = symbol_fspec.GetFilename();
       }
-      // We now have a module that represents a symbol file
-      // that can be used for a module that might exist in the
-      // current target, so we need to find that module in the
-      // target
+      // We now have a module that represents a symbol file that can be used
+      // for a module that might exist in the current target, so we need to
+      // find that module in the target
       ModuleList matching_module_list;
 
       size_t num_matches = 0;
@@ -4065,8 +4069,7 @@ protected:
 
         if (num_matches == 0) {
           // No matches yet, iterate through the module specs to find a UUID
-          // value that
-          // we can match up to an image in our target
+          // value that we can match up to an image in our target
           const size_t num_symfile_module_specs =
               symfile_module_specs.GetSize();
           for (size_t i = 0; i < num_symfile_module_specs && num_matches == 0;
@@ -4086,8 +4089,8 @@ protected:
         }
       }
 
-      // Just try to match up the file by basename if we have no matches at this
-      // point
+      // Just try to match up the file by basename if we have no matches at
+      // this point
       if (num_matches == 0)
         num_matches =
             target->GetImages().FindModules(module_spec, matching_module_list);
@@ -4099,7 +4102,8 @@ protected:
         if (!filename_no_extension)
           break;
 
-        // Check if there was no extension to strip and the basename is the same
+        // Check if there was no extension to strip and the basename is the
+        // same
         if (filename_no_extension == module_spec.GetFileSpec().GetFilename())
           break;
 
@@ -4118,9 +4122,9 @@ protected:
       } else if (num_matches == 1) {
         ModuleSP module_sp(matching_module_list.GetModuleAtIndex(0));
 
-        // The module has not yet created its symbol vendor, we can just
-        // give the existing target module the symfile path to use for
-        // when it decides to create it!
+        // The module has not yet created its symbol vendor, we can just give
+        // the existing target module the symfile path to use for when it
+        // decides to create it!
         module_sp->SetSymbolFileFileSpec(symbol_fspec);
 
         SymbolVendor *symbol_vendor =
@@ -4138,8 +4142,8 @@ protected:
                   "symbol file '%s' has been added to '%s'\n", symfile_path,
                   module_fs.GetPath().c_str());
 
-              // Let clients know something changed in the module
-              // if it is currently loaded
+              // Let clients know something changed in the module if it is
+              // currently loaded
               ModuleList module_list;
               module_list.Append(module_sp);
               target->SymbolsDidLoad(module_list);
@@ -4315,7 +4319,8 @@ protected:
 
         for (auto &entry : args.entries()) {
           if (!entry.ref.empty()) {
-            module_spec.GetSymbolFileSpec().SetFile(entry.ref, true);
+            module_spec.GetSymbolFileSpec().SetFile(entry.ref, true,
+                                                    FileSpec::Style::native);
             if (file_option_set) {
               module_spec.GetFileSpec() =
                   m_file_option.GetOptionValue().GetCurrentValue();

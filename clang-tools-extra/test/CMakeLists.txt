@@ -37,10 +37,14 @@ set(CLANG_TOOLS_TEST_DEPS
   # For the clang-apply-replacements test that uses clang-rename.
   clang-rename
 
+  # For the clang-doc tests that emit bitcode files.
+  llvm-bcanalyzer
+
   # Individual tools we test.
   clang-apply-replacements
   clang-change-namespace
   clangd
+  clang-doc
   clang-include-fixer
   clang-move
   clang-query
@@ -48,6 +52,10 @@ set(CLANG_TOOLS_TEST_DEPS
   find-all-symbols
   modularize
   pp-trace
+
+  # These individual tools have no tests, add them here to make them compile
+  # together with check-clang-tools, so that we won't break them in the future.
+  global-symbol-builder
 
   # Unit tests
   ExtraToolsUnitTests
