@@ -27,8 +27,8 @@
 ; CHECK-NOT:  NULL
 ; CHECK:      DW_TAG_variable
 ; CHECK:      DW_AT_location [DW_FORM_sec_offset] ({{.*}}
-; CHECK-NEXT:   {{0x.*}} - {{0x.*}}: DW_OP_reg0 RAX
-; CHECK-NEXT:   {{0x.*}} - {{0x.*}}: DW_OP_breg7 RSP+4, DW_OP_deref)
+; CHECK-NEXT:   [{{0x.*}}, {{0x.*}}): DW_OP_reg0 RAX
+; CHECK-NEXT:   [{{0x.*}}, {{0x.*}}): DW_OP_breg7 RSP+4, DW_OP_deref)
 ; CHECK-NEXT: DW_AT_name {{.*}}"val"
 
 ; ModuleID = 'frame.c'
@@ -90,7 +90,7 @@ attributes #1 = { nounwind readnone }
 !14 = !{i32 2, !"Dwarf Version", i32 4}
 !15 = !{i32 2, !"Debug Info Version", i32 3}
 !16 = !{!"clang version 3.9.0 (trunk 273961)"}
-!17 = distinct !DISubprogram(name: "main", scope: !3, file: !3, line: 8, type: !18, isLocal: false, isDefinition: true, scopeLine: 9, isOptimized: true, unit: !2, variables: !20)
+!17 = distinct !DISubprogram(name: "main", scope: !3, file: !3, line: 8, type: !18, isLocal: false, isDefinition: true, scopeLine: 9, isOptimized: true, unit: !2, retainedNodes: !20)
 !18 = !DISubroutineType(types: !19)
 !19 = !{!8}
 !20 = !{!21}

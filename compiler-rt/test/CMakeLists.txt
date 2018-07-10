@@ -1,7 +1,7 @@
-# Needed for lit support
+# Needed for lit support in standalone builds.
 include(AddLLVM)
 
-configure_lit_site_cfg(
+configure_compiler_rt_lit_site_cfg(
   ${CMAKE_CURRENT_SOURCE_DIR}/lit.common.configured.in
   ${CMAKE_CURRENT_BINARY_DIR}/lit.common.configured)
 
@@ -61,7 +61,8 @@ if(COMPILER_RT_CAN_EXECUTE_TESTS)
     compiler_rt_test_runtime(ubsan cfi)
     compiler_rt_test_runtime(sanitizer_common)
 
-    if(COMPILER_RT_BUILD_LIBFUZZER)
+    # OpenBSD not supporting asan, cannot run the tests
+    if(COMPILER_RT_BUILD_LIBFUZZER AND NOT "${CMAKE_SYSTEM_NAME}" STREQUAL "OpenBSD")
       compiler_rt_test_runtime(fuzzer)
     endif()
 
@@ -78,6 +79,9 @@ if(COMPILER_RT_CAN_EXECUTE_TESTS)
   if(COMPILER_RT_BUILD_XRAY)
     compiler_rt_test_runtime(xray)
   endif()
+  # ShadowCallStack does not yet provide a runtime with compiler-rt, the tests
+  # include their own minimal runtime
+  add_subdirectory(shadowcallstack)
 endif()
 
 if(COMPILER_RT_STANDALONE_BUILD)

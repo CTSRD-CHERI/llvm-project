@@ -14,14 +14,16 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/CodeGen/StackProtector.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/BranchProbabilityInfo.h"
 #include "llvm/Analysis/EHPersonalities.h"
 #include "llvm/Analysis/OptimizationRemarkEmitter.h"
 #include "llvm/CodeGen/Passes.h"
-#include "llvm/CodeGen/StackProtector.h"
+#include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constants.h"
@@ -34,6 +36,7 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/MDBuilder.h"
 #include "llvm/IR/Module.h"
@@ -42,10 +45,8 @@
 #include "llvm/Pass.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
-#include "llvm/Target/TargetLowering.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 #include <utility>
 
 using namespace llvm;
@@ -182,6 +183,14 @@ bool StackProtector::ContainsProtectableArray(Type *Ty, bool &IsLarge,
   return NeedsProtector;
 }
 
+static bool isLifetimeInst(const Instruction *I) {
+  if (const auto Intrinsic = dyn_cast<IntrinsicInst>(I)) {
+    const auto Id = Intrinsic->getIntrinsicID();
+    return Id == Intrinsic::lifetime_start || Id == Intrinsic::lifetime_end;
+  }
+  return false;
+}
+
 bool StackProtector::HasAddressTaken(const Instruction *AI) {
   for (const User *U : AI->users()) {
     if (const StoreInst *SI = dyn_cast<StoreInst>(U)) {
@@ -190,8 +199,10 @@ bool StackProtector::HasAddressTaken(const Instruction *AI) {
     } else if (const PtrToIntInst *SI = dyn_cast<PtrToIntInst>(U)) {
       if (AI == SI->getOperand(0))
         return true;
-    } else if (isa<CallInst>(U)) {
-      return true;
+    } else if (const CallInst *CI = dyn_cast<CallInst>(U)) {
+      // Ignore intrinsics that are not calls. TODO: Use isLoweredToCall().
+      if (!isa<DbgInfoIntrinsic>(CI) && !isLifetimeInst(CI))
+        return true;
     } else if (isa<InvokeInst>(U)) {
       return true;
     } else if (const SelectInst *SI = dyn_cast<SelectInst>(U)) {
@@ -214,7 +225,7 @@ bool StackProtector::HasAddressTaken(const Instruction *AI) {
   return false;
 }
 
-/// \brief Check whether or not this function needs a stack protector based
+/// Check whether or not this function needs a stack protector based
 /// upon the stack protector level.
 ///
 /// We use two heuristics: a standard (ssp) and strong (sspstrong).
@@ -385,8 +396,12 @@ static bool CreatePrologue(Function *F, Module *M, ReturnInst *RI,
 ///  - The epilogue checks the value stored in the prologue against the original
 ///    value. It calls __stack_chk_fail if they differ.
 bool StackProtector::InsertStackProtectors() {
+  // If the target wants to XOR the frame pointer into the guard value, it's
+  // impossible to emit the check in IR, so the target *must* support stack
+  // protection in SDAG.
   bool SupportsSelectionDAGSP =
-      EnableSelectionDAGSP && !TM->Options.EnableFastISel;
+      TLI->useStackGuardXorFP() ||
+      (EnableSelectionDAGSP && !TM->Options.EnableFastISel);
   AllocaInst *AI = nullptr;       // Place on stack that stores the stack guard.
 
   for (Function::iterator I = F->begin(), E = F->end(); I != E;) {

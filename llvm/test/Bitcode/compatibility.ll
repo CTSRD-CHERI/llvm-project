@@ -230,8 +230,6 @@ declare void @g.f1()
 ; Aliases -- DLLStorageClass
 @a.dlldefault = default alias i32, i32* @g.dlldefault
 ; CHECK: @a.dlldefault = alias i32, i32* @g.dlldefault
-@a.dllimport = dllimport alias i32, i32* @g1
-; CHECK: @a.dllimport = dllimport alias i32, i32* @g1
 @a.dllexport = dllexport alias i32, i32* @g.dllexport
 ; CHECK: @a.dllexport = dllexport alias i32, i32* @g.dllexport
 
@@ -775,6 +773,10 @@ define void @fastmathflags(float %op1, float %op2) {
   ; CHECK: %f.arcp = fadd arcp float %op1, %op2
   %f.contract = fadd contract float %op1, %op2
   ; CHECK: %f.contract = fadd contract float %op1, %op2
+  %f.afn = fadd afn float %op1, %op2
+  ; CHECK: %f.afn = fadd afn float %op1, %op2
+  %f.reassoc = fadd reassoc float %op1, %op2
+  ; CHECK: %f.reassoc = fadd reassoc float %op1, %op2
   %f.fast = fadd fast float %op1, %op2
   ; CHECK: %f.fast = fadd fast float %op1, %op2
   ret void

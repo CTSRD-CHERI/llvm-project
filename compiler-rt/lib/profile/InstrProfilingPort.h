@@ -7,6 +7,9 @@
 |*
 \*===----------------------------------------------------------------------===*/
 
+/* This header must be included after all others so it can provide fallback
+   definitions for stuff missing in system headers. */
+
 #ifndef PROFILE_INSTRPROFILING_PORT_H_
 #define PROFILE_INSTRPROFILING_PORT_H_
 
@@ -19,12 +22,14 @@
 #define COMPILER_RT_ALLOCA _alloca
 /* Need to include <stdio.h> and <io.h> */
 #define COMPILER_RT_FTRUNCATE(f,l) _chsize(_fileno(f),l)
+#define COMPILER_RT_ALWAYS_INLINE __forceinline
 #elif __GNUC__
 #define COMPILER_RT_ALIGNAS(x) __attribute__((aligned(x)))
 #define COMPILER_RT_VISIBILITY __attribute__((visibility("hidden")))
 #define COMPILER_RT_WEAK __attribute__((weak))
 #define COMPILER_RT_ALLOCA __builtin_alloca
 #define COMPILER_RT_FTRUNCATE(f,l) ftruncate(fileno(f),l)
+#define COMPILER_RT_ALWAYS_INLINE inline __attribute((always_inline))
 #endif
 
 #if defined(__APPLE__)
@@ -44,9 +49,6 @@
 #define COMPILER_RT_GETHOSTNAME(Name, Len) ((void)(Name), (void)(Len), (-1))
 #else
 #define COMPILER_RT_GETHOSTNAME(Name, Len) lprofGetHostName(Name, Len)
-#ifndef _MSC_VER
-#define COMPILER_RT_HAS_UNAME 1
-#endif
 #endif
 
 #if COMPILER_RT_HAS_ATOMICS == 1
@@ -106,6 +108,14 @@
 
 #define PROF_NOTE(Format, ...)                                                 \
   fprintf(stderr, "LLVM Profile Note: " Format, __VA_ARGS__);
+
+#ifndef MAP_FILE
+#define MAP_FILE 0
+#endif
+
+#ifndef O_BINARY
+#define O_BINARY 0
+#endif
 
 #if defined(__FreeBSD__)
 

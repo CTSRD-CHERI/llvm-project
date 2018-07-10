@@ -1,8 +1,8 @@
-; RUN: llc -march=amdgcn -mcpu=verde -verify-machineinstrs < %s | FileCheck -check-prefix=GCN -check-prefix=SIVI -check-prefix=FUNC %s
-; RUN: llc -march=amdgcn -mcpu=tonga -mattr=-flat-for-global -verify-machineinstrs < %s | FileCheck -check-prefix=GCN -check-prefix=SIVI -check-prefix=FUNC %s
-; RUN: llc -march=amdgcn -mcpu=gfx900 -verify-machineinstrs < %s | FileCheck -check-prefix=GCN -check-prefix=GFX9 -check-prefix=FUNC %s
-; RUN: llc -march=r600 -mcpu=redwood -verify-machineinstrs < %s | FileCheck -check-prefix=EG -check-prefix=FUNC %s
-; RUN: llc -march=r600 -mcpu=cayman -verify-machineinstrs < %s | FileCheck -check-prefix=CM -check-prefix=FUNC %s
+; RUN: llc -march=amdgcn -mtriple=amdgcn---amdgiz -mcpu=verde -verify-machineinstrs < %s | FileCheck -check-prefix=GCN -check-prefix=SIVI -check-prefix=FUNC %s
+; RUN: llc -march=amdgcn -mtriple=amdgcn---amdgiz -mcpu=tonga -mattr=-flat-for-global -verify-machineinstrs < %s | FileCheck -check-prefix=GCN -check-prefix=SIVI -check-prefix=FUNC %s
+; RUN: llc -march=amdgcn -mtriple=amdgcn---amdgiz -mcpu=gfx900 -verify-machineinstrs < %s | FileCheck -check-prefix=GCN -check-prefix=GFX9 -check-prefix=FUNC %s
+; RUN: llc -march=r600 -mtriple=r600---amdgiz -mcpu=redwood -verify-machineinstrs < %s | FileCheck -check-prefix=EG -check-prefix=FUNC %s
+; RUN: llc -march=r600 -mtriple=r600---amdgiz -mcpu=cayman -verify-machineinstrs < %s | FileCheck -check-prefix=CM -check-prefix=FUNC %s
 
 ; FUNC-LABEL: {{^}}store_i1:
 ; EG: MEM_RAT MSKOR
@@ -394,11 +394,11 @@ entry:
 
 ; SIVI: buffer_store_dwordx2
 ; GFX9: global_store_dwordx2
-define amdgpu_kernel void @vecload2(i32 addrspace(1)* nocapture %out, i32 addrspace(2)* nocapture %mem) #0 {
+define amdgpu_kernel void @vecload2(i32 addrspace(1)* nocapture %out, i32 addrspace(4)* nocapture %mem) #0 {
 entry:
-  %0 = load i32, i32 addrspace(2)* %mem, align 4
-  %arrayidx1.i = getelementptr inbounds i32, i32 addrspace(2)* %mem, i64 1
-  %1 = load i32, i32 addrspace(2)* %arrayidx1.i, align 4
+  %0 = load i32, i32 addrspace(4)* %mem, align 4
+  %arrayidx1.i = getelementptr inbounds i32, i32 addrspace(4)* %mem, i64 1
+  %1 = load i32, i32 addrspace(4)* %arrayidx1.i, align 4
   store i32 %0, i32 addrspace(1)* %out, align 4
   %arrayidx1 = getelementptr inbounds i32, i32 addrspace(1)* %out, i64 1
   store i32 %1, i32 addrspace(1)* %arrayidx1, align 4

@@ -15,6 +15,7 @@
 #define LLVM_CLANG_TOOLS_EXTRA_CLANGD_FUNCTION_H
 
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/Support/Error.h"
 #include <cassert>
 #include <memory>
 #include <tuple>
@@ -27,6 +28,9 @@ namespace clangd {
 /// A move-only type-erasing function wrapper. Similar to `std::function`, but
 /// allows to store move-only callables.
 template <class> class UniqueFunction;
+/// A Callback<T> is a void function that accepts Expected<T>.
+/// This is accepted by ClangdServer functions that logically return T.
+template <typename T> using Callback = UniqueFunction<void(llvm::Expected<T>)>;
 
 template <class Ret, class... Args> class UniqueFunction<Ret(Args...)> {
 public:
@@ -39,13 +43,17 @@ public:
   UniqueFunction(UniqueFunction &&) noexcept = default;
   UniqueFunction &operator=(UniqueFunction &&) noexcept = default;
 
-  template <class Callable>
+  template <class Callable,
+            /// A sfinae-check that Callable can be called with Args... and
+            class = typename std::enable_if<std::is_convertible<
+                decltype(std::declval<Callable>()(std::declval<Args>()...)),
+                Ret>::value>::type>
   UniqueFunction(Callable &&Func)
       : CallablePtr(llvm::make_unique<
                     FunctionCallImpl<typename std::decay<Callable>::type>>(
             std::forward<Callable>(Func))) {}
 
-  operator bool() { return CallablePtr; }
+  explicit operator bool() { return bool(CallablePtr); }
 
   Ret operator()(Args... As) {
     assert(CallablePtr);
@@ -113,7 +121,7 @@ public:
                                  std::forward<RestArgs>(Rest)...)) {
 
 #ifndef NDEBUG
-    assert(!WasCalled && "Can only call result of BindWithForward once.");
+    assert(!WasCalled && "Can only call result of Bind once.");
     WasCalled = true;
 #endif
     return CallImpl(llvm::index_sequence_for<Args...>(),
@@ -128,7 +136,7 @@ public:
 /// The returned object must be called no more than once, as \p As are
 /// std::forwarded'ed (therefore can be moved) into \p F during the call.
 template <class Func, class... Args>
-ForwardBinder<Func, Args...> BindWithForward(Func F, Args &&... As) {
+ForwardBinder<Func, Args...> Bind(Func F, Args &&... As) {
   return ForwardBinder<Func, Args...>(
       std::make_tuple(std::forward<Func>(F), std::forward<Args>(As)...));
 }

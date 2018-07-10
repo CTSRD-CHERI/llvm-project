@@ -26,7 +26,7 @@ namespace driver {
 
 namespace tools {
 
-/// \brief Clang compiler tool.
+/// Clang compiler tool.
 class LLVM_LIBRARY_VISIBILITY Clang : public Tool {
 public:
   static const char *getBaseInputName(const llvm::opt::ArgList &Args,
@@ -64,6 +64,8 @@ private:
                         llvm::opt::ArgStringList &CmdArgs) const;
   void AddR600TargetArgs(const llvm::opt::ArgList &Args,
                          llvm::opt::ArgStringList &CmdArgs) const;
+  void AddRISCVTargetArgs(const llvm::opt::ArgList &Args,
+                          llvm::opt::ArgStringList &CmdArgs) const;
   void AddSparcTargetArgs(const llvm::opt::ArgList &Args,
                           llvm::opt::ArgStringList &CmdArgs) const;
   void AddSystemZTargetArgs(const llvm::opt::ArgList &Args,
@@ -113,7 +115,7 @@ public:
                     const char *LinkingOutput) const override;
 };
 
-/// \brief Clang integrated assembler tool.
+/// Clang integrated assembler tool.
 class LLVM_LIBRARY_VISIBILITY ClangAs : public Tool {
 public:
   ClangAs(const ToolChain &TC)

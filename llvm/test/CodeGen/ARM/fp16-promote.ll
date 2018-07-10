@@ -170,8 +170,10 @@ define void @test_select(half* %p, half* %q, i1 zeroext %c) #0 {
 ; CHECK-LIBCALL: bl __aeabi_h2f
 ; CHECK-VFP: vcmp.f32
 ; CHECK-NOVFP: bl __aeabi_fcmpeq
-; CHECK-FP16: vmrs APSR_nzcv, fpscr
-; CHECK-ALL: movw{{ne|eq}}
+; CHECK-VFP-NEXT: vmrs APSR_nzcv, fpscr
+; CHECK-VFP-NEXT: movwne
+; CHECK-NOVFP-NEXT: clz r0, r0
+; CHECK-NOVFP-NEXT: lsr r0, r0, #5
 define i1 @test_fcmp_une(half* %p, half* %q) #0 {
   %a = load half, half* %p, align 2
   %b = load half, half* %q, align 2
@@ -817,25 +819,37 @@ define void @test_fmuladd(half* %p, half* %q, half* %r) #0 {
 
 ; CHECK-ALL-LABEL: test_insertelement:
 ; CHECK-ALL: sub sp, sp, #8
-; CHECK-ALL: ldrh
-; CHECK-ALL: ldrh
-; CHECK-ALL: ldrh
-; CHECK-ALL: ldrh
-; CHECK-ALL-DAG: strh
-; CHECK-ALL-DAG: strh
-; CHECK-ALL-DAG: mov
-; CHECK-ALL-DAG: ldrh
-; CHECK-ALL-DAG: orr
-; CHECK-ALL-DAG: strh
-; CHECK-ALL-DAG: strh
-; CHECK-ALL-DAG: strh
-; CHECK-ALL-DAG: ldrh
-; CHECK-ALL-DAG: ldrh
-; CHECK-ALL-DAG: ldrh
-; CHECK-ALL-DAG: strh
-; CHECK-ALL-DAG: strh
-; CHECK-ALL-DAG: strh
-; CHECK-ALL-DAG: strh
+
+; CHECK-VFP:	and	
+; CHECK-VFP:	mov	
+; CHECK-VFP:	ldrd	
+; CHECK-VFP:	orr	
+; CHECK-VFP:	ldrh	
+; CHECK-VFP:	stm	
+; CHECK-VFP:	strh	
+; CHECK-VFP:	ldm	
+; CHECK-VFP:	stm	
+
+; CHECK-NOVFP: ldrh
+; CHECK-NOVFP: ldrh
+; CHECK-NOVFP: ldrh
+; CHECK-NOVFP: ldrh
+; CHECK-NOVFP-DAG: strh
+; CHECK-NOVFP-DAG: strh
+; CHECK-NOVFP-DAG: mov
+; CHECK-NOVFP-DAG: ldrh
+; CHECK-NOVFP-DAG: orr
+; CHECK-NOVFP-DAG: strh
+; CHECK-NOVFP-DAG: strh
+; CHECK-NOVFP-DAG: strh
+; CHECK-NOVFP-DAG: ldrh
+; CHECK-NOVFP-DAG: ldrh
+; CHECK-NOVFP-DAG: ldrh
+; CHECK-NOVFP-DAG: strh
+; CHECK-NOVFP-DAG: strh
+; CHECK-NOVFP-DAG: strh
+; CHECK-NOVFP-DAG: strh
+
 ; CHECK-ALL: add sp, sp, #8
 define void @test_insertelement(half* %p, <4 x half>* %q, i32 %i) #0 {
   %a = load half, half* %p, align 2

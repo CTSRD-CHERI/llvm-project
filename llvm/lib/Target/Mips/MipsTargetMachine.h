@@ -44,7 +44,7 @@ public:
                     CodeGenOpt::Level OL, bool JIT, bool isLittle);
   ~MipsTargetMachine() override;
 
-  TargetIRAnalysis getTargetIRAnalysis() override;
+  TargetTransformInfo getTargetTransformInfo(const Function &F) override;
 
   const MipsSubtarget *getSubtargetImpl() const {
     if (Subtarget)
@@ -54,7 +54,7 @@ public:
 
   const MipsSubtarget *getSubtargetImpl(const Function &F) const override;
 
-  /// \brief Reset the subtarget for the Mips target.
+  /// Reset the subtarget for the Mips target.
   void resetSubtarget(MachineFunction *MF);
 
   // Pass Pipeline Configuration

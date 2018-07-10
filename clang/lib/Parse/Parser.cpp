@@ -24,7 +24,7 @@ using namespace clang;
 
 
 namespace {
-/// \brief A comment handler that passes comments found by the preprocessor
+/// A comment handler that passes comments found by the preprocessor
 /// to the parser action.
 class ActionCommentHandler : public CommentHandler {
   Sema &S;
@@ -77,7 +77,7 @@ DiagnosticBuilder Parser::Diag(const Token &Tok, unsigned DiagID) {
   return Diag(Tok.getLocation(), DiagID);
 }
 
-/// \brief Emits a diagnostic suggesting parentheses surrounding a
+/// Emits a diagnostic suggesting parentheses surrounding a
 /// given range.
 ///
 /// \param Loc The location where we'll emit the diagnostic.
@@ -556,10 +556,6 @@ bool Parser::ParseTopLevelDecl(DeclGroupPtrTy &Result) {
     HandlePragmaUnused();
     return false;
 
-  case tok::kw_import:
-    Result = ParseModuleImport(SourceLocation());
-    return false;
-
   case tok::kw_export:
     if (NextToken().isNot(tok::kw_module))
       break;
@@ -637,6 +633,9 @@ bool Parser::ParseTopLevelDecl(DeclGroupPtrTy &Result) {
 ///           ';'
 ///
 /// [C++0x/GNU] 'extern' 'template' declaration
+///
+/// [Modules-TS] module-import-declaration
+///
 Parser::DeclGroupPtrTy
 Parser::ParseExternalDeclaration(ParsedAttributesWithRange &attrs,
                                  ParsingDeclSpec *DS) {
@@ -742,7 +741,7 @@ Parser::ParseExternalDeclaration(ParsedAttributesWithRange &attrs,
     break;
   }
   case tok::at:
-    return ParseObjCAtDirectives();
+    return ParseObjCAtDirectives(attrs);
   case tok::minus:
   case tok::plus:
     if (!getLangOpts().ObjC1) {
@@ -753,11 +752,20 @@ Parser::ParseExternalDeclaration(ParsedAttributesWithRange &attrs,
     SingleDecl = ParseObjCMethodDefinition();
     break;
   case tok::code_completion:
-      Actions.CodeCompleteOrdinaryName(getCurScope(), 
-                             CurParsedObjCImpl? Sema::PCC_ObjCImplementation
-                                              : Sema::PCC_Namespace);
+    if (CurParsedObjCImpl) {
+      // Code-complete Objective-C methods even without leading '-'/'+' prefix.
+      Actions.CodeCompleteObjCMethodDecl(getCurScope(),
+                                         /*IsInstanceMethod=*/None,
+                                         /*ReturnType=*/nullptr);
+    }
+    Actions.CodeCompleteOrdinaryName(
+        getCurScope(),
+        CurParsedObjCImpl ? Sema::PCC_ObjCImplementation : Sema::PCC_Namespace);
     cutOffParsing();
     return nullptr;
+  case tok::kw_import:
+    SingleDecl = ParseModuleImport(SourceLocation());
+    break;
   case tok::kw_export:
     if (getLangOpts().ModulesTS) {
       SingleDecl = ParseExportDeclaration();
@@ -775,7 +783,7 @@ Parser::ParseExternalDeclaration(ParsedAttributesWithRange &attrs,
     // A function definition cannot start with any of these keywords.
     {
       SourceLocation DeclEnd;
-      return ParseDeclaration(Declarator::FileContext, DeclEnd, attrs);
+      return ParseDeclaration(DeclaratorContext::FileContext, DeclEnd, attrs);
     }
 
   case tok::kw_static:
@@ -785,7 +793,7 @@ Parser::ParseExternalDeclaration(ParsedAttributesWithRange &attrs,
       Diag(ConsumeToken(), diag::warn_static_inline_explicit_inst_ignored)
         << 0;
       SourceLocation DeclEnd;
-      return ParseDeclaration(Declarator::FileContext, DeclEnd, attrs);
+      return ParseDeclaration(DeclaratorContext::FileContext, DeclEnd, attrs);
     }
     goto dont_know;
       
@@ -796,7 +804,7 @@ Parser::ParseExternalDeclaration(ParsedAttributesWithRange &attrs,
       // Inline namespaces. Allowed as an extension even in C++03.
       if (NextKind == tok::kw_namespace) {
         SourceLocation DeclEnd;
-        return ParseDeclaration(Declarator::FileContext, DeclEnd, attrs);
+        return ParseDeclaration(DeclaratorContext::FileContext, DeclEnd, attrs);
       }
       
       // Parse (then ignore) 'inline' prior to a template instantiation. This is
@@ -805,7 +813,7 @@ Parser::ParseExternalDeclaration(ParsedAttributesWithRange &attrs,
         Diag(ConsumeToken(), diag::warn_static_inline_explicit_inst_ignored)
           << 1;
         SourceLocation DeclEnd;
-        return ParseDeclaration(Declarator::FileContext, DeclEnd, attrs);
+        return ParseDeclaration(DeclaratorContext::FileContext, DeclEnd, attrs);
       }
     }
     goto dont_know;
@@ -820,7 +828,7 @@ Parser::ParseExternalDeclaration(ParsedAttributesWithRange &attrs,
              diag::ext_extern_template) << SourceRange(ExternLoc, TemplateLoc);
       SourceLocation DeclEnd;
       return Actions.ConvertDeclToDeclGroup(
-                  ParseExplicitInstantiation(Declarator::FileContext,
+                  ParseExplicitInstantiation(DeclaratorContext::FileContext,
                                              ExternLoc, TemplateLoc, DeclEnd));
     }
     goto dont_know;
@@ -850,7 +858,7 @@ Parser::ParseExternalDeclaration(ParsedAttributesWithRange &attrs,
   return Actions.ConvertDeclToDeclGroup(SingleDecl);
 }
 
-/// \brief Determine whether the current token, if it occurs after a
+/// Determine whether the current token, if it occurs after a
 /// declarator, continues a declaration or declaration list.
 bool Parser::isDeclarationAfterDeclarator() {
   // Check for '= delete' or '= default'
@@ -869,7 +877,7 @@ bool Parser::isDeclarationAfterDeclarator() {
      Tok.is(tok::l_paren));         // int X(0) -> not a function def [C++]
 }
 
-/// \brief Determine whether the current token, if it occurs after a
+/// Determine whether the current token, if it occurs after a
 /// declarator, indicates the start of a function definition.
 bool Parser::isStartOfFunctionDefinition(const ParsingDeclarator &Declarator) {
   assert(Declarator.isFunctionDeclarator() && "Isn't a function declarator");
@@ -911,18 +919,43 @@ Parser::ParseDeclOrFunctionDefInternal(ParsedAttributesWithRange &attrs,
                                        AccessSpecifier AS) {
   MaybeParseMicrosoftAttributes(DS.getAttributes());
   // Parse the common declaration-specifiers piece.
-  ParseDeclarationSpecifiers(DS, ParsedTemplateInfo(), AS, DSC_top_level);
+  ParseDeclarationSpecifiers(DS, ParsedTemplateInfo(), AS,
+                             DeclSpecContext::DSC_top_level);
 
   // If we had a free-standing type definition with a missing semicolon, we
   // may get this far before the problem becomes obvious.
-  if (DS.hasTagDefinition() &&
-      DiagnoseMissingSemiAfterTagDefinition(DS, AS, DSC_top_level))
+  if (DS.hasTagDefinition() && DiagnoseMissingSemiAfterTagDefinition(
+                                   DS, AS, DeclSpecContext::DSC_top_level))
     return nullptr;
 
   // C99 6.7.2.3p6: Handle "struct-or-union identifier;", "enum { X };"
   // declaration-specifiers init-declarator-list[opt] ';'
   if (Tok.is(tok::semi)) {
-    ProhibitAttributes(attrs);
+    auto LengthOfTSTToken = [](DeclSpec::TST TKind) {
+      assert(DeclSpec::isDeclRep(TKind));
+      switch(TKind) {
+      case DeclSpec::TST_class:
+        return 5;
+      case DeclSpec::TST_struct:
+        return 6;
+      case DeclSpec::TST_union:
+        return 5;
+      case DeclSpec::TST_enum:
+        return 4;
+      case DeclSpec::TST_interface:
+        return 9;
+      default:
+        llvm_unreachable("we only expect to get the length of the class/struct/union/enum");
+      }
+      
+    };
+    // Suggest correct location to fix '[[attrib]] struct' to 'struct [[attrib]]'
+    SourceLocation CorrectLocationForAttributes =
+        DeclSpec::isDeclRep(DS.getTypeSpecType())
+            ? DS.getTypeSpecTypeLoc().getLocWithOffset(
+                  LengthOfTSTToken(DS.getTypeSpecType()))
+            : SourceLocation();
+    ProhibitAttributes(attrs, CorrectLocationForAttributes);
     ConsumeToken();
     RecordDecl *AnonRecord = nullptr;
     Decl *TheDecl = Actions.ParsedFreeStandingDeclSpec(getCurScope(), AS_none,
@@ -972,11 +1005,11 @@ Parser::ParseDeclOrFunctionDefInternal(ParsedAttributesWithRange &attrs,
   if (getLangOpts().CPlusPlus && isTokenStringLiteral() &&
       DS.getStorageClassSpec() == DeclSpec::SCS_extern &&
       DS.getParsedSpecifiers() == DeclSpec::PQ_StorageClassSpecifier) {
-    Decl *TheDecl = ParseLinkage(DS, Declarator::FileContext);
+    Decl *TheDecl = ParseLinkage(DS, DeclaratorContext::FileContext);
     return Actions.ConvertDeclToDeclGroup(TheDecl);
   }
 
-  return ParseDeclGroup(DS, Declarator::FileContext);
+  return ParseDeclGroup(DS, DeclaratorContext::FileContext);
 }
 
 Parser::DeclGroupPtrTy
@@ -1281,7 +1314,7 @@ void Parser::ParseKNRParamDeclarations(Declarator &D) {
     }
 
     // Parse the first declarator attached to this declspec.
-    Declarator ParmDeclarator(DS, Declarator::KNRTypeListContext);
+    Declarator ParmDeclarator(DS, DeclaratorContext::KNRTypeListContext);
     ParseDeclarator(ParmDeclarator);
 
     // Handle the full declarator list.
@@ -1418,7 +1451,7 @@ ExprResult Parser::ParseSimpleAsm(SourceLocation *EndLoc) {
   return Result;
 }
 
-/// \brief Get the TemplateIdAnnotation from the token and put it in the
+/// Get the TemplateIdAnnotation from the token and put it in the
 /// cleanup pool so that it gets destroyed when parsing the current top level
 /// declaration is finished.
 TemplateIdAnnotation *Parser::takeTemplateIdAnnotation(const Token &tok) {
@@ -1446,7 +1479,7 @@ void Parser::AnnotateScopeToken(CXXScopeSpec &SS, bool IsNewAnnotation) {
     PP.AnnotateCachedTokens(Tok);
 }
 
-/// \brief Attempt to classify the name at the current token position. This may
+/// Attempt to classify the name at the current token position. This may
 /// form a type, scope or primary expression annotation, or replace the token
 /// with a typo-corrected keyword. This is only appropriate when the current
 /// name must refer to an entity which has already been declared.
@@ -1731,7 +1764,7 @@ bool Parser::TryAnnotateTypeOrScopeToken() {
   return TryAnnotateTypeOrScopeTokenAfterScopeSpec(SS, !WasScopeAnnotation);
 }
 
-/// \brief Try to annotate a type or scope token, having already parsed an
+/// Try to annotate a type or scope token, having already parsed an
 /// optional scope specifier. \p IsNewScope should be \c true unless the scope
 /// specifier was extracted from an existing tok::annot_cxxscope annotation.
 bool Parser::TryAnnotateTypeOrScopeTokenAfterScopeSpec(CXXScopeSpec &SS,
@@ -1742,8 +1775,8 @@ bool Parser::TryAnnotateTypeOrScopeTokenAfterScopeSpec(CXXScopeSpec &SS,
             *Tok.getIdentifierInfo(), Tok.getLocation(), getCurScope(), &SS,
             false, NextToken().is(tok::period), nullptr,
             /*IsCtorOrDtorName=*/false,
-            /*NonTrivialTypeSourceInfo*/ true,
-            /*IsClassTemplateDeductionContext*/GreaterThanIsOperator)) {
+            /*NonTrivialTypeSourceInfo*/true,
+            /*IsClassTemplateDeductionContext*/true)) {
       SourceLocation BeginLoc = Tok.getLocation();
       if (SS.isNotEmpty()) // it was a C++ qualified type name.
         BeginLoc = SS.getBeginLoc();
@@ -1969,7 +2002,7 @@ bool Parser::ParseMicrosoftIfExistsCondition(IfExistsCondition& Result) {
   if (ParseUnqualifiedId(
           Result.SS, /*EnteringContext*/false, /*AllowDestructorName*/true,
           /*AllowConstructorName*/true, /*AllowDeductionGuide*/false, nullptr,
-          TemplateKWLoc, Result.Name)) {
+          &TemplateKWLoc, Result.Name)) {
     T.skipToEnd();
     return true;
   }
@@ -2086,7 +2119,7 @@ Parser::DeclGroupPtrTy Parser::ParseModuleDecl() {
 ///           '@' 'import' module-name ';'
 /// [ModTS] module-import-declaration:
 ///           'import' module-name attribute-specifier-seq[opt] ';'
-Parser::DeclGroupPtrTy Parser::ParseModuleImport(SourceLocation AtLoc) {
+Decl *Parser::ParseModuleImport(SourceLocation AtLoc) {
   assert((AtLoc.isInvalid() ? Tok.is(tok::kw_import)
                             : Tok.isObjCAtKeyword(tok::objc_import)) &&
          "Improper start to module import");
@@ -2113,7 +2146,7 @@ Parser::DeclGroupPtrTy Parser::ParseModuleImport(SourceLocation AtLoc) {
   if (Import.isInvalid())
     return nullptr;
 
-  return Actions.ConvertDeclToDeclGroup(Import.get());
+  return Import.get();
 }
 
 /// Parse a C++ Modules TS / Objective-C module name (both forms use the same
@@ -2152,7 +2185,7 @@ bool Parser::ParseModuleName(
   }
 }
 
-/// \brief Try recover parser when module annotation appears where it must not
+/// Try recover parser when module annotation appears where it must not
 /// be found.
 /// \returns false if the recover was successful and parsing may be continued, or
 /// true if parser must bail out to top level and handle the token there.
@@ -2217,7 +2250,7 @@ bool BalancedDelimiterTracker::expectAndConsume(unsigned DiagID,
     return true;
   }
 
-  if (getDepth() < MaxDepth)
+  if (getDepth() < P.getLangOpts().BracketDepth)
     return false;
     
   return diagnoseOverflow();

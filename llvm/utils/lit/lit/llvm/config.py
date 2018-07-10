@@ -45,14 +45,16 @@ class LLVMConfig(object):
             features.add('shell')
 
         # Running on Darwin OS
-        if platform.system() in ['Darwin']:
+        if platform.system() == 'Darwin':
             # FIXME: lld uses the first, other projects use the second.
             # We should standardize on the former.
             features.add('system-linker-mach-o')
             features.add('system-darwin')
-        elif platform.system() in ['Windows']:
+        elif platform.system() == 'Windows':
             # For tests that require Windows to run.
             features.add('system-windows')
+        elif platform.system() == "Linux":
+            features.add('system-linux')
 
         # Native compilation: host arch == default triple arch
         # Both of these values should probably be in every site config (e.g. as
@@ -98,10 +100,6 @@ class LLVMConfig(object):
             if gmalloc_path_str is not None:
                 self.with_environment(
                     'DYLD_INSERT_LIBRARIES', gmalloc_path_str)
-
-        breaking_checks = getattr(config, 'enable_abi_breaking_checks', None)
-        if lit.util.pythonize_bool(breaking_checks):
-            features.add('abi-breaking-checks')
 
     def with_environment(self, variable, value, append_path=False):
         if append_path:
@@ -221,12 +219,15 @@ class LLVMConfig(object):
             return True
 
         if re.match(r'^x86_64.*-apple', triple):
-            version_number = int(
-                re.search(r'version ([0-9]+)\.', version_string).group(1))
+            version_regex = re.search(r'version ([0-9]+)\.([0-9]+).([0-9]+)', version_string)
+            major_version_number = int(version_regex.group(1))
+            minor_version_number = int(version_regex.group(2))
+            patch_version_number = int(version_regex.group(3))
             if 'Apple LLVM' in version_string:
-                return version_number >= 9
+                # Apple LLVM doesn't yet support LSan
+                return False
             else:
-                return version_number >= 5
+                return major_version_number >= 5
 
         return False
 
@@ -314,7 +315,7 @@ class LLVMConfig(object):
                 return tool
 
         # Otherwise look in the path.
-        tool = lit.util.which(name, self.config.llvm_tools_dir)
+        tool = lit.util.which(name, self.config.environment['PATH'])
 
         if required and not tool:
             message = "couldn't find '{}' program".format(name)
@@ -365,10 +366,10 @@ class LLVMConfig(object):
         self.clear_environment(possibly_dangerous_env_vars)
 
         # Tweak the PATH to include the tools dir and the scripts dir.
-        paths = [self.config.llvm_tools_dir]
-        tools = getattr(self.config, 'clang_tools_dir', None)
-        if tools:
-            paths = paths + [tools]
+        # Put Clang first to avoid LLVM from overriding out-of-tree clang builds.
+        possible_paths = ['clang_tools_dir', 'llvm_tools_dir']
+        paths = [getattr(self.config, pp) for pp in possible_paths
+                 if getattr(self.config, pp, None)]
         self.with_environment('PATH', paths, append_path=True)
 
         paths = [self.config.llvm_shlib_dir, self.config.llvm_libs_dir]
@@ -387,7 +388,7 @@ class LLVMConfig(object):
         builtin_include_dir = self.get_clang_builtin_include_dir(self.config.clang)
         tool_substitutions = [
             ToolSubst('%clang', command=self.config.clang),
-            ToolSubst('%clang_analyze_cc1', command='%clang_cc1', extra_args=['-analyze']),
+            ToolSubst('%clang_analyze_cc1', command='%clang_cc1', extra_args=['-analyze', '%analyze']),
             ToolSubst('%clang_cc1', command=self.config.clang, extra_args=['-cc1', '-internal-isystem', builtin_include_dir, '-nostdsysteminc']),
             ToolSubst('%clang_cpp', command=self.config.clang, extra_args=['--driver-mode=cpp']),
             ToolSubst('%clang_cl', command=self.config.clang, extra_args=['--driver-mode=cl']),
@@ -460,9 +461,6 @@ class LLVMConfig(object):
         self.with_environment('PATH', tool_dirs, append_path=True)
         self.with_environment('LD_LIBRARY_PATH', lib_dirs, append_path=True)
 
-        self.config.substitutions.append(
-            (r"\bld.lld\b", 'ld.lld --full-shutdown'))
-
-        tool_patterns = ['ld.lld', 'lld-link', 'lld']
+        tool_patterns = ['lld', 'ld.lld', 'lld-link', 'ld64.lld', 'wasm-ld']
 
         self.add_tool_substitutions(tool_patterns, tool_dirs)

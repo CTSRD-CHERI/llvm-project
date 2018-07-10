@@ -13,16 +13,16 @@
 #include "../readability/BracesAroundStatementsCheck.h"
 #include "../readability/FunctionSizeCheck.h"
 #include "../readability/NamespaceCommentCheck.h"
-#include "../readability/RedundantSmartptrGetCheck.h"
 #include "AvoidCStyleCastsCheck.h"
+#include "AvoidThrowingObjCExceptionCheck.h"
 #include "DefaultArgumentsCheck.h"
 #include "ExplicitConstructorCheck.h"
 #include "ExplicitMakePairCheck.h"
 #include "GlobalNamesInHeadersCheck.h"
+#include "GlobalVariableDeclarationCheck.h"
 #include "IntegerTypesCheck.h"
 #include "NonConstReferences.h"
 #include "OverloadedUnaryAndCheck.h"
-#include "StringReferenceMemberCheck.h"
 #include "TodoCommentCheck.h"
 #include "UnnamedNamespaceInHeaderCheck.h"
 #include "UsingNamespaceDirectiveCheck.h"
@@ -34,7 +34,7 @@ namespace tidy {
 namespace google {
 
 class GoogleModule : public ClangTidyModule {
-public:
+ public:
   void addCheckFactories(ClangTidyCheckFactories &CheckFactories) override {
     CheckFactories.registerCheck<build::ExplicitMakePairCheck>(
         "google-build-explicit-make-pair");
@@ -46,14 +46,18 @@ public:
         "google-default-arguments");
     CheckFactories.registerCheck<ExplicitConstructorCheck>(
         "google-explicit-constructor");
+    CheckFactories.registerCheck<readability::GlobalNamesInHeadersCheck>(
+        "google-global-names-in-headers");
+    CheckFactories.registerCheck<objc::AvoidThrowingObjCExceptionCheck>(
+        "google-objc-avoid-throwing-exception");
+    CheckFactories.registerCheck<objc::GlobalVariableDeclarationCheck>(
+        "google-objc-global-variable-declaration");
     CheckFactories.registerCheck<runtime::IntegerTypesCheck>(
         "google-runtime-int");
     CheckFactories.registerCheck<runtime::OverloadedUnaryAndCheck>(
         "google-runtime-operator");
     CheckFactories.registerCheck<runtime::NonConstReferences>(
         "google-runtime-references");
-    CheckFactories.registerCheck<runtime::StringReferenceMemberCheck>(
-        "google-runtime-member-string-references");
     CheckFactories.registerCheck<readability::AvoidCStyleCastsCheck>(
         "google-readability-casting");
     CheckFactories.registerCheck<readability::TodoCommentCheck>(
@@ -61,16 +65,11 @@ public:
     CheckFactories
         .registerCheck<clang::tidy::readability::BracesAroundStatementsCheck>(
             "google-readability-braces-around-statements");
-    CheckFactories.registerCheck<readability::GlobalNamesInHeadersCheck>(
-        "google-global-names-in-headers");
     CheckFactories.registerCheck<clang::tidy::readability::FunctionSizeCheck>(
         "google-readability-function-size");
     CheckFactories
         .registerCheck<clang::tidy::readability::NamespaceCommentCheck>(
             "google-readability-namespace-comments");
-    CheckFactories
-        .registerCheck<clang::tidy::readability::RedundantSmartptrGetCheck>(
-            "google-readability-redundant-smartptr-get");
   }
 
   ClangTidyOptions getModuleOptions() override {
@@ -89,11 +88,11 @@ public:
 static ClangTidyModuleRegistry::Add<GoogleModule> X("google-module",
                                                     "Adds Google lint checks.");
 
-} // namespace google
+}  // namespace google
 
 // This anchor is used to force the linker to link in the generated object file
 // and thus register the GoogleModule.
 volatile int GoogleModuleAnchorSource = 0;
 
-} // namespace tidy
-} // namespace clang
+}  // namespace tidy
+}  // namespace clang

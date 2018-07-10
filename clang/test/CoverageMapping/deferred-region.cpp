@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -std=c++11 -fprofile-instrument=clang -fcoverage-mapping -dump-coverage-mapping -fexceptions -fcxx-exceptions -emit-llvm-only -triple %itanium_abi_triple -main-file-name deferred-region.cpp %s | FileCheck %s
+// RUN: %clang_cc1 -std=c++11 -fprofile-instrument=clang -fcoverage-mapping -dump-coverage-mapping -fexceptions -fcxx-exceptions -emit-llvm-only -triple %itanium_abi_triple -main-file-name deferred-region.cpp -I %S/Inputs %s | FileCheck %s
 
 #define IF if
 #define STMT(S) S
@@ -7,11 +7,12 @@
 void foo(int x) {
   if (x == 0) {
     return;
-  } // CHECK: Gap,File 0, [[@LINE]]:4 -> [[@LINE+2]]:2 = (#0 - #1)
-
+  } // CHECK-NOT: Gap,File 0, [[@LINE]]:4
+    //< Don't complete the last deferred region in a decl, even though it may
+    //< leave some whitespace marked with the same counter as the final return.
 }
 
-// CHECK-NEXT: _Z4foooi:
+// CHECK-LABEL: _Z4foooi:
 void fooo(int x) {
   if (x == 0) {
     return;
@@ -19,7 +20,7 @@ void fooo(int x) {
 
   if (x == 1) {
     return;
-  } // CHECK: Gap,File 0, [[@LINE]]:4 -> [[@LINE+2]]:2 = ((#0 - #1) - #2)
+  } // CHECK-NOT: Gap,File 0, [[@LINE]]:4
 
 }
 
@@ -31,9 +32,26 @@ void baz() { // CHECK: [[@LINE]]:12 -> [[@LINE+2]]:2
 // CHECK-LABEL: _Z3mazv:
 void maz() {
   if (true)
-    return; // CHECK: Gap,File 0, [[@LINE]]:11 -> 36:3 = (#0 - #1)
+    return; // CHECK: Gap,File 0, [[@LINE]]:11 -> [[@LINE+2]]:3 = (#0 - #1)
 
   return; // CHECK-NOT: Gap
+}
+
+// CHECK-LABEL: _Z4maazv:
+void maaz() {
+  if (true)
+    return; // CHECK: Gap,File 0, [[@LINE]]:11
+  else
+    return; // CHECK-NOT: Gap,File 0, [[@LINE]]
+}
+
+// CHECK-LABEL: _Z5maaazv:
+void maaaz() {
+  if (true) {
+    return;
+  } else {  // CHECK: Gap,File 0, [[@LINE]]:4 -> [[@LINE]]:10
+    return; // CHECK-NOT: Gap,File 0, [[@LINE]]
+  }
 }
 
 // CHECK-LABEL: _Z3bari:
@@ -91,7 +109,7 @@ void weird_if() {
   }
 
   if (false)
-    return; // CHECK: Gap,File 0, [[@LINE]]:11 -> [[@LINE+1]]:2
+    return; // CHECK-NOT: Gap,File 0, [[@LINE]]:11
 }
 
 // CHECK-LABEL: _Z8for_loopv:
@@ -150,7 +168,28 @@ void gotos() {
   return; // CHECK: [[@LINE]]:3 -> [[@LINE+4]]:2 = (#0 - #1)
 
 out:
-	return; // CHECK: Gap,File 0, [[@LINE]]:8 -> [[@LINE+1]]:2 = 0
+	return; // CHECK-NOT: Gap,File 0, [[@LINE]]:8
+}
+
+// CHECK-LABEL: _Z8switchesv:
+void switches() {
+  int x;
+  switch (x) {
+    case 0:
+      return;
+    default:
+      return; // CHECK-NOT: Gap,File 0, [[@LINE]]
+  }
+}
+
+#include "deferred-region-helper.h"
+// CHECK-LABEL: _Z13included_funcv:
+// CHECK:  Gap,File 0, 2:13 -> 3:5 = #1
+// CHECK:  Gap,File 0, 3:11 -> 4:3 = (#0 - #1)
+
+// CHECK-LABEL: _Z7includev:
+void include() {
+  included_func();
 }
 
 int main() {
@@ -158,6 +197,9 @@ int main() {
   foo(1);
   fooo(0);
   fooo(1);
+  maz();
+  maaz();
+  maaaz();
   baz();
   bar(0);
   bar(1);
@@ -169,5 +211,6 @@ int main() {
   for_loop();
   while_loop();
   gotos();
+  include();
   return 0;
 }

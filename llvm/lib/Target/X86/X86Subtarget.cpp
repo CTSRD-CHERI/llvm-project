@@ -22,8 +22,6 @@
 #include "llvm/ADT/Triple.h"
 #include "llvm/CodeGen/GlobalISel/CallLowering.h"
 #include "llvm/CodeGen/GlobalISel/InstructionSelect.h"
-#include "llvm/CodeGen/GlobalISel/Legalizer.h"
-#include "llvm/CodeGen/GlobalISel/RegBankSelect.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/ConstantRange.h"
 #include "llvm/IR/Function.h"
@@ -35,8 +33,6 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
-#include <cassert>
-#include <string>
 
 #if defined(_MSC_VER)
 #include <intrin.h>
@@ -72,14 +68,30 @@ X86Subtarget::classifyGlobalReference(const GlobalValue *GV) const {
 
 unsigned char
 X86Subtarget::classifyLocalReference(const GlobalValue *GV) const {
-  // 64 bits can use %rip addressing for anything local.
-  if (is64Bit())
-    return X86II::MO_NO_FLAG;
-
-  // If this is for a position dependent executable, the static linker can
-  // figure it out.
+  // If we're not PIC, it's not very interesting.
   if (!isPositionIndependent())
     return X86II::MO_NO_FLAG;
+
+  // For 64-bit, we need to consider the code model.
+  if (is64Bit()) {
+    switch (TM.getCodeModel()) {
+    // 64-bit small code model is simple: All rip-relative.
+    case CodeModel::Small:
+    case CodeModel::Kernel:
+      return X86II::MO_NO_FLAG;
+
+    // The large PIC code model uses GOTOFF.
+    case CodeModel::Large:
+      return X86II::MO_GOTOFF;
+
+    // Medium is a hybrid: RIP-rel for code, GOTOFF for DSO local data.
+    case CodeModel::Medium:
+      if (isa<Function>(GV))
+        return X86II::MO_NO_FLAG; // All code is RIP-relative
+      return X86II::MO_GOTOFF;    // Local symbols use GOTOFF.
+    }
+    llvm_unreachable("invalid code model");
+  }
 
   // The COFF dynamic linker just patches the executable sections.
   if (isTargetCOFF())
@@ -99,26 +111,10 @@ X86Subtarget::classifyLocalReference(const GlobalValue *GV) const {
   return X86II::MO_GOTOFF;
 }
 
-static bool shouldAssumeGlobalReferenceLocal(const X86Subtarget *ST,
-                                             const TargetMachine &TM,
-                                             const Module &M,
-                                             const GlobalValue *GV) {
-  if (!TM.shouldAssumeDSOLocal(M, GV))
-    return false;
-  // A weak reference can end up being 0. If the code can be more that 4g away
-  // from zero and we are using the small code model we have to treat it as non
-  // local.
-  if (GV && GV->hasExternalWeakLinkage() &&
-      TM.getCodeModel() == CodeModel::Small && TM.isPositionIndependent() &&
-      ST->is64Bit() && ST->isTargetELF())
-    return false;
-  return true;
-}
-
 unsigned char X86Subtarget::classifyGlobalReference(const GlobalValue *GV,
                                                     const Module &M) const {
-  // Large model never uses stubs.
-  if (TM.getCodeModel() == CodeModel::Large)
+  // The static large model never uses stubs.
+  if (TM.getCodeModel() == CodeModel::Large && !isPositionIndependent())
     return X86II::MO_NO_FLAG;
 
   // Absolute symbols can be referenced directly.
@@ -134,13 +130,13 @@ unsigned char X86Subtarget::classifyGlobalReference(const GlobalValue *GV,
     }
   }
 
-  if (shouldAssumeGlobalReferenceLocal(this, TM, M, GV))
+  if (TM.shouldAssumeDSOLocal(M, GV))
     return classifyLocalReference(GV);
 
   if (isTargetCOFF())
     return X86II::MO_DLLIMPORT;
 
-  if (is64Bit())
+  if (is64Bit() && TM.getCodeModel() != CodeModel::Large)
     return X86II::MO_GOTPCREL;
 
   if (isTargetDarwin()) {
@@ -177,6 +173,11 @@ X86Subtarget::classifyGlobalFunctionReference(const GlobalValue *GV,
       // In Regcall calling convention those registers are used for passing
       // parameters. Thus we need to prevent lazy binding in Regcall.
       return X86II::MO_GOTPCREL;
+    // If PLT must be avoided then the call should be via GOTPCREL.
+    if (((F && F->hasFnAttribute(Attribute::NonLazyBind)) ||
+         (!F && M.getRtLibUseGOT())) &&
+        is64Bit())
+       return X86II::MO_GOTPCREL;
     return X86II::MO_PLT;
   }
 
@@ -190,28 +191,6 @@ X86Subtarget::classifyGlobalFunctionReference(const GlobalValue *GV,
   }
 
   return X86II::MO_NO_FLAG;
-}
-
-/// This function returns the name of a function which has an interface like
-/// the non-standard bzero function, if such a function exists on the
-/// current subtarget and it is considered preferable over memset with zero
-/// passed as the second argument. Otherwise it returns null.
-const char *X86Subtarget::getBZeroEntry() const {
-  // Darwin 10 has a __bzero entry point for this purpose.
-  if (getTargetTriple().isMacOSX() &&
-      !getTargetTriple().isMacOSXVersionLT(10, 6))
-    return "__bzero";
-
-  return nullptr;
-}
-
-bool X86Subtarget::hasSinCos() const {
-  if (getTargetTriple().isMacOSX()) {
-    return !getTargetTriple().isMacOSXVersionLT(10, 9) && is64Bit();
-  } else if (getTargetTriple().isOSFuchsia()) {
-    return true;
-  }
-  return false;
 }
 
 /// Return true if the subtarget allows calls to immediate address.
@@ -256,8 +235,6 @@ void X86Subtarget::initSubtargetFeatures(StringRef CPU, StringRef FS) {
   // micro-architectures respectively.
   if (hasSSE42() || hasSSE4A())
     IsUAMem16Slow = false;
-  
-  InstrItins = getInstrItineraryForCPU(CPUName);
 
   // It's important to keep the MCSubtargetInfo feature bits in sync with
   // target data structure which is shared with MC code emitter, etc.
@@ -270,9 +247,9 @@ void X86Subtarget::initSubtargetFeatures(StringRef CPU, StringRef FS) {
   else
     llvm_unreachable("Not 16-bit, 32-bit or 64-bit mode!");
 
-  DEBUG(dbgs() << "Subtarget features: SSELevel " << X86SSELevel
-               << ", 3DNowLevel " << X863DNowLevel
-               << ", 64bit " << HasX86_64 << "\n");
+  LLVM_DEBUG(dbgs() << "Subtarget features: SSELevel " << X86SSELevel
+                    << ", 3DNowLevel " << X863DNowLevel << ", 64bit "
+                    << HasX86_64 << "\n");
   assert((!In64BitMode || HasX86_64) &&
          "64-bit code requested on a subtarget that doesn't support it!");
 
@@ -283,112 +260,41 @@ void X86Subtarget::initSubtargetFeatures(StringRef CPU, StringRef FS) {
   else if (isTargetDarwin() || isTargetLinux() || isTargetSolaris() ||
            isTargetKFreeBSD() || In64BitMode)
     stackAlignment = 16;
- 
-  // Gather is available since Haswell (AVX2 set). So technically, we can generate Gathers 
-  // on all AVX2 processors. But the overhead on HSW is high. Skylake Client processor has
-  // faster Gathers than HSW and performance is similar to Skylake Server (AVX-512). 
-  // The specified overhead is relative to the Load operation."2" is the number provided 
-  // by Intel architects, This parameter is used for cost estimation of Gather Op and 
-  // comparison with other alternatives.
-  if (X86ProcFamily == IntelSkylake || hasAVX512())
+
+  // Some CPUs have more overhead for gather. The specified overhead is relative
+  // to the Load operation. "2" is the number provided by Intel architects. This
+  // parameter is used for cost estimation of Gather Op and comparison with
+  // other alternatives.
+  // TODO: Remove the explicit hasAVX512()?, That would mean we would only
+  // enable gather with a -march.
+  if (hasAVX512() || (hasAVX2() && hasFastGather()))
     GatherOverhead = 2;
   if (hasAVX512())
     ScatterOverhead = 2;
-}
 
-void X86Subtarget::initializeEnvironment() {
-  X86SSELevel = NoSSE;
-  X863DNowLevel = NoThreeDNow;
-  HasX87 = false;
-  HasCMov = false;
-  HasX86_64 = false;
-  HasPOPCNT = false;
-  HasSSE4A = false;
-  HasAES = false;
-  HasFXSR = false;
-  HasXSAVE = false;
-  HasXSAVEOPT = false;
-  HasXSAVEC = false;
-  HasXSAVES = false;
-  HasPCLMUL = false;
-  HasFMA = false;
-  HasFMA4 = false;
-  HasXOP = false;
-  HasTBM = false;
-  HasLWP = false;
-  HasMOVBE = false;
-  HasRDRAND = false;
-  HasF16C = false;
-  HasFSGSBase = false;
-  HasLZCNT = false;
-  HasBMI = false;
-  HasBMI2 = false;
-  HasVBMI = false;
-  HasIFMA = false;
-  HasRTM = false;
-  HasERI = false;
-  HasCDI = false;
-  HasPFI = false;
-  HasDQI = false;
-  HasVPOPCNTDQ = false;
-  HasBWI = false;
-  HasVLX = false;
-  HasADX = false;
-  HasPKU = false;
-  HasSHA = false;
-  HasPRFCHW = false;
-  HasRDSEED = false;
-  HasLAHFSAHF = false;
-  HasMWAITX = false;
-  HasCLZERO = false;
-  HasMPX = false;
-  HasSGX = false;
-  HasCLFLUSHOPT = false;
-  HasCLWB = false;
-  IsPMULLDSlow = false;
-  IsSHLDSlow = false;
-  IsUAMem16Slow = false;
-  IsUAMem32Slow = false;
-  HasSSEUnalignedMem = false;
-  HasCmpxchg16b = false;
-  UseLeaForSP = false;
-  HasFastPartialYMMorZMMWrite = false;
-  HasFastScalarFSQRT = false;
-  HasFastVectorFSQRT = false;
-  HasFastLZCNT = false;
-  HasFastSHLDRotate = false;
-  HasMacroFusion = false;
-  HasERMSB = false;
-  HasSlowDivide32 = false;
-  HasSlowDivide64 = false;
-  PadShortFunctions = false;
-  SlowTwoMemOps = false;
-  LEAUsesAG = false;
-  SlowLEA = false;
-  Slow3OpsLEA = false;
-  SlowIncDec = false;
-  stackAlignment = 4;
-  // FIXME: this is a known good value for Yonah. How about others?
-  MaxInlineSizeThreshold = 128;
-  UseSoftFloat = false;
-  X86ProcFamily = Others;
-  GatherOverhead = 1024;
-  ScatterOverhead = 1024;
+  // Consume the vector width attribute or apply any target specific limit.
+  if (PreferVectorWidthOverride)
+    PreferVectorWidth = PreferVectorWidthOverride;
+  else if (Prefer256Bit)
+    PreferVectorWidth = 256;
 }
 
 X86Subtarget &X86Subtarget::initializeSubtargetDependencies(StringRef CPU,
                                                             StringRef FS) {
-  initializeEnvironment();
   initSubtargetFeatures(CPU, FS);
   return *this;
 }
 
 X86Subtarget::X86Subtarget(const Triple &TT, StringRef CPU, StringRef FS,
                            const X86TargetMachine &TM,
-                           unsigned StackAlignOverride)
-    : X86GenSubtargetInfo(TT, CPU, FS), X86ProcFamily(Others),
+                           unsigned StackAlignOverride,
+                           unsigned PreferVectorWidthOverride,
+                           unsigned RequiredVectorWidth)
+    : X86GenSubtargetInfo(TT, CPU, FS),
       PICStyle(PICStyles::None), TM(TM), TargetTriple(TT),
       StackAlignOverride(StackAlignOverride),
+      PreferVectorWidthOverride(PreferVectorWidthOverride),
+      RequiredVectorWidth(RequiredVectorWidth),
       In64BitMode(TargetTriple.getArch() == Triple::x86_64),
       In32BitMode(TargetTriple.getArch() == Triple::x86 &&
                   TargetTriple.getEnvironment() != Triple::CODE16),

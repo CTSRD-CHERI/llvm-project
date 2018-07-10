@@ -2336,6 +2336,8 @@ def t2USAT16: T2SatI<(ins imm0_15:$sat_imm, rGPR:$Rn),
 
 def : T2Pat<(ARMssatnoshift GPRnopc:$Rn, imm0_31:$imm),
              (t2SSAT imm0_31:$imm, GPRnopc:$Rn, 0)>;
+def : T2Pat<(ARMusatnoshift GPRnopc:$Rn, imm0_31:$imm),
+             (t2USAT imm0_31:$imm, GPRnopc:$Rn, 0)>;
 def : T2Pat<(int_arm_ssat GPR:$a, imm1_32:$pos),
             (t2SSAT imm1_32:$pos, GPR:$a, 0)>;
 def : T2Pat<(int_arm_usat GPR:$a, imm0_31:$pos),
@@ -2592,6 +2594,18 @@ def : T2Pat<(or      rGPR:$src, t2_so_imm_not:$imm),
 def : T2Pat<(t2_so_imm_not:$src),
             (t2MVNi t2_so_imm_not:$src)>;
 
+// There are shorter Thumb encodings for ADD than ORR, so to increase
+// Thumb2SizeReduction's chances later on we select a t2ADD for an or where
+// possible.
+def : T2Pat<(or AddLikeOrOp:$Rn, t2_so_imm:$imm),
+            (t2ADDri $Rn, t2_so_imm:$imm)>;
+
+def : T2Pat<(or AddLikeOrOp:$Rn, imm0_4095:$Rm),
+            (t2ADDri12 $Rn, imm0_4095:$Rm)>;
+
+def : T2Pat<(or AddLikeOrOp:$Rn, non_imm32:$Rm),
+            (t2ADDrr $Rn, $Rm)>;
+
 //===----------------------------------------------------------------------===//
 //  Multiply Instructions.
 //
@@ -2659,7 +2673,9 @@ class T2SMMUL<bits<4> op7_4, string opc, list<dag> pattern>
 }
 def t2SMMUL : T2SMMUL<0b0000, "smmul", [(set rGPR:$Rd, (mulhs rGPR:$Rn,
                                                               rGPR:$Rm))]>;
-def t2SMMULR : T2SMMUL<0b0001, "smmulr", []>;
+def t2SMMULR :
+  T2SMMUL<0b0001, "smmulr",
+          [(set rGPR:$Rd, (ARMsmmlar rGPR:$Rn, rGPR:$Rm, (i32 0)))]>;
 
 class T2FourRegSMMLA<bits<3> op22_20, bits<4> op7_4, string opc,
                      list<dag> pattern>
@@ -2675,9 +2691,11 @@ class T2FourRegSMMLA<bits<3> op22_20, bits<4> op7_4, string opc,
 
 def t2SMMLA :   T2FourRegSMMLA<0b101, 0b0000, "smmla",
                 [(set rGPR:$Rd, (add (mulhs rGPR:$Rm, rGPR:$Rn), rGPR:$Ra))]>;
-def t2SMMLAR:   T2FourRegSMMLA<0b101, 0b0001, "smmlar", []>;
+def t2SMMLAR:   T2FourRegSMMLA<0b101, 0b0001, "smmlar",
+                [(set rGPR:$Rd, (ARMsmmlar rGPR:$Rn, rGPR:$Rm, rGPR:$Ra))]>;
 def t2SMMLS:    T2FourRegSMMLA<0b110, 0b0000, "smmls", []>;
-def t2SMMLSR:   T2FourRegSMMLA<0b110, 0b0001, "smmlsr", []>;
+def t2SMMLSR:   T2FourRegSMMLA<0b110, 0b0001, "smmlsr",
+                [(set rGPR:$Rd, (ARMsmmlsr rGPR:$Rn, rGPR:$Rm, rGPR:$Ra))]>;
 
 class T2ThreeRegSMUL<bits<3> op22_20, bits<2> op5_4, string opc,
                      list<dag> pattern>
@@ -3694,6 +3712,8 @@ def : t2InstAlias<"esb$p.w", (t2HINT 16, pred:$p), 1> {
 def : t2InstAlias<"esb$p", (t2HINT 16, pred:$p), 0> {
   let Predicates = [IsThumb2, HasRAS];
 }
+def : t2InstAlias<"csdb$p.w", (t2HINT 20, pred:$p), 0>;
+def : t2InstAlias<"csdb$p",   (t2HINT 20, pred:$p), 1>;
 
 def t2DBG : T2I<(outs), (ins imm0_15:$opt), NoItinerary, "dbg", "\t$opt",
                 [(int_arm_dbg imm0_15:$opt)]> {
@@ -3843,13 +3863,13 @@ let isReMaterializable = 1 in {
 def t2MOV_ga_pcrel : PseudoInst<(outs rGPR:$dst), (ins i32imm:$addr),
                                 IIC_iMOVix2addpc,
                           [(set rGPR:$dst, (ARMWrapperPIC tglobaladdr:$addr))]>,
-                          Requires<[IsThumb, HasV8MBaseline, UseMovt]>;
+                          Requires<[IsThumb, HasV8MBaseline, UseMovtInPic]>;
 
 }
 
 def : T2Pat<(ARMWrapperPIC tglobaltlsaddr :$dst),
             (t2MOV_ga_pcrel tglobaltlsaddr:$dst)>,
-      Requires<[IsThumb2, UseMovt]>;
+      Requires<[IsThumb2, UseMovtInPic]>;
 def : T2Pat<(ARMWrapper tglobaltlsaddr:$dst),
             (t2MOVi32imm tglobaltlsaddr:$dst)>,
       Requires<[IsThumb2, UseMovt]>;
@@ -4506,6 +4526,8 @@ def : t2InstAlias<"tst${p} $Rn, $Rm",
 def : InstAlias<"dmb${p}", (t2DMB 0xf, pred:$p), 0>, Requires<[HasDB]>;
 def : InstAlias<"dsb${p}", (t2DSB 0xf, pred:$p), 0>, Requires<[HasDB]>;
 def : InstAlias<"isb${p}", (t2ISB 0xf, pred:$p), 0>, Requires<[HasDB]>;
+// Armv8-R 'Data Full Barrier'
+def : InstAlias<"dfb${p}", (t2DSB 0xc, pred:$p), 1>, Requires<[HasDFB]>;
 
 // Alias for LDR, LDRB, LDRH, LDRSB, and LDRSH without the ".w" optional
 // width specifier.

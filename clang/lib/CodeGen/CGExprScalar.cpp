@@ -89,6 +89,9 @@ struct BinOpInfo {
   BinaryOperator::Opcode Opcode; // Opcode of BinOp to perform
   FPOptions FPFeatures;
   const Expr *E;      // Entire expr, for error unsupported.  May not be binop.
+  // For CHERI we may have to use NULL as the resulting base in a bitiwise-and
+  // instead of the LHS (see https://github.com/CTSRD-CHERI/clang/issues/189)
+  Value *ResultProvenanceOverride = nullptr;
 
   /// Check if the binop can result in integer overflow.
   bool mayHaveIntegerOverflow() const {
@@ -165,7 +168,7 @@ static bool CanElideOverflowCheck(const ASTContext &Ctx, const BinOpInfo &Op) {
 
   // If a unary op has a widened operand, the op cannot overflow.
   if (const auto *UO = dyn_cast<UnaryOperator>(Op.E))
-    return IsWidenedIntegerOp(Ctx, UO->getSubExpr());
+    return !UO->canOverflow();
 
   // We usually don't need overflow checks for binops with widened operands.
   // Multiplication with promoted unsigned operands is a special case.
@@ -388,6 +391,9 @@ public:
   Value *VisitIntegerLiteral(const IntegerLiteral *E) {
     return Builder.getInt(E->getValue());
   }
+  Value *VisitFixedPointLiteral(const FixedPointLiteral *E) {
+    return Builder.getInt(E->getValue());
+  }
   Value *VisitFloatingLiteral(const FloatingLiteral *E) {
     return llvm::ConstantFP::get(VMContext, E->getValue());
   }
@@ -410,6 +416,12 @@ public:
   Value *VisitUnaryExprOrTypeTraitExpr(const UnaryExprOrTypeTraitExpr *E);
   Value *VisitAddrLabelExpr(const AddrLabelExpr *E) {
     llvm::Value *V = CGF.GetAddrOfLabel(E->getLabel());
+    auto &TI = CGF.getContext().getTargetInfo();
+    if (TI.areAllPointersCapabilities()) {
+      unsigned CapAS = CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
+      if (V->getType()->getPointerAddressSpace() != CapAS)
+        V = CodeGenFunction::FunctionAddressToCapability(CGF, V);
+    }
     return Builder.CreateBitCast(V, ConvertType(E->getType()));
   }
 
@@ -423,10 +435,11 @@ public:
 
   Value *VisitOpaqueValueExpr(OpaqueValueExpr *E) {
     if (E->isGLValue())
-      return EmitLoadOfLValue(CGF.getOpaqueLValueMapping(E), E->getExprLoc());
+      return EmitLoadOfLValue(CGF.getOrCreateOpaqueLValueMapping(E),
+                              E->getExprLoc());
 
     // Otherwise, assume the mapping is the scalar directly.
-    return CGF.getOpaqueRValueMapping(E).getScalarVal();
+    return CGF.getOrCreateOpaqueRValueMapping(E).getScalarVal();
   }
 
   Value *emitConstant(const CodeGenFunction::ConstantEmission &Constant,
@@ -435,7 +448,9 @@ public:
     if (Constant.isReference())
       return EmitLoadOfLValue(Constant.getReferenceLValue(CGF, E),
                               E->getExprLoc());
-    return Constant.getValue();
+    // XXXAR: For CHERI convert inttoptr instructions to setPointerOffset on
+    // null See https://github.com/CTSRD-CHERI/llvm/issues/268
+    return Constant.getValue(CGF);
   }
 
   // l-values.
@@ -559,11 +574,7 @@ public:
     if (TI.areAllPointersCapabilities()) {
       unsigned CapAS = CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
       if (AddrTy->getPointerAddressSpace() != CapAS) {
-        llvm::Type *CapTy = cast<llvm::PointerType>(AddrTy)
-            ->getElementType()->getPointerTo(CapAS);
-
         Addr = CodeGenFunction::FunctionAddressToCapability(CGF, Addr);
-        Addr = Builder.CreateBitCast(Addr, CapTy);
       }
     }
     return Addr;
@@ -689,15 +700,42 @@ public:
     if (!T->isCHERICapabilityType(CGF.getContext()) ||
         !V->getType()->isPointerTy())
       return V;
-    return CGF.getPointerOffset(V);
+    return CGF.getCapabilityIntegerValue(V);
   }
   Value *GetBinOpVal(const BinOpInfo &Op, Value *V) {
     return GetBinOpVal(Op, V, Op.E->getType());
   }
   Value *GetBinOpResult(const BinOpInfo &Op, Value *LHS, Value *V, QualType T) {
-    if (!T->isCHERICapabilityType(CGF.getContext()))
+    bool IsCapabilityResult = T->isCHERICapabilityType(CGF.getContext());
+    // TODO: or just check LHS LLVM type?
+    if (!IsCapabilityResult)
       return V;
-    return CGF.setPointerOffset(LHS, V);
+    // Bitwise-and require special handling (due to checking vs clearing low
+    // pointer bits: see https://github.com/CTSRD-CHERI/clang/issues/189
+    // Note: without data-dependent provenance patterns such as
+    // `if (uintptr_t(x) & 1 == 1)` break. This is commonly used is used to
+    // test for data stored in low pointer bits (for mutexes, etc...)
+    if (Op.Opcode == BinaryOperator::Opcode::BO_And ||
+        Op.Opcode == BinaryOperator::Opcode::BO_AndAssign) {
+      // If we are using data-dependent provenance we may need to return either
+      // a NULL-derived or LHS derived capability for bitwise-and
+      // TODO: is this also a problem for xor (should be less common so can
+      // probably ignore?)
+      if (IsCapabilityResult &&
+          CGF.getLangOpts().CheriDataDependentProvenance) {
+        // For now we derive from NULL if the value we are anding with is less
+        // than one page since such values should *almost* never be valid anyway
+        uint64_t NullDeriveLimit = 4096;
+        auto *ShouldDeriveFromNull = CGF.Builder.CreateICmpULE(
+            Op.RHS, llvm::ConstantInt::get(Op.RHS->getType(), NullDeriveLimit),
+            "bitand.should-nullderive");
+        auto CapNull = llvm::ConstantPointerNull::get(
+            cast<llvm::PointerType>(LHS->getType()));
+        LHS = Builder.CreateSelect(ShouldDeriveFromNull, CapNull, LHS,
+                                 "bitand.provenance");
+      }
+    }
+    return CGF.setCapabilityIntegerValue(LHS, V);
   }
   Value *GetBinOpResult(const BinOpInfo &Op, Value *LHS, Value *V) {
     return GetBinOpResult(Op, LHS, V, Op.E->getType());
@@ -1023,7 +1061,7 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
   if (SrcType->isHalfType() && !CGF.getContext().getLangOpts().NativeHalfType) {
     // Cast to FP using the intrinsic if the half type itself isn't supported.
     if (DstTy->isFloatingPointTy()) {
-      if (!CGF.getContext().getLangOpts().HalfArgsAndReturns)
+      if (CGF.getContext().getTargetInfo().useFP16ConversionIntrinsics())
         return Builder.CreateCall(
             CGF.CGM.getIntrinsic(llvm::Intrinsic::convert_from_fp16, DstTy),
             Src);
@@ -1031,7 +1069,7 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
       // Cast to other types through float, using either the intrinsic or FPExt,
       // depending on whether the half type itself is supported
       // (as opposed to operations on half, available with NativeHalfType).
-      if (!CGF.getContext().getLangOpts().HalfArgsAndReturns) {
+      if (CGF.getContext().getTargetInfo().useFP16ConversionIntrinsics()) {
         Src = Builder.CreateCall(
             CGF.CGM.getIntrinsic(llvm::Intrinsic::convert_from_fp16,
                                  CGF.CGM.FloatTy),
@@ -1058,8 +1096,7 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
 
     // Allow conversions from floating point types -> (u)intcap
     if (SrcType->isFloatingType()) {
-      assert((DstType->isSpecificBuiltinType(BuiltinType::UIntCap) ||
-             DstType->isSpecificBuiltinType(BuiltinType::IntCap)) &&
+      assert((DstType->isIntCapType()) &&
              "Float->cap conversions should only be possible with (u)intcap");
       unsigned BitWidth =
           CGF.getContext().getTargetInfo().getPointerRangeForCHERICapability();
@@ -1073,15 +1110,19 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
     assert(SrcType->isIntegerType() && "Not ptr->ptr or int->ptr conversion?");
 
     if (DstType->isCHERICapabilityType(CGF.getContext())) {
-      Value *Null =
-        Builder.CreateIntToPtr(llvm::ConstantInt::get(CGF.IntPtrTy, 0), DstTy);
-      Src = Builder.CreateSExtOrTrunc(Src, CGF.Int64Ty);
-      return CGF.setPointerOffset(Null, Src);
+      Value *Null = llvm::ConstantPointerNull::get(DstPT);
+      // Builder.CreateIntToPtr(llvm::ConstantInt::get(CGF.IntPtrTy, 0), DstPT);
+      if (SrcType->isBooleanType() && !TreatBooleanAsSigned)
+        Src = Builder.CreateZExtOrTrunc(Src, CGF.Int64Ty);
+      else
+        Src = Builder.CreateSExtOrTrunc(Src, CGF.Int64Ty);
+      return CGF.setCapabilityIntegerValue(Null, Src);
     }
     // First, convert to the correct width so that we control the kind of
     // extension.
     llvm::Type *MiddleTy = CGF.CGM.getDataLayout().getIntPtrType(DstPT);
     bool InputSigned = SrcType->isSignedIntegerOrEnumerationType();
+    assert(!SrcType->isCHERICapabilityType(CGF.getContext()));
     llvm::Value* IntResult =
         Builder.CreateIntCast(Src, MiddleTy, InputSigned, "conv");
     // Then, cast to pointer.
@@ -1091,16 +1132,16 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
   if (isa<llvm::PointerType>(SrcTy)) {
     if (!SrcType->isPointerType()) {
       // If this is not a pointer type in C, but is in LLVM IR, then it must be
-      // a [u]intcap_t
-      assert(SrcType->isSpecificBuiltinType(BuiltinType::UIntCap) ||
-             SrcType->isSpecificBuiltinType(BuiltinType::IntCap));
-      Src = CGF.getPointerOffset(Src);
+      // a [u]intcap_t or enum type whose underlying integer type is [u]intcap_t
+      assert(SrcType->isIntCapType());
+      Src = CGF.getCapabilityIntegerValue(Src);
       // Conversions from (u)intcap -> float should not be a bitcast:
       if (DstType->isFloatingType()) {
         if (SrcType->isSignedIntegerOrEnumerationType()) {
           return Builder.CreateSIToFP(Src, DstTy, "conv");
         } else {
-          assert(SrcType->isSpecificBuiltinType(BuiltinType::UIntCap));
+          assert(SrcType->isSpecificBuiltinType(BuiltinType::UIntCap) ||
+                 SrcType->isUnsignedIntegerOrEnumerationType());
           return Builder.CreateUIToFP(Src, DstTy, "conv");
         }
       }
@@ -1178,7 +1219,7 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
     if (SrcTy->isFloatingPointTy()) {
       // Use the intrinsic if the half type itself isn't supported
       // (as opposed to operations on half, available with NativeHalfType).
-      if (!CGF.getContext().getLangOpts().HalfArgsAndReturns)
+      if (CGF.getContext().getTargetInfo().useFP16ConversionIntrinsics())
         return Builder.CreateCall(
             CGF.CGM.getIntrinsic(llvm::Intrinsic::convert_to_fp16, SrcTy), Src);
       // If the half type is supported, just use an fptrunc.
@@ -1214,7 +1255,7 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
   }
 
   if (DstTy != ResTy) {
-    if (!CGF.getContext().getLangOpts().HalfArgsAndReturns) {
+    if (CGF.getContext().getTargetInfo().useFP16ConversionIntrinsics()) {
       assert(ResTy->isIntegerTy(16) && "Only half FP requires extra conversion");
       Res = Builder.CreateCall(
         CGF.CGM.getIntrinsic(llvm::Intrinsic::convert_to_fp16, CGF.CGM.FloatTy),
@@ -1254,7 +1295,7 @@ Value *ScalarExprEmitter::EmitNullValue(QualType Ty) {
   return CGF.EmitFromMemory(CGF.CGM.EmitNullConstant(Ty), Ty);
 }
 
-/// \brief Emit a sanitization check for the given "binary" operation (which
+/// Emit a sanitization check for the given "binary" operation (which
 /// might actually be a unary increment which has been lowered to a binary
 /// operation). The check passes if all values in \p Checks (which are \c i1),
 /// are \c true.
@@ -1476,6 +1517,7 @@ Value *ScalarExprEmitter::VisitArraySubscriptExpr(ArraySubscriptExpr *E) {
   Value *Idx  = Visit(E->getIdx());
   QualType IdxTy = E->getIdx()->getType();
 
+  // FIXME: should look at this
   if (CGF.SanOpts.has(SanitizerKind::ArrayBounds))
     CGF.EmitBoundsCheck(E, E->getBase(), Idx, IdxTy, /*Accessed*/true);
 
@@ -1810,6 +1852,32 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
         CGF, Src, SrcPointeeTy.getAddressSpace(),
         DstPointeeTy.getAddressSpace(), DestType);
   }
+  case CK_CHERICapabilityToOffset:
+  case CK_CHERICapabilityToAddress: {
+    llvm::Value *Src = nullptr;
+    // Special handling of CHERI C++ capability references. By default, clang
+    // emits a load of the referencee but that can lead to the Verifier being
+    // unhappy if the referencee type is incomplete. What we really want is
+    // just the pointer to the referencee, which is what we do here.
+    if (const DeclRefExpr *DRE = dyn_cast<DeclRefExpr>(E))
+      if (const VarDecl *VD = dyn_cast<VarDecl>(DRE->getDecl()))
+        if (const ReferenceType *RT = dyn_cast<ReferenceType>(VD->getType())) {
+          // RT is guaranteed to be a capability
+          Src = EmitLValue(E).getPointer();
+        }
+
+    if (!Src)
+      Src = Visit(E); // The default case
+    llvm::Type *ResultType = ConvertType(DestTy);
+    Src = Kind == CK_CHERICapabilityToOffset
+            ? CGF.getPointerOffset(Src)
+            : CGF.getPointerAddress(Src);
+    bool DestSigned = DestTy->isSignedIntegerOrEnumerationType();
+    // Insert int cast in case size of result type and capability offset field
+    // are not the same. This will be a no-op if the sizes are the same.
+    return Builder.CreateIntCast(Src, ResultType, DestSigned, "conv");
+  }
+
   case CK_AtomicToNonAtomic:
   case CK_NonAtomicToAtomic:
   case CK_NoOp:
@@ -1863,10 +1931,7 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     if (TI.areAllPointersCapabilities()) {
       unsigned CapAS = CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
       if (AddrTy->getPointerAddressSpace() != CapAS) {
-        llvm::Type *CapTy = cast<llvm::PointerType>(AddrTy)
-            ->getElementType()->getPointerTo(CapAS);
         Addr = CodeGenFunction::FunctionAddressToCapability(CGF, Addr);
-        Addr = Builder.CreateBitCast(Addr, CapTy);
       }
     }
     return Addr;
@@ -1943,7 +2008,7 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
       // Otherwise, it's some kind of non-capability pointer, so we need to
       // create an integer value first
       if (IsPureCap)
-        Src = CGF.getPointerOffset(Src);
+        Src = CGF.getCapabilityIntegerValue(Src);
       else 
         Src = Builder.CreatePtrToInt(Src, CGF.IntPtrTy);
     }
@@ -1956,8 +2021,9 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
       Builder.CreateIntCast(Src, MiddleTy, InputSigned, "conv");
 
     if (IsPureCap && DestTy->isCHERICapabilityType(CGF.getContext()))
-      return CGF.setPointerOffset(llvm::ConstantPointerNull::get(
-            cast<llvm::PointerType>(ResultType)), IntResult);
+      return CGF.setCapabilityIntegerValue(
+          llvm::ConstantPointerNull::get(cast<llvm::PointerType>(ResultType)),
+          IntResult);
 
     return Builder.CreateIntToPtr(IntResult, ResultType);
   }
@@ -2098,7 +2164,7 @@ llvm::Value *ScalarExprEmitter::EmitIncDecConsiderOverflowBehavior(
       return Builder.CreateNSWAdd(InVal, Amount, Name);
     // Fall through.
   case LangOptions::SOB_Trapping:
-    if (IsWidenedIntegerOp(CGF.getContext(), E->getSubExpr()))
+    if (!E->canOverflow())
       return Builder.CreateNSWAdd(InVal, Amount, Name);
     return EmitOverflowCheckedBinOp(createBinOpInfoFromIncDec(E, InVal, IsInc));
   }
@@ -2180,14 +2246,12 @@ ScalarExprEmitter::EmitScalarPrePostIncDec(const UnaryOperator *E, LValue LV,
   } else if (type->isIntegerType()) {
     llvm::Value *Base = value;
     if (type->isCHERICapabilityType(CGF.getContext()))
-      value = CGF.getPointerOffset(Base);
+      value = CGF.getCapabilityIntegerValue(Base);
     // Note that signed integer inc/dec with width less than int can't
     // overflow because of promotion rules; we're just eliding a few steps here.
-    bool CanOverflow = value->getType()->getIntegerBitWidth() >=
-                    CGF.IntTy->getIntegerBitWidth();
-    if (CanOverflow && type->isSignedIntegerOrEnumerationType()) {
+    if (E->canOverflow() && type->isSignedIntegerOrEnumerationType()) {
       value = EmitIncDecConsiderOverflowBehavior(E, value, isInc);
-    } else if (CanOverflow && type->isUnsignedIntegerType() &&
+    } else if (E->canOverflow() && type->isUnsignedIntegerType() &&
                CGF.SanOpts.has(SanitizerKind::UnsignedIntegerOverflow)) {
       value =
           EmitOverflowCheckedBinOp(createBinOpInfoFromIncDec(E, value, isInc));
@@ -2196,7 +2260,7 @@ ScalarExprEmitter::EmitScalarPrePostIncDec(const UnaryOperator *E, LValue LV,
       value = Builder.CreateAdd(value, amt, isInc ? "inc" : "dec");
     }
     if (type->isCHERICapabilityType(CGF.getContext()))
-      value = CGF.setPointerOffset(Base, value);
+      value = CGF.setCapabilityIntegerValue(Base, value);
   // Next most common: pointer increment.
   } else if (const PointerType *ptr = type->getAs<PointerType>()) {
     QualType type = ptr->getPointeeType();
@@ -2204,7 +2268,7 @@ ScalarExprEmitter::EmitScalarPrePostIncDec(const UnaryOperator *E, LValue LV,
     // VLA types don't have constant size.
     if (const VariableArrayType *vla
           = CGF.getContext().getAsVariableArrayType(type)) {
-      llvm::Value *numElts = CGF.getVLASize(vla).first;
+      llvm::Value *numElts = CGF.getVLASize(vla).NumElts;
       if (!isInc) numElts = Builder.CreateNSWNeg(numElts, "vla.negsize");
       if (CGF.getLangOpts().isSignedOverflowDefined())
         value = Builder.CreateGEP(value, numElts, "vla.inc");
@@ -2257,7 +2321,7 @@ ScalarExprEmitter::EmitScalarPrePostIncDec(const UnaryOperator *E, LValue LV,
 
     if (type->isHalfType() && !CGF.getContext().getLangOpts().NativeHalfType) {
       // Another special case: half FP increment should be done via float
-      if (!CGF.getContext().getLangOpts().HalfArgsAndReturns) {
+      if (CGF.getContext().getTargetInfo().useFP16ConversionIntrinsics()) {
         value = Builder.CreateCall(
             CGF.CGM.getIntrinsic(llvm::Intrinsic::convert_from_fp16,
                                  CGF.CGM.FloatTy),
@@ -2292,7 +2356,7 @@ ScalarExprEmitter::EmitScalarPrePostIncDec(const UnaryOperator *E, LValue LV,
     value = Builder.CreateFAdd(value, amt, isInc ? "inc" : "dec");
 
     if (type->isHalfType() && !CGF.getContext().getLangOpts().NativeHalfType) {
-      if (!CGF.getContext().getLangOpts().HalfArgsAndReturns) {
+      if (CGF.getContext().getTargetInfo().useFP16ConversionIntrinsics()) {
         value = Builder.CreateCall(
             CGF.CGM.getIntrinsic(llvm::Intrinsic::convert_to_fp16,
                                  CGF.CGM.FloatTy),
@@ -2374,10 +2438,10 @@ Value *ScalarExprEmitter::VisitUnaryNot(const UnaryOperator *E) {
   Value *Base = Op;
   bool IsIntCap = E->getType()->isCHERICapabilityType(CGF.getContext());
   if (IsIntCap)
-    Op = CGF.getPointerOffset(Op);
+    Op = CGF.getCapabilityIntegerValue(Op);
   Op = Builder.CreateNot(Op, "neg");
   if (IsIntCap)
-    Op = CGF.setPointerOffset(Base, Op);
+    Op = CGF.setCapabilityIntegerValue(Base, Op);
   return Op;
 }
 
@@ -2513,16 +2577,13 @@ ScalarExprEmitter::VisitUnaryExprOrTypeTraitExpr(
         CGF.EmitIgnoredExpr(E->getArgumentExpr());
       }
 
-      QualType eltType;
-      llvm::Value *numElts;
-      std::tie(numElts, eltType) = CGF.getVLASize(VAT);
-
-      llvm::Value *size = numElts;
+      auto VlaSize = CGF.getVLASize(VAT);
+      llvm::Value *size = VlaSize.NumElts;
 
       // Scale the number of non-VLA elements by the non-VLA element size.
-      CharUnits eltSize = CGF.getContext().getTypeSizeInChars(eltType);
+      CharUnits eltSize = CGF.getContext().getTypeSizeInChars(VlaSize.Type);
       if (!eltSize.isOne())
-        size = CGF.Builder.CreateNUWMul(CGF.CGM.getSize(eltSize), numElts);
+        size = CGF.Builder.CreateNUWMul(CGF.CGM.getSize(eltSize), size);
 
       return size;
     }
@@ -2943,6 +3004,8 @@ Value *ScalarExprEmitter::EmitOverflowCheckedBinOp(const BinOpInfo &Ops) {
 static Value *emitPointerArithmetic(CodeGenFunction &CGF,
                                     const BinOpInfo &op,
                                     bool isSubtraction) {
+  // FIXME: subobject-bounds
+
   // Must have binary (not unary) expr here.  Unary pointer
   // increment/decrement doesn't use this path.
   const BinaryOperator *expr = cast<BinaryOperator>(op.E);
@@ -2959,8 +3022,8 @@ static Value *emitPointerArithmetic(CodeGenFunction &CGF,
   }
 
   if (index->getType()->isPointerTy())
-    index = CGF.getPointerOffset(index);
-  
+    index = CGF.getCapabilityIntegerValue(index);
+
   bool isSigned = indexOperand->getType()->isSignedIntegerOrEnumerationType();
 
   unsigned width = cast<llvm::IntegerType>(index->getType())->getBitWidth();
@@ -3025,7 +3088,7 @@ static Value *emitPointerArithmetic(CodeGenFunction &CGF,
   if (const VariableArrayType *vla
         = CGF.getContext().getAsVariableArrayType(elementType)) {
     // The element count here is the total number of non-VLA elements.
-    llvm::Value *numElements = CGF.getVLASize(vla).first;
+    llvm::Value *numElements = CGF.getVLASize(vla).NumElts;
 
     // Effectively, the multiply by the VLA size is part of the GEP.
     // GEP indexes are signed, and scaling an index isn't permitted to
@@ -3233,10 +3296,9 @@ Value *ScalarExprEmitter::EmitSub(const BinOpInfo &op) {
   // For a variable-length array, this is going to be non-constant.
   if (const VariableArrayType *vla
         = CGF.getContext().getAsVariableArrayType(elementType)) {
-    llvm::Value *numElements;
-    std::tie(numElements, elementType) = CGF.getVLASize(vla);
-
-    divisor = numElements;
+    auto VlaSize = CGF.getVLASize(vla);
+    elementType = VlaSize.Type;
+    divisor = VlaSize.NumElts;
 
     // Scale the number of non-VLA elements by the non-VLA element size.
     CharUnits eltSize = CGF.getContext().getTypeSizeInChars(elementType);
@@ -3282,7 +3344,7 @@ Value *ScalarExprEmitter::EmitShl(const BinOpInfo &Ops) {
   // RHS to the same size as the LHS.
   Value *RHS = Ops.RHS;
   if (RHS->getType()->isPointerTy())
-    RHS = CGF.getPointerOffset(RHS);
+    RHS = CGF.getCapabilityIntegerValue(RHS);
   if (Ops.LHS->getType() != RHS->getType())
     RHS = Builder.CreateIntCast(RHS, Ops.LHS->getType(), false, "sh_prom");
 
@@ -3351,7 +3413,7 @@ Value *ScalarExprEmitter::EmitShr(const BinOpInfo &Ops) {
   // RHS to the same size as the LHS.
   Value *RHS = Ops.RHS;
   if (RHS->getType()->isPointerTy())
-    RHS = CGF.getPointerOffset(RHS);
+    RHS = CGF.getCapabilityIntegerValue(RHS);
   if (Ops.LHS->getType() != RHS->getType())
     RHS = Builder.CreateIntCast(RHS, Ops.LHS->getType(), false, "sh_prom");
 
@@ -3393,16 +3455,25 @@ static llvm::Intrinsic::ID GetIntrinsic(IntrinsicType IT,
     return (IT == VCMPEQ) ? llvm::Intrinsic::ppc_altivec_vcmpequh_p :
                             llvm::Intrinsic::ppc_altivec_vcmpgtsh_p;
   case BuiltinType::UInt:
-  case BuiltinType::ULong:
     return (IT == VCMPEQ) ? llvm::Intrinsic::ppc_altivec_vcmpequw_p :
                             llvm::Intrinsic::ppc_altivec_vcmpgtuw_p;
   case BuiltinType::Int:
-  case BuiltinType::Long:
     return (IT == VCMPEQ) ? llvm::Intrinsic::ppc_altivec_vcmpequw_p :
                             llvm::Intrinsic::ppc_altivec_vcmpgtsw_p;
+  case BuiltinType::ULong:
+  case BuiltinType::ULongLong:
+    return (IT == VCMPEQ) ? llvm::Intrinsic::ppc_altivec_vcmpequd_p :
+                            llvm::Intrinsic::ppc_altivec_vcmpgtud_p;
+  case BuiltinType::Long:
+  case BuiltinType::LongLong:
+    return (IT == VCMPEQ) ? llvm::Intrinsic::ppc_altivec_vcmpequd_p :
+                            llvm::Intrinsic::ppc_altivec_vcmpgtsd_p;
   case BuiltinType::Float:
     return (IT == VCMPEQ) ? llvm::Intrinsic::ppc_altivec_vcmpeqfp_p :
                             llvm::Intrinsic::ppc_altivec_vcmpgtfp_p;
+  case BuiltinType::Double:
+    return (IT == VCMPEQ) ? llvm::Intrinsic::ppc_vsx_xvcmpeqdp_p :
+                            llvm::Intrinsic::ppc_vsx_xvcmpgtdp_p;
   }
 }
 
@@ -3696,6 +3767,12 @@ Value *ScalarExprEmitter::VisitBinLAnd(const BinaryOperator *E) {
   }
   // Insert an entry into the phi node for the edge with the value of RHSCond.
   PN->addIncoming(RHSCond, RHSBlock);
+
+  // Artificial location to preserve the scope information
+  {
+    auto NL = ApplyDebugLocation::CreateArtificial(CGF);
+    PN->setDebugLoc(Builder.getCurrentDebugLocation());
+  }
 
   // ZExt result to int.
   return Builder.CreateZExtOrBitCast(PN, ResTy, "land.ext");
@@ -4186,6 +4263,7 @@ LValue CodeGenFunction::EmitCompoundAssignmentLValue(
   case BO_GE:
   case BO_EQ:
   case BO_NE:
+  case BO_Cmp:
   case BO_And:
   case BO_Xor:
   case BO_Or:

@@ -69,7 +69,7 @@ class GVN : public PassInfoMixin<GVN> {
 public:
   struct Expression;
 
-  /// \brief Run the pass over the function.
+  /// Run the pass over the function.
   PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
 
   /// This removes the specified instruction from
@@ -274,7 +274,7 @@ private:
                                  BasicBlock *Curr, unsigned int ValNo);
   Value *findLeader(const BasicBlock *BB, uint32_t num);
   void cleanupGlobalSets();
-  void fillImplicitControlFlowInfo(ReversePostOrderTraversal<Function *> &RPOT);
+  void fillImplicitControlFlowInfo(BasicBlock *BB);
   void verifyRemoved(const Instruction *I) const;
   bool splitCriticalEdges();
   BasicBlock *splitCriticalEdges(BasicBlock *Pred, BasicBlock *Succ);
@@ -291,17 +291,17 @@ private:
 /// loads are eliminated by the pass.
 FunctionPass *createGVNPass(bool NoLoads = false);
 
-/// \brief A simple and fast domtree-based GVN pass to hoist common expressions
+/// A simple and fast domtree-based GVN pass to hoist common expressions
 /// from sibling branches.
 struct GVNHoistPass : PassInfoMixin<GVNHoistPass> {
-  /// \brief Run the pass over the function.
+  /// Run the pass over the function.
   PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
 };
 
-/// \brief Uses an "inverted" value numbering to decide the similarity of
+/// Uses an "inverted" value numbering to decide the similarity of
 /// expressions and sinks similar expressions into successors.
 struct GVNSinkPass : PassInfoMixin<GVNSinkPass> {
-  /// \brief Run the pass over the function.
+  /// Run the pass over the function.
   PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
 };
 

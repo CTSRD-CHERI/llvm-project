@@ -37,14 +37,14 @@ struct CodeGenTypeCache {
   /// i8, i16, i32, and i64
   llvm::IntegerType *Int8Ty, *Int16Ty, *Int32Ty, *Int64Ty;
   /// float, double
-  llvm::Type *FloatTy, *DoubleTy;
+  llvm::Type *HalfTy, *FloatTy, *DoubleTy;
 
   /// int
   llvm::IntegerType *IntTy;
 
   /// intptr_t, size_t, and ptrdiff_t, which we assume are the same size.
   union {
-    llvm::IntegerType *IntPtrTy;
+    llvm::IntegerType *IntPtrTy; // FIXME: this is not really intptr_t for CHERI
     llvm::IntegerType *SizeTy;
     llvm::IntegerType *PtrDiffTy;
   };
@@ -53,6 +53,12 @@ struct CodeGenTypeCache {
   union {
     llvm::PointerType *VoidPtrTy;
     llvm::PointerType *Int8PtrTy;
+  };
+
+  /// void* in capability address space (if supported, otherwise nullptr)
+  union {
+    llvm::PointerType *VoidCheriCapTy;
+    llvm::PointerType *Int8CheriCapTy;
   };
 
   /// void** in address space 0
@@ -65,6 +71,12 @@ struct CodeGenTypeCache {
   union {
     llvm::PointerType *AllocaVoidPtrTy;
     llvm::PointerType *AllocaInt8PtrTy;
+  };
+
+  /// void* in program address space
+  union {
+    llvm::PointerType *ProgramVoidPtrTy;
+    llvm::PointerType *ProgramInt8PtrTy;
   };
 
   /// The size and alignment of the builtin C type 'int'.  This comes
@@ -112,8 +124,6 @@ struct CodeGenTypeCache {
 
   llvm::CallingConv::ID RuntimeCC;
   llvm::CallingConv::ID getRuntimeCC() const { return RuntimeCC; }
-  llvm::CallingConv::ID BuiltinCC;
-  llvm::CallingConv::ID getBuiltinCC() const { return BuiltinCC; }
 
   LangAS getASTAllocaAddressSpace() const { return ASTAllocaAddressSpace; }
 };

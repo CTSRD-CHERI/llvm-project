@@ -16,9 +16,9 @@
 #include "llvm/ADT/iterator_range.h"
 #include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/DebugInfo/DIContext.h"
+#include "llvm/DebugInfo/DWARF/DWARFAddressRange.h"
 #include "llvm/DebugInfo/DWARF/DWARFAttribute.h"
 #include "llvm/DebugInfo/DWARF/DWARFDebugInfoEntry.h"
-#include "llvm/DebugInfo/DWARF/DWARFDebugRangeList.h"
 #include <cassert>
 #include <cstdint>
 #include <iterator>
@@ -108,11 +108,7 @@ public:
   ///
   /// \returns a valid DWARFDie instance if this object has children or an
   /// invalid DWARFDie instance if it doesn't.
-  DWARFDie getFirstChild() const {
-    if (isValid() && Die->hasChildren())
-      return DWARFDie(U, Die + 1);
-    return DWARFDie();
-  }
+  DWARFDie getFirstChild() const;
 
   /// Dump the DIE and all of its attributes to the supplied stream.
   ///
@@ -211,7 +207,7 @@ public:
   ///
   /// \returns a address range vector that might be empty if no address range
   /// information is available.
-  DWARFAddressRangesVector getAddressRanges() const;
+  Expected<DWARFAddressRangesVector> getAddressRanges() const;
 
   /// Get all address ranges for any DW_TAG_subprogram DIEs in this DIE or any
   /// of its children.

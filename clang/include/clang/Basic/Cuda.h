@@ -22,6 +22,9 @@ enum class CudaVersion {
   CUDA_75,
   CUDA_80,
   CUDA_90,
+  CUDA_91,
+  CUDA_92,
+  LATEST = CUDA_92,
 };
 const char *CudaVersionToString(CudaVersion V);
 
@@ -43,6 +46,21 @@ enum class CudaArch {
   SM_61,
   SM_62,
   SM_70,
+  SM_72,
+  GFX600,
+  GFX601,
+  GFX700,
+  GFX701,
+  GFX702,
+  GFX703,
+  GFX704,
+  GFX801,
+  GFX802,
+  GFX803,
+  GFX810,
+  GFX900,
+  GFX902,
+  LAST,
 };
 const char *CudaArchToString(CudaArch A);
 
@@ -63,6 +81,8 @@ enum class CudaVirtualArch {
   COMPUTE_61,
   COMPUTE_62,
   COMPUTE_70,
+  COMPUTE_72,
+  COMPUTE_AMDGCN,
 };
 const char *CudaVirtualArchToString(CudaVirtualArch A);
 
@@ -74,6 +94,9 @@ CudaVirtualArch VirtualArchForCudaArch(CudaArch A);
 
 /// Get the earliest CudaVersion that supports the given CudaArch.
 CudaVersion MinVersionForCudaArch(CudaArch A);
+
+/// Get the latest CudaVersion that supports the given CudaArch.
+CudaVersion MaxVersionForCudaArch(CudaArch A);
 
 } // namespace clang
 

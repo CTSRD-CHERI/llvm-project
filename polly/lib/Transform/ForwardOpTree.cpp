@@ -51,6 +51,11 @@ static cl::opt<bool>
                  cl::desc("Analyze array contents for load forwarding"),
                  cl::cat(PollyCategory), cl::init(true), cl::Hidden);
 
+static cl::opt<bool>
+    NormalizePHIs("polly-optree-normalize-phi",
+                  cl::desc("Replace PHIs by their incoming values"),
+                  cl::cat(PollyCategory), cl::init(false), cl::Hidden);
+
 static cl::opt<unsigned>
     MaxOps("polly-optree-max-ops",
            cl::desc("Maximum number of ISL operations to invest for known "
@@ -64,6 +69,7 @@ STATISTIC(KnownOutOfQuota,
 STATISTIC(TotalInstructionsCopied, "Number of copied instructions");
 STATISTIC(TotalKnownLoadsForwarded,
           "Number of forwarded loads because their value was known");
+STATISTIC(TotalReloads, "Number of reloaded values");
 STATISTIC(TotalReadOnlyCopied, "Number of copied read-only accesses");
 STATISTIC(TotalForwardedTrees, "Number of forwarded operand trees");
 STATISTIC(TotalModifiedStmts,
@@ -106,12 +112,21 @@ enum ForwardingDecision {
   /// and can be used anywhere) into the same statement as %add would.
   FD_CanForwardLeaf,
 
-  /// The root instruction can be forwarded in a non-trivial way. This requires
-  /// the operand tree root to be an instruction in some statement.
-  FD_CanForwardTree,
+  /// The root instruction can be forwarded and doing so avoids a scalar
+  /// dependency.
+  ///
+  /// This can be either because the operand tree can be moved to the target
+  /// statement, or a memory access is redirected to read from a different
+  /// location.
+  FD_CanForwardProfitably,
 
-  /// Used to indicate that a forwarding has be carried out successfully.
-  FD_DidForward,
+  /// Used to indicate that a forwarding has be carried out successfully, and
+  /// the forwarded memory access can be deleted.
+  FD_DidForwardTree,
+
+  /// Used to indicate that a forwarding has be carried out successfully, and
+  /// the forwarded memory access is being reused.
+  FD_DidForwardLeaf,
 
   /// A forwarding method cannot be applied to the operand tree.
   /// The difference to FD_CannotForward is that there might be other methods
@@ -140,6 +155,9 @@ private:
   /// Number of loads forwarded because their value was known.
   int NumKnownLoadsForwarded = 0;
 
+  /// Number of values reloaded from known array elements.
+  int NumReloads = 0;
+
   /// How many read-only accesses have been copied.
   int NumReadOnlyCopied = 0;
 
@@ -162,6 +180,9 @@ private:
   /// that new introduced load instructions can reuse the Known analysis of its
   /// original load. { ValInst[] -> ValInst[] }
   isl::union_map Translator;
+
+  /// A cache for getDefToTarget().
+  DenseMap<std::pair<ScopStmt *, ScopStmt *>, isl::map> DefToTargetCache;
 
   /// Get list of array elements that do contain the same ValInst[] at Domain[].
   ///
@@ -267,22 +288,25 @@ public:
       IslQuotaScope QuotaScope = MaxOpGuard.enter();
 
       computeCommon();
+      if (NormalizePHIs)
+        computeNormalizedPHIs();
       Known = computeKnown(true, true);
 
       // Preexisting ValInsts use the known content analysis of themselves.
       Translator = makeIdentityMap(Known.range(), false);
     }
 
-    if (!Known || !Translator) {
+    if (!Known || !Translator || !NormalizeMap) {
       assert(isl_ctx_last_error(IslCtx.get()) == isl_error_quota);
       Known = nullptr;
       Translator = nullptr;
-      DEBUG(dbgs() << "Known analysis exceeded max_operations\n");
+      NormalizeMap = nullptr;
+      LLVM_DEBUG(dbgs() << "Known analysis exceeded max_operations\n");
       return false;
     }
 
     KnownAnalyzed++;
-    DEBUG(dbgs() << "All known: " << Known << "\n");
+    LLVM_DEBUG(dbgs() << "All known: " << Known << "\n");
 
     return true;
   }
@@ -293,6 +317,7 @@ public:
                           << '\n';
     OS.indent(Indent + 4) << "Known loads forwarded: " << NumKnownLoadsForwarded
                           << '\n';
+    OS.indent(Indent + 4) << "Reloads: " << NumReloads << '\n';
     OS.indent(Indent + 4) << "Read-only accesses copied: " << NumReadOnlyCopied
                           << '\n';
     OS.indent(Indent + 4) << "Operand trees forwarded: " << NumForwardedTrees
@@ -371,6 +396,86 @@ public:
     return UseScatter.apply_range(ReachDefTimepoints);
   }
 
+  /// Is @p InnerLoop nested inside @p OuterLoop?
+  static bool isInsideLoop(Loop *OuterLoop, Loop *InnerLoop) {
+    // If OuterLoop is nullptr, we cannot call its contains() method. In this
+    // case OuterLoop represents the 'top level' and therefore contains all
+    // loop.
+    return !OuterLoop || OuterLoop->contains(InnerLoop);
+  }
+
+  /// Get a domain translation map from a (scalar) definition to the statement
+  /// where the definition is being moved to.
+  ///
+  /// @p TargetStmt can also be seen an llvm::Use of an llvm::Value in
+  /// @p DefStmt. In addition, we allow transitive uses:
+  ///
+  /// DefStmt -> MiddleStmt -> TargetStmt
+  ///
+  /// where an operand tree of instructions in DefStmt and MiddleStmt are to be
+  /// moved to TargetStmt. To be generally correct, we also need to know all the
+  /// intermediate statements. However, we make use of the fact that we
+  /// currently do not support a move from a loop body across its header such
+  /// that only the first definition and the target statement are relevant.
+  ///
+  /// @param DefStmt    Statement from where a definition might be moved from.
+  /// @param TargetStmt Statement where the definition is potentially being
+  ///                   moved to (should contain a use of that definition).
+  ///
+  /// @return  { DomainDef[] -> DomainTarget[] }
+  isl::map getDefToTarget(ScopStmt *DefStmt, ScopStmt *TargetStmt) {
+    // No translation required if the definition is already at the target.
+    if (TargetStmt == DefStmt)
+      return isl::map::identity(
+          getDomainFor(TargetStmt).get_space().map_from_set());
+
+    isl::map &Result = DefToTargetCache[std::make_pair(TargetStmt, DefStmt)];
+
+    // This is a shortcut in case the schedule is still the original and
+    // TargetStmt is in the same or nested inside DefStmt's loop. With the
+    // additional assumption that operand trees do not cross DefStmt's loop
+    // header, then TargetStmt's instance shared coordinated are the same as
+    // DefStmt's coordinated. All TargetStmt instances with this prefix share
+    // the same DefStmt instance.
+    // Model:
+    //
+    //   for (int i < 0; i < N; i+=1) {
+    // DefStmt:
+    //    D = ...;
+    //    for (int j < 0; j < N; j+=1) {
+    // TargetStmt:
+    //      use(D);
+    //    }
+    //  }
+    //
+    // Here, the value used in TargetStmt is defined in the corresponding
+    // DefStmt, i.e.
+    //
+    //   { DefStmt[i] -> TargetStmt[i,j] }
+    //
+    // In practice, this should cover the majority of cases.
+    if (S->isOriginalSchedule() &&
+        isInsideLoop(DefStmt->getSurroundingLoop(),
+                     TargetStmt->getSurroundingLoop())) {
+      isl::set DefDomain = getDomainFor(DefStmt);
+      isl::set TargetDomain = getDomainFor(TargetStmt);
+      assert(DefDomain.dim(isl::dim::set) <= TargetDomain.dim(isl::dim::set));
+
+      Result = isl::map::from_domain_and_range(DefDomain, TargetDomain);
+      for (unsigned i = 0, DefDims = DefDomain.dim(isl::dim::set); i < DefDims;
+           i += 1)
+        Result = Result.equate(isl::dim::in, i, isl::dim::out, i);
+    }
+
+    if (!Result) {
+      // { DomainDef[] -> DomainTarget[] }
+      Result = computeUseToDefFlowDependency(TargetStmt, DefStmt).reverse();
+      simplify(Result);
+    }
+
+    return Result;
+  }
+
   /// Forward a load by reading from an array element that contains the same
   /// value. Typically the location it was loaded from.
   ///
@@ -378,33 +483,25 @@ public:
   /// @param Inst        The (possibly speculatable) instruction to forward.
   /// @param UseStmt     The statement that uses @p Inst.
   /// @param UseLoop     The loop @p Inst is used in.
-  /// @param UseToTarget { DomainUse[] -> DomainTarget[] }
-  ///                    A mapping from the statement instance @p Inst is used
-  ///                    to the statement instance it is forwarded to.
   /// @param DefStmt     The statement @p Inst is defined in.
   /// @param DefLoop     The loop which contains @p Inst.
-  /// @param DefToTarget { DomainDef[] -> DomainTarget[] }
-  ///                    A mapping from the statement instance @p Inst is
-  ///                    defined to the statement instance it is forwarded to.
   /// @param DoIt        If false, only determine whether an operand tree can be
   ///                    forwarded. If true, carry out the forwarding. Do not
   ///                    use DoIt==true if an operand tree is not known to be
   ///                    forwardable.
   ///
-  /// @return FD_NotApplicable  if @p Inst is not a LoadInst.
-  ///         FD_CannotForward  if no array element to load from was found.
-  ///         FD_CanForwardLeaf if the load is already in the target statement
-  ///                           instance.
-  ///         FD_CanForwardTree if @p Inst is forwardable.
-  ///         FD_DidForward     if @p DoIt was true.
+  /// @return FD_NotApplicable  if @p Inst cannot be forwarded by creating a new
+  ///                           load.
+  ///         FD_CannotForward  if the pointer operand cannot be forwarded.
+  ///         FD_CanForwardProfitably if @p Inst is forwardable.
+  ///         FD_DidForwardTree if @p DoIt was true.
   ForwardingDecision forwardKnownLoad(ScopStmt *TargetStmt, Instruction *Inst,
                                       ScopStmt *UseStmt, Loop *UseLoop,
-                                      isl::map UseToTarget, ScopStmt *DefStmt,
-                                      Loop *DefLoop, isl::map DefToTarget,
+                                      ScopStmt *DefStmt, Loop *DefLoop,
                                       bool DoIt) {
     // Cannot do anything without successful known analysis.
-    if (Known.is_null() || Translator.is_null() || UseToTarget.is_null() ||
-        DefToTarget.is_null() || MaxOpGuard.hasQuotaExceeded())
+    if (Known.is_null() || Translator.is_null() ||
+        MaxOpGuard.hasQuotaExceeded())
       return FD_NotApplicable;
 
     LoadInst *LI = dyn_cast<LoadInst>(Inst);
@@ -421,25 +518,22 @@ public:
     //   do not add another MemoryAccess.
     MemoryAccess *Access = TargetStmt->getArrayAccessOrNULLFor(LI);
     if (Access && !DoIt)
-      return FD_CanForwardTree;
+      return FD_CanForwardProfitably;
 
-    if (DoIt)
-      TargetStmt->prependInstruction(LI);
-
-    ForwardingDecision OpDecision =
-        forwardTree(TargetStmt, LI->getPointerOperand(), DefStmt, DefLoop,
-                    DefToTarget, DoIt);
+    ForwardingDecision OpDecision = forwardTree(
+        TargetStmt, LI->getPointerOperand(), DefStmt, DefLoop, DoIt);
     switch (OpDecision) {
     case FD_CannotForward:
       assert(!DoIt);
       return OpDecision;
 
     case FD_CanForwardLeaf:
-    case FD_CanForwardTree:
+    case FD_CanForwardProfitably:
       assert(!DoIt);
       break;
 
-    case FD_DidForward:
+    case FD_DidForwardLeaf:
+    case FD_DidForwardTree:
       assert(DoIt);
       break;
 
@@ -451,6 +545,11 @@ public:
 
     // { DomainDef[] -> ValInst[] }
     isl::map ExpectedVal = makeValInst(Inst, UseStmt, UseLoop);
+    assert(!isNormalized(ExpectedVal).is_false() &&
+           "LoadInsts are always normalized");
+
+    // { DomainUse[] -> DomainTarget[] }
+    isl::map UseToTarget = getDefToTarget(UseStmt, TargetStmt);
 
     // { DomainTarget[] -> ValInst[] }
     isl::map TargetExpectedVal = ExpectedVal.apply_domain(UseToTarget);
@@ -462,18 +561,22 @@ public:
 
     isl::map SameVal = singleLocation(Candidates, getDomainFor(TargetStmt));
     if (!SameVal)
-      return FD_CannotForward;
+      return FD_NotApplicable;
+
+    if (DoIt)
+      TargetStmt->prependInstruction(LI);
 
     if (!DoIt)
-      return FD_CanForwardTree;
+      return FD_CanForwardProfitably;
 
     if (Access) {
-      DEBUG(dbgs() << "    forwarded known load with preexisting MemoryAccess"
-                   << Access << "\n");
+      LLVM_DEBUG(
+          dbgs() << "    forwarded known load with preexisting MemoryAccess"
+                 << Access << "\n");
     } else {
       Access = makeReadArrayAccess(TargetStmt, LI, SameVal);
-      DEBUG(dbgs() << "    forwarded known load with new MemoryAccess" << Access
-                   << "\n");
+      LLVM_DEBUG(dbgs() << "    forwarded known load with new MemoryAccess"
+                        << Access << "\n");
 
       // { ValInst[] }
       isl::space ValInstSpace = ExpectedVal.get_space().range();
@@ -504,22 +607,98 @@ public:
         isl::map ValToVal =
             isl::map::identity(ValSpace.map_from_domain_and_range(ValSpace));
 
+        // { DomainDef[] -> DomainTarget[] }
+        isl::map DefToTarget = getDefToTarget(DefStmt, TargetStmt);
+
         // { [TargetDomain[] -> Value[]] -> [DefDomain[] -> Value] }
         isl::map LocalTranslator = DefToTarget.reverse().product(ValToVal);
 
         Translator = Translator.add_map(LocalTranslator);
-        DEBUG(dbgs() << "      local translator is " << LocalTranslator
-                     << "\n");
+        LLVM_DEBUG(dbgs() << "      local translator is " << LocalTranslator
+                          << "\n");
       }
     }
-    DEBUG(dbgs() << "      expected values where " << TargetExpectedVal
-                 << "\n");
-    DEBUG(dbgs() << "      candidate elements where " << Candidates << "\n");
+    LLVM_DEBUG(dbgs() << "      expected values where " << TargetExpectedVal
+                      << "\n");
+    LLVM_DEBUG(dbgs() << "      candidate elements where " << Candidates
+                      << "\n");
     assert(Access);
 
     NumKnownLoadsForwarded++;
     TotalKnownLoadsForwarded++;
-    return FD_DidForward;
+    return FD_DidForwardTree;
+  }
+
+  /// Forward a scalar by redirecting the access to an array element that stores
+  /// the same value.
+  ///
+  /// @param TargetStmt  The statement the operand tree will be copied to.
+  /// @param Inst        The scalar to forward.
+  /// @param UseStmt     The statement that uses @p Inst.
+  /// @param UseLoop     The loop @p Inst is used in.
+  /// @param DefStmt     The statement @p Inst is defined in.
+  /// @param DefLoop     The loop which contains @p Inst.
+  /// @param DoIt        If false, only determine whether an operand tree can be
+  ///                    forwarded. If true, carry out the forwarding. Do not
+  ///                    use DoIt==true if an operand tree is not known to be
+  ///                    forwardable.
+  ///
+  /// @return FD_NotApplicable        if @p Inst cannot be reloaded.
+  ///         FD_CanForwardLeaf       if @p Inst can be reloaded.
+  ///         FD_CanForwardProfitably if @p Inst has been reloaded.
+  ///         FD_DidForwardLeaf       if @p DoIt was true.
+  ForwardingDecision reloadKnownContent(ScopStmt *TargetStmt, Instruction *Inst,
+                                        ScopStmt *UseStmt, Loop *UseLoop,
+                                        ScopStmt *DefStmt, Loop *DefLoop,
+                                        bool DoIt) {
+    // Cannot do anything without successful known analysis.
+    if (Known.is_null() || Translator.is_null() ||
+        MaxOpGuard.hasQuotaExceeded())
+      return FD_NotApplicable;
+
+    MemoryAccess *Access = TargetStmt->lookupInputAccessOf(Inst);
+    if (Access && Access->isLatestArrayKind()) {
+      if (DoIt)
+        return FD_DidForwardLeaf;
+      return FD_CanForwardLeaf;
+    }
+
+    // Don't spend too much time analyzing whether it can be reloaded. When
+    // carrying-out the forwarding, we cannot bail-out in the middle of the
+    // transformation. It also shouldn't take as long because some results are
+    // cached.
+    IslQuotaScope QuotaScope = MaxOpGuard.enter(!DoIt);
+
+    // { DomainDef[] -> ValInst[] }
+    isl::union_map ExpectedVal = makeNormalizedValInst(Inst, UseStmt, UseLoop);
+
+    // { DomainUse[] -> DomainTarget[] }
+    isl::map UseToTarget = getDefToTarget(UseStmt, TargetStmt);
+
+    // { DomainTarget[] -> ValInst[] }
+    isl::union_map TargetExpectedVal = ExpectedVal.apply_domain(UseToTarget);
+    isl::union_map TranslatedExpectedVal =
+        TargetExpectedVal.apply_range(Translator);
+
+    // { DomainTarget[] -> Element[] }
+    isl::union_map Candidates = findSameContentElements(TranslatedExpectedVal);
+
+    isl::map SameVal = singleLocation(Candidates, getDomainFor(TargetStmt));
+    if (!SameVal)
+      return FD_NotApplicable;
+
+    if (!DoIt)
+      return FD_CanForwardProfitably;
+
+    if (!Access)
+      Access = TargetStmt->ensureValueRead(Inst);
+
+    simplify(SameVal);
+    Access->setNewAccessRelation(SameVal);
+
+    TotalReloads++;
+    NumReloads++;
+    return FD_DidForwardLeaf;
   }
 
   /// Forwards a speculatively executable instruction.
@@ -528,9 +707,6 @@ public:
   /// @param UseInst     The (possibly speculatable) instruction to forward.
   /// @param DefStmt     The statement @p UseInst is defined in.
   /// @param DefLoop     The loop which contains @p UseInst.
-  /// @param DefToTarget { DomainDef[] -> DomainTarget[] }
-  ///                    A mapping from the statement instance @p UseInst is
-  ///                    defined to the statement instance it is forwarded to.
   /// @param DoIt        If false, only determine whether an operand tree can be
   ///                    forwarded. If true, carry out the forwarding. Do not
   ///                    use DoIt==true if an operand tree is not known to be
@@ -544,7 +720,7 @@ public:
   ForwardingDecision forwardSpeculatable(ScopStmt *TargetStmt,
                                          Instruction *UseInst,
                                          ScopStmt *DefStmt, Loop *DefLoop,
-                                         isl::map DefToTarget, bool DoIt) {
+                                         bool DoIt) {
     // PHIs, unless synthesizable, are not yet supported.
     if (isa<PHINode>(UseInst))
       return FD_NotApplicable;
@@ -577,18 +753,19 @@ public:
 
     for (Value *OpVal : UseInst->operand_values()) {
       ForwardingDecision OpDecision =
-          forwardTree(TargetStmt, OpVal, DefStmt, DefLoop, DefToTarget, DoIt);
+          forwardTree(TargetStmt, OpVal, DefStmt, DefLoop, DoIt);
       switch (OpDecision) {
       case FD_CannotForward:
         assert(!DoIt);
         return FD_CannotForward;
 
       case FD_CanForwardLeaf:
-      case FD_CanForwardTree:
+      case FD_CanForwardProfitably:
         assert(!DoIt);
         break;
 
-      case FD_DidForward:
+      case FD_DidForwardLeaf:
+      case FD_DidForwardTree:
         assert(DoIt);
         break;
 
@@ -598,8 +775,8 @@ public:
     }
 
     if (DoIt)
-      return FD_DidForward;
-    return FD_CanForwardTree;
+      return FD_DidForwardTree;
+    return FD_CanForwardProfitably;
   }
 
   /// Determines whether an operand tree can be forwarded or carries out a
@@ -610,9 +787,6 @@ public:
   ///                    operand tree.
   /// @param UseStmt     The statement that uses @p UseVal.
   /// @param UseLoop     The loop @p UseVal is used in.
-  /// @param UseToTarget { DomainUse[] -> DomainTarget[] }
-  ///                    A mapping from the statement instance @p UseVal is used
-  ///                    to the statement instance it is forwarded to.
   /// @param DoIt        If false, only determine whether an operand tree can be
   ///                    forwarded. If true, carry out the forwarding. Do not
   ///                    use DoIt==true if an operand tree is not known to be
@@ -621,8 +795,7 @@ public:
   /// @return If DoIt==false, return whether the operand tree can be forwarded.
   ///         If DoIt==true, return FD_DidForward.
   ForwardingDecision forwardTree(ScopStmt *TargetStmt, Value *UseVal,
-                                 ScopStmt *UseStmt, Loop *UseLoop,
-                                 isl::map UseToTarget, bool DoIt) {
+                                 ScopStmt *UseStmt, Loop *UseLoop, bool DoIt) {
     ScopStmt *DefStmt = nullptr;
     Loop *DefLoop = nullptr;
 
@@ -636,14 +809,14 @@ public:
     case VirtualUse::Hoisted:
       // These can be used anywhere without special considerations.
       if (DoIt)
-        return FD_DidForward;
+        return FD_DidForwardTree;
       return FD_CanForwardLeaf;
 
     case VirtualUse::Synthesizable: {
       // ScopExpander will take care for of generating the code at the new
       // location.
       if (DoIt)
-        return FD_DidForward;
+        return FD_DidForwardTree;
 
       // Check if the value is synthesizable at the new location as well. This
       // might be possible when leaving a loop for which ScalarEvolution is
@@ -660,8 +833,9 @@ public:
       if (TargetUse.getKind() == VirtualUse::Synthesizable)
         return FD_CanForwardLeaf;
 
-      DEBUG(dbgs() << "    Synthesizable would not be synthesizable anymore: "
-                   << *UseVal << "\n");
+      LLVM_DEBUG(
+          dbgs() << "    Synthesizable would not be synthesizable anymore: "
+                 << *UseVal << "\n");
       return FD_CannotForward;
     }
 
@@ -682,13 +856,12 @@ public:
 
       NumReadOnlyCopied++;
       TotalReadOnlyCopied++;
-      return FD_DidForward;
+      return FD_DidForwardLeaf;
 
     case VirtualUse::Intra:
       // Knowing that UseStmt and DefStmt are the same statement instance, just
       // reuse the information about UseStmt for DefStmt
       DefStmt = UseStmt;
-      DefToTarget = UseToTarget;
 
       LLVM_FALLTHROUGH;
     case VirtualUse::Inter:
@@ -702,32 +875,24 @@ public:
 
       DefLoop = LI->getLoopFor(Inst->getParent());
 
-      if (DefToTarget.is_null() && !Known.is_null()) {
-        IslQuotaScope QuotaScope = MaxOpGuard.enter(!DoIt);
-
-        // { UseDomain[] -> DefDomain[] }
-        isl::map UseToDef = computeUseToDefFlowDependency(UseStmt, DefStmt);
-
-        // { DefDomain[] -> UseDomain[] -> TargetDomain[] } shortened to
-        // { DefDomain[] -> TargetDomain[] }
-        DefToTarget = UseToTarget.apply_domain(UseToDef);
-        simplify(DefToTarget);
-      }
-
-      ForwardingDecision SpeculativeResult = forwardSpeculatable(
-          TargetStmt, Inst, DefStmt, DefLoop, DefToTarget, DoIt);
+      ForwardingDecision SpeculativeResult =
+          forwardSpeculatable(TargetStmt, Inst, DefStmt, DefLoop, DoIt);
       if (SpeculativeResult != FD_NotApplicable)
         return SpeculativeResult;
 
-      ForwardingDecision KnownResult =
-          forwardKnownLoad(TargetStmt, Inst, UseStmt, UseLoop, UseToTarget,
-                           DefStmt, DefLoop, DefToTarget, DoIt);
+      ForwardingDecision KnownResult = forwardKnownLoad(
+          TargetStmt, Inst, UseStmt, UseLoop, DefStmt, DefLoop, DoIt);
       if (KnownResult != FD_NotApplicable)
         return KnownResult;
 
+      ForwardingDecision ReloadResult = reloadKnownContent(
+          TargetStmt, Inst, UseStmt, UseLoop, DefStmt, DefLoop, DoIt);
+      if (ReloadResult != FD_NotApplicable)
+        return ReloadResult;
+
       // When no method is found to forward the operand tree, we effectively
       // cannot handle it.
-      DEBUG(dbgs() << "    Cannot forward instruction: " << *Inst << "\n");
+      LLVM_DEBUG(dbgs() << "    Cannot forward instruction: " << *Inst << "\n");
       return FD_CannotForward;
     }
 
@@ -737,7 +902,7 @@ public:
   /// Try to forward an operand tree rooted in @p RA.
   bool tryForwardTree(MemoryAccess *RA) {
     assert(RA->isLatestScalarKind());
-    DEBUG(dbgs() << "Trying to forward operand tree " << RA << "...\n");
+    LLVM_DEBUG(dbgs() << "Trying to forward operand tree " << RA << "...\n");
 
     ScopStmt *Stmt = RA->getStatement();
     Loop *InLoop = Stmt->getSurroundingLoop();
@@ -749,19 +914,20 @@ public:
           isl::map::identity(DomSpace.map_from_domain_and_range(DomSpace));
     }
 
-    ForwardingDecision Assessment = forwardTree(
-        Stmt, RA->getAccessValue(), Stmt, InLoop, TargetToUse, false);
-    assert(Assessment != FD_DidForward);
-    if (Assessment != FD_CanForwardTree)
+    ForwardingDecision Assessment =
+        forwardTree(Stmt, RA->getAccessValue(), Stmt, InLoop, false);
+    assert(Assessment != FD_DidForwardTree && Assessment != FD_DidForwardLeaf);
+    if (Assessment != FD_CanForwardProfitably)
       return false;
 
-    ForwardingDecision Execution = forwardTree(Stmt, RA->getAccessValue(), Stmt,
-                                               InLoop, TargetToUse, true);
-    assert(Execution == FD_DidForward &&
+    ForwardingDecision Execution =
+        forwardTree(Stmt, RA->getAccessValue(), Stmt, InLoop, true);
+    assert(((Execution == FD_DidForwardTree) ||
+            (Execution == FD_DidForwardLeaf)) &&
            "A previous positive assessment must also be executable");
-    (void)Execution;
 
-    Stmt->removeSingleMemoryAccess(RA);
+    if (Execution == FD_DidForwardTree)
+      Stmt->removeSingleMemoryAccess(RA);
     return true;
   }
 
@@ -854,26 +1020,26 @@ public:
     LoopInfo &LI = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
 
     {
-      IslMaxOperationsGuard MaxOpGuard(S.getIslCtx(), MaxOps, false);
+      IslMaxOperationsGuard MaxOpGuard(S.getIslCtx().get(), MaxOps, false);
       Impl = llvm::make_unique<ForwardOpTreeImpl>(&S, &LI, MaxOpGuard);
 
       if (AnalyzeKnown) {
-        DEBUG(dbgs() << "Prepare forwarders...\n");
+        LLVM_DEBUG(dbgs() << "Prepare forwarders...\n");
         Impl->computeKnownValues();
       }
 
-      DEBUG(dbgs() << "Forwarding operand trees...\n");
+      LLVM_DEBUG(dbgs() << "Forwarding operand trees...\n");
       Impl->forwardOperandTrees();
 
       if (MaxOpGuard.hasQuotaExceeded()) {
-        DEBUG(dbgs() << "Not all operations completed because of "
-                        "max_operations exceeded\n");
+        LLVM_DEBUG(dbgs() << "Not all operations completed because of "
+                             "max_operations exceeded\n");
         KnownOutOfQuota++;
       }
     }
 
-    DEBUG(dbgs() << "\nFinal Scop:\n");
-    DEBUG(dbgs() << S);
+    LLVM_DEBUG(dbgs() << "\nFinal Scop:\n");
+    LLVM_DEBUG(dbgs() << S);
 
     // Update statistics
     auto ScopStats = S.getStatistics();
@@ -899,7 +1065,6 @@ public:
 }; // class ForwardOpTree
 
 char ForwardOpTree::ID;
-
 } // namespace
 
 ScopPass *polly::createForwardOpTreePass() { return new ForwardOpTree(); }

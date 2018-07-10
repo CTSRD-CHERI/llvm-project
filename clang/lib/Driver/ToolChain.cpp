@@ -1,4 +1,4 @@
-//===--- ToolChain.cpp - Collections of tools for one platform ------------===//
+//===- ToolChain.cpp - Collections of tools for one platform --------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -8,32 +8,46 @@
 //===----------------------------------------------------------------------===//
 
 #include "clang/Driver/ToolChain.h"
-#include "ToolChains/CommonArgs.h"
+#include "InputInfo.h"
 #include "ToolChains/Arch/ARM.h"
 #include "ToolChains/Arch/Mips.h"
 #include "ToolChains/Clang.h"
 #include "clang/Basic/ObjCRuntime.h"
+#include "clang/Basic/Sanitizers.h"
 #include "clang/Basic/VirtualFileSystem.h"
 #include "clang/Config/config.h"
 #include "clang/Driver/Action.h"
 #include "clang/Driver/Driver.h"
 #include "clang/Driver/DriverDiagnostic.h"
+#include "clang/Driver/Job.h"
 #include "clang/Driver/Options.h"
 #include "clang/Driver/SanitizerArgs.h"
 #include "clang/Driver/XRayArgs.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallString.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/Triple.h"
+#include "llvm/ADT/Twine.h"
+#include "llvm/Config/llvm-config.h"
+#include "llvm/MC/MCTargetOptions.h"
 #include "llvm/Option/Arg.h"
 #include "llvm/Option/ArgList.h"
+#include "llvm/Option/OptTable.h"
 #include "llvm/Option/Option.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/TargetParser.h"
 #include "llvm/Support/TargetRegistry.h"
+#include "llvm/Support/VersionTuple.h"
+#include <cassert>
+#include <cstddef>
+#include <cstring>
+#include <string>
 
-using namespace clang::driver;
-using namespace clang::driver::tools;
 using namespace clang;
+using namespace driver;
+using namespace tools;
 using namespace llvm;
 using namespace llvm::opt;
 
@@ -48,41 +62,31 @@ static ToolChain::RTTIMode CalculateRTTIMode(const ArgList &Args,
   // Explicit rtti/no-rtti args
   if (CachedRTTIArg) {
     if (CachedRTTIArg->getOption().matches(options::OPT_frtti))
-      return ToolChain::RM_EnabledExplicitly;
+      return ToolChain::RM_Enabled;
     else
-      return ToolChain::RM_DisabledExplicitly;
+      return ToolChain::RM_Disabled;
   }
 
   // -frtti is default, except for the PS4 CPU.
-  if (!Triple.isPS4CPU()) {
-    return ToolChain::RM_EnabledImplicitly;
-  }
-
-  // On the PS4, turning on c++ exceptions turns on rtti.
-  // We're assuming that, if we see -fexceptions, rtti gets turned on.
-  Arg *Exceptions = Args.getLastArgNoClaim(
-      options::OPT_fcxx_exceptions, options::OPT_fno_cxx_exceptions,
-      options::OPT_fexceptions, options::OPT_fno_exceptions);
-  if (Exceptions &&
-      (Exceptions->getOption().matches(options::OPT_fexceptions) ||
-       Exceptions->getOption().matches(options::OPT_fcxx_exceptions)))
-    return ToolChain::RM_EnabledImplicitly;
-
-  return ToolChain::RM_DisabledImplicitly;
+  return (Triple.isPS4CPU()) ? ToolChain::RM_Disabled : ToolChain::RM_Enabled;
 }
 
 ToolChain::ToolChain(const Driver &D, const llvm::Triple &T,
                      const ArgList &Args)
     : D(D), Triple(T), Args(Args), CachedRTTIArg(GetRTTIArgument(Args)),
-      CachedRTTIMode(CalculateRTTIMode(Args, Triple, CachedRTTIArg)),
-      EffectiveTriple() {
+      CachedRTTIMode(CalculateRTTIMode(Args, Triple, CachedRTTIArg)) {
   std::string CandidateLibPath = getArchSpecificLibPath();
   if (getVFS().exists(CandidateLibPath))
     getFilePaths().push_back(CandidateLibPath);
 }
 
-ToolChain::~ToolChain() {
+void ToolChain::setTripleEnvironment(llvm::Triple::EnvironmentType Env) {
+  Triple.setEnvironment(Env);
+  if (EffectiveTriple != llvm::Triple())
+    EffectiveTriple.setEnvironment(Env);
 }
+
+ToolChain::~ToolChain() = default;
 
 vfs::FileSystem &ToolChain::getVFS() const { return getDriver().getVFS(); }
 
@@ -90,6 +94,10 @@ bool ToolChain::useIntegratedAs() const {
   return Args.hasFlag(options::OPT_fintegrated_as,
                       options::OPT_fno_integrated_as,
                       IsIntegratedAssemblerDefault());
+}
+
+bool ToolChain::useRelaxRelocations() const {
+  return ENABLE_X86_RELAX_RELOCATIONS;
 }
 
 const SanitizerArgs& ToolChain::getSanitizerArgs() const {
@@ -105,12 +113,15 @@ const XRayArgs& ToolChain::getXRayArgs() const {
 }
 
 namespace {
+
 struct DriverSuffix {
   const char *Suffix;
   const char *ModeFlag;
 };
 
-const DriverSuffix *FindDriverSuffix(StringRef ProgName, size_t &Pos) {
+} // namespace
+
+static const DriverSuffix *FindDriverSuffix(StringRef ProgName, size_t &Pos) {
   // A list of known driver suffixes. Suffixes are compared against the
   // program name in order. If there is a match, the frontend type is updated as
   // necessary by applying the ModeFlag.
@@ -141,16 +152,16 @@ const DriverSuffix *FindDriverSuffix(StringRef ProgName, size_t &Pos) {
 
 /// Normalize the program name from argv[0] by stripping the file extension if
 /// present and lower-casing the string on Windows.
-std::string normalizeProgramName(llvm::StringRef Argv0) {
+static std::string normalizeProgramName(llvm::StringRef Argv0) {
   std::string ProgName = llvm::sys::path::stem(Argv0);
-#ifdef LLVM_ON_WIN32
+#ifdef _WIN32
   // Transform to lowercase for case insensitive file systems.
   std::transform(ProgName.begin(), ProgName.end(), ProgName.begin(), ::tolower);
 #endif
   return ProgName;
 }
 
-const DriverSuffix *parseDriverSuffix(StringRef ProgName, size_t &Pos) {
+static const DriverSuffix *parseDriverSuffix(StringRef ProgName, size_t &Pos) {
   // Try to infer frontend type and default target from the program name by
   // comparing it against DriverSuffixes in order.
 
@@ -175,7 +186,6 @@ const DriverSuffix *parseDriverSuffix(StringRef ProgName, size_t &Pos) {
   }
   return DS;
 }
-} // anonymous namespace
 
 ParsedClangName
 ToolChain::getTargetAndModeFromProgramName(StringRef PN) {
@@ -183,7 +193,7 @@ ToolChain::getTargetAndModeFromProgramName(StringRef PN) {
   size_t SuffixPos;
   const DriverSuffix *DS = parseDriverSuffix(ProgName, SuffixPos);
   if (!DS)
-    return ParsedClangName();
+    return {};
   size_t SuffixEnd = SuffixPos + strlen(DS->Suffix);
 
   size_t LastComponent = ProgName.rfind('-', SuffixPos);
@@ -215,6 +225,10 @@ StringRef ToolChain::getDefaultUniversalArchName() const {
   default:
     return Triple.getArchName();
   }
+}
+
+std::string ToolChain::getInputFilename(const InputInfo &Input) const {
+  return Input.getFilename();
 }
 
 bool ToolChain::IsUnwindTablesDefault(const ArgList &Args) const {
@@ -309,10 +323,28 @@ static StringRef getArchNameForCompilerRTLib(const ToolChain &TC,
   return llvm::Triple::getArchTypeName(TC.getArch());
 }
 
+StringRef ToolChain::getOSLibName() const {
+  switch (Triple.getOS()) {
+  case llvm::Triple::FreeBSD:
+    return "freebsd";
+  case llvm::Triple::NetBSD:
+    return "netbsd";
+  case llvm::Triple::OpenBSD:
+    return "openbsd";
+  case llvm::Triple::Solaris:
+    return "sunos";
+  default:
+    return getOS();
+  }
+}
+
 std::string ToolChain::getCompilerRTPath() const {
   SmallString<128> Path(getDriver().ResourceDir);
-  StringRef OSLibName = Triple.isOSFreeBSD() ? "freebsd" : getOS();
-  llvm::sys::path::append(Path, "lib", OSLibName);
+  if (Triple.isOSUnknown()) {
+    llvm::sys::path::append(Path, "lib");
+  } else {
+    llvm::sys::path::append(Path, "lib", getOSLibName());
+  }
   return Path.str();
 }
 
@@ -342,8 +374,7 @@ const char *ToolChain::getCompilerRTArgString(const llvm::opt::ArgList &Args,
 
 std::string ToolChain::getArchSpecificLibPath() const {
   SmallString<128> Path(getDriver().ResourceDir);
-  StringRef OSLibName = getTriple().isOSFreeBSD() ? "freebsd" : getOS();
-  llvm::sys::path::append(Path, "lib", OSLibName,
+  llvm::sys::path::append(Path, "lib", getOSLibName(),
                           llvm::Triple::getArchTypeName(getArch()));
   return Path.str();
 }
@@ -385,7 +416,7 @@ std::string ToolChain::GetLinkerPath() const {
   if (llvm::sys::path::is_absolute(UseLinker)) {
     // If we're passed what looks like an absolute path, don't attempt to
     // second-guess that.
-    if (llvm::sys::fs::exists(UseLinker))
+    if (llvm::sys::fs::can_execute(UseLinker))
       return UseLinker;
   } else if (UseLinker.empty() || UseLinker == "ld") {
     // If we're passed -fuse-ld= with no argument, or with the argument ld,
@@ -400,7 +431,7 @@ std::string ToolChain::GetLinkerPath() const {
     LinkerName.append(UseLinker);
 
     std::string LinkerPath(GetProgramPath(LinkerName.c_str()));
-    if (llvm::sys::fs::exists(LinkerPath))
+    if (llvm::sys::fs::can_execute(LinkerPath))
       return LinkerPath;
   }
 
@@ -437,6 +468,11 @@ bool ToolChain::isCrossCompiling() const {
 ObjCRuntime ToolChain::getDefaultObjCRuntime(bool isNonFragile) const {
   return ObjCRuntime(isNonFragile ? ObjCRuntime::GNUstep : ObjCRuntime::GCC,
                      VersionTuple());
+}
+
+llvm::ExceptionHandling
+ToolChain::GetExceptionModel(const llvm::opt::ArgList &Args) const {
+  return llvm::ExceptionHandling::None;
 }
 
 bool ToolChain::isThreadModelSupported(const StringRef Model) const {
@@ -539,11 +575,30 @@ std::string ToolChain::ComputeLLVMTriple(const ArgList &Args,
           << tools::arm::getARMArch(MArch, getTriple()) << "ARM";
     }
 
-    // Assembly files should start in ARM mode, unless arch is M-profile.
-    // Windows is always thumb.
-    if ((InputType != types::TY_PP_Asm && Args.hasFlag(options::OPT_mthumb,
-         options::OPT_mno_thumb, ThumbDefault)) || IsMProfile ||
-         getTriple().isOSWindows()) {
+    // Check to see if an explicit choice to use thumb has been made via
+    // -mthumb. For assembler files we must check for -mthumb in the options
+    // passed to the assember via -Wa or -Xassembler.
+    bool IsThumb = false;
+    if (InputType != types::TY_PP_Asm)
+      IsThumb = Args.hasFlag(options::OPT_mthumb, options::OPT_mno_thumb,
+                              ThumbDefault);
+    else {
+      // Ideally we would check for these flags in
+      // CollectArgsForIntegratedAssembler but we can't change the ArchName at
+      // that point. There is no assembler equivalent of -mno-thumb, -marm, or
+      // -mno-arm.
+      for (const auto *A :
+           Args.filtered(options::OPT_Wa_COMMA, options::OPT_Xassembler)) {
+        for (StringRef Value : A->getValues()) {
+          if (Value == "-mthumb")
+            IsThumb = true;
+        }
+      }
+    }
+    // Assembly files should start in ARM mode, unless arch is M-profile, or
+    // -mthumb has been passed explicitly to the assembler. Windows is always
+    // thumb.
+    if (IsThumb || IsMProfile || getTriple().isOSWindows()) {
       if (IsBigEndian)
         ArchName = "thumbeb";
       else
@@ -616,7 +671,7 @@ ToolChain::CXXStdlibType ToolChain::GetCXXStdlibType(const ArgList &Args) const{
   return GetDefaultCXXStdlibType();
 }
 
-/// \brief Utility function to add a system include directory to CC1 arguments.
+/// Utility function to add a system include directory to CC1 arguments.
 /*static*/ void ToolChain::addSystemInclude(const ArgList &DriverArgs,
                                             ArgStringList &CC1Args,
                                             const Twine &Path) {
@@ -624,7 +679,7 @@ ToolChain::CXXStdlibType ToolChain::GetCXXStdlibType(const ArgList &Args) const{
   CC1Args.push_back(DriverArgs.MakeArgString(Path));
 }
 
-/// \brief Utility function to add a system include directory with extern "C"
+/// Utility function to add a system include directory with extern "C"
 /// semantics to CC1 arguments.
 ///
 /// Note that this should be used rarely, and only for directories that
@@ -646,11 +701,11 @@ void ToolChain::addExternCSystemIncludeIfExists(const ArgList &DriverArgs,
     addExternCSystemInclude(DriverArgs, CC1Args, Path);
 }
 
-/// \brief Utility function to add a list of system include directories to CC1.
+/// Utility function to add a list of system include directories to CC1.
 /*static*/ void ToolChain::addSystemIncludes(const ArgList &DriverArgs,
                                              ArgStringList &CC1Args,
                                              ArrayRef<StringRef> Paths) {
-  for (StringRef Path : Paths) {
+  for (const auto Path : Paths) {
     CC1Args.push_back("-internal-isystem");
     CC1Args.push_back(DriverArgs.MakeArgString(Path));
   }
@@ -732,7 +787,9 @@ bool ToolChain::AddFastMathRuntimeIfAvailable(const ArgList &Args,
 SanitizerMask ToolChain::getSupportedSanitizers() const {
   // Return sanitizers which don't require runtime support and are not
   // platform dependent.
+
   using namespace SanitizerKind;
+
   SanitizerMask Res = (Undefined & ~Vptr & ~Function) | (CFI & ~CFIICall) |
                       CFICastStrict | UnsignedIntegerOverflow | Nullability |
                       LocalBounds;
@@ -743,6 +800,9 @@ SanitizerMask ToolChain::getSupportedSanitizers() const {
       getTriple().getArch() == llvm::Triple::wasm32 ||
       getTriple().getArch() == llvm::Triple::wasm64)
     Res |= CFIICall;
+  if (getTriple().getArch() == llvm::Triple::x86_64 ||
+      getTriple().getArch() == llvm::Triple::aarch64)
+    Res |= ShadowCallStack;
   return Res;
 }
 
@@ -814,7 +874,7 @@ llvm::opt::DerivedArgList *ToolChain::TranslateOpenMPTargetArgs(
   bool Modified = false;
 
   // Handle -Xopenmp-target flags
-  for (Arg *A : Args) {
+  for (auto *A : Args) {
     // Exclude flags which may only apply to the host toolchain.
     // Do not exclude flags when the host triple (AuxTriple)
     // matches the current toolchain triple. If it is not present

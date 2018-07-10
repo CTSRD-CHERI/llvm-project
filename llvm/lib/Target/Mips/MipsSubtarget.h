@@ -19,10 +19,14 @@
 #include "MipsISelLowering.h"
 #include "MipsInstrInfo.h"
 #include "llvm/CodeGen/SelectionDAGTargetInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
+#include "llvm/CodeGen/GlobalISel/CallLowering.h"
+#include "llvm/CodeGen/GlobalISel/LegalizerInfo.h"
+#include "llvm/CodeGen/GlobalISel/RegisterBankInfo.h"
+#include "llvm/CodeGen/GlobalISel/InstructionSelector.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/MC/MCInstrItineraries.h"
 #include "llvm/Support/ErrorHandling.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 #include <string>
 
 #define GET_SUBTARGETINFO_HEADER
@@ -43,6 +47,12 @@ class MipsSubtarget : public MipsGenSubtargetInfo {
   };
 
   enum class CPU { P5600 };
+
+  // Used to avoid printing dsp warnings multiple times.
+  static bool DspWarningPrinted;
+
+  // Used to avoid printing msa warnings multiple times.
+  static bool MSAWarningPrinted;
 
   // Mips architecture version
   MipsArchEnum MipsArchVersion;
@@ -151,6 +161,19 @@ class MipsSubtarget : public MipsGenSubtargetInfo {
 
   // HasMT -- support MT ASE.
   bool HasMT;
+
+  // HasCRC -- supports R6 CRC ASE
+  bool HasCRC;
+
+  // HasVirt -- supports Virtualization ASE
+  bool HasVirt;
+
+  // HasGINV -- supports R6 Global INValidate ASE
+  bool HasGINV;
+
+  // Use hazard variants of the jump register instructions for indirect
+  // function calls and jump tables.
+  bool UseIndirectJumpsHazard;
 
   // Disable use of the `jal` instruction.
   bool UseLongCalls = false;
@@ -265,7 +288,6 @@ public:
   }
   bool inMicroMipsMode() const { return InMicroMipsMode; }
   bool inMicroMips32r6Mode() const { return InMicroMipsMode && hasMips32r6(); }
-  bool inMicroMips64r6Mode() const { return InMicroMipsMode && hasMips64r6(); }
   bool hasDSP() const { return HasDSP; }
   bool hasDSPR2() const { return HasDSPR2; }
   bool hasDSPR3() const { return HasDSPR3; }
@@ -273,6 +295,12 @@ public:
   bool disableMadd4() const { return DisableMadd4; }
   bool hasEVA() const { return HasEVA; }
   bool hasMT() const { return HasMT; }
+  bool hasCRC() const { return HasCRC; }
+  bool hasVirt() const { return HasVirt; }
+  bool hasGINV() const { return HasGINV; }
+  bool useIndirectJumpsHazard() const {
+    return UseIndirectJumpsHazard && hasMips32r2();
+  }
   bool useSmallSection() const { return UseSmallSection; }
 
   bool hasStandardEncoding() const { return !inMips16Mode(); }
@@ -337,6 +365,19 @@ public:
   const InstrItineraryData *getInstrItineraryData() const override {
     return &InstrItins;
   }
+
+protected:
+  // GlobalISel related APIs.
+  std::unique_ptr<CallLowering> CallLoweringInfo;
+  std::unique_ptr<LegalizerInfo> Legalizer;
+  std::unique_ptr<RegisterBankInfo> RegBankInfo;
+  std::unique_ptr<InstructionSelector> InstSelector;
+
+public:
+  const CallLowering *getCallLowering() const override;
+  const LegalizerInfo *getLegalizerInfo() const override;
+  const RegisterBankInfo *getRegBankInfo() const override;
+  const InstructionSelector *getInstructionSelector() const override;
 };
 } // End llvm namespace
 

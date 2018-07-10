@@ -850,22 +850,58 @@ TEST_F(ChangeNamespaceTest, CommentsBeforeMovedClass) {
 TEST_F(ChangeNamespaceTest, UsingShadowDeclInGlobal) {
   std::string Code = "namespace glob {\n"
                      "class Glob {};\n"
+                     "void GFunc() {}\n"
                      "}\n"
                      "using glob::Glob;\n"
+                     "using glob::GFunc;\n"
                      "namespace na {\n"
                      "namespace nb {\n"
-                     "void f() { Glob g; }\n"
+                     "void f() { Glob g; GFunc(); }\n"
                      "} // namespace nb\n"
                      "} // namespace na\n";
 
   std::string Expected = "namespace glob {\n"
                          "class Glob {};\n"
+                         "void GFunc() {}\n"
                          "}\n"
                          "using glob::Glob;\n"
+                         "using glob::GFunc;\n"
                          "\n"
                          "namespace x {\n"
                          "namespace y {\n"
-                         "void f() { Glob g; }\n"
+                         "void f() { Glob g; GFunc(); }\n"
+                         "} // namespace y\n"
+                         "} // namespace x\n";
+  EXPECT_EQ(format(Expected), runChangeNamespaceOnCode(Code));
+}
+
+TEST_F(ChangeNamespaceTest, UsingShadowDeclsInAnonymousNamespaces) {
+  std::string Code = "namespace util {\n"
+                     "class Util {};\n"
+                     "void func() {}\n"
+                     "}\n"
+                     "namespace na {\n"
+                     "namespace nb {\n"
+                     "namespace {\n"
+                     "using ::util::Util;\n"
+                     "using ::util::func;\n"
+                     "void f() { Util u; func(); }\n"
+                     "}\n"
+                     "} // namespace nb\n"
+                     "} // namespace na\n";
+
+  std::string Expected = "namespace util {\n"
+                         "class Util {};\n"
+                         "void func() {}\n"
+                         "} // namespace util\n"
+                         "\n"
+                         "namespace x {\n"
+                         "namespace y {\n"
+                         "namespace {\n"
+                         "using ::util::Util;\n"
+                         "using ::util::func;\n"
+                         "void f() { Util u; func(); }\n"
+                         "}\n"
                          "} // namespace y\n"
                          "} // namespace x\n";
   EXPECT_EQ(format(Expected), runChangeNamespaceOnCode(Code));
@@ -1891,7 +1927,7 @@ TEST_F(ChangeNamespaceTest, ReferencesToEnums) {
                          "  Glob g2 = G2;\n"
                          "  na::X x1 = na::X::X1;\n"
                          "  na::Y y1 = na::Y::Y1;\n"
-                         "  na::Y y2 = na::Y::Y2;\n"
+                         "  na::Y y2 = na::Y2;\n"
                          "}\n"
                          "} // namespace y\n"
                          "} // namespace x\n";
@@ -1923,8 +1959,7 @@ TEST_F(ChangeNamespaceTest, NoRedundantEnumUpdate) {
                          "void f() {\n"
                          "  ns::X x1 = ns::X::X1;\n"
                          "  ns::Y y1 = ns::Y::Y1;\n"
-                         // FIXME: this is redundant
-                         "  ns::Y y2 = ns::Y::Y2;\n"
+                         "  ns::Y y2 = ns::Y2;\n"
                          "}\n"
                          "} // namespace y\n"
                          "} // namespace x\n";
@@ -2154,6 +2189,60 @@ TEST_F(ChangeNamespaceTest, DefaultMoveConstructors) {
   EXPECT_EQ(format(Expected), runChangeNamespaceOnCode(Code));
 }
 
+TEST_F(ChangeNamespaceTest, InjectedClassNameInFriendDecl) {
+  OldNamespace = "d";
+  NewNamespace = "e";
+  std::string Code = "namespace a{\n"
+                     "template <typename T>\n"
+                     "class Base {\n"
+                     " public:\n"
+                     "  void f() {\n"
+                     "    T t;\n"
+                     "    t.priv();\n"
+                     "  }\n"
+                     "};\n"
+                     "}  // namespace a\n"
+                     "namespace d {\n"
+                     "class D : public a::Base<D> {\n"
+                     " private:\n"
+                     "  friend class Base<D>;\n"
+                     "  void priv() {}\n"
+                     "  Base b;\n"
+                     "};\n"
+                     "\n"
+                     "void f() {\n"
+                     "  D d;\n"
+                     "  a:: Base<D> b;\n"
+                     "  b.f();\n"
+                     "}\n"
+                     "}  // namespace d\n";
+  std::string Expected = "namespace a{\n"
+                         "template <typename T>\n"
+                         "class Base {\n"
+                         " public:\n"
+                         "  void f() {\n"
+                         "    T t;\n"
+                         "    t.priv();\n"
+                         "  }\n"
+                         "};\n"
+                         "}  // namespace a\n"
+                         "\n"
+                         "namespace e {\n"
+                         "class D : public a::Base<D> {\n"
+                         " private:\n"
+                         "  friend class Base<D>;\n"
+                         "  void priv() {}\n"
+                         "  a::Base b;\n"
+                         "};\n"
+                         "\n"
+                         "void f() {\n"
+                         "  D d;\n"
+                         "  a::Base<D> b;\n"
+                         "  b.f();\n"
+                         "}\n"
+                         "}  // namespace e\n";
+  EXPECT_EQ(format(Expected), runChangeNamespaceOnCode(Code));
+}
 
 } // anonymous namespace
 } // namespace change_namespace

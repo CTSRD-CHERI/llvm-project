@@ -27,7 +27,7 @@
 
 namespace llvm {
 
-/// \brief Base class for use as a mix-in that aids implementing
+/// Base class for use as a mix-in that aids implementing
 /// a TargetTransformInfo-compatible class.
 class TargetTransformInfoImplBase {
 protected:
@@ -152,8 +152,10 @@ public:
 
     case Intrinsic::annotation:
     case Intrinsic::assume:
+    case Intrinsic::sideeffect:
     case Intrinsic::dbg_declare:
     case Intrinsic::dbg_value:
+    case Intrinsic::dbg_label:
     case Intrinsic::invariant_start:
     case Intrinsic::invariant_end:
     case Intrinsic::lifetime_start:
@@ -245,6 +247,10 @@ public:
                     C2.ScaleCost, C2.ImmCost, C2.SetupCost);
   }
 
+  bool canMacroFuseCmp() { return false; }
+
+  bool shouldFavorPostInc() const { return false; }
+
   bool isLegalMaskedStore(Type *DataType) { return false; }
 
   bool isLegalMaskedLoad(Type *DataType) { return false; }
@@ -254,6 +260,8 @@ public:
   bool isLegalMaskedGather(Type *DataType) { return false; }
 
   bool hasDivRemOp(Type *DataType, bool IsSigned) { return false; }
+
+  bool hasVolatileVariant(Instruction *I, unsigned AddrSpace) { return false; }
 
   bool prefersVectorizedAddressing() { return true; }
 
@@ -272,6 +280,8 @@ public:
 
   bool isProfitableToHoist(Instruction *I) { return true; }
 
+  bool useAA() { return false; }
+
   bool isTypeLegal(Type *Ty) { return false; }
 
   unsigned getJumpBufAlignment() { return 0; }
@@ -280,6 +290,8 @@ public:
 
   bool shouldBuildLookupTables() { return true; }
   bool shouldBuildLookupTablesForConstant(Constant *C) { return true; }
+
+  bool useColdCCForColdCall(Function &F) { return false; }
 
   unsigned getScalarizationOverhead(Type *Ty, bool Insert, bool Extract) {
     return 0;
@@ -292,7 +304,10 @@ public:
 
   bool enableAggressiveInterleaving(bool LoopHasReductions) { return false; }
 
-  bool enableMemCmpExpansion(unsigned &MaxLoadSize) { return false; }
+  const TTI::MemCmpExpansionOptions *enableMemCmpExpansion(
+      bool IsZeroCmp) const {
+    return nullptr;
+  }
 
   bool enableInterleavedAccessVectorization() { return false; }
 
@@ -310,6 +325,8 @@ public:
 
   bool haveFastSqrt(Type *Ty) { return false; }
 
+  bool isFCmpOrdCheaperThanFCmpZero(Type *Ty) { return true; }
+  
   unsigned getFPOpCost(Type *Ty) { return TargetTransformInfo::TCC_Basic; }
 
   int getIntImmCodeSizeCost(unsigned Opcode, unsigned Idx, const APInt &Imm,
@@ -334,6 +351,10 @@ public:
   unsigned getRegisterBitWidth(bool Vector) const { return 32; }
 
   unsigned getMinVectorRegisterBitWidth() { return 128; }
+
+  bool shouldMaximizeVectorBandwidth(bool OptSize) const { return false; }
+
+  unsigned getMinimumVF(unsigned ElemWidth) const { return 0; }
 
   bool
   shouldConsiderAddressTypePromotion(const Instruction &I,
@@ -499,6 +520,16 @@ public:
             Callee->getFnAttribute("target-features"));
   }
 
+  bool isIndexedLoadLegal(TTI::MemIndexedMode Mode, Type *Ty,
+                          const DataLayout &DL) const {
+    return false;
+  }
+
+  bool isIndexedStoreLegal(TTI::MemIndexedMode Mode, Type *Ty,
+                           const DataLayout &DL) const {
+    return false;
+  }
+
   unsigned getLoadStoreVecRegBitWidth(unsigned AddrSpace) const { return 128; }
 
   bool isLegalToVectorizeLoad(LoadInst *LI) const { return true; }
@@ -621,7 +652,7 @@ protected:
   }
 };
 
-/// \brief CRTP base class for use as a mix-in that aids implementing
+/// CRTP base class for use as a mix-in that aids implementing
 /// a TargetTransformInfo-compatible class.
 template <typename T>
 class TargetTransformInfoImplCRTPBase : public TargetTransformInfoImplBase {

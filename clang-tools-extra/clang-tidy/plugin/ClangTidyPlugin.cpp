@@ -118,10 +118,20 @@ extern volatile int PerformanceModuleAnchorSource;
 static int LLVM_ATTRIBUTE_UNUSED PerformanceModuleAnchorDestination =
     PerformanceModuleAnchorSource;
 
+// This anchor is used to force the linker to link the PortabilityModule.
+extern volatile int PortabilityModuleAnchorSource;
+static int LLVM_ATTRIBUTE_UNUSED PortabilityModuleAnchorDestination =
+    PortabilityModuleAnchorSource;
+
 // This anchor is used to force the linker to link the ReadabilityModule.
 extern volatile int ReadabilityModuleAnchorSource;
 static int LLVM_ATTRIBUTE_UNUSED ReadabilityModuleAnchorDestination =
     ReadabilityModuleAnchorSource;
+
+// This anchor is used to force the linker to link the ObjCModule.
+extern volatile int ObjCModuleAnchorSource;
+static int LLVM_ATTRIBUTE_UNUSED ObjCModuleAnchorDestination =
+    ObjCModuleAnchorSource;
 
 } // namespace tidy
 } // namespace clang

@@ -25,6 +25,7 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/MapVector.h"
+#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringMap.h"
@@ -40,10 +41,7 @@
 #include "llvm/IR/ValueHandle.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/Casting.h"
-#include "isl/aff.h"
-#include "isl/ctx.h"
 #include "isl/isl-noexceptions.h"
-#include "isl/set.h"
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
@@ -78,7 +76,6 @@ class Value;
 
 void initializeScopInfoRegionPassPass(PassRegistry &);
 void initializeScopInfoWrapperPassPass(PassRegistry &);
-
 } // end namespace llvm
 
 struct isl_map;
@@ -1174,7 +1171,7 @@ struct InvariantEquivClassTy {
   ///
   /// It is the union of the execution domains of the memory accesses in the
   /// InvariantAccesses list.
-  isl_set *ExecutionContext;
+  isl::set ExecutionContext;
 
   /// The type of the invariant access
   ///
@@ -1198,8 +1195,8 @@ class ScopStmt {
 
 public:
   /// Create the ScopStmt from a BasicBlock.
-  ScopStmt(Scop &parent, BasicBlock &bb, Loop *SurroundingLoop,
-           std::vector<Instruction *> Instructions, int Count);
+  ScopStmt(Scop &parent, BasicBlock &bb, StringRef Name, Loop *SurroundingLoop,
+           std::vector<Instruction *> Instructions);
 
   /// Create an overapproximating ScopStmt for the region @p R.
   ///
@@ -1209,7 +1206,7 @@ public:
   ///                               blocks for now. We currently do not allow
   ///                               to modify the instructions of blocks later
   ///                               in the region statement.
-  ScopStmt(Scop &parent, Region &R, Loop *SurroundingLoop,
+  ScopStmt(Scop &parent, Region &R, StringRef Name, Loop *SurroundingLoop,
            std::vector<Instruction *> EntryBlockInstructions);
 
   /// Create a copy statement.
@@ -1326,7 +1323,7 @@ private:
 
 public:
   /// Get an isl_ctx pointer.
-  isl_ctx *getIslCtx() const;
+  isl::ctx getIslCtx() const;
 
   /// Get the iteration domain of this ScopStmt.
   ///
@@ -1562,7 +1559,14 @@ public:
   /// Remove @p MA from this statement.
   ///
   /// In contrast to removeMemoryAccess(), no other access will be eliminated.
-  void removeSingleMemoryAccess(MemoryAccess *MA);
+  ///
+  /// @param MA            The MemoryAccess to be removed.
+  /// @param AfterHoisting If true, also remove from data access lists.
+  ///                      These lists are filled during
+  ///                      ScopBuilder::buildAccessRelations. Therefore, if this
+  ///                      method is called before buildAccessRelations, false
+  ///                      must be passed.
+  void removeSingleMemoryAccess(MemoryAccess *MA, bool AfterHoisting = true);
 
   using iterator = MemoryAccessVec::iterator;
   using const_iterator = MemoryAccessVec::const_iterator;
@@ -1680,7 +1684,7 @@ raw_ostream &operator<<(raw_ostream &OS, const ScopStmt &S);
 class Scop {
 public:
   /// Type to represent a pair of minimal/maximal access to an array.
-  using MinMaxAccessTy = std::pair<isl_pw_multi_aff *, isl_pw_multi_aff *>;
+  using MinMaxAccessTy = std::pair<isl::pw_multi_aff, isl::pw_multi_aff>;
 
   /// Vector of minimal/maximal accesses to different arrays.
   using MinMaxVectorTy = SmallVector<MinMaxAccessTy, 4>;
@@ -1696,6 +1700,17 @@ public:
 private:
   friend class ScopBuilder;
 
+  /// Isl context.
+  ///
+  /// We need a shared_ptr with reference counter to delete the context when all
+  /// isl objects are deleted. We will distribute the shared_ptr to all objects
+  /// that use the context to create isl objects, and increase the reference
+  /// counter. By doing this, we guarantee that the context is deleted when we
+  /// delete the last object that creates isl objects with the context. This
+  /// declaration needs to be the first in class to gracefully destroy all isl
+  /// objects before the context.
+  std::shared_ptr<isl_ctx> IslCtx;
+
   ScalarEvolution *SE;
   DominatorTree *DT;
 
@@ -1703,7 +1718,7 @@ private:
   Region &R;
 
   /// The name of the SCoP (identical to the regions name)
-  std::string name;
+  Optional<std::string> name;
 
   /// The ID to be assigned to the next Scop in a function
   static int NextScopID;
@@ -1751,15 +1766,6 @@ private:
   /// OptimizationRemarkEmitter object for displaying diagnostic remarks
   OptimizationRemarkEmitter &ORE;
 
-  /// Isl context.
-  ///
-  /// We need a shared_ptr with reference counter to delete the context when all
-  /// isl objects are deleted. We will distribute the shared_ptr to all objects
-  /// that use the context to create isl objects, and increase the reference
-  /// counter. By doing this, we guarantee that the context is deleted when we
-  /// delete the last object that creates isl objects with the context.
-  std::shared_ptr<isl_ctx> IslCtx;
-
   /// A map from basic blocks to vector of SCoP statements. Currently this
   /// vector comprises only of a single statement.
   DenseMap<BasicBlock *, std::vector<ScopStmt *>> StmtMap;
@@ -1771,7 +1777,7 @@ private:
   DenseMap<BasicBlock *, isl::set> DomainMap;
 
   /// Constraints on parameters.
-  isl_set *Context = nullptr;
+  isl::set Context = nullptr;
 
   /// The affinator used to translate SCEVs to isl expressions.
   SCEVAffinator Affinator;
@@ -1806,7 +1812,7 @@ private:
   /// lot simpler, but which is only valid under certain assumptions. The
   /// assumed context records the assumptions taken during the construction of
   /// this scop and that need to be code generated as a run-time test.
-  isl_set *AssumedContext = nullptr;
+  isl::set AssumedContext;
 
   /// The restrictions under which this SCoP was built.
   ///
@@ -1814,7 +1820,7 @@ private:
   /// constraints over the parameters. However, while we need the constraints
   /// in the assumed context to be "true" the constraints in the invalid context
   /// need to be "false". Otherwise they behave the same.
-  isl_set *InvalidContext = nullptr;
+  isl::set InvalidContext;
 
   /// Helper struct to remember assumptions.
   struct Assumption {
@@ -1825,7 +1831,7 @@ private:
     AssumptionSign Sign;
 
     /// The valid/invalid context if this is an assumption/restriction.
-    isl_set *Set;
+    isl::set Set;
 
     /// The location that caused this assumption.
     DebugLoc Loc;
@@ -1880,7 +1886,11 @@ private:
   /// set of statement instances that will be scheduled in a subtree. There
   /// are also several other nodes. A full description of the different nodes
   /// in a schedule tree is given in the isl manual.
-  isl_schedule *Schedule = nullptr;
+  isl::schedule Schedule = nullptr;
+
+  /// Whether the schedule has been modified after derived from the CFG by
+  /// ScopBuilder.
+  bool ScheduleModified = false;
 
   /// The set of minimal/maximal accesses for each alias group.
   ///
@@ -2198,11 +2208,11 @@ private:
   /// and map.
   ///
   /// @param BB              The basic block we build the statement for.
+  /// @param Name            The name of the new statement.
   /// @param SurroundingLoop The loop the created statement is contained in.
   /// @param Instructions    The instructions in the statement.
-  /// @param Count           The index of the created statement in @p BB.
-  void addScopStmt(BasicBlock *BB, Loop *SurroundingLoop,
-                   std::vector<Instruction *> Instructions, int Count);
+  void addScopStmt(BasicBlock *BB, StringRef Name, Loop *SurroundingLoop,
+                   std::vector<Instruction *> Instructions);
 
   /// Create a new SCoP statement for @p R.
   ///
@@ -2210,11 +2220,12 @@ private:
   /// and map.
   ///
   /// @param R                      The region we build the statement for.
+  /// @param Name                   The name of the new statement.
   /// @param SurroundingLoop        The loop the created statement is contained
   ///                               in.
   /// @param EntryBlockInstructions The (interesting) instructions in the
   ///                               entry block of the region statement.
-  void addScopStmt(Region *R, Loop *SurroundingLoop,
+  void addScopStmt(Region *R, StringRef Name, Loop *SurroundingLoop,
                    std::vector<Instruction *> EntryBlockInstructions);
 
   /// Update access dimensionalities.
@@ -2270,9 +2281,15 @@ private:
 
   /// Remove statements from the list of scop statements.
   ///
-  /// @param ShouldDelete A function that returns true if the statement passed
-  ///                     to it should be deleted.
-  void removeStmts(std::function<bool(ScopStmt &)> ShouldDelete);
+  /// @param ShouldDelete  A function that returns true if the statement passed
+  ///                      to it should be deleted.
+  /// @param AfterHoisting If true, also remove from data access lists.
+  ///                      These lists are filled during
+  ///                      ScopBuilder::buildAccessRelations. Therefore, if this
+  ///                      method is called before buildAccessRelations, false
+  ///                      must be passed.
+  void removeStmts(std::function<bool(ScopStmt &)> ShouldDelete,
+                   bool AfterHoisting = true);
 
   /// Removes @p Stmt from the StmtMap.
   void removeFromStmtMap(ScopStmt &Stmt);
@@ -2305,14 +2322,13 @@ private:
     Loop *L;
 
     // The (possibly incomplete) schedule for this loop.
-    isl_schedule *Schedule;
+    isl::schedule Schedule;
 
     // The number of basic blocks in the current loop, for which a schedule has
     // already been constructed.
     unsigned NumBlocksProcessed;
 
-    LoopStackElement(Loop *L, __isl_give isl_schedule *S,
-                     unsigned NumBlocksProcessed)
+    LoopStackElement(Loop *L, isl::schedule S, unsigned NumBlocksProcessed)
         : L(L), Schedule(S), NumBlocksProcessed(NumBlocksProcessed) {}
   };
 
@@ -2444,7 +2460,11 @@ public:
   /// could be executed.
   bool isEmpty() const { return Stmts.empty(); }
 
-  const StringRef getName() const { return name; }
+  StringRef getName() {
+    if (!name)
+      name = R.getNameStr();
+    return *name;
+  }
 
   using array_iterator = ArrayInfoSetTy::iterator;
   using const_array_iterator = ArrayInfoSetTy::const_iterator;
@@ -2599,7 +2619,7 @@ public:
   ///             (needed/assumptions) or negative (invalid/restrictions).
   ///
   /// @returns True if the assumption @p Set is not trivial.
-  bool isEffectiveAssumption(__isl_keep isl_set *Set, AssumptionSign Sign);
+  bool isEffectiveAssumption(isl::set Set, AssumptionSign Sign);
 
   /// Track and report an assumption.
   ///
@@ -2615,8 +2635,8 @@ public:
   ///             calculate hotness when emitting remark.
   ///
   /// @returns True if the assumption is not trivial.
-  bool trackAssumption(AssumptionKind Kind, __isl_keep isl_set *Set,
-                       DebugLoc Loc, AssumptionSign Sign, BasicBlock *BB);
+  bool trackAssumption(AssumptionKind Kind, isl::set Set, DebugLoc Loc,
+                       AssumptionSign Sign, BasicBlock *BB);
 
   /// Add assumptions to assumed context.
   ///
@@ -2636,7 +2656,7 @@ public:
   ///             (needed/assumptions) or negative (invalid/restrictions).
   /// @param BB   The block in which this assumption was taken. Used to
   ///             calculate hotness when emitting remark.
-  void addAssumption(AssumptionKind Kind, __isl_take isl_set *Set, DebugLoc Loc,
+  void addAssumption(AssumptionKind Kind, isl::set Set, DebugLoc Loc,
                      AssumptionSign Sign, BasicBlock *BB);
 
   /// Record an assumption for later addition to the assumed context.
@@ -2654,9 +2674,8 @@ public:
   ///             set, the domain of that block will be used to simplify the
   ///             actual assumption in @p Set once it is added. This is useful
   ///             if the assumption was created prior to the domain.
-  void recordAssumption(AssumptionKind Kind, __isl_take isl_set *Set,
-                        DebugLoc Loc, AssumptionSign Sign,
-                        BasicBlock *BB = nullptr);
+  void recordAssumption(AssumptionKind Kind, isl::set Set, DebugLoc Loc,
+                        AssumptionSign Sign, BasicBlock *BB = nullptr);
 
   /// Add all recorded assumptions to the assumed context.
   void addRecordedAssumptions();
@@ -2679,9 +2698,7 @@ public:
   isl::set getInvalidContext() const;
 
   /// Return true if and only if the InvalidContext is trivial (=empty).
-  bool hasTrivialInvalidContext() const {
-    return isl_set_is_empty(InvalidContext);
-  }
+  bool hasTrivialInvalidContext() const { return InvalidContext.is_empty(); }
 
   /// A vector of memory accesses that belong to an alias group.
   using AliasGroupTy = SmallVector<MemoryAccess *, 4>;
@@ -2747,6 +2764,11 @@ public:
 
   /// Return the list of ScopStmts that represent the given @p BB.
   ArrayRef<ScopStmt *> getStmtListFor(BasicBlock *BB) const;
+
+  /// Get the statement to put a PHI WRITE into.
+  ///
+  /// @param U The operand of a PHINode.
+  ScopStmt *getIncomingStmtFor(const Use &U) const;
 
   /// Return the last statement representing @p BB.
   ///
@@ -2867,7 +2889,7 @@ public:
     ScopArrayInfoMap.erase(It);
   }
 
-  void setContext(__isl_take isl_set *NewContext);
+  void setContext(isl::set NewContext);
 
   /// Align the parameters in the statement to the scop context
   void realignParams();
@@ -2901,7 +2923,7 @@ public:
   /// Get the isl context of this static control part.
   ///
   /// @return The isl context of this static control part.
-  isl_ctx *getIslCtx() const;
+  isl::ctx getIslCtx() const;
 
   /// Directly return the shared_ptr of the context.
   const std::shared_ptr<isl_ctx> &getSharedIslCtx() const { return IslCtx; }
@@ -2918,8 +2940,8 @@ public:
   /// the translation of @p E was deemed to complex the SCoP is invalidated and
   /// a dummy value of appropriate dimension is returned. This allows to bail
   /// for complex cases without "error handling code" needed on the users side.
-  __isl_give PWACtx getPwAff(const SCEV *E, BasicBlock *BB = nullptr,
-                             bool NonNegative = false);
+  PWACtx getPwAff(const SCEV *E, BasicBlock *BB = nullptr,
+                  bool NonNegative = false);
 
   /// Compute the isl representation for the SCEV @p E
   ///
@@ -2972,12 +2994,16 @@ public:
   /// Update the current schedule
   ///
   /// NewSchedule The new schedule (given as a flat union-map).
-  void setSchedule(__isl_take isl_union_map *NewSchedule);
+  void setSchedule(isl::union_map NewSchedule);
 
   /// Update the current schedule
   ///
   /// NewSchedule The new schedule (given as schedule tree).
-  void setScheduleTree(__isl_take isl_schedule *NewSchedule);
+  void setScheduleTree(isl::schedule NewSchedule);
+
+  /// Whether the schedule is the original schedule as derived from the CFG by
+  /// ScopBuilder.
+  bool isOriginalSchedule() const { return !ScheduleModified; }
 
   /// Intersects the domains of all statements in the SCoP.
   ///
@@ -2999,7 +3025,7 @@ public:
   /// Check whether @p Schedule contains extension nodes.
   ///
   /// @return true if @p Schedule contains extension nodes.
-  static bool containsExtensionNode(__isl_keep isl_schedule *Schedule);
+  static bool containsExtensionNode(isl::schedule Schedule);
 
   /// Simplify the SCoP representation.
   ///
@@ -3202,7 +3228,6 @@ public:
 
   void getAnalysisUsage(AnalysisUsage &AU) const override;
 };
-
 } // end namespace polly
 
 #endif // POLLY_SCOPINFO_H

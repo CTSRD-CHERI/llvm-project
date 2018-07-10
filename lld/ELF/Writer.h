@@ -23,7 +23,6 @@ class InputSectionBase;
 template <class ELFT> class ObjFile;
 class SymbolTable;
 template <class ELFT> void writeResult();
-template <class ELFT> void markLive();
 
 // This describes a program header entry.
 // Each contains type, access flags and range of output sections that will be
@@ -44,9 +43,12 @@ struct PhdrEntry {
   OutputSection *FirstSec = nullptr;
   OutputSection *LastSec = nullptr;
   bool HasLMA = false;
+
+  uint64_t LMAOffset = 0;
 };
 
-llvm::StringRef getOutputSectionName(llvm::StringRef Name);
+void addReservedSymbols();
+llvm::StringRef getOutputSectionName(const InputSectionBase *S);
 
 template <class ELFT> uint32_t calcMipsEFlags();
 
@@ -54,6 +56,7 @@ uint8_t getMipsFpAbiFlag(uint8_t OldFlag, uint8_t NewFlag,
                          llvm::StringRef FileName);
 
 bool isMipsN32Abi(const InputFile *F);
+bool isMicroMips();
 bool isMipsR6();
 } // namespace elf
 } // namespace lld

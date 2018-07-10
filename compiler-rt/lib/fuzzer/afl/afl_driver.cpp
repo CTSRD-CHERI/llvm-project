@@ -59,6 +59,7 @@ statistics from the file. If that fails then the process will quit.
 #include <sys/resource.h>
 #include <sys/time.h>
 #include <unistd.h>
+#include <limits.h>
 
 #include <fstream>
 #include <iostream>
@@ -69,26 +70,44 @@ statistics from the file. If that fails then the process will quit.
 #define LIBFUZZER_LINUX 1
 #define LIBFUZZER_APPLE 0
 #define LIBFUZZER_NETBSD 0
+#define LIBFUZZER_FREEBSD 0
+#define LIBFUZZER_OPENBSD 0
 #elif __APPLE__
 #define LIBFUZZER_LINUX 0
 #define LIBFUZZER_APPLE 1
 #define LIBFUZZER_NETBSD 0
+#define LIBFUZZER_FREEBSD 0
+#define LIBFUZZER_OPENBSD 0
 #elif __NetBSD__
 #define LIBFUZZER_LINUX 0
 #define LIBFUZZER_APPLE 0
 #define LIBFUZZER_NETBSD 1
+#define LIBFUZZER_FREEBSD 0
+#define LIBFUZZER_OPENBSD 0
+#elif __FreeBSD__
+#define LIBFUZZER_LINUX 0
+#define LIBFUZZER_APPLE 0
+#define LIBFUZZER_NETBSD 0
+#define LIBFUZZER_FREEBSD 1
+#define LIBFUZZER_OPENBSD 0
+#elif __OpenBSD__
+#define LIBFUZZER_LINUX 0
+#define LIBFUZZER_APPLE 0
+#define LIBFUZZER_NETBSD 0
+#define LIBFUZZER_FREEBSD 0
+#define LIBFUZZER_OPENBSD 1
 #else
 #error "Support for your platform has not been implemented"
 #endif
 
 // Used to avoid repeating error checking boilerplate. If cond is false, a
-// fatal error has occured in the program. In this event print error_message
+// fatal error has occurred in the program. In this event print error_message
 // to stderr and abort(). Otherwise do nothing. Note that setting
 // AFL_DRIVER_STDERR_DUPLICATE_FILENAME may cause error_message to be appended
 // to the file as well, if the error occurs after the duplication is performed.
 #define CHECK_ERROR(cond, error_message)                                       \
   if (!(cond)) {                                                               \
-    fprintf(stderr, (error_message));                                          \
+    fprintf(stderr, "%s\n", (error_message));                                  \
     abort();                                                                   \
   }
 
@@ -120,12 +139,24 @@ static const int kNumExtraStats = 2;
 static const char *kExtraStatsFormatString = "peak_rss_mb            : %u\n"
                                              "slowest_unit_time_sec  : %u\n";
 
+// Experimental feature to use afl_driver without AFL's deferred mode.
+// Needs to run before __afl_auto_init.
+__attribute__((constructor(0))) void __decide_deferred_forkserver(void) {
+  if (getenv("AFL_DRIVER_DONT_DEFER")) {
+    if (unsetenv("__AFL_DEFER_FORKSRV")) {
+      perror("Failed to unset __AFL_DEFER_FORKSRV");
+      abort();
+    }
+  }
+}
+
 // Copied from FuzzerUtil.cpp.
 size_t GetPeakRSSMb() {
   struct rusage usage;
   if (getrusage(RUSAGE_SELF, &usage))
     return 0;
-  if (LIBFUZZER_LINUX || LIBFUZZER_NETBSD) {
+  if (LIBFUZZER_LINUX || LIBFUZZER_NETBSD || LIBFUZZER_FREEBSD ||
+      LIBFUZZER_OPENBSD) {
     // ru_maxrss is in KiB
     return usage.ru_maxrss >> 10;
   } else if (LIBFUZZER_APPLE) {
@@ -270,9 +301,21 @@ int ExecuteFilesOnyByOne(int argc, char **argv) {
     assert(in);
     LLVMFuzzerTestOneInput(reinterpret_cast<const uint8_t *>(bytes.data()),
                            bytes.size());
-    std::cout << "Execution successfull" << std::endl;
+    std::cout << "Execution successful" << std::endl;
   }
   return 0;
+}
+
+static void set_iterations(int *N, const char *arg) {
+  char *next_char;
+  long NL = strtol(arg, &next_char, 10);
+  if (NL < 1 || NL > INT_MAX || *next_char != '\0') {
+    fprintf(stderr, "WARNING: iterations invalid `%s`\n",
+        arg);
+    ::exit(-1);
+  }
+
+  *N = static_cast<int>(NL);
 }
 
 int main(int argc, char **argv) {
@@ -296,18 +339,26 @@ int main(int argc, char **argv) {
   maybe_duplicate_stderr();
   maybe_initialize_extra_stats();
 
-  __afl_manual_init();
+  if (!getenv("AFL_DRIVER_DONT_DEFER"))
+    __afl_manual_init();
 
   int N = 1000;
   if (argc == 2 && argv[1][0] == '-')
-      N = atoi(argv[1] + 1);
-  else if(argc == 2 && (N = atoi(argv[1])) > 0)
-      fprintf(stderr, "WARNING: using the deprecated call style `%s %d`\n",
-              argv[0], N);
-  else if (argc > 1)
+    set_iterations(&N, argv[1] + 1);
+  else if(argc == 2) {
+    fprintf(stderr, "WARNING: using the deprecated call style `%s %d`\n",
+        argv[0], N);
+    set_iterations(&N, argv[1]);
+  } else if (argc > 1)
     return ExecuteFilesOnyByOne(argc, argv);
 
   assert(N > 0);
+
+  // Call LLVMFuzzerTestOneInput here so that coverage caused by initialization
+  // on the first execution of LLVMFuzzerTestOneInput is ignored.
+  uint8_t dummy_input[1] = {0};
+  LLVMFuzzerTestOneInput(dummy_input, 1);
+
   time_t unit_time_secs;
   int num_runs = 0;
   while (__afl_persistent_loop(N)) {

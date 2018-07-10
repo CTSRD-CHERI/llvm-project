@@ -48,6 +48,7 @@
 // RUN: %plain_clang_cheri_triple_allowed -target mips64-unknown-freebsd11 -cheri=256 \
 // RUN:   -mabi=n64 -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=MIPS-CHERI256 -DARCHNAME=MIPS64R2 %s
 
+
 // CHERI128: #define _MIPS_CAP_ALIGN_MASK 0xfffffffffffffff0
 // CHERI128: #define _MIPS_SZCAP 128
 // CHERI128: #define __CHERI_PURE_CAPABILITY__ 2
@@ -71,6 +72,7 @@
 // MIPS-CHERI128: #define __CHERI__ 1
 // MIPS-CHERI128: #define __SIZEOF_POINTER__ 8
 // MIPS-CHERI128: #define __UINTPTR_TYPE__ long unsigned int
+
 
 // MIPS-CHERI256: #define _MIPS_ARCH_[[ARCHNAME]] 1
 // MIPS-CHERI256: #define _MIPS_CAP_ALIGN_MASK 0xffffffffffffffe0

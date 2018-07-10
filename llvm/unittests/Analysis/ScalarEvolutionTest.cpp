@@ -24,18 +24,10 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/Support/SourceMgr.h"
-#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 namespace llvm {
 namespace {
-
-MATCHER_P3(IsAffineAddRec, S, X, L, "") {
-  if (auto *AR = dyn_cast<SCEVAddRecExpr>(arg))
-    return AR->isAffine() && AR->getLoop() == L && AR->getOperand(0) == S &&
-           AR->getOperand(1) == X;
-  return false;
-}
 
 // We use this fixture to ensure that we clean up ScalarEvolution before
 // deleting the PassManager.
@@ -894,6 +886,90 @@ TEST_F(ScalarEvolutionsTest, SCEVExitLimitForgetLoop) {
             2004u);
 }
 
+// Make sure that SCEV invalidates exit limits after invalidating the values it
+// depends on when we forget a value.
+TEST_F(ScalarEvolutionsTest, SCEVExitLimitForgetValue) {
+  /*
+   * Create the following code:
+   * func(i64 addrspace(10)* %arg)
+   * top:
+   *  br label %L.ph
+   * L.ph:
+   *  %load = load i64 addrspace(10)* %arg
+   *  br label %L
+   * L:
+   *  %phi = phi i64 [i64 0, %L.ph], [ %add, %L2 ]
+   *  %add = add i64 %phi2, 1
+   *  %cond = icmp slt i64 %add, %load ; then becomes 2000.
+   *  br i1 %cond, label %post, label %L2
+   * post:
+   *  ret void
+   *
+   */
+
+  // Create a module with non-integral pointers in it's datalayout
+  Module NIM("nonintegral", Context);
+  std::string DataLayout = M.getDataLayoutStr();
+  if (!DataLayout.empty())
+    DataLayout += "-";
+  DataLayout += "ni:10";
+  NIM.setDataLayout(DataLayout);
+
+  Type *T_int64 = Type::getInt64Ty(Context);
+  Type *T_pint64 = T_int64->getPointerTo(10);
+
+  FunctionType *FTy =
+      FunctionType::get(Type::getVoidTy(Context), {T_pint64}, false);
+  Function *F = cast<Function>(NIM.getOrInsertFunction("foo", FTy));
+
+  Argument *Arg = &*F->arg_begin();
+
+  BasicBlock *Top = BasicBlock::Create(Context, "top", F);
+  BasicBlock *LPh = BasicBlock::Create(Context, "L.ph", F);
+  BasicBlock *L = BasicBlock::Create(Context, "L", F);
+  BasicBlock *Post = BasicBlock::Create(Context, "post", F);
+
+  IRBuilder<> Builder(Top);
+  Builder.CreateBr(LPh);
+
+  Builder.SetInsertPoint(LPh);
+  auto *Load = cast<Instruction>(Builder.CreateLoad(T_int64, Arg, "load"));
+  Builder.CreateBr(L);
+
+  Builder.SetInsertPoint(L);
+  PHINode *Phi = Builder.CreatePHI(T_int64, 2);
+  auto *Add = cast<Instruction>(
+      Builder.CreateAdd(Phi, ConstantInt::get(T_int64, 1), "add"));
+  auto *Cond = cast<Instruction>(
+      Builder.CreateICmp(ICmpInst::ICMP_SLT, Add, Load, "cond"));
+  auto *Br = cast<Instruction>(Builder.CreateCondBr(Cond, L, Post));
+  Phi->addIncoming(ConstantInt::get(T_int64, 0), LPh);
+  Phi->addIncoming(Add, L);
+
+  Builder.SetInsertPoint(Post);
+  Builder.CreateRetVoid();
+
+  ScalarEvolution SE = buildSE(*F);
+  auto *Loop = LI->getLoopFor(L);
+  const SCEV *EC = SE.getBackedgeTakenCount(Loop);
+  EXPECT_FALSE(isa<SCEVCouldNotCompute>(EC));
+  EXPECT_FALSE(isa<SCEVConstant>(EC));
+
+  SE.forgetValue(Load);
+  Br->eraseFromParent();
+  Cond->eraseFromParent();
+  Load->eraseFromParent();
+
+  Builder.SetInsertPoint(L);
+  auto *NewCond = Builder.CreateICmp(
+      ICmpInst::ICMP_SLT, Add, ConstantInt::get(T_int64, 2000), "new.cond");
+  Builder.CreateCondBr(NewCond, L, Post);
+  const SCEV *NewEC = SE.getBackedgeTakenCount(Loop);
+  EXPECT_FALSE(isa<SCEVCouldNotCompute>(NewEC));
+  EXPECT_TRUE(isa<SCEVConstant>(NewEC));
+  EXPECT_EQ(cast<SCEVConstant>(NewEC)->getAPInt().getLimitedValue(), 1999u);
+}
+
 TEST_F(ScalarEvolutionsTest, SCEVAddRecFromPHIwithLargeConstants) {
   // Reference: https://reviews.llvm.org/D37265
   // Make sure that SCEV does not blow up when constructing an AddRec
@@ -1006,75 +1082,6 @@ TEST_F(ScalarEvolutionsTest, SCEVAddRecFromPHIwithLargeConstantAccum) {
   auto Result = SE.createAddRecFromPHIWithCasts(cast<SCEVUnknown>(Expr));
 }
 
-TEST_F(ScalarEvolutionsTest, SCEVForgetDependentLoop) {
-  LLVMContext C;
-  SMDiagnostic Err;
-  std::unique_ptr<Module> M = parseAssemblyString(
-      "target datalayout = \"e-m:e-p:32:32-f64:32:64-f80:32-n8:16:32-S128\" "
-      " "
-      "define void @f(i32 %first_limit, i1* %cond) { "
-      "entry: "
-      " br label %first_loop.ph "
-      " "
-      "first_loop.ph: "
-      "  br label %first_loop "
-      " "
-      "first_loop: "
-      "  %iv_first = phi i32 [0, %first_loop.ph], [%iv_first.inc, %first_loop] "
-      "  %iv_first.inc = add i32 %iv_first, 1 "
-      "  %known_cond = icmp slt i32 %iv_first, 2000 "
-      "  %unknown_cond = load volatile i1, i1* %cond "
-      "  br i1 %unknown_cond, label %first_loop, label %first_loop.exit "
-      " "
-      "first_loop.exit: "
-      "  %iv_first.3x = mul i32 %iv_first, 3 "
-      "  %iv_first.5x = mul i32 %iv_first, 5 "
-      "  br label %second_loop.ph "
-      " "
-      "second_loop.ph: "
-      "  br label %second_loop "
-      " "
-      "second_loop: "
-      "  %iv_second = phi i32 [%iv_first.3x, %second_loop.ph], [%iv_second.inc, %second_loop] "
-      "  %iv_second.inc = add i32 %iv_second, 1 "
-      "  %second_loop.cond = icmp ne i32 %iv_second, %iv_first.5x "
-      "  br i1 %second_loop.cond, label %second_loop, label %second_loop.exit "
-      " "
-      "second_loop.exit: "
-      "  ret void "
-      "} "
-      " ",
-      Err, C);
-
-  assert(M && "Could not parse module?");
-  assert(!verifyModule(*M) && "Must have been well formed!");
-
-  runWithSE(*M, "f", [&](Function &F, LoopInfo &LI, ScalarEvolution &SE) {
-    auto &FirstIV = GetInstByName(F, "iv_first");
-    auto &SecondIV = GetInstByName(F, "iv_second");
-
-    auto *FirstLoop = LI.getLoopFor(FirstIV.getParent());
-    auto *SecondLoop = LI.getLoopFor(SecondIV.getParent());
-
-    auto *Zero = SE.getZero(FirstIV.getType());
-    auto *Two = SE.getConstant(APInt(32, 2));
-
-    EXPECT_EQ(SE.getBackedgeTakenCount(FirstLoop), SE.getCouldNotCompute());
-    EXPECT_THAT(SE.getBackedgeTakenCount(SecondLoop),
-                IsAffineAddRec(Zero, Two, FirstLoop));
-
-    auto &UnknownCond = GetInstByName(F, "unknown_cond");
-    auto &KnownCond = GetInstByName(F, "known_cond");
-
-    UnknownCond.replaceAllUsesWith(&KnownCond);
-
-    SE.forgetLoop(FirstLoop);
-
-    EXPECT_EQ(SE.getBackedgeTakenCount(FirstLoop), SE.getConstant(APInt(32, 2000)));
-    EXPECT_EQ(SE.getBackedgeTakenCount(SecondLoop), SE.getConstant(APInt(32, 4000)));
-  });
-}
-
 TEST_F(ScalarEvolutionsTest, SCEVFoldSumOfTruncs) {
   // Verify that the following SCEV gets folded to a zero:
   //  (-1 * (trunc i64 (-1 * %0) to i32)) + (-1 * (trunc i64 %0 to i32)
@@ -1104,6 +1111,283 @@ TEST_F(ScalarEvolutionsTest, SCEVFoldSumOfTruncs) {
   // Verify that the SCEV was folded to 0
   const auto *ZeroConst = SE.getConstant(Int32Ty, 0);
   EXPECT_EQ(Expr, ZeroConst);
+}
+
+// Check that we can correctly identify the points at which the SCEV of the
+// AddRec can be expanded.
+TEST_F(ScalarEvolutionsTest, SCEVExpanderIsSafeToExpandAt) {
+  /*
+   * Create the following code:
+   * func(i64 addrspace(10)* %arg)
+   * top:
+   *  br label %L.ph
+   * L.ph:
+   *  br label %L
+   * L:
+   *  %phi = phi i64 [i64 0, %L.ph], [ %add, %L2 ]
+   *  %add = add i64 %phi2, 1
+   *  %cond = icmp slt i64 %add, 1000; then becomes 2000.
+   *  br i1 %cond, label %post, label %L2
+   * post:
+   *  ret void
+   *
+   */
+
+  // Create a module with non-integral pointers in it's datalayout
+  Module NIM("nonintegral", Context);
+  std::string DataLayout = M.getDataLayoutStr();
+  if (!DataLayout.empty())
+    DataLayout += "-";
+  DataLayout += "ni:10";
+  NIM.setDataLayout(DataLayout);
+
+  Type *T_int64 = Type::getInt64Ty(Context);
+  Type *T_pint64 = T_int64->getPointerTo(10);
+
+  FunctionType *FTy =
+      FunctionType::get(Type::getVoidTy(Context), {T_pint64}, false);
+  Function *F = cast<Function>(NIM.getOrInsertFunction("foo", FTy));
+
+  BasicBlock *Top = BasicBlock::Create(Context, "top", F);
+  BasicBlock *LPh = BasicBlock::Create(Context, "L.ph", F);
+  BasicBlock *L = BasicBlock::Create(Context, "L", F);
+  BasicBlock *Post = BasicBlock::Create(Context, "post", F);
+
+  IRBuilder<> Builder(Top);
+  Builder.CreateBr(LPh);
+
+  Builder.SetInsertPoint(LPh);
+  Builder.CreateBr(L);
+
+  Builder.SetInsertPoint(L);
+  PHINode *Phi = Builder.CreatePHI(T_int64, 2);
+  auto *Add = cast<Instruction>(
+      Builder.CreateAdd(Phi, ConstantInt::get(T_int64, 1), "add"));
+  auto *Limit = ConstantInt::get(T_int64, 1000);
+  auto *Cond = cast<Instruction>(
+      Builder.CreateICmp(ICmpInst::ICMP_SLT, Add, Limit, "cond"));
+  Builder.CreateCondBr(Cond, L, Post);
+  Phi->addIncoming(ConstantInt::get(T_int64, 0), LPh);
+  Phi->addIncoming(Add, L);
+
+  Builder.SetInsertPoint(Post);
+  Builder.CreateRetVoid();
+
+  ScalarEvolution SE = buildSE(*F);
+  const SCEV *S = SE.getSCEV(Phi);
+  EXPECT_TRUE(isa<SCEVAddRecExpr>(S));
+  const SCEVAddRecExpr *AR = cast<SCEVAddRecExpr>(S);
+  EXPECT_TRUE(AR->isAffine());
+  EXPECT_FALSE(isSafeToExpandAt(AR, Top->getTerminator(), SE));
+  EXPECT_FALSE(isSafeToExpandAt(AR, LPh->getTerminator(), SE));
+  EXPECT_TRUE(isSafeToExpandAt(AR, L->getTerminator(), SE));
+  EXPECT_TRUE(isSafeToExpandAt(AR, Post->getTerminator(), SE));
+}
+
+// Check that SCEV expander does not use the nuw instruction
+// for expansion.
+TEST_F(ScalarEvolutionsTest, SCEVExpanderNUW) {
+  /*
+   * Create the following code:
+   * func(i64 %a)
+   * entry:
+   *   br false, label %exit, label %body
+   * body:
+   *  %s1 = add i64 %a, -1
+   *  br label %exit
+   * exit:
+   *  %s = add nuw i64 %a, -1
+   *  ret %s
+   */
+
+  // Create a module.
+  Module M("SCEVExpanderNUW", Context);
+
+  Type *T_int64 = Type::getInt64Ty(Context);
+
+  FunctionType *FTy =
+      FunctionType::get(Type::getVoidTy(Context), { T_int64 }, false);
+  Function *F = cast<Function>(M.getOrInsertFunction("func", FTy));
+  Argument *Arg = &*F->arg_begin();
+  ConstantInt *C = ConstantInt::get(Context, APInt(64, -1));
+
+  BasicBlock *Entry = BasicBlock::Create(Context, "entry", F);
+  BasicBlock *Body = BasicBlock::Create(Context, "body", F);
+  BasicBlock *Exit = BasicBlock::Create(Context, "exit", F);
+
+  IRBuilder<> Builder(Entry);
+  ConstantInt *Cond = ConstantInt::get(Context, APInt(1, 0));
+  Builder.CreateCondBr(Cond, Exit, Body);
+
+  Builder.SetInsertPoint(Body);
+  auto *S1 = cast<Instruction>(Builder.CreateAdd(Arg, C, "add"));
+  Builder.CreateBr(Exit);
+
+  Builder.SetInsertPoint(Exit);
+  auto *S2 = cast<Instruction>(Builder.CreateAdd(Arg, C, "add"));
+  S2->setHasNoUnsignedWrap(true);
+  auto *R = cast<Instruction>(Builder.CreateRetVoid());
+
+  ScalarEvolution SE = buildSE(*F);
+  const SCEV *S = SE.getSCEV(S1);
+  EXPECT_TRUE(isa<SCEVAddExpr>(S));
+  SCEVExpander Exp(SE, M.getDataLayout(), "expander");
+  auto *I = cast<Instruction>(Exp.expandCodeFor(S, nullptr, R));
+  EXPECT_FALSE(I->hasNoUnsignedWrap());
+}
+
+// Check that SCEV expander does not use the nsw instruction
+// for expansion.
+TEST_F(ScalarEvolutionsTest, SCEVExpanderNSW) {
+  /*
+   * Create the following code:
+   * func(i64 %a)
+   * entry:
+   *   br false, label %exit, label %body
+   * body:
+   *  %s1 = add i64 %a, -1
+   *  br label %exit
+   * exit:
+   *  %s = add nsw i64 %a, -1
+   *  ret %s
+   */
+
+  // Create a module.
+  Module M("SCEVExpanderNSW", Context);
+
+  Type *T_int64 = Type::getInt64Ty(Context);
+
+  FunctionType *FTy =
+      FunctionType::get(Type::getVoidTy(Context), { T_int64 }, false);
+  Function *F = cast<Function>(M.getOrInsertFunction("func", FTy));
+  Argument *Arg = &*F->arg_begin();
+  ConstantInt *C = ConstantInt::get(Context, APInt(64, -1));
+
+  BasicBlock *Entry = BasicBlock::Create(Context, "entry", F);
+  BasicBlock *Body = BasicBlock::Create(Context, "body", F);
+  BasicBlock *Exit = BasicBlock::Create(Context, "exit", F);
+
+  IRBuilder<> Builder(Entry);
+  ConstantInt *Cond = ConstantInt::get(Context, APInt(1, 0));
+  Builder.CreateCondBr(Cond, Exit, Body);
+
+  Builder.SetInsertPoint(Body);
+  auto *S1 = cast<Instruction>(Builder.CreateAdd(Arg, C, "add"));
+  Builder.CreateBr(Exit);
+
+  Builder.SetInsertPoint(Exit);
+  auto *S2 = cast<Instruction>(Builder.CreateAdd(Arg, C, "add"));
+  S2->setHasNoSignedWrap(true);
+  auto *R = cast<Instruction>(Builder.CreateRetVoid());
+
+  ScalarEvolution SE = buildSE(*F);
+  const SCEV *S = SE.getSCEV(S1);
+  EXPECT_TRUE(isa<SCEVAddExpr>(S));
+  SCEVExpander Exp(SE, M.getDataLayout(), "expander");
+  auto *I = cast<Instruction>(Exp.expandCodeFor(S, nullptr, R));
+  EXPECT_FALSE(I->hasNoSignedWrap());
+}
+
+// Check that SCEV does not save the SCEV -> V
+// mapping of SCEV differ from V in NUW flag.
+TEST_F(ScalarEvolutionsTest, SCEVCacheNUW) {
+  /*
+   * Create the following code:
+   * func(i64 %a)
+   * entry:
+   *  %s1 = add i64 %a, -1
+   *  %s2 = add nuw i64 %a, -1
+   *  br label %exit
+   * exit:
+   *  ret %s
+   */
+
+  // Create a module.
+  Module M("SCEVCacheNUW", Context);
+
+  Type *T_int64 = Type::getInt64Ty(Context);
+
+  FunctionType *FTy =
+      FunctionType::get(Type::getVoidTy(Context), { T_int64 }, false);
+  Function *F = cast<Function>(M.getOrInsertFunction("func", FTy));
+  Argument *Arg = &*F->arg_begin();
+  ConstantInt *C = ConstantInt::get(Context, APInt(64, -1));
+
+  BasicBlock *Entry = BasicBlock::Create(Context, "entry", F);
+  BasicBlock *Exit = BasicBlock::Create(Context, "exit", F);
+
+  IRBuilder<> Builder(Entry);
+  auto *S1 = cast<Instruction>(Builder.CreateAdd(Arg, C, "add"));
+  auto *S2 = cast<Instruction>(Builder.CreateAdd(Arg, C, "add"));
+  S2->setHasNoUnsignedWrap(true);
+  Builder.CreateBr(Exit);
+
+  Builder.SetInsertPoint(Exit);
+  auto *R = cast<Instruction>(Builder.CreateRetVoid());
+
+  ScalarEvolution SE = buildSE(*F);
+  // Get S2 first to move it to cache.
+  const SCEV *SC2 = SE.getSCEV(S2);
+  EXPECT_TRUE(isa<SCEVAddExpr>(SC2));
+  // Now get S1.
+  const SCEV *SC1 = SE.getSCEV(S1);
+  EXPECT_TRUE(isa<SCEVAddExpr>(SC1));
+  // Expand for S1, it should use S1 not S2 in spite S2
+  // first in the cache.
+  SCEVExpander Exp(SE, M.getDataLayout(), "expander");
+  auto *I = cast<Instruction>(Exp.expandCodeFor(SC1, nullptr, R));
+  EXPECT_FALSE(I->hasNoUnsignedWrap());
+}
+
+// Check that SCEV does not save the SCEV -> V
+// mapping of SCEV differ from V in NSW flag.
+TEST_F(ScalarEvolutionsTest, SCEVCacheNSW) {
+  /*
+   * Create the following code:
+   * func(i64 %a)
+   * entry:
+   *  %s1 = add i64 %a, -1
+   *  %s2 = add nsw i64 %a, -1
+   *  br label %exit
+   * exit:
+   *  ret %s
+   */
+
+  // Create a module.
+  Module M("SCEVCacheNUW", Context);
+
+  Type *T_int64 = Type::getInt64Ty(Context);
+
+  FunctionType *FTy =
+      FunctionType::get(Type::getVoidTy(Context), { T_int64 }, false);
+  Function *F = cast<Function>(M.getOrInsertFunction("func", FTy));
+  Argument *Arg = &*F->arg_begin();
+  ConstantInt *C = ConstantInt::get(Context, APInt(64, -1));
+
+  BasicBlock *Entry = BasicBlock::Create(Context, "entry", F);
+  BasicBlock *Exit = BasicBlock::Create(Context, "exit", F);
+
+  IRBuilder<> Builder(Entry);
+  auto *S1 = cast<Instruction>(Builder.CreateAdd(Arg, C, "add"));
+  auto *S2 = cast<Instruction>(Builder.CreateAdd(Arg, C, "add"));
+  S2->setHasNoSignedWrap(true);
+  Builder.CreateBr(Exit);
+
+  Builder.SetInsertPoint(Exit);
+  auto *R = cast<Instruction>(Builder.CreateRetVoid());
+
+  ScalarEvolution SE = buildSE(*F);
+  // Get S2 first to move it to cache.
+  const SCEV *SC2 = SE.getSCEV(S2);
+  EXPECT_TRUE(isa<SCEVAddExpr>(SC2));
+  // Now get S1.
+  const SCEV *SC1 = SE.getSCEV(S1);
+  EXPECT_TRUE(isa<SCEVAddExpr>(SC1));
+  // Expand for S1, it should use S1 not S2 in spite S2
+  // first in the cache.
+  SCEVExpander Exp(SE, M.getDataLayout(), "expander");
+  auto *I = cast<Instruction>(Exp.expandCodeFor(SC1, nullptr, R));
+  EXPECT_FALSE(I->hasNoSignedWrap());
 }
 
 }  // end anonymous namespace

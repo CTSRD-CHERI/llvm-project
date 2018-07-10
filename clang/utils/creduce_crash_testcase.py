@@ -9,6 +9,7 @@ import shlex
 import subprocess
 import sys
 import resource
+import typing
 from abc import ABCMeta, abstractmethod
 from enum import Enum
 from pathlib import Path
@@ -17,6 +18,7 @@ from pathlib import Path
 try:
     from colors import blue, red, green, bold
 except ImportError:
+    # noinspection PyUnusedLocal
     def blue(s, bg=None, style=None):
         return s
     bold = blue
@@ -38,6 +40,10 @@ def extremely_verbose_print(*args, **kwargs):
         print(*args, **kwargs)
 
 
+def quote_cmd(cmd: typing.List[str]):
+    return " ".join(shlex.quote(s) for s in cmd)
+
+
 def die(*args):
     sys.exit(red(" ".join(map(str, args)), style="bold"))
 
@@ -47,52 +53,94 @@ def run(cmd: list, **kwargs):
     subprocess.check_call(list(map(str, cmd)), **kwargs)
 
 
+class ErrorKind(Enum):
+    CRASH = tuple()
+    INFINITE_LOOP = (b"INFINITE LOOP:", )
+    FATAL_ERROR = (b"fatal error:", b"LLVM ERROR:")
+    AddressSanitizer_ERROR = (b"ERROR: AddressSanitizer:", )
+
+
+# TODO: it should be possible to just use a table here to apply and remove the substitutions
+def expand_lit_substitutions(args: "Options", cmd) -> str:
+    compiler_cmd = cmd.replace("%clang_cc1 ", str(args.clang_cmd) + " -cc1 ")
+    compiler_cmd = compiler_cmd.replace("%clang ", str(args.clang_cmd) + " ")
+    cheri_cc1_triple = " -cc1 -triple cheri-unknown-freebsd "
+    compiler_cmd = compiler_cmd.replace("%cheri_cc1 ", str(args.clang_cmd) + cheri_cc1_triple)
+    compiler_cmd = compiler_cmd.replace("%cheri128_cc1 ", str(args.clang_cmd) + cheri_cc1_triple +
+                                        "-target-cpu cheri128 ")
+    compiler_cmd = compiler_cmd.replace("%cheri256_cc1 ", str(args.clang_cmd) + cheri_cc1_triple +
+                                        "-target-cpu cheri256 ")
+    compiler_cmd = compiler_cmd.replace("%cheri_purecap_cc1 ", str(args.clang_cmd) + cheri_cc1_triple +
+                                        "-target-abi purecap ")
+    # llc substitutions:
+    if "llc" in compiler_cmd:
+        compiler_cmd = re.sub(r"\sllc\b", " " + str(args.llc_cmd) + " ", compiler_cmd)
+    compiler_cmd = compiler_cmd.replace("%cheri128_llc ", str(args.llc_cmd) +
+                                        " -mtriple=cheri-unknown-freebsd -mcpu=cheri128")
+    compiler_cmd = compiler_cmd.replace("%cheri256_llc ", str(args.llc_cmd) +
+                                        " -mtriple=cheri-unknown-freebsd -mcpu=cheri256")
+    compiler_cmd = compiler_cmd.replace("%cheri_purecap_llc ",
+                                        "%cheri_llc -target-abi purecap -relocation-model pic ")
+    # For test case reduction pureposes assume %cheri_llc uses -mcpu=cheri128 since otherwise we get the following:
+    # Assertion `RC && "This value type is not natively supported!"'
+    compiler_cmd = compiler_cmd.replace("%cheri_llc ", str(args.llc_cmd) +
+                                        " -mtriple=cheri-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128 ")
+
+    # opt substitutions
+    if "opt" in compiler_cmd:
+        compiler_cmd = re.sub(r"\sopt\b", " " + str(args.opt_cmd) + " ", compiler_cmd)
+    compiler_cmd = compiler_cmd.replace("%cheri_opt ", str(args.opt_cmd) +
+                                        " -mtriple=cheri-unknown-freebsd")
+
+    # ignore all the piping to FileCheck parts of the command
+    if "|" in compiler_cmd:
+        compiler_cmd = compiler_cmd[0:compiler_cmd.find("|")]
+    return compiler_cmd
+
+
+def add_lit_substitutions(args: "Options", run_line: str) -> str:
+    for path, replacement in ((args.clang_cmd, "%clang"), (args.opt_cmd, "opt"), (args.llc_cmd, "llc")):
+        if str(path) in run_line:
+            run_line = run_line.replace(str(path), replacement)
+            break
+    run_line = re.sub("%clang\s+-cc1", "%clang_cc1", run_line)
+    # convert %clang_cc1 -target-cpu cheri to %cheri_cc1 / %cheri_purecap_cc1
+    run_line = run_line.replace("-Werror=implicit-int", "")  # important for creduce but not for the test
+    if "%clang_cc1" in run_line:
+        target_cpu_re = r"-target-cpu\s+cheri[^\s]*\s*"
+        triple_cheri_freebsd_re = r"-triple\s+cheri-unknown-freebsd\d*\s+"
+        if re.search(target_cpu_re, run_line) or re.search(triple_cheri_freebsd_re, run_line):
+            run_line = re.sub(target_cpu_re, "", run_line)  # remove
+            run_line = re.sub(triple_cheri_freebsd_re, "", run_line)  # remove
+            run_line = run_line.replace("%clang_cc1", "%cheri_cc1")
+            run_line = run_line.replace("-mllvm -cheri128", "")
+            run_line = re.sub(r"-cheri-size \d+", "", run_line)  # remove
+            target_abi_re = r"-target-abi\s+purecap\s*"
+            if re.search(target_abi_re, run_line) is not None:
+                run_line = re.sub(target_abi_re, "", run_line)  # remove
+                assert "%cheri_cc1" in run_line
+                run_line = run_line.replace("%cheri_cc1", "%cheri_purecap_cc1")
+    if "llc " in run_line:
+        # TODO: convert the 128/256 variants?
+        run_line = re.sub(r"llc\s+-mtriple=cheri-unknown-freebsd\s+-mcpu=cheri\d+\s+-mattr=\+cheri\d+", "%cheri_llc", run_line)
+        run_line = re.sub(r"%cheri_llc\s+-target-abi purecap\s+-relocation-model\s+pic", "%cheri_purecap_llc", run_line)
+    if "opt " in run_line:
+        run_line = re.sub(r"opt\s+-mtriple=cheri-unknown-freebsd", "%cheri_opt", run_line)
+    return run_line
+
 class ReduceTool(metaclass=ABCMeta):
-    def __init__(self, args: "Options", name: str, tool: Path):
+    def __init__(self, args: "Options", name: str, tool: Path) -> None:
         self.tool = tool
         self.name = name
         self.exit_statement = ""
         self.args = args
-        self.run_lines = [] # RUN: lines from the test case
-        self.run_cmds = []  # the lines without RUN: suitably quoted for passing to a shell
         self.infile_name = None
-
-        self.not_interesting_exit_code = None
-        self.interesting_exit_code = None
+        self.not_interesting_exit_code = None  # type: int
+        self.interesting_exit_code = None  # type: int
         print("Reducing test case using", name)
 
-    def _expand_lit_substitutions(self, cmd) -> str:
-        compiler_cmd = cmd.replace("%clang_cc1 ", str(self.args.clang_cmd) + " -cc1 ")
-        compiler_cmd = compiler_cmd.replace("%clang ", str(self.args.clang_cmd) + " ")
-        cheri_cc1_triple = " -cc1 -triple cheri-unknown-freebsd "
-        compiler_cmd = compiler_cmd.replace("%cheri_cc1 ", str(self.args.clang_cmd) + cheri_cc1_triple)
-        compiler_cmd = compiler_cmd.replace("%cheri128_cc1 ", str(self.args.clang_cmd) + cheri_cc1_triple +
-                                            "-target-cpu cheri128 ")
-        compiler_cmd = compiler_cmd.replace("%cheri256_cc1 ", str(self.args.clang_cmd) + cheri_cc1_triple +
-                                            "-target-cpu cheri256 ")
-        compiler_cmd = compiler_cmd.replace("%cheri_purecap_cc1 ", str(self.args.clang_cmd) + cheri_cc1_triple +
-                                            "-target-abi purecap ")
-        # llc substitutions:
-        if "llc" in compiler_cmd:
-            compiler_cmd = re.sub(r"\bllc\b", " " + str(self.args.llc_cmd) + " ", compiler_cmd)
-        compiler_cmd = compiler_cmd.replace("%cheri128_llc ", str(self.args.llc_cmd) +
-                                            " -mtriple=cheri-unknown-freebsd -mcpu=cheri128")
-        compiler_cmd = compiler_cmd.replace("%cheri256_llc ", str(self.args.llc_cmd) +
-                                            " -mtriple=cheri-unknown-freebsd -mcpu=cheri256")
-        compiler_cmd = compiler_cmd.replace("%cheri_llc ", str(self.args.llc_cmd) +
-                                            " -mtriple=cheri-unknown-freebsd")
-        # opt substitutions
-        if "opt" in compiler_cmd:
-            compiler_cmd = re.sub(r"\opt\b", " " + str(self.args.opt_cmd) + " ", compiler_cmd)
-        compiler_cmd = compiler_cmd.replace("%cheri_opt ", str(self.args.opt_cmd) +
-                                            " -mtriple=cheri-unknown-freebsd")
-
-        # ignore all the piping to FileCheck parts of the command
-        if "|" in compiler_cmd:
-            compiler_cmd = compiler_cmd[0:compiler_cmd.find("|")]
-        return compiler_cmd
-
-    def _reduce_script_text(self, input_file: Path):
+    def _reduce_script_text(self, input_file: Path, run_cmds: typing.List[typing.List[str]]):
+        verbose_print("Generating reduce script for the following commands:", run_cmds)
         # Handling timeouts in a shell script is awful -> just generate a python script instead
         result = """#!/usr/bin/env python3
 import subprocess
@@ -118,44 +166,40 @@ def run_cmd(cmd, timeout):
             raise
 """
         timeout_arg = self.args.timeout if self.args.timeout else "None"
-        for cmd in self.run_cmds:
+        for cmd in run_cmds:
             # check for %s should have happened earlier
             assert "%s" in cmd, cmd
-            # Undo the lit substitutions
-            compiler_cmd = self._expand_lit_substitutions(cmd)
-            compiler_cmd = compiler_cmd.replace("%s", self.input_file_arg(input_file))
+            compiler_cmd = quote_cmd(cmd).replace("%s", self.input_file_arg(input_file))
+            assert compiler_cmd.startswith("/"), "Command must use absolute path: " + compiler_cmd
             grep_msg = ""
-            crash_flag = "--crash"
-            if self.args.llvm_error:
-                grep_msg += "2>&1 | grep 'LLVM ERROR:' "
-                crash_flag = ""  # it doesn't actually crash now but returns 1
-                if not self.args.crash_message:
-                    self.args.crash_message = "Cannot select"
+            crash_flag = "--crash" if self.args.expected_error_kind in (None, ErrorKind.CRASH) else ""
             if self.args.crash_message:
-                grep_msg += "2>&1 | grep " + shlex.quote(self.args.crash_message)
+                grep_msg += "2>&1 | grep -F " + shlex.quote(self.args.crash_message)
             # exit once the first command crashes
+            timeout_exitcode = self.not_interesting_exit_code
+            if self.args.expected_error_kind == ErrorKind.INFINITE_LOOP:
+                timeout_exitcode = self.interesting_exit_code
             result += """
 try:
     command = r'''{not_cmd} {crash_flag} {command} {grep_msg} '''
-    # print(command)
     result = run_cmd(command, timeout={timeout_arg})
     if result.returncode != 0:
         sys.exit({not_interesting})
 except subprocess.TimeoutExpired:
     print("TIMED OUT", file=sys.stderr)
-    sys.exit({not_interesting})
+    sys.exit({timeout_exitcode})
 except Exception as e:
     print("SOME OTHER ERROR:", e)
     sys.exit({not_interesting})
 
-""".format(timeout_arg=timeout_arg, not_interesting=self.not_interesting_exit_code,
+""".format(timeout_arg=timeout_arg, not_interesting=self.not_interesting_exit_code, timeout_exitcode=timeout_exitcode,
            not_cmd=self.args.not_cmd, crash_flag=crash_flag, command=compiler_cmd, grep_msg=grep_msg)
 
         return result + "sys.exit(" + str(self.interesting_exit_code) + ")"
 
-    def _create_reduce_script(self, tmpdir: Path, input_file: Path):
+    def _create_reduce_script(self, tmpdir: Path, input_file: Path, run_cmds):
         reduce_script = Path(tmpdir, "reduce_script.sh").absolute()
-        reduce_script_text = self._reduce_script_text(input_file)
+        reduce_script_text = self._reduce_script_text(input_file, run_cmds)
         reduce_script.write_text(reduce_script_text)
         print("Reduce script:\n", bold(reduce_script_text), sep="")
         reduce_script.chmod(0o755)
@@ -163,26 +207,15 @@ except Exception as e:
             die("Reduce script is not interesting!")
         return reduce_script
 
-    def create_test_case(self, input_text: str, test_case: Path):
+    def create_test_case(self, input_text: str, test_case: Path,
+                         run_lines: typing.List[str]):
         processed_run_lines = []
         # TODO: try to remove more flags from the RUN: line!
-        for run_line in self.run_lines:
-            # convert %clang_cc1 -target-cpu cheri to %cheri_cc1 / %cheri_purecap_cc1
-            run_line = run_line.replace("-Werror=implicit-int", "")  # important for creduce but not for the test
-            if "%clang_cc1" in run_line:
-                target_cpu_re = r"-target-cpu\s+cheri[^\s]*\s*"
-                triple_cheri_freebsd_re = r"-triple\s+cheri-unknown-freebsd\d*\s+"
-                if re.search(target_cpu_re, run_line) or re.search(triple_cheri_freebsd_re, run_line):
-                    run_line = re.sub(target_cpu_re, "", run_line)  # remove
-                    run_line = re.sub(triple_cheri_freebsd_re, "", run_line)  # remove
-                    run_line = run_line.replace("%clang_cc1", "%cheri_cc1")
-                    run_line = run_line.replace("-mllvm -cheri128", "")
-                    target_abi_re = r"-target-abi\s+purecap\s*"
-                    if re.search(target_abi_re, run_line) is not None:
-                        run_line = re.sub(target_abi_re, "", run_line)  # remove
-                        assert "%cheri_cc1" in run_line
-                        run_line = run_line.replace("%cheri_cc1", "%cheri_purecap_cc1")
-            processed_run_lines.append(run_line)
+        for run_line in run_lines:
+            verbose_print("Adding run line: ", run_line)
+            with_lit_subs = add_lit_substitutions(self.args, run_line)
+            verbose_print("Substituted line: ", with_lit_subs)
+            processed_run_lines.append(with_lit_subs)
         result = "\n".join(processed_run_lines) + "\n" + input_text
         with test_case.open("w", encoding="utf-8") as f:
             f.write(result)
@@ -191,10 +224,12 @@ except Exception as e:
         verbose_print(result)
 
     def is_reduce_script_interesting(self, reduce_script: Path, input_file: Path) -> bool:
-        return False
+        raise NotImplemented()
 
     @abstractmethod
-    def reduce(self, input_file: Path, extra_args: list, tempdir: Path):
+    def reduce(self, input_file: Path, extra_args: list, tempdir: Path,
+               run_cmds: typing.List[typing.List[str]],
+               run_lines: typing.List[str]):
         raise NotImplemented()
 
     @abstractmethod
@@ -203,13 +238,15 @@ except Exception as e:
 
 
 class RunBugpoint(ReduceTool):
-    def __init__(self, args: "Options"):
+    def __init__(self, args: "Options") -> None:
         super().__init__(args, "bugpoint", tool=args.bugpoint_cmd)
         # bugpoint wants a non-zero exit code on interesting exit code
-        self.interesting_exit_code = 1
-        self.not_interesting_exit_code = 0
+        self.interesting_exit_code = 1  # type: int
+        self.not_interesting_exit_code = 0  # type: int
 
-    def reduce(self, input_file, extra_args, tempdir):
+    def reduce(self, input_file, extra_args, tempdir,
+               run_cmds: typing.List[typing.List[str]],
+               run_lines: typing.List[str]):
         bugpoint = [self.tool, "-opt-command=" + str(self.args.opt_cmd), "-output-prefix=" + input_file.name]
         if self.args.verbose:
             bugpoint.append("-verbose-errors")
@@ -222,11 +259,12 @@ class RunBugpoint(ReduceTool):
                 expected_output_file.unlink()
 
         # use a custom script to check for matching crash message:
-        if self.args.crash_message:
+        # This is also needed when reducing infinite loops since otherwise bugpoint will just freeze
+        if self.args.crash_message or self.args.expected_error_kind == ErrorKind.INFINITE_LOOP:
             # check that the reduce script is interesting:
             # http://blog.llvm.org/2015/11/reduce-your-testcases-with-bugpoint-and.html
             # ./bin/bugpoint -compile-custom -compile-command=./check.sh -opt-command=./bin/opt my_test_case.ll
-            reduce_script = self._create_reduce_script(tempdir, input_file.absolute())
+            reduce_script = self._create_reduce_script(tempdir, input_file.absolute(), run_cmds)
             print("Checking whether reduce script works")
             test_result = subprocess.run([str(reduce_script.absolute()), str(input_file)])
             if test_result.returncode == 0:
@@ -235,7 +273,7 @@ class RunBugpoint(ReduceTool):
             bugpoint += ["-compile-custom", "-compile-command=" + str(reduce_script.absolute()), input_file]
         else:
             bugpoint += ["-run-llc-ia", input_file]
-            tool_args = shlex.split(self.run_cmds[0])[1:]
+            tool_args = run_cmds[0][1:]
             # filter the tool args
             bugpoint += ["--tool-args", "--"]
             skip_next = False
@@ -266,7 +304,7 @@ class RunBugpoint(ReduceTool):
         if expected_output_file.exists():
             print("Attempting to convert generated bitcode file to a test case...")
             dis = subprocess.run([str(self.args.llvm_dis_cmd), "-o", "-", str(expected_output_file)], stdout=subprocess.PIPE)
-            self.create_test_case(dis.stdout.decode("utf-8"), input_file.with_suffix(".test" + input_file.suffix))
+            self.create_test_case(dis.stdout.decode("utf-8"), input_file.with_suffix(".test" + input_file.suffix), run_lines)
 
     def input_file_arg(self, input_file: Path):
         # bugpoint expects a script that takes the input files as arguments:
@@ -274,19 +312,21 @@ class RunBugpoint(ReduceTool):
 
     def is_reduce_script_interesting(self, reduce_script: Path, input_file: Path) -> bool:
         proc = subprocess.run([str(reduce_script), str(input_file)])
-        return proc.returncode != 0
+        return proc.returncode == self.interesting_exit_code
 
 
 class RunCreduce(ReduceTool):
-    def __init__(self, args: "Options"):
+    def __init__(self, args: "Options") -> None:
         super().__init__(args, "creduce", tool=args.creduce_cmd)
         self.exit_statement = "&& exit 0"
         # creduce wants a zero exit code on interesting test cases
         self.interesting_exit_code = 0
         self.not_interesting_exit_code = 1
 
-    def reduce(self, input_file: Path, extra_args, tempdir):
-        reduce_script = self._create_reduce_script(tempdir, input_file.absolute())
+    def reduce(self, input_file: Path, extra_args, tempdir,
+               run_cmds: typing.List[typing.List[str]],
+               run_lines: typing.List[str]):
+        reduce_script = self._create_reduce_script(tempdir, input_file.absolute(), run_cmds)
         creduce = ["time", str(self.tool), str(reduce_script), str(input_file), "--timing"] + extra_args
         # This is way too verbose
         if self.args.extremely_verbose:
@@ -299,7 +339,8 @@ class RunCreduce(ReduceTool):
         # write the output test file:
         print("\nDONE!")
         self.create_test_case(input_file.read_text(encoding="utf-8"),
-                              input_file.with_suffix(".test" + input_file.suffix))
+                              input_file.with_suffix(".test" + input_file.suffix),
+                              run_lines)
 
     def input_file_arg(self, input_file: Path):
         # creduce creates an input file in the test directory with the same name as the original input
@@ -320,18 +361,22 @@ class RunCreduce(ReduceTool):
 
 
 class SkipReducing(ReduceTool):
-    def __init__(self, args: "Options"):
+    def __init__(self, args: "Options") -> None:
         super().__init__(args, "noop", tool=Path("/dev/null"))
 
-    def reduce(self, input_file, extra_args, tempdir):
-        self.create_test_case("Some strange reduced test case\n", input_file.with_suffix(".test" + input_file.suffix))
+    def reduce(self, input_file, extra_args, tempdir,
+               run_cmds: typing.List[typing.List[str]],
+               run_lines: typing.List[str]):
+        self.create_test_case("Some strange reduced test case\n",
+                              input_file.with_suffix(".test" + input_file.suffix), run_lines)
 
     def input_file_arg(self, input_file: Path) -> str:
         raise NotImplemented()
 
 
 class Options(object):
-    def __init__(self, args: argparse.Namespace):
+    # noinspection PyUnresolvedReferences
+    def __init__(self, args: argparse.Namespace) -> None:
         self.verbose = args.verbose  # type: bool
         self.timeout = args.timeout  # type: int
         self.extremely_verbose = args.extremely_verbose  # type: bool
@@ -340,6 +385,14 @@ class Options(object):
         self.no_initial_reduce = args.no_initial_reduce  # type: bool
         self.crash_message = args.crash_message  # type: str
         self.llvm_error = args.llvm_error  # type: bool
+        # could also be an LLVM error or Address Sanitizer error that returns a non-crash exit code
+        self.expected_error_kind = None  # type: ErrorKind
+        if self.llvm_error:
+            self.expected_error_kind = ErrorKind.FATAL_ERROR
+        if args.infinite_loop:
+            if not self.timeout:
+                self.timeout = 30
+            self.expected_error_kind = ErrorKind.INFINITE_LOOP
 
     @property
     def clang_cmd(self):
@@ -367,6 +420,7 @@ class Options(object):
 
     @property
     def creduce_cmd(self):
+        # noinspection PyUnresolvedReferences
         creduce_path = self.args.creduce_cmd or shutil.which("creduce")
         if not creduce_path:
             die("Could not find `creduce` in $PATH. Add it to $PATH or pass --creduce-cmd")
@@ -380,7 +434,7 @@ class Options(object):
 
 
 class Reducer(object):
-    def __init__(self, parser: argparse.ArgumentParser):
+    def __init__(self, parser: argparse.ArgumentParser) -> None:
         self.args, self.reduce_args = parser.parse_known_args()
         if self.args.extremely_verbose:
             self.args.verbose = True
@@ -388,8 +442,10 @@ class Reducer(object):
         options = Options(self.args)
         self.options = options
         self.testcase = Path(self.args.testcase)
-        self.run_lines = [] # RUN: lines from the test case
-        self.run_cmds = []  # the lines without RUN: suitably quoted for passing to a shell
+        # RUN: lines to add to the test case
+        self.run_lines = []  # type: typing.List[str]
+        # the lines without RUN: suitably quoted for passing to a shell
+        self.run_cmds = []  # type: typing.List[typing.List[str]]
         self.reduce_tool = None  # type: ReduceTool
 
     # returns the real input file
@@ -403,7 +459,7 @@ class Reducer(object):
                 real_infile = self._parse_crash_reproducer(infile, f)
             else:
                 real_infile = infile
-                self._parse_test_case(f)
+                self._parse_test_case(f, infile)
         if len(self.run_cmds) < 1:
             die("Could not find any RUN: lines in", infile)
         return real_infile
@@ -423,60 +479,99 @@ class Reducer(object):
             real_in_file = source_file
             verbose_print("Real input file is", real_in_file)
             command[-1] = "%s"
+            # output to stdout
+            if "-o" not in command:
+                print("Adding '-o -' to the compiler invocation")
+                command += ["-o", "-"]
             # try to remove all unnecessary command line arguments
-            command, real_in_file = self._simplify_crash_command(command, real_in_file.absolute())
-            command.append("%s")
-            compiler_cmd = " ".join(shlex.quote(s) for s in command)
-            verbose_print("Test command is", bold(compiler_cmd))
-            self.run_cmds.append(compiler_cmd)
+            command[0] = str(self.options.clang_cmd)  # replace command with the clang binary
+            command, real_in_file = self.simplify_crash_command(command, real_in_file.absolute())
+            assert Path(command[0]).is_absolute(), "Command must be absolute: " + command[0]
+            quoted_cmd = quote_cmd(command)
+            verbose_print("Test command is", bold(quoted_cmd))
+            self.run_cmds.append(command)
             if real_in_file.suffix == ".ll":
                 comment_start = ";"
             elif real_in_file.suffix in (".S", ".s"):
                 comment_start = "#"
             else:
                 comment_start = "//"
-            self.run_lines.append(comment_start + " RUN: " + compiler_cmd)
+            self.run_lines.append(comment_start + " RUN: " + quoted_cmd)
         if not real_in_file:
             die("Could not compute input file for crash reproducer")
         return real_in_file
 
-    def _check_crash(self, command, infile, proc_info: dict=None):
-        full_cmd = [str(self.options.not_cmd), "--crash"] + command + [str(infile)]
-        verbose_print(blue("\nRunning" + " ".join(map(shlex.quote, full_cmd))))
+    def _check_crash(self, command, infile, proc_info: subprocess.CompletedProcess=None, force_print_cmd=False) -> typing.Optional[ErrorKind]:
+        # command = ["/tmp/crash"]
+        full_cmd = command + [str(infile)]
+        assert "%s" not in full_cmd, full_cmd
+
+        if force_print_cmd:
+            print("\nRunning", blue(quote_cmd(full_cmd)))
+        else:
+            verbose_print("\nRunning", blue(quote_cmd(full_cmd)))
         if self.args.reduce_tool == "noop":
             if proc_info is not None:
-                proc_info["stderr"] = b"Assertion `noop' failed."
+                proc_info.stderr = b"Assertion `noop' failed."
             print(green(" yes"))
-            return True
-        proc = subprocess.run(full_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-        # treat fatal llvm errors (cannot select, etc) as crashes too:
-        is_llvm_error = b"LLVM ERROR:" in proc.stderr
+            return ErrorKind.CRASH
+        infinite_loop_timeout = self.options.timeout if self.options.timeout else 30
+        try:
+            proc = subprocess.run(full_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                                  timeout=infinite_loop_timeout)
+            error_kind = None
+            if proc.returncode < 0 or proc.returncode == 254:
+                error_kind = ErrorKind.CRASH
+            else:
+                verbose_print("Exit code", proc.returncode, "was not a crash, checking stderr for known error.")
+                verbose_print("stderr:", proc.stderr)
+                # treat fatal llvm errors (cannot select, etc)as crashes too
+                # Also ASAN errors just return 1 instead of a negative exit code so we have to grep the message
+                for kind in ErrorKind:
+                    if kind.value:
+                        verbose_print("Checking for", kind.value)
+                        if any(msg in proc.stderr for msg in kind.value):
+                            verbose_print("Crash was", kind)
+                            error_kind = kind
+                            break
+        except subprocess.TimeoutExpired as e:
+            proc = subprocess.CompletedProcess(e.args, -1, e.stdout, e.stderr)
+            error_kind = ErrorKind.INFINITE_LOOP
+            verbose_print("Running took longer than", infinite_loop_timeout, "seconds -> assuming infinite loop")
+
         if proc_info is not None:  # To get the initial error message:
-            proc_info["stdout"] = proc.stdout
-            proc_info["stderr"] = proc.stderr
-            proc_info["returncode"] = proc.returncode
-        if proc.returncode == 0 or is_llvm_error:
-            if not self.options.crash_message or (self.options.crash_message in proc.stderr.decode("utf-8")):
+            proc_info.stdout = proc.stdout
+            proc_info.stderr = proc.stderr
+            proc_info.returncode = proc.returncode
+            proc_info.args = proc.args
+        if error_kind:
+            if self.options.expected_error_kind and self.options.expected_error_kind != error_kind:
+                print(red(" yes, but got " + error_kind.name + " instead of " + self.options.expected_error_kind.name))
+                return None
+            crash_message_found = not self.options.crash_message or (self.options.crash_message in proc.stderr.decode("utf-8"))
+            if error_kind == ErrorKind.INFINITE_LOOP or crash_message_found:
                 print(green(" yes"))
-                return True
+                return error_kind
             else:
                 print(red(" yes, but with a different crash message!"))
                 print("Note: Expected crash message '", bold(self.options.crash_message), "' not found in:\n",
                       proc.stderr.decode("utf-8"), sep="")
-                return False
+                return None
         print(red(" no"))
-        return False
+        return None
 
     @staticmethod
     def _filter_args(args, *, noargs_opts_to_remove=list(), noargs_opts_to_remove_startswith=list(),
-                     one_arg_opts_to_remove=list(), one_arg_opts_to_remove_if=dict()):
+                     one_arg_opts_to_remove=list(), one_arg_opts_to_remove_if=None):
+        if one_arg_opts_to_remove_if is None:
+            one_arg_opts_to_remove_if = dict()
         result = []
         skip_next = False
 
         def should_remove_arg(option, value):
             for a, predicate in one_arg_opts_to_remove_if.items():
                 if option == a:
-                    print("Testing predicate", predicate, "for arg", option, "on", value)
+                    verbose_print("Testing predicate", predicate, "for arg", option, "on", value)
                     if predicate(value):
                         return True
             return False
@@ -503,7 +598,7 @@ class Reducer(object):
         if extra_args:
             new_command += extra_args
         if new_command == command:
-            print(green("none of those flags are in the command line"))
+            print(green(" none of those flags are in the command line"))
             return command
         if self._check_crash(new_command, infile):
             return new_command
@@ -511,58 +606,104 @@ class Reducer(object):
 
     @staticmethod
     def _infer_crash_message(stderr: bytes):
+        print("Inferring crash message from", stderr)
         if not stderr:
             return None
-        regexes = [re.compile(s) for s in (
+        simple_regexes = [re.compile(s) for s in (
             r"Assertion `(.+)' failed.",  # Linux assert()
             r"Assertion failed: \(.+\),",  # FreeBSD/Mac assert()
             r"UNREACHABLE executed( at .+)?!",  # llvm_unreachable()
             # generic code gen crashes (at least creduce will keep the function name):
             r"LLVM IR generation of declaration '(.+)'",
             r"Generating code for declaration '(.+)'",
-            # error in backend:
-            r"fatal error: error in backend:(.+)"
-        )]
+            r"LLVM ERROR: Cannot select: (.+)",
+            r"LLVM ERROR: Cannot select:",
+       )]
+        regexes = [(r, 0) for r in simple_regexes]
+        # For this crash message we only want group 1
+        # TODO: add another grep for the program counter
+        regexes.insert(0, (re.compile(r"ERROR: (AddressSanitizer: .+ on address) 0x[0-9a-fA-F]+ (at pc 0x[0-9a-fA-F]+)"), 1))
+        # only get the kind of the cannot select from the message (without the number for tNN)
+        regexes.insert(0, (re.compile(r"LLVM ERROR: Cannot select: (t\w+): (.+)", ), 2))
+        # This message is different when invoked as llc: it prints LLVM ERROR instead
+        # so we only capture the actual message
+        regexes.insert(0, (re.compile(r"fatal error: error in backend:(.+)"), 1))
+        # same without colour diagnostics:
+        regexes.insert(0, (re.compile("\x1b\\[0m\x1b\\[0;1;31mfatal error: \x1b\\[0merror in backend:(.+)"), 1))
+
+        # Any other error in backed
+        regexes.append((re.compile(r"error in backend:(.+)"), 1))
+        # final fallback message: generic fatal error:
+        regexes.append((re.compile(r"fatal error:(.+)"), 0))
+
         for line in stderr.decode("utf-8").splitlines():
             # Check for failed assertions:
-            for r in regexes:
+            for r, index in regexes:
                 match = r.search(line)
                 if match:
-                    return match.group(0)
+                    message = match.group(index)
+                    if "\x1b" in message:
+                         message = message[:message.rfind("\x1b")]
+                    print("Inferred crash message bytes: ", message.encode("utf-8"))
+                    return message
         return None
 
-    def _simplify_crash_command(self, command: list, infile: Path) -> tuple:
+    def simplify_crash_command(self, command: list, infile: Path) -> tuple:
         new_command = command.copy()
-        new_command[0] = str(self.options.clang_cmd)
-        assert new_command[-1] == "%s"
-        del new_command[-1]
-        # output to stdout
-        if "-o" not in new_command:
-            print("Adding '-o -' to the compiler invocation")
-            new_command += ["-o", "-"]
-        full_cmd = new_command.copy()
-        print("Checking whether reproducer crashes with ", self.options.clang_cmd, ":", sep="", end="", flush=True)
-        crash_info = dict()
-        if not self._check_crash(new_command, infile, crash_info):
+        assert new_command.count("%s") == 1, new_command
+        new_command.remove("%s")
+
+        # Remove -mllvm options that no longer exist
+        def is_old_llvm_option(opt: str):
+            # -cheri-cap-table=true/false was replace with -mllvm -cheri-cap-table-abi=
+            if opt == "-cheri-cap-table" or opt.startswith("-cheri-cap-table="):
+                return True
+            return False
+
+        new_command = self._filter_args(new_command, one_arg_opts_to_remove_if={"-mllvm": is_old_llvm_option})
+
+        print("Checking whether reproducer crashes with ", new_command[0], ":", sep="", end="", flush=True)
+        crash_info = subprocess.CompletedProcess(None, None)
+        self.options.expected_error_kind = self._check_crash(new_command, infile, crash_info, force_print_cmd=True)
+        if not self.options.expected_error_kind:
             die("Crash reproducer no longer crashes?")
 
+        verbose_print("Reducing a", self.options.expected_error_kind, "with message =", self.options.crash_message)
+        verbose_print("Stderr was", crash_info.stderr)
         if not self.options.crash_message:
-            print("Attempting to infer crash message from process output")
-            inferred_msg = self._infer_crash_message(crash_info["stderr"])
-            if inferred_msg:
-                print("Inferred crash message as '" + green(inferred_msg) + "'")
-                if not input("Use this message? [Y/n]").lower().startswith("n"):
-                    self.options.crash_message = inferred_msg
+            if self.options.expected_error_kind == ErrorKind.INFINITE_LOOP:
+                self.options.crash_message = "INFINITE LOOP WHILE RUNNING, THIS GREP SHOULD NEVER MATCH!"
             else:
-                print("Could not infer crash message, stderr was:\n\n")
-                print(crash_info["stderr"].decode("utf-8"))
-                print("\n\n")
+                print("Attempting to infer crash message from process output")
+                inferred_msg = self._infer_crash_message(crash_info.stderr)
+                if inferred_msg:
+                    print("Inferred crash message as '" + green(inferred_msg) + "'")
+                    if not input("Use this message? [Y/n]").lower().startswith("n"):
+                        self.options.crash_message = inferred_msg
+                else:
+                    print("Could not infer crash message, stderr was:\n\n")
+                    print(crash_info.stderr.decode("utf-8"))
+                    print("\n\n")
         if not self.options.crash_message:
             print("Could not infer crash message from crash reproducer.")
             print(red("WARNING: Reducing without specifying the crash message will probably result"
                       " in the wrong test case being generated."))
             if not input("Are you sure you want to continue? [y/N]").lower().startswith("y"):
                 sys.exit()
+
+        if new_command[0] == str(self.options.clang_cmd):
+            new_command, infile = self._simplify_clang_crash_command(new_command, infile)
+        elif new_command[0] == str(self.options.llc_cmd):
+            # TODO: should be able to simplify llc crashes (e.g. by adding -O0, -verify-machineinstrs, etc)
+            pass
+        new_command.append("%s")  # ensure that the command contains %s at the end
+        return new_command, infile
+
+    def _simplify_clang_crash_command(self, new_command: list, infile: Path) -> tuple:
+        assert new_command[0] == str(self.options.clang_cmd)
+        assert "-o" in new_command
+        assert "%s" not in new_command
+        full_cmd = new_command.copy()
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether replacing optimization level with -O0 crashes:",
             noargs_opts_to_remove_startswith=["-O"],
@@ -578,12 +719,23 @@ class Reducer(object):
             noargs_opts_to_remove_startswith=["-debug-info-kind=", "-dwarf-version=", "-debugger-tuning="],
         )
         # try emitting llvm-ir (i.e. frontend bug):
-        print("Checking whether -O0 -emit-llvm crashes:", end="", flush=True)
-        generate_ir_cmd = new_command + ["-O0", "-emit-llvm"]
+        print("Checking whether -emit-llvm crashes:", end="", flush=True)
+        generate_ir_cmd = new_command + ["-emit-llvm"]
+        if "-cc1" in generate_ir_cmd:
+            # Don't add the optnone attribute to the generated IR function
+            generate_ir_cmd.append("-disable-O0-optnone")
         if "-emit-obj" in generate_ir_cmd:
             generate_ir_cmd.remove("-emit-obj")
         if self._check_crash(generate_ir_cmd, infile):
             new_command = generate_ir_cmd
+            # Try to remove the flags that were added:
+            new_command = generate_ir_cmd
+            new_command = self._try_remove_args(
+                new_command, infile, "Checking if it also crashes at -O0:",
+                noargs_opts_to_remove=["-disable-O0-optnone"],
+                noargs_opts_to_remove_startswith=["-O"],
+                extra_args=["-O0"]
+            )
             print("Must be a", blue("frontend crash.", style="bold"), "Will need to use creduce for test case reduction")
             return self._simplify_frontend_crash_cmd(new_command, infile)
         else:
@@ -639,14 +791,19 @@ class Reducer(object):
             pass
 
     def _simplify_frontend_crash_cmd(self, new_command: list, infile: Path):
-        print("Checking whether compiling without warnings crashes:", end="", flush=True)
-        no_warnings_cmd = self._filter_args(new_command, noargs_opts_to_remove=["-w"],
-                                            noargs_opts_to_remove_startswith=["-W"])
-        no_warnings_cmd.append("-w")  # disable all warnigns
-        no_warnings_cmd.append("-Werror=implicit-int")
-        if self._check_crash(no_warnings_cmd, infile):
-            new_command = no_warnings_cmd[:-2]
-        new_command.append("-Werror=implicit-int")
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether compiling without warnings crashes:",
+            noargs_opts_to_remove=["-w"], noargs_opts_to_remove_startswith=["-W"], extra_args=["-w"])
+        # Try to make implicit int an error to generate more sensible test output
+        # If we don't add this we get really obscure code that doesn't look like it should compile
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether compiling without -Werror=implicit-int crashes:",
+            extra_args=["-Werror=implicit-int"])
+        # speed up test case reduction by aborting the compilation on the first error
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether compiling with -Wfatal-errors crashes:",
+            extra_args=["-Wfatal-errors"]
+        )
 
         # Removing all the #ifdefs and #defines that get added by the #included headers can speed up reduction a lot
         print("Generating preprocessed source")
@@ -688,6 +845,12 @@ class Reducer(object):
         except Exception as e:
             print("Failed to shrink", infile, "-> will use the unprocessed source", e)
 
+        if "-emit-obj" in new_command:
+            # check if floating point args are relevant
+            new_command = self._try_remove_args(
+                new_command + ["-S"], infile, "Checking whether emitting ASM instead of object crashes:",
+                noargs_opts_to_remove=["-emit-obj"])
+
         # check if floating point args are relevant
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without floating point arguments crashes:",
@@ -712,7 +875,7 @@ class Reducer(object):
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without various MIPS flags crashes:",
             noargs_opts_to_remove=["-cheri-linker"],
-            one_arg_opts_to_remove_if={"-mllvm": lambda a: a.startswith("-mips-ssection-threshold=") or a == "-mxgot"}
+            one_arg_opts_to_remove_if={"-mllvm": lambda a: a.startswith("-mips-ssection-threshold=") or a == "-mxgot" or a.startswith("-mxcaptable")}
         )
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without -mrelax-all crashes:",
@@ -734,21 +897,28 @@ class Reducer(object):
                 new_command, infile, "Checking whether compiling without -disable-llvm-verifier crashes:",
                 noargs_opts_to_remove=["-disable-llvm-verifier"])
 
+        if "-fcxx-exceptions" in new_command or "-fexceptions" in new_command:
+            new_command = self._try_remove_args(
+                new_command, infile, "Checking whether compiling without exceptions crashes:",
+                noargs_opts_to_remove=["-fexceptions", "-fcxx-exceptions"])
+
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether misc C++ options can be removed:",
+            noargs_opts_to_remove=["-fno-rtti", "-mconstructor-aliases", "-nostdinc++"])
+
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether misc optimization options can be removed:",
+            noargs_opts_to_remove=["-vectorize-loops", "-vectorize-slp"],
+            noargs_opts_to_remove_startswith=["-ftls-model="])
+
         # try to remove some arguments that should not be needed
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether misc diagnostic options can be removed:",
             noargs_opts_to_remove=["-disable-free", "-discard-value-names", "-masm-verbose",
-                                   "-mconstructor-aliases"],
+                                   "-fdeprecated-macro", "-fcolor-diagnostics"],
             noargs_opts_to_remove_startswith=["-fdiagnostics-", "-fobjc-runtime="],
-            one_arg_opts_to_remove=["-main-file-name", "-ferror-limit", "-fmessage-length"]
+            one_arg_opts_to_remove=["-main-file-name", "-ferror-limit", "-fmessage-length", "-fvisibility"]
         )
-
-        # TODO: try removing individual -mllvm options such as mxgot, etc.?
-        # add the placeholders for the RUN: line
-        new_command[0] = "%clang"
-        if new_command[1] == "-cc1":
-            del new_command[1]
-            new_command[0] = "%clang_cc1"
         return new_command, infile
 
     def _simplify_backend_crash_cmd(self, new_command: list, infile: Path, full_cmd: list):
@@ -773,6 +943,8 @@ class Reducer(object):
         llc_args = [str(self.options.llc_cmd), "-o", "/dev/null"]  # TODO: -o -?
         cpu_flag = None  # -mcpu= only allowed once!
         pass_once_flags = set()
+        # Some crash messages only happen with verify-machineinstrs:
+        pass_once_flags.add("-verify-machineinstrs")
         skip_next = False
         optimization_flag = "-O2"
         for i, arg in enumerate(command):
@@ -814,57 +986,61 @@ class Reducer(object):
             elif arg == "-mxgot":
                 pass_once_flags.add(arg)  # some bugs only happen if mxgot is also passed
             elif arg.startswith("-O"):
+                if arg == "-Os":
+                    arg = "-O2" # llc doesn't understand -Os
                 optimization_flag = arg
         if cpu_flag:
             llc_args.append(cpu_flag)
         llc_args.append(optimization_flag)
         llc_args.extend(pass_once_flags)
         print("Checking whether compiling IR file with llc crashes:", end="", flush=True)
-        llc_info = dict()
+        llc_info = subprocess.CompletedProcess(None, None)
         if self._check_crash(llc_args, irfile, llc_info):
             print("Crash found with llc -> using bugpoint which is faster than creduce.")
             self.reduce_tool = RunBugpoint(self.options)
-            llc_args[0] = "llc"
             return llc_args, irfile
-        print("Compiling IR file with llc did not reproduce crash. Stderr was:", llc_info["stderr"].decode("utf-8"))
+        print("Compiling IR file with llc did not reproduce crash. Stderr was:", llc_info.stderr.decode("utf-8"))
         print("Checking whether compiling IR file with opt crashes:", end="", flush=True)
         opt_args = llc_args.copy()
         opt_args[0] = str(self.options.opt_cmd)
-        # -O flag can only be passed once and is already included in llc_args
         opt_args.append("-S")
-        opt_info = dict()
+        opt_info = subprocess.CompletedProcess(None, None)
         if self._check_crash(opt_args, irfile, opt_info):
             print("Crash found with LLC -> using bugpoint which is faster than creduce.")
             self.reduce_tool = RunBugpoint(self.options)
-            opt_args[0] = "opt"
             return opt_args, irfile
-        print("Compiling IR file with opt did not reproduce crash. Stderr was:", opt_info["stderr"].decode("utf-8"))
+        print("Compiling IR file with opt did not reproduce crash. Stderr was:", opt_info.stderr.decode("utf-8"))
 
         print("Checking whether compiling IR file with clang crashes:", end="", flush=True)
-        clang_info = dict()
+        clang_info = subprocess.CompletedProcess(None, None)
         bugpoint_clang_cmd = self._filter_args(full_cmd, noargs_opts_to_remove_startswith=["-xc", "-W", "-std="],
                                                one_arg_opts_to_remove=["-D", "-x", "-main-file-name"])
         bugpoint_clang_cmd.extend(["-x", "ir"])
         if self._check_crash(bugpoint_clang_cmd, irfile, clang_info):
             print("Crash found compiling IR with clang -> using bugpoint which is faster than creduce.")
             self.reduce_tool = RunBugpoint(self.options)
-            full_cmd[0] = "%clang"
             return bugpoint_clang_cmd, irfile
-        print("Compiling IR file with clang did not reproduce crash. Stderr was:", clang_info["stderr"].decode("utf-8"))
+        print("Compiling IR file with clang did not reproduce crash. Stderr was:", clang_info.stderr.decode("utf-8"))
         print(red("No crash found compiling the IR! Possibly crash only happens when invoking clang -> using creduce."))
         self.reduce_tool = RunCreduce(self.options)
         return self._simplify_frontend_crash_cmd(new_command, infile)
 
-    def _parse_test_case(self, f):
+    def _parse_test_case(self, f, infile: Path):
         # test case: just search for RUN: lines
         for line in f.readlines():
             match = re.match(r".*\s+RUN: (.+)", line)
             if match:
-                self.run_lines.append(line)
                 command = match.group(1).strip()
-                self.run_cmds.append(command)
                 if "%s" not in command:
                     die("RUN: line does not contain %s -> cannot create replacement invocation")
+                verbose_print("Found RUN: ", command)
+                command = expand_lit_substitutions(self.options, command)
+                verbose_print("After expansion:", command)
+                # We can only simplify the command line for clang right now
+                command, _ = self.simplify_crash_command(shlex.split(command), infile.absolute())
+                verbose_print("Final command:", command)
+                self.run_cmds.append(command)
+                self.run_lines.append(line[0:line.find(match.group(1))] + quote_cmd(command))
 
     def run(self):
         # scan test case for RUN: lines
@@ -881,10 +1057,6 @@ class Reducer(object):
                 assert self.args.reduce_tool == "creduce"
                 self.reduce_tool = RunCreduce(self.options)
 
-        # TODO: move this to ctor
-        self.reduce_tool.run_cmds = self.run_cmds
-        self.reduce_tool.run_lines = self.run_lines
-
         if self.args.output_file:
             reduce_input = Path(self.args.output_file).absolute()
         else:
@@ -892,7 +1064,8 @@ class Reducer(object):
         shutil.copy(str(infile), str(reduce_input))
         with tempfile.TemporaryDirectory() as tmpdir:
             # run("ulimit -S -c 0".split())
-            self.reduce_tool.reduce(input_file=reduce_input, extra_args=self.reduce_args, tempdir=tmpdir)
+            self.reduce_tool.reduce(input_file=reduce_input, extra_args=self.reduce_args, tempdir=tmpdir,
+                                    run_cmds=self.run_cmds, run_lines=self.run_lines)
 
 def main():
     default_bindir = "@CMAKE_BINARY_DIR@/bin"
@@ -912,7 +1085,8 @@ def main():
                         help="Treat the test case as not interesting if it runs longer than n seconds")
     parser.add_argument("--extremely-verbose", action="store_true", help="Print tons of debug output")
     parser.add_argument("--llvm-error", action="store_true", help="Reduce a LLVM ERROR: message instead of a crash")
-    # TODO: infer this automatically from the crash reproducer?
+    parser.add_argument("--infinite-loop", action="store_true", help="Try debugging an infinite loop (-> timed out testcases are interesting)."
+                                                                     "If timeout is not set this will set it to 30 seconds")
     parser.add_argument("--crash-message", help="If set the crash must contain this message to be accepted for reduction."
                                                 " This is useful if creduce ends up generating another crash bug that is not the one being debugged.")
     parser.add_argument("--reduce-tool", help="The tool to use for test case reduction. "
@@ -925,6 +1099,7 @@ def main():
                                          "or a .sh file from a clang crash")
     # bash completion for arguments:
     try:
+        # noinspection PyUnresolvedReferences
         import argcomplete
         argcomplete.autocomplete(parser)
     except ImportError:

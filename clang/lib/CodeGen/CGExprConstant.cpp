@@ -635,6 +635,60 @@ static ConstantAddress tryEmitGlobalCompoundLiteral(CodeGenModule &CGM,
   return ConstantAddress(GV, Align);
 }
 
+static llvm::Constant *
+EmitArrayConstant(CodeGenModule &CGM, const ConstantArrayType *DestType,
+                  llvm::Type *CommonElementType, unsigned ArrayBound,
+                  SmallVectorImpl<llvm::Constant *> &Elements,
+                  llvm::Constant *Filler) {
+  // Figure out how long the initial prefix of non-zero elements is.
+  unsigned NonzeroLength = ArrayBound;
+  if (Elements.size() < NonzeroLength && Filler->isNullValue())
+    NonzeroLength = Elements.size();
+  if (NonzeroLength == Elements.size()) {
+    while (NonzeroLength > 0 && Elements[NonzeroLength - 1]->isNullValue())
+      --NonzeroLength;
+  }
+
+  if (NonzeroLength == 0) {
+    return llvm::ConstantAggregateZero::get(
+        CGM.getTypes().ConvertType(QualType(DestType, 0)));
+  }
+
+  // Add a zeroinitializer array filler if we have lots of trailing zeroes.
+  unsigned TrailingZeroes = ArrayBound - NonzeroLength;
+  if (TrailingZeroes >= 8) {
+    assert(Elements.size() >= NonzeroLength &&
+           "missing initializer for non-zero element");
+    Elements.resize(NonzeroLength + 1);
+    auto *FillerType =
+        CommonElementType
+            ? CommonElementType
+            : CGM.getTypes().ConvertType(DestType->getElementType());
+    FillerType = llvm::ArrayType::get(FillerType, TrailingZeroes);
+    Elements.back() = llvm::ConstantAggregateZero::get(FillerType);
+    CommonElementType = nullptr;
+  } else if (Elements.size() != ArrayBound) {
+    // Otherwise pad to the right size with the filler if necessary.
+    Elements.resize(ArrayBound, Filler);
+    if (Filler->getType() != CommonElementType)
+      CommonElementType = nullptr;
+  }
+
+  // If all elements have the same type, just emit an array constant.
+  if (CommonElementType)
+    return llvm::ConstantArray::get(
+        llvm::ArrayType::get(CommonElementType, ArrayBound), Elements);
+
+  // We have mixed types. Use a packed struct.
+  llvm::SmallVector<llvm::Type *, 16> Types;
+  Types.reserve(Elements.size());
+  for (llvm::Constant *Elt : Elements)
+    Types.push_back(Elt->getType());
+  llvm::StructType *SType =
+      llvm::StructType::get(CGM.getLLVMContext(), Types, true);
+  return llvm::ConstantStruct::get(SType, Elements);
+}
+
 /// This class only needs to handle two cases:
 /// 1) Literals (this is used by APValue emission to emit literals).
 /// 2) Arrays, structs and unions (outside C++11 mode, we don't currently
@@ -733,6 +787,10 @@ public:
       return CGM.getTargetCodeGenInfo().performAddrSpaceCast(CGM, C, srcAS,
                                                              destAS, destTy);
     }
+
+    case CK_CHERICapabilityToOffset:
+    case CK_CHERICapabilityToAddress:
+      llvm_unreachable("__cheri_offset and __cheri_addr are handled elsewhere");
 
     case CK_LValueToRValue:
     case CK_AtomicToNonAtomic:
@@ -834,60 +892,47 @@ public:
   }
 
   llvm::Constant *EmitArrayInitialization(InitListExpr *ILE, QualType T) {
-    llvm::ArrayType *AType =
-        cast<llvm::ArrayType>(ConvertType(ILE->getType()));
-    llvm::Type *ElemTy = AType->getElementType();
+    auto *CAT = CGM.getContext().getAsConstantArrayType(ILE->getType());
+    assert(CAT && "can't emit array init for non-constant-bound array");
     unsigned NumInitElements = ILE->getNumInits();
-    unsigned NumElements = AType->getNumElements();
+    unsigned NumElements = CAT->getSize().getZExtValue();
 
     // Initialising an array requires us to automatically
     // initialise any elements that have not been initialised explicitly
     unsigned NumInitableElts = std::min(NumInitElements, NumElements);
 
-    QualType EltType = CGM.getContext().getAsArrayType(T)->getElementType();
+    QualType EltType = CAT->getElementType();
 
     // Initialize remaining array elements.
-    llvm::Constant *fillC;
-    if (Expr *filler = ILE->getArrayFiller())
+    llvm::Constant *fillC = nullptr;
+    if (Expr *filler = ILE->getArrayFiller()) {
       fillC = Emitter.tryEmitAbstractForMemory(filler, EltType);
-    else
-      fillC = Emitter.emitNullForMemory(EltType);
-    if (!fillC)
-      return nullptr;
-
-    // Try to use a ConstantAggregateZero if we can.
-    if (fillC->isNullValue() && !NumInitableElts)
-      return llvm::ConstantAggregateZero::get(AType);
+      if (!fillC)
+        return nullptr;
+    }
 
     // Copy initializer elements.
     SmallVector<llvm::Constant*, 16> Elts;
-    Elts.reserve(NumInitableElts + NumElements);
+    if (fillC && fillC->isNullValue())
+      Elts.reserve(NumInitableElts + 1);
+    else
+      Elts.reserve(NumElements);
 
-    bool RewriteType = false;
+    llvm::Type *CommonElementType = nullptr;
     for (unsigned i = 0; i < NumInitableElts; ++i) {
       Expr *Init = ILE->getInit(i);
       llvm::Constant *C = Emitter.tryEmitPrivateForMemory(Init, EltType);
       if (!C)
         return nullptr;
-      RewriteType |= (C->getType() != ElemTy);
+      if (i == 0)
+        CommonElementType = C->getType();
+      else if (C->getType() != CommonElementType)
+        CommonElementType = nullptr;
       Elts.push_back(C);
     }
 
-    RewriteType |= (fillC->getType() != ElemTy);
-    Elts.resize(NumElements, fillC);
-
-    if (RewriteType) {
-      // FIXME: Try to avoid packing the array
-      std::vector<llvm::Type*> Types;
-      Types.reserve(NumInitableElts + NumElements);
-      for (unsigned i = 0, e = Elts.size(); i < e; ++i)
-        Types.push_back(Elts[i]->getType());
-      llvm::StructType *SType = llvm::StructType::get(AType->getContext(),
-                                                            Types, true);
-      return llvm::ConstantStruct::get(SType, Elts);
-    }
-
-    return llvm::ConstantArray::get(AType, Elts);
+    return EmitArrayConstant(CGM, CAT, CommonElementType, NumElements, Elts,
+                             fillC);
   }
 
   llvm::Constant *EmitRecordInitialization(InitListExpr *ILE, QualType T) {
@@ -1143,6 +1188,22 @@ llvm::Constant *
 ConstantEmitter::tryEmitAbstract(const Expr *E, QualType destType) {
   auto state = pushAbstract();
   auto C = tryEmitPrivate(E, destType);
+  // XXXAR: add some sanitity checks here to catch wrong arguments
+  // See for example commit b1b58b0e0c34463518b5fac08114388ee57e565e
+  // However, in the exceptions-seh.cpp test bool is promoted to
+  // CGM.getContext().IntTy so skip that check
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
+  if (LLVM_UNLIKELY(E->getType() != destType &&
+                    E->getType() != CGM.getContext().BoolTy)) {
+    llvm::errs() << __func__ << ": E->getType(): ";
+    E->getType().dump();
+    llvm::errs() << __func__ << ": destType: ";
+    destType.dump();
+    llvm::errs() << __func__ << ": E: ";
+    E->dump();
+    assert(E->getType() == destType);
+  }
+#endif
   return validateAndPopAbstract(C, state);
 }
 
@@ -1658,6 +1719,8 @@ ConstantLValueEmitter::tryEmitAbsolute(llvm::Type *destTy) {
     llvm::Constant *C = offset;
     C = llvm::ConstantExpr::getIntegerCast(getOffset(), intptrTy,
                                            /*isSigned*/ false);
+    // FIXME: This may or may not be a valid pointer on CHERI
+    // See https://github.com/CTSRD-CHERI/llvm/issues/268
     C = llvm::ConstantExpr::getIntToPtr(C, destPtrTy);
     return C;
   }
@@ -1808,8 +1871,51 @@ llvm::Constant *ConstantEmitter::tryEmitPrivate(const APValue &Value,
     llvm_unreachable("Constant expressions should be initialized.");
   case APValue::LValue:
     return ConstantLValueEmitter(*this, Value, DestType).tryEmit();
-  case APValue::Int:
-    return llvm::ConstantInt::get(CGM.getLLVMContext(), Value.getInt());
+  case APValue::Int: {
+    // For __uintcap_t and enums whose underlying type is __[u]intcap_t,  we
+    // get an APValue::Int but we actually need to emit a i8 addrspace(200)*
+    // and not i64 here.
+    // Use ConvertType() here and not ConvertTypeForMem since that turns
+    // _Bool into i8/i32 instead of i1
+    llvm::Type *TargetTy = CGM.getTypes().ConvertType(DestType);
+    auto AsInt = llvm::ConstantInt::get(CGM.getLLVMContext(), Value.getInt());
+
+    if (DestType->isIntCapType()) {
+      // If we use an inttoptr inside a function the backend will generate a
+      // CFromPtr $ddc which probably gives a valid capability with vaddr = AsInt
+      // We really want a null-derived value here instead!
+      // This previously broke cases such as QReadWriteLock which writes 0x2
+      // to indicate write locked state but since it was not equal to
+      // (__intptr_t)0x2 it assumed it was a valid QReadWriteLockerPrivate and
+      // then crashed trying to read memory at address 0x2
+      //
+      // See https://github.com/CTSRD-CHERI/llvm/issues/268
+
+      // Would be nice use CGF->setPointerOffset() but we can't since that
+      // is not a llvm::Constant
+      // if (CGF)
+      //   return CGF->setCapabilityIntegerValue(
+      //       llvm::ConstantPointerNull::get(cast<llvm::PointerType>(TargetTy)),
+      //       AsInt);
+
+      // Note: CodeGenFunction needs to convert this into a
+      // CGF.getCapabilityIntegerValue
+      return llvm::ConstantExpr::getIntToPtr(AsInt, TargetTy);
+    }
+    assert(!DestType->isCHERICapabilityType(CGM.getContext()));
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
+    if (LLVM_UNLIKELY(AsInt->getType() != TargetTy)) {
+      llvm::errs() << __func__ << ": AsInt->getType(): ";
+      AsInt->getType()->dump();
+      llvm::errs() << __func__ << ": TargetTy: ";
+      TargetTy->dump();
+      llvm::errs() << __func__ << ": DestType: ";
+      DestType.dump();
+      assert(AsInt->getType() == TargetTy);
+    }
+#endif
+    return AsInt;
+  }
   case APValue::ComplexInt: {
     llvm::Constant *Complex[2];
 
@@ -1827,7 +1933,7 @@ llvm::Constant *ConstantEmitter::tryEmitPrivate(const APValue &Value,
     const llvm::APFloat &Init = Value.getFloat();
     if (&Init.getSemantics() == &llvm::APFloat::IEEEhalf() &&
         !CGM.getContext().getLangOpts().NativeHalfType &&
-        !CGM.getContext().getLangOpts().HalfArgsAndReturns)
+        CGM.getContext().getTargetInfo().useFP16ConversionIntrinsics())
       return llvm::ConstantInt::get(CGM.getLLVMContext(),
                                     Init.bitcastToAPInt());
     else
@@ -1883,40 +1989,31 @@ llvm::Constant *ConstantEmitter::tryEmitPrivate(const APValue &Value,
   case APValue::Union:
     return ConstStructBuilder::BuildStruct(*this, Value, DestType);
   case APValue::Array: {
-    const ArrayType *CAT = CGM.getContext().getAsArrayType(DestType);
+    const ConstantArrayType *CAT =
+        CGM.getContext().getAsConstantArrayType(DestType);
     unsigned NumElements = Value.getArraySize();
     unsigned NumInitElts = Value.getArrayInitializedElts();
 
     // Emit array filler, if there is one.
     llvm::Constant *Filler = nullptr;
-    if (Value.hasArrayFiller())
+    if (Value.hasArrayFiller()) {
       Filler = tryEmitAbstractForMemory(Value.getArrayFiller(),
                                         CAT->getElementType());
-
-    // Emit initializer elements.
-    llvm::Type *CommonElementType =
-        CGM.getTypes().ConvertType(CAT->getElementType());
-
-    // Try to use a ConstantAggregateZero if we can.
-    if (Filler && Filler->isNullValue() && !NumInitElts) {
-      llvm::ArrayType *AType =
-          llvm::ArrayType::get(CommonElementType, NumElements);
-      return llvm::ConstantAggregateZero::get(AType);
+      if (!Filler)
+        return nullptr;
     }
 
+    // Emit initializer elements.
     SmallVector<llvm::Constant*, 16> Elts;
-    Elts.reserve(NumElements);
-    for (unsigned I = 0; I < NumElements; ++I) {
-      llvm::Constant *C = Filler;
-      if (I < NumInitElts) {
-        C = tryEmitPrivateForMemory(Value.getArrayInitializedElt(I),
-                                    CAT->getElementType());
-      } else if (!Filler) {
-        assert(Value.hasArrayFiller() &&
-               "Missing filler for implicit elements of initializer");
-        C = tryEmitPrivateForMemory(Value.getArrayFiller(),
-                                    CAT->getElementType());
-      }
+    if (Filler && Filler->isNullValue())
+      Elts.reserve(NumInitElts + 1);
+    else
+      Elts.reserve(NumElements);
+
+    llvm::Type *CommonElementType = nullptr;
+    for (unsigned I = 0; I < NumInitElts; ++I) {
+      llvm::Constant *C = tryEmitPrivateForMemory(
+          Value.getArrayInitializedElt(I), CAT->getElementType());
       if (!C) return nullptr;
 
       if (I == 0)
@@ -1926,23 +2023,11 @@ llvm::Constant *ConstantEmitter::tryEmitPrivate(const APValue &Value,
       Elts.push_back(C);
     }
 
-    if (!CommonElementType) {
-      // FIXME: Try to avoid packing the array
-      std::vector<llvm::Type*> Types;
-      Types.reserve(NumElements);
-      for (unsigned i = 0, e = Elts.size(); i < e; ++i)
-        Types.push_back(Elts[i]->getType());
-      llvm::StructType *SType =
-        llvm::StructType::get(CGM.getLLVMContext(), Types, true);
-      return llvm::ConstantStruct::get(SType, Elts);
-    }
-
-    llvm::ArrayType *AType =
-      llvm::ArrayType::get(CommonElementType, NumElements);
-    return llvm::ConstantArray::get(AType, Elts);
+    return EmitArrayConstant(CGM, CAT, CommonElementType, NumElements, Elts,
+                             Filler);
   }
   case APValue::MemberPointer:
-    return CGM.getCXXABI().EmitMemberPointer(Value, DestType, CGF);
+    return CGM.getCXXABI().EmitMemberPointer(Value, DestType, nullptr);
   }
   llvm_unreachable("Unknown APValue kind");
 }

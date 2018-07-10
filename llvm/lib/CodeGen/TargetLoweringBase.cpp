@@ -28,9 +28,11 @@
 #include "llvm/CodeGen/MachineMemOperand.h"
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
-#include "llvm/CodeGen/MachineValueType.h"
 #include "llvm/CodeGen/RuntimeLibcalls.h"
 #include "llvm/CodeGen/StackMaps.h"
+#include "llvm/CodeGen/TargetLowering.h"
+#include "llvm/CodeGen/TargetOpcodes.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/CallingConv.h"
@@ -47,16 +49,14 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/MachineValueType.h"
 #include "llvm/Support/MathExtras.h"
-#include "llvm/Target/TargetLowering.h"
 #include "llvm/Target/TargetMachine.h"
-#include "llvm/Target/TargetOpcodes.h"
-#include "llvm/Target/TargetRegisterInfo.h"
 #include <algorithm>
 #include <cassert>
-#include <cstring>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <iterator>
 #include <string>
 #include <tuple>
@@ -89,6 +89,21 @@ static cl::opt<unsigned> OptsizeJumpTableDensity(
     cl::desc("Minimum density for building a jump table in "
              "an optsize function"));
 
+static bool darwinHasSinCos(const Triple &TT) {
+  assert(TT.isOSDarwin() && "should be called with darwin triple");
+  // Don't bother with 32 bit x86.
+  if (TT.getArch() == Triple::x86)
+    return false;
+  // Macos < 10.9 has no sincos_stret.
+  if (TT.isMacOSX())
+    return !TT.isMacOSXVersionLT(10, 9) && TT.isArch64Bit();
+  // iOS < 7.0 has no sincos_stret.
+  if (TT.isiOS())
+    return !TT.isOSVersionLT(7, 0);
+  // Any other darwin such as WatchOS/TvOS is new enough.
+  return true;
+}
+
 // Although this default value is arbitrary, it is not random. It is assumed
 // that a condition that evaluates the same way by a higher percentage than this
 // is best represented as control flow. Therefore, the default value N should be
@@ -100,42 +115,63 @@ static cl::opt<int> MinPercentageForPredictableBranch(
              "or false to assume that the condition is predictable"),
     cl::Hidden);
 
-/// InitLibcallNames - Set default libcall names.
-static void InitLibcallNames(const char **Names, const Triple &TT) {
+void TargetLoweringBase::InitLibcalls(const Triple &TT) {
 #define HANDLE_LIBCALL(code, name) \
-  Names[RTLIB::code] = name;
+  setLibcallName(RTLIB::code, name);
 #include "llvm/CodeGen/RuntimeLibcalls.def"
 #undef HANDLE_LIBCALL
+  // Initialize calling conventions to their default.
+  for (int LC = 0; LC < RTLIB::UNKNOWN_LIBCALL; ++LC)
+    setLibcallCallingConv((RTLIB::Libcall)LC, CallingConv::C);
 
   // A few names are different on particular architectures or environments.
   if (TT.isOSDarwin()) {
     // For f16/f32 conversions, Darwin uses the standard naming scheme, instead
     // of the gnueabi-style __gnu_*_ieee.
     // FIXME: What about other targets?
-    Names[RTLIB::FPEXT_F16_F32] = "__extendhfsf2";
-    Names[RTLIB::FPROUND_F32_F16] = "__truncsfhf2";
+    setLibcallName(RTLIB::FPEXT_F16_F32, "__extendhfsf2");
+    setLibcallName(RTLIB::FPROUND_F32_F16, "__truncsfhf2");
+
+    // Some darwins have an optimized __bzero/bzero function.
+    switch (TT.getArch()) {
+    case Triple::x86:
+    case Triple::x86_64:
+      if (TT.isMacOSX() && !TT.isMacOSXVersionLT(10, 6))
+        setLibcallName(RTLIB::BZERO, "__bzero");
+      break;
+    case Triple::aarch64:
+      setLibcallName(RTLIB::BZERO, "bzero");
+      break;
+    default:
+      break;
+    }
+
+    if (darwinHasSinCos(TT)) {
+      setLibcallName(RTLIB::SINCOS_STRET_F32, "__sincosf_stret");
+      setLibcallName(RTLIB::SINCOS_STRET_F64, "__sincos_stret");
+      if (TT.isWatchABI()) {
+        setLibcallCallingConv(RTLIB::SINCOS_STRET_F32,
+                              CallingConv::ARM_AAPCS_VFP);
+        setLibcallCallingConv(RTLIB::SINCOS_STRET_F64,
+                              CallingConv::ARM_AAPCS_VFP);
+      }
+    }
   } else {
-    Names[RTLIB::FPEXT_F16_F32] = "__gnu_h2f_ieee";
-    Names[RTLIB::FPROUND_F32_F16] = "__gnu_f2h_ieee";
+    setLibcallName(RTLIB::FPEXT_F16_F32, "__gnu_h2f_ieee");
+    setLibcallName(RTLIB::FPROUND_F32_F16, "__gnu_f2h_ieee");
   }
 
   if (TT.isGNUEnvironment() || TT.isOSFuchsia()) {
-    Names[RTLIB::SINCOS_F32] = "sincosf";
-    Names[RTLIB::SINCOS_F64] = "sincos";
-    Names[RTLIB::SINCOS_F80] = "sincosl";
-    Names[RTLIB::SINCOS_F128] = "sincosl";
-    Names[RTLIB::SINCOS_PPCF128] = "sincosl";
+    setLibcallName(RTLIB::SINCOS_F32, "sincosf");
+    setLibcallName(RTLIB::SINCOS_F64, "sincos");
+    setLibcallName(RTLIB::SINCOS_F80, "sincosl");
+    setLibcallName(RTLIB::SINCOS_F128, "sincosl");
+    setLibcallName(RTLIB::SINCOS_PPCF128, "sincosl");
   }
 
   if (TT.isOSOpenBSD()) {
-    Names[RTLIB::STACKPROTECTOR_CHECK_FAIL] = nullptr;
+    setLibcallName(RTLIB::STACKPROTECTOR_CHECK_FAIL, nullptr);
   }
-}
-
-/// Set default libcall CallingConvs.
-static void InitLibcallCallingConvs(CallingConv::ID *CCs) {
-  for (int LC = 0; LC < RTLIB::UNKNOWN_LIBCALL; ++LC)
-    CCs[LC] = CallingConv::C;
 }
 
 /// getFPEXT - Return the FPEXT_*_* value for the given types, or
@@ -156,6 +192,9 @@ RTLIB::Libcall RTLIB::getFPEXT(EVT OpVT, EVT RetVT) {
       return FPEXT_F64_F128;
     else if (RetVT == MVT::ppcf128)
       return FPEXT_F64_PPCF128;
+  } else if (OpVT == MVT::f80) {
+    if (RetVT == MVT::f128)
+      return FPEXT_F80_F128;
   }
 
   return UNKNOWN_LIBCALL;
@@ -191,6 +230,9 @@ RTLIB::Libcall RTLIB::getFPROUND(EVT OpVT, EVT RetVT) {
       return FPROUND_F128_F64;
     if (OpVT == MVT::ppcf128)
       return FPROUND_PPCF128_F64;
+  } else if (RetVT == MVT::f80) {
+    if (OpVT == MVT::f128)
+      return FPROUND_F128_F80;
   }
 
   return UNKNOWN_LIBCALL;
@@ -493,6 +535,7 @@ TargetLoweringBase::TargetLoweringBase(const TargetMachine &tm) : TM(tm) {
   // Perform these initializations only once.
   MaxStoresPerMemset = MaxStoresPerMemcpy = MaxStoresPerMemmove =
       MaxLoadsPerMemcmp = 8;
+  MaxGluedStoresPerMemcpy = 0;
   MaxStoresPerMemsetOptSize = MaxStoresPerMemcpyOptSize =
       MaxStoresPerMemmoveOptSize = MaxLoadsPerMemcmpOptSize = 4;
   UseUnderscoreSetJmp = false;
@@ -520,12 +563,12 @@ TargetLoweringBase::TargetLoweringBase(const TargetMachine &tm) : TM(tm) {
   MaxAtomicSizeInBitsSupported = 1024;
 
   MinCmpXchgSizeInBits = 0;
+  SupportsUnalignedAtomics = false;
 
   std::fill(std::begin(LibcallRoutineNames), std::end(LibcallRoutineNames), nullptr);
 
-  InitLibcallNames(LibcallRoutineNames, TM.getTargetTriple());
+  InitLibcalls(TM.getTargetTriple());
   InitCmpLibcallCCs(CmpLibcallCCs);
-  InitLibcallCallingConvs(LibcallCallingConvs);
 }
 
 void TargetLoweringBase::initActions() {
@@ -577,6 +620,12 @@ void TargetLoweringBase::initActions() {
     setOperationAction(ISD::ADDCARRY, VT, Expand);
     setOperationAction(ISD::SUBCARRY, VT, Expand);
     setOperationAction(ISD::SETCCCARRY, VT, Expand);
+
+    // ADDC/ADDE/SUBC/SUBE default to expand.
+    setOperationAction(ISD::ADDC, VT, Expand);
+    setOperationAction(ISD::ADDE, VT, Expand);
+    setOperationAction(ISD::SUBC, VT, Expand);
+    setOperationAction(ISD::SUBE, VT, Expand);
 
     // These default to Expand so they will be expanded to CTLZ/CTTZ by default.
     setOperationAction(ISD::CTLZ_ZERO_UNDEF, VT, Expand);
@@ -643,12 +692,13 @@ MVT TargetLoweringBase::getScalarShiftAmountTy(const DataLayout &DL,
   return MVT::getIntegerVT(8 * DL.getPointerSize(0));
 }
 
-EVT TargetLoweringBase::getShiftAmountTy(EVT LHSTy,
-                                         const DataLayout &DL) const {
+EVT TargetLoweringBase::getShiftAmountTy(EVT LHSTy, const DataLayout &DL,
+                                         bool LegalTypes) const {
   assert(LHSTy.isInteger() && "Shift amount is not an integer type!");
   if (LHSTy.isVector())
     return LHSTy;
-  return getScalarShiftAmountTy(DL, LHSTy);
+  return LegalTypes ? getScalarShiftAmountTy(DL, LHSTy)
+                    : getPointerTy(DL);
 }
 
 bool TargetLoweringBase::canOpTrap(unsigned Op, EVT VT) const {
@@ -940,6 +990,36 @@ TargetLoweringBase::emitPatchPoint(MachineInstr &InitialMI,
     MI->eraseFromParent();
     MI = MIB;
   }
+  return MBB;
+}
+
+MachineBasicBlock *
+TargetLoweringBase::emitXRayCustomEvent(MachineInstr &MI,
+                                        MachineBasicBlock *MBB) const {
+  assert(MI.getOpcode() == TargetOpcode::PATCHABLE_EVENT_CALL &&
+         "Called emitXRayCustomEvent on the wrong MI!");
+  auto &MF = *MI.getMF();
+  auto MIB = BuildMI(MF, MI.getDebugLoc(), MI.getDesc());
+  for (unsigned OpIdx = 0; OpIdx != MI.getNumOperands(); ++OpIdx)
+    MIB.add(MI.getOperand(OpIdx));
+
+  MBB->insert(MachineBasicBlock::iterator(MI), MIB);
+  MI.eraseFromParent();
+  return MBB;
+}
+
+MachineBasicBlock *
+TargetLoweringBase::emitXRayTypedEvent(MachineInstr &MI,
+                                       MachineBasicBlock *MBB) const {
+  assert(MI.getOpcode() == TargetOpcode::PATCHABLE_TYPED_EVENT_CALL &&
+         "Called emitXRayTypedEvent on the wrong MI!");
+  auto &MF = *MI.getMF();
+  auto MIB = BuildMI(MF, MI.getDebugLoc(), MI.getDesc());
+  for (unsigned OpIdx = 0; OpIdx != MI.getNumOperands(); ++OpIdx)
+    MIB.add(MI.getOperand(OpIdx));
+
+  MBB->insert(MachineBasicBlock::iterator(MI), MIB);
+  MI.eraseFromParent();
   return MBB;
 }
 
@@ -1551,13 +1631,16 @@ Value *TargetLoweringBase::getIRStackGuard(IRBuilder<> &IRB) const {
 // Currently only support "standard" __stack_chk_guard.
 // TODO: add LOAD_STACK_GUARD support.
 void TargetLoweringBase::insertSSPDeclarations(Module &M) const {
-  M.getOrInsertGlobal("__stack_chk_guard", Type::getInt8PtrTy(M.getContext()));
+  if (!M.getNamedValue("__stack_chk_guard"))
+    new GlobalVariable(M, Type::getInt8PtrTy(M.getContext()), false,
+                       GlobalVariable::ExternalLinkage,
+                       nullptr, "__stack_chk_guard");
 }
 
 // Currently only support "standard" __stack_chk_guard.
 // TODO: add LOAD_STACK_GUARD support.
 Value *TargetLoweringBase::getSDagStackGuard(const Module &M) const {
-  return M.getGlobalVariable("__stack_chk_guard", true);
+  return M.getNamedValue("__stack_chk_guard");
 }
 
 Value *TargetLoweringBase::getSSPStackGuardCheck(const Module &M) const {
@@ -1591,8 +1674,8 @@ void TargetLoweringBase::setMaximumJumpTableSize(unsigned Val) {
 /// Get the reciprocal estimate attribute string for a function that will
 /// override the target defaults.
 static StringRef getRecipEstimateForFunc(MachineFunction &MF) {
-  const Function *F = MF.getFunction();
-  return F->getFnAttribute("reciprocal-estimates").getValueAsString();
+  const Function &F = MF.getFunction();
+  return F.getFnAttribute("reciprocal-estimates").getValueAsString();
 }
 
 /// Construct a string for the given reciprocal operation of the given type.
@@ -1647,7 +1730,7 @@ static int getOpEnabled(bool IsSqrt, EVT VT, StringRef Override) {
     return TargetLoweringBase::ReciprocalEstimate::Unspecified;
 
   SmallVector<StringRef, 4> OverrideVector;
-  SplitString(Override, OverrideVector, ",");
+  Override.split(OverrideVector, ',');
   unsigned NumArgs = OverrideVector.size();
 
   // Check if "all", "none", or "default" was specified.
@@ -1707,7 +1790,7 @@ static int getOpRefinementSteps(bool IsSqrt, EVT VT, StringRef Override) {
     return TargetLoweringBase::ReciprocalEstimate::Unspecified;
 
   SmallVector<StringRef, 4> OverrideVector;
-  SplitString(Override, OverrideVector, ",");
+  Override.split(OverrideVector, ',');
   unsigned NumArgs = OverrideVector.size();
 
   // Check if "all", "default", or "none" was specified.

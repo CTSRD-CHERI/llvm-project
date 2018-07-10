@@ -33,6 +33,8 @@ def check_first_register_readable(test_case):
         test_case.expect("register read zero", substrs=['zero = 0x'])
     elif arch in ['s390x']:
         test_case.expect("register read r0", substrs=['r0 = 0x'])
+    elif arch in ['powerpc64le']:
+        test_case.expect("register read r0", substrs=['r0 = 0x'])
     else:
         # TODO: Add check for other architectures
         test_case.fail(
@@ -100,8 +102,7 @@ def finalize_build_dictionary(dictionary):
         if dictionary is None:
             dictionary = {}
         dictionary["OS"] = "Android"
-        if android_device_api() >= 16:
-            dictionary["PIE"] = 1
+        dictionary["PIE"] = 1
     return dictionary
 
 
@@ -110,7 +111,7 @@ def getHostPlatform():
     # Attempts to return a platform name matching a target Triple platform.
     if sys.platform.startswith('linux'):
         return 'linux'
-    elif sys.platform.startswith('win32'):
+    elif sys.platform.startswith('win32') or sys.platform.startswith('cygwin'):
         return 'windows'
     elif sys.platform.startswith('darwin'):
         return 'darwin'
@@ -175,6 +176,6 @@ def createPlatformContext():
 def hasChattyStderr(test_case):
     """Some targets produce garbage on the standard error output. This utility function
     determines whether the tests can be strict about the expected stderr contents."""
-    if match_android_device(test_case.getArchitecture(), ['aarch64'], [22]):
+    if match_android_device(test_case.getArchitecture(), ['aarch64'], range(22, 25+1)):
         return True  # The dynamic linker on the device will complain about unknown DT entries
     return False

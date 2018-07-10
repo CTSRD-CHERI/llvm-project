@@ -33,6 +33,7 @@
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/ScalarEvolutionExpander.h"
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
+#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/Dominators.h"
@@ -47,8 +48,8 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/Utils.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
-#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Utils/LoopUtils.h"
 #include <cassert>
 #include <iterator>
@@ -246,15 +247,14 @@ bool PPCLoopPreIncPrep::runOnLoop(Loop *L) {
   if (!L->empty())
     return MadeChange;
 
-  DEBUG(dbgs() << "PIP: Examining: " << *L << "\n");
+  LLVM_DEBUG(dbgs() << "PIP: Examining: " << *L << "\n");
 
   BasicBlock *Header = L->getHeader();
 
   const PPCSubtarget *ST =
     TM ? TM->getSubtargetImpl(*Header->getParent()) : nullptr;
 
-  unsigned HeaderLoopPredCount =
-    std::distance(pred_begin(Header), pred_end(Header));
+  unsigned HeaderLoopPredCount = pred_size(Header);
 
   // Collect buckets of comparable addresses used by loads and stores.
   SmallVector<Bucket, 16> Buckets;
@@ -332,7 +332,7 @@ bool PPCLoopPreIncPrep::runOnLoop(Loop *L) {
   if (!LoopPredecessor)
     return MadeChange;
 
-  DEBUG(dbgs() << "PIP: Found " << Buckets.size() << " buckets\n");
+  LLVM_DEBUG(dbgs() << "PIP: Found " << Buckets.size() << " buckets\n");
 
   SmallSet<BasicBlock *, 16> BBChanged;
   for (unsigned i = 0, e = Buckets.size(); i != e; ++i) {
@@ -381,7 +381,7 @@ bool PPCLoopPreIncPrep::runOnLoop(Loop *L) {
     if (!BasePtrSCEV->isAffine())
       continue;
 
-    DEBUG(dbgs() << "PIP: Transforming: " << *BasePtrSCEV << "\n");
+    LLVM_DEBUG(dbgs() << "PIP: Transforming: " << *BasePtrSCEV << "\n");
     assert(BasePtrSCEV->getLoop() == L &&
            "AddRec for the wrong loop?");
 
@@ -407,7 +407,7 @@ bool PPCLoopPreIncPrep::runOnLoop(Loop *L) {
     if (!isSafeToExpand(BasePtrStartSCEV, *SE))
       continue;
 
-    DEBUG(dbgs() << "PIP: New start is: " << *BasePtrStartSCEV << "\n");
+    LLVM_DEBUG(dbgs() << "PIP: New start is: " << *BasePtrStartSCEV << "\n");
 
     if (alreadyPrepared(L, MemI, BasePtrStartSCEV, BasePtrIncSCEV))
       continue;

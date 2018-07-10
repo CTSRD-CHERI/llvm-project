@@ -31,15 +31,15 @@
 #include "llvm/CodeGen/MachineMemOperand.h"
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
-#include "llvm/CodeGen/MachineValueType.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
-#include "llvm/Target/TargetRegisterInfo.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
+#include "llvm/Support/MachineValueType.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
@@ -187,6 +187,9 @@ void AArch64CallLowering::splitToValueTypes(
   const AArch64TargetLowering &TLI = *getTLI<AArch64TargetLowering>();
   LLVMContext &Ctx = OrigArg.Ty->getContext();
 
+  if (OrigArg.Ty->isVoidTy())
+    return;
+
   SmallVector<EVT, 4> SplitVTs;
   SmallVector<uint64_t, 4> Offsets;
   ComputeValueVTs(TLI, DL, OrigArg.Ty, SplitVTs, &Offsets, 0);
@@ -220,15 +223,20 @@ void AArch64CallLowering::splitToValueTypes(
 bool AArch64CallLowering::lowerReturn(MachineIRBuilder &MIRBuilder,
                                       const Value *Val, unsigned VReg) const {
   MachineFunction &MF = MIRBuilder.getMF();
-  const Function &F = *MF.getFunction();
+  const Function &F = MF.getFunction();
 
   auto MIB = MIRBuilder.buildInstrNoInsert(AArch64::RET_ReallyLR);
   assert(((Val && VReg) || (!Val && !VReg)) && "Return value without a vreg");
   bool Success = true;
   if (VReg) {
+    MachineRegisterInfo &MRI = MF.getRegInfo();
+
+    // We zero-extend i1s to i8.
+    if (MRI.getType(VReg).getSizeInBits() == 1)
+      VReg = MIRBuilder.buildZExt(LLT::scalar(8), VReg)->getOperand(0).getReg();
+
     const AArch64TargetLowering &TLI = *getTLI<AArch64TargetLowering>();
     CCAssignFn *AssignFn = TLI.CCAssignFnForReturn(F.getCallingConv());
-    MachineRegisterInfo &MRI = MF.getRegInfo();
     auto &DL = F.getParent()->getDataLayout();
 
     ArgInfo OrigArg{VReg, Val->getType()};
@@ -259,6 +267,8 @@ bool AArch64CallLowering::lowerFormalArguments(MachineIRBuilder &MIRBuilder,
   SmallVector<ArgInfo, 8> SplitArgs;
   unsigned i = 0;
   for (auto &Arg : F.args()) {
+    if (DL.getTypeStoreSize(Arg.getType()) == 0)
+      continue;
     ArgInfo OrigArg{VRegs[i], Arg.getType()};
     setArgFlags(OrigArg, i + AttributeList::FirstArgIndex, DL, F);
     bool Split = false;
@@ -320,7 +330,7 @@ bool AArch64CallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
                                     const ArgInfo &OrigRet,
                                     ArrayRef<ArgInfo> OrigArgs) const {
   MachineFunction &MF = MIRBuilder.getMF();
-  const Function &F = *MF.getFunction();
+  const Function &F = MF.getFunction();
   MachineRegisterInfo &MRI = MF.getRegInfo();
   auto &DL = F.getParent()->getDataLayout();
 
@@ -367,8 +377,7 @@ bool AArch64CallLowering::lowerCall(MachineIRBuilder &MIRBuilder,
   if (Callee.isReg())
     MIB->getOperand(0).setReg(constrainOperandRegClass(
         MF, *TRI, MRI, *MF.getSubtarget().getInstrInfo(),
-        *MF.getSubtarget().getRegBankInfo(), *MIB, MIB->getDesc(),
-        Callee.getReg(), 0));
+        *MF.getSubtarget().getRegBankInfo(), *MIB, MIB->getDesc(), Callee, 0));
 
   // Finally we can copy the returned value back into its virtual-register. In
   // symmetry with the arugments, the physical register must be an

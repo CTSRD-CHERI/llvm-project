@@ -119,62 +119,54 @@ static ModRefInfo GetLocation(const Instruction *Inst, MemoryLocation &Loc,
   if (const LoadInst *LI = dyn_cast<LoadInst>(Inst)) {
     if (LI->isUnordered()) {
       Loc = MemoryLocation::get(LI);
-      return MRI_Ref;
+      return ModRefInfo::Ref;
     }
     if (LI->getOrdering() == AtomicOrdering::Monotonic) {
       Loc = MemoryLocation::get(LI);
-      return MRI_ModRef;
+      return ModRefInfo::ModRef;
     }
     Loc = MemoryLocation();
-    return MRI_ModRef;
+    return ModRefInfo::ModRef;
   }
 
   if (const StoreInst *SI = dyn_cast<StoreInst>(Inst)) {
     if (SI->isUnordered()) {
       Loc = MemoryLocation::get(SI);
-      return MRI_Mod;
+      return ModRefInfo::Mod;
     }
     if (SI->getOrdering() == AtomicOrdering::Monotonic) {
       Loc = MemoryLocation::get(SI);
-      return MRI_ModRef;
+      return ModRefInfo::ModRef;
     }
     Loc = MemoryLocation();
-    return MRI_ModRef;
+    return ModRefInfo::ModRef;
   }
 
   if (const VAArgInst *V = dyn_cast<VAArgInst>(Inst)) {
     Loc = MemoryLocation::get(V);
-    return MRI_ModRef;
+    return ModRefInfo::ModRef;
   }
 
   if (const CallInst *CI = isFreeCall(Inst, &TLI)) {
     // calls to free() deallocate the entire structure
     Loc = MemoryLocation(CI->getArgOperand(0));
-    return MRI_Mod;
+    return ModRefInfo::Mod;
   }
 
   if (const IntrinsicInst *II = dyn_cast<IntrinsicInst>(Inst)) {
-    AAMDNodes AAInfo;
-
     switch (II->getIntrinsicID()) {
     case Intrinsic::lifetime_start:
     case Intrinsic::lifetime_end:
     case Intrinsic::invariant_start:
-      II->getAAMetadata(AAInfo);
-      Loc = MemoryLocation(
-          II->getArgOperand(1),
-          cast<ConstantInt>(II->getArgOperand(0))->getZExtValue(), AAInfo);
+      Loc = MemoryLocation::getForArgument(II, 1, TLI);
       // These intrinsics don't really modify the memory, but returning Mod
       // will allow them to be handled conservatively.
-      return MRI_Mod;
+      return ModRefInfo::Mod;
     case Intrinsic::invariant_end:
-      II->getAAMetadata(AAInfo);
-      Loc = MemoryLocation(
-          II->getArgOperand(2),
-          cast<ConstantInt>(II->getArgOperand(1))->getZExtValue(), AAInfo);
+      Loc = MemoryLocation::getForArgument(II, 2, TLI);
       // These intrinsics don't really modify the memory, but returning Mod
       // will allow them to be handled conservatively.
-      return MRI_Mod;
+      return ModRefInfo::Mod;
     default:
       break;
     }
@@ -182,10 +174,10 @@ static ModRefInfo GetLocation(const Instruction *Inst, MemoryLocation &Loc,
 
   // Otherwise, just do the coarse-grained thing that always works.
   if (Inst->mayWriteToMemory())
-    return MRI_ModRef;
+    return ModRefInfo::ModRef;
   if (Inst->mayReadFromMemory())
-    return MRI_Ref;
-  return MRI_NoModRef;
+    return ModRefInfo::Ref;
+  return ModRefInfo::NoModRef;
 }
 
 /// Private helper for finding the local dependencies of a call site.
@@ -196,48 +188,46 @@ MemDepResult MemoryDependenceResults::getCallSiteDependencyFrom(
 
   // Walk backwards through the block, looking for dependencies.
   while (ScanIt != BB->begin()) {
+    Instruction *Inst = &*--ScanIt;
+    // Debug intrinsics don't cause dependences and should not affect Limit
+    if (isa<DbgInfoIntrinsic>(Inst))
+      continue;
+
     // Limit the amount of scanning we do so we don't end up with quadratic
     // running time on extreme testcases.
     --Limit;
     if (!Limit)
       return MemDepResult::getUnknown();
 
-    Instruction *Inst = &*--ScanIt;
-
     // If this inst is a memory op, get the pointer it accessed
     MemoryLocation Loc;
     ModRefInfo MR = GetLocation(Inst, Loc, TLI);
     if (Loc.Ptr) {
       // A simple instruction.
-      if (AA.getModRefInfo(CS, Loc) != MRI_NoModRef)
+      if (isModOrRefSet(AA.getModRefInfo(CS, Loc)))
         return MemDepResult::getClobber(Inst);
       continue;
     }
 
     if (auto InstCS = CallSite(Inst)) {
-      // Debug intrinsics don't cause dependences.
-      if (isa<DbgInfoIntrinsic>(Inst))
-        continue;
       // If these two calls do not interfere, look past it.
-      switch (AA.getModRefInfo(CS, InstCS)) {
-      case MRI_NoModRef:
+      if (isNoModRef(AA.getModRefInfo(CS, InstCS))) {
         // If the two calls are the same, return InstCS as a Def, so that
         // CS can be found redundant and eliminated.
-        if (isReadOnlyCall && !(MR & MRI_Mod) &&
+        if (isReadOnlyCall && !isModSet(MR) &&
             CS.getInstruction()->isIdenticalToWhenDefined(Inst))
           return MemDepResult::getDef(Inst);
 
         // Otherwise if the two calls don't interact (e.g. InstCS is readnone)
         // keep scanning.
         continue;
-      default:
+      } else
         return MemDepResult::getClobber(Inst);
-      }
     }
 
     // If we could not obtain a pointer for the instruction and the instruction
     // touches memory then assume that this is a dependency.
-    if (MR != MRI_NoModRef)
+    if (isModOrRefSet(MR))
       return MemDepResult::getClobber(Inst);
   }
 
@@ -308,8 +298,10 @@ unsigned MemoryDependenceResults::getLoadLoadClobberFullWidthSize(
       return 0;
 
     if (LIOffs + NewLoadByteSize > MemLocEnd &&
-        LI->getParent()->getParent()->hasFnAttribute(
-            Attribute::SanitizeAddress))
+        (LI->getParent()->getParent()->hasFnAttribute(
+             Attribute::SanitizeAddress) ||
+         LI->getParent()->getParent()->hasFnAttribute(
+             Attribute::SanitizeHWAddress)))
       // We will be reading past the location accessed by the original program.
       // While this is safe in a regular build, Address Safety analysis tools
       // may start reporting false warnings. So, don't do widening.
@@ -363,8 +355,8 @@ MemDepResult MemoryDependenceResults::getPointerDependencyFrom(
 MemDepResult
 MemoryDependenceResults::getInvariantGroupPointerDependency(LoadInst *LI,
                                                             BasicBlock *BB) {
-  auto *InvariantGroupMD = LI->getMetadata(LLVMContext::MD_invariant_group);
-  if (!InvariantGroupMD)
+
+  if (!LI->getMetadata(LLVMContext::MD_invariant_group))
     return MemDepResult::getUnknown();
 
   // Take the ptr operand after all casts and geps 0. This way we can search
@@ -425,7 +417,7 @@ MemoryDependenceResults::getInvariantGroupPointerDependency(LoadInst *LI,
       // same pointer operand) we can assume that value pointed by pointer
       // operand didn't change.
       if ((isa<LoadInst>(U) || isa<StoreInst>(U)) &&
-          U->getMetadata(LLVMContext::MD_invariant_group) == InvariantGroupMD)
+          U->getMetadata(LLVMContext::MD_invariant_group) != nullptr)
         ClosestDependency = GetClosestDependency(ClosestDependency, U);
     }
   }
@@ -441,6 +433,7 @@ MemoryDependenceResults::getInvariantGroupPointerDependency(LoadInst *LI,
   NonLocalDefsCache.try_emplace(
       LI, NonLocalDepResult(ClosestDependency->getParent(),
                             MemDepResult::getDef(ClosestDependency), nullptr));
+  ReverseNonLocalDefsCache[ClosestDependency].insert(LI);
   return MemDepResult::getNonLocal();
 }
 
@@ -642,11 +635,12 @@ MemDepResult MemoryDependenceResults::getSimplePointerDependencyFrom(
       // If alias analysis can tell that this store is guaranteed to not modify
       // the query pointer, ignore it.  Use getModRefInfo to handle cases where
       // the query pointer points to constant memory etc.
-      if (AA.getModRefInfo(SI, MemLoc) == MRI_NoModRef)
+      if (!isModOrRefSet(AA.getModRefInfo(SI, MemLoc)))
         continue;
 
       // Ok, this store might clobber the query pointer.  Check to see if it is
       // a must alias: in this case, we want to return this as a def.
+      // FIXME: Use ModRefInfo::Must bit from getModRefInfo call above.
       MemoryLocation StoreLoc = MemoryLocation::get(SI);
 
       // If we found a pointer, check if it could be the same as our pointer.
@@ -688,15 +682,15 @@ MemDepResult MemoryDependenceResults::getSimplePointerDependencyFrom(
     // See if this instruction (e.g. a call or vaarg) mod/ref's the pointer.
     ModRefInfo MR = AA.getModRefInfo(Inst, MemLoc);
     // If necessary, perform additional analysis.
-    if (MR == MRI_ModRef)
+    if (isModAndRefSet(MR))
       MR = AA.callCapturesBefore(Inst, MemLoc, &DT, &OBB);
-    switch (MR) {
-    case MRI_NoModRef:
+    switch (clearMust(MR)) {
+    case ModRefInfo::NoModRef:
       // If the call has no effect on the queried pointer, just ignore it.
       continue;
-    case MRI_Mod:
+    case ModRefInfo::Mod:
       return MemDepResult::getClobber(Inst);
-    case MRI_Ref:
+    case ModRefInfo::Ref:
       // If the call is known to never store to the pointer, and if this is a
       // load query, we can safely ignore it (scan past it).
       if (isLoad)
@@ -749,7 +743,7 @@ MemDepResult MemoryDependenceResults::getDependency(Instruction *QueryInst) {
     ModRefInfo MR = GetLocation(QueryInst, MemLoc, TLI);
     if (MemLoc.Ptr) {
       // If we can do a pointer scan, make it happen.
-      bool isLoad = !(MR & MRI_Mod);
+      bool isLoad = !isModSet(MR);
       if (auto *II = dyn_cast<IntrinsicInst>(QueryInst))
         isLoad |= II->getIntrinsicID() == Intrinsic::lifetime_start;
 
@@ -812,7 +806,7 @@ MemoryDependenceResults::getNonLocalCallDependency(CallSite QueryCS) {
         DirtyBlocks.push_back(Entry.getBB());
 
     // Sort the cache so that we can do fast binary search lookups below.
-    std::sort(Cache.begin(), Cache.end());
+    llvm::sort(Cache.begin(), Cache.end());
 
     ++NumCacheDirtyNonLocal;
     // cerr << "CACHED CASE: " << DirtyBlocks.size() << " dirty: "
@@ -831,7 +825,7 @@ MemoryDependenceResults::getNonLocalCallDependency(CallSite QueryCS) {
   SmallPtrSet<BasicBlock *, 32> Visited;
 
   unsigned NumSortedEntries = Cache.size();
-  DEBUG(AssertSorted(Cache));
+  LLVM_DEBUG(AssertSorted(Cache));
 
   // Iterate while we still have blocks to update.
   while (!DirtyBlocks.empty()) {
@@ -844,7 +838,7 @@ MemoryDependenceResults::getNonLocalCallDependency(CallSite QueryCS) {
 
     // Do a binary search to see if we already have an entry for this block in
     // the cache set.  If so, find it.
-    DEBUG(AssertSorted(Cache, NumSortedEntries));
+    LLVM_DEBUG(AssertSorted(Cache, NumSortedEntries));
     NonLocalDepInfo::iterator Entry =
         std::upper_bound(Cache.begin(), Cache.begin() + NumSortedEntries,
                          NonLocalDepEntry(DirtyBB));
@@ -926,12 +920,12 @@ void MemoryDependenceResults::getNonLocalPointerDependency(
          "Can't get pointer deps of a non-pointer!");
   Result.clear();
   {
-    // Check if there is cached Def with invariant.group. FIXME: cache might be
-    // invalid if cached instruction would be removed between call to
-    // getPointerDependencyFrom and this function.
+    // Check if there is cached Def with invariant.group.
     auto NonLocalDefIt = NonLocalDefsCache.find(QueryInst);
     if (NonLocalDefIt != NonLocalDefsCache.end()) {
-      Result.push_back(std::move(NonLocalDefIt->second));
+      Result.push_back(NonLocalDefIt->second);
+      ReverseNonLocalDefsCache[NonLocalDefIt->second.getResult().getInst()]
+          .erase(QueryInst);
       NonLocalDefsCache.erase(NonLocalDefIt);
       return;
     }
@@ -1075,7 +1069,7 @@ SortNonLocalDepInfoCache(MemoryDependenceResults::NonLocalDepInfo &Cache,
     break;
   default:
     // Added many values, do a full scale sort.
-    std::sort(Cache.begin(), Cache.end());
+    llvm::sort(Cache.begin(), Cache.end());
     break;
   }
 }
@@ -1217,7 +1211,7 @@ bool MemoryDependenceResults::getNonLocalPointerDepFromBB(
   unsigned NumSortedEntries = Cache->size();
   unsigned WorklistEntries = BlockNumberLimit;
   bool GotWorklistLimit = false;
-  DEBUG(AssertSorted(*Cache));
+  LLVM_DEBUG(AssertSorted(*Cache));
 
   while (!Worklist.empty()) {
     BasicBlock *BB = Worklist.pop_back_val();
@@ -1248,7 +1242,7 @@ bool MemoryDependenceResults::getNonLocalPointerDepFromBB(
 
       // Get the dependency info for Pointer in BB.  If we have cached
       // information, we will use it, otherwise we compute it.
-      DEBUG(AssertSorted(*Cache, NumSortedEntries));
+      LLVM_DEBUG(AssertSorted(*Cache, NumSortedEntries));
       MemDepResult Dep = GetNonLocalInfoForBlock(QueryInst, Loc, isLoad, BB,
                                                  Cache, NumSortedEntries);
 
@@ -1462,13 +1456,33 @@ bool MemoryDependenceResults::getNonLocalPointerDepFromBB(
 
   // Okay, we're done now.  If we added new values to the cache, re-sort it.
   SortNonLocalDepInfoCache(*Cache, NumSortedEntries);
-  DEBUG(AssertSorted(*Cache));
+  LLVM_DEBUG(AssertSorted(*Cache));
   return true;
 }
 
-/// If P exists in CachedNonLocalPointerInfo, remove it.
+/// If P exists in CachedNonLocalPointerInfo or NonLocalDefsCache, remove it.
 void MemoryDependenceResults::RemoveCachedNonLocalPointerDependencies(
     ValueIsLoadPair P) {
+
+  // Most of the time this cache is empty.
+  if (!NonLocalDefsCache.empty()) {
+    auto it = NonLocalDefsCache.find(P.getPointer());
+    if (it != NonLocalDefsCache.end()) {
+      RemoveFromReverseMap(ReverseNonLocalDefsCache,
+                           it->second.getResult().getInst(), P.getPointer());
+      NonLocalDefsCache.erase(it);
+    }
+
+    if (auto *I = dyn_cast<Instruction>(P.getPointer())) {
+      auto toRemoveIt = ReverseNonLocalDefsCache.find(I);
+      if (toRemoveIt != ReverseNonLocalDefsCache.end()) {
+        for (const auto &entry : toRemoveIt->second)
+          NonLocalDefsCache.erase(entry);
+        ReverseNonLocalDefsCache.erase(toRemoveIt);
+      }
+    }
+  }
+
   CachedNonLocalPointerInfo::iterator It = NonLocalPointerDeps.find(P);
   if (It == NonLocalPointerDeps.end())
     return;
@@ -1645,7 +1659,7 @@ void MemoryDependenceResults::removeInstruction(Instruction *RemInst) {
 
       // Re-sort the NonLocalDepInfo.  Changing the dirty entry to its
       // subsequent value may invalidate the sortedness.
-      std::sort(NLPDI.begin(), NLPDI.end());
+      llvm::sort(NLPDI.begin(), NLPDI.end());
     }
 
     ReverseNonLocalPtrDeps.erase(ReversePtrDepIt);
@@ -1658,7 +1672,7 @@ void MemoryDependenceResults::removeInstruction(Instruction *RemInst) {
   }
 
   assert(!NonLocalDeps.count(RemInst) && "RemInst got reinserted?");
-  DEBUG(verifyRemoved(RemInst));
+  LLVM_DEBUG(verifyRemoved(RemInst));
 }
 
 /// Verify that the specified instruction does not occur in our internal data

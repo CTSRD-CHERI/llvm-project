@@ -32,10 +32,11 @@
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
-#include "llvm/CodeGen/MachineValueType.h"
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/SelectionDAGISel.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/DebugLoc.h"
@@ -51,10 +52,9 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/KnownBits.h"
+#include "llvm/Support/MachineValueType.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetInstrInfo.h"
-#include "llvm/Target/TargetRegisterInfo.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
@@ -68,6 +68,19 @@
 using namespace llvm;
 
 #define DEBUG_TYPE "ppc-codegen"
+
+STATISTIC(NumSextSetcc,
+          "Number of (sext(setcc)) nodes expanded into GPR sequence.");
+STATISTIC(NumZextSetcc,
+          "Number of (zext(setcc)) nodes expanded into GPR sequence.");
+STATISTIC(SignExtensionsAdded,
+          "Number of sign extensions for compare inputs added.");
+STATISTIC(ZeroExtensionsAdded,
+          "Number of zero extensions for compare inputs added.");
+STATISTIC(NumLogicOpsOnComparison,
+          "Number of logical ops on i1 values calculated in GPR.");
+STATISTIC(OmittedForNonExtendUses,
+          "Number of compares not eliminated as they have non-extending uses.");
 
 // FIXME: Remove this once the bug has been fixed!
 cl::opt<bool> ANDIGlueBug("expose-ppc-andi-glue-bug",
@@ -88,6 +101,34 @@ static cl::opt<bool> EnableBranchHint(
     cl::desc("Enable static hinting of branches on ppc"),
     cl::Hidden);
 
+static cl::opt<bool> EnableTLSOpt(
+  "ppc-tls-opt", cl::init(true),
+    cl::desc("Enable tls optimization peephole"),
+    cl::Hidden);
+
+enum ICmpInGPRType { ICGPR_All, ICGPR_None, ICGPR_I32, ICGPR_I64,
+  ICGPR_NonExtIn, ICGPR_Zext, ICGPR_Sext, ICGPR_ZextI32,
+  ICGPR_SextI32, ICGPR_ZextI64, ICGPR_SextI64 };
+
+static cl::opt<ICmpInGPRType> CmpInGPR(
+  "ppc-gpr-icmps", cl::Hidden, cl::init(ICGPR_All),
+  cl::desc("Specify the types of comparisons to emit GPR-only code for."),
+  cl::values(clEnumValN(ICGPR_None, "none", "Do not modify integer comparisons."),
+             clEnumValN(ICGPR_All, "all", "All possible int comparisons in GPRs."),
+             clEnumValN(ICGPR_I32, "i32", "Only i32 comparisons in GPRs."),
+             clEnumValN(ICGPR_I64, "i64", "Only i64 comparisons in GPRs."),
+             clEnumValN(ICGPR_NonExtIn, "nonextin",
+                        "Only comparisons where inputs don't need [sz]ext."),
+             clEnumValN(ICGPR_Zext, "zext", "Only comparisons with zext result."),
+             clEnumValN(ICGPR_ZextI32, "zexti32",
+                        "Only i32 comparisons with zext result."),
+             clEnumValN(ICGPR_ZextI64, "zexti64",
+                        "Only i64 comparisons with zext result."),
+             clEnumValN(ICGPR_Sext, "sext", "Only comparisons with sext result."),
+             clEnumValN(ICGPR_SextI32, "sexti32",
+                        "Only i32 comparisons with sext result."),
+             clEnumValN(ICGPR_SextI64, "sexti64",
+                        "Only i64 comparisons with sext result.")));
 namespace {
 
   //===--------------------------------------------------------------------===//
@@ -161,7 +202,16 @@ namespace {
 
     bool tryBitfieldInsert(SDNode *N);
     bool tryBitPermutation(SDNode *N);
+    bool tryIntCompareInGPR(SDNode *N);
 
+    // tryTLSXFormLoad - Convert an ISD::LOAD fed by a PPCISD::ADD_TLS into
+    // an X-Form load instruction with the offset being a relocation coming from
+    // the PPCISD::ADD_TLS.
+    bool tryTLSXFormLoad(LoadSDNode *N);
+    // tryTLSXFormStore - Convert an ISD::STORE fed by a PPCISD::ADD_TLS into
+    // an X-Form store instruction with the offset being a relocation coming from
+    // the PPCISD::ADD_TLS.
+    bool tryTLSXFormStore(StoreSDNode *N);
     /// SelectCC - Select a comparison of the specified values with the
     /// specified condition code, returning the CR# of the expression.
     SDValue SelectCC(SDValue LHS, SDValue RHS, ISD::CondCode CC,
@@ -277,6 +327,7 @@ private:
 
     bool isOffsetMultipleOf(SDNode *N, unsigned Val) const;
     void transferMemOperands(SDNode *N, SDNode *Result);
+    MachineSDNode *flipSignBit(const SDValue &N, SDNode **SignBit = nullptr);
   };
 
 } // end anonymous namespace
@@ -354,7 +405,7 @@ SDNode *PPCDAGToDAGISel::getGlobalBaseReg() {
     // Insert the set of GlobalBaseReg into the first MBB of the function
     MachineBasicBlock &FirstMBB = MF->front();
     MachineBasicBlock::iterator MBBI = FirstMBB.begin();
-    const Module *M = MF->getFunction()->getParent();
+    const Module *M = MF->getFunction().getParent();
     DebugLoc dl;
 
     if (PPCLowering->getPointerTy(CurDAG->getDataLayout()) == MVT::i32) {
@@ -380,6 +431,16 @@ SDNode *PPCDAGToDAGISel::getGlobalBaseReg() {
         BuildMI(FirstMBB, MBBI, dl, TII.get(PPC::MFLR), GlobalBaseReg);
       }
     } else {
+      // We must ensure that this sequence is dominated by the prologue.
+      // FIXME: This is a bit of a big hammer since we don't get the benefits
+      // of shrink-wrapping whenever we emit this instruction. Considering
+      // this is used in any function where we emit a jump table, this may be
+      // a significant limitation. We should consider inserting this in the
+      // block where it is used and then commoning this sequence up if it
+      // appears in multiple places.
+      // Note: on ISA 3.0 cores, we can use lnia (addpcis) instead of
+      // MovePCtoLR8.
+      MF->getInfo<PPCFunctionInfo>()->setShrinkWrapDisabled(true);
       GlobalBaseReg = RegInfo->createVirtualRegister(&PPC::G8RC_and_G8RC_NOX0RegClass);
       BuildMI(FirstMBB, MBBI, dl, TII.get(PPC::MovePCtoLR8));
       BuildMI(FirstMBB, MBBI, dl, TII.get(PPC::MFLR8), GlobalBaseReg);
@@ -457,10 +518,10 @@ static unsigned getBranchHint(unsigned PCC, FunctionLoweringInfo *FuncInfo,
   if (std::max(TProb, FProb) / Threshold < std::min(TProb, FProb))
     return PPC::BR_NO_HINT;
 
-  DEBUG(dbgs() << "Use branch hint for '" << FuncInfo->Fn->getName() << "::"
-               << BB->getName() << "'\n"
-               << " -> " << TBB->getName() << ": " << TProb << "\n"
-               << " -> " << FBB->getName() << ": " << FProb << "\n");
+  LLVM_DEBUG(dbgs() << "Use branch hint for '" << FuncInfo->Fn->getName()
+                    << "::" << BB->getName() << "'\n"
+                    << " -> " << TBB->getName() << ": " << TProb << "\n"
+                    << " -> " << FBB->getName() << ": " << FProb << "\n");
 
   const BasicBlockSDNode *BBDN = cast<BasicBlockSDNode>(DestMBB);
 
@@ -533,6 +594,90 @@ bool PPCDAGToDAGISel::isRotateAndMask(SDNode *N, unsigned Mask,
     return isRunOfOnes(Mask, MB, ME);
   }
   return false;
+}
+
+bool PPCDAGToDAGISel::tryTLSXFormStore(StoreSDNode *ST) {
+  SDValue Base = ST->getBasePtr();
+  if (Base.getOpcode() != PPCISD::ADD_TLS)
+    return false;
+  SDValue Offset = ST->getOffset();
+  if (!Offset.isUndef())
+    return false;
+
+  SDLoc dl(ST);
+  EVT MemVT = ST->getMemoryVT();
+  EVT RegVT = ST->getValue().getValueType();
+
+  unsigned Opcode;
+  switch (MemVT.getSimpleVT().SimpleTy) {
+    default:
+      return false;
+    case MVT::i8: {
+      Opcode = (RegVT == MVT::i32) ? PPC::STBXTLS_32 : PPC::STBXTLS;
+      break;
+    }
+    case MVT::i16: {
+      Opcode = (RegVT == MVT::i32) ? PPC::STHXTLS_32 : PPC::STHXTLS;
+      break;
+    }
+    case MVT::i32: {
+      Opcode = (RegVT == MVT::i32) ? PPC::STWXTLS_32 : PPC::STWXTLS;
+      break;
+    }
+    case MVT::i64: {
+      Opcode = PPC::STDXTLS;
+      break;
+    }
+  }
+  SDValue Chain = ST->getChain();
+  SDVTList VTs = ST->getVTList();
+  SDValue Ops[] = {ST->getValue(), Base.getOperand(0), Base.getOperand(1),
+                   Chain};
+  SDNode *MN = CurDAG->getMachineNode(Opcode, dl, VTs, Ops);
+  transferMemOperands(ST, MN);
+  ReplaceNode(ST, MN);
+  return true;
+}
+
+bool PPCDAGToDAGISel::tryTLSXFormLoad(LoadSDNode *LD) {
+  SDValue Base = LD->getBasePtr();
+  if (Base.getOpcode() != PPCISD::ADD_TLS)
+    return false;
+  SDValue Offset = LD->getOffset();
+  if (!Offset.isUndef())
+    return false;
+
+  SDLoc dl(LD);
+  EVT MemVT = LD->getMemoryVT();
+  EVT RegVT = LD->getValueType(0);
+  unsigned Opcode;
+  switch (MemVT.getSimpleVT().SimpleTy) {
+    default:
+      return false;
+    case MVT::i8: {
+      Opcode = (RegVT == MVT::i32) ? PPC::LBZXTLS_32 : PPC::LBZXTLS;
+      break;
+    }
+    case MVT::i16: {
+      Opcode = (RegVT == MVT::i32) ? PPC::LHZXTLS_32 : PPC::LHZXTLS;
+      break;
+    }
+    case MVT::i32: {
+      Opcode = (RegVT == MVT::i32) ? PPC::LWZXTLS_32 : PPC::LWZXTLS;
+      break;
+    }
+    case MVT::i64: {
+      Opcode = PPC::LDXTLS;
+      break;
+    }
+  }
+  SDValue Chain = LD->getChain();
+  SDVTList VTs = LD->getVTList();
+  SDValue Ops[] = {Base.getOperand(0), Base.getOperand(1), Chain};
+  SDNode *MN = CurDAG->getMachineNode(Opcode, dl, VTs, Ops);
+  transferMemOperands(LD, MN);
+  ReplaceNode(LD, MN);
+  return true;
 }
 
 /// Turn an or of two masked values into the rotate left word immediate then
@@ -749,8 +894,10 @@ static SDNode *selectI64ImmDirect(SelectionDAG *CurDAG, const SDLoc &dl,
 
   // Simple value.
   if (isInt<16>(Imm)) {
+    uint64_t SextImm = SignExtend64(Lo, 16);
+    SDValue SDImm = CurDAG->getTargetConstant(SextImm, dl, MVT::i64);
     // Just the Lo bits.
-    Result = CurDAG->getMachineNode(PPC::LI8, dl, MVT::i64, getI32Imm(Lo));
+    Result = CurDAG->getMachineNode(PPC::LI8, dl, MVT::i64, SDImm);
   } else if (Lo) {
     // Handle the Hi bits.
     unsigned OpC = Hi ? PPC::LIS8 : PPC::LI8;
@@ -855,12 +1002,74 @@ static SDNode *selectI64Imm(SelectionDAG *CurDAG, const SDLoc &dl,
                                 getI32Imm(64 - RMin), getI32Imm(MaskEnd));
 }
 
+static unsigned allUsesTruncate(SelectionDAG *CurDAG, SDNode *N) {
+  unsigned MaxTruncation = 0;
+  // Cannot use range-based for loop here as we need the actual use (i.e. we
+  // need the operand number corresponding to the use). A range-based for
+  // will unbox the use and provide an SDNode*.
+  for (SDNode::use_iterator Use = N->use_begin(), UseEnd = N->use_end();
+       Use != UseEnd; ++Use) {
+    unsigned Opc =
+      Use->isMachineOpcode() ? Use->getMachineOpcode() : Use->getOpcode();
+    switch (Opc) {
+    default: return 0;
+    case ISD::TRUNCATE:
+      if (Use->isMachineOpcode())
+        return 0;
+      MaxTruncation =
+        std::max(MaxTruncation, Use->getValueType(0).getSizeInBits());
+      continue;
+    case ISD::STORE: {
+      if (Use->isMachineOpcode())
+        return 0;
+      StoreSDNode *STN = cast<StoreSDNode>(*Use);
+      unsigned MemVTSize = STN->getMemoryVT().getSizeInBits();
+      if (MemVTSize == 64 || Use.getOperandNo() != 0)
+        return 0;
+      MaxTruncation = std::max(MaxTruncation, MemVTSize);
+      continue;
+    }
+    case PPC::STW8:
+    case PPC::STWX8:
+    case PPC::STWU8:
+    case PPC::STWUX8:
+      if (Use.getOperandNo() != 0)
+        return 0;
+      MaxTruncation = std::max(MaxTruncation, 32u);
+      continue;
+    case PPC::STH8:
+    case PPC::STHX8:
+    case PPC::STHU8:
+    case PPC::STHUX8:
+      if (Use.getOperandNo() != 0)
+        return 0;
+      MaxTruncation = std::max(MaxTruncation, 16u);
+      continue;
+    case PPC::STB8:
+    case PPC::STBX8:
+    case PPC::STBU8:
+    case PPC::STBUX8:
+      if (Use.getOperandNo() != 0)
+        return 0;
+      MaxTruncation = std::max(MaxTruncation, 8u);
+      continue;
+    }
+  }
+  return MaxTruncation;
+}
+
 // Select a 64-bit constant.
 static SDNode *selectI64Imm(SelectionDAG *CurDAG, SDNode *N) {
   SDLoc dl(N);
 
   // Get 64 bit value.
   int64_t Imm = cast<ConstantSDNode>(N)->getZExtValue();
+  if (unsigned MinSize = allUsesTruncate(CurDAG, N)) {
+    uint64_t SextImm = SignExtend64(Imm, MinSize);
+    SDValue SDImm = CurDAG->getTargetConstant(SextImm, dl, MVT::i64);
+    if (isInt<16>(SextImm))
+      return CurDAG->getMachineNode(PPC::LI8, dl, MVT::i64, SDImm);
+  }
   return selectI64Imm(CurDAG, dl, Imm);
 }
 
@@ -922,8 +1131,8 @@ class BitPermutationSelector {
     BitGroup(SDValue V, unsigned R, unsigned S, unsigned E)
       : V(V), RLAmt(R), StartIdx(S), EndIdx(E), Repl32(false), Repl32CR(false),
         Repl32Coalesced(false) {
-      DEBUG(dbgs() << "\tbit group for " << V.getNode() << " RLAmt = " << R <<
-                      " [" << S << ", " << E << "]\n");
+      LLVM_DEBUG(dbgs() << "\tbit group for " << V.getNode() << " RLAmt = " << R
+                        << " [" << S << ", " << E << "]\n");
     }
   };
 
@@ -951,6 +1160,10 @@ class BitPermutationSelector {
       else if (NumGroups > Other.NumGroups)
         return true;
       else if (NumGroups < Other.NumGroups)
+        return false;
+      else if (RLAmt == 0 && Other.RLAmt != 0)
+        return true;
+      else if (RLAmt != 0 && Other.RLAmt == 0)
         return false;
       else if (FirstGroupStartIdx < Other.FirstGroupStartIdx)
         return true;
@@ -1079,7 +1292,7 @@ class BitPermutationSelector {
         Bits[i] = ValueBit(ValueBit::ConstZero);
 
       return std::make_pair(Interesting, &Bits);
-      }
+    }
     }
 
     for (unsigned i = 0; i < NumBits; ++i)
@@ -1157,7 +1370,7 @@ class BitPermutationSelector {
           BitGroups[BitGroups.size()-1].EndIdx == Bits.size()-1 &&
           BitGroups[0].V == BitGroups[BitGroups.size()-1].V &&
           BitGroups[0].RLAmt == BitGroups[BitGroups.size()-1].RLAmt) {
-        DEBUG(dbgs() << "\tcombining final bit group with initial one\n");
+        LLVM_DEBUG(dbgs() << "\tcombining final bit group with initial one\n");
         BitGroups[BitGroups.size()-1].EndIdx = BitGroups[0].EndIdx;
         BitGroups.erase(BitGroups.begin());
       }
@@ -1165,7 +1378,9 @@ class BitPermutationSelector {
   }
 
   // Take all (SDValue, RLAmt) pairs and sort them by the number of groups
-  // associated with each. If there is a degeneracy, pick the one that occurs
+  // associated with each. If the number of groups are same, we prefer a group
+  // which does not require rotate, i.e. RLAmt is 0, to avoid the first rotate
+  // instruction. If there is a degeneracy, pick the one that occurs
   // first (in the final value).
   void collectValueRotInfo() {
     ValueRots.clear();
@@ -1186,7 +1401,7 @@ class BitPermutationSelector {
     for (auto &I : ValueRots) {
       ValueRotsVec.push_back(I.second);
     }
-    std::sort(ValueRotsVec.begin(), ValueRotsVec.end());
+    llvm::sort(ValueRotsVec.begin(), ValueRotsVec.end());
   }
 
   // In 64-bit mode, rlwinm and friends have a rotation operator that
@@ -1235,6 +1450,20 @@ class BitPermutationSelector {
     };
 
     for (auto &BG : BitGroups) {
+      // If this bit group has RLAmt of 0 and will not be merged with
+      // another bit group, we don't benefit from Repl32. We don't mark
+      // such group to give more freedom for later instruction selection.
+      if (BG.RLAmt == 0) {
+        auto PotentiallyMerged = [this](BitGroup & BG) {
+          for (auto &BG2 : BitGroups)
+            if (&BG != &BG2 && BG.V == BG2.V &&
+                (BG2.RLAmt == 0 || BG2.RLAmt == 32))
+              return true;
+          return false;
+        };
+        if (!PotentiallyMerged(BG))
+          continue;
+      }
       if (BG.StartIdx < 32 && BG.EndIdx < 32) {
         if (IsAllLow32(BG)) {
           if (BG.RLAmt >= 32) {
@@ -1244,9 +1473,9 @@ class BitPermutationSelector {
 
           BG.Repl32 = true;
 
-          DEBUG(dbgs() << "\t32-bit replicated bit group for " <<
-                          BG.V.getNode() << " RLAmt = " << BG.RLAmt <<
-                          " [" << BG.StartIdx << ", " << BG.EndIdx << "]\n");
+          LLVM_DEBUG(dbgs() << "\t32-bit replicated bit group for "
+                            << BG.V.getNode() << " RLAmt = " << BG.RLAmt << " ["
+                            << BG.StartIdx << ", " << BG.EndIdx << "]\n");
         }
       }
     }
@@ -1260,11 +1489,11 @@ class BitPermutationSelector {
       if (I->Repl32 && IP->Repl32 && I->V == IP->V && I->RLAmt == IP->RLAmt &&
           I->StartIdx == (IP->EndIdx + 1) % 64 && I != IP) {
 
-        DEBUG(dbgs() << "\tcombining 32-bit replicated bit group for " <<
-                        I->V.getNode() << " RLAmt = " << I->RLAmt <<
-                        " [" << I->StartIdx << ", " << I->EndIdx <<
-                        "] with group with range [" <<
-                        IP->StartIdx << ", " << IP->EndIdx << "]\n");
+        LLVM_DEBUG(dbgs() << "\tcombining 32-bit replicated bit group for "
+                          << I->V.getNode() << " RLAmt = " << I->RLAmt << " ["
+                          << I->StartIdx << ", " << I->EndIdx
+                          << "] with group with range [" << IP->StartIdx << ", "
+                          << IP->EndIdx << "]\n");
 
         IP->EndIdx = I->EndIdx;
         IP->Repl32CR = IP->Repl32CR || I->Repl32CR;
@@ -1288,12 +1517,12 @@ class BitPermutationSelector {
               IP->EndIdx == 31 && IN->StartIdx == 0 && I != IP &&
               IsAllLow32(*I)) {
 
-            DEBUG(dbgs() << "\tcombining bit group for " <<
-                            I->V.getNode() << " RLAmt = " << I->RLAmt <<
-                            " [" << I->StartIdx << ", " << I->EndIdx <<
-                            "] with 32-bit replicated groups with ranges [" <<
-                            IP->StartIdx << ", " << IP->EndIdx << "] and [" <<
-                            IN->StartIdx << ", " << IN->EndIdx << "]\n");
+            LLVM_DEBUG(dbgs() << "\tcombining bit group for " << I->V.getNode()
+                              << " RLAmt = " << I->RLAmt << " [" << I->StartIdx
+                              << ", " << I->EndIdx
+                              << "] with 32-bit replicated groups with ranges ["
+                              << IP->StartIdx << ", " << IP->EndIdx << "] and ["
+                              << IN->StartIdx << ", " << IN->EndIdx << "]\n");
 
             if (IP == IN) {
               // There is only one other group; change it to cover the whole
@@ -1402,15 +1631,15 @@ class BitPermutationSelector {
                              (unsigned) (ANDIMask != 0 && ANDISMask != 0) +
                              (unsigned) (bool) Res;
 
-      DEBUG(dbgs() << "\t\trotation groups for " << VRI.V.getNode() <<
-                      " RL: " << VRI.RLAmt << ":" <<
-                      "\n\t\t\tisel using masking: " << NumAndInsts <<
-                      " using rotates: " << VRI.NumGroups << "\n");
+      LLVM_DEBUG(dbgs() << "\t\trotation groups for " << VRI.V.getNode()
+                        << " RL: " << VRI.RLAmt << ":"
+                        << "\n\t\t\tisel using masking: " << NumAndInsts
+                        << " using rotates: " << VRI.NumGroups << "\n");
 
       if (NumAndInsts >= VRI.NumGroups)
         continue;
 
-      DEBUG(dbgs() << "\t\t\t\tusing masking\n");
+      LLVM_DEBUG(dbgs() << "\t\t\t\tusing masking\n");
 
       if (InstCnt) *InstCnt += NumAndInsts;
 
@@ -1758,10 +1987,10 @@ class BitPermutationSelector {
         FirstBG = false;
       }
 
-      DEBUG(dbgs() << "\t\trotation groups for " << VRI.V.getNode() <<
-                      " RL: " << VRI.RLAmt << (VRI.Repl32 ? " (32):" : ":") <<
-                      "\n\t\t\tisel using masking: " << NumAndInsts <<
-                      " using rotates: " << NumRLInsts << "\n");
+      LLVM_DEBUG(dbgs() << "\t\trotation groups for " << VRI.V.getNode()
+                        << " RL: " << VRI.RLAmt << (VRI.Repl32 ? " (32):" : ":")
+                        << "\n\t\t\tisel using masking: " << NumAndInsts
+                        << " using rotates: " << NumRLInsts << "\n");
 
       // When we'd use andi/andis, we bias toward using the rotates (andi only
       // has a record form, and is cracked on POWER cores). However, when using
@@ -1775,7 +2004,7 @@ class BitPermutationSelector {
       if ((Use32BitInsts || MoreBG) && NumAndInsts == NumRLInsts)
         continue;
 
-      DEBUG(dbgs() << "\t\t\t\tusing masking\n");
+      LLVM_DEBUG(dbgs() << "\t\t\t\tusing masking\n");
 
       if (InstCnt) *InstCnt += NumAndInsts;
 
@@ -2026,9 +2255,9 @@ public:
       return nullptr;
     Bits = std::move(*Result.second);
 
-    DEBUG(dbgs() << "Considering bit-permutation-based instruction"
-                    " selection for:    ");
-    DEBUG(N->dump(CurDAG));
+    LLVM_DEBUG(dbgs() << "Considering bit-permutation-based instruction"
+                         " selection for:    ");
+    LLVM_DEBUG(N->dump(CurDAG));
 
     // Fill it RLAmt and set HasZeros.
     computeRotationAmounts();
@@ -2044,27 +2273,1223 @@ public:
     // set of bit groups, and then mask in the zeros at the end. With early
     // masking, we only insert the non-zero parts of the result at every step.
 
-    unsigned InstCnt, InstCntLateMask;
-    DEBUG(dbgs() << "\tEarly masking:\n");
+    unsigned InstCnt = 0, InstCntLateMask = 0;
+    LLVM_DEBUG(dbgs() << "\tEarly masking:\n");
     SDNode *RN = Select(N, false, &InstCnt);
-    DEBUG(dbgs() << "\t\tisel would use " << InstCnt << " instructions\n");
+    LLVM_DEBUG(dbgs() << "\t\tisel would use " << InstCnt << " instructions\n");
 
-    DEBUG(dbgs() << "\tLate masking:\n");
+    LLVM_DEBUG(dbgs() << "\tLate masking:\n");
     SDNode *RNLM = Select(N, true, &InstCntLateMask);
-    DEBUG(dbgs() << "\t\tisel would use " << InstCntLateMask <<
-                    " instructions\n");
+    LLVM_DEBUG(dbgs() << "\t\tisel would use " << InstCntLateMask
+                      << " instructions\n");
 
     if (InstCnt <= InstCntLateMask) {
-      DEBUG(dbgs() << "\tUsing early-masking for isel\n");
+      LLVM_DEBUG(dbgs() << "\tUsing early-masking for isel\n");
       return RN;
     }
 
-    DEBUG(dbgs() << "\tUsing late-masking for isel\n");
+    LLVM_DEBUG(dbgs() << "\tUsing late-masking for isel\n");
     return RNLM;
   }
 };
 
+class IntegerCompareEliminator {
+  SelectionDAG *CurDAG;
+  PPCDAGToDAGISel *S;
+  // Conversion type for interpreting results of a 32-bit instruction as
+  // a 64-bit value or vice versa.
+  enum ExtOrTruncConversion { Ext, Trunc };
+
+  // Modifiers to guide how an ISD::SETCC node's result is to be computed
+  // in a GPR.
+  // ZExtOrig - use the original condition code, zero-extend value
+  // ZExtInvert - invert the condition code, zero-extend value
+  // SExtOrig - use the original condition code, sign-extend value
+  // SExtInvert - invert the condition code, sign-extend value
+  enum SetccInGPROpts { ZExtOrig, ZExtInvert, SExtOrig, SExtInvert };
+
+  // Comparisons against zero to emit GPR code sequences for. Each of these
+  // sequences may need to be emitted for two or more equivalent patterns.
+  // For example (a >= 0) == (a > -1). The direction of the comparison (</>)
+  // matters as well as the extension type: sext (-1/0), zext (1/0).
+  // GEZExt - (zext (LHS >= 0))
+  // GESExt - (sext (LHS >= 0))
+  // LEZExt - (zext (LHS <= 0))
+  // LESExt - (sext (LHS <= 0))
+  enum ZeroCompare { GEZExt, GESExt, LEZExt, LESExt };
+
+  SDNode *tryEXTEND(SDNode *N);
+  SDNode *tryLogicOpOfCompares(SDNode *N);
+  SDValue computeLogicOpInGPR(SDValue LogicOp);
+  SDValue signExtendInputIfNeeded(SDValue Input);
+  SDValue zeroExtendInputIfNeeded(SDValue Input);
+  SDValue addExtOrTrunc(SDValue NatWidthRes, ExtOrTruncConversion Conv);
+  SDValue getCompoundZeroComparisonInGPR(SDValue LHS, SDLoc dl,
+                                        ZeroCompare CmpTy);
+  SDValue get32BitZExtCompare(SDValue LHS, SDValue RHS, ISD::CondCode CC,
+                              int64_t RHSValue, SDLoc dl);
+ SDValue get32BitSExtCompare(SDValue LHS, SDValue RHS, ISD::CondCode CC,
+                              int64_t RHSValue, SDLoc dl);
+  SDValue get64BitZExtCompare(SDValue LHS, SDValue RHS, ISD::CondCode CC,
+                              int64_t RHSValue, SDLoc dl);
+  SDValue get64BitSExtCompare(SDValue LHS, SDValue RHS, ISD::CondCode CC,
+                              int64_t RHSValue, SDLoc dl);
+  SDValue getSETCCInGPR(SDValue Compare, SetccInGPROpts ConvOpts);
+
+public:
+  IntegerCompareEliminator(SelectionDAG *DAG,
+                           PPCDAGToDAGISel *Sel) : CurDAG(DAG), S(Sel) {
+    assert(CurDAG->getTargetLoweringInfo()
+           .getPointerTy(CurDAG->getDataLayout()).getSizeInBits() == 64 &&
+           "Only expecting to use this on 64 bit targets.");
+  }
+  SDNode *Select(SDNode *N) {
+    if (CmpInGPR == ICGPR_None)
+      return nullptr;
+    switch (N->getOpcode()) {
+    default: break;
+    case ISD::ZERO_EXTEND:
+      if (CmpInGPR == ICGPR_Sext || CmpInGPR == ICGPR_SextI32 ||
+          CmpInGPR == ICGPR_SextI64)
+        return nullptr;
+      LLVM_FALLTHROUGH;
+    case ISD::SIGN_EXTEND:
+      if (CmpInGPR == ICGPR_Zext || CmpInGPR == ICGPR_ZextI32 ||
+          CmpInGPR == ICGPR_ZextI64)
+        return nullptr;
+      return tryEXTEND(N);
+    case ISD::AND:
+    case ISD::OR:
+    case ISD::XOR:
+      return tryLogicOpOfCompares(N);
+    }
+    return nullptr;
+  }
+};
+
+static bool isLogicOp(unsigned Opc) {
+  return Opc == ISD::AND || Opc == ISD::OR || Opc == ISD::XOR;
+}
+// The obvious case for wanting to keep the value in a GPR. Namely, the
+// result of the comparison is actually needed in a GPR.
+SDNode *IntegerCompareEliminator::tryEXTEND(SDNode *N) {
+  assert((N->getOpcode() == ISD::ZERO_EXTEND ||
+          N->getOpcode() == ISD::SIGN_EXTEND) &&
+         "Expecting a zero/sign extend node!");
+  SDValue WideRes;
+  // If we are zero-extending the result of a logical operation on i1
+  // values, we can keep the values in GPRs.
+  if (isLogicOp(N->getOperand(0).getOpcode()) &&
+      N->getOperand(0).getValueType() == MVT::i1 &&
+      N->getOpcode() == ISD::ZERO_EXTEND)
+    WideRes = computeLogicOpInGPR(N->getOperand(0));
+  else if (N->getOperand(0).getOpcode() != ISD::SETCC)
+    return nullptr;
+  else
+    WideRes =
+      getSETCCInGPR(N->getOperand(0),
+                    N->getOpcode() == ISD::SIGN_EXTEND ?
+                    SetccInGPROpts::SExtOrig : SetccInGPROpts::ZExtOrig);
+
+  if (!WideRes)
+    return nullptr;
+
+  SDLoc dl(N);
+  bool Input32Bit = WideRes.getValueType() == MVT::i32;
+  bool Output32Bit = N->getValueType(0) == MVT::i32;
+
+  NumSextSetcc += N->getOpcode() == ISD::SIGN_EXTEND ? 1 : 0;
+  NumZextSetcc += N->getOpcode() == ISD::SIGN_EXTEND ? 0 : 1;
+
+  SDValue ConvOp = WideRes;
+  if (Input32Bit != Output32Bit)
+    ConvOp = addExtOrTrunc(WideRes, Input32Bit ? ExtOrTruncConversion::Ext :
+                           ExtOrTruncConversion::Trunc);
+  return ConvOp.getNode();
+}
+
+// Attempt to perform logical operations on the results of comparisons while
+// keeping the values in GPRs. Without doing so, these would end up being
+// lowered to CR-logical operations which suffer from significant latency and
+// low ILP.
+SDNode *IntegerCompareEliminator::tryLogicOpOfCompares(SDNode *N) {
+  if (N->getValueType(0) != MVT::i1)
+    return nullptr;
+  assert(isLogicOp(N->getOpcode()) &&
+         "Expected a logic operation on setcc results.");
+  SDValue LoweredLogical = computeLogicOpInGPR(SDValue(N, 0));
+  if (!LoweredLogical)
+    return nullptr;
+
+  SDLoc dl(N);
+  bool IsBitwiseNegate = LoweredLogical.getMachineOpcode() == PPC::XORI8;
+  unsigned SubRegToExtract = IsBitwiseNegate ? PPC::sub_eq : PPC::sub_gt;
+  SDValue CR0Reg = CurDAG->getRegister(PPC::CR0, MVT::i32);
+  SDValue LHS = LoweredLogical.getOperand(0);
+  SDValue RHS = LoweredLogical.getOperand(1);
+  SDValue WideOp;
+  SDValue OpToConvToRecForm;
+
+  // Look through any 32-bit to 64-bit implicit extend nodes to find the
+  // opcode that is input to the XORI.
+  if (IsBitwiseNegate &&
+      LoweredLogical.getOperand(0).getMachineOpcode() == PPC::INSERT_SUBREG)
+    OpToConvToRecForm = LoweredLogical.getOperand(0).getOperand(1);
+  else if (IsBitwiseNegate)
+    // If the input to the XORI isn't an extension, that's what we're after.
+    OpToConvToRecForm = LoweredLogical.getOperand(0);
+  else
+    // If this is not an XORI, it is a reg-reg logical op and we can convert
+    // it to record-form.
+    OpToConvToRecForm = LoweredLogical;
+
+  // Get the record-form version of the node we're looking to use to get the
+  // CR result from.
+  uint16_t NonRecOpc = OpToConvToRecForm.getMachineOpcode();
+  int NewOpc = PPCInstrInfo::getRecordFormOpcode(NonRecOpc);
+
+  // Convert the right node to record-form. This is either the logical we're
+  // looking at or it is the input node to the negation (if we're looking at
+  // a bitwise negation).
+  if (NewOpc != -1 && IsBitwiseNegate) {
+    // The input to the XORI has a record-form. Use it.
+    assert(LoweredLogical.getConstantOperandVal(1) == 1 &&
+           "Expected a PPC::XORI8 only for bitwise negation.");
+    // Emit the record-form instruction.
+    std::vector<SDValue> Ops;
+    for (int i = 0, e = OpToConvToRecForm.getNumOperands(); i < e; i++)
+      Ops.push_back(OpToConvToRecForm.getOperand(i));
+
+    WideOp =
+      SDValue(CurDAG->getMachineNode(NewOpc, dl,
+                                     OpToConvToRecForm.getValueType(),
+                                     MVT::Glue, Ops), 0);
+  } else {
+    assert((NewOpc != -1 || !IsBitwiseNegate) &&
+           "No record form available for AND8/OR8/XOR8?");
+    WideOp =
+      SDValue(CurDAG->getMachineNode(NewOpc == -1 ? PPC::ANDIo8 : NewOpc, dl,
+                                     MVT::i64, MVT::Glue, LHS, RHS), 0);
+  }
+
+  // Select this node to a single bit from CR0 set by the record-form node
+  // just created. For bitwise negation, use the EQ bit which is the equivalent
+  // of negating the result (i.e. it is a bit set when the result of the
+  // operation is zero).
+  SDValue SRIdxVal =
+    CurDAG->getTargetConstant(SubRegToExtract, dl, MVT::i32);
+  SDValue CRBit =
+    SDValue(CurDAG->getMachineNode(TargetOpcode::EXTRACT_SUBREG, dl,
+                                   MVT::i1, CR0Reg, SRIdxVal,
+                                   WideOp.getValue(1)), 0);
+  return CRBit.getNode();
+}
+
+// Lower a logical operation on i1 values into a GPR sequence if possible.
+// The result can be kept in a GPR if requested.
+// Three types of inputs can be handled:
+// - SETCC
+// - TRUNCATE
+// - Logical operation (AND/OR/XOR)
+// There is also a special case that is handled (namely a complement operation
+// achieved with xor %a, -1).
+SDValue IntegerCompareEliminator::computeLogicOpInGPR(SDValue LogicOp) {
+  assert(isLogicOp(LogicOp.getOpcode()) &&
+        "Can only handle logic operations here.");
+  assert(LogicOp.getValueType() == MVT::i1 &&
+         "Can only handle logic operations on i1 values here.");
+  SDLoc dl(LogicOp);
+  SDValue LHS, RHS;
+
+ // Special case: xor %a, -1
+  bool IsBitwiseNegation = isBitwiseNot(LogicOp);
+
+  // Produces a GPR sequence for each operand of the binary logic operation.
+  // For SETCC, it produces the respective comparison, for TRUNCATE it truncates
+  // the value in a GPR and for logic operations, it will recursively produce
+  // a GPR sequence for the operation.
+ auto getLogicOperand = [&] (SDValue Operand) -> SDValue {
+    unsigned OperandOpcode = Operand.getOpcode();
+    if (OperandOpcode == ISD::SETCC)
+      return getSETCCInGPR(Operand, SetccInGPROpts::ZExtOrig);
+    else if (OperandOpcode == ISD::TRUNCATE) {
+      SDValue InputOp = Operand.getOperand(0);
+     EVT InVT = InputOp.getValueType();
+      return SDValue(CurDAG->getMachineNode(InVT == MVT::i32 ? PPC::RLDICL_32 :
+                                            PPC::RLDICL, dl, InVT, InputOp,
+                                            S->getI64Imm(0, dl),
+                                            S->getI64Imm(63, dl)), 0);
+    } else if (isLogicOp(OperandOpcode))
+      return computeLogicOpInGPR(Operand);
+    return SDValue();
+  };
+  LHS = getLogicOperand(LogicOp.getOperand(0));
+  RHS = getLogicOperand(LogicOp.getOperand(1));
+
+  // If a GPR sequence can't be produced for the LHS we can't proceed.
+  // Not producing a GPR sequence for the RHS is only a problem if this isn't
+  // a bitwise negation operation.
+  if (!LHS || (!RHS && !IsBitwiseNegation))
+    return SDValue();
+
+  NumLogicOpsOnComparison++;
+
+  // We will use the inputs as 64-bit values.
+  if (LHS.getValueType() == MVT::i32)
+    LHS = addExtOrTrunc(LHS, ExtOrTruncConversion::Ext);
+  if (!IsBitwiseNegation && RHS.getValueType() == MVT::i32)
+    RHS = addExtOrTrunc(RHS, ExtOrTruncConversion::Ext);
+
+  unsigned NewOpc;
+  switch (LogicOp.getOpcode()) {
+  default: llvm_unreachable("Unknown logic operation.");
+  case ISD::AND: NewOpc = PPC::AND8; break;
+  case ISD::OR:  NewOpc = PPC::OR8;  break;
+  case ISD::XOR: NewOpc = PPC::XOR8; break;
+  }
+
+  if (IsBitwiseNegation) {
+    RHS = S->getI64Imm(1, dl);
+    NewOpc = PPC::XORI8;
+  }
+
+  return SDValue(CurDAG->getMachineNode(NewOpc, dl, MVT::i64, LHS, RHS), 0);
+
+}
+
+/// If the value isn't guaranteed to be sign-extended to 64-bits, extend it.
+/// Otherwise just reinterpret it as a 64-bit value.
+/// Useful when emitting comparison code for 32-bit values without using
+/// the compare instruction (which only considers the lower 32-bits).
+SDValue IntegerCompareEliminator::signExtendInputIfNeeded(SDValue Input) {
+  assert(Input.getValueType() == MVT::i32 &&
+         "Can only sign-extend 32-bit values here.");
+  unsigned Opc = Input.getOpcode();
+
+  // The value was sign extended and then truncated to 32-bits. No need to
+  // sign extend it again.
+  if (Opc == ISD::TRUNCATE &&
+      (Input.getOperand(0).getOpcode() == ISD::AssertSext ||
+       Input.getOperand(0).getOpcode() == ISD::SIGN_EXTEND))
+    return addExtOrTrunc(Input, ExtOrTruncConversion::Ext);
+
+  LoadSDNode *InputLoad = dyn_cast<LoadSDNode>(Input);
+  // The input is a sign-extending load. All ppc sign-extending loads
+  // sign-extend to the full 64-bits.
+  if (InputLoad && InputLoad->getExtensionType() == ISD::SEXTLOAD)
+    return addExtOrTrunc(Input, ExtOrTruncConversion::Ext);
+
+  ConstantSDNode *InputConst = dyn_cast<ConstantSDNode>(Input);
+  // We don't sign-extend constants.
+  if (InputConst)
+    return addExtOrTrunc(Input, ExtOrTruncConversion::Ext);
+
+  SDLoc dl(Input);
+  SignExtensionsAdded++;
+  return SDValue(CurDAG->getMachineNode(PPC::EXTSW_32_64, dl,
+                                        MVT::i64, Input), 0);
+}
+
+/// If the value isn't guaranteed to be zero-extended to 64-bits, extend it.
+/// Otherwise just reinterpret it as a 64-bit value.
+/// Useful when emitting comparison code for 32-bit values without using
+/// the compare instruction (which only considers the lower 32-bits).
+SDValue IntegerCompareEliminator::zeroExtendInputIfNeeded(SDValue Input) {
+  assert(Input.getValueType() == MVT::i32 &&
+         "Can only zero-extend 32-bit values here.");
+  unsigned Opc = Input.getOpcode();
+
+  // The only condition under which we can omit the actual extend instruction:
+  // - The value is a positive constant
+  // - The value comes from a load that isn't a sign-extending load
+  // An ISD::TRUNCATE needs to be zero-extended unless it is fed by a zext.
+  bool IsTruncateOfZExt = Opc == ISD::TRUNCATE &&
+    (Input.getOperand(0).getOpcode() == ISD::AssertZext ||
+     Input.getOperand(0).getOpcode() == ISD::ZERO_EXTEND);
+  if (IsTruncateOfZExt)
+    return addExtOrTrunc(Input, ExtOrTruncConversion::Ext);
+
+  ConstantSDNode *InputConst = dyn_cast<ConstantSDNode>(Input);
+  if (InputConst && InputConst->getSExtValue() >= 0)
+    return addExtOrTrunc(Input, ExtOrTruncConversion::Ext);
+
+  LoadSDNode *InputLoad = dyn_cast<LoadSDNode>(Input);
+  // The input is a load that doesn't sign-extend (it will be zero-extended).
+  if (InputLoad && InputLoad->getExtensionType() != ISD::SEXTLOAD)
+    return addExtOrTrunc(Input, ExtOrTruncConversion::Ext);
+
+  // None of the above, need to zero-extend.
+  SDLoc dl(Input);
+  ZeroExtensionsAdded++;
+  return SDValue(CurDAG->getMachineNode(PPC::RLDICL_32_64, dl, MVT::i64, Input,
+                                        S->getI64Imm(0, dl),
+                                        S->getI64Imm(32, dl)), 0);
+}
+
+// Handle a 32-bit value in a 64-bit register and vice-versa. These are of
+// course not actual zero/sign extensions that will generate machine code,
+// they're just a way to reinterpret a 32 bit value in a register as a
+// 64 bit value and vice-versa.
+SDValue IntegerCompareEliminator::addExtOrTrunc(SDValue NatWidthRes,
+                                                ExtOrTruncConversion Conv) {
+  SDLoc dl(NatWidthRes);
+
+  // For reinterpreting 32-bit values as 64 bit values, we generate
+  // INSERT_SUBREG IMPLICIT_DEF:i64, <input>, TargetConstant:i32<1>
+  if (Conv == ExtOrTruncConversion::Ext) {
+    SDValue ImDef(CurDAG->getMachineNode(PPC::IMPLICIT_DEF, dl, MVT::i64), 0);
+    SDValue SubRegIdx =
+      CurDAG->getTargetConstant(PPC::sub_32, dl, MVT::i32);
+    return SDValue(CurDAG->getMachineNode(PPC::INSERT_SUBREG, dl, MVT::i64,
+                                          ImDef, NatWidthRes, SubRegIdx), 0);
+  }
+
+  assert(Conv == ExtOrTruncConversion::Trunc &&
+         "Unknown convertion between 32 and 64 bit values.");
+  // For reinterpreting 64-bit values as 32-bit values, we just need to
+  // EXTRACT_SUBREG (i.e. extract the low word).
+  SDValue SubRegIdx =
+    CurDAG->getTargetConstant(PPC::sub_32, dl, MVT::i32);
+  return SDValue(CurDAG->getMachineNode(PPC::EXTRACT_SUBREG, dl, MVT::i32,
+                                        NatWidthRes, SubRegIdx), 0);
+}
+
+// Produce a GPR sequence for compound comparisons (<=, >=) against zero.
+// Handle both zero-extensions and sign-extensions.
+SDValue
+IntegerCompareEliminator::getCompoundZeroComparisonInGPR(SDValue LHS, SDLoc dl,
+                                                         ZeroCompare CmpTy) {
+  EVT InVT = LHS.getValueType();
+  bool Is32Bit = InVT == MVT::i32;
+  SDValue ToExtend;
+
+  // Produce the value that needs to be either zero or sign extended.
+  switch (CmpTy) {
+  case ZeroCompare::GEZExt:
+  case ZeroCompare::GESExt:
+    ToExtend = SDValue(CurDAG->getMachineNode(Is32Bit ? PPC::NOR : PPC::NOR8,
+                                              dl, InVT, LHS, LHS), 0);
+    break;
+  case ZeroCompare::LEZExt:
+  case ZeroCompare::LESExt: {
+    if (Is32Bit) {
+      // Upper 32 bits cannot be undefined for this sequence.
+      LHS = signExtendInputIfNeeded(LHS);
+      SDValue Neg =
+        SDValue(CurDAG->getMachineNode(PPC::NEG8, dl, MVT::i64, LHS), 0);
+      ToExtend =
+        SDValue(CurDAG->getMachineNode(PPC::RLDICL, dl, MVT::i64,
+                                       Neg, S->getI64Imm(1, dl),
+                                       S->getI64Imm(63, dl)), 0);
+    } else {
+      SDValue Addi =
+        SDValue(CurDAG->getMachineNode(PPC::ADDI8, dl, MVT::i64, LHS,
+                                       S->getI64Imm(~0ULL, dl)), 0);
+      ToExtend = SDValue(CurDAG->getMachineNode(PPC::OR8, dl, MVT::i64,
+                                                Addi, LHS), 0);
+    }
+    break;
+  }
+  }
+
+  // For 64-bit sequences, the extensions are the same for the GE/LE cases.
+  if (!Is32Bit &&
+      (CmpTy == ZeroCompare::GEZExt || CmpTy == ZeroCompare::LEZExt))
+    return SDValue(CurDAG->getMachineNode(PPC::RLDICL, dl, MVT::i64,
+                                          ToExtend, S->getI64Imm(1, dl),
+                                          S->getI64Imm(63, dl)), 0);
+  if (!Is32Bit &&
+      (CmpTy == ZeroCompare::GESExt || CmpTy == ZeroCompare::LESExt))
+    return SDValue(CurDAG->getMachineNode(PPC::SRADI, dl, MVT::i64, ToExtend,
+                                          S->getI64Imm(63, dl)), 0);
+
+  assert(Is32Bit && "Should have handled the 32-bit sequences above.");
+  // For 32-bit sequences, the extensions differ between GE/LE cases.
+  switch (CmpTy) {
+  case ZeroCompare::GEZExt: {
+    SDValue ShiftOps[] = { ToExtend, S->getI32Imm(1, dl), S->getI32Imm(31, dl),
+                           S->getI32Imm(31, dl) };
+    return SDValue(CurDAG->getMachineNode(PPC::RLWINM, dl, MVT::i32,
+                                          ShiftOps), 0);
+  }
+  case ZeroCompare::GESExt:
+    return SDValue(CurDAG->getMachineNode(PPC::SRAWI, dl, MVT::i32, ToExtend,
+                                          S->getI32Imm(31, dl)), 0);
+  case ZeroCompare::LEZExt:
+    return SDValue(CurDAG->getMachineNode(PPC::XORI8, dl, MVT::i64, ToExtend,
+                                          S->getI32Imm(1, dl)), 0);
+  case ZeroCompare::LESExt:
+    return SDValue(CurDAG->getMachineNode(PPC::ADDI8, dl, MVT::i64, ToExtend,
+                                          S->getI32Imm(-1, dl)), 0);
+  }
+
+  // The above case covers all the enumerators so it can't have a default clause
+  // to avoid compiler warnings.
+  llvm_unreachable("Unknown zero-comparison type.");
+}
+
+/// Produces a zero-extended result of comparing two 32-bit values according to
+/// the passed condition code.
+SDValue
+IntegerCompareEliminator::get32BitZExtCompare(SDValue LHS, SDValue RHS,
+                                              ISD::CondCode CC,
+                                              int64_t RHSValue, SDLoc dl) {
+  if (CmpInGPR == ICGPR_I64 || CmpInGPR == ICGPR_SextI64 ||
+      CmpInGPR == ICGPR_ZextI64 || CmpInGPR == ICGPR_Sext)
+    return SDValue();
+  bool IsRHSZero = RHSValue == 0;
+  bool IsRHSOne = RHSValue == 1;
+  bool IsRHSNegOne = RHSValue == -1LL;
+  switch (CC) {
+  default: return SDValue();
+  case ISD::SETEQ: {
+    // (zext (setcc %a, %b, seteq)) -> (lshr (cntlzw (xor %a, %b)), 5)
+    // (zext (setcc %a, 0, seteq))  -> (lshr (cntlzw %a), 5)
+    SDValue Xor = IsRHSZero ? LHS :
+      SDValue(CurDAG->getMachineNode(PPC::XOR, dl, MVT::i32, LHS, RHS), 0);
+    SDValue Clz =
+      SDValue(CurDAG->getMachineNode(PPC::CNTLZW, dl, MVT::i32, Xor), 0);
+    SDValue ShiftOps[] = { Clz, S->getI32Imm(27, dl), S->getI32Imm(5, dl),
+      S->getI32Imm(31, dl) };
+    return SDValue(CurDAG->getMachineNode(PPC::RLWINM, dl, MVT::i32,
+                                          ShiftOps), 0);
+  }
+  case ISD::SETNE: {
+    // (zext (setcc %a, %b, setne)) -> (xor (lshr (cntlzw (xor %a, %b)), 5), 1)
+    // (zext (setcc %a, 0, setne))  -> (xor (lshr (cntlzw %a), 5), 1)
+    SDValue Xor = IsRHSZero ? LHS :
+      SDValue(CurDAG->getMachineNode(PPC::XOR, dl, MVT::i32, LHS, RHS), 0);
+    SDValue Clz =
+      SDValue(CurDAG->getMachineNode(PPC::CNTLZW, dl, MVT::i32, Xor), 0);
+    SDValue ShiftOps[] = { Clz, S->getI32Imm(27, dl), S->getI32Imm(5, dl),
+      S->getI32Imm(31, dl) };
+    SDValue Shift =
+      SDValue(CurDAG->getMachineNode(PPC::RLWINM, dl, MVT::i32, ShiftOps), 0);
+    return SDValue(CurDAG->getMachineNode(PPC::XORI, dl, MVT::i32, Shift,
+                                          S->getI32Imm(1, dl)), 0);
+  }
+  case ISD::SETGE: {
+    // (zext (setcc %a, %b, setge)) -> (xor (lshr (sub %a, %b), 63), 1)
+    // (zext (setcc %a, 0, setge))  -> (lshr (~ %a), 31)
+    if(IsRHSZero)
+      return getCompoundZeroComparisonInGPR(LHS, dl, ZeroCompare::GEZExt);
+
+    // Not a special case (i.e. RHS == 0). Handle (%a >= %b) as (%b <= %a)
+    // by swapping inputs and falling through.
+    std::swap(LHS, RHS);
+    ConstantSDNode *RHSConst = dyn_cast<ConstantSDNode>(RHS);
+    IsRHSZero = RHSConst && RHSConst->isNullValue();
+    LLVM_FALLTHROUGH;
+  }
+  case ISD::SETLE: {
+    if (CmpInGPR == ICGPR_NonExtIn)
+      return SDValue();
+    // (zext (setcc %a, %b, setle)) -> (xor (lshr (sub %b, %a), 63), 1)
+    // (zext (setcc %a, 0, setle))  -> (xor (lshr (- %a), 63), 1)
+    if(IsRHSZero) {
+      if (CmpInGPR == ICGPR_NonExtIn)
+        return SDValue();
+      return getCompoundZeroComparisonInGPR(LHS, dl, ZeroCompare::LEZExt);
+    }
+
+    // The upper 32-bits of the register can't be undefined for this sequence.
+    LHS = signExtendInputIfNeeded(LHS);
+    RHS = signExtendInputIfNeeded(RHS);
+    SDValue Sub =
+      SDValue(CurDAG->getMachineNode(PPC::SUBF8, dl, MVT::i64, LHS, RHS), 0);
+    SDValue Shift =
+      SDValue(CurDAG->getMachineNode(PPC::RLDICL, dl, MVT::i64, Sub,
+                                     S->getI64Imm(1, dl), S->getI64Imm(63, dl)),
+              0);
+    return
+      SDValue(CurDAG->getMachineNode(PPC::XORI8, dl,
+                                     MVT::i64, Shift, S->getI32Imm(1, dl)), 0);
+  }
+  case ISD::SETGT: {
+    // (zext (setcc %a, %b, setgt)) -> (lshr (sub %b, %a), 63)
+    // (zext (setcc %a, -1, setgt)) -> (lshr (~ %a), 31)
+    // (zext (setcc %a, 0, setgt))  -> (lshr (- %a), 63)
+    // Handle SETLT -1 (which is equivalent to SETGE 0).
+    if (IsRHSNegOne)
+      return getCompoundZeroComparisonInGPR(LHS, dl, ZeroCompare::GEZExt);
+
+    if (IsRHSZero) {
+      if (CmpInGPR == ICGPR_NonExtIn)
+        return SDValue();
+      // The upper 32-bits of the register can't be undefined for this sequence.
+      LHS = signExtendInputIfNeeded(LHS);
+      RHS = signExtendInputIfNeeded(RHS);
+      SDValue Neg =
+        SDValue(CurDAG->getMachineNode(PPC::NEG8, dl, MVT::i64, LHS), 0);
+      return SDValue(CurDAG->getMachineNode(PPC::RLDICL, dl, MVT::i64,
+                     Neg, S->getI32Imm(1, dl), S->getI32Imm(63, dl)), 0);
+    }
+    // Not a special case (i.e. RHS == 0 or RHS == -1). Handle (%a > %b) as
+    // (%b < %a) by swapping inputs and falling through.
+    std::swap(LHS, RHS);
+    ConstantSDNode *RHSConst = dyn_cast<ConstantSDNode>(RHS);
+    IsRHSZero = RHSConst && RHSConst->isNullValue();
+    IsRHSOne = RHSConst && RHSConst->getSExtValue() == 1;
+    LLVM_FALLTHROUGH;
+  }
+  case ISD::SETLT: {
+    // (zext (setcc %a, %b, setlt)) -> (lshr (sub %a, %b), 63)
+    // (zext (setcc %a, 1, setlt))  -> (xor (lshr (- %a), 63), 1)
+    // (zext (setcc %a, 0, setlt))  -> (lshr %a, 31)
+    // Handle SETLT 1 (which is equivalent to SETLE 0).
+    if (IsRHSOne) {
+      if (CmpInGPR == ICGPR_NonExtIn)
+        return SDValue();
+      return getCompoundZeroComparisonInGPR(LHS, dl, ZeroCompare::LEZExt);
+    }
+
+    if (IsRHSZero) {
+      SDValue ShiftOps[] = { LHS, S->getI32Imm(1, dl), S->getI32Imm(31, dl),
+                             S->getI32Imm(31, dl) };
+      return SDValue(CurDAG->getMachineNode(PPC::RLWINM, dl, MVT::i32,
+                                            ShiftOps), 0);
+    }
+
+    if (CmpInGPR == ICGPR_NonExtIn)
+      return SDValue();
+    // The upper 32-bits of the register can't be undefined for this sequence.
+    LHS = signExtendInputIfNeeded(LHS);
+    RHS = signExtendInputIfNeeded(RHS);
+    SDValue SUBFNode =
+      SDValue(CurDAG->getMachineNode(PPC::SUBF8, dl, MVT::i64, RHS, LHS), 0);
+    return SDValue(CurDAG->getMachineNode(PPC::RLDICL, dl, MVT::i64,
+                                    SUBFNode, S->getI64Imm(1, dl),
+                                    S->getI64Imm(63, dl)), 0);
+  }
+  case ISD::SETUGE:
+    // (zext (setcc %a, %b, setuge)) -> (xor (lshr (sub %b, %a), 63), 1)
+    // (zext (setcc %a, %b, setule)) -> (xor (lshr (sub %a, %b), 63), 1)
+    std::swap(LHS, RHS);
+    LLVM_FALLTHROUGH;
+  case ISD::SETULE: {
+    if (CmpInGPR == ICGPR_NonExtIn)
+      return SDValue();
+    // The upper 32-bits of the register can't be undefined for this sequence.
+    LHS = zeroExtendInputIfNeeded(LHS);
+    RHS = zeroExtendInputIfNeeded(RHS);
+    SDValue Subtract =
+      SDValue(CurDAG->getMachineNode(PPC::SUBF8, dl, MVT::i64, LHS, RHS), 0);
+    SDValue SrdiNode =
+      SDValue(CurDAG->getMachineNode(PPC::RLDICL, dl, MVT::i64,
+                                          Subtract, S->getI64Imm(1, dl),
+                                          S->getI64Imm(63, dl)), 0);
+    return SDValue(CurDAG->getMachineNode(PPC::XORI8, dl, MVT::i64, SrdiNode,
+                                            S->getI32Imm(1, dl)), 0);
+  }
+  case ISD::SETUGT:
+    // (zext (setcc %a, %b, setugt)) -> (lshr (sub %b, %a), 63)
+    // (zext (setcc %a, %b, setult)) -> (lshr (sub %a, %b), 63)
+    std::swap(LHS, RHS);
+    LLVM_FALLTHROUGH;
+  case ISD::SETULT: {
+    if (CmpInGPR == ICGPR_NonExtIn)
+      return SDValue();
+    // The upper 32-bits of the register can't be undefined for this sequence.
+    LHS = zeroExtendInputIfNeeded(LHS);
+    RHS = zeroExtendInputIfNeeded(RHS);
+    SDValue Subtract =
+      SDValue(CurDAG->getMachineNode(PPC::SUBF8, dl, MVT::i64, RHS, LHS), 0);
+    return SDValue(CurDAG->getMachineNode(PPC::RLDICL, dl, MVT::i64,
+                                          Subtract, S->getI64Imm(1, dl),
+                                          S->getI64Imm(63, dl)), 0);
+  }
+  }
+}
+
+/// Produces a sign-extended result of comparing two 32-bit values according to
+/// the passed condition code.
+SDValue
+IntegerCompareEliminator::get32BitSExtCompare(SDValue LHS, SDValue RHS,
+                                              ISD::CondCode CC,
+                                              int64_t RHSValue, SDLoc dl) {
+  if (CmpInGPR == ICGPR_I64 || CmpInGPR == ICGPR_SextI64 ||
+      CmpInGPR == ICGPR_ZextI64 || CmpInGPR == ICGPR_Zext)
+    return SDValue();
+  bool IsRHSZero = RHSValue == 0;
+  bool IsRHSOne = RHSValue == 1;
+  bool IsRHSNegOne = RHSValue == -1LL;
+
+  switch (CC) {
+  default: return SDValue();
+  case ISD::SETEQ: {
+    // (sext (setcc %a, %b, seteq)) ->
+    //   (ashr (shl (ctlz (xor %a, %b)), 58), 63)
+    // (sext (setcc %a, 0, seteq)) ->
+    //   (ashr (shl (ctlz %a), 58), 63)
+    SDValue CountInput = IsRHSZero ? LHS :
+      SDValue(CurDAG->getMachineNode(PPC::XOR, dl, MVT::i32, LHS, RHS), 0);
+    SDValue Cntlzw =
+      SDValue(CurDAG->getMachineNode(PPC::CNTLZW, dl, MVT::i32, CountInput), 0);
+    SDValue SHLOps[] = { Cntlzw, S->getI32Imm(27, dl),
+                         S->getI32Imm(5, dl), S->getI32Imm(31, dl) };
+    SDValue Slwi =
+      SDValue(CurDAG->getMachineNode(PPC::RLWINM, dl, MVT::i32, SHLOps), 0);
+    return SDValue(CurDAG->getMachineNode(PPC::NEG, dl, MVT::i32, Slwi), 0);
+  }
+  case ISD::SETNE: {
+    // Bitwise xor the operands, count leading zeros, shift right by 5 bits and
+    // flip the bit, finally take 2's complement.
+    // (sext (setcc %a, %b, setne)) ->
+    //   (neg (xor (lshr (ctlz (xor %a, %b)), 5), 1))
+    // Same as above, but the first xor is not needed.
+    // (sext (setcc %a, 0, setne)) ->
+    //   (neg (xor (lshr (ctlz %a), 5), 1))
+    SDValue Xor = IsRHSZero ? LHS :
+      SDValue(CurDAG->getMachineNode(PPC::XOR, dl, MVT::i32, LHS, RHS), 0);
+    SDValue Clz =
+      SDValue(CurDAG->getMachineNode(PPC::CNTLZW, dl, MVT::i32, Xor), 0);
+    SDValue ShiftOps[] =
+      { Clz, S->getI32Imm(27, dl), S->getI32Imm(5, dl), S->getI32Imm(31, dl) };
+    SDValue Shift =
+      SDValue(CurDAG->getMachineNode(PPC::RLWINM, dl, MVT::i32, ShiftOps), 0);
+    SDValue Xori =
+      SDValue(CurDAG->getMachineNode(PPC::XORI, dl, MVT::i32, Shift,
+                                     S->getI32Imm(1, dl)), 0);
+    return SDValue(CurDAG->getMachineNode(PPC::NEG, dl, MVT::i32, Xori), 0);
+  }
+  case ISD::SETGE: {
+    // (sext (setcc %a, %b, setge)) -> (add (lshr (sub %a, %b), 63), -1)
+    // (sext (setcc %a, 0, setge))  -> (ashr (~ %a), 31)
+    if (IsRHSZero)
+      return getCompoundZeroComparisonInGPR(LHS, dl, ZeroCompare::GESExt);
+
+    // Not a special case (i.e. RHS == 0). Handle (%a >= %b) as (%b <= %a)
+    // by swapping inputs and falling through.
+    std::swap(LHS, RHS);
+    ConstantSDNode *RHSConst = dyn_cast<ConstantSDNode>(RHS);
+    IsRHSZero = RHSConst && RHSConst->isNullValue();
+    LLVM_FALLTHROUGH;
+  }
+  case ISD::SETLE: {
+    if (CmpInGPR == ICGPR_NonExtIn)
+      return SDValue();
+    // (sext (setcc %a, %b, setge)) -> (add (lshr (sub %b, %a), 63), -1)
+    // (sext (setcc %a, 0, setle))  -> (add (lshr (- %a), 63), -1)
+    if (IsRHSZero)
+      return getCompoundZeroComparisonInGPR(LHS, dl, ZeroCompare::LESExt);
+
+    // The upper 32-bits of the register can't be undefined for this sequence.
+    LHS = signExtendInputIfNeeded(LHS);
+    RHS = signExtendInputIfNeeded(RHS);
+    SDValue SUBFNode =
+      SDValue(CurDAG->getMachineNode(PPC::SUBF8, dl, MVT::i64, MVT::Glue,
+                                     LHS, RHS), 0);
+    SDValue Srdi =
+      SDValue(CurDAG->getMachineNode(PPC::RLDICL, dl, MVT::i64,
+                                     SUBFNode, S->getI64Imm(1, dl),
+                                     S->getI64Imm(63, dl)), 0);
+    return SDValue(CurDAG->getMachineNode(PPC::ADDI8, dl, MVT::i64, Srdi,
+                                          S->getI32Imm(-1, dl)), 0);
+  }
+  case ISD::SETGT: {
+    // (sext (setcc %a, %b, setgt)) -> (ashr (sub %b, %a), 63)
+    // (sext (setcc %a, -1, setgt)) -> (ashr (~ %a), 31)
+    // (sext (setcc %a, 0, setgt))  -> (ashr (- %a), 63)
+    if (IsRHSNegOne)
+      return getCompoundZeroComparisonInGPR(LHS, dl, ZeroCompare::GESExt);
+    if (IsRHSZero) {
+      if (CmpInGPR == ICGPR_NonExtIn)
+        return SDValue();
+      // The upper 32-bits of the register can't be undefined for this sequence.
+      LHS = signExtendInputIfNeeded(LHS);
+      RHS = signExtendInputIfNeeded(RHS);
+      SDValue Neg =
+        SDValue(CurDAG->getMachineNode(PPC::NEG8, dl, MVT::i64, LHS), 0);
+        return SDValue(CurDAG->getMachineNode(PPC::SRADI, dl, MVT::i64, Neg,
+                                              S->getI64Imm(63, dl)), 0);
+    }
+    // Not a special case (i.e. RHS == 0 or RHS == -1). Handle (%a > %b) as
+    // (%b < %a) by swapping inputs and falling through.
+    std::swap(LHS, RHS);
+    ConstantSDNode *RHSConst = dyn_cast<ConstantSDNode>(RHS);
+    IsRHSZero = RHSConst && RHSConst->isNullValue();
+    IsRHSOne = RHSConst && RHSConst->getSExtValue() == 1;
+    LLVM_FALLTHROUGH;
+  }
+  case ISD::SETLT: {
+    // (sext (setcc %a, %b, setgt)) -> (ashr (sub %a, %b), 63)
+    // (sext (setcc %a, 1, setgt))  -> (add (lshr (- %a), 63), -1)
+    // (sext (setcc %a, 0, setgt))  -> (ashr %a, 31)
+    if (IsRHSOne) {
+      if (CmpInGPR == ICGPR_NonExtIn)
+        return SDValue();
+      return getCompoundZeroComparisonInGPR(LHS, dl, ZeroCompare::LESExt);
+    }
+    if (IsRHSZero)
+      return SDValue(CurDAG->getMachineNode(PPC::SRAWI, dl, MVT::i32, LHS,
+                                            S->getI32Imm(31, dl)), 0);
+
+    if (CmpInGPR == ICGPR_NonExtIn)
+      return SDValue();
+    // The upper 32-bits of the register can't be undefined for this sequence.
+    LHS = signExtendInputIfNeeded(LHS);
+    RHS = signExtendInputIfNeeded(RHS);
+    SDValue SUBFNode =
+      SDValue(CurDAG->getMachineNode(PPC::SUBF8, dl, MVT::i64, RHS, LHS), 0);
+    return SDValue(CurDAG->getMachineNode(PPC::SRADI, dl, MVT::i64,
+                                          SUBFNode, S->getI64Imm(63, dl)), 0);
+  }
+  case ISD::SETUGE:
+    // (sext (setcc %a, %b, setuge)) -> (add (lshr (sub %a, %b), 63), -1)
+    // (sext (setcc %a, %b, setule)) -> (add (lshr (sub %b, %a), 63), -1)
+    std::swap(LHS, RHS);
+    LLVM_FALLTHROUGH;
+  case ISD::SETULE: {
+    if (CmpInGPR == ICGPR_NonExtIn)
+      return SDValue();
+    // The upper 32-bits of the register can't be undefined for this sequence.
+    LHS = zeroExtendInputIfNeeded(LHS);
+    RHS = zeroExtendInputIfNeeded(RHS);
+    SDValue Subtract =
+      SDValue(CurDAG->getMachineNode(PPC::SUBF8, dl, MVT::i64, LHS, RHS), 0);
+    SDValue Shift =
+      SDValue(CurDAG->getMachineNode(PPC::RLDICL, dl, MVT::i64, Subtract,
+                                     S->getI32Imm(1, dl), S->getI32Imm(63,dl)),
+              0);
+    return SDValue(CurDAG->getMachineNode(PPC::ADDI8, dl, MVT::i64, Shift,
+                                          S->getI32Imm(-1, dl)), 0);
+  }
+  case ISD::SETUGT:
+    // (sext (setcc %a, %b, setugt)) -> (ashr (sub %b, %a), 63)
+    // (sext (setcc %a, %b, setugt)) -> (ashr (sub %a, %b), 63)
+    std::swap(LHS, RHS);
+    LLVM_FALLTHROUGH;
+  case ISD::SETULT: {
+    if (CmpInGPR == ICGPR_NonExtIn)
+      return SDValue();
+    // The upper 32-bits of the register can't be undefined for this sequence.
+    LHS = zeroExtendInputIfNeeded(LHS);
+    RHS = zeroExtendInputIfNeeded(RHS);
+    SDValue Subtract =
+      SDValue(CurDAG->getMachineNode(PPC::SUBF8, dl, MVT::i64, RHS, LHS), 0);
+    return SDValue(CurDAG->getMachineNode(PPC::SRADI, dl, MVT::i64,
+                                          Subtract, S->getI64Imm(63, dl)), 0);
+  }
+  }
+}
+
+/// Produces a zero-extended result of comparing two 64-bit values according to
+/// the passed condition code.
+SDValue
+IntegerCompareEliminator::get64BitZExtCompare(SDValue LHS, SDValue RHS,
+                                              ISD::CondCode CC,
+                                              int64_t RHSValue, SDLoc dl) {
+  if (CmpInGPR == ICGPR_I32 || CmpInGPR == ICGPR_SextI32 ||
+      CmpInGPR == ICGPR_ZextI32 || CmpInGPR == ICGPR_Sext)
+    return SDValue();
+  bool IsRHSZero = RHSValue == 0;
+  bool IsRHSOne = RHSValue == 1;
+  bool IsRHSNegOne = RHSValue == -1LL;
+  switch (CC) {
+  default: return SDValue();
+  case ISD::SETEQ: {
+    // (zext (setcc %a, %b, seteq)) -> (lshr (ctlz (xor %a, %b)), 6)
+    // (zext (setcc %a, 0, seteq)) ->  (lshr (ctlz %a), 6)
+    SDValue Xor = IsRHSZero ? LHS :
+      SDValue(CurDAG->getMachineNode(PPC::XOR8, dl, MVT::i64, LHS, RHS), 0);
+    SDValue Clz =
+      SDValue(CurDAG->getMachineNode(PPC::CNTLZD, dl, MVT::i64, Xor), 0);
+    return SDValue(CurDAG->getMachineNode(PPC::RLDICL, dl, MVT::i64, Clz,
+                                          S->getI64Imm(58, dl),
+                                          S->getI64Imm(63, dl)), 0);
+  }
+  case ISD::SETNE: {
+    // {addc.reg, addc.CA} = (addcarry (xor %a, %b), -1)
+    // (zext (setcc %a, %b, setne)) -> (sube addc.reg, addc.reg, addc.CA)
+    // {addcz.reg, addcz.CA} = (addcarry %a, -1)
+    // (zext (setcc %a, 0, setne)) -> (sube addcz.reg, addcz.reg, addcz.CA)
+    SDValue Xor = IsRHSZero ? LHS :
+      SDValue(CurDAG->getMachineNode(PPC::XOR8, dl, MVT::i64, LHS, RHS), 0);
+    SDValue AC =
+      SDValue(CurDAG->getMachineNode(PPC::ADDIC8, dl, MVT::i64, MVT::Glue,
+                                     Xor, S->getI32Imm(~0U, dl)), 0);
+    return SDValue(CurDAG->getMachineNode(PPC::SUBFE8, dl, MVT::i64, AC,
+                                          Xor, AC.getValue(1)), 0);
+  }
+  case ISD::SETGE: {
+    // {subc.reg, subc.CA} = (subcarry %a, %b)
+    // (zext (setcc %a, %b, setge)) ->
+    //   (adde (lshr %b, 63), (ashr %a, 63), subc.CA)
+    // (zext (setcc %a, 0, setge)) -> (lshr (~ %a), 63)
+    if (IsRHSZero)
+      return getCompoundZeroComparisonInGPR(LHS, dl, ZeroCompare::GEZExt);
+    std::swap(LHS, RHS);
+    ConstantSDNode *RHSConst = dyn_cast<ConstantSDNode>(RHS);
+    IsRHSZero = RHSConst && RHSConst->isNullValue();
+    LLVM_FALLTHROUGH;
+  }
+  case ISD::SETLE: {
+    // {subc.reg, subc.CA} = (subcarry %b, %a)
+    // (zext (setcc %a, %b, setge)) ->
+    //   (adde (lshr %a, 63), (ashr %b, 63), subc.CA)
+    // (zext (setcc %a, 0, setge)) -> (lshr (or %a, (add %a, -1)), 63)
+    if (IsRHSZero)
+      return getCompoundZeroComparisonInGPR(LHS, dl, ZeroCompare::LEZExt);
+    SDValue ShiftL =
+      SDValue(CurDAG->getMachineNode(PPC::RLDICL, dl, MVT::i64, LHS,
+                                     S->getI64Imm(1, dl),
+                                     S->getI64Imm(63, dl)), 0);
+    SDValue ShiftR =
+      SDValue(CurDAG->getMachineNode(PPC::SRADI, dl, MVT::i64, RHS,
+                                     S->getI64Imm(63, dl)), 0);
+    SDValue SubtractCarry =
+      SDValue(CurDAG->getMachineNode(PPC::SUBFC8, dl, MVT::i64, MVT::Glue,
+                                     LHS, RHS), 1);
+    return SDValue(CurDAG->getMachineNode(PPC::ADDE8, dl, MVT::i64, MVT::Glue,
+                                          ShiftR, ShiftL, SubtractCarry), 0);
+  }
+  case ISD::SETGT: {
+    // {subc.reg, subc.CA} = (subcarry %b, %a)
+    // (zext (setcc %a, %b, setgt)) ->
+    //   (xor (adde (lshr %a, 63), (ashr %b, 63), subc.CA), 1)
+    // (zext (setcc %a, 0, setgt)) -> (lshr (nor (add %a, -1), %a), 63)
+    if (IsRHSNegOne)
+      return getCompoundZeroComparisonInGPR(LHS, dl, ZeroCompare::GEZExt);
+    if (IsRHSZero) {
+      SDValue Addi =
+        SDValue(CurDAG->getMachineNode(PPC::ADDI8, dl, MVT::i64, LHS,
+                                       S->getI64Imm(~0ULL, dl)), 0);
+      SDValue Nor =
+        SDValue(CurDAG->getMachineNode(PPC::NOR8, dl, MVT::i64, Addi, LHS), 0);
+      return SDValue(CurDAG->getMachineNode(PPC::RLDICL, dl, MVT::i64, Nor,
+                                            S->getI64Imm(1, dl),
+                                            S->getI64Imm(63, dl)), 0);
+    }
+    std::swap(LHS, RHS);
+    ConstantSDNode *RHSConst = dyn_cast<ConstantSDNode>(RHS);
+    IsRHSZero = RHSConst && RHSConst->isNullValue();
+    IsRHSOne = RHSConst && RHSConst->getSExtValue() == 1;
+    LLVM_FALLTHROUGH;
+  }
+  case ISD::SETLT: {
+    // {subc.reg, subc.CA} = (subcarry %a, %b)
+    // (zext (setcc %a, %b, setlt)) ->
+    //   (xor (adde (lshr %b, 63), (ashr %a, 63), subc.CA), 1)
+    // (zext (setcc %a, 0, setlt)) -> (lshr %a, 63)
+    if (IsRHSOne)
+      return getCompoundZeroComparisonInGPR(LHS, dl, ZeroCompare::LEZExt);
+    if (IsRHSZero)
+      return SDValue(CurDAG->getMachineNode(PPC::RLDICL, dl, MVT::i64, LHS,
+                                            S->getI64Imm(1, dl),
+                                            S->getI64Imm(63, dl)), 0);
+    SDValue SRADINode =
+      SDValue(CurDAG->getMachineNode(PPC::SRADI, dl, MVT::i64,
+                                     LHS, S->getI64Imm(63, dl)), 0);
+    SDValue SRDINode =
+      SDValue(CurDAG->getMachineNode(PPC::RLDICL, dl, MVT::i64,
+                                     RHS, S->getI64Imm(1, dl),
+                                     S->getI64Imm(63, dl)), 0);
+    SDValue SUBFC8Carry =
+      SDValue(CurDAG->getMachineNode(PPC::SUBFC8, dl, MVT::i64, MVT::Glue,
+                                     RHS, LHS), 1);
+    SDValue ADDE8Node =
+      SDValue(CurDAG->getMachineNode(PPC::ADDE8, dl, MVT::i64, MVT::Glue,
+                                     SRDINode, SRADINode, SUBFC8Carry), 0);
+    return SDValue(CurDAG->getMachineNode(PPC::XORI8, dl, MVT::i64,
+                                          ADDE8Node, S->getI64Imm(1, dl)), 0);
+  }
+  case ISD::SETUGE:
+    // {subc.reg, subc.CA} = (subcarry %a, %b)
+    // (zext (setcc %a, %b, setuge)) -> (add (sube %b, %b, subc.CA), 1)
+    std::swap(LHS, RHS);
+    LLVM_FALLTHROUGH;
+  case ISD::SETULE: {
+    // {subc.reg, subc.CA} = (subcarry %b, %a)
+    // (zext (setcc %a, %b, setule)) -> (add (sube %a, %a, subc.CA), 1)
+    SDValue SUBFC8Carry =
+      SDValue(CurDAG->getMachineNode(PPC::SUBFC8, dl, MVT::i64, MVT::Glue,
+                                     LHS, RHS), 1);
+    SDValue SUBFE8Node =
+      SDValue(CurDAG->getMachineNode(PPC::SUBFE8, dl, MVT::i64, MVT::Glue,
+                                     LHS, LHS, SUBFC8Carry), 0);
+    return SDValue(CurDAG->getMachineNode(PPC::ADDI8, dl, MVT::i64,
+                                          SUBFE8Node, S->getI64Imm(1, dl)), 0);
+  }
+  case ISD::SETUGT:
+    // {subc.reg, subc.CA} = (subcarry %b, %a)
+    // (zext (setcc %a, %b, setugt)) -> -(sube %b, %b, subc.CA)
+    std::swap(LHS, RHS);
+    LLVM_FALLTHROUGH;
+  case ISD::SETULT: {
+    // {subc.reg, subc.CA} = (subcarry %a, %b)
+    // (zext (setcc %a, %b, setult)) -> -(sube %a, %a, subc.CA)
+    SDValue SubtractCarry =
+      SDValue(CurDAG->getMachineNode(PPC::SUBFC8, dl, MVT::i64, MVT::Glue,
+                                     RHS, LHS), 1);
+    SDValue ExtSub =
+      SDValue(CurDAG->getMachineNode(PPC::SUBFE8, dl, MVT::i64,
+                                     LHS, LHS, SubtractCarry), 0);
+    return SDValue(CurDAG->getMachineNode(PPC::NEG8, dl, MVT::i64,
+                                          ExtSub), 0);
+  }
+  }
+}
+
+/// Produces a sign-extended result of comparing two 64-bit values according to
+/// the passed condition code.
+SDValue
+IntegerCompareEliminator::get64BitSExtCompare(SDValue LHS, SDValue RHS,
+                                              ISD::CondCode CC,
+                                              int64_t RHSValue, SDLoc dl) {
+  if (CmpInGPR == ICGPR_I32 || CmpInGPR == ICGPR_SextI32 ||
+      CmpInGPR == ICGPR_ZextI32 || CmpInGPR == ICGPR_Zext)
+    return SDValue();
+  bool IsRHSZero = RHSValue == 0;
+  bool IsRHSOne = RHSValue == 1;
+  bool IsRHSNegOne = RHSValue == -1LL;
+  switch (CC) {
+  default: return SDValue();
+  case ISD::SETEQ: {
+    // {addc.reg, addc.CA} = (addcarry (xor %a, %b), -1)
+    // (sext (setcc %a, %b, seteq)) -> (sube addc.reg, addc.reg, addc.CA)
+    // {addcz.reg, addcz.CA} = (addcarry %a, -1)
+    // (sext (setcc %a, 0, seteq)) -> (sube addcz.reg, addcz.reg, addcz.CA)
+    SDValue AddInput = IsRHSZero ? LHS :
+      SDValue(CurDAG->getMachineNode(PPC::XOR8, dl, MVT::i64, LHS, RHS), 0);
+    SDValue Addic =
+      SDValue(CurDAG->getMachineNode(PPC::ADDIC8, dl, MVT::i64, MVT::Glue,
+                                     AddInput, S->getI32Imm(~0U, dl)), 0);
+    return SDValue(CurDAG->getMachineNode(PPC::SUBFE8, dl, MVT::i64, Addic,
+                                          Addic, Addic.getValue(1)), 0);
+  }
+  case ISD::SETNE: {
+    // {subfc.reg, subfc.CA} = (subcarry 0, (xor %a, %b))
+    // (sext (setcc %a, %b, setne)) -> (sube subfc.reg, subfc.reg, subfc.CA)
+    // {subfcz.reg, subfcz.CA} = (subcarry 0, %a)
+    // (sext (setcc %a, 0, setne)) -> (sube subfcz.reg, subfcz.reg, subfcz.CA)
+    SDValue Xor = IsRHSZero ? LHS :
+      SDValue(CurDAG->getMachineNode(PPC::XOR8, dl, MVT::i64, LHS, RHS), 0);
+    SDValue SC =
+      SDValue(CurDAG->getMachineNode(PPC::SUBFIC8, dl, MVT::i64, MVT::Glue,
+                                     Xor, S->getI32Imm(0, dl)), 0);
+    return SDValue(CurDAG->getMachineNode(PPC::SUBFE8, dl, MVT::i64, SC,
+                                          SC, SC.getValue(1)), 0);
+  }
+  case ISD::SETGE: {
+    // {subc.reg, subc.CA} = (subcarry %a, %b)
+    // (zext (setcc %a, %b, setge)) ->
+    //   (- (adde (lshr %b, 63), (ashr %a, 63), subc.CA))
+    // (zext (setcc %a, 0, setge)) -> (~ (ashr %a, 63))
+    if (IsRHSZero)
+      return getCompoundZeroComparisonInGPR(LHS, dl, ZeroCompare::GESExt);
+    std::swap(LHS, RHS);
+    ConstantSDNode *RHSConst = dyn_cast<ConstantSDNode>(RHS);
+    IsRHSZero = RHSConst && RHSConst->isNullValue();
+    LLVM_FALLTHROUGH;
+  }
+  case ISD::SETLE: {
+    // {subc.reg, subc.CA} = (subcarry %b, %a)
+    // (zext (setcc %a, %b, setge)) ->
+    //   (- (adde (lshr %a, 63), (ashr %b, 63), subc.CA))
+    // (zext (setcc %a, 0, setge)) -> (ashr (or %a, (add %a, -1)), 63)
+    if (IsRHSZero)
+      return getCompoundZeroComparisonInGPR(LHS, dl, ZeroCompare::LESExt);
+    SDValue ShiftR =
+      SDValue(CurDAG->getMachineNode(PPC::SRADI, dl, MVT::i64, RHS,
+                                     S->getI64Imm(63, dl)), 0);
+    SDValue ShiftL =
+      SDValue(CurDAG->getMachineNode(PPC::RLDICL, dl, MVT::i64, LHS,
+                                     S->getI64Imm(1, dl),
+                                     S->getI64Imm(63, dl)), 0);
+    SDValue SubtractCarry =
+      SDValue(CurDAG->getMachineNode(PPC::SUBFC8, dl, MVT::i64, MVT::Glue,
+                                     LHS, RHS), 1);
+    SDValue Adde =
+      SDValue(CurDAG->getMachineNode(PPC::ADDE8, dl, MVT::i64, MVT::Glue,
+                                     ShiftR, ShiftL, SubtractCarry), 0);
+    return SDValue(CurDAG->getMachineNode(PPC::NEG8, dl, MVT::i64, Adde), 0);
+  }
+  case ISD::SETGT: {
+    // {subc.reg, subc.CA} = (subcarry %b, %a)
+    // (zext (setcc %a, %b, setgt)) ->
+    //   -(xor (adde (lshr %a, 63), (ashr %b, 63), subc.CA), 1)
+    // (zext (setcc %a, 0, setgt)) -> (ashr (nor (add %a, -1), %a), 63)
+    if (IsRHSNegOne)
+      return getCompoundZeroComparisonInGPR(LHS, dl, ZeroCompare::GESExt);
+    if (IsRHSZero) {
+      SDValue Add =
+        SDValue(CurDAG->getMachineNode(PPC::ADDI8, dl, MVT::i64, LHS,
+                                       S->getI64Imm(-1, dl)), 0);
+      SDValue Nor =
+        SDValue(CurDAG->getMachineNode(PPC::NOR8, dl, MVT::i64, Add, LHS), 0);
+      return SDValue(CurDAG->getMachineNode(PPC::SRADI, dl, MVT::i64, Nor,
+                                            S->getI64Imm(63, dl)), 0);
+    }
+    std::swap(LHS, RHS);
+    ConstantSDNode *RHSConst = dyn_cast<ConstantSDNode>(RHS);
+    IsRHSZero = RHSConst && RHSConst->isNullValue();
+    IsRHSOne = RHSConst && RHSConst->getSExtValue() == 1;
+    LLVM_FALLTHROUGH;
+  }
+  case ISD::SETLT: {
+    // {subc.reg, subc.CA} = (subcarry %a, %b)
+    // (zext (setcc %a, %b, setlt)) ->
+    //   -(xor (adde (lshr %b, 63), (ashr %a, 63), subc.CA), 1)
+    // (zext (setcc %a, 0, setlt)) -> (ashr %a, 63)
+    if (IsRHSOne)
+      return getCompoundZeroComparisonInGPR(LHS, dl, ZeroCompare::LESExt);
+    if (IsRHSZero) {
+      return SDValue(CurDAG->getMachineNode(PPC::SRADI, dl, MVT::i64, LHS,
+                                            S->getI64Imm(63, dl)), 0);
+    }
+    SDValue SRADINode =
+      SDValue(CurDAG->getMachineNode(PPC::SRADI, dl, MVT::i64,
+                                     LHS, S->getI64Imm(63, dl)), 0);
+    SDValue SRDINode =
+      SDValue(CurDAG->getMachineNode(PPC::RLDICL, dl, MVT::i64,
+                                     RHS, S->getI64Imm(1, dl),
+                                     S->getI64Imm(63, dl)), 0);
+    SDValue SUBFC8Carry =
+      SDValue(CurDAG->getMachineNode(PPC::SUBFC8, dl, MVT::i64, MVT::Glue,
+                                     RHS, LHS), 1);
+    SDValue ADDE8Node =
+      SDValue(CurDAG->getMachineNode(PPC::ADDE8, dl, MVT::i64,
+                                     SRDINode, SRADINode, SUBFC8Carry), 0);
+    SDValue XORI8Node =
+      SDValue(CurDAG->getMachineNode(PPC::XORI8, dl, MVT::i64,
+                                     ADDE8Node, S->getI64Imm(1, dl)), 0);
+    return SDValue(CurDAG->getMachineNode(PPC::NEG8, dl, MVT::i64,
+                                          XORI8Node), 0);
+  }
+  case ISD::SETUGE:
+    // {subc.reg, subc.CA} = (subcarry %a, %b)
+    // (sext (setcc %a, %b, setuge)) -> ~(sube %b, %b, subc.CA)
+    std::swap(LHS, RHS);
+    LLVM_FALLTHROUGH;
+  case ISD::SETULE: {
+    // {subc.reg, subc.CA} = (subcarry %b, %a)
+    // (sext (setcc %a, %b, setule)) -> ~(sube %a, %a, subc.CA)
+    SDValue SubtractCarry =
+      SDValue(CurDAG->getMachineNode(PPC::SUBFC8, dl, MVT::i64, MVT::Glue,
+                                     LHS, RHS), 1);
+    SDValue ExtSub =
+      SDValue(CurDAG->getMachineNode(PPC::SUBFE8, dl, MVT::i64, MVT::Glue, LHS,
+                                     LHS, SubtractCarry), 0);
+    return SDValue(CurDAG->getMachineNode(PPC::NOR8, dl, MVT::i64,
+                                          ExtSub, ExtSub), 0);
+  }
+  case ISD::SETUGT:
+    // {subc.reg, subc.CA} = (subcarry %b, %a)
+    // (sext (setcc %a, %b, setugt)) -> (sube %b, %b, subc.CA)
+    std::swap(LHS, RHS);
+    LLVM_FALLTHROUGH;
+  case ISD::SETULT: {
+    // {subc.reg, subc.CA} = (subcarry %a, %b)
+    // (sext (setcc %a, %b, setult)) -> (sube %a, %a, subc.CA)
+    SDValue SubCarry =
+      SDValue(CurDAG->getMachineNode(PPC::SUBFC8, dl, MVT::i64, MVT::Glue,
+                                     RHS, LHS), 1);
+    return SDValue(CurDAG->getMachineNode(PPC::SUBFE8, dl, MVT::i64,
+                                     LHS, LHS, SubCarry), 0);
+  }
+  }
+}
+
+/// Do all uses of this SDValue need the result in a GPR?
+/// This is meant to be used on values that have type i1 since
+/// it is somewhat meaningless to ask if values of other types
+/// should be kept in GPR's.
+static bool allUsesExtend(SDValue Compare, SelectionDAG *CurDAG) {
+  assert(Compare.getOpcode() == ISD::SETCC &&
+         "An ISD::SETCC node required here.");
+
+  // For values that have a single use, the caller should obviously already have
+  // checked if that use is an extending use. We check the other uses here.
+  if (Compare.hasOneUse())
+    return true;
+  // We want the value in a GPR if it is being extended, used for a select, or
+  // used in logical operations.
+  for (auto CompareUse : Compare.getNode()->uses())
+    if (CompareUse->getOpcode() != ISD::SIGN_EXTEND &&
+        CompareUse->getOpcode() != ISD::ZERO_EXTEND &&
+        CompareUse->getOpcode() != ISD::SELECT &&
+        !isLogicOp(CompareUse->getOpcode())) {
+      OmittedForNonExtendUses++;
+      return false;
+    }
+  return true;
+}
+
+/// Returns an equivalent of a SETCC node but with the result the same width as
+/// the inputs. This can also be used for SELECT_CC if either the true or false
+/// values is a power of two while the other is zero.
+SDValue IntegerCompareEliminator::getSETCCInGPR(SDValue Compare,
+                                                SetccInGPROpts ConvOpts) {
+  assert((Compare.getOpcode() == ISD::SETCC ||
+          Compare.getOpcode() == ISD::SELECT_CC) &&
+         "An ISD::SETCC node required here.");
+
+  // Don't convert this comparison to a GPR sequence because there are uses
+  // of the i1 result (i.e. uses that require the result in the CR).
+  if ((Compare.getOpcode() == ISD::SETCC) && !allUsesExtend(Compare, CurDAG))
+    return SDValue();
+
+  SDValue LHS = Compare.getOperand(0);
+  SDValue RHS = Compare.getOperand(1);
+
+  // The condition code is operand 2 for SETCC and operand 4 for SELECT_CC.
+  int CCOpNum = Compare.getOpcode() == ISD::SELECT_CC ? 4 : 2;
+  ISD::CondCode CC =
+    cast<CondCodeSDNode>(Compare.getOperand(CCOpNum))->get();
+  EVT InputVT = LHS.getValueType();
+  if (InputVT != MVT::i32 && InputVT != MVT::i64)
+    return SDValue();
+
+  if (ConvOpts == SetccInGPROpts::ZExtInvert ||
+      ConvOpts == SetccInGPROpts::SExtInvert)
+    CC = ISD::getSetCCInverse(CC, true);
+
+  bool Inputs32Bit = InputVT == MVT::i32;
+
+  SDLoc dl(Compare);
+  ConstantSDNode *RHSConst = dyn_cast<ConstantSDNode>(RHS);
+  int64_t RHSValue = RHSConst ? RHSConst->getSExtValue() : INT64_MAX;
+  bool IsSext = ConvOpts == SetccInGPROpts::SExtOrig ||
+    ConvOpts == SetccInGPROpts::SExtInvert;
+
+  if (IsSext && Inputs32Bit)
+    return get32BitSExtCompare(LHS, RHS, CC, RHSValue, dl);
+  else if (Inputs32Bit)
+    return get32BitZExtCompare(LHS, RHS, CC, RHSValue, dl);
+  else if (IsSext)
+    return get64BitSExtCompare(LHS, RHS, CC, RHSValue, dl);
+  return get64BitZExtCompare(LHS, RHS, CC, RHSValue, dl);
+}
+
 } // end anonymous namespace
+
+bool PPCDAGToDAGISel::tryIntCompareInGPR(SDNode *N) {
+  if (N->getValueType(0) != MVT::i32 &&
+      N->getValueType(0) != MVT::i64)
+    return false;
+
+  // This optimization will emit code that assumes 64-bit registers
+  // so we don't want to run it in 32-bit mode. Also don't run it
+  // on functions that are not to be optimized.
+  if (TM.getOptLevel() == CodeGenOpt::None || !TM.isPPC64())
+    return false;
+
+  switch (N->getOpcode()) {
+  default: break;
+  case ISD::ZERO_EXTEND:
+  case ISD::SIGN_EXTEND:
+  case ISD::AND:
+  case ISD::OR:
+  case ISD::XOR: {
+    IntegerCompareEliminator ICmpElim(CurDAG, this);
+    if (SDNode *New = ICmpElim.Select(N)) {
+      ReplaceNode(N, New);
+      return true;
+    }
+  }
+  }
+  return false;
+}
 
 bool PPCDAGToDAGISel::tryBitPermutation(SDNode *N) {
   if (N->getValueType(0) != MVT::i32 &&
@@ -2533,19 +3958,27 @@ bool PPCDAGToDAGISel::isOffsetMultipleOf(SDNode *N, unsigned Val) const {
   else if (STN)
     AddrOp = STN->getOperand(2);
 
+  // If the address points a frame object or a frame object with an offset,
+  // we need to check the object alignment.
   short Imm = 0;
-  if (AddrOp.getOpcode() == ISD::ADD) {
+  if (FrameIndexSDNode *FI = dyn_cast<FrameIndexSDNode>(
+          AddrOp.getOpcode() == ISD::ADD ? AddrOp.getOperand(0) :
+                                           AddrOp)) {
     // If op0 is a frame index that is under aligned, we can't do it either,
     // because it is translated to r31 or r1 + slot + offset. We won't know the
     // slot number until the stack frame is finalized.
-    if (FrameIndexSDNode *FI = dyn_cast<FrameIndexSDNode>(AddrOp.getOperand(0))) {
-      const MachineFrameInfo &MFI = CurDAG->getMachineFunction().getFrameInfo();
-      unsigned SlotAlign = MFI.getObjectAlignment(FI->getIndex());
-      if ((SlotAlign % Val) != 0)
-        return false;
-    }
-    return isIntS16Immediate(AddrOp.getOperand(1), Imm) && !(Imm % Val);
+    const MachineFrameInfo &MFI = CurDAG->getMachineFunction().getFrameInfo();
+    unsigned SlotAlign = MFI.getObjectAlignment(FI->getIndex());
+    if ((SlotAlign % Val) != 0)
+      return false;
+
+    // If we have an offset, we need further check on the offset.
+    if (AddrOp.getOpcode() != ISD::ADD)
+      return true;
   }
+
+  if (AddrOp.getOpcode() == ISD::ADD)
+    return isIntS16Immediate(AddrOp.getOperand(1), Imm) && !(Imm % Val);
 
   // If the address comes from the outside, the offset will be zero.
   return AddrOp.getOpcode() == ISD::CopyFromReg;
@@ -2556,6 +3989,51 @@ void PPCDAGToDAGISel::transferMemOperands(SDNode *N, SDNode *Result) {
   MachineSDNode::mmo_iterator MemOp = MF->allocateMemRefsArray(1);
   MemOp[0] = cast<MemSDNode>(N)->getMemOperand();
   cast<MachineSDNode>(Result)->setMemRefs(MemOp, MemOp + 1);
+}
+
+/// This method returns a node after flipping the MSB of each element
+/// of vector integer type. Additionally, if SignBitVec is non-null,
+/// this method sets a node with one at MSB of all elements
+/// and zero at other bits in SignBitVec.
+MachineSDNode *
+PPCDAGToDAGISel::flipSignBit(const SDValue &N, SDNode **SignBitVec) {
+  SDLoc dl(N);
+  EVT VecVT = N.getValueType();
+  if (VecVT == MVT::v4i32) {
+    if (SignBitVec) {
+      SDNode *ZV = CurDAG->getMachineNode(PPC::V_SET0, dl, MVT::v4i32);
+      *SignBitVec = CurDAG->getMachineNode(PPC::XVNEGSP, dl, VecVT,
+                                        SDValue(ZV, 0));
+    }
+    return CurDAG->getMachineNode(PPC::XVNEGSP, dl, VecVT, N);
+  }
+  else if (VecVT == MVT::v8i16) {
+    SDNode *Hi = CurDAG->getMachineNode(PPC::LIS, dl, MVT::i32,
+                                     getI32Imm(0x8000, dl));
+    SDNode *ScaImm = CurDAG->getMachineNode(PPC::ORI, dl, MVT::i32,
+                                         SDValue(Hi, 0),
+                                         getI32Imm(0x8000, dl));
+    SDNode *VecImm = CurDAG->getMachineNode(PPC::MTVSRWS, dl, VecVT,
+                                         SDValue(ScaImm, 0));
+    /*
+    Alternatively, we can do this as follow to use VRF instead of GPR.
+      vspltish 5, 1
+      vspltish 6, 15
+      vslh 5, 6, 5
+    */
+    if (SignBitVec) *SignBitVec = VecImm;
+    return CurDAG->getMachineNode(PPC::VADDUHM, dl, VecVT, N,
+                                  SDValue(VecImm, 0));
+  }
+  else if (VecVT == MVT::v16i8) {
+    SDNode *VecImm = CurDAG->getMachineNode(PPC::XXSPLTIB, dl, MVT::i32,
+                                         getI32Imm(0x80, dl));
+    if (SignBitVec) *SignBitVec = VecImm;
+    return CurDAG->getMachineNode(PPC::VADDUBM, dl, VecVT, N,
+                                  SDValue(VecImm, 0));
+  }
+  else
+    llvm_unreachable("Unsupported vector data type for flipSignBit");
 }
 
 // Select - Convert the specified operand from a target-independent to a
@@ -2578,6 +4056,10 @@ void PPCDAGToDAGISel::Select(SDNode *N) {
   if (tryBitPermutation(N))
     return;
 
+  // Try to emit integer compares as GPR-only sequences (i.e. no use of CR).
+  if (tryIntCompareInGPR(N))
+    return;
+
   switch (N->getOpcode()) {
   default: break;
 
@@ -2591,6 +4073,27 @@ void PPCDAGToDAGISel::Select(SDNode *N) {
   case ISD::SETCC:
     if (trySETCC(N))
       return;
+    break;
+
+  case PPCISD::CALL: {
+    const Module *M = MF->getFunction().getParent();
+
+    if (PPCLowering->getPointerTy(CurDAG->getDataLayout()) != MVT::i32 ||
+        !PPCSubTarget->isSecurePlt() || !PPCSubTarget->isTargetELF() ||
+        M->getPICLevel() == PICLevel::SmallPIC)
+      break;
+
+    SDValue Op = N->getOperand(1);
+
+    if (GlobalAddressSDNode *GA = dyn_cast<GlobalAddressSDNode>(Op)) {
+      if (GA->getTargetFlags() == PPCII::MO_PLT)
+        getGlobalBaseReg();
+    }
+    else if (ExternalSymbolSDNode *ES = dyn_cast<ExternalSymbolSDNode>(Op)) {
+      if (ES->getTargetFlags() == PPCII::MO_PLT)
+        getGlobalBaseReg();
+    }
+  }
     break;
 
   case PPCISD::GlobalBaseReg:
@@ -2638,14 +4141,28 @@ void PPCDAGToDAGISel::Select(SDNode *N) {
     }
   }
 
+  case ISD::STORE: {
+    // Change TLS initial-exec D-form stores to X-form stores.
+    StoreSDNode *ST = cast<StoreSDNode>(N);
+    if (EnableTLSOpt && PPCSubTarget->isELFv2ABI() &&
+        ST->getAddressingMode() != ISD::PRE_INC)
+      if (tryTLSXFormStore(ST))
+        return;
+    break;
+  }
   case ISD::LOAD: {
     // Handle preincrement loads.
     LoadSDNode *LD = cast<LoadSDNode>(N);
     EVT LoadedVT = LD->getMemoryVT();
 
     // Normal loads are handled by code generated from the .td file.
-    if (LD->getAddressingMode() != ISD::PRE_INC)
+    if (LD->getAddressingMode() != ISD::PRE_INC) {
+      // Change TLS initial-exec D-form loads to X-form loads.
+      if (EnableTLSOpt && PPCSubTarget->isELFv2ABI())
+        if (tryTLSXFormLoad(LD))
+          return;
       break;
+    }
 
     SDValue Offset = LD->getOffset();
     if (Offset.getOpcode() == ISD::TargetConstant ||
@@ -3218,9 +4735,9 @@ void PPCDAGToDAGISel::Select(SDNode *N) {
 
     // The first source operand is a TargetGlobalAddress or a TargetJumpTable.
     // If it must be toc-referenced according to PPCSubTarget, we generate:
-    //   LDtocL(<ga:@sym>, ADDIStocHA(%X2, <ga:@sym>))
+    //   LDtocL(@sym, ADDIStocHA(%x2, @sym))
     // Otherwise we generate:
-    //   ADDItocL(ADDIStocHA(%X2, <ga:@sym>), <ga:@sym>)
+    //   ADDItocL(ADDIStocHA(%x2, @sym), @sym)
     SDValue GA = N->getOperand(0);
     SDValue TOCbase = N->getOperand(1);
     SDNode *Tmp = CurDAG->getMachineNode(PPC::ADDIStocHA, dl, MVT::i64,
@@ -3331,6 +4848,55 @@ void PPCDAGToDAGISel::Select(SDNode *N) {
                                             SDValue(Tmp2, 0)));
       return;
     }
+  }
+  case ISD::ABS: {
+    assert(PPCSubTarget->hasP9Vector() && "ABS is supported with P9 Vector");
+
+    // For vector absolute difference, we use VABSDUW instruction of POWER9.
+    // Since VABSDU instructions are for unsigned integers, we need adjustment
+    // for signed integers.
+    // For abs(sub(a, b)), we generate VABSDUW(a+0x80000000, b+0x80000000).
+    // Otherwise, abs(sub(-1, 0)) returns 0xFFFFFFFF(=-1) instead of 1.
+    // For abs(a), we generate VABSDUW(a+0x80000000, 0x80000000).
+    EVT VecVT = N->getOperand(0).getValueType();
+    SDNode *AbsOp = nullptr;
+    unsigned AbsOpcode;
+
+    if (VecVT == MVT::v4i32)
+      AbsOpcode = PPC::VABSDUW;
+    else if (VecVT == MVT::v8i16)
+      AbsOpcode = PPC::VABSDUH;
+    else if (VecVT == MVT::v16i8)
+      AbsOpcode = PPC::VABSDUB;
+    else
+      llvm_unreachable("Unsupported vector data type for ISD::ABS");
+
+    // Even for signed integers, we can skip adjustment if all values are
+    // known to be positive (as signed integer) due to zero-extended inputs.
+    if (N->getOperand(0).getOpcode() == ISD::SUB &&
+        N->getOperand(0)->getOperand(0).getOpcode() == ISD::ZERO_EXTEND &&
+        N->getOperand(0)->getOperand(1).getOpcode() == ISD::ZERO_EXTEND) {
+      AbsOp = CurDAG->getMachineNode(AbsOpcode, dl, VecVT,
+                                     SDValue(N->getOperand(0)->getOperand(0)),
+                                     SDValue(N->getOperand(0)->getOperand(1)));
+      ReplaceNode(N, AbsOp);
+      return;
+    }
+    if (N->getOperand(0).getOpcode() == ISD::SUB) {
+      SDValue SubVal = N->getOperand(0);
+      SDNode *Op0 = flipSignBit(SubVal->getOperand(0));
+      SDNode *Op1 = flipSignBit(SubVal->getOperand(1));
+      AbsOp = CurDAG->getMachineNode(AbsOpcode, dl, VecVT,
+                                     SDValue(Op0, 0), SDValue(Op1, 0));
+    }
+    else {
+      SDNode *Op1 = nullptr;
+      SDNode *Op0 = flipSignBit(N->getOperand(0), &Op1);
+      AbsOp = CurDAG->getMachineNode(AbsOpcode, dl, VecVT, SDValue(Op0, 0),
+                                     SDValue(Op1, 0));
+    }
+    ReplaceNode(N, AbsOp);
+    return;
   }
   }
 
@@ -3623,8 +5189,7 @@ void PPCDAGToDAGISel::foldBoolExts(SDValue &Res, SDNode *&N) {
 }
 
 void PPCDAGToDAGISel::PreprocessISelDAG() {
-  SelectionDAG::allnodes_iterator Position(CurDAG->getRoot().getNode());
-  ++Position;
+  SelectionDAG::allnodes_iterator Position = CurDAG->allnodes_end();
 
   bool MadeChange = false;
   while (Position != CurDAG->allnodes_begin()) {
@@ -3644,11 +5209,11 @@ void PPCDAGToDAGISel::PreprocessISelDAG() {
       foldBoolExts(Res, N);
 
     if (Res) {
-      DEBUG(dbgs() << "PPC DAG preprocessing replacing:\nOld:    ");
-      DEBUG(N->dump(CurDAG));
-      DEBUG(dbgs() << "\nNew: ");
-      DEBUG(Res.getNode()->dump(CurDAG));
-      DEBUG(dbgs() << "\n");
+      LLVM_DEBUG(dbgs() << "PPC DAG preprocessing replacing:\nOld:    ");
+      LLVM_DEBUG(N->dump(CurDAG));
+      LLVM_DEBUG(dbgs() << "\nNew: ");
+      LLVM_DEBUG(Res.getNode()->dump(CurDAG));
+      LLVM_DEBUG(dbgs() << "\n");
 
       CurDAG->ReplaceAllUsesOfValueWith(SDValue(N, 0), Res);
       MadeChange = true;
@@ -3725,13 +5290,13 @@ void PPCDAGToDAGISel::SwapAllSelectUsers(SDNode *N) {
                              User->getOperand(2),
                              User->getOperand(1));
 
-      DEBUG(dbgs() << "CR Peephole replacing:\nOld:    ");
-      DEBUG(User->dump(CurDAG));
-      DEBUG(dbgs() << "\nNew: ");
-      DEBUG(ResNode->dump(CurDAG));
-      DEBUG(dbgs() << "\n");
+    LLVM_DEBUG(dbgs() << "CR Peephole replacing:\nOld:    ");
+    LLVM_DEBUG(User->dump(CurDAG));
+    LLVM_DEBUG(dbgs() << "\nNew: ");
+    LLVM_DEBUG(ResNode->dump(CurDAG));
+    LLVM_DEBUG(dbgs() << "\n");
 
-      ReplaceUses(User, ResNode);
+    ReplaceUses(User, ResNode);
   }
 }
 
@@ -4139,11 +5704,11 @@ void PPCDAGToDAGISel::PeepholeCROps() {
         SwapAllSelectUsers(MachineNode);
 
       if (ResNode != MachineNode) {
-        DEBUG(dbgs() << "CR Peephole replacing:\nOld:    ");
-        DEBUG(MachineNode->dump(CurDAG));
-        DEBUG(dbgs() << "\nNew: ");
-        DEBUG(ResNode->dump(CurDAG));
-        DEBUG(dbgs() << "\n");
+        LLVM_DEBUG(dbgs() << "CR Peephole replacing:\nOld:    ");
+        LLVM_DEBUG(MachineNode->dump(CurDAG));
+        LLVM_DEBUG(dbgs() << "\nNew: ");
+        LLVM_DEBUG(ResNode->dump(CurDAG));
+        LLVM_DEBUG(dbgs() << "\n");
 
         ReplaceUses(MachineNode, ResNode);
         IsModified = true;
@@ -4312,8 +5877,7 @@ void PPCDAGToDAGISel::PeepholePPC64ZExt() {
   // unnecessary. When that happens, we remove it here, and redefine the
   // relevant 32-bit operation to be a 64-bit operation.
 
-  SelectionDAG::allnodes_iterator Position(CurDAG->getRoot().getNode());
-  ++Position;
+  SelectionDAG::allnodes_iterator Position = CurDAG->allnodes_end();
 
   bool MadeChange = false;
   while (Position != CurDAG->allnodes_begin()) {
@@ -4438,25 +6002,25 @@ void PPCDAGToDAGISel::PeepholePPC64ZExt() {
         else
           NewVTs.push_back(VTs.VTs[i]);
 
-      DEBUG(dbgs() << "PPC64 ZExt Peephole morphing:\nOld:    ");
-      DEBUG(PN->dump(CurDAG));
+      LLVM_DEBUG(dbgs() << "PPC64 ZExt Peephole morphing:\nOld:    ");
+      LLVM_DEBUG(PN->dump(CurDAG));
 
       CurDAG->SelectNodeTo(PN, NewOpcode, CurDAG->getVTList(NewVTs), Ops);
 
-      DEBUG(dbgs() << "\nNew: ");
-      DEBUG(PN->dump(CurDAG));
-      DEBUG(dbgs() << "\n");
+      LLVM_DEBUG(dbgs() << "\nNew: ");
+      LLVM_DEBUG(PN->dump(CurDAG));
+      LLVM_DEBUG(dbgs() << "\n");
     }
 
     // Now we replace the original zero extend and its associated INSERT_SUBREG
     // with the value feeding the INSERT_SUBREG (which has now been promoted to
     // return an i64).
 
-    DEBUG(dbgs() << "PPC64 ZExt Peephole replacing:\nOld:    ");
-    DEBUG(N->dump(CurDAG));
-    DEBUG(dbgs() << "\nNew: ");
-    DEBUG(Op32.getNode()->dump(CurDAG));
-    DEBUG(dbgs() << "\n");
+    LLVM_DEBUG(dbgs() << "PPC64 ZExt Peephole replacing:\nOld:    ");
+    LLVM_DEBUG(N->dump(CurDAG));
+    LLVM_DEBUG(dbgs() << "\nNew: ");
+    LLVM_DEBUG(Op32.getNode()->dump(CurDAG));
+    LLVM_DEBUG(dbgs() << "\n");
 
     ReplaceUses(N, Op32.getNode());
   }
@@ -4470,8 +6034,7 @@ void PPCDAGToDAGISel::PeepholePPC64() {
   if (PPCSubTarget->isDarwin() || !PPCSubTarget->isPPC64())
     return;
 
-  SelectionDAG::allnodes_iterator Position(CurDAG->getRoot().getNode());
-  ++Position;
+  SelectionDAG::allnodes_iterator Position = CurDAG->allnodes_end();
 
   while (Position != CurDAG->allnodes_begin()) {
     SDNode *N = &*--Position;
@@ -4481,28 +6044,37 @@ void PPCDAGToDAGISel::PeepholePPC64() {
 
     unsigned FirstOp;
     unsigned StorageOpcode = N->getMachineOpcode();
+    bool RequiresMod4Offset = false;
 
     switch (StorageOpcode) {
     default: continue;
 
+    case PPC::LWA:
+    case PPC::LD:
+    case PPC::DFLOADf64:
+    case PPC::DFLOADf32:
+      RequiresMod4Offset = true;
+      LLVM_FALLTHROUGH;
     case PPC::LBZ:
     case PPC::LBZ8:
-    case PPC::LD:
     case PPC::LFD:
     case PPC::LFS:
     case PPC::LHA:
     case PPC::LHA8:
     case PPC::LHZ:
     case PPC::LHZ8:
-    case PPC::LWA:
     case PPC::LWZ:
     case PPC::LWZ8:
       FirstOp = 0;
       break;
 
+    case PPC::STD:
+    case PPC::DFSTOREf64:
+    case PPC::DFSTOREf32:
+      RequiresMod4Offset = true;
+      LLVM_FALLTHROUGH;
     case PPC::STB:
     case PPC::STB8:
-    case PPC::STD:
     case PPC::STFD:
     case PPC::STFS:
     case PPC::STH:
@@ -4549,9 +6121,7 @@ void PPCDAGToDAGISel::PeepholePPC64() {
       // For these cases, the immediate may not be divisible by 4, in
       // which case the fold is illegal for DS-form instructions.  (The
       // other cases provide aligned addresses and are always safe.)
-      if ((StorageOpcode == PPC::LWA ||
-           StorageOpcode == PPC::LD  ||
-           StorageOpcode == PPC::STD) &&
+      if (RequiresMod4Offset &&
           (!isa<ConstantSDNode>(Base.getOperand(1)) ||
            Base.getConstantOperandVal(1) % 4 != 0))
         continue;
@@ -4613,8 +6183,7 @@ void PPCDAGToDAGISel::PeepholePPC64() {
       if (auto *C = dyn_cast<ConstantSDNode>(ImmOpnd)) {
         Offset += C->getSExtValue();
 
-        if ((StorageOpcode == PPC::LWA || StorageOpcode == PPC::LD ||
-             StorageOpcode == PPC::STD) && (Offset % 4) != 0)
+        if (RequiresMod4Offset && (Offset % 4) != 0)
           continue;
 
         if (!isInt<16>(Offset))
@@ -4631,11 +6200,11 @@ void PPCDAGToDAGISel::PeepholePPC64() {
     // immediate and substitute them into the load or store.  If
     // needed, update the target flags for the immediate operand to
     // reflect the necessary relocation information.
-    DEBUG(dbgs() << "Folding add-immediate into mem-op:\nBase:    ");
-    DEBUG(Base->dump(CurDAG));
-    DEBUG(dbgs() << "\nN: ");
-    DEBUG(N->dump(CurDAG));
-    DEBUG(dbgs() << "\n");
+    LLVM_DEBUG(dbgs() << "Folding add-immediate into mem-op:\nBase:    ");
+    LLVM_DEBUG(Base->dump(CurDAG));
+    LLVM_DEBUG(dbgs() << "\nN: ");
+    LLVM_DEBUG(N->dump(CurDAG));
+    LLVM_DEBUG(dbgs() << "\n");
 
     // If the relocation information isn't already present on the
     // immediate operand, add it now.
@@ -4646,9 +6215,8 @@ void PPCDAGToDAGISel::PeepholePPC64() {
         // We can't perform this optimization for data whose alignment
         // is insufficient for the instruction encoding.
         if (GV->getAlignment() < 4 &&
-            (StorageOpcode == PPC::LD || StorageOpcode == PPC::STD ||
-             StorageOpcode == PPC::LWA || (Offset % 4) != 0)) {
-          DEBUG(dbgs() << "Rejected this candidate for alignment.\n\n");
+            (RequiresMod4Offset || (Offset % 4) != 0)) {
+          LLVM_DEBUG(dbgs() << "Rejected this candidate for alignment.\n\n");
           continue;
         }
         ImmOpnd = CurDAG->getTargetGlobalAddress(GV, dl, MVT::i64, Offset, Flags);

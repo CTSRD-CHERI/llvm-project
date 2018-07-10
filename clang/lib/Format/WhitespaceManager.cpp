@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief This file implements WhitespaceManager class.
+/// This file implements WhitespaceManager class.
 ///
 //===----------------------------------------------------------------------===//
 
@@ -67,6 +67,11 @@ void WhitespaceManager::addUntouchableToken(const FormatToken &Tok,
                            /*IsInsideToken=*/false));
 }
 
+llvm::Error
+WhitespaceManager::addReplacement(const tooling::Replacement &Replacement) {
+  return Replaces.add(Replacement);
+}
+
 void WhitespaceManager::replaceWhitespaceInToken(
     const FormatToken &Tok, unsigned Offset, unsigned ReplaceChars,
     StringRef PreviousPostfix, StringRef CurrentPrefix, bool InPPDirective,
@@ -85,7 +90,7 @@ const tooling::Replacements &WhitespaceManager::generateReplacements() {
   if (Changes.empty())
     return Replaces;
 
-  std::sort(Changes.begin(), Changes.end(), Change::IsBeforeInFile(SourceMgr));
+  llvm::sort(Changes.begin(), Changes.end(), Change::IsBeforeInFile(SourceMgr));
   calculateLineBreakInformation();
   alignConsecutiveDeclarations();
   alignConsecutiveAssignments();

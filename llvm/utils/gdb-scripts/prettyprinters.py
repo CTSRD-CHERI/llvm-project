@@ -20,7 +20,7 @@ class StringRefPrinter:
     self.val = val
 
   def to_string(self):
-    return self.val['Data'].string(length =  self.val['Length'])
+    return self.val['Data'].string(encoding='Latin-1', length=self.val['Length'])
 
   def display_hint (self):
     return 'string'
@@ -124,12 +124,13 @@ class OptionalPrinter:
       return ('value', self.member.dereference())
 
   def children(self):
-    if not self.value['hasVal']:
+    if not self.value['Storage']['hasVal']:
       return self._iterator('', True)
-    return self._iterator(self.value['storage']['buffer'].address.cast(self.value.type.template_argument(0).pointer()), False)
+    return self._iterator(self.value['Storage']['storage']['buffer'].address.cast(
+        self.value.type.template_argument(0).pointer()), False)
 
   def to_string(self):
-    return 'llvm::Optional is %sinitialized' % ('' if self.value['hasVal'] else 'not ')
+    return 'llvm::Optional is %sinitialized' % ('' if self.value['Storage']['hasVal'] else 'not ')
 
 class DenseMapPrinter:
   "Print a DenseMap"

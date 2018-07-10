@@ -1,7 +1,7 @@
 // REQUIRES: aarch64
 // RUN: llvm-mc -filetype=obj -triple=aarch64-none-linux %s -o %t
 // RUN: not ld.lld %t -o %t2 2>&1 | FileCheck %s
-        
+
 // Test derived from a typical ODR violation where a global is declared
 // extern int but defined as a half or byte sized type.
  .section .text
@@ -39,7 +39,7 @@ foo4:
 foo8:
  .space 8
 
-// CHECK: improper alignment for relocation R_AARCH64_LDST16_ABS_LO12_NC
-// CHECK-NEXT: improper alignment for relocation R_AARCH64_LDST32_ABS_LO12_NC
-// CHECK-NEXT: improper alignment for relocation R_AARCH64_LDST64_ABS_LO12_NC
-// CHECK-NEXT: improper alignment for relocation R_AARCH64_LDST128_ABS_LO12_NC
+// CHECK: improper alignment for relocation R_AARCH64_LDST16_ABS_LO12_NC: 0x30001 is not aligned to 2 bytes
+// CHECK-NEXT: improper alignment for relocation R_AARCH64_LDST32_ABS_LO12_NC: 0x30002 is not aligned to 4 bytes
+// CHECK-NEXT: improper alignment for relocation R_AARCH64_LDST64_ABS_LO12_NC: 0x30004 is not aligned to 8 bytes
+// CHECK-NEXT: improper alignment for relocation R_AARCH64_LDST128_ABS_LO12_NC: 0x30008 is not aligned to 16 bytes

@@ -21,9 +21,9 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/CodeGen/ISDOpcodes.h"
-#include "llvm/CodeGen/MachineValueType.h"
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
+#include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/DebugLoc.h"
@@ -32,7 +32,7 @@
 #include "llvm/Support/BranchProbability.h"
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/ErrorHandling.h"
-#include "llvm/Target/TargetLowering.h"
+#include "llvm/Support/MachineValueType.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
@@ -116,9 +116,12 @@ class SelectionDAGBuilder {
     unsigned getSDNodeOrder() { return SDNodeOrder; }
   };
 
+  /// DanglingDebugInfoVector - Helper type for DanglingDebugInfoMap.
+  typedef std::vector<DanglingDebugInfo> DanglingDebugInfoVector;
+
   /// DanglingDebugInfoMap - Keeps track of dbg_values for which we have not
   /// yet seen the referent.  We defer handling these until we do see it.
-  DenseMap<const Value*, DanglingDebugInfo> DanglingDebugInfoMap;
+  DenseMap<const Value*, DanglingDebugInfoVector> DanglingDebugInfoMap;
 
 public:
   /// PendingLoads - Loads are not emitted to the program immediately.  We bunch
@@ -369,6 +372,10 @@ private:
                      MachineBasicBlock *SwitchMBB,
                      MachineBasicBlock *DefaultMBB);
 
+  /// Peel the top probability case if it exceeds the threshold
+  MachineBasicBlock *peelDominantCaseCluster(const SwitchInst &SI,
+                                             CaseClusterVector &Clusters,
+                                             BranchProbability &PeeledCaseProb);
 
   /// A class which encapsulates all of the information needed to generate a
   /// stack protector check and signals to isel via its state being initialized
@@ -667,12 +674,25 @@ public:
   /// emit CopyFromReg of the specified type Ty. Return empty SDValue() otherwise.
   SDValue getCopyFromRegs(const Value *V, Type *Ty);
 
+  /// If we have dangling debug info that describes \p Variable, or an
+  /// overlapping part of variable considering the \p Expr, then this method
+  /// weill drop that debug info as it isn't valid any longer.
+  void dropDanglingDebugInfo(const DILocalVariable *Variable,
+                             const DIExpression *Expr);
+
   // resolveDanglingDebugInfo - if we saw an earlier dbg_value referring to V,
   // generate the debug data structures now that we've seen its definition.
   void resolveDanglingDebugInfo(const Value *V, SDValue Val);
 
   SDValue getValue(const Value *V);
   bool findValue(const Value *V) const;
+
+  /// Return the SDNode for the specified IR value if it exists.
+  SDNode *getNodeForIRValue(const Value *V) {
+    if (NodeMap.find(V) == NodeMap.end())
+      return nullptr;
+    return NodeMap[V].getNode();
+  }
 
   SDValue getNonRegisterValue(const Value *V);
   SDValue getValueImpl(const Value *V);
@@ -834,7 +854,7 @@ private:
   void visitInvoke(const InvokeInst &I);
   void visitResume(const ResumeInst &I);
 
-  void visitBinary(const User &I, unsigned OpCode);
+  void visitBinary(const User &I, unsigned Opcode);
   void visitShift(const User &I, unsigned Opcode);
   void visitAdd(const User &I)  { visitBinary(I, ISD::ADD); }
   void visitFAdd(const User &I) { visitBinary(I, ISD::FADD); }
@@ -1035,6 +1055,14 @@ struct RegsForValue {
   void AddInlineAsmOperands(unsigned Kind, bool HasMatching,
                             unsigned MatchingIdx, const SDLoc &dl,
                             SelectionDAG &DAG, std::vector<SDValue> &Ops) const;
+
+  /// Check if the total RegCount is greater than one.
+  bool occupiesMultipleRegs() const {
+    return std::accumulate(RegCount.begin(), RegCount.end(), 0) > 1;
+  }
+
+  /// Return a list of registers and their sizes.
+  SmallVector<std::pair<unsigned, unsigned>, 4> getRegsAndSizes() const;
 };
 
 } // end namespace llvm

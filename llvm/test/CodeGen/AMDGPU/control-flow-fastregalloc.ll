@@ -1,5 +1,5 @@
-; RUN: llc -O0 -mtriple=amdgcn--amdhsa -march=amdgcn -amdgpu-spill-sgpr-to-vgpr=0 -verify-machineinstrs < %s | FileCheck -check-prefix=VMEM -check-prefix=GCN %s
-; RUN: llc -O0 -mtriple=amdgcn--amdhsa -march=amdgcn -amdgpu-spill-sgpr-to-vgpr=1 -verify-machineinstrs < %s | FileCheck -check-prefix=VGPR -check-prefix=GCN %s
+; RUN: llc -O0 -mtriple=amdgcn--amdhsa -march=amdgcn -amdgpu-spill-sgpr-to-vgpr=0 -verify-machineinstrs < %s | FileCheck -enable-var-scope -check-prefix=VMEM -check-prefix=GCN %s
+; RUN: llc -O0 -mtriple=amdgcn--amdhsa -march=amdgcn -amdgpu-spill-sgpr-to-vgpr=1 -verify-machineinstrs < %s | FileCheck -enable-var-scope -check-prefix=VGPR -check-prefix=GCN %s
 
 ; Verify registers used for tracking exec mask changes when all
 ; registers are spilled at the end of the block. The SGPR spill
@@ -13,7 +13,7 @@
 ; VGPR: workitem_private_segment_byte_size = 12{{$}}
 
 
-; GCN: {{^}}; BB#0:
+; GCN: {{^}}; %bb.0:
 ; GCN: s_mov_b32 m0, -1
 ; GCN: ds_read_b32 [[LOAD0:v[0-9]+]]
 
@@ -41,16 +41,17 @@
 ; GCN: {{^}}BB{{[0-9]+}}_1: ; %if
 ; GCN: s_mov_b32 m0, -1
 ; GCN: ds_read_b32 [[LOAD1:v[0-9]+]]
-; GCN: s_waitcnt lgkmcnt(0)
 ; GCN: buffer_load_dword [[RELOAD_LOAD0:v[0-9]+]], off, s[0:3], s7 offset:[[LOAD0_OFFSET]] ; 4-byte Folded Reload
+; GCN: s_waitcnt vmcnt(0) lgkmcnt(0)
+
 
 ; Spill val register
 ; GCN: v_add_i32_e32 [[VAL:v[0-9]+]], vcc, [[LOAD1]], [[RELOAD_LOAD0]]
 ; GCN: buffer_store_dword [[VAL]], off, s[0:3], s7 offset:[[VAL_OFFSET:[0-9]+]] ; 4-byte Folded Spill
 
 ; VMEM: [[ENDIF]]:
+
 ; Reload and restore exec mask
-; VGPR: s_waitcnt lgkmcnt(0)
 ; VGPR: v_readlane_b32 s[[S_RELOAD_SAVEEXEC_LO:[0-9]+]], [[SPILL_VGPR]], [[SAVEEXEC_LO_LANE]]
 ; VGPR: v_readlane_b32 s[[S_RELOAD_SAVEEXEC_HI:[0-9]+]], [[SPILL_VGPR]], [[SAVEEXEC_HI_LANE]]
 
@@ -91,7 +92,7 @@ endif:
 ; GCN-LABEL: {{^}}divergent_loop:
 ; VGPR: workitem_private_segment_byte_size = 16{{$}}
 
-; GCN: {{^}}; BB#0:
+; GCN: {{^}}; %bb.0:
 
 ; GCN: s_mov_b32 m0, -1
 ; GCN: ds_read_b32 [[LOAD0:v[0-9]+]]
@@ -168,10 +169,10 @@ end:
 }
 
 ; GCN-LABEL: {{^}}divergent_if_else_endif:
-; GCN: {{^}}; BB#0:
+; GCN: {{^}}; %bb.0:
 
 ; GCN: s_mov_b32 m0, -1
-; VMEM: ds_read_b32 [[LOAD0:v[0-9]+]]
+; GCN: ds_read_b32 [[LOAD0:v[0-9]+]]
 
 ; GCN: v_cmp_ne_u32_e64 [[CMP0:s\[[0-9]+:[0-9]\]]], v0,
 

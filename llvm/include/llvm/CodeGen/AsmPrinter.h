@@ -50,6 +50,7 @@ class GlobalValue;
 class GlobalVariable;
 class MachineBasicBlock;
 class MachineConstantPoolValue;
+class MachineDominatorTree;
 class MachineFunction;
 class MachineInstr;
 class MachineJumpTableInfo;
@@ -58,6 +59,7 @@ class MachineModuleInfo;
 class MachineOptimizationRemarkEmitter;
 class MCAsmInfo;
 class MCCFIInstruction;
+struct MCCodePaddingContext;
 class MCContext;
 class MCExpr;
 class MCInst;
@@ -91,10 +93,16 @@ public:
   std::unique_ptr<MCStreamer> OutStreamer;
 
   /// The current machine function.
-  const MachineFunction *MF = nullptr;
+  MachineFunction *MF = nullptr;
 
   /// This is a pointer to the current MachineModuleInfo.
   MachineModuleInfo *MMI = nullptr;
+
+  /// This is a pointer to the current MachineLoopInfo.
+  MachineDominatorTree *MDT = nullptr;
+
+  /// This is a pointer to the current MachineLoopInfo.
+  MachineLoopInfo *MLI = nullptr;
 
   /// Optimization remark emitter.
   MachineOptimizationRemarkEmitter *ORE;
@@ -113,7 +121,7 @@ public:
   using GOTEquivUsePair = std::pair<const GlobalVariable *, unsigned>;
   MapVector<const MCSymbol *, GOTEquivUsePair> GlobalGOTEquivs;
 
-  /// Enable print [latency:throughput] in output
+  /// Enable print [latency:throughput] in output.
   bool EnablePrintSchedInfo = false;
 
 private:
@@ -128,9 +136,6 @@ private:
   bool VerboseAsm;
 
   static char ID;
-
-  /// If VerboseAsm is set, a pointer to the loop info for this function.
-  MachineLoopInfo *LI = nullptr;
 
   struct HandlerInfo {
     AsmPrinterHandler *Handler;
@@ -160,6 +165,12 @@ public:
   };
 
 private:
+  /// If generated on the fly this own the instance.
+  std::unique_ptr<MachineDominatorTree> OwnedMDT;
+
+  /// If generated on the fly this own the instance.
+  std::unique_ptr<MachineLoopInfo> OwnedMLI;
+
   /// Structure for generating diagnostics for inline assembly. Only initialised
   /// when necessary.
   mutable std::unique_ptr<SrcMgrDiagInfo> DiagInfo;
@@ -227,6 +238,7 @@ public:
     TAIL_CALL = 2,
     LOG_ARGS_ENTER = 3,
     CUSTOM_EVENT = 4,
+    TYPED_EVENT = 5,
   };
 
   // The table will contain these structs that point to the sled, the function
@@ -294,6 +306,8 @@ public:
 
   void emitFrameAlloc(const MachineInstr &MI);
 
+  void emitStackSizeSection(const MachineFunction &MF);
+
   enum CFIMoveType { CFI_M_None, CFI_M_EH, CFI_M_Debug };
   CFIMoveType needsCFIMoves() const;
 
@@ -329,10 +343,10 @@ public:
   /// Lower the specified LLVM Constant to an MCExpr.
   virtual const MCExpr *lowerConstant(const Constant *CV);
 
-  /// \brief Print a general LLVM constant to the .s file.
+  /// Print a general LLVM constant to the .s file.
   void EmitGlobalConstant(const DataLayout &DL, const Constant *CV);
 
-  /// \brief Unnamed constant global variables solely contaning a pointer to
+  /// Unnamed constant global variables solely contaning a pointer to
   /// another globals variable act like a global variable "proxy", or GOT
   /// equivalents, i.e., it's only used to hold the address of the latter. One
   /// optimization is to replace accesses to these proxies by using the GOT
@@ -342,7 +356,7 @@ public:
   /// accesses to GOT entries.
   void computeGlobalGOTEquivs(Module &M);
 
-  /// \brief Constant expressions using GOT equivalent globals may not be
+  /// Constant expressions using GOT equivalent globals may not be
   /// eligible for PC relative GOT entry conversion, in such cases we need to
   /// emit the proxies we previously omitted in EmitGlobalVariable.
   void emitGlobalGOTEquivs();
@@ -377,7 +391,7 @@ public:
   virtual void EmitBasicBlockStart(const MachineBasicBlock &MBB) const;
 
   /// Targets can override this to emit stuff at the end of a basic block.
-  virtual void EmitBasicBlockEnd(const MachineBasicBlock &MBB) {}
+  virtual void EmitBasicBlockEnd(const MachineBasicBlock &MBB);
 
   /// Targets should implement this to emit instructions.
   virtual void EmitInstruction(const MachineInstr *) {
@@ -441,19 +455,26 @@ public:
   void printOffset(int64_t Offset, raw_ostream &OS) const;
 
   /// Emit a byte directive and value.
-  void EmitInt8(int Value) const;
+  void emitInt8(int Value) const;
 
   /// Emit a short directive and value.
-  void EmitInt16(int Value) const;
+  void emitInt16(int Value) const;
 
   /// Emit a long directive and value.
-  void EmitInt32(int Value) const;
+  void emitInt32(int Value) const;
+
+  /// Emit a long long directive and value.
+  void emitInt64(uint64_t Value) const;
 
   /// Emit something like ".long Hi-Lo" where the size in bytes of the directive
   /// is specified by Size and Hi/Lo specify the labels.  This implicitly uses
   /// .set if it is available.
   void EmitLabelDifference(const MCSymbol *Hi, const MCSymbol *Lo,
                            unsigned Size) const;
+
+  /// Emit something like ".uleb128 Hi-Lo".
+  void EmitLabelDifferenceAsULEB128(const MCSymbol *Hi,
+                                    const MCSymbol *Lo) const;
 
   /// Emit something like ".long Label+Offset" where the size in bytes of the
   /// directive is specified by Size and Label specifies the label.  This
@@ -468,6 +489,9 @@ public:
     EmitLabelPlusOffset(Label, 0, Size, IsSectionRelative);
   }
 
+  /// Emit something like ".long Label + Offset".
+  void EmitDwarfOffset(const MCSymbol *Label, uint64_t Offset) const;
+
   //===------------------------------------------------------------------===//
   // Dwarf Emission Helper Routines
   //===------------------------------------------------------------------===//
@@ -477,11 +501,6 @@ public:
 
   /// Emit the specified unsigned leb128 value.
   void EmitULEB128(uint64_t Value, const char *Desc = nullptr) const;
-
-  /// Emit the specified unsigned leb128 value padded to a specific number
-  /// bytes
-  void EmitPaddedULEB128(uint64_t Value, unsigned PadTo,
-                         const char *Desc = nullptr) const;
 
   /// Emit a .byte 42 directive that corresponds to an encoding.  If verbose
   /// assembly output is enabled, we output comments describing the encoding.
@@ -505,7 +524,12 @@ public:
   /// When possible, emit a DwarfStringPool section offset without any
   /// relocations, and without using the symbol.  Otherwise, defers to \a
   /// emitDwarfSymbolReference().
-  void emitDwarfStringOffset(DwarfStringPoolEntryRef S) const;
+  void emitDwarfStringOffset(DwarfStringPoolEntry S) const;
+
+  /// Emit the 4-byte offset of a string from the start of its section.
+  void emitDwarfStringOffset(DwarfStringPoolEntryRef S) const {
+    emitDwarfStringOffset(S.getEntry());
+  }
 
   /// Get the value for DW_AT_APPLE_isa. Zero if no isa encoding specified.
   virtual unsigned getISAEncoding() { return 0; }
@@ -520,10 +544,10 @@ public:
   // Dwarf Lowering Routines
   //===------------------------------------------------------------------===//
 
-  /// \brief Emit frame instruction to describe the layout of the frame.
+  /// Emit frame instruction to describe the layout of the frame.
   void emitCFIInstruction(const MCCFIInstruction &Inst) const;
 
-  /// \brief Emit Dwarf abbreviation table.
+  /// Emit Dwarf abbreviation table.
   template <typename T> void emitDwarfAbbrevs(const T &Abbrevs) const {
     // For each abbreviation.
     for (const auto &Abbrev : Abbrevs)
@@ -535,7 +559,7 @@ public:
 
   void emitDwarfAbbrev(const DIEAbbrev &Abbrev) const;
 
-  /// \brief Recursively emit Dwarf DIE tree.
+  /// Recursively emit Dwarf DIE tree.
   void emitDwarfDIE(const DIE &Die) const;
 
   //===------------------------------------------------------------------===//
@@ -624,8 +648,9 @@ private:
 
   GCMetadataPrinter *GetOrCreateGCPrinter(GCStrategy &C);
   /// Emit GlobalAlias or GlobalIFunc.
-  void emitGlobalIndirectSymbol(Module &M,
-                                const GlobalIndirectSymbol& GIS);
+  void emitGlobalIndirectSymbol(Module &M, const GlobalIndirectSymbol &GIS);
+  void setupCodePaddingContext(const MachineBasicBlock &MBB,
+                               MCCodePaddingContext &Context) const;
 };
 
 } // end namespace llvm

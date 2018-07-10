@@ -15,10 +15,10 @@
 
 // explicit directory_iterator(const path& p);
 // directory_iterator(const path& p, directory_options options);
-// directory_iterator(const path& p, error_code& ec) noexcept;
-// directory_iterator(const path& p, directory_options options, error_code& ec) noexcept;
+// directory_iterator(const path& p, error_code& ec);
+// directory_iterator(const path& p, directory_options options, error_code& ec);
 
-#include <experimental/filesystem>
+#include "filesystem_include.hpp"
 #include <type_traits>
 #include <set>
 #include <cassert>
@@ -27,7 +27,7 @@
 #include "rapid-cxx-test.hpp"
 #include "filesystem_test_helper.hpp"
 
-using namespace std::experimental::filesystem;
+using namespace fs;
 
 TEST_SUITE(directory_iterator_constructor_tests)
 
@@ -40,15 +40,22 @@ TEST_CASE(test_constructor_signatures)
     static_assert(std::is_constructible<D, path>::value, "");
     static_assert(!std::is_nothrow_constructible<D, path>::value, "");
 
-    // directory_iterator(path const&, error_code&) noexcept
-    static_assert(std::is_nothrow_constructible<D, path, std::error_code&>::value, "");
+    // directory_iterator(path const&, error_code&)
+    static_assert(std::is_constructible<D, path,
+        std::error_code&>::value, "");
+    static_assert(!std::is_nothrow_constructible<D, path,
+        std::error_code&>::value, "");
 
     // directory_iterator(path const&, directory_options);
     static_assert(std::is_constructible<D, path, directory_options>::value, "");
     static_assert(!std::is_nothrow_constructible<D, path, directory_options>::value, "");
 
-    // directory_iterator(path const&, directory_options, error_code&) noexcept
-    static_assert(std::is_nothrow_constructible<D, path, directory_options, std::error_code&>::value, "");
+    // directory_iterator(path const&, directory_options, error_code&)
+    static_assert(std::is_constructible<D, path, directory_options,
+        std::error_code&>::value, "");
+    static_assert(!std::is_nothrow_constructible<D, path, directory_options,
+        std::error_code&>::value, "");
+
 }
 
 TEST_CASE(test_construction_from_bad_path)
@@ -79,7 +86,7 @@ TEST_CASE(test_construction_from_bad_path)
 
 TEST_CASE(access_denied_test_case)
 {
-    using namespace std::experimental::filesystem;
+    using namespace fs;
     scoped_test_env env;
     path const testDir = env.make_env_path("dir1");
     path const testFile = testDir / "testFile";
@@ -115,7 +122,7 @@ TEST_CASE(access_denied_test_case)
 
 TEST_CASE(access_denied_to_file_test_case)
 {
-    using namespace std::experimental::filesystem;
+    using namespace fs;
     scoped_test_env env;
     path const testFile = env.make_env_path("file1");
     env.create_file(testFile, 42);

@@ -45,7 +45,6 @@ namespace clang {
   class ColonProtectionRAIIObject;
   class InMessageExpressionRAIIObject;
   class PoisonSEHIdentifiersRAIIObject;
-  class VersionTuple;
   class OMPClause;
   class ObjCTypeParamList;
   class ObjCTypeParameter;
@@ -121,25 +120,25 @@ class Parser : public CodeCompletionHandler {
   /// Objective-C contextual keywords.
   mutable IdentifierInfo *Ident_instancetype;
 
-  /// \brief Identifier for "introduced".
+  /// Identifier for "introduced".
   IdentifierInfo *Ident_introduced;
 
-  /// \brief Identifier for "deprecated".
+  /// Identifier for "deprecated".
   IdentifierInfo *Ident_deprecated;
 
-  /// \brief Identifier for "obsoleted".
+  /// Identifier for "obsoleted".
   IdentifierInfo *Ident_obsoleted;
 
-  /// \brief Identifier for "unavailable".
+  /// Identifier for "unavailable".
   IdentifierInfo *Ident_unavailable;
   
-  /// \brief Identifier for "message".
+  /// Identifier for "message".
   IdentifierInfo *Ident_message;
 
-  /// \brief Identifier for "strict".
+  /// Identifier for "strict".
   IdentifierInfo *Ident_strict;
 
-  /// \brief Identifier for "replacement".
+  /// Identifier for "replacement".
   IdentifierInfo *Ident_replacement;
 
   /// Identifiers used by the 'external_source_symbol' attribute.
@@ -180,6 +179,7 @@ class Parser : public CodeCompletionHandler {
   std::unique_ptr<PragmaHandler> MSSection;
   std::unique_ptr<PragmaHandler> MSRuntimeChecks;
   std::unique_ptr<PragmaHandler> MSIntrinsic;
+  std::unique_ptr<PragmaHandler> MSOptimize;
   std::unique_ptr<PragmaHandler> CUDAForceHostDeviceHandler;
   std::unique_ptr<PragmaHandler> OptimizeHandler;
   std::unique_ptr<PragmaHandler> PointerInterpretationHandler;
@@ -187,6 +187,9 @@ class Parser : public CodeCompletionHandler {
   std::unique_ptr<PragmaHandler> UnrollHintHandler;
   std::unique_ptr<PragmaHandler> NoUnrollHintHandler;
   std::unique_ptr<PragmaHandler> FPHandler;
+  std::unique_ptr<PragmaHandler> STDCFENVHandler;
+  std::unique_ptr<PragmaHandler> STDCCXLIMITHandler;
+  std::unique_ptr<PragmaHandler> STDCUnknownHandler;
   std::unique_ptr<PragmaHandler> AttributePragmaHandler;
 
   std::unique_ptr<CommentHandler> CommentSemaHandler;
@@ -203,7 +206,7 @@ class Parser : public CodeCompletionHandler {
   /// ColonProtectionRAIIObject RAII object.
   bool ColonIsSacred;
 
-  /// \brief When true, we are directly inside an Objective-C message
+  /// When true, we are directly inside an Objective-C message
   /// send expression.
   ///
   /// This is managed by the \c InMessageExpressionRAIIObject class, and
@@ -213,7 +216,7 @@ class Parser : public CodeCompletionHandler {
   /// The "depth" of the template parameters currently being parsed.
   unsigned TemplateParameterDepth;
 
-  /// \brief RAII class that manages the template parameter depth.
+  /// RAII class that manages the template parameter depth.
   class TemplateParameterDepthRAII {
     unsigned &Depth;
     unsigned AddedLevels;
@@ -239,11 +242,11 @@ class Parser : public CodeCompletionHandler {
   /// Factory object for creating AttributeList objects.
   AttributeFactory AttrFactory;
 
-  /// \brief Gathers and cleans up TemplateIdAnnotations when parsing of a
+  /// Gathers and cleans up TemplateIdAnnotations when parsing of a
   /// top-level declaration is finished.
   SmallVector<TemplateIdAnnotation *, 16> TemplateIds;
 
-  /// \brief Identifiers which have been declared within a tentative parse.
+  /// Identifiers which have been declared within a tentative parse.
   SmallVector<IdentifierInfo *, 8> TentativelyDeclaredIdentifiers;
 
   IdentifierInfo *getSEHExceptKeyword();
@@ -340,56 +343,6 @@ public:
     return true;
   }
 
-  SourceLocation getEndOfPreviousToken() {
-    return PP.getLocForEndOfToken(PrevTokLocation);
-  }
-
-  /// Retrieve the underscored keyword (_Nonnull, _Nullable) that corresponds
-  /// to the given nullability kind.
-  IdentifierInfo *getNullabilityKeyword(NullabilityKind nullability) {
-    return Actions.getNullabilityKeyword(nullability);
-  }
-
-private:
-  //===--------------------------------------------------------------------===//
-  // Low-Level token peeking and consumption methods.
-  //
-
-  /// isTokenParen - Return true if the cur token is '(' or ')'.
-  bool isTokenParen() const {
-    return Tok.getKind() == tok::l_paren || Tok.getKind() == tok::r_paren;
-  }
-  /// isTokenBracket - Return true if the cur token is '[' or ']'.
-  bool isTokenBracket() const {
-    return Tok.getKind() == tok::l_square || Tok.getKind() == tok::r_square;
-  }
-  /// isTokenBrace - Return true if the cur token is '{' or '}'.
-  bool isTokenBrace() const {
-    return Tok.getKind() == tok::l_brace || Tok.getKind() == tok::r_brace;
-  }
-  /// isTokenStringLiteral - True if this token is a string-literal.
-  bool isTokenStringLiteral() const {
-    return tok::isStringLiteral(Tok.getKind());
-  }
-  /// isTokenSpecial - True if this token requires special consumption methods.
-  bool isTokenSpecial() const {
-    return isTokenStringLiteral() || isTokenParen() || isTokenBracket() ||
-           isTokenBrace() || Tok.is(tok::code_completion) || Tok.isAnnotation();
-  }
-
-  /// \brief Returns true if the current token is '=' or is a type of '='.
-  /// For typos, give a fixit to '='
-  bool isTokenEqualOrEqualTypo();
-
-  /// \brief Return the current token to the token stream and make the given
-  /// token the current token.
-  void UnconsumeToken(Token &Consumed) {
-      Token Next = Tok;
-      PP.EnterToken(Consumed);
-      PP.Lex(Tok);
-      PP.EnterToken(Next);
-  }
-
   /// ConsumeAnyToken - Dispatch to the right Consume* method based on the
   /// current token type.  This should only be used in cases where the type of
   /// the token really isn't known, e.g. in error recovery.
@@ -408,6 +361,57 @@ private:
     if (Tok.isAnnotation())
       return ConsumeAnnotationToken();
     return ConsumeToken();
+  }
+
+
+  SourceLocation getEndOfPreviousToken() {
+    return PP.getLocForEndOfToken(PrevTokLocation);
+  }
+
+  /// Retrieve the underscored keyword (_Nonnull, _Nullable) that corresponds
+  /// to the given nullability kind.
+  IdentifierInfo *getNullabilityKeyword(NullabilityKind nullability) {
+    return Actions.getNullabilityKeyword(nullability);
+  }
+
+private:
+  //===--------------------------------------------------------------------===//
+  // Low-Level token peeking and consumption methods.
+  //
+
+  /// isTokenParen - Return true if the cur token is '(' or ')'.
+  bool isTokenParen() const {
+    return Tok.isOneOf(tok::l_paren, tok::r_paren);
+  }
+  /// isTokenBracket - Return true if the cur token is '[' or ']'.
+  bool isTokenBracket() const {
+    return Tok.isOneOf(tok::l_square, tok::r_square);
+  }
+  /// isTokenBrace - Return true if the cur token is '{' or '}'.
+  bool isTokenBrace() const {
+    return Tok.isOneOf(tok::l_brace, tok::r_brace);
+  }
+  /// isTokenStringLiteral - True if this token is a string-literal.
+  bool isTokenStringLiteral() const {
+    return tok::isStringLiteral(Tok.getKind());
+  }
+  /// isTokenSpecial - True if this token requires special consumption methods.
+  bool isTokenSpecial() const {
+    return isTokenStringLiteral() || isTokenParen() || isTokenBracket() ||
+           isTokenBrace() || Tok.is(tok::code_completion) || Tok.isAnnotation();
+  }
+
+  /// Returns true if the current token is '=' or is a type of '='.
+  /// For typos, give a fixit to '='
+  bool isTokenEqualOrEqualTypo();
+
+  /// Return the current token to the token stream and make the given
+  /// token the current token.
+  void UnconsumeToken(Token &Consumed) {
+      Token Next = Tok;
+      PP.EnterToken(Consumed);
+      PP.Lex(Tok);
+      PP.EnterToken(Next);
   }
 
   SourceLocation ConsumeAnnotationToken() {
@@ -471,7 +475,7 @@ private:
     return PrevTokLocation;
   }
 
-  /// \brief Consume the current code-completion token.
+  /// Consume the current code-completion token.
   ///
   /// This routine can be called to consume the code-completion token and
   /// continue processing in special cases where \c cutOffParsing() isn't
@@ -490,7 +494,7 @@ private:
   /// \returns the source location of the code-completion token.
   SourceLocation handleUnexpectedCodeCompletionToken();
 
-  /// \brief Abruptly cut off parsing; mainly used when we have reached the
+  /// Abruptly cut off parsing; mainly used when we have reached the
   /// code-completion point.
   void cutOffParsing() {
     if (PP.isCodeCompletionEnabled())
@@ -499,7 +503,7 @@ private:
     Tok.setKind(tok::eof);
   }
 
-  /// \brief Determine if we're at the end of the file or at a transition
+  /// Determine if we're at the end of the file or at a transition
   /// between modules.
   bool isEofOrEom() {
     tok::TokenKind Kind = Tok.getKind();
@@ -507,28 +511,34 @@ private:
            Kind == tok::annot_module_end || Kind == tok::annot_module_include;
   }
 
-  /// \brief Initialize all pragma handlers.
+  /// Checks if the \p Level is valid for use in a fold expression.
+  bool isFoldOperator(prec::Level Level) const;
+
+  /// Checks if the \p Kind is a valid operator for fold expressions.
+  bool isFoldOperator(tok::TokenKind Kind) const;
+
+  /// Initialize all pragma handlers.
   void initializePragmaHandlers();
 
-  /// \brief Destroy and reset all pragma handlers.
+  /// Destroy and reset all pragma handlers.
   void resetPragmaHandlers();
 
-  /// \brief Handle the annotation token produced for #pragma unused(...)
+  /// Handle the annotation token produced for #pragma unused(...)
   void HandlePragmaUnused();
 
-  /// \brief Handle the annotation token produced for
+  /// Handle the annotation token produced for
   /// #pragma GCC visibility...
   void HandlePragmaVisibility();
 
-  /// \brief Handle the annotation token produced for
+  /// Handle the annotation token produced for
   /// #pragma pack...
   void HandlePragmaPack();
 
-  /// \brief Handle the annotation token produced for
+  /// Handle the annotation token produced for
   /// #pragma ms_struct...
   void HandlePragmaMSStruct();
 
-  /// \brief Handle the annotation token produced for
+  /// Handle the annotation token produced for
   /// #pragma comment...
   void HandlePragmaMSComment();
 
@@ -544,43 +554,43 @@ private:
   bool HandlePragmaMSInitSeg(StringRef PragmaName,
                              SourceLocation PragmaLocation);
 
-  /// \brief Handle the annotation token produced for
+  /// Handle the annotation token produced for
   /// #pragma align...
   void HandlePragmaAlign();
 
-  /// \brief Handle the annotation token produced for
+  /// Handle the annotation token produced for
   /// #pragma clang __debug dump...
   void HandlePragmaDump();
 
-  /// \brief Handle the annotation token produced for
+  /// Handle the annotation token produced for
   /// #pragma weak id...
   void HandlePragmaWeak();
 
-  /// \brief Handle the annotation token produced for
+  /// Handle the annotation token produced for
   /// #pragma weak id = id...
   void HandlePragmaWeakAlias();
 
-  /// \brief Handle the annotation token produced for
+  /// Handle the annotation token produced for
   /// #pragma redefine_extname...
   void HandlePragmaRedefineExtname();
 
-  /// \brief Handle the annotation token produced for
+  /// Handle the annotation token produced for
   /// #pragma STDC FP_CONTRACT...
   void HandlePragmaFPContract();
 
-  /// \brief Handle the annotation token produced for
+  /// Handle the annotation token produced for
   /// #pragma clang fp ...
   void HandlePragmaFP();
 
-  /// \brief Handle the annotation token produced for
+  /// Handle the annotation token produced for
   /// #pragma OPENCL EXTENSION...
   void HandlePragmaOpenCLExtension();
 
-  /// \brief Handle the annotation token produced for
+  /// Handle the annotation token produced for
   /// #pragma clang __debug captured
   StmtResult HandlePragmaCaptured();
 
-  /// \brief Handle the annotation token produced for
+  /// Handle the annotation token produced for
   /// #pragma clang loop and #pragma unroll.
   bool HandlePragmaLoopHint(LoopHint &Hint);
 
@@ -619,13 +629,13 @@ private:
     Tok.setAnnotationValue(T.getAsOpaquePtr());
   }
 
-  /// \brief Read an already-translated primary expression out of an annotation
+  /// Read an already-translated primary expression out of an annotation
   /// token.
   static ExprResult getExprAnnotation(const Token &Tok) {
     return ExprResult::getFromOpaquePointer(Tok.getAnnotationValue());
   }
 
-  /// \brief Set the primary expression corresponding to the given annotation
+  /// Set the primary expression corresponding to the given annotation
   /// token.
   static void setExprAnnotation(Token &Tok, ExprResult ER) {
     Tok.setAnnotationValue(ER.getAsOpaquePointer());
@@ -709,7 +719,7 @@ private:
   /// otherwise emits a diagnostic and returns true.
   bool TryKeywordIdentFallback(bool DisableKeyword);
 
-  /// \brief Get the TemplateIdAnnotation from the token.
+  /// Get the TemplateIdAnnotation from the token.
   TemplateIdAnnotation *takeTemplateIdAnnotation(const Token &tok);
 
   /// TentativeParsingAction - An object that is used as a kind of "tentative
@@ -807,14 +817,14 @@ private:
                         unsigned Diag = diag::err_expected,
                         StringRef DiagMsg = "");
 
-  /// \brief The parser expects a semicolon and, if present, will consume it.
+  /// The parser expects a semicolon and, if present, will consume it.
   ///
   /// If the next token is not a semicolon, this emits the specified diagnostic,
   /// or, if there's just some closing-delimiter noise (e.g., ')' or ']') prior
   /// to the semicolon, consumes that extra token.
   bool ExpectAndConsumeSemi(unsigned DiagID);
 
-  /// \brief The kind of extra semi diagnostic to emit.
+  /// The kind of extra semi diagnostic to emit.
   enum ExtraSemiKind {
     OutsideFunction = 0,
     InsideStruct = 1,
@@ -822,7 +832,7 @@ private:
     AfterMemberFunctionDefinition = 3
   };
 
-  /// \brief Consume any extra semi-colons until the end of the line.
+  /// Consume any extra semi-colons until the end of the line.
   void ConsumeExtraSemi(ExtraSemiKind Kind, unsigned TST = TST_unspecified);
 
   /// Return false if the next token is an identifier. An 'expected identifier'
@@ -886,7 +896,7 @@ public:
   void ExitScope();
 
 private:
-  /// \brief RAII object used to modify the scope flags for the current scope.
+  /// RAII object used to modify the scope flags for the current scope.
   class ParseScopeFlags {
     Scope *CurScope;
     unsigned OldFlags;
@@ -915,10 +925,10 @@ private:
 
 public:
 
-  /// \brief Control flags for SkipUntil functions.
+  /// Control flags for SkipUntil functions.
   enum SkipUntilFlags {
     StopAtSemi = 1 << 0,  ///< Stop skipping at semicolon
-    /// \brief Stop skipping at specified token, but don't skip the token itself
+    /// Stop skipping at specified token, but don't skip the token itself
     StopBeforeMatch = 1 << 1,
     StopAtCodeCompletion = 1 << 2 ///< Stop at code completion
   };
@@ -1040,7 +1050,7 @@ private:
     Decl *D;
     CachedTokens Toks;
 
-    /// \brief Whether this member function had an associated template
+    /// Whether this member function had an associated template
     /// scope. When true, D is a template declaration.
     /// otherwise, it is a member function declaration.
     bool TemplateScope;
@@ -1086,9 +1096,9 @@ private:
     /// Method - The method declaration.
     Decl *Method;
 
-    /// \brief Whether this member function had an associated template
+    /// Whether this member function had an associated template
     /// scope. When true, D is a template declaration.
-    /// othewise, it is a member function declaration.
+    /// otherwise, it is a member function declaration.
     bool TemplateScope;
 
     /// DefaultArgs - Contains the parameters of the function and
@@ -1098,7 +1108,7 @@ private:
     /// scope at the appropriate times.
     SmallVector<LateParsedDefaultArgument, 8> DefaultArgs;
   
-    /// \brief The set of tokens that make up an exception-specification that
+    /// The set of tokens that make up an exception-specification that
     /// has not yet been parsed.
     CachedTokens *ExceptionSpecTokens;
   };
@@ -1130,7 +1140,7 @@ private:
   /// entities.
   typedef SmallVector<LateParsedDeclaration*,2> LateParsedDeclarationsContainer;
 
-  /// \brief Representation of a class that has been parsed, including
+  /// Representation of a class that has been parsed, including
   /// any member function declarations or definitions that need to be
   /// parsed after the corresponding top-level class is complete.
   struct ParsingClass {
@@ -1138,19 +1148,19 @@ private:
       : TopLevelClass(TopLevelClass), TemplateScope(false),
         IsInterface(IsInterface), TagOrTemplate(TagOrTemplate) { }
 
-    /// \brief Whether this is a "top-level" class, meaning that it is
+    /// Whether this is a "top-level" class, meaning that it is
     /// not nested within another class.
     bool TopLevelClass : 1;
 
-    /// \brief Whether this class had an associated template
+    /// Whether this class had an associated template
     /// scope. When true, TagOrTemplate is a template declaration;
-    /// othewise, it is a tag declaration.
+    /// otherwise, it is a tag declaration.
     bool TemplateScope : 1;
 
-    /// \brief Whether this class is an __interface.
+    /// Whether this class is an __interface.
     bool IsInterface : 1;
 
-    /// \brief The class or class template whose definition we are parsing.
+    /// The class or class template whose definition we are parsing.
     Decl *TagOrTemplate;
 
     /// LateParsedDeclarations - Method declarations, inline definitions and
@@ -1159,7 +1169,7 @@ private:
     LateParsedDeclarationsContainer LateParsedDeclarations;
   };
 
-  /// \brief The stack of classes that is currently being
+  /// The stack of classes that is currently being
   /// parsed. Nested and local classes will be pushed onto this stack
   /// when they are parsed, and removed afterward.
   std::stack<ParsingClass *> ClassStack;
@@ -1169,7 +1179,7 @@ private:
     return *ClassStack.top();
   }
 
-  /// \brief RAII object used to manage the parsing of a class definition.
+  /// RAII object used to manage the parsing of a class definition.
   class ParsingClassDefinition {
     Parser &P;
     bool Popped;
@@ -1182,7 +1192,7 @@ private:
         State(P.PushParsingClass(TagOrTemplate, TopLevelClass, IsInterface)) {
     }
 
-    /// \brief Pop this class of the stack.
+    /// Pop this class of the stack.
     void Pop() {
       assert(!Popped && "Nested class has already been popped");
       Popped = true;
@@ -1195,7 +1205,7 @@ private:
     }
   };
 
-  /// \brief Contains information about any template-specific
+  /// Contains information about any template-specific
   /// information that has been parsed prior to parsing declaration
   /// specifiers.
   struct ParsedTemplateInfo {
@@ -1215,31 +1225,31 @@ private:
         ExternLoc(ExternLoc), TemplateLoc(TemplateLoc),
         LastParameterListWasEmpty(false){ }
 
-    /// \brief The kind of template we are parsing.
+    /// The kind of template we are parsing.
     enum {
-      /// \brief We are not parsing a template at all.
+      /// We are not parsing a template at all.
       NonTemplate = 0,
-      /// \brief We are parsing a template declaration.
+      /// We are parsing a template declaration.
       Template,
-      /// \brief We are parsing an explicit specialization.
+      /// We are parsing an explicit specialization.
       ExplicitSpecialization,
-      /// \brief We are parsing an explicit instantiation.
+      /// We are parsing an explicit instantiation.
       ExplicitInstantiation
     } Kind;
 
-    /// \brief The template parameter lists, for template declarations
+    /// The template parameter lists, for template declarations
     /// and explicit specializations.
     TemplateParameterLists *TemplateParams;
 
-    /// \brief The location of the 'extern' keyword, if any, for an explicit
+    /// The location of the 'extern' keyword, if any, for an explicit
     /// instantiation
     SourceLocation ExternLoc;
 
-    /// \brief The location of the 'template' keyword, for an explicit
+    /// The location of the 'template' keyword, for an explicit
     /// instantiation.
     SourceLocation TemplateLoc;
 
-    /// \brief Whether the last template parameter list was empty.
+    /// Whether the last template parameter list was empty.
     bool LastParameterListWasEmpty;
 
     SourceRange getSourceRange() const LLVM_READONLY;
@@ -1332,7 +1342,7 @@ private:
 
   // Objective-C External Declarations
   void MaybeSkipAttributes(tok::ObjCKeywordKind Kind);
-  DeclGroupPtrTy ParseObjCAtDirectives();
+  DeclGroupPtrTy ParseObjCAtDirectives(ParsedAttributesWithRange &Attrs);
   DeclGroupPtrTy ParseObjCAtClassDeclaration(SourceLocation atLoc);
   Decl *ParseObjCAtInterfaceDeclaration(SourceLocation AtLoc,
                                         ParsedAttributes &prefixAttrs);
@@ -1442,7 +1452,7 @@ private:
 
   bool isTokIdentifier_in() const;
 
-  ParsedType ParseObjCTypeName(ObjCDeclSpec &DS, Declarator::TheContext Ctx,
+  ParsedType ParseObjCTypeName(ObjCDeclSpec &DS, DeclaratorContext Ctx,
                                ParsedAttributes *ParamAttrs);
   void ParseObjCMethodRequirement();
   Decl *ParseObjCMethodPrototype(
@@ -1636,7 +1646,8 @@ private:
 
   //===--------------------------------------------------------------------===//
   // C++0x 8: Function declaration trailing-return-type
-  TypeResult ParseTrailingReturnType(SourceRange &Range);
+  TypeResult ParseTrailingReturnType(SourceRange &Range,
+                                     bool MayBeFollowedByDirectInit);
 
   //===--------------------------------------------------------------------===//
   // C++ 2.13.5: C++ Boolean Literals
@@ -1732,11 +1743,11 @@ private:
   StmtResult ParseStatement(SourceLocation *TrailingElseLoc = nullptr,
                             bool AllowOpenMPStandalone = false);
   enum AllowedConstructsKind {
-    /// \brief Allow any declarations, statements, OpenMP directives.
+    /// Allow any declarations, statements, OpenMP directives.
     ACK_Any,
-    /// \brief Allow only statements and non-standalone OpenMP directives.
+    /// Allow only statements and non-standalone OpenMP directives.
     ACK_StatementsOpenMPNonStandalone,
-    /// \brief Allow statements and all executable OpenMP directives
+    /// Allow statements and all executable OpenMP directives
     ACK_StatementsOpenMPAnyExecutable
   };
   StmtResult
@@ -1777,34 +1788,34 @@ private:
                                  SourceLocation *TrailingElseLoc,
                                  ParsedAttributesWithRange &Attrs);
 
-  /// \brief Describes the behavior that should be taken for an __if_exists
+  /// Describes the behavior that should be taken for an __if_exists
   /// block.
   enum IfExistsBehavior {
-    /// \brief Parse the block; this code is always used.
+    /// Parse the block; this code is always used.
     IEB_Parse,
-    /// \brief Skip the block entirely; this code is never used.
+    /// Skip the block entirely; this code is never used.
     IEB_Skip,
-    /// \brief Parse the block as a dependent block, which may be used in
+    /// Parse the block as a dependent block, which may be used in
     /// some template instantiations but not others.
     IEB_Dependent
   };
 
-  /// \brief Describes the condition of a Microsoft __if_exists or
+  /// Describes the condition of a Microsoft __if_exists or
   /// __if_not_exists block.
   struct IfExistsCondition {
-    /// \brief The location of the initial keyword.
+    /// The location of the initial keyword.
     SourceLocation KeywordLoc;
-    /// \brief Whether this is an __if_exists block (rather than an
+    /// Whether this is an __if_exists block (rather than an
     /// __if_not_exists block).
     bool IsIfExists;
 
-    /// \brief Nested-name-specifier preceding the name.
+    /// Nested-name-specifier preceding the name.
     CXXScopeSpec SS;
 
-    /// \brief The name we're looking for.
+    /// The name we're looking for.
     UnqualifiedId Name;
 
-    /// \brief The behavior of this __if_exists or __if_not_exists block
+    /// The behavior of this __if_exists or __if_not_exists block
     /// should.
     IfExistsBehavior Behavior;
   };
@@ -1851,7 +1862,7 @@ private:
   /// A context for parsing declaration specifiers.  TODO: flesh this
   /// out, there are other significant restrictions on specifiers than
   /// would be best implemented in the parser.
-  enum DeclSpecContext {
+  enum class DeclSpecContext {
     DSC_normal, // normal context
     DSC_class,  // class context, enables 'friend'
     DSC_type_specifier, // C++ type-specifier-seq or C specifier-qualifier-list
@@ -1868,18 +1879,18 @@ private:
   /// trailing-type-specifier)?
   static bool isTypeSpecifier(DeclSpecContext DSC) {
     switch (DSC) {
-    case DSC_normal:
-    case DSC_template_param:
-    case DSC_class:
-    case DSC_top_level:
-    case DSC_objc_method_result:
-    case DSC_condition:
+    case DeclSpecContext::DSC_normal:
+    case DeclSpecContext::DSC_template_param:
+    case DeclSpecContext::DSC_class:
+    case DeclSpecContext::DSC_top_level:
+    case DeclSpecContext::DSC_objc_method_result:
+    case DeclSpecContext::DSC_condition:
       return false;
 
-    case DSC_template_type_arg:
-    case DSC_type_specifier:
-    case DSC_trailing:
-    case DSC_alias_declaration:
+    case DeclSpecContext::DSC_template_type_arg:
+    case DeclSpecContext::DSC_type_specifier:
+    case DeclSpecContext::DSC_trailing:
+    case DeclSpecContext::DSC_alias_declaration:
       return true;
     }
     llvm_unreachable("Missing DeclSpecContext case");
@@ -1889,18 +1900,18 @@ private:
   /// deduction?
   static bool isClassTemplateDeductionContext(DeclSpecContext DSC) {
     switch (DSC) {
-    case DSC_normal:
-    case DSC_template_param:
-    case DSC_class:
-    case DSC_top_level:
-    case DSC_condition:
-    case DSC_type_specifier:
+    case DeclSpecContext::DSC_normal:
+    case DeclSpecContext::DSC_template_param:
+    case DeclSpecContext::DSC_class:
+    case DeclSpecContext::DSC_top_level:
+    case DeclSpecContext::DSC_condition:
+    case DeclSpecContext::DSC_type_specifier:
       return true;
 
-    case DSC_objc_method_result:
-    case DSC_template_type_arg:
-    case DSC_trailing:
-    case DSC_alias_declaration:
+    case DeclSpecContext::DSC_objc_method_result:
+    case DeclSpecContext::DSC_template_type_arg:
+    case DeclSpecContext::DSC_trailing:
+    case DeclSpecContext::DSC_alias_declaration:
       return false;
     }
     llvm_unreachable("Missing DeclSpecContext case");
@@ -1915,15 +1926,16 @@ private:
     bool ParsedForRangeDecl() { return !ColonLoc.isInvalid(); }
   };
 
-  DeclGroupPtrTy ParseDeclaration(unsigned Context, SourceLocation &DeclEnd,
+  DeclGroupPtrTy ParseDeclaration(DeclaratorContext Context,
+                                  SourceLocation &DeclEnd,
                                   ParsedAttributesWithRange &attrs);
-  DeclGroupPtrTy ParseSimpleDeclaration(unsigned Context,
+  DeclGroupPtrTy ParseSimpleDeclaration(DeclaratorContext Context,
                                         SourceLocation &DeclEnd,
                                         ParsedAttributesWithRange &attrs,
                                         bool RequireSemi,
                                         ForRangeInit *FRI = nullptr);
-  bool MightBeDeclarator(unsigned Context);
-  DeclGroupPtrTy ParseDeclGroup(ParsingDeclSpec &DS, unsigned Context,
+  bool MightBeDeclarator(DeclaratorContext Context);
+  DeclGroupPtrTy ParseDeclGroup(ParsingDeclSpec &DS, DeclaratorContext Context,
                                 SourceLocation *DeclEnd = nullptr,
                                 ForRangeInit *FRI = nullptr);
   Decl *ParseDeclarationAfterDeclarator(Declarator &D,
@@ -1936,7 +1948,7 @@ private:
   Decl *ParseFunctionStatementBody(Decl *Decl, ParseScope &BodyScope);
   Decl *ParseFunctionTryBlock(Decl *Decl, ParseScope &BodyScope);
 
-  /// \brief When in code-completion, skip parsing of the function/method body
+  /// When in code-completion, skip parsing of the function/method body
   /// unless the body contains the code-completion point.
   ///
   /// \returns true if the function body was skipped.
@@ -1946,21 +1958,24 @@ private:
                         const ParsedTemplateInfo &TemplateInfo,
                         AccessSpecifier AS, DeclSpecContext DSC, 
                         ParsedAttributesWithRange &Attrs);
-  DeclSpecContext getDeclSpecContextFromDeclaratorContext(unsigned Context);
-  void ParseDeclarationSpecifiers(DeclSpec &DS,
-                const ParsedTemplateInfo &TemplateInfo = ParsedTemplateInfo(),
-                                  AccessSpecifier AS = AS_none,
-                                  DeclSpecContext DSC = DSC_normal,
-                                  LateParsedAttrList *LateAttrs = nullptr);
-  bool DiagnoseMissingSemiAfterTagDefinition(DeclSpec &DS, AccessSpecifier AS,
-                                       DeclSpecContext DSContext,
-                                       LateParsedAttrList *LateAttrs = nullptr);
+  DeclSpecContext
+  getDeclSpecContextFromDeclaratorContext(DeclaratorContext Context);
+  void ParseDeclarationSpecifiers(
+      DeclSpec &DS,
+      const ParsedTemplateInfo &TemplateInfo = ParsedTemplateInfo(),
+      AccessSpecifier AS = AS_none,
+      DeclSpecContext DSC = DeclSpecContext::DSC_normal,
+      LateParsedAttrList *LateAttrs = nullptr);
+  bool DiagnoseMissingSemiAfterTagDefinition(
+      DeclSpec &DS, AccessSpecifier AS, DeclSpecContext DSContext,
+      LateParsedAttrList *LateAttrs = nullptr);
 
-  void ParseSpecifierQualifierList(DeclSpec &DS, AccessSpecifier AS = AS_none,
-                                   DeclSpecContext DSC = DSC_normal);
+  void ParseSpecifierQualifierList(
+      DeclSpec &DS, AccessSpecifier AS = AS_none,
+      DeclSpecContext DSC = DeclSpecContext::DSC_normal);
 
   void ParseObjCTypeQualifierList(ObjCDeclSpec &DS,
-                                  Declarator::TheContext Context);
+                                  DeclaratorContext Context);
 
   void ParseEnumSpecifier(SourceLocation TagLoc, DeclSpec &DS,
                           const ParsedTemplateInfo &TemplateInfo,
@@ -1981,7 +1996,7 @@ private:
   /// specifier or if we're not sure.
   bool isKnownToBeTypeSpecifier(const Token &Tok) const;
 
-  /// \brief Return true if we know that we are definitely looking at a
+  /// Return true if we know that we are definitely looking at a
   /// decl-specifier, and isn't part of an expression such as a function-style
   /// cast. Return false if it's no a decl-specifier, or we're not sure.
   bool isKnownToBeDeclarationSpecifier() {
@@ -2009,19 +2024,19 @@ private:
     return isDeclarationSpecifier(true);
   }
 
-  /// \brief Determine whether this is a C++1z for-range-identifier.
+  /// Determine whether this is a C++1z for-range-identifier.
   bool isForRangeIdentifier();
 
-  /// \brief Determine whether we are currently at the start of an Objective-C
+  /// Determine whether we are currently at the start of an Objective-C
   /// class message that appears to be missing the open bracket '['.
   bool isStartOfObjCClassMessageMissingOpenBracket();
 
-  /// \brief Starting with a scope specifier, identifier, or
+  /// Starting with a scope specifier, identifier, or
   /// template-id that refers to the current class, determine whether
   /// this is a constructor declarator.
   bool isConstructorDeclarator(bool Unqualified, bool DeductionGuide = false);
 
-  /// \brief Specifies the context in which type-id/expression
+  /// Specifies the context in which type-id/expression
   /// disambiguation will occur.
   enum TentativeCXXTypeIdContext {
     TypeIdInParens,
@@ -2044,7 +2059,7 @@ private:
     return isTypeIdInParens(isAmbiguous);
   }
 
-  /// \brief Checks if the current tokens form type-id or expression.
+  /// Checks if the current tokens form type-id or expression.
   /// It is similar to isTypeIdInParens but does not suppose that type-id
   /// is in parenthesis.
   bool isTypeIdUnambiguously() {
@@ -2082,7 +2097,7 @@ private:
     InitStmtDecl,  ///< Disambiguated as a simple-declaration init-statement.
     Error          ///< Can't be any of the above!
   };
-  /// \brief Disambiguates between the different kinds of things that can happen
+  /// Disambiguates between the different kinds of things that can happen
   /// after 'if (' or 'switch ('. This could be one of two different kinds of
   /// declaration (depending on whether there is a ';' later) or an expression.
   ConditionOrInitStatement
@@ -2100,7 +2115,7 @@ private:
     True, False, Ambiguous, Error
   };
 
-  /// \brief Based only on the given token kind, determine whether we know that
+  /// Based only on the given token kind, determine whether we know that
   /// we're at the start of an expression or a type-specifier-seq (which may
   /// be an expression, in C++).
   ///
@@ -2128,7 +2143,7 @@ private:
   /// a type-specifier other than a cv-qualifier.
   bool isCXXDeclarationSpecifierAType();
 
-  /// \brief Determine whether an identifier has been tentatively declared as a
+  /// Determine whether an identifier has been tentatively declared as a
   /// non-type. Such tentative declarations should not be found to name a type
   /// during a tentative parse, but also should not be annotated as a non-type.
   bool isTentativelyDeclared(IdentifierInfo *II);
@@ -2146,7 +2161,8 @@ private:
   TPResult TryParsePtrOperatorSeq();
   TPResult TryParseOperatorId();
   TPResult TryParseInitDeclaratorList();
-  TPResult TryParseDeclarator(bool mayBeAbstract, bool mayHaveIdentifier=true);
+  TPResult TryParseDeclarator(bool mayBeAbstract, bool mayHaveIdentifier = true,
+                              bool mayHaveDirectInit = false);
   TPResult
   TryParseParameterDeclarationClause(bool *InvalidAsDeclaration = nullptr,
                                      bool VersusTemplateArg = false);
@@ -2156,8 +2172,8 @@ private:
 
 public:
   TypeResult ParseTypeName(SourceRange *Range = nullptr,
-                           Declarator::TheContext Context
-                             = Declarator::TypeNameContext,
+                           DeclaratorContext Context
+                             = DeclaratorContext::TypeNameContext,
                            AccessSpecifier AS = AS_none,
                            Decl **OwnedType = nullptr,
                            ParsedAttributes *Attrs = nullptr);
@@ -2195,13 +2211,16 @@ private:
 
   void stripTypeAttributesOffDeclSpec(ParsedAttributesWithRange &Attrs,
                                       DeclSpec &DS, Sema::TagUseKind TUK);
-
-  void ProhibitAttributes(ParsedAttributesWithRange &attrs) {
+  
+  // FixItLoc = possible correct location for the attributes
+  void ProhibitAttributes(ParsedAttributesWithRange &attrs,
+                          SourceLocation FixItLoc = SourceLocation()) {
     if (!attrs.Range.isValid()) return;
-    DiagnoseProhibitedAttributes(attrs);
+    DiagnoseProhibitedAttributes(attrs, FixItLoc);
     attrs.clear();
   }
-  void DiagnoseProhibitedAttributes(ParsedAttributesWithRange &attrs);
+  void DiagnoseProhibitedAttributes(ParsedAttributesWithRange &attrs, 
+    SourceLocation FixItLoc);
 
   // Forbid C++11 and C2x attributes that appear on certain syntactic locations
   // which standard permits but we don't supported yet, for example, attributes
@@ -2209,16 +2228,16 @@ private:
   void ProhibitCXX11Attributes(ParsedAttributesWithRange &Attrs,
                                unsigned DiagID);
 
-  /// \brief Skip C++11 and C2x attributes and return the end location of the
+  /// Skip C++11 and C2x attributes and return the end location of the
   /// last one.
   /// \returns SourceLocation() if there are no attributes.
   SourceLocation SkipCXX11Attributes();
 
-  /// \brief Diagnose and skip C++11 and C2x attributes that appear in syntactic
+  /// Diagnose and skip C++11 and C2x attributes that appear in syntactic
   /// locations where attributes are not allowed.
   void DiagnoseAndSkipCXX11Attributes();
 
-  /// \brief Parses syntax-generic attribute arguments for attributes which are
+  /// Parses syntax-generic attribute arguments for attributes which are
   /// known to the implementation, and adds them to the given ParsedAttributes
   /// list with the given attribute syntax. Returns the number of arguments
   /// parsed for the attribute.
@@ -2291,7 +2310,7 @@ private:
                                     SourceLocation *EndLoc = nullptr);
   void ParseCXX11Attributes(ParsedAttributesWithRange &attrs,
                             SourceLocation *EndLoc = nullptr);
-  /// \brief Parses a C++11 (or C2x)-style attribute argument list. Returns true
+  /// Parses a C++11 (or C2x)-style attribute argument list. Returns true
   /// if this results in adding an attribute to the ParsedAttributes list.
   bool ParseCXX11AttributeArgs(IdentifierInfo *AttrName,
                                SourceLocation AttrNameLoc,
@@ -2327,7 +2346,7 @@ private:
   void ParseBorlandTypeAttributes(ParsedAttributes &attrs);
   void ParseOpenCLKernelAttributes(ParsedAttributes &attrs);
   void ParseOpenCLQualifiers(ParsedAttributes &Attrs);
-  /// \brief Parses opencl_unroll_hint attribute if language is OpenCL v2.0
+  /// Parses opencl_unroll_hint attribute if language is OpenCL v2.0
   /// or higher.
   /// \return false if error happens.
   bool MaybeParseOpenCLUnrollHintAttribute(ParsedAttributes &Attrs) {
@@ -2335,7 +2354,7 @@ private:
       return ParseOpenCLUnrollHintAttribute(Attrs);
     return true;
   }
-  /// \brief Parses opencl_unroll_hint attribute.
+  /// Parses opencl_unroll_hint attribute.
   /// \return false if error happens.
   bool ParseOpenCLUnrollHintAttribute(ParsedAttributes &Attrs);
   void ParseNullabilityTypeSpecifiers(ParsedAttributes &attrs);
@@ -2504,20 +2523,21 @@ private:
 
   void DiagnoseUnexpectedNamespace(NamedDecl *Context);
 
-  DeclGroupPtrTy ParseNamespace(unsigned Context, SourceLocation &DeclEnd,
+  DeclGroupPtrTy ParseNamespace(DeclaratorContext Context,
+                                SourceLocation &DeclEnd,
                                 SourceLocation InlineLoc = SourceLocation());
-  void ParseInnerNamespace(std::vector<SourceLocation>& IdentLoc,
-                           std::vector<IdentifierInfo*>& Ident,
-                           std::vector<SourceLocation>& NamespaceLoc,
-                           unsigned int index, SourceLocation& InlineLoc,
-                           ParsedAttributes& attrs,
+  void ParseInnerNamespace(std::vector<SourceLocation> &IdentLoc,
+                           std::vector<IdentifierInfo *> &Ident,
+                           std::vector<SourceLocation> &NamespaceLoc,
+                           unsigned int index, SourceLocation &InlineLoc,
+                           ParsedAttributes &attrs,
                            BalancedDelimiterTracker &Tracker);
-  Decl *ParseLinkage(ParsingDeclSpec &DS, unsigned Context);
+  Decl *ParseLinkage(ParsingDeclSpec &DS, DeclaratorContext Context);
   Decl *ParseExportDeclaration();
   DeclGroupPtrTy ParseUsingDirectiveOrDeclaration(
-      unsigned Context, const ParsedTemplateInfo &TemplateInfo,
+      DeclaratorContext Context, const ParsedTemplateInfo &TemplateInfo,
       SourceLocation &DeclEnd, ParsedAttributesWithRange &attrs);
-  Decl *ParseUsingDirective(unsigned Context,
+  Decl *ParseUsingDirective(DeclaratorContext Context,
                             SourceLocation UsingLoc,
                             SourceLocation &DeclEnd,
                             ParsedAttributes &attrs);
@@ -2525,19 +2545,18 @@ private:
   struct UsingDeclarator {
     SourceLocation TypenameLoc;
     CXXScopeSpec SS;
-    SourceLocation TemplateKWLoc;
     UnqualifiedId Name;
     SourceLocation EllipsisLoc;
 
     void clear() {
-      TypenameLoc = TemplateKWLoc = EllipsisLoc = SourceLocation();
+      TypenameLoc = EllipsisLoc = SourceLocation();
       SS.clear();
       Name.clear();
     }
   };
 
-  bool ParseUsingDeclarator(unsigned Context, UsingDeclarator &D);
-  DeclGroupPtrTy ParseUsingDeclaration(unsigned Context,
+  bool ParseUsingDeclarator(DeclaratorContext Context, UsingDeclarator &D);
+  DeclGroupPtrTy ParseUsingDeclaration(DeclaratorContext Context,
                                        const ParsedTemplateInfo &TemplateInfo,
                                        SourceLocation UsingLoc,
                                        SourceLocation &DeclEnd,
@@ -2615,18 +2634,18 @@ private:
   DeclGroupPtrTy ParseOMPDeclareSimdClauses(DeclGroupPtrTy Ptr,
                                             CachedTokens &Toks,
                                             SourceLocation Loc);
-  /// \brief Parses declarative OpenMP directives.
+  /// Parses declarative OpenMP directives.
   DeclGroupPtrTy ParseOpenMPDeclarativeDirectiveWithExtDecl(
       AccessSpecifier &AS, ParsedAttributesWithRange &Attrs,
       DeclSpec::TST TagType = DeclSpec::TST_unspecified,
       Decl *TagDecl = nullptr);
-  /// \brief Parse 'omp declare reduction' construct.
+  /// Parse 'omp declare reduction' construct.
   DeclGroupPtrTy ParseOpenMPDeclareReductionDirective(AccessSpecifier AS);
   /// Parses initializer for provided omp_priv declaration inside the reduction
   /// initializer.
   void ParseOpenMPReductionInitializerForDecl(VarDecl *OmpPrivParm);
 
-  /// \brief Parses simple list of variables.
+  /// Parses simple list of variables.
   ///
   /// \param Kind Kind of the directive.
   /// \param Callback Callback function to be called for the list elements.
@@ -2638,7 +2657,7 @@ private:
       const llvm::function_ref<void(CXXScopeSpec &, DeclarationNameInfo)> &
           Callback,
       bool AllowScopeSpecifier);
-  /// \brief Parses declarative or executable directive.
+  /// Parses declarative or executable directive.
   ///
   /// \param Allowed ACK_Any, if any directives are allowed,
   /// ACK_StatementsOpenMPAnyExecutable - if any executable directives are
@@ -2647,7 +2666,7 @@ private:
   ///
   StmtResult
   ParseOpenMPDeclarativeOrExecutableDirective(AllowedConstructsKind Allowed);
-  /// \brief Parses clause of kind \a CKind for directive of a kind \a Kind.
+  /// Parses clause of kind \a CKind for directive of a kind \a Kind.
   ///
   /// \param DKind Kind of current directive.
   /// \param CKind Kind of current clause.
@@ -2656,33 +2675,45 @@ private:
   ///
   OMPClause *ParseOpenMPClause(OpenMPDirectiveKind DKind,
                                OpenMPClauseKind CKind, bool FirstClause);
-  /// \brief Parses clause with a single expression of a kind \a Kind.
+  /// Parses clause with a single expression of a kind \a Kind.
   ///
   /// \param Kind Kind of current clause.
+  /// \param ParseOnly true to skip the clause's semantic actions and return
+  /// nullptr.
   ///
-  OMPClause *ParseOpenMPSingleExprClause(OpenMPClauseKind Kind);
-  /// \brief Parses simple clause of a kind \a Kind.
+  OMPClause *ParseOpenMPSingleExprClause(OpenMPClauseKind Kind,
+                                         bool ParseOnly);
+  /// Parses simple clause of a kind \a Kind.
   ///
   /// \param Kind Kind of current clause.
+  /// \param ParseOnly true to skip the clause's semantic actions and return
+  /// nullptr.
   ///
-  OMPClause *ParseOpenMPSimpleClause(OpenMPClauseKind Kind);
-  /// \brief Parses clause with a single expression and an additional argument
+  OMPClause *ParseOpenMPSimpleClause(OpenMPClauseKind Kind, bool ParseOnly);
+  /// Parses clause with a single expression and an additional argument
   /// of a kind \a Kind.
   ///
   /// \param Kind Kind of current clause.
+  /// \param ParseOnly true to skip the clause's semantic actions and return
+  /// nullptr.
   ///
-  OMPClause *ParseOpenMPSingleExprWithArgClause(OpenMPClauseKind Kind);
-  /// \brief Parses clause without any additional arguments.
-  ///
-  /// \param Kind Kind of current clause.
-  ///
-  OMPClause *ParseOpenMPClause(OpenMPClauseKind Kind);
-  /// \brief Parses clause with the list of variables of a kind \a Kind.
+  OMPClause *ParseOpenMPSingleExprWithArgClause(OpenMPClauseKind Kind,
+                                                bool ParseOnly);
+  /// Parses clause without any additional arguments.
   ///
   /// \param Kind Kind of current clause.
+  /// \param ParseOnly true to skip the clause's semantic actions and return
+  /// nullptr.
+  ///
+  OMPClause *ParseOpenMPClause(OpenMPClauseKind Kind, bool ParseOnly = false);
+  /// Parses clause with the list of variables of a kind \a Kind.
+  ///
+  /// \param Kind Kind of current clause.
+  /// \param ParseOnly true to skip the clause's semantic actions and return
+  /// nullptr.
   ///
   OMPClause *ParseOpenMPVarListClause(OpenMPDirectiveKind DKind,
-                                      OpenMPClauseKind Kind);
+                                      OpenMPClauseKind Kind, bool ParseOnly);
 
 public:
   /// Parses simple expression in parens for single-expression clauses of OpenMP
@@ -2713,7 +2744,7 @@ public:
                           bool AllowConstructorName,
                           bool AllowDeductionGuide,
                           ParsedType ObjectType,
-                          SourceLocation& TemplateKWLoc,
+                          SourceLocation *TemplateKWLoc,
                           UnqualifiedId &Result);
 
 private:
@@ -2721,16 +2752,16 @@ private:
   // C++ 14: Templates [temp]
 
   // C++ 14.1: Template Parameters [temp.param]
-  Decl *ParseDeclarationStartingWithTemplate(unsigned Context,
+  Decl *ParseDeclarationStartingWithTemplate(DeclaratorContext Context,
                                           SourceLocation &DeclEnd,
                                           AccessSpecifier AS = AS_none,
                                           AttributeList *AccessAttrs = nullptr);
-  Decl *ParseTemplateDeclarationOrSpecialization(unsigned Context,
+  Decl *ParseTemplateDeclarationOrSpecialization(DeclaratorContext Context,
                                                  SourceLocation &DeclEnd,
                                                  AccessSpecifier AS,
                                                  AttributeList *AccessAttrs);
   Decl *ParseSingleDeclarationAfterTemplate(
-                                       unsigned Context,
+                                       DeclaratorContext Context,
                                        const ParsedTemplateInfo &TemplateInfo,
                                        ParsingDeclRAIIObject &DiagsFromParams,
                                        SourceLocation &DeclEnd,
@@ -2743,10 +2774,10 @@ private:
   bool ParseTemplateParameterList(unsigned Depth,
                                   SmallVectorImpl<NamedDecl*> &TemplateParams);
   bool isStartOfTemplateTypeParameter();
-  Decl *ParseTemplateParameter(unsigned Depth, unsigned Position);
-  Decl *ParseTypeParameter(unsigned Depth, unsigned Position);
-  Decl *ParseTemplateTemplateParameter(unsigned Depth, unsigned Position);
-  Decl *ParseNonTypeTemplateParameter(unsigned Depth, unsigned Position);
+  NamedDecl *ParseTemplateParameter(unsigned Depth, unsigned Position);
+  NamedDecl *ParseTypeParameter(unsigned Depth, unsigned Position);
+  NamedDecl *ParseTemplateTemplateParameter(unsigned Depth, unsigned Position);
+  NamedDecl *ParseNonTypeTemplateParameter(unsigned Depth, unsigned Position);
   void DiagnoseMisplacedEllipsis(SourceLocation EllipsisLoc,
                                  SourceLocation CorrectLoc,
                                  bool AlreadyHasEllipsis,
@@ -2774,7 +2805,7 @@ private:
   bool ParseTemplateArgumentList(TemplateArgList &TemplateArgs);
   ParsedTemplateArgument ParseTemplateTemplateArgument();
   ParsedTemplateArgument ParseTemplateArgument();
-  Decl *ParseExplicitInstantiation(unsigned Context,
+  Decl *ParseExplicitInstantiation(DeclaratorContext Context,
                                    SourceLocation ExternLoc,
                                    SourceLocation TemplateLoc,
                                    SourceLocation &DeclEnd,
@@ -2783,7 +2814,7 @@ private:
   //===--------------------------------------------------------------------===//
   // Modules
   DeclGroupPtrTy ParseModuleDecl();
-  DeclGroupPtrTy ParseModuleImport(SourceLocation AtLoc);
+  Decl *ParseModuleImport(SourceLocation AtLoc);
   bool parseMisplacedModuleImport();
   bool tryParseMisplacedModuleImport() {
     tok::TokenKind Kind = Tok.getKind();

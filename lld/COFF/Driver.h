@@ -16,10 +16,12 @@
 #include "lld/Common/Reproduce.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/StringSet.h"
 #include "llvm/Object/Archive.h"
 #include "llvm/Object/COFF.h"
 #include "llvm/Option/Arg.h"
 #include "llvm/Option/ArgList.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/TarWriter.h"
 #include <memory>
 #include <set>
@@ -35,12 +37,6 @@ using llvm::COFF::MachineTypes;
 using llvm::COFF::WindowsSubsystem;
 using llvm::Optional;
 
-// Implemented in MarkLive.cpp.
-void markLive(const std::vector<Chunk *> &Chunks);
-
-// Implemented in ICF.cpp.
-void doICF(const std::vector<Chunk *> &Chunks);
-
 class COFFOptTable : public llvm::opt::OptTable {
 public:
   COFFOptTable();
@@ -53,6 +49,12 @@ public:
 
   // Tokenizes a given string and then parses as command line options.
   llvm::opt::InputArgList parse(StringRef S) { return parse(tokenize(S)); }
+
+  // Tokenizes a given string and then parses as command line options in
+  // .drectve section. /EXPORT options are returned in second element
+  // to be processed in fastpath.
+  std::pair<llvm::opt::InputArgList, std::vector<StringRef>>
+  parseDirectives(StringRef S);
 
 private:
   // Parses command line options.
@@ -74,6 +76,8 @@ public:
   void enqueueArchiveMember(const Archive::Child &C, StringRef SymName,
                             StringRef ParentName);
 
+  MemoryBufferRef takeBuffer(std::unique_ptr<MemoryBuffer> MB);
+
 private:
   std::unique_ptr<llvm::TarWriter> Tar; // for /linkrepro
 
@@ -91,10 +95,14 @@ private:
 
   // Library search path. The first element is always "" (current directory).
   std::vector<StringRef> SearchPaths;
-  std::set<std::string> VisitedFiles;
+
+  // We don't want to add the same file more than once.
+  // Files are uniquified by their filesystem and file number.
+  std::set<llvm::sys::fs::UniqueID> VisitedFiles;
+
   std::set<std::string> VisitedLibs;
 
-  SymbolBody *addUndefined(StringRef Sym);
+  Symbol *addUndefined(StringRef Sym);
   StringRef mangle(StringRef Sym);
 
   // Windows specific -- "main" is not the only main function in Windows.
@@ -109,7 +117,6 @@ private:
 
   void invokeMSVC(llvm::opt::InputArgList &Args);
 
-  MemoryBufferRef takeBuffer(std::unique_ptr<MemoryBuffer> MB);
   void addBuffer(std::unique_ptr<MemoryBuffer> MB, bool WholeArchive);
   void addArchiveBuffer(MemoryBufferRef MBRef, StringRef SymName,
                         StringRef ParentName);
@@ -122,6 +129,8 @@ private:
   std::list<std::function<void()>> TaskQueue;
   std::vector<StringRef> FilePaths;
   std::vector<MemoryBufferRef> Resources;
+
+  llvm::StringSet<> DirectivesExports;
 };
 
 // Functions below this line are defined in DriverUtils.cpp.
@@ -134,6 +143,8 @@ StringRef machineToStr(MachineTypes MT);
 
 // Parses a string in the form of "<integer>[,<integer>]".
 void parseNumbers(StringRef Arg, uint64_t *Addr, uint64_t *Size = nullptr);
+
+void parseGuard(StringRef Arg);
 
 // Parses a string in the form of "<integer>[.<integer>]".
 // Minor's default value is 0.
@@ -169,10 +180,8 @@ void assignExportOrdinals();
 // incompatible objects.
 void checkFailIfMismatch(StringRef Arg);
 
-// Convert Windows resource files (.res files) to a .obj file
-// using cvtres.exe.
-std::unique_ptr<MemoryBuffer>
-convertResToCOFF(const std::vector<MemoryBufferRef> &MBs);
+// Convert Windows resource files (.res files) to a .obj file.
+MemoryBufferRef convertResToCOFF(ArrayRef<MemoryBufferRef> MBs);
 
 void runMSVCLinker(std::string Rsp, ArrayRef<StringRef> Objects);
 

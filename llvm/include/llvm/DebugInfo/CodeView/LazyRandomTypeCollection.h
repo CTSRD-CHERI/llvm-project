@@ -26,7 +26,7 @@
 namespace llvm {
 namespace codeview {
 
-/// \brief Provides amortized O(1) random access to a CodeView type stream.
+/// Provides amortized O(1) random access to a CodeView type stream.
 /// Normally to access a type from a type stream, you must know its byte
 /// offset into the type stream, because type records are variable-lengthed.
 /// However, this is not the way we prefer to access them.  For example, given
@@ -67,6 +67,7 @@ public:
 
   void reset(ArrayRef<uint8_t> Data, uint32_t RecordCountHint);
   void reset(StringRef Data, uint32_t RecordCountHint);
+  void reset(BinaryStreamReader &Reader, uint32_t RecordCountHint);
 
   uint32_t getOffsetOfType(TypeIndex Index);
 

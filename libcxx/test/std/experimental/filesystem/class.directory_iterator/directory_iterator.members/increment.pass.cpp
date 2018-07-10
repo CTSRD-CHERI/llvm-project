@@ -14,9 +14,9 @@
 // class directory_iterator
 
 // directory_iterator& operator++();
-// directory_iterator& increment(error_code& ec) noexcept;
+// directory_iterator& increment(error_code& ec);
 
-#include <experimental/filesystem>
+#include "filesystem_include.hpp"
 #include <type_traits>
 #include <set>
 #include <cassert>
@@ -26,7 +26,7 @@
 #include "filesystem_test_helper.hpp"
 #include <iostream>
 
-using namespace std::experimental::filesystem;
+using namespace fs;
 
 TEST_SUITE(directory_iterator_increment_tests)
 
@@ -40,7 +40,7 @@ TEST_CASE(test_increment_signatures)
     ASSERT_NOT_NOEXCEPT(++d);
 
     ASSERT_SAME_TYPE(decltype(d.increment(ec)), directory_iterator&);
-    ASSERT_NOEXCEPT(d.increment(ec));
+    ASSERT_NOT_NOEXCEPT(d.increment(ec));
 }
 
 TEST_CASE(test_prefix_increment)

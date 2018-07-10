@@ -11,8 +11,6 @@ else ()
   list(APPEND LLVM_COMPILE_FLAGS -include ${LLDB_GTEST_COMMON_INCLUDE})
 endif ()
 
-include(${LLDB_PROJECT_ROOT}/cmake/LLDBDependencies.cmake)
-
 if (LLDB_BUILT_STANDALONE)
   # Build the gtest library needed for unittests, if we have LLVM sources
   # handy.
@@ -44,9 +42,9 @@ function(add_lldb_unittest test_name)
   add_custom_command(
     TARGET ${test_name}
     POST_BUILD
-    COMMAND "${CMAKE_COMMAND}" -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/Inputs)
+    COMMAND "${CMAKE_COMMAND}" -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/Inputs)
 
-  target_link_libraries(${test_name} ${ARG_LINK_LIBS} ${LLDB_SYSTEM_LIBS})
+  target_link_libraries(${test_name} PRIVATE ${ARG_LINK_LIBS})
 endfunction()
 
 function(add_unittest_inputs test_name inputs)
@@ -54,7 +52,7 @@ function(add_unittest_inputs test_name inputs)
     add_custom_command(
       TARGET ${test_name}
       POST_BUILD
-      COMMAND "${CMAKE_COMMAND}" -E copy ${CMAKE_CURRENT_SOURCE_DIR}/Inputs/${INPUT} ${CMAKE_CURRENT_BINARY_DIR}/Inputs
+      COMMAND "${CMAKE_COMMAND}" -E copy ${CMAKE_CURRENT_SOURCE_DIR}/Inputs/${INPUT} ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}/Inputs
       COMMENT "Copying ${INPUT} to binary directory.")
   endforeach()
 endfunction()

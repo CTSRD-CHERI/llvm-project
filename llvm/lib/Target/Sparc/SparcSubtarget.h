@@ -18,9 +18,9 @@
 #include "SparcISelLowering.h"
 #include "SparcInstrInfo.h"
 #include "llvm/CodeGen/SelectionDAGTargetInfo.h"
+#include "llvm/CodeGen/TargetFrameLowering.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/DataLayout.h"
-#include "llvm/Target/TargetFrameLowering.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 #include <string>
 
 #define GET_SUBTARGETINFO_HEADER
@@ -50,7 +50,6 @@ class SparcSubtarget : public SparcGenSubtargetInfo {
   bool InsertNOPLoad;
   bool FixAllFDIVSQRT;
   bool DetectRoundChange;
-  bool PerformSDIVReplace;
 
   SparcInstrInfo InstrInfo;
   SparcTargetLowering TLInfo;
@@ -92,7 +91,6 @@ public:
 
   // Leon options
   bool hasUmacSmac() const { return HasUmacSmac; }
-  bool performSDIVReplace() const { return PerformSDIVReplace; }
   bool hasLeonCasa() const { return HasLeonCasa; }
   bool insertNOPLoad() const { return InsertNOPLoad; }
   bool fixAllFDIVSQRT() const { return FixAllFDIVSQRT; }

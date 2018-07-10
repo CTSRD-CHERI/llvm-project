@@ -16,24 +16,22 @@
 #ifndef LLVM_TRANSFORMS_UTILS_UNROLLLOOP_H
 #define LLVM_TRANSFORMS_UTILS_UNROLLLOOP_H
 
-// Needed because we can't forward-declare the nested struct
-// TargetTransformInfo::UnrollingPreferences
+#include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 
 namespace llvm {
 
-class StringRef;
 class AssumptionCache;
+class BasicBlock;
 class DominatorTree;
 class Loop;
 class LoopInfo;
-class LPPassManager;
 class MDNode;
-class Pass;
 class OptimizationRemarkEmitter;
 class ScalarEvolution;
 
-typedef SmallDenseMap<const Loop *, Loop *, 4> NewLoopsMap;
+using NewLoopsMap = SmallDenseMap<const Loop *, Loop *, 4>;
 
 const Loop* addClonedBlockToLoopInfo(BasicBlock *OriginalBB,
                                      BasicBlock *ClonedBB, LoopInfo *LI,
@@ -69,17 +67,19 @@ bool UnrollRuntimeLoopRemainder(Loop *L, unsigned Count,
                                 LoopInfo *LI,
                                 ScalarEvolution *SE, DominatorTree *DT,
                                 AssumptionCache *AC,
-                                OptimizationRemarkEmitter *ORE,
                                 bool PreserveLCSSA);
 
 void computePeelCount(Loop *L, unsigned LoopSize,
                       TargetTransformInfo::UnrollingPreferences &UP,
-                      unsigned &TripCount);
+                      unsigned &TripCount, ScalarEvolution &SE);
+
+bool canPeel(Loop *L);
 
 bool peelLoop(Loop *L, unsigned PeelCount, LoopInfo *LI, ScalarEvolution *SE,
               DominatorTree *DT, AssumptionCache *AC, bool PreserveLCSSA);
 
 MDNode *GetUnrollMetadata(MDNode *LoopID, StringRef Name);
-}
 
-#endif
+} // end namespace llvm
+
+#endif // LLVM_TRANSFORMS_UTILS_UNROLLLOOP_H

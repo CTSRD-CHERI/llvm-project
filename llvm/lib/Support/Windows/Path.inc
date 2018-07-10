@@ -17,6 +17,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/Support/ConvertUTF.h"
 #include "llvm/Support/WindowsError.h"
 #include <fcntl.h>
 #include <io.h>
@@ -45,6 +46,7 @@ typedef int errno_t;
 using namespace llvm;
 
 using llvm::sys::windows::UTF8ToUTF16;
+using llvm::sys::windows::CurCPToUTF16;
 using llvm::sys::windows::UTF16ToUTF8;
 using llvm::sys::path::widenPath;
 
@@ -120,6 +122,8 @@ std::error_code widenPath(const Twine &Path8,
 } // end namespace path
 
 namespace fs {
+
+const file_t kInvalidFile = INVALID_HANDLE_VALUE;
 
 std::string getMainExecutable(const char *argv0, void *MainExecAddr) {
   SmallVector<wchar_t, MAX_PATH> PathName;
@@ -344,22 +348,60 @@ std::error_code is_local(const Twine &path, bool &result) {
   return is_local_internal(WidePath, result);
 }
 
+static std::error_code realPathFromHandle(HANDLE H,
+                                          SmallVectorImpl<wchar_t> &Buffer) {
+  DWORD CountChars = ::GetFinalPathNameByHandleW(
+      H, Buffer.begin(), Buffer.capacity() - 1, FILE_NAME_NORMALIZED);
+  if (CountChars > Buffer.capacity()) {
+    // The buffer wasn't big enough, try again.  In this case the return value
+    // *does* indicate the size of the null terminator.
+    Buffer.reserve(CountChars);
+    CountChars = ::GetFinalPathNameByHandleW(
+        H, Buffer.data(), Buffer.capacity() - 1, FILE_NAME_NORMALIZED);
+  }
+  if (CountChars == 0)
+    return mapWindowsError(GetLastError());
+  Buffer.set_size(CountChars);
+  return std::error_code();
+}
+
+static std::error_code realPathFromHandle(HANDLE H,
+                                          SmallVectorImpl<char> &RealPath) {
+  RealPath.clear();
+  SmallVector<wchar_t, MAX_PATH> Buffer;
+  if (std::error_code EC = realPathFromHandle(H, Buffer))
+    return EC;
+
+  const wchar_t *Data = Buffer.data();
+  DWORD CountChars = Buffer.size();
+  if (CountChars >= 4) {
+    if (0 == ::memcmp(Data, L"\\\\?\\", 8)) {
+      CountChars -= 4;
+      Data += 4;
+    }
+  }
+
+  // Convert the result from UTF-16 to UTF-8.
+  return UTF16ToUTF8(Data, CountChars, RealPath);
+}
+
 std::error_code is_local(int FD, bool &Result) {
   SmallVector<wchar_t, 128> FinalPath;
   HANDLE Handle = reinterpret_cast<HANDLE>(_get_osfhandle(FD));
 
-  size_t Len = 128;
-  do {
-    FinalPath.reserve(Len);
-    Len = ::GetFinalPathNameByHandleW(Handle, FinalPath.data(),
-                                      FinalPath.capacity() - 1, VOLUME_NAME_NT);
-    if (Len == 0)
-      return mapWindowsError(::GetLastError());
-  } while (Len > FinalPath.capacity());
-
-  FinalPath.set_size(Len);
+  if (std::error_code EC = realPathFromHandle(Handle, FinalPath))
+    return EC;
 
   return is_local_internal(FinalPath, Result);
+}
+
+static std::error_code setDeleteDisposition(HANDLE Handle, bool Delete) {
+  FILE_DISPOSITION_INFO Disposition;
+  Disposition.DeleteFile = Delete;
+  if (!SetFileInformationByHandle(Handle, FileDispositionInfo, &Disposition,
+                                  sizeof(Disposition)))
+    return mapWindowsError(::GetLastError());
+  return std::error_code();
 }
 
 static std::error_code rename_internal(HANDLE FromHandle, const Twine &To,
@@ -389,29 +431,10 @@ static std::error_code rename_internal(HANDLE FromHandle, const Twine &To,
   return std::error_code();
 }
 
-std::error_code rename(const Twine &From, const Twine &To) {
-  // Convert to utf-16.
-  SmallVector<wchar_t, 128> WideFrom;
+static std::error_code rename_handle(HANDLE FromHandle, const Twine &To) {
   SmallVector<wchar_t, 128> WideTo;
-  if (std::error_code EC = widenPath(From, WideFrom))
-    return EC;
   if (std::error_code EC = widenPath(To, WideTo))
     return EC;
-
-  ScopedFileHandle FromHandle;
-  // Retry this a few times to defeat badly behaved file system scanners.
-  for (unsigned Retry = 0; Retry != 200; ++Retry) {
-    if (Retry != 0)
-      ::Sleep(10);
-    FromHandle =
-        ::CreateFileW(WideFrom.begin(), GENERIC_READ | DELETE,
-                      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                      NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (FromHandle)
-      break;
-  }
-  if (!FromHandle)
-    return mapWindowsError(GetLastError());
 
   // We normally expect this loop to succeed after a few iterations. If it
   // requires more than 200 tries, it's more likely that the failures are due to
@@ -423,6 +446,9 @@ std::error_code rename(const Twine &From, const Twine &To) {
         std::error_code(ERROR_CALL_NOT_IMPLEMENTED, std::system_category())) {
       // Wine doesn't support SetFileInformationByHandle in rename_internal.
       // Fall back to MoveFileEx.
+      SmallVector<wchar_t, MAX_PATH> WideFrom;
+      if (std::error_code EC2 = realPathFromHandle(FromHandle, WideFrom))
+        return EC2;
       if (::MoveFileExW(WideFrom.begin(), WideTo.begin(),
                         MOVEFILE_REPLACE_EXISTING))
         return std::error_code();
@@ -498,6 +524,35 @@ std::error_code rename(const Twine &From, const Twine &To) {
 
   // The most likely root cause.
   return errc::permission_denied;
+}
+
+static std::error_code rename_fd(int FromFD, const Twine &To) {
+  HANDLE FromHandle = reinterpret_cast<HANDLE>(_get_osfhandle(FromFD));
+  return rename_handle(FromHandle, To);
+}
+
+std::error_code rename(const Twine &From, const Twine &To) {
+  // Convert to utf-16.
+  SmallVector<wchar_t, 128> WideFrom;
+  if (std::error_code EC = widenPath(From, WideFrom))
+    return EC;
+
+  ScopedFileHandle FromHandle;
+  // Retry this a few times to defeat badly behaved file system scanners.
+  for (unsigned Retry = 0; Retry != 200; ++Retry) {
+    if (Retry != 0)
+      ::Sleep(10);
+    FromHandle =
+        ::CreateFileW(WideFrom.begin(), GENERIC_READ | DELETE,
+                      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                      NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (FromHandle)
+      break;
+  }
+  if (!FromHandle)
+    return mapWindowsError(GetLastError());
+
+  return rename_handle(FromHandle, To);
 }
 
 std::error_code resize_file(int FD, uint64_t Size) {
@@ -721,12 +776,9 @@ std::error_code setLastModificationAndAccessTime(int FD, TimePoint<> Time) {
 
 std::error_code mapped_file_region::init(int FD, uint64_t Offset,
                                          mapmode Mode) {
-  // Make sure that the requested size fits within SIZE_T.
-  if (Size > std::numeric_limits<SIZE_T>::max())
-    return make_error_code(errc::invalid_argument);
-
-  HANDLE FileHandle = reinterpret_cast<HANDLE>(_get_osfhandle(FD));
-  if (FileHandle == INVALID_HANDLE_VALUE)
+  this->Mode = Mode;
+  HANDLE OrigFileHandle = reinterpret_cast<HANDLE>(_get_osfhandle(FD));
+  if (OrigFileHandle == INVALID_HANDLE_VALUE)
     return make_error_code(errc::bad_file_descriptor);
 
   DWORD flprotect;
@@ -737,9 +789,9 @@ std::error_code mapped_file_region::init(int FD, uint64_t Offset,
   }
 
   HANDLE FileMappingHandle =
-      ::CreateFileMappingW(FileHandle, 0, flprotect,
-                           (Offset + Size) >> 32,
-                           (Offset + Size) & 0xffffffff,
+      ::CreateFileMappingW(OrigFileHandle, 0, flprotect,
+                           Hi_32(Size),
+                           Lo_32(Size),
                            0);
   if (FileMappingHandle == NULL) {
     std::error_code ec = mapWindowsError(GetLastError());
@@ -775,9 +827,20 @@ std::error_code mapped_file_region::init(int FD, uint64_t Offset,
     Size = mbi.RegionSize;
   }
 
-  // Close all the handles except for the view. It will keep the other handles
-  // alive.
+  // Close the file mapping handle, as it's kept alive by the file mapping. But
+  // neither the file mapping nor the file mapping handle keep the file handle
+  // alive, so we need to keep a reference to the file in case all other handles
+  // are closed and the file is deleted, which may cause invalid data to be read
+  // from the file.
   ::CloseHandle(FileMappingHandle);
+  if (!::DuplicateHandle(::GetCurrentProcess(), OrigFileHandle,
+                         ::GetCurrentProcess(), &FileHandle, 0, 0,
+                         DUPLICATE_SAME_ACCESS)) {
+    std::error_code ec = mapWindowsError(GetLastError());
+    ::UnmapViewOfFile(Mapping);
+    return ec;
+  }
+
   return std::error_code();
 }
 
@@ -790,8 +853,20 @@ mapped_file_region::mapped_file_region(int fd, mapmode mode, size_t length,
 }
 
 mapped_file_region::~mapped_file_region() {
-  if (Mapping)
+  if (Mapping) {
     ::UnmapViewOfFile(Mapping);
+
+    if (Mode == mapmode::readwrite) {
+      // There is a Windows kernel bug, the exact trigger conditions of which
+      // are not well understood.  When triggered, dirty pages are not properly
+      // flushed and subsequent process's attempts to read a file can return
+      // invalid data.  Calling FlushFileBuffers on the write handle is
+      // sufficient to ensure that this bug is not triggered.
+      ::FlushFileBuffers(FileHandle);
+    }
+
+    ::CloseHandle(FileHandle);
+  }
 }
 
 size_t mapped_file_region::size() const {
@@ -920,146 +995,169 @@ ErrorOr<basic_file_status> directory_entry::status() const {
   return Status;
 }
 
-static std::error_code realPathFromHandle(HANDLE H,
-                                          SmallVectorImpl<char> &RealPath) {
-  RealPath.clear();
-  llvm::SmallVector<wchar_t, MAX_PATH> Buffer;
-  DWORD CountChars = ::GetFinalPathNameByHandleW(
-      H, Buffer.begin(), Buffer.capacity() - 1, FILE_NAME_NORMALIZED);
-  if (CountChars > Buffer.capacity()) {
-    // The buffer wasn't big enough, try again.  In this case the return value
-    // *does* indicate the size of the null terminator.
-    Buffer.reserve(CountChars);
-    CountChars = ::GetFinalPathNameByHandleW(
-        H, Buffer.data(), Buffer.capacity() - 1, FILE_NAME_NORMALIZED);
-  }
-  if (CountChars == 0)
-    return mapWindowsError(GetLastError());
+static std::error_code nativeFileToFd(Expected<HANDLE> H, int &ResultFD,
+                                      OpenFlags Flags) {
+  int CrtOpenFlags = 0;
+  if (Flags & OF_Append)
+    CrtOpenFlags |= _O_APPEND;
 
-  const wchar_t *Data = Buffer.data();
-  if (CountChars >= 4) {
-    if (0 == ::memcmp(Data, L"\\\\?\\", 8)) {
-      CountChars -= 4;
-      Data += 4;
+  if (Flags & OF_Text)
+    CrtOpenFlags |= _O_TEXT;
+
+  ResultFD = -1;
+  if (!H)
+    return errorToErrorCode(H.takeError());
+
+  ResultFD = ::_open_osfhandle(intptr_t(*H), CrtOpenFlags);
+  if (ResultFD == -1) {
+    ::CloseHandle(*H);
+    return mapWindowsError(ERROR_INVALID_HANDLE);
+  }
+  return std::error_code();
+}
+
+static DWORD nativeDisposition(CreationDisposition Disp, OpenFlags Flags) {
+  // This is a compatibility hack.  Really we should respect the creation
+  // disposition, but a lot of old code relied on the implicit assumption that
+  // OF_Append implied it would open an existing file.  Since the disposition is
+  // now explicit and defaults to CD_CreateAlways, this assumption would cause
+  // any usage of OF_Append to append to a new file, even if the file already
+  // existed.  A better solution might have two new creation dispositions:
+  // CD_AppendAlways and CD_AppendNew.  This would also address the problem of
+  // OF_Append being used on a read-only descriptor, which doesn't make sense.
+  if (Flags & OF_Append)
+    return OPEN_ALWAYS;
+
+  switch (Disp) {
+  case CD_CreateAlways:
+    return CREATE_ALWAYS;
+  case CD_CreateNew:
+    return CREATE_NEW;
+  case CD_OpenAlways:
+    return OPEN_ALWAYS;
+  case CD_OpenExisting:
+    return OPEN_EXISTING;
+  }
+  llvm_unreachable("unreachable!");
+}
+
+static DWORD nativeAccess(FileAccess Access, OpenFlags Flags) {
+  DWORD Result = 0;
+  if (Access & FA_Read)
+    Result |= GENERIC_READ;
+  if (Access & FA_Write)
+    Result |= GENERIC_WRITE;
+  if (Flags & OF_Delete)
+    Result |= DELETE;
+  return Result;
+}
+
+static std::error_code openNativeFileInternal(const Twine &Name,
+                                              file_t &ResultFile, DWORD Disp,
+                                              DWORD Access, DWORD Flags,
+                                              bool Inherit = false) {
+  SmallVector<wchar_t, 128> PathUTF16;
+  if (std::error_code EC = widenPath(Name, PathUTF16))
+    return EC;
+
+  SECURITY_ATTRIBUTES SA;
+  SA.nLength = sizeof(SA);
+  SA.lpSecurityDescriptor = nullptr;
+  SA.bInheritHandle = Inherit;
+
+  HANDLE H =
+      ::CreateFileW(PathUTF16.begin(), Access,
+                    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, &SA,
+                    Disp, Flags, NULL);
+  if (H == INVALID_HANDLE_VALUE) {
+    DWORD LastError = ::GetLastError();
+    std::error_code EC = mapWindowsError(LastError);
+    // Provide a better error message when trying to open directories.
+    // This only runs if we failed to open the file, so there is probably
+    // no performances issues.
+    if (LastError != ERROR_ACCESS_DENIED)
+      return EC;
+    if (is_directory(Name))
+      return make_error_code(errc::is_a_directory);
+    return EC;
+  }
+  ResultFile = H;
+  return std::error_code();
+}
+
+Expected<file_t> openNativeFile(const Twine &Name, CreationDisposition Disp,
+                                FileAccess Access, OpenFlags Flags,
+                                unsigned Mode) {
+  // Verify that we don't have both "append" and "excl".
+  assert((!(Disp == CD_CreateNew) || !(Flags & OF_Append)) &&
+         "Cannot specify both 'CreateNew' and 'Append' file creation flags!");
+
+  DWORD NativeDisp = nativeDisposition(Disp, Flags);
+  DWORD NativeAccess = nativeAccess(Access, Flags);
+
+  bool Inherit = false;
+  if (Flags & OF_ChildInherit)
+    Inherit = true;
+
+  file_t Result;
+  std::error_code EC = openNativeFileInternal(
+      Name, Result, NativeDisp, NativeAccess, FILE_ATTRIBUTE_NORMAL, Inherit);
+  if (EC)
+    return errorCodeToError(EC);
+  if (Flags & OF_Delete) {
+    if ((EC = setDeleteDisposition(Result, true))) {
+      ::CloseHandle(Result);
+      return errorCodeToError(EC);
     }
   }
+  return Result;
+}
 
-  // Convert the result from UTF-16 to UTF-8.
-  return UTF16ToUTF8(Data, CountChars, RealPath);
+std::error_code openFile(const Twine &Name, int &ResultFD,
+                         CreationDisposition Disp, FileAccess Access,
+                         OpenFlags Flags, unsigned int Mode) {
+  Expected<file_t> Result = openNativeFile(Name, Disp, Access, Flags);
+  if (!Result)
+    return errorToErrorCode(Result.takeError());
+
+  return nativeFileToFd(*Result, ResultFD, Flags);
 }
 
 static std::error_code directoryRealPath(const Twine &Name,
                                          SmallVectorImpl<char> &RealPath) {
-  SmallVector<wchar_t, 128> PathUTF16;
-
-  if (std::error_code EC = widenPath(Name, PathUTF16))
+  file_t File;
+  std::error_code EC = openNativeFileInternal(
+      Name, File, OPEN_EXISTING, GENERIC_READ, FILE_FLAG_BACKUP_SEMANTICS);
+  if (EC)
     return EC;
 
-  HANDLE H =
-      ::CreateFileW(PathUTF16.begin(), GENERIC_READ,
-                    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                    NULL, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
-  if (H == INVALID_HANDLE_VALUE)
-    return mapWindowsError(GetLastError());
-  std::error_code EC = realPathFromHandle(H, RealPath);
-  ::CloseHandle(H);
+  EC = realPathFromHandle(File, RealPath);
+  ::CloseHandle(File);
   return EC;
 }
 
 std::error_code openFileForRead(const Twine &Name, int &ResultFD,
+                                OpenFlags Flags,
                                 SmallVectorImpl<char> *RealPath) {
-  SmallVector<wchar_t, 128> PathUTF16;
-
-  if (std::error_code EC = widenPath(Name, PathUTF16))
-    return EC;
-
-  HANDLE H =
-      ::CreateFileW(PathUTF16.begin(), GENERIC_READ,
-                    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                    NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-  if (H == INVALID_HANDLE_VALUE) {
-    DWORD LastError = ::GetLastError();
-    std::error_code EC = mapWindowsError(LastError);
-    // Provide a better error message when trying to open directories.
-    // This only runs if we failed to open the file, so there is probably
-    // no performances issues.
-    if (LastError != ERROR_ACCESS_DENIED)
-      return EC;
-    if (is_directory(Name))
-      return make_error_code(errc::is_a_directory);
-    return EC;
-  }
-
-  int FD = ::_open_osfhandle(intptr_t(H), 0);
-  if (FD == -1) {
-    ::CloseHandle(H);
-    return mapWindowsError(ERROR_INVALID_HANDLE);
-  }
-
-  // Fetch the real name of the file, if the user asked
-  if (RealPath)
-    realPathFromHandle(H, *RealPath);
-
-  ResultFD = FD;
-  return std::error_code();
+  Expected<HANDLE> NativeFile = openNativeFileForRead(Name, Flags, RealPath);
+  return nativeFileToFd(std::move(NativeFile), ResultFD, OF_None);
 }
 
-std::error_code openFileForWrite(const Twine &Name, int &ResultFD,
-                            sys::fs::OpenFlags Flags, unsigned Mode) {
-  // Verify that we don't have both "append" and "excl".
-  assert((!(Flags & sys::fs::F_Excl) || !(Flags & sys::fs::F_Append)) &&
-         "Cannot specify both 'excl' and 'append' file creation flags!");
+Expected<file_t> openNativeFileForRead(const Twine &Name, OpenFlags Flags,
+                                       SmallVectorImpl<char> *RealPath) {
+  Expected<file_t> Result =
+      openNativeFile(Name, CD_OpenExisting, FA_Read, Flags);
 
-  SmallVector<wchar_t, 128> PathUTF16;
+  // Fetch the real name of the file, if the user asked
+  if (Result && RealPath)
+    realPathFromHandle(*Result, *RealPath);
 
-  if (std::error_code EC = widenPath(Name, PathUTF16))
-    return EC;
+  return Result;
+}
 
-  DWORD CreationDisposition;
-  if (Flags & F_Excl)
-    CreationDisposition = CREATE_NEW;
-  else if (Flags & F_Append)
-    CreationDisposition = OPEN_ALWAYS;
-  else
-    CreationDisposition = CREATE_ALWAYS;
-
-  DWORD Access = GENERIC_WRITE;
-  if (Flags & F_RW)
-    Access |= GENERIC_READ;
-
-  HANDLE H =
-      ::CreateFileW(PathUTF16.begin(), Access,
-                    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                    NULL, CreationDisposition, FILE_ATTRIBUTE_NORMAL, NULL);
-
-  if (H == INVALID_HANDLE_VALUE) {
-    DWORD LastError = ::GetLastError();
-    std::error_code EC = mapWindowsError(LastError);
-    // Provide a better error message when trying to open directories.
-    // This only runs if we failed to open the file, so there is probably
-    // no performances issues.
-    if (LastError != ERROR_ACCESS_DENIED)
-      return EC;
-    if (is_directory(Name))
-      return make_error_code(errc::is_a_directory);
-    return EC;
-  }
-
-  int OpenFlags = 0;
-  if (Flags & F_Append)
-    OpenFlags |= _O_APPEND;
-
-  if (Flags & F_Text)
-    OpenFlags |= _O_TEXT;
-
-  int FD = ::_open_osfhandle(intptr_t(H), OpenFlags);
-  if (FD == -1) {
-    ::CloseHandle(H);
-    return mapWindowsError(ERROR_INVALID_HANDLE);
-  }
-
-  ResultFD = FD;
-  return std::error_code();
+void closeFile(file_t &F) {
+  ::CloseHandle(F);
+  F = kInvalidFile;
 }
 
 std::error_code remove_directories(const Twine &path, bool IgnoreErrors) {
@@ -1130,7 +1228,8 @@ std::error_code real_path(const Twine &path, SmallVectorImpl<char> &dest,
     return directoryRealPath(path, dest);
 
   int fd;
-  if (std::error_code EC = llvm::sys::fs::openFileForRead(path, fd, &dest))
+  if (std::error_code EC =
+          llvm::sys::fs::openFileForRead(path, fd, OF_None, &dest))
     return EC;
   ::close(fd);
   return std::error_code();
@@ -1205,23 +1304,26 @@ void system_temp_directory(bool ErasedOnReboot, SmallVectorImpl<char> &Result) {
 } // end namespace path
 
 namespace windows {
-std::error_code UTF8ToUTF16(llvm::StringRef utf8,
-                            llvm::SmallVectorImpl<wchar_t> &utf16) {
-  if (!utf8.empty()) {
-    int len = ::MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, utf8.begin(),
-                                    utf8.size(), utf16.begin(), 0);
+std::error_code CodePageToUTF16(unsigned codepage,
+                                llvm::StringRef original,
+                                llvm::SmallVectorImpl<wchar_t> &utf16) {
+  if (!original.empty()) {
+    int len = ::MultiByteToWideChar(codepage, MB_ERR_INVALID_CHARS, original.begin(),
+                                    original.size(), utf16.begin(), 0);
 
-    if (len == 0)
+    if (len == 0) {
       return mapWindowsError(::GetLastError());
+    }
 
     utf16.reserve(len + 1);
     utf16.set_size(len);
 
-    len = ::MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, utf8.begin(),
-                                utf8.size(), utf16.begin(), utf16.size());
+    len = ::MultiByteToWideChar(codepage, MB_ERR_INVALID_CHARS, original.begin(),
+                                original.size(), utf16.begin(), utf16.size());
 
-    if (len == 0)
+    if (len == 0) {
       return mapWindowsError(::GetLastError());
+    }
   }
 
   // Make utf16 null terminated.
@@ -1231,32 +1333,44 @@ std::error_code UTF8ToUTF16(llvm::StringRef utf8,
   return std::error_code();
 }
 
+std::error_code UTF8ToUTF16(llvm::StringRef utf8,
+                            llvm::SmallVectorImpl<wchar_t> &utf16) {
+  return CodePageToUTF16(CP_UTF8, utf8, utf16);
+}
+
+std::error_code CurCPToUTF16(llvm::StringRef curcp,
+                            llvm::SmallVectorImpl<wchar_t> &utf16) {
+  return CodePageToUTF16(CP_ACP, curcp, utf16);
+}
+
 static
 std::error_code UTF16ToCodePage(unsigned codepage, const wchar_t *utf16,
                                 size_t utf16_len,
-                                llvm::SmallVectorImpl<char> &utf8) {
+                                llvm::SmallVectorImpl<char> &converted) {
   if (utf16_len) {
     // Get length.
-    int len = ::WideCharToMultiByte(codepage, 0, utf16, utf16_len, utf8.begin(),
+    int len = ::WideCharToMultiByte(codepage, 0, utf16, utf16_len, converted.begin(),
                                     0, NULL, NULL);
 
-    if (len == 0)
+    if (len == 0) {
       return mapWindowsError(::GetLastError());
+    }
 
-    utf8.reserve(len);
-    utf8.set_size(len);
+    converted.reserve(len);
+    converted.set_size(len);
 
     // Now do the actual conversion.
-    len = ::WideCharToMultiByte(codepage, 0, utf16, utf16_len, utf8.data(),
-                                utf8.size(), NULL, NULL);
+    len = ::WideCharToMultiByte(codepage, 0, utf16, utf16_len, converted.data(),
+                                converted.size(), NULL, NULL);
 
-    if (len == 0)
+    if (len == 0) {
       return mapWindowsError(::GetLastError());
+    }
   }
 
-  // Make utf8 null terminated.
-  utf8.push_back(0);
-  utf8.pop_back();
+  // Make the new string null terminated.
+  converted.push_back(0);
+  converted.pop_back();
 
   return std::error_code();
 }
@@ -1267,8 +1381,8 @@ std::error_code UTF16ToUTF8(const wchar_t *utf16, size_t utf16_len,
 }
 
 std::error_code UTF16ToCurCP(const wchar_t *utf16, size_t utf16_len,
-                             llvm::SmallVectorImpl<char> &utf8) {
-  return UTF16ToCodePage(CP_ACP, utf16, utf16_len, utf8);
+                             llvm::SmallVectorImpl<char> &curcp) {
+  return UTF16ToCodePage(CP_ACP, utf16, utf16_len, curcp);
 }
 
 } // end namespace windows

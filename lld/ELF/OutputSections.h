@@ -14,7 +14,6 @@
 #include "InputSection.h"
 #include "LinkerScript.h"
 #include "Relocations.h"
-
 #include "lld/Common/LLVM.h"
 #include "llvm/MC/StringTableBuilder.h"
 #include "llvm/Object/ELF.h"
@@ -23,7 +22,7 @@ namespace lld {
 namespace elf {
 
 struct PhdrEntry;
-class SymbolBody;
+class Symbol;
 struct EhSectionPiece;
 class EhInputSection;
 class InputSection;
@@ -33,7 +32,7 @@ class OutputSection;
 template <class ELFT> class ObjFile;
 template <class ELFT> class SharedFile;
 class SharedSymbol;
-class DefinedRegular;
+class Defined;
 
 // This represents a section in an output file.
 // It is composed of multiple InputSections.
@@ -49,10 +48,10 @@ public:
 
   static bool classof(const BaseCommand *C);
 
-  uint64_t getLMA() const { return Addr + LMAOffset; }
+  uint64_t getLMA() const { return PtLoad ? Addr + PtLoad->LMAOffset : Addr; }
   template <typename ELFT> void writeHeaderTo(typename ELFT::Shdr *SHdr);
 
-  unsigned SectionIndex;
+  uint32_t SectionIndex = UINT32_MAX;
   unsigned SortRank;
 
   uint32_t getPhdrFlags() const;
@@ -71,10 +70,13 @@ public:
   // it may have a non-null value.
   OutputSection *RelocationSection = nullptr;
 
-  // The following fields correspond to Elf_Shdr members.
+  // Initially this field is the number of InputSections that have been added to
+  // the OutputSection so far. Later on, after a call to assignAddresses, it
+  // corresponds to the Elf_Shdr member.
   uint64_t Size = 0;
+
+  // The following fields correspond to Elf_Shdr members.
   uint64_t Offset = 0;
-  uint64_t LMAOffset = 0;
   uint64_t Addr = 0;
   uint32_t ShName = 0;
 
@@ -85,6 +87,7 @@ public:
 
   // The following members are normally only used in linker scripts.
   MemoryRegion *MemRegion = nullptr;
+  MemoryRegion *LMARegion = nullptr;
   Expr AddrExpr;
   Expr AlignExpr;
   Expr LMAExpr;
@@ -95,13 +98,16 @@ public:
   ConstraintKind Constraint = ConstraintKind::NoConstraint;
   std::string Location;
   std::string MemoryRegionName;
+  std::string LMARegionName;
+  bool NonAlloc = false;
   bool Noload = false;
+  bool ExpressionsUseSymbols = false;
 
   template <class ELFT> void finalize();
   template <class ELFT> void writeTo(uint8_t *Buf);
   template <class ELFT> void maybeCompress();
 
-  void sort(std::function<int(InputSectionBase *S)> Order);
+  void sort(llvm::function_ref<int(InputSectionBase *S)> Order);
   void sortInitFini();
   void sortCtorsDtors();
 
@@ -115,13 +121,13 @@ private:
 
 int getPriority(StringRef S);
 
+std::vector<InputSection *> getInputSections(OutputSection* OS);
+
 // All output sections that are handled by the linker specially are
 // globally accessible. Writer initializes them, so don't use them
 // until Writer is initialized.
 struct Out {
   static uint8_t First;
-  static OutputSection *Opd;
-  static uint8_t *OpdBuf;
   static PhdrEntry *TlsPhdr;
   static OutputSection *DebugInfo;
   static OutputSection *ElfHeader;
@@ -131,45 +137,13 @@ struct Out {
   static OutputSection *FiniArray;
 };
 
-struct SectionKey {
-  StringRef Name;
-  uint64_t Flags;
-  uint32_t Alignment;
-};
 } // namespace elf
 } // namespace lld
 
-namespace llvm {
-template <> struct DenseMapInfo<lld::elf::SectionKey> {
-  static lld::elf::SectionKey getEmptyKey();
-  static lld::elf::SectionKey getTombstoneKey();
-  static unsigned getHashValue(const lld::elf::SectionKey &Val);
-  static bool isEqual(const lld::elf::SectionKey &LHS,
-                      const lld::elf::SectionKey &RHS);
-};
-} // namespace llvm
-
 namespace lld {
 namespace elf {
-// This class knows how to create an output section for a given
-// input section. Output section type is determined by various
-// factors, including input section's sh_flags, sh_type and
-// linker scripts.
-class OutputSectionFactory {
-public:
-  OutputSectionFactory();
-  ~OutputSectionFactory();
-
-  OutputSection *addInputSec(InputSectionBase *IS, StringRef OutsecName);
-
-private:
-  llvm::SmallDenseMap<SectionKey, OutputSection *> Map;
-};
 
 uint64_t getHeaderSize();
-void reportDiscarded(InputSectionBase *IS);
-void sortByOrder(llvm::MutableArrayRef<InputSection *> In,
-                 std::function<int(InputSectionBase *S)> Order);
 
 extern std::vector<OutputSection *> OutputSections;
 } // namespace elf

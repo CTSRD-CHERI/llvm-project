@@ -38,6 +38,7 @@ RUN: ld.lld -### foo.o -m i386pep -o bar.exe | FileCheck -check-prefix=OUT %s
 OUT: -out:bar.exe
 
 RUN: ld.lld -### foo.o -m i386pep --out-implib bar | FileCheck -check-prefix=IMPLIB %s
+RUN: ld.lld -### foo.o -m i386pep --out-implib=bar | FileCheck -check-prefix=IMPLIB %s
 IMPLIB: -implib:bar
 
 RUN: ld.lld -### foo.o -m i386pep -out-implib bar | FileCheck -check-prefix=NOIMPLIB %s
@@ -78,3 +79,64 @@ EXPORT-ALL: -export-all-symbols
 
 RUN: ld.lld -### -m i386pep foo.o --output-def out.def | FileCheck -check-prefix OUTPUT-DEF %s
 OUTPUT-DEF: -output-def:out.def
+
+RUN: ld.lld -### -m i386pep foo.o -Xlink=-lldmap | FileCheck -check-prefix XLINK %s
+XLINK: -lldmap
+
+RUN: ld.lld -### -m i386pep foo.o | FileCheck -check-prefix DEBUG %s
+DEBUG: -debug:dwarf
+
+RUN: ld.lld -### -m i386pep foo.o -s | FileCheck -check-prefix STRIP %s
+RUN: ld.lld -### -m i386pep foo.o --strip-all | FileCheck -check-prefix STRIP %s
+STRIP-NOT: -debug:dwarf
+
+RUN: ld.lld -### -m i386pep foo.o -pdb out.pdb | FileCheck -check-prefix PDB %s
+PDB: -debug -pdb:out.pdb
+PDB-NOT: -debug:dwarf
+
+RUN: ld.lld -### -m i386pep foo.o --large-address-aware | FileCheck -check-prefix LARGE-ADDRESS-AWARE %s
+LARGE-ADDRESS-AWARE: -largeaddressaware
+
+RUN: ld.lld -### -m i386pe foo.o | FileCheck -check-prefix DEFAULT-DISABLE-FLAGS %s
+RUN: ld.lld -### -m i386pep foo.o | FileCheck -check-prefix DEFAULT-DISABLE-FLAGS %s
+DEFAULT-DISABLE-FLAGS: -dynamicbase:no
+RUN: ld.lld -### -m i386pe --dynamicbase foo.o | FileCheck -check-prefix NO-DEFAULT-DISABLE-FLAGS %s
+RUN: ld.lld -### -m i386pep -dynamicbase foo.o | FileCheck -check-prefix NO-DEFAULT-DISABLE-FLAGS %s
+RUN: ld.lld -### -m thumb2pe foo.o | FileCheck -check-prefix NO-DEFAULT-DISABLE-FLAGS %s
+RUN: ld.lld -### -m arm64pe foo.o | FileCheck -check-prefix NO-DEFAULT-DISABLE-FLAGS %s
+NO-DEFAULT-DISABLE-FLAGS-NOT: -dynamicbase:no
+
+RUN: ld.lld -### -m i386pep foo.o --image-base 0x1230000 | FileCheck -check-prefix IMAGE-BASE %s
+RUN: ld.lld -### -m i386pep foo.o -image-base 0x1230000 | FileCheck -check-prefix IMAGE-BASE %s
+IMAGE-BASE: -base:0x1230000
+
+RUN: ld.lld -### -m i386pep foo.o | FileCheck -check-prefix NO-GC-SECTIONS %s
+RUN: ld.lld -### -m i386pep foo.o --gc-sections --no-gc-sections | FileCheck -check-prefix NO-GC-SECTIONS %s
+NO-GC-SECTIONS: -opt:noref
+
+RUN: ld.lld -### -m i386pep foo.o --gc-sections | FileCheck -check-prefix GC-SECTIONS %s
+RUN: ld.lld -### -m i386pep foo.o -gc-sections | FileCheck -check-prefix GC-SECTIONS %s
+GC-SECTIONS: -opt:ref
+
+RUN: ld.lld -### -m i386pep foo.o | FileCheck -check-prefix ICF-NONE %s
+RUN: ld.lld -### -m i386pep foo.o --icf=none | FileCheck -check-prefix ICF-NONE %s
+RUN: ld.lld -### -m i386pep foo.o -icf=none | FileCheck -check-prefix ICF-NONE %s
+RUN: ld.lld -### -m i386pep foo.o --icf=safe | FileCheck -check-prefix ICF-NONE %s
+RUN: ld.lld -### -m i386pep foo.o -icf=safe | FileCheck -check-prefix ICF-NONE %s
+ICF-NONE: -opt:noicf
+
+RUN: ld.lld -### -m i386pep foo.o --icf=all | FileCheck -check-prefix ICF %s
+RUN: ld.lld -### -m i386pep foo.o -icf=all | FileCheck -check-prefix ICF %s
+ICF: -opt:icf
+
+RUN: ld.lld -### -m i386pep --start-group foo.o --end-group
+
+RUN: ld.lld -### foo.o -m i386pe -shared --kill-at | FileCheck -check-prefix=KILL-AT %s
+RUN: ld.lld -### foo.o -m i386pe -shared -kill-at | FileCheck -check-prefix=KILL-AT %s
+KILL-AT: -kill-at
+
+RUN: ld.lld -### foo.o -m i386pep -Map bar.map | FileCheck -check-prefix=MAP %s
+RUN: ld.lld -### foo.o -m i386pep --Map bar.map | FileCheck -check-prefix=MAP %s
+RUN: ld.lld -### foo.o -m i386pep -Map=bar.map | FileCheck -check-prefix=MAP %s
+RUN: ld.lld -### foo.o -m i386pep --Map=bar.map | FileCheck -check-prefix=MAP %s
+MAP: -lldmap:bar.map

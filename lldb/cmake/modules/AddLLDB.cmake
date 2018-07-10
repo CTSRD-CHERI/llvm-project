@@ -4,7 +4,7 @@ function(add_lldb_library name)
   cmake_parse_arguments(PARAM
     "MODULE;SHARED;STATIC;OBJECT;PLUGIN"
     ""
-    "DEPENDS;LINK_LIBS;LINK_COMPONENTS"
+    "EXTRA_CXXFLAGS;DEPENDS;LINK_LIBS;LINK_COMPONENTS"
     ${ARGN})
   llvm_process_sources(srcs ${PARAM_UNPARSED_ARGUMENTS})
   list(APPEND LLVM_LINK_COMPONENTS ${PARAM_LINK_COMPONENTS})
@@ -35,6 +35,8 @@ function(add_lldb_library name)
   endif()
 
   #PIC not needed on Win
+  # FIXME: Setting CMAKE_CXX_FLAGS here is a no-op, use target_compile_options
+  # or omit this logic instead.
   if (NOT WIN32)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
   endif()
@@ -64,11 +66,9 @@ function(add_lldb_library name)
           ARCHIVE DESTINATION lib${LLVM_LIBDIR_SUFFIX})
       endif()
       if (NOT CMAKE_CONFIGURATION_TYPES)
-        add_custom_target(install-${name}
-                          DEPENDS ${name}
-                          COMMAND "${CMAKE_COMMAND}"
-                                  -DCMAKE_INSTALL_COMPONENT=${name}
-                                  -P "${CMAKE_BINARY_DIR}/cmake_install.cmake")
+        add_llvm_install_targets(install-${name}
+                                 DEPENDS ${name}
+                                 COMPONENT ${name})
       endif()
     endif()
   endif()
@@ -78,12 +78,15 @@ function(add_lldb_library name)
   # headers without negatively impacting much of anything.
   add_dependencies(${name} clang-tablegen-targets)
 
+  # Add in any extra C++ compilation flags for this library.
+  target_compile_options(${name} PRIVATE ${PARAM_EXTRA_CXXFLAGS})
+
   set_target_properties(${name} PROPERTIES FOLDER "lldb libraries")
 endfunction(add_lldb_library)
 
 function(add_lldb_executable name)
   cmake_parse_arguments(ARG
-    "INCLUDE_IN_FRAMEWORK;GENERATE_INSTALL"
+    "INCLUDE_IN_SUITE;GENERATE_INSTALL"
     ""
     "LINK_LIBS;LINK_COMPONENTS"
     ${ARGN}
@@ -92,12 +95,13 @@ function(add_lldb_executable name)
   list(APPEND LLVM_LINK_COMPONENTS ${ARG_LINK_COMPONENTS})
   add_llvm_executable(${name} ${ARG_UNPARSED_ARGUMENTS})
 
-  target_link_libraries(${name} ${ARG_LINK_LIBS})
+  target_link_libraries(${name} PRIVATE ${ARG_LINK_LIBS})
   set_target_properties(${name} PROPERTIES
     FOLDER "lldb executables")
 
-  if(LLDB_BUILD_FRAMEWORK)
-    if(ARG_INCLUDE_IN_FRAMEWORK)
+  if(ARG_INCLUDE_IN_SUITE)
+    add_dependencies(lldb-suite ${name})
+    if(LLDB_BUILD_FRAMEWORK)
       if(NOT IOS)
         set(resource_dir "/Resources")
         set(resource_dots "../")
@@ -116,28 +120,30 @@ function(add_lldb_executable name)
       if(ARG_GENERATE_INSTALL)
         add_custom_target(install-${name} DEPENDS ${name})
         add_dependencies(install-liblldb ${name})
+        add_custom_target(install-${name}-stripped DEPENDS ${name})
+        add_dependencies(install-liblldb-stripped ${name})
       endif()
-    else()
-      set_target_properties(${name} PROPERTIES
-            BUILD_WITH_INSTALL_RPATH On
-            INSTALL_RPATH "@loader_path/../${LLDB_FRAMEWORK_INSTALL_DIR}")
     endif()
   endif()
 
-  if(ARG_GENERATE_INSTALL AND NOT (ARG_INCLUDE_IN_FRAMEWORK AND LLDB_BUILD_FRAMEWORK ))
+  if(LLDB_BUILD_FRAMEWORK AND NOT ARG_INCLUDE_IN_SUITE)
+    set_target_properties(${name} PROPERTIES
+          BUILD_WITH_INSTALL_RPATH On
+          INSTALL_RPATH "@loader_path/../${LLDB_FRAMEWORK_INSTALL_DIR}")
+  endif()
+
+  if(ARG_GENERATE_INSTALL AND NOT (ARG_INCLUDE_IN_SUITE AND LLDB_BUILD_FRAMEWORK ))
     install(TARGETS ${name}
           COMPONENT ${name}
           RUNTIME DESTINATION bin)
     if (NOT CMAKE_CONFIGURATION_TYPES)
-      add_custom_target(install-${name}
-                        DEPENDS ${name}
-                        COMMAND "${CMAKE_COMMAND}"
-                                -DCMAKE_INSTALL_COMPONENT=${name}
-                                -P "${CMAKE_BINARY_DIR}/cmake_install.cmake")
+      add_llvm_install_targets(install-${name}
+                               DEPENDS ${name}
+                               COMPONENT ${name})
     endif()
   endif()
 
-  if(ARG_INCLUDE_IN_FRAMEWORK AND LLDB_BUILD_FRAMEWORK)
+  if(ARG_INCLUDE_IN_SUITE AND LLDB_BUILD_FRAMEWORK)
     add_llvm_tool_symlink(${name} ${name} ALWAYS_GENERATE SKIP_INSTALL
                             OUTPUT_DIR ${LLVM_RUNTIME_OUTPUT_INTDIR})
   endif()

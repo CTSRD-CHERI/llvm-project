@@ -15,12 +15,13 @@ target triple = "aarch64--linux"
 ; CHECK: load <4 x i32>
 ; CHECK: select <4 x i1>
 
-; YAML:      Pass:            slp-vectorizer
+; YAML:      --- !Passed
+; YAML-NEXT: Pass:            slp-vectorizer
 ; YAML-NEXT: Name:            VectorizedHorizontalReduction
 ; YAML-NEXT: Function:        test_select
 ; YAML-NEXT: Args:
 ; YAML-NEXT:   - String:          'Vectorized horizontal reduction with cost '
-; YAML-NEXT:   - Cost:            '4'
+; YAML-NEXT:   - Cost:            '-8'
 ; YAML-NEXT:   - String:          ' and with tree size '
 ; YAML-NEXT:   - TreeSize:        '8'
 
@@ -108,12 +109,13 @@ define i32 @reduction_with_br(i32* noalias nocapture readonly %blk1, i32* noalia
 ; CHECK: load <4 x i32>
 ; CHECK: mul nsw <4 x i32>
 
-; YAML:      Pass:            slp-vectorizer
+; YAML:      --- !Passed
+; YAML-NEXT: Pass:            slp-vectorizer
 ; YAML-NEXT: Name:            VectorizedHorizontalReduction
 ; YAML-NEXT: Function:        reduction_with_br
 ; YAML-NEXT: Args:
 ; YAML-NEXT:   - String:          'Vectorized horizontal reduction with cost '
-; YAML-NEXT:   - Cost:            '1'
+; YAML-NEXT:   - Cost:            '-11'
 ; YAML-NEXT:   - String:          ' and with tree size '
 ; YAML-NEXT:   - TreeSize:        '3'
 
@@ -175,12 +177,13 @@ for.end:                                          ; preds = %for.end.loopexit, %
 ; CHECK: load <8 x i8>
 ; CHECK: select <8 x i1>
 
-; YAML:      Pass:            slp-vectorizer
+; YAML:      --- !Passed
+; YAML-NEXT: Pass:            slp-vectorizer
 ; YAML-NEXT: Name:            VectorizedHorizontalReduction
 ; YAML-NEXT: Function:        test_unrolled_select
 ; YAML-NEXT: Args:
 ; YAML-NEXT:   - String:          'Vectorized horizontal reduction with cost '
-; YAML-NEXT:   - Cost:            '-33'
+; YAML-NEXT:   - Cost:            '-47'
 ; YAML-NEXT:   - String:          ' and with tree size '
 ; YAML-NEXT:   - TreeSize:        '10'
 

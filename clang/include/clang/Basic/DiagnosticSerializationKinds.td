@@ -38,8 +38,8 @@ def err_pch_targetopt_mismatch : Error<
     "PCH file was compiled for the %0 '%1' but the current translation "
     "unit is being compiled for target '%2'">;
 def err_pch_targetopt_feature_mismatch : Error<
-    "%select{AST file|current translation unit}0 was compiled with the target "
-    "feature'%1' but the %select{current translation unit is|AST file was}0 "
+    "%select{AST file was|current translation unit is}0 compiled with the target "
+    "feature '%1' but the %select{current translation unit is|AST file was}0 "
     "not">;
 def err_pch_langopt_mismatch : Error<"%0 was %select{disabled|enabled}1 in "
     "PCH file but is currently %select{disabled|enabled}2">;
@@ -77,6 +77,8 @@ def err_imported_module_not_found : Error<
     "module '%0' in AST file '%1' (imported by AST file '%2') "
     "is not defined in any loaded module map file; "
     "maybe you need to load '%3'?">, DefaultFatal;
+def note_imported_by_pch_module_not_found : Note<
+    "consider adding '%0' to the header search path">;
 def err_imported_module_modmap_changed : Error<
     "module '%0' imported by AST file '%1' found in a different module map file"
     " (%2) than when the importing AST file was built (%3)">, DefaultFatal;
@@ -166,11 +168,11 @@ def err_module_odr_violation_mismatch_decl : Error<
   "%select{definition in module '%2'|defined here}1 found "
   "%select{end of class|public access specifier|private access specifier|"
   "protected access specifier|static assert|field|method|type alias|typedef|"
-  "data member|friend declaration}3">;
+  "data member|friend declaration|function template}3">;
 def note_module_odr_violation_mismatch_decl : Note<"but in '%0' found "
   "%select{end of class|public access specifier|private access specifier|"
   "protected access specifier|static assert|field|method|type alias|typedef|"
-  "data member|friend declaration}1">;
+  "data member|friend declaration|function template}1">;
 
 def err_module_odr_violation_mismatch_decl_diff : Error<
   "%q0 has different definitions in different modules; first difference is "
@@ -209,6 +211,12 @@ def err_module_odr_violation_mismatch_decl_diff : Error<
     "with %ordinal6 parameter with%select{out|}7 a default argument|"
   "%select{method %5|constructor|destructor}4 "
     "with %ordinal6 parameter with a default argument|"
+  "%select{method %5|constructor|destructor}4 "
+    "with %select{no |}6template arguments|"
+  "%select{method %5|constructor|destructor}4 "
+    "with %6 template argument%s6|"
+  "%select{method %5|constructor|destructor}4 "
+    "with %6 for %ordinal7 template argument|"
   "%select{typedef|type alias}4 name %5|"
   "%select{typedef|type alias}4 %5 with underlying type %6|"
   "data member with name %4|"
@@ -219,6 +227,18 @@ def err_module_odr_violation_mismatch_decl_diff : Error<
   "friend %select{class|function}4|"
   "friend %4|"
   "friend function %4|"
+  "function template %4 with %5 template parameter%s5|"
+  "function template %4 with %ordinal5 template parameter being a "
+    "%select{type|non-type|template}6 template parameter|"
+  "function template %4 with %ordinal5 template parameter "
+    "%select{with no name|named %7}6|"
+  "function template %4 with %ordinal5 template parameter with "
+    "%select{no |}6default argument|"
+  "function template %4 with %ordinal5 template parameter with "
+    "default argument %6|"
+  "function template %4 with %ordinal5 template parameter with one type|"
+  "function template %4 with %ordinal5 template parameter %select{not |}6"
+    "being a template parameter pack|"
   "}3">;
 
 def note_module_odr_violation_mismatch_decl_diff : Note<"but in '%0' found "
@@ -256,6 +276,12 @@ def note_module_odr_violation_mismatch_decl_diff : Note<"but in '%0' found "
     "with %ordinal4 parameter with%select{out|}5 a default argument|"
   "%select{method %3|constructor|destructor}2 "
     "with %ordinal4 parameter with a different default argument|"
+  "%select{method %3|constructor|destructor}2 "
+    "with %select{no |}4template arguments|"
+  "%select{method %3|constructor|destructor}2 "
+    "with %4 template argument%s4|"
+  "%select{method %3|constructor|destructor}2 "
+    "with %4 for %ordinal5 template argument|"
   "%select{typedef|type alias}2 name %3|"
   "%select{typedef|type alias}2 %3 with different underlying type %4|"
   "data member with name %2|"
@@ -266,6 +292,41 @@ def note_module_odr_violation_mismatch_decl_diff : Note<"but in '%0' found "
   "friend %select{class|function}2|"
   "friend %2|"
   "friend function %2|"
+  "function template %2 with %3 template parameter%s3|"
+  "function template %2 with %ordinal3 template paramter being a "
+    "%select{type|non-type|template}4 template parameter|"
+  "function template %2 with %ordinal3 template parameter "
+    "%select{with no name|named %5}4|"
+  "function template %2 with %ordinal3 template parameter with "
+    "%select{no |}4default argument|"
+  "function template %2 with %ordinal3 template parameter with "
+    "default argument %4|"
+  "function template %2 with %ordinal3 template parameter with different type|"
+  "function template %2 with %ordinal3 template parameter %select{not |}4"
+    "being a template parameter pack|"
+  "}1">;
+
+def err_module_odr_violation_function : Error<
+  "%q0 has different definitions in different modules; "
+  "%select{definition in module '%2'|defined here}1 "
+  "first difference is "
+  "%select{"
+  "return type is %4|"
+  "%ordinal4 parameter with name %5|"
+  "%ordinal4 parameter with type %5%select{| decayed from %7}6|"
+  "%ordinal4 parameter with%select{out|}5 a default argument|"
+  "%ordinal4 parameter with a default argument|"
+  "function body"
+  "}3">;
+
+def note_module_odr_violation_function : Note<"but in '%0' found "
+  "%select{"
+  "different return type %2|"
+  "%ordinal2 parameter with name %3|"
+  "%ordinal2 parameter with type %3%select{| decayed from %5}4|"
+  "%ordinal2 parameter with%select{out|}3 a default argument|"
+  "%ordinal2 parameter with a different default argument|"
+  "a different body"
   "}1">;
 
 def err_module_odr_violation_mismatch_decl_unknown : Error<

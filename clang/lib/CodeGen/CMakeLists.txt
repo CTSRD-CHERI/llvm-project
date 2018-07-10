@@ -7,6 +7,7 @@ set(LLVM_LINK_COMPONENTS
   Coverage
   IPO
   IRReader
+  AggressiveInstCombine
   InstCombine
   Instrumentation
   LTO
@@ -57,6 +58,7 @@ add_clang_library(clangCodeGen
   CGExprScalar.cpp
   CGGPUBuiltin.cpp
   CGLoopInfo.cpp
+  CGNonTrivialStruct.cpp
   CGObjC.cpp
   CGObjCGNU.cpp
   CGObjCMac.cpp
@@ -94,7 +96,6 @@ add_clang_library(clangCodeGen
   LINK_LIBS
   clangAnalysis
   clangAST
-  clangAnalysis
   clangBasic
   clangFrontend
   clangLex

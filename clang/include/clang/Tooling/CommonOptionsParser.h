@@ -30,10 +30,11 @@
 #include "clang/Tooling/ArgumentsAdjusters.h"
 #include "clang/Tooling/CompilationDatabase.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/Error.h"
 
 namespace clang {
 namespace tooling {
-/// \brief A parser for options common to all command-line Clang tools.
+/// A parser for options common to all command-line Clang tools.
 ///
 /// Parses a common subset of command-line arguments, locates and loads a
 /// compilation commands database and runs a tool with user-specified action. It
@@ -51,7 +52,7 @@ namespace tooling {
 ///
 /// static cl::OptionCategory MyToolCategory("My tool options");
 /// static cl::extrahelp CommonHelp(CommonOptionsParser::HelpMessage);
-/// static cl::extrahelp MoreHelp("\nMore help text...");
+/// static cl::extrahelp MoreHelp("\nMore help text...\n");
 /// static cl::opt<bool> YourOwnOption(...);
 /// ...
 ///
@@ -64,7 +65,7 @@ namespace tooling {
 /// \endcode
 class CommonOptionsParser {
 public:
-  /// \brief Parses command-line, initializes a compilation database.
+  /// Parses command-line, initializes a compilation database.
   ///
   /// This constructor can change argc and argv contents, e.g. consume
   /// command-line options used for creating FixedCompilationDatabase.
@@ -78,7 +79,7 @@ public:
       : CommonOptionsParser(argc, argv, Category, llvm::cl::OneOrMore,
                             Overview) {}
 
-  /// \brief Parses command-line, initializes a compilation database.
+  /// Parses command-line, initializes a compilation database.
   ///
   /// This constructor can change argc and argv contents, e.g. consume
   /// command-line options used for creating FixedCompilationDatabase.
@@ -86,12 +87,17 @@ public:
   /// All options not belonging to \p Category become hidden.
   ///
   /// It also allows calls to set the required number of positional parameters.
-  ///
-  /// This constructor exits program in case of error.
   CommonOptionsParser(int &argc, const char **argv,
                       llvm::cl::OptionCategory &Category,
                       llvm::cl::NumOccurrencesFlag OccurrencesFlag,
                       const char *Overview = nullptr);
+
+  /// A factory method that is similar to the above constructor, except
+  /// this returns an error instead exiting the program on error.
+  static llvm::Expected<CommonOptionsParser>
+  create(int &argc, const char **argv, llvm::cl::OptionCategory &Category,
+         llvm::cl::NumOccurrencesFlag OccurrencesFlag,
+         const char *Overview = nullptr);
 
   /// Returns a reference to the loaded compilations database.
   CompilationDatabase &getCompilations() {
@@ -103,11 +109,23 @@ public:
     return SourcePathList;
   }
 
+  /// Returns the argument adjuster calculated from "--extra-arg" and
+  //"--extra-arg-before" options.
+  ArgumentsAdjuster getArgumentsAdjuster() { return Adjuster; }
+
   static const char *const HelpMessage;
 
 private:
+  CommonOptionsParser() = default;
+
+  llvm::Error init(int &argc, const char **argv,
+                   llvm::cl::OptionCategory &Category,
+                   llvm::cl::NumOccurrencesFlag OccurrencesFlag,
+                   const char *Overview);
+
   std::unique_ptr<CompilationDatabase> Compilations;
   std::vector<std::string> SourcePathList;
+  ArgumentsAdjuster Adjuster;
 };
 
 class ArgumentsAdjustingCompilations : public CompilationDatabase {

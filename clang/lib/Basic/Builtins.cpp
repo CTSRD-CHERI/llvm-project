@@ -75,8 +75,9 @@ bool Builtin::Context::builtinIsSupported(const Builtin::Info &BuiltinInfo,
                           (BuiltinInfo.Langs & ALL_OCLC_LANGUAGES) == OCLC20_LANG;
   bool OclCUnsupported = !LangOpts.OpenCL &&
                          (BuiltinInfo.Langs & ALL_OCLC_LANGUAGES);
+  bool OpenMPUnsupported = !LangOpts.OpenMP && BuiltinInfo.Langs == OMP_LANG;
   return !BuiltinsUnsupported && !MathBuiltinsUnsupported && !OclCUnsupported &&
-         !OclC1Unsupported && !OclC2Unsupported &&
+         !OclC1Unsupported && !OclC2Unsupported && !OpenMPUnsupported &&
          !GnuModeUnsupported && !MSModeUnsupported && !ObjCUnsupported;
 }
 
@@ -137,4 +138,11 @@ bool Builtin::Context::isPrintfLike(unsigned ID, unsigned &FormatIdx,
 bool Builtin::Context::isScanfLike(unsigned ID, unsigned &FormatIdx,
                                    bool &HasVAListArg) {
   return isLike(ID, FormatIdx, HasVAListArg, "sS");
+}
+
+bool Builtin::Context::canBeRedeclared(unsigned ID) const {
+  return ID == Builtin::NotBuiltin ||
+         ID == Builtin::BI__va_start ||
+         (!hasReferenceArgsOrResult(ID) &&
+          !hasCustomTypechecking(ID));
 }

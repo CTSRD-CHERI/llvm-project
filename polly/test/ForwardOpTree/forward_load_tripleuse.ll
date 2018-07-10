@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-optree -polly-codegen -analyze < %s | FileCheck %s -match-full-lines
+; RUN: opt %loadPolly -polly-stmt-granularity=bb -polly-optree -polly-codegen -analyze < %s | FileCheck %s -match-full-lines
 ;
 ; %val1 is used three times: Twice by its own operand tree of %val2 and once
 ; more by the store in %bodyB.
@@ -72,7 +72,7 @@ return:
 ; CHECK-NEXT:             }
 ; CHECK-NEXT:     Stmt_bodyB
 ; CHECK-NEXT:             ReadAccess :=       [Reduction Type: NONE] [Scalar: 0]
-; CHECK-NEXT:                 null;
+; CHECK-NEXT:                 ;
 ; CHECK-NEXT:            new: [n] -> { Stmt_bodyB[i0] -> MemRef_A[i0] };
 ; CHECK-NEXT:             MustWriteAccess :=  [Reduction Type: NONE] [Scalar: 0]
 ; CHECK-NEXT:                 [n] -> { Stmt_bodyB[i0] -> MemRef_B[i0] };
@@ -144,7 +144,7 @@ return:
 ; CHECK-NEXT:             }
 ; CHECK-NEXT:     Stmt_bodyB
 ; CHECK-NEXT:             ReadAccess :=       [Reduction Type: NONE] [Scalar: 0]
-; CHECK-NEXT:                 null;
+; CHECK-NEXT:                 ;
 ; CHECK-NEXT:            new: [n] -> { Stmt_bodyB[i0] -> MemRef_A[i0] };
 ; CHECK-NEXT:             MustWriteAccess :=  [Reduction Type: NONE] [Scalar: 0]
 ; CHECK-NEXT:                 [n] -> { Stmt_bodyB[i0] -> MemRef_B[i0] };

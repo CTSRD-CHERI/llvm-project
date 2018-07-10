@@ -25,6 +25,7 @@
 
 #ifndef __CLANG_MAX_ALIGN_T_DEFINED
 #define __CLANG_MAX_ALIGN_T_DEFINED
+#define _GCC_MAX_ALIGN_T /* Compat with GCC/FreeBSD headers */
 
 #if defined(_MSC_VER)
 typedef double max_align_t;

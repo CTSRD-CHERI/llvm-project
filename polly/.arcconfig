@@ -1,9 +1,4 @@
 {
-  "project_id" : "polly",
-  "conduit_uri" : "https://reviews.llvm.org/",
-  "history.immutable" : true,
-  "load" : [
-    "utils/arcanist/LitTestEngine"
-  ],
-  "unit.engine" : "LitTestEngine"
+  "repository.callsign" : "PLO",
+  "conduit_uri" : "https://reviews.llvm.org/"
 }

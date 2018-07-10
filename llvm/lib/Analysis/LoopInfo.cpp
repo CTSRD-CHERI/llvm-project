@@ -21,6 +21,7 @@
 #include "llvm/Analysis/LoopInfoImpl.h"
 #include "llvm/Analysis/LoopIterator.h"
 #include "llvm/Analysis/ValueTracking.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DebugLoc.h"
@@ -47,7 +48,7 @@ bool llvm::VerifyLoopInfo = false;
 #endif
 static cl::opt<bool, true>
     VerifyLoopInfoX("verify-loop-info", cl::location(VerifyLoopInfo),
-                    cl::desc("Verify loop info (time consuming)"));
+                    cl::Hidden, cl::desc("Verify loop info (time consuming)"));
 
 //===----------------------------------------------------------------------===//
 // Loop implementation
@@ -416,7 +417,7 @@ void Loop::getUniqueExitBlocks(
       // If a terminator has more then two successors, for example SwitchInst,
       // then it is possible that there are multiple edges from current block
       // to one exit block.
-      if (std::distance(succ_begin(BB), succ_end(BB)) <= 2) {
+      if (succ_size(BB) <= 2) {
         ExitBlocks.push_back(Successor);
         continue;
       }
@@ -731,12 +732,43 @@ PreservedAnalyses LoopPrinterPass::run(Function &F,
 }
 
 void llvm::printLoop(Loop &L, raw_ostream &OS, const std::string &Banner) {
+
+  if (forcePrintModuleIR()) {
+    // handling -print-module-scope
+    OS << Banner << " (loop: ";
+    L.getHeader()->printAsOperand(OS, false);
+    OS << ")\n";
+
+    // printing whole module
+    OS << *L.getHeader()->getModule();
+    return;
+  }
+
   OS << Banner;
+
+  auto *PreHeader = L.getLoopPreheader();
+  if (PreHeader) {
+    OS << "\n; Preheader:";
+    PreHeader->print(OS);
+    OS << "\n; Loop:";
+  }
+
   for (auto *Block : L.blocks())
     if (Block)
       Block->print(OS);
     else
       OS << "Printing <null> block";
+
+  SmallVector<BasicBlock *, 8> ExitBlocks;
+  L.getExitBlocks(ExitBlocks);
+  if (!ExitBlocks.empty()) {
+    OS << "\n; Exit blocks";
+    for (auto *Block : ExitBlocks)
+      if (Block)
+        Block->print(OS);
+      else
+        OS << "Printing <null> block";
+  }
 }
 
 //===----------------------------------------------------------------------===//

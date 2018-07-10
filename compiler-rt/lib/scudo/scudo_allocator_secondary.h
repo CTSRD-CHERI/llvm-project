@@ -21,118 +21,173 @@
 # error "This file must be included inside scudo_allocator.h."
 #endif
 
+// Secondary backed allocations are standalone chunks that contain extra
+// information stored in a LargeChunk::Header prior to the frontend's header.
+//
+// The secondary takes care of alignment requirements (so that it can release
+// unnecessary pages in the rare event of larger alignments), and as such must
+// know about the frontend's header size.
+//
+// Since Windows doesn't support partial releasing of a reserved memory region,
+// we have to keep track of both the reserved and the committed memory.
+//
+// The resulting chunk resembles the following:
+//
+//   +--------------------+
+//   | Guard page(s)      |
+//   +--------------------+
+//   | Unused space*      |
+//   +--------------------+
+//   | LargeChunk::Header |
+//   +--------------------+
+//   | {Unp,P}ackedHeader |
+//   +--------------------+
+//   | Data (aligned)     |
+//   +--------------------+
+//   | Unused space**     |
+//   +--------------------+
+//   | Guard page(s)      |
+//   +--------------------+
+
+namespace LargeChunk {
+  struct Header {
+    ReservedAddressRange StoredRange;
+    uptr CommittedSize;
+    uptr Size;
+  };
+  constexpr uptr getHeaderSize() {
+    return RoundUpTo(sizeof(Header), MinAlignment);
+  }
+  static Header *getHeader(uptr Ptr) {
+    return reinterpret_cast<Header *>(Ptr - getHeaderSize());
+  }
+  static Header *getHeader(const void *Ptr) {
+    return getHeader(reinterpret_cast<uptr>(Ptr));
+  }
+}  // namespace LargeChunk
+
 class ScudoLargeMmapAllocator {
  public:
-
   void Init() {
-    PageSize = GetPageSizeCached();
+    internal_memset(this, 0, sizeof(*this));
   }
 
   void *Allocate(AllocatorStats *Stats, uptr Size, uptr Alignment) {
-    uptr UserSize = Size - AlignedChunkHeaderSize;
+    const uptr UserSize = Size - Chunk::getHeaderSize();
     // The Scudo frontend prevents us from allocating more than
     // MaxAllowedMallocSize, so integer overflow checks would be superfluous.
-    uptr MapSize = Size + SecondaryHeaderSize;
-    if (Alignment > MinAlignment)
-      MapSize += Alignment;
-    MapSize = RoundUpTo(MapSize, PageSize);
+    uptr ReservedSize = Size + LargeChunk::getHeaderSize();
+    if (UNLIKELY(Alignment > MinAlignment))
+      ReservedSize += Alignment;
+    const uptr PageSize = GetPageSizeCached();
+    ReservedSize = RoundUpTo(ReservedSize, PageSize);
     // Account for 2 guard pages, one before and one after the chunk.
-    MapSize += 2 * PageSize;
+    ReservedSize += 2 * PageSize;
 
-    uptr MapBeg = reinterpret_cast<uptr>(MmapNoAccess(MapSize));
-    if (MapBeg == ~static_cast<uptr>(0))
-      return ReturnNullOrDieOnFailure::OnOOM();
+    ReservedAddressRange AddressRange;
+    uptr ReservedBeg = AddressRange.Init(ReservedSize, SecondaryAllocatorName);
+    if (UNLIKELY(ReservedBeg == ~static_cast<uptr>(0)))
+      return nullptr;
     // A page-aligned pointer is assumed after that, so check it now.
-    CHECK(IsAligned(MapBeg, PageSize));
-    uptr MapEnd = MapBeg + MapSize;
+    DCHECK(IsAligned(ReservedBeg, PageSize));
+    uptr ReservedEnd = ReservedBeg + ReservedSize;
     // The beginning of the user area for that allocation comes after the
     // initial guard page, and both headers. This is the pointer that has to
     // abide by alignment requirements.
-    uptr UserBeg = MapBeg + PageSize + HeadersSize;
+    uptr CommittedBeg = ReservedBeg + PageSize;
+    uptr UserBeg = CommittedBeg + HeadersSize;
     uptr UserEnd = UserBeg + UserSize;
+    uptr CommittedEnd = RoundUpTo(UserEnd, PageSize);
 
     // In the rare event of larger alignments, we will attempt to fit the mmap
     // area better and unmap extraneous memory. This will also ensure that the
     // offset and unused bytes field of the header stay small.
-    if (Alignment > MinAlignment) {
+    if (UNLIKELY(Alignment > MinAlignment)) {
       if (!IsAligned(UserBeg, Alignment)) {
         UserBeg = RoundUpTo(UserBeg, Alignment);
-        CHECK_GE(UserBeg, MapBeg);
-        uptr NewMapBeg = RoundDownTo(UserBeg - HeadersSize, PageSize) -
-            PageSize;
-        CHECK_GE(NewMapBeg, MapBeg);
-        if (NewMapBeg != MapBeg) {
-          UnmapOrDie(reinterpret_cast<void *>(MapBeg), NewMapBeg - MapBeg);
-          MapBeg = NewMapBeg;
+        CommittedBeg = RoundDownTo(UserBeg - HeadersSize, PageSize);
+        const uptr NewReservedBeg = CommittedBeg - PageSize;
+        DCHECK_GE(NewReservedBeg, ReservedBeg);
+        if (!SANITIZER_WINDOWS && NewReservedBeg != ReservedBeg) {
+          AddressRange.Unmap(ReservedBeg, NewReservedBeg - ReservedBeg);
+          ReservedBeg = NewReservedBeg;
         }
         UserEnd = UserBeg + UserSize;
+        CommittedEnd = RoundUpTo(UserEnd, PageSize);
       }
-      uptr NewMapEnd = RoundUpTo(UserEnd, PageSize) + PageSize;
-      if (NewMapEnd != MapEnd) {
-        UnmapOrDie(reinterpret_cast<void *>(NewMapEnd), MapEnd - NewMapEnd);
-        MapEnd = NewMapEnd;
+      const uptr NewReservedEnd = CommittedEnd + PageSize;
+      DCHECK_LE(NewReservedEnd, ReservedEnd);
+      if (!SANITIZER_WINDOWS && NewReservedEnd != ReservedEnd) {
+        AddressRange.Unmap(NewReservedEnd, ReservedEnd - NewReservedEnd);
+        ReservedEnd = NewReservedEnd;
       }
-      MapSize = MapEnd - MapBeg;
     }
 
-    CHECK_LE(UserEnd, MapEnd - PageSize);
-    // Actually mmap the memory, preserving the guard pages on either side.
-    CHECK_EQ(MapBeg + PageSize, reinterpret_cast<uptr>(
-        MmapFixedOrDie(MapBeg + PageSize, MapSize - 2 * PageSize)));
-    uptr Ptr = UserBeg - AlignedChunkHeaderSize;
-    SecondaryHeader *Header = getHeader(Ptr);
-    Header->MapBeg = MapBeg;
-    Header->MapSize = MapSize;
+    DCHECK_LE(UserEnd, CommittedEnd);
+    const uptr CommittedSize = CommittedEnd - CommittedBeg;
+    // Actually mmap the memory, preserving the guard pages on either sides.
+    CHECK_EQ(CommittedBeg, AddressRange.Map(CommittedBeg, CommittedSize));
+    const uptr Ptr = UserBeg - Chunk::getHeaderSize();
+    LargeChunk::Header *H = LargeChunk::getHeader(Ptr);
+    H->StoredRange = AddressRange;
+    H->Size = CommittedEnd - Ptr;
+    H->CommittedSize = CommittedSize;
+
     // The primary adds the whole class size to the stats when allocating a
     // chunk, so we will do something similar here. But we will not account for
     // the guard pages.
     {
       SpinMutexLock l(&StatsMutex);
-      Stats->Add(AllocatorStatAllocated, MapSize - 2 * PageSize);
-      Stats->Add(AllocatorStatMapped, MapSize - 2 * PageSize);
+      Stats->Add(AllocatorStatAllocated, CommittedSize);
+      Stats->Add(AllocatorStatMapped, CommittedSize);
+      AllocatedBytes += CommittedSize;
+      if (LargestSize < CommittedSize)
+        LargestSize = CommittedSize;
+      NumberOfAllocs++;
     }
 
     return reinterpret_cast<void *>(Ptr);
   }
 
   void Deallocate(AllocatorStats *Stats, void *Ptr) {
-    SecondaryHeader *Header = getHeader(Ptr);
+    LargeChunk::Header *H = LargeChunk::getHeader(Ptr);
+    // Since we're unmapping the entirety of where the ReservedAddressRange
+    // actually is, copy onto the stack.
+    ReservedAddressRange AddressRange = H->StoredRange;
+    const uptr Size = H->CommittedSize;
     {
       SpinMutexLock l(&StatsMutex);
-      Stats->Sub(AllocatorStatAllocated, Header->MapSize - 2 * PageSize);
-      Stats->Sub(AllocatorStatMapped, Header->MapSize - 2 * PageSize);
+      Stats->Sub(AllocatorStatAllocated, Size);
+      Stats->Sub(AllocatorStatMapped, Size);
+      FreedBytes += Size;
+      NumberOfFrees++;
     }
-    UnmapOrDie(reinterpret_cast<void *>(Header->MapBeg), Header->MapSize);
+    AddressRange.Unmap(reinterpret_cast<uptr>(AddressRange.base()),
+                       AddressRange.size());
   }
 
-  uptr GetActuallyAllocatedSize(void *Ptr) {
-    SecondaryHeader *Header = getHeader(Ptr);
-    // Deduct PageSize as MapSize includes the trailing guard page.
-    uptr MapEnd = Header->MapBeg + Header->MapSize - PageSize;
-    return MapEnd - reinterpret_cast<uptr>(Ptr);
+  static uptr GetActuallyAllocatedSize(void *Ptr) {
+    return LargeChunk::getHeader(Ptr)->Size;
+  }
+
+  void PrintStats() {
+    Printf("Stats: LargeMmapAllocator: allocated %zd times (%zd K), "
+           "freed %zd times (%zd K), remains %zd (%zd K) max %zd M\n",
+           NumberOfAllocs, AllocatedBytes >> 10, NumberOfFrees,
+           FreedBytes >> 10, NumberOfAllocs - NumberOfFrees,
+           (AllocatedBytes - FreedBytes) >> 10, LargestSize >> 20);
   }
 
  private:
-  // A Secondary allocated chunk header contains the base of the mapping and
-  // its size, which comprises the guard pages.
-  struct SecondaryHeader {
-    uptr MapBeg;
-    uptr MapSize;
-  };
-  // Check that sizeof(SecondaryHeader) is a multiple of MinAlignment.
-  COMPILER_CHECK((sizeof(SecondaryHeader) & (MinAlignment - 1)) == 0);
+  static constexpr uptr HeadersSize =
+      LargeChunk::getHeaderSize() + Chunk::getHeaderSize();
 
-  SecondaryHeader *getHeader(uptr Ptr) {
-    return reinterpret_cast<SecondaryHeader*>(Ptr - sizeof(SecondaryHeader));
-  }
-  SecondaryHeader *getHeader(const void *Ptr) {
-    return getHeader(reinterpret_cast<uptr>(Ptr));
-  }
-
-  const uptr SecondaryHeaderSize = sizeof(SecondaryHeader);
-  const uptr HeadersSize = SecondaryHeaderSize + AlignedChunkHeaderSize;
-  uptr PageSize;
-  SpinMutex StatsMutex;
+  StaticSpinMutex StatsMutex;
+  u32 NumberOfAllocs;
+  u32 NumberOfFrees;
+  uptr AllocatedBytes;
+  uptr FreedBytes;
+  uptr LargestSize;
 };
 
 #endif  // SCUDO_ALLOCATOR_SECONDARY_H_

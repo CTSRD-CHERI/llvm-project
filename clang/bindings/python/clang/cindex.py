@@ -94,6 +94,9 @@ if sys.version_info[0] == 3:
                 return cls(param)
             if isinstance(param, bytes):
                 return cls(param)
+            if param is None:
+                # Support passing null to C functions expecting char arrays
+                return None
             raise TypeError("Cannot convert '{}' to '{}'".format(type(param).__name__, cls.__name__))
 
         @staticmethod
@@ -878,7 +881,7 @@ CursorKind.INVALID_CODE = CursorKind(73)
 CursorKind.UNEXPOSED_EXPR = CursorKind(100)
 
 # An expression that refers to some value declaration, such as a function,
-# varible, or enumerator.
+# variable, or enumerator.
 CursorKind.DECL_REF_EXPR = CursorKind(101)
 
 # An expression that refers to a member of a struct, union, class, Objective-C
@@ -1476,6 +1479,12 @@ class Cursor(Structure):
         """
         return conf.lib.clang_CXXMethod_isVirtual(self)
 
+    def is_abstract_record(self):
+        """Returns True if the cursor refers to a C++ record declaration
+        that has pure virtual member functions.
+        """
+        return conf.lib.clang_CXXRecord_isAbstract(self)
+
     def is_scoped_enum(self):
         """Returns True if the cursor refers to a scoped enum declaration.
         """
@@ -1492,7 +1501,7 @@ class Cursor(Structure):
         return conf.lib.clang_getCursorDefinition(self)
 
     def get_usr(self):
-        """Return the Unified Symbol Resultion (USR) for the entity referenced
+        """Return the Unified Symbol Resolution (USR) for the entity referenced
         by the given cursor (or None).
 
         A Unified Symbol Resolution (USR) is a string that identifies a
@@ -1501,6 +1510,12 @@ class Cursor(Structure):
         e.g., when references in one translation refer to an entity defined in
         another translation unit."""
         return conf.lib.clang_getCursorUSR(self)
+
+    def get_included_file(self):
+        """Returns the File that is included by the current inclusion cursor."""
+        assert self.kind == CursorKind.INCLUSION_DIRECTIVE
+
+        return conf.lib.clang_getIncludedFile(self)
 
     @property
     def kind(self):
@@ -1587,6 +1602,16 @@ class Cursor(Structure):
         return StorageClass.from_id(self._storage_class)
 
     @property
+    def availability(self):
+        """
+        Retrieves the availability of the entity pointed at by the cursor.
+        """
+        if not hasattr(self, '_availability'):
+            self._availability = conf.lib.clang_getCursorAvailability(self)
+
+        return AvailabilityKind.from_id(self._availability)
+
+    @property
     def access_specifier(self):
         """
         Retrieves the access specifier (if any) of the entity pointed at by the
@@ -1625,7 +1650,7 @@ class Cursor(Structure):
     def result_type(self):
         """Retrieve the Type of the result for this Cursor."""
         if not hasattr(self, '_result_type'):
-            self._result_type = conf.lib.clang_getResultType(self.type)
+            self._result_type = conf.lib.clang_getCursorResultType(self)
 
         return self._result_type
 
@@ -1923,6 +1948,24 @@ StorageClass.OPENCLWORKGROUPLOCAL = StorageClass(5)
 StorageClass.AUTO = StorageClass(6)
 StorageClass.REGISTER = StorageClass(7)
 
+### Availability Kinds ###
+
+class AvailabilityKind(BaseEnumeration):
+    """
+    Describes the availability of an entity.
+    """
+
+    # The unique kind objects, indexed by id.
+    _kinds = []
+    _name_map = None
+
+    def __repr__(self):
+        return 'AvailabilityKind.%s' % (self.name,)
+
+AvailabilityKind.AVAILABLE = AvailabilityKind(0)
+AvailabilityKind.DEPRECATED = AvailabilityKind(1)
+AvailabilityKind.NOT_AVAILABLE = AvailabilityKind(2)
+AvailabilityKind.NOT_ACCESSIBLE = AvailabilityKind(3)
 
 ### C++ access specifiers ###
 
@@ -3048,8 +3091,9 @@ class File(ClangObject):
         return "<File: %s>" % (self.name)
 
     @staticmethod
-    def from_cursor_result(res, fn, args):
-        assert isinstance(res, File)
+    def from_result(res, fn, args):
+        assert isinstance(res, c_object_p)
+        res = File(res)
 
         # Copy a reference to the TranslationUnit to prevent premature GC.
         res._tu = args[0]._tu
@@ -3370,6 +3414,10 @@ functionList = [
    [Cursor],
    bool),
 
+  ("clang_CXXRecord_isAbstract",
+   [Cursor],
+   bool),
+
   ("clang_EnumDecl_isScoped",
    [Cursor],
    bool),
@@ -3491,6 +3539,10 @@ functionList = [
    [TranslationUnit, SourceLocation],
    Cursor),
 
+  ("clang_getCursorAvailability",
+   [Cursor],
+   c_int),
+
   ("clang_getCursorDefinition",
    [Cursor],
    Cursor,
@@ -3522,6 +3574,11 @@ functionList = [
   ("clang_getCursorReferenceNameRange",
    [Cursor, c_uint, c_uint],
    SourceRange),
+
+  ("clang_getCursorResultType",
+   [Cursor],
+   Type,
+   Type.from_result),
 
   ("clang_getCursorSemanticParent",
    [Cursor],
@@ -3651,8 +3708,8 @@ functionList = [
 
   ("clang_getIncludedFile",
    [Cursor],
-   File,
-   File.from_cursor_result),
+   c_object_p,
+   File.from_result),
 
   ("clang_getInclusions",
    [TranslationUnit, callbacks['translation_unit_includes'], py_object]),
@@ -4106,6 +4163,7 @@ conf = Config()
 register_enumerations()
 
 __all__ = [
+    'AvailabilityKind',
     'Config',
     'CodeCompletionResults',
     'CompilationDatabase',

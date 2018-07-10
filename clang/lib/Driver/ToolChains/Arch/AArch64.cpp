@@ -20,14 +20,12 @@ using namespace clang;
 using namespace llvm::opt;
 
 /// getAArch64TargetCPU - Get the (LLVM) name of the AArch64 cpu we are
-/// targeting. Set \p A to the Arg corresponding to the -mcpu or -mtune
-/// arguments if they are provided, or to nullptr otherwise.
+/// targeting. Set \p A to the Arg corresponding to the -mcpu argument if it is
+/// provided, or to nullptr otherwise.
 std::string aarch64::getAArch64TargetCPU(const ArgList &Args, Arg *&A) {
   std::string CPU;
-  // If we have -mtune or -mcpu, use that.
-  if ((A = Args.getLastArg(clang::driver::options::OPT_mtune_EQ))) {
-    CPU = StringRef(A->getValue()).lower();
-  } else if ((A = Args.getLastArg(options::OPT_mcpu_EQ))) {
+  // If we have -mcpu, use that.
+  if ((A = Args.getLastArg(options::OPT_mcpu_EQ))) {
     StringRef Mcpu = A->getValue();
     CPU = Mcpu.split("+").first.lower();
   }
@@ -122,6 +120,12 @@ getAArch64MicroArchFeaturesFromMtune(const Driver &D, StringRef Mtune,
                                      const ArgList &Args,
                                      std::vector<StringRef> &Features) {
   std::string MtuneLowerCase = Mtune.lower();
+  // Check CPU name is valid
+  std::vector<StringRef> MtuneFeatures;
+  StringRef Tune;
+  if (!DecodeAArch64Mcpu(D, MtuneLowerCase, Tune, MtuneFeatures))
+    return false;
+
   // Handle CPU name is 'native'.
   if (MtuneLowerCase == "native")
     MtuneLowerCase = llvm::sys::getHostCPUName();
@@ -193,6 +197,9 @@ void aarch64::getAArch64TargetFeatures(const Driver &D, const ArgList &Args,
 
   if (Args.hasArg(options::OPT_ffixed_x18))
     Features.push_back("+reserve-x18");
+
+  if (Args.hasArg(options::OPT_ffixed_x20))
+    Features.push_back("+reserve-x20");
 
   if (Args.hasArg(options::OPT_mno_neg_immediates))
     Features.push_back("+no-neg-immediates");

@@ -31,6 +31,14 @@ def warn_cxx98_compat_less_colon_colon : Warning<
   "'<::' is treated as digraph '<:' (aka '[') followed by ':' in C++98">,
   InGroup<CXX98Compat>, DefaultIgnore;
 
+def warn_cxx17_compat_spaceship : Warning<
+  "'<=>' operator is incompatible with C++ standards before C++2a">,
+  InGroup<CXXPre2aCompat>, DefaultIgnore;
+def warn_cxx2a_compat_spaceship : Warning<
+  "'<=>' is a single token in C++2a; "
+  "add a space to avoid a change in behavior">,
+  InGroup<CXX2aCompat>;
+
 // Trigraphs.
 def trigraph_ignored : Warning<"trigraph ignored">, InGroup<Trigraphs>;
 def trigraph_ignored_block_comment : Warning<
@@ -111,6 +119,9 @@ def err_non_ascii : Error<
 def ext_unicode_whitespace : ExtWarn<
   "treating Unicode character as whitespace">,
   InGroup<DiagGroup<"unicode-whitespace">>;
+def warn_utf8_symbol_homoglyph : Warning<
+  "treating Unicode character <U+%0> as identifier character rather than "
+  "as '%1' symbol">, InGroup<DiagGroup<"unicode-homoglyph">>;
 
 def err_hex_escape_no_digits : Error<
   "\\%0 used with no following hex digits">;
@@ -192,7 +203,7 @@ def ext_binary_literal_cxx14 : Extension<
   "binary integer literals are a C++14 extension">, InGroup<CXX14BinaryLiteral>;
 def warn_cxx11_compat_binary_literal : Warning<
   "binary integer literals are incompatible with C++ standards before C++14">,
-  InGroup<CXXPre14CompatPedantic>, DefaultIgnore;
+  InGroup<CXXPre14CompatBinaryLiteral>, DefaultIgnore;
 def err_pascal_string_too_long : Error<"Pascal string is too long">;
 def err_escape_too_large : Error<
   "%select{hex|octal}0 escape sequence out of range">;
@@ -494,16 +505,11 @@ def warn_pragma_message : Warning<"%0">,
 def err_pragma_message : Error<"%0">;
 def warn_pragma_ignored : Warning<"unknown pragma ignored">,
    InGroup<UnknownPragmas>, DefaultIgnore;
-def ext_stdc_pragma_ignored : ExtWarn<"unknown pragma in STDC namespace">,
-   InGroup<UnknownPragmas>;
 def ext_on_off_switch_syntax :
    ExtWarn<"expected 'ON' or 'OFF' or 'DEFAULT' in pragma">,
    InGroup<UnknownPragmas>;
 def ext_pragma_syntax_eod :
    ExtWarn<"expected end of directive in pragma">,
-   InGroup<UnknownPragmas>;
-def warn_stdc_fenv_access_not_supported :
-   Warning<"pragma STDC FENV_ACCESS ON is not supported, ignoring pragma">,
    InGroup<UnknownPragmas>;
 def warn_pragma_diagnostic_invalid :
    ExtWarn<"pragma diagnostic expected 'error', 'warning', 'ignored', 'fatal',"
@@ -680,11 +686,20 @@ def err_mmap_expected_feature : Error<"expected a feature name">;
 def err_mmap_expected_attribute : Error<"expected an attribute name">;
 def warn_mmap_unknown_attribute : Warning<"unknown attribute '%0'">,
   InGroup<IgnoredAttributes>;
-def warn_mmap_mismatched_top_level_private : Warning<
-  "top-level module '%0' in private module map, expected a submodule of '%1'">,
+def warn_mmap_mismatched_private_submodule : Warning<
+  "private submodule '%0' in private module map, expected top-level module">,
   InGroup<PrivateModule>;
-def note_mmap_rename_top_level_private_as_submodule : Note<
-  "make '%0' a submodule of '%1' to ensure it can be found by name">;
+def warn_mmap_mismatched_private_module_name : Warning<
+  "expected canonical name for private module '%0'">,
+  InGroup<PrivateModule>;
+def note_mmap_rename_top_level_private_module : Note<
+  "rename '%0' to ensure it can be found by name">;
+def warn_mmap_incomplete_framework_module_declaration : Warning<
+  "skipping '%0' because module declaration of '%1' lacks the 'framework' qualifier">,
+  InGroup<IncompleteFrameworkModuleDeclaration>;
+def note_mmap_add_framework_keyword : Note<
+  "use 'framework module' to declare module '%0'">;
+
 def err_mmap_duplicate_header_attribute : Error<
   "header attribute '%0' specified multiple times">;
 def err_mmap_invalid_header_attribute_value : Error<
@@ -698,6 +713,14 @@ def warn_mmap_redundant_export_as : Warning<
   InGroup<PrivateModule>;
 def err_mmap_submodule_export_as : Error<
   "only top-level modules can be re-exported as public">;
+
+def warn_quoted_include_in_framework_header : Warning<
+  "double-quoted include \"%0\" in framework header, "
+  "expected angle-bracketed instead"
+  >, InGroup<FrameworkHdrQuotedInclude>, DefaultIgnore;
+def warn_framework_include_private_from_public : Warning<
+  "public framework header includes private framework header '%0'"
+  >, InGroup<FrameworkIncludePrivateFromPublic>;
 
 def warn_auto_module_import : Warning<
   "treating #%select{include|import|include_next|__include_macros}0 as an "

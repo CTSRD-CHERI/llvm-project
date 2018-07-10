@@ -33,6 +33,15 @@ void ODRHash::AddIdentifierInfo(const IdentifierInfo *II) {
 }
 
 void ODRHash::AddDeclarationName(DeclarationName Name) {
+  // Index all DeclarationName and use index numbers to refer to them.
+  auto Result = DeclNameMap.insert(std::make_pair(Name, DeclNameMap.size()));
+  ID.AddInteger(Result.first->second);
+  if (!Result.second) {
+    // If found in map, the the DeclarationName has previously been processed.
+    return;
+  }
+
+  // First time processing each DeclarationName, also process its details.
   AddBoolean(Name.isEmpty());
   if (Name.isEmpty())
     return;
@@ -139,6 +148,8 @@ void ODRHash::AddTemplateArgument(TemplateArgument TA) {
       AddQualType(TA.getAsType());
       break;
     case TemplateArgument::Declaration:
+      AddDecl(TA.getAsDecl());
+      break;
     case TemplateArgument::NullPtr:
     case TemplateArgument::Integral:
       break;
@@ -168,7 +179,7 @@ void ODRHash::AddTemplateParameterList(const TemplateParameterList *TPL) {
 }
 
 void ODRHash::clear() {
-  DeclMap.clear();
+  DeclNameMap.clear();
   TypeMap.clear();
   Bools.clear();
   ID.clear();
@@ -321,6 +332,15 @@ public:
 
     AddQualType(D->getReturnType());
 
+    const auto* SpecializationArgs = D->getTemplateSpecializationArgs();
+    Hash.AddBoolean(SpecializationArgs);
+    if (SpecializationArgs) {
+      ID.AddInteger(SpecializationArgs->size());
+      for (const TemplateArgument &TA : SpecializationArgs->asArray()) {
+        Hash.AddTemplateArgument(TA);
+      }
+    }
+
     Inherited::VisitFunctionDecl(D);
   }
 
@@ -363,6 +383,7 @@ public:
     if (hasDefaultArgument) {
       AddTemplateArgument(D->getDefaultArgument());
     }
+    Hash.AddBoolean(D->isParameterPack());
 
     Inherited::VisitTemplateTypeParmDecl(D);
   }
@@ -375,6 +396,7 @@ public:
     if (hasDefaultArgument) {
       AddStmt(D->getDefaultArgument());
     }
+    Hash.AddBoolean(D->isParameterPack());
 
     Inherited::VisitNonTypeTemplateParmDecl(D);
   }
@@ -387,8 +409,26 @@ public:
     if (hasDefaultArgument) {
       AddTemplateArgument(D->getDefaultArgument().getArgument());
     }
+    Hash.AddBoolean(D->isParameterPack());
 
     Inherited::VisitTemplateTemplateParmDecl(D);
+  }
+
+  void VisitTemplateDecl(const TemplateDecl *D) {
+    Hash.AddTemplateParameterList(D->getTemplateParameters());
+
+    Inherited::VisitTemplateDecl(D);
+  }
+
+  void VisitRedeclarableTemplateDecl(const RedeclarableTemplateDecl *D) {
+    Hash.AddBoolean(D->isMemberSpecialization());
+    Inherited::VisitRedeclarableTemplateDecl(D);
+  }
+
+  void VisitFunctionTemplateDecl(const FunctionTemplateDecl *D) {
+    Visit(D->getTemplatedDecl());
+    AddDecl(D->getTemplatedDecl());
+    Inherited::VisitFunctionTemplateDecl(D);
   }
 };
 } // namespace
@@ -408,6 +448,7 @@ bool ODRHash::isWhitelistedDecl(const Decl *D, const CXXRecordDecl *Parent) {
     case Decl::CXXMethod:
     case Decl::Field:
     case Decl::Friend:
+    case Decl::FunctionTemplate:
     case Decl::StaticAssert:
     case Decl::TypeAlias:
     case Decl::Typedef:
@@ -418,7 +459,6 @@ bool ODRHash::isWhitelistedDecl(const Decl *D, const CXXRecordDecl *Parent) {
 
 void ODRHash::AddSubDecl(const Decl *D) {
   assert(D && "Expecting non-null pointer.");
-  AddDecl(D);
 
   ODRDeclVisitor(ID, *this).Visit(D);
 }
@@ -466,21 +506,47 @@ void ODRHash::AddCXXRecordDecl(const CXXRecordDecl *Record) {
   }
 }
 
+void ODRHash::AddFunctionDecl(const FunctionDecl *Function) {
+  assert(Function && "Expecting non-null pointer.");
+
+  // Skip hashing these kinds of function.
+  if (Function->isImplicit()) return;
+  if (Function->isDefaulted()) return;
+  if (Function->isDeleted()) return;
+  if (!Function->hasBody()) return;
+  if (!Function->getBody()) return;
+
+  // Skip functions that are specializations or in specialization context.
+  const DeclContext *DC = Function;
+  while (DC) {
+    if (isa<ClassTemplateSpecializationDecl>(DC)) return;
+    if (auto *F = dyn_cast<FunctionDecl>(DC))
+      if (F->isFunctionTemplateSpecialization()) return;
+    DC = DC->getParent();
+  }
+
+  AddDecl(Function);
+
+  AddQualType(Function->getReturnType());
+
+  ID.AddInteger(Function->param_size());
+  for (auto Param : Function->parameters())
+    AddSubDecl(Param);
+
+  AddStmt(Function->getBody());
+}
+
 void ODRHash::AddDecl(const Decl *D) {
   assert(D && "Expecting non-null pointer.");
-  auto Result = DeclMap.insert(std::make_pair(D, DeclMap.size()));
-  ID.AddInteger(Result.first->second);
-  // On first encounter of a Decl pointer, process it.  Every time afterwards,
-  // only the index value is needed.
-  if (!Result.second) {
+  D = D->getCanonicalDecl();
+
+  if (const NamedDecl *ND = dyn_cast<NamedDecl>(D)) {
+    AddDeclarationName(ND->getDeclName());
     return;
   }
 
   ID.AddInteger(D->getKind());
-
-  if (const NamedDecl *ND = dyn_cast<NamedDecl>(D)) {
-    AddDeclarationName(ND->getDeclName());
-  }
+  // TODO: Handle non-NamedDecl here.
 }
 
 namespace {
@@ -608,13 +674,41 @@ public:
     VisitFunctionType(T);
   }
 
+  void VisitPointerType(const PointerType *T) {
+    AddQualType(T->getPointeeType());
+    VisitType(T);
+  }
+
+  void VisitReferenceType(const ReferenceType *T) {
+    AddQualType(T->getPointeeTypeAsWritten());
+    VisitType(T);
+  }
+
+  void VisitLValueReferenceType(const LValueReferenceType *T) {
+    VisitReferenceType(T);
+  }
+
+  void VisitRValueReferenceType(const RValueReferenceType *T) {
+    VisitReferenceType(T);
+  }
+
   void VisitTypedefType(const TypedefType *T) {
     AddDecl(T->getDecl());
     QualType UnderlyingType = T->getDecl()->getUnderlyingType();
     VisitQualifiers(UnderlyingType.getQualifiers());
-    while (const TypedefType *Underlying =
-               dyn_cast<TypedefType>(UnderlyingType.getTypePtr())) {
-      UnderlyingType = Underlying->getDecl()->getUnderlyingType();
+    while (true) {
+      if (const TypedefType *Underlying =
+              dyn_cast<TypedefType>(UnderlyingType.getTypePtr())) {
+        UnderlyingType = Underlying->getDecl()->getUnderlyingType();
+        continue;
+      }
+      if (const ElaboratedType *Underlying =
+              dyn_cast<ElaboratedType>(UnderlyingType.getTypePtr())) {
+        UnderlyingType = Underlying->getNamedType();
+        continue;
+      }
+
+      break;
     }
     AddType(UnderlyingType.getTypePtr());
     VisitType(T);

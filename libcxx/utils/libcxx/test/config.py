@@ -50,6 +50,11 @@ def loadSiteConfig(lit_config, config, param_name, env_name):
         ld_fn(config, site_cfg)
         lit_config.load_config = ld_fn
 
+# Extract the value of a numeric macro such as __cplusplus or a feature-test
+# macro.
+def intMacroValue(token):
+    return int(token.rstrip('LlUu'))
+
 class Configuration(object):
     # pylint: disable=redefined-outer-name
     def __init__(self, lit_config, config):
@@ -463,7 +468,8 @@ class Configuration(object):
         if '__cpp_structured_bindings' not in macros:
             self.config.available_features.add('libcpp-no-structured-bindings')
 
-        if '__cpp_deduction_guides' not in macros:
+        if '__cpp_deduction_guides' not in macros or \
+                intMacroValue(macros['__cpp_deduction_guides']) < 201611:
             self.config.available_features.add('libcpp-no-deduction-guides')
 
         if self.is_windows:
@@ -509,6 +515,9 @@ class Configuration(object):
             # and so that those tests don't have to be changed to tolerate
             # this insanity.
             self.cxx.compile_flags += ['-DNOMINMAX']
+        additional_flags = self.get_lit_conf('test_compiler_flags')
+        if additional_flags:
+            self.cxx.compile_flags += shlex.split(additional_flags)
 
     def configure_default_compile_flags(self):
         # Try and get the std version from the command line. Fall back to
@@ -517,7 +526,8 @@ class Configuration(object):
         std = self.get_lit_conf('std')
         if not std:
             # Choose the newest possible language dialect if none is given.
-            possible_stds = ['c++1z', 'c++14', 'c++11', 'c++03']
+            possible_stds = ['c++2a', 'c++17', 'c++1z', 'c++14', 'c++11',
+                             'c++03']
             if self.cxx.type == 'gcc':
                 maj_v, _, _ = self.cxx.version
                 maj_v = int(maj_v)
@@ -538,7 +548,9 @@ class Configuration(object):
                     'Failed to infer a supported language dialect from one of %r'
                     % possible_stds)
         self.cxx.compile_flags += ['-std={0}'.format(std)]
-        self.config.available_features.add(std.replace('gnu++', 'c++'))
+        std_feature = std.replace('gnu++', 'c++')
+        std_feature = std.replace('1z', '17')
+        self.config.available_features.add(std_feature)
         # Configure include paths
         self.configure_compile_flags_header_includes()
         self.target_info.add_cxx_compile_flags(self.cxx.compile_flags)
@@ -576,6 +588,9 @@ class Configuration(object):
         # Disable availability unless explicitely requested
         if not self.with_availability:
             self.cxx.flags += ['-D_LIBCPP_DISABLE_AVAILABILITY']
+        # FIXME(EricWF): variant_size.pass.cpp requires a slightly larger
+        # template depth with older Clang versions.
+        self.cxx.addFlagIfSupported('-ftemplate-depth=270')
 
     def configure_compile_flags_header_includes(self):
         support_path = os.path.join(self.libcxx_src_root, 'test', 'support')
@@ -787,6 +802,9 @@ class Configuration(object):
                                         self.use_system_cxx_lib]
             if self.is_windows and self.link_shared:
                 self.add_path(self.cxx.compile_env, self.use_system_cxx_lib)
+        additional_flags = self.get_lit_conf('test_linker_flags')
+        if additional_flags:
+            self.cxx.link_flags += shlex.split(additional_flags)
 
     def configure_link_flags_abi_library_path(self):
         # Configure ABI library paths.
@@ -886,7 +904,7 @@ class Configuration(object):
         # Turn on warnings by default for Clang based compilers when C++ >= 11
         default_enable_warnings = self.cxx.type in ['clang', 'apple-clang'] \
             and len(self.config.available_features.intersection(
-                ['c++11', 'c++14', 'c++1z'])) != 0
+                ['c++11', 'c++14', 'c++17', 'c++2a'])) != 0
         enable_warnings = self.get_lit_bool('enable_warnings',
                                             default_enable_warnings)
         self.cxx.useWarnings(enable_warnings)
@@ -999,8 +1017,7 @@ class Configuration(object):
                     '__cpp_coroutines is not defined')
             # Consider coroutines supported only when the feature test macro
             # reflects a recent value.
-            val = macros['__cpp_coroutines'].replace('L', '')
-            if int(val) >= 201703:
+            if intMacroValue(macros['__cpp_coroutines']) >= 201703:
                 self.config.available_features.add('fcoroutines-ts')
 
     def configure_modules(self):

@@ -1,53 +1,19 @@
 set(LLVM_LINK_COMPONENTS support)
 
 add_clang_library(clangTidyMiscModule
-  ArgumentCommentCheck.cpp
-  AssertSideEffectCheck.cpp
-  ForwardingReferenceOverloadCheck.cpp
-  LambdaFunctionNameCheck.cpp
   MisplacedConstCheck.cpp
   UnconventionalAssignOperatorCheck.cpp
-  BoolPointerImplicitConversionCheck.cpp
-  DanglingHandleCheck.cpp
   DefinitionsInHeadersCheck.cpp
-  FoldInitTypeCheck.cpp
-  ForwardDeclarationNamespaceCheck.cpp
-  InaccurateEraseCheck.cpp
-  IncorrectRoundings.cpp
-  InefficientAlgorithmCheck.cpp
-  MacroParenthesesCheck.cpp
-  MacroRepeatedSideEffectsCheck.cpp
   MiscTidyModule.cpp
-  MisplacedWideningCastCheck.cpp
-  MoveConstantArgumentCheck.cpp
-  MoveConstructorInitCheck.cpp
-  MoveForwardingReferenceCheck.cpp
-  MultipleStatementMacroCheck.cpp
   NewDeleteOverloadsCheck.cpp
-  NoexceptMoveConstructorCheck.cpp
   NonCopyableObjects.cpp
   RedundantExpressionCheck.cpp
-  SizeofContainerCheck.cpp
-  SizeofExpressionCheck.cpp
   StaticAssertCheck.cpp
-  StringCompareCheck.cpp
-  StringConstructorCheck.cpp
-  StringIntegerAssignmentCheck.cpp
-  StringLiteralWithEmbeddedNulCheck.cpp
-  SuspiciousEnumUsageCheck.cpp
-  SuspiciousMissingCommaCheck.cpp
-  SuspiciousSemicolonCheck.cpp
-  SuspiciousStringCompareCheck.cpp
-  SwappedArgumentsCheck.cpp
   ThrowByValueCatchByReferenceCheck.cpp
-  UndelegatedConstructor.cpp
   UniqueptrResetReleaseCheck.cpp
   UnusedAliasDeclsCheck.cpp
   UnusedParametersCheck.cpp
-  UnusedRAIICheck.cpp
   UnusedUsingDeclsCheck.cpp
-  UseAfterMoveCheck.cpp
-  VirtualNearMissCheck.cpp
 
   LINK_LIBS
   clangAnalysis

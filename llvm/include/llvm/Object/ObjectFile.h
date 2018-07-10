@@ -15,6 +15,7 @@
 #define LLVM_OBJECT_OBJECTFILE_H
 
 #include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/Triple.h"
 #include "llvm/ADT/iterator_range.h"
 #include "llvm/BinaryFormat/Magic.h"
 #include "llvm/MC/SubtargetFeature.h"
@@ -64,7 +65,7 @@ public:
   symbol_iterator getSymbol() const;
   uint64_t getType() const;
 
-  /// @brief Get a string that represents the type of this relocation.
+  /// Get a string that represents the type of this relocation.
   ///
   /// This is for display purposes only.
   void getTypeName(SmallVectorImpl<char> &Result) const;
@@ -99,7 +100,7 @@ public:
   uint64_t getSize() const;
   std::error_code getContents(StringRef &Result) const;
 
-  /// @brief Get the alignment of this section as the actual value (not log 2).
+  /// Get the alignment of this section as the actual value (not log 2).
   uint64_t getAlignment() const;
 
   bool isCompressed() const;
@@ -153,12 +154,12 @@ public:
   /// offset or a virtual address.
   uint64_t getValue() const;
 
-  /// @brief Get the alignment of this symbol as the actual value (not log 2).
+  /// Get the alignment of this symbol as the actual value (not log 2).
   uint32_t getAlignment() const;
   uint64_t getCommonSize() const;
   Expected<SymbolRef::Type> getType() const;
 
-  /// @brief Get section this symbol is defined in reference to. Result is
+  /// Get section this symbol is defined in reference to. Result is
   /// end_sections() if it is undefined or is an absolute symbol.
   Expected<section_iterator> getSection() const;
 
@@ -261,6 +262,10 @@ public:
     return getCommonSymbolSizeImpl(Symb);
   }
 
+  virtual std::vector<SectionRef> dynamic_relocation_sections() const {
+    return std::vector<SectionRef>();
+  }
+
   using symbol_iterator_range = iterator_range<symbol_iterator>;
   symbol_iterator_range symbols() const {
     return symbol_iterator_range(symbol_begin(), symbol_end());
@@ -274,23 +279,17 @@ public:
     return section_iterator_range(section_begin(), section_end());
   }
 
-  /// @brief The number of bytes used to represent an address in this object
+  /// The number of bytes used to represent an address in this object
   ///        file format.
   virtual uint8_t getBytesInAddress() const = 0;
 
   virtual StringRef getFileFormatName() const = 0;
-  virtual /* Triple::ArchType */ unsigned getArch() const = 0;
+  virtual Triple::ArchType getArch() const = 0;
   virtual SubtargetFeatures getFeatures() const = 0;
   virtual void setARMSubArch(Triple &TheTriple) const { }
 
-  /// @brief Create a triple from the data in this object file.
+  /// Create a triple from the data in this object file.
   Triple makeTriple() const;
-
-  /// Returns platform-specific object flags, if any.
-  virtual std::error_code getPlatformFlags(unsigned &Result) const {
-    Result = 0;
-    return object_error::invalid_file_type;
-  }
 
   virtual std::error_code
     getBuildAttributes(ARMAttributeParser &Attributes) const {
@@ -306,7 +305,7 @@ public:
   /// @returns Pointer to ObjectFile subclass to handle this type of object.
   /// @param ObjectPath The path to the object file. ObjectPath.isObject must
   ///        return true.
-  /// @brief Create ObjectFile from path.
+  /// Create ObjectFile from path.
   static Expected<OwningBinary<ObjectFile>>
   createObjectFile(StringRef ObjectPath);
 

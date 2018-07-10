@@ -16,6 +16,7 @@
 #include "ubsan_diag.h"
 #include "ubsan_init.h"
 #include "ubsan_flags.h"
+#include "ubsan_monitor.h"
 #include "sanitizer_common/sanitizer_placement_new.h"
 #include "sanitizer_common/sanitizer_report_decorator.h"
 #include "sanitizer_common/sanitizer_stacktrace.h"
@@ -26,9 +27,8 @@
 
 using namespace __ubsan;
 
-void __ubsan::GetStackTraceWithPcBpAndContext(BufferedStackTrace *stack,
-                                              uptr max_depth, uptr pc, uptr bp,
-                                              void *context, bool fast) {
+void __ubsan::GetStackTrace(BufferedStackTrace *stack, uptr max_depth, uptr pc,
+                            uptr bp, void *context, bool fast) {
   uptr top = 0;
   uptr bottom = 0;
   if (fast)
@@ -43,8 +43,8 @@ static void MaybePrintStackTrace(uptr pc, uptr bp) {
     return;
 
   BufferedStackTrace stack;
-  GetStackTraceWithPcBpAndContext(&stack, kStackTraceMax, pc, bp, nullptr,
-                                  common_flags()->fast_unwind_on_fatal);
+  GetStackTrace(&stack, kStackTraceMax, pc, bp, nullptr,
+                common_flags()->fast_unwind_on_fatal);
   stack.Print();
 }
 
@@ -340,6 +340,13 @@ Diag::~Diag() {
   ScopedReport::CheckLocked();
   Decorator Decor;
   InternalScopedString Buffer(1024);
+
+  // Prepare a report that a monitor process can inspect.
+  if (Level == DL_Error) {
+    RenderText(&Buffer, Message, Args);
+    UndefinedBehaviorReport UBR{ConvertTypeToString(ET), Loc, Buffer};
+    Buffer.clear();
+  }
 
   Buffer.append(Decor.Bold());
   RenderLocation(&Buffer, Loc);

@@ -12,8 +12,8 @@
 
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/MC/LaneBitmask.h"
-#include "llvm/Target/TargetRegisterInfo.h"
 #include <cassert>
 #include <cstdint>
 #include <map>
@@ -206,6 +206,7 @@ namespace rdf {
 
       bool operator==(const rr_iterator &I) const {
         assert(Owner == I.Owner);
+        (void)Owner;
         return Index == I.Index;
       }
 

@@ -7,9 +7,6 @@
 |*
 \*===----------------------------------------------------------------------===*/
 
-#include "InstrProfiling.h"
-#include "InstrProfilingInternal.h"
-#include "InstrProfilingUtil.h"
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,6 +19,7 @@
 #include "WindowsMMap.h"
 /* For _chsize_s */
 #include <io.h>
+#include <process.h>
 #else
 #include <sys/file.h>
 #include <sys/mman.h>
@@ -30,6 +28,10 @@
 #include <sys/types.h>
 #endif
 #endif
+
+#include "InstrProfiling.h"
+#include "InstrProfilingInternal.h"
+#include "InstrProfilingUtil.h"
 
 /* From where is profile name specified.
  * The order the enumerators define their
@@ -85,7 +87,6 @@ typedef struct lprofFilename {
 COMPILER_RT_WEAK lprofFilename lprofCurFilename = {0, 0, 0, {0}, {0},
                                                    0, 0, 0, PNS_unknown};
 
-int getpid(void);
 static int getCurFilenameLength();
 static const char *getCurFilename(char *FilenameBuf);
 static unsigned doMerging() { return lprofCurFilename.MergePoolSize; }
@@ -183,8 +184,12 @@ static int doProfileMerging(FILE *ProfileFile, int *MergeDone) {
 
   /* Now start merging */
   __llvm_profile_merge_from_buffer(ProfileBuffer, ProfileFileSize);
-  (void)munmap(ProfileBuffer, ProfileFileSize);
 
+  // Truncate the file in case merging of value profile did not happend to
+  // prevent from leaving garbage data at the end of the profile file.
+  COMPILER_RT_FTRUNCATE(ProfileFile, __llvm_profile_get_size_for_buffer());
+
+  (void)munmap(ProfileBuffer, ProfileFileSize);
   *MergeDone = 1;
 
   return 0;
@@ -234,6 +239,7 @@ static int writeFile(const char *OutputName) {
   FILE *OutputFile;
 
   int MergeDone = 0;
+  VPMergeHook = &lprofMergeValueProfData;
   if (!doMerging())
     OutputFile = fopen(OutputName, "ab");
   else
@@ -325,7 +331,7 @@ static int parseFilenamePattern(const char *FilenamePat,
     if (FilenamePat[I] == '%') {
       if (FilenamePat[++I] == 'p') {
         if (!NumPids++) {
-          if (snprintf(PidChars, MAX_PID_SIZE, "%d", getpid()) <= 0) {
+          if (snprintf(PidChars, MAX_PID_SIZE, "%ld", (long)getpid()) <= 0) {
             PROF_WARN("Unable to get pid for filename pattern %s. Using the "
                       "default name.",
                       FilenamePat);

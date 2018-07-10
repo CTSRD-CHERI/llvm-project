@@ -212,8 +212,8 @@ def VTX_READ_32_eg
   // to be caused by ALU instructions in the next instruction group that wrote
   // to the $src_gpr registers of the VTX_READ.
   // e.g.
-  // %T3_X<def> = VTX_READ_PARAM_32_eg %T2_X<kill>, 24
-  // %T2_X<def> = MOV %ZERO
+  // %t3_x = VTX_READ_PARAM_32_eg killed %t2_x, 24
+  // %t2_x = MOV %zero
   //Adding this constraint prevents this from happening.
   let Constraints = "$src_gpr.ptr = $dst_gpr";
 }
@@ -660,7 +660,7 @@ def LDS_WRXCHG_RET : R600_LDS_1A1D_RET <0x2d, "LDS_WRXCHG",
   [(set i32:$dst, (atomic_swap_local i32:$src0, i32:$src1))]
 >;
 def LDS_CMPST_RET : R600_LDS_1A2D_RET <0x30, "LDS_CMPST",
-  [(set i32:$dst, (atomic_cmp_swap_32_local i32:$src0, i32:$src1, i32:$src2))]
+  [(set i32:$dst, (atomic_cmp_swap_local i32:$src0, i32:$src1, i32:$src2))]
 >;
 def LDS_READ_RET : R600_LDS_1A <0x32, "LDS_READ_RET",
   [(set (i32 R600_Reg32:$dst), (load_local R600_Reg32:$src0))]
@@ -693,7 +693,7 @@ def : EGOrCaymanPat<(fp_to_sint f32:$src0), (FLT_TO_INT_eg (TRUNC $src0))>;
 def : EGOrCaymanPat<(fp_to_uint f32:$src0), (FLT_TO_UINT_eg (TRUNC $src0))>;
 
 // SHA-256 Patterns
-def : SHA256MaPattern <BFI_INT_eg, XOR_INT>;
+defm : SHA256MaPattern <BFI_INT_eg, XOR_INT, R600_Reg64>;
 
 def EG_ExportSwz : ExportSwzInst {
   let Word1{19-16} = 0; // BURST_COUNT

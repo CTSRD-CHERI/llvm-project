@@ -26,10 +26,10 @@
 #include "llvm/CodeGen/GlobalISel/LegalizerInfo.h"
 #include "llvm/CodeGen/GlobalISel/RegisterBankInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/MC/MCInstrItineraries.h"
 #include "llvm/MC/MCSchedule.h"
 #include "llvm/Target/TargetOptions.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 #include <memory>
 #include <string>
 
@@ -198,6 +198,9 @@ protected:
   /// register allocation.
   bool DisablePostRAScheduler = false;
 
+  /// UseAA - True if using AA during codegen (DAGCombine, MISched, etc)
+  bool UseAA = false;
+
   /// HasThumb2 - True if Thumb2 instructions are supported.
   bool HasThumb2 = false;
 
@@ -235,6 +238,10 @@ protected:
   /// HasDataBarrier - True if the subtarget supports DMB / DSB data barrier
   /// instructions.
   bool HasDataBarrier = false;
+
+  /// HasFullDataBarrier - True if the subtarget supports DFB data barrier
+  /// instruction.
+  bool HasFullDataBarrier = false;
 
   /// HasV7Clrex - True if the subtarget supports CLREX instructions
   bool HasV7Clrex = false;
@@ -544,6 +551,7 @@ public:
   bool hasDivideInThumbMode() const { return HasHardwareDivideInThumb; }
   bool hasDivideInARMMode() const { return HasHardwareDivideInARM; }
   bool hasDataBarrier() const { return HasDataBarrier; }
+  bool hasFullDataBarrier() const { return HasFullDataBarrier; }
   bool hasV7Clrex() const { return HasV7Clrex; }
   bool hasAcquireRelease() const { return HasAcquireRelease; }
 
@@ -593,7 +601,7 @@ public:
   bool hasFullFP16() const { return HasFullFP16; }
 
   bool hasFuseAES() const { return HasFuseAES; }
-  /// \brief Return true if the CPU supports any kind of instruction fusion.
+  /// Return true if the CPU supports any kind of instruction fusion.
   bool hasFusion() const { return hasFuseAES(); }
 
   const Triple &getTargetTriple() const { return TargetTriple; }
@@ -712,15 +720,15 @@ public:
 
   unsigned getMispredictionPenalty() const;
 
-  /// This function returns true if the target has sincos() routine in its
-  /// compiler runtime or math libraries.
-  bool hasSinCos() const;
-
   /// Returns true if machine scheduler should be enabled.
   bool enableMachineScheduler() const override;
 
   /// True for some subtargets at > -O0.
   bool enablePostRAScheduler() const override;
+
+  /// Enable use of alias analysis during code generation (during MI
+  /// scheduling, DAGCombine, etc.).
+  bool useAA() const override { return UseAA; }
 
   // enableAtomicExpand- True if we need to expand our atomics.
   bool enableAtomicExpand() const override;
@@ -752,7 +760,7 @@ public:
   bool isGVIndirectSymbol(const GlobalValue *GV) const;
 
   /// Returns the constant pool modifier needed to access the GV.
-  ARMCP::ARMCPModifier getCPModifier(const GlobalValue *GV) const;
+  bool isGVInGOT(const GlobalValue *GV) const;
 
   /// True if fast-isel is used.
   bool useFastISel() const;
@@ -766,6 +774,13 @@ public:
     if (hasV4TOps())
       return ARM::BX_RET;
     return ARM::MOVPCLR;
+  }
+
+  /// Allow movt+movw for PIC global address calculation.
+  /// ELF does not have GOT relocations for movt+movw.
+  /// ROPI does not use GOT.
+  bool allowPositionIndependentMovt() const {
+    return isROPI() || !isTargetELF();
   }
 };
 

@@ -75,6 +75,8 @@ public:
 
   lldb::SBProcess GetProcess();
 
+  lldb::SBStructuredData GetStatistics();
+
   //------------------------------------------------------------------
   /// Return the platform object associated with the target.
   ///
@@ -163,6 +165,7 @@ public:
                          bool stop_at_entry, lldb::SBError &error);
 
   SBProcess LoadCore(const char *core_file);
+  SBProcess LoadCore(const char *core_file, lldb::SBError &error);
 
   //------------------------------------------------------------------
   /// Launch a new process with sensible defaults.
@@ -716,9 +719,9 @@ public:
   // Finds all breakpoints by name, returning the list in bkpt_list.  Returns
   // false if the name is not a valid breakpoint name, true otherwise.
   bool FindBreakpointsByName(const char *name, SBBreakpointList &bkpt_list);
-  
+
   void GetBreakpointNames(SBStringList &names);
-  
+
   void DeleteBreakpointName(const char *name);
 
   bool EnableAllBreakpoints();
@@ -773,8 +776,7 @@ public:
                                           const void *buf, size_t size);
 
   // The "WithFlavor" is necessary to keep SWIG from getting confused about
-  // overloaded arguments when
-  // using the buf + size -> Python Object magic.
+  // overloaded arguments when using the buf + size -> Python Object magic.
 
   lldb::SBInstructionList GetInstructionsWithFlavor(lldb::SBAddress base_addr,
                                                     const char *flavor_string,
@@ -827,8 +829,8 @@ protected:
   friend class SBValue;
 
   //------------------------------------------------------------------
-  // Constructors are private, use static Target::Create function to
-  // create an instance of this class.
+  // Constructors are private, use static Target::Create function to create an
+  // instance of this class.
   //------------------------------------------------------------------
 
   lldb::TargetSP GetSP() const;

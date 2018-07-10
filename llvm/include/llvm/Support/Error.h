@@ -246,18 +246,20 @@ public:
   }
 
 private:
+#if LLVM_ENABLE_ABI_BREAKING_CHECKS
+  // assertIsChecked() happens very frequently, but under normal circumstances
+  // is supposed to be a no-op.  So we want it to be inlined, but having a bunch
+  // of debug prints can cause the function to be too large for inlining.  So
+  // it's important that we define this function out of line so that it can't be
+  // inlined.
+  LLVM_ATTRIBUTE_NORETURN
+  void fatalUncheckedError() const;
+#endif
+
   void assertIsChecked() {
 #if LLVM_ENABLE_ABI_BREAKING_CHECKS
-    if (!getChecked() || getPtr()) {
-      dbgs() << "Program aborted due to an unhandled Error:\n";
-      if (getPtr())
-        getPtr()->log(dbgs());
-      else
-        dbgs()
-            << "Error value was Success. (Note: Success values must still be "
-               "checked prior to being destroyed).\n";
-      abort();
-    }
+    if (LLVM_UNLIKELY(!getChecked() || getPtr()))
+      fatalUncheckedError();
 #endif
   }
 
@@ -503,7 +505,7 @@ public:
       getErrorStorage()->~error_type();
   }
 
-  /// \brief Return false if there is an error.
+  /// Return false if there is an error.
   explicit operator bool() {
 #if LLVM_ENABLE_ABI_BREAKING_CHECKS
     Unchecked = HasError;
@@ -511,24 +513,24 @@ public:
     return !HasError;
   }
 
-  /// \brief Returns a reference to the stored T value.
+  /// Returns a reference to the stored T value.
   reference get() {
     assertIsChecked();
     return *getStorage();
   }
 
-  /// \brief Returns a const reference to the stored T value.
+  /// Returns a const reference to the stored T value.
   const_reference get() const {
     assertIsChecked();
     return const_cast<Expected<T> *>(this)->get();
   }
 
-  /// \brief Check that this Expected<T> is an error of type ErrT.
+  /// Check that this Expected<T> is an error of type ErrT.
   template <typename ErrT> bool errorIsA() const {
     return HasError && (*getErrorStorage())->template isA<ErrT>();
   }
 
-  /// \brief Take ownership of the stored error.
+  /// Take ownership of the stored error.
   /// After calling this the Expected<T> is in an indeterminate state that can
   /// only be safely destructed. No further calls (beside the destructor) should
   /// be made on the Expected<T> vaule.
@@ -539,25 +541,25 @@ public:
     return HasError ? Error(std::move(*getErrorStorage())) : Error::success();
   }
 
-  /// \brief Returns a pointer to the stored T value.
+  /// Returns a pointer to the stored T value.
   pointer operator->() {
     assertIsChecked();
     return toPointer(getStorage());
   }
 
-  /// \brief Returns a const pointer to the stored T value.
+  /// Returns a const pointer to the stored T value.
   const_pointer operator->() const {
     assertIsChecked();
     return toPointer(getStorage());
   }
 
-  /// \brief Returns a reference to the stored T value.
+  /// Returns a reference to the stored T value.
   reference operator*() {
     assertIsChecked();
     return *getStorage();
   }
 
-  /// \brief Returns a const reference to the stored T value.
+  /// Returns a const reference to the stored T value.
   const_reference operator*() const {
     assertIsChecked();
     return *getStorage();
@@ -632,19 +634,26 @@ private:
 #endif
   }
 
+#if LLVM_ENABLE_ABI_BREAKING_CHECKS
+  LLVM_ATTRIBUTE_NORETURN
+  LLVM_ATTRIBUTE_NOINLINE
+  void fatalUncheckedExpected() const {
+    dbgs() << "Expected<T> must be checked before access or destruction.\n";
+    if (HasError) {
+      dbgs() << "Unchecked Expected<T> contained error:\n";
+      (*getErrorStorage())->log(dbgs());
+    } else
+      dbgs() << "Expected<T> value was in success state. (Note: Expected<T> "
+                "values in success mode must still be checked prior to being "
+                "destroyed).\n";
+    abort();
+  }
+#endif
+
   void assertIsChecked() {
 #if LLVM_ENABLE_ABI_BREAKING_CHECKS
-    if (Unchecked) {
-      dbgs() << "Expected<T> must be checked before access or destruction.\n";
-      if (HasError) {
-        dbgs() << "Unchecked Expected<T> contained error:\n";
-        (*getErrorStorage())->log(dbgs());
-      } else
-        dbgs() << "Expected<T> value was in success state. (Note: Expected<T> "
-                  "values in success mode must still be checked prior to being "
-                  "destroyed).\n";
-      abort();
-    }
+    if (LLVM_UNLIKELY(Unchecked))
+      fatalUncheckedExpected();
 #endif
   }
 
@@ -873,16 +882,16 @@ Error handleErrors(Error E, HandlerTs &&... Hs) {
   return handleErrorImpl(std::move(Payload), std::forward<HandlerTs>(Hs)...);
 }
 
-/// Behaves the same as handleErrors, except that it requires that all
-/// errors be handled by the given handlers. If any unhandled error remains
-/// after the handlers have run, report_fatal_error() will be called.
+/// Behaves the same as handleErrors, except that by contract all errors
+/// *must* be handled by the given handlers (i.e. there must be no remaining
+/// errors after running the handlers, or llvm_unreachable is called).
 template <typename... HandlerTs>
 void handleAllErrors(Error E, HandlerTs &&... Handlers) {
   cantFail(handleErrors(std::move(E), std::forward<HandlerTs>(Handlers)...));
 }
 
 /// Check that E is a non-error, then drop it.
-/// If E is an error report_fatal_error will be called.
+/// If E is an error, llvm_unreachable will be called.
 inline void handleAllErrors(Error E) {
   cantFail(std::move(E));
 }
@@ -952,6 +961,18 @@ inline std::string toString(Error E) {
 /// might be more clearly refactored to return an Optional<T>.
 inline void consumeError(Error Err) {
   handleAllErrors(std::move(Err), [](const ErrorInfoBase &) {});
+}
+
+/// Helper for converting an Error to a bool.
+///
+/// This method returns true if Err is in an error state, or false if it is
+/// in a success state.  Puts Err in a checked state in both cases (unlike
+/// Error::operator bool(), which only does this for success states).
+inline bool errorToBool(Error Err) {
+  bool IsError = static_cast<bool>(Err);
+  if (IsError)
+    consumeError(std::move(Err));
+  return IsError;
 }
 
 /// Helper for Errors used as out-parameters.

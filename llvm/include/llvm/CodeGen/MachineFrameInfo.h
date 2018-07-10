@@ -85,7 +85,7 @@ public:
 /// stack offsets of the object, eliminating all MO_FrameIndex operands from
 /// the program.
 ///
-/// @brief Abstract Stack Frame Information
+/// Abstract Stack Frame Information
 class MachineFrameInfo {
 
   // Represent a single object allocated on the stack.
@@ -115,7 +115,7 @@ class MachineFrameInfo {
     /// slot can't alias any LLVM IR value.  This is very similar to a Spill
     /// Slot, but is created by statepoint lowering is SelectionDAG, not the
     /// register allocator.
-    bool isStatepointSpillSlot;
+    bool isStatepointSpillSlot = false;
 
     /// Identifier for stack memory type analagous to address space. If this is
     /// non-0, the meaning is target defined. Offsets cannot be directly
@@ -123,6 +123,9 @@ class MachineFrameInfo {
     /// necessarily reside in the same contiguous memory block as other stack
     /// objects. Objects with differing stack IDs should not be merged or
     /// replaced substituted for each other.
+    //
+    /// It is assumed a target uses consecutive, increasing stack IDs starting
+    /// from 1.
     uint8_t StackID;
 
     /// If this stack object is originated from an Alloca instruction
@@ -131,7 +134,7 @@ class MachineFrameInfo {
 
     // If true, the object was mapped into the local frame
     // block and doesn't need additional handling for allocation beyond that.
-    bool PreAllocated;
+    bool PreAllocated = false;
 
     // If true, an LLVM IR value might point to this object.
     // Normally, spill slots and fixed-offset objects don't alias IR-accessible
@@ -140,17 +143,17 @@ class MachineFrameInfo {
     bool isAliased;
 
     /// If true, the object has been zero-extended.
-    bool isZExt;
+    bool isZExt = false;
 
     /// If true, the object has been zero-extended.
-    bool isSExt;
+    bool isSExt = false;
 
-    StackObject(uint64_t Sz, unsigned Al, int64_t SP, bool IM,
-                bool isSS, const AllocaInst *Val, bool Aliased, uint8_t ID = 0)
-      : SPOffset(SP), Size(Sz), Alignment(Al), isImmutable(IM),
-        isSpillSlot(isSS), isStatepointSpillSlot(false), StackID(ID),
-        Alloca(Val),
-        PreAllocated(false), isAliased(Aliased), isZExt(false), isSExt(false) {}
+    StackObject(uint64_t Size, unsigned Alignment, int64_t SPOffset,
+                bool IsImmutable, bool IsSpillSlot, const AllocaInst *Alloca,
+                bool IsAliased, uint8_t StackID = 0)
+      : SPOffset(SPOffset), Size(Size), Alignment(Alignment),
+        isImmutable(IsImmutable), isSpillSlot(IsSpillSlot),
+        StackID(StackID), Alloca(Alloca), isAliased(IsAliased) {}
   };
 
   /// The alignment of the stack.
@@ -573,13 +576,13 @@ public:
   /// All fixed objects should be created before other objects are created for
   /// efficiency. By default, fixed objects are not pointed to by LLVM IR
   /// values. This returns an index with a negative value.
-  int CreateFixedObject(uint64_t Size, int64_t SPOffset, bool Immutable,
+  int CreateFixedObject(uint64_t Size, int64_t SPOffset, bool IsImmutable,
                         bool isAliased = false);
 
   /// Create a spill slot at a fixed location on the stack.
   /// Returns an index with a negative value.
   int CreateFixedSpillStackObject(uint64_t Size, int64_t SPOffset,
-                                  bool Immutable = false);
+                                  bool IsImmutable = false);
 
   /// Returns true if the specified index corresponds to a fixed stack object.
   bool isFixedObjectIndex(int ObjectIdx) const {
@@ -605,10 +608,10 @@ public:
   }
 
   /// Marks the immutability of an object.
-  void setIsImmutableObjectIndex(int ObjectIdx, bool Immutable) {
+  void setIsImmutableObjectIndex(int ObjectIdx, bool IsImmutable) {
     assert(unsigned(ObjectIdx+NumFixedObjects) < Objects.size() &&
            "Invalid Object Idx!");
-    Objects[ObjectIdx+NumFixedObjects].isImmutable = Immutable;
+    Objects[ObjectIdx+NumFixedObjects].isImmutable = IsImmutable;
   }
 
   /// Returns true if the specified index corresponds to a spill slot.
@@ -660,7 +663,7 @@ public:
 
   /// Create a new statically sized stack object, returning
   /// a nonnegative identifier to represent it.
-  int CreateStackObject(uint64_t Size, unsigned Alignment, bool isSS,
+  int CreateStackObject(uint64_t Size, unsigned Alignment, bool isSpillSlot,
                         const AllocaInst *Alloca = nullptr, uint8_t ID = 0);
 
   /// Create a new statically sized stack object that represents a spill slot,

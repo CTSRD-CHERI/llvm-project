@@ -17,32 +17,48 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/Transforms/IPO/SCCP.h"
+#include "llvm/Transforms/Scalar/SCCP.h"
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/PointerIntPair.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/Analysis/GlobalsModRef.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
+#include "llvm/Transforms/Utils/Local.h"
+#include "llvm/Analysis/ValueLattice.h"
 #include "llvm/Analysis/ValueLatticeUtils.h"
+#include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CallSite.h"
+#include "llvm/IR/Constant.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/InstVisitor.h"
+#include "llvm/IR/InstrTypes.h"
+#include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/PassManager.h"
+#include "llvm/IR/Type.h"
+#include "llvm/IR/User.h"
+#include "llvm/IR/Value.h"
 #include "llvm/Pass.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Transforms/IPO.h"
 #include "llvm/Transforms/Scalar.h"
-#include "llvm/Transforms/Scalar/SCCP.h"
-#include "llvm/Transforms/Utils/Local.h"
-#include <algorithm>
+#include <cassert>
+#include <utility>
+#include <vector>
+
 using namespace llvm;
 
 #define DEBUG_TYPE "sccp"
@@ -53,8 +69,11 @@ STATISTIC(NumDeadBlocks , "Number of basic blocks unreachable");
 STATISTIC(IPNumInstRemoved, "Number of instructions removed by IPSCCP");
 STATISTIC(IPNumArgsElimed ,"Number of arguments constant propagated by IPSCCP");
 STATISTIC(IPNumGlobalConst, "Number of globals found to be constant by IPSCCP");
+STATISTIC(IPNumRangeInfoUsed, "Number of times constant range info was used by"
+                              "IPSCCP");
 
 namespace {
+
 /// LatticeVal class - This class represents the different lattice values that
 /// an LLVM value may occupy.  It is a simple class with value semantics.
 ///
@@ -89,9 +108,11 @@ public:
   LatticeVal() : Val(nullptr, unknown) {}
 
   bool isUnknown() const { return getLatticeValue() == unknown; }
+
   bool isConstant() const {
     return getLatticeValue() == constant || getLatticeValue() == forcedconstant;
   }
+
   bool isOverdefined() const { return getLatticeValue() == overdefined; }
 
   Constant *getConstant() const {
@@ -154,11 +175,15 @@ public:
     Val.setInt(forcedconstant);
     Val.setPointer(V);
   }
+
+  ValueLatticeElement toValueLattice() const {
+    if (isOverdefined())
+      return ValueLatticeElement::getOverdefined();
+    if (isConstant())
+      return ValueLatticeElement::get(getConstant());
+    return ValueLatticeElement();
+  }
 };
-} // end anonymous namespace.
-
-
-namespace {
 
 //===----------------------------------------------------------------------===//
 //
@@ -168,37 +193,42 @@ namespace {
 class SCCPSolver : public InstVisitor<SCCPSolver> {
   const DataLayout &DL;
   const TargetLibraryInfo *TLI;
-  SmallPtrSet<BasicBlock*, 8> BBExecutable; // The BBs that are executable.
-  DenseMap<Value*, LatticeVal> ValueState;  // The state each value is in.
+  SmallPtrSet<BasicBlock *, 8> BBExecutable; // The BBs that are executable.
+  DenseMap<Value *, LatticeVal> ValueState;  // The state each value is in.
+  // The state each parameter is in.
+  DenseMap<Value *, ValueLatticeElement> ParamState;
 
   /// StructValueState - This maintains ValueState for values that have
   /// StructType, for example for formal arguments, calls, insertelement, etc.
-  ///
-  DenseMap<std::pair<Value*, unsigned>, LatticeVal> StructValueState;
+  DenseMap<std::pair<Value *, unsigned>, LatticeVal> StructValueState;
 
   /// GlobalValue - If we are tracking any values for the contents of a global
   /// variable, we keep a mapping from the constant accessor to the element of
   /// the global, to the currently known value.  If the value becomes
   /// overdefined, it's entry is simply removed from this map.
-  DenseMap<GlobalVariable*, LatticeVal> TrackedGlobals;
+  DenseMap<GlobalVariable *, LatticeVal> TrackedGlobals;
 
   /// TrackedRetVals - If we are tracking arguments into and the return
   /// value out of a function, it will have an entry in this map, indicating
   /// what the known return value for the function is.
-  DenseMap<Function*, LatticeVal> TrackedRetVals;
+  DenseMap<Function *, LatticeVal> TrackedRetVals;
 
   /// TrackedMultipleRetVals - Same as TrackedRetVals, but used for functions
   /// that return multiple values.
-  DenseMap<std::pair<Function*, unsigned>, LatticeVal> TrackedMultipleRetVals;
+  DenseMap<std::pair<Function *, unsigned>, LatticeVal> TrackedMultipleRetVals;
 
   /// MRVFunctionsTracked - Each function in TrackedMultipleRetVals is
   /// represented here for efficient lookup.
-  SmallPtrSet<Function*, 16> MRVFunctionsTracked;
+  SmallPtrSet<Function *, 16> MRVFunctionsTracked;
+
+  /// MustTailFunctions - Each function here is a callee of non-removable
+  /// musttail call site.
+  SmallPtrSet<Function *, 16> MustTailCallees;
 
   /// TrackingIncomingArguments - This is the set of functions for whose
   /// arguments we make optimistic assumptions about and try to prove as
   /// constants.
-  SmallPtrSet<Function*, 16> TrackingIncomingArguments;
+  SmallPtrSet<Function *, 16> TrackingIncomingArguments;
 
   /// The reason for two worklists is that overdefined is the lowest state
   /// on the lattice, and moving things to overdefined as fast as possible
@@ -207,16 +237,17 @@ class SCCPSolver : public InstVisitor<SCCPSolver> {
   /// By having a separate worklist, we accomplish this because everything
   /// possibly overdefined will become overdefined at the soonest possible
   /// point.
-  SmallVector<Value*, 64> OverdefinedInstWorkList;
-  SmallVector<Value*, 64> InstWorkList;
+  SmallVector<Value *, 64> OverdefinedInstWorkList;
+  SmallVector<Value *, 64> InstWorkList;
 
-
-  SmallVector<BasicBlock*, 64>  BBWorkList;  // The BasicBlock work list
+  // The BasicBlock work list
+  SmallVector<BasicBlock *, 64>  BBWorkList;
 
   /// KnownFeasibleEdges - Entries in this set are edges which have already had
   /// PHI nodes retriggered.
-  typedef std::pair<BasicBlock*, BasicBlock*> Edge;
+  using Edge = std::pair<BasicBlock *, BasicBlock *>;
   DenseSet<Edge> KnownFeasibleEdges;
+
 public:
   SCCPSolver(const DataLayout &DL, const TargetLibraryInfo *tli)
       : DL(DL), TLI(tli) {}
@@ -228,7 +259,7 @@ public:
   bool MarkBlockExecutable(BasicBlock *BB) {
     if (!BBExecutable.insert(BB).second)
       return false;
-    DEBUG(dbgs() << "Marking Block Executable: " << BB->getName() << '\n');
+    LLVM_DEBUG(dbgs() << "Marking Block Executable: " << BB->getName() << '\n');
     BBWorkList.push_back(BB);  // Add the block to the work list!
     return true;
   }
@@ -260,6 +291,18 @@ public:
       TrackedRetVals.insert(std::make_pair(F, LatticeVal()));
   }
 
+  /// AddMustTailCallee - If the SCCP solver finds that this function is called
+  /// from non-removable musttail call site.
+  void AddMustTailCallee(Function *F) {
+    MustTailCallees.insert(F);
+  }
+
+  /// Returns true if the given function is called from non-removable musttail
+  /// call site.
+  bool isMustTailCallee(Function *F) {
+    return MustTailCallees.count(F);
+  }
+
   void AddArgumentTrackedFunction(Function *F) {
     TrackingIncomingArguments.insert(F);
   }
@@ -271,7 +314,6 @@ public:
   }
 
   /// Solve - Solve for constants and executable blocks.
-  ///
   void Solve();
 
   /// ResolvedUndefsIn - While solving the dataflow for a function, we assume
@@ -297,14 +339,23 @@ public:
     return StructValues;
   }
 
-  LatticeVal getLatticeValueFor(Value *V) const {
-    DenseMap<Value*, LatticeVal>::const_iterator I = ValueState.find(V);
-    assert(I != ValueState.end() && "V is not in valuemap!");
-    return I->second;
+  ValueLatticeElement getLatticeValueFor(Value *V) {
+    assert(!V->getType()->isStructTy() &&
+           "Should use getStructLatticeValueFor");
+    std::pair<DenseMap<Value*, ValueLatticeElement>::iterator, bool>
+        PI = ParamState.insert(std::make_pair(V, ValueLatticeElement()));
+    ValueLatticeElement &LV = PI.first->second;
+    if (PI.second) {
+      DenseMap<Value*, LatticeVal>::const_iterator I = ValueState.find(V);
+      assert(I != ValueState.end() &&
+             "V not found in ValueState nor Paramstate map!");
+      LV = I->second.toValueLattice();
+    }
+
+    return LV;
   }
 
   /// getTrackedRetVals - Get the inferred return value map.
-  ///
   const DenseMap<Function*, LatticeVal> &getTrackedRetVals() {
     return TrackedRetVals;
   }
@@ -319,6 +370,12 @@ public:
   /// values tracked by the pass.
   const SmallPtrSet<Function *, 16> getMRVFunctionsTracked() {
     return MRVFunctionsTracked;
+  }
+
+  /// getMustTailCallees - Get the set of functions which are called
+  /// from non-removable musttail call sites.
+  const SmallPtrSet<Function *, 16> getMustTailCallees() {
+    return MustTailCallees;
   }
 
   /// markOverdefined - Mark the specified value overdefined.  This
@@ -356,10 +413,9 @@ private:
   // markConstant - Make a value be marked as "constant".  If the value
   // is not already a constant, add it to the instruction work list so that
   // the users of the instruction are updated later.
-  //
   void markConstant(LatticeVal &IV, Value *V, Constant *C) {
     if (!IV.markConstant(C)) return;
-    DEBUG(dbgs() << "markConstant: " << *C << ": " << *V << '\n');
+    LLVM_DEBUG(dbgs() << "markConstant: " << *C << ": " << *V << '\n');
     pushToWorkList(IV, V);
   }
 
@@ -372,10 +428,9 @@ private:
     assert(!V->getType()->isStructTy() && "structs should use mergeInValue");
     LatticeVal &IV = ValueState[V];
     IV.markForcedConstant(C);
-    DEBUG(dbgs() << "markForcedConstant: " << *C << ": " << *V << '\n');
+    LLVM_DEBUG(dbgs() << "markForcedConstant: " << *C << ": " << *V << '\n');
     pushToWorkList(IV, V);
   }
-
 
   // markOverdefined - Make a value be marked as "overdefined". If the
   // value is not already overdefined, add it to the overdefined instruction
@@ -383,11 +438,10 @@ private:
   void markOverdefined(LatticeVal &IV, Value *V) {
     if (!IV.markOverdefined()) return;
 
-    DEBUG(dbgs() << "markOverdefined: ";
-          if (auto *F = dyn_cast<Function>(V))
-            dbgs() << "Function '" << F->getName() << "'\n";
-          else
-            dbgs() << *V << '\n');
+    LLVM_DEBUG(dbgs() << "markOverdefined: ";
+               if (auto *F = dyn_cast<Function>(V)) dbgs()
+               << "Function '" << F->getName() << "'\n";
+               else dbgs() << *V << '\n');
     // Only instructions go on the work list
     pushToWorkList(IV, V);
   }
@@ -409,7 +463,6 @@ private:
     mergeInValue(ValueState[V], V, MergeWithV);
   }
 
-
   /// getValueState - Return the LatticeVal object that corresponds to the
   /// value.  This function handles the case when the value hasn't been seen yet
   /// by properly seeding constants etc.
@@ -430,6 +483,18 @@ private:
     }
 
     // All others are underdefined by default.
+    return LV;
+  }
+
+  ValueLatticeElement &getParamState(Value *V) {
+    assert(!V->getType()->isStructTy() && "Should use getStructValueState");
+
+    std::pair<DenseMap<Value*, ValueLatticeElement>::iterator, bool>
+        PI = ParamState.insert(std::make_pair(V, ValueLatticeElement()));
+    ValueLatticeElement &LV = PI.first->second;
+    if (PI.second)
+      LV = getValueState(V).toValueLattice();
+
     return LV;
   }
 
@@ -464,7 +529,6 @@ private:
     return LV;
   }
 
-
   /// markEdgeExecutable - Mark a basic block as executable, adding it to the BB
   /// work list if it is not already executable.
   void markEdgeExecutable(BasicBlock *Source, BasicBlock *Dest) {
@@ -475,30 +539,25 @@ private:
       // If the destination is already executable, we just made an *edge*
       // feasible that wasn't before.  Revisit the PHI nodes in the block
       // because they have potentially new operands.
-      DEBUG(dbgs() << "Marking Edge Executable: " << Source->getName()
-            << " -> " << Dest->getName() << '\n');
+      LLVM_DEBUG(dbgs() << "Marking Edge Executable: " << Source->getName()
+                        << " -> " << Dest->getName() << '\n');
 
-      PHINode *PN;
-      for (BasicBlock::iterator I = Dest->begin();
-           (PN = dyn_cast<PHINode>(I)); ++I)
-        visitPHINode(*PN);
+      for (PHINode &PN : Dest->phis())
+        visitPHINode(PN);
     }
   }
 
   // getFeasibleSuccessors - Return a vector of booleans to indicate which
   // successors are reachable from a given terminator instruction.
-  //
   void getFeasibleSuccessors(TerminatorInst &TI, SmallVectorImpl<bool> &Succs);
 
   // isEdgeFeasible - Return true if the control flow edge from the 'From' basic
   // block to the 'To' basic block is currently feasible.
-  //
   bool isEdgeFeasible(BasicBlock *From, BasicBlock *To);
 
   // OperandChangedState - This method is invoked on all of the users of an
   // instruction that was just changed state somehow.  Based on this
   // information, we need to update the specified user of this instruction.
-  //
   void OperandChangedState(Instruction *I) {
     if (BBExecutable.count(I->getParent()))   // Inst is executable?
       visit(*I);
@@ -513,6 +572,7 @@ private:
   void visitPHINode(PHINode &I);
 
   // Terminators
+
   void visitReturnInst(ReturnInst &I);
   void visitTerminatorInst(TerminatorInst &TI);
 
@@ -522,40 +582,44 @@ private:
   void visitCmpInst(CmpInst &I);
   void visitExtractValueInst(ExtractValueInst &EVI);
   void visitInsertValueInst(InsertValueInst &IVI);
+
   void visitCatchSwitchInst(CatchSwitchInst &CPI) {
     markOverdefined(&CPI);
     visitTerminatorInst(CPI);
   }
 
   // Instructions that cannot be folded away.
+
   void visitStoreInst     (StoreInst &I);
   void visitLoadInst      (LoadInst &I);
   void visitGetElementPtrInst(GetElementPtrInst &I);
+
   void visitCallInst      (CallInst &I) {
     visitCallSite(&I);
   }
+
   void visitInvokeInst    (InvokeInst &II) {
     visitCallSite(&II);
     visitTerminatorInst(II);
   }
+
   void visitCallSite      (CallSite CS);
   void visitResumeInst    (TerminatorInst &I) { /*returns void*/ }
   void visitUnreachableInst(TerminatorInst &I) { /*returns void*/ }
   void visitFenceInst     (FenceInst &I) { /*returns void*/ }
+
   void visitInstruction(Instruction &I) {
     // All the instructions we don't do any special handling for just
     // go to overdefined.
-    DEBUG(dbgs() << "SCCP: Don't know how to handle: " << I << '\n');
+    LLVM_DEBUG(dbgs() << "SCCP: Don't know how to handle: " << I << '\n');
     markOverdefined(&I);
   }
 };
 
 } // end anonymous namespace
 
-
 // getFeasibleSuccessors - Return a vector of booleans to indicate which
 // successors are reachable from a given terminator instruction.
-//
 void SCCPSolver::getFeasibleSuccessors(TerminatorInst &TI,
                                        SmallVectorImpl<bool> &Succs) {
   Succs.resize(TI.getNumSuccessors());
@@ -634,14 +698,12 @@ void SCCPSolver::getFeasibleSuccessors(TerminatorInst &TI,
     return;
   }
 
-  DEBUG(dbgs() << "Unknown terminator instruction: " << TI << '\n');
+  LLVM_DEBUG(dbgs() << "Unknown terminator instruction: " << TI << '\n');
   llvm_unreachable("SCCP: Don't know how to handle this terminator!");
 }
 
-
 // isEdgeFeasible - Return true if the control flow edge from the 'From' basic
 // block to the 'To' basic block is currently feasible.
-//
 bool SCCPSolver::isEdgeFeasible(BasicBlock *From, BasicBlock *To) {
   assert(BBExecutable.count(To) && "Dest should always be alive!");
 
@@ -696,7 +758,7 @@ bool SCCPSolver::isEdgeFeasible(BasicBlock *From, BasicBlock *To) {
     return Addr->getBasicBlock() == To;
   }
 
-  DEBUG(dbgs() << "Unknown terminator instruction: " << *TI << '\n');
+  LLVM_DEBUG(dbgs() << "Unknown terminator instruction: " << *TI << '\n');
   llvm_unreachable("SCCP: Don't know how to handle this terminator!");
 }
 
@@ -717,7 +779,6 @@ bool SCCPSolver::isEdgeFeasible(BasicBlock *From, BasicBlock *To) {
 //    destination executable
 // 7. If a conditional branch has a value that is overdefined, make all
 //    successors executable.
-//
 void SCCPSolver::visitPHINode(PHINode &PN) {
   // If this PN returns a struct, just mark the result overdefined.
   // TODO: We could do a lot better than this if code actually uses this.
@@ -737,7 +798,6 @@ void SCCPSolver::visitPHINode(PHINode &PN) {
   // constant, and they agree with each other, the PHI becomes the identical
   // constant.  If they are constant and don't agree, the PHI is overdefined.
   // If there are no executable operands, the PHI remains unknown.
-  //
   Constant *OperandVal = nullptr;
   for (unsigned i = 0, e = PN.getNumIncomingValues(); i != e; ++i) {
     LatticeVal IV = getValueState(PN.getIncomingValue(i));
@@ -768,7 +828,6 @@ void SCCPSolver::visitPHINode(PHINode &PN) {
   // arguments that agree with each other(and OperandVal is the constant) or
   // OperandVal is null because there are no defined incoming arguments.  If
   // this is the case, the PHI remains unknown.
-  //
   if (OperandVal)
     markConstant(&PN, OperandVal);      // Acquire operand value
 }
@@ -796,7 +855,6 @@ void SCCPSolver::visitReturnInst(ReturnInst &I) {
         for (unsigned i = 0, e = STy->getNumElements(); i != e; ++i)
           mergeInValue(TrackedMultipleRetVals[std::make_pair(F, i)], F,
                        getStructValueState(ResultOp, i));
-
   }
 }
 
@@ -826,7 +884,6 @@ void SCCPSolver::visitCastInst(CastInst &I) {
     markConstant(&I, C);
   }
 }
-
 
 void SCCPSolver::visitExtractValueInst(ExtractValueInst &EVI) {
   // If this returns a struct, mark all elements over defined, we don't track
@@ -976,7 +1033,6 @@ void SCCPSolver::visitBinaryOperator(Instruction &I) {
     }
   }
 
-
   markOverdefined(&I);
 }
 
@@ -1005,7 +1061,6 @@ void SCCPSolver::visitCmpInst(CmpInst &I) {
 
 // Handle getelementptr instructions.  If all operands are constants then we
 // can turn this into a getelementptr ConstantExpr.
-//
 void SCCPSolver::visitGetElementPtrInst(GetElementPtrInst &I) {
   if (ValueState[&I].isOverdefined()) return;
 
@@ -1050,7 +1105,6 @@ void SCCPSolver::visitStoreInst(StoreInst &SI) {
   if (I->second.isOverdefined())
     TrackedGlobals.erase(I);      // No need to keep tracking this!
 }
-
 
 // Handle load instructions.  If the operand is a constant pointer to a constant
 // global, we can replace the load with the loaded constant value!
@@ -1115,7 +1169,6 @@ CallOverdefined:
     // a declaration, maybe we can constant fold it.
     if (F && F->isDeclaration() && !I->getType()->isStructTy() &&
         canConstantFoldCallTo(CS, F)) {
-
       SmallVector<Constant*, 8> Operands;
       for (CallSite::arg_iterator AI = CS.arg_begin(), E = CS.arg_end();
            AI != E; ++AI) {
@@ -1169,6 +1222,9 @@ CallOverdefined:
           mergeInValue(getStructValueState(&*AI, i), &*AI, CallArg);
         }
       } else {
+        // Most other parts of the Solver still only use the simpler value
+        // lattice, so we propagate changes for parameters to both lattices.
+        getParamState(&*AI).mergeIn(getValueState(*CAI).toValueLattice(), DL);
         mergeInValue(&*AI, getValueState(*CAI));
       }
     }
@@ -1203,7 +1259,7 @@ void SCCPSolver::Solve() {
     while (!OverdefinedInstWorkList.empty()) {
       Value *I = OverdefinedInstWorkList.pop_back_val();
 
-      DEBUG(dbgs() << "\nPopped off OI-WL: " << *I << '\n');
+      LLVM_DEBUG(dbgs() << "\nPopped off OI-WL: " << *I << '\n');
 
       // "I" got into the work list because it either made the transition from
       // bottom to constant, or to overdefined.
@@ -1221,7 +1277,7 @@ void SCCPSolver::Solve() {
     while (!InstWorkList.empty()) {
       Value *I = InstWorkList.pop_back_val();
 
-      DEBUG(dbgs() << "\nPopped off I-WL: " << *I << '\n');
+      LLVM_DEBUG(dbgs() << "\nPopped off I-WL: " << *I << '\n');
 
       // "I" got into the work list because it made the transition from undef to
       // constant.
@@ -1241,7 +1297,7 @@ void SCCPSolver::Solve() {
       BasicBlock *BB = BBWorkList.back();
       BBWorkList.pop_back();
 
-      DEBUG(dbgs() << "\nPopped off BBWL: " << *BB << '\n');
+      LLVM_DEBUG(dbgs() << "\nPopped off BBWL: " << *BB << '\n');
 
       // Notify all instructions in this basic block that they are newly
       // executable.
@@ -1367,7 +1423,6 @@ bool SCCPSolver::ResolvedUndefsIn(Function &F) {
         // undef & X -> 0.   X could be zero.
         markForcedConstant(&I, Constant::getNullValue(ITy));
         return true;
-
       case Instruction::Or:
         // Both operands undef -> undef
         if (Op0LV.isUnknown() && Op1LV.isUnknown())
@@ -1375,7 +1430,6 @@ bool SCCPSolver::ResolvedUndefsIn(Function &F) {
         // undef | X -> -1.   X could be -1.
         markForcedConstant(&I, Constant::getAllOnesValue(ITy));
         return true;
-
       case Instruction::Xor:
         // undef ^ undef -> 0; strictly speaking, this is not strictly
         // necessary, but we try to be nice to people who expect this
@@ -1386,7 +1440,6 @@ bool SCCPSolver::ResolvedUndefsIn(Function &F) {
         }
         // undef ^ X -> undef
         break;
-
       case Instruction::SDiv:
       case Instruction::UDiv:
       case Instruction::SRem:
@@ -1404,7 +1457,6 @@ bool SCCPSolver::ResolvedUndefsIn(Function &F) {
         // undef % X -> 0.   X could be 1.
         markForcedConstant(&I, Constant::getNullValue(ITy));
         return true;
-
       case Instruction::AShr:
         // X >>a undef -> undef.
         if (Op1LV.isUnknown()) break;
@@ -1471,7 +1523,7 @@ bool SCCPSolver::ResolvedUndefsIn(Function &F) {
         markOverdefined(&I);
         return true;
       case Instruction::Call:
-      case Instruction::Invoke: {
+      case Instruction::Invoke:
         // There are two reasons a call can have an undef result
         // 1. It could be tracked.
         // 2. It could be constant-foldable.
@@ -1485,7 +1537,6 @@ bool SCCPSolver::ResolvedUndefsIn(Function &F) {
         // we do not know what return values are valid.
         markOverdefined(&I);
         return true;
-      }
       default:
         // If we don't know what should happen here, conservatively mark it
         // overdefined.
@@ -1564,11 +1615,51 @@ bool SCCPSolver::ResolvedUndefsIn(Function &F) {
   return false;
 }
 
+static bool tryToReplaceWithConstantRange(SCCPSolver &Solver, Value *V) {
+  bool Changed = false;
+
+  // Currently we only use range information for integer values.
+  if (!V->getType()->isIntegerTy())
+    return false;
+
+  const ValueLatticeElement &IV = Solver.getLatticeValueFor(V);
+  if (!IV.isConstantRange())
+    return false;
+
+  for (auto UI = V->uses().begin(), E = V->uses().end(); UI != E;) {
+    const Use &U = *UI++;
+    auto *Icmp = dyn_cast<ICmpInst>(U.getUser());
+    if (!Icmp || !Solver.isBlockExecutable(Icmp->getParent()))
+      continue;
+
+    auto getIcmpLatticeValue = [&](Value *Op) {
+      if (auto *C = dyn_cast<Constant>(Op))
+        return ValueLatticeElement::get(C);
+      return Solver.getLatticeValueFor(Op);
+    };
+
+    ValueLatticeElement A = getIcmpLatticeValue(Icmp->getOperand(0));
+    ValueLatticeElement B = getIcmpLatticeValue(Icmp->getOperand(1));
+
+    Constant *C = A.getCompare(Icmp->getPredicate(), Icmp->getType(), B);
+    if (C) {
+      Icmp->replaceAllUsesWith(C);
+      LLVM_DEBUG(dbgs() << "Replacing " << *Icmp << " with " << *C
+                        << ", because of range information " << A << " " << B
+                        << "\n");
+      Icmp->eraseFromParent();
+      Changed = true;
+    }
+  }
+  return Changed;
+}
+
 static bool tryToReplaceWithConstant(SCCPSolver &Solver, Value *V) {
   Constant *Const = nullptr;
   if (V->getType()->isStructTy()) {
     std::vector<LatticeVal> IVs = Solver.getStructLatticeValueFor(V);
-    if (any_of(IVs, [](const LatticeVal &LV) { return LV.isOverdefined(); }))
+    if (llvm::any_of(IVs,
+                     [](const LatticeVal &LV) { return LV.isOverdefined(); }))
       return false;
     std::vector<Constant *> ConstVals;
     auto *ST = dyn_cast<StructType>(V->getType());
@@ -1580,13 +1671,39 @@ static bool tryToReplaceWithConstant(SCCPSolver &Solver, Value *V) {
     }
     Const = ConstantStruct::get(ST, ConstVals);
   } else {
-    LatticeVal IV = Solver.getLatticeValueFor(V);
+    const ValueLatticeElement &IV = Solver.getLatticeValueFor(V);
     if (IV.isOverdefined())
       return false;
-    Const = IV.isConstant() ? IV.getConstant() : UndefValue::get(V->getType());
+
+    if (IV.isConstantRange()) {
+      if (IV.getConstantRange().isSingleElement())
+        Const =
+            ConstantInt::get(V->getType(), IV.asConstantInteger().getValue());
+      else
+        return false;
+    } else
+      Const =
+          IV.isConstant() ? IV.getConstant() : UndefValue::get(V->getType());
   }
   assert(Const && "Constant is nullptr here!");
-  DEBUG(dbgs() << "  Constant: " << *Const << " = " << *V << '\n');
+
+  // Replacing `musttail` instructions with constant breaks `musttail` invariant
+  // unless the call itself can be removed
+  CallInst *CI = dyn_cast<CallInst>(V);
+  if (CI && CI->isMustTailCall() && !CI->isSafeToRemove()) {
+    CallSite CS(CI);
+    Function *F = CS.getCalledFunction();
+
+    // Don't zap returns of the callee
+    if (F)
+      Solver.AddMustTailCallee(F);
+
+    LLVM_DEBUG(dbgs() << "  Can\'t treat the result of musttail call : " << *CI
+                      << " as a constant\n");
+    return false;
+  }
+
+  LLVM_DEBUG(dbgs() << "  Constant: " << *Const << " = " << *V << '\n');
 
   // Replaces all of the uses of a variable with uses of the constant.
   V->replaceAllUsesWith(Const);
@@ -1595,10 +1712,9 @@ static bool tryToReplaceWithConstant(SCCPSolver &Solver, Value *V) {
 
 // runSCCP() - Run the Sparse Conditional Constant Propagation algorithm,
 // and return true if the function was modified.
-//
 static bool runSCCP(Function &F, const DataLayout &DL,
                     const TargetLibraryInfo *TLI) {
-  DEBUG(dbgs() << "SCCP on function '" << F.getName() << "'\n");
+  LLVM_DEBUG(dbgs() << "SCCP on function '" << F.getName() << "'\n");
   SCCPSolver Solver(DL, TLI);
 
   // Mark the first block of the function as being executable.
@@ -1612,7 +1728,7 @@ static bool runSCCP(Function &F, const DataLayout &DL,
   bool ResolvedUndefs = true;
   while (ResolvedUndefs) {
     Solver.Solve();
-    DEBUG(dbgs() << "RESOLVING UNDEFs\n");
+    LLVM_DEBUG(dbgs() << "RESOLVING UNDEFs\n");
     ResolvedUndefs = Solver.ResolvedUndefsIn(F);
   }
 
@@ -1624,7 +1740,7 @@ static bool runSCCP(Function &F, const DataLayout &DL,
 
   for (BasicBlock &BB : F) {
     if (!Solver.isBlockExecutable(&BB)) {
-      DEBUG(dbgs() << "  BasicBlock Dead:" << BB);
+      LLVM_DEBUG(dbgs() << "  BasicBlock Dead:" << BB);
 
       ++NumDeadBlocks;
       NumInstRemoved += removeAllNonTerminatorAndEHPadInstructions(&BB);
@@ -1635,7 +1751,6 @@ static bool runSCCP(Function &F, const DataLayout &DL,
 
     // Iterate over all of the instructions in a function, replacing them with
     // constants if we have found them to be of constant values.
-    //
     for (BasicBlock::iterator BI = BB.begin(), E = BB.end(); BI != E;) {
       Instruction *Inst = &*BI++;
       if (Inst->getType()->isVoidTy() || isa<TerminatorInst>(Inst))
@@ -1666,6 +1781,7 @@ PreservedAnalyses SCCPPass::run(Function &F, FunctionAnalysisManager &AM) {
 }
 
 namespace {
+
 //===--------------------------------------------------------------------===//
 //
 /// SCCP Class - This class uses the SCCPSolver to implement a per-function
@@ -1673,18 +1789,20 @@ namespace {
 ///
 class SCCPLegacyPass : public FunctionPass {
 public:
-  void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.addRequired<TargetLibraryInfoWrapperPass>();
-    AU.addPreserved<GlobalsAAWrapperPass>();
-  }
-  static char ID; // Pass identification, replacement for typeid
+  // Pass identification, replacement for typeid
+  static char ID;
+
   SCCPLegacyPass() : FunctionPass(ID) {
     initializeSCCPLegacyPassPass(*PassRegistry::getPassRegistry());
   }
 
+  void getAnalysisUsage(AnalysisUsage &AU) const override {
+    AU.addRequired<TargetLibraryInfoWrapperPass>();
+    AU.addPreserved<GlobalsAAWrapperPass>();
+  }
+
   // runOnFunction - Run the Sparse Conditional Constant Propagation
   // algorithm, and return true if the function was modified.
-  //
   bool runOnFunction(Function &F) override {
     if (skipFunction(F))
       return false;
@@ -1694,9 +1812,11 @@ public:
     return runSCCP(F, DL, TLI);
   }
 };
+
 } // end anonymous namespace
 
 char SCCPLegacyPass::ID = 0;
+
 INITIALIZE_PASS_BEGIN(SCCPLegacyPass, "sccp",
                       "Sparse Conditional Constant Propagation", false, false)
 INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfoWrapperPass)
@@ -1713,19 +1833,34 @@ static void findReturnsToZap(Function &F,
   if (!Solver.isArgumentTrackedFunction(&F))
     return;
 
-  for (BasicBlock &BB : F)
+  // There is a non-removable musttail call site of this function. Zapping
+  // returns is not allowed.
+  if (Solver.isMustTailCallee(&F)) {
+    LLVM_DEBUG(dbgs() << "Can't zap returns of the function : " << F.getName()
+                      << " due to present musttail call of it\n");
+    return;
+  }
+
+  for (BasicBlock &BB : F) {
+    if (CallInst *CI = BB.getTerminatingMustTailCall()) {
+      LLVM_DEBUG(dbgs() << "Can't zap return of the block due to present "
+                        << "musttail call : " << *CI << "\n");
+      (void)CI;
+      return;
+    }
+
     if (auto *RI = dyn_cast<ReturnInst>(BB.getTerminator()))
       if (!isa<UndefValue>(RI->getOperand(0)))
         ReturnsToZap.push_back(RI);
+  }
 }
 
-static bool runIPSCCP(Module &M, const DataLayout &DL,
-                      const TargetLibraryInfo *TLI) {
+bool llvm::runIPSCCP(Module &M, const DataLayout &DL,
+                     const TargetLibraryInfo *TLI) {
   SCCPSolver Solver(DL, TLI);
 
   // Loop over all functions, marking arguments to those with their addresses
   // taken or that are external as overdefined.
-  //
   for (Function &F : M) {
     if (F.isDeclaration())
       continue;
@@ -1764,7 +1899,7 @@ static bool runIPSCCP(Module &M, const DataLayout &DL,
   while (ResolvedUndefs) {
     Solver.Solve();
 
-    DEBUG(dbgs() << "RESOLVING UNDEFS\n");
+    LLVM_DEBUG(dbgs() << "RESOLVING UNDEFS\n");
     ResolvedUndefs = false;
     for (Function &F : M)
       ResolvedUndefs |= Solver.ResolvedUndefsIn(F);
@@ -1774,7 +1909,6 @@ static bool runIPSCCP(Module &M, const DataLayout &DL,
 
   // Iterate over all of the instructions in the module, replacing them with
   // constants if we have found them to be of constant values.
-  //
   SmallVector<BasicBlock*, 512> BlocksToErase;
 
   for (Function &F : M) {
@@ -1783,13 +1917,19 @@ static bool runIPSCCP(Module &M, const DataLayout &DL,
 
     if (Solver.isBlockExecutable(&F.front()))
       for (Function::arg_iterator AI = F.arg_begin(), E = F.arg_end(); AI != E;
-           ++AI)
-        if (!AI->use_empty() && tryToReplaceWithConstant(Solver, &*AI))
+           ++AI) {
+        if (!AI->use_empty() && tryToReplaceWithConstant(Solver, &*AI)) {
           ++IPNumArgsElimed;
+          continue;
+        }
+
+        if (!AI->use_empty() && tryToReplaceWithConstantRange(Solver, &*AI))
+          ++IPNumRangeInfoUsed;
+      }
 
     for (Function::iterator BB = F.begin(), E = F.end(); BB != E; ++BB) {
       if (!Solver.isBlockExecutable(&*BB)) {
-        DEBUG(dbgs() << "  BasicBlock Dead:" << *BB);
+        LLVM_DEBUG(dbgs() << "  BasicBlock Dead:" << *BB);
 
         ++NumDeadBlocks;
         NumInstRemoved +=
@@ -1807,7 +1947,7 @@ static bool runIPSCCP(Module &M, const DataLayout &DL,
         if (Inst->getType()->isVoidTy())
           continue;
         if (tryToReplaceWithConstant(Solver, Inst)) {
-          if (!isa<CallInst>(Inst) && !isa<TerminatorInst>(Inst))
+          if (Inst->isSafeToRemove())
             Inst->eraseFromParent();
           // Hey, we just changed something!
           MadeChanges = true;
@@ -1887,7 +2027,8 @@ static bool runIPSCCP(Module &M, const DataLayout &DL,
     GlobalVariable *GV = I->first;
     assert(!I->second.isOverdefined() &&
            "Overdefined values should have been taken out of the map!");
-    DEBUG(dbgs() << "Found that GV '" << GV->getName() << "' is constant!\n");
+    LLVM_DEBUG(dbgs() << "Found that GV '" << GV->getName()
+                      << "' is constant!\n");
     while (!GV->use_empty()) {
       StoreInst *SI = cast<StoreInst>(GV->user_back());
       SI->eraseFromParent();
@@ -1898,52 +2039,3 @@ static bool runIPSCCP(Module &M, const DataLayout &DL,
 
   return MadeChanges;
 }
-
-PreservedAnalyses IPSCCPPass::run(Module &M, ModuleAnalysisManager &AM) {
-  const DataLayout &DL = M.getDataLayout();
-  auto &TLI = AM.getResult<TargetLibraryAnalysis>(M);
-  if (!runIPSCCP(M, DL, &TLI))
-    return PreservedAnalyses::all();
-  return PreservedAnalyses::none();
-}
-
-namespace {
-//===--------------------------------------------------------------------===//
-//
-/// IPSCCP Class - This class implements interprocedural Sparse Conditional
-/// Constant Propagation.
-///
-class IPSCCPLegacyPass : public ModulePass {
-public:
-  static char ID;
-
-  IPSCCPLegacyPass() : ModulePass(ID) {
-    initializeIPSCCPLegacyPassPass(*PassRegistry::getPassRegistry());
-  }
-
-  bool runOnModule(Module &M) override {
-    if (skipModule(M))
-      return false;
-    const DataLayout &DL = M.getDataLayout();
-    const TargetLibraryInfo *TLI =
-        &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
-    return runIPSCCP(M, DL, TLI);
-  }
-
-  void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.addRequired<TargetLibraryInfoWrapperPass>();
-  }
-};
-} // end anonymous namespace
-
-char IPSCCPLegacyPass::ID = 0;
-INITIALIZE_PASS_BEGIN(IPSCCPLegacyPass, "ipsccp",
-                      "Interprocedural Sparse Conditional Constant Propagation",
-                      false, false)
-INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfoWrapperPass)
-INITIALIZE_PASS_END(IPSCCPLegacyPass, "ipsccp",
-                    "Interprocedural Sparse Conditional Constant Propagation",
-                    false, false)
-
-// createIPSCCPPass - This is the public interface to this file.
-ModulePass *llvm::createIPSCCPPass() { return new IPSCCPLegacyPass(); }

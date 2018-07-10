@@ -282,6 +282,10 @@ bool LLParser::ParseTopLevelEntities() {
     case lltok::GlobalVar:  if (ParseNamedGlobal()) return true; break;
     case lltok::ComdatVar:  if (parseComdat()) return true; break;
     case lltok::exclaim:    if (ParseStandaloneMetadata()) return true; break;
+    case lltok::SummaryID:
+      if (ParseSummaryEntry())
+        return true;
+      break;
     case lltok::MetadataVar:if (ParseNamedMetadata()) return true; break;
     case lltok::kw_attributes: if (ParseUnnamedAttrGrp()) return true; break;
     case lltok::kw_uselistorder: if (ParseUseListOrder()) return true; break;
@@ -327,7 +331,8 @@ bool LLParser::ParseTargetDefinition() {
     if (ParseToken(lltok::equal, "expected '=' after target datalayout") ||
         ParseStringConstant(Str))
       return true;
-    M->setDataLayout(Str);
+    if (DataLayoutStr.empty())
+      M->setDataLayout(Str);
     return false;
   }
 }
@@ -483,10 +488,12 @@ bool LLParser::ParseOptionalUnnamedAddr(
 
 /// ParseUnnamedGlobal:
 ///   OptionalVisibility (ALIAS | IFUNC) ...
-///   OptionalLinkage OptionalVisibility OptionalDLLStorageClass
+///   OptionalLinkage OptionalPreemptionSpecifier OptionalVisibility
+///   OptionalDLLStorageClass
 ///                                                     ...   -> global variable
 ///   GlobalID '=' OptionalVisibility (ALIAS | IFUNC) ...
-///   GlobalID '=' OptionalLinkage OptionalVisibility OptionalDLLStorageClass
+///   GlobalID '=' OptionalLinkage OptionalPreemptionSpecifier OptionalVisibility
+///                OptionalDLLStorageClass
 ///                                                     ...   -> global variable
 bool LLParser::ParseUnnamedGlobal() {
   unsigned VarID = NumberedVals.size();
@@ -506,23 +513,26 @@ bool LLParser::ParseUnnamedGlobal() {
 
   bool HasLinkage;
   unsigned Linkage, Visibility, DLLStorageClass;
+  bool DSOLocal;
   GlobalVariable::ThreadLocalMode TLM;
   GlobalVariable::UnnamedAddr UnnamedAddr;
-  if (ParseOptionalLinkage(Linkage, HasLinkage, Visibility, DLLStorageClass) ||
+  if (ParseOptionalLinkage(Linkage, HasLinkage, Visibility, DLLStorageClass,
+                           DSOLocal) ||
       ParseOptionalThreadLocal(TLM) || ParseOptionalUnnamedAddr(UnnamedAddr))
     return true;
 
   if (Lex.getKind() != lltok::kw_alias && Lex.getKind() != lltok::kw_ifunc)
     return ParseGlobal(Name, NameLoc, Linkage, HasLinkage, Visibility,
-                       DLLStorageClass, TLM, UnnamedAddr);
+                       DLLStorageClass, DSOLocal, TLM, UnnamedAddr);
 
   return parseIndirectSymbol(Name, NameLoc, Linkage, Visibility,
-                             DLLStorageClass, TLM, UnnamedAddr);
+                             DLLStorageClass, DSOLocal, TLM, UnnamedAddr);
 }
 
 /// ParseNamedGlobal:
 ///   GlobalVar '=' OptionalVisibility (ALIAS | IFUNC) ...
-///   GlobalVar '=' OptionalLinkage OptionalVisibility OptionalDLLStorageClass
+///   GlobalVar '=' OptionalLinkage OptionalPreemptionSpecifier
+///                 OptionalVisibility OptionalDLLStorageClass
 ///                                                     ...   -> global variable
 bool LLParser::ParseNamedGlobal() {
   assert(Lex.getKind() == lltok::GlobalVar);
@@ -532,19 +542,21 @@ bool LLParser::ParseNamedGlobal() {
 
   bool HasLinkage;
   unsigned Linkage, Visibility, DLLStorageClass;
+  bool DSOLocal;
   GlobalVariable::ThreadLocalMode TLM;
   GlobalVariable::UnnamedAddr UnnamedAddr;
   if (ParseToken(lltok::equal, "expected '=' in global variable") ||
-      ParseOptionalLinkage(Linkage, HasLinkage, Visibility, DLLStorageClass) ||
+      ParseOptionalLinkage(Linkage, HasLinkage, Visibility, DLLStorageClass,
+                           DSOLocal) ||
       ParseOptionalThreadLocal(TLM) || ParseOptionalUnnamedAddr(UnnamedAddr))
     return true;
 
   if (Lex.getKind() != lltok::kw_alias && Lex.getKind() != lltok::kw_ifunc)
     return ParseGlobal(Name, NameLoc, Linkage, HasLinkage, Visibility,
-                       DLLStorageClass, TLM, UnnamedAddr);
+                       DLLStorageClass, DSOLocal, TLM, UnnamedAddr);
 
   return parseIndirectSymbol(Name, NameLoc, Linkage, Visibility,
-                             DLLStorageClass, TLM, UnnamedAddr);
+                             DLLStorageClass, DSOLocal, TLM, UnnamedAddr);
 }
 
 bool LLParser::parseComdat() {
@@ -703,25 +715,83 @@ bool LLParser::ParseStandaloneMetadata() {
   return false;
 }
 
+// Skips a single module summary entry.
+bool LLParser::SkipModuleSummaryEntry() {
+  // Each module summary entry consists of a tag for the entry
+  // type, followed by a colon, then the fields surrounded by nested sets of
+  // parentheses. The "tag:" looks like a Label. Once parsing support is
+  // in place we will look for the tokens corresponding to the expected tags.
+  if (ParseToken(lltok::LabelStr,
+                 "expected 'label' at start of summary entry") ||
+      ParseToken(lltok::lparen, "expected '(' at start of summary entry"))
+    return true;
+  // Now walk through the parenthesized entry, until the number of open
+  // parentheses goes back down to 0 (the first '(' was parsed above).
+  unsigned NumOpenParen = 1;
+  do {
+    switch (Lex.getKind()) {
+    case lltok::lparen:
+      NumOpenParen++;
+      break;
+    case lltok::rparen:
+      NumOpenParen--;
+      break;
+    case lltok::Eof:
+      return TokError("found end of file while parsing summary entry");
+    default:
+      // Skip everything in between parentheses.
+      break;
+    }
+    Lex.Lex();
+  } while (NumOpenParen > 0);
+  return false;
+}
+
+/// ParseSummaryEntry:
+///   ::= SummaryID '=' ...
+bool LLParser::ParseSummaryEntry() {
+  assert(Lex.getKind() == lltok::SummaryID);
+  // unsigned SummaryID = Lex.getUIntVal();
+
+  Lex.Lex();
+  if (ParseToken(lltok::equal, "expected '=' here"))
+    return true;
+
+  // TODO: Support parsing into a ModuleSummaryIndex object saved in
+  // the LLParser. For now, skip the summary entry.
+  if (SkipModuleSummaryEntry())
+    return true;
+  return false;
+}
+
 static bool isValidVisibilityForLinkage(unsigned V, unsigned L) {
   return !GlobalValue::isLocalLinkage((GlobalValue::LinkageTypes)L) ||
          (GlobalValue::VisibilityTypes)V == GlobalValue::DefaultVisibility;
 }
 
+// If there was an explicit dso_local, update GV. In the absence of an explicit
+// dso_local we keep the default value.
+static void maybeSetDSOLocal(bool DSOLocal, GlobalValue &GV) {
+  if (DSOLocal)
+    GV.setDSOLocal(true);
+}
+
 /// parseIndirectSymbol:
-///   ::= GlobalVar '=' OptionalLinkage OptionalVisibility
-///                     OptionalDLLStorageClass OptionalThreadLocal
-///                     OptionalUnnamedAddr 'alias|ifunc' IndirectSymbol
+///   ::= GlobalVar '=' OptionalLinkage OptionalPreemptionSpecifier 
+///                     OptionalVisibility OptionalDLLStorageClass
+///                     OptionalThreadLocal OptionalUnnamedAddr
+//                      'alias|ifunc' IndirectSymbol
 ///
 /// IndirectSymbol
 ///   ::= TypeAndValue
 ///
 /// Everything through OptionalUnnamedAddr has already been parsed.
 ///
-bool LLParser::parseIndirectSymbol(
-    const std::string &Name, LocTy NameLoc, unsigned L, unsigned Visibility,
-    unsigned DLLStorageClass, GlobalVariable::ThreadLocalMode TLM,
-    GlobalVariable::UnnamedAddr UnnamedAddr) {
+bool LLParser::parseIndirectSymbol(const std::string &Name, LocTy NameLoc,
+                                   unsigned L, unsigned Visibility,
+                                   unsigned DLLStorageClass, bool DSOLocal,
+                                   GlobalVariable::ThreadLocalMode TLM,
+                                   GlobalVariable::UnnamedAddr UnnamedAddr) {
   bool IsAlias;
   if (Lex.getKind() == lltok::kw_alias)
     IsAlias = true;
@@ -812,6 +882,7 @@ bool LLParser::parseIndirectSymbol(
   GA->setVisibility((GlobalValue::VisibilityTypes)Visibility);
   GA->setDLLStorageClass((GlobalValue::DLLStorageClassTypes)DLLStorageClass);
   GA->setUnnamedAddr(UnnamedAddr);
+  maybeSetDSOLocal(DSOLocal, *GA);
 
   if (Name.empty())
     NumberedVals.push_back(GA.get());
@@ -843,12 +914,14 @@ bool LLParser::parseIndirectSymbol(
 }
 
 /// ParseGlobal
-///   ::= GlobalVar '=' OptionalLinkage OptionalVisibility OptionalDLLStorageClass
+///   ::= GlobalVar '=' OptionalLinkage OptionalPreemptionSpecifier
+///       OptionalVisibility OptionalDLLStorageClass
 ///       OptionalThreadLocal OptionalUnnamedAddr OptionalAddrSpace
 ///       OptionalExternallyInitialized GlobalType Type Const OptionalAttrs
-///   ::= OptionalLinkage OptionalVisibility OptionalDLLStorageClass
-///       OptionalThreadLocal OptionalUnnamedAddr OptionalAddrSpace
-///       OptionalExternallyInitialized GlobalType Type Const OptionalAttrs
+///   ::= OptionalLinkage OptionalPreemptionSpecifier OptionalVisibility
+///       OptionalDLLStorageClass OptionalThreadLocal OptionalUnnamedAddr
+///       OptionalAddrSpace OptionalExternallyInitialized GlobalType Type
+///       Const OptionalAttrs
 ///
 /// Everything up to and including OptionalUnnamedAddr has been parsed
 /// already.
@@ -856,7 +929,7 @@ bool LLParser::parseIndirectSymbol(
 bool LLParser::ParseGlobal(const std::string &Name, LocTy NameLoc,
                            unsigned Linkage, bool HasLinkage,
                            unsigned Visibility, unsigned DLLStorageClass,
-                           GlobalVariable::ThreadLocalMode TLM,
+                           bool DSOLocal, GlobalVariable::ThreadLocalMode TLM,
                            GlobalVariable::UnnamedAddr UnnamedAddr) {
   if (!isValidVisibilityForLinkage(Visibility, Linkage))
     return Error(NameLoc,
@@ -930,6 +1003,7 @@ bool LLParser::ParseGlobal(const std::string &Name, LocTy NameLoc,
     GV->setInitializer(Init);
   GV->setConstant(IsConstant);
   GV->setLinkage((GlobalValue::LinkageTypes)Linkage);
+  maybeSetDSOLocal(DSOLocal, *GV);
   GV->setVisibility((GlobalValue::VisibilityTypes)Visibility);
   GV->setDLLStorageClass((GlobalValue::DLLStorageClassTypes)DLLStorageClass);
   GV->setExternallyInitialized(IsExternallyInitialized);
@@ -1110,8 +1184,11 @@ bool LLParser::ParseFnAttributeValuePairs(AttrBuilder &B,
     case lltok::kw_nonlazybind: B.addAttribute(Attribute::NonLazyBind); break;
     case lltok::kw_noredzone: B.addAttribute(Attribute::NoRedZone); break;
     case lltok::kw_noreturn: B.addAttribute(Attribute::NoReturn); break;
+    case lltok::kw_nocf_check: B.addAttribute(Attribute::NoCfCheck); break;
     case lltok::kw_norecurse: B.addAttribute(Attribute::NoRecurse); break;
     case lltok::kw_nounwind: B.addAttribute(Attribute::NoUnwind); break;
+    case lltok::kw_optforfuzzing:
+      B.addAttribute(Attribute::OptForFuzzing); break;
     case lltok::kw_optnone: B.addAttribute(Attribute::OptimizeNone); break;
     case lltok::kw_optsize: B.addAttribute(Attribute::OptimizeForSize); break;
     case lltok::kw_readnone: B.addAttribute(Attribute::ReadNone); break;
@@ -1124,8 +1201,12 @@ bool LLParser::ParseFnAttributeValuePairs(AttrBuilder &B,
     case lltok::kw_sspstrong:
       B.addAttribute(Attribute::StackProtectStrong); break;
     case lltok::kw_safestack: B.addAttribute(Attribute::SafeStack); break;
+    case lltok::kw_shadowcallstack:
+      B.addAttribute(Attribute::ShadowCallStack); break;
     case lltok::kw_sanitize_address:
       B.addAttribute(Attribute::SanitizeAddress); break;
+    case lltok::kw_sanitize_hwaddress:
+      B.addAttribute(Attribute::SanitizeHWAddress); break;
     case lltok::kw_sanitize_thread:
       B.addAttribute(Attribute::SanitizeThread); break;
     case lltok::kw_sanitize_memory:
@@ -1445,17 +1526,21 @@ bool LLParser::ParseOptionalParamAttrs(AttrBuilder &B) {
     case lltok::kw_nonlazybind:
     case lltok::kw_noredzone:
     case lltok::kw_noreturn:
+    case lltok::kw_nocf_check:
     case lltok::kw_nounwind:
+    case lltok::kw_optforfuzzing:
     case lltok::kw_optnone:
     case lltok::kw_optsize:
     case lltok::kw_returns_twice:
     case lltok::kw_sanitize_address:
+    case lltok::kw_sanitize_hwaddress:
     case lltok::kw_sanitize_memory:
     case lltok::kw_sanitize_thread:
     case lltok::kw_ssp:
     case lltok::kw_sspreq:
     case lltok::kw_sspstrong:
     case lltok::kw_safestack:
+    case lltok::kw_shadowcallstack:
     case lltok::kw_strictfp:
     case lltok::kw_uwtable:
       HaveError |= Error(Lex.getLoc(), "invalid use of function-only attribute");
@@ -1537,17 +1622,21 @@ bool LLParser::ParseOptionalReturnAttrs(AttrBuilder &B) {
     case lltok::kw_nonlazybind:
     case lltok::kw_noredzone:
     case lltok::kw_noreturn:
+    case lltok::kw_nocf_check:
     case lltok::kw_nounwind:
+    case lltok::kw_optforfuzzing:
     case lltok::kw_optnone:
     case lltok::kw_optsize:
     case lltok::kw_returns_twice:
     case lltok::kw_sanitize_address:
+    case lltok::kw_sanitize_hwaddress:
     case lltok::kw_sanitize_memory:
     case lltok::kw_sanitize_thread:
     case lltok::kw_ssp:
     case lltok::kw_sspreq:
     case lltok::kw_sspstrong:
     case lltok::kw_safestack:
+    case lltok::kw_shadowcallstack:
     case lltok::kw_strictfp:
     case lltok::kw_uwtable:
       HaveError |= Error(Lex.getLoc(), "invalid use of function-only attribute");
@@ -1608,13 +1697,36 @@ static unsigned parseOptionalLinkageAux(lltok::Kind Kind, bool &HasLinkage) {
 ///   ::= 'external'
 bool LLParser::ParseOptionalLinkage(unsigned &Res, bool &HasLinkage,
                                     unsigned &Visibility,
-                                    unsigned &DLLStorageClass) {
+                                    unsigned &DLLStorageClass,
+                                    bool &DSOLocal) {
   Res = parseOptionalLinkageAux(Lex.getKind(), HasLinkage);
   if (HasLinkage)
     Lex.Lex();
+  ParseOptionalDSOLocal(DSOLocal);
   ParseOptionalVisibility(Visibility);
   ParseOptionalDLLStorageClass(DLLStorageClass);
+
+  if (DSOLocal && DLLStorageClass == GlobalValue::DLLImportStorageClass) {
+    return Error(Lex.getLoc(), "dso_location and DLL-StorageClass mismatch");
+  }
+
   return false;
+}
+
+void LLParser::ParseOptionalDSOLocal(bool &DSOLocal) {
+  switch (Lex.getKind()) {
+  default:
+    DSOLocal = false;
+    break;
+  case lltok::kw_dso_local:
+    DSOLocal = true;
+    Lex.Lex();
+    break;
+  case lltok::kw_dso_preemptable:
+    DSOLocal = false;
+    Lex.Lex();
+    break;
+  }
 }
 
 /// ParseOptionalVisibility
@@ -2564,11 +2676,24 @@ bool LLParser::PerFunctionState::FinishFunction() {
   return false;
 }
 
+static bool isValidVariableType(Module *M, Type *Ty, Value *Val, bool IsCall) {
+  if (Val->getType() == Ty)
+    return true;
+  // For calls we also accept variables in the program address space
+  if (IsCall && isa<PointerType>(Ty)) {
+    Type *TyInProgAS = cast<PointerType>(Ty)->getElementType()->getPointerTo(
+        M->getDataLayout().getProgramAddressSpace());
+    if (Val->getType() == TyInProgAS)
+      return true;
+  }
+  return false;
+}
+
 /// GetVal - Get a value with the specified name or ID, creating a
 /// forward reference record if needed.  This can return null if the value
 /// exists but does not have the right type.
 Value *LLParser::PerFunctionState::GetVal(const std::string &Name, Type *Ty,
-                                          LocTy Loc) {
+                                          LocTy Loc, bool IsCall) {
   // Look this name up in the normal function symbol table.
   Value *Val = F.getValueSymbolTable()->lookup(Name);
 
@@ -2582,7 +2707,8 @@ Value *LLParser::PerFunctionState::GetVal(const std::string &Name, Type *Ty,
 
   // If we have the value in the symbol table or fwd-ref table, return it.
   if (Val) {
-    if (Val->getType() == Ty) return Val;
+    if (isValidVariableType(P.M, Ty, Val, IsCall))
+      return Val;
     if (Ty->isLabelTy())
       P.Error(Loc, "'%" + Name + "' is not a basic block");
     else
@@ -2609,7 +2735,8 @@ Value *LLParser::PerFunctionState::GetVal(const std::string &Name, Type *Ty,
   return FwdVal;
 }
 
-Value *LLParser::PerFunctionState::GetVal(unsigned ID, Type *Ty, LocTy Loc) {
+Value *LLParser::PerFunctionState::GetVal(unsigned ID, Type *Ty, LocTy Loc,
+                                          bool IsCall) {
   // Look this name up in the normal function symbol table.
   Value *Val = ID < NumberedVals.size() ? NumberedVals[ID] : nullptr;
 
@@ -2623,7 +2750,8 @@ Value *LLParser::PerFunctionState::GetVal(unsigned ID, Type *Ty, LocTy Loc) {
 
   // If we have the value in the symbol table or fwd-ref table, return it.
   if (Val) {
-    if (Val->getType() == Ty) return Val;
+    if (isValidVariableType(P.M, Ty, Val, IsCall))
+      return Val;
     if (Ty->isLabelTy())
       P.Error(Loc, "'%" + Twine(ID) + "' is not a basic block");
     else
@@ -2714,13 +2842,13 @@ bool LLParser::PerFunctionState::SetInstName(int NameID,
 /// forward reference record if needed.
 BasicBlock *LLParser::PerFunctionState::GetBB(const std::string &Name,
                                               LocTy Loc) {
-  return dyn_cast_or_null<BasicBlock>(GetVal(Name,
-                                      Type::getLabelTy(F.getContext()), Loc));
+  return dyn_cast_or_null<BasicBlock>(
+      GetVal(Name, Type::getLabelTy(F.getContext()), Loc, /*IsCall=*/false));
 }
 
 BasicBlock *LLParser::PerFunctionState::GetBB(unsigned ID, LocTy Loc) {
-  return dyn_cast_or_null<BasicBlock>(GetVal(ID,
-                                      Type::getLabelTy(F.getContext()), Loc));
+  return dyn_cast_or_null<BasicBlock>(
+      GetVal(ID, Type::getLabelTy(F.getContext()), Loc, /*IsCall=*/false));
 }
 
 /// DefineBB - Define the specified basic block, which is either named or
@@ -3339,7 +3467,7 @@ bool LLParser::ParseGlobalValue(Type *Ty, Constant *&C) {
   ValID ID;
   Value *V = nullptr;
   bool Parsed = ParseValID(ID) ||
-                ConvertValIDToValue(Ty, ID, V, nullptr);
+                ConvertValIDToValue(Ty, ID, V, nullptr, /*IsCall=*/false);
   if (V && !(C = dyn_cast<Constant>(V)))
     return Error(ID.Loc, "global values must be constants");
   return Parsed;
@@ -3445,6 +3573,39 @@ template <class FieldTy> struct MDFieldImpl {
       : Val(std::move(Default)), Seen(false) {}
 };
 
+/// Structure to represent an optional metadata field that
+/// can be of either type (A or B) and encapsulates the
+/// MD<typeofA>Field and MD<typeofB>Field structs, so not
+/// to reimplement the specifics for representing each Field.
+template <class FieldTypeA, class FieldTypeB> struct MDEitherFieldImpl {
+  typedef MDEitherFieldImpl<FieldTypeA, FieldTypeB> ImplTy;
+  FieldTypeA A;
+  FieldTypeB B;
+  bool Seen;
+
+  enum {
+    IsInvalid = 0,
+    IsTypeA = 1,
+    IsTypeB = 2
+  } WhatIs;
+
+  void assign(FieldTypeA A) {
+    Seen = true;
+    this->A = std::move(A);
+    WhatIs = IsTypeA;
+  }
+
+  void assign(FieldTypeB B) {
+    Seen = true;
+    this->B = std::move(B);
+    WhatIs = IsTypeB;
+  }
+
+  explicit MDEitherFieldImpl(FieldTypeA DefaultA, FieldTypeB DefaultB)
+      : A(std::move(DefaultA)), B(std::move(DefaultB)), Seen(false),
+        WhatIs(IsInvalid) {}
+};
+
 struct MDUnsignedField : public MDFieldImpl<uint64_t> {
   uint64_t Max;
 
@@ -3531,8 +3692,43 @@ struct MDFieldList : public MDFieldImpl<SmallVector<Metadata *, 4>> {
 };
 
 struct ChecksumKindField : public MDFieldImpl<DIFile::ChecksumKind> {
-  ChecksumKindField() : ImplTy(DIFile::CSK_None) {}
   ChecksumKindField(DIFile::ChecksumKind CSKind) : ImplTy(CSKind) {}
+};
+
+struct MDSignedOrMDField : MDEitherFieldImpl<MDSignedField, MDField> {
+  MDSignedOrMDField(int64_t Default = 0, bool AllowNull = true)
+      : ImplTy(MDSignedField(Default), MDField(AllowNull)) {}
+
+  MDSignedOrMDField(int64_t Default, int64_t Min, int64_t Max,
+                    bool AllowNull = true)
+      : ImplTy(MDSignedField(Default, Min, Max), MDField(AllowNull)) {}
+
+  bool isMDSignedField() const { return WhatIs == IsTypeA; }
+  bool isMDField() const { return WhatIs == IsTypeB; }
+  int64_t getMDSignedValue() const {
+    assert(isMDSignedField() && "Wrong field type");
+    return A.Val;
+  }
+  Metadata *getMDFieldValue() const {
+    assert(isMDField() && "Wrong field type");
+    return B.Val;
+  }
+};
+
+struct MDSignedOrUnsignedField
+    : MDEitherFieldImpl<MDSignedField, MDUnsignedField> {
+  MDSignedOrUnsignedField() : ImplTy(MDSignedField(0), MDUnsignedField(0)) {}
+
+  bool isMDSignedField() const { return WhatIs == IsTypeA; }
+  bool isMDUnsignedField() const { return WhatIs == IsTypeB; }
+  int64_t getMDSignedValue() const {
+    assert(isMDSignedField() && "Wrong field type");
+    return A.Val;
+  }
+  uint64_t getMDUnsignedValue() const {
+    assert(isMDUnsignedField() && "Wrong field type");
+    return B.Val;
+  }
 };
 
 } // end anonymous namespace
@@ -3789,6 +3985,50 @@ bool LLParser::ParseMDField(LocTy Loc, StringRef Name, MDField &Result) {
 }
 
 template <>
+bool LLParser::ParseMDField(LocTy Loc, StringRef Name,
+                            MDSignedOrMDField &Result) {
+  // Try to parse a signed int.
+  if (Lex.getKind() == lltok::APSInt) {
+    MDSignedField Res = Result.A;
+    if (!ParseMDField(Loc, Name, Res)) {
+      Result.assign(Res);
+      return false;
+    }
+    return true;
+  }
+
+  // Otherwise, try to parse as an MDField.
+  MDField Res = Result.B;
+  if (!ParseMDField(Loc, Name, Res)) {
+    Result.assign(Res);
+    return false;
+  }
+
+  return true;
+}
+
+template <>
+bool LLParser::ParseMDField(LocTy Loc, StringRef Name,
+                            MDSignedOrUnsignedField &Result) {
+  if (Lex.getKind() != lltok::APSInt)
+    return false;
+
+  if (Lex.getAPSIntVal().isSigned()) {
+    MDSignedField Res = Result.A;
+    if (ParseMDField(Loc, Name, Res))
+      return true;
+    Result.assign(Res);
+    return false;
+  }
+
+  MDUnsignedField Res = Result.B;
+  if (ParseMDField(Loc, Name, Res))
+    return true;
+  Result.assign(Res);
+  return false;
+}
+
+template <>
 bool LLParser::ParseMDField(LocTy Loc, StringRef Name, MDStringField &Result) {
   LocTy ValueLoc = Lex.getLoc();
   std::string S;
@@ -3815,13 +4055,14 @@ bool LLParser::ParseMDField(LocTy Loc, StringRef Name, MDFieldList &Result) {
 template <>
 bool LLParser::ParseMDField(LocTy Loc, StringRef Name,
                             ChecksumKindField &Result) {
-  if (Lex.getKind() != lltok::ChecksumKind)
+  Optional<DIFile::ChecksumKind> CSKind =
+      DIFile::getChecksumKind(Lex.getStrVal());
+
+  if (Lex.getKind() != lltok::ChecksumKind || !CSKind)
     return TokError(
         "invalid checksum kind" + Twine(" '") + Lex.getStrVal() + "'");
 
-  DIFile::ChecksumKind CSKind = DIFile::getChecksumKind(Lex.getStrVal());
-
-  Result.assign(CSKind);
+  Result.assign(*CSKind);
   Lex.Lex();
   return false;
 }
@@ -3932,27 +4173,45 @@ bool LLParser::ParseGenericDINode(MDNode *&Result, bool IsDistinct) {
 
 /// ParseDISubrange:
 ///   ::= !DISubrange(count: 30, lowerBound: 2)
+///   ::= !DISubrange(count: !node, lowerBound: 2)
 bool LLParser::ParseDISubrange(MDNode *&Result, bool IsDistinct) {
 #define VISIT_MD_FIELDS(OPTIONAL, REQUIRED)                                    \
-  REQUIRED(count, MDSignedField, (-1, -1, INT64_MAX));                         \
+  REQUIRED(count, MDSignedOrMDField, (-1, -1, INT64_MAX, false));              \
   OPTIONAL(lowerBound, MDSignedField, );
   PARSE_MD_FIELDS();
 #undef VISIT_MD_FIELDS
 
-  Result = GET_OR_DISTINCT(DISubrange, (Context, count.Val, lowerBound.Val));
+  if (count.isMDSignedField())
+    Result = GET_OR_DISTINCT(
+        DISubrange, (Context, count.getMDSignedValue(), lowerBound.Val));
+  else if (count.isMDField())
+    Result = GET_OR_DISTINCT(
+        DISubrange, (Context, count.getMDFieldValue(), lowerBound.Val));
+  else
+    return true;
+
   return false;
 }
 
 /// ParseDIEnumerator:
-///   ::= !DIEnumerator(value: 30, name: "SomeKind")
+///   ::= !DIEnumerator(value: 30, isUnsigned: true, name: "SomeKind")
 bool LLParser::ParseDIEnumerator(MDNode *&Result, bool IsDistinct) {
 #define VISIT_MD_FIELDS(OPTIONAL, REQUIRED)                                    \
   REQUIRED(name, MDStringField, );                                             \
-  REQUIRED(value, MDSignedField, );
+  REQUIRED(value, MDSignedOrUnsignedField, );                                  \
+  OPTIONAL(isUnsigned, MDBoolField, (false));
   PARSE_MD_FIELDS();
 #undef VISIT_MD_FIELDS
 
-  Result = GET_OR_DISTINCT(DIEnumerator, (Context, value.Val, name.Val));
+  if (isUnsigned.Val && value.isMDSignedField())
+    return TokError("unsigned enumerator with negative value");
+
+  int64_t Value = value.isMDSignedField()
+                      ? value.getMDSignedValue()
+                      : static_cast<int64_t>(value.getMDUnsignedValue());
+  Result =
+      GET_OR_DISTINCT(DIEnumerator, (Context, Value, isUnsigned.Val, name.Val));
+
   return false;
 }
 
@@ -4023,7 +4282,8 @@ bool LLParser::ParseDICompositeType(MDNode *&Result, bool IsDistinct) {
   OPTIONAL(runtimeLang, DwarfLangField, );                                     \
   OPTIONAL(vtableHolder, MDField, );                                           \
   OPTIONAL(templateParams, MDField, );                                         \
-  OPTIONAL(identifier, MDStringField, );
+  OPTIONAL(identifier, MDStringField, );                                       \
+  OPTIONAL(discriminator, MDField, );
   PARSE_MD_FIELDS();
 #undef VISIT_MD_FIELDS
 
@@ -4033,7 +4293,7 @@ bool LLParser::ParseDICompositeType(MDNode *&Result, bool IsDistinct) {
             Context, *identifier.Val, tag.Val, name.Val, file.Val, line.Val,
             scope.Val, baseType.Val, size.Val, align.Val, offset.Val, flags.Val,
             elements.Val, runtimeLang.Val, vtableHolder.Val,
-            templateParams.Val)) {
+            templateParams.Val, discriminator.Val)) {
       Result = CT;
       return false;
     }
@@ -4044,7 +4304,8 @@ bool LLParser::ParseDICompositeType(MDNode *&Result, bool IsDistinct) {
       DICompositeType,
       (Context, tag.Val, name.Val, file.Val, line.Val, scope.Val, baseType.Val,
        size.Val, align.Val, offset.Val, flags.Val, elements.Val,
-       runtimeLang.Val, vtableHolder.Val, templateParams.Val, identifier.Val));
+       runtimeLang.Val, vtableHolder.Val, templateParams.Val, identifier.Val,
+       discriminator.Val));
   return false;
 }
 
@@ -4062,20 +4323,34 @@ bool LLParser::ParseDISubroutineType(MDNode *&Result, bool IsDistinct) {
 }
 
 /// ParseDIFileType:
-///   ::= !DIFileType(filename: "path/to/file", directory: "/path/to/dir"
+///   ::= !DIFileType(filename: "path/to/file", directory: "/path/to/dir",
 ///                   checksumkind: CSK_MD5,
-///                   checksum: "000102030405060708090a0b0c0d0e0f")
+///                   checksum: "000102030405060708090a0b0c0d0e0f",
+///                   source: "source file contents")
 bool LLParser::ParseDIFile(MDNode *&Result, bool IsDistinct) {
+  // The default constructed value for checksumkind is required, but will never
+  // be used, as the parser checks if the field was actually Seen before using
+  // the Val.
 #define VISIT_MD_FIELDS(OPTIONAL, REQUIRED)                                    \
   REQUIRED(filename, MDStringField, );                                         \
   REQUIRED(directory, MDStringField, );                                        \
-  OPTIONAL(checksumkind, ChecksumKindField, );                                 \
-  OPTIONAL(checksum, MDStringField, );
+  OPTIONAL(checksumkind, ChecksumKindField, (DIFile::CSK_MD5));                \
+  OPTIONAL(checksum, MDStringField, );                                         \
+  OPTIONAL(source, MDStringField, );
   PARSE_MD_FIELDS();
 #undef VISIT_MD_FIELDS
 
+  Optional<DIFile::ChecksumInfo<MDString *>> OptChecksum;
+  if (checksumkind.Seen && checksum.Seen)
+    OptChecksum.emplace(checksumkind.Val, checksum.Val);
+  else if (checksumkind.Seen || checksum.Seen)
+    return Lex.Error("'checksumkind' and 'checksum' must be provided together");
+
+  Optional<MDString *> OptSource;
+  if (source.Seen)
+    OptSource = source.Val;
   Result = GET_OR_DISTINCT(DIFile, (Context, filename.Val, directory.Val,
-                                    checksumkind.Val, checksum.Val));
+                                    OptChecksum, OptSource));
   return false;
 }
 
@@ -4125,7 +4400,7 @@ bool LLParser::ParseDICompileUnit(MDNode *&Result, bool IsDistinct) {
 ///                     virtuality: DW_VIRTUALTIY_pure_virtual,
 ///                     virtualIndex: 10, thisAdjustment: 4, flags: 11,
 ///                     isOptimized: false, templateParams: !4, declaration: !5,
-///                     variables: !6, thrownTypes: !7)
+///                     retainedNodes: !6, thrownTypes: !7)
 bool LLParser::ParseDISubprogram(MDNode *&Result, bool IsDistinct) {
   auto Loc = Lex.getLoc();
 #define VISIT_MD_FIELDS(OPTIONAL, REQUIRED)                                    \
@@ -4147,7 +4422,7 @@ bool LLParser::ParseDISubprogram(MDNode *&Result, bool IsDistinct) {
   OPTIONAL(unit, MDField, );                                                   \
   OPTIONAL(templateParams, MDField, );                                         \
   OPTIONAL(declaration, MDField, );                                            \
-  OPTIONAL(variables, MDField, );                                              \
+  OPTIONAL(retainedNodes, MDField, );                                              \
   OPTIONAL(thrownTypes, MDField, );
   PARSE_MD_FIELDS();
 #undef VISIT_MD_FIELDS
@@ -4163,7 +4438,7 @@ bool LLParser::ParseDISubprogram(MDNode *&Result, bool IsDistinct) {
        type.Val, isLocal.Val, isDefinition.Val, scopeLine.Val,
        containingType.Val, virtuality.Val, virtualIndex.Val, thisAdjustment.Val,
        flags.Val, isOptimized.Val, unit.Val, templateParams.Val,
-       declaration.Val, variables.Val, thrownTypes.Val));
+       declaration.Val, retainedNodes.Val, thrownTypes.Val));
   return false;
 }
 
@@ -4343,6 +4618,22 @@ bool LLParser::ParseDILocalVariable(MDNode *&Result, bool IsDistinct) {
   Result = GET_OR_DISTINCT(DILocalVariable,
                            (Context, scope.Val, name.Val, file.Val, line.Val,
                             type.Val, arg.Val, flags.Val, align.Val));
+  return false;
+}
+
+/// ParseDILabel:
+///   ::= !DILabel(scope: !0, name: "foo", file: !1, line: 7)
+bool LLParser::ParseDILabel(MDNode *&Result, bool IsDistinct) {
+#define VISIT_MD_FIELDS(OPTIONAL, REQUIRED)                                    \
+  REQUIRED(scope, MDField, (/* AllowNull */ false));                           \
+  REQUIRED(name, MDStringField, );                                             \
+  REQUIRED(file, MDField, );                                                   \
+  REQUIRED(line, LineField, );
+  PARSE_MD_FIELDS();
+#undef VISIT_MD_FIELDS
+
+  Result = GET_OR_DISTINCT(DILabel,
+                           (Context, scope.Val, name.Val, file.Val, line.Val));
   return false;
 }
 
@@ -4534,18 +4825,18 @@ bool LLParser::ParseMetadata(Metadata *&MD, PerFunctionState *PFS) {
 //===----------------------------------------------------------------------===//
 
 bool LLParser::ConvertValIDToValue(Type *Ty, ValID &ID, Value *&V,
-                                   PerFunctionState *PFS) {
+                                   PerFunctionState *PFS, bool IsCall) {
   if (Ty->isFunctionTy())
     return Error(ID.Loc, "functions are not values, refer to them as pointers");
 
   switch (ID.Kind) {
   case ValID::t_LocalID:
     if (!PFS) return Error(ID.Loc, "invalid use of function-local name");
-    V = PFS->GetVal(ID.UIntVal, Ty, ID.Loc);
+    V = PFS->GetVal(ID.UIntVal, Ty, ID.Loc, IsCall);
     return V == nullptr;
   case ValID::t_LocalName:
     if (!PFS) return Error(ID.Loc, "invalid use of function-local name");
-    V = PFS->GetVal(ID.StrVal, Ty, ID.Loc);
+    V = PFS->GetVal(ID.StrVal, Ty, ID.Loc, IsCall);
     return V == nullptr;
   case ValID::t_InlineAsm: {
     if (!ID.FTy || !InlineAsm::Verify(ID.FTy, ID.StrVal2))
@@ -4661,7 +4952,7 @@ bool LLParser::parseConstantValue(Type *Ty, Constant *&C) {
   case ValID::t_ConstantStruct:
   case ValID::t_PackedConstantStruct: {
     Value *V;
-    if (ConvertValIDToValue(Ty, ID, V, /*PFS=*/nullptr))
+    if (ConvertValIDToValue(Ty, ID, V, /*PFS=*/nullptr, /*IsCall=*/false))
       return true;
     assert(isa<Constant>(V) && "Expected a constant value");
     C = cast<Constant>(V);
@@ -4678,7 +4969,8 @@ bool LLParser::parseConstantValue(Type *Ty, Constant *&C) {
 bool LLParser::ParseValue(Type *Ty, Value *&V, PerFunctionState *PFS) {
   V = nullptr;
   ValID ID;
-  return ParseValID(ID, PFS) || ConvertValIDToValue(Ty, ID, V, PFS);
+  return ParseValID(ID, PFS) ||
+         ConvertValIDToValue(Ty, ID, V, PFS, /*IsCall=*/false);
 }
 
 bool LLParser::ParseTypeAndValue(Value *&V, PerFunctionState *PFS) {
@@ -4699,22 +4991,24 @@ bool LLParser::ParseTypeAndBasicBlock(BasicBlock *&BB, LocTy &Loc,
 }
 
 /// FunctionHeader
-///   ::= OptionalLinkage OptionalVisibility OptionalCallingConv OptRetAttrs
-///       OptUnnamedAddr Type GlobalName '(' ArgList ')' OptFuncAttrs OptSection
-///       OptionalAlign OptGC OptionalPrefix OptionalPrologue OptPersonalityFn
+///   ::= OptionalLinkage OptionalPreemptionSpecifier OptionalVisibility
+///       OptionalCallingConv OptRetAttrs OptUnnamedAddr Type GlobalName
+///       '(' ArgList ')' OptFuncAttrs OptSection OptionalAlign OptGC
+///       OptionalPrefix OptionalPrologue OptPersonalityFn
 bool LLParser::ParseFunctionHeader(Function *&Fn, bool isDefine) {
   // Parse the linkage.
   LocTy LinkageLoc = Lex.getLoc();
   unsigned Linkage;
-
   unsigned Visibility;
   unsigned DLLStorageClass;
+  bool DSOLocal;
   AttrBuilder RetAttrs;
   unsigned CC;
   bool HasLinkage;
   Type *RetType = nullptr;
   LocTy RetTypeLoc = Lex.getLoc();
-  if (ParseOptionalLinkage(Linkage, HasLinkage, Visibility, DLLStorageClass) ||
+  if (ParseOptionalLinkage(Linkage, HasLinkage, Visibility, DLLStorageClass,
+                           DSOLocal) ||
       ParseOptionalCallingConv(CC) || ParseOptionalReturnAttrs(RetAttrs) ||
       ParseType(RetType, RetTypeLoc, true /*void allowed*/))
     return true;
@@ -4876,6 +5170,7 @@ bool LLParser::ParseFunctionHeader(Function *&Fn, bool isDefine) {
     NumberedVals.push_back(Fn);
 
   Fn->setLinkage((GlobalValue::LinkageTypes)Linkage);
+  maybeSetDSOLocal(DSOLocal, *Fn);
   Fn->setVisibility((GlobalValue::VisibilityTypes)Visibility);
   Fn->setDLLStorageClass((GlobalValue::DLLStorageClassTypes)DLLStorageClass);
   Fn->setCallingConv(CC);
@@ -5428,7 +5723,8 @@ bool LLParser::ParseInvoke(Instruction *&Inst, PerFunctionState &PFS) {
 
   // Look up the callee.
   Value *Callee;
-  if (ConvertValIDToValue(PointerType::getUnqual(Ty), CalleeID, Callee, &PFS))
+  if (ConvertValIDToValue(PointerType::getUnqual(Ty), CalleeID, Callee, &PFS,
+                          /*IsCall=*/true))
     return true;
 
   // Set up the Attribute for the function.
@@ -6019,7 +6315,8 @@ bool LLParser::ParseCall(Instruction *&Inst, PerFunctionState &PFS,
 
   // Look up the callee.
   Value *Callee;
-  if (ConvertValIDToValue(PointerType::getUnqual(Ty), CalleeID, Callee, &PFS))
+  if (ConvertValIDToValue(PointerType::getUnqual(Ty), CalleeID, Callee, &PFS,
+                          /*IsCall=*/true))
     return true;
 
   // Set up the Attribute for the function.
@@ -6126,14 +6423,7 @@ int LLParser::ParseAlloc(Instruction *&Inst, PerFunctionState &PFS) {
   if (Size && !Size->getType()->isIntegerTy())
     return Error(SizeLoc, "element count must have integer type");
 
-  const DataLayout &DL = M->getDataLayout();
-  unsigned AS = DL.getAllocaAddrSpace();
-  if (AS != AddrSpace) {
-    // TODO: In the future it should be possible to specify addrspace per-alloca.
-    return Error(ASLoc, "address space must match datalayout");
-  }
-
-  AllocaInst *AI = new AllocaInst(Ty, AS, Size, Alignment);
+  AllocaInst *AI = new AllocaInst(Ty, AddrSpace, Size, Alignment);
   AI->setUsedWithInAlloca(IsInAlloca);
   AI->setSwiftError(IsSwiftError);
   Inst = AI;
@@ -6519,8 +6809,8 @@ bool LLParser::sortUseListOrder(Value *V, ArrayRef<unsigned> Indexes,
   if (NumUses < 2)
     return Error(Loc, "value only has one use");
   if (Order.size() != Indexes.size() || NumUses > Indexes.size())
-    return Error(Loc, "wrong number of indexes, expected " +
-                          Twine(std::distance(V->use_begin(), V->use_end())));
+    return Error(Loc,
+                 "wrong number of indexes, expected " + Twine(V->getNumUses()));
 
   V->sortUseList([&](const Use &L, const Use &R) {
     return Order.lookup(&L) < Order.lookup(&R);

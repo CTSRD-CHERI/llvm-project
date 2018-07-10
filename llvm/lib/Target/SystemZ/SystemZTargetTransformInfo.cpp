@@ -17,10 +17,10 @@
 #include "SystemZTargetTransformInfo.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/CodeGen/BasicTTIImpl.h"
+#include "llvm/CodeGen/CostTable.h"
+#include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/Support/Debug.h"
-#include "llvm/Target/CostTable.h"
-#include "llvm/Target/TargetLowering.h"
 using namespace llvm;
 
 #define DEBUG_TYPE "systemztti"
@@ -321,6 +321,11 @@ unsigned SystemZTTIImpl::getRegisterBitWidth(bool Vector) const {
   if (ST->hasVector())
     return 128;
   return 0;
+}
+
+bool SystemZTTIImpl::hasDivRemOp(Type *DataType, bool IsSigned) {
+  EVT VT = TLI->getValueType(DL, DataType);
+  return (VT.isScalarInteger() && TLI->isTypeLegal(VT));
 }
 
 int SystemZTTIImpl::getArithmeticInstrCost(
@@ -732,7 +737,7 @@ int SystemZTTIImpl::getCmpSelInstrCost(unsigned Opcode, Type *ValTy, Type *CondT
       unsigned PredicateExtraCost = 0;
       if (I != nullptr) {
         // Some predicates cost one or two extra instructions.
-        switch (dyn_cast<CmpInst>(I)->getPredicate()) {
+        switch (cast<CmpInst>(I)->getPredicate()) {
         case CmpInst::Predicate::ICMP_NE:
         case CmpInst::Predicate::ICMP_UGE:
         case CmpInst::Predicate::ICMP_ULE:

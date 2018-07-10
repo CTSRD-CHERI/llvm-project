@@ -3,14 +3,14 @@
 # RUN: llvm-objdump -s %t.exe | FileCheck %s
 
 # CHECK: .text:
-# CHECK: 402000 01104000 00000000 00000000 00000000
-# CHECK: 402010 01100000 00000000 00000000 00000000
-# CHECK: 402020 41f20009 c0f24009 00000000 00000000
-# CHECK: 402030 fe07e62f 00000000 00000000 00000000
-# CHECK: 402040 3e04de2f 00000000 00000000 00000000
-# CHECK: 402050 fe07d62f 00000000 00000000 00000000
-# CHECK: 402060 fef0cef7 00000000 00000000 00000000
-# CHECK: 402070 00005000 00000000 00000000 00000000
+# CHECK: 401000 01204000 00000000 00000000 00000000
+# CHECK: 401010 01200000 00000000 00000000 00000000
+# CHECK: 401020 42f20009 c0f24009 00000000 00000000
+# CHECK: 401030 0000e62f 00000000 00000000 00000000
+# CHECK: 401040 0000de07 00000000 00000000 00000000
+# CHECK: 401050 0000d62f 00000000 00000000 00000000
+# CHECK: 401060 00f1cef7 00000000 00000000 00000000
+# CHECK: 401070 00005000 00000000 00000000 00000000
 
 --- !COFF
 header:
@@ -28,28 +28,28 @@ sections:
     Relocations:
       - VirtualAddress:  0
         SymbolName:      foo
-        Type:            1  # IMAGE_REL_ARM_ADDR32
+        Type:            IMAGE_REL_ARM_ADDR32
       - VirtualAddress:  16
         SymbolName:      foo
-        Type:            2  # IMAGE_REL_ARM_ADDR32NB
+        Type:            IMAGE_REL_ARM_ADDR32NB
       - VirtualAddress:  32
         SymbolName:      foo
-        Type:            17  # IMAGE_REL_ARM_MOV32T
+        Type:            IMAGE_REL_ARM_MOV32T
       - VirtualAddress:  48
         SymbolName:      foo
-        Type:            20  # IMAGE_REL_ARM_BRANCH24T
+        Type:            IMAGE_REL_ARM_BRANCH24T
       - VirtualAddress:  64
         SymbolName:      foo
-        Type:            18  # IMAGE_REL_ARM_BRANCH20T
+        Type:            IMAGE_REL_ARM_BRANCH20T
       - VirtualAddress:  80
         SymbolName:      foo
-        Type:            21  # IMAGE_REL_ARM_BLX23T
+        Type:            IMAGE_REL_ARM_BLX23T
       - VirtualAddress:  96
         SymbolName:      bar
-        Type:            20  # IMAGE_REL_ARM_BRANCH24T
+        Type:            IMAGE_REL_ARM_BRANCH24T
       - VirtualAddress:  112
         SymbolName:      bar
-        Type:            15  # IMAGE_REL_ARM_SECREL
+        Type:            IMAGE_REL_ARM_SECREL
 symbols:
   - Name:            .aaa
     Value:           0

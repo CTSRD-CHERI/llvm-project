@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "lld/Common/Driver.h"
+#include "lld/Common/ErrorHandler.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/StringExtras.h"
@@ -29,11 +30,6 @@
 
 using namespace lld;
 using namespace llvm;
-
-LLVM_ATTRIBUTE_NORETURN static void error(const Twine &Msg) {
-  errs() << Msg << "\n";
-  exit(1);
-}
 
 // Create OptTable
 enum {
@@ -73,11 +69,11 @@ opt::InputArgList MinGWOptTable::parse(ArrayRef<const char *> Argv) {
   opt::InputArgList Args = this->ParseArgs(Vec, MissingIndex, MissingCount);
 
   if (MissingCount)
-    error(StringRef(Args.getArgString(MissingIndex)) + ": missing argument");
+    fatal(StringRef(Args.getArgString(MissingIndex)) + ": missing argument");
   for (auto *Arg : Args.filtered(OPT_UNKNOWN))
-    error("unknown argument: " + Arg->getSpelling());
+    fatal("unknown argument: " + Arg->getSpelling());
   if (!Args.hasArg(OPT_INPUT) && !Args.hasArg(OPT_l))
-    error("no input files");
+    fatal("no input files");
   return Args;
 }
 
@@ -97,7 +93,7 @@ searchLibrary(StringRef Name, ArrayRef<StringRef> SearchPaths, bool BStatic) {
     for (StringRef Dir : SearchPaths)
       if (Optional<std::string> S = findFile(Dir, Name.substr(1)))
         return *S;
-    error("unable to find library -l" + Name);
+    fatal("unable to find library -l" + Name);
   }
 
   for (StringRef Dir : SearchPaths) {
@@ -107,7 +103,7 @@ searchLibrary(StringRef Name, ArrayRef<StringRef> SearchPaths, bool BStatic) {
     if (Optional<std::string> S = findFile(Dir, "lib" + Name + ".a"))
       return *S;
   }
-  error("unable to find library -l" + Name);
+  fatal("unable to find library -l" + Name);
 }
 
 // Convert Unix-ish command line arguments to Windows-ish ones and
@@ -138,6 +134,10 @@ bool mingw::link(ArrayRef<const char *> ArgsArr, raw_ostream &Diag) {
     Add("-stack:" + StringRef(A->getValue()));
   if (auto *A = Args.getLastArg(OPT_output_def))
     Add("-output-def:" + StringRef(A->getValue()));
+  if (auto *A = Args.getLastArg(OPT_image_base))
+    Add("-base:" + StringRef(A->getValue()));
+  if (auto *A = Args.getLastArg(OPT_map))
+    Add("-lldmap:" + StringRef(A->getValue()));
 
   if (auto *A = Args.getLastArg(OPT_o))
     Add("-out:" + StringRef(A->getValue()));
@@ -146,12 +146,44 @@ bool mingw::link(ArrayRef<const char *> ArgsArr, raw_ostream &Diag) {
   else
     Add("-out:a.exe");
 
+  if (auto *A = Args.getLastArg(OPT_pdb)) {
+    Add("-debug");
+    Add("-pdb:" + StringRef(A->getValue()));
+  } else if (!Args.hasArg(OPT_strip_all)) {
+    Add("-debug:dwarf");
+  }
+
   if (Args.hasArg(OPT_shared))
     Add("-dll");
   if (Args.hasArg(OPT_verbose))
     Add("-verbose");
   if (Args.hasArg(OPT_export_all_symbols))
     Add("-export-all-symbols");
+  if (Args.hasArg(OPT_large_address_aware))
+    Add("-largeaddressaware");
+  if (Args.hasArg(OPT_kill_at))
+    Add("-kill-at");
+
+  if (Args.getLastArgValue(OPT_m) != "thumb2pe" &&
+      Args.getLastArgValue(OPT_m) != "arm64pe" && !Args.hasArg(OPT_dynamicbase))
+    Add("-dynamicbase:no");
+
+  if (Args.hasFlag(OPT_gc_sections, OPT_no_gc_sections, false))
+    Add("-opt:ref");
+  else
+    Add("-opt:noref");
+
+  if (auto *A = Args.getLastArg(OPT_icf)) {
+    StringRef S = A->getValue();
+    if (S == "all")
+      Add("-opt:icf");
+    else if (S == "safe" || S == "none")
+      Add("-opt:noicf");
+    else
+      fatal("unknown parameter: --icf=" + S);
+  } else {
+    Add("-opt:noicf");
+  }
 
   if (auto *A = Args.getLastArg(OPT_m)) {
     StringRef S = A->getValue();
@@ -164,11 +196,14 @@ bool mingw::link(ArrayRef<const char *> ArgsArr, raw_ostream &Diag) {
     else if (S == "arm64pe")
       Add("-machine:arm64");
     else
-      error("unknown parameter: -m" + S);
+      fatal("unknown parameter: -m" + S);
   }
 
   for (auto *A : Args.filtered(OPT_mllvm))
     Add("-mllvm:" + StringRef(A->getValue()));
+
+  for (auto *A : Args.filtered(OPT_Xlink))
+    Add(A->getValue());
 
   if (Args.getLastArgValue(OPT_m) == "i386pe")
     Add("-alternatename:__image_base__=___ImageBase");
@@ -217,5 +252,5 @@ bool mingw::link(ArrayRef<const char *> ArgsArr, raw_ostream &Diag) {
   std::vector<const char *> Vec;
   for (const std::string &S : LinkArgs)
     Vec.push_back(S.c_str());
-  return coff::link(Vec);
+  return coff::link(Vec, true);
 }

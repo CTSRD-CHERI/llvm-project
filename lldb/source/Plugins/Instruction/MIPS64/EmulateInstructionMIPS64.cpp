@@ -12,12 +12,12 @@
 #include <stdlib.h>
 
 #include "lldb/Core/Address.h"
-#include "lldb/Core/ArchSpec.h"
 #include "lldb/Core/Opcode.h"
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Core/RegisterValue.h"
 #include "lldb/Host/PosixApi.h"
 #include "lldb/Symbol/UnwindPlan.h"
+#include "lldb/Utility/ArchSpec.h"
 #include "lldb/Utility/ConstString.h"
 #include "lldb/Utility/DataExtractor.h"
 #include "lldb/Utility/Stream.h"
@@ -1091,13 +1091,10 @@ bool EmulateInstructionMIPS64::Emulate_DADDiu(llvm::MCInst &insn) {
   dst = m_reg_info->getEncodingValue(insn.getOperand(0).getReg());
   src = m_reg_info->getEncodingValue(insn.getOperand(1).getReg());
 
-  // If immediate is greater than 2^16 - 1 then clang generate
-  // LUI, (D)ADDIU,(D)SUBU instructions in prolog.
-  // Example
-  // lui    $1, 0x2
-  // daddiu $1, $1, -0x5920
-  // dsubu  $sp, $sp, $1
-  // In this case, (D)ADDIU dst and src will be same and not equal to sp
+  // If immediate is greater than 2^16 - 1 then clang generate LUI,
+  // (D)ADDIU,(D)SUBU instructions in prolog. Example lui    $1, 0x2 daddiu $1,
+  // $1, -0x5920 dsubu  $sp, $sp, $1 In this case, (D)ADDIU dst and src will be
+  // same and not equal to sp
   if (dst == src) {
     Context context;
 

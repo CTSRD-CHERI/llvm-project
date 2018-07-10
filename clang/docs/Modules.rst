@@ -430,6 +430,21 @@ cplusplus
 cplusplus11
   C++11 support is available.
 
+cplusplus14
+  C++14 support is available.
+
+cplusplus17
+  C++17 support is available.
+
+c99
+  C99 support is available.
+
+c11
+  C11 support is available.
+
+c17
+  C17 support is available.
+
 freestanding
   A freestanding environment is available.
 
@@ -859,10 +874,12 @@ express this with a single module map file in the library:
 
   module Foo {
     header "Foo.h"
-    
-    explicit module Private {
-      header "Foo_Private.h"
-    }
+    ...
+  }
+
+  module Foo_Private {
+    header "Foo_Private.h"
+    ...
   }
 
 
@@ -873,7 +890,7 @@ build machinery.
 
 Private module map files, which are named ``module.private.modulemap``
 (or, for backward compatibility, ``module_private.map``), allow one to
-augment the primary module map file with an additional submodule. For
+augment the primary module map file with an additional modules. For
 example, we would split the module map file above into two module map
 files:
 
@@ -883,9 +900,9 @@ files:
   module Foo {
     header "Foo.h"
   }
-  
+
   /* module.private.modulemap */
-  explicit module Foo.Private {
+  module Foo_Private {
     header "Foo_Private.h"
   }
 
@@ -899,13 +916,12 @@ boundaries.
 
 When writing a private module as part of a *framework*, it's recommended that:
 
-* Headers for this module are present in the ``PrivateHeaders``
-  framework subdirectory.
-* The private module is defined as a *submodule* of the public framework (if
-  there's one), similar to how ``Foo.Private`` is defined in the example above.
-* The ``explicit`` keyword should be used to guarantee that its content will
-  only be available when the submodule itself is explicitly named (through a
-  ``@import`` for example).
+* Headers for this module are present in the ``PrivateHeaders`` framework
+  subdirectory.
+* The private module is defined as a *top level module* with the name of the
+  public framework prefixed, like ``Foo_Private`` above. Clang has extra logic
+  to work with this naming, using ``FooPrivate`` or ``Foo.Private`` (submodule)
+  trigger warnings and might not work as expected.
 
 Modularizing a Platform
 =======================

@@ -17,7 +17,7 @@
 ; 10 }
 
 ; X86-LABEL: _f:
-; X86:      # BB
+; X86:      # %bb.
 ; X86:      .cv_file 1 "D:\\one.c" "70B51F534D80639D033AE92C6A856AF6" 1
 ; X86:      .cv_loc 0 1 1 0 is_stmt 0 # one.c:1:0
 ; X86:      calll   _g
@@ -106,7 +106,7 @@
 ; X64-NEXT: .L{{.*}}:{{$}}
 ; X64:      .cv_file 1 "D:\\input.c" "70B51F534D80639D033AE92C6A856AF6" 1
 ; X64:      .cv_loc 0 1 3 0 is_stmt 0 # input.c:3:0
-; X64:      # BB
+; X64:      # %bb.
 ; X64:      subq    $40, %rsp
 ; X64:      .cv_file 2 "D:\\one.c" "70B51F534D80639D033AE92C6A856AF6" 1
 ; X64:      .cv_loc 0 2 1 0 # one.c:1:0
@@ -225,7 +225,7 @@ attributes #1 = { "less-precise-fpmad"="false" "no-frame-pointer-elim"="false" "
 !0 = distinct !DICompileUnit(language: DW_LANG_C99, producer: "clang version 3.5 ", isOptimized: false, emissionKind: FullDebug, file: !1, enums: !2, retainedTypes: !2, globals: !2, imports: !2)
 !1 = !DIFile(filename: "<unknown>", directory: "D:\5C", checksumkind: CSK_MD5, checksum:"70b51f534d80639d033ae92c6a856af6")
 !2 = !{}
-!4 = distinct !DISubprogram(name: "f", line: 3, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 3, file: !5, scope: !6, type: !7, variables: !2)
+!4 = distinct !DISubprogram(name: "f", line: 3, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 3, file: !5, scope: !6, type: !7, retainedNodes: !2)
 !5 = !DIFile(filename: "input.c", directory: "D:\5C", checksumkind: CSK_MD5, checksum:"70b51f534d80639d033ae92c6a856af6")
 !6 = !DIFile(filename: "input.c", directory: "D:C", checksumkind: CSK_MD5, checksum:"70b51f534d80639d033ae92c6a856af6")
 !7 = !DISubroutineType(types: !8)

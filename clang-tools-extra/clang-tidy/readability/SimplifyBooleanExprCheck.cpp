@@ -62,10 +62,7 @@ const char SimplifyConditionalReturnDiagnostic[] =
 const CXXBoolLiteralExpr *getBoolLiteral(const MatchFinder::MatchResult &Result,
                                          StringRef Id) {
   const auto *Literal = Result.Nodes.getNodeAs<CXXBoolLiteralExpr>(Id);
-  return (Literal &&
-          Result.SourceManager->isMacroBodyExpansion(Literal->getLocStart()))
-             ? nullptr
-             : Literal;
+  return (Literal && Literal->getLocStart().isMacroID()) ? nullptr : Literal;
 }
 
 internal::Matcher<Stmt> returnsBool(bool Value, StringRef Id = "ignored") {
@@ -198,6 +195,9 @@ std::string compareExpressionToZero(const MatchFinder::MatchResult &Result,
 std::string replacementExpression(const MatchFinder::MatchResult &Result,
                                   bool Negated, const Expr *E) {
   E = E->ignoreParenBaseCasts();
+  if (const auto *EC = dyn_cast<ExprWithCleanups>(E))
+    E = EC->getSubExpr();
+
   const bool NeedsStaticCast = needsStaticCast(E);
   if (Negated) {
     if (const auto *UnOp = dyn_cast<UnaryOperator>(E)) {

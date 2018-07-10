@@ -31,7 +31,7 @@ config.suffixes = ['.c', '.cpp', '.cppm', '.m', '.mm', '.cu',
 # excludes: A list of directories to exclude from the testsuite. The 'Inputs'
 # subdirectories contain auxiliary inputs for various tests in their parent
 # directories.
-config.excludes = ['Inputs', 'CMakeLists.txt', 'README.txt', 'LICENSE.txt']
+config.excludes = ['Inputs', 'CMakeLists.txt', 'README.txt', 'LICENSE.txt', 'debuginfo-tests']
 
 # test_source_root: The root path where tests are located.
 config.test_source_root = os.path.dirname(__file__)
@@ -40,7 +40,8 @@ config.test_source_root = os.path.dirname(__file__)
 config.test_exec_root = os.path.join(config.clang_obj_root, 'test')
 
 llvm_config.use_default_substitutions()
-
+# Not really required but makes debugging tests easier
+llvm_config.add_cheri_tool_substitutions(["llc", "opt"])
 llvm_config.use_clang()
 
 # Propagate path to symbolizer for ASan/MSan.
@@ -49,6 +50,7 @@ llvm_config.with_system_environment(
 
 config.substitutions.append(('%PATH%', config.environment['PATH']))
 
+
 # For each occurrence of a clang tool name, replace it with the full path to
 # the build directory holding that tool.  We explicitly specify the directories
 # to search to ensure that we get the tools just built and not some random
@@ -56,18 +58,22 @@ config.substitutions.append(('%PATH%', config.environment['PATH']))
 tool_dirs = [config.clang_tools_dir, config.llvm_tools_dir]
 
 tools = [
-    'c-index-test', 'clang-check', 'clang-diff', 'clang-format', 'opt',
-    'llvm-readobj', 'llvm-objdump', # XXXAR: needed by some CHERI tests
-    ToolSubst('%test_debuginfo', command=os.path.join(
-        config.llvm_src_root, 'utils', 'test_debuginfo.pl')),
+    'llvm-readobj', 'llvm-objdump', 'llvm-dwarfdump', # XXXAR: needed by some CHERI tests
+    'c-index-test', 'clang-check', 'clang-diff', 'clang-format', 'clang-tblgen',
+    'opt',
     ToolSubst('%clang_func_map', command=FindTool(
         'clang-func-mapping'), unresolved='ignore'),
 ]
 
 if config.clang_examples:
+    config.available_features.add('examples')
     tools.append('clang-interpreter')
 
 llvm_config.add_tool_substitutions(tools, tool_dirs)
+
+config.substitutions.append(
+    ('%hmaptool', "'%s' %s" % (config.python_executable,
+                             os.path.join(config.llvm_tools_dir, 'hmaptool'))))
 
 # Plugins (loadable modules)
 # TODO: This should be supplied by Makefile or autoconf.

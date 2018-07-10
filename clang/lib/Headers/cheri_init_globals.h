@@ -57,7 +57,7 @@ __attribute__((weak)) extern void *__capability
 __cap_table_end;
 
 #define INIT_CGP_REGISTER_ASM                                                  \
-  ".option pic0\n\t.set noreorder\n\t"                                         \
+  ".option pic0\n\t"                                                           \
   "dla $2, __cap_table_start\n\t"                                              \
   "beqz $2, .Lskip_cgp_setup\n\t"                                              \
   "nop\n\t"                                                                    \
@@ -74,14 +74,46 @@ __cap_table_end;
  */
 #define DEFINE_CHERI_START_FUNCTION(c_startup_fn)                              \
   __asm__(".text\n\t"                                                          \
+          ".set noreorder\n\t"                                                 \
           ".global __start\n\t"                                                \
           ".ent __start\n\t"                                                   \
           "__start:\n\t"                                                       \
           INIT_CGP_REGISTER_ASM                                                \
-          "b " #c_startup_fn "\n\t"                                            \
+          ".set noat\n\t"                                                      \
+          /* Setup $c12 correctly in case we are inferring $cgp from $c12 */   \
+          ".protected "  #c_startup_fn "\n\t"                                  \
+          "lui $1, %pcrel_hi("  #c_startup_fn " - 8)\n\t"                      \
+          "daddiu $1, $1, %pcrel_lo("  #c_startup_fn " - 4)\n\t"               \
+          "cgetpcc $c12\n\t"                                                   \
+          "cincoffset $c12, $c12, $1\n\t"                                      \
+          "cjr $c12\n\t"                                                       \
           "nop\n\t"                                                            \
           ".end __start");
 
+static __attribute__((always_inline))
+void cheri_init_globals_impl(const struct capreloc *start_relocs,
+                             const struct capreloc * stop_relocs,
+                             void* gdc, void* pcc, __UINT64_TYPE__ relocbase) {
+  gdc = __builtin_cheri_perms_and(gdc, global_pointer_permissions);
+  pcc = __builtin_cheri_perms_and(pcc, function_pointer_permissions);
+  for (const struct capreloc *reloc = start_relocs; reloc < stop_relocs; reloc++) {
+    _Bool isFunction = (reloc->permissions & function_reloc_flag) == function_reloc_flag;
+    void **dest = __builtin_cheri_offset_set(gdc, reloc->capability_location + relocbase);
+    if (reloc->object == 0) {
+      /* XXXAR: clang fills uninitialized capabilities with 0xcacaca..., so we
+       * we need to explicitly write NULL here */
+      *dest = (void*)0;
+      continue;
+    }
+    void *base = isFunction ? pcc : gdc;
+    void *src = __builtin_cheri_offset_set(base, reloc->object);
+    if (!isFunction && (reloc->size != 0)) {
+      src = __builtin_cheri_bounds_set(src, reloc->size);
+    }
+    src = __builtin_cheri_offset_increment(src, reloc->offset);
+    *dest = src;
+  }
+}
 
 #ifndef ADDITIONAL_CAPRELOC_PROCESSING
 #define ADDITIONAL_CAPRELOC_PROCESSING
@@ -108,26 +140,10 @@ static __attribute__((always_inline)) void cheri_init_globals(void) {
 #endif
   void *gdc = __builtin_cheri_global_data_get();
   void *pcc = __builtin_cheri_program_counter_get();
-
-  gdc = __builtin_cheri_perms_and(gdc, global_pointer_permissions);
-  pcc = __builtin_cheri_perms_and(pcc, function_pointer_permissions);
-  for (struct capreloc *reloc = start_relocs; reloc < stop_relocs; reloc++) {
-    _Bool isFunction = (reloc->permissions & function_reloc_flag) == function_reloc_flag;
-    void **dest = __builtin_cheri_offset_set(gdc, reloc->capability_location);
-    if (reloc->object == 0) {
-      /* XXXAR:clang fills uninitialized capabilities with 0xcacaca..., so we
-       * we need to explicitly write NULL here */
-      *dest = (void*)0;
-      continue;
-    }
-    void *base = isFunction ? pcc : gdc;
-    void *src = __builtin_cheri_offset_set(base, reloc->object);
-    /* e.g. CheriBSD needs to set _int here */
-    ADDITIONAL_CAPRELOC_PROCESSING
-    if (!isFunction && (reloc->size != 0)) {
-      src = __builtin_cheri_bounds_set(src, reloc->size);
-    }
-    src = __builtin_cheri_offset_increment(src, reloc->offset);
-    *dest = src;
-  }
+  /*
+   * We can assume that all relocations in the __cap_relocs section have already
+   * been processed so we don't need to a a relocation base address to the
+   * location of the capreloc.
+   */
+  cheri_init_globals_impl(start_relocs, stop_relocs, gdc, pcc, /*relocbase=*/0);
 }

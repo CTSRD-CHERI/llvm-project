@@ -329,6 +329,9 @@ public:
     return make_range(extrel_begin(), extrel_end());
   }
 
+  relocation_iterator locrel_begin() const;
+  relocation_iterator locrel_end() const;
+  
   void moveRelocationNext(DataRefImpl &Rel) const override;
   uint64_t getRelocationOffset(DataRefImpl Rel) const override;
   symbol_iterator getRelocationSymbol(DataRefImpl Rel) const override;
@@ -360,7 +363,7 @@ public:
   uint8_t getBytesInAddress() const override;
 
   StringRef getFileFormatName() const override;
-  unsigned getArch() const override;
+  Triple::ArchType getArch() const override;
   SubtargetFeatures getFeatures() const override { return SubtargetFeatures(); }
   Triple getArchTriple(const char **McpuDefault = nullptr) const;
 
@@ -460,7 +463,7 @@ public:
 
   // In a MachO file, sections have a segment name. This is used in the .o
   // files. They have a single segment, but this field specifies which segment
-  // a section should be put in in the final object.
+  // a section should be put in the final object.
   StringRef getSectionFinalSegmentName(DataRefImpl Sec) const;
 
   // Names are stored as 16 bytes. These returns the raw 16 bytes without

@@ -205,7 +205,7 @@ void Sema::ActOnPragmaPack(SourceLocation PragmaLoc, PragmaMsStackAction Action,
   // "#pragma pack(pop, identifier, n) is undefined"
   if (Action & Sema::PSK_Pop) {
     if (Alignment && !SlotLabel.empty())
-      Diag(PragmaLoc, diag::warn_pragma_pack_pop_identifer_and_alignment);
+      Diag(PragmaLoc, diag::warn_pragma_pack_pop_identifier_and_alignment);
     if (PackStack.Stack.empty())
       Diag(PragmaLoc, diag::warn_pragma_pop_failed) << "pack" << "stack empty";
   }
@@ -335,7 +335,7 @@ void Sema::PragmaStack<ValueType>::Act(SourceLocation PragmaLocation,
         Stack.erase(std::prev(I.base()), Stack.end());
       }
     } else if (!Stack.empty()) {
-      // We don't have a label, just pop the last entry.
+      // We do not have a label, just pop the last entry.
       CurrentValue = Stack.back().Value;
       CurrentPragmaLocation = Stack.back().PragmaLocation;
       Stack.pop_back();
@@ -394,7 +394,7 @@ bool Sema::UnifySection(StringRef SectionName,
   return false;
 }
 
-/// \brief Called on well formed \#pragma bss_seg().
+/// Called on well formed \#pragma bss_seg().
 void Sema::ActOnPragmaMSSeg(SourceLocation PragmaLocation,
                             PragmaMsStackAction Action,
                             llvm::StringRef StackSlotLabel,
@@ -415,7 +415,7 @@ void Sema::ActOnPragmaMSSeg(SourceLocation PragmaLocation,
   Stack->Act(PragmaLocation, Action, StackSlotLabel, SegmentName);
 }
 
-/// \brief Called on well formed \#pragma bss_seg().
+/// Called on well formed \#pragma bss_seg().
 void Sema::ActOnPragmaMSSection(SourceLocation PragmaLocation,
                                 int SectionFlags, StringLiteral *SegmentName) {
   UnifySection(SegmentName->getString(), SectionFlags, PragmaLocation);

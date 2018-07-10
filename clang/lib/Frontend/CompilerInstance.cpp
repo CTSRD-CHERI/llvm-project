@@ -302,11 +302,9 @@ CompilerInstance::createDiagnostics(DiagnosticOptions *Opts,
 
 FileManager *CompilerInstance::createFileManager() {
   if (!hasVirtualFileSystem()) {
-    if (IntrusiveRefCntPtr<vfs::FileSystem> VFS =
-            createVFSFromCompilerInvocation(getInvocation(), getDiagnostics()))
-      setVirtualFileSystem(VFS);
-    else
-      return nullptr;
+    IntrusiveRefCntPtr<vfs::FileSystem> VFS =
+        createVFSFromCompilerInvocation(getInvocation(), getDiagnostics());
+    setVirtualFileSystem(VFS);
   }
   FileMgr = new FileManager(getFileSystemOpts(), VirtualFileSystem);
   return FileMgr.get();
@@ -464,7 +462,7 @@ void CompilerInstance::createPreprocessor(TranslationUnitKind TUKind) {
                            /*ShowDepth=*/false);
   }
 
-  if (DepOpts.PrintShowIncludes) {
+  if (DepOpts.ShowIncludesDest != ShowIncludesDestination::None) {
     AttachHeaderIncludeGen(*PP, DepOpts,
                            /*ShowAllHeaders=*/true, /*OutputPath=*/"",
                            /*ShowDepth=*/true, /*MSStyle=*/true);
@@ -1044,7 +1042,7 @@ bool CompilerInstance::ExecuteAction(FrontendAction &Act) {
   return !getDiagnostics().getClient()->getNumErrors();
 }
 
-/// \brief Determine the appropriate source input kind based on language
+/// Determine the appropriate source input kind based on language
 /// options.
 static InputKind::Language getLanguageFromOptions(const LangOptions &LangOpts) {
   if (LangOpts.OpenCL)
@@ -1056,7 +1054,7 @@ static InputKind::Language getLanguageFromOptions(const LangOptions &LangOpts) {
   return LangOpts.CPlusPlus ? InputKind::CXX : InputKind::C;
 }
 
-/// \brief Compile a module file for the given module, using the options 
+/// Compile a module file for the given module, using the options 
 /// provided by the importing compiler instance. Returns true if the module
 /// was built without errors.
 static bool
@@ -1089,6 +1087,10 @@ compileModuleImpl(CompilerInstance &ImportingInstance, SourceLocation ImportLoc,
                    llvm::CachedHashString(MacroDef.split('=').first)) > 0;
       }),
       PPOpts.Macros.end());
+
+  // If the original compiler invocation had -fmodule-name, pass it through.
+  Invocation->getLangOpts()->ModuleName =
+      ImportingInstance.getInvocation().getLangOpts()->ModuleName;
 
   // Note the name of the module we're building.
   Invocation->getLangOpts()->CurrentModule = ModuleName;
@@ -1186,7 +1188,20 @@ compileModuleImpl(CompilerInstance &ImportingInstance, SourceLocation ImportLoc,
   return !Instance.getDiagnostics().hasErrorOccurred();
 }
 
-/// \brief Compile a module file for the given module, using the options 
+static const FileEntry *getPublicModuleMap(const FileEntry *File,
+                                           FileManager &FileMgr) {
+  StringRef Filename = llvm::sys::path::filename(File->getName());
+  SmallString<128> PublicFilename(File->getDir()->getName());
+  if (Filename == "module_private.map")
+    llvm::sys::path::append(PublicFilename, "module.map");
+  else if (Filename == "module.private.modulemap")
+    llvm::sys::path::append(PublicFilename, "module.modulemap");
+  else
+    return nullptr;
+  return FileMgr.getFile(PublicFilename);
+}
+
+/// Compile a module file for the given module, using the options 
 /// provided by the importing compiler instance. Returns true if the module
 /// was built without errors.
 static bool compileModuleImpl(CompilerInstance &ImportingInstance,
@@ -1202,6 +1217,13 @@ static bool compileModuleImpl(CompilerInstance &ImportingInstance,
   bool Result;
   if (const FileEntry *ModuleMapFile =
           ModMap.getContainingModuleMapFile(Module)) {
+    // Canonicalize compilation to start with the public module map. This is
+    // vital for submodules declarations in the private module maps to be
+    // correctly parsed when depending on a top level module in the public one.
+    if (const FileEntry *PublicMMFile = getPublicModuleMap(
+            ModuleMapFile, ImportingInstance.getFileManager()))
+      ModuleMapFile = PublicMMFile;
+
     // Use the module map where this module resides.
     Result = compileModuleImpl(
         ImportingInstance, ImportLoc, Module->getTopLevelModuleName(),
@@ -1298,7 +1320,7 @@ static bool compileAndLoadModule(CompilerInstance &ImportingInstance,
         // case of timeout, build it ourselves.
         Diags.Report(ModuleNameLoc, diag::remark_module_lock_timeout)
             << Module->Name;
-        // Clear the lock file so that future invokations can make progress.
+        // Clear the lock file so that future invocations can make progress.
         Locked.unsafeRemoveLockFile();
         continue;
       }
@@ -1328,7 +1350,7 @@ static bool compileAndLoadModule(CompilerInstance &ImportingInstance,
   }
 }
 
-/// \brief Diagnose differences between the current definition of the given
+/// Diagnose differences between the current definition of the given
 /// configuration macro and the definition provided on the command line.
 static void checkConfigMacro(Preprocessor &PP, StringRef ConfigMacro,
                              Module *Mod, SourceLocation ImportLoc) {
@@ -1386,13 +1408,13 @@ static void checkConfigMacro(Preprocessor &PP, StringRef ConfigMacro,
   }
 }
 
-/// \brief Write a new timestamp file with the given path.
+/// Write a new timestamp file with the given path.
 static void writeTimestampFile(StringRef TimestampFile) {
   std::error_code EC;
   llvm::raw_fd_ostream Out(TimestampFile.str(), EC, llvm::sys::fs::F_None);
 }
 
-/// \brief Prune the module cache of modules that haven't been accessed in
+/// Prune the module cache of modules that haven't been accessed in
 /// a long time.
 static void pruneModuleCache(const HeaderSearchOptions &HSOpts) {
   struct stat StatBuf;
@@ -1580,15 +1602,22 @@ bool CompilerInstance::loadModuleFile(StringRef FileName) {
   if (!ModuleManager)
     createModuleManager();
 
+  // If -Wmodule-file-config-mismatch is mapped as an error or worse, allow the
+  // ASTReader to diagnose it, since it can produce better errors that we can.
+  bool ConfigMismatchIsRecoverable =
+      getDiagnostics().getDiagnosticLevel(diag::warn_module_config_mismatch,
+                                          SourceLocation())
+        <= DiagnosticsEngine::Warning;
+
   auto Listener = llvm::make_unique<ReadModuleNames>(*this);
   auto &ListenerRef = *Listener;
   ASTReader::ListenerScope ReadModuleNamesListener(*ModuleManager,
                                                    std::move(Listener));
 
   // Try to load the module file.
-  switch (ModuleManager->ReadAST(FileName, serialization::MK_ExplicitModule,
-                                 SourceLocation(),
-                                 ASTReader::ARR_ConfigurationMismatch)) {
+  switch (ModuleManager->ReadAST(
+      FileName, serialization::MK_ExplicitModule, SourceLocation(),
+      ConfigMismatchIsRecoverable ? ASTReader::ARR_ConfigurationMismatch : 0)) {
   case ASTReader::Success:
     // We successfully loaded the module file; remember the set of provided
     // modules so that we don't try to load implicit modules for them.
@@ -1854,10 +1883,44 @@ CompilerInstance::loadModule(SourceLocation ImportLoc,
 
   // Verify that the rest of the module path actually corresponds to
   // a submodule.
+  bool MapPrivateSubModToTopLevel = false;
   if (!getLangOpts().ModulesTS && Path.size() > 1) {
     for (unsigned I = 1, N = Path.size(); I != N; ++I) {
       StringRef Name = Path[I].first->getName();
       clang::Module *Sub = Module->findSubmodule(Name);
+
+      // If the user is requesting Foo.Private and it doesn't exist, try to
+      // match Foo_Private and emit a warning asking for the user to write
+      // @import Foo_Private instead. FIXME: remove this when existing clients
+      // migrate off of Foo.Private syntax.
+      if (!Sub && PP->getLangOpts().ImplicitModules && Name == "Private" &&
+          Module == Module->getTopLevelModule()) {
+        SmallString<128> PrivateModule(Module->Name);
+        PrivateModule.append("_Private");
+
+        SmallVector<std::pair<IdentifierInfo *, SourceLocation>, 2> PrivPath;
+        auto &II = PP->getIdentifierTable().get(
+            PrivateModule, PP->getIdentifierInfo(Module->Name)->getTokenID());
+        PrivPath.push_back(std::make_pair(&II, Path[0].second));
+
+        if (PP->getHeaderSearchInfo().lookupModule(PrivateModule))
+          Sub =
+              loadModule(ImportLoc, PrivPath, Visibility, IsInclusionDirective);
+        if (Sub) {
+          MapPrivateSubModToTopLevel = true;
+          if (!getDiagnostics().isIgnored(
+                  diag::warn_no_priv_submodule_use_toplevel, ImportLoc)) {
+            getDiagnostics().Report(Path[I].second,
+                                    diag::warn_no_priv_submodule_use_toplevel)
+                << Path[I].first << Module->getFullModuleName() << PrivateModule
+                << SourceRange(Path[0].second, Path[I].second)
+                << FixItHint::CreateReplacement(SourceRange(Path[0].second),
+                                                PrivateModule);
+            getDiagnostics().Report(Sub->DefinitionLoc,
+                                    diag::note_private_top_level_defined);
+          }
+        }
+      }
       
       if (!Sub) {
         // Attempt to perform typo correction to find a module name that works.
@@ -1892,7 +1955,7 @@ CompilerInstance::loadModule(SourceLocation ImportLoc,
           Sub = Module->findSubmodule(Best[0]);
         }
       }
-      
+
       if (!Sub) {
         // No submodule by this name. Complain, and don't look for further
         // submodules.
@@ -1909,7 +1972,7 @@ CompilerInstance::loadModule(SourceLocation ImportLoc,
   // Make the named module visible, if it's not already part of the module
   // we are parsing.
   if (ModuleName != getLangOpts().CurrentModule) {
-    if (!Module->IsFromModuleFile) {
+    if (!Module->IsFromModuleFile && !MapPrivateSubModToTopLevel) {
       // We have an umbrella header or directory that doesn't actually include
       // all of the headers within the directory it covers. Complain about
       // this missing submodule and recover by forgetting that we ever saw
@@ -1942,6 +2005,12 @@ CompilerInstance::loadModule(SourceLocation ImportLoc,
     checkConfigMacro(getPreprocessor(), TopModule->ConfigMacros[I],
                      Module, ImportLoc);
   }
+
+  // Resolve any remaining module using export_as for this one.
+  getPreprocessor()
+      .getHeaderSearchInfo()
+      .getModuleMap()
+      .resolveLinkAsDependencies(TopModule);
 
   LastModuleImportLoc = ImportLoc;
   LastModuleImportResult = ModuleLoadResult(Module);

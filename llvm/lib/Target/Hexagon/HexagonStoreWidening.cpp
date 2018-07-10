@@ -9,10 +9,10 @@
 // Replace sequences of "narrow" stores to adjacent memory locations with
 // a fewer "wide" stores that have the same effect.
 // For example, replace:
-//   S4_storeirb_io  %vreg100, 0, 0   ; store-immediate-byte
-//   S4_storeirb_io  %vreg100, 1, 0   ; store-immediate-byte
+//   S4_storeirb_io  %100, 0, 0   ; store-immediate-byte
+//   S4_storeirb_io  %100, 1, 0   ; store-immediate-byte
 // with
-//   S4_storeirh_io  %vreg100, 0, 0   ; store-immediate-halfword
+//   S4_storeirh_io  %100, 0, 0   ; store-immediate-halfword
 // The above is the general idea.  The actual cases handled by the code
 // may be a bit more complex.
 // The purpose of this pass is to reduce the number of outstanding stores,
@@ -433,10 +433,11 @@ bool HexagonStoreWidening::createWideStores(InstrGroup &OG, InstrGroup &NG,
     const MCInstrDesc &StD = TII->get(WOpc);
     MachineOperand &MR = FirstSt->getOperand(0);
     int64_t Off = FirstSt->getOperand(1).getImm();
-    MachineInstr *StI = BuildMI(*MF, DL, StD)
-                          .addReg(MR.getReg(), getKillRegState(MR.isKill()))
-                          .addImm(Off)
-                          .addImm(Val);
+    MachineInstr *StI =
+        BuildMI(*MF, DL, StD)
+            .addReg(MR.getReg(), getKillRegState(MR.isKill()), MR.getSubReg())
+            .addImm(Off)
+            .addImm(Val);
     StI->addMemOperand(*MF, NewM);
     NG.push_back(StI);
   } else {
@@ -455,10 +456,11 @@ bool HexagonStoreWidening::createWideStores(InstrGroup &OG, InstrGroup &NG,
     const MCInstrDesc &StD = TII->get(WOpc);
     MachineOperand &MR = FirstSt->getOperand(0);
     int64_t Off = FirstSt->getOperand(1).getImm();
-    MachineInstr *StI = BuildMI(*MF, DL, StD)
-                          .addReg(MR.getReg(), getKillRegState(MR.isKill()))
-                          .addImm(Off)
-                          .addReg(VReg, RegState::Kill);
+    MachineInstr *StI =
+        BuildMI(*MF, DL, StD)
+            .addReg(MR.getReg(), getKillRegState(MR.isKill()), MR.getSubReg())
+            .addImm(Off)
+            .addReg(VReg, RegState::Kill);
     StI->addMemOperand(*MF, NewM);
     NG.push_back(StI);
   }
@@ -472,7 +474,7 @@ bool HexagonStoreWidening::createWideStores(InstrGroup &OG, InstrGroup &NG,
 // from OG was (in the order in which they appeared in the basic block).
 // (The ordering in OG does not have to match the order in the basic block.)
 bool HexagonStoreWidening::replaceStores(InstrGroup &OG, InstrGroup &NG) {
-  DEBUG({
+  LLVM_DEBUG({
     dbgs() << "Replacing:\n";
     for (auto I : OG)
       dbgs() << "  " << *I;
@@ -576,7 +578,7 @@ bool HexagonStoreWidening::processBasicBlock(MachineBasicBlock &MBB) {
   };
   for (auto &G : SGs) {
     assert(G.size() > 1 && "Store group with fewer than 2 elements");
-    std::sort(G.begin(), G.end(), Less);
+    llvm::sort(G.begin(), G.end(), Less);
 
     Changed |= processStoreGroup(G);
   }
@@ -585,7 +587,7 @@ bool HexagonStoreWidening::processBasicBlock(MachineBasicBlock &MBB) {
 }
 
 bool HexagonStoreWidening::runOnMachineFunction(MachineFunction &MFn) {
-  if (skipFunction(*MFn.getFunction()))
+  if (skipFunction(MFn.getFunction()))
     return false;
 
   MF = &MFn;

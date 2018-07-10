@@ -21,10 +21,9 @@
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringSet.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/MemoryBuffer.h"
-#include "llvm/Support/PrettyStackTrace.h"
 #include "llvm/Support/Regex.h"
-#include "llvm/Support/Signals.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
@@ -61,6 +60,10 @@ static cl::list<std::string> ImplicitCheckNot(
              "positive check. This can be used to ensure that no instances of\n"
              "this pattern occur which are not matched by a positive pattern"),
     cl::value_desc("pattern"));
+
+static cl::list<std::string> GlobalDefines("D", cl::Prefix,
+    cl::desc("Define a variable to be used in capture patterns."),
+    cl::value_desc("VAR=VALUE"));
 
 static cl::opt<bool> AllowEmptyInput(
     "allow-empty", cl::init(false),
@@ -714,6 +717,9 @@ static size_t CheckTypeSize(Check::CheckType Ty) {
 }
 
 static Check::CheckType FindCheckType(StringRef Buffer, StringRef Prefix) {
+  if (Buffer.size() <= Prefix.size())
+    return Check::CheckNone;
+
   char NextChar = Buffer[Prefix.size()];
 
   // Verify that the : is present after the prefix.
@@ -1295,6 +1301,9 @@ bool CheckInput(SourceMgr &SM, StringRef Buffer,
   /// VariableTable - This holds all the current filecheck variables.
   StringMap<StringRef> VariableTable;
 
+  for (const auto& Def : GlobalDefines)
+    VariableTable.insert(StringRef(Def).split('='));
+
   unsigned i = 0, j = 0, e = CheckStrings.size();
   while (true) {
     StringRef CheckRegion;
@@ -1350,8 +1359,7 @@ bool CheckInput(SourceMgr &SM, StringRef Buffer,
 }
 
 int main(int argc, char **argv) {
-  sys::PrintStackTraceOnErrorSignal(argv[0]);
-  PrettyStackTraceProgram X(argc, argv);
+  InitLLVM X(argc, argv);
   cl::ParseCommandLineOptions(argc, argv);
 
   if (!ValidateCheckPrefixes()) {

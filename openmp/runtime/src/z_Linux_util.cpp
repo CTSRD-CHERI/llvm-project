@@ -2,7 +2,6 @@
  * z_Linux_util.cpp -- platform specific routines.
  */
 
-
 //===----------------------------------------------------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
@@ -11,7 +10,6 @@
 // Source Licenses. See LICENSE.txt for details.
 //
 //===----------------------------------------------------------------------===//
-
 
 #include "kmp.h"
 #include "kmp_affinity.h"
@@ -510,7 +508,7 @@ static void *__kmp_launch_worker(void *thr) {
   __kmp_gtid = gtid;
 #endif
 #if KMP_STATS_ENABLED
-  // set __thread local index to point to thread-specific stats
+  // set thread local index to point to thread-specific stats
   __kmp_stats_thread_ptr = ((kmp_info_t *)thr)->th.th_stats;
   KMP_START_EXPLICIT_TIMER(OMP_worker_thread_life);
   KMP_SET_THREAD_STATE(IDLE);
@@ -780,7 +778,7 @@ void __kmp_create_worker(int gtid, kmp_info_t *th, size_t stack_size) {
 
   // th->th.th_stats is used to transfer thread-specific stats-pointer to
   // __kmp_launch_worker. So when thread is created (goes into
-  // __kmp_launch_worker) it will set its __thread local pointer to
+  // __kmp_launch_worker) it will set its thread local pointer to
   // th->th.th_stats
   if (!KMP_UBER_GTID(gtid)) {
     th->th.th_stats = __kmp_stats_list->push_back(gtid);
@@ -1255,16 +1253,21 @@ void __kmp_disable(int *old_state) {
 #endif
 }
 
-static void __kmp_atfork_prepare(void) { /*  nothing to do  */
+static void __kmp_atfork_prepare(void) {
+  __kmp_acquire_bootstrap_lock(&__kmp_initz_lock);
+  __kmp_acquire_bootstrap_lock(&__kmp_forkjoin_lock);
 }
 
-static void __kmp_atfork_parent(void) { /*  nothing to do  */
+static void __kmp_atfork_parent(void) {
+  __kmp_release_bootstrap_lock(&__kmp_initz_lock);
+  __kmp_release_bootstrap_lock(&__kmp_forkjoin_lock);
 }
 
 /* Reset the library so execution in the child starts "all over again" with
    clean data structures in initial states.  Don't worry about freeing memory
    allocated by parent, just abandon it to be safe. */
 static void __kmp_atfork_child(void) {
+  __kmp_release_bootstrap_lock(&__kmp_forkjoin_lock);
   /* TODO make sure this is done right for nested/sibling */
   // ATT:  Memory leaks are here? TODO: Check it and fix.
   /* KMP_ASSERT( 0 ); */
@@ -1309,6 +1312,10 @@ static void __kmp_atfork_child(void) {
   __kmp_all_nth = 0;
   TCW_4(__kmp_nth, 0);
 
+  __kmp_thread_pool = NULL;
+  __kmp_thread_pool_insert_pt = NULL;
+  __kmp_team_pool = NULL;
+
   /* Must actually zero all the *cache arguments passed to __kmpc_threadprivate
      here so threadprivate doesn't use stale data */
   KA_TRACE(10, ("__kmp_atfork_child: checking cache address list %p\n",
@@ -1331,6 +1338,11 @@ static void __kmp_atfork_child(void) {
   __kmp_init_bootstrap_lock(&__kmp_initz_lock);
   __kmp_init_bootstrap_lock(&__kmp_stdio_lock);
   __kmp_init_bootstrap_lock(&__kmp_console_lock);
+  __kmp_init_bootstrap_lock(&__kmp_task_team_lock);
+
+#if USE_ITT_BUILD
+  __kmp_itt_reset(); // reset ITT's global state
+#endif /* USE_ITT_BUILD */
 
   /* This is necessary to make sure no stale data is left around */
   /* AC: customers complain that we use unsafe routines in the atfork
@@ -1395,7 +1407,6 @@ void __kmp_suspend_uninitialize_thread(kmp_info_t *th) {
     KMP_DEBUG_ASSERT(th->th.th_suspend_init_count == __kmp_fork_count);
   }
 }
-
 
 /* This routine puts the calling thread to sleep after setting the
    sleep bit for the indicated flag variable to true. */
@@ -2283,7 +2294,7 @@ int __kmp_invoke_microtask(microtask_t pkfn, int gtid, int tid, int argc,
 #endif
                            ) {
 #if OMPT_SUPPORT
-  *exit_frame_ptr = __builtin_frame_address(0);
+  *exit_frame_ptr = OMPT_GET_FRAME_ADDRESS(0);
 #endif
 
   switch (argc) {

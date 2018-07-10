@@ -19,6 +19,9 @@
 # define SANITIZER_DEBUG 0
 #endif
 
+#define SANITIZER_STRINGIFY_(S) #S
+#define SANITIZER_STRINGIFY(S) SANITIZER_STRINGIFY_(S)
+
 // Only use SANITIZER_*ATTRIBUTE* before the function return type!
 #if SANITIZER_WINDOWS
 #if SANITIZER_IMPORT_INTERFACE
@@ -36,7 +39,8 @@
 #endif
 
 // TLS is handled differently on different platforms
-#if SANITIZER_LINUX
+#if SANITIZER_LINUX || SANITIZER_NETBSD || \
+  SANITIZER_FREEBSD || SANITIZER_OPENBSD
 # define SANITIZER_TLS_INITIAL_EXEC_ATTRIBUTE \
     __attribute__((tls_model("initial-exec"))) thread_local
 #else
@@ -65,7 +69,13 @@
 // SANITIZER_SUPPORTS_WEAK_HOOKS means that we support real weak functions that
 // will evaluate to a null pointer when not defined.
 #ifndef SANITIZER_SUPPORTS_WEAK_HOOKS
-#if (SANITIZER_LINUX || SANITIZER_MAC) && !SANITIZER_GO
+#if (SANITIZER_LINUX || SANITIZER_SOLARIS) && !SANITIZER_GO
+# define SANITIZER_SUPPORTS_WEAK_HOOKS 1
+// Before Xcode 4.5, the Darwin linker doesn't reliably support undefined
+// weak symbols.  Mac OS X 10.9/Darwin 13 is the first release only supported
+// by Xcode >= 4.5.
+#elif SANITIZER_MAC && \
+    __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 1090 && !SANITIZER_GO
 # define SANITIZER_SUPPORTS_WEAK_HOOKS 1
 #else
 # define SANITIZER_SUPPORTS_WEAK_HOOKS 0
@@ -89,11 +99,18 @@
 // We can use .preinit_array section on Linux to call sanitizer initialization
 // functions very early in the process startup (unless PIC macro is defined).
 // FIXME: do we have anything like this on Mac?
-#if SANITIZER_LINUX && !SANITIZER_ANDROID && !defined(PIC)
+#ifndef SANITIZER_CAN_USE_PREINIT_ARRAY
+#if ((SANITIZER_LINUX && !SANITIZER_ANDROID) || \
+  SANITIZER_FREEBSD || SANITIZER_OPENBSD) && !defined(PIC)
+# define SANITIZER_CAN_USE_PREINIT_ARRAY 1
+// Before Solaris 11.4, .preinit_array is fully supported only with GNU ld.
+// FIXME: Check for those conditions.
+#elif SANITIZER_SOLARIS && !defined(PIC)
 # define SANITIZER_CAN_USE_PREINIT_ARRAY 1
 #else
 # define SANITIZER_CAN_USE_PREINIT_ARRAY 0
 #endif
+#endif  // SANITIZER_CAN_USE_PREINIT_ARRAY
 
 // GCC does not understand __has_feature
 #if !defined(__has_feature)
@@ -137,9 +154,14 @@ typedef unsigned error_t;
 typedef int fd_t;
 typedef int error_t;
 #endif
+#if SANITIZER_SOLARIS && !defined(_LP64)
+typedef long pid_t;
+#else
 typedef int pid_t;
+#endif
 
-#if SANITIZER_FREEBSD || SANITIZER_NETBSD || SANITIZER_MAC || \
+#if SANITIZER_FREEBSD || SANITIZER_NETBSD || \
+    SANITIZER_OPENBSD || SANITIZER_MAC || \
     (SANITIZER_LINUX && defined(__x86_64__))
 typedef u64 OFF_T;
 #else
@@ -150,7 +172,7 @@ typedef u64  OFF64_T;
 #if (SANITIZER_WORDSIZE == 64) || SANITIZER_MAC
 typedef uptr operator_new_size_type;
 #else
-# if defined(__s390__) && !defined(__s390x__)
+# if SANITIZER_OPENBSD || defined(__s390__) && !defined(__s390x__)
 // Special case: 31-bit s390 has unsigned long as size_t.
 typedef unsigned long operator_new_size_type;
 # else
@@ -158,12 +180,7 @@ typedef u32 operator_new_size_type;
 # endif
 #endif
 
-#if SANITIZER_MAC
-// On Darwin, thread IDs are 64-bit even on 32-bit systems.
 typedef u64 tid_t;
-#else
-typedef uptr tid_t;
-#endif
 
 // ----------- ATTENTION -------------
 // This header should NOT include any other headers to avoid portability issues.
@@ -335,6 +352,12 @@ void NORETURN CheckFailed(const char *file, int line, const char *cond,
 #define INT64_MAX              (__INT64_C(9223372036854775807))
 #undef UINT64_MAX
 #define UINT64_MAX             (__UINT64_C(18446744073709551615))
+#undef UINTPTR_MAX
+#if SANITIZER_WORDSIZE == 64
+# define UINTPTR_MAX           (18446744073709551615UL)
+#else
+# define UINTPTR_MAX           (4294967295U)
+#endif  // SANITIZER_WORDSIZE == 64
 
 enum LinkerInitialized { LINKER_INITIALIZED = 0 };
 
@@ -390,6 +413,7 @@ namespace __dfsan { using namespace __sanitizer; }  // NOLINT
 namespace __esan  { using namespace __sanitizer; }  // NOLINT
 namespace __lsan  { using namespace __sanitizer; }  // NOLINT
 namespace __msan  { using namespace __sanitizer; }  // NOLINT
+namespace __hwasan  { using namespace __sanitizer; }  // NOLINT
 namespace __tsan  { using namespace __sanitizer; }  // NOLINT
 namespace __scudo { using namespace __sanitizer; }  // NOLINT
 namespace __ubsan { using namespace __sanitizer; }  // NOLINT

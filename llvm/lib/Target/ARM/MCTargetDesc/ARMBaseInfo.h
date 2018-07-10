@@ -186,7 +186,8 @@ namespace ARMII {
     AddrModeT2_so   = 13,
     AddrModeT2_pc   = 14, // +/- i12 for pc relative data
     AddrModeT2_i8s4 = 15, // i8 * 4
-    AddrMode_i12    = 16
+    AddrMode_i12    = 16,
+    AddrMode5FP16   = 17  // i8 * 2
   };
 
   inline static const char *AddrModeToString(AddrMode addrmode) {
@@ -197,6 +198,7 @@ namespace ARMII {
     case AddrMode3:       return "AddrMode3";
     case AddrMode4:       return "AddrMode4";
     case AddrMode5:       return "AddrMode5";
+    case AddrMode5FP16:   return "AddrMode5FP16";
     case AddrMode6:       return "AddrMode6";
     case AddrModeT1_1:    return "AddrModeT1_1";
     case AddrModeT1_2:    return "AddrModeT1_2";
@@ -228,7 +230,10 @@ namespace ARMII {
 
     /// MO_OPTION_MASK - Most flags are mutually exclusive; this mask selects
     /// just that part of the flag set.
-    MO_OPTION_MASK = 0x0f,
+    MO_OPTION_MASK = 0x3,
+
+    /// MO_GOT - On a symbol operand, this represents a GOT relative relocation.
+    MO_GOT = 0x8,
 
     /// MO_SBREL - On a symbol operand, this represents a static base relative
     /// relocation. Used in movw and movt instructions.

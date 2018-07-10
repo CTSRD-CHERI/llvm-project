@@ -1,5 +1,4 @@
 add_lldb_unittest(LLDBCoreTests
-  ArchSpecTest.cpp
   BroadcasterTest.cpp
   DataExtractorTest.cpp
   ListenerTest.cpp
@@ -10,6 +9,7 @@ add_lldb_unittest(LLDBCoreTests
   LINK_LIBS
     lldbCore
     lldbHost
+    LLVMTestingSupport
   LINK_COMPONENTS
     Support
   )

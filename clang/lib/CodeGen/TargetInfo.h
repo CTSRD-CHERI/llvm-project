@@ -57,8 +57,7 @@ public:
   /// setTargetAttributes - Provides a convenient hook to handle extra
   /// target-specific attributes for the given global.
   virtual void setTargetAttributes(const Decl *D, llvm::GlobalValue *GV,
-                                   CodeGen::CodeGenModule &M,
-                                   ForDefinition_t IsForDefinition) const {}
+                                   CodeGen::CodeGenModule &M) const {}
 
   /// emitTargetMD - Provides a convenient hook to handle extra
   /// target-specific metadata for the given global.
@@ -222,30 +221,40 @@ public:
                                        llvm::SmallString<32> &Opt) const {}
 
   virtual unsigned getDefaultAS() const {
+#if 0
     // For e.g. AMDGPU this should not return 0 but instead whatever LangAS::Default maps to
     return getABIInfo().getContext().getTargetAddressSpace(LangAS::Default, nullptr);
+#else
+    return 0; // XXXAR: to keep code the same as upstream
+#endif
   }
 
-  virtual unsigned getStackAS() const;
-  
-  virtual unsigned getCHERICapabilityAS() const { 
-    assert(0 && "Target does not support capabilities!\n");
+  virtual unsigned getCHERICapabilityAS() const {
+    llvm_unreachable("Target does not support capabilities!\n");
     return 0;
   }
 
-  /// Returns true if the type is a scalar type that is represented as a
-  /// capability or an aggregate type that contains one or more capabilities.
-  virtual bool containsCapabilities(QualType Ty) const { return false; }
-
   virtual llvm::Value *getPointerOffset(CodeGen::CodeGenFunction &,
                                         llvm::Value *V) const {
-      assert(0 && "Target does not support capabilities!\n");
-      return nullptr;
+    llvm_unreachable("Target does not support capabilities!\n");
+    return nullptr;
   }
   virtual llvm::Value *setPointerOffset(CodeGen::CodeGenFunction &,
           llvm::Value *Ptr, llvm::Value *Offset) const {
-      assert(0 && "Target does not support capabilities!\n");
-      return nullptr;
+    llvm_unreachable("Target does not support capabilities!\n");
+    return nullptr;
+  }
+  virtual llvm::Value *setPointerAddress(CodeGen::CodeGenFunction &,
+                                         llvm::Value *Ptr,
+                                         llvm::Value *Offset) const {
+    llvm_unreachable("Target does not support capabilities!\n");
+    return nullptr;
+  }
+  virtual llvm::Value *setPointerBounds(CodeGen::CodeGenFunction &,
+                                        llvm::Value *Ptr, llvm::Value *Size,
+                                        const llvm::Twine &Name) const {
+    llvm_unreachable("Target does not support capabilities!\n");
+    return nullptr;
   }
   virtual llvm::Value *getPointerBase(CodeGen::CodeGenFunction &,
                                       llvm::Value *V) const {
@@ -304,7 +313,7 @@ public:
   virtual llvm::SyncScope::ID getLLVMSyncScopeID(SyncScope S,
                                                  llvm::LLVMContext &C) const;
 
-  /// Inteface class for filling custom fields of a block literal for OpenCL.
+  /// Interface class for filling custom fields of a block literal for OpenCL.
   class TargetOpenCLBlockHelper {
   public:
     typedef std::pair<llvm::Value *, StringRef> ValueTy;
@@ -334,6 +343,13 @@ public:
   createEnqueuedBlockKernel(CodeGenFunction &CGF,
                             llvm::Function *BlockInvokeFunc,
                             llvm::Value *BlockLiteral) const;
+
+  /// \return true if the target supports alias from the unmangled name to the
+  /// mangled name of functions declared within an extern "C" region and marked
+  /// as 'used', and having internal linkage.
+  virtual bool shouldEmitStaticExternCAliases() const { return true; }
+
+  virtual void setCUDAKernelCallingConvention(const FunctionType *&FT) const {}
 };
 
 } // namespace CodeGen

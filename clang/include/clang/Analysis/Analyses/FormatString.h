@@ -257,23 +257,31 @@ public:
 private:
   const Kind K;
   QualType T;
-  const char *Name;
-  bool Ptr;
+  const char *Name = nullptr;
+  bool Ptr = false, IsSizeT = false;
+
 public:
-  ArgType(Kind k = UnknownTy, const char *n = nullptr)
-      : K(k), Name(n), Ptr(false) {}
-  ArgType(QualType t, const char *n = nullptr)
-      : K(SpecificTy), T(t), Name(n), Ptr(false) {}
-  ArgType(CanQualType t) : K(SpecificTy), T(t), Name(nullptr), Ptr(false) {}
+  ArgType(Kind K = UnknownTy, const char *N = nullptr) : K(K), Name(N) {}
+  ArgType(QualType T, const char *N = nullptr) : K(SpecificTy), T(T), Name(N) {}
+  ArgType(CanQualType T) : K(SpecificTy), T(T) {}
 
   static ArgType Invalid() { return ArgType(InvalidTy); }
   bool isValid() const { return K != InvalidTy; }
+
+  bool isSizeT() const { return IsSizeT; }
 
   /// Create an ArgType which corresponds to the type pointer to A.
   static ArgType PtrTo(const ArgType& A) {
     assert(A.K >= InvalidTy && "ArgType cannot be pointer to invalid/unknown");
     ArgType Res = A;
     Res.Ptr = true;
+    return Res;
+  }
+
+  /// Create an ArgType which corresponds to the size_t/ssize_t type.
+  static ArgType makeSizeT(const ArgType &A) {
+    ArgType Res = A;
+    Res.IsSizeT = true;
     return Res;
   }
 
@@ -511,7 +519,7 @@ public:
     return getConversionSpecifier().consumesDataArgument();
   }
 
-  /// \brief Returns the builtin type that a data argument
+  /// Returns the builtin type that a data argument
   /// paired with this format specifier should have.  This method
   /// will return null if the format specifier does not have
   /// a matching data argument or the matching argument matches

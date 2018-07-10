@@ -1,5 +1,8 @@
-// RUN: %clang_cc1 -verify -fopenmp -ferror-limit 200 %s
-// RUN: %clang_cc1 -DCCODE -verify -fopenmp -ferror-limit 200 -x c %s
+// RUN: %clang_cc1 -verify -fopenmp -ferror-limit 200 %s -Wno-openmp-target
+// RUN: %clang_cc1 -DCCODE -verify -fopenmp -ferror-limit 200 -x c %s -Wno-openmp-target
+
+// RUN: %clang_cc1 -verify -fopenmp-simd -ferror-limit 200 %s -Wno-openmp-target
+// RUN: %clang_cc1 -DCCODE -verify -fopenmp-simd -ferror-limit 200 -x c %s -Wno-openmp-target
 #ifdef CCODE
 void foo(int arg) {
   const int n = 0;
@@ -16,6 +19,13 @@ void foo(int arg) {
   {}
 }
 #else
+
+struct SREF {
+  int &a;
+  int b;
+  SREF(int &a) : a(a) {}
+};
+
 template <typename T, int I>
 struct SA {
   static int ss;
@@ -26,8 +36,16 @@ struct SA {
   T d;
   float e[I];
   T *f;
+  int bf : 20;
   void func(int arg) {
-    #pragma omp target map(arg,a,d)
+    SREF sref(arg);
+    #pragma omp target
+    {
+      a = 0.0;
+      func(arg);
+      bf = 20;
+    }
+    #pragma omp target map(arg,a,d,sref.b)
     {}
     #pragma omp target map(arg[2:2],a,d) // expected-error {{subscripted value is not an array or pointer}}
     {}
@@ -225,9 +243,17 @@ void SAclient(int arg) {
   {}
   #pragma omp target map(r.ArrS[0].A, t.ArrS[1].A)
   {}
-  #pragma omp target map(r.PtrS[0], r.PtrS->B) // expected-error {{same pointer derreferenced in multiple different ways in map clause expressions}} expected-note {{used here}}
+  #pragma omp target map(r.PtrS[0], r.PtrS->B) // expected-error {{same pointer dereferenced in multiple different ways in map clause expressions}} expected-note {{used here}}
   {}
-  #pragma omp target map(r.RPtrS[0], r.RPtrS->B) // expected-error {{same pointer derreferenced in multiple different ways in map clause expressions}} expected-note {{used here}}
+  #pragma omp target map(r.PtrS, r.PtrS->B) // expected-error {{pointer cannot be mapped along with a section derived from itself}} expected-note {{used here}}
+  {}
+  #pragma omp target map(r.PtrS->A, r.PtrS->B)
+  {}
+  #pragma omp target map(r.RPtrS[0], r.RPtrS->B) // expected-error {{same pointer dereferenced in multiple different ways in map clause expressions}} expected-note {{used here}}
+  {}
+  #pragma omp target map(r.RPtrS, r.RPtrS->B) // expected-error {{pointer cannot be mapped along with a section derived from itself}} expected-note {{used here}}
+  {}
+  #pragma omp target map(r.RPtrS->A, r.RPtrS->B)
   {}
   #pragma omp target map(r.S.Arr[:12])
   {}
@@ -267,8 +293,13 @@ void SAclient(int arg) {
   {}
   #pragma omp target map((p+1)->A)  // expected-error {{expected expression containing only member accesses and/or array sections based on named variables}}
   {}
-  #pragma omp target map(u.B)  // expected-error {{mapped storage cannot be derived from a union}}
+  #pragma omp target map(u.B)  // expected-error {{mapping of union members is not allowed}}
   {}
+  #pragma omp target
+  {
+    u.B = 0;
+    r.S.foo();
+  }
 
   #pragma omp target data map(to: r.C) //expected-note {{used here}}
   {

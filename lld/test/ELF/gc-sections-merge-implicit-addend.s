@@ -1,3 +1,4 @@
+// REQUIRES: x86
 // RUN: llvm-mc %s -o %t.o -filetype=obj -triple=i386-pc-linux
 // RUN: ld.lld %t.o -o %t.so -shared --gc-sections
 // RUN: llvm-readobj -s -section-data %t.so | FileCheck %s
@@ -16,7 +17,7 @@
 // CHECK-NEXT: Link: 0
 // CHECK-NEXT: Info: 0
 // CHECK-NEXT: AddressAlignment: 1
-// CHECK-NEXT: EntrySize: 0
+// CHECK-NEXT: EntrySize: 1
 // CHECK-NEXT: SectionData (
 // CHECK-NEXT:   0000: 62617200                    |bar.|
 // CHECK-NEXT: )

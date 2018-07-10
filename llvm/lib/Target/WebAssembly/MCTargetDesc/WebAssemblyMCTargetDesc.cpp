@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief This file provides WebAssembly-specific target descriptions.
+/// This file provides WebAssembly-specific target descriptions.
 ///
 //===----------------------------------------------------------------------===//
 
@@ -69,10 +69,10 @@ static MCCodeEmitter *createCodeEmitter(const MCInstrInfo &MCII,
 }
 
 static MCAsmBackend *createAsmBackend(const Target & /*T*/,
+                                      const MCSubtargetInfo &STI,
                                       const MCRegisterInfo & /*MRI*/,
-                                      const Triple &TT, StringRef /*CPU*/,
                                       const MCTargetOptions & /*Options*/) {
-  return createWebAssemblyAsmBackend(TT);
+  return createWebAssemblyAsmBackend(STI.getTargetTriple());
 }
 
 static MCSubtargetInfo *createMCSubtargetInfo(const Triple &TT, StringRef CPU,
@@ -135,6 +135,7 @@ wasm::ValType WebAssembly::toValType(const MVT &Ty) {
   case MVT::i64: return wasm::ValType::I64;
   case MVT::f32: return wasm::ValType::F32;
   case MVT::f64: return wasm::ValType::F64;
+  case MVT::ExceptRef: return wasm::ValType::EXCEPT_REF;
   default: llvm_unreachable("unexpected type");
   }
 }

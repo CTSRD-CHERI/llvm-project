@@ -44,7 +44,6 @@ class Value;
 
 void initializeScopInfoRegionPassPass(PassRegistry &);
 void initializeScopInfoWrapperPassPass(PassRegistry &);
-
 } // end namespace llvm
 
 namespace polly {
@@ -233,7 +232,7 @@ class ScopBuilder {
   ///
   /// Consecutive instructions are associated to the same statement until a
   /// separator is found.
-  void buildSequentialBlockStmts(BasicBlock *BB);
+  void buildSequentialBlockStmts(BasicBlock *BB, bool SplitOnStore = false);
 
   /// Create one or more ScopStmts for @p BB using equivalence classes.
   ///
@@ -404,7 +403,6 @@ public:
   ///         for the region
   std::unique_ptr<Scop> getScop() { return std::move(scop); }
 };
-
 } // end namespace polly
 
 #endif // POLLY_SCOPBUILDER_H

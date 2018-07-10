@@ -34,7 +34,7 @@ public:
   IntrinsicEmitter(RecordKeeper &R, bool T)
     : Records(R), TargetOnly(T) {}
 
-  void run(raw_ostream &OS);
+  void run(raw_ostream &OS, bool Enums);
 
   void EmitPrefix(raw_ostream &OS);
 
@@ -56,7 +56,7 @@ public:
 // IntrinsicEmitter Implementation
 //===----------------------------------------------------------------------===//
 
-void IntrinsicEmitter::run(raw_ostream &OS) {
+void IntrinsicEmitter::run(raw_ostream &OS, bool Enums) {
   emitSourceFileHeader("Intrinsic Function Source Fragment", OS);
 
   CodeGenIntrinsicTable Ints(Records, TargetOnly);
@@ -66,29 +66,31 @@ void IntrinsicEmitter::run(raw_ostream &OS) {
 
   EmitPrefix(OS);
 
-  // Emit the enum information.
-  EmitEnumInfo(Ints, OS);
+  if (Enums) {
+    // Emit the enum information.
+    EmitEnumInfo(Ints, OS);
+  } else {
+    // Emit the target metadata.
+    EmitTargetInfo(Ints, OS);
 
-  // Emit the target metadata.
-  EmitTargetInfo(Ints, OS);
+    // Emit the intrinsic ID -> name table.
+    EmitIntrinsicToNameTable(Ints, OS);
 
-  // Emit the intrinsic ID -> name table.
-  EmitIntrinsicToNameTable(Ints, OS);
+    // Emit the intrinsic ID -> overload table.
+    EmitIntrinsicToOverloadTable(Ints, OS);
 
-  // Emit the intrinsic ID -> overload table.
-  EmitIntrinsicToOverloadTable(Ints, OS);
+    // Emit the intrinsic declaration generator.
+    EmitGenerator(Ints, OS);
 
-  // Emit the intrinsic declaration generator.
-  EmitGenerator(Ints, OS);
+    // Emit the intrinsic parameter attributes.
+    EmitAttributes(Ints, OS);
 
-  // Emit the intrinsic parameter attributes.
-  EmitAttributes(Ints, OS);
+    // Emit code to translate GCC builtins into LLVM intrinsics.
+    EmitIntrinsicToBuiltinMap(Ints, true, OS);
 
-  // Emit code to translate GCC builtins into LLVM intrinsics.
-  EmitIntrinsicToBuiltinMap(Ints, true, OS);
-
-  // Emit code to translate MS builtins into LLVM intrinsics.
-  EmitIntrinsicToBuiltinMap(Ints, false, OS);
+    // Emit code to translate MS builtins into LLVM intrinsics.
+    EmitIntrinsicToBuiltinMap(Ints, false, OS);
+  }
 
   EmitSuffix(OS);
 }
@@ -172,7 +174,7 @@ void IntrinsicEmitter::EmitIntrinsicToOverloadTable(
 }
 
 
-// NOTE: This must be kept in synch with the copy in lib/VMCore/Function.cpp!
+// NOTE: This must be kept in synch with the copy in lib/IR/Function.cpp!
 enum IIT_Info {
   // Common values should be encoded with 0-15.
   IIT_Done = 0,
@@ -448,7 +450,7 @@ void IntrinsicEmitter::EmitGenerator(const CodeGenIntrinsicTable &Ints,
 
     // If the entry fit in the table, just emit it.
     if (FixedEncodings[i] != ~0U) {
-      OS << "0x" << utohexstr(FixedEncodings[i]) << ", ";
+      OS << "0x" << Twine::utohexstr(FixedEncodings[i]) << ", ";
       continue;
     }
 
@@ -701,7 +703,7 @@ void IntrinsicEmitter::EmitAttributes(const CodeGenIntrinsicTable &Ints,
         if (addComma)
           OS << ",";
         OS << "Attribute::WriteOnly,";
-        OS << "Attribute::InaccessibleMemOrArgOnly";
+        OS << "Attribute::InaccessibleMemOrArgMemOnly";
         break;
       case CodeGenIntrinsic::ReadWriteArgMem:
         if (addComma)
@@ -717,6 +719,7 @@ void IntrinsicEmitter::EmitAttributes(const CodeGenIntrinsicTable &Ints,
         if (addComma)
           OS << ",";
         OS << "Attribute::InaccessibleMemOrArgMemOnly";
+        break;
       case CodeGenIntrinsic::ReadWriteMem:
         break;
       }
@@ -838,6 +841,12 @@ void IntrinsicEmitter::EmitIntrinsicToBuiltinMap(
   OS << "#endif\n\n";
 }
 
-void llvm::EmitIntrinsics(RecordKeeper &RK, raw_ostream &OS, bool TargetOnly) {
-  IntrinsicEmitter(RK, TargetOnly).run(OS);
+void llvm::EmitIntrinsicEnums(RecordKeeper &RK, raw_ostream &OS,
+                              bool TargetOnly) {
+  IntrinsicEmitter(RK, TargetOnly).run(OS, /*Enums=*/true);
+}
+
+void llvm::EmitIntrinsicImpl(RecordKeeper &RK, raw_ostream &OS,
+                             bool TargetOnly) {
+  IntrinsicEmitter(RK, TargetOnly).run(OS, /*Enums=*/false);
 }

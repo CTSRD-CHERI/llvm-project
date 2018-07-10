@@ -12,7 +12,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Analysis/AssumptionCache.h"
-#include "llvm/Analysis/CallGraph.h"
 #include "llvm/Analysis/InlineCost.h"
 #include "llvm/Analysis/ProfileSummaryInfo.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
@@ -21,7 +20,6 @@
 #include "llvm/IR/CallingConv.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Instructions.h"
-#include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
 #include "llvm/Transforms/IPO.h"
@@ -33,7 +31,7 @@ using namespace llvm;
 
 namespace {
 
-/// \brief Actual inliner pass implementation.
+/// Actual inliner pass implementation.
 ///
 /// The common implementation of the inlining logic is shared between this
 /// inliner pass and the always inliner pass. The two passes use different cost

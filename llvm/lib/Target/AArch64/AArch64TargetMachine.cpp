@@ -136,7 +136,7 @@ static cl::opt<bool>
 static cl::opt<int> EnableGlobalISelAtO(
     "aarch64-enable-global-isel-at-O", cl::Hidden,
     cl::desc("Enable GlobalISel at or below an opt level (-1 to disable)"),
-    cl::init(-1));
+    cl::init(0));
 
 static cl::opt<bool> EnableFalkorHWPFFix("aarch64-enable-falkor-hwpf-fix",
                                          cl::init(true), cl::Hidden);
@@ -157,7 +157,7 @@ extern "C" void LLVMInitializeAArch64Target() {
   initializeAArch64DeadRegisterDefinitionsPass(*PR);
   initializeAArch64ExpandPseudoPass(*PR);
   initializeAArch64LoadStoreOptPass(*PR);
-  initializeAArch64VectorByElementOptPass(*PR);
+  initializeAArch64SIMDInstrOptPass(*PR);
   initializeAArch64PromoteConstantPass(*PR);
   initializeAArch64RedundantCopyEliminationPass(*PR);
   initializeAArch64StorePairSuppressPass(*PR);
@@ -243,6 +243,13 @@ AArch64TargetMachine::AArch64TargetMachine(const Target &T, const Triple &TT,
                         getEffectiveCodeModel(TT, CM, JIT), OL),
       TLOF(createTLOF(getTargetTriple())), isLittle(LittleEndian) {
   initAsmInfo();
+
+  if (TT.isOSBinFormatMachO())
+    this->Options.TrapUnreachable = true;
+
+  // Enable GlobalISel at or below EnableGlobalISelAt0.
+  if (getOptLevel() <= EnableGlobalISelAtO)
+    setGlobalISel(true);
 }
 
 AArch64TargetMachine::~AArch64TargetMachine() = default;
@@ -340,16 +347,13 @@ public:
   void addPostRegAlloc() override;
   void addPreSched2() override;
   void addPreEmitPass() override;
-
-  bool isGlobalISelEnabled() const override;
 };
 
 } // end anonymous namespace
 
-TargetIRAnalysis AArch64TargetMachine::getTargetIRAnalysis() {
-  return TargetIRAnalysis([this](const Function &F) {
-    return TargetTransformInfo(AArch64TTIImpl(this, F));
-  });
+TargetTransformInfo
+AArch64TargetMachine::getTargetTransformInfo(const Function &F) {
+  return TargetTransformInfo(AArch64TTIImpl(this, F));
 }
 
 TargetPassConfig *AArch64TargetMachine::createPassConfig(PassManagerBase &PM) {
@@ -365,7 +369,7 @@ void AArch64PassConfig::addIRPasses() {
   // determine whether it succeeded. We can exploit existing control-flow in
   // ldrex/strex loops to simplify this, but it needs tidying up.
   if (TM->getOptLevel() != CodeGenOpt::None && EnableAtomicTidy)
-    addPass(createLateCFGSimplificationPass());
+    addPass(createCFGSimplificationPass(1, true, true, false, true));
 
   // Run LoopDataPrefetch
   //
@@ -388,7 +392,7 @@ void AArch64PassConfig::addIRPasses() {
     // Call SeparateConstOffsetFromGEP pass to extract constants within indices
     // and lower a GEP with multiple indices to either arithmetic operations or
     // multiple GEPs with single index.
-    addPass(createSeparateConstOffsetFromGEPPass(TM, true));
+    addPass(createSeparateConstOffsetFromGEPPass(true));
     // Call EarlyCSE pass to find and remove subexpressions in the lowered
     // result.
     addPass(createEarlyCSEPass());
@@ -456,10 +460,6 @@ bool AArch64PassConfig::addGlobalInstructionSelect() {
   return false;
 }
 
-bool AArch64PassConfig::isGlobalISelEnabled() const {
-  return TM->getOptLevel() <= EnableGlobalISelAtO;
-}
-
 bool AArch64PassConfig::addILPOpts() {
   if (EnableCondOpt)
     addPass(createAArch64ConditionOptimizerPass());
@@ -473,7 +473,7 @@ bool AArch64PassConfig::addILPOpts() {
     addPass(&EarlyIfConverterID);
   if (EnableStPairSuppress)
     addPass(createAArch64StorePairSuppressPass());
-  addPass(createAArch64VectorByElementOptPass());
+  addPass(createAArch64SIMDInstrOptPass());
   return true;
 }
 

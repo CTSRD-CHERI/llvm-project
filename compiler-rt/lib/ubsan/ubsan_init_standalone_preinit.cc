@@ -1,5 +1,4 @@
-//===-- ubsan_init_standalone_preinit.cc
-//------------------------------------------===//
+//===-- ubsan_init_standalone_preinit.cc ---------------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //

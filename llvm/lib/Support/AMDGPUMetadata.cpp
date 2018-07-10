@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 //
 /// \file
-/// \brief AMDGPU metadata definitions and in-memory representations.
+/// AMDGPU metadata definitions and in-memory representations.
 ///
 //
 //===----------------------------------------------------------------------===//
@@ -142,12 +142,16 @@ struct MappingTraits<Kernel::CodeProps::Metadata> {
                     MD.mNumSGPRs, uint16_t(0));
     YIO.mapOptional(Kernel::CodeProps::Key::NumVGPRs,
                     MD.mNumVGPRs, uint16_t(0));
-    YIO.mapOptional(Kernel::CodeProps::Key::MaxFlatWorkgroupSize,
-                    MD.mMaxFlatWorkgroupSize, uint32_t(0));
+    YIO.mapOptional(Kernel::CodeProps::Key::MaxFlatWorkGroupSize,
+                    MD.mMaxFlatWorkGroupSize, uint32_t(0));
     YIO.mapOptional(Kernel::CodeProps::Key::IsDynamicCallStack,
                     MD.mIsDynamicCallStack, false);
     YIO.mapOptional(Kernel::CodeProps::Key::IsXNACKEnabled,
                     MD.mIsXNACKEnabled, false);
+    YIO.mapOptional(Kernel::CodeProps::Key::NumSpilledSGPRs,
+                    MD.mNumSpilledSGPRs, uint16_t(0));
+    YIO.mapOptional(Kernel::CodeProps::Key::NumSpilledVGPRs,
+                    MD.mNumSpilledVGPRs, uint16_t(0));
   }
 };
 

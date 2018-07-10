@@ -31,8 +31,15 @@ def AutoDisableVptrSanitizer : DiagGroup<"auto-disable-vptr-sanitizer">;
 def Availability : DiagGroup<"availability">;
 def Section : DiagGroup<"section">;
 def AutoImport : DiagGroup<"auto-import">;
+def FrameworkHdrQuotedInclude : DiagGroup<"quoted-include-in-framework-header">;
+def FrameworkIncludePrivateFromPublic :
+  DiagGroup<"framework-include-private-from-public">;
 def CXX14BinaryLiteral : DiagGroup<"c++14-binary-literal">;
+def CXXPre14CompatBinaryLiteral : DiagGroup<"c++98-c++11-compat-binary-literal">;
 def GNUBinaryLiteral : DiagGroup<"gnu-binary-literal">;
+def BinaryLiteral : DiagGroup<"binary-literal", [CXX14BinaryLiteral,
+                                                 CXXPre14CompatBinaryLiteral,
+                                                 GNUBinaryLiteral]>;
 def GNUCompoundLiteralInitializer : DiagGroup<"gnu-compound-literal-initializer">;
 def BitFieldConstantConversion : DiagGroup<"bitfield-constant-conversion">;
 def BitFieldEnumConversion : DiagGroup<"bitfield-enum-conversion">;
@@ -73,10 +80,20 @@ def MacroRedefined : DiagGroup<"macro-redefined">;
 def BuiltinMacroRedefined : DiagGroup<"builtin-macro-redefined">;
 def BuiltinRequiresHeader : DiagGroup<"builtin-requires-header">;
 
-def CHERICapabilityToIntegerCast : DiagGroup<"capability-to-integer-cast">;
-def CHERIPedantic : DiagGroup<"cheri-pedantic", [CHERICapabilityToIntegerCast]>;
+
+// Generally useful CHERI warnings
 def CHERICaps : DiagGroup<"cheri-capability-misuse">;
+def CHERIBitwiseOps : DiagGroup<"cheri-bitwise-operations">;
+def CHERIImplicitConversion : DiagGroup<"cheri-implicit-conversion">;
+def CHERIImplicitConversionSign : DiagGroup<"cheri-implicit-conversion-sign">;
 def MIPSCHERIPrototypes: DiagGroup<"mips-cheri-prototypes">;
+def CheriAll : DiagGroup<"cheri",
+     [CHERICaps, CHERIBitwiseOps, CHERIImplicitConversion,
+      CHERIImplicitConversionSign, MIPSCHERIPrototypes]>;
+// CHERI warnings that are too noisy to turn on by default
+def CHERICapabilityToIntegerCast : DiagGroup<"capability-to-integer-cast">;
+def CheriPedantic : DiagGroup<"cheri-pedantic", [CHERICapabilityToIntegerCast]>;
+// Warnings/Errors for bugs in the MIPS/CHERI backend
 def MIPSCHERIBugs: DiagGroup<"mips-cheri-bugs">;
 
 def C99Compat : DiagGroup<"c99-compat">;
@@ -154,8 +171,10 @@ def Exceptions : DiagGroup<"exceptions">;
 def GNUEmptyInitializer : DiagGroup<"gnu-empty-initializer">;
 def GNUEmptyStruct : DiagGroup<"gnu-empty-struct">;
 def ExtraTokens : DiagGroup<"extra-tokens">;
+def CXX98CompatExtraSemi : DiagGroup<"c++98-compat-extra-semi">;
 def CXX11ExtraSemi : DiagGroup<"c++11-extra-semi">;
-def ExtraSemi : DiagGroup<"extra-semi", [CXX11ExtraSemi]>;
+def ExtraSemi : DiagGroup<"extra-semi", [CXX98CompatExtraSemi,
+                                         CXX11ExtraSemi]>;
 
 def GNUFlexibleArrayInitializer : DiagGroup<"gnu-flexible-array-initializer">;
 def GNUFlexibleArrayUnionMember : DiagGroup<"gnu-flexible-array-union-member">;
@@ -173,7 +192,8 @@ def NoexceptType : DiagGroup<"noexcept-type", [CXX17CompatMangling]>;
 // Warnings for C++1y code which is not compatible with prior C++ standards.
 def CXXPre14Compat : DiagGroup<"c++98-c++11-compat">;
 def CXXPre14CompatPedantic : DiagGroup<"c++98-c++11-compat-pedantic",
-                                       [CXXPre14Compat]>;
+                                       [CXXPre14Compat,
+                                        CXXPre14CompatBinaryLiteral]>;
 def CXXPre17Compat : DiagGroup<"c++98-c++11-c++14-compat">;
 def CXXPre17CompatPedantic : DiagGroup<"c++98-c++11-c++14-compat-pedantic",
                                        [CXXPre17Compat]>;
@@ -198,6 +218,7 @@ def CXX98Compat : DiagGroup<"c++98-compat",
 def CXX98CompatPedantic : DiagGroup<"c++98-compat-pedantic",
                                     [CXX98Compat,
                                      CXX98CompatBindToTemporaryCopy,
+                                     CXX98CompatExtraSemi,
                                      CXXPre14CompatPedantic,
                                      CXXPre17CompatPedantic,
                                      CXXPre2aCompatPedantic]>;
@@ -284,6 +305,8 @@ def IncompatiblePointerTypes
     [IncompatiblePointerTypesDiscardsQualifiers,
      IncompatibleFunctionPointerTypes]>;
 def IncompleteUmbrella : DiagGroup<"incomplete-umbrella">;
+def IncompleteFrameworkModuleDeclaration
+  : DiagGroup<"incomplete-framework-module-declaration">;
 def NonModularIncludeInFrameworkModule
   : DiagGroup<"non-modular-include-in-framework-module">;
 def NonModularIncludeInModule : DiagGroup<"non-modular-include-in-module",
@@ -376,12 +399,18 @@ def ObjCRootClass : DiagGroup<"objc-root-class">;
 def ObjCPointerIntrospectPerformSelector : DiagGroup<"deprecated-objc-pointer-introspection-performSelector">;
 def ObjCPointerIntrospect : DiagGroup<"deprecated-objc-pointer-introspection", [ObjCPointerIntrospectPerformSelector]>;
 def ObjCMultipleMethodNames : DiagGroup<"objc-multiple-method-names">;
+def ObjCFlexibleArray : DiagGroup<"objc-flexible-array">;
 def OpenCLUnsupportedRGBA: DiagGroup<"opencl-unsupported-rgba">;
 def DeprecatedObjCIsaUsage : DiagGroup<"deprecated-objc-isa-usage">;
 def ExplicitInitializeCall : DiagGroup<"explicit-initialize-call">;
+def ExcessPadding : DiagGroup<"excess-padding">;
 def Packed : DiagGroup<"packed">;
 def Padded : DiagGroup<"padded">;
+
 def PessimizingMove : DiagGroup<"pessimizing-move">;
+def ReturnStdMoveInCXX11 : DiagGroup<"return-std-move-in-c++11">;
+def ReturnStdMove : DiagGroup<"return-std-move">;
+
 def PointerArith : DiagGroup<"pointer-arith">;
 def PoundWarning : DiagGroup<"#warnings">;
 def PoundPragmaMessage : DiagGroup<"#pragma-messages">,
@@ -398,7 +427,8 @@ def ReturnType : DiagGroup<"return-type", [ReturnTypeCLinkage]>;
 def BindToTemporaryCopy : DiagGroup<"bind-to-temporary-copy",
                                     [CXX98CompatBindToTemporaryCopy]>;
 def SelfAssignmentField : DiagGroup<"self-assign-field">;
-def SelfAssignment : DiagGroup<"self-assign", [SelfAssignmentField]>;
+def SelfAssignmentOverloaded : DiagGroup<"self-assign-overloaded">;
+def SelfAssignment : DiagGroup<"self-assign", [SelfAssignmentOverloaded, SelfAssignmentField]>;
 def SelfMove : DiagGroup<"self-move">;
 def SemiBeforeMethodBody : DiagGroup<"semicolon-before-method-body">;
 def Sentinel : DiagGroup<"sentinel">;
@@ -436,13 +466,16 @@ def StringCompare : DiagGroup<"string-compare">;
 def StringPlusInt : DiagGroup<"string-plus-int">;
 def StringPlusChar : DiagGroup<"string-plus-char">;
 def StrncatSize : DiagGroup<"strncat-size">;
+def TautologicalTypeLimitCompare : DiagGroup<"tautological-type-limit-compare">;
 def TautologicalUnsignedZeroCompare : DiagGroup<"tautological-unsigned-zero-compare">;
 def TautologicalUnsignedEnumZeroCompare : DiagGroup<"tautological-unsigned-enum-zero-compare">;
+def TautologicalInRangeCompare : DiagGroup<"tautological-constant-in-range-compare",
+                                           [TautologicalTypeLimitCompare,
+                                            TautologicalUnsignedZeroCompare,
+                                            TautologicalUnsignedEnumZeroCompare]>;
 def TautologicalOutOfRangeCompare : DiagGroup<"tautological-constant-out-of-range-compare">;
 def TautologicalConstantCompare : DiagGroup<"tautological-constant-compare",
-                                            [TautologicalUnsignedZeroCompare,
-                                             TautologicalUnsignedEnumZeroCompare,
-                                             TautologicalOutOfRangeCompare]>;
+                                            [TautologicalOutOfRangeCompare]>;
 def TautologicalPointerCompare : DiagGroup<"tautological-pointer-compare">;
 def TautologicalOverlapCompare : DiagGroup<"tautological-overlap-compare">;
 def TautologicalUndefinedCompare : DiagGroup<"tautological-undefined-compare">;
@@ -510,8 +543,13 @@ def UninitializedStaticSelfInit : DiagGroup<"static-self-init">;
 def Uninitialized  : DiagGroup<"uninitialized", [UninitializedSometimes,
                                                  UninitializedStaticSelfInit]>;
 def IgnoredPragmaIntrinsic : DiagGroup<"ignored-pragma-intrinsic">;
+// #pragma optimize is often used to avoid to work around MSVC codegen bugs or
+// to disable inlining. It's not completely clear what alternative to suggest
+// (#pragma clang optimize, noinline) so suggest nothing for now.
+def IgnoredPragmaOptimize : DiagGroup<"ignored-pragma-optimize">;
 def UnknownPragmas : DiagGroup<"unknown-pragmas">;
-def IgnoredPragmas : DiagGroup<"ignored-pragmas", [IgnoredPragmaIntrinsic]>;
+def IgnoredPragmas : DiagGroup<"ignored-pragmas",
+    [IgnoredPragmaIntrinsic, IgnoredPragmaOptimize]>;
 def PragmaClangAttribute : DiagGroup<"pragma-clang-attribute">;
 def PragmaPackSuspiciousInclude : DiagGroup<"pragma-pack-suspicious-include">;
 def PragmaPack : DiagGroup<"pragma-pack", [PragmaPackSuspiciousInclude]>;
@@ -713,7 +751,12 @@ def IntToVoidPointerCast : DiagGroup<"int-to-void-pointer-cast">;
 def IntToPointerCast : DiagGroup<"int-to-pointer-cast",
                                  [IntToVoidPointerCast]>;
 
-def Move : DiagGroup<"move", [PessimizingMove, RedundantMove, SelfMove]>;
+def Move : DiagGroup<"move", [
+    PessimizingMove,
+    RedundantMove,
+    ReturnStdMove,
+    SelfMove
+  ]>;
 
 def Extra : DiagGroup<"extra", [
     MissingFieldInitializers,
@@ -752,6 +795,7 @@ def Most : DiagGroup<"most", [
     VolatileRegisterVar,
     ObjCMissingSuperCalls,
     ObjCDesignatedInit,
+    ObjCFlexibleArray,
     OverloadedVirtual,
     PrivateExtern,
     SelTypeCast,
@@ -785,7 +829,7 @@ def All : DiagGroup<"all", [Most, Parentheses, Switch, SwitchBool]>;
 def : DiagGroup<"CL4", [All, Extra]>;
 
 // Warnings enabled by -pedantic.  This is magically filled in by TableGen.
-def Pedantic : DiagGroup<"pedantic">;
+def Pedantic : DiagGroup<"pedantic", [CheriPedantic]>;
 
 // Aliases.
 def : DiagGroup<"", [Extra]>;                   // -W = -Wextra
@@ -890,6 +934,7 @@ def MicrosoftVoidPseudoDtor : DiagGroup<"microsoft-void-pseudo-dtor">;
 def MicrosoftAnonTag : DiagGroup<"microsoft-anon-tag">;
 def MicrosoftCommentPaste : DiagGroup<"microsoft-comment-paste">;
 def MicrosoftEndOfFile : DiagGroup<"microsoft-end-of-file">;
+def MicrosoftInaccessibleBase : DiagGroup<"microsoft-inaccessible-base">;
 // Aliases.
 def : DiagGroup<"msvc-include", [MicrosoftInclude]>;
                 // -Wmsvc-include = -Wmicrosoft-include
@@ -981,3 +1026,6 @@ def UnknownArgument : DiagGroup<"unknown-argument">;
 // A warning group for warnings about code that clang accepts when
 // compiling OpenCL C/C++ but which is not compatible with the SPIR spec.
 def SpirCompat : DiagGroup<"spir-compat">;
+
+// Warning for the experimental-isel options.
+def ExperimentalISel : DiagGroup<"experimental-isel">;

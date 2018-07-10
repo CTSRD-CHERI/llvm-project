@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief Provides an action to find USR for the symbol at <offset>, as well as
+/// Provides an action to find USR for the symbol at <offset>, as well as
 /// all additional USRs.
 ///
 //===----------------------------------------------------------------------===//
@@ -55,7 +55,7 @@ const NamedDecl *getCanonicalSymbolDeclaration(const NamedDecl *FoundDecl) {
 }
 
 namespace {
-// \brief NamedDeclFindingConsumer should delegate finding USRs of given Decl to
+// NamedDeclFindingConsumer should delegate finding USRs of given Decl to
 // AdditionalUSRFinder. AdditionalUSRFinder adds USRs of ctor and dtor if given
 // Decl refers to class and adds USRs of all overridden methods if Decl refers
 // to virtual method.
@@ -73,6 +73,7 @@ public:
         if (checkIfOverriddenFunctionAscends(OverriddenMethod))
           USRSet.insert(getUSRForDecl(OverriddenMethod));
       }
+      addUSRsOfInstantiatedMethods(MethodDecl);
     } else if (const auto *RecordDecl = dyn_cast<CXXRecordDecl>(FoundDecl)) {
       handleCXXRecordDecl(RecordDecl);
     } else if (const auto *TemplateDecl =
@@ -84,9 +85,13 @@ public:
     return std::vector<std::string>(USRSet.begin(), USRSet.end());
   }
 
+  bool shouldVisitTemplateInstantiations() const { return true; }
+
   bool VisitCXXMethodDecl(const CXXMethodDecl *MethodDecl) {
     if (MethodDecl->isVirtual())
       OverriddenMethods.push_back(MethodDecl);
+    if (MethodDecl->getInstantiatedFromMemberFunction())
+      InstantiatedMethods.push_back(MethodDecl);
     return true;
   }
 
@@ -137,6 +142,20 @@ private:
       addUSRsOfOverridenFunctions(OverriddenMethod);
   }
 
+  void addUSRsOfInstantiatedMethods(const CXXMethodDecl *MethodDecl) {
+    // For renaming a class template method, all references of the instantiated
+    // member methods should be renamed too, so add USRs of the instantiated
+    // methods to the USR set.
+    USRSet.insert(getUSRForDecl(MethodDecl));
+    if (const auto *FT = MethodDecl->getInstantiatedFromMemberFunction())
+      USRSet.insert(getUSRForDecl(FT));
+    for (const auto *Method : InstantiatedMethods) {
+      if (USRSet.find(getUSRForDecl(
+              Method->getInstantiatedFromMemberFunction())) != USRSet.end())
+        USRSet.insert(getUSRForDecl(Method));
+    }
+  }
+
   bool checkIfOverriddenFunctionAscends(const CXXMethodDecl *MethodDecl) {
     for (const auto &OverriddenMethod : MethodDecl->overridden_methods()) {
       if (USRSet.find(getUSRForDecl(OverriddenMethod)) != USRSet.end())
@@ -150,6 +169,7 @@ private:
   ASTContext &Context;
   std::set<std::string> USRSet;
   std::vector<const CXXMethodDecl *> OverriddenMethods;
+  std::vector<const CXXMethodDecl *> InstantiatedMethods;
   std::vector<const ClassTemplatePartialSpecializationDecl *> PartialSpecs;
 };
 } // namespace

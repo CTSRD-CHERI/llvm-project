@@ -21,11 +21,6 @@ using namespace clang::driver::tools;
 using namespace clang;
 using namespace llvm::opt;
 
-bool tools::isMipsArch(llvm::Triple::ArchType Arch) {
-  return Arch == llvm::Triple::mips || Arch == llvm::Triple::mipsel ||
-         Arch == llvm::Triple::mips64 || Arch == llvm::Triple::mips64el;
-}
-
 // Get CPU and ABI names. They are not independent
 // so we have to calculate them together.
 void mips::getMipsCPUAndABI(const ArgList &Args, const llvm::Triple &Triple,
@@ -51,7 +46,7 @@ void mips::getMipsCPUAndABI(const ArgList &Args, const llvm::Triple &Triple,
                      .Case("256", "cheri256")
                      .Default("cheri128");
   }
-  if (Triple.getArch() == llvm::Triple::cheri) {
+  if (Triple.getArch() == llvm::Triple::cheri || ABIName == "purecap") {
     DefMips32CPU = CHERICPU;
     DefMips64CPU = CHERICPU;
   }
@@ -126,11 +121,7 @@ void mips::getMipsCPUAndABI(const ArgList &Args, const llvm::Triple &Triple,
 
   if (ABIName.empty()) {
     // Deduce ABI name from the target triple.
-    if (Triple.getArch() == llvm::Triple::mips ||
-        Triple.getArch() == llvm::Triple::mipsel)
-      ABIName = "o32";
-    else
-      ABIName = "n64";
+    ABIName = Triple.isMIPS32() ? "o32" : "n64";
   }
 
   if (CPUName.empty()) {
@@ -211,7 +202,8 @@ void mips::getMIPSTargetFeatures(const Driver &D, const llvm::Triple &Triple,
   StringRef ABIName;
   getMipsCPUAndABI(Args, Triple, CPUName, ABIName);
   ABIName = getGnuCompatibleMipsABIName(ABIName);
-  if (ABIName == "purecap" && Triple.getArch() != llvm::Triple::cheri)
+  if (ABIName == "purecap" && Triple.getArch() != llvm::Triple::cheri &&
+      Triple.getArch() != llvm::Triple::mips64)
     D.Diag(diag::err_drv_argument_not_allowed_with) << "-mabi=purecap"
       << Triple.str();
 
@@ -244,6 +236,7 @@ void mips::getMIPSTargetFeatures(const Driver &D, const llvm::Triple &Triple,
   // For case (a) we need to add +noabicalls for N64.
 
   bool IsN64 = ABIName == "64";
+  bool IsPIC = false;
   bool NonPIC = false;
 
   Arg *LastPICArg = Args.getLastArg(options::OPT_fPIC, options::OPT_fno_PIC,
@@ -255,6 +248,9 @@ void mips::getMIPSTargetFeatures(const Driver &D, const llvm::Triple &Triple,
     NonPIC =
         (O.matches(options::OPT_fno_PIC) || O.matches(options::OPT_fno_pic) ||
          O.matches(options::OPT_fno_PIE) || O.matches(options::OPT_fno_pie));
+    IsPIC =
+        (O.matches(options::OPT_fPIC) || O.matches(options::OPT_fpic) ||
+         O.matches(options::OPT_fPIE) || O.matches(options::OPT_fpie));
   }
 
   bool UseAbiCalls = false;
@@ -264,9 +260,14 @@ void mips::getMIPSTargetFeatures(const Driver &D, const llvm::Triple &Triple,
   UseAbiCalls =
       !ABICallsArg || ABICallsArg->getOption().matches(options::OPT_mabicalls);
 
-  if (UseAbiCalls && IsN64 && NonPIC) {
-    D.Diag(diag::warn_drv_unsupported_abicalls);
-    UseAbiCalls = false;
+  if (IsN64 && NonPIC && (!ABICallsArg || UseAbiCalls)) {
+    D.Diag(diag::warn_drv_unsupported_pic_with_mabicalls)
+        << LastPICArg->getAsString(Args) << (!ABICallsArg ? 0 : 1);
+    NonPIC = false;
+  }
+
+  if (ABICallsArg && !UseAbiCalls && IsPIC) {
+    D.Diag(diag::err_drv_unsupported_noabicalls_pic);
   }
 
   if (!UseAbiCalls)
@@ -391,6 +392,27 @@ void mips::getMIPSTargetFeatures(const Driver &D, const llvm::Triple &Triple,
             << A->getOption().getName() << A->getValue();
     }
   }
+  if (Arg *A = Args.getLastArg(options::OPT_mindirect_jump_EQ)) {
+    StringRef Val = StringRef(A->getValue());
+    if (Val == "hazard") {
+      Arg *B =
+          Args.getLastArg(options::OPT_mmicromips, options::OPT_mno_micromips);
+      Arg *C = Args.getLastArg(options::OPT_mips16, options::OPT_mno_mips16);
+
+      if (B && B->getOption().matches(options::OPT_mmicromips))
+        D.Diag(diag::err_drv_unsupported_indirect_jump_opt)
+            << "hazard" << "micromips";
+      else if (C && C->getOption().matches(options::OPT_mips16))
+        D.Diag(diag::err_drv_unsupported_indirect_jump_opt)
+            << "hazard" << "mips16";
+      else if (mips::supportsIndirectJumpHazardBarrier(CPUName))
+        Features.push_back("+use-indirect-jump-hazard");
+      else
+        D.Diag(diag::err_drv_unsupported_indirect_jump_opt)
+            << "hazard" << CPUName;
+    } else
+      D.Diag(diag::err_drv_unknown_indirect_jump_opt) << Val;
+  }
 }
 
 mips::IEEE754Standard mips::getIEEE754Standard(StringRef &CPU) {
@@ -494,4 +516,21 @@ bool mips::shouldUseFPXX(const ArgList &Args, const llvm::Triple &Triple,
       UseFPXX = false;
 
   return UseFPXX;
+}
+
+bool mips::supportsIndirectJumpHazardBarrier(StringRef &CPU) {
+  // Supporting the hazard barrier method of dealing with indirect
+  // jumps requires MIPSR2 support.
+  return llvm::StringSwitch<bool>(CPU)
+      .Case("mips32r2", true)
+      .Case("mips32r3", true)
+      .Case("mips32r5", true)
+      .Case("mips32r6", true)
+      .Case("mips64r2", true)
+      .Case("mips64r3", true)
+      .Case("mips64r5", true)
+      .Case("mips64r6", true)
+      .Case("octeon", true)
+      .Case("p5600", true)
+      .Default(false);
 }

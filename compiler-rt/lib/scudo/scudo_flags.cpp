@@ -12,17 +12,15 @@
 //===----------------------------------------------------------------------===//
 
 #include "scudo_flags.h"
+#include "scudo_interface_internal.h"
 #include "scudo_utils.h"
 
 #include "sanitizer_common/sanitizer_flags.h"
 #include "sanitizer_common/sanitizer_flag_parser.h"
 
-extern "C" SANITIZER_INTERFACE_ATTRIBUTE SANITIZER_WEAK_ATTRIBUTE
-const char* __scudo_default_options();
-
 namespace __scudo {
 
-Flags ScudoFlags;  // Use via getFlags().
+static Flags ScudoFlags;  // Use via getFlags().
 
 void Flags::setDefaults() {
 #define SCUDO_FLAG(Type, Name, DefaultValue, Description) Name = DefaultValue;
@@ -37,7 +35,15 @@ static void RegisterScudoFlags(FlagParser *parser, Flags *f) {
 #undef SCUDO_FLAG
 }
 
-static const char *callGetScudoDefaultOptions() {
+static const char *getCompileDefinitionScudoDefaultOptions() {
+#ifdef SCUDO_DEFAULT_OPTIONS
+  return SANITIZER_STRINGIFY(SCUDO_DEFAULT_OPTIONS);
+#else
+  return "";
+#endif
+}
+
+static const char *getScudoDefaultOptions() {
   return (&__scudo_default_options) ? __scudo_default_options() : "";
 }
 
@@ -56,9 +62,11 @@ void initFlags() {
   RegisterScudoFlags(&ScudoParser, f);
   RegisterCommonFlags(&ScudoParser);
 
+  // Override from compile definition.
+  ScudoParser.ParseString(getCompileDefinitionScudoDefaultOptions());
+
   // Override from user-specified string.
-  const char *ScudoDefaultOptions = callGetScudoDefaultOptions();
-  ScudoParser.ParseString(ScudoDefaultOptions);
+  ScudoParser.ParseString(getScudoDefaultOptions());
 
   // Override from environment.
   ScudoParser.ParseString(GetEnv("SCUDO_OPTIONS"));
@@ -121,3 +129,9 @@ Flags *getFlags() {
 }
 
 }  // namespace __scudo
+
+#if !SANITIZER_SUPPORTS_WEAK_HOOKS
+SANITIZER_INTERFACE_WEAK_DEF(const char*, __scudo_default_options, void) {
+  return "";
+}
+#endif

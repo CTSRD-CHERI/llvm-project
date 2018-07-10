@@ -60,6 +60,7 @@
         ldr r4, [r5, r6, ror #-1]
         pld r4, [r5, r6, ror #32]
         pld r4, [r5, r6, rrx #0]
+        ldr r4, [r5, r6, not_a_shift]
 
 @ CHECK-ERRORS: error: shift amount must be an immediate
 @ CHECK-ERRORS:         str r1, [r2, r3, lsl #invalid]
@@ -89,6 +90,8 @@
 @ CHECK-ERRORS:         pld r4, [r5, r6, ror #32]
 @ CHECK-ERRORS: error: ']' expected
 @ CHECK-ERRORS:         pld r4, [r5, r6, rrx #0]
+@ CHECK-ERRORS: error: illegal shift operator
+@ CHECK-ERRORS:         ldr r4, [r5, r6, not_a_shift]
         
         @ Out of range 16-bit immediate on BKPT
         bkpt #65536
@@ -733,3 +736,16 @@ foo2:
 @ CHECK-ERRORS: error: immediate operand must an even number in the range [0, 30]
 @ CHECK-ERRORS: error: immediate operand must a number in the range [0, 255]
 @ CHECK-ERRORS: error: immediate operand must an even number in the range [0, 30]
+
+        @ Generic error for too few operands
+        adds
+        adds r0
+@ CHECK-ERRORS: error: too few operands for instruction
+@ CHECK-ERRORS: error: too few operands for instruction
+
+        @ Using pc for MVN
+	mvn pc, r6, lsl r7
+@ CHECK-ERRORS: error: invalid instruction, any one of the following would fix this:
+@ CHECK-ERRORS: note: operand must be a register in range [r0, r14]
+@ CHECK-ERRORS:         mvn pc, r6, lsl r7
+@ CHECK-ERRORS:             ^
