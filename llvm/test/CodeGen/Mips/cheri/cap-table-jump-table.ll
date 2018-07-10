@@ -29,7 +29,7 @@ default:
 
 sw.bb:
   ret i64 1
-
+; FUXME: I SHOULD NOT BE DOING THIS SHIT HERE
 sw.bb1:
   ret i64 0
 }
@@ -52,11 +52,14 @@ sw.bb1:
 ; CHECK-NEXT:	clc	$c1, $1, 0($c26)
 ; CHECK-NEXT:	dsll	$1, $4, 2
 ; CHECK-NEXT:	clw	$1, $1, 0($c1)
-; CHECK-NEXT:	cincoffset	$c1, $c1, $1
 ; TODO: this is not ideal but we need to derive an executable capability
-; CHECK-NEXT:	cgetpcc	$c2
-; CHECK-NEXT:	csub	$1, $c1, $c2
-; CHECK-NEXT:	cincoffset	$c1, $c2, $1
+; TODO: it is even slower now
+; CHECK-NEXT:	cgetaddr $2, $c1
+; CHECK-NEXT:	daddu $1, $2, $1
+; CHECK-NEXT:	cgetpcc	$c1
+; CHECK-NEXT:	cgetaddr $2, $c1
+; CHECK-NEXT:	dsubu $1, $1, $2
+; CHECK-NEXT:	cincoffset $c1, $c1, $1
 ; CHECK-NEXT:	cjr	$c1
 ; CHECK-NEXT:	nop
 
@@ -107,10 +110,12 @@ sw.bb1:
 ; NO-OPT-NEXT:	clc	$c1, $zero, [[$CAP_SIZE]]($c11)    # [[$CAP_SIZE]]-byte Folded Reload
 ; NO-OPT-NEXT:	clc	$c2, $3, 0($c1)
 ; NO-OPT-NEXT:	clw	$2, $2, 0($c2)
-; NO-OPT-NEXT:	cincoffset	$c2, $c2, $2
-; NO-OPT-NEXT:	cgetpcc	$c3
-; NO-OPT-NEXT:	csub	$2, $c2, $c3
-; NO-OPT-NEXT:	cincoffset	$c2, $c3, $2
+; NO-OPT-NEXT:	cgetaddr $3, $c2
+; NO-OPT-NEXT:	daddu $2, $3, $2
+; NO-OPT-NEXT:	cgetpcc	$c2
+; NO-OPT-NEXT:	cgetaddr $3, $c2
+; NO-OPT-NEXT:	dsubu $2, $2, $3
+; NO-OPT-NEXT:	cincoffset $c2, $c2, $2
 ; NO-OPT-NEXT:	cjr	$c2
 ; NO-OPT-NEXT:	nop
 

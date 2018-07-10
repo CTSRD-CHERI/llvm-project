@@ -3122,29 +3122,47 @@ SDValue MipsTargetLowering::lowerBR_JT(SDValue Op,
                       DAG.getConstant(Log2_32(EntrySize), dl, MVT::i64));
   EVT MemVT = EVT::getIntegerVT(*DAG.getContext(), EntrySize * 8);
   auto LoadAddr = DAG.getNode(ISD::PTRADD, dl, PTy, JtAddr, Index);
-  SDValue Addr = DAG.getExtLoad(
-    ISD::SEXTLOAD, dl, MVT::i64, Chain, LoadAddr,
-    MachinePointerInfo::getJumpTable(DAG.getMachineFunction()), MemVT);
-  Chain = Addr.getValue(1);
-  // FIXME: why doesn't indexedLoad work?
-  // Hopefully the CheriAddressingModeFolder can optmized away the add
-  // Addr = DAG.getIndexedLoad(Addr, dl, JtAddr, Index, ISD::PRE_INC);
+  SDValue JTEntryValue = DAG.getExtLoad(
+      ISD::SEXTLOAD, dl, MVT::i64, Chain, LoadAddr,
+      MachinePointerInfo::getJumpTable(DAG.getMachineFunction()), MemVT);
+  Chain = JTEntryValue.getValue(1);
   assert(isJumpTableRelative());
+  // Each jump table entry contains .4byte	.LBB0_N - .LJTI0_0.
+  // Since the jump table comes before .text this will generally be a positive
+  // number that we can add to the address of the jump-table to get the
+  // address of the basic block:
+  // addrof(BB) = addrof(JT) + *(JT[INDEX])
+  // New PPC = CIncOffset, PCC, (addrof(BB) - addrof(PCC))
 
-  Addr = DAG.getNode(ISD::PTRADD, dl, PTy, JtAddr, Addr);
+  // TODO: use a smarter model for jump tables, this is just used because
+  // there is existing infrastucture. Maybe use offset from beginning of func
+  // instead?
+  auto GetPCC = DAG.getConstant(Intrinsic::cheri_pcc_get, dl, MVT::i64);
+  auto PCC = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, PTy, GetPCC);
+#if 0
+  // this is the old approach that creates out-of-bounds capabilities that might
+  // become unrep
+  auto Addr = DAG.getNode(ISD::PTRADD, dl, PTy, JtAddr, JTEntryValue);
   // Addr is a data capability so won't have Permit_Execute so we have to derive
   // a new capabiilty from PCC
-
-  // to get this we do a (add pcc, (csub target, pcc))
-  // This should work even if pcc and cgp have different base addreses
-
-  auto GetPCC = DAG.getConstant(Intrinsic::cheri_pcc_get, dl, MVT::i64);
   auto CSub = DAG.getConstant(Intrinsic::cheri_cap_diff, dl, MVT::i64);
-  auto PCC = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, PTy, GetPCC);
-  auto Diff = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, MVT::i64,
-                       CSub, Addr, PCC);
-  Addr = DAG.getNode(ISD::PTRADD, dl, PTy, PCC, Diff);
-  return DAG.getNode(ISD::BRIND, dl, MVT::Other, Chain, Addr);
+  auto OffsetFromPCC = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, MVT::i64,
+                                   CSub, Addr, PCC);
+#endif
+  // In order to avoid creating out-of-bounds capabilties we look at the
+  // virtual address only. This is less efficient since we need two more
+  // cgetaddr instructions
+  auto GetAddr =
+      DAG.getConstant(Intrinsic::cheri_cap_address_get, dl, MVT::i64);
+  auto JTAddrI64 =
+      DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, MVT::i64, GetAddr, JtAddr);
+  auto BBAddr = DAG.getNode(ISD::ADD, dl, MVT::i64, JTAddrI64, JTEntryValue);
+  auto PCCAddrI64 =
+      DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, MVT::i64, GetAddr, PCC);
+  auto OffsetFromPCC = DAG.getNode(ISD::SUB, dl, MVT::i64, BBAddr, PCCAddrI64);
+
+  JTEntryValue = DAG.getNode(ISD::PTRADD, dl, PTy, PCC, OffsetFromPCC);
+  return DAG.getNode(ISD::BRIND, dl, MVT::Other, Chain, JTEntryValue);
 }
 
 
