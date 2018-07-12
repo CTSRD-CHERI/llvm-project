@@ -4544,6 +4544,8 @@ parseRegForInlineAsmConstraint(StringRef C, MVT VT) const {
   else if (Prefix == "$w") { // Parse $w0-$w31.
     RC = getRegClassFor((VT == MVT::Other) ? MVT::v16i8 : VT);
   } else if (Prefix == "$c") { // Parse $c0-$c31.
+    assert(Reg != 0 && "$c0 should not end up as an inline asm constraint");
+    Reg--; // C0 does not exist so we need to subtract one here
     RC = getRegClassFor(CapType);
   } else { // Parse $0-$31.
     assert(Prefix == "$");
