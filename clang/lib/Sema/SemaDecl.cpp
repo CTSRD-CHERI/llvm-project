@@ -14642,7 +14642,7 @@ void Sema::ActOnTagFinishDefinition(Scope *S, Decl *TagD,
     // Don't try to compute excess padding (which can be expensive) if the diag
     // is ignored.
     if (RecordDecl *RD = dyn_cast<RecordDecl>(Tag))
-      if (!Diags.isIgnored(diag::warn_excess_padding, RD->getLocation())) {
+      if (!RD->isDependentContext() && !Diags.isIgnored(diag::warn_excess_padding, RD->getLocation())) {
         unsigned CharBitNum = Context.getTargetInfo().getCharWidth();
         unsigned NumFields = 0;
         unsigned LastFieldEnd = 0;
