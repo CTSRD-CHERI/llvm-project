@@ -2453,7 +2453,7 @@ unsigned CastInst::isEliminableCastPair(
   }
 }
 
-#if !defined(NDEBUG) && defined(LLVM_ENABLE_DUMP)
+#if !defined(NDEBUG)
 #define assertCastIsValid(op, S, Ty, msg)                                      \
   do {                                                                         \
     if (LLVM_UNLIKELY(!castIsValid((op), (S), (Ty)))) {                        \
