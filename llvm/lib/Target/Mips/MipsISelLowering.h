@@ -95,6 +95,9 @@ extern bool LargeCapTable;
       // Thread Pointer
       ThreadPointer,
 
+      // Capability Thread Pointer
+      CapThreadPointer,
+
       // Vector Floating Point Multiply and Subtract
       FMS,
 
@@ -532,51 +535,86 @@ extern bool LargeCapTable;
           UseCallReloc ? MipsII::MO_CAPTAB_CALL_HI16 : MipsII::MO_CAPTAB_HI16;
         auto LoReloc =
           UseCallReloc ? MipsII::MO_CAPTAB_CALL_LO16 : MipsII::MO_CAPTAB_LO16;
+        // (Ab)use GotHi since it already exists and does the right thing
         return _getGlobalCapBigImmediate(N, SDLoc(N), Ty, DAG, HiReloc, LoReloc,
-                                         Chain, PtrInfo);
+                                         Chain, &PtrInfo, true, MipsISD::GotHi);
       } else {
         auto Reloc = UseCallReloc ? MipsII::MO_CAPTAB_CALL20 : MipsII::MO_CAPTAB20;
         return _getGlobalCapSmallImmediate(N, SDLoc(N), Ty, DAG, Reloc, Chain,
-                                           PtrInfo);
+                                           &PtrInfo, true);
+      }
+    }
+
+    template <class NodeTy>
+    SDValue getFromCapTable(NodeTy *N, const SDLoc &DL, EVT Ty,
+                            SelectionDAG &DAG, SDValue Chain,
+                            const MachinePointerInfo &PtrInfo,
+                            unsigned HiFlag, unsigned LoFlag,
+                            unsigned SmallFlag, unsigned HiOpc) const {
+      if (LargeCapTable || SmallFlag == 0) {
+        return _getGlobalCapBigImmediate(N, SDLoc(N), Ty, DAG, HiFlag, LoFlag,
+                                         Chain, &PtrInfo, true, HiOpc);
+      } else {
+        return _getGlobalCapSmallImmediate(N, SDLoc(N), Ty, DAG, SmallFlag,
+                                           Chain, &PtrInfo, true);
+      }
+    }
+
+    template <class NodeTy>
+    SDValue getCapToCapTable(NodeTy *N, const SDLoc &DL, SelectionDAG &DAG,
+                             unsigned HiFlag, unsigned LoFlag,
+                             unsigned SmallFlag, unsigned HiOpc) const {
+      if (LargeCapTable || SmallFlag == 0) {
+        return _getGlobalCapBigImmediate(N, SDLoc(N), EVT(), DAG, HiFlag, LoFlag,
+                                         SDValue(), nullptr, false, HiOpc);
+      } else {
+        return _getGlobalCapSmallImmediate(N, SDLoc(N), EVT(), DAG, SmallFlag,
+                                           SDValue(), nullptr, false);
       }
     }
 
     // This method creates the following nodes, which are necessary for
     // computing a symbol's capability:
     //
-    // (load (wrapper $cgp, %captab20(sym)))
+    // (load (wrappercapop $cgp, %captab20(sym)))
     template <class NodeTy>
     SDValue
     _getGlobalCapSmallImmediate(NodeTy *N, const SDLoc &DL, EVT Ty,
                                 SelectionDAG &DAG, unsigned Flag, SDValue Chain,
-                                const MachinePointerInfo &PtrInfo) const {
+                                const MachinePointerInfo *PtrInfo,
+                                bool DoLoad) const {
       assert(Ty.isFatPointer());
       SDValue Off = getTargetNode(N, MVT::i64, DAG, Flag);
-      SDValue Tgt = DAG.getNode(MipsISD::WrapperCapOp, DL, Ty,
-                                getCapGlobalReg(DAG, Ty), Off);
+      SDValue Tgt = DAG.getNode(MipsISD::WrapperCapOp, DL, CapType,
+                                getCapGlobalReg(DAG, CapType), Off);
       // Why can't I use the target node here directly?
-      // SDNode *Addr = DAG.getMachineNode(Mips::CapGlobalAddrPseudo, DL, Ty, getCapGlobalReg(DAG, Ty), Off);
-      return DAG.getLoad(Ty, DL, Chain, Tgt, PtrInfo);
+      // SDNode *Addr = DAG.getMachineNode(Mips::CapGlobalAddrPseudo, DL, Ty, getCapGlobalReg(DAG, CapType), Off);
+      if (DoLoad)
+        return DAG.getLoad(Ty, DL, Chain, Tgt, *PtrInfo);
+      else
+        return Tgt;
     }
 
     // This method creates the following nodes, which are necessary for
     // computing a global symbol's address in large-GOT mode:
     //
-    // (load (ptradd $cgp, (wrapper %captab_hi(sym), %mcaptab_lo(sym))))
+    // (load (ptradd $cgp, (wrapper %captab_hi(sym), %captab_lo(sym))))
     template <class NodeTy>
     SDValue _getGlobalCapBigImmediate(NodeTy *N, const SDLoc &DL, EVT Ty,
                                       SelectionDAG &DAG, unsigned HiFlag,
                                       unsigned LoFlag, SDValue Chain,
-                                      const MachinePointerInfo &PtrInfo) const {
-      assert(Ty.isFatPointer());
-      // (Ab)use GotHi since it already exists and does the right thing
-      SDValue Off = DAG.getNode(MipsISD::GotHi, DL, MVT::i64,
+                                      const MachinePointerInfo *PtrInfo,
+                                      bool DoLoad, unsigned HiOpc) const {
+      SDValue Off = DAG.getNode(HiOpc, DL, MVT::i64,
                                 getTargetNode(N, MVT::i64, DAG, HiFlag));
       Off = DAG.getNode(MipsISD::Wrapper, DL, MVT::i64, Off,
                         getTargetNode(N, MVT::i64, DAG, LoFlag));
-      SDValue Tgt = DAG.getNode(ISD::PTRADD, DL, Ty,
-                                getCapGlobalReg(DAG, Ty), Off);
-      return DAG.getLoad(Ty, DL, Chain, Tgt, PtrInfo);
+      SDValue Tgt = DAG.getNode(ISD::PTRADD, DL, CapType,
+                                getCapGlobalReg(DAG, CapType), Off);
+      if (DoLoad)
+        return DAG.getLoad(Ty, DL, Chain, Tgt, *PtrInfo);
+      else
+        return Tgt;
     }
 
     /// This function fills Ops, which is the list of operands that will later

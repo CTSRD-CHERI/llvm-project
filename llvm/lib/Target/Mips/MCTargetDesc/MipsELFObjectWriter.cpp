@@ -439,6 +439,19 @@ unsigned MipsELFObjectWriter::getRelocType(MCContext &Ctx,
 
   case Mips::fixup_CHERI_CAPABILITY:
     return ELF::R_MIPS_CHERI_CAPABILITY;
+
+  case Mips::fixup_CHERI_CAPTAB_TLSGD_HI16:
+    return ELF::R_MIPS_CHERI_CAPTAB_TLS_GD_HI16;
+  case Mips::fixup_CHERI_CAPTAB_TLSGD_LO16:
+    return ELF::R_MIPS_CHERI_CAPTAB_TLS_GD_LO16;
+  case Mips::fixup_CHERI_CAPTAB_TLSLDM_HI16:
+    return ELF::R_MIPS_CHERI_CAPTAB_TLS_LDM_HI16;
+  case Mips::fixup_CHERI_CAPTAB_TLSLDM_LO16:
+    return ELF::R_MIPS_CHERI_CAPTAB_TLS_LDM_LO16;
+  case Mips::fixup_CHERI_CAPTAB_TPREL_HI16:
+    return ELF::R_MIPS_CHERI_CAPTAB_TLS_TPREL_HI16;
+  case Mips::fixup_CHERI_CAPTAB_TPREL_LO16:
+    return ELF::R_MIPS_CHERI_CAPTAB_TLS_TPREL_LO16;
   }
 
   llvm_unreachable("invalid fixup kind!");

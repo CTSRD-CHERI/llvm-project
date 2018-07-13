@@ -23,6 +23,10 @@ def CheriJmpLink : SDNode<"MipsISD::CheriJmpLink",SDT_CheriJmpLink,
                          [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue,
                           SDNPVariadic]>;
 
+def SDT_MipsCapThreadPointer : SDTypeProfile<1, 0, [SDTCisVT<0, CapRegType>]>;
+def MipsCapThreadPointer : SDNode<"MipsISD::CapThreadPointer",
+                                  SDT_MipsCapThreadPointer>;
+
 // Scaled immediate offsets
 
 class SImmScaled<int Width, int Scale> : AsmOperandClass {
@@ -786,7 +790,6 @@ def : CapTableWrapperPat<tjumptable>;
 def : CapTableWrapperPat<tconstpool>;
 def : CapTableWrapperPat<texternalsym>;
 def : CapTableWrapperPat<tblockaddress>;
-def : CapTableWrapperPat<tglobaltlsaddr>;
 
 def : Pat<(load GPR64Opnd:$rt),
           (LOADCAP GPR64Opnd:$rt, (i64 0), DDC)>;

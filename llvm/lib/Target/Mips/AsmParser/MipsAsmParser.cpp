@@ -780,6 +780,18 @@ public:
       return MipsMCExpr::create(MipsMCExpr::MEK_CAPCALL_HI16, E, Ctx);
     case AsmToken::PercentCapTabCall_Lo:
       return MipsMCExpr::create(MipsMCExpr::MEK_CAPCALL_LO16, E, Ctx);
+    case AsmToken::PercentCapTabTlsgd_Hi:
+      return MipsMCExpr::create(MipsMCExpr::MEK_CAPTAB_TLSGD_HI16, E, Ctx);
+    case AsmToken::PercentCapTabTlsgd_Lo:
+      return MipsMCExpr::create(MipsMCExpr::MEK_CAPTAB_TLSGD_LO16, E, Ctx);
+    case AsmToken::PercentCapTabTlsldm_Hi:
+      return MipsMCExpr::create(MipsMCExpr::MEK_CAPTAB_TLSLDM_HI16, E, Ctx);
+    case AsmToken::PercentCapTabTlsldm_Lo:
+      return MipsMCExpr::create(MipsMCExpr::MEK_CAPTAB_TLSLDM_LO16, E, Ctx);
+    case AsmToken::PercentCapTabTprel_Hi:
+      return MipsMCExpr::create(MipsMCExpr::MEK_CAPTAB_TPREL_HI16, E, Ctx);
+    case AsmToken::PercentCapTabTprel_Lo:
+      return MipsMCExpr::create(MipsMCExpr::MEK_CAPTAB_TPREL_LO16, E, Ctx);
     }
   }
 };

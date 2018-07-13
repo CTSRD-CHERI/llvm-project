@@ -849,6 +849,12 @@ MipsInstrInfo::getSerializableDirectMachineOperandTargetFlags() const {
     { MO_CAPTABLE_OFF_HI, "mips-captable-off-hi" },
     { MO_CAPTABLE_OFF_LO, "mips-captable-off-lo" },
 
+    { MO_CAPTAB_TLSGD_HI16,  "mips-captable-tlsgd-hi16" },
+    { MO_CAPTAB_TLSGD_LO16,  "mips-captable-tlsgd-lo16" },
+    { MO_CAPTAB_TLSLDM_HI16, "mips-captable-tlsldm-hi16" },
+    { MO_CAPTAB_TLSLDM_LO16, "mips-captable-tlsldm-lo16" },
+    { MO_CAPTAB_TPREL_HI16,  "mips-captable-gottprel-hi16" },
+    { MO_CAPTAB_TPREL_LO16,  "mips-captable-gottprel-lo16" },
   };
   return makeArrayRef(Flags);
 }

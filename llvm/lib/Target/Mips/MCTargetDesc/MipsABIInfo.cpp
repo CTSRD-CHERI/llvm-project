@@ -103,6 +103,10 @@ bool MipsABIInfo::UsesCapabilityTable() const {
   return IsCheriPureCap() && MCTargetOptions::cheriUsesCapabilityTable();
 }
 
+bool MipsABIInfo::UsesCapabilityTls() const {
+  return IsCheriPureCap() && MCTargetOptions::cheriUsesCapabilityTls();
+}
+
 unsigned MipsABIInfo::GetReturnAddress() const {
   return IsCheriPureCap() ?
     Mips::C17 :

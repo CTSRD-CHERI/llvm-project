@@ -222,6 +222,7 @@ const char *MipsTargetLowering::getTargetNodeName(unsigned Opcode) const {
   case MipsISD::TlsHi:             return "MipsISD::TlsHi";
   case MipsISD::GPRel:             return "MipsISD::GPRel";
   case MipsISD::ThreadPointer:     return "MipsISD::ThreadPointer";
+  case MipsISD::CapThreadPointer:  return "MipsISD::CapThreadPointer";
   case MipsISD::Ret:               return "MipsISD::Ret";
   case MipsISD::ERet:              return "MipsISD::ERet";
   case MipsISD::EH_RETURN:         return "MipsISD::EH_RETURN";
@@ -390,6 +391,8 @@ MipsTargetLowering::MipsTargetLowering(const MipsTargetMachine &TM,
 
   // Mips Custom Operations
   setOperationAction(ISD::GlobalAddress,      CapType,    Custom);
+  if (ABI.UsesCapabilityTls())
+    setOperationAction(ISD::GlobalTLSAddress, CapType,    Custom);
   if (ABI.UsesCapabilityTable())
     setOperationAction(ISD::BR_JT,            MVT::Other, Custom);
   else
@@ -2379,9 +2382,93 @@ lowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const
 
   SDLoc DL(GA);
   const GlobalValue *GV = GA->getGlobal();
+  TLSModel::Model model = getTargetMachine().getTLSModel(GV);
   EVT PtrVT = getPointerTy(DAG.getDataLayout());
 
-  TLSModel::Model model = getTargetMachine().getTLSModel(GV);
+  if (Subtarget.getABI().IsCheriPureCap() && Subtarget.useCheriCapTls()) {
+    const Type *GVTy = GV->getType();
+    if (DAG.getDataLayout().isFatPointer(GVTy)) {
+      EVT OffsetVT = getPointerRangeTy(DAG.getDataLayout(),
+                                       GVTy->getPointerAddressSpace());
+      EVT CapVT = CapType;
+
+      if (model == TLSModel::GeneralDynamic || model == TLSModel::LocalDynamic) {
+        // General Dynamic and Local Dynamic TLS Model.
+        unsigned HiFlag, LoFlag;
+        if (model == TLSModel::GeneralDynamic) {
+          HiFlag = MipsII::MO_CAPTAB_TLSGD_HI16;
+          LoFlag = MipsII::MO_CAPTAB_TLSGD_LO16;
+        } else {
+          HiFlag = MipsII::MO_CAPTAB_TLSLDM_HI16;
+          LoFlag = MipsII::MO_CAPTAB_TLSLDM_LO16;
+        }
+
+        SDValue Argument = getCapToCapTable(GA, DL, DAG, HiFlag, LoFlag, 0,
+                                            MipsISD::TlsHi);
+        Type *CapTy = Type::getInt8PtrTy(*DAG.getContext(),
+                                         GVTy->getPointerAddressSpace());
+
+        SDValue TlsGetAddr = DAG.getExternalSymbol("__tls_get_addr", PtrVT);
+
+        ArgListTy Args;
+        ArgListEntry Entry;
+        Entry.Node = Argument;
+        Entry.Ty = CapTy;
+        Args.push_back(Entry);
+
+        TargetLowering::CallLoweringInfo CLI(DAG);
+        CLI.setDebugLoc(DL)
+            .setChain(DAG.getEntryNode())
+            .setLibCallee(CallingConv::C, CapTy, TlsGetAddr, std::move(Args));
+        std::pair<SDValue, SDValue> CallResult = LowerCallTo(CLI);
+
+        SDValue Ret = CallResult.first;
+
+        if (model != TLSModel::LocalDynamic)
+          return Ret;
+
+        SDValue TGAHi = DAG.getTargetGlobalAddress(GV, DL, OffsetVT, 0,
+                                                   MipsII::MO_DTPREL_HI);
+        SDValue Hi = DAG.getNode(MipsISD::TlsHi, DL, OffsetVT, TGAHi);
+        SDValue TGALo = DAG.getTargetGlobalAddress(GV, DL, OffsetVT, 0,
+                                                   MipsII::MO_DTPREL_LO);
+        SDValue Lo = DAG.getNode(MipsISD::Lo, DL, OffsetVT, TGALo);
+        SDValue Add = DAG.getNode(ISD::ADD, DL, OffsetVT, Hi, Lo);
+        return DAG.getNode(ISD::PTRADD, DL, CapVT, Ret, Add);
+      }
+
+      SDValue Offset;
+      if (model == TLSModel::InitialExec) {
+        // Initial Exec TLS Model
+        auto PtrInfo =
+          MachinePointerInfo::getCapTable(DAG.getMachineFunction());
+        Offset =
+          getFromCapTable(GA, DL, OffsetVT, DAG, DAG.getEntryNode(), PtrInfo,
+                          MipsII::MO_CAPTAB_TPREL_HI16,
+                          MipsII::MO_CAPTAB_TPREL_LO16, 0, MipsISD::TlsHi);
+      } else {
+        // Local Exec TLS Model
+        assert(model == TLSModel::LocalExec);
+        SDValue TGAHi = DAG.getTargetGlobalAddress(GV, DL, OffsetVT, 0,
+                                                   MipsII::MO_TPREL_HI);
+        SDValue TGALo = DAG.getTargetGlobalAddress(GV, DL, OffsetVT, 0,
+                                                   MipsII::MO_TPREL_LO);
+        SDValue Hi = DAG.getNode(MipsISD::TlsHi, DL, OffsetVT, TGAHi);
+        SDValue Lo = DAG.getNode(MipsISD::Lo, DL, OffsetVT, TGALo);
+        Offset = DAG.getNode(ISD::ADD, DL, OffsetVT, Hi, Lo);
+      }
+
+      SDValue ThreadPointer = DAG.getNode(MipsISD::CapThreadPointer,
+                                          DL, CapVT);
+      return DAG.getNode(ISD::PTRADD, DL, CapVT, ThreadPointer, Offset);
+    } else {
+      llvm::errs() << "Not using capability TLS for " <<  GV->getName() << "\n";
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
+      GV->dump();
+#endif
+      assert(false && "SHOULD HAVE USED CAP TLS");
+    }
+  }
 
   if (model == TLSModel::GeneralDynamic || model == TLSModel::LocalDynamic) {
     // General Dynamic and Local Dynamic TLS Model.

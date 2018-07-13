@@ -326,6 +326,7 @@ public:
   bool isCheri128() const { return IsCheri128; }
   bool isCheri256() const { return IsCheri256; }
   bool useCheriCapTable() const { return getABI().UsesCapabilityTable(); };
+  bool useCheriCapTls() const { return getABI().UsesCapabilityTls(); };
   MVT typeForCapabilities() const {
     return IsCheri64 ? MVT::iFATPTR64 :
       (IsCheri128 ? MVT::iFATPTR128 : MVT::iFATPTR256);

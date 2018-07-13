@@ -469,6 +469,13 @@ getFixupKindInfo(MCFixupKind Kind) const {
     { "fixup_Mips_CAPTABLEREL_HI",       0,     16,   0 }, // like GPOFF_HI
     { "fixup_Mips_CAPTABLEREL_LO",       0,     16,   0 }, // like GPOFF_LO
 
+    { "fixup_CHERI_CAPTAB_TLSGD_HI16",   0,     16,   0 },
+    { "fixup_CHERI_CAPTAB_TLSGD_LO16",   0,     16,   0 },
+    { "fixup_CHERI_CAPTAB_TLSLDM_HI16",  0,     16,   0 },
+    { "fixup_CHERI_CAPTAB_TLSLDM_LO16",  0,     16,   0 },
+    { "fixup_CHERI_CAPTAB_TPREL_HI16",   0,     16,   0 },
+    { "fixup_CHERI_CAPTAB_TPREL_LO16",   0,     16,   0 },
+
   };
   static_assert(array_lengthof(LittleEndianInfos) == Mips::NumTargetFixupKinds,
                 "Not all MIPS little endian fixup kinds added!");
@@ -562,6 +569,13 @@ getFixupKindInfo(MCFixupKind Kind) const {
     { "fixup_Mips_CAPTABLEREL_HI", 16,    16,   0 }, // like GPOFF_HI
     { "fixup_Mips_CAPTABLEREL_LO", 16,    16,   0 }, // like GPOFF_LO
 
+    { "fixup_CHERI_CAPTAB_TLSGD_HI16",  16,     16,   0 },
+    { "fixup_CHERI_CAPTAB_TLSGD_LO16",  16,     16,   0 },
+    { "fixup_CHERI_CAPTAB_TLSLDM_HI16", 16,     16,   0 },
+    { "fixup_CHERI_CAPTAB_TLSLDM_LO16", 16,     16,   0 },
+    { "fixup_CHERI_CAPTAB_TPREL_HI16",  16,     16,   0 },
+    { "fixup_CHERI_CAPTAB_TPREL_LO16",  16,     16,   0 },
+
   };
   static_assert(array_lengthof(BigEndianInfos) == Mips::NumTargetFixupKinds,
                 "Not all MIPS big endian fixup kinds added!");
@@ -633,6 +647,12 @@ bool MipsAsmBackend::shouldForceRelocation(const MCAssembler &Asm,
   case Mips::fixup_MICROMIPS_TLS_LDM:
   case Mips::fixup_MICROMIPS_TLS_TPREL_HI16:
   case Mips::fixup_MICROMIPS_TLS_TPREL_LO16:
+  case Mips::fixup_CHERI_CAPTAB_TLSGD_HI16:
+  case Mips::fixup_CHERI_CAPTAB_TLSGD_LO16:
+  case Mips::fixup_CHERI_CAPTAB_TLSLDM_HI16:
+  case Mips::fixup_CHERI_CAPTAB_TLSLDM_LO16:
+  case Mips::fixup_CHERI_CAPTAB_TPREL_HI16:
+  case Mips::fixup_CHERI_CAPTAB_TPREL_LO16:
     return true;
   }
 }

@@ -106,6 +106,24 @@ namespace MipsII {
     // Offset to the capability table
     MO_CAPTABLE_OFF_HI,
     MO_CAPTABLE_OFF_LO,
+
+    /// MO_CAPTAB_TLSGD* - Represents the offset into the capability table at
+    // which the module ID and TSL block offset reside during execution (General
+    // Dynamic TLS).
+    MO_CAPTAB_TLSGD_HI16,
+    MO_CAPTAB_TLSGD_LO16,
+
+    /// MO_CAPTAB_TLSLDM* - Represents the offset into the capability table at
+    // which the module ID and TSL block offset reside during execution (Local
+    // Dynamic TLS).
+    MO_CAPTAB_TLSLDM_HI16,
+    MO_CAPTAB_TLSLDM_LO16,
+
+    /// MO_CAPTAB_TPREL* - Represents the offset into the capability table at
+    // which the offset from the thread pointer resides during execution
+    // (Initial Exec TLS).
+    MO_CAPTAB_TPREL_HI16,
+    MO_CAPTAB_TPREL_LO16,
   };
 
   enum {
