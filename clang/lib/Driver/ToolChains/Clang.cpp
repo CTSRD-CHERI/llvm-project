@@ -1511,9 +1511,24 @@ static void addCheriFlags(const ArgList &Args, ArgStringList &CmdArgs,
     }
   }
 
-  // Add the -cap-table-abi flags (ignore for non-purecap ABIs)
+  // Add the -cap-table-abi and -cap-tls-abi flags (ignore for non-purecap ABIs)
   bool IsCapTable = false;
   StringRef DefaultCapTableABI = "pcrel";
+
+  if (Arg *A = Args.getLastArg(options::OPT_cheri_cap_tls_abi)) {
+    StringRef v = A->getValue();
+    if (ABIName == "purecap") {
+      CmdArgs.push_back("-mllvm");
+      CmdArgs.push_back(Args.MakeArgString("-cheri-cap-tls-abi=" + v));
+    }
+    A->claim();
+  } else {
+    if (ABIName == "purecap") {
+      CmdArgs.push_back("-mllvm");
+      CmdArgs.push_back(Args.MakeArgString("-cheri-cap-tls-abi=legacy"));
+    }
+  }
+
   if (Arg *A = Args.getLastArg(options::OPT_cheri_cap_table_abi)) {
     StringRef v = A->getValue();
     if (ABIName == "purecap") {
@@ -4734,6 +4749,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       StringRef Replacement = StringRef(A->getValue(0)) == "-mxcaptable=false" ? "-no-mxcaptable" : "-mxcaptable";
       D.Diag(diag::err_drv_unsupported_opt_with_suggestion)
           << A->getAsString(Args) << Replacement;
+    }
+    if (StringRef(A->getValue(0)).startswith("-cheri-cap-tls-abi")) {
+      D.Diag(diag::err_drv_unsupported_opt_with_suggestion)
+          << A->getAsString(Args) << StringRef(A->getValue(0));
     }
 
     // We translate this by hand to the -cc1 argument, since nightly test uses

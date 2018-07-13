@@ -3091,7 +3091,8 @@ LangAS CodeGenModule::GetGlobalVarAddressSpace(const VarDecl *D) {
     unsigned CapAS = getTargetCodeGenInfo().getCHERICapabilityAS();
     if (Target.areAllPointersCapabilities()) { // Pure ABI
       // CHERI TLS currently relies on mips rdhwr 29 which is AS0
-      return (D && (D->getTLSKind() != VarDecl::TLS_None))
+      return (D && (D->getTLSKind() != VarDecl::TLS_None) &&
+              !llvm::MCTargetOptions::cheriUsesCapabilityTls())
              ? LangAS::cheri_tls : getLangASFromTargetAS(CapAS);
     } else if (D && getAddressSpaceForType(D->getType()) == CapAS) {
       // In the hybrid ABI all globals are in AS 0 (even capabilities)
