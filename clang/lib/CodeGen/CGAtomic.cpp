@@ -724,6 +724,11 @@ AddDirectArgument(CodeGenFunction &CGF, CallArgList &Args,
                   SourceLocation Loc, CharUnits SizeInChars) {
   if (UseOptimizedLibcall) {
     // Load value and pass it to the function directly.
+    if (ValTy->isCHERICapabilityType(CGF.getContext())) {
+      // capabilities can be passed directly without casting to i8*
+      Args.add(RValue::get(Val), ValTy);
+      return;
+    }
     CharUnits Align = CGF.getContext().getTypeAlignInChars(ValTy);
     int64_t SizeInBits = CGF.getContext().toBits(SizeInChars);
     ValTy =
@@ -775,9 +780,10 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
   bool UseLibcall = ((Ptr.getAlignment() % sizeChars) != 0 ||
                      getContext().toBits(sizeChars) > MaxInlineWidthInBits);
 
+  bool IsCheriCap = AtomicTy->isCHERICapabilityType(CGM.getContext());
   // Silence this warning for CHERI caps since it is known to be broken
   // https://github.com/CTSRD-CHERI/clang/issues/201
-  if (UseLibcall && !AtomicTy->isCHERICapabilityType(CGM.getContext()))
+  if (UseLibcall && !IsCheriCap)
     CGM.getDiags().Report(E->getLocStart(), diag::warn_atomic_op_misaligned);
 
   llvm::Value *Order = EmitScalarExpr(E->getOrder());
@@ -945,8 +951,7 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
     case AtomicExpr::AO__atomic_fetch_min:
     case AtomicExpr::AO__atomic_fetch_max:
       // For these, only library calls for certain sizes exist.
-      if (Size == 1 || Size == 2 || Size == 4 || Size == 8)
-        UseOptimizedLibcall = true;
+      UseOptimizedLibcall = true;
       break;
 
     case AtomicExpr::AO__c11_atomic_load:
@@ -968,7 +973,7 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
     case AtomicExpr::AO__atomic_compare_exchange_n:
     case AtomicExpr::AO__atomic_compare_exchange:
       // Only use optimized library calls for sizes for which they exist.
-      if (Size == 1 || Size == 2 || Size == 4 || Size == 8)
+      if (!IsCheriCap && (Size == 1 || Size == 2 || Size == 4 || Size == 8))
         UseOptimizedLibcall = true;
       break;
     }
@@ -1161,15 +1166,18 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
 
     }
     // Optimized functions have the size in their name.
+    // XXXAR: for capability libcalls we use _cap as the suffix
     if (UseOptimizedLibcall)
-      LibCallName += "_" + llvm::utostr(Size);
+      LibCallName += IsCheriCap ? "_cap" : ("_" + llvm::utostr(Size));
     // By default, assume we return a value of the atomic type.
     if (!HaveRetTy) {
       if (UseOptimizedLibcall) {
         // Value is returned directly.
         // The function returns an appropriately sized integer type.
-        RetTy = getContext().getIntTypeForBitwidth(
-            getContext().toBits(sizeChars), /*Signed=*/false);
+        RetTy = IsCheriCap
+                    ? getContext().UnsignedIntCapTy
+                    : getContext().getIntTypeForBitwidth(
+                          getContext().toBits(sizeChars), /*Signed=*/false);
       } else {
         // Value is returned through parameter before the order.
         RetTy = getContext().VoidTy;
@@ -1342,10 +1350,12 @@ Address AtomicInfo::emitCastToAtomicIntPointer(Address addr) const {
   auto addrTy = cast<llvm::PointerType>(addr.getPointer()->getType());
   llvm::Type *ty;
   if (AtomicTy->isCHERICapabilityType(CGF.getContext())) {
-    addrspace = CGF.CGM.getTargetCodeGenInfo().getDefaultAS();
-    if (addrTy->getAddressSpace() == addrspace) {
+    // If we aren't using a libcall there is no need to cast to i8*
+    if (!UseLibcall && addrTy->getAddressSpace() == CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS())
       return addr;
-    }
+    // XXXAR: getDefaultAS and NOT getCheriCapabilityAS() since this should
+    // also work in hybrid mode
+    addrspace = CGF.CGM.getTargetCodeGenInfo().getDefaultAS();
     ty = CGF.Int8Ty;
   } else {
     ty = llvm::IntegerType::get(CGF.getLLVMContext(), AtomicSizeInBits);
@@ -1357,6 +1367,13 @@ Address AtomicInfo::emitCastToAtomicIntPointer(Address addr) const {
 
 Address AtomicInfo::convertToAtomicIntPointer(Address Addr) const {
   llvm::Type *Ty = Addr.getElementType();
+  // correctly convert fetch_add, etc arguments:
+  if (AtomicTy->isCHERICapabilityType(CGF.getContext()) && Ty->isIntegerTy()) {
+    Addr = Address(CGF.setPointerAddress(
+        llvm::ConstantPointerNull::get(CGF.Int8CheriCapTy),
+        CGF.Builder.CreateLoad(Addr)), CGF.getContext().getTypeAlignInChars(AtomicTy));
+    Ty = Addr.getPointer()->getType();
+  }
   uint64_t SourceSizeInBits = CGF.CGM.getDataLayout().getTypeSizeInBits(Ty);
   if (SourceSizeInBits != AtomicSizeInBits) {
     Address Tmp = CreateTempAlloca();
