@@ -33,6 +33,12 @@ int main(void) {
   return *old;
 }
 
+// These should really take an i64 argument but fixing the atomic codegen is annoying
+// TODO-CHECK: declare i8 addrspace(200)* @__atomic_fetch_add_cap(i8 addrspace(200)*, i8 addrspace(200)*, i32) local_unnamed_addr
+// CHECK: declare i8 addrspace(200)* @__atomic_fetch_add_cap(i8 addrspace(200)*, i64, i32) local_unnamed_addr
+// TODO-CHECK: declare i8 addrspace(200)* @__atomic_fetch_sub_cap(i8 addrspace(200)*, i8 addrspace(200)*, i32) local_unnamed_addr
+// CHECK: declare i8 addrspace(200)* @__atomic_fetch_sub_cap(i8 addrspace(200)*, i64, i32) local_unnamed_addr
+
 
 // CHECK-LABEL: @uint128(
 int uint128(void) {
