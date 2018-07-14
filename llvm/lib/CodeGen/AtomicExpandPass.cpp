@@ -313,9 +313,9 @@ bool AtomicExpand::runOnFunction(Function &F) {
       // extend convertCmpXchgToInteger for floating point too.
       assert(!CASI->getCompareOperand()->getType()->isFloatingPointTy() &&
              "unimplemented - floating point not legal at IR level");
-      if (CASI->getCompareOperand()->getType()->isPointerTy() ) {
-        // TODO: add a TLI hook to control this so that each target can
-        // convert to lowering the original type one at a time.
+      if (CASI->getCompareOperand()->getType()->isPointerTy() &&
+          !TLI->canLowerPointerTypeCmpXchg(F.getParent()->getDataLayout(),
+                                           CASI)) {
         CASI = convertCmpXchgToIntegerType(CASI);
         assert(CASI->getCompareOperand()->getType()->isIntegerTy() &&
                "invariant broken");

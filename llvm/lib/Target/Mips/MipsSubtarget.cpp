@@ -60,6 +60,11 @@ static cl::opt<bool>
     GPOpt("mgpopt", cl::Hidden,
           cl::desc("Enable gp-relative addressing of mips small data items"));
 
+static cl::opt<bool> CheriExactEqualsOpt(
+    "cheri-exact-equals",
+    cl::desc("CHERI: Capability equality comparisons are exact."),
+    cl::init(false));
+
 bool MipsSubtarget::DspWarningPrinted = false;
 
 bool MipsSubtarget::MSAWarningPrinted = false;
@@ -74,18 +79,17 @@ MipsSubtarget::MipsSubtarget(const Triple &TT, StringRef CPU, StringRef FS,
       NoABICalls(false), IsFP64bit(false), UseOddSPReg(true),
       IsNaN2008bit(false), IsGP64bit(false), HasVFPU(false), HasCnMips(false),
       HasMips3_32(false), HasMips3_32r2(false), HasMips4_32(false),
-      HasMips4_32r2(false), HasMips5_32r2(false),
-      IsCheri64(false), IsCheri128(false), IsCheri256(false), IsCheri(false),
-      InMips16Mode(false),
+      HasMips4_32r2(false), HasMips5_32r2(false), IsCheri64(false),
+      IsCheri128(false), IsCheri256(false), IsCheri(false),
+      UseCheriExactEquals(CheriExactEqualsOpt), InMips16Mode(false),
       InMips16HardFloat(Mips16HardFloat), InMicroMipsMode(false), HasDSP(false),
       HasDSPR2(false), HasDSPR3(false), AllowMixed16_32(Mixed16_32 | Mips_Os16),
       Os16(Mips_Os16), HasMSA(false), UseTCCInDIV(false), HasSym32(false),
       HasEVA(false), DisableMadd4(false), HasMT(false), HasCRC(false),
       HasVirt(false), HasGINV(false), UseIndirectJumpsHazard(false),
-      StackAlignOverride(StackAlignOverride),
-      TM(TM), TargetTriple(TT), TSInfo(),
-      InstrInfo(
-          MipsInstrInfo::create(initializeSubtargetDependencies(CPU, FS, TM))),
+      StackAlignOverride(StackAlignOverride), TM(TM), TargetTriple(TT),
+      TSInfo(), InstrInfo(MipsInstrInfo::create(
+                    initializeSubtargetDependencies(CPU, FS, TM))),
       FrameLowering(MipsFrameLowering::create(*this)),
       TLInfo(MipsTargetLowering::create(TM, *this)) {
 

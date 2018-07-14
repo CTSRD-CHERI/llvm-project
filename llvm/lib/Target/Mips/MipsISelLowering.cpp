@@ -1246,6 +1246,13 @@ bool MipsTargetLowering::isCheapToSpeculateCtlz() const {
   return Subtarget.hasMips32();
 }
 
+bool MipsTargetLowering::canLowerPointerTypeCmpXchg(
+    const llvm::DataLayout &DL, llvm::AtomicCmpXchgInst *AI) const {
+  if (Subtarget.isCheri() && DL.isFatPointer(AI->getPointerAddressSpace()))
+    return true;
+  return TargetLowering::canLowerPointerTypeCmpXchg(DL, AI);
+}
+
 void
 MipsTargetLowering::LowerOperationWrapper(SDNode *N,
                                           SmallVectorImpl<SDValue> &Results,
@@ -1446,7 +1453,7 @@ MipsTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
   case Mips::CAP_ATOMIC_SWAP_I16:
   case Mips::CAP_ATOMIC_SWAP_I32:
   case Mips::CAP_ATOMIC_SWAP_I64:
-  // TODO: case Mips::CAP_ATOMIC_SWAP_CAP:
+  case Mips::CAP_ATOMIC_SWAP_CAP:
     return emitAtomicBinary(MI, BB);
 
   case Mips::ATOMIC_CMP_SWAP_I8:
@@ -1461,7 +1468,7 @@ MipsTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
   case Mips::CAP_ATOMIC_CMP_SWAP_I16:
   case Mips::CAP_ATOMIC_CMP_SWAP_I32:
   case Mips::CAP_ATOMIC_CMP_SWAP_I64:
-  // TODO: case Mips::CAP_ATOMIC_CMP_SWAP_CAP:
+  case Mips::CAP_ATOMIC_CMP_SWAP_CAP:
     return emitAtomicCmpSwap(MI, BB);
   case Mips::PseudoSDIV:
   case Mips::PseudoUDIV:
@@ -1839,46 +1846,43 @@ MipsTargetLowering::emitAtomicCmpSwap(MachineInstr &MI,
                                       MachineBasicBlock *BB) const {
 
   unsigned AtomicOp = -1;
-  MVT OpTy;
+  MVT ScratchTy;
   switch (MI.getOpcode()) {
   case Mips::ATOMIC_CMP_SWAP_I32:
     AtomicOp = Mips::ATOMIC_CMP_SWAP_I32_POSTRA;
-    OpTy = MVT::i32;
+    ScratchTy = MVT::i32;
     break;
   case Mips::ATOMIC_CMP_SWAP_I64:
     AtomicOp = Mips::ATOMIC_CMP_SWAP_I64_POSTRA;
-    OpTy = MVT::i64;
+    ScratchTy = MVT::i64;
     break;
   case Mips::CAP_ATOMIC_CMP_SWAP_I8:
     AtomicOp = Mips::CAP_ATOMIC_CMP_SWAP_I8_POSTRA;
-    OpTy = MVT::i32;
+    ScratchTy = MVT::i32;
     break;
   case Mips::CAP_ATOMIC_CMP_SWAP_I16:
     AtomicOp = Mips::CAP_ATOMIC_CMP_SWAP_I16_POSTRA;
-    OpTy = MVT::i32;
+    ScratchTy = MVT::i32;
     break;
   case Mips::CAP_ATOMIC_CMP_SWAP_I32:
     AtomicOp = Mips::CAP_ATOMIC_CMP_SWAP_I32_POSTRA;
-    OpTy = MVT::i32;
+    ScratchTy = MVT::i32;
     break;
   case Mips::CAP_ATOMIC_CMP_SWAP_I64:
     AtomicOp = Mips::CAP_ATOMIC_CMP_SWAP_I64_POSTRA;
-    OpTy = MVT::i64;
+    ScratchTy = MVT::i64;
     break;
-// TODO:
-#if 0
-    case Mips::CAP_ATOMIC_CMP_SWAP_CAP:
-      AtomicOp = Mips::CAP_ATOMIC_CMP_SWAP_CAP_POSTRA;
-      OpTy = CapType;
-      break;
-#endif
+  case Mips::CAP_ATOMIC_CMP_SWAP_CAP:
+    AtomicOp = Mips::CAP_ATOMIC_CMP_SWAP_CAP_POSTRA;
+    ScratchTy = MVT::i64;
+    break;
   default:
-    llvm_unreachable("Unsupported atomic psseudo for EmitAtomicCmpSwap.");
+    llvm_unreachable("Unsupported atomic pseudo for EmitAtomicCmpSwap.");
   }
 
   MachineFunction *MF = BB->getParent();
   MachineRegisterInfo &MRI = MF->getRegInfo();
-  const TargetRegisterClass *RC = getRegClassFor(OpTy);
+  const TargetRegisterClass *RC = getRegClassFor(ScratchTy);
   const TargetInstrInfo *TII = Subtarget.getInstrInfo();
   DebugLoc DL = MI.getDebugLoc();
   unsigned Dest = MI.getOperand(0).getReg();

@@ -136,6 +136,8 @@ class MipsSubtarget : public MipsGenSubtargetInfo {
   /// IsCheri - Supports the CHERI capability extensions
   bool IsCheri;
 
+  bool UseCheriExactEquals;
+
   // InMips16 -- can process Mips16 instructions
   bool InMips16Mode;
 
@@ -347,6 +349,8 @@ public:
   bool useSoftFloat() const { return IsSoftFloat; }
 
   bool useLongCalls() const { return UseLongCalls; }
+
+  bool useCheriExactEquals() const { return UseCheriExactEquals; }
 
   bool enableLongBranchPass() const {
     return hasStandardEncoding() || allowMixed16_32();

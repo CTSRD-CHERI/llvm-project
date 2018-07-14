@@ -56,10 +56,6 @@ static cl::opt<bool>
 UseMipsTailCalls("mips-tail-calls", cl::Hidden,
                     cl::desc("MIPS: permit tail calls."), cl::init(false));
 
-static cl::opt<bool>
-CheriExactEquals("cheri-exact-equals", 
-                 cl::desc("CHERI: Capability equality comparisons are exact."), cl::init(false));
-
 static cl::opt<bool> NoDPLoadStore("mno-ldc1-sdc1", cl::init(false),
                                    cl::desc("Expand double precision loads and "
                                             "stores to their single precision "
@@ -3929,8 +3925,9 @@ MachineBasicBlock *
 MipsSETargetLowering::emitCapNotEqual(MachineInstr &MI,
                                     MachineBasicBlock *BB) const {
   bool is64 = (MI.getOpcode() == Mips::CNEPseudo);
-  unsigned Op = CheriExactEquals ? (is64 ? Mips::CNEXEQ : Mips::CNEXEQ32)
-                                 : (is64 ? Mips::CNE : Mips::CNE32);
+  unsigned Op = Subtarget.useCheriExactEquals()
+                    ? (is64 ? Mips::CNEXEQ : Mips::CNEXEQ32)
+                    : (is64 ? Mips::CNE : Mips::CNE32);
   const TargetInstrInfo *TII = Subtarget.getInstrInfo();
   BuildMI(*BB, MI, MI.getDebugLoc(), TII->get(Op))
       .add(MI.getOperand(0))
@@ -3943,8 +3940,9 @@ MachineBasicBlock *
 MipsSETargetLowering::emitCapEqual(MachineInstr &MI,
                                     MachineBasicBlock *BB) const {
   bool is64 = (MI.getOpcode() == Mips::CEQPseudo);
-  unsigned Op = CheriExactEquals ? (is64 ? Mips::CEXEQ : Mips::CEXEQ32)
-                                 : (is64 ? Mips::CEQ : Mips::CEQ32);
+  unsigned Op = Subtarget.useCheriExactEquals()
+                    ? (is64 ? Mips::CEXEQ : Mips::CEXEQ32)
+                    : (is64 ? Mips::CEQ : Mips::CEQ32);
   const TargetInstrInfo *TII = Subtarget.getInstrInfo();
   BuildMI(*BB, MI, MI.getDebugLoc(), TII->get(Op))
       .add(MI.getOperand(0))

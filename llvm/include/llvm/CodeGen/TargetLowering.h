@@ -1619,6 +1619,13 @@ public:
     return false;
   }
 
+  /// Return true if the backend can lower of pointer-type cmpxchg.
+  /// Otherwise it will be converted to an integer-type cmpxchg in the IR
+  virtual bool canLowerPointerTypeCmpXchg(const DataLayout &DL,
+                                          AtomicCmpXchgInst *AI) const {
+    return false;
+  }
+
   /// Returns how the IR-level AtomicExpand pass should expand the given
   /// AtomicRMW, if at all. Default is to never expand.
   virtual AtomicExpansionKind shouldExpandAtomicRMWInIR(AtomicRMWInst *) const {

@@ -54,6 +54,7 @@ defm simm8    : ShiftImmPattern<8, 0>;
 defm simm11s0 : ShiftImmPattern<11, 0>;
 
 // Pattern for atomic loads on capabilities
+// TODO: these should end up in TargetSelectionDAG.td
 def SDTAtomicCapLoad : SDTypeProfile<1, 1, [
   SDTCisPtrTy<0>, SDTCisPtrTy<1>
 ]>;
@@ -61,22 +62,54 @@ def SDTAtomicCapStore : SDTypeProfile<0, 2, [
   SDTCisPtrTy<0>, SDTCisPtrTy<1>
 ]>;
 
-def atomic_load_node      : SDNode<"ISD::ATOMIC_LOAD", SDTAtomicCapLoad,
+def atomic_load_cap_node      : SDNode<"ISD::ATOMIC_LOAD", SDTAtomicCapLoad,
                     [SDNPHasChain, SDNPMayLoad, SDNPMemOperand]>;
 def atomic_load_cap :
   PatFrag<(ops node:$ptr),
-          (atomic_load_node node:$ptr), [{
+          (atomic_load_cap_node node:$ptr), [{
   return cast<AtomicSDNode>(N)->getMemoryVT().isFatPointer();
 }]>;
 
-def atomic_store_node     : SDNode<"ISD::ATOMIC_STORE", SDTAtomicCapStore,
+def atomic_store_cap_node     : SDNode<"ISD::ATOMIC_STORE", SDTAtomicCapStore,
                     [SDNPHasChain, SDNPMayStore, SDNPMemOperand]>;
 
 def atomic_store_cap : PatFrag<(ops node:$ptr, node:$val),
-                   (atomic_store_node node:$ptr, node:$val), [{
+                   (atomic_store_cap_node node:$ptr, node:$val), [{
     return cast<AtomicSDNode>(N)->getMemoryVT().isFatPointer();
 }]>;
 
+
+def SDTAtomicCap3 : SDTypeProfile<1, 3, [
+  SDTCisSameAs<0,2>,  SDTCisSameAs<0,3>, SDTCisPtrTy<0>, SDTCisPtrTy<1>
+]>;
+def SDTAtomicCap2 : SDTypeProfile<1, 2, [
+  SDTCisSameAs<0,2>, SDTCisPtrTy<0>, SDTCisPtrTy<1>
+]>;
+def atomic_cmp_swap_cap_node : SDNode<"ISD::ATOMIC_CMP_SWAP" , SDTAtomicCap3,
+                    [SDNPHasChain, SDNPMayStore, SDNPMayLoad, SDNPMemOperand]>;
+def atomic_load_add_cap_node : SDNode<"ISD::ATOMIC_LOAD_ADD" , SDTAtomicCap2,
+                    [SDNPHasChain, SDNPMayStore, SDNPMayLoad, SDNPMemOperand]>;
+def atomic_swap_cap_node     : SDNode<"ISD::ATOMIC_SWAP", SDTAtomicCap2,
+                    [SDNPHasChain, SDNPMayStore, SDNPMayLoad, SDNPMemOperand]>;
+def atomic_load_sub_cap_node : SDNode<"ISD::ATOMIC_LOAD_SUB" , SDTAtomicCap2,
+                    [SDNPHasChain, SDNPMayStore, SDNPMayLoad, SDNPMemOperand]>;
+
+
+def atomic_swap_cap : PatFrag<(ops node:$ptr, node:$val),
+                   (atomic_swap_cap_node node:$ptr, node:$val), [{
+    return cast<AtomicSDNode>(N)->getMemoryVT().isFatPointer();
+}]> {
+    // We can't use let MemoryVT = iFATPTRAny here since by the time it runs
+    // we have turned it into an IFATPTR128, etc -> use the C++ predicate above
+}
+
+def atomic_cmp_swap_cap : PatFrag<(ops node:$ptr, node:$cmp, node:$val),
+                   (atomic_cmp_swap_cap_node node:$ptr, node:$cmp, node:$val), [{
+    return cast<AtomicSDNode>(N)->getMemoryVT().isFatPointer();
+}]> {
+    // We can't use let MemoryVT = iFATPTRAny here since by the time it runs
+    // we have turned it into an IFATPTR128, etc -> use the C++ predicate above
+}
 
 // ClearRegs values
 // TODO: Add some nice parsing so that we can get handle register lists for
@@ -600,6 +633,19 @@ let usesCustomInserter = 1 in {
   def CAP_ATOMIC_LOAD_NAND_I64 : CapAtomic2Ops<atomic_load_nand_64, GPR64>;
   def CAP_ATOMIC_SWAP_I64      : CapAtomic2Ops<atomic_swap_64, GPR64>;
   def CAP_ATOMIC_CMP_SWAP_I64  : CapAtomicCmpSwap<atomic_cmp_swap_64, GPR64>;
+
+  // Capability atomics:
+  def CAP_ATOMIC_SWAP_CAP      : CapAtomic2Ops<atomic_swap_cap, CheriGPROrDDC>;
+  def CAP_ATOMIC_CMP_SWAP_CAP  : CapAtomicCmpSwap<atomic_cmp_swap_cap, CheriGPROrDDC>;
+
+  // TODO: implement these:
+  // def ATOMIC_LOAD_ADD_CAP  : Atomic2Ops<atomic_load_add_cap, CheriGPROrDDC>;
+  // def ATOMIC_LOAD_SUB_CAP  : Atomic2Ops<atomic_load_sub_cap, CheriGPROrDDC>;
+  // Not sure about the bitwise ops though, they are probably useless on caps
+  // def ATOMIC_LOAD_AND_CAP  : Atomic2Ops<atomic_load_and_cap, CheriGPROrDDC>;
+  // def ATOMIC_LOAD_OR_CAP   : Atomic2Ops<atomic_load_or_cap, CheriGPROrDDC>;
+  // def ATOMIC_LOAD_XOR_CAP  : Atomic2Ops<atomic_load_xor_cap, CheriGPROrDDC>;
+  // def ATOMIC_LOAD_NAND_CAP : Atomic2Ops<atomic_load_nand_cap, CheriGPROrDDC>;
 }
 
 class CapAtomic2OpsPostRA<RegisterClass RC> :
@@ -619,7 +665,7 @@ multiclass CapAtomicPostRA2Ops {
   def NAME # _I16_POSTRA : CapAtomic2OpsPostRA<GPR32>;
   def NAME # _I32_POSTRA : CapAtomic2OpsPostRA<GPR32>;
   def NAME # _I64_POSTRA : CapAtomic2OpsPostRA<GPR64>;
-  // def NAME # _CAP_POSTRA : Atomic2OpsPostRA<CheriGPROrCNull>;
+  // def NAME # _CAP_POSTRA : CapAtomic2OpsPostRA<CheriGPROrCNull>;
 }
 
 defm CAP_ATOMIC_LOAD_ADD  : CapAtomicPostRA2Ops;
@@ -630,11 +676,19 @@ defm CAP_ATOMIC_LOAD_XOR  : CapAtomicPostRA2Ops;
 defm CAP_ATOMIC_LOAD_NAND : CapAtomicPostRA2Ops;
 defm CAP_ATOMIC_SWAP      : CapAtomicPostRA2Ops;
 
-def CAP_ATOMIC_CMP_SWAP_I8_POSTRA  : CapAtomicCmpSwapPostRA<GPR32>;
+def CAP_ATOMIC_CMP_SWAP_I8_POSTRA   : CapAtomicCmpSwapPostRA<GPR32>;
 def CAP_ATOMIC_CMP_SWAP_I16_POSTRA  : CapAtomicCmpSwapPostRA<GPR32>;
 def CAP_ATOMIC_CMP_SWAP_I32_POSTRA  : CapAtomicCmpSwapPostRA<GPR32>;
 def CAP_ATOMIC_CMP_SWAP_I64_POSTRA  : CapAtomicCmpSwapPostRA<GPR64>;
-// def CAP_ATOMIC_CMP_SWAP_CAP_POSTRA  : CapAtomicCmpSwapPostRA<CheriGPROrCNull>;
+
+// Capability postra atomics:
+// TODO: do we want add/sub/or/xor/nand/and for capabilities?
+// I guess add/sub makes sense but the others don't
+def CAP_ATOMIC_SWAP_CAP_POSTRA      : CapAtomic2OpsPostRA<CheriGPROrCNull>;
+def CAP_ATOMIC_CMP_SWAP_CAP_POSTRA  : CapAtomicCmpSwapPostRA<CheriGPROrCNull>;
+// TODO:
+// def CAP_ATOMIC_LOAD_ADD_CAP_POSTRA      : CapAtomic2OpsPostRA<CheriGPROrCNull>;
+// def CAP_ATOMIC_LOAD_SUB_CAP_POSTRA      : CapAtomic2OpsPostRA<CheriGPROrCNull>;
 
 // Atomic load patterns.  These (and the store patterns) expand to simple loads
 // because an IR pass adds the required barriers.

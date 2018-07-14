@@ -208,6 +208,8 @@ bool MipsExpandPseudo::expandAtomicCmpSwap(MachineBasicBlock &BB,
                                            bool IsCapOp) {
 
   unsigned Size = -1;
+  constexpr unsigned CAP_CMPXCHG_SIZE = 0xca;
+  bool IsCapCmpXchg = false;
   switch(I->getOpcode()) {
     case Mips::ATOMIC_CMP_SWAP_I32_POSTRA: Size = 4; break;
     case Mips::ATOMIC_CMP_SWAP_I64_POSTRA: Size = 8; break;
@@ -215,6 +217,10 @@ bool MipsExpandPseudo::expandAtomicCmpSwap(MachineBasicBlock &BB,
     case Mips::CAP_ATOMIC_CMP_SWAP_I16_POSTRA: Size = 2; break;
     case Mips::CAP_ATOMIC_CMP_SWAP_I32_POSTRA: Size = 4; break;
     case Mips::CAP_ATOMIC_CMP_SWAP_I64_POSTRA: Size = 8; break;
+    case Mips::CAP_ATOMIC_CMP_SWAP_CAP_POSTRA:
+      Size = CAP_CMPXCHG_SIZE;
+      IsCapCmpXchg = true;
+      break;
     default:
       llvm_unreachable("Unhandled cmpxchg");
   }
@@ -270,6 +276,12 @@ bool MipsExpandPseudo::expandAtomicCmpSwap(MachineBasicBlock &BB,
       LL = Mips::CLLD;
       SC = Mips::CSCD;
       break;
+    case CAP_CMPXCHG_SIZE:
+      assert(IsCapCmpXchg);
+      LL = Mips::CLLC;
+      SC = Mips::CSCC;
+      break;
+      break;
     default:
       llvm_unreachable("Unknown CHERI atomic size!");
     }
@@ -314,8 +326,25 @@ bool MipsExpandPseudo::expandAtomicCmpSwap(MachineBasicBlock &BB,
   auto LLOp = BuildMI(loop1MBB, DL, TII->get(LL), Dest).addReg(Ptr);
   if (!IsCapOp)
     LLOp.addImm(0);
-  BuildMI(loop1MBB, DL, TII->get(BNE))
-    .addReg(Dest, RegState::Kill).addReg(OldVal).addMBB(exitMBB);
+  if (IsCapCmpXchg) {
+    unsigned CapCmp = STI->useCheriExactEquals() ? Mips::CEXEQ : Mips::CEQ;
+    // load, compare, and exit if not equal
+    //   cllc dest, ptr
+    //   ceq scratch, dest, oldval,
+    //   beqz scratch exitMBB
+    BuildMI(loop1MBB, DL, TII->get(CapCmp), Scratch)
+        .addReg(Dest, RegState::Kill)
+        .addReg(OldVal);
+    BuildMI(loop1MBB, DL, TII->get(BEQ))
+        .addReg(Scratch, RegState::Kill)
+        .addReg(ZERO)
+        .addMBB(exitMBB);
+  } else {
+    BuildMI(loop1MBB, DL, TII->get(BNE))
+        .addReg(Dest, RegState::Kill)
+        .addReg(OldVal)
+        .addMBB(exitMBB);
+  }
 
   // loop2MBB:
   //   move scratch, NewVal
@@ -791,6 +820,7 @@ bool MipsExpandPseudo::expandMI(MachineBasicBlock &MBB,
   case Mips::CAP_ATOMIC_CMP_SWAP_I16_POSTRA:
   case Mips::CAP_ATOMIC_CMP_SWAP_I32_POSTRA:
   case Mips::CAP_ATOMIC_CMP_SWAP_I64_POSTRA:
+  case Mips::CAP_ATOMIC_CMP_SWAP_CAP_POSTRA:
     return expandAtomicCmpSwap(MBB, MBBI, NMBB, /*IsCapOp=*/true);
 
   default:

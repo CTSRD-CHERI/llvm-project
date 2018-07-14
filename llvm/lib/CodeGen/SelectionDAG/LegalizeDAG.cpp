@@ -2945,10 +2945,13 @@ bool SelectionDAGLegalize::ExpandNode(SDNode *Node) {
 
     SDValue ExtRes = Res;
     SDValue LHS = Res;
-    SDValue RHS = Node->getOperand(1);
+    SDValue RHS = Node->getOperand(2);
 
     EVT AtomicType = cast<AtomicSDNode>(Node)->getMemoryVT();
     EVT OuterType = Node->getValueType(0);
+    // XXXAR: Sign/Zero extending fat pointers doesn't make sense -> skip this
+    if (!OuterType.isFatPointer()) {
+    // XXXAR: not indented correctly to avoid merge conflicts
     switch (TLI.getExtendForAtomicOps()) {
     case ISD::SIGN_EXTEND:
       LHS = DAG.getNode(ISD::AssertSext, dl, OuterType, Res,
@@ -2969,6 +2972,7 @@ bool SelectionDAGLegalize::ExpandNode(SDNode *Node) {
       break;
     default:
       llvm_unreachable("Invalid atomic op extension");
+    }
     }
 
     SDValue Success =
