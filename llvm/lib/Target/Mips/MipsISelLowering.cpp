@@ -1509,6 +1509,29 @@ MipsTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
   }
 }
 
+
+static unsigned getCheriPostRAAtomicOp(const MachineInstr &MI) {
+#define CAP_ATOMIC_POSTRA_CASES(op) \
+    case Mips::CAP_ATOMIC_##op##_I8: return Mips::CAP_ATOMIC_##op##_I8_POSTRA; \
+    case Mips::CAP_ATOMIC_##op##_I16: return Mips::CAP_ATOMIC_##op##_I16_POSTRA; \
+    case Mips::CAP_ATOMIC_##op##_I32: return Mips::CAP_ATOMIC_##op##_I32_POSTRA; \
+    case Mips::CAP_ATOMIC_##op##_I64: return Mips::CAP_ATOMIC_##op##_I64_POSTRA;
+
+    // TODO: case Mips::CAP_ATOMIC_##op##_CAP: return Mips::CAP_ATOMIC_##op##_CAP_POSTRA;
+
+  switch (MI.getOpcode()) {
+  default:
+    CAP_ATOMIC_POSTRA_CASES(LOAD_ADD)
+    CAP_ATOMIC_POSTRA_CASES(LOAD_SUB)
+    CAP_ATOMIC_POSTRA_CASES(LOAD_AND)
+    CAP_ATOMIC_POSTRA_CASES(LOAD_OR)
+    CAP_ATOMIC_POSTRA_CASES(LOAD_XOR)
+    CAP_ATOMIC_POSTRA_CASES(LOAD_NAND)
+    CAP_ATOMIC_POSTRA_CASES(SWAP)
+    llvm_unreachable("Unknown pseudo atomic for replacement!");
+  }
+}
+
 // This function also handles Mips::ATOMIC_SWAP_I32 (when BinOpcode == 0), and
 // Mips::ATOMIC_LOAD_NAND_I32 (when Nand == true)
 MachineBasicBlock *
@@ -1565,6 +1588,7 @@ MipsTargetLowering::emitAtomicBinary(MachineInstr &MI,
     AtomicOp = Mips::ATOMIC_SWAP_I64_POSTRA;
     break;
   default:
+    AtomicOp = getCheriPostRAAtomicOp(MI);
     break;
   }
 
@@ -1814,53 +1838,42 @@ MachineBasicBlock *
 MipsTargetLowering::emitAtomicCmpSwap(MachineInstr &MI,
                                       MachineBasicBlock *BB) const {
 
-  assert((MI.getOpcode() == Mips::ATOMIC_CMP_SWAP_I32 ||
-          MI.getOpcode() == Mips::ATOMIC_CMP_SWAP_I64) &&
-         "Unsupported atomic psseudo for EmitAtomicCmpSwap.");
-
-  const unsigned Size = MI.getOpcode() == Mips::ATOMIC_CMP_SWAP_I32 ? 4 : 8;
-
-  MachineFunction *MF = BB->getParent();
-  MachineRegisterInfo &MRI = MF->getRegInfo();
-  const TargetRegisterClass *RC = getRegClassFor(MVT::getIntegerVT(Size * 8));
-  const TargetInstrInfo *TII = Subtarget.getInstrInfo();
-  DebugLoc DL = MI.getDebugLoc();
-
-  unsigned AtomicOp = MI.getOpcode() == Mips::ATOMIC_CMP_SWAP_I32
-                          ? Mips::ATOMIC_CMP_SWAP_I32_POSTRA
-                          : Mips::ATOMIC_CMP_SWAP_I64_POSTRA;
-  unsigned Dest = MI.getOperand(0).getReg();
-  unsigned Ptr = MI.getOperand(1).getReg();
-  unsigned OldVal = MI.getOperand(2).getReg();
-  unsigned NewVal = MI.getOperand(3).getReg();
-
-  bool isCapOp = true;
+  unsigned AtomicOp = -1;
+  MVT OpTy;
   switch (MI.getOpcode()) {
-    case Mips::CAP_ATOMIC_CMP_SWAP_I64:
-      AtomicOp = Mips::CAP_ATOMIC_CMP_SWAP_I64_POSTRA;
-      break;
-    case Mips::CAP_ATOMIC_CMP_SWAP_I32:
-      AtomicOp = Mips::CAP_ATOMIC_CMP_SWAP_I32_POSTRA;
-      break;
-    case Mips::CAP_ATOMIC_CMP_SWAP_I16:
-      AtomicOp = Mips::CAP_ATOMIC_CMP_SWAP_I16_POSTRA;
-      break;
-    case Mips::CAP_ATOMIC_CMP_SWAP_I8:
-      AtomicOp = Mips::CAP_ATOMIC_CMP_SWAP_I8_POSTRA;
-      break;
+  case Mips::ATOMIC_CMP_SWAP_I32:
+    AtomicOp = Mips::ATOMIC_CMP_SWAP_I32_POSTRA;
+    OpTy = MVT::i32;
+    break;
+  case Mips::ATOMIC_CMP_SWAP_I64:
+    AtomicOp = Mips::ATOMIC_CMP_SWAP_I64_POSTRA;
+    OpTy = MVT::i64;
+    break;
+  case Mips::CAP_ATOMIC_CMP_SWAP_I8:
+    AtomicOp = Mips::CAP_ATOMIC_CMP_SWAP_I8_POSTRA;
+    OpTy = MVT::i32;
+    break;
+  case Mips::CAP_ATOMIC_CMP_SWAP_I16:
+    AtomicOp = Mips::CAP_ATOMIC_CMP_SWAP_I16_POSTRA;
+    OpTy = MVT::i32;
+    break;
+  case Mips::CAP_ATOMIC_CMP_SWAP_I32:
+    AtomicOp = Mips::CAP_ATOMIC_CMP_SWAP_I32_POSTRA;
+    OpTy = MVT::i32;
+    break;
+  case Mips::CAP_ATOMIC_CMP_SWAP_I64:
+    AtomicOp = Mips::CAP_ATOMIC_CMP_SWAP_I64_POSTRA;
+    OpTy = MVT::i64;
+    break;
 // TODO:
 #if 0
     case Mips::CAP_ATOMIC_CMP_SWAP_CAP:
       AtomicOp = Mips::CAP_ATOMIC_CMP_SWAP_CAP_POSTRA;
-      RC = getRegClassFor(CapType);
+      OpTy = CapType;
       break;
 #endif
   default:
     llvm_unreachable("Unsupported atomic psseudo for EmitAtomicCmpSwap.");
-    default:
-      assert(AtomicOp == Mips::ATOMIC_CMP_SWAP_I32_POSTRA ||
-             AtomicOp == Mips::ATOMIC_CMP_SWAP_I64_POSTRA);
-      isCapOp = false;
   }
 
   MachineFunction *MF = BB->getParent();
@@ -3738,6 +3751,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     Chain = DAG.getNode(MipsISD::CheriJmpLink, DL, NodeTys, Ops);
   } else {
     if (IsTailCall) {
+      MF.getFrameInfo().setHasTailCall();
       return DAG.getNode(MipsISD::TailCall, DL, MVT::Other, Ops);
     }
 

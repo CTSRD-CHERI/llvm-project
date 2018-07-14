@@ -53,14 +53,16 @@ namespace {
   private:
     bool expandAtomicCmpSwap(MachineBasicBlock &MBB,
                              MachineBasicBlock::iterator MBBI,
-                             MachineBasicBlock::iterator &NextMBBI);
+                             MachineBasicBlock::iterator &NextMBBI,
+                             bool IsCapOp = false);
     bool expandAtomicCmpSwapSubword(MachineBasicBlock &MBB,
                                     MachineBasicBlock::iterator MBBI,
                                     MachineBasicBlock::iterator &NextMBBI);
 
     bool expandAtomicBinOp(MachineBasicBlock &BB,
                            MachineBasicBlock::iterator I,
-                           MachineBasicBlock::iterator &NMBBI, unsigned Size);
+                           MachineBasicBlock::iterator &NMBBI, unsigned Size,
+                           bool IsCapOp = false);
     bool expandAtomicBinOpSubword(MachineBasicBlock &BB,
                                   MachineBasicBlock::iterator I,
                                   MachineBasicBlock::iterator &NMBBI);
@@ -202,10 +204,20 @@ bool MipsExpandPseudo::expandAtomicCmpSwapSubword(
 
 bool MipsExpandPseudo::expandAtomicCmpSwap(MachineBasicBlock &BB,
                                            MachineBasicBlock::iterator I,
-                                           MachineBasicBlock::iterator &NMBBI) {
+                                           MachineBasicBlock::iterator &NMBBI,
+                                           bool IsCapOp) {
 
-  const unsigned Size =
-      I->getOpcode() == Mips::ATOMIC_CMP_SWAP_I32_POSTRA ? 4 : 8;
+  unsigned Size = -1;
+  switch(I->getOpcode()) {
+    case Mips::ATOMIC_CMP_SWAP_I32_POSTRA: Size = 4; break;
+    case Mips::ATOMIC_CMP_SWAP_I64_POSTRA: Size = 8; break;
+    case Mips::CAP_ATOMIC_CMP_SWAP_I8_POSTRA: Size = 1; break;
+    case Mips::CAP_ATOMIC_CMP_SWAP_I16_POSTRA: Size = 2; break;
+    case Mips::CAP_ATOMIC_CMP_SWAP_I32_POSTRA: Size = 4; break;
+    case Mips::CAP_ATOMIC_CMP_SWAP_I64_POSTRA: Size = 8; break;
+    default:
+      llvm_unreachable("Unhandled cmpxchg");
+  }
   MachineFunction *MF = BB.getParent();
 
   const bool ArePtrs64bit = STI->getABI().ArePtrs64bit();
@@ -213,7 +225,7 @@ bool MipsExpandPseudo::expandAtomicCmpSwap(MachineBasicBlock &BB,
 
   unsigned LL, SC, ZERO, BNE, BEQ, MOVE;
 
-  if (Size == 4) {
+  if (Size <= 4) {
     if (STI->inMicroMipsMode()) {
       LL = STI->hasMips32r6() ? Mips::LL_MMR6 : Mips::LL_MM;
       SC = STI->hasMips32r6() ? Mips::SC_MMR6 : Mips::SC_MM;
@@ -240,6 +252,29 @@ bool MipsExpandPseudo::expandAtomicCmpSwap(MachineBasicBlock &BB,
     BEQ = Mips::BEQ64;
     MOVE = Mips::OR64;
   }
+  if (IsCapOp) {
+    switch(Size) {
+    case 1:
+      LL = Mips::CLLB;
+      SC = Mips::CSCB;
+      break;
+    case 2:
+      LL = Mips::CLLH;
+      SC = Mips::CSCH;
+      break;
+    case 4:
+      LL = Mips::CLLW;
+      SC = Mips::CSCW;
+      break;
+    case 8:
+      LL = Mips::CLLD;
+      SC = Mips::CSCD;
+      break;
+    default:
+      llvm_unreachable("Unknown CHERI atomic size!");
+    }
+  }
+
 
   unsigned Dest = I->getOperand(0).getReg();
   unsigned Ptr = I->getOperand(1).getReg();
@@ -276,7 +311,9 @@ bool MipsExpandPseudo::expandAtomicCmpSwap(MachineBasicBlock &BB,
   // loop1MBB:
   //   ll dest, 0(ptr)
   //   bne dest, oldval, exitMBB
-  BuildMI(loop1MBB, DL, TII->get(LL), Dest).addReg(Ptr).addImm(0);
+  auto LLOp = BuildMI(loop1MBB, DL, TII->get(LL), Dest).addReg(Ptr);
+  if (!IsCapOp)
+    LLOp.addImm(0);
   BuildMI(loop1MBB, DL, TII->get(BNE))
     .addReg(Dest, RegState::Kill).addReg(OldVal).addMBB(exitMBB);
 
@@ -285,8 +322,9 @@ bool MipsExpandPseudo::expandAtomicCmpSwap(MachineBasicBlock &BB,
   //   sc Scratch, Scratch, 0(ptr)
   //   beq Scratch, $0, loop1MBB
   BuildMI(loop2MBB, DL, TII->get(MOVE), Scratch).addReg(NewVal).addReg(ZERO);
-  BuildMI(loop2MBB, DL, TII->get(SC), Scratch)
-    .addReg(Scratch).addReg(Ptr).addImm(0);
+  auto SCOp = BuildMI(loop2MBB, DL, TII->get(SC), Scratch).addReg(Scratch).addReg(Ptr);
+  if (!IsCapOp)
+    SCOp.addImm(0);
   BuildMI(loop2MBB, DL, TII->get(BEQ))
     .addReg(Scratch, RegState::Kill).addReg(ZERO).addMBB(loop1MBB);
 
@@ -483,7 +521,7 @@ bool MipsExpandPseudo::expandAtomicBinOpSubword(
 bool MipsExpandPseudo::expandAtomicBinOp(MachineBasicBlock &BB,
                                          MachineBasicBlock::iterator I,
                                          MachineBasicBlock::iterator &NMBBI,
-                                         unsigned Size) {
+                                         unsigned Size, bool IsCapOp) {
   MachineFunction *MF = BB.getParent();
 
   const bool ArePtrs64bit = STI->getABI().ArePtrs64bit();
@@ -491,7 +529,7 @@ bool MipsExpandPseudo::expandAtomicBinOp(MachineBasicBlock &BB,
 
   unsigned LL, SC, ZERO, BEQ;
 
-  if (Size == 4) {
+  if (Size <= 4) {
     if (STI->inMicroMipsMode()) {
       LL = STI->hasMips32r6() ? Mips::LL_MMR6 : Mips::LL_MM;
       SC = STI->hasMips32r6() ? Mips::SC_MMR6 : Mips::SC_MM;
@@ -513,6 +551,28 @@ bool MipsExpandPseudo::expandAtomicBinOp(MachineBasicBlock &BB,
     ZERO = Mips::ZERO_64;
     BEQ = Mips::BEQ64;
   }
+  if (IsCapOp) {
+    switch(Size) {
+    case 1:
+      LL = Mips::CLLB;
+      SC = Mips::CSCB;
+      break;
+    case 2:
+      LL = Mips::CLLH;
+      SC = Mips::CSCH;
+      break;
+    case 4:
+      LL = Mips::CLLW;
+      SC = Mips::CSCW;
+      break;
+    case 8:
+      LL = Mips::CLLD;
+      SC = Mips::CSCD;
+      break;
+    default:
+      llvm_unreachable("Unknown CHERI atomic size!");
+    }
+  }
 
   unsigned OldVal = I->getOperand(0).getReg();
   unsigned Ptr = I->getOperand(1).getReg();
@@ -524,50 +584,68 @@ bool MipsExpandPseudo::expandAtomicBinOp(MachineBasicBlock &BB,
   unsigned AND = 0;
   unsigned NOR = 0;
   bool IsNand = false;
+#define CHERI_SMALL_CASES(op) \
+        case Mips::CAP_ATOMIC_##op##_I8_POSTRA: \
+        case Mips::CAP_ATOMIC_##op##_I16_POSTRA: \
+        case Mips::CAP_ATOMIC_##op##_I32_POSTRA:
   switch (I->getOpcode()) {
   case Mips::ATOMIC_LOAD_ADD_I32_POSTRA:
+  CHERI_SMALL_CASES(LOAD_ADD)
     Opcode = Mips::ADDu;
     break;
   case Mips::ATOMIC_LOAD_SUB_I32_POSTRA:
+  CHERI_SMALL_CASES(LOAD_SUB)
     Opcode = Mips::SUBu;
     break;
   case Mips::ATOMIC_LOAD_AND_I32_POSTRA:
+  CHERI_SMALL_CASES(LOAD_AND)
     Opcode = Mips::AND;
     break;
   case Mips::ATOMIC_LOAD_OR_I32_POSTRA:
+  CHERI_SMALL_CASES(LOAD_OR)
     Opcode = Mips::OR;
     break;
   case Mips::ATOMIC_LOAD_XOR_I32_POSTRA:
+  CHERI_SMALL_CASES(LOAD_XOR)
     Opcode = Mips::XOR;
     break;
   case Mips::ATOMIC_LOAD_NAND_I32_POSTRA:
+  CHERI_SMALL_CASES(LOAD_NAND)
     IsNand = true;
     AND = Mips::AND;
     NOR = Mips::NOR;
     break;
   case Mips::ATOMIC_SWAP_I32_POSTRA:
+  CHERI_SMALL_CASES(SWAP)
     OR = Mips::OR;
     break;
+  case Mips::CAP_ATOMIC_LOAD_ADD_I64_POSTRA:
   case Mips::ATOMIC_LOAD_ADD_I64_POSTRA:
     Opcode = Mips::DADDu;
     break;
+  case Mips::CAP_ATOMIC_LOAD_SUB_I64_POSTRA:
   case Mips::ATOMIC_LOAD_SUB_I64_POSTRA:
     Opcode = Mips::DSUBu;
     break;
+  case Mips::CAP_ATOMIC_LOAD_AND_I64_POSTRA:
   case Mips::ATOMIC_LOAD_AND_I64_POSTRA:
     Opcode = Mips::AND64;
     break;
+  case Mips::CAP_ATOMIC_LOAD_OR_I64_POSTRA:
   case Mips::ATOMIC_LOAD_OR_I64_POSTRA:
     Opcode = Mips::OR64;
     break;
+  case Mips::CAP_ATOMIC_LOAD_XOR_I64_POSTRA:
   case Mips::ATOMIC_LOAD_XOR_I64_POSTRA:
     Opcode = Mips::XOR64;
     break;
+  case Mips::CAP_ATOMIC_LOAD_NAND_I64_POSTRA:
   case Mips::ATOMIC_LOAD_NAND_I64_POSTRA:
     IsNand = true;
     AND = Mips::AND64;
     NOR = Mips::NOR64;
     break;
+  case Mips::CAP_ATOMIC_SWAP_I64_POSTRA:
   case Mips::ATOMIC_SWAP_I64_POSTRA:
     OR = Mips::OR64;
     break;
@@ -590,7 +668,9 @@ bool MipsExpandPseudo::expandAtomicBinOp(MachineBasicBlock &BB,
   loopMBB->addSuccessor(loopMBB);
   loopMBB->normalizeSuccProbs();
 
-  BuildMI(loopMBB, DL, TII->get(LL), OldVal).addReg(Ptr).addImm(0);
+  auto LLOp = BuildMI(loopMBB, DL, TII->get(LL), OldVal).addReg(Ptr);
+  if (!IsCapOp)
+    LLOp.addImm(0);
   assert((OldVal != Ptr) && "Clobbered the wrong ptr reg!");
   assert((OldVal != Incr) && "Clobbered the wrong reg!");
   if (Opcode) {
@@ -605,7 +685,9 @@ bool MipsExpandPseudo::expandAtomicBinOp(MachineBasicBlock &BB,
     BuildMI(loopMBB, DL, TII->get(OR), Scratch).addReg(Incr).addReg(ZERO);
   }
 
-  BuildMI(loopMBB, DL, TII->get(SC), Scratch).addReg(Scratch).addReg(Ptr).addImm(0);
+  auto SCOp = BuildMI(loopMBB, DL, TII->get(SC), Scratch).addReg(Scratch).addReg(Ptr);
+  if (!IsCapOp)
+    SCOp.addImm(0);
   BuildMI(loopMBB, DL, TII->get(BEQ)).addReg(Scratch).addReg(ZERO).addMBB(loopMBB);
 
   NMBBI = BB.end();
@@ -662,6 +744,47 @@ bool MipsExpandPseudo::expandMI(MachineBasicBlock &MBB,
   case Mips::ATOMIC_LOAD_NAND_I64_POSTRA:
   case Mips::ATOMIC_SWAP_I64_POSTRA:
     return expandAtomicBinOp(MBB, MBBI, NMBB, 8);
+
+  // CHERI instrs:
+  case Mips::CAP_ATOMIC_SWAP_I8_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_NAND_I8_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_ADD_I8_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_SUB_I8_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_AND_I8_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_OR_I8_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_XOR_I8_POSTRA:
+    return expandAtomicBinOp(MBB, MBBI, NMBB, 1, /*IsCapOp=*/true);
+  case Mips::CAP_ATOMIC_SWAP_I16_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_NAND_I16_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_ADD_I16_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_SUB_I16_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_AND_I16_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_OR_I16_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_XOR_I16_POSTRA:
+    return expandAtomicBinOp(MBB, MBBI, NMBB, 2, /*IsCapOp=*/true);
+  case Mips::CAP_ATOMIC_LOAD_ADD_I32_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_SUB_I32_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_AND_I32_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_OR_I32_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_XOR_I32_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_NAND_I32_POSTRA:
+  case Mips::CAP_ATOMIC_SWAP_I32_POSTRA:
+    return expandAtomicBinOp(MBB, MBBI, NMBB, 4, /*IsCapOp=*/true);
+  case Mips::CAP_ATOMIC_LOAD_ADD_I64_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_SUB_I64_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_AND_I64_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_OR_I64_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_XOR_I64_POSTRA:
+  case Mips::CAP_ATOMIC_LOAD_NAND_I64_POSTRA:
+  case Mips::CAP_ATOMIC_SWAP_I64_POSTRA:
+    return expandAtomicBinOp(MBB, MBBI, NMBB, 8, /*IsCapOp=*/true);
+
+  case Mips::CAP_ATOMIC_CMP_SWAP_I8_POSTRA:
+  case Mips::CAP_ATOMIC_CMP_SWAP_I16_POSTRA:
+  case Mips::CAP_ATOMIC_CMP_SWAP_I32_POSTRA:
+  case Mips::CAP_ATOMIC_CMP_SWAP_I64_POSTRA:
+    return expandAtomicCmpSwap(MBB, MBBI, NMBB, /*IsCapOp=*/true);
+
   default:
     return Modified;
   }

@@ -602,6 +602,40 @@ let usesCustomInserter = 1 in {
   def CAP_ATOMIC_CMP_SWAP_I64  : CapAtomicCmpSwap<atomic_cmp_swap_64, GPR64>;
 }
 
+class CapAtomic2OpsPostRA<RegisterClass RC> :
+  PseudoSE<(outs RC:$dst), (ins CheriGPROrCNull:$ptr, RC:$incr), []> {
+  let mayLoad = 1;
+  let mayStore = 1;
+}
+
+class CapAtomicCmpSwapPostRA<RegisterClass RC> :
+  PseudoSE<(outs RC:$dst), (ins CheriGPROrCNull:$ptr, RC:$cmp, RC:$swap), []> {
+  let mayLoad = 1;
+  let mayStore = 1;
+}
+
+multiclass CapAtomicPostRA2Ops {
+  def NAME # _I8_POSTRA : CapAtomic2OpsPostRA<GPR32>;
+  def NAME # _I16_POSTRA : CapAtomic2OpsPostRA<GPR32>;
+  def NAME # _I32_POSTRA : CapAtomic2OpsPostRA<GPR32>;
+  def NAME # _I64_POSTRA : CapAtomic2OpsPostRA<GPR64>;
+  // def NAME # _CAP_POSTRA : Atomic2OpsPostRA<CheriGPROrCNull>;
+}
+
+defm CAP_ATOMIC_LOAD_ADD  : CapAtomicPostRA2Ops;
+defm CAP_ATOMIC_LOAD_SUB  : CapAtomicPostRA2Ops;
+defm CAP_ATOMIC_LOAD_AND  : CapAtomicPostRA2Ops;
+defm CAP_ATOMIC_LOAD_OR   : CapAtomicPostRA2Ops;
+defm CAP_ATOMIC_LOAD_XOR  : CapAtomicPostRA2Ops;
+defm CAP_ATOMIC_LOAD_NAND : CapAtomicPostRA2Ops;
+defm CAP_ATOMIC_SWAP      : CapAtomicPostRA2Ops;
+
+def CAP_ATOMIC_CMP_SWAP_I8_POSTRA  : CapAtomicCmpSwapPostRA<GPR32>;
+def CAP_ATOMIC_CMP_SWAP_I16_POSTRA  : CapAtomicCmpSwapPostRA<GPR32>;
+def CAP_ATOMIC_CMP_SWAP_I32_POSTRA  : CapAtomicCmpSwapPostRA<GPR32>;
+def CAP_ATOMIC_CMP_SWAP_I64_POSTRA  : CapAtomicCmpSwapPostRA<GPR64>;
+// def CAP_ATOMIC_CMP_SWAP_CAP_POSTRA  : CapAtomicCmpSwapPostRA<CheriGPROrCNull>;
+
 // Atomic load patterns.  These (and the store patterns) expand to simple loads
 // because an IR pass adds the required barriers.
 def : MipsPat<(atomic_load_8 CheriOpnd0IsDDC:$a), (CAPLOAD832 ZERO_64, (i64 0), CheriOpnd0IsDDC:$a)>;
@@ -685,28 +719,29 @@ def CLLC  : CheriFmtCLL<1, 3, (outs CheriOpnd:$rd), (ins CheriOpnd0IsDDC:$cb),
                         "cllc\t$rd, $cb">;
 def CLLD  : CheriFmtCLL<0, 3, (outs GPR64Opnd:$rd), (ins CheriOpnd0IsDDC:$cb),
                         "clld\t$rd, $cb">;
-def CLLW  : CheriFmtCLL<1, 2, (outs GPR64Opnd:$rd), (ins CheriOpnd0IsDDC:$cb),
+def CLLW  : CheriFmtCLL<1, 2, (outs GPR32Opnd:$rd), (ins CheriOpnd0IsDDC:$cb),
                         "cllw\t$rd, $cb">;
-def CLLWU : CheriFmtCLL<0, 2, (outs GPR64Opnd:$rd), (ins CheriOpnd0IsDDC:$cb),
+def CLLWU : CheriFmtCLL<0, 2, (outs GPR32Opnd:$rd), (ins CheriOpnd0IsDDC:$cb),
                         "cllwu\t$rd, $cb">;
-def CLLH  : CheriFmtCLL<1, 1, (outs GPR64Opnd:$rd), (ins CheriOpnd0IsDDC:$cb),
+def CLLH  : CheriFmtCLL<1, 1, (outs GPR32Opnd:$rd), (ins CheriOpnd0IsDDC:$cb),
                         "cllh\t$rd, $cb">;
-def CLLHU : CheriFmtCLL<0, 1, (outs GPR64Opnd:$rd), (ins CheriOpnd0IsDDC:$cb),
+def CLLHU : CheriFmtCLL<0, 1, (outs GPR32Opnd:$rd), (ins CheriOpnd0IsDDC:$cb),
                         "cllhu\t$rd, $cb">;
-def CLLB  : CheriFmtCLL<1, 0, (outs GPR64Opnd:$rd), (ins CheriOpnd0IsDDC:$cb),
+def CLLB  : CheriFmtCLL<1, 0, (outs GPR32Opnd:$rd), (ins CheriOpnd0IsDDC:$cb),
                         "cllb\t$rd, $cb">;
-def CLLBU : CheriFmtCLL<0, 0, (outs GPR64Opnd:$rd), (ins CheriOpnd0IsDDC:$cb),
+def CLLBU : CheriFmtCLL<0, 0, (outs GPR32Opnd:$rd), (ins CheriOpnd0IsDDC:$cb),
                         "cllbu\t$rd, $cb">;
 
 def CSCC  : CheriFmtCSC<7, (outs GPR64Opnd:$rd), (ins CheriOpnd: $rs, CheriOpnd0IsDDC:$cb),
                         "cscc\t$rd, $rs, $cb">;
 def CSCD  : CheriFmtCSC<3, (outs GPR64Opnd:$rd), (ins GPR64Opnd: $rs, CheriOpnd0IsDDC:$cb),
                         "cscd\t$rd, $rs, $cb">;
-def CSCW  : CheriFmtCSC<2, (outs GPR64Opnd:$rd), (ins GPR64Opnd: $rs, CheriOpnd0IsDDC:$cb),
+// FIXME: these are all GPR32 so that the MIPS atomics expansion is happy but I don't think they should be
+def CSCW  : CheriFmtCSC<2, (outs GPR32Opnd:$rd), (ins GPR32Opnd: $rs, CheriOpnd0IsDDC:$cb),
                         "cscw\t$rd, $rs, $cb">;
-def CSCH  : CheriFmtCSC<1, (outs GPR64Opnd:$rd), (ins GPR64Opnd: $rs, CheriOpnd0IsDDC:$cb),
+def CSCH  : CheriFmtCSC<1, (outs GPR32Opnd:$rd), (ins GPR32Opnd: $rs, CheriOpnd0IsDDC:$cb),
                         "csch\t$rd, $rs, $cb">;
-def CSCB  : CheriFmtCSC<0, (outs GPR64Opnd:$rd), (ins GPR64Opnd: $rs, CheriOpnd0IsDDC:$cb),
+def CSCB  : CheriFmtCSC<0, (outs GPR32Opnd:$rd), (ins GPR32Opnd: $rs, CheriOpnd0IsDDC:$cb),
                         "cscb\t$rd, $rs, $cb">;
 }
 
