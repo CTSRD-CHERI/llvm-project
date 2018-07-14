@@ -31,18 +31,19 @@ handler set_handler_atomic(handler func) noexcept {
   // CHECK: store void () addrspace(200)* %func, void () addrspace(200)* addrspace(200)* %func.addr, align [[$CAP_SIZE]]
   // CHECK: [[VAR_0:%.+]] = load void () addrspace(200)*, void () addrspace(200)* addrspace(200)* %func.addr, align [[$CAP_SIZE]]
   // CHECK: store void () addrspace(200)* [[VAR_0]], void () addrspace(200)* addrspace(200)* %.atomictmp, align [[$CAP_SIZE]]
-  // CHECK: [[VAR_1:%.+]] = bitcast void () addrspace(200)* addrspace(200)* %.atomictmp to i8 addrspace(200)*
-  // CHECK: [[VAR_2:%.+]] = bitcast void () addrspace(200)* addrspace(200)* %atomic-temp to i8 addrspace(200)*
-  // CHECK: call void @__atomic_exchange(i64 zeroext [[$CAP_SIZE]], i8 addrspace(200)* bitcast (void () addrspace(200)* addrspace(200)* @_ZL9__handler to i8 addrspace(200)*), i8 addrspace(200)* [[VAR_1]], i8 addrspace(200)* [[VAR_2]], i32 signext 5)
+  // CHECK: [[VAR_1:%.+]] = load void () addrspace(200)*, void () addrspace(200)* addrspace(200)* %.atomictmp, align [[$CAP_SIZE]]
+  // CHECK: atomicrmw xchg void () addrspace(200)* addrspace(200)* @_ZL9__handler, void () addrspace(200)* [[VAR_1]] seq_cst
   return __atomic_exchange_n(&__handler, func, __ATOMIC_SEQ_CST);
 
   // ASM-LABEL: _Z18set_handler_atomicU3capPFvvE:
-  // ASM: clcbi   $c3, %captab20(_ZL9__handler)($c26)
-  // ASM: clcbi   $c12, %capcall20(__atomic_exchange)($c26)
-  // ASM: daddiu  $4, $zero, [[$CAP_SIZE]]
-  // ASM: daddiu  $5, $zero, 5
-  // ASM: cjalr   $c12, $c17
-  // ASM: cmove   $c5,  $c18
+  // ASM:      clcbi   $c2, %captab20(_ZL9__handler)($c26)
+  // ASM-NEXT: sync
+  // ASM-NEXT: .LBB0_1:
+  // ASM-NEXT: cllc    $c1, $c2
+  // ASM-NEXT: cscc    $1, $c3, $c2
+  // ASM-NEXT: beqz    $1, .LBB0_1
+  // ASM-NEXT: nop
+  // ASM-NEXT: sync
   // ASM: .end _Z18set_handler_atomicU3capPFvvE
 }
 
@@ -70,18 +71,19 @@ handler set_handler_c11_atomic(handler func) noexcept {
   // CHECK: store void () addrspace(200)* %func, void () addrspace(200)* addrspace(200)* %func.addr, align [[$CAP_SIZE]]
   // CHECK: [[VAR_0:%.+]] = load void () addrspace(200)*, void () addrspace(200)* addrspace(200)* %func.addr, align [[$CAP_SIZE]]
   // CHECK: store void () addrspace(200)* [[VAR_0]], void () addrspace(200)* addrspace(200)* %.atomictmp, align [[$CAP_SIZE]]
-  // CHECK: [[VAR_1:%.+]] = bitcast void () addrspace(200)* addrspace(200)* %.atomictmp to i8 addrspace(200)*
-  // CHECK: [[VAR_2:%.+]] = bitcast void () addrspace(200)* addrspace(200)* %atomic-temp to i8 addrspace(200)*
-  // CHECK: call void @__atomic_exchange(i64 zeroext [[$CAP_SIZE]], i8 addrspace(200)* bitcast (void () addrspace(200)* addrspace(200)* @_ZL16__atomic_handler to i8 addrspace(200)*), i8 addrspace(200)* [[VAR_1]], i8 addrspace(200)* [[VAR_2]], i32 signext 5)
+  // CHECK: [[VAR_1:%.+]] = load void () addrspace(200)*, void () addrspace(200)* addrspace(200)* %.atomictmp, align [[$CAP_SIZE]]
+  // CHECK: atomicrmw xchg void () addrspace(200)* addrspace(200)* @_ZL16__atomic_handler, void () addrspace(200)* [[VAR_1]] seq_cst
   return __c11_atomic_exchange(&__atomic_handler, func, __ATOMIC_SEQ_CST);
 
   // ASM-LABEL: _Z22set_handler_c11_atomicU3capPFvvE:
-  // ASM: clcbi   $c3, %captab20(_ZL16__atomic_handler)($c26)
-  // ASM: clcbi   $c12, %capcall20(__atomic_exchange)($c26)
-  // ASM: daddiu  $4, $zero, [[$CAP_SIZE]]
-  // ASM: daddiu  $5, $zero, 5
-  // ASM: cjalr   $c12, $c17
-  // ASM: cmove   $c5,  $c18
+  // ASM:      clcbi   $c2, %captab20(_ZL16__atomic_handler)($c26)
+  // ASM-NEXT: sync
+  // ASM-NEXT: .LBB2_1:
+  // ASM-NEXT: cllc    $c1, $c2
+  // ASM-NEXT: cscc    $1, $c3, $c2
+  // ASM-NEXT: beqz    $1, .LBB2_1
+  // ASM-NEXT: nop
+  // ASM-NEXT: sync
   // ASM: .end _Z22set_handler_c11_atomicU3capPFvvE
 
 }
