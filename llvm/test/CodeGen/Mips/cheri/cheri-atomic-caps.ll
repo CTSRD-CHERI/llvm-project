@@ -35,3 +35,18 @@ entry:
   ret i32 42
 }
 
+define i32 addrspace(200)* @atomic_fetch_swap_cap(i32 addrspace(200)* %x) nounwind {
+; CHECK-LABEL:   atomic_fetch_swap_cap:
+; CHECK: clcbi   [[GLOBAL:\$c[0-9]+]], %captab20(cap)($c26)
+; CHECK-NEXT: [[BB0:(\$|\.L)[A-Z_0-9]+]]:
+; Load into $2 (return value)
+; CHECK-NEXT: cllc    [[DST:\$c[0-9]+]], [[GLOBAL]]
+; CHECK-NEXT: cscc    $1, $c3, [[GLOBAL]]
+; CHECK-NEXT: beqz    $1, [[BB0]]
+; CHECK-NEXT: nop
+; CHECK:      cjr     $c17
+; CHECK-NEXT: cmove   $c3, [[DST]]
+
+  %t1 = atomicrmw xchg i32 addrspace(200)* addrspace(200)* @cap, i32 addrspace(200)* %x acquire
+  ret i32 addrspace(200)* %t1
+}

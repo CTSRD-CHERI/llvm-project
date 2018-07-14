@@ -3339,8 +3339,8 @@ void Verifier::visitAtomicRMWInst(AtomicRMWInst &RMWI) {
   PointerType *PTy = dyn_cast<PointerType>(RMWI.getOperand(0)->getType());
   Assert(PTy, "First atomicrmw operand must be a pointer.", &RMWI);
   Type *ElTy = PTy->getElementType();
-  Assert(ElTy->isIntegerTy(), "atomicrmw operand must have integer type!",
-         &RMWI, ElTy);
+  Assert(ElTy->isIntegerTy() || ElTy->isPointerTy(),
+         "atomicrmw operand must have integer or pointer type!", &RMWI, ElTy);
   checkAtomicMemAccessSize(ElTy, &RMWI);
   Assert(ElTy == RMWI.getOperand(1)->getType(),
          "Argument value type does not match pointer operand type!", &RMWI,

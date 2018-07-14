@@ -1517,7 +1517,8 @@ MipsTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
 }
 
 
-static unsigned getCheriPostRAAtomicOp(const MachineInstr &MI) {
+static unsigned getCheriPostRAAtomicOp(const MachineInstr &MI,
+                                       bool* IsCapabilityArg) {
 #define CAP_ATOMIC_POSTRA_CASES(op) \
     case Mips::CAP_ATOMIC_##op##_I8: return Mips::CAP_ATOMIC_##op##_I8_POSTRA; \
     case Mips::CAP_ATOMIC_##op##_I16: return Mips::CAP_ATOMIC_##op##_I16_POSTRA; \
@@ -1527,14 +1528,17 @@ static unsigned getCheriPostRAAtomicOp(const MachineInstr &MI) {
     // TODO: case Mips::CAP_ATOMIC_##op##_CAP: return Mips::CAP_ATOMIC_##op##_CAP_POSTRA;
 
   switch (MI.getOpcode()) {
+  CAP_ATOMIC_POSTRA_CASES(LOAD_ADD)
+  CAP_ATOMIC_POSTRA_CASES(LOAD_SUB)
+  CAP_ATOMIC_POSTRA_CASES(LOAD_AND)
+  CAP_ATOMIC_POSTRA_CASES(LOAD_OR)
+  CAP_ATOMIC_POSTRA_CASES(LOAD_XOR)
+  CAP_ATOMIC_POSTRA_CASES(LOAD_NAND)
+  CAP_ATOMIC_POSTRA_CASES(SWAP)
+  case Mips::CAP_ATOMIC_SWAP_CAP:
+    *IsCapabilityArg = true;
+    return Mips::CAP_ATOMIC_SWAP_CAP_POSTRA;
   default:
-    CAP_ATOMIC_POSTRA_CASES(LOAD_ADD)
-    CAP_ATOMIC_POSTRA_CASES(LOAD_SUB)
-    CAP_ATOMIC_POSTRA_CASES(LOAD_AND)
-    CAP_ATOMIC_POSTRA_CASES(LOAD_OR)
-    CAP_ATOMIC_POSTRA_CASES(LOAD_XOR)
-    CAP_ATOMIC_POSTRA_CASES(LOAD_NAND)
-    CAP_ATOMIC_POSTRA_CASES(SWAP)
     llvm_unreachable("Unknown pseudo atomic for replacement!");
   }
 }
@@ -1551,6 +1555,7 @@ MipsTargetLowering::emitAtomicBinary(MachineInstr &MI,
   DebugLoc DL = MI.getDebugLoc();
 
   unsigned AtomicOp;
+  bool IsCapabilityArg = false;
   switch (MI.getOpcode()) {
   case Mips::ATOMIC_LOAD_ADD_I32:
     AtomicOp = Mips::ATOMIC_LOAD_ADD_I32_POSTRA;
@@ -1595,14 +1600,18 @@ MipsTargetLowering::emitAtomicBinary(MachineInstr &MI,
     AtomicOp = Mips::ATOMIC_SWAP_I64_POSTRA;
     break;
   default:
-    AtomicOp = getCheriPostRAAtomicOp(MI);
+    AtomicOp = getCheriPostRAAtomicOp(MI, &IsCapabilityArg);
     break;
   }
 
   unsigned OldVal = MI.getOperand(0).getReg();
+  auto RC = RegInfo.getRegClass(OldVal);
+  // For capability cscc we want a GPR64 scratch register and not CheriGPR
+  if (IsCapabilityArg)
+    RC = &Mips::GPR64RegClass;
   unsigned Ptr = MI.getOperand(1).getReg();
   unsigned Incr = MI.getOperand(2).getReg();
-  unsigned Scratch = RegInfo.createVirtualRegister(RegInfo.getRegClass(OldVal));
+  unsigned Scratch = RegInfo.createVirtualRegister(RC);
 
   MachineBasicBlock::iterator II(MI);
 

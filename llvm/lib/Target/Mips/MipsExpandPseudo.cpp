@@ -31,6 +31,8 @@ using namespace llvm;
 #define DEBUG_TYPE "mips-pseudo"
 
 namespace {
+  constexpr unsigned CAP_ATOMIC_SIZE = 0xcacaca;
+
   class MipsExpandPseudo : public MachineFunctionPass {
   public:
     static char ID;
@@ -208,7 +210,6 @@ bool MipsExpandPseudo::expandAtomicCmpSwap(MachineBasicBlock &BB,
                                            bool IsCapOp) {
 
   unsigned Size = -1;
-  constexpr unsigned CAP_CMPXCHG_SIZE = 0xca;
   bool IsCapCmpXchg = false;
   switch(I->getOpcode()) {
     case Mips::ATOMIC_CMP_SWAP_I32_POSTRA: Size = 4; break;
@@ -218,7 +219,7 @@ bool MipsExpandPseudo::expandAtomicCmpSwap(MachineBasicBlock &BB,
     case Mips::CAP_ATOMIC_CMP_SWAP_I32_POSTRA: Size = 4; break;
     case Mips::CAP_ATOMIC_CMP_SWAP_I64_POSTRA: Size = 8; break;
     case Mips::CAP_ATOMIC_CMP_SWAP_CAP_POSTRA:
-      Size = CAP_CMPXCHG_SIZE;
+      Size = CAP_ATOMIC_SIZE;
       IsCapCmpXchg = true;
       break;
     default:
@@ -276,11 +277,10 @@ bool MipsExpandPseudo::expandAtomicCmpSwap(MachineBasicBlock &BB,
       LL = Mips::CLLD;
       SC = Mips::CSCD;
       break;
-    case CAP_CMPXCHG_SIZE:
+    case CAP_ATOMIC_SIZE:
       assert(IsCapCmpXchg);
       LL = Mips::CLLC;
       SC = Mips::CSCC;
-      break;
       break;
     default:
       llvm_unreachable("Unknown CHERI atomic size!");
@@ -601,6 +601,10 @@ bool MipsExpandPseudo::expandAtomicBinOp(MachineBasicBlock &BB,
       LL = Mips::CLLD;
       SC = Mips::CSCD;
       break;
+    case CAP_ATOMIC_SIZE:
+      LL = Mips::CLLC;
+      SC = Mips::CSCC;
+      break;
     default:
       llvm_unreachable("Unknown CHERI atomic size!");
     }
@@ -678,6 +682,7 @@ bool MipsExpandPseudo::expandAtomicBinOp(MachineBasicBlock &BB,
     NOR = Mips::NOR64;
     break;
   case Mips::CAP_ATOMIC_SWAP_I64_POSTRA:
+  case Mips::CAP_ATOMIC_SWAP_CAP_POSTRA:
   case Mips::ATOMIC_SWAP_I64_POSTRA:
     OR = Mips::OR64;
     break;
@@ -815,6 +820,11 @@ bool MipsExpandPseudo::expandMI(MachineBasicBlock &MBB,
   case Mips::CAP_ATOMIC_LOAD_NAND_I64_POSTRA:
   case Mips::CAP_ATOMIC_SWAP_I64_POSTRA:
     return expandAtomicBinOp(MBB, MBBI, NMBB, 8, /*IsCapOp=*/true);
+
+  case Mips::CAP_ATOMIC_SWAP_CAP_POSTRA:
+  // TODO: case Mips::CAP_ATOMIC_LOAD_ADD_CAP_POSTRA:
+  // TODO: case Mips::CAP_ATOMIC_LOAD_SUB_CAP_POSTRA:
+    return expandAtomicBinOp(MBB, MBBI, NMBB, CAP_ATOMIC_SIZE, /*IsCapOp=*/true);
 
   case Mips::CAP_ATOMIC_CMP_SWAP_I8_POSTRA:
   case Mips::CAP_ATOMIC_CMP_SWAP_I16_POSTRA:

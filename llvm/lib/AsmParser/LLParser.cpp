@@ -6635,12 +6635,15 @@ int LLParser::ParseAtomicRMW(Instruction *&Inst, PerFunctionState &PFS) {
     return Error(PtrLoc, "atomicrmw operand must be a pointer");
   if (cast<PointerType>(Ptr->getType())->getElementType() != Val->getType())
     return Error(ValLoc, "atomicrmw value and pointer type do not match");
-  if (!Val->getType()->isIntegerTy())
-    return Error(ValLoc, "atomicrmw operand must be an integer");
-  unsigned Size = Val->getType()->getPrimitiveSizeInBits();
-  if (Size < 8 || (Size & (Size - 1)))
-    return Error(ValLoc, "atomicrmw operand must be power-of-two byte-sized"
-                         " integer");
+  if (!Val->getType()->isIntegerTy() && !Val->getType()->isPointerTy())
+    return Error(ValLoc, "atomicrmw operand must be an integer or pointer");
+  if (Val->getType()->isIntegerTy()) {
+    unsigned Size = Val->getType()->getPrimitiveSizeInBits();
+    if (Size < 8 || (Size & (Size - 1)))
+      return Error(ValLoc, "atomicrmw operand must be power-of-two byte-sized"
+                           " integer. " +
+                               Twine(Size) + " is invalid");
+  }
 
   AtomicRMWInst *RMWI =
     new AtomicRMWInst(Operation, Ptr, Val, Ordering, SSID);
