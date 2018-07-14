@@ -3991,17 +3991,6 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
     return ExprError();
   }
 
-  // At O0 we generate spills to the stack which can make the LL/SC fail!
-  // This is not a probalem for capabilities as we don't used LL/SC here but
-  // instead fall back to the library calls
-  if (!IsCapabilityAtomicOp) {
-    if (Context.getTargetInfo().getTriple().isMIPS()) {
-      if (!getLangOpts().Optimize && !getLangOpts().OptimizeSize)
-        Diag(DRE->getLocStart(), diag::warn_atomic_builtins_broken_mips)
-            << pointerType->getPointeeType() << FirstArg->getSourceRange();
-    }
-  }
-
   QualType ValType = pointerType->getPointeeType();
   if (!ValType->isIntegerType() && !ValType->isAnyPointerType() &&
       !ValType->isBlockPointerType()) {
