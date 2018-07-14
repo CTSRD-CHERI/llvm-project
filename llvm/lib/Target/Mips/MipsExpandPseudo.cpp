@@ -321,10 +321,13 @@ bool MipsExpandPseudo::expandAtomicCmpSwap(MachineBasicBlock &BB,
   //   move scratch, NewVal
   //   sc Scratch, Scratch, 0(ptr)
   //   beq Scratch, $0, loop1MBB
-  BuildMI(loop2MBB, DL, TII->get(MOVE), Scratch).addReg(NewVal).addReg(ZERO);
-  auto SCOp = BuildMI(loop2MBB, DL, TII->get(SC), Scratch).addReg(Scratch).addReg(Ptr);
-  if (!IsCapOp)
-    SCOp.addImm(0);
+  if (!IsCapOp) {
+    BuildMI(loop2MBB, DL, TII->get(MOVE), Scratch).addReg(NewVal).addReg(ZERO);
+    BuildMI(loop2MBB, DL, TII->get(SC), Scratch).addReg(Scratch).addReg(Ptr).addImm(0);
+  } else {
+    // No need for a move with the CHERI cll*/csc*
+    BuildMI(loop2MBB, DL, TII->get(SC), Scratch).addReg(NewVal).addReg(Ptr);
+  }
   BuildMI(loop2MBB, DL, TII->get(BEQ))
     .addReg(Scratch, RegState::Kill).addReg(ZERO).addMBB(loop1MBB);
 
@@ -673,6 +676,7 @@ bool MipsExpandPseudo::expandAtomicBinOp(MachineBasicBlock &BB,
     LLOp.addImm(0);
   assert((OldVal != Ptr) && "Clobbered the wrong ptr reg!");
   assert((OldVal != Incr) && "Clobbered the wrong reg!");
+  unsigned SCStoreValue = Scratch;
   if (Opcode) {
     BuildMI(loopMBB, DL, TII->get(Opcode), Scratch).addReg(OldVal).addReg(Incr);
   } else if (IsNand) {
@@ -682,10 +686,14 @@ bool MipsExpandPseudo::expandAtomicBinOp(MachineBasicBlock &BB,
     BuildMI(loopMBB, DL, TII->get(NOR), Scratch).addReg(ZERO).addReg(Scratch);
   } else {
     assert(OR && "Unknown instruction for atomic pseudo expansion!");
-    BuildMI(loopMBB, DL, TII->get(OR), Scratch).addReg(Incr).addReg(ZERO);
+    // CHERI can use different registers for store value and result -> skip move
+    if (IsCapOp)
+      SCStoreValue = Incr;
+    else
+      BuildMI(loopMBB, DL, TII->get(OR), Scratch).addReg(Incr).addReg(ZERO);
   }
 
-  auto SCOp = BuildMI(loopMBB, DL, TII->get(SC), Scratch).addReg(Scratch).addReg(Ptr);
+  auto SCOp = BuildMI(loopMBB, DL, TII->get(SC), Scratch).addReg(SCStoreValue).addReg(Ptr);
   if (!IsCapOp)
     SCOp.addImm(0);
   BuildMI(loopMBB, DL, TII->get(BEQ)).addReg(Scratch).addReg(ZERO).addMBB(loopMBB);
