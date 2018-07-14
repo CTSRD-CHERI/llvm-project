@@ -18,6 +18,7 @@
 #include "CodeGenModule.h"
 #include "CGValue.h"
 #include "clang/AST/Type.h"
+#include "clang/AST/Expr.h"
 #include "clang/Basic/LLVM.h"
 #include "clang/Basic/SyncScope.h"
 #include "llvm/ADT/SmallString.h"
@@ -227,6 +228,10 @@ public:
 #else
     return 0; // XXXAR: to keep code the same as upstream
 #endif
+  }
+
+  virtual bool cheriCapabilityAtomicNeedsLibcall(AtomicExpr::AtomicOp Op) const {
+    return true;
   }
 
   virtual unsigned getCHERICapabilityAS() const {

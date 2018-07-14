@@ -781,9 +781,9 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
                      getContext().toBits(sizeChars) > MaxInlineWidthInBits);
 
   bool IsCheriCap = AtomicTy->isCHERICapabilityType(CGM.getContext());
-  // Silence this warning for CHERI caps since it is known to be broken
-  // https://github.com/CTSRD-CHERI/clang/issues/201
-  if (UseLibcall && !IsCheriCap)
+  if (IsCheriCap)
+    UseLibcall = CGM.getTargetCodeGenInfo().cheriCapabilityAtomicNeedsLibcall(E->getOp());
+  if (UseLibcall)
     CGM.getDiags().Report(E->getLocStart(), diag::warn_atomic_op_misaligned);
 
   llvm::Value *Order = EmitScalarExpr(E->getOrder());
@@ -908,13 +908,6 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
                 E->getOp() == AtomicExpr::AO__opencl_atomic_load ||
                 E->getOp() == AtomicExpr::AO__atomic_load ||
                 E->getOp() == AtomicExpr::AO__atomic_load_n;
-
-  // For CHERI we can lower load/store to atomic ops but currently need to use
-  // libcalls for non-load/store operations
-  // See https://github.com/CTSRD-CHERI/clang/issues/201
-  if ((!IsLoad && !IsStore) && AtomicTy->isCHERICapabilityType(CGM.getContext()))
-    UseLibcall = true;
-
 
   // Use a library call.  See: http://gcc.gnu.org/wiki/Atomic/GCCMM/LIbrary .
   if (UseLibcall) {
