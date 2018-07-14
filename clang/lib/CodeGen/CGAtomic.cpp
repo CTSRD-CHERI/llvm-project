@@ -781,8 +781,14 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
                      getContext().toBits(sizeChars) > MaxInlineWidthInBits);
 
   bool IsCheriCap = AtomicTy->isCHERICapabilityType(CGM.getContext());
-  if (IsCheriCap)
-    UseLibcall = CGM.getTargetCodeGenInfo().cheriCapabilityAtomicNeedsLibcall(E->getOp());
+  if (IsCheriCap) {
+    if (getTarget().areAllPointersCapabilities())
+      UseLibcall = CGM.getTargetCodeGenInfo().cheriCapabilityAtomicNeedsLibcall(
+          E->getOp());
+    // FIXME: for now use libcalls in hybrid mode since it results in broken IR
+    else
+      UseLibcall = true;
+  }
   if (UseLibcall)
     CGM.getDiags().Report(E->getLocStart(), diag::warn_atomic_op_misaligned);
 
