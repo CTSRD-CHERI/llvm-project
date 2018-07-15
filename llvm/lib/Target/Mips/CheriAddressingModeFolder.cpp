@@ -197,8 +197,11 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         if (IncOffset->getOpcode() == Mips::CFromPtr) {
           if ((Op == Mips::LOADCAP) || (Op == Mips::STORECAP))
             continue;
+          // FIXME: this does the wrong thing if the MIPS register is zero!
+#if 0
           if (IncOffset->getOperand(1).getReg() == Mips::DDC)
             DDCOps.emplace_back(&MI, IncOffset);
+#endif
           continue;
         }
 
@@ -280,6 +283,8 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         IncOffsets.insert(IncOffset);
         modified = true;
       }
+
+    assert(DDCOps.empty() && "This optimization is sometimes wrong -> should skip!");
     for (auto &I : DDCOps) {
       IncOffsets.insert(I.second);
       unsigned BaseReg = I.second->getOperand(2).getReg();
