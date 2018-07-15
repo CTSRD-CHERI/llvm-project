@@ -1445,6 +1445,13 @@ RValue AtomicInfo::ConvertIntToValueOrAtomic(llvm::Value *IntVal,
                                              AggValueSlot ResultSlot,
                                              SourceLocation Loc,
                                              bool AsValue) const {
+  if (AtomicTy->isCHERICapabilityType(CGF.getContext())) {
+    auto *ValTy = AsValue ? CGF.ConvertTypeForMem(ValueTy)
+                      : getAtomicAddress().getType()->getPointerElementType();
+    assert(ValTy->isPointerTy());
+    return RValue::get(CGF.Builder.CreateBitCast(IntVal, ValTy));
+  }
+
   // Try not to in some easy cases.
   assert(IntVal->getType()->isIntegerTy() && "Expected integer value");
   if (getEvaluationKind() == TEK_Scalar &&
