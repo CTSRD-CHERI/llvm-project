@@ -9,8 +9,13 @@ int main(void) {
   _Atomic(int*) p;
 
   // TODO: implement this inline
-  __c11_atomic_fetch_add(&p, 1, __ATOMIC_SEQ_CST);  // expected-warning {{misaligned or large atomic operation may incur significant performance penalty}}
+  __c11_atomic_init(&p, (int *)7);
   // CHECK: [[P_AS_I8:%.+]] = bitcast i32 addrspace(200)* addrspace(200)* %p to i8 addrspace(200)*
+  // CHECK: [[INITVAL:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 7)
+  // CHECK: [[P_AS_I8_PTRPTR:%.+]] = bitcast i32 addrspace(200)* addrspace(200)* %p to i8 addrspace(200)* addrspace(200)*
+  // CHECK: store i8 addrspace(200)* [[INITVAL]], i8 addrspace(200)* addrspace(200)* [[P_AS_I8_PTRPTR]], align
+
+  __c11_atomic_fetch_add(&p, 1, __ATOMIC_SEQ_CST); // expected-warning {{misaligned or large atomic operation may incur significant performance penalty}}
   // CHECK: [[INC:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 4)
   // CHECK: call i8 addrspace(200)* @__atomic_fetch_add_cap(i8 addrspace(200)* nonnull [[P_AS_I8]], i8 addrspace(200)* [[INC]], i32 signext 5)
   __c11_atomic_fetch_sub(&p, 2, __ATOMIC_SEQ_CST); // expected-warning {{misaligned or large atomic operation may incur significant performance penalty}}

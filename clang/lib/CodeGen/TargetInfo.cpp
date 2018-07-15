@@ -6896,31 +6896,32 @@ public:
 
   bool cheriCapabilityAtomicNeedsLibcall(AtomicExpr::AtomicOp Op) const override {
     switch (Op) {
-      case AtomicExpr::AO__atomic_load:
-      case AtomicExpr::AO__atomic_load_n:
-      case AtomicExpr::AO__c11_atomic_load:
-      case AtomicExpr::AO__c11_atomic_store:
-      case AtomicExpr::AO__atomic_store:
-      case AtomicExpr::AO__atomic_store_n:
-      case AtomicExpr::AO__c11_atomic_exchange:
-      case AtomicExpr::AO__atomic_exchange:
-      case AtomicExpr::AO__atomic_exchange_n:
-      case AtomicExpr::AO__c11_atomic_compare_exchange_strong:
-      case AtomicExpr::AO__c11_atomic_compare_exchange_weak:
-      case AtomicExpr::AO__atomic_compare_exchange:
-      case AtomicExpr::AO__atomic_compare_exchange_n:
-        return false;
-      case AtomicExpr::AO__atomic_fetch_add:
-      case AtomicExpr::AO__atomic_fetch_sub:
-      case AtomicExpr::AO__atomic_add_fetch:
-      case AtomicExpr::AO__atomic_sub_fetch:
-      case AtomicExpr::AO__c11_atomic_fetch_add:
-      case AtomicExpr::AO__c11_atomic_fetch_sub:
-        return true; // TODO: allow emitting this without a libcall
+    case AtomicExpr::AO__c11_atomic_init:
+    case AtomicExpr::AO__atomic_load:
+    case AtomicExpr::AO__atomic_load_n:
+    case AtomicExpr::AO__c11_atomic_load:
+    case AtomicExpr::AO__c11_atomic_store:
+    case AtomicExpr::AO__atomic_store:
+    case AtomicExpr::AO__atomic_store_n:
+    case AtomicExpr::AO__c11_atomic_exchange:
+    case AtomicExpr::AO__atomic_exchange:
+    case AtomicExpr::AO__atomic_exchange_n:
+    case AtomicExpr::AO__c11_atomic_compare_exchange_strong:
+    case AtomicExpr::AO__c11_atomic_compare_exchange_weak:
+    case AtomicExpr::AO__atomic_compare_exchange:
+    case AtomicExpr::AO__atomic_compare_exchange_n:
+      return false;
+    case AtomicExpr::AO__atomic_fetch_add:
+    case AtomicExpr::AO__atomic_fetch_sub:
+    case AtomicExpr::AO__atomic_add_fetch:
+    case AtomicExpr::AO__atomic_sub_fetch:
+    case AtomicExpr::AO__c11_atomic_fetch_add:
+    case AtomicExpr::AO__c11_atomic_fetch_sub:
+      return true; // TODO: allow emitting this without a libcall
 
-      default:
-        llvm_unreachable("Atomic op should not be supported for capabilities");
-        return true;
+    default:
+      llvm_unreachable("Atomic op should not be supported for capabilities");
+      return true;
     }
   }
 };
