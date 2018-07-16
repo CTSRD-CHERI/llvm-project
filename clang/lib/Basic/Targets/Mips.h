@@ -19,6 +19,7 @@
 #include "clang/Basic/TargetOptions.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/ADT/Triple.h"
+#include "llvm/IR/Cheri.h"
 #include "llvm/MC/MCTargetOptions.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Compiler.h"
@@ -523,15 +524,15 @@ public:
   uint64_t getPointerRangeForCHERICapability() const override { return 64; }
 
   uint64_t getPointerWidthV(unsigned AddrSpace) const override {
-    return (AddrSpace == 200) ? CapSize : PointerWidth;
+    return isCheriPointer(AddrSpace, &getDataLayout()) ? CapSize : PointerWidth;
   }
 
   uint64_t getPointerRangeV(unsigned AddrSpace) const override {
-    return (AddrSpace == 200) ? getPointerRangeForCHERICapability() : PointerWidth;
+    return isCheriPointer(AddrSpace, &getDataLayout()) ? getPointerRangeForCHERICapability() : PointerWidth;
   }
 
   uint64_t getPointerAlignV(unsigned AddrSpace) const override {
-    return (AddrSpace == 200) ? CapSize : PointerAlign;
+    return isCheriPointer(AddrSpace, &getDataLayout()) ? CapSize : PointerAlign;
   }
 
   bool SupportsCapabilities() const override { return IsCHERI; }
