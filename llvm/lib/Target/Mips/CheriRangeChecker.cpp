@@ -1,4 +1,5 @@
 #include "llvm/Pass.h"
+#include "llvm/IR/Cheri.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/LLVMContext.h"
@@ -108,7 +109,7 @@ public:
   }
   User *testI2P(User &I2P) {
     PointerType *DestTy = dyn_cast<PointerType>(I2P.getType());
-    if (DestTy && DestTy->getAddressSpace() == 200) {
+    if (DestTy && isCheriPointer(DestTy, TD)) {
       if (checkOpcode(I2P.getOperand(0), Instruction::PtrToInt)) {
         User *P2I = cast<User>(I2P.getOperand(0));
         PointerType *SrcTy =
@@ -129,7 +130,7 @@ public:
     PointerType *DestTy = dyn_cast<PointerType>(ASC.getType());
     Value *Src = ASC.getOperand(0);
     PointerType *SrcTy = dyn_cast<PointerType>(Src->getType());
-    if ((DestTy && DestTy->getAddressSpace() == 200) &&
+    if ((DestTy && isCheriPointer(DestTy, TD)) &&
         (SrcTy && SrcTy->getAddressSpace() == 0)) {
       Src = Src->stripPointerCasts();
       if (GlobalVariable *GV = dyn_cast<GlobalVariable>(Src)) {

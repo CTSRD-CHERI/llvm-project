@@ -3160,7 +3160,7 @@ static void checkCheriIntToPtr(const DataLayout *DL, Type* SrcTy, Type* Dst) {
     // FIXME: hardcoded 64 is wrong for CHERI64
     unsigned ValidBitWidth = DL ? DL->getIndexTypeSizeInBits(Dst) : 64;
     assert(cast<IntegerType>(SrcTy)->getIntegerBitWidth() <= ValidBitWidth &&
-           "Bad ptrtoint for Cheri capabilities!");
+           "Bad inttoptr for Cheri capabilities!");
   }
 }
 

@@ -33,6 +33,7 @@
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/CallSite.h"
+#include "llvm/IR/Cheri.h"
 #include "llvm/IR/Constant.h"
 #include "llvm/IR/ConstantRange.h"
 #include "llvm/IR/Constants.h"
@@ -1010,7 +1011,7 @@ bool SimplifyCFGOpt::FoldValueComparisonIntoPredecessors(TerminatorInst *TI,
 
   // Don't fold if the value is a CHERI capability
   if (PointerType* PT = dyn_cast<PointerType>(CV->getType())) {
-    if (PT->getAddressSpace() == 200)
+    if (isCheriPointer(PT, getDataLayoutOrNull(BB)))
       return false;
   }
 

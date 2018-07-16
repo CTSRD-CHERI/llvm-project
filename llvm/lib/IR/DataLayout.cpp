@@ -20,6 +20,7 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Triple.h"
+#include "llvm/IR/Cheri.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/GetElementPtrTypeIterator.h"
@@ -282,7 +283,7 @@ void DataLayout::parseSpecifier(StringRef Desc) {
       unsigned AddrSpace = Tok.empty() ? 0 : getInt(Tok);
       if (!isUInt<24>(AddrSpace))
         report_fatal_error("Invalid address space, must be a 24bit integer");
-      assert(isFat == (AddrSpace == 200));
+      assert(isFat == isCheriPointer(AddrSpace, nullptr));
 
       // Size.
       if (Rest.empty())

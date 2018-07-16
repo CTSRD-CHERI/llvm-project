@@ -69,6 +69,7 @@
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/CallingConv.h"
+#include "llvm/IR/Cheri.h"
 #include "llvm/IR/Constant.h"
 #include "llvm/IR/ConstantRange.h"
 #include "llvm/IR/Constants.h"
@@ -8821,7 +8822,7 @@ void SelectionDAGISel::LowerArguments(const Function &F) {
 
     // Ignore byval attribute on CHERI capability arguments because we just
     // pass them in capability registers
-    bool isArgCHERICapability = FinalType->isPointerTy() && FinalType->getPointerAddressSpace() == 200;
+    bool isArgCHERICapability = isCheriPointer(FinalType, &DAG.getDataLayout());
     if (Arg.hasAttribute(Attribute::ByVal) && !isArgCHERICapability)
       FinalType = cast<PointerType>(FinalType)->getElementType();
     bool NeedsRegBlock = TLI->functionArgumentNeedsConsecutiveRegisters(

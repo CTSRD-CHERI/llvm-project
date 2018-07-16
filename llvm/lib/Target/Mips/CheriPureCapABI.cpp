@@ -1,4 +1,5 @@
 #include "llvm/Pass.h"
+#include "llvm/IR/Cheri.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/LLVMContext.h"
@@ -63,13 +64,13 @@ public:
     const DataLayout &DL = F.getParent()->getDataLayout();
 
     for (AllocaInst *AI : Allocas) {
-      assert(AI->getType()->getPointerAddressSpace() == 200);
       // Insert immediately after the alloca
       B.SetInsertPoint(AI);
       B.SetInsertPoint(&*++B.GetInsertPoint());
       unsigned ForcedAlignment = 0;
 
       PointerType *AllocaTy = AI->getType();
+      assert(isCheriPointer(AllocaTy, &DL));
       Type *AllocationTy = AllocaTy->getElementType();
       Value *ArraySize = AI->getArraySize();
 

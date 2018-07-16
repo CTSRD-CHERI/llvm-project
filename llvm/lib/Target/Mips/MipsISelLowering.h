@@ -27,6 +27,7 @@
 #include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/CallingConv.h"
+#include "llvm/IR/Cheri.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Type.h"
 #include "llvm/Support/MachineValueType.h"
@@ -378,7 +379,10 @@ extern bool LargeCapTable;
       // Mips doesn't have any special address spaces so we just reserve
       // the first 256 for software use (e.g. OpenCL) and treat casts
       // between them as noops.
-      if (((SrcAS == 200) || (DestAS == 200)) && (DestAS != SrcAS))
+      // TODO: can we get the datalayout somehow?
+      const bool SrcIsCheri = isCheriPointer(SrcAS, nullptr);
+      const bool DestIsCheri = isCheriPointer(DestAS, nullptr);
+      if ((SrcIsCheri || DestIsCheri) && (SrcIsCheri != DestIsCheri))
         return false;
       return SrcAS < 256 && DestAS < 256;
     }

@@ -49,6 +49,7 @@
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/CallingConv.h"
+#include "llvm/IR/Cheri.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DebugLoc.h"
@@ -2201,7 +2202,7 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
   }
 
   EVT AddrTy = Ty;
-  if (GV->getType()->getAddressSpace() == 200)
+  if (isCheriPointer(GV->getType(), &DAG.getDataLayout()))
     Ty = MVT::i64;
   SDValue Global;
 
@@ -2248,7 +2249,7 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
           DAG.getEntryNode(), MachinePointerInfo::getGOT(DAG.getMachineFunction()), GV->isThreadLocal());
   }
 
-  if (GV->getType()->getAddressSpace() == 200) {
+  if (isCheriPointer(GV->getType(), &DAG.getDataLayout())) {
     assert(!ABI.UsesCapabilityTable());
     Global = DAG.getNode(ISD::INTTOPTR, SDLoc(N), AddrTy, Global);
     StringRef Name = GV->getName();
@@ -2466,7 +2467,7 @@ SDValue MipsTargetLowering::lowerVASTART(SDValue Op, SelectionDAG &DAG) const {
     // alloca to AS 0.  We need to extract the original operands.
     const Value *SV = cast<SrcValueSDNode>(Op.getOperand(2))->getValue();
     SV = SV->stripPointerCasts();
-    assert(SV->getType()->getPointerAddressSpace() == 200);
+    assert(isCheriPointer(SV->getType(), &DAG.getDataLayout()));
     SDValue Chain = Op.getOperand(0);
     SDValue CapAddr = Op.getOperand(1);
     FI = DAG.getCopyFromReg(DAG.getEntryNode(), DL, Reg, CapType);
@@ -4658,7 +4659,7 @@ bool MipsTargetLowering::isLegalAddressingMode(const DataLayout &DL,
   if (AM.BaseGV)
     return false;
 
-  if (AS == 200) {
+  if (isCheriPointer(AS, &DL)) {
     switch (AM.Scale) {
     case 0: // "r+i" or just "i", depending on HasBaseReg.
     case 1:
