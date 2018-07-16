@@ -1,4 +1,5 @@
 ; RUN: %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=pcrel %s -o - -O2 | FileCheck %s
+; RUN: %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=legacy %s -o - -O2 | FileCheck %s
 
 ; The Cheri Addressing Mode Folder pass would previously turn this clw of NULL (which always traps with a tag violation)
 ; into a lw of zero (which is relative to $ddc and might not trap)

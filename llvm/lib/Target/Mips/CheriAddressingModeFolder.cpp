@@ -20,11 +20,13 @@ namespace {
 struct CheriAddressingModeFolder : public MachineFunctionPass {
   static char ID;
   const MipsInstrInfo *InstrInfo = nullptr;
+  bool UseCapTable = false;
 
   CheriAddressingModeFolder() : MachineFunctionPass(ID) {
   }
   CheriAddressingModeFolder(MipsTargetMachine &TM) : MachineFunctionPass(ID) {
     InstrInfo = TM.getSubtargetImpl()->getInstrInfo();
+    UseCapTable = TM.getSubtargetImpl()->useCheriCapTable();
   }
 
   StringRef getPassName() const override { return "Cheri Addressing Mode Folder"; }
@@ -194,14 +196,17 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
           continue;
         // If this is CFromPtr-relative load or store, then we may be able to
         // fold it into a MIPS load.
-        if (IncOffset->getOpcode() == Mips::CFromPtr) {
+        // XXXAR: this optimization is needed for the legacy ABI but is slightly
+        // unsounds (load of null might not longer always trap) so we disable it
+        // when using the cap table.
+        if (!UseCapTable && IncOffset->getOpcode() == Mips::CFromPtr) {
           if ((Op == Mips::LOADCAP) || (Op == Mips::STORECAP))
             continue;
           // FIXME: this does the wrong thing if the MIPS register is zero!
-#if 0
-          if (IncOffset->getOperand(1).getReg() == Mips::DDC)
+          // For now just assume it's fine if it's not the zero register
+          if (IncOffset->getOperand(1).getReg() == Mips::DDC &&
+              IncOffset->getOperand(2).getReg() != Mips::ZERO_64)
             DDCOps.emplace_back(&MI, IncOffset);
-#endif
           continue;
         }
 
@@ -284,7 +289,9 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         modified = true;
       }
 
-    assert(DDCOps.empty() && "This optimization is sometimes wrong -> should skip!");
+    assert(!UseCapTable ||
+           DDCOps.empty() && "This optimization is sometimes wrong -> should "
+                             "skip (at least for captable)!");
     for (auto &I : DDCOps) {
       IncOffsets.insert(I.second);
       unsigned BaseReg = I.second->getOperand(2).getReg();
