@@ -3135,7 +3135,7 @@ static void checkCheriPtrToInt(const DataLayout *DL, Type* SrcTy, Type* Dst) {
   if (isCheriPointer(SrcTy, DL)) {
     // FIXME: hardcoded 64 is wrong for CHERI64
     unsigned ValidBitWidth = DL ? DL->getIndexTypeSizeInBits(SrcTy) : 64;
-    assert(cast<IntegerType>(Dst)->getIntegerBitWidth() == ValidBitWidth &&
+    assert(cast<IntegerType>(Dst)->getIntegerBitWidth() <= ValidBitWidth &&
            "Bad ptrtoint for Cheri capabilities!");
   }
 }
@@ -3154,16 +3154,28 @@ PtrToIntInst::PtrToIntInst(Value *S, Type *Ty, const Twine &Name,
   checkCheriPtrToInt(getDataLayoutOrNull(InsertAtEnd), S->getType(), Ty);
 }
 
+static void checkCheriIntToPtr(const DataLayout *DL, Type* SrcTy, Type* Dst) {
+  // Catch things that are always an error like i128/i256 -> CHERI ptr
+  if (isCheriPointer(Dst, DL)) {
+    // FIXME: hardcoded 64 is wrong for CHERI64
+    unsigned ValidBitWidth = DL ? DL->getIndexTypeSizeInBits(Dst) : 64;
+    assert(cast<IntegerType>(SrcTy)->getIntegerBitWidth() <= ValidBitWidth &&
+           "Bad ptrtoint for Cheri capabilities!");
+  }
+}
+
 IntToPtrInst::IntToPtrInst(Value *S, Type *Ty, const Twine &Name,
                            Instruction *InsertBefore)
     : CastInst(Ty, IntToPtr, S, Name, InsertBefore) {
   assertCastIsValid(getOpcode(), S, Ty, "Illegal IntToPtr");
+  checkCheriIntToPtr(getDataLayoutOrNull(InsertBefore), S->getType(), Ty);
 }
 
 IntToPtrInst::IntToPtrInst(Value *S, Type *Ty, const Twine &Name,
                            BasicBlock *InsertAtEnd)
     : CastInst(Ty, IntToPtr, S, Name, InsertAtEnd) {
   assertCastIsValid(getOpcode(), S, Ty, "Illegal IntToPtr");
+  checkCheriIntToPtr(getDataLayoutOrNull(InsertAtEnd), S->getType(), Ty);
 }
 
 BitCastInst::BitCastInst(Value *S, Type *Ty, const Twine &Name,
