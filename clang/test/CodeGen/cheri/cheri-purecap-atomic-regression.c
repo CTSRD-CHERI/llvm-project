@@ -2,7 +2,7 @@
 // RUN: %cheri_purecap_cc1 -std=c11 %s -emit-llvm -o - -O0 | FileCheck %s
 // RUN: %cheri_purecap_cc1 -std=c11 %s -emit-llvm -o - -O2 | FileCheck %s -check-prefix OPT
 // Check that we can generate assembly without crashing
-// RUN: %cheri_purecap_cc1 -std=c11 %s -S -o - -O2 | FileCheck %s -check-prefix ASM
+// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=plt -std=c11 %s -S -o - -O2 | FileCheck %s -check-prefix ASM
 
 // This previously crashed in codegen when generating the *p
 // CHECK-LABEL: @main(
@@ -49,10 +49,41 @@ int main(void) {
 //
 int main2(_Atomic(int*) p) {
   return *p;
-
   // ASM-LABEL: main2:
   // TODO: why is this not going in the delay slot?
   // ASM:      clw	$2, $zero, 0($c3)
   // ASM-NEXT: cjr	$c17
   // ASM-NEXT: nop
+}
+
+
+// This was also crashing:
+_Atomic(int *) a;
+// CHECK-LABEL: @test_store(
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 1)
+// CHECK-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)* [[TMP0]] to i32 addrspace(200)*
+// CHECK-NEXT:    store atomic i32 addrspace(200)* [[TMP1]], i32 addrspace(200)* addrspace(200)* @a seq_cst, align 16
+// CHECK-NEXT:    ret void
+//
+// OPT-LABEL: @test_store(
+// OPT-NEXT:  entry:
+// OPT-NEXT:    [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 1)
+// OPT-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)* [[TMP0]] to i32 addrspace(200)*
+// OPT-NEXT:    store atomic i32 addrspace(200)* [[TMP1]], i32 addrspace(200)* addrspace(200)* @a seq_cst, align 16, !tbaa !6
+// OPT-NEXT:    ret void
+//
+void test_store() {
+  a = (void *)1;
+  // ASM-LABEL: test_store:
+  // TODO: why is this not going in the delay slot?
+  // ASM: clcbi	$c1, %captab20(a)($c26)
+  // ASM-NEXT: cgetnull	$c2
+  // ASM-NEXT: cincoffset	$c2, $c2, 1
+  // ASM-NEXT: sync
+  // ASM-NEXT: csc	$c2, $zero, 0($c1)
+  // ASM-NEXT: sync
+  // ASM-NEXT: cjr	$c17
+  // ASM-NEXT: nop
+
 }

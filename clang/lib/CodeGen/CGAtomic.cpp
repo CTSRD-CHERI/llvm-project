@@ -1648,6 +1648,10 @@ llvm::Value *AtomicInfo::convertRValueToInt(RValue RVal) const {
     if (isa<llvm::IntegerType>(Value->getType()))
       return CGF.EmitToMemory(Value, ValueTy);
     else {
+      if (AtomicTy->isCHERICapabilityType(CGF.getContext())) {
+        // Cast to the atomic ptr element type for CHERI capabilities
+        return CGF.Builder.CreateBitCast(Value, LVal.getAddress().getElementType());
+      }
       llvm::IntegerType *InputIntTy = llvm::IntegerType::get(
           CGF.getLLVMContext(),
           LVal.isSimple() ? getValueSizeInBits() : getAtomicSizeInBits());
