@@ -1,4 +1,5 @@
 #include "Cheri.h"
+#include "../Bits.h"
 #include "../OutputSections.h"
 #include "../SymbolTable.h"
 #include "../SyntheticSections.h"
@@ -523,7 +524,33 @@ CheriCapTableSection::CheriCapTableSection()
 void CheriCapTableSection::writeTo(uint8_t* Buf) {
   // Should be filled with all zeros and crt_init_globals fills it in
   // TODO: fill in the raw bits and use csettag
-  (void)Buf;
+
+  auto Write = [&](size_t I, const Symbol *S, int64_t A) {
+    uint64_t VA = A;
+    if (S)
+      VA = S->getVA(A);
+    writeUint(Buf + I * Config->Wordsize, VA);
+  };
+  // If TLS entry has a corresponding dynamic relocations, leave it
+  // initialized by zero. Write down adjusted TLS symbol's values otherwise.
+  // To calculate the adjustments use offsets for thread-local storage.
+  // TODO: Don't hard-code MIPS offsets here.
+  for (auto &it : DynTlsEntries) {
+    if (it.first == nullptr && !Config->Pic)
+      Write(it.second.Index.getValue(), nullptr, 1);
+    else if (it.first && !it.first->IsPreemptible) {
+      // If we are emitting PIC code with relocations we mustn't write
+      // anything to the GOT here. When using Elf_Rel relocations the value
+      // one will be treated as an addend and will cause crashes at runtime
+      if (!Config->Pic)
+        Write(it.second.Index.getValue(), nullptr, 1);
+      Write(it.second.Index.getValue() + 1, it.first, -0x8000);
+    }
+  }
+
+  for (auto &it : TlsEntries)
+    Write(it.second.Index.getValue(), it.first,
+          it.first->IsPreemptible ? 0 : -0x7000);
 }
 
 void CheriCapTableSection::addEntry(Symbol &Sym, bool SmallImm) {
@@ -544,11 +571,44 @@ void CheriCapTableSection::addEntry(Symbol &Sym, bool SmallImm) {
 #endif
 }
 
+void CheriCapTableSection::addDynTlsEntry(Symbol &Sym) {
+  DynTlsEntries.insert(std::make_pair(&Sym, CapTableIndex()));
+}
+
+void CheriCapTableSection::addTlsIndex() {
+  DynTlsEntries.insert(std::make_pair(nullptr, CapTableIndex()));
+}
+
+void CheriCapTableSection::addTlsEntry(Symbol &Sym) {
+  TlsEntries.insert(std::make_pair(&Sym, CapTableIndex()));
+}
+
 uint32_t CheriCapTableSection::getIndex(const Symbol &Sym) const {
   assert(ValuesAssigned && "getIndex called before index assignment");
   auto it = Entries.find(const_cast<Symbol *>(&Sym));
   assert(it != Entries.end());
   return it->second.Index.getValue();
+}
+
+uint32_t CheriCapTableSection::getDynTlsOffset(const Symbol &Sym) const {
+  assert(ValuesAssigned && "getDynTlsOffset called before index assignment");
+  auto it = DynTlsEntries.find(const_cast<Symbol *>(&Sym));
+  assert(it != Entries.end());
+  return it->second.Index.getValue() * Config->Wordsize;
+}
+
+uint32_t CheriCapTableSection::getTlsIndexOffset() const {
+  assert(ValuesAssigned && "getTlsIndexOffset called before index assignment");
+  auto it = DynTlsEntries.find(nullptr);
+  assert(it != Entries.end());
+  return it->second.Index.getValue() * Config->Wordsize;
+}
+
+uint32_t CheriCapTableSection::getTlsOffset(const Symbol &Sym) const {
+  assert(ValuesAssigned && "getTlsOffset called before index assignment");
+  auto it = TlsEntries.find(const_cast<Symbol *>(&Sym));
+  assert(it != Entries.end());
+  return it->second.Index.getValue() * Config->Wordsize;
 }
 
 template <class ELFT>
@@ -641,6 +701,50 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
         [&]() { return "\n>>> referenced by " + RefName; });
   }
   assert(AssignedSmallIndexes + AssignedLargeIndexes == Entries.size());
+
+  uint32_t AssignedTlsIndexes = 0;
+  uint32_t TlsBaseIndex =
+    (AssignedSmallIndexes + AssignedLargeIndexes) *
+    (Config->CapabilitySize / Config->Wordsize);
+
+  for (auto &it : DynTlsEntries) {
+    CapTableIndex &CTI = it.second;
+    assert(!CTI.NeedsSmallImm);
+    CTI.Index = TlsBaseIndex + AssignedTlsIndexes;
+    AssignedTlsIndexes += 2;
+    Symbol *S = it.first;
+    uint64_t Offset = CTI.Index.getValue() * Config->Wordsize;
+    if (S == nullptr) {
+      if (!Config->Pic)
+        continue;
+      InX::RelaDyn->addReloc(Target->TlsModuleIndexRel, this, Offset, S);
+    } else {
+      // When building a shared library we still need a dynamic relocation
+      // for the module index. Therefore only checking for
+      // S->IsPreemptible is not sufficient (this happens e.g. for
+      // thread-locals that have been marked as local through a linker script)
+      if (!S->IsPreemptible && !Config->Pic)
+        continue;
+      InX::RelaDyn->addReloc(Target->TlsModuleIndexRel, this, Offset, S);
+      // However, we can skip writing the TLS offset reloc for non-preemptible
+      // symbols since it is known even in shared libraries
+      if (!S->IsPreemptible)
+        continue;
+      Offset += Config->Wordsize;
+      InX::RelaDyn->addReloc(Target->TlsOffsetRel, this, Offset, S);
+    }
+  }
+
+  for (auto &it : TlsEntries) {
+    CapTableIndex &CTI = it.second;
+    assert(!CTI.NeedsSmallImm);
+    CTI.Index = TlsBaseIndex + AssignedTlsIndexes++;
+    Symbol *S = it.first;
+    uint64_t Offset = CTI.Index.getValue() * Config->Wordsize;
+    if (S->IsPreemptible)
+      InX::RelaDyn->addReloc(Target->TlsGotRel, this, Offset, S);
+  }
+
   ValuesAssigned = true;
 }
 
