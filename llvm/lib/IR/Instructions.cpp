@@ -20,6 +20,7 @@
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CallSite.h"
+#include "llvm/IR/Cheri.h"
 #include "llvm/IR/Constant.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
@@ -3129,16 +3130,28 @@ FPToSIInst::FPToSIInst(Value *S, Type *Ty, const Twine &Name,
   assertCastIsValid(getOpcode(), S, Ty, "Illegal FPToSI");
 }
 
+static void checkCheriPtrToInt(const DataLayout *DL, Type* SrcTy, Type* Dst) {
+  // Catch things that are always an error like CHERI ptr -> i128/i256
+  if (isCheriPointer(SrcTy, DL)) {
+    // FIXME: hardcoded 64 is wrong for CHERI64
+    unsigned ValidBitWidth = DL ? DL->getIndexTypeSizeInBits(SrcTy) : 64;
+    assert(cast<IntegerType>(Dst)->getIntegerBitWidth() == ValidBitWidth &&
+           "Bad ptrtoint for Cheri capabilities!");
+  }
+}
+
 PtrToIntInst::PtrToIntInst(Value *S, Type *Ty, const Twine &Name,
                            Instruction *InsertBefore)
     : CastInst(Ty, PtrToInt, S, Name, InsertBefore) {
   assertCastIsValid(getOpcode(), S, Ty, "Illegal PtrToInt");
+  checkCheriPtrToInt(getDataLayoutOrNull(InsertBefore), S->getType(), Ty);
 }
 
 PtrToIntInst::PtrToIntInst(Value *S, Type *Ty, const Twine &Name,
                            BasicBlock *InsertAtEnd)
     : CastInst(Ty, PtrToInt, S, Name, InsertAtEnd) {
   assertCastIsValid(getOpcode(), S, Ty, "Illegal PtrToInt");
+  checkCheriPtrToInt(getDataLayoutOrNull(InsertAtEnd), S->getType(), Ty);
 }
 
 IntToPtrInst::IntToPtrInst(Value *S, Type *Ty, const Twine &Name,
