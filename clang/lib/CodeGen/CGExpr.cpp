@@ -561,19 +561,19 @@ STATISTIC(NumBoundsSetOnReferences,
           "Number of references where bounds were tightend");
 #undef DEBUG_TYPE
 
-static inline llvm::Value *setCHERIBounds(CodeGenFunction &CGF,
-                                          llvm::Value *Value, QualType Ty) {
-  uint64_t Size = CGF.getContext().getTypeSizeInChars(Ty).getQuantity();
-  CHERI_BOUNDS_DBG(<< "setting bounds for '" << Ty.getAsString()
-                   << "' reference to " << Size << "\n");
-  NumBoundsSetOnReferences++;
-  return CGF.setPointerBounds(Value, Size, "ref.with.bounds");
-};
-
 llvm::Value *CodeGenFunction::setCHERIBoundsOnReference(llvm::Value *Value,
                                                         QualType Ty) {
   if (getLangOpts().getCheriBounds() < LangOptions::CBM_References)
     return Value; // Not enabled
+
+
+  auto setCHERIBounds = [](CodeGenFunction &CGF, llvm::Value *Value, QualType Ty) {
+    uint64_t Size = CGF.getContext().getTypeSizeInChars(Ty).getQuantity();
+    CHERI_BOUNDS_DBG(<< "setting bounds for '" << Ty.getAsString()
+                     << "' reference to " << Size << "\n");
+    NumBoundsSetOnReferences++;
+    return CGF.setPointerBounds(Value, Size, "ref.with.bounds");
+  };
 
   // CHERI_BOUNDS_DBG(<< "Trying to set CHERI bounds on reference ";
   //                  E->dump(llvm::dbgs()));
