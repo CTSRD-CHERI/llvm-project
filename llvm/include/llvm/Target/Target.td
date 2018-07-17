@@ -960,6 +960,7 @@ def FUNC_START : StandardPseudoInstruction {
   let InOperandList = (ins i32imm:$id);
   let AsmString = "";
   let isNotDuplicable = 1;
+  let hasSideEffects = 0;
 }
 def AUX_FUNC_START : StandardPseudoInstruction {
   let OutOperandList = (outs);
@@ -967,6 +968,7 @@ def AUX_FUNC_START : StandardPseudoInstruction {
   let AsmString = "";
   let hasCtrlDep = 1;
   let isNotDuplicable = 1;
+  let hasSideEffects = 0;
 }
 def ANNOTATION_LABEL : StandardPseudoInstruction {
   let OutOperandList = (outs);

@@ -457,6 +457,7 @@ getFixupKindInfo(MCFixupKind Kind) const {
 
     { "fixup_CHERI_CAPTABLE11",          0,     11,   0 },
     { "fixup_CHERI_CAPTABLE20",          0,     16,   0 },
+    { "fixup_CHERI_CAPTABLE_TLS20",      0,     16,   0 },
     { "fixup_CHERI_CAPTABLE_HI16",       0,     16,   0 },
     { "fixup_CHERI_CAPTABLE_LO16",       0,     16,   0 },
     { "fixup_CHERI_CAPCALL11",           0,     11,   0 },
@@ -550,6 +551,7 @@ getFixupKindInfo(MCFixupKind Kind) const {
 
     { "fixup_CHERI_CAPTABLE11",    21,    11,   0 },
     { "fixup_CHERI_CAPTABLE20",    16,    16,   0 },
+    { "fixup_CHERI_CAPTABLE_TLS_20", 16,  16,   0 },
     { "fixup_CHERI_CAPTABLE_HI16", 16,    16,   0 },
     { "fixup_CHERI_CAPTABLE_LO16", 16,    16,   0 },
     { "fixup_CHERI_CAPCALL11",     21,    11,   0 },

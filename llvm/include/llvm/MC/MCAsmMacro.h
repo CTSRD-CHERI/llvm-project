@@ -65,7 +65,7 @@ public:
     // CHERI capability relocation expressions:
     PercentCapTabCall11, PercentCapTabCall_Hi, PercentCapTabCall_Lo,
     PercentCapTab11, PercentCapTab_Hi, PercentCapTab_Lo,
-    PercentCapTab20, PercentCapTabCall20, PercentCapTab_Rel
+    PercentCapTab20, PercentCapTabTLS20, PercentCapTabCall20, PercentCapTab_Rel
   };
 
 private:

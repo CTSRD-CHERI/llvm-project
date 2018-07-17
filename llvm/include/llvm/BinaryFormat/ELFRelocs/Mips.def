@@ -90,7 +90,7 @@ ELF_RELOC(R_MIPS_CHERI_CAPCALL_CLC11, 85)
 // New relocations that are 16 bit immediates shifted by 4
 ELF_RELOC(R_MIPS_CHERI_CAPTAB20,   86)
 ELF_RELOC(R_MIPS_CHERI_CAPCALL20,  87)
-ELF_RELOC(R_MIPS_CHERI_CAPTAB_TLS20,  88)
+ELF_RELOC(R_MIPS_CHERI_CAPTAB_TLS20,  89)
 
 // Difference between symbol and _CHERI_CAPABILITY_TABLE_ (used to derive $cgp
 // from $pcc)

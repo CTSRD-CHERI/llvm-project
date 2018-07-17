@@ -5949,8 +5949,10 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name,
              .Case("cbp", ABI.GetBasePtr())
              .Case("cfp", ABI.GetFramePtr())
              .Case("cgp", ABI.GetGlobalCapability())
+             .Case("ctlp", ABI.GetLocalCapability())
              .Case("cra", ABI.GetReturnAddress())
              .Case("csp", ABI.GetStackPtr())
+             .Case("cusp", ABI.GetUnsafeStackPtr())
              .Case("ddc", ABI.GetDefaultDataCapability())
              .Default(-1);
   }
@@ -5978,7 +5980,7 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name,
                            .Case("kdc", 30)
                            .Case("epcc", 31)
                            .Default(0);
-      if (InvalidReg) {
+      if (InvalidReg && !AreCheriSysRegsAccessible) {
         Error(Parser.getTok().getLoc(),
               "Register $" + Name +
                   " is no longer a general-purpose CHERI register. If you want "
@@ -5988,7 +5990,7 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name,
                   " this is available with `.set cheri_sysregs_accessible` .",
               Parser.getTok().getLocRange());
         return -1;
-      }
+      } else if (InvalidReg) return( Mips::C1 + InvalidReg - 1);
       CC = StringSwitch<unsigned>(Name)
                .Case("ddc", Mips::DDC)
                .Case("idc", Mips::C26)

@@ -437,7 +437,7 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
   // register that is implicitly read by loads and stores.
   MBB.addLiveIn(Mips::DDC);
 
-  bool NeedAuxEntry = ABI.IsCheriPureCap() &&  MF.getFunction()->hasExternalLinkage();
+  bool NeedAuxEntry = ABI.IsCheriPureCap() &&  MF.getFunction().hasExternalLinkage();
 
   if(ABI.IsCheriPureCap()) {
     MF.getRegInfo().addLiveIn(CRD);

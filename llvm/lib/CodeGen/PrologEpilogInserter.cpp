@@ -707,7 +707,7 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &MF) {
 
   if(partitionUnsafeObjects && MFI.hasStaticUnsafeObjects()) {
     // This object must be put on the stack immediately after the unsafe region
-    MFI.setUnsafeEndIndex(TFI.createUnsafeEndObject(Fn));
+    MFI.setUnsafeEndIndex(TFI.createUnsafeEndObject(MF));
   }
 
   // Start at the beginning of the local area.

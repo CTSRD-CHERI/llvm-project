@@ -85,7 +85,7 @@ unsigned MipsFunctionInfo::getCapLocalBaseReg() {
   if (CapLocalBaseReg)
     return CapLocalBaseReg;
 
-  const TargetRegisterClass *RC = &Mips::CheriRegsRegClass;
+  const TargetRegisterClass *RC = &Mips::CheriGPRRegClass;
   return CapLocalBaseReg = MF.getRegInfo().createVirtualRegister(RC);
 }
 
