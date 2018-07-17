@@ -124,10 +124,10 @@ add_lit_testsuite_with_cheri_selectors(check-clang "Running the Clang regression
   )
 set_target_properties(check-clang PROPERTIES FOLDER "Clang tests")
 
-add_lit_testsuites(CLANG ${CMAKE_CURRENT_SOURCE_DIR}
-  PARAMS ${CLANG_TEST_PARAMS}
-  DEPENDS ${CLANG_TEST_DEPS}
-)
+#add_lit_testsuites(CLANG ${CMAKE_CURRENT_SOURCE_DIR}
+#  PARAMS ${CLANG_TEST_PARAMS}
+#  DEPENDS ${CLANG_TEST_DEPS}
+#)
 
 # Add a legacy target spelling: clang-test
 add_custom_target(clang-test)
