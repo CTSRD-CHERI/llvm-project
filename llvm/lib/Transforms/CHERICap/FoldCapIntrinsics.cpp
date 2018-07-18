@@ -286,10 +286,25 @@ class CHERICapFoldIntrinsics : public ModulePass {
         assert(CI->hasNUses(0));
         continue;
       }
+
+      Value *LHS, *RHS;
+      // Replace setoffset(setoffset(C, A), B) with setoffset(C, B). Must come
+      // before the setoffset to incoffset transformation in case C is an add.
+      while (match(CI->getOperand(0),
+                   m_Intrinsic<Intrinsic::cheri_cap_offset_set>(
+                       m_Value(LHS), m_Value(RHS)))) {
+        if (CI->hasOneUse())
+          ToErase.insert(CI);
+        if (auto RHSInstr = dyn_cast<Instruction>(RHS))
+          if (RHSInstr->hasOneUse())
+            ToErase.insert(RHSInstr);
+        CI->setOperand(0, LHS);
+        Modified = true;
+      }
+
       // fold chains of set-offset, (inc-offset/GEP)+ into a single set-offset
       foldIncOffsetSetOffsetOnlyUserIncrement(CI, ToErase);
 
-      Value *LHS, *RHS;
       if (match(CI->getOperand(1), m_Add(m_Value(LHS), m_Value(RHS)))) {
         Value *BaseCap = CI->getOperand(0);
         Value *Add = nullptr;
