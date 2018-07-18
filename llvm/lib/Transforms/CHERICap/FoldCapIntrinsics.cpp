@@ -304,6 +304,7 @@ class CHERICapFoldIntrinsics : public ModulePass {
           CallInst *Replacement = B.CreateCall(IncOffset, {BaseCap, Add});
           Replacement->setTailCall(true);
           CI->replaceAllUsesWith(Replacement);
+          ToErase.insert(CI);
           Modified = true;
         }
       }
