@@ -3705,6 +3705,8 @@ public:
   /// Emits a reference binding to the passed in expression.
   RValue EmitReferenceBindingToExpr(const Expr *E);
   llvm::Value *setCHERIBoundsOnReference(llvm::Value *Ptr, QualType Ty);
+  llvm::Value *setCHERIBoundsOnAddrOf(llvm::Value *Ptr, QualType Ty);
+  bool canTightenCheriBounds(llvm::Value *Ptr, QualType Ty);
 
   //===--------------------------------------------------------------------===//
   //                           Expression Emission

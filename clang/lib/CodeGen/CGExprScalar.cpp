@@ -569,13 +569,18 @@ public:
       return CGF.EmitCXXMemberPointerAddressOf(E);
     }
     llvm::Value *Addr = EmitLValue(E->getSubExpr()).getPointer();
-    llvm::Type *AddrTy = Addr->getType();
     auto &TI = CGF.getContext().getTargetInfo();
     if (TI.areAllPointersCapabilities()) {
       unsigned CapAS = CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
-      if (AddrTy->getPointerAddressSpace() != CapAS) {
+      if (Addr->getType()->getPointerAddressSpace() != CapAS) {
         Addr = CodeGenFunction::FunctionAddressToCapability(CGF, Addr);
       }
+    }
+    if (CGF.getLangOpts().getCheriBounds() >= LangOptions::CBM_SubObjectsSafe) {
+      auto BoundedAddr =
+          CGF.setCHERIBoundsOnAddrOf(Addr, E->getSubExpr()->getType());
+      assert(BoundedAddr->getType() == Addr->getType());
+      Addr = BoundedAddr;
     }
     return Addr;
   }

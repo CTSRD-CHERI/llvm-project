@@ -556,9 +556,13 @@ EmitMaterializeTemporaryExpr(const MaterializeTemporaryExpr *M) {
 #define CHERI_BOUNDS_DBG(x) DEBUG_WITH_TYPE("cheri-bounds", llvm::dbgs() x)
 #define DEBUG_TYPE "cheri-bounds"
 STATISTIC(NumReferencesCheckedForBoundsTightening,
-          "Number of references processed for tightening bounds");
+          "Number of references checked for tightening bounds");
 STATISTIC(NumBoundsSetOnReferences,
           "Number of references where bounds were tightend");
+STATISTIC(NumAddrOfCheckedForBoundsTightening,
+          "Number of & operators checked for tightening bounds");
+STATISTIC(NumBoundsSetOnAddrOf,
+          "Number of & operators where bounds were tightend");
 #undef DEBUG_TYPE
 
 llvm::Value *CodeGenFunction::setCHERIBoundsOnReference(llvm::Value *Value,
@@ -566,30 +570,49 @@ llvm::Value *CodeGenFunction::setCHERIBoundsOnReference(llvm::Value *Value,
   if (getLangOpts().getCheriBounds() < LangOptions::CBM_References)
     return Value; // Not enabled
 
-
-  auto setCHERIBounds = [](CodeGenFunction &CGF, llvm::Value *Value, QualType Ty) {
-    uint64_t Size = CGF.getContext().getTypeSizeInChars(Ty).getQuantity();
-    CHERI_BOUNDS_DBG(<< "setting bounds for '" << Ty.getAsString()
-                     << "' reference to " << Size << "\n");
-    NumBoundsSetOnReferences++;
-    return CGF.setPointerBounds(Value, Size, "ref.with.bounds");
-  };
-
   // CHERI_BOUNDS_DBG(<< "Trying to set CHERI bounds on reference ";
   //                  E->dump(llvm::dbgs()));
 
-  // TODO: add a statistic for number of bounds that were added?
   NumReferencesCheckedForBoundsTightening++;
+  if (canTightenCheriBounds(Value, Ty)) {
+    uint64_t Size = getContext().getTypeSizeInChars(Ty).getQuantity();
+    CHERI_BOUNDS_DBG(<< "setting bounds for '" << Ty.getAsString()
+                     << "' reference to " << Size << "\n");
+    NumBoundsSetOnReferences++;
+    return setPointerBounds(Value, Size, "ref.with.bounds");
+  }
+  return Value;
+}
+
+llvm::Value *CodeGenFunction::setCHERIBoundsOnAddrOf(llvm::Value *Value,
+                                                     clang::QualType Ty) {
+  assert(getLangOpts().getCheriBounds() >= LangOptions::CBM_SubObjectsSafe);
+  // CHERI_BOUNDS_DBG(<< "Trying to set CHERI bounds on addrof operator ";
+  //                  E->dump(llvm::dbgs()));
+
+  NumAddrOfCheckedForBoundsTightening++;
+  if (canTightenCheriBounds(Value, Ty)) {
+    uint64_t Size = getContext().getTypeSizeInChars(Ty).getQuantity();
+    CHERI_BOUNDS_DBG(<< "setting bounds for '" << Ty.getAsString()
+                     << "' addrof to " << Size << "\n");
+    NumBoundsSetOnAddrOf++;
+    return setPointerBounds(Value, Size, "addrof.with.bounds");
+  }
+  return Value;
+}
+
+bool CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty) {
+  assert(getLangOpts().getCheriBounds() > LangOptions::CBM_Conservative);
 
   if (Ty->isIncompleteType()) {
     CHERI_BOUNDS_DBG(<< "Cannot set bounds on incomplete type\n");
-    return Value;
+    return false;
   }
   assert(CGM.getTypes().getDataLayout().isFatPointer(Value->getType()));
   // It should be possible to set the size for all scalar types
   if (Ty->isScalarType()) {
     CHERI_BOUNDS_DBG(<< "Found scalar type -> ");
-    return setCHERIBounds(*this, Value, Ty);
+    return true;
   }
   // It because a bit more tricky for class types since they might be
   // downcasted to something with a larger size.
@@ -597,47 +620,55 @@ llvm::Value *CodeGenFunction::setCHERIBoundsOnReference(llvm::Value *Value,
   // I guess final classes would work
   if (Ty->isRecordType()) {
     CHERI_BOUNDS_DBG(<< "Found record type '" << Ty.getAsString() << "' -> ");
-    if (Ty->isCXXStructureOrClassType()) {
+    auto *RT = Ty->getAs<RecordType>();
+    auto RD = RT->getDecl();
+    if (RD->hasFlexibleArrayMember()) {
+      CHERI_BOUNDS_DBG(<< "has flexible array member -> can't set bounds\n");
+      return false;
+    }
+    if (Ty->isStructureOrClassType() && !getLangOpts().CPlusPlus) {
+      // No inheritance or vtables in C -> we should be able to set bounds on
+      // all structurs that don't have flexible array members and aren't
+      // annotated as opt-out
+      CHERI_BOUNDS_DBG(<< "compiling C and no flexible array -> ");
+      return true;
+    } else if (Ty->isCXXStructureOrClassType()) {
       CXXRecordDecl *CRD = Ty->getAsCXXRecordDecl();
-      if (CRD->hasFlexibleArrayMember()) {
-        CHERI_BOUNDS_DBG(<< "has flexible array member -> can't set bounds\n");
-        return Value;
-      }
       const bool IsFinalClass = CRD->hasAttr<FinalAttr>();
       // TODO: isCLike() -> safe to set bounds? hopefully not inherited from?
       if (!IsFinalClass) {
         // TODO: should we have a mode where we aggressively set bounds
         // (at least for c-like structs?)
         CHERI_BOUNDS_DBG(<< "not final -> can't assume it has no inheritors\n");
-        return Value;
+        return false;
       }
       if (CRD->isCLike()) {
         CHERI_BOUNDS_DBG(<< "is C-like struct type and is marked as final -> ");
-        return setCHERIBounds(*this, Value, Ty);
+        return true;
       }
       // Final class: check it doesn't have any virtual bases
       // TODO: check there are no flexible array members
       if (!CRD->isLiteral()) {
         CHERI_BOUNDS_DBG(<< "final but not a literal type -> "
                          << "size might by dynamic -> not setting bounds\n");
-        return Value;
+        return false;
       } else {
         assert(CRD->getNumVBases() == 0);
         CHERI_BOUNDS_DBG(<< "is literal type and is marked as final -> ");
-        return setCHERIBounds(*this, Value, Ty);
+        return true;
       }
     }
     CHERI_BOUNDS_DBG(<< "not a struct/class -> not setting bounds\n");
     // TODO: flexible array members
     // TODO: unions?
-    return Value;
+    return false;
   }
   // Otherwise this type is unhandled, let's print a message:
   llvm::errs() << __func__ << ": don't know how to handle type "
                << Ty.getAsString() << "\n";
   // TODO: assert here to find all the cases?
   // llvm_unreachable("Don't know whether to set bounds on type");
-  return Value;
+  return false;
 }
 
 RValue
@@ -1148,7 +1179,7 @@ Address CodeGenFunction::EmitPointerWithAlignment(const Expr *E,
       break;
 
     // Array-to-pointer decay.
-    case CK_ArrayToPointerDecay:
+    case CK_ArrayToPointerDecay: // FIXME: bounds on array-to-pointer-decay
       return EmitArrayToPointerDecay(CE->getSubExpr(), BaseInfo, TBAAInfo);
 
     // Derived-to-base conversions.
@@ -1177,6 +1208,7 @@ Address CodeGenFunction::EmitPointerWithAlignment(const Expr *E,
   // Unary &.
   if (const UnaryOperator *UO = dyn_cast<UnaryOperator>(E)) {
     if (UO->getOpcode() == UO_AddrOf) {
+      // FIXME: set bounds here!
       LValue LV = EmitLValue(UO->getSubExpr());
       if (BaseInfo) *BaseInfo = LV.getBaseInfo();
       if (TBAAInfo) *TBAAInfo = LV.getTBAAInfo();

@@ -2337,6 +2337,10 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
     if (BoundsMode == (LangOptions::CheriBoundsMode)-1) {
       Diags.Report(diag::err_drv_invalid_value)
           << A->getAsString(Args) << A->getValue();
+    } else if (BoundsMode == LangOptions::CBM_SubObjectsSafe) {
+      // not implemented yet
+      Diags.Report(diag::err_drv_unsupported_option_argument)
+          << A->getAsString(Args) << A->getValue();
     } else {
       Opts.setCheriBounds(BoundsMode);
     }

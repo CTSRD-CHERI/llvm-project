@@ -2949,8 +2949,13 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
 
     return RValue::get(Carry);
   }
-  case Builtin::BI__builtin_addressof:
-    return RValue::get(EmitLValue(E->getArg(0)).getPointer());
+  case Builtin::BI__builtin_addressof: {
+    auto Result = RValue::get(EmitLValue(E->getArg(0)).getPointer());
+    if (getLangOpts().getCheriBounds() >= LangOptions::CBM_SubObjectsSafe) {
+      report_fatal_error("__builtin_addressof() needs bounds too!");
+    }
+    return Result;
+  }
   case Builtin::BI__builtin_operator_new:
     return EmitBuiltinNewDeleteCall(
         E->getCallee()->getType()->castAs<FunctionProtoType>(), E, false);
