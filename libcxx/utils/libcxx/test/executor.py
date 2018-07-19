@@ -239,6 +239,8 @@ class SSHExecutor(RemoteExecutor):
         remote = self.host
         remote = self.user_prefix + remote
         cmd = self.scp_command + ['-p', src, remote + ':' + dst]
+        if self.config and self.config.lit_config.debug:
+            print('{}: Copying {} to {}'.format(datetime.datetime.now(), src, dst))
         self.local_run(cmd)
 
     def _execute_command_remote(self, cmd, remote_work_dir='.', env=None):
@@ -252,10 +254,10 @@ class SSHExecutor(RemoteExecutor):
         remote_cmd = ' '.join(env_cmd + cmd)
         if remote_work_dir != '.':
             remote_cmd = 'cd \'' + remote_work_dir + '\' && ' + remote_cmd
-        if self.config.lit_config.debug:
+        if self.config and self.config.lit_config.debug:
             print('{}: About to run {}'.format(datetime.datetime.now(), remote_cmd))
         out, err, rc = self.local_run(ssh_cmd + [remote_cmd])
-        if self.config.lit_config.debug:
+        if self.config and self.config.lit_config.debug:
             print('{}: Remote command completed'.format(datetime.datetime.now()))
         return remote_cmd, out, err, rc
 
