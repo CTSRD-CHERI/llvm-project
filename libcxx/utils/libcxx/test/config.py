@@ -194,6 +194,10 @@ class Configuration(object):
                 # way of getting at that easily.
                 self.lit_config.fatal("Cannot infer how to create a Valgrind "
                                       " executor.")
+            # Set config on the excutor even if the user forgot to pass it as
+            # an argument in the exuctor string:
+            if hasattr(te, "config") and te.config is None:
+                te.config = self
         else:
             te = LocalExecutor()
             if self.lit_config.useValgrind:
