@@ -3545,8 +3545,11 @@ messages<_CharT>::do_open(const basic_string<char>& __nm, const locale&) const
 {
 #ifdef _LIBCPP_HAS_CATOPEN
     catalog __cat = (catalog)catopen(__nm.c_str(), NL_CAT_LOCALE);
+#ifndef __CHERI_PURE_CAPABILITY__
+    // We can already distinguish invalid pointers from a pointer with high bits set -> don't do this shifting
     if (__cat != -1)
         __cat = static_cast<catalog>((static_cast<size_t>(__cat) >> 1));
+#endif
     return __cat;
 #else // !_LIBCPP_HAS_CATOPEN
     (void)__nm;
@@ -3564,8 +3567,11 @@ messages<_CharT>::do_get(catalog __c, int __set, int __msgid,
     __narrow_to_utf8<sizeof(char_type)*__CHAR_BIT__>()(back_inserter(__ndflt),
                                                        __dflt.c_str(),
                                                        __dflt.c_str() + __dflt.size());
+#ifndef __CHERI_PURE_CAPABILITY__
+    // We can already distinguish invalid pointers from a pointer with high bits set -> don't do this shifting
     if (__c != -1)
-        __c = (vaddr_t)__c << 1;
+        __c = __c << 1;
+#endif
     nl_catd __cat = (nl_catd)__c;
     char* __n = catgets(__cat, __set, __msgid, __ndflt.c_str());
     string_type __w;
@@ -3585,8 +3591,11 @@ void
 messages<_CharT>::do_close(catalog __c) const
 {
 #ifdef _LIBCPP_HAS_CATOPEN
+#ifndef __CHERI_PURE_CAPABILITY__
+// We can already distinguish invalid pointers from a pointer with high bits set -> don't do this shifting
     if (__c != -1)
-        __c = (vaddr_t)__c << 1;
+        __c = __c << 1;
+#endif
     nl_catd __cat = (nl_catd)__c;
     catclose(__cat);
 #else
