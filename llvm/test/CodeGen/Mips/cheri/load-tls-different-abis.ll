@@ -1,20 +1,19 @@
-; RUN: sed 's/addrspace(200)//' %s | llc -mtriple=mips64-unknown-freebsd -relocation-model=pic -mxgot=false -o - -show-mc-encoding -print-machineinstrs=expand-isel-pseudos 2>&1 | FileCheck %s -check-prefixes=MIPS,COMMON
-; RUN: %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=legacy  %s -o - -show-mc-encoding -print-machineinstrs=expand-isel-pseudos 2>&1 | %cheri_FileCheck %s -check-prefixes=LEGACY,COMMON
-; RUN: %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=plt     %s -o - -show-mc-encoding -print-machineinstrs=expand-isel-pseudos 2>&1 | %cheri_FileCheck %s -check-prefixes=PLT,COMMON,CAP-TABLE-HACK
-; RUN: %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=fn-desc %s -o - -show-mc-encoding -print-machineinstrs=expand-isel-pseudos 2>&1 | %cheri_FileCheck %s -check-prefixes=FNDESC,COMMON,CAP-TABLE-HACK
-; RUN: %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=pcrel   %s -o - -show-mc-encoding -print-machineinstrs=expand-isel-pseudos 2>&1 | %cheri_FileCheck %s -check-prefixes=PCREL,COMMON,CAP-TABLE-HACK
+; RUN: sed 's/addrspace(\(200\|TLS\))//' %s | llc -mtriple=mips64-unknown-freebsd -relocation-model=pic -mxgot=false -o - -show-mc-encoding -print-machineinstrs=expand-isel-pseudos 2>&1 | FileCheck %s -check-prefixes=MIPS,COMMON
+; RUN: sed 's/addrspace(TLS)//' %s | %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=legacy  -o - -show-mc-encoding -print-machineinstrs=expand-isel-pseudos 2>&1 | %cheri_FileCheck %s -check-prefixes=LEGACY,COMMON
+; RUN: sed 's/addrspace(TLS)//' %s | %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=plt     -o - -show-mc-encoding -print-machineinstrs=expand-isel-pseudos 2>&1 | %cheri_FileCheck %s -check-prefixes=PLT,COMMON,CAP-TABLE,CAP-TABLE-HACK
+; RUN: sed 's/addrspace(TLS)//' %s | %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=fn-desc -o - -show-mc-encoding -print-machineinstrs=expand-isel-pseudos 2>&1 | %cheri_FileCheck %s -check-prefixes=FNDESC,COMMON,CAP-TABLE,CAP-TABLE-HACK
+; RUN: sed 's/addrspace(TLS)//' %s | %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=pcrel   -o - -show-mc-encoding -print-machineinstrs=expand-isel-pseudos 2>&1 | %cheri_FileCheck %s -check-prefixes=PCREL,COMMON,CAP-TABLE,CAP-TABLE-HACK
+; RUN: sed 's/addrspace(TLS)/addrspace(200)/' %s | %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=pcrel   -cheri-cap-tls-abi=cap-equiv -o - -show-mc-encoding -print-machineinstrs=expand-isel-pseudos 2>&1 | %cheri_FileCheck %s -check-prefixes=PCREL,COMMON,CAP-TABLE,CAP-EQUIV
 
 target triple = "cheri-unknown-freebsd"
 
-@global_tls = external thread_local(initialexec) global i64, align 4
-; TODO: @global_tls = external thread_local(initialexec) addrspace(200) global i64, align 4
+@global_tls = external thread_local(initialexec) addrspace(TLS) global i64, align 4
 @global_normal = external addrspace(200) global i64, align 4
 
 ; Function Attrs: nounwind
 define i64 @test() local_unnamed_addr {
 entry:
-  %loaded_tls = load i64, i64* @global_tls, align 8
-  ; TODO: %loaded_tls = load i64, i64 addrspace(200)* @global_tls, align 8
+  %loaded_tls = load i64, i64 addrspace(TLS)* @global_tls, align 8
   %loaded_normal = load i64, i64 addrspace(200)* @global_normal, align 8
   %result = add i64 %loaded_tls, %loaded_normal
   ret i64 %result
@@ -45,7 +44,7 @@ entry:
 ; MIPS-NEXT:  %7:gpr64 = LD killed %6:gpr64, 0, implicit $ddc :: (dereferenceable load 8 from @global_normal)
 ; MIPS-NEXT:  [[RESULT:%8]]:gpr64 = DADDu killed %5:gpr64, killed %7
 
-; We currently use the same legacy hack of using the MIPS hwr29 for all ABIs:
+; We currently use the same legacy hack of using the MIPS hwr29 for all ABIs except the new cap-equiv ABI:
 
 ; LEGACY-NEXT:  liveins: $c12
 ; LEGACY-NEXT:  $t9_64 = CGetOffset $c12
@@ -78,9 +77,9 @@ entry:
 ; FNDESC-NEXT:  %0:cherigpr = COPY $c26
 ; PCREL needs to derive $cgp so it's not live-in:
 ; PCREL-NEXT: liveins: $c12
-; PCREL-NEXT: %12:gpr64 = LUi64 target-flags(mips-captable-off-hi) @test
-; PCREL-NEXT: %13:gpr64 = DADDiu %12:gpr64, target-flags(mips-captable-off-lo) @test
-; PCREL-NEXT: $c26 = CIncOffset $c12, %13:gpr64
+; PCREL-NEXT: [[CGPOFF_HI:%[0-9]+]]:gpr64 = LUi64 target-flags(mips-captable-off-hi) @test
+; PCREL-NEXT: [[CGPOFF_LO:%[0-9]+]]:gpr64 = DADDiu [[CGPOFF_HI]]:gpr64, target-flags(mips-captable-off-lo) @test
+; PCREL-NEXT: $c26 = CIncOffset $c12, [[CGPOFF_LO]]:gpr64
 ; PCREL-NEXT: %0:cherigpr = COPY $c26
 
 
@@ -97,6 +96,18 @@ entry:
 ; CAP-TABLE-HACK-NEXT:  %7:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @global_normal, %0:cherigpr :: (load {{16|32}} from cap-table)
 ; CAP-TABLE-HACK-NEXT:  %8:gpr64 = CAPLOAD64 $zero_64, 0, killed %7:cherigpr :: (dereferenceable load 8 from @global_normal, addrspace 200)
 ; CAP-TABLE-HACK-NEXT:  [[RESULT:%9]]:gpr64 = DADDu killed %6:gpr64, killed %8:gpr64
+
+
+; CAP-EQUIV-NEXT:  %1:gpr64 = LUi64 target-flags(mips-captable-gottprel-hi16) @global_tls
+; CAP-EQUIV-NEXT:  %2:gpr64 = DADDiu killed %1:gpr64, target-flags(mips-captable-gottprel-lo16) @global_tls
+; CAP-EQUIV-NEXT:  %3:cherigpr = CIncOffset %0:cherigpr, killed %2:gpr64
+; CAP-EQUIV-NEXT:  %4:gpr64 = CAPLOAD64 $zero_64, 0, killed %3:cherigpr :: (load 8 from cap-table)
+; CAP-EQUIV-NEXT:  %5:cherigpr = CReadHwr $caphwr1
+; CAP-EQUIV-NEXT:  %6:cherigpr = CIncOffset killed %5:cherigpr, killed %4:gpr64
+; CAP-EQUIV-NEXT:  %7:gpr64 = CAPLOAD64 $zero_64, 0, killed %6:cherigpr :: (dereferenceable load 8 from @global_tls, addrspace 200)
+; CAP-EQUIV-NEXT:  %8:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @global_normal, %0:cherigpr :: (load {{16|32}} from cap-table)
+; CAP-EQUIV-NEXT:  %9:gpr64 = CAPLOAD64 $zero_64, 0, killed %8:cherigpr :: (dereferenceable load 8 from @global_normal, addrspace 200)
+; CAP-EQUIV-NEXT:  [[RESULT:%10]]:gpr64 = DADDu killed %7:gpr64, killed %9:gpr64
 
 
 ; COMMON-NEXT:   $v0_64 = COPY [[RESULT]]
@@ -151,10 +162,17 @@ entry:
 ; CAP-TABLE-HACK-NEXT:                       #   fixup A - offset: 0, value: %gottprel(global_tls), kind: fixup_Mips_GOTTPREL
 ; For PCREL derive $cgp from $c12 now:
 ; PCREL-NEXT:           cincoffset      $c26, $c12, $1
-; CAP-TABLE-HACK-NEXT:  clcbi   $c1, %captab20(global_normal)($c26)
-; CAP-TABLE-HACK-NEXT:               #   fixup A - offset: 0, value: %captab20(global_normal), kind: fixup_CHERI_CAPTABLE20
+; CAP-EQUIV-NEXT:       lui     [[CAPTAB_TPREL:\$[0-9]+]], %captab_tprel_hi(global_tls)
+; CAP-EQUIV-NEXT:                                       #   fixup A - offset: 0, value: %captab_tprel_hi(global_tls), kind: fixup_CHERI_CAPTAB_TPREL_HI16
+; CAP-EQUIV-NEXT:       daddiu  [[CAPTAB_TPREL]], [[CAPTAB_TPREL]], %captab_tprel_lo(global_tls)
+; CAP-EQUIV-NEXT:                                       #   fixup A - offset: 0, value: %captab_tprel_lo(global_tls), kind: fixup_CHERI_CAPTAB_TPREL_LO16
+; CAP-EQUIV-NEXT:       cld     [[TLSOFF:\$[0-9]+]], [[CAPTAB_TPREL]], 0($c26)
+; CAP-TABLE-NEXT:       clcbi   $c1, %captab20(global_normal)($c26)
+; CAP-TABLE-NEXT:                    #   fixup A - offset: 0, value: %captab20(global_normal), kind: fixup_CHERI_CAPTABLE20
 ; CAP-TABLE-HACK-NEXT:  daddu   $1, [[HWREG]], [[TLSPTR]]
 ; CAP-TABLE-HACK-NEXT:  ld      $1, 0($1)
-; CAP-TABLE-HACK-NEXT:  cld     $2, $zero, 0($c1)
-; CAP-TABLE-HACK-NEXT:  cjr     $c17
-; CAP-TABLE-HACK-NEXT:  daddu   $2, $1, $2
+; CAP-EQUIV-NEXT:       creadhwr [[TLSBASE:\$c[0-9]+]], $chwr_userlocal
+; CAP-EQUIV-NEXT:       cld     $1, [[TLSOFF]], 0([[TLSBASE]])
+; CAP-TABLE-NEXT:       cld     $2, $zero, 0($c1)
+; CAP-TABLE-NEXT:       cjr     $c17
+; CAP-TABLE-NEXT:       daddu   $2, $1, $2
