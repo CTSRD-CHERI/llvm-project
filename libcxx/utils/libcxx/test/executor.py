@@ -19,6 +19,8 @@ from libcxx.util import executeCommand
 
 
 class Executor(object):
+    is_remote = False
+
     def run(self, exe_path, cmd, local_cwd, file_deps=None, env=None):
         """Execute a command.
             Be very careful not to change shared state in this function.
@@ -138,6 +140,7 @@ class TimeoutExecutor(PrefixExecutor):
 
 
 class RemoteExecutor(Executor):
+    is_remote = True
     def __init__(self):
         self.local_run = executeCommand
         self.keep_test = False

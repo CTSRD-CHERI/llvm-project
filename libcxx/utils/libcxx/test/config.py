@@ -67,6 +67,7 @@ class Configuration(object):
         self.abi_library_root = None
         self.link_shared = self.get_lit_bool('enable_shared', default=True)
         self.debug_build = self.get_lit_bool('debug_build',   default=False)
+        # XXXAR: don't pass in local environment when running remote commands:
         self.exec_env = dict(os.environ)
         self.use_target = False
         self.use_system_cxx_lib = False
@@ -203,6 +204,10 @@ class Configuration(object):
             if self.lit_config.useValgrind:
                 te = ValgrindExecutor(self.lit_config.valgrindArgs, te)
         self.executor = te
+            # Don't pass in the current local environment variables to the remote machine
+            # since this might completely break the test
+            self.exec_env = {k: v for k, v in self.exec_env.items() if k not in os.environ or v != os.environ[k]}
+
 
     def configure_target_info(self):
         self.target_info = make_target_info(self)
