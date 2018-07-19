@@ -263,7 +263,7 @@ class SSHExecutor(RemoteExecutor):
 
 
 class SSHExecutorWithNFSMount(SSHExecutor):
-    def __init__(self, host, nfs_dir, path_in_target, config, username=None, port=None):
+    def __init__(self, host, nfs_dir, path_in_target, config=None, username=None, port=None):
         super(SSHExecutorWithNFSMount, self).__init__(
             host, config=config, username=username, port=port)
         self.nfs_dir = nfs_dir
@@ -316,4 +316,4 @@ class SSHExecutorWithNFSMount(SSHExecutor):
         if all(self.nfs_dir not in s for s in cmd):
             raise NotImplementedError("Cannot run non-test binaries: Command was: %s" % cmd)
         cmd = [s.replace(self.nfs_dir, self.path_in_target) for s in cmd]
-        return super(SSHExecutorWithNFSMount, self)._execute_command_remote(cmd, remote_work_dir=remote_work_dir)
+        return super(SSHExecutorWithNFSMount, self)._execute_command_remote(cmd, remote_work_dir=remote_work_dir, env=env)
