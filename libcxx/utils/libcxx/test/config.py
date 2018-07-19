@@ -204,6 +204,7 @@ class Configuration(object):
             if self.lit_config.useValgrind:
                 te = ValgrindExecutor(self.lit_config.valgrindArgs, te)
         self.executor = te
+        if te.is_remote:
             # Don't pass in the current local environment variables to the remote machine
             # since this might completely break the test
             self.exec_env = {k: v for k, v in self.exec_env.items() if k not in os.environ or v != os.environ[k]}
