@@ -1,8 +1,10 @@
 // RUN: %cheri_purecap_clang -cheri-cap-table-abi=pcrel %s -c -o - -cheri-cap-tls-abi=cap-equiv -### 2>&1 | FileCheck -check-prefix CAP-EQUIV %s
 // RUN: %cheri_purecap_clang -cheri-cap-table-abi=pcrel %s -c -o - -cheri-cap-tls-abi=legacy -### 2>&1 | FileCheck -check-prefix LEGACY %s
 //
-// TODO: at some point change the default to be cap tls
-// RUN: %cheri_purecap_clang -cheri-cap-table-abi=pcrel %s -c -o - -### 2>&1 | FileCheck -check-prefix LEGACY %s
+// TODO: at some point change the default to be cap table
+// RUN: %cheri_purecap_clang -cheri-cap-table-abi=legacy %s -c -o - -### 2>&1 | FileCheck -check-prefix LEGACY %s
+// Defaults to cap-equiv when cap table is enabled
+// RUN: %cheri_purecap_clang -cheri-cap-table-abi=pcrel %s -c -o - -### 2>&1 | FileCheck -check-prefix CAP-EQUIV %s
 // CHECK that it also works with mips triple and non purecap abi (but is ignored)
 // but not with x86
 // RUN: %cheri_clang -cheri-cap-table-abi=pcrel %s -c -o - -cheri-cap-tls-abi=cap-equiv -### 2>&1 | FileCheck -check-prefix NOTPURECAP %s

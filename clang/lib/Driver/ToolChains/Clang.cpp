@@ -1514,21 +1514,6 @@ static void addCheriFlags(const ArgList &Args, ArgStringList &CmdArgs,
   // Add the -cap-table-abi and -cap-tls-abi flags (ignore for non-purecap ABIs)
   bool IsCapTable = false;
   StringRef DefaultCapTableABI = "pcrel";
-
-  if (Arg *A = Args.getLastArg(options::OPT_cheri_cap_tls_abi)) {
-    StringRef v = A->getValue();
-    if (ABIName == "purecap") {
-      CmdArgs.push_back("-mllvm");
-      CmdArgs.push_back(Args.MakeArgString("-cheri-cap-tls-abi=" + v));
-    }
-    A->claim();
-  } else {
-    if (ABIName == "purecap") {
-      CmdArgs.push_back("-mllvm");
-      CmdArgs.push_back(Args.MakeArgString("-cheri-cap-tls-abi=legacy"));
-    }
-  }
-
   if (Arg *A = Args.getLastArg(options::OPT_cheri_cap_table_abi)) {
     StringRef v = A->getValue();
     if (ABIName == "purecap") {
@@ -1564,6 +1549,22 @@ static void addCheriFlags(const ArgList &Args, ArgStringList &CmdArgs,
   if (IsCapTable) {
     CmdArgs.push_back("-mllvm");
     CmdArgs.push_back(MxCapTable ? "-mxcaptable=true" : "-mxcaptable=false");
+  }
+
+  StringRef DefaultCapTlsABI = "cap-equiv";
+  if (Arg *A = Args.getLastArg(options::OPT_cheri_cap_tls_abi)) {
+    StringRef v = A->getValue();
+    if (ABIName == "purecap") {
+      CmdArgs.push_back("-mllvm");
+      CmdArgs.push_back(Args.MakeArgString("-cheri-cap-tls-abi=" + v));
+    }
+    A->claim();
+  } else {
+    if (ABIName == "purecap") {
+      CmdArgs.push_back("-mllvm");
+      StringRef ChosenABI = IsCapTable ? "cap-equiv" : "legacy";
+      CmdArgs.push_back(Args.MakeArgString("-cheri-cap-tls-abi=" + ChosenABI));
+    }
   }
 }
 
