@@ -53,13 +53,10 @@ sw.bb1:
 ; CHECK-NEXT:	dsll	$1, $4, 2
 ; CHECK-NEXT:	clw	$1, $1, 0($c1)
 ; TODO: this is not ideal but we need to derive an executable capability
-; TODO: it is even slower now
-; CHECK-NEXT:	cgetaddr $2, $c1
+; CHECK-NEXT:	cgetpcc	$c2
+; CHECK-NEXT:	csub $2, $c1,	$c2
 ; CHECK-NEXT:	daddu $1, $2, $1
-; CHECK-NEXT:	cgetpcc	$c1
-; CHECK-NEXT:	cgetaddr $2, $c1
-; CHECK-NEXT:	dsubu $1, $1, $2
-; CHECK-NEXT:	cincoffset $c1, $c1, $1
+; CHECK-NEXT:	cincoffset $c1, $c2, $1
 ; CHECK-NEXT:	cjr	$c1
 ; CHECK-NEXT:	nop
 
@@ -103,20 +100,18 @@ sw.bb1:
 ; NO-OPT-NEXT:	beqz	$2, .LBB0_2
 ; NO-OPT-NEXT:	nop
 ; NO-OPT-LABEL: .LBB0_1:                                # %entry
-; NO-OPT-NEXT:	cld	$1, $zero, [[@EXPR $CAP_SIZE - 8]]($c11)     # 8-byte Folded Reload
-; NO-OPT-NEXT:	dsll	$2, $1, 2
-; NO-OPT-NEXT:	lui	$3, %captab_hi(.LJTI0_0)
-; NO-OPT-NEXT:	daddiu	$3, $3, %captab_lo(.LJTI0_0)
-; NO-OPT-NEXT:	clc	$c1, $zero, [[$CAP_SIZE]]($c11)    # [[$CAP_SIZE]]-byte Folded Reload
-; NO-OPT-NEXT:	clc	$c2, $3, 0($c1)
-; NO-OPT-NEXT:	clw	$2, $2, 0($c2)
-; NO-OPT-NEXT:	cgetaddr $3, $c2
-; NO-OPT-NEXT:	daddu $2, $3, $2
-; NO-OPT-NEXT:	cgetpcc	$c2
-; NO-OPT-NEXT:	cgetaddr $3, $c2
-; NO-OPT-NEXT:	dsubu $2, $2, $3
-; NO-OPT-NEXT:	cincoffset $c2, $c2, $2
-; NO-OPT-NEXT:	cjr	$c2
+; NO-OPT-NEXT:	cgetpcc	[[PCC:\$c[0-9]+]]
+; NO-OPT-NEXT:	lui	[[CAPTABLE_INDEX:\$[0-9]+]], %captab_hi(.LJTI0_0)
+; NO-OPT-NEXT:	daddiu	[[CAPTABLE_INDEX]], [[CAPTABLE_INDEX]], %captab_lo(.LJTI0_0)
+; NO-OPT-NEXT:	clc	[[CAPTABLE:\$c[0-9]+]], $zero, [[$CAP_SIZE]]($c11)    # [[$CAP_SIZE]]-byte Folded Reload
+; NO-OPT-NEXT:	clc	[[JUMPTABLE_CAP:\$c[0-9]+]], [[CAPTABLE_INDEX]], 0([[CAPTABLE]])
+; NO-OPT-NEXT:	csub [[PCC_INCREMENT:\$[0-9]+]], [[JUMPTABLE_CAP]], [[PCC]]
+; NO-OPT-NEXT:	cld	[[JT_INDEX:\$[0-9]+]], $zero, [[@EXPR $CAP_SIZE - 8]]($c11)     # 8-byte Folded Reload
+; NO-OPT-NEXT:	dsll	[[JT_ENTRY_OFFSET:\$[0-9]+]], [[JT_INDEX]], 2
+; NO-OPT-NEXT:	clw	[[JT_CONTENTS:\$[0-9]+]], [[JT_ENTRY_OFFSET]], 0([[JUMPTABLE_CAP]])
+; NO-OPT-NEXT:	daddu [[FINAL_INCREMENT:\$[0-9]+]], [[PCC_INCREMENT]], [[JT_CONTENTS]]
+; NO-OPT-NEXT:	cincoffset [[PCC]], [[PCC]], [[FINAL_INCREMENT]]
+; NO-OPT-NEXT:	cjr	[[PCC]]
 ; NO-OPT-NEXT:	nop
 
 attributes #0 = { noreturn nounwind }

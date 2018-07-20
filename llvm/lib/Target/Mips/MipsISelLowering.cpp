@@ -3021,6 +3021,40 @@ SDValue MipsTargetLowering::lowerFP_TO_SINT(SDValue Op,
   return DAG.getNode(ISD::BITCAST, SDLoc(Op), Op.getValueType(), Trunc);
 }
 
+SDValue
+MipsTargetLowering::convertToPCCDerivedCap(SDValue TargetAddr, const SDLoc &dl,
+                                           SelectionDAG &DAG,
+                                           SDValue AdditionalOffset) const {
+  // To get a pcc derived capability we can just do the equivalent of SetAddr
+  auto GetPCC = DAG.getConstant(Intrinsic::cheri_pcc_get, dl, MVT::i64);
+  // TODO: it would be nice if we could just create a setaddr node here and
+  // expand it later
+  auto PCC = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, CapType, GetPCC);
+  SDValue OffsetFromPCC;
+  if (TargetAddr.getValueType() == MVT::i64) {
+    // If addr is an i64: CIncOfset($pcc, $addr - CGetAddr($pcc))
+    auto GetAddr =
+        DAG.getConstant(Intrinsic::cheri_cap_address_get, dl, MVT::i64);
+    auto PCCAddrI64 =
+        DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, MVT::i64, GetAddr, PCC);
+    OffsetFromPCC = DAG.getNode(ISD::SUB, dl, MVT::i64, TargetAddr, PCCAddrI64);
+  } else {
+    assert(TargetAddr.getValueType() == CapType);
+    // If addr is a cap: CIncOfset($pcc, CSub($addr  $pcc))
+    auto CSub = DAG.getConstant(Intrinsic::cheri_cap_diff, dl, MVT::i64);
+    OffsetFromPCC = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, MVT::i64, CSub,
+                                TargetAddr, PCC);
+  }
+  if (AdditionalOffset) {
+    // We can't add the AdditionalOffset to either the source or target address
+    // capability since prior to using CSub since it might cause it to become
+    // unrepresentable. Instead add it to the computed OffsetFromPCC now.
+    OffsetFromPCC =
+        DAG.getNode(ISD::ADD, dl, MVT::i64, OffsetFromPCC, AdditionalOffset);
+  }
+  return DAG.getNode(ISD::PTRADD, dl, CapType, PCC, OffsetFromPCC);
+}
+
 SDValue MipsTargetLowering::lowerBR_JT(SDValue Op,
                                        SelectionDAG &DAG) const {
   // FIXME: this is almost the same as the code in LegalizeDAG.cpp, can
@@ -3042,13 +3076,14 @@ SDValue MipsTargetLowering::lowerBR_JT(SDValue Op,
   assert(isPowerOf2_64(EntrySize));
   // FIXME: or should this be something else? like in lowerCall?
   auto PtrInfo = MachinePointerInfo::getCapTable(DAG.getMachineFunction());
-  SDValue JtAddr = getFromCapTable(false, cast<JumpTableSDNode>(Table.getNode()),
-                                   dl, PTy, DAG, Chain, PtrInfo);
+  SDValue Jumptable =
+      getFromCapTable(false, cast<JumpTableSDNode>(Table.getNode()), dl, PTy,
+                      DAG, Chain, PtrInfo);
   // TODO: use a mul here and let the code later on convert it to a shift?
   Index = DAG.getNode(ISD::SHL, dl, MVT::i64, Index,
                       DAG.getConstant(Log2_32(EntrySize), dl, MVT::i64));
   EVT MemVT = EVT::getIntegerVT(*DAG.getContext(), EntrySize * 8);
-  auto LoadAddr = DAG.getNode(ISD::PTRADD, dl, PTy, JtAddr, Index);
+  auto LoadAddr = DAG.getNode(ISD::PTRADD, dl, PTy, Jumptable, Index);
   SDValue JTEntryValue = DAG.getExtLoad(
       ISD::SEXTLOAD, dl, MVT::i64, Chain, LoadAddr,
       MachinePointerInfo::getJumpTable(DAG.getMachineFunction()), MemVT);
@@ -3058,41 +3093,25 @@ SDValue MipsTargetLowering::lowerBR_JT(SDValue Op,
   // Since the jump table comes before .text this will generally be a positive
   // number that we can add to the address of the jump-table to get the
   // address of the basic block:
-  // addrof(BB) = addrof(JT) + *(JT[INDEX])
-  // New PPC = CIncOffset, PCC, (addrof(BB) - addrof(PCC))
 
   // TODO: use a smarter model for jump tables, this is just used because
   // there is existing infrastucture. Maybe use offset from beginning of func
   // instead?
-  auto GetPCC = DAG.getConstant(Intrinsic::cheri_pcc_get, dl, MVT::i64);
-  auto PCC = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, PTy, GetPCC);
-#if 0
-  // this is the old approach that creates out-of-bounds capabilities that might
-  // become unrep
-  auto Addr = DAG.getNode(ISD::PTRADD, dl, PTy, JtAddr, JTEntryValue);
-  // Addr is a data capability so won't have Permit_Execute so we have to derive
-  // a new capabiilty from PCC
-  auto CSub = DAG.getConstant(Intrinsic::cheri_cap_diff, dl, MVT::i64);
-  auto OffsetFromPCC = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, MVT::i64,
-                                   CSub, Addr, PCC);
-#endif
-  // In order to avoid creating out-of-bounds capabilties we look at the
-  // virtual address only. This is less efficient since we need two more
-  // cgetaddr instructions
-  auto GetAddr =
-      DAG.getConstant(Intrinsic::cheri_cap_address_get, dl, MVT::i64);
-  auto JTAddrI64 =
-      DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, MVT::i64, GetAddr, JtAddr);
-  auto BBAddr = DAG.getNode(ISD::ADD, dl, MVT::i64, JTAddrI64, JTEntryValue);
-  auto PCCAddrI64 =
-      DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, MVT::i64, GetAddr, PCC);
-  auto OffsetFromPCC = DAG.getNode(ISD::SUB, dl, MVT::i64, BBAddr, PCCAddrI64);
 
-  JTEntryValue = DAG.getNode(ISD::PTRADD, dl, PTy, PCC, OffsetFromPCC);
+  // Addr is a data capability so won't have Permit_Execute so we have to derive
+  // a new capability from PCC:
+  // We use the jump table capability as the target address capability and
+  // then add on the value loaded from the jump table to get the actual basic
+  // block address:
+  // addrof(BB) = addrof(JT) + *(JT[INDEX])
+  // New PPC = CIncOffset, PCC, (addrof(BB) - addrof(PCC))
+  // This can be done slightly more efficiently as:
+  // New PPC = CIncOffset, PCC, (CSub(JT, PCC) + *(JT[INDEX]))
+  // But not the following since it might cause JT to become unrepresentable:
+  // New PPC = CIncOffset, PCC, (CSub(JT + *(JT[INDEX]), PCC))
+  JTEntryValue = convertToPCCDerivedCap(Jumptable, dl, DAG, JTEntryValue);
   return DAG.getNode(ISD::BRIND, dl, MVT::Other, Chain, JTEntryValue);
 }
-
-
 
 //===----------------------------------------------------------------------===//
 //                      Calling Convention Implementation
