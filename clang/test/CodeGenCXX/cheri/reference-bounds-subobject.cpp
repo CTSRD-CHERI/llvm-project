@@ -7,8 +7,6 @@
 // DBG: Found record type 'struct Nested' -> is C-like struct type and is marked as final -> setting bounds for 'struct Nested' reference to 8
 // DBG: Found scalar type -> setting bounds for 'int' reference to 4
 // DBG: Found scalar type -> setting bounds for 'float' reference to 4
-// DBG: 3 cheri-bounds     - Number of references where bounds were tightend
-// DBG: 3 cheri-bounds     - Number of references processed for tightening bounds
 
 struct Nested final {
     int a;
@@ -58,8 +56,5 @@ void test_subobject_ptr(WithNested& s) {
   do_stuff_with_ptr(&s.n);
 }
 
-// finally check the dumped statistics:
-// DEBUG-MSG-LABEL: STATISTICS:
-// DEBUG-MSG: ... Statistics Collected ...
-// DEBUG-MSG:  8 cheri-bounds     - Number of references where bounds were tightend
-// DEBUG-MSG: 15 cheri-bounds     - Number of references processed for tightening bounds
+// DBG: 3 cheri-bounds     - Number of references where bounds were tightend
+// DBG: 3 cheri-bounds     - Number of references checked for tightening bounds

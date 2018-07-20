@@ -57,4 +57,4 @@ void test_final_class_array() {
 // CHECK-LABEL: STATISTICS:
 // CHECK: ... Statistics Collected ...
 // CHECK:  6 cheri-bounds     - Number of references where bounds were tightend
-// CHECK:  9 cheri-bounds     - Number of references processed for tightening bounds
+// CHECK:  9 cheri-bounds     - Number of references checked for tightening bounds

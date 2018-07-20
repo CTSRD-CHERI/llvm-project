@@ -183,4 +183,4 @@ TEST_PTR_TO_REF(IntOrFloat)
 // DEBUG-MSG-LABEL: STATISTICS:
 // DEBUG-MSG: ... Statistics Collected ...
 // DEBUG-MSG:  8 cheri-bounds     - Number of references where bounds were tightend
-// DEBUG-MSG: 15 cheri-bounds     - Number of references processed for tightening bounds
+// DEBUG-MSG: 15 cheri-bounds     - Number of references checked for tightening bounds
