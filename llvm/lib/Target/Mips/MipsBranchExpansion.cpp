@@ -556,65 +556,103 @@ void MipsBranchExpansion::expandToLongBranch(MBBInfo &I) {
 
       Pos = LongBrMBB->begin();
 
-      BuildMI(*LongBrMBB, Pos, DL, TII->get(Mips::DADDiu), Mips::SP_64)
-          .addReg(Mips::SP_64)
-          .addImm(-16);
-      BuildMI(*LongBrMBB, Pos, DL, TII->get(Mips::SD))
-          .addReg(Mips::RA_64)
-          .addReg(Mips::SP_64)
-          .addImm(0);
-      BuildMI(*LongBrMBB, Pos, DL, TII->get(Mips::LONG_BRANCH_DADDiu),
-              Mips::AT_64)
-          .addReg(Mips::ZERO_64)
-          .addMBB(TgtMBB, MipsII::MO_ABS_HI)
-          .addMBB(BalTgtMBB);
-      BuildMI(*LongBrMBB, Pos, DL, TII->get(Mips::DSLL), Mips::AT_64)
+      // CHERI (purecap):
+      // $longbr:
+      //  daddiu $at, $zero, %hi($tgt - $baltgt)
+      //  dsll $at, $at, 16
+      //  b $baltgt
+      //  daddiu $at, $at, %lo($tgt - $baltgt)
+      // $baltgt:
+      //  cgetpcc $c12
+      //  cincoffset $c12, $c12, $1
+      //  cjr $c12
+      // $fallthrough:
+
+      if (ABI.IsCheriPureCap()) {
+        BuildMI(*LongBrMBB, Pos, DL, TII->get(Mips::LONG_BRANCH_DADDiu),
+              Mips::AT_64).addReg(Mips::ZERO_64)
+                          .addMBB(TgtMBB, MipsII::MO_ABS_HI).addMBB(BalTgtMBB);
+        BuildMI(*LongBrMBB, Pos, DL, TII->get(Mips::DSLL), Mips::AT_64)
+        .addReg(Mips::AT_64).addImm(16);
+        BuildMI(*LongBrMBB, Pos, DL, TII->get(Mips::B)).addMBB(BalTgtMBB);
+        BuildMI(*LongBrMBB, Pos, DL, TII->get(Mips::LONG_BRANCH_DADDiu), Mips::AT_64)
           .addReg(Mips::AT_64)
-          .addImm(16);
-
-      MachineInstrBuilder BalInstr =
-          BuildMI(*MFp, DL, TII->get(BalOp)).addMBB(BalTgtMBB);
-      MachineInstrBuilder DADDiuInstr =
-          BuildMI(*MFp, DL, TII->get(Mips::LONG_BRANCH_DADDiu), Mips::AT_64)
-              .addReg(Mips::AT_64)
-              .addMBB(TgtMBB, MipsII::MO_ABS_LO)
-              .addMBB(BalTgtMBB);
-      if (STI->hasMips32r6()) {
-        LongBrMBB->insert(Pos, DADDiuInstr);
-        LongBrMBB->insert(Pos, BalInstr);
-      } else {
-        LongBrMBB->insert(Pos, BalInstr);
-        LongBrMBB->insert(Pos, DADDiuInstr);
+          .addMBB(TgtMBB, MipsII::MO_ABS_LO)
+          .addMBB(BalTgtMBB);
         LongBrMBB->rbegin()->bundleWithPred();
-      }
 
-      Pos = BalTgtMBB->begin();
+        Pos = BalTgtMBB->begin();
 
-      BuildMI(*BalTgtMBB, Pos, DL, TII->get(Mips::DADDu), Mips::AT_64)
-          .addReg(Mips::RA_64)
+        BuildMI(*BalTgtMBB, Pos, DL, TII->get(Mips::CGetPCC), Mips::C12);
+        BuildMI(*BalTgtMBB, Pos, DL, TII->get(Mips::CIncOffset), Mips::C12)
+          .addReg(Mips::C12)
           .addReg(Mips::AT_64);
-      BuildMI(*BalTgtMBB, Pos, DL, TII->get(Mips::LD), Mips::RA_64)
-          .addReg(Mips::SP_64)
-          .addImm(0);
-
-      if (STI->hasMips64r6() && !STI->useIndirectJumpsHazard()) {
-        BuildMI(*BalTgtMBB, Pos, DL, TII->get(Mips::DADDiu), Mips::SP_64)
-            .addReg(Mips::SP_64)
-            .addImm(16);
-        BuildMI(*BalTgtMBB, Pos, DL, TII->get(Mips::JIC64))
-            .addReg(Mips::AT_64)
-            .addImm(0);
-      } else {
-        unsigned JROp =
-            STI->useIndirectJumpsHazard()
-                ? (STI->hasMips32r6() ? Mips::JR_HB64_R6 : Mips::JR_HB64)
-                : Mips::JR64;
-        BuildMI(*BalTgtMBB, Pos, DL, TII->get(JROp)).addReg(Mips::AT_64);
-        BuildMI(*BalTgtMBB, Pos, DL, TII->get(Mips::DADDiu), Mips::SP_64)
-            .addReg(Mips::SP_64)
-            .addImm(16);
+        BuildMI(*BalTgtMBB, Pos, DL, TII->get(Mips::CJR), Mips::C12);
+        BuildMI(*BalTgtMBB, Pos, DL, TII->get(Mips::NOP));
         BalTgtMBB->rbegin()->bundleWithPred();
-      }
+
+      } else {
+
+				BuildMI(*LongBrMBB, Pos, DL, TII->get(Mips::DADDiu), Mips::SP_64)
+						.addReg(Mips::SP_64)
+						.addImm(-16);
+				BuildMI(*LongBrMBB, Pos, DL, TII->get(Mips::SD))
+						.addReg(Mips::RA_64)
+						.addReg(Mips::SP_64)
+						.addImm(0);
+				BuildMI(*LongBrMBB, Pos, DL, TII->get(Mips::LONG_BRANCH_DADDiu),
+								Mips::AT_64)
+						.addReg(Mips::ZERO_64)
+						.addMBB(TgtMBB, MipsII::MO_ABS_HI)
+						.addMBB(BalTgtMBB);
+				BuildMI(*LongBrMBB, Pos, DL, TII->get(Mips::DSLL), Mips::AT_64)
+						.addReg(Mips::AT_64)
+						.addImm(16);
+
+				MachineInstrBuilder BalInstr =
+						BuildMI(*MFp, DL, TII->get(BalOp)).addMBB(BalTgtMBB);
+				MachineInstrBuilder DADDiuInstr =
+						BuildMI(*MFp, DL, TII->get(Mips::LONG_BRANCH_DADDiu), Mips::AT_64)
+								.addReg(Mips::AT_64)
+								.addMBB(TgtMBB, MipsII::MO_ABS_LO)
+								.addMBB(BalTgtMBB);
+				if (STI->hasMips32r6()) {
+					LongBrMBB->insert(Pos, DADDiuInstr);
+					LongBrMBB->insert(Pos, BalInstr);
+				} else {
+					LongBrMBB->insert(Pos, BalInstr);
+					LongBrMBB->insert(Pos, DADDiuInstr);
+					LongBrMBB->rbegin()->bundleWithPred();
+				}
+
+				Pos = BalTgtMBB->begin();
+
+				BuildMI(*BalTgtMBB, Pos, DL, TII->get(Mips::DADDu), Mips::AT_64)
+						.addReg(Mips::RA_64)
+						.addReg(Mips::AT_64);
+				BuildMI(*BalTgtMBB, Pos, DL, TII->get(Mips::LD), Mips::RA_64)
+						.addReg(Mips::SP_64)
+						.addImm(0);
+
+				if (STI->hasMips64r6() && !STI->useIndirectJumpsHazard()) {
+					BuildMI(*BalTgtMBB, Pos, DL, TII->get(Mips::DADDiu), Mips::SP_64)
+							.addReg(Mips::SP_64)
+							.addImm(16);
+					BuildMI(*BalTgtMBB, Pos, DL, TII->get(Mips::JIC64))
+							.addReg(Mips::AT_64)
+							.addImm(0);
+				} else {
+					unsigned JROp =
+							STI->useIndirectJumpsHazard()
+									? (STI->hasMips32r6() ? Mips::JR_HB64_R6 : Mips::JR_HB64)
+									: Mips::JR64;
+					BuildMI(*BalTgtMBB, Pos, DL, TII->get(JROp)).addReg(Mips::AT_64);
+					BuildMI(*BalTgtMBB, Pos, DL, TII->get(Mips::DADDiu), Mips::SP_64)
+							.addReg(Mips::SP_64)
+							.addImm(16);
+					BalTgtMBB->rbegin()->bundleWithPred();
+				}
+			}
     }
 
     assert(LongBrMBB->size() + BalTgtMBB->size() == LongBranchSeqSize);
@@ -707,6 +745,7 @@ bool MipsBranchExpansion::handlePossibleLongBranch() {
 
   LongBranchSeqSize = IsPIC ? ((ABI.IsN64() || STI->isTargetNaCl()) ? 10 : 9)
                             : (STI->hasMips32r6() ? 1 : 2);
+	LongBranchSeqSize = ABI.IsCheriPureCap() ? 8 : LongBranchSeqSize;
 
   if (STI->inMips16Mode() || !STI->enableLongBranchPass())
     return false;
