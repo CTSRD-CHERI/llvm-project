@@ -4915,7 +4915,9 @@ bool LLParser::ConvertValIDToValue(Type *Ty, ValID &ID, Value *&V,
     return false;
   case ValID::t_Constant:
     if (ID.ConstantVal->getType() != Ty)
-      return Error(ID.Loc, "constant expression type mismatch");
+      return Error(ID.Loc, "constant expression type mismatch: expected " +
+                               getTypeString(Ty) + " but got " +
+                               getTypeString(ID.ConstantVal->getType()));
 
     V = ID.ConstantVal;
     return false;
