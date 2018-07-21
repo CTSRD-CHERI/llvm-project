@@ -161,7 +161,9 @@ static inline unsigned getLoadStoreOffsetAlign(const unsigned Opcode) {
   case Mips::CAPLOAD64:
     return 8;
   case Mips::LOADCAP:
+  case Mips::LOADCAP_BigImm:
   case Mips::STORECAP:
+  case Mips::STORECAP_BigImm:
     return 16;
   case Mips::LD_H:
   case Mips::ST_H:
