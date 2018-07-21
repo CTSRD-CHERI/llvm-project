@@ -2572,7 +2572,9 @@ static void emitGlobalConstantCHERICap(const DataLayout &DL, const Constant *CV,
     return;
   } else if (const MCSymbolRefExpr *SRE = dyn_cast<MCSymbolRefExpr>(Expr)) {
     // emit capability for label whose address is stored in a global variable
+    // FIXME: this is wrong
     if (SRE->getSymbol().isTemporary()) {
+      assert(false && "This is wrong and needs a different fix!");
       AP.OutStreamer->EmitCheriCapability(&SRE->getSymbol(), 0, CapWidth);
       return;
     }
