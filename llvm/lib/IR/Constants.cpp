@@ -1408,9 +1408,20 @@ BlockAddress *BlockAddress::get(Function *F, BasicBlock *BB) {
   return BA;
 }
 
+extern cl::opt<bool> IgnoreProgramASForFunctions;
+
+static unsigned addressSpaceForBloackAddress(Function *F) {
+  // To keep this working for the legacy ABI we need to use the program
+  // address space instead of the addres sapce of the parent function
+  if (IgnoreProgramASForFunctions)
+    return F->getParent()->getDataLayout().getProgramAddressSpace();
+  return F->getAddressSpace();
+}
+
 BlockAddress::BlockAddress(Function *F, BasicBlock *BB)
-    : Constant(Type::getInt8PtrTy(F->getContext(), F->getAddressSpace()),
-               Value::BlockAddressVal, &Op<0>(), 2) {
+    : Constant(
+          Type::getInt8PtrTy(F->getContext(), addressSpaceForBloackAddress(F)),
+          Value::BlockAddressVal, &Op<0>(), 2) {
   setOperand(0, F);
   setOperand(1, BB);
   BB->AdjustBlockAddressRefCount(1);
