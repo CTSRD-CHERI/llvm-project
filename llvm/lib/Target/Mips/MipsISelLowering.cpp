@@ -2290,20 +2290,22 @@ SDValue MipsTargetLowering::lowerBlockAddress(SDValue Op,
                                               SelectionDAG &DAG) const {
   BlockAddressSDNode *N = cast<BlockAddressSDNode>(Op);
   EVT Ty = Op.getValueType();
+  MachineFunction &MF = DAG.getMachineFunction();
 
   if (!isPositionIndependent())
     return Subtarget.hasSym32() ? getAddrNonPIC(N, SDLoc(N), Ty, DAG)
                                 : getAddrNonPICSym64(N, SDLoc(N), Ty, DAG);
 
   if (ABI.UsesCapabilityTable()) {
-    if (N->getBlockAddress()->getFunction() !=
-        &DAG.getMachineFunction().getFunction())
+    if (N->getBlockAddress()->getFunction() != &MF.getFunction())
       report_fatal_error(
           "Should only get a blockaddress for the current function");
     // FIXME: derive from C12 instead of loading from the captable
     auto PtrInfo = MachinePointerInfo::getCapTable(DAG.getMachineFunction());
-    return getFromCapTable(true, N, SDLoc(N), Ty, DAG, DAG.getEntryNode(),
-                           PtrInfo);
+    // TODO: we don't need a capbility here, a vaddr is good enough!
+    auto BBCap = getFromCapTable(true, N, SDLoc(N), Ty, DAG, DAG.getEntryNode(),
+                                 PtrInfo);
+    return convertToPCCDerivedCap(BBCap, SDLoc(N), DAG);
   }
   // XXXAR: keep supporting the legacy ABI for now
   if (ABI.IsCheriPureCap())
