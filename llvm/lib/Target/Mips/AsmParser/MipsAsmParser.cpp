@@ -3810,6 +3810,38 @@ bool MipsAsmParser::expandBranchImm(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out,
 
 void MipsAsmParser::expandMemInst(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out,
                                   const MCSubtargetInfo *STI, bool IsLoad) {
+
+  switch (Inst.getOpcode()) {
+  case Mips::CAPLOAD8:
+  case Mips::CAPLOAD16:
+  case Mips::CAPLOAD32:
+  case Mips::CAPLOAD64:
+  case Mips::CAPLOAD832:
+  case Mips::CAPLOAD1632:
+  case Mips::CAPLOAD3264:
+  case Mips::CAPLOADU8:
+  case Mips::CAPLOADU16:
+  case Mips::CAPLOADU32:
+  case Mips::CAPLOADU832:
+  case Mips::CAPLOADU1632:
+
+  case Mips::CAPSTORE8:
+  case Mips::CAPSTORE832:
+  case Mips::CAPSTORE16:
+  case Mips::CAPSTORE1632:
+  case Mips::CAPSTORE32:
+  case Mips::CAPSTORE3264:
+  case Mips::CAPSTORE64:
+
+  case Mips::STORECAP:
+  case Mips::STORECAP_BigImm:
+  case Mips::LOADCAP:
+  case Mips::LOADCAP_BigImm:
+    getParser().Error(IDLoc, "Cannot expand symbol in immediate operand for this instruction");
+    return;
+  default:
+    break;
+  }
   const MCOperand &DstRegOp = Inst.getOperand(0);
   assert(DstRegOp.isReg() && "expected register operand kind");
   const MCOperand &BaseRegOp = Inst.getOperand(1);
