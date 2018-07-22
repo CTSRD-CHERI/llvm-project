@@ -56,7 +56,7 @@ def run(cmd: list, **kwargs):
 class ErrorKind(Enum):
     CRASH = tuple()
     INFINITE_LOOP = (b"INFINITE LOOP:", )
-    FATAL_ERROR = (b"fatal error:", b"LLVM ERROR:")
+    FATAL_ERROR = (b"fatal error:", b"LLVM ERROR:", b"*** Bad machine code:")
     AddressSanitizer_ERROR = (b"ERROR: AddressSanitizer:", )
 
 
@@ -618,6 +618,8 @@ class Reducer(object):
             r"Generating code for declaration '(.+)'",
             r"LLVM ERROR: Cannot select: (.+)",
             r"LLVM ERROR: Cannot select:",
+            r"LLVM ERROR: (.+)",
+            r"\*\*\* Bad machine code: (.+) \*\*\*",
        )]
         regexes = [(r, 0) for r in simple_regexes]
         # For this crash message we only want group 1
@@ -1029,10 +1031,14 @@ class Reducer(object):
         # test case: just search for RUN: lines
         for line in f.readlines():
             match = re.match(r".*\s+RUN: (.+)", line)
+            if line.endswith("\\"):
+                die("RUN lines with continuations not handled yet")
             if match:
                 command = match.group(1).strip()
                 if "%s" not in command:
                     die("RUN: line does not contain %s -> cannot create replacement invocation")
+                if "2>&1" in line:
+                    die("Cannot handle 2>&1 in RUN lines yet")
                 verbose_print("Found RUN: ", command)
                 command = expand_lit_substitutions(self.options, command)
                 verbose_print("After expansion:", command)
