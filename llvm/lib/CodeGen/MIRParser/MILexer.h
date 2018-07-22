@@ -103,6 +103,7 @@ struct MIToken {
     kw_addrspace,
     kw_stack,
     kw_got,
+    kw_cap_table,
     kw_jump_table,
     kw_constant_pool,
     kw_call_entry,

@@ -235,6 +235,7 @@ static MIToken::TokenKind getIdentifierKind(StringRef Identifier) {
       .Case("addrspace", MIToken::kw_addrspace)
       .Case("stack", MIToken::kw_stack)
       .Case("got", MIToken::kw_got)
+      .Case("cap-table", MIToken::kw_cap_table)
       .Case("jump-table", MIToken::kw_jump_table)
       .Case("constant-pool", MIToken::kw_constant_pool)
       .Case("call-entry", MIToken::kw_call_entry)
