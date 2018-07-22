@@ -796,6 +796,28 @@ bool MipsInstrInfo::verifyInstruction(const MachineInstr &MI,
 
       ErrInfo = "invalid instruction when using jump guards!";
       return false;
+
+    // Check that we don't use the cjalr output register (usually $c17) in the
+    // delay slot since it will have changed
+    case Mips::CapJumpLinkPseudo:
+    case Mips::CJALR:
+      // errs() << "CAPJUMPLINK: (delay slot: " << MI.hasDelaySlot()
+      //    << ", bundle size: " << MI.getBundleSize() << ") "; MI.dump();
+      if (MI.isBundledWithSucc()) {
+        auto &OutputOp =
+            MI.getOpcode() == Mips::CJALR ? MI.getOperand(0) : MI.getOperand(2);
+        if (MI.getOpcode() ==
+            Mips::CapJumpLinkPseudo) // Op2 here is implicitly c17:
+          assert(OutputOp.isReg() && OutputOp.getReg() == Mips::C17);
+        auto DelaySlotInstr = MI.getNextNode();
+        if (DelaySlotInstr->readsRegister(Mips::C17)) {
+          ErrInfo = "Filled CapJumpLinkPseudo delay slot with a read of $c17 "
+                    "(which will have been clobbered!)";
+          return false;
+        }
+      }
+      return true;
+
     default:
       return true;
   }

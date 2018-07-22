@@ -1,0 +1,149 @@
+# RUN: %cheri_purecap_llc %s -start-before=mips-delay-slot-filler -stop-after=mips-delay-slot-filler -verify-machineinstrs -o -
+# We currently have a BUG in the Mipsdelayslotfiller
+# XFAIL: *
+
+# Reduce MIR generated from the following LLVM IR:
+--- |
+  ; ModuleID = '/Users/alex/cheri/llvm/tools/clang/test/CodeGen/cheri/postgres-c17-load.c'
+  source_filename = "/Users/alex/cheri/llvm/tools/clang/test/CodeGen/cheri/postgres-c17-load.c"
+  target datalayout = "E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200"
+  target triple = "cheri-unknown-freebsd12"
+  
+  @j = common local_unnamed_addr addrspace(200) global i32 0, align 4
+  @k = common local_unnamed_addr addrspace(200) global i32 0, align 4
+  @h = common addrspace(200) global i8 0, align 1
+  @f = common local_unnamed_addr addrspace(200) global i8 addrspace(200)* null, align 16
+  @a = common local_unnamed_addr addrspace(200) global i32 addrspace(200)* null, align 16
+  @d = common local_unnamed_addr addrspace(200) global i32 addrspace(200)* null, align 16
+  @e = common local_unnamed_addr addrspace(200) global i8 addrspace(200)* null, align 16
+  @c = common local_unnamed_addr addrspace(200) global i8 0, align 1
+  @g = common local_unnamed_addr addrspace(200) global i8 0, align 1
+  @b = common local_unnamed_addr addrspace(200) global i8 addrspace(200)* null, align 16
+  @i = common local_unnamed_addr addrspace(200) global [1 x i16] zeroinitializer, align 2
+
+
+  ; Function Attrs: nounwind readnone
+  declare i64 @llvm.cheri.cap.diff(i8 addrspace(200)*, i8 addrspace(200)*) addrspace(200) #1
+
+  declare void @l() local_unnamed_addr addrspace(200) #2
+
+  ; Function Attrs: noreturn
+  declare void @m() local_unnamed_addr addrspace(200) #3
+
+  ; Function Attrs: nounwind readnone
+  declare i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)*, i64) addrspace(200) #1
+
+  ; Function Attrs: nounwind readnone
+  declare i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)*, i64) addrspace(200) #1
+
+  ; Function Attrs: nounwind readnone
+  declare i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)*) addrspace(200) #1
+
+  ; Function Attrs: nounwind
+  declare void @llvm.stackprotector(i8*, i8**) addrspace(200) #4
+
+  ; Function Attrs: nounwind
+  define i32 @n() local_unnamed_addr addrspace(200) #0 {
+  entry:
+    br label %o
+  
+  o:                                                ; preds = %if.then, %entry
+    %0 = load i32, i32 addrspace(200)* @j, align 4
+    %idxprom = sext i32 %0 to i64
+    %arrayidx = getelementptr [1 x i16], [1 x i16] addrspace(200)* @i, i64 0, i64 %idxprom
+    %1 = load i16, i16 addrspace(200)* %arrayidx, align 2
+    %conv = sext i16 %1 to i32
+    store i32 %conv, i32 addrspace(200)* @k, align 4
+    switch i32 %conv, label %sw.default [
+      i32 0, label %sw.bb
+      i32 8, label %sw.bb1
+    ]
+  
+  sw.bb:                                            ; preds = %o
+    ret i32 0
+  
+  sw.bb1:                                           ; preds = %o
+    %2 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @f, align 16
+    %3 = load i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* @a, align 16
+    store i32 addrspace(200)* %3, i32 addrspace(200)* addrspace(200)* @d, align 16
+    %4 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @e, align 16
+    %5 = load i8, i8 addrspace(200)* @c, align 1
+    %conv3 = sext i8 %5 to i64
+    %6 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 %conv3)
+    %cmp = icmp ugt i8 addrspace(200)* %4, %6
+    br i1 %cmp, label %for.cond.preheader, label %if.then
+  
+  for.cond.preheader:                               ; preds = %sw.bb1
+    %7 = tail call i64 @llvm.cheri.cap.diff(i8 addrspace(200)* nonnull @h, i8 addrspace(200)* %2)
+    %conv5 = trunc i64 %7 to i8
+    br label %for.cond
+  
+  if.then:                                          ; preds = %sw.bb1
+    tail call void @l() #4
+    %8 = load i8, i8 addrspace(200)* @g, align 1
+    store i8 %8, i8 addrspace(200)* @h, align 1
+    br label %o
+  
+  for.cond:                                         ; preds = %for.cond.preheader, %for.cond
+    %9 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @b, align 16
+    store i8 %conv5, i8 addrspace(200)* %9, align 1
+    br label %for.cond
+  
+  sw.default:                                       ; preds = %o
+    tail call void @m() #5
+    unreachable
+  }
+
+  attributes #0 = { nounwind "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="mips4" "target-features"="+cheri128,+chericap,+mips4,+soft-float,-noabicalls" "unsafe-fp-math"="false" "use-soft-float"="true" }
+  attributes #1 = { nounwind readnone }
+  attributes #2 = { "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="mips4" "target-features"="+cheri128,+chericap,+mips4,+soft-float,-noabicalls" "unsafe-fp-math"="false" "use-soft-float"="true" }
+  attributes #3 = { noreturn "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="mips4" "target-features"="+cheri128,+chericap,+mips4,+soft-float,-noabicalls" "unsafe-fp-math"="false" "use-soft-float"="true" }
+  attributes #4 = { nounwind }
+  attributes #5 = { noreturn nounwind }
+  
+  !llvm.module.flags = !{!0, !1}
+
+  !0 = !{i32 1, !"wchar_size", i32 4}
+  !1 = !{i32 7, !"PIC Level", i32 1}
+
+...
+---
+name:            n
+registers:
+liveins:
+  - { reg: '$c12', virtual-reg: '' }
+frameInfo:
+  isFrameAddressTaken: false
+  isReturnAddressTaken: false
+  hasStackMap:     false
+  hasPatchPoint:   false
+  stackSize:       256
+  offsetAdjustment: 0
+  maxAlignment:    16
+  adjustsStack:    true
+  hasCalls:        true
+  stackProtector:  ''
+  maxCallFrameSize: 0
+  hasOpaqueSPAdjustment: false
+  hasVAStart:      false
+  hasMustTailInVarArgFunc: false
+  localFrameSize:  0
+  savePoint:       ''
+  restorePoint:    ''
+fixedStack:
+stack:
+  - { id: 0, name: '', type: spill-slot, offset: -256, size: 16, alignment: 16,
+      stack-id: 0, callee-saved-register: '', callee-saved-restored: true,
+      debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
+constants:
+body:             |
+  bb.0.entry:
+    liveins: $c12, $s0_64, $c24, $c23, $c22, $c21, $c20, $c19, $c18, $c17, $ddc
+
+    $c11 = CIncOffsetImm $c11, -256
+    $c24 = frame-setup CIncOffset $c11, $zero_64
+    STORECAP killed renamable $c17, $zero_64, 0, $c24 :: (store 16 into %stack.0)
+    CapJumpLinkPseudo $c12, csr_cheri_purecap, implicit-def dead $c17, implicit-def $c11
+    renamable $c17 = LOADCAP $zero_64, 0, $c24 :: (load 16 from %stack.0)
+    PseudoReturnCap $c17
+...
