@@ -32,7 +32,7 @@ class CheriRangeChecker : public FunctionPass,
     unsigned OpNo;
     User *Origin;
   };
-  DataLayout *TD;
+  std::unique_ptr<DataLayout> TD;
   Module *M;
   IntegerType *Int64Ty;
   PointerType *CapPtrTy;
@@ -94,12 +94,12 @@ public:
   StringRef getPassName() const override { return "CHERI range checker"; }
   bool doInitialization(Module &Mod) override {
     M = &Mod;
-    TD = new DataLayout(M);
+    TD = llvm::make_unique<DataLayout>(M);
     Int64Ty = IntegerType::get(M->getContext(), 64);
     CapPtrTy = PointerType::get(IntegerType::get(M->getContext(), 8), 200);
     return true;
   }
-  virtual ~CheriRangeChecker() { delete TD; }
+  virtual ~CheriRangeChecker() {}
   bool checkOpcode(Value *V, unsigned Opcode) {
     if (Instruction *I = dyn_cast<Instruction>(V))
       return I->getOpcode() == Opcode;
@@ -109,7 +109,7 @@ public:
   }
   User *testI2P(User &I2P) {
     PointerType *DestTy = dyn_cast<PointerType>(I2P.getType());
-    if (DestTy && isCheriPointer(DestTy, TD)) {
+    if (DestTy && isCheriPointer(DestTy, TD.get())) {
       if (checkOpcode(I2P.getOperand(0), Instruction::PtrToInt)) {
         User *P2I = cast<User>(I2P.getOperand(0));
         PointerType *SrcTy =
@@ -130,7 +130,7 @@ public:
     PointerType *DestTy = dyn_cast<PointerType>(ASC.getType());
     Value *Src = ASC.getOperand(0);
     PointerType *SrcTy = dyn_cast<PointerType>(Src->getType());
-    if ((DestTy && isCheriPointer(DestTy, TD)) &&
+    if ((DestTy && isCheriPointer(DestTy, TD.get())) &&
         (SrcTy && SrcTy->getAddressSpace() == 0)) {
       Src = Src->stripPointerCasts();
       if (GlobalVariable *GV = dyn_cast<GlobalVariable>(Src)) {
