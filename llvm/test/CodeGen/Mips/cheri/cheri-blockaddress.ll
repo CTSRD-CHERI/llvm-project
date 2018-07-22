@@ -1,5 +1,5 @@
 ; RUN: not --crash %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -o - 2>&1 | FileCheck %s
-; CHECK: Assertion failed: (false &&  "This is wrong and needs a different fix!")
+; CHECK: false &&  "This is wrong and needs a different fix!"
 
 ; RUNTODO: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -o - -filetype=obj | llvm-objdump -d -t -r -
 ; RUNTODO: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -o - -filetype=obj | llvm-readobj -r -
