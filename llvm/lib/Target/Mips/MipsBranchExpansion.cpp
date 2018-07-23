@@ -592,7 +592,7 @@ void MipsBranchExpansion::expandToLongBranch(MBBInfo &I) {
         BuildMI(*BalTgtMBB, Pos, DL, TII->get(Mips::CIncOffset), Mips::C12)
           .addReg(Mips::C12)
           .addReg(Mips::AT_64);
-        BuildMI(*BalTgtMBB, Pos, DL, TII->get(Mips::CJR), Mips::C12);
+        BuildMI(*BalTgtMBB, Pos, DL, TII->get(Mips::CJR)).addReg(Mips::C12);
         BuildMI(*BalTgtMBB, Pos, DL, TII->get(Mips::NOP));
         BalTgtMBB->rbegin()->bundleWithPred();
 
