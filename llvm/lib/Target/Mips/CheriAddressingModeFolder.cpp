@@ -121,9 +121,12 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
       case Mips::CAPLOADU1632: return Mips::LHu;
       case Mips::CAPLOAD3264: return Mips::LW64;
       case Mips::CAPLOAD64: return Mips::LD;
+      case Mips::CAPSTORE832: return Mips::SB;
       case Mips::CAPSTORE8: return Mips::SB64;
       case Mips::CAPSTORE16: return Mips::SH64;
-      case Mips::CAPSTORE32: return Mips::SW64;
+      case Mips::CAPSTORE1632: return Mips::SH;
+      case Mips::CAPSTORE32: return Mips::SW;
+      case Mips::CAPSTORE3264: return Mips::SW64;
       case Mips::CAPSTORE64: return Mips::SD;
     }
   }
@@ -162,8 +165,11 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
               Op == Mips::CAPLOAD1632 || Op == Mips::CAPLOADU1632 ||
               Op == Mips::CAPLOAD3264 || Op == Mips::CAPLOAD64 ||
               Op == Mips::CAPSTORE8 || Op == Mips::CAPSTORE16 ||
+              Op == Mips::CAPSTORE3264 || Op == Mips::CAPSTORE64 ||
               Op == Mips::LOADCAP || Op == Mips::STORECAP ||
-              Op == Mips::CAPSTORE32 || Op == Mips::CAPSTORE64))
+              Op == Mips::LOADCAP_BigImm || Op == Mips::STORECAP_BigImm ||
+              Op == Mips::CAPSTORE832 || Op == Mips::CAPSTORE1632 ||
+              Op == Mips::CAPSTORE32))
           continue;
 
         // If the operand is a relocation expression then skip this pass:
@@ -335,13 +341,13 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
                              "skip (at least for captable)!");
     for (auto &I : DDCOps) {
       IncOffsets.insert(I.second);
-      unsigned BaseReg = I.second->getOperand(2).getReg();
+      MachineOperand *BaseOperand = &I.second->getOperand(2);
       // This can't be a symbolic address (yet) because we don't have
       // relocations that fit.
       MachineOperand &Offset = I.first->getOperand(2);
       // If this was the result of a daddiu, fold the immediate into the result
       // as well.
-      MachineInstr *AddInst = RI.getUniqueVRegDef(BaseReg);
+      MachineInstr *AddInst = RI.getUniqueVRegDef(BaseOperand->getReg());
       if (AddInst && (AddInst->getOpcode() == Mips::DADDiu)) {
         MachineOperand &MO = AddInst->getOperand(2);
         // FIXME: We could probably fold the add into the load in some cases
@@ -349,7 +355,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         // grown, but that's probably not the common case.
         if (Offset.isImm() && (Offset.getImm() == 0)) {
           Offset = MO;
-          BaseReg = AddInst->getOperand(1).getReg();
+          BaseOperand = &AddInst->getOperand(1);
         }
       } else
         AddInst = nullptr;
@@ -359,7 +365,8 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
       BuildMI(*InsertBlock, I.first, I.first->getDebugLoc(),
           InstrInfo->get(MipsOpForCHERIOp(I.first->getOpcode())))
         .addReg(FirstReg, getDefRegState(FirstOperand.isDef()))
-        .addReg(BaseReg).add(Offset);
+        .addReg(BaseOperand->getReg()).add(Offset);
+      BaseOperand->setIsKill(false); // we used this register -> can't kill it
       I.first->eraseFromBundle();
       if (AddInst) {
         // If we've folded the base of the add into the load's immediate, then
