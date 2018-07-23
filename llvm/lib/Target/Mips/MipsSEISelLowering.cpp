@@ -3955,10 +3955,11 @@ template<unsigned MFC1, unsigned CAPSTORE>
 static MachineBasicBlock *
 emitCapFloatStore(const MipsSubtarget &Subtarget,
                   MachineInstr &MI,
+                  const llvm::TargetRegisterClass &RC,
                   MachineBasicBlock *BB) {
   DebugLoc DL = MI.getDebugLoc();
   MachineRegisterInfo &RegInfo = BB->getParent()->getRegInfo();
-  unsigned IntReg = RegInfo.createVirtualRegister(&Mips::GPR64RegClass);
+  unsigned IntReg = RegInfo.createVirtualRegister(&RC);
   const TargetInstrInfo *TII = Subtarget.getInstrInfo();
   BuildMI(*BB, MI, DL, TII->get(MFC1), IntReg)
       .add(MI.getOperand(0));
@@ -3973,10 +3974,10 @@ emitCapFloatStore(const MipsSubtarget &Subtarget,
 MachineBasicBlock *
 MipsSETargetLowering::emitCapFloat64Store(MachineInstr &MI,
                                     MachineBasicBlock *BB) const {
-  return emitCapFloatStore<Mips::DMFC1, Mips::CAPSTORE64>(Subtarget, MI, BB);
+  return emitCapFloatStore<Mips::DMFC1, Mips::CAPSTORE64>(Subtarget, MI, Mips::GPR64RegClass, BB);
 }
 MachineBasicBlock *
 MipsSETargetLowering::emitCapFloat32Store(MachineInstr &MI,
                                     MachineBasicBlock *BB) const {
-  return emitCapFloatStore<Mips::MFC1, Mips::CAPSTORE32>(Subtarget, MI, BB);
+  return emitCapFloatStore<Mips::MFC1, Mips::CAPSTORE32>(Subtarget, MI, Mips::GPR32RegClass, BB);
 }
