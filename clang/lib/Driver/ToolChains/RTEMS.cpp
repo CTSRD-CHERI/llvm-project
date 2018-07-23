@@ -82,8 +82,14 @@ void rtems::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   CmdArgs.push_back(Output.getFilename());
 
   if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
-    const char* Crt0 = Args.hasArg(options::OPT_q_rtems) ? "start.o" : "crt0.o";
-    CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath(Crt0)));
+    if (!Args.hasArg(options::OPT_q_rtems)) {
+
+      /* RTEMS must provide a --sysroot path to its installed C library */
+      assert(!D.Sysroot.empty()
+
+      CmdArgs.push_back(Args.MakeArgString(D.SysRoot + "/lib/crt0.o"));
+    }
+    /* Otherwise, RTEMS build system should provide its own start file */
   }
 
   Args.AddAllArgs(CmdArgs, options::OPT_L);
