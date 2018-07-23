@@ -6008,14 +6008,16 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name,
                            .Case("epcc", 31)
                            .Default(0);
       if (InvalidReg) {
-        Error(Parser.getTok().getLoc(),
-              "Register $" + Name +
-                  " is no longer a general-purpose CHERI register. If you want "
-                  "to access the special register use c{get,set}" +
-                  Name + " instead. If you really want to access $c" +
-                  Twine(InvalidReg) +
-                  " this is available with `.set cheri_sysregs_accessible` .",
-              Parser.getTok().getLocRange());
+        ErrorIfNotPending(
+            Parser.getTok().getLoc(),
+            "Register $" + Name +
+                " is no longer a general-purpose CHERI register. If you want "
+                "to access the special register use c{get,set}" +
+                Name + " instead. If you really want to access $c" +
+                Twine(InvalidReg) +
+                " (which is ABI-reserved for kernel use and may be clobbered "
+                "at any time), use that instead.",
+            Parser.getTok().getLocRange());
         return -1;
       }
       CC = StringSwitch<unsigned>(Name)
@@ -6024,25 +6026,6 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name,
                .Default(-1);
     }
   }
-  auto BadReg = [&](const Twine &Reg, const char *Replacement = nullptr) {
-    // $ddc should always warn:
-    bool AffectedBySysregsAccessible = CC != 0;
-    if (AreCheriSysRegsAccessible && AffectedBySysregsAccessible)
-      return CC;
-
-    std::string Msg =
-        ("Direct access to " + Reg + " is deprecated: use C(Get/Set)" +
-         (Replacement ? Replacement : Reg) + " instead.")
-            .str();
-
-    if (AffectedBySysregsAccessible) {
-      Msg += (" If you really meant to access $c" + Twine(CC - Mips::C1 + 1) +
-              " you can use  `.set cheri_sysregs_accessible` to silence this"
-              " warning.").str();
-      Warning(Parser.getTok().getLoc(), Msg);
-    }
-    return CC;
-  };
   if (CC == 0) {
     // special handling for register zero (some instructions treat it as NULL
     // and other use it for $ddc)
@@ -6069,18 +6052,30 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name,
     errs() << "REGISTER NAME " << Name << "not handled?\n";
     llvm_unreachable("Bad register name?");
   }
+  auto ABIReservedReg = [&]() {
+    if (AreCheriSysRegsAccessible)
+      return CC;
+    Warning(Parser.getTok().getLoc(),
+            "Registers $c27 to $c31 are ABI-reserved for kernel use and may be "
+            "clobbered at any time. If you are writing kernel code and really "
+            "meant to access $" +
+                Name +
+                " you can use "
+                "`.set cheri_sysregs_accessible` to silence this  warning.");
+    return CC;
+  };
   assert(CC != 0);
   switch (CC) {
   case Mips::C27:
-    return BadReg("KR1C");
+    return ABIReservedReg();
   case Mips::C28:
-    return BadReg("KR2C");
+    return ABIReservedReg();
   case Mips::C29:
-    return BadReg("KCC");
+    return ABIReservedReg();
   case Mips::C30:
-    return BadReg("KDC");
+    return ABIReservedReg();
   case Mips::C31:
-    return BadReg("EPCC");
+    return ABIReservedReg();
   default:
     break;
   }
