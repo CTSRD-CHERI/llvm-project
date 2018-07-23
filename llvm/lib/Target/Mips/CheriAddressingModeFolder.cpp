@@ -300,13 +300,24 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
           MI.getOperand(1).setIsKill(Offset.isKill());
           Offset.setIsKill(false);
         }
-        MI.getOperand(3).setReg(Cap.getReg());
-
         // If we were using a unique vreg here it will probably have kill set to
         // true, so if we retain this kill state the machine instr verifier will
         // complain if there is any other instruction later on that uses the
         // cap reg.
-        MI.getOperand(3).setIsKill(std::distance(RI.use_begin(Cap.getReg()), RI.use_end()) <= 2);
+        // We can kill the capreg if the only uses are the CIncOffset
+        bool CanKillCap = RI.hasOneUse(Cap.getReg());
+        if (auto *CapRegDef = RI.getUniqueVRegDef(Cap.getReg())) {
+          // But we can't kill it if it is defined in a different BB since we
+          // might jump somewhere else that requires that vreg
+          if (CapRegDef->getParent() != MI.getParent()) {
+            LLVM_DEBUG(dbgs() << "capreg defined in different BB -> not "
+                                 "killing operand 3: ";
+                       MI.dump(););
+            CanKillCap = false;
+          }
+        }
+        MI.getOperand(3).setReg(Cap.getReg());
+        MI.getOperand(3).setIsKill(CanKillCap);
         Cap.setIsKill(false);
 
         IncOffsets.insert(IncOffset);

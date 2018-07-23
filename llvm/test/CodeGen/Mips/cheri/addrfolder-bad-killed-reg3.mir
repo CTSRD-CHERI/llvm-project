@@ -1,0 +1,100 @@
+# RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -verify-machineinstrs -start-before=cheriaddrmodefolder -stop-after=cheriaddrmodefolder  -o -
+# RsUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -verify-machineinstrs -start-before=cheriaddrmodefolder -stop-after=cheriaddrmodefolder  -o - | FileCheck %s
+
+--- |
+  ; ModuleID = '/Users/alex/cheri/llvm/test/CodeGen/Mips/cheri/a.ll'
+  source_filename = "/tmp/localtime-bf5ccd.c"
+  target datalayout = "E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200"
+  target triple = "cheri-unknown-freebsd12"
+  
+  ; Function Attrs: noinline nounwind optnone
+  define void @pg_interpret_timezone_abbrev() addrspace(200) #0 {
+  entry:
+    br label %while.cond
+  
+  while.cond:                                       ; preds = %while.cond, %entry
+    call void @strcmp() #3
+    br label %while.cond
+  }
+  
+  ; Function Attrs: nounwind readonly
+  declare void @strcmp() addrspace(200) #1
+  
+  ; Function Attrs: nounwind
+  declare void @llvm.stackprotector(i8*, i8**) addrspace(200) #2
+  
+  attributes #0 = { noinline nounwind optnone "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="mips4" "target-features"="-noabicalls,+soft-float,+chericap,+cheri128" "unsafe-fp-math"="false" "use-soft-float"="true" }
+  attributes #1 = { nounwind readonly "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="mips4" "target-features"="-noabicalls,+soft-float,+chericap,+cheri128" "unsafe-fp-math"="false" "use-soft-float"="true" }
+  attributes #2 = { nounwind }
+  attributes #3 = { nounwind readonly }
+  
+...
+---
+name:            pg_interpret_timezone_abbrev
+alignment:       3
+exposesReturnsTwice: false
+legalized:       false
+regBankSelected: false
+selected:        false
+failedISel:      false
+tracksRegLiveness: true
+registers:       
+  - { id: 0, class: cherigpr, preferred-register: '' }
+  - { id: 1, class: gpr64, preferred-register: '' }
+  - { id: 2, class: gpr64, preferred-register: '' }
+  - { id: 3, class: cherigpr, preferred-register: '' }
+  - { id: 4, class: cherigpr, preferred-register: '' }
+  - { id: 5, class: gpr64, preferred-register: '' }
+  - { id: 6, class: cherigpr, preferred-register: '' }
+  - { id: 7, class: gpr64, preferred-register: '' }
+  - { id: 8, class: gpr64, preferred-register: '' }
+liveins:         
+  - { reg: '$c12', virtual-reg: '' }
+frameInfo:       
+  isFrameAddressTaken: false
+  isReturnAddressTaken: false
+  hasStackMap:     false
+  hasPatchPoint:   false
+  stackSize:       0
+  offsetAdjustment: 0
+  maxAlignment:    1
+  adjustsStack:    false
+  hasCalls:        true
+  stackProtector:  ''
+  maxCallFrameSize: 4294967295
+  hasOpaqueSPAdjustment: false
+  hasVAStart:      false
+  hasMustTailInVarArgFunc: false
+  localFrameSize:  0
+  savePoint:       ''
+  restorePoint:    ''
+fixedStack:      
+stack:           
+constants:       
+body:             |
+  bb.0.entry:
+    successors: %bb.1(0x80000000)
+    liveins: $c12
+  
+    %7:gpr64 = LUi64 target-flags(mips-captable-off-hi) @pg_interpret_timezone_abbrev
+    %8:gpr64 = DADDiu %7, target-flags(mips-captable-off-lo) @pg_interpret_timezone_abbrev
+    $c26 = CIncOffset $c12, %8
+    %0:cherigpr = COPY $c26
+    B %bb.1, implicit-def dead $at
+  
+  bb.1.while.cond:
+    successors: %bb.1(0x80000000)
+  
+    ADJCALLSTACKCAPDOWN 0, 0, implicit-def dead $c11, implicit $c11
+    %1:gpr64 = LUi64 target-flags(mips-captable-hi16-call) @strcmp
+    %2:gpr64 = DADDiu killed %1, target-flags(mips-captable-lo16-call) @strcmp
+    %3:cherigpr = CIncOffset %0, killed %2
+    %4:cherigpr = LOADCAP $zero_64, 0, killed %3 :: (load 16 from call-entry @strcmp)
+    %5:gpr64 = DADDiu $zero_64, 0
+    $c13 = CFromPtr $ddc, killed $zero_64
+    $c12 = COPY %4
+    CapJumpLinkPseudo killed $c12, csr_cheri_purecap, implicit-def dead $c17, implicit $c13, implicit-def $c11
+    ADJCALLSTACKCAPUP 0, 0, implicit-def dead $c11, implicit $c11
+    B %bb.1, implicit-def dead $at
+
+...
