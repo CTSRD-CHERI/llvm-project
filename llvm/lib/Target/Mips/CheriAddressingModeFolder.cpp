@@ -145,8 +145,9 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
     std::set<MachineInstr *> GetPCCs;
     bool modified = false;
     for (auto &MBB : MF)
-      for (MachineBasicBlock::iterator I = MBB.begin(), IE = MBB.end();
-                     I != IE; ++I) {
+      // Iterate backwards to update the last use of the CIncOffsets first
+      // This prevents various machine verifier issues
+      for (auto I = MBB.rbegin(), IE = MBB.rend(); I != IE; ++I) {
         MachineInstr &MI = *I;
         int Op = MI.getOpcode();
         if (Op == Mips::CGetPCC) {
@@ -256,16 +257,21 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         auto* TRI = RI.getTargetRegisterInfo();
         bool CapKilled = false;
         bool OffsetKilled = false;
-        for (auto J = std::prev(I), JE = MachineBasicBlock::iterator(IncOffset);
-            J != JE; --J) {
+        // Keep looking backwards towards the incoffset instruction to see if
+        // there is a hazard
+        for (auto J = std::next(I),
+                  JE = MachineBasicBlock::reverse_iterator(IncOffset);
+             J != JE; ++J) {
           if (J->modifiesRegister(Cap.getReg(), TRI) ||
               J->killsRegister(Cap.getReg(), TRI)) {
             CapKilled = true;
+            LLVM_DEBUG(dbgs() << "Cannot fold: CAP IS KILLED BY "; J->dump(););
             break;
           }
           if (J->modifiesRegister(Offset.getReg(), TRI) ||
               J->killsRegister(Offset.getReg(), TRI)) {
             OffsetKilled = true;
+            LLVM_DEBUG(dbgs() << "Cannot fold: OFFSET IS KILLED BY "; J->dump(););
             break;
           }
         }

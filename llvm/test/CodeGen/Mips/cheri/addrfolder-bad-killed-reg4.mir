@@ -1,0 +1,139 @@
+# RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -verify-machineinstrs -start-before=cheriaddrmodefolder -stop-after=cheriaddrmodefolder  -o -                 -debug
+# RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -verify-machineinstrs -start-before=cheriaddrmodefolder -stop-after=cheriaddrmodefolder  -o - | FileCheck %s
+--- |
+  ; ModuleID = '/Users/alex/cheri/llvm/test/CodeGen/Mips/cheri/cheri-cap-index.ll'
+  source_filename = "/Users/alex/cheri/llvm/test/CodeGen/Mips/cheri/cheri-cap-index.ll"
+  target datalayout = "E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128"
+  target triple = "cheri-unknown-freebsd"
+
+  ; Function Attrs: nounwind
+  define i32 @loop(i32 addrspace(200)* nocapture %x, i32 %len) #0 {
+  entry:
+    %cmp9 = icmp sgt i32 %len, 0
+    br i1 %cmp9, label %for.body.preheader, label %for.end
+
+  for.body.preheader:                               ; preds = %entry
+    br label %for.body
+
+  for.body:                                         ; preds = %for.body.preheader, %for.body
+    %i.011 = phi i32 [ %inc, %for.body ], [ 0, %for.body.preheader ]
+    %sum.010 = phi i32 [ %add, %for.body ], [ 0, %for.body.preheader ]
+    %0 = sext i32 %i.011 to i256
+    %arrayidx = getelementptr inbounds i32, i32 addrspace(200)* %x, i256 %0
+    %1 = load i32, i32 addrspace(200)* %arrayidx, align 4
+    %add = add nsw i32 %1, %sum.010
+    store i32 %add, i32 addrspace(200)* %arrayidx, align 4
+    %inc = add nsw i32 %i.011, 1
+    %exitcond = icmp eq i32 %len, %inc
+    br i1 %exitcond, label %for.end, label %for.body
+
+  for.end:                                          ; preds = %for.body, %entry
+    %sum.0.lcssa = phi i32 [ 0, %entry ], [ %add, %for.body ]
+    ret i32 %sum.0.lcssa
+  }
+
+  attributes #0 = { nounwind "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf"="true" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "target-cpu"="cheri128" "target-features"="+cheri128" "unsafe-fp-math"="false" "use-soft-float"="false" }
+
+...
+---
+name:            loop
+alignment:       3
+exposesReturnsTwice: false
+legalized:       false
+regBankSelected: false
+selected:        false
+failedISel:      false
+tracksRegLiveness: true
+registers:
+  - { id: 0, class: gpr32, preferred-register: '' }
+  - { id: 1, class: gpr32, preferred-register: '' }
+  - { id: 2, class: gpr32, preferred-register: '' }
+  - { id: 3, class: gpr32, preferred-register: '' }
+  - { id: 4, class: gpr32, preferred-register: '' }
+  - { id: 5, class: cherigpr, preferred-register: '' }
+  - { id: 6, class: gpr64, preferred-register: '' }
+  - { id: 7, class: gpr32, preferred-register: '' }
+  - { id: 8, class: gpr32, preferred-register: '' }
+  - { id: 9, class: gpr32, preferred-register: '' }
+  - { id: 10, class: gpr32, preferred-register: '' }
+  - { id: 11, class: gpr64, preferred-register: '' }
+  - { id: 12, class: gpr64, preferred-register: '' }
+  - { id: 13, class: cherigpr, preferred-register: '' }
+  - { id: 14, class: gpr32, preferred-register: '' }
+liveins:
+  - { reg: '$c3', virtual-reg: '%5' }
+  - { reg: '$a0_64', virtual-reg: '%6' }
+frameInfo:
+  isFrameAddressTaken: false
+  isReturnAddressTaken: false
+  hasStackMap:     false
+  hasPatchPoint:   false
+  stackSize:       0
+  offsetAdjustment: 0
+  maxAlignment:    1
+  adjustsStack:    false
+  hasCalls:        false
+  stackProtector:  ''
+  maxCallFrameSize: 4294967295
+  hasOpaqueSPAdjustment: false
+  hasVAStart:      false
+  hasMustTailInVarArgFunc: false
+  localFrameSize:  0
+  savePoint:       ''
+  restorePoint:    ''
+fixedStack:
+stack:
+constants:
+body:             |
+  bb.0.entry:
+    successors: %bb.1(0x50000000), %bb.4(0x30000000)
+    liveins: $c3, $a0_64
+
+    %6:gpr64 = COPY $a0_64
+    %5:cherigpr = COPY $c3
+    %9:gpr32 = COPY %6.sub_32
+    %7:gpr32 = SLL killed %9, 0
+    BGTZ %7, %bb.1, implicit-def $at
+
+  bb.4:
+    successors: %bb.3(0x80000000)
+
+    %8:gpr32 = ADDiu $zero, 0
+    J %bb.3, implicit-def $at
+
+  bb.1.for.body.preheader:
+    successors: %bb.2(0x80000000)
+
+    %10:gpr32 = ADDiu $zero, 0
+
+  bb.2.for.body:
+    successors: %bb.3(0x04000000), %bb.2(0x7c000000)
+
+    %0:gpr32 = PHI %10, %bb.1, %3, %bb.2
+    %1:gpr32 = PHI %10, %bb.1, %2, %bb.2
+    %11:gpr64 = SLL64_32 %0
+    %12:gpr64 = DSLL killed %11, 2
+    %13:cherigpr = CIncOffset %5, killed %12
+    %14:gpr32 = CAPLOAD32 $zero_64, 0, %13 :: (load 4 from %ir.arrayidx, addrspace 200)
+    %2:gpr32 = ADDu killed %14, %1
+    CAPSTORE32 %2, $zero_64, 0, %13 :: (store 4 into %ir.arrayidx, addrspace 200)
+    %3:gpr32 = ADDiu %0, 1
+    BNE %7, %3, %bb.2, implicit-def dead $at
+    J %bb.3, implicit-def dead $at
+
+  bb.3.for.end:
+    %4:gpr32 = PHI %8, %bb.4, %2, %bb.2
+    $v0 = COPY %4
+    RetRA implicit $v0
+
+...
+
+# CHECK:      %11:gpr64 = SLL64_32 %0
+# CHECK-NEXT: %12:gpr64 = DSLL killed %11, 2
+# This was previously marking the first %12 as killed:
+# CHECK-NEXT: %14:gpr32 = CAPLOAD32 %12, 0, %5 :: (load 4 from %ir.arrayidx, addrspace 200)
+# CHECK-NEXT: %2:gpr32 = ADDu killed %14, %1
+# However actually it should mark this %12 as killed:
+# CHECK-NEXT: CAPSTORE32 %2, killed %12, 0, %5 :: (store 4 into %ir.arrayidx, addrspace 200)
+# CHECK-NEXT: %3:gpr32 = ADDiu %0, 1
+# CHECK-NEXT: BNE %7, %3, %bb.3, implicit-def dead $at
