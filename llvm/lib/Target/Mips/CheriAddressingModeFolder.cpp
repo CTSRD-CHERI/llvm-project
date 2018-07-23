@@ -76,7 +76,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
   bool IsValidOffset(unsigned Op, int immediate) {
     switch (Op) {
       default:
-        llvm_unreachable("No MIPS equivalent");
+        llvm_unreachable("Unsupported load operation");
       case Mips::CAPLOAD8:
       case Mips::CAPSTORE8:
       case Mips::CAPLOADU8:
@@ -92,6 +92,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
       case Mips::CAPLOAD32:
       case Mips::CAPLOADU32:
       case Mips::CAPSTORE32:
+      case Mips::CAPSTORE3264:
       case Mips::CAPLOAD3264:
         return isShiftedInt<8,2>(immediate);
       case Mips::CAPLOAD64:
