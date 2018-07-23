@@ -65,7 +65,8 @@ void rtems::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-r");
   } else {
     CmdArgs.push_back("--build-id");
-    CmdArgs.push_back("--hash-style=gnu");
+    /* LLD rejects gnu hash style for MIPS */
+    //CmdArgs.push_back("--hash-style=gnu");
   }
 
   CmdArgs.push_back("--eh-frame-hdr");
