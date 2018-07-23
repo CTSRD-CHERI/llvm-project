@@ -12,7 +12,7 @@
 // CHECK: {{.*}}ld.lld{{.*}}" "-z" "rodynamic"
 // CHECK: "--sysroot=[[SYSROOT]]"
 // CHECK: "--build-id"
-// CHECK: "--hash-style=gnu"
+// CHECK-NOT: "--hash-style=gnu"
 // CHECK: crt0.o
 // CHECK-NOT: crti.o
 // CHECK-NOT: crtbegin.o
@@ -47,10 +47,9 @@
 // RUN: %clang %s -### --target=mips64-unknown-rtems5 --sysroot=%S/platform 2>&1 | FileCheck \
 // RUN:   -check-prefixes=NO-QRTEMS %s -implicit-check-not start.o
 
-// QTREMS: ld.lld
-// QRTEMS: start.o
-// QRTEMS: "-lrtemsbsp" "-lrtemscpu"
-// NO-QTREMS: ld.lld
-// NO-QTREMS: crt0.o
-// NO-QTREMS-NOT: "-lrtemsbsp"
-// NO-QTREMS-NOT: "-lrtemscpu"
+// QRTEMS: {{.+}}bin/ld.lld"
+// QRTEMS-SAME: "-Tlinkcmds" "-lrtemsbsp" "-lrtemscpu"
+// NO-QRTEMS: {{.+}}bin/ld.lld"
+// NO-QRTEMS-SAME: lib/crt0.o"
+// NO-QRTEMS-NOT: "-lrtemsbsp"
+// NO-QRTEMS-NOT: "-lrtemscpu"
