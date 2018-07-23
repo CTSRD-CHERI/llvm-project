@@ -105,6 +105,7 @@ void rtems::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
     // Add the rtems libns:
     if (Args.hasArg(options::OPT_q_rtems)) {
+      CmdArgs.push_back("-Tlinkcmds");
       CmdArgs.push_back("-lrtemsbsp");
       CmdArgs.push_back("-lrtemscpu");
     }
