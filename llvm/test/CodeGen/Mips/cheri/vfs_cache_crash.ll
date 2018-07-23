@@ -1,4 +1,4 @@
-; RUN: %cheri_purecap_llc -O2 %s -o /dev/null -print-before-all
+; RUN: %cheri_purecap_llc -O2 %s -o /dev/null
 
 ; From this reduced C source code (and then reduced the IR):
 ; static int __attribute__((__section__(".data.read_mostly"))) a;
