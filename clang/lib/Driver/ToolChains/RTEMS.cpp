@@ -85,7 +85,7 @@ void rtems::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     if (!Args.hasArg(options::OPT_q_rtems)) {
 
       /* RTEMS must provide a --sysroot path to its installed C library */
-      assert(!D.Sysroot.empty()
+      assert(!D.SysRoot.empty());
 
       CmdArgs.push_back(Args.MakeArgString(D.SysRoot + "/lib/crt0.o"));
     }
