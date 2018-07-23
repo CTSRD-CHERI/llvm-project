@@ -66,6 +66,9 @@ extern "C" void LLVMInitializeMipsTarget() {
   initializeMipsDelaySlotFillerPass(*PR);
   initializeMipsBranchExpansionPass(*PR);
   initializeMicroMipsSizeReducePass(*PR);
+  initializeCHERICapDirectCallsPass(*PR);
+  initializeCHERICapFoldIntrinsicsPass(*PR);
+  initializeCheriAddressingModeFolderPass(*PR);
 }
 
 static std::string computeDataLayout(const Triple &TT, StringRef CPU,

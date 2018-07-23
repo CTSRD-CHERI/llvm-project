@@ -10,6 +10,9 @@
 #include "MipsInstrInfo.h"
 #include "MipsTargetMachine.h"
 
+
+#define DEBUG_TYPE "cheriaddrmodefolder"
+
 using namespace llvm;
 
 static cl::opt<bool> DisableAddressingModeFolder(
@@ -97,6 +100,9 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
       case Mips::LOADCAP:
       case Mips::STORECAP:
         return isShiftedInt<11,4>(immediate);
+      case Mips::LOADCAP_BigImm:
+      case Mips::STORECAP_BigImm:
+        return isShiftedInt<16,4>(immediate);
     }
   }
   unsigned MipsOpForCHERIOp(unsigned Op) {
@@ -216,7 +222,12 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
           uint64_t offsetImm = IncOffset->getOperand(2).getImm();
           if (IsValidOffset(Op, offset + offsetImm)) {
             IncOffset->getOperand(1).setIsKill(false);
-            MI.getOperand(3).setReg(IncOffset->getOperand(1).getReg());
+            auto IncOffsetArg = IncOffset->getOperand(1).getReg();
+            MI.getOperand(3).setReg(IncOffsetArg);
+            if (std::distance(RI.use_begin(IncOffsetArg), RI.use_end()) > 2) {
+              // Don't kill the register if there are other uses
+              MI.getOperand(3).setIsKill(false);
+            }
             MI.getOperand(2).setImm(offset + offsetImm);
             Adds.insert(IncOffset);
           }
@@ -279,10 +290,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         // true, so if we retain this kill state the machine instr verifier will
         // complain if there is any other instruction later on that uses the
         // cap reg.
-        // XXXAR: is copying the kill state the capreg enough?
-        // Could there be some corner case where the capreg is killed before
-        // this CIncOffset?
-        MI.getOperand(3).setIsKill(Cap.isKill());
+        MI.getOperand(3).setIsKill(std::distance(RI.use_begin(Cap.getReg()), RI.use_end()) <= 2);
         Cap.setIsKill(false);
 
         IncOffsets.insert(IncOffset);
@@ -351,12 +359,12 @@ namespace llvm {
 }
 
 
-char CheriAddressingModeFolder::ID;
-INITIALIZE_PASS_BEGIN(CheriAddressingModeFolder, "cheriaddrmodefolder",
+char CheriAddressingModeFolder::ID = 0;
+INITIALIZE_PASS_BEGIN(CheriAddressingModeFolder, DEBUG_TYPE,
                     "CHERI addressing mode folder", false, false)
 INITIALIZE_PASS_DEPENDENCY(MachineLoopInfo)
 INITIALIZE_PASS_DEPENDENCY(MachineDominatorTree)
-INITIALIZE_PASS_END(CheriAddressingModeFolder, "cheriaddrmodefolder",
+INITIALIZE_PASS_END(CheriAddressingModeFolder, DEBUG_TYPE,
                     "CHERI addressing mode folder", false, false)
 
 
