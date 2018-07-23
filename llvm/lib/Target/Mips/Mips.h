@@ -55,6 +55,7 @@ namespace llvm {
   void initializeMipsDelaySlotFillerPass(PassRegistry &);
   void initializeMipsBranchExpansionPass(PassRegistry &);
   void initializeMicroMipsSizeReducePass(PassRegistry &);
+  void initializeMipsOptimizePICCallPass(PassRegistry &);
   void initializeCheriAddressingModeFolderPass(PassRegistry &);
 } // end namespace llvm;
 

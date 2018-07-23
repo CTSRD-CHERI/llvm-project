@@ -66,6 +66,7 @@ extern "C" void LLVMInitializeMipsTarget() {
   initializeMipsDelaySlotFillerPass(*PR);
   initializeMipsBranchExpansionPass(*PR);
   initializeMicroMipsSizeReducePass(*PR);
+  initializeMipsOptimizePICCallPass(*PR);
   initializeCHERICapDirectCallsPass(*PR);
   initializeCHERICapFoldIntrinsicsPass(*PR);
   initializeCheriAddressingModeFolderPass(*PR);
