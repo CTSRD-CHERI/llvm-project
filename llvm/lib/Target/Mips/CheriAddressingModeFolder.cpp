@@ -251,8 +251,11 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         // We are going to use the CIncOffset's source capability at the
         // load/store instruction, so first we need to check it has not been
         // killed before the use
+        // We also need to do the same for the offset value (but we can ignore
+        // it if the only kill is the CIncOffset instruction)
         auto* TRI = RI.getTargetRegisterInfo();
         bool CapKilled = false;
+        bool OffsetKilled = false;
         for (auto J = std::prev(I), JE = MachineBasicBlock::iterator(IncOffset);
             J != JE; --J) {
           if (J->modifiesRegister(Cap.getReg(), TRI) ||
@@ -260,8 +263,13 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
             CapKilled = true;
             break;
           }
+          if (J->modifiesRegister(Offset.getReg(), TRI) ||
+              J->killsRegister(Offset.getReg(), TRI)) {
+            OffsetKilled = true;
+            break;
+          }
         }
-        if (CapKilled)
+        if (CapKilled || OffsetKilled)
           continue;
 
         MachineInstr *AddInst;
@@ -276,14 +284,22 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
             Adds.insert(AddInst);
             MI.getOperand(1).setReg(Mips::ZERO_64);
             MI.getOperand(2).setImm(offset);
-          } else
+          } else {
             // If we didn't, then use the CIncOffset's register value as our
             // offset
             MI.getOperand(1).setReg(Offset.getReg());
-        } else
+            // transfer the kill state to the capability load instruction
+            MI.getOperand(1).setIsKill(Offset.isKill());
+            Offset.setIsKill(false);
+          }
+        } else {
           // If it has a relocation, then use the CIncOffset's register value
           // as our offset
           MI.getOperand(1).setReg(Offset.getReg());
+          // transfer the kill state to the capability load instruction
+          MI.getOperand(1).setIsKill(Offset.isKill());
+          Offset.setIsKill(false);
+        }
         MI.getOperand(3).setReg(Cap.getReg());
 
         // If we were using a unique vreg here it will probably have kill set to
