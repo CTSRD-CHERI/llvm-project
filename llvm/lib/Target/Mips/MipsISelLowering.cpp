@@ -1856,6 +1856,7 @@ MipsTargetLowering::emitAtomicCmpSwap(MachineInstr &MI,
                                       MachineBasicBlock *BB) const {
 
   unsigned AtomicOp = -1;
+  bool IsCheriOp = false;
   MVT ScratchTy;
   switch (MI.getOpcode()) {
   case Mips::ATOMIC_CMP_SWAP_I32:
@@ -1867,22 +1868,27 @@ MipsTargetLowering::emitAtomicCmpSwap(MachineInstr &MI,
     ScratchTy = MVT::i64;
     break;
   case Mips::CAP_ATOMIC_CMP_SWAP_I8:
+    IsCheriOp = true;
     AtomicOp = Mips::CAP_ATOMIC_CMP_SWAP_I8_POSTRA;
     ScratchTy = MVT::i32;
     break;
   case Mips::CAP_ATOMIC_CMP_SWAP_I16:
+    IsCheriOp = true;
     AtomicOp = Mips::CAP_ATOMIC_CMP_SWAP_I16_POSTRA;
     ScratchTy = MVT::i32;
     break;
   case Mips::CAP_ATOMIC_CMP_SWAP_I32:
+    IsCheriOp = true;
     AtomicOp = Mips::CAP_ATOMIC_CMP_SWAP_I32_POSTRA;
     ScratchTy = MVT::i32;
     break;
   case Mips::CAP_ATOMIC_CMP_SWAP_I64:
+    IsCheriOp = true;
     AtomicOp = Mips::CAP_ATOMIC_CMP_SWAP_I64_POSTRA;
     ScratchTy = MVT::i64;
     break;
   case Mips::CAP_ATOMIC_CMP_SWAP_CAP:
+    IsCheriOp = true;
     AtomicOp = Mips::CAP_ATOMIC_CMP_SWAP_CAP_POSTRA;
     ScratchTy = MVT::i64;
     break;
@@ -1912,7 +1918,10 @@ MipsTargetLowering::emitAtomicCmpSwap(MachineInstr &MI,
   unsigned OldValCopy = MRI.createVirtualRegister(MRI.getRegClass(OldVal));
   unsigned NewValCopy = MRI.createVirtualRegister(MRI.getRegClass(NewVal));
 
-  BuildMI(*BB, II, DL, TII->get(Mips::COPY), DestCopy).addReg(Dest);
+  // We have different ptr + output registers for csc* -> no need for this copy
+  // FIXME: is this also an error for MIPS (since it is defined by the op below)?
+  if (!IsCheriOp)
+    BuildMI(*BB, II, DL, TII->get(Mips::COPY), DestCopy).addReg(Dest);
   BuildMI(*BB, II, DL, TII->get(Mips::COPY), PtrCopy).addReg(Ptr);
   BuildMI(*BB, II, DL, TII->get(Mips::COPY), OldValCopy).addReg(OldVal);
   BuildMI(*BB, II, DL, TII->get(Mips::COPY), NewValCopy).addReg(NewVal);
