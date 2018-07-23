@@ -1,5 +1,4 @@
-# RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -verify-machineinstrs -start-before=cheriaddrmodefolder -stop-after=cheriaddrmodefolder  -o -
-# RsUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -verify-machineinstrs -start-before=cheriaddrmodefolder -stop-after=cheriaddrmodefolder  -o - | FileCheck %s
+# RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -verify-machineinstrs -start-before=cheriaddrmodefolder -stop-after=cheriaddrmodefolder  -o - | FileCheck %s
 
 --- |
   ; ModuleID = '/Users/alex/cheri/llvm/test/CodeGen/Mips/cheri/a.ll'
@@ -98,3 +97,9 @@ body:             |
     B %bb.1, implicit-def dead $at
 
 ...
+
+# CHECK:      ADJCALLSTACKCAPDOWN 0, 0, implicit-def dead $c11, implicit $c11
+# CHECK-NEXT: %1:gpr64 = LUi64 target-flags(mips-captable-hi16-call) @strcmp
+# CHECK-NEXT: %2:gpr64 = DADDiu killed %1, target-flags(mips-captable-lo16-call) @strcmp
+# The CIncOffset is gone:
+# CHECK-NEXT: %4:cherigpr = LOADCAP killed %2, 0, %0 :: (load 16 from call-entry @strcmp)
