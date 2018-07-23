@@ -1,6 +1,6 @@
-# RUN: %cheri_purecap_llc %s -start-before=mips-delay-slot-filler -stop-after=mips-delay-slot-filler -verify-machineinstrs -o -
-# We currently have a BUG in the Mipsdelayslotfiller
-# XFAIL: *
+# REQUIRES: asserts
+# RUN: %cheri_purecap_llc %s -start-before=mips-delay-slot-filler -stop-after=mips-delay-slot-filler -verify-machineinstrs \
+# RUN:   -o - -debug-only="mips-delay-slot-filler" | FileCheck %s
 
 # Reduce MIR generated from the following LLVM IR:
 --- |
@@ -147,3 +147,17 @@ body:             |
     renamable $c17 = LOADCAP $zero_64, 0, $c24 :: (load 16 from %stack.0)
     PseudoReturnCap $c17
 ...
+
+
+# We should not fill the delay slot with a store of $c17 since it will be clobbered before the delay slot executes
+# CHECK:      bb.0.entry:
+# CHECK-NEXT:   $c11 = CIncOffsetImm $c11, -256
+# CHECK-NEXT:   $c24 = frame-setup CIncOffset $c11, $zero_64
+# CHECK-NEXT:   STORECAP killed renamable $c17, $zero_64, 0, $c24 :: (store 16 into %stack.0)
+# CHECK-NEXT:   CapJumpLinkPseudo $c12, csr_cheri_purecap, implicit-def dead $c17, implicit-def $c11 {
+# CHECK-NEXT:     NOP
+# CHECK-NEXT:   }
+# CHECK-NEXT:   renamable $c17 = LOADCAP $zero_64, 0, $c24 :: (load 16 from %stack.0)
+# CHECK-NEXT:   PseudoReturnCap $c17 {
+# CHECK-NEXT:     NOP
+# CHECK-NEXT:   }

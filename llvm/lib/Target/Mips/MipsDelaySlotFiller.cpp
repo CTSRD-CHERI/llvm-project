@@ -353,8 +353,12 @@ void RegDefsUses::init(const MachineInstr &MI) {
 
   // If MI is a call, add RA to Defs to prevent users of RA from going into
   // delay slot.
-  if (MI.isCall())
-    Defs.set(Mips::RA);
+  if (MI.isCall()) {
+    assert(MI.getDesc().getNumImplicitDefs() == 1 &&
+           "Expected one implicit def for call instruction");
+    for (unsigned i = 0; i < MI.getDesc().getNumImplicitDefs(); i++)
+      Defs.set(MI.getDesc().getImplicitDefs()[i]);
+  }
 
   // Add all implicit register operands of branch instructions except
   // register AT.
