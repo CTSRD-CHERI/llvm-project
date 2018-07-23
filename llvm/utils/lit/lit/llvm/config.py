@@ -324,8 +324,12 @@ class LLVMConfig(object):
         else:
             triple_arg = '-mtriple=cheri-unknown-freebsd'
             purecap_args = ['-target-abi', 'purecap', '-relocation-model', 'pic']
-        cheri128_args = [triple_arg, '-mcpu=cheri128', '-mattr=+cheri128']
-        cheri256_args = [triple_arg, '-mcpu=cheri256', '-mattr=+cheri256']
+        extra_args = []
+        if tool == "llc":  # TODO: add this to clang as well?
+            extra_args = ["-verify-machineinstrs"]
+        cheri128_args = [triple_arg, '-mcpu=cheri128', '-mattr=+cheri128'] + extra_args
+        cheri256_args = [triple_arg, '-mcpu=cheri256', '-mattr=+cheri256'] + extra_args
+
 
         if default_cheri_size == '16':
             self.config.available_features.add("cheri_is_128")
@@ -440,9 +444,9 @@ class LLVMConfig(object):
         builtin_include_dir = self.get_clang_builtin_include_dir(self.config.clang)
         clang_cc1_args = ['-cc1', '-internal-isystem', builtin_include_dir, '-nostdsysteminc']
         cheri128_cc1_args = clang_cc1_args + ['-triple', 'cheri-unknown-freebsd',
-                '-target-cpu', 'cheri128', '-cheri-size', '128']
+                '-target-cpu', 'cheri128', '-cheri-size', '128', '-mllvm', '-verify-machineinstrs']
         cheri256_cc1_args = clang_cc1_args + ['-triple', 'cheri-unknown-freebsd',
-                '-target-cpu', 'cheri256', '-cheri-size', '256']
+                '-target-cpu', 'cheri256', '-cheri-size', '256', '-mllvm', '-verify-machineinstrs']
 
         default_cheri_size = self.lit_config.params['CHERI_CAP_SIZE']
         if default_cheri_size == '16':
