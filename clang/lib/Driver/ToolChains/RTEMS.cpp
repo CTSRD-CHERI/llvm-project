@@ -65,7 +65,7 @@ void rtems::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-r");
   } else {
     CmdArgs.push_back("--build-id");
-    /* LLD rejects gnu hash style for MIPS */
+    // LLD rejects gnu hash style for MIPS
     //CmdArgs.push_back("--hash-style=gnu");
   }
 
@@ -84,12 +84,12 @@ void rtems::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
     if (!Args.hasArg(options::OPT_q_rtems)) {
 
-      /* RTEMS must provide a --sysroot path to its installed C library */
+      // RTEMS must provide a --sysroot path to its installed C library
       assert(!D.SysRoot.empty());
 
       CmdArgs.push_back(Args.MakeArgString(D.SysRoot + "/lib/crt0.o"));
     }
-    /* Otherwise, RTEMS build system should provide its own start file */
+    // Otherwise, RTEMS build system should provide its own start file
   }
 
   Args.AddAllArgs(CmdArgs, options::OPT_L);
