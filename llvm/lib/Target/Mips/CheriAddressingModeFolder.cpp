@@ -79,6 +79,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         llvm_unreachable("Unsupported load operation");
       case Mips::CAPLOAD8:
       case Mips::CAPSTORE8:
+      case Mips::CAPSTORE832:
       case Mips::CAPLOADU8:
       case Mips::CAPLOADU832:
       case Mips::CAPLOAD832:
@@ -86,6 +87,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
       case Mips::CAPLOAD16:
       case Mips::CAPLOADU16:
       case Mips::CAPSTORE16:
+      case Mips::CAPSTORE1632:
       case Mips::CAPLOAD1632:
       case Mips::CAPLOADU1632:
         return isShiftedInt<8,1>(immediate);
