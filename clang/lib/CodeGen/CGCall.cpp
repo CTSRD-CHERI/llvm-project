@@ -1239,10 +1239,12 @@ static llvm::Value *CreateCoercedLoad(Address Src, llvm::Type *Ty,
   if (llvm::StructType *SrcSTy = dyn_cast<llvm::StructType>(SrcTy)) {
     // If Ty is a CHERI capability meaning that we are coercing the struct
     // into a capability, then we just return the Src pointer (which is a capability).
-    if (llvm::PointerType* PTy = dyn_cast<llvm::PointerType>(Ty)) {
-      if (PTy->getAddressSpace() == CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS()) {
-        Src = CGF.Builder.CreateBitCast(Src, Ty);
-        return Src.getPointer();
+    if (CGF.getTarget().SupportsCapabilities()) {
+      if (llvm::PointerType* PTy = dyn_cast<llvm::PointerType>(Ty)) {
+        if (PTy->getAddressSpace() == CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS()) {
+          Src = CGF.Builder.CreateBitCast(Src, Ty);
+          return Src.getPointer();
+        }
       }
     }
     Src = EnterStructPointerForCoercedAccess(Src, SrcSTy, DstSize, CGF);
@@ -1328,13 +1330,15 @@ static void CreateCoercedStore(llvm::Value *Src,
   if (llvm::StructType *DstSTy = dyn_cast<llvm::StructType>(DstTy)) {
     // If Src is a CHERI capability then we load the struct using the
     // capability and store into the dst struct pointer
-    if (llvm::PointerType* PTy = dyn_cast<llvm::PointerType>(SrcTy)) {
-      unsigned CapAS = CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
-      if (PTy->getAddressSpace() == CapAS) {
-        Src = CGF.Builder.CreateBitCast(Src, DstTy->getPointerTo(CapAS));
-        Src = CGF.Builder.CreateLoad(Address(Src, Dst.getAlignment()));
-        CGF.Builder.CreateStore(Src, Dst, DstIsVolatile);
-        return;
+    if (CGF.getTarget().SupportsCapabilities()) {
+      if (llvm::PointerType* PTy = dyn_cast<llvm::PointerType>(SrcTy)) {
+        unsigned CapAS = CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
+        if (PTy->getAddressSpace() == CapAS) {
+          Src = CGF.Builder.CreateBitCast(Src, DstTy->getPointerTo(CapAS));
+          Src = CGF.Builder.CreateLoad(Address(Src, Dst.getAlignment()));
+          CGF.Builder.CreateStore(Src, Dst, DstIsVolatile);
+          return;
+        }
       }
     }
     Dst = EnterStructPointerForCoercedAccess(Dst, DstSTy, SrcSize, CGF);
