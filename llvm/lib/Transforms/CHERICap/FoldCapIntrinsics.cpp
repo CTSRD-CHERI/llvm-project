@@ -293,8 +293,9 @@ class CHERICapFoldIntrinsics : public ModulePass {
       while (match(CI->getOperand(0),
                    m_Intrinsic<Intrinsic::cheri_cap_offset_set>(
                        m_Value(LHS), m_Value(RHS)))) {
-        if (CI->hasOneUse())
-          ToErase.insert(CI);
+        Instruction *NestedInstr = cast<Instruction>(CI->getOperand(0));
+        if (NestedInstr->hasOneUse())
+          ToErase.insert(NestedInstr);
         if (auto RHSInstr = dyn_cast<Instruction>(RHS))
           if (RHSInstr->hasOneUse())
             ToErase.insert(RHSInstr);
