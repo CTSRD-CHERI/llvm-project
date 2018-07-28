@@ -5183,17 +5183,19 @@ static FunctionDecl *rewriteBuiltinFunctionDecl(Sema *Sema, ASTContext &Context,
 static void checkDirectCallValidity(Sema &S, const Expr *Fn,
                                     FunctionDecl *Callee,
                                     MultiExprArg ArgExprs) {
-  
-  // For MIPS CHERI, output a warning if the callee doesn't have a prototype
+
+  // For purecap CHERI, output a warning if the callee doesn't have a prototype
   // and we are passing arguments. This would normally lead to using the
   // variadic calling convention. In the case of MIPS CHERI, this could lead to
   // runtime stack corruption if the callee function is not actually variadic.
-  if (S.Context.getTargetInfo().getTriple().getArch() == llvm::Triple::cheri) {
+  if (S.Context.getTargetInfo().areAllPointersCapabilities()) {
     bool NoProto = !Callee->getBuiltinID() && Callee->getType()->isFunctionNoProtoType();
     if (NoProto && ArgExprs.size() > 0) {
       S.Diag(Fn->getLocStart(), diag::warn_mips_cheri_call_no_func_proto) 
           << Callee->getName() << Fn->getSourceRange();
       S.Diag(Callee->getLocation(), diag::note_mips_cheri_func_decl_add_types);
+      S.Diag(Callee->getLocation(),
+             diag::note_mips_cheri_func_variadic_explanation);
       return;
     }
   }
@@ -13870,6 +13872,52 @@ static bool maybeDiagnoseAssignmentToFunction(Sema &S, QualType DstType,
                                               SrcExpr->getLocStart());
 }
 
+static void diagnoseBadVariadicFunctionPointerAssignment(Sema &S,
+                                                         SourceLocation Loc,
+                                                         QualType SrcType,
+                                                         QualType DstType,
+                                                         Expr* SrcExpr) {
+  const FunctionType *DstFnTy =
+      DstType->getPointeeType()->getAs<FunctionType>();
+
+  const FunctionType *SrcFnTy = nullptr;
+  if (SrcType->isFunctionPointerType())
+    SrcFnTy = SrcType->getPointeeType()->getAs<FunctionType>();
+  else
+    SrcFnTy = SrcType->getAs<FunctionType>();
+  // TODO: also diagnose any variadic to non-variadic
+  // TODO: don't warn about zero-arg function
+  if (!SrcFnTy)
+    return; // Should give an invalid pointer to function warning anyway
+
+
+  enum class CCType { NoProto, Variadic, FixedArg, Invalid };
+  CCType SrcCCType = CCType::Invalid;
+  if (SrcFnTy->isFunctionNoProtoType())
+    SrcCCType = CCType::NoProto;
+  else if (auto *SrcProto = SrcFnTy->getAs<FunctionProtoType>()) {
+    // assigning a function without parameters is fine since there will never be
+    // any confusion between on-stack and in-register arguments
+    if (SrcProto->getNumParams() == 0)
+      return;
+    SrcCCType = SrcProto->isVariadic() ? CCType::Variadic : CCType::FixedArg;
+  }
+  CCType DstCCType = CCType::Invalid;
+  if (DstFnTy->isFunctionNoProtoType())
+    DstCCType = CCType::NoProto;
+  else if (auto *DstProto = DstFnTy->getAs<FunctionProtoType>()) {
+    DstCCType = DstProto->isVariadic() ? CCType::Variadic : CCType::FixedArg;
+  }
+  assert(SrcCCType != CCType::Invalid);
+  assert(DstCCType != CCType::Invalid);
+
+  if (SrcCCType != DstCCType) {
+    S.Diag(Loc, diag::warn_mips_cheri_nonvariadic_func_to_variadic_fn_ptr)
+        << (int)SrcCCType << SrcType << (int)DstCCType << DstType;
+    S.Diag(Loc, diag::note_mips_cheri_func_variadic_explanation);
+  }
+}
+
 bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
                                     SourceLocation Loc,
                                     QualType DstType, QualType SrcType,
@@ -13888,6 +13936,15 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
   bool MayHaveFunctionDiff = false;
   const ObjCInterfaceDecl *IFace = nullptr;
   const ObjCProtocolDecl *PDecl = nullptr;
+
+  // Warn when assigning non-variadic functions to variadic function pointers
+  // and the other way around
+  // TODO: this should probably be upstreamed as it is not CHERI specific
+  // TODO: only for Context.getTargetInfo().areAllPointersCapabilities()?
+  // Note: we need to do this even if ConvTy == compatible since pointers without
+  // prototypes can be assigned to from any function pointer type
+  if (DstType->isFunctionPointerType())
+    diagnoseBadVariadicFunctionPointerAssignment(*this, Loc, SrcType, DstType, SrcExpr);
 
   switch (ConvTy) {
   case Compatible:

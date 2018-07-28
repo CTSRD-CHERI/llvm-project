@@ -1032,8 +1032,17 @@ def err_cheri_method_class_must_have_correct_type: Error<
 def err_cheri_invalid_callback_cast: Error<
   "CHERI callback function pointers may only be cast to other CHERI callback types">;
 def warn_mips_cheri_call_no_func_proto: Warning<
-  "call to function '%0' with no prototype may lead to run-time stack corruption on CHERI">,
-  InGroup<MIPSCHERIPrototypes>, DefaultIgnore;
+  "call to function '%0' with no prototype may lead to run-time stack corruption on CHERI.">,
+  InGroup<MIPSCHERIPrototypes>, DefaultError;
+def warn_mips_cheri_nonvariadic_func_to_variadic_fn_ptr: Warning<
+  "converting %select{function type without prototype|variadic function type|function type}0 "
+  "%1 to %select{function pointer without prototype|variadic function pointer|function pointer}2 %3 "
+  "may cause wrong parameters to be passed at run-time.">,
+  InGroup<MIPSCHERIPrototypes>, DefaultError;
+def note_mips_cheri_func_variadic_explanation : Note<
+  "In the CHERI pure-capability ABI parameters to variadic functions must be passed "
+  "on the stack. This means a non-variadic function called with this calling convention "
+  "will read garbage values from the argument registers.">;
 def note_mips_cheri_func_decl_add_types : Note<
   "candidate function declaration needs parameter types">;
 def err_cheri_capability_attribute_ambiguous : Error<
