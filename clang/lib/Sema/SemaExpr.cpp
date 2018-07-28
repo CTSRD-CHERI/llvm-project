@@ -13890,6 +13890,16 @@ static void diagnoseBadVariadicFunctionPointerAssignment(Sema &S,
   if (!SrcFnTy)
     return; // Should give an invalid pointer to function warning anyway
 
+  FunctionDecl* FuncDecl = nullptr;
+  // Avoid warnings for K&R functions where we actually know the prototype:
+  if (auto *UO = dyn_cast<UnaryOperator>(SrcExpr->IgnoreImplicit())) {
+    // look through &foo to find the actual function
+    if (UO->getOpcode() == UO_AddrOf)
+      SrcExpr = UO->getSubExpr();
+  }
+  if (auto *DRE = dyn_cast<DeclRefExpr>(SrcExpr->IgnoreImplicit())) {
+    FuncDecl = dyn_cast<FunctionDecl>(DRE->getDecl());
+  }
 
   enum class CCType { NoProto, Variadic, FixedArg, Invalid };
   CCType SrcCCType = CCType::Invalid;
@@ -13915,6 +13925,8 @@ static void diagnoseBadVariadicFunctionPointerAssignment(Sema &S,
     S.Diag(Loc, diag::warn_mips_cheri_nonvariadic_func_to_variadic_fn_ptr)
         << (int)SrcCCType << SrcType << (int)DstCCType << DstType;
     S.Diag(Loc, diag::note_mips_cheri_func_variadic_explanation);
+    if (FuncDecl)
+      S.Diag(FuncDecl->getLocStart(), diag::note_callee_decl) << FuncDecl;
   }
 }
 

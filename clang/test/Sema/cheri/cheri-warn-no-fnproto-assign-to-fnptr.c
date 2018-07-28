@@ -4,7 +4,6 @@
 
 // Assigning a function with non-variadic calling convention to a variadic function
 // pointer should give a warning
-
 typedef int (*NoProtoFnTy)();
 typedef int (*VariadicFnTy)(const char *, ...);
 typedef int (*NoArgFnTy)(void);
@@ -19,11 +18,11 @@ struct Foo {
   PtrArgFnTy ptrarg;
 };
 
-extern int noproto_fn();
+extern int noproto_fn();  // expected-note 4 {{'noproto_fn' declared here}}
 extern int noarg_fn(void);
-extern int intarg_fn(int);
-extern int ptrarg_fn(const char *);
-extern int variadic_fn(const char *, ...);
+extern int intarg_fn(int);  // expected-note 3 {{'intarg_fn' declared here}}
+extern int ptrarg_fn(const char *);  // expected-note 3 {{'ptrarg_fn' declared here}}
+extern int variadic_fn(const char *, ...);  // expected-note 5 {{'variadic_fn' declared here}}
 
 static void assign_functions(struct Foo *f) {
   f->noproto = noproto_fn; // fine, these are the same  (and will be caught be -Wstrict-prototypes)
