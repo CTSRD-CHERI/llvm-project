@@ -139,5 +139,31 @@ static void test_callback(int arg) {
   // expected-note@-1{{will read garbage values from the argument registers}}
   noproto_callback(arg, variadic_fn); // expected-error{{converting variadic function type 'int (const char * __capability, ...)' to function pointer without prototype 'void (* __capability)()' may cause wrong parameters to be passed at run-time.}}
   // expected-note@-1{{will read garbage values from the argument registers}}
-
 }
+
+static void* kr(void* arg);
+static void* kr(arg)
+  void* arg;
+{
+  return arg;
+}
+
+static void* (*ptr)(void*) = kr; // this should not warn!
+static void* (*ptr_addrof)(void*) = &kr; // this should not warn!
+
+static void* kr2();
+static void* kr2(arg)
+  void* arg;
+{
+  return arg;
+}
+
+static void* (*ptr2)(void*) = kr2; // this should not warn!
+static void* (*ptr2_addrof)(void*) = &kr2; // this should not warn!
+
+
+static void* kr3();  //expected-note 2 {{'kr3' declared here}}
+static void* (*ptr3)(int) = kr3;  // expected-error {{converting function type without prototype 'void * __capability ()' to function pointer 'void * __capability (* __capability)(int)' may cause wrong parameters to be passed at run-time.}}
+// expected-note@-1{{will read garbage values from the argument registers}}
+static void* (*ptr3_addrof)(int) = &kr3; // expected-error {{converting function type without prototype 'void * __capability (* __capability)()' to function pointer 'void * __capability (* __capability)(int)' may cause wrong parameters to be passed at run-time.}}
+// expected-note@-1{{will read garbage values from the argument registers}}

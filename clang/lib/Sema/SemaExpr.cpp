@@ -13903,9 +13903,15 @@ static void diagnoseBadVariadicFunctionPointerAssignment(Sema &S,
 
   enum class CCType { NoProto, Variadic, FixedArg, Invalid };
   CCType SrcCCType = CCType::Invalid;
-  if (SrcFnTy->isFunctionNoProtoType())
-    SrcCCType = CCType::NoProto;
-  else if (auto *SrcProto = SrcFnTy->getAs<FunctionProtoType>()) {
+  if (SrcFnTy->isFunctionNoProtoType()) {
+    // Type is noproto but we might have a decl with the real prototype:
+    if (FuncDecl)
+      SrcFnTy = FuncDecl->getType()->getAs<FunctionType>();
+    // Now check again to see if it is still a noproto type
+    if (SrcFnTy->isFunctionNoProtoType())
+      SrcCCType = CCType::NoProto;
+  }
+  if (auto *SrcProto = SrcFnTy->getAs<FunctionProtoType>()) {
     // assigning a function without parameters is fine since there will never be
     // any confusion between on-stack and in-register arguments
     if (SrcProto->getNumParams() == 0)
