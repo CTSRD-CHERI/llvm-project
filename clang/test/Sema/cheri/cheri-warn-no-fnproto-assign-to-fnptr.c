@@ -1,4 +1,4 @@
-// RUN: %cheri_purecap_cc1 -Weverything -Wno-incompatible-pointer-types -Wno-strict-prototypes -Wmips-cheri-prototypes -fsyntax-only %s -verify -fdiagnostics-show-option
+// RUN: %cheri_purecap_cc1 -Weverything -Wno-incompatible-pointer-types -Wno-strict-prototypes -Werror=mips-cheri-prototypes -fsyntax-only %s -verify -fdiagnostics-show-option
 
 // TODO: C++ should also be handled (there is no no-proto case but the others should still warn)
 
