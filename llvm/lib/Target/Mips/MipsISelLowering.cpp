@@ -2260,7 +2260,13 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
 
   if (isCheriPointer(GV->getType(), &DAG.getDataLayout())) {
     assert(!ABI.UsesCapabilityTable());
-    Global = DAG.getNode(ISD::INTTOPTR, SDLoc(N), AddrTy, Global);
+    // Allow compiling some LLVM IR generated for cap-table:
+    if (isa<Function>(GV) || GV->getType()->getElementType()->isFunctionTy()) {
+      // Derive function pointers from PCC instead of $ddc
+      Global = setPccOffset(DAG, SDLoc(N), Global);
+    } else {
+      Global = DAG.getNode(ISD::INTTOPTR, SDLoc(N), AddrTy, Global);
+    }
     StringRef Name = GV->getName();
     if (!SkipGlobalBounds &&
         !isa<Function>(GV) &&
@@ -2322,7 +2328,7 @@ SDValue MipsTargetLowering::lowerBlockAddress(SDValue Op,
   auto Result = getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64(),
                              /*IsForTls=*/false);
   if (ABI.IsCheriPureCap())
-    Result = deriveFromPCC(DAG, SDLoc(N), Result);
+    Result = setPccOffset(DAG, SDLoc(N), Result);
   return Result;
 }
 
@@ -3765,7 +3771,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   if (ABI.IsCheriPureCap() && (!Callee.getValueType().isFatPointer())) {
     if (CheriCapTable)
       llvm_unreachable("Should not derive address from PCC with cap table");
-    Callee = deriveFromPCC(DAG, DL, Callee);
+    Callee = setPccOffset(DAG, DL, Callee);
   }
 
 
@@ -3820,15 +3826,14 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
                          InVals, CLI);
 }
 
-SDValue MipsTargetLowering::deriveFromPCC(SelectionDAG &DAG, const SDLoc DL,
-                                          SDValue Callee) const {
+SDValue MipsTargetLowering::setPccOffset(SelectionDAG &DAG, const SDLoc DL,
+                                         SDValue Offset) const {
   auto GetPCC = DAG.getConstant(Intrinsic::cheri_pcc_get, DL, MVT::i64);
   auto SetOffset =
       DAG.getConstant(Intrinsic::cheri_cap_offset_set, DL, MVT::i64);
   auto PCC = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, CapType, GetPCC);
-  Callee =
-      DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, CapType, SetOffset, PCC, Callee);
-  return Callee;
+  return DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, CapType, SetOffset, PCC,
+                     Offset);
 }
 
 /// LowerCallResult - Lower the result values of a call into the
