@@ -1034,11 +1034,16 @@ def err_cheri_invalid_callback_cast: Error<
 def warn_mips_cheri_call_no_func_proto: Warning<
   "call to function '%0' with no prototype may lead to run-time stack corruption on CHERI.">,
   InGroup<MIPSCHERIPrototypes>; // , DefaultError;
-def warn_mips_cheri_nonvariadic_func_to_variadic_fn_ptr: Warning<
+def warn_mips_cheri_fnptr_variadic_nonvariadic_conversion: Warning<
   "converting %select{function type without prototype|variadic function type|function type}0 "
   "%1 to %select{function pointer without prototype|variadic function pointer|function pointer}2 %3 "
   "may cause wrong parameters to be passed at run-time.">,
-  InGroup<MIPSCHERIPrototypes>; //, DefaultError;
+  InGroup<MIPSCHERIPrototypes>, DefaultError;  // This will almost certainly crash at runtime -> DefaultError
+def warn_mips_cheri_fnptr_proto_noproto_conversion: Warning<
+  "converting %select{function type without prototype|variadic function type|function type}0 "
+  "%1 to %select{function pointer without prototype|variadic function pointer|function pointer}2 %3 "
+  "may cause wrong parameters to be passed at run-time.">,
+  InGroup<MIPSCHERIPrototypes>, DefaultIgnore;  // This is really noisy (at least for CheriBSD so make it opt-in)
 def note_mips_cheri_func_variadic_explanation : Note<
   "In the CHERI pure-capability ABI parameters to variadic functions must be passed "
   "on the stack. This means a non-variadic function called with this calling convention "
