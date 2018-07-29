@@ -87,12 +87,14 @@ def CHERIBitwiseOps : DiagGroup<"cheri-bitwise-operations">;
 def CHERIImplicitConversion : DiagGroup<"cheri-implicit-conversion">;
 def CHERIImplicitConversionSign : DiagGroup<"cheri-implicit-conversion-sign">;
 def MIPSCHERIPrototypes: DiagGroup<"mips-cheri-prototypes">;
+def MIPSCHERIPrototypesStrict: DiagGroup<"mips-cheri-prototypes-strict">;
+
 def CheriAll : DiagGroup<"cheri",
      [CHERICaps, CHERIBitwiseOps, CHERIImplicitConversion,
-      CHERIImplicitConversionSign, MIPSCHERIPrototypes]>;
+      CHERIImplicitConversionSign, MIPSCHERIPrototypes, MIPSCHERIPrototypesStrict]>;
 // CHERI warnings that are too noisy to turn on by default
 def CHERICapabilityToIntegerCast : DiagGroup<"capability-to-integer-cast">;
-def CheriPedantic : DiagGroup<"cheri-pedantic", [CHERICapabilityToIntegerCast]>;
+def CheriPedantic : DiagGroup<"cheri-pedantic", [CHERICapabilityToIntegerCast, MIPSCHERIPrototypesStrict]>;
 // Warnings/Errors for bugs in the MIPS/CHERI backend
 def MIPSCHERIBugs: DiagGroup<"mips-cheri-bugs">;
 
@@ -759,6 +761,7 @@ def Move : DiagGroup<"move", [
   ]>;
 
 def Extra : DiagGroup<"extra", [
+    MIPSCHERIPrototypesStrict, // this is quite noisy so only on for -Wextra
     MissingFieldInitializers,
     IgnoredQualifiers,
     InitializerOverrides,

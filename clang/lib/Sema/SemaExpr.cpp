@@ -5194,8 +5194,7 @@ static void checkDirectCallValidity(Sema &S, const Expr *Fn,
       S.Diag(Fn->getLocStart(), diag::warn_mips_cheri_call_no_func_proto) 
           << Callee->getName() << Fn->getSourceRange();
       S.Diag(Callee->getLocation(), diag::note_mips_cheri_func_decl_add_types);
-      S.Diag(Callee->getLocation(),
-             diag::note_mips_cheri_func_variadic_explanation);
+      S.Diag(Callee->getLocation(), diag::note_mips_cheri_func_noproto_explanation);
       return;
     }
   }
@@ -13928,15 +13927,17 @@ static void diagnoseBadVariadicFunctionPointerAssignment(Sema &S,
   assert(DstCCType != CCType::Invalid);
 
   if (SrcCCType != DstCCType) {
-    // convertin variadic to non-variadic is an error by default, the other is
+    // converting variadic to non-variadic is an error by default, the other is
     // a pedantic warning that is often a false positive
-    unsigned DiagID =
-        (SrcCCType == CCType::Variadic || DstCCType == CCType::Variadic)
-            ? diag::warn_mips_cheri_fnptr_variadic_nonvariadic_conversion
-            : diag::warn_mips_cheri_fnptr_proto_noproto_conversion;
+    unsigned DiagID = diag::warn_mips_cheri_fnptr_proto_noproto_conversion;
+    unsigned ExplainID = diag::note_mips_cheri_func_noproto_explanation;
+    if (SrcCCType == CCType::Variadic || DstCCType == CCType::Variadic) {
+      DiagID = diag::warn_mips_cheri_fnptr_variadic_nonvariadic_conversion;
+      ExplainID = diag::note_mips_cheri_func_variadic_explanation;
+    }
     S.Diag(Loc, DiagID) << (int)SrcCCType << SrcType << (int)DstCCType
                         << DstType;
-    S.Diag(Loc, diag::note_mips_cheri_func_variadic_explanation);
+    S.Diag(Loc, ExplainID);
     if (FuncDecl)
       S.Diag(FuncDecl->getLocStart(), diag::note_callee_decl) << FuncDecl;
   }

@@ -1037,17 +1037,22 @@ def warn_mips_cheri_call_no_func_proto: Warning<
 def warn_mips_cheri_fnptr_variadic_nonvariadic_conversion: Warning<
   "converting %select{function type without prototype|variadic function type|function type}0 "
   "%1 to %select{function pointer without prototype|variadic function pointer|function pointer}2 %3 "
-  "may cause wrong parameters to be passed at run-time.">,
+  "will cause wrong parameters to be passed at run-time.">,
   InGroup<MIPSCHERIPrototypes>, DefaultError;  // This will almost certainly crash at runtime -> DefaultError
 def warn_mips_cheri_fnptr_proto_noproto_conversion: Warning<
   "converting %select{function type without prototype|variadic function type|function type}0 "
   "%1 to %select{function pointer without prototype|variadic function pointer|function pointer}2 %3 "
   "may cause wrong parameters to be passed at run-time.">,
-  InGroup<MIPSCHERIPrototypes>, DefaultIgnore;  // This is really noisy (at least for CheriBSD so make it opt-in)
+  DefaultIgnore, InGroup<MIPSCHERIPrototypesStrict>;  // This is really noisy (at least for CheriBSD so make it opt-in)
 def note_mips_cheri_func_variadic_explanation : Note<
   "In the CHERI pure-capability ABI parameters to variadic functions must be passed "
   "on the stack. This means a non-variadic function called with this calling convention "
   "will read garbage values from the argument registers.">;
+def note_mips_cheri_func_noproto_explanation : Note<
+  "Calling functions without prototypes is dangerous because in the CHERI pure-capability ABI "
+  "integer and pointer arguments are passed in different registers. If the call includes a "
+  "parameter that does not match the function definition, the function will read garbage "
+  "values from the argument registers.">;
 def note_mips_cheri_func_decl_add_types : Note<
   "candidate function declaration needs parameter types">;
 def err_cheri_capability_attribute_ambiguous : Error<

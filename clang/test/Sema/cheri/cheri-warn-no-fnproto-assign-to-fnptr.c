@@ -1,8 +1,25 @@
+// RUN: %cheri_purecap_cc1 -Wno-incompatible-pointer-types -DCHECK_ENABLED -fsyntax-only %s -verify=default
+// RUN: %cheri_purecap_cc1 -Wno-incompatible-pointer-types -Wall -DCHECK_ENABLED -fsyntax-only %s -verify=default
+// RUN: %cheri_purecap_cc1 -Wno-incompatible-pointer-types -Wextra -DCHECK_ENABLED -fsyntax-only %s -verify=wextra,default
 // RUN: %cheri_purecap_cc1 -Weverything -Wno-incompatible-pointer-types -Wno-strict-prototypes -Wmips-cheri-prototypes -fsyntax-only %s -verify -fdiagnostics-show-option
 // RUN: %cheri_purecap_cc1 -Wno-incompatible-pointer-types -Wcheri -fsyntax-only %s -verify -fdiagnostics-show-option
 // RUN: %cheri_purecap_cc1 -Wno-incompatible-pointer-types -Wno-cheri -fsyntax-only %s -verify=cheri-off -fdiagnostics-show-option
 // cheri-off-no-diagnostics
 
+#ifdef CHECK_ENABLED
+
+extern void variadic(int, ...); //default-note{{'variadic' declared here}}
+extern void noproto();
+extern void proto(int); //wextra-note{{'proto' declared here}}
+
+static void* (*ptr)() = variadic; // default-error{{converting variadic function type}}
+// default-note@-1{{read garbage values from the argument registers}}
+// no warnings by default:
+static void* (*ptr1)() = noproto;
+static void* (*ptr2)() = proto; // wextra-warning{{converting function type 'void (int)' to function pointer without prototype}}
+// wextra-note@-1{{read garbage values from the argument registers}}
+
+#else
 
 // TODO: C++ should also be handled (there is no no-proto case but the others should still warn)
 
@@ -30,7 +47,7 @@ extern int variadic_fn(const char *, ...);  // expected-note 5 {{'variadic_fn' d
 
 static void assign_functions(struct Foo *f) {
   f->noproto = noproto_fn; // fine, these are the same  (and will be caught be -Wstrict-prototypes)
-  f->noproto = variadic_fn; // expected-error{{converting variadic function type 'int (const char * __capability, ...)' to function pointer without prototype 'NoProtoFnTy' (aka 'int (* __capability)()') may cause wrong parameters to be passed at run-time.}}
+  f->noproto = variadic_fn; // expected-error{{converting variadic function type 'int (const char * __capability, ...)' to function pointer without prototype 'NoProtoFnTy' (aka 'int (* __capability)()') will cause wrong parameters to be passed at run-time.}}
   // expected-note@-1{{will read garbage values from the argument registers}}
   f->noproto = noarg_fn; // noarg is fine since there is no calling convention confusion
   f->noproto = intarg_fn; // expected-warning{{converting function type 'int (int)' to function pointer without prototype 'NoProtoFnTy' (aka 'int (* __capability)()') may cause wrong parameters to be passed at run-time.}}
@@ -42,14 +59,14 @@ static void assign_functions(struct Foo *f) {
 
   f->variadic = variadic_fn;
   f->variadic = noarg_fn;
-  f->variadic = intarg_fn; // expected-error{{converting function type 'int (int)' to variadic function pointer 'VariadicFnTy' (aka 'int (* __capability)(const char * __capability, ...)') may cause wrong parameters to be passed at run-time.}}
+  f->variadic = intarg_fn; // expected-error{{converting function type 'int (int)' to variadic function pointer 'VariadicFnTy' (aka 'int (* __capability)(const char * __capability, ...)') will cause wrong parameters to be passed at run-time.}}
   // expected-note@-1{{will read garbage values from the argument registers}}
-  f->variadic = ptrarg_fn; // expected-error{{converting function type 'int (const char * __capability)' to variadic function pointer 'VariadicFnTy' (aka 'int (* __capability)(const char * __capability, ...)') may cause wrong parameters to be passed at run-time.}}
+  f->variadic = ptrarg_fn; // expected-error{{converting function type 'int (const char * __capability)' to variadic function pointer 'VariadicFnTy' (aka 'int (* __capability)(const char * __capability, ...)') will cause wrong parameters to be passed at run-time.}}
   // expected-note@-1{{will read garbage values from the argument registers}}
-  f->variadic = noproto_fn; // expected-error{{converting function type without prototype 'int ()' to variadic function pointer 'VariadicFnTy' (aka 'int (* __capability)(const char * __capability, ...)') may cause wrong parameters to be passed at run-time.}}
+  f->variadic = noproto_fn; // expected-error{{converting function type without prototype 'int ()' to variadic function pointer 'VariadicFnTy' (aka 'int (* __capability)(const char * __capability, ...)') will cause wrong parameters to be passed at run-time.}}
   // expected-note@-1{{will read garbage values from the argument registers}}
 
-  f->noarg = variadic_fn; // expected-error{{converting variadic function type 'int (const char * __capability, ...)' to function pointer 'NoArgFnTy' (aka 'int (* __capability)(void)') may cause wrong parameters to be passed at run-time.}}
+  f->noarg = variadic_fn; // expected-error{{converting variadic function type 'int (const char * __capability, ...)' to function pointer 'NoArgFnTy' (aka 'int (* __capability)(void)') will cause wrong parameters to be passed at run-time.}}
   // expected-note@-1{{will read garbage values from the argument registers}}
   // incompatible function pointer types but that is handled by a different warning:
   f->noarg = noarg_fn;
@@ -58,7 +75,7 @@ static void assign_functions(struct Foo *f) {
   f->noarg = noproto_fn; // expected-warning{{converting function type without prototype 'int ()' to function pointer 'NoArgFnTy' (aka 'int (* __capability)(void)') may cause wrong parameters to be passed at run-time.}}
   // expected-note@-1{{will read garbage values from the argument registers}}
 
-  f->intarg = variadic_fn; // expected-error{{converting variadic function type 'int (const char * __capability, ...)' to function pointer 'IntArgFnTy' (aka 'int (* __capability)(int)') may cause wrong parameters to be passed at run-time.}}
+  f->intarg = variadic_fn; // expected-error{{converting variadic function type 'int (const char * __capability, ...)' to function pointer 'IntArgFnTy' (aka 'int (* __capability)(int)') will cause wrong parameters to be passed at run-time.}}
   // expected-note@-1{{will read garbage values from the argument registers}}
   // incompatible function pointer types but that is handled by a different warning:
   f->intarg = noarg_fn;
@@ -67,7 +84,7 @@ static void assign_functions(struct Foo *f) {
   f->intarg = noproto_fn; // expected-warning{{converting function type without prototype 'int ()' to function pointer 'IntArgFnTy' (aka 'int (* __capability)(int)') may cause wrong parameters to be passed at run-time.}}
   // expected-note@-1{{will read garbage values from the argument registers}}
 
-  f->ptrarg = variadic_fn;  // expected-error{{converting variadic function type 'int (const char * __capability, ...)' to function pointer 'PtrArgFnTy' (aka 'int (* __capability)(const char * __capability)') may cause wrong parameters to be passed at run-time.}}
+  f->ptrarg = variadic_fn;  // expected-error{{converting variadic function type 'int (const char * __capability, ...)' to function pointer 'PtrArgFnTy' (aka 'int (* __capability)(const char * __capability)') will cause wrong parameters to be passed at run-time.}}
   // expected-note@-1{{will read garbage values from the argument registers}}
   // incompatible function pointer types but that is handled by a different warning:
   f->ptrarg = noarg_fn;
@@ -84,7 +101,7 @@ static void assign_fnptr_noproto(struct Foo *f,
                                  NoArgFnTy NoArgFnTy_arg,
                                  IntArgFnTy IntArgFnTy_arg) {
   f->noproto = NoProtoFnTy_arg;
-  f->noproto = VariadicFnTy_arg; // expected-error{{may cause wrong parameters to be passed at run-time.}}
+  f->noproto = VariadicFnTy_arg; // expected-error{{will cause wrong parameters to be passed at run-time.}}
   // expected-note@-1{{will read garbage values from the argument registers}}
   f->noproto = NoArgFnTy_arg;
   f->noproto = IntArgFnTy_arg; // expected-warning{{may cause wrong parameters to be passed at run-time.}}
@@ -92,18 +109,18 @@ static void assign_fnptr_noproto(struct Foo *f,
   f->noproto = PtrArgFnTy_arg; // expected-warning{{may cause wrong parameters to be passed at run-time.}}
   // expected-note@-1{{will read garbage values from the argument registers}}
 
-  f->variadic = NoProtoFnTy_arg; // expected-error{{may cause wrong parameters to be passed at run-time.}}
+  f->variadic = NoProtoFnTy_arg; // expected-error{{will cause wrong parameters to be passed at run-time.}}
   // expected-note@-1{{will read garbage values from the argument registers}}
   f->variadic = VariadicFnTy_arg;
   f->variadic = NoArgFnTy_arg;
-  f->variadic = IntArgFnTy_arg; // expected-error{{may cause wrong parameters to be passed at run-time.}}
+  f->variadic = IntArgFnTy_arg; // expected-error{{will cause wrong parameters to be passed at run-time.}}
   // expected-note@-1{{will read garbage values from the argument registers}}
-  f->variadic = PtrArgFnTy_arg; // expected-error{{may cause wrong parameters to be passed at run-time.}}
+  f->variadic = PtrArgFnTy_arg; // expected-error{{will cause wrong parameters to be passed at run-time.}}
   // expected-note@-1{{will read garbage values from the argument registers}}
 
   f->noarg = NoProtoFnTy_arg; // expected-warning{{may cause wrong parameters to be passed at run-time.}}
   // expected-note@-1{{will read garbage values from the argument registers}}
-  f->noarg = VariadicFnTy_arg; // expected-error{{may cause wrong parameters to be passed at run-time.}}
+  f->noarg = VariadicFnTy_arg; // expected-error{{will cause wrong parameters to be passed at run-time.}}
   // expected-note@-1{{will read garbage values from the argument registers}}
   f->noarg = NoArgFnTy_arg;
   f->noarg = IntArgFnTy_arg;
@@ -111,7 +128,7 @@ static void assign_fnptr_noproto(struct Foo *f,
 
   f->intarg = NoProtoFnTy_arg; // expected-warning{{may cause wrong parameters to be passed at run-time.}}
   // expected-note@-1{{will read garbage values from the argument registers}}
-  f->intarg = VariadicFnTy_arg; // expected-error{{may cause wrong parameters to be passed at run-time.}}
+  f->intarg = VariadicFnTy_arg; // expected-error{{will cause wrong parameters to be passed at run-time.}}
   // expected-note@-1{{will read garbage values from the argument registers}}
   f->intarg = NoArgFnTy_arg;
   f->intarg = IntArgFnTy_arg;
@@ -119,7 +136,7 @@ static void assign_fnptr_noproto(struct Foo *f,
 
   f->ptrarg = NoProtoFnTy_arg; // expected-warning{{may cause wrong parameters to be passed at run-time.}}
   // expected-note@-1{{will read garbage values from the argument registers}}
-  f->ptrarg = VariadicFnTy_arg; // expected-error{{may cause wrong parameters to be passed at run-time.}}
+  f->ptrarg = VariadicFnTy_arg; // expected-error{{will cause wrong parameters to be passed at run-time.}}
   // expected-note@-1{{will read garbage values from the argument registers}}
   f->ptrarg = NoArgFnTy_arg;
   f->ptrarg = IntArgFnTy_arg;
@@ -141,7 +158,7 @@ static void test_callback(int arg) {
   // expected-note@-1{{will read garbage values from the argument registers}}
   noproto_callback(arg, ptrarg_fn); // expected-warning{{converting function type 'int (const char * __capability)' to function pointer without prototype 'void (* __capability)()' may cause wrong parameters to be passed at run-time.}}
   // expected-note@-1{{will read garbage values from the argument registers}}
-  noproto_callback(arg, variadic_fn); // expected-error{{converting variadic function type 'int (const char * __capability, ...)' to function pointer without prototype 'void (* __capability)()' may cause wrong parameters to be passed at run-time.}}
+  noproto_callback(arg, variadic_fn); // expected-error{{converting variadic function type 'int (const char * __capability, ...)' to function pointer without prototype 'void (* __capability)()' will cause wrong parameters to be passed at run-time.}}
   // expected-note@-1{{will read garbage values from the argument registers}}
 }
 
@@ -171,3 +188,5 @@ static void* (*ptr3)(int) = kr3;  // expected-warning {{converting function type
 // expected-note@-1{{will read garbage values from the argument registers}}
 static void* (*ptr3_addrof)(int) = &kr3; // expected-warning {{converting function type without prototype 'void * __capability (* __capability)()' to function pointer 'void * __capability (* __capability)(int)' may cause wrong parameters to be passed at run-time.}}
 // expected-note@-1{{will read garbage values from the argument registers}}
+
+#endif
