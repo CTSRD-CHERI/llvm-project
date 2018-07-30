@@ -177,6 +177,11 @@ void MipsTargetInfo::getTargetDefines(const LangOptions &Opts,
         Builder.defineMacro("__CHERI_CAPABILITY_TABLE__",
                             Twine(((int)CapTableABI) + 1));
       }
+      auto CapTlsABI = llvm::MCTargetOptions::cheriCapabilityTlsABI();
+      if (CapTlsABI != llvm::CheriCapabilityTlsABI::Legacy) {
+        Builder.defineMacro("__CHERI_CAPABILITY_TLS__",
+                            Twine((int)CapTlsABI));
+      }
     }
 
     // Macros for use with the set and get permissions builtins.
