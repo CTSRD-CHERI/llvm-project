@@ -114,19 +114,58 @@ private:
   bool containsLegacyCapRelocs() const { return !LegacyInputs.empty(); }
 };
 
+// General cap table structure (for CapSize = 2*WordSize):
+//
+// +-------------------------------+
+// |       Small Index Cap 1       |
+// +-------------------------------+
+// |               :               |
+// +-------------------------------+
+// |       Small Index Cap m       |
+// +-------------------------------+
+// |       Large Index Cap 1       |
+// +-------------------------------+
+// |               :               |
+// +-------------------------------+
+// |       Large Index Cap n       |
+// +---------------+---------------+
+// | Dyn TLS Mod 1 | Dyn TLS Off 2 |
+// +---------------+---------------+
+// |               :               |
+// +---------------+---------------+
+// | Dyn TLS Mod p | Dyn TLS Off p |
+// +---------------+---------------+
+// |  IE TPREL 1   |  IE TPREL 2   |
+// +---------------+---------------+
+// |               :               |
+// +---------------+---------------+
+// | IE TPREL q-1  |  IE TPREL q   |
+// +-------------------------------+
+//
 class CheriCapTableSection : public SyntheticSection {
 public:
   CheriCapTableSection();
   void addEntry(Symbol &Sym, bool NeedsSmallImm);
+  void addDynTlsEntry(Symbol &Sym);
+  void addTlsIndex();
+  void addTlsEntry(Symbol &Sym);
   uint32_t getIndex(const Symbol &Sym) const;
-  bool empty() const override { return Entries.empty(); }
+  uint32_t getDynTlsOffset(const Symbol &Sym) const;
+  uint32_t getTlsIndexOffset() const;
+  uint32_t getTlsOffset(const Symbol &Sym) const;
+  bool empty() const override {
+    return Entries.empty() && DynTlsEntries.empty() && TlsEntries.empty();
+  }
   void writeTo(uint8_t *Buf) override;
   template <class ELFT> void assignValuesAndAddCapTableSymbols();
   size_t getSize() const override {
     if (!Entries.empty() > 0)
       assert(Config->CapabilitySize > 0 &&
              "Cap table entries present but cap size unknown???");
-    return Entries.size() * Config->CapabilitySize;
+    size_t Bytes =
+      Entries.size() * Config->CapabilitySize +
+      (DynTlsEntries.size() * 2 + TlsEntries.size()) * Config->Wordsize;
+    return llvm::alignTo(Bytes, Config->CapabilitySize);
   }
 private:
   struct CapTableIndex {
@@ -139,6 +178,8 @@ private:
     bool NeedsSmallImm = false;
   };
   llvm::MapVector<Symbol *, CapTableIndex> Entries;
+  llvm::MapVector<Symbol *, CapTableIndex> DynTlsEntries;
+  llvm::MapVector<Symbol *, CapTableIndex> TlsEntries;
   bool ValuesAssigned = false;
 };
 

@@ -102,6 +102,21 @@ static unsigned handleMipsTlsRelocation(RelType Type, Symbol &Sym,
     C.Relocations.push_back({Expr, Type, Offset, Addend, &Sym});
     return 1;
   }
+  if (Expr == R_MIPS_CHERI_CAPTAB_TLSLD) {
+    InX::CheriCapTable->addTlsIndex();
+    C.Relocations.push_back({Expr, Type, Offset, Addend, &Sym});
+    return 1;
+  }
+  if (Expr == R_MIPS_CHERI_CAPTAB_TLSGD) {
+    InX::CheriCapTable->addDynTlsEntry(Sym);
+    C.Relocations.push_back({Expr, Type, Offset, Addend, &Sym});
+    return 1;
+  }
+  if (Expr == R_MIPS_CHERI_CAPTAB_TPREL) {
+    InX::CheriCapTable->addTlsEntry(Sym);
+    C.Relocations.push_back({Expr, Type, Offset, Addend, &Sym});
+    return 1;
+  }
   return 0;
 }
 

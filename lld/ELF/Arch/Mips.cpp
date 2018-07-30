@@ -202,6 +202,15 @@ RelExpr MIPS<ELFT>::getRelExpr(RelType Type, const Symbol &S,
   case R_MIPS_CHERI_CAPTAB_CLC11:
   case R_MIPS_CHERI_CAPTAB20:
     return R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE;
+  case R_MIPS_CHERI_CAPTAB_TLS_GD_LO16:
+  case R_MIPS_CHERI_CAPTAB_TLS_GD_HI16:
+    return R_MIPS_CHERI_CAPTAB_TLSGD;
+  case R_MIPS_CHERI_CAPTAB_TLS_LDM_LO16:
+  case R_MIPS_CHERI_CAPTAB_TLS_LDM_HI16:
+    return R_MIPS_CHERI_CAPTAB_TLSLD;
+  case R_MIPS_CHERI_CAPTAB_TLS_TPREL_LO16:
+  case R_MIPS_CHERI_CAPTAB_TLS_TPREL_HI16:
+    return R_MIPS_CHERI_CAPTAB_TPREL;
 #endif
   default:
     return R_INVALID;
@@ -565,6 +574,9 @@ void MIPS<ELFT>::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
   // FIXME: handle difference between capcall and captab
   case R_MIPS_CHERI_CAPTAB_LO16:
   case R_MIPS_CHERI_CAPCALL_LO16:
+  case R_MIPS_CHERI_CAPTAB_TLS_GD_LO16:
+  case R_MIPS_CHERI_CAPTAB_TLS_LDM_LO16:
+  case R_MIPS_CHERI_CAPTAB_TLS_TPREL_LO16:
 #endif
     writeValue<E>(Loc, Val, 16, 0);
     break;
@@ -599,6 +611,9 @@ void MIPS<ELFT>::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
   // TODO: handle difference between captab and capcall!
   case R_MIPS_CHERI_CAPTAB_HI16:
   case R_MIPS_CHERI_CAPCALL_HI16:
+  case R_MIPS_CHERI_CAPTAB_TLS_GD_HI16:
+  case R_MIPS_CHERI_CAPTAB_TLS_LDM_HI16:
+  case R_MIPS_CHERI_CAPTAB_TLS_TPREL_HI16:
     writeValue<E>(Loc, Val + 0x8000, 16, 16);
     break;
   case R_MIPS_CHERI_CAPTAB_CLC11:

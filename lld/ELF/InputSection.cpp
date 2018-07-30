@@ -675,6 +675,15 @@ static uint64_t getRelocTargetVA(const InputFile *File, RelType Type, int64_t A,
     return Config->CapabilitySize * InX::CheriCapTable->getIndex(Sym);
   case R_CHERI_CAPABILITY_TABLE_REL:
     return Sym.getVA(A) - ElfSym::CheriCapabilityTable->getVA();
+  case R_MIPS_CHERI_CAPTAB_TLSGD:
+    assert(A == 0 && "capability table index relocs should not have addends");
+    return InX::CheriCapTable->getDynTlsOffset(Sym);
+  case R_MIPS_CHERI_CAPTAB_TLSLD:
+    assert(A == 0 && "capability table index relocs should not have addends");
+    return InX::CheriCapTable->getTlsIndexOffset();
+  case R_MIPS_CHERI_CAPTAB_TPREL:
+    assert(A == 0 && "capability table index relocs should not have addends");
+    return InX::CheriCapTable->getTlsOffset(Sym);
   }
   llvm_unreachable("Invalid expression");
 }
