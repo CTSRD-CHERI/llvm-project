@@ -296,9 +296,6 @@ class CHERICapFoldIntrinsics : public ModulePass {
         Instruction *NestedInstr = cast<Instruction>(CI->getOperand(0));
         if (NestedInstr->hasOneUse())
           ToErase.insert(NestedInstr);
-        if (auto RHSInstr = dyn_cast<Instruction>(RHS))
-          if (RHSInstr->hasOneUse())
-            ToErase.insert(RHSInstr);
         CI->setOperand(0, LHS);
         Modified = true;
       }
