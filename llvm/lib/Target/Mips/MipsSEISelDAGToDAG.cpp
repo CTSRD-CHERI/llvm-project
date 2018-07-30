@@ -1198,6 +1198,15 @@ bool MipsSEDAGToDAGISel::trySelect(SDNode *Node) {
     return true;
   }
 
+  case MipsISD::CapThreadPointer: {
+    EVT CapVT = Subtarget->typeForCapabilities();
+    SDNode *CReadHwr =
+        CurDAG->getMachineNode(Mips::CReadHwr, DL, CapVT,
+                               CurDAG->getRegister(Mips::CAPHWR1, CapVT));
+    ReplaceNode(Node, CReadHwr);
+    return true;
+  }
+
   case ISD::BUILD_VECTOR: {
     // Select appropriate ldi.[bhwd] instructions for constant splats of
     // 128-bit when MSA is enabled. Fixup any register class mismatches that

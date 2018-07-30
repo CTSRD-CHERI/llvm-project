@@ -242,6 +242,14 @@ namespace Mips {
     // resulting in - R_MIPS_CHERI_CAPTABLEREL16/R_MIPS_SUB/R_MIPS_LO16
     fixup_Mips_CAPTABLEOFF_LO,
 
+    // Fixups for capability TLS (R_MIPS_CHERI_CAPTAB_*)
+    fixup_CHERI_CAPTAB_TLSGD_HI16,
+    fixup_CHERI_CAPTAB_TLSGD_LO16,
+    fixup_CHERI_CAPTAB_TLSLDM_HI16,
+    fixup_CHERI_CAPTAB_TLSLDM_LO16,
+    fixup_CHERI_CAPTAB_TPREL_HI16,
+    fixup_CHERI_CAPTAB_TPREL_LO16,
+
     // Marker
     LastTargetFixupKind,
     NumTargetFixupKinds = LastTargetFixupKind - FirstTargetFixupKind

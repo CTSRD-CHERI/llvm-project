@@ -57,6 +57,13 @@ public:
     // Like GPREL but the offset from _CHERI_CAPABILITY_TABLE_ to symbol
     MEK_CAPTABLEREL,
 
+    MEK_CAPTAB_TLSGD_HI16,
+    MEK_CAPTAB_TLSGD_LO16,
+    MEK_CAPTAB_TLSLDM_HI16,
+    MEK_CAPTAB_TLSLDM_LO16,
+    MEK_CAPTAB_TPREL_HI16,
+    MEK_CAPTAB_TPREL_LO16,
+
     MEK_Special,
   };
 

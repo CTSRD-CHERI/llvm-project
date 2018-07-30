@@ -151,6 +151,24 @@ void MipsMCExpr::printImpl(raw_ostream &OS, const MCAsmInfo *MAI) const {
     // FIXME: should we really end up here?
     OS << "%chericap";
     break;
+  case MEK_CAPTAB_TLSGD_HI16:
+    OS << "%captab_tlsgd_hi";
+    break;
+  case MEK_CAPTAB_TLSGD_LO16:
+    OS << "%captab_tlsgd_lo";
+    break;
+  case MEK_CAPTAB_TLSLDM_HI16:
+    OS << "%captab_tlsldm_hi";
+    break;
+  case MEK_CAPTAB_TLSLDM_LO16:
+    OS << "%captab_tlsldm_lo";
+    break;
+  case MEK_CAPTAB_TPREL_HI16:
+    OS << "%captab_tprel_hi";
+    break;
+  case MEK_CAPTAB_TPREL_LO16:
+    OS << "%captab_tprel_lo";
+    break;
   }
 
   OS << '(';
@@ -221,6 +239,12 @@ MipsMCExpr::evaluateAsRelocatableImpl(MCValue &Res,
     case MEK_CAPTABLE20:
     case MEK_CAPTABLE_HI16:
     case MEK_CAPTABLE_LO16:
+    case MEK_CAPTAB_TLSGD_HI16:
+    case MEK_CAPTAB_TLSGD_LO16:
+    case MEK_CAPTAB_TLSLDM_HI16:
+    case MEK_CAPTAB_TLSLDM_LO16:
+    case MEK_CAPTAB_TPREL_HI16:
+    case MEK_CAPTAB_TPREL_LO16:
       return false;
     case MEK_LO:
     case MEK_CALL_LO16:
@@ -332,6 +356,12 @@ void MipsMCExpr::fixELFSymbolsInTLSFixups(MCAssembler &Asm) const {
   case MEK_GOTTPREL:
   case MEK_TPREL_HI:
   case MEK_TPREL_LO:
+  case MEK_CAPTAB_TLSGD_HI16:
+  case MEK_CAPTAB_TLSGD_LO16:
+  case MEK_CAPTAB_TLSLDM_HI16:
+  case MEK_CAPTAB_TLSLDM_LO16:
+  case MEK_CAPTAB_TPREL_HI16:
+  case MEK_CAPTAB_TPREL_LO16:
     fixELFSymbolsInTLSFixupsImpl(getSubExpr(), Asm);
     break;
   }

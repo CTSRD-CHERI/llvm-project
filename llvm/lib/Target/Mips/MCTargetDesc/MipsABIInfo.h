@@ -52,6 +52,11 @@ public:
     assert(IsCheriPureCap());
     return MCTargetOptions::cheriCapabilityTableABI();
   }
+  bool UsesCapabilityTls() const;
+  CheriCapabilityTlsABI CapabilityTlsABI() const {
+    assert(IsCheriPureCap());
+    return MCTargetOptions::cheriCapabilityTlsABI();
+  }
   unsigned StackAddrSpace() const { return isCheriPureCap ? 200 : 0; }
   ABI GetEnumValue() const { return ThisABI; }
 
