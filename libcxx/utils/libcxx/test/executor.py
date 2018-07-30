@@ -205,7 +205,7 @@ class RemoteExecutor(Executor):
 
 
 class SSHExecutor(RemoteExecutor):
-    def __init__(self, host, username=None, port=None, config=None):
+    def __init__(self, host, username=None, port=None, config=None, extra_ssh_flags=None, extra_scp_flags=None):
         super(SSHExecutor, self).__init__()
 
         self.user_prefix = username + '@' if username else ''
@@ -213,7 +213,11 @@ class SSHExecutor(RemoteExecutor):
         self.port = port
         self.config = config
         self.scp_command = ['scp'] if port is None else ['scp', '-P', str(port)]
+        if extra_scp_flags:
+            self.scp_command.extend(extra_scp_flags)
         self.ssh_command = ['ssh'] if port is None else ['ssh', '-p', str(port)]
+        if extra_ssh_flags:
+            self.ssh_command.extend(extra_ssh_flags)
 
         # TODO(jroelofs): switch this on some -super-verbose-debug config flag
         if self.config and self.config.lit_config.debug:
@@ -263,9 +267,10 @@ class SSHExecutor(RemoteExecutor):
 
 
 class SSHExecutorWithNFSMount(SSHExecutor):
-    def __init__(self, host, nfs_dir, path_in_target, config=None, username=None, port=None):
+    def __init__(self, host, nfs_dir, path_in_target, config=None, username=None, port=None, extra_ssh_flags=None, extra_scp_flags=None):
         super(SSHExecutorWithNFSMount, self).__init__(
-            host, config=config, username=username, port=port)
+            host, config=config, username=username, port=port,
+            extra_ssh_flags=extra_ssh_flags, extra_scp_flags=extra_scp_flags)
         self.nfs_dir = nfs_dir
         if not self.nfs_dir.endswith('/'):
             self.nfs_dir = self.nfs_dir + '/'
