@@ -1034,8 +1034,16 @@ class Configuration(object):
         if not supports_modules:
             return
         self.config.available_features.add('modules-support')
-        module_cache = os.path.join(self.config.test_exec_root,
-                                   'modules.cache')
+        exec_str = self.get_lit_conf('modules', "None")
+
+        modules_cache_dirname = 'modules.cache'
+        # Avoid reusing the same directory when running parallel jobs
+        if self.lit_config.shardNumber is not None:
+            self.lit_config.note('Running parallel jobs -> appending ' +
+                str(self.lit_config.shardNumber) + ' to modules cache dir')
+            modules_cache_dirname += "." + str(self.lit_config.shardNumber)
+
+        module_cache = os.path.join(self.config.test_exec_root, modules_cache_dirname)
         module_cache = os.path.realpath(module_cache)
         if os.path.isdir(module_cache):
             shutil.rmtree(module_cache)
