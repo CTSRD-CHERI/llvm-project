@@ -61,10 +61,14 @@ __cap_table_end;
   "dla $2, __cap_table_start\n\t"                                              \
   "beqz $2, .Lskip_cgp_setup\n\t"                                              \
   "nop\n\t"                                                                    \
+  "cgetdefault $c14\n\t"                                                       \
+  /* If we are running without a DDC we should have a valid $cgp already */    \
+  "cbtu $c14, .Lskip_cgp_setup\n\t"                                            \
   "dla $3, __cap_table_end\n\t"                                                \
-  "cgetdefault $cgp\n\t"                                                       \
-  "csetoffset $cgp, $cgp, $2\n\t"                                              \
+  "csetoffset $cgp, $c14, $2\n\t"                                              \
   "dsubu $1, $3, $2\n\t"                                                       \
+  /* Avoid leaking original DDC in $c14 */                                     \
+  "cgetnull $c14\n\t"                                                          \
   "csetbounds $cgp, $cgp, $1\n\t"                                              \
   ".Lskip_cgp_setup: \n\t"
 
