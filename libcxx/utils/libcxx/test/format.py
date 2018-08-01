@@ -208,7 +208,7 @@ class LibcxxTestFormat(object):
                                                       local_cwd, data_files,
                                                       env)
                 except libcxx.util.ExecuteCommandTimeoutException as e:
-                    report = e.msg + "\n" + libcxx.util.makeReport(cmd, e.out, e.err, e.exitCode)
+                    report = e.msg + "\n" + libcxx.util.makeReport(e.command, e.out, e.err, e.exitCode)
                     report = "Compiled With: %s\n%s" % (compile_cmd, report)
                     report += "Compiled test failed unexpectedly!"
                     return lit.Test.TIMEOUT, report

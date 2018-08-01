@@ -163,15 +163,18 @@ def mkdir_p(path):
 
 
 class ExecuteCommandTimeoutException(Exception):
-    def __init__(self, msg, out, err, exitCode):
+    def __init__(self, msg, out, err, exitCode, command=None):
         assert isinstance(msg, str)
         assert isinstance(out, str)
         assert isinstance(err, str)
         assert isinstance(exitCode, int)
+        if command is not None:
+            assert isinstance(command, list) or isinstance(command, str)
         self.msg = msg
         self.out = out
         self.err = err
         self.exitCode = exitCode
+        self.command = command
 
 # Close extra file handles on UNIX (on Windows this cannot be done while
 # also redirecting input).
@@ -234,7 +237,8 @@ def executeCommand(command, cwd=None, env=None, input=None, timeout=0):
             msg='Reached timeout of {} seconds'.format(timeout),
             out=out,
             err=err,
-            exitCode=exitCode
+            exitCode=exitCode,
+            command=command
             )
 
     # Detect Ctrl-C in subprocess.
