@@ -141,6 +141,7 @@ class TimeoutExecutor(PrefixExecutor):
 
 class RemoteExecutor(Executor):
     is_remote = True
+
     def __init__(self):
         self.local_run = executeCommand
         self.keep_test = False
@@ -260,7 +261,7 @@ class SSHExecutor(RemoteExecutor):
             remote_cmd = 'cd \'' + remote_work_dir + '\' && ' + remote_cmd
         if self.config and self.config.lit_config.debug:
             print('{}: About to run {}'.format(datetime.datetime.now(), remote_cmd))
-        out, err, rc = self.local_run(ssh_cmd + [remote_cmd])
+        out, err, rc = self.local_run(ssh_cmd + [remote_cmd], timeout=self.config.lit_config.maxIndividualTestTime)
         if self.config and self.config.lit_config.debug:
             print('{}: Remote command completed'.format(datetime.datetime.now()))
         return remote_cmd, out, err, rc

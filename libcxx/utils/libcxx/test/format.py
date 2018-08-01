@@ -203,9 +203,15 @@ class LibcxxTestFormat(object):
             is_flaky = self._get_parser('FLAKY_TEST.', parsers).getValue()
             max_retry = 3 if is_flaky else 1
             for retry_count in range(max_retry):
-                cmd, out, err, rc = self.executor.run(exec_path, [exec_path],
+                try:
+                    cmd, out, err, rc = self.executor.run(exec_path, [exec_path],
                                                       local_cwd, data_files,
                                                       env)
+                except libcxx.util.ExecuteCommandTimeoutException as e:
+                    report = e.msg + "\n" + libcxx.util.makeReport(cmd, e.out, e.err, e.exitCode)
+                    report = "Compiled With: %s\n%s" % (compile_cmd, report)
+                    report += "Compiled test failed unexpectedly!"
+                    return lit.Test.TIMEOUT, report
                 if rc == 0:
                     res = lit.Test.PASS if retry_count == 0 else lit.Test.FLAKYPASS
                     return res, ''
