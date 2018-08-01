@@ -219,6 +219,7 @@ class SSHExecutor(RemoteExecutor):
         self.ssh_command = ['ssh'] if port is None else ['ssh', '-p', str(port)]
         if extra_ssh_flags:
             self.ssh_command.extend(extra_ssh_flags)
+        self.remote_host_failed_connections = 0
 
         # TODO(jroelofs): switch this on some -super-verbose-debug config flag
         if self.config and self.config.lit_config.debug:
@@ -264,7 +265,21 @@ class SSHExecutor(RemoteExecutor):
         out, err, rc = self.local_run(ssh_cmd + [remote_cmd], timeout=self.config.lit_config.maxIndividualTestTime)
         if self.config and self.config.lit_config.debug:
             print('{}: Remote command completed'.format(datetime.datetime.now()))
-        return remote_cmd, out, err, rc
+        if rc != 0 and "Connection closed by remote host" in err:
+            # accept up to N failed connections before giving up
+            self.config.lit_config.warning("Remote host seems to have died?: " + " ".join(ssh_cmd))
+            self.remote_host_failed_connections += 1
+        return ssh_cmd + [remote_cmd], out, err, rc
+
+    def run(self, *args, **kwargs):
+        # If more than N connections to the remote host failed we assume the
+        # QEMU instance has wedged and just give up instead of timing out
+        MAX_FAILED_CONNECTIONS = 10
+        if self.remote_host_failed_connections > MAX_FAILED_CONNECTIONS:
+            cmd = [] if "cmd" not in kwargs or kwargs["cmd"] is None else kwargs["cmd"]
+            return ["REMOTE_HOST_DEAD"] + cmd, "", "REMOTE HOST IS DEAD", 1
+        return super(SSHExecutor, self).run(*args, **kwargs)
+
 
 
 class SSHExecutorWithNFSMount(SSHExecutor):
