@@ -265,7 +265,8 @@ class SSHExecutor(RemoteExecutor):
         out, err, rc = self.local_run(ssh_cmd + [remote_cmd], timeout=self.config.lit_config.maxIndividualTestTime)
         if self.config and self.config.lit_config.debug:
             print('{}: Remote command completed'.format(datetime.datetime.now()))
-        if rc != 0 and "Connection closed by remote host" in err:
+        if rc != 0 and ("Connection closed by remote host" in err or
+                        "ssh_exchange_identification: read: Connection reset by peer" in err):
             # accept up to N failed connections before giving up
             self.config.lit_config.warning("Remote host seems to have died?: " + " ".join(ssh_cmd))
             self.remote_host_failed_connections += 1
