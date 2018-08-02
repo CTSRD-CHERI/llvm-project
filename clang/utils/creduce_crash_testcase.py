@@ -90,7 +90,7 @@ def expand_lit_substitutions(args: "Options", cmd) -> str:
     if "opt" in compiler_cmd:
         compiler_cmd = re.sub(r"\sopt\b", " " + str(args.opt_cmd) + " ", compiler_cmd)
     compiler_cmd = compiler_cmd.replace("%cheri_opt ", str(args.opt_cmd) +
-                                        " -mtriple=cheri-unknown-freebsd")
+                                        " -mtriple=cheri-unknown-freebsd ")
 
     # ignore all the piping to FileCheck parts of the command
     if "|" in compiler_cmd:
