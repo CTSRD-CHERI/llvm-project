@@ -15,7 +15,7 @@ import datetime
 import shutil
 
 from libcxx.test import tracing
-from libcxx.util import executeCommand
+from libcxx.util import executeCommand, ExecuteCommandTimeoutException
 
 
 class Executor(object):
@@ -269,6 +269,7 @@ class SSHExecutor(RemoteExecutor):
             # accept up to N failed connections before giving up
             self.config.lit_config.warning("Remote host seems to have died?: " + " ".join(ssh_cmd))
             self.remote_host_failed_connections += 1
+            raise ExecuteCommandTimeoutException("REMOTE HOST SEEMS DEAD", out, err, rc, command=ssh_cmd + [remote_cmd])
         return ssh_cmd + [remote_cmd], out, err, rc
 
     def run(self, *args, **kwargs):
@@ -277,9 +278,8 @@ class SSHExecutor(RemoteExecutor):
         MAX_FAILED_CONNECTIONS = 10
         if self.remote_host_failed_connections > MAX_FAILED_CONNECTIONS:
             cmd = [] if "cmd" not in kwargs or kwargs["cmd"] is None else kwargs["cmd"]
-            return ["REMOTE_HOST_DEAD"] + cmd, "", "REMOTE HOST IS DEAD", 1
+            raise ExecuteCommandTimeoutException("REMOTE HOST SEEMS DEAD", "", "", 1, command=cmd)
         return super(SSHExecutor, self).run(*args, **kwargs)
-
 
 
 class SSHExecutorWithNFSMount(SSHExecutor):
