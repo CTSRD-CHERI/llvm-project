@@ -1217,19 +1217,7 @@ static llvm::Value *CoerceIntOrPtrToIntOrPtr(llvm::Value *Val,
   return Val;
 }
 
-// returns true if the struct STy contains exactly one field that is a
-// capability (regardless of how deep - i.e. also checks nested unions/structs)
-static bool structContainsExactlyOneFieldThatIsACapability(llvm::StructType* STy,
-                                                          CodeGenFunction &CGF) {
-  if (STy->getNumElements() == 1) {
-    llvm::Type* ETy = STy->getElementType(0);
-    if (llvm::PointerType* EPTy = dyn_cast<llvm::PointerType>(ETy))
-      return EPTy->getAddressSpace() == CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
-    else if (llvm::StructType* ESTy = dyn_cast<llvm::StructType>(ETy))
-      return structContainsExactlyOneFieldThatIsACapability(ESTy, CGF);
-  }
-  return false;
-}
+
 
 /// CreateCoercedLoad - Create a load from \arg SrcPtr interpreted as
 /// a pointer to an object of type \arg Ty, known to be aligned to
@@ -1249,21 +1237,6 @@ static llvm::Value *CreateCoercedLoad(Address Src, llvm::Type *Ty,
   uint64_t DstSize = CGF.CGM.getDataLayout().getTypeAllocSize(Ty);
 
   if (llvm::StructType *SrcSTy = dyn_cast<llvm::StructType>(SrcTy)) {
-    // If Ty is a CHERI capability meaning that we are coercing the struct
-    // into a capability, then we need to handle it specially:
-    // If the struct contains exactly one field that is a capability
-    // (regardless of how deep) then enter the struct so we can pass the
-    // capability in a register, otherwise pass a pointer to the struct.
-    if (CGF.getTarget().SupportsCapabilities()) {
-      if (!structContainsExactlyOneFieldThatIsACapability(SrcSTy, CGF)) {
-        if (llvm::PointerType* PTy = dyn_cast<llvm::PointerType>(Ty)) {
-          if (PTy->getAddressSpace() == CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS()) {
-            Src = CGF.Builder.CreateBitCast(Src, Ty);
-            return Src.getPointer();
-          }
-        }
-      }
-    }
     Src = EnterStructPointerForCoercedAccess(Src, SrcSTy, DstSize, CGF);
     SrcTy = Src.getType()->getElementType();
   }
@@ -1345,24 +1318,6 @@ static void CreateCoercedStore(llvm::Value *Src,
   uint64_t SrcSize = CGF.CGM.getDataLayout().getTypeAllocSize(SrcTy);
 
   if (llvm::StructType *DstSTy = dyn_cast<llvm::StructType>(DstTy)) {
-    // If Src is a CHERI capability then we load the struct using the
-    // capability and store into the dst struct pointer. If the dst struct
-    // contains exactly one field that is a capability (regardless of how
-    // deep) then we must dive into the struct as the capability will
-    // have been passed in a register.
-    if (CGF.getTarget().SupportsCapabilities()) {
-      if (!structContainsExactlyOneFieldThatIsACapability(DstSTy, CGF)) {
-        if (llvm::PointerType* PTy = dyn_cast<llvm::PointerType>(SrcTy)) {
-          unsigned CapAS = CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
-          if (PTy->getAddressSpace() == CapAS) {
-            Src = CGF.Builder.CreateBitCast(Src, DstTy->getPointerTo(CapAS));
-            Src = CGF.Builder.CreateLoad(Address(Src, Dst.getAlignment()));
-            CGF.Builder.CreateStore(Src, Dst, DstIsVolatile);
-            return;
-          }
-        }
-      }
-    }
     Dst = EnterStructPointerForCoercedAccess(Dst, DstSTy, SrcSize, CGF);
     DstTy = Dst.getType()->getElementType();
   }
