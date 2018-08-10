@@ -175,3 +175,46 @@ void *cast_uintcap_to_intptr_explicit(__uintcap_t cap) {
   return (void *)cap; // this should warn!
 }
 #endif
+
+// Check that this does not warn since it only uses cfromddc (which could also be a bug but a different one):
+#define PTREXPAND_CP(src,dst,fld) do { (dst).fld = (void * __capability)(__intcap_t)(src).fld; } while (0)
+
+
+struct kinfo_proc {
+  struct vmspace *ki_vmspace;   /* pointer to kernel vmspace struct */
+  char other_stuff[1024];
+};
+struct kinfo_proc_c {
+  void * __capability    ki_vmspace;           /* struct vmspace */
+  char other_stuff[1024];
+};
+
+void *
+cheriabi_kinfo_proc_out(const struct kinfo_proc *ki, struct kinfo_proc_c *ki_c)
+{
+  PTREXPAND_CP(*ki, *ki_c, ki_vmspace);
+  return ki_c;
+  // CHECK-LABEL: cheriabi_kinfo_proc_out
+  // CHECK-NOT: cfromddc
+  // CHECK-NOT: cfromptr
+  // CHECK:	     cgetnull	$c1
+  // CHECK-NEXT: csetoffset	$c1, $c1, ${{[0-9]+}}
+  // CHECK-NOT: cfromddc
+  // CHECK-NOT: cfromptr
+  // CHECK: .end cheriabi_kinfo_proc_out
+
+}
+
+void * __capability same_thing_expanded(const struct kinfo_proc *ki, struct kinfo_proc_c *ki_c) {
+  (*ki_c).ki_vmspace = (void * __capability)(__intcap_t)(*ki).ki_vmspace;
+  return ki_c->ki_vmspace;
+  // CHECK-LABEL: same_thing_expanded:
+  // CHECK-NOT: cfromddc
+  // CHECK-NOT: cfromptr
+  // CHECK:	     cgetnull	$c1
+  // CHECK-NEXT: csetoffset	$c1, $c1, ${{[0-9]+}}
+  // CHECK-NOT: cfromddc
+  // CHECK-NOT: cfromptr
+  // CHECK: .end same_thing_expanded
+
+}

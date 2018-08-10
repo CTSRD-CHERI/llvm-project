@@ -2057,13 +2057,20 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     // For casts from pointers to intcap_t, we need to turn the pointer into a
     // capability.
     if (DestTy->isCHERICapabilityType(C)) {
+      assert(DestTy->isIntCapType());
       if (E->getType()->isCHERICapabilityType(C))
         return Builder.CreateBitCast(Src, ResultType);
-      // ptrtoint will result in CToPtr in the hybrid ABI -> warn about it
-      warnAboutImplicitCToPtr(CGF.CGM, CE);
+
       Src = Builder.CreatePtrToInt(Src,
             llvm::IntegerType::get(Src->getContext(), TI.getPointerWidth(0)));
+      // FIXME: should casts to intcap_t yield a tagged or untagged value?
+      // I believe we should make a cast to __intcap_t yield the integer value
+      // and require a (__cheri_tocap ) cast if you really want the cfromddc behaviour
+      return CGF.setCapabilityIntegerValue(
+          llvm::ConstantPointerNull::get(cast<llvm::PointerType>(ResultType)), Src);
+#if 0   // This would yield a cfromddc:
       return Builder.CreateIntToPtr(Src, ResultType);
+#endif
     }
     if (IsPureCap) {
       Src = CGF.getPointerAddress(Src);
