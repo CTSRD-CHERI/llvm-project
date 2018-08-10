@@ -86,6 +86,7 @@ def CHERICaps : DiagGroup<"cheri-capability-misuse">;
 def CHERIBitwiseOps : DiagGroup<"cheri-bitwise-operations">;
 def CHERIImplicitConversion : DiagGroup<"cheri-implicit-conversion">;
 def CHERIImplicitConversionSign : DiagGroup<"cheri-implicit-conversion-sign">;
+def CHERIPointerConversion : DiagGroup<"cheri-pointer-conversion", [CHERIImplicitConversionSign, CHERIImplicitConversion]>;
 def MIPSCHERIPrototypes: DiagGroup<"mips-cheri-prototypes">;
 def MIPSCHERIPrototypesStrict: DiagGroup<"mips-cheri-prototypes-strict">;
 

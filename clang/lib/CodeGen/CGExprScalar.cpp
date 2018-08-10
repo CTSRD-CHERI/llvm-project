@@ -25,6 +25,7 @@
 #include "clang/AST/StmtVisitor.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Frontend/CodeGenOptions.h"
+#include "clang/Sema/SemaDiagnostic.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/Constants.h"
@@ -1766,6 +1767,13 @@ llvm::Value* CodeGenFunction::EmitPointerCast(llvm::Value *From,
   return result;
 }
 
+static void warnAboutImplicitCToPtr(CodeGenModule &CGM, CastExpr *CE) {
+  auto Loc = CE->getExprLoc();
+  CGM.getDiags().Report(Loc, diag::warn_cheri_implicit_ctoptr)
+      << CE->getSourceRange();
+  CGM.getDiags().Report(Loc, diag::note_cheri_implicit_ctoptr_suggestion)
+      << CE->getSourceRange();
+}
 
 // VisitCastExpr - Emit code for an explicit or implicit cast.  Implicit casts
 // have to handle a more broad range of conversions than explicit casts, as they
@@ -1821,6 +1829,7 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     return Builder.CreateBitCast(Src, DstTy);
   }
   case CK_AddressSpaceConversion:
+  // FIXME: these two should probably be moved
   case CK_CHERICapabilityToPointer:
   case CK_PointerToCHERICapability: {
     Expr::EvalResult Result;
@@ -2006,7 +2015,8 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     bool IsPureCap = TI.areAllPointersCapabilities();
 
     // For __[u]intcap_t, the underlying LLVM type is actually a pointer.
-    if (E->getType()->isCHERICapabilityType(CGF.getContext()) ) {
+    bool SrcIsCheriCap = E->getType()->isCHERICapabilityType(CGF.getContext());
+    if (SrcIsCheriCap) {
       // If we're casting to a capability pointer, then it's just a bitcast:
       if (DestTy->isCHERICapabilityType(CGF.getContext()))
         return Builder.CreateBitCast(Src, ResultType);
@@ -2014,8 +2024,10 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
       // create an integer value first
       if (IsPureCap)
         Src = CGF.getCapabilityIntegerValue(Src);
-      else 
+      else {
+        warnAboutImplicitCToPtr(CGF.CGM, CE);
         Src = Builder.CreatePtrToInt(Src, CGF.IntPtrTy);
+      }
     }
     // First, convert to the correct width so that we control the kind of
     // extension.
@@ -2029,7 +2041,10 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
       return CGF.setCapabilityIntegerValue(
           llvm::ConstantPointerNull::get(cast<llvm::PointerType>(ResultType)),
           IntResult);
-
+    // assert(!SrcIsCheriCap);
+    // TODO: generate CFromPtr/CFromInt depending on value (for constants use
+    // CFromInt/otherwise CFromPtr)
+    // FIMXE: This should warn!
     return Builder.CreateIntToPtr(IntResult, ResultType);
   }
   case CK_PointerToIntegral: {
@@ -2044,6 +2059,8 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     if (DestTy->isCHERICapabilityType(C)) {
       if (E->getType()->isCHERICapabilityType(C))
         return Builder.CreateBitCast(Src, ResultType);
+      // ptrtoint will result in CToPtr in the hybrid ABI -> warn about it
+      warnAboutImplicitCToPtr(CGF.CGM, CE);
       Src = Builder.CreatePtrToInt(Src,
             llvm::IntegerType::get(Src->getContext(), TI.getPointerWidth(0)));
       return Builder.CreateIntToPtr(Src, ResultType);
@@ -2051,6 +2068,10 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     if (IsPureCap) {
       Src = CGF.getPointerAddress(Src);
       return Builder.CreateTruncOrBitCast(Src, ResultType);
+    }
+    // ptrtoint will result in CToPtr in the hybrid ABI -> warn about it
+    if (E->getType()->isCHERICapabilityType(C)) {
+      warnAboutImplicitCToPtr(CGF.CGM, CE);
     }
     return Builder.CreatePtrToInt(Src, ResultType);
   }

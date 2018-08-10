@@ -6033,7 +6033,19 @@ def warn_cheri_offset_addr_smaller_target_type: Warning<
   InGroup<CHERICapabilityToIntegerCast>;
 
 def err_cheri_cast : Error<
-  "Using __cheri_cast is no longer valid; use __cheri_tocap or __cheri_fromcap instead">;
+  "using __cheri_cast is no longer valid; use __cheri_tocap or __cheri_fromcap instead">;
+
+def warn_cheri_implicit_ctoptr : Warning<
+  "the following conversion will result in a CToPtr operation; the behaviour of CToPtr can "
+  " be confusing since using CToPtr on an untagged capability will give 0 instead of the "
+  " integer value and should therefore be explicitly annotated">,
+  InGroup<CHERIPointerConversion>;
+  // TODO: add a link to an explanation for this warning?
+def note_cheri_implicit_ctoptr_suggestion : Note<
+  "if you really intended to use CToPtr use __builtin_cheri_cap_to_pointer() or a __cheri_fromcap cast to silence this warning; "
+  "to get the virtual address use __builtin_cheri_address_get() or a __cheri_address cast; "
+  "to get the capability offset use __builtin_cheri_offset_get() or a __cheri_offset cast">;
+
 
 def warn_mixed_sign_comparison : Warning<
   "comparison of integers of different signs: %0 and %1">,
