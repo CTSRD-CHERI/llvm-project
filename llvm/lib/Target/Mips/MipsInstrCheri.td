@@ -161,6 +161,7 @@ let isCall=1, hasDelaySlot=1 in {
 def CJALR : CheriFmt2Op<0xc, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2),
                               "cjalr\t${r2}, ${r1}",
                               []>;
+}
 def CCall : CheriFmt3CCall<0x05, (outs), (ins CheriOpnd:$cs, CheriOpnd:$cb, uimm11: $selector),
                               "ccall\t${cs}, ${cb}, ${selector}",
                               []>;
@@ -172,7 +173,7 @@ def CReturn : CheriFmt3CRet<0x06, (outs), (ins variable_ops),
                               []> {
   let isTerminator = 1;
   let isReturn = 1;
-  let hasDelaySlot = 1;
+  let hasDelaySlot = 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
