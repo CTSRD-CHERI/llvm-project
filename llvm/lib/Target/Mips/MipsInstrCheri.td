@@ -166,8 +166,10 @@ def CCall : CheriFmt3CCall<0x05, (outs), (ins CheriOpnd:$cs, CheriOpnd:$cb, uimm
                               "ccall\t${cs}, ${cb}, ${selector}",
                               []>;
 }
-def : InstAlias<"ccall $cs, $cb",
+def : InstAlias<"CCallTrap $cs, $cb",
                 (CCall CheriOpnd: $cs, CheriOpnd:$cb, 0)>;
+def : InstAlias<"CCallFast $cs, $cb",
+                (CCall CheriOpnd: $cs, CheriOpnd:$cb, 1)>;
 def CReturn : CheriFmt3CRet<0x06, (outs), (ins variable_ops),
                               "creturn",
                               []> {
