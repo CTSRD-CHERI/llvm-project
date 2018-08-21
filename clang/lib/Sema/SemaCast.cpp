@@ -3020,16 +3020,29 @@ ExprResult Sema::BuildCheriOffsetOrAddress(SourceLocation LParenLoc,
                                            DestTy, TypeSourceInfo *TSInfo,
                                            SourceLocation RParenLoc, Expr
                                            *SubExpr) {
+
+  CastKind Kind =
+      IsOffsetCast ? CK_CHERICapabilityToOffset : CK_CHERICapabilityToAddress;
   // Check the source type
   // Use getRealReferenceType() because getType() only returns T for T&
   QualType SrcTy = SubExpr->getRealReferenceType();
   // __cheri_offset and __cheri_address is valid for __uintcap_t as well
   bool SrcIsCap = SrcTy->isCHERICapabilityType(Context, true);
   if (!SrcIsCap) {
-    // XXXKG: What about functions?
-    Diag(SubExpr->getLocStart(), diag::err_cheri_offset_addr_invalid_source_type)
-      << SrcTy << IsOffsetCast;
-    return ExprError();
+    // Note: __cheri_addr can be used on plain pointers since otherwise it would
+    // be very difficult to write code that compiles both in hybrid and in
+    // purecap mode. However, the offset cast only makes sense for capabilities!
+    if (IsOffsetCast || (!SrcTy->isPointerType() && !SrcTy->isReferenceType())) {
+      // XXXKG: What about functions?
+      Diag(SubExpr->getLocStart(),
+           diag::err_cheri_offset_addr_invalid_source_type)
+          << SrcTy << IsOffsetCast;
+      return ExprError();
+    } else {
+      // Casting from pointer to address in hybrid mode
+      assert(!Context.getTargetInfo().areAllPointersCapabilities());
+      Kind = CK_PointerToIntegral;
+    }
   }
 
   // Check the destination type:
@@ -3063,10 +3076,7 @@ ExprResult Sema::BuildCheriOffsetOrAddress(SourceLocation LParenLoc,
       << DestTy << minTy << IsOffsetCast;
   }
 
-  return CStyleCastExpr::Create(Context, DestTy, VK_RValue,
-                                IsOffsetCast ? CK_CHERICapabilityToOffset
-                                             : CK_CHERICapabilityToAddress,
-                                SubExpr,
+  return CStyleCastExpr::Create(Context, DestTy, VK_RValue, Kind, SubExpr,
                                 nullptr, TSInfo, LParenLoc, RParenLoc);
 }
 
