@@ -153,3 +153,10 @@ def int_cheri_cap_build:
 def int_cheri_cap_type_copy:
   GCCBuiltin<"__builtin_cheri_cap_type_copy">,
   Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_fatptr_ty], [IntrNoMem]>;
+
+////////////////////////////////////////////////////////////////////////////////
+// Tag memory accessor functions
+////////////////////////////////////////////////////////////////////////////////
+def int_cheri_cap_load_tags:
+  GCCBuiltin<"__builtin_cheri_cap_load_tags">,
+  Intrinsic<[llvm_i64_ty], [llvm_fatptr_ty], [IntrReadMem]>;
