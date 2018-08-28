@@ -4,11 +4,10 @@
 
 // Check all the warnings:
 // TODO: Check the IR
-// RUNs: %cheri_cc1 -Wno-missing-variable-declarations -Wno-missing-prototypes -emit-llvm %s -o /dev/null -O0 -verify
-// RUN: %cheri_cc1 -S %s -o - -O0 -verify | FileCheck %s -implicit-check-not ctoptr
+// RUN: %cheri_cc1 -Wcheri-pointer-conversion -S %s -o - -O0 -verify | FileCheck %s -implicit-check-not ctoptr
 
 // And finally try compiling this in purecap mode (and verify doesn't create any ctoptr except for the builtin call):
-// RUN: %cheri_purecap_cc1 -S %s -o - -O0 -verify=purecap | FileCheck %s -check-prefix PURECAP -implicit-check-not ctoptr
+// RUN: %cheri_purecap_cc1 -Wcheri-pointer-conversion -S %s -o - -O0 -verify=purecap | FileCheck %s -check-prefix PURECAP -implicit-check-not ctoptr
 // purecap-no-diagnostics
 
 // CHECK: .file "warn-ctoptr.c"
