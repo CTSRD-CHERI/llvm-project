@@ -841,6 +841,7 @@ public:
   MipsAbiFlagsSection(Elf_Mips_ABIFlags Flags);
   size_t getSize() const override { return sizeof(Elf_Mips_ABIFlags); }
   void writeTo(uint8_t *Buf) override;
+  unsigned getCheriAbiVariant() const;
 
 private:
   Elf_Mips_ABIFlags Flags;
@@ -973,13 +974,15 @@ struct InX {
 template <class ELFT> struct In {
   // XXXAR: needs to be templated because writing depends on endianess
   // TODO: use the non-templated version
-  static CheriCapRelocsSection <ELFT> *CapRelocs;
+  static CheriCapRelocsSection<ELFT> *CapRelocs;
+  static MipsAbiFlagsSection<ELFT> *MipsAbiFlags;
   static VersionDefinitionSection<ELFT> *VerDef;
   static VersionTableSection<ELFT> *VerSym;
   static VersionNeedSection<ELFT> *VerNeed;
 };
 
 template <class ELFT> CheriCapRelocsSection<ELFT> *In<ELFT>::CapRelocs;
+template <class ELFT> MipsAbiFlagsSection<ELFT> *In<ELFT>::MipsAbiFlags;
 template <class ELFT> VersionDefinitionSection<ELFT> *In<ELFT>::VerDef;
 template <class ELFT> VersionTableSection<ELFT> *In<ELFT>::VerSym;
 template <class ELFT> VersionNeedSection<ELFT> *In<ELFT>::VerNeed;

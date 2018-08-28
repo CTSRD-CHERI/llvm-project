@@ -15,6 +15,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "SyntheticSections.h"
+#include "Arch/Cheri.h"
 #include "Bits.h"
 #include "Config.h"
 #include "InputFiles.h"
@@ -24,7 +25,6 @@
 #include "Symbols.h"
 #include "Target.h"
 #include "Writer.h"
-#include "Arch/Cheri.h"
 #include "lld/Common/ErrorHandler.h"
 #include "lld/Common/Memory.h"
 #include "lld/Common/Strings.h"
@@ -37,6 +37,7 @@
 #include "llvm/Object/ELFObjectFile.h"
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/LEB128.h"
+#include "llvm/Support/MipsABIFlags.h"
 #include "llvm/Support/MD5.h"
 #include "llvm/Support/RandomNumberGenerator.h"
 #include "llvm/Support/SHA1.h"
@@ -146,6 +147,24 @@ MipsAbiFlagsSection<ELFT> *MipsAbiFlagsSection<ELFT>::create() {
   if (Create)
     return make<MipsAbiFlagsSection<ELFT>>(Flags);
   return nullptr;
+}
+
+template <class ELFT>
+unsigned MipsAbiFlagsSection<ELFT>::getCheriAbiVariant() const {
+  auto CheriAbiVariant = Flags.isa_ext & Mips::AFL_EXT_CHERI_ABI_MASK;
+  switch (CheriAbiVariant) {
+  case Mips::AFL_EXT_CHERI_ABI_LEGACY:
+    return DF_MIPS_CHERI_ABI_LEGACY;
+  case Mips::AFL_EXT_CHERI_ABI_PCREL:
+    return DF_MIPS_CHERI_ABI_PCREL;
+  case Mips::AFL_EXT_CHERI_ABI_PLT:
+    return DF_MIPS_CHERI_ABI_PLT;
+  case Mips::AFL_EXT_CHERI_ABI_FNDESC:
+    return DF_MIPS_CHERI_ABI_FNDESC;
+  default:
+    error("Unknown CHERI ABI variant " + Twine(CheriAbiVariant));
+    return 0;
+  }
 }
 
 // .MIPS.options section.
@@ -1395,11 +1414,15 @@ template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
       // relative to the address of the tag.
       addInSecRelative(DT_MIPS_RLD_MAP_REL, InX::MipsRldMap);
     }
+    uint32_t CheriFlags = 0;
+    if (Config->isCheriABI() && In<ELFT>::MipsAbiFlags)
+      CheriFlags |= In<ELFT>::MipsAbiFlags->getCheriAbiVariant();
+    addInt(DT_MIPS_CHERI_FLAGS, CheriFlags);
   }
 
   if (In<ELFT>::CapRelocs && !In<ELFT>::CapRelocs->empty()) {
-    addInSec(DT_CHERI___CAPRELOCS, In<ELFT>::CapRelocs);
-    addSize(DT_CHERI___CAPRELOCSSZ, In<ELFT>::CapRelocs->getParent());
+    addInSec(DT_MIPS_CHERI___CAPRELOCS, In<ELFT>::CapRelocs);
+    addSize(DT_MIPS_CHERI___CAPRELOCSSZ, In<ELFT>::CapRelocs->getParent());
   }
   // Glink dynamic tag is required by the V2 abi if the plt section isn't empty.
   if (Config->EMachine == EM_PPC64 && !InX::Plt->empty()) {
