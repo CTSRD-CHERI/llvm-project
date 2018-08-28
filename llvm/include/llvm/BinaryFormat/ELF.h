@@ -1270,6 +1270,17 @@ enum {
   RHF_RLD_ORDER_SAFE = 0x00004000          // Symbol table is in a safe order.
 };
 
+// DT_MIPS_CHERI_FLAGS values.
+enum {
+  DF_MIPS_CHERI_NONE = 0x00000000,              // No flags.
+  DF_MIPS_CHERI_ABI_MASK = 0x00000007,          // 3 bits for the ABI
+  DF_MIPS_CHERI_ABI_LEGACY = 0x0000000,
+  DF_MIPS_CHERI_ABI_PCREL = 0x0000001,
+  DF_MIPS_CHERI_ABI_PLT = 0x0000002,
+  DF_MIPS_CHERI_ABI_FNDESC = 0x0000003,
+};
+
+
 // ElfXX_VerDef structure version (GNU versioning)
 enum { VER_DEF_NONE = 0, VER_DEF_CURRENT = 1 };
 

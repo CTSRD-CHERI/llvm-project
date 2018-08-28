@@ -178,8 +178,9 @@ MIPS_DYNAMIC_TAG(MIPS_RWPLT, 0x70000034)        // Points to the base
 MIPS_DYNAMIC_TAG(MIPS_RLD_MAP_REL, 0x70000035)  // Relative offset of run time loader
                                                 // map, used for debugging.
 
-MIPS_DYNAMIC_TAG(CHERI___CAPRELOCS, 0x7000c000)    // start of __cap_relocs sections
-MIPS_DYNAMIC_TAG(CHERI___CAPRELOCSSZ, 0x7000c001)  // size of __cap_relocs sections
+MIPS_DYNAMIC_TAG(MIPS_CHERI___CAPRELOCS, 0x7000c000)    // start of __cap_relocs sections
+MIPS_DYNAMIC_TAG(MIPS_CHERI___CAPRELOCSSZ, 0x7000c001)  // size of __cap_relocs sections
+MIPS_DYNAMIC_TAG(MIPS_CHERI_FLAGS, 0x7000c002)          // 32 bits of flags
 
 
 // PPC64 specific dynamic table entries.
