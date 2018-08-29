@@ -1414,10 +1414,12 @@ template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
       // relative to the address of the tag.
       addInSecRelative(DT_MIPS_RLD_MAP_REL, InX::MipsRldMap);
     }
-    uint32_t CheriFlags = 0;
-    if (Config->isCheriABI() && In<ELFT>::MipsAbiFlags)
-      CheriFlags |= In<ELFT>::MipsAbiFlags->getCheriAbiVariant();
-    addInt(DT_MIPS_CHERI_FLAGS, CheriFlags);
+    if (Config->isCheriABI()) {
+      uint32_t CheriFlags = 0;
+      if (In<ELFT>::MipsAbiFlags)
+        CheriFlags |= In<ELFT>::MipsAbiFlags->getCheriAbiVariant();
+      addInt(DT_MIPS_CHERI_FLAGS, CheriFlags);
+    }
   }
 
   if (In<ELFT>::CapRelocs && !In<ELFT>::CapRelocs->empty()) {
