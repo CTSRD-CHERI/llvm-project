@@ -2432,11 +2432,10 @@ lowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const
                                           DL, CapVT);
       return DAG.getNode(ISD::PTRADD, DL, CapVT, ThreadPointer, Offset);
     } else {
-      llvm::errs() << "Not using capability TLS for " <<  GV->getName() << "\n";
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
       GV->dump();
 #endif
-      assert(false && "SHOULD HAVE USED CAP TLS");
+      report_fatal_error("SHOULD HAVE USED CAP TLS for " + GV->getName());
     }
   }
 
