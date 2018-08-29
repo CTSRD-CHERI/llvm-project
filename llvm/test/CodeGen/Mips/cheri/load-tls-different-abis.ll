@@ -1,10 +1,12 @@
 ; FreeBSD sed is different from GNU sed -> use the lowest common denominator
 ; RUN: sed  's/addrspace(200)//' %s | sed  's/addrspace(TLS)//' | llc -mtriple=mips64-unknown-freebsd -relocation-model=pic -mxgot=false -o - -show-mc-encoding -print-machineinstrs=expand-isel-pseudos 2>&1 | FileCheck %s -check-prefixes=MIPS,COMMON
 ; RUN: sed 's/addrspace(TLS)//' %s | %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=legacy  -o - -show-mc-encoding -print-machineinstrs=expand-isel-pseudos 2>&1 | %cheri_FileCheck %s -check-prefixes=LEGACY,COMMON
-; RUN: sed 's/addrspace(TLS)//' %s | %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=plt     -o - -show-mc-encoding -print-machineinstrs=expand-isel-pseudos 2>&1 | %cheri_FileCheck %s -check-prefixes=PLT,COMMON,CAP-TABLE,CAP-TABLE-HACK
-; RUN: sed 's/addrspace(TLS)//' %s | %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=fn-desc -o - -show-mc-encoding -print-machineinstrs=expand-isel-pseudos 2>&1 | %cheri_FileCheck %s -check-prefixes=FNDESC,COMMON,CAP-TABLE,CAP-TABLE-HACK
-; RUN: sed 's/addrspace(TLS)//' %s | %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=pcrel   -o - -show-mc-encoding -print-machineinstrs=expand-isel-pseudos 2>&1 | %cheri_FileCheck %s -check-prefixes=PCREL,COMMON,CAP-TABLE,CAP-TABLE-HACK
-; RUN: sed 's/addrspace(TLS)/addrspace(200)/' %s | %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=pcrel   -cheri-cap-tls-abi=cap-equiv -o - -show-mc-encoding -print-machineinstrs=expand-isel-pseudos 2>&1 | %cheri_FileCheck %s -check-prefixes=PCREL,COMMON,CAP-TABLE,CAP-EQUIV
+; RUN: sed 's/addrspace(TLS)/addrspace(200)/' %s | %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=pcrel -o - -show-mc-encoding -print-machineinstrs=expand-isel-pseudos 2>&1 | %cheri_FileCheck %s -check-prefixes=PCREL,COMMON,CAP-TABLE,CAP-EQUIV
+; RUN: sed 's/addrspace(TLS)/addrspace(200)/' %s | %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=plt     -o - -show-mc-encoding -print-machineinstrs=expand-isel-pseudos 2>&1 | %cheri_FileCheck %s -check-prefixes=PLT,COMMON,CAP-TABLE,CAP-EQUIV
+; RUN: sed 's/addrspace(TLS)/addrspace(200)/' %s | %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=fn-desc -o - -show-mc-encoding -print-machineinstrs=expand-isel-pseudos 2>&1 | %cheri_FileCheck %s -check-prefixes=FNDESC,COMMON,CAP-TABLE,CAP-EQUIV
+
+; Check that the old legacy TLS hack still works in cap-table mode
+; RUN: sed 's/addrspace(TLS)//' %s | %cheri_purecap_llc -verify-machineinstrs -cheri-cap-table-abi=pcrel -cheri-cap-tls-abi=legacy  -o - -show-mc-encoding -print-machineinstrs=expand-isel-pseudos 2>&1 | %cheri_FileCheck %s -check-prefixes=PCREL,COMMON,CAP-TABLE,CAP-TABLE-HACK
 
 target triple = "cheri-unknown-freebsd"
 
@@ -24,8 +26,8 @@ entry:
 ; MIPS:   Function Live Ins: $t9_64
 ; We currently fall back to tls via mips hwr $29 for all CHERI abis:
 ; LEGACY-HACK: Function Live Ins: $c12
-; PLT: Function Live Ins: $c12, $c26
-; FN-DESC: Function Live Ins: $c12, $c26
+; PLT: Function Live Ins: $c26
+; FN-DESC: Function Live Ins: $c26
 ; PCREL: Function Live Ins: $c12
 
 ; COMMON-LABEL: bb.0.entry:
@@ -71,10 +73,10 @@ entry:
 ; LEGACY-NEXT:  [[RESULT:%16]]:gpr64 = DADDu killed %5:gpr64, killed %15
 
 
-; PCREL, PLT and FNDESC only differ in the prologue since they all use the same hack:
-; PLT-NEXT: liveins: $c12, $c26
+; PCREL, PLT and FNDESC only differ in the prologue since they all use the same TLS mechanism:
+; PLT-NEXT: liveins: $c26
 ; PLT-NEXT:  %0:cherigpr = COPY $c26
-; FNDESC-NEXT: liveins: $c12, $c26
+; FNDESC-NEXT: liveins: $c26
 ; FNDESC-NEXT:  %0:cherigpr = COPY $c26
 ; PCREL needs to derive $cgp so it's not live-in:
 ; PCREL-NEXT: liveins: $c12
