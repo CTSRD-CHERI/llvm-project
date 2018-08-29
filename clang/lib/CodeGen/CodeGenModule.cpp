@@ -3091,10 +3091,12 @@ LangAS CodeGenModule::GetGlobalVarAddressSpace(const VarDecl *D) {
     // FIXME-cheri-qual: We currently can't handle thread-local storage
     unsigned CapAS = getTargetCodeGenInfo().getCHERICapabilityAS();
     if (Target.areAllPointersCapabilities()) { // Pure ABI
-      // CHERI TLS currently relies on mips rdhwr 29 which is AS0
-      return (D && (D->getTLSKind() != VarDecl::TLS_None) &&
-              !llvm::MCTargetOptions::cheriUsesCapabilityTls())
-             ? LangAS::cheri_tls : getLangASFromTargetAS(CapAS);
+      if (D && (D->getTLSKind() != VarDecl::TLS_None)) {
+        return getLangASFromTargetAS(
+            getTargetCodeGenInfo().getTlsAddressSpace());
+      }
+      // All non-TLS variables should be in the Cap AS
+      return getLangASFromTargetAS(CapAS);
     } else if (D && getAddressSpaceForType(D->getType()) == CapAS) {
       // In the hybrid ABI all globals are in AS 0 (even capabilities)
       return LangAS::Default; // XXXAR: FIXME: is this really  correct?

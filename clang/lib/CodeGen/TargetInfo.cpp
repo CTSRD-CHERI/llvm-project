@@ -6890,6 +6890,16 @@ public:
     const TargetInfo &Target = getABIInfo().getContext().getTargetInfo();
     return Target.areAllPointersCapabilities() ? getCHERICapabilityAS() : 0;
   }
+  unsigned getTlsAddressSpace() const override {
+    const TargetInfo &Target = getABIInfo().getContext().getTargetInfo();
+    if (Target.areAllPointersCapabilities()) {
+      // For the legacy ABI we still need rdhwr29 for TLS (which is AS0)
+      if (!llvm::MCTargetOptions::cheriUsesCapabilityTls())
+        return 0;
+      return getCHERICapabilityAS();
+    }
+    return getDefaultAS();
+  }
   unsigned getCHERICapabilityAS() const override {
     return 200;
   }

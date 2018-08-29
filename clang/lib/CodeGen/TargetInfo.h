@@ -229,6 +229,10 @@ public:
     return 0; // XXXAR: to keep code the same as upstream
 #endif
   }
+  /// The address space for thead_local variables in the IR. This should be the
+  /// same as getDefaultAS() but for CHERI we still place TLS vars in AS0 when
+  /// using the legacy TLS ABI.
+  virtual unsigned getTlsAddressSpace() const { return getDefaultAS(); }
 
   virtual bool cheriCapabilityAtomicNeedsLibcall(AtomicExpr::AtomicOp Op) const {
     return true;

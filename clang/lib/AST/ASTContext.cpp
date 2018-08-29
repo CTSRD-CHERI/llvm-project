@@ -10339,8 +10339,6 @@ uint64_t ASTContext::getTargetNullPointerValue(QualType QT) const {
 
 unsigned ASTContext::getTargetAddressSpace(LangAS AS) const {
   if (isTargetAddressSpace(AS)) {
-    if (AS == LangAS::cheri_tls)
-      return 0; // XXXAR: CHERI still needs rdhwr29 which is AS0
     return toTargetAddressSpace(AS);
   }
   if (getTargetInfo().areAllPointersCapabilities() && AS == LangAS::Default) {

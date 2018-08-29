@@ -48,10 +48,6 @@ enum class LangAS : unsigned {
   // specified by address space attributes __attribute__(address_space(n))).
   FirstTargetAddressSpace,
 
-  // Currently CHERI TLS variables need to be in AS0 otherwise we get Cannot
-  // select errors
-  // This is hack to force CodeGen to use AS0 even if default == AS200
-  cheri_tls = FirstTargetAddressSpace + 0xdead,
   // TODO: should we add this:
   // cheri_capability = FirstTargetAddressSpace + 200,
 };

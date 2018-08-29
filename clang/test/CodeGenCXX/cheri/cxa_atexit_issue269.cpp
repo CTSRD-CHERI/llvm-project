@@ -12,12 +12,12 @@ struct n {
 thread_local m f;
 thread_local n h;
 
-// CHECK: @f = thread_local global %struct.m zeroinitializer, align 1
-// CHECK: @h = thread_local global %struct.n zeroinitializer, align 1
-// CHECK: @__tls_guard = internal thread_local unnamed_addr global i1 false, align 1
+// CHECK: @f = thread_local addrspace(200) global %struct.m zeroinitializer, align 1
+// CHECK: @h = thread_local addrspace(200) global %struct.n zeroinitializer, align 1
+// CHECK: @__tls_guard = internal thread_local unnamed_addr addrspace(200) global i1 false, align 1
 
 void r() {
   // CHECK-LABEL: define void @_Z1rv()
-  // CHECK: load i1, i1* @__tls_guard, align 1
+  // CHECK: load i1, i1 addrspace(200)* @__tls_guard, align 1
   (void)f;
 }

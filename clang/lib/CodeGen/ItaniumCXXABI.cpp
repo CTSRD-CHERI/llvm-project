@@ -2512,9 +2512,10 @@ void ItaniumCXXABI::EmitThreadLocalInitFuncs(
         CGM.getModule(), CGM.Int8Ty, /*isConstant=*/false,
         llvm::GlobalVariable::InternalLinkage,
         llvm::ConstantInt::get(CGM.Int8Ty, 0), "__tls_guard", nullptr,
-        /* Needed to set address space (thread-local is set later) */
+        // Need to set address space and initially mark as not thread-local
+        // since that flag is set later.
         llvm::GlobalVariable::NotThreadLocal,
-        /* XXXAR: currently needs to be AS0 (https://github.com/CTSRD-CHERI/llvm/issues/269) */0);
+        CGM.getTargetCodeGenInfo().getTlsAddressSpace());
     Guard->setThreadLocal(true);
 
     CharUnits GuardAlign = CharUnits::One();
