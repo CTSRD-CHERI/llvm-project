@@ -5045,7 +5045,8 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
     if (!CHERIErrno) {
       CHERIErrno = new llvm::GlobalVariable(M, IntTy,
           /*isConstant*/false, llvm::GlobalValue::ExternalLinkage,
-          nullptr, "cheri_errno");
+          nullptr, "cheri_errno", nullptr, llvm::GlobalValue::NotThreadLocal,
+          CGM.getTargetCodeGenInfo().getTlsAddressSpace());
       CHERIErrno->setThreadLocal(true);
     }
     // FIXME: Don't hard code 4-byte alignment for int!
