@@ -1,11 +1,12 @@
 // REQUIRES: clang
 
 // RUN: llvm-readobj -r %S/../Inputs/kvm_pcpu.pico | FileCheck -check-prefix READOBJ %s
-// RUN: ld.lld -process-cap-relocs %S/../Inputs/kvm_pcpu.pico -shared --fatal-warnings -o %t.so 2>&1 | FileCheck %s -check-prefix WARN
+// RUN: ld.lld -process-cap-relocs %S/../Inputs/kvm_pcpu.pico -shared --no-fatal-warnings -o %t.so 2>&1 | FileCheck %s -check-prefix WARN
 // WARN-NOT: Could not find a real symbol for __cap_reloc against .data.rel.ro+0x0
 // WARN: Could not find a real symbol for __cap_reloc against .data.rel.ro+0x20
 // WARN: Could not find a real symbol for __cap_reloc against .data.rel.ro+0x40
 // WARN: Could not find a real symbol for __cap_reloc against .data.rel.ro+0x60
+// WARN: warning: Linking old object files without CheriABI variant flag.
 // RUN: llvm-readobj -r %t.so | FileCheck %s -check-prefix DYNAMIC-RELOCS
 // RUN: llvm-objdump -C %t.so | FileCheck %s
 

@@ -40,13 +40,13 @@ __attribute__((noreturn)) void exit(int code) {
 // CHECK-NEXT:            0x12003{{.+}} (environ@CAPTABLE) Base: 0x120040020 (environ+0) Length: 16 Perms: Object
 // CHECK-NEXT:            0x12003{{.+}} (__progname@CAPTABLE) Base: 0x120020000 (__progname+0) Length: 16 Perms: Object
 // CHECK-NEXT:            0x12003{{.+}} (_DYNAMIC@CAPTABLE) Base: 0x0 (<unknown symbol>+0) Length: 0 Perms: Object
-// CHECK-NEXT:            0x12003{{.+}} (atexit@CAPTABLE) Base: 0x1200106b8 (atexit+0) Length: 8 Perms: Function
-// CHECK-NEXT:            0x12003{{.+}} (_init_tls@CAPTABLE) Base: 0x1200106c0 (_init_tls+0) Length: 8 Perms: Function
-// CHECK-NEXT:            0x12003{{.+}} (crt_call_constructors@CAPTABLE) Base: 0x120010560 (crt_call_constructors+0) Length: 128 Perms: Function
-// CHECK-NEXT:            0x12003{{.+}} (handle_static_init@CAPTABLE.7) Base: 0x1200102f0 (handle_static_init+0) Length: 432 Perms: Function
-// CHECK-NEXT:            0x12003{{.+}} (main@CAPTABLE) Base: 0x1200106b0 (main+0) Length: 8 Perms: Function
-// CHECK-NEXT:            0x12003{{.+}} (exit@CAPTABLE) Base: 0x1200106c8 (exit+0) Length: 4 Perms: Function
-// CHECK-NEXT:            0x12003{{.+}} (finalizer@CAPTABLE.10) Base: 0x1200104a0 (finalizer+0) Length: 192 Perms: Function
+// CHECK-NEXT:            0x12003{{.+}} (atexit@CAPTABLE) Base: 0x1200106c8 (atexit+0) Length: 8 Perms: Function
+// CHECK-NEXT:            0x12003{{.+}} (_init_tls@CAPTABLE) Base: 0x1200106d0 (_init_tls+0) Length: 8 Perms: Function
+// CHECK-NEXT:            0x12003{{.+}} (crt_call_constructors@CAPTABLE) Base: 0x120010570 (crt_call_constructors+0) Length: 128 Perms: Function
+// CHECK-NEXT:            0x12003{{.+}} (handle_static_init@CAPTABLE.7) Base: 0x1200102f8 (handle_static_init+0) Length: 432 Perms: Function
+// CHECK-NEXT:            0x12003{{.+}} (main@CAPTABLE) Base: 0x1200106c0 (main+0) Length: 8 Perms: Function
+// CHECK-NEXT:            0x12003{{.+}} (exit@CAPTABLE) Base: 0x1200106d8 (exit+0) Length: 4 Perms: Function
+// CHECK-NEXT:            0x12003{{.+}} (finalizer@CAPTABLE.10) Base: 0x1200104a8 (finalizer+0) Length: 192 Perms: Function
 // WITHOUT_CTORS-NEXT:    0x12003{{.+}} (__preinit_array_start@CAPTABLE) Base: 0x120010000 (__fini_array_end+0) Length: 0 Perms: Object
 // WITHOUT_CTORS-NEXT:    0x12003{{.+}} (__preinit_array_end@CAPTABLE) Base: 0x120010000 (__fini_array_end+0) Length: 0 Perms: Object
 // WITHOUT_CTORS-NEXT:    0x12003{{.+}} (__init_array_start@CAPTABLE) Base: 0x120010000 (__fini_array_end+0) Length: 0 Perms: Object
