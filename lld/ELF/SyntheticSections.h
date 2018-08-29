@@ -841,7 +841,7 @@ public:
   MipsAbiFlagsSection(Elf_Mips_ABIFlags Flags);
   size_t getSize() const override { return sizeof(Elf_Mips_ABIFlags); }
   void writeTo(uint8_t *Buf) override;
-  unsigned getCheriAbiVariant() const;
+  llvm::Optional<unsigned> getCheriAbiVariant() const;
 
 private:
   Elf_Mips_ABIFlags Flags;

@@ -150,8 +150,12 @@ MipsAbiFlagsSection<ELFT> *MipsAbiFlagsSection<ELFT>::create() {
 }
 
 template <class ELFT>
-unsigned MipsAbiFlagsSection<ELFT>::getCheriAbiVariant() const {
+Optional<unsigned> MipsAbiFlagsSection<ELFT>::getCheriAbiVariant() const {
   auto CheriAbiVariant = Flags.isa_ext & Mips::AFL_EXT_CHERI_ABI_MASK;
+  if (!CheriAbiVariant) {
+    warn("Linking old object files without CheriABI variant flag.");
+    return None;
+  }
   switch (CheriAbiVariant) {
   case Mips::AFL_EXT_CHERI_ABI_LEGACY:
     return DF_MIPS_CHERI_ABI_LEGACY;
@@ -163,7 +167,7 @@ unsigned MipsAbiFlagsSection<ELFT>::getCheriAbiVariant() const {
     return DF_MIPS_CHERI_ABI_FNDESC;
   default:
     error("Unknown CHERI ABI variant " + Twine(CheriAbiVariant));
-    return 0;
+    return None;
   }
 }
 
@@ -1417,7 +1421,8 @@ template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
     if (Config->isCheriABI()) {
       uint32_t CheriFlags = 0;
       if (In<ELFT>::MipsAbiFlags)
-        CheriFlags |= In<ELFT>::MipsAbiFlags->getCheriAbiVariant();
+        if (auto ABI = In<ELFT>::MipsAbiFlags->getCheriAbiVariant())
+          CheriFlags |= *ABI;
       addInt(DT_MIPS_CHERI_FLAGS, CheriFlags);
     }
   }
