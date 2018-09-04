@@ -226,6 +226,14 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
           continue;
         }
 
+        // We can't fold $cnull since register 0 refers to DDC in loads and
+        // stores.
+        if ((IncOffset->getOpcode() == Mips::CIncOffset ||
+             IncOffset->getOpcode() == Mips::CIncOffsetImm) &&
+            IncOffset->getOperand(1).isReg() &&
+            IncOffset->getOperand(1).getReg() == Mips::CNULL)
+          continue;
+
         // If this is a CIncOffset with an immediate then try to fold it into
         // the operation.
         if (IncOffset->getOpcode() == Mips::CIncOffsetImm) {

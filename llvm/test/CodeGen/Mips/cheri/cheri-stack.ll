@@ -57,11 +57,11 @@ entry:
 ; CHECK: csc	$c17, $zero, [[C17OFFSET:([0-9]+|sp)]]($c11)
 ; $cfp <- $csp
 ; CHECK: cincoffset	$c24, $c11, $zero
-; CHECK: cincoffset	$c[[ALLOCACAP:([0-9]+|sp)]], $c24, 28
+; CHECK: cincoffset	$c[[ALLOCACAP:([0-9]+|sp)]], $c24, 12 
 ; CHECK: csetbounds	$c{{([0-9]+|sp)}}, $c[[ALLOCACAP]], 4
-; CHECK: csw	${{([0-9]+)}}, $zero, 12($c24)
+; CHECK: csw	${{([0-9]+)}}, $zero, 8($c24)
 ; CHECK: cjalr	$c12, $c17
-; CHECK: clw	${{([0-9]+)}}, $zero, 12($c24)
+; CHECK: clw	${{([0-9]+)}}, $zero, 8($c24)
 ; CHECK: cincoffset	$c11, $c24, $zero
 ; CHECK: clc	$c17, $zero, [[C17OFFSET]]($c11)
 ; CHECK: cincoffset	$c11, $c11, [[FRAMESIZE]]

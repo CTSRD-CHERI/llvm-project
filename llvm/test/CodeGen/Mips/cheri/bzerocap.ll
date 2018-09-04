@@ -13,10 +13,10 @@ define void @zero64(%struct.bigbuf addrspace(200)* nocapture %out) local_unnamed
 entry:
   %.compoundliteral.sroa.0.0..sroa_cast1 = bitcast %struct.bigbuf addrspace(200)* %out to i8 addrspace(200)*
   call void @llvm.memset.p200i8.i64(i8 addrspace(200)* align 16 %.compoundliteral.sroa.0.0..sroa_cast1, i8 0, i64 64, i1 false)
+; CHECK: csc	$c1, $zero, 0($c3)
 ; CHECK: csc	$c1, $zero, 48($c3)
 ; CHECK: csc	$c1, $zero, 32($c3)
 ; CHECK: csc	$c1, $zero, 16($c3)
-; CHECK: csc	$c1, $zero, 0($c3)
   ret void
 }
 
@@ -26,11 +26,11 @@ define void @zero65(%struct.bigbuf addrspace(200)* nocapture %out) local_unnamed
 entry:
   %.compoundliteral.sroa.0.0..sroa_cast1 = bitcast %struct.bigbuf addrspace(200)* %out to i8 addrspace(200)*
   call void @llvm.memset.p200i8.i64(i8 addrspace(200)* align 16 %.compoundliteral.sroa.0.0..sroa_cast1, i8 0, i64 65, i1 false)
+; CHECK: csc	$c1, $zero, 0($c3)
 ; CHECK: csb	$zero, $zero, 64($c3)
 ; CHECK: csc	$c1, $zero, 48($c3)
 ; CHECK: csc	$c1, $zero, 32($c3)
 ; CHECK: csc	$c1, $zero, 16($c3)
-; CHECK: csc	$c1, $zero, 0($c3)
   ret void
 }
 
@@ -40,11 +40,11 @@ define void @zero66(%struct.bigbuf addrspace(200)* nocapture %out) local_unnamed
 entry:
   %.compoundliteral.sroa.0.0..sroa_cast1 = bitcast %struct.bigbuf addrspace(200)* %out to i8 addrspace(200)*
   call void @llvm.memset.p200i8.i64(i8 addrspace(200)* align 16 %.compoundliteral.sroa.0.0..sroa_cast1, i8 0, i64 66, i1 false)
+; CHECK: csc	$c1, $zero, 0($c3)
 ; CHECK: csh	$zero, $zero, 64($c3)
 ; CHECK: csc	$c1, $zero, 48($c3)
 ; CHECK: csc	$c1, $zero, 32($c3)
 ; CHECK: csc	$c1, $zero, 16($c3)
-; CHECK: csc	$c1, $zero, 0($c3)
   ret void
 }
 

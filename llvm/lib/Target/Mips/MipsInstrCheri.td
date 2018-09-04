@@ -392,10 +392,20 @@ def : Pat<(ptradd CheriOpnd:$r2, simm11s0Pattern:$imm),
 def : Pat<(ptradd CheriOpnd:$r2, GPR64Opnd:$r3),
           (CIncOffset $r2, $r3)>;
 // Int to pointer in address space 0
+let Predicates=[IsCHERIABI] in {
+def : Pat<(inttoptr simm11s0Pattern:$imm),
+          (CIncOffsetImm CNULL, simm11s0Pattern: $imm)>;
+def : Pat<(inttoptr (i64 0)),
+          (CFromPtr DDC, ZERO_64)>;
+def : Pat<(inttoptr GPR64Opnd:$rt),
+          (CIncOffset CNULL, $rt)>;
+}
+let Predicates=[NotCHERIABI] in {
 def : Pat<(inttoptr GPR64Opnd:$rt),
           (CFromPtr DDC, $rt)>;
 def : Pat<(inttoptr GPR32:$rt),
           (CFromPtr32 DDC, $rt)>;
+}
 def : Pat<(ptrtoint CheriOpnd:$rt),
           (CToPtr DDC, $rt)>;
 def : Pat<(ptrtoint CheriOpnd:$rt),
@@ -596,6 +606,7 @@ def : InstAlias<"cgetnull $dst", (CFromPtr CheriOpnd:$dst, DDC, ZERO_64), 1>;
 // def : InstAlias<"cfromint $dst, $src", (CIncOffset CheriOpnd:$dst, CNULL, GPR64Opnd:$src), 1>;
 
 // So that we can use ptr -> int without a warning that $c0 access is deprecated in .s files
+def : Pat<(int_cheri_cap_from_ddc GPR64Opnd:$addr), (CFromPtr DDC, $addr)>;
 def : InstAlias<"cfromddc $dst, $src", (CFromPtr CheriOpnd:$dst, DDC, GPR64Opnd:$src), 1>;
 
 ////////////////////////////////////////////////////////////////////////////////

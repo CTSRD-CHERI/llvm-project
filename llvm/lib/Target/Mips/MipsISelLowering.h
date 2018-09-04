@@ -439,7 +439,7 @@ extern bool LargeCapTable;
       SDValue Tgt = DAG.getNode(MipsISD::Wrapper, DL, Ty, getGlobalReg(DAG, Ty, IsForTls),
                                 getTargetNode(N, Ty, DAG, Flag));
       if (ABI.IsCheriPureCap())
-        Tgt = DAG.getNode(ISD::INTTOPTR, DL, CapType, Tgt);
+        Tgt = cFromDDC(DAG, DL, Tgt);
       return DAG.getLoad(Ty, DL, Chain, Tgt, PtrInfo);
     }
 
@@ -748,6 +748,8 @@ extern bool LargeCapTable;
 
     SDValue setPccOffset(SelectionDAG &DAG, const SDLoc DL,
                          SDValue Callee) const;
+
+    SDValue cFromDDC(SelectionDAG &DAG, const SDLoc DL, SDValue Offset) const;
 
     bool CanLowerReturn(CallingConv::ID CallConv, MachineFunction &MF,
                         bool isVarArg,

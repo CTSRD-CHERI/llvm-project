@@ -143,6 +143,8 @@ def int_cheri_cap_to_pointer:
   Intrinsic<[llvm_i64_ty], [llvm_fatptr_ty, llvm_fatptr_ty], [IntrNoMem]>;
 def int_cheri_cap_from_pointer:
   Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_i64_ty], [IntrNoMem]>;
+def int_cheri_cap_from_ddc:
+  Intrinsic<[llvm_fatptr_ty], [llvm_i64_ty], [IntrNoMem]>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Building capabilities from untagged data

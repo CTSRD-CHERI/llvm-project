@@ -2214,7 +2214,6 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
     }
   }
 
-  EVT AddrTy = Ty;
   if (isCheriPointer(GV->getType(), &DAG.getDataLayout()))
     Ty = MVT::i64;
   SDValue Global;
@@ -2269,7 +2268,7 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
       // Derive function pointers from PCC instead of $ddc
       Global = setPccOffset(DAG, SDLoc(N), Global);
     } else {
-      Global = DAG.getNode(ISD::INTTOPTR, SDLoc(N), AddrTy, Global);
+      Global = cFromDDC(DAG, SDLoc(N), Global);
     }
     StringRef Name = GV->getName();
     if (!SkipGlobalBounds &&
@@ -3921,6 +3920,12 @@ SDValue MipsTargetLowering::setPccOffset(SelectionDAG &DAG, const SDLoc DL,
   auto PCC = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, CapType, GetPCC);
   return DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, CapType, SetOffset, PCC,
                      Offset);
+}
+
+SDValue MipsTargetLowering::cFromDDC(SelectionDAG &DAG, const SDLoc DL,
+                                     SDValue Offset) const {
+  auto CFromDDC = DAG.getConstant(Intrinsic::cheri_cap_from_ddc, DL, MVT::i64);
+  return DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, CapType, CFromDDC, Offset);
 }
 
 /// LowerCallResult - Lower the result values of a call into the
