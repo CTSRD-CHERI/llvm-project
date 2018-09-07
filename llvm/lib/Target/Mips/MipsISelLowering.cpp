@@ -2318,12 +2318,21 @@ SDValue MipsTargetLowering::lowerBlockAddress(SDValue Op,
     if (N->getBlockAddress()->getFunction() != &MF.getFunction())
       report_fatal_error(
           "Should only get a blockaddress for the current function");
-    // FIXME: derive from C12 instead of loading from the captable
-    auto PtrInfo = MachinePointerInfo::getCapTable(DAG.getMachineFunction());
-    // TODO: we don't need a capbility here, a vaddr is good enough!
-    auto BBCap = getFromCapTable(true, N, SDLoc(N), Ty, DAG, DAG.getEntryNode(),
-                                 PtrInfo);
-    return convertToPCCDerivedCap(BBCap, SDLoc(N), DAG);
+    auto DL = SDLoc(N);
+    // FIXME: will this always generate the three instructions here without
+    // inserting anything in between?
+    auto BA = N->getBlockAddress();
+    SDValue BAHi = DAG.getTargetBlockAddress(BA, MVT::i64, N->getOffset() + 8,
+                                             MipsII::MO_PCREL_HI);
+    SDValue BALo = DAG.getTargetBlockAddress(BA, MVT::i64, N->getOffset() + 4,
+                                             MipsII::MO_PCREL_LO);
+    SDValue MNHi =
+        SDValue(DAG.getMachineNode(Mips::LUi64, DL, MVT::i64, BAHi), 0);
+    SDValue OffsetFromPCC =
+        SDValue(DAG.getMachineNode(Mips::DADDiu, DL, MVT::i64, MNHi, BALo), 0);
+    auto GetPCC = DAG.getConstant(Intrinsic::cheri_pcc_get, DL, MVT::i64);
+    auto PCC = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, CapType, GetPCC);
+    return DAG.getPointerAdd(DL, PCC, OffsetFromPCC);
   }
   // XXXAR: keep supporting the legacy ABI for now
   if (ABI.IsCheriPureCap())
