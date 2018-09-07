@@ -118,6 +118,12 @@ MCOperand MipsMCInstLower::LowerSymbolOperand(const MachineOperand &MO,
   case MipsII::MO_CALL_LO16:
     TargetKind = MipsMCExpr::MEK_CALL_LO16;
     break;
+  case MipsII::MO_PCREL_HI:
+    TargetKind = MipsMCExpr::MEK_PCREL_HI16;
+    break;
+  case MipsII::MO_PCREL_LO:
+    TargetKind = MipsMCExpr::MEK_PCREL_LO16;
+    break;
   case MipsII::MO_CAPTAB11:
     TargetKind = MipsMCExpr::MEK_CAPTABLE11;
     break;

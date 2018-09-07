@@ -91,6 +91,11 @@ namespace MipsII {
     MO_CALL_HI16,
     MO_CALL_LO16,
 
+    /// MO_PCREL_HI/LO - Represents the hi or low part of an PC-relative symbol
+    /// address.
+    MO_PCREL_HI,
+    MO_PCREL_LO,
+
     /// CHERI capability relocations:
     MO_CAPTAB11,       // offset into the capability table
     MO_CAPTAB_CALL11,  // same as above but only for calls

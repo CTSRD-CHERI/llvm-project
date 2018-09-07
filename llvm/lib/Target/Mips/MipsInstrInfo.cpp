@@ -859,6 +859,9 @@ MipsInstrInfo::getSerializableDirectMachineOperandTargetFlags() const {
     {MO_CALL_HI16,    "mips-call-hi16"},
     {MO_CALL_LO16,    "mips-call-lo16"},
 
+    { MO_PCREL_LO,  "mips-pcrel-lo16" },
+    { MO_PCREL_HI,  "mips-pcrel-hi16" },
+
     { MO_CAPTAB11,         "mips-captable11" },
     { MO_CAPTAB_CALL11,    "mips-captable11-call" },
     { MO_CAPTAB20,         "mips-captable20" },
