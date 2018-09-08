@@ -904,9 +904,13 @@ def : CapTableWrapperPat<tjumptable>;
 // TODO: add test cases for these:
 def : CapTableWrapperPat<tconstpool>;
 def : CapTableWrapperPat<texternalsym>;
-def : CapTableWrapperPat<tblockaddress>;
 
 def : Pat<(load GPR64Opnd:$rt),
           (LOADCAP GPR64Opnd:$rt, (i64 0), DDC)>;
 def : Pat<(load CheriOpnd:$cb),
           (LOADCAP ZERO_64, (i64 0), CheriOpnd:$cb)>;
+
+
+def PseudoPccRelativeAddress : CheriPseudo<(outs CheriOpnd: $cd), (ins CheriOpnd: $addr),
+                                           "#PseudoPccRelBlockAddress $cd, $addr", []>;
+def PseudoPccRelativeAddressPostRA : PseudoSE<(outs CheriOpnd:$dst), (ins CheriOpnd:$addr), []>;

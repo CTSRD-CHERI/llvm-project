@@ -1518,6 +1518,24 @@ MipsTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
   case Mips::PseudoSELECTFP_T_D32:
   case Mips::PseudoSELECTFP_T_D64:
     return emitPseudoSELECT(MI, BB, true, Mips::BC1T);
+
+  case Mips::PseudoPccRelativeAddress: {
+    // Since we need to ensure that these instrs are written together we need to
+    // bundle them. However, this is only possible after register allocation so
+    // we convert this to another pseudo instruction first.
+    MachineFunction *MF = BB->getParent();
+    MachineRegisterInfo &RegInfo = MF->getRegInfo();
+    const TargetInstrInfo *TII = Subtarget.getInstrInfo();
+    DebugLoc DL = MI.getDebugLoc();
+    unsigned Scratch = RegInfo.createVirtualRegister(&Mips::GPR64RegClass);
+    BuildMI(*BB, &MI, DL, TII->get(Mips::PseudoPccRelativeAddressPostRA))
+        .add(MI.getOperand(0))
+        .add(MI.getOperand(1))
+        .addReg(Scratch, RegState::Define | RegState::EarlyClobber |
+                             RegState::Implicit | RegState::Dead);
+    MI.eraseFromParent();
+    return BB;
+  }
   }
 }
 
@@ -2318,21 +2336,14 @@ SDValue MipsTargetLowering::lowerBlockAddress(SDValue Op,
     if (N->getBlockAddress()->getFunction() != &MF.getFunction())
       report_fatal_error(
           "Should only get a blockaddress for the current function");
-    auto DL = SDLoc(N);
-    // FIXME: will this always generate the three instructions here without
-    // inserting anything in between?
-    auto BA = N->getBlockAddress();
-    SDValue BAHi = DAG.getTargetBlockAddress(BA, MVT::i64, N->getOffset() + 8,
-                                             MipsII::MO_PCREL_HI);
-    SDValue BALo = DAG.getTargetBlockAddress(BA, MVT::i64, N->getOffset() + 4,
-                                             MipsII::MO_PCREL_LO);
-    SDValue MNHi =
-        SDValue(DAG.getMachineNode(Mips::LUi64, DL, MVT::i64, BAHi), 0);
-    SDValue OffsetFromPCC =
-        SDValue(DAG.getMachineNode(Mips::DADDiu, DL, MVT::i64, MNHi, BALo), 0);
-    auto GetPCC = DAG.getConstant(Intrinsic::cheri_pcc_get, DL, MVT::i64);
-    auto PCC = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, CapType, GetPCC);
-    return DAG.getPointerAdd(DL, PCC, OffsetFromPCC);
+    auto BANode = DAG.getTargetBlockAddress(N->getBlockAddress(), MVT::i64,
+                                            N->getOffset());
+    // TODO: add the offset as another node?
+    assert(N->getOffset() == 0 && "nonzero offset is not supported");
+    // auto Offset = DAG.getConstant(N->getOffset(), SDLoc(N), MVT::i64);
+    return SDValue(DAG.getMachineNode(Mips::PseudoPccRelativeAddress, SDLoc(N),
+                                      CapType, BANode),
+                   0);
   }
   // XXXAR: keep supporting the legacy ABI for now
   if (ABI.IsCheriPureCap())

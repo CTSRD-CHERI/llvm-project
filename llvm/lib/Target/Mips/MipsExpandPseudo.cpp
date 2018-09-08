@@ -68,7 +68,9 @@ namespace {
     bool expandAtomicBinOpSubword(MachineBasicBlock &BB,
                                   MachineBasicBlock::iterator I,
                                   MachineBasicBlock::iterator &NMBBI);
-
+    bool expandPccRelativeAddr(MachineBasicBlock &BB,
+                               MachineBasicBlock::iterator I,
+                               MachineBasicBlock::iterator &NMBBI);
     bool expandMI(MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
                   MachineBasicBlock::iterator &NMBB);
     bool expandMBB(MachineBasicBlock &MBB);
@@ -550,6 +552,37 @@ bool MipsExpandPseudo::expandAtomicBinOpSubword(
   return true;
 }
 
+bool MipsExpandPseudo::expandPccRelativeAddr(
+    MachineBasicBlock &BB, MachineBasicBlock::iterator I,
+    MachineBasicBlock::iterator &NMBBI) {
+  DebugLoc DL = I->getDebugLoc();
+  // TODO: do we want to handle other kinds of instructions?
+  assert(I->getOperand(1).isBlockAddress() && "Only blockaddr handled for now");
+  auto BlockAddr = I->getOperand(1).getBlockAddress();
+  unsigned ResultReg = I->getOperand(0).getReg();
+  unsigned ScratchReg = I->getOperand(2).getReg();
+  auto BundleStart =
+      BuildMI(BB, I, DL, TII->get(Mips::CGetPCC), ResultReg).getInstr();
+  BuildMI(BB, I, DL, TII->get(Mips::LUi64))
+      .addReg(ScratchReg, RegState::Define)
+      .addBlockAddress(BlockAddr, 4, MipsII::MO_PCREL_HI);
+  BuildMI(BB, I, DL, TII->get(Mips::DADDiu))
+      .addReg(ScratchReg, RegState::Define)
+      .addReg(ScratchReg, RegState::Kill)
+      .addBlockAddress(BlockAddr, 8, MipsII::MO_PCREL_LO);
+  BuildMI(BB, I, DL, TII->get(Mips::CIncOffset), ResultReg)
+      .addReg(ResultReg, RegState::Kill)
+      .addReg(ScratchReg, RegState::Kill);
+
+  MachineBasicBlock::instr_iterator BundleIt(BundleStart);
+  // Note: the final CIncOffset doesn't need to be in the bundle but I think
+  // this makes it clearer when reading the MIR
+  finalizeBundle(BB, BundleIt, std::next(BundleIt, 4));
+  I->eraseFromParent();
+
+  return true;
+}
+
 bool MipsExpandPseudo::expandAtomicBinOp(MachineBasicBlock &BB,
                                          MachineBasicBlock::iterator I,
                                          MachineBasicBlock::iterator &NMBBI,
@@ -832,7 +865,8 @@ bool MipsExpandPseudo::expandMI(MachineBasicBlock &MBB,
   case Mips::CAP_ATOMIC_CMP_SWAP_I64_POSTRA:
   case Mips::CAP_ATOMIC_CMP_SWAP_CAP_POSTRA:
     return expandAtomicCmpSwap(MBB, MBBI, NMBB, /*IsCapOp=*/true);
-
+  case Mips::PseudoPccRelativeAddressPostRA:
+    return expandPccRelativeAddr(MBB, MBBI, NMBB);
   default:
     return Modified;
   }

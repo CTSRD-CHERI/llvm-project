@@ -31,23 +31,18 @@ indirectgoto:                                     ; preds = %entry
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset $c11, $c11, -16
 ; CHECK-NEXT:    .cfi_def_cfa_offset 16
-; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(addrof_label_in_local)))
-; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(addrof_label_in_local)))
-; CHECK-NEXT:    cincoffset $c26, $c12, $1
-; Fetch label address from captable:
-; CHECK-NEXT:    clcbi $c1, %captab20(.Ltmp0)($c26)
-; CHECK-NEXT:    cincoffset $c2, $c11, 0
-; CHECK-NEXT:    csetbounds $c2, $c2, 16
-; Turn the global (STT_NOTYPE) cap into a pcc derived one
-; CHECK-NEXT:    cgetpcc $c3
-; CHECK-NEXT:    csub $1, $c1, $c3
-; CHECK-NEXT:    cincoffset $c1, $c3, $1
-; CHECK-NEXT:    cjr $c1
-; CHECK-NEXT:    csc $c1, $zero, 0($c2)
+; CHECK-NEXT:    cincoffset $c1, $c11, 0
+; CHECK-NEXT:    csetbounds $c1, $c1, 16
+; Generate a pc-relative blockaddress:
+; CHECK-NEXT:    cgetpcc $c2
+; CHECK-NEXT:    lui $1, %pcrel_hi(.Ltmp0+4)
+; CHECK-NEXT:    daddiu $1, $1, %pcrel_lo(.Ltmp0+8)
+; CHECK-NEXT:    cincoffset $c2, $c2, $1
+; CHECK-NEXT:    cjr $c2
+; CHECK-NEXT:    csc $c2, $zero, 0($c1)
 ; CHECK-NEXT:  .Ltmp0: # Block address taken
 ; CHECK-NEXT:  .LBB0_1: # %label2
 ; CHECK-NEXT:    addiu $2, $zero, 2
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    cincoffset $c11, $c11, 16
-;
 

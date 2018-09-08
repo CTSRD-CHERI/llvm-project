@@ -221,6 +221,10 @@ void MipsAsmPrinter::EmitInstruction(const MachineInstr *MI) {
     if (emitPseudoExpansionLowering(*OutStreamer, &*I))
       continue;
 
+    // FIXME: not sure this is correct
+    if (I->getOpcode() == Mips::BUNDLE)
+      continue;
+
     if (I->getOpcode() == Mips::PseudoReturn ||
         I->getOpcode() == Mips::PseudoReturn64 ||
         I->getOpcode() == Mips::PseudoReturnCap ||
