@@ -1,7 +1,6 @@
-; RUN: %cheri_purecap_llc -o - %s -O0 | FileCheck %s -check-prefixes CHECK
-; RUN: %cheri_purecap_llc -o - %s -O0 -filetype=obj | llvm-objdump -r -d - | FileCheck %s -check-prefix OBJ
-; RUN: %cheri128_purecap_llc -o - %s | FileCheck %s -check-prefixes ASM,ASM128
-; RUN: %cheri256_purecap_llc -o - %s | FileCheck %s -check-prefixes ASM,ASM256
+; RUN: %cheri_llc -verify-machineinstrs -target-abi purecap -relocation-model=static -o - %s -O0 | FileCheck %s -check-prefixes CHECK
+; RUN: %cheri_llc -verify-machineinstrs -target-abi purecap -relocation-model=static -o - %s -O0 -filetype=obj | llvm-objdump -r -d - | FileCheck %s -check-prefix OBJ
+; RUN: %cheri128_purecap_llc -o - %s | %cheri_FileCheck %s -check-prefix ASM
 
 ; FIXME: Why is LLVM generating an invalid cgetpccsetoffset
 ; CHECK-NOT: cgetpccsetoffset        $c12, test
@@ -55,8 +54,7 @@ for.end:                                          ; preds = %for.cond
 ; ASM-DAG: daddiu  [[COUNT_REG:\$[0-9]+]], $zero, 32
 ; ASM: .LBB0_1:
 ; ASM: cmove     [[SAVEREG:\$c[0-9]+]], $c11
-; ASM256: daddiu  $1, [[LOOP_REG]], 31
-; ASM128: daddiu  $1, [[LOOP_REG]], 15
+; ASM: daddiu  $1, [[LOOP_REG]], [[@EXPR $CAP_SIZE - 1]]
 ; ASM: and     $1, $1, $18
 ; ASM: dsubu   $1, $sp, $1
 ; ASM: move     $sp, $1
