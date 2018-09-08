@@ -46,3 +46,17 @@ indirectgoto:                                     ; preds = %entry
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    cincoffset $c11, $c11, 16
 
+; DUMP-LABEL: addrof_label_in_local:
+; DUMP-NEXT:        0:	4a 6b 5f f0 	cincoffset	$c11, $c11, -16
+; DUMP-NEXT:        4:	4a 61 58 00 	cincoffset	$c1, $c11, 0
+; DUMP-NEXT:        8:	4a 81 08 10 	csetbounds	$c1, $c1, 16
+; DUMP-NEXT:        c:	48 02 07 ff 	cgetpcc	$c2
+; DUMP-NEXT:       10:	3c 01 00 00 	lui	$1, 0
+; DUMP-NEXT:       14:	64 21 00 18 	daddiu	$1, $1, [[PCREL_LOWER:24]]
+; DUMP-NEXT:       18:	48 02 10 51 	cincoffset	$c2, $c2, $1
+; DUMP-NEXT:       1c:	48 02 1f ff 	cjr	$c2
+; DUMP-NEXT:       20:	f8 41 00 00 	csc	$c2, $zero, 0($c1)
+; Check that the jump target address is correct
+; DUMP-NEXT:       [[@EXPR hex(0xc + PCREL_LOWER)]]:	24 02 00 02 	addiu	$2, $zero, 2
+; DUMP-NEXT:       28:	48 11 1f ff 	cjr	$c17
+; DUMP-NEXT:       2c:	4a 6b 58 10 	cincoffset	$c11, $c11, 16
