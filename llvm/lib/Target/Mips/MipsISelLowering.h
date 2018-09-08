@@ -526,27 +526,22 @@ extern bool LargeCapTable;
     }
 
     template <class NodeTy>
-    SDValue getFromCapTable(bool UseCallReloc, NodeTy *N, const SDLoc &DL,
-                            EVT Ty, SelectionDAG &DAG, SDValue Chain,
-                            const MachinePointerInfo &PtrInfo) const {
-      // FIXME: in the future it would be good to inline local function pointers
-      // into the capability table directly (right now the value is a
-      // void () addrspace(200)* addrspace(200)* instead of a
-      // void () addrspace(200)*
-      // llvm::errs() << "is fn ptr: " << IsFnPtr << "\n";
-      if (LargeCapTable) {
-        auto HiReloc =
-          UseCallReloc ? MipsII::MO_CAPTAB_CALL_HI16 : MipsII::MO_CAPTAB_HI16;
-        auto LoReloc =
-          UseCallReloc ? MipsII::MO_CAPTAB_CALL_LO16 : MipsII::MO_CAPTAB_LO16;
-        // (Ab)use GotHi since it already exists and does the right thing
-        return _getGlobalCapBigImmediate(N, SDLoc(N), Ty, DAG, HiReloc, LoReloc,
-                                         Chain, &PtrInfo, true, MipsISD::GotHi);
-      } else {
-        auto Reloc = UseCallReloc ? MipsII::MO_CAPTAB_CALL20 : MipsII::MO_CAPTAB20;
-        return _getGlobalCapSmallImmediate(N, SDLoc(N), Ty, DAG, Reloc, Chain,
-                                           &PtrInfo, true);
-      }
+    SDValue getCallTargetFromCapTable(NodeTy *N, const SDLoc &DL, EVT Ty,
+                                      SelectionDAG &DAG, SDValue Chain,
+                                      const MachinePointerInfo &PtrInfo) const {
+      return getFromCapTable(N, DL, Ty, DAG, Chain, PtrInfo,
+                             MipsII::MO_CAPTAB_CALL_HI16,
+                             MipsII::MO_CAPTAB_CALL_LO16,
+                             MipsII::MO_CAPTAB_CALL20, MipsISD::GotHi);
+    }
+
+    template <class NodeTy>
+    SDValue getDataFromCapTable(NodeTy *N, const SDLoc &DL, EVT Ty,
+                                SelectionDAG &DAG, SDValue Chain,
+                                const MachinePointerInfo &PtrInfo) const {
+      return getFromCapTable(N, DL, Ty, DAG, Chain, PtrInfo,
+                             MipsII::MO_CAPTAB_HI16, MipsII::MO_CAPTAB_LO16,
+                             MipsII::MO_CAPTAB20, MipsISD::GotHi);
     }
 
     template <class NodeTy>

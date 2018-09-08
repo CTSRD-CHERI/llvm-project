@@ -2200,10 +2200,22 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
     EVT GlobalTy = Ty.isFatPointer() ? Ty : CapType;
     bool IsFnPtr =
       GVTy->isPointerTy() && GVTy->getPointerElementType()->isFunctionTy();
+
     if (IsFnPtr) {
-      // Functions don't have addres spaces yet which is why this hack is needed
-      // See https://reviews.llvm.org/D37054
-      CanUseCapTable = true;
+      // FIXME: in the future it would be good to inline local function pointers
+      // into the capability table directly (right now the value is a
+      // void () addrspace(200)* addrspace(200)* instead of a
+      // void () addrspace(200)*
+      // llvm::errs() << "is fn ptr: " << IsFnPtr << "\n";
+
+      if (!CanUseCapTable) {
+        // Functions didn't have address spaces yet which is why this hack was
+        // needed. See https://reviews.llvm.org/D37054
+        // Should no longer be the case now so lets report and error
+        report_fatal_error("Found function " + GV->getName() +
+                           " not in AS200. Compiling old IR?");
+        CanUseCapTable = true;
+      }
     }
     if (!CanUseCapTable && !GV->isThreadLocal()) {
       if (GVTy->getPointerAddressSpace() == 0) {
@@ -2217,7 +2229,8 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
     if (CanUseCapTable) {
       // FIXME: or should this be something else? like in lowerCall?
       auto PtrInfo = MachinePointerInfo::getCapTable(DAG.getMachineFunction());
-      auto Addr = getFromCapTable(IsFnPtr, N, SDLoc(N), GlobalTy, DAG, DAG.getEntryNode(), PtrInfo);
+      auto Addr = getDataFromCapTable(N, SDLoc(N), GlobalTy, DAG,
+                                      DAG.getEntryNode(), PtrInfo);
       // Also handle the case where a ptrtoint is used on a global:
       if (Ty.isFatPointer())
         return Addr;
@@ -2531,8 +2544,8 @@ lowerJumpTable(SDValue Op, SelectionDAG &DAG) const
 
   if (ABI.UsesCapabilityTable()) {
     auto PtrInfo = MachinePointerInfo::getCapTable(DAG.getMachineFunction());
-    return getFromCapTable(false, N, SDLoc(N), CapType, DAG, DAG.getEntryNode(),
-                           PtrInfo);
+    return getDataFromCapTable(N, SDLoc(N), CapType, DAG, DAG.getEntryNode(),
+                               PtrInfo);
   }
 
   if (!isPositionIndependent())
@@ -3199,9 +3212,8 @@ SDValue MipsTargetLowering::lowerBR_JT(SDValue Op,
   assert(isPowerOf2_64(EntrySize));
   // FIXME: or should this be something else? like in lowerCall?
   auto PtrInfo = MachinePointerInfo::getCapTable(DAG.getMachineFunction());
-  SDValue Jumptable =
-      getFromCapTable(false, cast<JumpTableSDNode>(Table.getNode()), dl, PTy,
-                      DAG, Chain, PtrInfo);
+  SDValue Jumptable = getDataFromCapTable(
+      cast<JumpTableSDNode>(Table.getNode()), dl, PTy, DAG, Chain, PtrInfo);
   // TODO: use a mul here and let the code later on convert it to a shift?
   Index = DAG.getNode(ISD::SHL, dl, MVT::i64, Index,
                       DAG.getConstant(Log2_32(EntrySize), dl, MVT::i64));
@@ -3821,8 +3833,8 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee)) {
     const GlobalValue *GV = G->getGlobal();
     if (CheriCapTable) {
-      Callee = getFromCapTable(true, G, DL, CapType, DAG, Chain,
-                               FuncInfo->callPtrInfo(GV));
+      Callee = getCallTargetFromCapTable(G, DL, CapType, DAG, Chain,
+                                         FuncInfo->callPtrInfo(GV));
       IsCallReloc = true;
     } else if (IsPIC) {
       InternalLinkage = GV->hasInternalLinkage();
@@ -3849,8 +3861,8 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     const char *Sym = S->getSymbol();
 
     if (CheriCapTable) {
-      Callee = getFromCapTable(true, S, DL, CapType, DAG, Chain,
-                               FuncInfo->callPtrInfo(Sym));
+      Callee = getCallTargetFromCapTable(S, DL, CapType, DAG, Chain,
+                                         FuncInfo->callPtrInfo(Sym));
       IsCallReloc = true;
     } else if (!IsPIC) // static
       Callee = DAG.getTargetExternalSymbol(
