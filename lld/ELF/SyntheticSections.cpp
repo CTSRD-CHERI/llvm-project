@@ -1425,9 +1425,9 @@ template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
           CheriFlags |= *ABI;
       addInt(DT_MIPS_CHERI_FLAGS, CheriFlags);
     }
-    if (InX::CheriCapTable && !In<ELFT>::CheriCapTable->empty()) {
-      addInSec(DT_MIPS_CHERI_CAPTABLE, In<ELFT>::CheriCapTable);
-      addSize(DT_MIPS_CHERI_CAPTABLESSZ, In<ELFT>::CheriCapTable->getParent());
+    if (InX::CheriCapTable && !InX::CheriCapTable->empty()) {
+      addInSec(DT_MIPS_CHERI_CAPTABLE, InX::CheriCapTable);
+      addSize(DT_MIPS_CHERI_CAPTABLESZ, InX::CheriCapTable->getParent());
     }
     if (In<ELFT>::CapRelocs && !In<ELFT>::CapRelocs->empty()) {
       addInSec(DT_MIPS_CHERI___CAPRELOCS, In<ELFT>::CapRelocs);
