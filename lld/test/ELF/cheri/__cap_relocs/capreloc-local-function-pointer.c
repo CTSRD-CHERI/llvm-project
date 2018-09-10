@@ -107,10 +107,10 @@ void __start(void) {}
 
 
 // DUMP-CAPRELOCS-LABEL: CHERI __cap_relocs [
-// STATIC-NEXT:                     0x120020000 (__error_selector) Base: 0x1200100e0 (__error_unthreaded+0) Length: 68 Perms: Function
+// STATIC-NEXT:                     0x120020000 (__error_selector) Base: 0x1200100{{.+}} (__error_unthreaded+0) Length: 68 Perms: Function
 // PIE exe and shlib should have dynamic relocations and only the offset values
-// DYNAMIC-NEXT:                    0x020000 (__error_selector) Base: 0x100e0 (__error_unthreaded+0) Length: 68 Perms: Function
+// DYNAMIC-NEXT:                    0x020000 (__error_selector) Base: 0x100{{.+}} (__error_unthreaded+0) Length: 68 Perms: Function
 // The external capsizefix does okay static:
-// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x120020000 (__error_selector) Base: 0x1200100e0 (__error_unthreaded+0) Length: 68 Perms: Function
+// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x120020000 (__error_selector) Base: 0x1200100{{.+}} (__error_unthreaded+0) Length: 68 Perms: Function
 // DUMP-CAPRELOCS-NEXT: ]
 
