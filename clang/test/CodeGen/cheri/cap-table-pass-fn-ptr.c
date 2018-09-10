@@ -9,10 +9,11 @@ void snprintf_func(void) {
   // CHECK:       %call = tail call i32 @a(void () addrspace(200)* nonnull @snprintf_func) #2
 }
 
-// ASM:      clcbi	$c3, %capcall20(snprintf_func)($c26)
+
+// This should use captab20 for loading the address of snprintf_func
+// ASM:      clcbi	$c3, %captab20(snprintf_func)($c26)
 // ASM-NEXT: clcbi $c12, %capcall20(a)($c26)
 // ASM-NEXT: cjalr	$c12, $c17
 // ASM-NEXT: nop
 
-// Checking the asm output should be done in LLVM but the IR will probably change
 
