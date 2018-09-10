@@ -1425,12 +1425,16 @@ template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
           CheriFlags |= *ABI;
       addInt(DT_MIPS_CHERI_FLAGS, CheriFlags);
     }
+    if (InX::CheriCapTable && !In<ELFT>::CheriCapTable->empty()) {
+      addInSec(DT_MIPS_CHERI_CAPTABLE, In<ELFT>::CheriCapTable);
+      addSize(DT_MIPS_CHERI_CAPTABLESSZ, In<ELFT>::CheriCapTable->getParent());
+    }
+    if (In<ELFT>::CapRelocs && !In<ELFT>::CapRelocs->empty()) {
+      addInSec(DT_MIPS_CHERI___CAPRELOCS, In<ELFT>::CapRelocs);
+      addSize(DT_MIPS_CHERI___CAPRELOCSSZ, In<ELFT>::CapRelocs->getParent());
+    }
   }
 
-  if (In<ELFT>::CapRelocs && !In<ELFT>::CapRelocs->empty()) {
-    addInSec(DT_MIPS_CHERI___CAPRELOCS, In<ELFT>::CapRelocs);
-    addSize(DT_MIPS_CHERI___CAPRELOCSSZ, In<ELFT>::CapRelocs->getParent());
-  }
   // Glink dynamic tag is required by the V2 abi if the plt section isn't empty.
   if (Config->EMachine == EM_PPC64 && !InX::Plt->empty()) {
     // The Glink tag points to 32 bytes before the first lazy symbol resolution
