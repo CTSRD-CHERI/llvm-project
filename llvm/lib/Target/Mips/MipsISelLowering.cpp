@@ -2119,7 +2119,11 @@ SDValue MipsTargetLowering::lowerADDRSPACECAST(SDValue Op, SelectionDAG &DAG)
   }
   if (Src.getValueType() == MVT::i64) {
     assert(Op.getValueType() == CapType);
-    auto Ptr = DAG.getNode(ISD::INTTOPTR, DL, DstTy, Src);
+    LLVM_DEBUG(dbgs() << "Lowering addrspacecast to CFromDDC: "; Op.dump(&DAG));
+    // INTTOPTR will lower to a cincoffset on null in the purecap ABI, so we
+    // need to use cfromddc here to keep the legacy ABI working:
+    auto Ptr = cFromDDC(DAG, DL, Src);
+    // auto Ptr = DAG.getNode(ISD::INTTOPTR, DL, DstTy, Src);
     if (auto *N = dyn_cast<GlobalAddressSDNode>(Src)) {
       const GlobalValue *GV = N->getGlobal();
       auto *Ty = GV->getValueType();
@@ -2132,6 +2136,7 @@ SDValue MipsTargetLowering::lowerADDRSPACECAST(SDValue Op, SelectionDAG &DAG)
   }
   assert(Src.getValueType() == CapType);
   assert(Op.getValueType() == MVT::i64);
+  assert(!ABI.UsesCapabilityTable() && "Should not generate ptrtoint in captable");
   return DAG.getNode(ISD::PTRTOINT, DL, DstTy, Src);
 }
 
