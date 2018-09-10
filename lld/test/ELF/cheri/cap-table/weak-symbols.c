@@ -31,7 +31,7 @@ TEST(_DYNAMIC)
 int __start(void) {
   return 0;
 }
-// DYNAMIC-EXE: 0000000000000238 .dynamic		 00000170 .hidden _DYNAMIC
+// DYNAMIC-EXE: 0000000000000238 .dynamic		 00000190 .hidden _DYNAMIC
 // DYNAMIC-EXE: 0000000000010000 .text 00000000 .hidden __init_array_end
 // DYNAMIC-EXE: 0000000000010000 .text 00000000 .hidden __init_array_start
 // STATIC-EXE: 0000000120010000 .text 00000000 .hidden __init_array_end
