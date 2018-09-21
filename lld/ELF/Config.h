@@ -281,11 +281,6 @@ struct Configuration {
     MipsCheriAbi = true;
     if (DynamicLinker.empty())
       DynamicLinker = "/libexec/ld-cheri-elf.so.1";
-    for (const auto &S : SearchPaths)
-      if (S.endswith("/lib"))
-        warn("search path ending in /lib added when targeting CheriABI. This "
-             "is probably an error and should be /libcheri instead:\n>>> "
-             "search path was " + S);
     // add the default search paths for CheriABI
     SearchPaths.emplace_back("=/libcheri");
     SearchPaths.emplace_back("=/usr/libcheri");
