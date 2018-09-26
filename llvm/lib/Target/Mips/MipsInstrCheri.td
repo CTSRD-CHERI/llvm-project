@@ -687,7 +687,7 @@ def PseudoReturnCap : MipsPseudo<(outs), (ins CheriOpnd:$cs, CheriOpnd:$cb, uimm
                       [], II_ReturnPseudo> {
   let isTerminator = 1;
   let isBarrier = 1;
-  let hasDelaySlot = 1;
+  let hasDelaySlot = 0;
   let isReturn = 1;
   let isCodeGenOnly = 1;
   let hasCtrlDep = 1;

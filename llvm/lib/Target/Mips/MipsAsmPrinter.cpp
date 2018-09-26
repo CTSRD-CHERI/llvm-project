@@ -136,7 +136,7 @@ void MipsAsmPrinter::emitPseudoIndirectBranch(MCStreamer &OutStreamer,
       // Pseusdo return should use ccall $cra, $crd, 2
     if(MI->getOpcode() == Mips::PseudoReturnCap) {
         isPsuedoReturn = true;
-        TmpInst0.setOpcode(Mips::CCall);
+        TmpInst0.setOpcode(Mips::CCallSlotless);
     } else {
     TmpInst0.setOpcode(
         Mips::CheriGPROrCNullRegClass.contains(MI->getOperand(0).getReg())
@@ -168,6 +168,11 @@ void MipsAsmPrinter::emitPseudoIndirectBranch(MCStreamer &OutStreamer,
   }
 
   EmitToStreamer(OutStreamer, TmpInst0);
+
+  if(isPsuedoReturn) {
+      // Also emit a nop until we fix hardware
+      OutStreamer.EmitZeros(4);
+  }
 }
 
 void MipsAsmPrinter::EmitInstruction(const MachineInstr *MI) {

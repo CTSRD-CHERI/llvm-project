@@ -939,12 +939,6 @@ void MipsSEFrameLowering::emitEpilogue(MachineFunction &MF,
             .addReg(Mips::AT);
     */
 
-    // Restore stack
-    BuildMI(MBB, MBBI, DL, TII.get(Mips::LOADCAP), (SP))
-            .addReg(ZERO)
-            .addImm(ABI.GetTABILayout()->GetStackPointerOffset_Prev())
-            .addReg(USP);
-
     // TODO: only if using dynamic linking
     // Save cusp as it may have changed, and this may be a cross domain return
     BuildMI(MBB, MBBI, DL, TII.get(Mips::STORECAP))
@@ -952,6 +946,13 @@ void MipsSEFrameLowering::emitEpilogue(MachineFunction &MF,
             .addReg(ZERO)
             .addImm(ABI.GetTABILayout()->GetThreadLocalOffset_CUSP())
             .addReg(ABI.GetLocalCapability());
+
+    // Restore stack
+    BuildMI(MBB, MBBI, DL, TII.get(Mips::LOADCAP), (SP))
+        .addReg(ZERO)
+        .addImm(ABI.GetTABILayout()->GetStackPointerOffset_Prev())
+        .addReg(USP);
+
   } else {
     // Adjust stack.
     TII.adjustStackPtr(SP, StackSize, MBB, MBBI);
