@@ -50,34 +50,58 @@ using IdentifierLocPair = std::pair<IdentifierInfo *, SourceLocation>;
 class IdentifierInfo {
   friend class IdentifierTable;
 
-  unsigned TokenID            : 9; // Front-end token ID or tok::identifier.
-  // Objective-C keyword ('protocol' in '@protocol') or builtin (__builtin_inf).
-  // First NUM_OBJC_KEYWORDS values are for Objective-C, the remaining values
-  // are for builtins.
-  unsigned ObjCOrBuiltinID    :13;
-  bool HasMacro               : 1; // True if there is a #define for this.
-  bool HadMacro               : 1; // True if there was a #define for this.
-  bool IsExtension            : 1; // True if identifier is a lang extension.
-  bool IsFutureCompatKeyword  : 1; // True if identifier is a keyword in a
-                                   // newer Standard or proposed Standard.
-  bool IsPoisoned             : 1; // True if identifier is poisoned.
-  bool IsCPPOperatorKeyword   : 1; // True if ident is a C++ operator keyword.
-  bool NeedsHandleIdentifier  : 1; // See "RecomputeNeedsHandleIdentifier".
-  bool IsFromAST              : 1; // True if identifier was loaded (at least 
-                                   // partially) from an AST file.
-  bool ChangedAfterLoad       : 1; // True if identifier has changed from the
-                                   // definition loaded from an AST file.
-  bool FEChangedAfterLoad     : 1; // True if identifier's frontend information
-                                   // has changed from the definition loaded
-                                   // from an AST file.
-  bool RevertedTokenID        : 1; // True if revertTokenIDToIdentifier was
-                                   // called.
-  bool OutOfDate              : 1; // True if there may be additional
-                                   // information about this identifier
-                                   // stored externally.
-  bool IsModulesImport        : 1; // True if this is the 'import' contextual
-                                   // keyword.
-  // 29 bit left in 64-bit word.
+  // Front-end token ID or tok::identifier.
+  unsigned TokenID : 9;
+
+  // ObjC keyword ('protocol' in '@protocol') or builtin (__builtin_inf).
+  // First NUM_OBJC_KEYWORDS values are for Objective-C,
+  // the remaining values are for builtins.
+  unsigned ObjCOrBuiltinID : 13;
+
+  // True if there is a #define for this.
+  unsigned HasMacro : 1;
+
+  // True if there was a #define for this.
+  unsigned HadMacro : 1;
+
+  // True if the identifier is a language extension.
+  unsigned IsExtension : 1;
+
+  // True if the identifier is a keyword in a newer or proposed Standard.
+  unsigned IsFutureCompatKeyword : 1;
+
+  // True if the identifier is poisoned.
+  unsigned IsPoisoned : 1;
+
+  // True if the identifier is a C++ operator keyword.
+  unsigned IsCPPOperatorKeyword : 1;
+
+  // Internal bit set by the member function RecomputeNeedsHandleIdentifier.
+  // See comment about RecomputeNeedsHandleIdentifier for more info.
+  unsigned NeedsHandleIdentifier : 1;
+
+  // True if the identifier was loaded (at least partially) from an AST file.
+  unsigned IsFromAST : 1;
+
+  // True if the identifier has changed from the definition
+  // loaded from an AST file.
+  unsigned ChangedAfterLoad : 1;
+
+  // True if the identifier's frontend information has changed from the
+  // definition loaded from an AST file.
+  unsigned FEChangedAfterLoad : 1;
+
+  // True if revertTokenIDToIdentifier was called.
+  unsigned RevertedTokenID : 1;
+
+  // True if there may be additional information about
+  // this identifier stored externally.
+  unsigned OutOfDate : 1;
+
+  // True if this is the 'import' contextual keyword.
+  unsigned IsModulesImport : 1;
+
+  // 29 bits left in a 64-bit word.
 
   // Managed by the language front-end.
   void *FETokenInfo = nullptr;
@@ -308,7 +332,7 @@ public:
   bool hasChangedSinceDeserialization() const {
     return ChangedAfterLoad;
   }
-  
+
   /// Note that this identifier has changed since it was loaded from
   /// an AST file.
   void setChangedSinceDeserialization() {
@@ -320,7 +344,7 @@ public:
   bool hasFETokenInfoChangedSinceDeserialization() const {
     return FEChangedAfterLoad;
   }
-  
+
   /// Note that the frontend token information for this identifier has
   /// changed since it was loaded from an AST file.
   void setFETokenInfoChangedSinceDeserialization() {
@@ -330,7 +354,7 @@ public:
   /// Determine whether the information for this identifier is out of
   /// date with respect to the external source.
   bool isOutOfDate() const { return OutOfDate; }
-  
+
   /// Set whether the information for this identifier is out of
   /// date with respect to the external source.
   void setOutOfDate(bool OOD) {
@@ -340,10 +364,10 @@ public:
     else
       RecomputeNeedsHandleIdentifier();
   }
-  
+
   /// Determine whether this is the contextual keyword \c import.
   bool isModulesImport() const { return IsModulesImport; }
-  
+
   /// Set whether this identifier is the contextual keyword \c import.
   void setModulesImport(bool I) {
     IsModulesImport = I;
@@ -419,7 +443,7 @@ public:
 class IdentifierIterator {
 protected:
   IdentifierIterator() = default;
-  
+
 public:
   IdentifierIterator(const IdentifierIterator &) = delete;
   IdentifierIterator &operator=(const IdentifierIterator &) = delete;
@@ -490,7 +514,7 @@ public:
   IdentifierInfoLookup *getExternalIdentifierLookup() const {
     return ExternalLookup;
   }
-  
+
   llvm::BumpPtrAllocator& getAllocator() {
     return HashTable.getAllocator();
   }
@@ -572,7 +596,7 @@ public:
   void AddKeywords(const LangOptions &LangOpts);
 };
 
-/// A family of Objective-C methods. 
+/// A family of Objective-C methods.
 ///
 /// These families have no inherent meaning in the language, but are
 /// nonetheless central enough in the existing implementations to
@@ -687,13 +711,13 @@ class Selector {
   MultiKeywordSelector *getMultiKeywordSelector() const {
     return reinterpret_cast<MultiKeywordSelector *>(InfoPtr & ~ArgFlags);
   }
-  
+
   unsigned getIdentifierInfoFlag() const {
     return InfoPtr & ArgFlags;
   }
 
   static ObjCMethodFamily getMethodFamilyImpl(Selector sel);
-  
+
   static ObjCStringFormatFamily getStringFormatFamilyImpl(Selector sel);
 
 public:
@@ -730,11 +754,11 @@ public:
   }
 
   unsigned getNumArgs() const;
-  
+
   /// Retrieve the identifier at a given position in the selector.
   ///
   /// Note that the identifier pointer returned may be NULL. Clients that only
-  /// care about the text of the identifier string, and not the specific, 
+  /// care about the text of the identifier string, and not the specific,
   /// uniqued identifier pointer, should use \c getNameForSlot(), which returns
   /// an empty string when the identifier pointer would be NULL.
   ///
@@ -745,7 +769,7 @@ public:
   /// \returns the uniqued identifier for this slot, or NULL if this slot has
   /// no corresponding identifier.
   IdentifierInfo *getIdentifierInfoForSlot(unsigned argIndex) const;
-  
+
   /// Retrieve the name at a given position in the selector.
   ///
   /// \param argIndex The index for which we want to retrieve the name.
@@ -755,7 +779,7 @@ public:
   /// \returns the name for this slot, which may be the empty string if no
   /// name was supplied.
   StringRef getNameForSlot(unsigned argIndex) const;
-  
+
   /// Derive the full selector name (e.g. "foo:bar:") and return
   /// it as an std::string.
   std::string getAsString() const;
@@ -769,11 +793,11 @@ public:
   ObjCMethodFamily getMethodFamily() const {
     return getMethodFamilyImpl(*this);
   }
-  
+
   ObjCStringFormatFamily getStringFormatFamily() const {
     return getStringFormatFamilyImpl(*this);
   }
-  
+
   static Selector getEmptyMarker() {
     return Selector(uintptr_t(-1));
   }
@@ -781,7 +805,7 @@ public:
   static Selector getTombstoneMarker() {
     return Selector(uintptr_t(-2));
   }
-  
+
   static ObjCInstanceTypeFamily getInstTypeMethodFamily(Selector sel);
 };
 
@@ -901,7 +925,7 @@ struct PointerLikeTypeTraits<clang::Selector> {
     return clang::Selector(reinterpret_cast<uintptr_t>(P));
   }
 
-  enum { NumLowBitsAvailable = 0 };  
+  enum { NumLowBitsAvailable = 0 };
 };
 
 // Provide PointerLikeTypeTraits for IdentifierInfo pointers, which

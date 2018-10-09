@@ -165,6 +165,7 @@ public:
   void EmitCOFFSymbolIndex(MCSymbol const *Symbol) override;
   void EmitCOFFSectionIndex(MCSymbol const *Symbol) override;
   void EmitCOFFSecRel32(MCSymbol const *Symbol, uint64_t Offset) override;
+  void EmitCOFFImgRel32(MCSymbol const *Symbol, int64_t Offset) override;
   void emitELFSize(MCSymbol *Symbol, const MCExpr *Value) override;
   void EmitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
                         unsigned ByteAlignment) override;
@@ -178,7 +179,8 @@ public:
                              unsigned ByteAlignment) override;
 
   void EmitZerofill(MCSection *Section, MCSymbol *Symbol = nullptr,
-                    uint64_t Size = 0, unsigned ByteAlignment = 0) override;
+                    uint64_t Size = 0, unsigned ByteAlignment = 0,
+                    SMLoc Loc = SMLoc()) override;
 
   void EmitTBSSSymbol(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
                       unsigned ByteAlignment = 0) override;
@@ -318,6 +320,9 @@ public:
                           const MCExpr *Expr, SMLoc Loc,
                           const MCSubtargetInfo &STI) override;
 
+  void EmitAddrsig() override;
+  void EmitAddrsigSym(const MCSymbol *Sym) override;
+
   /// If this file is backed by an assembly streamer, this dumps the specified
   /// string in the output .s file. This capability is indicated by the
   /// hasRawTextSupport() predicate.
@@ -332,7 +337,7 @@ void MCAsmStreamer::AddComment(const Twine &T, bool EOL) {
   if (!IsVerboseAsm) return;
 
   T.toVector(CommentToEmit);
- 
+
   if (EOL)
     CommentToEmit.push_back('\n'); // Place comment in a new line.
 }
@@ -650,7 +655,7 @@ void MCAsmStreamer::EmitSyntaxDirective() {
     EmitEOL();
   }
   // FIXME: Currently emit unprefix'ed registers.
-  // The intel_syntax directive has one optional argument 
+  // The intel_syntax directive has one optional argument
   // with may have a value of prefix or noprefix.
 }
 
@@ -702,6 +707,16 @@ void MCAsmStreamer::EmitCOFFSecRel32(MCSymbol const *Symbol, uint64_t Offset) {
   EmitEOL();
 }
 
+void MCAsmStreamer::EmitCOFFImgRel32(MCSymbol const *Symbol, int64_t Offset) {
+  OS << "\t.rva\t";
+  Symbol->print(OS, MAI);
+  if (Offset > 0)
+    OS << '+' << Offset;
+  else if (Offset < 0)
+    OS << '-' << -Offset;
+  EmitEOL();
+}
+
 void MCAsmStreamer::emitELFSize(MCSymbol *Symbol, const MCExpr *Value) {
   assert(MAI->hasDotTypeDotSizeDirective());
   OS << "\t.size\t";
@@ -749,14 +764,18 @@ void MCAsmStreamer::EmitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
 }
 
 void MCAsmStreamer::EmitZerofill(MCSection *Section, MCSymbol *Symbol,
-                                 uint64_t Size, unsigned ByteAlignment) {
+                                 uint64_t Size, unsigned ByteAlignment,
+                                 SMLoc Loc) {
   if (Symbol)
     AssignFragment(Symbol, &Section->getDummyFragment());
 
   // Note: a .zerofill directive does not switch sections.
   OS << ".zerofill ";
 
+  assert(Section->getVariant() == MCSection::SV_MachO &&
+         ".zerofill is a Mach-O specific directive");
   // This is a mach-o specific directive.
+
   const MCSectionMachO *MOSection = ((const MCSectionMachO*)Section);
   OS << MOSection->getSegmentName() << "," << MOSection->getSectionName();
 
@@ -779,7 +798,11 @@ void MCAsmStreamer::EmitTBSSSymbol(MCSection *Section, MCSymbol *Symbol,
 
   assert(Symbol && "Symbol shouldn't be NULL!");
   // Instead of using the Section we'll just use the shortcut.
+
+  assert(Section->getVariant() == MCSection::SV_MachO &&
+         ".zerofill is a Mach-O specific directive");
   // This is a mach-o specific directive and section.
+
   OS << ".tbss ";
   Symbol->print(OS, MAI);
   OS << ", " << Size;
@@ -803,7 +826,7 @@ static void PrintQuotedString(StringRef Data, raw_ostream &OS) {
       continue;
     }
 
-    if (isprint((unsigned char)C)) {
+    if (isPrint((unsigned char)C)) {
       OS << (char)C;
       continue;
     }
@@ -1835,6 +1858,17 @@ bool MCAsmStreamer::EmitRelocDirective(const MCExpr &Offset, StringRef Name,
   }
   EmitEOL();
   return false;
+}
+
+void MCAsmStreamer::EmitAddrsig() {
+  OS << "\t.addrsig";
+  EmitEOL();
+}
+
+void MCAsmStreamer::EmitAddrsigSym(const MCSymbol *Sym) {
+  OS << "\t.addrsig_sym ";
+  Sym->print(OS, MAI);
+  EmitEOL();
 }
 
 /// EmitRawText - If this file is backed by an assembly streamer, this dumps

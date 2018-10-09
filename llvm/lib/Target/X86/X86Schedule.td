@@ -118,6 +118,9 @@ defm WriteIMul64 : X86SchedWritePair; // Integer 64-bit multiplication.
 def  WriteIMulH  : SchedWrite;        // Integer multiplication, high part.
 def  WriteLEA    : SchedWrite;        // LEA instructions can't fold loads.
 
+def  WriteBSWAP32 : SchedWrite; // Byte Order (Endianness) 32-bit Swap.
+def  WriteBSWAP64 : SchedWrite; // Byte Order (Endianness) 64-bit Swap.
+
 // Integer division.
 defm WriteDiv8   : X86SchedWritePair;
 defm WriteDiv16  : X86SchedWritePair;
@@ -128,7 +131,8 @@ defm WriteIDiv16 : X86SchedWritePair;
 defm WriteIDiv32 : X86SchedWritePair;
 defm WriteIDiv64 : X86SchedWritePair;
 
-defm WriteBitScan : X86SchedWritePair; // Bit scan forward/reverse.
+defm WriteBSF : X86SchedWritePair; // Bit scan forward.
+defm WriteBSR : X86SchedWritePair; // Bit scan reverse.
 defm WritePOPCNT : X86SchedWritePair; // Bit population count.
 defm WriteLZCNT : X86SchedWritePair; // Leading zero count.
 defm WriteTZCNT : X86SchedWritePair; // Trailing zero count.
@@ -138,9 +142,15 @@ def  WriteFCMOV : SchedWrite; // X87 conditional move.
 def  WriteSETCC : SchedWrite; // Set register based on condition code.
 def  WriteSETCCStore : SchedWrite;
 def  WriteLAHFSAHF : SchedWrite; // Load/Store flags in AH.
+def  WriteBitTest  : SchedWrite; // Bit Test - TODO add memory folding support
 
 // Integer shifts and rotates.
 defm WriteShift : X86SchedWritePair;
+// Double shift instructions.
+def  WriteSHDrri  : SchedWrite;
+def  WriteSHDrrcl : SchedWrite;
+def  WriteSHDmri  : SchedWrite;
+def  WriteSHDmrcl : SchedWrite;
 
 // BMI1 BEXTR, BMI2 BZHI
 defm WriteBEXTR : X86SchedWritePair;
@@ -613,11 +623,6 @@ def SchedWriteFLogicSizes
  : X86SchedWriteSizes<SchedWriteFLogic, SchedWriteFLogic>;
 def SchedWriteFShuffleSizes
  : X86SchedWriteSizes<SchedWriteFShuffle, SchedWriteFShuffle>;
-
-//===----------------------------------------------------------------------===//
-//  Common MCInstPredicate definitions used by variant scheduling classes.
-
-def ZeroIdiomPredicate : CheckSameRegOperand<1, 2>;
 
 //===----------------------------------------------------------------------===//
 // Generic Processor Scheduler Models.

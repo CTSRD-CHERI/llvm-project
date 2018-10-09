@@ -723,14 +723,14 @@ CompletionSnippetSuffix:    '-snippet'
 ...
 )";
 
-  auto Symbols1 = SymbolsFromYAML(YAML1);
+  auto Symbols1 = symbolsFromYAML(YAML1);
 
   EXPECT_THAT(Symbols1,
               UnorderedElementsAre(AllOf(QName("clang::Foo1"), Labeled("Foo1"),
                                          Doc("Foo doc"), ReturnType("int"),
                                          DeclURI("file:///path/foo.h"),
                                          ForCodeCompletion(true))));
-  auto Symbols2 = SymbolsFromYAML(YAML2);
+  auto Symbols2 = symbolsFromYAML(YAML2);
   EXPECT_THAT(Symbols2, UnorderedElementsAre(AllOf(
                             QName("clang::Foo2"), Labeled("Foo2-sig"),
                             Not(HasReturnType()), DeclURI("file:///path/bar.h"),
@@ -742,7 +742,7 @@ CompletionSnippetSuffix:    '-snippet'
     SymbolsToYAML(Symbols1, OS);
     SymbolsToYAML(Symbols2, OS);
   }
-  auto ConcatenatedSymbols = SymbolsFromYAML(ConcatenatedYAML);
+  auto ConcatenatedSymbols = symbolsFromYAML(ConcatenatedYAML);
   EXPECT_THAT(ConcatenatedSymbols,
               UnorderedElementsAre(QName("clang::Foo1"),
                                    QName("clang::Foo2")));
@@ -983,6 +983,39 @@ TEST_F(SymbolCollectorTest, ReferencesInFriendDecl) {
   runSymbolCollector(Header, Main);
   EXPECT_THAT(Symbols, UnorderedElementsAre(AllOf(QName("X"), Refs(1)),
                                             AllOf(QName("Y"), Refs(1))));
+}
+
+TEST_F(SymbolCollectorTest, Origin) {
+  CollectorOpts.Origin = SymbolOrigin::Static;
+  runSymbolCollector("class Foo {};", /*Main=*/"");
+  EXPECT_THAT(Symbols, UnorderedElementsAre(
+                           Field(&Symbol::Origin, SymbolOrigin::Static)));
+}
+
+TEST_F(SymbolCollectorTest, CollectMacros) {
+  CollectorOpts.CollectIncludePath = true;
+  Annotations Header(R"(
+    #define X 1
+    #define $mac[[MAC]](x) int x
+    #define $used[[USED]](y) float y;
+
+    MAC(p);
+  )");
+  const std::string Main = R"(
+    #define MAIN 1  // not indexed
+    USED(t);
+  )";
+  CollectorOpts.CountReferences = true;
+  CollectorOpts.CollectMacro = true;
+  runSymbolCollector(Header.code(), Main);
+  EXPECT_THAT(
+      Symbols,
+      UnorderedElementsAre(
+          QName("p"),
+          AllOf(QName("X"), DeclURI(TestHeaderURI),
+                IncludeHeader(TestHeaderURI)),
+          AllOf(Labeled("MAC(x)"), Refs(0), DeclRange(Header.range("mac"))),
+          AllOf(Labeled("USED(y)"), Refs(1), DeclRange(Header.range("used")))));
 }
 
 } // namespace

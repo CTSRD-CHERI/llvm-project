@@ -29,7 +29,22 @@
 // CHECK-COVERAGE-WIN64: "--dependent-lib={{[^"]*}}ubsan_standalone-x86_64.lib"
 
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=integer %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-INTEGER -implicit-check-not="-fsanitize-address-use-after-scope"
-// CHECK-INTEGER: "-fsanitize={{((signed-integer-overflow|unsigned-integer-overflow|integer-divide-by-zero|shift-base|shift-exponent),?){5}"}}
+// CHECK-INTEGER: "-fsanitize={{((signed-integer-overflow|unsigned-integer-overflow|integer-divide-by-zero|shift-base|shift-exponent|implicit-integer-truncation),?){6}"}}
+
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=implicit-conversion %s -### 2>&1 | FileCheck %s --check-prefixes=CHECK-implicit-conversion,CHECK-implicit-conversion-RECOVER
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=implicit-conversion -fsanitize-recover=implicit-conversion %s -### 2>&1 | FileCheck %s --check-prefixes=CHECK-implicit-conversion,CHECK-implicit-conversion-RECOVER
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=implicit-conversion -fno-sanitize-recover=implicit-conversion %s -### 2>&1 | FileCheck %s --check-prefixes=CHECK-implicit-conversion,CHECK-implicit-conversion-NORECOVER
+// RUN: %clang -target x86_64-linux-gnu -fsanitize=implicit-conversion -fsanitize-trap=implicit-conversion %s -### 2>&1 | FileCheck %s --check-prefixes=CHECK-implicit-conversion,CHECK-implicit-conversion-TRAP
+// CHECK-implicit-conversion: "-fsanitize={{((implicit-integer-truncation),?){1}"}}
+// CHECK-implicit-conversion-RECOVER: "-fsanitize-recover={{((implicit-integer-truncation),?){1}"}}
+// CHECK-implicit-conversion-RECOVER-NOT: "-fno-sanitize-recover={{((implicit-integer-truncation),?){1}"}}
+// CHECK-implicit-conversion-RECOVER-NOT: "-fsanitize-trap={{((implicit-integer-truncation),?){1}"}}
+// CHECK-implicit-conversion-NORECOVER-NOT: "-fno-sanitize-recover={{((implicit-integer-truncation),?){1}"}} // ???
+// CHECK-implicit-conversion-NORECOVER-NOT: "-fsanitize-recover={{((implicit-integer-truncation),?){1}"}}
+// CHECK-implicit-conversion-NORECOVER-NOT: "-fsanitize-trap={{((implicit-integer-truncation),?){1}"}}
+// CHECK-implicit-conversion-TRAP: "-fsanitize-trap={{((implicit-integer-truncation),?){1}"}}
+// CHECK-implicit-conversion-TRAP-NOT: "-fsanitize-recover={{((implicit-integer-truncation),?){1}"}}
+// CHECK-implicit-conversion-TRAP-NOT: "-fno-sanitize-recover={{((implicit-integer-truncation),?){1}"}}
 
 // RUN: %clang -fsanitize=bounds -### -fsyntax-only %s 2>&1 | FileCheck %s --check-prefix=CHECK-BOUNDS
 // CHECK-BOUNDS: "-fsanitize={{((array-bounds|local-bounds),?){2}"}}
@@ -315,6 +330,12 @@
 
 // RUN: %clang -target mips-unknown-linux -fsanitize=leak %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SANL-MIPS
 // CHECK-SANL-MIPS: unsupported option '-fsanitize=leak' for target 'mips-unknown-linux'
+
+// RUN: %clang -target mips-unknown-freebsd -fsanitize=leak %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SANL-MIPS-FREEBSD
+// CHECK-SANL-MIPS-FREEBSD: unsupported option '-fsanitize=leak' for target 'mips-unknown-freebsd'
+
+// RUN: %clang -target mips64-unknown-freebsd -fsanitize=leak %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SANL-MIPS64-FREEBSD
+// CHECK-SANL-MIPS64-FREEBSD: "-fsanitize=leak"
 
 // RUN: %clang -target powerpc64-unknown-linux -fsanitize=leak %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SANL-PPC64
 // RUN: %clang -target powerpc64le-unknown-linux -fsanitize=leak %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SANL-PPC64
@@ -670,6 +691,8 @@
 // RUN: %clang -target mips64el-unknown-linux-gnu -fsanitize=scudo %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SCUDO
 // RUN: %clang -target mips-unknown-linux-gnu -fsanitize=scudo %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SCUDO
 // RUN: %clang -target mipsel-unknown-linux-gnu -fsanitize=scudo %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SCUDO
+// RUN: %clang -target powerpc64-unknown-linux -fsanitize=scudo %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SCUDO
+// RUN: %clang -target powerpc64le-unknown-linux -fsanitize=scudo %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SCUDO
 // CHECK-SCUDO: "-fsanitize=scudo"
 
 // RUN: %clang -target x86_64-linux-gnu -fsanitize=scudo %s -### 2>&1 | FileCheck %s --check-prefix=CHECK-SCUDO-PIE

@@ -7,9 +7,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "lldb/Core/RegisterValue.h"
 #include "lldb/Host/windows/HostThreadWindows.h"
 #include "lldb/Host/windows/windows.h"
+#include "lldb/Utility/RegisterValue.h"
 #include "lldb/Utility/Status.h"
 #include "lldb/lldb-private-types.h"
 
@@ -174,6 +174,9 @@ const RegisterSet *RegisterContextWindows_x86::GetRegisterSet(size_t reg_set) {
 bool RegisterContextWindows_x86::ReadRegister(const RegisterInfo *reg_info,
                                               RegisterValue &reg_value) {
   if (!CacheAllRegisterValues())
+    return false;
+
+  if (reg_info == nullptr)
     return false;
 
   uint32_t reg = reg_info->kinds[eRegisterKindLLDB];

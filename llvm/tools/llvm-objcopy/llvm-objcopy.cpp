@@ -9,10 +9,15 @@
 
 #include "llvm-objcopy.h"
 #include "Object.h"
+#include "llvm/ADT/BitmaskEnum.h"
+#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/BinaryFormat/ELF.h"
+#include "llvm/Object/Archive.h"
+#include "llvm/Object/ArchiveWriter.h"
 #include "llvm/Object/Binary.h"
 #include "llvm/Object/ELFObjectFile.h"
 #include "llvm/Object/ELFTypes.h"
@@ -41,6 +46,7 @@
 #include <utility>
 
 using namespace llvm;
+using namespace llvm::objcopy;
 using namespace object;
 using namespace ELF;
 
@@ -112,12 +118,73 @@ public:
   StripOptTable() : OptTable(StripInfoTable, true) {}
 };
 
+struct SectionRename {
+  StringRef OriginalName;
+  StringRef NewName;
+  Optional<uint64_t> NewFlags;
+};
+
+struct CopyConfig {
+  StringRef OutputFilename;
+  StringRef InputFilename;
+  StringRef OutputFormat;
+  StringRef InputFormat;
+  StringRef BinaryArch;
+
+  StringRef SplitDWO;
+  StringRef AddGnuDebugLink;
+  std::vector<StringRef> ToRemove;
+  std::vector<StringRef> Keep;
+  std::vector<StringRef> OnlyKeep;
+  std::vector<StringRef> AddSection;
+  std::vector<StringRef> SymbolsToLocalize;
+  std::vector<StringRef> SymbolsToGlobalize;
+  std::vector<StringRef> SymbolsToWeaken;
+  std::vector<StringRef> SymbolsToRemove;
+  std::vector<StringRef> SymbolsToKeep;
+  StringMap<SectionRename> SectionsToRename;
+  StringMap<StringRef> SymbolsToRename;
+  bool StripAll = false;
+  bool StripAllGNU = false;
+  bool StripDebug = false;
+  bool StripSections = false;
+  bool StripNonAlloc = false;
+  bool StripDWO = false;
+  bool StripUnneeded = false;
+  bool ExtractDWO = false;
+  bool LocalizeHidden = false;
+  bool Weaken = false;
+  bool DiscardAll = false;
+  bool OnlyKeepDebug = false;
+  bool KeepFileSymbols = false;
+};
+
+using SectionPred = std::function<bool(const SectionBase &Sec)>;
+
+enum SectionFlag {
+  SecNone = 0,
+  SecAlloc = 1 << 0,
+  SecLoad = 1 << 1,
+  SecNoload = 1 << 2,
+  SecReadonly = 1 << 3,
+  SecDebug = 1 << 4,
+  SecCode = 1 << 5,
+  SecData = 1 << 6,
+  SecRom = 1 << 7,
+  SecMerge = 1 << 8,
+  SecStrings = 1 << 9,
+  SecContents = 1 << 10,
+  SecShare = 1 << 11,
+  LLVM_MARK_AS_BITMASK_ENUM(/* LargestValue = */ SecShare)
+};
+
 } // namespace
 
-// The name this program was invoked as.
-static StringRef ToolName;
-
 namespace llvm {
+namespace objcopy {
+
+// The name this program was invoked as.
+StringRef ToolName;
 
 LLVM_ATTRIBUTE_NORETURN void error(Twine Message) {
   errs() << ToolName << ": " << Message << ".\n";
@@ -141,47 +208,78 @@ LLVM_ATTRIBUTE_NORETURN void reportError(StringRef File, Error E) {
   exit(1);
 }
 
+} // end namespace objcopy
 } // end namespace llvm
 
-struct CopyConfig {
-  StringRef OutputFilename;
-  StringRef InputFilename;
-  StringRef OutputFormat;
-  StringRef InputFormat;
-  StringRef BinaryArch;
+static SectionFlag ParseSectionRenameFlag(StringRef SectionName) {
+  return llvm::StringSwitch<SectionFlag>(SectionName)
+      .Case("alloc", SectionFlag::SecAlloc)
+      .Case("load", SectionFlag::SecLoad)
+      .Case("noload", SectionFlag::SecNoload)
+      .Case("readonly", SectionFlag::SecReadonly)
+      .Case("debug", SectionFlag::SecDebug)
+      .Case("code", SectionFlag::SecCode)
+      .Case("data", SectionFlag::SecData)
+      .Case("rom", SectionFlag::SecRom)
+      .Case("merge", SectionFlag::SecMerge)
+      .Case("strings", SectionFlag::SecStrings)
+      .Case("contents", SectionFlag::SecContents)
+      .Case("share", SectionFlag::SecShare)
+      .Default(SectionFlag::SecNone);
+}
 
-  StringRef SplitDWO;
-  StringRef AddGnuDebugLink;
-  std::vector<StringRef> ToRemove;
-  std::vector<StringRef> Keep;
-  std::vector<StringRef> OnlyKeep;
-  std::vector<StringRef> AddSection;
-  std::vector<StringRef> SymbolsToLocalize;
-  std::vector<StringRef> SymbolsToGlobalize;
-  std::vector<StringRef> SymbolsToWeaken;
-  std::vector<StringRef> SymbolsToRemove;
-  std::vector<StringRef> SymbolsToKeep;
-  StringMap<StringRef> SymbolsToRename;
-  bool StripAll = false;
-  bool StripAllGNU = false;
-  bool StripDebug = false;
-  bool StripSections = false;
-  bool StripNonAlloc = false;
-  bool StripDWO = false;
-  bool StripUnneeded = false;
-  bool ExtractDWO = false;
-  bool LocalizeHidden = false;
-  bool Weaken = false;
-  bool DiscardAll = false;
-  bool OnlyKeepDebug = false;
-  bool KeepFileSymbols = false;
-};
+static SectionRename ParseRenameSectionValue(StringRef FlagValue) {
+  if (!FlagValue.contains('='))
+    error("Bad format for --rename-section: missing '='");
 
-using SectionPred = std::function<bool(const SectionBase &Sec)>;
+  // Initial split: ".foo" = ".bar,f1,f2,..."
+  auto Old2New = FlagValue.split('=');
+  SectionRename SR;
+  SR.OriginalName = Old2New.first;
 
-bool IsDWOSection(const SectionBase &Sec) { return Sec.Name.endswith(".dwo"); }
+  // Flags split: ".bar" "f1" "f2" ...
+  SmallVector<StringRef, 6> NameAndFlags;
+  Old2New.second.split(NameAndFlags, ',');
+  SR.NewName = NameAndFlags[0];
 
-bool OnlyKeepDWOPred(const Object &Obj, const SectionBase &Sec) {
+  if (NameAndFlags.size() > 1) {
+    SectionFlag Flags = SectionFlag::SecNone;
+    for (size_t I = 1, Size = NameAndFlags.size(); I < Size; ++I) {
+      SectionFlag Flag = ParseSectionRenameFlag(NameAndFlags[I]);
+      if (Flag == SectionFlag::SecNone)
+        error("Unrecognized section flag '" + NameAndFlags[I] +
+              "'. Flags supported for GNU compatibility: alloc, load, noload, "
+              "readonly, debug, code, data, rom, share, contents, merge, "
+              "strings.");
+      Flags |= Flag;
+    }
+
+    SR.NewFlags = 0;
+    if (Flags & SectionFlag::SecAlloc)
+      *SR.NewFlags |= ELF::SHF_ALLOC;
+    if (!(Flags & SectionFlag::SecReadonly))
+      *SR.NewFlags |= ELF::SHF_WRITE;
+    if (Flags & SectionFlag::SecCode)
+      *SR.NewFlags |= ELF::SHF_EXECINSTR;
+    if (Flags & SectionFlag::SecMerge)
+      *SR.NewFlags |= ELF::SHF_MERGE;
+    if (Flags & SectionFlag::SecStrings)
+      *SR.NewFlags |= ELF::SHF_STRINGS;
+  }
+
+  return SR;
+}
+
+static bool IsDebugSection(const SectionBase &Sec) {
+  return Sec.Name.startswith(".debug") || Sec.Name.startswith(".zdebug") ||
+         Sec.Name == ".gdb_index";
+}
+
+static bool IsDWOSection(const SectionBase &Sec) {
+  return Sec.Name.endswith(".dwo");
+}
+
+static bool OnlyKeepDWOPred(const Object &Obj, const SectionBase &Sec) {
   // We can't remove the section header string table.
   if (&Sec == Obj.SectionNames)
     return false;
@@ -190,35 +288,37 @@ bool OnlyKeepDWOPred(const Object &Obj, const SectionBase &Sec) {
   return !IsDWOSection(Sec);
 }
 
-std::unique_ptr<Writer> CreateWriter(const CopyConfig &Config, Object &Obj,
-                                     StringRef File, ElfType OutputElfType) {
+static std::unique_ptr<Writer> CreateWriter(const CopyConfig &Config,
+                                            Object &Obj, Buffer &Buf,
+                                            ElfType OutputElfType) {
   if (Config.OutputFormat == "binary") {
-    return llvm::make_unique<BinaryWriter>(File, Obj);
+    return llvm::make_unique<BinaryWriter>(Obj, Buf);
   }
   // Depending on the initial ELFT and OutputFormat we need a different Writer.
   switch (OutputElfType) {
   case ELFT_ELF32LE:
-    return llvm::make_unique<ELFWriter<ELF32LE>>(File, Obj,
+    return llvm::make_unique<ELFWriter<ELF32LE>>(Obj, Buf,
                                                  !Config.StripSections);
   case ELFT_ELF64LE:
-    return llvm::make_unique<ELFWriter<ELF64LE>>(File, Obj,
+    return llvm::make_unique<ELFWriter<ELF64LE>>(Obj, Buf,
                                                  !Config.StripSections);
   case ELFT_ELF32BE:
-    return llvm::make_unique<ELFWriter<ELF32BE>>(File, Obj,
+    return llvm::make_unique<ELFWriter<ELF32BE>>(Obj, Buf,
                                                  !Config.StripSections);
   case ELFT_ELF64BE:
-    return llvm::make_unique<ELFWriter<ELF64BE>>(File, Obj,
+    return llvm::make_unique<ELFWriter<ELF64BE>>(Obj, Buf,
                                                  !Config.StripSections);
   }
   llvm_unreachable("Invalid output format");
 }
 
-void SplitDWOToFile(const CopyConfig &Config, const Reader &Reader,
-                    StringRef File, ElfType OutputElfType) {
+static void SplitDWOToFile(const CopyConfig &Config, const Reader &Reader,
+                           StringRef File, ElfType OutputElfType) {
   auto DWOFile = Reader.create();
   DWOFile->removeSections(
       [&](const SectionBase &Sec) { return OnlyKeepDWOPred(*DWOFile, Sec); });
-  auto Writer = CreateWriter(Config, *DWOFile, File, OutputElfType);
+  FileBuffer FB(File);
+  auto Writer = CreateWriter(Config, *DWOFile, FB, OutputElfType);
   Writer->finalize();
   Writer->write();
 }
@@ -230,8 +330,8 @@ void SplitDWOToFile(const CopyConfig &Config, const Reader &Reader,
 // any previous removals. Lastly whether or not something is removed shouldn't
 // depend a) on the order the options occur in or b) on some opaque priority
 // system. The only priority is that keeps/copies overrule removes.
-void HandleArgs(const CopyConfig &Config, Object &Obj, const Reader &Reader,
-                ElfType OutputElfType) {
+static void HandleArgs(const CopyConfig &Config, Object &Obj,
+                       const Reader &Reader, ElfType OutputElfType) {
 
   if (!Config.SplitDWO.empty()) {
     SplitDWOToFile(Config, Reader, Config.SplitDWO, OutputElfType);
@@ -306,8 +406,7 @@ void HandleArgs(const CopyConfig &Config, Object &Obj, const Reader &Reader,
   // Removes:
   if (!Config.ToRemove.empty()) {
     RemovePred = [&Config](const SectionBase &Sec) {
-      return std::find(std::begin(Config.ToRemove), std::end(Config.ToRemove),
-                       Sec.Name) != std::end(Config.ToRemove);
+      return find(Config.ToRemove, Sec.Name) != Config.ToRemove.end();
     };
   }
 
@@ -336,7 +435,7 @@ void HandleArgs(const CopyConfig &Config, Object &Obj, const Reader &Reader,
       case SHT_STRTAB:
         return true;
       }
-      return Sec.Name.startswith(".debug");
+      return IsDebugSection(Sec);
     };
 
   if (Config.StripSections) {
@@ -347,7 +446,7 @@ void HandleArgs(const CopyConfig &Config, Object &Obj, const Reader &Reader,
 
   if (Config.StripDebug) {
     RemovePred = [RemovePred](const SectionBase &Sec) {
-      return RemovePred(Sec) || Sec.Name.startswith(".debug");
+      return RemovePred(Sec) || IsDebugSection(Sec);
     };
   }
 
@@ -375,8 +474,7 @@ void HandleArgs(const CopyConfig &Config, Object &Obj, const Reader &Reader,
   if (!Config.OnlyKeep.empty()) {
     RemovePred = [&Config, RemovePred, &Obj](const SectionBase &Sec) {
       // Explicitly keep these sections regardless of previous removes.
-      if (std::find(std::begin(Config.OnlyKeep), std::end(Config.OnlyKeep),
-                    Sec.Name) != std::end(Config.OnlyKeep))
+      if (find(Config.OnlyKeep, Sec.Name) != Config.OnlyKeep.end())
         return false;
 
       // Allow all implicit removes.
@@ -386,7 +484,8 @@ void HandleArgs(const CopyConfig &Config, Object &Obj, const Reader &Reader,
       // Keep special sections.
       if (Obj.SectionNames == &Sec)
         return false;
-      if (Obj.SymbolTable == &Sec || Obj.SymbolTable->getStrTab() == &Sec)
+      if (Obj.SymbolTable == &Sec ||
+          (Obj.SymbolTable && Obj.SymbolTable->getStrTab() == &Sec))
         return false;
 
       // Remove everything else.
@@ -397,8 +496,7 @@ void HandleArgs(const CopyConfig &Config, Object &Obj, const Reader &Reader,
   if (!Config.Keep.empty()) {
     RemovePred = [Config, RemovePred](const SectionBase &Sec) {
       // Explicitly keep these sections regardless of previous removes.
-      if (std::find(std::begin(Config.Keep), std::end(Config.Keep), Sec.Name) !=
-          std::end(Config.Keep))
+      if (find(Config.Keep, Sec.Name) != Config.Keep.end())
         return false;
       // Otherwise defer to RemovePred.
       return RemovePred(Sec);
@@ -411,7 +509,7 @@ void HandleArgs(const CopyConfig &Config, Object &Obj, const Reader &Reader,
   // (equivalently, the updated symbol table is not empty)
   // the symbol table and the string table should not be removed.
   if ((!Config.SymbolsToKeep.empty() || Config.KeepFileSymbols) &&
-      !Obj.SymbolTable->empty()) {
+      Obj.SymbolTable && !Obj.SymbolTable->empty()) {
     RemovePred = [&Obj, RemovePred](const SectionBase &Sec) {
       if (&Sec == Obj.SymbolTable || &Sec == Obj.SymbolTable->getStrTab())
         return false;
@@ -420,6 +518,26 @@ void HandleArgs(const CopyConfig &Config, Object &Obj, const Reader &Reader,
   }
 
   Obj.removeSections(RemovePred);
+
+  if (!Config.SectionsToRename.empty()) {
+    for (auto &Sec : Obj.sections()) {
+      const auto Iter = Config.SectionsToRename.find(Sec.Name);
+      if (Iter != Config.SectionsToRename.end()) {
+        const SectionRename &SR = Iter->second;
+        Sec.Name = SR.NewName;
+        if (SR.NewFlags.hasValue()) {
+          // Preserve some flags which should not be dropped when setting flags.
+          // Also, preserve anything OS/processor dependant.
+          const uint64_t PreserveMask = ELF::SHF_COMPRESSED | ELF::SHF_EXCLUDE |
+                                        ELF::SHF_GROUP | ELF::SHF_LINK_ORDER |
+                                        ELF::SHF_MASKOS | ELF::SHF_MASKPROC |
+                                        ELF::SHF_TLS | ELF::SHF_INFO_LINK;
+          Sec.Flags = (Sec.Flags & PreserveMask) |
+                      (SR.NewFlags.getValue() & ~PreserveMask);
+        }
+      }
+    }
+  }
 
   if (!Config.AddSection.empty()) {
     for (const auto &Flag : Config.AddSection) {
@@ -441,30 +559,97 @@ void HandleArgs(const CopyConfig &Config, Object &Obj, const Reader &Reader,
     Obj.addSection<GnuDebugLinkSection>(Config.AddGnuDebugLink);
 }
 
-std::unique_ptr<Reader> CreateReader(StringRef InputFilename,
-                                     ElfType &OutputElfType) {
-  // Right now we can only read ELF files so there's only one reader;
-  auto Out = llvm::make_unique<ELFReader>(InputFilename);
-  // We need to set the default ElfType for output.
-  OutputElfType = Out->getElfType();
-  return std::move(Out);
-}
+static void ExecuteElfObjcopyOnBinary(const CopyConfig &Config, Binary &Binary,
+                                      Buffer &Out) {
+  ELFReader Reader(&Binary);
+  std::unique_ptr<Object> Obj = Reader.create();
 
-void ExecuteElfObjcopy(const CopyConfig &Config) {
-  ElfType OutputElfType;
-  auto Reader = CreateReader(Config.InputFilename, OutputElfType);
-  auto Obj = Reader->create();
-  auto Writer =
-      CreateWriter(Config, *Obj, Config.OutputFilename, OutputElfType);
-  HandleArgs(Config, *Obj, *Reader, OutputElfType);
+  HandleArgs(Config, *Obj, Reader, Reader.getElfType());
+
+  std::unique_ptr<Writer> Writer =
+      CreateWriter(Config, *Obj, Out, Reader.getElfType());
   Writer->finalize();
   Writer->write();
+}
+
+// For regular archives this function simply calls llvm::writeArchive,
+// For thin archives it writes the archive file itself as well as its members.
+static Error deepWriteArchive(StringRef ArcName,
+                              ArrayRef<NewArchiveMember> NewMembers,
+                              bool WriteSymtab, object::Archive::Kind Kind,
+                              bool Deterministic, bool Thin) {
+  Error E =
+      writeArchive(ArcName, NewMembers, WriteSymtab, Kind, Deterministic, Thin);
+  if (!Thin || E)
+    return E;
+  for (const NewArchiveMember &Member : NewMembers) {
+    // Internally, FileBuffer will use the buffer created by
+    // FileOutputBuffer::create, for regular files (that is the case for
+    // deepWriteArchive) FileOutputBuffer::create will return OnDiskBuffer.
+    // OnDiskBuffer uses a temporary file and then renames it. So in reality
+    // there is no inefficiency / duplicated in-memory buffers in this case. For
+    // now in-memory buffers can not be completely avoided since
+    // NewArchiveMember still requires them even though writeArchive does not
+    // write them on disk.
+    FileBuffer FB(Member.MemberName);
+    FB.allocate(Member.Buf->getBufferSize());
+    std::copy(Member.Buf->getBufferStart(), Member.Buf->getBufferEnd(),
+              FB.getBufferStart());
+    if (auto E = FB.commit())
+      return E;
+  }
+  return Error::success();
+}
+
+static void ExecuteElfObjcopyOnArchive(const CopyConfig &Config,
+                                       const Archive &Ar) {
+  std::vector<NewArchiveMember> NewArchiveMembers;
+  Error Err = Error::success();
+  for (const Archive::Child &Child : Ar.children(Err)) {
+    Expected<std::unique_ptr<Binary>> ChildOrErr = Child.getAsBinary();
+    if (!ChildOrErr)
+      reportError(Ar.getFileName(), ChildOrErr.takeError());
+    Expected<StringRef> ChildNameOrErr = Child.getName();
+    if (!ChildNameOrErr)
+      reportError(Ar.getFileName(), ChildNameOrErr.takeError());
+
+    MemBuffer MB(ChildNameOrErr.get());
+    ExecuteElfObjcopyOnBinary(Config, **ChildOrErr, MB);
+
+    Expected<NewArchiveMember> Member =
+        NewArchiveMember::getOldMember(Child, true);
+    if (!Member)
+      reportError(Ar.getFileName(), Member.takeError());
+    Member->Buf = MB.releaseMemoryBuffer();
+    Member->MemberName = Member->Buf->getBufferIdentifier();
+    NewArchiveMembers.push_back(std::move(*Member));
+  }
+
+  if (Err)
+    reportError(Config.InputFilename, std::move(Err));
+  if (Error E =
+          deepWriteArchive(Config.OutputFilename, NewArchiveMembers,
+                           Ar.hasSymbolTable(), Ar.kind(), true, Ar.isThin()))
+    reportError(Config.OutputFilename, std::move(E));
+}
+
+static void ExecuteElfObjcopy(const CopyConfig &Config) {
+  Expected<OwningBinary<llvm::object::Binary>> BinaryOrErr =
+      createBinary(Config.InputFilename);
+  if (!BinaryOrErr)
+    reportError(Config.InputFilename, BinaryOrErr.takeError());
+
+  if (Archive *Ar = dyn_cast<Archive>(BinaryOrErr.get().getBinary()))
+    return ExecuteElfObjcopyOnArchive(Config, *Ar);
+
+  FileBuffer FB(Config.OutputFilename);
+  ExecuteElfObjcopyOnBinary(Config, *BinaryOrErr.get().getBinary(), FB);
 }
 
 // ParseObjcopyOptions returns the config and sets the input arguments. If a
 // help flag is set then ParseObjcopyOptions will print the help messege and
 // exit.
-CopyConfig ParseObjcopyOptions(ArrayRef<const char *> ArgsArr) {
+static CopyConfig ParseObjcopyOptions(ArrayRef<const char *> ArgsArr) {
   ObjcopyOptTable T;
   unsigned MissingArgumentIndex, MissingArgumentCount;
   llvm::opt::InputArgList InputArgs =
@@ -512,6 +697,12 @@ CopyConfig ParseObjcopyOptions(ArrayRef<const char *> ArgsArr) {
       error("Multiple redefinition of symbol " + Old2New.first);
   }
 
+  for (auto Arg : InputArgs.filtered(OBJCOPY_rename_section)) {
+    SectionRename SR = ParseRenameSectionValue(StringRef(Arg->getValue()));
+    if (!Config.SectionsToRename.try_emplace(SR.OriginalName, SR).second)
+      error("Multiple renames of section " + SR.OriginalName);
+  }
+
   for (auto Arg : InputArgs.filtered(OBJCOPY_remove_section))
     Config.ToRemove.push_back(Arg->getValue());
   for (auto Arg : InputArgs.filtered(OBJCOPY_keep))
@@ -550,7 +741,7 @@ CopyConfig ParseObjcopyOptions(ArrayRef<const char *> ArgsArr) {
 // ParseStripOptions returns the config and sets the input arguments. If a
 // help flag is set then ParseStripOptions will print the help messege and
 // exit.
-CopyConfig ParseStripOptions(ArrayRef<const char *> ArgsArr) {
+static CopyConfig ParseStripOptions(ArrayRef<const char *> ArgsArr) {
   StripOptTable T;
   unsigned MissingArgumentIndex, MissingArgumentCount;
   llvm::opt::InputArgList InputArgs =
@@ -584,9 +775,10 @@ CopyConfig ParseStripOptions(ArrayRef<const char *> ArgsArr) {
       InputArgs.getLastArgValue(STRIP_output, Positional[0]);
 
   Config.StripDebug = InputArgs.hasArg(STRIP_strip_debug);
-  
+
   Config.DiscardAll = InputArgs.hasArg(STRIP_discard_all);
   Config.StripUnneeded = InputArgs.hasArg(STRIP_strip_unneeded);
+  Config.StripAll = InputArgs.hasArg(STRIP_strip_all);
 
   if (!Config.StripDebug && !Config.StripUnneeded && !Config.DiscardAll)
     Config.StripAll = true;

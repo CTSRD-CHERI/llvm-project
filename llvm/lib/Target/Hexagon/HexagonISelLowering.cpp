@@ -151,16 +151,6 @@ static bool CC_SkipOdd(unsigned &ValNo, MVT &ValVT, MVT &LocVT,
 #include "HexagonGenCallingConv.inc"
 
 
-void HexagonTargetLowering::promoteLdStType(MVT VT, MVT PromotedLdStVT) {
-  if (VT != PromotedLdStVT) {
-    setOperationAction(ISD::LOAD, VT, Promote);
-    AddPromotedToType(ISD::LOAD, VT, PromotedLdStVT);
-
-    setOperationAction(ISD::STORE, VT, Promote);
-    AddPromotedToType(ISD::STORE, VT, PromotedLdStVT);
-  }
-}
-
 SDValue
 HexagonTargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op, SelectionDAG &DAG)
       const {
@@ -836,7 +826,7 @@ SDValue HexagonTargetLowering::LowerSETCC(SDValue Op, SelectionDAG &DAG) const {
         SDValue Op = N.getOperand(0);
         if (Op.getOpcode() != ISD::AssertSext)
           return false;
-        MVT OrigTy = cast<VTSDNode>(Op.getOperand(1))->getVT().getSimpleVT();
+        EVT OrigTy = cast<VTSDNode>(Op.getOperand(1))->getVT();
         unsigned ThisBW = ty(N).getSizeInBits();
         unsigned OrigBW = OrigTy.getSizeInBits();
         // The type that was sign-extended to get the AssertSext must be
@@ -1403,12 +1393,6 @@ HexagonTargetLowering::HexagonTargetLowering(const TargetMachine &TM,
   // Handling of vector operations.
   //
 
-  promoteLdStType(MVT::v4i8,  MVT::i32);
-  promoteLdStType(MVT::v2i16, MVT::i32);
-  promoteLdStType(MVT::v8i8,  MVT::i64);
-  promoteLdStType(MVT::v4i16, MVT::i64);
-  promoteLdStType(MVT::v2i32, MVT::i64);
-
   // Set the action for vector operations to "expand", then override it with
   // either "custom" or "legal" for specific cases.
   static const unsigned VectExpOps[] = {
@@ -1488,9 +1472,13 @@ HexagonTargetLowering::HexagonTargetLowering(const TargetMachine &TM,
   }
 
   // Custom lower unaligned loads.
-  for (MVT VecVT : {MVT::i32, MVT::v4i8, MVT::i64, MVT::v8i8,
-                    MVT::v2i16, MVT::v4i16, MVT::v2i32}) {
-    setOperationAction(ISD::LOAD, VecVT, Custom);
+  // Also, for both loads and stores, verify the alignment of the address
+  // in case it is a compile-time constant. This is a usability feature to
+  // provide a meaningful error message to users.
+  for (MVT VT : {MVT::i16, MVT::i32, MVT::v4i8, MVT::i64, MVT::v8i8,
+                 MVT::v2i16, MVT::v4i16, MVT::v2i32}) {
+    setOperationAction(ISD::LOAD,  VT, Custom);
+    setOperationAction(ISD::STORE, VT, Custom);
   }
 
   for (MVT VT : {MVT::v2i16, MVT::v4i8, MVT::v2i32, MVT::v4i16, MVT::v2i32}) {
@@ -1736,6 +1724,26 @@ const char* HexagonTargetLowering::getTargetNodeName(unsigned Opcode) const {
   case HexagonISD::OP_END:        break;
   }
   return nullptr;
+}
+
+void
+HexagonTargetLowering::validateConstPtrAlignment(SDValue Ptr, const SDLoc &dl,
+      unsigned NeedAlign) const {
+  auto *CA = dyn_cast<ConstantSDNode>(Ptr);
+  if (!CA)
+    return;
+  unsigned Addr = CA->getZExtValue();
+  unsigned HaveAlign = Addr != 0 ? 1u << countTrailingZeros(Addr) : NeedAlign;
+  if (HaveAlign < NeedAlign) {
+    std::string ErrMsg;
+    raw_string_ostream O(ErrMsg);
+    O << "Misaligned constant address: " << format_hex(Addr, 10)
+      << " has alignment " << HaveAlign
+      << ", but the memory access requires " << NeedAlign;
+    if (DebugLoc DL = dl.getDebugLoc())
+      DL.print(O << ", at ");
+    report_fatal_error(O.str());
+  }
 }
 
 // Bit-reverse Load Intrinsic: Check if the instruction is a bit reverse load
@@ -2327,7 +2335,9 @@ HexagonTargetLowering::extractVector(SDValue VecV, SDValue IdxV,
     // If the value extracted is a single bit, use tstbit.
     if (ValWidth == 1) {
       SDValue A0 = getInstr(Hexagon::C2_tfrpr, dl, MVT::i32, {VecV}, DAG);
-      return DAG.getNode(HexagonISD::TSTBIT, dl, MVT::i1, A0, IdxV);
+      SDValue M0 = DAG.getConstant(8 / VecWidth, dl, MVT::i32);
+      SDValue I0 = DAG.getNode(ISD::MUL, dl, MVT::i32, IdxV, M0);
+      return DAG.getNode(HexagonISD::TSTBIT, dl, MVT::i1, A0, I0);
     }
 
     // Each bool vector (v2i1, v4i1, v8i1) always occupies 8 bits in
@@ -2641,12 +2651,37 @@ HexagonTargetLowering::allowTruncateForTailCall(Type *Ty1, Type *Ty2) const {
 }
 
 SDValue
+HexagonTargetLowering::LowerLoad(SDValue Op, SelectionDAG &DAG) const {
+  LoadSDNode *LN = cast<LoadSDNode>(Op.getNode());
+  unsigned ClaimAlign = LN->getAlignment();
+  validateConstPtrAlignment(LN->getBasePtr(), SDLoc(Op), ClaimAlign);
+  // Call LowerUnalignedLoad for all loads, it recognizes loads that
+  // don't need extra aligning.
+  return LowerUnalignedLoad(Op, DAG);
+}
+
+SDValue
+HexagonTargetLowering::LowerStore(SDValue Op, SelectionDAG &DAG) const {
+  StoreSDNode *SN = cast<StoreSDNode>(Op.getNode());
+  unsigned ClaimAlign = SN->getAlignment();
+  SDValue Ptr = SN->getBasePtr();
+  const SDLoc &dl(Op);
+  validateConstPtrAlignment(Ptr, dl, ClaimAlign);
+
+  MVT StoreTy = SN->getMemoryVT().getSimpleVT();
+  unsigned NeedAlign = Subtarget.getTypeAlignment(StoreTy);
+  if (ClaimAlign < NeedAlign)
+    return expandUnalignedStore(SN, DAG);
+  return Op;
+}
+
+SDValue
 HexagonTargetLowering::LowerUnalignedLoad(SDValue Op, SelectionDAG &DAG)
       const {
   LoadSDNode *LN = cast<LoadSDNode>(Op.getNode());
-  unsigned HaveAlign = LN->getAlignment();
   MVT LoadTy = ty(Op);
   unsigned NeedAlign = Subtarget.getTypeAlignment(LoadTy);
+  unsigned HaveAlign = LN->getAlignment();
   if (HaveAlign >= NeedAlign)
     return Op;
 
@@ -2800,7 +2835,8 @@ HexagonTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
     case ISD::BUILD_VECTOR:         return LowerBUILD_VECTOR(Op, DAG);
     case ISD::VECTOR_SHUFFLE:       return LowerVECTOR_SHUFFLE(Op, DAG);
     case ISD::BITCAST:              return LowerBITCAST(Op, DAG);
-    case ISD::LOAD:                 return LowerUnalignedLoad(Op, DAG);
+    case ISD::LOAD:                 return LowerLoad(Op, DAG);
+    case ISD::STORE:                return LowerStore(Op, DAG);
     case ISD::ADDCARRY:
     case ISD::SUBCARRY:             return LowerAddSubCarry(Op, DAG);
     case ISD::SRA:
@@ -2829,6 +2865,19 @@ HexagonTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
   }
 
   return SDValue();
+}
+
+void
+HexagonTargetLowering::LowerOperationWrapper(SDNode *N,
+                                             SmallVectorImpl<SDValue> &Results,
+                                             SelectionDAG &DAG) const {
+  // We are only custom-lowering stores to verify the alignment of the
+  // address if it is a compile-time constant. Since a store can be modified
+  // during type-legalization (the value being stored may need legalization),
+  // return empty Results here to indicate that we don't really make any
+  // changes in the custom lowering.
+  if (N->getOpcode() != ISD::STORE)
+    return TargetLowering::LowerOperationWrapper(N, Results, DAG);
 }
 
 void

@@ -9,13 +9,13 @@
 
 #include "lldb/Interpreter/OptionValueFileSpec.h"
 
-#include "lldb/Core/State.h"
 #include "lldb/DataFormatters/FormatManager.h"
 #include "lldb/Host/FileSystem.h"
 #include "lldb/Interpreter/CommandCompletions.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
 #include "lldb/Utility/Args.h"
 #include "lldb/Utility/DataBufferLLVM.h"
+#include "lldb/Utility/State.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -99,15 +99,12 @@ lldb::OptionValueSP OptionValueFileSpec::DeepCopy() const {
   return OptionValueSP(new OptionValueFileSpec(*this));
 }
 
-size_t OptionValueFileSpec::AutoComplete(
-    CommandInterpreter &interpreter, llvm::StringRef s, int match_start_point,
-    int max_return_elements, bool &word_complete, StringList &matches) {
-  word_complete = false;
-  matches.Clear();
+size_t OptionValueFileSpec::AutoComplete(CommandInterpreter &interpreter,
+                                         CompletionRequest &request) {
+  request.SetWordComplete(false);
   CommandCompletions::InvokeCommonCompletionCallbacks(
-      interpreter, m_completion_mask, s, match_start_point, max_return_elements,
-      nullptr, word_complete, matches);
-  return matches.GetSize();
+      interpreter, m_completion_mask, request, nullptr);
+  return request.GetNumberOfMatches();
 }
 
 const lldb::DataBufferSP &OptionValueFileSpec::GetFileContents() {

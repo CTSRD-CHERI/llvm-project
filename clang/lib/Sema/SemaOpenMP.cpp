@@ -1417,7 +1417,7 @@ bool Sema::isInOpenMPTargetExecutionDirective() const {
              false);
 }
 
-VarDecl *Sema::isOpenMPCapturedDecl(ValueDecl *D) const {
+VarDecl *Sema::isOpenMPCapturedDecl(ValueDecl *D) {
   assert(LangOpts.OpenMP && "OpenMP is not allowed");
   D = getCanonicalDecl(D);
 
@@ -1425,13 +1425,22 @@ VarDecl *Sema::isOpenMPCapturedDecl(ValueDecl *D) const {
   // 'target' we return true so that this global is also mapped to the device.
   //
   auto *VD = dyn_cast<VarDecl>(D);
-  if (VD && !VD->hasLocalStorage() && isInOpenMPTargetExecutionDirective()) {
-    // If the declaration is enclosed in a 'declare target' directive,
-    // then it should not be captured.
-    //
-    if (isDeclareTargetDeclaration(VD))
+  if (VD && !VD->hasLocalStorage()) {
+    if (isInOpenMPDeclareTargetContext() &&
+        (getCurCapturedRegion() || getCurBlock() || getCurLambda())) {
+      // Try to mark variable as declare target if it is used in capturing
+      // regions.
+      if (!isDeclareTargetDeclaration(VD))
+        checkDeclIsAllowedInOpenMPTarget(nullptr, VD);
       return nullptr;
-    return VD;
+    } else if (isInOpenMPTargetExecutionDirective()) {
+      // If the declaration is enclosed in a 'declare target' directive,
+      // then it should not be captured.
+      //
+      if (isDeclareTargetDeclaration(VD))
+        return nullptr;
+      return VD;
+    }
   }
 
   if (DSAStack->getCurrentDirective() != OMPD_unknown &&
@@ -4909,7 +4918,8 @@ checkOpenMPLoop(OpenMPDirectiveKind DKind, Expr *CollapseLoopCountExpr,
     ExprResult IsUBGreater = SemaRef.BuildBinOp(CurScope, InitLoc, BO_GT,
                                                 UB.get(), LastIteration.get());
     ExprResult CondOp = SemaRef.ActOnConditionalOp(
-        InitLoc, InitLoc, IsUBGreater.get(), LastIteration.get(), UB.get());
+        LastIteration.get()->getExprLoc(), InitLoc, IsUBGreater.get(),
+        LastIteration.get(), UB.get());
     EUB = SemaRef.BuildBinOp(CurScope, InitLoc, BO_Assign, UB.get(),
                              CondOp.get());
     EUB = SemaRef.ActOnFinishFullExpr(EUB.get());
@@ -13012,8 +13022,12 @@ void Sema::checkDeclIsAllowedInOpenMPTarget(Expr *E, Decl *D,
     return;
   SourceRange SR = E ? E->getSourceRange() : D->getSourceRange();
   SourceLocation SL = E ? E->getLocStart() : D->getLocation();
-  // 2.10.6: threadprivate variable cannot appear in a declare target directive.
   if (auto *VD = dyn_cast<VarDecl>(D)) {
+    // Only global variables can be marked as declare target.
+    if (VD->isLocalVarDeclOrParm())
+      return;
+    // 2.10.6: threadprivate variable cannot appear in a declare target
+    // directive.
     if (DSAStack->isThreadPrivate(VD)) {
       Diag(SL, diag::err_omp_threadprivate_in_target);
       reportOriginalDsa(*this, DSAStack, VD, DSAStack->getTopDSA(VD, false));

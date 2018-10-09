@@ -12,6 +12,7 @@ set(LLVM_LINK_COMPONENTS
 
 add_llvm_unittest(LLVMExegesisTests
   BenchmarkResultTest.cpp
+  BenchmarkRunnerTest.cpp
   ClusteringTest.cpp
   PerfHelperTest.cpp
   )
@@ -22,4 +23,7 @@ if(LLVM_TARGETS_TO_BUILD MATCHES "X86")
 endif()
 if(LLVM_TARGETS_TO_BUILD MATCHES "ARM")
 	add_subdirectory(ARM)
+endif()
+if(LLVM_TARGETS_TO_BUILD MATCHES "AArch64")
+  add_subdirectory(AArch64)
 endif()

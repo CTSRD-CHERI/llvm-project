@@ -124,7 +124,9 @@ let isReturn = 1 in {
   defm "": SIMD_RETURN<v16i8>;
   defm "": SIMD_RETURN<v8i16>;
   defm "": SIMD_RETURN<v4i32>;
+  defm "": SIMD_RETURN<v2i64>;
   defm "": SIMD_RETURN<v4f32>;
+  defm "": SIMD_RETURN<v2f64>;
 
   defm RETURN_VOID : NRI<(outs), (ins), [(WebAssemblyreturn)], "return", 0x0f>;
 
@@ -139,6 +141,8 @@ defm UNREACHABLE : NRI<(outs), (ins), [(trap)], "unreachable", 0x00>;
 //===----------------------------------------------------------------------===//
 // Exception handling instructions
 //===----------------------------------------------------------------------===//
+
+let Predicates = [HasExceptionHandling] in {
 
 // Throwing an exception: throw / rethrow
 let isTerminator = 1, hasCtrlDep = 1, isBarrier = 1 in {
@@ -186,6 +190,7 @@ let isTerminator = 1, hasSideEffects = 1, isBarrier = 1, hasCtrlDep = 1,
   defm CLEANUPRET : NRI<(outs), (ins), [(cleanupret)], "", 0>;
   defm CATCHRET : NRI<(outs), (ins bb_op:$dst, bb_op:$from),
                    [(catchret bb:$dst, bb:$from)], "", 0>;
+}
 }
 
 } // Defs = [ARGUMENTS]

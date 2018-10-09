@@ -119,7 +119,6 @@ bool MCWasmStreamer::EmitSymbolAttribute(MCSymbol *S, MCSymbolAttr Attribute) {
     break;
 
   case MCSA_ELF_TypeObject:
-    Symbol->setType(wasm::WASM_SYMBOL_TYPE_DATA);
     break;
 
   default:
@@ -215,7 +214,8 @@ void MCWasmStreamer::EmitSymbolDesc(MCSymbol *Symbol, unsigned DescValue) {
 }
 
 void MCWasmStreamer::EmitZerofill(MCSection *Section, MCSymbol *Symbol,
-                                  uint64_t Size, unsigned ByteAlignment) {
+                                  uint64_t Size, unsigned ByteAlignment,
+                                  SMLoc Loc) {
   llvm_unreachable("Wasm doesn't support this directive");
 }
 

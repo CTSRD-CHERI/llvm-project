@@ -11,6 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/CodeGen/GlobalISel/IRTranslator.h"
+#include "llvm/ADT/PostOrderIterator.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/SmallSet.h"
@@ -26,12 +27,14 @@
 #include "llvm/CodeGen/MachineMemOperand.h"
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/CodeGen/StackProtector.h"
 #include "llvm/CodeGen/TargetFrameLowering.h"
 #include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/CFG.h"
 #include "llvm/IR/Constant.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
@@ -102,7 +105,9 @@ IRTranslator::IRTranslator() : MachineFunctionPass(ID) {
 }
 
 void IRTranslator::getAnalysisUsage(AnalysisUsage &AU) const {
+  AU.addRequired<StackProtector>();
   AU.addRequired<TargetPassConfig>();
+  getSelectionDAGFallbackAnalysisUsage(AU);
   MachineFunctionPass::getAnalysisUsage(AU);
 }
 
@@ -228,6 +233,20 @@ unsigned IRTranslator::getMemOpAlignment(const Instruction &I) {
   } else if (const LoadInst *LI = dyn_cast<LoadInst>(&I)) {
     Alignment = LI->getAlignment();
     ValTy = LI->getType();
+  } else if (const AtomicCmpXchgInst *AI = dyn_cast<AtomicCmpXchgInst>(&I)) {
+    // TODO(PR27168): This instruction has no alignment attribute, but unlike
+    // the default alignment for load/store, the default here is to assume
+    // it has NATURAL alignment, not DataLayout-specified alignment.
+    const DataLayout &DL = AI->getModule()->getDataLayout();
+    Alignment = DL.getTypeStoreSize(AI->getCompareOperand()->getType());
+    ValTy = AI->getCompareOperand()->getType();
+  } else if (const AtomicRMWInst *AI = dyn_cast<AtomicRMWInst>(&I)) {
+    // TODO(PR27168): This instruction has no alignment attribute, but unlike
+    // the default alignment for load/store, the default here is to assume
+    // it has NATURAL alignment, not DataLayout-specified alignment.
+    const DataLayout &DL = AI->getModule()->getDataLayout();
+    Alignment = DL.getTypeStoreSize(AI->getValOperand()->getType());
+    ValTy = AI->getType();
   } else {
     OptimizationRemarkMissed R("gisel-irtranslator", "", &I);
     R << "unable to translate memop: " << ore::NV("Opcode", &I);
@@ -304,14 +323,16 @@ bool IRTranslator::translateRet(const User &U, MachineIRBuilder &MIRBuilder) {
   const Value *Ret = RI.getReturnValue();
   if (Ret && DL->getTypeStoreSize(Ret->getType()) == 0)
     Ret = nullptr;
+
+  ArrayRef<unsigned> VRegs;
+  if (Ret)
+    VRegs = getOrCreateVRegs(*Ret);
+
   // The target may mess up with the insertion point, but
   // this is not important as a return is the last instruction
   // of the block anyway.
 
-  // FIXME: this interface should simplify when CallLowering gets adapted to
-  // multiple VRegs per Value.
-  unsigned VReg = Ret ? packRegs(*Ret, MIRBuilder) : 0;
-  return CLI->lowerReturn(MIRBuilder, Ret, VReg);
+  return CLI->lowerReturn(MIRBuilder, Ret, VRegs);
 }
 
 bool IRTranslator::translateBr(const User &U, MachineIRBuilder &MIRBuilder) {
@@ -892,6 +913,26 @@ bool IRTranslator::translateKnownIntrinsic(const CallInst &CI, Intrinsic::ID ID,
             PtrTy.getSizeInBits() / 8, 8));
     return true;
   }
+  case Intrinsic::cttz:
+  case Intrinsic::ctlz: {
+    ConstantInt *Cst = cast<ConstantInt>(CI.getArgOperand(1));
+    bool isTrailing = ID == Intrinsic::cttz;
+    unsigned Opcode = isTrailing
+                          ? Cst->isZero() ? TargetOpcode::G_CTTZ
+                                          : TargetOpcode::G_CTTZ_ZERO_UNDEF
+                          : Cst->isZero() ? TargetOpcode::G_CTLZ
+                                          : TargetOpcode::G_CTLZ_ZERO_UNDEF;
+    MIRBuilder.buildInstr(Opcode)
+        .addDef(getOrCreateVReg(CI))
+        .addUse(getOrCreateVReg(*CI.getArgOperand(0)));
+    return true;
+  }
+  case Intrinsic::ctpop: {
+    MIRBuilder.buildInstr(TargetOpcode::G_CTPOP)
+        .addDef(getOrCreateVReg(CI))
+        .addUse(getOrCreateVReg(*CI.getArgOperand(0)));
+    return true;
+  }
   }
   return false;
 }
@@ -1140,6 +1181,9 @@ bool IRTranslator::translateAlloca(const User &U,
                                    MachineIRBuilder &MIRBuilder) {
   auto &AI = cast<AllocaInst>(U);
 
+  if (AI.isSwiftError())
+    return false;
+
   if (AI.isStaticAlloca()) {
     unsigned Res = getOrCreateVReg(AI);
     int FI = getOrCreateFrameIndex(AI);
@@ -1285,6 +1329,100 @@ bool IRTranslator::translatePHI(const User &U, MachineIRBuilder &MIRBuilder) {
   return true;
 }
 
+bool IRTranslator::translateAtomicCmpXchg(const User &U,
+                                          MachineIRBuilder &MIRBuilder) {
+  const AtomicCmpXchgInst &I = cast<AtomicCmpXchgInst>(U);
+
+  if (I.isWeak())
+    return false;
+
+  auto Flags = I.isVolatile() ? MachineMemOperand::MOVolatile
+                              : MachineMemOperand::MONone;
+  Flags |= MachineMemOperand::MOLoad | MachineMemOperand::MOStore;
+
+  Type *ResType = I.getType();
+  Type *ValType = ResType->Type::getStructElementType(0);
+
+  auto Res = getOrCreateVRegs(I);
+  unsigned OldValRes = Res[0];
+  unsigned SuccessRes = Res[1];
+  unsigned Addr = getOrCreateVReg(*I.getPointerOperand());
+  unsigned Cmp = getOrCreateVReg(*I.getCompareOperand());
+  unsigned NewVal = getOrCreateVReg(*I.getNewValOperand());
+
+  MIRBuilder.buildAtomicCmpXchgWithSuccess(
+      OldValRes, SuccessRes, Addr, Cmp, NewVal,
+      *MF->getMachineMemOperand(MachinePointerInfo(I.getPointerOperand()),
+                                Flags, DL->getTypeStoreSize(ValType),
+                                getMemOpAlignment(I), AAMDNodes(), nullptr,
+                                I.getSyncScopeID(), I.getSuccessOrdering(),
+                                I.getFailureOrdering()));
+  return true;
+}
+
+bool IRTranslator::translateAtomicRMW(const User &U,
+                                      MachineIRBuilder &MIRBuilder) {
+  const AtomicRMWInst &I = cast<AtomicRMWInst>(U);
+
+  auto Flags = I.isVolatile() ? MachineMemOperand::MOVolatile
+                              : MachineMemOperand::MONone;
+  Flags |= MachineMemOperand::MOLoad | MachineMemOperand::MOStore;
+
+  Type *ResType = I.getType();
+
+  unsigned Res = getOrCreateVReg(I);
+  unsigned Addr = getOrCreateVReg(*I.getPointerOperand());
+  unsigned Val = getOrCreateVReg(*I.getValOperand());
+
+  unsigned Opcode = 0;
+  switch (I.getOperation()) {
+  default:
+    llvm_unreachable("Unknown atomicrmw op");
+    return false;
+  case AtomicRMWInst::Xchg:
+    Opcode = TargetOpcode::G_ATOMICRMW_XCHG;
+    break;
+  case AtomicRMWInst::Add:
+    Opcode = TargetOpcode::G_ATOMICRMW_ADD;
+    break;
+  case AtomicRMWInst::Sub:
+    Opcode = TargetOpcode::G_ATOMICRMW_SUB;
+    break;
+  case AtomicRMWInst::And:
+    Opcode = TargetOpcode::G_ATOMICRMW_AND;
+    break;
+  case AtomicRMWInst::Nand:
+    Opcode = TargetOpcode::G_ATOMICRMW_NAND;
+    break;
+  case AtomicRMWInst::Or:
+    Opcode = TargetOpcode::G_ATOMICRMW_OR;
+    break;
+  case AtomicRMWInst::Xor:
+    Opcode = TargetOpcode::G_ATOMICRMW_XOR;
+    break;
+  case AtomicRMWInst::Max:
+    Opcode = TargetOpcode::G_ATOMICRMW_MAX;
+    break;
+  case AtomicRMWInst::Min:
+    Opcode = TargetOpcode::G_ATOMICRMW_MIN;
+    break;
+  case AtomicRMWInst::UMax:
+    Opcode = TargetOpcode::G_ATOMICRMW_UMAX;
+    break;
+  case AtomicRMWInst::UMin:
+    Opcode = TargetOpcode::G_ATOMICRMW_UMIN;
+    break;
+  }
+
+  MIRBuilder.buildAtomicRMW(
+      Opcode, Res, Addr, Val,
+      *MF->getMachineMemOperand(MachinePointerInfo(I.getPointerOperand()),
+                                Flags, DL->getTypeStoreSize(ResType),
+                                getMemOpAlignment(I), AAMDNodes(), nullptr,
+                                I.getSyncScopeID(), I.getOrdering()));
+  return true;
+}
+
 void IRTranslator::finishPendingPhis() {
   for (auto &Phi : PendingPHIs) {
     const PHINode *PI = Phi.first;
@@ -1389,6 +1527,8 @@ bool IRTranslator::translate(const Constant &C, unsigned Reg) {
       Ops.push_back(getOrCreateVReg(*CV->getOperand(i)));
     }
     EntryBuilder.buildMerge(Reg, Ops);
+  } else if (auto *BA = dyn_cast<BlockAddress>(&C)) {
+    EntryBuilder.buildBlockAddress(Reg, BA);
   } else
     return false;
 
@@ -1463,6 +1603,18 @@ bool IRTranslator::runOnMachineFunction(MachineFunction &CurMF) {
         MRI->createGenericVirtualRegister(getLLTForType(*Arg.getType(), *DL)));
   }
 
+  // We don't currently support translating swifterror or swiftself functions.
+  for (auto &Arg : F.args()) {
+    if (Arg.hasSwiftErrorAttr() || Arg.hasSwiftSelfAttr()) {
+      OptimizationRemarkMissed R("gisel-irtranslator", "GISelFailure",
+                                 F.getSubprogram(), &F.getEntryBlock());
+      R << "unable to lower arguments due to swifterror/swiftself: "
+        << ore::NV("Prototype", F.getType());
+      reportTranslationError(*MF, *TPC, *ORE, R);
+      return false;
+    }
+  }
+
   if (!CLI->lowerFormalArguments(EntryBuilder, F, VRegArgs)) {
     OptimizationRemarkMissed R("gisel-irtranslator", "GISelFailure",
                                F.getSubprogram(), &F.getEntryBlock());
@@ -1485,19 +1637,20 @@ bool IRTranslator::runOnMachineFunction(MachineFunction &CurMF) {
     ArgIt++;
   }
 
-  // And translate the function!
-  for (const BasicBlock &BB : F) {
-    MachineBasicBlock &MBB = getMBB(BB);
+  // Need to visit defs before uses when translating instructions.
+  ReversePostOrderTraversal<const Function *> RPOT(&F);
+  for (const BasicBlock *BB : RPOT) {
+    MachineBasicBlock &MBB = getMBB(*BB);
     // Set the insertion point of all the following translations to
     // the end of this basic block.
     CurBuilder.setMBB(MBB);
 
-    for (const Instruction &Inst : BB) {
+    for (const Instruction &Inst : *BB) {
       if (translate(Inst))
         continue;
 
       OptimizationRemarkMissed R("gisel-irtranslator", "GISelFailure",
-                                 Inst.getDebugLoc(), &BB);
+                                 Inst.getDebugLoc(), BB);
       R << "unable to translate instruction: " << ore::NV("Opcode", &Inst);
 
       if (ORE->allowExtraAnalysis("gisel-irtranslator")) {
@@ -1541,6 +1694,10 @@ bool IRTranslator::runOnMachineFunction(MachineFunction &CurMF) {
 
   assert(&MF->front() == &NewEntryBB &&
          "New entry wasn't next in the list of basic block!");
+
+  // Initialize stack protector information.
+  StackProtector &SP = getAnalysis<StackProtector>();
+  SP.copyToMachineFrameInfo(MF->getFrameInfo());
 
   return false;
 }

@@ -240,12 +240,8 @@ public:
 
     // Process schedule.
     if (tnum == 1 || tripCount <= 1 || OrderedSchedule(schedule)) {
-      if (OrderedSchedule(schedule)) {
-        if (isSPMDMode())
-          __syncthreads();
-        else
-          __kmpc_barrier(loc, threadId);
-      }
+      if (OrderedSchedule(schedule))
+        __kmpc_barrier(loc, threadId);
       PRINT(LD_LOOP,
             "go sequential as tnum=%ld, trip count %lld, ordered sched=%d\n",
             (long)tnum, P64(tripCount), schedule);
@@ -298,7 +294,9 @@ public:
       // compute static chunk
       ST stride;
       int lastiter = 0;
-      ForStaticChunk(lastiter, lb, ub, stride, chunk, threadId, tnum);
+      ForStaticChunk(
+          lastiter, lb, ub, stride, chunk,
+          GetOmpThreadId(tid, isSPMDMode(), isRuntimeUninitialized()), tnum);
       // save computed params
       omptarget_nvptx_threadPrivateContext->Chunk(tid) = chunk;
       omptarget_nvptx_threadPrivateContext->NextLowerBound(tid) = lb;
@@ -320,7 +318,9 @@ public:
       // compute static chunk
       ST stride;
       int lastiter = 0;
-      ForStaticNoChunk(lastiter, lb, ub, stride, chunk, threadId, tnum);
+      ForStaticNoChunk(
+          lastiter, lb, ub, stride, chunk,
+          GetOmpThreadId(tid, isSPMDMode(), isRuntimeUninitialized()), tnum);
       // save computed params
       omptarget_nvptx_threadPrivateContext->Chunk(tid) = chunk;
       omptarget_nvptx_threadPrivateContext->NextLowerBound(tid) = lb;
@@ -334,10 +334,7 @@ public:
             omptarget_nvptx_threadPrivateContext->Stride(tid));
 
     } else if (schedule == kmp_sched_dynamic || schedule == kmp_sched_guided) {
-      if (isSPMDMode())
-        __syncthreads();
-      else
-        __kmpc_barrier(loc, threadId);
+      __kmpc_barrier(loc, threadId);
       // save sched state
       int teamId = GetOmpTeamId();
       omptarget_nvptx_threadPrivateContext->ScheduleType(tid) = schedule;
@@ -348,10 +345,7 @@ public:
         omptarget_nvptx_threadPrivateContext->LoopUpperBound(teamId) = ub;
         omptarget_nvptx_threadPrivateContext->NextLowerBound(teamId) = lb;
       }
-      if (isSPMDMode())
-        __syncthreads();
-      else
-        __kmpc_barrier(loc, threadId);
+      __kmpc_barrier(loc, threadId);
       PRINT(LD_LOOP,
             "dispatch init (dyn) : num threads = %d, lb = %llu, ub = %" PRId64
             ", chunk %" PRIu64 "\n",
@@ -366,10 +360,11 @@ public:
   // Support for dispatch next
 
   INLINE static int DynamicNextChunk(T &lb, T &ub, T chunkSize,
-                                     Counter &loopLowerBound,
+                                     int64_t &loopLowerBound,
                                      T loopUpperBound) {
     // calculate lower bound for all lanes in the warp
-    lb = atomicAdd(&loopLowerBound, (Counter)chunkSize);
+    lb = atomicAdd((unsigned long long *)&loopLowerBound,
+                   (unsigned long long)chunkSize);
     ub = lb + chunkSize - 1;  // Clang uses i <= ub
 
     // 3 result cases:

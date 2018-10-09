@@ -778,6 +778,12 @@ public:
 
   unsigned getEncoding() const { return Encoding; }
 
+  enum class Signedness { Signed, Unsigned };
+
+  /// Return the signedness of this type, or None if this type is neither
+  /// signed nor unsigned.
+  Optional<Signedness> getSignedness() const;
+
   static bool classof(const Metadata *MD) {
     return MD->getMetadataID() == DIBasicTypeKind;
   }
@@ -1156,11 +1162,12 @@ public:
     NoDebug = 0,
     FullDebug,
     LineTablesOnly,
-    LastEmissionKind = LineTablesOnly
+    DebugDirectivesOnly,
+    LastEmissionKind = DebugDirectivesOnly
   };
 
   static Optional<DebugEmissionKind> getEmissionKind(StringRef Str);
-  static const char *EmissionKindString(DebugEmissionKind EK);
+  static const char *emissionKindString(DebugEmissionKind EK);
 
 private:
   unsigned SourceLanguage;
@@ -1261,6 +1268,9 @@ public:
   unsigned getRuntimeVersion() const { return RuntimeVersion; }
   DebugEmissionKind getEmissionKind() const {
     return (DebugEmissionKind)EmissionKind;
+  }
+  bool isDebugDirectivesOnly() const {
+    return EmissionKind == DebugDirectivesOnly;
   }
   bool getDebugInfoForProfiling() const { return DebugInfoForProfiling; }
   bool getGnuPubnames() const { return GnuPubnames; }
@@ -2206,6 +2216,14 @@ public:
   /// Determines the size of the variable's type.
   Optional<uint64_t> getSizeInBits() const;
 
+  /// Return the signedness of this variable's type, or None if this type is
+  /// neither signed nor unsigned.
+  Optional<DIBasicType::Signedness> getSignedness() const {
+    if (auto *BT = dyn_cast<DIBasicType>(getType().resolve()))
+      return BT->getSignedness();
+    return None;
+  }
+
   StringRef getFilename() const {
     if (auto *F = getFile())
       return F->getFilename();
@@ -2312,6 +2330,11 @@ public:
     ///
     /// Return the number of elements in the operand (1 + args).
     unsigned getSize() const;
+
+    /// Append the elements of this operand to \p V.
+    void appendToVector(SmallVectorImpl<uint64_t> &V) const {
+      V.append(get(), get() + getSize());
+    }
   };
 
   /// An iterator for expression operands.
@@ -2415,15 +2438,28 @@ public:
 
   /// Prepend \p DIExpr with a deref and offset operation and optionally turn it
   /// into a stack value.
-  static DIExpression *prepend(const DIExpression *DIExpr, bool DerefBefore,
+  static DIExpression *prepend(const DIExpression *Expr, bool DerefBefore,
                                int64_t Offset = 0, bool DerefAfter = false,
                                bool StackValue = false);
 
   /// Prepend \p DIExpr with the given opcodes and optionally turn it into a
   /// stack value.
-  static DIExpression *prependOpcodes(const DIExpression *DIExpr,
+  static DIExpression *prependOpcodes(const DIExpression *Expr,
                                       SmallVectorImpl<uint64_t> &Ops,
                                       bool StackValue = false);
+
+  /// Append the opcodes \p Ops to \p DIExpr. Unlike \ref appendToStack, the
+  /// returned expression is a stack value only if \p DIExpr is a stack value.
+  /// If \p DIExpr describes a fragment, the returned expression will describe
+  /// the same fragment.
+  static DIExpression *append(const DIExpression *Expr, ArrayRef<uint64_t> Ops);
+
+  /// Convert \p DIExpr into a stack value if it isn't one already by appending
+  /// DW_OP_deref if needed, and appending \p Ops to the resulting expression.
+  /// If \p DIExpr describes a fragment, the returned expression will describe
+  /// the same fragment.
+  static DIExpression *appendToStack(const DIExpression *Expr,
+                                     ArrayRef<uint64_t> Ops);
 
   /// Create a DIExpression to describe one part of an aggregate variable that
   /// is fragmented across multiple Values. The DW_OP_LLVM_fragment operation

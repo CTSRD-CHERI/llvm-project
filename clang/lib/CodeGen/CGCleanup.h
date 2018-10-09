@@ -230,7 +230,7 @@ public:
 };
 
 /// A cleanup scope which generates the cleanup blocks lazily.
-class LLVM_ALIGNAS(/*alignof(uint64_t)*/ 8) EHCleanupScope : public EHScope {
+class alignas(8) EHCleanupScope : public EHScope {
   /// The nearest normal cleanup scope enclosing this one.
   EHScopeStack::stable_iterator EnclosingNormal;
 
@@ -509,7 +509,7 @@ class EHScopeStack::iterator {
 public:
   iterator() : Ptr(nullptr) {}
 
-  EHScope *get() const { 
+  EHScope *get() const {
     return reinterpret_cast<EHScope*>(Ptr);
   }
 

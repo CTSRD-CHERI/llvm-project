@@ -522,6 +522,8 @@ private:
     enum OMPTargetGlobalVarEntryKind : uint32_t {
       /// Mark the entry as a to declare target.
       OMPTargetGlobalVarEntryTo = 0x0,
+      /// Mark the entry as a to declare target link.
+      OMPTargetGlobalVarEntryLink = 0x1,
     };
 
     /// Device global variable entries info.
@@ -599,6 +601,10 @@ private:
 
   bool ShouldMarkAsGlobal = true;
   llvm::SmallDenseSet<const FunctionDecl *> AlreadyEmittedTargetFunctions;
+
+  /// List of variables that can become declare target implicitly and, thus,
+  /// must be emitted.
+  llvm::SmallDenseSet<const VarDecl *> DeferredGlobalVariables;
 
   /// Creates and registers offloading binary descriptor for the current
   /// compilation unit. The function that does the registration is returned.
@@ -1507,6 +1513,8 @@ public:
   /// true, if it was marked already, and false, otherwise.
   bool markAsGlobalTarget(GlobalDecl GD);
 
+  /// Emit deferred declare target variables marked for deferred emission.
+  void emitDeferredTargetDecls() const;
 };
 
 /// Class supports emissionof SIMD-only code.

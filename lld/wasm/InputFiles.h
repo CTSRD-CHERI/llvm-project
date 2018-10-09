@@ -63,7 +63,7 @@ public:
   Kind kind() const { return FileKind; }
 
   // An archive file name if this file is created from an archive.
-  StringRef ParentName;
+  StringRef ArchiveName;
 
   ArrayRef<Symbol *> getSymbols() const { return Symbols; }
 
@@ -149,6 +149,10 @@ public:
   void parse() override;
   std::unique_ptr<llvm::lto::InputFile> Obj;
 };
+
+// Will report a fatal() error if the input buffer is not a valid bitcode
+// or was object file.
+InputFile *createObjectFile(MemoryBufferRef MB);
 
 // Opens a given file.
 llvm::Optional<MemoryBufferRef> readFile(StringRef Path);

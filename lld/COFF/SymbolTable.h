@@ -92,9 +92,9 @@ public:
   Symbol *addCommon(InputFile *F, StringRef N, uint64_t Size,
                     const llvm::object::coff_symbol_generic *S = nullptr,
                     CommonChunk *C = nullptr);
-  DefinedImportData *addImportData(StringRef N, ImportFile *F);
-  DefinedImportThunk *addImportThunk(StringRef Name, DefinedImportData *S,
-                                     uint16_t Machine);
+  Symbol *addImportData(StringRef N, ImportFile *F);
+  Symbol *addImportThunk(StringRef Name, DefinedImportData *S,
+                         uint16_t Machine);
 
   void reportDuplicate(Symbol *Existing, InputFile *NewFile);
 
@@ -108,7 +108,7 @@ public:
   }
 
 private:
-  std::pair<Symbol *, bool> insert(StringRef Name);
+  std::pair<Symbol *, bool> insert(StringRef Name, InputFile *F);
   StringRef findByPrefix(StringRef Prefix);
 
   llvm::DenseMap<llvm::CachedHashStringRef, Symbol *> SymMap;

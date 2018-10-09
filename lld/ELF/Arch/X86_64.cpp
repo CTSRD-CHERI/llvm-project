@@ -43,6 +43,8 @@ public:
   void relaxTlsGdToLe(uint8_t *Loc, RelType Type, uint64_t Val) const override;
   void relaxTlsIeToLe(uint8_t *Loc, RelType Type, uint64_t Val) const override;
   void relaxTlsLdToLe(uint8_t *Loc, RelType Type, uint64_t Val) const override;
+  bool adjustPrologueForCrossSplitStack(uint8_t *Loc,
+                                        uint8_t *End) const override;
 
 private:
   void relaxGotNoPic(uint8_t *Loc, uint64_t Val, uint8_t Op,
@@ -468,6 +470,49 @@ void X86_64<ELFT>::relaxGot(uint8_t *Loc, uint64_t Val) const {
   Loc[3] = 0x90;  // nop
   write32le(Loc - 1, Val + 1);
 }
+
+// This anonymous namespace works around a warning bug in
+// old versions of gcc. See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=56480
+namespace {
+
+// A split-stack prologue starts by checking the amount of stack remaining
+// in one of two ways:
+// A) Comparing of the stack pointer to a field in the tcb.
+// B) Or a load of a stack pointer offset with an lea to r10 or r11.
+template <>
+bool X86_64<ELF64LE>::adjustPrologueForCrossSplitStack(uint8_t *Loc,
+                                                       uint8_t *End) const {
+  if (Loc + 8 >= End)
+    return false;
+
+  // Replace "cmp %fs:0x70,%rsp" and subsequent branch
+  // with "stc, nopl 0x0(%rax,%rax,1)"
+  if (memcmp(Loc, "\x64\x48\x3b\x24\x25", 5) == 0) {
+    memcpy(Loc, "\xf9\x0f\x1f\x84\x00\x00\x00\x00", 8);
+    return true;
+  }
+
+  // Adjust "lea X(%rsp),%rYY" to lea "(X - 0x4000)(%rsp),%rYY" where rYY could
+  // be r10 or r11. The lea instruction feeds a subsequent compare which checks
+  // if there is X available stack space. Making X larger effectively reserves
+  // that much additional space. The stack grows downward so subtract the value.
+  if (memcmp(Loc, "\x4c\x8d\x94\x24", 4) == 0 ||
+      memcmp(Loc, "\x4c\x8d\x9c\x24", 4) == 0) {
+    // The offset bytes are encoded four bytes after the start of the
+    // instruction.
+    write32le(Loc + 4, read32le(Loc + 4) - 0x4000);
+    return true;
+  }
+  return false;
+}
+
+template <>
+bool X86_64<ELF32LE>::adjustPrologueForCrossSplitStack(uint8_t *Loc,
+                                                       uint8_t *End) const {
+  llvm_unreachable("Target doesn't support split stacks.");
+}
+
+} // namespace
 
 // These nonstandard PLT entries are to migtigate Spectre v2 security
 // vulnerability. In order to mitigate Spectre v2, we want to avoid indirect

@@ -1137,44 +1137,13 @@ static Value *simplifyMinnumMaxnum(const IntrinsicInst &II) {
   Value *Arg0 = II.getArgOperand(0);
   Value *Arg1 = II.getArgOperand(1);
 
-  // fmin(x, x) -> x
-  if (Arg0 == Arg1)
-    return Arg0;
-
   const auto *C1 = dyn_cast<ConstantFP>(Arg1);
 
   // fmin(x, nan) -> x
   if (C1 && C1->isNaN())
     return Arg0;
 
-  // This is the value because if undef were NaN, we would return the other
-  // value and cannot return a NaN unless both operands are.
-  //
-  // fmin(undef, x) -> x
-  if (isa<UndefValue>(Arg0))
-    return Arg1;
-
-  // fmin(x, undef) -> x
-  if (isa<UndefValue>(Arg1))
-    return Arg0;
-
-  Value *X = nullptr;
-  Value *Y = nullptr;
   if (II.getIntrinsicID() == Intrinsic::minnum) {
-    // fmin(x, fmin(x, y)) -> fmin(x, y)
-    // fmin(y, fmin(x, y)) -> fmin(x, y)
-    if (match(Arg1, m_FMin(m_Value(X), m_Value(Y)))) {
-      if (Arg0 == X || Arg0 == Y)
-        return Arg1;
-    }
-
-    // fmin(fmin(x, y), x) -> fmin(x, y)
-    // fmin(fmin(x, y), y) -> fmin(x, y)
-    if (match(Arg0, m_FMin(m_Value(X), m_Value(Y)))) {
-      if (Arg1 == X || Arg1 == Y)
-        return Arg0;
-    }
-
     // TODO: fmin(nnan x, inf) -> x
     // TODO: fmin(nnan ninf x, flt_max) -> x
     if (C1 && C1->isInfinity()) {
@@ -1184,20 +1153,6 @@ static Value *simplifyMinnumMaxnum(const IntrinsicInst &II) {
     }
   } else {
     assert(II.getIntrinsicID() == Intrinsic::maxnum);
-    // fmax(x, fmax(x, y)) -> fmax(x, y)
-    // fmax(y, fmax(x, y)) -> fmax(x, y)
-    if (match(Arg1, m_FMax(m_Value(X), m_Value(Y)))) {
-      if (Arg0 == X || Arg0 == Y)
-        return Arg1;
-    }
-
-    // fmax(fmax(x, y), x) -> fmax(x, y)
-    // fmax(fmax(x, y), y) -> fmax(x, y)
-    if (match(Arg0, m_FMax(m_Value(X), m_Value(Y)))) {
-      if (Arg1 == X || Arg1 == Y)
-        return Arg0;
-    }
-
     // TODO: fmax(nnan x, -inf) -> x
     // TODO: fmax(nnan ninf x, -flt_max) -> x
     if (C1 && C1->isInfinity()) {
@@ -1264,6 +1219,40 @@ static Instruction *simplifyMaskedGather(IntrinsicInst &II, InstCombiner &IC) {
     return IC.replaceInstUsesWith(II, II.getArgOperand(3));
 
   return nullptr;
+}
+
+/// This function transforms launder.invariant.group and strip.invariant.group
+/// like:
+/// launder(launder(%x)) -> launder(%x)       (the result is not the argument)
+/// launder(strip(%x)) -> launder(%x)
+/// strip(strip(%x)) -> strip(%x)             (the result is not the argument)
+/// strip(launder(%x)) -> strip(%x)
+/// This is legal because it preserves the most recent information about
+/// the presence or absence of invariant.group.
+static Instruction *simplifyInvariantGroupIntrinsic(IntrinsicInst &II,
+                                                    InstCombiner &IC) {
+  auto *Arg = II.getArgOperand(0);
+  auto *StrippedArg = Arg->stripPointerCasts();
+  auto *StrippedInvariantGroupsArg = Arg->stripPointerCastsAndInvariantGroups();
+  if (StrippedArg == StrippedInvariantGroupsArg)
+    return nullptr; // No launders/strips to remove.
+
+  Value *Result = nullptr;
+
+  if (II.getIntrinsicID() == Intrinsic::launder_invariant_group)
+    Result = IC.Builder.CreateLaunderInvariantGroup(StrippedInvariantGroupsArg);
+  else if (II.getIntrinsicID() == Intrinsic::strip_invariant_group)
+    Result = IC.Builder.CreateStripInvariantGroup(StrippedInvariantGroupsArg);
+  else
+    llvm_unreachable(
+        "simplifyInvariantGroupIntrinsic only handles launder and strip");
+  if (Result->getType()->getPointerAddressSpace() !=
+      II.getType()->getPointerAddressSpace())
+    Result = IC.Builder.CreateAddrSpaceCast(Result, II.getType());
+  if (Result->getType() != II.getType())
+    Result = IC.Builder.CreateBitCast(Result, II.getType());
+
+  return cast<Instruction>(Result);
 }
 
 static Instruction *simplifyMaskedScatter(IntrinsicInst &II, InstCombiner &IC) {
@@ -1940,7 +1929,11 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
     return simplifyMaskedGather(*II, *this);
   case Intrinsic::masked_scatter:
     return simplifyMaskedScatter(*II, *this);
-
+  case Intrinsic::launder_invariant_group:
+  case Intrinsic::strip_invariant_group:
+    if (auto *SkippedBarrier = simplifyInvariantGroupIntrinsic(*II, *this))
+      return replaceInstUsesWith(*II, SkippedBarrier);
+    break;
   case Intrinsic::powi:
     if (ConstantInt *Power = dyn_cast<ConstantInt>(II->getArgOperand(1))) {
       // 0 and 1 are handled in instsimplify
@@ -2060,8 +2053,8 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
     }
 
     // fma fabs(x), fabs(x), z -> fma x, x, z
-    if (match(Src0, m_Intrinsic<Intrinsic::fabs>(m_Value(X))) &&
-        match(Src1, m_Intrinsic<Intrinsic::fabs>(m_Specific(X)))) {
+    if (match(Src0, m_FAbs(m_Value(X))) &&
+        match(Src1, m_FAbs(m_Specific(X)))) {
       II->setArgOperand(0, X);
       II->setArgOperand(1, X);
       return II;
@@ -2108,7 +2101,7 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
     Value *SrcSrc;
     Value *Src = II->getArgOperand(0);
     if (match(Src, m_FNeg(m_Value(SrcSrc))) ||
-        match(Src, m_Intrinsic<Intrinsic::fabs>(m_Value(SrcSrc)))) {
+        match(Src, m_FAbs(m_Value(SrcSrc)))) {
       // cos(-x) -> cos(x)
       // cos(fabs(x)) -> cos(x)
       II->setArgOperand(0, SrcSrc);
@@ -2535,18 +2528,6 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
   case Intrinsic::x86_avx512_mask_min_ss_round:
   case Intrinsic::x86_avx512_mask_max_sd_round:
   case Intrinsic::x86_avx512_mask_min_sd_round:
-  case Intrinsic::x86_avx512_mask_vfmadd_ss:
-  case Intrinsic::x86_avx512_mask_vfmadd_sd:
-  case Intrinsic::x86_avx512_maskz_vfmadd_ss:
-  case Intrinsic::x86_avx512_maskz_vfmadd_sd:
-  case Intrinsic::x86_avx512_mask3_vfmadd_ss:
-  case Intrinsic::x86_avx512_mask3_vfmadd_sd:
-  case Intrinsic::x86_avx512_mask3_vfmsub_ss:
-  case Intrinsic::x86_avx512_mask3_vfmsub_sd:
-  case Intrinsic::x86_avx512_mask3_vfnmsub_ss:
-  case Intrinsic::x86_avx512_mask3_vfnmsub_sd:
-  case Intrinsic::x86_fma_vfmadd_ss:
-  case Intrinsic::x86_fma_vfmadd_sd:
   case Intrinsic::x86_sse_cmp_ss:
   case Intrinsic::x86_sse_min_ss:
   case Intrinsic::x86_sse_max_ss:
@@ -3426,6 +3407,24 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
     Value *Src1 = II->getArgOperand(1);
     Value *Src2 = II->getArgOperand(2);
 
+    // Checking for NaN before canonicalization provides better fidelity when
+    // mapping other operations onto fmed3 since the order of operands is
+    // unchanged.
+    CallInst *NewCall = nullptr;
+    if (match(Src0, m_NaN()) || isa<UndefValue>(Src0)) {
+      NewCall = Builder.CreateMinNum(Src1, Src2);
+    } else if (match(Src1, m_NaN()) || isa<UndefValue>(Src1)) {
+      NewCall = Builder.CreateMinNum(Src0, Src2);
+    } else if (match(Src2, m_NaN()) || isa<UndefValue>(Src2)) {
+      NewCall = Builder.CreateMaxNum(Src0, Src1);
+    }
+
+    if (NewCall) {
+      NewCall->copyFastMathFlags(II);
+      NewCall->takeName(II);
+      return replaceInstUsesWith(*II, NewCall);
+    }
+
     bool Swap = false;
     // Canonicalize constants to RHS operands.
     //
@@ -3450,13 +3449,6 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
       II->setArgOperand(1, Src1);
       II->setArgOperand(2, Src2);
       return II;
-    }
-
-    if (match(Src2, m_NaN()) || isa<UndefValue>(Src2)) {
-      CallInst *NewCall = Builder.CreateMinNum(Src0, Src1);
-      NewCall->copyFastMathFlags(II);
-      NewCall->takeName(II);
-      return replaceInstUsesWith(*II, NewCall);
     }
 
     if (const ConstantFP *C0 = dyn_cast<ConstantFP>(Src0)) {
@@ -4011,7 +4003,9 @@ Instruction *InstCombiner::visitCallSite(CallSite CS) {
     }
   }
 
-  if (isa<ConstantPointerNull>(Callee) || isa<UndefValue>(Callee)) {
+  if ((isa<ConstantPointerNull>(Callee) &&
+       !NullPointerIsDefined(CS.getInstruction()->getFunction())) ||
+      isa<UndefValue>(Callee)) {
     // If CS does not return void then replaceAllUsesWith undef.
     // This allows ValueHandlers and custom metadata to adjust itself.
     if (!CS.getInstruction()->getType()->isVoidTy())

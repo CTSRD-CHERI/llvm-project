@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "DwarfStreamer.h"
+#include "CompileUnit.h"
 #include "LinkUtils.h"
 #include "MachOUtils.h"
 #include "llvm/ADT/Triple.h"
@@ -69,8 +70,8 @@ bool DwarfStreamer::init(Triple TheTriple) {
   if (!MSTI)
     return error("no subtarget info for target " + TripleName, Context);
 
-  MCTargetOptions Options;
-  MAB = TheTarget->createMCAsmBackend(*MSTI, *MRI, Options);
+  MCTargetOptions MCOptions = InitMCTargetOptionsFromFlags();
+  MAB = TheTarget->createMCAsmBackend(*MSTI, *MRI, MCOptions);
   if (!MAB)
     return error("no asm backend for target " + TripleName, Context);
 
@@ -82,12 +83,26 @@ bool DwarfStreamer::init(Triple TheTriple) {
   if (!MCE)
     return error("no code emitter for target " + TripleName, Context);
 
-  MCTargetOptions MCOptions = InitMCTargetOptionsFromFlags();
-  MS = TheTarget->createMCObjectStreamer(
-      TheTriple, *MC, std::unique_ptr<MCAsmBackend>(MAB),
-      MAB->createObjectWriter(OutFile), std::unique_ptr<MCCodeEmitter>(MCE),
-      *MSTI, MCOptions.MCRelaxAll, MCOptions.MCIncrementalLinkerCompatible,
-      /*DWARFMustBeAtTheEnd*/ false);
+  switch (Options.FileType) {
+  case OutputFileType::Assembly: {
+    MIP = TheTarget->createMCInstPrinter(TheTriple, MAI->getAssemblerDialect(),
+                                         *MAI, *MII, *MRI);
+    MS = TheTarget->createAsmStreamer(
+        *MC, llvm::make_unique<formatted_raw_ostream>(OutFile), true, true, MIP,
+        std::unique_ptr<MCCodeEmitter>(MCE), std::unique_ptr<MCAsmBackend>(MAB),
+        true);
+    break;
+  }
+  case OutputFileType::Object: {
+    MS = TheTarget->createMCObjectStreamer(
+        TheTriple, *MC, std::unique_ptr<MCAsmBackend>(MAB),
+        MAB->createObjectWriter(OutFile), std::unique_ptr<MCCodeEmitter>(MCE),
+        *MSTI, MCOptions.MCRelaxAll, MCOptions.MCIncrementalLinkerCompatible,
+        /*DWARFMustBeAtTheEnd*/ false);
+    break;
+  }
+  }
+
   if (!MS)
     return error("no object streamer for target " + TripleName, Context);
 
@@ -111,7 +126,8 @@ bool DwarfStreamer::init(Triple TheTriple) {
 
 bool DwarfStreamer::finish(const DebugMap &DM) {
   bool Result = true;
-  if (DM.getTriple().isOSDarwin() && !DM.getBinaryPath().empty())
+  if (DM.getTriple().isOSDarwin() && !DM.getBinaryPath().empty() &&
+      Options.FileType == OutputFileType::Object)
     Result = MachOUtils::generateDsymCompanion(DM, *MS, OutFile);
   else
     MS->Finish();
@@ -136,15 +152,23 @@ void DwarfStreamer::emitCompileUnitHeader(CompileUnit &Unit) {
   unsigned Version = Unit.getOrigUnit().getVersion();
   switchToDebugInfoSection(Version);
 
+  /// The start of the unit within its section.
+  Unit.setLabelBegin(Asm->createTempSymbol("cu_begin"));
+  Asm->OutStreamer->EmitLabel(Unit.getLabelBegin());
+
   // Emit size of content not including length itself. The size has already
   // been computed in CompileUnit::computeOffsets(). Subtract 4 to that size to
   // account for the length field.
   Asm->emitInt32(Unit.getNextUnitOffset() - Unit.getStartOffset() - 4);
   Asm->emitInt16(Version);
+
   // We share one abbreviations table across all units so it's always at the
   // start of the section.
   Asm->emitInt32(0);
   Asm->emitInt8(Unit.getOrigUnit().getAddressByteSize());
+
+  // Remember this CU.
+  EmittedUnits.push_back({Unit.getUniqueID(), Unit.getLabelBegin()});
 }
 
 /// Emit the \p Abbrevs array as the shared abbreviation table
@@ -166,15 +190,36 @@ void DwarfStreamer::emitDIE(DIE &Die) {
 /// Emit the debug_str section stored in \p Pool.
 void DwarfStreamer::emitStrings(const NonRelocatableStringpool &Pool) {
   Asm->OutStreamer->SwitchSection(MOFI->getDwarfStrSection());
-  std::vector<DwarfStringPoolEntryRef> Entries = Pool.getEntries();
+  std::vector<DwarfStringPoolEntryRef> Entries = Pool.getEntriesForEmission();
   for (auto Entry : Entries) {
-    if (Entry.getIndex() == -1U)
-      break;
     // Emit the string itself.
     Asm->OutStreamer->EmitBytes(Entry.getString());
     // Emit a null terminator.
     Asm->emitInt8(0);
   }
+}
+
+void DwarfStreamer::emitDebugNames(
+    AccelTable<DWARF5AccelTableStaticData> &Table) {
+  if (EmittedUnits.empty())
+    return;
+
+  // Build up data structures needed to emit this section.
+  std::vector<MCSymbol *> CompUnits;
+  DenseMap<unsigned, size_t> UniqueIdToCuMap;
+  unsigned Id = 0;
+  for (auto &CU : EmittedUnits) {
+    CompUnits.push_back(CU.LabelBegin);
+    // We might be omitting CUs, so we need to remap them.
+    UniqueIdToCuMap[CU.ID] = Id++;
+  }
+
+  Asm->OutStreamer->SwitchSection(MOFI->getDwarfDebugNamesSection());
+  emitDWARF5AccelTable(
+      Asm.get(), Table, CompUnits,
+      [&UniqueIdToCuMap](const DWARF5AccelTableStaticData &Entry) {
+        return UniqueIdToCuMap[Entry.getCUIndex()];
+      });
 }
 
 void DwarfStreamer::emitAppleNamespaces(
@@ -540,8 +585,7 @@ static void emitSectionContents(const object::ObjectFile &Obj,
       MS->EmitBytes(Contents);
 }
 
-void DwarfStreamer::copyInvariantDebugSection(const object::ObjectFile &Obj,
-                                              LinkOptions &Options) {
+void DwarfStreamer::copyInvariantDebugSection(const object::ObjectFile &Obj) {
   MS->SwitchSection(MC->getObjectFileInfo()->getDwarfLineSection());
   emitSectionContents(Obj, "debug_line", MS);
 

@@ -1,6 +1,6 @@
-; RUN: llc -march=amdgcn -verify-machineinstrs < %s | FileCheck -enable-var-scope -check-prefixes=GCN,FUNC %s
-; RUN: llc -march=amdgcn -mcpu=tonga -mattr=-flat-for-global -verify-machineinstrs < %s | FileCheck -enable-var-scope -check-prefixes=GCN,FUNC %s
-; RUN: llc -march=r600 -mcpu=redwood < %s | FileCheck -enable-var-scope -check-prefixes=R600,FUNC %s
+; RUN: llc -march=amdgcn -verify-machineinstrs < %s | FileCheck -allow-deprecated-dag-overlap -enable-var-scope -check-prefixes=GCN,FUNC %s
+; RUN: llc -march=amdgcn -mcpu=tonga -mattr=-flat-for-global -verify-machineinstrs < %s | FileCheck -allow-deprecated-dag-overlap -enable-var-scope -check-prefixes=GCN,FUNC %s
+; RUN: llc -march=r600 -mcpu=redwood < %s | FileCheck -allow-deprecated-dag-overlap -enable-var-scope -check-prefixes=R600,FUNC %s
 
 ; BFI_INT Definition pattern from ISA docs
 ; (y & x) | (z & ~x)
@@ -54,8 +54,8 @@ entry:
 
 ; FUNC-LABEL: {{^}}v_bitselect_v2i32_pat1:
 ; GCN: s_waitcnt
-; GCN-NEXT: v_bfi_b32 v1, v3, v1, v5
 ; GCN-NEXT: v_bfi_b32 v0, v2, v0, v4
+; GCN-NEXT: v_bfi_b32 v1, v3, v1, v5
 ; GCN-NEXT: s_setpc_b64
 define <2 x i32> @v_bitselect_v2i32_pat1(<2 x i32> %a, <2 x i32> %b, <2 x i32> %mask) {
   %xor.0 = xor <2 x i32> %a, %mask

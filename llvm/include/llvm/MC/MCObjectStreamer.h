@@ -90,6 +90,9 @@ protected:
 public:
   void visitUsedSymbol(const MCSymbol &Sym) override;
 
+  /// Create a dummy fragment to assign any pending labels.
+  void flushPendingLabels() { flushPendingLabels(nullptr); }
+
   MCAssembler &getAssembler() { return *Assembler; }
   MCAssembler *getAssemblerPtr() override;
   /// \name MCStreamer Interface
@@ -166,6 +169,9 @@ public:
   void emitFill(const MCExpr &NumValues, int64_t Size, int64_t Expr,
                 SMLoc Loc = SMLoc()) override;
   void EmitFileDirective(StringRef Filename) override;
+
+  void EmitAddrsig() override;
+  void EmitAddrsigSym(const MCSymbol *Sym) override;
 
   void FinishImpl() override;
 

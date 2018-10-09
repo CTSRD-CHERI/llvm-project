@@ -1,250 +1,236 @@
+// THIS IS A GENERATED TEST. DO NOT EDIT.
+// To regenerate, see clang-doc/gen_test.py docstring.
+//
+// This test requires Linux due to system-dependent USR for the inner class.
+// REQUIRES: system-linux
 // RUN: rm -rf %t
 // RUN: mkdir %t
 // RUN: echo "" > %t/compile_flags.txt
 // RUN: cp "%s" "%t/test.cpp"
-// RUN: clang-doc -doxygen -p %t %t/test.cpp -output=%t/docs
-// RUN: cat %t/docs/A.yaml | FileCheck %s --check-prefix=CHECK-A
-// RUN: cat %t/docs/Bc.yaml | FileCheck %s --check-prefix=CHECK-BC
-// RUN: cat %t/docs/B.yaml | FileCheck %s --check-prefix=CHECK-B
-// RUN: cat %t/docs/C.yaml | FileCheck %s --check-prefix=CHECK-C
-// RUN: cat %t/docs/D.yaml | FileCheck %s --check-prefix=CHECK-D
-// RUN: cat %t/docs/E.yaml | FileCheck %s --check-prefix=CHECK-E
-// RUN: cat %t/docs/E/ProtectedMethod.yaml | FileCheck %s --check-prefix=CHECK-EPM
-// RUN: cat %t/docs/E/E.yaml | FileCheck %s --check-prefix=CHECK-ECON
-// RUN: cat %t/docs/E/'~E.yaml' | FileCheck %s --check-prefix=CHECK-EDES
-// RUN: cat %t/docs/F.yaml | FileCheck %s --check-prefix=CHECK-F
-// RUN: cat %t/docs/X.yaml | FileCheck %s --check-prefix=CHECK-X
-// RUN: cat %t/docs/X/Y.yaml | FileCheck %s --check-prefix=CHECK-Y
-// RUN: cat %t/docs/H.yaml | FileCheck %s --check-prefix=CHECK-H
-// RUN: cat %t/docs/H/I.yaml | FileCheck %s --check-prefix=CHECK-I
+
+void H() {
+  class I {};
+}
 
 union A { int X; int Y; };
 
-// CHECK-A: ---
-// CHECK-A-NEXT: USR:             'ACE81AFA6627B4CEF2B456FB6E1252925674AF7E'
-// CHECK-A-NEXT: Name:            'A'
-// CHECK-A-NEXT: DefLocation:     
-// CHECK-A-NEXT:   LineNumber:      21
-// CHECK-A-NEXT:   Filename:        '{{.*}}'
-// CHECK-A-NEXT: TagType:         Union
-// CHECK-A-NEXT: Members:         
-// CHECK-A-NEXT:   - Type:            
-// CHECK-A-NEXT:       Name:            'int'
-// CHECK-A-NEXT:     Name:            'X'
-// CHECK-A-NEXT:   - Type:            
-// CHECK-A-NEXT:       Name:            'int'
-// CHECK-A-NEXT:     Name:            'Y'
-// CHECK-A-NEXT: ...
-
-
 enum B { X, Y };
-
-// CHECK-B: ---
-// CHECK-B-NEXT: USR:             'FC07BD34D5E77782C263FA944447929EA8753740'
-// CHECK-B-NEXT: Name:            'B'
-// CHECK-B-NEXT: DefLocation:     
-// CHECK-B-NEXT:   LineNumber:      40
-// CHECK-B-NEXT:   Filename:        '{{.*}}'
-// CHECK-B-NEXT: Members:         
-// CHECK-B-NEXT:   - 'X'
-// CHECK-B-NEXT:   - 'Y'
-// CHECK-B-NEXT: ...
 
 enum class Bc { A, B };
 
-// CHECK-BC: ---
-// CHECK-BC-NEXT: USR:             '1E3438A08BA22025C0B46289FF0686F92C8924C5'
-// CHECK-BC-NEXT: Name:            'Bc'
-// CHECK-BC-NEXT: DefLocation:     
-// CHECK-BC-NEXT:   LineNumber:      53
-// CHECK-BC-NEXT:   Filename:        '{{.*}}'
-// CHECK-BC-NEXT: Scoped:          true
-// CHECK-BC-NEXT: Members:         
-// CHECK-BC-NEXT:   - 'A'
-// CHECK-BC-NEXT:   - 'B'
-// CHECK-BC-NEXT: ...
-
 struct C { int i; };
 
-// CHECK-C: ---
-// CHECK-C-NEXT: USR:             '06B5F6A19BA9F6A832E127C9968282B94619B210'
-// CHECK-C-NEXT: Name:            'C'
-// CHECK-C-NEXT: DefLocation:     
-// CHECK-C-NEXT:   LineNumber:      67
-// CHECK-C-NEXT:   Filename:        '{{.*}}'
-// CHECK-C-NEXT: Members:         
-// CHECK-C-NEXT:   - Type:            
-// CHECK-C-NEXT:       Name:            'int'
-// CHECK-C-NEXT:     Name:            'i'
-// CHECK-C-NEXT: ...
-
 class D {};
-
-// CHECK-D: ---
-// CHECK-D-NEXT: USR:             '0921737541208B8FA9BB42B60F78AC1D779AA054'
-// CHECK-D-NEXT: Name:            'D'
-// CHECK-D-NEXT: DefLocation:     
-// CHECK-D-NEXT:   LineNumber:      81
-// CHECK-D-NEXT:   Filename:        '{{.*}}'
-// CHECK-D-NEXT: TagType:         Class
-// CHECK-D-NEXT: ...
 
 class E {
 public:
   E() {}
-
-// CHECK-ECON: ---
-// CHECK-ECON-NEXT: USR:             'DEB4AC1CD9253CD9EF7FBE6BCAC506D77984ABD4'
-// CHECK-ECON-NEXT: Name:            'E'
-// CHECK-ECON-NEXT: Namespace:       
-// CHECK-ECON-NEXT:   - Type:            Record
-// CHECK-ECON-NEXT:     Name:            'E'
-// CHECK-ECON-NEXT:     USR:             '289584A8E0FF4178A794622A547AA622503967A1'
-// CHECK-ECON-NEXT: DefLocation:
-// CHECK-ECON-NEXT:   LineNumber:      94
-// CHECK-ECON-NEXT:   Filename:        '{{.*}}'
-// CHECK-ECON-NEXT: IsMethod:        true
-// CHECK-ECON-NEXT: Parent:          
-// CHECK-ECON-NEXT:   Type:            Record
-// CHECK-ECON-NEXT:   Name:            'E'
-// CHECK-ECON-NEXT:   USR:             '289584A8E0FF4178A794622A547AA622503967A1'
-// CHECK-ECON-NEXT: ReturnType:      
-// CHECK-ECON-NEXT:   Type:            
-// CHECK-ECON-NEXT:     Name:            'void'
-// CHECK-ECON-NEXT: ...
-  
   ~E() {}
-  
-// CHECK-EDES: ---
-// CHECK-EDES-NEXT: USR:             'BD2BDEBD423F80BACCEA75DE6D6622D355FC2D17'
-// CHECK-EDES-NEXT: Name:            '~E'
-// CHECK-EDES-NEXT: Namespace:       
-// CHECK-EDES-NEXT:   - Type:            Record
-// CHECK-EDES-NEXT:     Name:            'E'
-// CHECK-EDES-NEXT:     USR:             '289584A8E0FF4178A794622A547AA622503967A1'
-// CHECK-EDES-NEXT: DefLocation:     
-// CHECK-EDES-NEXT:   LineNumber:      116
-// CHECK-EDES-NEXT:   Filename:        '{{.*}}'
-// CHECK-EDES-NEXT: IsMethod:        true
-// CHECK-EDES-NEXT: Parent:          
-// CHECK-EDES-NEXT:   Type:            Record
-// CHECK-EDES-NEXT:   Name:            'E'
-// CHECK-EDES-NEXT:   USR:             '289584A8E0FF4178A794622A547AA622503967A1'
-// CHECK-EDES-NEXT: ReturnType:      
-// CHECK-EDES-NEXT:   Type:            
-// CHECK-EDES-NEXT:     Name:            'void'
-// CHECK-EDES-NEXT: ...
-
 
 protected:
   void ProtectedMethod();
 };
 
-// CHECK-E: ---
-// CHECK-E-NEXT: USR:             '289584A8E0FF4178A794622A547AA622503967A1'
-// CHECK-E-NEXT: Name:            'E'
-// CHECK-E-NEXT: DefLocation:     
-// CHECK-E-NEXT:   LineNumber:      92
-// CHECK-E-NEXT:   Filename:        '{{.*}}'
-// CHECK-E-NEXT: TagType:         Class
-// CHECK-E-NEXT: ...
-
 void E::ProtectedMethod() {}
-
-// CHECK-EPM: ---
-// CHECK-EPM-NEXT: USR:             '5093D428CDC62096A67547BA52566E4FB9404EEE'
-// CHECK-EPM-NEXT: Name:            'ProtectedMethod'
-// CHECK-EPM-NEXT: Namespace:       
-// CHECK-EPM-NEXT:   - Type:            Record
-// CHECK-EPM-NEXT:     Name:            'E'
-// CHECK-EPM-NEXT:     USR:             '289584A8E0FF4178A794622A547AA622503967A1'
-// CHECK-EPM-NEXT: DefLocation:     
-// CHECK-EPM-NEXT:   LineNumber:      152
-// CHECK-EPM-NEXT:   Filename:        '{{.*}}'
-// CHECK-EPM-NEXT: Location:        
-// CHECK-EPM-NEXT:   - LineNumber:      140
-// CHECK-EPM-NEXT:     Filename:        '{{.*}}'
-// CHECK-EPM-NEXT: IsMethod:        true
-// CHECK-EPM-NEXT: Parent:          
-// CHECK-EPM-NEXT:   Type:            Record
-// CHECK-EPM-NEXT:   Name:            'E'
-// CHECK-EPM-NEXT:   USR:             '289584A8E0FF4178A794622A547AA622503967A1'
-// CHECK-EPM-NEXT: ReturnType:      
-// CHECK-EPM-NEXT:   Type:            
-// CHECK-EPM-NEXT:     Name:            'void'
-// CHECK-EPM-NEXT: ...
 
 class F : virtual private D, public E {};
 
-// CHECK-F: ---
-// CHECK-F-NEXT: USR:             'E3B54702FABFF4037025BA194FC27C47006330B5'
-// CHECK-F-NEXT: Name:            'F'
-// CHECK-F-NEXT: DefLocation:     
-// CHECK-F-NEXT:   LineNumber:      177
-// CHECK-F-NEXT:   Filename:        '{{.*}}'
-// CHECK-F-NEXT: TagType:         Class
-// CHECK-F-NEXT: Parents:         
-// CHECK-F-NEXT:   - Type:            Record
-// CHECK-F-NEXT:     Name:            'E'
-// CHECK-F-NEXT:     USR:             '289584A8E0FF4178A794622A547AA622503967A1'
-// CHECK-F-NEXT: VirtualParents:  
-// CHECK-F-NEXT:   - Type:            Record
-// CHECK-F-NEXT:     Name:            'D'
-// CHECK-F-NEXT:     USR:             '0921737541208B8FA9BB42B60F78AC1D779AA054'
-// CHECK-F-NEXT: ...
-
 class X {
   class Y {};
-  
-// CHECK-Y: ---
-// CHECK-Y-NEXT: USR:             '641AB4A3D36399954ACDE29C7A8833032BF40472'
-// CHECK-Y-NEXT: Name:            'Y'
-// CHECK-Y-NEXT: Namespace:       
-// CHECK-Y-NEXT:   - Type:            Record
-// CHECK-Y-NEXT:     Name:            'X'
-// CHECK-Y-NEXT:     USR:             'CA7C7935730B5EACD25F080E9C83FA087CCDC75E'
-// CHECK-Y-NEXT: DefLocation:     
-// CHECK-Y-NEXT:   LineNumber:      197
-// CHECK-Y-NEXT:   Filename:        '{{.*}}'
-// CHECK-Y-NEXT: TagType:         Class
-// CHECK-Y-NEXT: ...
-
 };
 
-// CHECK-X: ---
-// CHECK-X-NEXT: USR:             'CA7C7935730B5EACD25F080E9C83FA087CCDC75E'
-// CHECK-X-NEXT: Name:            'X'
-// CHECK-X-NEXT: DefLocation:     
-// CHECK-X-NEXT:   LineNumber:      196
-// CHECK-X-NEXT:   Filename:        '{{.*}}'
-// CHECK-X-NEXT: TagType:         Class
-// CHECK-X-NEXT: ...
+// RUN: clang-doc --format=yaml --doxygen --extra-arg=-fmodules-ts -p %t %t/test.cpp -output=%t/docs
 
-void H() {
-  class I {};
-  
-// CHECK-I: ---
-// CHECK-I-NEXT: USR:             '{{.*}}'
-// CHECK-I-NEXT: Name:            'I'
-// CHECK-I-NEXT: Namespace:       
-// CHECK-I-NEXT:   - Type:            Function
-// CHECK-I-NEXT:     Name:            'H'
-// CHECK-I-NEXT:     USR:             'B6AC4C5C9F2EA3F2B3ECE1A33D349F4EE502B24E'
-// CHECK-I-NEXT: DefLocation:     
-// CHECK-I-NEXT:   LineNumber:      224
-// CHECK-I-NEXT:   Filename:        'test'
-// CHECK-I-NEXT: TagType:         Class
-// CHECK-I-NEXT: ...
 
-}
+// RUN: cat %t/docs/./C.yaml | FileCheck %s --check-prefix CHECK-0
+// CHECK-0: ---
+// CHECK-0-NEXT: USR:             '{{[0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z]}}'
+// CHECK-0-NEXT: Name:            'C'
+// CHECK-0-NEXT: DefLocation:     
+// CHECK-0-NEXT:   LineNumber:      21
+// CHECK-0-NEXT:   Filename:        'test'
+// CHECK-0-NEXT: Members:         
+// CHECK-0-NEXT:   - Type:            
+// CHECK-0-NEXT:       Name:            'int'
+// CHECK-0-NEXT:     Name:            'i'
+// CHECK-0-NEXT: ...
 
-// CHECK-H: ---
-// CHECK-H-NEXT: USR:             'B6AC4C5C9F2EA3F2B3ECE1A33D349F4EE502B24E'
-// CHECK-H-NEXT: Name:            'H'
-// CHECK-H-NEXT: DefLocation:     
-// CHECK-H-NEXT:   LineNumber:      223
-// CHECK-H-NEXT:   Filename:        'test'
-// CHECK-H-NEXT: ReturnType:      
-// CHECK-H-NEXT:   Type:            
-// CHECK-H-NEXT:     Name:            'void'
-// CHECK-H-NEXT: ...
+// RUN: cat %t/docs/./A.yaml | FileCheck %s --check-prefix CHECK-1
+// CHECK-1: ---
+// CHECK-1-NEXT: USR:             '{{[0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z]}}'
+// CHECK-1-NEXT: Name:            'A'
+// CHECK-1-NEXT: DefLocation:     
+// CHECK-1-NEXT:   LineNumber:      15
+// CHECK-1-NEXT:   Filename:        'test'
+// CHECK-1-NEXT: TagType:         Union
+// CHECK-1-NEXT: Members:         
+// CHECK-1-NEXT:   - Type:            
+// CHECK-1-NEXT:       Name:            'int'
+// CHECK-1-NEXT:     Name:            'X'
+// CHECK-1-NEXT:   - Type:            
+// CHECK-1-NEXT:       Name:            'int'
+// CHECK-1-NEXT:     Name:            'Y'
+// CHECK-1-NEXT: ...
+
+// RUN: cat %t/docs/./F.yaml | FileCheck %s --check-prefix CHECK-2
+// CHECK-2: ---
+// CHECK-2-NEXT: USR:             '{{[0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z]}}'
+// CHECK-2-NEXT: Name:            'F'
+// CHECK-2-NEXT: DefLocation:     
+// CHECK-2-NEXT:   LineNumber:      36
+// CHECK-2-NEXT:   Filename:        'test'
+// CHECK-2-NEXT: TagType:         Class
+// CHECK-2-NEXT: Parents:         
+// CHECK-2-NEXT:   - Type:            Record
+// CHECK-2-NEXT:     Name:            'E'
+// CHECK-2-NEXT:     USR:             '{{[0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z]}}'
+// CHECK-2-NEXT: VirtualParents:  
+// CHECK-2-NEXT:   - Type:            Record
+// CHECK-2-NEXT:     Name:            'D'
+// CHECK-2-NEXT:     USR:             '{{[0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z]}}'
+// CHECK-2-NEXT: ...
+
+// RUN: cat %t/docs/./E.yaml | FileCheck %s --check-prefix CHECK-3
+// CHECK-3: ---
+// CHECK-3-NEXT: USR:             '{{[0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z]}}'
+// CHECK-3-NEXT: Name:            'E'
+// CHECK-3-NEXT: DefLocation:     
+// CHECK-3-NEXT:   LineNumber:      25
+// CHECK-3-NEXT:   Filename:        'test'
+// CHECK-3-NEXT: TagType:         Class
+// CHECK-3-NEXT: ChildFunctions:  
+// CHECK-3-NEXT:   - USR:             '{{[0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z]}}'
+// CHECK-3-NEXT:     Name:            'E'
+// CHECK-3-NEXT:     Namespace:       
+// CHECK-3-NEXT:       - Type:            Record
+// CHECK-3-NEXT:         Name:            'E'
+// CHECK-3-NEXT:         USR:             '{{[0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z]}}'
+// CHECK-3-NEXT:     DefLocation:     
+// CHECK-3-NEXT:       LineNumber:      27
+// CHECK-3-NEXT:       Filename:        'test'
+// CHECK-3-NEXT:     IsMethod:        true
+// CHECK-3-NEXT:     Parent:          
+// CHECK-3-NEXT:       Type:            Record
+// CHECK-3-NEXT:       Name:            'E'
+// CHECK-3-NEXT:       USR:             '{{[0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z]}}'
+// CHECK-3-NEXT:     ReturnType:      
+// CHECK-3-NEXT:       Type:            
+// CHECK-3-NEXT:         Name:            'void'
+// CHECK-3-NEXT:   - USR:             '{{[0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z]}}'
+// CHECK-3-NEXT:     Name:            '~E'
+// CHECK-3-NEXT:     Namespace:       
+// CHECK-3-NEXT:       - Type:            Record
+// CHECK-3-NEXT:         Name:            'E'
+// CHECK-3-NEXT:         USR:             '{{[0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z]}}'
+// CHECK-3-NEXT:     DefLocation:     
+// CHECK-3-NEXT:       LineNumber:      28
+// CHECK-3-NEXT:       Filename:        'test'
+// CHECK-3-NEXT:     IsMethod:        true
+// CHECK-3-NEXT:     Parent:          
+// CHECK-3-NEXT:       Type:            Record
+// CHECK-3-NEXT:       Name:            'E'
+// CHECK-3-NEXT:       USR:             '{{[0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z]}}'
+// CHECK-3-NEXT:     ReturnType:      
+// CHECK-3-NEXT:       Type:            
+// CHECK-3-NEXT:         Name:            'void'
+// CHECK-3-NEXT:   - USR:             '{{[0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z]}}'
+// CHECK-3-NEXT:     Name:            'ProtectedMethod'
+// CHECK-3-NEXT:     Namespace:       
+// CHECK-3-NEXT:       - Type:            Record
+// CHECK-3-NEXT:         Name:            'E'
+// CHECK-3-NEXT:         USR:             '{{[0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z]}}'
+// CHECK-3-NEXT:     DefLocation:     
+// CHECK-3-NEXT:       LineNumber:      34
+// CHECK-3-NEXT:       Filename:        'test'
+// CHECK-3-NEXT:     Location:        
+// CHECK-3-NEXT:       - LineNumber:      31
+// CHECK-3-NEXT:         Filename:        'test'
+// CHECK-3-NEXT:     IsMethod:        true
+// CHECK-3-NEXT:     Parent:          
+// CHECK-3-NEXT:       Type:            Record
+// CHECK-3-NEXT:       Name:            'E'
+// CHECK-3-NEXT:       USR:             '{{[0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z]}}'
+// CHECK-3-NEXT:     ReturnType:      
+// CHECK-3-NEXT:       Type:            
+// CHECK-3-NEXT:         Name:            'void'
+// CHECK-3-NEXT: ...
+
+// RUN: cat %t/docs/./D.yaml | FileCheck %s --check-prefix CHECK-4
+// CHECK-4: ---
+// CHECK-4-NEXT: USR:             '{{[0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z]}}'
+// CHECK-4-NEXT: Name:            'D'
+// CHECK-4-NEXT: DefLocation:     
+// CHECK-4-NEXT:   LineNumber:      23
+// CHECK-4-NEXT:   Filename:        'test'
+// CHECK-4-NEXT: TagType:         Class
+// CHECK-4-NEXT: ...
+
+// RUN: cat %t/docs/./X.yaml | FileCheck %s --check-prefix CHECK-5
+// CHECK-5: ---
+// CHECK-5-NEXT: USR:             '{{[0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z]}}'
+// CHECK-5-NEXT: Name:            'X'
+// CHECK-5-NEXT: DefLocation:     
+// CHECK-5-NEXT:   LineNumber:      38
+// CHECK-5-NEXT:   Filename:        'test'
+// CHECK-5-NEXT: TagType:         Class
+// CHECK-5-NEXT: ...
+
+// RUN: cat %t/docs/./GlobalNamespace.yaml | FileCheck %s --check-prefix CHECK-6
+// CHECK-6: ---
+// CHECK-6-NEXT: USR:             '{{[0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z]}}'
+// CHECK-6-NEXT: ChildFunctions:  
+// CHECK-6-NEXT:   - USR:             '{{[0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z]}}'
+// CHECK-6-NEXT:     Name:            'H'
+// CHECK-6-NEXT:     DefLocation:     
+// CHECK-6-NEXT:       LineNumber:      11
+// CHECK-6-NEXT:       Filename:        'test'
+// CHECK-6-NEXT:     ReturnType:      
+// CHECK-6-NEXT:       Type:            
+// CHECK-6-NEXT:         Name:            'void'
+// CHECK-6-NEXT: ChildEnums:      
+// CHECK-6-NEXT:   - USR:             '{{[0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z]}}'
+// CHECK-6-NEXT:     Name:            'B'
+// CHECK-6-NEXT:     DefLocation:     
+// CHECK-6-NEXT:       LineNumber:      17
+// CHECK-6-NEXT:       Filename:        'test'
+// CHECK-6-NEXT:     Members:         
+// CHECK-6-NEXT:       - 'X'
+// CHECK-6-NEXT:       - 'Y'
+// CHECK-6-NEXT:   - USR:             '{{[0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z]}}'
+// CHECK-6-NEXT:     Name:            'Bc'
+// CHECK-6-NEXT:     DefLocation:     
+// CHECK-6-NEXT:       LineNumber:      19
+// CHECK-6-NEXT:       Filename:        'test'
+// CHECK-6-NEXT:     Scoped:          true
+// CHECK-6-NEXT:     Members:         
+// CHECK-6-NEXT:       - 'A'
+// CHECK-6-NEXT:       - 'B'
+// CHECK-6-NEXT: ...
+
+// RUN: cat %t/docs/H/I.yaml | FileCheck %s --check-prefix CHECK-7
+// CHECK-7: ---
+// CHECK-7-NEXT: USR:             '{{[0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z]}}'
+// CHECK-7-NEXT: Name:            'I'
+// CHECK-7-NEXT: Namespace:       
+// CHECK-7-NEXT:   - Type:            Function
+// CHECK-7-NEXT:     Name:            'H'
+// CHECK-7-NEXT:     USR:             '{{[0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z]}}'
+// CHECK-7-NEXT: DefLocation:     
+// CHECK-7-NEXT:   LineNumber:      12
+// CHECK-7-NEXT:   Filename:        'test'
+// CHECK-7-NEXT: TagType:         Class
+// CHECK-7-NEXT: ...
+
+// RUN: cat %t/docs/X/Y.yaml | FileCheck %s --check-prefix CHECK-8
+// CHECK-8: ---
+// CHECK-8-NEXT: USR:             '{{[0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z]}}'
+// CHECK-8-NEXT: Name:            'Y'
+// CHECK-8-NEXT: Namespace:       
+// CHECK-8-NEXT:   - Type:            Record
+// CHECK-8-NEXT:     Name:            'X'
+// CHECK-8-NEXT:     USR:             '{{[0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z][0-9A-Z]}}'
+// CHECK-8-NEXT: DefLocation:     
+// CHECK-8-NEXT:   LineNumber:      39
+// CHECK-8-NEXT:   Filename:        'test'
+// CHECK-8-NEXT: TagType:         Class
+// CHECK-8-NEXT: ...

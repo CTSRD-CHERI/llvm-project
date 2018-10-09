@@ -186,6 +186,10 @@ DIE *DwarfCompileUnit::getOrCreateGlobalVariableDIE(
     if (!Global && (!Expr || !Expr->isConstant()))
       continue;
 
+    if (Global && Global->isThreadLocal() &&
+        !Asm->getObjFileLowering().supportDebugThreadLocalLocation())
+      continue;
+
     if (!Loc) {
       addToAccelTable = true;
       Loc = new (DIEValueAllocator) DIELoc;
@@ -275,6 +279,9 @@ void DwarfCompileUnit::addRange(RangeSpan Range) {
 }
 
 void DwarfCompileUnit::initStmtList() {
+  if (CUNode->isDebugDirectivesOnly())
+    return;
+
   // Define start line table label for each Compile Unit.
   MCSymbol *LineTableStartSym;
   const TargetLoweringObjectFile &TLOF = Asm->getObjFileLowering();
@@ -327,10 +334,16 @@ DIE &DwarfCompileUnit::updateSubprogramScopeDIE(const DISubprogram *SP) {
 
   // Only include DW_AT_frame_base in full debug info
   if (!includeMinimalInlineScopes()) {
-    const TargetRegisterInfo *RI = Asm->MF->getSubtarget().getRegisterInfo();
-    MachineLocation Location(RI->getFrameRegister(*Asm->MF));
-    if (RI->isPhysicalRegister(Location.getReg()))
-      addAddress(*SPDie, dwarf::DW_AT_frame_base, Location);
+    if (Asm->MF->getTarget().getTargetTriple().isNVPTX()) {
+      DIELoc *Loc = new (DIEValueAllocator) DIELoc;
+      addUInt(*Loc, dwarf::DW_FORM_data1, dwarf::DW_OP_call_frame_cfa);
+      addBlock(*SPDie, dwarf::DW_AT_frame_base, Loc);
+    } else {
+      const TargetRegisterInfo *RI = Asm->MF->getSubtarget().getRegisterInfo();
+      MachineLocation Location(RI->getFrameRegister(*Asm->MF));
+      if (RI->isPhysicalRegister(Location.getReg()))
+        addAddress(*SPDie, dwarf::DW_AT_frame_base, Location);
+    }
   }
 
   // Add name to the name table, we do this here because we're guaranteed
@@ -399,21 +412,28 @@ void DwarfCompileUnit::addScopeRangeList(DIE &ScopeDIE,
                                          SmallVector<RangeSpan, 2> Range) {
   const TargetLoweringObjectFile &TLOF = Asm->getObjFileLowering();
 
-  // Emit offset in .debug_range as a relocatable label. emitDIE will handle
-  // emitting it appropriately.
+  // Emit the offset into .debug_ranges or .debug_rnglists as a relocatable
+  // label. emitDIE() will handle emitting it appropriately.
   const MCSymbol *RangeSectionSym =
-      TLOF.getDwarfRangesSection()->getBeginSymbol();
+      DD->getDwarfVersion() >= 5
+          ? TLOF.getDwarfRnglistsSection()->getBeginSymbol()
+          : TLOF.getDwarfRangesSection()->getBeginSymbol();
 
   RangeSpanList List(Asm->createTempSymbol("debug_ranges"), std::move(Range));
 
   // Under fission, ranges are specified by constant offsets relative to the
   // CU's DW_AT_GNU_ranges_base.
-  if (isDwoUnit())
-    addSectionDelta(ScopeDIE, dwarf::DW_AT_ranges, List.getSym(),
-                    RangeSectionSym);
-  else
+  // FIXME: For DWARF v5, do not generate the DW_AT_ranges attribute under
+  // fission until we support the forms using the .debug_addr section
+  // (DW_RLE_startx_endx etc.).
+  if (isDwoUnit()) {
+    if (DD->getDwarfVersion() < 5)
+      addSectionDelta(ScopeDIE, dwarf::DW_AT_ranges, List.getSym(),
+                      RangeSectionSym);
+  } else {
     addSectionLabel(ScopeDIE, dwarf::DW_AT_ranges, List.getSym(),
                     RangeSectionSym);
+  }
 
   // Add the range list to the set of ranges to be emitted.
   (Skeleton ? Skeleton : this)->CURangeLists.push_back(std::move(List));
@@ -563,8 +583,11 @@ DIE *DwarfCompileUnit::constructVariableDIEImpl(const DbgVariable &DV,
     Ops.append(Expr->elements_begin(), Expr->elements_end());
     DIExpressionCursor Cursor(Ops);
     DwarfExpr.setMemoryLocationKind();
-    DwarfExpr.addMachineRegExpression(
-        *Asm->MF->getSubtarget().getRegisterInfo(), Cursor, FrameReg);
+    if (const MCSymbol *FrameSymbol = Asm->getFunctionFrameSymbol())
+      addOpAddress(*Loc, FrameSymbol);
+    else
+      DwarfExpr.addMachineRegExpression(
+          *Asm->MF->getSubtarget().getRegisterInfo(), Cursor, FrameReg);
     DwarfExpr.addExpression(std::move(Cursor));
   }
   addBlock(*VariableDie, dwarf::DW_AT_location, DwarfExpr.finalize());
@@ -866,7 +889,7 @@ bool DwarfCompileUnit::hasDwarfPubSections() const {
     return true;
 
   return DD->tuneForGDB() && DD->usePubSections() &&
-         !includeMinimalInlineScopes();
+         !includeMinimalInlineScopes() && !CUNode->isDebugDirectivesOnly();
 }
 
 /// addGlobalName - Add a new global name to the compile unit.

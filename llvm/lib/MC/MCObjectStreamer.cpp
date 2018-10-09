@@ -660,7 +660,18 @@ void MCObjectStreamer::EmitFileDirective(StringRef Filename) {
   getAssembler().addFileName(Filename);
 }
 
+void MCObjectStreamer::EmitAddrsig() {
+  getAssembler().getWriter().emitAddrsigSection();
+}
+
+void MCObjectStreamer::EmitAddrsigSym(const MCSymbol *Sym) {
+  getAssembler().registerSymbol(*Sym);
+  getAssembler().getWriter().addAddrsigSymbol(Sym);
+}
+
 void MCObjectStreamer::FinishImpl() {
+  getContext().RemapDebugPaths();
+
   // If we are generating dwarf for assembly source files dump out the sections.
   if (getContext().getGenDwarfForAssembly())
     MCGenDwarfInfo::Emit(this);
@@ -668,6 +679,6 @@ void MCObjectStreamer::FinishImpl() {
   // Dump out the dwarf file & directory tables and line tables.
   MCDwarfLineTable::Emit(this, getAssembler().getDWARFLinetableParams());
 
-  flushPendingLabels(nullptr);
+  flushPendingLabels();
   getAssembler().Finish();
 }

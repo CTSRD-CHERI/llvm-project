@@ -21,6 +21,7 @@
 #include "Protocol.h"
 #include "index/Index.h"
 #include "clang/Frontend/PrecompiledPreamble.h"
+#include "clang/Sema/CodeCompleteConsumer.h"
 #include "clang/Sema/CodeCompleteOptions.h"
 #include "clang/Tooling/CompilationDatabase.h"
 
@@ -67,12 +68,19 @@ struct CodeCompleteOptions {
     std::string NoInsert = " ";
   } IncludeIndicator;
 
+  /// Expose origins of completion items in the label (for debugging).
+  bool ShowOrigins = false;
+
   // Populated internally by clangd, do not set.
   /// If `Index` is set, it is used to augment the code completion
   /// results.
   /// FIXME(ioeric): we might want a better way to pass the index around inside
   /// clangd.
   const SymbolIndex *Index = nullptr;
+
+  /// Include completions that require small corrections, e.g. change '.' to
+  /// '->' on member access etc.
+  bool IncludeFixIts = false;
 };
 
 // Semi-structured representation of a code-complete suggestion for our C++ API.
@@ -102,13 +110,18 @@ struct CodeCompletion {
   //  - ReturnType may be empty
   //  - Documentation may be from one symbol, or a combination of several
   // Other fields should apply equally to all bundled completions.
-  unsigned BundleSize;
+  unsigned BundleSize = 1;
+  SymbolOrigin Origin = SymbolOrigin::Unknown;
   // The header through which this symbol could be included.
   // Quoted string as expected by an #include directive, e.g. "<memory>".
   // Empty for non-symbol completions, or when not known.
   std::string Header;
   // Present if Header is set and should be inserted to use this item.
   llvm::Optional<TextEdit> HeaderInsertion;
+
+  /// Holds information about small corrections that needs to be done. Like
+  /// converting '->' to '.' on member access.
+  std::vector<TextEdit> FixIts;
 
   // Scores are used to rank completion items.
   struct Scores {
@@ -136,18 +149,23 @@ struct CodeCompletion {
   // Serialize this to an LSP completion item. This is a lossy operation.
   CompletionItem render(const CodeCompleteOptions &) const;
 };
+raw_ostream &operator<<(raw_ostream &, const CodeCompletion &);
 struct CodeCompleteResult {
   std::vector<CodeCompletion> Completions;
   bool HasMore = false;
+  CodeCompletionContext::Kind Context = CodeCompletionContext::CCC_Other;
 };
+raw_ostream &operator<<(raw_ostream &, const CodeCompleteResult &);
 
 /// Get code completions at a specified \p Pos in \p FileName.
-CodeCompleteResult codeComplete(
-    PathRef FileName, const tooling::CompileCommand &Command,
-    PrecompiledPreamble const *Preamble,
-    const std::vector<Inclusion> &PreambleInclusions, StringRef Contents,
-    Position Pos, IntrusiveRefCntPtr<vfs::FileSystem> VFS,
-    std::shared_ptr<PCHContainerOperations> PCHs, CodeCompleteOptions Opts);
+CodeCompleteResult codeComplete(PathRef FileName,
+                                const tooling::CompileCommand &Command,
+                                PrecompiledPreamble const *Preamble,
+                                const IncludeStructure &PreambleInclusions,
+                                StringRef Contents, Position Pos,
+                                IntrusiveRefCntPtr<vfs::FileSystem> VFS,
+                                std::shared_ptr<PCHContainerOperations> PCHs,
+                                CodeCompleteOptions Opts);
 
 /// Get signature help at a specified \p Pos in \p FileName.
 SignatureHelp signatureHelp(PathRef FileName,

@@ -48,6 +48,10 @@ class DwarfFile {
   /// the string offsets table. The contribution is shared by all units.
   MCSymbol *StringOffsetsStartSym = nullptr;
 
+  /// DWARF v5: The symbol that designates the base of the range list table.
+  /// The table is shared by all units.
+  MCSymbol *RnglistsTableBaseSym = nullptr;
+
   /// The variables of a lexical scope.
   struct ScopeVars {
     /// We need to sort Args by ArgNo and check for duplicates. This could also
@@ -87,9 +91,6 @@ public:
   /// Add a unit to the list of CUs.
   void addUnit(std::unique_ptr<DwarfCompileUnit> U);
 
-  /// Emit the string table offsets header.
-  void emitStringOffsetsTableHeader(MCSection *Section);
-
   /// Emit all of the units to the section listed with the given
   /// abbreviation section.
   void emitUnits(bool UseOffsets);
@@ -113,6 +114,10 @@ public:
   MCSymbol *getStringOffsetsStartSym() const { return StringOffsetsStartSym; }
 
   void setStringOffsetsStartSym(MCSymbol *Sym) { StringOffsetsStartSym = Sym; }
+
+  MCSymbol *getRnglistsTableBaseSym() const { return RnglistsTableBaseSym; }
+
+  void setRnglistsTableBaseSym(MCSymbol *Sym) { RnglistsTableBaseSym = Sym; }
 
   /// \returns false if the variable was merged with a previous one.
   bool addScopeVariable(LexicalScope *LS, DbgVariable *Var);

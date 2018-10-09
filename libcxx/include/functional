@@ -1006,7 +1006,7 @@ class _LIBCPP_TEMPLATE_VIS binary_negate
 {
     _Predicate __pred_;
 public:
-    _LIBCPP_INLINE_VISIBILITY explicit _LIBCPP_CONSTEXPR_AFTER_CXX11 
+    _LIBCPP_INLINE_VISIBILITY explicit _LIBCPP_CONSTEXPR_AFTER_CXX11
     binary_negate(const _Predicate& __pred) : __pred_(__pred) {}
 
     _LIBCPP_CONSTEXPR_AFTER_CXX11 _LIBCPP_INLINE_VISIBILITY
@@ -1399,13 +1399,13 @@ public:
 #endif
 };
 
-_LIBCPP_NORETURN inline _LIBCPP_ALWAYS_INLINE
+_LIBCPP_NORETURN inline _LIBCPP_INLINE_VISIBILITY
 void __throw_bad_function_call()
 {
 #ifndef _LIBCPP_NO_EXCEPTIONS
     throw bad_function_call();
 #else
-	_VSTD::abort();
+    _VSTD::abort();
 #endif
 }
 
@@ -1790,7 +1790,7 @@ function<_Rp(_ArgTypes...)>::function(allocator_arg_t, const _Alloc& __a0, _Fp _
         typedef __function::__func<_Fp, _Alloc, _Rp(_ArgTypes...)> _FF;
         typedef typename __rebind_alloc_helper<__alloc_traits, _FF>::type _Ap;
         _Ap __a(__a0);
-        if (sizeof(_FF) <= sizeof(__buf_) && 
+        if (sizeof(_FF) <= sizeof(__buf_) &&
             is_nothrow_copy_constructible<_Fp>::value && is_nothrow_copy_constructible<_Ap>::value)
         {
             __f_ = ::new((void*)&__buf_) _FF(_VSTD::move(__f), _Alloc(__a));
@@ -2005,7 +2005,7 @@ namespace placeholders
 
 template <int _Np> struct __ph {};
 
-#if defined(_LIBCPP_CXX03_LANG) || defined(_LIBCPP_BUILDING_BIND)
+#if defined(_LIBCPP_CXX03_LANG) || defined(_LIBCPP_BUILDING_LIBRARY)
 _LIBCPP_FUNC_VIS extern const __ph<1>   _1;
 _LIBCPP_FUNC_VIS extern const __ph<2>   _2;
 _LIBCPP_FUNC_VIS extern const __ph<3>   _3;
@@ -2027,7 +2027,7 @@ _LIBCPP_FUNC_VIS extern const __ph<10> _10;
 /* _LIBCPP_INLINE_VAR */ constexpr __ph<8>   _8{};
 /* _LIBCPP_INLINE_VAR */ constexpr __ph<9>   _9{};
 /* _LIBCPP_INLINE_VAR */ constexpr __ph<10> _10{};
-#endif // defined(_LIBCPP_CXX03_LANG) || defined(_LIBCPP_BUILDING_BIND)
+#endif // defined(_LIBCPP_CXX03_LANG) || defined(_LIBCPP_BUILDING_LIBRARY)
 
 }  // placeholders
 
@@ -2497,7 +2497,7 @@ template<class _ForwardIterator, class _BinaryPredicate = equal_to<>>
 class _LIBCPP_TYPE_VIS default_searcher {
 public:
     _LIBCPP_INLINE_VISIBILITY
-    default_searcher(_ForwardIterator __f, _ForwardIterator __l, 
+    default_searcher(_ForwardIterator __f, _ForwardIterator __l,
                        _BinaryPredicate __p = _BinaryPredicate())
         : __first_(__f), __last_(__l), __pred_(__p) {}
 

@@ -105,8 +105,8 @@ TargetInfo *elf::getTarget() {
 
 template <class ELFT> static ErrorPlace getErrPlace(const uint8_t *Loc) {
   for (InputSectionBase *D : InputSections) {
-    auto *IS = dyn_cast<InputSection>(D);
-    if (!IS || !IS->getParent())
+    auto *IS = cast<InputSection>(D);
+    if (!IS->getParent())
       continue;
 
     uint8_t *ISLoc = IS->getParent()->Loc + IS->OutSecOff;
@@ -143,6 +143,12 @@ bool TargetInfo::needsThunk(RelExpr Expr, RelType Type, const InputFile *File,
                             uint64_t BranchAddr, const Symbol &S) const {
   return false;
 }
+
+bool TargetInfo::adjustPrologueForCrossSplitStack(uint8_t *Loc,
+                                                  uint8_t *End) const {
+  llvm_unreachable("Target doesn't support split stacks.");
+}
+
 
 bool TargetInfo::inBranchRange(RelType Type, uint64_t Src, uint64_t Dst) const {
   return true;

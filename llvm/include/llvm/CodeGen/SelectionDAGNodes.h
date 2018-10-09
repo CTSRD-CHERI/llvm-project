@@ -1246,7 +1246,7 @@ protected:
 
 public:
   MemSDNode(unsigned Opc, unsigned Order, const DebugLoc &dl, SDVTList VTs,
-            EVT MemoryVT, MachineMemOperand *MMO);
+            EVT memvt, MachineMemOperand *MMO);
 
   bool readMem() const { return MMO->isLoad(); }
   bool writeMem() const { return MMO->isStore(); }
@@ -1594,10 +1594,10 @@ bool isOneConstant(SDValue V);
 bool isBitwiseNot(SDValue V);
 
 /// Returns the SDNode if it is a constant splat BuildVector or constant int.
-ConstantSDNode *isConstOrConstSplat(SDValue V);
+ConstantSDNode *isConstOrConstSplat(SDValue N);
 
 /// Returns the SDNode if it is a constant splat BuildVector or constant float.
-ConstantFPSDNode *isConstOrConstSplatFP(SDValue V);
+ConstantFPSDNode *isConstOrConstSplatFP(SDValue N);
 
 class GlobalAddressSDNode : public SDNode {
   friend class SelectionDAG;
@@ -1608,7 +1608,7 @@ class GlobalAddressSDNode : public SDNode {
 
   GlobalAddressSDNode(unsigned Opc, unsigned Order, const DebugLoc &DL,
                       const GlobalValue *GA, EVT VT, int64_t o,
-                      unsigned char TargetFlags);
+                      unsigned char TF);
 
 public:
   const GlobalValue *getGlobal() const { return TheGlobal; }
@@ -2143,7 +2143,7 @@ public:
     return static_cast<ISD::LoadExtType>(LoadSDNodeBits.ExtTy);
   }
 
-  const SDValue &getSrc0() const { return getOperand(3); }
+  const SDValue &getPassThru() const { return getOperand(3); }
   static bool classof(const SDNode *N) {
     return N->getOpcode() == ISD::MLOAD;
   }
@@ -2201,7 +2201,6 @@ public:
   const SDValue &getBasePtr() const { return getOperand(3); }
   const SDValue &getIndex()   const { return getOperand(4); }
   const SDValue &getMask()    const { return getOperand(2); }
-  const SDValue &getValue()   const { return getOperand(1); }
   const SDValue &getScale()   const { return getOperand(5); }
 
   static bool classof(const SDNode *N) {
@@ -2220,6 +2219,8 @@ public:
                      EVT MemVT, MachineMemOperand *MMO)
       : MaskedGatherScatterSDNode(ISD::MGATHER, Order, dl, VTs, MemVT, MMO) {}
 
+  const SDValue &getPassThru() const { return getOperand(1); }
+
   static bool classof(const SDNode *N) {
     return N->getOpcode() == ISD::MGATHER;
   }
@@ -2234,6 +2235,8 @@ public:
   MaskedScatterSDNode(unsigned Order, const DebugLoc &dl, SDVTList VTs,
                       EVT MemVT, MachineMemOperand *MMO)
       : MaskedGatherScatterSDNode(ISD::MSCATTER, Order, dl, VTs, MemVT, MMO) {}
+
+  const SDValue &getValue() const { return getOperand(1); }
 
   static bool classof(const SDNode *N) {
     return N->getOpcode() == ISD::MSCATTER;

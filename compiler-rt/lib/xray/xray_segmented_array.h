@@ -9,7 +9,7 @@
 //
 // This file is a part of XRay, a dynamic runtime instrumentation system.
 //
-// Defines the implementation of a segmented array, with fixed-size chunks
+// Defines the implementation of a segmented array, with fixed-size segments
 // backing the segments.
 //
 //===----------------------------------------------------------------------===//
@@ -18,151 +18,166 @@
 
 #include "sanitizer_common/sanitizer_allocator.h"
 #include "xray_allocator.h"
+#include "xray_utils.h"
+#include <cassert>
 #include <type_traits>
 #include <utility>
 
 namespace __xray {
-
-namespace {
-
-constexpr size_t gcd(size_t a, size_t b) {
-  return (b == 0) ? a : gcd(b, a % b);
-}
-
-constexpr size_t lcm(size_t a, size_t b) { return a * b / gcd(a, b); }
-
-} // namespace
 
 /// The Array type provides an interface similar to std::vector<...> but does
 /// not shrink in size. Once constructed, elements can be appended but cannot be
 /// removed. The implementation is heavily dependent on the contract provided by
 /// the Allocator type, in that all memory will be released when the Allocator
 /// is destroyed. When an Array is destroyed, it will destroy elements in the
-/// backing store but will not free the memory. The parameter N defines how many
-/// elements of T there should be in a single block.
-///
-/// We compute the least common multiple of the size of T and the cache line
-/// size, to allow us to maximise the number of T objects we can place in
-/// cache-line multiple sized blocks. To get back the number of T's, we divide
-/// this least common multiple by the size of T.
-template <class T, size_t N = lcm(sizeof(T), kCacheLineSize) / sizeof(T)>
-struct Array {
-  static constexpr size_t ChunkSize = N;
-  static constexpr size_t AllocatorChunkSize = sizeof(T) * ChunkSize;
-  using AllocatorType = Allocator<AllocatorChunkSize>;
-  static_assert(std::is_trivially_destructible<T>::value,
-                "T must be trivially destructible.");
-
-private:
-  // TODO: Consider co-locating the chunk information with the data in the
-  // Block, as in an intrusive list -- i.e. putting the next and previous
-  // pointer values inside the Block storage.
-  struct Chunk {
-    typename AllocatorType::Block Block;
-    static constexpr size_t Size = N;
-    Chunk *Prev = nullptr;
-    Chunk *Next = nullptr;
+/// backing store but will not free the memory.
+template <class T> class Array {
+  struct SegmentBase {
+    SegmentBase *Prev;
+    SegmentBase *Next;
   };
 
-  static Chunk SentinelChunk;
+  // We want each segment of the array to be cache-line aligned, and elements of
+  // the array be offset from the beginning of the segment.
+  struct Segment : SegmentBase {
+    char Data[1];
+  };
 
+public:
+  // Each segment of the array will be laid out with the following assumptions:
+  //
+  //   - Each segment will be on a cache-line address boundary (kCacheLineSize
+  //     aligned).
+  //
+  //   - The elements will be accessed through an aligned pointer, dependent on
+  //     the alignment of T.
+  //
+  //   - Each element is at least two-pointers worth from the beginning of the
+  //     Segment, aligned properly, and the rest of the elements are accessed
+  //     through appropriate alignment.
+  //
+  // We then compute the size of the segment to follow this logic:
+  //
+  //   - Compute the number of elements that can fit within
+  //     kCacheLineSize-multiple segments, minus the size of two pointers.
+  //
+  //   - Request cacheline-multiple sized elements from the allocator.
+  static constexpr size_t AlignedElementStorageSize =
+      sizeof(typename std::aligned_storage<sizeof(T), alignof(T)>::type);
+
+  static constexpr size_t SegmentSize =
+      nearest_boundary(sizeof(Segment) + next_pow2(sizeof(T)), kCacheLineSize);
+
+  using AllocatorType = Allocator<SegmentSize>;
+
+  static constexpr size_t ElementsPerSegment =
+      (SegmentSize - sizeof(Segment)) / next_pow2(sizeof(T));
+
+  static_assert(ElementsPerSegment > 0,
+                "Must have at least 1 element per segment.");
+
+  static SegmentBase SentinelSegment;
+
+private:
   AllocatorType *Alloc;
-  Chunk *Head = &SentinelChunk;
-  Chunk *Tail = &SentinelChunk;
+  SegmentBase *Head = &SentinelSegment;
+  SegmentBase *Tail = &SentinelSegment;
   size_t Size = 0;
-  size_t FreeElements = 0;
 
-  // Here we keep track of chunks in the freelist, to allow us to re-use chunks
-  // when elements are trimmed off the end.
-  Chunk *Freelist = &SentinelChunk;
+  // Here we keep track of segments in the freelist, to allow us to re-use
+  // segments when elements are trimmed off the end.
+  SegmentBase *Freelist = &SentinelSegment;
 
-  Chunk *NewChunk() {
+  Segment *NewSegment() {
     // We need to handle the case in which enough elements have been trimmed to
-    // allow us to re-use chunks we've allocated before. For this we look into
+    // allow us to re-use segments we've allocated before. For this we look into
     // the Freelist, to see whether we need to actually allocate new blocks or
     // just re-use blocks we've already seen before.
-    if (Freelist != &SentinelChunk) {
-      auto *FreeChunk = Freelist;
-      Freelist = FreeChunk->Next;
-      FreeChunk->Next = &SentinelChunk;
-      return FreeChunk;
+    if (Freelist != &SentinelSegment) {
+      auto *FreeSegment = Freelist;
+      Freelist = FreeSegment->Next;
+      FreeSegment->Next = &SentinelSegment;
+      Freelist->Prev = &SentinelSegment;
+      return static_cast<Segment *>(FreeSegment);
     }
 
-    auto Block = Alloc->Allocate();
-    if (Block.Data == nullptr)
+    auto SegmentBlock = Alloc->Allocate();
+    if (SegmentBlock.Data == nullptr)
       return nullptr;
-    // TODO: Maybe use a separate managed allocator for Chunk instances?
-    auto C = reinterpret_cast<Chunk *>(InternalAlloc(sizeof(Chunk)));
-    if (C == nullptr)
-      return nullptr;
-    C->Block = Block;
-    return C;
+
+    // Placement-new the Segment element at the beginning of the SegmentBlock.
+    auto S = reinterpret_cast<Segment *>(SegmentBlock.Data);
+    new (S) SegmentBase{&SentinelSegment, &SentinelSegment};
+    return S;
   }
 
-  static AllocatorType &GetGlobalAllocator() {
-    static AllocatorType *const GlobalAllocator = [] {
-      AllocatorType *A = reinterpret_cast<AllocatorType *>(
-          InternalAlloc(sizeof(AllocatorType)));
-      new (A) AllocatorType(2 << 10, 0);
-      return A;
-    }();
-
-    return *GlobalAllocator;
+  Segment *InitHeadAndTail() {
+    DCHECK_EQ(Head, &SentinelSegment);
+    DCHECK_EQ(Tail, &SentinelSegment);
+    auto Segment = NewSegment();
+    if (Segment == nullptr)
+      return nullptr;
+    DCHECK_EQ(Segment->Next, &SentinelSegment);
+    DCHECK_EQ(Segment->Prev, &SentinelSegment);
+    Head = Tail = static_cast<SegmentBase *>(Segment);
+    return Segment;
   }
 
-  Chunk *InitHeadAndTail() {
-    DCHECK_EQ(Head, &SentinelChunk);
-    DCHECK_EQ(Tail, &SentinelChunk);
-    auto Chunk = NewChunk();
-    if (Chunk == nullptr)
+  Segment *AppendNewSegment() {
+    auto S = NewSegment();
+    if (S == nullptr)
       return nullptr;
-    Chunk->Prev = &SentinelChunk;
-    Chunk->Next = &SentinelChunk;
-    Head = Chunk;
-    Tail = Chunk;
-    return Chunk;
-  }
-
-  Chunk *AppendNewChunk() {
-    auto Chunk = NewChunk();
-    if (Chunk == nullptr)
-      return nullptr;
-    Tail->Next = Chunk;
-    Chunk->Prev = Tail;
-    Chunk->Next = &SentinelChunk;
-    Tail = Chunk;
-    return Chunk;
+    DCHECK_NE(Tail, &SentinelSegment);
+    DCHECK_EQ(Tail->Next, &SentinelSegment);
+    DCHECK_EQ(S->Prev, &SentinelSegment);
+    DCHECK_EQ(S->Next, &SentinelSegment);
+    Tail->Next = S;
+    S->Prev = Tail;
+    Tail = S;
+    return static_cast<Segment *>(Tail);
   }
 
   // This Iterator models a BidirectionalIterator.
   template <class U> class Iterator {
-    Chunk *C = nullptr;
+    SegmentBase *S = &SentinelSegment;
     size_t Offset = 0;
+    size_t Size = 0;
 
   public:
-    Iterator(Chunk *IC, size_t Off) : C(IC), Offset(Off) {}
+    Iterator(SegmentBase *IS, size_t Off, size_t S)
+        : S(IS), Offset(Off), Size(S) {}
+    Iterator(const Iterator &) noexcept = default;
+    Iterator() noexcept = default;
+    Iterator(Iterator &&) noexcept = default;
+    Iterator &operator=(const Iterator &) = default;
+    Iterator &operator=(Iterator &&) = default;
+    ~Iterator() = default;
 
     Iterator &operator++() {
-      if (++Offset % N)
+      if (++Offset % ElementsPerSegment || Offset == Size)
         return *this;
 
-      DCHECK_NE(C, &SentinelChunk);
-
       // At this point, we know that Offset % N == 0, so we must advance the
-      // chunk pointer.
-      DCHECK_EQ(Offset % N, 0);
-      C = C->Next;
+      // segment pointer.
+      DCHECK_EQ(Offset % ElementsPerSegment, 0);
+      DCHECK_NE(Offset, Size);
+      DCHECK_NE(S, &SentinelSegment);
+      DCHECK_NE(S->Next, &SentinelSegment);
+      S = S->Next;
+      DCHECK_NE(S, &SentinelSegment);
       return *this;
     }
 
     Iterator &operator--() {
-      DCHECK_NE(C, &SentinelChunk);
+      DCHECK_NE(S, &SentinelSegment);
       DCHECK_GT(Offset, 0);
 
-      // We check whether the offset was on a boundary before decrement, to see
-      // whether we need to retreat to the previous chunk.
-      if ((Offset-- % N) == 0)
-        C = C->Prev;
+      auto PreviousOffset = Offset--;
+      if (PreviousOffset != Size && PreviousOffset % ElementsPerSegment == 0) {
+        DCHECK_NE(S->Prev, &SentinelSegment);
+        S = S->Prev;
+      }
+
       return *this;
     }
 
@@ -180,7 +195,7 @@ private:
 
     template <class V, class W>
     friend bool operator==(const Iterator<V> &L, const Iterator<W> &R) {
-      return L.C == R.C && L.Offset == R.Offset;
+      return L.S == R.S && L.Offset == R.Offset;
     }
 
     template <class V, class W>
@@ -189,27 +204,29 @@ private:
     }
 
     U &operator*() const {
-      DCHECK_NE(C, &SentinelChunk);
-      return reinterpret_cast<U *>(C->Block.Data)[Offset % N];
+      DCHECK_NE(S, &SentinelSegment);
+      auto RelOff = Offset % ElementsPerSegment;
+
+      // We need to compute the character-aligned pointer, offset from the
+      // segment's Data location to get the element in the position of Offset.
+      auto Base = static_cast<Segment *>(S)->Data;
+      auto AlignedOffset = Base + (RelOff * AlignedElementStorageSize);
+      return *reinterpret_cast<U *>(AlignedOffset);
     }
 
-    U *operator->() const {
-      DCHECK_NE(C, &SentinelChunk);
-      return reinterpret_cast<U *>(C->Block.Data) + (Offset % N);
-    }
+    U *operator->() const { return &(**this); }
   };
 
 public:
   explicit Array(AllocatorType &A) : Alloc(&A) {}
-  Array() : Array(GetGlobalAllocator()) {}
 
   Array(const Array &) = delete;
   Array(Array &&O) NOEXCEPT : Alloc(O.Alloc),
                               Head(O.Head),
                               Tail(O.Tail),
                               Size(O.Size) {
-    O.Head = &SentinelChunk;
-    O.Tail = &SentinelChunk;
+    O.Head = &SentinelSegment;
+    O.Tail = &SentinelSegment;
     O.Size = 0;
   }
 
@@ -223,63 +240,74 @@ public:
   size_t size() const { return Size; }
 
   T *Append(const T &E) {
-    if (UNLIKELY(Head == &SentinelChunk))
+    if (UNLIKELY(Head == &SentinelSegment))
       if (InitHeadAndTail() == nullptr)
         return nullptr;
 
-    auto Offset = Size % N;
+    auto Offset = Size % ElementsPerSegment;
     if (UNLIKELY(Size != 0 && Offset == 0))
-      if (AppendNewChunk() == nullptr)
+      if (AppendNewSegment() == nullptr)
         return nullptr;
 
-    auto Position = reinterpret_cast<T *>(Tail->Block.Data) + Offset;
+    auto Base = static_cast<Segment *>(Tail)->Data;
+    auto AlignedOffset = Base + (Offset * AlignedElementStorageSize);
+    auto Position = reinterpret_cast<T *>(AlignedOffset);
     *Position = E;
     ++Size;
-    FreeElements -= FreeElements ? 1 : 0;
     return Position;
   }
 
   template <class... Args> T *AppendEmplace(Args &&... args) {
-    if (UNLIKELY(Head == &SentinelChunk))
+    if (UNLIKELY(Head == &SentinelSegment))
       if (InitHeadAndTail() == nullptr)
         return nullptr;
 
-    auto Offset = Size % N;
-    if (UNLIKELY(Size != 0 && Offset == 0))
-      if (AppendNewChunk() == nullptr)
+    auto Offset = Size % ElementsPerSegment;
+    auto *LatestSegment = Tail;
+    if (UNLIKELY(Size != 0 && Offset == 0)) {
+      LatestSegment = AppendNewSegment();
+      if (LatestSegment == nullptr)
         return nullptr;
+    }
 
-    auto Position = reinterpret_cast<T *>(Tail->Block.Data) + Offset;
+    DCHECK_NE(Tail, &SentinelSegment);
+    auto Base = static_cast<Segment *>(LatestSegment)->Data;
+    auto AlignedOffset = Base + (Offset * AlignedElementStorageSize);
+    auto Position = reinterpret_cast<T *>(AlignedOffset);
+
     // In-place construct at Position.
-    new (Position) T(std::forward<Args>(args)...);
+    new (Position) T{std::forward<Args>(args)...};
     ++Size;
-    FreeElements -= FreeElements ? 1 : 0;
-    return Position;
+    return reinterpret_cast<T *>(Position);
   }
 
   T &operator[](size_t Offset) const {
     DCHECK_LE(Offset, Size);
     // We need to traverse the array enough times to find the element at Offset.
-    auto C = Head;
-    while (Offset >= N) {
-      C = C->Next;
-      Offset -= N;
-      DCHECK_NE(C, &SentinelChunk);
+    auto S = Head;
+    while (Offset >= ElementsPerSegment) {
+      S = S->Next;
+      Offset -= ElementsPerSegment;
+      DCHECK_NE(S, &SentinelSegment);
     }
-    auto Position = reinterpret_cast<T *>(C->Block.Data) + Offset;
-    return *Position;
+    auto Base = static_cast<Segment *>(S)->Data;
+    auto AlignedOffset = Base + (Offset * AlignedElementStorageSize);
+    auto Position = reinterpret_cast<T *>(AlignedOffset);
+    return *reinterpret_cast<T *>(Position);
   }
 
   T &front() const {
-    DCHECK_NE(Head, &SentinelChunk);
+    DCHECK_NE(Head, &SentinelSegment);
     DCHECK_NE(Size, 0u);
-    return *reinterpret_cast<T *>(Head->Block.Data);
+    return *begin();
   }
 
   T &back() const {
-    DCHECK_NE(Tail, &SentinelChunk);
-    auto Offset = (Size - 1) % N;
-    return *(reinterpret_cast<T *>(Tail->Block.Data) + Offset);
+    DCHECK_NE(Tail, &SentinelSegment);
+    DCHECK_NE(Size, 0u);
+    auto It = end();
+    --It;
+    return *It;
   }
 
   template <class Predicate> T *find_element(Predicate P) const {
@@ -298,40 +326,49 @@ public:
   /// require allocation of new blocks for new elements added after trimming.
   void trim(size_t Elements) {
     DCHECK_LE(Elements, Size);
+    DCHECK_GT(Size, 0);
+    auto OldSize = Size;
     Size -= Elements;
-    FreeElements += Elements;
 
-    // Here we need to check whether we've cleared enough elements to warrant
-    // putting blocks on to the freelist. We determine whether we need to
-    // right-size the internal list, by keeping track of the number of "free"
-    // elements still in the array.
-    auto ChunksToTrim = FreeElements / N;
-    for (size_t i = 0; i < ChunksToTrim; ++i, FreeElements -= N) {
+    DCHECK_NE(Head, &SentinelSegment);
+    DCHECK_NE(Tail, &SentinelSegment);
+
+    for (auto SegmentsToTrim = (nearest_boundary(OldSize, ElementsPerSegment) -
+                                nearest_boundary(Size, ElementsPerSegment)) /
+                               ElementsPerSegment;
+         SegmentsToTrim > 0; --SegmentsToTrim) {
+      DCHECK_NE(Head, &SentinelSegment);
+      DCHECK_NE(Tail, &SentinelSegment);
       // Put the tail into the Freelist.
-      auto *FreeChunk = Tail;
+      auto *FreeSegment = Tail;
       Tail = Tail->Prev;
-      if (Tail == &SentinelChunk)
+      if (Tail == &SentinelSegment)
         Head = Tail;
       else
-        Tail->Next = &SentinelChunk;
-      FreeChunk->Next = Freelist;
-      FreeChunk->Prev = Freelist->Prev;
-      Freelist = FreeChunk;
+        Tail->Next = &SentinelSegment;
+
+      DCHECK_EQ(Tail->Next, &SentinelSegment);
+      FreeSegment->Next = Freelist;
+      FreeSegment->Prev = &SentinelSegment;
+      if (Freelist != &SentinelSegment)
+        Freelist->Prev = FreeSegment;
+      Freelist = FreeSegment;
     }
   }
 
   // Provide iterators.
-  Iterator<T> begin() const { return Iterator<T>(Head, 0); }
-  Iterator<T> end() const { return Iterator<T>(Tail, Size); }
-  Iterator<const T> cbegin() const { return Iterator<const T>(Head, 0); }
-  Iterator<const T> cend() const { return Iterator<const T>(Tail, Size); }
+  Iterator<T> begin() const { return Iterator<T>(Head, 0, Size); }
+  Iterator<T> end() const { return Iterator<T>(Tail, Size, Size); }
+  Iterator<const T> cbegin() const { return Iterator<const T>(Head, 0, Size); }
+  Iterator<const T> cend() const { return Iterator<const T>(Tail, Size, Size); }
 };
 
 // We need to have this storage definition out-of-line so that the compiler can
-// ensure that storage for the SentinelChunk is defined and has a single
+// ensure that storage for the SentinelSegment is defined and has a single
 // address.
-template <class T, size_t N>
-typename Array<T, N>::Chunk Array<T, N>::SentinelChunk;
+template <class T>
+typename Array<T>::SegmentBase Array<T>::SentinelSegment{
+    &Array<T>::SentinelSegment, &Array<T>::SentinelSegment};
 
 } // namespace __xray
 

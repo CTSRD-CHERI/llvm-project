@@ -262,6 +262,14 @@ void __kmpc_fork_call(ident_t *loc, kmp_int32 argc, kmpc_micro microtask, ...) {
   int gtid = __kmp_entry_gtid();
 
 #if (KMP_STATS_ENABLED)
+  // If we were in a serial region, then stop the serial timer, record
+  // the event, and start parallel region timer
+  stats_state_e previous_state = KMP_GET_THREAD_STATE();
+  if (previous_state == stats_state_e::SERIAL_REGION) {
+    KMP_EXCHANGE_PARTITIONED_TIMER(OMP_parallel_overhead);
+  } else {
+    KMP_PUSH_PARTITIONED_TIMER(OMP_parallel_overhead);
+  }
   int inParallel = __kmpc_in_parallel(loc);
   if (inParallel) {
     KMP_COUNT_BLOCK(OMP_NESTED_PARALLEL);
@@ -318,6 +326,14 @@ void __kmpc_fork_call(ident_t *loc, kmp_int32 argc, kmpc_micro microtask, ...) {
 
     va_end(ap);
   }
+
+#if KMP_STATS_ENABLED
+  if (previous_state == stats_state_e::SERIAL_REGION) {
+    KMP_EXCHANGE_PARTITIONED_TIMER(OMP_serial);
+  } else {
+    KMP_POP_PARTITIONED_TIMER();
+  }
+#endif // KMP_STATS_ENABLED
 }
 
 #if OMP_40_ENABLED
@@ -930,9 +946,10 @@ __kmp_init_indirect_csptr(kmp_critical_name *crit, ident_t const *loc,
 #define KMP_ACQUIRE_TAS_LOCK(lock, gtid)                                       \
   {                                                                            \
     kmp_tas_lock_t *l = (kmp_tas_lock_t *)lock;                                \
-    if (l->lk.poll != KMP_LOCK_FREE(tas) ||                                    \
-        !KMP_COMPARE_AND_STORE_ACQ32(&(l->lk.poll), KMP_LOCK_FREE(tas),        \
-                                     KMP_LOCK_BUSY(gtid + 1, tas))) {          \
+    kmp_int32 tas_free = KMP_LOCK_FREE(tas);                                   \
+    kmp_int32 tas_busy = KMP_LOCK_BUSY(gtid + 1, tas);                         \
+    if (KMP_ATOMIC_LD_RLX(&l->lk.poll) != tas_free ||                          \
+        !__kmp_atomic_compare_store_acq(&l->lk.poll, tas_free, tas_busy)) {    \
       kmp_uint32 spins;                                                        \
       KMP_FSYNC_PREPARE(l);                                                    \
       KMP_INIT_YIELD(spins);                                                   \
@@ -943,9 +960,9 @@ __kmp_init_indirect_csptr(kmp_critical_name *crit, ident_t const *loc,
         KMP_YIELD_SPIN(spins);                                                 \
       }                                                                        \
       kmp_backoff_t backoff = __kmp_spin_backoff_params;                       \
-      while (l->lk.poll != KMP_LOCK_FREE(tas) ||                               \
-             !KMP_COMPARE_AND_STORE_ACQ32(&(l->lk.poll), KMP_LOCK_FREE(tas),   \
-                                          KMP_LOCK_BUSY(gtid + 1, tas))) {     \
+      while (                                                                  \
+          KMP_ATOMIC_LD_RLX(&l->lk.poll) != tas_free ||                        \
+          !__kmp_atomic_compare_store_acq(&l->lk.poll, tas_free, tas_busy)) {  \
         __kmp_spin_backoff(&backoff);                                          \
         if (TCR_4(__kmp_nth) >                                                 \
             (__kmp_avail_proc ? __kmp_avail_proc : __kmp_xproc)) {             \
@@ -962,17 +979,15 @@ __kmp_init_indirect_csptr(kmp_critical_name *crit, ident_t const *loc,
 #define KMP_TEST_TAS_LOCK(lock, gtid, rc)                                      \
   {                                                                            \
     kmp_tas_lock_t *l = (kmp_tas_lock_t *)lock;                                \
-    rc = l->lk.poll == KMP_LOCK_FREE(tas) &&                                   \
-         KMP_COMPARE_AND_STORE_ACQ32(&(l->lk.poll), KMP_LOCK_FREE(tas),        \
-                                     KMP_LOCK_BUSY(gtid + 1, tas));            \
+    kmp_int32 tas_free = KMP_LOCK_FREE(tas);                                   \
+    kmp_int32 tas_busy = KMP_LOCK_BUSY(gtid + 1, tas);                         \
+    rc = KMP_ATOMIC_LD_RLX(&l->lk.poll) == tas_free &&                         \
+         __kmp_atomic_compare_store_acq(&l->lk.poll, tas_free, tas_busy);      \
   }
 
 // Fast-path release tas lock
 #define KMP_RELEASE_TAS_LOCK(lock, gtid)                                       \
-  {                                                                            \
-    TCW_4(((kmp_tas_lock_t *)lock)->lk.poll, KMP_LOCK_FREE(tas));              \
-    KMP_MB();                                                                  \
-  }
+  { KMP_ATOMIC_ST_REL(&((kmp_tas_lock_t *)lock)->lk.poll, KMP_LOCK_FREE(tas)); }
 
 #if KMP_USE_FUTEX
 
@@ -1116,8 +1131,6 @@ void __kmpc_critical(ident_t *loc, kmp_int32 global_tid,
   __kmpc_critical_with_hint(loc, global_tid, crit, omp_lock_hint_none);
 #else
   KMP_COUNT_BLOCK(OMP_CRITICAL);
-  KMP_TIME_PARTITIONED_BLOCK(
-      OMP_critical_wait); /* Time spent waiting to enter the critical section */
 #if OMPT_SUPPORT && OMPT_OPTIONAL
   omp_state_t prev_state = omp_state_undefined;
   ompt_thread_info_t ti;
@@ -1128,6 +1141,7 @@ void __kmpc_critical(ident_t *loc, kmp_int32 global_tid,
 
   // TODO: add THR_OVHD_STATE
 
+  KMP_PUSH_PARTITIONED_TIMER(OMP_critical_wait);
   KMP_CHECK_USER_LOCK_INIT();
 
   if ((__kmp_user_lock_kind == lk_tas) &&
@@ -1194,8 +1208,9 @@ void __kmpc_critical(ident_t *loc, kmp_int32 global_tid,
     }
   }
 #endif
+  KMP_POP_PARTITIONED_TIMER();
 
-  KMP_START_EXPLICIT_TIMER(OMP_critical);
+  KMP_PUSH_PARTITIONED_TIMER(OMP_critical);
   KA_TRACE(15, ("__kmpc_critical: done T#%d\n", global_tid));
 #endif // KMP_USE_DYNAMIC_LOCK
 }
@@ -1346,6 +1361,7 @@ void __kmpc_critical_with_hint(ident_t *loc, kmp_int32 global_tid,
 
   kmp_dyna_lock_t *lk = (kmp_dyna_lock_t *)crit;
   // Check if it is initialized.
+  KMP_PUSH_PARTITIONED_TIMER(OMP_critical_wait);
   if (*lk == 0) {
     kmp_dyna_lockseq_t lckseq = __kmp_map_hint_to_lock(hint);
     if (KMP_IS_D_LOCK(lckseq)) {
@@ -1423,6 +1439,7 @@ void __kmpc_critical_with_hint(ident_t *loc, kmp_int32 global_tid,
 #endif
     KMP_I_LOCK_FUNC(ilk, set)(lck, global_tid);
   }
+  KMP_POP_PARTITIONED_TIMER();
 
 #if USE_ITT_BUILD
   __kmp_itt_critical_acquired(lck);
@@ -1754,6 +1771,7 @@ void __kmpc_end_single(ident_t *loc, kmp_int32 global_tid) {
 Mark the end of a statically scheduled loop.
 */
 void __kmpc_for_static_fini(ident_t *loc, kmp_int32 global_tid) {
+  KMP_POP_PARTITIONED_TIMER();
   KE_TRACE(10, ("__kmpc_for_static_fini called T#%d\n", global_tid));
 
 #if OMPT_SUPPORT && OMPT_OPTIONAL
@@ -1780,7 +1798,6 @@ void __kmpc_for_static_fini(ident_t *loc, kmp_int32 global_tid) {
         &(task_info->task_data), 0, OMPT_GET_RETURN_ADDRESS(0));
   }
 #endif
-
   if (__kmp_env_consistency_check)
     __kmp_pop_workshare(global_tid, ct_pdo, loc);
 }
@@ -3765,7 +3782,7 @@ Expect compiler send us inclusive bounds,
 e.g. for(i=2;i<9;i+=2) lo=2, up=8, st=2.
 */
 void __kmpc_doacross_init(ident_t *loc, int gtid, int num_dims,
-                          struct kmp_dim *dims) {
+                          const struct kmp_dim *dims) {
   int j, idx;
   kmp_int64 last, trace_count;
   kmp_info_t *th = __kmp_threads[gtid];
@@ -3884,7 +3901,7 @@ void __kmpc_doacross_init(ident_t *loc, int gtid, int num_dims,
   KA_TRACE(20, ("__kmpc_doacross_init() exit: T#%d\n", gtid));
 }
 
-void __kmpc_doacross_wait(ident_t *loc, int gtid, long long *vec) {
+void __kmpc_doacross_wait(ident_t *loc, int gtid, const kmp_int64 *vec) {
   kmp_int32 shft, num_dims, i;
   kmp_uint32 flag;
   kmp_int64 iter_number; // iteration number of "collapsed" loop nest
@@ -3977,7 +3994,7 @@ void __kmpc_doacross_wait(ident_t *loc, int gtid, long long *vec) {
             gtid, (iter_number << 5) + shft));
 }
 
-void __kmpc_doacross_post(ident_t *loc, int gtid, long long *vec) {
+void __kmpc_doacross_post(ident_t *loc, int gtid, const kmp_int64 *vec) {
   kmp_int32 shft, num_dims, i;
   kmp_uint32 flag;
   kmp_int64 iter_number; // iteration number of "collapsed" loop nest
@@ -4059,6 +4076,7 @@ void __kmpc_doacross_fini(ident_t *loc, int gtid) {
         __kmp_dispatch_num_buffers; // free buffer for future re-use
   }
   // free private resources (need to keep buffer index forever)
+  pr_buf->th_doacross_flags = NULL;
   __kmp_thread_free(th, (void *)pr_buf->th_doacross_info);
   pr_buf->th_doacross_info = NULL;
   KA_TRACE(20, ("__kmpc_doacross_fini() exit: T#%d\n", gtid));

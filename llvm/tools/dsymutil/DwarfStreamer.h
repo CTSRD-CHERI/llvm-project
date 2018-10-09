@@ -9,6 +9,7 @@
 
 #include "CompileUnit.h"
 #include "DebugMap.h"
+#include "LinkUtils.h"
 #include "NonRelocatableStringpool.h"
 #include "llvm/CodeGen/AccelTable.h"
 #include "llvm/CodeGen/AsmPrinter.h"
@@ -26,6 +27,7 @@
 #include "llvm/MC/MCSection.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSubtargetInfo.h"
+#include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/MCTargetOptions.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
@@ -36,15 +38,15 @@
 namespace llvm {
 namespace dsymutil {
 
-struct LinkOptions;
-
 /// The Dwarf streaming logic.
 ///
 /// All interactions with the MC layer that is used to build the debug
 /// information binary representation are handled in this class.
 class DwarfStreamer {
 public:
-  DwarfStreamer(raw_fd_ostream &OutFile) : OutFile(OutFile) {}
+  DwarfStreamer(raw_fd_ostream &OutFile, LinkOptions Options)
+      : OutFile(OutFile), Options(std::move(Options)) {}
+
   bool init(Triple TheTriple);
 
   /// Dump the file to the disk.
@@ -103,7 +105,7 @@ public:
                             unsigned AdddressSize);
 
   /// Copy over the debug sections that are not modified when updating.
-  void copyInvariantDebugSection(const object::ObjectFile &Obj, LinkOptions &);
+  void copyInvariantDebugSection(const object::ObjectFile &Obj);
 
   uint32_t getLineSectionSize() const { return LineSectionSize; }
 
@@ -119,6 +121,9 @@ public:
   /// Emit an FDE with data \p Bytes.
   void emitFDE(uint32_t CIEOffset, uint32_t AddreSize, uint32_t Address,
                StringRef Bytes);
+
+  /// Emit DWARF debug names.
+  void emitDebugNames(AccelTable<DWARF5AccelTableStaticData> &Table);
 
   /// Emit Apple namespaces accelerator table.
   void emitAppleNamespaces(AccelTable<AppleAccelTableStaticOffsetData> &Table);
@@ -144,6 +149,7 @@ private:
   MCAsmBackend *MAB; // Owned by MCStreamer
   std::unique_ptr<MCInstrInfo> MII;
   std::unique_ptr<MCSubtargetInfo> MSTI;
+  MCInstPrinter *MIP; // Owned by AsmPrinter
   MCCodeEmitter *MCE; // Owned by MCStreamer
   MCStreamer *MS;     // Owned by AsmPrinter
   std::unique_ptr<TargetMachine> TM;
@@ -153,10 +159,19 @@ private:
   /// The file we stream the linked Dwarf to.
   raw_fd_ostream &OutFile;
 
+  LinkOptions Options;
+
   uint32_t RangesSectionSize;
   uint32_t LocSectionSize;
   uint32_t LineSectionSize;
   uint32_t FrameSectionSize;
+
+  /// Keep track of emitted CUs and their Unique ID.
+  struct EmittedUnit {
+    unsigned ID;
+    MCSymbol *LabelBegin;
+  };
+  std::vector<EmittedUnit> EmittedUnits;
 
   /// Emit the pubnames or pubtypes section contribution for \p
   /// Unit into \p Sec. The data is provided in \p Names.

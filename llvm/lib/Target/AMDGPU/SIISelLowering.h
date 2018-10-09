@@ -23,8 +23,21 @@ namespace llvm {
 
 class SITargetLowering final : public AMDGPUTargetLowering {
 private:
-  const SISubtarget *Subtarget;
+  const GCNSubtarget *Subtarget;
 
+public:
+  MVT getRegisterTypeForCallingConv(LLVMContext &Context,
+                                    CallingConv::ID CC,
+                                    EVT VT) const override;
+  unsigned getNumRegistersForCallingConv(LLVMContext &Context,
+                                         CallingConv::ID CC,
+                                         EVT VT) const override;
+
+  unsigned getVectorTypeBreakdownForCallingConv(
+    LLVMContext &Context, CallingConv::ID CC, EVT VT, EVT &IntermediateVT,
+    unsigned &NumIntermediates, MVT &RegisterVT) const override;
+
+private:
   SDValue lowerKernArgParameterPtr(SelectionDAG &DAG, const SDLoc &SL,
                                    SDValue Chain, uint64_t Offset) const;
   SDValue getImplicitArgPtr(SelectionDAG &DAG, const SDLoc &SL) const;
@@ -68,7 +81,7 @@ private:
   SDValue LowerBRCOND(SDValue Op, SelectionDAG &DAG) const;
 
   SDValue adjustLoadValueType(unsigned Opcode, MemSDNode *M,
-                              SelectionDAG &DAG,
+                              SelectionDAG &DAG, ArrayRef<SDValue> Ops,
                               bool IsIntrinsic = false) const;
 
   SDValue handleD16VData(SDValue VData, SelectionDAG &DAG) const;
@@ -117,6 +130,8 @@ private:
   SDValue performXorCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performZeroExtendCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performClassCombine(SDNode *N, DAGCombinerInfo &DCI) const;
+  SDValue getCanonicalConstantFP(SelectionDAG &DAG, const SDLoc &SL, EVT VT,
+                                 const APFloat &C) const;
   SDValue performFCanonicalizeCombine(SDNode *N, DAGCombinerInfo &DCI) const;
 
   SDValue performFPMed3ImmCombine(SelectionDAG &DAG, const SDLoc &SL,
@@ -136,6 +151,7 @@ private:
   SDValue performSubCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performFAddCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performFSubCombine(SDNode *N, DAGCombinerInfo &DCI) const;
+  SDValue performFMACombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performSetCCCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performCvtF32UByteNCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performClampCombine(SDNode *N, DAGCombinerInfo &DCI) const;
@@ -162,9 +178,9 @@ private:
   bool shouldEmitPCReloc(const GlobalValue *GV) const;
 
 public:
-  SITargetLowering(const TargetMachine &tm, const SISubtarget &STI);
+  SITargetLowering(const TargetMachine &tm, const GCNSubtarget &STI);
 
-  const SISubtarget *getSubtarget() const;
+  const GCNSubtarget *getSubtarget() const;
 
   bool isFPExtFoldable(unsigned Opcode, EVT DestVT, EVT SrcVT) const override;
 
@@ -309,6 +325,10 @@ public:
 
   bool isSDNodeSourceOfDivergence(const SDNode *N,
     FunctionLoweringInfo *FLI, DivergenceAnalysis *DA) const override;
+
+  bool isCanonicalized(SelectionDAG &DAG, SDValue Op,
+                       unsigned MaxDepth = 5) const;
+  bool denormalsEnabledForType(EVT VT) const;
 };
 
 } // End namespace llvm

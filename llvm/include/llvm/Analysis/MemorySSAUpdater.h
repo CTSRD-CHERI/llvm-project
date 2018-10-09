@@ -60,7 +60,11 @@ class raw_ostream;
 class MemorySSAUpdater {
 private:
   MemorySSA *MSSA;
-  SmallVector<MemoryPhi *, 8> InsertedPHIs;
+
+  /// We use WeakVH rather than a costly deletion to deal with dangling pointers.
+  /// MemoryPhis are created eagerly and sometimes get zapped shortly afterwards.
+  SmallVector<WeakVH, 16> InsertedPHIs;
+
   SmallPtrSet<BasicBlock *, 8> VisitedBlocks;
   SmallSet<AssertingVH<MemoryPhi>, 8> NonOptPhis;
 
@@ -89,6 +93,45 @@ public:
   void moveAfter(MemoryUseOrDef *What, MemoryUseOrDef *Where);
   void moveToPlace(MemoryUseOrDef *What, BasicBlock *BB,
                    MemorySSA::InsertionPlace Where);
+  /// `From` block was spliced into `From` and `To`.
+  /// Move all accesses from `From` to `To` starting at instruction `Start`.
+  /// `To` is newly created BB, so empty of MemorySSA::MemoryAccesses.
+  /// Edges are already updated, so successors of `To` with MPhi nodes need to
+  /// update incoming block.
+  /// |------|        |------|
+  /// | From |        | From |
+  /// |      |        |------|
+  /// |      |           ||
+  /// |      |   =>      \/
+  /// |      |        |------|  <- Start
+  /// |      |        |  To  |
+  /// |------|        |------|
+  void moveAllAfterSpliceBlocks(BasicBlock *From, BasicBlock *To,
+                                Instruction *Start);
+  /// `From` block was merged into `To`. All instructions were moved and
+  /// `From` is an empty block with successor edges; `From` is about to be
+  /// deleted. Move all accesses from `From` to `To` starting at instruction
+  /// `Start`. `To` may have multiple successors, `From` has a single
+  /// predecessor. `From` may have successors with MPhi nodes, replace their
+  /// incoming block with `To`.
+  /// |------|        |------|
+  /// |  To  |        |  To  |
+  /// |------|        |      |
+  ///    ||      =>   |      |
+  ///    \/           |      |
+  /// |------|        |      |  <- Start
+  /// | From |        |      |
+  /// |------|        |------|
+  void moveAllAfterMergeBlocks(BasicBlock *From, BasicBlock *To,
+                               Instruction *Start);
+  /// BasicBlock Old had New, an empty BasicBlock, added directly before it,
+  /// and the predecessors in Preds that used to point to Old, now point to
+  /// New. If New is the only predecessor, move Old's Phi, if present, to New.
+  /// Otherwise, add a new Phi in New with appropriate incoming values, and
+  /// update the incoming values in Old's Phi node too, if present.
+  void
+  wireOldPredecessorsToNewImmediatePredecessor(BasicBlock *Old, BasicBlock *New,
+                                               ArrayRef<BasicBlock *> Preds);
 
   // The below are utility functions. Other than creation of accesses to pass
   // to insertDef, and removeAccess to remove accesses, you should generally
@@ -162,6 +205,9 @@ private:
   // Move What before Where in the MemorySSA IR.
   template <class WhereType>
   void moveTo(MemoryUseOrDef *What, BasicBlock *BB, WhereType Where);
+  // Move all memory accesses from `From` to `To` starting at `Start`.
+  // Restrictions apply, see public wrappers of this method.
+  void moveAllAccesses(BasicBlock *From, BasicBlock *To, Instruction *Start);
   MemoryAccess *getPreviousDef(MemoryAccess *);
   MemoryAccess *getPreviousDefInBlock(MemoryAccess *);
   MemoryAccess *
@@ -173,7 +219,7 @@ private:
   MemoryAccess *recursePhi(MemoryAccess *Phi);
   template <class RangeType>
   MemoryAccess *tryRemoveTrivialPhi(MemoryPhi *Phi, RangeType &Operands);
-  void fixupDefs(const SmallVectorImpl<MemoryAccess *> &);
+  void fixupDefs(const SmallVectorImpl<WeakVH> &);
 };
 } // end namespace llvm
 

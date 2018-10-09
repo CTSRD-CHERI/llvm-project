@@ -1206,6 +1206,12 @@ TEST(TypeMatching, MatchesAutoTypes) {
   //                       autoType(hasDeducedType(isInteger()))));
 }
 
+TEST(TypeMatching, MatchesDeclTypes) {
+  EXPECT_TRUE(matches("decltype(1 + 1) sum = 1 + 1;", decltypeType()));
+  EXPECT_TRUE(matches("decltype(1 + 1) sum = 1 + 1;",
+                      decltypeType(hasUnderlyingType(isInteger()))));
+}
+
 TEST(TypeMatching, MatchesFunctionTypes) {
   EXPECT_TRUE(matches("int (*f)(int);", functionType()));
   EXPECT_TRUE(matches("void f(int i) {}", functionType()));
@@ -1685,6 +1691,18 @@ TEST(ObjCStmtMatcher, ExceptionStmts) {
   EXPECT_TRUE(matchesObjC(
     ObjCString,
     objcFinallyStmt()));
+}
+
+TEST(ObjCAutoreleaseMatcher, AutoreleasePool) {
+  std::string ObjCString =
+    "void f() {"
+    "@autoreleasepool {"
+    "  int x = 1;"
+    "}"
+    "}";
+  EXPECT_TRUE(matchesObjC(ObjCString, autoreleasePoolStmt()));
+  std::string ObjCStringNoPool = "void f() { int x = 1; }";
+  EXPECT_FALSE(matchesObjC(ObjCStringNoPool, autoreleasePoolStmt()));
 }
 
 } // namespace ast_matchers

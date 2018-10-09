@@ -789,7 +789,7 @@ CodeGenTypes::arrangeLLVMFunctionInfo(CanQualType resultType,
 
   bool erased = FunctionsBeingProcessed.erase(FI); (void)erased;
   assert(erased && "Not in set?");
-  
+
   return *FI;
 }
 
@@ -1344,7 +1344,7 @@ static void CreateCoercedStore(llvm::Value *Src,
 }
 
 static Address emitAddressAtOffset(CodeGenFunction &CGF, Address addr,
-                                   const ABIArgInfo &info) {      
+                                   const ABIArgInfo &info) {
   if (unsigned offset = info.getDirectOffset()) {
     addr = CGF.Builder.CreateElementBitCast(addr, CGF.Int8Ty);
     addr = CGF.Builder.CreateConstInBoundsByteGEP(addr,
@@ -1675,7 +1675,7 @@ llvm::Type *CodeGenTypes::GetFunctionTypeForVTable(GlobalDecl GD) {
 
   if (!isFuncTypeConvertible(FPT))
     return llvm::StructType::get(getLLVMContext());
-    
+
   const CGFunctionInfo *Info;
   if (isa<CXXDestructorDecl>(MD))
     Info =
@@ -1734,6 +1734,8 @@ void CodeGenModule::ConstructDefaultFnAttrList(StringRef Name, bool HasOptnone,
     FuncAttrs.addAttribute("less-precise-fpmad",
                            llvm::toStringRef(CodeGenOpts.LessPreciseFPMAD));
 
+    if (CodeGenOpts.NullPointerIsValid)
+      FuncAttrs.addAttribute("null-pointer-is-valid", "true");
     if (!CodeGenOpts.FPDenormalMode.empty())
       FuncAttrs.addAttribute("denormal-fp-math", CodeGenOpts.FPDenormalMode);
 
@@ -1798,7 +1800,7 @@ void CodeGenModule::ConstructDefaultFnAttrList(StringRef Name, bool HasOptnone,
     FuncAttrs.addAttribute(llvm::Attribute::NoUnwind);
 
     // Respect -fcuda-flush-denormals-to-zero.
-    if (getLangOpts().CUDADeviceFlushDenormalsToZero)
+    if (CodeGenOpts.FlushDenorm)
       FuncAttrs.addAttribute("nvptx-f32ftz", "true");
   }
 }
@@ -1867,7 +1869,8 @@ void CodeGenModule::ConstructAttributeList(
     }
     if (TargetDecl->hasAttr<RestrictAttr>())
       RetAttrs.addAttribute(llvm::Attribute::NoAlias);
-    if (TargetDecl->hasAttr<ReturnsNonNullAttr>())
+    if (TargetDecl->hasAttr<ReturnsNonNullAttr>() &&
+        !CodeGenOpts.NullPointerIsValid)
       RetAttrs.addAttribute(llvm::Attribute::NonNull);
     if (TargetDecl->hasAttr<AnyX86NoCallerSavedRegistersAttr>())
       FuncAttrs.addAttribute("no_caller_saved_registers");
@@ -1974,7 +1977,8 @@ void CodeGenModule::ConstructAttributeList(
     if (!PTy->isIncompleteType() && PTy->isConstantSizeType())
       RetAttrs.addDereferenceableAttr(getContext().getTypeSizeInChars(PTy)
                                         .getQuantity());
-    else if (getContext().getTargetAddressSpace(PTy) == 0)
+    else if (getContext().getTargetAddressSpace(PTy) == 0 &&
+             !CodeGenOpts.NullPointerIsValid)
       RetAttrs.addAttribute(llvm::Attribute::NonNull);
   }
 
@@ -1984,7 +1988,8 @@ void CodeGenModule::ConstructAttributeList(
   // Attach attributes to sret.
   if (IRFunctionArgs.hasSRetArg()) {
     llvm::AttrBuilder SRETAttrs;
-    SRETAttrs.addAttribute(llvm::Attribute::StructRet);
+    if (!RetAI.getSuppressSRet())
+      SRETAttrs.addAttribute(llvm::Attribute::StructRet);
     hasUsedSRet = true;
     if (RetAI.getInReg())
       SRETAttrs.addAttribute(llvm::Attribute::InReg);
@@ -2083,7 +2088,8 @@ void CodeGenModule::ConstructAttributeList(
       if (!PTy->isIncompleteType() && PTy->isConstantSizeType())
         Attrs.addDereferenceableAttr(getContext().getTypeSizeInChars(PTy)
                                        .getQuantity());
-      else if (getContext().getTargetAddressSpace(PTy) == 0)
+      else if (getContext().getTargetAddressSpace(PTy) == 0 &&
+               !CodeGenOpts.NullPointerIsValid)
         Attrs.addAttribute(llvm::Attribute::NonNull);
     }
 
@@ -2343,7 +2349,8 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
 
         if (const ParmVarDecl *PVD = dyn_cast<ParmVarDecl>(Arg)) {
           if (getNonNullAttr(CurCodeDecl, PVD, PVD->getType(),
-                             PVD->getFunctionScopeIndex()))
+                             PVD->getFunctionScopeIndex()) &&
+              !CGM.getCodeGenOpts().NullPointerIsValid)
             AI->addAttr(llvm::Attribute::NonNull);
 
           QualType OTy = PVD->getOriginalType();
@@ -2362,7 +2369,8 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
                 Attrs.addDereferenceableAttr(
                   getContext().getTypeSizeInChars(ETy).getQuantity()*ArrSize);
                 AI->addAttrs(Attrs);
-              } else if (getContext().getTargetAddressSpace(ETy) == 0) {
+              } else if (getContext().getTargetAddressSpace(ETy) == 0 &&
+                         !CGM.getCodeGenOpts().NullPointerIsValid) {
                 AI->addAttr(llvm::Attribute::NonNull);
               }
             }
@@ -2372,7 +2380,8 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
             // we can't use the dereferenceable attribute, but in addrspace(0)
             // we know that it must be nonnull.
             if (ArrTy->getSizeModifier() == VariableArrayType::Static &&
-                !getContext().getTargetAddressSpace(ArrTy->getElementType()))
+                !getContext().getTargetAddressSpace(ArrTy->getElementType()) &&
+                !CGM.getCodeGenOpts().NullPointerIsValid)
               AI->addAttr(llvm::Attribute::NonNull);
           }
 
@@ -2674,7 +2683,7 @@ static llvm::Value *tryRemoveRetainOfSelf(CodeGenFunction &CGF,
   llvm::Value *retainedValue = retainCall->getArgOperand(0);
   llvm::LoadInst *load =
     dyn_cast<llvm::LoadInst>(retainedValue->stripPointerCasts());
-  if (!load || load->isAtomic() || load->isVolatile() || 
+  if (!load || load->isAtomic() || load->isVolatile() ||
       load->getPointerOperand() != CGF.GetAddrOfLocalVar(self).getPointer())
     return nullptr;
 
@@ -3130,7 +3139,7 @@ static void emitWriteback(CodeGenFunction &CGF,
   // Cast it back, in case we're writing an id to a Foo* or something.
   value = CGF.Builder.CreateBitCast(value, srcAddr.getElementType(),
                                     "icr.writeback-cast");
-  
+
   // Perform the writeback.
 
   // If we have a "to use" value, it's something we need to emit a use
@@ -3236,7 +3245,7 @@ static void emitWritebackArg(CodeGenFunction &CGF, CallArgList &args,
   // isn't null, so we need to register a dominating point so that the cleanups
   // system will make valid IR.
   CodeGenFunction::ConditionalEvaluation condEval(CGF);
-  
+
   // Zero-initialize it if we're not doing a copy-initialization.
   bool shouldCopy = CRE->shouldCopy();
   if (!shouldCopy) {
@@ -3260,7 +3269,7 @@ static void emitWritebackArg(CodeGenFunction &CGF, CallArgList &args,
     llvm::Value *isNull =
       CGF.Builder.CreateIsNull(srcAddr.getPointer(), "icr.isnull");
 
-    finalArgument = CGF.Builder.CreateSelect(isNull, 
+    finalArgument = CGF.Builder.CreateSelect(isNull,
                                    llvm::ConstantPointerNull::get(destType),
                                              temp.getPointer(), "icr.argument");
 
@@ -3300,7 +3309,7 @@ static void emitWritebackArg(CodeGenFunction &CGF, CallArgList &args,
       valueToUse = src;
     }
   }
-  
+
   // Finish the control flow if we needed it.
   if (shouldCopy && !provablyNonNull) {
     llvm::BasicBlock *copyBB = CGF.Builder.GetInsertBlock();
@@ -3351,7 +3360,7 @@ void CodeGenFunction::EmitNonNullArgCheck(RValue RV, QualType ArgType,
   auto PVD = ParmNum < AC.getNumParams() ? AC.getParamDecl(ParmNum) : nullptr;
   unsigned ArgNo = PVD ? PVD->getFunctionScopeIndex() : ParmNum;
 
-  // Prefer the nonnull attribute if it's present. 
+  // Prefer the nonnull attribute if it's present.
   const NonNullAttr *NNAttr = nullptr;
   if (SanOpts.has(SanitizerKind::NonnullAttribute))
     NNAttr = getNonNullAttr(AC.getDecl(), PVD, ArgType, ArgNo);
@@ -3704,7 +3713,7 @@ void CodeGenFunction::EmitNoreturnRuntimeCallOrInvoke(llvm::Value *callee,
       getBundlesForFunclet(callee);
 
   if (getInvokeDest()) {
-    llvm::InvokeInst *invoke = 
+    llvm::InvokeInst *invoke =
       Builder.CreateInvoke(callee,
                            getUnreachableBlock(),
                            getInvokeDest(),

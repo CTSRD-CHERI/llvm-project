@@ -15,7 +15,6 @@
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/Section.h"
-#include "lldb/Core/State.h"
 #include "lldb/Core/ValueObjectVariable.h"
 #include "lldb/DataFormatters/ValueObjectPrinter.h"
 #include "lldb/Host/OptionParser.h"
@@ -51,6 +50,7 @@
 #include "lldb/Target/Thread.h"
 #include "lldb/Target/ThreadSpec.h"
 #include "lldb/Utility/Args.h"
+#include "lldb/Utility/State.h"
 #include "lldb/Utility/Timer.h"
 
 #include "llvm/Support/FileSystem.h"
@@ -195,20 +195,13 @@ public:
 
   Options *GetOptions() override { return &m_option_group; }
 
-  int HandleArgumentCompletion(Args &input, int &cursor_index,
-                               int &cursor_char_position,
-                               OptionElementVector &opt_element_vector,
-                               int match_start_point, int max_return_elements,
-                               bool &word_complete,
-                               StringList &matches) override {
-    std::string completion_str(input.GetArgumentAtIndex(cursor_index));
-    completion_str.erase(cursor_char_position);
-
+  int HandleArgumentCompletion(
+      CompletionRequest &request,
+      OptionElementVector &opt_element_vector) override {
     CommandCompletions::InvokeCommonCompletionCallbacks(
         GetCommandInterpreter(), CommandCompletions::eDiskFileCompletion,
-        completion_str.c_str(), match_start_point, max_return_elements, nullptr,
-        word_complete, matches);
-    return matches.GetSize();
+        request, nullptr);
+    return request.GetNumberOfMatches();
   }
 
 protected:
@@ -1811,21 +1804,13 @@ public:
 
   ~CommandObjectTargetModulesModuleAutoComplete() override = default;
 
-  int HandleArgumentCompletion(Args &input, int &cursor_index,
-                               int &cursor_char_position,
-                               OptionElementVector &opt_element_vector,
-                               int match_start_point, int max_return_elements,
-                               bool &word_complete,
-                               StringList &matches) override {
-    // Arguments are the standard module completer.
-    std::string completion_str(input.GetArgumentAtIndex(cursor_index));
-    completion_str.erase(cursor_char_position);
-
+  int HandleArgumentCompletion(
+      CompletionRequest &request,
+      OptionElementVector &opt_element_vector) override {
     CommandCompletions::InvokeCommonCompletionCallbacks(
-        GetCommandInterpreter(), CommandCompletions::eModuleCompletion,
-        completion_str.c_str(), match_start_point, max_return_elements, nullptr,
-        word_complete, matches);
-    return matches.GetSize();
+        GetCommandInterpreter(), CommandCompletions::eModuleCompletion, request,
+        nullptr);
+    return request.GetNumberOfMatches();
   }
 };
 
@@ -1860,21 +1845,13 @@ public:
 
   ~CommandObjectTargetModulesSourceFileAutoComplete() override = default;
 
-  int HandleArgumentCompletion(Args &input, int &cursor_index,
-                               int &cursor_char_position,
-                               OptionElementVector &opt_element_vector,
-                               int match_start_point, int max_return_elements,
-                               bool &word_complete,
-                               StringList &matches) override {
-    // Arguments are the standard source file completer.
-    std::string completion_str(input.GetArgumentAtIndex(cursor_index));
-    completion_str.erase(cursor_char_position);
-
+  int HandleArgumentCompletion(
+      CompletionRequest &request,
+      OptionElementVector &opt_element_vector) override {
     CommandCompletions::InvokeCommonCompletionCallbacks(
         GetCommandInterpreter(), CommandCompletions::eSourceFileCompletion,
-        completion_str.c_str(), match_start_point, max_return_elements, nullptr,
-        word_complete, matches);
-    return matches.GetSize();
+        request, nullptr);
+    return request.GetNumberOfMatches();
   }
 };
 
@@ -2410,20 +2387,13 @@ public:
 
   Options *GetOptions() override { return &m_option_group; }
 
-  int HandleArgumentCompletion(Args &input, int &cursor_index,
-                               int &cursor_char_position,
-                               OptionElementVector &opt_element_vector,
-                               int match_start_point, int max_return_elements,
-                               bool &word_complete,
-                               StringList &matches) override {
-    std::string completion_str(input.GetArgumentAtIndex(cursor_index));
-    completion_str.erase(cursor_char_position);
-
+  int HandleArgumentCompletion(
+      CompletionRequest &request,
+      OptionElementVector &opt_element_vector) override {
     CommandCompletions::InvokeCommonCompletionCallbacks(
         GetCommandInterpreter(), CommandCompletions::eDiskFileCompletion,
-        completion_str.c_str(), match_start_point, max_return_elements, nullptr,
-        word_complete, matches);
-    return matches.GetSize();
+        request, nullptr);
+    return request.GetNumberOfMatches();
   }
 
 protected:
@@ -2770,10 +2740,15 @@ protected:
                   }
                   if (set_pc) {
                     ThreadList &thread_list = process->GetThreadList();
-                    ThreadSP curr_thread(thread_list.GetSelectedThread());
                     RegisterContextSP reg_context(
-                        curr_thread->GetRegisterContext());
-                    reg_context->SetPC(file_entry.GetLoadAddress(target));
+                        thread_list.GetSelectedThread()->GetRegisterContext());
+                    addr_t file_entry_addr = file_entry.GetLoadAddress(target);
+                    if (!reg_context->SetPC(file_entry_addr)) {
+                      result.AppendErrorWithFormat("failed to set PC value to "
+                                                   "0x%" PRIx64 "\n",
+                                                   file_entry_addr);
+                      result.SetStatus(eReturnStatusFailed);
+                    }
                   }
                 }
               } else {
@@ -4011,20 +3986,13 @@ public:
 
   ~CommandObjectTargetSymbolsAdd() override = default;
 
-  int HandleArgumentCompletion(Args &input, int &cursor_index,
-                               int &cursor_char_position,
-                               OptionElementVector &opt_element_vector,
-                               int match_start_point, int max_return_elements,
-                               bool &word_complete,
-                               StringList &matches) override {
-    std::string completion_str(input.GetArgumentAtIndex(cursor_index));
-    completion_str.erase(cursor_char_position);
-
+  int HandleArgumentCompletion(
+      CompletionRequest &request,
+      OptionElementVector &opt_element_vector) override {
     CommandCompletions::InvokeCommonCompletionCallbacks(
         GetCommandInterpreter(), CommandCompletions::eDiskFileCompletion,
-        completion_str.c_str(), match_start_point, max_return_elements, nullptr,
-        word_complete, matches);
-    return matches.GetSize();
+        request, nullptr);
+    return request.GetNumberOfMatches();
   }
 
   Options *GetOptions() override { return &m_option_group; }

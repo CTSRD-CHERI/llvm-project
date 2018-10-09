@@ -125,13 +125,6 @@ StringRef llvm::object::getELFRelocationTypeName(uint32_t Machine,
       break;
     }
     break;
-  case ELF::EM_WEBASSEMBLY:
-    switch (Type) {
-#include "llvm/BinaryFormat/ELFRelocs/WebAssembly.def"
-    default:
-      break;
-    }
-    break;
   case ELF::EM_AMDGPU:
     switch (Type) {
 #include "llvm/BinaryFormat/ELFRelocs/AMDGPU.def"
@@ -188,8 +181,6 @@ uint32_t llvm::object::getELFRelrRelocationType(uint32_t Machine) {
   case ELF::EM_SPARC32PLUS:
   case ELF::EM_SPARCV9:
     return ELF::R_SPARC_RELATIVE;
-  case ELF::EM_WEBASSEMBLY:
-    break;
   case ELF::EM_AMDGPU:
     break;
   case ELF::EM_BPF:
@@ -255,6 +246,7 @@ StringRef llvm::object::getELFSectionTypeName(uint32_t Machine, unsigned Type) {
     STRINGIFY_ENUM_CASE(ELF, SHT_LLVM_ODRTAB);
     STRINGIFY_ENUM_CASE(ELF, SHT_LLVM_LINKER_OPTIONS);
     STRINGIFY_ENUM_CASE(ELF, SHT_LLVM_CALL_GRAPH_PROFILE);
+    STRINGIFY_ENUM_CASE(ELF, SHT_LLVM_ADDRSIG);
     STRINGIFY_ENUM_CASE(ELF, SHT_GNU_ATTRIBUTES);
     STRINGIFY_ENUM_CASE(ELF, SHT_GNU_HASH);
     STRINGIFY_ENUM_CASE(ELF, SHT_GNU_verdef);
@@ -426,6 +418,144 @@ ELFFile<ELFT>::android_relas(const Elf_Shdr *Sec) const {
   }
 
   return Relocs;
+}
+
+template <class ELFT>
+const char *ELFFile<ELFT>::getDynamicTagAsString(unsigned Arch,
+                                                 uint64_t Type) const {
+#define DYNAMIC_STRINGIFY_ENUM(tag, value)                                     \
+  case value:                                                                  \
+    return #tag;
+
+#define DYNAMIC_TAG(n, v)
+  switch (Arch) {
+  case ELF::EM_HEXAGON:
+    switch (Type) {
+#define HEXAGON_DYNAMIC_TAG(name, value) DYNAMIC_STRINGIFY_ENUM(name, value)
+#include "llvm/BinaryFormat/DynamicTags.def"
+#undef HEXAGON_DYNAMIC_TAG
+    }
+
+  case ELF::EM_MIPS:
+    switch (Type) {
+#define MIPS_DYNAMIC_TAG(name, value) DYNAMIC_STRINGIFY_ENUM(name, value)
+#include "llvm/BinaryFormat/DynamicTags.def"
+#undef MIPS_DYNAMIC_TAG
+    }
+
+  case ELF::EM_PPC64:
+    switch (Type) {
+#define PPC64_DYNAMIC_TAG(name, value) DYNAMIC_STRINGIFY_ENUM(name, value)
+#include "llvm/BinaryFormat/DynamicTags.def"
+#undef PPC64_DYNAMIC_TAG
+    }
+  }
+#undef DYNAMIC_TAG
+  switch (Type) {
+// Now handle all dynamic tags except the architecture specific ones
+#define MIPS_DYNAMIC_TAG(name, value)
+#define HEXAGON_DYNAMIC_TAG(name, value)
+#define PPC64_DYNAMIC_TAG(name, value)
+// Also ignore marker tags such as DT_HIOS (maps to DT_VERNEEDNUM), etc.
+#define DYNAMIC_TAG_MARKER(name, value)
+#define DYNAMIC_TAG(name, value) DYNAMIC_STRINGIFY_ENUM(name, value)
+#include "llvm/BinaryFormat/DynamicTags.def"
+#undef DYNAMIC_TAG
+#undef MIPS_DYNAMIC_TAG
+#undef HEXAGON_DYNAMIC_TAG
+#undef PPC64_DYNAMIC_TAG
+#undef DYNAMIC_TAG_MARKER
+#undef DYNAMIC_STRINGIFY_ENUM
+  default:
+    return "unknown";
+  }
+}
+
+template <class ELFT>
+const char *ELFFile<ELFT>::getDynamicTagAsString(uint64_t Type) const {
+  return getDynamicTagAsString(getHeader()->e_machine, Type);
+}
+
+template <class ELFT>
+Expected<typename ELFT::DynRange> ELFFile<ELFT>::dynamicEntries() const {
+  ArrayRef<Elf_Dyn> Dyn;
+  size_t DynSecSize = 0;
+
+  auto ProgramHeadersOrError = program_headers();
+  if (!ProgramHeadersOrError)
+    return ProgramHeadersOrError.takeError();
+
+  for (const Elf_Phdr &Phdr : *ProgramHeadersOrError) {
+    if (Phdr.p_type == ELF::PT_DYNAMIC) {
+      Dyn = makeArrayRef(
+          reinterpret_cast<const Elf_Dyn *>(base() + Phdr.p_offset),
+          Phdr.p_filesz / sizeof(Elf_Dyn));
+      DynSecSize = Phdr.p_filesz;
+      break;
+    }
+  }
+
+  // If we can't find the dynamic section in the program headers, we just fall
+  // back on the sections.
+  if (Dyn.empty()) {
+    auto SectionsOrError = sections();
+    if (!SectionsOrError)
+      return SectionsOrError.takeError();
+
+    for (const Elf_Shdr &Sec : *SectionsOrError) {
+      if (Sec.sh_type == ELF::SHT_DYNAMIC) {
+        Expected<ArrayRef<Elf_Dyn>> DynOrError =
+            getSectionContentsAsArray<Elf_Dyn>(&Sec);
+        if (!DynOrError)
+          return DynOrError.takeError();
+        Dyn = *DynOrError;
+        DynSecSize = Sec.sh_size;
+        break;
+      }
+    }
+
+    if (!Dyn.data())
+      return ArrayRef<Elf_Dyn>();
+  }
+
+  if (Dyn.empty())
+    return createError("invalid empty dynamic section");
+
+  if (DynSecSize % sizeof(Elf_Dyn) != 0)
+    return createError("malformed dynamic section");
+
+  if (Dyn.back().d_tag != ELF::DT_NULL)
+    return createError("dynamic sections must be DT_NULL terminated");
+
+  return Dyn;
+}
+
+template <class ELFT>
+Expected<const uint8_t *> ELFFile<ELFT>::toMappedAddr(uint64_t VAddr) const {
+  auto ProgramHeadersOrError = program_headers();
+  if (!ProgramHeadersOrError)
+    return ProgramHeadersOrError.takeError();
+
+  llvm::SmallVector<Elf_Phdr *, 4> LoadSegments;
+
+  for (const Elf_Phdr &Phdr : *ProgramHeadersOrError)
+    if (Phdr.p_type == ELF::PT_LOAD)
+      LoadSegments.push_back(const_cast<Elf_Phdr *>(&Phdr));
+
+  const Elf_Phdr *const *I =
+      std::upper_bound(LoadSegments.begin(), LoadSegments.end(), VAddr,
+                       [](uint64_t VAddr, const Elf_Phdr_Impl<ELFT> *Phdr) {
+                         return VAddr < Phdr->p_vaddr;
+                       });
+
+  if (I == LoadSegments.begin())
+    return createError("Virtual address is not in any segment");
+  --I;
+  const Elf_Phdr &Phdr = **I;
+  uint64_t Delta = VAddr - Phdr.p_vaddr;
+  if (Delta >= Phdr.p_filesz)
+    return createError("Virtual address is not in any segment");
+  return base() + Phdr.p_offset + Delta;
 }
 
 template class llvm::object::ELFFile<ELF32LE>;

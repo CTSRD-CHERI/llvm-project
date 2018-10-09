@@ -644,11 +644,12 @@ static void PrivateAutoComplete(
       break;
 
     case '-':
-      if (partial_path[1] == '>' && !prefix_path.str().empty()) {
+      if (partial_path.size() > 1 && partial_path[1] == '>' &&
+          !prefix_path.str().empty()) {
         switch (type_class) {
         case lldb::eTypeClassPointer: {
           CompilerType pointee_type(compiler_type.GetPointeeType());
-          if (partial_path[2]) {
+          if (partial_path.size() > 2 && partial_path[2]) {
             // If there is more after the "->", then search deeper
             PrivateAutoComplete(
                 frame, partial_path.substr(2), prefix_path + "->",
@@ -672,7 +673,7 @@ static void PrivateAutoComplete(
         case lldb::eTypeClassUnion:
         case lldb::eTypeClassStruct:
         case lldb::eTypeClassClass:
-          if (partial_path[1]) {
+          if (partial_path.size() > 1 && partial_path[1]) {
             // If there is more after the ".", then search deeper
             PrivateAutoComplete(frame, partial_path.substr(1),
                                 prefix_path + ".", compiler_type, matches,
@@ -756,13 +757,15 @@ static void PrivateAutoComplete(
 }
 
 size_t Variable::AutoComplete(const ExecutionContext &exe_ctx,
-                              llvm::StringRef partial_path, StringList &matches,
-                              bool &word_complete) {
-  word_complete = false;
+                              CompletionRequest &request) {
   CompilerType compiler_type;
 
-  PrivateAutoComplete(exe_ctx.GetFramePtr(), partial_path, "", compiler_type,
-                      matches, word_complete);
+  bool word_complete = false;
+  StringList matches;
+  PrivateAutoComplete(exe_ctx.GetFramePtr(), request.GetCursorArgumentPrefix(),
+                      "", compiler_type, matches, word_complete);
+  request.SetWordComplete(word_complete);
+  request.AddCompletions(matches);
 
-  return matches.GetSize();
+  return request.GetNumberOfMatches();
 }

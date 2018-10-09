@@ -45,8 +45,9 @@ class LangOptions;
 class NamedDecl;
 class NestedNameSpecifier;
 class Preprocessor;
-class Sema;
 class RawComment;
+class Sema;
+class UsingShadowDecl;
 
 /// Default priority values for code-completion results based
 /// on their kind.
@@ -554,14 +555,14 @@ private:
 
   /// The availability of this code-completion result.
   unsigned Availability : 2;
-  
+
   /// The name of the parent context.
   StringRef ParentName;
 
   /// A brief documentation comment attached to the declaration of
   /// entity being completed by this result.
   const char *BriefComment;
-  
+
   CodeCompletionString(const Chunk *Chunks, unsigned NumChunks,
                        unsigned Priority, CXAvailabilityKind Availability,
                        const char **Annotations, unsigned NumAnnotations,
@@ -599,7 +600,7 @@ public:
 
   /// Retrieve the annotation string specified by \c AnnotationNr.
   const char *getAnnotation(unsigned AnnotationNr) const;
-  
+
   /// Retrieve the name of the parent context.
   StringRef getParentContextName() const {
     return ParentName;
@@ -608,7 +609,7 @@ public:
   const char *getBriefComment() const {
     return BriefComment;
   }
-  
+
   /// Retrieve a string representation of the code completion string,
   /// which is mainly useful for debugging.
   std::string getAsString() const;
@@ -669,7 +670,7 @@ private:
   CXAvailabilityKind Availability = CXAvailability_Available;
   StringRef ParentName;
   const char *BriefComment = nullptr;
-  
+
   /// The chunks stored in this string.
   SmallVector<Chunk, 4> Chunks;
 
@@ -728,7 +729,7 @@ public:
 
   const char *getBriefComment() const { return BriefComment; }
   void addBriefComment(StringRef Comment);
-  
+
   StringRef getParentName() const { return ParentName; }
 };
 
@@ -836,6 +837,12 @@ public:
   /// informative rather than required.
   NestedNameSpecifier *Qualifier = nullptr;
 
+  /// If this Decl was unshadowed by using declaration, this can store a
+  /// pointer to the UsingShadowDecl which was used in the unshadowing process.
+  /// This information can be used to uprank CodeCompletionResults / which have
+  /// corresponding `using decl::qualified::name;` nearby.
+  const UsingShadowDecl *ShadowDecl = nullptr;
+
   /// Build a result that refers to a declaration.
   CodeCompletionResult(const NamedDecl *Declaration, unsigned Priority,
                        NestedNameSpecifier *Qualifier = nullptr,
@@ -847,7 +854,7 @@ public:
         QualifierIsInformative(QualifierIsInformative),
         StartsNestedNameSpecifier(false), AllParametersAreInformative(false),
         DeclaringEntity(false), Qualifier(Qualifier) {
-    //FIXME: Add assert to check FixIts range requirements.
+    // FIXME: Add assert to check FixIts range requirements.
     computeCursorKindAndAvailability(Accessible);
   }
 
@@ -886,11 +893,13 @@ public:
         StartsNestedNameSpecifier(false), AllParametersAreInformative(false),
         DeclaringEntity(false) {
     computeCursorKindAndAvailability();
-  }  
-  
-  /// Retrieve the declaration stored in this result.
+  }
+
+  /// Retrieve the declaration stored in this result. This might be nullptr if
+  /// Kind is RK_Pattern.
   const NamedDecl *getDeclaration() const {
-    assert(Kind == RK_Declaration && "Not a declaration result");
+    assert(((Kind == RK_Declaration) || (Kind == RK_Pattern)) &&
+           "Not a declaration or pattern result");
     return Declaration;
   }
 
@@ -918,6 +927,13 @@ public:
                                            CodeCompletionAllocator &Allocator,
                                            CodeCompletionTUInfo &CCTUInfo,
                                            bool IncludeBriefComments);
+  /// Creates a new code-completion string for the macro result. Similar to the
+  /// above overloads, except this only requires preprocessor information.
+  /// The result kind must be `RK_Macro`.
+  CodeCompletionString *
+  CreateCodeCompletionStringForMacro(Preprocessor &PP,
+                                     CodeCompletionAllocator &Allocator,
+                                     CodeCompletionTUInfo &CCTUInfo);
 
   /// Retrieve the name that should be used to order a result.
   ///

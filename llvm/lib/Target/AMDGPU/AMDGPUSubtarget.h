@@ -46,7 +46,19 @@ namespace llvm {
 
 class StringRef;
 
-class AMDGPUCommonSubtarget {
+class AMDGPUSubtarget {
+public:
+  enum Generation {
+    R600 = 0,
+    R700 = 1,
+    EVERGREEN = 2,
+    NORTHERN_ISLANDS = 3,
+    SOUTHERN_ISLANDS = 4,
+    SEA_ISLANDS = 5,
+    VOLCANIC_ISLANDS = 6,
+    GFX9 = 7
+  };
+
 private:
   Triple TargetTriple;
 
@@ -66,11 +78,11 @@ protected:
   unsigned WavefrontSize;
 
 public:
-  AMDGPUCommonSubtarget(const Triple &TT, const FeatureBitset &FeatureBits);
+  AMDGPUSubtarget(const Triple &TT, const FeatureBitset &FeatureBits);
 
-  static const AMDGPUCommonSubtarget &get(const MachineFunction &MF);
-  static const AMDGPUCommonSubtarget &get(const TargetMachine &TM,
-                                          const Function &F);
+  static const AMDGPUSubtarget &get(const MachineFunction &MF);
+  static const AMDGPUSubtarget &get(const TargetMachine &TM,
+                                    const Function &F);
 
   /// \returns Default range flat work group size for a calling convention.
   std::pair<unsigned, unsigned> getDefaultFlatWorkGroupSize(CallingConv::ID CC) const;
@@ -112,6 +124,18 @@ public:
 
   bool isAmdPalOS() const {
     return TargetTriple.getOS() == Triple::AMDPAL;
+  }
+
+  bool isMesa3DOS() const {
+    return TargetTriple.getOS() == Triple::Mesa3D;
+  }
+
+  bool isMesaKernel(const Function &F) const {
+    return isMesa3DOS() && !AMDGPU::isShader(F.getCallingConv());
+  }
+
+  bool isAmdCodeObjectV2(const Function &F) const {
+    return isAmdHsaOS() || isMesaKernel(F);
   }
 
   bool has16BitInsts() const {
@@ -166,6 +190,12 @@ public:
     return isAmdHsaOS() ? 8 : 4;
   }
 
+  /// Returns the offset in bytes from the start of the input buffer
+  ///        of the first explicit kernel argument.
+  unsigned getExplicitKernelArgOffset(const Function &F) const {
+    return isAmdCodeObjectV2(F) ? 0 : 36;
+  }
+
   /// \returns Maximum number of work groups per compute unit supported by the
   /// subtarget and limited by given \p FlatWorkGroupSize.
   unsigned getMaxWorkGroupsPerCU(unsigned FlatWorkGroupSize) const {
@@ -201,21 +231,24 @@ public:
   /// Creates value range metadata on an workitemid.* inrinsic call or load.
   bool makeLIDRangeMetadata(Instruction *I) const;
 
-  virtual ~AMDGPUCommonSubtarget() {}
+  /// \returns Number of bytes of arguments that are passed to a shader or
+  /// kernel in addition to the explicit ones declared for the function.
+  unsigned getImplicitArgNumBytes(const Function &F) const {
+    if (isMesaKernel(F))
+      return 16;
+    return AMDGPU::getIntegerAttribute(F, "amdgpu-implicitarg-num-bytes", 0);
+  }
+  uint64_t getExplicitKernArgSize(const Function &F,
+                                  unsigned &MaxAlign) const;
+  unsigned getKernArgSegmentSize(const Function &F,
+                                 unsigned &MaxAlign) const;
+
+  virtual ~AMDGPUSubtarget() {}
 };
 
-class AMDGPUSubtarget : public AMDGPUGenSubtargetInfo,
-                        public AMDGPUCommonSubtarget {
+class GCNSubtarget : public AMDGPUGenSubtargetInfo,
+                     public AMDGPUSubtarget {
 public:
-  enum Generation {
-    // Gap for R600 generations, so we can do comparisons between
-    // AMDGPUSubtarget and r600Subtarget.
-    SOUTHERN_ISLANDS = 4,
-    SEA_ISLANDS = 5,
-    VOLCANIC_ISLANDS = 6,
-    GFX9 = 7,
-  };
-
   enum {
     ISAVersion0_0_0,
     ISAVersion6_0_0,
@@ -256,8 +289,6 @@ public:
   };
 
 private:
-  SIFrameLowering FrameLowering;
-
   /// GlobalISel related APIs.
   std::unique_ptr<AMDGPUCallLowering> CallLoweringInfo;
   std::unique_ptr<InstructionSelector> InstSelector;
@@ -306,6 +337,7 @@ protected:
   bool IsGCN;
   bool GCN3Encoding;
   bool CIInsts;
+  bool VIInsts;
   bool GFX9Insts;
   bool SGPRInitBug;
   bool HasSMemRealTime;
@@ -342,24 +374,34 @@ protected:
 
   SelectionDAGTargetInfo TSInfo;
   AMDGPUAS AS;
+private:
+  SIInstrInfo InstrInfo;
+  SITargetLowering TLInfo;
+  SIFrameLowering FrameLowering;
 
 public:
-  AMDGPUSubtarget(const Triple &TT, StringRef GPU, StringRef FS,
-                  const TargetMachine &TM);
-  ~AMDGPUSubtarget() override;
+  GCNSubtarget(const Triple &TT, StringRef GPU, StringRef FS,
+               const GCNTargetMachine &TM);
+  ~GCNSubtarget() override;
 
-  AMDGPUSubtarget &initializeSubtargetDependencies(const Triple &TT,
+  GCNSubtarget &initializeSubtargetDependencies(const Triple &TT,
                                                    StringRef GPU, StringRef FS);
 
-  virtual const SIInstrInfo *getInstrInfo() const override = 0;
+  const SIInstrInfo *getInstrInfo() const override {
+    return &InstrInfo;
+  }
 
   const SIFrameLowering *getFrameLowering() const override {
     return &FrameLowering;
   }
 
-  virtual const SITargetLowering *getTargetLowering() const override = 0;
+  const SITargetLowering *getTargetLowering() const override {
+    return &TLInfo;
+  }
 
-  virtual const SIRegisterInfo *getRegisterInfo() const override = 0;
+  const SIRegisterInfo *getRegisterInfo() const override {
+    return &InstrInfo.getRegisterInfo();
+  }
 
   const CallLowering *getCallLowering() const override {
     return CallLoweringInfo.get();
@@ -383,10 +425,6 @@ public:
   }
 
   void ParseSubtargetFeatures(StringRef CPU, StringRef FS);
-
-  bool isMesa3DOS() const {
-    return TargetTriple.getOS() == Triple::Mesa3D;
-  }
 
   Generation getGeneration() const {
     return (Generation)Gen;
@@ -603,17 +641,9 @@ public:
     return HasUnpackedD16VMem;
   }
 
-  bool isMesaKernel(const Function &F) const {
-    return isMesa3DOS() && !AMDGPU::isShader(F.getCallingConv());
-  }
-
   // Covers VS/PS/CS graphics shaders
   bool isMesaGfxShader(const Function &F) const {
     return isMesa3DOS() && AMDGPU::isShader(F.getCallingConv());
-  }
-
-  bool isAmdCodeObjectV2(const Function &F) const {
-    return isAmdHsaOS() || isMesaKernel(F);
   }
 
   bool hasMad64_32() const {
@@ -650,20 +680,6 @@ public:
 
   bool d16PreservesUnusedBits() const {
     return D16PreservesUnusedBits;
-  }
-
-  /// Returns the offset in bytes from the start of the input buffer
-  ///        of the first explicit kernel argument.
-  unsigned getExplicitKernelArgOffset(const Function &F) const {
-    return isAmdCodeObjectV2(F) ? 0 : 36;
-  }
-
-  /// \returns Number of bytes of arguments that are passed to a shader or
-  /// kernel in addition to the explicit ones declared for the function.
-  unsigned getImplicitArgNumBytes(const Function &F) const {
-    if (isMesaKernel(F))
-      return 16;
-    return AMDGPU::getIntegerAttribute(F, "amdgpu-implicitarg-num-bytes", 0);
   }
 
   // Scratch is allocated in 256 dword per wave blocks for the entire
@@ -720,55 +736,7 @@ public:
     return AMDGPU::IsaInfo::getWavesPerWorkGroup(
         MCSubtargetInfo::getFeatureBits(), FlatWorkGroupSize);
   }
-};
 
-class SISubtarget final : public AMDGPUSubtarget {
-private:
-  SIInstrInfo InstrInfo;
-  SIFrameLowering FrameLowering;
-  SITargetLowering TLInfo;
-
-  /// GlobalISel related APIs.
-  std::unique_ptr<AMDGPUCallLowering> CallLoweringInfo;
-  std::unique_ptr<InstructionSelector> InstSelector;
-  std::unique_ptr<LegalizerInfo> Legalizer;
-  std::unique_ptr<RegisterBankInfo> RegBankInfo;
-
-public:
-  SISubtarget(const Triple &TT, StringRef CPU, StringRef FS,
-              const GCNTargetMachine &TM);
-
-  const SIInstrInfo *getInstrInfo() const override {
-    return &InstrInfo;
-  }
-
-  const SIFrameLowering *getFrameLowering() const override {
-    return &FrameLowering;
-  }
-
-  const SITargetLowering *getTargetLowering() const override {
-    return &TLInfo;
-  }
-
-  const CallLowering *getCallLowering() const override {
-    return CallLoweringInfo.get();
-  }
-
-  const InstructionSelector *getInstructionSelector() const override {
-    return InstSelector.get();
-  }
-
-  const LegalizerInfo *getLegalizerInfo() const override {
-    return Legalizer.get();
-  }
-
-  const RegisterBankInfo *getRegBankInfo() const override {
-    return RegBankInfo.get();
-  }
-
-  const SIRegisterInfo *getRegisterInfo() const override {
-    return &InstrInfo.getRegisterInfo();
-  }
   // static wrappers
   static bool hasHalfRate64Ops(const TargetSubtargetInfo &STI);
 
@@ -861,10 +829,6 @@ public:
   bool hasReadM0SendMsgHazard() const {
     return getGeneration() >= AMDGPUSubtarget::VOLCANIC_ISLANDS;
   }
-
-  uint64_t getExplicitKernArgSize(const Function &F) const;
-  unsigned getKernArgSegmentSize(const Function &F,
-                                 int64_t ExplicitArgBytes = -1) const;
 
   /// Return the maximum number of waves per SIMD for kernels using \p SGPRs
   /// SGPRs
@@ -988,12 +952,8 @@ public:
       const override;
 };
 
-
 class R600Subtarget final : public R600GenSubtargetInfo,
-                            public AMDGPUCommonSubtarget {
-public:
-  enum Generation { R600 = 0, R700 = 1, EVERGREEN = 2, NORTHERN_ISLANDS = 3 };
-
+                            public AMDGPUSubtarget {
 private:
   R600InstrInfo InstrInfo;
   R600FrameLowering FrameLowering;
@@ -1087,10 +1047,6 @@ public:
   }
 
   bool hasFMA() const { return FMA; }
-
-  unsigned getExplicitKernelArgOffset(const MachineFunction &MF) const {
-    return 36;
-  }
 
   bool hasCFAluBug() const { return CFALUBug; }
 

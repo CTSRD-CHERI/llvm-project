@@ -267,6 +267,9 @@ void MCObjectFileInfo::initMachOMCObjectFileInfo(const Triple &T) {
   DwarfRangesSection =
       Ctx->getMachOSection("__DWARF", "__debug_ranges", MachO::S_ATTR_DEBUG,
                            SectionKind::getMetadata(), "debug_range");
+  DwarfRnglistsSection =
+      Ctx->getMachOSection("__DWARF", "__debug_rnglists", MachO::S_ATTR_DEBUG,
+                           SectionKind::getMetadata(), "debug_range");
   DwarfMacinfoSection =
       Ctx->getMachOSection("__DWARF", "__debug_macinfo", MachO::S_ATTR_DEBUG,
                            SectionKind::getMetadata(), "debug_macinfo");
@@ -578,6 +581,7 @@ void MCObjectFileInfo::initELFMCObjectFileInfo(const Triple &T, bool Large) {
   DwarfStrOffSection =
       Ctx->getELFSection(".debug_str_offsets", DebugSecType, 0);
   DwarfAddrSection = Ctx->getELFSection(".debug_addr", DebugSecType, 0);
+  DwarfRnglistsSection = Ctx->getELFSection(".debug_rnglists", DebugSecType, 0);
 
   // Fission Sections
   DwarfInfoDWOSection =
@@ -595,6 +599,8 @@ void MCObjectFileInfo::initELFMCObjectFileInfo(const Triple &T, bool Large) {
       Ctx->getELFSection(".debug_loc.dwo", DebugSecType, 0);
   DwarfStrOffDWOSection =
       Ctx->getELFSection(".debug_str_offsets.dwo", DebugSecType, 0);
+  DwarfRnglistsDWOSection =
+      Ctx->getELFSection(".debug_rnglists.dwo", DebugSecType, 0);
 
   // DWP Sections
   DwarfCUIndexSection =
@@ -944,8 +950,19 @@ void MCObjectFileInfo::InitMCObjectFileInfo(const Triple &TheTriple, bool PIC,
 }
 
 MCSection *MCObjectFileInfo::getDwarfTypesSection(uint64_t Hash) const {
-  return Ctx->getELFSection(".debug_types", ELF::SHT_PROGBITS, ELF::SHF_GROUP,
-                            0, utostr(Hash));
+  switch (TT.getObjectFormat()) {
+  case Triple::ELF:
+    return Ctx->getELFSection(".debug_types", ELF::SHT_PROGBITS, ELF::SHF_GROUP,
+                              0, utostr(Hash));
+  case Triple::MachO:
+  case Triple::COFF:
+  case Triple::Wasm:
+  case Triple::UnknownObjectFormat:
+    report_fatal_error("Cannot get DWARF types section for this object file "
+                       "format: not implemented.");
+    break;
+  }
+  llvm_unreachable("Unknown ObjectFormatType");
 }
 
 MCSection *

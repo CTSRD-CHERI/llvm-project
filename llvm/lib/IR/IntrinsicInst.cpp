@@ -32,10 +32,11 @@
 using namespace llvm;
 
 //===----------------------------------------------------------------------===//
-/// DbgInfoIntrinsic - This is the common base class for debug info intrinsics
+/// DbgVariableIntrinsic - This is the common base class for debug info
+/// intrinsics for variables.
 ///
 
-Value *DbgInfoIntrinsic::getVariableLocation(bool AllowNullOp) const {
+Value *DbgVariableIntrinsic::getVariableLocation(bool AllowNullOp) const {
   Value *Op = getArgOperand(0);
   if (AllowNullOp && !Op)
     return nullptr;
@@ -49,7 +50,7 @@ Value *DbgInfoIntrinsic::getVariableLocation(bool AllowNullOp) const {
   return nullptr;
 }
 
-Optional<uint64_t> DbgInfoIntrinsic::getFragmentSizeInBits() const {
+Optional<uint64_t> DbgVariableIntrinsic::getFragmentSizeInBits() const {
   if (auto Fragment = getExpression()->getFragmentInfo())
     return Fragment->SizeInBits;
   return getVariable()->getSizeInBits();

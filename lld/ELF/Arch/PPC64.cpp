@@ -55,6 +55,7 @@ public:
                           RelExpr Expr) const override;
   void relaxTlsGdToIe(uint8_t *Loc, RelType Type, uint64_t Val) const override;
   void relaxTlsGdToLe(uint8_t *Loc, RelType Type, uint64_t Val) const override;
+  void relaxTlsLdToLe(uint8_t *Loc, RelType Type, uint64_t Val) const override;
 };
 } // namespace
 
@@ -111,52 +112,21 @@ PPC64::PPC64() {
 }
 
 static uint32_t getEFlags(InputFile *File) {
-  // Get the e_flag from the input file and issue an error if incompatible
-  // e_flag encountered.
-  uint32_t EFlags;
-  switch (Config->EKind) {
-  case ELF64BEKind:
-    EFlags = cast<ObjFile<ELF64BE>>(File)->getObj().getHeader()->e_flags;
-    break;
-  case ELF64LEKind:
-    EFlags = cast<ObjFile<ELF64LE>>(File)->getObj().getHeader()->e_flags;
-    break;
-  default:
-    llvm_unreachable("unknown Config->EKind");
-  }
-  if (EFlags > 2) {
-    error("incompatible e_flags: " +  toString(File));
-    return 0;
-  }
-  return EFlags;
+  if (Config->EKind == ELF64BEKind)
+    return cast<ObjFile<ELF64BE>>(File)->getObj().getHeader()->e_flags;
+  return cast<ObjFile<ELF64LE>>(File)->getObj().getHeader()->e_flags;
 }
 
+// This file implements v2 ABI. This function makes sure that all
+// object files have v2 or an unspecified version as an ABI version.
 uint32_t PPC64::calcEFlags() const {
-  assert(!ObjectFiles.empty());
-
-  uint32_t NonZeroFlag;
-  for (InputFile *F : makeArrayRef(ObjectFiles)) {
-    NonZeroFlag = getEFlags(F);
-    if (NonZeroFlag)
-      break;
-  }
-
-  // Verify that all input files have either the same e_flags, or zero.
-  for (InputFile *F : makeArrayRef(ObjectFiles)) {
+  for (InputFile *F : ObjectFiles) {
     uint32_t Flag = getEFlags(F);
-    if (Flag == 0 || Flag == NonZeroFlag)
-      continue;
-    error(toString(F) + ": ABI version " + Twine(Flag) +
-          " is not compatible with ABI version " + Twine(NonZeroFlag) +
-          " output");
-    return 0;
+    if (Flag == 1)
+      error(toString(F) + ": ABI version 1 is not supported");
+    else if (Flag > 2)
+      error(toString(F) + ": unrecognized e_flags: " + Twine(Flag));
   }
-
-  if (NonZeroFlag == 1) {
-    error("PPC64 V1 ABI not supported");
-    return 0;
-  }
-
   return 2;
 }
 
@@ -193,6 +163,52 @@ void PPC64::relaxTlsGdToLe(uint8_t *Loc, RelType Type, uint64_t Val) const {
     break;
   default:
     llvm_unreachable("unsupported relocation for TLS GD to LE relaxation");
+  }
+}
+
+
+void PPC64::relaxTlsLdToLe(uint8_t *Loc, RelType Type, uint64_t Val) const {
+  // Reference: 3.7.4.3 of the 64-bit ELF V2 abi supplement.
+  // The local dynamic code sequence for a global `x` will look like:
+  // Instruction                    Relocation                Symbol
+  // addis r3, r2, x@got@tlsld@ha   R_PPC64_GOT_TLSLD16_HA      x
+  // addi  r3, r3, x@got@tlsld@l    R_PPC64_GOT_TLSLD16_LO      x
+  // bl __tls_get_addr(x@tlsgd)     R_PPC64_TLSLD               x
+  //                                R_PPC64_REL24               __tls_get_addr
+  // nop                            None                       None
+
+  // Relaxing to local exec entails converting:
+  // addis r3, r2, x@got@tlsld@ha   into      nop
+  // addi  r3, r3, x@got@tlsld@l    into      addis r3, r13, 0
+  // bl __tls_get_addr(x@tlsgd)     into      nop
+  // nop                            into      addi r3, r3, 4096
+
+  uint32_t EndianOffset = Config->EKind == ELF64BEKind ? 2U : 0U;
+  switch (Type) {
+  case R_PPC64_GOT_TLSLD16_HA:
+    write32(Loc - EndianOffset, 0x60000000); // nop
+    break;
+  case R_PPC64_GOT_TLSLD16_LO:
+    write32(Loc - EndianOffset, 0x3c6d0000); // addis r3, r13, 0
+    break;
+  case R_PPC64_TLSLD:
+    write32(Loc, 0x60000000);     // nop
+    write32(Loc + 4, 0x38631000); // addi r3, r3, 4096
+    break;
+  case R_PPC64_DTPREL16:
+  case R_PPC64_DTPREL16_HA:
+  case R_PPC64_DTPREL16_HI:
+  case R_PPC64_DTPREL16_DS:
+  case R_PPC64_DTPREL16_LO:
+  case R_PPC64_DTPREL16_LO_DS:
+  case R_PPC64_GOT_DTPREL16_HA:
+  case R_PPC64_GOT_DTPREL16_LO_DS:
+  case R_PPC64_GOT_DTPREL16_DS:
+  case R_PPC64_GOT_DTPREL16_HI:
+    relocateOne(Loc, Type, Val);
+    break;
+  default:
+    llvm_unreachable("unsupported relocation for TLS LD to LE relaxation");
   }
 }
 
@@ -261,6 +277,7 @@ RelExpr PPC64::getRelExpr(RelType Type, const Symbol &S,
   case R_PPC64_TLSGD:
     return R_TLSDESC_CALL;
   case R_PPC64_TLSLD:
+    return R_TLSLD_HINT;
   case R_PPC64_TLS:
     return R_HINT;
   default:
@@ -462,6 +479,8 @@ RelExpr PPC64::adjustRelaxExpr(RelType Type, const uint8_t *Data,
                                RelExpr Expr) const {
   if (Expr == R_RELAX_TLS_GD_TO_IE)
     return R_RELAX_TLS_GD_TO_IE_GOT_OFF;
+  if (Expr == R_RELAX_TLS_LD_TO_LE)
+    return R_RELAX_TLS_LD_TO_LE_ABS;
   return Expr;
 }
 

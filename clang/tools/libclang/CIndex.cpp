@@ -26,6 +26,7 @@
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/DiagnosticCategories.h"
 #include "clang/Basic/DiagnosticIDs.h"
+#include "clang/Basic/Stack.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Basic/Version.h"
 #include "clang/Frontend/ASTUnit.h"
@@ -1771,6 +1772,7 @@ DEFAULT_TYPELOC_IMPL(IncompleteArray, ArrayType)
 DEFAULT_TYPELOC_IMPL(VariableArray, ArrayType)
 DEFAULT_TYPELOC_IMPL(DependentSizedArray, ArrayType)
 DEFAULT_TYPELOC_IMPL(DependentAddressSpace, Type)
+DEFAULT_TYPELOC_IMPL(DependentVector, Type)
 DEFAULT_TYPELOC_IMPL(DependentSizedExtVector, Type)
 DEFAULT_TYPELOC_IMPL(Vector, Type)
 DEFAULT_TYPELOC_IMPL(ExtVector, VectorType)
@@ -1800,7 +1802,9 @@ bool CursorVisitor::VisitCXXRecordDecl(CXXRecordDecl *D) {
 
 bool CursorVisitor::VisitAttributes(Decl *D) {
   for (const auto *I : D->attrs())
-    if (!I->isImplicit() && Visit(MakeCXCursor(I, D, TU)))
+    if ((TU->ParsingOptions & CXTranslationUnit_VisitImplicitAttributes ||
+         !I->isImplicit()) &&
+        Visit(MakeCXCursor(I, D, TU)))
         return true;
 
   return false;
@@ -5275,6 +5279,42 @@ CXString clang_getCursorKindSpelling(enum CXCursorKind Kind) {
     return cxstring::createRef("attribute(dllexport)");
   case CXCursor_DLLImport:
     return cxstring::createRef("attribute(dllimport)");
+  case CXCursor_NSReturnsRetained:
+    return cxstring::createRef("attribute(ns_returns_retained)");
+  case CXCursor_NSReturnsNotRetained:
+    return cxstring::createRef("attribute(ns_returns_not_retained)");
+  case CXCursor_NSReturnsAutoreleased:
+    return cxstring::createRef("attribute(ns_returns_autoreleased)");
+  case CXCursor_NSConsumesSelf:
+    return cxstring::createRef("attribute(ns_consumes_self)");
+  case CXCursor_NSConsumed:
+    return cxstring::createRef("attribute(ns_consumed)");
+  case CXCursor_ObjCException:
+    return cxstring::createRef("attribute(objc_exception)");
+  case CXCursor_ObjCNSObject:
+    return cxstring::createRef("attribute(NSObject)");
+  case CXCursor_ObjCIndependentClass:
+    return cxstring::createRef("attribute(objc_independent_class)");
+  case CXCursor_ObjCPreciseLifetime:
+    return cxstring::createRef("attribute(objc_precise_lifetime)");
+  case CXCursor_ObjCReturnsInnerPointer:
+    return cxstring::createRef("attribute(objc_returns_inner_pointer)");
+  case CXCursor_ObjCRequiresSuper:
+    return cxstring::createRef("attribute(objc_requires_super)");
+  case CXCursor_ObjCRootClass:
+    return cxstring::createRef("attribute(objc_root_class)");
+  case CXCursor_ObjCSubclassingRestricted:
+    return cxstring::createRef("attribute(objc_subclassing_restricted)");
+  case CXCursor_ObjCExplicitProtocolImpl:
+    return cxstring::createRef("attribute(objc_protocol_requires_explicit_implementation)");
+  case CXCursor_ObjCDesignatedInitializer:
+    return cxstring::createRef("attribute(objc_designated_initializer)");
+  case CXCursor_ObjCRuntimeVisible:
+    return cxstring::createRef("attribute(objc_runtime_visible)");
+  case CXCursor_ObjCBoxable:
+    return cxstring::createRef("attribute(objc_boxable)");
+  case CXCursor_FlagEnum:
+    return cxstring::createRef("attribute(flag_enum)");
   case CXCursor_PreprocessingDirective:
     return cxstring::createRef("preprocessing directive");
   case CXCursor_MacroDefinition:
@@ -7875,6 +7915,30 @@ unsigned clang_Cursor_getObjCPropertyAttributes(CXCursor C, unsigned reserved) {
   return Result;
 }
 
+CXString clang_Cursor_getObjCPropertyGetterName(CXCursor C) {
+  if (C.kind != CXCursor_ObjCPropertyDecl)
+    return cxstring::createNull();
+
+  const ObjCPropertyDecl *PD = dyn_cast<ObjCPropertyDecl>(getCursorDecl(C));
+  Selector sel = PD->getGetterName();
+  if (sel.isNull())
+    return cxstring::createNull();
+
+  return cxstring::createDup(sel.getAsString());
+}
+
+CXString clang_Cursor_getObjCPropertySetterName(CXCursor C) {
+  if (C.kind != CXCursor_ObjCPropertyDecl)
+    return cxstring::createNull();
+
+  const ObjCPropertyDecl *PD = dyn_cast<ObjCPropertyDecl>(getCursorDecl(C));
+  Selector sel = PD->getSetterName();
+  if (sel.isNull())
+    return cxstring::createNull();
+
+  return cxstring::createDup(sel.getAsString());
+}
+
 unsigned clang_Cursor_getObjCDeclQualifiers(CXCursor C) {
   if (!clang_isDeclaration(C.kind))
     return CXObjCDeclQualifier_None;
@@ -8474,8 +8538,8 @@ void clang::PrintLibclangResourceUsage(CXTranslationUnit TU) {
 // Misc. utility functions.
 //===----------------------------------------------------------------------===//
 
-/// Default to using an 8 MB stack size on "safety" threads.
-static unsigned SafetyStackThreadSize = 8 << 20;
+/// Default to using our desired 8 MB stack size on "safety" threads.
+static unsigned SafetyStackThreadSize = DesiredStackSize;
 
 namespace clang {
 

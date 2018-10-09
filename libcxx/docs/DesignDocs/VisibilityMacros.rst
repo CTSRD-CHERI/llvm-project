@@ -40,11 +40,26 @@ Visibility Macros
   this macro therefore expands to `__declspec(dllexport)` when building the
   library and has an empty definition otherwise.
 
-**_LIBCPP_INLINE_VISIBILITY**
-  Mark a function as hidden and force inlining whenever possible.
+**_LIBCPP_HIDE_FROM_ABI**
+  Mark a function as not being part of the ABI of any final linked image that
+  uses it, and also as being internal to each TU that uses that function. In
+  other words, the address of a function marked with this attribute is not
+  guaranteed to be the same across translation units.
 
-**_LIBCPP_ALWAYS_INLINE**
-  A synonym for `_LIBCPP_INLINE_VISIBILITY`
+**_LIBCPP_HIDE_FROM_ABI_AFTER_V1**
+  Mark a function as being hidden from the ABI (per `_LIBCPP_HIDE_FROM_ABI`)
+  when libc++ is built with an ABI version after ABI v1. This macro is used to
+  maintain ABI compatibility for symbols that have been historically exported
+  by libc++ in v1 of the ABI, but that we don't want to export in the future.
+
+  This macro works as follows. When we build libc++, we either hide the symbol
+  from the ABI (if the symbol is not part of the ABI in the version we're
+  building), or we leave it included. From user code (i.e. when we're not
+  building libc++), the macro always marks symbols as internal so that programs
+  built using new libc++ headers stop relying on symbols that are removed from
+  the ABI in a future version. Each time we release a new stable version of the
+  ABI, we should create a new _LIBCPP_HIDE_FROM_ABI_AFTER_XXX macro, and we can
+  use it to start removing symbols from the ABI after that stable version.
 
 **_LIBCPP_TYPE_VIS**
   Mark a type's typeinfo, vtable and members as having default visibility.
@@ -139,21 +154,28 @@ Visibility Macros
   against the libc++ headers after making `_LIBCPP_TYPE_VIS` and
   `_LIBCPP_EXTERN_TEMPLATE_TYPE_VIS` expand to default visibility.
 
-**_LIBCPP_EXTERN_TEMPLATE_INLINE_VISIBILITY**
-  Mark a member function of a class template as visible and always inline. This
-  macro should only be applied to member functions of class templates that are
-  externally instantiated. It is important that these symbols are not marked
-  as hidden as that will prevent the dylib definition from being found.
-
-  This macro is used to maintain ABI compatibility for symbols that have been
-  historically exported by the libc++ library but are now marked inline.
-
 **_LIBCPP_EXCEPTION_ABI**
   Mark the member functions, typeinfo, and vtable of the type as being exported
   by the libc++ library. This macro must be applied to all *exception types*.
   Exception types should be defined directly in namespace `std` and not the
   versioning namespace. This allows throwing and catching some exception types
   between libc++ and libstdc++.
+
+**_LIBCPP_INTERNAL_LINKAGE**
+  Mark the affected entity as having internal linkage (i.e. the `static`
+  keyword in C). This is only a best effort: when the `internal_linkage`
+  attribute is not available, we fall back to forcing the function to be
+  inlined, which approximates internal linkage since an externally visible
+  symbol is never generated for that function. This is an internal macro
+  used as an implementation detail by other visibility macros. Never mark
+  a function or a class with this macro directly.
+
+**_LIBCPP_ALWAYS_INLINE**
+  Forces inlining of the function it is applied to. For visibility purposes,
+  this macro is used to make sure that an externally visible symbol is never
+  generated in an object file when the `internal_linkage` attribute is not
+  available. This is an internal macro used by other visibility macros, and
+  it should not be used directly.
 
 Links
 =====

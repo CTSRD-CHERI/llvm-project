@@ -153,7 +153,7 @@ static const char *const kAsanHandleNoReturnName = "__asan_handle_no_return";
 static const int kMaxAsanStackMallocSizeClass = 10;
 static const char *const kAsanStackMallocNameTemplate = "__asan_stack_malloc_";
 static const char *const kAsanStackFreeNameTemplate = "__asan_stack_free_";
-static const char *const kAsanGenPrefix = "__asan_gen_";
+static const char *const kAsanGenPrefix = "___asan_gen_";
 static const char *const kODRGenPrefix = "__odr_asan_gen_";
 static const char *const kSanCovGenPrefix = "__sancov_gen_";
 static const char *const kAsanSetShadowPrefix = "__asan_set_shadow_";
@@ -538,7 +538,7 @@ static ShadowMapping getShadowMapping(Triple &TargetTriple, int LongSize,
       Mapping.Offset = kPPC64_ShadowOffset64;
     else if (IsSystemZ)
       Mapping.Offset = kSystemZ_ShadowOffset64;
-    else if (IsFreeBSD)
+    else if (IsFreeBSD && !IsMIPS64)
       Mapping.Offset = kFreeBSD_ShadowOffset64;
     else if (IsNetBSD)
       Mapping.Offset = kNetBSD_ShadowOffset64;
@@ -2464,10 +2464,10 @@ bool AddressSanitizer::runOnFunction(Function &F) {
 
   // If needed, insert __asan_init before checking for SanitizeAddress attr.
   // This function needs to be called even if the function body is not
-  // instrumented.  
+  // instrumented.
   if (maybeInsertAsanInitAtFunctionEntry(F))
     FunctionModified = true;
-  
+
   // Leave if the function doesn't need instrumentation.
   if (!F.hasFnAttribute(Attribute::SanitizeAddress)) return FunctionModified;
 

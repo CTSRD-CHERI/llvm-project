@@ -39,13 +39,13 @@ namespace llvm {
 class APInt;
 class MachineRegisterInfo;
 class RegScavenger;
-class SISubtarget;
+class GCNSubtarget;
 class TargetRegisterClass;
 
 class SIInstrInfo final : public AMDGPUGenInstrInfo {
 private:
   const SIRegisterInfo RI;
-  const SISubtarget &ST;
+  const GCNSubtarget &ST;
 
   // The inverse predicate should have the negative value.
   enum BranchPredicate {
@@ -147,7 +147,7 @@ public:
     MO_REL32_HI = 5
   };
 
-  explicit SIInstrInfo(const SISubtarget &ST);
+  explicit SIInstrInfo(const GCNSubtarget &ST);
 
   const SIRegisterInfo &getRegisterInfo() const {
     return RI;
@@ -596,6 +596,9 @@ public:
     const MachineRegisterInfo &MRI = MF.getRegInfo();
     return !RI.isSGPRReg(MRI, Dest);
   }
+
+  /// Whether we must prevent this instruction from executing with EXEC = 0.
+  bool hasUnwantedEffectsWhenEXECEmpty(const MachineInstr &MI) const;
 
   bool isInlineConstant(const APInt &Imm) const;
 

@@ -629,6 +629,8 @@ clang::MakeDeductionFailureInfo(ASTContext &Context,
     break;
   }
 
+  case Sema::TDK_IncompletePack:
+    // FIXME: It's slightly wasteful to allocate two TemplateArguments for this.
   case Sema::TDK_Inconsistent:
   case Sema::TDK_Underqualified: {
     // FIXME: Should allocate from normal heap so that we can free this later.
@@ -671,6 +673,7 @@ void DeductionFailureInfo::Destroy() {
   case Sema::TDK_NonDependentConversionFailure:
     break;
 
+  case Sema::TDK_IncompletePack:
   case Sema::TDK_Inconsistent:
   case Sema::TDK_Underqualified:
   case Sema::TDK_DeducedMismatch:
@@ -720,6 +723,7 @@ TemplateParameter DeductionFailureInfo::getTemplateParameter() {
   case Sema::TDK_InvalidExplicitArguments:
     return TemplateParameter::getFromOpaqueValue(Data);
 
+  case Sema::TDK_IncompletePack:
   case Sema::TDK_Inconsistent:
   case Sema::TDK_Underqualified:
     return static_cast<DFIParamWithArguments*>(Data)->Param;
@@ -740,6 +744,7 @@ TemplateArgumentList *DeductionFailureInfo::getTemplateArgumentList() {
   case Sema::TDK_TooManyArguments:
   case Sema::TDK_TooFewArguments:
   case Sema::TDK_Incomplete:
+  case Sema::TDK_IncompletePack:
   case Sema::TDK_InvalidExplicitArguments:
   case Sema::TDK_Inconsistent:
   case Sema::TDK_Underqualified:
@@ -777,6 +782,7 @@ const TemplateArgument *DeductionFailureInfo::getFirstArg() {
   case Sema::TDK_NonDependentConversionFailure:
     return nullptr;
 
+  case Sema::TDK_IncompletePack:
   case Sema::TDK_Inconsistent:
   case Sema::TDK_Underqualified:
   case Sema::TDK_DeducedMismatch:
@@ -798,6 +804,7 @@ const TemplateArgument *DeductionFailureInfo::getSecondArg() {
   case Sema::TDK_Invalid:
   case Sema::TDK_InstantiationDepth:
   case Sema::TDK_Incomplete:
+  case Sema::TDK_IncompletePack:
   case Sema::TDK_TooManyArguments:
   case Sema::TDK_TooFewArguments:
   case Sema::TDK_InvalidExplicitArguments:
@@ -3087,7 +3094,7 @@ Sema::IsQualificationConversion(QualType FromType, QualType ToType,
   //   in multi-level pointers, subject to the following rules: [...]
   bool PreviousToQualsIncludeConst = true;
   bool UnwrappedAnyPointer = false;
-  while (Context.UnwrapSimilarPointerTypes(FromType, ToType)) {
+  while (Context.UnwrapSimilarTypes(FromType, ToType)) {
     // Within each iteration of the loop, we check the qualifiers to
     // determine if this still looks like a qualification
     // conversion. Then, if all is well, we unwrap one more level of
@@ -3141,6 +3148,15 @@ Sema::IsQualificationConversion(QualType FromType, QualType ToType,
     // include const.
     PreviousToQualsIncludeConst
       = PreviousToQualsIncludeConst && ToQuals.hasConst();
+  }
+
+  // Allows address space promotion by language rules implemented in
+  // Type::Qualifiers::isAddressSpaceSupersetOf.
+  Qualifiers FromQuals = FromType.getQualifiers();
+  Qualifiers ToQuals = ToType.getQualifiers();
+  if (!ToQuals.isAddressSpaceSupersetOf(FromQuals) &&
+      !FromQuals.isAddressSpaceSupersetOf(ToQuals)) {
+    return false;
   }
 
   // We are left with FromType and ToType being the pointee types
@@ -3642,16 +3658,6 @@ CompareImplicitConversionSequences(Sema &S, SourceLocation Loc,
   return Result;
 }
 
-static bool hasSimilarType(ASTContext &Context, QualType T1, QualType T2) {
-  while (Context.UnwrapSimilarPointerTypes(T1, T2)) {
-    Qualifiers Quals;
-    T1 = Context.getUnqualifiedArrayType(T1, Quals);
-    T2 = Context.getUnqualifiedArrayType(T2, Quals);
-  }
-
-  return Context.hasSameUnqualifiedType(T1, T2);
-}
-
 // Per 13.3.3.2p3, compare the given standard conversion sequences to
 // determine if one is a proper subset of the other.
 static ImplicitConversionSequence::CompareKind
@@ -3675,7 +3681,7 @@ compareStandardConversionSubsets(ASTContext &Context,
       Result = ImplicitConversionSequence::Worse;
     else
       return ImplicitConversionSequence::Indistinguishable;
-  } else if (!hasSimilarType(Context, SCS1.getToType(1), SCS2.getToType(1)))
+  } else if (!Context.hasSimilarType(SCS1.getToType(1), SCS2.getToType(1)))
     return ImplicitConversionSequence::Indistinguishable;
 
   if (SCS1.Third == SCS2.Third) {
@@ -3949,7 +3955,7 @@ CompareQualificationConversions(Sema &S,
                : ImplicitConversionSequence::Better;
   }
 
-  while (S.Context.UnwrapSimilarPointerTypes(T1, T2)) {
+  while (S.Context.UnwrapSimilarTypes(T1, T2)) {
     // Within each iteration of the loop, we check the qualifiers to
     // determine if this still looks like a qualification
     // conversion. Then, if all is well, we unwrap one more level of
@@ -5159,6 +5165,13 @@ Sema::PerformObjectArgumentInitialization(Expr *From,
     FromRecordType = From->getType();
     DestType = ImplicitParamRecordType;
     FromClassification = From->Classify(Context);
+
+    // When performing member access on an rvalue, materialize a temporary.
+    if (From->isRValue()) {
+      From = CreateMaterializeTemporaryExpr(FromRecordType, From,
+                                            Method->getRefQualifier() !=
+                                                RefQualifierKind::RQ_RValue);
+    }
   }
 
   // Note that we always use the true parent context when performing
@@ -5982,7 +5995,7 @@ Sema::AddOverloadCandidate(FunctionDecl *Function,
   Candidate.IgnoreObjectArgument = false;
   Candidate.ExplicitCallArguments = Args.size();
 
-  if (Function->isMultiVersion() &&
+  if (Function->isMultiVersion() && Function->hasAttr<TargetAttr>() &&
       !Function->getAttr<TargetAttr>()->isDefaultVersion()) {
     Candidate.Viable = false;
     Candidate.FailureKind = ovl_non_default_multiversion_function;
@@ -6202,24 +6215,6 @@ Sema::SelectBestMethod(Selector Sel, MultiExprArg Args, bool IsInstance,
   return nullptr;
 }
 
-// specific_attr_iterator iterates over enable_if attributes in reverse, and
-// enable_if is order-sensitive. As a result, we need to reverse things
-// sometimes. Size of 4 elements is arbitrary.
-static SmallVector<EnableIfAttr *, 4>
-getOrderedEnableIfAttrs(const FunctionDecl *Function) {
-  SmallVector<EnableIfAttr *, 4> Result;
-  if (!Function->hasAttrs())
-    return Result;
-
-  const auto &FuncAttrs = Function->getAttrs();
-  for (Attr *Attr : FuncAttrs)
-    if (auto *EnableIf = dyn_cast<EnableIfAttr>(Attr))
-      Result.push_back(EnableIf);
-
-  std::reverse(Result.begin(), Result.end());
-  return Result;
-}
-
 static bool
 convertArgsForAvailabilityChecks(Sema &S, FunctionDecl *Function, Expr *ThisArg,
                                  ArrayRef<Expr *> Args, Sema::SFINAETrap &Trap,
@@ -6293,9 +6288,8 @@ convertArgsForAvailabilityChecks(Sema &S, FunctionDecl *Function, Expr *ThisArg,
 
 EnableIfAttr *Sema::CheckEnableIf(FunctionDecl *Function, ArrayRef<Expr *> Args,
                                   bool MissingImplicitThis) {
-  SmallVector<EnableIfAttr *, 4> EnableIfAttrs =
-      getOrderedEnableIfAttrs(Function);
-  if (EnableIfAttrs.empty())
+  auto EnableIfAttrs = Function->specific_attrs<EnableIfAttr>();
+  if (EnableIfAttrs.begin() == EnableIfAttrs.end())
     return nullptr;
 
   SFINAETrap Trap(*this);
@@ -6305,7 +6299,7 @@ EnableIfAttr *Sema::CheckEnableIf(FunctionDecl *Function, ArrayRef<Expr *> Args,
   if (!convertArgsForAvailabilityChecks(
           *this, Function, /*ThisArg=*/nullptr, Args, Trap,
           /*MissingImplicitThis=*/true, DiscardedThis, ConvertedArgs))
-    return EnableIfAttrs[0];
+    return *EnableIfAttrs.begin();
 
   for (auto *EIA : EnableIfAttrs) {
     APValue Result;
@@ -6617,7 +6611,7 @@ Sema::AddMethodCandidate(CXXMethodDecl *Method, DeclAccessPair FoundDecl,
     return;
   }
 
-  if (Method->isMultiVersion() &&
+  if (Method->isMultiVersion() && Method->hasAttr<TargetAttr>() &&
       !Method->getAttr<TargetAttr>()->isDefaultVersion()) {
     Candidate.Viable = false;
     Candidate.FailureKind = ovl_non_default_multiversion_function;
@@ -7026,7 +7020,7 @@ Sema::AddConversionCandidate(CXXConversionDecl *Conversion,
     return;
   }
 
-  if (Conversion->isMultiVersion() &&
+  if (Conversion->isMultiVersion() && Conversion->hasAttr<TargetAttr>() &&
       !Conversion->getAttr<TargetAttr>()->isDefaultVersion()) {
     Candidate.Viable = false;
     Candidate.FailureKind = ovl_non_default_multiversion_function;
@@ -8954,24 +8948,21 @@ static Comparison compareEnableIfAttrs(const Sema &S, const FunctionDecl *Cand1,
     return Cand1Attr ? Comparison::Better : Comparison::Worse;
   }
 
-  // FIXME: The next several lines are just
-  // specific_attr_iterator<EnableIfAttr> but going in declaration order,
-  // instead of reverse order which is how they're stored in the AST.
-  auto Cand1Attrs = getOrderedEnableIfAttrs(Cand1);
-  auto Cand2Attrs = getOrderedEnableIfAttrs(Cand2);
-
-  // It's impossible for Cand1 to be better than (or equal to) Cand2 if Cand1
-  // has fewer enable_if attributes than Cand2.
-  if (Cand1Attrs.size() < Cand2Attrs.size())
-    return Comparison::Worse;
+  auto Cand1Attrs = Cand1->specific_attrs<EnableIfAttr>();
+  auto Cand2Attrs = Cand2->specific_attrs<EnableIfAttr>();
 
   auto Cand1I = Cand1Attrs.begin();
   llvm::FoldingSetNodeID Cand1ID, Cand2ID;
-  for (auto &Cand2A : Cand2Attrs) {
+  for (EnableIfAttr *Cand2A : Cand2Attrs) {
     Cand1ID.clear();
     Cand2ID.clear();
 
-    auto &Cand1A = *Cand1I++;
+    // It's impossible for Cand1 to be better than (or equal to) Cand2 if Cand1
+    // has fewer enable_if attributes than Cand2.
+    auto Cand1A = Cand1I++;
+    if (Cand1A == Cand1Attrs.end())
+      return Comparison::Worse;
+
     Cand1A->getCond()->Profile(Cand1ID, S.getASTContext(), true);
     Cand2A->getCond()->Profile(Cand2ID, S.getASTContext(), true);
     if (Cand1ID != Cand2ID)
@@ -8979,6 +8970,47 @@ static Comparison compareEnableIfAttrs(const Sema &S, const FunctionDecl *Cand1,
   }
 
   return Cand1I == Cand1Attrs.end() ? Comparison::Equal : Comparison::Better;
+}
+
+static bool isBetterMultiversionCandidate(const OverloadCandidate &Cand1,
+                                          const OverloadCandidate &Cand2) {
+  if (!Cand1.Function || !Cand1.Function->isMultiVersion() || !Cand2.Function ||
+      !Cand2.Function->isMultiVersion())
+    return false;
+
+  // If this is a cpu_dispatch/cpu_specific multiversion situation, prefer
+  // cpu_dispatch, else arbitrarily based on the identifiers.
+  bool Cand1CPUDisp = Cand1.Function->hasAttr<CPUDispatchAttr>();
+  bool Cand2CPUDisp = Cand2.Function->hasAttr<CPUDispatchAttr>();
+  const auto *Cand1CPUSpec = Cand1.Function->getAttr<CPUSpecificAttr>();
+  const auto *Cand2CPUSpec = Cand2.Function->getAttr<CPUSpecificAttr>();
+
+  if (!Cand1CPUDisp && !Cand2CPUDisp && !Cand1CPUSpec && !Cand2CPUSpec)
+    return false;
+
+  if (Cand1CPUDisp && !Cand2CPUDisp)
+    return true;
+  if (Cand2CPUDisp && !Cand1CPUDisp)
+    return false;
+
+  if (Cand1CPUSpec && Cand2CPUSpec) {
+    if (Cand1CPUSpec->cpus_size() != Cand2CPUSpec->cpus_size())
+      return Cand1CPUSpec->cpus_size() < Cand2CPUSpec->cpus_size();
+
+    std::pair<CPUSpecificAttr::cpus_iterator, CPUSpecificAttr::cpus_iterator>
+        FirstDiff = std::mismatch(
+            Cand1CPUSpec->cpus_begin(), Cand1CPUSpec->cpus_end(),
+            Cand2CPUSpec->cpus_begin(),
+            [](const IdentifierInfo *LHS, const IdentifierInfo *RHS) {
+              return LHS->getName() == RHS->getName();
+            });
+
+    assert(FirstDiff.first != Cand1CPUSpec->cpus_end() &&
+           "Two different cpu-specific versions should not have the same "
+           "identifier list, otherwise they'd be the same decl!");
+    return (*FirstDiff.first)->getName() < (*FirstDiff.second)->getName();
+  }
+  llvm_unreachable("No way to get here unless both had cpu_dispatch");
 }
 
 /// isBetterOverloadCandidate - Determines whether the first overload
@@ -9178,7 +9210,10 @@ bool clang::isBetterOverloadCandidate(
                 functionHasPassObjectSizeParams(Cand1.Function);
   bool HasPS2 = Cand2.Function != nullptr &&
                 functionHasPassObjectSizeParams(Cand2.Function);
-  return HasPS1 != HasPS2 && HasPS1;
+  if (HasPS1 != HasPS2 && HasPS1)
+    return true;
+
+  return isBetterMultiversionCandidate(Cand1, Cand2);
 }
 
 /// Determine whether two declarations are "equivalent" for the purposes of
@@ -9497,7 +9532,8 @@ void Sema::NoteOverloadCandidate(NamedDecl *Found, FunctionDecl *Fn,
                                  QualType DestType, bool TakingAddress) {
   if (TakingAddress && !checkAddressOfCandidateIsAvailable(*this, Fn))
     return;
-  if (Fn->isMultiVersion() && !Fn->getAttr<TargetAttr>()->isDefaultVersion())
+  if (Fn->isMultiVersion() && Fn->hasAttr<TargetAttr>() &&
+      !Fn->getAttr<TargetAttr>()->isDefaultVersion())
     return;
 
   std::string FnDesc;
@@ -9899,6 +9935,17 @@ static void DiagnoseBadDeduction(Sema &S, NamedDecl *Found, Decl *Templated,
     S.Diag(Templated->getLocation(),
            diag::note_ovl_candidate_incomplete_deduction)
         << ParamD->getDeclName();
+    MaybeEmitInheritedConstructorNote(S, Found);
+    return;
+  }
+
+  case Sema::TDK_IncompletePack: {
+    assert(ParamD && "no parameter found for incomplete deduction result");
+    S.Diag(Templated->getLocation(),
+           diag::note_ovl_candidate_incomplete_deduction_pack)
+        << ParamD->getDeclName()
+        << (DeductionFailure.getFirstArg()->pack_size() + 1)
+        << *DeductionFailure.getFirstArg();
     MaybeEmitInheritedConstructorNote(S, Found);
     return;
   }
@@ -10382,6 +10429,7 @@ static unsigned RankDeductionFailure(const DeductionFailureInfo &DFI) {
 
   case Sema::TDK_Invalid:
   case Sema::TDK_Incomplete:
+  case Sema::TDK_IncompletePack:
     return 1;
 
   case Sema::TDK_Underqualified:
@@ -11038,8 +11086,7 @@ private:
             return false;
       if (FunDecl->isMultiVersion()) {
         const auto *TA = FunDecl->getAttr<TargetAttr>();
-        assert(TA && "Multiversioned functions require a target attribute");
-        if (!TA->isDefaultVersion())
+        if (TA && !TA->isDefaultVersion())
           return false;
       }
 
@@ -11337,7 +11384,8 @@ bool Sema::resolveAndFixAddressOfOnlyViableOverloadCandidate(
 
   DeclAccessPair DAP;
   FunctionDecl *Found = resolveAddressOfOnlyViableOverloadCandidate(E, DAP);
-  if (!Found)
+  if (!Found || Found->isCPUDispatchMultiVersion() ||
+      Found->isCPUSpecificMultiVersion())
     return false;
 
   // Emitting multiple diagnostics for a function that is both inaccessible and

@@ -17,7 +17,6 @@
 #include "lldb/Breakpoint/BreakpointSite.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/State.h"
 #include "lldb/Host/Host.h"
 #include "lldb/Host/OptionParser.h"
 #include "lldb/Host/StringConvert.h"
@@ -32,6 +31,7 @@
 #include "lldb/Target/Thread.h"
 #include "lldb/Target/UnixSignals.h"
 #include "lldb/Utility/Args.h"
+#include "lldb/Utility/State.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -134,20 +134,14 @@ public:
 
   ~CommandObjectProcessLaunch() override = default;
 
-  int HandleArgumentCompletion(Args &input, int &cursor_index,
-                               int &cursor_char_position,
-                               OptionElementVector &opt_element_vector,
-                               int match_start_point, int max_return_elements,
-                               bool &word_complete,
-                               StringList &matches) override {
-    std::string completion_str(input.GetArgumentAtIndex(cursor_index));
-    completion_str.erase(cursor_char_position);
+  int HandleArgumentCompletion(
+      CompletionRequest &request,
+      OptionElementVector &opt_element_vector) override {
 
     CommandCompletions::InvokeCommonCompletionCallbacks(
         GetCommandInterpreter(), CommandCompletions::eDiskFileCompletion,
-        completion_str.c_str(), match_start_point, max_return_elements, nullptr,
-        word_complete, matches);
-    return matches.GetSize();
+        request, nullptr);
+    return request.GetNumberOfMatches();
   }
 
   Options *GetOptions() override { return &m_options; }
@@ -387,11 +381,8 @@ public:
     }
 
     bool HandleOptionArgumentCompletion(
-        Args &input, int cursor_index, int char_pos,
-        OptionElementVector &opt_element_vector, int opt_element_index,
-        int match_start_point, int max_return_elements,
-        CommandInterpreter &interpreter, bool &word_complete,
-        StringList &matches) override {
+        CompletionRequest &request, OptionElementVector &opt_element_vector,
+        int opt_element_index, CommandInterpreter &interpreter) override {
       int opt_arg_pos = opt_element_vector[opt_element_index].opt_arg_pos;
       int opt_defs_index = opt_element_vector[opt_element_index].opt_defs_index;
 
@@ -404,7 +395,7 @@ public:
         // plugin, otherwise use the default plugin.
 
         const char *partial_name = nullptr;
-        partial_name = input.GetArgumentAtIndex(opt_arg_pos);
+        partial_name = request.GetParsedLine().GetArgumentAtIndex(opt_arg_pos);
 
         PlatformSP platform_sp(interpreter.GetPlatform(true));
         if (platform_sp) {
@@ -419,9 +410,9 @@ public:
           const size_t num_matches = process_infos.GetSize();
           if (num_matches > 0) {
             for (size_t i = 0; i < num_matches; ++i) {
-              matches.AppendString(
+              request.AddCompletion(llvm::StringRef(
                   process_infos.GetProcessNameAtIndex(i),
-                  process_infos.GetProcessNameLengthAtIndex(i));
+                  process_infos.GetProcessNameLengthAtIndex(i)));
             }
           }
         }

@@ -288,7 +288,7 @@ static void addHeaderInclude(StringRef HeaderName,
     Includes += "}\n";
 }
 
-/// Collect the set of header includes needed to construct the given 
+/// Collect the set of header includes needed to construct the given
 /// module and update the TopHeaders file set of the module.
 ///
 /// \param Module The module we're collecting includes from.
@@ -345,7 +345,7 @@ static std::error_code collectModuleHeaderIncludes(
     vfs::FileSystem &FS = *FileMgr.getVirtualFileSystem();
     for (vfs::recursive_directory_iterator Dir(FS, DirNative, EC), End;
          Dir != End && !EC; Dir.increment(EC)) {
-      // Check whether this entry has an extension typically associated with 
+      // Check whether this entry has an extension typically associated with
       // headers.
       if (!llvm::StringSwitch<bool>(llvm::sys::path::extension(Dir->getName()))
           .Cases(".h", ".H", ".hh", ".hpp", true)
@@ -358,7 +358,7 @@ static std::error_code collectModuleHeaderIncludes(
       if (!Header)
         continue;
 
-      // If this header is marked 'unavailable' in this module, don't include 
+      // If this header is marked 'unavailable' in this module, don't include
       // it.
       if (ModMap.isHeaderUnavailableInModule(Header, Module))
         continue;
@@ -431,7 +431,7 @@ static Module *prepareToBuildModule(CompilerInstance &CI,
     CI.getDiagnostics().Report(diag::err_missing_module_name);
 
     // FIXME: Eventually, we could consider asking whether there was just
-    // a single module described in the module map, and use that as a 
+    // a single module described in the module map, and use that as a
     // default. Then it would be fairly trivial to just "compile" a module
     // map with a single module (the common case).
     return nullptr;
@@ -766,6 +766,22 @@ bool FrontendAction::BeginSourceFile(CompilerInstance &CI,
   if (!BeginSourceFileAction(CI))
     goto failure;
 
+  // If we were asked to load any module map files, do so now.
+  for (const auto &Filename : CI.getFrontendOpts().ModuleMapFiles) {
+    if (auto *File = CI.getFileManager().getFile(Filename))
+      CI.getPreprocessor().getHeaderSearchInfo().loadModuleMapFile(
+          File, /*IsSystem*/false);
+    else
+      CI.getDiagnostics().Report(diag::err_module_map_not_found) << Filename;
+  }
+
+  // Add a module declaration scope so that modules from -fmodule-map-file
+  // arguments may shadow modules found implicitly in search paths.
+  CI.getPreprocessor()
+      .getHeaderSearchInfo()
+      .getModuleMap()
+      .finishModuleDeclarationScope();
+
   // Create the AST context and consumer unless this is a preprocessor only
   // action.
   if (!usesPreprocessorOnly()) {
@@ -854,22 +870,6 @@ bool FrontendAction::BeginSourceFile(CompilerInstance &CI,
            "modules enabled but created an external source that "
            "doesn't support modules");
   }
-
-  // If we were asked to load any module map files, do so now.
-  for (const auto &Filename : CI.getFrontendOpts().ModuleMapFiles) {
-    if (auto *File = CI.getFileManager().getFile(Filename))
-      CI.getPreprocessor().getHeaderSearchInfo().loadModuleMapFile(
-          File, /*IsSystem*/false);
-    else
-      CI.getDiagnostics().Report(diag::err_module_map_not_found) << Filename;
-  }
-
-  // Add a module declaration scope so that modules from -fmodule-map-file
-  // arguments may shadow modules found implicitly in search paths.
-  CI.getPreprocessor()
-      .getHeaderSearchInfo()
-      .getModuleMap()
-      .finishModuleDeclarationScope();
 
   // If we were asked to load any module files, do so now.
   for (const auto &ModuleFile : CI.getFrontendOpts().ModuleFiles)

@@ -72,6 +72,7 @@ private:
   void readRegionAlias();
   void readSearchDir();
   void readSections();
+  void readTarget();
   void readVersion();
   void readVersionScriptCommand();
 
@@ -255,6 +256,8 @@ void ScriptParser::readLinkerScript() {
       readSearchDir();
     } else if (Tok == "SECTIONS") {
       readSections();
+    } else if (Tok == "TARGET") {
+      readTarget();
     } else if (Tok == "VERSION") {
       readVersion();
     } else if (SymbolAssignment *Cmd = readAssignment(Tok)) {
@@ -344,7 +347,7 @@ void ScriptParser::readInclude() {
     return;
   }
 
-  if (Optional<std::string> Path = searchLinkerScript(Tok)) {
+  if (Optional<std::string> Path = searchScript(Tok)) {
     if (Optional<MemoryBufferRef> MB = readFile(*Path))
       tokenize(*MB);
     return;
@@ -522,14 +525,33 @@ void ScriptParser::readSections() {
                                  V.end());
 }
 
+void ScriptParser::readTarget() {
+  // TARGET(foo) is an alias for "--format foo". Unlike GNU linkers,
+  // we accept only a limited set of BFD names (i.e. "elf" or "binary")
+  // for --format. We recognize only /^elf/ and "binary" in the linker
+  // script as well.
+  expect("(");
+  StringRef Tok = next();
+  expect(")");
+
+  if (Tok.startswith("elf"))
+    Config->FormatBinary = false;
+  else if (Tok == "binary")
+    Config->FormatBinary = true;
+  else
+    setError("unknown target: " + Tok);
+}
+
 static int precedence(StringRef Op) {
   return StringSwitch<int>(Op)
-      .Cases("*", "/", "%", 6)
-      .Cases("+", "-", 5)
-      .Cases("<<", ">>", 4)
-      .Cases("<", "<=", ">", ">=", "==", "!=", 3)
-      .Case("&", 2)
-      .Case("|", 1)
+      .Cases("*", "/", "%", 8)
+      .Cases("+", "-", 7)
+      .Cases("<<", ">>", 6)
+      .Cases("<", "<=", ">", ">=", "==", "!=", 5)
+      .Case("&", 4)
+      .Case("|", 3)
+      .Case("&&", 2)
+      .Case("||", 1)
       .Default(-1);
 }
 
@@ -924,6 +946,10 @@ Expr ScriptParser::combine(StringRef Op, Expr L, Expr R) {
     return [=] { return L().getValue() == R().getValue(); };
   if (Op == "!=")
     return [=] { return L().getValue() != R().getValue(); };
+  if (Op == "||")
+    return [=] { return L().getValue() || R().getValue(); };
+  if (Op == "&&")
+    return [=] { return L().getValue() && R().getValue(); };
   if (Op == "&")
     return [=] { return bitAnd(L(), R()); };
   if (Op == "|")

@@ -3,6 +3,7 @@ set(LLVM_LINK_COMPONENTS
   )
 
 add_llvm_unittest(ADTTests
+  AnyTest.cpp
   APFloatTest.cpp
   APIntTest.cpp
   APSIntTest.cpp
@@ -18,6 +19,7 @@ add_llvm_unittest(ADTTests
   DepthFirstIteratorTest.cpp
   EquivalenceClassesTest.cpp
   FoldingSet.cpp
+  FunctionExtrasTest.cpp
   FunctionRefTest.cpp
   HashingTest.cpp
   IListBaseTest.cpp

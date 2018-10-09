@@ -189,6 +189,9 @@ namespace llvm {
       /// Direct move from a GPR to a VSX register (zero)
       MTVSRZ,
 
+      /// Direct move of 2 consective GPR to a VSX register.
+      BUILD_FP128,
+
       /// Extract a subvector from signed integer vector and convert to FP.
       /// It is primarily used to convert a (widened) illegal integer vector
       /// type to a legal floating point vector type.
@@ -571,6 +574,8 @@ namespace llvm {
 
     bool useSoftFloat() const override;
 
+    bool hasSPE() const;
+
     MVT getScalarShiftAmountTy(const DataLayout &, EVT) const override {
       return MVT::i32;
     }
@@ -660,7 +665,7 @@ namespace llvm {
     SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const override;
 
     SDValue BuildSDIVPow2(SDNode *N, const APInt &Divisor, SelectionDAG &DAG,
-                          std::vector<SDNode *> *Created) const override;
+                          SmallVectorImpl<SDNode *> &Created) const override;
 
     unsigned getRegisterByName(const char* RegName, EVT VT,
                                SelectionDAG &DAG) const override;
@@ -866,6 +871,14 @@ namespace llvm {
                                                unsigned JTI,
                                                MCContext &Ctx) const override;
 
+    unsigned getNumRegistersForCallingConv(LLVMContext &Context,
+                                           CallingConv:: ID CC,
+                                           EVT VT) const override;
+
+    MVT getRegisterTypeForCallingConv(LLVMContext &Context,
+                                      CallingConv:: ID CC,
+                                      EVT VT) const override;
+
   private:
     struct ReuseLoadInfo {
       SDValue Ptr;
@@ -1065,6 +1078,7 @@ namespace llvm {
 
     SDValue lowerEH_SJLJ_SETJMP(SDValue Op, SelectionDAG &DAG) const;
     SDValue lowerEH_SJLJ_LONGJMP(SDValue Op, SelectionDAG &DAG) const;
+    SDValue LowerBITCAST(SDValue Op, SelectionDAG &DAG) const;
 
     SDValue DAGCombineExtBoolTrunc(SDNode *N, DAGCombinerInfo &DCI) const;
     SDValue DAGCombineBuildVector(SDNode *N, DAGCombinerInfo &DCI) const;
@@ -1129,7 +1143,7 @@ namespace llvm {
                                          ISD::ArgFlagsTy &ArgFlags,
                                          CCState &State);
 
-  bool 
+  bool
   CC_PPC32_SVR4_Custom_SkipLastArgRegsPPCF128(unsigned &ValNo, MVT &ValVT,
                                                  MVT &LocVT,
                                                  CCValAssign::LocInfo &LocInfo,

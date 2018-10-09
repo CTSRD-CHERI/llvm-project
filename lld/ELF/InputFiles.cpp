@@ -129,7 +129,7 @@ template <class ELFT> void ObjFile<ELFT>::initializeDwarf() {
   DWARFDataExtractor LineData(Obj, Obj.getLineSection(), Config->IsLE,
                               Config->Wordsize);
 
-  for (std::unique_ptr<DWARFCompileUnit> &CU : Dwarf->compile_units()) {
+  for (std::unique_ptr<DWARFUnit> &CU : Dwarf->compile_units()) {
     auto Report = [](Error Err) {
       handleAllErrors(std::move(Err),
                       [](ErrorInfoBase &Info) { warn(Info.message()); });
@@ -219,14 +219,6 @@ Optional<DILineInfo> ObjFile<ELFT>::getDILineInfo(InputSectionBase *S,
             DILineInfoSpecifier::FileLineInfoKind::AbsoluteFilePath, Info))
       return Info;
   return None;
-}
-
-// Returns source line information for a given offset using DWARF debug info.
-template <class ELFT>
-std::string ObjFile<ELFT>::getLineInfo(InputSectionBase *S, uint64_t Offset) {
-  if (Optional<DILineInfo> Info = getDILineInfo(S, Offset))
-    return Info->FileName + ":" + std::to_string(Info->Line);
-  return "";
 }
 
 // Returns "<internal>", "foo.a(bar.o)" or "baz.o".
@@ -429,6 +421,17 @@ void ObjFile<ELFT>::initializeSections(
     // if -r is given, we'll let the final link discard such sections.
     // This is compatible with GNU.
     if ((Sec.sh_flags & SHF_EXCLUDE) && !Config->Relocatable) {
+      if (Sec.sh_type == SHT_LLVM_ADDRSIG) {
+        // We ignore the address-significance table if we know that the object
+        // file was created by objcopy or ld -r. This is because these tools
+        // will reorder the symbols in the symbol table, invalidating the data
+        // in the address-significance table, which refers to symbols by index.
+        if (Sec.sh_link != 0)
+          this->AddrsigSec = &Sec;
+        else if (Config->ICF == ICFLevel::Safe)
+          warn(toString(this) + ": --icf=safe is incompatible with object "
+                                "files created using objcopy or ld -r");
+      }
       this->Sections[I] = &InputSection::Discarded;
       continue;
     }
@@ -490,6 +493,46 @@ void ObjFile<ELFT>::initializeSections(
               toString(LinkSec));
     }
   }
+}
+
+// For ARM only, to set the EF_ARM_ABI_FLOAT_SOFT or EF_ARM_ABI_FLOAT_HARD
+// flag in the ELF Header we need to look at Tag_ABI_VFP_args to find out how
+// the input objects have been compiled.
+static void updateARMVFPArgs(const ARMAttributeParser &Attributes,
+                             const InputFile *F) {
+  if (!Attributes.hasAttribute(ARMBuildAttrs::ABI_VFP_args))
+    // If an ABI tag isn't present then it is implicitly given the value of 0
+    // which maps to ARMBuildAttrs::BaseAAPCS. However many assembler files,
+    // including some in glibc that don't use FP args (and should have value 3)
+    // don't have the attribute so we do not consider an implicit value of 0
+    // as a clash.
+    return;
+
+  unsigned VFPArgs = Attributes.getAttributeValue(ARMBuildAttrs::ABI_VFP_args);
+  ARMVFPArgKind Arg;
+  switch (VFPArgs) {
+  case ARMBuildAttrs::BaseAAPCS:
+    Arg = ARMVFPArgKind::Base;
+    break;
+  case ARMBuildAttrs::HardFPAAPCS:
+    Arg = ARMVFPArgKind::VFP;
+    break;
+  case ARMBuildAttrs::ToolChainFPPCS:
+    // Tool chain specific convention that conforms to neither AAPCS variant.
+    Arg = ARMVFPArgKind::ToolChain;
+    break;
+  case ARMBuildAttrs::CompatibleFPAAPCS:
+    // Object compatible with all conventions.
+    return;
+  default:
+    error(toString(F) + ": unknown Tag_ABI_VFP_args value: " + Twine(VFPArgs));
+    return;
+  }
+  // Follow ld.bfd and error if there is a mix of calling conventions.
+  if (Config->ARMVFPArgs != Arg && Config->ARMVFPArgs != ARMVFPArgKind::Default)
+    error(toString(F) + ": incompatible Tag_ABI_VFP_args");
+  else
+    Config->ARMVFPArgs = Arg;
 }
 
 // The ARM support in lld makes some use of instructions that are not available
@@ -571,6 +614,8 @@ InputSectionBase *ObjFile<ELFT>::createInputSection(const Elf_Shdr &Sec) {
     ArrayRef<uint8_t> Contents = check(this->getObj().getSectionContents(&Sec));
     Attributes.Parse(Contents, /*isLittle*/ Config->EKind == ELF32LEKind);
     updateSupportedARMFeatures(Attributes);
+    updateARMVFPArgs(Attributes, this);
+
     // FIXME: Retain the first attribute section we see. The eglibc ARM
     // dynamic loaders require the presence of an attribute section for dlopen
     // to work. In a full implementation we would merge all attribute sections.
@@ -661,13 +706,24 @@ InputSectionBase *ObjFile<ELFT>::createInputSection(const Elf_Shdr &Sec) {
   if (Name == ".note.GNU-stack")
     return &InputSection::Discarded;
 
-  // Split stacks is a feature to support a discontiguous stack. At least
-  // as of 2017, it seems that the feature is not being used widely.
-  // Only GNU gold supports that. We don't. For the details about that,
-  // see https://gcc.gnu.org/wiki/SplitStacks
+  // Split stacks is a feature to support a discontiguous stack,
+  // commonly used in the programming language Go. For the details,
+  // see https://gcc.gnu.org/wiki/SplitStacks. An object file compiled
+  // for split stack will include a .note.GNU-split-stack section.
   if (Name == ".note.GNU-split-stack") {
-    error(toString(this) +
-          ": object file compiled with -fsplit-stack is not supported");
+    if (Config->Relocatable) {
+      error("Cannot mix split-stack and non-split-stack in a relocatable link");
+      return &InputSection::Discarded;
+    }
+    this->SplitStack = true;
+    return &InputSection::Discarded;
+  }
+
+  // An object file cmpiled for split stack, but where some of the
+  // functions were compiled with the no_split_stack_attribute will
+  // include a .note.GNU-no-split-stack section.
+  if (Name == ".note.GNU-no-split-stack") {
+    this->SomeNoSplitStack = true;
     return &InputSection::Discarded;
   }
 
@@ -892,8 +948,7 @@ std::vector<const typename ELFT::Verdef *> SharedFile<ELFT>::parseVerdefs() {
     auto *CurVerdef = reinterpret_cast<const Elf_Verdef *>(Verdef);
     Verdef += CurVerdef->vd_next;
     unsigned VerdefIndex = CurVerdef->vd_ndx;
-    if (Verdefs.size() <= VerdefIndex)
-      Verdefs.resize(VerdefIndex + 1);
+    Verdefs.resize(VerdefIndex + 1);
     Verdefs[VerdefIndex] = CurVerdef;
   }
 

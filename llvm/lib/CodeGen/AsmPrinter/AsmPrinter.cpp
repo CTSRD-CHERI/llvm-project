@@ -87,6 +87,7 @@
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCSection.h"
+#include "llvm/MC/MCSectionCOFF.h"
 #include "llvm/MC/MCSectionELF.h"
 #include "llvm/MC/MCSectionMachO.h"
 #include "llvm/MC/MCStreamer.h"
@@ -1529,6 +1530,15 @@ bool AsmPrinter::doFinalization(Module &M) {
     }
   }
 
+  if (TM.Options.EmitAddrsig) {
+    // Emit address-significance attributes for all globals.
+    OutStreamer->EmitAddrsig();
+    for (const GlobalValue &GV : M.global_values())
+      if (!GV.isThreadLocal() && !GV.getName().startswith("llvm.") &&
+          !GV.hasAtLeastLocalUnnamedAddr())
+        OutStreamer->EmitAddrsigSym(getSymbol(&GV));
+  }
+
   // Allow the target to emit any magic that it wants at the end of the file,
   // after everything else has gone out.
   EmitEndOfAsmFile(M);
@@ -2654,6 +2664,25 @@ MCSymbol *AsmPrinter::GetBlockAddressSymbol(const BasicBlock *BB) const {
 
 /// GetCPISymbol - Return the symbol for the specified constant pool entry.
 MCSymbol *AsmPrinter::GetCPISymbol(unsigned CPID) const {
+  if (getSubtargetInfo().getTargetTriple().isKnownWindowsMSVCEnvironment()) {
+    const MachineConstantPoolEntry &CPE =
+        MF->getConstantPool()->getConstants()[CPID];
+    if (!CPE.isMachineConstantPoolEntry()) {
+      const DataLayout &DL = MF->getDataLayout();
+      SectionKind Kind = CPE.getSectionKind(&DL);
+      const Constant *C = CPE.Val.ConstVal;
+      unsigned Align = CPE.Alignment;
+      if (const MCSectionCOFF *S = dyn_cast<MCSectionCOFF>(
+              getObjFileLowering().getSectionForConstant(DL, Kind, C, Align))) {
+        if (MCSymbol *Sym = S->getCOMDATSymbol()) {
+          if (Sym->isUndefined())
+            OutStreamer->EmitSymbolAttribute(Sym, MCSA_Global);
+          return Sym;
+        }
+      }
+    }
+  }
+
   const DataLayout &DL = getDataLayout();
   return OutContext.getOrCreateSymbol(Twine(DL.getPrivateGlobalPrefix()) +
                                       "CPI" + Twine(getFunctionNumber()) + "_" +

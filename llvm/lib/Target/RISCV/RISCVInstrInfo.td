@@ -36,6 +36,12 @@ def CallSeqEnd   : SDNode<"ISD::CALLSEQ_END", SDT_RISCVCallSeqEnd,
                           [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue]>;
 def RetFlag      : SDNode<"RISCVISD::RET_FLAG", SDTNone,
                           [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
+def URetFlag     : SDNode<"RISCVISD::URET_FLAG", SDTNone,
+                          [SDNPHasChain, SDNPOptInGlue]>;
+def SRetFlag     : SDNode<"RISCVISD::SRET_FLAG", SDTNone,
+                          [SDNPHasChain, SDNPOptInGlue]>;
+def MRetFlag     : SDNode<"RISCVISD::MRET_FLAG", SDTNone,
+                          [SDNPHasChain, SDNPOptInGlue]>;
 def SelectCC     : SDNode<"RISCVISD::SELECT_CC", SDT_RISCVSelectCC,
                           [SDNPInGlue]>;
 def Tail         : SDNode<"RISCVISD::TAIL", SDT_RISCVCall,
@@ -544,6 +550,45 @@ def : InstAlias<"csrci $csr, $imm", (CSRRCI X0, uimm12:$csr, uimm5:$imm)>;
 def : InstAlias<"sfence.vma",     (SFENCE_VMA      X0, X0)>;
 def : InstAlias<"sfence.vma $rs", (SFENCE_VMA GPR:$rs, X0)>;
 
+let EmitPriority = 0 in {
+def : InstAlias<"add $rd, $rs1, $imm12",
+                (ADDI  GPR:$rd, GPR:$rs1, simm12:$imm12)>;
+def : InstAlias<"and $rd, $rs1, $imm12",
+                (ANDI  GPR:$rd, GPR:$rs1, simm12:$imm12)>;
+def : InstAlias<"xor $rd, $rs1, $imm12",
+                (XORI  GPR:$rd, GPR:$rs1, simm12:$imm12)>;
+def : InstAlias<"or $rd, $rs1, $imm12",
+                (ORI  GPR:$rd, GPR:$rs1, simm12:$imm12)>;
+def : InstAlias<"sll $rd, $rs1, $shamt",
+                (SLLI  GPR:$rd, GPR:$rs1, uimmlog2xlen:$shamt)>;
+def : InstAlias<"srl $rd, $rs1, $shamt",
+                (SRLI  GPR:$rd, GPR:$rs1, uimmlog2xlen:$shamt)>;
+def : InstAlias<"sra $rd, $rs1, $shamt",
+                (SRAI  GPR:$rd, GPR:$rs1, uimmlog2xlen:$shamt)>;
+let Predicates = [IsRV64] in {
+def : InstAlias<"addw $rd, $rs1, $imm12",
+                (ADDIW  GPR:$rd, GPR:$rs1, simm12:$imm12)>;
+def : InstAlias<"sllw $rd, $rs1, $shamt",
+                (SLLIW  GPR:$rd, GPR:$rs1, uimm5:$shamt)>;
+def : InstAlias<"srlw $rd, $rs1, $shamt",
+                (SRLIW  GPR:$rd, GPR:$rs1, uimm5:$shamt)>;
+def : InstAlias<"sraw $rd, $rs1, $shamt",
+                (SRAIW  GPR:$rd, GPR:$rs1, uimm5:$shamt)>;
+} // Predicates = [IsRV64]
+def : InstAlias<"slt $rd, $rs1, $imm12",
+                (SLTI  GPR:$rd, GPR:$rs1, simm12:$imm12)>;
+def : InstAlias<"sltu $rd, $rs1, $imm12",
+                (SLTIU  GPR:$rd, GPR:$rs1, simm12:$imm12)>;
+}
+
+def : MnemonicAlias<"move", "mv">;
+
+// The SCALL and SBREAK instructions wererenamed to ECALL and EBREAK in
+// version 2.1 of the user-level ISA. Like the GNU toolchain, we still accept
+// the old name for backwards compatibility.
+def : MnemonicAlias<"scall", "ecall">;
+def : MnemonicAlias<"sbreak", "ebreak">;
+
 //===----------------------------------------------------------------------===//
 // Pseudo-instructions and codegen patterns
 //
@@ -683,6 +728,10 @@ def PseudoCALL : Pseudo<(outs), (ins bare_symbol:$func),
 }
 
 def : Pat<(Call texternalsym:$func), (PseudoCALL texternalsym:$func)>;
+
+def : Pat<(URetFlag), (URET X0, X0)>;
+def : Pat<(SRetFlag), (SRET X0, X0)>;
+def : Pat<(MRetFlag), (MRET X0, X0)>;
 
 let isCall = 1, Defs = [X1] in
 def PseudoCALLIndirect : Pseudo<(outs), (ins GPR:$rs1), [(Call GPR:$rs1)]>,

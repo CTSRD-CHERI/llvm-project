@@ -35,6 +35,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/TypeBuilder.h"
+#include "llvm/IR/Verifier.h"
 #include "llvm/IRReader/IRReader.h"
 #include "llvm/Object/Archive.h"
 #include "llvm/Object/ObjectFile.h"
@@ -521,6 +522,9 @@ int main(int argc, char **argv, char * const *envp) {
                 JITEventListener::createOProfileJITEventListener());
   EE->RegisterJITEventListener(
                 JITEventListener::createIntelJITEventListener());
+  if (!RemoteMCJIT)
+    EE->RegisterJITEventListener(
+                JITEventListener::createPerfJITEventListener());
 
   if (!NoLazyCompilation && RemoteMCJIT) {
     WithColor::warning(errs(), argv[0])
@@ -767,7 +771,16 @@ int runOrcLazyJIT(LLVMContext &Ctx, std::vector<std::unique_ptr<Module>> Ms,
   auto J =
       ExitOnErr(orc::LLLazyJIT::Create(std::move(ES), std::move(TM), DL, Ctx));
 
-  J->setLazyCompileTransform(createDebugDumper());
+  auto Dump = createDebugDumper();
+
+  J->setLazyCompileTransform(
+    [&](std::unique_ptr<Module> M) {
+      if (verifyModule(*M, &dbgs())) {
+        dbgs() << "Bad module: " << *M << "\n";
+        exit(1);
+      }
+      return Dump(std::move(M));
+    });
   J->getMainVSO().setFallbackDefinitionGenerator(
       orc::DynamicLibraryFallbackGenerator(
           std::move(LibLLI), DL, [](orc::SymbolStringPtr) { return true; }));
@@ -776,8 +789,10 @@ int runOrcLazyJIT(LLVMContext &Ctx, std::vector<std::unique_ptr<Module>> Ms,
   orc::LocalCXXRuntimeOverrides2 CXXRuntimeOverrides;
   ExitOnErr(CXXRuntimeOverrides.enable(J->getMainVSO(), Mangle));
 
-  for (auto &M : Ms)
+  for (auto &M : Ms) {
+    orc::makeAllSymbolsExternallyAccessible(*M);
     ExitOnErr(J->addLazyIRModule(std::move(M)));
+  }
 
   ExitOnErr(J->runConstructors());
 

@@ -15,150 +15,26 @@
 
 #include "__cxxabi_config.h"
 
-#include <vector>
-#include <algorithm>
-#include <numeric>
+#include "demangle/Compiler.h"
+#include "demangle/StringView.h"
+#include "demangle/Utility.h"
+
 #include <cassert>
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <cctype>
-
-#ifdef _MSC_VER
-// snprintf is implemented in VS 2015
-#if _MSC_VER < 1900
-#define snprintf _snprintf_s
-#endif
-#endif
-
-#ifndef NDEBUG
-#if __has_attribute(noinline) && __has_attribute(used)
-#define DUMP_METHOD __attribute__((noinline,used))
-#else
-#define DUMP_METHOD
-#endif
-#endif
+#include <numeric>
+#include <utility>
+#include <vector>
 
 namespace {
-
-class StringView {
-  const char *First;
-  const char *Last;
-
-public:
-  template <size_t N>
-  StringView(const char (&Str)[N]) : First(Str), Last(Str + N - 1) {}
-  StringView(const char *First_, const char *Last_) : First(First_), Last(Last_) {}
-  StringView() : First(nullptr), Last(nullptr) {}
-
-  StringView substr(size_t From, size_t To) {
-    if (To >= size())
-      To = size() - 1;
-    if (From >= size())
-      From = size() - 1;
-    return StringView(First + From, First + To);
-  }
-
-  StringView dropFront(size_t N) const {
-    if (N >= size())
-      N = size() - 1;
-    return StringView(First + N, Last);
-  }
-
-  bool startsWith(StringView Str) const {
-    if (Str.size() > size())
-      return false;
-    return std::equal(Str.begin(), Str.end(), begin());
-  }
-
-  const char &operator[](size_t Idx) const { return *(begin() + Idx); }
-
-  const char *begin() const { return First; }
-  const char *end() const { return Last; }
-  size_t size() const { return static_cast<size_t>(Last - First); }
-  bool empty() const { return First == Last; }
-};
-
-bool operator==(const StringView &LHS, const StringView &RHS) {
-  return LHS.size() == RHS.size() &&
-         std::equal(LHS.begin(), LHS.end(), RHS.begin());
-}
-
-// Stream that AST nodes write their string representation into after the AST
-// has been parsed.
-class OutputStream {
-  char *Buffer;
-  size_t CurrentPosition;
-  size_t BufferCapacity;
-
-  // Ensure there is at least n more positions in buffer.
-  void grow(size_t N) {
-    if (N + CurrentPosition >= BufferCapacity) {
-      BufferCapacity *= 2;
-      if (BufferCapacity < N + CurrentPosition)
-        BufferCapacity = N + CurrentPosition;
-      Buffer = static_cast<char *>(std::realloc(Buffer, BufferCapacity));
-    }
-  }
-
-public:
-  OutputStream(char *StartBuf, size_t Size)
-      : Buffer(StartBuf), CurrentPosition(0), BufferCapacity(Size) {}
-  OutputStream() = default;
-  void reset(char *Buffer_, size_t BufferCapacity_) {
-    CurrentPosition = 0;
-    Buffer = Buffer_;
-    BufferCapacity = BufferCapacity_;
-  }
-
-  /// If a ParameterPackExpansion (or similar type) is encountered, the offset
-  /// into the pack that we're currently printing.
-  unsigned CurrentPackIndex = std::numeric_limits<unsigned>::max();
-  unsigned CurrentPackMax = std::numeric_limits<unsigned>::max();
-
-  OutputStream &operator+=(StringView R) {
-    size_t Size = R.size();
-    if (Size == 0)
-      return *this;
-    grow(Size);
-    memmove(Buffer + CurrentPosition, R.begin(), Size);
-    CurrentPosition += Size;
-    return *this;
-  }
-
-  OutputStream &operator+=(char C) {
-    grow(1);
-    Buffer[CurrentPosition++] = C;
-    return *this;
-  }
-
-  size_t getCurrentPosition() const { return CurrentPosition; }
-  void setCurrentPosition(size_t NewPos) { CurrentPosition = NewPos; }
-
-  char back() const {
-    return CurrentPosition ? Buffer[CurrentPosition - 1] : '\0';
-  }
-
-  bool empty() const { return CurrentPosition == 0; }
-
-  char *getBuffer() { return Buffer; }
-  char *getBufferEnd() { return Buffer + CurrentPosition - 1; }
-  size_t getBufferCapacity() { return BufferCapacity; }
-};
-
-template <class T>
-class SwapAndRestore {
-  T &Restore;
-  T OriginalValue;
-public:
-  SwapAndRestore(T& Restore_, T NewVal)
-      : Restore(Restore_), OriginalValue(Restore) {
-    Restore = std::move(NewVal);
-  }
-  ~SwapAndRestore() { Restore = std::move(OriginalValue); }
-
-  SwapAndRestore(const SwapAndRestore &) = delete;
-  SwapAndRestore &operator=(const SwapAndRestore &) = delete;
+enum : int {
+  demangle_unknown_error = -4,
+  demangle_invalid_args = -3,
+  demangle_invalid_mangled_name = -2,
+  demangle_memory_alloc_failure = -1,
+  demangle_success = 0,
 };
 
 // Base class of all AST nodes. The AST is built by the parser, then is
@@ -178,8 +54,7 @@ public:
     KEnableIfAttr,
     KObjCProtoName,
     KPointerType,
-    KLValueReferenceType,
-    KRValueReferenceType,
+    KReferenceType,
     KPointerToMemberType,
     KArrayType,
     KFunctionType,
@@ -260,6 +135,12 @@ public:
   virtual bool hasArraySlow(OutputStream &) const { return false; }
   virtual bool hasFunctionSlow(OutputStream &) const { return false; }
 
+  // Dig through "glue" nodes like ParameterPack and ForwardTemplateReference to
+  // get at a node that actually represents some concrete syntax.
+  virtual const Node *getSyntaxNode(OutputStream &) const {
+    return this;
+  }
+
   void print(OutputStream &S) const {
     printLeft(S);
     if (RHSComponentCache != Cache::No)
@@ -272,7 +153,7 @@ public:
   // Print the "right". This distinction is necessary to represent C++ types
   // that appear on the RHS of their subtype, such as arrays or functions.
   // Since most types don't have such a component, provide a default
-  // implemenation.
+  // implementation.
   virtual void printRight(OutputStream &) const {}
 
   virtual StringView getBaseName() const { return StringView(); }
@@ -570,60 +451,64 @@ public:
   }
 };
 
-class LValueReferenceType final : public Node {
-  const Node *Pointee;
-
-public:
-  LValueReferenceType(Node *Pointee_)
-      : Node(KLValueReferenceType, Pointee_->RHSComponentCache),
-        Pointee(Pointee_) {}
-
-  bool hasRHSComponentSlow(OutputStream &S) const override {
-    return Pointee->hasRHSComponent(S);
-  }
-
-  void printLeft(OutputStream &s) const override {
-    Pointee->printLeft(s);
-    if (Pointee->hasArray(s))
-      s += " ";
-    if (Pointee->hasArray(s) || Pointee->hasFunction(s))
-      s += "(&";
-    else
-      s += "&";
-  }
-  void printRight(OutputStream &s) const override {
-    if (Pointee->hasArray(s) || Pointee->hasFunction(s))
-      s += ")";
-    Pointee->printRight(s);
-  }
+enum class ReferenceKind {
+  LValue,
+  RValue,
 };
 
-class RValueReferenceType final : public Node {
+// Represents either a LValue or an RValue reference type.
+class ReferenceType : public Node {
   const Node *Pointee;
+  ReferenceKind RK;
+
+  mutable bool Printing = false;
+
+  // Dig through any refs to refs, collapsing the ReferenceTypes as we go. The
+  // rule here is rvalue ref to rvalue ref collapses to a rvalue ref, and any
+  // other combination collapses to a lvalue ref.
+  std::pair<ReferenceKind, const Node *> collapse(OutputStream &S) const {
+    auto SoFar = std::make_pair(RK, Pointee);
+    for (;;) {
+      const Node *SN = SoFar.second->getSyntaxNode(S);
+      if (SN->getKind() != KReferenceType)
+        break;
+      auto *RT = static_cast<const ReferenceType *>(SN);
+      SoFar.second = RT->Pointee;
+      SoFar.first = std::min(SoFar.first, RT->RK);
+    }
+    return SoFar;
+  }
 
 public:
-  RValueReferenceType(Node *Pointee_)
-      : Node(KRValueReferenceType, Pointee_->RHSComponentCache),
-        Pointee(Pointee_) {}
+  ReferenceType(Node *Pointee_, ReferenceKind RK_)
+      : Node(KReferenceType, Pointee_->RHSComponentCache),
+        Pointee(Pointee_), RK(RK_) {}
 
   bool hasRHSComponentSlow(OutputStream &S) const override {
     return Pointee->hasRHSComponent(S);
   }
 
   void printLeft(OutputStream &s) const override {
-    Pointee->printLeft(s);
-    if (Pointee->hasArray(s))
+    if (Printing)
+      return;
+    SwapAndRestore<bool> SavePrinting(Printing, true);
+    std::pair<ReferenceKind, const Node *> Collapsed = collapse(s);
+    Collapsed.second->printLeft(s);
+    if (Collapsed.second->hasArray(s))
       s += " ";
-    if (Pointee->hasArray(s) || Pointee->hasFunction(s))
-      s += "(&&";
-    else
-      s += "&&";
-  }
+    if (Collapsed.second->hasArray(s) || Collapsed.second->hasFunction(s))
+      s += "(";
 
+    s += (Collapsed.first == ReferenceKind::LValue ? "&" : "&&");
+  }
   void printRight(OutputStream &s) const override {
-    if (Pointee->hasArray(s) || Pointee->hasFunction(s))
+    if (Printing)
+      return;
+    SwapAndRestore<bool> SavePrinting(Printing, true);
+    std::pair<ReferenceKind, const Node *> Collapsed = collapse(s);
+    if (Collapsed.second->hasArray(s) || Collapsed.second->hasFunction(s))
       s += ")";
-    Pointee->printRight(s);
+    Collapsed.second->printRight(s);
   }
 };
 
@@ -748,7 +633,7 @@ public:
   bool hasRHSComponentSlow(OutputStream &) const override { return true; }
   bool hasFunctionSlow(OutputStream &) const override { return true; }
 
-  // Handle C++'s ... quirky decl grammer by using the left & right
+  // Handle C++'s ... quirky decl grammar by using the left & right
   // distinction. Consider:
   //   int (*f(float))(char) {}
   // f is a function that takes a float and returns a pointer to a function
@@ -1042,6 +927,11 @@ public:
     size_t Idx = S.CurrentPackIndex;
     return Idx < Data.size() && Data[Idx]->hasFunction(S);
   }
+  const Node *getSyntaxNode(OutputStream &S) const override {
+    initializePackExpansion(S);
+    size_t Idx = S.CurrentPackIndex;
+    return Idx < Data.size() ? Data[Idx]->getSyntaxNode(S) : this;
+  }
 
   void printLeft(OutputStream &S) const override {
     initializePackExpansion(S);
@@ -1057,7 +947,7 @@ public:
   }
 };
 
-/// A variadic template argument. This node represents an occurance of
+/// A variadic template argument. This node represents an occurrence of
 /// J<something>E in some <template-args>. It isn't itself unexpanded, unless
 /// one of it's Elements is. The parser inserts a ParameterPack into the
 /// TemplateParams table if the <template-args> this pack belongs to apply to an
@@ -1168,6 +1058,12 @@ struct ForwardTemplateReference : Node {
       return false;
     SwapAndRestore<bool> SavePrinting(Printing, true);
     return Ref->hasFunction(S);
+  }
+  const Node *getSyntaxNode(OutputStream &S) const override {
+    if (Printing)
+      return this;
+    SwapAndRestore<bool> SavePrinting(Printing, true);
+    return Ref->getSyntaxNode(S);
   }
 
   void printLeft(OutputStream &S) const override {
@@ -1890,17 +1786,21 @@ class BumpPointerAllocator {
   static constexpr size_t AllocSize = 4096;
   static constexpr size_t UsableAllocSize = AllocSize - sizeof(BlockMeta);
 
-  alignas(16) char InitialBuffer[AllocSize];
+  alignas(long double) char InitialBuffer[AllocSize];
   BlockMeta* BlockList = nullptr;
 
   void grow() {
-    char* NewMeta = new char[AllocSize];
+    char* NewMeta = static_cast<char *>(std::malloc(AllocSize));
+    if (NewMeta == nullptr)
+      std::terminate();
     BlockList = new (NewMeta) BlockMeta{BlockList, 0};
   }
 
   void* allocateMassive(size_t NBytes) {
     NBytes += sizeof(BlockMeta);
-    BlockMeta* NewMeta = reinterpret_cast<BlockMeta*>(new char[NBytes]);
+    BlockMeta* NewMeta = reinterpret_cast<BlockMeta*>(std::malloc(NBytes));
+    if (NewMeta == nullptr)
+      std::terminate();
     BlockList->Next = new (NewMeta) BlockMeta{BlockList->Next, 0};
     return static_cast<void*>(NewMeta + 1);
   }
@@ -1926,7 +1826,7 @@ public:
       BlockMeta* Tmp = BlockList;
       BlockList = BlockList->Next;
       if (reinterpret_cast<char*>(Tmp) != InitialBuffer)
-        delete[] reinterpret_cast<char*>(Tmp);
+        std::free(Tmp);
     }
     BlockList = new (InitialBuffer) BlockMeta{nullptr, 0};
   }
@@ -1956,10 +1856,15 @@ class PODSmallVector {
     size_t S = size();
     if (isInline()) {
       auto* Tmp = static_cast<T*>(std::malloc(NewCap * sizeof(T)));
+      if (Tmp == nullptr)
+        std::terminate();
       std::copy(First, Last, Tmp);
       First = Tmp;
-    } else
+    } else {
       First = static_cast<T*>(std::realloc(First, NewCap * sizeof(T)));
+      if (First == nullptr)
+        std::terminate();
+    }
     Last = First + S;
     Cap = First + NewCap;
   }
@@ -2053,7 +1958,7 @@ struct Db {
   const char *Last;
 
   // Name stack, this is used by the parser to hold temporary names that were
-  // parsed. The parser colapses multiple names into new nodes to construct
+  // parsed. The parser collapses multiple names into new nodes to construct
   // the AST. Once the parser is finished, names.size() == 1.
   PODSmallVector<Node *, 32> Names;
 
@@ -2927,7 +2832,7 @@ Node *Db::parseBaseUnresolvedName() {
 // <unresolved-name>
 //  extension        ::= srN <unresolved-type> [<template-args>] <unresolved-qualifier-level>* E <base-unresolved-name>
 //                   ::= [gs] <base-unresolved-name>                     # x or (with "gs") ::x
-//                   ::= [gs] sr <unresolved-qualifier-level>+ E <base-unresolved-name>  
+//                   ::= [gs] sr <unresolved-qualifier-level>+ E <base-unresolved-name>
 //                                                                       # A::x, N::y, A<T>::z; "gs" means leading "::"
 //                   ::= sr <unresolved-type> <base-unresolved-name>     # T::x / decltype(p)::x
 //  extension        ::= sr <unresolved-type> <template-args> <base-unresolved-name>
@@ -2977,7 +2882,7 @@ Node *Db::parseUnresolvedName() {
     return SoFar;
   }
 
-  // [gs] sr <unresolved-qualifier-level>+ E   <base-unresolved-name>  
+  // [gs] sr <unresolved-qualifier-level>+ E   <base-unresolved-name>
   if (std::isdigit(look())) {
     do {
       Node *Qual = parseSimpleId();
@@ -3558,7 +3463,7 @@ Node *Db::parseType() {
     Node *Ref = parseType();
     if (Ref == nullptr)
       return nullptr;
-    Result = make<LValueReferenceType>(Ref);
+    Result = make<ReferenceType>(Ref, ReferenceKind::LValue);
     break;
   }
   //             ::= O <type>        # r-value reference (C++11)
@@ -3567,7 +3472,7 @@ Node *Db::parseType() {
     Node *Ref = parseType();
     if (Ref == nullptr)
       return nullptr;
-    Result = make<RValueReferenceType>(Ref);
+    Result = make<ReferenceType>(Ref, ReferenceKind::RValue);
     break;
   }
   //             ::= C <type>        # complex pair (C99)
@@ -5030,6 +4935,8 @@ Node *Db::parse() {
     bool RequireNumber = consumeIf('_');
     if (parseNumber().empty() && RequireNumber)
       return nullptr;
+    if (look() == '.')
+      First = Last;
     if (numLeft() != 0)
       return nullptr;
     return make<SpecialName>("invocation function for block in ", Encoding);
@@ -5058,33 +4965,25 @@ bool initializeOutputStream(char *Buf, size_t *N, OutputStream &S,
 
 }  // unnamed namespace
 
-enum {
-  unknown_error = -4,
-  invalid_args = -3,
-  invalid_mangled_name = -2,
-  memory_alloc_failure = -1,
-  success = 0,
-};
-
 namespace __cxxabiv1 {
 extern "C" _LIBCXXABI_FUNC_VIS char *
 __cxa_demangle(const char *MangledName, char *Buf, size_t *N, int *Status) {
   if (MangledName == nullptr || (Buf != nullptr && N == nullptr)) {
     if (Status)
-      *Status = invalid_args;
+      *Status = demangle_invalid_args;
     return nullptr;
   }
 
-  int InternalStatus = success;
+  int InternalStatus = demangle_success;
   Db Parser(MangledName, MangledName + std::strlen(MangledName));
   OutputStream S;
 
   Node *AST = Parser.parse();
 
   if (AST == nullptr)
-    InternalStatus = invalid_mangled_name;
+    InternalStatus = demangle_invalid_mangled_name;
   else if (initializeOutputStream(Buf, N, S, 1024))
-    InternalStatus = memory_alloc_failure;
+    InternalStatus = demangle_memory_alloc_failure;
   else {
     assert(Parser.ForwardTemplateRefs.empty());
     AST->print(S);
@@ -5096,6 +4995,6 @@ __cxa_demangle(const char *MangledName, char *Buf, size_t *N, int *Status) {
 
   if (Status)
     *Status = InternalStatus;
-  return InternalStatus == success ? Buf : nullptr;
+  return InternalStatus == demangle_success ? Buf : nullptr;
 }
 }  // __cxxabiv1

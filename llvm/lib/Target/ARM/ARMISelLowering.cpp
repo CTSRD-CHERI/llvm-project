@@ -308,13 +308,6 @@ ARMTargetLowering::ARMTargetLowering(const TargetMachine &TM,
           setCmpLibcallCC(LC.Op, LC.Cond);
       }
     }
-
-    // Set the correct calling convention for ARMv7k WatchOS. It's just
-    // AAPCS_VFP for functions as simple as libcalls.
-    if (Subtarget->isTargetWatchABI()) {
-      for (int i = 0; i < RTLIB::UNKNOWN_LIBCALL; ++i)
-        setLibcallCallingConv((RTLIB::Libcall)i, CallingConv::ARM_AAPCS_VFP);
-    }
   }
 
   // These libcalls are not available in 32-bit.
@@ -658,9 +651,13 @@ ARMTargetLowering::ARMTargetLowering(const TargetMachine &TM,
     // it have a FP_TO_[SU]INT instruction with a narrower destination than
     // source.
     setOperationAction(ISD::SINT_TO_FP, MVT::v4i16, Custom);
+    setOperationAction(ISD::SINT_TO_FP, MVT::v8i16, Custom);
     setOperationAction(ISD::UINT_TO_FP, MVT::v4i16, Custom);
+    setOperationAction(ISD::UINT_TO_FP, MVT::v8i16, Custom);
     setOperationAction(ISD::FP_TO_UINT, MVT::v4i16, Custom);
+    setOperationAction(ISD::FP_TO_UINT, MVT::v8i16, Custom);
     setOperationAction(ISD::FP_TO_SINT, MVT::v4i16, Custom);
+    setOperationAction(ISD::FP_TO_SINT, MVT::v8i16, Custom);
 
     setOperationAction(ISD::FP_ROUND,   MVT::v2f32, Expand);
     setOperationAction(ISD::FP_EXTEND,  MVT::v2f64, Expand);
@@ -1151,6 +1148,18 @@ ARMTargetLowering::ARMTargetLowering(const TargetMachine &TM,
     setOperationAction(ISD::FMAXNAN, MVT::v2f32, Legal);
     setOperationAction(ISD::FMINNAN, MVT::v4f32, Legal);
     setOperationAction(ISD::FMAXNAN, MVT::v4f32, Legal);
+
+    if (Subtarget->hasFullFP16()) {
+      setOperationAction(ISD::FMINNUM, MVT::v4f16, Legal);
+      setOperationAction(ISD::FMAXNUM, MVT::v4f16, Legal);
+      setOperationAction(ISD::FMINNUM, MVT::v8f16, Legal);
+      setOperationAction(ISD::FMAXNUM, MVT::v8f16, Legal);
+
+      setOperationAction(ISD::FMINNAN, MVT::v4f16, Legal);
+      setOperationAction(ISD::FMAXNAN, MVT::v4f16, Legal);
+      setOperationAction(ISD::FMINNAN, MVT::v8f16, Legal);
+      setOperationAction(ISD::FMAXNAN, MVT::v8f16, Legal);
+    }
   }
 
   // We have target-specific dag combine patterns for the following nodes:
@@ -3103,7 +3112,7 @@ static SDValue promoteToConstantPool(const GlobalValue *GV, SelectionDAG &DAG,
   // need to be duplicated) or duplicating the constant wouldn't increase code
   // size (implying the constant is no larger than 4 bytes).
   const Function &F = DAG.getMachineFunction().getFunction();
-  
+
   // We rely on this decision to inline being idemopotent and unrelated to the
   // use-site. We know that if we inline a variable at one use site, we'll
   // inline it elsewhere too (and reuse the constant pool entry). Fast-isel
@@ -3857,8 +3866,8 @@ SDValue ARMTargetLowering::getARMCmp(SDValue LHS, SDValue RHS, ISD::CondCode CC,
                                      const SDLoc &dl) const {
   if (ConstantSDNode *RHSC = dyn_cast<ConstantSDNode>(RHS.getNode())) {
     unsigned C = RHSC->getZExtValue();
-    if (!isLegalICmpImmediate(C)) {
-      // Constant does not fit, try adjusting it by one?
+    if (!isLegalICmpImmediate((int32_t)C)) {
+      // Constant does not fit, try adjusting it by one.
       switch (CC) {
       default: break;
       case ISD::SETLT:
@@ -4681,9 +4690,11 @@ SDValue ARMTargetLowering::LowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
   // Optimize {s|u}{add|sub|mul}.with.overflow feeding into a branch
   // instruction.
   unsigned Opc = Cond.getOpcode();
+  bool OptimizeMul = (Opc == ISD::SMULO || Opc == ISD::UMULO) &&
+                      !Subtarget->isThumb1Only();
   if (Cond.getResNo() == 1 &&
       (Opc == ISD::SADDO || Opc == ISD::UADDO || Opc == ISD::SSUBO ||
-       Opc == ISD::USUBO || Opc == ISD::SMULO || Opc == ISD::UMULO)) {
+       Opc == ISD::USUBO || OptimizeMul)) {
     // Only lower legal XALUO ops.
     if (!DAG.getTargetLoweringInfo().isTypeLegal(Cond->getValueType(0)))
       return SDValue();
@@ -4730,9 +4741,11 @@ SDValue ARMTargetLowering::LowerBR_CC(SDValue Op, SelectionDAG &DAG) const {
   // Optimize {s|u}{add|sub|mul}.with.overflow feeding into a branch
   // instruction.
   unsigned Opc = LHS.getOpcode();
+  bool OptimizeMul = (Opc == ISD::SMULO || Opc == ISD::UMULO) &&
+                      !Subtarget->isThumb1Only();
   if (LHS.getResNo() == 1 && (isOneConstant(RHS) || isNullConstant(RHS)) &&
       (Opc == ISD::SADDO || Opc == ISD::UADDO || Opc == ISD::SSUBO ||
-       Opc == ISD::USUBO || Opc == ISD::SMULO || Opc == ISD::UMULO) &&
+       Opc == ISD::USUBO || OptimizeMul) &&
       (CC == ISD::SETEQ || CC == ISD::SETNE)) {
     // Only lower legal XALUO ops.
     if (!DAG.getTargetLoweringInfo().isTypeLegal(LHS->getValueType(0)))
@@ -4835,12 +4848,24 @@ static SDValue LowerVectorFP_TO_INT(SDValue Op, SelectionDAG &DAG) {
     return DAG.UnrollVectorOp(Op.getNode());
   }
 
-  assert(Op.getOperand(0).getValueType() == MVT::v4f32 &&
-         "Invalid type for custom lowering!");
-  if (VT != MVT::v4i16)
+  const bool HasFullFP16 =
+    static_cast<const ARMSubtarget&>(DAG.getSubtarget()).hasFullFP16();
+
+  EVT NewTy;
+  const EVT OpTy = Op.getOperand(0).getValueType();
+  if (OpTy == MVT::v4f32)
+    NewTy = MVT::v4i32;
+  else if (OpTy == MVT::v4f16 && HasFullFP16)
+    NewTy = MVT::v4i16;
+  else if (OpTy == MVT::v8f16 && HasFullFP16)
+    NewTy = MVT::v8i16;
+  else
+    llvm_unreachable("Invalid type for custom lowering!");
+
+  if (VT != MVT::v4i16 && VT != MVT::v8i16)
     return DAG.UnrollVectorOp(Op.getNode());
 
-  Op = DAG.getNode(Op.getOpcode(), dl, MVT::v4i32, Op.getOperand(0));
+  Op = DAG.getNode(Op.getOpcode(), dl, NewTy, Op.getOperand(0));
   return DAG.getNode(ISD::TRUNCATE, dl, VT, Op);
 }
 
@@ -4873,9 +4898,21 @@ static SDValue LowerVectorINT_TO_FP(SDValue Op, SelectionDAG &DAG) {
     return DAG.UnrollVectorOp(Op.getNode());
   }
 
-  assert(Op.getOperand(0).getValueType() == MVT::v4i16 &&
+  assert((Op.getOperand(0).getValueType() == MVT::v4i16 ||
+          Op.getOperand(0).getValueType() == MVT::v8i16) &&
          "Invalid type for custom lowering!");
-  if (VT != MVT::v4f32)
+
+  const bool HasFullFP16 =
+    static_cast<const ARMSubtarget&>(DAG.getSubtarget()).hasFullFP16();
+
+  EVT DestVecType;
+  if (VT == MVT::v4f32)
+    DestVecType = MVT::v4i32;
+  else if (VT == MVT::v4f16 && HasFullFP16)
+    DestVecType = MVT::v4i16;
+  else if (VT == MVT::v8f16 && HasFullFP16)
+    DestVecType = MVT::v8i16;
+  else
     return DAG.UnrollVectorOp(Op.getNode());
 
   unsigned CastOpc;
@@ -4892,7 +4929,7 @@ static SDValue LowerVectorINT_TO_FP(SDValue Op, SelectionDAG &DAG) {
     break;
   }
 
-  Op = DAG.getNode(CastOpc, dl, MVT::v4i32, Op.getOperand(0));
+  Op = DAG.getNode(CastOpc, dl, DestVecType, Op.getOperand(0));
   return DAG.getNode(Opc, dl, VT, Op);
 }
 
@@ -5165,7 +5202,7 @@ static SDValue ExpandBITCAST(SDNode *N, SelectionDAG &DAG,
       return SDValue();
     // SoftFP: read half-precision arguments:
     //
-    // t2: i32,ch = ... 
+    // t2: i32,ch = ...
     //        t7: i16 = truncate t2 <~~~~ Op
     //      t8: f16 = bitcast t7    <~~~~ N
     //
@@ -5176,7 +5213,7 @@ static SDValue ExpandBITCAST(SDNode *N, SelectionDAG &DAG,
     return SDValue();
   }
 
-  // Half-precision return values 
+  // Half-precision return values
   if (SrcVT == MVT::f16 && DstVT == MVT::i16) {
     if (!HasFullFP16)
       return SDValue();
@@ -10679,6 +10716,83 @@ static SDValue PerformMULCombine(SDNode *N,
   return SDValue();
 }
 
+static SDValue CombineANDShift(SDNode *N,
+                               TargetLowering::DAGCombinerInfo &DCI,
+                               const ARMSubtarget *Subtarget) {
+  // Allow DAGCombine to pattern-match before we touch the canonical form.
+  if (DCI.isBeforeLegalize() || DCI.isCalledByLegalizer())
+    return SDValue();
+
+  if (N->getValueType(0) != MVT::i32)
+    return SDValue();
+
+  ConstantSDNode *N1C = dyn_cast<ConstantSDNode>(N->getOperand(1));
+  if (!N1C)
+    return SDValue();
+
+  uint32_t C1 = (uint32_t)N1C->getZExtValue();
+  // Don't transform uxtb/uxth.
+  if (C1 == 255 || C1 == 65535)
+    return SDValue();
+
+  SDNode *N0 = N->getOperand(0).getNode();
+  if (!N0->hasOneUse())
+    return SDValue();
+
+  if (N0->getOpcode() != ISD::SHL && N0->getOpcode() != ISD::SRL)
+    return SDValue();
+
+  bool LeftShift = N0->getOpcode() == ISD::SHL;
+
+  ConstantSDNode *N01C = dyn_cast<ConstantSDNode>(N0->getOperand(1));
+  if (!N01C)
+    return SDValue();
+
+  uint32_t C2 = (uint32_t)N01C->getZExtValue();
+  if (!C2 || C2 >= 32)
+    return SDValue();
+
+  SelectionDAG &DAG = DCI.DAG;
+  SDLoc DL(N);
+
+  // We have a pattern of the form "(and (shl x, c2) c1)" or
+  // "(and (srl x, c2) c1)", where c1 is a shifted mask. Try to
+  // transform to a pair of shifts, to save materializing c1.
+
+  // First pattern: right shift, and c1+1 is a power of two.
+  // FIXME: Also check reversed pattern (left shift, and ~c1+1 is a power
+  // of two).
+  // FIXME: Use demanded bits?
+  if (!LeftShift && isMask_32(C1)) {
+    uint32_t C3 = countLeadingZeros(C1);
+    if (C2 < C3) {
+      SDValue SHL = DAG.getNode(ISD::SHL, DL, MVT::i32, N0->getOperand(0),
+                                DAG.getConstant(C3 - C2, DL, MVT::i32));
+      return DAG.getNode(ISD::SRL, DL, MVT::i32, SHL,
+                         DAG.getConstant(C3, DL, MVT::i32));
+    }
+  }
+
+  // Second pattern: left shift, and (c1>>c2)+1 is a power of two.
+  // FIXME: Also check reversed pattern (right shift, and ~(c1<<c2)+1
+  // is a power of two).
+  // FIXME: Use demanded bits?
+  if (LeftShift && isShiftedMask_32(C1)) {
+    uint32_t C3 = countLeadingZeros(C1);
+    if (C2 + C3 < 32 && C1 == ((-1U << (C2 + C3)) >> C3)) {
+      SDValue SHL = DAG.getNode(ISD::SHL, DL, MVT::i32, N0->getOperand(0),
+                                DAG.getConstant(C2 + C3, DL, MVT::i32));
+      return DAG.getNode(ISD::SRL, DL, MVT::i32, SHL,
+                        DAG.getConstant(C3, DL, MVT::i32));
+    }
+  }
+
+  // FIXME: Transform "(and (shl x, c2) c1)" ->
+  // "(shl (and x, c1>>c2), c2)" if "c1 >> c2" is a cheaper immediate than
+  // c1.
+  return SDValue();
+}
+
 static SDValue PerformANDCombine(SDNode *N,
                                  TargetLowering::DAGCombinerInfo &DCI,
                                  const ARMSubtarget *Subtarget) {
@@ -10719,6 +10833,10 @@ static SDValue PerformANDCombine(SDNode *N,
     if (SDValue Result = PerformSHLSimplify(N, DCI, Subtarget))
       return Result;
   }
+
+  if (Subtarget->isThumb1Only())
+    if (SDValue Result = CombineANDShift(N, DCI, Subtarget))
+      return Result;
 
   return SDValue();
 }
@@ -11484,6 +11602,12 @@ static SDValue CombineBaseUpdate(SDNode *N,
         NumVecs = 3; break;
       case Intrinsic::arm_neon_vld4:     NewOpc = ARMISD::VLD4_UPD;
         NumVecs = 4; break;
+      case Intrinsic::arm_neon_vld2dup:
+      case Intrinsic::arm_neon_vld3dup:
+      case Intrinsic::arm_neon_vld4dup:
+        // TODO: Support updating VLDxDUP nodes. For now, we just skip
+        // combining base updates for such intrinsics.
+        continue;
       case Intrinsic::arm_neon_vld2lane: NewOpc = ARMISD::VLD2LN_UPD;
         NumVecs = 2; isLaneOp = true; break;
       case Intrinsic::arm_neon_vld3lane: NewOpc = ARMISD::VLD3LN_UPD;
@@ -13198,9 +13322,11 @@ bool ARMTargetLowering::isLegalAddressingMode(const DataLayout &DL,
 bool ARMTargetLowering::isLegalICmpImmediate(int64_t Imm) const {
   // Thumb2 and ARM modes can use cmn for negative immediates.
   if (!Subtarget->isThumb())
-    return ARM_AM::getSOImmVal(std::abs(Imm)) != -1;
+    return ARM_AM::getSOImmVal((uint32_t)Imm) != -1 ||
+           ARM_AM::getSOImmVal(-(uint32_t)Imm) != -1;
   if (Subtarget->isThumb2())
-    return ARM_AM::getT2SOImmVal(std::abs(Imm)) != -1;
+    return ARM_AM::getT2SOImmVal((uint32_t)Imm) != -1 ||
+           ARM_AM::getT2SOImmVal(-(uint32_t)Imm) != -1;
   // Thumb1 doesn't have cmn, and only 8-bit immediates.
   return Imm >= 0 && Imm <= 255;
 }
@@ -13375,13 +13501,13 @@ bool ARMTargetLowering::getPostIndexedAddressParts(SDNode *N, SDNode *Op,
     auto *RHS = dyn_cast<ConstantSDNode>(Op->getOperand(1));
     if (!RHS || RHS->getZExtValue() != 4)
       return false;
-    
+
     Offset = Op->getOperand(1);
     Base = Op->getOperand(0);
     AM = ISD::POST_INC;
     return true;
   }
-  
+
   bool isInc;
   bool isLegal = false;
   if (Subtarget->isThumb2())

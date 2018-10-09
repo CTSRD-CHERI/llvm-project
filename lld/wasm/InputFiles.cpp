@@ -42,6 +42,17 @@ Optional<MemoryBufferRef> lld::wasm::readFile(StringRef Path) {
   return MBRef;
 }
 
+InputFile *lld::wasm::createObjectFile(MemoryBufferRef MB) {
+  file_magic Magic = identify_magic(MB.getBuffer());
+  if (Magic == file_magic::wasm_object)
+    return make<ObjFile>(MB);
+
+  if (Magic == file_magic::bitcode)
+    return make<BitcodeFile>(MB);
+
+  fatal("unknown file type: " + MB.getBufferIdentifier());
+}
+
 void ObjFile::dumpInfo() const {
   log("info for: " + getName() +
       "\n              Symbols : " + Twine(Symbols.size()) +
@@ -360,19 +371,8 @@ void ArchiveFile::addMember(const Archive::Symbol *Sym) {
             "could not get the buffer for the member defining symbol " +
                 Sym->getName());
 
-  InputFile *Obj;
-
-  file_magic Magic = identify_magic(MB.getBuffer());
-  if (Magic == file_magic::wasm_object) {
-    Obj = make<ObjFile>(MB);
-  } else if (Magic == file_magic::bitcode) {
-    Obj = make<BitcodeFile>(MB);
-  } else {
-    error("unknown file type: " + MB.getBufferIdentifier());
-    return;
-  }
-
-  Obj->ParentName = ParentName;
+  InputFile *Obj = createObjectFile(MB);
+  Obj->ArchiveName = getName();
   Symtab->addFile(Obj);
 }
 
@@ -407,7 +407,7 @@ static Symbol *createBitcodeSymbol(const lto::InputFile::Symbol &ObjSym,
 
 void BitcodeFile::parse() {
   Obj = check(lto::InputFile::create(MemoryBufferRef(
-      MB.getBuffer(), Saver.save(ParentName + MB.getBufferIdentifier()))));
+      MB.getBuffer(), Saver.save(ArchiveName + MB.getBufferIdentifier()))));
   Triple T(Obj->getTargetTriple());
   if (T.getArch() != Triple::wasm32) {
     error(toString(MB.getBufferIdentifier()) + ": machine type must be wasm32");
@@ -423,8 +423,8 @@ std::string lld::toString(const wasm::InputFile *File) {
   if (!File)
     return "<internal>";
 
-  if (File->ParentName.empty())
+  if (File->ArchiveName.empty())
     return File->getName();
 
-  return (File->ParentName + "(" + File->getName() + ")").str();
+  return (File->ArchiveName + "(" + File->getName() + ")").str();
 }

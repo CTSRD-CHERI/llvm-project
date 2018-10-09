@@ -12,7 +12,6 @@
 #include "lldb/Utility/SafeMachO.h"
 
 #include "lldb/Breakpoint/Watchpoint.h"
-#include "lldb/Core/State.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/RegisterContext.h"
 #include "lldb/Target/StopInfo.h"
@@ -20,6 +19,7 @@
 #include "lldb/Target/Unwind.h"
 #include "lldb/Utility/ArchSpec.h"
 #include "lldb/Utility/DataExtractor.h"
+#include "lldb/Utility/State.h"
 #include "lldb/Utility/StreamString.h"
 
 #include "Plugins/Process/Utility/StopInfoMachException.h"
@@ -52,11 +52,11 @@ ThreadKDP::~ThreadKDP() {
 
 const char *ThreadKDP::GetName() {
   if (m_thread_name.empty())
-    return NULL;
+    return nullptr;
   return m_thread_name.c_str();
 }
 
-const char *ThreadKDP::GetQueueName() { return NULL; }
+const char *ThreadKDP::GetQueueName() { return nullptr; }
 
 void ThreadKDP::RefreshStateAfterStop() {
   // Invalidate all registers in our register context. We don't set "force" to
@@ -79,8 +79,8 @@ void ThreadKDP::Dump(Log *log, uint32_t index) {}
 
 bool ThreadKDP::ShouldStop(bool &step_more) { return true; }
 lldb::RegisterContextSP ThreadKDP::GetRegisterContext() {
-  if (m_reg_context_sp.get() == NULL)
-    m_reg_context_sp = CreateRegisterContextForFrame(NULL);
+  if (!m_reg_context_sp)
+    m_reg_context_sp = CreateRegisterContextForFrame(nullptr);
   return m_reg_context_sp;
 }
 
@@ -119,7 +119,7 @@ ThreadKDP::CreateRegisterContextForFrame(StackFrame *frame) {
     }
   } else {
     Unwind *unwinder = GetUnwinder();
-    if (unwinder)
+    if (unwinder != nullptr)
       reg_ctx_sp = unwinder->CreateRegisterContextForFrame(frame);
   }
   return reg_ctx_sp;

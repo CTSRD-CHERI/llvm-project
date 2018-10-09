@@ -54,6 +54,10 @@ static cl::opt<bool> EnableMachineCombinerPass("x86-machine-combiner",
                                cl::desc("Enable the machine combiner pass"),
                                cl::init(true), cl::Hidden);
 
+static cl::opt<bool> EnableSpeculativeLoadHardening(
+    "x86-speculative-load-hardening",
+    cl::desc("Enable speculative load hardening"), cl::init(false), cl::Hidden);
+
 namespace llvm {
 
 void initializeWinEHStatePassPass(PassRegistry &);
@@ -156,9 +160,15 @@ static std::string computeDataLayout(const Triple &TT) {
 }
 
 static Reloc::Model getEffectiveRelocModel(const Triple &TT,
+                                           bool JIT,
                                            Optional<Reloc::Model> RM) {
   bool is64Bit = TT.getArch() == Triple::x86_64;
   if (!RM.hasValue()) {
+    // JIT codegen should use static relocations by default, since it's
+    // typically executed in process and not relocatable.
+    if (JIT)
+      return Reloc::Static;
+
     // Darwin defaults to PIC in 64 bit mode and dynamic-no-pic in 32 bit mode.
     // Win64 requires rip-rel addressing, thus we force it to PIC. Otherwise we
     // use static relocation model by default.
@@ -210,7 +220,7 @@ X86TargetMachine::X86TargetMachine(const Target &T, const Triple &TT,
                                    CodeGenOpt::Level OL, bool JIT)
     : LLVMTargetMachine(
           T, computeDataLayout(TT), TT, CPU, FS, Options,
-          getEffectiveRelocModel(TT, RM),
+          getEffectiveRelocModel(TT, JIT, RM),
           getEffectiveCodeModel(CM, JIT, TT.getArch() == Triple::x86_64), OL),
       TLOF(createTLOF(getTargetTriple())) {
   // Windows stack unwinder gets confused when execution flow "falls through"
@@ -462,6 +472,9 @@ void X86PassConfig::addPreRegAlloc() {
     addPass(createX86CallFrameOptimization());
     addPass(createX86AvoidStoreForwardingBlocks());
   }
+
+  if (EnableSpeculativeLoadHardening)
+    addPass(createX86SpeculativeLoadHardeningPass());
 
   addPass(createX86FlagsCopyLoweringPass());
   addPass(createX86WinAllocaExpander());

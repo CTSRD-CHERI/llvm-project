@@ -55,16 +55,16 @@ namespace serialization {
     const unsigned VERSION_MINOR = 0;
 
     /// An ID number that refers to an identifier in an AST file.
-    /// 
+    ///
     /// The ID numbers of identifiers are consecutive (in order of discovery)
     /// and start at 1. 0 is reserved for NULL.
     using IdentifierID = uint32_t;
-    
+
     /// An ID number that refers to a declaration in an AST file.
     ///
     /// The ID numbers of declarations are consecutive (in order of
-    /// discovery), with values below NUM_PREDEF_DECL_IDS being reserved. 
-    /// At the start of a chain of precompiled headers, declaration ID 1 is 
+    /// discovery), with values below NUM_PREDEF_DECL_IDS being reserved.
+    /// At the start of a chain of precompiled headers, declaration ID 1 is
     /// used for the translation unit declaration.
     using DeclID = uint32_t;
 
@@ -98,14 +98,14 @@ namespace serialization {
       TypeID asTypeID(unsigned FastQuals) const {
         if (Idx == uint32_t(-1))
           return TypeID(-1);
-        
+
         return (Idx << Qualifiers::FastWidth) | FastQuals;
       }
 
       static TypeIdx fromTypeID(TypeID ID) {
         if (ID == TypeID(-1))
           return TypeIdx(-1);
-        
+
         return TypeIdx(ID >> Qualifiers::FastWidth);
       }
     };
@@ -124,7 +124,7 @@ namespace serialization {
       }
 
       static unsigned getHashValue(QualType T) {
-        assert(!T.getLocalFastQualifiers() && 
+        assert(!T.getLocalFastQualifiers() &&
                "hash invalid for types with fast quals");
         uintptr_t v = reinterpret_cast<uintptr_t>(T.getAsOpaquePtr());
         return (unsigned(v) >> 4) ^ (unsigned(v) >> 9);
@@ -155,8 +155,8 @@ namespace serialization {
 
     /// The number of predefined selector IDs.
     const unsigned int NUM_PREDEF_SELECTOR_IDS = 1;
-    
-    /// An ID number that refers to a set of CXXBaseSpecifiers in an 
+
+    /// An ID number that refers to a set of CXXBaseSpecifiers in an
     /// AST file.
     using CXXBaseSpecifiersID = uint32_t;
 
@@ -170,7 +170,7 @@ namespace serialization {
 
     /// An ID number that refers to a submodule in a module file.
     using SubmoduleID = uint32_t;
-    
+
     /// The number of predefined submodule IDs.
     const unsigned int NUM_PREDEF_SUBMODULE_IDS = 1;
 
@@ -311,7 +311,7 @@ namespace serialization {
       /// generate the AST file, including both its file ID and its
       /// name.
       ORIGINAL_FILE,
-      
+
       /// The directory that the PCH was originally created in.
       ORIGINAL_PCH_DIR,
 
@@ -706,15 +706,15 @@ namespace serialization {
     enum PreprocessorDetailRecordTypes {
       /// Describes a macro expansion within the preprocessing record.
       PPD_MACRO_EXPANSION = 0,
-      
+
       /// Describes a macro definition within the preprocessing record.
       PPD_MACRO_DEFINITION = 1,
-      
+
       /// Describes an inclusion directive within the preprocessing
       /// record.
       PPD_INCLUSION_DIRECTIVE = 2
     };
-    
+
     /// Record types used within a submodule description block.
     enum SubmoduleRecordTypes {
       /// Metadata for submodules as a whole.
@@ -737,11 +737,11 @@ namespace serialization {
       /// Specifies an umbrella directory.
       SUBMODULE_UMBRELLA_DIR = 5,
 
-      /// Specifies the submodules that are imported by this 
+      /// Specifies the submodules that are imported by this
       /// submodule.
       SUBMODULE_IMPORTS = 6,
 
-      /// Specifies the submodules that are re-exported from this 
+      /// Specifies the submodules that are re-exported from this
       /// submodule.
       SUBMODULE_EXPORTS = 7,
 
@@ -1032,133 +1032,133 @@ namespace serialization {
     /// AST. Note that DeclCode values share this code space.
     enum TypeCode {
       /// An ExtQualType record.
-      TYPE_EXT_QUAL                 = 1,
+      TYPE_EXT_QUAL = 1,
 
       /// A ComplexType record.
-      TYPE_COMPLEX                  = 3,
+      TYPE_COMPLEX = 3,
 
       /// A PointerType record.
-      TYPE_POINTER                  = 4,
+      TYPE_POINTER = 4,
 
       /// A BlockPointerType record.
-      TYPE_BLOCK_POINTER            = 5,
+      TYPE_BLOCK_POINTER = 5,
 
       /// An LValueReferenceType record.
-      TYPE_LVALUE_REFERENCE         = 6,
+      TYPE_LVALUE_REFERENCE = 6,
 
       /// An RValueReferenceType record.
-      TYPE_RVALUE_REFERENCE         = 7,
+      TYPE_RVALUE_REFERENCE = 7,
 
       /// A MemberPointerType record.
-      TYPE_MEMBER_POINTER           = 8,
+      TYPE_MEMBER_POINTER = 8,
 
       /// A ConstantArrayType record.
-      TYPE_CONSTANT_ARRAY           = 9,
+      TYPE_CONSTANT_ARRAY = 9,
 
       /// An IncompleteArrayType record.
-      TYPE_INCOMPLETE_ARRAY         = 10,
+      TYPE_INCOMPLETE_ARRAY = 10,
 
       /// A VariableArrayType record.
-      TYPE_VARIABLE_ARRAY           = 11,
+      TYPE_VARIABLE_ARRAY = 11,
 
       /// A VectorType record.
-      TYPE_VECTOR                   = 12,
+      TYPE_VECTOR = 12,
 
       /// An ExtVectorType record.
-      TYPE_EXT_VECTOR               = 13,
+      TYPE_EXT_VECTOR = 13,
 
       /// A FunctionNoProtoType record.
-      TYPE_FUNCTION_NO_PROTO        = 14,
+      TYPE_FUNCTION_NO_PROTO = 14,
 
       /// A FunctionProtoType record.
-      TYPE_FUNCTION_PROTO           = 15,
+      TYPE_FUNCTION_PROTO = 15,
 
       /// A TypedefType record.
-      TYPE_TYPEDEF                  = 16,
+      TYPE_TYPEDEF = 16,
 
       /// A TypeOfExprType record.
-      TYPE_TYPEOF_EXPR              = 17,
+      TYPE_TYPEOF_EXPR = 17,
 
       /// A TypeOfType record.
-      TYPE_TYPEOF                   = 18,
+      TYPE_TYPEOF = 18,
 
       /// A RecordType record.
-      TYPE_RECORD                   = 19,
+      TYPE_RECORD = 19,
 
       /// An EnumType record.
-      TYPE_ENUM                     = 20,
+      TYPE_ENUM = 20,
 
       /// An ObjCInterfaceType record.
-      TYPE_OBJC_INTERFACE           = 21,
+      TYPE_OBJC_INTERFACE = 21,
 
       /// An ObjCObjectPointerType record.
-      TYPE_OBJC_OBJECT_POINTER      = 22,
+      TYPE_OBJC_OBJECT_POINTER = 22,
 
       /// a DecltypeType record.
-      TYPE_DECLTYPE                 = 23,
+      TYPE_DECLTYPE = 23,
 
       /// An ElaboratedType record.
-      TYPE_ELABORATED               = 24,
+      TYPE_ELABORATED = 24,
 
       /// A SubstTemplateTypeParmType record.
       TYPE_SUBST_TEMPLATE_TYPE_PARM = 25,
 
       /// An UnresolvedUsingType record.
-      TYPE_UNRESOLVED_USING         = 26,
+      TYPE_UNRESOLVED_USING = 26,
 
       /// An InjectedClassNameType record.
-      TYPE_INJECTED_CLASS_NAME      = 27,
+      TYPE_INJECTED_CLASS_NAME = 27,
 
       /// An ObjCObjectType record.
-      TYPE_OBJC_OBJECT              = 28,
+      TYPE_OBJC_OBJECT = 28,
 
       /// An TemplateTypeParmType record.
-      TYPE_TEMPLATE_TYPE_PARM       = 29,
+      TYPE_TEMPLATE_TYPE_PARM = 29,
 
       /// An TemplateSpecializationType record.
-      TYPE_TEMPLATE_SPECIALIZATION  = 30,
+      TYPE_TEMPLATE_SPECIALIZATION = 30,
 
       /// A DependentNameType record.
-      TYPE_DEPENDENT_NAME           = 31,
+      TYPE_DEPENDENT_NAME = 31,
 
       /// A DependentTemplateSpecializationType record.
       TYPE_DEPENDENT_TEMPLATE_SPECIALIZATION = 32,
 
       /// A DependentSizedArrayType record.
-      TYPE_DEPENDENT_SIZED_ARRAY    = 33,
+      TYPE_DEPENDENT_SIZED_ARRAY = 33,
 
       /// A ParenType record.
-      TYPE_PAREN                    = 34,
+      TYPE_PAREN = 34,
 
       /// A PackExpansionType record.
-      TYPE_PACK_EXPANSION           = 35,
+      TYPE_PACK_EXPANSION = 35,
 
       /// An AttributedType record.
-      TYPE_ATTRIBUTED               = 36,
+      TYPE_ATTRIBUTED = 36,
 
       /// A SubstTemplateTypeParmPackType record.
       TYPE_SUBST_TEMPLATE_TYPE_PARM_PACK = 37,
 
       /// A AutoType record.
-      TYPE_AUTO                  = 38,
+      TYPE_AUTO = 38,
 
       /// A UnaryTransformType record.
-      TYPE_UNARY_TRANSFORM       = 39,
+      TYPE_UNARY_TRANSFORM = 39,
 
       /// An AtomicType record.
-      TYPE_ATOMIC                = 40,
+      TYPE_ATOMIC = 40,
 
       /// A DecayedType record.
-      TYPE_DECAYED               = 41,
+      TYPE_DECAYED = 41,
 
       /// An AdjustedType record.
-      TYPE_ADJUSTED              = 42,
+      TYPE_ADJUSTED = 42,
 
       /// A PipeType record.
-      TYPE_PIPE                  = 43,
+      TYPE_PIPE = 43,
 
       /// An ObjCTypeParamType record.
-      TYPE_OBJC_TYPE_PARAM       = 44,
+      TYPE_OBJC_TYPE_PARAM = 44,
 
       /// A DeducedTemplateSpecializationType record.
       TYPE_DEDUCED_TEMPLATE_SPECIALIZATION = 45,
@@ -1167,7 +1167,10 @@ namespace serialization {
       TYPE_DEPENDENT_SIZED_EXT_VECTOR = 46,
 
       /// A DependentAddressSpaceType record.
-      TYPE_DEPENDENT_ADDRESS_SPACE = 47
+      TYPE_DEPENDENT_ADDRESS_SPACE = 47,
+
+      /// A dependentSizedVectorType record.
+      TYPE_DEPENDENT_SIZED_VECTOR = 48
     };
 
     /// The type IDs for special types constructed by semantic
@@ -1200,7 +1203,7 @@ namespace serialization {
       /// C ucontext_t typedef type
       SPECIAL_TYPE_UCONTEXT_T                  = 7
     };
-    
+
     /// The number of special type IDs.
     const unsigned NumSpecialTypeIDs = 8;
 
@@ -1208,7 +1211,7 @@ namespace serialization {
     ///
     /// These declaration IDs correspond to predefined declarations in the AST
     /// context, such as the NULL declaration ID. Such declarations are never
-    /// actually serialized, since they will be built by the AST context when 
+    /// actually serialized, since they will be built by the AST context when
     /// it is created.
     enum PredefinedDeclIDs {
       /// The NULL declaration.
@@ -1276,7 +1279,7 @@ namespace serialization {
     /// Record code for a list of local redeclarations of a declaration.
     /// This can occur within DECLTYPES_BLOCK_ID.
     const unsigned int LOCAL_REDECLARATIONS = 50;
-    
+
     /// Record codes for each kind of declaration.
     ///
     /// These constants describe the declaration records that can occur within
@@ -1536,7 +1539,7 @@ namespace serialization {
     ///
     /// These constants describe the records that describe statements
     /// or expressions. These records  occur within type and declarations
-    /// block, so they begin with record values of 128.  Each constant 
+    /// block, so they begin with record values of 128.  Each constant
     /// describes a record for a specific statement or expression class in the
     /// AST.
     enum StmtCode {
@@ -1738,7 +1741,7 @@ namespace serialization {
       EXPR_OBJC_BOXED_EXPRESSION,
       EXPR_OBJC_ARRAY_LITERAL,
       EXPR_OBJC_DICTIONARY_LITERAL,
-   
+
       /// An ObjCEncodeExpr record.
       EXPR_OBJC_ENCODE,
 
@@ -1797,7 +1800,7 @@ namespace serialization {
       EXPR_OBJC_AVAILABILITY_CHECK,
 
       // C++
-      
+
       /// A CXXCatchStmt record.
       STMT_CXX_CATCH,
 
@@ -1859,9 +1862,9 @@ namespace serialization {
       EXPR_CXX_NEW,               // CXXNewExpr
       EXPR_CXX_DELETE,            // CXXDeleteExpr
       EXPR_CXX_PSEUDO_DESTRUCTOR, // CXXPseudoDestructorExpr
-      
+
       EXPR_EXPR_WITH_CLEANUPS,    // ExprWithCleanups
-      
+
       EXPR_CXX_DEPENDENT_SCOPE_MEMBER,   // CXXDependentScopeMemberExpr
       EXPR_CXX_DEPENDENT_SCOPE_DECL_REF, // DependentScopeDeclRefExpr
       EXPR_CXX_UNRESOLVED_CONSTRUCT,     // CXXUnresolvedConstructExpr
@@ -1875,7 +1878,7 @@ namespace serialization {
       EXPR_BINARY_CONDITIONAL_OPERATOR,  // BinaryConditionalOperator
       EXPR_TYPE_TRAIT,            // TypeTraitExpr
       EXPR_ARRAY_TYPE_TRAIT,      // ArrayTypeTraitIntExpr
-      
+
       EXPR_PACK_EXPANSION,        // PackExpansionExpr
       EXPR_SIZEOF_PACK,           // SizeOfPackExpr
       EXPR_SUBST_NON_TYPE_TEMPLATE_PARM, // SubstNonTypeTemplateParmExpr
@@ -1885,7 +1888,7 @@ namespace serialization {
       EXPR_CXX_FOLD,              // CXXFoldExpr
 
       // CUDA
-      EXPR_CUDA_KERNEL_CALL,       // CUDAKernelCallExpr      
+      EXPR_CUDA_KERNEL_CALL,       // CUDAKernelCallExpr
 
       // OpenCL
       EXPR_ASTYPE,                 // AsTypeExpr
@@ -1995,22 +1998,22 @@ namespace serialization {
 
       // Offset into the array of redeclaration chains.
       unsigned Offset;
-      
+
       friend bool operator<(const LocalRedeclarationsInfo &X,
                             const LocalRedeclarationsInfo &Y) {
         return X.FirstID < Y.FirstID;
       }
-      
+
       friend bool operator>(const LocalRedeclarationsInfo &X,
                             const LocalRedeclarationsInfo &Y) {
         return X.FirstID > Y.FirstID;
       }
-      
+
       friend bool operator<=(const LocalRedeclarationsInfo &X,
                              const LocalRedeclarationsInfo &Y) {
         return X.FirstID <= Y.FirstID;
       }
-      
+
       friend bool operator>=(const LocalRedeclarationsInfo &X,
                              const LocalRedeclarationsInfo &Y) {
         return X.FirstID >= Y.FirstID;
@@ -2024,22 +2027,22 @@ namespace serialization {
 
       // Offset into the array of category lists.
       unsigned Offset;
-      
+
       friend bool operator<(const ObjCCategoriesInfo &X,
                             const ObjCCategoriesInfo &Y) {
         return X.DefinitionID < Y.DefinitionID;
       }
-      
+
       friend bool operator>(const ObjCCategoriesInfo &X,
                             const ObjCCategoriesInfo &Y) {
         return X.DefinitionID > Y.DefinitionID;
       }
-      
+
       friend bool operator<=(const ObjCCategoriesInfo &X,
                              const ObjCCategoriesInfo &Y) {
         return X.DefinitionID <= Y.DefinitionID;
       }
-      
+
       friend bool operator>=(const ObjCCategoriesInfo &X,
                              const ObjCCategoriesInfo &Y) {
         return X.DefinitionID >= Y.DefinitionID;

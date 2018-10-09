@@ -8,9 +8,13 @@
 //===----------------------------------------------------------------------===//
 #include "SourceCode.h"
 
+#include "Logger.h"
+#include "clang/AST/ASTContext.h"
 #include "clang/Basic/SourceManager.h"
+#include "clang/Lex/Lexer.h"
 #include "llvm/Support/Errc.h"
 #include "llvm/Support/Error.h"
+#include "llvm/Support/Path.h"
 
 namespace clang {
 namespace clangd {
@@ -179,6 +183,29 @@ std::vector<TextEdit> replacementsToEdits(StringRef Code,
   for (const auto &R : Repls)
     Edits.push_back(replacementToEdit(Code, R));
   return Edits;
+}
+
+llvm::Optional<std::string>
+getAbsoluteFilePath(const FileEntry *F, const SourceManager &SourceMgr) {
+  SmallString<64> FilePath = F->tryGetRealPathName();
+  if (FilePath.empty())
+    FilePath = F->getName();
+  if (!llvm::sys::path::is_absolute(FilePath)) {
+    if (!SourceMgr.getFileManager().makeAbsolutePath(FilePath)) {
+      log("Could not turn relative path to absolute: {0}", FilePath);
+      return llvm::None;
+    }
+  }
+  return FilePath.str().str();
+}
+
+TextEdit toTextEdit(const FixItHint &FixIt, const SourceManager &M,
+                    const LangOptions &L) {
+  TextEdit Result;
+  Result.range =
+      halfOpenToRange(M, Lexer::makeFileCharRange(FixIt.RemoveRange, M, L));
+  Result.newText = FixIt.CodeToInsert;
+  return Result;
 }
 
 } // namespace clangd

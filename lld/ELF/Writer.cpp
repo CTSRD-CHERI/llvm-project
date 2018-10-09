@@ -316,6 +316,7 @@ template <class ELFT> static void createSyntheticSections() {
   if (Config->Strip != StripPolicy::All) {
     InX::StrTab = make<StringTableSection>(".strtab", false);
     InX::SymTab = make<SymbolTableSection<ELFT>>(*InX::StrTab);
+    InX::SymTabShndx = make<SymtabShndxSection>();
   }
 
   if (Config->BuildId != BuildIdKind::None) {
@@ -387,6 +388,11 @@ template <class ELFT> static void createSyntheticSections() {
     Add(InX::RelaDyn);
   }
 
+  if (Config->RelrPackDynRelocs) {
+    InX::RelrDyn = make<RelrSection<ELFT>>();
+    Add(InX::RelrDyn);
+  }
+
   // Add .got. MIPS' .got is so different from the other archs,
   // it has its own class.
   if (Config->EMachine == EM_MIPS) {
@@ -403,7 +409,7 @@ template <class ELFT> static void createSyntheticSections() {
   Add(InX::IgotPlt);
 
   if (Config->GdbIndex) {
-    InX::GdbIndex = createGdbIndex<ELFT>();
+    InX::GdbIndex = GdbIndexSection::create<ELFT>();
     Add(InX::GdbIndex);
   }
 
@@ -442,6 +448,8 @@ template <class ELFT> static void createSyntheticSections() {
 
   if (InX::SymTab)
     Add(InX::SymTab);
+  if (InX::SymTabShndx)
+    Add(InX::SymTabShndx);
   Add(InX::ShStrTab);
   if (InX::StrTab)
     Add(InX::StrTab);
@@ -555,7 +563,6 @@ static bool shouldKeepInSymtab(SectionBase *Sec, StringRef SymName,
                                const Symbol &B) {
   if (B.isSection())
     return false;
-
 
   if (Config->Discard == DiscardPolicy::None)
     return true;
@@ -1050,11 +1057,9 @@ static int getRankProximity(OutputSection *A, BaseCommand *B) {
 //  rw_sec : { *(rw_sec) }
 // would mean that the RW PT_LOAD would become unaligned.
 static bool shouldSkip(BaseCommand *Cmd) {
-  if (isa<OutputSection>(Cmd))
-    return false;
   if (auto *Assign = dyn_cast<SymbolAssignment>(Cmd))
     return Assign->Name != ".";
-  return true;
+  return false;
 }
 
 // We want to place orphan sections so that they share as much
@@ -1423,8 +1428,7 @@ static bool isDuplicateArmExidxSec(InputSection *Prev, InputSection *Cur) {
   };
 
   // Get the last table Entry from the previous .ARM.exidx section.
-  const ExidxEntry &PrevEntry = *reinterpret_cast<const ExidxEntry *>(
-      Prev->Data.data() + Prev->getSize() - sizeof(ExidxEntry));
+  const ExidxEntry &PrevEntry = Prev->getDataAs<ExidxEntry>().back();
   if (IsExtabRef(PrevEntry.Unwind))
     return false;
 
@@ -1436,14 +1440,7 @@ static bool isDuplicateArmExidxSec(InputSection *Prev, InputSection *Cur) {
   // consecutive identical entries are rare and the effort to check that they
   // are identical is high.
 
-  if (isa<SyntheticSection>(Cur))
-    // Exidx sentinel section has implicit EXIDX_CANTUNWIND;
-    return PrevEntry.Unwind == 0x1;
-
-  ArrayRef<const ExidxEntry> Entries(
-      reinterpret_cast<const ExidxEntry *>(Cur->Data.data()),
-      Cur->getSize() / sizeof(ExidxEntry));
-  for (const ExidxEntry &Entry : Entries)
+  for (const ExidxEntry Entry : Cur->getDataAs<ExidxEntry>())
     if (IsExtabRef(Entry.Unwind) || Entry.Unwind != PrevEntry.Unwind)
       return false;
   // All table entries in this .ARM.exidx Section can be merged into the
@@ -1473,13 +1470,12 @@ template <class ELFT> void Writer<ELFT>::resolveShfLinkOrder() {
     if (!Config->Relocatable && Config->EMachine == EM_ARM &&
         Sec->Type == SHT_ARM_EXIDX) {
 
-      if (!Sections.empty() && isa<ARMExidxSentinelSection>(Sections.back())) {
+      if (auto *Sentinel = dyn_cast<ARMExidxSentinelSection>(Sections.back())) {
         assert(Sections.size() >= 2 &&
                "We should create a sentinel section only if there are "
                "alive regular exidx sections.");
         // The last executable section is required to fill the sentinel.
         // Remember it here so that we don't have to find it again.
-        auto *Sentinel = cast<ARMExidxSentinelSection>(Sections.back());
         Sentinel->Highest = Sections[Sections.size() - 2]->getLinkOrderDep();
       }
 
@@ -1490,16 +1486,13 @@ template <class ELFT> void Writer<ELFT>::resolveShfLinkOrder() {
         // previous one. This does not require any rewriting of InputSection
         // contents but misses opportunities for fine grained deduplication
         // where only a subset of the InputSection contents can be merged.
-        int Cur = 1;
-        int Prev = 0;
+        size_t Prev = 0;
         // The last one is a sentinel entry which should not be removed.
-        int N = Sections.size() - 1;
-        while (Cur < N) {
-          if (isDuplicateArmExidxSec(Sections[Prev], Sections[Cur]))
-            Sections[Cur] = nullptr;
+        for (size_t I = 1; I < Sections.size() - 1; ++I) {
+          if (isDuplicateArmExidxSec(Sections[Prev], Sections[I]))
+            Sections[I] = nullptr;
           else
-            Prev = Cur;
-          ++Cur;
+            Prev = I;
         }
       }
     }
@@ -1740,6 +1733,15 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     if (auto *Sec = dyn_cast<OutputSection>(Base))
       OutputSections.push_back(Sec);
 
+  // Ensure data sections are not mixed with executable sections when
+  // -execute-only is used.
+  if (Config->ExecuteOnly)
+    for (OutputSection *OS : OutputSections)
+      if (OS->Flags & SHF_EXECINSTR)
+        for (InputSection *IS : getInputSections(OS))
+          if (!(IS->Flags & SHF_EXECINSTR))
+            error("-execute-only does not support intermingling data and code");
+
   // Prefer command line supplied address over other constraints.
   for (OutputSection *Sec : OutputSections) {
     auto I = Config->SectionStartMap.find(Sec->Name);
@@ -1774,12 +1776,13 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
   // Dynamic section must be the last one in this list and dynamic
   // symbol table section (DynSymTab) must be the first one.
   applySynthetic(
-      {InX::DynSymTab,   InX::Bss,          InX::BssRelRo, InX::GnuHashTab,
-       InX::HashTab,     InX::SymTab,       InX::ShStrTab, InX::StrTab,
-       In<ELFT>::VerDef, InX::DynStrTab,    InX::Got,      InX::MipsGot,
-       InX::IgotPlt,     InX::GotPlt,       InX::RelaDyn,  InX::RelaIplt,
-       InX::RelaPlt,     InX::Plt,          InX::Iplt,     InX::EhFrameHdr,
-       In<ELFT>::VerSym, In<ELFT>::VerNeed, InX::Dynamic},
+      {InX::DynSymTab, InX::Bss,         InX::BssRelRo,    InX::GnuHashTab,
+       InX::HashTab,   InX::SymTab,      InX::SymTabShndx, InX::ShStrTab,
+       InX::StrTab,    In<ELFT>::VerDef, InX::DynStrTab,   InX::Got,
+       InX::MipsGot,   InX::IgotPlt,     InX::GotPlt,      InX::RelaDyn,
+       InX::RelrDyn,   InX::RelaIplt,    InX::RelaPlt,     InX::Plt,
+       InX::Iplt,      InX::EhFrameHdr,  In<ELFT>::VerSym, In<ELFT>::VerNeed,
+       InX::Dynamic},
       [](SyntheticSection *SS) { SS->finalizeContents(); });
 
   if (!Script->HasSectionsCommand && !Config->Relocatable)
@@ -1794,7 +1797,8 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
   // for jump instructions that is the linker's responsibility for creating
   // range extension thunks for. As the generation of the content may also
   // alter InputSection addresses we must converge to a fixed point.
-  if (Target->NeedsThunks || Config->AndroidPackDynRelocs) {
+  if (Target->NeedsThunks || Config->AndroidPackDynRelocs ||
+      Config->RelrPackDynRelocs) {
     ThunkCreator TC;
     AArch64Err843419Patcher A64P;
     bool Changed;
@@ -1811,6 +1815,8 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
       if (InX::MipsGot)
         InX::MipsGot->updateAllocSize();
       Changed |= InX::RelaDyn->updateAllocSize();
+      if (InX::RelrDyn)
+        Changed |= InX::RelrDyn->updateAllocSize();
     } while (Changed);
   }
 
@@ -1932,6 +1938,8 @@ static bool needsPtLoad(OutputSection *Sec) {
 static uint64_t computeFlags(uint64_t Flags) {
   if (Config->Omagic)
     return PF_R | PF_W | PF_X;
+  if (Config->ExecuteOnly && (Flags & PF_X))
+    return Flags & ~PF_R;
   if (Config->SingleRoRx && !(Flags & PF_W))
     return Flags | PF_X;
   return Flags;
@@ -1970,12 +1978,14 @@ template <class ELFT> std::vector<PhdrEntry *> Writer<ELFT>::createPhdrs() {
     // Segments are contiguous memory regions that has the same attributes
     // (e.g. executable or writable). There is one phdr for each segment.
     // Therefore, we need to create a new phdr when the next section has
-    // different flags or is loaded at a discontiguous address using AT linker
-    // script command. At the same time, we don't want to create a separate
-    // load segment for the headers, even if the first output section has
-    // an AT attribute.
+    // different flags or is loaded at a discontiguous address or memory
+    // region using AT or AT> linker script command, respectively. At the same
+    // time, we don't want to create a separate load segment for the headers,
+    // even if the first output section has an AT or AT> attribute.
     uint64_t NewFlags = computeFlags(Sec->getPhdrFlags());
-    if ((Sec->LMAExpr && Load->LastSec != Out::ProgramHeaders) ||
+    if (((Sec->LMAExpr ||
+          (Sec->LMARegion && (Sec->LMARegion != Load->FirstSec->LMARegion))) &&
+         Load->LastSec != Out::ProgramHeaders) ||
         Sec->MemRegion != Load->FirstSec->MemRegion || Flags != NewFlags) {
 
       Load = AddHdr(PT_LOAD, NewFlags);
@@ -2159,8 +2169,6 @@ template <class ELFT> void Writer<ELFT>::assignFileOffsetsBinary() {
 }
 
 static std::string rangeToString(uint64_t Addr, uint64_t Len) {
-  if (Len == 0)
-    return "<empty range at 0x" + utohexstr(Addr) + ">";
   return "[0x" + utohexstr(Addr) + ", 0x" + utohexstr(Addr + Len - 1) + "]";
 }
 
@@ -2203,7 +2211,7 @@ template <class ELFT> void Writer<ELFT>::assignFileOffsets() {
       continue;
     if ((Sec->Offset > FileSize) || (Sec->Offset + Sec->Size > FileSize))
       error("unable to place section " + Sec->Name + " at file offset " +
-            rangeToString(Sec->Offset, Sec->Offset + Sec->Size) +
+            rangeToString(Sec->Offset, Sec->Size) +
             "; check your linker script for overflows");
   }
 }
@@ -2303,7 +2311,7 @@ template <class ELFT> void Writer<ELFT>::checkSections() {
   // file so we skip any non-allocated sections in that case.
   std::vector<SectionOffset> FileOffs;
   for (OutputSection *Sec : OutputSections)
-    if (0 < Sec->Size && Sec->Type != SHT_NOBITS &&
+    if (Sec->Size > 0 && Sec->Type != SHT_NOBITS &&
         (!Config->OFormatBinary || (Sec->Flags & SHF_ALLOC)))
       FileOffs.push_back({Sec, Sec->Offset});
   checkOverlap("file", FileOffs, false);
@@ -2321,7 +2329,7 @@ template <class ELFT> void Writer<ELFT>::checkSections() {
   // ranges in the file.
   std::vector<SectionOffset> VMAs;
   for (OutputSection *Sec : OutputSections)
-    if (0 < Sec->Size && (Sec->Flags & SHF_ALLOC) && !(Sec->Flags & SHF_TLS))
+    if (Sec->Size > 0 && (Sec->Flags & SHF_ALLOC) && !(Sec->Flags & SHF_TLS))
       VMAs.push_back({Sec, Sec->Addr});
   checkOverlap("virtual address", VMAs, true);
 
@@ -2330,7 +2338,7 @@ template <class ELFT> void Writer<ELFT>::checkSections() {
   // script with AT().
   std::vector<SectionOffset> LMAs;
   for (OutputSection *Sec : OutputSections)
-    if (0 < Sec->Size && (Sec->Flags & SHF_ALLOC) && !(Sec->Flags & SHF_TLS))
+    if (Sec->Size > 0 && (Sec->Flags & SHF_ALLOC) && !(Sec->Flags & SHF_TLS))
       LMAs.push_back({Sec, Sec->getLMA()});
   checkOverlap("load address", LMAs, false);
 }
@@ -2408,8 +2416,6 @@ template <class ELFT> void Writer<ELFT>::writeHeader() {
   EHdr->e_ehsize = sizeof(Elf_Ehdr);
   EHdr->e_phnum = Phdrs.size();
   EHdr->e_shentsize = sizeof(Elf_Shdr);
-  EHdr->e_shnum = OutputSections.size() + 1;
-  EHdr->e_shstrndx = InX::ShStrTab->getParent()->SectionIndex;
 
   if (!Config->Relocatable) {
     EHdr->e_phoff = sizeof(Elf_Ehdr);
@@ -2430,8 +2436,30 @@ template <class ELFT> void Writer<ELFT>::writeHeader() {
     ++HBuf;
   }
 
-  // Write the section header table. Note that the first table entry is null.
+  // Write the section header table.
+  //
+  // The ELF header can only store numbers up to SHN_LORESERVE in the e_shnum
+  // and e_shstrndx fields. When the value of one of these fields exceeds
+  // SHN_LORESERVE ELF requires us to put sentinel values in the ELF header and
+  // use fields in the section header at index 0 to store
+  // the value. The sentinel values and fields are:
+  // e_shnum = 0, SHdrs[0].sh_size = number of sections.
+  // e_shstrndx = SHN_XINDEX, SHdrs[0].sh_link = .shstrtab section index.
   auto *SHdrs = reinterpret_cast<Elf_Shdr *>(Buf + EHdr->e_shoff);
+  size_t Num = OutputSections.size() + 1;
+  if (Num >= SHN_LORESERVE)
+    SHdrs->sh_size = Num;
+  else
+    EHdr->e_shnum = Num;
+
+  uint32_t StrTabIndex = InX::ShStrTab->getParent()->SectionIndex;
+  if (StrTabIndex >= SHN_LORESERVE) {
+    SHdrs->sh_link = StrTabIndex;
+    EHdr->e_shstrndx = SHN_XINDEX;
+  } else {
+    EHdr->e_shstrndx = StrTabIndex;
+  }
+
   for (OutputSection *Sec : OutputSections)
     Sec->writeHeaderTo<ELFT>(++SHdrs);
 }

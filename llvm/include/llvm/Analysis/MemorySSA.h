@@ -578,10 +578,11 @@ public:
     setNumHungOffUseOperands(getNumOperands() - 1);
   }
 
-  // After deleting incoming block BB, the incoming blocks order may be changed.
-  void unorderedDeleteIncomingBlock(const BasicBlock *BB) {
+  // After deleting entries that satisfy Pred, remaining entries may have
+  // changed order.
+  template <typename Fn> void unorderedDeleteIncomingIf(Fn &&Pred) {
     for (unsigned I = 0, E = getNumOperands(); I != E; ++I)
-      if (block_begin()[I] == BB) {
+      if (Pred(getIncomingValue(I), getIncomingBlock(I))) {
         unorderedDeleteIncoming(I);
         E = getNumOperands();
         --I;
@@ -590,17 +591,17 @@ public:
            "Cannot remove all incoming blocks in a MemoryPhi.");
   }
 
+  // After deleting incoming block BB, the incoming blocks order may be changed.
+  void unorderedDeleteIncomingBlock(const BasicBlock *BB) {
+    unorderedDeleteIncomingIf(
+        [&](const MemoryAccess *, const BasicBlock *B) { return BB == B; });
+  }
+
   // After deleting incoming memory access MA, the incoming accesses order may
   // be changed.
   void unorderedDeleteIncomingValue(const MemoryAccess *MA) {
-    for (unsigned I = 0, E = getNumOperands(); I != E; ++I)
-      if (getIncomingValue(I) == MA) {
-        unorderedDeleteIncoming(I);
-        E = getNumOperands();
-        --I;
-      }
-    assert(getNumOperands() >= 1 &&
-           "Cannot remove all incoming values in a MemoryPhi.");
+    unorderedDeleteIncomingIf(
+        [&](const MemoryAccess *M, const BasicBlock *) { return MA == M; });
   }
 
   static bool classof(const Value *V) {
@@ -781,7 +782,7 @@ protected:
   // relies on the updater to fixup what it breaks, so it is not public.
 
   void moveTo(MemoryUseOrDef *What, BasicBlock *BB, AccessList::iterator Where);
-  void moveTo(MemoryUseOrDef *What, BasicBlock *BB, InsertionPlace Point);
+  void moveTo(MemoryAccess *What, BasicBlock *BB, InsertionPlace Point);
 
   // Rename the dominator tree branch rooted at BB.
   void renamePass(BasicBlock *BB, MemoryAccess *IncomingVal,

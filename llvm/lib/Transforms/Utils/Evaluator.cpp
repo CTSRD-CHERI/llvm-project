@@ -24,6 +24,7 @@
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/GlobalAlias.h"
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/InstrTypes.h"
@@ -215,6 +216,73 @@ Constant *Evaluator::ComputeLoadResult(Constant *P) {
   }
 
   return nullptr;  // don't know how to evaluate.
+}
+
+static Function *getFunction(Constant *C) {
+  if (auto *Fn = dyn_cast<Function>(C))
+    return Fn;
+
+  if (auto *Alias = dyn_cast<GlobalAlias>(C))
+    if (auto *Fn = dyn_cast<Function>(Alias->getAliasee()))
+      return Fn;
+  return nullptr;
+}
+
+Function *
+Evaluator::getCalleeWithFormalArgs(CallSite &CS,
+                                   SmallVector<Constant *, 8> &Formals) {
+  auto *V = CS.getCalledValue();
+  if (auto *Fn = getFunction(getVal(V)))
+    return getFormalParams(CS, Fn, Formals) ? Fn : nullptr;
+
+  auto *CE = dyn_cast<ConstantExpr>(V);
+  if (!CE || CE->getOpcode() != Instruction::BitCast ||
+      !getFormalParams(CS, getFunction(CE->getOperand(0)), Formals))
+    return nullptr;
+
+  return dyn_cast<Function>(
+      ConstantFoldLoadThroughBitcast(CE, CE->getOperand(0)->getType(), DL));
+}
+
+bool Evaluator::getFormalParams(CallSite &CS, Function *F,
+                                SmallVector<Constant *, 8> &Formals) {
+  if (!F)
+    return false;
+
+  auto *FTy = F->getFunctionType();
+  if (FTy->getNumParams() > CS.getNumArgOperands()) {
+    LLVM_DEBUG(dbgs() << "Too few arguments for function.\n");
+    return false;
+  }
+
+  auto ArgI = CS.arg_begin();
+  for (auto ParI = FTy->param_begin(), ParE = FTy->param_end(); ParI != ParE;
+       ++ParI) {
+    auto *ArgC = ConstantFoldLoadThroughBitcast(getVal(*ArgI), *ParI, DL);
+    if (!ArgC) {
+      LLVM_DEBUG(dbgs() << "Can not convert function argument.\n");
+      return false;
+    }
+    Formals.push_back(ArgC);
+    ++ArgI;
+  }
+  return true;
+}
+
+/// If call expression contains bitcast then we may need to cast
+/// evaluated return value to a type of the call expression.
+Constant *Evaluator::castCallResultIfNeeded(Value *CallExpr, Constant *RV) {
+  ConstantExpr *CE = dyn_cast<ConstantExpr>(CallExpr);
+  if (!RV || !CE || CE->getOpcode() != Instruction::BitCast)
+    return RV;
+
+  if (auto *FT =
+          dyn_cast<FunctionType>(CE->getType()->getPointerElementType())) {
+    RV = ConstantFoldLoadThroughBitcast(RV, FT->getReturnType(), DL);
+    if (!RV)
+      LLVM_DEBUG(dbgs() << "Failed to fold bitcast call expr\n");
+  }
+  return RV;
 }
 
 /// Evaluate all instructions in block BB, returning true if successful, false
@@ -465,20 +533,19 @@ bool Evaluator::EvaluateBlock(BasicBlock::iterator CurInst,
       }
 
       // Resolve function pointers.
-      Function *Callee = dyn_cast<Function>(getVal(CS.getCalledValue()));
+      SmallVector<Constant *, 8> Formals;
+      Function *Callee = getCalleeWithFormalArgs(CS, Formals);
       if (!Callee || Callee->isInterposable()) {
         LLVM_DEBUG(dbgs() << "Can not resolve function pointer.\n");
         return false;  // Cannot resolve.
       }
 
-      SmallVector<Constant*, 8> Formals;
-      for (User::op_iterator i = CS.arg_begin(), e = CS.arg_end(); i != e; ++i)
-        Formals.push_back(getVal(*i));
-
       if (Callee->isDeclaration()) {
         // If this is a function we can constant fold, do it.
         if (Constant *C = ConstantFoldCall(CS, Callee, Formals, TLI)) {
-          InstResult = C;
+          InstResult = castCallResultIfNeeded(CS.getCalledValue(), C);
+          if (!InstResult)
+            return false;
           LLVM_DEBUG(dbgs() << "Constant folded function call. Result: "
                             << *InstResult << "\n");
         } else {
@@ -499,7 +566,9 @@ bool Evaluator::EvaluateBlock(BasicBlock::iterator CurInst,
           return false;
         }
         ValueStack.pop_back();
-        InstResult = RetVal;
+        InstResult = castCallResultIfNeeded(CS.getCalledValue(), RetVal);
+        if (RetVal && !InstResult)
+          return false;
 
         if (InstResult) {
           LLVM_DEBUG(dbgs() << "Successfully evaluated function. Result: "

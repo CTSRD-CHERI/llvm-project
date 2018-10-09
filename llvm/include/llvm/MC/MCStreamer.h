@@ -297,8 +297,8 @@ public:
   /// If the comment includes embedded \n's, they will each get the comment
   /// prefix as appropriate.  The added comment should not end with a \n.
   /// By default, each comment is terminated with an end of line, i.e. the
-  /// EOL param is set to true by default. If one prefers not to end the 
-  /// comment with a new line then the EOL param should be passed 
+  /// EOL param is set to true by default. If one prefers not to end the
+  /// comment with a new line then the EOL param should be passed
   /// with a false value.
   virtual void AddComment(const Twine &T, bool EOL = true) {}
 
@@ -522,6 +522,11 @@ public:
   /// \param Symbol - Symbol the section relative relocation should point to.
   virtual void EmitCOFFSecRel32(MCSymbol const *Symbol, uint64_t Offset);
 
+  /// Emits a COFF image relative relocation.
+  ///
+  /// \param Symbol - Symbol the image relative relocation should point to.
+  virtual void EmitCOFFImgRel32(MCSymbol const *Symbol, int64_t Offset);
+
   /// Emit an ELF .size directive.
   ///
   /// This corresponds to an assembler statement such as:
@@ -566,7 +571,8 @@ public:
   /// \param ByteAlignment - The alignment of the zerofill symbol if
   /// non-zero. This must be a power of 2 on some targets.
   virtual void EmitZerofill(MCSection *Section, MCSymbol *Symbol = nullptr,
-                            uint64_t Size = 0, unsigned ByteAlignment = 0) = 0;
+                            uint64_t Size = 0, unsigned ByteAlignment = 0,
+                            SMLoc Loc = SMLoc()) = 0;
 
   /// Emit a thread local bss (.tbss) symbol.
   ///
@@ -922,6 +928,9 @@ public:
                                   const MCSubtargetInfo &STI) {
     return true;
   }
+
+  virtual void EmitAddrsig() {}
+  virtual void EmitAddrsigSym(const MCSymbol *Sym) {}
 
   /// Emit the given \p Instruction into the current section.
   /// PrintSchedInfo == true then schedul comment should be added to output

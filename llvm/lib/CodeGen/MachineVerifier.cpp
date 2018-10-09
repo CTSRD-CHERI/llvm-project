@@ -251,16 +251,16 @@ namespace {
     void report_context_liverange(const LiveRange &LR) const;
     void report_context_lanemask(LaneBitmask LaneMask) const;
     void report_context_vreg(unsigned VReg) const;
-    void report_context_vreg_regunit(unsigned VRegOrRegUnit) const;
+    void report_context_vreg_regunit(unsigned VRegOrUnit) const;
 
     void verifyInlineAsm(const MachineInstr *MI);
 
     void checkLiveness(const MachineOperand *MO, unsigned MONum);
     void checkLivenessAtUse(const MachineOperand *MO, unsigned MONum,
-                            SlotIndex UseIdx, const LiveRange &LR, unsigned Reg,
+                            SlotIndex UseIdx, const LiveRange &LR, unsigned VRegOrUnit,
                             LaneBitmask LaneMask = LaneBitmask::getNone());
     void checkLivenessAtDef(const MachineOperand *MO, unsigned MONum,
-                            SlotIndex DefIdx, const LiveRange &LR, unsigned Reg,
+                            SlotIndex DefIdx, const LiveRange &LR, unsigned VRegOrUnit,
                             LaneBitmask LaneMask = LaneBitmask::getNone());
 
     void markReachable(const MachineBasicBlock *MBB);
@@ -1077,8 +1077,8 @@ void MachineVerifier::visitMachineInstrBefore(const MachineInstr *MI) {
 
     auto VerifyStackMapConstant = [&](unsigned Offset) {
       if (!MI->getOperand(Offset).isImm() ||
-          MI->getOperand(Offset).getImm() != StackMaps::ConstantOp || 
-          !MI->getOperand(Offset + 1).isImm()) 
+          MI->getOperand(Offset).getImm() != StackMaps::ConstantOp ||
+          !MI->getOperand(Offset + 1).isImm())
         report("stack map constant to STATEPOINT not well formed!", MI);
     };
     const unsigned VarStart = StatepointOpers(MI).getVarIdx();

@@ -167,7 +167,7 @@ public:
 ///  SubRegion::getExtent instead -- the value returned may not be a symbol.
 class SymbolExtent : public SymbolData {
   const SubRegion *R;
-  
+
 public:
   SymbolExtent(SymbolID sym, const SubRegion *r)
       : SymbolData(SymbolExtentKind, sym), R(r) {
@@ -270,6 +270,12 @@ public:
     // Otherwise, 'To' should also be a valid type.
   }
 
+  unsigned computeComplexity() const override {
+    if (Complexity == 0)
+      Complexity = 1 + Operand->computeComplexity();
+    return Complexity;
+  }
+
   QualType getType() const override { return ToTy; }
 
   const SymExpr *getOperand() const { return Operand; }
@@ -294,7 +300,7 @@ public:
   }
 };
 
-/// Represents a symbolic expression involving a binary operator 
+/// Represents a symbolic expression involving a binary operator
 class BinarySymExpr : public SymExpr {
   BinaryOperator::Opcode Op;
   QualType T;
@@ -337,6 +343,12 @@ public:
   const SymExpr *getLHS() const { return LHS; }
   const llvm::APSInt &getRHS() const { return RHS; }
 
+  unsigned computeComplexity() const override {
+    if (Complexity == 0)
+      Complexity = 1 + LHS->computeComplexity();
+    return Complexity;
+  }
+
   static void Profile(llvm::FoldingSetNodeID& ID, const SymExpr *lhs,
                       BinaryOperator::Opcode op, const llvm::APSInt& rhs,
                       QualType t) {
@@ -373,6 +385,12 @@ public:
 
   const SymExpr *getRHS() const { return RHS; }
   const llvm::APSInt &getLHS() const { return LHS; }
+
+  unsigned computeComplexity() const override {
+    if (Complexity == 0)
+      Complexity = 1 + RHS->computeComplexity();
+    return Complexity;
+  }
 
   static void Profile(llvm::FoldingSetNodeID& ID, const llvm::APSInt& lhs,
                       BinaryOperator::Opcode op, const SymExpr *rhs,
@@ -411,6 +429,12 @@ public:
   const SymExpr *getRHS() const { return RHS; }
 
   void dumpToStream(raw_ostream &os) const override;
+
+  unsigned computeComplexity() const override {
+    if (Complexity == 0)
+      Complexity = RHS->computeComplexity() + LHS->computeComplexity();
+    return Complexity;
+  }
 
   static void Profile(llvm::FoldingSetNodeID& ID, const SymExpr *lhs,
                     BinaryOperator::Opcode op, const SymExpr *rhs, QualType t) {
@@ -534,7 +558,7 @@ class SymbolReaper {
   SymbolSetTy TheDead;
 
   RegionSetTy RegionRoots;
-  
+
   const StackFrameContext *LCtx;
   const Stmt *Loc;
   SymbolManager& SymMgr;
@@ -590,7 +614,7 @@ public:
   bool hasDeadSymbols() const {
     return !TheDead.empty();
   }
-  
+
   using region_iterator = RegionSetTy::const_iterator;
 
   region_iterator region_begin() const { return RegionRoots.begin(); }
@@ -603,10 +627,10 @@ public:
   bool isDead(SymbolRef sym) const {
     return TheDead.count(sym);
   }
-  
+
   void markLive(const MemRegion *region);
   void markElementIndicesLive(const MemRegion *region);
-  
+
   /// Set to the value of the symbolic store after
   /// StoreManager::removeDeadBindings has been called.
   void setReapedStore(StoreRef st) { reapedStore = st; }

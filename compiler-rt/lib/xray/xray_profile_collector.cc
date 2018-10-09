@@ -13,11 +13,12 @@
 //
 //===----------------------------------------------------------------------===//
 #include "xray_profile_collector.h"
+#include "sanitizer_common/sanitizer_allocator_internal.h"
 #include "sanitizer_common/sanitizer_common.h"
 #include "sanitizer_common/sanitizer_vector.h"
 #include "xray_profiling_flags.h"
-#include <pthread.h>
 #include <memory>
+#include <pthread.h>
 #include <utility>
 
 namespace __xray {
@@ -30,13 +31,24 @@ struct ThreadTrie {
   tid_t TId;
   FunctionCallTrie *Trie;
 };
-Vector<ThreadTrie> ThreadTries;
 
 struct ProfileBuffer {
   void *Data;
   size_t Size;
 };
-Vector<ProfileBuffer> ProfileBuffers;
+
+// Current version of the profile format.
+constexpr u64 XRayProfilingVersion = 0x20180424;
+
+// Identifier for XRay profiling files 'xrayprof' in hex.
+constexpr u64 XRayMagicBytes = 0x7872617970726f66;
+
+struct XRayProfilingFileHeader {
+  const u64 MagicBytes = XRayMagicBytes;
+  const u64 Version = XRayProfilingVersion;
+  u64 Timestamp = 0; // System time in nanoseconds.
+  u64 PID = 0;       // Process ID.
+};
 
 struct BlockHeader {
   u32 BlockSize;
@@ -44,6 +56,10 @@ struct BlockHeader {
   u64 ThreadId;
 };
 
+// These need to be pointers that point to heap/internal-allocator-allocated
+// objects because these are accessed even at program exit.
+Vector<ThreadTrie> *ThreadTries = nullptr;
+Vector<ProfileBuffer> *ProfileBuffers = nullptr;
 FunctionCallTrie::Allocators *GlobalAllocators = nullptr;
 
 } // namespace
@@ -55,9 +71,18 @@ void post(const FunctionCallTrie &T, tid_t TId) {
     GlobalAllocators = reinterpret_cast<FunctionCallTrie::Allocators *>(
         InternalAlloc(sizeof(FunctionCallTrie::Allocators)));
     new (GlobalAllocators) FunctionCallTrie::Allocators();
-    *GlobalAllocators = FunctionCallTrie::InitAllocators();
+    *GlobalAllocators = FunctionCallTrie::InitAllocatorsCustom(
+        profilingFlags()->global_allocator_max);
+    ThreadTries = reinterpret_cast<Vector<ThreadTrie> *>(
+        InternalAlloc(sizeof(Vector<ThreadTrie>)));
+    new (ThreadTries) Vector<ThreadTrie>();
+    ProfileBuffers = reinterpret_cast<Vector<ProfileBuffer> *>(
+        InternalAlloc(sizeof(Vector<ProfileBuffer>)));
+    new (ProfileBuffers) Vector<ProfileBuffer>();
   });
   DCHECK_NE(GlobalAllocators, nullptr);
+  DCHECK_NE(ThreadTries, nullptr);
+  DCHECK_NE(ProfileBuffers, nullptr);
 
   ThreadTrie *Item = nullptr;
   {
@@ -65,7 +90,7 @@ void post(const FunctionCallTrie &T, tid_t TId) {
     if (GlobalAllocators == nullptr)
       return;
 
-    Item = ThreadTries.PushBack();
+    Item = ThreadTries->PushBack();
     Item->TId = TId;
 
     // Here we're using the internal allocator instead of the managed allocator
@@ -83,12 +108,11 @@ void post(const FunctionCallTrie &T, tid_t TId) {
     //    and is decoupled from the lifetime management required by the managed
     //    allocator we have in XRay.
     //
-    Item->Trie = reinterpret_cast<FunctionCallTrie *>(
-        InternalAlloc(sizeof(FunctionCallTrie)));
+    Item->Trie = reinterpret_cast<FunctionCallTrie *>(InternalAlloc(
+        sizeof(FunctionCallTrie), nullptr, alignof(FunctionCallTrie)));
     DCHECK_NE(Item->Trie, nullptr);
     new (Item->Trie) FunctionCallTrie(*GlobalAllocators);
   }
-  DCHECK_NE(Item, nullptr);
 
   T.deepCopyInto(*Item->Trie);
 }
@@ -128,7 +152,7 @@ static void populateRecords(ProfileRecordArray &PRs,
                             const FunctionCallTrie &Trie) {
   using StackArray = Array<const FunctionCallTrie::Node *>;
   using StackAllocator = typename StackArray::AllocatorType;
-  StackAllocator StackAlloc(profilingFlags()->stack_allocator_max, 0);
+  StackAllocator StackAlloc(profilingFlags()->stack_allocator_max);
   StackArray DFSStack(StackAlloc);
   for (const auto R : Trie.getRoots()) {
     DFSStack.Append(R);
@@ -136,6 +160,8 @@ static void populateRecords(ProfileRecordArray &PRs,
       auto Node = DFSStack.back();
       DFSStack.trim(1);
       auto Record = PRs.AppendEmplace(PA, Node);
+      if (Record == nullptr)
+        return;
       DCHECK_NE(Record, nullptr);
 
       // Traverse the Node's parents and as we're doing so, get the FIds in
@@ -188,26 +214,26 @@ void serialize() {
   SpinMutexLock Lock(&GlobalMutex);
 
   // Clear out the global ProfileBuffers.
-  for (uptr I = 0; I < ProfileBuffers.Size(); ++I)
-    InternalFree(ProfileBuffers[I].Data);
-  ProfileBuffers.Reset();
+  for (uptr I = 0; I < ProfileBuffers->Size(); ++I)
+    InternalFree((*ProfileBuffers)[I].Data);
+  ProfileBuffers->Reset();
 
-  if (ThreadTries.Size() == 0)
+  if (ThreadTries->Size() == 0)
     return;
 
   // Then repopulate the global ProfileBuffers.
-  for (u32 I = 0; I < ThreadTries.Size(); ++I) {
+  for (u32 I = 0; I < ThreadTries->Size(); ++I) {
     using ProfileRecordAllocator = typename ProfileRecordArray::AllocatorType;
-    ProfileRecordAllocator PRAlloc(profilingFlags()->global_allocator_max, 0);
+    ProfileRecordAllocator PRAlloc(profilingFlags()->global_allocator_max);
     ProfileRecord::PathAllocator PathAlloc(
-        profilingFlags()->global_allocator_max, 0);
+        profilingFlags()->global_allocator_max);
     ProfileRecordArray ProfileRecords(PRAlloc);
 
     // First, we want to compute the amount of space we're going to need. We'll
     // use a local allocator and an __xray::Array<...> to store the intermediary
     // data, then compute the size as we're going along. Then we'll allocate the
     // contiguous space to contain the thread buffer data.
-    const auto &Trie = *ThreadTries[I].Trie;
+    const auto &Trie = *(*ThreadTries)[I].Trie;
     if (Trie.getRoots().empty())
       continue;
     populateRecords(ProfileRecords, PathAlloc, Trie);
@@ -227,8 +253,8 @@ void serialize() {
     for (const auto &Record : ProfileRecords)
       CumulativeSizes += 20 + (4 * Record.Path->size());
 
-    BlockHeader Header{16 + CumulativeSizes, I, ThreadTries[I].TId};
-    auto Buffer = ProfileBuffers.PushBack();
+    BlockHeader Header{16 + CumulativeSizes, I, (*ThreadTries)[I].TId};
+    auto Buffer = ProfileBuffers->PushBack();
     Buffer->Size = sizeof(Header) + CumulativeSizes;
     Buffer->Data = InternalAlloc(Buffer->Size, nullptr, 64);
     DCHECK_NE(Buffer->Data, nullptr);
@@ -244,18 +270,26 @@ void serialize() {
 
 void reset() {
   SpinMutexLock Lock(&GlobalMutex);
-  // Clear out the profile buffers that have been serialized.
-  for (uptr I = 0; I < ProfileBuffers.Size(); ++I)
-    InternalFree(ProfileBuffers[I].Data);
-  ProfileBuffers.Reset();
-
-  // Clear out the function call tries per thread.
-  for (uptr I = 0; I < ThreadTries.Size(); ++I) {
-    auto &T = ThreadTries[I];
-    T.Trie->~FunctionCallTrie();
-    InternalFree(T.Trie);
+  if (ProfileBuffers != nullptr) {
+    // Clear out the profile buffers that have been serialized.
+    for (uptr I = 0; I < ProfileBuffers->Size(); ++I)
+      InternalFree((*ProfileBuffers)[I].Data);
+    ProfileBuffers->Reset();
+    InternalFree(ProfileBuffers);
+    ProfileBuffers = nullptr;
   }
-  ThreadTries.Reset();
+
+  if (ThreadTries != nullptr) {
+    // Clear out the function call tries per thread.
+    for (uptr I = 0; I < ThreadTries->Size(); ++I) {
+      auto &T = (*ThreadTries)[I];
+      T.Trie->~FunctionCallTrie();
+      InternalFree(T.Trie);
+    }
+    ThreadTries->Reset();
+    InternalFree(ThreadTries);
+    ThreadTries = nullptr;
+  }
 
   // Reset the global allocators.
   if (GlobalAllocators != nullptr) {
@@ -267,18 +301,44 @@ void reset() {
       InternalAlloc(sizeof(FunctionCallTrie::Allocators)));
   new (GlobalAllocators) FunctionCallTrie::Allocators();
   *GlobalAllocators = FunctionCallTrie::InitAllocators();
+  ThreadTries = reinterpret_cast<Vector<ThreadTrie> *>(
+      InternalAlloc(sizeof(Vector<ThreadTrie>)));
+  new (ThreadTries) Vector<ThreadTrie>();
+  ProfileBuffers = reinterpret_cast<Vector<ProfileBuffer> *>(
+      InternalAlloc(sizeof(Vector<ProfileBuffer>)));
+  new (ProfileBuffers) Vector<ProfileBuffer>();
 }
 
 XRayBuffer nextBuffer(XRayBuffer B) {
   SpinMutexLock Lock(&GlobalMutex);
-  if (B.Data == nullptr && ProfileBuffers.Size())
-    return {ProfileBuffers[0].Data, ProfileBuffers[0].Size};
+
+  if (ProfileBuffers == nullptr || ProfileBuffers->Size() == 0)
+    return {nullptr, 0};
+
+  static pthread_once_t Once = PTHREAD_ONCE_INIT;
+  static typename std::aligned_storage<sizeof(XRayProfilingFileHeader)>::type
+      FileHeaderStorage;
+  pthread_once(&Once,
+               +[] { new (&FileHeaderStorage) XRayProfilingFileHeader{}; });
+
+  if (UNLIKELY(B.Data == nullptr)) {
+    // The first buffer should always contain the file header information.
+    auto &FileHeader =
+        *reinterpret_cast<XRayProfilingFileHeader *>(&FileHeaderStorage);
+    FileHeader.Timestamp = NanoTime();
+    FileHeader.PID = internal_getpid();
+    return {&FileHeaderStorage, sizeof(XRayProfilingFileHeader)};
+  }
+
+  if (UNLIKELY(B.Data == &FileHeaderStorage))
+    return {(*ProfileBuffers)[0].Data, (*ProfileBuffers)[0].Size};
 
   BlockHeader Header;
   internal_memcpy(&Header, B.Data, sizeof(BlockHeader));
   auto NextBlock = Header.BlockNum + 1;
-  if (NextBlock < ProfileBuffers.Size())
-    return {ProfileBuffers[NextBlock].Data, ProfileBuffers[NextBlock].Size};
+  if (NextBlock < ProfileBuffers->Size())
+    return {(*ProfileBuffers)[NextBlock].Data,
+            (*ProfileBuffers)[NextBlock].Size};
   return {nullptr, 0};
 }
 

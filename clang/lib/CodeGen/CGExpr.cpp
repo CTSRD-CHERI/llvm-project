@@ -498,18 +498,51 @@ EmitMaterializeTemporaryExpr(const MaterializeTemporaryExpr *M) {
   } else {
     switch (M->getStorageDuration()) {
     case SD_Automatic:
-    case SD_FullExpression:
       if (auto *Size = EmitLifetimeStart(
               CGM.getDataLayout().getTypeAllocSize(Alloca.getElementType()),
               Alloca.getPointer())) {
-        if (M->getStorageDuration() == SD_Automatic)
-          pushCleanupAfterFullExpr<CallLifetimeEnd>(NormalEHLifetimeMarker,
-                                                    Alloca, Size);
-        else
-          pushFullExprCleanup<CallLifetimeEnd>(NormalEHLifetimeMarker, Alloca,
-                                               Size);
+        pushCleanupAfterFullExpr<CallLifetimeEnd>(NormalEHLifetimeMarker,
+                                                  Alloca, Size);
       }
       break;
+
+    case SD_FullExpression: {
+      if (!ShouldEmitLifetimeMarkers)
+        break;
+
+      // Avoid creating a conditional cleanup just to hold an llvm.lifetime.end
+      // marker. Instead, start the lifetime of a conditional temporary earlier
+      // so that it's unconditional. Don't do this in ASan's use-after-scope
+      // mode so that it gets the more precise lifetime marks. If the type has
+      // a non-trivial destructor, we'll have a cleanup block for it anyway,
+      // so this typically doesn't help; skip it in that case.
+      ConditionalEvaluation *OldConditional = nullptr;
+      CGBuilderTy::InsertPoint OldIP;
+      if (isInConditionalBranch() && !E->getType().isDestructedType() &&
+          !CGM.getCodeGenOpts().SanitizeAddressUseAfterScope) {
+        OldConditional = OutermostConditional;
+        OutermostConditional = nullptr;
+
+        OldIP = Builder.saveIP();
+        llvm::BasicBlock *Block = OldConditional->getStartingBlock();
+        Builder.restoreIP(CGBuilderTy::InsertPoint(
+            Block, llvm::BasicBlock::iterator(Block->back())));
+      }
+
+      if (auto *Size = EmitLifetimeStart(
+              CGM.getDataLayout().getTypeAllocSize(Alloca.getElementType()),
+              Alloca.getPointer())) {
+        pushFullExprCleanup<CallLifetimeEnd>(NormalEHLifetimeMarker, Alloca,
+                                             Size);
+      }
+
+      if (OldConditional) {
+        OutermostConditional = OldConditional;
+        Builder.restoreIP(OldIP);
+      }
+      break;
+    }
+
     default:
       break;
     }
@@ -1820,14 +1853,14 @@ Address CodeGenFunction::EmitExtVectorElementLValue(LValue LV) {
   const VectorType *ExprVT = LV.getType()->getAs<VectorType>();
   QualType EQT = ExprVT->getElementType();
   llvm::Type *VectorElementTy = CGM.getTypes().ConvertType(EQT);
-  
+
   Address CastToPointerElement =
     Builder.CreateElementBitCast(VectorAddress, VectorElementTy,
                                  "conv.ptr.element");
-  
+
   const llvm::Constant *Elts = LV.getExtVectorElts();
   unsigned ix = getAccessedFieldNo(0, Elts);
-  
+
   Address VectorBasePtrPlusIx =
     Builder.CreateConstInBoundsGEP(CastToPointerElement, ix,
                                    getContext().getTypeSizeInChars(EQT),
@@ -3282,7 +3315,7 @@ static Address emitArraySubscriptGEP(CodeGenFunction &CGF, Address addr,
   for (auto idx : indices.drop_back())
     assert(isa<llvm::ConstantInt>(idx) &&
            cast<llvm::ConstantInt>(idx)->isZero());
-#endif  
+#endif
 
   // Determine the element size of the statically-sized base.  This is
   // the thing that the indices are expressed in terms of.
@@ -3764,7 +3797,7 @@ LValue CodeGenFunction::EmitLValueForLambdaField(const FieldDecl *Field) {
 static Address emitAddrOfFieldStorage(CodeGenFunction &CGF, Address base,
                                       const FieldDecl *field) {
   const RecordDecl *rec = field->getParent();
-  
+
   unsigned idx =
     CGF.CGM.getTypes().getCGRecordLayout(rec).getLLVMFieldNo(field);
 
@@ -3870,6 +3903,18 @@ LValue CodeGenFunction::EmitLValueForField(LValue base,
   }
 
   Address addr = base.getAddress();
+  if (auto *ClassDef = dyn_cast<CXXRecordDecl>(rec)) {
+    if (CGM.getCodeGenOpts().StrictVTablePointers &&
+        ClassDef->isDynamicClass()) {
+      // Getting to any field of dynamic object requires stripping dynamic
+      // information provided by invariant.group.  This is because accessing
+      // fields may leak the real address of dynamic object, which could result
+      // in miscompilation when leaked pointer would be compared.
+      auto *stripped = Builder.CreateStripInvariantGroup(addr.getPointer());
+      addr = Address(stripped, addr.getAlignment());
+    }
+  }
+
   unsigned RecordCVR = base.getVRQualifiers();
   if (rec->isUnion()) {
     // For unions, there is no pointer adjustment.

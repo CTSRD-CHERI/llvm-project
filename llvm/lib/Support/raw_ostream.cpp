@@ -160,7 +160,7 @@ raw_ostream &raw_ostream::write_escaped(StringRef Str,
       *this << '\\' << '"';
       break;
     default:
-      if (std::isprint(c)) {
+      if (isPrint(c)) {
         *this << c;
         break;
       }
@@ -436,7 +436,7 @@ raw_ostream &raw_ostream::operator<<(const FormattedBytes &FB) {
 
       // Print the ASCII char values for each byte on this line
       for (uint8_t Byte : Line) {
-        if (isprint(Byte))
+        if (isPrint(Byte))
           *this << static_cast<char>(Byte);
         else
           *this << '.';
@@ -613,10 +613,10 @@ void raw_fd_ostream::write_impl(const char *Ptr, size_t Size) {
   assert(FD >= 0 && "File already closed.");
   pos += Size;
 
-  // The maximum write size is limited to SSIZE_MAX because a write
-  // greater than SSIZE_MAX is implementation-defined in POSIX.
-  // Since SSIZE_MAX is not portable, we use SIZE_MAX >> 1 instead.
-  size_t MaxWriteSize = SIZE_MAX >> 1;
+  // The maximum write size is limited to INT32_MAX. A write
+  // greater than SSIZE_MAX is implementation-defined in POSIX,
+  // and Windows _write requires 32 bit input.
+  size_t MaxWriteSize = INT32_MAX;
 
 #if defined(__linux__)
   // It is observed that Linux returns EINVAL for a very large write (>2G).

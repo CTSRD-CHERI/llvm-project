@@ -34,7 +34,6 @@
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/State.h"
 #include "lldb/Core/StreamFile.h"
 #include "lldb/Core/Value.h"
 #include "lldb/DataFormatters/FormatManager.h"
@@ -68,6 +67,7 @@
 #include "lldb/Utility/Args.h"
 #include "lldb/Utility/CleanUp.h"
 #include "lldb/Utility/FileSpec.h"
+#include "lldb/Utility/State.h"
 #include "lldb/Utility/StreamString.h"
 #include "lldb/Utility/Timer.h"
 
@@ -1523,7 +1523,6 @@ void ProcessGDBRemote::ClearThreadIDList() {
 size_t
 ProcessGDBRemote::UpdateThreadIDsFromStopReplyThreadsValue(std::string &value) {
   m_thread_ids.clear();
-  m_thread_pcs.clear();
   size_t comma_pos;
   lldb::tid_t tid;
   while ((comma_pos = value.find(',')) != std::string::npos) {
@@ -3485,7 +3484,7 @@ Status ProcessGDBRemote::LaunchAndConnectToDebugserver(
     if (m_gdb_comm.IsConnected()) {
       // Finish the connection process by doing the handshake without
       // connecting (send NULL URL)
-      ConnectToDebugserver("");
+      error = ConnectToDebugserver("");
     } else {
       error.SetErrorString("connection failed");
     }
@@ -5244,8 +5243,9 @@ public:
 
   ~CommandObjectProcessGDBRemotePacketMonitor() {}
 
-  bool DoExecute(const char *command, CommandReturnObject &result) override {
-    if (command == NULL || command[0] == '\0') {
+  bool DoExecute(llvm::StringRef command,
+                 CommandReturnObject &result) override {
+    if (command.empty()) {
       result.AppendErrorWithFormat("'%s' takes a command string argument",
                                    m_cmd_name.c_str());
       result.SetStatus(eReturnStatusFailed);
@@ -5257,7 +5257,7 @@ public:
     if (process) {
       StreamString packet;
       packet.PutCString("qRcmd,");
-      packet.PutBytesAsRawHex8(command, strlen(command));
+      packet.PutBytesAsRawHex8(command.data(), command.size());
 
       bool send_async = true;
       StringExtractorGDBRemote response;

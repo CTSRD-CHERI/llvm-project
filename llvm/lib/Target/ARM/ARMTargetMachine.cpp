@@ -90,6 +90,7 @@ extern "C" void LLVMInitializeARMTarget() {
   initializeARMLoadStoreOptPass(Registry);
   initializeARMPreAllocLoadStoreOptPass(Registry);
   initializeARMParallelDSPPass(Registry);
+  initializeARMCodeGenPreparePass(Registry);
   initializeARMConstantIslandsPass(Registry);
   initializeARMExecutionDomainFixPass(Registry);
   initializeARMExpandPseudoPass(Registry);
@@ -215,11 +216,7 @@ ARMBaseTargetMachine::ARMBaseTargetMachine(const Target &T, const Triple &TT,
 
   // Default to triple-appropriate float ABI
   if (Options.FloatABIType == FloatABI::Default) {
-    if (TargetTriple.getEnvironment() == Triple::GNUEABIHF ||
-        TargetTriple.getEnvironment() == Triple::MuslEABIHF ||
-        TargetTriple.getEnvironment() == Triple::EABIHF ||
-        TargetTriple.isOSWindows() ||
-        TargetABI == ARMBaseTargetMachine::ARM_ABI_AAPCS16)
+    if (isTargetHardFloat())
       this->Options.FloatABIType = FloatABI::Hard;
     else
       this->Options.FloatABIType = FloatABI::Soft;
@@ -350,6 +347,7 @@ public:
   }
 
   void addIRPasses() override;
+  void addCodeGenPrepare() override;
   bool addPreISel() override;
   bool addInstSelector() override;
   bool addIRTranslator() override;
@@ -404,6 +402,12 @@ void ARMPassConfig::addIRPasses() {
   // Match interleaved memory accesses to ldN/stN intrinsics.
   if (TM->getOptLevel() != CodeGenOpt::None)
     addPass(createInterleavedAccessPass());
+}
+
+void ARMPassConfig::addCodeGenPrepare() {
+  if (getOptLevel() != CodeGenOpt::None)
+    addPass(createARMCodeGenPreparePass());
+  TargetPassConfig::addCodeGenPrepare();
 }
 
 bool ARMPassConfig::addPreISel() {

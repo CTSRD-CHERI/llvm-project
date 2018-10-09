@@ -515,7 +515,8 @@ def : InstRW<[P9_DP_7C, IP_EXEC_1C, DISP_1C, DISP_1C],
     XSRSQRTESP,
     XSSUBDP,
     XSSUBSP,
-    XSCVDPSPN
+    XSCVDPSPN,
+    XSRSP
 )>;
 
 // Three Cycle PM operation. Only one PM unit per superslice so we use the whole
@@ -591,6 +592,7 @@ def : InstRW<[P9_PM_3C, IP_EXECO_1C, IP_EXECE_1C, DISP_1C, DISP_1C, DISP_1C],
     XXPERM,
     XXPERMR,
     XXSLDWI,
+    XXSLDWIs,
     XXSPLTIB,
     XXSPLTW,
     XXSPLTWs,

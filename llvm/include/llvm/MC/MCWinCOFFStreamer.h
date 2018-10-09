@@ -54,12 +54,13 @@ public:
   void EmitCOFFSymbolIndex(MCSymbol const *Symbol) override;
   void EmitCOFFSectionIndex(MCSymbol const *Symbol) override;
   void EmitCOFFSecRel32(MCSymbol const *Symbol, uint64_t Offset) override;
+  void EmitCOFFImgRel32(MCSymbol const *Symbol, int64_t Offset) override;
   void EmitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
                         unsigned ByteAlignment) override;
   void EmitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
                              unsigned ByteAlignment) override;
   void EmitZerofill(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
-                    unsigned ByteAlignment) override;
+                    unsigned ByteAlignment, SMLoc Loc = SMLoc()) override;
   void EmitTBSSSymbol(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
                       unsigned ByteAlignment) override;
   void EmitIdent(StringRef IdentString) override;

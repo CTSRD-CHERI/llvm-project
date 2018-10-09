@@ -31,7 +31,7 @@ struct FuzzingOptions {
   bool UseCounters = false;
   bool UseMemmem = true;
   bool UseCmp = false;
-  bool UseValueProfile = false;
+  int UseValueProfile = false;
   bool Shrink = false;
   bool ReduceInputs = false;
   int ReloadIntervalSec = 1;
@@ -52,8 +52,12 @@ struct FuzzingOptions {
   bool PrintNewCovPcs = false;
   int PrintNewCovFuncs = 0;
   bool PrintFinalStats = false;
+  bool PrintMutationStats = false;
+  bool UseWeightedMutations = false;
   bool PrintCorpusStats = false;
   bool PrintCoverage = false;
+  bool PrintUnstableStats = false;
+  int HandleUnstable = 0;
   bool DumpCoverage = false;
   bool DetectLeaks = true;
   int PurgeAllocatorIntervalSec = 1;

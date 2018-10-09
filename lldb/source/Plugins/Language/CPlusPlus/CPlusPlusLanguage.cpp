@@ -423,18 +423,20 @@ static void LoadLibCxxFormatters(lldb::TypeCategoryImplSP cpp_category_sp) {
   SyntheticChildren::Flags stl_synth_flags;
   stl_synth_flags.SetCascades(true).SetSkipPointers(false).SetSkipReferences(
       false);
+  SyntheticChildren::Flags stl_deref_flags = stl_synth_flags;
+  stl_deref_flags.SetFrontEndWantsDereference();
 
   AddCXXSynthetic(
       cpp_category_sp,
       lldb_private::formatters::LibcxxBitsetSyntheticFrontEndCreator,
       "libc++ std::bitset synthetic children",
-      ConstString("^std::__(ndk)?1::bitset<.+>(( )?&)?$"), stl_synth_flags,
+      ConstString("^std::__(ndk)?1::bitset<.+>(( )?&)?$"), stl_deref_flags,
       true);
   AddCXXSynthetic(
       cpp_category_sp,
       lldb_private::formatters::LibcxxStdVectorSyntheticFrontEndCreator,
       "libc++ std::vector synthetic children",
-      ConstString("^std::__(ndk)?1::vector<.+>(( )?&)?$"), stl_synth_flags,
+      ConstString("^std::__(ndk)?1::vector<.+>(( )?&)?$"), stl_deref_flags,
       true);
   AddCXXSynthetic(
       cpp_category_sp,
@@ -457,13 +459,13 @@ static void LoadLibCxxFormatters(lldb::TypeCategoryImplSP cpp_category_sp) {
       cpp_category_sp,
       lldb_private::formatters::LibcxxStdMapSyntheticFrontEndCreator,
       "libc++ std::set synthetic children",
-      ConstString("^std::__(ndk)?1::set<.+> >(( )?&)?$"), stl_synth_flags,
+      ConstString("^std::__(ndk)?1::set<.+> >(( )?&)?$"), stl_deref_flags,
       true);
   AddCXXSynthetic(
       cpp_category_sp,
       lldb_private::formatters::LibcxxStdMapSyntheticFrontEndCreator,
       "libc++ std::multiset synthetic children",
-      ConstString("^std::__(ndk)?1::multiset<.+> >(( )?&)?$"), stl_synth_flags,
+      ConstString("^std::__(ndk)?1::multiset<.+> >(( )?&)?$"), stl_deref_flags,
       true);
   AddCXXSynthetic(
       cpp_category_sp,
@@ -999,4 +1001,17 @@ CPlusPlusLanguage::GetHardcodedSynthetics() {
   });
 
   return g_formatters;
+}
+
+bool CPlusPlusLanguage::IsSourceFile(llvm::StringRef file_path) const {
+  const auto suffixes = {".cpp", ".cxx", ".c++", ".cc",  ".c",
+                         ".h",   ".hh",  ".hpp", ".hxx", ".h++"};
+  for (auto suffix : suffixes) {
+    if (file_path.endswith_lower(suffix))
+      return true;
+  }
+
+  // Check if we're in a STL path (where the files usually have no extension
+  // that we could check for.
+  return file_path.contains("/usr/include/c++/");
 }

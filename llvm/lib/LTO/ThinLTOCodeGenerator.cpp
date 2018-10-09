@@ -55,6 +55,12 @@
 
 #include <numeric>
 
+#if !defined(_MSC_VER) && !defined(__MINGW32__)
+#include <unistd.h>
+#else
+#include <io.h>
+#endif
+
 using namespace llvm;
 
 #define DEBUG_TYPE "thinlto"
@@ -391,7 +397,18 @@ public:
   ErrorOr<std::unique_ptr<MemoryBuffer>> tryLoadingBuffer() {
     if (EntryPath.empty())
       return std::error_code();
-    return MemoryBuffer::getFile(EntryPath);
+    int FD;
+    SmallString<64> ResultPath;
+    std::error_code EC = sys::fs::openFileForRead(
+        Twine(EntryPath), FD, sys::fs::OF_UpdateAtime, &ResultPath);
+    if (EC)
+      return EC;
+    ErrorOr<std::unique_ptr<MemoryBuffer>> MBOrErr =
+        MemoryBuffer::getOpenFile(FD, EntryPath,
+                                  /*FileSize*/ -1,
+                                  /*RequiresNullTerminator*/ false);
+    close(FD);
+    return MBOrErr;
   }
 
   // Cache the Produced object file
@@ -405,7 +422,7 @@ public:
     int TempFD;
     llvm::sys::path::remove_filename(CachePath);
     sys::path::append(TempFilename, CachePath, "Thin-%%%%%%.tmp.o");
-    std::error_code EC = 
+    std::error_code EC =
       sys::fs::createUniqueFile(TempFilename, TempFD, TempFilename);
     if (EC) {
       errs() << "Error: " << EC.message() << "\n";
@@ -415,7 +432,7 @@ public:
       raw_fd_ostream OS(TempFD, /* ShouldClose */ true);
       OS << OutputBuffer.getBuffer();
     }
-    // Rename temp file to final destination; rename is atomic 
+    // Rename temp file to final destination; rename is atomic
     EC = sys::fs::rename(TempFilename, EntryPath);
     if (EC)
       sys::fs::remove(TempFilename);
@@ -741,8 +758,14 @@ void ThinLTOCodeGenerator::emitImports(StringRef ModulePath,
   ComputeCrossModuleImport(Index, ModuleToDefinedGVSummaries, ImportLists,
                            ExportLists);
 
+  std::map<std::string, GVSummaryMapTy> ModuleToSummariesForIndex;
+  llvm::gatherImportedSummariesForModule(ModulePath, ModuleToDefinedGVSummaries,
+                                         ImportLists[ModulePath],
+                                         ModuleToSummariesForIndex);
+
   std::error_code EC;
-  if ((EC = EmitImportsFiles(ModulePath, OutputName, ImportLists[ModulePath])))
+  if ((EC =
+           EmitImportsFiles(ModulePath, OutputName, ModuleToSummariesForIndex)))
     report_fatal_error(Twine("Failed to open ") + OutputName +
                        " to save imports lists\n");
 }
@@ -1025,10 +1048,10 @@ void ThinLTOCodeGenerator::run() {
         if (SavedObjectsDirectoryPath.empty()) {
           // We need to generated a memory buffer for the linker.
           if (!CacheEntryPath.empty()) {
-            // When cache is enabled, reload from the cache if possible. 
+            // When cache is enabled, reload from the cache if possible.
             // Releasing the buffer from the heap and reloading it from the
-            // cache file with mmap helps us to lower memory pressure. 
-            // The freed memory can be used for the next input file. 
+            // cache file with mmap helps us to lower memory pressure.
+            // The freed memory can be used for the next input file.
             // The final binary link will read from the VFS cache (hopefully!)
             // or from disk (if the memory pressure was too high).
             auto ReloadedBufferOrErr = CacheEntry.tryLoadingBuffer();

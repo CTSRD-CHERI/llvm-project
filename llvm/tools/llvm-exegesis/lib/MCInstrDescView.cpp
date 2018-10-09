@@ -26,6 +26,7 @@ Instruction::Instruction(const llvm::MCInstrDesc &MCInstrDesc,
     Operand Operand;
     Operand.Index = OpIndex;
     Operand.IsDef = (OpIndex < MCInstrDesc.getNumDefs());
+    Operand.IsMem = OpInfo.OperandType == llvm::MCOI::OPERAND_MEMORY;
     Operand.IsExplicit = true;
     // TODO(gchatelet): Handle isLookupPtrRegClass.
     if (OpInfo.RegClass >= 0)
@@ -83,43 +84,54 @@ Instruction::Instruction(const llvm::MCInstrDesc &MCInstrDesc,
   }
 }
 
-InstructionInstance::InstructionInstance(const Instruction &Instr)
+bool Instruction::hasMemoryOperands() const {
+  return std::any_of(Operands.begin(), Operands.end(),
+                     [](const Operand &Op) { return Op.IsMem; });
+}
+
+InstructionBuilder::InstructionBuilder(const Instruction &Instr)
     : Instr(Instr), VariableValues(Instr.Variables.size()) {}
 
-InstructionInstance::InstructionInstance(InstructionInstance &&) = default;
+InstructionBuilder::InstructionBuilder(InstructionBuilder &&) = default;
 
-InstructionInstance &InstructionInstance::
-operator=(InstructionInstance &&) = default;
+InstructionBuilder &InstructionBuilder::
+operator=(InstructionBuilder &&) = default;
 
-unsigned InstructionInstance::getOpcode() const {
+InstructionBuilder::InstructionBuilder(const InstructionBuilder &) = default;
+
+InstructionBuilder &InstructionBuilder::
+operator=(const InstructionBuilder &) = default;
+
+unsigned InstructionBuilder::getOpcode() const {
   return Instr.Description->getOpcode();
 }
 
-llvm::MCOperand &InstructionInstance::getValueFor(const Variable &Var) {
+llvm::MCOperand &InstructionBuilder::getValueFor(const Variable &Var) {
   return VariableValues[Var.Index];
 }
 
 const llvm::MCOperand &
-InstructionInstance::getValueFor(const Variable &Var) const {
+InstructionBuilder::getValueFor(const Variable &Var) const {
   return VariableValues[Var.Index];
 }
 
-llvm::MCOperand &InstructionInstance::getValueFor(const Operand &Op) {
+llvm::MCOperand &InstructionBuilder::getValueFor(const Operand &Op) {
   assert(Op.VariableIndex >= 0);
   return getValueFor(Instr.Variables[Op.VariableIndex]);
 }
 
 const llvm::MCOperand &
-InstructionInstance::getValueFor(const Operand &Op) const {
+InstructionBuilder::getValueFor(const Operand &Op) const {
   assert(Op.VariableIndex >= 0);
   return getValueFor(Instr.Variables[Op.VariableIndex]);
 }
 
 // forward declaration.
 static void randomize(const Instruction &Instr, const Variable &Var,
-                      llvm::MCOperand &AssignedValue);
+                      llvm::MCOperand &AssignedValue,
+                      const llvm::BitVector &ForbiddenRegs);
 
-bool InstructionInstance::hasImmediateVariables() const {
+bool InstructionBuilder::hasImmediateVariables() const {
   return llvm::any_of(Instr.Variables, [this](const Variable &Var) {
     assert(!Var.TiedOperands.empty());
     const unsigned OpIndex = Var.TiedOperands[0];
@@ -129,15 +141,16 @@ bool InstructionInstance::hasImmediateVariables() const {
   });
 }
 
-void InstructionInstance::randomizeUnsetVariables() {
+void InstructionBuilder::randomizeUnsetVariables(
+    const llvm::BitVector &ForbiddenRegs) {
   for (const Variable &Var : Instr.Variables) {
     llvm::MCOperand &AssignedValue = getValueFor(Var);
     if (!AssignedValue.isValid())
-      randomize(Instr, Var, AssignedValue);
+      randomize(Instr, Var, AssignedValue, ForbiddenRegs);
   }
 }
 
-llvm::MCInst InstructionInstance::build() const {
+llvm::MCInst InstructionBuilder::build() const {
   llvm::MCInst Result;
   Result.setOpcode(Instr.Description->Opcode);
   for (const auto &Op : Instr.Operands)
@@ -146,9 +159,9 @@ llvm::MCInst InstructionInstance::build() const {
   return Result;
 }
 
-SnippetPrototype::SnippetPrototype(SnippetPrototype &&) = default;
+CodeTemplate::CodeTemplate(CodeTemplate &&) = default;
 
-SnippetPrototype &SnippetPrototype::operator=(SnippetPrototype &&) = default;
+CodeTemplate &CodeTemplate::operator=(CodeTemplate &&) = default;
 
 bool RegisterOperandAssignment::
 operator==(const RegisterOperandAssignment &Other) const {
@@ -222,7 +235,8 @@ static auto randomElement(const C &Container) -> decltype(Container[0]) {
 }
 
 static void randomize(const Instruction &Instr, const Variable &Var,
-                      llvm::MCOperand &AssignedValue) {
+                      llvm::MCOperand &AssignedValue,
+                      const llvm::BitVector &ForbiddenRegs) {
   assert(!Var.TiedOperands.empty());
   const Operand &Op = Instr.Operands[Var.TiedOperands.front()];
   assert(Op.Info != nullptr);
@@ -234,8 +248,11 @@ static void randomize(const Instruction &Instr, const Variable &Var,
     break;
   case llvm::MCOI::OperandType::OPERAND_REGISTER: {
     assert(Op.Tracker);
-    const auto &Registers = Op.Tracker->sourceBits();
-    AssignedValue = llvm::MCOperand::createReg(randomBit(Registers));
+    auto AllowedRegs = Op.Tracker->sourceBits();
+    assert(AllowedRegs.size() == ForbiddenRegs.size());
+    for (auto I : ForbiddenRegs.set_bits())
+      AllowedRegs.reset(I);
+    AssignedValue = llvm::MCOperand::createReg(randomBit(AllowedRegs));
     break;
   }
   default:
@@ -244,10 +261,10 @@ static void randomize(const Instruction &Instr, const Variable &Var,
 }
 
 static void setRegisterOperandValue(const RegisterOperandAssignment &ROV,
-                                    InstructionInstance &II) {
+                                    InstructionBuilder &IB) {
   assert(ROV.Op);
   if (ROV.Op->IsExplicit) {
-    auto &AssignedValue = II.getValueFor(*ROV.Op);
+    auto &AssignedValue = IB.getValueFor(*ROV.Op);
     if (AssignedValue.isValid()) {
       assert(AssignedValue.isReg() && AssignedValue.getReg() == ROV.Reg);
       return;
@@ -268,12 +285,12 @@ size_t randomBit(const llvm::BitVector &Vector) {
 }
 
 void setRandomAliasing(const AliasingConfigurations &AliasingConfigurations,
-                       InstructionInstance &DefII, InstructionInstance &UseII) {
+                       InstructionBuilder &DefIB, InstructionBuilder &UseIB) {
   assert(!AliasingConfigurations.empty());
   assert(!AliasingConfigurations.hasImplicitAliasing());
   const auto &RandomConf = randomElement(AliasingConfigurations.Configurations);
-  setRegisterOperandValue(randomElement(RandomConf.Defs), DefII);
-  setRegisterOperandValue(randomElement(RandomConf.Uses), UseII);
+  setRegisterOperandValue(randomElement(RandomConf.Defs), DefIB);
+  setRegisterOperandValue(randomElement(RandomConf.Uses), UseIB);
 }
 
 void DumpMCOperand(const llvm::MCRegisterInfo &MCRegisterInfo,

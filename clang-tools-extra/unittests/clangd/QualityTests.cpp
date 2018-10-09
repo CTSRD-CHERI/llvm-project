@@ -17,9 +17,15 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "FileDistance.h"
 #include "Quality.h"
 #include "TestFS.h"
 #include "TestTU.h"
+#include "clang/AST/Decl.h"
+#include "clang/AST/DeclCXX.h"
+#include "clang/AST/Type.h"
+#include "clang/Sema/CodeCompleteConsumer.h"
+#include "llvm/Support/Casting.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
@@ -73,18 +79,31 @@ TEST(QualityTests, SymbolQualitySignalExtraction) {
 TEST(QualityTests, SymbolRelevanceSignalExtraction) {
   TestTU Test;
   Test.HeaderCode = R"cpp(
-    int header();
-    int header_main();
-    )cpp";
+  int header();
+  int header_main();
+
+  namespace hdr { class Bar {}; } // namespace hdr
+
+  #define DEFINE_FLAG(X) \
+  namespace flags { \
+  int FLAGS_##X; \
+  } \
+
+  DEFINE_FLAG(FOO)
+  )cpp";
   Test.Code = R"cpp(
-    int ::header_main() {}
-    int main();
+  using hdr::Bar;
 
-    [[deprecated]]
-    int deprecated() { return 0; }
+  using flags::FLAGS_FOO;
 
-    namespace { struct X { void y() { int z; } }; }
-    struct S{}
+  int ::header_main() {}
+  int main();
+
+  [[deprecated]]
+  int deprecated() { return 0; }
+
+  namespace { struct X { void y() { int z; } }; }
+  struct S{}
   )cpp";
   auto AST = Test.build();
 
@@ -106,6 +125,32 @@ TEST(QualityTests, SymbolRelevanceSignalExtraction) {
   Relevance.merge(CodeCompletionResult(&findDecl(AST, "header_main"), 42));
   EXPECT_FLOAT_EQ(Relevance.SemaProximityScore, 1.0f)
       << "Current file and header";
+
+  auto constructShadowDeclCompletionResult = [&](const std::string DeclName) {
+    auto *Shadow =
+        *dyn_cast<UsingDecl>(
+             &findAnyDecl(AST,
+                          [&](const NamedDecl &ND) {
+                            if (const UsingDecl *Using =
+                                    dyn_cast<UsingDecl>(&ND))
+                              if (Using->shadow_size() &&
+                                  Using->getQualifiedNameAsString() == DeclName)
+                                return true;
+                            return false;
+                          }))
+             ->shadow_begin();
+    CodeCompletionResult Result(Shadow->getTargetDecl(), 42);
+    Result.ShadowDecl = Shadow;
+    return Result;
+  };
+
+  Relevance = {};
+  Relevance.merge(constructShadowDeclCompletionResult("Bar"));
+  EXPECT_FLOAT_EQ(Relevance.SemaProximityScore, 1.0f)
+      << "Using declaration in main file";
+  Relevance.merge(constructShadowDeclCompletionResult("FLAGS_FOO"));
+  EXPECT_FLOAT_EQ(Relevance.SemaProximityScore, 1.0f)
+      << "Using declaration in main file";
 
   Relevance = {};
   Relevance.merge(CodeCompletionResult(&findAnyDecl(AST, "X"), 42));
@@ -141,13 +186,16 @@ TEST(QualityTests, SymbolQualitySignalsSanity) {
   EXPECT_GT(WithReferences.evaluate(), Default.evaluate());
   EXPECT_GT(ManyReferences.evaluate(), WithReferences.evaluate());
 
-  SymbolQualitySignals Keyword, Variable, Macro;
+  SymbolQualitySignals Keyword, Variable, Macro, Constructor, Function;
   Keyword.Category = SymbolQualitySignals::Keyword;
   Variable.Category = SymbolQualitySignals::Variable;
   Macro.Category = SymbolQualitySignals::Macro;
+  Constructor.Category = SymbolQualitySignals::Constructor;
+  Function.Category = SymbolQualitySignals::Function;
   EXPECT_GT(Variable.evaluate(), Default.evaluate());
   EXPECT_GT(Keyword.evaluate(), Variable.evaluate());
   EXPECT_LT(Macro.evaluate(), Default.evaluate());
+  EXPECT_LT(Constructor.evaluate(), Function.evaluate());
 }
 
 TEST(QualityTests, SymbolRelevanceSignalsSanity) {
@@ -162,19 +210,41 @@ TEST(QualityTests, SymbolRelevanceSignalsSanity) {
   PoorNameMatch.NameMatch = 0.2f;
   EXPECT_LT(PoorNameMatch.evaluate(), Default.evaluate());
 
-  SymbolRelevanceSignals WithProximity;
-  WithProximity.SemaProximityScore = 0.2f;
-  EXPECT_GT(WithProximity.evaluate(), Default.evaluate());
+  SymbolRelevanceSignals WithSemaProximity;
+  WithSemaProximity.SemaProximityScore = 0.2f;
+  EXPECT_GT(WithSemaProximity.evaluate(), Default.evaluate());
+
+  SymbolRelevanceSignals IndexProximate;
+  IndexProximate.SymbolURI = "unittest:/foo/bar.h";
+  llvm::StringMap<SourceParams> ProxSources;
+  ProxSources.try_emplace(testPath("foo/baz.h"));
+  URIDistance Distance(ProxSources);
+  IndexProximate.FileProximityMatch = &Distance;
+  EXPECT_GT(IndexProximate.evaluate(), Default.evaluate());
+  SymbolRelevanceSignals IndexDistant = IndexProximate;
+  IndexDistant.SymbolURI = "unittest:/elsewhere/path.h";
+  EXPECT_GT(IndexProximate.evaluate(), IndexDistant.evaluate())
+      << IndexProximate << IndexDistant;
+  EXPECT_GT(IndexDistant.evaluate(), Default.evaluate());
 
   SymbolRelevanceSignals Scoped;
   Scoped.Scope = SymbolRelevanceSignals::FileScope;
   EXPECT_EQ(Scoped.evaluate(), Default.evaluate());
   Scoped.Query = SymbolRelevanceSignals::CodeComplete;
   EXPECT_GT(Scoped.evaluate(), Default.evaluate());
+
+  SymbolRelevanceSignals Instance;
+  Instance.IsInstanceMember = false;
+  EXPECT_EQ(Instance.evaluate(), Default.evaluate());
+  Instance.Context = CodeCompletionContext::CCC_DotMemberAccess;
+  EXPECT_LT(Instance.evaluate(), Default.evaluate());
+  Instance.IsInstanceMember = true;
+  EXPECT_EQ(Instance.evaluate(), Default.evaluate());
 }
 
 TEST(QualityTests, SortText) {
-  EXPECT_LT(sortText(std::numeric_limits<float>::infinity()), sortText(1000.2f));
+  EXPECT_LT(sortText(std::numeric_limits<float>::infinity()),
+            sortText(1000.2f));
   EXPECT_LT(sortText(1000.2f), sortText(1));
   EXPECT_LT(sortText(1), sortText(0.3f));
   EXPECT_LT(sortText(0.3f), sortText(0));
@@ -185,57 +255,117 @@ TEST(QualityTests, SortText) {
   EXPECT_LT(sortText(0, "a"), sortText(0, "z"));
 }
 
-// {a,b,c} becomes /clangd-test/a/b/c
-std::string joinPaths(llvm::ArrayRef<StringRef> Parts) {
-  return testPath(
-      llvm::join(Parts.begin(), Parts.end(), llvm::sys::path::get_separator()));
+TEST(QualityTests, NoBoostForClassConstructor) {
+  auto Header = TestTU::withHeaderCode(R"cpp(
+    class Foo {
+    public:
+      Foo(int);
+    };
+  )cpp");
+  auto Symbols = Header.headerSymbols();
+  auto AST = Header.build();
+
+  const NamedDecl *Foo = &findDecl(AST, "Foo");
+  SymbolRelevanceSignals Cls;
+  Cls.merge(CodeCompletionResult(Foo, /*Priority=*/0));
+
+  const NamedDecl *CtorDecl = &findAnyDecl(AST, [](const NamedDecl &ND) {
+    return (ND.getQualifiedNameAsString() == "Foo::Foo") &&
+           llvm::isa<CXXConstructorDecl>(&ND);
+  });
+  SymbolRelevanceSignals Ctor;
+  Ctor.merge(CodeCompletionResult(CtorDecl, /*Priority=*/0));
+
+  EXPECT_EQ(Cls.Scope, SymbolRelevanceSignals::GlobalScope);
+  EXPECT_EQ(Ctor.Scope, SymbolRelevanceSignals::GlobalScope);
 }
 
-static constexpr float ProximityBase = 0.7f;
+TEST(QualityTests, IsInstanceMember) {
+  auto Header = TestTU::withHeaderCode(R"cpp(
+    class Foo {
+    public:
+      static void foo() {}
 
-// Calculates a proximity score for an index symbol with declaration file
-// SymPath with the given URI scheme.
-float URIProximity(const FileProximityMatcher &Matcher, StringRef SymPath,
-                     StringRef Scheme = "file") {
-  auto U = URI::create(SymPath, Scheme);
-  EXPECT_TRUE(static_cast<bool>(U)) << llvm::toString(U.takeError());
-  return Matcher.uriProximity(U->toString());
+      template <typename T> void tpl(T *t) {}
+
+      void bar() {}
+    };
+  )cpp");
+  auto Symbols = Header.headerSymbols();
+
+  SymbolRelevanceSignals Rel;
+  const Symbol &FooSym = findSymbol(Symbols, "Foo::foo");
+  Rel.merge(FooSym);
+  EXPECT_FALSE(Rel.IsInstanceMember);
+  const Symbol &BarSym = findSymbol(Symbols, "Foo::bar");
+  Rel.merge(BarSym);
+  EXPECT_TRUE(Rel.IsInstanceMember);
+
+  Rel.IsInstanceMember =false;
+  const Symbol &TplSym = findSymbol(Symbols, "Foo::tpl");
+  Rel.merge(TplSym);
+  EXPECT_TRUE(Rel.IsInstanceMember);
+
+  auto AST = Header.build();
+  const NamedDecl *Foo = &findDecl(AST, "Foo::foo");
+  const NamedDecl *Bar = &findDecl(AST, "Foo::bar");
+  const NamedDecl *Tpl = &findDecl(AST, "Foo::tpl");
+
+  Rel.IsInstanceMember = false;
+  Rel.merge(CodeCompletionResult(Foo, /*Priority=*/0));
+  EXPECT_FALSE(Rel.IsInstanceMember);
+  Rel.merge(CodeCompletionResult(Bar, /*Priority=*/0));
+  EXPECT_TRUE(Rel.IsInstanceMember);
+  Rel.IsInstanceMember = false;
+  Rel.merge(CodeCompletionResult(Tpl, /*Priority=*/0));
+  EXPECT_TRUE(Rel.IsInstanceMember);
 }
 
-TEST(QualityTests, URIProximityScores) {
-  FileProximityMatcher Matcher(
-      /*ProximityPaths=*/{joinPaths({"a", "b", "c", "d", "x"})});
+TEST(QualityTests, ConstructorQuality) {
+  auto Header = TestTU::withHeaderCode(R"cpp(
+    class Foo {
+    public:
+      Foo(int);
+    };
+  )cpp");
+  auto Symbols = Header.headerSymbols();
+  auto AST = Header.build();
 
-  EXPECT_FLOAT_EQ(URIProximity(Matcher, joinPaths({"a", "b", "c", "d", "x"})),
-                  1);
-  EXPECT_FLOAT_EQ(URIProximity(Matcher, joinPaths({"a", "b", "c", "d", "y"})),
-                  ProximityBase);
-  EXPECT_FLOAT_EQ(URIProximity(Matcher, joinPaths({"a", "y", "z"})),
-                  std::pow(ProximityBase, 5));
-  EXPECT_FLOAT_EQ(
-      URIProximity(Matcher, joinPaths({"a", "b", "c", "d", "e", "y"})),
-      std::pow(ProximityBase, 2));
-  EXPECT_FLOAT_EQ(
-      URIProximity(Matcher, joinPaths({"a", "b", "m", "n", "o", "y"})),
-      std::pow(ProximityBase, 5));
-  EXPECT_FLOAT_EQ(
-      URIProximity(Matcher, joinPaths({"a", "t", "m", "n", "o", "y"})),
-      std::pow(ProximityBase, 6));
-  // Note the common directory is /clang-test/
-  EXPECT_FLOAT_EQ(URIProximity(Matcher, joinPaths({"m", "n", "o", "p", "y"})),
-                  std::pow(ProximityBase, 7));
+  const NamedDecl *CtorDecl = &findAnyDecl(AST, [](const NamedDecl &ND) {
+    return (ND.getQualifiedNameAsString() == "Foo::Foo") &&
+           llvm::isa<CXXConstructorDecl>(&ND);
+  });
+
+  SymbolQualitySignals Q;
+  Q.merge(CodeCompletionResult(CtorDecl, /*Priority=*/0));
+  EXPECT_EQ(Q.Category, SymbolQualitySignals::Constructor);
+
+  Q.Category = SymbolQualitySignals::Unknown;
+  const Symbol &CtorSym = findSymbol(Symbols, "Foo::Foo");
+  Q.merge(CtorSym);
+  EXPECT_EQ(Q.Category, SymbolQualitySignals::Constructor);
 }
 
-TEST(QualityTests, URIProximityScoresWithTestURI) {
-  FileProximityMatcher Matcher(
-      /*ProximityPaths=*/{joinPaths({"b", "c", "x"})});
-  EXPECT_FLOAT_EQ(URIProximity(Matcher, joinPaths({"b", "c", "x"}), "unittest"),
-                  1);
-  EXPECT_FLOAT_EQ(URIProximity(Matcher, joinPaths({"b", "y"}), "unittest"),
-                  std::pow(ProximityBase, 2));
-  // unittest:///b/c/x vs unittest:///m/n/y. No common directory.
-  EXPECT_FLOAT_EQ(URIProximity(Matcher, joinPaths({"m", "n", "y"}), "unittest"),
-                  std::pow(ProximityBase, 4));
+TEST(QualityTests, ItemWithFixItsRankedDown) {
+  CodeCompleteOptions Opts;
+  Opts.IncludeFixIts = true;
+
+  auto Header = TestTU::withHeaderCode(R"cpp(
+        int x;
+      )cpp");
+  auto AST = Header.build();
+
+  SymbolRelevanceSignals RelevanceWithFixIt;
+  RelevanceWithFixIt.merge(CodeCompletionResult(&findDecl(AST, "x"), 0, nullptr,
+                                                false, true, {FixItHint{}}));
+  EXPECT_TRUE(RelevanceWithFixIt.NeedsFixIts);
+
+  SymbolRelevanceSignals RelevanceWithoutFixIt;
+  RelevanceWithoutFixIt.merge(
+      CodeCompletionResult(&findDecl(AST, "x"), 0, nullptr, false, true, {}));
+  EXPECT_FALSE(RelevanceWithoutFixIt.NeedsFixIts);
+
+  EXPECT_LT(RelevanceWithFixIt.evaluate(), RelevanceWithoutFixIt.evaluate());
 }
 
 } // namespace

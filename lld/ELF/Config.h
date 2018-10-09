@@ -42,6 +42,9 @@ enum class CapRelocsMode { Legacy, ElfReloc, CBuildCap };
 // For --discard-{all,locals,none}.
 enum class DiscardPolicy { Default, All, Locals, None };
 
+// For --icf={none,safe,all}.
+enum class ICFLevel { None, Safe, All };
+
 // For --strip-{all,debug}.
 enum class StripPolicy { None, All, Debug };
 
@@ -56,6 +59,9 @@ enum class SortSectionPolicy { Default, None, Alignment, Name, Priority };
 
 // For --target2
 enum class Target2Policy { Abs, Rel, GotRel };
+
+// For tracking ARM Float Argument PCS
+enum class ARMVFPArgKind { Default, Base, VFP, ToolChain };
 
 struct SymbolVersion {
   llvm::StringRef Name;
@@ -82,6 +88,7 @@ struct Configuration {
   llvm::StringMap<uint64_t> SectionStartMap;
   llvm::StringRef Chroot;
   llvm::StringRef DynamicLinker;
+  llvm::StringRef DwoDir;
   llvm::StringRef Entry;
   llvm::StringRef Emulation;
   llvm::StringRef Fini;
@@ -116,7 +123,7 @@ struct Configuration {
       CallGraphProfile;
   bool AllowMultipleDefinition;
   bool AllowUndefinedCapRelocs = false;
-  bool AndroidPackDynRelocs = false;
+  bool AndroidPackDynRelocs;
   bool ARMHasBlx = false;
   bool ARMHasMovtMovw = false;
   bool ARMJ1J2BranchEncoding = false;
@@ -132,15 +139,16 @@ struct Configuration {
   bool EhFrameHdr;
   bool EmitRelocs;
   bool EnableNewDtags;
+  bool ExecuteOnly;
   bool ExportDynamic;
   bool FixCortexA53Errata843419;
+  bool FormatBinary = false;
   bool GcSections;
   bool GdbIndex;
   bool GnuHash = false;
   bool GnuUnique;
   bool HasDynamicList = false;
   bool HasDynSymTab;
-  bool ICF;
   bool IgnoreDataAddressEquality;
   bool IgnoreFunctionAddressEquality;
   bool LTODebugPassManager;
@@ -157,6 +165,7 @@ struct Configuration {
   bool PrintIcfSections;
   bool ProcessCapRelocs = false;
   bool Relocatable;
+  bool RelrPackDynRelocs;
   bool SaveTemps;
   bool SortCapRelocs;
   bool SingleRoRx;
@@ -168,6 +177,7 @@ struct Configuration {
   bool ThinLTOEmitImportsFiles;
   bool ThinLTOIndexOnly;
   bool UndefinedVersion;
+  bool UseAndroidRelrTags = false;
   bool VerboseCapRelocs = false;
   bool WarnBackrefs;
   bool WarnCommon;
@@ -190,6 +200,7 @@ struct Configuration {
   bool ZRetpolineplt;
   bool ZWxneeded;
   DiscardPolicy Discard;
+  ICFLevel ICF;
   OrphanHandlingPolicy OrphanHandling;
   SortSectionPolicy SortSection;
   StripPolicy Strip;
@@ -200,6 +211,7 @@ struct Configuration {
   // Method used for capability relocations for non-preemptible symbols
   CapRelocsMode LocalCapRelocsMode;
 
+  ARMVFPArgKind ARMVFPArgs = ARMVFPArgKind::Default;
   BuildIdKind BuildId = BuildIdKind::None;
   ELFKind EKind = ELFNoneKind;
   uint16_t DefaultSymbolVersion = llvm::ELF::VER_NDX_GLOBAL;

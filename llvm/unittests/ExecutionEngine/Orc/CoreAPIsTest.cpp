@@ -11,13 +11,14 @@
 #include "llvm/Config/llvm-config.h"
 #include "llvm/ExecutionEngine/Orc/Core.h"
 #include "llvm/ExecutionEngine/Orc/OrcError.h"
-#include "gtest/gtest.h"
 
 #include <set>
 #include <thread>
 
 using namespace llvm;
 using namespace llvm::orc;
+
+class CoreAPIsStandardTest : public CoreAPIsBasedStandardTest {};
 
 namespace {
 
@@ -58,142 +59,93 @@ private:
   DestructorFunction Destructor;
 };
 
-TEST(CoreAPIsTest, AsynchronousSymbolQuerySuccessfulResolutionOnly) {
-  SymbolStringPool SP;
-  auto Foo = SP.intern("foo");
-  constexpr JITTargetAddress FakeAddr = 0xdeadbeef;
-  SymbolNameSet Names({Foo});
-
+TEST_F(CoreAPIsStandardTest, BasicSuccessfulLookup) {
   bool OnResolutionRun = false;
   bool OnReadyRun = false;
-  auto OnResolution =
-      [&](Expected<AsynchronousSymbolQuery::ResolutionResult> Result) {
-        EXPECT_TRUE(!!Result) << "Resolution unexpectedly returned error";
-        auto &Resolved = Result->Symbols;
-        auto I = Resolved.find(Foo);
-        EXPECT_NE(I, Resolved.end()) << "Could not find symbol definition";
-        EXPECT_EQ(I->second.getAddress(), FakeAddr)
-            << "Resolution returned incorrect result";
-        OnResolutionRun = true;
-      };
+
+  auto OnResolution = [&](Expected<SymbolMap> Result) {
+    EXPECT_TRUE(!!Result) << "Resolution unexpectedly returned error";
+    auto &Resolved = *Result;
+    auto I = Resolved.find(Foo);
+    EXPECT_NE(I, Resolved.end()) << "Could not find symbol definition";
+    EXPECT_EQ(I->second.getAddress(), FooAddr)
+        << "Resolution returned incorrect result";
+    OnResolutionRun = true;
+  };
   auto OnReady = [&](Error Err) {
     cantFail(std::move(Err));
     OnReadyRun = true;
   };
 
-  AsynchronousSymbolQuery Q(Names, OnResolution, OnReady);
+  std::shared_ptr<MaterializationResponsibility> FooMR;
 
-  Q.resolve(Foo, JITEvaluatedSymbol(FakeAddr, JITSymbolFlags::Exported));
+  cantFail(V.define(llvm::make_unique<SimpleMaterializationUnit>(
+      SymbolFlagsMap({{Foo, FooSym.getFlags()}}),
+      [&](MaterializationResponsibility R) {
+        FooMR = std::make_shared<MaterializationResponsibility>(std::move(R));
+      })));
 
-  EXPECT_TRUE(Q.isFullyResolved()) << "Expected query to be fully resolved";
+  ES.lookup({&V}, {Foo}, OnResolution, OnReady, NoDependenciesToRegister);
 
-  if (!Q.isFullyResolved())
-    return;
+  EXPECT_FALSE(OnResolutionRun) << "Should not have been resolved yet";
+  EXPECT_FALSE(OnReadyRun) << "Should not have been marked ready yet";
 
-  Q.handleFullyResolved();
+  FooMR->resolve({{Foo, FooSym}});
+
+  EXPECT_TRUE(OnResolutionRun) << "Should have been resolved";
+  EXPECT_FALSE(OnReadyRun) << "Should not have been marked ready yet";
+
+  FooMR->finalize();
+
+  EXPECT_TRUE(OnReadyRun) << "Should have been marked ready";
+}
+
+TEST_F(CoreAPIsStandardTest, ExecutionSessionFailQuery) {
+  bool OnResolutionRun = false;
+  bool OnReadyRun = false;
+
+  auto OnResolution = [&](Expected<SymbolMap> Result) {
+    EXPECT_FALSE(!!Result) << "Resolution unexpectedly returned success";
+    auto Msg = toString(Result.takeError());
+    EXPECT_EQ(Msg, "xyz") << "Resolution returned incorrect result";
+    OnResolutionRun = true;
+  };
+  auto OnReady = [&](Error Err) {
+    cantFail(std::move(Err));
+    OnReadyRun = true;
+  };
+
+  AsynchronousSymbolQuery Q(SymbolNameSet({Foo}), OnResolution, OnReady);
+
+  ES.legacyFailQuery(Q,
+                     make_error<StringError>("xyz", inconvertibleErrorCode()));
 
   EXPECT_TRUE(OnResolutionRun) << "OnResolutionCallback was not run";
   EXPECT_FALSE(OnReadyRun) << "OnReady unexpectedly run";
 }
 
-TEST(CoreAPIsTest, ExecutionSessionFailQuery) {
-  ExecutionSession ES;
-  auto Foo = ES.getSymbolStringPool().intern("foo");
-  SymbolNameSet Names({Foo});
-
-  bool OnResolutionRun = false;
-  bool OnReadyRun = false;
-
-  auto OnResolution =
-      [&](Expected<AsynchronousSymbolQuery::ResolutionResult> Result) {
-        EXPECT_FALSE(!!Result) << "Resolution unexpectedly returned success";
-        auto Msg = toString(Result.takeError());
-        EXPECT_EQ(Msg, "xyz") << "Resolution returned incorrect result";
-        OnResolutionRun = true;
-      };
-  auto OnReady = [&](Error Err) {
-    cantFail(std::move(Err));
-    OnReadyRun = true;
-  };
-
-  AsynchronousSymbolQuery Q(Names, OnResolution, OnReady);
-
-  ES.failQuery(Q, make_error<StringError>("xyz", inconvertibleErrorCode()));
-
-  EXPECT_TRUE(OnResolutionRun) << "OnResolutionCallback was not run";
-  EXPECT_FALSE(OnReadyRun) << "OnReady unexpectedly run";
-}
-
-TEST(CoreAPIsTest, SimpleAsynchronousSymbolQueryAgainstVSO) {
-  ExecutionSession ES;
-  auto Foo = ES.getSymbolStringPool().intern("foo");
-  constexpr JITTargetAddress FakeAddr = 0xdeadbeef;
-  SymbolNameSet Names({Foo});
-
-  bool OnResolutionRun = false;
-  bool OnReadyRun = false;
-
-  auto OnResolution =
-      [&](Expected<AsynchronousSymbolQuery::ResolutionResult> Result) {
-        EXPECT_TRUE(!!Result) << "Query unexpectedly returned error";
-        auto &Resolved = Result->Symbols;
-        auto I = Resolved.find(Foo);
-        EXPECT_NE(I, Resolved.end()) << "Could not find symbol definition";
-        EXPECT_EQ(I->second.getAddress(), FakeAddr)
-            << "Resolution returned incorrect result";
-        OnResolutionRun = true;
-      };
-
-  auto OnReady = [&](Error Err) {
-    cantFail(std::move(Err));
-    OnReadyRun = true;
-  };
-
-  auto Q =
-      std::make_shared<AsynchronousSymbolQuery>(Names, OnResolution, OnReady);
-  auto &V = ES.createVSO("V");
-
-  auto Defs = absoluteSymbols(
-      {{Foo, JITEvaluatedSymbol(FakeAddr, JITSymbolFlags::Exported)}});
-  cantFail(V.define(Defs));
-  assert(Defs == nullptr && "Defs should have been accepted");
-  V.lookup(Q, Names);
-
-  EXPECT_TRUE(OnResolutionRun) << "OnResolutionCallback was not run";
-  EXPECT_TRUE(OnReadyRun) << "OnReady was not run";
-}
-
-TEST(CoreAPIsTest, EmptyVSOAndQueryLookup) {
-  ExecutionSession ES;
-  auto &V = ES.createVSO("V");
-
+TEST_F(CoreAPIsStandardTest, EmptyLookup) {
   bool OnResolvedRun = false;
   bool OnReadyRun = false;
 
-  auto Q = std::make_shared<AsynchronousSymbolQuery>(
-      SymbolNameSet(),
-      [&](Expected<AsynchronousSymbolQuery::ResolutionResult> RR) {
-        cantFail(std::move(RR));
-        OnResolvedRun = true;
-      },
-      [&](Error Err) {
-        cantFail(std::move(Err));
-        OnReadyRun = true;
-      });
+  auto OnResolution = [&](Expected<SymbolMap> Result) {
+    cantFail(std::move(Result));
+    OnResolvedRun = true;
+  };
 
-  V.lookup(std::move(Q), {});
+  auto OnReady = [&](Error Err) {
+    cantFail(std::move(Err));
+    OnReadyRun = true;
+  };
+
+  ES.lookup({&V}, {}, OnResolution, OnReady, NoDependenciesToRegister);
 
   EXPECT_TRUE(OnResolvedRun) << "OnResolved was not run for empty query";
   EXPECT_TRUE(OnReadyRun) << "OnReady was not run for empty query";
 }
 
-TEST(CoreAPIsTest, ChainedVSOLookup) {
-  ExecutionSession ES;
-  auto Foo = ES.getSymbolStringPool().intern("foo");
-  auto FooSym = JITEvaluatedSymbol(1U, JITSymbolFlags::Exported);
-
-  auto &V1 = ES.createVSO("V1");
-  cantFail(V1.define(absoluteSymbols({{Foo, FooSym}})));
+TEST_F(CoreAPIsStandardTest, ChainedVSOLookup) {
+  cantFail(V.define(absoluteSymbols({{Foo, FooSym}})));
 
   auto &V2 = ES.createVSO("V2");
 
@@ -202,8 +154,8 @@ TEST(CoreAPIsTest, ChainedVSOLookup) {
 
   auto Q = std::make_shared<AsynchronousSymbolQuery>(
       SymbolNameSet({Foo}),
-      [&](Expected<AsynchronousSymbolQuery::ResolutionResult> RR) {
-        cantFail(std::move(RR));
+      [&](Expected<SymbolMap> Result) {
+        cantFail(std::move(Result));
         OnResolvedRun = true;
       },
       [&](Error Err) {
@@ -211,68 +163,44 @@ TEST(CoreAPIsTest, ChainedVSOLookup) {
         OnReadyRun = true;
       });
 
-  V2.lookup(Q, V1.lookup(Q, {Foo}));
+  V2.legacyLookup(Q, V.legacyLookup(Q, {Foo}));
 
   EXPECT_TRUE(OnResolvedRun) << "OnResolved was not run for empty query";
   EXPECT_TRUE(OnReadyRun) << "OnReady was not run for empty query";
 }
 
-TEST(CoreAPIsTest, LookupFlagsTest) {
-
+TEST_F(CoreAPIsStandardTest, LookupFlagsTest) {
   // Test that lookupFlags works on a predefined symbol, and does not trigger
-  // materialization of a lazy symbol.
+  // materialization of a lazy symbol. Make the lazy symbol weak to test that
+  // the weak flag is propagated correctly.
 
-  ExecutionSession ES;
-  auto Foo = ES.getSymbolStringPool().intern("foo");
-  auto Bar = ES.getSymbolStringPool().intern("bar");
-  auto Baz = ES.getSymbolStringPool().intern("baz");
-
-  JITSymbolFlags FooFlags = JITSymbolFlags::Exported;
-  JITSymbolFlags BarFlags = static_cast<JITSymbolFlags::FlagNames>(
-      JITSymbolFlags::Exported | JITSymbolFlags::Weak);
-
-  VSO &V = ES.createVSO("V");
-
+  BarSym.setFlags(static_cast<JITSymbolFlags::FlagNames>(
+      JITSymbolFlags::Exported | JITSymbolFlags::Weak));
   auto MU = llvm::make_unique<SimpleMaterializationUnit>(
-      SymbolFlagsMap({{Bar, BarFlags}}),
+      SymbolFlagsMap({{Bar, BarSym.getFlags()}}),
       [](MaterializationResponsibility R) {
         llvm_unreachable("Symbol materialized on flags lookup");
       });
 
-  cantFail(V.define(
-      absoluteSymbols({{Foo, JITEvaluatedSymbol(0xdeadbeef, FooFlags)}})));
+  cantFail(V.define(absoluteSymbols({{Foo, FooSym}})));
   cantFail(V.define(std::move(MU)));
 
   SymbolNameSet Names({Foo, Bar, Baz});
 
-  SymbolFlagsMap SymbolFlags;
-  auto SymbolsNotFound = V.lookupFlags(SymbolFlags, Names);
+  auto SymbolFlags = V.lookupFlags(Names);
 
-  EXPECT_EQ(SymbolsNotFound.size(), 1U) << "Expected one not-found symbol";
-  EXPECT_EQ(SymbolsNotFound.count(Baz), 1U) << "Expected Baz to be not-found";
   EXPECT_EQ(SymbolFlags.size(), 2U)
       << "Returned symbol flags contains unexpected results";
   EXPECT_EQ(SymbolFlags.count(Foo), 1U) << "Missing lookupFlags result for Foo";
-  EXPECT_EQ(SymbolFlags[Foo], FooFlags) << "Incorrect flags returned for Foo";
+  EXPECT_EQ(SymbolFlags[Foo], FooSym.getFlags())
+      << "Incorrect flags returned for Foo";
   EXPECT_EQ(SymbolFlags.count(Bar), 1U)
       << "Missing  lookupFlags result for Bar";
-  EXPECT_EQ(SymbolFlags[Bar], BarFlags) << "Incorrect flags returned for Bar";
+  EXPECT_EQ(SymbolFlags[Bar], BarSym.getFlags())
+      << "Incorrect flags returned for Bar";
 }
 
-TEST(CoreAPIsTest, TestAliases) {
-  ExecutionSession ES;
-  auto &V = ES.createVSO("V");
-
-  auto Foo = ES.getSymbolStringPool().intern("foo");
-  auto FooSym = JITEvaluatedSymbol(1U, JITSymbolFlags::Exported);
-  auto Bar = ES.getSymbolStringPool().intern("bar");
-  auto BarSym = JITEvaluatedSymbol(2U, JITSymbolFlags::Exported);
-
-  auto Baz = ES.getSymbolStringPool().intern("baz");
-  auto Qux = ES.getSymbolStringPool().intern("qux");
-
-  auto QuxSym = JITEvaluatedSymbol(3U, JITSymbolFlags::Exported);
-
+TEST_F(CoreAPIsStandardTest, TestBasicAliases) {
   cantFail(V.define(absoluteSymbols({{Foo, FooSym}, {Bar, BarSym}})));
   cantFail(V.define(symbolAliases({{Baz, {Foo, JITSymbolFlags::Exported}},
                                    {Qux, {Bar, JITSymbolFlags::Weak}}})));
@@ -288,37 +216,103 @@ TEST(CoreAPIsTest, TestAliases) {
       << "The \"Qux\" alias should have been overriden";
 }
 
-TEST(CoreAPIsTest, TestTrivialCircularDependency) {
-  ExecutionSession ES;
+TEST_F(CoreAPIsStandardTest, TestChainedAliases) {
+  cantFail(V.define(absoluteSymbols({{Foo, FooSym}})));
+  cantFail(V.define(symbolAliases(
+      {{Baz, {Bar, BazSym.getFlags()}}, {Bar, {Foo, BarSym.getFlags()}}})));
 
-  auto &V = ES.createVSO("V");
+  auto Result = lookup({&V}, {Bar, Baz});
+  EXPECT_TRUE(!!Result) << "Unexpected lookup failure";
+  EXPECT_EQ(Result->count(Bar), 1U) << "No result for \"bar\"";
+  EXPECT_EQ(Result->count(Baz), 1U) << "No result for \"baz\"";
+  EXPECT_EQ((*Result)[Bar].getAddress(), FooSym.getAddress())
+      << "\"Bar\"'s address should match \"Foo\"'s";
+  EXPECT_EQ((*Result)[Baz].getAddress(), FooSym.getAddress())
+      << "\"Baz\"'s address should match \"Foo\"'s";
+}
 
-  auto Foo = ES.getSymbolStringPool().intern("foo");
-  auto FooFlags = JITSymbolFlags::Exported;
-  auto FooSym = JITEvaluatedSymbol(1U, FooFlags);
+TEST_F(CoreAPIsStandardTest, TestBasicReExports) {
+  // Test that the basic use case of re-exporting a single symbol from another
+  // VSO works.
+  cantFail(V.define(absoluteSymbols({{Foo, FooSym}})));
 
+  auto &V2 = ES.createVSO("V2");
+
+  cantFail(V2.define(reexports(V, {{Bar, {Foo, BarSym.getFlags()}}})));
+
+  auto Result = cantFail(lookup({&V2}, Bar));
+  EXPECT_EQ(Result.getAddress(), FooSym.getAddress())
+      << "Re-export Bar for symbol Foo should match FooSym's address";
+}
+
+TEST_F(CoreAPIsStandardTest, TestThatReExportsDontUnnecessarilyMaterialize) {
+  // Test that re-exports do not materialize symbols that have not been queried
+  // for.
+  cantFail(V.define(absoluteSymbols({{Foo, FooSym}})));
+
+  bool BarMaterialized = false;
+  auto BarMU = llvm::make_unique<SimpleMaterializationUnit>(
+      SymbolFlagsMap({{Bar, BarSym.getFlags()}}),
+      [&](MaterializationResponsibility R) {
+        BarMaterialized = true;
+        R.resolve({{Bar, BarSym}});
+        R.finalize();
+      });
+
+  cantFail(V.define(BarMU));
+
+  auto &V2 = ES.createVSO("V2");
+
+  cantFail(V2.define(reexports(
+      V, {{Baz, {Foo, BazSym.getFlags()}}, {Qux, {Bar, QuxSym.getFlags()}}})));
+
+  auto Result = cantFail(lookup({&V2}, Baz));
+  EXPECT_EQ(Result.getAddress(), FooSym.getAddress())
+      << "Re-export Baz for symbol Foo should match FooSym's address";
+
+  EXPECT_FALSE(BarMaterialized) << "Bar should not have been materialized";
+}
+
+TEST_F(CoreAPIsStandardTest, TestReexportsFallbackGenerator) {
+  // Test that a re-exports fallback generator can dynamically generate
+  // reexports.
+
+  auto &V2 = ES.createVSO("V2");
+  cantFail(V2.define(absoluteSymbols({{Foo, FooSym}, {Bar, BarSym}})));
+
+  auto Filter = [this](SymbolStringPtr Name) { return Name != Bar; };
+
+  V.setFallbackDefinitionGenerator(
+      ReexportsFallbackDefinitionGenerator(V2, Filter));
+
+  auto Flags = V.lookupFlags({Foo, Bar, Baz});
+  EXPECT_EQ(Flags.size(), 1U) << "Unexpected number of results";
+  EXPECT_EQ(Flags[Foo], FooSym.getFlags()) << "Unexpected flags for Foo";
+
+  auto Result = cantFail(lookup({&V}, Foo));
+
+  EXPECT_EQ(Result.getAddress(), FooSym.getAddress())
+      << "Incorrect reexported symbol address";
+}
+
+TEST_F(CoreAPIsStandardTest, TestTrivialCircularDependency) {
   Optional<MaterializationResponsibility> FooR;
   auto FooMU = llvm::make_unique<SimpleMaterializationUnit>(
-      SymbolFlagsMap({{Foo, FooFlags}}),
+      SymbolFlagsMap({{Foo, FooSym.getFlags()}}),
       [&](MaterializationResponsibility R) { FooR.emplace(std::move(R)); });
 
   cantFail(V.define(FooMU));
 
   bool FooReady = false;
-  auto Q =
-    std::make_shared<AsynchronousSymbolQuery>(
-      SymbolNameSet({ Foo }),
-      [](Expected<AsynchronousSymbolQuery::ResolutionResult> R) {
-        cantFail(std::move(R));
-      },
-      [&](Error Err) {
-        cantFail(std::move(Err));
-        FooReady = true;
-      });
+  auto OnResolution = [](Expected<SymbolMap> R) { cantFail(std::move(R)); };
+  auto OnReady = [&](Error Err) {
+    cantFail(std::move(Err));
+    FooReady = true;
+  };
 
-  V.lookup(std::move(Q), { Foo });
+  ES.lookup({&V}, {Foo}, std::move(OnResolution), std::move(OnReady),
+            NoDependenciesToRegister);
 
-  FooR->addDependencies({{&V, {Foo}}});
   FooR->resolve({{Foo, FooSym}});
   FooR->finalize();
 
@@ -326,28 +320,14 @@ TEST(CoreAPIsTest, TestTrivialCircularDependency) {
     << "Self-dependency prevented symbol from being marked ready";
 }
 
-TEST(CoreAPIsTest, TestCircularDependenceInOneVSO) {
+TEST_F(CoreAPIsStandardTest, TestCircularDependenceInOneVSO) {
+  // Test that a circular symbol dependency between three symbols in a VSO does
+  // not prevent any symbol from becoming 'ready' once all symbols are
+  // finalized.
 
-  ExecutionSession ES;
-
-  auto &V = ES.createVSO("V");
-
-  // Create three symbols: Foo, Bar and Baz.
-  auto Foo = ES.getSymbolStringPool().intern("foo");
-  auto FooFlags = JITSymbolFlags::Exported;
-  auto FooSym = JITEvaluatedSymbol(1U, FooFlags);
-
-  auto Bar = ES.getSymbolStringPool().intern("bar");
-  auto BarFlags = JITSymbolFlags::Exported;
-  auto BarSym = JITEvaluatedSymbol(2U, BarFlags);
-
-  auto Baz = ES.getSymbolStringPool().intern("baz");
-  auto BazFlags = JITSymbolFlags::Exported;
-  auto BazSym = JITEvaluatedSymbol(3U, BazFlags);
-
-  // Create three MaterializationResponsibility objects: one for each symbol
-  // (these are optional because MaterializationResponsibility does not have
-  // a default constructor).
+  // Create three MaterializationResponsibility objects: one for each of Foo,
+  // Bar and Baz. These are optional because MaterializationResponsibility
+  // does not have a default constructor).
   Optional<MaterializationResponsibility> FooR;
   Optional<MaterializationResponsibility> BarR;
   Optional<MaterializationResponsibility> BazR;
@@ -355,15 +335,15 @@ TEST(CoreAPIsTest, TestCircularDependenceInOneVSO) {
   // Create a MaterializationUnit for each symbol that moves the
   // MaterializationResponsibility into one of the locals above.
   auto FooMU = llvm::make_unique<SimpleMaterializationUnit>(
-      SymbolFlagsMap({{Foo, FooFlags}}),
+      SymbolFlagsMap({{Foo, FooSym.getFlags()}}),
       [&](MaterializationResponsibility R) { FooR.emplace(std::move(R)); });
 
   auto BarMU = llvm::make_unique<SimpleMaterializationUnit>(
-      SymbolFlagsMap({{Bar, BarFlags}}),
+      SymbolFlagsMap({{Bar, BarSym.getFlags()}}),
       [&](MaterializationResponsibility R) { BarR.emplace(std::move(R)); });
 
   auto BazMU = llvm::make_unique<SimpleMaterializationUnit>(
-      SymbolFlagsMap({{Baz, BazFlags}}),
+      SymbolFlagsMap({{Baz, BazSym.getFlags()}}),
       [&](MaterializationResponsibility R) { BazR.emplace(std::move(R)); });
 
   // Define the symbols.
@@ -374,74 +354,75 @@ TEST(CoreAPIsTest, TestCircularDependenceInOneVSO) {
   // Query each of the symbols to trigger materialization.
   bool FooResolved = false;
   bool FooReady = false;
-  auto FooQ = std::make_shared<AsynchronousSymbolQuery>(
-      SymbolNameSet({Foo}),
-      [&](Expected<AsynchronousSymbolQuery::ResolutionResult> RR) {
-        cantFail(std::move(RR));
-        FooResolved = true;
-      },
-      [&](Error Err) {
-        cantFail(std::move(Err));
-        FooReady = true;
-      });
-  {
-    auto Unresolved = V.lookup(FooQ, {Foo});
-    EXPECT_TRUE(Unresolved.empty()) << "Failed to resolve \"Foo\"";
-  }
+
+  auto OnFooResolution = [&](Expected<SymbolMap> Result) {
+    cantFail(std::move(Result));
+    FooResolved = true;
+  };
+
+  auto OnFooReady = [&](Error Err) {
+    cantFail(std::move(Err));
+    FooReady = true;
+  };
+
+  // Issue a lookup for Foo. Use NoDependenciesToRegister: We're going to add
+  // the dependencies manually below.
+  ES.lookup({&V}, {Foo}, std::move(OnFooResolution), std::move(OnFooReady),
+            NoDependenciesToRegister);
 
   bool BarResolved = false;
   bool BarReady = false;
-  auto BarQ = std::make_shared<AsynchronousSymbolQuery>(
-      SymbolNameSet({Bar}),
-      [&](Expected<AsynchronousSymbolQuery::ResolutionResult> RR) {
-        cantFail(std::move(RR));
-        BarResolved = true;
-      },
-      [&](Error Err) {
-        cantFail(std::move(Err));
-        BarReady = true;
-      });
-  {
-    auto Unresolved = V.lookup(BarQ, {Bar});
-    EXPECT_TRUE(Unresolved.empty()) << "Failed to resolve \"Bar\"";
-  }
+  auto OnBarResolution = [&](Expected<SymbolMap> Result) {
+    cantFail(std::move(Result));
+    BarResolved = true;
+  };
+
+  auto OnBarReady = [&](Error Err) {
+    cantFail(std::move(Err));
+    BarReady = true;
+  };
+
+  ES.lookup({&V}, {Bar}, std::move(OnBarResolution), std::move(OnBarReady),
+            NoDependenciesToRegister);
 
   bool BazResolved = false;
   bool BazReady = false;
-  auto BazQ = std::make_shared<AsynchronousSymbolQuery>(
-      SymbolNameSet({Baz}),
-      [&](Expected<AsynchronousSymbolQuery::ResolutionResult> RR) {
-        cantFail(std::move(RR));
-        BazResolved = true;
-      },
-      [&](Error Err) {
-        cantFail(std::move(Err));
-        BazReady = true;
-      });
-  {
-    auto Unresolved = V.lookup(BazQ, {Baz});
-    EXPECT_TRUE(Unresolved.empty()) << "Failed to resolve \"Baz\"";
-  }
+
+  auto OnBazResolution = [&](Expected<SymbolMap> Result) {
+    cantFail(std::move(Result));
+    BazResolved = true;
+  };
+
+  auto OnBazReady = [&](Error Err) {
+    cantFail(std::move(Err));
+    BazReady = true;
+  };
+
+  ES.lookup({&V}, {Baz}, std::move(OnBazResolution), std::move(OnBazReady),
+            NoDependenciesToRegister);
 
   // Add a circular dependency: Foo -> Bar, Bar -> Baz, Baz -> Foo.
-  FooR->addDependencies({{&V, SymbolNameSet({Bar})}});
-  BarR->addDependencies({{&V, SymbolNameSet({Baz})}});
-  BazR->addDependencies({{&V, SymbolNameSet({Foo})}});
+  FooR->addDependenciesForAll({{&V, SymbolNameSet({Bar})}});
+  BarR->addDependenciesForAll({{&V, SymbolNameSet({Baz})}});
+  BazR->addDependenciesForAll({{&V, SymbolNameSet({Foo})}});
 
   // Add self-dependencies for good measure. This tests that the implementation
   // of addDependencies filters these out.
-  FooR->addDependencies({{&V, SymbolNameSet({Foo})}});
-  BarR->addDependencies({{&V, SymbolNameSet({Bar})}});
-  BazR->addDependencies({{&V, SymbolNameSet({Baz})}});
+  FooR->addDependenciesForAll({{&V, SymbolNameSet({Foo})}});
+  BarR->addDependenciesForAll({{&V, SymbolNameSet({Bar})}});
+  BazR->addDependenciesForAll({{&V, SymbolNameSet({Baz})}});
 
+  // Check that nothing has been resolved yet.
   EXPECT_FALSE(FooResolved) << "\"Foo\" should not be resolved yet";
   EXPECT_FALSE(BarResolved) << "\"Bar\" should not be resolved yet";
   EXPECT_FALSE(BazResolved) << "\"Baz\" should not be resolved yet";
 
+  // Resolve the symbols (but do not finalized them).
   FooR->resolve({{Foo, FooSym}});
   BarR->resolve({{Bar, BarSym}});
   BazR->resolve({{Baz, BazSym}});
 
+  // Verify that the symbols have been resolved, but are not ready yet.
   EXPECT_TRUE(FooResolved) << "\"Foo\" should be resolved now";
   EXPECT_TRUE(BarResolved) << "\"Bar\" should be resolved now";
   EXPECT_TRUE(BazResolved) << "\"Baz\" should be resolved now";
@@ -450,15 +431,16 @@ TEST(CoreAPIsTest, TestCircularDependenceInOneVSO) {
   EXPECT_FALSE(BarReady) << "\"Bar\" should not be ready yet";
   EXPECT_FALSE(BazReady) << "\"Baz\" should not be ready yet";
 
+  // Finalize two of the symbols.
   FooR->finalize();
   BarR->finalize();
 
   // Verify that nothing is ready until the circular dependence is resolved.
-
   EXPECT_FALSE(FooReady) << "\"Foo\" still should not be ready";
   EXPECT_FALSE(BarReady) << "\"Bar\" still should not be ready";
   EXPECT_FALSE(BazReady) << "\"Baz\" still should not be ready";
 
+  // Finalize the last symbol.
   BazR->finalize();
 
   // Verify that everything becomes ready once the circular dependence resolved.
@@ -467,16 +449,14 @@ TEST(CoreAPIsTest, TestCircularDependenceInOneVSO) {
   EXPECT_TRUE(BazReady) << "\"Baz\" should be ready now";
 }
 
-TEST(CoreAPIsTest, DropMaterializerWhenEmpty) {
-  ExecutionSession ES;
-  auto Foo = ES.getSymbolStringPool().intern("foo");
-  auto Bar = ES.getSymbolStringPool().intern("bar");
-
+TEST_F(CoreAPIsStandardTest, DropMaterializerWhenEmpty) {
   bool DestructorRun = false;
 
+  JITSymbolFlags WeakExported(JITSymbolFlags::Exported);
+  WeakExported |= JITSymbolFlags::Weak;
+
   auto MU = llvm::make_unique<SimpleMaterializationUnit>(
-      SymbolFlagsMap(
-          {{Foo, JITSymbolFlags::Weak}, {Bar, JITSymbolFlags::Weak}}),
+      SymbolFlagsMap({{Foo, WeakExported}, {Bar, WeakExported}}),
       [](MaterializationResponsibility R) {
         llvm_unreachable("Unexpected call to materialize");
       },
@@ -486,12 +466,8 @@ TEST(CoreAPIsTest, DropMaterializerWhenEmpty) {
       },
       [&]() { DestructorRun = true; });
 
-  auto &V = ES.createVSO("V");
-
   cantFail(V.define(MU));
 
-  auto FooSym = JITEvaluatedSymbol(1, JITSymbolFlags::Exported);
-  auto BarSym = JITEvaluatedSymbol(2, JITSymbolFlags::Exported);
   cantFail(V.define(absoluteSymbols({{Foo, FooSym}})));
 
   EXPECT_FALSE(DestructorRun)
@@ -503,31 +479,18 @@ TEST(CoreAPIsTest, DropMaterializerWhenEmpty) {
       << "MaterializationUnit should have been destroyed";
 }
 
-TEST(CoreAPIsTest, AddAndMaterializeLazySymbol) {
-
-  constexpr JITTargetAddress FakeFooAddr = 0xdeadbeef;
-  constexpr JITTargetAddress FakeBarAddr = 0xcafef00d;
-
-  ExecutionSession ES;
-  auto Foo = ES.getSymbolStringPool().intern("foo");
-  auto Bar = ES.getSymbolStringPool().intern("bar");
-
+TEST_F(CoreAPIsStandardTest, AddAndMaterializeLazySymbol) {
   bool FooMaterialized = false;
   bool BarDiscarded = false;
 
-  auto &V = ES.createVSO("V");
+  JITSymbolFlags WeakExported(JITSymbolFlags::Exported);
+  WeakExported |= JITSymbolFlags::Weak;
 
   auto MU = llvm::make_unique<SimpleMaterializationUnit>(
-      SymbolFlagsMap(
-          {{Foo, JITSymbolFlags::Exported},
-           {Bar, static_cast<JITSymbolFlags::FlagNames>(
-                     JITSymbolFlags::Exported | JITSymbolFlags::Weak)}}),
+      SymbolFlagsMap({{Foo, JITSymbolFlags::Exported}, {Bar, WeakExported}}),
       [&](MaterializationResponsibility R) {
         assert(BarDiscarded && "Bar should have been discarded by this point");
-        SymbolMap SymbolsToResolve;
-        SymbolsToResolve[Foo] =
-            JITEvaluatedSymbol(FakeFooAddr, JITSymbolFlags::Exported);
-        R.resolve(std::move(SymbolsToResolve));
+        R.resolve(SymbolMap({{Foo, FooSym}}));
         R.finalize();
         FooMaterialized = true;
       },
@@ -537,52 +500,37 @@ TEST(CoreAPIsTest, AddAndMaterializeLazySymbol) {
       });
 
   cantFail(V.define(MU));
-
-  ;
-  cantFail(V.define(absoluteSymbols(
-      {{Bar, JITEvaluatedSymbol(FakeBarAddr, JITSymbolFlags::Exported)}})));
+  cantFail(V.define(absoluteSymbols({{Bar, BarSym}})));
 
   SymbolNameSet Names({Foo});
 
   bool OnResolutionRun = false;
   bool OnReadyRun = false;
 
-  auto OnResolution =
-      [&](Expected<AsynchronousSymbolQuery::ResolutionResult> Result) {
-        EXPECT_TRUE(!!Result) << "Resolution unexpectedly returned error";
-        auto I = Result->Symbols.find(Foo);
-        EXPECT_NE(I, Result->Symbols.end())
-            << "Could not find symbol definition";
-        EXPECT_EQ(I->second.getAddress(), FakeFooAddr)
-            << "Resolution returned incorrect result";
-        OnResolutionRun = true;
-      };
+  auto OnResolution = [&](Expected<SymbolMap> Result) {
+    EXPECT_TRUE(!!Result) << "Resolution unexpectedly returned error";
+    auto I = Result->find(Foo);
+    EXPECT_NE(I, Result->end()) << "Could not find symbol definition";
+    EXPECT_EQ(I->second.getAddress(), FooSym.getAddress())
+        << "Resolution returned incorrect result";
+    OnResolutionRun = true;
+  };
 
   auto OnReady = [&](Error Err) {
     cantFail(std::move(Err));
     OnReadyRun = true;
   };
 
-  auto Q =
-      std::make_shared<AsynchronousSymbolQuery>(Names, OnResolution, OnReady);
+  ES.lookup({&V}, Names, std::move(OnResolution), std::move(OnReady),
+            NoDependenciesToRegister);
 
-  auto Unresolved = V.lookup(std::move(Q), Names);
-
-  EXPECT_TRUE(Unresolved.empty()) << "Could not find Foo in dylib";
   EXPECT_TRUE(FooMaterialized) << "Foo was not materialized";
   EXPECT_TRUE(BarDiscarded) << "Bar was not discarded";
   EXPECT_TRUE(OnResolutionRun) << "OnResolutionCallback was not run";
   EXPECT_TRUE(OnReadyRun) << "OnReady was not run";
 }
 
-TEST(CoreAPIsTest, DefineMaterializingSymbol) {
-  ExecutionSession ES;
-  auto Foo = ES.getSymbolStringPool().intern("foo");
-  auto Bar = ES.getSymbolStringPool().intern("bar");
-
-  auto FooSym = JITEvaluatedSymbol(1, JITSymbolFlags::Exported);
-  auto BarSym = JITEvaluatedSymbol(2, JITSymbolFlags::Exported);
-
+TEST_F(CoreAPIsStandardTest, DefineMaterializingSymbol) {
   bool ExpectNoMoreMaterialization = false;
   ES.setDispatchMaterialization(
       [&](VSO &V, std::unique_ptr<MaterializationUnit> MU) {
@@ -600,56 +548,19 @@ TEST(CoreAPIsTest, DefineMaterializingSymbol) {
         R.finalize();
       });
 
-  auto &V = ES.createVSO("V");
   cantFail(V.define(MU));
+  cantFail(lookup({&V}, Foo));
 
-  auto OnResolution1 =
-      [&](Expected<AsynchronousSymbolQuery::ResolutionResult> Result) {
-        cantFail(std::move(Result));
-      };
-
-  auto OnReady1 = [](Error Err) { cantFail(std::move(Err)); };
-
-  auto Q1 = std::make_shared<AsynchronousSymbolQuery>(SymbolNameSet({Foo}),
-                                                      OnResolution1, OnReady1);
-
-  V.lookup(std::move(Q1), {Foo});
-
-  bool BarResolved = false;
-  auto OnResolution2 =
-      [&](Expected<AsynchronousSymbolQuery::ResolutionResult> Result) {
-        auto R = cantFail(std::move(Result));
-        EXPECT_EQ(R.Symbols.size(), 1U) << "Expected to resolve one symbol";
-        EXPECT_EQ(R.Symbols.count(Bar), 1U) << "Expected to resolve 'Bar'";
-        EXPECT_EQ(R.Symbols[Bar].getAddress(), BarSym.getAddress())
-            << "Expected Bar == BarSym";
-        BarResolved = true;
-      };
-
-  auto OnReady2 = [](Error Err) { cantFail(std::move(Err)); };
-
-  auto Q2 = std::make_shared<AsynchronousSymbolQuery>(SymbolNameSet({Bar}),
-                                                      OnResolution2, OnReady2);
-
+  // Assert that materialization is complete by now.
   ExpectNoMoreMaterialization = true;
-  V.lookup(std::move(Q2), {Bar});
 
-  EXPECT_TRUE(BarResolved) << "Bar should have been resolved";
+  // Look up bar to verify that no further materialization happens.
+  auto BarResult = cantFail(lookup({&V}, Bar));
+  EXPECT_EQ(BarResult.getAddress(), BarSym.getAddress())
+      << "Expected Bar == BarSym";
 }
 
-TEST(CoreAPIsTest, FallbackDefinitionGeneratorTest) {
-  constexpr JITTargetAddress FakeFooAddr = 0xdeadbeef;
-  constexpr JITTargetAddress FakeBarAddr = 0xcafef00d;
-
-  ExecutionSession ES;
-  auto Foo = ES.getSymbolStringPool().intern("foo");
-  auto Bar = ES.getSymbolStringPool().intern("bar");
-
-  auto FooSym = JITEvaluatedSymbol(FakeFooAddr, JITSymbolFlags::Exported);
-  auto BarSym = JITEvaluatedSymbol(FakeBarAddr, JITSymbolFlags::Exported);
-
-  auto &V = ES.createVSO("V");
-
+TEST_F(CoreAPIsStandardTest, FallbackDefinitionGeneratorTest) {
   cantFail(V.define(absoluteSymbols({{Foo, FooSym}})));
 
   V.setFallbackDefinitionGenerator([&](VSO &W, const SymbolNameSet &Names) {
@@ -660,140 +571,48 @@ TEST(CoreAPIsTest, FallbackDefinitionGeneratorTest) {
   auto Result = cantFail(lookup({&V}, {Foo, Bar}));
 
   EXPECT_EQ(Result.count(Bar), 1U) << "Expected to find fallback def for 'bar'";
-  EXPECT_EQ(Result[Bar].getAddress(), FakeBarAddr)
-      << "Expected address of fallback def for 'bar' to be " << FakeBarAddr;
+  EXPECT_EQ(Result[Bar].getAddress(), BarSym.getAddress())
+      << "Expected fallback def for Bar to be equal to BarSym";
 }
 
-TEST(CoreAPIsTest, FailResolution) {
-  ExecutionSession ES;
-  auto Foo = ES.getSymbolStringPool().intern("foo");
-  auto Bar = ES.getSymbolStringPool().intern("bar");
-
-  SymbolNameSet Names({Foo, Bar});
-
+TEST_F(CoreAPIsStandardTest, FailResolution) {
   auto MU = llvm::make_unique<SimpleMaterializationUnit>(
       SymbolFlagsMap(
           {{Foo, JITSymbolFlags::Weak}, {Bar, JITSymbolFlags::Weak}}),
       [&](MaterializationResponsibility R) { R.failMaterialization(); });
 
-  auto &V = ES.createVSO("V");
-
   cantFail(V.define(MU));
 
-  auto OnResolution =
-      [&](Expected<AsynchronousSymbolQuery::ResolutionResult> Result) {
-        handleAllErrors(Result.takeError(),
-                        [&](FailedToMaterialize &F) {
-                          EXPECT_EQ(F.getSymbols(), Names)
-                              << "Expected to fail on symbols in Names";
-                        },
-                        [](ErrorInfoBase &EIB) {
-                          std::string ErrMsg;
-                          {
-                            raw_string_ostream ErrOut(ErrMsg);
-                            EIB.log(ErrOut);
-                          }
-                          ADD_FAILURE()
-                              << "Expected a FailedToResolve error. Got:\n"
-                              << ErrMsg;
-                        });
-      };
+  SymbolNameSet Names({Foo, Bar});
+  auto Result = lookup({&V}, Names);
 
-  auto OnReady = [](Error Err) {
-    cantFail(std::move(Err));
-    ADD_FAILURE() << "OnReady should never be called";
-  };
-
-  auto Q =
-      std::make_shared<AsynchronousSymbolQuery>(Names, OnResolution, OnReady);
-
-  V.lookup(std::move(Q), Names);
+  EXPECT_FALSE(!!Result) << "Expected failure";
+  if (!Result) {
+    handleAllErrors(Result.takeError(),
+                    [&](FailedToMaterialize &F) {
+                      EXPECT_EQ(F.getSymbols(), Names)
+                          << "Expected to fail on symbols in Names";
+                    },
+                    [](ErrorInfoBase &EIB) {
+                      std::string ErrMsg;
+                      {
+                        raw_string_ostream ErrOut(ErrMsg);
+                        EIB.log(ErrOut);
+                      }
+                      ADD_FAILURE()
+                          << "Expected a FailedToResolve error. Got:\n"
+                          << ErrMsg;
+                    });
+  }
 }
 
-TEST(CoreAPIsTest, TestLambdaSymbolResolver) {
-  JITEvaluatedSymbol FooSym(0xdeadbeef, JITSymbolFlags::Exported);
-  JITEvaluatedSymbol BarSym(0xcafef00d, JITSymbolFlags::Exported);
-
-  ExecutionSession ES;
-
-  auto Foo = ES.getSymbolStringPool().intern("foo");
-  auto Bar = ES.getSymbolStringPool().intern("bar");
-  auto Baz = ES.getSymbolStringPool().intern("baz");
-
-  auto &V = ES.createVSO("V");
-  cantFail(V.define(absoluteSymbols({{Foo, FooSym}, {Bar, BarSym}})));
-
-  auto Resolver = createSymbolResolver(
-      [&](SymbolFlagsMap &SymbolFlags, const SymbolNameSet &Symbols) {
-        return V.lookupFlags(SymbolFlags, Symbols);
-      },
-      [&](std::shared_ptr<AsynchronousSymbolQuery> Q, SymbolNameSet Symbols) {
-        return V.lookup(std::move(Q), Symbols);
-      });
-
-  SymbolNameSet Symbols({Foo, Bar, Baz});
-
-  SymbolFlagsMap SymbolFlags;
-  SymbolNameSet SymbolsNotFound = Resolver->lookupFlags(SymbolFlags, Symbols);
-
-  EXPECT_EQ(SymbolFlags.size(), 2U)
-      << "lookupFlags returned the wrong number of results";
-  EXPECT_EQ(SymbolFlags.count(Foo), 1U) << "Missing lookupFlags result for foo";
-  EXPECT_EQ(SymbolFlags.count(Bar), 1U) << "Missing lookupFlags result for bar";
-  EXPECT_EQ(SymbolFlags[Foo], FooSym.getFlags())
-      << "Incorrect lookupFlags result for Foo";
-  EXPECT_EQ(SymbolFlags[Bar], BarSym.getFlags())
-      << "Incorrect lookupFlags result for Bar";
-  EXPECT_EQ(SymbolsNotFound.size(), 1U)
-      << "Expected one symbol not found in lookupFlags";
-  EXPECT_EQ(SymbolsNotFound.count(Baz), 1U)
-      << "Expected baz not to be found in lookupFlags";
-
-  bool OnResolvedRun = false;
-
-  auto OnResolved =
-      [&](Expected<AsynchronousSymbolQuery::ResolutionResult> Result) {
-        OnResolvedRun = true;
-        EXPECT_TRUE(!!Result) << "Unexpected error";
-        EXPECT_EQ(Result->Symbols.size(), 2U)
-            << "Unexpected number of resolved symbols";
-        EXPECT_EQ(Result->Symbols.count(Foo), 1U)
-            << "Missing lookup result for foo";
-        EXPECT_EQ(Result->Symbols.count(Bar), 1U)
-            << "Missing lookup result for bar";
-        EXPECT_EQ(Result->Symbols[Foo].getAddress(), FooSym.getAddress())
-            << "Incorrect address for foo";
-        EXPECT_EQ(Result->Symbols[Bar].getAddress(), BarSym.getAddress())
-            << "Incorrect address for bar";
-      };
-  auto OnReady = [&](Error Err) {
-    EXPECT_FALSE(!!Err) << "Finalization should never fail in this test";
-  };
-
-  auto Q = std::make_shared<AsynchronousSymbolQuery>(SymbolNameSet({Foo, Bar}),
-                                                     OnResolved, OnReady);
-  auto Unresolved = Resolver->lookup(std::move(Q), Symbols);
-
-  EXPECT_EQ(Unresolved.size(), 1U) << "Expected one unresolved symbol";
-  EXPECT_EQ(Unresolved.count(Baz), 1U) << "Expected baz to not be resolved";
-  EXPECT_TRUE(OnResolvedRun) << "OnResolved was never run";
-}
-
-TEST(CoreAPIsTest, TestLookupWithUnthreadedMaterialization) {
-  constexpr JITTargetAddress FakeFooAddr = 0xdeadbeef;
-  JITEvaluatedSymbol FooSym(FakeFooAddr, JITSymbolFlags::Exported);
-
-  ExecutionSession ES(std::make_shared<SymbolStringPool>());
-  auto Foo = ES.getSymbolStringPool().intern("foo");
-
+TEST_F(CoreAPIsStandardTest, TestLookupWithUnthreadedMaterialization) {
   auto MU = llvm::make_unique<SimpleMaterializationUnit>(
       SymbolFlagsMap({{Foo, JITSymbolFlags::Exported}}),
       [&](MaterializationResponsibility R) {
         R.resolve({{Foo, FooSym}});
         R.finalize();
       });
-
-  auto &V = ES.createVSO("V");
 
   cantFail(V.define(MU));
 
@@ -805,12 +624,8 @@ TEST(CoreAPIsTest, TestLookupWithUnthreadedMaterialization) {
       << "lookup returned incorrect flags";
 }
 
-TEST(CoreAPIsTest, TestLookupWithThreadedMaterialization) {
+TEST_F(CoreAPIsStandardTest, TestLookupWithThreadedMaterialization) {
 #if LLVM_ENABLE_THREADS
-  constexpr JITTargetAddress FakeFooAddr = 0xdeadbeef;
-  JITEvaluatedSymbol FooSym(FakeFooAddr, JITSymbolFlags::Exported);
-
-  ExecutionSession ES(std::make_shared<SymbolStringPool>());
 
   std::thread MaterializationThread;
   ES.setDispatchMaterialization(
@@ -819,9 +634,7 @@ TEST(CoreAPIsTest, TestLookupWithThreadedMaterialization) {
         MaterializationThread =
             std::thread([SharedMU, &V]() { SharedMU->doMaterialize(V); });
       });
-  auto Foo = ES.getSymbolStringPool().intern("foo");
 
-  auto &V = ES.createVSO("V");
   cantFail(V.define(absoluteSymbols({{Foo, FooSym}})));
 
   auto FooLookupResult = cantFail(lookup({&V}, Foo));
@@ -834,14 +647,11 @@ TEST(CoreAPIsTest, TestLookupWithThreadedMaterialization) {
 #endif
 }
 
-TEST(CoreAPIsTest, TestGetRequestedSymbolsAndDelegate) {
-  ExecutionSession ES;
-  auto Foo = ES.getSymbolStringPool().intern("foo");
-  auto Bar = ES.getSymbolStringPool().intern("bar");
-
-  JITEvaluatedSymbol FooSym(0xdeadbeef, JITSymbolFlags::Exported);
-  JITEvaluatedSymbol BarSym(0xcafef00d, JITSymbolFlags::Exported);
-
+TEST_F(CoreAPIsStandardTest, TestGetRequestedSymbolsAndReplace) {
+  // Test that GetRequestedSymbols returns the set of symbols that currently
+  // have pending queries, and test that MaterializationResponsibility's
+  // replace method can be used to return definitions to the VSO in a new
+  // MaterializationUnit.
   SymbolNameSet Names({Foo, Bar});
 
   bool FooMaterialized = false;
@@ -862,15 +672,13 @@ TEST(CoreAPIsTest, TestGetRequestedSymbolsAndDelegate) {
               BarMaterialized = true;
             });
 
-        R.delegate(std::move(NewMU));
+        R.replace(std::move(NewMU));
 
         R.resolve(SymbolMap({{Foo, FooSym}}));
         R.finalize();
 
         FooMaterialized = true;
       });
-
-  auto &V = ES.createVSO("V");
 
   cantFail(V.define(MU));
 
@@ -890,35 +698,54 @@ TEST(CoreAPIsTest, TestGetRequestedSymbolsAndDelegate) {
   EXPECT_TRUE(BarMaterialized) << "Bar should be materialized now";
 }
 
-TEST(CoreAPIsTest, TestMaterializeWeakSymbol) {
+TEST_F(CoreAPIsStandardTest, TestMaterializationResponsibilityDelegation) {
+  auto MU = llvm::make_unique<SimpleMaterializationUnit>(
+      SymbolFlagsMap({{Foo, FooSym.getFlags()}, {Bar, BarSym.getFlags()}}),
+      [&](MaterializationResponsibility R) {
+        auto R2 = R.delegate({Bar});
+
+        R.resolve({{Foo, FooSym}});
+        R.finalize();
+        R2.resolve({{Bar, BarSym}});
+        R2.finalize();
+      });
+
+  cantFail(V.define(MU));
+
+  auto Result = lookup({&V}, {Foo, Bar});
+
+  EXPECT_TRUE(!!Result) << "Result should be a success value";
+  EXPECT_EQ(Result->count(Foo), 1U) << "\"Foo\" entry missing";
+  EXPECT_EQ(Result->count(Bar), 1U) << "\"Bar\" entry missing";
+  EXPECT_EQ((*Result)[Foo].getAddress(), FooSym.getAddress())
+      << "Address mismatch for \"Foo\"";
+  EXPECT_EQ((*Result)[Bar].getAddress(), BarSym.getAddress())
+      << "Address mismatch for \"Bar\"";
+}
+
+TEST_F(CoreAPIsStandardTest, TestMaterializeWeakSymbol) {
   // Confirm that once a weak definition is selected for materialization it is
   // treated as strong.
-
-  constexpr JITTargetAddress FakeFooAddr = 0xdeadbeef;
-  JITSymbolFlags FooFlags = JITSymbolFlags::Exported;
-  FooFlags &= JITSymbolFlags::Weak;
-  auto FooSym = JITEvaluatedSymbol(FakeFooAddr, FooFlags);
-
-  ExecutionSession ES;
-  auto Foo = ES.getSymbolStringPool().intern("foo");
-
-  auto &V = ES.createVSO("V");
+  JITSymbolFlags WeakExported = JITSymbolFlags::Exported;
+  WeakExported &= JITSymbolFlags::Weak;
 
   std::unique_ptr<MaterializationResponsibility> FooResponsibility;
   auto MU = llvm::make_unique<SimpleMaterializationUnit>(
-      SymbolFlagsMap({{Foo, FooFlags}}), [&](MaterializationResponsibility R) {
+      SymbolFlagsMap({{Foo, FooSym.getFlags()}}),
+      [&](MaterializationResponsibility R) {
         FooResponsibility =
             llvm::make_unique<MaterializationResponsibility>(std::move(R));
       });
 
   cantFail(V.define(MU));
-  auto Q = std::make_shared<AsynchronousSymbolQuery>(
-      SymbolNameSet({Foo}),
-      [](Expected<AsynchronousSymbolQuery::ResolutionResult> R) {
-        cantFail(std::move(R));
-      },
-      [](Error Err) { cantFail(std::move(Err)); });
-  V.lookup(std::move(Q), SymbolNameSet({Foo}));
+  auto OnResolution = [](Expected<SymbolMap> Result) {
+    cantFail(std::move(Result));
+  };
+
+  auto OnReady = [](Error Err) { cantFail(std::move(Err)); };
+
+  ES.lookup({&V}, {Foo}, std::move(OnResolution), std::move(OnReady),
+            NoDependenciesToRegister);
 
   auto MU2 = llvm::make_unique<SimpleMaterializationUnit>(
       SymbolFlagsMap({{Foo, JITSymbolFlags::Exported}}),

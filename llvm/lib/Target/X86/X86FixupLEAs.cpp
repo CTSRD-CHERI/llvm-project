@@ -278,7 +278,8 @@ static inline bool isLEA(const int Opcode) {
 }
 
 static inline bool isInefficientLEAReg(unsigned int Reg) {
-  return Reg == X86::EBP || Reg == X86::RBP || Reg == X86::R13;
+  return Reg == X86::EBP || Reg == X86::RBP ||
+         Reg == X86::R13D || Reg == X86::R13;
 }
 
 static inline bool isRegOperand(const MachineOperand &Op) {
@@ -286,6 +287,8 @@ static inline bool isRegOperand(const MachineOperand &Op) {
 }
 /// hasIneffecientLEARegs - LEA that uses base and index registers
 /// where the base is EBP, RBP, or R13
+// TODO: use a variant scheduling class to model the latency profile
+// of LEA instructions, and implement this logic as a scheduling predicate.
 static inline bool hasInefficientLEABaseReg(const MachineOperand &Base,
                                             const MachineOperand &Index) {
   return Base.isReg() && isInefficientLEAReg(Base.getReg()) &&
@@ -294,13 +297,6 @@ static inline bool hasInefficientLEABaseReg(const MachineOperand &Base,
 
 static inline bool hasLEAOffset(const MachineOperand &Offset) {
   return (Offset.isImm() && Offset.getImm() != 0) || Offset.isGlobal();
-}
-
-// LEA instruction that has all three operands: offset, base and index
-static inline bool isThreeOperandsLEA(const MachineOperand &Base,
-                                      const MachineOperand &Index,
-                                      const MachineOperand &Offset) {
-  return isRegOperand(Base) && isRegOperand(Index) && hasLEAOffset(Offset);
 }
 
 static inline int getADDrrFromLEA(int LEAOpcode) {
@@ -477,7 +473,7 @@ FixupLEAPass::processInstrForSlow3OpLEA(MachineInstr &MI,
   const MachineOperand &Offset = MI.getOperand(4);
   const MachineOperand &Segment = MI.getOperand(5);
 
-  if (!(isThreeOperandsLEA(Base, Index, Offset) ||
+  if (!(TII->isThreeOperandsLEA(MI) ||
         hasInefficientLEABaseReg(Base, Index)) ||
       !TII->isSafeToClobberEFLAGS(*MFI, MI) ||
       Segment.getReg() != X86::NoRegister)
@@ -583,7 +579,7 @@ bool FixupLEAPass::processBasicBlock(MachineFunction &MF,
         continue;
 
     if (OptLEA) {
-      if (MF.getSubtarget<X86Subtarget>().isSLM())
+      if (MF.getSubtarget<X86Subtarget>().slowLEA())
         processInstructionForSLM(I, MFI);
 
       else {

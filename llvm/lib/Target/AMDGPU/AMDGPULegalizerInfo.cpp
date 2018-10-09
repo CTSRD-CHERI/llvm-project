@@ -24,7 +24,7 @@
 using namespace llvm;
 using namespace LegalizeActions;
 
-AMDGPULegalizerInfo::AMDGPULegalizerInfo(const SISubtarget &ST,
+AMDGPULegalizerInfo::AMDGPULegalizerInfo(const GCNSubtarget &ST,
                                          const GCNTargetMachine &TM) {
   using namespace TargetOpcode;
 
@@ -39,6 +39,7 @@ AMDGPULegalizerInfo::AMDGPULegalizerInfo(const SISubtarget &ST,
 
   const LLT S32 = LLT::scalar(32);
   const LLT S64 = LLT::scalar(64);
+  const LLT S512 = LLT::scalar(512);
 
   const LLT GlobalPtr = GetAddrSpacePtr(AMDGPUAS::GLOBAL_ADDRESS);
   const LLT ConstantPtr = GetAddrSpacePtr(AMDGPUAS::CONSTANT_ADDRESS);
@@ -70,9 +71,16 @@ AMDGPULegalizerInfo::AMDGPULegalizerInfo(const SISubtarget &ST,
 
   getActionDefinitionsBuilder(G_FCONSTANT)
     .legalFor({S32, S64});
+
+  // G_IMPLICIT_DEF is a no-op so we can make it legal for any value type that
+  // can fit in a register.
+  // FIXME: We need to legalize several more operations before we can add
+  // a test case for size > 512.
   getActionDefinitionsBuilder(G_IMPLICIT_DEF)
-    .legalFor({S1, S32, S64,
-               GlobalPtr, ConstantPtr, LocalPtr, FlatPtr, PrivatePtr});
+    .legalIf([=](const LegalityQuery &Query) {
+        return Query.Types[0].getSizeInBits() <= 512;
+    })
+    .clampScalar(0, S1, S512);
 
   getActionDefinitionsBuilder(G_CONSTANT)
     .legalFor({S1, S32, S64});
@@ -164,10 +172,7 @@ AMDGPULegalizerInfo::AMDGPULegalizerInfo(const SISubtarget &ST,
   }
 
   // FIXME: Doesn't handle extract of illegal sizes.
-  getActionDefinitionsBuilder(G_EXTRACT)
-    .unsupportedIf([=](const LegalityQuery &Query) {
-        return Query.Types[0].getSizeInBits() >= Query.Types[1].getSizeInBits();
-      })
+  getActionDefinitionsBuilder({G_EXTRACT, G_INSERT})
     .legalIf([=](const LegalityQuery &Query) {
         const LLT &Ty0 = Query.Types[0];
         const LLT &Ty1 = Query.Types[1];

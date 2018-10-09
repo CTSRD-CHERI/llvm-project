@@ -238,6 +238,15 @@ Linux::Linux(const Driver &D, const llvm::Triple &Triple, const ArgList &Args)
     ExtraOpts.push_back("relro");
   }
 
+  if (GCCInstallation.getParentLibPath().find("opt/rh/devtoolset") !=
+      StringRef::npos)
+    // With devtoolset on RHEL, we want to add a bin directory that is relative
+    // to the detected gcc install, because if we are using devtoolset gcc then
+    // we want to use other tools from devtoolset (e.g. ld) instead of the
+    // standard system tools.
+    PPaths.push_back(Twine(GCCInstallation.getParentLibPath() +
+                     "/../bin").str());
+
   if (Arch == llvm::Triple::arm || Arch == llvm::Triple::thumb)
     ExtraOpts.push_back("-X");
 
@@ -367,7 +376,14 @@ Linux::Linux(const Driver &D, const llvm::Triple &Triple, const ArgList &Args)
   }
 
   addPathIfExists(D, SysRoot + "/usr/lib/" + MultiarchTriple, Paths);
-  addPathIfExists(D, SysRoot + "/usr/lib/../" + OSLibDir, Paths);
+  // 64-bit OpenEmbedded sysroots may not have a /usr/lib dir. So they cannot
+  // find /usr/lib64 as it is referenced as /usr/lib/../lib64. So we handle
+  // this here.
+  if (Triple.getVendor() == llvm::Triple::OpenEmbedded &&
+      Triple.isArch64Bit())
+    addPathIfExists(D, SysRoot + "/usr/" + OSLibDir, Paths);
+  else
+    addPathIfExists(D, SysRoot + "/usr/lib/../" + OSLibDir, Paths);
   if (IsRISCV) {
     StringRef ABIName = tools::riscv::getRISCVABI(Args, Triple);
     addPathIfExists(D, SysRoot + "/" + OSLibDir + "/" + ABIName, Paths);
@@ -922,7 +938,8 @@ SanitizerMask Linux::getSupportedSanitizers() const {
     Res |= SanitizerKind::Efficiency;
   if (IsX86 || IsX86_64)
     Res |= SanitizerKind::Function;
-  if (IsX86_64 || IsMIPS64 || IsAArch64 || IsX86 || IsMIPS || IsArmArch)
+  if (IsX86_64 || IsMIPS64 || IsAArch64 || IsX86 || IsMIPS || IsArmArch ||
+      IsPowerPC64)
     Res |= SanitizerKind::Scudo;
   if (IsX86_64 || IsAArch64) {
     Res |= SanitizerKind::HWAddress;

@@ -46,17 +46,13 @@ public:
   /// Functor for receiving finalization notifications.
   using NotifyFinalizedFunction = std::function<void(VModuleKey)>;
 
-  struct Resources {
-    std::shared_ptr<RuntimeDyld::MemoryManager> MemMgr;
-    std::shared_ptr<SymbolResolver> Resolver;
-  };
-
-  using ResourcesGetterFunction = std::function<Resources(VModuleKey)>;
+  using GetMemoryManagerFunction =
+      std::function<std::shared_ptr<RuntimeDyld::MemoryManager>(VModuleKey)>;
 
   /// Construct an ObjectLinkingLayer with the given NotifyLoaded,
   ///        and NotifyFinalized functors.
   RTDyldObjectLinkingLayer2(
-      ExecutionSession &ES, ResourcesGetterFunction GetResources,
+      ExecutionSession &ES, GetMemoryManagerFunction GetMemoryManager,
       NotifyLoadedFunction NotifyLoaded = NotifyLoadedFunction(),
       NotifyFinalizedFunction NotifyFinalized = NotifyFinalizedFunction());
 
@@ -81,7 +77,7 @@ public:
 
 private:
   mutable std::mutex RTDyldLayerMutex;
-  ResourcesGetterFunction GetResources;
+  GetMemoryManagerFunction GetMemoryManager;
   NotifyLoadedFunction NotifyLoaded;
   NotifyFinalizedFunction NotifyFinalized;
   bool ProcessAllSections;
@@ -253,9 +249,14 @@ private:
           consumeError(SymbolName.takeError());
           continue;
         }
+        // FIXME: Raise an error for bad symbols.
         auto Flags = JITSymbolFlags::fromObjectSymbol(Symbol);
+        if (!Flags) {
+          consumeError(Flags.takeError());
+          continue;
+        }
         SymbolTable.insert(
-          std::make_pair(*SymbolName, JITEvaluatedSymbol(0, Flags)));
+            std::make_pair(*SymbolName, JITEvaluatedSymbol(0, *Flags)));
       }
     }
 

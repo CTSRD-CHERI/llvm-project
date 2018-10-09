@@ -90,6 +90,8 @@ enum SpillOpcodeKey {
   SOK_QuadFloat4Spill,
   SOK_QuadBitSpill,
   SOK_SpillToVSR,
+  SOK_SPESpill,
+  SOK_SPE4Spill,
   SOK_LastOpcodeSpill  // This must be last on the enum.
 };
 
@@ -314,11 +316,11 @@ unsigned PPCInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
 }
 
 // For opcodes with the ReMaterializable flag set, this function is called to
-// verify the instruction is really rematable.  
+// verify the instruction is really rematable.
 bool PPCInstrInfo::isReallyTriviallyReMaterializable(const MachineInstr &MI,
                                                      AliasAnalysis *AA) const {
   switch (MI.getOpcode()) {
-  default: 
+  default:
     // This function should only be called for opcodes with the ReMaterializable
     // flag set.
     llvm_unreachable("Unknown rematerializable operation!");
@@ -949,7 +951,18 @@ void PPCInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     BuildMI(MBB, I, DL, get(PPC::MFVSRD), DestReg).addReg(SrcReg);
     getKillRegState(KillSrc);
     return;
+  } else if (PPC::SPERCRegClass.contains(SrcReg) &&
+             PPC::SPE4RCRegClass.contains(DestReg)) {
+    BuildMI(MBB, I, DL, get(PPC::EFSCFD), DestReg).addReg(SrcReg);
+    getKillRegState(KillSrc);
+    return;
+  } else if (PPC::SPE4RCRegClass.contains(SrcReg) &&
+             PPC::SPERCRegClass.contains(DestReg)) {
+    BuildMI(MBB, I, DL, get(PPC::EFDCFS), DestReg).addReg(SrcReg);
+    getKillRegState(KillSrc);
+    return;
   }
+
 
   unsigned Opc;
   if (PPC::GPRCRegClass.contains(DestReg, SrcReg))
@@ -983,6 +996,8 @@ void PPCInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     Opc = PPC::QVFMRb;
   else if (PPC::CRBITRCRegClass.contains(DestReg, SrcReg))
     Opc = PPC::CROR;
+  else if (PPC::SPERCRegClass.contains(DestReg, SrcReg))
+    Opc = PPC::EVOR;
   else
     llvm_unreachable("Impossible reg-to-reg copy");
 
@@ -1011,6 +1026,10 @@ unsigned PPCInstrInfo::getStoreOpcodeForSpill(unsigned Reg,
       OpcodeIndex = SOK_Float8Spill;
     } else if (PPC::F4RCRegClass.hasSubClassEq(RC)) {
       OpcodeIndex = SOK_Float4Spill;
+    } else if (PPC::SPERCRegClass.hasSubClassEq(RC)) {
+      OpcodeIndex = SOK_SPESpill;
+    } else if (PPC::SPE4RCRegClass.hasSubClassEq(RC)) {
+      OpcodeIndex = SOK_SPE4Spill;
     } else if (PPC::CRRCRegClass.hasSubClassEq(RC)) {
       OpcodeIndex = SOK_CRSpill;
     } else if (PPC::CRBITRCRegClass.hasSubClassEq(RC)) {
@@ -1093,6 +1112,10 @@ PPCInstrInfo::getLoadOpcodeForSpill(unsigned Reg,
       OpcodeIndex = SOK_Float8Spill;
     } else if (PPC::F4RCRegClass.hasSubClassEq(RC)) {
       OpcodeIndex = SOK_Float4Spill;
+    } else if (PPC::SPERCRegClass.hasSubClassEq(RC)) {
+      OpcodeIndex = SOK_SPESpill;
+    } else if (PPC::SPE4RCRegClass.hasSubClassEq(RC)) {
+      OpcodeIndex = SOK_SPE4Spill;
     } else if (PPC::CRRCRegClass.hasSubClassEq(RC)) {
       OpcodeIndex = SOK_CRSpill;
     } else if (PPC::CRBITRCRegClass.hasSubClassEq(RC)) {
@@ -2321,7 +2344,7 @@ const unsigned *PPCInstrInfo::getStoreOpcodesForSpillArray() const {
       {PPC::STW, PPC::STD, PPC::STFD, PPC::STFS, PPC::SPILL_CR,
        PPC::SPILL_CRBIT, PPC::STVX, PPC::STXVD2X, PPC::STXSDX, PPC::STXSSPX,
        PPC::SPILL_VRSAVE, PPC::QVSTFDX, PPC::QVSTFSXs, PPC::QVSTFDXb,
-       PPC::SPILLTOVSR_ST},
+       PPC::SPILLTOVSR_ST, PPC::EVSTDD, PPC::SPESTW},
       // Power 9
       {PPC::STW, PPC::STD, PPC::STFD, PPC::STFS, PPC::SPILL_CR,
        PPC::SPILL_CRBIT, PPC::STVX, PPC::STXV, PPC::DFSTOREf64, PPC::DFSTOREf32,
@@ -2337,7 +2360,7 @@ const unsigned *PPCInstrInfo::getLoadOpcodesForSpillArray() const {
       {PPC::LWZ, PPC::LD, PPC::LFD, PPC::LFS, PPC::RESTORE_CR,
        PPC::RESTORE_CRBIT, PPC::LVX, PPC::LXVD2X, PPC::LXSDX, PPC::LXSSPX,
        PPC::RESTORE_VRSAVE, PPC::QVLFDX, PPC::QVLFSXs, PPC::QVLFDXb,
-       PPC::SPILLTOVSR_LD},
+       PPC::SPILLTOVSR_LD, PPC::EVLDD, PPC::SPELWZ},
       // Power 9
       {PPC::LWZ, PPC::LD, PPC::LFD, PPC::LFS, PPC::RESTORE_CR,
        PPC::RESTORE_CRBIT, PPC::LVX, PPC::LXV, PPC::DFLOADf64, PPC::DFLOADf32,
@@ -2480,8 +2503,6 @@ bool PPCInstrInfo::convertToImmediateForm(MachineInstr &MI,
       Is64BitLI = Opc != PPC::RLDICL_32;
       NewImm = InVal.getSExtValue();
       SetCR = Opc == PPC::RLDICLo;
-      if (SetCR && (SExtImm & NewImm) != NewImm)
-        return false;
       break;
     }
     return false;
@@ -2495,7 +2516,7 @@ bool PPCInstrInfo::convertToImmediateForm(MachineInstr &MI,
     int64_t ME = MI.getOperand(4).getImm();
     APInt InVal(32, SExtImm, true);
     InVal = InVal.rotl(SH);
-    // Set the bits (        MB + 32       ) to (        ME + 32       ).
+    // Set the bits (        MB + 32        ) to (        ME + 32        ).
     uint64_t Mask = ((1LLU << (32 - MB)) - 1) & ~((1LLU << (31 - ME)) - 1);
     InVal &= Mask;
     // Can't replace negative values with an LI as that will sign-extend
@@ -2509,8 +2530,6 @@ bool PPCInstrInfo::convertToImmediateForm(MachineInstr &MI,
       Is64BitLI = Opc == PPC::RLWINM8 || Opc == PPC::RLWINM8o;
       NewImm = InVal.getSExtValue();
       SetCR = Opc == PPC::RLWINMo || Opc == PPC::RLWINM8o;
-      if (SetCR && (SExtImm & NewImm) != NewImm)
-        return false;
       break;
     }
     return false;
@@ -2536,6 +2555,33 @@ bool PPCInstrInfo::convertToImmediateForm(MachineInstr &MI,
   }
 
   if (ReplaceWithLI) {
+    // We need to be careful with CR-setting instructions we're replacing.
+    if (SetCR) {
+      // We don't know anything about uses when we're out of SSA, so only
+      // replace if the new immediate will be reproduced.
+      bool ImmChanged = (SExtImm & NewImm) != NewImm;
+      if (PostRA && ImmChanged)
+        return false;
+
+      if (!PostRA) {
+        // If the defining load-immediate has no other uses, we can just replace
+        // the immediate with the new immediate.
+        if (MRI->hasOneUse(DefMI->getOperand(0).getReg()))
+          DefMI->getOperand(1).setImm(NewImm);
+
+        // If we're not using the GPR result of the CR-setting instruction, we
+        // just need to and with zero/non-zero depending on the new immediate.
+        else if (MRI->use_empty(MI.getOperand(0).getReg())) {
+          if (NewImm) {
+            assert(Immediate && "Transformation converted zero to non-zero?");
+            NewImm = Immediate;
+          }
+        }
+        else if (ImmChanged)
+          return false;
+      }
+    }
+
     LLVM_DEBUG(dbgs() << "Replacing instruction:\n");
     LLVM_DEBUG(MI.dump());
     LLVM_DEBUG(dbgs() << "Fed by:\n");

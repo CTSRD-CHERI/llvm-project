@@ -36,15 +36,18 @@ class TargetLoweringObjectFileELF : public TargetLoweringObjectFile {
 protected:
   MCSymbolRefExpr::VariantKind PLTRelativeVariantKind =
       MCSymbolRefExpr::VK_None;
+  const TargetMachine *TM;
 
 public:
   TargetLoweringObjectFileELF() = default;
   ~TargetLoweringObjectFileELF() override = default;
 
+  void Initialize(MCContext &Ctx, const TargetMachine &TM) override;
+
   /// Emit Obj-C garbage collection and linker options.
   void emitModuleMetadata(MCStreamer &Streamer, Module &M) const override;
 
-  void emitPersonalityValue(MCStreamer &Streamer, const DataLayout &TM,
+  void emitPersonalityValue(MCStreamer &Streamer, const DataLayout &DL,
                             const MCSymbol *Sym) const override;
 
   /// Given a constant with the SectionKind, return a section that it should be

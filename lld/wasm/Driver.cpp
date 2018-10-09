@@ -68,13 +68,17 @@ private:
   void createFiles(opt::InputArgList &Args);
   void addFile(StringRef Path);
   void addLibrary(StringRef Name);
+
+  // True if we are in --whole-archive and --no-whole-archive.
+  bool InWholeArchive = false;
+
   std::vector<InputFile *> Files;
 };
 } // anonymous namespace
 
 bool lld::wasm::link(ArrayRef<const char *> Args, bool CanExitEarly,
                      raw_ostream &Error) {
-  errorHandler().LogName = Args[0];
+  errorHandler().LogName = sys::path::filename(Args[0]);
   errorHandler().ErrorOS = &Error;
   errorHandler().ColorDiagnostics = Error.has_colors();
   errorHandler().ErrorLimitExceededMsg =
@@ -180,6 +184,37 @@ static void readImportFile(StringRef Filename) {
       Config->AllowUndefinedSymbols.insert(Sym);
 }
 
+// Returns slices of MB by parsing MB as an archive file.
+// Each slice consists of a member file in the archive.
+std::vector<MemoryBufferRef> static getArchiveMembers(
+    MemoryBufferRef MB) {
+  std::unique_ptr<Archive> File =
+      CHECK(Archive::create(MB),
+            MB.getBufferIdentifier() + ": failed to parse archive");
+
+  std::vector<MemoryBufferRef> V;
+  Error Err = Error::success();
+  for (const ErrorOr<Archive::Child> &COrErr : File->children(Err)) {
+    Archive::Child C =
+        CHECK(COrErr, MB.getBufferIdentifier() +
+                          ": could not get the child of the archive");
+    MemoryBufferRef MBRef =
+        CHECK(C.getMemoryBufferRef(),
+              MB.getBufferIdentifier() +
+                  ": could not get the buffer for a child of the archive");
+    V.push_back(MBRef);
+  }
+  if (Err)
+    fatal(MB.getBufferIdentifier() + ": Archive::children failed: " +
+          toString(std::move(Err)));
+
+  // Take ownership of memory buffers created for members of thin archives.
+  for (std::unique_ptr<MemoryBuffer> &MB : File->takeThinBuffers())
+    make<std::unique_ptr<MemoryBuffer>>(std::move(MB));
+
+  return V;
+}
+
 void LinkerDriver::addFile(StringRef Path) {
   Optional<MemoryBufferRef> Buffer = readFile(Path);
   if (!Buffer.hasValue())
@@ -188,6 +223,13 @@ void LinkerDriver::addFile(StringRef Path) {
 
   switch (identify_magic(MBRef.getBuffer())) {
   case file_magic::archive: {
+    // Handle -whole-archive.
+    if (InWholeArchive) {
+      for (MemoryBufferRef &M : getArchiveMembers(MBRef))
+        Files.push_back(createObjectFile(M));
+      return;
+    }
+
     SmallString<128> ImportFile = Path;
     path::replace_extension(ImportFile, ".imports");
     if (fs::exists(ImportFile))
@@ -197,10 +239,11 @@ void LinkerDriver::addFile(StringRef Path) {
     return;
   }
   case file_magic::bitcode:
-    Files.push_back(make<BitcodeFile>(MBRef));
+  case file_magic::wasm_object:
+    Files.push_back(createObjectFile(MBRef));
     break;
   default:
-    Files.push_back(make<ObjFile>(MBRef));
+    error("unknown file type: " + MBRef.getBufferIdentifier());
   }
 }
 
@@ -224,6 +267,12 @@ void LinkerDriver::createFiles(opt::InputArgList &Args) {
       break;
     case OPT_INPUT:
       addFile(Arg->getValue());
+      break;
+    case OPT_whole_archive:
+      InWholeArchive = true;
+      break;
+    case OPT_no_whole_archive:
+      InWholeArchive = false;
       break;
     }
   }
@@ -280,14 +329,19 @@ static void handleWeakUndefines() {
 }
 
 // Force Sym to be entered in the output. Used for -u or equivalent.
-static Symbol *addUndefined(StringRef Name) {
-  Symbol *S = Symtab->addUndefinedFunction(Name, 0, nullptr, nullptr);
+static Symbol *handleUndefined(StringRef Name) {
+  Symbol *Sym = Symtab->find(Name);
+  if (!Sym)
+    return nullptr;
 
   // Since symbol S may not be used inside the program, LTO may
   // eliminate it. Mark the symbol as "used" to prevent it.
-  S->IsUsedInRegularObj = true;
+  Sym->IsUsedInRegularObj = true;
 
-  return S;
+  if (auto *LazySym = dyn_cast<LazySymbol>(Sym))
+    LazySym->fetch();
+
+  return Sym;
 }
 
 void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
@@ -413,15 +467,6 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
     WasmSym::DsoHandle = Symtab->addSyntheticDataSymbol(
         "__dso_handle", WASM_SYMBOL_VISIBILITY_HIDDEN);
     WasmSym::DataEnd = Symtab->addSyntheticDataSymbol("__data_end", 0);
-
-    // For now, since we don't actually use the start function as the
-    // wasm start symbol, we don't need to care about it signature.
-    if (!Config->Entry.empty())
-      EntrySym = addUndefined(Config->Entry);
-
-    // Handle the `--undefined <sym>` options.
-    for (auto *Arg : Args.filtered(OPT_undefined))
-      addUndefined(Arg->getValue());
   }
 
   createFiles(Args);
@@ -435,44 +480,43 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   if (errorCount())
     return;
 
-  // Add synthetic dummies for weak undefined functions.
-  if (!Config->Relocatable)
-    handleWeakUndefines();
+  // Handle the `--undefined <sym>` options.
+  for (auto *Arg : Args.filtered(OPT_undefined))
+    handleUndefined(Arg->getValue());
 
-  // Handle --export.
+  // Handle the `--export <sym>` options
+  // This works like --undefined but also exports the symbol if its found
   for (auto *Arg : Args.filtered(OPT_export)) {
-    StringRef Name = Arg->getValue();
-    Symbol *Sym = Symtab->find(Name);
+    Symbol *Sym = handleUndefined(Arg->getValue());
     if (Sym && Sym->isDefined())
       Sym->ForceExport = true;
     else if (!Config->AllowUndefined)
-      error("symbol exported via --export not found: " + Name);
+      error(Twine("symbol exported via --export not found: ") +
+            Arg->getValue());
   }
+
+  if (!Config->Relocatable) {
+    // Add synthetic dummies for weak undefined functions.
+    handleWeakUndefines();
+
+    if (!Config->Entry.empty()) {
+      EntrySym = handleUndefined(Config->Entry);
+      if (!EntrySym)
+        error("entry symbol not defined (pass --no-entry to supress): " +
+              Config->Entry);
+    }
+
+    // Make sure we have resolved all symbols.
+    if (!Config->AllowUndefined)
+      Symtab->reportRemainingUndefines();
+  }
+
+  if (errorCount())
+    return;
 
   // Do link-time optimization if given files are LLVM bitcode files.
   // This compiles bitcode files into real object files.
   Symtab->addCombinedLTOObject();
-  if (errorCount())
-    return;
-
-  // Make sure we have resolved all symbols.
-  if (!Config->Relocatable && !Config->AllowUndefined) {
-    Symtab->reportRemainingUndefines();
-  } else {
-    // Even when using --allow-undefined we still want to report the absence of
-    // our initial set of undefined symbols (i.e. the entry point and symbols
-    // specified via --undefined).
-    // Part of the reason for this is that these function don't have signatures
-    // so which means they cannot be written as wasm function imports.
-    for (auto *Arg : Args.filtered(OPT_undefined)) {
-      Symbol *Sym = Symtab->find(Arg->getValue());
-      if (!Sym->isDefined())
-        error("symbol forced with --undefined not found: " + Sym->getName());
-    }
-    if (EntrySym && !EntrySym->isDefined())
-      error("entry symbol not defined (pass --no-entry to supress): " +
-            EntrySym->getName());
-  }
   if (errorCount())
     return;
 

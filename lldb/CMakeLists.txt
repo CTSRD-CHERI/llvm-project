@@ -40,6 +40,7 @@ endif()
 # lldb-suite is a dummy target that encompasses all the necessary tools and
 # libraries for building a fully-functioning liblldb.
 add_custom_target(lldb-suite)
+set(LLDB_SUITE_TARGET lldb-suite)
 
 option(LLDB_BUILD_FRAMEWORK "Build the Darwin LLDB.framework" Off)
 if(LLDB_BUILD_FRAMEWORK)
@@ -50,14 +51,17 @@ if(LLDB_BUILD_FRAMEWORK)
     message(FATAL_ERROR "LLDB.framework can only be generated when targeting Apple platforms")
   endif()
 
+  add_custom_target(lldb-framework)
   # These are used to fill out LLDB-Info.plist. These are relevant when building
   # the framework, and must be defined before building liblldb.
   set(PRODUCT_NAME "LLDB")
   set(EXECUTABLE_NAME "LLDB")
   set(CURRENT_PROJECT_VERSION "360.99.0")
+  set(LLDB_SUITE_TARGET lldb-framework)
 
   set(LLDB_FRAMEWORK_DIR
     ${CMAKE_BINARY_DIR}/${CMAKE_CFG_INTDIR}/${LLDB_FRAMEWORK_INSTALL_DIR})
+  include(LLDBFramework)
 endif()
 
 add_subdirectory(docs)
@@ -88,6 +92,13 @@ option(LLDB_INCLUDE_TESTS "Generate build targets for the LLDB unit tests."
 option(LLDB_TEST_USE_CUSTOM_C_COMPILER "Use the C compiler provided via LLDB_TEST_C_COMPILER for building test inferiors (instead of the just-built compiler). Defaults to OFF." OFF)
 option(LLDB_TEST_USE_CUSTOM_CXX_COMPILER "Use the C++ compiler provided via LLDB_TEST_CXX_COMPILER for building test inferiors (instead of the just-built compiler). Defaults to OFF." OFF)
 if(LLDB_INCLUDE_TESTS)
+
+  # The difference between the following two paths is significant. The path to
+  # LLDB will point to LLDB's binary directory, while the other will point to
+  # LLVM's binary directory in case the two differ.
+  set(LLDB_DEFAULT_TEST_EXECUTABLE "${LLVM_RUNTIME_OUTPUT_INTDIR}/lldb${CMAKE_EXECUTABLE_SUFFIX}")
+  set(LLDB_DEFAULT_TEST_DSYMUTIL "${LLVM_BINARY_DIR}/${CMAKE_CFG_INTDIR}/bin/dsymutil${CMAKE_EXECUTABLE_SUFFIX}")
+
   if (NOT LLDB_TEST_USE_CUSTOM_C_COMPILER AND TARGET clang)
     set(LLDB_DEFAULT_TEST_C_COMPILER "${LLVM_BINARY_DIR}/${CMAKE_CFG_INTDIR}/bin/clang${CMAKE_EXECUTABLE_SUFFIX}")
   else()
@@ -100,8 +111,10 @@ if(LLDB_INCLUDE_TESTS)
     set(LLDB_DEFAULT_TEST_CXX_COMPILER "")
   endif()
 
+  set(LLDB_TEST_EXECUTABLE "${LLDB_DEFAULT_TEST_EXECUTABLE}" CACHE PATH "lldb executable used for testing")
   set(LLDB_TEST_C_COMPILER "${LLDB_DEFAULT_TEST_C_COMPILER}" CACHE PATH "C Compiler to use for building LLDB test inferiors")
   set(LLDB_TEST_CXX_COMPILER "${LLDB_DEFAULT_TEST_CXX_COMPILER}" CACHE PATH "C++ Compiler to use for building LLDB test inferiors")
+  set(LLDB_TEST_DSYMUTIL "${LLDB_DEFAULT_TEST_DSYMUTIL}" CACHE PATH "dsymutil used for generating dSYM bundles")
 
   if (("${LLDB_TEST_C_COMPILER}" STREQUAL "") OR
       ("${LLDB_TEST_CXX_COMPILER}" STREQUAL ""))
@@ -130,7 +143,7 @@ if(LLDB_INCLUDE_TESTS)
   endif()
 
   if(NOT LLDB_BUILT_STANDALONE)
-    list(APPEND LLDB_TEST_DEPS yaml2obj dsymutil)
+    list(APPEND LLDB_TEST_DEPS yaml2obj)
   endif()
 
   if(TARGET liblldb)
@@ -141,18 +154,16 @@ if(LLDB_INCLUDE_TESTS)
     list(APPEND LLDB_TEST_DEPS clang)
   endif()
 
+  if(TARGET dsymutil)
+    list(APPEND LLDB_TEST_DEPS dsymutil)
+  endif()
+
   add_subdirectory(test)
   add_subdirectory(unittests)
   add_subdirectory(lit)
   add_subdirectory(utils/lldb-dotest)
 endif()
 
-if (LLDB_BUILD_FRAMEWORK)
-  add_custom_target(lldb-framework)
-  include(LLDBFramework)
-  add_dependencies(lldb-suite lldb-framework)
-endif()
-add_dependencies(lldb-suite liblldb)
 
 if (NOT LLDB_DISABLE_PYTHON)
     # Add a Post-Build Event to copy over Python files and create the symlink
@@ -174,7 +185,7 @@ if (NOT LLDB_DISABLE_PYTHON)
         COMMENT "Python script sym-linking LLDB Python API")
 
     # We depend on liblldb and lldb-argdumper being built before we can do this step.
-    add_dependencies(finish_swig lldb-suite)
+    add_dependencies(finish_swig ${LLDB_SUITE_TARGET})
 
     # If we build the readline module, we depend on that happening
     # first.

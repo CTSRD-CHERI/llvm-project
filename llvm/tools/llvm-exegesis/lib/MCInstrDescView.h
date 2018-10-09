@@ -39,7 +39,7 @@ struct Variable {
   llvm::SmallVector<unsigned, 2> TiedOperands;
   llvm::MCOperand AssignedValue;
   // The index of this Variable in Instruction.Variables and its associated
-  // Value in InstructionInstance.VariableValues.
+  // Value in InstructionBuilder.VariableValues.
   unsigned Index = -1;
 };
 
@@ -58,6 +58,7 @@ struct Variable {
 struct Operand {
   unsigned Index = 0;
   bool IsDef = false;
+  bool IsMem = false;
   bool IsExplicit = false;
   const RegisterAliasingTracker *Tracker = nullptr; // Set for Register Op.
   const llvm::MCOperandInfo *Info = nullptr;        // Set for Explicit Op.
@@ -72,6 +73,8 @@ struct Instruction {
   Instruction(const llvm::MCInstrDesc &MCInstrDesc,
               const RegisterAliasingTrackerCache &ATC);
 
+  bool hasMemoryOperands() const;
+
   const llvm::MCInstrDesc *Description; // Never nullptr.
   llvm::SmallVector<Operand, 8> Operands;
   llvm::SmallVector<Variable, 4> Variables;
@@ -79,17 +82,14 @@ struct Instruction {
   llvm::BitVector UseRegisters; // The union of the aliased use registers.
 };
 
-// An instance of an Instruction holding values for each of its Variables.
-struct InstructionInstance {
-  InstructionInstance(const Instruction &Instr);
+// A builder for an Instruction holding values for each of its Variables.
+struct InstructionBuilder {
+  InstructionBuilder(const Instruction &Instr);
 
-  // No copy.
-  InstructionInstance(const InstructionInstance &) = delete;
-  InstructionInstance &operator=(const InstructionInstance &) = delete;
-
-  // Moving is OK.
-  InstructionInstance(InstructionInstance &&);
-  InstructionInstance &operator=(InstructionInstance &&);
+  InstructionBuilder(const InstructionBuilder &);            // default
+  InstructionBuilder &operator=(const InstructionBuilder &); // default
+  InstructionBuilder(InstructionBuilder &&);                 // default
+  InstructionBuilder &operator=(InstructionBuilder &&);      // default
 
   unsigned getOpcode() const;
   llvm::MCOperand &getValueFor(const Variable &Var);
@@ -99,33 +99,37 @@ struct InstructionInstance {
   bool hasImmediateVariables() const;
 
   // Assigns a Random Value to all Variables that are still Invalid.
-  void randomizeUnsetVariables();
+  // Do not use any of the registers in `ForbiddenRegs`.
+  void randomizeUnsetVariables(const llvm::BitVector &ForbiddenRegs);
 
-  // Returns the instance as an llvm::MCInst. The InstructionInstance must be
-  // fully allocated (no invalid variables).
+  // Builds an llvm::MCInst from this InstructionBuilder setting its operands to
+  // the corresponding variable values.
+  // Precondition: All VariableValues must be set.
   llvm::MCInst build() const;
 
   Instruction Instr;
   llvm::SmallVector<llvm::MCOperand, 4> VariableValues;
 };
 
-// A prototype is a set of InstructionInstances with an explanation of how
-// it's been built. The prototype can then be randomized to exercice several
-// immediate values. It is also used to gather the used registers and define
-// their initial values.
-struct SnippetPrototype {
-  SnippetPrototype() = default;
+// A CodeTemplate is a set of InstructionBuilders that may not be fully
+// specified (i.e. some variables are not yet set).
+// This allows the BenchmarkRunner to instantiate it many times with specific
+// values to study their impact on instruction's performance.
+struct CodeTemplate {
+  CodeTemplate() = default;
 
-  // No copy.
-  SnippetPrototype(const SnippetPrototype &) = delete;
-  SnippetPrototype &operator=(const SnippetPrototype &) = delete;
+  CodeTemplate(CodeTemplate &&);            // default
+  CodeTemplate &operator=(CodeTemplate &&); // default
+  CodeTemplate(const CodeTemplate &) = delete;
+  CodeTemplate &operator=(const CodeTemplate &) = delete;
 
-  // Moving is OK.
-  SnippetPrototype(SnippetPrototype &&);
-  SnippetPrototype &operator=(SnippetPrototype &&);
-
-  std::string Explanation;
-  std::vector<InstructionInstance> Snippet;
+  // Some information about how this template has been created.
+  std::string Info;
+  // The list of the instructions for this template.
+  std::vector<InstructionBuilder> Instructions;
+  // If the template uses the provided scratch memory, the register in which
+  // the pointer to this memory is passed in to the function.
+  unsigned ScratchSpacePointerInReg = 0;
 };
 
 // Represents the assignment of a Register to an Operand.
@@ -182,7 +186,7 @@ size_t randomBit(const llvm::BitVector &Vector);
 // Picks a random configuration, then selects a random def and a random use from
 // it and finally set the selected values in the provided InstructionInstances.
 void setRandomAliasing(const AliasingConfigurations &AliasingConfigurations,
-                       InstructionInstance &DefII, InstructionInstance &UseII);
+                       InstructionBuilder &DefIB, InstructionBuilder &UseIB);
 
 // Writes MCInst to OS.
 // This is not assembly but the internal LLVM's name for instructions and

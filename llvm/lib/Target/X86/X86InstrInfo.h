@@ -168,32 +168,6 @@ class X86InstrInfo final : public X86GenInstrInfo {
   X86Subtarget &Subtarget;
   const X86RegisterInfo RI;
 
-  struct MemOp2RegOpTableTypeEntry {
-    uint16_t MemOp;
-    uint16_t RegOp;
-    uint16_t Flags;
-
-    bool operator<(const MemOp2RegOpTableTypeEntry &RHS) const {
-      return MemOp < RHS.MemOp;
-    }
-    bool operator==(const MemOp2RegOpTableTypeEntry &RHS) const {
-      return MemOp == RHS.MemOp;
-    }
-    friend bool operator<(const MemOp2RegOpTableTypeEntry &TE,
-                          unsigned Opcode) {
-      return TE.MemOp < Opcode;
-    }
-  };
-
-  /// MemOp2RegOpTable - Load / store unfolding opcode map.
-  ///
-  typedef std::vector<MemOp2RegOpTableTypeEntry> MemOp2RegOpTableType;
-  MemOp2RegOpTableType MemOp2RegOpTable;
-
-  static void AddTableEntry(MemOp2RegOpTableType &M2RTable, uint16_t RegOp,
-                            uint16_t MemOp, uint16_t Flags);
-  const MemOp2RegOpTableTypeEntry *lookupUnfoldTable(unsigned MemOp) const;
-
   virtual void anchor();
 
   bool AnalyzeBranchImpl(MachineBasicBlock &MBB, MachineBasicBlock *&TBB,
@@ -570,7 +544,7 @@ public:
   ArrayRef<std::pair<unsigned, const char *>>
   getSerializableDirectMachineOperandTargetFlags() const override;
 
-  virtual outliner::TargetCostInfo getOutlininingCandidateInfo(
+  virtual outliner::OutlinedFunction getOutliningCandidateInfo(
       std::vector<outliner::Candidate> &RepeatedSequenceLocs) const override;
 
   bool isFunctionSafeToOutlineFrom(MachineFunction &MF,
@@ -580,12 +554,12 @@ public:
   getOutliningType(MachineBasicBlock::iterator &MIT, unsigned Flags) const override;
 
   void buildOutlinedFrame(MachineBasicBlock &MBB, MachineFunction &MF,
-                            const outliner::TargetCostInfo &TCI) const override;
+                          const outliner::OutlinedFunction &OF) const override;
 
   MachineBasicBlock::iterator
   insertOutlinedCall(Module &M, MachineBasicBlock &MBB,
                      MachineBasicBlock::iterator &It, MachineFunction &MF,
-                     const outliner::TargetCostInfo &TCI) const override;
+                     const outliner::Candidate &C) const override;
 
 protected:
   /// Commutes the operands in the given instruction by changing the operands

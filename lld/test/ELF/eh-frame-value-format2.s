@@ -1,7 +1,7 @@
 # REQUIRES: x86
 
 # RUN: llvm-mc -filetype=obj -triple=x86_64-pc-linux %s -o %t
-# RUN: ld.lld --eh-frame-hdr %t -o %t2
+# RUN: ld.lld --eh-frame-hdr %t -o /dev/null
 
 .section .eh_frame
   .byte 0x14
@@ -22,7 +22,7 @@
   .byte 0x01 # LEB128
   .byte 0x01 # LEB128
 
-  .byte 0x04 # DW_EH_PE_sdata8
+  .byte 0x0C # DW_EH_PE_sdata8
   .byte 0xFF
   .byte 0xFF
   .byte 0xFF

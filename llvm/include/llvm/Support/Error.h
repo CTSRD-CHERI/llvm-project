@@ -24,6 +24,7 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/ErrorOr.h"
+#include "llvm/Support/Format.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 #include <cassert>
@@ -302,6 +303,14 @@ private:
     return Tmp;
   }
 
+  friend raw_ostream &operator<<(raw_ostream &OS, const Error &E) {
+    if (auto P = E.getPtr())
+      P->log(OS);
+    else
+      OS << "success";
+    return OS;
+  }
+
   ErrorInfoBase *Payload = nullptr;
 };
 
@@ -421,7 +430,7 @@ template <class T> class LLVM_NODISCARD Expected {
 
   static const bool isRef = std::is_reference<T>::value;
 
-  using wrap = ReferenceStorage<typename std::remove_reference<T>::type>;
+  using wrap = std::reference_wrapper<typename std::remove_reference<T>::type>;
 
   using error_type = std::unique_ptr<ErrorInfoBase>;
 
@@ -1112,6 +1121,18 @@ private:
   std::string Msg;
   std::error_code EC;
 };
+
+/// Create formatted StringError object.
+template <typename... Ts>
+Error createStringError(std::error_code EC, char const *Fmt,
+                        const Ts &... Vals) {
+  std::string Buffer;
+  raw_string_ostream Stream(Buffer);
+  Stream << format(Fmt, Vals...);
+  return make_error<StringError>(Stream.str(), EC);
+}
+
+Error createStringError(std::error_code EC, char const *Msg);
 
 /// Helper for check-and-exit error handling.
 ///

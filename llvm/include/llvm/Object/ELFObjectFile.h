@@ -373,6 +373,7 @@ public:
   uint8_t getBytesInAddress() const override;
   StringRef getFileFormatName() const override;
   Triple::ArchType getArch() const override;
+  Expected<uint64_t> getStartAddress() const override;
 
   unsigned getPlatformFlags() const override { return EF.getHeader()->e_flags; }
 
@@ -1025,8 +1026,6 @@ StringRef ELFObjectFile<ELFT>::getFileFormatName() const {
     case ELF::EM_SPARC:
     case ELF::EM_SPARC32PLUS:
       return "ELF32-sparc";
-    case ELF::EM_WEBASSEMBLY:
-      return "ELF32-wasm";
     case ELF::EM_AMDGPU:
       return "ELF32-amdgpu";
     default:
@@ -1050,8 +1049,6 @@ StringRef ELFObjectFile<ELFT>::getFileFormatName() const {
       return "ELF64-sparc";
     case ELF::EM_MIPS:
       return "ELF64-mips";
-    case ELF::EM_WEBASSEMBLY:
-      return "ELF64-wasm";
     case ELF::EM_AMDGPU:
       return "ELF64-amdgpu";
     case ELF::EM_BPF:
@@ -1113,12 +1110,6 @@ template <class ELFT> Triple::ArchType ELFObjectFile<ELFT>::getArch() const {
     return IsLittleEndian ? Triple::sparcel : Triple::sparc;
   case ELF::EM_SPARCV9:
     return Triple::sparcv9;
-  case ELF::EM_WEBASSEMBLY:
-    switch (EF.getHeader()->e_ident[ELF::EI_CLASS]) {
-    case ELF::ELFCLASS32: return Triple::wasm32;
-    case ELF::ELFCLASS64: return Triple::wasm64;
-    default: return Triple::UnknownArch;
-    }
 
   case ELF::EM_AMDGPU: {
     if (!IsLittleEndian)
@@ -1141,6 +1132,11 @@ template <class ELFT> Triple::ArchType ELFObjectFile<ELFT>::getArch() const {
   default:
     return Triple::UnknownArch;
   }
+}
+
+template <class ELFT>
+Expected<uint64_t> ELFObjectFile<ELFT>::getStartAddress() const {
+  return EF.getHeader()->e_entry;
 }
 
 template <class ELFT>

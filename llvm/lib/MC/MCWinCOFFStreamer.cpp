@@ -232,6 +232,25 @@ void MCWinCOFFStreamer::EmitCOFFSecRel32(const MCSymbol *Symbol,
   DF->getContents().resize(DF->getContents().size() + 4, 0);
 }
 
+void MCWinCOFFStreamer::EmitCOFFImgRel32(const MCSymbol *Symbol,
+                                         int64_t Offset) {
+  visitUsedSymbol(*Symbol);
+  MCDataFragment *DF = getOrCreateDataFragment();
+  // Create Symbol A for the relocation relative reference.
+  const MCExpr *MCE = MCSymbolRefExpr::create(
+      Symbol, MCSymbolRefExpr::VK_COFF_IMGREL32, getContext());
+  // Add the constant offset, if given.
+  if (Offset)
+    MCE = MCBinaryExpr::createAdd(
+        MCE, MCConstantExpr::create(Offset, getContext()), getContext());
+  // Build the imgrel relocation.
+  MCFixup Fixup = MCFixup::create(DF->getContents().size(), MCE, FK_Data_4);
+  // Record the relocation.
+  DF->getFixups().push_back(Fixup);
+  // Emit 4 bytes (zeros) to the object file.
+  DF->getContents().resize(DF->getContents().size() + 4, 0);
+}
+
 void MCWinCOFFStreamer::EmitCommonSymbol(MCSymbol *S, uint64_t Size,
                                          unsigned ByteAlignment) {
   auto *Symbol = cast<MCSymbolCOFF>(S);
@@ -279,7 +298,8 @@ void MCWinCOFFStreamer::EmitLocalCommonSymbol(MCSymbol *S, uint64_t Size,
 }
 
 void MCWinCOFFStreamer::EmitZerofill(MCSection *Section, MCSymbol *Symbol,
-                                     uint64_t Size, unsigned ByteAlignment) {
+                                     uint64_t Size, unsigned ByteAlignment,
+                                     SMLoc Loc) {
   llvm_unreachable("not implemented");
 }
 

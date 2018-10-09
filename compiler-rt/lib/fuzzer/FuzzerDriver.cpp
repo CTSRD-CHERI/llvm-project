@@ -537,6 +537,8 @@ int FuzzerDriver(int *argc, char ***argv, UserCallback Callback) {
   EF = new ExternalFunctions();
   if (EF->LLVMFuzzerInitialize)
     EF->LLVMFuzzerInitialize(argc, argv);
+  if (EF->__msan_scoped_disable_interceptor_checks)
+    EF->__msan_scoped_disable_interceptor_checks();
   const Vector<std::string> Args(*argv, *argv + *argc);
   assert(!Args.empty());
   ProgName = new std::string(Args[0]);
@@ -613,8 +615,14 @@ int FuzzerDriver(int *argc, char ***argv, UserCallback Callback) {
   Options.PrintNewCovPcs = Flags.print_pcs;
   Options.PrintNewCovFuncs = Flags.print_funcs;
   Options.PrintFinalStats = Flags.print_final_stats;
+  Options.PrintMutationStats = Flags.print_mutation_stats;
+  Options.UseWeightedMutations = Flags.use_weighted_mutations;
   Options.PrintCorpusStats = Flags.print_corpus_stats;
   Options.PrintCoverage = Flags.print_coverage;
+  Options.PrintUnstableStats = Flags.print_unstable_stats;
+  if (Flags.handle_unstable == TracePC::MinUnstable ||
+      Flags.handle_unstable == TracePC::ZeroUnstable)
+    Options.HandleUnstable = Flags.handle_unstable;
   Options.DumpCoverage = Flags.dump_coverage;
   if (Flags.exit_on_src_pos)
     Options.ExitOnSrcPos = Flags.exit_on_src_pos;

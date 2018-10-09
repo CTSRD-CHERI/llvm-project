@@ -18,6 +18,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "VPlan.h"
+#include "VPlanDominatorTree.h"
 #include "llvm/ADT/DepthFirstIterator.h"
 #include "llvm/ADT/PostOrderIterator.h"
 #include "llvm/ADT/SmallVector.h"
@@ -25,7 +26,6 @@
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CFG.h"
-#include "llvm/IR/Dominators.h"
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
@@ -34,6 +34,7 @@
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/GenericDomTreeConstruction.h"
 #include "llvm/Support/GraphWriter.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
@@ -457,6 +458,18 @@ void VPlanPrinter::dumpBasicBlock(const VPBasicBlock *BasicBlock) {
   bumpIndent(1);
   for (const VPRecipeBase &Recipe : *BasicBlock)
     Recipe.print(OS, Indent);
+
+  // Dump the condition bit.
+  const VPValue *CBV = BasicBlock->getCondBit();
+  if (CBV) {
+    OS << " +\n" << Indent << " \"CondBit: ";
+    if (const VPInstruction *CBI = dyn_cast<VPInstruction>(CBV)) {
+      CBI->printAsOperand(OS);
+      OS << " (" << DOT::EscapeString(CBI->getParent()->getName()) << ")\\l\"";
+    } else
+      CBV->printAsOperand(OS);
+  }
+
   bumpIndent(-2);
   OS << "\n" << Indent << "]\n";
   dumpEdges(BasicBlock);
@@ -564,3 +577,5 @@ void VPWidenMemoryInstructionRecipe::print(raw_ostream &O,
   }
   O << "\\l\"";
 }
+
+template void DomTreeBuilder::Calculate<VPDominatorTree>(VPDominatorTree &DT);

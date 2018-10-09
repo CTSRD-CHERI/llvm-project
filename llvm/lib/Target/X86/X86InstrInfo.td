@@ -944,6 +944,8 @@ let RecomputePerFunction = 1 in {
   def OptForSpeed  : Predicate<"!MF->getFunction().optForSize()">;
   def UseIncDec : Predicate<"!Subtarget->slowIncDec() || "
                             "MF->getFunction().optForSize()">;
+  def NoSSE41_Or_OptForSize : Predicate<"MF->getFunction().optForSize() || "
+                                        "!Subtarget->hasSSE41()">;
 }
 
 def CallImmAddr  : Predicate<"Subtarget->isLegalToCallImmediateAddr()">;
@@ -1093,6 +1095,15 @@ def loadf32  : PatFrag<(ops node:$ptr), (f32 (load node:$ptr))>;
 def loadf64  : PatFrag<(ops node:$ptr), (f64 (load node:$ptr))>;
 def loadf80  : PatFrag<(ops node:$ptr), (f80 (load node:$ptr))>;
 def loadf128 : PatFrag<(ops node:$ptr), (f128 (load node:$ptr))>;
+def alignedloadf128 : PatFrag<(ops node:$ptr), (f128 (load node:$ptr)), [{
+  LoadSDNode *Ld = cast<LoadSDNode>(N);
+  return Ld->getAlignment() >= Ld->getMemoryVT().getStoreSize();
+}]>;
+def memopf128 : PatFrag<(ops node:$ptr), (f128 (load node:$ptr)), [{
+  LoadSDNode *Ld = cast<LoadSDNode>(N);
+  return Subtarget->hasSSEUnalignedMem() ||
+         Ld->getAlignment() >= Ld->getMemoryVT().getStoreSize();
+}]>;
 
 def sextloadi16i8  : PatFrag<(ops node:$ptr), (i16 (sextloadi8 node:$ptr))>;
 def sextloadi32i8  : PatFrag<(ops node:$ptr), (i32 (sextloadi8 node:$ptr))>;
@@ -1341,7 +1352,7 @@ def PUSHA16  : I<0x60, RawFrm, (outs), (ins), "pushaw", []>,
                OpSize16, Requires<[Not64BitMode]>;
 }
 
-let Constraints = "$src = $dst", SchedRW = [WriteALU] in {
+let Constraints = "$src = $dst", SchedRW = [WriteBSWAP32] in {
 // This instruction is a consequence of BSWAP32r observing operand size. The
 // encoding is valid, but the behavior is undefined.
 let isCodeGenOnly = 1, ForceDisassemble = 1, hasSideEffects = 0 in
@@ -1352,6 +1363,7 @@ def BSWAP32r : I<0xC8, AddRegFrm, (outs GR32:$dst), (ins GR32:$src),
                  "bswap{l}\t$dst",
                  [(set GR32:$dst, (bswap GR32:$src))]>, OpSize32, TB;
 
+let SchedRW = [WriteBSWAP64] in
 def BSWAP64r : RI<0xC8, AddRegFrm, (outs GR64:$dst), (ins GR64:$src),
                   "bswap{q}\t$dst",
                   [(set GR64:$dst, (bswap GR64:$src))]>, TB;
@@ -1362,52 +1374,52 @@ let Defs = [EFLAGS] in {
 def BSF16rr  : I<0xBC, MRMSrcReg, (outs GR16:$dst), (ins GR16:$src),
                  "bsf{w}\t{$src, $dst|$dst, $src}",
                  [(set GR16:$dst, EFLAGS, (X86bsf GR16:$src))]>,
-                  PS, OpSize16, Sched<[WriteBitScan]>;
+                  PS, OpSize16, Sched<[WriteBSF]>;
 def BSF16rm  : I<0xBC, MRMSrcMem, (outs GR16:$dst), (ins i16mem:$src),
                  "bsf{w}\t{$src, $dst|$dst, $src}",
                  [(set GR16:$dst, EFLAGS, (X86bsf (loadi16 addr:$src)))]>,
-                 PS, OpSize16, Sched<[WriteBitScanLd]>;
+                 PS, OpSize16, Sched<[WriteBSFLd]>;
 def BSF32rr  : I<0xBC, MRMSrcReg, (outs GR32:$dst), (ins GR32:$src),
                  "bsf{l}\t{$src, $dst|$dst, $src}",
                  [(set GR32:$dst, EFLAGS, (X86bsf GR32:$src))]>,
-                 PS, OpSize32, Sched<[WriteBitScan]>;
+                 PS, OpSize32, Sched<[WriteBSF]>;
 def BSF32rm  : I<0xBC, MRMSrcMem, (outs GR32:$dst), (ins i32mem:$src),
                  "bsf{l}\t{$src, $dst|$dst, $src}",
                  [(set GR32:$dst, EFLAGS, (X86bsf (loadi32 addr:$src)))]>,
-                 PS, OpSize32, Sched<[WriteBitScanLd]>;
+                 PS, OpSize32, Sched<[WriteBSFLd]>;
 def BSF64rr  : RI<0xBC, MRMSrcReg, (outs GR64:$dst), (ins GR64:$src),
                   "bsf{q}\t{$src, $dst|$dst, $src}",
                   [(set GR64:$dst, EFLAGS, (X86bsf GR64:$src))]>,
-                  PS, Sched<[WriteBitScan]>;
+                  PS, Sched<[WriteBSF]>;
 def BSF64rm  : RI<0xBC, MRMSrcMem, (outs GR64:$dst), (ins i64mem:$src),
                   "bsf{q}\t{$src, $dst|$dst, $src}",
                   [(set GR64:$dst, EFLAGS, (X86bsf (loadi64 addr:$src)))]>,
-                  PS, Sched<[WriteBitScanLd]>;
+                  PS, Sched<[WriteBSFLd]>;
 
 def BSR16rr  : I<0xBD, MRMSrcReg, (outs GR16:$dst), (ins GR16:$src),
                  "bsr{w}\t{$src, $dst|$dst, $src}",
                  [(set GR16:$dst, EFLAGS, (X86bsr GR16:$src))]>,
-                 PS, OpSize16, Sched<[WriteBitScan]>;
+                 PS, OpSize16, Sched<[WriteBSR]>;
 def BSR16rm  : I<0xBD, MRMSrcMem, (outs GR16:$dst), (ins i16mem:$src),
                  "bsr{w}\t{$src, $dst|$dst, $src}",
                  [(set GR16:$dst, EFLAGS, (X86bsr (loadi16 addr:$src)))]>,
-                 PS, OpSize16, Sched<[WriteBitScanLd]>;
+                 PS, OpSize16, Sched<[WriteBSRLd]>;
 def BSR32rr  : I<0xBD, MRMSrcReg, (outs GR32:$dst), (ins GR32:$src),
                  "bsr{l}\t{$src, $dst|$dst, $src}",
                  [(set GR32:$dst, EFLAGS, (X86bsr GR32:$src))]>,
-                 PS, OpSize32, Sched<[WriteBitScan]>;
+                 PS, OpSize32, Sched<[WriteBSR]>;
 def BSR32rm  : I<0xBD, MRMSrcMem, (outs GR32:$dst), (ins i32mem:$src),
                  "bsr{l}\t{$src, $dst|$dst, $src}",
                  [(set GR32:$dst, EFLAGS, (X86bsr (loadi32 addr:$src)))]>,
-                 PS, OpSize32, Sched<[WriteBitScanLd]>;
+                 PS, OpSize32, Sched<[WriteBSRLd]>;
 def BSR64rr  : RI<0xBD, MRMSrcReg, (outs GR64:$dst), (ins GR64:$src),
                   "bsr{q}\t{$src, $dst|$dst, $src}",
                   [(set GR64:$dst, EFLAGS, (X86bsr GR64:$src))]>,
-                  PS, Sched<[WriteBitScan]>;
+                  PS, Sched<[WriteBSR]>;
 def BSR64rm  : RI<0xBD, MRMSrcMem, (outs GR64:$dst), (ins i64mem:$src),
                   "bsr{q}\t{$src, $dst|$dst, $src}",
                   [(set GR64:$dst, EFLAGS, (X86bsr (loadi64 addr:$src)))]>,
-                  PS, Sched<[WriteBitScanLd]>;
+                  PS, Sched<[WriteBSRLd]>;
 } // Defs = [EFLAGS]
 
 let SchedRW = [WriteMicrocoded] in {
@@ -1738,7 +1750,7 @@ def LAHF     : I<0x9F, RawFrm, (outs),  (ins), "lahf", []>,  // AH = flags
 // Bit tests instructions: BT, BTS, BTR, BTC.
 
 let Defs = [EFLAGS] in {
-let SchedRW = [WriteALU] in {
+let SchedRW = [WriteBitTest] in {
 def BT16rr : I<0xA3, MRMDestReg, (outs), (ins GR16:$src1, GR16:$src2),
                "bt{w}\t{$src2, $src1|$src1, $src2}",
                [(set EFLAGS, (X86bt GR16:$src1, GR16:$src2))]>,
@@ -1771,7 +1783,7 @@ let mayLoad = 1, hasSideEffects = 0, SchedRW = [WriteALULd] in {
                   []>, TB, NotMemoryFoldable;
 }
 
-let SchedRW = [WriteALU] in {
+let SchedRW = [WriteBitTest] in {
 def BT16ri8 : Ii8<0xBA, MRM4r, (outs), (ins GR16:$src1, i16i8imm:$src2),
                 "bt{w}\t{$src2, $src1|$src1, $src2}",
                 [(set EFLAGS, (X86bt GR16:$src1, i16immSExt8:$src2))]>,
@@ -1806,7 +1818,7 @@ def BT64mi8 : RIi8<0xBA, MRM4m, (outs), (ins i64mem:$src1, i64i8imm:$src2),
 } // SchedRW
 
 let hasSideEffects = 0 in {
-let SchedRW = [WriteALU], Constraints = "$src1 = $dst" in {
+let SchedRW = [WriteBitTest], Constraints = "$src1 = $dst" in {
 def BTC16rr : I<0xBB, MRMDestReg, (outs GR16:$dst), (ins GR16:$src1, GR16:$src2),
                 "btc{w}\t{$src2, $src1|$src1, $src2}", []>,
                 OpSize16, TB, NotMemoryFoldable;
@@ -1830,7 +1842,7 @@ def BTC64mr : RI<0xBB, MRMDestMem, (outs), (ins i64mem:$src1, GR64:$src2),
                  NotMemoryFoldable;
 }
 
-let SchedRW = [WriteALU], Constraints = "$src1 = $dst" in {
+let SchedRW = [WriteBitTest], Constraints = "$src1 = $dst" in {
 def BTC16ri8 : Ii8<0xBA, MRM7r, (outs GR16:$dst), (ins GR16:$src1, i16i8imm:$src2),
                     "btc{w}\t{$src2, $src1|$src1, $src2}", []>, OpSize16, TB;
 def BTC32ri8 : Ii8<0xBA, MRM7r, (outs GR32:$dst), (ins GR32:$src1, i32i8imm:$src2),
@@ -1849,7 +1861,7 @@ def BTC64mi8 : RIi8<0xBA, MRM7m, (outs), (ins i64mem:$src1, i64i8imm:$src2),
                     Requires<[In64BitMode]>;
 }
 
-let SchedRW = [WriteALU], Constraints = "$src1 = $dst" in {
+let SchedRW = [WriteBitTest], Constraints = "$src1 = $dst" in {
 def BTR16rr : I<0xB3, MRMDestReg, (outs GR16:$dst), (ins GR16:$src1, GR16:$src2),
                 "btr{w}\t{$src2, $src1|$src1, $src2}", []>,
                 OpSize16, TB, NotMemoryFoldable;
@@ -1873,7 +1885,7 @@ def BTR64mr : RI<0xB3, MRMDestMem, (outs), (ins i64mem:$src1, GR64:$src2),
                  NotMemoryFoldable;
 }
 
-let SchedRW = [WriteALU], Constraints = "$src1 = $dst" in {
+let SchedRW = [WriteBitTest], Constraints = "$src1 = $dst" in {
 def BTR16ri8 : Ii8<0xBA, MRM6r, (outs GR16:$dst), (ins GR16:$src1, i16i8imm:$src2),
                     "btr{w}\t{$src2, $src1|$src1, $src2}", []>,
                     OpSize16, TB;
@@ -1896,7 +1908,7 @@ def BTR64mi8 : RIi8<0xBA, MRM6m, (outs), (ins i64mem:$src1, i64i8imm:$src2),
                     Requires<[In64BitMode]>;
 }
 
-let SchedRW = [WriteALU], Constraints = "$src1 = $dst" in {
+let SchedRW = [WriteBitTest], Constraints = "$src1 = $dst" in {
 def BTS16rr : I<0xAB, MRMDestReg, (outs GR16:$dst), (ins GR16:$src1, GR16:$src2),
                 "bts{w}\t{$src2, $src1|$src1, $src2}", []>,
                 OpSize16, TB, NotMemoryFoldable;
@@ -1920,7 +1932,7 @@ def BTS64mr : RI<0xAB, MRMDestMem, (outs), (ins i64mem:$src1, GR64:$src2),
                  NotMemoryFoldable;
 }
 
-let SchedRW = [WriteALU], Constraints = "$src1 = $dst" in {
+let SchedRW = [WriteBitTest], Constraints = "$src1 = $dst" in {
 def BTS16ri8 : Ii8<0xBA, MRM5r, (outs GR16:$dst), (ins GR16:$src1, i16i8imm:$src2),
                     "bts{w}\t{$src2, $src1|$src1, $src2}", []>, OpSize16, TB;
 def BTS32ri8 : Ii8<0xBA, MRM5r, (outs GR32:$dst), (ins GR32:$src1, i32i8imm:$src2),

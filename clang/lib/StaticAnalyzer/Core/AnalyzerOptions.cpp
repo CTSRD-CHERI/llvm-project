@@ -388,6 +388,12 @@ unsigned AnalyzerOptions::getGraphTrimInterval() {
   return GraphTrimInterval.getValue();
 }
 
+unsigned AnalyzerOptions::getMaxSymbolComplexity() {
+  if (!MaxSymbolComplexity.hasValue())
+    MaxSymbolComplexity = getOptionAsInteger("max-symbol-complexity", 35);
+  return MaxSymbolComplexity.getValue();
+}
+
 unsigned AnalyzerOptions::getMaxTimesInlineLarge() {
   if (!MaxTimesInlineLarge.hasValue())
     MaxTimesInlineLarge = getOptionAsInteger("max-times-inline-large", 32);
@@ -457,12 +463,12 @@ bool AnalyzerOptions::shouldDisplayNotesAsEvents() {
   return DisplayNotesAsEvents.getValue();
 }
 
-bool AnalyzerOptions::shouldAggressivelySimplifyRelationalComparison() {
-  if (!AggressiveRelationalComparisonSimplification.hasValue())
-    AggressiveRelationalComparisonSimplification =
-      getBooleanOption("aggressive-relational-comparison-simplification",
+bool AnalyzerOptions::shouldAggressivelySimplifyBinaryOperation() {
+  if (!AggressiveBinaryOperationSimplification.hasValue())
+    AggressiveBinaryOperationSimplification =
+      getBooleanOption("aggressive-binary-operation-simplification",
                        /*Default=*/false);
-  return AggressiveRelationalComparisonSimplification.getValue();
+  return AggressiveBinaryOperationSimplification.getValue();
 }
 
 StringRef AnalyzerOptions::getCTUDir() {

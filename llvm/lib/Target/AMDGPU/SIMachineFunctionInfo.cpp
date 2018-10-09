@@ -47,13 +47,23 @@ SIMachineFunctionInfo::SIMachineFunctionInfo(const MachineFunction &MF)
     ImplicitArgPtr(false),
     GITPtrHigh(0xffffffff),
     HighBitsOf32BitAddress(0) {
-  const SISubtarget &ST = MF.getSubtarget<SISubtarget>();
+  const GCNSubtarget &ST = MF.getSubtarget<GCNSubtarget>();
   const Function &F = MF.getFunction();
   FlatWorkGroupSizes = ST.getFlatWorkGroupSizes(F);
   WavesPerEU = ST.getWavesPerEU(F);
 
   Occupancy = getMaxWavesPerEU();
   limitOccupancy(MF);
+  CallingConv::ID CC = F.getCallingConv();
+
+  if (CC == CallingConv::AMDGPU_KERNEL || CC == CallingConv::SPIR_KERNEL) {
+    if (!F.arg_empty())
+      KernargSegmentPtr = true;
+    WorkGroupIDX = true;
+    WorkItemIDX = true;
+  } else if (CC == CallingConv::AMDGPU_PS) {
+    PSInputAddr = AMDGPU::getInitialPSInputAddr(F);
+  }
 
   if (!isEntryFunction()) {
     // Non-entry functions have no special inputs for now, other registers
@@ -73,19 +83,9 @@ SIMachineFunctionInfo::SIMachineFunctionInfo(const MachineFunction &MF)
   } else {
     if (F.hasFnAttribute("amdgpu-implicitarg-ptr")) {
       KernargSegmentPtr = true;
-      assert(MaxKernArgAlign == 0);
-      MaxKernArgAlign =  ST.getAlignmentForImplicitArgPtr();
+      MaxKernArgAlign = std::max(ST.getAlignmentForImplicitArgPtr(),
+                                 MaxKernArgAlign);
     }
-  }
-
-  CallingConv::ID CC = F.getCallingConv();
-  if (CC == CallingConv::AMDGPU_KERNEL || CC == CallingConv::SPIR_KERNEL) {
-    if (!F.arg_empty())
-      KernargSegmentPtr = true;
-    WorkGroupIDX = true;
-    WorkItemIDX = true;
-  } else if (CC == CallingConv::AMDGPU_PS) {
-    PSInputAddr = AMDGPU::getInitialPSInputAddr(F);
   }
 
   if (ST.debuggerEmitPrologue()) {
@@ -178,7 +178,7 @@ SIMachineFunctionInfo::SIMachineFunctionInfo(const MachineFunction &MF)
 
 void SIMachineFunctionInfo::limitOccupancy(const MachineFunction &MF) {
   limitOccupancy(getMaxWavesPerEU());
-  const SISubtarget& ST = MF.getSubtarget<SISubtarget>();
+  const GCNSubtarget& ST = MF.getSubtarget<GCNSubtarget>();
   limitOccupancy(ST.getOccupancyWithLocalMemSize(getLDSSize(),
                  MF.getFunction()));
 }
@@ -253,7 +253,7 @@ bool SIMachineFunctionInfo::allocateSGPRSpillToVGPR(MachineFunction &MF,
   if (!SpillLanes.empty())
     return true;
 
-  const SISubtarget &ST = MF.getSubtarget<SISubtarget>();
+  const GCNSubtarget &ST = MF.getSubtarget<GCNSubtarget>();
   const SIRegisterInfo *TRI = ST.getRegisterInfo();
   MachineFrameInfo &FrameInfo = MF.getFrameInfo();
   MachineRegisterInfo &MRI = MF.getRegInfo();

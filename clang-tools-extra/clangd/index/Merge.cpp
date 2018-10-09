@@ -7,6 +7,7 @@
 //
 //===---------------------------------------------------------------------===//
 #include "Merge.h"
+#include "../Logger.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/raw_ostream.h"
 namespace clang {
@@ -74,10 +75,16 @@ class MergedIndex : public SymbolIndex {
         Callback(*Sym);
   }
 
+  void findOccurrences(const OccurrencesRequest &Req,
+                       llvm::function_ref<void(const SymbolOccurrence &)>
+                           Callback) const override {
+    log("findOccurrences is not implemented.");
+  }
+
 private:
   const SymbolIndex *Dynamic, *Static;
 };
-}
+} // namespace
 
 Symbol
 mergeSymbol(const Symbol &L, const Symbol &R, Symbol::Details *Scratch) {
@@ -115,6 +122,8 @@ mergeSymbol(const Symbol &L, const Symbol &R, Symbol::Details *Scratch) {
     } else
       S.Detail = O.Detail;
   }
+
+  S.Origin |= O.Origin | SymbolOrigin::Merge;
   return S;
 }
 

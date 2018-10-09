@@ -8,7 +8,9 @@
 # RUN: %p/Inputs/trace-symbols-foo-strong.s -o %t2
 # RUN: ld.lld -shared %t1 -o %t1.so
 # RUN: ld.lld -shared %t2 -o %t2.so
+# RUN: rm -f %t1.a
 # RUN: llvm-ar rcs %t1.a %t1
+# RUN: rm -f %t2.a
 # RUN: llvm-ar rcs %t2.a %t2
 
 # RUN: ld.lld -y foo -trace-symbol common -trace-symbol=hsymbol \
@@ -29,7 +31,7 @@
 # RUN: ld.lld -y foo -trace-symbol=common -trace-symbol=hsymbol \
 # RUN:   %t %t1 %t2 -o %t3 2>&1 | FileCheck -check-prefix=OBJECTD2FOO %s
 # RUN: ld.lld -y foo -y common --trace-symbol=hsymbol \
-# RUN:   %t %t2 %t1 -o %t4 2>&1 | FileCheck -check-prefix=OBJECTD2FOO %s
+# RUN:   %t %t2 %t1 -o /dev/null 2>&1 | FileCheck -check-prefix=OBJECTD2FOO %s
 # RUN: ld.lld -y foo -y common %t %t1.so %t2 -o %t3 2>&1 | \
 # RUN:   FileCheck -check-prefix=OBJECTD2FOO %s
 # OBJECTD2FOO: trace-symbols.s.tmp2: definition of foo
@@ -75,6 +77,9 @@
 # RUN: ld.lld -y foo -y bar %t -u bar --start-lib %t1 %t2 --end-lib -o %t3 | \
 # RUN:   FileCheck -check-prefix=STARTLIB %s
 # STARTLIB: trace-symbols.s.tmp1: reference to bar
+
+## Check we do not crash when trying to trace special symbol.
+# RUN: not ld.lld -trace-symbol=_end %t -o /dev/null
 
 .hidden hsymbol
 .globl	_start

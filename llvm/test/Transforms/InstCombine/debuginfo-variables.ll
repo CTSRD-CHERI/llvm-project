@@ -1,5 +1,7 @@
 ; RUN: opt < %s -debugify -instcombine -S | FileCheck %s
 
+declare void @escape32(i32)
+
 define i64 @test_sext_zext(i16 %A) {
 ; CHECK-LABEL: @test_sext_zext(
 ; CHECK-NEXT:  [[C2:%.*]] = zext i16 %A to i64
@@ -8,6 +10,31 @@ define i64 @test_sext_zext(i16 %A) {
   %c1 = zext i16 %A to i32
   %c2 = sext i32 %c1 to i64
   ret i64 %c2
+}
+
+define i64 @test_used_sext_zext(i16 %A) {
+; CHECK-LABEL: @test_used_sext_zext(
+; CHECK-NEXT:  [[C1:%.*]] = zext i16 %A to i32
+; CHECK-NEXT:  call void @llvm.dbg.value(metadata i32 [[C1]], {{.*}}, metadata !DIExpression())
+; CHECK-NEXT:  [[C2:%.*]] = zext i16 %A to i64
+; CHECK-NEXT:  call void @llvm.dbg.value(metadata i64 [[C2]], {{.*}}, metadata !DIExpression())
+; CHECK-NEXT:  call void @escape32(i32 %c1)
+; CHECK-NEXT:  ret i64 %c2
+  %c1 = zext i16 %A to i32
+  %c2 = sext i32 %c1 to i64
+  call void @escape32(i32 %c1)
+  ret i64 %c2
+}
+
+define i32 @test_cast_select(i1 %cond) {
+; CHECK-LABEL: @test_cast_select(
+; CHECK-NEXT:  [[sel:%.*]] = select i1 %cond, i32 3, i32 5
+; CHECK-NEXT:  call void @llvm.dbg.value(metadata i32 [[sel]], {{.*}}, metadata !DIExpression())
+; CHECK-NEXT:  call void @llvm.dbg.value(metadata i32 [[sel]], {{.*}}, metadata !DIExpression())
+; CHECK-NEXT:  ret i32 [[sel]]
+  %sel = select i1 %cond, i16 3, i16 5
+  %cast = zext i16 %sel to i32
+  ret i32 %cast
 }
 
 define void @test_or(i64 %A) {

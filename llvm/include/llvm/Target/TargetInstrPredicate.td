@@ -13,7 +13,7 @@
 // an instruction. Each MCInstPredicate class has a well-known semantic, and it
 // is used by a PredicateExpander to generate code for MachineInstr and/or
 // MCInst.
-// 
+//
 // MCInstPredicate definitions can be used to construct MCSchedPredicate
 // definitions. An MCSchedPredicate can be used in place of a SchedPredicate
 // when defining SchedReadVariant and SchedWriteVariant used by a processor
@@ -63,7 +63,7 @@
 //
 // New MCInstPredicate classes must be added to this file. For each new class
 // XYZ, an "expandXYZ" method must be added to the PredicateExpander.
-// 
+//
 //===----------------------------------------------------------------------===//
 
 // Forward declarations.
@@ -110,6 +110,9 @@ class CheckSameRegOperand<int First, int Second> : MCInstPredicate {
 class CheckRegOperand<int Index, Register R> : MCOperandPredicate<Index> {
   Register Reg = R;
 }
+
+// Check if register operand at index `Index` is the invalid register.
+class CheckInvalidRegOperand<int Index> : MCOperandPredicate<Index>;
 
 // Check that the operand at position `Index` is immediate `Imm`.
 class CheckImmOperand<int Index, int Imm> : MCOperandPredicate<Index> {

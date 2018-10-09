@@ -65,6 +65,48 @@ static Value *SimplifyCastInst(unsigned, Value *, Type *,
 static Value *SimplifyGEPInst(Type *, ArrayRef<Value *>, const SimplifyQuery &,
                               unsigned);
 
+static Value *foldSelectWithBinaryOp(Value *Cond, Value *TrueVal,
+                                     Value *FalseVal) {
+  BinaryOperator::BinaryOps BinOpCode;
+  if (auto *BO = dyn_cast<BinaryOperator>(Cond))
+    BinOpCode = BO->getOpcode();
+  else
+    return nullptr;
+
+  CmpInst::Predicate ExpectedPred, Pred1, Pred2;
+  if (BinOpCode == BinaryOperator::Or) {
+    ExpectedPred = ICmpInst::ICMP_NE;
+  } else if (BinOpCode == BinaryOperator::And) {
+    ExpectedPred = ICmpInst::ICMP_EQ;
+  } else
+    return nullptr;
+
+  // %A = icmp eq %TV, %FV
+  // %B = icmp eq %X, %Y (and one of these is a select operand)
+  // %C = and %A, %B
+  // %D = select %C, %TV, %FV
+  // -->
+  // %FV
+
+  // %A = icmp ne %TV, %FV
+  // %B = icmp ne %X, %Y (and one of these is a select operand)
+  // %C = or %A, %B
+  // %D = select %C, %TV, %FV
+  // -->
+  // %TV
+  Value *X, *Y;
+  if (!match(Cond, m_c_BinOp(m_c_ICmp(Pred1, m_Specific(TrueVal),
+                                      m_Specific(FalseVal)),
+                             m_ICmp(Pred2, m_Value(X), m_Value(Y)))) ||
+      Pred1 != Pred2 || Pred1 != ExpectedPred)
+    return nullptr;
+
+  if (X == TrueVal || X == FalseVal || Y == TrueVal || Y == FalseVal)
+    return BinOpCode == BinaryOperator::Or ? TrueVal : FalseVal;
+
+  return nullptr;
+}
+
 /// For a boolean type or a vector of boolean type, return false or a vector
 /// with every element false.
 static Constant *getFalse(Type *Ty) {
@@ -539,6 +581,10 @@ static Value *SimplifyAddInst(Value *Op0, Value *Op1, bool IsNSW, bool IsNUW,
   // X + 0 -> X
   if (match(Op1, m_Zero()))
     return Op0;
+
+  // If two operands are negative, return 0.
+  if (isKnownNegation(Op0, Op1))
+    return Constant::getNullValue(Op0->getType());
 
   // X + (Y - X) -> Y
   // (Y - X) + X -> Y
@@ -1077,6 +1123,10 @@ static Value *simplifyRem(Instruction::BinaryOps Opcode, Value *Op0, Value *Op1,
 /// If not, this returns null.
 static Value *SimplifySDivInst(Value *Op0, Value *Op1, const SimplifyQuery &Q,
                                unsigned MaxRecurse) {
+  // If two operands are negated and no signed overflow, return -1.
+  if (isKnownNegation(Op0, Op1, /*NeedNSW=*/true))
+    return Constant::getAllOnesValue(Op0->getType());
+
   return simplifyDiv(Instruction::SDiv, Op0, Op1, Q, MaxRecurse);
 }
 
@@ -1103,6 +1153,10 @@ static Value *SimplifySRemInst(Value *Op0, Value *Op1, const SimplifyQuery &Q,
   // srem Op0, (sext i1 X) --> srem Op0, -1 --> 0
   Value *X;
   if (match(Op1, m_SExt(m_Value(X))) && X->getType()->isIntOrIntVectorTy(1))
+    return ConstantInt::getNullValue(Op0->getType());
+
+  // If the two operands are negated, return 0.
+  if (isKnownNegation(Op0, Op1))
     return ConstantInt::getNullValue(Op0->getType());
 
   return simplifyRem(Instruction::SRem, Op0, Op1, Q, MaxRecurse);
@@ -1270,6 +1324,23 @@ static Value *SimplifyLShrInst(Value *Op0, Value *Op1, bool isExact,
   Value *X;
   if (match(Op0, m_NUWShl(m_Value(X), m_Specific(Op1))))
     return X;
+
+  // ((X << A) | Y) >> A -> X  if effective width of Y is not larger than A.
+  // We can return X as we do in the above case since OR alters no bits in X.
+  // SimplifyDemandedBits in InstCombine can do more general optimization for
+  // bit manipulation. This pattern aims to provide opportunities for other
+  // optimizers by supporting a simple but common case in InstSimplify.
+  Value *Y;
+  const APInt *ShRAmt, *ShLAmt;
+  if (match(Op1, m_APInt(ShRAmt)) &&
+      match(Op0, m_c_Or(m_NUWShl(m_Value(X), m_APInt(ShLAmt)), m_Value(Y))) &&
+      *ShRAmt == *ShLAmt) {
+    const KnownBits YKnown = computeKnownBits(Y, Q.DL, 0, Q.AC, Q.CxtI, Q.DT);
+    const unsigned Width = Op0->getType()->getScalarSizeInBits();
+    const unsigned EffWidthY = Width - YKnown.countMinLeadingZeros();
+    if (EffWidthY <= ShRAmt->getZExtValue())
+      return X;
+  }
 
   return nullptr;
 }
@@ -1792,6 +1863,40 @@ static Value *SimplifyAndInst(Value *Op0, Value *Op1, const SimplifyQuery &Q,
                                       MaxRecurse))
       return V;
 
+  // Assuming the effective width of Y is not larger than A, i.e. all bits
+  // from X and Y are disjoint in (X << A) | Y,
+  // if the mask of this AND op covers all bits of X or Y, while it covers
+  // no bits from the other, we can bypass this AND op. E.g.,
+  // ((X << A) | Y) & Mask -> Y,
+  //     if Mask = ((1 << effective_width_of(Y)) - 1)
+  // ((X << A) | Y) & Mask -> X << A,
+  //     if Mask = ((1 << effective_width_of(X)) - 1) << A
+  // SimplifyDemandedBits in InstCombine can optimize the general case.
+  // This pattern aims to help other passes for a common case.
+  Value *Y, *XShifted;
+  if (match(Op1, m_APInt(Mask)) &&
+      match(Op0, m_c_Or(m_CombineAnd(m_NUWShl(m_Value(X), m_APInt(ShAmt)),
+                                     m_Value(XShifted)),
+                        m_Value(Y)))) {
+    const unsigned ShftCnt = ShAmt->getZExtValue();
+    const KnownBits YKnown = computeKnownBits(Y, Q.DL, 0, Q.AC, Q.CxtI, Q.DT);
+    const unsigned Width = Op0->getType()->getScalarSizeInBits();
+    const unsigned EffWidthY = Width - YKnown.countMinLeadingZeros();
+    if (EffWidthY <= ShftCnt) {
+      const KnownBits XKnown = computeKnownBits(X, Q.DL, 0, Q.AC, Q.CxtI,
+                                                Q.DT);
+      const unsigned EffWidthX = Width - XKnown.countMinLeadingZeros();
+      const APInt EffBitsY = APInt::getLowBitsSet(Width, EffWidthY);
+      const APInt EffBitsX = APInt::getLowBitsSet(Width, EffWidthX) << ShftCnt;
+      // If the mask is extracting all bits from X or Y as is, we can skip
+      // this AND op.
+      if (EffBitsY.isSubsetOf(*Mask) && !EffBitsX.intersects(*Mask))
+        return Y;
+      if (EffBitsX.isSubsetOf(*Mask) && !EffBitsY.intersects(*Mask))
+        return XShifted;
+    }
+  }
+
   return nullptr;
 }
 
@@ -2120,9 +2225,12 @@ computePointerICmp(const DataLayout &DL, const TargetLibraryInfo *TLI,
       ConstantInt *LHSOffsetCI = dyn_cast<ConstantInt>(LHSOffset);
       ConstantInt *RHSOffsetCI = dyn_cast<ConstantInt>(RHSOffset);
       uint64_t LHSSize, RHSSize;
+      ObjectSizeOpts Opts;
+      Opts.NullIsUnknownSize =
+          NullPointerIsDefined(cast<AllocaInst>(LHS)->getFunction());
       if (LHSOffsetCI && RHSOffsetCI &&
-          getObjectSize(LHS, LHSSize, DL, TLI) &&
-          getObjectSize(RHS, RHSSize, DL, TLI)) {
+          getObjectSize(LHS, LHSSize, DL, TLI, Opts) &&
+          getObjectSize(RHS, RHSSize, DL, TLI, Opts)) {
         const APInt &LHSOffsetValue = LHSOffsetCI->getValue();
         const APInt &RHSOffsetValue = RHSOffsetCI->getValue();
         if (!LHSOffsetValue.isNegative() &&
@@ -3737,6 +3845,9 @@ static Value *SimplifySelectInst(Value *Cond, Value *TrueVal, Value *FalseVal,
           simplifySelectWithICmpCond(Cond, TrueVal, FalseVal, Q, MaxRecurse))
     return V;
 
+  if (Value *V = foldSelectWithBinaryOp(Cond, TrueVal, FalseVal))
+    return V;
+
   return nullptr;
 }
 
@@ -4248,6 +4359,14 @@ static Value *SimplifyFAddInst(Value *Op0, Value *Op1, FastMathFlags FMF,
                        match(Op1, m_FSub(m_AnyZeroFP(), m_Specific(Op0)))))
     return ConstantFP::getNullValue(Op0->getType());
 
+  // (X - Y) + Y --> X
+  // Y + (X - Y) --> X
+  Value *X;
+  if (FMF.noSignedZeros() && FMF.allowReassoc() &&
+      (match(Op0, m_FSub(m_Value(X), m_Specific(Op1))) ||
+       match(Op1, m_FSub(m_Value(X), m_Specific(Op0)))))
+    return X;
+
   return nullptr;
 }
 
@@ -4284,6 +4403,13 @@ static Value *SimplifyFSubInst(Value *Op0, Value *Op1, FastMathFlags FMF,
   // fsub nnan x, x ==> 0.0
   if (FMF.noNaNs() && Op0 == Op1)
     return Constant::getNullValue(Op0->getType());
+
+  // Y - (Y - X) --> X
+  // (X + Y) - Y --> X
+  if (FMF.noSignedZeros() && FMF.allowReassoc() &&
+      (match(Op1, m_FSub(m_Specific(Op0), m_Value(X))) ||
+       match(Op0, m_c_FAdd(m_Specific(Op1), m_Value(X)))))
+    return X;
 
   return nullptr;
 }
@@ -4589,141 +4715,146 @@ static bool maskIsAllZeroOrUndef(Value *Mask) {
   return true;
 }
 
-template <typename IterTy>
-static Value *SimplifyIntrinsic(Function *F, IterTy ArgBegin, IterTy ArgEnd,
-                                const SimplifyQuery &Q, unsigned MaxRecurse) {
+static Value *simplifyUnaryIntrinsic(Function *F, Value *Op0,
+                                     const SimplifyQuery &Q) {
+  // Idempotent functions return the same result when called repeatedly.
   Intrinsic::ID IID = F->getIntrinsicID();
-  unsigned NumOperands = std::distance(ArgBegin, ArgEnd);
+  if (IsIdempotent(IID))
+    if (auto *II = dyn_cast<IntrinsicInst>(Op0))
+      if (II->getIntrinsicID() == IID)
+        return II;
 
-  // Unary Ops
-  if (NumOperands == 1) {
-    // Perform idempotent optimizations
-    if (IsIdempotent(IID)) {
-      if (IntrinsicInst *II = dyn_cast<IntrinsicInst>(*ArgBegin)) {
-        if (II->getIntrinsicID() == IID)
-          return II;
-      }
-    }
-
-    Value *IIOperand = *ArgBegin;
-    Value *X;
-    switch (IID) {
-    case Intrinsic::fabs: {
-      if (SignBitMustBeZero(IIOperand, Q.TLI))
-        return IIOperand;
-      return nullptr;
-    }
-    case Intrinsic::bswap: {
-      // bswap(bswap(x)) -> x
-      if (match(IIOperand, m_BSwap(m_Value(X))))
-        return X;
-      return nullptr;
-    }
-    case Intrinsic::bitreverse: {
-      // bitreverse(bitreverse(x)) -> x
-      if (match(IIOperand, m_BitReverse(m_Value(X))))
-        return X;
-      return nullptr;
-    }
-    case Intrinsic::exp: {
-      // exp(log(x)) -> x
-      if (Q.CxtI->hasAllowReassoc() &&
-          match(IIOperand, m_Intrinsic<Intrinsic::log>(m_Value(X))))
-        return X;
-      return nullptr;
-    }
-    case Intrinsic::exp2: {
-      // exp2(log2(x)) -> x
-      if (Q.CxtI->hasAllowReassoc() &&
-          match(IIOperand, m_Intrinsic<Intrinsic::log2>(m_Value(X))))
-        return X;
-      return nullptr;
-    }
-    case Intrinsic::log: {
-      // log(exp(x)) -> x
-      if (Q.CxtI->hasAllowReassoc() &&
-          match(IIOperand, m_Intrinsic<Intrinsic::exp>(m_Value(X))))
-        return X;
-      return nullptr;
-    }
-    case Intrinsic::log2: {
-      // log2(exp2(x)) -> x
-      if (Q.CxtI->hasAllowReassoc() &&
-          match(IIOperand, m_Intrinsic<Intrinsic::exp2>(m_Value(X)))) {
-        return X;
-      }
-      return nullptr;
-    }
-    default:
-      return nullptr;
-    }
+  Value *X;
+  switch (IID) {
+  case Intrinsic::fabs:
+    if (SignBitMustBeZero(Op0, Q.TLI)) return Op0;
+    break;
+  case Intrinsic::bswap:
+    // bswap(bswap(x)) -> x
+    if (match(Op0, m_BSwap(m_Value(X)))) return X;
+    break;
+  case Intrinsic::bitreverse:
+    // bitreverse(bitreverse(x)) -> x
+    if (match(Op0, m_BitReverse(m_Value(X)))) return X;
+    break;
+  case Intrinsic::exp:
+    // exp(log(x)) -> x
+    if (Q.CxtI->hasAllowReassoc() &&
+        match(Op0, m_Intrinsic<Intrinsic::log>(m_Value(X)))) return X;
+    break;
+  case Intrinsic::exp2:
+    // exp2(log2(x)) -> x
+    if (Q.CxtI->hasAllowReassoc() &&
+        match(Op0, m_Intrinsic<Intrinsic::log2>(m_Value(X)))) return X;
+    break;
+  case Intrinsic::log:
+    // log(exp(x)) -> x
+    if (Q.CxtI->hasAllowReassoc() &&
+        match(Op0, m_Intrinsic<Intrinsic::exp>(m_Value(X)))) return X;
+    break;
+  case Intrinsic::log2:
+    // log2(exp2(x)) -> x
+    if (Q.CxtI->hasAllowReassoc() &&
+        match(Op0, m_Intrinsic<Intrinsic::exp2>(m_Value(X)))) return X;
+    break;
+  default:
+    break;
   }
 
-  // Binary Ops
-  if (NumOperands == 2) {
-    Value *LHS = *ArgBegin;
-    Value *RHS = *(ArgBegin + 1);
-    Type *ReturnType = F->getReturnType();
+  return nullptr;
+}
 
-    switch (IID) {
-    case Intrinsic::usub_with_overflow:
-    case Intrinsic::ssub_with_overflow: {
-      // X - X -> { 0, false }
-      if (LHS == RHS)
-        return Constant::getNullValue(ReturnType);
-
-      // X - undef -> undef
-      // undef - X -> undef
-      if (isa<UndefValue>(LHS) || isa<UndefValue>(RHS))
-        return UndefValue::get(ReturnType);
-
-      return nullptr;
-    }
-    case Intrinsic::uadd_with_overflow:
-    case Intrinsic::sadd_with_overflow: {
-      // X + undef -> undef
-      if (isa<UndefValue>(LHS) || isa<UndefValue>(RHS))
-        return UndefValue::get(ReturnType);
-
-      return nullptr;
-    }
-    case Intrinsic::umul_with_overflow:
-    case Intrinsic::smul_with_overflow: {
-      // 0 * X -> { 0, false }
-      // X * 0 -> { 0, false }
-      if (match(LHS, m_Zero()) || match(RHS, m_Zero()))
-        return Constant::getNullValue(ReturnType);
-
-      // undef * X -> { 0, false }
-      // X * undef -> { 0, false }
-      if (match(LHS, m_Undef()) || match(RHS, m_Undef()))
-        return Constant::getNullValue(ReturnType);
-
-      return nullptr;
-    }
-    case Intrinsic::load_relative: {
-      Constant *C0 = dyn_cast<Constant>(LHS);
-      Constant *C1 = dyn_cast<Constant>(RHS);
-      if (C0 && C1)
+static Value *simplifyBinaryIntrinsic(Function *F, Value *Op0, Value *Op1,
+                                      const SimplifyQuery &Q) {
+  Intrinsic::ID IID = F->getIntrinsicID();
+  Type *ReturnType = F->getReturnType();
+  switch (IID) {
+  case Intrinsic::usub_with_overflow:
+  case Intrinsic::ssub_with_overflow:
+    // X - X -> { 0, false }
+    if (Op0 == Op1)
+      return Constant::getNullValue(ReturnType);
+    // X - undef -> undef
+    // undef - X -> undef
+    if (isa<UndefValue>(Op0) || isa<UndefValue>(Op1))
+      return UndefValue::get(ReturnType);
+    break;
+  case Intrinsic::uadd_with_overflow:
+  case Intrinsic::sadd_with_overflow:
+    // X + undef -> undef
+    if (isa<UndefValue>(Op0) || isa<UndefValue>(Op1))
+      return UndefValue::get(ReturnType);
+    break;
+  case Intrinsic::umul_with_overflow:
+  case Intrinsic::smul_with_overflow:
+    // 0 * X -> { 0, false }
+    // X * 0 -> { 0, false }
+    if (match(Op0, m_Zero()) || match(Op1, m_Zero()))
+      return Constant::getNullValue(ReturnType);
+    // undef * X -> { 0, false }
+    // X * undef -> { 0, false }
+    if (match(Op0, m_Undef()) || match(Op1, m_Undef()))
+      return Constant::getNullValue(ReturnType);
+    break;
+  case Intrinsic::load_relative:
+    if (auto *C0 = dyn_cast<Constant>(Op0))
+      if (auto *C1 = dyn_cast<Constant>(Op1))
         return SimplifyRelativeLoad(C0, C1, Q.DL);
-      return nullptr;
+    break;
+  case Intrinsic::powi:
+    if (auto *Power = dyn_cast<ConstantInt>(Op1)) {
+      // powi(x, 0) -> 1.0
+      if (Power->isZero())
+        return ConstantFP::get(Op0->getType(), 1.0);
+      // powi(x, 1) -> x
+      if (Power->isOne())
+        return Op0;
     }
-    case Intrinsic::powi:
-      if (ConstantInt *Power = dyn_cast<ConstantInt>(RHS)) {
-        // powi(x, 0) -> 1.0
-        if (Power->isZero())
-          return ConstantFP::get(LHS->getType(), 1.0);
-        // powi(x, 1) -> x
-        if (Power->isOne())
-          return LHS;
-      }
-      return nullptr;
-    default:
-      return nullptr;
-    }
+    break;
+  case Intrinsic::maxnum:
+  case Intrinsic::minnum:
+    // If the arguments are the same, this is a no-op.
+    if (Op0 == Op1) return Op0;
+
+    // If one argument is NaN or undef, return the other argument.
+    if (match(Op0, m_CombineOr(m_NaN(), m_Undef()))) return Op1;
+    if (match(Op1, m_CombineOr(m_NaN(), m_Undef()))) return Op0;
+
+    // Min/max of the same operation with common operand:
+    // m(m(X, Y)), X --> m(X, Y) (4 commuted variants)
+    if (auto *M0 = dyn_cast<IntrinsicInst>(Op0))
+      if (M0->getIntrinsicID() == IID &&
+          (M0->getOperand(0) == Op1 || M0->getOperand(1) == Op1))
+        return Op0;
+    if (auto *M1 = dyn_cast<IntrinsicInst>(Op1))
+      if (M1->getIntrinsicID() == IID &&
+          (M1->getOperand(0) == Op0 || M1->getOperand(1) == Op0))
+        return Op1;
+
+    break;
+  default:
+    break;
   }
 
-  // Simplify calls to llvm.masked.load.*
+  return nullptr;
+}
+
+template <typename IterTy>
+static Value *simplifyIntrinsic(Function *F, IterTy ArgBegin, IterTy ArgEnd,
+                                const SimplifyQuery &Q) {
+  // Intrinsics with no operands have some kind of side effect. Don't simplify.
+  unsigned NumOperands = std::distance(ArgBegin, ArgEnd);
+  if (NumOperands == 0)
+    return nullptr;
+
+  Intrinsic::ID IID = F->getIntrinsicID();
+  if (NumOperands == 1)
+    return simplifyUnaryIntrinsic(F, ArgBegin[0], Q);
+
+  if (NumOperands == 2)
+    return simplifyBinaryIntrinsic(F, ArgBegin[0], ArgBegin[1], Q);
+
+  // Handle intrinsics with 3 or more arguments.
   switch (IID) {
   case Intrinsic::masked_load: {
     Value *MaskArg = ArgBegin[2];
@@ -4731,6 +4862,19 @@ static Value *SimplifyIntrinsic(Function *F, IterTy ArgBegin, IterTy ArgEnd,
     // If the mask is all zeros or undef, the "passthru" argument is the result.
     if (maskIsAllZeroOrUndef(MaskArg))
       return PassthruArg;
+    return nullptr;
+  }
+  case Intrinsic::fshl:
+  case Intrinsic::fshr: {
+    Value *ShAmtArg = ArgBegin[2];
+    const APInt *ShAmtC;
+    if (match(ShAmtArg, m_APInt(ShAmtC))) {
+      // If there's effectively no shift, return the 1st arg or 2nd arg.
+      // TODO: For vectors, we could check each element of a non-splat constant.
+      APInt BitWidth = APInt(ShAmtC->getBitWidth(), ShAmtC->getBitWidth());
+      if (ShAmtC->urem(BitWidth).isNullValue())
+        return ArgBegin[IID == Intrinsic::fshl ? 0 : 1];
+    }
     return nullptr;
   }
   default:
@@ -4757,7 +4901,7 @@ static Value *SimplifyCall(ImmutableCallSite CS, Value *V, IterTy ArgBegin,
     return nullptr;
 
   if (F->isIntrinsic())
-    if (Value *Ret = SimplifyIntrinsic(F, ArgBegin, ArgEnd, Q, MaxRecurse))
+    if (Value *Ret = simplifyIntrinsic(F, ArgBegin, ArgEnd, Q))
       return Ret;
 
   if (!canConstantFoldCallTo(CS, F))

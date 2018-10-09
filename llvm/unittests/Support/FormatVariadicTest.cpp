@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Support/FormatVariadic.h"
+#include "llvm/Support/Error.h"
 #include "llvm/Support/FormatAdapters.h"
 #include "gtest/gtest.h"
 
@@ -670,4 +671,21 @@ TEST(FormatVariadicTest, CopiesAndMoves) {
   EXPECT_EQ("0C 3M", formatv("{0}", Recorder()).str());
   EXPECT_EQ(0, R.Copied);
   EXPECT_EQ(0, R.Moved);
+}
+
+namespace adl {
+struct X {};
+raw_ostream &operator<<(raw_ostream &OS, const X &) { return OS << "X"; }
+} // namespace adl
+TEST(FormatVariadicTest, FormatStreamable) {
+  adl::X X;
+  EXPECT_EQ("X", formatv("{0}", X).str());
+}
+
+TEST(FormatVariadicTest, FormatError) {
+  auto E1 = make_error<StringError>("X", inconvertibleErrorCode());
+  EXPECT_EQ("X", formatv("{0}", E1).str());
+  EXPECT_TRUE(E1.isA<StringError>()); // not consumed
+  EXPECT_EQ("X", formatv("{0}", fmt_consume(std::move(E1))).str());
+  EXPECT_FALSE(E1.isA<StringError>()); // consumed
 }

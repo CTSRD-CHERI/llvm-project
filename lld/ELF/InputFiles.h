@@ -195,9 +195,6 @@ public:
     return getSymbol(SymIndex);
   }
 
-  // Returns source line information for a given offset.
-  // If no information is available, returns "".
-  std::string getLineInfo(InputSectionBase *S, uint64_t Offset);
   llvm::Optional<llvm::DILineInfo> getDILineInfo(InputSectionBase *, uint64_t);
   llvm::Optional<std::pair<std::string, unsigned>> getVariableLoc(StringRef Name);
 
@@ -210,6 +207,17 @@ public:
   // or empty string if there is no such symbol in object file
   // symbol table.
   StringRef SourceFile;
+
+  // True if the file defines functions compiled with
+  // -fsplit-stack. Usually false.
+  bool SplitStack = false;
+
+  // True if the file defines functions compiled with -fsplit-stack,
+  // but had one or more functions with the no_split_stack attribute.
+  bool SomeNoSplitStack = false;
+
+  // Pointer to this input file's .llvm_addrsig section, if it has one.
+  const Elf_Shdr *AddrsigSec = nullptr;
 
 private:
   void

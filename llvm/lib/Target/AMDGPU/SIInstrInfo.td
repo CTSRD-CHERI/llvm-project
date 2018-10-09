@@ -7,12 +7,12 @@
 //
 //===----------------------------------------------------------------------===//
 def isCI : Predicate<"Subtarget->getGeneration() "
-                      ">= SISubtarget::SEA_ISLANDS">;
+                      ">= AMDGPUSubtarget::SEA_ISLANDS">;
 def isCIOnly : Predicate<"Subtarget->getGeneration() =="
-                         "SISubtarget::SEA_ISLANDS">,
+                         "AMDGPUSubtarget::SEA_ISLANDS">,
   AssemblerPredicate <"FeatureSeaIslands">;
 def isVIOnly : Predicate<"Subtarget->getGeneration() =="
-                         "SISubtarget::VOLCANIC_ISLANDS">,
+                         "AMDGPUSubtarget::VOLCANIC_ISLANDS">,
   AssemblerPredicate <"FeatureVolcanicIslands">;
 
 def DisableInst : Predicate <"false">, AssemblerPredicate<"FeatureDisable">;
@@ -487,7 +487,7 @@ class InlineFPImm <ValueType vt> : PatLeaf <(vt fpimm), [{
 }]>;
 
 class VGPRImm <dag frag> : PatLeaf<frag, [{
-  if (Subtarget->getGeneration() < SISubtarget::SOUTHERN_ISLANDS) {
+  if (Subtarget->getGeneration() < AMDGPUSubtarget::SOUTHERN_ISLANDS) {
     return false;
   }
   const SIRegisterInfo *SIRI =
@@ -1788,6 +1788,8 @@ def VOP_B32_F16_F16 : VOPProfile <[i32, f16, f16, untyped]>;
 
 def VOP_V2F16_V2F16_V2F16_V2F16 : VOPProfile <[v2f16, v2f16, v2f16, v2f16]>;
 def VOP_V2I16_V2I16_V2I16_V2I16 : VOPProfile <[v2i16, v2i16, v2i16, v2i16]>;
+def VOP_V2I16_F32_F32 : VOPProfile <[v2i16, f32, f32, untyped]>;
+def VOP_V2I16_I32_I32 : VOPProfile <[v2i16, i32, i32, untyped]>;
 
 def VOP_F32_V2F16_V2F16_V2F16 : VOPProfile <[f32, v2f16, v2f16, v2f16]>;
 

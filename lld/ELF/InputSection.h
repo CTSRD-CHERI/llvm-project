@@ -107,7 +107,7 @@ public:
 
   static bool classof(const SectionBase *S) { return S->kind() != Output; }
 
-  // The file which contains this section. It's dynamic type is always
+  // The file which contains this section. Its dynamic type is always
   // ObjFile<ELFT>, but in order to avoid ELFT, we use InputFile as
   // its static type.
   InputFile *File;
@@ -165,6 +165,15 @@ public:
 
   InputSection *getLinkOrderDep() const;
 
+  // Get the function symbol that encloses this offset from within the
+  // section.
+  template <class ELFT>
+  Defined *getEnclosingFunction(uint64_t Offset);
+  template <class ELFT>
+  Defined *getEnclosingObject(uint64_t Offset);
+  template <class ELFT, unsigned SymbolType>
+  Defined *getEnclosingSymbol(uint64_t Offset);
+
   // Compilers emit zlib-compressed debug sections if the -gz option
   // is given. This function checks if this section is compressed, and
   // if so, decompress in memory.
@@ -186,6 +195,15 @@ public:
   // This vector contains such "cooked" relocations.
   std::vector<Relocation> Relocations;
   std::vector<DynamicReloc> FreeBSDMipsRelocationsHack;
+
+  // A function compiled with -fsplit-stack calling a function
+  // compiled without -fsplit-stack needs its prologue adjusted. Find
+  // such functions and adjust their prologues.  This is very similar
+  // to relocation. See https://gcc.gnu.org/wiki/SplitStacks for more
+  // information.
+  template <typename ELFT>
+  void adjustSplitStackFunctionPrologues(uint8_t *Buf, uint8_t *End);
+
 
   template <typename T> llvm::ArrayRef<T> getDataAs() const {
     size_t S = Data.size();

@@ -951,12 +951,9 @@ bool MipsFastISel::selectBranch(const Instruction *I) {
   //
   MachineBasicBlock *TBB = FuncInfo.MBBMap[BI->getSuccessor(0)];
   MachineBasicBlock *FBB = FuncInfo.MBBMap[BI->getSuccessor(1)];
-  BI->getCondition();
   // For now, just try the simplest case where it's fed by a compare.
   if (const CmpInst *CI = dyn_cast<CmpInst>(BI->getCondition())) {
-    unsigned CondReg = createResultReg(&Mips::GPR32RegClass);
-    if (!emitCmp(CondReg, CI))
-      return false;
+    unsigned CondReg = getRegForValue(CI);
     BuildMI(*BrBB, FuncInfo.InsertPt, DbgLoc, TII.get(Mips::BGTZ))
         .addReg(CondReg)
         .addMBB(TBB);
@@ -1665,7 +1662,7 @@ bool MipsFastISel::selectRet(const Instruction *I) {
       return false;
 
     SmallVector<ISD::OutputArg, 4> Outs;
-    GetReturnInfo(F.getReturnType(), F.getAttributes(), Outs, TLI, DL);
+    GetReturnInfo(CC, F.getReturnType(), F.getAttributes(), Outs, TLI, DL);
 
     // Analyze operands of the call, assigning locations to each operand.
     SmallVector<CCValAssign, 16> ValLocs;
@@ -2065,6 +2062,10 @@ unsigned MipsFastISel::getRegEnsuringSimpleIntegerWidening(const Value *V,
   if (VReg == 0)
     return 0;
   MVT VMVT = TLI.getValueType(DL, V->getType(), true).getSimpleVT();
+
+  if (VMVT == MVT::i1)
+    return 0;
+
   if ((VMVT == MVT::i8) || (VMVT == MVT::i16)) {
     unsigned TempReg = createResultReg(&Mips::GPR32RegClass);
     if (!emitIntExt(VMVT, VReg, MVT::i32, TempReg, IsUnsigned))

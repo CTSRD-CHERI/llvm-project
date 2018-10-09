@@ -556,7 +556,6 @@ class NonvolatileLoad<SDPatternOperator load>
   auto *Load = cast<LoadSDNode>(N);
   return !Load->isVolatile();
 }]>;
-def nonvolatile_load          : NonvolatileLoad<load>;
 def nonvolatile_anyextloadi8  : NonvolatileLoad<anyextloadi8>;
 def nonvolatile_anyextloadi16 : NonvolatileLoad<anyextloadi16>;
 def nonvolatile_anyextloadi32 : NonvolatileLoad<anyextloadi32>;
@@ -567,7 +566,6 @@ class NonvolatileStore<SDPatternOperator store>
   auto *Store = cast<StoreSDNode>(N);
   return !Store->isVolatile();
 }]>;
-def nonvolatile_store         : NonvolatileStore<store>;
 def nonvolatile_truncstorei8  : NonvolatileStore<truncstorei8>;
 def nonvolatile_truncstorei16 : NonvolatileStore<truncstorei16>;
 def nonvolatile_truncstorei32 : NonvolatileStore<truncstorei32>;
@@ -646,6 +644,20 @@ def z_inegabs64 : PatFrag<(ops node:$src), (ineg (z_iabs64 node:$src))>;
 def z_muladd : PatFrag<(ops node:$src1, node:$src2, node:$src3),
                        (add (mul node:$src1, node:$src2), node:$src3)>;
 
+// Alternatives to match operations with or without an overflow CC result.
+def z_sadd : PatFrags<(ops node:$src1, node:$src2),
+                      [(z_saddo node:$src1, node:$src2),
+                       (add node:$src1, node:$src2)]>;
+def z_uadd : PatFrags<(ops node:$src1, node:$src2),
+                      [(z_uaddo node:$src1, node:$src2),
+                       (add node:$src1, node:$src2)]>;
+def z_ssub : PatFrags<(ops node:$src1, node:$src2),
+                      [(z_ssubo node:$src1, node:$src2),
+                       (sub node:$src1, node:$src2)]>;
+def z_usub : PatFrags<(ops node:$src1, node:$src2),
+                      [(z_usubo node:$src1, node:$src2),
+                       (sub node:$src1, node:$src2)]>;
+
 // Fused multiply-subtract, using the natural operand order.
 def fms : PatFrag<(ops node:$src1, node:$src2, node:$src3),
                   (fma node:$src1, node:$src2, (fneg node:$src3))>;
@@ -682,6 +694,16 @@ class storeu<SDPatternOperator operator, SDPatternOperator store = store>
 class storei<SDPatternOperator operator, SDPatternOperator store = store>
   : PatFrag<(ops node:$addr),
             (store (operator), node:$addr)>;
+
+// Create a shift operator that optionally ignores an AND of the
+// shift count with an immediate if the bottom 6 bits are all set.
+def imm32bottom6set : PatLeaf<(i32 imm), [{
+  return (N->getZExtValue() & 0x3f) == 0x3f;
+}]>;
+class shiftop<SDPatternOperator operator>
+  : PatFrags<(ops node:$val, node:$count),
+             [(operator node:$val, node:$count),
+              (operator node:$val, (and node:$count, imm32bottom6set))]>;
 
 // Vector representation of all-zeros and all-ones.
 def z_vzero : PatFrag<(ops), (bitconvert (v16i8 (z_byte_mask (i32 0))))>;

@@ -17,6 +17,7 @@
 #ifndef LLVM_TOOLS_LLVM_MCA_REGISTER_FILE_H
 #define LLVM_TOOLS_LLVM_MCA_REGISTER_FILE_H
 
+#include "HardwareUnit.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSchedule.h"
@@ -29,12 +30,13 @@ class WriteRef;
 
 /// Manages hardware register files, and tracks register definitions for
 /// register renaming purposes.
-class RegisterFile {
+class RegisterFile : public HardwareUnit {
   const llvm::MCRegisterInfo &MRI;
 
   // Each register file is associated with an instance of
-  // RegisterMappingTracker. A RegisterMappingTracker tracks the number of
-  // physical registers that are dynamically allocated by the simulator.
+  // RegisterMappingTracker.
+  // A RegisterMappingTracker keeps track of the number of physical registers
+  // which have been dynamically allocated by the simulator.
   struct RegisterMappingTracker {
     // The total number of physical registers that are available in this
     // register file for register renaming purpouses.  A value of zero for this
@@ -59,24 +61,35 @@ class RegisterFile {
   // regsiter file #0 specifying command line flag `-register-file-size=<uint>`.
   llvm::SmallVector<RegisterMappingTracker, 4> RegisterFiles;
 
-  // This pair is used to identify the owner of a register, as well as
-  // the "register cost". Register cost is defined as the number of physical
-  // registers required to allocate a user register.
+  // This type is used to propagate information about the owner of a register,
+  // and the cost of allocating it in the PRF. Register cost is defined as the
+  // number of physical registers consumed by the PRF to allocate a user
+  // register.
+  //
   // For example: on X86 BtVer2, a YMM register consumes 2 128-bit physical
   // registers. So, the cost of allocating a YMM register in BtVer2 is 2.
   using IndexPlusCostPairTy = std::pair<unsigned, unsigned>;
+
+  // Struct RegisterRenamingInfo maps registers to register files.
+  // There is a RegisterRenamingInfo object for every register defined by
+  // the target. RegisteRenamingInfo objects are stored into vector
+  // RegisterMappings, and register IDs can be used to reference them.
+  struct RegisterRenamingInfo {
+    IndexPlusCostPairTy IndexPlusCost;
+    llvm::MCPhysReg RenameAs;
+  };
 
   // RegisterMapping objects are mainly used to track physical register
   // definitions. There is a RegisterMapping for every register defined by the
   // Target. For each register, a RegisterMapping pair contains a descriptor of
   // the last register write (in the form of a WriteRef object), as well as a
-  // IndexPlusCostPairTy to quickly identify owning register files.
+  // RegisterRenamingInfo to quickly identify owning register files.
   //
   // This implementation does not allow overlapping register files. The only
   // register file that is allowed to overlap with other register files is
   // register file #0. If we exclude register #0, every register is "owned" by
   // at most one register file.
-  using RegisterMapping = std::pair<WriteRef, IndexPlusCostPairTy>;
+  using RegisterMapping = std::pair<WriteRef, RegisterRenamingInfo>;
 
   // This map contains one entry for each register defined by the target.
   std::vector<RegisterMapping> RegisterMappings;
@@ -101,13 +114,12 @@ class RegisterFile {
 
   // Consumes physical registers in each register file specified by the
   // `IndexPlusCostPairTy`. This method is called from `addRegisterMapping()`.
-  void allocatePhysRegs(IndexPlusCostPairTy IPC,
+  void allocatePhysRegs(const RegisterRenamingInfo &Entry,
                         llvm::MutableArrayRef<unsigned> UsedPhysRegs);
 
-  // Releases previously allocated physical registers from the register file(s)
-  // referenced by the IndexPlusCostPairTy object. This method is called from
-  // `invalidateRegisterMapping()`.
-  void freePhysRegs(IndexPlusCostPairTy IPC,
+  // Releases previously allocated physical registers from the register file(s).
+  // This method is called from `invalidateRegisterMapping()`.
+  void freePhysRegs(const RegisterRenamingInfo &Entry,
                     llvm::MutableArrayRef<unsigned> FreedPhysRegs);
 
   // Create an instance of RegisterMappingTracker for every register file
@@ -138,8 +150,11 @@ public:
   // Returns a "response mask" where each bit represents the response from a
   // different register file.  A mask of all zeroes means that all register
   // files are available.  Otherwise, the mask can be used to identify which
-  // register file was busy.  This sematic allows us classify dispatch dispatch
+  // register file was busy.  This sematic allows us to classify dispatch
   // stalls caused by the lack of register file resources.
+  //
+  // Current implementation can simulate up to 32 register files (including the
+  // special register file at index #0).
   unsigned isAvailable(llvm::ArrayRef<unsigned> Regs) const;
   void collectWrites(llvm::SmallVectorImpl<WriteRef> &Writes,
                      unsigned RegID) const;

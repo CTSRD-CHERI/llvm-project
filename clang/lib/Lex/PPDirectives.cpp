@@ -887,6 +887,22 @@ private:
   bool save;
 };
 
+/// Process a directive while looking for the through header.
+/// Only #include (to check if it is the through header) and #define (to warn
+/// about macros that don't match the PCH) are handled. All other directives
+/// are completely discarded.
+void Preprocessor::HandleSkippedThroughHeaderDirective(Token &Result,
+                                                       SourceLocation HashLoc) {
+  if (const IdentifierInfo *II = Result.getIdentifierInfo()) {
+    if (II->getPPKeywordID() == tok::pp_include)
+      return HandleIncludeDirective(HashLoc, Result);
+    if (II->getPPKeywordID() == tok::pp_define)
+      return HandleDefineDirective(Result,
+                                   /*ImmediatelyAfterHeaderGuard=*/false);
+  }
+  DiscardUntilEndOfDirective();
+}
+
 /// HandleDirective - This callback is invoked when the lexer sees a # token
 /// at the start of a line.  This consumes the directive, modifies the
 /// lexer/preprocessor state, and advances the lexer(s) so that the next token
@@ -947,6 +963,9 @@ void Preprocessor::HandleDirective(Token &Result) {
   // Temporarily enable macro expansion if set so
   // and reset to previous state when returning from this function.
   ResetMacroExpansionHelper helper(this);
+
+  if (SkippingUntilPCHThroughHeader)
+    return HandleSkippedThroughHeaderDirective(Result, SavedHash.getLocation());
 
   switch (Result.getKind()) {
   case tok::eod:
@@ -1862,6 +1881,12 @@ void Preprocessor::HandleIncludeDirective(SourceLocation HashLoc,
     }
   }
 
+  if (usingPCHWithThroughHeader() && SkippingUntilPCHThroughHeader) {
+    if (isPCHThroughHeader(File))
+      SkippingUntilPCHThroughHeader = false;
+    return;
+  }
+
   // Should we enter the source file? Set to false if either the source file is
   // known to have no effect beyond its effect on module visibility -- that is,
   // if it's got an include guard that is already defined or is a modular header
@@ -1869,6 +1894,12 @@ void Preprocessor::HandleIncludeDirective(SourceLocation HashLoc,
   bool ShouldEnter = true;
 
   if (PPOpts->SingleFileParseMode)
+    ShouldEnter = false;
+
+  // Any diagnostics after the fatal error will not be visible. As the
+  // compilation failed already and errors in subsequently included files won't
+  // be visible, avoid preprocessing those files.
+  if (ShouldEnter && Diags->hasFatalErrorOccurred())
     ShouldEnter = false;
 
   // Determine whether we should try to import the module for this #include, if
@@ -2566,13 +2597,13 @@ void Preprocessor::HandleDefineDirective(
 
   MacroInfo *const MI = ReadOptionalMacroParameterListAndBody(
       MacroNameTok, ImmediatelyAfterHeaderGuard);
-  
+
   if (!MI) return;
 
   if (MacroShadowsKeyword &&
       !isConfigurationPattern(MacroNameTok, MI, getLangOpts())) {
     Diag(MacroNameTok, diag::warn_pp_macro_hides_keyword);
-  }  
+  }
   // Check that there is no paste (##) operator at the beginning or end of the
   // replacement list.
   unsigned NumTokens = MI->getNumTokens();
@@ -2587,7 +2618,15 @@ void Preprocessor::HandleDefineDirective(
     }
   }
 
-  
+  // When skipping just warn about macros that do not match.
+  if (SkippingUntilPCHThroughHeader) {
+    const MacroInfo *OtherMI = getMacroInfo(MacroNameTok.getIdentifierInfo());
+    if (!OtherMI || !MI->isIdenticalTo(*OtherMI, *this,
+                             /*Syntactic=*/LangOpts.MicrosoftExt))
+      Diag(MI->getDefinitionLoc(), diag::warn_pp_macro_def_mismatch_with_pch)
+          << MacroNameTok.getIdentifierInfo();
+    return;
+  }
 
   // Finally, if this identifier already had a macro defined for it, verify that
   // the macro bodies are identical, and issue diagnostics if they are not.
@@ -2677,7 +2716,7 @@ void Preprocessor::HandleUndefDirective() {
   auto *II = MacroNameTok.getIdentifierInfo();
   auto MD = getMacroDefinition(II);
   UndefMacroDirective *Undef = nullptr;
-  
+
   // If the macro is not defined, this is a noop undef.
   if (const MacroInfo *MI = MD.getMacroInfo()) {
     if (!MI->isUsed() && MI->isWarnIfUnused())

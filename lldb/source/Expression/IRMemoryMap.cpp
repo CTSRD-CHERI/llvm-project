@@ -8,7 +8,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "lldb/Expression/IRMemoryMap.h"
-#include "lldb/Core/Scalar.h"
 #include "lldb/Target/MemoryRegionInfo.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/Target.h"
@@ -16,6 +15,7 @@
 #include "lldb/Utility/DataExtractor.h"
 #include "lldb/Utility/LLDBAssert.h"
 #include "lldb/Utility/Log.h"
+#include "lldb/Utility/Scalar.h"
 #include "lldb/Utility/Status.h"
 
 using namespace lldb_private;
@@ -278,14 +278,10 @@ IRMemoryMap::Allocation::Allocation(lldb::addr_t process_alloc,
   default:
     assert(0 && "We cannot reach this!");
   case eAllocationPolicyHostOnly:
-    m_data.SetByteSize(size);
-    memset(m_data.GetBytes(), 0, size);
-    break;
-  case eAllocationPolicyProcessOnly:
-    break;
   case eAllocationPolicyMirror:
     m_data.SetByteSize(size);
-    memset(m_data.GetBytes(), 0, size);
+    break;
+  case eAllocationPolicyProcessOnly:
     break;
   }
 }

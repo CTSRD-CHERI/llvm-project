@@ -26,6 +26,7 @@
 //===---------------------------------------------------------------------===//
 #ifndef LLVM_CLANG_TOOLS_EXTRA_CLANGD_QUALITY_H
 #define LLVM_CLANG_TOOLS_EXTRA_CLANGD_QUALITY_H
+#include "clang/Sema/CodeCompleteConsumer.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"
 #include <algorithm>
@@ -38,6 +39,7 @@ namespace clang {
 class CodeCompletionResult;
 namespace clangd {
 struct Symbol;
+class URIDistance;
 
 // Signals structs are designed to be aggregated from 0 or more sources.
 // A default instance has neutral signals, and sources are merged into it.
@@ -56,6 +58,7 @@ struct SymbolQualitySignals {
     Macro,
     Type,
     Function,
+    Constructor,
     Namespace,
     Keyword,
   } Category = Unknown;
@@ -69,15 +72,15 @@ struct SymbolQualitySignals {
 llvm::raw_ostream &operator<<(llvm::raw_ostream &,
                               const SymbolQualitySignals &);
 
-class FileProximityMatcher;
-
 /// Attributes of a symbol-query pair that affect how much we like it.
 struct SymbolRelevanceSignals {
   /// 0-1+ fuzzy-match score for unqualified name. Must be explicitly assigned.
   float NameMatch = 1;
   bool Forbidden = false; // Unavailable (e.g const) or inaccessible (private).
+  /// Whether fixits needs to be applied for that completion or not.
+  bool NeedsFixIts = false;
 
-  const FileProximityMatcher *FileProximityMatch = nullptr;
+  URIDistance *FileProximityMatch = nullptr;
   /// This is used to calculate proximity between the index symbol and the
   /// query.
   llvm::StringRef SymbolURI;
@@ -99,6 +102,11 @@ struct SymbolRelevanceSignals {
     Generic,
   } Query = Generic;
 
+  CodeCompletionContext::Kind Context = CodeCompletionContext::CCC_Other;
+
+  // Whether symbol is an instance member of a class.
+  bool IsInstanceMember = false;
+
   void merge(const CodeCompletionResult &SemaResult);
   void merge(const Symbol &IndexResult);
 
@@ -110,25 +118,6 @@ llvm::raw_ostream &operator<<(llvm::raw_ostream &,
 
 /// Combine symbol quality and relevance into a single score.
 float evaluateSymbolAndRelevance(float SymbolQuality, float SymbolRelevance);
-
-class FileProximityMatcher {
-  public:
-    /// \p ProximityPaths are used to compute proximity scores from symbol's
-    /// declaring file. The best score will be used.
-    explicit FileProximityMatcher(
-        llvm::ArrayRef<llvm::StringRef> ProximityPaths);
-
-    /// Calculates the best proximity score from proximity paths to the symbol's
-    /// URI. Score is [0-1], 1 means \p SymbolURI exactly matches a proximity
-    /// path. When a path cannot be encoded into the same scheme as \p
-    /// SymbolURI, the proximity will be 0.
-    float uriProximity(llvm::StringRef SymbolURI) const;
-
-  private:
-    llvm::SmallVector<std::string, 2> ProximityPaths;
-    friend llvm::raw_ostream &operator<<(llvm::raw_ostream &,
-                                         const FileProximityMatcher &);
-};
 
 /// TopN<T> is a lossy container that preserves only the "best" N elements.
 template <typename T, typename Compare = std::greater<T>> class TopN {

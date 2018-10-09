@@ -14,7 +14,6 @@
 // Other libraries and framework includes
 // Project includes
 #include "lldb/Core/SourceManager.h"
-#include "lldb/Core/State.h"
 #include "lldb/Core/ValueObject.h"
 #include "lldb/Host/Host.h"
 #include "lldb/Host/OptionParser.h"
@@ -37,6 +36,7 @@
 #include "lldb/Target/ThreadPlanStepInstruction.h"
 #include "lldb/Target/ThreadPlanStepOut.h"
 #include "lldb/Target/ThreadPlanStepRange.h"
+#include "lldb/Utility/State.h"
 #include "lldb/lldb-private.h"
 
 using namespace lldb;
@@ -1603,12 +1603,13 @@ public:
   Options *GetOptions() override { return &m_options; }
 
 protected:
-  bool DoExecute(const char *command, CommandReturnObject &result) override {
+  bool DoExecute(llvm::StringRef command,
+                 CommandReturnObject &result) override {
     // I am going to handle this by hand, because I don't want you to have to
     // say:
     // "thread return -- -5".
-    if (command[0] == '-' && command[1] == 'x') {
-      if (command && command[2] != '\0')
+    if (command.startswith("-x")) {
+      if (command.size() != 2U)
         result.AppendWarning("Return values ignored when returning from user "
                              "called expressions");
 
@@ -1645,7 +1646,7 @@ protected:
       return false;
     }
 
-    if (command && command[0] != '\0') {
+    if (!command.empty()) {
       Target *target = m_exe_ctx.GetTargetPtr();
       EvaluateExpressionOptions options;
 

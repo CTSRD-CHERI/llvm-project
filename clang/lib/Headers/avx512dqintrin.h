@@ -29,7 +29,7 @@
 #define __AVX512DQINTRIN_H
 
 /* Define the default attributes for the functions in this file. */
-#define __DEFAULT_FN_ATTRS __attribute__((__always_inline__, __nodebug__, __target__("avx512dq")))
+#define __DEFAULT_FN_ATTRS __attribute__((__always_inline__, __nodebug__, __target__("avx512dq"), __min_vector_width__(512)))
 
 static __inline__ __m512i __DEFAULT_FN_ATTRS
 _mm512_mullo_epi64 (__m512i __A, __m512i __B) {
@@ -995,7 +995,7 @@ _mm512_broadcast_f32x8(__m256 __A)
 static __inline__ __m512 __DEFAULT_FN_ATTRS
 _mm512_mask_broadcast_f32x8(__m512 __O, __mmask16 __M, __m256 __A)
 {
-  return (__m512)__builtin_ia32_selectps_512((__mmask8)__M,
+  return (__m512)__builtin_ia32_selectps_512((__mmask16)__M,
                                            (__v16sf)_mm512_broadcast_f32x8(__A),
                                            (__v16sf)__O);
 }
@@ -1003,7 +1003,7 @@ _mm512_mask_broadcast_f32x8(__m512 __O, __mmask16 __M, __m256 __A)
 static __inline__ __m512 __DEFAULT_FN_ATTRS
 _mm512_maskz_broadcast_f32x8(__mmask16 __M, __m256 __A)
 {
-  return (__m512)__builtin_ia32_selectps_512((__mmask8)__M,
+  return (__m512)__builtin_ia32_selectps_512((__mmask16)__M,
                                            (__v16sf)_mm512_broadcast_f32x8(__A),
                                            (__v16sf)_mm512_setzero_ps());
 }
@@ -1066,7 +1066,7 @@ _mm512_broadcast_i32x8(__m256i __A)
 static __inline__ __m512i __DEFAULT_FN_ATTRS
 _mm512_mask_broadcast_i32x8(__m512i __O, __mmask16 __M, __m256i __A)
 {
-  return (__m512i)__builtin_ia32_selectd_512((__mmask8)__M,
+  return (__m512i)__builtin_ia32_selectd_512((__mmask16)__M,
                                            (__v16si)_mm512_broadcast_i32x8(__A),
                                            (__v16si)__O);
 }
@@ -1074,7 +1074,7 @@ _mm512_mask_broadcast_i32x8(__m512i __O, __mmask16 __M, __m256i __A)
 static __inline__ __m512i __DEFAULT_FN_ATTRS
 _mm512_maskz_broadcast_i32x8(__mmask16 __M, __m256i __A)
 {
-  return (__m512i)__builtin_ia32_selectd_512((__mmask8)__M,
+  return (__m512i)__builtin_ia32_selectd_512((__mmask16)__M,
                                            (__v16si)_mm512_broadcast_i32x8(__A),
                                            (__v16si)_mm512_setzero_si512());
 }
@@ -1105,7 +1105,7 @@ _mm512_maskz_broadcast_i64x2(__mmask8 __M, __m128i __A)
 #define _mm512_extractf32x8_ps(A, imm) \
   (__m256)__builtin_ia32_extractf32x8_mask((__v16sf)(__m512)(A), (int)(imm), \
                                            (__v8sf)_mm256_undefined_ps(), \
-                                           (__mmask8)-1);
+                                           (__mmask8)-1)
 
 #define _mm512_mask_extractf32x8_ps(W, U, A, imm) \
   (__m256)__builtin_ia32_extractf32x8_mask((__v16sf)(__m512)(A), (int)(imm), \

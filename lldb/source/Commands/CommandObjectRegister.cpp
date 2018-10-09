@@ -9,8 +9,7 @@
 
 #include "CommandObjectRegister.h"
 #include "lldb/Core/Debugger.h"
-#include "lldb/Core/RegisterValue.h"
-#include "lldb/Core/Scalar.h"
+#include "lldb/Core/DumpRegisterValue.h"
 #include "lldb/Host/OptionParser.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
 #include "lldb/Interpreter/CommandReturnObject.h"
@@ -26,6 +25,8 @@
 #include "lldb/Target/Thread.h"
 #include "lldb/Utility/Args.h"
 #include "lldb/Utility/DataExtractor.h"
+#include "lldb/Utility/RegisterValue.h"
+#include "lldb/Utility/Scalar.h"
 #include "llvm/Support/Errno.h"
 
 using namespace lldb;
@@ -92,8 +93,8 @@ public:
 
         bool prefix_with_altname = (bool)m_command_options.alternate_name;
         bool prefix_with_name = !prefix_with_altname;
-        reg_value.Dump(&strm, reg_info, prefix_with_name, prefix_with_altname,
-                       m_format_options.GetFormat(), 8);
+        DumpRegisterValue(reg_value, &strm, reg_info, prefix_with_name,
+                          prefix_with_altname, m_format_options.GetFormat(), 8);
         if ((reg_info->encoding == eEncodingUint) ||
             (reg_info->encoding == eEncodingSint)) {
           Process *process = exe_ctx.GetProcessPtr();

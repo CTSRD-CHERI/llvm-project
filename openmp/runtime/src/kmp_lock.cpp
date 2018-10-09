@@ -19,6 +19,8 @@
 #include "kmp_io.h"
 #include "kmp_itt.h"
 #include "kmp_lock.h"
+#include "kmp_wait_release.h"
+#include "kmp_wrapper_getpid.h"
 
 #include "tsan_annotations.h"
 
@@ -69,7 +71,7 @@ void __kmp_validate_locks(void) {
 // entire 8 bytes were allocated for nested locks on all 64-bit platforms.
 
 static kmp_int32 __kmp_get_tas_lock_owner(kmp_tas_lock_t *lck) {
-  return KMP_LOCK_STRIP(TCR_4(lck->lk.poll)) - 1;
+  return KMP_LOCK_STRIP(KMP_ATOMIC_LD_RLX(&lck->lk.poll)) - 1;
 }
 
 static inline bool __kmp_is_tas_lock_nestable(kmp_tas_lock_t *lck) {
@@ -81,15 +83,17 @@ __kmp_acquire_tas_lock_timed_template(kmp_tas_lock_t *lck, kmp_int32 gtid) {
   KMP_MB();
 
 #ifdef USE_LOCK_PROFILE
-  kmp_uint32 curr = KMP_LOCK_STRIP(TCR_4(lck->lk.poll));
+  kmp_uint32 curr = KMP_LOCK_STRIP(lck->lk.poll);
   if ((curr != 0) && (curr != gtid + 1))
     __kmp_printf("LOCK CONTENTION: %p\n", lck);
 /* else __kmp_printf( "." );*/
 #endif /* USE_LOCK_PROFILE */
 
-  if ((lck->lk.poll == KMP_LOCK_FREE(tas)) &&
-      KMP_COMPARE_AND_STORE_ACQ32(&(lck->lk.poll), KMP_LOCK_FREE(tas),
-                                  KMP_LOCK_BUSY(gtid + 1, tas))) {
+  kmp_int32 tas_free = KMP_LOCK_FREE(tas);
+  kmp_int32 tas_busy = KMP_LOCK_BUSY(gtid + 1, tas);
+
+  if (KMP_ATOMIC_LD_RLX(&lck->lk.poll) == tas_free &&
+      __kmp_atomic_compare_store_acq(&lck->lk.poll, tas_free, tas_busy)) {
     KMP_FSYNC_ACQUIRED(lck);
     return KMP_LOCK_ACQUIRED_FIRST;
   }
@@ -104,10 +108,8 @@ __kmp_acquire_tas_lock_timed_template(kmp_tas_lock_t *lck, kmp_int32 gtid) {
   }
 
   kmp_backoff_t backoff = __kmp_spin_backoff_params;
-  while ((lck->lk.poll != KMP_LOCK_FREE(tas)) ||
-         (!KMP_COMPARE_AND_STORE_ACQ32(&(lck->lk.poll), KMP_LOCK_FREE(tas),
-                                       KMP_LOCK_BUSY(gtid + 1, tas)))) {
-
+  while (KMP_ATOMIC_LD_RLX(&lck->lk.poll) != tas_free ||
+         !__kmp_atomic_compare_store_acq(&lck->lk.poll, tas_free, tas_busy)) {
     __kmp_spin_backoff(&backoff);
     if (TCR_4(__kmp_nth) >
         (__kmp_avail_proc ? __kmp_avail_proc : __kmp_xproc)) {
@@ -140,9 +142,10 @@ static int __kmp_acquire_tas_lock_with_checks(kmp_tas_lock_t *lck,
 }
 
 int __kmp_test_tas_lock(kmp_tas_lock_t *lck, kmp_int32 gtid) {
-  if ((lck->lk.poll == KMP_LOCK_FREE(tas)) &&
-      KMP_COMPARE_AND_STORE_ACQ32(&(lck->lk.poll), KMP_LOCK_FREE(tas),
-                                  KMP_LOCK_BUSY(gtid + 1, tas))) {
+  kmp_int32 tas_free = KMP_LOCK_FREE(tas);
+  kmp_int32 tas_busy = KMP_LOCK_BUSY(gtid + 1, tas);
+  if (KMP_ATOMIC_LD_RLX(&lck->lk.poll) == tas_free &&
+      __kmp_atomic_compare_store_acq(&lck->lk.poll, tas_free, tas_busy)) {
     KMP_FSYNC_ACQUIRED(lck);
     return TRUE;
   }
@@ -164,7 +167,7 @@ int __kmp_release_tas_lock(kmp_tas_lock_t *lck, kmp_int32 gtid) {
 
   KMP_FSYNC_RELEASING(lck);
   ANNOTATE_TAS_RELEASED(lck);
-  KMP_ST_REL32(&(lck->lk.poll), KMP_LOCK_FREE(tas));
+  KMP_ATOMIC_ST_REL(&lck->lk.poll, KMP_LOCK_FREE(tas));
   KMP_MB(); /* Flush all pending memory write invalidates.  */
 
   KMP_YIELD(TCR_4(__kmp_nth) >
@@ -191,7 +194,7 @@ static int __kmp_release_tas_lock_with_checks(kmp_tas_lock_t *lck,
 }
 
 void __kmp_init_tas_lock(kmp_tas_lock_t *lck) {
-  TCW_4(lck->lk.poll, KMP_LOCK_FREE(tas));
+  lck->lk.poll = KMP_LOCK_FREE(tas);
 }
 
 static void __kmp_init_tas_lock_with_checks(kmp_tas_lock_t *lck) {
@@ -1868,13 +1871,15 @@ static kmp_adaptive_lock_statistics_t destroyedStats;
 static kmp_adaptive_lock_info_t liveLocks;
 
 // A lock so we can safely update the list of locks.
-static kmp_bootstrap_lock_t chain_lock;
+static kmp_bootstrap_lock_t chain_lock =
+    KMP_BOOTSTRAP_LOCK_INITIALIZER(chain_lock);
 
 // Initialize the list of stats.
 void __kmp_init_speculative_stats() {
   kmp_adaptive_lock_info_t *lck = &liveLocks;
 
-  memset((void *)&(lck->stats), 0, sizeof(lck->stats));
+  memset(CCAST(kmp_adaptive_lock_statistics_t *, &(lck->stats)), 0,
+         sizeof(lck->stats));
   lck->stats.next = lck;
   lck->stats.prev = lck;
 
@@ -1912,7 +1917,8 @@ static void __kmp_forget_lock(kmp_adaptive_lock_info_t *lck) {
 }
 
 static void __kmp_zero_speculative_stats(kmp_adaptive_lock_info_t *lck) {
-  memset((void *)&lck->stats, 0, sizeof(lck->stats));
+  memset(CCAST(kmp_adaptive_lock_statistics_t *, &lck->stats), 0,
+         sizeof(lck->stats));
   __kmp_remember_lock(lck);
 }
 
@@ -1929,8 +1935,6 @@ static void __kmp_add_stats(kmp_adaptive_lock_statistics_t *t,
 }
 
 static void __kmp_accumulate_speculative_stats(kmp_adaptive_lock_info_t *lck) {
-  kmp_adaptive_lock_statistics_t *t = &destroyedStats;
-
   __kmp_acquire_bootstrap_lock(&chain_lock);
 
   __kmp_add_stats(&destroyedStats, lck);
@@ -1958,11 +1962,6 @@ static FILE *__kmp_open_stats_file() {
 }
 
 void __kmp_print_speculative_stats() {
-  if (__kmp_user_lock_kind != lk_adaptive)
-    return;
-
-  FILE *statsFile = __kmp_open_stats_file();
-
   kmp_adaptive_lock_statistics_t total = destroyedStats;
   kmp_adaptive_lock_info_t *lck;
 
@@ -1975,6 +1974,10 @@ void __kmp_print_speculative_stats() {
   kmp_uint32 totalSpeculations = t->successfulSpeculations +
                                  t->hardFailedSpeculations +
                                  t->softFailedSpeculations;
+  if (totalSections <= 0)
+    return;
+
+  FILE *statsFile = __kmp_open_stats_file();
 
   fprintf(statsFile, "Speculative lock statistics (all approximate!)\n");
   fprintf(statsFile, " Lock parameters: \n"
@@ -2279,7 +2282,7 @@ static void __kmp_destroy_adaptive_lock_with_checks(kmp_adaptive_lock_t *lck) {
 /* "DRDPA" means Dynamically Reconfigurable Distributed Polling Area */
 
 static kmp_int32 __kmp_get_drdpa_lock_owner(kmp_drdpa_lock_t *lck) {
-  return TCR_4(lck->lk.owner_id) - 1;
+  return lck->lk.owner_id - 1;
 }
 
 static inline bool __kmp_is_drdpa_lock_nestable(kmp_drdpa_lock_t *lck) {
@@ -2288,13 +2291,12 @@ static inline bool __kmp_is_drdpa_lock_nestable(kmp_drdpa_lock_t *lck) {
 
 __forceinline static int
 __kmp_acquire_drdpa_lock_timed_template(kmp_drdpa_lock_t *lck, kmp_int32 gtid) {
-  kmp_uint64 ticket =
-      KMP_TEST_THEN_INC64(RCAST(volatile kmp_int64 *, &lck->lk.next_ticket));
-  kmp_uint64 mask = TCR_8(lck->lk.mask); // volatile load
-  volatile struct kmp_base_drdpa_lock::kmp_lock_poll *polls = lck->lk.polls;
+  kmp_uint64 ticket = KMP_ATOMIC_INC(&lck->lk.next_ticket);
+  kmp_uint64 mask = lck->lk.mask; // atomic load
+  std::atomic<kmp_uint64> *polls = lck->lk.polls;
 
 #ifdef USE_LOCK_PROFILE
-  if (TCR_8(polls[ticket & mask].poll) != ticket)
+  if (polls[ticket & mask] != ticket)
     __kmp_printf("LOCK CONTENTION: %p\n", lck);
 /* else __kmp_printf( "." );*/
 #endif /* USE_LOCK_PROFILE */
@@ -2311,7 +2313,7 @@ __kmp_acquire_drdpa_lock_timed_template(kmp_drdpa_lock_t *lck, kmp_int32 gtid) {
 
   KMP_FSYNC_PREPARE(lck);
   KMP_INIT_YIELD(spins);
-  while (TCR_8(polls[ticket & mask].poll) < ticket) { // volatile load
+  while (polls[ticket & mask] < ticket) { // atomic load
     // If we are oversubscribed,
     // or have waited a bit (and KMP_LIBRARY=turnaround), then yield.
     // CPU Pause is in the macros for yield.
@@ -2327,8 +2329,8 @@ __kmp_acquire_drdpa_lock_timed_template(kmp_drdpa_lock_t *lck, kmp_int32 gtid) {
     // If another thread picks reconfigures the polling area and updates their
     // values, and we get the new value of mask and the old polls pointer, we
     // could access memory beyond the end of the old polling area.
-    mask = TCR_8(lck->lk.mask); // volatile load
-    polls = lck->lk.polls; // volatile load
+    mask = lck->lk.mask; // atomic load
+    polls = lck->lk.polls; // atomic load
   }
 
   // Critical section starts here
@@ -2343,7 +2345,7 @@ __kmp_acquire_drdpa_lock_timed_template(kmp_drdpa_lock_t *lck, kmp_int32 gtid) {
   // The >= check is in case __kmp_test_drdpa_lock() allocated the cleanup
   // ticket.
   if ((lck->lk.old_polls != NULL) && (ticket >= lck->lk.cleanup_ticket)) {
-    __kmp_free(CCAST(kmp_base_drdpa_lock::kmp_lock_poll *, lck->lk.old_polls));
+    __kmp_free(lck->lk.old_polls);
     lck->lk.old_polls = NULL;
     lck->lk.cleanup_ticket = 0;
   }
@@ -2353,7 +2355,7 @@ __kmp_acquire_drdpa_lock_timed_template(kmp_drdpa_lock_t *lck, kmp_int32 gtid) {
   // previous reconfiguration, let a later thread reconfigure it.
   if (lck->lk.old_polls == NULL) {
     bool reconfigure = false;
-    volatile struct kmp_base_drdpa_lock::kmp_lock_poll *old_polls = polls;
+    std::atomic<kmp_uint64> *old_polls = polls;
     kmp_uint32 num_polls = TCR_4(lck->lk.num_polls);
 
     if (TCR_4(__kmp_nth) >
@@ -2365,9 +2367,9 @@ __kmp_acquire_drdpa_lock_timed_template(kmp_drdpa_lock_t *lck, kmp_int32 gtid) {
         num_polls = TCR_4(lck->lk.num_polls);
         mask = 0;
         num_polls = 1;
-        polls = (volatile struct kmp_base_drdpa_lock::kmp_lock_poll *)
-            __kmp_allocate(num_polls * sizeof(*polls));
-        polls[0].poll = ticket;
+        polls = (std::atomic<kmp_uint64> *)__kmp_allocate(num_polls *
+                                                          sizeof(*polls));
+        polls[0] = ticket;
       }
     } else {
       // We are in under/fully subscribed mode.  Check the number of
@@ -2386,11 +2388,11 @@ __kmp_acquire_drdpa_lock_timed_template(kmp_drdpa_lock_t *lck, kmp_int32 gtid) {
         // of the old polling area to the new area.  __kmp_allocate()
         // zeroes the memory it allocates, and most of the old area is
         // just zero padding, so we only copy the release counters.
-        polls = (volatile struct kmp_base_drdpa_lock::kmp_lock_poll *)
-            __kmp_allocate(num_polls * sizeof(*polls));
+        polls = (std::atomic<kmp_uint64> *)__kmp_allocate(num_polls *
+                                                          sizeof(*polls));
         kmp_uint32 i;
         for (i = 0; i < old_num_polls; i++) {
-          polls[i].poll = old_polls[i].poll;
+          polls[i].store(old_polls[i]);
         }
       }
     }
@@ -2409,13 +2411,13 @@ __kmp_acquire_drdpa_lock_timed_template(kmp_drdpa_lock_t *lck, kmp_int32 gtid) {
                       "lock %p to %d polls\n",
                       ticket, lck, num_polls));
 
-      lck->lk.old_polls = old_polls; // non-volatile store
-      lck->lk.polls = polls; // volatile store
+      lck->lk.old_polls = old_polls;
+      lck->lk.polls = polls; // atomic store
 
       KMP_MB();
 
-      lck->lk.num_polls = num_polls; // non-volatile store
-      lck->lk.mask = mask; // volatile store
+      lck->lk.num_polls = num_polls;
+      lck->lk.mask = mask; // atomic store
 
       KMP_MB();
 
@@ -2423,7 +2425,7 @@ __kmp_acquire_drdpa_lock_timed_template(kmp_drdpa_lock_t *lck, kmp_int32 gtid) {
       // to main memory can we update the cleanup ticket field.
       //
       // volatile load / non-volatile store
-      lck->lk.cleanup_ticket = TCR_8(lck->lk.next_ticket);
+      lck->lk.cleanup_ticket = lck->lk.next_ticket;
     }
   }
   return KMP_LOCK_ACQUIRED_FIRST;
@@ -2457,13 +2459,13 @@ static int __kmp_acquire_drdpa_lock_with_checks(kmp_drdpa_lock_t *lck,
 int __kmp_test_drdpa_lock(kmp_drdpa_lock_t *lck, kmp_int32 gtid) {
   // First get a ticket, then read the polls pointer and the mask.
   // The polls pointer must be read before the mask!!! (See above)
-  kmp_uint64 ticket = TCR_8(lck->lk.next_ticket); // volatile load
-  volatile struct kmp_base_drdpa_lock::kmp_lock_poll *polls = lck->lk.polls;
-  kmp_uint64 mask = TCR_8(lck->lk.mask); // volatile load
-  if (TCR_8(polls[ticket & mask].poll) == ticket) {
+  kmp_uint64 ticket = lck->lk.next_ticket; // atomic load
+  std::atomic<kmp_uint64> *polls = lck->lk.polls;
+  kmp_uint64 mask = lck->lk.mask; // atomic load
+  if (polls[ticket & mask] == ticket) {
     kmp_uint64 next_ticket = ticket + 1;
-    if (KMP_COMPARE_AND_STORE_ACQ64(&lck->lk.next_ticket, ticket,
-                                    next_ticket)) {
+    if (__kmp_atomic_compare_store_acq(&lck->lk.next_ticket, ticket,
+                                       next_ticket)) {
       KMP_FSYNC_ACQUIRED(lck);
       KA_TRACE(1000, ("__kmp_test_drdpa_lock: ticket #%lld acquired lock %p\n",
                       ticket, lck));
@@ -2502,14 +2504,14 @@ static int __kmp_test_drdpa_lock_with_checks(kmp_drdpa_lock_t *lck,
 int __kmp_release_drdpa_lock(kmp_drdpa_lock_t *lck, kmp_int32 gtid) {
   // Read the ticket value from the lock data struct, then the polls pointer and
   // the mask.  The polls pointer must be read before the mask!!! (See above)
-  kmp_uint64 ticket = lck->lk.now_serving + 1; // non-volatile load
-  volatile struct kmp_base_drdpa_lock::kmp_lock_poll *polls = lck->lk.polls;
-  kmp_uint64 mask = TCR_8(lck->lk.mask); // volatile load
+  kmp_uint64 ticket = lck->lk.now_serving + 1; // non-atomic load
+  std::atomic<kmp_uint64> *polls = lck->lk.polls; // atomic load
+  kmp_uint64 mask = lck->lk.mask; // atomic load
   KA_TRACE(1000, ("__kmp_release_drdpa_lock: ticket #%lld released lock %p\n",
                   ticket - 1, lck));
   KMP_FSYNC_RELEASING(lck);
   ANNOTATE_DRDPA_RELEASED(lck);
-  KMP_ST_REL64(&(polls[ticket & mask].poll), ticket); // volatile store
+  polls[ticket & mask] = ticket; // atomic store
   return KMP_LOCK_RELEASED;
 }
 
@@ -2538,9 +2540,8 @@ void __kmp_init_drdpa_lock(kmp_drdpa_lock_t *lck) {
   lck->lk.location = NULL;
   lck->lk.mask = 0;
   lck->lk.num_polls = 1;
-  lck->lk.polls =
-      (volatile struct kmp_base_drdpa_lock::kmp_lock_poll *)__kmp_allocate(
-          lck->lk.num_polls * sizeof(*(lck->lk.polls)));
+  lck->lk.polls = (std::atomic<kmp_uint64> *)__kmp_allocate(
+      lck->lk.num_polls * sizeof(*(lck->lk.polls)));
   lck->lk.cleanup_ticket = 0;
   lck->lk.old_polls = NULL;
   lck->lk.next_ticket = 0;
@@ -2559,12 +2560,12 @@ static void __kmp_init_drdpa_lock_with_checks(kmp_drdpa_lock_t *lck) {
 void __kmp_destroy_drdpa_lock(kmp_drdpa_lock_t *lck) {
   lck->lk.initialized = NULL;
   lck->lk.location = NULL;
-  if (lck->lk.polls != NULL) {
-    __kmp_free(CCAST(kmp_base_drdpa_lock::kmp_lock_poll *, lck->lk.polls));
+  if (lck->lk.polls.load() != NULL) {
+    __kmp_free(lck->lk.polls.load());
     lck->lk.polls = NULL;
   }
   if (lck->lk.old_polls != NULL) {
-    __kmp_free(CCAST(kmp_base_drdpa_lock::kmp_lock_poll *, lck->lk.old_polls));
+    __kmp_free(lck->lk.old_polls);
     lck->lk.old_polls = NULL;
   }
   lck->lk.mask = 0;

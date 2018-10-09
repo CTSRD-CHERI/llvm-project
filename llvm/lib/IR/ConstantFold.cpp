@@ -1500,8 +1500,12 @@ static ICmpInst::Predicate evaluateICmpRelation(Constant *V1, Constant *V2,
       assert(isa<ConstantPointerNull>(V2) && "Canonicalization guarantee!");
       // GlobalVals can never be null unless they have external weak linkage.
       // We don't try to evaluate aliases here.
+      // NOTE: We should not be doing this constant folding if null pointer
+      // is considered valid for the function. But currently there is no way to
+      // query it from the Constant type.
       if (!GV->hasExternalWeakLinkage() && !isa<GlobalAlias>(GV) &&
-          GV->getType()->getAddressSpace() == 0)
+          !NullPointerIsDefined(nullptr /* F */,
+                                GV->getType()->getAddressSpace()))
         return ICmpInst::ICMP_NE;
     }
   } else if (const BlockAddress *BA = dyn_cast<BlockAddress>(V1)) {
@@ -1553,8 +1557,7 @@ static ICmpInst::Predicate evaluateICmpRelation(Constant *V1, Constant *V2,
 
       // If the cast is not actually changing bits, and the second operand is a
       // null pointer, do the comparison with the pre-casted value.
-      if (V2->isNullValue() &&
-          (CE1->getType()->isPointerTy() || CE1->getType()->isIntegerTy())) {
+      if (V2->isNullValue() && CE1->getType()->isIntOrPtrTy()) {
         if (CE1->getOpcode() == Instruction::ZExt) isSigned = false;
         if (CE1->getOpcode() == Instruction::SExt) isSigned = true;
         return evaluateICmpRelation(CE1Op0,
@@ -1732,7 +1735,8 @@ Constant *llvm::ConstantFoldCompareInstruction(unsigned short pred,
     if (const GlobalValue *GV = dyn_cast<GlobalValue>(C2))
       // Don't try to evaluate aliases.  External weak GV can be null.
       if (!isa<GlobalAlias>(GV) && !GV->hasExternalWeakLinkage() &&
-          GV->getType()->getAddressSpace() == 0) {
+          !NullPointerIsDefined(nullptr /* F */,
+                                GV->getType()->getAddressSpace())) {
         if (pred == ICmpInst::ICMP_EQ)
           return ConstantInt::getFalse(C1->getContext());
         else if (pred == ICmpInst::ICMP_NE)
@@ -1743,7 +1747,8 @@ Constant *llvm::ConstantFoldCompareInstruction(unsigned short pred,
     if (const GlobalValue *GV = dyn_cast<GlobalValue>(C1))
       // Don't try to evaluate aliases.  External weak GV can be null.
       if (!isa<GlobalAlias>(GV) && !GV->hasExternalWeakLinkage() &&
-          GV->getType()->getAddressSpace() == 0) {
+          !NullPointerIsDefined(nullptr /* F */,
+                                GV->getType()->getAddressSpace())) {
         if (pred == ICmpInst::ICMP_EQ)
           return ConstantInt::getFalse(C1->getContext());
         else if (pred == ICmpInst::ICMP_NE)

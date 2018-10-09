@@ -202,7 +202,7 @@ public:
       return SymExpr::symbol_iterator();
   }
 
-  SymExpr::symbol_iterator symbol_end() const { 
+  SymExpr::symbol_iterator symbol_end() const {
     return SymExpr::symbol_end();
   }
 };
@@ -230,13 +230,13 @@ public:
   // tautologically false.
   bool isUndef() const = delete;
   bool isValid() const = delete;
-  
+
 protected:
   DefinedOrUnknownSVal() = default;
   explicit DefinedOrUnknownSVal(const void *d, bool isLoc, unsigned ValKind)
       : SVal(d, isLoc, ValKind) {}
   explicit DefinedOrUnknownSVal(BaseKind k, void *D = nullptr) : SVal(k, D) {}
-  
+
 private:
   friend class SVal;
 
@@ -244,11 +244,11 @@ private:
     return !V.isUndef();
   }
 };
-  
+
 class UnknownVal : public DefinedOrUnknownSVal {
 public:
   explicit UnknownVal() : DefinedOrUnknownSVal(UnknownValKind) {}
-  
+
 private:
   friend class SVal;
 
@@ -325,7 +325,7 @@ public:
   void dumpToStream(raw_ostream &Out) const;
 
   static bool isLocType(QualType T) {
-    return T->isAnyPointerType() || T->isBlockPointerType() || 
+    return T->isAnyPointerType() || T->isBlockPointerType() ||
            T->isReferenceType() || T->isNullPtrType();
   }
 
@@ -343,11 +343,14 @@ private:
 
 namespace nonloc {
 
-/// Represents symbolic expression.
+/// Represents symbolic expression that isn't a location.
 class SymbolVal : public NonLoc {
 public:
   SymbolVal() = delete;
-  SymbolVal(SymbolRef sym) : NonLoc(SymbolValKind, sym) { assert(sym); }
+  SymbolVal(SymbolRef sym) : NonLoc(SymbolValKind, sym) {
+    assert(sym);
+    assert(!Loc::isLocType(sym->getType()));
+  }
 
   SymbolRef getSymbol() const {
     return (const SymExpr *) Data;
@@ -661,7 +664,7 @@ private:
   }
 };
 
-} // namespace loc 
+} // namespace loc
 
 } // namespace ento
 

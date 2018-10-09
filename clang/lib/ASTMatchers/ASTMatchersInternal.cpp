@@ -548,6 +548,8 @@ bool HasNameMatcher::matchesNode(const NamedDecl &Node) const {
 
 } // end namespace internal
 
+const internal::VariadicDynCastAllOfMatcher<Stmt, ObjCAutoreleasePoolStmt>
+    autoreleasePoolStmt;
 const internal::VariadicDynCastAllOfMatcher<Decl, TranslationUnitDecl>
     translationUnitDecl;
 const internal::VariadicDynCastAllOfMatcher<Decl, TypedefDecl> typedefDecl;
@@ -677,6 +679,7 @@ const internal::VariadicDynCastAllOfMatcher<Stmt, CXXOperatorCallExpr>
     cxxOperatorCallExpr;
 const internal::VariadicDynCastAllOfMatcher<Stmt, Expr> expr;
 const internal::VariadicDynCastAllOfMatcher<Stmt, DeclRefExpr> declRefExpr;
+const internal::VariadicDynCastAllOfMatcher<Stmt, ObjCIvarRefExpr> objcIvarRefExpr;
 const internal::VariadicDynCastAllOfMatcher<Stmt, IfStmt> ifStmt;
 const internal::VariadicDynCastAllOfMatcher<Stmt, ForStmt> forStmt;
 const internal::VariadicDynCastAllOfMatcher<Stmt, CXXForRangeStmt>
@@ -798,6 +801,7 @@ const AstTypeMatcher<IncompleteArrayType> incompleteArrayType;
 const AstTypeMatcher<VariableArrayType> variableArrayType;
 const AstTypeMatcher<AtomicType> atomicType;
 const AstTypeMatcher<AutoType> autoType;
+const AstTypeMatcher<DecltypeType> decltypeType;
 const AstTypeMatcher<FunctionType> functionType;
 const AstTypeMatcher<FunctionProtoType> functionProtoType;
 const AstTypeMatcher<ParenType> parenType;

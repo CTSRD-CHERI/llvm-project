@@ -1457,6 +1457,26 @@ bool SBTarget::DeleteAllWatchpoints() {
   return false;
 }
 
+void SBTarget::AppendImageSearchPath(const char *from, const char *to,
+                                     lldb::SBError &error) {
+  TargetSP target_sp(GetSP());
+  if (!target_sp)
+    return error.SetErrorString("invalid target");
+
+  const ConstString csFrom(from), csTo(to);
+  if (!csFrom)
+    return error.SetErrorString("<from> path can't be empty");
+  if (!csTo)
+    return error.SetErrorString("<to> path can't be empty");
+
+  Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_API));
+  if (log)
+    log->Printf("SBTarget(%p)::%s: '%s' -> '%s'",
+                static_cast<void *>(target_sp.get()),  __FUNCTION__,
+                from, to);
+  target_sp->GetImageSearchPathList().Append(csFrom, csTo, true);
+}
+
 lldb::SBModule SBTarget::AddModule(const char *path, const char *triple,
                                    const char *uuid_cstr) {
   return AddModule(path, triple, uuid_cstr, NULL);
@@ -1542,6 +1562,18 @@ SBModule SBTarget::FindModule(const SBFileSpec &sb_file_spec) {
     sb_module.SetSP(target_sp->GetImages().FindFirstModule(module_spec));
   }
   return sb_module;
+}
+
+SBSymbolContextList
+SBTarget::FindCompileUnits(const SBFileSpec &sb_file_spec) {
+  SBSymbolContextList sb_sc_list;
+  const TargetSP target_sp(GetSP());
+  if (target_sp && sb_file_spec.IsValid()) {
+    const bool append = true;
+    target_sp->GetImages().FindCompileUnits(*sb_file_spec,
+                                            append, *sb_sc_list);
+  }
+  return sb_sc_list;
 }
 
 lldb::ByteOrder SBTarget::GetByteOrder() {

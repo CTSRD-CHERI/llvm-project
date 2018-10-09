@@ -201,6 +201,10 @@ public:
   /// Return a unique ID for the current function.
   unsigned getFunctionNumber() const;
 
+  /// Return symbol for the function pseudo stack if the stack frame is not a
+  /// register based.
+  virtual const MCSymbol *getFunctionFrameSymbol() const { return nullptr; }
+
   MCSymbol *getFunctionBegin() const { return CurrentFnBegin; }
   MCSymbol *getFunctionEnd() const { return CurrentFnEnd; }
   MCSymbol *getCurExceptionSym();
@@ -338,7 +342,7 @@ public:
   /// global value is specified, and if that global has an explicit alignment
   /// requested, it will override the alignment request if required for
   /// correctness.
-  void EmitAlignment(unsigned NumBits, const GlobalObject *GO = nullptr) const;
+  void EmitAlignment(unsigned NumBits, const GlobalObject *GV = nullptr) const;
 
   /// Lower the specified LLVM Constant to an MCExpr.
   virtual const MCExpr *lowerConstant(const Constant *CV);
@@ -646,7 +650,7 @@ private:
   void EmitXXStructorList(const DataLayout &DL, const Constant *List,
                           bool isCtor);
 
-  GCMetadataPrinter *GetOrCreateGCPrinter(GCStrategy &C);
+  GCMetadataPrinter *GetOrCreateGCPrinter(GCStrategy &S);
   /// Emit GlobalAlias or GlobalIFunc.
   void emitGlobalIndirectSymbol(Module &M, const GlobalIndirectSymbol &GIS);
   void setupCodePaddingContext(const MachineBasicBlock &MBB,

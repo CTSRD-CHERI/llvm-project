@@ -305,10 +305,10 @@ ProgramStateRef CStringChecker::CheckLocation(CheckerContext &C,
   ProgramStateRef StOutBound = state->assumeInBound(Idx, Size, false);
   if (StOutBound && !StInBound) {
     // These checks are either enabled by the CString out-of-bounds checker
-    // explicitly or the "basic" CStringNullArg checker support that Malloc
-    // checker enables.
-    assert(Filter.CheckCStringOutOfBounds || Filter.CheckCStringNullArg);
-
+    // explicitly or implicitly by the Malloc checker.
+    // In the latter case we only do modeling but do not emit warning.
+    if (!Filter.CheckCStringOutOfBounds)
+      return nullptr;
     // Emit a bug report.
     if (warningMsg) {
       emitOutOfBoundsBug(C, StOutBound, S, warningMsg);
@@ -552,6 +552,7 @@ void CStringChecker::emitNullArgBug(CheckerContext &C, ProgramStateRef State,
 
     BuiltinBug *BT = static_cast<BuiltinBug *>(BT_Null.get());
     auto Report = llvm::make_unique<BugReport>(*BT, WarningMsg, N);
+    Report->addRange(S->getSourceRange());
     bugreporter::trackNullOrUndefValue(N, S, *Report);
     C.emitReport(std::move(Report));
   }
@@ -1039,7 +1040,7 @@ bool CStringChecker::memsetAux(const Expr *DstBuffer, const Expr *CharE,
     std::tie(StateWholeReg, StateNotWholeReg) =
         State->assume(svalBuilder.evalEQ(State, Extent, *SizeNL));
 
-    // With the semantic of 'memset()', we should convert the CharVal to 
+    // With the semantic of 'memset()', we should convert the CharVal to
     // unsigned char.
     CharVal = svalBuilder.evalCast(CharVal, Ctx.UnsignedCharTy, Ctx.IntTy);
 
@@ -2418,5 +2419,5 @@ void CStringChecker::checkDeadSymbols(SymbolReaper &SR,
 REGISTER_CHECKER(CStringNotNullTerm)
 
   void ento::registerCStringCheckerBasic(CheckerManager &Mgr) {
-    registerCStringNullArg(Mgr);
+    Mgr.registerChecker<CStringChecker>();
   }

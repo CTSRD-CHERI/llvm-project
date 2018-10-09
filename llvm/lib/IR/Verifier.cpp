@@ -409,6 +409,7 @@ private:
   void visitModuleFlag(const MDNode *Op,
                        DenseMap<const MDString *, const MDNode *> &SeenIDs,
                        SmallVectorImpl<const MDNode *> &Requirements);
+  void visitModuleFlagCGProfileEntry(const MDOperand &MDO);
   void visitFunction(const Function &F);
   void visitBasicBlock(BasicBlock &BB);
   void visitRangeMetadata(Instruction &I, MDNode *Range, Type *Ty);
@@ -466,7 +467,7 @@ private:
   void visitUserOp2(Instruction &I) { visitUserOp1(I); }
   void visitIntrinsicCallSite(Intrinsic::ID ID, CallSite CS);
   void visitConstrainedFPIntrinsic(ConstrainedFPIntrinsic &FPI);
-  void visitDbgIntrinsic(StringRef Kind, DbgInfoIntrinsic &DII);
+  void visitDbgIntrinsic(StringRef Kind, DbgVariableIntrinsic &DII);
   void visitDbgLabelIntrinsic(StringRef Kind, DbgLabelInst &DLI);
   void visitAtomicCmpXchgInst(AtomicCmpXchgInst &CXI);
   void visitAtomicRMWInst(AtomicRMWInst &RMWI);
@@ -504,12 +505,12 @@ private:
   void verifyFrameRecoverIndices();
   void verifySiblingFuncletUnwinds();
 
-  void verifyFragmentExpression(const DbgInfoIntrinsic &I);
+  void verifyFragmentExpression(const DbgVariableIntrinsic &I);
   template <typename ValueOrMetadata>
   void verifyFragmentExpression(const DIVariable &V,
                                 DIExpression::FragmentInfo Fragment,
                                 ValueOrMetadata *Desc);
-  void verifyFnArgs(const DbgInfoIntrinsic &I);
+  void verifyFnArgs(const DbgVariableIntrinsic &I);
 
   /// Module-level debug info verification...
   void verifyCompileUnits();
@@ -1411,6 +1412,28 @@ Verifier::visitModuleFlag(const MDNode *Op,
     Assert(M.getNamedMetadata("llvm.linker.options"),
            "'Linker Options' named metadata no longer supported");
   }
+
+  if (ID->getString() == "CG Profile") {
+    for (const MDOperand &MDO : cast<MDNode>(Op->getOperand(2))->operands())
+      visitModuleFlagCGProfileEntry(MDO);
+  }
+}
+
+void Verifier::visitModuleFlagCGProfileEntry(const MDOperand &MDO) {
+  auto CheckFunction = [&](const MDOperand &FuncMDO) {
+    if (!FuncMDO)
+      return;
+    auto F = dyn_cast<ValueAsMetadata>(FuncMDO);
+    Assert(F && isa<Function>(F->getValue()), "expected a Function or null",
+           FuncMDO);
+  };
+  auto Node = dyn_cast_or_null<MDNode>(MDO);
+  Assert(Node && Node->getNumOperands() == 3, "expected a MDNode triple", MDO);
+  CheckFunction(Node->getOperand(0));
+  CheckFunction(Node->getOperand(1));
+  auto Count = dyn_cast_or_null<ConstantAsMetadata>(Node->getOperand(2));
+  Assert(Count && Count->getType()->isIntegerTy(),
+         "expected an integer constant", Node->getOperand(2));
 }
 
 /// Return true if this attribute kind only applies to functions.
@@ -3183,8 +3206,7 @@ void Verifier::visitLoadInst(LoadInst &LI) {
            "Load cannot have Release ordering", &LI);
     Assert(LI.getAlignment() != 0,
            "Atomic load must specify explicit alignment", &LI);
-    Assert(ElTy->isIntegerTy() || ElTy->isPointerTy() ||
-               ElTy->isFloatingPointTy(),
+    Assert(ElTy->isIntOrPtrTy() || ElTy->isFloatingPointTy(),
            "atomic load operand must have integer, pointer, or floating point "
            "type!",
            ElTy, &LI);
@@ -3212,8 +3234,7 @@ void Verifier::visitStoreInst(StoreInst &SI) {
            "Store cannot have Acquire ordering", &SI);
     Assert(SI.getAlignment() != 0,
            "Atomic store must specify explicit alignment", &SI);
-    Assert(ElTy->isIntegerTy() || ElTy->isPointerTy() ||
-               ElTy->isFloatingPointTy(),
+    Assert(ElTy->isIntOrPtrTy() || ElTy->isFloatingPointTy(),
            "atomic store operand must have integer, pointer, or floating point "
            "type!",
            ElTy, &SI);
@@ -3304,9 +3325,8 @@ void Verifier::visitAtomicCmpXchgInst(AtomicCmpXchgInst &CXI) {
   PointerType *PTy = dyn_cast<PointerType>(CXI.getOperand(0)->getType());
   Assert(PTy, "First cmpxchg operand must be a pointer.", &CXI);
   Type *ElTy = PTy->getElementType();
-  Assert(ElTy->isIntegerTy() || ElTy->isPointerTy(),
-        "cmpxchg operand must have integer or pointer type",
-         ElTy, &CXI);
+  Assert(ElTy->isIntOrPtrTy(),
+         "cmpxchg operand must have integer or pointer type", ElTy, &CXI);
   checkAtomicMemAccessSize(ElTy, &CXI);
   Assert(ElTy == CXI.getOperand(1)->getType(),
          "Expected value type does not match pointer operand type!", &CXI,
@@ -3964,7 +3984,7 @@ void Verifier::visitInstruction(Instruction &I) {
     visitMDNode(*N);
   }
 
-  if (auto *DII = dyn_cast<DbgInfoIntrinsic>(&I))
+  if (auto *DII = dyn_cast<DbgVariableIntrinsic>(&I))
     verifyFragmentExpression(*DII);
 
   InstsInThisBlock.insert(&I);
@@ -4070,13 +4090,13 @@ void Verifier::visitIntrinsicCallSite(Intrinsic::ID ID, CallSite CS) {
   case Intrinsic::dbg_declare: // llvm.dbg.declare
     Assert(isa<MetadataAsValue>(CS.getArgOperand(0)),
            "invalid llvm.dbg.declare intrinsic call 1", CS);
-    visitDbgIntrinsic("declare", cast<DbgInfoIntrinsic>(*CS.getInstruction()));
+    visitDbgIntrinsic("declare", cast<DbgVariableIntrinsic>(*CS.getInstruction()));
     break;
   case Intrinsic::dbg_addr: // llvm.dbg.addr
-    visitDbgIntrinsic("addr", cast<DbgInfoIntrinsic>(*CS.getInstruction()));
+    visitDbgIntrinsic("addr", cast<DbgVariableIntrinsic>(*CS.getInstruction()));
     break;
   case Intrinsic::dbg_value: // llvm.dbg.value
-    visitDbgIntrinsic("value", cast<DbgInfoIntrinsic>(*CS.getInstruction()));
+    visitDbgIntrinsic("value", cast<DbgVariableIntrinsic>(*CS.getInstruction()));
     break;
   case Intrinsic::dbg_label: // llvm.dbg.label
     visitDbgLabelIntrinsic("label", cast<DbgLabelInst>(*CS.getInstruction()));
@@ -4471,7 +4491,7 @@ void Verifier::visitConstrainedFPIntrinsic(ConstrainedFPIntrinsic &FPI) {
          "invalid exception behavior argument", &FPI);
 }
 
-void Verifier::visitDbgIntrinsic(StringRef Kind, DbgInfoIntrinsic &DII) {
+void Verifier::visitDbgIntrinsic(StringRef Kind, DbgVariableIntrinsic &DII) {
   auto *MD = cast<MetadataAsValue>(DII.getArgOperand(0))->getMetadata();
   AssertDI(isa<ValueAsMetadata>(MD) ||
              (isa<MDNode>(MD) && !cast<MDNode>(MD)->getNumOperands()),
@@ -4511,9 +4531,9 @@ void Verifier::visitDbgIntrinsic(StringRef Kind, DbgInfoIntrinsic &DII) {
 }
 
 void Verifier::visitDbgLabelIntrinsic(StringRef Kind, DbgLabelInst &DLI) {
-  AssertDI(isa<DILabel>(DLI.getRawVariable()),
+  AssertDI(isa<DILabel>(DLI.getRawLabel()),
          "invalid llvm.dbg." + Kind + " intrinsic variable", &DLI,
-         DLI.getRawVariable());
+         DLI.getRawLabel());
 
   // Ignore broken !dbg attachments; they're checked elsewhere.
   if (MDNode *N = DLI.getDebugLoc().getAsMDNode())
@@ -4540,10 +4560,7 @@ void Verifier::visitDbgLabelIntrinsic(StringRef Kind, DbgLabelInst &DLI) {
            Loc->getScope()->getSubprogram());
 }
 
-void Verifier::verifyFragmentExpression(const DbgInfoIntrinsic &I) {
-  if (dyn_cast<DbgLabelInst>(&I))
-    return;
-
+void Verifier::verifyFragmentExpression(const DbgVariableIntrinsic &I) {
   DILocalVariable *V = dyn_cast_or_null<DILocalVariable>(I.getRawVariable());
   DIExpression *E = dyn_cast_or_null<DIExpression>(I.getRawExpression());
 
@@ -4585,7 +4602,7 @@ void Verifier::verifyFragmentExpression(const DIVariable &V,
   AssertDI(FragSize != *VarSize, "fragment covers entire variable", Desc, &V);
 }
 
-void Verifier::verifyFnArgs(const DbgInfoIntrinsic &I) {
+void Verifier::verifyFnArgs(const DbgVariableIntrinsic &I) {
   // This function does not take the scope of noninlined function arguments into
   // account. Don't run it if current function is nodebug, because it may
   // contain inlined debug intrinsics.

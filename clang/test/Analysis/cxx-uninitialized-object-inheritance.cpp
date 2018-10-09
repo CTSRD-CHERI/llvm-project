@@ -1,4 +1,7 @@
-// RUN: %clang_analyze_cc1 -analyzer-checker=core,alpha.cplusplus.UninitializedObject -analyzer-config alpha.cplusplus.UninitializedObject:Pedantic=true -std=c++11 -verify %s
+// RUN: %clang_analyze_cc1 -analyzer-checker=core,alpha.cplusplus.UninitializedObject \
+// RUN: -analyzer-config alpha.cplusplus.UninitializedObject:Pedantic=true -DPEDANTIC \
+// RUN: -analyzer-config alpha.cplusplus.UninitializedObject:CheckPointeeInitialization=true \
+// RUN: -std=c++11 -verify  %s
 
 //===----------------------------------------------------------------------===//
 // Non-polymorphic inheritance tests
@@ -773,3 +776,26 @@ public:
 void fVirtualDiamondInheritanceTest3() {
   VirtualDiamondInheritanceTest3();
 }
+
+//===----------------------------------------------------------------------===//
+// Dynamic type test.
+//===----------------------------------------------------------------------===//
+
+struct DynTBase {};
+struct DynTDerived : DynTBase {
+  // TODO: we'd expect the note: {{uninitialized field 'this->x'}}
+  int x; // no-note
+};
+
+struct DynamicTypeTest {
+  DynTBase *bptr;
+  int i = 0;
+
+  // TODO: we'd expect the warning: {{1 uninitialized field}}
+  DynamicTypeTest(DynTBase *bptr) : bptr(bptr) {} // no-warning
+};
+
+void f() {
+  DynTDerived d;
+  DynamicTypeTest t(&d);
+};

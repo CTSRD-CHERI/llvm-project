@@ -100,48 +100,33 @@ namespace llvm {
 
 namespace clang {
 
-class ArrayType;
 class ASTContext;
-class AttributedType;
-class AutoType;
-class BuiltinType;
 template <typename> class CanQual;
-class ComplexType;
 class CXXRecordDecl;
 class DeclContext;
-class DeducedType;
 class EnumDecl;
 class Expr;
 class ExtQualsTypeCommonBase;
 class FunctionDecl;
-class FunctionNoProtoType;
-class FunctionProtoType;
 class IdentifierInfo;
-class InjectedClassNameType;
 class NamedDecl;
 class ObjCInterfaceDecl;
-class ObjCObjectPointerType;
-class ObjCObjectType;
 class ObjCProtocolDecl;
 class ObjCTypeParamDecl;
-class ParenType;
 struct PrintingPolicy;
 class RecordDecl;
-class RecordType;
 class Stmt;
 class TagDecl;
 class TemplateArgument;
 class TemplateArgumentListInfo;
 class TemplateArgumentLoc;
-class TemplateSpecializationType;
 class TemplateTypeParmDecl;
 class TypedefNameDecl;
-class TypedefType;
 class UnresolvedUsingTypenameDecl;
 
 using CanQualType = CanQual<Type>;
 
-  // Provide forward declarations for all of the *Type classes
+// Provide forward declarations for all of the *Type classes.
 #define TYPE(Class, Base) class Class##Type;
 #include "clang/AST/TypeNodes.def"
 
@@ -810,6 +795,13 @@ public:
   /// Return true if this is a trivially copyable type (C++0x [basic.types]p9)
   bool isTriviallyCopyableType(const ASTContext &Context) const;
 
+
+  /// Returns true if it is a class and it might be dynamic.
+  bool mayBeDynamicClass() const;
+
+  /// Returns true if it is not a class or if the class might not be dynamic.
+  bool mayBeNotDynamicClass() const;
+
   // Don't promise in the API that anything besides 'const' can be
   // easily added.
 
@@ -985,7 +977,7 @@ public:
   static std::string getAsString(const Type *ty, Qualifiers qs,
                                  const PrintingPolicy &Policy);
 
-  std::string getAsString() const; 
+  std::string getAsString() const;
   std::string getAsString(const PrintingPolicy &Policy) const;
 
   void print(raw_ostream &OS, const PrintingPolicy &Policy,
@@ -1583,6 +1575,7 @@ protected:
 
   class VectorTypeBitfields {
     friend class VectorType;
+    friend class DependentVectorType;
 
     unsigned : NumTypeBits;
 
@@ -1776,6 +1769,9 @@ public:
   /// isComplexIntegerType() can be used to test for complex integers.
   bool isIntegerType() const;     // C99 6.2.5p17 (int, char, bool, enum)
   bool isEnumeralType() const;
+
+  /// Determine whether this type is a scoped enumeration type.
+  bool isScopedEnumeralType() const;
   bool isBooleanType() const;
   bool isCharType() const;
   bool isWideCharType() const;
@@ -1800,6 +1796,7 @@ public:
   bool isFloatingType() const;     // C99 6.2.5p11 (real floating + complex)
   bool isHalfType() const;         // OpenCL 6.1.1.1, NEON (IEEE 754-2008 half)
   bool isFloat16Type() const;      // C11 extension ISO/IEC TS 18661
+  bool isFloat128Type() const;
   bool isRealType() const;         // C99 6.2.5p17 (real floating + integer)
   bool isArithmeticType() const;   // C99 6.2.5p18 (integer + floating)
   bool isVoidType() const;         // C99 6.2.5p19
@@ -2004,6 +2001,9 @@ public:
   /// because the type is a RecordType or because it is the injected-class-name
   /// type of a class template or class template partial specialization.
   CXXRecordDecl *getAsCXXRecordDecl() const;
+
+  /// Retrieves the RecordDecl this type refers to.
+  RecordDecl *getAsRecordDecl() const;
 
   /// Retrieves the TagDecl that this type refers to, either
   /// because the type is a TagType or because it is the injected-class-name
@@ -2244,7 +2244,9 @@ public:
 #include "clang/AST/BuiltinTypes.def"
   };
 
-public:
+private:
+  friend class ASTContext; // ASTContext creates these.
+
   BuiltinType(Kind K)
       : Type(Builtin, QualType(), /*Dependent=*/(K == Dependent),
              /*InstantiationDependent=*/(K == Dependent),
@@ -2253,6 +2255,7 @@ public:
     BuiltinTypeBits.Kind = K;
   }
 
+public:
   Kind getKind() const { return static_cast<Kind>(BuiltinTypeBits.Kind); }
   StringRef getName(const PrintingPolicy &Policy) const;
 
@@ -2911,7 +2914,7 @@ public:
 };
 
 /// Represents an extended address space qualifier where the input address space
-/// value is dependent. Non-dependent address spaces are not represented with a 
+/// value is dependent. Non-dependent address spaces are not represented with a
 /// special Type subclass; they are stored on an ExtQuals node as part of a QualType.
 ///
 /// For example:
@@ -2930,7 +2933,7 @@ class DependentAddressSpaceType : public Type, public llvm::FoldingSetNode {
   SourceLocation loc;
 
   DependentAddressSpaceType(const ASTContext &Context, QualType PointeeType,
-                            QualType can, Expr *AddrSpaceExpr, 
+                            QualType can, Expr *AddrSpaceExpr,
                             SourceLocation loc);
 
 public:
@@ -3071,6 +3074,51 @@ public:
   }
 };
 
+/// Represents a vector type where either the type or size is dependent.
+////
+/// For example:
+/// \code
+/// template<typename T, int Size>
+/// class vector {
+///   typedef T __attribute__((vector_size(Size))) type;
+/// }
+/// \endcode
+class DependentVectorType : public Type, public llvm::FoldingSetNode {
+  friend class ASTContext;
+
+  const ASTContext &Context;
+  QualType ElementType;
+  Expr *SizeExpr;
+  SourceLocation Loc;
+
+  DependentVectorType(const ASTContext &Context, QualType ElementType,
+                           QualType CanonType, Expr *SizeExpr,
+                           SourceLocation Loc, VectorType::VectorKind vecKind);
+
+public:
+  Expr *getSizeExpr() const { return SizeExpr; }
+  QualType getElementType() const { return ElementType; }
+  SourceLocation getAttributeLoc() const { return Loc; }
+  VectorType::VectorKind getVectorKind() const {
+    return VectorType::VectorKind(VectorTypeBits.VecKind);
+  }
+
+  bool isSugared() const { return false; }
+  QualType desugar() const { return QualType(this, 0); }
+
+  static bool classof(const Type *T) {
+    return T->getTypeClass() == DependentVector;
+  }
+
+  void Profile(llvm::FoldingSetNodeID &ID) {
+    Profile(ID, Context, getElementType(), getSizeExpr(), getVectorKind());
+  }
+
+  static void Profile(llvm::FoldingSetNodeID &ID, const ASTContext &Context,
+                      QualType ElementType, const Expr *SizeExpr,
+                      VectorType::VectorKind VecKind);
+};
+
 /// ExtVectorType - Extended vector type. This type is created using
 /// __attribute__((ext_vector_type(n)), where "n" is the number of elements.
 /// Unlike vector_size, ext_vector_type is only allowed on typedef's. This
@@ -3204,7 +3252,7 @@ public:
        Bits = ((unsigned)cc) | (noReturn ? NoReturnMask : 0) |
               (producesResult ? ProducesResultMask : 0) |
               (noCallerSavedRegs ? NoCallerSavedRegsMask : 0) |
-              (hasRegParm ? ((regParm + 1) << RegParmOffset) : 0) | 
+              (hasRegParm ? ((regParm + 1) << RegParmOffset) : 0) |
               (NoCfCheck ? NoCfCheckMask : 0);
     }
 
@@ -4174,6 +4222,7 @@ public:
     attr_null_unspecified,
     attr_objc_kindof,
     attr_objc_inert_unsafe_unretained,
+    attr_lifetimebound,
   };
 
 private:
@@ -4587,7 +4636,7 @@ public:
 /// TemplateArguments, followed by a QualType representing the
 /// non-canonical aliased type when the template is a type alias
 /// template.
-class LLVM_ALIGNAS(/*alignof(uint64_t)*/ 8) TemplateSpecializationType
+class alignas(8) TemplateSpecializationType
     : public Type,
       public llvm::FoldingSetNode {
   friend class ASTContext; // ASTContext creates these
@@ -5005,7 +5054,7 @@ public:
 /// Represents a template specialization type whose template cannot be
 /// resolved, e.g.
 ///   A<T>::template B<T>
-class LLVM_ALIGNAS(/*alignof(uint64_t)*/ 8) DependentTemplateSpecializationType
+class alignas(8) DependentTemplateSpecializationType
     : public TypeWithKeyword,
       public llvm::FoldingSetNode {
   friend class ASTContext; // ASTContext creates these
@@ -5276,7 +5325,7 @@ public:
 /// with base C and no protocols.
 ///
 /// 'C<P>' is an unspecialized ObjCObjectType with base C and protocol list [P].
-/// 'C<C*>' is a specialized ObjCObjectType with type arguments 'C*' and no 
+/// 'C<C*>' is a specialized ObjCObjectType with type arguments 'C*' and no
 /// protocol list.
 /// 'C<C*><P>' is a specialized ObjCObjectType with base C, type arguments 'C*',
 /// and protocol list [P].
@@ -5908,7 +5957,7 @@ inline QualType QualType::getUnqualifiedType() const {
 
   return QualType(getSplitUnqualifiedTypeImpl(*this).Ty, 0);
 }
-  
+
 inline SplitQualType QualType::getSplitUnqualifiedType() const {
   if (!getTypePtr()->getCanonicalTypeInternal().hasLocalQualifiers())
     return split();
@@ -6292,6 +6341,12 @@ inline bool Type::isFloat16Type() const {
   return false;
 }
 
+inline bool Type::isFloat128Type() const {
+  if (const auto *BT = dyn_cast<BuiltinType>(CanonicalType))
+    return BT->getKind() == BuiltinType::Float128;
+  return false;
+}
+
 inline bool Type::isNullPtrType() const {
   if (const auto *BT = getAs<BuiltinType>())
     return BT->getKind() == BuiltinType::NullPtr;
@@ -6377,7 +6432,7 @@ inline bool Type::isIntegralOrEnumerationType() const {
   if (const auto *ET = dyn_cast<EnumType>(CanonicalType))
     return IsEnumDeclComplete(ET->getDecl());
 
-  return false;  
+  return false;
 }
 
 inline bool Type::isBooleanType() const {
@@ -6549,9 +6604,8 @@ QualType DecayedType::getPointeeType() const {
 
 // Get the decimal string representation of a fixed point type, represented
 // as a scaled integer.
-void FixedPointValueToString(SmallVectorImpl<char> &Str,
-                             const llvm::APSInt &Val,
-                             unsigned Scale, unsigned Radix);
+void FixedPointValueToString(SmallVectorImpl<char> &Str, llvm::APSInt Val,
+                             unsigned Scale);
 
 } // namespace clang
 

@@ -36,6 +36,8 @@ def guard   : P<"guard", "Control flow guard">;
 def heap    : P<"heap", "Size of the heap">;
 def ignore : P<"ignore", "Specify warning codes to ignore">;
 def implib  : P<"implib", "Import library name">;
+def lib : F<"lib">,
+    HelpText<"Act like lib.exe; must be first argument if present">;
 def libpath : P<"libpath", "Additional library search path">;
 def linkrepro : P<"linkrepro", "Dump linker invocation and input files for debugging">;
 def lldltocache : P<"lldltocache", "Path to ThinLTO cached object file directory">;
@@ -143,8 +145,9 @@ def debug_symtab : F<"debug:symtab">;
 def export_all_symbols : F<"export-all-symbols">;
 def kill_at : F<"kill-at">;
 def lldmingw : F<"lldmingw">;
-def msvclto : F<"msvclto">;
 def output_def : Joined<["/", "-"], "output-def:">;
+def pdb_source_path : P<"pdbsourcepath",
+                        "Base path used to make relative source file path absolute in PDB">;
 def rsp_quoting : Joined<["--"], "rsp-quoting=">,
   HelpText<"Quoting style for response files, 'windows' (default) or 'posix'">;
 def dash_dash_version : Flag<["--"], "version">,

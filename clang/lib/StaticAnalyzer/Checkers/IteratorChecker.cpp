@@ -291,6 +291,7 @@ const ContainerData *getContainerData(ProgramStateRef State,
                                       const MemRegion *Cont);
 ProgramStateRef setContainerData(ProgramStateRef State, const MemRegion *Cont,
                                  const ContainerData &CData);
+bool hasLiveIterators(ProgramStateRef State, const MemRegion *Cont);
 bool isOutOfRange(ProgramStateRef State, const IteratorPosition &Pos);
 bool isZero(ProgramStateRef State, const NonLoc &Val);
 } // namespace
@@ -488,14 +489,18 @@ void IteratorChecker::checkLiveSymbols(ProgramStateRef State,
   // alive
   auto RegionMap = State->get<IteratorRegionMap>();
   for (const auto Reg : RegionMap) {
-    const auto Pos = Reg.second;
-    SR.markLive(Pos.getOffset());
+    const auto Offset = Reg.second.getOffset();
+    for (auto i = Offset->symbol_begin(); i != Offset->symbol_end(); ++i)
+      if (isa<SymbolData>(*i))
+        SR.markLive(*i);
   }
 
   auto SymbolMap = State->get<IteratorSymbolMap>();
   for (const auto Sym : SymbolMap) {
-    const auto Pos = Sym.second;
-    SR.markLive(Pos.getOffset());
+    const auto Offset = Sym.second.getOffset();
+    for (auto i = Offset->symbol_begin(); i != Offset->symbol_end(); ++i)
+      if (isa<SymbolData>(*i))
+        SR.markLive(*i);
   }
 
   auto ContMap = State->get<ContainerMap>();
@@ -532,7 +537,11 @@ void IteratorChecker::checkDeadSymbols(SymbolReaper &SR,
   auto ContMap = State->get<ContainerMap>();
   for (const auto Cont : ContMap) {
     if (!SR.isLiveRegion(Cont.first)) {
-      State = State->remove<ContainerMap>(Cont.first);
+      // We must keep the container data while it has live iterators to be able
+      // to compare them to the begin and the end of the container.
+      if (!hasLiveIterators(State, Cont.first)) {
+        State = State->remove<ContainerMap>(Cont.first);
+      }
     }
   }
 
@@ -542,6 +551,8 @@ void IteratorChecker::checkDeadSymbols(SymbolReaper &SR,
       State = State->remove<IteratorComparisonMap>(Comp.first);
     }
   }
+
+  C.addTransition(State);
 }
 
 ProgramStateRef IteratorChecker::evalAssume(ProgramStateRef State, SVal Cond,
@@ -1157,21 +1168,47 @@ ProgramStateRef relateIteratorPositions(ProgramStateRef State,
                                         const IteratorPosition &Pos2,
                                         bool Equal) {
   auto &SVB = State->getStateManager().getSValBuilder();
+
+  // FIXME: This code should be reworked as follows:
+  // 1. Subtract the operands using evalBinOp().
+  // 2. Assume that the result doesn't overflow.
+  // 3. Compare the result to 0.
+  // 4. Assume the result of the comparison.
   const auto comparison =
       SVB.evalBinOp(State, BO_EQ, nonloc::SymbolVal(Pos1.getOffset()),
-                    nonloc::SymbolVal(Pos2.getOffset()), SVB.getConditionType())
-          .getAs<DefinedSVal>();
+                    nonloc::SymbolVal(Pos2.getOffset()),
+                    SVB.getConditionType());
 
-  if (comparison) {
-    auto NewState = State->assume(*comparison, Equal);
-    if (const auto CompSym = comparison->getAsSymbol()) {
-      return assumeNoOverflow(NewState, cast<SymIntExpr>(CompSym)->getLHS(), 2);
-    }
+  assert(comparison.getAs<DefinedSVal>() &&
+    "Symbol comparison must be a `DefinedSVal`");
 
-    return NewState;
+  auto NewState = State->assume(comparison.castAs<DefinedSVal>(), Equal);
+  if (const auto CompSym = comparison.getAsSymbol()) {
+    assert(isa<SymIntExpr>(CompSym) &&
+           "Symbol comparison must be a `SymIntExpr`");
+    assert(BinaryOperator::isComparisonOp(
+               cast<SymIntExpr>(CompSym)->getOpcode()) &&
+           "Symbol comparison must be a comparison");
+    return assumeNoOverflow(NewState, cast<SymIntExpr>(CompSym)->getLHS(), 2);
   }
 
-  return State;
+  return NewState;
+}
+
+bool hasLiveIterators(ProgramStateRef State, const MemRegion *Cont) {
+  auto RegionMap = State->get<IteratorRegionMap>();
+  for (const auto Reg : RegionMap) {
+    if (Reg.second.getContainer() == Cont)
+      return true;
+  }
+
+  auto SymbolMap = State->get<IteratorSymbolMap>();
+  for (const auto Sym : SymbolMap) {
+    if (Sym.second.getContainer() == Cont)
+      return true;
+  }
+
+  return false;
 }
 
 bool isZero(ProgramStateRef State, const NonLoc &Val) {
@@ -1225,14 +1262,12 @@ bool compare(ProgramStateRef State, NonLoc NL1, NonLoc NL2,
   auto &SVB = State->getStateManager().getSValBuilder();
 
   const auto comparison =
-      SVB.evalBinOp(State, Opc, NL1, NL2, SVB.getConditionType())
-          .getAs<DefinedSVal>();
+    SVB.evalBinOp(State, Opc, NL1, NL2, SVB.getConditionType());
 
-  if (comparison) {
-    return !State->assume(*comparison, false);
-  }
+  assert(comparison.getAs<DefinedSVal>() &&
+    "Symbol comparison must be a `DefinedSVal`");
 
-  return false;
+  return !State->assume(comparison.castAs<DefinedSVal>(), false);
 }
 
 } // namespace

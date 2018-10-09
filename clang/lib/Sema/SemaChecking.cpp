@@ -119,7 +119,7 @@ static bool checkArgCount(Sema &S, CallExpr *call, unsigned desiredArgCount) {
   // Highlight all the excess arguments.
   SourceRange range(call->getArg(desiredArgCount)->getLocStart(),
                     call->getArg(argCount - 1)->getLocEnd());
-    
+
   return S.Diag(range.getBegin(), diag::err_typecheck_call_too_many_args)
     << 0 /*function call*/ << desiredArgCount << argCount
     << call->getArg(1)->getSourceRange();
@@ -237,7 +237,7 @@ static bool SemaBuiltinOverflow(Sema &S, CallExpr *TheCall) {
 }
 
 static void SemaBuiltinMemChkCall(Sema &S, FunctionDecl *FDecl,
-		                  CallExpr *TheCall, unsigned SizeIdx,
+                                  CallExpr *TheCall, unsigned SizeIdx,
                                   unsigned DstSizeIdx) {
   if (TheCall->getNumArgs() <= SizeIdx ||
       TheCall->getNumArgs() <= DstSizeIdx)
@@ -888,18 +888,18 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
   Context.GetBuiltinType(BuiltinID, Error, &ICEArguments);
   if (Error != ASTContext::GE_None)
     ICEArguments = 0;  // Don't diagnose previously diagnosed errors.
-  
+
   // If any arguments are required to be ICE's, check and diagnose.
   for (unsigned ArgNo = 0; ICEArguments != 0; ++ArgNo) {
     // Skip arguments not required to be ICE's.
     if ((ICEArguments & (1 << ArgNo)) == 0) continue;
-    
+
     llvm::APSInt Result;
     if (SemaBuiltinConstantArg(TheCall, ArgNo, Result))
       return true;
     ICEArguments &= ~(1 << ArgNo);
   }
-  
+
   switch (BuiltinID) {
   case Builtin::BI__builtin___CFStringMakeConstantString:
     assert(TheCall->getNumArgs() == 1 &&
@@ -1731,8 +1731,791 @@ bool Sema::CheckAArch64BuiltinFunctionCall(unsigned BuiltinID,
   return SemaBuiltinConstantArgRange(TheCall, i, l, u + l);
 }
 
-bool Sema::CheckHexagonBuiltinFunctionCall(unsigned BuiltinID,
-                                           CallExpr *TheCall) {
+bool Sema::CheckHexagonBuiltinCpu(unsigned BuiltinID, CallExpr *TheCall) {
+  static const std::map<unsigned, std::vector<StringRef>> ValidCPU = {
+    { Hexagon::BI__builtin_HEXAGON_A6_vcmpbeq_notany, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_A6_vminub_RdP, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_M6_vabsdiffb, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_M6_vabsdiffub, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_S6_rol_i_p_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_S6_rol_i_p_and, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_S6_rol_i_p_nac, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_S6_rol_i_p_or, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_S6_rol_i_p, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_S6_rol_i_p_xacc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_S6_rol_i_r_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_S6_rol_i_r_and, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_S6_rol_i_r_nac, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_S6_rol_i_r_or, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_S6_rol_i_r, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_S6_rol_i_r_xacc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_S6_vsplatrbp, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_S6_vtrunehb_ppp, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_S6_vtrunohb_ppp, {"v62", "v65"} },
+  };
+
+  static const std::map<unsigned, std::vector<StringRef>> ValidHVX = {
+    { Hexagon::BI__builtin_HEXAGON_V6_extractw, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_extractw_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_hi, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_hi_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_lo, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_lo_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_lvsplatb, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_lvsplatb_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_lvsplath, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_lvsplath_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_lvsplatw, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_lvsplatw_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_pred_and, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_pred_and_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_pred_and_n, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_pred_and_n_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_pred_not, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_pred_not_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_pred_or, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_pred_or_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_pred_or_n, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_pred_or_n_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_pred_scalar2, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_pred_scalar2_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_pred_scalar2v2, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_pred_scalar2v2_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_pred_xor, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_pred_xor_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_shuffeqh, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_shuffeqh_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_shuffeqw, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_shuffeqw_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vabsb, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vabsb_128B, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vabsb_sat, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vabsb_sat_128B, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vabsdiffh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vabsdiffh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vabsdiffub, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vabsdiffub_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vabsdiffuh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vabsdiffuh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vabsdiffw, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vabsdiffw_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vabsh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vabsh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vabsh_sat, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vabsh_sat_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vabsw, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vabsw_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vabsw_sat, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vabsw_sat_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddb, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddb_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddb_dv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddb_dv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddbsat, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddbsat_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddbsat_dv, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddbsat_dv_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddcarry, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddcarry_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddclbh, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddclbh_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddclbw, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddclbw_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddh_dv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddh_dv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddhsat, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddhsat_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddhsat_dv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddhsat_dv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddhw, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddhw_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddhw_acc, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddhw_acc_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddubh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddubh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddubh_acc, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddubh_acc_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddubsat, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddubsat_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddubsat_dv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddubsat_dv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddububb_sat, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddububb_sat_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vadduhsat, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vadduhsat_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vadduhsat_dv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vadduhsat_dv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vadduhw, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vadduhw_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vadduhw_acc, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vadduhw_acc_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vadduwsat, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vadduwsat_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vadduwsat_dv, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vadduwsat_dv_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddw, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddw_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddw_dv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddw_dv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddwsat, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddwsat_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddwsat_dv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaddwsat_dv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_valignb, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_valignb_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_valignbi, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_valignbi_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vand, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vand_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vandnqrt, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vandnqrt_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vandnqrt_acc, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vandnqrt_acc_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vandqrt, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vandqrt_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vandqrt_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vandqrt_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vandvnqv, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vandvnqv_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vandvqv, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vandvqv_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vandvrt, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vandvrt_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vandvrt_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vandvrt_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaslh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaslh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaslh_acc, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaslh_acc_128B, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaslhv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaslhv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaslw, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaslw_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaslw_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaslw_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaslwv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vaslwv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasrh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasrh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasrh_acc, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasrh_acc_128B, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasrhbrndsat, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasrhbrndsat_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasrhbsat, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasrhbsat_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasrhubrndsat, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasrhubrndsat_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasrhubsat, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasrhubsat_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasrhv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasrhv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasruhubrndsat, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasruhubrndsat_128B, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasruhubsat, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasruhubsat_128B, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasruwuhrndsat, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasruwuhrndsat_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasruwuhsat, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasruwuhsat_128B, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasrw, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasrw_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasrw_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasrw_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasrwh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasrwh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasrwhrndsat, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasrwhrndsat_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasrwhsat, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasrwhsat_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasrwuhrndsat, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasrwuhrndsat_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasrwuhsat, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasrwuhsat_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasrwv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vasrwv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vassign, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vassign_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vassignp, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vassignp_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vavgb, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vavgb_128B, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vavgbrnd, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vavgbrnd_128B, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vavgh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vavgh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vavghrnd, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vavghrnd_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vavgub, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vavgub_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vavgubrnd, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vavgubrnd_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vavguh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vavguh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vavguhrnd, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vavguhrnd_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vavguw, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vavguw_128B, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vavguwrnd, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vavguwrnd_128B, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vavgw, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vavgw_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vavgwrnd, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vavgwrnd_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vcl0h, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vcl0h_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vcl0w, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vcl0w_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vcombine, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vcombine_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vd0, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vd0_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdd0, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdd0_128B, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdealb, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdealb_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdealb4w, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdealb4w_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdealh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdealh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdealvdd, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdealvdd_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdelta, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdelta_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpybus, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpybus_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpybus_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpybus_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpybus_dv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpybus_dv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpybus_dv_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpybus_dv_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpyhb, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpyhb_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpyhb_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpyhb_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpyhb_dv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpyhb_dv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpyhb_dv_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpyhb_dv_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpyhisat, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpyhisat_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpyhisat_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpyhisat_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpyhsat, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpyhsat_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpyhsat_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpyhsat_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpyhsuisat, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpyhsuisat_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpyhsuisat_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpyhsuisat_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpyhsusat, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpyhsusat_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpyhsusat_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpyhsusat_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpyhvsat, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpyhvsat_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpyhvsat_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdmpyhvsat_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdsaduh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdsaduh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdsaduh_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vdsaduh_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_veqb, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_veqb_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_veqb_and, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_veqb_and_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_veqb_or, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_veqb_or_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_veqb_xor, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_veqb_xor_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_veqh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_veqh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_veqh_and, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_veqh_and_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_veqh_or, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_veqh_or_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_veqh_xor, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_veqh_xor_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_veqw, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_veqw_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_veqw_and, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_veqw_and_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_veqw_or, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_veqw_or_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_veqw_xor, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_veqw_xor_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtb, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtb_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtb_and, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtb_and_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtb_or, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtb_or_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtb_xor, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtb_xor_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgth, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgth_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgth_and, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgth_and_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgth_or, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgth_or_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgth_xor, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgth_xor_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtub, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtub_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtub_and, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtub_and_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtub_or, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtub_or_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtub_xor, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtub_xor_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtuh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtuh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtuh_and, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtuh_and_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtuh_or, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtuh_or_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtuh_xor, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtuh_xor_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtuw, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtuw_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtuw_and, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtuw_and_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtuw_or, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtuw_or_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtuw_xor, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtuw_xor_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtw, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtw_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtw_and, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtw_and_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtw_or, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtw_or_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtw_xor, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vgtw_xor_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vinsertwr, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vinsertwr_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlalignb, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlalignb_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlalignbi, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlalignbi_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlsrb, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlsrb_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlsrh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlsrh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlsrhv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlsrhv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlsrw, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlsrw_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlsrwv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlsrwv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlut4, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlut4_128B, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlutvvb, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlutvvb_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlutvvbi, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlutvvbi_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlutvvb_nm, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlutvvb_nm_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlutvvb_oracc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlutvvb_oracc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlutvvb_oracci, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlutvvb_oracci_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlutvwh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlutvwh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlutvwhi, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlutvwhi_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlutvwh_nm, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlutvwh_nm_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlutvwh_oracc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlutvwh_oracc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlutvwh_oracci, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vlutvwh_oracci_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmaxb, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmaxb_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmaxh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmaxh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmaxub, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmaxub_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmaxuh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmaxuh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmaxw, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmaxw_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vminb, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vminb_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vminh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vminh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vminub, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vminub_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vminuh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vminuh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vminw, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vminw_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpabus, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpabus_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpabus_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpabus_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpabusv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpabusv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpabuu, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpabuu_128B, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpabuu_acc, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpabuu_acc_128B, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpabuuv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpabuuv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpahb, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpahb_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpahb_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpahb_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpahhsat, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpahhsat_128B, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpauhb, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpauhb_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpauhb_acc, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpauhb_acc_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpauhuhsat, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpauhuhsat_128B, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpsuhuhsat, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpsuhuhsat_128B, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpybus, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpybus_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpybus_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpybus_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpybusv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpybusv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpybusv_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpybusv_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpybv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpybv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpybv_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpybv_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyewuh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyewuh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyewuh_64, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyewuh_64_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyh_acc, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyh_acc_128B, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyhsat_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyhsat_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyhsrs, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyhsrs_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyhss, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyhss_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyhus, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyhus_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyhus_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyhus_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyhv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyhv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyhv_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyhv_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyhvsrs, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyhvsrs_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyieoh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyieoh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyiewh_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyiewh_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyiewuh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyiewuh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyiewuh_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyiewuh_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyih, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyih_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyih_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyih_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyihb, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyihb_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyihb_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyihb_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyiowh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyiowh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyiwb, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyiwb_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyiwb_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyiwb_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyiwh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyiwh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyiwh_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyiwh_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyiwub, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyiwub_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyiwub_acc, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyiwub_acc_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyowh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyowh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyowh_64_acc, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyowh_64_acc_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyowh_rnd, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyowh_rnd_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyowh_rnd_sacc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyowh_rnd_sacc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyowh_sacc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyowh_sacc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyub, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyub_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyub_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyub_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyubv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyubv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyubv_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyubv_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyuh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyuh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyuh_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyuh_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyuhe, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyuhe_128B, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyuhe_acc, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyuhe_acc_128B, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyuhv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyuhv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyuhv_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmpyuhv_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmux, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vmux_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vnavgb, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vnavgb_128B, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vnavgh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vnavgh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vnavgub, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vnavgub_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vnavgw, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vnavgw_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vnormamth, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vnormamth_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vnormamtw, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vnormamtw_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vnot, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vnot_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vor, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vor_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vpackeb, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vpackeb_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vpackeh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vpackeh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vpackhb_sat, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vpackhb_sat_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vpackhub_sat, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vpackhub_sat_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vpackob, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vpackob_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vpackoh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vpackoh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vpackwh_sat, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vpackwh_sat_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vpackwuh_sat, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vpackwuh_sat_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vpopcounth, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vpopcounth_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vprefixqb, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vprefixqb_128B, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vprefixqh, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vprefixqh_128B, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vprefixqw, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vprefixqw_128B, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrdelta, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrdelta_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpybub_rtt, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpybub_rtt_128B, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpybub_rtt_acc, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpybub_rtt_acc_128B, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpybus, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpybus_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpybus_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpybus_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpybusi, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpybusi_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpybusi_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpybusi_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpybusv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpybusv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpybusv_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpybusv_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpybv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpybv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpybv_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpybv_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpyub, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpyub_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpyub_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpyub_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpyubi, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpyubi_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpyubi_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpyubi_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpyub_rtt, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpyub_rtt_128B, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpyub_rtt_acc, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpyub_rtt_acc_128B, {"v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpyubv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpyubv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpyubv_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrmpyubv_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vror, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vror_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vroundhb, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vroundhb_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vroundhub, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vroundhub_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrounduhub, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrounduhub_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrounduwuh, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrounduwuh_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vroundwh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vroundwh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vroundwuh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vroundwuh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrsadubi, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrsadubi_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrsadubi_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vrsadubi_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsathub, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsathub_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsatuwuh, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsatuwuh_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsatwh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsatwh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsb, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsb_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vshufeh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vshufeh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vshuffb, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vshuffb_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vshuffeb, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vshuffeb_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vshuffh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vshuffh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vshuffob, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vshuffob_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vshuffvdd, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vshuffvdd_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vshufoeb, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vshufoeb_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vshufoeh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vshufoeh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vshufoh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vshufoh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubb, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubb_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubb_dv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubb_dv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubbsat, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubbsat_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubbsat_dv, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubbsat_dv_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubcarry, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubcarry_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubh_dv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubh_dv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubhsat, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubhsat_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubhsat_dv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubhsat_dv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubhw, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubhw_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsububh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsububh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsububsat, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsububsat_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsububsat_dv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsububsat_dv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubububb_sat, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubububb_sat_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubuhsat, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubuhsat_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubuhsat_dv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubuhsat_dv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubuhw, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubuhw_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubuwsat, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubuwsat_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubuwsat_dv, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubuwsat_dv_128B, {"v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubw, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubw_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubw_dv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubw_dv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubwsat, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubwsat_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubwsat_dv, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vsubwsat_dv_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vswap, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vswap_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vtmpyb, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vtmpyb_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vtmpyb_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vtmpyb_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vtmpybus, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vtmpybus_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vtmpybus_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vtmpybus_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vtmpyhb, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vtmpyhb_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vtmpyhb_acc, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vtmpyhb_acc_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vunpackb, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vunpackb_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vunpackh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vunpackh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vunpackob, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vunpackob_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vunpackoh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vunpackoh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vunpackub, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vunpackub_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vunpackuh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vunpackuh_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vxor, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vxor_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vzb, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vzb_128B, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vzh, {"v60", "v62", "v65"} },
+    { Hexagon::BI__builtin_HEXAGON_V6_vzh_128B, {"v60", "v62", "v65"} },
+  };
+
+  const TargetInfo &TI = Context.getTargetInfo();
+
+  auto FC = ValidCPU.find(BuiltinID);
+  if (FC != ValidCPU.end()) {
+    const TargetOptions &Opts = TI.getTargetOpts();
+    StringRef CPU = Opts.CPU;
+    if (!CPU.empty()) {
+      assert(CPU.startswith("hexagon") && "Unexpected CPU name");
+      CPU.consume_front("hexagon");
+      if (llvm::none_of(FC->second, [CPU](StringRef S) { return S == CPU; }))
+        return Diag(TheCall->getLocStart(),
+                    diag::err_hexagon_builtin_unsupported_cpu);
+    }
+  }
+
+  auto FH = ValidHVX.find(BuiltinID);
+  if (FH != ValidHVX.end()) {
+    if (!TI.hasFeature("hvx"))
+      return Diag(TheCall->getLocStart(),
+                  diag::err_hexagon_builtin_requires_hvx);
+
+    bool IsValid = llvm::any_of(FH->second,
+                                [&TI] (StringRef V) {
+                                  std::string F = "hvx" + V.str();
+                                  return TI.hasFeature(F);
+                                });
+    if (!IsValid)
+      return Diag(TheCall->getLocStart(),
+                  diag::err_hexagon_builtin_unsupported_hvx);
+  }
+
+  return false;
+}
+
+bool Sema::CheckHexagonBuiltinArgument(unsigned BuiltinID, CallExpr *TheCall) {
   struct ArgInfo {
     ArgInfo(unsigned O, bool S, unsigned W, unsigned A)
       : OpNum(O), IsSigned(S), BitWidth(W), Align(A) {}
@@ -1949,6 +2732,13 @@ bool Sema::CheckHexagonBuiltinFunctionCall(unsigned BuiltinID,
   }
   return Error;
 }
+
+bool Sema::CheckHexagonBuiltinFunctionCall(unsigned BuiltinID,
+                                           CallExpr *TheCall) {
+  return CheckHexagonBuiltinCpu(BuiltinID, TheCall) ||
+         CheckHexagonBuiltinArgument(BuiltinID, TheCall);
+}
+
 
 // CheckMipsBuiltinFunctionCall - Checks the constant value passed to the
 // intrinsic is correct. The switch statement is ordered by DSP, MSA. The
@@ -2814,18 +3604,18 @@ bool Sema::CheckX86BuiltinFunctionCall(unsigned BuiltinID, CallExpr *TheCall) {
   case X86::BI__builtin_ia32_reduceps128_mask:
   case X86::BI__builtin_ia32_reduceps256_mask:
   case X86::BI__builtin_ia32_reduceps512_mask:
-  case X86::BI__builtin_ia32_prold512_mask:
-  case X86::BI__builtin_ia32_prolq512_mask:
-  case X86::BI__builtin_ia32_prold128_mask:
-  case X86::BI__builtin_ia32_prold256_mask:
-  case X86::BI__builtin_ia32_prolq128_mask:
-  case X86::BI__builtin_ia32_prolq256_mask:
-  case X86::BI__builtin_ia32_prord512_mask:
-  case X86::BI__builtin_ia32_prorq512_mask:
-  case X86::BI__builtin_ia32_prord128_mask:
-  case X86::BI__builtin_ia32_prord256_mask:
-  case X86::BI__builtin_ia32_prorq128_mask:
-  case X86::BI__builtin_ia32_prorq256_mask:
+  case X86::BI__builtin_ia32_prold512:
+  case X86::BI__builtin_ia32_prolq512:
+  case X86::BI__builtin_ia32_prold128:
+  case X86::BI__builtin_ia32_prold256:
+  case X86::BI__builtin_ia32_prolq128:
+  case X86::BI__builtin_ia32_prolq256:
+  case X86::BI__builtin_ia32_prord512:
+  case X86::BI__builtin_ia32_prorq512:
+  case X86::BI__builtin_ia32_prord128:
+  case X86::BI__builtin_ia32_prord256:
+  case X86::BI__builtin_ia32_prorq128:
+  case X86::BI__builtin_ia32_prorq256:
   case X86::BI__builtin_ia32_fpclasspd128_mask:
   case X86::BI__builtin_ia32_fpclasspd256_mask:
   case X86::BI__builtin_ia32_fpclassps128_mask:
@@ -3060,7 +3850,7 @@ DiagnoseCStringFormatDirectiveInCFAPI(Sema &S,
 static bool isNonNullType(ASTContext &ctx, QualType type) {
   if (auto nullability = type->getNullability(ctx))
     return *nullability == NullabilityKind::NonNull;
-     
+
   return false;
 }
 
@@ -3103,12 +3893,12 @@ static void CheckNonNullArguments(Sema &S,
       parms = FD->parameters();
     else
       parms = cast<ObjCMethodDecl>(FDecl)->parameters();
-    
+
     unsigned ParamIndex = 0;
     for (ArrayRef<ParmVarDecl*>::iterator I = parms.begin(), E = parms.end();
          I != E; ++I, ++ParamIndex) {
       const ParmVarDecl *PVD = *I;
-      if (PVD->hasAttr<NonNullAttr>() || 
+      if (PVD->hasAttr<NonNullAttr>() ||
           isNonNullType(S.Context, PVD->getType())) {
         if (NonNullArgs.empty())
           NonNullArgs.resize(Args.size());
@@ -3130,7 +3920,7 @@ static void CheckNonNullArguments(Sema &S,
 
         // Dig out the function prototype, if there is one.
         Proto = type->getAs<FunctionProtoType>();
-      } 
+      }
     }
 
     // Fill in non-null argument information from the nullability
@@ -3141,17 +3931,17 @@ static void CheckNonNullArguments(Sema &S,
         if (isNonNullType(S.Context, paramType)) {
           if (NonNullArgs.empty())
             NonNullArgs.resize(Args.size());
-          
+
           NonNullArgs.set(Index);
         }
-        
+
         ++Index;
       }
     }
   }
 
   // Check for non-null arguments.
-  for (unsigned ArgIndex = 0, ArgIndexEnd = NonNullArgs.size(); 
+  for (unsigned ArgIndex = 0, ArgIndexEnd = NonNullArgs.size();
        ArgIndex != ArgIndexEnd; ++ArgIndex) {
     if (NonNullArgs[ArgIndex])
       CheckNonNullArgument(S, Args[ArgIndex], CallSiteLoc);
@@ -3284,7 +4074,7 @@ bool Sema::CheckFunctionCall(FunctionDecl *FDecl, CallExpr *TheCall,
   return false;
 }
 
-bool Sema::CheckObjCMethodCall(ObjCMethodDecl *Method, SourceLocation lbrac, 
+bool Sema::CheckObjCMethodCall(ObjCMethodDecl *Method, SourceLocation lbrac,
                                ArrayRef<const Expr *> Args) {
   VariadicCallType CallType =
       Method->isVariadic() ? VariadicMethod : VariadicDoesNotApply;
@@ -3557,7 +4347,7 @@ ExprResult Sema::SemaAtomicOpsOverloaded(ExprResult TheCallResult,
         << Ptr->getType() << Ptr->getSourceRange();
       return ExprError();
     }
-    if (AtomTy.isConstQualified() ||
+    if ((Form != Load && Form != LoadCopy && AtomTy.isConstQualified()) ||
         AtomTy.getAddressSpace() == LangAS::opencl_constant) {
       Diag(DRE->getLocStart(), diag::err_atomic_op_needs_non_const_atomic)
           << (AtomTy.isConstQualified() ? 0 : 1) << Ptr->getType()
@@ -3787,7 +4577,7 @@ ExprResult Sema::SemaAtomicOpsOverloaded(ExprResult TheCallResult,
   AtomicExpr *AE = new (Context) AtomicExpr(TheCall->getCallee()->getLocStart(),
                                             SubExprs, ResultType, Op,
                                             TheCall->getRParenLoc());
-  
+
   if ((Op == AtomicExpr::AO__c11_atomic_load ||
        Op == AtomicExpr::AO__c11_atomic_store ||
        Op == AtomicExpr::AO__opencl_atomic_load ||
@@ -3954,52 +4744,52 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   bool WarnAboutSemanticsChange = false;
   switch (BuiltinID) {
   default: llvm_unreachable("Unknown overloaded atomic builtin!");
-  case Builtin::BI__sync_fetch_and_add: 
+  case Builtin::BI__sync_fetch_and_add:
   case Builtin::BI__sync_fetch_and_add_1:
   case Builtin::BI__sync_fetch_and_add_2:
   case Builtin::BI__sync_fetch_and_add_4:
   case Builtin::BI__sync_fetch_and_add_8:
   case Builtin::BI__sync_fetch_and_add_16:
-    BuiltinIndex = 0; 
+    BuiltinIndex = 0;
     break;
-      
-  case Builtin::BI__sync_fetch_and_sub: 
+
+  case Builtin::BI__sync_fetch_and_sub:
   case Builtin::BI__sync_fetch_and_sub_1:
   case Builtin::BI__sync_fetch_and_sub_2:
   case Builtin::BI__sync_fetch_and_sub_4:
   case Builtin::BI__sync_fetch_and_sub_8:
   case Builtin::BI__sync_fetch_and_sub_16:
-    BuiltinIndex = 1; 
+    BuiltinIndex = 1;
     break;
-      
-  case Builtin::BI__sync_fetch_and_or:  
+
+  case Builtin::BI__sync_fetch_and_or:
   case Builtin::BI__sync_fetch_and_or_1:
   case Builtin::BI__sync_fetch_and_or_2:
   case Builtin::BI__sync_fetch_and_or_4:
   case Builtin::BI__sync_fetch_and_or_8:
   case Builtin::BI__sync_fetch_and_or_16:
-    BuiltinIndex = 2; 
+    BuiltinIndex = 2;
     break;
-      
-  case Builtin::BI__sync_fetch_and_and: 
+
+  case Builtin::BI__sync_fetch_and_and:
   case Builtin::BI__sync_fetch_and_and_1:
   case Builtin::BI__sync_fetch_and_and_2:
   case Builtin::BI__sync_fetch_and_and_4:
   case Builtin::BI__sync_fetch_and_and_8:
   case Builtin::BI__sync_fetch_and_and_16:
-    BuiltinIndex = 3; 
+    BuiltinIndex = 3;
     break;
 
-  case Builtin::BI__sync_fetch_and_xor: 
+  case Builtin::BI__sync_fetch_and_xor:
   case Builtin::BI__sync_fetch_and_xor_1:
   case Builtin::BI__sync_fetch_and_xor_2:
   case Builtin::BI__sync_fetch_and_xor_4:
   case Builtin::BI__sync_fetch_and_xor_8:
   case Builtin::BI__sync_fetch_and_xor_16:
-    BuiltinIndex = 4; 
+    BuiltinIndex = 4;
     break;
 
-  case Builtin::BI__sync_fetch_and_nand: 
+  case Builtin::BI__sync_fetch_and_nand:
   case Builtin::BI__sync_fetch_and_nand_1:
   case Builtin::BI__sync_fetch_and_nand_2:
   case Builtin::BI__sync_fetch_and_nand_4:
@@ -4009,43 +4799,43 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
     WarnAboutSemanticsChange = true;
     break;
 
-  case Builtin::BI__sync_add_and_fetch: 
+  case Builtin::BI__sync_add_and_fetch:
   case Builtin::BI__sync_add_and_fetch_1:
   case Builtin::BI__sync_add_and_fetch_2:
   case Builtin::BI__sync_add_and_fetch_4:
   case Builtin::BI__sync_add_and_fetch_8:
   case Builtin::BI__sync_add_and_fetch_16:
-    BuiltinIndex = 6; 
+    BuiltinIndex = 6;
     break;
-      
-  case Builtin::BI__sync_sub_and_fetch: 
+
+  case Builtin::BI__sync_sub_and_fetch:
   case Builtin::BI__sync_sub_and_fetch_1:
   case Builtin::BI__sync_sub_and_fetch_2:
   case Builtin::BI__sync_sub_and_fetch_4:
   case Builtin::BI__sync_sub_and_fetch_8:
   case Builtin::BI__sync_sub_and_fetch_16:
-    BuiltinIndex = 7; 
+    BuiltinIndex = 7;
     break;
-      
-  case Builtin::BI__sync_and_and_fetch: 
+
+  case Builtin::BI__sync_and_and_fetch:
   case Builtin::BI__sync_and_and_fetch_1:
   case Builtin::BI__sync_and_and_fetch_2:
   case Builtin::BI__sync_and_and_fetch_4:
   case Builtin::BI__sync_and_and_fetch_8:
   case Builtin::BI__sync_and_and_fetch_16:
-    BuiltinIndex = 8; 
+    BuiltinIndex = 8;
     break;
-      
-  case Builtin::BI__sync_or_and_fetch:  
+
+  case Builtin::BI__sync_or_and_fetch:
   case Builtin::BI__sync_or_and_fetch_1:
   case Builtin::BI__sync_or_and_fetch_2:
   case Builtin::BI__sync_or_and_fetch_4:
   case Builtin::BI__sync_or_and_fetch_8:
   case Builtin::BI__sync_or_and_fetch_16:
-    BuiltinIndex = 9; 
+    BuiltinIndex = 9;
     break;
-      
-  case Builtin::BI__sync_xor_and_fetch: 
+
+  case Builtin::BI__sync_xor_and_fetch:
   case Builtin::BI__sync_xor_and_fetch_1:
   case Builtin::BI__sync_xor_and_fetch_2:
   case Builtin::BI__sync_xor_and_fetch_4:
@@ -4054,7 +4844,7 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
     BuiltinIndex = 10;
     break;
 
-  case Builtin::BI__sync_nand_and_fetch: 
+  case Builtin::BI__sync_nand_and_fetch:
   case Builtin::BI__sync_nand_and_fetch_1:
   case Builtin::BI__sync_nand_and_fetch_2:
   case Builtin::BI__sync_nand_and_fetch_4:
@@ -4073,7 +4863,7 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
     BuiltinIndex = 12;
     NumFixed = 2;
     break;
-      
+
   case Builtin::BI__sync_bool_compare_and_swap:
   case Builtin::BI__sync_bool_compare_and_swap_1:
   case Builtin::BI__sync_bool_compare_and_swap_2:
@@ -4084,16 +4874,16 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
     NumFixed = 2;
     ResultType = Context.BoolTy;
     break;
-      
+
   case Builtin::BI__sync_lock_test_and_set:
   case Builtin::BI__sync_lock_test_and_set_1:
   case Builtin::BI__sync_lock_test_and_set_2:
   case Builtin::BI__sync_lock_test_and_set_4:
   case Builtin::BI__sync_lock_test_and_set_8:
   case Builtin::BI__sync_lock_test_and_set_16:
-    BuiltinIndex = 14; 
+    BuiltinIndex = 14;
     break;
-      
+
   case Builtin::BI__sync_lock_release:
   case Builtin::BI__sync_lock_release_1:
   case Builtin::BI__sync_lock_release_2:
@@ -4104,14 +4894,14 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
     NumFixed = 0;
     ResultType = Context.VoidTy;
     break;
-      
-  case Builtin::BI__sync_swap: 
+
+  case Builtin::BI__sync_swap:
   case Builtin::BI__sync_swap_1:
   case Builtin::BI__sync_swap_2:
   case Builtin::BI__sync_swap_4:
   case Builtin::BI__sync_swap_8:
   case Builtin::BI__sync_swap_16:
-    BuiltinIndex = 16; 
+    BuiltinIndex = 16;
     break;
   }
 
@@ -4620,7 +5410,7 @@ bool Sema::SemaBuiltinFPClassification(CallExpr *TheCall, unsigned NumArgs) {
       }
     }
   }
-  
+
   return false;
 }
 
@@ -4997,13 +5787,13 @@ bool Sema::SemaBuiltinConstantArg(CallExpr *TheCall, int ArgNum,
   Expr *Arg = TheCall->getArg(ArgNum);
   DeclRefExpr *DRE =cast<DeclRefExpr>(TheCall->getCallee()->IgnoreParenCasts());
   FunctionDecl *FDecl = cast<FunctionDecl>(DRE->getDecl());
-  
+
   if (Arg->isTypeDependent() || Arg->isValueDependent()) return false;
-  
+
   if (!Arg->isIntegerConstantExpr(Result, Context))
     return Diag(TheCall->getLocStart(), diag::err_constant_integer_arg_type)
                 << FDecl->getDeclName() <<  Arg->getSourceRange();
-  
+
   return false;
 }
 
@@ -5174,7 +5964,7 @@ bool Sema::SemaBuiltinLongjmp(CallExpr *TheCall) {
   // TODO: This is less than ideal. Overload this to take a value.
   if (SemaBuiltinConstantArg(TheCall, 1, Result))
     return true;
-  
+
   if (Result != 1)
     return Diag(TheCall->getLocStart(), diag::err_builtin_longjmp_invalid_val)
              << SourceRange(Arg->getLocStart(), Arg->getLocEnd());
@@ -5441,7 +6231,7 @@ checkFormatStringExpr(Sema &S, const Expr *E, ArrayRef<const Expr *> Args,
     // cannot contain format specifiers and thus are not a security
     // liability.
     return SLCT_UncheckedLiteral;
-      
+
   case Stmt::DeclRefExprClass: {
     const DeclRefExpr *DR = cast<DeclRefExpr>(E);
 
@@ -5518,13 +6308,22 @@ checkFormatStringExpr(Sema &S, const Expr *E, ArrayRef<const Expr *> Args,
   case Stmt::CXXMemberCallExprClass: {
     const CallExpr *CE = cast<CallExpr>(E);
     if (const NamedDecl *ND = dyn_cast_or_null<NamedDecl>(CE->getCalleeDecl())) {
-      if (const FormatArgAttr *FA = ND->getAttr<FormatArgAttr>()) {
+      bool IsFirst = true;
+      StringLiteralCheckType CommonResult;
+      for (const auto *FA : ND->specific_attrs<FormatArgAttr>()) {
         const Expr *Arg = CE->getArg(FA->getFormatIdx().getASTIndex());
-        return checkFormatStringExpr(S, Arg, Args,
-                                     HasVAListArg, format_idx, firstDataArg,
-                                     Type, CallType, InFunctionCall,
-                                     CheckedVarArgs, UncoveredArg, Offset);
-      } else if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(ND)) {
+        StringLiteralCheckType Result = checkFormatStringExpr(
+            S, Arg, Args, HasVAListArg, format_idx, firstDataArg, Type,
+            CallType, InFunctionCall, CheckedVarArgs, UncoveredArg, Offset);
+        if (IsFirst) {
+          CommonResult = Result;
+          IsFirst = false;
+        }
+      }
+      if (!IsFirst)
+        return CommonResult;
+
+      if (const auto *FD = dyn_cast<FunctionDecl>(ND)) {
         unsigned BuiltinID = FD->getBuiltinID();
         if (BuiltinID == Builtin::BI__builtin___CFStringMakeConstantString ||
             BuiltinID == Builtin::BI__builtin___NSStringMakeConstantString) {
@@ -5827,14 +6626,14 @@ protected:
   void HandlePositionalNonpositionalArgs(SourceLocation Loc,
                                          const char *startSpec,
                                          unsigned specifierLen);
-  
+
   SourceRange getFormatStringRange();
   CharSourceRange getSpecifierRange(const char *startSpecifier,
                                     unsigned specifierLen);
   SourceLocation getLocationOfByte(const char *x);
 
   const Expr *getDataArg(unsigned i) const;
-  
+
   bool CheckNumArgs(const analyze_format_string::FormatSpecifier &FS,
                     const analyze_format_string::ConversionSpecifier &CS,
                     const char *startSpecifier, unsigned specifierLen,
@@ -6253,7 +7052,7 @@ public:
                          const char *startSpecifier, unsigned specifierLen);
   bool checkForCStrMembers(const analyze_printf::ArgType &AT,
                            const Expr *E);
-                           
+
   void HandleEmptyObjCModifierFlag(const char *startFlag,
                                    unsigned flagLen) override;
 
@@ -6262,7 +7061,7 @@ public:
 
   void HandleObjCFlagsWithNonObjCConversion(const char *flagsStart,
                                            const char *flagsEnd,
-                                           const char *conversionPosition) 
+                                           const char *conversionPosition)
                                              override;
 };
 
@@ -6274,7 +7073,7 @@ bool CheckPrintfHandler::HandleInvalidPrintfConversionSpecifier(
                                       unsigned specifierLen) {
   const analyze_printf::PrintfConversionSpecifier &CS =
     FS.getConversionSpecifier();
-  
+
   return HandleInvalidConversionSpecifier(FS.getArgIndex(),
                                           getLocationOfByte(CS.getStart()),
                                           startSpecifier, specifierLen,
@@ -6885,10 +7684,11 @@ CheckPrintfHandler::checkFormatExpr(const analyze_printf::PrintfSpecifier &FS,
     QualType CastTy;
     std::tie(CastTy, CastTyName) = shouldNotPrintDirectly(S.Context, IntendedTy, E);
     if (!CastTy.isNull()) {
-      // %zi/%zu are OK to use for NSInteger/NSUInteger of type int
+      // %zi/%zu and %td/%tu are OK to use for NSInteger/NSUInteger of type int
       // (long in ASTContext). Only complain to pedants.
       if ((CastTyName == "NSInteger" || CastTyName == "NSUInteger") &&
-          AT.isSizeT() && AT.matchesType(S.Context, CastTy))
+          (AT.isSizeT() || AT.isPtrdiffT()) &&
+          AT.matchesType(S.Context, CastTy))
         Pedantic = true;
       IntendedTy = CastTy;
       ShouldNotPrintDirectly = true;
@@ -6936,7 +7736,7 @@ CheckPrintfHandler::checkFormatExpr(const analyze_printf::PrintfSpecifier &FS,
       CastFix << ")";
 
       SmallVector<FixItHint,4> Hints;
-      if (!AT.matchesType(S.Context, IntendedTy) || ShouldNotPrintDirectly) 
+      if (!AT.matchesType(S.Context, IntendedTy) || ShouldNotPrintDirectly)
         Hints.push_back(FixItHint::CreateReplacement(SpecRange, os.str()));
 
       if (const CStyleCastExpr *CCast = dyn_cast<CStyleCastExpr>(E)) {
@@ -6977,7 +7777,7 @@ CheckPrintfHandler::checkFormatExpr(const analyze_printf::PrintfSpecifier &FS,
                              SpecRange, Hints);
       } else {
         // In this case, the expression could be printed using a different
-        // specifier, but we've decided that the specifier is probably correct 
+        // specifier, but we've decided that the specifier is probably correct
         // and we should cast instead. Just use the normal warning message.
         EmitFormatDiagnostic(
           S.PDiag(diag::warn_format_conversion_argument_type_mismatch)
@@ -7052,7 +7852,7 @@ CheckPrintfHandler::checkFormatExpr(const analyze_printf::PrintfSpecifier &FS,
 
 //===--- CHECK: Scanf format string checking ------------------------------===//
 
-namespace {  
+namespace {
 
 class CheckScanfHandler : public CheckFormatHandler {
 public:
@@ -7072,7 +7872,7 @@ public:
   bool HandleScanfSpecifier(const analyze_scanf::ScanfSpecifier &FS,
                             const char *startSpecifier,
                             unsigned specifierLen) override;
-  
+
   bool HandleInvalidScanfConversionSpecifier(
           const analyze_scanf::ScanfSpecifier &FS,
           const char *startSpecifier,
@@ -7108,7 +7908,7 @@ bool CheckScanfHandler::HandleScanfSpecifier(
                                        const char *startSpecifier,
                                        unsigned specifierLen) {
   using namespace analyze_scanf;
-  using namespace analyze_format_string;  
+  using namespace analyze_format_string;
 
   const ScanfConversionSpecifier &CS = FS.getConversionSpecifier();
 
@@ -7125,7 +7925,7 @@ bool CheckScanfHandler::HandleScanfSpecifier(
       return false;
     }
   }
-  
+
   // Check if the field with is non-zero.
   const OptionalAmount &Amt = FS.getFieldWidth();
   if (Amt.getHowSpecified() == OptionalAmount::Constant) {
@@ -7829,24 +8629,26 @@ static const CXXRecordDecl *getContainedDynamicClass(QualType T,
   return nullptr;
 }
 
+static const UnaryExprOrTypeTraitExpr *getAsSizeOfExpr(const Expr *E) {
+  if (const auto *Unary = dyn_cast<UnaryExprOrTypeTraitExpr>(E))
+    if (Unary->getKind() == UETT_SizeOf)
+      return Unary;
+  return nullptr;
+}
+
 /// If E is a sizeof expression, returns its argument expression,
 /// otherwise returns NULL.
 static const Expr *getSizeOfExprArg(const Expr *E) {
-  if (const UnaryExprOrTypeTraitExpr *SizeOf =
-      dyn_cast<UnaryExprOrTypeTraitExpr>(E))
-    if (SizeOf->getKind() == UETT_SizeOf && !SizeOf->isArgumentType())
+  if (const UnaryExprOrTypeTraitExpr *SizeOf = getAsSizeOfExpr(E))
+    if (!SizeOf->isArgumentType())
       return SizeOf->getArgumentExpr()->IgnoreParenImpCasts();
-
   return nullptr;
 }
 
 /// If E is a sizeof expression, returns its argument type.
 static QualType getSizeOfArgType(const Expr *E) {
-  if (const UnaryExprOrTypeTraitExpr *SizeOf =
-      dyn_cast<UnaryExprOrTypeTraitExpr>(E))
-    if (SizeOf->getKind() == UETT_SizeOf)
-      return SizeOf->getTypeOfArgument();
-
+  if (const UnaryExprOrTypeTraitExpr *SizeOf = getAsSizeOfExpr(E))
+    return SizeOf->getTypeOfArgument();
   return QualType();
 }
 
@@ -7942,6 +8744,89 @@ struct SearchNonTrivialToCopyField
 
 }
 
+/// Detect if \c SizeofExpr is likely to calculate the sizeof an object.
+static bool doesExprLikelyComputeSize(const Expr *SizeofExpr) {
+  SizeofExpr = SizeofExpr->IgnoreParenImpCasts();
+
+  if (const auto *BO = dyn_cast<BinaryOperator>(SizeofExpr)) {
+    if (BO->getOpcode() != BO_Mul && BO->getOpcode() != BO_Add)
+      return false;
+
+    return doesExprLikelyComputeSize(BO->getLHS()) ||
+           doesExprLikelyComputeSize(BO->getRHS());
+  }
+
+  return getAsSizeOfExpr(SizeofExpr) != nullptr;
+}
+
+/// Check if the ArgLoc originated from a macro passed to the call at CallLoc.
+///
+/// \code
+///   #define MACRO 0
+///   foo(MACRO);
+///   foo(0);
+/// \endcode
+///
+/// This should return true for the first call to foo, but not for the second
+/// (regardless of whether foo is a macro or function).
+static bool isArgumentExpandedFromMacro(SourceManager &SM,
+                                        SourceLocation CallLoc,
+                                        SourceLocation ArgLoc) {
+  if (!CallLoc.isMacroID())
+    return SM.getFileID(CallLoc) != SM.getFileID(ArgLoc);
+
+  return SM.getFileID(SM.getImmediateMacroCallerLoc(CallLoc)) !=
+         SM.getFileID(SM.getImmediateMacroCallerLoc(ArgLoc));
+}
+
+/// Diagnose cases like 'memset(buf, sizeof(buf), 0)', which should have the
+/// last two arguments transposed.
+static void CheckMemaccessSize(Sema &S, unsigned BId, const CallExpr *Call) {
+  if (BId != Builtin::BImemset && BId != Builtin::BIbzero)
+    return;
+
+  const Expr *SizeArg =
+    Call->getArg(BId == Builtin::BImemset ? 2 : 1)->IgnoreImpCasts();
+
+  auto isLiteralZero = [](const Expr *E) {
+    return isa<IntegerLiteral>(E) && cast<IntegerLiteral>(E)->getValue() == 0;
+  };
+
+  // If we're memsetting or bzeroing 0 bytes, then this is likely an error.
+  SourceLocation CallLoc = Call->getRParenLoc();
+  SourceManager &SM = S.getSourceManager();
+  if (isLiteralZero(SizeArg) &&
+      !isArgumentExpandedFromMacro(SM, CallLoc, SizeArg->getExprLoc())) {
+
+    SourceLocation DiagLoc = SizeArg->getExprLoc();
+
+    // Some platforms #define bzero to __builtin_memset. See if this is the
+    // case, and if so, emit a better diagnostic.
+    if (BId == Builtin::BIbzero ||
+        (CallLoc.isMacroID() && Lexer::getImmediateMacroName(
+                                    CallLoc, SM, S.getLangOpts()) == "bzero")) {
+      S.Diag(DiagLoc, diag::warn_suspicious_bzero_size);
+      S.Diag(DiagLoc, diag::note_suspicious_bzero_size_silence);
+    } else if (!isLiteralZero(Call->getArg(1)->IgnoreImpCasts())) {
+      S.Diag(DiagLoc, diag::warn_suspicious_sizeof_memset) << 0;
+      S.Diag(DiagLoc, diag::note_suspicious_sizeof_memset_silence) << 0;
+    }
+    return;
+  }
+
+  // If the second argument to a memset is a sizeof expression and the third
+  // isn't, this is also likely an error. This should catch
+  // 'memset(buf, sizeof(buf), 0xff)'.
+  if (BId == Builtin::BImemset &&
+      doesExprLikelyComputeSize(Call->getArg(1)) &&
+      !doesExprLikelyComputeSize(Call->getArg(2))) {
+    SourceLocation DiagLoc = Call->getArg(1)->getExprLoc();
+    S.Diag(DiagLoc, diag::warn_suspicious_sizeof_memset) << 1;
+    S.Diag(DiagLoc, diag::note_suspicious_sizeof_memset_silence) << 1;
+    return;
+  }
+}
+
 /// Check for dangerous or invalid arguments to memset().
 ///
 /// This issues warnings on known problematic, dangerous or unspecified
@@ -7970,6 +8855,9 @@ void Sema::CheckMemaccessArguments(const CallExpr *Call,
   if (CheckMemorySizeofForComparison(*this, LenExpr, FnName,
                                      Call->getLocStart(), Call->getRParenLoc()))
     return;
+
+  // Catch cases like 'memset(buf, sizeof(buf), 0)'.
+  CheckMemaccessSize(*this, BId, Call);
 
   // We have special checking when the length is a sizeof expression.
   QualType SizeOfArgTy = getSizeOfArgType(LenExpr);
@@ -8093,7 +8981,7 @@ void Sema::CheckMemaccessArguments(const CallExpr *Call,
         else if (BId == Builtin::BImemcmp)
           OperationType = 3;
       }
-        
+
       DiagRuntimeBehavior(
         Dest->getExprLoc(), Dest,
         PDiag(diag::warn_dyn_class_memaccess)
@@ -8147,7 +9035,7 @@ static const Expr *ignoreLiteralAdditions(const Expr *Ex, ASTContext &Ctx) {
 
     const Expr *RHS = BO->getRHS()->IgnoreParenCasts();
     const Expr *LHS = BO->getLHS()->IgnoreParenCasts();
-    
+
     if (isa<IntegerLiteral>(RHS))
       Ex = LHS;
     else if (isa<IntegerLiteral>(LHS))
@@ -8189,7 +9077,7 @@ void Sema::CheckStrlcpycatArguments(const CallExpr *Call,
   if (CheckMemorySizeofForComparison(*this, SizeArg, FnName,
                                      Call->getLocStart(), Call->getRParenLoc()))
     return;
-  
+
   // Look for 'strlcpy(dst, x, sizeof(x))'
   if (const Expr *Ex = getSizeOfExprArg(SizeArg))
     CompareWithSrc = Ex;
@@ -8212,16 +9100,16 @@ void Sema::CheckStrlcpycatArguments(const CallExpr *Call,
   const DeclRefExpr *SrcArgDRE = dyn_cast<DeclRefExpr>(SrcArg);
   if (!SrcArgDRE)
     return;
-  
+
   const DeclRefExpr *CompareWithSrcDRE = dyn_cast<DeclRefExpr>(CompareWithSrc);
-  if (!CompareWithSrcDRE || 
+  if (!CompareWithSrcDRE ||
       SrcArgDRE->getDecl() != CompareWithSrcDRE->getDecl())
     return;
-  
+
   const Expr *OriginalSizeArg = Call->getArg(2);
   Diag(CompareWithSrcDRE->getLocStart(), diag::warn_strlcpycat_wrong_size)
     << OriginalSizeArg->getSourceRange() << FnName;
-  
+
   // Output a FIXIT hint if the destination is an array (rather than a
   // pointer to an array).  This could be enhanced to handle some
   // pointers if we know the actual size, like if DstArg is 'array+2'
@@ -8235,7 +9123,7 @@ void Sema::CheckStrlcpycatArguments(const CallExpr *Call,
   OS << "sizeof(";
   DstArg->printPretty(OS, nullptr, getPrintingPolicy());
   OS << ")";
-  
+
   Diag(OriginalSizeArg->getLocStart(), diag::note_strlcpycat_wrong_size)
     << FixItHint::CreateReplacement(OriginalSizeArg->getSourceRange(),
                                     OS.str());
@@ -8344,421 +9232,12 @@ void Sema::CheckStrncatArguments(const CallExpr *CE,
     << FixItHint::CreateReplacement(SR, OS.str());
 }
 
-//===--- CHECK: Return Address of Stack Variable --------------------------===//
-
-static const Expr *EvalVal(const Expr *E,
-                           SmallVectorImpl<const DeclRefExpr *> &refVars,
-                           const Decl *ParentDecl);
-static const Expr *EvalAddr(const Expr *E,
-                            SmallVectorImpl<const DeclRefExpr *> &refVars,
-                            const Decl *ParentDecl);
-
-/// CheckReturnStackAddr - Check if a return statement returns the address
-///   of a stack variable.
-static void
-CheckReturnStackAddr(Sema &S, Expr *RetValExp, QualType lhsType,
-                     SourceLocation ReturnLoc) {
-  const Expr *stackE = nullptr;
-  SmallVector<const DeclRefExpr *, 8> refVars;
-
-  // Perform checking for returned stack addresses, local blocks,
-  // label addresses or references to temporaries.
-  if (lhsType->isPointerType() ||
-      (!S.getLangOpts().ObjCAutoRefCount && lhsType->isBlockPointerType())) {
-    stackE = EvalAddr(RetValExp, refVars, /*ParentDecl=*/nullptr);
-  } else if (lhsType->isReferenceType()) {
-    stackE = EvalVal(RetValExp, refVars, /*ParentDecl=*/nullptr);
-  }
-
-  if (!stackE)
-    return; // Nothing suspicious was found.
-
-  // Parameters are initialized in the calling scope, so taking the address
-  // of a parameter reference doesn't need a warning.
-  for (auto *DRE : refVars)
-    if (isa<ParmVarDecl>(DRE->getDecl()))
-      return;
-
-  SourceLocation diagLoc;
-  SourceRange diagRange;
-  if (refVars.empty()) {
-    diagLoc = stackE->getLocStart();
-    diagRange = stackE->getSourceRange();
-  } else {
-    // We followed through a reference variable. 'stackE' contains the
-    // problematic expression but we will warn at the return statement pointing
-    // at the reference variable. We will later display the "trail" of
-    // reference variables using notes.
-    diagLoc = refVars[0]->getLocStart();
-    diagRange = refVars[0]->getSourceRange();
-  }
-
-  if (const DeclRefExpr *DR = dyn_cast<DeclRefExpr>(stackE)) {
-    // address of local var
-    S.Diag(diagLoc, diag::warn_ret_stack_addr_ref) << lhsType->isReferenceType()
-     << DR->getDecl()->getDeclName() << diagRange;
-  } else if (isa<BlockExpr>(stackE)) { // local block.
-    S.Diag(diagLoc, diag::err_ret_local_block) << diagRange;
-  } else if (isa<AddrLabelExpr>(stackE)) { // address of label.
-    S.Diag(diagLoc, diag::warn_ret_addr_label) << diagRange;
-  } else { // local temporary.
-    // If there is an LValue->RValue conversion, then the value of the
-    // reference type is used, not the reference.
-    if (auto *ICE = dyn_cast<ImplicitCastExpr>(RetValExp)) {
-      if (ICE->getCastKind() == CK_LValueToRValue) {
-        return;
-      }
-    }
-    S.Diag(diagLoc, diag::warn_ret_local_temp_addr_ref)
-     << lhsType->isReferenceType() << diagRange;
-  }
-
-  // Display the "trail" of reference variables that we followed until we
-  // found the problematic expression using notes.
-  for (unsigned i = 0, e = refVars.size(); i != e; ++i) {
-    const VarDecl *VD = cast<VarDecl>(refVars[i]->getDecl());
-    // If this var binds to another reference var, show the range of the next
-    // var, otherwise the var binds to the problematic expression, in which case
-    // show the range of the expression.
-    SourceRange range = (i < e - 1) ? refVars[i + 1]->getSourceRange()
-                                    : stackE->getSourceRange();
-    S.Diag(VD->getLocation(), diag::note_ref_var_local_bind)
-        << VD->getDeclName() << range;
-  }
-}
-
-/// EvalAddr - EvalAddr and EvalVal are mutually recursive functions that
-///  check if the expression in a return statement evaluates to an address
-///  to a location on the stack, a local block, an address of a label, or a
-///  reference to local temporary. The recursion is used to traverse the
-///  AST of the return expression, with recursion backtracking when we
-///  encounter a subexpression that (1) clearly does not lead to one of the
-///  above problematic expressions (2) is something we cannot determine leads to
-///  a problematic expression based on such local checking.
-///
-///  Both EvalAddr and EvalVal follow through reference variables to evaluate
-///  the expression that they point to. Such variables are added to the
-///  'refVars' vector so that we know what the reference variable "trail" was.
-///
-///  EvalAddr processes expressions that are pointers that are used as
-///  references (and not L-values).  EvalVal handles all other values.
-///  At the base case of the recursion is a check for the above problematic
-///  expressions.
-///
-///  This implementation handles:
-///
-///   * pointer-to-pointer casts
-///   * implicit conversions from array references to pointers
-///   * taking the address of fields
-///   * arbitrary interplay between "&" and "*" operators
-///   * pointer arithmetic from an address of a stack variable
-///   * taking the address of an array element where the array is on the stack
-static const Expr *EvalAddr(const Expr *E,
-                            SmallVectorImpl<const DeclRefExpr *> &refVars,
-                            const Decl *ParentDecl) {
-  if (E->isTypeDependent())
-    return nullptr;
-
-  // We should only be called for evaluating pointer expressions.
-  assert((E->getType()->isAnyPointerType() ||
-          E->getType()->isBlockPointerType() ||
-          E->getType()->isObjCQualifiedIdType()) &&
-         "EvalAddr only works on pointers");
-
-  E = E->IgnoreParens();
-
-  // Our "symbolic interpreter" is just a dispatch off the currently
-  // viewed AST node.  We then recursively traverse the AST by calling
-  // EvalAddr and EvalVal appropriately.
-  switch (E->getStmtClass()) {
-  case Stmt::DeclRefExprClass: {
-    const DeclRefExpr *DR = cast<DeclRefExpr>(E);
-
-    // If we leave the immediate function, the lifetime isn't about to end.
-    if (DR->refersToEnclosingVariableOrCapture())
-      return nullptr;
-
-    if (const VarDecl *V = dyn_cast<VarDecl>(DR->getDecl()))
-      // If this is a reference variable, follow through to the expression that
-      // it points to.
-      if (V->hasLocalStorage() &&
-          V->getType()->isReferenceType() && V->hasInit()) {
-        // Add the reference variable to the "trail".
-        refVars.push_back(DR);
-        return EvalAddr(V->getInit(), refVars, ParentDecl);
-      }
-
-    return nullptr;
-  }
-
-  case Stmt::UnaryOperatorClass: {
-    // The only unary operator that make sense to handle here
-    // is AddrOf.  All others don't make sense as pointers.
-    const UnaryOperator *U = cast<UnaryOperator>(E);
-
-    if (U->getOpcode() == UO_AddrOf)
-      return EvalVal(U->getSubExpr(), refVars, ParentDecl);
-    return nullptr;
-  }
-
-  case Stmt::BinaryOperatorClass: {
-    // Handle pointer arithmetic.  All other binary operators are not valid
-    // in this context.
-    const BinaryOperator *B = cast<BinaryOperator>(E);
-    BinaryOperatorKind op = B->getOpcode();
-
-    if (op != BO_Add && op != BO_Sub)
-      return nullptr;
-
-    const Expr *Base = B->getLHS();
-
-    // Determine which argument is the real pointer base.  It could be
-    // the RHS argument instead of the LHS.
-    if (!Base->getType()->isPointerType())
-      Base = B->getRHS();
-
-    assert(Base->getType()->isPointerType());
-    return EvalAddr(Base, refVars, ParentDecl);
-  }
-
-  // For conditional operators we need to see if either the LHS or RHS are
-  // valid DeclRefExpr*s.  If one of them is valid, we return it.
-  case Stmt::ConditionalOperatorClass: {
-    const ConditionalOperator *C = cast<ConditionalOperator>(E);
-
-    // Handle the GNU extension for missing LHS.
-    // FIXME: That isn't a ConditionalOperator, so doesn't get here.
-    if (const Expr *LHSExpr = C->getLHS()) {
-      // In C++, we can have a throw-expression, which has 'void' type.
-      if (!LHSExpr->getType()->isVoidType())
-        if (const Expr *LHS = EvalAddr(LHSExpr, refVars, ParentDecl))
-          return LHS;
-    }
-
-    // In C++, we can have a throw-expression, which has 'void' type.
-    if (C->getRHS()->getType()->isVoidType())
-      return nullptr;
-
-    return EvalAddr(C->getRHS(), refVars, ParentDecl);
-  }
-
-  case Stmt::BlockExprClass:
-    if (cast<BlockExpr>(E)->getBlockDecl()->hasCaptures())
-      return E; // local block.
-    return nullptr;
-
-  case Stmt::AddrLabelExprClass:
-    return E; // address of label.
-
-  case Stmt::ExprWithCleanupsClass:
-    return EvalAddr(cast<ExprWithCleanups>(E)->getSubExpr(), refVars,
-                    ParentDecl);
-
-  // For casts, we need to handle conversions from arrays to
-  // pointer values, and pointer-to-pointer conversions.
-  case Stmt::ImplicitCastExprClass:
-  case Stmt::CStyleCastExprClass:
-  case Stmt::CXXFunctionalCastExprClass:
-  case Stmt::ObjCBridgedCastExprClass:
-  case Stmt::CXXStaticCastExprClass:
-  case Stmt::CXXDynamicCastExprClass:
-  case Stmt::CXXConstCastExprClass:
-  case Stmt::CXXReinterpretCastExprClass: {
-    const Expr* SubExpr = cast<CastExpr>(E)->getSubExpr();
-    switch (cast<CastExpr>(E)->getCastKind()) {
-    case CK_LValueToRValue:
-    case CK_NoOp:
-    case CK_BaseToDerived:
-    case CK_DerivedToBase:
-    case CK_UncheckedDerivedToBase:
-    case CK_Dynamic:
-    case CK_CPointerToObjCPointerCast:
-    case CK_BlockPointerToObjCPointerCast:
-    case CK_AnyPointerToBlockPointerCast:
-      return EvalAddr(SubExpr, refVars, ParentDecl);
-
-    case CK_ArrayToPointerDecay:
-      return EvalVal(SubExpr, refVars, ParentDecl);
-
-    case CK_BitCast:
-      if (SubExpr->getType()->isAnyPointerType() ||
-          SubExpr->getType()->isBlockPointerType() ||
-          SubExpr->getType()->isObjCQualifiedIdType())
-        return EvalAddr(SubExpr, refVars, ParentDecl);
-      else
-        return nullptr;
-
-    default:
-      return nullptr;
-    }
-  }
-
-  case Stmt::MaterializeTemporaryExprClass:
-    if (const Expr *Result =
-            EvalAddr(cast<MaterializeTemporaryExpr>(E)->GetTemporaryExpr(),
-                     refVars, ParentDecl))
-      return Result;
-    return E;
-
-  // Everything else: we simply don't reason about them.
-  default:
-    return nullptr;
-  }
-}
-
-///  EvalVal - This function is complements EvalAddr in the mutual recursion.
-///   See the comments for EvalAddr for more details.
-static const Expr *EvalVal(const Expr *E,
-                           SmallVectorImpl<const DeclRefExpr *> &refVars,
-                           const Decl *ParentDecl) {
-  do {
-    // We should only be called for evaluating non-pointer expressions, or
-    // expressions with a pointer type that are not used as references but
-    // instead
-    // are l-values (e.g., DeclRefExpr with a pointer type).
-
-    // Our "symbolic interpreter" is just a dispatch off the currently
-    // viewed AST node.  We then recursively traverse the AST by calling
-    // EvalAddr and EvalVal appropriately.
-
-    E = E->IgnoreParens();
-    switch (E->getStmtClass()) {
-    case Stmt::ImplicitCastExprClass: {
-      const ImplicitCastExpr *IE = cast<ImplicitCastExpr>(E);
-      if (IE->getValueKind() == VK_LValue) {
-        E = IE->getSubExpr();
-        continue;
-      }
-      return nullptr;
-    }
-
-    case Stmt::ExprWithCleanupsClass:
-      return EvalVal(cast<ExprWithCleanups>(E)->getSubExpr(), refVars,
-                     ParentDecl);
-
-    case Stmt::DeclRefExprClass: {
-      // When we hit a DeclRefExpr we are looking at code that refers to a
-      // variable's name. If it's not a reference variable we check if it has
-      // local storage within the function, and if so, return the expression.
-      const DeclRefExpr *DR = cast<DeclRefExpr>(E);
-
-      // If we leave the immediate function, the lifetime isn't about to end.
-      if (DR->refersToEnclosingVariableOrCapture())
-        return nullptr;
-
-      if (const VarDecl *V = dyn_cast<VarDecl>(DR->getDecl())) {
-        // Check if it refers to itself, e.g. "int& i = i;".
-        if (V == ParentDecl)
-          return DR;
-
-        if (V->hasLocalStorage()) {
-          if (!V->getType()->isReferenceType())
-            return DR;
-
-          // Reference variable, follow through to the expression that
-          // it points to.
-          if (V->hasInit()) {
-            // Add the reference variable to the "trail".
-            refVars.push_back(DR);
-            return EvalVal(V->getInit(), refVars, V);
-          }
-        }
-      }
-
-      return nullptr;
-    }
-
-    case Stmt::UnaryOperatorClass: {
-      // The only unary operator that make sense to handle here
-      // is Deref.  All others don't resolve to a "name."  This includes
-      // handling all sorts of rvalues passed to a unary operator.
-      const UnaryOperator *U = cast<UnaryOperator>(E);
-
-      if (U->getOpcode() == UO_Deref)
-        return EvalAddr(U->getSubExpr(), refVars, ParentDecl);
-
-      return nullptr;
-    }
-
-    case Stmt::ArraySubscriptExprClass: {
-      // Array subscripts are potential references to data on the stack.  We
-      // retrieve the DeclRefExpr* for the array variable if it indeed
-      // has local storage.
-      const auto *ASE = cast<ArraySubscriptExpr>(E);
-      if (ASE->isTypeDependent())
-        return nullptr;
-      return EvalAddr(ASE->getBase(), refVars, ParentDecl);
-    }
-
-    case Stmt::OMPArraySectionExprClass: {
-      return EvalAddr(cast<OMPArraySectionExpr>(E)->getBase(), refVars,
-                      ParentDecl);
-    }
-
-    case Stmt::ConditionalOperatorClass: {
-      // For conditional operators we need to see if either the LHS or RHS are
-      // non-NULL Expr's.  If one is non-NULL, we return it.
-      const ConditionalOperator *C = cast<ConditionalOperator>(E);
-
-      // Handle the GNU extension for missing LHS.
-      if (const Expr *LHSExpr = C->getLHS()) {
-        // In C++, we can have a throw-expression, which has 'void' type.
-        if (!LHSExpr->getType()->isVoidType())
-          if (const Expr *LHS = EvalVal(LHSExpr, refVars, ParentDecl))
-            return LHS;
-      }
-
-      // In C++, we can have a throw-expression, which has 'void' type.
-      if (C->getRHS()->getType()->isVoidType())
-        return nullptr;
-
-      return EvalVal(C->getRHS(), refVars, ParentDecl);
-    }
-
-    // Accesses to members are potential references to data on the stack.
-    case Stmt::MemberExprClass: {
-      const MemberExpr *M = cast<MemberExpr>(E);
-
-      // Check for indirect access.  We only want direct field accesses.
-      if (M->isArrow())
-        return nullptr;
-
-      // Check whether the member type is itself a reference, in which case
-      // we're not going to refer to the member, but to what the member refers
-      // to.
-      if (M->getMemberDecl()->getType()->isReferenceType())
-        return nullptr;
-
-      return EvalVal(M->getBase(), refVars, ParentDecl);
-    }
-
-    case Stmt::MaterializeTemporaryExprClass:
-      if (const Expr *Result =
-              EvalVal(cast<MaterializeTemporaryExpr>(E)->GetTemporaryExpr(),
-                      refVars, ParentDecl))
-        return Result;
-      return E;
-
-    default:
-      // Check that we don't return or take the address of a reference to a
-      // temporary. This is only useful in C++.
-      if (!E->isTypeDependent() && E->isRValue())
-        return E;
-
-      // Everything else: we simply don't reason about them.
-      return nullptr;
-    }
-  } while (true);
-}
-
 void
 Sema::CheckReturnValExpr(Expr *RetValExp, QualType lhsType,
                          SourceLocation ReturnLoc,
                          bool isObjCMethod,
                          const AttrVec *Attrs,
                          const FunctionDecl *FD) {
-  CheckReturnStackAddr(*this, RetValExp, lhsType, ReturnLoc);
-
   // Check if the return value is null but should not be.
   if (((Attrs && hasSpecificAttr<ReturnsNonNullAttr>(*Attrs)) ||
        (!isObjCMethod && isNonNullType(Context, lhsType))) &&
@@ -9792,7 +10271,7 @@ static void AnalyzeAssignment(Sema &S, BinaryOperator *E) {
 }
 
 /// Diagnose an implicit cast;  purely a helper for CheckImplicitConversion.
-static void DiagnoseImpCast(Sema &S, Expr *E, QualType SourceType, QualType T, 
+static void DiagnoseImpCast(Sema &S, Expr *E, QualType SourceType, QualType T,
                             SourceLocation CContext, unsigned diag,
                             bool pruneControlFlow = false) {
   if (pruneControlFlow) {
@@ -10397,7 +10876,7 @@ CheckImplicitConversion(Sema &S, Expr *E, QualType T, SourceLocation CC,
     // We also want to warn about it in -Wconversion.
     // So if -Wconversion is off, use a completely identical diagnostic
     // in the sign-compare group.
-    // The conditional-checking code will 
+    // The conditional-checking code will
     if (ICContext) {
       DiagID = diag::warn_impcast_integer_sign_conditional;
       *ICContext = true;
@@ -10418,7 +10897,7 @@ CheckImplicitConversion(Sema &S, Expr *E, QualType T, SourceLocation CC,
         Source = S.Context.getCanonicalType(SourceType).getTypePtr();
       }
   }
-  
+
   if (const EnumType *SourceEnum = Source->getAs<EnumType>())
     if (const EnumType *TargetEnum = Target->getAs<EnumType>())
       if (SourceEnum->getDecl()->hasNameForLinkage() &&
@@ -10427,7 +10906,7 @@ CheckImplicitConversion(Sema &S, Expr *E, QualType T, SourceLocation CC,
         if (S.SourceMgr.isInSystemMacro(CC))
           return;
 
-        return DiagnoseImpCast(S, E, SourceType, T, CC, 
+        return DiagnoseImpCast(S, E, SourceType, T, CC,
                                diag::warn_impcast_different_enum_types);
       }
 }
@@ -10466,7 +10945,7 @@ static void CheckConditionalOperator(Sema &S, ConditionalOperator *E,
   // ...then check whether it would have warned about either of the
   // candidates for a signedness conversion to the condition type.
   if (E->getType() == T) return;
- 
+
   Suspicious = false;
   CheckImplicitConversion(S, E->getTrueExpr()->IgnoreParenImpCasts(),
                           E->getType(), CC, &Suspicious);
@@ -11947,11 +12426,11 @@ namespace {
     }
 
     void VisitBlockExpr(BlockExpr *block) {
-      // Look inside nested blocks 
+      // Look inside nested blocks
       if (block->getBlockDecl()->capturesVariable(Variable))
         Visit(block->getBlockDecl()->getBody());
     }
-    
+
     void VisitOpaqueValueExpr(OpaqueValueExpr *OVE) {
       if (Capturer) return;
       if (OVE->getSourceExpr())
@@ -12004,7 +12483,7 @@ static Expr *findCapturingExpr(Sema &S, Expr *e, RetainCycleOwner &owner) {
       }
     }
   }
-  
+
   BlockExpr *block = dyn_cast<BlockExpr>(e);
   if (!block || !block->getBlockDecl()->capturesVariable(owner.Variable))
     return nullptr;
@@ -12257,12 +12736,12 @@ void Sema::checkRetainCycles(VarDecl *Var, Expr *Init) {
   RetainCycleOwner Owner;
   if (!considerVariable(Var, /*DeclRefExpr=*/nullptr, Owner))
     return;
-  
+
   // Because we don't have an expression for the variable, we have to set the
   // location explicitly here.
   Owner.Loc = Var->getLocation();
   Owner.Range = Var->getSourceRange();
-  
+
   if (Expr *Capturer = findCapturingExpr(*this, Init, Owner))
     diagnoseRetainCycle(*this, Capturer, Owner);
 }
@@ -12335,7 +12814,7 @@ void Sema::checkUnsafeExprAssigns(SourceLocation Loc,
     if (PD)
       LHSType = PD->getType();
   }
-  
+
   if (LHSType.isNull())
     LHSType = LHS->getType();
 
@@ -12352,14 +12831,14 @@ void Sema::checkUnsafeExprAssigns(SourceLocation Loc,
   // FIXME. Check for other life times.
   if (LT != Qualifiers::OCL_None)
     return;
-  
+
   if (PRE) {
     if (PRE->isImplicitProperty())
       return;
     const ObjCPropertyDecl *PD = PRE->getExplicitProperty();
     if (!PD)
       return;
-    
+
     unsigned Attributes = PD->getPropertyAttributes();
     if (Attributes & ObjCPropertyDecl::OBJC_PR_assign) {
       // when 'assign' attribute was not explicitly specified
@@ -12369,7 +12848,7 @@ void Sema::checkUnsafeExprAssigns(SourceLocation Loc,
       if (!(AsWrittenAttr & ObjCPropertyDecl::OBJC_PR_assign) &&
           LHSType->isObjCRetainableType())
         return;
-        
+
       while (ImplicitCastExpr *cast = dyn_cast<ImplicitCastExpr>(RHS)) {
         if (cast->getCastKind() == CK_ARCConsumeObject) {
           Diag(Loc, diag::warn_arc_retained_property_assign)

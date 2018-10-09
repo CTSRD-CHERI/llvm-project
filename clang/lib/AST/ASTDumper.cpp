@@ -521,6 +521,7 @@ namespace  {
     // Exprs
     void VisitExpr(const Expr *Node);
     void VisitCastExpr(const CastExpr *Node);
+    void VisitImplicitCastExpr(const ImplicitCastExpr *Node);
     void VisitDeclRefExpr(const DeclRefExpr *Node);
     void VisitPredefinedExpr(const PredefinedExpr *Node);
     void VisitCharacterLiteral(const CharacterLiteral *Node);
@@ -1965,7 +1966,7 @@ void ASTDumper::dumpStmt(const Stmt *S) {
 }
 
 void ASTDumper::VisitStmt(const Stmt *Node) {
-  {   
+  {
     ColorScope Color(*this, StmtColor);
     OS << Node->getStmtClassName();
   }
@@ -2117,6 +2118,12 @@ void ASTDumper::VisitCastExpr(const CastExpr *Node) {
   }
   dumpBasePath(OS, Node);
   OS << ">";
+}
+
+void ASTDumper::VisitImplicitCastExpr(const ImplicitCastExpr *Node) {
+  VisitCastExpr(Node);
+  if (Node->isPartOfExplicitCast())
+    OS << " part_of_explicit_cast";
 }
 
 void ASTDumper::VisitDeclRefExpr(const DeclRefExpr *Node) {

@@ -67,9 +67,10 @@ static std::string getThinLTOOutputFile(StringRef ModulePath) {
 static lto::Config createConfig() {
   lto::Config C;
 
-  // LLD supports the new relocations.
+  // LLD supports the new relocations and address-significance tables.
   C.Options = InitTargetOptionsFromCodeGenFlags();
   C.Options.RelaxELFRelocations = true;
+  C.Options.EmitAddrsig = true;
 
   // Always emit a section per function/datum with LTO.
   C.Options.FunctionSections = true;
@@ -99,6 +100,7 @@ static lto::Config createConfig() {
   C.SampleProfile = Config->LTOSampleProfile;
   C.UseNewPM = Config->LTONewPassManager;
   C.DebugPassManager = Config->LTODebugPassManager;
+  C.DwoDir = Config->DwoDir;
 
   if (Config->SaveTemps)
     checkError(C.addSaveTemps(Config->OutputFile.str() + ".",
@@ -201,9 +203,6 @@ void BitcodeCompiler::add(BitcodeFile &F) {
 
 static void createEmptyIndex(StringRef ModulePath) {
   std::string Path = replaceThinLTOSuffix(getThinLTOOutputFile(ModulePath));
-  if (Path.empty())
-    return;
-
   std::unique_ptr<raw_fd_ostream> OS = openFile(Path + ".thinlto.bc");
   if (!OS)
     return;

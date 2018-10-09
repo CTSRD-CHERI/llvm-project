@@ -133,32 +133,27 @@ insert-before or insert-after.");
     bool m_global;
   };
 
-  int HandleArgumentCompletion(Args &input, int &cursor_index,
-                               int &cursor_char_position,
-                               OptionElementVector &opt_element_vector,
-                               int match_start_point, int max_return_elements,
-                               bool &word_complete,
-                               StringList &matches) override {
-    std::string completion_str(input.GetArgumentAtIndex(cursor_index),
-                               cursor_char_position);
+  int HandleArgumentCompletion(
+      CompletionRequest &request,
+      OptionElementVector &opt_element_vector) override {
 
-    const size_t argc = input.GetArgumentCount();
+    const size_t argc = request.GetParsedLine().GetArgumentCount();
     const char *arg = nullptr;
     int setting_var_idx;
     for (setting_var_idx = 0; setting_var_idx < static_cast<int>(argc);
          ++setting_var_idx) {
-      arg = input.GetArgumentAtIndex(setting_var_idx);
+      arg = request.GetParsedLine().GetArgumentAtIndex(setting_var_idx);
       if (arg && arg[0] != '-')
         break; // We found our setting variable name index
     }
-    if (cursor_index == setting_var_idx) {
+    if (request.GetCursorIndex() == setting_var_idx) {
       // Attempting to complete setting variable name
       CommandCompletions::InvokeCommonCompletionCallbacks(
           GetCommandInterpreter(), CommandCompletions::eSettingsNameCompletion,
-          completion_str.c_str(), match_start_point, max_return_elements,
-          nullptr, word_complete, matches);
+          request, nullptr);
     } else {
-      arg = input.GetArgumentAtIndex(cursor_index);
+      arg =
+          request.GetParsedLine().GetArgumentAtIndex(request.GetCursorIndex());
 
       if (arg) {
         if (arg[0] == '-') {
@@ -166,24 +161,23 @@ insert-before or insert-after.");
         } else {
           // Complete setting value
           const char *setting_var_name =
-              input.GetArgumentAtIndex(setting_var_idx);
+              request.GetParsedLine().GetArgumentAtIndex(setting_var_idx);
           Status error;
           lldb::OptionValueSP value_sp(
               m_interpreter.GetDebugger().GetPropertyValue(
                   &m_exe_ctx, setting_var_name, false, error));
           if (value_sp) {
-            value_sp->AutoComplete(m_interpreter, completion_str.c_str(),
-                                   match_start_point, max_return_elements,
-                                   word_complete, matches);
+            value_sp->AutoComplete(m_interpreter, request);
           }
         }
       }
     }
-    return matches.GetSize();
+    return request.GetNumberOfMatches();
   }
 
 protected:
-  bool DoExecute(const char *command, CommandReturnObject &result) override {
+  bool DoExecute(llvm::StringRef command,
+                 CommandReturnObject &result) override {
     Args cmd_args(command);
 
     // Process possible options.
@@ -272,20 +266,13 @@ public:
 
   ~CommandObjectSettingsShow() override = default;
 
-  int HandleArgumentCompletion(Args &input, int &cursor_index,
-                               int &cursor_char_position,
-                               OptionElementVector &opt_element_vector,
-                               int match_start_point, int max_return_elements,
-                               bool &word_complete,
-                               StringList &matches) override {
-    std::string completion_str(input.GetArgumentAtIndex(cursor_index),
-                               cursor_char_position);
-
+  int HandleArgumentCompletion(
+      CompletionRequest &request,
+      OptionElementVector &opt_element_vector) override {
     CommandCompletions::InvokeCommonCompletionCallbacks(
         GetCommandInterpreter(), CommandCompletions::eSettingsNameCompletion,
-        completion_str.c_str(), match_start_point, max_return_elements, nullptr,
-        word_complete, matches);
-    return matches.GetSize();
+        request, nullptr);
+    return request.GetNumberOfMatches();
   }
 
 protected:
@@ -345,20 +332,13 @@ public:
 
   ~CommandObjectSettingsList() override = default;
 
-  int HandleArgumentCompletion(Args &input, int &cursor_index,
-                               int &cursor_char_position,
-                               OptionElementVector &opt_element_vector,
-                               int match_start_point, int max_return_elements,
-                               bool &word_complete,
-                               StringList &matches) override {
-    std::string completion_str(input.GetArgumentAtIndex(cursor_index),
-                               cursor_char_position);
-
+  int HandleArgumentCompletion(
+      CompletionRequest &request,
+      OptionElementVector &opt_element_vector) override {
     CommandCompletions::InvokeCommonCompletionCallbacks(
         GetCommandInterpreter(), CommandCompletions::eSettingsNameCompletion,
-        completion_str.c_str(), match_start_point, max_return_elements, nullptr,
-        word_complete, matches);
-    return matches.GetSize();
+        request, nullptr);
+    return request.GetNumberOfMatches();
   }
 
 protected:
@@ -440,26 +420,19 @@ public:
 
   ~CommandObjectSettingsRemove() override = default;
 
-  int HandleArgumentCompletion(Args &input, int &cursor_index,
-                               int &cursor_char_position,
-                               OptionElementVector &opt_element_vector,
-                               int match_start_point, int max_return_elements,
-                               bool &word_complete,
-                               StringList &matches) override {
-    std::string completion_str(input.GetArgumentAtIndex(cursor_index),
-                               cursor_char_position);
-
-    // Attempting to complete variable name
-    if (cursor_index < 2)
+  int HandleArgumentCompletion(
+      CompletionRequest &request,
+      OptionElementVector &opt_element_vector) override {
+    if (request.GetCursorIndex() < 2)
       CommandCompletions::InvokeCommonCompletionCallbacks(
           GetCommandInterpreter(), CommandCompletions::eSettingsNameCompletion,
-          completion_str.c_str(), match_start_point, max_return_elements,
-          nullptr, word_complete, matches);
-    return matches.GetSize();
+          request, nullptr);
+    return request.GetNumberOfMatches();
   }
 
 protected:
-  bool DoExecute(const char *command, CommandReturnObject &result) override {
+  bool DoExecute(llvm::StringRef command,
+                 CommandReturnObject &result) override {
     result.SetStatus(eReturnStatusSuccessFinishNoResult);
 
     Args cmd_args(command);
@@ -562,27 +535,21 @@ public:
   // !WantsRawCommandString.
   bool WantsCompletion() override { return true; }
 
-  int HandleArgumentCompletion(Args &input, int &cursor_index,
-                               int &cursor_char_position,
-                               OptionElementVector &opt_element_vector,
-                               int match_start_point, int max_return_elements,
-                               bool &word_complete,
-                               StringList &matches) override {
-    std::string completion_str(input.GetArgumentAtIndex(cursor_index),
-                               cursor_char_position);
-
+  int HandleArgumentCompletion(
+      CompletionRequest &request,
+      OptionElementVector &opt_element_vector) override {
     // Attempting to complete variable name
-    if (cursor_index < 2)
+    if (request.GetCursorIndex() < 2)
       CommandCompletions::InvokeCommonCompletionCallbacks(
           GetCommandInterpreter(), CommandCompletions::eSettingsNameCompletion,
-          completion_str.c_str(), match_start_point, max_return_elements,
-          nullptr, word_complete, matches);
+          request, nullptr);
 
-    return matches.GetSize();
+    return request.GetNumberOfMatches();
   }
 
 protected:
-  bool DoExecute(const char *command, CommandReturnObject &result) override {
+  bool DoExecute(llvm::StringRef command,
+                 CommandReturnObject &result) override {
     result.SetStatus(eReturnStatusSuccessFinishNoResult);
 
     Args cmd_args(command);
@@ -668,27 +635,21 @@ public:
   // !WantsRawCommandString.
   bool WantsCompletion() override { return true; }
 
-  int HandleArgumentCompletion(Args &input, int &cursor_index,
-                               int &cursor_char_position,
-                               OptionElementVector &opt_element_vector,
-                               int match_start_point, int max_return_elements,
-                               bool &word_complete,
-                               StringList &matches) override {
-    std::string completion_str(input.GetArgumentAtIndex(cursor_index),
-                               cursor_char_position);
-
+  int HandleArgumentCompletion(
+      CompletionRequest &request,
+      OptionElementVector &opt_element_vector) override {
     // Attempting to complete variable name
-    if (cursor_index < 2)
+    if (request.GetCursorIndex() < 2)
       CommandCompletions::InvokeCommonCompletionCallbacks(
           GetCommandInterpreter(), CommandCompletions::eSettingsNameCompletion,
-          completion_str.c_str(), match_start_point, max_return_elements,
-          nullptr, word_complete, matches);
+          request, nullptr);
 
-    return matches.GetSize();
+    return request.GetNumberOfMatches();
   }
 
 protected:
-  bool DoExecute(const char *command, CommandReturnObject &result) override {
+  bool DoExecute(llvm::StringRef command,
+                 CommandReturnObject &result) override {
     result.SetStatus(eReturnStatusSuccessFinishNoResult);
 
     Args cmd_args(command);
@@ -779,27 +740,21 @@ public:
   // !WantsRawCommandString.
   bool WantsCompletion() override { return true; }
 
-  int HandleArgumentCompletion(Args &input, int &cursor_index,
-                               int &cursor_char_position,
-                               OptionElementVector &opt_element_vector,
-                               int match_start_point, int max_return_elements,
-                               bool &word_complete,
-                               StringList &matches) override {
-    std::string completion_str(input.GetArgumentAtIndex(cursor_index),
-                               cursor_char_position);
-
+  int HandleArgumentCompletion(
+      CompletionRequest &request,
+      OptionElementVector &opt_element_vector) override {
     // Attempting to complete variable name
-    if (cursor_index < 2)
+    if (request.GetCursorIndex() < 2)
       CommandCompletions::InvokeCommonCompletionCallbacks(
           GetCommandInterpreter(), CommandCompletions::eSettingsNameCompletion,
-          completion_str.c_str(), match_start_point, max_return_elements,
-          nullptr, word_complete, matches);
+          request, nullptr);
 
-    return matches.GetSize();
+    return request.GetNumberOfMatches();
   }
 
 protected:
-  bool DoExecute(const char *command, CommandReturnObject &result) override {
+  bool DoExecute(llvm::StringRef command,
+                 CommandReturnObject &result) override {
     result.SetStatus(eReturnStatusSuccessFinishNoResult);
 
     Args cmd_args(command);
@@ -879,27 +834,21 @@ public:
   // !WantsRawCommandString.
   bool WantsCompletion() override { return true; }
 
-  int HandleArgumentCompletion(Args &input, int &cursor_index,
-                               int &cursor_char_position,
-                               OptionElementVector &opt_element_vector,
-                               int match_start_point, int max_return_elements,
-                               bool &word_complete,
-                               StringList &matches) override {
-    std::string completion_str(input.GetArgumentAtIndex(cursor_index),
-                               cursor_char_position);
-
+  int HandleArgumentCompletion(
+      CompletionRequest &request,
+      OptionElementVector &opt_element_vector) override {
     // Attempting to complete variable name
-    if (cursor_index < 2)
+    if (request.GetCursorIndex() < 2)
       CommandCompletions::InvokeCommonCompletionCallbacks(
           GetCommandInterpreter(), CommandCompletions::eSettingsNameCompletion,
-          completion_str.c_str(), match_start_point, max_return_elements,
-          nullptr, word_complete, matches);
+          request, nullptr);
 
-    return matches.GetSize();
+    return request.GetNumberOfMatches();
   }
 
 protected:
-  bool DoExecute(const char *command, CommandReturnObject &result) override {
+  bool DoExecute(llvm::StringRef command,
+                 CommandReturnObject &result) override {
     result.SetStatus(eReturnStatusSuccessFinishNoResult);
     Args cmd_args(command);
     const size_t argc = cmd_args.GetArgumentCount();
@@ -966,23 +915,16 @@ public:
 
   ~CommandObjectSettingsClear() override = default;
 
-  int HandleArgumentCompletion(Args &input, int &cursor_index,
-                               int &cursor_char_position,
-                               OptionElementVector &opt_element_vector,
-                               int match_start_point, int max_return_elements,
-                               bool &word_complete,
-                               StringList &matches) override {
-    std::string completion_str(input.GetArgumentAtIndex(cursor_index),
-                               cursor_char_position);
-
+  int HandleArgumentCompletion(
+      CompletionRequest &request,
+      OptionElementVector &opt_element_vector) override {
     // Attempting to complete variable name
-    if (cursor_index < 2)
+    if (request.GetCursorIndex() < 2)
       CommandCompletions::InvokeCommonCompletionCallbacks(
           GetCommandInterpreter(), CommandCompletions::eSettingsNameCompletion,
-          completion_str.c_str(), match_start_point, max_return_elements,
-          nullptr, word_complete, matches);
+          request, nullptr);
 
-    return matches.GetSize();
+    return request.GetNumberOfMatches();
   }
 
 protected:

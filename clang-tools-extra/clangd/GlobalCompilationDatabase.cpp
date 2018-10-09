@@ -47,7 +47,7 @@ DirectoryBasedGlobalCompilationDatabase::getCompileCommand(PathRef File) const {
       return std::move(Candidates.front());
     }
   } else {
-    log("Failed to find compilation database for " + Twine(File));
+    log("Failed to find compilation database for {0}", File);
   }
   return llvm::None;
 }
@@ -150,6 +150,30 @@ void CachingCompilationDb::invalidate(PathRef File) {
 void CachingCompilationDb::clear() {
   std::unique_lock<std::mutex> Lock(Mut);
   Cached.clear();
+}
+
+llvm::Optional<tooling::CompileCommand>
+InMemoryCompilationDb::getCompileCommand(PathRef File) const {
+  std::lock_guard<std::mutex> Lock(Mutex);
+  auto It = Commands.find(File);
+  if (It == Commands.end())
+    return None;
+  return It->second;
+}
+
+bool InMemoryCompilationDb::setCompilationCommandForFile(
+    PathRef File, tooling::CompileCommand CompilationCommand) {
+  std::unique_lock<std::mutex> Lock(Mutex);
+  auto ItInserted = Commands.insert(std::make_pair(File, CompilationCommand));
+  if (ItInserted.second)
+    return true;
+  ItInserted.first->setValue(std::move(CompilationCommand));
+  return false;
+}
+
+void InMemoryCompilationDb::invalidate(PathRef File) {
+  std::unique_lock<std::mutex> Lock(Mutex);
+  Commands.erase(File);
 }
 
 } // namespace clangd

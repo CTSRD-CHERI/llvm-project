@@ -527,10 +527,6 @@ SystemZTargetLowering::SystemZTargetLowering(const TargetMachine &TM,
   setTargetDAGCombine(ISD::EXTRACT_VECTOR_ELT);
   setTargetDAGCombine(ISD::FP_ROUND);
   setTargetDAGCombine(ISD::BSWAP);
-  setTargetDAGCombine(ISD::SHL);
-  setTargetDAGCombine(ISD::SRA);
-  setTargetDAGCombine(ISD::SRL);
-  setTargetDAGCombine(ISD::ROTL);
 
   // Handle intrinsics.
   setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::Other, Custom);
@@ -609,7 +605,7 @@ struct AddressingMode {
 
   // True if use of index register is supported.
   bool IndexReg;
-  
+
   AddressingMode(bool LongDispl, bool IdxReg) :
     LongDisplacement(LongDispl), IndexReg(IdxReg) {}
 };
@@ -3893,20 +3889,34 @@ static const Permute *matchDoublePermute(const SmallVectorImpl<int> &Bytes,
   return nullptr;
 }
 
-// Convert the mask of the given VECTOR_SHUFFLE into a byte-level mask,
+// Convert the mask of the given shuffle op into a byte-level mask,
 // as if it had type vNi8.
-static void getVPermMask(ShuffleVectorSDNode *VSN,
+static bool getVPermMask(SDValue ShuffleOp,
                          SmallVectorImpl<int> &Bytes) {
-  EVT VT = VSN->getValueType(0);
+  EVT VT = ShuffleOp.getValueType();
   unsigned NumElements = VT.getVectorNumElements();
   unsigned BytesPerElement = VT.getVectorElementType().getStoreSize();
-  Bytes.resize(NumElements * BytesPerElement, -1);
-  for (unsigned I = 0; I < NumElements; ++I) {
-    int Index = VSN->getMaskElt(I);
-    if (Index >= 0)
+
+  if (auto *VSN = dyn_cast<ShuffleVectorSDNode>(ShuffleOp)) {
+    Bytes.resize(NumElements * BytesPerElement, -1);
+    for (unsigned I = 0; I < NumElements; ++I) {
+      int Index = VSN->getMaskElt(I);
+      if (Index >= 0)
+        for (unsigned J = 0; J < BytesPerElement; ++J)
+          Bytes[I * BytesPerElement + J] = Index * BytesPerElement + J;
+    }
+    return true;
+  }
+  if (SystemZISD::SPLAT == ShuffleOp.getOpcode() &&
+      isa<ConstantSDNode>(ShuffleOp.getOperand(1))) {
+    unsigned Index = ShuffleOp.getConstantOperandVal(1);
+    Bytes.resize(NumElements * BytesPerElement, -1);
+    for (unsigned I = 0; I < NumElements; ++I)
       for (unsigned J = 0; J < BytesPerElement; ++J)
         Bytes[I * BytesPerElement + J] = Index * BytesPerElement + J;
+    return true;
   }
+  return false;
 }
 
 // Bytes is a VPERM-like permute vector, except that -1 is used for
@@ -4075,7 +4085,8 @@ bool GeneralShuffle::add(SDValue Op, unsigned Elem) {
       // See whether the bytes we need come from a contiguous part of one
       // operand.
       SmallVector<int, SystemZ::VectorBytes> OpBytes;
-      getVPermMask(cast<ShuffleVectorSDNode>(Op), OpBytes);
+      if (!getVPermMask(Op, OpBytes))
+        break;
       int NewByte;
       if (!getShuffleInput(OpBytes, Byte, BytesPerElement, NewByte))
         break;
@@ -5109,13 +5120,14 @@ SDValue SystemZTargetLowering::combineExtract(const SDLoc &DL, EVT ResVT,
     if (Opcode == ISD::BITCAST)
       // Look through bitcasts.
       Op = Op.getOperand(0);
-    else if (Opcode == ISD::VECTOR_SHUFFLE &&
+    else if ((Opcode == ISD::VECTOR_SHUFFLE || Opcode == SystemZISD::SPLAT) &&
              canTreatAsByteVector(Op.getValueType())) {
       // Get a VPERM-like permute mask and see whether the bytes covered
       // by the extracted element are a contiguous sequence from one
       // source operand.
       SmallVector<int, SystemZ::VectorBytes> Bytes;
-      getVPermMask(cast<ShuffleVectorSDNode>(Op), Bytes);
+      if (!getVPermMask(Op, Bytes))
+        break;
       int First;
       if (!getShuffleInput(Bytes, Index * BytesPerElement,
                            BytesPerElement, First))
@@ -5508,76 +5520,6 @@ SDValue SystemZTargetLowering::combineBSWAP(
   return SDValue();
 }
 
-SDValue SystemZTargetLowering::combineSHIFTROT(
-    SDNode *N, DAGCombinerInfo &DCI) const {
-
-  SelectionDAG &DAG = DCI.DAG;
-
-  // Shift/rotate instructions only use the last 6 bits of the second operand
-  // register. If the second operand is the result of an AND with an immediate
-  // value that has its last 6 bits set, we can safely remove the AND operation.
-  //
-  // If the AND operation doesn't have the last 6 bits set, we can't remove it
-  // entirely, but we can still truncate it to a 16-bit value. This prevents
-  // us from ending up with a NILL with a signed operand, which will cause the
-  // instruction printer to abort.
-  SDValue N1 = N->getOperand(1);
-  if (N1.getOpcode() == ISD::AND) {
-    SDValue AndMaskOp = N1->getOperand(1);
-    auto *AndMask = dyn_cast<ConstantSDNode>(AndMaskOp);
-
-    // The AND mask is constant
-    if (AndMask) {
-      auto AmtVal = AndMask->getZExtValue();
-      
-      // Bottom 6 bits are set
-      if ((AmtVal & 0x3f) == 0x3f) {
-        SDValue AndOp = N1->getOperand(0);
-
-        // This is the only use, so remove the node
-        if (N1.hasOneUse()) {
-          // Combine the AND away
-          DCI.CombineTo(N1.getNode(), AndOp);
-
-          // Return N so it isn't rechecked
-          return SDValue(N, 0);
-
-        // The node will be reused, so create a new node for this one use
-        } else {
-          SDValue Replace = DAG.getNode(N->getOpcode(), SDLoc(N),
-                                        N->getValueType(0), N->getOperand(0),
-                                        AndOp);
-          DCI.AddToWorklist(Replace.getNode());
-
-          return Replace;
-        }
-
-      // We can't remove the AND, but we can use NILL here (normally we would
-      // use NILF). Only keep the last 16 bits of the mask. The actual
-      // transformation will be handled by .td definitions.
-      } else if (AmtVal >> 16 != 0) {
-        SDValue AndOp = N1->getOperand(0);
-
-        auto NewMask = DAG.getConstant(AndMask->getZExtValue() & 0x0000ffff,
-                                       SDLoc(AndMaskOp),
-                                       AndMaskOp.getValueType());
-
-        auto NewAnd = DAG.getNode(N1.getOpcode(), SDLoc(N1), N1.getValueType(),
-                                  AndOp, NewMask);
-
-        SDValue Replace = DAG.getNode(N->getOpcode(), SDLoc(N),
-                                      N->getValueType(0), N->getOperand(0),
-                                      NewAnd);
-        DCI.AddToWorklist(Replace.getNode());
-
-        return Replace;
-      }
-    }
-  }
-
-  return SDValue();
-}
-
 static bool combineCCMask(SDValue &CCReg, int &CCValid, int &CCMask) {
   // We have a SELECT_CCMASK or BR_CCMASK comparing the condition code
   // set by the CCReg instruction using the CCValid / CCMask masks,
@@ -5736,10 +5678,6 @@ SDValue SystemZTargetLowering::PerformDAGCombine(SDNode *N,
   case SystemZISD::JOIN_DWORDS: return combineJOIN_DWORDS(N, DCI);
   case ISD::FP_ROUND:           return combineFP_ROUND(N, DCI);
   case ISD::BSWAP:              return combineBSWAP(N, DCI);
-  case ISD::SHL:
-  case ISD::SRA:
-  case ISD::SRL:
-  case ISD::ROTL:               return combineSHIFTROT(N, DCI);
   case SystemZISD::BR_CCMASK:   return combineBR_CCMASK(N, DCI);
   case SystemZISD::SELECT_CCMASK: return combineSELECT_CCMASK(N, DCI);
   case SystemZISD::GET_CCMASK:  return combineGET_CCMASK(N, DCI);

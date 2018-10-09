@@ -12,7 +12,6 @@
 #include "lldb/Utility/SafeMachO.h"
 
 #include "lldb/Breakpoint/Watchpoint.h"
-#include "lldb/Core/State.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/RegisterContext.h"
@@ -21,6 +20,7 @@
 #include "lldb/Target/Unwind.h"
 #include "lldb/Utility/ArchSpec.h"
 #include "lldb/Utility/DataExtractor.h"
+#include "lldb/Utility/State.h"
 #include "lldb/Utility/StreamString.h"
 
 #include "ProcessMachCore.h"
@@ -43,7 +43,7 @@ ThreadMachCore::~ThreadMachCore() { DestroyThread(); }
 
 const char *ThreadMachCore::GetName() {
   if (m_thread_name.empty())
-    return NULL;
+    return nullptr;
   return m_thread_name.c_str();
 }
 
@@ -63,8 +63,8 @@ void ThreadMachCore::RefreshStateAfterStop() {
 bool ThreadMachCore::ThreadIDIsValid(lldb::tid_t thread) { return thread != 0; }
 
 lldb::RegisterContextSP ThreadMachCore::GetRegisterContext() {
-  if (m_reg_context_sp.get() == NULL)
-    m_reg_context_sp = CreateRegisterContextForFrame(NULL);
+  if (!m_reg_context_sp)
+    m_reg_context_sp = CreateRegisterContextForFrame(nullptr);
   return m_reg_context_sp;
 }
 
@@ -89,7 +89,7 @@ ThreadMachCore::CreateRegisterContextForFrame(StackFrame *frame) {
     reg_ctx_sp = m_thread_reg_ctx_sp;
   } else {
     Unwind *unwinder = GetUnwinder();
-    if (unwinder)
+    if (unwinder != nullptr)
       reg_ctx_sp = unwinder->CreateRegisterContextForFrame(frame);
   }
   return reg_ctx_sp;

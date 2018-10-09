@@ -81,6 +81,8 @@ enum OpenMPRTLFunctionNVPTX {
   OMPRTL_NVPTX__kmpc_end_reduce_nowait,
   /// Call to void __kmpc_data_sharing_init_stack();
   OMPRTL_NVPTX__kmpc_data_sharing_init_stack,
+  /// Call to void __kmpc_data_sharing_init_stack_spmd();
+  OMPRTL_NVPTX__kmpc_data_sharing_init_stack_spmd,
   /// Call to void* __kmpc_data_sharing_push_stack(size_t size,
   /// int16_t UseSharedMemory);
   OMPRTL_NVPTX__kmpc_data_sharing_push_stack,
@@ -202,7 +204,7 @@ class CheckVarsEscapingDeclContext final
 
   void markAsEscaped(const ValueDecl *VD) {
     // Do not globalize declare target variables.
-    if (isDeclareTargetDeclaration(VD))
+    if (!isa<VarDecl>(VD) || isDeclareTargetDeclaration(VD))
       return;
     VD = cast<ValueDecl>(VD->getCanonicalDecl());
     // Variables captured by value must be globalized.
@@ -1025,6 +1027,12 @@ void CGOpenMPRuntimeNVPTX::emitSPMDEntryHeader(
                          /*RequiresDataSharing=*/Bld.getInt16(1)};
   CGF.EmitRuntimeCall(
       createNVPTXRuntimeFunction(OMPRTL_NVPTX__kmpc_spmd_kernel_init), Args);
+
+  // For data sharing, we need to initialize the stack.
+  CGF.EmitRuntimeCall(
+      createNVPTXRuntimeFunction(
+          OMPRTL_NVPTX__kmpc_data_sharing_init_stack_spmd));
+
   CGF.EmitBranch(ExecuteBB);
 
   CGF.EmitBlock(ExecuteBB);
@@ -1106,11 +1114,6 @@ void CGOpenMPRuntimeNVPTX::emitWorkerLoop(CodeGenFunction &CGF,
   CGF.EmitBlock(AwaitBB);
   // Wait for parallel work
   syncCTAThreads(CGF);
-
-  // For data sharing, we need to initialize the stack for workers.
-  CGF.EmitRuntimeCall(
-      createNVPTXRuntimeFunction(
-          OMPRTL_NVPTX__kmpc_data_sharing_init_stack));
 
   Address WorkFn =
       CGF.CreateDefaultAlignTempAlloca(CGF.Int8PtrTy, /*Name=*/"work_fn");
@@ -1417,6 +1420,13 @@ CGOpenMPRuntimeNVPTX::createNVPTXRuntimeFunction(unsigned Function) {
     RTLFn = CGM.CreateRuntimeFunction(FnTy, "__kmpc_data_sharing_init_stack");
     break;
   }
+  case OMPRTL_NVPTX__kmpc_data_sharing_init_stack_spmd: {
+    /// Build void __kmpc_data_sharing_init_stack_spmd();
+    auto *FnTy =
+        llvm::FunctionType::get(CGM.VoidTy, llvm::None, /*isVarArg*/ false);
+    RTLFn = CGM.CreateRuntimeFunction(FnTy, "__kmpc_data_sharing_init_stack_spmd");
+    break;
+  }
   case OMPRTL_NVPTX__kmpc_data_sharing_push_stack: {
     // Build void *__kmpc_data_sharing_push_stack(size_t size,
     // int16_t UseSharedMemory);
@@ -1554,29 +1564,22 @@ void CGOpenMPRuntimeNVPTX::emitNumTeamsClause(CodeGenFunction &CGF,
 llvm::Value *CGOpenMPRuntimeNVPTX::emitParallelOutlinedFunction(
     const OMPExecutableDirective &D, const VarDecl *ThreadIDVar,
     OpenMPDirectiveKind InnermostKind, const RegionCodeGenTy &CodeGen) {
-  SourceLocation Loc = D.getLocStart();
-
   // Emit target region as a standalone region.
   class NVPTXPrePostActionTy : public PrePostActionTy {
-    SourceLocation &Loc;
     bool &IsInParallelRegion;
     bool PrevIsInParallelRegion;
 
   public:
-    NVPTXPrePostActionTy(SourceLocation &Loc, bool &IsInParallelRegion)
-        : Loc(Loc), IsInParallelRegion(IsInParallelRegion) {}
+    NVPTXPrePostActionTy(bool &IsInParallelRegion)
+        : IsInParallelRegion(IsInParallelRegion) {}
     void Enter(CodeGenFunction &CGF) override {
-      static_cast<CGOpenMPRuntimeNVPTX &>(CGF.CGM.getOpenMPRuntime())
-          .emitGenericVarsProlog(CGF, Loc);
       PrevIsInParallelRegion = IsInParallelRegion;
       IsInParallelRegion = true;
     }
     void Exit(CodeGenFunction &CGF) override {
       IsInParallelRegion = PrevIsInParallelRegion;
-      static_cast<CGOpenMPRuntimeNVPTX &>(CGF.CGM.getOpenMPRuntime())
-          .emitGenericVarsEpilog(CGF);
     }
-  } Action(Loc, IsInParallelRegion);
+  } Action(IsInParallelRegion);
   CodeGen.setAction(Action);
   bool PrevIsInTargetMasterThreadRegion = IsInTargetMasterThreadRegion;
   IsInTargetMasterThreadRegion = false;
@@ -1781,8 +1784,9 @@ void CGOpenMPRuntimeNVPTX::emitNonSPMDParallelCall(
                                            /*DestWidth=*/32, /*Signed=*/1),
                                        ".zero.addr");
   CGF.InitTempAlloca(ZeroAddr, CGF.Builder.getInt32(/*C*/ 0));
-  Address ThreadIDAddr = emitThreadIDAddress(CGF, Loc);
-  auto &&CodeGen = [this, Fn, CapturedVars, Loc, ZeroAddr, ThreadIDAddr](
+  // ThreadId for serialized parallels is 0.
+  Address ThreadIDAddr = ZeroAddr;
+  auto &&CodeGen = [this, Fn, CapturedVars, Loc, ZeroAddr, &ThreadIDAddr](
                        CodeGenFunction &CGF, PrePostActionTy &Action) {
     Action.Enter(CGF);
 
@@ -1880,8 +1884,9 @@ void CGOpenMPRuntimeNVPTX::emitNonSPMDParallelCall(
     Work.emplace_back(WFn);
   };
 
-  auto &&LNParallelGen = [this, Loc, &SeqGen, &L0ParallelGen, &CodeGen](
-                             CodeGenFunction &CGF, PrePostActionTy &Action) {
+  auto &&LNParallelGen = [this, Loc, &SeqGen, &L0ParallelGen, &CodeGen,
+                          &ThreadIDAddr](CodeGenFunction &CGF,
+                                         PrePostActionTy &Action) {
     RegionCodeGenTy RCG(CodeGen);
     if (IsInParallelRegion) {
       SeqGen(CGF, Action);
@@ -1933,6 +1938,8 @@ void CGOpenMPRuntimeNVPTX::emitNonSPMDParallelCall(
       // There is no need to emit line number for unconditional branch.
       (void)ApplyDebugLocation::CreateEmpty(CGF);
       CGF.EmitBlock(ElseBlock);
+      // In the worker need to use the real thread id.
+      ThreadIDAddr = emitThreadIDAddress(CGF, Loc);
       RCG(CGF);
       // There is no need to emit line number for unconditional branch.
       (void)ApplyDebugLocation::CreateEmpty(CGF);
@@ -1962,10 +1969,11 @@ void CGOpenMPRuntimeNVPTX::emitSPMDParallelCall(
                                            /*DestWidth=*/32, /*Signed=*/1),
                                        ".zero.addr");
   CGF.InitTempAlloca(ZeroAddr, CGF.Builder.getInt32(/*C*/ 0));
-  Address ThreadIDAddr = emitThreadIDAddress(CGF, Loc);
+  // ThreadId for serialized parallels is 0.
+  Address ThreadIDAddr = ZeroAddr;
   auto &&CodeGen = [this, OutlinedFn, CapturedVars, Loc, ZeroAddr,
-                    ThreadIDAddr](CodeGenFunction &CGF,
-                                  PrePostActionTy &Action) {
+                    &ThreadIDAddr](CodeGenFunction &CGF,
+                                   PrePostActionTy &Action) {
     Action.Enter(CGF);
 
     llvm::SmallVector<llvm::Value *, 16> OutlinedFnArgs;
@@ -1992,6 +2000,8 @@ void CGOpenMPRuntimeNVPTX::emitSPMDParallelCall(
   };
 
   if (IsInTargetMasterThreadRegion) {
+    // In the worker need to use the real thread id.
+    ThreadIDAddr = emitThreadIDAddress(CGF, Loc);
     RegionCodeGenTy RCG(CodeGen);
     RCG(CGF);
   } else {

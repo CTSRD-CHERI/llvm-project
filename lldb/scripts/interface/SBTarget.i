@@ -373,6 +373,14 @@ public:
     lldb::SBFileSpec
     GetExecutable ();
 
+    %feature("docstring", "
+    /// Append the path mapping (from -> to) to the target's paths mapping list.
+    ") AppendImageSearchPath;
+    void
+    AppendImageSearchPath (const char *from,
+                           const char *to,
+                           SBError &error);
+
     bool
     AddModule (lldb::SBModule &module);
 
@@ -404,6 +412,23 @@ public:
 
     lldb::SBModule
     FindModule (const lldb::SBFileSpec &file_spec);
+
+    %feature("docstring", "
+    //------------------------------------------------------------------
+    /// Find compile units related to *this target and passed source
+    /// file.
+    ///
+    /// @param[in] sb_file_spec
+    ///     A lldb::SBFileSpec object that contains source file
+    ///     specification.
+    ///
+    /// @return
+    ///     A lldb::SBSymbolContextList that gets filled in with all of
+    ///     the symbol contexts for all the matches.
+    //------------------------------------------------------------------
+    ") FindCompileUnits;
+    lldb::SBSymbolContextList
+    FindCompileUnits (const lldb::SBFileSpec &sb_file_spec);
 
     lldb::ByteOrder
     GetByteOrder ();

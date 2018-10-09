@@ -9,6 +9,7 @@
 
 #include "FileIndex.h"
 #include "SymbolCollector.h"
+#include "../Logger.h"
 #include "clang/Index/IndexingAction.h"
 #include "clang/Lex/Preprocessor.h"
 
@@ -27,6 +28,7 @@ SymbolSlab indexAST(ASTContext &AST, std::shared_ptr<Preprocessor> PP,
   CollectorOpts.CountReferences = false;
   if (!URISchemes.empty())
     CollectorOpts.URISchemes = URISchemes;
+  CollectorOpts.Origin = SymbolOrigin::Dynamic;
 
   SymbolCollector Collector(std::move(CollectorOpts));
   Collector.setPreprocessor(PP);
@@ -102,6 +104,12 @@ void FileIndex::lookup(
     const LookupRequest &Req,
     llvm::function_ref<void(const Symbol &)> Callback) const {
   Index.lookup(Req, Callback);
+}
+
+void FileIndex::findOccurrences(
+    const OccurrencesRequest &Req,
+    llvm::function_ref<void(const SymbolOccurrence &)> Callback) const {
+  log("findOccurrences is not implemented.");
 }
 
 } // namespace clangd

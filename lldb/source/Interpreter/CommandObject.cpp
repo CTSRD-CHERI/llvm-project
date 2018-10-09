@@ -260,18 +260,13 @@ void CommandObject::Cleanup() {
     m_api_locker.unlock();
 }
 
-int CommandObject::HandleCompletion(Args &input, int &cursor_index,
-                                    int &cursor_char_position,
-                                    int match_start_point,
-                                    int max_return_elements,
-                                    bool &word_complete, StringList &matches) {
+int CommandObject::HandleCompletion(CompletionRequest &request) {
   // Default implementation of WantsCompletion() is !WantsRawCommandString().
   // Subclasses who want raw command string but desire, for example, argument
   // completion should override WantsCompletion() to return true, instead.
   if (WantsRawCommandString() && !WantsCompletion()) {
     // FIXME: Abstract telling the completion to insert the completion
     // character.
-    matches.Clear();
     return -1;
   } else {
     // Can we do anything generic with the options?
@@ -280,21 +275,17 @@ int CommandObject::HandleCompletion(Args &input, int &cursor_index,
     OptionElementVector opt_element_vector;
 
     if (cur_options != nullptr) {
-      opt_element_vector = cur_options->ParseForCompletion(input, cursor_index);
+      opt_element_vector = cur_options->ParseForCompletion(
+          request.GetParsedLine(), request.GetCursorIndex());
 
-      bool handled_by_options;
-      handled_by_options = cur_options->HandleOptionCompletion(
-          input, opt_element_vector, cursor_index, cursor_char_position,
-          match_start_point, max_return_elements, GetCommandInterpreter(),
-          word_complete, matches);
+      bool handled_by_options = cur_options->HandleOptionCompletion(
+          request, opt_element_vector, GetCommandInterpreter());
       if (handled_by_options)
-        return matches.GetSize();
+        return request.GetNumberOfMatches();
     }
 
     // If we got here, the last word is not an option or an option argument.
-    return HandleArgumentCompletion(
-        input, cursor_index, cursor_char_position, opt_element_vector,
-        match_start_point, max_return_elements, word_complete, matches);
+    return HandleArgumentCompletion(request, opt_element_vector);
   }
 }
 
@@ -331,6 +322,22 @@ bool CommandObject::HelpTextContainsWord(llvm::StringRef search_word,
   }
 
   return found_word;
+}
+
+bool CommandObject::ParseOptionsAndNotify(Args &args,
+                                          CommandReturnObject &result,
+                                          OptionGroupOptions &group_options,
+                                          ExecutionContext &exe_ctx) {
+  if (!ParseOptions(args, result))
+    return false;
+
+  Status error(group_options.NotifyOptionParsingFinished(&exe_ctx));
+  if (error.Fail()) {
+    result.AppendError(error.AsCString());
+    result.SetStatus(eReturnStatusFailed);
+    return false;
+  }
+  return true;
 }
 
 int CommandObject::GetNumArgumentEntries() { return m_arguments.size(); }
@@ -1001,7 +1008,8 @@ static llvm::StringRef arch_helper() {
   static StreamString g_archs_help;
   if (g_archs_help.Empty()) {
     StringList archs;
-    ArchSpec::AutoComplete(llvm::StringRef(), archs);
+
+    ArchSpec::ListSupportedArchNames(archs);
     g_archs_help.Printf("These are the supported architecture names:\n");
     archs.Join("\n", g_archs_help);
   }

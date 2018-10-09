@@ -152,9 +152,7 @@ uint64_t Symbol::getSize() const {
     }
     return DR->Size;
   }
-  if (const auto *S = dyn_cast<SharedSymbol>(this))
-    return S->Size;
-  return 0;
+  return cast<SharedSymbol>(this)->Size;
 }
 
 OutputSection *Symbol::getOutputSection() const {

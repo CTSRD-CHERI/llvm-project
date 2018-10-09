@@ -10,8 +10,8 @@
 #include "lldb/Core/EmulateInstruction.h"
 
 #include "lldb/Core/Address.h"
+#include "lldb/Core/DumpRegisterValue.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/RegisterValue.h"
 #include "lldb/Core/StreamFile.h"
 #include "lldb/Symbol/UnwindPlan.h"
 #include "lldb/Target/Process.h"
@@ -19,6 +19,7 @@
 #include "lldb/Target/StackFrame.h"   // for StackFrame
 #include "lldb/Utility/ConstString.h" // for ConstString
 #include "lldb/Utility/DataExtractor.h"
+#include "lldb/Utility/RegisterValue.h"
 #include "lldb/Utility/Status.h"
 #include "lldb/Utility/Stream.h" // for Stream, Stream::::eBinary
 #include "lldb/Utility/StreamString.h"
@@ -361,7 +362,7 @@ bool EmulateInstruction::WriteRegisterDefault(EmulateInstruction *instruction,
                                               const RegisterValue &reg_value) {
   StreamFile strm(stdout, false);
   strm.Printf("    Write to Register (name = %s, value = ", reg_info->name);
-  reg_value.Dump(&strm, reg_info, false, false, eFormatDefault);
+  DumpRegisterValue(reg_value, &strm, reg_info, false, false, eFormatDefault);
   strm.PutCString(", context = ");
   context.Dump(strm, instruction);
   strm.EOL();
