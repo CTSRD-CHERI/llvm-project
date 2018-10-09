@@ -303,6 +303,18 @@ TEST_CASE(test_PR35078)
         TEST_CHECK(*it == nestedFile);
       }
     }
+    {
+      bool SeenNestedFile = false;
+      recursive_directory_iterator it = SetupState(false, SeenNestedFile);
+      TEST_REQUIRE(it != endIt);
+      TEST_REQUIRE(*it == nestedDir);
+
+      ExceptionChecker Checker(std::errc::permission_denied,
+                               "recursive_directory_iterator::operator++()",
+                               format_string("attempting recursion into \"%s\"",
+                                             nestedDir.native()));
+      TEST_CHECK_THROW_RESULT(filesystem_error, Checker, ++it);
+    }
 }
 
 

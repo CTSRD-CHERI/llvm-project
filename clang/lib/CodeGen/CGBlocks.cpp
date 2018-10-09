@@ -110,7 +110,7 @@ static llvm::Constant *buildBlockDescriptor(CodeGenModule &CGM,
   elements.addInt(ulong, blockInfo.BlockSize.getQuantity());
 
   // Optional copy/dispose helpers.
-  if (blockInfo.NeedsCopyDispose) {
+  if (blockInfo.needsCopyDisposeHelpers()) {
     // copy_func_helper_decl
     elements.add(buildCopyHelper(CGM, blockInfo));
 
@@ -165,6 +165,7 @@ static llvm::Constant *buildBlockDescriptor(CodeGenModule &CGM,
 
     /// These are the flags (with corresponding bit number) that the
     /// compiler is actually supposed to know about.
+    ///  23. BLOCK_IS_NOESCAPE - indicates that the block is non-escaping
     ///  25. BLOCK_HAS_COPY_DISPOSE - indicates that the block
     ///   descriptor provides copy and dispose helper functions
     ///  26. BLOCK_HAS_CXX_OBJ - indicates that there's a captured
@@ -784,8 +785,13 @@ llvm::Value *CodeGenFunction::EmitBlockLiteral(const CGBlockInfo &blockInfo) {
   llvm::Constant *descriptor;
   BlockFlags flags;
   if (!IsOpenCL) {
-    isa = llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(CGM.getNSConcreteStackBlock(),
-                                         VoidPtrTy);
+    // If the block is non-escaping, set field 'isa 'to NSConcreteGlobalBlock
+    // and set the BLOCK_IS_GLOBAL bit of field 'flags'. Copying a non-escaping
+    // block just returns the original block and releasing it is a no-op.
+    llvm::Constant *blockISA = blockInfo.getBlockDecl()->doesNotEscape()
+                                   ? CGM.getNSConcreteGlobalBlock()
+                                   : CGM.getNSConcreteStackBlock();
+    isa = llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(blockISA, VoidPtrTy);
 
     // Build the block descriptor.
     descriptor = buildBlockDescriptor(CGM, blockInfo);
@@ -794,12 +800,14 @@ llvm::Value *CodeGenFunction::EmitBlockLiteral(const CGBlockInfo &blockInfo) {
     flags = BLOCK_HAS_SIGNATURE;
     if (blockInfo.HasCapturedVariableLayout)
       flags |= BLOCK_HAS_EXTENDED_LAYOUT;
-    if (blockInfo.NeedsCopyDispose)
+    if (blockInfo.needsCopyDisposeHelpers())
       flags |= BLOCK_HAS_COPY_DISPOSE;
     if (blockInfo.HasCXXObject)
       flags |= BLOCK_HAS_CXX_OBJ;
     if (blockInfo.UsesStret)
       flags |= BLOCK_USE_STRET;
+    if (blockInfo.getBlockDecl()->doesNotEscape())
+      flags |= BLOCK_IS_NOESCAPE | BLOCK_IS_GLOBAL;
   }
 
   auto projectField =

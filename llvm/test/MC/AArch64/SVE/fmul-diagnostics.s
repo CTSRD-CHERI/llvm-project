@@ -43,17 +43,17 @@ fmul z0.h, z0.h, z8.b[0]
 // CHECK-NOT: [[@LINE-1]]:{{[0-9]+}}:
 
 fmul z0.h, z0.h, z8.h[0]
-// CHECK: [[@LINE-1]]:{{[0-9]+}}: error: Invalid restricted vector register, expected z0.h..z7.h
+// CHECK: [[@LINE-1]]:{{[0-9]+}}: error: invalid operand for instruction
 // CHECK-NEXT: fmul z0.h, z0.h, z8.h[0]
 // CHECK-NOT: [[@LINE-1]]:{{[0-9]+}}:
 
 fmul z0.s, z0.s, z8.s[0]
-// CHECK: [[@LINE-1]]:{{[0-9]+}}: error: Invalid restricted vector register, expected z0.s..z7.s
+// CHECK: [[@LINE-1]]:{{[0-9]+}}: error: invalid operand for instruction
 // CHECK-NEXT: fmul z0.s, z0.s, z8.s[0]
 // CHECK-NOT: [[@LINE-1]]:{{[0-9]+}}:
 
 fmul z0.d, z0.d, z16.d[0]
-// CHECK: [[@LINE-1]]:{{[0-9]+}}: error: Invalid restricted vector register, expected z0.d..z15.d
+// CHECK: [[@LINE-1]]:{{[0-9]+}}: error: invalid operand for instruction
 // CHECK-NEXT: fmul z0.d, z0.d, z16.d[0]
 // CHECK-NOT: [[@LINE-1]]:{{[0-9]+}}:
 
@@ -89,4 +89,46 @@ fmul z0.d, z0.d, z0.d[-1]
 fmul z0.d, z0.d, z0.d[2]
 // CHECK: [[@LINE-1]]:{{[0-9]+}}: error: vector lane must be an integer in range [0, 1].
 // CHECK-NEXT: fmul z0.d, z0.d, z0.d[2]
+// CHECK-NOT: [[@LINE-1]]:{{[0-9]+}}:
+
+
+// ------------------------------------------------------------------------- //
+// Tied operands must match
+
+fmul    z0.h, p7/m, z1.h, z31.h
+// CHECK: [[@LINE-1]]:{{[0-9]+}}: error: operand must match destination register
+// CHECK-NEXT: fmul    z0.h, p7/m, z1.h, z31.h
+// CHECK-NOT: [[@LINE-1]]:{{[0-9]+}}:
+
+
+// ------------------------------------------------------------------------- //
+// Invalid element widths.
+
+fmul    z0.b, p7/m, z0.b, z31.b
+// CHECK: [[@LINE-1]]:{{[0-9]+}}: error: invalid element width
+// CHECK-NEXT: fmul    z0.b, p7/m, z0.b, z31.b
+// CHECK-NOT: [[@LINE-1]]:{{[0-9]+}}:
+
+fmul    z0.h, p7/m, z0.h, z31.s
+// CHECK: [[@LINE-1]]:{{[0-9]+}}: error: invalid element width
+// CHECK-NEXT: fmul    z0.h, p7/m, z0.h, z31.s
+// CHECK-NOT: [[@LINE-1]]:{{[0-9]+}}:
+
+fmul z0.b, z1.b, z2.b
+// CHECK: [[@LINE-1]]:{{[0-9]+}}: error: invalid element width
+// CHECK-NEXT: fmul z0.b, z1.b, z2.b
+// CHECK-NOT: [[@LINE-1]]:{{[0-9]+}}:
+
+fmul z0.h, z1.s, z2.s
+// CHECK: [[@LINE-1]]:{{[0-9]+}}: error: invalid element width
+// CHECK-NEXT: fmul z0.h, z1.s, z2.s
+// CHECK-NOT: [[@LINE-1]]:{{[0-9]+}}:
+
+
+// ------------------------------------------------------------------------- //
+// Invalid predicate
+
+fmul    z0.h, p8/m, z0.h, z31.h
+// CHECK: [[@LINE-1]]:{{[0-9]+}}: error: restricted predicate has range [0, 7].
+// CHECK-NEXT: fmul    z0.h, p8/m, z0.h, z31.h
 // CHECK-NOT: [[@LINE-1]]:{{[0-9]+}}:

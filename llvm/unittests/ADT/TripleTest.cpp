@@ -367,6 +367,12 @@ TEST(TripleTest, ParsedIDs) {
   EXPECT_EQ(Triple::Linux, T.getOS());
   EXPECT_EQ(Triple::GNUEABI, T.getEnvironment());
 
+  T = Triple("aarch64-oe-linux");
+  EXPECT_EQ(Triple::aarch64, T.getArch());
+  EXPECT_EQ(Triple::OpenEmbedded, T.getVendor());
+  EXPECT_EQ(Triple::Linux, T.getOS());
+  EXPECT_EQ(Triple::UnknownEnvironment, T.getEnvironment());
+
   T = Triple("huh");
   EXPECT_EQ(Triple::UnknownArch, T.getArch());
 }
@@ -1048,11 +1054,6 @@ TEST(TripleTest, FileFormat) {
             Triple("wasm32-unknown-unknown-wasm").getObjectFormat());
   EXPECT_EQ(Triple::Wasm,
             Triple("wasm64-unknown-unknown-wasm").getObjectFormat());
-
-  EXPECT_EQ(Triple::ELF,
-            Triple("wasm32-unknown-unknown-elf").getObjectFormat());
-  EXPECT_EQ(Triple::ELF,
-            Triple("wasm64-unknown-unknown-elf").getObjectFormat());
 
   Triple MSVCNormalized(Triple::normalize("i686-pc-windows-msvc-elf"));
   EXPECT_EQ(Triple::ELF, MSVCNormalized.getObjectFormat());

@@ -27,6 +27,7 @@
 #include <vector>
 
 using namespace llvm;
+using namespace llvm::objcopy;
 using namespace object;
 using namespace ELF;
 
@@ -398,15 +399,15 @@ void RelocSectionWithSymtabBase<SymTabType>::finalize() {
 }
 
 template <class ELFT>
-void setAddend(Elf_Rel_Impl<ELFT, false> &Rel, uint64_t Addend) {}
+static void setAddend(Elf_Rel_Impl<ELFT, false> &Rel, uint64_t Addend) {}
 
 template <class ELFT>
-void setAddend(Elf_Rel_Impl<ELFT, true> &Rela, uint64_t Addend) {
+static void setAddend(Elf_Rel_Impl<ELFT, true> &Rela, uint64_t Addend) {
   Rela.r_addend = Addend;
 }
 
 template <class RelRange, class T>
-void writeRel(const RelRange &Relocations, T *Buf) {
+static void writeRel(const RelRange &Relocations, T *Buf) {
   for (const auto &Reloc : Relocations) {
     Buf->r_offset = Reloc.Offset;
     setAddend(*Buf, Reloc.Addend);
@@ -754,8 +755,8 @@ static void getAddend(uint64_t &ToSet, const Elf_Rel_Impl<ELFT, true> &Rela) {
 }
 
 template <class T>
-void initRelocations(RelocationSection *Relocs, SymbolTableSection *SymbolTable,
-                     T RelRange) {
+static void initRelocations(RelocationSection *Relocs,
+                            SymbolTableSection *SymbolTable, T RelRange) {
   for (const auto &Rel : RelRange) {
     Relocation ToAdd;
     ToAdd.Offset = Rel.r_offset;
@@ -1387,6 +1388,7 @@ void BinaryWriter::finalize() {
 }
 
 namespace llvm {
+namespace objcopy {
 
 template class ELFBuilder<ELF64LE>;
 template class ELFBuilder<ELF64BE>;
@@ -1397,4 +1399,5 @@ template class ELFWriter<ELF64LE>;
 template class ELFWriter<ELF64BE>;
 template class ELFWriter<ELF32LE>;
 template class ELFWriter<ELF32BE>;
+} // end namespace objcopy
 } // end namespace llvm

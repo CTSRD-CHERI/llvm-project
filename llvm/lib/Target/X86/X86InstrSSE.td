@@ -287,14 +287,6 @@ let Predicates = [UseAVX] in {
   def : Pat<(store (f32 (extractelt (v4f32 VR128:$src), (iPTR 0))),
                    addr:$dst),
             (VMOVSSmr addr:$dst, (COPY_TO_REGCLASS (v4f32 VR128:$src), FR32))>;
-
-  // Shuffle with VMOVSS
-  def : Pat<(v4i32 (X86Movss VR128:$src1, VR128:$src2)),
-            (VMOVSSrr VR128:$src1, VR128:$src2)>;
-
-  // Shuffle with VMOVSD
-  def : Pat<(v2i64 (X86Movsd VR128:$src1, VR128:$src2)),
-            (VMOVSDrr VR128:$src1, VR128:$src2)>;
 }
 
 let Predicates = [UseAVX, OptForSize] in {
@@ -349,10 +341,6 @@ let Predicates = [UseSSE1] in {
   def : Pat<(store (f32 (extractelt (v4f32 VR128:$src), (iPTR 0))),
                    addr:$dst),
             (MOVSSmr addr:$dst, (COPY_TO_REGCLASS VR128:$src, FR32))>;
-
-  // Shuffle with MOVSS
-  def : Pat<(v4i32 (X86Movss VR128:$src1, VR128:$src2)),
-            (MOVSSrr VR128:$src1, VR128:$src2)>;
 }
 
 let Predicates = [UseSSE2] in {
@@ -365,10 +353,6 @@ let Predicates = [UseSSE2] in {
             (COPY_TO_REGCLASS (MOVSDrm addr:$src), VR128)>;
   def : Pat<(v2f64 (X86vzload addr:$src)),
             (COPY_TO_REGCLASS (MOVSDrm addr:$src), VR128)>;
-
-  // Shuffle with MOVSD
-  def : Pat<(v2i64 (X86Movsd VR128:$src1, VR128:$src2)),
-            (MOVSDrr VR128:$src1, VR128:$src2)>;
 }
 
 // Aliases to help the assembler pick two byte VEX encodings by swapping the
@@ -660,19 +644,16 @@ let Predicates = [UseSSE1] in {
 // SSE 1 & 2 - Move Low packed FP Instructions
 //===----------------------------------------------------------------------===//
 
-multiclass sse12_mov_hilo_packed_base<bits<8>opc, SDNode psnode, SDNode pdnode,
+multiclass sse12_mov_hilo_packed_base<bits<8>opc,  SDNode pdnode,
                                       string base_opc, string asm_opr> {
+  // No pattern as they need be special cased between high and low.
   let hasSideEffects = 0, mayLoad = 1 in
   def PSrm : PI<opc, MRMSrcMem,
-         (outs VR128:$dst), (ins VR128:$src1, f64mem:$src2),
-         !strconcat(base_opc, "s", asm_opr),
-     [(set VR128:$dst,
-       (psnode VR128:$src1,
-              (bc_v4f32 (v2f64 (scalar_to_vector (loadf64 addr:$src2))))))],
-              SSEPackedSingle>, PS,
-     Sched<[SchedWriteFShuffle.XMM.Folded, ReadAfterLd]>;
+                (outs VR128:$dst), (ins VR128:$src1, f64mem:$src2),
+                !strconcat(base_opc, "s", asm_opr),
+                [], SSEPackedSingle>, PS,
+                Sched<[SchedWriteFShuffle.XMM.Folded, ReadAfterLd]>;
 
-  let hasSideEffects = 0, mayLoad = 1 in
   def PDrm : PI<opc, MRMSrcMem,
          (outs VR128:$dst), (ins VR128:$src1, f64mem:$src2),
          !strconcat(base_opc, "d", asm_opr),
@@ -682,19 +663,19 @@ multiclass sse12_mov_hilo_packed_base<bits<8>opc, SDNode psnode, SDNode pdnode,
      Sched<[SchedWriteFShuffle.XMM.Folded, ReadAfterLd]>;
 }
 
-multiclass sse12_mov_hilo_packed<bits<8>opc, SDPatternOperator psnode,
-                                 SDPatternOperator pdnode, string base_opc> {
+multiclass sse12_mov_hilo_packed<bits<8>opc, SDPatternOperator pdnode,
+                                 string base_opc> {
   let Predicates = [UseAVX] in
-    defm V#NAME : sse12_mov_hilo_packed_base<opc, psnode, pdnode, base_opc,
+    defm V#NAME : sse12_mov_hilo_packed_base<opc, pdnode, base_opc,
                                     "\t{$src2, $src1, $dst|$dst, $src1, $src2}">,
                                     VEX_4V, VEX_WIG;
 
   let Constraints = "$src1 = $dst" in
-    defm NAME : sse12_mov_hilo_packed_base<opc, psnode, pdnode, base_opc,
+    defm NAME : sse12_mov_hilo_packed_base<opc,  pdnode, base_opc,
                                     "\t{$src2, $dst|$dst, $src2}">;
 }
 
-defm MOVL : sse12_mov_hilo_packed<0x12, null_frag, null_frag, "movlp">;
+defm MOVL : sse12_mov_hilo_packed<0x12, X86Movsd, "movlp">;
 
 let SchedRW = [WriteFStore] in {
 let Predicates = [UseAVX] in {
@@ -719,32 +700,24 @@ def MOVLPDmr : PDI<0x13, MRMDestMem, (outs), (ins f64mem:$dst, VR128:$src),
                                  (iPTR 0))), addr:$dst)]>;
 } // SchedRW
 
-let Predicates = [UseAVX] in {
-  // Shuffle with VMOVLPD
-  def : Pat<(v2f64 (X86Movsd VR128:$src1,
-                             (v2f64 (scalar_to_vector (loadf64 addr:$src2))))),
-            (VMOVLPDrm VR128:$src1, addr:$src2)>;
-}
-
 let Predicates = [UseSSE1] in {
   // (store (vector_shuffle (load addr), v2, <4, 5, 2, 3>), addr) using MOVLPS
   def : Pat<(store (i64 (extractelt (bc_v2i64 (v4f32 VR128:$src2)),
                                  (iPTR 0))), addr:$src1),
             (MOVLPSmr addr:$src1, VR128:$src2)>;
-}
 
-let Predicates = [UseSSE2] in {
-  // Shuffle with MOVLPD
-  def : Pat<(v2f64 (X86Movsd VR128:$src1,
-                             (v2f64 (scalar_to_vector (loadf64 addr:$src2))))),
-            (MOVLPDrm VR128:$src1, addr:$src2)>;
+  // This pattern helps select MOVLPS on SSE1 only targets. With SSE2 we'll
+  // end up with a movsd or blend instead of shufp.
+  // No need for aligned load, we're only loading 64-bits.
+  def : Pat<(X86Shufp (loadv4f32 addr:$src2), VR128:$src1, (i8 -28)),
+            (MOVLPSrm VR128:$src1, addr:$src2)>;
 }
 
 //===----------------------------------------------------------------------===//
 // SSE 1 & 2 - Move Hi packed FP Instructions
 //===----------------------------------------------------------------------===//
 
-defm MOVH : sse12_mov_hilo_packed<0x16, X86Movlhps, X86Unpckl, "movhp">;
+defm MOVH : sse12_mov_hilo_packed<0x16, X86Unpckl, "movhp">;
 
 let SchedRW = [WriteFStore] in {
 // v2f64 extract element 1 is always custom lowered to unpack high to low
@@ -776,24 +749,11 @@ def MOVHPDmr : PDI<0x17, MRMDestMem, (outs), (ins f64mem:$dst, VR128:$src),
 } // SchedRW
 
 let Predicates = [UseAVX] in {
-  // VMOVHPS patterns
-  def : Pat<(X86Movlhps VR128:$src1,
-                 (bc_v4f32 (v2i64 (scalar_to_vector (loadi64 addr:$src2))))),
-            (VMOVHPSrm VR128:$src1, addr:$src2)>;
-  def : Pat<(X86Movlhps VR128:$src1,
-                 (bc_v4f32 (v2i64 (X86vzload addr:$src2)))),
-            (VMOVHPSrm VR128:$src1, addr:$src2)>;
-
   // Also handle an i64 load because that may get selected as a faster way to
   // load the data.
   def : Pat<(v2f64 (X86Unpckl VR128:$src1,
                       (bc_v2f64 (v2i64 (scalar_to_vector (loadi64 addr:$src2)))))),
             (VMOVHPDrm VR128:$src1, addr:$src2)>;
-
-  def : Pat<(store (f64 (extractelt
-                          (bc_v2f64 (v4f32 (X86Movhlps VR128:$src, VR128:$src))),
-                          (iPTR 0))), addr:$dst),
-            (VMOVHPDmr addr:$dst, VR128:$src)>;
 
   def : Pat<(store (f64 (extractelt
                           (v2f64 (X86VPermilpi VR128:$src, (i8 1))),
@@ -802,12 +762,10 @@ let Predicates = [UseAVX] in {
 }
 
 let Predicates = [UseSSE1] in {
-  // MOVHPS patterns
-  def : Pat<(X86Movlhps VR128:$src1,
-                 (bc_v4f32 (v2i64 (scalar_to_vector (loadi64 addr:$src2))))),
-            (MOVHPSrm VR128:$src1, addr:$src2)>;
-  def : Pat<(X86Movlhps VR128:$src1,
-                 (bc_v4f32 (v2i64 (X86vzload addr:$src2)))),
+  // This pattern helps select MOVHPS on SSE1 only targets. With SSE2 we'll
+  // end up with a movsd or blend instead of shufp.
+  // No need for aligned load, we're only loading 64-bits.
+  def : Pat<(X86Movlhps VR128:$src1, (loadv4f32 addr:$src2)),
             (MOVHPSrm VR128:$src1, addr:$src2)>;
 }
 
@@ -819,11 +777,6 @@ let Predicates = [UseSSE2] in {
   def : Pat<(v2f64 (X86Unpckl VR128:$src1,
                       (bc_v2f64 (v2i64 (scalar_to_vector (loadi64 addr:$src2)))))),
             (MOVHPDrm VR128:$src1, addr:$src2)>;
-
-  def : Pat<(store (f64 (extractelt
-                          (bc_v2f64 (v4f32 (X86Movhlps VR128:$src, VR128:$src))),
-                          (iPTR 0))), addr:$dst),
-            (MOVHPDmr addr:$dst, VR128:$src)>;
 
   def : Pat<(store (f64 (extractelt
                           (v2f64 (X86Shufp VR128:$src, VR128:$src, (i8 1))),
@@ -842,6 +795,7 @@ let Predicates = [UseAVX] in {
                       [(set VR128:$dst,
                         (v4f32 (X86Movlhps VR128:$src1, VR128:$src2)))]>,
                       VEX_4V, Sched<[SchedWriteFShuffle.XMM]>, VEX_WIG;
+  let isCommutable = 1 in
   def VMOVHLPSrr : VPSI<0x12, MRMSrcReg, (outs VR128:$dst),
                                        (ins VR128:$src1, VR128:$src2),
                       "movhlps\t{$src2, $src1, $dst|$dst, $src1, $src2}",
@@ -864,6 +818,19 @@ let Constraints = "$src1 = $dst" in {
                       [(set VR128:$dst,
                         (v4f32 (X86Movhlps VR128:$src1, VR128:$src2)))]>,
                       Sched<[SchedWriteFShuffle.XMM]>, NotMemoryFoldable;
+}
+
+// TODO: This is largely to trick fastisel into ignoring the pattern.
+def UnpckhUnary : PatFrag<(ops node:$src1, node:$src2),
+                          (X86Unpckh node:$src1, node:$src2), [{
+  return N->getOperand(0) == N->getOperand(1);
+}]>;
+
+let Predicates = [UseSSE2] in {
+  // TODO: This is a hack pattern to allow lowering to emit unpckh instead of
+  // movhlps for sse2 without changing a bunch of tests.
+  def : Pat<(v2f64 (UnpckhUnary VR128:$src, VR128:$src)),
+            (MOVHLPSrr VR128:$src, VR128:$src)>;
 }
 
 //===----------------------------------------------------------------------===//
@@ -2207,7 +2174,7 @@ defm VUNPCKHPS: sse12_unpack_interleave<0x15, X86Unpckh, v4f32, loadv4f32,
                      SchedWriteFShuffle.XMM, SSEPackedSingle>, PS, VEX_4V, VEX_WIG;
 defm VUNPCKHPD: sse12_unpack_interleave<0x15, X86Unpckh, v2f64, loadv2f64,
       VR128, f128mem, "unpckhpd\t{$src2, $src1, $dst|$dst, $src1, $src2}",
-                     SchedWriteFShuffle.XMM, SSEPackedDouble>, PD, VEX_4V, VEX_WIG;
+                     SchedWriteFShuffle.XMM, SSEPackedDouble, 1>, PD, VEX_4V, VEX_WIG;
 defm VUNPCKLPS: sse12_unpack_interleave<0x14, X86Unpckl, v4f32, loadv4f32,
       VR128, f128mem, "unpcklps\t{$src2, $src1, $dst|$dst, $src1, $src2}",
                      SchedWriteFShuffle.XMM, SSEPackedSingle>, PS, VEX_4V, VEX_WIG;
@@ -6443,12 +6410,6 @@ let Predicates = [HasAVX, OptForSpeed] in {
             (VBLENDPSrmi VR128:$src1, addr:$src2, (i8 1))>;
   def : Pat<(v4f32 (X86Movss (loadv4f32 addr:$src2), VR128:$src1)),
             (VBLENDPSrmi VR128:$src1, addr:$src2, (i8 0xe))>;
-  def : Pat<(v4i32 (X86Movss VR128:$src1, VR128:$src2)),
-            (VPBLENDWrri VR128:$src1, VR128:$src2, (i8 3))>;
-  def : Pat<(v4i32 (X86Movss VR128:$src1, (bc_v4i32 (loadv2i64 addr:$src2)))),
-            (VPBLENDWrmi VR128:$src1, addr:$src2, (i8 3))>;
-  def : Pat<(v4i32 (X86Movss (bc_v4i32 (loadv2i64 addr:$src2)), VR128:$src1)),
-            (VPBLENDWrmi VR128:$src1, addr:$src2, (i8 0xfc))>;
 
   def : Pat<(v2f64 (X86Movsd VR128:$src1, VR128:$src2)),
             (VBLENDPDrri VR128:$src1, VR128:$src2, (i8 1))>;
@@ -6456,12 +6417,6 @@ let Predicates = [HasAVX, OptForSpeed] in {
             (VBLENDPDrmi VR128:$src1, addr:$src2, (i8 1))>;
   def : Pat<(v2f64 (X86Movsd (loadv2f64 addr:$src2), VR128:$src1)),
             (VBLENDPDrmi VR128:$src1, addr:$src2, (i8 2))>;
-  def : Pat<(v2i64 (X86Movsd VR128:$src1, VR128:$src2)),
-            (VPBLENDWrri VR128:$src1, VR128:$src2, (i8 0xf))>;
-  def : Pat<(v2i64 (X86Movsd VR128:$src1, (loadv2i64 addr:$src2))),
-            (VPBLENDWrmi VR128:$src1, addr:$src2, (i8 0xf))>;
-  def : Pat<(v2i64 (X86Movsd (loadv2i64 addr:$src2), VR128:$src1)),
-            (VPBLENDWrmi VR128:$src1, addr:$src2, (i8 0xf0))>;
 
   // Move low f32 and clear high bits.
   def : Pat<(v8f32 (X86vzmovl (v8f32 VR256:$src))),
@@ -6503,12 +6458,6 @@ let Predicates = [UseSSE41, OptForSpeed] in {
             (BLENDPSrmi VR128:$src1, addr:$src2, (i8 1))>;
   def : Pat<(v4f32 (X86Movss (memopv4f32 addr:$src2), VR128:$src1)),
             (BLENDPSrmi VR128:$src1, addr:$src2, (i8 0xe))>;
-  def : Pat<(v4i32 (X86Movss VR128:$src1, VR128:$src2)),
-            (PBLENDWrri VR128:$src1, VR128:$src2, (i8 3))>;
-  def : Pat<(v4i32 (X86Movss VR128:$src1, (bc_v4i32 (memopv2i64 addr:$src2)))),
-            (PBLENDWrmi VR128:$src1, addr:$src2, (i8 3))>;
-  def : Pat<(v4i32 (X86Movss (bc_v4i32 (memopv2i64 addr:$src2)), VR128:$src1)),
-            (PBLENDWrmi VR128:$src1, addr:$src2, (i8 0xfc))>;
 
   def : Pat<(v2f64 (X86Movsd VR128:$src1, VR128:$src2)),
             (BLENDPDrri VR128:$src1, VR128:$src2, (i8 1))>;
@@ -6516,12 +6465,6 @@ let Predicates = [UseSSE41, OptForSpeed] in {
             (BLENDPDrmi VR128:$src1, addr:$src2, (i8 1))>;
   def : Pat<(v2f64 (X86Movsd (memopv2f64 addr:$src2), VR128:$src1)),
             (BLENDPDrmi VR128:$src1, addr:$src2, (i8 2))>;
-  def : Pat<(v2i64 (X86Movsd VR128:$src1, VR128:$src2)),
-            (PBLENDWrri VR128:$src1, VR128:$src2, (i8 0xf))>;
-  def : Pat<(v2i64 (X86Movsd VR128:$src1, (memopv2i64 addr:$src2))),
-            (PBLENDWrmi VR128:$src1, addr:$src2, (i8 0xf))>;
-  def : Pat<(v2i64 (X86Movsd (memopv2i64 addr:$src2), VR128:$src1)),
-            (PBLENDWrmi VR128:$src1, addr:$src2, (i8 0xf0))>;
 }
 
 

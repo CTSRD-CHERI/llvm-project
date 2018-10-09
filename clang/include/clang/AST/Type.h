@@ -1794,6 +1794,9 @@ public:
   /// isComplexIntegerType() can be used to test for complex integers.
   bool isIntegerType() const;     // C99 6.2.5p17 (int, char, bool, enum)
   bool isEnumeralType() const;
+
+  /// Determine whether this type is a scoped enumeration type.
+  bool isScopedEnumeralType() const;
   bool isBooleanType() const;
   bool isCharType() const;
   bool isWideCharType() const;
@@ -4678,7 +4681,7 @@ public:
 /// TemplateArguments, followed by a QualType representing the
 /// non-canonical aliased type when the template is a type alias
 /// template.
-class LLVM_ALIGNAS(/*alignof(uint64_t)*/ 8) TemplateSpecializationType
+class alignas(8) TemplateSpecializationType
     : public Type,
       public llvm::FoldingSetNode {
   friend class ASTContext; // ASTContext creates these
@@ -5096,7 +5099,7 @@ public:
 /// Represents a template specialization type whose template cannot be
 /// resolved, e.g.
 ///   A<T>::template B<T>
-class LLVM_ALIGNAS(/*alignof(uint64_t)*/ 8) DependentTemplateSpecializationType
+class alignas(8) DependentTemplateSpecializationType
     : public TypeWithKeyword,
       public llvm::FoldingSetNode {
   friend class ASTContext; // ASTContext creates these

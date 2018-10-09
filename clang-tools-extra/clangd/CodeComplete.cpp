@@ -270,12 +270,14 @@ struct CodeCompletionBuilder {
     if (C.SemaResult) {
       Completion.Origin |= SymbolOrigin::AST;
       Completion.Name = llvm::StringRef(SemaCCS->getTypedText());
-      if (Completion.Scope.empty())
-        if (C.SemaResult->Kind == CodeCompletionResult::RK_Declaration)
+      if (Completion.Scope.empty()) {
+        if ((C.SemaResult->Kind == CodeCompletionResult::RK_Declaration) ||
+            (C.SemaResult->Kind == CodeCompletionResult::RK_Pattern))
           if (const auto *D = C.SemaResult->getDeclaration())
             if (const auto *ND = llvm::dyn_cast<NamedDecl>(D))
               Completion.Scope =
                   splitQualifiedName(printQualifiedName(*ND)).first;
+      }
       Completion.Kind =
           toCompletionItemKind(C.SemaResult->Kind, C.SemaResult->Declaration);
     }
@@ -1060,6 +1062,7 @@ private:
       Output.Completions.back().Score = C.second;
     }
     Output.HasMore = Incomplete;
+    Output.Context = Recorder->CCContext.getKind();
     return Output;
   }
 
@@ -1154,6 +1157,7 @@ private:
                     CompletionCandidate::Bundle Bundle) {
     SymbolQualitySignals Quality;
     SymbolRelevanceSignals Relevance;
+    Relevance.Context = Recorder->CCContext.getKind();
     Relevance.Query = SymbolRelevanceSignals::CodeComplete;
     Relevance.FileProximityMatch = FileProximity.getPointer();
     auto &First = Bundle.front();
@@ -1288,6 +1292,7 @@ raw_ostream &operator<<(raw_ostream &OS, const CodeCompletion &C) {
 
 raw_ostream &operator<<(raw_ostream &OS, const CodeCompleteResult &R) {
   OS << "CodeCompleteResult: " << R.Completions.size() << (R.HasMore ? "+" : "")
+     << " (" << getCompletionKindString(R.Context) << ")"
      << " items:\n";
   for (const auto &C : R.Completions)
     OS << C << "\n";

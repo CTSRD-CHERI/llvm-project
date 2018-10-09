@@ -159,7 +159,8 @@ SVal SimpleSValBuilder::evalCastFromLoc(Loc val, QualType castTy) {
               return nonloc::SymbolVal(SymMgr.getExtentSymbol(FTR));
 
         if (const SymbolicRegion *SymR = R->getSymbolicBase())
-          return nonloc::SymbolVal(SymR->getSymbol());
+          return makeNonLoc(SymR->getSymbol(), BO_NE,
+                            BasicVals.getZeroWithPtrWidth(), castTy);
 
         // FALL-THROUGH
         LLVM_FALLTHROUGH;
@@ -455,14 +456,17 @@ static Optional<NonLoc> tryRearrange(ProgramStateRef State,
   auto &Opts =
     StateMgr.getOwningEngine()->getAnalysisManager().getAnalyzerOptions();
 
+  // FIXME: After putting complexity threshold to the symbols we can always
+  //        rearrange additive operations but rearrange comparisons only if
+  //        option is set.
+  if(!Opts.shouldAggressivelySimplifyBinaryOperation())
+    return None;
+
   SymbolRef LSym = Lhs.getAsSymbol();
   if (!LSym)
     return None;
 
-  // Always rearrange additive operations but rearrange comparisons only if
-  // option is set.
-  if (BinaryOperator::isComparisonOp(Op) &&
-      Opts.shouldAggressivelySimplifyRelationalComparison()) {
+  if (BinaryOperator::isComparisonOp(Op)) {
     SingleTy = LSym->getType();
     if (ResultTy != SVB.getConditionType())
       return None;
@@ -1238,7 +1242,7 @@ SVal SimpleSValBuilder::simplifySVal(ProgramStateRef State, SVal V) {
 
     SVal VisitSymbolData(const SymbolData *S) {
       if (const llvm::APSInt *I =
-              SVB.getKnownValue(State, nonloc::SymbolVal(S)))
+              SVB.getKnownValue(State, SVB.makeSymbolVal(S)))
         return Loc::isLocType(S->getType()) ? (SVal)SVB.makeIntLocVal(*I)
                                             : (SVal)SVB.makeIntVal(*I);
       return SVB.makeSymbolVal(S);

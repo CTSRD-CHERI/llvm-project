@@ -242,7 +242,8 @@ namespace {
     }
 
     bool SimplifyDemandedBits(SDValue Op, const APInt &Demanded);
-    bool SimplifyDemandedVectorElts(SDValue Op, const APInt &Demanded);
+    bool SimplifyDemandedVectorElts(SDValue Op, const APInt &Demanded,
+                                    bool AssumeSingleUse = false);
 
     bool CombineToPreIndexedLoadStore(SDNode *N);
     bool CombineToPostIndexedLoadStore(SDNode *N);
@@ -1064,11 +1065,12 @@ bool DAGCombiner::SimplifyDemandedBits(SDValue Op, const APInt &Demanded) {
 /// Check the specified vector node value to see if it can be simplified or
 /// if things it uses can be simplified as it only uses some of the elements.
 /// If so, return true.
-bool DAGCombiner::SimplifyDemandedVectorElts(SDValue Op,
-                                             const APInt &Demanded) {
+bool DAGCombiner::SimplifyDemandedVectorElts(SDValue Op, const APInt &Demanded,
+                                             bool AssumeSingleUse) {
   TargetLowering::TargetLoweringOpt TLO(DAG, LegalTypes, LegalOperations);
   APInt KnownUndef, KnownZero;
-  if (!TLI.SimplifyDemandedVectorElts(Op, Demanded, KnownUndef, KnownZero, TLO))
+  if (!TLI.SimplifyDemandedVectorElts(Op, Demanded, KnownUndef, KnownZero, TLO,
+                                      0, AssumeSingleUse))
     return false;
 
   // Revisit the node.
@@ -2580,6 +2582,11 @@ SDValue DAGCombiner::visitSUB(SDNode *N) {
   if (isAllOnesConstantOrAllOnesSplatConstant(N0))
     return DAG.getNode(ISD::XOR, DL, VT, N1, N0);
 
+  // fold (A - (0-B)) -> A+B
+  if (N1.getOpcode() == ISD::SUB &&
+      isNullConstantOrNullSplatConstant(N1.getOperand(0)))
+    return DAG.getNode(ISD::ADD, DL, VT, N0, N1.getOperand(1));
+
   // fold A-(A-B) -> B
   if (N1.getOpcode() == ISD::SUB && N0 == N1.getOperand(0))
     return N1.getOperand(1);
@@ -2621,6 +2628,24 @@ SDValue DAGCombiner::visitSUB(SDNode *N) {
       N0.getOperand(1).getOperand(1) == N1)
     return DAG.getNode(ISD::SUB, DL, VT, N0.getOperand(0),
                        N0.getOperand(1).getOperand(0));
+
+  // fold (X - (-Y * Z)) -> (X + (Y * Z))
+  if (N1.getOpcode() == ISD::MUL && N1.hasOneUse()) {
+    if (N1.getOperand(0).getOpcode() == ISD::SUB &&
+        isNullConstantOrNullSplatConstant(N1.getOperand(0).getOperand(0))) {
+      SDValue Mul = DAG.getNode(ISD::MUL, DL, VT,
+                                N1.getOperand(0).getOperand(1),
+                                N1.getOperand(1));
+      return DAG.getNode(ISD::ADD, DL, VT, N0, Mul);
+    }
+    if (N1.getOperand(1).getOpcode() == ISD::SUB &&
+        isNullConstantOrNullSplatConstant(N1.getOperand(1).getOperand(0))) {
+      SDValue Mul = DAG.getNode(ISD::MUL, DL, VT,
+                                N1.getOperand(0),
+                                N1.getOperand(1).getOperand(1));
+      return DAG.getNode(ISD::ADD, DL, VT, N0, Mul);
+    }
+  }
 
   // If either operand of a sub is undef, the result is undef
   if (N0.isUndef())
@@ -4189,8 +4214,8 @@ bool DAGCombiner::BackwardsPropagateMask(SDNode *N, SelectionDAG &DAG) {
                                 FixupNode->getValueType(0),
                                 SDValue(FixupNode, 0), MaskOp);
       DAG.ReplaceAllUsesOfValueWith(SDValue(FixupNode, 0), And);
-      DAG.UpdateNodeOperands(And.getNode(), SDValue(FixupNode, 0),
-                             MaskOp);
+      if (And.getOpcode() == ISD ::AND)
+        DAG.UpdateNodeOperands(And.getNode(), SDValue(FixupNode, 0), MaskOp);
     }
 
     // Narrow any constants that need it.
@@ -4213,7 +4238,9 @@ bool DAGCombiner::BackwardsPropagateMask(SDNode *N, SelectionDAG &DAG) {
       SDValue And = DAG.getNode(ISD::AND, SDLoc(Load), Load->getValueType(0),
                                 SDValue(Load, 0), MaskOp);
       DAG.ReplaceAllUsesOfValueWith(SDValue(Load, 0), And);
-      DAG.UpdateNodeOperands(And.getNode(), SDValue(Load, 0), MaskOp);
+      if (And.getOpcode() == ISD ::AND)
+        And = SDValue(
+            DAG.UpdateNodeOperands(And.getNode(), SDValue(Load, 0), MaskOp), 0);
       SDValue NewLoad = ReduceLoadWidth(And.getNode());
       assert(NewLoad &&
              "Shouldn't be masking the load if it can't be narrowed");
@@ -13042,22 +13069,6 @@ CheckForMaskedLoad(SDValue V, SDValue Ptr, SDValue Chain) {
   LoadSDNode *LD = cast<LoadSDNode>(V->getOperand(0));
   if (LD->getBasePtr() != Ptr) return Result;  // Not from same pointer.
 
-  // The store should be chained directly to the load or be an operand of a
-  // tokenfactor.
-  if (LD == Chain.getNode())
-    ; // ok.
-  else if (Chain->getOpcode() != ISD::TokenFactor)
-    return Result; // Fail.
-  else {
-    bool isOk = false;
-    for (const SDValue &ChainOp : Chain->op_values())
-      if (ChainOp.getNode() == LD) {
-        isOk = true;
-        break;
-      }
-    if (!isOk) return Result;
-  }
-
   // This only handles simple types.
   if (V.getValueType() != MVT::i16 &&
       V.getValueType() != MVT::i32 &&
@@ -13093,6 +13104,24 @@ CheckForMaskedLoad(SDValue V, SDValue Ptr, SDValue Chain) {
   // Verify that the first bit starts at a multiple of mask so that the access
   // is aligned the same as the access width.
   if (NotMaskTZ && NotMaskTZ/8 % MaskedBytes) return Result;
+
+  // For narrowing to be valid, it must be the case that the load the
+  // immediately preceeding memory operation before the store.
+  if (LD == Chain.getNode())
+    ; // ok.
+  else if (Chain->getOpcode() == ISD::TokenFactor &&
+           SDValue(LD, 1).hasOneUse()) {
+    // LD has only 1 chain use so they are no indirect dependencies.
+    bool isOk = false;
+    for (const SDValue &ChainOp : Chain->op_values())
+      if (ChainOp.getNode() == LD) {
+        isOk = true;
+        break;
+      }
+    if (!isOk)
+      return Result;
+  } else
+    return Result; // Fail.
 
   Result.first = MaskedBytes;
   Result.second = NotMaskTZ/8;
@@ -15012,6 +15041,23 @@ SDValue DAGCombiner::visitEXTRACT_VECTOR_ELT(SDNode *N) {
       return DAG.getNode(ISD::EXTRACT_VECTOR_ELT, SDLoc(N), NVT, SVInVec,
                          DAG.getConstant(OrigElt, SDLoc(SVOp), IndexTy));
     }
+  }
+
+  // If only EXTRACT_VECTOR_ELT nodes use the source vector we can
+  // simplify it based on the (valid) extraction indices.
+  if (llvm::all_of(InVec->uses(), [&](SDNode *Use) {
+        return Use->getOpcode() == ISD::EXTRACT_VECTOR_ELT &&
+               Use->getOperand(0) == InVec &&
+               isa<ConstantSDNode>(Use->getOperand(1));
+      })) {
+    APInt DemandedElts = APInt::getNullValue(VT.getVectorNumElements());
+    for (SDNode *Use : InVec->uses()) {
+      auto *CstElt = cast<ConstantSDNode>(Use->getOperand(1));
+      if (CstElt->getAPIntValue().ult(VT.getVectorNumElements()))
+        DemandedElts.setBit(CstElt->getZExtValue());
+    }
+    if (SimplifyDemandedVectorElts(InVec, DemandedElts, true))
+      return SDValue(N, 0);
   }
 
   bool BCNumEltsChanged = false;

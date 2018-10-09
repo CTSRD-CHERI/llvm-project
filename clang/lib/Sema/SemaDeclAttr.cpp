@@ -1849,6 +1849,50 @@ static void handleRestrictAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
       << AL.getName() << getFunctionOrMethodResultSourceRange(D);
 }
 
+static void handleCPUSpecificAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
+  FunctionDecl *FD = cast<FunctionDecl>(D);
+  if (!checkAttributeAtLeastNumArgs(S, AL, 1))
+    return;
+
+  SmallVector<IdentifierInfo *, 8> CPUs;
+  for (unsigned ArgNo = 0; ArgNo < getNumAttributeArgs(AL); ++ArgNo) {
+    if (!AL.isArgIdent(ArgNo)) {
+      S.Diag(AL.getLoc(), diag::err_attribute_argument_type)
+          << AL.getName() << AANT_ArgumentIdentifier;
+      return;
+    }
+
+    IdentifierLoc *CPUArg = AL.getArgAsIdent(ArgNo);
+    StringRef CPUName = CPUArg->Ident->getName().trim();
+
+    if (!S.Context.getTargetInfo().validateCPUSpecificCPUDispatch(CPUName)) {
+      S.Diag(CPUArg->Loc, diag::err_invalid_cpu_specific_dispatch_value)
+          << CPUName << (AL.getKind() == ParsedAttr::AT_CPUDispatch);
+      return;
+    }
+
+    const TargetInfo &Target = S.Context.getTargetInfo();
+    if (llvm::any_of(CPUs, [CPUName, &Target](const IdentifierInfo *Cur) {
+          return Target.CPUSpecificManglingCharacter(CPUName) ==
+                 Target.CPUSpecificManglingCharacter(Cur->getName());
+        })) {
+      S.Diag(AL.getLoc(), diag::warn_multiversion_duplicate_entries);
+      return;
+    }
+    CPUs.push_back(CPUArg->Ident);
+  }
+
+  FD->setIsMultiVersion(true);
+  if (AL.getKind() == ParsedAttr::AT_CPUSpecific)
+    D->addAttr(::new (S.Context) CPUSpecificAttr(
+        AL.getRange(), S.Context, CPUs.data(), CPUs.size(),
+        AL.getAttributeSpellingListIndex()));
+  else
+    D->addAttr(::new (S.Context) CPUDispatchAttr(
+        AL.getRange(), S.Context, CPUs.data(), CPUs.size(),
+        AL.getAttributeSpellingListIndex()));
+}
+
 static void handleCommonAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
   if (S.LangOpts.CPlusPlus) {
     S.Diag(AL.getLoc(), diag::err_attribute_not_supported_in_lang)
@@ -2879,10 +2923,18 @@ static void handleVecTypeHint(Sema &S, Decl *D, const ParsedAttr &AL) {
 SectionAttr *Sema::mergeSectionAttr(Decl *D, SourceRange Range,
                                     StringRef Name,
                                     unsigned AttrSpellingListIndex) {
+  // Explicit or partial specializations do not inherit
+  // the section attribute from the primary template.
+  if (const auto *FD = dyn_cast<FunctionDecl>(D)) {
+    if (AttrSpellingListIndex == SectionAttr::Declspec_allocate &&
+        FD->isFunctionTemplateSpecialization())
+      return nullptr;
+  }
   if (SectionAttr *ExistingAttr = D->getAttr<SectionAttr>()) {
     if (ExistingAttr->getName() == Name)
       return nullptr;
-    Diag(ExistingAttr->getLocation(), diag::warn_mismatched_section);
+    Diag(ExistingAttr->getLocation(), diag::warn_mismatched_section)
+         << 1 /*section*/;
     Diag(Range.getBegin(), diag::note_previous_attribute);
     return nullptr;
   }
@@ -2893,7 +2945,8 @@ SectionAttr *Sema::mergeSectionAttr(Decl *D, SourceRange Range,
 bool Sema::checkSectionName(SourceLocation LiteralLoc, StringRef SecName) {
   std::string Error = Context.getTargetInfo().isValidSectionSpecifier(SecName);
   if (!Error.empty()) {
-    Diag(LiteralLoc, diag::err_attribute_section_invalid_for_target) << Error;
+    Diag(LiteralLoc, diag::err_attribute_section_invalid_for_target) << Error
+         << 1 /*'section'*/;	  
     return false;
   }
   return true;
@@ -2922,6 +2975,59 @@ static void handleSectionAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
   SectionAttr *NewAttr = S.mergeSectionAttr(D, AL.getRange(), Str, Index);
   if (NewAttr)
     D->addAttr(NewAttr);
+}
+
+static bool checkCodeSegName(Sema&S, SourceLocation LiteralLoc, StringRef CodeSegName) {
+  std::string Error = S.Context.getTargetInfo().isValidSectionSpecifier(CodeSegName);
+  if (!Error.empty()) {
+    S.Diag(LiteralLoc, diag::err_attribute_section_invalid_for_target) << Error
+           << 0 /*'code-seg'*/;
+    return false;
+  }
+  return true;
+}
+
+CodeSegAttr *Sema::mergeCodeSegAttr(Decl *D, SourceRange Range,
+                                    StringRef Name,
+                                    unsigned AttrSpellingListIndex) {
+  // Explicit or partial specializations do not inherit
+  // the code_seg attribute from the primary template.
+  if (const auto *FD = dyn_cast<FunctionDecl>(D)) {
+    if (FD->isFunctionTemplateSpecialization())
+      return nullptr;
+  }
+  if (const auto *ExistingAttr = D->getAttr<CodeSegAttr>()) {
+    if (ExistingAttr->getName() == Name)
+      return nullptr;
+    Diag(ExistingAttr->getLocation(), diag::warn_mismatched_section)
+         << 0 /*codeseg*/;
+    Diag(Range.getBegin(), diag::note_previous_attribute);
+    return nullptr;
+  }
+  return ::new (Context) CodeSegAttr(Range, Context, Name,
+                                     AttrSpellingListIndex);
+}
+
+static void handleCodeSegAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
+  StringRef Str;
+  SourceLocation LiteralLoc;
+  if (!S.checkStringLiteralArgumentAttr(AL, 0, Str, &LiteralLoc))
+    return;
+  if (!checkCodeSegName(S, LiteralLoc, Str))
+    return;
+  if (const auto *ExistingAttr = D->getAttr<CodeSegAttr>()) {
+    if (!ExistingAttr->isImplicit()) {
+      S.Diag(AL.getLoc(),
+             ExistingAttr->getName() == Str
+             ? diag::warn_duplicate_codeseg_attribute
+             : diag::err_conflicting_codeseg_attribute);
+      return;
+    }
+    D->dropAttr<CodeSegAttr>();
+  }
+  if (CodeSegAttr *CSA = S.mergeCodeSegAttr(D, AL.getRange(), Str,
+                                            AL.getAttributeSpellingListIndex()))
+    D->addAttr(CSA);
 }
 
 // Check for things we'd like to warn about. Multiversioning issues are
@@ -6044,6 +6150,10 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   case ParsedAttr::AT_CarriesDependency:
     handleDependencyAttr(S, scope, D, AL);
     break;
+  case ParsedAttr::AT_CPUDispatch:
+  case ParsedAttr::AT_CPUSpecific:
+    handleCPUSpecificAttr(S, D, AL);
+    break;
   case ParsedAttr::AT_Common:
     handleCommonAttr(S, D, AL);
     break;
@@ -6258,6 +6368,9 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
     break;
   case ParsedAttr::AT_Section:
     handleSectionAttr(S, D, AL);
+    break;
+  case ParsedAttr::AT_CodeSeg:
+    handleCodeSegAttr(S, D, AL);
     break;
   case ParsedAttr::AT_Target:
     handleTargetAttr(S, D, AL);
@@ -6743,7 +6856,7 @@ NamedDecl * Sema::DeclClonePragmaWeak(NamedDecl *ND, IdentifierInfo *II,
                            VD->getType(), VD->getTypeSourceInfo(),
                            VD->getStorageClass());
     if (VD->getQualifier())
-	  cast<VarDecl>(NewD)->setQualifierInfo(VD->getQualifierLoc());
+      cast<VarDecl>(NewD)->setQualifierInfo(VD->getQualifierLoc());
   }
   return NewD;
 }

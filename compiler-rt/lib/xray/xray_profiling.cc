@@ -56,12 +56,14 @@ struct alignas(64) ProfilingData {
 
 static pthread_key_t ProfilingKey;
 
-ProfilingData &getThreadLocalData() XRAY_NEVER_INSTRUMENT {
-  thread_local std::aligned_storage<sizeof(ProfilingData)>::type ThreadStorage;
-  if (pthread_getspecific(ProfilingKey) == NULL) {
+thread_local std::aligned_storage<sizeof(ProfilingData)>::type ThreadStorage{};
+static ProfilingData &getThreadLocalData() XRAY_NEVER_INSTRUMENT {
+  thread_local auto ThreadOnce = [] {
     new (&ThreadStorage) ProfilingData{};
     pthread_setspecific(ProfilingKey, &ThreadStorage);
-  }
+    return false;
+  }();
+  (void)ThreadOnce;
 
   auto &TLD = *reinterpret_cast<ProfilingData *>(&ThreadStorage);
 
@@ -84,6 +86,18 @@ ProfilingData &getThreadLocalData() XRAY_NEVER_INSTRUMENT {
   }
 
   return TLD;
+}
+
+static void cleanupTLD() XRAY_NEVER_INSTRUMENT {
+  auto &TLD = *reinterpret_cast<ProfilingData *>(&ThreadStorage);
+  if (TLD.Allocators != nullptr && TLD.FCT != nullptr) {
+    TLD.FCT->~FunctionCallTrie();
+    TLD.Allocators->~Allocators();
+    InternalFree(TLD.FCT);
+    InternalFree(TLD.Allocators);
+    TLD.FCT = nullptr;
+    TLD.Allocators = nullptr;
+  }
 }
 
 } // namespace
@@ -118,35 +132,42 @@ XRayLogFlushStatus profilingFlush() XRAY_NEVER_INSTRUMENT {
   // At this point, we'll create the file that will contain the profile, but
   // only if the options say so.
   if (!profilingFlags()->no_flush) {
-    int Fd = -1;
-    Fd = getLogFD();
-    if (Fd == -1) {
-      if (__sanitizer::Verbosity())
-        Report(
-            "profiler: Failed to acquire a file descriptor, dropping data.\n");
+    // First check whether we have data in the profile collector service
+    // before we try and write anything down.
+    XRayBuffer B = profileCollectorService::nextBuffer({nullptr, 0});
+    if (B.Data == nullptr) {
+      if (Verbosity())
+        Report("profiling: No data to flush.\n");
     } else {
-      XRayProfilingFileHeader Header;
-      Header.Timestamp = NanoTime();
-      Header.PID = internal_getpid();
-      retryingWriteAll(Fd, reinterpret_cast<const char *>(&Header),
-                       reinterpret_cast<const char *>(&Header) +
-                           sizeof(Header));
+      int Fd = getLogFD();
+      if (Fd == -1) {
+        if (Verbosity())
+          Report("profiling: Failed to flush to file, dropping data.\n");
+      } else {
+        XRayProfilingFileHeader Header;
+        Header.Timestamp = NanoTime();
+        Header.PID = internal_getpid();
+        retryingWriteAll(Fd, reinterpret_cast<const char *>(&Header),
+                         reinterpret_cast<const char *>(&Header) +
+                             sizeof(Header));
 
-      // Now for each of the threads, write out the profile data as we would see
-      // it in memory, verbatim.
-      XRayBuffer B = profileCollectorService::nextBuffer({nullptr, 0});
-      while (B.Data != nullptr && B.Size != 0) {
-        retryingWriteAll(Fd, reinterpret_cast<const char *>(B.Data),
-                         reinterpret_cast<const char *>(B.Data) + B.Size);
-        B = profileCollectorService::nextBuffer(B);
+        // Now for each of the threads, write out the profile data as we would
+        // see it in memory, verbatim.
+        while (B.Data != nullptr && B.Size != 0) {
+          retryingWriteAll(Fd, reinterpret_cast<const char *>(B.Data),
+                           reinterpret_cast<const char *>(B.Data) + B.Size);
+          B = profileCollectorService::nextBuffer(B);
+        }
+        // Then we close out the file.
+        internal_close(Fd);
       }
-
-      // Then we close out the file.
-      internal_close(Fd);
     }
   }
 
   profileCollectorService::reset();
+
+  // Flush the current thread's local data structures as well.
+  cleanupTLD();
 
   atomic_store(&ProfilerLogStatus, XRayLogFlushStatus::XRAY_LOG_FLUSHED,
                memory_order_release);
@@ -158,17 +179,12 @@ namespace {
 
 thread_local atomic_uint8_t ReentranceGuard{0};
 
-void postCurrentThreadFCT(ProfilingData &TLD) {
+static void postCurrentThreadFCT(ProfilingData &TLD) {
   if (TLD.Allocators == nullptr || TLD.FCT == nullptr)
     return;
 
   profileCollectorService::post(*TLD.FCT, GetTid());
-  TLD.FCT->~FunctionCallTrie();
-  TLD.Allocators->~Allocators();
-  InternalFree(TLD.FCT);
-  InternalFree(TLD.Allocators);
-  TLD.FCT = nullptr;
-  TLD.Allocators = nullptr;
+  cleanupTLD();
 }
 
 } // namespace
@@ -294,10 +310,14 @@ profilingLoggingInit(size_t BufferSize, size_t BufferMax, void *Options,
     // ABI functions for registering exit handlers.
     Atexit(+[] {
       // Finalize and flush.
-      if (profilingFinalize() != XRAY_LOG_FINALIZED)
+      if (profilingFinalize() != XRAY_LOG_FINALIZED) {
+        cleanupTLD();
         return;
-      if (profilingFlush() != XRAY_LOG_FLUSHED)
+      }
+      if (profilingFlush() != XRAY_LOG_FLUSHED) {
+        cleanupTLD();
         return;
+      }
       if (Verbosity())
         Report("XRay Profile flushed at exit.");
     });

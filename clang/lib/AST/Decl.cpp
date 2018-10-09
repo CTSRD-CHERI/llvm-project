@@ -2877,6 +2877,14 @@ bool FunctionDecl::isNoReturn() const {
   return false;
 }
 
+bool FunctionDecl::isCPUDispatchMultiVersion() const {
+  return isMultiVersion() && hasAttr<CPUDispatchAttr>();
+}
+
+bool FunctionDecl::isCPUSpecificMultiVersion() const {
+  return isMultiVersion() && hasAttr<CPUSpecificAttr>();
+}
+
 void
 FunctionDecl::setPreviousDeclaration(FunctionDecl *PrevDecl) {
   redeclarable_base::setPreviousDecl(PrevDecl);
