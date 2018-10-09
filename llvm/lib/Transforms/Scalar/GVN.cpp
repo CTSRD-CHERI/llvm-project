@@ -766,13 +766,15 @@ static Value *ConstructSSAForLoadSet(LoadInst *LI,
     if (SSAUpdate.HasValueForBlock(BB))
       continue;
 
-    // I do not understand why this was added or even needed. There is
-    // no comment. There is no test. And it breaks the LLVM test suite as well
-    // as some otherwise valid codebases. Revert this and use the original
-    // code instead.
-    //Value *Materialized = AV.MaterializeAdjustedValue(LI, gvn);
-    //if (Materialized != LI)
-    //  SSAUpdate.AddAvailableValue(BB, Materialized);
+    // If the value is the load that we will be eliminating, and the block it's
+    // available in is the block that the load is in, then don't add it as
+    // SSAUpdater will resolve the value to the relevant phi which may let it
+    // avoid phi construction entirely if there's actually only one value.
+    if (BB == LI->getParent() &&
+        ((AV.AV.isSimpleValue() && AV.AV.getSimpleValue() == LI) ||
+         (AV.AV.isCoercedLoadValue() && AV.AV.getCoercedLoadValue() == LI)))
+      continue;
+
     SSAUpdate.AddAvailableValue(BB, AV.MaterializeAdjustedValue(LI, gvn));
   }
 

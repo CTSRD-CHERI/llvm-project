@@ -38,7 +38,7 @@
 #include <armintr.h>
 #endif
 
-#if defined(_M_ARM64)
+#if defined(__aarch64__)
 #include <arm64intr.h>
 #endif
 
@@ -299,7 +299,7 @@ unsigned __int64 _umul128(unsigned __int64,
 
 #endif /* __x86_64__ */
 
-#if defined(__x86_64__) || defined(__arm__)
+#if defined(__x86_64__) || defined(__arm__) || defined(__aarch64__)
 
 static __inline__
 unsigned char _BitScanForward64(unsigned long *_Index, unsigned __int64 _Mask);
@@ -861,6 +861,20 @@ __halt(void) {
 static __inline__ void __DEFAULT_FN_ATTRS
 __nop(void) {
   __asm__ volatile ("nop");
+}
+#endif
+#if defined(__x86_64__)
+static __inline__ unsigned __int64 __DEFAULT_FN_ATTRS
+__shiftleft128(unsigned __int64 __l, unsigned __int64 __h, unsigned char __d) {
+  unsigned __int128 __val = ((unsigned __int128)__h << 64) | __l;
+  unsigned __int128 __res = __val << (__d & 63);
+  return (unsigned __int64)(__res >> 64);
+}
+static __inline__ unsigned __int64 __DEFAULT_FN_ATTRS
+__shiftright128(unsigned __int64 __l, unsigned __int64 __h, unsigned char __d) {
+  unsigned __int128 __val = ((unsigned __int128)__h << 64) | __l;
+  unsigned __int128 __res = __val >> (__d & 63);
+  return (unsigned __int64)__res;
 }
 #endif
 

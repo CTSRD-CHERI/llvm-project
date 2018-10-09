@@ -46,7 +46,7 @@ class ObjCMethodDecl;
 class Sema;
 
 /// Describes an entity that is being initialized.
-class InitializedEntity {
+class alignas(8) InitializedEntity {
 public:
   /// Specifies the kind of entity being initialized.
   enum EntityKind {
@@ -59,11 +59,14 @@ public:
     /// The entity being initialized is the result of a function call.
     EK_Result,
 
+    /// The entity being initialized is the result of a statement expression.
+    EK_StmtExprResult,
+
     /// The entity being initialized is an exception object that
     /// is being thrown.
     EK_Exception,
 
-    /// The entity being initialized is a non-static data member 
+    /// The entity being initialized is a non-static data member
     /// subobject.
     EK_Member,
 
@@ -123,7 +126,7 @@ public:
     // enum as an index for its first %select.  When modifying this list,
     // that diagnostic text needs to be updated as well.
   };
-  
+
 private:
   /// The kind of entity being initialized.
   EntityKind Kind;
@@ -158,6 +161,10 @@ private:
     /// initialization in a copy or move constructor. These can perform array
     /// copies.
     bool IsImplicitFieldInit;
+
+    /// When Kind == EK_Member, whether this is the initial initialization
+    /// check for a default member initializer.
+    bool IsDefaultMemberInit;
   };
 
   struct C {
@@ -203,7 +210,7 @@ private:
 
   /// Create the initialization entity for a variable.
   InitializedEntity(VarDecl *Var, EntityKind EK = EK_Variable)
-      : Kind(EK), Type(Var->getType()), Variable{Var, false} {}
+      : Kind(EK), Type(Var->getType()), Variable{Var, false, false} {}
   
   /// Create the initialization entity for the result of a
   /// function, throwing an object, performing an explicit cast, or
@@ -217,9 +224,9 @@ private:
   
   /// Create the initialization entity for a member subobject.
   InitializedEntity(FieldDecl *Member, const InitializedEntity *Parent,
-                    bool Implicit) 
+                    bool Implicit, bool DefaultMemberInit)
       : Kind(EK_Member), Parent(Parent), Type(Member->getType()),
-        Variable{Member, Implicit} {}
+        Variable{Member, Implicit, DefaultMemberInit} {}
   
   /// Create the initialization entity for an array element.
   InitializedEntity(ASTContext &Context, unsigned Index, 
@@ -281,6 +288,11 @@ public:
     return InitializedEntity(EK_Result, ReturnLoc, Type, NRVO);
   }
 
+  static InitializedEntity InitializeStmtExprResult(SourceLocation ReturnLoc,
+                                            QualType Type) {
+    return InitializedEntity(EK_StmtExprResult, ReturnLoc, Type);
+  }
+
   static InitializedEntity InitializeBlock(SourceLocation BlockVarLoc,
                                            QualType Type, bool NRVO) {
     return InitializedEntity(EK_BlockElement, BlockVarLoc, Type, NRVO);
@@ -339,21 +351,27 @@ public:
   static InitializedEntity InitializeDelegation(QualType Type) {
     return InitializedEntity(EK_Delegating, SourceLocation(), Type);
   }
-  
+
   /// Create the initialization entity for a member subobject.
   static InitializedEntity
   InitializeMember(FieldDecl *Member,
                    const InitializedEntity *Parent = nullptr,
                    bool Implicit = false) {
-    return InitializedEntity(Member, Parent, Implicit);
+    return InitializedEntity(Member, Parent, Implicit, false);
   }
-  
+
   /// Create the initialization entity for a member subobject.
   static InitializedEntity
   InitializeMember(IndirectFieldDecl *Member,
                    const InitializedEntity *Parent = nullptr,
                    bool Implicit = false) {
-    return InitializedEntity(Member->getAnonField(), Parent, Implicit);
+    return InitializedEntity(Member->getAnonField(), Parent, Implicit, false);
+  }
+
+  /// Create the initialization entity for a default member initializer.
+  static InitializedEntity
+  InitializeMemberFromDefaultMemberInitializer(FieldDecl *Member) {
+    return InitializedEntity(Member, nullptr, false, true);
   }
 
   /// Create the initialization entity for an array element.
@@ -451,6 +469,12 @@ public:
   /// a defaulted constructor?
   bool isImplicitMemberInitializer() const {
     return getKind() == EK_Member && Variable.IsImplicitFieldInit;
+  }
+
+  /// Is this the default member initializer of a member (specified inside
+  /// the class definition)?
+  bool isDefaultMemberInitializer() const {
+    return getKind() == EK_Member && Variable.IsDefaultMemberInit;
   }
 
   /// Determine the location of the 'return' keyword when initializing

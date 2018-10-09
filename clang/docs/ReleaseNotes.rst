@@ -98,6 +98,14 @@ Non-comprehensive list of changes in this release
   finding out the warning hierarchy, and which of them are enabled by default
   or for a particular compiler invocation.
 
+- By default, Clang emits an address-significance table into
+  every ELF object file when using the integrated assembler.
+  Address-significance tables allow linkers to implement `safe ICF
+  <https://research.google.com/pubs/archive/36912.pdf>`_ without the false
+  positives that can result from other implementation techniques such as
+  relocation scanning. The ``-faddrsig`` and ``-fno-addrsig`` flags can be
+  used to control whether to emit the address-significance table.
+
 - ...
 
 New Compiler Flags
@@ -158,7 +166,19 @@ Attribute Changes in Clang
 Windows Support
 ---------------
 
-Clang's support for building native Windows programs ...
+- clang-cl's support for precompiled headers has been much improved:
+
+   - When using a pch file, clang-cl now no longer redundantly emits inline
+     methods that are already stored in the obj that was built together with
+     the pch file (matching cl.exe).  This speeds up builds using pch files
+     by around 30%.
+
+   - The /Ycfoo.h and /Yufoo.h flags can now be used without /FIfoo.h when
+     foo.h is instead included by an explicit `#include` directive. This means
+     Visual Studio's default stdafx.h setup now uses precompiled headers with
+     clang-cl.
+
+- ...
 
 
 C Language Changes in Clang

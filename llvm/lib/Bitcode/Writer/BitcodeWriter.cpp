@@ -3355,10 +3355,14 @@ void IndexBitcodeWriter::writeModStrings() {
 
 /// Write the function type metadata related records that need to appear before
 /// a function summary entry (whether per-module or combined).
-static void writeFunctionTypeMetadataRecords(BitstreamWriter &Stream,
-                                             FunctionSummary *FS) {
-  if (!FS->type_tests().empty())
+static void writeFunctionTypeMetadataRecords(
+    BitstreamWriter &Stream, FunctionSummary *FS,
+    std::set<GlobalValue::GUID> &ReferencedTypeIds) {
+  if (!FS->type_tests().empty()) {
     Stream.EmitRecord(bitc::FS_TYPE_TESTS, FS->type_tests());
+    for (auto &TT : FS->type_tests())
+      ReferencedTypeIds.insert(TT);
+  }
 
   SmallVector<uint64_t, 64> Record;
 
@@ -3370,6 +3374,7 @@ static void writeFunctionTypeMetadataRecords(BitstreamWriter &Stream,
     for (auto &VF : VFs) {
       Record.push_back(VF.GUID);
       Record.push_back(VF.Offset);
+      ReferencedTypeIds.insert(VF.GUID);
     }
     Stream.EmitRecord(Ty, Record);
   };
@@ -3384,6 +3389,7 @@ static void writeFunctionTypeMetadataRecords(BitstreamWriter &Stream,
     for (auto &VC : VCs) {
       Record.clear();
       Record.push_back(VC.VFunc.GUID);
+      ReferencedTypeIds.insert(VC.VFunc.GUID);
       Record.push_back(VC.VFunc.Offset);
       Record.insert(Record.end(), VC.Args.begin(), VC.Args.end());
       Stream.EmitRecord(Ty, Record);
@@ -3449,7 +3455,8 @@ void ModuleBitcodeWriterBase::writePerModuleFunctionSummaryRecord(
   NameVals.push_back(ValueID);
 
   FunctionSummary *FS = cast<FunctionSummary>(Summary);
-  writeFunctionTypeMetadataRecords(Stream, FS);
+  std::set<GlobalValue::GUID> ReferencedTypeIds;
+  writeFunctionTypeMetadataRecords(Stream, FS, ReferencedTypeIds);
 
   NameVals.push_back(getEncodedGVSummaryFlags(FS->flags()));
   NameVals.push_back(FS->instCount());
@@ -3704,6 +3711,10 @@ void IndexBitcodeWriter::writeCombinedGlobalValueSummary() {
 
   SmallVector<uint64_t, 64> NameVals;
 
+  // Set that will be populated during call to writeFunctionTypeMetadataRecords
+  // with the type ids referenced by this index file.
+  std::set<GlobalValue::GUID> ReferencedTypeIds;
+
   // For local linkage, we also emit the original name separately
   // immediately after the record.
   auto MaybeEmitOriginalName = [&](GlobalValueSummary &S) {
@@ -3755,7 +3766,7 @@ void IndexBitcodeWriter::writeCombinedGlobalValueSummary() {
     }
 
     auto *FS = cast<FunctionSummary>(S);
-    writeFunctionTypeMetadataRecords(Stream, FS);
+    writeFunctionTypeMetadataRecords(Stream, FS, ReferencedTypeIds);
 
     NameVals.push_back(*ValueId);
     NameVals.push_back(Index.getModuleId(FS->modulePath()));
@@ -3864,6 +3875,9 @@ void IndexBitcodeWriter::writeCombinedGlobalValueSummary() {
 
   if (!Index.typeIds().empty()) {
     for (auto &S : Index.typeIds()) {
+      // Skip if not referenced in any GV summary within this index file.
+      if (!ReferencedTypeIds.count(GlobalValue::getGUID(S.first)))
+        continue;
       writeTypeIdSummaryRecord(NameVals, StrtabBuilder, S.first, S.second);
       Stream.EmitRecord(bitc::FS_TYPE_ID, NameVals);
       NameVals.clear();

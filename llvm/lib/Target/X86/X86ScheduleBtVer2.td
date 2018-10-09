@@ -168,6 +168,9 @@ defm : JWriteResIntPair<WriteIMul,   [JALU1, JMul], 3, [1, 1], 2>; // i8/i16/i32
 defm : JWriteResIntPair<WriteIMul64, [JALU1, JMul], 6, [1, 4], 2>; // i64 multiplication
 defm : X86WriteRes<WriteIMulH,       [JALU1], 6, [4], 1>;
 
+defm : JWriteResIntPair<WriteBSWAP32,[JALU01], 1>;
+defm : JWriteResIntPair<WriteBSWAP64,[JALU01], 1>;
+
 defm : JWriteResIntPair<WriteDiv8,   [JALU1, JDiv], 12, [1, 12], 1>;
 defm : JWriteResIntPair<WriteDiv16,  [JALU1, JDiv], 17, [1, 17], 2>;
 defm : JWriteResIntPair<WriteDiv32,  [JALU1, JDiv], 25, [1, 25], 2>;
@@ -187,7 +190,6 @@ def  : WriteRes<WriteSETCCStore, [JALU01,JSAGU]>;
 def  : WriteRes<WriteLAHFSAHF, [JALU01]>;
 
 // This is for simple LEAs with one or two input operands.
-// FIXME: SAGU 3-operand LEA
 def : WriteRes<WriteLEA, [JALU01]>;
 
 // Bit counts.
@@ -664,4 +666,38 @@ def : InstRW<[JWriteVZeroIdiomALUX], (instrs PSUBBrr, VPSUBBrr,
                                              PCMPGTDrr, VPCMPGTDrr,
                                              PCMPGTQrr, VPCMPGTQrr,
                                              PCMPGTWrr, VPCMPGTWrr)>;
+
+// This write is used for slow LEA instructions.
+def JWrite3OpsLEA : SchedWriteRes<[JALU1, JSAGU]> {
+  let Latency = 2;
+}
+
+// On Jaguar, a slow LEA is either a 3Ops LEA (base, index, offset), or an LEA
+// with a `Scale` value different than 1.
+def JSlowLEAPredicate : MCSchedPredicate<
+  CheckAny<[
+    // A 3-operand LEA (base, index, offset).
+    IsThreeOperandsLEAFn,
+    // An LEA with a "Scale" different than 1.
+    CheckAll<[
+      CheckIsImmOperand<2>,
+      CheckNot<CheckImmOperand<2, 1>>
+    ]>
+  ]>
+>;
+
+def JWriteLEA : SchedWriteVariant<[
+    SchedVar<JSlowLEAPredicate,          [JWrite3OpsLEA]>,
+    SchedVar<MCSchedPredicate<TruePred>, [WriteLEA]>
+]>;
+
+def : InstRW<[JWriteLEA], (instrs LEA32r, LEA64r, LEA64_32r)>;
+
+def JSlowLEA16r : SchedWriteRes<[JALU01]> {
+  let Latency = 3;
+  let ResourceCycles = [4];
+}
+
+def : InstRW<[JSlowLEA16r], (instrs LEA16r)>;
+
 } // SchedModel

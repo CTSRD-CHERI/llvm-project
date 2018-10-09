@@ -328,8 +328,6 @@ void BuildIdSection::computeHash(
 BssSection::BssSection(StringRef Name, uint64_t Size, uint32_t Alignment)
     : SyntheticSection(SHF_ALLOC | SHF_WRITE, SHT_NOBITS, Alignment, Name) {
   this->Bss = true;
-  if (OutputSection *Sec = getParent())
-    Sec->Alignment = std::max(Sec->Alignment, Alignment);
   this->Size = Size;
 }
 
@@ -370,15 +368,11 @@ EhFrameSection::EhFrameSection()
 // and where their relocations point to.
 template <class ELFT, class RelTy>
 CieRecord *EhFrameSection::addCie(EhSectionPiece &Cie, ArrayRef<RelTy> Rels) {
-  auto *Sec = cast<EhInputSection>(Cie.Sec);
-  if (read32(Cie.data().data() + 4) != 0)
-    fatal(toString(Sec) + ": CIE expected at beginning of .eh_frame");
-
   Symbol *Personality = nullptr;
   unsigned FirstRelI = Cie.FirstRelocation;
   if (FirstRelI != (unsigned)-1)
     Personality =
-        &Sec->template getFile<ELFT>()->getRelocTargetSym(Rels[FirstRelI]);
+        &Cie.Sec->template getFile<ELFT>()->getRelocTargetSym(Rels[FirstRelI]);
 
   // Search for an existing CIE by CIE contents/relocation target pair.
   CieRecord *&Rec = CieMap[{Cie.data(), Personality}];
@@ -480,9 +474,7 @@ static void writeCieFde(uint8_t *Buf, ArrayRef<uint8_t> D) {
 }
 
 void EhFrameSection::finalizeContents() {
-  if (this->Size)
-    return; // Already finalized.
-
+  assert(!this->Size); // Not finalized.
   size_t Off = 0;
   for (CieRecord *Rec : CieRecords) {
     Rec->Cie->OutputOff = Off;
@@ -510,14 +502,31 @@ std::vector<EhFrameSection::FdeData> EhFrameSection::getFdeData() const {
   uint8_t *Buf = getParent()->Loc + OutSecOff;
   std::vector<FdeData> Ret;
 
+  uint64_t VA = InX::EhFrameHdr->getVA();
   for (CieRecord *Rec : CieRecords) {
     uint8_t Enc = getFdeEncoding(Rec->Cie);
     for (EhSectionPiece *Fde : Rec->Fdes) {
-      uint32_t Pc = getFdePc(Buf, Fde->OutputOff, Enc);
-      uint32_t FdeVA = getParent()->Addr + Fde->OutputOff;
-      Ret.push_back({Pc, FdeVA});
+      uint64_t Pc = getFdePc(Buf, Fde->OutputOff, Enc);
+      uint64_t FdeVA = getParent()->Addr + Fde->OutputOff;
+      if (!isInt<32>(Pc - VA))
+        fatal(toString(Fde->Sec) + ": PC offset is too large: 0x" +
+              Twine::utohexstr(Pc - VA));
+      Ret.push_back({uint32_t(Pc - VA), uint32_t(FdeVA - VA)});
     }
   }
+
+  // Sort the FDE list by their PC and uniqueify. Usually there is only
+  // one FDE for a PC (i.e. function), but if ICF merges two functions
+  // into one, there can be more than one FDEs pointing to the address.
+  auto Less = [](const FdeData &A, const FdeData &B) {
+    return A.PcRel < B.PcRel;
+  };
+  std::stable_sort(Ret.begin(), Ret.end(), Less);
+  auto Eq = [](const FdeData &A, const FdeData &B) {
+    return A.PcRel == B.PcRel;
+  };
+  Ret.erase(std::unique(Ret.begin(), Ret.end(), Eq), Ret.end());
+
   return Ret;
 }
 
@@ -525,9 +534,14 @@ static uint64_t readFdeAddr(uint8_t *Buf, int Size) {
   switch (Size) {
   case DW_EH_PE_udata2:
     return read16(Buf);
+  case DW_EH_PE_sdata2:
+    return (int16_t)read16(Buf);
   case DW_EH_PE_udata4:
     return read32(Buf);
+  case DW_EH_PE_sdata4:
+    return (int32_t)read32(Buf);
   case DW_EH_PE_udata8:
+  case DW_EH_PE_sdata8:
     return read64(Buf);
   case DW_EH_PE_absptr:
     return readUint(Buf);
@@ -542,7 +556,7 @@ uint64_t EhFrameSection::getFdePc(uint8_t *Buf, size_t FdeOff,
   // The starting address to which this FDE applies is
   // stored at FDE + 8 byte.
   size_t Off = FdeOff + 8;
-  uint64_t Addr = readFdeAddr(Buf + Off, Enc & 0x7);
+  uint64_t Addr = readFdeAddr(Buf + Off, Enc & 0xf);
   if ((Enc & 0x70) == DW_EH_PE_absptr)
     return Addr;
   if ((Enc & 0x70) == DW_EH_PE_pcrel)
@@ -858,7 +872,13 @@ template <class ELFT> void MipsGotSection::build() {
     if (tryMergeGots(MergedGots.front(), SrcGot, true)) {
       File->MipsGotIndex = 0;
     } else {
-      if (!tryMergeGots(MergedGots.back(), SrcGot, false)) {
+      // If this is the first time we failed to merge with the primary GOT,
+      // MergedGots.back() will also be the primary GOT. We must make sure not
+      // to try to merge again with IsPrimary=false, as otherwise, if the
+      // inputs are just right, we could allow the primary GOT to become 1 or 2
+      // words too big due to ignoring the header size.
+      if (MergedGots.size() == 1 ||
+          !tryMergeGots(MergedGots.back(), SrcGot, false)) {
         MergedGots.emplace_back();
         std::swap(MergedGots.back(), SrcGot);
       }
@@ -1855,8 +1875,7 @@ void SymbolTableBaseSection::finalizeContents() {
 // symbol. That is convenient for purpose of identifying where are local symbols
 // coming from.
 void SymbolTableBaseSection::postThunkContents() {
-  if (this->Type == SHT_DYNSYM)
-    return;
+  assert(this->Type == SHT_SYMTAB);
 
   // Move all local symbols before global symbols.
   auto E = std::stable_partition(
@@ -2539,14 +2558,6 @@ void EhFrameHeader::writeTo(uint8_t *Buf) {
 
   std::vector<FdeData> Fdes = InX::EhFrame->getFdeData();
 
-  // Sort the FDE list by their PC and uniqueify. Usually there is only
-  // one FDE for a PC (i.e. function), but if ICF merges two functions
-  // into one, there can be more than one FDEs pointing to the address.
-  auto Less = [](const FdeData &A, const FdeData &B) { return A.Pc < B.Pc; };
-  std::stable_sort(Fdes.begin(), Fdes.end(), Less);
-  auto Eq = [](const FdeData &A, const FdeData &B) { return A.Pc == B.Pc; };
-  Fdes.erase(std::unique(Fdes.begin(), Fdes.end(), Eq), Fdes.end());
-
   Buf[0] = 1;
   Buf[1] = DW_EH_PE_pcrel | DW_EH_PE_sdata4;
   Buf[2] = DW_EH_PE_udata4;
@@ -2555,10 +2566,9 @@ void EhFrameHeader::writeTo(uint8_t *Buf) {
   write32(Buf + 8, Fdes.size());
   Buf += 12;
 
-  uint64_t VA = this->getVA();
   for (FdeData &Fde : Fdes) {
-    write32(Buf, Fde.Pc - VA);
-    write32(Buf + 4, Fde.FdeVA - VA);
+    write32(Buf, Fde.PcRel);
+    write32(Buf + 4, Fde.FdeVARel);
     Buf += 8;
   }
 }

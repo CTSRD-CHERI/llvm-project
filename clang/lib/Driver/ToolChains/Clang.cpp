@@ -524,6 +524,10 @@ static bool useFramePointerForTargetByDefault(const ArgList &Args,
     break;
   }
 
+  if (Triple.getOS() == llvm::Triple::NetBSD) {
+    return !areOptimizationsEnabled(Args);
+  }
+
   if (Triple.isOSLinux() || Triple.getOS() == llvm::Triple::CloudABI) {
     switch (Triple.getArch()) {
     // Don't use a frame pointer on linux if optimizing for certain targets.
@@ -3024,6 +3028,11 @@ static void RenderDebugOptions(const ToolChain &TC, const Driver &D,
 
   if (Args.hasFlag(options::OPT_fdebug_types_section,
                    options::OPT_fno_debug_types_section, false)) {
+    if (!T.isOSBinFormatELF())
+      D.Diag(diag::err_drv_unsupported_opt_for_target)
+          << Args.getLastArg(options::OPT_fdebug_types_section)
+                 ->getAsString(Args)
+          << T.getTriple();
     CmdArgs.push_back("-mllvm");
     CmdArgs.push_back("-generate-type-units");
   }
@@ -3343,6 +3352,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (Args.hasFlag(options::OPT_fmerge_all_constants,
                    options::OPT_fno_merge_all_constants, false))
     CmdArgs.push_back("-fmerge-all-constants");
+
+  if (Args.hasFlag(options::OPT_fno_delete_null_pointer_checks,
+                   options::OPT_fdelete_null_pointer_checks, false))
+    CmdArgs.push_back("-fno-delete-null-pointer-checks");
 
   // LLVM Code Generator Options.
 
@@ -3925,6 +3938,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // Forward -f (flag) options which we can pass directly.
   Args.AddLastArg(CmdArgs, options::OPT_femit_all_decls);
   Args.AddLastArg(CmdArgs, options::OPT_fheinous_gnu_extensions);
+  Args.AddLastArg(CmdArgs, options::OPT_fdigraphs, options::OPT_fno_digraphs);
   Args.AddLastArg(CmdArgs, options::OPT_fno_operator_names);
   Args.AddLastArg(CmdArgs, options::OPT_femulated_tls,
                   options::OPT_fno_emulated_tls);
@@ -4771,6 +4785,11 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back("-enable-machine-outliner=never");
     }
   }
+
+  if (Args.hasFlag(options::OPT_faddrsig, options::OPT_fno_addrsig,
+                   getToolChain().getTriple().isOSBinFormatELF() &&
+                       getToolChain().useIntegratedAs()))
+    CmdArgs.push_back("-faddrsig");
 
   // Finally add the compile command to the compilation.
   if (Args.hasArg(options::OPT__SLASH_fallback) &&

@@ -43,6 +43,8 @@ thread_local bool Fuzzer::IsMyThread;
 
 SharedMemoryRegion SMR;
 
+bool RunningUserCallback = false;
+
 // Only one Fuzzer per process.
 static Fuzzer *F;
 
@@ -243,7 +245,7 @@ void Fuzzer::CrashCallback() {
 }
 
 void Fuzzer::ExitCallback() {
-  if (!RunningCB)
+  if (!RunningUserCallback)
     return; // This exit did not come from the user callback
   if (EF->__sanitizer_acquire_crash_state &&
       !EF->__sanitizer_acquire_crash_state())
@@ -277,7 +279,7 @@ void Fuzzer::AlarmCallback() {
   if (!InFuzzingThread())
     return;
 #endif
-  if (!RunningCB)
+  if (!RunningUserCallback)
     return; // We have not started running units yet.
   size_t Seconds =
       duration_cast<seconds>(system_clock::now() - UnitStartTime).count();
@@ -358,6 +360,7 @@ void Fuzzer::PrintFinalStats() {
     TPC.DumpCoverage();
   if (Options.PrintCorpusStats)
     Corpus.PrintStats();
+  if (Options.PrintMutationStats) MD.PrintMutationStats();
   if (!Options.PrintFinalStats)
     return;
   size_t ExecPerSec = execPerSec();
@@ -451,9 +454,9 @@ void Fuzzer::CheckForUnstableCounters(const uint8_t *Data, size_t Size) {
     ScopedEnableMsanInterceptorChecks S;
     UnitStartTime = system_clock::now();
     TPC.ResetMaps();
-    RunningCB = true;
+    RunningUserCallback = true;
     CB(Data, Size);
-    RunningCB = false;
+    RunningUserCallback = false;
     UnitStopTime = system_clock::now();
   };
 
@@ -462,11 +465,16 @@ void Fuzzer::CheckForUnstableCounters(const uint8_t *Data, size_t Size) {
 
   // First Rerun
   CBSetupAndRun();
-  TPC.UpdateUnstableCounters();
+  TPC.UpdateUnstableCounters(Options.HandleUnstable);
 
   // Second Rerun
   CBSetupAndRun();
-  TPC.UpdateUnstableCounters();
+  TPC.UpdateUnstableCounters(Options.HandleUnstable);
+
+  // Move minimum hit counts back to ModuleInline8bitCounters
+  if (Options.HandleUnstable == TracePC::MinUnstable ||
+      Options.HandleUnstable == TracePC::ZeroUnstable)
+    TPC.ApplyUnstableCounters();
 }
 
 bool Fuzzer::RunOne(const uint8_t *Data, size_t Size, bool MayDeleteFile,
@@ -479,6 +487,17 @@ bool Fuzzer::RunOne(const uint8_t *Data, size_t Size, bool MayDeleteFile,
   UniqFeatureSetTmp.clear();
   size_t FoundUniqFeaturesOfII = 0;
   size_t NumUpdatesBefore = Corpus.NumFeatureUpdates();
+  bool NewFeaturesUnstable = false;
+
+  if (Options.HandleUnstable || Options.PrintUnstableStats) {
+    TPC.CollectFeatures([&](size_t Feature) {
+      if (Corpus.IsFeatureNew(Feature, Size, Options.Shrink))
+        NewFeaturesUnstable = true;
+    });
+    if (NewFeaturesUnstable)
+      CheckForUnstableCounters(Data, Size);
+  }
+
   TPC.CollectFeatures([&](size_t Feature) {
     if (Corpus.AddFeature(Feature, Size, Options.Shrink))
       UniqFeatureSetTmp.push_back(Feature);
@@ -487,21 +506,16 @@ bool Fuzzer::RunOne(const uint8_t *Data, size_t Size, bool MayDeleteFile,
                              II->UniqFeatureSet.end(), Feature))
         FoundUniqFeaturesOfII++;
   });
+
   if (FoundUniqFeatures)
     *FoundUniqFeatures = FoundUniqFeaturesOfII;
   PrintPulseAndReportSlowInput(Data, Size);
   size_t NumNewFeatures = Corpus.NumFeatureUpdates() - NumUpdatesBefore;
 
-  // If print_unstable_stats, execute the same input two more times to detect
-  // unstable edges.
-  if (NumNewFeatures && Options.PrintUnstableStats)
-    CheckForUnstableCounters(Data, Size);
-
   if (NumNewFeatures) {
     TPC.UpdateObservedPCs();
     Corpus.AddToCorpus({Data, Data + Size}, NumNewFeatures, MayDeleteFile,
-                       TPC.ObservedFocusFunction(),
-                       UniqFeatureSetTmp, DFT);
+                       TPC.ObservedFocusFunction(), UniqFeatureSetTmp, DFT, II);
     return true;
   }
   if (II && FoundUniqFeaturesOfII &&
@@ -558,9 +572,9 @@ void Fuzzer::ExecuteCallback(const uint8_t *Data, size_t Size) {
     AllocTracer.Start(Options.TraceMalloc);
     UnitStartTime = system_clock::now();
     TPC.ResetMaps();
-    RunningCB = true;
+    RunningUserCallback = true;
     int Res = CB(DataCopy, Size);
-    RunningCB = false;
+    RunningUserCallback = false;
     UnitStopTime = system_clock::now();
     (void)Res;
     assert(Res == 0);
@@ -684,7 +698,12 @@ void Fuzzer::MutateAndTestOne() {
       break;
     MaybeExitGracefully();
     size_t NewSize = 0;
-    NewSize = MD.Mutate(CurrentUnitData, Size, CurrentMaxMutationLen);
+    if (II.HasFocusFunction && !II.DataFlowTraceForFocusFunction.empty() &&
+        Size <= CurrentMaxMutationLen)
+      NewSize = MD.MutateWithMask(CurrentUnitData, Size, Size,
+                                  II.DataFlowTraceForFocusFunction);
+    else
+      NewSize = MD.Mutate(CurrentUnitData, Size, CurrentMaxMutationLen);
     assert(NewSize > 0 && "Mutator returned empty unit");
     assert(NewSize <= CurrentMaxMutationLen && "Mutator return oversized unit");
     Size = NewSize;

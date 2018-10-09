@@ -2243,6 +2243,19 @@ Sema::CheckBaseSpecifier(CXXRecordDecl *Class,
   CXXRecordDecl *CXXBaseDecl = cast<CXXRecordDecl>(BaseDecl);
   assert(CXXBaseDecl && "Base type is not a C++ type");
 
+  // Microsoft docs say:
+  // "If a base-class has a code_seg attribute, derived classes must have the
+  // same attribute."
+  const auto *BaseCSA = CXXBaseDecl->getAttr<CodeSegAttr>();
+  const auto *DerivedCSA = Class->getAttr<CodeSegAttr>();
+  if ((DerivedCSA || BaseCSA) &&
+      (!BaseCSA || !DerivedCSA || BaseCSA->getName() != DerivedCSA->getName())) {
+    Diag(Class->getLocation(), diag::err_mismatched_code_seg_base);
+    Diag(CXXBaseDecl->getLocation(), diag::note_base_class_specified_here)
+      << CXXBaseDecl;
+    return nullptr;
+  }
+
   // A class which contains a flexible array member is not suitable for use as a
   // base class:
   //   - If the layout determines that a base comes before another base,
@@ -3621,7 +3634,8 @@ void Sema::ActOnFinishCXXInClassMemberInitializer(Decl *D,
 
   ExprResult Init = InitExpr;
   if (!FD->getType()->isDependentType() && !InitExpr->isTypeDependent()) {
-    InitializedEntity Entity = InitializedEntity::InitializeMember(FD);
+    InitializedEntity Entity =
+        InitializedEntity::InitializeMemberFromDefaultMemberInitializer(FD);
     InitializationKind Kind =
         FD->getInClassInitStyle() == ICIS_ListInit
             ? InitializationKind::CreateDirectList(InitExpr->getLocStart(),
@@ -3932,53 +3946,6 @@ Sema::BuildMemInitializer(Decl *ConstructorD,
   return BuildBaseInitializer(BaseType, TInfo, Init, ClassDecl, EllipsisLoc);
 }
 
-/// Checks a member initializer expression for cases where reference (or
-/// pointer) members are bound to by-value parameters (or their addresses).
-static void CheckForDanglingReferenceOrPointer(Sema &S, ValueDecl *Member,
-                                               Expr *Init,
-                                               SourceLocation IdLoc) {
-  QualType MemberTy = Member->getType();
-
-  // We only handle pointers and references currently.
-  // FIXME: Would this be relevant for ObjC object pointers? Or block pointers?
-  if (!MemberTy->isReferenceType() && !MemberTy->isPointerType())
-    return;
-
-  const bool IsPointer = MemberTy->isPointerType();
-  if (IsPointer) {
-    if (const UnaryOperator *Op
-          = dyn_cast<UnaryOperator>(Init->IgnoreParenImpCasts())) {
-      // The only case we're worried about with pointers requires taking the
-      // address.
-      if (Op->getOpcode() != UO_AddrOf)
-        return;
-
-      Init = Op->getSubExpr();
-    } else {
-      // We only handle address-of expression initializers for pointers.
-      return;
-    }
-  }
-
-  if (const DeclRefExpr *DRE = dyn_cast<DeclRefExpr>(Init->IgnoreParens())) {
-    // We only warn when referring to a non-reference parameter declaration.
-    const ParmVarDecl *Parameter = dyn_cast<ParmVarDecl>(DRE->getDecl());
-    if (!Parameter || Parameter->getType()->isReferenceType())
-      return;
-
-    S.Diag(Init->getExprLoc(),
-           IsPointer ? diag::warn_init_ptr_member_to_parameter_addr
-                     : diag::warn_bind_ref_member_to_parameter)
-      << Member << Parameter << Init->getSourceRange();
-  } else {
-    // Other initializers are fine.
-    return;
-  }
-
-  S.Diag(Member->getLocation(), diag::note_ref_or_ptr_member_declared_here)
-    << (unsigned)IsPointer;
-}
-
 MemInitResult
 Sema::BuildMemberInitializer(ValueDecl *Member, Expr *Init,
                              SourceLocation IdLoc) {
@@ -4032,8 +3999,6 @@ Sema::BuildMemberInitializer(ValueDecl *Member, Expr *Init,
                                             nullptr);
     if (MemberInit.isInvalid())
       return true;
-
-    CheckForDanglingReferenceOrPointer(*this, Member, MemberInit.get(), IdLoc);
 
     // C++11 [class.base.init]p7:
     //   The initialization of each base and member constitutes a
@@ -4646,6 +4611,10 @@ static bool CollectFieldInitializer(Sema &SemaRef, BaseAndFieldInfo &Info,
         SemaRef.BuildCXXDefaultInitExpr(Info.Ctor->getLocation(), Field);
     if (DIE.isInvalid())
       return true;
+
+    auto Entity = InitializedEntity::InitializeMember(Field, nullptr, true);
+    SemaRef.checkInitializerLifetime(Entity, DIE.get());
+
     CXXCtorInitializer *Init;
     if (Indirect)
       Init = new (SemaRef.Context)
@@ -5609,6 +5578,16 @@ static void checkForMultipleExportedDefaultConstructors(Sema &S,
   }
 }
 
+void Sema::checkClassLevelCodeSegAttribute(CXXRecordDecl *Class) {
+  // Mark any compiler-generated routines with the implicit code_seg attribute.
+  for (auto *Method : Class->methods()) {
+    if (Method->isUserProvided())
+      continue;
+    if (Attr *A = getImplicitCodeSegOrSectionAttrForFunction(Method, /*IsDefinition=*/true))
+      Method->addAttr(A);
+  }
+}
+
 /// Check class-level dllimport/dllexport attribute.
 void Sema::checkClassLevelDLLAttribute(CXXRecordDecl *Class) {
   Attr *ClassAttr = getDLLAttr(Class);
@@ -6117,6 +6096,7 @@ void Sema::CheckCompletedCXXClass(CXXRecordDecl *Record) {
   }
 
   checkClassLevelDLLAttribute(Record);
+  checkClassLevelCodeSegAttribute(Record);
 
   bool ClangABICompat4 =
       Context.getLangOpts().getClangABICompat() <= LangOptions::ClangABI::Ver4;
@@ -14582,6 +14562,16 @@ bool Sema::CheckOverridingFunctionAttributes(const CXXMethodDecl *New,
         Diag(Old->getParamDecl(I)->getLocation(),
              diag::note_overridden_marked_noescape);
       }
+  }
+
+  // Virtual overrides must have the same code_seg.
+  const auto *OldCSA = Old->getAttr<CodeSegAttr>();
+  const auto *NewCSA = New->getAttr<CodeSegAttr>();
+  if ((NewCSA || OldCSA) &&
+      (!OldCSA || !NewCSA || NewCSA->getName() != OldCSA->getName())) {
+    Diag(New->getLocation(), diag::err_mismatched_code_seg_override);
+    Diag(Old->getLocation(), diag::note_previous_declaration);
+    return true;
   }
 
   CallingConv NewCC = NewFT->getCallConv(), OldCC = OldFT->getCallConv();

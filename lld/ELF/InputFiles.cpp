@@ -420,6 +420,17 @@ void ObjFile<ELFT>::initializeSections(
     // if -r is given, we'll let the final link discard such sections.
     // This is compatible with GNU.
     if ((Sec.sh_flags & SHF_EXCLUDE) && !Config->Relocatable) {
+      if (Sec.sh_type == SHT_LLVM_ADDRSIG) {
+        // We ignore the address-significance table if we know that the object
+        // file was created by objcopy or ld -r. This is because these tools
+        // will reorder the symbols in the symbol table, invalidating the data
+        // in the address-significance table, which refers to symbols by index.
+        if (Sec.sh_link != 0)
+          this->AddrsigSec = &Sec;
+        else if (Config->ICF == ICFLevel::Safe)
+          warn(toString(this) + ": --icf=safe is incompatible with object "
+                                "files created using objcopy or ld -r");
+      }
       this->Sections[I] = &InputSection::Discarded;
       continue;
     }
@@ -645,13 +656,24 @@ InputSectionBase *ObjFile<ELFT>::createInputSection(const Elf_Shdr &Sec) {
   if (Name == ".note.GNU-stack")
     return &InputSection::Discarded;
 
-  // Split stacks is a feature to support a discontiguous stack. At least
-  // as of 2017, it seems that the feature is not being used widely.
-  // Only GNU gold supports that. We don't. For the details about that,
-  // see https://gcc.gnu.org/wiki/SplitStacks
+  // Split stacks is a feature to support a discontiguous stack,
+  // commonly used in the programming language Go. For the details,
+  // see https://gcc.gnu.org/wiki/SplitStacks. An object file compiled
+  // for split stack will include a .note.GNU-split-stack section.
   if (Name == ".note.GNU-split-stack") {
-    error(toString(this) +
-          ": object file compiled with -fsplit-stack is not supported");
+    if (Config->Relocatable) {
+      error("Cannot mix split-stack and non-split-stack in a relocatable link");
+      return &InputSection::Discarded;
+    }
+    this->SplitStack = true;
+    return &InputSection::Discarded;
+  }
+
+  // An object file cmpiled for split stack, but where some of the
+  // functions were compiled with the no_split_stack_attribute will
+  // include a .note.GNU-no-split-stack section.
+  if (Name == ".note.GNU-no-split-stack") {
+    this->SomeNoSplitStack = true;
     return &InputSection::Discarded;
   }
 

@@ -732,8 +732,8 @@ static RValue EmitMSVCRTSetJmp(CodeGenFunction &CGF, MSVCSetJmpKind SJKind,
   return RValue::get(CS.getInstruction());
 }
 
-// Many of MSVC builtins are on both x64 and ARM; to avoid repeating code, we
-// handle them here.
+// Many of MSVC builtins are on x64, ARM and AArch64; to avoid repeating code,
+// we handle them here.
 enum class CodeGenFunction::MSVCIntrin {
   _BitScanForward,
   _BitScanReverse,
@@ -4158,6 +4158,8 @@ static const NeonIntrinsicInfo ARMSIMDIntrinsicMap [] = {
   NEONMAP1(vrnd_v, arm_neon_vrintz, Add1ArgType),
   NEONMAP1(vrnda_v, arm_neon_vrinta, Add1ArgType),
   NEONMAP1(vrndaq_v, arm_neon_vrinta, Add1ArgType),
+  NEONMAP0(vrndi_v),
+  NEONMAP0(vrndiq_v),
   NEONMAP1(vrndm_v, arm_neon_vrintm, Add1ArgType),
   NEONMAP1(vrndmq_v, arm_neon_vrintm, Add1ArgType),
   NEONMAP1(vrndn_v, arm_neon_vrintn, Add1ArgType),
@@ -4334,6 +4336,8 @@ static const NeonIntrinsicInfo AArch64SIMDIntrinsicMap[] = {
   NEONMAP1(vrecpsq_v, aarch64_neon_frecps, Add1ArgType),
   NEONMAP2(vrhadd_v, aarch64_neon_urhadd, aarch64_neon_srhadd, Add1ArgType | UnsignedAlts),
   NEONMAP2(vrhaddq_v, aarch64_neon_urhadd, aarch64_neon_srhadd, Add1ArgType | UnsignedAlts),
+  NEONMAP0(vrndi_v),
+  NEONMAP0(vrndiq_v),
   NEONMAP2(vrshl_v, aarch64_neon_urshl, aarch64_neon_srshl, Add1ArgType | UnsignedAlts),
   NEONMAP2(vrshlq_v, aarch64_neon_urshl, aarch64_neon_srshl, Add1ArgType | UnsignedAlts),
   NEONMAP2(vrshr_n_v, aarch64_neon_urshl, aarch64_neon_srshl, UnsignedAlts),
@@ -5094,7 +5098,10 @@ Value *CodeGenFunction::EmitCommonNeonBuiltinExpr(
   case NEON::BI__builtin_neon_vrsqrteq_v:
     Int = Ty->isFPOrFPVectorTy() ? LLVMIntrinsic : AltLLVMIntrinsic;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, NameHint);
-
+  case NEON::BI__builtin_neon_vrndi_v:
+  case NEON::BI__builtin_neon_vrndiq_v:
+    Int = Intrinsic::nearbyint;
+    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, NameHint);
   case NEON::BI__builtin_neon_vrshr_n_v:
   case NEON::BI__builtin_neon_vrshrq_n_v:
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrshr_n",
@@ -7486,11 +7493,6 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
     Int = Intrinsic::nearbyint;
     return EmitNeonCall(CGM.getIntrinsic(Int, HalfTy), Ops, "vrndi");
   }
-  case NEON::BI__builtin_neon_vrndi_v:
-  case NEON::BI__builtin_neon_vrndiq_v: {
-    Int = Intrinsic::nearbyint;
-    return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrndi");
-  }
   case NEON::BI__builtin_neon_vrndmh_f16: {
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
     Int = Intrinsic::floor;
@@ -7510,6 +7512,11 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
   case NEON::BI__builtin_neon_vrndnq_v: {
     Int = Intrinsic::aarch64_neon_frintn;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vrndn");
+  }
+  case NEON::BI__builtin_neon_vrndns_f32: {
+    Ops.push_back(EmitScalarExpr(E->getArg(0)));
+    Int = Intrinsic::aarch64_neon_frintn;
+    return EmitNeonCall(CGM.getIntrinsic(Int, FloatTy), Ops, "vrndn");
   }
   case NEON::BI__builtin_neon_vrndph_f16: {
     Ops.push_back(EmitScalarExpr(E->getArg(0)));
@@ -7567,14 +7574,14 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
   case NEON::BI__builtin_neon_vcvt_u32_v:
   case NEON::BI__builtin_neon_vcvt_s64_v:
   case NEON::BI__builtin_neon_vcvt_u64_v:
-	case NEON::BI__builtin_neon_vcvt_s16_v:
-	case NEON::BI__builtin_neon_vcvt_u16_v:
+  case NEON::BI__builtin_neon_vcvt_s16_v:
+  case NEON::BI__builtin_neon_vcvt_u16_v:
   case NEON::BI__builtin_neon_vcvtq_s32_v:
   case NEON::BI__builtin_neon_vcvtq_u32_v:
   case NEON::BI__builtin_neon_vcvtq_s64_v:
   case NEON::BI__builtin_neon_vcvtq_u64_v:
-	case NEON::BI__builtin_neon_vcvtq_s16_v:
-	case NEON::BI__builtin_neon_vcvtq_u16_v: {
+  case NEON::BI__builtin_neon_vcvtq_s16_v:
+  case NEON::BI__builtin_neon_vcvtq_u16_v: {
     Ops[0] = Builder.CreateBitCast(Ops[0], GetFloatNeonType(this, Type));
     if (usgn)
       return Builder.CreateFPToUI(Ops[0], Ty);
@@ -8385,6 +8392,28 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
   case AArch64::BI__iso_volatile_store32:
   case AArch64::BI__iso_volatile_store64:
     return EmitISOVolatileStore(E);
+  case AArch64::BI_BitScanForward:
+  case AArch64::BI_BitScanForward64:
+    return EmitMSVCBuiltinExpr(MSVCIntrin::_BitScanForward, E);
+  case AArch64::BI_BitScanReverse:
+  case AArch64::BI_BitScanReverse64:
+    return EmitMSVCBuiltinExpr(MSVCIntrin::_BitScanReverse, E);
+  case AArch64::BI_InterlockedAnd64:
+    return EmitMSVCBuiltinExpr(MSVCIntrin::_InterlockedAnd, E);
+  case AArch64::BI_InterlockedExchange64:
+    return EmitMSVCBuiltinExpr(MSVCIntrin::_InterlockedExchange, E);
+  case AArch64::BI_InterlockedExchangeAdd64:
+    return EmitMSVCBuiltinExpr(MSVCIntrin::_InterlockedExchangeAdd, E);
+  case AArch64::BI_InterlockedExchangeSub64:
+    return EmitMSVCBuiltinExpr(MSVCIntrin::_InterlockedExchangeSub, E);
+  case AArch64::BI_InterlockedOr64:
+    return EmitMSVCBuiltinExpr(MSVCIntrin::_InterlockedOr, E);
+  case AArch64::BI_InterlockedXor64:
+    return EmitMSVCBuiltinExpr(MSVCIntrin::_InterlockedXor, E);
+  case AArch64::BI_InterlockedDecrement64:
+    return EmitMSVCBuiltinExpr(MSVCIntrin::_InterlockedDecrement, E);
+  case AArch64::BI_InterlockedIncrement64:
+    return EmitMSVCBuiltinExpr(MSVCIntrin::_InterlockedIncrement, E);
   }
 }
 
@@ -8882,11 +8911,10 @@ Value *CodeGenFunction::EmitX86CpuSupports(const CallExpr *E) {
   return EmitX86CpuSupports(FeatureStr);
 }
 
-Value *CodeGenFunction::EmitX86CpuSupports(ArrayRef<StringRef> FeatureStrs) {
+uint32_t
+CodeGenFunction::GetX86CpuSupportsMask(ArrayRef<StringRef> FeatureStrs) {
   // Processor features and mapping to processor feature value.
-
   uint32_t FeaturesMask = 0;
-
   for (const StringRef &FeatureStr : FeatureStrs) {
     unsigned Feature =
         StringSwitch<unsigned>(FeatureStr)
@@ -8895,7 +8923,14 @@ Value *CodeGenFunction::EmitX86CpuSupports(ArrayRef<StringRef> FeatureStrs) {
         ;
     FeaturesMask |= (1U << Feature);
   }
+  return FeaturesMask;
+}
 
+Value *CodeGenFunction::EmitX86CpuSupports(ArrayRef<StringRef> FeatureStrs) {
+  return EmitX86CpuSupports(GetX86CpuSupportsMask(FeatureStrs));
+}
+
+llvm::Value *CodeGenFunction::EmitX86CpuSupports(uint32_t FeaturesMask) {
   // Matching the struct layout from the compiler-rt/libgcc structure that is
   // filled in:
   // unsigned int __cpu_vendor;
@@ -10809,19 +10844,11 @@ Value *CodeGenFunction::EmitPPCBuiltinExpr(unsigned BuiltinID,
     Ops[0] = Builder.CreateBitCast(Ops[0], llvm::VectorType::get(Int64Ty, 2));
     Ops[1] = Builder.CreateBitCast(Ops[1], llvm::VectorType::get(Int64Ty, 2));
 
-    // Element zero comes from the first input vector and element one comes from
-    // the second. The element indices within each vector are numbered in big
-    // endian order so the shuffle mask must be adjusted for this on little
-    // endian platforms (i.e. index is complemented and source vector reversed).
-    unsigned ElemIdx0;
-    unsigned ElemIdx1;
-    if (getTarget().isLittleEndian()) {
-      ElemIdx0 = (~Index & 1) + 2;
-      ElemIdx1 = (~Index & 2) >> 1;
-    } else { // BigEndian
-      ElemIdx0 = (Index & 2) >> 1;
-      ElemIdx1 = 2 + (Index & 1);
-    }
+    // Account for endianness by treating this as just a shuffle. So we use the
+    // same indices for both LE and BE in order to produce expected results in
+    // both cases.
+    unsigned ElemIdx0 = (Index & 2) >> 1;
+    unsigned ElemIdx1 = 2 + (Index & 1);
 
     Constant *ShuffleElts[2] = {ConstantInt::get(Int32Ty, ElemIdx0),
                                 ConstantInt::get(Int32Ty, ElemIdx1)};

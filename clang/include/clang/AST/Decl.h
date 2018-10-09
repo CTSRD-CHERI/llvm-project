@@ -83,7 +83,7 @@ class VarTemplateDecl;
 /// TypeLoc TL = TypeSourceInfo->getTypeLoc();
 /// TL.getStartLoc().print(OS, SrcMgr);
 /// @endcode
-class LLVM_ALIGNAS(8) TypeSourceInfo {
+class alignas(8) TypeSourceInfo {
   // Contains a memory block after the class, used for type source information,
   // allocated by ASTContext.
   friend class ASTContext;
@@ -2209,6 +2209,13 @@ public:
     getCanonicalDecl()->IsMultiVersion = V;
   }
 
+  /// True if this function is a multiversioned dispatch function as a part of
+  /// the cpu_specific/cpu_dispatch functionality.
+  bool isCPUDispatchMultiVersion() const;
+  /// True if this function is a multiversioned processor specific function as a
+  /// part of the cpu_specific/cpu_dispatch functionality.
+  bool isCPUSpecificMultiVersion() const;
+
   void setPreviousDeclaration(FunctionDecl * PrevDecl);
 
   FunctionDecl *getCanonicalDecl() override;
@@ -2860,7 +2867,7 @@ public:
 
 /// Base class for declarations which introduce a typedef-name.
 class TypedefNameDecl : public TypeDecl, public Redeclarable<TypedefNameDecl> {
-  struct LLVM_ALIGNAS(8) ModedTInfo {
+  struct alignas(8) ModedTInfo {
     TypeSourceInfo *first;
     QualType second;
   };

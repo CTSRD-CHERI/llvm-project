@@ -26,6 +26,7 @@
 #include "X86Subtarget.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/SmallPtrSet.h"
@@ -141,17 +142,33 @@ private:
     MachineInstr *UncondBr;
   };
 
+  /// Manages the predicate state traced through the program.
+  struct PredState {
+    unsigned InitialReg;
+    unsigned PoisonReg;
+
+    const TargetRegisterClass *RC;
+    MachineSSAUpdater SSA;
+
+    PredState(MachineFunction &MF, const TargetRegisterClass *RC)
+        : RC(RC), SSA(MF) {}
+  };
+
   const X86Subtarget *Subtarget;
   MachineRegisterInfo *MRI;
   const X86InstrInfo *TII;
   const TargetRegisterInfo *TRI;
-  const TargetRegisterClass *PredStateRC;
+
+  Optional<PredState> PS;
 
   void hardenEdgesWithLFENCE(MachineFunction &MF);
 
   SmallVector<BlockCondInfo, 16> collectBlockCondInfo(MachineFunction &MF);
 
-  void checkAllLoads(MachineFunction &MF, MachineSSAUpdater &PredStateSSA);
+  SmallVector<MachineInstr *, 16>
+  tracePredStateThroughCFG(MachineFunction &MF, ArrayRef<BlockCondInfo> Infos);
+
+  void hardenAllLoads(MachineFunction &MF);
 
   unsigned saveEFLAGS(MachineBasicBlock &MBB,
                       MachineBasicBlock::iterator InsertPt, DebugLoc Loc);
@@ -168,15 +185,17 @@ private:
 
   void
   hardenLoadAddr(MachineInstr &MI, MachineOperand &BaseMO,
-                 MachineOperand &IndexMO, MachineSSAUpdater &PredStateSSA,
+                 MachineOperand &IndexMO,
                  SmallDenseMap<unsigned, unsigned, 32> &AddrRegToHardenedReg);
   MachineInstr *
   sinkPostLoadHardenedInst(MachineInstr &MI,
                            SmallPtrSetImpl<MachineInstr *> &HardenedInstrs);
   bool canHardenRegister(unsigned Reg);
-  void hardenPostLoad(MachineInstr &MI, MachineSSAUpdater &PredStateSSA);
-  void checkReturnInstr(MachineInstr &MI, MachineSSAUpdater &PredStateSSA);
-  void checkCallInstr(MachineInstr &MI, MachineSSAUpdater &PredStateSSA);
+  unsigned hardenValueInRegister(unsigned Reg, MachineBasicBlock &MBB,
+                                 MachineBasicBlock::iterator InsertPt,
+                                 DebugLoc Loc);
+  unsigned hardenPostLoad(MachineInstr &MI);
+  void hardenReturnInstr(MachineInstr &MI);
 };
 
 } // end anonymous namespace
@@ -371,8 +390,9 @@ bool X86SpeculativeLoadHardeningPass::runOnMachineFunction(
   MRI = &MF.getRegInfo();
   TII = Subtarget->getInstrInfo();
   TRI = Subtarget->getRegisterInfo();
+
   // FIXME: Support for 32-bit.
-  PredStateRC = &X86::GR64_NOSPRegClass;
+  PS.emplace(MF, &X86::GR64_NOSPRegClass);
 
   if (MF.begin() == MF.end())
     // Nothing to do for a degenerate empty function...
@@ -401,14 +421,11 @@ bool X86SpeculativeLoadHardeningPass::runOnMachineFunction(
   if (!HasVulnerableLoad && Infos.empty())
     return true;
 
-  unsigned PredStateReg;
-  unsigned PredStateSizeInBytes = TRI->getRegSizeInBits(*PredStateRC) / 8;
-
   // The poison value is required to be an all-ones value for many aspects of
   // this mitigation.
   const int PoisonVal = -1;
-  unsigned PoisonReg = MRI->createVirtualRegister(PredStateRC);
-  BuildMI(Entry, EntryInsertPt, Loc, TII->get(X86::MOV64ri32), PoisonReg)
+  PS->PoisonReg = MRI->createVirtualRegister(PS->RC);
+  BuildMI(Entry, EntryInsertPt, Loc, TII->get(X86::MOV64ri32), PS->PoisonReg)
       .addImm(PoisonVal);
   ++NumInstsInserted;
 
@@ -436,11 +453,11 @@ bool X86SpeculativeLoadHardeningPass::runOnMachineFunction(
   if (HardenInterprocedurally && !FenceCallAndRet) {
     // Set up the predicate state by extracting it from the incoming stack
     // pointer so we pick up any misspeculation in our caller.
-    PredStateReg = extractPredStateFromSP(Entry, EntryInsertPt, Loc);
+    PS->InitialReg = extractPredStateFromSP(Entry, EntryInsertPt, Loc);
   } else {
     // Otherwise, just build the predicate state itself by zeroing a register
     // as we don't need any initial state.
-    PredStateReg = MRI->createVirtualRegister(PredStateRC);
+    PS->InitialReg = MRI->createVirtualRegister(PS->RC);
     unsigned PredStateSubReg = MRI->createVirtualRegister(&X86::GR32RegClass);
     auto ZeroI = BuildMI(Entry, EntryInsertPt, Loc, TII->get(X86::MOV32r0),
                          PredStateSubReg);
@@ -451,7 +468,7 @@ bool X86SpeculativeLoadHardeningPass::runOnMachineFunction(
            "Must have an implicit def of EFLAGS!");
     ZeroEFLAGSDefOp->setIsDead(true);
     BuildMI(Entry, EntryInsertPt, Loc, TII->get(X86::SUBREG_TO_REG),
-            PredStateReg)
+            PS->InitialReg)
         .addImm(0)
         .addReg(PredStateSubReg)
         .addImm(X86::sub_32bit);
@@ -464,142 +481,11 @@ bool X86SpeculativeLoadHardeningPass::runOnMachineFunction(
 
   // Track the updated values in an SSA updater to rewrite into SSA form at the
   // end.
-  MachineSSAUpdater PredStateSSA(MF);
-  PredStateSSA.Initialize(PredStateReg);
-  PredStateSSA.AddAvailableValue(&Entry, PredStateReg);
-  // Collect the inserted instructions so we can rewrite their uses of the
-  // predicate state into SSA form.
-  SmallVector<MachineInstr *, 16> CMovs;
+  PS->SSA.Initialize(PS->InitialReg);
+  PS->SSA.AddAvailableValue(&Entry, PS->InitialReg);
 
-  // Now walk all of the basic blocks looking for ones that end in conditional
-  // jumps where we need to update this register along each edge.
-  for (BlockCondInfo &Info : Infos) {
-    MachineBasicBlock &MBB = *Info.MBB;
-    SmallVectorImpl<MachineInstr *> &CondBrs = Info.CondBrs;
-    MachineInstr *UncondBr = Info.UncondBr;
-
-    LLVM_DEBUG(dbgs() << "Tracing predicate through block: " << MBB.getName()
-                      << "\n");
-    ++NumCondBranchesTraced;
-
-    // Compute the non-conditional successor as either the target of any
-    // unconditional branch or the layout successor.
-    MachineBasicBlock *UncondSucc =
-        UncondBr ? (UncondBr->getOpcode() == X86::JMP_1
-                        ? UncondBr->getOperand(0).getMBB()
-                        : nullptr)
-                 : &*std::next(MachineFunction::iterator(&MBB));
-
-    // Count how many edges there are to any given successor.
-    SmallDenseMap<MachineBasicBlock *, int> SuccCounts;
-    if (UncondSucc)
-      ++SuccCounts[UncondSucc];
-    for (auto *CondBr : CondBrs)
-      ++SuccCounts[CondBr->getOperand(0).getMBB()];
-
-    // A lambda to insert cmov instructions into a block checking all of the
-    // condition codes in a sequence.
-    auto BuildCheckingBlockForSuccAndConds =
-        [&](MachineBasicBlock &MBB, MachineBasicBlock &Succ, int SuccCount,
-            MachineInstr *Br, MachineInstr *&UncondBr,
-            ArrayRef<X86::CondCode> Conds) {
-          // First, we split the edge to insert the checking block into a safe
-          // location.
-          auto &CheckingMBB =
-              (SuccCount == 1 && Succ.pred_size() == 1)
-                  ? Succ
-                  : splitEdge(MBB, Succ, SuccCount, Br, UncondBr, *TII);
-
-          bool LiveEFLAGS = Succ.isLiveIn(X86::EFLAGS);
-          if (!LiveEFLAGS)
-            CheckingMBB.addLiveIn(X86::EFLAGS);
-
-          // Now insert the cmovs to implement the checks.
-          auto InsertPt = CheckingMBB.begin();
-          assert((InsertPt == CheckingMBB.end() || !InsertPt->isPHI()) &&
-                 "Should never have a PHI in the initial checking block as it "
-                 "always has a single predecessor!");
-
-          // We will wire each cmov to each other, but need to start with the
-          // incoming pred state.
-          unsigned CurStateReg = PredStateReg;
-
-          for (X86::CondCode Cond : Conds) {
-            auto CMovOp = X86::getCMovFromCond(Cond, PredStateSizeInBytes);
-
-            unsigned UpdatedStateReg = MRI->createVirtualRegister(PredStateRC);
-            auto CMovI = BuildMI(CheckingMBB, InsertPt, Loc, TII->get(CMovOp),
-                                 UpdatedStateReg)
-                             .addReg(CurStateReg)
-                             .addReg(PoisonReg);
-            // If this is the last cmov and the EFLAGS weren't originally
-            // live-in, mark them as killed.
-            if (!LiveEFLAGS && Cond == Conds.back())
-              CMovI->findRegisterUseOperand(X86::EFLAGS)->setIsKill(true);
-
-            ++NumInstsInserted;
-            LLVM_DEBUG(dbgs() << "  Inserting cmov: "; CMovI->dump();
-                       dbgs() << "\n");
-
-            // The first one of the cmovs will be using the top level
-            // `PredStateReg` and need to get rewritten into SSA form.
-            if (CurStateReg == PredStateReg)
-              CMovs.push_back(&*CMovI);
-
-            // The next cmov should start from this one's def.
-            CurStateReg = UpdatedStateReg;
-          }
-
-          // And put the last one into the available values for PredStateSSA.
-          PredStateSSA.AddAvailableValue(&CheckingMBB, CurStateReg);
-        };
-
-    std::vector<X86::CondCode> UncondCodeSeq;
-    for (auto *CondBr : CondBrs) {
-      MachineBasicBlock &Succ = *CondBr->getOperand(0).getMBB();
-      int &SuccCount = SuccCounts[&Succ];
-
-      X86::CondCode Cond = X86::getCondFromBranchOpc(CondBr->getOpcode());
-      X86::CondCode InvCond = X86::GetOppositeBranchCondition(Cond);
-      UncondCodeSeq.push_back(Cond);
-
-      BuildCheckingBlockForSuccAndConds(MBB, Succ, SuccCount, CondBr, UncondBr,
-                                        {InvCond});
-
-      // Decrement the successor count now that we've split one of the edges.
-      // We need to keep the count of edges to the successor accurate in order
-      // to know above when to *replace* the successor in the CFG vs. just
-      // adding the new successor.
-      --SuccCount;
-    }
-
-    // Since we may have split edges and changed the number of successors,
-    // normalize the probabilities. This avoids doing it each time we split an
-    // edge.
-    MBB.normalizeSuccProbs();
-
-    // Finally, we need to insert cmovs into the "fallthrough" edge. Here, we
-    // need to intersect the other condition codes. We can do this by just
-    // doing a cmov for each one.
-    if (!UncondSucc)
-      // If we have no fallthrough to protect (perhaps it is an indirect jump?)
-      // just skip this and continue.
-      continue;
-
-    assert(SuccCounts[UncondSucc] == 1 &&
-           "We should never have more than one edge to the unconditional "
-           "successor at this point because every other edge must have been "
-           "split above!");
-
-    // Sort and unique the codes to minimize them.
-    llvm::sort(UncondCodeSeq.begin(), UncondCodeSeq.end());
-    UncondCodeSeq.erase(std::unique(UncondCodeSeq.begin(), UncondCodeSeq.end()),
-                        UncondCodeSeq.end());
-
-    // Build a checking version of the successor.
-    BuildCheckingBlockForSuccAndConds(MBB, *UncondSucc, /*SuccCount*/ 1,
-                                      UncondBr, UncondBr, UncondCodeSeq);
-  }
+  // Trace through the CFG.
+  auto CMovs = tracePredStateThroughCFG(MF, Infos);
 
   // We may also enter basic blocks in this function via exception handling
   // control flow. Here, if we are hardening interprocedurally, we need to
@@ -615,23 +501,23 @@ bool X86SpeculativeLoadHardeningPass::runOnMachineFunction(
       assert(!MBB.isCleanupFuncletEntry() && "Only Itanium ABI EH supported!");
       if (!MBB.isEHPad())
         continue;
-      PredStateSSA.AddAvailableValue(
+      PS->SSA.AddAvailableValue(
           &MBB,
           extractPredStateFromSP(MBB, MBB.SkipPHIsAndLabels(MBB.begin()), Loc));
     }
   }
 
-  // Now check all of the loads using the predicate state.
-  checkAllLoads(MF, PredStateSSA);
+  // Now harden all of the loads in the function using the predicate state.
+  hardenAllLoads(MF);
 
   // Now rewrite all the uses of the pred state using the SSA updater so that
   // we track updates through the CFG.
   for (MachineInstr *CMovI : CMovs)
     for (MachineOperand &Op : CMovI->operands()) {
-      if (!Op.isReg() || Op.getReg() != PredStateReg)
+      if (!Op.isReg() || Op.getReg() != PS->InitialReg)
         continue;
 
-      PredStateSSA.RewriteUse(Op);
+      PS->SSA.RewriteUse(Op);
     }
 
   // If we are hardening interprocedurally, find each returning block and
@@ -642,10 +528,14 @@ bool X86SpeculativeLoadHardeningPass::runOnMachineFunction(
         continue;
 
       MachineInstr &MI = MBB.back();
-      if (!MI.isReturn())
+
+      // We only care about returns that are not also calls. For calls, that
+      // happen to also be returns (tail calls) we will have already handled
+      // them as calls.
+      if (!MI.isReturn() || MI.isCall())
         continue;
 
-      checkReturnInstr(MI, PredStateSSA);
+      hardenReturnInstr(MI);
     }
 
   LLVM_DEBUG(dbgs() << "Final speculative load hardened function:\n"; MF.dump();
@@ -776,6 +666,157 @@ X86SpeculativeLoadHardeningPass::collectBlockCondInfo(MachineFunction &MF) {
   return Infos;
 }
 
+/// Trace the predicate state through the CFG, instrumenting each conditional
+/// branch such that misspeculation through an edge will poison the predicate
+/// state.
+///
+/// Returns the list of inserted CMov instructions so that they can have their
+/// uses of the predicate state rewritten into proper SSA form once it is
+/// complete.
+SmallVector<MachineInstr *, 16>
+X86SpeculativeLoadHardeningPass::tracePredStateThroughCFG(
+    MachineFunction &MF, ArrayRef<BlockCondInfo> Infos) {
+  // Collect the inserted cmov instructions so we can rewrite their uses of the
+  // predicate state into SSA form.
+  SmallVector<MachineInstr *, 16> CMovs;
+
+  // Now walk all of the basic blocks looking for ones that end in conditional
+  // jumps where we need to update this register along each edge.
+  for (const BlockCondInfo &Info : Infos) {
+    MachineBasicBlock &MBB = *Info.MBB;
+    const SmallVectorImpl<MachineInstr *> &CondBrs = Info.CondBrs;
+    MachineInstr *UncondBr = Info.UncondBr;
+
+    LLVM_DEBUG(dbgs() << "Tracing predicate through block: " << MBB.getName()
+                      << "\n");
+    ++NumCondBranchesTraced;
+
+    // Compute the non-conditional successor as either the target of any
+    // unconditional branch or the layout successor.
+    MachineBasicBlock *UncondSucc =
+        UncondBr ? (UncondBr->getOpcode() == X86::JMP_1
+                        ? UncondBr->getOperand(0).getMBB()
+                        : nullptr)
+                 : &*std::next(MachineFunction::iterator(&MBB));
+
+    // Count how many edges there are to any given successor.
+    SmallDenseMap<MachineBasicBlock *, int> SuccCounts;
+    if (UncondSucc)
+      ++SuccCounts[UncondSucc];
+    for (auto *CondBr : CondBrs)
+      ++SuccCounts[CondBr->getOperand(0).getMBB()];
+
+    // A lambda to insert cmov instructions into a block checking all of the
+    // condition codes in a sequence.
+    auto BuildCheckingBlockForSuccAndConds =
+        [&](MachineBasicBlock &MBB, MachineBasicBlock &Succ, int SuccCount,
+            MachineInstr *Br, MachineInstr *&UncondBr,
+            ArrayRef<X86::CondCode> Conds) {
+          // First, we split the edge to insert the checking block into a safe
+          // location.
+          auto &CheckingMBB =
+              (SuccCount == 1 && Succ.pred_size() == 1)
+                  ? Succ
+                  : splitEdge(MBB, Succ, SuccCount, Br, UncondBr, *TII);
+
+          bool LiveEFLAGS = Succ.isLiveIn(X86::EFLAGS);
+          if (!LiveEFLAGS)
+            CheckingMBB.addLiveIn(X86::EFLAGS);
+
+          // Now insert the cmovs to implement the checks.
+          auto InsertPt = CheckingMBB.begin();
+          assert((InsertPt == CheckingMBB.end() || !InsertPt->isPHI()) &&
+                 "Should never have a PHI in the initial checking block as it "
+                 "always has a single predecessor!");
+
+          // We will wire each cmov to each other, but need to start with the
+          // incoming pred state.
+          unsigned CurStateReg = PS->InitialReg;
+
+          for (X86::CondCode Cond : Conds) {
+            int PredStateSizeInBytes = TRI->getRegSizeInBits(*PS->RC) / 8;
+            auto CMovOp = X86::getCMovFromCond(Cond, PredStateSizeInBytes);
+
+            unsigned UpdatedStateReg = MRI->createVirtualRegister(PS->RC);
+            // Note that we intentionally use an empty debug location so that
+            // this picks up the preceding location.
+            auto CMovI = BuildMI(CheckingMBB, InsertPt, DebugLoc(),
+                                 TII->get(CMovOp), UpdatedStateReg)
+                             .addReg(CurStateReg)
+                             .addReg(PS->PoisonReg);
+            // If this is the last cmov and the EFLAGS weren't originally
+            // live-in, mark them as killed.
+            if (!LiveEFLAGS && Cond == Conds.back())
+              CMovI->findRegisterUseOperand(X86::EFLAGS)->setIsKill(true);
+
+            ++NumInstsInserted;
+            LLVM_DEBUG(dbgs() << "  Inserting cmov: "; CMovI->dump();
+                       dbgs() << "\n");
+
+            // The first one of the cmovs will be using the top level
+            // `PredStateReg` and need to get rewritten into SSA form.
+            if (CurStateReg == PS->InitialReg)
+              CMovs.push_back(&*CMovI);
+
+            // The next cmov should start from this one's def.
+            CurStateReg = UpdatedStateReg;
+          }
+
+          // And put the last one into the available values for SSA form of our
+          // predicate state.
+          PS->SSA.AddAvailableValue(&CheckingMBB, CurStateReg);
+        };
+
+    std::vector<X86::CondCode> UncondCodeSeq;
+    for (auto *CondBr : CondBrs) {
+      MachineBasicBlock &Succ = *CondBr->getOperand(0).getMBB();
+      int &SuccCount = SuccCounts[&Succ];
+
+      X86::CondCode Cond = X86::getCondFromBranchOpc(CondBr->getOpcode());
+      X86::CondCode InvCond = X86::GetOppositeBranchCondition(Cond);
+      UncondCodeSeq.push_back(Cond);
+
+      BuildCheckingBlockForSuccAndConds(MBB, Succ, SuccCount, CondBr, UncondBr,
+                                        {InvCond});
+
+      // Decrement the successor count now that we've split one of the edges.
+      // We need to keep the count of edges to the successor accurate in order
+      // to know above when to *replace* the successor in the CFG vs. just
+      // adding the new successor.
+      --SuccCount;
+    }
+
+    // Since we may have split edges and changed the number of successors,
+    // normalize the probabilities. This avoids doing it each time we split an
+    // edge.
+    MBB.normalizeSuccProbs();
+
+    // Finally, we need to insert cmovs into the "fallthrough" edge. Here, we
+    // need to intersect the other condition codes. We can do this by just
+    // doing a cmov for each one.
+    if (!UncondSucc)
+      // If we have no fallthrough to protect (perhaps it is an indirect jump?)
+      // just skip this and continue.
+      continue;
+
+    assert(SuccCounts[UncondSucc] == 1 &&
+           "We should never have more than one edge to the unconditional "
+           "successor at this point because every other edge must have been "
+           "split above!");
+
+    // Sort and unique the codes to minimize them.
+    llvm::sort(UncondCodeSeq.begin(), UncondCodeSeq.end());
+    UncondCodeSeq.erase(std::unique(UncondCodeSeq.begin(), UncondCodeSeq.end()),
+                        UncondCodeSeq.end());
+
+    // Build a checking version of the successor.
+    BuildCheckingBlockForSuccAndConds(MBB, *UncondSucc, /*SuccCount*/ 1,
+                                      UncondBr, UncondBr, UncondCodeSeq);
+  }
+
+  return CMovs;
+}
+
 /// Returns true if the instruction has no behavior (specified or otherwise)
 /// that is based on the value of any of its register operands
 ///
@@ -865,6 +906,27 @@ static bool isDataInvariant(MachineInstr &MI) {
   case X86::BZHI32rr:
   case X86::BZHI64rr:
 
+  // Shift and rotate.
+  case X86::ROL8r1:  case X86::ROL16r1:  case X86::ROL32r1:  case X86::ROL64r1:
+  case X86::ROL8rCL: case X86::ROL16rCL: case X86::ROL32rCL: case X86::ROL64rCL:
+  case X86::ROL8ri:  case X86::ROL16ri:  case X86::ROL32ri:  case X86::ROL64ri:
+  case X86::ROR8r1:  case X86::ROR16r1:  case X86::ROR32r1:  case X86::ROR64r1:
+  case X86::ROR8rCL: case X86::ROR16rCL: case X86::ROR32rCL: case X86::ROR64rCL:
+  case X86::ROR8ri:  case X86::ROR16ri:  case X86::ROR32ri:  case X86::ROR64ri:
+  case X86::SAR8r1:  case X86::SAR16r1:  case X86::SAR32r1:  case X86::SAR64r1:
+  case X86::SAR8rCL: case X86::SAR16rCL: case X86::SAR32rCL: case X86::SAR64rCL:
+  case X86::SAR8ri:  case X86::SAR16ri:  case X86::SAR32ri:  case X86::SAR64ri:
+  case X86::SHL8r1:  case X86::SHL16r1:  case X86::SHL32r1:  case X86::SHL64r1:
+  case X86::SHL8rCL: case X86::SHL16rCL: case X86::SHL32rCL: case X86::SHL64rCL:
+  case X86::SHL8ri:  case X86::SHL16ri:  case X86::SHL32ri:  case X86::SHL64ri:
+  case X86::SHR8r1:  case X86::SHR16r1:  case X86::SHR32r1:  case X86::SHR64r1:
+  case X86::SHR8rCL: case X86::SHR16rCL: case X86::SHR32rCL: case X86::SHR64rCL:
+  case X86::SHR8ri:  case X86::SHR16ri:  case X86::SHR32ri:  case X86::SHR64ri:
+  case X86::SHLD16rrCL: case X86::SHLD32rrCL: case X86::SHLD64rrCL:
+  case X86::SHLD16rri8: case X86::SHLD32rri8: case X86::SHLD64rri8:
+  case X86::SHRD16rrCL: case X86::SHRD32rrCL: case X86::SHRD64rrCL:
+  case X86::SHRD16rri8: case X86::SHRD32rri8: case X86::SHRD64rri8:
+
   // Basic arithmetic is constant time on the input but does set flags.
   case X86::ADC8rr:   case X86::ADC8ri:
   case X86::ADC16rr:  case X86::ADC16ri:   case X86::ADC16ri8:
@@ -898,9 +960,10 @@ static bool isDataInvariant(MachineInstr &MI) {
   case X86::ADCX32rr: case X86::ADCX64rr:
   case X86::ADOX32rr: case X86::ADOX64rr:
   case X86::ANDN32rr: case X86::ANDN64rr:
-  // Just one operand for inc and dec.
-  case X86::INC8r: case X86::INC16r: case X86::INC32r: case X86::INC64r:
+  // Unary arithmetic operations.
   case X86::DEC8r: case X86::DEC16r: case X86::DEC32r: case X86::DEC64r:
+  case X86::INC8r: case X86::INC16r: case X86::INC32r: case X86::INC64r:
+  case X86::NEG8r: case X86::NEG16r: case X86::NEG32r: case X86::NEG64r:
     // Check whether the EFLAGS implicit-def is dead. We assume that this will
     // always find the implicit-def because this code should only be reached
     // for instructions that do in fact implicitly def this.
@@ -915,11 +978,19 @@ static bool isDataInvariant(MachineInstr &MI) {
     // don't set EFLAGS.
     LLVM_FALLTHROUGH;
 
-  // Integer multiply w/o affecting flags is still believed to be constant
-  // time on x86. Called out separately as this is among the most surprising
-  // instructions to exhibit that behavior.
-  case X86::MULX32rr:
-  case X86::MULX64rr:
+  // Unlike other arithmetic, NOT doesn't set EFLAGS.
+  case X86::NOT8r: case X86::NOT16r: case X86::NOT32r: case X86::NOT64r:
+
+  // Various move instructions used to zero or sign extend things. Note that we
+  // intentionally don't support the _NOREX variants as we can't handle that
+  // register constraint anyways.
+  case X86::MOVSX16rr8:
+  case X86::MOVSX32rr8: case X86::MOVSX32rr16:
+  case X86::MOVSX64rr8: case X86::MOVSX64rr16: case X86::MOVSX64rr32:
+  case X86::MOVZX16rr8:
+  case X86::MOVZX32rr8: case X86::MOVZX32rr16:
+  case X86::MOVZX64rr8: case X86::MOVZX64rr16:
+  case X86::MOV32rr:
 
   // Arithmetic instructions that are both constant time and don't set flags.
   case X86::RORX32ri:
@@ -1160,8 +1231,24 @@ static bool isEFLAGSLive(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
   return MBB.isLiveIn(X86::EFLAGS);
 }
 
-void X86SpeculativeLoadHardeningPass::checkAllLoads(
-    MachineFunction &MF, MachineSSAUpdater &PredStateSSA) {
+/// Harden all of the loads (including implicit loads) in the function.
+///
+/// This operates in two passes. First, we analyze the loads to determine which
+/// strategy will be used to harden them: hardening the address or hardening the
+/// loaded value when loaded into a register amenable to hardening. We have to
+/// process these first because the two strategies may interact -- later
+/// hardening may change what strategy we wish to use. We also will analyze
+/// data dependencies between loads and avoid hardening those loads that are
+/// data dependent on a load with a hardened address. We also skip hardening
+/// loads already behind an LFENCE as that is sufficient to harden them against
+/// misspeculation.
+///
+/// Second, we apply the hardening steps we determined necessary in the first
+/// pass.
+///
+/// These two passes are applied to each basic block. We operate one block at
+/// a time to simplify reasoning about reachability and sequencing.
+void X86SpeculativeLoadHardeningPass::hardenAllLoads(MachineFunction &MF) {
   // If the actual checking of loads is disabled, skip doing anything here.
   if (!HardenLoads)
     return;
@@ -1315,7 +1402,7 @@ void X86SpeculativeLoadHardeningPass::checkAllLoads(
             MI.getOperand(MemRefBeginIdx + X86::AddrBaseReg);
         MachineOperand &IndexMO =
             MI.getOperand(MemRefBeginIdx + X86::AddrIndexReg);
-        hardenLoadAddr(MI, BaseMO, IndexMO, PredStateSSA, AddrRegToHardenedReg);
+        hardenLoadAddr(MI, BaseMO, IndexMO, AddrRegToHardenedReg);
         continue;
       }
 
@@ -1346,12 +1433,11 @@ void X86SpeculativeLoadHardeningPass::checkAllLoads(
           }
         }
 
-        // The register def'ed by this instruction is trivially hardened so map
-        // it to itself.
-        AddrRegToHardenedReg[MI.getOperand(0).getReg()] =
-            MI.getOperand(0).getReg();
+        unsigned HardenedReg = hardenPostLoad(MI);
 
-        hardenPostLoad(MI, PredStateSSA);
+        // Mark the resulting hardened register as such so we don't re-harden.
+        AddrRegToHardenedReg[HardenedReg] = HardenedReg;
+
         continue;
       }
 
@@ -1371,7 +1457,7 @@ void X86SpeculativeLoadHardeningPass::checkAllLoads(
       // First, we transfer the predicate state into the called function by
       // merging it into the stack pointer. This will kill the current def of
       // the state.
-      unsigned StateReg = PredStateSSA.GetValueAtEndOfBlock(&MBB);
+      unsigned StateReg = PS->SSA.GetValueAtEndOfBlock(&MBB);
       mergePredStateIntoSP(MBB, InsertPt, Loc, StateReg);
 
       // If this call is also a return (because it is a tail call) we're done.
@@ -1382,7 +1468,7 @@ void X86SpeculativeLoadHardeningPass::checkAllLoads(
       // state from SP after the return, and make this new state available.
       ++InsertPt;
       unsigned NewStateReg = extractPredStateFromSP(MBB, InsertPt, Loc);
-      PredStateSSA.AddAvailableValue(&MBB, NewStateReg);
+      PS->SSA.AddAvailableValue(&MBB, NewStateReg);
     }
 
     HardenPostLoad.clear();
@@ -1435,7 +1521,7 @@ void X86SpeculativeLoadHardeningPass::restoreEFLAGS(
 void X86SpeculativeLoadHardeningPass::mergePredStateIntoSP(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator InsertPt, DebugLoc Loc,
     unsigned PredStateReg) {
-  unsigned TmpReg = MRI->createVirtualRegister(PredStateRC);
+  unsigned TmpReg = MRI->createVirtualRegister(PS->RC);
   // FIXME: This hard codes a shift distance based on the number of bits needed
   // to stay canonical on 64-bit. We should compute this somehow and support
   // 32-bit as part of that.
@@ -1455,8 +1541,8 @@ void X86SpeculativeLoadHardeningPass::mergePredStateIntoSP(
 unsigned X86SpeculativeLoadHardeningPass::extractPredStateFromSP(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator InsertPt,
     DebugLoc Loc) {
-  unsigned PredStateReg = MRI->createVirtualRegister(PredStateRC);
-  unsigned TmpReg = MRI->createVirtualRegister(PredStateRC);
+  unsigned PredStateReg = MRI->createVirtualRegister(PS->RC);
+  unsigned TmpReg = MRI->createVirtualRegister(PS->RC);
 
   // We know that the stack pointer will have any preserved predicate state in
   // its high bit. We just want to smear this across the other bits. Turns out,
@@ -1466,7 +1552,7 @@ unsigned X86SpeculativeLoadHardeningPass::extractPredStateFromSP(
   auto ShiftI =
       BuildMI(MBB, InsertPt, Loc, TII->get(X86::SAR64ri), PredStateReg)
           .addReg(TmpReg, RegState::Kill)
-          .addImm(TRI->getRegSizeInBits(*PredStateRC) - 1);
+          .addImm(TRI->getRegSizeInBits(*PS->RC) - 1);
   ShiftI->addRegisterDead(X86::EFLAGS, TRI);
   ++NumInstsInserted;
 
@@ -1475,7 +1561,6 @@ unsigned X86SpeculativeLoadHardeningPass::extractPredStateFromSP(
 
 void X86SpeculativeLoadHardeningPass::hardenLoadAddr(
     MachineInstr &MI, MachineOperand &BaseMO, MachineOperand &IndexMO,
-    MachineSSAUpdater &PredStateSSA,
     SmallDenseMap<unsigned, unsigned, 32> &AddrRegToHardenedReg) {
   MachineBasicBlock &MBB = *MI.getParent();
   DebugLoc Loc = MI.getDebugLoc();
@@ -1540,7 +1625,7 @@ void X86SpeculativeLoadHardeningPass::hardenLoadAddr(
     return;
 
   // Compute the current predicate state.
-  unsigned StateReg = PredStateSSA.GetValueAtEndOfBlock(&MBB);
+  unsigned StateReg = PS->SSA.GetValueAtEndOfBlock(&MBB);
 
   auto InsertPt = MI.getIterator();
 
@@ -1783,132 +1868,122 @@ bool X86SpeculativeLoadHardeningPass::canHardenRegister(unsigned Reg) {
   return RC->hasSuperClassEq(GPRRegClasses[Log2_32(RegBytes)]);
 }
 
-// We can harden non-leaking loads into register without touching the address
-// by just hiding all of the loaded bits. We use an `or` instruction to do
-// this because having the poison value be all ones allows us to use the same
-// value below. And the goal is just for the loaded bits to not be exposed to
-// execution and coercing them to one is sufficient.
-void X86SpeculativeLoadHardeningPass::hardenPostLoad(
-    MachineInstr &MI, MachineSSAUpdater &PredStateSSA) {
-  MachineBasicBlock &MBB = *MI.getParent();
-  DebugLoc Loc = MI.getDebugLoc();
+/// Harden a value in a register.
+///
+/// This is the low-level logic to fully harden a value sitting in a register
+/// against leaking during speculative execution.
+///
+/// Unlike hardening an address that is used by a load, this routine is required
+/// to hide *all* incoming bits in the register.
+///
+/// `Reg` must be a virtual register. Currently, it is required to be a GPR no
+/// larger than the predicate state register. FIXME: We should support vector
+/// registers here by broadcasting the predicate state.
+///
+/// The new, hardened virtual register is returned. It will have the same
+/// register class as `Reg`.
+unsigned X86SpeculativeLoadHardeningPass::hardenValueInRegister(
+    unsigned Reg, MachineBasicBlock &MBB, MachineBasicBlock::iterator InsertPt,
+    DebugLoc Loc) {
+  assert(canHardenRegister(Reg) && "Cannot harden this register!");
+  assert(TRI->isVirtualRegister(Reg) && "Cannot harden a physical register!");
 
-  // For all of these, the def'ed register operand is operand zero.
-  auto &DefOp = MI.getOperand(0);
-  unsigned OldDefReg = DefOp.getReg();
-  assert(canHardenRegister(OldDefReg) &&
-         "Cannot harden this instruction's defined register!");
+  auto *RC = MRI->getRegClass(Reg);
+  int Bytes = TRI->getRegSizeInBits(*RC) / 8;
 
-  auto *DefRC = MRI->getRegClass(OldDefReg);
-  int DefRegBytes = TRI->getRegSizeInBits(*DefRC) / 8;
+  unsigned StateReg = PS->SSA.GetValueAtEndOfBlock(&MBB);
 
-  unsigned OrOpCodes[] = {X86::OR8rr, X86::OR16rr, X86::OR32rr, X86::OR64rr};
-  unsigned OrOpCode = OrOpCodes[Log2_32(DefRegBytes)];
+  // FIXME: Need to teach this about 32-bit mode.
+  if (Bytes != 8) {
+    unsigned SubRegImms[] = {X86::sub_8bit, X86::sub_16bit, X86::sub_32bit};
+    unsigned SubRegImm = SubRegImms[Log2_32(Bytes)];
+    unsigned NarrowStateReg = MRI->createVirtualRegister(RC);
+    BuildMI(MBB, InsertPt, Loc, TII->get(TargetOpcode::COPY), NarrowStateReg)
+        .addReg(StateReg, 0, SubRegImm);
+    StateReg = NarrowStateReg;
+  }
 
-  unsigned SubRegImms[] = {X86::sub_8bit, X86::sub_16bit, X86::sub_32bit};
-
-  auto GetStateRegInRC = [&](const TargetRegisterClass &RC) {
-    unsigned StateReg = PredStateSSA.GetValueAtEndOfBlock(&MBB);
-
-    int Bytes = TRI->getRegSizeInBits(RC) / 8;
-    // FIXME: Need to teach this about 32-bit mode.
-    if (Bytes != 8) {
-      unsigned SubRegImm = SubRegImms[Log2_32(Bytes)];
-      unsigned NarrowStateReg = MRI->createVirtualRegister(&RC);
-      BuildMI(MBB, MI.getIterator(), Loc, TII->get(TargetOpcode::COPY),
-              NarrowStateReg)
-          .addReg(StateReg, 0, SubRegImm);
-      StateReg = NarrowStateReg;
-    }
-    return StateReg;
-  };
-
-  auto InsertPt = std::next(MI.getIterator());
   unsigned FlagsReg = 0;
-  bool EFLAGSLive = isEFLAGSLive(MBB, InsertPt, *TRI);
-  if (EFLAGSLive && !Subtarget->hasBMI2()) {
+  if (isEFLAGSLive(MBB, InsertPt, *TRI))
     FlagsReg = saveEFLAGS(MBB, InsertPt, Loc);
-    EFLAGSLive = false;
-  }
 
-  if (!EFLAGSLive) {
-    unsigned StateReg = GetStateRegInRC(*DefRC);
-    unsigned NewDefReg = MRI->createVirtualRegister(DefRC);
-    DefOp.setReg(NewDefReg);
-    auto OrI = BuildMI(MBB, InsertPt, Loc, TII->get(OrOpCode), OldDefReg)
-                   .addReg(StateReg)
-                   .addReg(NewDefReg);
-    OrI->addRegisterDead(X86::EFLAGS, TRI);
-    ++NumInstsInserted;
-    LLVM_DEBUG(dbgs() << "  Inserting or: "; OrI->dump(); dbgs() << "\n");
-  } else {
-    assert(Subtarget->hasBMI2() &&
-           "Cannot harden loads and preserve EFLAGS without BMI2!");
-
-    unsigned ShiftOpCode = DefRegBytes < 4 ? X86::SHRX32rr : X86::SHRX64rr;
-    auto &ShiftRC =
-        DefRegBytes < 4 ? X86::GR32_NOSPRegClass : X86::GR64_NOSPRegClass;
-    int ShiftRegBytes = TRI->getRegSizeInBits(ShiftRC) / 8;
-    unsigned DefSubRegImm = SubRegImms[Log2_32(DefRegBytes)];
-
-    unsigned StateReg = GetStateRegInRC(ShiftRC);
-
-    // First have the def instruction def a temporary register.
-    unsigned TmpReg = MRI->createVirtualRegister(DefRC);
-    DefOp.setReg(TmpReg);
-    // Now copy it into a register of the shift RC.
-    unsigned ShiftInputReg = TmpReg;
-    if (DefRegBytes != ShiftRegBytes) {
-      unsigned UndefReg = MRI->createVirtualRegister(&ShiftRC);
-      BuildMI(MBB, InsertPt, Loc, TII->get(X86::IMPLICIT_DEF), UndefReg);
-      ShiftInputReg = MRI->createVirtualRegister(&ShiftRC);
-      BuildMI(MBB, InsertPt, Loc, TII->get(X86::INSERT_SUBREG), ShiftInputReg)
-          .addReg(UndefReg)
-          .addReg(TmpReg)
-          .addImm(DefSubRegImm);
-    }
-
-    // We shift this once if the shift is wider than the def and thus we can
-    // shift *all* of the def'ed bytes out. Otherwise we need to do two shifts.
-
-    unsigned ShiftedReg = MRI->createVirtualRegister(&ShiftRC);
-    auto Shift1I =
-        BuildMI(MBB, InsertPt, Loc, TII->get(ShiftOpCode), ShiftedReg)
-            .addReg(ShiftInputReg)
-            .addReg(StateReg);
-    (void)Shift1I;
-    ++NumInstsInserted;
-    LLVM_DEBUG(dbgs() << "  Inserting shrx: "; Shift1I->dump(); dbgs() << "\n");
-
-    // The only way we have a bit left is if all 8 bytes were defined. Do an
-    // extra shift to get the last bit in this case.
-    if (DefRegBytes == ShiftRegBytes) {
-      // We can just directly def the old def register as its the same size.
-      ShiftInputReg = ShiftedReg;
-      auto Shift2I =
-          BuildMI(MBB, InsertPt, Loc, TII->get(ShiftOpCode), OldDefReg)
-              .addReg(ShiftInputReg)
-              .addReg(StateReg);
-      (void)Shift2I;
-      ++NumInstsInserted;
-      LLVM_DEBUG(dbgs() << "  Inserting shrx: "; Shift2I->dump();
-                 dbgs() << "\n");
-    } else {
-      // When we have different size shift register we need to fix up the
-      // class. We can do that as we copy into the old def register.
-      BuildMI(MBB, InsertPt, Loc, TII->get(TargetOpcode::COPY), OldDefReg)
-          .addReg(ShiftedReg, 0, DefSubRegImm);
-    }
-  }
+  unsigned NewReg = MRI->createVirtualRegister(RC);
+  unsigned OrOpCodes[] = {X86::OR8rr, X86::OR16rr, X86::OR32rr, X86::OR64rr};
+  unsigned OrOpCode = OrOpCodes[Log2_32(Bytes)];
+  auto OrI = BuildMI(MBB, InsertPt, Loc, TII->get(OrOpCode), NewReg)
+                 .addReg(StateReg)
+                 .addReg(Reg);
+  OrI->addRegisterDead(X86::EFLAGS, TRI);
+  ++NumInstsInserted;
+  LLVM_DEBUG(dbgs() << "  Inserting or: "; OrI->dump(); dbgs() << "\n");
 
   if (FlagsReg)
     restoreEFLAGS(MBB, InsertPt, Loc, FlagsReg);
 
-  ++NumPostLoadRegsHardened;
+  return NewReg;
 }
 
-void X86SpeculativeLoadHardeningPass::checkReturnInstr(
-    MachineInstr &MI, MachineSSAUpdater &PredStateSSA) {
+/// Harden a load by hardening the loaded value in the defined register.
+///
+/// We can harden a non-leaking load into a register without touching the
+/// address by just hiding all of the loaded bits during misspeculation. We use
+/// an `or` instruction to do this because we set up our poison value as all
+/// ones. And the goal is just for the loaded bits to not be exposed to
+/// execution and coercing them to one is sufficient.
+///
+/// Returns the newly hardened register.
+unsigned X86SpeculativeLoadHardeningPass::hardenPostLoad(MachineInstr &MI) {
+  MachineBasicBlock &MBB = *MI.getParent();
+  DebugLoc Loc = MI.getDebugLoc();
+
+  auto &DefOp = MI.getOperand(0);
+  unsigned OldDefReg = DefOp.getReg();
+  auto *DefRC = MRI->getRegClass(OldDefReg);
+
+  // Because we want to completely replace the uses of this def'ed value with
+  // the hardened value, create a dedicated new register that will only be used
+  // to communicate the unhardened value to the hardening.
+  unsigned UnhardenedReg = MRI->createVirtualRegister(DefRC);
+  DefOp.setReg(UnhardenedReg);
+
+  // Now harden this register's value, getting a hardened reg that is safe to
+  // use. Note that we insert the instructions to compute this *after* the
+  // defining instruction, not before it.
+  unsigned HardenedReg = hardenValueInRegister(
+      UnhardenedReg, MBB, std::next(MI.getIterator()), Loc);
+
+  // Finally, replace the old register (which now only has the uses of the
+  // original def) with the hardened register.
+  MRI->replaceRegWith(/*FromReg*/ OldDefReg, /*ToReg*/ HardenedReg);
+
+  ++NumPostLoadRegsHardened;
+  return HardenedReg;
+}
+
+/// Harden a return instruction.
+///
+/// Returns implicitly perform a load which we need to harden. Without hardening
+/// this load, an attacker my speculatively write over the return address to
+/// steer speculation of the return to an attacker controlled address. This is
+/// called Spectre v1.1 or Bounds Check Bypass Store (BCBS) and is described in
+/// this paper:
+/// https://people.csail.mit.edu/vlk/spectre11.pdf
+///
+/// We can harden this by introducing an LFENCE that will delay any load of the
+/// return address until prior instructions have retired (and thus are not being
+/// speculated), or we can harden the address used by the implicit load: the
+/// stack pointer.
+///
+/// If we are not using an LFENCE, hardening the stack pointer has an additional
+/// benefit: it allows us to pass the predicate state accumulated in this
+/// function back to the caller. In the absence of a BCBS attack on the return,
+/// the caller will typically be resumed and speculatively executed due to the
+/// Return Stack Buffer (RSB) prediction which is very accurate and has a high
+/// priority. It is possible that some code from the caller will be executed
+/// speculatively even during a BCBS-attacked return until the steering takes
+/// effect. Whenever this happens, the caller can recover the (poisoned)
+/// predicate state from the stack pointer and continue to harden loads.
+void X86SpeculativeLoadHardeningPass::hardenReturnInstr(MachineInstr &MI) {
   MachineBasicBlock &MBB = *MI.getParent();
   DebugLoc Loc = MI.getDebugLoc();
   auto InsertPt = MI.getIterator();
@@ -1932,8 +2007,7 @@ void X86SpeculativeLoadHardeningPass::checkReturnInstr(
   // Take our predicate state, shift it to the high 17 bits (so that we keep
   // pointers canonical) and merge it into RSP. This will allow the caller to
   // extract it when we return (speculatively).
-  mergePredStateIntoSP(MBB, InsertPt, Loc,
-                       PredStateSSA.GetValueAtEndOfBlock(&MBB));
+  mergePredStateIntoSP(MBB, InsertPt, Loc, PS->SSA.GetValueAtEndOfBlock(&MBB));
 }
 
 INITIALIZE_PASS_BEGIN(X86SpeculativeLoadHardeningPass, DEBUG_TYPE,

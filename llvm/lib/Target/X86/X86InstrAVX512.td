@@ -198,7 +198,8 @@ multiclass AVX512_maskable_custom<bits<8> O, Format F,
                                   list<dag> ZeroMaskingPattern,
                                   string MaskingConstraint = "",
                                   bit IsCommutable = 0,
-                                  bit IsKCommutable = 0> {
+                                  bit IsKCommutable = 0,
+                                  bit IsKZCommutable = IsCommutable> {
   let isCommutable = IsCommutable in
     def NAME: AVX512<O, F, Outs, Ins,
                        OpcodeStr#"\t{"#AttSrcAsm#", $dst|"#
@@ -218,7 +219,7 @@ multiclass AVX512_maskable_custom<bits<8> O, Format F,
 
   // Zero mask does not add any restrictions to commute operands transformation.
   // So, it is Ok to use IsCommutable instead of IsKCommutable.
-  let isCommutable = IsCommutable in // Prefer over VMOV*rrkz Pat<>
+  let isCommutable = IsKZCommutable in // Prefer over VMOV*rrkz Pat<>
     def NAME#kz: AVX512<O, F, Outs, ZeroMaskingIns,
                        OpcodeStr#"\t{"#AttSrcAsm#", $dst {${mask}} {z}|"#
                                      "$dst {${mask}} {z}, "#IntelSrcAsm#"}",
@@ -237,7 +238,8 @@ multiclass AVX512_maskable_common<bits<8> O, Format F, X86VectorVTInfo _,
                                   SDNode Select = vselect,
                                   string MaskingConstraint = "",
                                   bit IsCommutable = 0,
-                                  bit IsKCommutable = 0> :
+                                  bit IsKCommutable = 0,
+                                  bit IsKZCommutable = IsCommutable> :
   AVX512_maskable_custom<O, F, Outs, Ins, MaskingIns, ZeroMaskingIns, OpcodeStr,
                          AttSrcAsm, IntelSrcAsm,
                          [(set _.RC:$dst, RHS)],
@@ -245,7 +247,7 @@ multiclass AVX512_maskable_common<bits<8> O, Format F, X86VectorVTInfo _,
                          [(set _.RC:$dst,
                                (Select _.KRCWM:$mask, RHS, _.ImmAllZerosV))],
                          MaskingConstraint, IsCommutable,
-                         IsKCommutable>;
+                         IsKCommutable, IsKZCommutable>;
 
 // This multiclass generates the unconditional/non-masking, the masking and
 // the zero-masking variant of the vector instruction.  In the masking case, the
@@ -276,13 +278,15 @@ multiclass AVX512_maskable<bits<8> O, Format F, X86VectorVTInfo _,
                            string AttSrcAsm, string IntelSrcAsm,
                            dag RHS,
                            bit IsCommutable = 0, bit IsKCommutable = 0,
+                           bit IsKZCommutable = IsCommutable,
                            SDNode Select = vselect> :
    AVX512_maskable_common<O, F, _, Outs, Ins,
                           !con((ins _.RC:$src0, _.KRCWM:$mask), Ins),
                           !con((ins _.KRCWM:$mask), Ins),
                           OpcodeStr, AttSrcAsm, IntelSrcAsm, RHS,
                           (Select _.KRCWM:$mask, RHS, _.RC:$src0),
-                          Select, "$src0 = $dst", IsCommutable, IsKCommutable>;
+                          Select, "$src0 = $dst", IsCommutable, IsKCommutable,
+                          IsKZCommutable>;
 
 // This multiclass generates the unconditional/non-masking, the masking and
 // the zero-masking variant of the scalar instruction.
@@ -292,7 +296,7 @@ multiclass AVX512_maskable_scalar<bits<8> O, Format F, X86VectorVTInfo _,
                            dag RHS,
                            bit IsCommutable = 0> :
    AVX512_maskable<O, F, _, Outs, Ins, OpcodeStr, AttSrcAsm, IntelSrcAsm,
-                   RHS, IsCommutable, 0, X86selects>;
+                   RHS, IsCommutable, 0, IsCommutable, X86selects>;
 
 // Similar to AVX512_maskable but in this case one of the source operands
 // ($src1) is already tied to $dst so we just use that for the preserved
@@ -4464,16 +4468,6 @@ let Predicates = [HasAVX512] in {
             (VMOVSSZmr addr:$dst, (COPY_TO_REGCLASS (v4f32 VR128X:$src), FR32X))>;
 }
 
-let Predicates = [HasAVX512, OptForSize] in {
-  // Shuffle with VMOVSS
-  def : Pat<(v4i32 (X86Movss VR128X:$src1, VR128X:$src2)),
-            (VMOVSSZrr (v4i32 VR128X:$src1), VR128X:$src2)>;
-
-  // Shuffle with VMOVSD
-  def : Pat<(v2i64 (X86Movsd VR128X:$src1, VR128X:$src2)),
-            (VMOVSDZrr VR128X:$src1, VR128X:$src2)>;
-}
-
 let ExeDomain = SSEPackedInt, SchedRW = [SchedWriteVecLogic.XMM] in {
 def VMOVZPQILo2PQIZrr : AVX512XSI<0x7E, MRMSrcReg, (outs VR128X:$dst),
                                 (ins VR128X:$src),
@@ -5312,12 +5306,14 @@ defm VMAXCSDZ : avx512_comutable_binop_s<0x5F, "vmaxsd", f64x_info, X86fmaxc,
 
 multiclass avx512_fp_packed<bits<8> opc, string OpcodeStr, SDPatternOperator OpNode,
                             X86VectorVTInfo _, X86FoldableSchedWrite sched,
-                            bit IsCommutable> {
+                            bit IsCommutable,
+                            bit IsKZCommutable = IsCommutable> {
   let ExeDomain = _.ExeDomain, hasSideEffects = 0 in {
   defm rr: AVX512_maskable<opc, MRMSrcReg, _, (outs _.RC:$dst),
                   (ins _.RC:$src1, _.RC:$src2), OpcodeStr##_.Suffix,
                   "$src2, $src1", "$src1, $src2",
-                  (_.VT (OpNode _.RC:$src1, _.RC:$src2)), IsCommutable>,
+                  (_.VT (OpNode _.RC:$src1, _.RC:$src2)), IsCommutable, 0,
+                  IsKZCommutable>,
                   EVEX_4V, Sched<[sched]>;
   let mayLoad = 1 in {
     defm rm: AVX512_maskable<opc, MRMSrcMem, _, (outs _.RC:$dst),
@@ -5361,7 +5357,8 @@ multiclass avx512_fp_sae_packed<bits<8> opc, string OpcodeStr,
 
 multiclass avx512_fp_binop_p<bits<8> opc, string OpcodeStr, SDPatternOperator OpNode,
                              Predicate prd, X86SchedWriteSizes sched,
-                             bit IsCommutable = 0> {
+                             bit IsCommutable = 0,
+                             bit IsPD128Commutable = IsCommutable> {
   let Predicates = [prd] in {
   defm PSZ : avx512_fp_packed<opc, OpcodeStr, OpNode, v16f32_info,
                               sched.PS.ZMM, IsCommutable>, EVEX_V512, PS,
@@ -5380,7 +5377,8 @@ multiclass avx512_fp_binop_p<bits<8> opc, string OpcodeStr, SDPatternOperator Op
                                    sched.PS.YMM, IsCommutable>, EVEX_V256, PS,
                                    EVEX_CD8<32, CD8VF>;
     defm PDZ128 : avx512_fp_packed<opc, OpcodeStr, OpNode, v2f64x_info,
-                                   sched.PD.XMM, IsCommutable>, EVEX_V128, PD, VEX_W,
+                                   sched.PD.XMM, IsPD128Commutable,
+                                   IsCommutable>, EVEX_V128, PD, VEX_W,
                                    EVEX_CD8<64, CD8VF>;
     defm PDZ256 : avx512_fp_packed<opc, OpcodeStr, OpNode, v4f64x_info,
                                    sched.PD.YMM, IsCommutable>, EVEX_V256, PD, VEX_W,
@@ -6426,6 +6424,7 @@ def VMOVLHPSZrr : AVX512PSI<0x16, MRMSrcReg, (outs VR128X:$dst),
           "vmovlhps\t{$src2, $src1, $dst|$dst, $src1, $src2}",
           [(set VR128X:$dst, (v4f32 (X86Movlhps VR128X:$src1, VR128X:$src2)))]>,
           Sched<[SchedWriteFShuffle.XMM]>, EVEX_4V;
+let isCommutable = 1 in
 def VMOVHLPSZrr : AVX512PSI<0x12, MRMSrcReg, (outs VR128X:$dst),
           (ins VR128X:$src1, VR128X:$src2),
           "vmovhlps\t{$src2, $src1, $dst|$dst, $src1, $src2}",
@@ -6452,31 +6451,22 @@ multiclass avx512_mov_hilo_packed<bits<8> opc, string OpcodeStr,
                   Sched<[SchedWriteFShuffle.XMM.Folded, ReadAfterLd]>, EVEX_4V;
 }
 
-defm VMOVHPSZ128 : avx512_mov_hilo_packed<0x16, "vmovhps", X86Movlhps,
+// No patterns for MOVLPS/MOVHPS as the Movlhps node should only be created in
+// SSE1. And MOVLPS pattern is even more complex.
+defm VMOVHPSZ128 : avx512_mov_hilo_packed<0x16, "vmovhps", null_frag,
                                   v4f32x_info>, EVEX_CD8<32, CD8VT2>, PS;
 defm VMOVHPDZ128 : avx512_mov_hilo_packed<0x16, "vmovhpd", X86Unpckl,
                                   v2f64x_info>, EVEX_CD8<64, CD8VT1>, PD, VEX_W;
 defm VMOVLPSZ128 : avx512_mov_hilo_packed<0x12, "vmovlps", null_frag,
                                   v4f32x_info>, EVEX_CD8<32, CD8VT2>, PS;
-defm VMOVLPDZ128 : avx512_mov_hilo_packed<0x12, "vmovlpd", null_frag,
+defm VMOVLPDZ128 : avx512_mov_hilo_packed<0x12, "vmovlpd", X86Movsd,
                                   v2f64x_info>, EVEX_CD8<64, CD8VT1>, PD, VEX_W;
 
 let Predicates = [HasAVX512] in {
-  // VMOVHPS patterns
-  def : Pat<(X86Movlhps VR128X:$src1,
-               (bc_v4f32 (v2i64 (scalar_to_vector (loadi64 addr:$src2))))),
-          (VMOVHPSZ128rm VR128X:$src1, addr:$src2)>;
-  def : Pat<(X86Movlhps VR128X:$src1,
-               (bc_v4f32 (v2i64 (X86vzload addr:$src2)))),
-          (VMOVHPSZ128rm VR128X:$src1, addr:$src2)>;
   // VMOVHPD patterns
   def : Pat<(v2f64 (X86Unpckl VR128X:$src1,
                     (bc_v2f64 (v2i64 (scalar_to_vector (loadi64 addr:$src2)))))),
            (VMOVHPDZ128rm VR128X:$src1, addr:$src2)>;
-  // VMOVLPD patterns
-  def : Pat<(v2f64 (X86Movsd VR128X:$src1,
-                           (v2f64 (scalar_to_vector (loadf64 addr:$src2))))),
-          (VMOVLPDZ128rm VR128X:$src1, addr:$src2)>;
 }
 
 let SchedRW = [WriteFStore] in {
@@ -10148,188 +10138,207 @@ defm VGETMANTSS: avx512_common_fp_sae_scalar_imm<"vgetmantss", f32x_info,
       0x27, X86GetMants, X86GetMantsRnd, SchedWriteFRnd, HasAVX512>,
       AVX512AIi8Base, VEX_LIG, EVEX_4V, EVEX_CD8<32, CD8VT1>;
 
+
+multiclass AVX512_rndscale_lowering<X86VectorVTInfo _, string Suffix> {
+  // Register
+  def : Pat<(_.VT (ffloor _.RC:$src)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rri")
+             _.RC:$src, (i32 0x9))>;
+  def : Pat<(_.VT (fnearbyint _.RC:$src)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rri")
+             _.RC:$src, (i32 0xC))>;
+  def : Pat<(_.VT (fceil _.RC:$src)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rri")
+             _.RC:$src, (i32 0xA))>;
+  def : Pat<(_.VT (frint _.RC:$src)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rri")
+             _.RC:$src, (i32 0x4))>;
+  def : Pat<(_.VT (ftrunc _.RC:$src)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rri")
+             _.RC:$src, (i32 0xB))>;
+
+  // Merge-masking
+  def : Pat<(_.VT (vselect _.KRCWM:$mask, (ffloor _.RC:$src), _.RC:$dst)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rrik")
+             _.RC:$dst, _.KRCWM:$mask, _.RC:$src, (i32 0x9))>;
+  def : Pat<(_.VT (vselect _.KRCWM:$mask, (fnearbyint _.RC:$src), _.RC:$dst)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rrik")
+             _.RC:$dst, _.KRCWM:$mask, _.RC:$src, (i32 0xC))>;
+  def : Pat<(_.VT (vselect _.KRCWM:$mask, (fceil _.RC:$src), _.RC:$dst)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rrik")
+             _.RC:$dst, _.KRCWM:$mask, _.RC:$src, (i32 0xA))>;
+  def : Pat<(_.VT (vselect _.KRCWM:$mask, (frint _.RC:$src), _.RC:$dst)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rrik")
+             _.RC:$dst, _.KRCWM:$mask, _.RC:$src, (i32 0x4))>;
+  def : Pat<(_.VT (vselect _.KRCWM:$mask, (ftrunc _.RC:$src), _.RC:$dst)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rrik")
+             _.RC:$dst, _.KRCWM:$mask, _.RC:$src, (i32 0xB))>;
+
+  // Zero-masking
+  def : Pat<(_.VT (vselect _.KRCWM:$mask, (ffloor _.RC:$src),
+                           _.ImmAllZerosV)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rrikz")
+             _.KRCWM:$mask, _.RC:$src, (i32 0x9))>;
+  def : Pat<(_.VT (vselect _.KRCWM:$mask, (fnearbyint _.RC:$src),
+                           _.ImmAllZerosV)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rrikz")
+             _.KRCWM:$mask, _.RC:$src, (i32 0xC))>;
+  def : Pat<(_.VT (vselect _.KRCWM:$mask, (fceil _.RC:$src),
+                           _.ImmAllZerosV)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rrikz")
+             _.KRCWM:$mask, _.RC:$src, (i32 0xA))>;
+  def : Pat<(_.VT (vselect _.KRCWM:$mask, (frint _.RC:$src),
+                           _.ImmAllZerosV)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rrikz")
+             _.KRCWM:$mask, _.RC:$src, (i32 0x4))>;
+  def : Pat<(_.VT (vselect _.KRCWM:$mask, (ftrunc _.RC:$src),
+                           _.ImmAllZerosV)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rrikz")
+             _.KRCWM:$mask, _.RC:$src, (i32 0xB))>;
+
+  // Load
+  def : Pat<(_.VT (ffloor (_.LdFrag addr:$src))),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rmi")
+             addr:$src, (i32 0x9))>;
+  def : Pat<(_.VT (fnearbyint (_.LdFrag addr:$src))),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rmi")
+             addr:$src, (i32 0xC))>;
+  def : Pat<(_.VT (fceil (_.LdFrag addr:$src))),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rmi")
+             addr:$src, (i32 0xA))>;
+  def : Pat<(_.VT (frint (_.LdFrag addr:$src))),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rmi")
+             addr:$src, (i32 0x4))>;
+  def : Pat<(_.VT (ftrunc (_.LdFrag addr:$src))),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rmi")
+             addr:$src, (i32 0xB))>;
+
+  // Merge-masking + load
+  def : Pat<(_.VT (vselect _.KRCWM:$mask, (ffloor (_.LdFrag addr:$src)),
+                           _.RC:$dst)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rmik")
+             _.RC:$dst, _.KRCWM:$mask, addr:$src, (i32 0x9))>;
+  def : Pat<(_.VT (vselect _.KRCWM:$mask, (fnearbyint (_.LdFrag addr:$src)),
+                           _.RC:$dst)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rmik")
+             _.RC:$dst, _.KRCWM:$mask, addr:$src, (i32 0xC))>;
+  def : Pat<(_.VT (vselect _.KRCWM:$mask, (fceil (_.LdFrag addr:$src)),
+                           _.RC:$dst)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rmik")
+             _.RC:$dst, _.KRCWM:$mask, addr:$src, (i32 0xA))>;
+  def : Pat<(_.VT (vselect _.KRCWM:$mask, (frint (_.LdFrag addr:$src)),
+                           _.RC:$dst)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rmik")
+             _.RC:$dst, _.KRCWM:$mask, addr:$src, (i32 0x4))>;
+  def : Pat<(_.VT (vselect _.KRCWM:$mask, (ftrunc (_.LdFrag addr:$src)),
+                           _.RC:$dst)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rmik")
+             _.RC:$dst, _.KRCWM:$mask, addr:$src, (i32 0xB))>;
+
+  // Zero-masking + load
+  def : Pat<(_.VT (vselect _.KRCWM:$mask, (ffloor (_.LdFrag addr:$src)),
+                           _.ImmAllZerosV)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rmikz")
+             _.KRCWM:$mask, addr:$src, (i32 0x9))>;
+  def : Pat<(_.VT (vselect _.KRCWM:$mask, (fnearbyint (_.LdFrag addr:$src)),
+                           _.ImmAllZerosV)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rmikz")
+             _.KRCWM:$mask, addr:$src, (i32 0xC))>;
+  def : Pat<(_.VT (vselect _.KRCWM:$mask, (fceil (_.LdFrag addr:$src)),
+                           _.ImmAllZerosV)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rmikz")
+             _.KRCWM:$mask, addr:$src, (i32 0xA))>;
+  def : Pat<(_.VT (vselect _.KRCWM:$mask, (frint (_.LdFrag addr:$src)),
+                           _.ImmAllZerosV)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rmikz")
+             _.KRCWM:$mask, addr:$src, (i32 0x4))>;
+  def : Pat<(_.VT (vselect _.KRCWM:$mask, (ftrunc (_.LdFrag addr:$src)),
+                           _.ImmAllZerosV)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rmikz")
+             _.KRCWM:$mask, addr:$src, (i32 0xB))>;
+
+  // Broadcast load
+  def : Pat<(_.VT (ffloor (X86VBroadcast (_.ScalarLdFrag addr:$src)))),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rmbi")
+             addr:$src, (i32 0x9))>;
+  def : Pat<(_.VT (fnearbyint (X86VBroadcast (_.ScalarLdFrag addr:$src)))),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rmbi")
+             addr:$src, (i32 0xC))>;
+  def : Pat<(_.VT (fceil (X86VBroadcast (_.ScalarLdFrag addr:$src)))),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rmbi")
+             addr:$src, (i32 0xA))>;
+  def : Pat<(_.VT (frint (X86VBroadcast (_.ScalarLdFrag addr:$src)))),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rmbi")
+             addr:$src, (i32 0x4))>;
+  def : Pat<(_.VT (ftrunc (X86VBroadcast (_.ScalarLdFrag addr:$src)))),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rmbi")
+             addr:$src, (i32 0xB))>;
+
+  // Merge-masking + broadcast load
+  def : Pat<(_.VT (vselect _.KRCWM:$mask,
+                           (ffloor (X86VBroadcast (_.ScalarLdFrag addr:$src))),
+                           _.RC:$dst)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rmbik")
+             _.RC:$dst, _.KRCWM:$mask, addr:$src, (i32 0x9))>;
+  def : Pat<(_.VT (vselect _.KRCWM:$mask,
+                           (fnearbyint (X86VBroadcast (_.ScalarLdFrag addr:$src))),
+                           _.RC:$dst)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rmbik")
+             _.RC:$dst, _.KRCWM:$mask, addr:$src, (i32 0xC))>;
+  def : Pat<(_.VT (vselect _.KRCWM:$mask,
+                           (fceil (X86VBroadcast (_.ScalarLdFrag addr:$src))),
+                           _.RC:$dst)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rmbik")
+             _.RC:$dst, _.KRCWM:$mask, addr:$src, (i32 0xA))>;
+  def : Pat<(_.VT (vselect _.KRCWM:$mask,
+                           (frint (X86VBroadcast (_.ScalarLdFrag addr:$src))),
+                           _.RC:$dst)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rmbik")
+             _.RC:$dst, _.KRCWM:$mask, addr:$src, (i32 0x4))>;
+  def : Pat<(_.VT (vselect _.KRCWM:$mask,
+                           (ftrunc (X86VBroadcast (_.ScalarLdFrag addr:$src))),
+                           _.RC:$dst)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rmbik")
+             _.RC:$dst, _.KRCWM:$mask, addr:$src, (i32 0xB))>;
+
+  // Zero-masking + broadcast load
+  def : Pat<(_.VT (vselect _.KRCWM:$mask,
+                           (ffloor (X86VBroadcast (_.ScalarLdFrag addr:$src))),
+                           _.ImmAllZerosV)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rmbikz")
+             _.KRCWM:$mask, addr:$src, (i32 0x9))>;
+  def : Pat<(_.VT (vselect _.KRCWM:$mask,
+                           (fnearbyint (X86VBroadcast (_.ScalarLdFrag addr:$src))),
+                           _.ImmAllZerosV)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rmbikz")
+             _.KRCWM:$mask, addr:$src, (i32 0xC))>;
+  def : Pat<(_.VT (vselect _.KRCWM:$mask,
+                           (fceil (X86VBroadcast (_.ScalarLdFrag addr:$src))),
+                           _.ImmAllZerosV)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rmbikz")
+             _.KRCWM:$mask, addr:$src, (i32 0xA))>;
+  def : Pat<(_.VT (vselect _.KRCWM:$mask,
+                           (frint (X86VBroadcast (_.ScalarLdFrag addr:$src))),
+                           _.ImmAllZerosV)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rmbikz")
+             _.KRCWM:$mask, addr:$src, (i32 0x4))>;
+  def : Pat<(_.VT (vselect _.KRCWM:$mask,
+                           (ftrunc (X86VBroadcast (_.ScalarLdFrag addr:$src))),
+                           _.ImmAllZerosV)),
+            (!cast<Instruction>("VRNDSCALE"#Suffix#_.ZSuffix#"rmbikz")
+             _.KRCWM:$mask, addr:$src, (i32 0xB))>;
+}
+
 let Predicates = [HasAVX512] in {
-def : Pat<(v16f32 (ffloor VR512:$src)),
-          (VRNDSCALEPSZrri VR512:$src, (i32 0x9))>;
-def : Pat<(v16f32 (vselect VK16WM:$mask, (ffloor VR512:$src), VR512:$dst)),
-          (VRNDSCALEPSZrrik VR512:$dst, VK16WM:$mask, VR512:$src, (i32 0x9))>;
-def : Pat<(v16f32 (vselect VK16WM:$mask, (ffloor VR512:$src), v16f32_info.ImmAllZerosV)),
-          (VRNDSCALEPSZrrikz VK16WM:$mask, VR512:$src, (i32 0x9))>;
-def : Pat<(v16f32 (fnearbyint VR512:$src)),
-          (VRNDSCALEPSZrri VR512:$src, (i32 0xC))>;
-def : Pat<(v16f32 (fceil VR512:$src)),
-          (VRNDSCALEPSZrri VR512:$src, (i32 0xA))>;
-def : Pat<(v16f32 (vselect VK16WM:$mask, (fceil VR512:$src), VR512:$dst)),
-          (VRNDSCALEPSZrrik VR512:$dst, VK16WM:$mask, VR512:$src, (i32 0xA))>;
-def : Pat<(v16f32 (vselect VK16WM:$mask, (fceil VR512:$src), v16f32_info.ImmAllZerosV)),
-          (VRNDSCALEPSZrrikz VK16WM:$mask, VR512:$src, (i32 0xA))>;
-def : Pat<(v16f32 (frint VR512:$src)),
-          (VRNDSCALEPSZrri VR512:$src, (i32 0x4))>;
-def : Pat<(v16f32 (ftrunc VR512:$src)),
-          (VRNDSCALEPSZrri VR512:$src, (i32 0xB))>;
-
-def : Pat<(v16f32 (ffloor (loadv16f32 addr:$src))),
-          (VRNDSCALEPSZrmi addr:$src, (i32 0x9))>;
-def : Pat<(v16f32 (fnearbyint (loadv16f32 addr:$src))),
-          (VRNDSCALEPSZrmi addr:$src, (i32 0xC))>;
-def : Pat<(v16f32 (fceil (loadv16f32 addr:$src))),
-          (VRNDSCALEPSZrmi addr:$src, (i32 0xA))>;
-def : Pat<(v16f32 (frint (loadv16f32 addr:$src))),
-          (VRNDSCALEPSZrmi addr:$src, (i32 0x4))>;
-def : Pat<(v16f32 (ftrunc (loadv16f32 addr:$src))),
-          (VRNDSCALEPSZrmi addr:$src, (i32 0xB))>;
-
-def : Pat<(v8f64 (ffloor VR512:$src)),
-          (VRNDSCALEPDZrri VR512:$src, (i32 0x9))>;
-def : Pat<(v8f64 (vselect VK8WM:$mask, (ffloor VR512:$src), VR512:$dst)),
-          (VRNDSCALEPDZrrik VR512:$dst, VK8WM:$mask, VR512:$src, (i32 0x9))>;
-def : Pat<(v8f64 (vselect VK8WM:$mask, (ffloor VR512:$src), v8f64_info.ImmAllZerosV)),
-          (VRNDSCALEPDZrrikz VK8WM:$mask, VR512:$src, (i32 0x9))>;
-def : Pat<(v8f64 (fnearbyint VR512:$src)),
-          (VRNDSCALEPDZrri VR512:$src, (i32 0xC))>;
-def : Pat<(v8f64 (fceil VR512:$src)),
-          (VRNDSCALEPDZrri VR512:$src, (i32 0xA))>;
-def : Pat<(v8f64 (vselect VK8WM:$mask, (fceil VR512:$src), VR512:$dst)),
-          (VRNDSCALEPDZrrik VR512:$dst, VK8WM:$mask, VR512:$src, (i32 0xA))>;
-def : Pat<(v8f64 (vselect VK8WM:$mask, (fceil VR512:$src), v8f64_info.ImmAllZerosV)),
-          (VRNDSCALEPDZrrikz VK8WM:$mask, VR512:$src, (i32 0xA))>;
-def : Pat<(v8f64 (frint VR512:$src)),
-          (VRNDSCALEPDZrri VR512:$src, (i32 0x4))>;
-def : Pat<(v8f64 (ftrunc VR512:$src)),
-          (VRNDSCALEPDZrri VR512:$src, (i32 0xB))>;
-
-def : Pat<(v8f64 (ffloor (loadv8f64 addr:$src))),
-          (VRNDSCALEPDZrmi addr:$src, (i32 0x9))>;
-def : Pat<(v8f64 (fnearbyint (loadv8f64 addr:$src))),
-          (VRNDSCALEPDZrmi addr:$src, (i32 0xC))>;
-def : Pat<(v8f64 (fceil (loadv8f64 addr:$src))),
-          (VRNDSCALEPDZrmi addr:$src, (i32 0xA))>;
-def : Pat<(v8f64 (frint (loadv8f64 addr:$src))),
-          (VRNDSCALEPDZrmi addr:$src, (i32 0x4))>;
-def : Pat<(v8f64 (ftrunc (loadv8f64 addr:$src))),
-          (VRNDSCALEPDZrmi addr:$src, (i32 0xB))>;
+  defm : AVX512_rndscale_lowering<v16f32_info, "PS">;
+  defm : AVX512_rndscale_lowering<v8f64_info,  "PD">;
 }
 
 let Predicates = [HasVLX] in {
-def : Pat<(v4f32 (ffloor VR128X:$src)),
-          (VRNDSCALEPSZ128rri VR128X:$src, (i32 0x9))>;
-def : Pat<(v4f32 (vselect VK4WM:$mask, (ffloor VR128X:$src), VR128X:$dst)),
-          (VRNDSCALEPSZ128rrik VR128X:$dst, VK4WM:$mask, VR128X:$src, (i32 0x9))>;
-def : Pat<(v4f32 (vselect VK4WM:$mask, (ffloor VR128X:$src), v4f32x_info.ImmAllZerosV)),
-          (VRNDSCALEPSZ128rrikz VK4WM:$mask, VR128X:$src, (i32 0x9))>;
-def : Pat<(v4f32 (fnearbyint VR128X:$src)),
-          (VRNDSCALEPSZ128rri VR128X:$src, (i32 0xC))>;
-def : Pat<(v4f32 (fceil VR128X:$src)),
-          (VRNDSCALEPSZ128rri VR128X:$src, (i32 0xA))>;
-def : Pat<(v4f32 (vselect VK4WM:$mask, (fceil VR128X:$src), VR128X:$dst)),
-          (VRNDSCALEPSZ128rrik VR128X:$dst, VK4WM:$mask, VR128X:$src, (i32 0xA))>;
-def : Pat<(v4f32 (vselect VK4WM:$mask, (fceil VR128X:$src), v4f32x_info.ImmAllZerosV)),
-          (VRNDSCALEPSZ128rrikz VK4WM:$mask, VR128X:$src, (i32 0xA))>;
-def : Pat<(v4f32 (frint VR128X:$src)),
-          (VRNDSCALEPSZ128rri VR128X:$src, (i32 0x4))>;
-def : Pat<(v4f32 (ftrunc VR128X:$src)),
-          (VRNDSCALEPSZ128rri VR128X:$src, (i32 0xB))>;
-
-def : Pat<(v4f32 (ffloor (loadv4f32 addr:$src))),
-          (VRNDSCALEPSZ128rmi addr:$src, (i32 0x9))>;
-def : Pat<(v4f32 (fnearbyint (loadv4f32 addr:$src))),
-          (VRNDSCALEPSZ128rmi addr:$src, (i32 0xC))>;
-def : Pat<(v4f32 (fceil (loadv4f32 addr:$src))),
-          (VRNDSCALEPSZ128rmi addr:$src, (i32 0xA))>;
-def : Pat<(v4f32 (frint (loadv4f32 addr:$src))),
-          (VRNDSCALEPSZ128rmi addr:$src, (i32 0x4))>;
-def : Pat<(v4f32 (ftrunc (loadv4f32 addr:$src))),
-          (VRNDSCALEPSZ128rmi addr:$src, (i32 0xB))>;
-
-def : Pat<(v2f64 (ffloor VR128X:$src)),
-          (VRNDSCALEPDZ128rri VR128X:$src, (i32 0x9))>;
-def : Pat<(v2f64 (vselect VK2WM:$mask, (ffloor VR128X:$src), VR128X:$dst)),
-          (VRNDSCALEPDZ128rrik VR128X:$dst, VK2WM:$mask, VR128X:$src, (i32 0x9))>;
-def : Pat<(v2f64 (vselect VK2WM:$mask, (ffloor VR128X:$src), v2f64x_info.ImmAllZerosV)),
-          (VRNDSCALEPDZ128rrikz VK2WM:$mask, VR128X:$src, (i32 0x9))>;
-def : Pat<(v2f64 (fnearbyint VR128X:$src)),
-          (VRNDSCALEPDZ128rri VR128X:$src, (i32 0xC))>;
-def : Pat<(v2f64 (fceil VR128X:$src)),
-          (VRNDSCALEPDZ128rri VR128X:$src, (i32 0xA))>;
-def : Pat<(v2f64 (vselect VK2WM:$mask, (fceil VR128X:$src), VR128X:$dst)),
-          (VRNDSCALEPDZ128rrik VR128X:$dst, VK2WM:$mask, VR128X:$src, (i32 0xA))>;
-def : Pat<(v2f64 (vselect VK2WM:$mask, (fceil VR128X:$src), v2f64x_info.ImmAllZerosV)),
-          (VRNDSCALEPDZ128rrikz VK2WM:$mask, VR128X:$src, (i32 0xA))>;
-def : Pat<(v2f64 (frint VR128X:$src)),
-          (VRNDSCALEPDZ128rri VR128X:$src, (i32 0x4))>;
-def : Pat<(v2f64 (ftrunc VR128X:$src)),
-          (VRNDSCALEPDZ128rri VR128X:$src, (i32 0xB))>;
-
-def : Pat<(v2f64 (ffloor (loadv2f64 addr:$src))),
-          (VRNDSCALEPDZ128rmi addr:$src, (i32 0x9))>;
-def : Pat<(v2f64 (fnearbyint (loadv2f64 addr:$src))),
-          (VRNDSCALEPDZ128rmi addr:$src, (i32 0xC))>;
-def : Pat<(v2f64 (fceil (loadv2f64 addr:$src))),
-          (VRNDSCALEPDZ128rmi addr:$src, (i32 0xA))>;
-def : Pat<(v2f64 (frint (loadv2f64 addr:$src))),
-          (VRNDSCALEPDZ128rmi addr:$src, (i32 0x4))>;
-def : Pat<(v2f64 (ftrunc (loadv2f64 addr:$src))),
-          (VRNDSCALEPDZ128rmi addr:$src, (i32 0xB))>;
-
-def : Pat<(v8f32 (ffloor VR256X:$src)),
-          (VRNDSCALEPSZ256rri VR256X:$src, (i32 0x9))>;
-def : Pat<(v8f32 (vselect VK8WM:$mask, (ffloor VR256X:$src), VR256X:$dst)),
-          (VRNDSCALEPSZ256rrik VR256X:$dst, VK8WM:$mask, VR256X:$src, (i32 0x9))>;
-def : Pat<(v8f32 (vselect VK8WM:$mask, (ffloor VR256X:$src), v8f32x_info.ImmAllZerosV)),
-          (VRNDSCALEPSZ256rrikz VK8WM:$mask, VR256X:$src, (i32 0x9))>;
-def : Pat<(v8f32 (fnearbyint VR256X:$src)),
-          (VRNDSCALEPSZ256rri VR256X:$src, (i32 0xC))>;
-def : Pat<(v8f32 (fceil VR256X:$src)),
-          (VRNDSCALEPSZ256rri VR256X:$src, (i32 0xA))>;
-def : Pat<(v8f32 (vselect VK8WM:$mask, (fceil VR256X:$src), VR256X:$dst)),
-          (VRNDSCALEPSZ256rrik VR256X:$dst, VK8WM:$mask, VR256X:$src, (i32 0xA))>;
-def : Pat<(v8f32 (vselect VK8WM:$mask, (fceil VR256X:$src), v8f32x_info.ImmAllZerosV)),
-          (VRNDSCALEPSZ256rrikz VK8WM:$mask, VR256X:$src, (i32 0xA))>;
-def : Pat<(v8f32 (frint VR256X:$src)),
-          (VRNDSCALEPSZ256rri VR256X:$src, (i32 0x4))>;
-def : Pat<(v8f32 (ftrunc VR256X:$src)),
-          (VRNDSCALEPSZ256rri VR256X:$src, (i32 0xB))>;
-
-def : Pat<(v8f32 (ffloor (loadv8f32 addr:$src))),
-          (VRNDSCALEPSZ256rmi addr:$src, (i32 0x9))>;
-def : Pat<(v8f32 (fnearbyint (loadv8f32 addr:$src))),
-          (VRNDSCALEPSZ256rmi addr:$src, (i32 0xC))>;
-def : Pat<(v8f32 (fceil (loadv8f32 addr:$src))),
-          (VRNDSCALEPSZ256rmi addr:$src, (i32 0xA))>;
-def : Pat<(v8f32 (frint (loadv8f32 addr:$src))),
-          (VRNDSCALEPSZ256rmi addr:$src, (i32 0x4))>;
-def : Pat<(v8f32 (ftrunc (loadv8f32 addr:$src))),
-          (VRNDSCALEPSZ256rmi addr:$src, (i32 0xB))>;
-
-def : Pat<(v4f64 (ffloor VR256X:$src)),
-          (VRNDSCALEPDZ256rri VR256X:$src, (i32 0x9))>;
-def : Pat<(v4f64 (vselect VK4WM:$mask, (ffloor VR256X:$src), VR256X:$dst)),
-          (VRNDSCALEPDZ256rrik VR256X:$dst, VK4WM:$mask, VR256X:$src, (i32 0x9))>;
-def : Pat<(v4f64 (vselect VK4WM:$mask, (ffloor VR256X:$src), v4f64x_info.ImmAllZerosV)),
-          (VRNDSCALEPDZ256rrikz VK4WM:$mask, VR256X:$src, (i32 0x9))>;
-def : Pat<(v4f64 (fnearbyint VR256X:$src)),
-          (VRNDSCALEPDZ256rri VR256X:$src, (i32 0xC))>;
-def : Pat<(v4f64 (fceil VR256X:$src)),
-          (VRNDSCALEPDZ256rri VR256X:$src, (i32 0xA))>;
-def : Pat<(v4f64 (vselect VK4WM:$mask, (fceil VR256X:$src), VR256X:$dst)),
-          (VRNDSCALEPDZ256rrik VR256X:$dst, VK4WM:$mask, VR256X:$src, (i32 0xA))>;
-def : Pat<(v4f64 (vselect VK4WM:$mask, (fceil VR256X:$src), v4f64x_info.ImmAllZerosV)),
-          (VRNDSCALEPDZ256rrikz VK4WM:$mask, VR256X:$src, (i32 0xA))>;
-def : Pat<(v4f64 (frint VR256X:$src)),
-          (VRNDSCALEPDZ256rri VR256X:$src, (i32 0x4))>;
-def : Pat<(v4f64 (ftrunc VR256X:$src)),
-          (VRNDSCALEPDZ256rri VR256X:$src, (i32 0xB))>;
-
-def : Pat<(v4f64 (ffloor (loadv4f64 addr:$src))),
-          (VRNDSCALEPDZ256rmi addr:$src, (i32 0x9))>;
-def : Pat<(v4f64 (fnearbyint (loadv4f64 addr:$src))),
-          (VRNDSCALEPDZ256rmi addr:$src, (i32 0xC))>;
-def : Pat<(v4f64 (fceil (loadv4f64 addr:$src))),
-          (VRNDSCALEPDZ256rmi addr:$src, (i32 0xA))>;
-def : Pat<(v4f64 (frint (loadv4f64 addr:$src))),
-          (VRNDSCALEPDZ256rmi addr:$src, (i32 0x4))>;
-def : Pat<(v4f64 (ftrunc (loadv4f64 addr:$src))),
-          (VRNDSCALEPDZ256rmi addr:$src, (i32 0xB))>;
+  defm : AVX512_rndscale_lowering<v8f32x_info, "PS">;
+  defm : AVX512_rndscale_lowering<v4f64x_info, "PD">;
+  defm : AVX512_rndscale_lowering<v4f32x_info, "PS">;
+  defm : AVX512_rndscale_lowering<v2f64x_info, "PD">;
 }
 
 multiclass avx512_shuff_packed_128_common<bits<8> opc, string OpcodeStr,
@@ -10844,7 +10853,7 @@ def : Pat<(vselect (v2i1 VK2WM:$mask), (v2f64 (X86VBroadcast (loadv2f64 addr:$sr
 //===----------------------------------------------------------------------===//
 
 defm VUNPCKH : avx512_fp_binop_p<0x15, "vunpckh", X86Unpckh, HasAVX512,
-                                 SchedWriteFShuffleSizes>;
+                                 SchedWriteFShuffleSizes, 0, 1>;
 defm VUNPCKL : avx512_fp_binop_p<0x14, "vunpckl", X86Unpckl, HasAVX512,
                                  SchedWriteFShuffleSizes>;
 

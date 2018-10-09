@@ -23,6 +23,8 @@
 #include "TestTU.h"
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclCXX.h"
+#include "clang/AST/Type.h"
+#include "clang/Sema/CodeCompleteConsumer.h"
 #include "llvm/Support/Casting.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -184,13 +186,16 @@ TEST(QualityTests, SymbolQualitySignalsSanity) {
   EXPECT_GT(WithReferences.evaluate(), Default.evaluate());
   EXPECT_GT(ManyReferences.evaluate(), WithReferences.evaluate());
 
-  SymbolQualitySignals Keyword, Variable, Macro;
+  SymbolQualitySignals Keyword, Variable, Macro, Constructor, Function;
   Keyword.Category = SymbolQualitySignals::Keyword;
   Variable.Category = SymbolQualitySignals::Variable;
   Macro.Category = SymbolQualitySignals::Macro;
+  Constructor.Category = SymbolQualitySignals::Constructor;
+  Function.Category = SymbolQualitySignals::Function;
   EXPECT_GT(Variable.evaluate(), Default.evaluate());
   EXPECT_GT(Keyword.evaluate(), Variable.evaluate());
   EXPECT_LT(Macro.evaluate(), Default.evaluate());
+  EXPECT_LT(Constructor.evaluate(), Function.evaluate());
 }
 
 TEST(QualityTests, SymbolRelevanceSignalsSanity) {
@@ -227,6 +232,14 @@ TEST(QualityTests, SymbolRelevanceSignalsSanity) {
   EXPECT_EQ(Scoped.evaluate(), Default.evaluate());
   Scoped.Query = SymbolRelevanceSignals::CodeComplete;
   EXPECT_GT(Scoped.evaluate(), Default.evaluate());
+
+  SymbolRelevanceSignals Instance;
+  Instance.IsInstanceMember = false;
+  EXPECT_EQ(Instance.evaluate(), Default.evaluate());
+  Instance.Context = CodeCompletionContext::CCC_DotMemberAccess;
+  EXPECT_LT(Instance.evaluate(), Default.evaluate());
+  Instance.IsInstanceMember = true;
+  EXPECT_EQ(Instance.evaluate(), Default.evaluate());
 }
 
 TEST(QualityTests, SortText) {
@@ -265,6 +278,72 @@ TEST(QualityTests, NoBoostForClassConstructor) {
 
   EXPECT_EQ(Cls.Scope, SymbolRelevanceSignals::GlobalScope);
   EXPECT_EQ(Ctor.Scope, SymbolRelevanceSignals::GlobalScope);
+}
+
+TEST(QualityTests, IsInstanceMember) {
+  auto Header = TestTU::withHeaderCode(R"cpp(
+    class Foo {
+    public:
+      static void foo() {}
+
+      template <typename T> void tpl(T *t) {}
+
+      void bar() {}
+    };
+  )cpp");
+  auto Symbols = Header.headerSymbols();
+
+  SymbolRelevanceSignals Rel;
+  const Symbol &FooSym = findSymbol(Symbols, "Foo::foo");
+  Rel.merge(FooSym);
+  EXPECT_FALSE(Rel.IsInstanceMember);
+  const Symbol &BarSym = findSymbol(Symbols, "Foo::bar");
+  Rel.merge(BarSym);
+  EXPECT_TRUE(Rel.IsInstanceMember);
+
+  Rel.IsInstanceMember =false;
+  const Symbol &TplSym = findSymbol(Symbols, "Foo::tpl");
+  Rel.merge(TplSym);
+  EXPECT_TRUE(Rel.IsInstanceMember);
+
+  auto AST = Header.build();
+  const NamedDecl *Foo = &findDecl(AST, "Foo::foo");
+  const NamedDecl *Bar = &findDecl(AST, "Foo::bar");
+  const NamedDecl *Tpl = &findDecl(AST, "Foo::tpl");
+
+  Rel.IsInstanceMember = false;
+  Rel.merge(CodeCompletionResult(Foo, /*Priority=*/0));
+  EXPECT_FALSE(Rel.IsInstanceMember);
+  Rel.merge(CodeCompletionResult(Bar, /*Priority=*/0));
+  EXPECT_TRUE(Rel.IsInstanceMember);
+  Rel.IsInstanceMember = false;
+  Rel.merge(CodeCompletionResult(Tpl, /*Priority=*/0));
+  EXPECT_TRUE(Rel.IsInstanceMember);
+}
+
+TEST(QualityTests, ConstructorQuality) {
+  auto Header = TestTU::withHeaderCode(R"cpp(
+    class Foo {
+    public:
+      Foo(int);
+    };
+  )cpp");
+  auto Symbols = Header.headerSymbols();
+  auto AST = Header.build();
+
+  const NamedDecl *CtorDecl = &findAnyDecl(AST, [](const NamedDecl &ND) {
+    return (ND.getQualifiedNameAsString() == "Foo::Foo") &&
+           llvm::isa<CXXConstructorDecl>(&ND);
+  });
+
+  SymbolQualitySignals Q;
+  Q.merge(CodeCompletionResult(CtorDecl, /*Priority=*/0));
+  EXPECT_EQ(Q.Category, SymbolQualitySignals::Constructor);
+
+  Q.Category = SymbolQualitySignals::Unknown;
+  const Symbol &CtorSym = findSymbol(Symbols, "Foo::Foo");
+  Q.merge(CtorSym);
+  EXPECT_EQ(Q.Category, SymbolQualitySignals::Constructor);
 }
 
 } // namespace

@@ -1761,13 +1761,17 @@ class BumpPointerAllocator {
   BlockMeta* BlockList = nullptr;
 
   void grow() {
-    char* NewMeta = new char[AllocSize];
+    char* NewMeta = static_cast<char *>(std::malloc(AllocSize));
+    if (NewMeta == nullptr)
+      std::terminate();
     BlockList = new (NewMeta) BlockMeta{BlockList, 0};
   }
 
   void* allocateMassive(size_t NBytes) {
     NBytes += sizeof(BlockMeta);
-    BlockMeta* NewMeta = reinterpret_cast<BlockMeta*>(new char[NBytes]);
+    BlockMeta* NewMeta = reinterpret_cast<BlockMeta*>(std::malloc(NBytes));
+    if (NewMeta == nullptr)
+      std::terminate();
     BlockList->Next = new (NewMeta) BlockMeta{BlockList->Next, 0};
     return static_cast<void*>(NewMeta + 1);
   }
@@ -1793,7 +1797,7 @@ public:
       BlockMeta* Tmp = BlockList;
       BlockList = BlockList->Next;
       if (reinterpret_cast<char*>(Tmp) != InitialBuffer)
-        delete[] reinterpret_cast<char*>(Tmp);
+        std::free(Tmp);
     }
     BlockList = new (InitialBuffer) BlockMeta{nullptr, 0};
   }
@@ -1823,10 +1827,15 @@ class PODSmallVector {
     size_t S = size();
     if (isInline()) {
       auto* Tmp = static_cast<T*>(std::malloc(NewCap * sizeof(T)));
+      if (Tmp == nullptr)
+        std::terminate();
       std::copy(First, Last, Tmp);
       First = Tmp;
-    } else
+    } else {
       First = static_cast<T*>(std::realloc(First, NewCap * sizeof(T)));
+      if (First == nullptr)
+        std::terminate();
+    }
     Last = First + S;
     Cap = First + NewCap;
   }
@@ -4925,32 +4934,24 @@ bool initializeOutputStream(char *Buf, size_t *N, OutputStream &S,
 
 }  // unnamed namespace
 
-enum {
-  unknown_error = -4,
-  invalid_args = -3,
-  invalid_mangled_name = -2,
-  memory_alloc_failure = -1,
-  success = 0,
-};
-
 char *llvm::itaniumDemangle(const char *MangledName, char *Buf,
                             size_t *N, int *Status) {
   if (MangledName == nullptr || (Buf != nullptr && N == nullptr)) {
     if (Status)
-      *Status = invalid_args;
+      *Status = demangle_invalid_args;
     return nullptr;
   }
 
-  int InternalStatus = success;
+  int InternalStatus = demangle_success;
   Db Parser(MangledName, MangledName + std::strlen(MangledName));
   OutputStream S;
 
   Node *AST = Parser.parse();
 
   if (AST == nullptr)
-    InternalStatus = invalid_mangled_name;
+    InternalStatus = demangle_invalid_mangled_name;
   else if (initializeOutputStream(Buf, N, S, 1024))
-    InternalStatus = memory_alloc_failure;
+    InternalStatus = demangle_memory_alloc_failure;
   else {
     assert(Parser.ForwardTemplateRefs.empty());
     AST->print(S);
@@ -4962,7 +4963,7 @@ char *llvm::itaniumDemangle(const char *MangledName, char *Buf,
 
   if (Status)
     *Status = InternalStatus;
-  return InternalStatus == success ? Buf : nullptr;
+  return InternalStatus == demangle_success ? Buf : nullptr;
 }
 
 namespace llvm {
