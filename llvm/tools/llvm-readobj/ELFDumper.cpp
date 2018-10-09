@@ -4210,7 +4210,7 @@ void LLVMStyle<ELFT>::printRelocations(const Elf_Shdr *Sec, const ELFO *Obj) {
     } else {
       std::vector<Elf_Rela> RelrRelas = unwrapOrError(Obj->decode_relrs(Relrs));
       for (const Elf_Rela &R : RelrRelas)
-        printRelocation(Obj, R, SymTab);
+        printRelocation(Obj, R, SymTab, /*IsRela=*/true);
     }
     break;
   }
