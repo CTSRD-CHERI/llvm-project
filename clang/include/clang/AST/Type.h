@@ -100,48 +100,33 @@ namespace llvm {
 
 namespace clang {
 
-class ArrayType;
 class ASTContext;
-class AttributedType;
-class AutoType;
-class BuiltinType;
 template <typename> class CanQual;
-class ComplexType;
 class CXXRecordDecl;
 class DeclContext;
-class DeducedType;
 class EnumDecl;
 class Expr;
 class ExtQualsTypeCommonBase;
 class FunctionDecl;
-class FunctionNoProtoType;
-class FunctionProtoType;
 class IdentifierInfo;
-class InjectedClassNameType;
 class NamedDecl;
 class ObjCInterfaceDecl;
-class ObjCObjectPointerType;
-class ObjCObjectType;
 class ObjCProtocolDecl;
 class ObjCTypeParamDecl;
-class ParenType;
 struct PrintingPolicy;
 class RecordDecl;
-class RecordType;
 class Stmt;
 class TagDecl;
 class TemplateArgument;
 class TemplateArgumentListInfo;
 class TemplateArgumentLoc;
-class TemplateSpecializationType;
 class TemplateTypeParmDecl;
 class TypedefNameDecl;
-class TypedefType;
 class UnresolvedUsingTypenameDecl;
 
 using CanQualType = CanQual<Type>;
 
-  // Provide forward declarations for all of the *Type classes
+// Provide forward declarations for all of the *Type classes.
 #define TYPE(Class, Base) class Class##Type;
 #include "clang/AST/TypeNodes.def"
 
@@ -6653,9 +6638,8 @@ QualType DecayedType::getPointeeType() const {
 
 // Get the decimal string representation of a fixed point type, represented
 // as a scaled integer.
-void FixedPointValueToString(SmallVectorImpl<char> &Str,
-                             const llvm::APSInt &Val,
-                             unsigned Scale, unsigned Radix);
+void FixedPointValueToString(SmallVectorImpl<char> &Str, llvm::APSInt Val,
+                             unsigned Scale);
 
 } // namespace clang
 

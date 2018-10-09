@@ -10,19 +10,33 @@
 // This file defines a checker that reports uninitialized fields in objects
 // created after a constructor call.
 //
-// This checker has two options:
+// This checker has several options:
 //   - "Pedantic" (boolean). If its not set or is set to false, the checker
 //     won't emit warnings for objects that don't have at least one initialized
 //     field. This may be set with
 //
-//  `-analyzer-config alpha.cplusplus.UninitializedObject:Pedantic=true`.
+//     `-analyzer-config alpha.cplusplus.UninitializedObject:Pedantic=true`.
 //
 //   - "NotesAsWarnings" (boolean). If set to true, the checker will emit a
 //     warning for each uninitalized field, as opposed to emitting one warning
 //     per constructor call, and listing the uninitialized fields that belongs
 //     to it in notes. Defaults to false.
 //
-//  `-analyzer-config alpha.cplusplus.UninitializedObject:NotesAsWarnings=true`.
+//     `-analyzer-config \
+//         alpha.cplusplus.UninitializedObject:NotesAsWarnings=true`.
+//
+//   - "CheckPointeeInitialization" (boolean). If set to false, the checker will
+//     not analyze the pointee of pointer/reference fields, and will only check
+//     whether the object itself is initialized. Defaults to false.
+//
+//     `-analyzer-config \
+//         alpha.cplusplus.UninitializedObject:CheckPointeeInitialization=true`.
+//
+//     TODO: With some clever heuristics, some pointers should be dereferenced
+//     by default. For example, if the pointee is constructed within the
+//     constructor call, it's reasonable to say that no external object
+//     references it, and we wouldn't generate multiple report on the same
+//     pointee.
 //
 //===----------------------------------------------------------------------===//
 
@@ -30,7 +44,7 @@
 #include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
 #include "clang/StaticAnalyzer/Core/Checker.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
-#include <algorithm>
+#include "clang/StaticAnalyzer/Core/PathSensitive/DynamicTypeMap.h"
 
 using namespace clang;
 using namespace clang::ento;
@@ -44,6 +58,7 @@ public:
   // These fields will be initialized when registering the checker.
   bool IsPedantic;
   bool ShouldConvertNotesToWarnings;
+  bool CheckPointeeInitialization;
 
   UninitializedObjectChecker()
       : BT_uninitField(new BuiltinBug(this, "Uninitialized fields")) {}
@@ -109,13 +124,16 @@ class FindUninitializedFields {
   const TypedValueRegion *const ObjectR;
 
   const bool IsPedantic;
+  const bool CheckPointeeInitialization;
+
   bool IsAnyFieldInitialized = false;
 
   UninitFieldSet UninitFields;
 
 public:
   FindUninitializedFields(ProgramStateRef State,
-                          const TypedValueRegion *const R, bool IsPedantic);
+                          const TypedValueRegion *const R, bool IsPedantic,
+                          bool CheckPointeeInitialization);
   const UninitFieldSet &getUninitFields();
 
 private:
@@ -207,17 +225,21 @@ static llvm::ImmutableListFactory<const FieldRegion *> Factory;
 
 /// Returns the object that was constructed by CtorDecl, or None if that isn't
 /// possible.
+// TODO: Refactor this function so that it returns the constructed object's
+// region.
 static Optional<nonloc::LazyCompoundVal>
 getObjectVal(const CXXConstructorDecl *CtorDecl, CheckerContext &Context);
 
-/// Checks whether the constructor under checking is called by another
-/// constructor.
-static bool isCalledByConstructor(const CheckerContext &Context);
+/// Checks whether the object constructed by \p Ctor will be analyzed later
+/// (e.g. if the object is a field of another object, in which case we'd check
+/// it multiple times).
+static bool willObjectBeAnalyzedLater(const CXXConstructorDecl *Ctor,
+                               CheckerContext &Context);
 
-/// Returns whether FD can be (transitively) dereferenced to a void pointer type
+/// Returns whether T can be (transitively) dereferenced to a void pointer type
 /// (void*, void**, ...). The type of the region behind a void pointer isn't
 /// known, and thus FD can not be analyzed.
-static bool isVoidPointer(const FieldDecl *FD);
+static bool isVoidPointer(QualType T);
 
 /// Returns true if T is a primitive type. We defined this type so that for
 /// objects that we'd only like analyze as much as checking whether their
@@ -255,15 +277,15 @@ void UninitializedObjectChecker::checkEndFunction(
     return;
 
   // This avoids essentially the same error being reported multiple times.
-  if (isCalledByConstructor(Context))
+  if (willObjectBeAnalyzedLater(CtorDecl, Context))
     return;
 
   Optional<nonloc::LazyCompoundVal> Object = getObjectVal(CtorDecl, Context);
   if (!Object)
     return;
 
-  FindUninitializedFields F(Context.getState(), Object->getRegion(),
-                            IsPedantic);
+  FindUninitializedFields F(Context.getState(), Object->getRegion(), IsPedantic,
+                            CheckPointeeInitialization);
 
   const UninitFieldSet &UninitFields = F.getUninitFields();
 
@@ -327,8 +349,10 @@ void UninitializedObjectChecker::checkEndFunction(
 //===----------------------------------------------------------------------===//
 
 FindUninitializedFields::FindUninitializedFields(
-    ProgramStateRef State, const TypedValueRegion *const R, bool IsPedantic)
-    : State(State), ObjectR(R), IsPedantic(IsPedantic) {}
+    ProgramStateRef State, const TypedValueRegion *const R, bool IsPedantic,
+    bool CheckPointeeInitialization)
+    : State(State), ObjectR(R), IsPedantic(IsPedantic),
+      CheckPointeeInitialization(CheckPointeeInitialization) {}
 
 const UninitFieldSet &FindUninitializedFields::getUninitFields() {
   isNonUnionUninit(ObjectR, FieldChainInfo());
@@ -413,8 +437,8 @@ bool FindUninitializedFields::isNonUnionUninit(const TypedValueRegion *R,
   }
 
   // Checking bases.
-  // FIXME: As of now, because of `isCalledByConstructor`, objects whose type
-  // is a descendant of another type will emit warnings for uninitalized
+  // FIXME: As of now, because of `willObjectBeAnalyzedLater`, objects whose
+  // type is a descendant of another type will emit warnings for uninitalized
   // inherited members.
   // This is not the only way to analyze bases of an object -- if we didn't
   // filter them out, and didn't analyze the bases, this checker would run for
@@ -459,7 +483,7 @@ bool FindUninitializedFields::isPointerOrReferenceUninit(
 
   SVal V = State->getSVal(FR);
 
-  if (V.isUnknown() || V.isZeroConstant()) {
+  if (V.isUnknown() || V.getAs<loc::ConcreteInt>()) {
     IsAnyFieldInitialized = true;
     return false;
   }
@@ -468,48 +492,75 @@ bool FindUninitializedFields::isPointerOrReferenceUninit(
     return addFieldToUninits({LocalChain, FR});
   }
 
-  const FieldDecl *FD = FR->getDecl();
-
-  // TODO: The dynamic type of a void pointer may be retrieved with
-  // `getDynamicTypeInfo`.
-  if (isVoidPointer(FD)) {
+  if (!CheckPointeeInitialization) {
     IsAnyFieldInitialized = true;
     return false;
   }
 
-  assert(V.getAs<Loc>() && "V should be Loc at this point!");
+  assert(V.getAs<loc::MemRegionVal>() &&
+         "At this point V must be loc::MemRegionVal!");
+  auto L = V.castAs<loc::MemRegionVal>();
+
+  // We can't reason about symbolic regions, assume its initialized.
+  // Note that this also avoids a potential infinite recursion, because
+  // constructors for list-like classes are checked without being called, and
+  // the Static Analyzer will construct a symbolic region for Node *next; or
+  // similar code snippets.
+  if (L.getRegion()->getSymbolicBase()) {
+    IsAnyFieldInitialized = true;
+    return false;
+  }
+
+  DynamicTypeInfo DynTInfo = getDynamicTypeInfo(State, L.getRegion());
+  if (!DynTInfo.isValid()) {
+    IsAnyFieldInitialized = true;
+    return false;
+  }
+
+  QualType DynT = DynTInfo.getType();
+
+  if (isVoidPointer(DynT)) {
+    IsAnyFieldInitialized = true;
+    return false;
+  }
 
   // At this point the pointer itself is initialized and points to a valid
   // location, we'll now check the pointee.
-  SVal DerefdV = State->getSVal(V.castAs<Loc>());
+  SVal DerefdV = State->getSVal(V.castAs<Loc>(), DynT);
 
-  // TODO: Dereferencing should be done according to the dynamic type.
-  while (Optional<Loc> L = DerefdV.getAs<Loc>()) {
-    DerefdV = State->getSVal(*L);
+  // If DerefdV is still a pointer value, we'll dereference it again (e.g.:
+  // int** -> int*).
+  while (auto Tmp = DerefdV.getAs<loc::MemRegionVal>()) {
+    if (Tmp->getRegion()->getSymbolicBase()) {
+      IsAnyFieldInitialized = true;
+      return false;
+    }
+
+    DynTInfo = getDynamicTypeInfo(State, Tmp->getRegion());
+    if (!DynTInfo.isValid()) {
+      IsAnyFieldInitialized = true;
+      return false;
+    }
+
+    DynT = DynTInfo.getType();
+    if (isVoidPointer(DynT)) {
+      IsAnyFieldInitialized = true;
+      return false;
+    }
+
+    DerefdV = State->getSVal(*Tmp, DynT);
   }
 
-  // If V is a pointer pointing to a record type.
+  // If FR is a pointer pointing to a non-primitive type.
   if (Optional<nonloc::LazyCompoundVal> RecordV =
           DerefdV.getAs<nonloc::LazyCompoundVal>()) {
 
     const TypedValueRegion *R = RecordV->getRegion();
 
-    // We can't reason about symbolic regions, assume its initialized.
-    // Note that this also avoids a potential infinite recursion, because
-    // constructors for list-like classes are checked without being called, and
-    // the Static Analyzer will construct a symbolic region for Node *next; or
-    // similar code snippets.
-    if (R->getSymbolicBase()) {
-      IsAnyFieldInitialized = true;
-      return false;
-    }
-
-    const QualType T = R->getValueType();
-
-    if (T->isStructureOrClassType())
+    if (DynT->getPointeeType()->isStructureOrClassType())
       return isNonUnionUninit(R, {LocalChain, FR});
 
-    if (T->isUnionType()) {
+    if (DynT->getPointeeType()->isUnionType()) {
       if (isUnionUninit(R)) {
         return addFieldToUninits({LocalChain, FR, /*IsDereferenced*/ true});
       } else {
@@ -518,7 +569,7 @@ bool FindUninitializedFields::isPointerOrReferenceUninit(
       }
     }
 
-    if (T->isArrayType()) {
+    if (DynT->getPointeeType()->isArrayType()) {
       IsAnyFieldInitialized = true;
       return false;
     }
@@ -526,8 +577,10 @@ bool FindUninitializedFields::isPointerOrReferenceUninit(
     llvm_unreachable("All cases are handled!");
   }
 
-  // TODO: If possible, it should be asserted that the DerefdV at this point is
-  // primitive.
+  assert((isPrimitiveType(DynT->getPointeeType()) || DynT->isPointerType() ||
+          DynT->isReferenceType()) &&
+         "At this point FR must either have a primitive dynamic type, or it "
+         "must be a null, undefined, unknown or concrete pointer!");
 
   if (isPrimitiveUninit(DerefdV))
     return addFieldToUninits({LocalChain, FR, /*IsDereferenced*/ true});
@@ -571,6 +624,25 @@ const FieldDecl *FieldChainInfo::getEndOfChain() const {
   return (*Chain.begin())->getDecl();
 }
 
+// TODO: This function constructs an incorrect string if a void pointer is a
+// part of the chain:
+//
+//   struct B { int x; }
+//
+//   struct A {
+//     void *vptr;
+//     A(void* vptr) : vptr(vptr) {}
+//   };
+//
+//   void f() {
+//     B b;
+//     A a(&b);
+//   }
+//
+// The note message will be "uninitialized field 'this->vptr->x'", even though
+// void pointers can't be dereferenced. This should be changed to "uninitialized
+// field 'static_cast<B*>(this->vptr)->x'".
+//
 // TODO: This function constructs an incorrect fieldchain string in the
 // following case:
 //
@@ -611,9 +683,7 @@ void FieldChainInfo::printTail(
 //                           Utility functions.
 //===----------------------------------------------------------------------===//
 
-static bool isVoidPointer(const FieldDecl *FD) {
-  QualType T = FD->getType();
-
+static bool isVoidPointer(QualType T) {
   while (!T.isNull()) {
     if (T->isVoidPointerType())
       return true;
@@ -636,18 +706,32 @@ getObjectVal(const CXXConstructorDecl *CtorDecl, CheckerContext &Context) {
   return Object.getAs<nonloc::LazyCompoundVal>();
 }
 
-// TODO: We should also check that if the constructor was called by another
-// constructor, whether those two are in any relation to one another. In it's
-// current state, this introduces some false negatives.
-static bool isCalledByConstructor(const CheckerContext &Context) {
-  const LocationContext *LC = Context.getLocationContext()->getParent();
+static bool willObjectBeAnalyzedLater(const CXXConstructorDecl *Ctor,
+                               CheckerContext &Context) {
 
-  while (LC) {
-    if (isa<CXXConstructorDecl>(LC->getDecl()))
+  Optional<nonloc::LazyCompoundVal> CurrentObject = getObjectVal(Ctor, Context);
+  if (!CurrentObject)
+    return false;
+
+  const LocationContext *LC = Context.getLocationContext();
+  while ((LC = LC->getParent())) {
+
+    // If \p Ctor was called by another constructor.
+    const auto *OtherCtor = dyn_cast<CXXConstructorDecl>(LC->getDecl());
+    if (!OtherCtor)
+      continue;
+
+    Optional<nonloc::LazyCompoundVal> OtherObject =
+        getObjectVal(OtherCtor, Context);
+    if (!OtherObject)
+      continue;
+
+    // If the CurrentObject is a subregion of OtherObject, it will be analyzed
+    // during the analysis of OtherObject.
+    if (CurrentObject->getRegion()->isSubRegionOf(OtherObject->getRegion()))
       return true;
-
-    LC = LC->getParent();
   }
+
   return false;
 }
 
@@ -685,4 +769,6 @@ void ento::registerUninitializedObjectChecker(CheckerManager &Mgr) {
       "Pedantic", /*DefaultVal*/ false, Chk);
   Chk->ShouldConvertNotesToWarnings = Mgr.getAnalyzerOptions().getBooleanOption(
       "NotesAsWarnings", /*DefaultVal*/ false, Chk);
+  Chk->CheckPointeeInitialization = Mgr.getAnalyzerOptions().getBooleanOption(
+      "CheckPointeeInitialization", /*DefaultVal*/ false, Chk);
 }

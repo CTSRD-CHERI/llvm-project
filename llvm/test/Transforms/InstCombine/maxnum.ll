@@ -129,14 +129,6 @@ define float @canonicalize_constant_maxnum_f32(float %x) {
   ret float %y
 }
 
-define float @noop_maxnum_f32(float %x) {
-; CHECK-LABEL: @noop_maxnum_f32(
-; CHECK-NEXT:    ret float [[X:%.*]]
-;
-  %y = call float @llvm.maxnum.f32(float %x, float %x)
-  ret float %y
-}
-
 define float @maxnum_f32_nan_val(float %x) {
 ; CHECK-LABEL: @maxnum_f32_nan_val(
 ; CHECK-NEXT:    ret float [[X:%.*]]
@@ -151,72 +143,6 @@ define float @maxnum_f32_val_nan(float %x) {
 ;
   %y = call float @llvm.maxnum.f32(float %x, float 0x7FF8000000000000)
   ret float %y
-}
-
-define float @fold_maxnum_f32_undef_undef(float %x) {
-; CHECK-LABEL: @fold_maxnum_f32_undef_undef(
-; CHECK-NEXT:    ret float undef
-;
-  %val = call float @llvm.maxnum.f32(float undef, float undef)
-  ret float %val
-}
-
-define float @fold_maxnum_f32_val_undef(float %x) {
-; CHECK-LABEL: @fold_maxnum_f32_val_undef(
-; CHECK-NEXT:    ret float [[X:%.*]]
-;
-  %val = call float @llvm.maxnum.f32(float %x, float undef)
-  ret float %val
-}
-
-define float @fold_maxnum_f32_undef_val(float %x) {
-; CHECK-LABEL: @fold_maxnum_f32_undef_val(
-; CHECK-NEXT:    ret float [[X:%.*]]
-;
-  %val = call float @llvm.maxnum.f32(float undef, float %x)
-  ret float %val
-}
-
-define float @maxnum_x_maxnum_x_y(float %x, float %y) {
-; CHECK-LABEL: @maxnum_x_maxnum_x_y(
-; CHECK-NEXT:    [[A:%.*]] = call float @llvm.maxnum.f32(float [[X:%.*]], float [[Y:%.*]])
-; CHECK-NEXT:    ret float [[A]]
-;
-  %a = call float @llvm.maxnum.f32(float %x, float %y)
-  %b = call float @llvm.maxnum.f32(float %x, float %a)
-  ret float %b
-}
-
-define float @maxnum_y_maxnum_x_y(float %x, float %y) {
-; CHECK-LABEL: @maxnum_y_maxnum_x_y(
-; CHECK-NEXT:    [[A:%.*]] = call float @llvm.maxnum.f32(float [[X:%.*]], float [[Y:%.*]])
-; CHECK-NEXT:    ret float [[A]]
-;
-  %a = call float @llvm.maxnum.f32(float %x, float %y)
-  %b = call float @llvm.maxnum.f32(float %y, float %a)
-  ret float %b
-}
-
-define float @maxnum_z_maxnum_x_y(float %x, float %y, float %z) {
-; CHECK-LABEL: @maxnum_z_maxnum_x_y(
-; CHECK-NEXT:    [[A:%.*]] = call float @llvm.maxnum.f32(float [[X:%.*]], float [[Y:%.*]])
-; CHECK-NEXT:    [[B:%.*]] = call float @llvm.maxnum.f32(float [[Z:%.*]], float [[A]])
-; CHECK-NEXT:    ret float [[B]]
-;
-  %a = call float @llvm.maxnum.f32(float %x, float %y)
-  %b = call float @llvm.maxnum.f32(float %z, float %a)
-  ret float %b
-}
-
-define float @maxnum_maxnum_x_y_z(float %x, float %y, float %z) {
-; CHECK-LABEL: @maxnum_maxnum_x_y_z(
-; CHECK-NEXT:    [[A:%.*]] = call float @llvm.maxnum.f32(float [[X:%.*]], float [[Y:%.*]])
-; CHECK-NEXT:    [[B:%.*]] = call float @llvm.maxnum.f32(float [[A]], float [[Z:%.*]])
-; CHECK-NEXT:    ret float [[B]]
-;
-  %a = call float @llvm.maxnum.f32(float %x, float %y)
-  %b = call float @llvm.maxnum.f32(float %a, float %z)
-  ret float %b
 }
 
 define float @maxnum4(float %x, float %y, float %z, float %w) {

@@ -31,7 +31,9 @@ extensions = ['sphinx.ext.intersphinx', 'sphinx.ext.todo']
 templates_path = ['_templates']
 
 # The suffix of source filenames.
-source_suffix = '.rst'
+source_suffix = ['.rst', '.md']
+
+source_parsers = {'.md': 'recommonmark.parser.CommonMarkParser'}
 
 # The encoding of source files.
 #source_encoding = 'utf-8-sig'
@@ -255,3 +257,6 @@ intersphinx_mapping = {}
 # Pygment lexer are sometimes out of date (when parsing LLVM for example) or
 # wrong. Suppress the warning so the build doesn't abort.
 suppress_warnings = [ 'misc.highlighting_failure' ]
+
+# Direct html-ified man pages to llvm.org
+manpages_url = 'https://llvm.org/docs/CommandGuide/{page}.html'

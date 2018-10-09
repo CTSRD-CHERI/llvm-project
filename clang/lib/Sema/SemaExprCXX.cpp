@@ -113,9 +113,15 @@ ParsedType Sema::getConstructorName(IdentifierInfo &II,
       break;
     }
   }
-  if (!InjectedClassName && CurClass->isInvalidDecl())
+  if (!InjectedClassName) {
+    if (!CurClass->isInvalidDecl()) {
+      // FIXME: RequireCompleteDeclContext doesn't check dependent contexts
+      // properly. Work around it here for now.
+      Diag(SS.getLastQualifierNameLoc(),
+           diag::err_incomplete_nested_name_spec) << CurClass << SS.getRange();
+    }
     return ParsedType();
-  assert(InjectedClassName && "couldn't find injected class name");
+  }
 
   QualType T = Context.getTypeDeclType(InjectedClassName);
   DiagnoseUseOfDecl(InjectedClassName, NameLoc);
@@ -1741,9 +1747,9 @@ static void diagnoseUnavailableAlignedAllocation(const FunctionDecl &FD,
     StringRef OSName = AvailabilityAttr::getPlatformNameSourceSpelling(
         S.getASTContext().getTargetInfo().getPlatformName());
 
-    S.Diag(Loc, diag::warn_aligned_allocation_unavailable)
-         << IsDelete << FD.getType().getAsString() << OSName
-         << alignedAllocMinVersion(T.getOS()).getAsString();
+    S.Diag(Loc, diag::err_aligned_allocation_unavailable)
+        << IsDelete << FD.getType().getAsString() << OSName
+        << alignedAllocMinVersion(T.getOS()).getAsString();
     S.Diag(Loc, diag::note_silence_unligned_allocation_unavailable);
   }
 }

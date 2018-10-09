@@ -30,17 +30,17 @@ RegisterDependenciesFunction NoDependenciesToRegister =
 void MaterializationUnit::anchor() {}
 
 raw_ostream &operator<<(raw_ostream &OS, const JITSymbolFlags &Flags) {
+  if (Flags.isCallable())
+    OS << "[Callable]";
+  else
+    OS << "[Data]";
   if (Flags.isWeak())
-    OS << 'W';
+    OS << "[Weak]";
   else if (Flags.isCommon())
-    OS << 'C';
-  else
-    OS << 'S';
+    OS << "[Common]";
 
-  if (Flags.isExported())
-    OS << 'E';
-  else
-    OS << 'H';
+  if (!Flags.isExported())
+    OS << "[Hidden]";
 
   return OS;
 }
@@ -884,6 +884,30 @@ buildSimpleReexportsAliasMap(VSO &SourceV, const SymbolNameSet &Symbols) {
   }
 
   return Result;
+}
+
+ReexportsFallbackDefinitionGenerator::ReexportsFallbackDefinitionGenerator(
+    VSO &BackingVSO, SymbolPredicate Allow)
+    : BackingVSO(BackingVSO), Allow(std::move(Allow)) {}
+
+SymbolNameSet ReexportsFallbackDefinitionGenerator::
+operator()(VSO &V, const SymbolNameSet &Names) {
+  orc::SymbolNameSet Added;
+  orc::SymbolAliasMap AliasMap;
+
+  auto Flags = BackingVSO.lookupFlags(Names);
+
+  for (auto &KV : Flags) {
+    if (!Allow(KV.first))
+      continue;
+    AliasMap[KV.first] = SymbolAliasMapEntry(KV.first, KV.second);
+    Added.insert(KV.first);
+  }
+
+  if (!Added.empty())
+    cantFail(V.define(reexports(BackingVSO, AliasMap)));
+
+  return Added;
 }
 
 Error VSO::defineMaterializing(const SymbolFlagsMap &SymbolFlags) {

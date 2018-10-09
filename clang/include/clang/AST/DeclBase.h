@@ -1250,16 +1250,29 @@ public:
 /// that directly derive from DeclContext are mentioned, not their subclasses):
 ///
 ///   TranslationUnitDecl
+///   ExternCContext
 ///   NamespaceDecl
-///   FunctionDecl
 ///   TagDecl
+///   OMPDeclareReductionDecl
+///   FunctionDecl
 ///   ObjCMethodDecl
 ///   ObjCContainerDecl
 ///   LinkageSpecDecl
 ///   ExportDecl
 ///   BlockDecl
-///   OMPDeclareReductionDecl
+///   CapturedDecl
 class DeclContext {
+  /// For makeDeclVisibleInContextImpl
+  friend class ASTDeclReader;
+  /// For reconcileExternalVisibleStorage, CreateStoredDeclsMap,
+  /// hasNeedToReconcileExternalVisibleStorage
+  friend class ExternalASTSource;
+  /// For CreateStoredDeclsMap
+  friend class DependentDiagnostic;
+  /// For hasNeedToReconcileExternalVisibleStorage,
+  /// hasLazyLocalLexicalLookups, hasLazyExternalLexicalLookups
+  friend class ASTWriter;
+
   // We use uint64_t in the bit-fields below since some bit-fields
   // cross the unsigned boundary and this breaks the packing.
 
@@ -1541,8 +1554,6 @@ class DeclContext {
   /// methods in ObjCMethodDecl should be updated appropriately.
   class ObjCMethodDeclBitfields {
     friend class ObjCMethodDecl;
-    /// For the bits in DeclContextBitfields.
-    uint64_t : NumDeclContextBits;
 
     /// This is needed for the bitwidth of Family below but
     /// is defined in Basic/IdentifierTable.h which we do not include.
@@ -1550,6 +1561,9 @@ class DeclContext {
     /// a static_assert in the ctor of ObjCMethodDecl which checks
     /// that these two ObjCMethodFamilyBitWidth are equal.
     enum { ObjCMethodFamilyBitWidth = 4 };
+
+    /// For the bits in DeclContextBitfields.
+    uint64_t : NumDeclContextBits;
 
     /// The conventional meaning of this method; an ObjCMethodFamily.
     /// This is not serialized; instead, it is computed on demand and
@@ -1715,10 +1729,6 @@ protected:
     static_assert(sizeof(BlockDeclBitfields) <= 8,
                   "BlockDeclBitfields is larger than 8 bytes!");
   };
-
-  friend class ASTDeclReader;
-  friend class ASTWriter;
-  friend class ExternalASTSource;
 
   /// FirstDecl - The first declaration stored within this declaration
   /// context.
@@ -2397,8 +2407,6 @@ private:
   void setHasLazyExternalLexicalLookups(bool HasLELL = true) const {
     DeclContextBits.HasLazyExternalLexicalLookups = HasLELL;
   }
-
-  friend class DependentDiagnostic;
 
   void reconcileExternalVisibleStorage() const;
   bool LoadLexicalDeclsFromExternalStorage() const;

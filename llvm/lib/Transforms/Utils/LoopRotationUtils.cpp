@@ -23,10 +23,10 @@
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/ScalarEvolutionAliasAnalysis.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
-#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/DebugInfoMetadata.h"
+#include "llvm/IR/DomTreeUpdater.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/IntrinsicInst.h"
@@ -35,6 +35,7 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
+#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Utils/LoopUtils.h"
 #include "llvm/Transforms/Utils/SSAUpdater.h"
 #include "llvm/Transforms/Utils/ValueMapper.h"
@@ -303,13 +304,13 @@ bool LoopRotate::rotateLoop(Loop *L, bool SimplifiedLatch) {
   // Record all debug intrinsics preceding LoopEntryBranch to avoid duplication.
   using DbgIntrinsicHash =
       std::pair<std::pair<Value *, DILocalVariable *>, DIExpression *>;
-  auto makeHash = [](DbgInfoIntrinsic *D) -> DbgIntrinsicHash {
+  auto makeHash = [](DbgVariableIntrinsic *D) -> DbgIntrinsicHash {
     return {{D->getVariableLocation(), D->getVariable()}, D->getExpression()};
   };
   SmallDenseSet<DbgIntrinsicHash, 8> DbgIntrinsics;
   for (auto I = std::next(OrigPreheader->rbegin()), E = OrigPreheader->rend();
        I != E; ++I) {
-    if (auto *DII = dyn_cast<DbgInfoIntrinsic>(&*I))
+    if (auto *DII = dyn_cast<DbgVariableIntrinsic>(&*I))
       DbgIntrinsics.insert(makeHash(DII));
     else
       break;
@@ -339,7 +340,7 @@ bool LoopRotate::rotateLoop(Loop *L, bool SimplifiedLatch) {
                      RF_NoModuleLevelChanges | RF_IgnoreMissingLocals);
 
     // Avoid inserting the same intrinsic twice.
-    if (auto *DII = dyn_cast<DbgInfoIntrinsic>(C))
+    if (auto *DII = dyn_cast<DbgVariableIntrinsic>(C))
       if (DbgIntrinsics.count(makeHash(DII))) {
         C->deleteValue();
         continue;
@@ -476,7 +477,8 @@ bool LoopRotate::rotateLoop(Loop *L, bool SimplifiedLatch) {
   // the OrigHeader block into OrigLatch.  This will succeed if they are
   // connected by an unconditional branch.  This is just a cleanup so the
   // emitted code isn't too gross in this common case.
-  MergeBlockIntoPredecessor(OrigHeader, DT, LI);
+  DomTreeUpdater DTU(DT, DomTreeUpdater::UpdateStrategy::Eager);
+  MergeBlockIntoPredecessor(OrigHeader, &DTU, LI);
 
   LLVM_DEBUG(dbgs() << "LoopRotation: into "; L->dump());
 

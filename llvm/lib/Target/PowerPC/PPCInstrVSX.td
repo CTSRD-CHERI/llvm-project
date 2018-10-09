@@ -877,6 +877,12 @@ let Uses = [RM] in {
                        "xxsldwi $XT, $XA, $XB, $SHW", IIC_VecPerm,
                        [(set v4i32:$XT, (PPCvecshl v4i32:$XA, v4i32:$XB,
                                                   imm32SExt16:$SHW))]>;
+
+  let isCodeGenOnly = 1 in
+  def XXSLDWIs : XX3Form_2s<60, 2,
+                       (outs vsrc:$XT), (ins vsfrc:$XA, u2imm:$SHW),
+                       "xxsldwi $XT, $XA, $XA, $SHW", IIC_VecPerm, []>;
+
   def XXSPLTW : XX2Form_2<60, 164,
                        (outs vsrc:$XT), (ins vsrc:$XB, u2imm:$UIM),
                        "xxspltw $XT, $XB, $UIM", IIC_VecPerm,
@@ -886,6 +892,7 @@ let Uses = [RM] in {
   def XXSPLTWs : XX2Form_2<60, 164,
                        (outs vsrc:$XT), (ins vfrc:$XB, u2imm:$UIM),
                        "xxspltw $XT, $XB, $UIM", IIC_VecPerm, []>;
+
 } // hasSideEffects
 } // UseVSXReg = 1
 
@@ -1466,8 +1473,6 @@ let AddedComplexity = 400 in { // Prefer VSX patterns over non-VSX patterns.
                    (f64 (PPCmtvsra (i64 (vector_extract v2i64:$S, 1)))))),
             (f32 (XSCVUXDSP (COPY_TO_REGCLASS (XXPERMDI $S, $S, 2), VSFRC)))>;
   }
-  def : Pat<(v4i32 (scalar_to_vector ScalarLoads.Li32)),
-            (v4i32 (XXSPLTWs (LIWAX xoaddr:$src), 1))>;
 
   // Instructions for converting float to i64 feeding a store.
   let Predicates = [NoP9Vector] in {
@@ -3050,13 +3055,47 @@ let AddedComplexity = 400, Predicates = [HasP9Vector] in {
             (STXVX $rS, xoaddr:$dst)>;
   def : Pat<(int_ppc_vsx_stxvd2x v2f64:$rS, xoaddr:$dst),
             (STXVX $rS, xoaddr:$dst)>;
-  def : Pat<(v4i32 (scalar_to_vector (i32 (load xoaddr:$src)))),
-            (v4i32 (LXVWSX xoaddr:$src))>;
-  def : Pat<(v4f32 (scalar_to_vector (f32 (load xoaddr:$src)))),
-            (v4f32 (LXVWSX xoaddr:$src))>;
-  def : Pat<(v4f32 (scalar_to_vector
-                     (f32 (fpround (f64 (extloadf32 xoaddr:$src)))))),
-            (v4f32 (LXVWSX xoaddr:$src))>;
+
+  let AddedComplexity = 400 in {
+    // LIWAX - This instruction is used for sign extending i32 -> i64.
+    // LIWZX - This instruction will be emitted for i32, f32, and when
+    //         zero-extending i32 to i64 (zext i32 -> i64).
+    let Predicates = [IsLittleEndian] in {
+
+      def : Pat<(v2i64 (scalar_to_vector (i64 (sextloadi32 xoaddr:$src)))),
+                (v2i64 (XXPERMDIs
+                (COPY_TO_REGCLASS (LIWAX xoaddr:$src), VSRC), 2))>;
+
+      def : Pat<(v2i64 (scalar_to_vector (i64 (zextloadi32 xoaddr:$src)))),
+                (v2i64 (XXPERMDIs
+                (COPY_TO_REGCLASS (LIWZX xoaddr:$src), VSRC), 2))>;
+
+      def : Pat<(v4i32 (scalar_to_vector (i32 (load xoaddr:$src)))),
+                (v4i32 (XXPERMDIs
+                (COPY_TO_REGCLASS (LIWZX xoaddr:$src), VSRC), 2))>;
+
+      def : Pat<(v4f32 (scalar_to_vector (f32 (load xoaddr:$src)))),
+                (v4f32 (XXPERMDIs
+                (COPY_TO_REGCLASS (LIWZX xoaddr:$src), VSRC), 2))>;
+    }
+
+    let Predicates = [IsBigEndian] in {
+      def : Pat<(v2i64 (scalar_to_vector (i64 (sextloadi32 xoaddr:$src)))),
+                (v2i64 (COPY_TO_REGCLASS (LIWAX xoaddr:$src), VSRC))>;
+
+      def : Pat<(v2i64 (scalar_to_vector (i64 (zextloadi32 xoaddr:$src)))),
+                (v2i64 (COPY_TO_REGCLASS (LIWZX xoaddr:$src), VSRC))>;
+
+      def : Pat<(v4i32 (scalar_to_vector (i32 (load xoaddr:$src)))),
+                (v4i32 (XXSLDWIs
+                (COPY_TO_REGCLASS (LIWZX xoaddr:$src), VSRC), 1))>;
+
+      def : Pat<(v4f32 (scalar_to_vector (f32 (load xoaddr:$src)))),
+                (v4f32 (XXSLDWIs
+                (COPY_TO_REGCLASS (LIWZX xoaddr:$src), VSRC), 1))>;
+    }
+
+  }
 
   // Build vectors from i8 loads
   def : Pat<(v16i8 (scalar_to_vector ScalarLoads.Li8)),
@@ -3217,6 +3256,39 @@ let AddedComplexity = 400, Predicates = [HasP9Vector] in {
             (COPY_TO_REGCLASS (DFLOADf32 ixaddr:$src), VSFRC)>;
   def : Pat<(f32 (fpround (f64 (extloadf32 ixaddr:$src)))),
             (f32 (DFLOADf32 ixaddr:$src))>;
+
+
+  let AddedComplexity = 400 in {
+  // The following pseudoinstructions are used to ensure the utilization
+  // of all 64 VSX registers.
+    let Predicates = [IsLittleEndian, HasP9Vector] in {
+      def : Pat<(v2i64 (scalar_to_vector (i64 (load ixaddr:$src)))),
+                (v2i64 (XXPERMDIs
+                (COPY_TO_REGCLASS (DFLOADf64 ixaddr:$src), VSRC), 2))>;
+      def : Pat<(v2i64 (scalar_to_vector (i64 (load xaddr:$src)))),
+                (v2i64 (XXPERMDIs
+		(COPY_TO_REGCLASS (XFLOADf64 xaddr:$src), VSRC), 2))>;
+
+      def : Pat<(v2f64 (scalar_to_vector (f64 (load ixaddr:$src)))),
+                (v2f64 (XXPERMDIs
+                (COPY_TO_REGCLASS (DFLOADf64 ixaddr:$src), VSRC), 2))>;
+      def : Pat<(v2f64 (scalar_to_vector (f64 (load xaddr:$src)))),
+                (v2f64 (XXPERMDIs
+                (COPY_TO_REGCLASS (XFLOADf64 xaddr:$src), VSRC), 2))>;
+    }
+
+    let Predicates = [IsBigEndian, HasP9Vector] in {
+      def : Pat<(v2i64 (scalar_to_vector (i64 (load ixaddr:$src)))),
+                (v2i64 (COPY_TO_REGCLASS (DFLOADf64 ixaddr:$src), VSRC))>;
+      def : Pat<(v2i64 (scalar_to_vector (i64 (load xaddr:$src)))),
+                (v2i64 (COPY_TO_REGCLASS (XFLOADf64 xaddr:$src), VSRC))>;
+
+      def : Pat<(v2f64 (scalar_to_vector (f64 (load ixaddr:$src)))),
+                (v2f64 (COPY_TO_REGCLASS (DFLOADf64 ixaddr:$src), VSRC))>;
+      def : Pat<(v2f64 (scalar_to_vector (f64 (load xaddr:$src)))),
+                (v2f64 (COPY_TO_REGCLASS (XFLOADf64 xaddr:$src), VSRC))>;
+    }
+  }
 
   let Predicates = [IsBigEndian, HasP9Vector] in {
 
@@ -3494,6 +3566,17 @@ def DblToFlt {
   dag B1 = (f32 (fpround (f64 (extractelt v2f64:$B, 1))));
 }
 
+def ExtDbl {
+  dag A0S = (i32 (PPCmfvsr (f64 (PPCfctiwz (f64 (extractelt v2f64:$A, 0))))));
+  dag A1S = (i32 (PPCmfvsr (f64 (PPCfctiwz (f64 (extractelt v2f64:$A, 1))))));
+  dag B0S = (i32 (PPCmfvsr (f64 (PPCfctiwz (f64 (extractelt v2f64:$B, 0))))));
+  dag B1S = (i32 (PPCmfvsr (f64 (PPCfctiwz (f64 (extractelt v2f64:$B, 1))))));
+  dag A0U = (i32 (PPCmfvsr (f64 (PPCfctiwuz (f64 (extractelt v2f64:$A, 0))))));
+  dag A1U = (i32 (PPCmfvsr (f64 (PPCfctiwuz (f64 (extractelt v2f64:$A, 1))))));
+  dag B0U = (i32 (PPCmfvsr (f64 (PPCfctiwuz (f64 (extractelt v2f64:$B, 0))))));
+  dag B1U = (i32 (PPCmfvsr (f64 (PPCfctiwuz (f64 (extractelt v2f64:$B, 1))))));
+}
+
 def ByteToWord {
   dag LE_A0 = (i32 (sext_inreg (i32 (vector_extract v16i8:$A, 0)), i8));
   dag LE_A1 = (i32 (sext_inreg (i32 (vector_extract v16i8:$A, 4)), i8));
@@ -3571,9 +3654,15 @@ def FltToULong {
 }
 def DblToInt {
   dag A = (i32 (PPCmfvsr (f64 (PPCfctiwz f64:$A))));
+  dag B = (i32 (PPCmfvsr (f64 (PPCfctiwz f64:$B))));
+  dag C = (i32 (PPCmfvsr (f64 (PPCfctiwz f64:$C))));
+  dag D = (i32 (PPCmfvsr (f64 (PPCfctiwz f64:$D))));
 }
 def DblToUInt {
   dag A = (i32 (PPCmfvsr (f64 (PPCfctiwuz f64:$A))));
+  dag B = (i32 (PPCmfvsr (f64 (PPCfctiwuz f64:$B))));
+  dag C = (i32 (PPCmfvsr (f64 (PPCfctiwuz f64:$C))));
+  dag D = (i32 (PPCmfvsr (f64 (PPCfctiwuz f64:$D))));
 }
 def DblToLong {
   dag A = (i64 (PPCmfvsr (f64 (PPCfctidz f64:$A))));
@@ -3610,6 +3699,47 @@ def MrgFP {
   dag ABlToFlt = (XVCVDPSP (XXPERMDI $A, $B, 3));
   dag BAhToFlt = (XVCVDPSP (XXPERMDI $B, $A, 0));
   dag BAlToFlt = (XVCVDPSP (XXPERMDI $B, $A, 3));
+}
+
+// Word-element merge dags - conversions from f64 to i32 merged into vectors.
+def MrgWords {
+  // For big endian, we merge low and hi doublewords (A, B).
+  dag A0B0 = (v2f64 (XXPERMDI v2f64:$A, v2f64:$B, 0));
+  dag A1B1 = (v2f64 (XXPERMDI v2f64:$A, v2f64:$B, 3));
+  dag CVA1B1S = (v4i32 (XVCVDPSXWS A1B1));
+  dag CVA0B0S = (v4i32 (XVCVDPSXWS A0B0));
+  dag CVA1B1U = (v4i32 (XVCVDPUXWS A1B1));
+  dag CVA0B0U = (v4i32 (XVCVDPUXWS A0B0));
+
+  // For little endian, we merge low and hi doublewords (B, A).
+  dag B1A1 = (v2f64 (XXPERMDI v2f64:$B, v2f64:$A, 0));
+  dag B0A0 = (v2f64 (XXPERMDI v2f64:$B, v2f64:$A, 3));
+  dag CVB1A1S = (v4i32 (XVCVDPSXWS B1A1));
+  dag CVB0A0S = (v4i32 (XVCVDPSXWS B0A0));
+  dag CVB1A1U = (v4i32 (XVCVDPUXWS B1A1));
+  dag CVB0A0U = (v4i32 (XVCVDPUXWS B0A0));
+
+  // For big endian, we merge hi doublewords of (A, C) and (B, D), convert
+  // then merge.
+  dag AC = (v2f64 (XXPERMDI (COPY_TO_REGCLASS f64:$A, VSRC),
+                            (COPY_TO_REGCLASS f64:$C, VSRC), 0));
+  dag BD = (v2f64 (XXPERMDI (COPY_TO_REGCLASS f64:$B, VSRC),
+                            (COPY_TO_REGCLASS f64:$D, VSRC), 0));
+  dag CVACS = (v4i32 (XVCVDPSXWS AC));
+  dag CVBDS = (v4i32 (XVCVDPSXWS BD));
+  dag CVACU = (v4i32 (XVCVDPUXWS AC));
+  dag CVBDU = (v4i32 (XVCVDPUXWS BD));
+
+  // For little endian, we merge hi doublewords of (D, B) and (C, A), convert
+  // then merge.
+  dag DB = (v2f64 (XXPERMDI (COPY_TO_REGCLASS f64:$D, VSRC),
+                            (COPY_TO_REGCLASS f64:$B, VSRC), 0));
+  dag CA = (v2f64 (XXPERMDI (COPY_TO_REGCLASS f64:$C, VSRC),
+                            (COPY_TO_REGCLASS f64:$A, VSRC), 0));
+  dag CVDBS = (v4i32 (XVCVDPSXWS DB));
+  dag CVCAS = (v4i32 (XVCVDPSXWS CA));
+  dag CVDBU = (v4i32 (XVCVDPUXWS DB));
+  dag CVCAU = (v4i32 (XVCVDPUXWS CA));
 }
 
 // Patterns for BUILD_VECTOR nodes.
@@ -3679,6 +3809,20 @@ let AddedComplexity = 400 in {
     def : Pat<(v4f32 (build_vector DblToFlt.A0, DblToFlt.A1,
                                    DblToFlt.B0, DblToFlt.B1)),
               (v4f32 (VMRGEW MrgFP.ABhToFlt, MrgFP.ABlToFlt))>;
+
+    // Convert 4 doubles to a vector of ints.
+    def : Pat<(v4i32 (build_vector DblToInt.A, DblToInt.B,
+                                   DblToInt.C, DblToInt.D)),
+              (v4i32 (VMRGEW MrgWords.CVACS, MrgWords.CVBDS))>;
+    def : Pat<(v4i32 (build_vector DblToUInt.A, DblToUInt.B,
+                                   DblToUInt.C, DblToUInt.D)),
+              (v4i32 (VMRGEW MrgWords.CVACU, MrgWords.CVBDU))>;
+    def : Pat<(v4i32 (build_vector ExtDbl.A0S, ExtDbl.A1S,
+                                   ExtDbl.B0S, ExtDbl.B1S)),
+              (v4i32 (VMRGEW MrgWords.CVA0B0S, MrgWords.CVA1B1S))>;
+    def : Pat<(v4i32 (build_vector ExtDbl.A0U, ExtDbl.A1U,
+                                   ExtDbl.B0U, ExtDbl.B1U)),
+              (v4i32 (VMRGEW MrgWords.CVA0B0U, MrgWords.CVA1B1U))>;
   }
 
   let Predicates = [IsLittleEndian, HasVSX] in {
@@ -3693,6 +3837,20 @@ let AddedComplexity = 400 in {
     def : Pat<(v4f32 (build_vector DblToFlt.A0, DblToFlt.A1,
                                    DblToFlt.B0, DblToFlt.B1)),
               (v4f32 (VMRGEW MrgFP.BAhToFlt, MrgFP.BAlToFlt))>;
+
+    // Convert 4 doubles to a vector of ints.
+    def : Pat<(v4i32 (build_vector DblToInt.A, DblToInt.B,
+                                   DblToInt.C, DblToInt.D)),
+              (v4i32 (VMRGEW MrgWords.CVDBS, MrgWords.CVCAS))>;
+    def : Pat<(v4i32 (build_vector DblToUInt.A, DblToUInt.B,
+                                   DblToUInt.C, DblToUInt.D)),
+              (v4i32 (VMRGEW MrgWords.CVDBU, MrgWords.CVCAU))>;
+    def : Pat<(v4i32 (build_vector ExtDbl.A0S, ExtDbl.A1S,
+                                   ExtDbl.B0S, ExtDbl.B1S)),
+              (v4i32 (VMRGEW MrgWords.CVB1A1S, MrgWords.CVB0A0S))>;
+    def : Pat<(v4i32 (build_vector ExtDbl.A0U, ExtDbl.A1U,
+                                   ExtDbl.B0U, ExtDbl.B1U)),
+              (v4i32 (VMRGEW MrgWords.CVB1A1U, MrgWords.CVB0A0U))>;
   }
 
   let Predicates = [HasDirectMove] in {
@@ -3846,3 +4004,4 @@ let AddedComplexity = 400 in {
               (v4i32 (VEXTSH2W $A))>;
   }
 }
+

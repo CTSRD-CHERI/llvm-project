@@ -42,7 +42,7 @@ llvm::Error LatencyBenchmarkRunner::isInfeasible(
   return llvm::Error::success();
 }
 
-llvm::Expected<SnippetPrototype>
+llvm::Expected<CodeTemplate>
 LatencyBenchmarkRunner::generateTwoInstructionPrototype(
     const Instruction &Instr) const {
   std::vector<unsigned> Opcodes;
@@ -62,34 +62,33 @@ LatencyBenchmarkRunner::generateTwoInstructionPrototype(
     const AliasingConfigurations Back(OtherInstr, Instr);
     if (Forward.empty() || Back.empty())
       continue;
-    InstructionInstance ThisII(Instr);
-    InstructionInstance OtherII(OtherInstr);
+    InstructionBuilder ThisIB(Instr);
+    InstructionBuilder OtherIB(OtherInstr);
     if (!Forward.hasImplicitAliasing())
-      setRandomAliasing(Forward, ThisII, OtherII);
+      setRandomAliasing(Forward, ThisIB, OtherIB);
     if (!Back.hasImplicitAliasing())
-      setRandomAliasing(Back, OtherII, ThisII);
-    SnippetPrototype Prototype;
-    Prototype.Explanation =
-        llvm::formatv("creating cycle through {0}.",
-                      State.getInstrInfo().getName(OtherOpcode));
-    Prototype.Snippet.push_back(std::move(ThisII));
-    Prototype.Snippet.push_back(std::move(OtherII));
-    return std::move(Prototype);
+      setRandomAliasing(Back, OtherIB, ThisIB);
+    CodeTemplate CT;
+    CT.Info = llvm::formatv("creating cycle through {0}.",
+                            State.getInstrInfo().getName(OtherOpcode));
+    CT.Instructions.push_back(std::move(ThisIB));
+    CT.Instructions.push_back(std::move(OtherIB));
+    return std::move(CT);
   }
   return llvm::make_error<BenchmarkFailure>(
       "Infeasible : Didn't find any scheme to make the instruction serial");
 }
 
-llvm::Expected<SnippetPrototype>
-LatencyBenchmarkRunner::generatePrototype(unsigned Opcode) const {
+llvm::Expected<CodeTemplate>
+LatencyBenchmarkRunner::generateCodeTemplate(unsigned Opcode) const {
   const auto &InstrDesc = State.getInstrInfo().get(Opcode);
   if (auto E = isInfeasible(InstrDesc))
     return std::move(E);
   const Instruction Instr(InstrDesc, RATC);
-  if (auto SelfAliasingPrototype = generateSelfAliasingPrototype(Instr))
-    return SelfAliasingPrototype;
+  if (auto CT = generateSelfAliasingCodeTemplate(Instr))
+    return CT;
   else
-    llvm::consumeError(SelfAliasingPrototype.takeError());
+    llvm::consumeError(CT.takeError());
   // No self aliasing, trying to create a dependency through another opcode.
   return generateTwoInstructionPrototype(Instr);
 }

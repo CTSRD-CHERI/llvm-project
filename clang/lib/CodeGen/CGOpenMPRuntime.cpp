@@ -3823,7 +3823,19 @@ CGOpenMPRuntime::createOffloadingBinaryDescriptorRegistration() {
     CGF.disableDebugInfo();
     const auto &FI = CGM.getTypes().arrangeNullaryFunction();
     llvm::FunctionType *FTy = CGM.getTypes().GetFunctionType(FI);
-    std::string Descriptor = getName({"omp_offloading", "descriptor_reg"});
+
+    // Encode offload target triples into the registration function name. It
+    // will serve as a comdat key for the registration/unregistration code for
+    // this particular combination of offloading targets.
+    SmallVector<StringRef, 4U> RegFnNameParts(Devices.size() + 2U);
+    RegFnNameParts[0] = "omp_offloading";
+    RegFnNameParts[1] = "descriptor_reg";
+    llvm::transform(Devices, std::next(RegFnNameParts.begin(), 2),
+                    [](const llvm::Triple &T) -> const std::string& {
+                      return T.getTriple();
+                    });
+    llvm::sort(std::next(RegFnNameParts.begin(), 2), RegFnNameParts.end());
+    std::string Descriptor = getName(RegFnNameParts);
     RegFn = CGM.CreateGlobalInitOrDestructFunction(FTy, Descriptor, FI);
     CGF.StartFunction(GlobalDecl(), C.VoidTy, RegFn, FI, FunctionArgList());
     CGF.EmitRuntimeCall(createRuntimeFunction(OMPRTL__tgt_register_lib), Desc);
@@ -8102,7 +8114,12 @@ bool CGOpenMPRuntime::emitTargetGlobalVariable(GlobalDecl GD) {
   // Do not to emit variable if it is not marked as declare target.
   llvm::Optional<OMPDeclareTargetDeclAttr::MapTypeTy> Res =
       isDeclareTargetDeclaration(cast<VarDecl>(GD.getDecl()));
-  return !Res || *Res == OMPDeclareTargetDeclAttr::MT_Link;
+  if (!Res || *Res == OMPDeclareTargetDeclAttr::MT_Link) {
+    if (CGM.getContext().DeclMustBeEmitted(GD.getDecl()))
+      DeferredGlobalVariables.insert(cast<VarDecl>(GD.getDecl()));
+    return true;
+  }
+  return false;
 }
 
 void CGOpenMPRuntime::registerTargetGlobalVariable(const VarDecl *VD,
@@ -8157,6 +8174,18 @@ bool CGOpenMPRuntime::emitTargetGlobal(GlobalDecl GD) {
     return emitTargetFunctions(GD);
 
   return emitTargetGlobalVariable(GD);
+}
+
+void CGOpenMPRuntime::emitDeferredTargetDecls() const {
+  for (const VarDecl *VD : DeferredGlobalVariables) {
+    llvm::Optional<OMPDeclareTargetDeclAttr::MapTypeTy> Res =
+        isDeclareTargetDeclaration(VD);
+    if (Res) {
+      assert(*Res != OMPDeclareTargetDeclAttr::MT_Link &&
+             "Implicit declare target variables must be only to().");
+      CGM.EmitGlobal(VD);
+    }
+  }
 }
 
 CGOpenMPRuntime::DisableAutoDeclareTargetRAII::DisableAutoDeclareTargetRAII(

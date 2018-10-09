@@ -26,6 +26,7 @@
 #include "llvm/IR/Constant.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
+#include "llvm/IR/DomTreeUpdater.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/GetElementPtrTypeIterator.h"
 #include "llvm/IR/Operator.h"
@@ -43,7 +44,7 @@ class AssumptionCache;
 class BasicBlock;
 class BranchInst;
 class CallInst;
-class DbgInfoIntrinsic;
+class DbgVariableIntrinsic;
 class DbgValueInst;
 class DIBuilder;
 class Function;
@@ -120,7 +121,7 @@ struct SimplifyCFGOptions {
 /// DeleteDeadConditions is true.
 bool ConstantFoldTerminator(BasicBlock *BB, bool DeleteDeadConditions = false,
                             const TargetLibraryInfo *TLI = nullptr,
-                            DeferredDominance *DDT = nullptr);
+                            DomTreeUpdater *DTU = nullptr);
 
 //===----------------------------------------------------------------------===//
 //  Local dead code elimination.
@@ -187,20 +188,19 @@ bool SimplifyInstructionsInBlock(BasicBlock *BB,
 /// .. and delete the predecessor corresponding to the '1', this will attempt to
 /// recursively fold the 'and' to 0.
 void RemovePredecessorAndSimplify(BasicBlock *BB, BasicBlock *Pred,
-                                  DeferredDominance *DDT = nullptr);
+                                  DomTreeUpdater *DTU = nullptr);
 
 /// BB is a block with one predecessor and its predecessor is known to have one
 /// successor (BB!). Eliminate the edge between them, moving the instructions in
 /// the predecessor into BB. This deletes the predecessor block.
-void MergeBasicBlockIntoOnlyPred(BasicBlock *BB, DominatorTree *DT = nullptr,
-                                 DeferredDominance *DDT = nullptr);
+void MergeBasicBlockIntoOnlyPred(BasicBlock *BB, DomTreeUpdater *DTU = nullptr);
 
 /// BB is known to contain an unconditional branch, and contains no instructions
 /// other than PHI nodes, potential debug intrinsics and the branch. If
 /// possible, eliminate BB by rewriting all the predecessors to branch to the
 /// successor block and return true. If we can't transform, return false.
 bool TryToSimplifyUncondBranchFromEmptyBlock(BasicBlock *BB,
-                                             DeferredDominance *DDT = nullptr);
+                                             DomTreeUpdater *DTU = nullptr);
 
 /// Check for and eliminate duplicate PHI nodes in this block. This doesn't try
 /// to be clever about PHI nodes which differ only in the order of the incoming
@@ -270,17 +270,17 @@ inline unsigned getKnownAlignment(Value *V, const DataLayout &DL,
 
 /// Inserts a llvm.dbg.value intrinsic before a store to an alloca'd value
 /// that has an associated llvm.dbg.declare or llvm.dbg.addr intrinsic.
-void ConvertDebugDeclareToDebugValue(DbgInfoIntrinsic *DII,
+void ConvertDebugDeclareToDebugValue(DbgVariableIntrinsic *DII,
                                      StoreInst *SI, DIBuilder &Builder);
 
 /// Inserts a llvm.dbg.value intrinsic before a load of an alloca'd value
 /// that has an associated llvm.dbg.declare or llvm.dbg.addr intrinsic.
-void ConvertDebugDeclareToDebugValue(DbgInfoIntrinsic *DII,
+void ConvertDebugDeclareToDebugValue(DbgVariableIntrinsic *DII,
                                      LoadInst *LI, DIBuilder &Builder);
 
 /// Inserts a llvm.dbg.value intrinsic after a phi that has an associated
 /// llvm.dbg.declare or llvm.dbg.addr intrinsic.
-void ConvertDebugDeclareToDebugValue(DbgInfoIntrinsic *DII,
+void ConvertDebugDeclareToDebugValue(DbgVariableIntrinsic *DII,
                                      PHINode *LI, DIBuilder &Builder);
 
 /// Lowers llvm.dbg.declare intrinsics into appropriate set of
@@ -294,13 +294,13 @@ void insertDebugValuesForPHIs(BasicBlock *BB,
 /// Finds all intrinsics declaring local variables as living in the memory that
 /// 'V' points to. This may include a mix of dbg.declare and
 /// dbg.addr intrinsics.
-TinyPtrVector<DbgInfoIntrinsic *> FindDbgAddrUses(Value *V);
+TinyPtrVector<DbgVariableIntrinsic *> FindDbgAddrUses(Value *V);
 
 /// Finds the llvm.dbg.value intrinsics describing a value.
 void findDbgValues(SmallVectorImpl<DbgValueInst *> &DbgValues, Value *V);
 
 /// Finds the debug info intrinsics describing a value.
-void findDbgUsers(SmallVectorImpl<DbgInfoIntrinsic *> &DbgInsts, Value *V);
+void findDbgUsers(SmallVectorImpl<DbgVariableIntrinsic *> &DbgInsts, Value *V);
 
 /// Replaces llvm.dbg.declare instruction when the address it
 /// describes is replaced with a new value. If Deref is true, an
@@ -359,7 +359,7 @@ unsigned removeAllNonTerminatorAndEHPadInstructions(BasicBlock *BB);
 /// instruction, making it and the rest of the code in the block dead.
 unsigned changeToUnreachable(Instruction *I, bool UseLLVMTrap,
                              bool PreserveLCSSA = false,
-                             DeferredDominance *DDT = nullptr);
+                             DomTreeUpdater *DTU = nullptr);
 
 /// Convert the CallInst to InvokeInst with the specified unwind edge basic
 /// block.  This also splits the basic block where CI is located, because
@@ -374,24 +374,32 @@ BasicBlock *changeToInvokeAndSplitBasicBlock(CallInst *CI,
 ///
 /// \param BB  Block whose terminator will be replaced.  Its terminator must
 ///            have an unwind successor.
-void removeUnwindEdge(BasicBlock *BB, DeferredDominance *DDT = nullptr);
+void removeUnwindEdge(BasicBlock *BB, DomTreeUpdater *DTU = nullptr);
 
 /// Remove all blocks that can not be reached from the function's entry.
 ///
 /// Returns true if any basic block was removed.
 bool removeUnreachableBlocks(Function &F, LazyValueInfo *LVI = nullptr,
-                             DeferredDominance *DDT = nullptr);
+                             DomTreeUpdater *DTU = nullptr);
 
-/// Combine the metadata of two instructions so that K can replace J
+/// Combine the metadata of two instructions so that K can replace J. Some
+/// metadata kinds can only be kept if K does not move, meaning it dominated
+/// J in the original IR.
 ///
 /// Metadata not listed as known via KnownIDs is removed
-void combineMetadata(Instruction *K, const Instruction *J, ArrayRef<unsigned> KnownIDs);
+void combineMetadata(Instruction *K, const Instruction *J,
+                     ArrayRef<unsigned> KnownIDs, bool DoesKMove = true);
 
 /// Combine the metadata of two instructions so that K can replace J. This
 /// specifically handles the case of CSE-like transformations.
 ///
 /// Unknown metadata is removed.
 void combineMetadataForCSE(Instruction *K, const Instruction *J);
+
+/// Patch the replacement so that it is not more restrictive than the value
+/// being replaced. It assumes that the replacement does not get moved from
+/// its original position.
+void patchReplacementInstruction(Instruction *I, Value *Repl);
 
 // Replace each use of 'From' with 'To', if that use does not belong to basic
 // block where 'From' is defined. Returns the number of replacements made.

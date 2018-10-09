@@ -48,6 +48,7 @@
 #include "clang/Basic/Builtins.h"
 #include "clang/Basic/CommentOptions.h"
 #include "clang/Basic/ExceptionSpecificationType.h"
+#include "clang/Basic/FixedPoint.h"
 #include "clang/Basic/IdentifierTable.h"
 #include "clang/Basic/LLVM.h"
 #include "clang/Basic/LangOptions.h"
@@ -885,7 +886,9 @@ void ASTContext::PrintStats() const {
 #define TYPE(Name, Parent)                                              \
   if (counts[Idx])                                                      \
     llvm::errs() << "    " << counts[Idx] << " " << #Name               \
-                 << " types\n";                                         \
+                 << " types, " << sizeof(Name##Type) << " each "        \
+                 << "(" << counts[Idx] * sizeof(Name##Type)             \
+                 << " bytes)\n";                                        \
   TotalBytes += counts[Idx] * sizeof(Name##Type);                       \
   ++Idx;
 #define ABSTRACT_TYPE(Name, Parent)
@@ -9581,9 +9584,11 @@ static QualType DecodeTypeFromStr(const char *&Str, const ASTContext &Context,
       // qualified with an address space.
       char *End;
       unsigned AddrSpace = strtoul(Str, &End, 10);
-      if (End != Str && AddrSpace != 0) {
-        Type = Context.getAddrSpaceQualType(Type,
-                                            getLangASFromTargetAS(AddrSpace));
+      if (End != Str) {
+        // Note AddrSpace == 0 is not the same as an unspecified address space.
+        Type = Context.getAddrSpaceQualType(
+          Type,
+          Context.getLangASForBuiltinAddressSpace(AddrSpace));
         Str = End;
       }
       if (c == '*') {
@@ -10572,6 +10577,16 @@ QualType ASTContext::getCorrespondingSaturatedType(QualType Ty) const {
   }
 }
 
+LangAS ASTContext::getLangASForBuiltinAddressSpace(unsigned AS) const {
+  if (LangOpts.OpenCL)
+    return getTargetInfo().getOpenCLBuiltinAddressSpace(AS);
+
+  if (LangOpts.CUDA)
+    return getTargetInfo().getCUDABuiltinAddressSpace(AS);
+
+  return getLangASFromTargetAS(AS);
+}
+
 // Explicitly instantiate this in case a Redeclarable<T> is used from a TU that
 // doesn't include ASTContext.h
 template
@@ -10668,4 +10683,23 @@ unsigned char ASTContext::getFixedPointIBits(QualType Ty) const {
     case BuiltinType::SatULongFract:
       return 0;
   }
+}
+
+FixedPointSemantics ASTContext::getFixedPointSemantics(QualType Ty) const {
+  assert(Ty->isFixedPointType());
+  bool isSigned = Ty->isSignedFixedPointType();
+  return FixedPointSemantics(
+      static_cast<unsigned>(getTypeSize(Ty)), getFixedPointScale(Ty), isSigned,
+      Ty->isSaturatedFixedPointType(),
+      !isSigned && getTargetInfo().doUnsignedFixedPointTypesHavePadding());
+}
+
+APFixedPoint ASTContext::getFixedPointMax(QualType Ty) const {
+  assert(Ty->isFixedPointType());
+  return APFixedPoint::getMax(getFixedPointSemantics(Ty));
+}
+
+APFixedPoint ASTContext::getFixedPointMin(QualType Ty) const {
+  assert(Ty->isFixedPointType());
+  return APFixedPoint::getMin(getFixedPointSemantics(Ty));
 }

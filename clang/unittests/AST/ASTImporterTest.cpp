@@ -989,7 +989,7 @@ TEST_P(ASTImporterTestBase, ImportRecordTypeInFunc) {
                            "  return 0;"
                            "}",
                            Lang_C, "input.c");
-  auto FromVar =
+  auto *FromVar =
       FirstDeclMatcher<VarDecl>().match(FromTU, varDecl(hasName("d")));
   ASSERT_TRUE(FromVar);
   auto ToType =
@@ -999,12 +999,41 @@ TEST_P(ASTImporterTestBase, ImportRecordTypeInFunc) {
 
 TEST_P(ASTImporterTestBase, ImportRecordDeclInFuncParams) {
   // This construct is not supported by ASTImporter.
-  Decl *FromTU =
-      getTuDecl("int declToImport(struct data_t{int a;int b;} *d){ return 0; }",
-                Lang_C, "input.c");
-  auto From = FirstDeclMatcher<FunctionDecl>().match(FromTU, functionDecl());
+  Decl *FromTU = getTuDecl(
+      "int declToImport(struct data_t{int a;int b;} ***d){ return 0; }",
+      Lang_C, "input.c");
+  auto *From = FirstDeclMatcher<FunctionDecl>().match(
+      FromTU, functionDecl(hasName("declToImport")));
   ASSERT_TRUE(From);
-  auto To = Import(From, Lang_C);
+  auto *To = Import(From, Lang_C);
+  EXPECT_EQ(To, nullptr);
+}
+
+TEST_P(ASTImporterTestBase, ImportRecordDeclInFuncFromMacro) {
+  Decl *FromTU = getTuDecl(
+      "#define NONAME_SIZEOF(type) sizeof(struct{type *dummy;}) \n"
+      "int declToImport(){ return NONAME_SIZEOF(int); }",
+      Lang_C, "input.c");
+  auto *From = FirstDeclMatcher<FunctionDecl>().match(
+      FromTU, functionDecl(hasName("declToImport")));
+  ASSERT_TRUE(From);
+  auto *To = Import(From, Lang_C);
+  ASSERT_TRUE(To);
+  EXPECT_TRUE(MatchVerifier<FunctionDecl>().match(
+      To, functionDecl(hasName("declToImport"),
+                       hasDescendant(unaryExprOrTypeTraitExpr()))));
+}
+
+TEST_P(ASTImporterTestBase, ImportRecordDeclInFuncParamsFromMacro) {
+  // This construct is not supported by ASTImporter.
+  Decl *FromTU = getTuDecl(
+      "#define PAIR_STRUCT(type) struct data_t{type a;type b;} \n"
+      "int declToImport(PAIR_STRUCT(int) ***d){ return 0; }",
+      Lang_C, "input.c");
+  auto *From = FirstDeclMatcher<FunctionDecl>().match(
+      FromTU, functionDecl(hasName("declToImport")));
+  ASSERT_TRUE(From);
+  auto *To = Import(From, Lang_C);
   EXPECT_EQ(To, nullptr);
 }
 
@@ -2610,6 +2639,40 @@ TEST_P(ASTImporterTestBase, ImportUnnamedStructsWithRecursingField) {
       R0, recordDecl(has(fieldDecl(hasName("next"))))));
   EXPECT_TRUE(MatchVerifier<RecordDecl>().match(
       R1, recordDecl(has(fieldDecl(hasName("next"))))));
+}
+
+TEST_P(ASTImporterTestBase, ImportUnnamedFieldsInCorrectOrder) {
+  Decl *FromTU = getTuDecl(
+      R"(
+      void f(int X, int Y, bool Z) {
+        (void)[X, Y, Z] { (void)Z; };
+      }
+      )",
+      Lang_CXX11, "input0.cc");
+  auto *FromF = FirstDeclMatcher<FunctionDecl>().match(
+      FromTU, functionDecl(hasName("f")));
+  auto *ToF = cast_or_null<FunctionDecl>(Import(FromF, Lang_CXX11));
+  EXPECT_TRUE(ToF);
+
+  CXXRecordDecl *FromLambda =
+      cast<LambdaExpr>(cast<CStyleCastExpr>(cast<CompoundStmt>(
+          FromF->getBody())->body_front())->getSubExpr())->getLambdaClass();
+
+  auto *ToLambda = cast_or_null<CXXRecordDecl>(Import(FromLambda, Lang_CXX11));
+  EXPECT_TRUE(ToLambda);
+
+  // Check if the fields of the lambda class are imported in correct order.
+  unsigned FromIndex = 0u;
+  for (auto *FromField : FromLambda->fields()) {
+    ASSERT_FALSE(FromField->getDeclName());
+    auto *ToField = cast_or_null<FieldDecl>(Import(FromField, Lang_CXX11));
+    EXPECT_TRUE(ToField);
+    unsigned ToIndex = ASTImporter::getFieldIndex(ToField);
+    EXPECT_EQ(ToIndex, FromIndex + 1);
+    ++FromIndex;
+  }
+
+  EXPECT_EQ(FromIndex, 3u);
 }
 
 struct DeclContextTest : ASTImporterTestBase {};

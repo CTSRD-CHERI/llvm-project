@@ -250,7 +250,7 @@ namespace {
 
       getMutableDeclSpec().getAttributes().clearListOnly();
       for (ParsedAttr *AL : savedAttrs)
-        getMutableDeclSpec().getAttributes().addAtStart(AL);
+        getMutableDeclSpec().getAttributes().addAtEnd(AL);
     }
   };
 } // end anonymous namespace
@@ -259,7 +259,7 @@ static void moveAttrFromListToList(ParsedAttr &attr,
                                    ParsedAttributesView &fromList,
                                    ParsedAttributesView &toList) {
   fromList.remove(&attr);
-  toList.addAtStart(&attr);
+  toList.addAtEnd(&attr);
 }
 
 /// The location of a type attribute.
@@ -4158,7 +4158,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
               SourceRange(pointerLoc), nullptr, SourceLocation(), nullptr, 0,
               syntax);
 
-      attrs.addAtStart(nullabilityAttr);
+      attrs.addAtEnd(nullabilityAttr);
 
       if (inferNullabilityCS) {
         state.getDeclarator().getMutableDeclSpec().getObjCQualifiers()
@@ -5126,7 +5126,7 @@ static void transferARCOwnershipToDeclaratorChunk(TypeProcessingState &state,
       &S.Context.Idents.get("objc_ownership"), SourceLocation(),
       /*scope*/ nullptr, SourceLocation(),
       /*args*/ &Args, 1, ParsedAttr::AS_GNU);
-  chunk.getAttrs().addAtStart(attr);
+  chunk.getAttrs().addAtEnd(attr);
   // TODO: mark whether we did this inference?
 }
 
@@ -7907,39 +7907,24 @@ bool Sema::RequireCompleteTypeImpl(SourceLocation Loc, QualType T,
     return false;
   }
 
-  const TagType *Tag = T->getAs<TagType>();
-  const ObjCInterfaceType *IFace = T->getAs<ObjCInterfaceType>();
+  TagDecl *Tag = dyn_cast_or_null<TagDecl>(Def);
+  ObjCInterfaceDecl *IFace = dyn_cast_or_null<ObjCInterfaceDecl>(Def);
 
-  // If there's an unimported definition of this type in a module (for
-  // instance, because we forward declared it, then imported the definition),
-  // import that definition now.
-  //
-  // FIXME: What about other cases where an import extends a redeclaration
-  // chain for a declaration that can be accessed through a mechanism other
-  // than name lookup (eg, referenced in a template, or a variable whose type
-  // could be completed by the module)?
-  //
-  // FIXME: Should we map through to the base array element type before
-  // checking for a tag type?
+  // Give the external source a chance to provide a definition of the type.
+  // This is kept separate from completing the redeclaration chain so that
+  // external sources such as LLDB can avoid synthesizing a type definition
+  // unless it's actually needed.
   if (Tag || IFace) {
-    NamedDecl *D =
-        Tag ? static_cast<NamedDecl *>(Tag->getDecl()) : IFace->getDecl();
-
     // Avoid diagnosing invalid decls as incomplete.
-    if (D->isInvalidDecl())
+    if (Def->isInvalidDecl())
       return true;
 
     // Give the external AST source a chance to complete the type.
     if (auto *Source = Context.getExternalSource()) {
-      if (Tag) {
-        TagDecl *TagD = Tag->getDecl();
-        if (TagD->hasExternalLexicalStorage())
-          Source->CompleteType(TagD);
-      } else {
-        ObjCInterfaceDecl *IFaceD = IFace->getDecl();
-        if (IFaceD->hasExternalLexicalStorage())
-          Source->CompleteType(IFace->getDecl());
-      }
+      if (Tag && Tag->hasExternalLexicalStorage())
+          Source->CompleteType(Tag);
+      if (IFace && IFace->hasExternalLexicalStorage())
+          Source->CompleteType(IFace);
       // If the external source completed the type, go through the motions
       // again to ensure we're allowed to use the completed type.
       if (!T->isIncompleteType())
@@ -7950,32 +7935,31 @@ bool Sema::RequireCompleteTypeImpl(SourceLocation Loc, QualType T,
   // If we have a class template specialization or a class member of a
   // class template specialization, or an array with known size of such,
   // try to instantiate it.
-  QualType MaybeTemplate = T;
-  while (const ConstantArrayType *Array
-           = Context.getAsConstantArrayType(MaybeTemplate))
-    MaybeTemplate = Array->getElementType();
-  if (const RecordType *Record = MaybeTemplate->getAs<RecordType>()) {
+  if (auto *RD = dyn_cast_or_null<CXXRecordDecl>(Tag)) {
     bool Instantiated = false;
     bool Diagnosed = false;
-    if (ClassTemplateSpecializationDecl *ClassTemplateSpec
-          = dyn_cast<ClassTemplateSpecializationDecl>(Record->getDecl())) {
+    if (RD->isDependentContext()) {
+      // Don't try to instantiate a dependent class (eg, a member template of
+      // an instantiated class template specialization).
+      // FIXME: Can this ever happen?
+    } else if (auto *ClassTemplateSpec =
+            dyn_cast<ClassTemplateSpecializationDecl>(RD)) {
       if (ClassTemplateSpec->getSpecializationKind() == TSK_Undeclared) {
         Diagnosed = InstantiateClassTemplateSpecialization(
             Loc, ClassTemplateSpec, TSK_ImplicitInstantiation,
             /*Complain=*/Diagnoser);
         Instantiated = true;
       }
-    } else if (CXXRecordDecl *Rec
-                 = dyn_cast<CXXRecordDecl>(Record->getDecl())) {
-      CXXRecordDecl *Pattern = Rec->getInstantiatedFromMemberClass();
-      if (!Rec->isBeingDefined() && Pattern) {
-        MemberSpecializationInfo *MSI = Rec->getMemberSpecializationInfo();
+    } else {
+      CXXRecordDecl *Pattern = RD->getInstantiatedFromMemberClass();
+      if (!RD->isBeingDefined() && Pattern) {
+        MemberSpecializationInfo *MSI = RD->getMemberSpecializationInfo();
         assert(MSI && "Missing member specialization information?");
         // This record was instantiated from a class within a template.
         if (MSI->getTemplateSpecializationKind() !=
             TSK_ExplicitSpecialization) {
-          Diagnosed = InstantiateClass(Loc, Rec, Pattern,
-                                       getTemplateInstantiationArgs(Rec),
+          Diagnosed = InstantiateClass(Loc, RD, Pattern,
+                                       getTemplateInstantiationArgs(RD),
                                        TSK_ImplicitInstantiation,
                                        /*Complain=*/Diagnoser);
           Instantiated = true;
@@ -8006,15 +7990,15 @@ bool Sema::RequireCompleteTypeImpl(SourceLocation Loc, QualType T,
 
   // If the type was a forward declaration of a class/struct/union
   // type, produce a note.
-  if (Tag && !Tag->getDecl()->isInvalidDecl())
-    Diag(Tag->getDecl()->getLocation(),
+  if (Tag && !Tag->isInvalidDecl())
+    Diag(Tag->getLocation(),
          Tag->isBeingDefined() ? diag::note_type_being_defined
                                : diag::note_forward_declaration)
-      << QualType(Tag, 0);
+      << Context.getTagDeclType(Tag);
 
   // If the Objective-C class was a forward declaration, produce a note.
-  if (IFace && !IFace->getDecl()->isInvalidDecl())
-    Diag(IFace->getDecl()->getLocation(), diag::note_forward_class);
+  if (IFace && !IFace->isInvalidDecl())
+    Diag(IFace->getLocation(), diag::note_forward_class);
 
   // If we have external information that we can use to suggest a fix,
   // produce a note.

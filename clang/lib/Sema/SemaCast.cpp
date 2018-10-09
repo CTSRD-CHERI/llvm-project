@@ -1079,6 +1079,17 @@ void CastOperation::CheckStaticCast() {
   }
 }
 
+static bool IsAddressSpaceConversion(QualType SrcType, QualType DestType) {
+  auto *SrcPtrType = SrcType->getAs<PointerType>();
+  if (!SrcPtrType)
+    return false;
+  auto *DestPtrType = DestType->getAs<PointerType>();
+  if (!DestPtrType)
+    return false;
+  return SrcPtrType->getPointeeType().getAddressSpace() !=
+         DestPtrType->getPointeeType().getAddressSpace();
+}
+
 /// TryStaticCast - Check if a static cast can be performed, and do so if
 /// possible. If @p CStyle, ignore access restrictions on hierarchy casting
 /// and casting away constness.
@@ -1220,7 +1231,9 @@ static TryCastResult TryStaticCast(Sema &Self, ExprResult &SrcExpr,
               return TC_Failed;
             }
           }
-          Kind = CK_BitCast;
+          Kind = IsAddressSpaceConversion(SrcType, DestType)
+                     ? CK_AddressSpaceConversion
+                     : CK_BitCast;
           return TC_Success;
         }
 
@@ -2130,12 +2143,6 @@ static bool fixOverloadedReinterpretCastExpr(Sema &Self, QualType DestType,
           Result, /*DoFunctionPointerConversion=*/true))
     return false;
   return Result.isUsable();
-}
-
-static bool IsAddressSpaceConversion(QualType SrcType, QualType DestType) {
-  return SrcType->isPointerType() && DestType->isPointerType() &&
-         SrcType->getAs<PointerType>()->getPointeeType().getAddressSpace() !=
-             DestType->getAs<PointerType>()->getPointeeType().getAddressSpace();
 }
 
 static TryCastResult TryReinterpretCast(Sema &Self, ExprResult &SrcExpr,
