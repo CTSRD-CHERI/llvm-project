@@ -317,6 +317,8 @@ DwarfDebug::DwarfDebug(AsmPrinter *A, Module *M)
   else
     UseInlineStrings = DwarfInlinedStrings == Enable;
 
+  UseLocSection = !TT.isNVPTX();
+
   HasAppleExtensionAttributes = tuneForLLDB();
 
   // Handle split DWARF.
@@ -1196,6 +1198,9 @@ void DwarfDebug::collectVariableInfo(DwarfCompileUnit &TheCU,
       RegVar->initializeDbgValue(MInsn);
       continue;
     }
+    // Do not emit location lists if .debug_loc secton is disabled.
+    if (!useLocSection())
+      continue;
 
     // Handle multiple DBG_VALUE instructions describing one variable.
     DebugLocStream::ListBuilder List(DebugLocs, TheCU, *Asm, *RegVar, *MInsn);
@@ -1688,7 +1693,6 @@ void DwarfDebug::emitDebugLocEntry(ByteStreamer &Streamer,
 }
 
 static void emitDebugLocValue(const AsmPrinter &AP, const DIBasicType *BT,
-                              ByteStreamer &Streamer,
                               const DebugLocEntry::Value &Value,
                               DwarfExpression &DwarfExpr) {
   auto *DIExpr = Value.getExpression();
@@ -1733,11 +1737,11 @@ void DebugLocEntry::finalize(const AsmPrinter &AP,
            "fragments are expected to be sorted");
 
     for (auto Fragment : Values)
-      emitDebugLocValue(AP, BT, Streamer, Fragment, DwarfExpr);
+      emitDebugLocValue(AP, BT, Fragment, DwarfExpr);
 
   } else {
     assert(Values.size() == 1 && "only fragments may have >1 value");
-    emitDebugLocValue(AP, BT, Streamer, Value, DwarfExpr);
+    emitDebugLocValue(AP, BT, Value, DwarfExpr);
   }
   DwarfExpr.finalize();
 }

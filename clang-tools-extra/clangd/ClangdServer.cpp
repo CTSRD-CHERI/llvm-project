@@ -165,11 +165,15 @@ void ClangdServer::codeComplete(PathRef File, Position Pos,
 
     // FIXME(ibiryukov): even if Preamble is non-null, we may want to check
     // both the old and the new version in case only one of them matches.
-    CompletionList Result = clangd::codeComplete(
+    CodeCompleteResult Result = clangd::codeComplete(
         File, IP->Command, PreambleData ? &PreambleData->Preamble : nullptr,
         PreambleData ? PreambleData->Inclusions : std::vector<Inclusion>(),
         IP->Contents, Pos, FS, PCHs, CodeCompleteOpts);
-    CB(std::move(Result));
+    CompletionList LSPResult;
+    LSPResult.isIncomplete = Result.HasMore;
+    for (const auto &Completion : Result.Completions)
+      LSPResult.items.push_back(Completion.render(CodeCompleteOpts));
+    CB(std::move(LSPResult));
   };
 
   WorkScheduler.runWithPreamble("CodeComplete", File,
@@ -375,7 +379,8 @@ ClangdServer::formatCode(llvm::StringRef Code, PathRef File,
                          ArrayRef<tooling::Range> Ranges) {
   // Call clang-format.
   auto FS = FSProvider.getFileSystem();
-  auto Style = format::getStyle("file", File, "LLVM", Code, FS.get());
+  auto Style = format::getStyle(format::DefaultFormatStyle, File,
+                                format::DefaultFallbackStyle, Code, FS.get());
   if (!Style)
     return Style.takeError();
 

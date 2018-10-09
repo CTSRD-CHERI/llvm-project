@@ -752,7 +752,8 @@ private:
   std::pair<ValueInfo, GlobalValue::GUID>
   getValueInfoFromValueId(unsigned ValueId);
 
-  ModuleSummaryIndex::ModuleInfo *addThisModule();
+  void addThisModule();
+  ModuleSummaryIndex::ModuleInfo *getThisModule();
 };
 
 } // end anonymous namespace
@@ -4811,9 +4812,13 @@ ModuleSummaryIndexBitcodeReader::ModuleSummaryIndexBitcodeReader(
     : BitcodeReaderBase(std::move(Cursor), Strtab), TheIndex(TheIndex),
       ModulePath(ModulePath), ModuleId(ModuleId) {}
 
+void ModuleSummaryIndexBitcodeReader::addThisModule() {
+  TheIndex.addModule(ModulePath, ModuleId);
+}
+
 ModuleSummaryIndex::ModuleInfo *
-ModuleSummaryIndexBitcodeReader::addThisModule() {
-  return TheIndex.addModule(ModulePath, ModuleId);
+ModuleSummaryIndexBitcodeReader::getThisModule() {
+  return TheIndex.getModule(ModulePath);
 }
 
 std::pair<ValueInfo, GlobalValue::GUID>
@@ -4835,11 +4840,14 @@ void ModuleSummaryIndexBitcodeReader::setValueGUID(
   if (PrintSummaryGUIDs)
     dbgs() << "GUID " << ValueGUID << "(" << OriginalNameID << ") is "
            << ValueName << "\n";
-  
+
   // UseStrtab is false for legacy summary formats and value names are
-  // created on stack. We can't use them outside of parseValueSymbolTable.
+  // created on stack. In that case we save the name in a string saver in
+  // the index so that the value name can be recorded.
   ValueIdToValueInfoMap[ValueID] = std::make_pair(
-      TheIndex.getOrInsertValueInfo(ValueGUID, UseStrtab ? ValueName : ""),
+      TheIndex.getOrInsertValueInfo(
+          ValueGUID,
+          UseStrtab ? ValueName : TheIndex.saveString(ValueName.str())),
       OriginalNameID);
 }
 
@@ -4969,6 +4977,9 @@ Error ModuleSummaryIndexBitcodeReader::parseModule() {
         break;
       case bitc::GLOBALVAL_SUMMARY_BLOCK_ID:
       case bitc::FULL_LTO_GLOBALVAL_SUMMARY_BLOCK_ID:
+        // Add the module if it is a per-module index (has a source file name).
+        if (!SourceFileName.empty())
+          addThisModule();
         assert(!SeenValueSymbolTable &&
                "Already read VST when parsing summary block?");
         // We might not have a VST if there were no values in the
@@ -5014,7 +5025,7 @@ Error ModuleSummaryIndexBitcodeReader::parseModule() {
         case bitc::MODULE_CODE_HASH: {
           if (Record.size() != 5)
             return error("Invalid hash length " + Twine(Record.size()).str());
-          auto &Hash = addThisModule()->second.second;
+          auto &Hash = getThisModule()->second.second;
           int Pos = 0;
           for (auto &Val : Record) {
             assert(!(Val >> 32) && "Unexpected high bits set");
@@ -5276,7 +5287,7 @@ Error ModuleSummaryIndexBitcodeReader::parseEntireSummary(unsigned ID) {
       PendingTypeTestAssumeConstVCalls.clear();
       PendingTypeCheckedLoadConstVCalls.clear();
       auto VIAndOriginalGUID = getValueInfoFromValueId(ValueID);
-      FS->setModulePath(addThisModule()->first());
+      FS->setModulePath(getThisModule()->first());
       FS->setOriginalName(VIAndOriginalGUID.second);
       TheIndex.addGlobalValueSummary(VIAndOriginalGUID.first, std::move(FS));
       break;
@@ -5295,7 +5306,7 @@ Error ModuleSummaryIndexBitcodeReader::parseEntireSummary(unsigned ID) {
       // string table section in the per-module index, we create a single
       // module path string table entry with an empty (0) ID to take
       // ownership.
-      AS->setModulePath(addThisModule()->first());
+      AS->setModulePath(getThisModule()->first());
 
       GlobalValue::GUID AliaseeGUID =
           getValueInfoFromValueId(AliaseeID).first.getGUID();
@@ -5319,7 +5330,7 @@ Error ModuleSummaryIndexBitcodeReader::parseEntireSummary(unsigned ID) {
       std::vector<ValueInfo> Refs =
           makeRefList(ArrayRef<uint64_t>(Record).slice(2));
       auto FS = llvm::make_unique<GlobalVarSummary>(Flags, std::move(Refs));
-      FS->setModulePath(addThisModule()->first());
+      FS->setModulePath(getThisModule()->first());
       auto GUID = getValueInfoFromValueId(ValueID);
       FS->setOriginalName(GUID.second);
       TheIndex.addGlobalValueSummary(GUID.first, std::move(FS));

@@ -1,4 +1,4 @@
-//===-- MachOUtils.h - Mach-o specific helpers for dsymutil  --------------===//
+//===-- MachOUtils.cpp - Mach-o specific helpers for dsymutil  ------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -10,8 +10,8 @@
 #include "MachOUtils.h"
 #include "BinaryHolder.h"
 #include "DebugMap.h"
+#include "LinkUtils.h"
 #include "NonRelocatableStringpool.h"
-#include "dsymutil.h"
 #include "llvm/MC/MCAsmLayout.h"
 #include "llvm/MC/MCMachObjectWriter.h"
 #include "llvm/MC/MCObjectStreamer.h"
@@ -327,19 +327,25 @@ bool generateDsymCompanion(const DebugMap &DM, MCStreamer &MS,
   MCAsm.layout(Layout);
 
   BinaryHolder InputBinaryHolder(false);
-  auto ErrOrObjs = InputBinaryHolder.GetObjectFiles(DM.getBinaryPath());
-  if (auto Error = ErrOrObjs.getError())
-    return error(Twine("opening ") + DM.getBinaryPath() + ": " +
-                     Error.message(),
-                 "output file streaming");
 
-  auto ErrOrInputBinary =
-      InputBinaryHolder.GetAs<object::MachOObjectFile>(DM.getTriple());
-  if (auto Error = ErrOrInputBinary.getError())
+  auto ObjectEntry = InputBinaryHolder.getObjectEntry(DM.getBinaryPath());
+  if (!ObjectEntry) {
+    auto Err = ObjectEntry.takeError();
     return error(Twine("opening ") + DM.getBinaryPath() + ": " +
-                     Error.message(),
+                     toString(std::move(Err)),
                  "output file streaming");
-  auto &InputBinary = *ErrOrInputBinary;
+  }
+
+  auto Object =
+      ObjectEntry->getObjectAs<object::MachOObjectFile>(DM.getTriple());
+  if (!Object) {
+    auto Err = Object.takeError();
+    return error(Twine("opening ") + DM.getBinaryPath() + ": " +
+                     toString(std::move(Err)),
+                 "output file streaming");
+  }
+
+  auto &InputBinary = *Object;
 
   bool Is64Bit = Writer.is64Bit();
   MachO::symtab_command SymtabCmd = InputBinary.getSymtabLoadCommand();

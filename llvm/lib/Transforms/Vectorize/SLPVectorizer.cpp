@@ -299,11 +299,6 @@ isShuffle(ArrayRef<Value *> VL) {
               : TargetTransformInfo::SK_PermuteSingleSrc;
 }
 
-static bool sameOpcodeOrAlt(unsigned Opcode, unsigned AltOpcode,
-                            unsigned CheckedOpcode) {
-  return Opcode == CheckedOpcode || AltOpcode == CheckedOpcode;
-}
-
 namespace {
 
 /// Main data required for vectorization of instructions.
@@ -318,6 +313,11 @@ struct InstructionsState {
   /// Some of the instructions in the list have alternate opcodes.
   bool isAltShuffle() const { return Opcode != AltOpcode; }
 
+  bool isOpcodeOrAlt(Instruction *I) const {
+    unsigned CheckedOpcode = I->getOpcode();
+    return Opcode == CheckedOpcode || AltOpcode == CheckedOpcode;
+  }
+
   InstructionsState() = default;
   InstructionsState(Value *OpValue, unsigned Opcode, unsigned AltOpcode)
       : OpValue(OpValue), Opcode(Opcode), AltOpcode(AltOpcode) {}
@@ -330,7 +330,7 @@ struct InstructionsState {
 /// OpValue.
 static Value *isOneOf(const InstructionsState &S, Value *Op) {
   auto *I = dyn_cast<Instruction>(Op);
-  if (I && sameOpcodeOrAlt(S.Opcode, S.AltOpcode, I->getOpcode()))
+  if (I && S.isOpcodeOrAlt(I))
     return Op;
   return S.OpValue;
 }
@@ -352,7 +352,7 @@ static InstructionsState getSameOpcode(ArrayRef<Value *> VL,
   // TODO - can we support other operators (casts etc.)?
   for (int Cnt = 0, E = VL.size(); Cnt < E; Cnt++) {
     unsigned InstOpcode = cast<Instruction>(VL[Cnt])->getOpcode();
-    if (!sameOpcodeOrAlt(Opcode, AltOpcode, InstOpcode)) {
+    if (InstOpcode != Opcode && InstOpcode != AltOpcode) {
       if (Opcode == AltOpcode && IsBinOp && isa<BinaryOperator>(VL[Cnt])) {
         AltOpcode = InstOpcode;
         continue;
@@ -2224,33 +2224,32 @@ int BoUpSLP::getEntryCost(TreeEntry *E) {
       TargetTransformInfo::OperandValueProperties Op1VP =
           TargetTransformInfo::OP_None;
       TargetTransformInfo::OperandValueProperties Op2VP =
-          TargetTransformInfo::OP_None;
+          TargetTransformInfo::OP_PowerOf2;
 
       // If all operands are exactly the same ConstantInt then set the
       // operand kind to OK_UniformConstantValue.
       // If instead not all operands are constants, then set the operand kind
       // to OK_AnyValue. If all operands are constants but not the same,
       // then set the operand kind to OK_NonUniformConstantValue.
-      ConstantInt *CInt = nullptr;
-      for (unsigned i = 0; i < VL.size(); ++i) {
+      ConstantInt *CInt0 = nullptr;
+      for (unsigned i = 0, e = VL.size(); i < e; ++i) {
         const Instruction *I = cast<Instruction>(VL[i]);
-        if (!isa<ConstantInt>(I->getOperand(1))) {
+        ConstantInt *CInt = dyn_cast<ConstantInt>(I->getOperand(1));
+        if (!CInt) {
           Op2VK = TargetTransformInfo::OK_AnyValue;
+          Op2VP = TargetTransformInfo::OP_None;
           break;
         }
+        if (Op2VP == TargetTransformInfo::OP_PowerOf2 &&
+            !CInt->getValue().isPowerOf2())
+          Op2VP = TargetTransformInfo::OP_None;
         if (i == 0) {
-          CInt = cast<ConstantInt>(I->getOperand(1));
+          CInt0 = CInt;
           continue;
         }
-        if (Op2VK == TargetTransformInfo::OK_UniformConstantValue &&
-            CInt != cast<ConstantInt>(I->getOperand(1)))
+        if (CInt0 != CInt)
           Op2VK = TargetTransformInfo::OK_NonUniformConstantValue;
       }
-      // FIXME: Currently cost of model modification for division by power of
-      // 2 is handled for X86 and AArch64. Add support for other targets.
-      if (Op2VK == TargetTransformInfo::OK_UniformConstantValue && CInt &&
-          CInt->getValue().isPowerOf2())
-        Op2VP = TargetTransformInfo::OP_PowerOf2;
 
       SmallVector<const Value *, 4> Operands(VL0->operand_values());
       if (NeedToShuffleReuses) {
@@ -2630,8 +2629,7 @@ void BoUpSLP::reorderAltShuffleOperands(const InstructionsState &S,
   // Push left and right operands of binary operation into Left and Right
   for (Value *V : VL) {
     auto *I = cast<Instruction>(V);
-    assert(sameOpcodeOrAlt(S.Opcode, S.AltOpcode, I->getOpcode()) &&
-           "Incorrect instruction in vector");
+    assert(S.isOpcodeOrAlt(I) && "Incorrect instruction in vector");
     Left.push_back(I->getOperand(0));
     Right.push_back(I->getOperand(1));
   }
@@ -2838,12 +2836,9 @@ void BoUpSLP::setInsertPointAfterBundle(ArrayRef<Value *> VL,
   // should be in this block.
   auto *Front = cast<Instruction>(S.OpValue);
   auto *BB = Front->getParent();
-  const unsigned Opcode = S.Opcode;
-  const unsigned AltOpcode = S.AltOpcode;
   assert(llvm::all_of(make_range(VL.begin(), VL.end()), [=](Value *V) -> bool {
-    return !sameOpcodeOrAlt(Opcode, AltOpcode,
-                            cast<Instruction>(V)->getOpcode()) ||
-           cast<Instruction>(V)->getParent() == BB;
+    auto *I = cast<Instruction>(V);
+    return !S.isOpcodeOrAlt(I) || I->getParent() == BB;
   }));
 
   // The last instruction in the bundle in program order.
@@ -2883,7 +2878,7 @@ void BoUpSLP::setInsertPointAfterBundle(ArrayRef<Value *> VL,
   if (!LastInst) {
     SmallPtrSet<Value *, 16> Bundle(VL.begin(), VL.end());
     for (auto &I : make_range(BasicBlock::iterator(Front), BB->end())) {
-      if (Bundle.erase(&I) && sameOpcodeOrAlt(Opcode, AltOpcode, I.getOpcode()))
+      if (Bundle.erase(&I) && S.isOpcodeOrAlt(&I))
         LastInst = &I;
       if (Bundle.empty())
         break;
@@ -3495,10 +3490,8 @@ Value *BoUpSLP::vectorizeTree(TreeEntry *E) {
       SmallVector<Constant *, 8> Mask(e);
       for (unsigned i = 0; i < e; ++i) {
         auto *OpInst = cast<Instruction>(E->Scalars[i]);
-        unsigned InstOpcode = OpInst->getOpcode();
-        assert(sameOpcodeOrAlt(S.Opcode, S.AltOpcode, InstOpcode) &&
-               "Unexpected main/alternate opcode");
-        if (InstOpcode == S.AltOpcode) {
+        assert(S.isOpcodeOrAlt(OpInst) && "Unexpected main/alternate opcode");
+        if (OpInst->getOpcode() == S.AltOpcode) {
           Mask[i] = Builder.getInt32(e + i);
           AltScalars.push_back(E->Scalars[i]);
         } else {

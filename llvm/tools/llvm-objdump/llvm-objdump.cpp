@@ -67,6 +67,12 @@
 using namespace llvm;
 using namespace object;
 
+cl::opt<bool>
+    llvm::AllHeaders("all-headers",
+                     cl::desc("Display all available header information"));
+static cl::alias AllHeadersShort("x", cl::desc("Alias for --all-headers"),
+                                 cl::aliasopt(AllHeaders));
+
 static cl::list<std::string>
 InputFilenames(cl::Positional, cl::desc("<input object files>"),cl::ZeroOrMore);
 
@@ -1281,6 +1287,7 @@ static void DisassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
   // Create a mapping from virtual address to symbol name.  This is used to
   // pretty print the symbols while disassembling.
   std::map<SectionRef, SectionSymbolsTy> AllSymbols;
+  SectionSymbolsTy AbsoluteSymbols;
   for (const SymbolRef &Symbol : Obj->symbols()) {
     Expected<uint64_t> AddressOrErr = Symbol.getAddress();
     if (!AddressOrErr)
@@ -1296,15 +1303,17 @@ static void DisassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
     Expected<section_iterator> SectionOrErr = Symbol.getSection();
     if (!SectionOrErr)
       report_error(Obj->getFileName(), SectionOrErr.takeError());
-    section_iterator SecI = *SectionOrErr;
-    if (SecI == Obj->section_end())
-      continue;
 
     uint8_t SymbolType = ELF::STT_NOTYPE;
     if (Obj->isELF())
       SymbolType = getElfSymbolType(Obj, Symbol);
 
-    AllSymbols[*SecI].emplace_back(Address, *Name, SymbolType);
+    section_iterator SecI = *SectionOrErr;
+    if (SecI != Obj->section_end())
+      AllSymbols[*SecI].emplace_back(Address, *Name, SymbolType);
+    else
+      AbsoluteSymbols.emplace_back(Address, *Name, SymbolType);
+
 
     if (*Name == "_CHERI_CAPABILITY_TABLE_") {
       // errs() << "FOUND CHERI CAP TABLE @" << utohexstr(Address);
@@ -1344,6 +1353,8 @@ static void DisassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
 
       if (Sec != SectionAddresses.end())
         AllSymbols[Sec->second].emplace_back(VA, Name, ELF::STT_NOTYPE);
+      else
+        AbsoluteSymbols.emplace_back(VA, Name, ELF::STT_NOTYPE);
     }
   }
 
@@ -1351,6 +1362,7 @@ static void DisassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
   // a symbol near an address.
   for (std::pair<const SectionRef, SectionSymbolsTy> &SecSyms : AllSymbols)
     array_pod_sort(SecSyms.second.begin(), SecSyms.second.end());
+  array_pod_sort(AbsoluteSymbols.begin(), AbsoluteSymbols.end());
 
   for (const SectionRef &Section : ToolSectionFilter(*Obj)) {
     if (!DisassembleAll && (!Section.isText() || Section.isVirtual()))
@@ -1665,29 +1677,37 @@ static void DisassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
                 --SectionAddress;
                 TargetSectionSymbols = &AllSymbols[SectionAddress->second];
               } else {
-                TargetSectionSymbols = nullptr;
+                TargetSectionSymbols = &AbsoluteSymbols;
               }
             }
 
             // Find the first symbol in the section whose offset is less than
-            // or equal to the target.
-            if (TargetSectionSymbols) {
-              auto TargetSym = std::upper_bound(
-                  TargetSectionSymbols->begin(), TargetSectionSymbols->end(),
+            // or equal to the target. If there isn't a section that contains
+            // the target, find the nearest preceding absolute symbol.
+            auto TargetSym = std::upper_bound(
+                TargetSectionSymbols->begin(), TargetSectionSymbols->end(),
+                Target, [](uint64_t LHS,
+                           const std::tuple<uint64_t, StringRef, uint8_t> &RHS) {
+                  return LHS < std::get<0>(RHS);
+                });
+            if (TargetSym == TargetSectionSymbols->begin()) {
+              TargetSectionSymbols = &AbsoluteSymbols;
+              TargetSym = std::upper_bound(
+                  AbsoluteSymbols.begin(), AbsoluteSymbols.end(),
                   Target, [](uint64_t LHS,
                              const std::tuple<uint64_t, StringRef, uint8_t> &RHS) {
-                    return LHS < std::get<0>(RHS);
-                  });
-              if (TargetSym != TargetSectionSymbols->begin()) {
-                --TargetSym;
-                uint64_t TargetAddress = std::get<0>(*TargetSym);
-                StringRef TargetName = std::get<1>(*TargetSym);
-                outs() << " <" << TargetName;
-                uint64_t Disp = Target - TargetAddress;
-                if (Disp)
-                  outs() << "+0x" << Twine::utohexstr(Disp);
-                outs() << '>';
-              }
+                            return LHS < std::get<0>(RHS);
+                          });
+            }
+            if (TargetSym != TargetSectionSymbols->begin()) {
+              --TargetSym;
+              uint64_t TargetAddress = std::get<0>(*TargetSym);
+              StringRef TargetName = std::get<1>(*TargetSym);
+              outs() << " <" << TargetName;
+              uint64_t Disp = Target - TargetAddress;
+              if (Disp)
+                outs() << "+0x" << Twine::utohexstr(Disp);
+              outs() << '>';
             }
           }
         }
@@ -2346,6 +2366,9 @@ int main(int argc, char **argv) {
   // Defaults to a.out if no filenames specified.
   if (InputFilenames.size() == 0)
     InputFilenames.push_back("a.out");
+
+  if (AllHeaders)
+    PrivateHeaders = Relocations = SectionHeaders = SymbolTable = true;
 
   if (DisassembleAll || PrintSource || PrintLines)
     Disassemble = true;

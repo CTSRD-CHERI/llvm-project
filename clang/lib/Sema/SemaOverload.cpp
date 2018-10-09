@@ -2007,6 +2007,14 @@ bool Sema::IsIntegralPromotion(Expr *From, QualType FromType, QualType ToType) {
         isCompleteType(From->getLocStart(), FromType))
       return Context.hasSameUnqualifiedType(
           ToType, FromEnumType->getDecl()->getPromotionType());
+
+    // C++ [conv.prom]p5:
+    //   If the bit-field has an enumerated type, it is treated as any other
+    //   value of that type for promotion purposes.
+    //
+    // ... so do not fall through into the bit-field checks below in C++.
+    if (getLangOpts().CPlusPlus)
+      return false;
   }
 
   // C++0x [conv.prom]p2:
@@ -2054,6 +2062,11 @@ bool Sema::IsIntegralPromotion(Expr *From, QualType FromType, QualType ToType) {
   // other value of that type for promotion purposes (C++ 4.5p3).
   // FIXME: We should delay checking of bit-fields until we actually perform the
   // conversion.
+  //
+  // FIXME: In C, only bit-fields of types _Bool, int, or unsigned int may be
+  // promoted, per C11 6.3.1.1/2. We promote all bit-fields (including enum
+  // bit-fields and those whose underlying type is larger than int) for GCC
+  // compatibility.
   if (From) {
     if (FieldDecl *MemberDecl = From->getSourceBitField()) {
       llvm::APSInt BitWidth;
@@ -12191,7 +12204,8 @@ Sema::CreateOverloadedUnaryOp(SourceLocation OpLoc, UnaryOperatorKind Opc,
       // break out so that we will build the appropriate built-in
       // operator node.
       ExprResult InputRes = PerformImplicitConversion(
-          Input, Best->BuiltinParamTypes[0], Best->Conversions[0], AA_Passing);
+          Input, Best->BuiltinParamTypes[0], Best->Conversions[0], AA_Passing,
+          CCK_ForBuiltinOverloadedOp);
       if (InputRes.isInvalid())
         return ExprError();
       Input = InputRes.get();
@@ -12435,16 +12449,16 @@ Sema::CreateOverloadedBinOp(SourceLocation OpLoc,
         // We matched a built-in operator. Convert the arguments, then
         // break out so that we will build the appropriate built-in
         // operator node.
-        ExprResult ArgsRes0 =
-            PerformImplicitConversion(Args[0], Best->BuiltinParamTypes[0],
-                                      Best->Conversions[0], AA_Passing);
+        ExprResult ArgsRes0 = PerformImplicitConversion(
+            Args[0], Best->BuiltinParamTypes[0], Best->Conversions[0],
+            AA_Passing, CCK_ForBuiltinOverloadedOp);
         if (ArgsRes0.isInvalid())
           return ExprError();
         Args[0] = ArgsRes0.get();
 
-        ExprResult ArgsRes1 =
-            PerformImplicitConversion(Args[1], Best->BuiltinParamTypes[1],
-                                      Best->Conversions[1], AA_Passing);
+        ExprResult ArgsRes1 = PerformImplicitConversion(
+            Args[1], Best->BuiltinParamTypes[1], Best->Conversions[1],
+            AA_Passing, CCK_ForBuiltinOverloadedOp);
         if (ArgsRes1.isInvalid())
           return ExprError();
         Args[1] = ArgsRes1.get();
@@ -12647,16 +12661,16 @@ Sema::CreateOverloadedArraySubscriptExpr(SourceLocation LLoc,
         // We matched a built-in operator. Convert the arguments, then
         // break out so that we will build the appropriate built-in
         // operator node.
-        ExprResult ArgsRes0 =
-            PerformImplicitConversion(Args[0], Best->BuiltinParamTypes[0],
-                                      Best->Conversions[0], AA_Passing);
+        ExprResult ArgsRes0 = PerformImplicitConversion(
+            Args[0], Best->BuiltinParamTypes[0], Best->Conversions[0],
+            AA_Passing, CCK_ForBuiltinOverloadedOp);
         if (ArgsRes0.isInvalid())
           return ExprError();
         Args[0] = ArgsRes0.get();
 
-        ExprResult ArgsRes1 =
-            PerformImplicitConversion(Args[1], Best->BuiltinParamTypes[1],
-                                      Best->Conversions[1], AA_Passing);
+        ExprResult ArgsRes1 = PerformImplicitConversion(
+            Args[1], Best->BuiltinParamTypes[1], Best->Conversions[1],
+            AA_Passing, CCK_ForBuiltinOverloadedOp);
         if (ArgsRes1.isInvalid())
           return ExprError();
         Args[1] = ArgsRes1.get();

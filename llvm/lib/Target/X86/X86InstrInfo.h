@@ -17,9 +17,9 @@
 #include "MCTargetDesc/X86BaseInfo.h"
 #include "X86InstrFMA3Info.h"
 #include "X86RegisterInfo.h"
-#include "llvm/ADT/DenseMap.h"
 #include "llvm/CodeGen/ISDOpcodes.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
+#include <vector>
 
 #define GET_INSTRINFO_HEADER
 #include "X86GenInstrInfo.inc"
@@ -167,15 +167,6 @@ inline static bool isMem(const MachineInstr &MI, unsigned Op) {
 class X86InstrInfo final : public X86GenInstrInfo {
   X86Subtarget &Subtarget;
   const X86RegisterInfo RI;
-
-  /// MemOp2RegOpTable - Load / store unfolding opcode map.
-  ///
-  typedef DenseMap<unsigned, std::pair<uint16_t, uint16_t>>
-      MemOp2RegOpTableType;
-  MemOp2RegOpTableType MemOp2RegOpTable;
-
-  static void AddTableEntry(MemOp2RegOpTableType &M2RTable, uint16_t RegOp,
-                            uint16_t MemOp, uint16_t Flags);
 
   virtual void anchor();
 
@@ -552,9 +543,6 @@ public:
 
   ArrayRef<std::pair<unsigned, const char *>>
   getSerializableDirectMachineOperandTargetFlags() const override;
-
-  /// X86 supports the MachineOutliner.
-  bool useMachineOutliner() const override { return true; }
 
   virtual outliner::TargetCostInfo getOutlininingCandidateInfo(
       std::vector<outliner::Candidate> &RepeatedSequenceLocs) const override;

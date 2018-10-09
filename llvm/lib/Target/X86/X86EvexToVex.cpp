@@ -25,7 +25,6 @@
 #include "X86.h"
 #include "X86InstrInfo.h"
 #include "X86Subtarget.h"
-#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
@@ -239,15 +238,15 @@ bool EvexToVexInstPass::CompressEvexToVexImpl(MachineInstr &MI) const {
 
 #ifndef NDEBUG
   // Make sure the tables are sorted.
-  static bool TableChecked = false;
-  if (!TableChecked) {
+  static std::atomic<bool> TableChecked(false);
+  if (!TableChecked.load(std::memory_order_relaxed)) {
     assert(std::is_sorted(std::begin(X86EvexToVex128CompressTable),
                           std::end(X86EvexToVex128CompressTable)) &&
            "X86EvexToVex128CompressTable is not sorted!");
     assert(std::is_sorted(std::begin(X86EvexToVex256CompressTable),
                           std::end(X86EvexToVex256CompressTable)) &&
            "X86EvexToVex256CompressTable is not sorted!");
-    TableChecked = true;
+    TableChecked.store(true, std::memory_order_relaxed);
   }
 #endif
 

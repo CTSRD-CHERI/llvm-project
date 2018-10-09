@@ -238,6 +238,15 @@ Linux::Linux(const Driver &D, const llvm::Triple &Triple, const ArgList &Args)
     ExtraOpts.push_back("relro");
   }
 
+  if (GCCInstallation.getParentLibPath().find("opt/rh/devtoolset") !=
+      StringRef::npos)
+    // With devtoolset on RHEL, we want to add a bin directory that is relative
+    // to the detected gcc install, because if we are using devtoolset gcc then
+    // we want to use other tools from devtoolset (e.g. ld) instead of the
+    // standard system tools.
+    PPaths.push_back(Twine(GCCInstallation.getParentLibPath() +
+                     "/../bin").str());
+
   if (Arch == llvm::Triple::arm || Arch == llvm::Triple::thumb)
     ExtraOpts.push_back("-X");
 
@@ -803,6 +812,7 @@ void Linux::addLibCxxIncludePaths(const llvm::opt::ArgList &DriverArgs,
                                   llvm::opt::ArgStringList &CC1Args) const {
   const std::string& SysRoot = computeSysRoot();
   const std::string LibCXXIncludePathCandidates[] = {
+      DetectLibcxxIncludePath(getDriver().ResourceDir + "/include/c++"),
       DetectLibcxxIncludePath(getDriver().Dir + "/../include/c++"),
       // If this is a development, non-installed, clang, libcxx will
       // not be found at ../include/c++ but it likely to be found at

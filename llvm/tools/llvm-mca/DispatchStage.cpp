@@ -18,7 +18,6 @@
 
 #include "DispatchStage.h"
 #include "HWEventListener.h"
-#include "Pipeline.h"
 #include "Scheduler.h"
 #include "llvm/Support/Debug.h"
 
@@ -31,7 +30,12 @@ namespace mca {
 void DispatchStage::notifyInstructionDispatched(const InstRef &IR,
                                                 ArrayRef<unsigned> UsedRegs) {
   LLVM_DEBUG(dbgs() << "[E] Instruction Dispatched: " << IR << '\n');
-  Owner->notifyInstructionEvent(HWInstructionDispatchedEvent(IR, UsedRegs));
+  notifyInstructionEvent(HWInstructionDispatchedEvent(IR, UsedRegs));
+}
+
+void DispatchStage::notifyStallEvent(const HWStallEvent &Event) {
+  for (HWEventListener *Listener : getListeners())
+    Listener->onStallEvent(Event);
 }
 
 bool DispatchStage::checkPRF(const InstRef &IR) {
@@ -43,7 +47,7 @@ bool DispatchStage::checkPRF(const InstRef &IR) {
   const unsigned RegisterMask = PRF.isAvailable(RegDefs);
   // A mask with all zeroes means: register files are available.
   if (RegisterMask) {
-    Owner->notifyStallEvent(HWStallEvent(HWStallEvent::RegisterFileStall, IR));
+    notifyStallEvent(HWStallEvent(HWStallEvent::RegisterFileStall, IR));
     return false;
   }
 
@@ -54,8 +58,7 @@ bool DispatchStage::checkRCU(const InstRef &IR) {
   const unsigned NumMicroOps = IR.getInstruction()->getDesc().NumMicroOps;
   if (RCU.isAvailable(NumMicroOps))
     return true;
-  Owner->notifyStallEvent(
-      HWStallEvent(HWStallEvent::RetireControlUnitStall, IR));
+  notifyStallEvent(HWStallEvent(HWStallEvent::RetireControlUnitStall, IR));
   return false;
 }
 
@@ -63,13 +66,13 @@ bool DispatchStage::checkScheduler(const InstRef &IR) {
   HWStallEvent::GenericEventType Event;
   const bool Ready = SC.canBeDispatched(IR, Event);
   if (!Ready)
-    Owner->notifyStallEvent(HWStallEvent(Event, IR));
+    notifyStallEvent(HWStallEvent(Event, IR));
   return Ready;
 }
 
 void DispatchStage::updateRAWDependencies(ReadState &RS,
                                           const MCSubtargetInfo &STI) {
-  SmallVector<WriteState *, 4> DependentWrites;
+  SmallVector<WriteRef, 4> DependentWrites;
 
   collectWrites(DependentWrites, RS.getRegisterID());
   RS.setDependentWrites(DependentWrites.size());
@@ -79,18 +82,13 @@ void DispatchStage::updateRAWDependencies(ReadState &RS,
   // For each write, check if we have ReadAdvance information, and use it
   // to figure out in how many cycles this read becomes available.
   const ReadDescriptor &RD = RS.getDescriptor();
-  if (!RD.HasReadAdvanceEntries) {
-    for (WriteState *WS : DependentWrites)
-      WS->addUser(&RS, /* ReadAdvance */ 0);
-    return;
-  }
-
   const MCSchedModel &SM = STI.getSchedModel();
   const MCSchedClassDesc *SC = SM.getSchedClassDesc(RD.SchedClassID);
-  for (WriteState *WS : DependentWrites) {
-    unsigned WriteResID = WS->getWriteResourceID();
+  for (WriteRef &WR : DependentWrites) {
+    WriteState &WS = *WR.getWriteState();
+    unsigned WriteResID = WS.getWriteResourceID();
     int ReadAdvance = STI.getReadAdvanceCycles(SC, RD.UseIndex, WriteResID);
-    WS->addUser(&RS, ReadAdvance);
+    WS.addUser(&RS, ReadAdvance);
   }
 }
 
@@ -123,7 +121,8 @@ void DispatchStage::dispatch(InstRef IR) {
   // is allocated to the instruction.
   SmallVector<unsigned, 4> RegisterFiles(PRF.getNumRegisterFiles());
   for (std::unique_ptr<WriteState> &WS : IS.getDefs())
-    PRF.addRegisterWrite(*WS, RegisterFiles, !Desc.isZeroLatency());
+    PRF.addRegisterWrite(WriteRef(IR.first, WS.get()), RegisterFiles,
+                         !Desc.isZeroLatency());
 
   // Reserve slots in the RCU, and notify the instruction that it has been
   // dispatched to the schedulers for execution.

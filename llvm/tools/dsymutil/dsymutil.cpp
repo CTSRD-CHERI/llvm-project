@@ -13,8 +13,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "dsymutil.h"
+#include "BinaryHolder.h"
 #include "CFBundle.h"
 #include "DebugMap.h"
+#include "LinkUtils.h"
 #include "MachOUtils.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/SmallVector.h"
@@ -493,6 +495,9 @@ int main(int argc, char **argv) {
       return 1;
     }
 
+    // Shared a single binary holder for all the link steps.
+    BinaryHolder BinHolder;
+
     NumThreads =
         std::min<unsigned>(OptionsOrErr->Threads, DebugMapPtrsOrErr->size());
     llvm::ThreadPool Threads(NumThreads);
@@ -545,7 +550,7 @@ int main(int argc, char **argv) {
 
       auto LinkLambda = [&,
                          OutputFile](std::shared_ptr<raw_fd_ostream> Stream) {
-        AllOK.fetch_and(linkDwarf(*Stream, *Map, *OptionsOrErr));
+        AllOK.fetch_and(linkDwarf(*Stream, BinHolder, *Map, *OptionsOrErr));
         Stream->flush();
         if (Verify && !NoOutput)
           AllOK.fetch_and(verify(OutputFile, Map->getTriple().getArchName()));

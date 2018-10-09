@@ -26,23 +26,26 @@ namespace exegesis {
 BenchmarkFailure::BenchmarkFailure(const llvm::Twine &S)
     : llvm::StringError(S, llvm::inconvertibleErrorCode()) {}
 
-BenchmarkRunner::InstructionFilter::~InstructionFilter() = default;
-
-BenchmarkRunner::BenchmarkRunner(const LLVMState &State)
-    : State(State),
-      RATC(State.getRegInfo(), getFunctionReservedRegs(State.getTargetMachine())) {}
+BenchmarkRunner::BenchmarkRunner(const LLVMState &State,
+                                 InstructionBenchmark::ModeE Mode)
+    : State(State), RATC(State.getRegInfo(),
+                         getFunctionReservedRegs(State.getTargetMachine())),
+      Mode(Mode) {}
 
 BenchmarkRunner::~BenchmarkRunner() = default;
 
 llvm::Expected<std::vector<InstructionBenchmark>>
-BenchmarkRunner::run(unsigned Opcode, const InstructionFilter &Filter,
-                     unsigned NumRepetitions) {
+BenchmarkRunner::run(unsigned Opcode, unsigned NumRepetitions) {
+  const llvm::MCInstrDesc &InstrDesc = State.getInstrInfo().get(Opcode);
   // Ignore instructions that we cannot run.
-  if (State.getInstrInfo().get(Opcode).isPseudo())
+  if (InstrDesc.isPseudo())
     return llvm::make_error<BenchmarkFailure>("Unsupported opcode: isPseudo");
-
-  if (llvm::Error E = Filter.shouldRun(State, Opcode))
-    return std::move(E);
+  if (InstrDesc.isBranch() || InstrDesc.isIndirectBranch())
+    return llvm::make_error<BenchmarkFailure>(
+        "Unsupported opcode: isBranch/isIndirectBranch");
+  if (InstrDesc.isCall() || InstrDesc.isReturn())
+    return llvm::make_error<BenchmarkFailure>(
+        "Unsupported opcode: isCall/isReturn");
 
   llvm::Expected<std::vector<BenchmarkConfiguration>> ConfigurationOrError =
       generateConfigurations(Opcode);
@@ -60,7 +63,7 @@ InstructionBenchmark
 BenchmarkRunner::runOne(const BenchmarkConfiguration &Configuration,
                         unsigned Opcode, unsigned NumRepetitions) const {
   InstructionBenchmark InstrBenchmark;
-  InstrBenchmark.Mode = getMode();
+  InstrBenchmark.Mode = Mode;
   InstrBenchmark.CpuName = State.getTargetMachine().getTargetCPU();
   InstrBenchmark.LLVMTriple =
       State.getTargetMachine().getTargetTriple().normalize();
@@ -191,6 +194,27 @@ BenchmarkRunner::writeObjectFile(const BenchmarkConfiguration::Setup &Setup,
   assembleToStream(State.getExegesisTarget(), State.createTargetMachine(),
                    Setup.RegsToDef, Code, OFS);
   return ResultPath.str();
+}
+
+llvm::Expected<SnippetPrototype> BenchmarkRunner::generateSelfAliasingPrototype(
+    const Instruction &Instr) const {
+  const AliasingConfigurations SelfAliasing(Instr, Instr);
+  if (SelfAliasing.empty()) {
+    return llvm::make_error<BenchmarkFailure>("empty self aliasing");
+  }
+  SnippetPrototype Prototype;
+  InstructionInstance II(Instr);
+  if (SelfAliasing.hasImplicitAliasing()) {
+    Prototype.Explanation = "implicit Self cycles, picking random values.";
+  } else {
+    Prototype.Explanation =
+        "explicit self cycles, selecting one aliasing Conf.";
+    // This is a self aliasing instruction so defs and uses are from the same
+    // instance, hence twice II in the following call.
+    setRandomAliasing(SelfAliasing, II, II);
+  }
+  Prototype.Snippet.push_back(std::move(II));
+  return std::move(Prototype);
 }
 
 } // namespace exegesis

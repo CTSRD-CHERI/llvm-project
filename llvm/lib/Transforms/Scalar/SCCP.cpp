@@ -1777,6 +1777,7 @@ PreservedAnalyses SCCPPass::run(Function &F, FunctionAnalysisManager &AM) {
 
   auto PA = PreservedAnalyses();
   PA.preserve<GlobalsAA>();
+  PA.preserveSet<CFGAnalyses>();
   return PA;
 }
 
@@ -1799,6 +1800,7 @@ public:
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.addRequired<TargetLibraryInfoWrapperPass>();
     AU.addPreserved<GlobalsAAWrapperPass>();
+    AU.setPreservesCFG();
   }
 
   // runOnFunction - Run the Sparse Conditional Constant Propagation
@@ -1930,10 +1932,7 @@ bool llvm::runIPSCCP(Module &M, const DataLayout &DL,
     for (Function::iterator BB = F.begin(), E = F.end(); BB != E; ++BB) {
       if (!Solver.isBlockExecutable(&*BB)) {
         LLVM_DEBUG(dbgs() << "  BasicBlock Dead:" << *BB);
-
         ++NumDeadBlocks;
-        NumInstRemoved +=
-            changeToUnreachable(BB->getFirstNonPHI(), /*UseLLVMTrap=*/false);
 
         MadeChanges = true;
 
@@ -1955,6 +1954,17 @@ bool llvm::runIPSCCP(Module &M, const DataLayout &DL,
         }
       }
     }
+
+    // Change dead blocks to unreachable. We do it after replacing constants in
+    // all executable blocks, because changeToUnreachable may remove PHI nodes
+    // in executable blocks we found values for. The function's entry block is
+    // not part of BlocksToErase, so we have to handle it separately.
+    for (BasicBlock *BB : BlocksToErase)
+      NumInstRemoved +=
+          changeToUnreachable(BB->getFirstNonPHI(), /*UseLLVMTrap=*/false);
+    if (!Solver.isBlockExecutable(&F.front()))
+      NumInstRemoved += changeToUnreachable(F.front().getFirstNonPHI(),
+                                            /*UseLLVMTrap=*/false);
 
     // Now that all instructions in the function are constant folded, erase dead
     // blocks, because we can now use ConstantFoldTerminator to get rid of
