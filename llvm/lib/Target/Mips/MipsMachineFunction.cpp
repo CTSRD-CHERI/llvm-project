@@ -58,23 +58,10 @@ unsigned MipsFunctionInfo::getGlobalBaseReg(bool IsForTls) {
            "$gp should only be used for TLS in cap-table mode");
 
   // Return if it has already been initialized.
-  if (GlobalBaseReg)
-    return GlobalBaseReg;
-
-  MipsSubtarget const &STI =
-      static_cast<const MipsSubtarget &>(MF.getSubtarget());
-
-  const TargetRegisterClass *RC =
-      STI.inMips16Mode()
-          ? &Mips::CPU16RegsRegClass
-          : STI.inMicroMipsMode()
-                ? &Mips::GPRMM16RegClass
-                : static_cast<const MipsTargetMachine &>(MF.getTarget())
-                          .getABI()
-                          .IsN64()
-                      ? &Mips::GPR64RegClass
-                      : &Mips::GPR32RegClass;
-  return GlobalBaseReg = MF.getRegInfo().createVirtualRegister(RC);
+  if (!GlobalBaseReg)
+    GlobalBaseReg =
+        MF.getRegInfo().createVirtualRegister(&getGlobalBaseRegClass(MF));
+  return GlobalBaseReg;
 }
 
 bool MipsFunctionInfo::capGlobalBaseRegSet() const {

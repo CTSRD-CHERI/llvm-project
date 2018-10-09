@@ -1920,17 +1920,12 @@ MipsTargetLowering::emitAtomicCmpSwap(MachineInstr &MI,
     llvm_unreachable("Unsupported atomic pseudo for EmitAtomicCmpSwap.");
   }
 
-  const unsigned Size = MI.getOpcode() == Mips::ATOMIC_CMP_SWAP_I32 ? 4 : 8;
-
   MachineFunction *MF = BB->getParent();
   MachineRegisterInfo &MRI = MF->getRegInfo();
   const TargetRegisterClass *RC = getRegClassFor(ScratchTy);
   const TargetInstrInfo *TII = Subtarget.getInstrInfo();
   DebugLoc DL = MI.getDebugLoc();
 
-  unsigned AtomicOp = MI.getOpcode() == Mips::ATOMIC_CMP_SWAP_I32
-                          ? Mips::ATOMIC_CMP_SWAP_I32_POSTRA
-                          : Mips::ATOMIC_CMP_SWAP_I64_POSTRA;
   unsigned Dest = MI.getOperand(0).getReg();
   unsigned Ptr = MI.getOperand(1).getReg();
   unsigned OldVal = MI.getOperand(2).getReg();
