@@ -715,12 +715,12 @@ enum IIT_Info {
   IIT_STRUCT6 = 38,
   IIT_STRUCT7 = 39,
   IIT_STRUCT8 = 40,
-  IIT_F128 = 41
+  IIT_F128 = 41,
   IIT_IFATPTR64 = 42,
   IIT_IFATPTR128 = 43,
   IIT_IFATPTR256 = 44,
   IIT_IFATPTR512 = 45,
-  IIT_IFATPTRAny = 46
+  IIT_IFATPTRAny = 46,
 };
 
 static void DecodeIITType(unsigned &NextElt, ArrayRef<unsigned char> Infos,
