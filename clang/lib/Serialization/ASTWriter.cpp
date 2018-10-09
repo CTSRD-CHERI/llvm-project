@@ -4769,13 +4769,15 @@ ASTFileSignature ASTWriter::WriteASTCore(Sema &SemaRef, StringRef isysroot,
   // analyze later in AST.
   RecordData DeleteExprsToAnalyze;
 
-  for (const auto &DeleteExprsInfo :
-       SemaRef.getMismatchingDeleteExpressions()) {
-    AddDeclRef(DeleteExprsInfo.first, DeleteExprsToAnalyze);
-    DeleteExprsToAnalyze.push_back(DeleteExprsInfo.second.size());
-    for (const auto &DeleteLoc : DeleteExprsInfo.second) {
-      AddSourceLocation(DeleteLoc.first, DeleteExprsToAnalyze);
-      DeleteExprsToAnalyze.push_back(DeleteLoc.second);
+  if (!isModule) {
+    for (const auto &DeleteExprsInfo :
+         SemaRef.getMismatchingDeleteExpressions()) {
+      AddDeclRef(DeleteExprsInfo.first, DeleteExprsToAnalyze);
+      DeleteExprsToAnalyze.push_back(DeleteExprsInfo.second.size());
+      for (const auto &DeleteLoc : DeleteExprsInfo.second) {
+        AddSourceLocation(DeleteLoc.first, DeleteExprsToAnalyze);
+        DeleteExprsToAnalyze.push_back(DeleteLoc.second);
+      }
     }
   }
 
@@ -5445,12 +5447,11 @@ void ASTRecordWriter::AddTypeSourceInfo(TypeSourceInfo *TInfo) {
     return;
   }
 
+  AddTypeRef(TInfo->getType());
   AddTypeLoc(TInfo->getTypeLoc());
 }
 
 void ASTRecordWriter::AddTypeLoc(TypeLoc TL) {
-  AddTypeRef(TL.getType());
-
   TypeLocWriter TLW(*this);
   for (; !TL.isNull(); TL = TL.getNextTypeLoc())
     TLW.Visit(TL);
@@ -5775,6 +5776,7 @@ void ASTRecordWriter::AddNestedNameSpecifierLoc(NestedNameSpecifierLoc NNS) {
     case NestedNameSpecifier::TypeSpec:
     case NestedNameSpecifier::TypeSpecWithTemplate:
       Record->push_back(Kind == NestedNameSpecifier::TypeSpecWithTemplate);
+      AddTypeRef(NNS.getTypeLoc().getType());
       AddTypeLoc(NNS.getTypeLoc());
       AddSourceLocation(NNS.getLocalSourceRange().getEnd());
       break;

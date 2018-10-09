@@ -665,7 +665,7 @@ void Writer::createSymbolAndStringTable() {
     Sec->setStringTableOff(addEntryToStringTable(Sec->Name));
   }
 
-  if (Config->DebugDwarf) {
+  if (Config->DebugDwarf || Config->DebugSymtab) {
     for (ObjFile *File : ObjFile::Instances) {
       for (Symbol *B : File->getSymbols()) {
         auto *D = dyn_cast_or_null<Defined>(B);
@@ -1044,6 +1044,11 @@ void Writer::createGuardCFTables() {
   // Mark the image entry as address-taken.
   if (Config->Entry)
     addSymbolToRVASet(AddressTakenSyms, cast<Defined>(Config->Entry));
+
+  // Ensure sections referenced in the gfid table are 16-byte aligned.
+  for (const ChunkAndOffset &C : AddressTakenSyms)
+    if (C.InputChunk->Alignment < 16)
+      C.InputChunk->Alignment = 16;
 
   maybeAddRVATable(std::move(AddressTakenSyms), "__guard_fids_table",
                    "__guard_fids_count");

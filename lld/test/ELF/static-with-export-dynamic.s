@@ -1,3 +1,4 @@
+// REQUIRES: x86
 // RUN: llvm-mc -filetype=obj -triple=x86_64-unknown-linux-gnu %s -o %t.o
 // RUN: ld.lld --export-dynamic %t.o -o %t
 // BFD does not add a dynamic section when --export-dynamic is passed together
@@ -5,7 +6,6 @@
 // RUN: ld.lld -Bstatic --export-dynamic %t.o -o %t-static
 // RUN: llvm-readobj -dyn-symbols -t -s %t | FileCheck %s
 // RUN: llvm-readobj -dyn-symbols -t -s %t-static | FileCheck %s -check-prefix STATIC
-// REQUIRES: x86
 
 
 // Ensure that the generated binary is still a static binary and doesn't have

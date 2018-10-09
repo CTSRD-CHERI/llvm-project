@@ -371,7 +371,11 @@ if(APPLE)
         if(DARWIN_${platform}_ARCHS)
           list(APPEND SANITIZER_COMMON_SUPPORTED_OS ${platform})
           list(APPEND PROFILE_SUPPORTED_OS ${platform})
-          list(APPEND TSAN_SUPPORTED_OS ${platform})
+
+          list_intersect(DARWIN_${platform}_TSAN_ARCHS DARWIN_${platform}_ARCHS ALL_TSAN_SUPPORTED_ARCH)
+          if(DARWIN_${platform}_TSAN_ARCHS)
+            list(APPEND TSAN_SUPPORTED_OS ${platform})
+          endif()
         endif()
         foreach(arch ${DARWIN_${platform}_ARCHS})
           list(APPEND COMPILER_RT_SUPPORTED_ARCH ${arch})
@@ -383,7 +387,6 @@ if(APPLE)
 
   # for list_intersect
   include(CompilerRTUtils)
-
 
   list_intersect(SANITIZER_COMMON_SUPPORTED_ARCH
     ALL_SANITIZER_COMMON_SUPPORTED_ARCH

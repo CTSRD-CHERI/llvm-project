@@ -124,6 +124,9 @@ if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_SOURCE_DIR})
     set(LLVM_RUNTIMES_PREFIX "${LLVM_RUNTIMES_TARGET}/")
   endif()
 
+  string(REGEX MATCH "[0-9]+\\.[0-9]+(\\.[0-9]+)?" CLANG_VERSION
+         ${PACKAGE_VERSION})
+
   foreach(entry ${runtimes})
     get_filename_component(projName ${entry} NAME)
 
@@ -132,12 +135,6 @@ if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_SOURCE_DIR})
     string(TOUPPER ${canon_name} canon_name)
     # The subdirectories need to treat this as standalone builds
     set(${canon_name}_STANDALONE_BUILD On)
-
-    if(LLVM_RUNTIMES_TARGET)
-      if(NOT "${projName}" MATCHES "compiler-rt")
-        set(${canon_name}_INSTALL_PREFIX "lib/${LLVM_RUNTIMES_PREFIX}/" CACHE STRING "" FORCE)
-      endif()
-    endif()
 
     # Setting a variable to let sub-projects detect which other projects
     # will be included under here.
@@ -152,15 +149,6 @@ if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_SOURCE_DIR})
   # other runtimes are added.
   foreach(entry ${runtimes})
     get_filename_component(projName ${entry} NAME)
-
-    if(LLVM_RUNTIMES_TARGET)
-      if(NOT "${projName}" MATCHES "compiler-rt")
-        set(LLVM_BINARY_DIR "${LLVM_LIBRARY_DIR}/${LLVM_RUNTIMES_PREFIX}")
-        set(LLVM_LIBDIR_SUFFIX "${LLVM_RUNTIMES_LIBDIR_SUFFIX}")
-        set(LLVM_LIBRARY_OUTPUT_INTDIR "${LLVM_LIBRARY_DIR}/${LLVM_RUNTIMES_PREFIX}lib${LLVM_RUNTIMES_LIBDIR_SUFFIX}")
-        set(LLVM_RUNTIME_OUTPUT_INTDIR "${LLVM_TOOLS_BINARY_DIR}/${LLVM_RUNTIMES_PREFIX}")
-      endif()
-    endif()
 
     # Between each sub-project we want to cache and clear the LIT properties
     set_property(GLOBAL PROPERTY LLVM_LIT_TESTSUITES)
@@ -247,6 +235,8 @@ else() # if this is included from LLVM's CMake
                              ${compiler_rt_path}/lib/builtins
                              CMAKE_ARGS -DLLVM_LIBRARY_OUTPUT_INTDIR=${LLVM_LIBRARY_DIR}
                                         -DLLVM_RUNTIME_OUTPUT_INTDIR=${LLVM_TOOLS_BINARY_DIR}
+                                        -DLLVM_DEFAULT_TARGET_TRIPLE=${TARGET_TRIPLE}
+                                        -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON
                                         -DCMAKE_C_COMPILER_TARGET=${TARGET_TRIPLE}
                                         -DCMAKE_ASM_COMPILER_TARGET=${TARGET_TRIPLE}
                                         -DCMAKE_C_COMPILER_WORKS=ON
@@ -278,6 +268,8 @@ else() # if this is included from LLVM's CMake
                              ${compiler_rt_path}/lib/builtins
                              CMAKE_ARGS -DLLVM_LIBRARY_OUTPUT_INTDIR=${LLVM_LIBRARY_DIR}
                                         -DLLVM_RUNTIME_OUTPUT_INTDIR=${LLVM_TOOLS_BINARY_DIR}
+                                        -DLLVM_DEFAULT_TARGET_TRIPLE=${target}
+                                        -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON
                                         -DCMAKE_C_COMPILER_TARGET=${target}
                                         -DCMAKE_ASM_COMPILER_TARGET=${target}
                                         -DCMAKE_C_COMPILER_WORKS=ON
@@ -371,6 +363,8 @@ else() # if this is included from LLVM's CMake
                              CMAKE_ARGS -DCOMPILER_RT_BUILD_BUILTINS=Off
                                         -DLLVM_INCLUDE_TESTS=${LLVM_INCLUDE_TESTS}
                                         -DLLVM_LIBRARY_DIR=${LLVM_LIBRARY_DIR}
+                                        -DLLVM_DEFAULT_TARGET_TRIPLE=${TARGET_TRIPLE}
+                                        -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON
                                         -DCMAKE_C_COMPILER_TARGET=${TARGET_TRIPLE}
                                         -DCMAKE_CXX_COMPILER_TARGET=${TARGET_TRIPLE}
                                         -DCMAKE_ASM_COMPILER_TARGET=${TARGET_TRIPLE}
@@ -402,17 +396,19 @@ else() # if this is included from LLVM's CMake
     endif()
 
     foreach(runtime_name ${runtime_names})
-      list(APPEND ${name}_extra_targets
-        "${runtime_name}:${runtime_name}-${name}"
-        "install-${runtime_name}:install-${runtime_name}-${name}"
-        "install-${runtime_name}-stripped:install-${runtime_name}-${name}-stripped")
+      set(${runtime_name}-${name} ${runtime_name})
+      set(install-${runtime_name}-${name} install-${runtime_name})
+      set(install-${runtime_name}-${name}-stripped install-${runtime_name}-stripped)
+      list(APPEND ${name}_extra_targets ${runtime_name}-${name} install-${runtime_name}-${name} install-${runtime_name}-${name}-stripped)
       if(LLVM_INCLUDE_TESTS)
-        list(APPEND ${name}_test_targets "check-${runtime_name}:check-${runtime_name}-${name}")
+        set(check-${runtime_name}-${name} check-${runtime_name} )
+        list(APPEND ${name}_test_targets check-${runtime_name}-${name})
       endif()
     endforeach()
 
     foreach(target_name IN LISTS SUB_COMPONENTS SUB_INSTALL_TARGETS)
-      list(APPEND ${name}_extra_targets "${target_name}:${target_name}-${name}")
+      set(${target_name}-${name} ${target_name})
+      list(APPEND ${name}_extra_targets ${target_name}-${name})
     endforeach()
 
     foreach(component ${LLVM_RUNTIME_DISTRIBUTION_COMPONENTS})
@@ -424,12 +420,13 @@ else() # if this is included from LLVM's CMake
     endforeach()
 
     if(LLVM_INCLUDE_TESTS)
-      list(APPEND ${name}_test_targets
-        "runtimes-test-depends:runtimes-test-depends-${name}"
-        "check-runtimes:check-runtimes-${name}")
+      set(runtimes-test-depends-${name} runtimes-test-depends)
+      set(check-runtimes-${name} check-runtimes)
+      list(APPEND ${name}_test_targets runtimes-test-depends-${name} check-runtimes-${name})
       foreach(target_name IN LISTS SUB_CHECK_TARGETS)
-        list(APPEND ${name}_test_targets "${target_name}:${target_name}-${name}")
-        list(APPEND test_targets "${target_name}-${name}")
+        set(${target_name}-${name} ${target_name})
+        list(APPEND ${name}_test_targets ${target_name}-${name})
+        list(APPEND test_targets ${target_name}-${name})
       endforeach()
       set(test_targets "${test_targets}" PARENT_SCOPE)
     endif()
@@ -452,6 +449,8 @@ else() # if this is included from LLVM's CMake
                              CMAKE_ARGS -DCOMPILER_RT_BUILD_BUILTINS=Off
                                         -DLLVM_INCLUDE_TESTS=${LLVM_INCLUDE_TESTS}
                                         -DLLVM_LIBRARY_DIR=${LLVM_LIBRARY_DIR}
+                                        -DLLVM_DEFAULT_TARGET_TRIPLE=${target}
+                                        -DLLVM_ENABLE_PER_TARGET_RUNTIME_DIR=ON
                                         -DCMAKE_C_COMPILER_TARGET=${target}
                                         -DCMAKE_CXX_COMPILER_TARGET=${target}
                                         -DCMAKE_ASM_COMPILER_TARGET=${target}
@@ -504,15 +503,7 @@ else() # if this is included from LLVM's CMake
       endif()
 
       foreach(name ${LLVM_RUNTIME_TARGETS})
-        set(target ${name})
-        string(REPLACE ":" ";" target_list ${target})
-        list(GET target_list 0 name)
-        list(LENGTH target_list target_list_len)
-        if(${target_list_len} GREATER 1)
-          list(GET target_list 1 target)
-        endif()
-
-        runtime_register_target(${name} ${target}
+        runtime_register_target(${name} ${name}
           DEPS ${deps}
           )
 
@@ -524,6 +515,32 @@ else() # if this is included from LLVM's CMake
           add_dependencies(check-runtimes check-runtimes-${name})
           add_dependencies(runtimes-test-depends runtimes-test-depends-${name})
         endif()
+      endforeach()
+
+      foreach(sanitizer ${LLVM_RUNTIME_SANITIZERS})
+        if (sanitizer STREQUAL "Address")
+          set(sanitizer_name "asan")
+        elseif (sanitizer STREQUAL "Memory")
+          set(sanitizer_name "msan")
+        elseif (sanitizer STREQUAL "Thread")
+          set(sanitizer_name "tsan")
+        elseif (sanitizer STREQUAL "Undefined")
+          set(sanitizer_name "ubsan")
+        else()
+          message(FATAL_ERROR "Unsupported value of LLVM_RUNTIME_TARGET_SANITIZERS: ${sanitizers}")
+        endif()
+        foreach(name ${LLVM_RUNTIME_SANITIZER_${sanitizer}_TARGETS})
+          runtime_register_target(${name}-${sanitizer_name} ${name}
+            DEPS runtimes-${name}
+            CMAKE_ARGS -DLLVM_USE_SANITIZER=${sanitizer}
+                       -DLLVM_RUNTIMES_PREFIX=${name}/
+                       -DLLVM_RUNTIMES_LIBDIR_SUFFIX=/${sanitizer_name}
+            )
+          add_dependencies(runtimes runtimes-${name}-${sanitizer_name})
+          add_dependencies(runtimes-configure runtimes-${name}-${sanitizer_name}-configure)
+          add_dependencies(install-runtimes install-runtimes-${name}-${sanitizer_name})
+          add_dependencies(install-runtimes-stripped install-runtimes-${name}-${sanitizer_name}-stripped)
+        endforeach()
       endforeach()
     endif()
 

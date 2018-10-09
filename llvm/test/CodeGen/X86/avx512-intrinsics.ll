@@ -393,28 +393,140 @@ define <8 x double> @test_sqrt_pd_512(<8 x double> %a0) {
 ; CHECK:       ## %bb.0:
 ; CHECK-NEXT:    vsqrtpd %zmm0, %zmm0
 ; CHECK-NEXT:    retq
-  %res = call <8 x double> @llvm.x86.avx512.mask.sqrt.pd.512(<8 x double> %a0,  <8 x double> zeroinitializer, i8 -1, i32 4)
-  ret <8 x double> %res
+  %1 = call <8 x double> @llvm.sqrt.v8f64(<8 x double> %a0)
+  ret <8 x double> %1
 }
-declare <8 x double> @llvm.x86.avx512.mask.sqrt.pd.512(<8 x double>, <8 x double>, i8, i32) nounwind readnone
+
+define <8 x double> @test_mask_sqrt_pd_512(<8 x double> %a0, <8 x double> %passthru, i8 %mask) {
+; CHECK-LABEL: test_mask_sqrt_pd_512:
+; CHECK:       ## %bb.0:
+; CHECK-NEXT:    kmovw %edi, %k1
+; CHECK-NEXT:    vsqrtpd %zmm0, %zmm1 {%k1}
+; CHECK-NEXT:    vmovapd %zmm1, %zmm0
+; CHECK-NEXT:    retq
+  %1 = call <8 x double> @llvm.sqrt.v8f64(<8 x double> %a0)
+  %2 = bitcast i8 %mask to <8 x i1>
+  %3 = select <8 x i1> %2, <8 x double> %1, <8 x double> %passthru
+  ret <8 x double> %3
+}
+
+define <8 x double> @test_maskz_sqrt_pd_512(<8 x double> %a0, i8 %mask) {
+; CHECK-LABEL: test_maskz_sqrt_pd_512:
+; CHECK:       ## %bb.0:
+; CHECK-NEXT:    kmovw %edi, %k1
+; CHECK-NEXT:    vsqrtpd %zmm0, %zmm0 {%k1} {z}
+; CHECK-NEXT:    retq
+  %1 = call <8 x double> @llvm.sqrt.v8f64(<8 x double> %a0)
+  %2 = bitcast i8 %mask to <8 x i1>
+  %3 = select <8 x i1> %2, <8 x double> %1, <8 x double> zeroinitializer
+  ret <8 x double> %3
+}
+declare <8 x double> @llvm.sqrt.v8f64(<8 x double>)
+
+define <8 x double> @test_sqrt_round_pd_512(<8 x double> %a0) {
+; CHECK-LABEL: test_sqrt_round_pd_512:
+; CHECK:       ## %bb.0:
+; CHECK-NEXT:    vsqrtpd {rz-sae}, %zmm0, %zmm0
+; CHECK-NEXT:    retq
+  %1 = call <8 x double> @llvm.x86.avx512.sqrt.pd.512(<8 x double> %a0, i32 11)
+  ret <8 x double> %1
+}
+
+define <8 x double> @test_mask_sqrt_round_pd_512(<8 x double> %a0, <8 x double> %passthru, i8 %mask) {
+; CHECK-LABEL: test_mask_sqrt_round_pd_512:
+; CHECK:       ## %bb.0:
+; CHECK-NEXT:    kmovw %edi, %k1
+; CHECK-NEXT:    vsqrtpd {rz-sae}, %zmm0, %zmm1 {%k1}
+; CHECK-NEXT:    vmovapd %zmm1, %zmm0
+; CHECK-NEXT:    retq
+  %1 = call <8 x double> @llvm.x86.avx512.sqrt.pd.512(<8 x double> %a0, i32 11)
+  %2 = bitcast i8 %mask to <8 x i1>
+  %3 = select <8 x i1> %2, <8 x double> %1, <8 x double> %passthru
+  ret <8 x double> %3
+}
+
+define <8 x double> @test_maskz_sqrt_round_pd_512(<8 x double> %a0, i8 %mask) {
+; CHECK-LABEL: test_maskz_sqrt_round_pd_512:
+; CHECK:       ## %bb.0:
+; CHECK-NEXT:    kmovw %edi, %k1
+; CHECK-NEXT:    vsqrtpd {rz-sae}, %zmm0, %zmm0 {%k1} {z}
+; CHECK-NEXT:    retq
+  %1 = call <8 x double> @llvm.x86.avx512.sqrt.pd.512(<8 x double> %a0, i32 11)
+  %2 = bitcast i8 %mask to <8 x i1>
+  %3 = select <8 x i1> %2, <8 x double> %1, <8 x double> zeroinitializer
+  ret <8 x double> %3
+}
+declare <8 x double> @llvm.x86.avx512.sqrt.pd.512(<8 x double>, i32) nounwind readnone
 
 define <16 x float> @test_sqrt_ps_512(<16 x float> %a0) {
 ; CHECK-LABEL: test_sqrt_ps_512:
 ; CHECK:       ## %bb.0:
 ; CHECK-NEXT:    vsqrtps %zmm0, %zmm0
 ; CHECK-NEXT:    retq
-  %res = call <16 x float> @llvm.x86.avx512.mask.sqrt.ps.512(<16 x float> %a0, <16 x float> zeroinitializer, i16 -1, i32 4)
-  ret <16 x float> %res
+  %1 = call <16 x float> @llvm.sqrt.v16f32(<16 x float> %a0)
+  ret <16 x float> %1
 }
+
+define <16 x float> @test_mask_sqrt_ps_512(<16 x float> %a0, <16 x float> %passthru, i16 %mask) {
+; CHECK-LABEL: test_mask_sqrt_ps_512:
+; CHECK:       ## %bb.0:
+; CHECK-NEXT:    kmovw %edi, %k1
+; CHECK-NEXT:    vsqrtps %zmm0, %zmm1 {%k1}
+; CHECK-NEXT:    vmovaps %zmm1, %zmm0
+; CHECK-NEXT:    retq
+  %1 = call <16 x float> @llvm.sqrt.v16f32(<16 x float> %a0)
+  %2 = bitcast i16 %mask to <16 x i1>
+  %3 = select <16 x i1> %2, <16 x float> %1, <16 x float> %passthru
+  ret <16 x float> %3
+}
+
+define <16 x float> @test_maskz_sqrt_ps_512(<16 x float> %a0, i16 %mask) {
+; CHECK-LABEL: test_maskz_sqrt_ps_512:
+; CHECK:       ## %bb.0:
+; CHECK-NEXT:    kmovw %edi, %k1
+; CHECK-NEXT:    vsqrtps %zmm0, %zmm0 {%k1} {z}
+; CHECK-NEXT:    retq
+  %1 = call <16 x float> @llvm.sqrt.v16f32(<16 x float> %a0)
+  %2 = bitcast i16 %mask to <16 x i1>
+  %3 = select <16 x i1> %2, <16 x float> %1, <16 x float> zeroinitializer
+  ret <16 x float> %3
+}
+declare <16 x float> @llvm.sqrt.v16f32(<16 x float>)
+
 define <16 x float> @test_sqrt_round_ps_512(<16 x float> %a0) {
 ; CHECK-LABEL: test_sqrt_round_ps_512:
 ; CHECK:       ## %bb.0:
 ; CHECK-NEXT:    vsqrtps {rz-sae}, %zmm0, %zmm0
 ; CHECK-NEXT:    retq
-  %res = call <16 x float> @llvm.x86.avx512.mask.sqrt.ps.512(<16 x float> %a0, <16 x float> zeroinitializer, i16 -1, i32 3)
-  ret <16 x float> %res
+  %1 = call <16 x float> @llvm.x86.avx512.sqrt.ps.512(<16 x float> %a0, i32 11)
+  ret <16 x float> %1
 }
-declare <16 x float> @llvm.x86.avx512.mask.sqrt.ps.512(<16 x float>, <16 x float>, i16, i32) nounwind readnone
+
+define <16 x float> @test_mask_sqrt_round_ps_512(<16 x float> %a0, <16 x float> %passthru, i16 %mask) {
+; CHECK-LABEL: test_mask_sqrt_round_ps_512:
+; CHECK:       ## %bb.0:
+; CHECK-NEXT:    kmovw %edi, %k1
+; CHECK-NEXT:    vsqrtps {rz-sae}, %zmm0, %zmm1 {%k1}
+; CHECK-NEXT:    vmovaps %zmm1, %zmm0
+; CHECK-NEXT:    retq
+  %1 = call <16 x float> @llvm.x86.avx512.sqrt.ps.512(<16 x float> %a0, i32 11)
+  %2 = bitcast i16 %mask to <16 x i1>
+  %3 = select <16 x i1> %2, <16 x float> %1, <16 x float> %passthru
+  ret <16 x float> %3
+}
+
+define <16 x float> @test_maskz_sqrt_round_ps_512(<16 x float> %a0, i16 %mask) {
+; CHECK-LABEL: test_maskz_sqrt_round_ps_512:
+; CHECK:       ## %bb.0:
+; CHECK-NEXT:    kmovw %edi, %k1
+; CHECK-NEXT:    vsqrtps {rz-sae}, %zmm0, %zmm0 {%k1} {z}
+; CHECK-NEXT:    retq
+  %1 = call <16 x float> @llvm.x86.avx512.sqrt.ps.512(<16 x float> %a0, i32 11)
+  %2 = bitcast i16 %mask to <16 x i1>
+  %3 = select <16 x i1> %2, <16 x float> %1, <16 x float> zeroinitializer
+  ret <16 x float> %3
+}
+declare <16 x float> @llvm.x86.avx512.sqrt.ps.512(<16 x float>, i32) nounwind readnone
 
 define <8 x double> @test_getexp_pd_512(<8 x double> %a0) {
 ; CHECK-LABEL: test_getexp_pd_512:
@@ -902,11 +1014,11 @@ define i16 @test_cmpps(<16 x float> %a, <16 x float> %b) {
 ; CHECK-NEXT:    ## kill: def $ax killed $ax killed $eax
 ; CHECK-NEXT:    vzeroupper
 ; CHECK-NEXT:    retq
-  %res = call <16 x i1> @llvm.x86.avx512.mask.cmp.ps.512(<16 x float> %a, <16 x float> %b, i32 2, i32 8)
+  %res = call <16 x i1> @llvm.x86.avx512.cmp.ps.512(<16 x float> %a, <16 x float> %b, i32 2, i32 8)
   %1 = bitcast <16 x i1> %res to i16
   ret i16 %1
 }
-declare <16 x i1> @llvm.x86.avx512.mask.cmp.ps.512(<16 x float>, <16 x float>, i32, i32)
+declare <16 x i1> @llvm.x86.avx512.cmp.ps.512(<16 x float>, <16 x float>, i32, i32)
 
 define i8 @test_cmppd(<8 x double> %a, <8 x double> %b) {
 ; CHECK-LABEL: test_cmppd:
@@ -916,11 +1028,11 @@ define i8 @test_cmppd(<8 x double> %a, <8 x double> %b) {
 ; CHECK-NEXT:    ## kill: def $al killed $al killed $eax
 ; CHECK-NEXT:    vzeroupper
 ; CHECK-NEXT:    retq
-  %res = call <8 x i1> @llvm.x86.avx512.mask.cmp.pd.512(<8 x double> %a, <8 x double> %b, i32 4, i32 4)
+  %res = call <8 x i1> @llvm.x86.avx512.cmp.pd.512(<8 x double> %a, <8 x double> %b, i32 4, i32 4)
   %1 = bitcast <8 x i1> %res to i8
   ret i8 %1
 }
-declare <8 x i1> @llvm.x86.avx512.mask.cmp.pd.512(<8 x double>, <8 x double>, i32, i32)
+declare <8 x i1> @llvm.x86.avx512.cmp.pd.512(<8 x double>, <8 x double>, i32, i32)
 
 ; Function Attrs: nounwind readnone
 
@@ -5121,9 +5233,9 @@ define <16 x float> @bad_mask_transition(<8 x double> %a, <8 x double> %b, <8 x 
 ; CHECK-NEXT:    vblendmps %zmm5, %zmm4, %zmm0 {%k1}
 ; CHECK-NEXT:    retq
 entry:
-  %0 = call <8 x i1> @llvm.x86.avx512.mask.cmp.pd.512(<8 x double> %a, <8 x double> %b, i32 17, i32 4)
+  %0 = call <8 x i1> @llvm.x86.avx512.cmp.pd.512(<8 x double> %a, <8 x double> %b, i32 17, i32 4)
   %1 = bitcast <8 x i1> %0 to i8
-  %2 = call <8 x i1> @llvm.x86.avx512.mask.cmp.pd.512(<8 x double> %c, <8 x double> %d, i32 17, i32 4)
+  %2 = call <8 x i1> @llvm.x86.avx512.cmp.pd.512(<8 x double> %c, <8 x double> %d, i32 17, i32 4)
   %3 = bitcast <8 x i1> %2 to i8
   %conv = zext i8 %1 to i16
   %conv2 = zext i8 %3 to i16
@@ -5146,7 +5258,7 @@ define <16 x float> @bad_mask_transition_2(<8 x double> %a, <8 x double> %b, <8 
 ; CHECK-NEXT:    vblendmps %zmm5, %zmm4, %zmm0 {%k1}
 ; CHECK-NEXT:    retq
 entry:
-  %0 = call <8 x i1> @llvm.x86.avx512.mask.cmp.pd.512(<8 x double> %a, <8 x double> %b, i32 17, i32 4)
+  %0 = call <8 x i1> @llvm.x86.avx512.cmp.pd.512(<8 x double> %a, <8 x double> %b, i32 17, i32 4)
   %1 = bitcast <8 x i1> %0 to i8
   %conv = zext i8 %1 to i16
   %2 = bitcast i16 %conv to <16 x i1>

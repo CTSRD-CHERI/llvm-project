@@ -5411,10 +5411,17 @@ X86InstrInfo::X86InstrInfo(X86Subtarget &STI)
                   // Index 4, folded load
                   Entry.Flags | TB_INDEX_4 | TB_FOLDED_LOAD);
 
+  // Sort the memory->reg unfold table.
+  array_pod_sort(MemOp2RegOpTable.begin(), MemOp2RegOpTable.end());
+
 #ifndef NDEBUG
   // Make sure the tables are sorted.
-  static bool FoldTablesChecked = false;
-  if (!FoldTablesChecked) {
+  static std::atomic<bool> FoldTablesChecked(false);
+  if (!FoldTablesChecked.load(std::memory_order_relaxed)) {
+    assert(std::adjacent_find(MemOp2RegOpTable.begin(),
+                              MemOp2RegOpTable.end()) ==
+           MemOp2RegOpTable.end() &&
+           "MemOp2RegOpTable is not unique!");
     assert(std::is_sorted(std::begin(MemoryFoldTable2Addr),
                           std::end(MemoryFoldTable2Addr)) &&
            std::adjacent_find(std::begin(MemoryFoldTable2Addr),
@@ -5451,7 +5458,7 @@ X86InstrInfo::X86InstrInfo(X86Subtarget &STI)
                               std::end(MemoryFoldTable4)) ==
            std::end(MemoryFoldTable4) &&
            "MemoryFoldTable4 is not sorted and unique!");
-    FoldTablesChecked = true;
+    FoldTablesChecked.store(true, std::memory_order_relaxed);
   }
 #endif
 }
@@ -5459,11 +5466,17 @@ X86InstrInfo::X86InstrInfo(X86Subtarget &STI)
 void
 X86InstrInfo::AddTableEntry(MemOp2RegOpTableType &M2RTable,
                             uint16_t RegOp, uint16_t MemOp, uint16_t Flags) {
-  if ((Flags & TB_NO_REVERSE) == 0) {
-    assert(!M2RTable.count(MemOp) &&
-         "Duplicated entries in unfolding maps?");
-    M2RTable[MemOp] = std::make_pair(RegOp, Flags);
-  }
+  if ((Flags & TB_NO_REVERSE) == 0)
+    M2RTable.push_back({MemOp, RegOp, Flags});
+}
+
+const X86InstrInfo::MemOp2RegOpTableTypeEntry *
+X86InstrInfo::lookupUnfoldTable(unsigned MemOp) const {
+  auto I = std::lower_bound(MemOp2RegOpTable.begin(), MemOp2RegOpTable.end(),
+                            MemOp);
+  if (I != MemOp2RegOpTable.end() && I->MemOp == MemOp)
+    return &*I;
+  return nullptr;
 }
 
 static const X86MemoryFoldTableEntry *
@@ -6766,15 +6779,9 @@ unsigned X86InstrInfo::getFMA3OpcodeToCommuteOperands(
   };
 
   unsigned FMAForms[3];
-  if (FMA3Group.isRegOpcodeFromGroup(Opc)) {
-    FMAForms[0] = FMA3Group.getReg132Opcode();
-    FMAForms[1] = FMA3Group.getReg213Opcode();
-    FMAForms[2] = FMA3Group.getReg231Opcode();
-  } else {
-    FMAForms[0] = FMA3Group.getMem132Opcode();
-    FMAForms[1] = FMA3Group.getMem213Opcode();
-    FMAForms[2] = FMA3Group.getMem231Opcode();
-  }
+  FMAForms[0] = FMA3Group.get132Opcode();
+  FMAForms[1] = FMA3Group.get213Opcode();
+  FMAForms[2] = FMA3Group.get231Opcode();
   unsigned FormIndex;
   for (FormIndex = 0; FormIndex < 3; FormIndex++)
     if (Opc == FMAForms[FormIndex])
@@ -10728,13 +10735,13 @@ MachineInstr *X86InstrInfo::foldMemoryOperandImpl(
 bool X86InstrInfo::unfoldMemoryOperand(
     MachineFunction &MF, MachineInstr &MI, unsigned Reg, bool UnfoldLoad,
     bool UnfoldStore, SmallVectorImpl<MachineInstr *> &NewMIs) const {
-  auto I = MemOp2RegOpTable.find(MI.getOpcode());
-  if (I == MemOp2RegOpTable.end())
+  const MemOp2RegOpTableTypeEntry *I = lookupUnfoldTable(MI.getOpcode());
+  if (I == nullptr)
     return false;
-  unsigned Opc = I->second.first;
-  unsigned Index = I->second.second & TB_INDEX_MASK;
-  bool FoldedLoad = I->second.second & TB_FOLDED_LOAD;
-  bool FoldedStore = I->second.second & TB_FOLDED_STORE;
+  unsigned Opc = I->RegOp;
+  unsigned Index = I->Flags & TB_INDEX_MASK;
+  bool FoldedLoad = I->Flags & TB_FOLDED_LOAD;
+  bool FoldedStore = I->Flags & TB_FOLDED_STORE;
   if (UnfoldLoad && !FoldedLoad)
     return false;
   UnfoldLoad &= FoldedLoad;
@@ -10850,13 +10857,13 @@ X86InstrInfo::unfoldMemoryOperand(SelectionDAG &DAG, SDNode *N,
   if (!N->isMachineOpcode())
     return false;
 
-  auto I = MemOp2RegOpTable.find(N->getMachineOpcode());
-  if (I == MemOp2RegOpTable.end())
+  const MemOp2RegOpTableTypeEntry *I = lookupUnfoldTable(N->getMachineOpcode());
+  if (I == nullptr)
     return false;
-  unsigned Opc = I->second.first;
-  unsigned Index = I->second.second & TB_INDEX_MASK;
-  bool FoldedLoad = I->second.second & TB_FOLDED_LOAD;
-  bool FoldedStore = I->second.second & TB_FOLDED_STORE;
+  unsigned Opc = I->RegOp;
+  unsigned Index = I->Flags & TB_INDEX_MASK;
+  bool FoldedLoad = I->Flags & TB_FOLDED_LOAD;
+  bool FoldedStore = I->Flags & TB_FOLDED_STORE;
   const MCInstrDesc &MCID = get(Opc);
   MachineFunction &MF = DAG.getMachineFunction();
   const TargetRegisterInfo &TRI = *MF.getSubtarget().getRegisterInfo();
@@ -10981,18 +10988,18 @@ X86InstrInfo::unfoldMemoryOperand(SelectionDAG &DAG, SDNode *N,
 unsigned X86InstrInfo::getOpcodeAfterMemoryUnfold(unsigned Opc,
                                       bool UnfoldLoad, bool UnfoldStore,
                                       unsigned *LoadRegIndex) const {
-  auto I = MemOp2RegOpTable.find(Opc);
-  if (I == MemOp2RegOpTable.end())
+  const MemOp2RegOpTableTypeEntry *I = lookupUnfoldTable(Opc);
+  if (I == nullptr)
     return 0;
-  bool FoldedLoad = I->second.second & TB_FOLDED_LOAD;
-  bool FoldedStore = I->second.second & TB_FOLDED_STORE;
+  bool FoldedLoad = I->Flags & TB_FOLDED_LOAD;
+  bool FoldedStore = I->Flags & TB_FOLDED_STORE;
   if (UnfoldLoad && !FoldedLoad)
     return 0;
   if (UnfoldStore && !FoldedStore)
     return 0;
   if (LoadRegIndex)
-    *LoadRegIndex = I->second.second & TB_INDEX_MASK;
-  return I->second.first;
+    *LoadRegIndex = I->Flags & TB_INDEX_MASK;
+  return I->RegOp;
 }
 
 bool
@@ -11254,9 +11261,7 @@ isSafeToMoveRegClassDefs(const TargetRegisterClass *RC) const {
 /// TODO: Eliminate this and move the code to X86MachineFunctionInfo.
 ///
 unsigned X86InstrInfo::getGlobalBaseReg(MachineFunction *MF) const {
-  assert((!Subtarget.is64Bit() ||
-          MF->getTarget().getCodeModel() == CodeModel::Medium ||
-          MF->getTarget().getCodeModel() == CodeModel::Large) &&
+  assert(!Subtarget.is64Bit() &&
          "X86-64 PIC uses RIP relative addressing");
 
   X86MachineFunctionInfo *X86FI = MF->getInfo<X86MachineFunctionInfo>();
@@ -11267,8 +11272,7 @@ unsigned X86InstrInfo::getGlobalBaseReg(MachineFunction *MF) const {
   // Create the register. The code to initialize it is inserted
   // later, by the CGBR pass (below).
   MachineRegisterInfo &RegInfo = MF->getRegInfo();
-  GlobalBaseReg = RegInfo.createVirtualRegister(
-      Subtarget.is64Bit() ? &X86::GR64_NOSPRegClass : &X86::GR32_NOSPRegClass);
+  GlobalBaseReg = RegInfo.createVirtualRegister(&X86::GR32_NOSPRegClass);
   X86FI->setGlobalBaseReg(GlobalBaseReg);
   return GlobalBaseReg;
 }
@@ -12642,10 +12646,9 @@ namespace {
         static_cast<const X86TargetMachine *>(&MF.getTarget());
       const X86Subtarget &STI = MF.getSubtarget<X86Subtarget>();
 
-      // Don't do anything in the 64-bit small and kernel code models. They use
-      // RIP-relative addressing for everything.
-      if (STI.is64Bit() && (TM->getCodeModel() == CodeModel::Small ||
-                            TM->getCodeModel() == CodeModel::Kernel))
+      // Don't do anything if this is 64-bit as 64-bit PIC
+      // uses RIP relative addressing.
+      if (STI.is64Bit())
         return false;
 
       // Only emit a global base reg in PIC mode.
@@ -12672,41 +12675,17 @@ namespace {
       else
         PC = GlobalBaseReg;
 
-      if (STI.is64Bit()) {
-        if (TM->getCodeModel() == CodeModel::Medium) {
-          // In the medium code model, use a RIP-relative LEA to materialize the
-          // GOT.
-          BuildMI(FirstMBB, MBBI, DL, TII->get(X86::LEA64r), PC)
-              .addReg(X86::RIP)
-              .addImm(0)
-              .addReg(0)
-              .addExternalSymbol("_GLOBAL_OFFSET_TABLE_")
-              .addReg(0);
-        } else if (TM->getCodeModel() == CodeModel::Large) {
-          // Loading the GOT in the large code model requires math with labels,
-          // so we use a pseudo instruction and expand it during MC emission.
-          unsigned Scratch = RegInfo.createVirtualRegister(&X86::GR64RegClass);
-          BuildMI(FirstMBB, MBBI, DL, TII->get(X86::MOVGOT64r), PC)
-              .addReg(Scratch, RegState::Undef | RegState::Define)
-              .addExternalSymbol("_GLOBAL_OFFSET_TABLE_");
-        } else {
-          llvm_unreachable("unexpected code model");
-        }
-      } else {
-        // Operand of MovePCtoStack is completely ignored by asm printer. It's
-        // only used in JIT code emission as displacement to pc.
-        BuildMI(FirstMBB, MBBI, DL, TII->get(X86::MOVPC32r), PC).addImm(0);
+      // Operand of MovePCtoStack is completely ignored by asm printer. It's
+      // only used in JIT code emission as displacement to pc.
+      BuildMI(FirstMBB, MBBI, DL, TII->get(X86::MOVPC32r), PC).addImm(0);
 
-        // If we're using vanilla 'GOT' PIC style, we should use relative
-        // addressing not to pc, but to _GLOBAL_OFFSET_TABLE_ external.
-        if (STI.isPICStyleGOT()) {
-          // Generate addl $__GLOBAL_OFFSET_TABLE_ + [.-piclabel],
-          // %some_register
-          BuildMI(FirstMBB, MBBI, DL, TII->get(X86::ADD32ri), GlobalBaseReg)
-              .addReg(PC)
-              .addExternalSymbol("_GLOBAL_OFFSET_TABLE_",
-                                 X86II::MO_GOT_ABSOLUTE_ADDRESS);
-        }
+      // If we're using vanilla 'GOT' PIC style, we should use relative addressing
+      // not to pc, but to _GLOBAL_OFFSET_TABLE_ external.
+      if (STI.isPICStyleGOT()) {
+        // Generate addl $__GLOBAL_OFFSET_TABLE_ + [.-piclabel], %some_register
+        BuildMI(FirstMBB, MBBI, DL, TII->get(X86::ADD32ri), GlobalBaseReg)
+          .addReg(PC).addExternalSymbol("_GLOBAL_OFFSET_TABLE_",
+                                        X86II::MO_GOT_ABSOLUTE_ADDRESS);
       }
 
       return true;

@@ -65,7 +65,6 @@
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
-#include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/DIBuilder.h"
 #include "llvm/IR/IRBuilder.h"
@@ -1331,15 +1330,6 @@ bool MachineOutliner::runOnModule(Module &M) {
       MMI.getOrCreateMachineFunction(*M.begin()).getSubtarget();
   const TargetRegisterInfo *TRI = STI.getRegisterInfo();
   const TargetInstrInfo *TII = STI.getInstrInfo();
-
-  // Does the target implement the MachineOutliner? If it doesn't, quit here.
-  if (!TII->useMachineOutliner()) {
-    // No. So we're done.
-    LLVM_DEBUG(
-        dbgs()
-        << "Skipping pass: Target does not support the MachineOutliner.\n");
-    return false;
-  }
 
   // If the user specifies that they want to outline from linkonceodrs, set
   // it here.

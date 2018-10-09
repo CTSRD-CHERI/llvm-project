@@ -1,9 +1,8 @@
+# REQUIRES: amdgpu
 # RUN: llvm-mc -filetype=obj -triple=amdgcn--amdhsa -mcpu=fiji %s -o %t.o
 # RUN: ld.lld --hash-style=sysv -shared %t.o -o %t.so
 # RUN: llvm-readobj -r %t.so | FileCheck %s
 # RUN: llvm-objdump -s %t.so | FileCheck %s --check-prefix=OBJDUMP
-
-# REQUIRES: amdgpu
 
 .text
 
@@ -111,7 +110,7 @@ foo:
 # CHECK-NEXT: ]
 
 # OBJDUMP: Contents of section .rodata:
-# OBJDUMP: 28fbffff ffffffff
+# OBJDUMP: d0f8ffff ffffffff
 
 # OBJDUMP: Contents of section nonalloc:
 # OBJDUMP-NEXT: 0000 00000000 04480000 00000000 08440000

@@ -15,6 +15,7 @@
 #if CAN_SANITIZE_UB
 #include "ubsan_handlers.h"
 #include "ubsan_diag.h"
+#include "ubsan_flags.h"
 #include "ubsan_monitor.h"
 
 #include "sanitizer_common/sanitizer_common.h"
@@ -116,6 +117,9 @@ static void handleIntegerOverflowImpl(OverflowData *Data, ValueHandle LHS,
                           : ErrorType::UnsignedIntegerOverflow;
 
   if (ignoreReport(Loc, Opts, ET))
+    return;
+
+  if (!IsSigned && flags()->silence_unsigned_overflow)
     return;
 
   ScopedReport R(Opts, Loc, ET);
@@ -660,6 +664,21 @@ static void handleCFIBadIcall(CFICheckFailData *Data, ValueHandle Function,
   if (!FName)
     FName = "(unknown)";
   Diag(FLoc, DL_Note, ET, "%0 defined here") << FName;
+
+  // If the failure involved different DSOs for the check location and icall
+  // target, report the DSO names.
+  const char *DstModule = FLoc.get()->info.module;
+  if (!DstModule)
+    DstModule = "(unknown)";
+
+  const char *SrcModule = Symbolizer::GetOrInit()->GetModuleNameForPc(Opts.pc);
+  if (!SrcModule)
+    SrcModule = "(unknown)";
+
+  if (internal_strcmp(SrcModule, DstModule))
+    Diag(Loc, DL_Note, ET,
+         "check failed in %0, destination function located in %1")
+        << SrcModule << DstModule;
 }
 
 namespace __ubsan {
