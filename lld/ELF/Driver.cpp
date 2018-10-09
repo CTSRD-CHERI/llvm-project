@@ -607,6 +607,20 @@ getBuildId(opt::InputArgList &Args) {
   return {BuildIdKind::None, {}};
 }
 
+static std::pair<bool, bool> getPackDynRelocs(opt::InputArgList &Args) {
+  StringRef S = Args.getLastArgValue(OPT_pack_dyn_relocs, "none");
+  if (S == "android")
+    return {true, false};
+  if (S == "relr")
+    return {false, true};
+  if (S == "android+relr")
+    return {true, true};
+
+  if (S != "none")
+    error("unknown -pack-dyn-relocs format: " + S);
+  return {false, false};
+}
+
 static void readCallGraph(MemoryBufferRef MB) {
   // Build a map from symbol name to section
   DenseMap<StringRef, const Symbol *> SymbolNameToSymbol;
@@ -617,18 +631,16 @@ static void readCallGraph(MemoryBufferRef MB) {
   for (StringRef L : args::getLines(MB)) {
     SmallVector<StringRef, 3> Fields;
     L.split(Fields, ' ');
-    if (Fields.size() != 3)
-      fatal("parse error");
     uint64_t Count;
-    if (!to_integer(Fields[2], Count))
-      fatal("parse error");
+    if (Fields.size() != 3 || !to_integer(Fields[2], Count))
+      fatal(MB.getBufferIdentifier() + ": parse error");
     const Symbol *FromSym = SymbolNameToSymbol.lookup(Fields[0]);
     const Symbol *ToSym = SymbolNameToSymbol.lookup(Fields[1]);
     if (Config->WarnSymbolOrdering) {
       if (!FromSym)
-        warn("call graph file: no such symbol: " + Fields[0]);
+        warn(MB.getBufferIdentifier() + ": no such symbol: " + Fields[0]);
       if (!ToSym)
-        warn("call graph file: no such symbol: " + Fields[1]);
+        warn(MB.getBufferIdentifier() + ": no such symbol: " + Fields[1]);
     }
     if (!FromSym || !ToSym || Count == 0)
       continue;
@@ -715,6 +727,7 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
   Config->Demangle = Args.hasFlag(OPT_demangle, OPT_no_demangle, true);
   Config->DisableVerify = Args.hasArg(OPT_disable_verify);
   Config->Discard = getDiscard(Args);
+  Config->DwoDir = Args.getLastArgValue(OPT_plugin_opt_dwo_dir_eq);
   Config->DynamicLinker = getDynamicLinker(Args);
   Config->EhFrameHdr =
       Args.hasFlag(OPT_eh_frame_hdr, OPT_no_eh_frame_hdr, false);
@@ -794,6 +807,8 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
   Config->Undefined = args::getStrings(Args, OPT_undefined);
   Config->UndefinedVersion =
       Args.hasFlag(OPT_undefined_version, OPT_no_undefined_version, true);
+  Config->UseAndroidRelrTags = Args.hasFlag(
+      OPT_use_android_relr_tags, OPT_no_use_android_relr_tags, false);
   Config->UnresolvedSymbols = getUnresolvedSymbolPolicy(Args);
   Config->WarnBackrefs =
       Args.hasFlag(OPT_warn_backrefs, OPT_no_warn_backrefs, false);
@@ -871,13 +886,8 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
 
   std::tie(Config->BuildId, Config->BuildIdVector) = getBuildId(Args);
 
-  if (auto *Arg = Args.getLastArg(OPT_pack_dyn_relocs)) {
-    StringRef S = Arg->getValue();
-    if (S == "android")
-      Config->AndroidPackDynRelocs = true;
-    else if (S != "none")
-      error("unknown -pack-dyn-relocs format: " + S);
-  }
+  std::tie(Config->AndroidPackDynRelocs, Config->RelrPackDynRelocs) =
+      getPackDynRelocs(Args);
 
   if (auto *Arg = Args.getLastArg(OPT_symbol_ordering_file))
     if (Optional<MemoryBufferRef> Buffer = readFile(Arg->getValue()))
@@ -1153,12 +1163,19 @@ static void excludeLibs(opt::InputArgList &Args) {
   DenseSet<StringRef> Libs = getExcludeLibs(Args);
   bool All = Libs.count("ALL");
 
-  for (InputFile *File : ObjectFiles)
+  auto Visit = [&](InputFile *File) {
     if (!File->ArchiveName.empty())
       if (All || Libs.count(path::filename(File->ArchiveName)))
         for (Symbol *Sym : File->getSymbols())
           if (!Sym->isLocal() && Sym->File == File)
             Sym->VersionId = VER_NDX_LOCAL;
+  };
+
+  for (InputFile *File : ObjectFiles)
+    Visit(File);
+
+  for (BitcodeFile *File : BitcodeFiles)
+    Visit(File);
 }
 
 // Force Sym to be entered in the output. Used for -u or equivalent.

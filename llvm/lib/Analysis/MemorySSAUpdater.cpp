@@ -278,8 +278,7 @@ void MemorySSAUpdater::insertDef(MemoryDef *MD, bool RenameUses) {
   // above and reset ourselves.
   MD->setDefiningAccess(DefBefore);
 
-  SmallVector<MemoryAccess *, 8> FixupList(InsertedPHIs.begin(),
-                                           InsertedPHIs.end());
+  SmallVector<WeakVH, 8> FixupList(InsertedPHIs.begin(), InsertedPHIs.end());
   if (!DefBeforeSameBlock) {
     // If there was a local def before us, we must have the same effect it
     // did. Because every may-def is the same, any phis/etc we would create, it
@@ -300,7 +299,7 @@ void MemorySSAUpdater::insertDef(MemoryDef *MD, bool RenameUses) {
     fixupDefs(FixupList);
     FixupList.clear();
     // Put any new phis on the fixup list, and process them
-    FixupList.append(InsertedPHIs.end() - StartingPHISize, InsertedPHIs.end());
+    FixupList.append(InsertedPHIs.begin() + StartingPHISize, InsertedPHIs.end());
   }
   // Now that all fixups are done, rename all uses if we are asked.
   if (RenameUses) {
@@ -317,21 +316,27 @@ void MemorySSAUpdater::insertDef(MemoryDef *MD, bool RenameUses) {
     MSSA->renamePass(MD->getBlock(), FirstDef, Visited);
     // We just inserted a phi into this block, so the incoming value will become
     // the phi anyway, so it does not matter what we pass.
-    for (auto *MP : InsertedPHIs)
-      MSSA->renamePass(MP->getBlock(), nullptr, Visited);
+    for (auto &MP : InsertedPHIs) {
+      MemoryPhi *Phi = dyn_cast_or_null<MemoryPhi>(MP);
+      if (Phi)
+        MSSA->renamePass(Phi->getBlock(), nullptr, Visited);
+    }
   }
 }
 
-void MemorySSAUpdater::fixupDefs(const SmallVectorImpl<MemoryAccess *> &Vars) {
+void MemorySSAUpdater::fixupDefs(const SmallVectorImpl<WeakVH> &Vars) {
   SmallPtrSet<const BasicBlock *, 8> Seen;
   SmallVector<const BasicBlock *, 16> Worklist;
-  for (auto *NewDef : Vars) {
+  for (auto &Var : Vars) {
+    MemoryAccess *NewDef = dyn_cast_or_null<MemoryAccess>(Var);
+    if (!NewDef)
+      continue;
     // First, see if there is a local def after the operand.
     auto *Defs = MSSA->getWritableBlockDefs(NewDef->getBlock());
     auto DefIter = NewDef->getDefsIterator();
 
     // The temporary Phi is being fixed, unmark it for not to optimize.
-    if (MemoryPhi *Phi = dyn_cast_or_null<MemoryPhi>(NewDef))
+    if (MemoryPhi *Phi = dyn_cast<MemoryPhi>(NewDef))
       NonOptPhis.erase(Phi);
 
     // If there is a local def after us, we only have to rename that.
@@ -395,7 +400,7 @@ void MemorySSAUpdater::moveTo(MemoryUseOrDef *What, BasicBlock *BB,
                               WhereType Where) {
   // Mark MemoryPhi users of What not to be optimized.
   for (auto *U : What->users())
-    if (MemoryPhi *PhiUser = dyn_cast_or_null<MemoryPhi>(U))
+    if (MemoryPhi *PhiUser = dyn_cast<MemoryPhi>(U))
       NonOptPhis.insert(PhiUser);
 
   // Replace all our users with our defining access.
@@ -428,6 +433,56 @@ void MemorySSAUpdater::moveAfter(MemoryUseOrDef *What, MemoryUseOrDef *Where) {
 void MemorySSAUpdater::moveToPlace(MemoryUseOrDef *What, BasicBlock *BB,
                                    MemorySSA::InsertionPlace Where) {
   return moveTo(What, BB, Where);
+}
+
+// All accesses in To used to be in From. Move to end and update access lists.
+void MemorySSAUpdater::moveAllAccesses(BasicBlock *From, BasicBlock *To,
+                                       Instruction *Start) {
+
+  MemorySSA::AccessList *Accs = MSSA->getWritableBlockAccesses(From);
+  if (!Accs)
+    return;
+
+  MemoryAccess *FirstInNew = nullptr;
+  for (Instruction &I : make_range(Start->getIterator(), To->end()))
+    if ((FirstInNew = MSSA->getMemoryAccess(&I)))
+      break;
+  if (!FirstInNew)
+    return;
+
+  auto *MUD = cast<MemoryUseOrDef>(FirstInNew);
+  do {
+    auto NextIt = ++MUD->getIterator();
+    MemoryUseOrDef *NextMUD = (!Accs || NextIt == Accs->end())
+                                  ? nullptr
+                                  : cast<MemoryUseOrDef>(&*NextIt);
+    MSSA->moveTo(MUD, To, MemorySSA::End);
+    // Moving MUD from Accs in the moveTo above, may delete Accs, so we need to
+    // retrieve it again.
+    Accs = MSSA->getWritableBlockAccesses(From);
+    MUD = NextMUD;
+  } while (MUD);
+}
+
+void MemorySSAUpdater::moveAllAfterSpliceBlocks(BasicBlock *From,
+                                                BasicBlock *To,
+                                                Instruction *Start) {
+  assert(MSSA->getBlockAccesses(To) == nullptr &&
+         "To block is expected to be free of MemoryAccesses.");
+  moveAllAccesses(From, To, Start);
+  for (BasicBlock *Succ : successors(To))
+    if (MemoryPhi *MPhi = MSSA->getMemoryAccess(Succ))
+      MPhi->setIncomingBlock(MPhi->getBasicBlockIndex(From), To);
+}
+
+void MemorySSAUpdater::moveAllAfterMergeBlocks(BasicBlock *From, BasicBlock *To,
+                                               Instruction *Start) {
+  assert(From->getSinglePredecessor() == To &&
+         "From block is expected to have a single predecessor (To).");
+  moveAllAccesses(From, To, Start);
+  for (BasicBlock *Succ : successors(From))
+    if (MemoryPhi *MPhi = MSSA->getMemoryAccess(Succ))
+      MPhi->setIncomingBlock(MPhi->getBasicBlockIndex(From), To);
 }
 
 /// If all arguments of a MemoryPHI are defined by the same incoming

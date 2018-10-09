@@ -99,6 +99,11 @@ namespace clang {
     /// deduction where the parameter is a function type that can be converted
     /// to the argument type.
     TDF_AllowCompatibleFunctionType = 0x20,
+
+    /// Within template argument deduction for a conversion function, we are
+    /// matching with an argument type for which the original argument was
+    /// a reference.
+    TDF_ArgWithReferenceType = 0x40,
   };
 }
 
@@ -936,12 +941,6 @@ DeduceTemplateArguments(Sema &S,
                         SmallVectorImpl<DeducedTemplateArgument> &Deduced,
                         unsigned TDF,
                         bool PartialOrdering = false) {
-  // Fast-path check to see if we have too many/too few arguments.
-  if (NumParams != NumArgs &&
-      !(NumParams && isa<PackExpansionType>(Params[NumParams - 1])) &&
-      !(NumArgs && isa<PackExpansionType>(Args[NumArgs - 1])))
-    return Sema::TDK_MiscellaneousDeductionFailure;
-
   // C++0x [temp.deduct.type]p10:
   //   Similarly, if P has a form that contains (T), then each parameter type
   //   Pi of the respective parameter-type- list of P is compared with the
@@ -978,13 +977,6 @@ DeduceTemplateArguments(Sema &S,
       continue;
     }
 
-    // C++0x [temp.deduct.type]p5:
-    //   The non-deduced contexts are:
-    //     - A function parameter pack that does not occur at the end of the
-    //       parameter-declaration-clause.
-    if (ParamIdx + 1 < NumParams)
-      return Sema::TDK_Success;
-
     // C++0x [temp.deduct.type]p10:
     //   If the parameter-declaration corresponding to Pi is a function
     //   parameter pack, then the type of its declarator- id is compared with
@@ -995,15 +987,41 @@ DeduceTemplateArguments(Sema &S,
     QualType Pattern = Expansion->getPattern();
     PackDeductionScope PackScope(S, TemplateParams, Deduced, Info, Pattern);
 
-    for (; ArgIdx < NumArgs; ++ArgIdx) {
-      // Deduce template arguments from the pattern.
-      if (Sema::TemplateDeductionResult Result
-            = DeduceTemplateArgumentsByTypeMatch(S, TemplateParams, Pattern,
-                                                 Args[ArgIdx], Info, Deduced,
-                                                 TDF, PartialOrdering))
-        return Result;
+    if (ParamIdx + 1 == NumParams) {
+      for (; ArgIdx < NumArgs; ++ArgIdx) {
+        // Deduce template arguments from the pattern.
+        if (Sema::TemplateDeductionResult Result
+              = DeduceTemplateArgumentsByTypeMatch(S, TemplateParams, Pattern,
+                                                   Args[ArgIdx], Info, Deduced,
+                                                   TDF, PartialOrdering))
+          return Result;
 
-      PackScope.nextPackElement();
+        PackScope.nextPackElement();
+      }
+    } else {
+      // C++0x [temp.deduct.type]p5:
+      //   The non-deduced contexts are:
+      //     - A function parameter pack that does not occur at the end of the
+      //       parameter-declaration-clause.
+      //
+      // FIXME: There is no wording to say what we should do in this case. We
+      // choose to resolve this by applying the same rule that is applied for a
+      // function call: that is, deduce all contained packs to their
+      // explicitly-specified values (or to <> if there is no such value).
+      //
+      // This is seemingly-arbitrarily different from the case of a template-id
+      // with a non-trailing pack-expansion in its arguments, which renders the
+      // entire template-argument-list a non-deduced context.
+
+      // If the parameter type contains an explicitly-specified pack that we
+      // could not expand, skip the number of parameters notionally created
+      // by the expansion.
+      Optional<unsigned> NumExpansions = Expansion->getNumExpansions();
+      if (NumExpansions && !PackScope.isPartiallyExpanded()) {
+        for (unsigned I = 0; I != *NumExpansions && ArgIdx < NumArgs;
+             ++I, ++ArgIdx)
+          PackScope.nextPackElement();
+      }
     }
 
     // Build argument packs for each of the parameter packs expanded by this
@@ -1019,8 +1037,10 @@ DeduceTemplateArguments(Sema &S,
   return Sema::TDK_Success;
 }
 
-/// Determine whether the parameter has qualifiers that are either
-/// inconsistent with or a superset of the argument's qualifiers.
+/// Determine whether the parameter has qualifiers that the argument
+/// lacks. Put another way, determine whether there is no way to add
+/// a deduced set of qualifiers to the ParamType that would result in
+/// its qualifiers matching those of the ArgType.
 static bool hasInconsistentOrSupersetQualifiersOf(QualType ParamType,
                                                   QualType ArgType) {
   Qualifiers ParamQs = ParamType.getQualifiers();
@@ -1044,10 +1064,8 @@ static bool hasInconsistentOrSupersetQualifiersOf(QualType ParamType,
       ParamQs.hasObjCLifetime())
     return true;
 
-  // CVR qualifier superset.
-  return (ParamQs.getCVRQualifiers() != ArgQs.getCVRQualifiers()) &&
-      ((ParamQs.getCVRQualifiers() | ArgQs.getCVRQualifiers())
-                                                == ParamQs.getCVRQualifiers());
+  // CVR qualifiers inconsistent or a superset.
+  return (ParamQs.getCVRQualifiers() & ~ArgQs.getCVRQualifiers()) != 0;
 }
 
 /// Compare types for equality with respect to possibly compatible
@@ -1354,6 +1372,18 @@ DeduceTemplateArgumentsByTypeMatch(Sema &S,
     if (TDF & TDF_ParamWithReferenceType) {
       if (hasInconsistentOrSupersetQualifiersOf(Param, Arg))
         return Sema::TDK_NonDeducedMismatch;
+    } else if (TDF & TDF_ArgWithReferenceType) {
+      // C++ [temp.deduct.conv]p4:
+      //   If the original A is a reference type, A can be more cv-qualified
+      //   than the deduced A
+      if (!Arg.getQualifiers().compatiblyIncludes(Param.getQualifiers()))
+        return Sema::TDK_NonDeducedMismatch;
+
+      // Strip out all extra qualifiers from the argument to figure out the
+      // type we're converting to, prior to the qualification conversion.
+      Qualifiers Quals;
+      Arg = S.Context.getUnqualifiedArrayType(Arg, Quals);
+      Arg = S.Context.getQualifiedType(Arg, Param.getQualifiers());
     } else if (!IsPossiblyOpaquelyQualifiedType(Param)) {
       if (Param.getCVRQualifiers() != Arg.getCVRQualifiers())
         return Sema::TDK_NonDeducedMismatch;
@@ -1628,6 +1658,9 @@ DeduceTemplateArgumentsByTypeMatch(Sema &S,
         }
       }
       // FIXME: Detect non-deduced exception specification mismatches?
+      //
+      // Careful about [temp.deduct.call] and [temp.deduct.conv], which allow
+      // top-level differences in noexcept-specifications.
 
       return Sema::TDK_Success;
     }
@@ -1832,6 +1865,54 @@ DeduceTemplateArgumentsByTypeMatch(Sema &S,
                                                   VectorParam->getElementType(),
                                                   VectorArg->getElementType(),
                                                   Info, Deduced, TDF);
+      }
+
+      return Sema::TDK_NonDeducedMismatch;
+    }
+
+    case Type::DependentVector: {
+      const auto *VectorParam = cast<DependentVectorType>(Param);
+
+      if (const auto *VectorArg = dyn_cast<VectorType>(Arg)) {
+        // Perform deduction on the element types.
+        if (Sema::TemplateDeductionResult Result =
+                DeduceTemplateArgumentsByTypeMatch(
+                    S, TemplateParams, VectorParam->getElementType(),
+                    VectorArg->getElementType(), Info, Deduced, TDF))
+          return Result;
+
+        // Perform deduction on the vector size, if we can.
+        NonTypeTemplateParmDecl *NTTP =
+            getDeducedParameterFromExpr(Info, VectorParam->getSizeExpr());
+        if (!NTTP)
+          return Sema::TDK_Success;
+
+        llvm::APSInt ArgSize(S.Context.getTypeSize(S.Context.IntTy), false);
+        ArgSize = VectorArg->getNumElements();
+        // Note that we use the "array bound" rules here; just like in that
+        // case, we don't have any particular type for the vector size, but
+        // we can provide one if necessary.
+        return DeduceNonTypeTemplateArgument(S, TemplateParams, NTTP, ArgSize,
+                                             S.Context.UnsignedIntTy, true,
+                                             Info, Deduced);
+      }
+
+      if (const auto *VectorArg = dyn_cast<DependentVectorType>(Arg)) {
+        // Perform deduction on the element types.
+        if (Sema::TemplateDeductionResult Result =
+                DeduceTemplateArgumentsByTypeMatch(
+                    S, TemplateParams, VectorParam->getElementType(),
+                    VectorArg->getElementType(), Info, Deduced, TDF))
+          return Result;
+
+        // Perform deduction on the vector size, if we can.
+        NonTypeTemplateParmDecl *NTTP = getDeducedParameterFromExpr(
+            Info, VectorParam->getSizeExpr());
+        if (!NTTP)
+          return Sema::TDK_Success;
+
+        return DeduceNonTypeTemplateArgument(
+            S, TemplateParams, NTTP, VectorArg->getSizeExpr(), Info, Deduced);
       }
 
       return Sema::TDK_NonDeducedMismatch;
@@ -2174,10 +2255,6 @@ DeduceTemplateArguments(Sema &S, TemplateParameterList *TemplateParams,
     //   comparison deduces template arguments for subsequent positions in the
     //   template parameter packs expanded by Pi.
     TemplateArgument Pattern = Params[ParamIdx].getPackExpansionPattern();
-
-    // FIXME: If there are no remaining arguments, we can bail out early
-    // and set any deduced parameter packs to an empty argument pack.
-    // The latter part of this is a (minor) correctness issue.
 
     // Prepare to deduce the packs within the pattern.
     PackDeductionScope PackScope(S, TemplateParams, Deduced, Info, Pattern);
@@ -4025,12 +4102,20 @@ Sema::DeduceTemplateArguments(FunctionTemplateDecl *ConversionTemplate,
   // C++0x [temp.deduct.conv]p4:
   //   [...] If A is a reference type, the type referred to by A is used
   //   for type deduction.
-  if (const ReferenceType *ARef = A->getAs<ReferenceType>())
-    A = ARef->getPointeeType().getUnqualifiedType();
+  if (const ReferenceType *ARef = A->getAs<ReferenceType>()) {
+    A = ARef->getPointeeType();
+    // We work around a defect in the standard here: cv-qualifiers are also
+    // removed from P and A in this case, unless P was a reference type. This
+    // seems to mostly match what other compilers are doing.
+    if (!FromType->getAs<ReferenceType>()) {
+      A = A.getUnqualifiedType();
+      P = P.getUnqualifiedType();
+    }
+
   // C++ [temp.deduct.conv]p3:
   //
   //   If A is not a reference type:
-  else {
+  } else {
     assert(!A->isReferenceType() && "Reference types were handled above");
 
     //   - If P is an array type, the pointer type produced by the
@@ -4079,7 +4164,7 @@ Sema::DeduceTemplateArguments(FunctionTemplateDecl *ConversionTemplate,
   //       cv-qualified than the deduced A (i.e., the type referred to
   //       by the reference)
   if (ToType->isReferenceType())
-    TDF |= TDF_ParamWithReferenceType;
+    TDF |= TDF_ArgWithReferenceType;
   //     - The deduced A can be another pointer or pointer to member
   //       type that can be converted to A via a qualification
   //       conversion.
@@ -5227,6 +5312,14 @@ MarkUsedTemplateParameters(ASTContext &Ctx, QualType T,
                                OnlyDeduced, Depth, Used);
     break;
 
+  case Type::DependentVector: {
+    const auto *VecType = cast<DependentVectorType>(T);
+    MarkUsedTemplateParameters(Ctx, VecType->getElementType(), OnlyDeduced,
+                               Depth, Used);
+    MarkUsedTemplateParameters(Ctx, VecType->getSizeExpr(), OnlyDeduced, Depth,
+                               Used);
+    break;
+  }
   case Type::DependentSizedExtVector: {
     const DependentSizedExtVectorType *VecType
       = cast<DependentSizedExtVectorType>(T);
@@ -5252,9 +5345,24 @@ MarkUsedTemplateParameters(ASTContext &Ctx, QualType T,
     const FunctionProtoType *Proto = cast<FunctionProtoType>(T);
     MarkUsedTemplateParameters(Ctx, Proto->getReturnType(), OnlyDeduced, Depth,
                                Used);
-    for (unsigned I = 0, N = Proto->getNumParams(); I != N; ++I)
-      MarkUsedTemplateParameters(Ctx, Proto->getParamType(I), OnlyDeduced,
-                                 Depth, Used);
+    for (unsigned I = 0, N = Proto->getNumParams(); I != N; ++I) {
+      // C++17 [temp.deduct.type]p5:
+      //   The non-deduced contexts are: [...]
+      //   -- A function parameter pack that does not occur at the end of the
+      //      parameter-declaration-list.
+      if (!OnlyDeduced || I + 1 == N ||
+          !Proto->getParamType(I)->getAs<PackExpansionType>()) {
+        MarkUsedTemplateParameters(Ctx, Proto->getParamType(I), OnlyDeduced,
+                                   Depth, Used);
+      } else {
+        // FIXME: C++17 [temp.deduct.call]p1:
+        //   When a function parameter pack appears in a non-deduced context,
+        //   the type of that pack is never deduced.
+        //
+        // We should also track a set of "never deduced" parameters, and
+        // subtract that from the list of deduced parameters after marking.
+      }
+    }
     if (auto *E = Proto->getNoexceptExpr())
       MarkUsedTemplateParameters(Ctx, E, OnlyDeduced, Depth, Used);
     break;

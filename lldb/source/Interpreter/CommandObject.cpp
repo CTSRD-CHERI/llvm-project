@@ -279,14 +279,8 @@ int CommandObject::HandleCompletion(CompletionRequest &request) {
       opt_element_vector = cur_options->ParseForCompletion(
           request.GetParsedLine(), request.GetCursorIndex());
 
-      bool handled_by_options;
-      bool word_complete = request.GetWordComplete();
-      handled_by_options = cur_options->HandleOptionCompletion(
-          request.GetParsedLine(), opt_element_vector, request.GetCursorIndex(),
-          request.GetCursorCharPosition(), request.GetMatchStartPoint(),
-          request.GetMaxReturnElements(), GetCommandInterpreter(),
-          word_complete, request.GetMatches());
-      request.SetWordComplete(word_complete);
+      bool handled_by_options = cur_options->HandleOptionCompletion(
+          request, opt_element_vector, GetCommandInterpreter());
       if (handled_by_options)
         return request.GetMatches().GetSize();
     }
@@ -329,6 +323,22 @@ bool CommandObject::HelpTextContainsWord(llvm::StringRef search_word,
   }
 
   return found_word;
+}
+
+bool CommandObject::ParseOptionsAndNotify(Args &args,
+                                          CommandReturnObject &result,
+                                          OptionGroupOptions &group_options,
+                                          ExecutionContext &exe_ctx) {
+  if (!ParseOptions(args, result))
+    return false;
+
+  Status error(group_options.NotifyOptionParsingFinished(&exe_ctx));
+  if (error.Fail()) {
+    result.AppendError(error.AsCString());
+    result.SetStatus(eReturnStatusFailed);
+    return false;
+  }
+  return true;
 }
 
 int CommandObject::GetNumArgumentEntries() { return m_arguments.size(); }
@@ -999,7 +1009,8 @@ static llvm::StringRef arch_helper() {
   static StreamString g_archs_help;
   if (g_archs_help.Empty()) {
     StringList archs;
-    ArchSpec::AutoComplete(llvm::StringRef(), archs);
+
+    ArchSpec::ListSupportedArchNames(archs);
     g_archs_help.Printf("These are the supported architecture names:\n");
     archs.Join("\n", g_archs_help);
   }

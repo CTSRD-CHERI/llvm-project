@@ -130,7 +130,9 @@ Instruction *InstCombiner::visitMul(BinaryOperator &I) {
                                  SQ.getWithInstruction(&I)))
     return replaceInstUsesWith(I, V);
 
-  bool Changed = SimplifyAssociativeOrCommutative(I);
+  if (SimplifyAssociativeOrCommutative(I))
+    return &I;
+
   if (Instruction *X = foldShuffledBinop(I))
     return X;
 
@@ -393,6 +395,7 @@ Instruction *InstCombiner::visitMul(BinaryOperator &I) {
     }
   }
 
+  bool Changed = false;
   if (!I.hasNoSignedWrap() && willNotOverflowSignedMul(Op0, Op1, I)) {
     Changed = true;
     I.setHasNoSignedWrap(true);
@@ -412,7 +415,9 @@ Instruction *InstCombiner::visitFMul(BinaryOperator &I) {
                                   SQ.getWithInstruction(&I)))
     return replaceInstUsesWith(I, V);
 
-  bool Changed = SimplifyAssociativeOrCommutative(I);
+  if (SimplifyAssociativeOrCommutative(I))
+    return &I;
+
   if (Instruction *X = foldShuffledBinop(I))
     return X;
 
@@ -542,7 +547,7 @@ Instruction *InstCombiner::visitFMul(BinaryOperator &I) {
     }
   }
 
-  return Changed ? &I : nullptr;
+  return nullptr;
 }
 
 /// Fold a divide or remainder with a select instruction divisor when one of the
@@ -623,7 +628,7 @@ static bool multiplyOverflows(const APInt &C1, const APInt &C2, APInt &Product,
   return Overflow;
 }
 
-/// True if C2 is a multiple of C1. Quotient contains C2/C1.
+/// True if C1 is a multiple of C2. Quotient contains C1/C2.
 static bool isMultiple(const APInt &C1, const APInt &C2, APInt &Quotient,
                        bool IsSigned) {
   assert(C1.getBitWidth() == C2.getBitWidth() && "Constant widths not equal");
@@ -709,7 +714,7 @@ Instruction *InstCombiner::commonIDivTransforms(BinaryOperator &I) {
       APInt C1Shifted = APInt::getOneBitSet(
           C1->getBitWidth(), static_cast<unsigned>(C1->getLimitedValue()));
 
-      // (X << C1) / C2 -> X / (C2 >> C1) if C2 is a multiple of C1.
+      // (X << C1) / C2 -> X / (C2 >> C1) if C2 is a multiple of 1 << C1.
       if (isMultiple(*C2, C1Shifted, Quotient, IsSigned)) {
         auto *BO = BinaryOperator::Create(I.getOpcode(), X,
                                           ConstantInt::get(Ty, Quotient));
@@ -717,7 +722,7 @@ Instruction *InstCombiner::commonIDivTransforms(BinaryOperator &I) {
         return BO;
       }
 
-      // (X << C1) / C2 -> X * (C2 >> C1) if C1 is a multiple of C2.
+      // (X << C1) / C2 -> X * ((1 << C1) / C2) if 1 << C1 is a multiple of C2.
       if (isMultiple(C1Shifted, *C2, Quotient, IsSigned)) {
         auto *Mul = BinaryOperator::Create(Instruction::Mul, X,
                                            ConstantInt::get(Ty, Quotient));

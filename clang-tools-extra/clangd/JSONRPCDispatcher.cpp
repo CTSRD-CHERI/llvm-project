@@ -8,29 +8,31 @@
 //===----------------------------------------------------------------------===//
 
 #include "JSONRPCDispatcher.h"
-#include "JSONExpr.h"
 #include "ProtocolHandlers.h"
 #include "Trace.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/Chrono.h"
 #include "llvm/Support/Errno.h"
+#include "llvm/Support/FormatVariadic.h"
+#include "llvm/Support/JSON.h"
 #include "llvm/Support/SourceMgr.h"
 #include <istream>
 
+using namespace llvm;
 using namespace clang;
 using namespace clangd;
 
 namespace {
-static Key<json::Expr> RequestID;
+static Key<json::Value> RequestID;
 static Key<JSONOutput *> RequestOut;
 
 // When tracing, we trace a request and attach the repsonse in reply().
 // Because the Span isn't available, we find the current request using Context.
 class RequestSpan {
-  RequestSpan(json::obj *Args) : Args(Args) {}
+  RequestSpan(llvm::json::Object *Args) : Args(Args) {}
   std::mutex Mu;
-  json::obj *Args;
+  llvm::json::Object *Args;
   static Key<std::unique_ptr<RequestSpan>> RSKey;
 
 public:
@@ -41,7 +43,7 @@ public:
   }
 
   // If there's an enclosing request and the tracer is interested, calls \p F
-  // with a json::obj where request info can be added.
+  // with a json::Object where request info can be added.
   template <typename Func> static void attach(Func &&F) {
     auto *RequestArgs = Context::current().get(RSKey);
     if (!RequestArgs || !*RequestArgs || !(*RequestArgs)->Args)
@@ -53,7 +55,7 @@ public:
 Key<std::unique_ptr<RequestSpan>> RequestSpan::RSKey;
 } // namespace
 
-void JSONOutput::writeMessage(const json::Expr &Message) {
+void JSONOutput::writeMessage(const json::Value &Message) {
   std::string S;
   llvm::raw_string_ostream OS(S);
   if (Pretty)
@@ -67,14 +69,18 @@ void JSONOutput::writeMessage(const json::Expr &Message) {
     Outs << "Content-Length: " << S.size() << "\r\n\r\n" << S;
     Outs.flush();
   }
-  log(llvm::Twine("--> ") + S + "\n");
+  vlog(">>> {0}\n", S);
 }
 
-void JSONOutput::log(const Twine &Message) {
+void JSONOutput::log(Logger::Level Level,
+                     const llvm::formatv_object_base &Message) {
+  if (Level < MinLevel)
+    return;
   llvm::sys::TimePoint<> Timestamp = std::chrono::system_clock::now();
   trace::log(Message);
   std::lock_guard<std::mutex> Guard(StreamMutex);
-  Logs << llvm::formatv("[{0:%H:%M:%S.%L}] {1}\n", Timestamp, Message);
+  Logs << llvm::formatv("{0}[{1:%H:%M:%S.%L}] {2}\n", indicator(Level),
+                        Timestamp, Message);
   Logs.flush();
 }
 
@@ -86,16 +92,17 @@ void JSONOutput::mirrorInput(const Twine &Message) {
   InputMirror->flush();
 }
 
-void clangd::reply(json::Expr &&Result) {
+void clangd::reply(json::Value &&Result) {
   auto ID = Context::current().get(RequestID);
   if (!ID) {
-    log("Attempted to reply to a notification!");
+    elog("Attempted to reply to a notification!");
     return;
   }
-  RequestSpan::attach([&](json::obj &Args) { Args["Reply"] = Result; });
+  RequestSpan::attach([&](json::Object &Args) { Args["Reply"] = Result; });
+  log("--> reply({0})", *ID);
   Context::current()
       .getExisting(RequestOut)
-      ->writeMessage(json::obj{
+      ->writeMessage(json::Object{
           {"jsonrpc", "2.0"},
           {"id", *ID},
           {"result", std::move(Result)},
@@ -103,35 +110,38 @@ void clangd::reply(json::Expr &&Result) {
 }
 
 void clangd::replyError(ErrorCode code, const llvm::StringRef &Message) {
-  log("Error " + Twine(static_cast<int>(code)) + ": " + Message);
-  RequestSpan::attach([&](json::obj &Args) {
-    Args["Error"] =
-        json::obj{{"code", static_cast<int>(code)}, {"message", Message.str()}};
+  elog("Error {0}: {1}", static_cast<int>(code), Message);
+  RequestSpan::attach([&](json::Object &Args) {
+    Args["Error"] = json::Object{{"code", static_cast<int>(code)},
+                                 {"message", Message.str()}};
   });
 
   if (auto ID = Context::current().get(RequestID)) {
+    log("--> reply({0}) error: {1}", *ID, Message);
     Context::current()
         .getExisting(RequestOut)
-        ->writeMessage(json::obj{
+        ->writeMessage(json::Object{
             {"jsonrpc", "2.0"},
             {"id", *ID},
-            {"error",
-             json::obj{{"code", static_cast<int>(code)}, {"message", Message}}},
+            {"error", json::Object{{"code", static_cast<int>(code)},
+                                   {"message", Message}}},
         });
   }
 }
 
-void clangd::call(StringRef Method, json::Expr &&Params) {
+void clangd::call(StringRef Method, json::Value &&Params) {
+  RequestSpan::attach([&](json::Object &Args) {
+    Args["Call"] = json::Object{{"method", Method.str()}, {"params", Params}};
+  });
   // FIXME: Generate/Increment IDs for every request so that we can get proper
   // replies once we need to.
-  RequestSpan::attach([&](json::obj &Args) {
-    Args["Call"] = json::obj{{"method", Method.str()}, {"params", Params}};
-  });
+  auto ID = 1;
+  log("--> {0}({1})", Method, ID);
   Context::current()
       .getExisting(RequestOut)
-      ->writeMessage(json::obj{
+      ->writeMessage(json::Object{
           {"jsonrpc", "2.0"},
-          {"id", 1},
+          {"id", ID},
           {"method", Method},
           {"params", std::move(Params)},
       });
@@ -142,21 +152,39 @@ void JSONRPCDispatcher::registerHandler(StringRef Method, Handler H) {
   Handlers[Method] = std::move(H);
 }
 
-bool JSONRPCDispatcher::call(const json::Expr &Message, JSONOutput &Out) const {
+static void logIncomingMessage(const llvm::Optional<json::Value> &ID,
+                               llvm::Optional<StringRef> Method,
+                               const json::Object *Error) {
+  if (Method) { // incoming request
+    if (ID)     // call
+      log("<-- {0}({1})", *Method, *ID);
+    else // notification
+      log("<-- {0}", *Method);
+  } else if (ID) { // response, ID must be provided
+    if (Error)
+      log("<-- reply({0}) error: {1}", *ID,
+          Error->getString("message").getValueOr("<no message>"));
+    else
+      log("<-- reply({0})", *ID);
+  }
+}
+
+bool JSONRPCDispatcher::call(const json::Value &Message,
+                             JSONOutput &Out) const {
   // Message must be an object with "jsonrpc":"2.0".
-  auto *Object = Message.asObject();
+  auto *Object = Message.getAsObject();
   if (!Object || Object->getString("jsonrpc") != Optional<StringRef>("2.0"))
     return false;
   // ID may be any JSON value. If absent, this is a notification.
-  llvm::Optional<json::Expr> ID;
+  llvm::Optional<json::Value> ID;
   if (auto *I = Object->get("id"))
     ID = std::move(*I);
-  // Method must be given.
   auto Method = Object->getString("method");
-  if (!Method)
+  logIncomingMessage(ID, Method, Object->getObject("error"));
+  if (!Method) // We only handle incoming requests, and ignore responses.
     return false;
   // Params should be given, use null if not.
-  json::Expr Params = nullptr;
+  json::Value Params = nullptr;
   if (auto *P = Object->get("params"))
     Params = std::move(*P);
 
@@ -228,9 +256,9 @@ static llvm::Optional<std::string> readStandardMessage(std::FILE *In,
     // Content-Length is a mandatory header, and the only one we handle.
     if (LineRef.consume_front("Content-Length: ")) {
       if (ContentLength != 0) {
-        log("Warning: Duplicate Content-Length header received. "
-            "The previous value for this message (" +
-            llvm::Twine(ContentLength) + ") was ignored.");
+        elog("Warning: Duplicate Content-Length header received. "
+             "The previous value for this message ({0}) was ignored.",
+             ContentLength);
       }
       llvm::getAsUnsignedInteger(LineRef.trim(), 0, ContentLength);
       continue;
@@ -246,8 +274,9 @@ static llvm::Optional<std::string> readStandardMessage(std::FILE *In,
 
   // The fuzzer likes crashing us by sending "Content-Length: 9999999999999999"
   if (ContentLength > 1 << 30) { // 1024M
-    log("Refusing to read message with long Content-Length: " +
-        Twine(ContentLength) + ". Expect protocol errors.");
+    elog("Refusing to read message with long Content-Length: {0}. "
+         "Expect protocol errors",
+         ContentLength);
     return llvm::None;
   }
   if (ContentLength == 0) {
@@ -262,8 +291,8 @@ static llvm::Optional<std::string> readStandardMessage(std::FILE *In,
                                        ContentLength - Pos, In);
     Out.mirrorInput(StringRef(&JSON[Pos], Read));
     if (Read == 0) {
-      log("Input was aborted. Read only " + llvm::Twine(Pos) +
-          " bytes of expected " + llvm::Twine(ContentLength) + ".");
+      elog("Input was aborted. Read only {0} bytes of expected {1}.", Pos,
+           ContentLength);
       return llvm::None;
     }
     clearerr(In); // If we're done, the error was transient. If we're not done,
@@ -295,7 +324,7 @@ static llvm::Optional<std::string> readDelimitedMessage(std::FILE *In,
   }
 
   if (ferror(In)) {
-    log("Input error while reading message!");
+    elog("Input error while reading message!");
     return llvm::None;
   } else { // Including EOF
     Out.mirrorInput(
@@ -319,21 +348,20 @@ void clangd::runLanguageServerLoop(std::FILE *In, JSONOutput &Out,
       (InputStyle == Delimited) ? readDelimitedMessage : readStandardMessage;
   while (!IsDone && !feof(In)) {
     if (ferror(In)) {
-      log("IO error: " + llvm::sys::StrError());
+      elog("IO error: {0}", llvm::sys::StrError());
       return;
     }
     if (auto JSON = ReadMessage(In, Out)) {
       if (auto Doc = json::parse(*JSON)) {
         // Log the formatted message.
-        log(llvm::formatv(Out.Pretty ? "<-- {0:2}\n" : "<-- {0}\n", *Doc));
+        vlog(Out.Pretty ? "<<< {0:2}\n" : "<<< {0}\n", *Doc);
         // Finally, execute the action for this JSON message.
         if (!Dispatcher.call(*Doc, Out))
-          log("JSON dispatch failed!");
+          elog("JSON dispatch failed!");
       } else {
         // Parse error. Log the raw message.
-        log(llvm::formatv("<-- {0}\n" , *JSON));
-        log(llvm::Twine("JSON parse error: ") +
-            llvm::toString(Doc.takeError()));
+        vlog("<<< {0}\n", *JSON);
+        elog("JSON parse error: {0}", llvm::toString(Doc.takeError()));
       }
     }
   }

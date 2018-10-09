@@ -671,10 +671,10 @@ _LIBCPP_BEGIN_NAMESPACE_STD
 template <class _T1, class _T2 = _T1>
 struct __equal_to
 {
-    _LIBCPP_INLINE_VISIBILITY bool operator()(const _T1& __x, const _T1& __y) const {return __x == __y;}
-    _LIBCPP_INLINE_VISIBILITY bool operator()(const _T1& __x, const _T2& __y) const {return __x == __y;}
-    _LIBCPP_INLINE_VISIBILITY bool operator()(const _T2& __x, const _T1& __y) const {return __x == __y;}
-    _LIBCPP_INLINE_VISIBILITY bool operator()(const _T2& __x, const _T2& __y) const {return __x == __y;}
+    _LIBCPP_INLINE_VISIBILITY _LIBCPP_CONSTEXPR_AFTER_CXX11 bool operator()(const _T1& __x, const _T1& __y) const {return __x == __y;}
+    _LIBCPP_INLINE_VISIBILITY _LIBCPP_CONSTEXPR_AFTER_CXX11 bool operator()(const _T1& __x, const _T2& __y) const {return __x == __y;}
+    _LIBCPP_INLINE_VISIBILITY _LIBCPP_CONSTEXPR_AFTER_CXX11 bool operator()(const _T2& __x, const _T1& __y) const {return __x == __y;}
+    _LIBCPP_INLINE_VISIBILITY _LIBCPP_CONSTEXPR_AFTER_CXX11 bool operator()(const _T2& __x, const _T2& __y) const {return __x == __y;}
 };
 
 template <class _T1>
@@ -1708,7 +1708,7 @@ __unwrap_iter(move_iterator<_Tp*> __i)
 #if _LIBCPP_DEBUG_LEVEL < 2
 
 template <class _Tp>
-inline _LIBCPP_INLINE_VISIBILITY
+inline _LIBCPP_INLINE_VISIBILITY _LIBCPP_CONSTEXPR_IF_NODEBUG
 typename enable_if
 <
     is_trivially_copy_assignable<_Tp>::value,
@@ -1722,7 +1722,7 @@ __unwrap_iter(__wrap_iter<_Tp*> __i)
 #else
 
 template <class _Tp>
-inline _LIBCPP_INLINE_VISIBILITY
+inline _LIBCPP_INLINE_VISIBILITY _LIBCPP_CONSTEXPR_IF_NODEBUG
 typename enable_if
 <
     is_trivially_copy_assignable<_Tp>::value,

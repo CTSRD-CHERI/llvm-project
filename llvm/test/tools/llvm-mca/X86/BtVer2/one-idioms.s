@@ -6,7 +6,6 @@
 
 pcmpeqb   %mm2, %mm2
 pcmpeqd   %mm2, %mm2
-# pcmpeqq %mm2, %mm2 # invalid operand for instruction
 pcmpeqw   %mm2, %mm2
 
 pcmpeqb   %xmm2, %xmm2
@@ -39,7 +38,7 @@ vpcmpeqw  %xmm3, %xmm3, %xmm5
 # CHECK-NEXT: [3]: RThroughput
 # CHECK-NEXT: [4]: MayLoad
 # CHECK-NEXT: [5]: MayStore
-# CHECK-NEXT: [6]: HasSideEffects
+# CHECK-NEXT: [6]: HasSideEffects (U)
 
 # CHECK:      [1]    [2]    [3]    [4]    [5]    [6]    Instructions:
 # CHECK-NEXT:  1      1     0.50                        pcmpeqb	%mm2, %mm2

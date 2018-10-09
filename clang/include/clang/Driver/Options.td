@@ -848,6 +848,7 @@ def fconstexpr_backtrace_limit_EQ : Joined<["-"], "fconstexpr-backtrace-limit=">
                                     Group<f_Group>;
 def fno_crash_diagnostics : Flag<["-"], "fno-crash-diagnostics">, Group<f_clang_Group>, Flags<[NoArgumentUnused]>,
   HelpText<"Disable auto-generation of preprocessed source files and a script for reproduction during a clang crash">;
+def fcrash_diagnostics_dir : Joined<["-"], "fcrash-diagnostics-dir=">, Group<f_clang_Group>, Flags<[NoArgumentUnused]>;
 def fcreate_profile : Flag<["-"], "fcreate-profile">, Group<f_Group>;
 def fcxx_exceptions: Flag<["-"], "fcxx-exceptions">, Group<f_Group>,
   HelpText<"Enable C++ exceptions">, Flags<[CC1Option]>;
@@ -1790,7 +1791,8 @@ def fsplit_dwarf_inlining: Flag <["-"], "fsplit-dwarf-inlining">, Group<f_Group>
 def fno_split_dwarf_inlining: Flag<["-"], "fno-split-dwarf-inlining">, Group<f_Group>,
   Flags<[CC1Option]>;
 def fdebug_prefix_map_EQ
-  : Joined<["-"], "fdebug-prefix-map=">, Group<f_Group>, Flags<[CC1Option]>,
+  : Joined<["-"], "fdebug-prefix-map=">, Group<f_Group>,
+    Flags<[CC1Option,CC1AsOption]>,
     HelpText<"remap file source paths in debug info">;
 def g_Flag : Flag<["-"], "g">, Group<g_Group>,
   HelpText<"Generate source-level debug information">;
@@ -2264,6 +2266,10 @@ def mno_abicalls : Flag<["-"], "mno-abicalls">, Group<m_mips_Features_Group>,
   HelpText<"Disable SVR4-style position-independent code (Mips only)">;
 def mno_crc : Flag<["-"], "mno-crc">, Group<m_mips_Features_Group>,
   HelpText<"Disallow use of CRC instructions (Mips only)">;
+def mvirt : Flag<["-"], "mvirt">, Group<m_mips_Features_Group>;
+def mno_virt : Flag<["-"], "mno-virt">, Group<m_mips_Features_Group>;
+def mginv : Flag<["-"], "mginv">, Group<m_mips_Features_Group>;
+def mno_ginv : Flag<["-"], "mno-ginv">, Group<m_mips_Features_Group>;
 def mips1 : Flag<["-"], "mips1">,
   Alias<march_EQ>, AliasArgs<["mips1"]>, Group<m_mips_Features_Group>,
   HelpText<"Equivalent to -march=mips1">, Flags<[HelpHidden]>;

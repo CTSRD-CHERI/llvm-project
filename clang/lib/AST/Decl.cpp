@@ -3662,17 +3662,14 @@ unsigned FunctionDecl::getMemoryFunctionKind() const {
   return 0;
 }
 
+unsigned FunctionDecl::getODRHash() const {
+  assert(HasODRHash);
+  return ODRHash;
+}
+
 unsigned FunctionDecl::getODRHash() {
   if (HasODRHash)
     return ODRHash;
-
-  if (FunctionDecl *Definition = getDefinition()) {
-    if (Definition != this) {
-      HasODRHash = true;
-      ODRHash = Definition->getODRHash();
-      return ODRHash;
-    }
-  }
 
   if (auto *FT = getInstantiatedFromMemberFunction()) {
     HasODRHash = true;

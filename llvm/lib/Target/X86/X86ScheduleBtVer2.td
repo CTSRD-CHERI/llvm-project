@@ -41,7 +41,14 @@ def JFPU1 : ProcResource<1>; // Vector/FPU Pipe1: VALU1/STC/FPM
 // The Integer PRF for Jaguar is 64 entries, and it holds the architectural and
 // speculative version of the 64-bit integer registers.
 // Reference: www.realworldtech.com/jaguar/4/
-def JIntegerPRF : RegisterFile<64, [GR8, GR16, GR32, GR64, CCR]>;
+//
+// The processor always keeps the different parts of an integer register
+// together. An instruction that writes to a part of a register will therefore
+// have a false dependence on any previous write to the same register or any
+// part of it.
+// Reference: Section 21.10 "AMD Bobcat and Jaguar pipeline: Partial register
+// access" - Agner Fog's "microarchitecture.pdf".
+def JIntegerPRF : RegisterFile<64, [GR64, CCR]>;
 
 // The Jaguar FP Retire Queue renames SIMD and FP uOps onto a pool of 72 SSE
 // registers. Operations on 256-bit data types are cracked into two COPs.
@@ -184,10 +191,11 @@ def  : WriteRes<WriteLAHFSAHF, [JALU01]>;
 def : WriteRes<WriteLEA, [JALU01]>;
 
 // Bit counts.
-defm : JWriteResIntPair<WriteBitScan, [JALU01], 5, [4], 8>;
-defm : JWriteResIntPair<WritePOPCNT,  [JALU01], 1>;
-defm : JWriteResIntPair<WriteLZCNT,   [JALU01], 1>;
-defm : JWriteResIntPair<WriteTZCNT,   [JALU01], 2, [2]>;
+defm : JWriteResIntPair<WriteBSF, [JALU01], 5, [4], 8>;
+defm : JWriteResIntPair<WriteBSR, [JALU01], 5, [4], 8>;
+defm : JWriteResIntPair<WritePOPCNT,         [JALU01], 1>;
+defm : JWriteResIntPair<WriteLZCNT,          [JALU01], 1>;
+defm : JWriteResIntPair<WriteTZCNT,          [JALU01], 2, [2]>;
 
 // BMI1 BEXTR, BMI2 BZHI
 defm : JWriteResIntPair<WriteBEXTR, [JALU01], 1>;
@@ -198,6 +206,8 @@ defm : X86WriteResPairUnsupported<WriteBZHI>;
 ////////////////////////////////////////////////////////////////////////////////
 
 defm : JWriteResIntPair<WriteShift, [JALU01], 1>;
+
+defm : JWriteResIntPair<WriteShiftDouble, [JALU01], 1>;
 
 def JWriteSHLDrri : SchedWriteRes<[JALU01]> {
   let Latency = 3;

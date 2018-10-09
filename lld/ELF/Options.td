@@ -233,7 +233,11 @@ defm orphan_handling:
 
 defm pack_dyn_relocs:
   Eq<"pack-dyn-relocs", "Pack dynamic relocations in the given format">,
-  MetaVarName<"[none,android]">;
+  MetaVarName<"[none,android,relr,android+relr]">;
+
+defm use_android_relr_tags: B<"use-android-relr-tags",
+    "use SHT_ANDROID_RELR / DT_ANDROID_RELR* tags instead of SHT_RELR / DT_RELR*",
+    "use SHT_RELR / DT_RELR* tags (default)">;
 
 defm pie: B<"pie",
     "Create a position independent executable",
@@ -428,6 +432,8 @@ def: J<"plugin-opt=O">, Alias<lto_O>, HelpText<"Alias for -lto-O">;
 def: F<"plugin-opt=debug-pass-manager">,
   Alias<lto_debug_pass_manager>, HelpText<"Alias for -lto-debug-pass-manager">;
 def: F<"plugin-opt=disable-verify">, Alias<disable_verify>, HelpText<"Alias for -disable-verify">;
+def plugin_opt_dwo_dir_eq: J<"plugin-opt=dwo_dir=">,
+  HelpText<"Directory to store .dwo files when LTO and debug fission are used">;
 def: J<"plugin-opt=jobs=">, Alias<thinlto_jobs>, HelpText<"Alias for -thinlto-jobs">;
 def: J<"plugin-opt=lto-partitions=">, Alias<lto_partitions>, HelpText<"Alias for -lto-partitions">;
 def plugin_opt_mcpu_eq: J<"plugin-opt=mcpu=">;

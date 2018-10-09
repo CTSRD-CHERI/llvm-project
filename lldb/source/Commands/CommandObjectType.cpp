@@ -2862,9 +2862,9 @@ public:
     return m_cmd_help_long;
   }
 
-  bool DoExecute(const char *raw_command_line,
+  bool DoExecute(llvm::StringRef raw_command_line,
                  CommandReturnObject &result) override {
-    if (!raw_command_line || !raw_command_line[0]) {
+    if (raw_command_line.empty()) {
       result.SetError(
           "type lookup cannot be invoked without a type name as argument");
       return false;
@@ -2873,42 +2873,13 @@ public:
     auto exe_ctx = GetCommandInterpreter().GetExecutionContext();
     m_option_group.NotifyOptionParsingStarting(&exe_ctx);
 
-    const char *name_of_type = nullptr;
+    OptionsWithRaw args(raw_command_line);
+    const char *name_of_type = args.GetRawPart().c_str();
 
-    if (raw_command_line[0] == '-') {
-      // We have some options and these options MUST end with --.
-      const char *end_options = nullptr;
-      const char *s = raw_command_line;
-      while (s && s[0]) {
-        end_options = ::strstr(s, "--");
-        if (end_options) {
-          end_options += 2; // Get past the "--"
-          if (::isspace(end_options[0])) {
-            name_of_type = end_options;
-            while (::isspace(*name_of_type))
-              ++name_of_type;
-            break;
-          }
-        }
-        s = end_options;
-      }
-
-      if (end_options) {
-        Args args(
-            llvm::StringRef(raw_command_line, end_options - raw_command_line));
-        if (!ParseOptions(args, result))
-          return false;
-
-        Status error(m_option_group.NotifyOptionParsingFinished(&exe_ctx));
-        if (error.Fail()) {
-          result.AppendError(error.AsCString());
-          result.SetStatus(eReturnStatusFailed);
-          return false;
-        }
-      }
-    }
-    if (nullptr == name_of_type)
-      name_of_type = raw_command_line;
+    if (args.HasArgs())
+      if (!ParseOptionsAndNotify(args.GetArgs(), result, m_option_group,
+                                 exe_ctx))
+        return false;
 
     // TargetSP
     // target_sp(GetCommandInterpreter().GetDebugger().GetSelectedTarget());
@@ -3023,7 +2994,8 @@ public:
   ~CommandObjectFormatterInfo() override = default;
 
 protected:
-  bool DoExecute(const char *command, CommandReturnObject &result) override {
+  bool DoExecute(llvm::StringRef command,
+                 CommandReturnObject &result) override {
     TargetSP target_sp = m_interpreter.GetDebugger().GetSelectedTarget();
     Thread *thread = GetDefaultThread();
     if (!thread) {
@@ -3046,16 +3018,16 @@ protected:
           m_discovery_function(*result_valobj_sp);
       if (formatter_sp) {
         std::string description(formatter_sp->GetDescription());
-        result.AppendMessageWithFormat(
-            "%s applied to (%s) %s is: %s\n", m_formatter_name.c_str(),
-            result_valobj_sp->GetDisplayTypeName().AsCString("<unknown>"),
-            command, description.c_str());
+        result.GetOutputStream()
+            << m_formatter_name << " applied to ("
+            << result_valobj_sp->GetDisplayTypeName().AsCString("<unknown>")
+            << ") " << command << " is: " << description << "\n";
         result.SetStatus(lldb::eReturnStatusSuccessFinishResult);
       } else {
-        result.AppendMessageWithFormat(
-            "no %s applies to (%s) %s\n", m_formatter_name.c_str(),
-            result_valobj_sp->GetDisplayTypeName().AsCString("<unknown>"),
-            command);
+        result.GetOutputStream()
+            << "no " << m_formatter_name << " applies to ("
+            << result_valobj_sp->GetDisplayTypeName().AsCString("<unknown>")
+            << ") " << command << "\n";
         result.SetStatus(lldb::eReturnStatusSuccessFinishNoResult);
       }
       return true;

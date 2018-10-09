@@ -66,6 +66,14 @@ let Predicates = [HasSVE] in {
   defm ABS_ZPmZ  : sve_int_un_pred_arit_0<  0b110, "abs">;
   defm NEG_ZPmZ  : sve_int_un_pred_arit_0<  0b111, "neg">;
 
+  defm CLS_ZPmZ  : sve_int_un_pred_arit_1<   0b000, "cls">;
+  defm CLZ_ZPmZ  : sve_int_un_pred_arit_1<   0b001, "clz">;
+  defm CNT_ZPmZ  : sve_int_un_pred_arit_1<   0b010, "cnt">;
+  defm CNOT_ZPmZ : sve_int_un_pred_arit_1<   0b011, "cnot">;
+  defm NOT_ZPmZ  : sve_int_un_pred_arit_1<   0b110, "not">;
+  defm FABS_ZPmZ : sve_int_un_pred_arit_1_fp<0b100, "fabs">;
+  defm FNEG_ZPmZ : sve_int_un_pred_arit_1_fp<0b101, "fneg">;
+
   defm SMAX_ZPmZ : sve_int_bin_pred_arit_1<0b000, "smax">;
   defm UMAX_ZPmZ : sve_int_bin_pred_arit_1<0b001, "umax">;
   defm SMIN_ZPmZ : sve_int_bin_pred_arit_1<0b010, "smin">;
@@ -104,6 +112,18 @@ let Predicates = [HasSVE] in {
   // Select elements from either vector (predicated)
   defm SEL_ZPZZ    : sve_int_sel_vvv<"sel">;
 
+  defm COMPACT_ZPZ : sve_int_perm_compact<"compact">;
+  defm INSR_ZR : sve_int_perm_insrs<"insr">;
+  defm INSR_ZV : sve_int_perm_insrv<"insr">;
+
+  defm SUNPKLO_ZZ : sve_int_perm_unpk<0b00, "sunpklo">;
+  defm SUNPKHI_ZZ : sve_int_perm_unpk<0b01, "sunpkhi">;
+  defm UUNPKLO_ZZ : sve_int_perm_unpk<0b10, "uunpklo">;
+  defm UUNPKHI_ZZ : sve_int_perm_unpk<0b11, "uunpkhi">;
+
+  def  PUNPKLO_PP : sve_int_perm_punpk<0b0, "punpklo">;
+  def  PUNPKHI_PP : sve_int_perm_punpk<0b1, "punpkhi">;
+
   def AND_PPzPP   : sve_int_pred_log<0b0000, "and">;
   def BIC_PPzPP   : sve_int_pred_log<0b0001, "bic">;
   def EOR_PPzPP   : sve_int_pred_log<0b0010, "eor">;
@@ -119,6 +139,18 @@ let Predicates = [HasSVE] in {
   def ORNS_PPzPP  : sve_int_pred_log<0b1101, "orns">;
   def NORS_PPzPP  : sve_int_pred_log<0b1110, "nors">;
   def NANDS_PPzPP : sve_int_pred_log<0b1111, "nands">;
+
+  defm CLASTA_RPZ : sve_int_perm_clast_rz<0, "clasta">;
+  defm CLASTB_RPZ : sve_int_perm_clast_rz<1, "clastb">;
+  defm CLASTA_VPZ : sve_int_perm_clast_vz<0, "clasta">;
+  defm CLASTB_VPZ : sve_int_perm_clast_vz<1, "clastb">;
+  defm CLASTA_ZPZ : sve_int_perm_clast_zz<0, "clasta">;
+  defm CLASTB_ZPZ : sve_int_perm_clast_zz<1, "clastb">;
+
+  defm LASTA_RPZ : sve_int_perm_last_r<0, "lasta">;
+  defm LASTB_RPZ : sve_int_perm_last_r<1, "lastb">;
+  defm LASTA_VPZ : sve_int_perm_last_v<0, "lasta">;
+  defm LASTB_VPZ : sve_int_perm_last_v<1, "lastb">;
 
   // continuous load with reg+immediate
   defm LD1B_IMM    : sve_mem_cld_si<0b0000, "ld1b",  Z_b, ZPR8>;
@@ -534,24 +566,26 @@ let Predicates = [HasSVE] in {
   defm PRFW_D_PZI : sve_mem_64b_prfm_vi<0b10, "prfw", uimm5s4>;
   defm PRFD_D_PZI : sve_mem_64b_prfm_vi<0b11, "prfd", uimm5s8>;
 
+  defm ADR_SXTW_ZZZ_D : sve_int_bin_cons_misc_0_a_sxtw<0b00, "adr">;
+  defm ADR_UXTW_ZZZ_D : sve_int_bin_cons_misc_0_a_uxtw<0b01, "adr">;
+  defm ADR_LSL_ZZZ_S  : sve_int_bin_cons_misc_0_a_32_lsl<0b10, "adr">;
+  defm ADR_LSL_ZZZ_D  : sve_int_bin_cons_misc_0_a_64_lsl<0b11, "adr">;
+
+  defm TBL_ZZZ  : sve_int_perm_tbl<"tbl">;
+
   defm ZIP1_ZZZ : sve_int_perm_bin_perm_zz<0b000, "zip1">;
   defm ZIP2_ZZZ : sve_int_perm_bin_perm_zz<0b001, "zip2">;
+  defm UZP1_ZZZ : sve_int_perm_bin_perm_zz<0b010, "uzp1">;
+  defm UZP2_ZZZ : sve_int_perm_bin_perm_zz<0b011, "uzp2">;
+  defm TRN1_ZZZ : sve_int_perm_bin_perm_zz<0b100, "trn1">;
+  defm TRN2_ZZZ : sve_int_perm_bin_perm_zz<0b101, "trn2">;
 
   defm ZIP1_PPP : sve_int_perm_bin_perm_pp<0b000, "zip1">;
   defm ZIP2_PPP : sve_int_perm_bin_perm_pp<0b001, "zip2">;
-
-  def RDVLI_XI  : sve_int_read_vl_a<0b0, 0b11111, "rdvl">;
-  def ADDVL_XXI : sve_int_arith_vl<0b0, "addvl">;
-  def ADDPL_XXI : sve_int_arith_vl<0b1, "addpl">;
-
-  defm INCB_XPiI : sve_int_pred_pattern_a<0b000, "incb">;
-  defm DECB_XPiI : sve_int_pred_pattern_a<0b001, "decb">;
-  defm INCH_XPiI : sve_int_pred_pattern_a<0b010, "inch">;
-  defm DECH_XPiI : sve_int_pred_pattern_a<0b011, "dech">;
-  defm INCW_XPiI : sve_int_pred_pattern_a<0b100, "incw">;
-  defm DECW_XPiI : sve_int_pred_pattern_a<0b101, "decw">;
-  defm INCD_XPiI : sve_int_pred_pattern_a<0b110, "incd">;
-  defm DECD_XPiI : sve_int_pred_pattern_a<0b111, "decd">;
+  defm UZP1_PPP : sve_int_perm_bin_perm_pp<0b010, "uzp1">;
+  defm UZP2_PPP : sve_int_perm_bin_perm_pp<0b011, "uzp2">;
+  defm TRN1_PPP : sve_int_perm_bin_perm_pp<0b100, "trn1">;
+  defm TRN2_PPP : sve_int_perm_bin_perm_pp<0b101, "trn2">;
 
   defm CMPHS_PPzZZ : sve_int_cmp_0<0b000, "cmphs">;
   defm CMPHI_PPzZZ : sve_int_cmp_0<0b001, "cmphi">;
@@ -596,6 +630,25 @@ let Predicates = [HasSVE] in {
   defm FCMLE_PPzZ0 : sve_fp_2op_p_pd<0b011, "fcmle">;
   defm FCMEQ_PPzZ0 : sve_fp_2op_p_pd<0b100, "fcmeq">;
   defm FCMNE_PPzZ0 : sve_fp_2op_p_pd<0b110, "fcmne">;
+
+  def RDVLI_XI  : sve_int_read_vl_a<0b0, 0b11111, "rdvl">;
+  def ADDVL_XXI : sve_int_arith_vl<0b0, "addvl">;
+  def ADDPL_XXI : sve_int_arith_vl<0b1, "addpl">;
+
+  defm CNTB_XPiI : sve_int_count<0b000, "cntb">;
+  defm CNTH_XPiI : sve_int_count<0b010, "cnth">;
+  defm CNTW_XPiI : sve_int_count<0b100, "cntw">;
+  defm CNTD_XPiI : sve_int_count<0b110, "cntd">;
+  defm CNTP_XPP : sve_int_pcount_pred<0b0000, "cntp">;
+
+  defm INCB_XPiI : sve_int_pred_pattern_a<0b000, "incb">;
+  defm DECB_XPiI : sve_int_pred_pattern_a<0b001, "decb">;
+  defm INCH_XPiI : sve_int_pred_pattern_a<0b010, "inch">;
+  defm DECH_XPiI : sve_int_pred_pattern_a<0b011, "dech">;
+  defm INCW_XPiI : sve_int_pred_pattern_a<0b100, "incw">;
+  defm DECW_XPiI : sve_int_pred_pattern_a<0b101, "decw">;
+  defm INCD_XPiI : sve_int_pred_pattern_a<0b110, "incd">;
+  defm DECD_XPiI : sve_int_pred_pattern_a<0b111, "decd">;
 
   defm SQINCB_XPiWdI : sve_int_pred_pattern_b_s32<0b00000, "sqincb">;
   defm UQINCB_WPiI   : sve_int_pred_pattern_b_u32<0b00001, "uqincb">;
@@ -675,11 +728,31 @@ let Predicates = [HasSVE] in {
   defm INDEX_RI : sve_int_index_ri<"index">;
   defm INDEX_II : sve_int_index_ii<"index">;
 
-  defm LSR_ZZI : sve_int_bin_cons_shift_b_right<0b01, "lsr">;
-  defm LSL_ZZI : sve_int_bin_cons_shift_b_left< 0b11, "lsl">;
+  // Unpredicated shifts
+  defm ASR_ZZI : sve_int_bin_cons_shift_imm_right<0b00, "asr">;
+  defm LSR_ZZI : sve_int_bin_cons_shift_imm_right<0b01, "lsr">;
+  defm LSL_ZZI : sve_int_bin_cons_shift_imm_left< 0b11, "lsl">;
 
-  defm LSR_ZPmZ  : sve_int_bin_pred_shift_1<0b001, "lsr">;
-  defm LSL_ZPmZ  : sve_int_bin_pred_shift_1<0b011, "lsl">;
+  defm ASR_WIDE_ZZZ : sve_int_bin_cons_shift_wide<0b00, "asr">;
+  defm LSR_WIDE_ZZZ : sve_int_bin_cons_shift_wide<0b01, "lsr">;
+  defm LSL_WIDE_ZZZ : sve_int_bin_cons_shift_wide<0b11, "lsl">;
+
+  // Predicated shifts
+  defm ASR_ZPmI  : sve_int_bin_pred_shift_imm_right<0b000, "asr">;
+  defm LSR_ZPmI  : sve_int_bin_pred_shift_imm_right<0b001, "lsr">;
+  defm LSL_ZPmI  : sve_int_bin_pred_shift_imm_left< 0b011, "lsl">;
+  defm ASRD_ZPmI : sve_int_bin_pred_shift_imm_right<0b100, "asrd">;
+
+  defm ASR_ZPmZ  : sve_int_bin_pred_shift<0b000, "asr">;
+  defm LSR_ZPmZ  : sve_int_bin_pred_shift<0b001, "lsr">;
+  defm LSL_ZPmZ  : sve_int_bin_pred_shift<0b011, "lsl">;
+  defm ASRR_ZPmZ : sve_int_bin_pred_shift<0b100, "asrr">;
+  defm LSRR_ZPmZ : sve_int_bin_pred_shift<0b101, "lsrr">;
+  defm LSLR_ZPmZ : sve_int_bin_pred_shift<0b111, "lslr">;
+
+  defm ASR_WIDE_ZPmZ : sve_int_bin_pred_shift_wide<0b000, "asr">;
+  defm LSR_WIDE_ZPmZ : sve_int_bin_pred_shift_wide<0b001, "lsr">;
+  defm LSL_WIDE_ZPmZ : sve_int_bin_pred_shift_wide<0b011, "lsl">;
 
   def FCVT_ZPmZ_StoH   : sve_fp_2op_p_zd<0b1001000, "fcvt",   ZPR32, ZPR16>;
   def FCVT_ZPmZ_HtoS   : sve_fp_2op_p_zd<0b1001001, "fcvt",   ZPR16, ZPR32>;

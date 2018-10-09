@@ -94,6 +94,7 @@
 //  e -> const, but only when -fno-math-errno
 //  j -> returns_twice (like setjmp)
 //  u -> arguments are not evaluated for their side-effects
+//  V:N: -> requires vectors of at least N bits to be legal
 //  FIXME: gcc has nonnull
 
 #if defined(BUILTIN) && !defined(LIBBUILTIN)
@@ -724,7 +725,7 @@ ATOMIC_BUILTIN(__opencl_atomic_fetch_min, "v.", "t")
 ATOMIC_BUILTIN(__opencl_atomic_fetch_max, "v.", "t")
 
 // GCC does not support these, they are a Clang extension.
-ATOMIC_BUILTIN(__atomic_fetch_min, "iiD*i.", "t")
+ATOMIC_BUILTIN(__atomic_fetch_min, "v.", "t")
 ATOMIC_BUILTIN(__atomic_fetch_max, "v.", "t")
 
 #undef ATOMIC_BUILTIN
@@ -1463,6 +1464,8 @@ BUILTIN(__builtin_cheri_cap_type_copy, "v*mvC*mvC*m", "nc")
 
 // Safestack builtins
 BUILTIN(__builtin___get_unsafe_stack_start, "v*", "Fn")
+BUILTIN(__builtin___get_unsafe_stack_bottom, "v*", "Fn")
+BUILTIN(__builtin___get_unsafe_stack_top, "v*", "Fn")
 BUILTIN(__builtin___get_unsafe_stack_ptr, "v*", "Fn")
 
 // Nontemporal loads/stores builtins

@@ -23,7 +23,7 @@ namespace llvm {
 
 class SITargetLowering final : public AMDGPUTargetLowering {
 private:
-  const SISubtarget *Subtarget;
+  const GCNSubtarget *Subtarget;
 
   SDValue lowerKernArgParameterPtr(SelectionDAG &DAG, const SDLoc &SL,
                                    SDValue Chain, uint64_t Offset) const;
@@ -136,6 +136,7 @@ private:
   SDValue performSubCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performFAddCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performFSubCombine(SDNode *N, DAGCombinerInfo &DCI) const;
+  SDValue performFMACombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performSetCCCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performCvtF32UByteNCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performClampCombine(SDNode *N, DAGCombinerInfo &DCI) const;
@@ -162,9 +163,9 @@ private:
   bool shouldEmitPCReloc(const GlobalValue *GV) const;
 
 public:
-  SITargetLowering(const TargetMachine &tm, const SISubtarget &STI);
+  SITargetLowering(const TargetMachine &tm, const GCNSubtarget &STI);
 
-  const SISubtarget *getSubtarget() const;
+  const GCNSubtarget *getSubtarget() const;
 
   bool isFPExtFoldable(unsigned Opcode, EVT DestVT, EVT SrcVT) const override;
 

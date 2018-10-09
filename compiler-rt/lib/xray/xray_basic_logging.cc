@@ -60,7 +60,6 @@ struct alignas(64) ThreadLocalData {
   size_t StackSize = 0;
   size_t StackEntries = 0;
   int Fd = -1;
-  tid_t TID = 0;
 };
 
 static pthread_key_t PThreadKey;
@@ -91,7 +90,9 @@ static int openLogFile() XRAY_NEVER_INSTRUMENT {
   // header will only be written once, at the start, and let the threads
   // logging do writes which just append.
   XRayFileHeader Header;
-  Header.Version = 2; // Version 2 includes tail exit records.
+  // Version 2 includes tail exit records.
+  // Version 3 includes pid inside records.
+  Header.Version = 3;
   Header.Type = FileTypes::NAIVE_LOG;
   Header.CycleFrequency = atomic_load(&CycleFrequency, memory_order_acquire);
 
@@ -119,7 +120,6 @@ static ThreadLocalData &getThreadLocalData() XRAY_NEVER_INSTRUMENT {
         Report("Not initializing TLD since ThreadBufferSize == 0.\n");
       return false;
     }
-    TLD.TID = GetTid();
     pthread_setspecific(PThreadKey, &TLD);
     TLD.Fd = getGlobalFd();
     TLD.InMemoryBuffer = reinterpret_cast<XRayRecord *>(
@@ -227,7 +227,8 @@ void InMemoryRawLog(int32_t FuncId, XRayEntryType Type,
   R.RecordType = RecordTypes::NORMAL;
   R.CPU = CPU;
   R.TSC = TSC;
-  R.TId = TLD.TID;
+  R.TId = GetTid(); 
+  R.PId = internal_getpid(); 
   R.Type = Type;
   R.FuncId = FuncId;
   auto FirstEntry = reinterpret_cast<XRayRecord *>(TLD.InMemoryBuffer);
@@ -270,11 +271,12 @@ void InMemoryRawLogWithArg(int32_t FuncId, XRayEntryType Type, uint64_t Arg1,
   if (!G)
     return;
 
-  // And from here on write the arg payload.
+  // And, from here on write the arg payload.
   XRayArgPayload R;
   R.RecordType = RecordTypes::ARG_PAYLOAD;
   R.FuncId = FuncId;
-  R.TId = TLD.TID;
+  R.TId = GetTid(); 
+  R.PId = internal_getpid(); 
   R.Arg = Arg1;
   internal_memcpy(FirstEntry + TLD.BufferOffset, &R, sizeof(R));
   if (++TLD.BufferOffset == BuffLen) {
@@ -334,12 +336,12 @@ static void TLDDestructor(void *P) XRAY_NEVER_INSTRUMENT {
     if (TLD.ShadowStack)
       InternalFree(TLD.ShadowStack);
     if (Verbosity())
-      Report("Cleaned up log for TID: %d\n", TLD.TID);
+      Report("Cleaned up log for TID: %d\n", GetTid());
   });
 
   if (TLD.Fd == -1 || TLD.BufferOffset == 0) {
     if (Verbosity())
-      Report("Skipping buffer for TID: %d; Fd = %d; Offset = %llu\n", TLD.TID,
+      Report("Skipping buffer for TID: %d; Fd = %d; Offset = %llu\n", GetTid(),
              TLD.Fd, TLD.BufferOffset);
     return;
   }

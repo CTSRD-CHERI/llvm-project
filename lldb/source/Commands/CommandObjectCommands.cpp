@@ -238,16 +238,9 @@ public:
   int HandleArgumentCompletion(
       CompletionRequest &request,
       OptionElementVector &opt_element_vector) override {
-    auto completion_str = request.GetParsedLine()[request.GetCursorIndex()].ref;
-    completion_str = completion_str.take_front(request.GetCursorCharPosition());
-
-    bool word_complete = request.GetWordComplete();
     CommandCompletions::InvokeCommonCompletionCallbacks(
         GetCommandInterpreter(), CommandCompletions::eDiskFileCompletion,
-        completion_str, request.GetMatchStartPoint(),
-        request.GetMaxReturnElements(), nullptr, word_complete,
-        request.GetMatches());
-    request.SetWordComplete(word_complete);
+        request, nullptr);
     return request.GetMatches().GetSize();
   }
 
@@ -543,9 +536,9 @@ rather than using a positional placeholder:"
   ~CommandObjectCommandsAlias() override = default;
 
 protected:
-  bool DoExecute(const char *raw_command_line,
+  bool DoExecute(llvm::StringRef raw_command_line,
                  CommandReturnObject &result) override {
-    if (!raw_command_line || !raw_command_line[0]) {
+    if (raw_command_line.empty()) {
       result.AppendError("'command alias' requires at least two arguments");
       return false;
     }
@@ -553,42 +546,13 @@ protected:
     ExecutionContext exe_ctx = GetCommandInterpreter().GetExecutionContext();
     m_option_group.NotifyOptionParsingStarting(&exe_ctx);
 
-    const char *remainder = nullptr;
+    OptionsWithRaw args_with_suffix(raw_command_line);
+    const char *remainder = args_with_suffix.GetRawPart().c_str();
 
-    if (raw_command_line[0] == '-') {
-      // We have some options and these options MUST end with --.
-      const char *end_options = nullptr;
-      const char *s = raw_command_line;
-      while (s && s[0]) {
-        end_options = ::strstr(s, "--");
-        if (end_options) {
-          end_options += 2; // Get past the "--"
-          if (::isspace(end_options[0])) {
-            remainder = end_options;
-            while (::isspace(*remainder))
-              ++remainder;
-            break;
-          }
-        }
-        s = end_options;
-      }
-
-      if (end_options) {
-        Args args(
-            llvm::StringRef(raw_command_line, end_options - raw_command_line));
-        if (!ParseOptions(args, result))
-          return false;
-
-        Status error(m_option_group.NotifyOptionParsingFinished(&exe_ctx));
-        if (error.Fail()) {
-          result.AppendError(error.AsCString());
-          result.SetStatus(eReturnStatusFailed);
-          return false;
-        }
-      }
-    }
-    if (nullptr == remainder)
-      remainder = raw_command_line;
+    if (args_with_suffix.HasArgs())
+      if (!ParseOptionsAndNotify(args_with_suffix.GetArgs(), result,
+                                 m_option_group, exe_ctx))
+        return false;
 
     llvm::StringRef raw_command_string(remainder);
     Args args(raw_command_string);
@@ -1304,7 +1268,7 @@ public:
   }
 
 protected:
-  bool DoExecute(const char *raw_command_line,
+  bool DoExecute(llvm::StringRef raw_command_line,
                  CommandReturnObject &result) override {
     ScriptInterpreter *scripter = m_interpreter.GetScriptInterpreter();
 
@@ -1393,7 +1357,7 @@ public:
   }
 
 protected:
-  bool DoExecute(const char *raw_command_line,
+  bool DoExecute(llvm::StringRef raw_command_line,
                  CommandReturnObject &result) override {
     ScriptInterpreter *scripter = m_interpreter.GetScriptInterpreter();
 
@@ -1462,17 +1426,9 @@ public:
   int HandleArgumentCompletion(
       CompletionRequest &request,
       OptionElementVector &opt_element_vector) override {
-    llvm::StringRef completion_str =
-        request.GetParsedLine()[request.GetCursorIndex()].ref;
-    completion_str = completion_str.take_front(request.GetCursorCharPosition());
-
-    bool word_complete = request.GetWordComplete();
     CommandCompletions::InvokeCommonCompletionCallbacks(
         GetCommandInterpreter(), CommandCompletions::eDiskFileCompletion,
-        completion_str, request.GetMatchStartPoint(),
-        request.GetMaxReturnElements(), nullptr, word_complete,
-        request.GetMatches());
-    request.SetWordComplete(word_complete);
+        request, nullptr);
     return request.GetMatches().GetSize();
   }
 

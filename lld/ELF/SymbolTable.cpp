@@ -38,7 +38,7 @@ static InputFile *getFirstElf() {
     return ObjectFiles[0];
   if (!SharedFiles.empty())
     return SharedFiles[0];
-  return nullptr;
+  return BitcodeFiles[0];
 }
 
 // All input object files must be for the same architecture
@@ -209,6 +209,17 @@ void SymbolTable::applySymbolWrap() {
 
     if (Real)
       SymVector.push_back(Real);
+  }
+}
+
+// Apply changes caused by relocations to wrapped symbols
+// This is needed for direct calls to __wrap_sym
+void SymbolTable::applySymbolWrapReloc() {
+  for (WrappedSymbol &W : WrappedSymbols) {
+    memcpy(W.Wrap, W.Sym, sizeof(SymbolUnion));
+
+    // Keep this so that this copy of the symbol remains dropped
+    W.Wrap->IsUsedInRegularObj = false;
   }
 }
 

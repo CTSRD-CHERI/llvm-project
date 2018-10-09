@@ -6369,6 +6369,17 @@ QualType ASTReader::readTypeRecord(unsigned Index) {
     return Context.getPipeType(ElementType, ReadOnly);
   }
 
+  case TYPE_DEPENDENT_SIZED_VECTOR: {
+    unsigned Idx = 0;
+    QualType ElementType = readType(*Loc.F, Record, Idx);
+    Expr *SizeExpr = ReadExpr(*Loc.F);
+    SourceLocation AttrLoc = ReadSourceLocation(*Loc.F, Record, Idx);
+    unsigned VecKind = Record[Idx];
+
+    return Context.getDependentVectorType(ElementType, SizeExpr, AttrLoc,
+                                               (VectorType::VectorKind)VecKind);
+  }
+
   case TYPE_DEPENDENT_SIZED_EXT_VECTOR: {
     unsigned Idx = 0;
 
@@ -6546,6 +6557,11 @@ void TypeLocReader::VisitDependentSizedExtVectorTypeLoc(
 }
 
 void TypeLocReader::VisitVectorTypeLoc(VectorTypeLoc TL) {
+  TL.setNameLoc(ReadSourceLocation());
+}
+
+void TypeLocReader::VisitDependentVectorTypeLoc(
+    DependentVectorTypeLoc TL) {
   TL.setNameLoc(ReadSourceLocation());
 }
 
@@ -9403,7 +9419,15 @@ void ASTReader::finishPendingActions() {
         if (!FD->isLateTemplateParsed() &&
             !NonConstDefn->isLateTemplateParsed() &&
             FD->getODRHash() != NonConstDefn->getODRHash()) {
-          PendingFunctionOdrMergeFailures[FD].push_back(NonConstDefn);
+          if (!isa<CXXMethodDecl>(FD)) {
+            PendingFunctionOdrMergeFailures[FD].push_back(NonConstDefn);
+          } else if (FD->getLexicalParent()->isFileContext() &&
+                     NonConstDefn->getLexicalParent()->isFileContext()) {
+            // Only diagnose out-of-line method definitions.  If they are
+            // in class definitions, then an error will be generated when
+            // processing the class bodies.
+            PendingFunctionOdrMergeFailures[FD].push_back(NonConstDefn);
+          }
         }
       }
       continue;
@@ -10075,6 +10099,7 @@ void ASTReader::diagnoseOdrViolations() {
         FieldDifferentInitializers,
         MethodName,
         MethodDeleted,
+        MethodDefaulted,
         MethodVirtual,
         MethodStatic,
         MethodVolatile,
@@ -10088,6 +10113,8 @@ void ASTReader::diagnoseOdrViolations() {
         MethodNoTemplateArguments,
         MethodDifferentNumberTemplateArguments,
         MethodDifferentTemplateArgument,
+        MethodSingleBody,
+        MethodDifferentBody,
         TypedefName,
         TypedefType,
         VarName,
@@ -10321,8 +10348,8 @@ void ASTReader::diagnoseOdrViolations() {
           break;
         }
 
-        const bool FirstDeleted = FirstMethod->isDeleted();
-        const bool SecondDeleted = SecondMethod->isDeleted();
+        const bool FirstDeleted = FirstMethod->isDeletedAsWritten();
+        const bool SecondDeleted = SecondMethod->isDeletedAsWritten();
         if (FirstDeleted != SecondDeleted) {
           ODRDiagError(FirstMethod->getLocation(),
                        FirstMethod->getSourceRange(), MethodDeleted)
@@ -10331,6 +10358,20 @@ void ASTReader::diagnoseOdrViolations() {
           ODRDiagNote(SecondMethod->getLocation(),
                       SecondMethod->getSourceRange(), MethodDeleted)
               << SecondMethodType << SecondName << SecondDeleted;
+          Diagnosed = true;
+          break;
+        }
+
+        const bool FirstDefaulted = FirstMethod->isExplicitlyDefaulted();
+        const bool SecondDefaulted = SecondMethod->isExplicitlyDefaulted();
+        if (FirstDefaulted != SecondDefaulted) {
+          ODRDiagError(FirstMethod->getLocation(),
+                       FirstMethod->getSourceRange(), MethodDefaulted)
+              << FirstMethodType << FirstName << FirstDefaulted;
+
+          ODRDiagNote(SecondMethod->getLocation(),
+                      SecondMethod->getSourceRange(), MethodDefaulted)
+              << SecondMethodType << SecondName << SecondDefaulted;
           Diagnosed = true;
           break;
         }
@@ -10600,6 +10641,44 @@ void ASTReader::diagnoseOdrViolations() {
             break;
           }
         }
+
+        // Compute the hash of the method as if it has no body.
+        auto ComputeCXXMethodODRHash = [&Hash](const CXXMethodDecl *D) {
+          Hash.clear();
+          Hash.AddFunctionDecl(D, true /*SkipBody*/);
+          return Hash.CalculateHash();
+        };
+
+        // Compare the hash generated to the hash stored.  A difference means
+        // that a body was present in the original source.  Due to merging,
+        // the stardard way of detecting a body will not work.
+        const bool HasFirstBody =
+            ComputeCXXMethodODRHash(FirstMethod) != FirstMethod->getODRHash();
+        const bool HasSecondBody =
+            ComputeCXXMethodODRHash(SecondMethod) != SecondMethod->getODRHash();
+
+        if (HasFirstBody != HasSecondBody) {
+          ODRDiagError(FirstMethod->getLocation(),
+                       FirstMethod->getSourceRange(), MethodSingleBody)
+              << FirstMethodType << FirstName << HasFirstBody;
+          ODRDiagNote(SecondMethod->getLocation(),
+                      SecondMethod->getSourceRange(), MethodSingleBody)
+              << SecondMethodType << SecondName << HasSecondBody;
+          Diagnosed = true;
+          break;
+        }
+
+        if (HasFirstBody && HasSecondBody) {
+          ODRDiagError(FirstMethod->getLocation(),
+                       FirstMethod->getSourceRange(), MethodDifferentBody)
+              << FirstMethodType << FirstName;
+          ODRDiagNote(SecondMethod->getLocation(),
+                      SecondMethod->getSourceRange(), MethodDifferentBody)
+              << SecondMethodType << SecondName;
+          Diagnosed = true;
+          break;
+        }
+
         break;
       }
       case TypeAlias:

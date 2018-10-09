@@ -250,8 +250,9 @@ void MCDwarfLineTable::Emit(MCObjectStreamer *MCOS,
   MCOS->SwitchSection(context.getObjectFileInfo()->getDwarfLineSection());
 
   // Handle the rest of the Compile Units.
-  for (const auto &CUIDTablePair : LineTables)
+  for (const auto &CUIDTablePair : LineTables) {
     CUIDTablePair.second.EmitCU(MCOS, Params, LineStr);
+  }
 
   if (LineStr)
     LineStr->emitSection(MCOS);
@@ -394,13 +395,13 @@ void MCDwarfLineTableHeader::emitV5FileDirTables(
   if (LineStr) {
     // Record path strings, emit references here.
     LineStr->emitRef(MCOS, CompDir);
-    for (auto &Dir : MCDwarfDirs)
+    for (const auto &Dir : MCDwarfDirs)
       LineStr->emitRef(MCOS, Dir);
   } else {
     // The list of directory paths.  Compilation directory comes first.
     MCOS->EmitBytes(CompDir);
     MCOS->EmitBytes(StringRef("\0", 1));
-    for (auto &Dir : MCDwarfDirs) {
+    for (const auto &Dir : MCDwarfDirs) {
       MCOS->EmitBytes(Dir);                // The DirectoryName, and...
       MCOS->EmitBytes(StringRef("\0", 1)); // its null terminator.
     }
