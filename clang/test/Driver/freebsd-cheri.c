@@ -1,6 +1,6 @@
 // RUN: %plain_clang_cheri_triple_allowed -no-canonical-prefixes \
 // RUN:   -target cheri-pc-freebsd11 %s                              \
-// RUN:   --sysroot=%S/Inputs/basic_freebsd64_tree -### 2>&1 \
+// RUN:   --sysroot=%S/Inputs/basic_cheribsd_libcheri_tree -### 2>&1 \
 // RUN:   | FileCheck --check-prefix=CHECK-CHERI %s
 // CHECK-CHERI: "-cc1" "-triple" "cheri-pc-freebsd11"
 // CHECK-CHERI: ld{{.*}}" "--sysroot=[[SYSROOT:[^"]+]]"
@@ -8,7 +8,7 @@
 //
 // RUN: %plain_clang_cheri_triple_allowed -no-canonical-prefixes \
 // RUN:   -target cheri-pc-freebsd11 -mabi=purecap %s        \
-// RUN:   --sysroot=%S/Inputs/basic_freebsd64_tree -### 2>&1 \
+// RUN:   --sysroot=%S/Inputs/basic_cheribsd_libcheri_tree -### 2>&1 \
 // RUN:   | FileCheck --check-prefix=CHECK-CHERI-SANDBOX %s
 // CHECK-CHERI-SANDBOX: "-cc1" "-triple" "cheri-pc-freebsd11"
 // CHECK-CHERI-SANDBOX: ld{{.*}}" "--sysroot=[[SYSROOT:[^"]+]]"
