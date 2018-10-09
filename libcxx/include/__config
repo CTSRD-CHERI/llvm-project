@@ -33,7 +33,7 @@
 #  define _GNUC_VER_NEW 0
 #endif
 
-#define _LIBCPP_VERSION 7000
+#define _LIBCPP_VERSION 8000
 
 #ifndef _LIBCPP_ABI_VERSION
 #  ifdef __Fuchsia__
@@ -42,6 +42,18 @@
 #    define _LIBCPP_ABI_VERSION 1
 #  endif
 #endif
+
+#ifndef _LIBCPP_STD_VER
+#  if  __cplusplus <= 201103L
+#    define _LIBCPP_STD_VER 11
+#  elif __cplusplus <= 201402L
+#    define _LIBCPP_STD_VER 14
+#  elif __cplusplus <= 201703L
+#    define _LIBCPP_STD_VER 17
+#  else
+#    define _LIBCPP_STD_VER 18  // current year, or date of c++2a ratification
+#  endif
+#endif  // _LIBCPP_STD_VER
 
 #if defined(__ELF__)
 #  define _LIBCPP_OBJECT_FORMAT_ELF   1
@@ -479,6 +491,8 @@ namespace std {
 #define _LIBCPP_HAS_UNIQUE_OBJECT_REPRESENTATIONS
 #endif
 
+#define _LIBCPP_ALWAYS_INLINE __attribute__ ((__always_inline__))
+
 #elif defined(_LIBCPP_COMPILER_GCC)
 
 #define _ALIGNAS(x) __attribute__((__aligned__(x)))
@@ -496,7 +510,7 @@ namespace std {
 #define _LIBCPP_HAS_IS_BASE_OF
 #endif
 
-#if !__EXCEPTIONS
+#if !__EXCEPTIONS && !defined(_LIBCPP_NO_EXCEPTIONS)
 #define _LIBCPP_NO_EXCEPTIONS
 #endif
 
@@ -570,6 +584,8 @@ namespace std {
 #define _LIBCPP_HAS_UNIQUE_OBJECT_REPRESENTATIONS
 #endif
 
+#define _LIBCPP_ALWAYS_INLINE __attribute__ ((__always_inline__))
+
 #elif defined(_LIBCPP_COMPILER_MSVC)
 
 #define _LIBCPP_TOSTRING2(x) #x
@@ -602,6 +618,10 @@ namespace std {
 
 #define _LIBCPP_HAS_NO_ASAN
 
+#define _LIBCPP_ALWAYS_INLINE __forceinline
+
+#define _LIBCPP_HAS_NO_VECTOR_EXTENSION
+
 #elif defined(_LIBCPP_COMPILER_IBM)
 
 #define _ALIGNAS(x) __attribute__((__aligned__(x)))
@@ -632,7 +652,25 @@ namespace std {
 
 #define _LIBCPP_HAS_NO_ASAN
 
+#define _LIBCPP_ALWAYS_INLINE __attribute__ ((__always_inline__))
+
+#define _LIBCPP_HAS_NO_VECTOR_EXTENSION
+
 #endif // _LIBCPP_COMPILER_[CLANG|GCC|MSVC|IBM]
+
+#if _LIBCPP_STD_VER >= 17
+#define _LIBCPP_BEGIN_NAMESPACE_FILESYSTEM \
+  _LIBCPP_BEGIN_NAMESPACE_STD inline namespace __fs { namespace filesystem {
+#else
+#define _LIBCPP_BEGIN_NAMESPACE_FILESYSTEM \
+  _LIBCPP_BEGIN_NAMESPACE_STD namespace __fs { namespace filesystem {
+#endif
+
+#define _LIBCPP_END_NAMESPACE_FILESYSTEM \
+  _LIBCPP_END_NAMESPACE_STD } }
+
+#define _VSTD_FS _VSTD::__fs::filesystem
+
 
 #if defined(_LIBCPP_OBJECT_FORMAT_COFF)
 
@@ -669,10 +707,8 @@ namespace std {
 #define _LIBCPP_ENUM_VIS
 
 #if defined(_LIBCPP_COMPILER_MSVC)
-#  define _LIBCPP_INLINE_VISIBILITY __forceinline
 #  define _LIBCPP_EXTERN_TEMPLATE_INLINE_VISIBILITY __forceinline
 #else
-#  define _LIBCPP_INLINE_VISIBILITY __attribute__ ((__always_inline__))
 #  define _LIBCPP_EXTERN_TEMPLATE_INLINE_VISIBILITY __attribute__ ((__always_inline__))
 #endif
 
@@ -759,13 +795,18 @@ namespace std {
 #define _LIBCPP_CLASS_TEMPLATE_INSTANTIATION_VIS
 #endif
 
-#ifndef _LIBCPP_INLINE_VISIBILITY
-#  if !defined(_LIBCPP_DISABLE_VISIBILITY_ANNOTATIONS)
-#    define _LIBCPP_INLINE_VISIBILITY __attribute__ ((__visibility__("hidden"), __always_inline__))
-#  else
-#    define _LIBCPP_INLINE_VISIBILITY __attribute__ ((__always_inline__))
-#  endif
+#if __has_attribute(internal_linkage)
+#  define _LIBCPP_INTERNAL_LINKAGE __attribute__ ((internal_linkage))
+#else
+#  define _LIBCPP_INTERNAL_LINKAGE _LIBCPP_ALWAYS_INLINE
 #endif
+
+#ifndef _LIBCPP_HIDE_FROM_ABI
+#  define _LIBCPP_HIDE_FROM_ABI _LIBCPP_HIDDEN _LIBCPP_INTERNAL_LINKAGE
+#endif
+
+// Just so we can migrate to _LIBCPP_HIDE_FROM_ABI gradually.
+#define _LIBCPP_INLINE_VISIBILITY _LIBCPP_HIDE_FROM_ABI
 
 #ifndef _LIBCPP_EXTERN_TEMPLATE_INLINE_VISIBILITY
 #  if !defined(_LIBCPP_DISABLE_VISIBILITY_ANNOTATIONS)
@@ -958,18 +999,6 @@ template <unsigned> struct __static_assert_check {};
 #if defined(__APPLE__) || defined(__FreeBSD__) || defined(__sun__)
 #define _LIBCPP_WCTYPE_IS_MASK
 #endif
-
-#ifndef _LIBCPP_STD_VER
-#  if  __cplusplus <= 201103L
-#    define _LIBCPP_STD_VER 11
-#  elif __cplusplus <= 201402L
-#    define _LIBCPP_STD_VER 14
-#  elif __cplusplus <= 201703L
-#    define _LIBCPP_STD_VER 17
-#  else
-#    define _LIBCPP_STD_VER 18  // current year, or date of c++2a ratification
-#  endif
-#endif  // _LIBCPP_STD_VER
 
 #if _LIBCPP_STD_VER > 11
 #  define _LIBCPP_DEPRECATED [[deprecated]]

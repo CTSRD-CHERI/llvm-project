@@ -131,6 +131,11 @@ void MipsELFStreamer::EmitCheriIntcap(int64_t Value, unsigned CapSize, SMLoc) {
   }
 }
 
+void MipsELFStreamer::EmitIntValue(uint64_t Value, unsigned Size) {
+  MCELFStreamer::EmitIntValue(Value, Size);
+  Labels.clear();
+}
+
 void MipsELFStreamer::EmitMipsOptionRecords() {
   for (const auto &I : MipsOptionRecords)
     I->EmitMipsOptionRecord();

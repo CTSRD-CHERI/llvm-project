@@ -1896,6 +1896,12 @@ void Preprocessor::HandleIncludeDirective(SourceLocation HashLoc,
   if (PPOpts->SingleFileParseMode)
     ShouldEnter = false;
 
+  // Any diagnostics after the fatal error will not be visible. As the
+  // compilation failed already and errors in subsequently included files won't
+  // be visible, avoid preprocessing those files.
+  if (ShouldEnter && Diags->hasFatalErrorOccurred())
+    ShouldEnter = false;
+
   // Determine whether we should try to import the module for this #include, if
   // there is one. Don't do so if precompiled module support is disabled or we
   // are processing this module textually (because we're building the module).
@@ -2591,13 +2597,13 @@ void Preprocessor::HandleDefineDirective(
 
   MacroInfo *const MI = ReadOptionalMacroParameterListAndBody(
       MacroNameTok, ImmediatelyAfterHeaderGuard);
-  
+
   if (!MI) return;
 
   if (MacroShadowsKeyword &&
       !isConfigurationPattern(MacroNameTok, MI, getLangOpts())) {
     Diag(MacroNameTok, diag::warn_pp_macro_hides_keyword);
-  }  
+  }
   // Check that there is no paste (##) operator at the beginning or end of the
   // replacement list.
   unsigned NumTokens = MI->getNumTokens();
@@ -2710,7 +2716,7 @@ void Preprocessor::HandleUndefDirective() {
   auto *II = MacroNameTok.getIdentifierInfo();
   auto MD = getMacroDefinition(II);
   UndefMacroDirective *Undef = nullptr;
-  
+
   // If the macro is not defined, this is a noop undef.
   if (const MacroInfo *MI = MD.getMacroInfo()) {
     if (!MI->isUsed() && MI->isWarnIfUnused())

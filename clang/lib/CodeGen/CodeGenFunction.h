@@ -116,6 +116,7 @@ enum TypeEvaluationKind {
   SANITIZER_CHECK(DynamicTypeCacheMiss, dynamic_type_cache_miss, 0)            \
   SANITIZER_CHECK(FloatCastOverflow, float_cast_overflow, 0)                   \
   SANITIZER_CHECK(FunctionTypeMismatch, function_type_mismatch, 0)             \
+  SANITIZER_CHECK(ImplicitConversion, implicit_conversion, 0)                  \
   SANITIZER_CHECK(InvalidBuiltin, invalid_builtin, 0)                          \
   SANITIZER_CHECK(LoadInvalidValue, load_invalid_value, 0)                     \
   SANITIZER_CHECK(MissingReturn, missing_return, 0)                            \
@@ -1758,7 +1759,25 @@ public:
   class AutoVarEmission;
 
   void emitByrefStructureInit(const AutoVarEmission &emission);
-  void enterByrefCleanup(const AutoVarEmission &emission);
+
+  /// Enter a cleanup to destroy a __block variable.  Note that this
+  /// cleanup should be a no-op if the variable hasn't left the stack
+  /// yet; if a cleanup is required for the variable itself, that needs
+  /// to be done externally.
+  ///
+  /// \param Kind Cleanup kind.
+  ///
+  /// \param Addr When \p LoadBlockVarAddr is false, the address of the __block
+  /// structure that will be passed to _Block_object_dispose. When
+  /// \p LoadBlockVarAddr is true, the address of the field of the block
+  /// structure that holds the address of the __block structure.
+  ///
+  /// \param Flags The flag that will be passed to _Block_object_dispose.
+  ///
+  /// \param LoadBlockVarAddr Indicates whether we need to emit a load from
+  /// \p Addr to get the address of the __block structure.
+  void enterByrefCleanup(CleanupKind Kind, Address Addr, BlockFieldFlags Flags,
+                         bool LoadBlockVarAddr);
 
   void setBlockContextParameter(const ImplicitParamDecl *D, unsigned argNum,
                                 llvm::Value *ptr);
@@ -2472,13 +2491,15 @@ public:
   void EmitCXXConstructorCall(const CXXConstructorDecl *D, CXXCtorType Type,
                               bool ForVirtualBase, bool Delegating,
                               Address This, const CXXConstructExpr *E,
-                              AggValueSlot::Overlap_t Overlap);
+                              AggValueSlot::Overlap_t Overlap,
+                              bool NewPointerIsChecked);
 
   void EmitCXXConstructorCall(const CXXConstructorDecl *D, CXXCtorType Type,
                               bool ForVirtualBase, bool Delegating,
                               Address This, CallArgList &Args,
                               AggValueSlot::Overlap_t Overlap,
-                              SourceLocation Loc);
+                              SourceLocation Loc,
+                              bool NewPointerIsChecked);
 
   /// Emit assumption load for all bases. Requires to be be called only on
   /// most-derived class and not under construction of the object.
@@ -2495,12 +2516,14 @@ public:
                                   const ArrayType *ArrayTy,
                                   Address ArrayPtr,
                                   const CXXConstructExpr *E,
+                                  bool NewPointerIsChecked,
                                   bool ZeroInitialization = false);
 
   void EmitCXXAggrConstructorCall(const CXXConstructorDecl *D,
                                   llvm::Value *NumElements,
                                   Address ArrayPtr,
                                   const CXXConstructExpr *E,
+                                  bool NewPointerIsChecked,
                                   bool ZeroInitialization = false);
 
   static Destroyer destroyCXXObject;

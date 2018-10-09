@@ -164,29 +164,26 @@ def S_SUB_U64_CO_PSEUDO : SPseudoInstSI <
 
 } // End usesCustomInserter = 1, Defs = [SCC]
 
-let usesCustomInserter = 1, SALU = 1 in {
-def GET_GROUPSTATICSIZE : PseudoInstSI <(outs SReg_32:$sdst), (ins),
+let usesCustomInserter = 1 in {
+def GET_GROUPSTATICSIZE : SPseudoInstSI <(outs SReg_32:$sdst), (ins),
   [(set SReg_32:$sdst, (int_amdgcn_groupstaticsize))]>;
 } // End let usesCustomInserter = 1, SALU = 1
 
-def S_MOV_B64_term : PseudoInstSI<(outs SReg_64:$dst),
+def S_MOV_B64_term : SPseudoInstSI<(outs SReg_64:$dst),
    (ins SSrc_b64:$src0)> {
-  let SALU = 1;
   let isAsCheapAsAMove = 1;
   let isTerminator = 1;
 }
 
-def S_XOR_B64_term : PseudoInstSI<(outs SReg_64:$dst),
+def S_XOR_B64_term : SPseudoInstSI<(outs SReg_64:$dst),
    (ins SSrc_b64:$src0, SSrc_b64:$src1)> {
-  let SALU = 1;
   let isAsCheapAsAMove = 1;
   let isTerminator = 1;
   let Defs = [SCC];
 }
 
-def S_ANDN2_B64_term : PseudoInstSI<(outs SReg_64:$dst),
+def S_ANDN2_B64_term : SPseudoInstSI<(outs SReg_64:$dst),
    (ins SSrc_b64:$src0, SSrc_b64:$src1)> {
-  let SALU = 1;
   let isAsCheapAsAMove = 1;
   let isTerminator = 1;
 }
@@ -374,6 +371,7 @@ def SI_RETURN_TO_EPILOG : SPseudoInstSI <
   let isReturn = 1;
   let hasNoSchedulingInfo = 1;
   let DisableWQM = 1;
+  let FixedSize = 1;
 }
 
 // Return for returning function calls.
@@ -1386,6 +1384,11 @@ def : GCNPat<
 >;
 
 def : GCNPat<
+  (fcanonicalize (f16 (fneg (VOP3Mods f16:$src, i32:$src_mods)))),
+  (V_MUL_F16_e64 0, (i32 CONST.FP16_NEG_ONE), $src_mods, $src, 0, 0)
+>;
+
+def : GCNPat<
   (fcanonicalize (v2f16 (VOP3PMods v2f16:$src, i32:$src_mods))),
   (V_PK_MUL_F16 0, (i32 CONST.V2FP16_ONE), $src_mods, $src, DSTCLAMP.NONE)
 >;
@@ -1409,6 +1412,11 @@ let OtherPredicates = [NoFP32Denormals] in {
 def : GCNPat<
   (fcanonicalize (f32 (VOP3Mods f32:$src, i32:$src_mods))),
   (V_MUL_F32_e64 0, (i32 CONST.FP32_ONE), $src_mods, $src, 0, 0)
+>;
+
+def : GCNPat<
+  (fcanonicalize (f32 (fneg (VOP3Mods f32:$src, i32:$src_mods)))),
+  (V_MUL_F32_e64 0, (i32 CONST.FP32_NEG_ONE), $src_mods, $src, 0, 0)
 >;
 }
 

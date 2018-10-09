@@ -71,7 +71,7 @@
 #include <cassert>
 #include <cstdint>
 #include <iterator>
-#include <utility>     
+#include <utility>
 
 using namespace llvm;
 using namespace llvm::PatternMatch;
@@ -2343,7 +2343,7 @@ static unsigned ComputeNumSignBitsImpl(const Value *V, unsigned Depth,
 
   case Instruction::Select:
     Tmp = ComputeNumSignBits(U->getOperand(1), Depth + 1, Q);
-    if (Tmp == 1) return 1;  // Early out.
+    if (Tmp == 1) break;
     Tmp2 = ComputeNumSignBits(U->getOperand(2), Depth + 1, Q);
     return std::min(Tmp, Tmp2);
 
@@ -2351,7 +2351,7 @@ static unsigned ComputeNumSignBitsImpl(const Value *V, unsigned Depth,
     // Add can have at most one carry bit.  Thus we know that the output
     // is, at worst, one more bit than the inputs.
     Tmp = ComputeNumSignBits(U->getOperand(0), Depth + 1, Q);
-    if (Tmp == 1) return 1;  // Early out.
+    if (Tmp == 1) break;
 
     // Special case decrementing a value (ADD X, -1):
     if (const auto *CRHS = dyn_cast<Constant>(U->getOperand(1)))
@@ -2371,12 +2371,12 @@ static unsigned ComputeNumSignBitsImpl(const Value *V, unsigned Depth,
       }
 
     Tmp2 = ComputeNumSignBits(U->getOperand(1), Depth + 1, Q);
-    if (Tmp2 == 1) return 1;
+    if (Tmp2 == 1) break;
     return std::min(Tmp, Tmp2)-1;
 
   case Instruction::Sub:
     Tmp2 = ComputeNumSignBits(U->getOperand(1), Depth + 1, Q);
-    if (Tmp2 == 1) return 1;
+    if (Tmp2 == 1) break;
 
     // Handle NEG.
     if (const auto *CLHS = dyn_cast<Constant>(U->getOperand(0)))
@@ -2399,15 +2399,15 @@ static unsigned ComputeNumSignBitsImpl(const Value *V, unsigned Depth,
     // Sub can have at most one carry bit.  Thus we know that the output
     // is, at worst, one more bit than the inputs.
     Tmp = ComputeNumSignBits(U->getOperand(0), Depth + 1, Q);
-    if (Tmp == 1) return 1;  // Early out.
+    if (Tmp == 1) break;
     return std::min(Tmp, Tmp2)-1;
 
   case Instruction::Mul: {
     // The output of the Mul can be at most twice the valid bits in the inputs.
     unsigned SignBitsOp0 = ComputeNumSignBits(U->getOperand(0), Depth + 1, Q);
-    if (SignBitsOp0 == 1) return 1;  // Early out.
+    if (SignBitsOp0 == 1) break;
     unsigned SignBitsOp1 = ComputeNumSignBits(U->getOperand(1), Depth + 1, Q);
-    if (SignBitsOp1 == 1) return 1;
+    if (SignBitsOp1 == 1) break;
     unsigned OutValidBits =
         (TyBits - SignBitsOp0 + 1) + (TyBits - SignBitsOp1 + 1);
     return OutValidBits > TyBits ? 1 : TyBits - OutValidBits + 1;
@@ -3834,7 +3834,7 @@ static bool checkRippleForSignedAdd(const KnownBits &LHSKnown,
 
   // If either of the values is known to be non-negative, adding them can only
   // overflow if the second is also non-negative, so we can assume that.
-  // Two non-negative numbers will only overflow if there is a carry to the 
+  // Two non-negative numbers will only overflow if there is a carry to the
   // sign bit, so we can check if even when the values are as big as possible
   // there is no overflow to the sign bit.
   if (LHSKnown.isNonNegative() || RHSKnown.isNonNegative()) {
@@ -3861,7 +3861,7 @@ static bool checkRippleForSignedAdd(const KnownBits &LHSKnown,
   }
 
   // If we reached here it means that we know nothing about the sign bits.
-  // In this case we can't know if there will be an overflow, since by 
+  // In this case we can't know if there will be an overflow, since by
   // changing the sign bits any two values can be made to overflow.
   return false;
 }
@@ -3911,7 +3911,7 @@ static OverflowResult computeOverflowForSignedAdd(const Value *LHS,
   // operands.
   bool LHSOrRHSKnownNonNegative =
       (LHSKnown.isNonNegative() || RHSKnown.isNonNegative());
-  bool LHSOrRHSKnownNegative = 
+  bool LHSOrRHSKnownNegative =
       (LHSKnown.isNegative() || RHSKnown.isNegative());
   if (LHSOrRHSKnownNonNegative || LHSOrRHSKnownNegative) {
     KnownBits AddKnown = computeKnownBits(Add, DL, /*Depth=*/0, AC, CxtI, DT);
@@ -4460,7 +4460,7 @@ static SelectPatternResult matchMinMax(CmpInst::Predicate Pred,
   SPR = matchMinMaxOfMinMax(Pred, CmpLHS, CmpRHS, TrueVal, FalseVal, Depth);
   if (SPR.Flavor != SelectPatternFlavor::SPF_UNKNOWN)
     return SPR;
-  
+
   if (Pred != CmpInst::ICMP_SGT && Pred != CmpInst::ICMP_SLT)
     return {SPF_UNKNOWN, SPNB_NA, false};
 
@@ -4636,7 +4636,7 @@ static SelectPatternResult matchSelectPattern(CmpInst::Predicate Pred,
     case FCmpInst::FCMP_OLE: return {SPF_FMINNUM, NaNBehavior, Ordered};
     }
   }
-  
+
   if (isKnownNegation(TrueVal, FalseVal)) {
     // Sign-extending LHS does not change its sign, so TrueVal/FalseVal can
     // match against either LHS or sext(LHS).

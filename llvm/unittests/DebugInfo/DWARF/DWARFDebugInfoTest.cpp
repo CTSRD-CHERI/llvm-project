@@ -67,12 +67,21 @@ void TestAllForms() {
   const uint32_t Dwarf32Values[] = {1, 2, 3, 4, 5, 6, 7, 8};
   const char *StringValue = "Hello";
   const char *StrpValue = "World";
+  const char *StrxValue = "Indexed";
+  const char *Strx1Value = "Indexed1";
+  const char *Strx2Value = "Indexed2";
+  const char *Strx3Value = "Indexed3";
+  const char *Strx4Value = "Indexed4";
 
   auto ExpectedDG = dwarfgen::Generator::create(Triple, Version);
   ASSERT_THAT_EXPECTED(ExpectedDG, Succeeded());
   dwarfgen::Generator *DG = ExpectedDG.get().get();
   dwarfgen::CompileUnit &CU = DG->addCompileUnit();
   dwarfgen::DIE CUDie = CU.getUnitDIE();
+
+  if (Version >= 5)
+    CUDie.addStrOffsetsBaseAttribute();
+
   uint16_t Attr = DW_AT_lo_user;
 
   //----------------------------------------------------------------------
@@ -121,6 +130,19 @@ void TestAllForms() {
   //----------------------------------------------------------------------
   const auto Attr_DW_FORM_string = static_cast<dwarf::Attribute>(Attr++);
   CUDie.addAttribute(Attr_DW_FORM_string, DW_FORM_string, StringValue);
+
+  const auto Attr_DW_FORM_strx = static_cast<dwarf::Attribute>(Attr++);
+  const auto Attr_DW_FORM_strx1 = static_cast<dwarf::Attribute>(Attr++);
+  const auto Attr_DW_FORM_strx2 = static_cast<dwarf::Attribute>(Attr++);
+  const auto Attr_DW_FORM_strx3 = static_cast<dwarf::Attribute>(Attr++);
+  const auto Attr_DW_FORM_strx4 = static_cast<dwarf::Attribute>(Attr++);
+  if (Version >= 5) {
+    CUDie.addAttribute(Attr_DW_FORM_strx, DW_FORM_strx, StrxValue);
+    CUDie.addAttribute(Attr_DW_FORM_strx1, DW_FORM_strx1, Strx1Value);
+    CUDie.addAttribute(Attr_DW_FORM_strx2, DW_FORM_strx2, Strx2Value);
+    CUDie.addAttribute(Attr_DW_FORM_strx3, DW_FORM_strx3, Strx3Value);
+    CUDie.addAttribute(Attr_DW_FORM_strx4, DW_FORM_strx4, Strx4Value);
+  }
 
   const auto Attr_DW_FORM_strp = static_cast<dwarf::Attribute>(Attr++);
   CUDie.addAttribute(Attr_DW_FORM_strp, DW_FORM_strp, StrpValue);
@@ -209,7 +231,8 @@ void TestAllForms() {
   std::unique_ptr<DWARFContext> DwarfContext = DWARFContext::create(**Obj);
   uint32_t NumCUs = DwarfContext->getNumCompileUnits();
   EXPECT_EQ(NumCUs, 1u);
-  DWARFCompileUnit *U = DwarfContext->getCompileUnitAtIndex(0);
+  DWARFCompileUnit *U =
+      cast<DWARFCompileUnit>(DwarfContext->getUnitAtIndex(0));
   auto DieDG = U->getUnitDIE(false);
   EXPECT_TRUE(DieDG.isValid());
 
@@ -281,11 +304,33 @@ void TestAllForms() {
   //----------------------------------------------------------------------
   auto ExtractedStringValue = toString(DieDG.find(Attr_DW_FORM_string));
   EXPECT_TRUE((bool)ExtractedStringValue);
-  EXPECT_TRUE(strcmp(StringValue, *ExtractedStringValue) == 0);
+  EXPECT_STREQ(StringValue, *ExtractedStringValue);
+
+  if (Version >= 5) {
+    auto ExtractedStrxValue = toString(DieDG.find(Attr_DW_FORM_strx));
+    EXPECT_TRUE((bool)ExtractedStrxValue);
+    EXPECT_STREQ(StrxValue, *ExtractedStrxValue);
+
+    auto ExtractedStrx1Value = toString(DieDG.find(Attr_DW_FORM_strx1));
+    EXPECT_TRUE((bool)ExtractedStrx1Value);
+    EXPECT_STREQ(Strx1Value, *ExtractedStrx1Value);
+
+    auto ExtractedStrx2Value = toString(DieDG.find(Attr_DW_FORM_strx2));
+    EXPECT_TRUE((bool)ExtractedStrx2Value);
+    EXPECT_STREQ(Strx2Value, *ExtractedStrx2Value);
+
+    auto ExtractedStrx3Value = toString(DieDG.find(Attr_DW_FORM_strx3));
+    EXPECT_TRUE((bool)ExtractedStrx3Value);
+    EXPECT_STREQ(Strx3Value, *ExtractedStrx3Value);
+
+    auto ExtractedStrx4Value = toString(DieDG.find(Attr_DW_FORM_strx4));
+    EXPECT_TRUE((bool)ExtractedStrx4Value);
+    EXPECT_STREQ(Strx4Value, *ExtractedStrx4Value);
+  }
 
   auto ExtractedStrpValue = toString(DieDG.find(Attr_DW_FORM_strp));
   EXPECT_TRUE((bool)ExtractedStrpValue);
-  EXPECT_TRUE(strcmp(StrpValue, *ExtractedStrpValue) == 0);
+  EXPECT_STREQ(StrpValue, *ExtractedStrpValue);
 
   //----------------------------------------------------------------------
   // Test reference forms
@@ -452,7 +497,8 @@ template <uint16_t Version, class AddrType> void TestChildren() {
   // Verify the number of compile units is correct.
   uint32_t NumCUs = DwarfContext->getNumCompileUnits();
   EXPECT_EQ(NumCUs, 1u);
-  DWARFCompileUnit *U = DwarfContext->getCompileUnitAtIndex(0);
+  DWARFCompileUnit *U =
+      cast<DWARFCompileUnit>(DwarfContext->getUnitAtIndex(0));
 
   // Get the compile unit DIE is valid.
   auto DieDG = U->getUnitDIE(false);
@@ -628,8 +674,10 @@ template <uint16_t Version, class AddrType> void TestReferences() {
   // Verify the number of compile units is correct.
   uint32_t NumCUs = DwarfContext->getNumCompileUnits();
   EXPECT_EQ(NumCUs, 2u);
-  DWARFCompileUnit *U1 = DwarfContext->getCompileUnitAtIndex(0);
-  DWARFCompileUnit *U2 = DwarfContext->getCompileUnitAtIndex(1);
+  DWARFCompileUnit *U1 =
+      cast<DWARFCompileUnit>(DwarfContext->getUnitAtIndex(0));
+  DWARFCompileUnit *U2 =
+      cast<DWARFCompileUnit>(DwarfContext->getUnitAtIndex(1));
 
   // Get the compile unit DIE is valid.
   auto Unit1DieDG = U1->getUnitDIE(false);
@@ -836,7 +884,8 @@ template <uint16_t Version, class AddrType> void TestAddresses() {
   // Verify the number of compile units is correct.
   uint32_t NumCUs = DwarfContext->getNumCompileUnits();
   EXPECT_EQ(NumCUs, 1u);
-  DWARFCompileUnit *U = DwarfContext->getCompileUnitAtIndex(0);
+  DWARFCompileUnit *U =
+      cast<DWARFCompileUnit>(DwarfContext->getUnitAtIndex(0));
 
   // Get the compile unit DIE is valid.
   auto DieDG = U->getUnitDIE(false);
@@ -1011,7 +1060,8 @@ TEST(DWARFDebugInfo, TestRelations) {
   // Verify the number of compile units is correct.
   uint32_t NumCUs = DwarfContext->getNumCompileUnits();
   EXPECT_EQ(NumCUs, 1u);
-  DWARFCompileUnit *U = DwarfContext->getCompileUnitAtIndex(0);
+  DWARFCompileUnit *U =
+      cast<DWARFCompileUnit>(DwarfContext->getUnitAtIndex(0));
 
   // Get the compile unit DIE is valid.
   auto CUDie = U->getUnitDIE(false);
@@ -1078,26 +1128,57 @@ TEST(DWARFDebugInfo, TestRelations) {
   EXPECT_EQ(C1.getParent(), C);
   EXPECT_EQ(C2.getParent(), C);
 
-  // Make sure bidirectional iterator works as expected.
-  auto Begin = A.begin();
-  auto End = A.end();
-  auto It = A.begin();
+  // Make sure iterators work as expected.
+  EXPECT_THAT(std::vector<DWARFDie>(A.begin(), A.end()),
+              testing::ElementsAre(B, C, D));
+  EXPECT_THAT(std::vector<DWARFDie>(A.rbegin(), A.rend()),
+              testing::ElementsAre(D, C, B));
 
-  EXPECT_EQ(It, Begin);
-  EXPECT_EQ(*It, B);
-  ++It;
-  EXPECT_EQ(*It, C);
-  ++It;
-  EXPECT_EQ(*It, D);
-  ++It;
-  EXPECT_EQ(It, End);
-  --It;
-  EXPECT_EQ(*It, D);
-  --It;
-  EXPECT_EQ(*It, C);
-  --It;
-  EXPECT_EQ(*It, B);
-  EXPECT_EQ(It, Begin);
+  // Make sure iterator is bidirectional.
+  {
+    auto Begin = A.begin();
+    auto End = A.end();
+    auto It = A.begin();
+
+    EXPECT_EQ(It, Begin);
+    EXPECT_EQ(*It, B);
+    ++It;
+    EXPECT_EQ(*It, C);
+    ++It;
+    EXPECT_EQ(*It, D);
+    ++It;
+    EXPECT_EQ(It, End);
+    --It;
+    EXPECT_EQ(*It, D);
+    --It;
+    EXPECT_EQ(*It, C);
+    --It;
+    EXPECT_EQ(*It, B);
+    EXPECT_EQ(It, Begin);
+  }
+
+  // Make sure reverse iterator is bidirectional.
+  {
+    auto Begin = A.rbegin();
+    auto End = A.rend();
+    auto It = A.rbegin();
+
+    EXPECT_EQ(It, Begin);
+    EXPECT_EQ(*It, D);
+    ++It;
+    EXPECT_EQ(*It, C);
+    ++It;
+    EXPECT_EQ(*It, B);
+    ++It;
+    EXPECT_EQ(It, End);
+    --It;
+    EXPECT_EQ(*It, B);
+    --It;
+    EXPECT_EQ(*It, C);
+    --It;
+    EXPECT_EQ(*It, D);
+    EXPECT_EQ(It, Begin);
+  }
 }
 
 TEST(DWARFDebugInfo, TestDWARFDie) {
@@ -1147,7 +1228,8 @@ TEST(DWARFDebugInfo, TestChildIterators) {
   // Verify the number of compile units is correct.
   uint32_t NumCUs = DwarfContext->getNumCompileUnits();
   EXPECT_EQ(NumCUs, 1u);
-  DWARFCompileUnit *U = DwarfContext->getCompileUnitAtIndex(0);
+  DWARFCompileUnit *U =
+      cast<DWARFCompileUnit>(DwarfContext->getUnitAtIndex(0));
 
   // Get the compile unit DIE is valid.
   auto CUDie = U->getUnitDIE(false);
@@ -1209,7 +1291,8 @@ TEST(DWARFDebugInfo, TestEmptyChildren) {
   // Verify the number of compile units is correct.
   uint32_t NumCUs = DwarfContext->getNumCompileUnits();
   EXPECT_EQ(NumCUs, 1u);
-  DWARFCompileUnit *U = DwarfContext->getCompileUnitAtIndex(0);
+  DWARFCompileUnit *U =
+      cast<DWARFCompileUnit>(DwarfContext->getUnitAtIndex(0));
 
   // Get the compile unit DIE is valid.
   auto CUDie = U->getUnitDIE(false);
@@ -1256,7 +1339,8 @@ TEST(DWARFDebugInfo, TestAttributeIterators) {
   // Verify the number of compile units is correct.
   uint32_t NumCUs = DwarfContext->getNumCompileUnits();
   EXPECT_EQ(NumCUs, 1u);
-  DWARFCompileUnit *U = DwarfContext->getCompileUnitAtIndex(0);
+  DWARFCompileUnit *U =
+      cast<DWARFCompileUnit>(DwarfContext->getUnitAtIndex(0));
 
   // Get the compile unit DIE is valid.
   auto CUDie = U->getUnitDIE(false);
@@ -1324,7 +1408,8 @@ TEST(DWARFDebugInfo, TestFindRecurse) {
   // Verify the number of compile units is correct.
   uint32_t NumCUs = DwarfContext->getNumCompileUnits();
   EXPECT_EQ(NumCUs, 1u);
-  DWARFCompileUnit *U = DwarfContext->getCompileUnitAtIndex(0);
+  DWARFCompileUnit *U =
+      cast<DWARFCompileUnit>(DwarfContext->getUnitAtIndex(0));
 
   // Get the compile unit DIE is valid.
   auto CUDie = U->getUnitDIE(false);
@@ -1531,7 +1616,8 @@ TEST(DWARFDebugInfo, TestFindAttrs) {
   // Verify the number of compile units is correct.
   uint32_t NumCUs = DwarfContext->getNumCompileUnits();
   EXPECT_EQ(NumCUs, 1u);
-  DWARFCompileUnit *U = DwarfContext->getCompileUnitAtIndex(0);
+  DWARFCompileUnit *U =
+      cast<DWARFCompileUnit>(DwarfContext->getUnitAtIndex(0));
 
   // Get the compile unit DIE is valid.
   auto CUDie = U->getUnitDIE(false);
@@ -1590,7 +1676,8 @@ TEST(DWARFDebugInfo, TestImplicitConstAbbrevs) {
   auto Obj = object::ObjectFile::createObjectFile(FileBuffer);
   EXPECT_TRUE((bool)Obj);
   std::unique_ptr<DWARFContext> DwarfContext = DWARFContext::create(**Obj);
-  DWARFCompileUnit *U = DwarfContext->getCompileUnitAtIndex(0);
+  DWARFCompileUnit *U =
+      cast<DWARFCompileUnit>(DwarfContext->getUnitAtIndex(0));
   EXPECT_TRUE((bool)U);
 
   const auto *Abbrevs = U->getAbbreviations();

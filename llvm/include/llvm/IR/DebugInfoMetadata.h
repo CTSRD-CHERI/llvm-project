@@ -1162,7 +1162,8 @@ public:
     NoDebug = 0,
     FullDebug,
     LineTablesOnly,
-    LastEmissionKind = LineTablesOnly
+    DebugDirectivesOnly,
+    LastEmissionKind = DebugDirectivesOnly
   };
 
   static Optional<DebugEmissionKind> getEmissionKind(StringRef Str);
@@ -1267,6 +1268,9 @@ public:
   unsigned getRuntimeVersion() const { return RuntimeVersion; }
   DebugEmissionKind getEmissionKind() const {
     return (DebugEmissionKind)EmissionKind;
+  }
+  bool isDebugDirectivesOnly() const {
+    return EmissionKind == DebugDirectivesOnly;
   }
   bool getDebugInfoForProfiling() const { return DebugInfoForProfiling; }
   bool getGnuPubnames() const { return GnuPubnames; }
@@ -2443,6 +2447,12 @@ public:
   static DIExpression *prependOpcodes(const DIExpression *Expr,
                                       SmallVectorImpl<uint64_t> &Ops,
                                       bool StackValue = false);
+
+  /// Append the opcodes \p Ops to \p DIExpr. Unlike \ref appendToStack, the
+  /// returned expression is a stack value only if \p DIExpr is a stack value.
+  /// If \p DIExpr describes a fragment, the returned expression will describe
+  /// the same fragment.
+  static DIExpression *append(const DIExpression *Expr, ArrayRef<uint64_t> Ops);
 
   /// Convert \p DIExpr into a stack value if it isn't one already by appending
   /// DW_OP_deref if needed, and appending \p Ops to the resulting expression.

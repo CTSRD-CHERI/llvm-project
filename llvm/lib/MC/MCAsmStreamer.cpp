@@ -165,6 +165,7 @@ public:
   void EmitCOFFSymbolIndex(MCSymbol const *Symbol) override;
   void EmitCOFFSectionIndex(MCSymbol const *Symbol) override;
   void EmitCOFFSecRel32(MCSymbol const *Symbol, uint64_t Offset) override;
+  void EmitCOFFImgRel32(MCSymbol const *Symbol, int64_t Offset) override;
   void emitELFSize(MCSymbol *Symbol, const MCExpr *Value) override;
   void EmitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
                         unsigned ByteAlignment) override;
@@ -341,7 +342,7 @@ void MCAsmStreamer::AddComment(const Twine &T, bool EOL) {
   if (!IsVerboseAsm) return;
 
   T.toVector(CommentToEmit);
- 
+
   if (EOL)
     CommentToEmit.push_back('\n'); // Place comment in a new line.
 }
@@ -659,7 +660,7 @@ void MCAsmStreamer::EmitSyntaxDirective() {
     EmitEOL();
   }
   // FIXME: Currently emit unprefix'ed registers.
-  // The intel_syntax directive has one optional argument 
+  // The intel_syntax directive has one optional argument
   // with may have a value of prefix or noprefix.
 }
 
@@ -708,6 +709,16 @@ void MCAsmStreamer::EmitCOFFSecRel32(MCSymbol const *Symbol, uint64_t Offset) {
   Symbol->print(OS, MAI);
   if (Offset != 0)
     OS << '+' << Offset;
+  EmitEOL();
+}
+
+void MCAsmStreamer::EmitCOFFImgRel32(MCSymbol const *Symbol, int64_t Offset) {
+  OS << "\t.rva\t";
+  Symbol->print(OS, MAI);
+  if (Offset > 0)
+    OS << '+' << Offset;
+  else if (Offset < 0)
+    OS << '-' << -Offset;
   EmitEOL();
 }
 
@@ -820,7 +831,7 @@ static void PrintQuotedString(StringRef Data, raw_ostream &OS) {
       continue;
     }
 
-    if (isprint((unsigned char)C)) {
+    if (isPrint((unsigned char)C)) {
       OS << (char)C;
       continue;
     }
