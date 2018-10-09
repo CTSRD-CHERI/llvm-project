@@ -1826,6 +1826,24 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     if (E->getType()->isPointerType() && DestTy->isPointerType())
       return CGF.EmitPointerCast(Src, E->getType(), DestTy);
 
+    if (CGF.CGM.getCodeGenOpts().StrictVTablePointers) {
+      const QualType SrcType = E->getType();
+
+      if (SrcType.mayBeNotDynamicClass() && DestTy.mayBeDynamicClass()) {
+        // Casting to pointer that could carry dynamic information (provided by
+        // invariant.group) requires launder.
+        Src = Builder.CreateLaunderInvariantGroup(Src);
+      } else if (SrcType.mayBeDynamicClass() && DestTy.mayBeNotDynamicClass()) {
+        // Casting to pointer that does not carry dynamic information (provided
+        // by invariant.group) requires stripping it.  Note that we don't do it
+        // if the source could not be dynamic type and destination could be
+        // dynamic because dynamic information is already laundered.  It is
+        // because launder(strip(src)) == launder(src), so there is no need to
+        // add extra strip before launder.
+        Src = Builder.CreateStripInvariantGroup(Src);
+      }
+    }
+
     return Builder.CreateBitCast(Src, DstTy);
   }
   case CK_AddressSpaceConversion:
@@ -2009,7 +2027,7 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
 
   case CK_IntegralToPointer: {
     Value *Src = Visit(const_cast<Expr*>(E));
-    llvm::Type *ResultType = ConvertType(DestTy);
+    llvm::Type *DestLLVMTy = ConvertType(DestTy);
     auto &C = CGF.getContext();
     auto &TI = C.getTargetInfo();
     bool IsPureCap = TI.areAllPointersCapabilities();
@@ -2019,7 +2037,7 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     if (SrcIsCheriCap) {
       // If we're casting to a capability pointer, then it's just a bitcast:
       if (DestTy->isCHERICapabilityType(CGF.getContext()))
-        return Builder.CreateBitCast(Src, ResultType);
+        return Builder.CreateBitCast(Src, DestLLVMTy);
       // Otherwise, it's some kind of non-capability pointer, so we need to
       // create an integer value first
       if (IsPureCap)
@@ -2031,7 +2049,6 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     }
     // First, convert to the correct width so that we control the kind of
     // extension.
-    auto DestLLVMTy = ConvertType(DestTy);
     llvm::Type *MiddleTy = CGF.CGM.getDataLayout().getIntPtrType(DestLLVMTy);
     bool InputSigned = E->getType()->isSignedIntegerOrEnumerationType();
     llvm::Value* IntResult =
@@ -2039,18 +2056,37 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
 
     if (IsPureCap && DestTy->isCHERICapabilityType(CGF.getContext()))
       return CGF.setCapabilityIntegerValue(
-          llvm::ConstantPointerNull::get(cast<llvm::PointerType>(ResultType)),
+          llvm::ConstantPointerNull::get(cast<llvm::PointerType>(DestLLVMTy)),
           IntResult);
     // assert(!SrcIsCheriCap);
     // TODO: generate CFromPtr/CFromInt depending on value (for constants use
     // CFromInt/otherwise CFromPtr)
     // FIMXE: This should warn!
-    return Builder.CreateIntToPtr(IntResult, ResultType);
+
+    auto *IntToPtr = Builder.CreateIntToPtr(IntResult, DestLLVMTy);
+
+    if (CGF.CGM.getCodeGenOpts().StrictVTablePointers) {
+      // Going from integer to pointer that could be dynamic requires reloading
+      // dynamic information from invariant.group.
+      if (DestTy.mayBeDynamicClass())
+        IntToPtr = Builder.CreateLaunderInvariantGroup(IntToPtr);
+    }
+    return IntToPtr;
   }
   case CK_PointerToIntegral: {
-    llvm::Value *Src = Visit(E);
-    llvm::Type *ResultType = ConvertType(DestTy);
     assert(!DestTy->isBooleanType() && "bool should use PointerToBool");
+    auto *PtrExpr = Visit(E);
+    llvm::Type *ResultType = ConvertType(DestTy);
+
+    if (CGF.CGM.getCodeGenOpts().StrictVTablePointers) {
+      const QualType SrcType = E->getType();
+
+      // Casting to integer requires stripping dynamic information as it does
+      // not carries it.
+      if (SrcType.mayBeDynamicClass())
+        PtrExpr = Builder.CreateStripInvariantGroup(PtrExpr);
+    }
+
     auto &C = CGF.getContext();
     auto &TI = C.getTargetInfo();
     bool IsPureCap = TI.areAllPointersCapabilities();
@@ -2059,30 +2095,29 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     if (DestTy->isCHERICapabilityType(C)) {
       assert(DestTy->isIntCapType());
       if (E->getType()->isCHERICapabilityType(C))
-        return Builder.CreateBitCast(Src, ResultType);
+        return Builder.CreateBitCast(PtrExpr, ResultType);
 
-      Src = Builder.CreatePtrToInt(Src,
-            llvm::IntegerType::get(Src->getContext(), TI.getPointerWidth(0)));
+      PtrExpr = Builder.CreatePtrToInt(PtrExpr,
+            llvm::IntegerType::get(PtrExpr->getContext(), TI.getPointerWidth(0)));
       // FIXME: should casts to intcap_t yield a tagged or untagged value?
       // I believe we should make a cast to __intcap_t yield the integer value
       // and require a (__cheri_tocap ) cast if you really want the cfromddc behaviour
       return CGF.setCapabilityIntegerValue(
-          llvm::ConstantPointerNull::get(cast<llvm::PointerType>(ResultType)), Src);
+          llvm::ConstantPointerNull::get(cast<llvm::PointerType>(ResultType)), PtrExpr);
 #if 0   // This would yield a cfromddc:
-      return Builder.CreateIntToPtr(Src, ResultType);
+      return Builder.CreateIntToPtr(PtrExpr, ResultType);
 #endif
     }
     if (IsPureCap) {
-      Src = CGF.getPointerAddress(Src);
-      return Builder.CreateTruncOrBitCast(Src, ResultType);
+      PtrExpr = CGF.getPointerAddress(PtrExpr);
+      return Builder.CreateTruncOrBitCast(PtrExpr, ResultType);
     }
     // ptrtoint will result in CToPtr in the hybrid ABI -> warn about it
     if (E->getType()->isCHERICapabilityType(C)) {
       warnAboutImplicitCToPtr(CGF.CGM, CE);
     }
-    return Builder.CreatePtrToInt(Src, ResultType);
+    return Builder.CreatePtrToInt(PtrExpr, ResultType);
   }
-
   case CK_ToVoid: {
     CGF.EmitIgnoredExpr(E);
     return nullptr;
@@ -3611,6 +3646,23 @@ Value *ScalarExprEmitter::EmitCompare(const BinaryOperator *E,
       Result = Builder.CreateICmp(SICmpOpc, LHS, RHS, "cmp");
     } else {
       // Unsigned integers and pointers.
+
+      if (CGF.CGM.getCodeGenOpts().StrictVTablePointers &&
+          !isa<llvm::ConstantPointerNull>(LHS) &&
+          !isa<llvm::ConstantPointerNull>(RHS)) {
+
+        // Dynamic information is required to be stripped for comparisons,
+        // because it could leak the dynamic information.  Based on comparisons
+        // of pointers to dynamic objects, the optimizer can replace one pointer
+        // with another, which might be incorrect in presence of invariant
+        // groups. Comparison with null is safe because null does not carry any
+        // dynamic information.
+        if (LHSTy.mayBeDynamicClass())
+          LHS = Builder.CreateStripInvariantGroup(LHS);
+        if (RHSTy.mayBeDynamicClass())
+          RHS = Builder.CreateStripInvariantGroup(RHS);
+      }
+
       Result = Builder.CreateICmp(UICmpOpc, LHS, RHS, "cmp");
     }
 

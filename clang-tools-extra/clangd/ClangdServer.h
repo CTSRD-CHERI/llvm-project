@@ -141,7 +141,7 @@ public:
   /// when codeComplete results become available.
   void codeComplete(PathRef File, Position Pos,
                     const clangd::CodeCompleteOptions &Opts,
-                    Callback<CompletionList> CB);
+                    Callback<CodeCompleteResult> CB);
 
   /// Provide signature help for \p File at \p Pos.  This method should only be
   /// called for tracked files.
@@ -167,6 +167,10 @@ public:
   void workspaceSymbols(StringRef Query, int Limit,
                         Callback<std::vector<SymbolInformation>> CB);
 
+  /// Retrieve the symbols within the specified file.
+  void documentSymbols(StringRef File,
+                       Callback<std::vector<SymbolInformation>> CB);
+
   /// Run formatting for \p Rng inside \p File with content \p Code.
   llvm::Expected<tooling::Replacements> formatRange(StringRef Code,
                                                     PathRef File, Range Rng);
@@ -188,7 +192,7 @@ public:
   /// Only for testing purposes.
   /// Waits until all requests to worker thread are finished and dumps AST for
   /// \p File. \p File must be in the list of added documents.
-  void dumpAST(PathRef File, UniqueFunction<void(std::string)> Callback);
+  void dumpAST(PathRef File, llvm::unique_function<void(std::string)> Callback);
   /// Called when an event occurs for a watched file in the workspace.
   void onFileEvent(const DidChangeWatchedFilesParams &Params);
 

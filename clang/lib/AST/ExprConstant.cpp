@@ -8442,7 +8442,8 @@ bool IntExprEvaluator::VisitBuiltinCallExpr(const CallExpr *E,
     }
 
     APValue APV{Result};
-    handleAssignment(Info, E, ResultLValue, ResultType, APV);
+    if (!handleAssignment(Info, E, ResultLValue, ResultType, APV))
+      return false;
     return Success(DidOverflow, E);
   }
   }

@@ -112,6 +112,7 @@ void ClangdLSPServer::onInitialize(InitializeParams &Params) {
             {"documentHighlightProvider", true},
             {"hoverProvider", true},
             {"renameProvider", true},
+            {"documentSymbolProvider", true},
             {"workspaceSymbolProvider", true},
             {"executeCommandProvider",
              json::obj{
@@ -294,6 +295,19 @@ void ClangdLSPServer::onDocumentFormatting(DocumentFormattingParams &Params) {
                llvm::toString(ReplacementsOrError.takeError()));
 }
 
+void ClangdLSPServer::onDocumentSymbol(DocumentSymbolParams &Params) {
+  Server.documentSymbols(
+      Params.textDocument.uri.file(),
+      [this](llvm::Expected<std::vector<SymbolInformation>> Items) {
+        if (!Items)
+          return replyError(ErrorCode::InvalidParams,
+                            llvm::toString(Items.takeError()));
+        for (auto &Sym : *Items)
+          Sym.kind = adjustKindToCapability(Sym.kind, SupportedSymbolKinds);
+        reply(json::ary(*Items));
+      });
+}
+
 void ClangdLSPServer::onCodeAction(CodeActionParams &Params) {
   // We provide a code action for each diagnostic at the requested location
   // which has FixIts available.
@@ -320,11 +334,15 @@ void ClangdLSPServer::onCodeAction(CodeActionParams &Params) {
 
 void ClangdLSPServer::onCompletion(TextDocumentPositionParams &Params) {
   Server.codeComplete(Params.textDocument.uri.file(), Params.position, CCOpts,
-                      [](llvm::Expected<CompletionList> List) {
+                      [this](llvm::Expected<CodeCompleteResult> List) {
                         if (!List)
                           return replyError(ErrorCode::InvalidParams,
                                             llvm::toString(List.takeError()));
-                        reply(*List);
+                        CompletionList LSPList;
+                        LSPList.isIncomplete = List->HasMore;
+                        for (const auto &R : List->Completions)
+                          LSPList.items.push_back(R.render(CCOpts));
+                        reply(std::move(LSPList));
                       });
 }
 

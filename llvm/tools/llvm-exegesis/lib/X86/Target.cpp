@@ -14,6 +14,7 @@
 #include "MCTargetDesc/X86MCTargetDesc.h"
 #include "X86.h"
 #include "X86RegisterInfo.h"
+#include "X86Subtarget.h"
 #include "llvm/MC/MCInstBuilder.h"
 
 namespace exegesis {
@@ -43,9 +44,9 @@ template <typename Impl> class X86BenchmarkRunner : public Impl {
     case llvm::X86II::NotFP:
       break;
     case llvm::X86II::ZeroArgFP:
-      return Impl::handleZeroArgFP(Instr);
+      return llvm::make_error<BenchmarkFailure>("Unsupported x87 ZeroArgFP");
     case llvm::X86II::OneArgFP:
-      return Impl::handleOneArgFP(Instr); // fstp ST(0)
+      return llvm::make_error<BenchmarkFailure>("Unsupported x87 OneArgFP");
     case llvm::X86II::OneArgFPRW:
     case llvm::X86II::TwoArgFP: {
       // These are instructions like
@@ -60,7 +61,7 @@ template <typename Impl> class X86BenchmarkRunner : public Impl {
     case llvm::X86II::CondMovFP:
       return Impl::handleCondMovFP(Instr);
     case llvm::X86II::SpecialFP:
-      return Impl::handleSpecialFP(Instr);
+      return llvm::make_error<BenchmarkFailure>("Unsupported x87 SpecialFP");
     default:
       llvm_unreachable("Unknown FP Type!");
     }
@@ -75,24 +76,12 @@ protected:
   using Base = LatencyBenchmarkRunner;
   using Base::Base;
   llvm::Expected<SnippetPrototype>
-  handleZeroArgFP(const Instruction &Instr) const {
-    return llvm::make_error<BenchmarkFailure>("Unsupported x87 ZeroArgFP");
-  }
-  llvm::Expected<SnippetPrototype>
-  handleOneArgFP(const Instruction &Instr) const {
-    return llvm::make_error<BenchmarkFailure>("Unsupported x87 OneArgFP");
-  }
-  llvm::Expected<SnippetPrototype>
   handleCompareFP(const Instruction &Instr) const {
     return llvm::make_error<BenchmarkFailure>("Unsupported x87 CompareFP");
   }
   llvm::Expected<SnippetPrototype>
   handleCondMovFP(const Instruction &Instr) const {
     return llvm::make_error<BenchmarkFailure>("Unsupported x87 CondMovFP");
-  }
-  llvm::Expected<SnippetPrototype>
-  handleSpecialFP(const Instruction &Instr) const {
-    return llvm::make_error<BenchmarkFailure>("Unsupported x87 SpecialFP");
   }
 };
 
@@ -100,71 +89,75 @@ class X86UopsImpl : public UopsBenchmarkRunner {
 protected:
   using Base = UopsBenchmarkRunner;
   using Base::Base;
-  llvm::Expected<SnippetPrototype>
-  handleZeroArgFP(const Instruction &Instr) const {
-    return llvm::make_error<BenchmarkFailure>("Unsupported x87 ZeroArgFP");
-  }
-  llvm::Expected<SnippetPrototype>
-  handleOneArgFP(const Instruction &Instr) const {
-    return llvm::make_error<BenchmarkFailure>("Unsupported x87 OneArgFP");
-  }
+  // We can compute uops for any FP instruction that does not grow or shrink the
+  // stack (either do not touch the stack or push as much as they pop).
   llvm::Expected<SnippetPrototype>
   handleCompareFP(const Instruction &Instr) const {
-    return llvm::make_error<BenchmarkFailure>("Unsupported x87 CompareFP");
+    return generateUnconstrainedPrototype(
+        Instr, "instruction does not grow/shrink the FP stack");
   }
   llvm::Expected<SnippetPrototype>
   handleCondMovFP(const Instruction &Instr) const {
-    return llvm::make_error<BenchmarkFailure>("Unsupported x87 CondMovFP");
-  }
-  llvm::Expected<SnippetPrototype>
-  handleSpecialFP(const Instruction &Instr) const {
-    return llvm::make_error<BenchmarkFailure>("Unsupported x87 SpecialFP");
+    return generateUnconstrainedPrototype(
+        Instr, "instruction does not grow/shrink the FP stack");
   }
 };
 
 class ExegesisX86Target : public ExegesisTarget {
   void addTargetSpecificPasses(llvm::PassManagerBase &PM) const override {
     // Lowers FP pseudo-instructions, e.g. ABS_Fp32 -> ABS_F.
-    // FIXME: Enable when the exegesis assembler no longer does
-    // Properties.reset(TracksLiveness);
     PM.add(llvm::createX86FloatingPointStackifierPass());
   }
 
-  std::vector<llvm::MCInst>
-  setRegToConstant(unsigned Reg) const override {
-    if (llvm::X86::GR8RegClass.contains(Reg)) {
+  std::vector<llvm::MCInst> setRegToConstant(const llvm::MCSubtargetInfo &STI,
+                                             unsigned Reg) const override {
+    // GPR.
+    if (llvm::X86::GR8RegClass.contains(Reg))
       return {llvm::MCInstBuilder(llvm::X86::MOV8ri).addReg(Reg).addImm(1)};
-    }
-    if (llvm::X86::GR16RegClass.contains(Reg)) {
+    if (llvm::X86::GR16RegClass.contains(Reg))
       return {llvm::MCInstBuilder(llvm::X86::MOV16ri).addReg(Reg).addImm(1)};
-    }
-    if (llvm::X86::GR32RegClass.contains(Reg)) {
+    if (llvm::X86::GR32RegClass.contains(Reg))
       return {llvm::MCInstBuilder(llvm::X86::MOV32ri).addReg(Reg).addImm(1)};
-    }
-    if (llvm::X86::GR64RegClass.contains(Reg)) {
+    if (llvm::X86::GR64RegClass.contains(Reg))
       return {llvm::MCInstBuilder(llvm::X86::MOV64ri32).addReg(Reg).addImm(1)};
-    }
+    // MMX.
+    if (llvm::X86::VR64RegClass.contains(Reg))
+      return setVectorRegToConstant(Reg, 8, llvm::X86::MMX_MOVQ64rm);
+    // {X,Y,Z}MM.
     if (llvm::X86::VR128XRegClass.contains(Reg)) {
-      return setVectorRegToConstant(Reg, 16, llvm::X86::VMOVDQUrm);
+      if (STI.getFeatureBits()[llvm::X86::FeatureAVX512])
+        return setVectorRegToConstant(Reg, 16, llvm::X86::VMOVDQU32Z128rm);
+      if (STI.getFeatureBits()[llvm::X86::FeatureAVX])
+        return setVectorRegToConstant(Reg, 16, llvm::X86::VMOVDQUrm);
+      return setVectorRegToConstant(Reg, 16, llvm::X86::MOVDQUrm);
     }
     if (llvm::X86::VR256XRegClass.contains(Reg)) {
+      if (STI.getFeatureBits()[llvm::X86::FeatureAVX512])
+        return setVectorRegToConstant(Reg, 32, llvm::X86::VMOVDQU32Z256rm);
       return setVectorRegToConstant(Reg, 32, llvm::X86::VMOVDQUYrm);
     }
-    if (llvm::X86::VR512RegClass.contains(Reg)) {
-      return setVectorRegToConstant(Reg, 64, llvm::X86::VMOVDQU64Zrm);
-    }
+    if (llvm::X86::VR512RegClass.contains(Reg))
+      return setVectorRegToConstant(Reg, 64, llvm::X86::VMOVDQU32Zrm);
+    // X87.
     if (llvm::X86::RFP32RegClass.contains(Reg) ||
         llvm::X86::RFP64RegClass.contains(Reg) ||
-        llvm::X86::RFP80RegClass.contains(Reg)) {
+        llvm::X86::RFP80RegClass.contains(Reg))
       return setVectorRegToConstant(Reg, 8, llvm::X86::LD_Fp64m);
+    if (Reg == llvm::X86::EFLAGS) {
+      // Set all flags to 0 but the bits that are "reserved and set to 1".
+      constexpr const uint32_t kImmValue = 0x00007002u;
+      std::vector<llvm::MCInst> Result;
+      Result.push_back(allocateStackSpace(8));
+      Result.push_back(fillStackSpace(llvm::X86::MOV64mi32, 0, kImmValue));
+      Result.push_back(llvm::MCInstBuilder(llvm::X86::POPF64)); // Also pops.
+      return Result;
     }
     return {};
   }
 
   std::unique_ptr<BenchmarkRunner>
   createLatencyBenchmarkRunner(const LLVMState &State) const override {
-    return llvm::make_unique<X86BenchmarkRunner<X86LatencyImpl>>(
-        State);
+    return llvm::make_unique<X86BenchmarkRunner<X86LatencyImpl>>(State);
   }
 
   std::unique_ptr<BenchmarkRunner>
@@ -189,40 +182,58 @@ private:
     // value that has set bits for all byte values and is a normal float/
     // double. 0x40404040 is ~32.5 when interpreted as a double and ~3.0f when
     // interpreted as a float.
-    constexpr const uint64_t kImmValue = 0x40404040ull;
+    constexpr const uint32_t kImmValue = 0x40404040u;
     std::vector<llvm::MCInst> Result;
-    // Allocate scratch memory on the stack.
-    Result.push_back(llvm::MCInstBuilder(llvm::X86::SUB64ri8)
-                         .addReg(llvm::X86::RSP)
-                         .addReg(llvm::X86::RSP)
-                         .addImm(RegSizeBytes));
-    // Fill scratch memory.
-    for (unsigned Disp = 0; Disp < RegSizeBytes; Disp += 4) {
-      Result.push_back(llvm::MCInstBuilder(llvm::X86::MOV32mi)
-                           // Address = ESP
-                           .addReg(llvm::X86::RSP) // BaseReg
-                           .addImm(1)              // ScaleAmt
-                           .addReg(0)              // IndexReg
-                           .addImm(Disp)           // Disp
-                           .addReg(0)              // Segment
-                           // Immediate.
-                           .addImm(kImmValue));
+    Result.push_back(allocateStackSpace(RegSizeBytes));
+    constexpr const unsigned kMov32NumBytes = 4;
+    for (unsigned Disp = 0; Disp < RegSizeBytes; Disp += kMov32NumBytes) {
+      Result.push_back(fillStackSpace(llvm::X86::MOV32mi, Disp, kImmValue));
     }
-    // Load Reg from scratch memory.
-    Result.push_back(llvm::MCInstBuilder(RMOpcode)
-                         .addReg(Reg)
-                         // Address = ESP
-                         .addReg(llvm::X86::RSP) // BaseReg
-                         .addImm(1)              // ScaleAmt
-                         .addReg(0)              // IndexReg
-                         .addImm(0)              // Disp
-                         .addReg(0));            // Segment
-    // Release scratch memory.
-    Result.push_back(llvm::MCInstBuilder(llvm::X86::ADD64ri8)
-                         .addReg(llvm::X86::RSP)
-                         .addReg(llvm::X86::RSP)
-                         .addImm(RegSizeBytes));
+    Result.push_back(loadToReg(Reg, RMOpcode));
+    Result.push_back(releaseStackSpace(RegSizeBytes));
     return Result;
+  }
+
+  // Allocates scratch memory on the stack.
+  static llvm::MCInst allocateStackSpace(unsigned Bytes) {
+    return llvm::MCInstBuilder(llvm::X86::SUB64ri8)
+        .addReg(llvm::X86::RSP)
+        .addReg(llvm::X86::RSP)
+        .addImm(Bytes);
+  }
+
+  // Fills scratch memory at offset `OffsetBytes` with value `Imm`.
+  static llvm::MCInst fillStackSpace(unsigned MovOpcode, unsigned OffsetBytes,
+                                     uint64_t Imm) {
+    return llvm::MCInstBuilder(MovOpcode)
+        // Address = ESP
+        .addReg(llvm::X86::RSP) // BaseReg
+        .addImm(1)              // ScaleAmt
+        .addReg(0)              // IndexReg
+        .addImm(OffsetBytes)    // Disp
+        .addReg(0)              // Segment
+        // Immediate.
+        .addImm(Imm);
+  }
+
+  // Loads scratch memory into register `Reg` using opcode `RMOpcode`.
+  static llvm::MCInst loadToReg(unsigned Reg, unsigned RMOpcode) {
+    return llvm::MCInstBuilder(RMOpcode)
+        .addReg(Reg)
+        // Address = ESP
+        .addReg(llvm::X86::RSP) // BaseReg
+        .addImm(1)              // ScaleAmt
+        .addReg(0)              // IndexReg
+        .addImm(0)              // Disp
+        .addReg(0);             // Segment
+  }
+
+  // Releases scratch memory.
+  static llvm::MCInst releaseStackSpace(unsigned Bytes) {
+    return llvm::MCInstBuilder(llvm::X86::ADD64ri8)
+        .addReg(llvm::X86::RSP)
+        .addReg(llvm::X86::RSP)
+        .addImm(Bytes);
   }
 };
 

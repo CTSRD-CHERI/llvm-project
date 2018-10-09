@@ -135,6 +135,9 @@ void LinkerScript::setDot(Expr E, const Twine &Loc, bool InSec) {
   // Update to location counter means update to section size.
   if (InSec)
     expandOutputSection(Val - Dot);
+  else
+    expandMemoryRegions(Val - Dot);
+
   Dot = Val;
 }
 
@@ -245,13 +248,12 @@ void LinkerScript::declareSymbols() {
       declareSymbol(Cmd);
       continue;
     }
-    auto *Sec = dyn_cast<OutputSection>(Base);
-    if (!Sec)
-      continue;
+
     // If the output section directive has constraints,
     // we can't say for sure if it is going to be included or not.
     // Skip such sections for now. Improve the checks if we ever
     // need symbols from that sections to be declared early.
+    auto *Sec = cast<OutputSection>(Base);
     if (Sec->Constraint != ConstraintKind::NoConstraint)
       continue;
     for (BaseCommand *Base2 : Sec->SectionCommands)
@@ -708,8 +710,6 @@ void LinkerScript::output(InputSection *S) {
 }
 
 void LinkerScript::switchTo(OutputSection *Sec) {
-  if (Ctx->OutSec == Sec)
-    return;
   Ctx->OutSec = Sec;
 
   uint64_t Before = advance(0, 1);
@@ -834,9 +834,16 @@ static bool isDiscardable(OutputSection &Sec) {
   if (Sec.ExpressionsUseSymbols)
     return false;
 
-  for (BaseCommand *Base : Sec.SectionCommands)
+  for (BaseCommand *Base : Sec.SectionCommands) {
+    if (auto Cmd = dyn_cast<SymbolAssignment>(Base))
+      // Don't create empty output sections just for unreferenced PROVIDE
+      // symbols.
+      if (Cmd->Name != "." && !Cmd->Sym)
+        continue;
+
     if (!isa<InputSectionDescription>(*Base))
       return false;
+  }
   return true;
 }
 

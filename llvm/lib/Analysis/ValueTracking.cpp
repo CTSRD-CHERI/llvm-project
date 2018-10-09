@@ -1129,7 +1129,7 @@ static void computeKnownBitsFromOperator(const Operator *I, KnownBits &Known,
   }
   case Instruction::BitCast: {
     Type *SrcTy = I->getOperand(0)->getType();
-    if ((SrcTy->isIntegerTy() || SrcTy->isPointerTy()) &&
+    if (SrcTy->isIntOrPtrTy() &&
         // TODO: For now, not handling conversions like:
         // (bitcast i64 %x to <2 x i32>)
         !I->getType()->isVectorTy()) {
@@ -3404,8 +3404,9 @@ const Value *llvm::getArgumentAliasingToReturnedPointer(ImmutableCallSite CS) {
 }
 
 bool llvm::isIntrinsicReturningPointerAliasingArgumentWithoutCapturing(
-      ImmutableCallSite CS) {
-  return CS.getIntrinsicID() == Intrinsic::launder_invariant_group;
+    ImmutableCallSite CS) {
+  return CS.getIntrinsicID() == Intrinsic::launder_invariant_group ||
+         CS.getIntrinsicID() == Intrinsic::strip_invariant_group;
 }
 
 /// \p PN defines a loop-variant pointer to an object.  Check if the
@@ -3454,13 +3455,15 @@ Value *llvm::GetUnderlyingObject(Value *V, const DataLayout &DL,
       return V;
     } else {
       if (auto CS = CallSite(V)) {
-        // Note: getArgumentAliasingToReturnedPointer keeps it in sync with
-        // CaptureTracking, which is needed for correctness.  This is because
-        // some intrinsics like launder.invariant.group returns pointers that
-        // are aliasing it's argument, which is known to CaptureTracking.
-        // If AliasAnalysis does not use the same information, it could assume
-        // that pointer returned from launder does not alias it's argument
-        // because launder could not return it if the pointer was not captured.
+        // CaptureTracking can know about special capturing properties of some
+        // intrinsics like launder.invariant.group, that can't be expressed with
+        // the attributes, but have properties like returning aliasing pointer.
+        // Because some analysis may assume that nocaptured pointer is not
+        // returned from some special intrinsic (because function would have to
+        // be marked with returns attribute), it is crucial to use this function
+        // because it should be in sync with CaptureTracking. Not using it may
+        // cause weird miscompilations where 2 aliasing pointers are assumed to
+        // noalias.
         if (auto *RP = getArgumentAliasingToReturnedPointer(CS)) {
           V = RP;
           continue;
@@ -4602,39 +4605,34 @@ static SelectPatternResult matchSelectPattern(CmpInst::Predicate Pred,
     }
   }
 
-  const APInt *C1;
-  if (match(CmpRHS, m_APInt(C1))) {
-    // Sign-extending LHS does not change its sign, so TrueVal/FalseVal can
-    // match against either LHS or sext(LHS).
-    auto MaybeSExtLHS = m_CombineOr(m_Specific(CmpLHS),
-                                    m_SExt(m_Specific(CmpLHS)));
-    if ((match(TrueVal, MaybeSExtLHS) &&
-         match(FalseVal, m_Neg(m_Specific(TrueVal)))) ||
-        (match(FalseVal, MaybeSExtLHS) &&
-         match(TrueVal, m_Neg(m_Specific(FalseVal))))) {
-      // Set LHS and RHS so that RHS is the negated operand of the select
-      if (match(TrueVal, MaybeSExtLHS)) {
-        LHS = TrueVal;
-        RHS = FalseVal;
-      } else {
-        LHS = FalseVal;
-        RHS = TrueVal;
-      }
-
-      // ABS(X) ==> (X >s 0) ? X : -X and (X >s -1) ? X : -X
-      // NABS(X) ==> (X >s 0) ? -X : X and (X >s -1) ? -X : X
-      if (Pred == ICmpInst::ICMP_SGT &&
-          (C1->isNullValue() || C1->isAllOnesValue())) {
-        return {(LHS == TrueVal) ? SPF_ABS : SPF_NABS, SPNB_NA, false};
-      }
-
-      // ABS(X) ==> (X <s 0) ? -X : X and (X <s 1) ? -X : X
-      // NABS(X) ==> (X <s 0) ? X : -X and (X <s 1) ? X : -X
-      if (Pred == ICmpInst::ICMP_SLT &&
-          (C1->isNullValue() || C1->isOneValue())) {
-        return {(LHS == FalseVal) ? SPF_ABS : SPF_NABS, SPNB_NA, false};
-      }
+  // Sign-extending LHS does not change its sign, so TrueVal/FalseVal can
+  // match against either LHS or sext(LHS).
+  auto MaybeSExtLHS = m_CombineOr(m_Specific(CmpLHS),
+                                  m_SExt(m_Specific(CmpLHS)));
+  if ((match(TrueVal, MaybeSExtLHS) &&
+       match(FalseVal, m_Neg(m_Specific(TrueVal)))) ||
+      (match(FalseVal, MaybeSExtLHS) &&
+       match(TrueVal, m_Neg(m_Specific(FalseVal))))) {
+    // Set LHS and RHS so that RHS is the negated operand of the select
+    if (match(TrueVal, MaybeSExtLHS)) {
+      LHS = TrueVal;
+      RHS = FalseVal;
+    } else {
+      LHS = FalseVal;
+      RHS = TrueVal;
     }
+
+    // (X >s 0) ? X : -X or (X >s -1) ? X : -X --> ABS(X)
+    // (X >s 0) ? -X : X or (X >s -1) ? -X : X --> NABS(X)
+    if (Pred == ICmpInst::ICMP_SGT &&
+        match(CmpRHS, m_CombineOr(m_ZeroInt(), m_AllOnes())))
+      return {(LHS == TrueVal) ? SPF_ABS : SPF_NABS, SPNB_NA, false};
+
+    // (X <s 0) ? -X : X or (X <s 1) ? -X : X --> ABS(X)
+    // (X <s 0) ? X : -X or (X <s 1) ? X : -X --> NABS(X)
+    if (Pred == ICmpInst::ICMP_SLT &&
+        match(CmpRHS, m_CombineOr(m_ZeroInt(), m_One())))
+      return {(LHS == FalseVal) ? SPF_ABS : SPF_NABS, SPNB_NA, false};
   }
 
   if (CmpInst::isIntPredicate(Pred))

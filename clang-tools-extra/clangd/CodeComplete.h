@@ -67,6 +67,9 @@ struct CodeCompleteOptions {
     std::string NoInsert = " ";
   } IncludeIndicator;
 
+  /// Expose origins of completion items in the label (for debugging).
+  bool ShowOrigins = false;
+
   // Populated internally by clangd, do not set.
   /// If `Index` is set, it is used to augment the code completion
   /// results.
@@ -102,7 +105,8 @@ struct CodeCompletion {
   //  - ReturnType may be empty
   //  - Documentation may be from one symbol, or a combination of several
   // Other fields should apply equally to all bundled completions.
-  unsigned BundleSize;
+  unsigned BundleSize = 1;
+  SymbolOrigin Origin = SymbolOrigin::Unknown;
   // The header through which this symbol could be included.
   // Quoted string as expected by an #include directive, e.g. "<memory>".
   // Empty for non-symbol completions, or when not known.
@@ -136,18 +140,22 @@ struct CodeCompletion {
   // Serialize this to an LSP completion item. This is a lossy operation.
   CompletionItem render(const CodeCompleteOptions &) const;
 };
+raw_ostream &operator<<(raw_ostream &, const CodeCompletion &);
 struct CodeCompleteResult {
   std::vector<CodeCompletion> Completions;
   bool HasMore = false;
 };
+raw_ostream &operator<<(raw_ostream &, const CodeCompleteResult &);
 
 /// Get code completions at a specified \p Pos in \p FileName.
-CodeCompleteResult codeComplete(
-    PathRef FileName, const tooling::CompileCommand &Command,
-    PrecompiledPreamble const *Preamble,
-    const std::vector<Inclusion> &PreambleInclusions, StringRef Contents,
-    Position Pos, IntrusiveRefCntPtr<vfs::FileSystem> VFS,
-    std::shared_ptr<PCHContainerOperations> PCHs, CodeCompleteOptions Opts);
+CodeCompleteResult codeComplete(PathRef FileName,
+                                const tooling::CompileCommand &Command,
+                                PrecompiledPreamble const *Preamble,
+                                const IncludeStructure &PreambleInclusions,
+                                StringRef Contents, Position Pos,
+                                IntrusiveRefCntPtr<vfs::FileSystem> VFS,
+                                std::shared_ptr<PCHContainerOperations> PCHs,
+                                CodeCompleteOptions Opts);
 
 /// Get signature help at a specified \p Pos in \p FileName.
 SignatureHelp signatureHelp(PathRef FileName,

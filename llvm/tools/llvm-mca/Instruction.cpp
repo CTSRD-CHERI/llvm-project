@@ -41,7 +41,7 @@ void ReadState::writeStartEvent(unsigned Cycles) {
 void WriteState::onInstructionIssued() {
   assert(CyclesLeft == UNKNOWN_CYCLES);
   // Update the number of cycles left based on the WriteDescriptor info.
-  CyclesLeft = WD.Latency;
+  CyclesLeft = getLatency();
 
   // Now that the time left before write-back is known, notify
   // all the users.
@@ -93,11 +93,12 @@ void ReadState::cycleEvent() {
 
 #ifndef NDEBUG
 void WriteState::dump() const {
-  dbgs() << "{ OpIdx=" << WD.OpIndex << ", Lat=" << WD.Latency << ", RegID "
-         << getRegisterID() << ", Cycles Left=" << getCyclesLeft() << " }\n";
+  dbgs() << "{ OpIdx=" << WD.OpIndex << ", Lat=" << getLatency() << ", RegID "
+         << getRegisterID() << ", Cycles Left=" << getCyclesLeft() << " }";
 }
 
 void WriteRef::dump() const {
+  dbgs() << "IID=" << getSourceIndex() << ' ';
   if (isValid())
     getWriteState()->dump();
   else

@@ -247,6 +247,8 @@ MCDisassembler::DecodeStatus X86GenericDisassembler::getInstruction(
                  // It should not be 'pause' f3 90
                  InternalInstr.opcode != 0x90)
           Flags |= X86::IP_HAS_REPEAT;
+        if (InternalInstr.hasLockPrefix)
+          Flags |= X86::IP_HAS_LOCK;
       }
       Instr.setFlags(Flags);
     }
@@ -661,8 +663,6 @@ static void translateImmediate(MCInst &mcInst, uint64_t immediate,
   case TYPE_ZMM:
     mcInst.addOperand(MCOperand::createReg(X86::ZMM0 + (immediate >> 4)));
     return;
-  case TYPE_BNDR:
-    mcInst.addOperand(MCOperand::createReg(X86::BND0 + (immediate >> 4)));
   default:
     // operand is 64 bits wide.  Do nothing.
     break;

@@ -147,8 +147,10 @@ void TracePC::HandleCallerCallee(uintptr_t Caller, uintptr_t Callee) {
 void TracePC::UpdateObservedPCs() {
   Vector<uintptr_t> CoveredFuncs;
   auto ObservePC = [&](uintptr_t PC) {
-    if (ObservedPCs.insert(PC).second && DoPrintNewPCs)
-      PrintPC("\tNEW_PC: %p %F %L\n", "\tNEW_PC: %p\n", PC + 1);
+    if (ObservedPCs.insert(PC).second && DoPrintNewPCs) {
+      PrintPC("\tNEW_PC: %p %F %L", "\tNEW_PC: %p", PC + 1);
+      Printf("\n");
+    }
   };
 
   auto Observe = [&](const PCTableEntry &TE) {
@@ -185,7 +187,8 @@ void TracePC::UpdateObservedPCs() {
 
   for (size_t i = 0, N = Min(CoveredFuncs.size(), NumPrintNewFuncs); i < N; i++) {
     Printf("\tNEW_FUNC[%zd/%zd]: ", i + 1, CoveredFuncs.size());
-    PrintPC("%p %F %L\n", "%p\n", CoveredFuncs[i] + 1);
+    PrintPC("%p %F %L", "%p", CoveredFuncs[i] + 1);
+    Printf("\n");
   }
 }
 
@@ -356,7 +359,14 @@ void TracePC::HandleCmp(uintptr_t PC, T Arg1, T Arg2) {
       TORC4.Insert(ArgXor, Arg1, Arg2);
   else if (sizeof(T) == 8)
       TORC8.Insert(ArgXor, Arg1, Arg2);
-  ValueProfileMap.AddValue(Idx);
+  // TODO: remove these flags and instead use all metrics at once.
+  if (UseValueProfileMask & 1)
+    ValueProfileMap.AddValue(Idx);
+  if (UseValueProfileMask & 2)
+    ValueProfileMap.AddValue(
+        PC * 64 + (Arg1 == Arg2 ? 0 : __builtin_clzll(Arg1 - Arg2) + 1));
+  if (UseValueProfileMask & 4)  // alternative way to use the hamming distance
+    ValueProfileMap.AddValue(PC * 64 + ArgDistance);
 }
 
 static size_t InternalStrnlen(const char *S, size_t MaxLen) {

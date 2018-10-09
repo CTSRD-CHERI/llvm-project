@@ -4,8 +4,422 @@
 ; Try to eliminate binops and shuffles when the shuffle is a select in disguise:
 ; PR37806 - https://bugs.llvm.org/show_bug.cgi?id=37806
 
-define <4 x i32> @add(<4 x i32> %v0) {
+define <4 x i32> @add(<4 x i32> %v) {
 ; CHECK-LABEL: @add(
+; CHECK-NEXT:    [[S:%.*]] = add <4 x i32> [[V:%.*]], <i32 11, i32 0, i32 13, i32 0>
+; CHECK-NEXT:    ret <4 x i32> [[S]]
+;
+  %b = add <4 x i32> %v, <i32 11, i32 12, i32 13, i32 14>
+  %s = shufflevector <4 x i32> %b, <4 x i32> %v, <4 x i32> <i32 0, i32 5, i32 2, i32 7>
+  ret <4 x i32> %s
+}
+
+; Propagate flags when possible.
+
+define <4 x i32> @add_nuw_nsw(<4 x i32> %v) {
+; CHECK-LABEL: @add_nuw_nsw(
+; CHECK-NEXT:    [[S:%.*]] = add nuw nsw <4 x i32> [[V:%.*]], <i32 11, i32 0, i32 13, i32 0>
+; CHECK-NEXT:    ret <4 x i32> [[S]]
+;
+  %b = add nuw nsw <4 x i32> %v, <i32 11, i32 12, i32 13, i32 14>
+  %s = shufflevector <4 x i32> %b, <4 x i32> %v, <4 x i32> <i32 0, i32 5, i32 2, i32 7>
+  ret <4 x i32> %s
+}
+
+define <4 x i32> @add_undef_mask_elt(<4 x i32> %v) {
+; CHECK-LABEL: @add_undef_mask_elt(
+; CHECK-NEXT:    [[S:%.*]] = add <4 x i32> [[V:%.*]], <i32 11, i32 0, i32 undef, i32 0>
+; CHECK-NEXT:    ret <4 x i32> [[S]]
+;
+  %b = add <4 x i32> %v, <i32 11, i32 12, i32 13, i32 14>
+  %s = shufflevector <4 x i32> %b, <4 x i32> %v, <4 x i32> <i32 0, i32 5, i32 undef, i32 7>
+  ret <4 x i32> %s
+}
+
+; FIXME: Poison flags must be dropped or undef must be replaced with safe constant.
+
+define <4 x i32> @add_nuw_nsw_undef_mask_elt(<4 x i32> %v) {
+; CHECK-LABEL: @add_nuw_nsw_undef_mask_elt(
+; CHECK-NEXT:    [[S:%.*]] = add nuw nsw <4 x i32> [[V:%.*]], <i32 11, i32 undef, i32 13, i32 0>
+; CHECK-NEXT:    ret <4 x i32> [[S]]
+;
+  %b = add nuw nsw <4 x i32> %v, <i32 11, i32 12, i32 13, i32 14>
+  %s = shufflevector <4 x i32> %b, <4 x i32> %v, <4 x i32> <i32 0, i32 undef, i32 2, i32 7>
+  ret <4 x i32> %s
+}
+
+; Constant operand 0 (LHS) could work for some non-commutative binops?
+
+define <4 x i32> @sub(<4 x i32> %v) {
+; CHECK-LABEL: @sub(
+; CHECK-NEXT:    [[B:%.*]] = sub <4 x i32> <i32 undef, i32 undef, i32 undef, i32 14>, [[V:%.*]]
+; CHECK-NEXT:    [[S:%.*]] = shufflevector <4 x i32> [[V]], <4 x i32> [[B]], <4 x i32> <i32 0, i32 1, i32 2, i32 7>
+; CHECK-NEXT:    ret <4 x i32> [[S]]
+;
+  %b = sub <4 x i32> <i32 11, i32 12, i32 13, i32 14>, %v
+  %s = shufflevector <4 x i32> %v, <4 x i32> %b, <4 x i32> <i32 0, i32 1, i32 2, i32 7>
+  ret <4 x i32> %s
+}
+
+; If any element of the shuffle mask operand is undef, that element of the result is undef.
+; The shuffle is eliminated in this transform, but we can replace a constant element with undef.
+; FIXME:
+; Preserve flags when possible. It's not safe to propagate poison-generating flags with undef constants.
+
+define <4 x i32> @mul(<4 x i32> %v) {
+; CHECK-LABEL: @mul(
+; CHECK-NEXT:    [[S:%.*]] = mul nuw nsw <4 x i32> [[V:%.*]], <i32 undef, i32 12, i32 1, i32 14>
+; CHECK-NEXT:    ret <4 x i32> [[S]]
+;
+  %b = mul nsw nuw <4 x i32> %v, <i32 11, i32 12, i32 13, i32 14>
+  %s = shufflevector <4 x i32> %v, <4 x i32> %b, <4 x i32> <i32 undef, i32 5, i32 2, i32 7>
+  ret <4 x i32> %s
+}
+
+define <4 x i32> @shl(<4 x i32> %v) {
+; CHECK-LABEL: @shl(
+; CHECK-NEXT:    [[B:%.*]] = shl <4 x i32> [[V:%.*]], <i32 11, i32 12, i32 13, i32 14>
+; CHECK-NEXT:    [[S:%.*]] = shufflevector <4 x i32> [[B]], <4 x i32> [[V]], <4 x i32> <i32 4, i32 1, i32 2, i32 7>
+; CHECK-NEXT:    ret <4 x i32> [[S]]
+;
+  %b = shl <4 x i32> %v, <i32 11, i32 12, i32 13, i32 14>
+  %s = shufflevector <4 x i32> %b, <4 x i32> %v, <4 x i32> <i32 4, i32 1, i32 2, i32 7>
+  ret <4 x i32> %s
+}
+
+define <4 x i32> @shl_nsw(<4 x i32> %v) {
+; CHECK-LABEL: @shl_nsw(
+; CHECK-NEXT:    [[B:%.*]] = shl nsw <4 x i32> [[V:%.*]], <i32 11, i32 12, i32 13, i32 14>
+; CHECK-NEXT:    [[S:%.*]] = shufflevector <4 x i32> [[B]], <4 x i32> [[V]], <4 x i32> <i32 4, i32 1, i32 2, i32 7>
+; CHECK-NEXT:    ret <4 x i32> [[S]]
+;
+  %b = shl nsw <4 x i32> %v, <i32 11, i32 12, i32 13, i32 14>
+  %s = shufflevector <4 x i32> %b, <4 x i32> %v, <4 x i32> <i32 4, i32 1, i32 2, i32 7>
+  ret <4 x i32> %s
+}
+
+define <4 x i32> @shl_undef_mask_elt(<4 x i32> %v) {
+; CHECK-LABEL: @shl_undef_mask_elt(
+; CHECK-NEXT:    [[B:%.*]] = shl <4 x i32> [[V:%.*]], <i32 11, i32 12, i32 13, i32 14>
+; CHECK-NEXT:    [[S:%.*]] = shufflevector <4 x i32> [[B]], <4 x i32> [[V]], <4 x i32> <i32 undef, i32 1, i32 2, i32 7>
+; CHECK-NEXT:    ret <4 x i32> [[S]]
+;
+  %b = shl <4 x i32> %v, <i32 11, i32 12, i32 13, i32 14>
+  %s = shufflevector <4 x i32> %b, <4 x i32> %v, <4 x i32> <i32 undef, i32 1, i32 2, i32 7>
+  ret <4 x i32> %s
+}
+
+define <4 x i32> @shl_nuw_undef_mask_elt(<4 x i32> %v) {
+; CHECK-LABEL: @shl_nuw_undef_mask_elt(
+; CHECK-NEXT:    [[B:%.*]] = shl nuw <4 x i32> [[V:%.*]], <i32 11, i32 12, i32 13, i32 14>
+; CHECK-NEXT:    [[S:%.*]] = shufflevector <4 x i32> [[B]], <4 x i32> [[V]], <4 x i32> <i32 undef, i32 5, i32 2, i32 undef>
+; CHECK-NEXT:    ret <4 x i32> [[S]]
+;
+  %b = shl nuw <4 x i32> %v, <i32 11, i32 12, i32 13, i32 14>
+  %s = shufflevector <4 x i32> %b, <4 x i32> %v, <4 x i32> <i32 undef, i32 5, i32 2, i32 undef>
+  ret <4 x i32> %s
+}
+
+define <4 x i32> @lshr_constant_op0(<4 x i32> %v) {
+; CHECK-LABEL: @lshr_constant_op0(
+; CHECK-NEXT:    [[B:%.*]] = lshr <4 x i32> [[V:%.*]], <i32 11, i32 12, i32 13, i32 14>
+; CHECK-NEXT:    [[S:%.*]] = shufflevector <4 x i32> [[V]], <4 x i32> [[B]], <4 x i32> <i32 4, i32 5, i32 2, i32 7>
+; CHECK-NEXT:    ret <4 x i32> [[S]]
+;
+  %b = lshr <4 x i32> %v, <i32 11, i32 12, i32 13, i32 14>
+  %s = shufflevector <4 x i32> %v, <4 x i32> %b, <4 x i32> <i32 4, i32 5, i32 2, i32 7>
+  ret <4 x i32> %s
+}
+
+define <4 x i32> @lshr_exact_constant_op0(<4 x i32> %v) {
+; CHECK-LABEL: @lshr_exact_constant_op0(
+; CHECK-NEXT:    [[B:%.*]] = lshr exact <4 x i32> [[V:%.*]], <i32 11, i32 12, i32 13, i32 14>
+; CHECK-NEXT:    [[S:%.*]] = shufflevector <4 x i32> [[V]], <4 x i32> [[B]], <4 x i32> <i32 4, i32 5, i32 2, i32 7>
+; CHECK-NEXT:    ret <4 x i32> [[S]]
+;
+  %b = lshr exact <4 x i32> %v, <i32 11, i32 12, i32 13, i32 14>
+  %s = shufflevector <4 x i32> %v, <4 x i32> %b, <4 x i32> <i32 4, i32 5, i32 2, i32 7>
+  ret <4 x i32> %s
+}
+
+define <4 x i32> @lshr_undef_mask_elt(<4 x i32> %v) {
+; CHECK-LABEL: @lshr_undef_mask_elt(
+; CHECK-NEXT:    [[B:%.*]] = shl <4 x i32> [[V:%.*]], <i32 11, i32 12, i32 13, i32 14>
+; CHECK-NEXT:    [[S:%.*]] = shufflevector <4 x i32> [[B]], <4 x i32> [[V]], <4 x i32> <i32 undef, i32 1, i32 2, i32 7>
+; CHECK-NEXT:    ret <4 x i32> [[S]]
+;
+  %b = shl <4 x i32> %v, <i32 11, i32 12, i32 13, i32 14>
+  %s = shufflevector <4 x i32> %b, <4 x i32> %v, <4 x i32> <i32 undef, i32 1, i32 2, i32 7>
+  ret <4 x i32> %s
+}
+
+define <4 x i32> @lshr_exact_undef_mask_elt(<4 x i32> %v) {
+; CHECK-LABEL: @lshr_exact_undef_mask_elt(
+; CHECK-NEXT:    [[B:%.*]] = lshr exact <4 x i32> [[V:%.*]], <i32 11, i32 12, i32 13, i32 14>
+; CHECK-NEXT:    [[S:%.*]] = shufflevector <4 x i32> [[B]], <4 x i32> [[V]], <4 x i32> <i32 undef, i32 5, i32 2, i32 undef>
+; CHECK-NEXT:    ret <4 x i32> [[S]]
+;
+  %b = lshr exact  <4 x i32> %v, <i32 11, i32 12, i32 13, i32 14>
+  %s = shufflevector <4 x i32> %b, <4 x i32> %v, <4 x i32> <i32 undef, i32 5, i32 2, i32 undef>
+  ret <4 x i32> %s
+}
+
+define <4 x i32> @lshr_constant_op1(<4 x i32> %v) {
+; CHECK-LABEL: @lshr_constant_op1(
+; CHECK-NEXT:    [[B:%.*]] = lshr exact <4 x i32> <i32 11, i32 12, i32 13, i32 14>, [[V:%.*]]
+; CHECK-NEXT:    [[S:%.*]] = shufflevector <4 x i32> [[V]], <4 x i32> [[B]], <4 x i32> <i32 4, i32 5, i32 2, i32 7>
+; CHECK-NEXT:    ret <4 x i32> [[S]]
+;
+  %b = lshr exact <4 x i32> <i32 11, i32 12, i32 13, i32 14>, %v
+  %s = shufflevector <4 x i32> %v, <4 x i32> %b, <4 x i32> <i32 4, i32 5, i32 2, i32 7>
+  ret <4 x i32> %s
+}
+
+; Try weird types.
+
+define <3 x i32> @ashr(<3 x i32> %v) {
+; CHECK-LABEL: @ashr(
+; CHECK-NEXT:    [[B:%.*]] = ashr <3 x i32> [[V:%.*]], <i32 11, i32 12, i32 13>
+; CHECK-NEXT:    [[S:%.*]] = shufflevector <3 x i32> [[B]], <3 x i32> [[V]], <3 x i32> <i32 3, i32 1, i32 2>
+; CHECK-NEXT:    ret <3 x i32> [[S]]
+;
+  %b = ashr <3 x i32> %v, <i32 11, i32 12, i32 13>
+  %s = shufflevector <3 x i32> %b, <3 x i32> %v, <3 x i32> <i32 3, i32 1, i32 2>
+  ret <3 x i32> %s
+}
+
+define <3 x i42> @and(<3 x i42> %v) {
+; CHECK-LABEL: @and(
+; CHECK-NEXT:    [[S:%.*]] = and <3 x i42> [[V:%.*]], <i42 -1, i42 12, i42 undef>
+; CHECK-NEXT:    ret <3 x i42> [[S]]
+;
+  %b = and <3 x i42> %v, <i42 11, i42 12, i42 13>
+  %s = shufflevector <3 x i42> %v, <3 x i42> %b, <3 x i32> <i32 0, i32 4, i32 undef>
+  ret <3 x i42> %s
+}
+
+; It doesn't matter if the intermediate op has extra uses.
+
+declare void @use_v4i32(<4 x i32>)
+
+define <4 x i32> @or(<4 x i32> %v) {
+; CHECK-LABEL: @or(
+; CHECK-NEXT:    [[B:%.*]] = or <4 x i32> [[V:%.*]], <i32 11, i32 12, i32 13, i32 14>
+; CHECK-NEXT:    [[S:%.*]] = or <4 x i32> [[V]], <i32 0, i32 0, i32 13, i32 14>
+; CHECK-NEXT:    call void @use_v4i32(<4 x i32> [[B]])
+; CHECK-NEXT:    ret <4 x i32> [[S]]
+;
+  %b = or <4 x i32> %v, <i32 11, i32 12, i32 13, i32 14>
+  %s = shufflevector <4 x i32> %b, <4 x i32> %v, <4 x i32> <i32 4, i32 5, i32 2, i32 3>
+  call void @use_v4i32(<4 x i32> %b)
+  ret <4 x i32> %s
+}
+
+define <4 x i32> @xor(<4 x i32> %v) {
+; CHECK-LABEL: @xor(
+; CHECK-NEXT:    [[S:%.*]] = xor <4 x i32> [[V:%.*]], <i32 0, i32 12, i32 0, i32 0>
+; CHECK-NEXT:    ret <4 x i32> [[S]]
+;
+  %b = xor <4 x i32> %v, <i32 11, i32 12, i32 13, i32 14>
+  %s = shufflevector <4 x i32> %v, <4 x i32> %b, <4 x i32> <i32 0, i32 5, i32 2, i32 3>
+  ret <4 x i32> %s
+}
+
+define <4 x i32> @udiv(<4 x i32> %v) {
+; CHECK-LABEL: @udiv(
+; CHECK-NEXT:    [[B:%.*]] = udiv <4 x i32> <i32 11, i32 12, i32 13, i32 14>, [[V:%.*]]
+; CHECK-NEXT:    [[S:%.*]] = shufflevector <4 x i32> [[B]], <4 x i32> [[V]], <4 x i32> <i32 0, i32 1, i32 2, i32 7>
+; CHECK-NEXT:    ret <4 x i32> [[S]]
+;
+  %b = udiv <4 x i32> <i32 11, i32 12, i32 13, i32 14>, %v
+  %s = shufflevector <4 x i32> %b, <4 x i32> %v, <4 x i32> <i32 0, i32 1, i32 2, i32 7>
+  ret <4 x i32> %s
+}
+
+define <4 x i32> @udiv_exact(<4 x i32> %v) {
+; CHECK-LABEL: @udiv_exact(
+; CHECK-NEXT:    [[B:%.*]] = udiv exact <4 x i32> <i32 11, i32 12, i32 13, i32 14>, [[V:%.*]]
+; CHECK-NEXT:    [[S:%.*]] = shufflevector <4 x i32> [[B]], <4 x i32> [[V]], <4 x i32> <i32 0, i32 1, i32 2, i32 7>
+; CHECK-NEXT:    ret <4 x i32> [[S]]
+;
+  %b = udiv exact <4 x i32> <i32 11, i32 12, i32 13, i32 14>, %v
+  %s = shufflevector <4 x i32> %b, <4 x i32> %v, <4 x i32> <i32 0, i32 1, i32 2, i32 7>
+  ret <4 x i32> %s
+}
+
+define <4 x i32> @udiv_undef_mask_elt(<4 x i32> %v) {
+; CHECK-LABEL: @udiv_undef_mask_elt(
+; CHECK-NEXT:    [[B:%.*]] = udiv <4 x i32> <i32 11, i32 12, i32 13, i32 14>, [[V:%.*]]
+; CHECK-NEXT:    [[S:%.*]] = shufflevector <4 x i32> [[B]], <4 x i32> [[V]], <4 x i32> <i32 0, i32 undef, i32 2, i32 7>
+; CHECK-NEXT:    ret <4 x i32> [[S]]
+;
+  %b = udiv <4 x i32> <i32 11, i32 12, i32 13, i32 14>, %v
+  %s = shufflevector <4 x i32> %b, <4 x i32> %v, <4 x i32> <i32 0, i32 undef, i32 2, i32 7>
+  ret <4 x i32> %s
+}
+
+define <4 x i32> @udiv_exact_undef_mask_elt(<4 x i32> %v) {
+; CHECK-LABEL: @udiv_exact_undef_mask_elt(
+; CHECK-NEXT:    [[B:%.*]] = udiv exact <4 x i32> <i32 11, i32 12, i32 13, i32 14>, [[V:%.*]]
+; CHECK-NEXT:    [[S:%.*]] = shufflevector <4 x i32> [[B]], <4 x i32> [[V]], <4 x i32> <i32 0, i32 undef, i32 2, i32 7>
+; CHECK-NEXT:    ret <4 x i32> [[S]]
+;
+  %b = udiv exact <4 x i32> <i32 11, i32 12, i32 13, i32 14>, %v
+  %s = shufflevector <4 x i32> %b, <4 x i32> %v, <4 x i32> <i32 0, i32 undef, i32 2, i32 7>
+  ret <4 x i32> %s
+}
+
+define <4 x i32> @sdiv(<4 x i32> %v) {
+; CHECK-LABEL: @sdiv(
+; CHECK-NEXT:    [[B:%.*]] = sdiv <4 x i32> [[V:%.*]], <i32 11, i32 12, i32 13, i32 14>
+; CHECK-NEXT:    [[S:%.*]] = shufflevector <4 x i32> [[V]], <4 x i32> [[B]], <4 x i32> <i32 4, i32 1, i32 6, i32 3>
+; CHECK-NEXT:    ret <4 x i32> [[S]]
+;
+  %b = sdiv <4 x i32> %v, <i32 11, i32 12, i32 13, i32 14>
+  %s = shufflevector <4 x i32> %v, <4 x i32> %b, <4 x i32> <i32 4, i32 1, i32 6, i32 3>
+  ret <4 x i32> %s
+}
+
+define <4 x i32> @sdiv_exact(<4 x i32> %v) {
+; CHECK-LABEL: @sdiv_exact(
+; CHECK-NEXT:    [[B:%.*]] = sdiv exact <4 x i32> [[V:%.*]], <i32 11, i32 12, i32 13, i32 14>
+; CHECK-NEXT:    [[S:%.*]] = shufflevector <4 x i32> [[V]], <4 x i32> [[B]], <4 x i32> <i32 4, i32 1, i32 6, i32 3>
+; CHECK-NEXT:    ret <4 x i32> [[S]]
+;
+  %b = sdiv exact <4 x i32> %v, <i32 11, i32 12, i32 13, i32 14>
+  %s = shufflevector <4 x i32> %v, <4 x i32> %b, <4 x i32> <i32 4, i32 1, i32 6, i32 3>
+  ret <4 x i32> %s
+}
+
+; Div/rem need special handling if the shuffle has undef elements.
+
+define <4 x i32> @sdiv_undef_mask_elt(<4 x i32> %v) {
+; CHECK-LABEL: @sdiv_undef_mask_elt(
+; CHECK-NEXT:    [[B:%.*]] = sdiv <4 x i32> [[V:%.*]], <i32 11, i32 12, i32 13, i32 14>
+; CHECK-NEXT:    [[S:%.*]] = shufflevector <4 x i32> [[V]], <4 x i32> [[B]], <4 x i32> <i32 undef, i32 1, i32 6, i32 undef>
+; CHECK-NEXT:    ret <4 x i32> [[S]]
+;
+  %b = sdiv <4 x i32> %v, <i32 11, i32 12, i32 13, i32 14>
+  %s = shufflevector <4 x i32> %v, <4 x i32> %b, <4 x i32> <i32 undef, i32 1, i32 6, i32 undef>
+  ret <4 x i32> %s
+}
+
+define <4 x i32> @sdiv_exact_undef_mask_elt(<4 x i32> %v) {
+; CHECK-LABEL: @sdiv_exact_undef_mask_elt(
+; CHECK-NEXT:    [[B:%.*]] = sdiv exact <4 x i32> [[V:%.*]], <i32 11, i32 12, i32 13, i32 14>
+; CHECK-NEXT:    [[S:%.*]] = shufflevector <4 x i32> [[V]], <4 x i32> [[B]], <4 x i32> <i32 undef, i32 1, i32 6, i32 undef>
+; CHECK-NEXT:    ret <4 x i32> [[S]]
+;
+  %b = sdiv exact <4 x i32> %v, <i32 11, i32 12, i32 13, i32 14>
+  %s = shufflevector <4 x i32> %v, <4 x i32> %b, <4 x i32> <i32 undef, i32 1, i32 6, i32 undef>
+  ret <4 x i32> %s
+}
+
+define <4 x i32> @urem(<4 x i32> %v) {
+; CHECK-LABEL: @urem(
+; CHECK-NEXT:    [[B:%.*]] = urem <4 x i32> <i32 11, i32 12, i32 13, i32 14>, [[V:%.*]]
+; CHECK-NEXT:    [[S:%.*]] = shufflevector <4 x i32> [[B]], <4 x i32> [[V]], <4 x i32> <i32 0, i32 1, i32 6, i32 7>
+; CHECK-NEXT:    ret <4 x i32> [[S]]
+;
+  %b = urem <4 x i32> <i32 11, i32 12, i32 13, i32 14>, %v
+  %s = shufflevector <4 x i32> %b, <4 x i32> %v, <4 x i32> <i32 0, i32 1, i32 6, i32 7>
+  ret <4 x i32> %s
+}
+
+define <4 x i32> @urem_undef_mask_elt(<4 x i32> %v) {
+; CHECK-LABEL: @urem_undef_mask_elt(
+; CHECK-NEXT:    [[B:%.*]] = urem <4 x i32> <i32 11, i32 12, i32 13, i32 14>, [[V:%.*]]
+; CHECK-NEXT:    [[S:%.*]] = shufflevector <4 x i32> [[B]], <4 x i32> [[V]], <4 x i32> <i32 0, i32 1, i32 6, i32 undef>
+; CHECK-NEXT:    ret <4 x i32> [[S]]
+;
+  %b = urem <4 x i32> <i32 11, i32 12, i32 13, i32 14>, %v
+  %s = shufflevector <4 x i32> %b, <4 x i32> %v, <4 x i32> <i32 0, i32 1, i32 6, i32 undef>
+  ret <4 x i32> %s
+}
+
+define <4 x i32> @srem(<4 x i32> %v) {
+; CHECK-LABEL: @srem(
+; CHECK-NEXT:    [[B:%.*]] = srem <4 x i32> <i32 11, i32 12, i32 13, i32 14>, [[V:%.*]]
+; CHECK-NEXT:    [[S:%.*]] = shufflevector <4 x i32> [[V]], <4 x i32> [[B]], <4 x i32> <i32 0, i32 1, i32 6, i32 3>
+; CHECK-NEXT:    ret <4 x i32> [[S]]
+;
+  %b = srem <4 x i32> <i32 11, i32 12, i32 13, i32 14>, %v
+  %s = shufflevector <4 x i32> %v, <4 x i32> %b, <4 x i32> <i32 0, i32 1, i32 6, i32 3>
+  ret <4 x i32> %s
+}
+
+; Try FP ops/types.
+
+define <4 x float> @fadd(<4 x float> %v) {
+; CHECK-LABEL: @fadd(
+; CHECK-NEXT:    [[S:%.*]] = fadd <4 x float> [[V:%.*]], <float 4.100000e+01, float 4.200000e+01, float -0.000000e+00, float -0.000000e+00>
+; CHECK-NEXT:    ret <4 x float> [[S]]
+;
+  %b = fadd <4 x float> %v, <float 41.0, float 42.0, float 43.0, float 44.0>
+  %s = shufflevector <4 x float> %b, <4 x float> %v, <4 x i32> <i32 0, i32 1, i32 6, i32 7>
+  ret <4 x float> %s
+}
+
+define <4 x double> @fsub(<4 x double> %v) {
+; CHECK-LABEL: @fsub(
+; CHECK-NEXT:    [[B:%.*]] = fsub <4 x double> <double 4.100000e+01, double 4.200000e+01, double 4.300000e+01, double 4.400000e+01>, [[V:%.*]]
+; CHECK-NEXT:    [[S:%.*]] = shufflevector <4 x double> [[V]], <4 x double> [[B]], <4 x i32> <i32 undef, i32 1, i32 6, i32 7>
+; CHECK-NEXT:    ret <4 x double> [[S]]
+;
+  %b = fsub <4 x double> <double 41.0, double 42.0, double 43.0, double 44.0>, %v
+  %s = shufflevector <4 x double> %v, <4 x double> %b, <4 x i32> <i32 undef, i32 1, i32 6, i32 7>
+  ret <4 x double> %s
+}
+
+; Propagate any FMF.
+
+define <4 x float> @fmul(<4 x float> %v) {
+; CHECK-LABEL: @fmul(
+; CHECK-NEXT:    [[S:%.*]] = fmul nnan ninf <4 x float> [[V:%.*]], <float 4.100000e+01, float 1.000000e+00, float 1.000000e+00, float 1.000000e+00>
+; CHECK-NEXT:    ret <4 x float> [[S]]
+;
+  %b = fmul nnan ninf <4 x float> %v, <float 41.0, float 42.0, float 43.0, float 44.0>
+  %s = shufflevector <4 x float> %b, <4 x float> %v, <4 x i32> <i32 0, i32 5, i32 6, i32 7>
+  ret <4 x float> %s
+}
+
+define <4 x double> @fdiv_constant_op0(<4 x double> %v) {
+; CHECK-LABEL: @fdiv_constant_op0(
+; CHECK-NEXT:    [[B:%.*]] = fdiv fast <4 x double> <double 4.100000e+01, double 4.200000e+01, double 4.300000e+01, double 4.400000e+01>, [[V:%.*]]
+; CHECK-NEXT:    [[S:%.*]] = shufflevector <4 x double> [[V]], <4 x double> [[B]], <4 x i32> <i32 undef, i32 1, i32 6, i32 7>
+; CHECK-NEXT:    ret <4 x double> [[S]]
+;
+  %b = fdiv fast <4 x double> <double 41.0, double 42.0, double 43.0, double 44.0>, %v
+  %s = shufflevector <4 x double> %v, <4 x double> %b, <4 x i32> <i32 undef, i32 1, i32 6, i32 7>
+  ret <4 x double> %s
+}
+
+define <4 x double> @fdiv_constant_op1(<4 x double> %v) {
+; CHECK-LABEL: @fdiv_constant_op1(
+; CHECK-NEXT:    [[B:%.*]] = fdiv reassoc <4 x double> [[V:%.*]], <double 4.100000e+01, double 4.200000e+01, double 4.300000e+01, double 4.400000e+01>
+; CHECK-NEXT:    [[S:%.*]] = shufflevector <4 x double> [[V]], <4 x double> [[B]], <4 x i32> <i32 undef, i32 1, i32 6, i32 7>
+; CHECK-NEXT:    ret <4 x double> [[S]]
+;
+  %b = fdiv reassoc <4 x double> %v, <double 41.0, double 42.0, double 43.0, double 44.0>
+  %s = shufflevector <4 x double> %v, <4 x double> %b, <4 x i32> <i32 undef, i32 1, i32 6, i32 7>
+  ret <4 x double> %s
+}
+
+define <4 x double> @frem(<4 x double> %v) {
+; CHECK-LABEL: @frem(
+; CHECK-NEXT:    [[B:%.*]] = frem <4 x double> <double 4.100000e+01, double 4.200000e+01, double 4.300000e+01, double 4.400000e+01>, [[V:%.*]]
+; CHECK-NEXT:    [[S:%.*]] = shufflevector <4 x double> [[B]], <4 x double> [[V]], <4 x i32> <i32 0, i32 1, i32 6, i32 7>
+; CHECK-NEXT:    ret <4 x double> [[S]]
+;
+  %b = frem <4 x double> <double 41.0, double 42.0, double 43.0, double 44.0>, %v
+  %s = shufflevector <4 x double> %b, <4 x double> %v, <4 x i32> <i32 0, i32 1, i32 6, i32 7>
+  ret <4 x double> %s
+}
+
+; Tests where both operands of the shuffle are binops with the same opcode.
+
+define <4 x i32> @add_add(<4 x i32> %v0) {
+; CHECK-LABEL: @add_add(
 ; CHECK-NEXT:    [[T3:%.*]] = add <4 x i32> [[V0:%.*]], <i32 1, i32 6, i32 3, i32 8>
 ; CHECK-NEXT:    ret <4 x i32> [[T3]]
 ;
@@ -15,10 +429,45 @@ define <4 x i32> @add(<4 x i32> %v0) {
   ret <4 x i32> %t3
 }
 
+define <4 x i32> @add_add_nsw(<4 x i32> %v0) {
+; CHECK-LABEL: @add_add_nsw(
+; CHECK-NEXT:    [[T3:%.*]] = add nsw <4 x i32> [[V0:%.*]], <i32 1, i32 6, i32 3, i32 8>
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = add nsw <4 x i32> %v0, <i32 1, i32 2, i32 3, i32 4>
+  %t2 = add nsw <4 x i32> %v0, <i32 5, i32 6, i32 7, i32 8>
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 0, i32 5, i32 2, i32 7>
+  ret <4 x i32> %t3
+}
+
+define <4 x i32> @add_add_undef_mask_elt(<4 x i32> %v0) {
+; CHECK-LABEL: @add_add_undef_mask_elt(
+; CHECK-NEXT:    [[T3:%.*]] = add <4 x i32> [[V0:%.*]], <i32 1, i32 6, i32 undef, i32 8>
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = add <4 x i32> %v0, <i32 1, i32 2, i32 3, i32 4>
+  %t2 = add <4 x i32> %v0, <i32 5, i32 6, i32 7, i32 8>
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 0, i32 5, i32 undef, i32 7>
+  ret <4 x i32> %t3
+}
+
+; FIXME: Poison flags must be dropped or undef must be replaced with safe constant.
+
+define <4 x i32> @add_add_nsw_undef_mask_elt(<4 x i32> %v0) {
+; CHECK-LABEL: @add_add_nsw_undef_mask_elt(
+; CHECK-NEXT:    [[T3:%.*]] = add nsw <4 x i32> [[V0:%.*]], <i32 1, i32 6, i32 undef, i32 8>
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = add nsw <4 x i32> %v0, <i32 1, i32 2, i32 3, i32 4>
+  %t2 = add nsw <4 x i32> %v0, <i32 5, i32 6, i32 7, i32 8>
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 0, i32 5, i32 undef, i32 7>
+  ret <4 x i32> %t3
+}
+
 ; Constant operand 0 (LHS) also works.
 
-define <4 x i32> @sub(<4 x i32> %v0) {
-; CHECK-LABEL: @sub(
+define <4 x i32> @sub_sub(<4 x i32> %v0) {
+; CHECK-LABEL: @sub_sub(
 ; CHECK-NEXT:    [[T3:%.*]] = sub <4 x i32> <i32 1, i32 2, i32 3, i32 8>, [[V0:%.*]]
 ; CHECK-NEXT:    ret <4 x i32> [[T3]]
 ;
@@ -28,11 +477,46 @@ define <4 x i32> @sub(<4 x i32> %v0) {
   ret <4 x i32> %t3
 }
 
+define <4 x i32> @sub_sub_nuw(<4 x i32> %v0) {
+; CHECK-LABEL: @sub_sub_nuw(
+; CHECK-NEXT:    [[T3:%.*]] = sub nuw <4 x i32> <i32 1, i32 2, i32 3, i32 8>, [[V0:%.*]]
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = sub nuw <4 x i32> <i32 1, i32 2, i32 3, i32 4>, %v0
+  %t2 = sub nuw <4 x i32> <i32 5, i32 6, i32 7, i32 8>, %v0
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 0, i32 1, i32 2, i32 7>
+  ret <4 x i32> %t3
+}
+
+define <4 x i32> @sub_sub_undef_mask_elt(<4 x i32> %v0) {
+; CHECK-LABEL: @sub_sub_undef_mask_elt(
+; CHECK-NEXT:    [[T3:%.*]] = sub <4 x i32> <i32 undef, i32 2, i32 3, i32 8>, [[V0:%.*]]
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = sub <4 x i32> <i32 1, i32 2, i32 3, i32 4>, %v0
+  %t2 = sub <4 x i32> <i32 5, i32 6, i32 7, i32 8>, %v0
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 undef, i32 1, i32 2, i32 7>
+  ret <4 x i32> %t3
+}
+
+; FIXME: Poison flags must be dropped or undef must be replaced with safe constant.
+
+define <4 x i32> @sub_sub_nuw_undef_mask_elt(<4 x i32> %v0) {
+; CHECK-LABEL: @sub_sub_nuw_undef_mask_elt(
+; CHECK-NEXT:    [[T3:%.*]] = sub nuw <4 x i32> <i32 undef, i32 2, i32 3, i32 8>, [[V0:%.*]]
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = sub nuw <4 x i32> <i32 1, i32 2, i32 3, i32 4>, %v0
+  %t2 = sub nuw <4 x i32> <i32 5, i32 6, i32 7, i32 8>, %v0
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 undef, i32 1, i32 2, i32 7>
+  ret <4 x i32> %t3
+}
+
 ; If any element of the shuffle mask operand is undef, that element of the result is undef.
 ; The shuffle is eliminated in this transform, but we can replace a constant element with undef.
 
-define <4 x i32> @mul(<4 x i32> %v0) {
-; CHECK-LABEL: @mul(
+define <4 x i32> @mul_mul(<4 x i32> %v0) {
+; CHECK-LABEL: @mul_mul(
 ; CHECK-NEXT:    [[T3:%.*]] = mul <4 x i32> [[V0:%.*]], <i32 undef, i32 6, i32 3, i32 8>
 ; CHECK-NEXT:    ret <4 x i32> [[T3]]
 ;
@@ -44,8 +528,45 @@ define <4 x i32> @mul(<4 x i32> %v0) {
 
 ; Preserve flags when possible.
 
-define <4 x i32> @shl(<4 x i32> %v0) {
-; CHECK-LABEL: @shl(
+define <4 x i32> @shl_shl(<4 x i32> %v0) {
+; CHECK-LABEL: @shl_shl(
+; CHECK-NEXT:    [[T3:%.*]] = shl <4 x i32> [[V0:%.*]], <i32 5, i32 6, i32 3, i32 4>
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = shl <4 x i32> %v0, <i32 1, i32 2, i32 3, i32 4>
+  %t2 = shl <4 x i32> %v0, <i32 5, i32 6, i32 7, i32 8>
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 4, i32 5, i32 2, i32 3>
+  ret <4 x i32> %t3
+}
+
+define <4 x i32> @shl_shl_nuw(<4 x i32> %v0) {
+; CHECK-LABEL: @shl_shl_nuw(
+; CHECK-NEXT:    [[T3:%.*]] = shl nuw <4 x i32> [[V0:%.*]], <i32 5, i32 6, i32 3, i32 4>
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = shl nuw <4 x i32> %v0, <i32 1, i32 2, i32 3, i32 4>
+  %t2 = shl nuw <4 x i32> %v0, <i32 5, i32 6, i32 7, i32 8>
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 4, i32 5, i32 2, i32 3>
+  ret <4 x i32> %t3
+}
+
+; FIXME: Shift by undef is poison. Undef must be replaced by safe constant.
+
+define <4 x i32> @shl_shl_undef_mask_elt(<4 x i32> %v0) {
+; CHECK-LABEL: @shl_shl_undef_mask_elt(
+; CHECK-NEXT:    [[T3:%.*]] = shl <4 x i32> [[V0:%.*]], <i32 undef, i32 6, i32 3, i32 undef>
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = shl <4 x i32> %v0, <i32 1, i32 2, i32 3, i32 4>
+  %t2 = shl <4 x i32> %v0, <i32 5, i32 6, i32 7, i32 8>
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 undef, i32 5, i32 2, i32 undef>
+  ret <4 x i32> %t3
+}
+
+; FIXME: Shift by undef is poison. Undef must be replaced by safe constant.
+
+define <4 x i32> @shl_shl_nuw_undef_mask_elt(<4 x i32> %v0) {
+; CHECK-LABEL: @shl_shl_nuw_undef_mask_elt(
 ; CHECK-NEXT:    [[T3:%.*]] = shl nuw <4 x i32> [[V0:%.*]], <i32 undef, i32 6, i32 3, i32 undef>
 ; CHECK-NEXT:    ret <4 x i32> [[T3]]
 ;
@@ -57,8 +578,8 @@ define <4 x i32> @shl(<4 x i32> %v0) {
 
 ; Can't propagate the flag here.
 
-define <4 x i32> @lshr(<4 x i32> %v0) {
-; CHECK-LABEL: @lshr(
+define <4 x i32> @lshr_lshr(<4 x i32> %v0) {
+; CHECK-LABEL: @lshr_lshr(
 ; CHECK-NEXT:    [[T3:%.*]] = lshr <4 x i32> <i32 5, i32 6, i32 3, i32 8>, [[V0:%.*]]
 ; CHECK-NEXT:    ret <4 x i32> [[T3]]
 ;
@@ -70,8 +591,8 @@ define <4 x i32> @lshr(<4 x i32> %v0) {
 
 ; Try weird types.
 
-define <3 x i32> @ashr(<3 x i32> %v0) {
-; CHECK-LABEL: @ashr(
+define <3 x i32> @ashr_ashr(<3 x i32> %v0) {
+; CHECK-LABEL: @ashr_ashr(
 ; CHECK-NEXT:    [[T3:%.*]] = ashr <3 x i32> [[V0:%.*]], <i32 4, i32 2, i32 3>
 ; CHECK-NEXT:    ret <3 x i32> [[T3]]
 ;
@@ -81,8 +602,8 @@ define <3 x i32> @ashr(<3 x i32> %v0) {
   ret <3 x i32> %t3
 }
 
-define <3 x i42> @and(<3 x i42> %v0) {
-; CHECK-LABEL: @and(
+define <3 x i42> @and_and(<3 x i42> %v0) {
+; CHECK-LABEL: @and_and(
 ; CHECK-NEXT:    [[T3:%.*]] = and <3 x i42> [[V0:%.*]], <i42 1, i42 5, i42 undef>
 ; CHECK-NEXT:    ret <3 x i42> [[T3]]
 ;
@@ -94,10 +615,8 @@ define <3 x i42> @and(<3 x i42> %v0) {
 
 ; It doesn't matter if the intermediate ops have extra uses.
 
-declare void @use_v4i32(<4 x i32>)
-
-define <4 x i32> @or(<4 x i32> %v0) {
-; CHECK-LABEL: @or(
+define <4 x i32> @or_or(<4 x i32> %v0) {
+; CHECK-LABEL: @or_or(
 ; CHECK-NEXT:    [[T1:%.*]] = or <4 x i32> [[V0:%.*]], <i32 1, i32 2, i32 3, i32 4>
 ; CHECK-NEXT:    [[T3:%.*]] = or <4 x i32> [[V0]], <i32 5, i32 6, i32 3, i32 4>
 ; CHECK-NEXT:    call void @use_v4i32(<4 x i32> [[T1]])
@@ -110,8 +629,8 @@ define <4 x i32> @or(<4 x i32> %v0) {
   ret <4 x i32> %t3
 }
 
-define <4 x i32> @xor(<4 x i32> %v0) {
-; CHECK-LABEL: @xor(
+define <4 x i32> @xor_xor(<4 x i32> %v0) {
+; CHECK-LABEL: @xor_xor(
 ; CHECK-NEXT:    [[T2:%.*]] = xor <4 x i32> [[V0:%.*]], <i32 5, i32 6, i32 7, i32 8>
 ; CHECK-NEXT:    [[T3:%.*]] = xor <4 x i32> [[V0]], <i32 1, i32 6, i32 3, i32 4>
 ; CHECK-NEXT:    call void @use_v4i32(<4 x i32> [[T2]])
@@ -124,8 +643,8 @@ define <4 x i32> @xor(<4 x i32> %v0) {
   ret <4 x i32> %t3
 }
 
-define <4 x i32> @udiv(<4 x i32> %v0) {
-; CHECK-LABEL: @udiv(
+define <4 x i32> @udiv_udiv(<4 x i32> %v0) {
+; CHECK-LABEL: @udiv_udiv(
 ; CHECK-NEXT:    [[T1:%.*]] = udiv <4 x i32> <i32 1, i32 2, i32 3, i32 4>, [[V0:%.*]]
 ; CHECK-NEXT:    [[T2:%.*]] = udiv <4 x i32> <i32 5, i32 6, i32 7, i32 8>, [[V0]]
 ; CHECK-NEXT:    [[T3:%.*]] = udiv <4 x i32> <i32 1, i32 2, i32 3, i32 8>, [[V0]]
@@ -143,8 +662,30 @@ define <4 x i32> @udiv(<4 x i32> %v0) {
 
 ; Div/rem need special handling if the shuffle has undef elements.
 
-define <4 x i32> @sdiv(<4 x i32> %v0) {
-; CHECK-LABEL: @sdiv(
+define <4 x i32> @sdiv_sdiv(<4 x i32> %v0) {
+; CHECK-LABEL: @sdiv_sdiv(
+; CHECK-NEXT:    [[T3:%.*]] = sdiv <4 x i32> [[V0:%.*]], <i32 1, i32 2, i32 7, i32 8>
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = sdiv <4 x i32> %v0, <i32 1, i32 2, i32 3, i32 4>
+  %t2 = sdiv <4 x i32> %v0, <i32 5, i32 6, i32 7, i32 8>
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 0, i32 1, i32 6, i32 7>
+  ret <4 x i32> %t3
+}
+
+define <4 x i32> @sdiv_sdiv_exact(<4 x i32> %v0) {
+; CHECK-LABEL: @sdiv_sdiv_exact(
+; CHECK-NEXT:    [[T3:%.*]] = sdiv exact <4 x i32> [[V0:%.*]], <i32 1, i32 2, i32 7, i32 8>
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = sdiv exact <4 x i32> %v0, <i32 1, i32 2, i32 3, i32 4>
+  %t2 = sdiv exact <4 x i32> %v0, <i32 5, i32 6, i32 7, i32 8>
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 0, i32 1, i32 6, i32 7>
+  ret <4 x i32> %t3
+}
+
+define <4 x i32> @sdiv_sdiv_undef_mask_elt(<4 x i32> %v0) {
+; CHECK-LABEL: @sdiv_sdiv_undef_mask_elt(
 ; CHECK-NEXT:    [[T3:%.*]] = sdiv <4 x i32> [[V0:%.*]], <i32 1, i32 2, i32 7, i32 1>
 ; CHECK-NEXT:    ret <4 x i32> [[T3]]
 ;
@@ -154,8 +695,30 @@ define <4 x i32> @sdiv(<4 x i32> %v0) {
   ret <4 x i32> %t3
 }
 
-define <4 x i32> @urem(<4 x i32> %v0) {
-; CHECK-LABEL: @urem(
+define <4 x i32> @sdiv_sdiv_exact_undef_mask_elt(<4 x i32> %v0) {
+; CHECK-LABEL: @sdiv_sdiv_exact_undef_mask_elt(
+; CHECK-NEXT:    [[T3:%.*]] = sdiv exact <4 x i32> [[V0:%.*]], <i32 1, i32 2, i32 7, i32 1>
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = sdiv exact <4 x i32> %v0, <i32 1, i32 2, i32 3, i32 4>
+  %t2 = sdiv exact <4 x i32> %v0, <i32 5, i32 6, i32 7, i32 8>
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 undef, i32 1, i32 6, i32 undef>
+  ret <4 x i32> %t3
+}
+
+define <4 x i32> @urem_urem(<4 x i32> %v0) {
+; CHECK-LABEL: @urem_urem(
+; CHECK-NEXT:    [[T3:%.*]] = urem <4 x i32> <i32 1, i32 2, i32 7, i32 8>, [[V0:%.*]]
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = urem <4 x i32> <i32 1, i32 2, i32 3, i32 4>, %v0
+  %t2 = urem <4 x i32> <i32 5, i32 6, i32 7, i32 8>, %v0
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 0, i32 1, i32 6, i32 7>
+  ret <4 x i32> %t3
+}
+
+define <4 x i32> @urem_urem_undef_mask_elt(<4 x i32> %v0) {
+; CHECK-LABEL: @urem_urem_undef_mask_elt(
 ; CHECK-NEXT:    [[T3:%.*]] = urem <4 x i32> <i32 1, i32 2, i32 7, i32 1>, [[V0:%.*]]
 ; CHECK-NEXT:    ret <4 x i32> [[T3]]
 ;
@@ -165,8 +728,8 @@ define <4 x i32> @urem(<4 x i32> %v0) {
   ret <4 x i32> %t3
 }
 
-define <4 x i32> @srem(<4 x i32> %v0) {
-; CHECK-LABEL: @srem(
+define <4 x i32> @srem_srem(<4 x i32> %v0) {
+; CHECK-LABEL: @srem_srem(
 ; CHECK-NEXT:    [[T3:%.*]] = srem <4 x i32> <i32 1, i32 2, i32 7, i32 4>, [[V0:%.*]]
 ; CHECK-NEXT:    ret <4 x i32> [[T3]]
 ;
@@ -176,10 +739,21 @@ define <4 x i32> @srem(<4 x i32> %v0) {
   ret <4 x i32> %t3
 }
 
+define <4 x i32> @srem_srem_undef_mask_elt(<4 x i32> %v0) {
+; CHECK-LABEL: @srem_srem_undef_mask_elt(
+; CHECK-NEXT:    [[T3:%.*]] = srem <4 x i32> <i32 1, i32 1, i32 7, i32 4>, [[V0:%.*]]
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = srem <4 x i32> <i32 1, i32 2, i32 3, i32 4>, %v0
+  %t2 = srem <4 x i32> <i32 5, i32 6, i32 7, i32 8>, %v0
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 0, i32 undef, i32 6, i32 3>
+  ret <4 x i32> %t3
+}
+
 ; Try FP ops/types.
 
-define <4 x float> @fadd(<4 x float> %v0) {
-; CHECK-LABEL: @fadd(
+define <4 x float> @fadd_fadd(<4 x float> %v0) {
+; CHECK-LABEL: @fadd_fadd(
 ; CHECK-NEXT:    [[T3:%.*]] = fadd <4 x float> [[V0:%.*]], <float 1.000000e+00, float 2.000000e+00, float 7.000000e+00, float 8.000000e+00>
 ; CHECK-NEXT:    ret <4 x float> [[T3]]
 ;
@@ -189,8 +763,8 @@ define <4 x float> @fadd(<4 x float> %v0) {
   ret <4 x float> %t3
 }
 
-define <4 x double> @fsub(<4 x double> %v0) {
-; CHECK-LABEL: @fsub(
+define <4 x double> @fsub_fsub(<4 x double> %v0) {
+; CHECK-LABEL: @fsub_fsub(
 ; CHECK-NEXT:    [[T3:%.*]] = fsub <4 x double> <double undef, double 2.000000e+00, double 7.000000e+00, double 8.000000e+00>, [[V0:%.*]]
 ; CHECK-NEXT:    ret <4 x double> [[T3]]
 ;
@@ -202,8 +776,8 @@ define <4 x double> @fsub(<4 x double> %v0) {
 
 ; Intersect any FMF.
 
-define <4 x float> @fmul(<4 x float> %v0) {
-; CHECK-LABEL: @fmul(
+define <4 x float> @fmul_fmul(<4 x float> %v0) {
+; CHECK-LABEL: @fmul_fmul(
 ; CHECK-NEXT:    [[T3:%.*]] = fmul nnan ninf <4 x float> [[V0:%.*]], <float 1.000000e+00, float 6.000000e+00, float 7.000000e+00, float 8.000000e+00>
 ; CHECK-NEXT:    ret <4 x float> [[T3]]
 ;
@@ -213,8 +787,8 @@ define <4 x float> @fmul(<4 x float> %v0) {
   ret <4 x float> %t3
 }
 
-define <4 x double> @fdiv(<4 x double> %v0) {
-; CHECK-LABEL: @fdiv(
+define <4 x double> @fdiv_fdiv(<4 x double> %v0) {
+; CHECK-LABEL: @fdiv_fdiv(
 ; CHECK-NEXT:    [[T3:%.*]] = fdiv nnan arcp <4 x double> <double undef, double 2.000000e+00, double 7.000000e+00, double 8.000000e+00>, [[V0:%.*]]
 ; CHECK-NEXT:    ret <4 x double> [[T3]]
 ;
@@ -226,8 +800,8 @@ define <4 x double> @fdiv(<4 x double> %v0) {
 
 ; The variable operand must be either the first operand or second operand in both binops.
 
-define <4 x double> @frem(<4 x double> %v0) {
-; CHECK-LABEL: @frem(
+define <4 x double> @frem_frem(<4 x double> %v0) {
+; CHECK-LABEL: @frem_frem(
 ; CHECK-NEXT:    [[T1:%.*]] = frem <4 x double> <double 1.000000e+00, double 2.000000e+00, double 3.000000e+00, double 4.000000e+00>, [[V0:%.*]]
 ; CHECK-NEXT:    [[T2:%.*]] = frem <4 x double> [[V0]], <double 5.000000e+00, double 6.000000e+00, double 7.000000e+00, double 8.000000e+00>
 ; CHECK-NEXT:    [[T3:%.*]] = shufflevector <4 x double> [[T1]], <4 x double> [[T2]], <4 x i32> <i32 0, i32 1, i32 6, i32 7>
@@ -265,18 +839,94 @@ define <4 x i32> @sub_2_vars(<4 x i32> %v0, <4 x i32> %v1) {
   ret <4 x i32> %t3
 }
 
+define <4 x i32> @sub_2_vars_nsw(<4 x i32> %v0, <4 x i32> %v1) {
+; CHECK-LABEL: @sub_2_vars_nsw(
+; CHECK-NEXT:    [[TMP1:%.*]] = shufflevector <4 x i32> [[V0:%.*]], <4 x i32> [[V1:%.*]], <4 x i32> <i32 0, i32 1, i32 2, i32 7>
+; CHECK-NEXT:    [[T3:%.*]] = sub nsw <4 x i32> <i32 1, i32 2, i32 3, i32 8>, [[TMP1]]
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = sub nsw <4 x i32> <i32 1, i32 2, i32 3, i32 4>, %v0
+  %t2 = sub nsw <4 x i32> <i32 5, i32 6, i32 7, i32 8>, %v1
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 0, i32 1, i32 2, i32 7>
+  ret <4 x i32> %t3
+}
+
+define <4 x i32> @sub_2_vars_undef_mask_elt(<4 x i32> %v0, <4 x i32> %v1) {
+; CHECK-LABEL: @sub_2_vars_undef_mask_elt(
+; CHECK-NEXT:    [[TMP1:%.*]] = shufflevector <4 x i32> [[V0:%.*]], <4 x i32> [[V1:%.*]], <4 x i32> <i32 undef, i32 1, i32 2, i32 7>
+; CHECK-NEXT:    [[T3:%.*]] = sub <4 x i32> <i32 undef, i32 2, i32 3, i32 8>, [[TMP1]]
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = sub <4 x i32> <i32 1, i32 2, i32 3, i32 4>, %v0
+  %t2 = sub <4 x i32> <i32 5, i32 6, i32 7, i32 8>, %v1
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 undef, i32 1, i32 2, i32 7>
+  ret <4 x i32> %t3
+}
+
+; FIXME: Poison flags must be dropped or undef must be replaced with safe constant.
+
+define <4 x i32> @sub_2_vars_nsw_undef_mask_elt(<4 x i32> %v0, <4 x i32> %v1) {
+; CHECK-LABEL: @sub_2_vars_nsw_undef_mask_elt(
+; CHECK-NEXT:    [[TMP1:%.*]] = shufflevector <4 x i32> [[V0:%.*]], <4 x i32> [[V1:%.*]], <4 x i32> <i32 undef, i32 1, i32 2, i32 7>
+; CHECK-NEXT:    [[T3:%.*]] = sub nsw <4 x i32> <i32 undef, i32 2, i32 3, i32 8>, [[TMP1]]
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = sub nsw <4 x i32> <i32 1, i32 2, i32 3, i32 4>, %v0
+  %t2 = sub nsw <4 x i32> <i32 5, i32 6, i32 7, i32 8>, %v1
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 undef, i32 1, i32 2, i32 7>
+  ret <4 x i32> %t3
+}
+
 ; If any element of the shuffle mask operand is undef, that element of the result is undef.
 ; The shuffle is eliminated in this transform, but we can replace a constant element with undef.
 
 define <4 x i32> @mul_2_vars(<4 x i32> %v0, <4 x i32> %v1) {
 ; CHECK-LABEL: @mul_2_vars(
-; CHECK-NEXT:    [[TMP1:%.*]] = shufflevector <4 x i32> [[V0:%.*]], <4 x i32> [[V1:%.*]], <4 x i32> <i32 undef, i32 5, i32 2, i32 7>
-; CHECK-NEXT:    [[T3:%.*]] = mul <4 x i32> [[TMP1]], <i32 undef, i32 6, i32 3, i32 8>
+; CHECK-NEXT:    [[TMP1:%.*]] = shufflevector <4 x i32> [[V0:%.*]], <4 x i32> [[V1:%.*]], <4 x i32> <i32 0, i32 5, i32 2, i32 7>
+; CHECK-NEXT:    [[T3:%.*]] = mul <4 x i32> [[TMP1]], <i32 1, i32 6, i32 3, i32 8>
 ; CHECK-NEXT:    ret <4 x i32> [[T3]]
 ;
   %t1 = mul <4 x i32> %v0, <i32 1, i32 2, i32 3, i32 4>
   %t2 = mul <4 x i32> %v1, <i32 5, i32 6, i32 7, i32 8>
-  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 undef, i32 5, i32 2, i32 7>
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 0, i32 5, i32 2, i32 7>
+  ret <4 x i32> %t3
+}
+
+define <4 x i32> @mul_2_vars_nuw(<4 x i32> %v0, <4 x i32> %v1) {
+; CHECK-LABEL: @mul_2_vars_nuw(
+; CHECK-NEXT:    [[TMP1:%.*]] = shufflevector <4 x i32> [[V0:%.*]], <4 x i32> [[V1:%.*]], <4 x i32> <i32 0, i32 5, i32 2, i32 7>
+; CHECK-NEXT:    [[T3:%.*]] = mul nuw <4 x i32> [[TMP1]], <i32 1, i32 6, i32 3, i32 8>
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = mul nuw <4 x i32> %v0, <i32 1, i32 2, i32 3, i32 4>
+  %t2 = mul nuw <4 x i32> %v1, <i32 5, i32 6, i32 7, i32 8>
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 0, i32 5, i32 2, i32 7>
+  ret <4 x i32> %t3
+}
+
+define <4 x i32> @mul_2_vars_undef_mask_elt(<4 x i32> %v0, <4 x i32> %v1) {
+; CHECK-LABEL: @mul_2_vars_undef_mask_elt(
+; CHECK-NEXT:    [[TMP1:%.*]] = shufflevector <4 x i32> [[V0:%.*]], <4 x i32> [[V1:%.*]], <4 x i32> <i32 0, i32 undef, i32 2, i32 7>
+; CHECK-NEXT:    [[T3:%.*]] = mul <4 x i32> [[TMP1]], <i32 1, i32 undef, i32 3, i32 8>
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = mul <4 x i32> %v0, <i32 1, i32 2, i32 3, i32 4>
+  %t2 = mul <4 x i32> %v1, <i32 5, i32 6, i32 7, i32 8>
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 0, i32 undef, i32 2, i32 7>
+  ret <4 x i32> %t3
+}
+
+; FIXME: Poison flags must be dropped or undef must be replaced with safe constant.
+
+define <4 x i32> @mul_2_vars_nuw_undef_mask_elt(<4 x i32> %v0, <4 x i32> %v1) {
+; CHECK-LABEL: @mul_2_vars_nuw_undef_mask_elt(
+; CHECK-NEXT:    [[TMP1:%.*]] = shufflevector <4 x i32> [[V0:%.*]], <4 x i32> [[V1:%.*]], <4 x i32> <i32 0, i32 undef, i32 2, i32 7>
+; CHECK-NEXT:    [[T3:%.*]] = mul nuw <4 x i32> [[TMP1]], <i32 1, i32 undef, i32 3, i32 8>
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = mul nuw <4 x i32> %v0, <i32 1, i32 2, i32 3, i32 4>
+  %t2 = mul nuw <4 x i32> %v1, <i32 5, i32 6, i32 7, i32 8>
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 0, i32 undef, i32 2, i32 7>
   ret <4 x i32> %t3
 }
 
@@ -284,6 +934,46 @@ define <4 x i32> @mul_2_vars(<4 x i32> %v0, <4 x i32> %v1) {
 
 define <4 x i32> @shl_2_vars(<4 x i32> %v0, <4 x i32> %v1) {
 ; CHECK-LABEL: @shl_2_vars(
+; CHECK-NEXT:    [[TMP1:%.*]] = shufflevector <4 x i32> [[V0:%.*]], <4 x i32> [[V1:%.*]], <4 x i32> <i32 0, i32 5, i32 2, i32 3>
+; CHECK-NEXT:    [[T3:%.*]] = shl <4 x i32> [[TMP1]], <i32 1, i32 6, i32 3, i32 4>
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = shl <4 x i32> %v0, <i32 1, i32 2, i32 3, i32 4>
+  %t2 = shl <4 x i32> %v1, <i32 5, i32 6, i32 7, i32 8>
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 0, i32 5, i32 2, i32 3>
+  ret <4 x i32> %t3
+}
+
+define <4 x i32> @shl_2_vars_nsw(<4 x i32> %v0, <4 x i32> %v1) {
+; CHECK-LABEL: @shl_2_vars_nsw(
+; CHECK-NEXT:    [[TMP1:%.*]] = shufflevector <4 x i32> [[V0:%.*]], <4 x i32> [[V1:%.*]], <4 x i32> <i32 0, i32 5, i32 2, i32 3>
+; CHECK-NEXT:    [[T3:%.*]] = shl nsw <4 x i32> [[TMP1]], <i32 1, i32 6, i32 3, i32 4>
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = shl nsw <4 x i32> %v0, <i32 1, i32 2, i32 3, i32 4>
+  %t2 = shl nsw <4 x i32> %v1, <i32 5, i32 6, i32 7, i32 8>
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 0, i32 5, i32 2, i32 3>
+  ret <4 x i32> %t3
+}
+
+; FIXME: Shift by undef is poison. Undef must be replaced by safe constant.
+
+define <4 x i32> @shl_2_vars_undef_mask_elt(<4 x i32> %v0, <4 x i32> %v1) {
+; CHECK-LABEL: @shl_2_vars_undef_mask_elt(
+; CHECK-NEXT:    [[TMP1:%.*]] = shufflevector <4 x i32> [[V0:%.*]], <4 x i32> [[V1:%.*]], <4 x i32> <i32 undef, i32 5, i32 2, i32 undef>
+; CHECK-NEXT:    [[T3:%.*]] = shl <4 x i32> [[TMP1]], <i32 undef, i32 6, i32 3, i32 undef>
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = shl <4 x i32> %v0, <i32 1, i32 2, i32 3, i32 4>
+  %t2 = shl <4 x i32> %v1, <i32 5, i32 6, i32 7, i32 8>
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 undef, i32 5, i32 2, i32 undef>
+  ret <4 x i32> %t3
+}
+
+; FIXME: Shift by undef is poison. Undef must be replaced by safe constant.
+
+define <4 x i32> @shl_2_vars_nsw_undef_mask_elt(<4 x i32> %v0, <4 x i32> %v1) {
+; CHECK-LABEL: @shl_2_vars_nsw_undef_mask_elt(
 ; CHECK-NEXT:    [[TMP1:%.*]] = shufflevector <4 x i32> [[V0:%.*]], <4 x i32> [[V1:%.*]], <4 x i32> <i32 undef, i32 5, i32 2, i32 undef>
 ; CHECK-NEXT:    [[T3:%.*]] = shl nsw <4 x i32> [[TMP1]], <i32 undef, i32 6, i32 3, i32 undef>
 ; CHECK-NEXT:    ret <4 x i32> [[T3]]
@@ -305,6 +995,49 @@ define <4 x i32> @lshr_2_vars(<4 x i32> %v0, <4 x i32> %v1) {
   %t1 = lshr <4 x i32> <i32 1, i32 2, i32 3, i32 4>, %v0
   %t2 = lshr exact <4 x i32> <i32 5, i32 6, i32 7, i32 8>, %v1
   %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 4, i32 5, i32 2, i32 7>
+  ret <4 x i32> %t3
+}
+
+define <4 x i32> @lshr_2_vars_exact(<4 x i32> %v0, <4 x i32> %v1) {
+; CHECK-LABEL: @lshr_2_vars_exact(
+; CHECK-NEXT:    [[TMP1:%.*]] = shufflevector <4 x i32> [[V0:%.*]], <4 x i32> [[V1:%.*]], <4 x i32> <i32 4, i32 5, i32 2, i32 7>
+; CHECK-NEXT:    [[T3:%.*]] = lshr exact <4 x i32> <i32 5, i32 6, i32 3, i32 8>, [[TMP1]]
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = lshr exact <4 x i32> <i32 1, i32 2, i32 3, i32 4>, %v0
+  %t2 = lshr exact <4 x i32> <i32 5, i32 6, i32 7, i32 8>, %v1
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 4, i32 5, i32 2, i32 7>
+  ret <4 x i32> %t3
+}
+
+; FIXME: This is not safe for the same reason that div/rem with undef mask is not safe.
+; Analysis could determine that the shift has an undef shift amount creating poison.
+
+define <4 x i32> @lshr_2_vars_undef_mask_elt(<4 x i32> %v0, <4 x i32> %v1) {
+; CHECK-LABEL: @lshr_2_vars_undef_mask_elt(
+; CHECK-NEXT:    [[TMP1:%.*]] = shufflevector <4 x i32> [[V0:%.*]], <4 x i32> [[V1:%.*]], <4 x i32> <i32 undef, i32 5, i32 2, i32 7>
+; CHECK-NEXT:    [[T3:%.*]] = lshr <4 x i32> <i32 undef, i32 6, i32 3, i32 8>, [[TMP1]]
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = lshr <4 x i32> <i32 1, i32 2, i32 3, i32 4>, %v0
+  %t2 = lshr <4 x i32> <i32 5, i32 6, i32 7, i32 8>, %v1
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 undef, i32 5, i32 2, i32 7>
+  ret <4 x i32> %t3
+}
+
+; FIXME: This is not safe for the same reason that div/rem with undef mask is not safe.
+; Analysis could determine that the shift has an undef shift amount creating poison.
+; The 'exact' could also result in poison by choosing a -1 shift value.
+
+define <4 x i32> @lshr_2_vars_exact_undef_mask_elt(<4 x i32> %v0, <4 x i32> %v1) {
+; CHECK-LABEL: @lshr_2_vars_exact_undef_mask_elt(
+; CHECK-NEXT:    [[TMP1:%.*]] = shufflevector <4 x i32> [[V0:%.*]], <4 x i32> [[V1:%.*]], <4 x i32> <i32 undef, i32 5, i32 2, i32 7>
+; CHECK-NEXT:    [[T3:%.*]] = lshr exact <4 x i32> <i32 undef, i32 6, i32 3, i32 8>, [[TMP1]]
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = lshr exact <4 x i32> <i32 1, i32 2, i32 3, i32 4>, %v0
+  %t2 = lshr exact <4 x i32> <i32 5, i32 6, i32 7, i32 8>, %v1
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 undef, i32 5, i32 2, i32 7>
   ret <4 x i32> %t3
 }
 
@@ -376,11 +1109,50 @@ define <4 x i32> @udiv_2_vars(<4 x i32> %v0, <4 x i32> %v1) {
 ; CHECK-LABEL: @udiv_2_vars(
 ; CHECK-NEXT:    [[T1:%.*]] = udiv <4 x i32> <i32 1, i32 2, i32 3, i32 4>, [[V0:%.*]]
 ; CHECK-NEXT:    [[T2:%.*]] = udiv <4 x i32> <i32 5, i32 6, i32 7, i32 8>, [[V1:%.*]]
+; CHECK-NEXT:    [[T3:%.*]] = shufflevector <4 x i32> [[T1]], <4 x i32> [[T2]], <4 x i32> <i32 4, i32 1, i32 2, i32 7>
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = udiv <4 x i32> <i32 1, i32 2, i32 3, i32 4>, %v0
+  %t2 = udiv <4 x i32> <i32 5, i32 6, i32 7, i32 8>, %v1
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 4, i32 1, i32 2, i32 7>
+  ret <4 x i32> %t3
+}
+
+define <4 x i32> @udiv_2_vars_exact(<4 x i32> %v0, <4 x i32> %v1) {
+; CHECK-LABEL: @udiv_2_vars_exact(
+; CHECK-NEXT:    [[T1:%.*]] = udiv exact <4 x i32> <i32 1, i32 2, i32 3, i32 4>, [[V0:%.*]]
+; CHECK-NEXT:    [[T2:%.*]] = udiv exact <4 x i32> <i32 5, i32 6, i32 7, i32 8>, [[V1:%.*]]
+; CHECK-NEXT:    [[T3:%.*]] = shufflevector <4 x i32> [[T1]], <4 x i32> [[T2]], <4 x i32> <i32 4, i32 1, i32 2, i32 7>
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = udiv exact <4 x i32> <i32 1, i32 2, i32 3, i32 4>, %v0
+  %t2 = udiv exact <4 x i32> <i32 5, i32 6, i32 7, i32 8>, %v1
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 4, i32 1, i32 2, i32 7>
+  ret <4 x i32> %t3
+}
+
+define <4 x i32> @udiv_2_vars_undef_mask_elt(<4 x i32> %v0, <4 x i32> %v1) {
+; CHECK-LABEL: @udiv_2_vars_undef_mask_elt(
+; CHECK-NEXT:    [[T1:%.*]] = udiv <4 x i32> <i32 1, i32 2, i32 3, i32 4>, [[V0:%.*]]
+; CHECK-NEXT:    [[T2:%.*]] = udiv <4 x i32> <i32 5, i32 6, i32 7, i32 8>, [[V1:%.*]]
 ; CHECK-NEXT:    [[T3:%.*]] = shufflevector <4 x i32> [[T1]], <4 x i32> [[T2]], <4 x i32> <i32 undef, i32 1, i32 2, i32 7>
 ; CHECK-NEXT:    ret <4 x i32> [[T3]]
 ;
   %t1 = udiv <4 x i32> <i32 1, i32 2, i32 3, i32 4>, %v0
   %t2 = udiv <4 x i32> <i32 5, i32 6, i32 7, i32 8>, %v1
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 undef, i32 1, i32 2, i32 7>
+  ret <4 x i32> %t3
+}
+
+define <4 x i32> @udiv_2_vars_exact_undef_mask_elt(<4 x i32> %v0, <4 x i32> %v1) {
+; CHECK-LABEL: @udiv_2_vars_exact_undef_mask_elt(
+; CHECK-NEXT:    [[T1:%.*]] = udiv exact <4 x i32> <i32 1, i32 2, i32 3, i32 4>, [[V0:%.*]]
+; CHECK-NEXT:    [[T2:%.*]] = udiv exact <4 x i32> <i32 5, i32 6, i32 7, i32 8>, [[V1:%.*]]
+; CHECK-NEXT:    [[T3:%.*]] = shufflevector <4 x i32> [[T1]], <4 x i32> [[T2]], <4 x i32> <i32 undef, i32 1, i32 2, i32 7>
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = udiv exact <4 x i32> <i32 1, i32 2, i32 3, i32 4>, %v0
+  %t2 = udiv exact <4 x i32> <i32 5, i32 6, i32 7, i32 8>, %v1
   %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 undef, i32 1, i32 2, i32 7>
   ret <4 x i32> %t3
 }
@@ -397,6 +1169,45 @@ define <4 x i32> @sdiv_2_vars(<4 x i32> %v0, <4 x i32> %v1) {
   %t1 = sdiv <4 x i32> %v0, <i32 1, i32 2, i32 3, i32 4>
   %t2 = sdiv <4 x i32> %v1, <i32 5, i32 6, i32 7, i32 8>
   %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 0, i32 1, i32 6, i32 3>
+  ret <4 x i32> %t3
+}
+
+define <4 x i32> @sdiv_2_vars_exact(<4 x i32> %v0, <4 x i32> %v1) {
+; CHECK-LABEL: @sdiv_2_vars_exact(
+; CHECK-NEXT:    [[T1:%.*]] = sdiv exact <4 x i32> [[V0:%.*]], <i32 1, i32 2, i32 3, i32 4>
+; CHECK-NEXT:    [[T2:%.*]] = sdiv exact <4 x i32> [[V1:%.*]], <i32 5, i32 6, i32 7, i32 8>
+; CHECK-NEXT:    [[T3:%.*]] = shufflevector <4 x i32> [[T1]], <4 x i32> [[T2]], <4 x i32> <i32 0, i32 1, i32 6, i32 3>
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = sdiv exact <4 x i32> %v0, <i32 1, i32 2, i32 3, i32 4>
+  %t2 = sdiv exact <4 x i32> %v1, <i32 5, i32 6, i32 7, i32 8>
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 0, i32 1, i32 6, i32 3>
+  ret <4 x i32> %t3
+}
+
+define <4 x i32> @sdiv_2_vars_undef_mask_elt(<4 x i32> %v0, <4 x i32> %v1) {
+; CHECK-LABEL: @sdiv_2_vars_undef_mask_elt(
+; CHECK-NEXT:    [[T1:%.*]] = sdiv <4 x i32> [[V0:%.*]], <i32 1, i32 2, i32 3, i32 4>
+; CHECK-NEXT:    [[T2:%.*]] = sdiv <4 x i32> [[V1:%.*]], <i32 5, i32 6, i32 7, i32 8>
+; CHECK-NEXT:    [[T3:%.*]] = shufflevector <4 x i32> [[T1]], <4 x i32> [[T2]], <4 x i32> <i32 0, i32 1, i32 6, i32 undef>
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = sdiv <4 x i32> %v0, <i32 1, i32 2, i32 3, i32 4>
+  %t2 = sdiv <4 x i32> %v1, <i32 5, i32 6, i32 7, i32 8>
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 0, i32 1, i32 6, i32 undef>
+  ret <4 x i32> %t3
+}
+
+define <4 x i32> @sdiv_2_vars_exact_undef_mask_elt(<4 x i32> %v0, <4 x i32> %v1) {
+; CHECK-LABEL: @sdiv_2_vars_exact_undef_mask_elt(
+; CHECK-NEXT:    [[T1:%.*]] = sdiv exact <4 x i32> [[V0:%.*]], <i32 1, i32 2, i32 3, i32 4>
+; CHECK-NEXT:    [[T2:%.*]] = sdiv exact <4 x i32> [[V1:%.*]], <i32 5, i32 6, i32 7, i32 8>
+; CHECK-NEXT:    [[T3:%.*]] = shufflevector <4 x i32> [[T1]], <4 x i32> [[T2]], <4 x i32> <i32 0, i32 1, i32 6, i32 undef>
+; CHECK-NEXT:    ret <4 x i32> [[T3]]
+;
+  %t1 = sdiv exact <4 x i32> %v0, <i32 1, i32 2, i32 3, i32 4>
+  %t2 = sdiv exact <4 x i32> %v1, <i32 5, i32 6, i32 7, i32 8>
+  %t3 = shufflevector <4 x i32> %t1, <4 x i32> %t2, <4 x i32> <i32 0, i32 1, i32 6, i32 undef>
   ret <4 x i32> %t3
 }
 
@@ -582,9 +1393,7 @@ define <4 x i32> @shl_mul_2_vars(<4 x i32> %v0, <4 x i32> %v1) {
 define <4 x i32> @add_or(<4 x i32> %v) {
 ; CHECK-LABEL: @add_or(
 ; CHECK-NEXT:    [[V0:%.*]] = shl <4 x i32> [[V:%.*]], <i32 5, i32 5, i32 5, i32 5>
-; CHECK-NEXT:    [[T1:%.*]] = add <4 x i32> [[V0]], <i32 undef, i32 undef, i32 65536, i32 65537>
-; CHECK-NEXT:    [[T2:%.*]] = or <4 x i32> [[V0]], <i32 31, i32 31, i32 undef, i32 undef>
-; CHECK-NEXT:    [[T3:%.*]] = shufflevector <4 x i32> [[T1]], <4 x i32> [[T2]], <4 x i32> <i32 4, i32 5, i32 2, i32 3>
+; CHECK-NEXT:    [[T3:%.*]] = add <4 x i32> [[V0]], <i32 31, i32 31, i32 65536, i32 65537>
 ; CHECK-NEXT:    ret <4 x i32> [[T3]]
 ;
   %v0 = shl <4 x i32> %v, <i32 5, i32 5, i32 5, i32 5>                   ; clear the bottom bits
@@ -599,9 +1408,7 @@ define <4 x i32> @add_or(<4 x i32> %v) {
 define <4 x i8> @or_add(<4 x i8> %v) {
 ; CHECK-LABEL: @or_add(
 ; CHECK-NEXT:    [[V0:%.*]] = lshr <4 x i8> [[V:%.*]], <i8 3, i8 3, i8 3, i8 3>
-; CHECK-NEXT:    [[T1:%.*]] = or <4 x i8> [[V0]], <i8 undef, i8 undef, i8 -64, i8 -64>
-; CHECK-NEXT:    [[T2:%.*]] = add nuw nsw <4 x i8> [[V0]], <i8 1, i8 2, i8 undef, i8 undef>
-; CHECK-NEXT:    [[T3:%.*]] = shufflevector <4 x i8> [[T1]], <4 x i8> [[T2]], <4 x i32> <i32 4, i32 5, i32 2, i32 3>
+; CHECK-NEXT:    [[T3:%.*]] = add nsw <4 x i8> [[V0]], <i8 1, i8 2, i8 -64, i8 -64>
 ; CHECK-NEXT:    ret <4 x i8> [[T3]]
 ;
   %v0 = lshr <4 x i8> %v, <i8 3, i8 3, i8 3, i8 3>          ; clear the top bits
@@ -610,6 +1417,8 @@ define <4 x i8> @or_add(<4 x i8> %v) {
   %t3 = shufflevector <4 x i8> %t1, <4 x i8> %t2, <4 x i32> <i32 4, i32 5, i32 2, i32 3>
   ret <4 x i8> %t3
 }
+
+; Negative test: not all 'or' insts can be converted to 'add'.
 
 define <4 x i8> @or_add_not_enough_masking(<4 x i8> %v) {
 ; CHECK-LABEL: @or_add_not_enough_masking(
@@ -631,9 +1440,8 @@ define <4 x i8> @or_add_not_enough_masking(<4 x i8> %v) {
 define <4 x i32> @add_or_2_vars(<4 x i32> %v, <4 x i32> %v1) {
 ; CHECK-LABEL: @add_or_2_vars(
 ; CHECK-NEXT:    [[V0:%.*]] = shl <4 x i32> [[V:%.*]], <i32 5, i32 5, i32 5, i32 5>
-; CHECK-NEXT:    [[T1:%.*]] = add <4 x i32> [[V1:%.*]], <i32 undef, i32 undef, i32 65536, i32 65537>
-; CHECK-NEXT:    [[T2:%.*]] = or <4 x i32> [[V0]], <i32 31, i32 31, i32 undef, i32 undef>
-; CHECK-NEXT:    [[T3:%.*]] = shufflevector <4 x i32> [[T1]], <4 x i32> [[T2]], <4 x i32> <i32 4, i32 5, i32 2, i32 3>
+; CHECK-NEXT:    [[TMP1:%.*]] = shufflevector <4 x i32> [[V1:%.*]], <4 x i32> [[V0]], <4 x i32> <i32 4, i32 5, i32 2, i32 3>
+; CHECK-NEXT:    [[T3:%.*]] = add <4 x i32> [[TMP1]], <i32 31, i32 31, i32 65536, i32 65537>
 ; CHECK-NEXT:    ret <4 x i32> [[T3]]
 ;
   %v0 = shl <4 x i32> %v, <i32 5, i32 5, i32 5, i32 5>                   ; clear the bottom bits
@@ -646,9 +1454,8 @@ define <4 x i32> @add_or_2_vars(<4 x i32> %v, <4 x i32> %v1) {
 define <4 x i8> @or_add_2_vars(<4 x i8> %v, <4 x i8> %v1) {
 ; CHECK-LABEL: @or_add_2_vars(
 ; CHECK-NEXT:    [[V0:%.*]] = lshr <4 x i8> [[V:%.*]], <i8 3, i8 3, i8 3, i8 3>
-; CHECK-NEXT:    [[T1:%.*]] = or <4 x i8> [[V0]], <i8 undef, i8 undef, i8 -64, i8 -64>
-; CHECK-NEXT:    [[T2:%.*]] = add nuw nsw <4 x i8> [[V1:%.*]], <i8 1, i8 2, i8 undef, i8 undef>
-; CHECK-NEXT:    [[T3:%.*]] = shufflevector <4 x i8> [[T1]], <4 x i8> [[T2]], <4 x i32> <i32 4, i32 5, i32 2, i32 3>
+; CHECK-NEXT:    [[TMP1:%.*]] = shufflevector <4 x i8> [[V0]], <4 x i8> [[V1:%.*]], <4 x i32> <i32 4, i32 5, i32 2, i32 3>
+; CHECK-NEXT:    [[T3:%.*]] = add <4 x i8> [[TMP1]], <i8 1, i8 2, i8 -64, i8 -64>
 ; CHECK-NEXT:    ret <4 x i8> [[T3]]
 ;
   %v0 = lshr <4 x i8> %v, <i8 3, i8 3, i8 3, i8 3>          ; clear the top bits

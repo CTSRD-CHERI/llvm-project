@@ -843,7 +843,7 @@ CCAssignFn *AMDGPUCallLowering::CCAssignFnForCall(CallingConv::ID CC,
   switch (CC) {
   case CallingConv::AMDGPU_KERNEL:
   case CallingConv::SPIR_KERNEL:
-    return CC_AMDGPU_Kernel;
+    llvm_unreachable("kernels should not be handled here");
   case CallingConv::AMDGPU_VS:
   case CallingConv::AMDGPU_GS:
   case CallingConv::AMDGPU_PS:
@@ -866,7 +866,7 @@ CCAssignFn *AMDGPUCallLowering::CCAssignFnForReturn(CallingConv::ID CC,
   switch (CC) {
   case CallingConv::AMDGPU_KERNEL:
   case CallingConv::SPIR_KERNEL:
-    return CC_AMDGPU_Kernel;
+    llvm_unreachable("kernels should not be handled here");
   case CallingConv::AMDGPU_VS:
   case CallingConv::AMDGPU_GS:
   case CallingConv::AMDGPU_PS:
@@ -3939,7 +3939,8 @@ SDValue AMDGPUTargetLowering::loadInputValue(SelectionDAG &DAG,
 uint32_t AMDGPUTargetLowering::getImplicitParameterOffset(
     const MachineFunction &MF, const ImplicitParameter Param) const {
   const AMDGPUMachineFunction *MFI = MF.getInfo<AMDGPUMachineFunction>();
-  const AMDGPUSubtarget &ST = MF.getSubtarget<AMDGPUSubtarget>();
+  const AMDGPUCommonSubtarget &ST =
+      AMDGPUCommonSubtarget::get(getTargetMachine(), MF.getFunction());
   unsigned ExplicitArgOffset = ST.getExplicitKernelArgOffset(MF.getFunction());
   unsigned Alignment = ST.getAlignmentForImplicitArgPtr();
   uint64_t ArgOffset = alignTo(MFI->getExplicitKernArgSize(), Alignment) +

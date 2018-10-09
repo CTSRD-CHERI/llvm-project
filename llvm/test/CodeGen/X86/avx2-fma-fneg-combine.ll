@@ -43,16 +43,16 @@ declare <4 x float> @llvm.x86.fma.vfmadd.ps(<4 x float> %a, <4 x float> %b, <4 x
 define <4 x float> @test3(<4 x float> %a, <4 x float> %b, <4 x float> %c)  {
 ; X32-LABEL: test3:
 ; X32:       # %bb.0: # %entry
-; X32-NEXT:    vbroadcastss {{.*#+}} xmm3 = [-0,-0,-0,-0]
 ; X32-NEXT:    vfnmadd213ss {{.*#+}} xmm0 = -(xmm1 * xmm0) + xmm2
-; X32-NEXT:    vxorps %xmm3, %xmm0, %xmm0
+; X32-NEXT:    vbroadcastss {{.*#+}} xmm1 = [-0,-0,-0,-0]
+; X32-NEXT:    vxorps %xmm1, %xmm0, %xmm0
 ; X32-NEXT:    retl
 ;
 ; X64-LABEL: test3:
 ; X64:       # %bb.0: # %entry
-; X64-NEXT:    vbroadcastss {{.*#+}} xmm3 = [-0,-0,-0,-0]
 ; X64-NEXT:    vfnmadd213ss {{.*#+}} xmm0 = -(xmm1 * xmm0) + xmm2
-; X64-NEXT:    vxorps %xmm3, %xmm0, %xmm0
+; X64-NEXT:    vbroadcastss {{.*#+}} xmm1 = [-0,-0,-0,-0]
+; X64-NEXT:    vxorps %xmm1, %xmm0, %xmm0
 ; X64-NEXT:    retq
 entry:
   %0 = tail call <4 x float> @llvm.x86.fma.vfnmadd.ss(<4 x float> %a, <4 x float> %b, <4 x float> %c) #2
@@ -140,6 +140,31 @@ entry:
   %3 = tail call <8 x float> @llvm.fma.v8f32(<8 x float> %2, <8 x float> %b, <8 x float> %c)
   ret <8 x float> %3
 
+}
+
+define <8 x float> @test8(float %a, <8 x float> %b, <8 x float> %c)  {
+; X32-LABEL: test8:
+; X32:       # %bb.0: # %entry
+; X32-NEXT:    vmovss {{.*#+}} xmm2 = mem[0],zero,zero,zero
+; X32-NEXT:    vbroadcastss {{.*#+}} xmm3 = [-0,-0,-0,-0]
+; X32-NEXT:    vxorps %xmm3, %xmm2, %xmm2
+; X32-NEXT:    vbroadcastss %xmm2, %ymm2
+; X32-NEXT:    vfmadd213ps {{.*#+}} ymm0 = (ymm2 * ymm0) + ymm1
+; X32-NEXT:    retl
+;
+; X64-LABEL: test8:
+; X64:       # %bb.0: # %entry
+; X64-NEXT:    vbroadcastss {{.*#+}} xmm3 = [-0,-0,-0,-0]
+; X64-NEXT:    vxorps %xmm3, %xmm0, %xmm0
+; X64-NEXT:    vbroadcastss %xmm0, %ymm0
+; X64-NEXT:    vfmadd213ps {{.*#+}} ymm0 = (ymm1 * ymm0) + ymm2
+; X64-NEXT:    retq
+entry:
+  %0 = fsub float -0.0, %a
+  %1 = insertelement <8 x float> undef, float %0, i32 0
+  %2 = shufflevector <8 x float> %1, <8 x float> undef, <8 x i32> zeroinitializer
+  %3 = tail call <8 x float> @llvm.fma.v8f32(<8 x float> %2, <8 x float> %b, <8 x float> %c)
+  ret <8 x float> %3
 }
 
 declare <8 x float> @llvm.fma.v8f32(<8 x float> %a, <8 x float> %b, <8 x float> %c)
