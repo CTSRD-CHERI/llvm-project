@@ -208,10 +208,10 @@ bool fromJSON(const json::Value &Params, SymbolKindCapabilities &R) {
 }
 
 SymbolKind adjustKindToCapability(SymbolKind Kind,
-                                  SymbolKindBitset &supportedSymbolKinds) {
+                                  SymbolKindBitset &SupportedSymbolKinds) {
   auto KindVal = static_cast<size_t>(Kind);
-  if (KindVal >= SymbolKindMin && KindVal <= supportedSymbolKinds.size() &&
-      supportedSymbolKinds[KindVal])
+  if (KindVal >= SymbolKindMin && KindVal <= SupportedSymbolKinds.size() &&
+      SupportedSymbolKinds[KindVal])
     return Kind;
 
   switch (Kind) {
@@ -263,7 +263,7 @@ bool fromJSON(const json::Value &Params, InitializeParams &R) {
   O.map("rootPath", R.rootPath);
   O.map("capabilities", R.capabilities);
   O.map("trace", R.trace);
-  // initializationOptions, capabilities unused
+  O.map("initializationOptions", R.initializationOptions);
   return true;
 }
 
@@ -591,10 +591,18 @@ bool fromJSON(const json::Value &Params, DidChangeConfigurationParams &CCP) {
   return O && O.map("settings", CCP.settings);
 }
 
+bool fromJSON(const llvm::json::Value &Params,
+              ClangdCompileCommand &CDbUpdate) {
+  json::ObjectMapper O(Params);
+  return O && O.map("workingDirectory", CDbUpdate.workingDirectory) &&
+         O.map("compilationCommand", CDbUpdate.compilationCommand);
+}
+
 bool fromJSON(const json::Value &Params,
               ClangdConfigurationParamsChange &CCPC) {
   json::ObjectMapper O(Params);
-  return O && O.map("compilationDatabasePath", CCPC.compilationDatabasePath);
+  return O && O.map("compilationDatabasePath", CCPC.compilationDatabasePath) &&
+         O.map("compilationDatabaseChanges", CCPC.compilationDatabaseChanges);
 }
 
 } // namespace clangd

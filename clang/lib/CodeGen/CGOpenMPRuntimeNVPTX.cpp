@@ -1785,8 +1785,9 @@ void CGOpenMPRuntimeNVPTX::emitNonSPMDParallelCall(
                                            /*DestWidth=*/32, /*Signed=*/1),
                                        ".zero.addr");
   CGF.InitTempAlloca(ZeroAddr, CGF.Builder.getInt32(/*C*/ 0));
-  Address ThreadIDAddr = emitThreadIDAddress(CGF, Loc);
-  auto &&CodeGen = [this, Fn, CapturedVars, Loc, ZeroAddr, ThreadIDAddr](
+  // ThreadId for serialized parallels is 0.
+  Address ThreadIDAddr = ZeroAddr;
+  auto &&CodeGen = [this, Fn, CapturedVars, Loc, ZeroAddr, &ThreadIDAddr](
                        CodeGenFunction &CGF, PrePostActionTy &Action) {
     Action.Enter(CGF);
 
@@ -1884,8 +1885,9 @@ void CGOpenMPRuntimeNVPTX::emitNonSPMDParallelCall(
     Work.emplace_back(WFn);
   };
 
-  auto &&LNParallelGen = [this, Loc, &SeqGen, &L0ParallelGen, &CodeGen](
-                             CodeGenFunction &CGF, PrePostActionTy &Action) {
+  auto &&LNParallelGen = [this, Loc, &SeqGen, &L0ParallelGen, &CodeGen,
+                          &ThreadIDAddr](CodeGenFunction &CGF,
+                                         PrePostActionTy &Action) {
     RegionCodeGenTy RCG(CodeGen);
     if (IsInParallelRegion) {
       SeqGen(CGF, Action);
@@ -1937,6 +1939,8 @@ void CGOpenMPRuntimeNVPTX::emitNonSPMDParallelCall(
       // There is no need to emit line number for unconditional branch.
       (void)ApplyDebugLocation::CreateEmpty(CGF);
       CGF.EmitBlock(ElseBlock);
+      // In the worker need to use the real thread id.
+      ThreadIDAddr = emitThreadIDAddress(CGF, Loc);
       RCG(CGF);
       // There is no need to emit line number for unconditional branch.
       (void)ApplyDebugLocation::CreateEmpty(CGF);
@@ -1966,10 +1970,11 @@ void CGOpenMPRuntimeNVPTX::emitSPMDParallelCall(
                                            /*DestWidth=*/32, /*Signed=*/1),
                                        ".zero.addr");
   CGF.InitTempAlloca(ZeroAddr, CGF.Builder.getInt32(/*C*/ 0));
-  Address ThreadIDAddr = emitThreadIDAddress(CGF, Loc);
+  // ThreadId for serialized parallels is 0.
+  Address ThreadIDAddr = ZeroAddr;
   auto &&CodeGen = [this, OutlinedFn, CapturedVars, Loc, ZeroAddr,
-                    ThreadIDAddr](CodeGenFunction &CGF,
-                                  PrePostActionTy &Action) {
+                    &ThreadIDAddr](CodeGenFunction &CGF,
+                                   PrePostActionTy &Action) {
     Action.Enter(CGF);
 
     llvm::SmallVector<llvm::Value *, 16> OutlinedFnArgs;
@@ -1996,6 +2001,8 @@ void CGOpenMPRuntimeNVPTX::emitSPMDParallelCall(
   };
 
   if (IsInTargetMasterThreadRegion) {
+    // In the worker need to use the real thread id.
+    ThreadIDAddr = emitThreadIDAddress(CGF, Loc);
     RegionCodeGenTy RCG(CodeGen);
     RCG(CGF);
   } else {

@@ -234,6 +234,9 @@ void DwarfUnit::addSInt(DIELoc &Die, Optional<dwarf::Form> Form,
 
 void DwarfUnit::addString(DIE &Die, dwarf::Attribute Attribute,
                           StringRef String) {
+  if (CUNode->isDebugDirectivesOnly())
+    return;
+
   if (DD->useInlineStrings()) {
     Die.addValue(DIEValueAllocator, Attribute, dwarf::DW_FORM_string,
                  new (DIEValueAllocator)
@@ -1182,7 +1185,7 @@ DIE *DwarfUnit::getOrCreateModule(const DIModule *M) {
     addString(MDie, dwarf::DW_AT_LLVM_include_path, M->getIncludePath());
   if (!M->getISysRoot().empty())
     addString(MDie, dwarf::DW_AT_LLVM_isysroot, M->getISysRoot());
-  
+
   return &MDie;
 }
 
@@ -1691,7 +1694,7 @@ void DwarfUnit::emitCommonHeader(bool UseOffsets, dwarf::UnitType UT) {
 }
 
 void DwarfTypeUnit::emitHeader(bool UseOffsets) {
-  DwarfUnit::emitCommonHeader(UseOffsets, 
+  DwarfUnit::emitCommonHeader(UseOffsets,
                               DD->useSplitDwarf() ? dwarf::DW_UT_split_type
                                                   : dwarf::DW_UT_type);
   Asm->OutStreamer->AddComment("Type Signature");

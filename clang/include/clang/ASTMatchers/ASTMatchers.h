@@ -1247,7 +1247,7 @@ extern const internal::VariadicDynCastAllOfMatcher<Decl, ObjCMethodDecl>
     objcMethodDecl;
 
 /// Matches block declarations.
-/// 
+///
 /// Example matches the declaration of the nameless block printing an input
 /// integer.
 ///
@@ -1643,6 +1643,20 @@ extern const internal::VariadicDynCastAllOfMatcher<Stmt, Expr> expr;
 /// \endcode
 extern const internal::VariadicDynCastAllOfMatcher<Stmt, DeclRefExpr>
     declRefExpr;
+
+/// Matches a reference to an ObjCIvar.
+///
+/// Example: matches "a" in "init" method:
+/// \code
+/// @implementation A {
+///   NSString *a;
+/// }
+/// - (void) init {
+///   a = @"hello";
+/// }
+/// \endcode
+extern const internal::VariadicDynCastAllOfMatcher<Stmt, ObjCIvarRefExpr>
+    objcIvarRefExpr;
 
 /// Matches if statements.
 ///
@@ -2655,6 +2669,7 @@ extern const internal::VariadicOperatorMatcherFunc<1, 1> unless;
 /// - for MemberExpr, the declaration of the referenced member
 /// - for CXXConstructExpr, the declaration of the constructor
 /// - for CXXNewExpr, the declaration of the operator new
+/// - for ObjCIvarExpr, the declaration of the ivar
 ///
 /// For type nodes, hasDeclaration will generally match the declaration of the
 /// sugared type. Given
@@ -2870,7 +2885,7 @@ AST_MATCHER(ObjCMessageExpr, hasKeywordSelector) {
 AST_MATCHER_P(ObjCMessageExpr, numSelectorArgs, unsigned, N) {
   return Node.getSelector().getNumArgs() == N;
 }
-   
+
 /// Matches if the call expression's callee expression matches.
 ///
 /// Given
@@ -3663,7 +3678,7 @@ AST_POLYMORPHIC_MATCHER_P2(forEachArgumentWithParam,
 /// \code
 ///   b = ^(int y) { printf("%d", y) };
 /// \endcode
-/// 
+///
 /// the matcher blockDecl(hasAnyParameter(hasName("y")))
 /// matches the declaration of the block b with hasParameter
 /// matching y.
@@ -5125,7 +5140,7 @@ extern const AstTypeMatcher<AutoType> autoType;
 ///   int j = 42;
 ///   decltype(i + j) result = i + j;
 /// \endcode
-/// decltypeType() 
+/// decltypeType()
 ///   matches "decltype(i + j)"
 extern const AstTypeMatcher<DecltypeType> decltypeType;
 
@@ -6032,8 +6047,8 @@ AST_MATCHER(NamedDecl, hasExternalFormalLinkage) {
 /// void x(int val) {}
 /// void y(int val = 0) {}
 /// \endcode
-AST_MATCHER(ParmVarDecl, hasDefaultArgument) { 
-  return Node.hasDefaultArg(); 
+AST_MATCHER(ParmVarDecl, hasDefaultArgument) {
+  return Node.hasDefaultArg();
 }
 
 /// Matches array new expressions.

@@ -159,7 +159,7 @@ public:
   /// is null, all requests will be processed on the calling thread
   /// synchronously instead. \p Barrier is acquired when processing each
   /// request, it is be used to limit the number of actively running threads.
-  static ASTWorkerHandle Create(PathRef FileName,
+  static ASTWorkerHandle create(PathRef FileName,
                                 TUScheduler::ASTCache &IdleASTs,
                                 AsyncTaskRunner *Tasks, Semaphore &Barrier,
                                 steady_clock::duration UpdateDebounce,
@@ -228,6 +228,9 @@ private:
   Semaphore &Barrier;
   /// Inputs, corresponding to the current state of AST.
   ParseInputs FileInputs;
+  /// Whether the diagnostics for the current FileInputs were reported to the
+  /// users before.
+  bool DiagsWereReported = false;
   /// Size of the last AST
   /// Guards members used by both TUScheduler and the worker thread.
   mutable std::mutex Mutex;
@@ -282,7 +285,7 @@ private:
   std::shared_ptr<ASTWorker> Worker;
 };
 
-ASTWorkerHandle ASTWorker::Create(PathRef FileName,
+ASTWorkerHandle ASTWorker::create(PathRef FileName,
                                   TUScheduler::ASTCache &IdleASTs,
                                   AsyncTaskRunner *Tasks, Semaphore &Barrier,
                                   steady_clock::duration UpdateDebounce,
@@ -324,10 +327,15 @@ void ASTWorker::update(
     ParseInputs Inputs, WantDiagnostics WantDiags,
     llvm::unique_function<void(std::vector<Diag>)> OnUpdated) {
   auto Task = [=](decltype(OnUpdated) OnUpdated) mutable {
+    // Will be used to check if we can avoid rebuilding the AST.
+    bool InputsAreTheSame =
+        std::tie(FileInputs.CompileCommand, FileInputs.Contents) ==
+        std::tie(Inputs.CompileCommand, Inputs.Contents);
+
     tooling::CompileCommand OldCommand = std::move(FileInputs.CompileCommand);
+    bool PrevDiagsWereReported = DiagsWereReported;
     FileInputs = Inputs;
-    // Remove the old AST if it's still in cache.
-    IdleASTs.take(this);
+    DiagsWereReported = false;
 
     log("Updating file {0} with command [{1}] {2}", FileName,
         Inputs.CompileCommand.Directory,
@@ -337,33 +345,73 @@ void ASTWorker::update(
         buildCompilerInvocation(Inputs);
     if (!Invocation) {
       elog("Could not build CompilerInvocation for file {0}", FileName);
+      // Remove the old AST if it's still in cache.
+      IdleASTs.take(this);
       // Make sure anyone waiting for the preamble gets notified it could not
       // be built.
       PreambleWasBuilt.notify();
       return;
     }
 
-    std::shared_ptr<const PreambleData> NewPreamble = buildPreamble(
-        FileName, *Invocation, getPossiblyStalePreamble(), OldCommand, Inputs,
-        PCHs, StorePreambleInMemory, PreambleCallback);
+    std::shared_ptr<const PreambleData> OldPreamble =
+        getPossiblyStalePreamble();
+    std::shared_ptr<const PreambleData> NewPreamble =
+        buildPreamble(FileName, *Invocation, OldPreamble, OldCommand, Inputs,
+                      PCHs, StorePreambleInMemory, PreambleCallback);
+
+    bool CanReuseAST = InputsAreTheSame && (OldPreamble == NewPreamble);
     {
       std::lock_guard<std::mutex> Lock(Mutex);
       if (NewPreamble)
         LastBuiltPreamble = NewPreamble;
     }
+    // Before doing the expensive AST reparse, we want to release our reference
+    // to the old preamble, so it can be freed if there are no other references
+    // to it.
+    OldPreamble.reset();
     PreambleWasBuilt.notify();
 
-    // Build the AST for diagnostics.
-    llvm::Optional<ParsedAST> AST =
-        buildAST(FileName, std::move(Invocation), Inputs, NewPreamble, PCHs);
+    if (!CanReuseAST) {
+      IdleASTs.take(this); // Remove the old AST if it's still in cache.
+    } else {
+      // Since we don't need to rebuild the AST, we might've already reported
+      // the diagnostics for it.
+      if (PrevDiagsWereReported) {
+        DiagsWereReported = true;
+        // Take a shortcut and don't report the diagnostics, since they should
+        // not changed. All the clients should handle the lack of OnUpdated()
+        // call anyway to handle empty result from buildAST.
+        // FIXME(ibiryukov): the AST could actually change if non-preamble
+        // includes changed, but we choose to ignore it.
+        // FIXME(ibiryukov): should we refresh the cache in IdleASTs for the
+        // current file at this point?
+        log("Skipping rebuild of the AST for {0}, inputs are the same.",
+            FileName);
+        return;
+      }
+    }
+
+    // We only need to build the AST if diagnostics were requested.
+    if (WantDiags == WantDiagnostics::No)
+      return;
+
+    // Get the AST for diagnostics.
+    llvm::Optional<std::unique_ptr<ParsedAST>> AST = IdleASTs.take(this);
+    if (!AST) {
+      llvm::Optional<ParsedAST> NewAST =
+          buildAST(FileName, std::move(Invocation), Inputs, NewPreamble, PCHs);
+      AST = NewAST ? llvm::make_unique<ParsedAST>(std::move(*NewAST)) : nullptr;
+    }
     // We want to report the diagnostics even if this update was cancelled.
     // It seems more useful than making the clients wait indefinitely if they
     // spam us with updates.
-    if (WantDiags != WantDiagnostics::No && AST)
-      OnUpdated(AST->getDiagnostics());
+    // Note *AST can be still be null if buildAST fails.
+    if (*AST) {
+      OnUpdated((*AST)->getDiagnostics());
+      DiagsWereReported = true;
+    }
     // Stash the AST in the cache for further use.
-    IdleASTs.put(this,
-                 AST ? llvm::make_unique<ParsedAST>(std::move(*AST)) : nullptr);
+    IdleASTs.put(this, std::move(*AST));
   };
 
   startTask("Update", Bind(Task, std::move(OnUpdated)), WantDiags);
@@ -612,7 +660,7 @@ void TUScheduler::update(
   std::unique_ptr<FileData> &FD = Files[File];
   if (!FD) {
     // Create a new worker to process the AST-related tasks.
-    ASTWorkerHandle Worker = ASTWorker::Create(
+    ASTWorkerHandle Worker = ASTWorker::create(
         File, *IdleASTs, WorkerThreads ? WorkerThreads.getPointer() : nullptr,
         Barrier, UpdateDebounce, PCHOps, StorePreamblesInMemory,
         PreambleCallback);

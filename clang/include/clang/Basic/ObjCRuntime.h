@@ -160,7 +160,7 @@ public:
     llvm_unreachable("bad kind");
   }
 
-  /// Does this runtime natively provide the ARC entrypoints? 
+  /// Does this runtime natively provide the ARC entrypoints?
   ///
   /// ARC cannot be directly supported on a platform that does not provide
   /// these entrypoints, although it may be supportable via a stub

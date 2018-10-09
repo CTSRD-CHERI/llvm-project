@@ -11,6 +11,7 @@ set(files
   __libcpp_version
   __locale
   __mutex_base
+  __node_handle
   __nullptr
   __split_buffer
   __sso_allocator
@@ -31,6 +32,7 @@ set(files
   cerrno
   cfenv
   cfloat
+  charconv
   chrono
   cinttypes
   ciso646
@@ -93,6 +95,7 @@ set(files
   ext/__hash
   ext/hash_map
   ext/hash_set
+  filesystem
   float.h
   forward_list
   fstream
@@ -205,7 +208,7 @@ else()
     )
 endif()
 
-if(NOT LIBCXX_USING_INSTALLED_LLVM AND LLVM_BINARY_DIR)
+if(NOT LIBCXX_USING_INSTALLED_LLVM AND LIBCXX_HEADER_DIR)
   set(output_dir ${LIBCXX_HEADER_DIR}/include/c++/v1)
 
   set(out_files)

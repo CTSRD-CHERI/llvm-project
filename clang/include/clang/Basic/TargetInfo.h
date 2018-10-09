@@ -1177,7 +1177,8 @@ public:
   bool isSEHTrySupported() const {
     return getTriple().isOSWindows() &&
            (getTriple().getArch() == llvm::Triple::x86 ||
-            getTriple().getArch() == llvm::Triple::x86_64);
+            getTriple().getArch() == llvm::Triple::x86_64 ||
+            getTriple().getArch() == llvm::Triple::aarch64);
   }
 
   /// Return true if {|} are normal characters in the asm string.
@@ -1266,7 +1267,7 @@ public:
   enum CallingConvKind {
     CCK_Default,
     CCK_ClangABI4OrPS4,
-    CCK_MicrosoftX86_64
+    CCK_MicrosoftWin64
   };
 
   virtual CallingConvKind getCallingConvKind(bool ClangABICompat4) const;

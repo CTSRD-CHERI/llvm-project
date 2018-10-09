@@ -165,7 +165,7 @@ public:
   llvm::BasicBlock *
   EmitCtorCompleteObjectHandler(CodeGenFunction &CGF,
                                 const CXXRecordDecl *RD) override;
-  
+
   llvm::BasicBlock *
   EmitDtorCompleteObjectHandler(CodeGenFunction &CGF);
 
@@ -840,6 +840,7 @@ MicrosoftCXXABI::getRecordArgABI(const CXXRecordDecl *RD) const {
     return RAA_Default;
 
   case llvm::Triple::x86_64:
+  case llvm::Triple::aarch64:
     return !canCopyArgument(RD) ? RAA_Indirect : RAA_Default;
   }
 
@@ -1074,10 +1075,22 @@ bool MicrosoftCXXABI::classifyReturnType(CGFunctionInfo &FI) const {
     // the second parameter.
     FI.getReturnInfo() = ABIArgInfo::getIndirect(Align, /*ByVal=*/false);
     FI.getReturnInfo().setSRetAfterThis(FI.isInstanceMethod());
+
+    // aarch64-windows requires that instance methods use X1 for the return
+    // address. So for aarch64-windows we do not mark the
+    // return as SRet.
+    FI.getReturnInfo().setSuppressSRet(CGM.getTarget().getTriple().getArch() ==
+                                       llvm::Triple::aarch64);
     return true;
   } else if (!RD->isPOD()) {
     // If it's a free function, non-POD types are returned indirectly.
     FI.getReturnInfo() = ABIArgInfo::getIndirect(Align, /*ByVal=*/false);
+
+    // aarch64-windows requires that non-POD, non-instance returns use X0 for
+    // the return address. So for aarch64-windows we do not mark the return as
+    // SRet.
+    FI.getReturnInfo().setSuppressSRet(CGM.getTarget().getTriple().getArch() ==
+                                       llvm::Triple::aarch64);
     return true;
   }
 
@@ -1124,7 +1137,7 @@ MicrosoftCXXABI::EmitDtorCompleteObjectHandler(CodeGenFunction &CGF) {
 
   CGF.EmitBlock(CallVbaseDtorsBB);
   // CGF will put the base dtor calls in this basic block for us later.
-    
+
   return SkipVbaseDtorsBB;
 }
 
@@ -1394,7 +1407,7 @@ Address MicrosoftCXXABI::adjustThisArgumentForVirtualFunctionCall(
   Address Result = This;
   if (ML.VBase) {
     Result = CGF.Builder.CreateElementBitCast(Result, CGF.Int8Ty);
-    
+
     const CXXRecordDecl *Derived = MD->getParent();
     const CXXRecordDecl *VBase = ML.VBase;
     llvm::Value *VBaseOffset =
@@ -1563,21 +1576,21 @@ void MicrosoftCXXABI::EmitDestructorCall(CodeGenFunction &CGF,
     This = adjustThisArgumentForVirtualFunctionCall(CGF, GlobalDecl(DD, Type),
                                                     This, false);
   }
-  
+
   llvm::BasicBlock *BaseDtorEndBB = nullptr;
   if (ForVirtualBase && isa<CXXConstructorDecl>(CGF.CurCodeDecl)) {
     BaseDtorEndBB = EmitDtorCompleteObjectHandler(CGF);
-  }  
+  }
 
   CGF.EmitCXXDestructorCall(DD, Callee, This.getPointer(),
                             /*ImplicitParam=*/nullptr,
                             /*ImplicitParamTy=*/QualType(), nullptr,
                             getFromDtorType(Type));
   if (BaseDtorEndBB) {
-    // Complete object handler should continue to be the remaining 
+    // Complete object handler should continue to be the remaining
     CGF.Builder.CreateBr(BaseDtorEndBB);
     CGF.EmitBlock(BaseDtorEndBB);
-  } 
+  }
 }
 
 void MicrosoftCXXABI::emitVTableTypeMetadata(const VPtrInfo &Info,

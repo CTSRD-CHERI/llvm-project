@@ -37,6 +37,7 @@
 #include "ToolChains/NetBSD.h"
 #include "ToolChains/OpenBSD.h"
 #include "ToolChains/PS4CPU.h"
+#include "ToolChains/RISCV.h"
 #include "ToolChains/RTEMS.h"
 #include "ToolChains/Solaris.h"
 #include "ToolChains/TCE.h"
@@ -4294,7 +4295,6 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
                                       const llvm::Triple &Target) const {
 
   auto &TC = ToolChains[Target.str()];
-  // FIXME: handle RTEMS here
   if (!TC) {
     switch (Target.getOS()) {
     case llvm::Triple::Haiku:
@@ -4421,6 +4421,10 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
         break;
       case llvm::Triple::avr:
         TC = llvm::make_unique<toolchains::AVRToolChain>(*this, Target, Args);
+        break;
+      case llvm::Triple::riscv32:
+      case llvm::Triple::riscv64:
+        TC = llvm::make_unique<toolchains::RISCVToolChain>(*this, Target, Args);
         break;
       default:
         if (Target.getVendor() == llvm::Triple::Myriad)

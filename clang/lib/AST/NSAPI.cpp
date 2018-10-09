@@ -432,7 +432,7 @@ NSAPI::getNSNumberFactoryMethodKind(QualType T) const {
     return NSAPI::NSNumberWithDouble;
   case BuiltinType::Bool:
     return NSAPI::NSNumberWithBool;
-    
+
   case BuiltinType::IntCap:
   case BuiltinType::UIntCap:
   case BuiltinType::Void:
@@ -493,7 +493,7 @@ NSAPI::getNSNumberFactoryMethodKind(QualType T) const {
   case BuiltinType::OMPArraySection:
     break;
   }
-  
+
   return None;
 }
 
@@ -513,7 +513,7 @@ bool NSAPI::isObjCNSUIntegerType(QualType T) const {
 StringRef NSAPI::GetNSIntegralKind(QualType T) const {
   if (!Ctx.getLangOpts().ObjC1 || T.isNull())
     return StringRef();
-  
+
   while (const TypedefType *TDT = T->getAs<TypedefType>()) {
     StringRef NSIntegralResust =
       llvm::StringSwitch<StringRef>(
