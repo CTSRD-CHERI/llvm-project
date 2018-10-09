@@ -312,16 +312,31 @@ void Scheduler::promoteToReadyQueue(SmallVectorImpl<InstRef> &Ready) {
 }
 
 InstRef Scheduler::select() {
-  // Give priority to older instructions in the ReadyQueue. Since the ready
-  // queue is ordered by key, this will always prioritize older instructions.
-  const auto It = std::find_if(ReadyQueue.begin(), ReadyQueue.end(),
-                               [&](const QueueEntryTy &Entry) {
-                                 const InstrDesc &D = Entry.second->getDesc();
-                                 return Resources->canBeIssued(D);
-                               });
+  // Find the oldest ready-to-issue instruction in the ReadyQueue.
+  auto It = std::find_if(ReadyQueue.begin(), ReadyQueue.end(),
+                         [&](const QueueEntryTy &Entry) {
+                           const InstrDesc &D = Entry.second->getDesc();
+                           return Resources->canBeIssued(D);
+                         });
 
   if (It == ReadyQueue.end())
     return {0, nullptr};
+
+  // We want to prioritize older instructions over younger instructions to
+  // minimize the pressure on the reorder buffer.  We also want to
+  // rank higher the instructions with more users to better expose ILP.
+
+  // Compute a rank value based on the age of an instruction (i.e. its source
+  // index) and its number of users. The lower the rank value, the better.
+  int Rank = It->first - It->second->getNumUsers();
+  for (auto I = It, E = ReadyQueue.end(); I != E; ++I) {
+    int CurrentRank = I->first - I->second->getNumUsers();
+    if (CurrentRank < Rank) {
+      const InstrDesc &D = I->second->getDesc();
+      if (Resources->canBeIssued(D))
+        It = I;
+    }
+  }
 
   // We found an instruction to issue.
   InstRef IR(It->first, It->second);
@@ -348,7 +363,7 @@ void Scheduler::updateIssuedQueue(SmallVectorImpl<InstRef> &Executed) {
       ++I;
       IssuedQueue.erase(ToRemove);
     } else {
-      LLVM_DEBUG(dbgs() << "[SCHEDULER]: Instruction " << Entry.first
+      LLVM_DEBUG(dbgs() << "[SCHEDULER]: Instruction #" << Entry.first
                         << " is still executing.\n");
       ++I;
     }
@@ -367,7 +382,7 @@ bool Scheduler::reserveResources(InstRef &IR) {
   // If necessary, reserve queue entries in the load-store unit (LSU).
   const bool Reserved = LSU->reserve(IR);
   if (!IR.getInstruction()->isReady() || (Reserved && !LSU->isReady(IR))) {
-    LLVM_DEBUG(dbgs() << "[SCHEDULER] Adding " << IR << " to the Wait Queue\n");
+    LLVM_DEBUG(dbgs() << "[SCHEDULER] Adding #" << IR << " to the Wait Queue\n");
     WaitQueue[IR.getSourceIndex()] = IR.getInstruction();
     return false;
   }
@@ -377,7 +392,7 @@ bool Scheduler::reserveResources(InstRef &IR) {
 bool Scheduler::issueImmediately(InstRef &IR) {
   const InstrDesc &Desc = IR.getInstruction()->getDesc();
   if (!Desc.isZeroLatency() && !Resources->mustIssueImmediately(Desc)) {
-    LLVM_DEBUG(dbgs() << "[SCHEDULER] Adding " << IR
+    LLVM_DEBUG(dbgs() << "[SCHEDULER] Adding #" << IR
                       << " to the Ready Queue\n");
     ReadyQueue[IR.getSourceIndex()] = IR.getInstruction();
     return false;

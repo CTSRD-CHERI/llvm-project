@@ -134,20 +134,14 @@ public:
 
   ~CommandObjectProcessLaunch() override = default;
 
-  int HandleArgumentCompletion(Args &input, int &cursor_index,
-                               int &cursor_char_position,
-                               OptionElementVector &opt_element_vector,
-                               int match_start_point, int max_return_elements,
-                               bool &word_complete,
-                               StringList &matches) override {
-    std::string completion_str(input.GetArgumentAtIndex(cursor_index));
-    completion_str.erase(cursor_char_position);
+  int HandleArgumentCompletion(
+      CompletionRequest &request,
+      OptionElementVector &opt_element_vector) override {
 
     CommandCompletions::InvokeCommonCompletionCallbacks(
         GetCommandInterpreter(), CommandCompletions::eDiskFileCompletion,
-        completion_str.c_str(), match_start_point, max_return_elements, nullptr,
-        word_complete, matches);
-    return matches.GetSize();
+        request, nullptr);
+    return request.GetMatches().GetSize();
   }
 
   Options *GetOptions() override { return &m_options; }
@@ -387,11 +381,8 @@ public:
     }
 
     bool HandleOptionArgumentCompletion(
-        Args &input, int cursor_index, int char_pos,
-        OptionElementVector &opt_element_vector, int opt_element_index,
-        int match_start_point, int max_return_elements,
-        CommandInterpreter &interpreter, bool &word_complete,
-        StringList &matches) override {
+        CompletionRequest &request, OptionElementVector &opt_element_vector,
+        int opt_element_index, CommandInterpreter &interpreter) override {
       int opt_arg_pos = opt_element_vector[opt_element_index].opt_arg_pos;
       int opt_defs_index = opt_element_vector[opt_element_index].opt_defs_index;
 
@@ -404,7 +395,7 @@ public:
         // plugin, otherwise use the default plugin.
 
         const char *partial_name = nullptr;
-        partial_name = input.GetArgumentAtIndex(opt_arg_pos);
+        partial_name = request.GetParsedLine().GetArgumentAtIndex(opt_arg_pos);
 
         PlatformSP platform_sp(interpreter.GetPlatform(true));
         if (platform_sp) {
@@ -419,7 +410,7 @@ public:
           const size_t num_matches = process_infos.GetSize();
           if (num_matches > 0) {
             for (size_t i = 0; i < num_matches; ++i) {
-              matches.AppendString(
+              request.GetMatches().AppendString(
                   process_infos.GetProcessNameAtIndex(i),
                   process_infos.GetProcessNameLengthAtIndex(i));
             }

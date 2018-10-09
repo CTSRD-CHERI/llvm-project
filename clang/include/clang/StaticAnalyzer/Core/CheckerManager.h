@@ -144,31 +144,18 @@ public:
 //===----------------------------------------------------------------------===//
 
   /// Used to register checkers.
+  /// All arguments are automatically passed through to the checker
+  /// constructor.
   ///
   /// \returns a pointer to the checker object.
-  template <typename CHECKER>
-  CHECKER *registerChecker() {
+  template <typename CHECKER, typename... AT>
+  CHECKER *registerChecker(AT... Args) {
     CheckerTag tag = getTag<CHECKER>();
     CheckerRef &ref = CheckerTags[tag];
     if (ref)
       return static_cast<CHECKER *>(ref); // already registered.
 
-    CHECKER *checker = new CHECKER();
-    checker->Name = CurrentCheckName;
-    CheckerDtors.push_back(CheckerDtor(checker, destruct<CHECKER>));
-    CHECKER::_register(checker, *this);
-    ref = checker;
-    return checker;
-  }
-
-  template <typename CHECKER>
-  CHECKER *registerChecker(AnalyzerOptions &AOpts) {
-    CheckerTag tag = getTag<CHECKER>();
-    CheckerRef &ref = CheckerTags[tag];
-    if (ref)
-      return static_cast<CHECKER *>(ref); // already registered.
-
-    CHECKER *checker = new CHECKER(AOpts);
+    CHECKER *checker = new CHECKER(Args...);
     checker->Name = CurrentCheckName;
     CheckerDtors.push_back(CheckerDtor(checker, destruct<CHECKER>));
     CHECKER::_register(checker, *this);
@@ -309,7 +296,8 @@ public:
   void runCheckersForEndFunction(NodeBuilderContext &BC,
                                  ExplodedNodeSet &Dst,
                                  ExplodedNode *Pred,
-                                 ExprEngine &Eng);
+                                 ExprEngine &Eng,
+                                 const ReturnStmt *RS);
 
   /// Run checkers for branch condition.
   void runCheckersForBranchCondition(const Stmt *condition,
@@ -451,7 +439,8 @@ public:
 
   using CheckBeginFunctionFunc = CheckerFn<void (CheckerContext &)>;
 
-  using CheckEndFunctionFunc = CheckerFn<void (CheckerContext &)>;
+  using CheckEndFunctionFunc =
+      CheckerFn<void (const ReturnStmt *, CheckerContext &)>;
   
   using CheckBranchConditionFunc =
       CheckerFn<void (const Stmt *, CheckerContext &)>;
@@ -509,7 +498,7 @@ public:
 
   void _registerForEndAnalysis(CheckEndAnalysisFunc checkfn);
 
-  void _registerForBeginFunction(CheckEndFunctionFunc checkfn);
+  void _registerForBeginFunction(CheckBeginFunctionFunc checkfn);
   void _registerForEndFunction(CheckEndFunctionFunc checkfn);
 
   void _registerForBranchCondition(CheckBranchConditionFunc checkfn);

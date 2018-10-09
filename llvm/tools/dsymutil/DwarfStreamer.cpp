@@ -69,8 +69,8 @@ bool DwarfStreamer::init(Triple TheTriple) {
   if (!MSTI)
     return error("no subtarget info for target " + TripleName, Context);
 
-  MCTargetOptions Options;
-  MAB = TheTarget->createMCAsmBackend(*MSTI, *MRI, Options);
+  MCTargetOptions MCOptions = InitMCTargetOptionsFromFlags();
+  MAB = TheTarget->createMCAsmBackend(*MSTI, *MRI, MCOptions);
   if (!MAB)
     return error("no asm backend for target " + TripleName, Context);
 
@@ -82,12 +82,26 @@ bool DwarfStreamer::init(Triple TheTriple) {
   if (!MCE)
     return error("no code emitter for target " + TripleName, Context);
 
-  MCTargetOptions MCOptions = InitMCTargetOptionsFromFlags();
-  MS = TheTarget->createMCObjectStreamer(
-      TheTriple, *MC, std::unique_ptr<MCAsmBackend>(MAB),
-      MAB->createObjectWriter(OutFile), std::unique_ptr<MCCodeEmitter>(MCE),
-      *MSTI, MCOptions.MCRelaxAll, MCOptions.MCIncrementalLinkerCompatible,
-      /*DWARFMustBeAtTheEnd*/ false);
+  switch (Options.FileType) {
+  case OutputFileType::Assembly: {
+    MIP = TheTarget->createMCInstPrinter(TheTriple, MAI->getAssemblerDialect(),
+                                         *MAI, *MII, *MRI);
+    MS = TheTarget->createAsmStreamer(
+        *MC, llvm::make_unique<formatted_raw_ostream>(OutFile), true, true, MIP,
+        std::unique_ptr<MCCodeEmitter>(MCE), std::unique_ptr<MCAsmBackend>(MAB),
+        true);
+    break;
+  }
+  case OutputFileType::Object: {
+    MS = TheTarget->createMCObjectStreamer(
+        TheTriple, *MC, std::unique_ptr<MCAsmBackend>(MAB),
+        MAB->createObjectWriter(OutFile), std::unique_ptr<MCCodeEmitter>(MCE),
+        *MSTI, MCOptions.MCRelaxAll, MCOptions.MCIncrementalLinkerCompatible,
+        /*DWARFMustBeAtTheEnd*/ false);
+    break;
+  }
+  }
+
   if (!MS)
     return error("no object streamer for target " + TripleName, Context);
 
@@ -111,7 +125,8 @@ bool DwarfStreamer::init(Triple TheTriple) {
 
 bool DwarfStreamer::finish(const DebugMap &DM) {
   bool Result = true;
-  if (DM.getTriple().isOSDarwin() && !DM.getBinaryPath().empty())
+  if (DM.getTriple().isOSDarwin() && !DM.getBinaryPath().empty() &&
+      Options.FileType == OutputFileType::Object)
     Result = MachOUtils::generateDsymCompanion(DM, *MS, OutFile);
   else
     MS->Finish();
@@ -136,11 +151,16 @@ void DwarfStreamer::emitCompileUnitHeader(CompileUnit &Unit) {
   unsigned Version = Unit.getOrigUnit().getVersion();
   switchToDebugInfoSection(Version);
 
+  /// The start of the unit within its section.
+  Unit.setLabelBegin(Asm->createTempSymbol("cu_begin"));
+  Asm->OutStreamer->EmitLabel(Unit.getLabelBegin());
+
   // Emit size of content not including length itself. The size has already
   // been computed in CompileUnit::computeOffsets(). Subtract 4 to that size to
   // account for the length field.
   Asm->emitInt32(Unit.getNextUnitOffset() - Unit.getStartOffset() - 4);
   Asm->emitInt16(Version);
+
   // We share one abbreviations table across all units so it's always at the
   // start of the section.
   Asm->emitInt32(0);
@@ -540,8 +560,7 @@ static void emitSectionContents(const object::ObjectFile &Obj,
       MS->EmitBytes(Contents);
 }
 
-void DwarfStreamer::copyInvariantDebugSection(const object::ObjectFile &Obj,
-                                              LinkOptions &Options) {
+void DwarfStreamer::copyInvariantDebugSection(const object::ObjectFile &Obj) {
   MS->SwitchSection(MC->getObjectFileInfo()->getDwarfLineSection());
   emitSectionContents(Obj, "debug_line", MS);
 

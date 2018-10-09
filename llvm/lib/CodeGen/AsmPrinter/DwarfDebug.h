@@ -331,9 +331,9 @@ class DwarfDebug : public DebugHandlerBase {
 
   using InlinedVariable = DbgValueHistoryMap::InlinedVariable;
 
-  void ensureAbstractVariableIsCreated(DwarfCompileUnit &CU, InlinedVariable Var,
+  void ensureAbstractVariableIsCreated(DwarfCompileUnit &CU, InlinedVariable IV,
                                        const MDNode *Scope);
-  void ensureAbstractVariableIsCreatedIfScoped(DwarfCompileUnit &CU, InlinedVariable Var,
+  void ensureAbstractVariableIsCreatedIfScoped(DwarfCompileUnit &CU, InlinedVariable IV,
                                                const MDNode *Scope);
 
   DbgVariable *createConcreteVariable(DwarfCompileUnit &TheCU,
@@ -404,6 +404,9 @@ class DwarfDebug : public DebugHandlerBase {
 
   /// Emit address ranges into a debug ranges section.
   void emitDebugRanges();
+
+  /// Emit range lists into a DWARF v5 debug rnglists section.
+  void emitDebugRnglists();
 
   /// Emit macros into a debug macinfo section.
   void emitDebugMacinfo();

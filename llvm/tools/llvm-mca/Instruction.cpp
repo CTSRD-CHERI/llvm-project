@@ -41,7 +41,7 @@ void ReadState::writeStartEvent(unsigned Cycles) {
 void WriteState::onInstructionIssued() {
   assert(CyclesLeft == UNKNOWN_CYCLES);
   // Update the number of cycles left based on the WriteDescriptor info.
-  CyclesLeft = WD.Latency;
+  CyclesLeft = getLatency();
 
   // Now that the time left before write-back is known, notify
   // all the users.
@@ -93,11 +93,12 @@ void ReadState::cycleEvent() {
 
 #ifndef NDEBUG
 void WriteState::dump() const {
-  dbgs() << "{ OpIdx=" << WD.OpIndex << ", Lat=" << WD.Latency << ", RegID "
-         << getRegisterID() << ", Cycles Left=" << getCyclesLeft() << " }\n";
+  dbgs() << "{ OpIdx=" << WD.OpIndex << ", Lat=" << getLatency() << ", RegID "
+         << getRegisterID() << ", Cycles Left=" << getCyclesLeft() << " }";
 }
 
 void WriteRef::dump() const {
+  dbgs() << "IID=" << getSourceIndex() << ' ';
   if (isValid())
     getWriteState()->dump();
   else
@@ -131,7 +132,22 @@ void Instruction::execute() {
 
 void Instruction::update() {
   assert(isDispatched() && "Unexpected instruction stage found!");
-  if (llvm::all_of(Uses, [](const UniqueUse &Use) { return Use->isReady(); }))
+
+  if (!llvm::all_of(Uses, [](const UniqueUse &Use) { return Use->isReady(); }))
+    return;
+
+  // A partial register write cannot complete before a dependent write.
+  auto IsDefReady = [&](const UniqueDef &Def) {
+    if (const WriteState *Write = Def->getDependentWrite()) {
+      int WriteLatency = Write->getCyclesLeft();
+      if (WriteLatency == UNKNOWN_CYCLES)
+        return false;
+      return static_cast<unsigned>(WriteLatency) < Desc.MaxLatency;
+    }
+    return true;
+  };
+
+  if (llvm::all_of(Defs, IsDefReady))
     Stage = IS_READY;
 }
 
@@ -140,14 +156,10 @@ void Instruction::cycleEvent() {
     return;
 
   if (isDispatched()) {
-    bool IsReady = true;
-    for (UniqueUse &Use : Uses) {
+    for (UniqueUse &Use : Uses)
       Use->cycleEvent();
-      IsReady &= Use->isReady();
-    }
 
-    if (IsReady)
-      Stage = IS_READY;
+    update();
     return;
   }
 

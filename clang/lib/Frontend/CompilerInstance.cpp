@@ -16,6 +16,7 @@
 #include "clang/Basic/FileManager.h"
 #include "clang/Basic/MemoryBufferCache.h"
 #include "clang/Basic/SourceManager.h"
+#include "clang/Basic/Stack.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Basic/Version.h"
 #include "clang/Config/config.h"
@@ -852,36 +853,7 @@ bool CompilerInstance::InitializeSourceManager(
 
   // Figure out where to get and map in the main file.
   if (InputFile != "-") {
-    const FileEntry *File;
-    if (Opts.FindPchSource.empty()) {
-      File = FileMgr.getFile(InputFile, /*OpenFile=*/true);
-    } else {
-      // When building a pch file in clang-cl mode, the .h file is built as if
-      // it was included by a cc file.  Since the driver doesn't know about
-      // all include search directories, the frontend must search the input
-      // file through HeaderSearch here, as if it had been included by the
-      // cc file at Opts.FindPchSource.
-      const FileEntry *FindFile = FileMgr.getFile(Opts.FindPchSource);
-      if (!FindFile) {
-        Diags.Report(diag::err_fe_error_reading) << Opts.FindPchSource;
-        return false;
-      }
-      const DirectoryLookup *UnusedCurDir;
-      SmallVector<std::pair<const FileEntry *, const DirectoryEntry *>, 16>
-          Includers;
-      Includers.push_back(std::make_pair(FindFile, FindFile->getDir()));
-      File = HS->LookupFile(InputFile, SourceLocation(), /*isAngled=*/false,
-                            /*FromDir=*/nullptr,
-                            /*CurDir=*/UnusedCurDir, Includers,
-                            /*SearchPath=*/nullptr,
-                            /*RelativePath=*/nullptr,
-                            /*RequestingModule=*/nullptr,
-                            /*SuggestedModule=*/nullptr, /*IsMapped=*/nullptr,
-                            /*SkipCache=*/true);
-      // Also add the header to /showIncludes output.
-      if (File)
-        DepOpts.ShowIncludesPretendHeader = File->getName();
-    }
+    const FileEntry *File = FileMgr.getFile(InputFile, /*OpenFile=*/true);
     if (!File) {
       Diags.Report(diag::err_fe_error_reading) << InputFile;
       return false;
@@ -1164,14 +1136,13 @@ compileModuleImpl(CompilerInstance &ImportingInstance, SourceLocation ImportLoc,
 
   // Execute the action to actually build the module in-place. Use a separate
   // thread so that we get a stack large enough.
-  const unsigned ThreadStackSize = 8 << 20;
   llvm::CrashRecoveryContext CRC;
   CRC.RunSafelyOnThread(
       [&]() {
         GenerateModuleFromModuleMapAction Action;
         Instance.ExecuteAction(Action);
       },
-      ThreadStackSize);
+      DesiredStackSize);
 
   PostBuildStep(Instance);
 

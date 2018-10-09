@@ -134,6 +134,7 @@ RegistryMaps::RegistryMaps() {
   REGISTER_MATCHER(atomicExpr);
   REGISTER_MATCHER(atomicType);
   REGISTER_MATCHER(autoType);
+  REGISTER_MATCHER(autoreleasePoolStmt)
   REGISTER_MATCHER(binaryOperator);
   REGISTER_MATCHER(binaryConditionalOperator);
   REGISTER_MATCHER(blockDecl);
@@ -282,6 +283,7 @@ RegistryMaps::RegistryMaps() {
   REGISTER_MATCHER(hasParent);
   REGISTER_MATCHER(hasQualifier);
   REGISTER_MATCHER(hasRangeInit);
+  REGISTER_MATCHER(hasReceiver);
   REGISTER_MATCHER(hasReceiverType);
   REGISTER_MATCHER(hasReplacementType);
   REGISTER_MATCHER(hasReturnValue);
@@ -348,6 +350,7 @@ RegistryMaps::RegistryMaps() {
   REGISTER_MATCHER(isImplicit);
   REGISTER_MATCHER(isExpansionInFileMatching);
   REGISTER_MATCHER(isExpansionInMainFile);
+  REGISTER_MATCHER(isInstanceMessage);
   REGISTER_MATCHER(isInstantiated);
   REGISTER_MATCHER(isExpansionInSystemHeader);
   REGISTER_MATCHER(isInteger);

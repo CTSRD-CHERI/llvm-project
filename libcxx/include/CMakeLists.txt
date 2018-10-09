@@ -2,6 +2,7 @@ set(files
   __bit_reference
   __bsd_locale_defaults.h
   __bsd_locale_fallbacks.h
+  __errc
   __debug
   __functional_03
   __functional_base
@@ -238,7 +239,7 @@ if (LIBCXX_INSTALL_HEADERS)
   foreach(file ${files})
     get_filename_component(dir ${file} DIRECTORY)
     install(FILES ${file}
-      DESTINATION ${LIBCXX_INSTALL_PATH}include/c++/v1/${dir}
+      DESTINATION ${LIBCXX_INSTALL_HEADER_PREFIX}include/c++/v1/${dir}
       COMPONENT cxx-headers
       PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
     )
@@ -247,7 +248,7 @@ if (LIBCXX_INSTALL_HEADERS)
   if (LIBCXX_NEEDS_SITE_CONFIG)
     # Install the generated header as __config.
     install(FILES ${LIBCXX_BINARY_DIR}/__generated_config
-      DESTINATION ${LIBCXX_INSTALL_PATH}include/c++/v1
+      DESTINATION ${LIBCXX_INSTALL_HEADER_PREFIX}include/c++/v1
       PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
       RENAME __config
       COMPONENT cxx-headers)

@@ -282,6 +282,13 @@ void AArch64InstPrinter::printInst(const MCInst *MI, raw_ostream &O,
     return;
   }
 
+  // Instruction TSB is specified as a one operand instruction, but 'csync' is
+  // not encoded, so for printing it is treated as a special case here:
+  if (Opcode == AArch64::TSB) {
+    O << "\ttsb\tcsync";
+    return;
+  }
+
   if (!printAliasInstr(MI, STI, O))
     printInstruction(MI, STI, O);
 
@@ -1329,6 +1336,9 @@ void AArch64InstPrinter::printBarrierOption(const MCInst *MI, unsigned OpNo,
   if (Opcode == AArch64::ISB) {
     auto ISB = AArch64ISB::lookupISBByEncoding(Val);
     Name = ISB ? ISB->Name : "";
+  } else if (Opcode == AArch64::TSB) {
+    auto TSB = AArch64TSB::lookupTSBByEncoding(Val);
+    Name = TSB ? TSB->Name : "";
   } else {
     auto DB = AArch64DB::lookupDBByEncoding(Val);
     Name = DB ? DB->Name : "";
@@ -1526,4 +1536,11 @@ void AArch64InstPrinter::printExactFPImm(const MCInst *MI, unsigned OpNum,
   auto *Imm1Desc = AArch64ExactFPImm::lookupExactFPImmByEnum(ImmIs1);
   unsigned Val = MI->getOperand(OpNum).getImm();
   O << "#" << (Val ? Imm1Desc->Repr : Imm0Desc->Repr);
+}
+
+void AArch64InstPrinter::printGPR64as32(const MCInst *MI, unsigned OpNum,
+                                        const MCSubtargetInfo &STI,
+                                        raw_ostream &O) {
+  unsigned Reg = MI->getOperand(OpNum).getReg();
+  O << getRegisterName(getWRegFromXReg(Reg));
 }

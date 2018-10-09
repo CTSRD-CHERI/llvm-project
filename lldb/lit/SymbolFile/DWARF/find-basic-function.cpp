@@ -65,7 +65,7 @@
 // FULL-DAG: name = "ffbar()::sbaz::foo()", mangled = "_ZZ5ffbarvEN4sbaz3fooEv"
 
 // FULL-MANGLED: Found 1 functions:
-// FULL-DAG: name = "foo(int)", mangled = "_Z3fooi"
+// FULL-MANGLED-DAG: name = "foo(int)", mangled = "_Z3fooi"
 
 // CONTEXT: Found 1 functions:
 // CONTEXT-DAG: name = "bar::foo()", mangled = "_ZN3bar3fooEv"

@@ -33,11 +33,17 @@ class Module;
 /// based on the provided summary informations.
 class FunctionImporter {
 public:
-  /// Set of functions to import from a source module. Each entry is a map
-  /// containing all the functions to import for a source module.
-  /// The keys is the GUID identifying a function to import, and the value
-  /// is the threshold applied when deciding to import it.
-  using FunctionsToImportTy = std::map<GlobalValue::GUID, unsigned>;
+  /// Set of functions to import from a source module. Each entry is a set
+  /// containing all the GUIDs of all functions to import for a source module.
+  using FunctionsToImportTy = std::unordered_set<GlobalValue::GUID>;
+
+  /// Map of callee GUID considered for import into a given module to a pair
+  /// consisting of the largest threshold applied when deciding whether to
+  /// import it and, if we decided to import, a pointer to the summary instance
+  /// imported. If we decided not to import, the summary will be nullptr.
+  using ImportThresholdsTy =
+      DenseMap<GlobalValue::GUID,
+               std::pair<unsigned, const GlobalValueSummary *>>;
 
   /// The map contains an entry for every module to import from, the key being
   /// the module identifier to pass to the ModuleLoader. The value is the set of
@@ -143,9 +149,9 @@ void gatherImportedSummariesForModule(
     std::map<std::string, GVSummaryMapTy> &ModuleToSummariesForIndex);
 
 /// Emit into \p OutputFilename the files module \p ModulePath will import from.
-std::error_code
-EmitImportsFiles(StringRef ModulePath, StringRef OutputFilename,
-                 const FunctionImporter::ImportMapTy &ModuleImports);
+std::error_code EmitImportsFiles(
+    StringRef ModulePath, StringRef OutputFilename,
+    const std::map<std::string, GVSummaryMapTy> &ModuleToSummariesForIndex);
 
 /// Resolve WeakForLinker values in \p TheModule based on the information
 /// recorded in the summaries during global summary-based analysis.

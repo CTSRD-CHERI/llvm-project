@@ -24,6 +24,7 @@ Clang-Tidy Checks
    bugprone-bool-pointer-implicit-conversion
    bugprone-copy-constructor-init
    bugprone-dangling-handle
+   bugprone-exception-escape
    bugprone-fold-init-type
    bugprone-forward-declaration-namespace
    bugprone-forwarding-reference-overload
@@ -73,7 +74,9 @@ Clang-Tidy Checks
    cert-fio38-c (redirects to misc-non-copyable-objects) <cert-fio38-c>
    cert-flp30-c
    cert-msc30-c (redirects to cert-msc50-cpp) <cert-msc30-c>
+   cert-msc32-c (redirects to cert-msc51-cpp) <cert-msc32-c>
    cert-msc50-cpp
+   cert-msc51-cpp
    cert-oop11-cpp (redirects to performance-move-constructor-init) <cert-oop11-cpp>
    cppcoreguidelines-avoid-goto
    cppcoreguidelines-c-copy-assignment-signature (redirects to misc-unconventional-assign-operator) <cppcoreguidelines-c-copy-assignment-signature>

@@ -18,6 +18,7 @@
 // Project includes
 #include "lldb/Interpreter/CommandObject.h"
 #include "lldb/Utility/Args.h"
+#include "lldb/Utility/CompletionRequest.h"
 #include "lldb/lldb-forward.h"
 
 namespace lldb_private {
@@ -40,17 +41,11 @@ public:
 
   bool WantsCompletion() override;
 
-  int HandleCompletion(Args &input, int &cursor_index,
-                       int &cursor_char_position, int match_start_point,
-                       int max_return_elements, bool &word_complete,
-                       StringList &matches) override;
+  int HandleCompletion(CompletionRequest &request) override;
 
-  int HandleArgumentCompletion(Args &input, int &cursor_index,
-                               int &cursor_char_position,
-                               OptionElementVector &opt_element_vector,
-                               int match_start_point, int max_return_elements,
-                               bool &word_complete,
-                               StringList &matches) override;
+  int HandleArgumentCompletion(
+      CompletionRequest &request,
+      OptionElementVector &opt_element_vector) override;
 
   Options *GetOptions() override;
 

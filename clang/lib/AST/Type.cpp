@@ -88,6 +88,16 @@ const IdentifierInfo* QualType::getBaseTypeIdentifier() const {
   return nullptr;
 }
 
+bool QualType::mayBeDynamicClass() const {
+  const auto *ClassDecl = getTypePtr()->getPointeeCXXRecordDecl();
+  return ClassDecl && ClassDecl->mayBeDynamicClass();
+}
+
+bool QualType::mayBeNotDynamicClass() const {
+  const auto *ClassDecl = getTypePtr()->getPointeeCXXRecordDecl();
+  return !ClassDecl || ClassDecl->mayBeNonDynamicClass();
+}
+
 bool QualType::isConstant(QualType T, const ASTContext &Ctx) {
   if (T.isConstQualified())
     return true;
@@ -165,6 +175,27 @@ void DependentSizedArrayType::Profile(llvm::FoldingSetNodeID &ID,
   ID.AddInteger(SizeMod);
   ID.AddInteger(TypeQuals);
   E->Profile(ID, Context, true);
+}
+
+DependentVectorType::DependentVectorType(
+    const ASTContext &Context, QualType ElementType, QualType CanonType,
+    Expr *SizeExpr, SourceLocation Loc, VectorType::VectorKind VecKind)
+    : Type(DependentVector, CanonType, /*Dependent=*/true,
+           /*InstantiationDependent=*/true,
+           ElementType->isVariablyModifiedType(),
+           ElementType->containsUnexpandedParameterPack() ||
+               (SizeExpr && SizeExpr->containsUnexpandedParameterPack())),
+      Context(Context), ElementType(ElementType), SizeExpr(SizeExpr), Loc(Loc) {
+  VectorTypeBits.VecKind = VecKind;
+}
+
+void DependentVectorType::Profile(llvm::FoldingSetNodeID &ID,
+                                  const ASTContext &Context,
+                                  QualType ElementType, const Expr *SizeExpr,
+                                  VectorType::VectorKind VecKind) {
+  ID.AddPointer(ElementType.getAsOpaquePtr());
+  ID.AddInteger(VecKind);
+  SizeExpr->Profile(ID, Context, true);
 }
 
 DependentSizedExtVectorType::DependentSizedExtVectorType(const
@@ -3773,6 +3804,7 @@ bool Type::canHaveNullability(bool ResultIfUnknown) const {
   case Type::IncompleteArray:
   case Type::VariableArray:
   case Type::DependentSizedArray:
+  case Type::DependentVector:
   case Type::DependentSizedExtVector:
   case Type::Vector:
   case Type::ExtVector:

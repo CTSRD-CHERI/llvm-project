@@ -910,6 +910,12 @@ Triple::ArchType COFFObjectFile::getArch() const {
   }
 }
 
+Expected<uint64_t> COFFObjectFile::getStartAddress() const {
+  if (PE32Header)
+    return PE32Header->AddressOfEntryPoint;
+  return 0;
+}
+
 iterator_range<import_directory_iterator>
 COFFObjectFile::import_directories() const {
   return make_range(import_directory_begin(), import_directory_end());
@@ -969,6 +975,21 @@ std::error_code COFFObjectFile::getSection(int32_t Index,
     // We already verified the section table data, so no need to check again.
     Result = SectionTable + (Index - 1);
     return std::error_code();
+  }
+  return object_error::parse_failed;
+}
+
+std::error_code COFFObjectFile::getSection(StringRef SectionName,
+                                           const coff_section *&Result) const {
+  Result = nullptr;
+  StringRef SecName;
+  for (const SectionRef &Section : sections()) {
+    if (std::error_code E = Section.getName(SecName))
+      return E;
+    if (SecName == SectionName) {
+      Result = getCOFFSection(Section);
+      return std::error_code();
+    }
   }
   return object_error::parse_failed;
 }

@@ -146,7 +146,8 @@ public:
     AMD,
     Mesa,
     SUSE,
-    LastVendorType = SUSE
+    OpenEmbedded,
+    LastVendorType = OpenEmbedded
   };
   enum OSType {
     UnknownOS,

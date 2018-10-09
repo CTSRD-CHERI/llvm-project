@@ -4224,9 +4224,11 @@ static OverloadingResult TryRefInitWithConversionFunction(
   OverloadCandidateSet &CandidateSet = Sequence.getFailedCandidateSet();
   CandidateSet.clear(OverloadCandidateSet::CSK_InitByUserDefinedConversion);
 
-  // Determine whether we are allowed to call explicit constructors or
-  // explicit conversion operators.
-  bool AllowExplicit = Kind.AllowExplicit();
+  // Determine whether we are allowed to call explicit conversion operators.
+  // Note that none of [over.match.copy], [over.match.conv], nor
+  // [over.match.ref] permit an explicit constructor to be chosen when
+  // initializing a reference, not even for direct-initialization.
+  bool AllowExplicitCtors = false;
   bool AllowExplicitConvs = Kind.allowExplicitConversionFunctionsInRefBinding();
 
   const RecordType *T1RecordType = nullptr;
@@ -4242,7 +4244,7 @@ static OverloadingResult TryRefInitWithConversionFunction(
         continue;
 
       if (!Info.Constructor->isInvalidDecl() &&
-          Info.Constructor->isConvertingConstructor(AllowExplicit)) {
+          Info.Constructor->isConvertingConstructor(AllowExplicitCtors)) {
         if (Info.ConstructorTmpl)
           S.AddTemplateOverloadCandidate(Info.ConstructorTmpl, Info.FoundDecl,
                                          /*ExplicitArgs*/ nullptr,
@@ -7565,6 +7567,19 @@ bool InitializationSequence::Diagnose(Sema &S,
   if (!Failed())
     return false;
 
+  // When we want to diagnose only one element of a braced-init-list,
+  // we need to factor it out.
+  Expr *OnlyArg;
+  if (Args.size() == 1) {
+    auto *List = dyn_cast<InitListExpr>(Args[0]);
+    if (List && List->getNumInits() == 1)
+      OnlyArg = List->getInit(0);
+    else
+      OnlyArg = Args[0];
+  }
+  else
+    OnlyArg = nullptr;
+
   QualType DestType = Entity.getType();
   switch (Failure) {
   case FK_TooManyInitsForReference:
@@ -7625,7 +7640,7 @@ bool InitializationSequence::Diagnose(Sema &S,
               ? diag::err_array_init_different_type
               : diag::err_array_init_non_constant_array))
       << DestType.getNonReferenceType()
-      << Args[0]->getType()
+      << OnlyArg->getType()
       << Args[0]->getSourceRange();
     break;
 
@@ -7636,7 +7651,7 @@ bool InitializationSequence::Diagnose(Sema &S,
 
   case FK_AddressOfOverloadFailed: {
     DeclAccessPair Found;
-    S.ResolveAddressOfOverloadedFunction(Args[0],
+    S.ResolveAddressOfOverloadedFunction(OnlyArg,
                                          DestType.getNonReferenceType(),
                                          true,
                                          Found);
@@ -7644,9 +7659,9 @@ bool InitializationSequence::Diagnose(Sema &S,
   }
 
   case FK_AddressOfUnaddressableFunction: {
-    auto *FD = cast<FunctionDecl>(cast<DeclRefExpr>(Args[0])->getDecl());
+    auto *FD = cast<FunctionDecl>(cast<DeclRefExpr>(OnlyArg)->getDecl());
     S.checkAddressOfFunctionIsAvailable(FD, /*Complain=*/true,
-                                        Args[0]->getLocStart());
+                                        OnlyArg->getLocStart());
     break;
   }
 
@@ -7656,11 +7671,11 @@ bool InitializationSequence::Diagnose(Sema &S,
     case OR_Ambiguous:
       if (Failure == FK_UserConversionOverloadFailed)
         S.Diag(Kind.getLocation(), diag::err_typecheck_ambiguous_condition)
-          << Args[0]->getType() << DestType
+          << OnlyArg->getType() << DestType
           << Args[0]->getSourceRange();
       else
         S.Diag(Kind.getLocation(), diag::err_ref_init_ambiguous)
-          << DestType << Args[0]->getType()
+          << DestType << OnlyArg->getType()
           << Args[0]->getSourceRange();
 
       FailedCandidateSet.NoteCandidates(S, OCD_ViableCandidates, Args);
@@ -7670,10 +7685,10 @@ bool InitializationSequence::Diagnose(Sema &S,
       if (!S.RequireCompleteType(Kind.getLocation(),
                                  DestType.getNonReferenceType(),
                           diag::err_typecheck_nonviable_condition_incomplete,
-                               Args[0]->getType(), Args[0]->getSourceRange()))
+                               OnlyArg->getType(), Args[0]->getSourceRange()))
         S.Diag(Kind.getLocation(), diag::err_typecheck_nonviable_condition)
           << (Entity.getKind() == InitializedEntity::EK_Result)
-          << Args[0]->getType() << Args[0]->getSourceRange()
+          << OnlyArg->getType() << Args[0]->getSourceRange()
           << DestType.getNonReferenceType();
 
       FailedCandidateSet.NoteCandidates(S, OCD_AllCandidates, Args);
@@ -7681,7 +7696,7 @@ bool InitializationSequence::Diagnose(Sema &S,
 
     case OR_Deleted: {
       S.Diag(Kind.getLocation(), diag::err_typecheck_deleted_function)
-        << Args[0]->getType() << DestType.getNonReferenceType()
+        << OnlyArg->getType() << DestType.getNonReferenceType()
         << Args[0]->getSourceRange();
       OverloadCandidateSet::iterator Best;
       OverloadingResult Ovl
@@ -7717,7 +7732,7 @@ bool InitializationSequence::Diagnose(Sema &S,
              : diag::err_lvalue_reference_bind_to_unrelated)
       << DestType.getNonReferenceType().isVolatileQualified()
       << DestType.getNonReferenceType()
-      << Args[0]->getType()
+      << OnlyArg->getType()
       << Args[0]->getSourceRange();
     break;
 
@@ -7742,12 +7757,12 @@ bool InitializationSequence::Diagnose(Sema &S,
 
   case FK_RValueReferenceBindingToLValue:
     S.Diag(Kind.getLocation(), diag::err_lvalue_to_rvalue_ref)
-      << DestType.getNonReferenceType() << Args[0]->getType()
+      << DestType.getNonReferenceType() << OnlyArg->getType()
       << Args[0]->getSourceRange();
     break;
 
   case FK_ReferenceInitDropsQualifiers: {
-    QualType SourceType = Args[0]->getType();
+    QualType SourceType = OnlyArg->getType();
     QualType NonRefType = DestType.getNonReferenceType();
     Qualifiers DroppedQualifiers =
         SourceType.getQualifiers() - NonRefType.getQualifiers();
@@ -7763,18 +7778,18 @@ bool InitializationSequence::Diagnose(Sema &S,
   case FK_ReferenceInitFailed:
     S.Diag(Kind.getLocation(), diag::err_reference_bind_failed)
       << DestType.getNonReferenceType()
-      << Args[0]->isLValue()
-      << Args[0]->getType()
+      << OnlyArg->isLValue()
+      << OnlyArg->getType()
       << Args[0]->getSourceRange();
     emitBadConversionNotes(S, Entity, Args[0]);
     break;
 
   case FK_ConversionFailed: {
-    QualType FromType = Args[0]->getType();
+    QualType FromType = OnlyArg->getType();
     PartialDiagnostic PDiag = S.PDiag(diag::err_init_conversion_failed)
       << (int)Entity.getKind()
       << DestType
-      << Args[0]->isLValue()
+      << OnlyArg->isLValue()
       << FromType
       << Args[0]->getSourceRange();
     S.HandleFunctionTypeMismatch(PDiag, FromType, DestType);

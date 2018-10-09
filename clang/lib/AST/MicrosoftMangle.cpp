@@ -2514,6 +2514,16 @@ void MicrosoftCXXNameMangler::mangleType(const ExtVectorType *T,
                                          Qualifiers Quals, SourceRange Range) {
   mangleType(static_cast<const VectorType *>(T), Quals, Range);
 }
+
+void MicrosoftCXXNameMangler::mangleType(const DependentVectorType *T,
+                                         Qualifiers, SourceRange Range) {
+  DiagnosticsEngine &Diags = Context.getDiags();
+  unsigned DiagID = Diags.getCustomDiagID(
+      DiagnosticsEngine::Error,
+      "cannot mangle this dependent-sized vector type yet");
+  Diags.Report(Range.getBegin(), DiagID) << Range;
+}
+
 void MicrosoftCXXNameMangler::mangleType(const DependentSizedExtVectorType *T,
                                          Qualifiers, SourceRange Range) {
   DiagnosticsEngine &Diags = Context.getDiags();
@@ -3164,14 +3174,14 @@ MicrosoftMangleContextImpl::mangleDynamicAtExitDestructor(const VarDecl *D,
 
 void MicrosoftMangleContextImpl::mangleStringLiteral(const StringLiteral *SL,
                                                      raw_ostream &Out) {
-  // <char-type> ::= 0   # char
-  //             ::= 1   # wchar_t
-  //             ::= ??? # char16_t/char32_t will need a mangling too...
+  // <char-type> ::= 0   # char, char16_t, char32_t
+  //                     # (little endian char data in mangling)
+  //             ::= 1   # wchar_t (big endian char data in mangling)
   //
   // <literal-length> ::= <non-negative integer>  # the length of the literal
   //
   // <encoded-crc>    ::= <hex digit>+ @          # crc of the literal including
-  //                                              # null-terminator
+  //                                              # trailing null bytes
   //
   // <encoded-string> ::= <simple character>           # uninteresting character
   //                  ::= '?$' <hex digit> <hex digit> # these two nibbles
@@ -3186,6 +3196,18 @@ void MicrosoftMangleContextImpl::mangleStringLiteral(const StringLiteral *SL,
   MicrosoftCXXNameMangler Mangler(*this, Out);
   Mangler.getStream() << "??_C@_";
 
+  // The actual string length might be different from that of the string literal
+  // in cases like:
+  // char foo[3] = "foobar";
+  // char bar[42] = "foobar";
+  // Where it is truncated or zero-padded to fit the array. This is the length
+  // used for mangling, and any trailing null-bytes also need to be mangled.
+  unsigned StringLength = getASTContext()
+                              .getAsConstantArrayType(SL->getType())
+                              ->getSize()
+                              .getZExtValue();
+  unsigned StringByteLength = StringLength * SL->getCharByteWidth();
+
   // <char-type>: The "kind" of string literal is encoded into the mangled name.
   if (SL->isWide())
     Mangler.getStream() << '1';
@@ -3193,14 +3215,13 @@ void MicrosoftMangleContextImpl::mangleStringLiteral(const StringLiteral *SL,
     Mangler.getStream() << '0';
 
   // <literal-length>: The next part of the mangled name consists of the length
-  // of the string.
-  // The StringLiteral does not consider the NUL terminator byte(s) but the
-  // mangling does.
-  // N.B. The length is in terms of bytes, not characters.
-  Mangler.mangleNumber(SL->getByteLength() + SL->getCharByteWidth());
+  // of the string in bytes.
+  Mangler.mangleNumber(StringByteLength);
 
   auto GetLittleEndianByte = [&SL](unsigned Index) {
     unsigned CharByteWidth = SL->getCharByteWidth();
+    if (Index / CharByteWidth >= SL->getLength())
+      return static_cast<char>(0);
     uint32_t CodeUnit = SL->getCodeUnit(Index / CharByteWidth);
     unsigned OffsetInCodeUnit = Index % CharByteWidth;
     return static_cast<char>((CodeUnit >> (8 * OffsetInCodeUnit)) & 0xff);
@@ -3208,6 +3229,8 @@ void MicrosoftMangleContextImpl::mangleStringLiteral(const StringLiteral *SL,
 
   auto GetBigEndianByte = [&SL](unsigned Index) {
     unsigned CharByteWidth = SL->getCharByteWidth();
+    if (Index / CharByteWidth >= SL->getLength())
+      return static_cast<char>(0);
     uint32_t CodeUnit = SL->getCodeUnit(Index / CharByteWidth);
     unsigned OffsetInCodeUnit = (CharByteWidth - 1) - (Index % CharByteWidth);
     return static_cast<char>((CodeUnit >> (8 * OffsetInCodeUnit)) & 0xff);
@@ -3215,21 +3238,15 @@ void MicrosoftMangleContextImpl::mangleStringLiteral(const StringLiteral *SL,
 
   // CRC all the bytes of the StringLiteral.
   llvm::JamCRC JC;
-  for (unsigned I = 0, E = SL->getByteLength(); I != E; ++I)
+  for (unsigned I = 0, E = StringByteLength; I != E; ++I)
     JC.update(GetLittleEndianByte(I));
-
-  // The NUL terminator byte(s) were not present earlier,
-  // we need to manually process those bytes into the CRC.
-  for (unsigned NullTerminator = 0; NullTerminator < SL->getCharByteWidth();
-       ++NullTerminator)
-    JC.update('\x00');
 
   // <encoded-crc>: The CRC is encoded utilizing the standard number mangling
   // scheme.
   Mangler.mangleNumber(JC.getCRC());
 
-  // <encoded-string>: The mangled name also contains the first 32 _characters_
-  // (including null-terminator bytes) of the StringLiteral.
+  // <encoded-string>: The mangled name also contains the first 32 bytes
+  // (including null-terminator bytes) of the encoded StringLiteral.
   // Each character is encoded by splitting them into bytes and then encoding
   // the constituent bytes.
   auto MangleByte = [&Mangler](char Byte) {
@@ -3258,20 +3275,15 @@ void MicrosoftMangleContextImpl::mangleStringLiteral(const StringLiteral *SL,
     }
   };
 
-  // Enforce our 32 character max.
-  unsigned NumCharsToMangle = std::min(32U, SL->getLength());
-  for (unsigned I = 0, E = NumCharsToMangle * SL->getCharByteWidth(); I != E;
-       ++I)
+  // Enforce our 32 bytes max, except wchar_t which gets 32 chars instead.
+  unsigned MaxBytesToMangle = SL->isWide() ? 64U : 32U;
+  unsigned NumBytesToMangle = std::min(MaxBytesToMangle, StringByteLength);
+  for (unsigned I = 0; I != NumBytesToMangle; ++I) {
     if (SL->isWide())
       MangleByte(GetBigEndianByte(I));
     else
       MangleByte(GetLittleEndianByte(I));
-
-  // Encode the NUL terminator if there is room.
-  if (NumCharsToMangle < 32)
-    for (unsigned NullTerminator = 0; NullTerminator < SL->getCharByteWidth();
-         ++NullTerminator)
-      MangleByte(0);
+  }
 
   Mangler.getStream() << '@';
 }

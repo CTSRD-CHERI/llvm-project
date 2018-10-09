@@ -26,6 +26,7 @@
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/DiagnosticCategories.h"
 #include "clang/Basic/DiagnosticIDs.h"
+#include "clang/Basic/Stack.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Basic/Version.h"
 #include "clang/Frontend/ASTUnit.h"
@@ -1771,6 +1772,7 @@ DEFAULT_TYPELOC_IMPL(IncompleteArray, ArrayType)
 DEFAULT_TYPELOC_IMPL(VariableArray, ArrayType)
 DEFAULT_TYPELOC_IMPL(DependentSizedArray, ArrayType)
 DEFAULT_TYPELOC_IMPL(DependentAddressSpace, Type)
+DEFAULT_TYPELOC_IMPL(DependentVector, Type)
 DEFAULT_TYPELOC_IMPL(DependentSizedExtVector, Type)
 DEFAULT_TYPELOC_IMPL(Vector, Type)
 DEFAULT_TYPELOC_IMPL(ExtVector, VectorType)
@@ -8474,8 +8476,8 @@ void clang::PrintLibclangResourceUsage(CXTranslationUnit TU) {
 // Misc. utility functions.
 //===----------------------------------------------------------------------===//
 
-/// Default to using an 8 MB stack size on "safety" threads.
-static unsigned SafetyStackThreadSize = 8 << 20;
+/// Default to using our desired 8 MB stack size on "safety" threads.
+static unsigned SafetyStackThreadSize = DesiredStackSize;
 
 namespace clang {
 

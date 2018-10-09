@@ -8,10 +8,11 @@
 // RUN:     XRAY_PROFILING_OPTIONS=no_flush=true %run %t
 // RUN: XRAY_OPTIONS=verbosity=1 %run %t
 // RUN: PROFILES=`ls xray-log.profiling-single-* | wc -l`
-// RUN: [ $PROFILES -eq 2 ]
+// RUN: [ $PROFILES -ge 2 ]
 // RUN: rm -f xray-log.profiling-single-*
 //
-// UNSUPPORTED: target-is-mips64,target-is-mips64el
+// REQUIRES: x86_64-target-arch
+// REQUIRES: built-in-llvm-tree
 
 #include "xray/xray_interface.h"
 #include "xray/xray_log_interface.h"

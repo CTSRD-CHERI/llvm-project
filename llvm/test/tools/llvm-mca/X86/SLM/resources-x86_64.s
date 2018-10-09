@@ -103,6 +103,21 @@ andq %rsi, %rdi
 andq %rsi, (%rax)
 andq (%rax), %rdi
 
+bsfw %si, %di
+bsrw %si, %di
+bsfw (%rax), %di
+bsrw (%rax), %di
+
+bsfl %esi, %edi
+bsrl %esi, %edi
+bsfl (%rax), %edi
+bsrl (%rax), %edi
+
+bsfq %rsi, %rdi
+bsrq %rsi, %rdi
+bsfq (%rax), %rdi
+bsrq (%rax), %rdi
+
 btw  %si, %di
 btcw %si, %di
 btrw %si, %di
@@ -610,7 +625,7 @@ xorq (%rax), %rdi
 # CHECK-NEXT: [3]: RThroughput
 # CHECK-NEXT: [4]: MayLoad
 # CHECK-NEXT: [5]: MayStore
-# CHECK-NEXT: [6]: HasSideEffects
+# CHECK-NEXT: [6]: HasSideEffects (U)
 
 # CHECK:      [1]    [2]    [3]    [4]    [5]    [6]    Instructions:
 # CHECK-NEXT:  1      1     0.50                        adcb	$7, %al
@@ -703,6 +718,18 @@ xorq (%rax), %rdi
 # CHECK-NEXT:  1      1     0.50                        andq	%rsi, %rdi
 # CHECK-NEXT:  2      5     2.00    *      *            andq	%rsi, (%rax)
 # CHECK-NEXT:  1      4     1.00    *                   andq	(%rax), %rdi
+# CHECK-NEXT:  10     10    10.00                       bsfw	%si, %di
+# CHECK-NEXT:  10     10    10.00                       bsrw	%si, %di
+# CHECK-NEXT:  10     13    10.00   *                   bsfw	(%rax), %di
+# CHECK-NEXT:  10     13    10.00   *                   bsrw	(%rax), %di
+# CHECK-NEXT:  10     10    10.00                       bsfl	%esi, %edi
+# CHECK-NEXT:  10     10    10.00                       bsrl	%esi, %edi
+# CHECK-NEXT:  10     13    10.00   *                   bsfl	(%rax), %edi
+# CHECK-NEXT:  10     13    10.00   *                   bsrl	(%rax), %edi
+# CHECK-NEXT:  10     10    10.00                       bsfq	%rsi, %rdi
+# CHECK-NEXT:  10     10    10.00                       bsrq	%rsi, %rdi
+# CHECK-NEXT:  10     13    10.00   *                   bsfq	(%rax), %rdi
+# CHECK-NEXT:  10     13    10.00   *                   bsrq	(%rax), %rdi
 # CHECK-NEXT:  1      1     0.50                        btw	%si, %di
 # CHECK-NEXT:  1      1     0.50                        btcw	%si, %di
 # CHECK-NEXT:  1      1     0.50                        btrw	%si, %di
@@ -751,7 +778,7 @@ xorq (%rax), %rdi
 # CHECK-NEXT:  2      4     2.00    *      *            btcq	$7, (%rax)
 # CHECK-NEXT:  2      4     2.00    *      *            btrq	$7, (%rax)
 # CHECK-NEXT:  2      4     2.00    *      *            btsq	$7, (%rax)
-# CHECK-NEXT:  1      1     0.50                  *     clc
+# CHECK-NEXT:  1      1     0.50                  U     clc
 # CHECK-NEXT:  1      1     0.50                        decb	%dil
 # CHECK-NEXT:  2      5     2.00    *      *            decb	(%rax)
 # CHECK-NEXT:  1      1     0.50                        decw	%di
@@ -760,22 +787,22 @@ xorq (%rax), %rdi
 # CHECK-NEXT:  2      5     2.00    *      *            decl	(%rax)
 # CHECK-NEXT:  1      1     0.50                        decq	%rdi
 # CHECK-NEXT:  2      5     2.00    *      *            decq	(%rax)
-# CHECK-NEXT:  1      25    25.00                 *     divb	%dil
-# CHECK-NEXT:  1      29    25.00   *             *     divb	(%rax)
-# CHECK-NEXT:  1      25    25.00                 *     divw	%si
-# CHECK-NEXT:  1      29    25.00   *             *     divw	(%rax)
-# CHECK-NEXT:  1      25    25.00                 *     divl	%edx
-# CHECK-NEXT:  1      29    25.00   *             *     divl	(%rax)
-# CHECK-NEXT:  1      25    25.00                 *     divq	%rcx
-# CHECK-NEXT:  1      29    25.00   *             *     divq	(%rax)
-# CHECK-NEXT:  1      25    25.00                 *     idivb	%dil
-# CHECK-NEXT:  1      29    25.00   *             *     idivb	(%rax)
-# CHECK-NEXT:  1      25    25.00                 *     idivw	%si
-# CHECK-NEXT:  1      29    25.00   *             *     idivw	(%rax)
-# CHECK-NEXT:  1      25    25.00                 *     idivl	%edx
-# CHECK-NEXT:  1      29    25.00   *             *     idivl	(%rax)
-# CHECK-NEXT:  1      25    25.00                 *     idivq	%rcx
-# CHECK-NEXT:  1      29    25.00   *             *     idivq	(%rax)
+# CHECK-NEXT:  1      25    25.00                 U     divb	%dil
+# CHECK-NEXT:  1      29    25.00   *             U     divb	(%rax)
+# CHECK-NEXT:  1      25    25.00                 U     divw	%si
+# CHECK-NEXT:  1      29    25.00   *             U     divw	(%rax)
+# CHECK-NEXT:  1      25    25.00                 U     divl	%edx
+# CHECK-NEXT:  1      29    25.00   *             U     divl	(%rax)
+# CHECK-NEXT:  1      25    25.00                 U     divq	%rcx
+# CHECK-NEXT:  1      29    25.00   *             U     divq	(%rax)
+# CHECK-NEXT:  1      25    25.00                 U     idivb	%dil
+# CHECK-NEXT:  1      29    25.00   *             U     idivb	(%rax)
+# CHECK-NEXT:  1      25    25.00                 U     idivw	%si
+# CHECK-NEXT:  1      29    25.00   *             U     idivw	(%rax)
+# CHECK-NEXT:  1      25    25.00                 U     idivl	%edx
+# CHECK-NEXT:  1      29    25.00   *             U     idivl	(%rax)
+# CHECK-NEXT:  1      25    25.00                 U     idivq	%rcx
+# CHECK-NEXT:  1      29    25.00   *             U     idivq	(%rax)
 # CHECK-NEXT:  1      3     1.00                        imulb	%dil
 # CHECK-NEXT:  1      6     1.00    *                   imulb	(%rax)
 # CHECK-NEXT:  1      3     1.00                        imulw	%di
@@ -1168,7 +1195,7 @@ xorq (%rax), %rdi
 
 # CHECK:      Resource pressure per iteration:
 # CHECK-NEXT: [0]    [1]    [2]    [3]    [4]    [5]    [6]    [7]
-# CHECK-NEXT: 400.00  -      -      -      -     393.00 235.00 470.00
+# CHECK-NEXT: 400.00  -      -      -      -     513.00 355.00 476.00
 
 # CHECK:      Resource pressure by instruction:
 # CHECK-NEXT: [0]    [1]    [2]    [3]    [4]    [5]    [6]    [7]    Instructions:
@@ -1262,6 +1289,18 @@ xorq (%rax), %rdi
 # CHECK-NEXT:  -      -      -      -      -     0.50   0.50    -     andq	%rsi, %rdi
 # CHECK-NEXT:  -      -      -      -      -     1.00   1.00   2.00   andq	%rsi, (%rax)
 # CHECK-NEXT:  -      -      -      -      -     0.50   0.50   1.00   andq	(%rax), %rdi
+# CHECK-NEXT:  -      -      -      -      -     10.00  10.00   -     bsfw	%si, %di
+# CHECK-NEXT:  -      -      -      -      -     10.00  10.00   -     bsrw	%si, %di
+# CHECK-NEXT:  -      -      -      -      -     10.00  10.00  1.00   bsfw	(%rax), %di
+# CHECK-NEXT:  -      -      -      -      -     10.00  10.00  1.00   bsrw	(%rax), %di
+# CHECK-NEXT:  -      -      -      -      -     10.00  10.00   -     bsfl	%esi, %edi
+# CHECK-NEXT:  -      -      -      -      -     10.00  10.00   -     bsrl	%esi, %edi
+# CHECK-NEXT:  -      -      -      -      -     10.00  10.00  1.00   bsfl	(%rax), %edi
+# CHECK-NEXT:  -      -      -      -      -     10.00  10.00  1.00   bsrl	(%rax), %edi
+# CHECK-NEXT:  -      -      -      -      -     10.00  10.00   -     bsfq	%rsi, %rdi
+# CHECK-NEXT:  -      -      -      -      -     10.00  10.00   -     bsrq	%rsi, %rdi
+# CHECK-NEXT:  -      -      -      -      -     10.00  10.00  1.00   bsfq	(%rax), %rdi
+# CHECK-NEXT:  -      -      -      -      -     10.00  10.00  1.00   bsrq	(%rax), %rdi
 # CHECK-NEXT:  -      -      -      -      -     0.50   0.50    -     btw	%si, %di
 # CHECK-NEXT:  -      -      -      -      -     0.50   0.50    -     btcw	%si, %di
 # CHECK-NEXT:  -      -      -      -      -     0.50   0.50    -     btrw	%si, %di

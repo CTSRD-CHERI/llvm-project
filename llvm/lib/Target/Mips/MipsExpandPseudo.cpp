@@ -289,7 +289,6 @@ bool MipsExpandPseudo::expandAtomicCmpSwap(MachineBasicBlock &BB,
     }
   }
 
-
   unsigned Dest = I->getOperand(0).getReg();
   unsigned Ptr = I->getOperand(1).getReg();
   unsigned OldVal = I->getOperand(2).getReg();
@@ -867,6 +866,7 @@ bool MipsExpandPseudo::expandMI(MachineBasicBlock &MBB,
     return expandAtomicCmpSwap(MBB, MBBI, NMBB, /*IsCapOp=*/true);
   case Mips::PseudoPccRelativeAddressPostRA:
     return expandPccRelativeAddr(MBB, MBBI, NMBB);
+
   default:
     return Modified;
   }

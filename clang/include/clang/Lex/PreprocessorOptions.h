@@ -54,6 +54,13 @@ public:
   /// definitions and expansions.
   bool DetailedRecord = false;
 
+  /// If non-empty, the filename used in an #include directive in the primary
+  /// source file (or command-line preinclude) that is used to implement
+  /// MSVC-style precompiled headers. When creating a PCH, after the #include
+  /// of this header, the PCH generation stops. When using a PCH, tokens are
+  /// skipped until after an #include of this header is seen.
+  std::string PCHThroughHeader;
+
   /// The implicit PCH included at the start of the translation unit, or empty.
   std::string ImplicitPCHInclude;
 
@@ -87,6 +94,11 @@ public:
   /// conditional #if stack, so the ASTWriter/ASTReader can save/restore it when
   /// processing the rest of the file.
   bool GeneratePreamble = false;
+
+  /// Whether to write comment locations into the PCH when building it.
+  /// Reading the comments from the PCH can be a performance hit even if the
+  /// clients don't use them.
+  bool WriteCommentListToPCH = true;
 
   /// The implicit PTH input included at the start of the translation unit, or
   /// empty.

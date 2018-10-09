@@ -1388,7 +1388,7 @@ unsigned X86InstrInfo::getFMA3OpcodeToCommuteOperands(
   return FMAForms[FormIndex];
 }
 
-static bool commuteVPTERNLOG(MachineInstr &MI, unsigned SrcOpIdx1,
+static void commuteVPTERNLOG(MachineInstr &MI, unsigned SrcOpIdx1,
                              unsigned SrcOpIdx2) {
   // Determine which case this commute is or if it can't be done.
   unsigned Case = getThreeSrcCommuteCase(MI.getDesc().TSFlags, SrcOpIdx1,
@@ -1412,8 +1412,6 @@ static bool commuteVPTERNLOG(MachineInstr &MI, unsigned SrcOpIdx1,
   if (Imm & SwapMasks[Case][2]) NewImm |= SwapMasks[Case][3];
   if (Imm & SwapMasks[Case][3]) NewImm |= SwapMasks[Case][2];
   MI.getOperand(MI.getNumOperands()-1).setImm(NewImm);
-
-  return true;
 }
 
 // Returns true if this is a VPERMI2 or VPERMT2 instruction that can be
@@ -1549,9 +1547,29 @@ MachineInstr *X86InstrInfo::commuteInstructionImpl(MachineInstr &MI, bool NewMI,
   }
   case X86::BLENDPDrri:
   case X86::BLENDPSrri:
-  case X86::PBLENDWrri:
   case X86::VBLENDPDrri:
   case X86::VBLENDPSrri:
+    // If we're optimizing for size, try to use MOVSD/MOVSS.
+    if (MI.getParent()->getParent()->getFunction().optForSize()) {
+      unsigned Mask, Opc;
+      switch (MI.getOpcode()) {
+      default: llvm_unreachable("Unreachable!");
+      case X86::BLENDPDrri:  Opc = X86::MOVSDrr;  Mask = 0x03; break;
+      case X86::BLENDPSrri:  Opc = X86::MOVSSrr;  Mask = 0x0F; break;
+      case X86::VBLENDPDrri: Opc = X86::VMOVSDrr; Mask = 0x03; break;
+      case X86::VBLENDPSrri: Opc = X86::VMOVSSrr; Mask = 0x0F; break;
+      }
+      if ((MI.getOperand(3).getImm() ^ Mask) == 1) {
+        auto &WorkingMI = cloneIfNew(MI);
+        WorkingMI.setDesc(get(Opc));
+        WorkingMI.RemoveOperand(3);
+        return TargetInstrInfo::commuteInstructionImpl(WorkingMI,
+                                                       /*NewMI=*/false,
+                                                       OpIdx1, OpIdx2);
+      }
+    }
+    LLVM_FALLTHROUGH;
+  case X86::PBLENDWrri:
   case X86::VBLENDPDYrri:
   case X86::VBLENDPSYrri:
   case X86::VPBLENDDrri:
@@ -1585,8 +1603,7 @@ MachineInstr *X86InstrInfo::commuteInstructionImpl(MachineInstr &MI, bool NewMI,
   case X86::VMOVSDrr:
   case X86::VMOVSSrr:{
     // On SSE41 or later we can commute a MOVSS/MOVSD to a BLENDPS/BLENDPD.
-    if (!Subtarget.hasSSE41())
-      return nullptr;
+    assert(Subtarget.hasSSE41() && "Commuting MOVSD/MOVSS requires SSE41!");
 
     unsigned Mask, Opc;
     switch (MI.getOpcode()) {
@@ -1618,37 +1635,6 @@ MachineInstr *X86InstrInfo::commuteInstructionImpl(MachineInstr &MI, bool NewMI,
     WorkingMI.getOperand(3).setImm((Src1Hi << 4) | (Src2Hi >> 4));
     return TargetInstrInfo::commuteInstructionImpl(WorkingMI, /*NewMI=*/false,
                                                    OpIdx1, OpIdx2);
-  }
-  case X86::CMPSDrr:
-  case X86::CMPSSrr:
-  case X86::CMPPDrri:
-  case X86::CMPPSrri:
-  case X86::VCMPSDrr:
-  case X86::VCMPSSrr:
-  case X86::VCMPPDrri:
-  case X86::VCMPPSrri:
-  case X86::VCMPPDYrri:
-  case X86::VCMPPSYrri:
-  case X86::VCMPSDZrr:
-  case X86::VCMPSSZrr:
-  case X86::VCMPPDZrri:
-  case X86::VCMPPSZrri:
-  case X86::VCMPPDZ128rri:
-  case X86::VCMPPSZ128rri:
-  case X86::VCMPPDZ256rri:
-  case X86::VCMPPSZ256rri: {
-    // Float comparison can be safely commuted for
-    // Ordered/Unordered/Equal/NotEqual tests
-    unsigned Imm = MI.getOperand(3).getImm() & 0x7;
-    switch (Imm) {
-    case 0x00: // EQUAL
-    case 0x03: // UNORDERED
-    case 0x04: // NOT EQUAL
-    case 0x07: // ORDERED
-      return TargetInstrInfo::commuteInstructionImpl(MI, NewMI, OpIdx1, OpIdx2);
-    default:
-      return nullptr;
-    }
   }
   case X86::VPCMPBZ128rri:  case X86::VPCMPUBZ128rri:
   case X86::VPCMPBZ256rri:  case X86::VPCMPUBZ256rri:
@@ -1707,8 +1693,7 @@ MachineInstr *X86InstrInfo::commuteInstructionImpl(MachineInstr &MI, bool NewMI,
   }
   case X86::MOVHLPSrr:
   case X86::UNPCKHPDrr: {
-    if (!Subtarget.hasSSE2())
-      return nullptr;
+    assert(Subtarget.hasSSE2() && "Commuting MOVHLP/UNPCKHPD requires SSE2!");
 
     unsigned Opc = MI.getOpcode();
     switch (Opc) {
@@ -1825,8 +1810,7 @@ MachineInstr *X86InstrInfo::commuteInstructionImpl(MachineInstr &MI, bool NewMI,
   case X86::VPTERNLOGQZ256rmbikz:
   case X86::VPTERNLOGQZrmbikz: {
     auto &WorkingMI = cloneIfNew(MI);
-    if (!commuteVPTERNLOG(WorkingMI, OpIdx1, OpIdx2))
-      return nullptr;
+    commuteVPTERNLOG(WorkingMI, OpIdx1, OpIdx2);
     return TargetInstrInfo::commuteInstructionImpl(WorkingMI, /*NewMI=*/false,
                                                    OpIdx1, OpIdx2);
   }
@@ -1839,12 +1823,11 @@ MachineInstr *X86InstrInfo::commuteInstructionImpl(MachineInstr &MI, bool NewMI,
                                                      OpIdx1, OpIdx2);
     }
 
-    const X86InstrFMA3Group *FMA3Group = getFMA3Group(MI.getOpcode());
+    const X86InstrFMA3Group *FMA3Group = getFMA3Group(MI.getOpcode(),
+                                                      MI.getDesc().TSFlags);
     if (FMA3Group) {
       unsigned Opc =
         getFMA3OpcodeToCommuteOperands(MI, OpIdx1, OpIdx2, *FMA3Group);
-      if (Opc == 0)
-        return nullptr;
       auto &WorkingMI = cloneIfNew(MI);
       WorkingMI.setDesc(get(Opc));
       return TargetInstrInfo::commuteInstructionImpl(WorkingMI, /*NewMI=*/false,
@@ -2001,11 +1984,15 @@ bool X86InstrInfo::findCommutedOpIndices(MachineInstr &MI, unsigned &SrcOpIdx1,
   case X86::MOVSDrr:
   case X86::MOVSSrr:
   case X86::VMOVSDrr:
-  case X86::VMOVSSrr: {
+  case X86::VMOVSSrr:
     if (Subtarget.hasSSE41())
       return TargetInstrInfo::findCommutedOpIndices(MI, SrcOpIdx1, SrcOpIdx2);
     return false;
-  }
+  case X86::MOVHLPSrr:
+  case X86::UNPCKHPDrr:
+    if (Subtarget.hasSSE2())
+      return TargetInstrInfo::findCommutedOpIndices(MI, SrcOpIdx1, SrcOpIdx2);
+    return false;
   case X86::VPTERNLOGDZrri:      case X86::VPTERNLOGDZrmi:
   case X86::VPTERNLOGDZ128rri:   case X86::VPTERNLOGDZ128rmi:
   case X86::VPTERNLOGDZ256rri:   case X86::VPTERNLOGDZ256rmi:
@@ -2073,7 +2060,8 @@ bool X86InstrInfo::findCommutedOpIndices(MachineInstr &MI, unsigned &SrcOpIdx1,
   }
 
   default:
-    const X86InstrFMA3Group *FMA3Group = getFMA3Group(MI.getOpcode());
+    const X86InstrFMA3Group *FMA3Group = getFMA3Group(MI.getOpcode(),
+                                                      MI.getDesc().TSFlags);
     if (FMA3Group)
       return findThreeSrcCommutedOpIndices(MI, SrcOpIdx1, SrcOpIdx2,
                                            FMA3Group->isIntrinsic());
@@ -3603,6 +3591,13 @@ static X86::CondCode isUseDefConvertible(MachineInstr &MI) {
   case X86::TZCNT32rr: case X86::TZCNT32rm:
   case X86::TZCNT64rr: case X86::TZCNT64rm:
     return X86::COND_B;
+  case X86::BSF16rr:
+  case X86::BSF16rm:
+  case X86::BSF32rr:
+  case X86::BSF32rm:
+  case X86::BSF64rr:
+  case X86::BSF64rm:
+    return X86::COND_E;
   }
 }
 
@@ -6316,6 +6311,29 @@ static const uint16_t ReplaceableCustomAVX2Instrs[][3] = {
   { X86::VBLENDPSYrri,       X86::VBLENDPDYrri,       X86::VPBLENDDYrri },
 };
 
+// Special table for changing EVEX logic instructions to VEX.
+// TODO: Should we run EVEX->VEX earlier?
+static const uint16_t ReplaceableCustomAVX512LogicInstrs[][4] = {
+  // Two integer columns for 64-bit and 32-bit elements.
+  //PackedSingle     PackedDouble     PackedInt           PackedInt
+  { X86::VANDNPSrm,  X86::VANDNPDrm,  X86::VPANDNQZ128rm, X86::VPANDNDZ128rm },
+  { X86::VANDNPSrr,  X86::VANDNPDrr,  X86::VPANDNQZ128rr, X86::VPANDNDZ128rr },
+  { X86::VANDPSrm,   X86::VANDPDrm,   X86::VPANDQZ128rm,  X86::VPANDDZ128rm  },
+  { X86::VANDPSrr,   X86::VANDPDrr,   X86::VPANDQZ128rr,  X86::VPANDDZ128rr  },
+  { X86::VORPSrm,    X86::VORPDrm,    X86::VPORQZ128rm,   X86::VPORDZ128rm   },
+  { X86::VORPSrr,    X86::VORPDrr,    X86::VPORQZ128rr,   X86::VPORDZ128rr   },
+  { X86::VXORPSrm,   X86::VXORPDrm,   X86::VPXORQZ128rm,  X86::VPXORDZ128rm  },
+  { X86::VXORPSrr,   X86::VXORPDrr,   X86::VPXORQZ128rr,  X86::VPXORDZ128rr  },
+  { X86::VANDNPSYrm, X86::VANDNPDYrm, X86::VPANDNQZ256rm, X86::VPANDNDZ256rm },
+  { X86::VANDNPSYrr, X86::VANDNPDYrr, X86::VPANDNQZ256rr, X86::VPANDNDZ256rr },
+  { X86::VANDPSYrm,  X86::VANDPDYrm,  X86::VPANDQZ256rm,  X86::VPANDDZ256rm  },
+  { X86::VANDPSYrr,  X86::VANDPDYrr,  X86::VPANDQZ256rr,  X86::VPANDDZ256rr  },
+  { X86::VORPSYrm,   X86::VORPDYrm,   X86::VPORQZ256rm,   X86::VPORDZ256rm   },
+  { X86::VORPSYrr,   X86::VORPDYrr,   X86::VPORQZ256rr,   X86::VPORDZ256rr   },
+  { X86::VXORPSYrm,  X86::VXORPDYrm,  X86::VPXORQZ256rm,  X86::VPXORDZ256rm  },
+  { X86::VXORPSYrr,  X86::VXORPDYrr,  X86::VPXORQZ256rr,  X86::VPXORDZ256rr  },
+};
+
 // FIXME: Some shuffle and unpack instructions have equivalents in different
 // domains, but they require a bit more work than just switching opcodes.
 
@@ -6370,7 +6388,7 @@ static bool AdjustBlendMask(unsigned OldMask, unsigned OldWidth,
 
 uint16_t X86InstrInfo::getExecutionDomainCustom(const MachineInstr &MI) const {
   unsigned Opcode = MI.getOpcode();
-  unsigned NumOperands = MI.getNumOperands();
+  unsigned NumOperands = MI.getDesc().getNumOperands();
 
   auto GetBlendDomains = [&](unsigned ImmWidth, bool Is256) {
     uint16_t validDomains = 0;
@@ -6415,6 +6433,38 @@ uint16_t X86InstrInfo::getExecutionDomainCustom(const MachineInstr &MI) const {
   case X86::VPBLENDWYrmi:
   case X86::VPBLENDWYrri:
     return GetBlendDomains(8, false);
+  case X86::VPANDDZ128rr:  case X86::VPANDDZ128rm:
+  case X86::VPANDDZ256rr:  case X86::VPANDDZ256rm:
+  case X86::VPANDQZ128rr:  case X86::VPANDQZ128rm:
+  case X86::VPANDQZ256rr:  case X86::VPANDQZ256rm:
+  case X86::VPANDNDZ128rr: case X86::VPANDNDZ128rm:
+  case X86::VPANDNDZ256rr: case X86::VPANDNDZ256rm:
+  case X86::VPANDNQZ128rr: case X86::VPANDNQZ128rm:
+  case X86::VPANDNQZ256rr: case X86::VPANDNQZ256rm:
+  case X86::VPORDZ128rr:   case X86::VPORDZ128rm:
+  case X86::VPORDZ256rr:   case X86::VPORDZ256rm:
+  case X86::VPORQZ128rr:   case X86::VPORQZ128rm:
+  case X86::VPORQZ256rr:   case X86::VPORQZ256rm:
+  case X86::VPXORDZ128rr:  case X86::VPXORDZ128rm:
+  case X86::VPXORDZ256rr:  case X86::VPXORDZ256rm:
+  case X86::VPXORQZ128rr:  case X86::VPXORQZ128rm:
+  case X86::VPXORQZ256rr:  case X86::VPXORQZ256rm:
+    // If we don't have DQI see if we can still switch from an EVEX integer
+    // instruction to a VEX floating point instruction.
+    if (Subtarget.hasDQI())
+      return 0;
+
+    if (RI.getEncodingValue(MI.getOperand(0).getReg()) >= 16)
+      return 0;
+    if (RI.getEncodingValue(MI.getOperand(1).getReg()) >= 16)
+      return 0;
+    // Register forms will have 3 operands. Memory form will have more.
+    if (NumOperands == 3 &&
+        RI.getEncodingValue(MI.getOperand(2).getReg()) >= 16)
+      return 0;
+
+    // All domains are valid.
+    return 0xe;
   }
   return 0;
 }
@@ -6426,7 +6476,7 @@ bool X86InstrInfo::setExecutionDomainCustom(MachineInstr &MI,
   assert(dom && "Not an SSE instruction");
 
   unsigned Opcode = MI.getOpcode();
-  unsigned NumOperands = MI.getNumOperands();
+  unsigned NumOperands = MI.getDesc().getNumOperands();
 
   auto SetBlendDomain = [&](unsigned ImmWidth, bool Is256) {
     if (MI.getOperand(NumOperands - 1).isImm()) {
@@ -6491,6 +6541,36 @@ bool X86InstrInfo::setExecutionDomainCustom(MachineInstr &MI,
   case X86::VPBLENDWYrmi:
   case X86::VPBLENDWYrri:
     return SetBlendDomain(16, true);
+  case X86::VPANDDZ128rr:  case X86::VPANDDZ128rm:
+  case X86::VPANDDZ256rr:  case X86::VPANDDZ256rm:
+  case X86::VPANDQZ128rr:  case X86::VPANDQZ128rm:
+  case X86::VPANDQZ256rr:  case X86::VPANDQZ256rm:
+  case X86::VPANDNDZ128rr: case X86::VPANDNDZ128rm:
+  case X86::VPANDNDZ256rr: case X86::VPANDNDZ256rm:
+  case X86::VPANDNQZ128rr: case X86::VPANDNQZ128rm:
+  case X86::VPANDNQZ256rr: case X86::VPANDNQZ256rm:
+  case X86::VPORDZ128rr:   case X86::VPORDZ128rm:
+  case X86::VPORDZ256rr:   case X86::VPORDZ256rm:
+  case X86::VPORQZ128rr:   case X86::VPORQZ128rm:
+  case X86::VPORQZ256rr:   case X86::VPORQZ256rm:
+  case X86::VPXORDZ128rr:  case X86::VPXORDZ128rm:
+  case X86::VPXORDZ256rr:  case X86::VPXORDZ256rm:
+  case X86::VPXORQZ128rr:  case X86::VPXORQZ128rm:
+  case X86::VPXORQZ256rr:  case X86::VPXORQZ256rm: {
+    // Without DQI, convert EVEX instructions to VEX instructions.
+    if (Subtarget.hasDQI())
+      return false;
+
+    const uint16_t *table = lookupAVX512(MI.getOpcode(), dom,
+                                         ReplaceableCustomAVX512LogicInstrs);
+    assert(table && "Instruction not found in table?");
+    // Don't change integer Q instructions to D instructions and
+    // use D intructions if we started with a PS instruction.
+    if (Domain == 3 && (dom == 1 || table[3] == MI.getOpcode()))
+      Domain = 4;
+    MI.setDesc(get(table[Domain - 1]));
+    return true;
+  }
   }
   return false;
 }
@@ -7438,7 +7518,7 @@ enum MachineOutlinerClass {
 };
 
 outliner::TargetCostInfo
-X86InstrInfo::getOutlininingCandidateInfo(
+X86InstrInfo::getOutliningCandidateInfo(
   std::vector<outliner::Candidate> &RepeatedSequenceLocs) const {
   unsigned SequenceSize = std::accumulate(
       RepeatedSequenceLocs[0].front(), std::next(RepeatedSequenceLocs[0].back()),

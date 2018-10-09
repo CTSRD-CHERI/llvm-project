@@ -1291,12 +1291,13 @@ void Driver::generateCompilationDiagnostics(
   // Assume associated files are based off of the first temporary file.
   CrashReportInfo CrashInfo(TempFiles[0], VFS);
 
-  std::string Script = CrashInfo.Filename.rsplit('.').first.str() + ".sh";
+  llvm::SmallString<128> Script(CrashInfo.Filename);
+  llvm::sys::path::replace_extension(Script, "sh");
   std::error_code EC;
   llvm::raw_fd_ostream ScriptOS(Script, EC, llvm::sys::fs::CD_CreateNew);
   if (EC) {
     Diag(clang::diag::note_drv_command_failed_diag_msg)
-        << "Error generating run script: " + Script + " " + EC.message();
+        << "Error generating run script: " << Script << " " << EC.message();
   } else {
     ScriptOS << "# Crash reproducer for " << getClangFullVersion() << "\n"
              << "# Driver args: ";
@@ -1308,7 +1309,7 @@ void Driver::generateCompilationDiagnostics(
       ScriptOS << "\n# Additional information: " << AdditionalInformation
                << "\n";
     if (Report)
-      Report->TemporaryFiles.push_back(Script);
+      Report->TemporaryFiles.push_back(Script.str());
     Diag(clang::diag::note_drv_command_failed_diag_msg) << Script;
   }
 
@@ -2991,22 +2992,6 @@ void Driver::BuildActions(Compilation &C, DerivedArgList &Args,
     Args.eraseArg(options::OPT__SLASH_Yu);
     YcArg = YuArg = nullptr;
   }
-  if (YcArg || YuArg) {
-    StringRef Val = YcArg ? YcArg->getValue() : YuArg->getValue();
-    bool FoundMatchingInclude = false;
-    for (const Arg *Inc : Args.filtered(options::OPT_include)) {
-      // FIXME: Do case-insensitive matching and consider / and \ as equal.
-      if (Inc->getValue() == Val)
-        FoundMatchingInclude = true;
-    }
-    if (!FoundMatchingInclude) {
-      Diag(clang::diag::warn_drv_ycyu_no_fi_arg_clang_cl)
-          << (YcArg ? YcArg : YuArg)->getSpelling();
-      Args.eraseArg(options::OPT__SLASH_Yc);
-      Args.eraseArg(options::OPT__SLASH_Yu);
-      YcArg = YuArg = nullptr;
-    }
-  }
   if (YcArg && Inputs.size() > 1) {
     Diag(clang::diag::warn_drv_yc_multiple_inputs_clang_cl);
     Args.eraseArg(options::OPT__SLASH_Yc);
@@ -3076,11 +3061,9 @@ void Driver::BuildActions(Compilation &C, DerivedArgList &Args,
         const types::ID HeaderType = lookupHeaderTypeForSourceType(InputType);
         llvm::SmallVector<phases::ID, phases::MaxNumberOfPhases> PCHPL;
         types::getCompilationPhases(HeaderType, PCHPL);
-        Arg *PchInputArg = MakeInputArg(Args, *Opts, YcArg->getValue());
-
         // Build the pipeline for the pch file.
         Action *ClangClPch =
-            C.MakeAction<InputAction>(*PchInputArg, HeaderType);
+            C.MakeAction<InputAction>(*InputArg, HeaderType);
         for (phases::ID Phase : PCHPL)
           ClangClPch = ConstructPhaseAction(C, Args, Phase, ClangClPch);
         assert(ClangClPch);
@@ -4036,8 +4019,22 @@ const char *Driver::GetNamedOutputPath(Compilation &C, const JobAction &JA,
       CCGenDiagnostics) {
     StringRef Name = llvm::sys::path::filename(BaseInput);
     std::pair<StringRef, StringRef> Split = Name.split('.');
-    std::string TmpName = GetTemporaryPath(
-        Split.first, types::getTypeTempSuffix(JA.getType(), IsCLMode()));
+    SmallString<128> TmpName;
+    const char *Suffix = types::getTypeTempSuffix(JA.getType(), IsCLMode());
+    Arg *A = C.getArgs().getLastArg(options::OPT_fcrash_diagnostics_dir);
+    if (CCGenDiagnostics && A) {
+      SmallString<128> CrashDirectory(A->getValue());
+      llvm::sys::path::append(CrashDirectory, Split.first);
+      const char *Middle = Suffix ? "-%%%%%%." : "-%%%%%%";
+      std::error_code EC =
+          llvm::sys::fs::createUniqueFile(CrashDirectory + Middle + Suffix, TmpName);
+      if (EC) {
+        Diag(clang::diag::err_unable_to_make_temp) << EC.message();
+        return "";
+      }
+    } else {
+      TmpName = GetTemporaryPath(Split.first, Suffix);
+    }
     return C.addTempFile(C.getArgs().MakeArgString(TmpName));
   }
 
@@ -4269,6 +4266,9 @@ std::string Driver::GetClPchPath(Compilation &C, StringRef BaseName) const {
     // extension of .pch is assumed. "
     if (!llvm::sys::path::has_extension(Output))
       Output += ".pch";
+  } else if (Arg *YcArg = C.getArgs().getLastArg(options::OPT__SLASH_Yc)) {
+    Output = YcArg->getValue();
+    llvm::sys::path::replace_extension(Output, ".pch");
   } else {
     Output = BaseName;
     llvm::sys::path::replace_extension(Output, ".pch");

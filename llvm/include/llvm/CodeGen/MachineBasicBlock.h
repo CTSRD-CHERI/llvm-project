@@ -58,7 +58,7 @@ private:
 public:
   void addNodeToList(MachineInstr *N);
   void removeNodeFromList(MachineInstr *N);
-  void transferNodesFromList(ilist_traits &OldList, instr_iterator First,
+  void transferNodesFromList(ilist_traits &FromList, instr_iterator First,
                              instr_iterator Last);
   void deleteNode(MachineInstr *MI);
 };
@@ -476,6 +476,11 @@ public:
   /// This is useful when doing a partial clone of successors. Afterward, the
   /// probabilities may need to be normalized.
   void copySuccessor(MachineBasicBlock *Orig, succ_iterator I);
+
+  /// Split the old successor into old plus new and updates the probability
+  /// info.
+  void splitSuccessor(MachineBasicBlock *Old, MachineBasicBlock *New,
+                      bool NormalizeSuccProbs = false);
 
   /// Transfers all the successors from MBB to this machine basic block (i.e.,
   /// copies all the successors FromMBB and remove all the successors from

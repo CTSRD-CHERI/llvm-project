@@ -328,7 +328,6 @@ void SelectionDAGISel::getAnalysisUsage(AnalysisUsage &AU) const {
     AU.addRequired<AAResultsWrapperPass>();
   AU.addRequired<GCModuleInfo>();
   AU.addRequired<StackProtector>();
-  AU.addPreserved<StackProtector>();
   AU.addPreserved<GCModuleInfo>();
   AU.addRequired<TargetLibraryInfoWrapperPass>();
   AU.addRequired<TargetTransformInfoWrapperPass>();
@@ -1574,6 +1573,7 @@ void SelectionDAGISel::SelectAllBasicBlocks(const Function &Fn) {
   processDbgDeclares(FuncInfo);
 
   // Iterate over all basic blocks in the function.
+  StackProtector &SP = getAnalysis<StackProtector>();
   for (const BasicBlock *LLVMBB : RPOT) {
     if (OptLevel != CodeGenOpt::None) {
       bool AllPredsVisited = true;
@@ -1743,7 +1743,7 @@ void SelectionDAGISel::SelectAllBasicBlocks(const Function &Fn) {
       FastIS->recomputeInsertPt();
     }
 
-    if (getAnalysis<StackProtector>().shouldEmitSDCheck(*LLVMBB)) {
+    if (SP.shouldEmitSDCheck(*LLVMBB)) {
       bool FunctionBasedInstrumentation =
           TLI->getSSPStackGuardCheck(*Fn.getParent());
       SDB->SPDescriptor.initialize(LLVMBB, FuncInfo->MBBMap[LLVMBB],
@@ -1775,6 +1775,8 @@ void SelectionDAGISel::SelectAllBasicBlocks(const Function &Fn) {
     FuncInfo->PHINodesToUpdate.clear();
     ElidedArgCopyInstrs.clear();
   }
+
+  SP.copyToMachineFrameInfo(MF->getFrameInfo());
 
   propagateSwiftErrorVRegs(FuncInfo);
 

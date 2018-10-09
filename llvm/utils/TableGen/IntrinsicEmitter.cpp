@@ -220,11 +220,12 @@ enum IIT_Info {
   IIT_STRUCT6 = 38,
   IIT_STRUCT7 = 39,
   IIT_STRUCT8 = 40,
-  IIT_IFATPTR64 = 41,
-  IIT_IFATPTR128 = 42,
-  IIT_IFATPTR256 = 43,
-  IIT_IFATPTR512 = 44,
-  IIT_IFATPTRAny = 45
+  IIT_F128 = 41
+  IIT_IFATPTR64 = 42,
+  IIT_IFATPTR128 = 43,
+  IIT_IFATPTR256 = 44,
+  IIT_IFATPTR512 = 45,
+  IIT_IFATPTRAny = 46
 };
 
 static void EncodeFixedValueType(MVT::SimpleValueType VT,
@@ -252,6 +253,7 @@ static void EncodeFixedValueType(MVT::SimpleValueType VT,
   case MVT::f16: return Sig.push_back(IIT_F16);
   case MVT::f32: return Sig.push_back(IIT_F32);
   case MVT::f64: return Sig.push_back(IIT_F64);
+  case MVT::f128: return Sig.push_back(IIT_F128);
   case MVT::token: return Sig.push_back(IIT_TOKEN);
   case MVT::Metadata: return Sig.push_back(IIT_METADATA);
   case MVT::x86mmx: return Sig.push_back(IIT_MMX);

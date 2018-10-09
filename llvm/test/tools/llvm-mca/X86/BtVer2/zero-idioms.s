@@ -8,11 +8,14 @@ xorq  %rax, %rax
 
 pcmpgtb   %mm2, %mm2
 pcmpgtd   %mm2, %mm2
+# pcmpgtq   %mm2, %mm2 # invalid operand for instruction
 pcmpgtw   %mm2, %mm2
+
 pcmpgtb   %xmm2, %xmm2
 pcmpgtd   %xmm2, %xmm2
 pcmpgtq   %xmm2, %xmm2
 pcmpgtw   %xmm2, %xmm2
+
 vpcmpgtb  %xmm3, %xmm3, %xmm3
 vpcmpgtd  %xmm3, %xmm3, %xmm3
 vpcmpgtq  %xmm3, %xmm3, %xmm3
@@ -78,7 +81,7 @@ vpxor  %xmm3, %xmm3, %xmm5
 # CHECK-NEXT: [3]: RThroughput
 # CHECK-NEXT: [4]: MayLoad
 # CHECK-NEXT: [5]: MayStore
-# CHECK-NEXT: [6]: HasSideEffects
+# CHECK-NEXT: [6]: HasSideEffects (U)
 
 # CHECK:      [1]    [2]    [3]    [4]    [5]    [6]    Instructions:
 # CHECK-NEXT:  1      0     0.50                        subl	%eax, %eax

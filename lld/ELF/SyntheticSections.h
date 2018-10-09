@@ -26,6 +26,7 @@
 #include "InputSection.h"
 #include "llvm/ADT/MapVector.h"
 #include "llvm/MC/StringTableBuilder.h"
+#include "llvm/Support/Endian.h"
 #include <functional>
 
 namespace lld {
@@ -438,6 +439,7 @@ template <class ELFT> class DynamicSection final : public SyntheticSection {
   typedef typename ELFT::Dyn Elf_Dyn;
   typedef typename ELFT::Rel Elf_Rel;
   typedef typename ELFT::Rela Elf_Rela;
+  typedef typename ELFT::Relr Elf_Relr;
   typedef typename ELFT::Shdr Elf_Shdr;
   typedef typename ELFT::Sym Elf_Sym;
 
@@ -515,6 +517,39 @@ public:
 
 private:
   SmallVector<char, 0> RelocData;
+};
+
+struct RelativeReloc {
+  uint64_t getOffset() const { return InputSec->getVA(OffsetInSec); }
+
+  const InputSectionBase *InputSec;
+  uint64_t OffsetInSec;
+};
+
+class RelrBaseSection : public SyntheticSection {
+public:
+  RelrBaseSection();
+  std::vector<RelativeReloc> Relocs;
+};
+
+// RelrSection is used to encode offsets for relative relocations.
+// Proposal for adding SHT_RELR sections to generic-abi is here:
+//   https://groups.google.com/forum/#!topic/generic-abi/bX460iggiKg
+// For more details, see the comment in RelrSection::updateAllocSize().
+template <class ELFT> class RelrSection final : public RelrBaseSection {
+  typedef typename ELFT::Relr Elf_Relr;
+
+public:
+  RelrSection();
+
+  bool updateAllocSize() override;
+  size_t getSize() const override { return RelrRelocs.size() * this->Entsize; }
+  void writeTo(uint8_t *Buf) override {
+    memcpy(Buf, RelrRelocs.data(), getSize());
+  }
+
+private:
+  std::vector<Elf_Relr> RelrRelocs;
 };
 
 struct SymbolTableEntry {
@@ -617,9 +652,8 @@ private:
   bool IsIplt;
 };
 
-// GdbIndexChunk is created for each .debug_info section and contains
-// information to create a part of .gdb_index for a given input section.
-struct GdbIndexChunk {
+class GdbIndexSection final : public SyntheticSection {
+public:
   struct AddressEntry {
     InputSection *Section;
     uint64_t LowAddress;
@@ -634,58 +668,50 @@ struct GdbIndexChunk {
 
   struct NameTypeEntry {
     llvm::CachedHashStringRef Name;
-    uint8_t Type;
+    uint32_t Type;
   };
 
-  InputSection *DebugInfoSec;
-  std::vector<AddressEntry> AddressAreas;
-  std::vector<CuEntry> CompilationUnits;
-  std::vector<NameTypeEntry> NamesAndTypes;
-};
+  struct GdbChunk {
+    InputSection *Sec;
+    std::vector<AddressEntry> AddressAreas;
+    std::vector<CuEntry> CompilationUnits;
+  };
 
-// The symbol type for the .gdb_index section.
-struct GdbSymbol {
-  uint32_t NameHash;
-  size_t NameOffset;
-  size_t CuVectorIndex;
-};
+  struct GdbSymbol {
+    llvm::CachedHashStringRef Name;
+    std::vector<uint32_t> CuVector;
+    uint32_t NameOff;
+    uint32_t CuVectorOff;
+  };
 
-class GdbIndexSection final : public SyntheticSection {
-public:
-  GdbIndexSection(std::vector<GdbIndexChunk> &&Chunks);
+  GdbIndexSection();
+  template <typename ELFT> static GdbIndexSection *create();
   void writeTo(uint8_t *Buf) override;
-  size_t getSize() const override;
+  size_t getSize() const override { return Size; }
   bool empty() const override;
 
 private:
-  void fixCuIndex();
-  std::vector<std::vector<uint32_t>> createCuVectors();
-  std::vector<GdbSymbol *> createGdbSymtab();
+  struct GdbIndexHeader {
+    llvm::support::ulittle32_t Version;
+    llvm::support::ulittle32_t CuListOff;
+    llvm::support::ulittle32_t CuTypesOff;
+    llvm::support::ulittle32_t AddressAreaOff;
+    llvm::support::ulittle32_t SymtabOff;
+    llvm::support::ulittle32_t ConstantPoolOff;
+  };
+
+  void initOutputSize();
+  size_t computeSymtabSize() const;
+
+  // Each chunk contains information gathered from debug sections of a
+  // single object file.
+  std::vector<GdbChunk> Chunks;
 
   // A symbol table for this .gdb_index section.
-  std::vector<GdbSymbol *> GdbSymtab;
+  std::vector<GdbSymbol> Symbols;
 
-  // CU vector is a part of constant pool area of section.
-  std::vector<std::vector<uint32_t>> CuVectors;
-
-  // Symbol table contents.
-  llvm::DenseMap<llvm::CachedHashStringRef, GdbSymbol *> Symbols;
-
-  // Each chunk contains information gathered from a debug sections of single
-  // object and used to build different areas of gdb index.
-  std::vector<GdbIndexChunk> Chunks;
-
-  static constexpr uint32_t CuListOffset = 24;
-  uint32_t CuTypesOffset;
-  uint32_t SymtabOffset;
-  uint32_t ConstantPoolOffset;
-  uint32_t StringPoolOffset;
-  uint32_t StringPoolSize;
-
-  std::vector<size_t> CuVectorOffsets;
+  size_t Size;
 };
-
-template <class ELFT> GdbIndexSection *createGdbIndex();
 
 // --eh-frame-hdr option tells linker to construct a header for all the
 // .eh_frame sections. This header is placed to a section named .eh_frame_hdr
@@ -898,6 +924,8 @@ public:
   void writeTo(uint8_t *Buf) override;
   bool empty() const override;
 
+  static bool classof(const SectionBase *D);
+
   // The last section referenced by a regular .ARM.exidx section.
   // It is found and filled in Writer<ELFT>::resolveShfLinkOrder().
   // The sentinel points at the end of that section.
@@ -958,6 +986,7 @@ struct InX {
   static PltSection *Plt;
   static PltSection *Iplt;
   static RelocationBaseSection *RelaDyn;
+  static RelrBaseSection *RelrDyn;
   static RelocationBaseSection *RelaPlt;
   static RelocationBaseSection *RelaIplt;
   static StringTableSection *ShStrTab;

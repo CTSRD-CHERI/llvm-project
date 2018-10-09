@@ -1475,6 +1475,7 @@ MipsTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
   case Mips::CAP_ATOMIC_CMP_SWAP_I64:
   case Mips::CAP_ATOMIC_CMP_SWAP_CAP:
     return emitAtomicCmpSwap(MI, BB);
+
   case Mips::PseudoSDIV:
   case Mips::PseudoUDIV:
   case Mips::DIV:
@@ -1672,7 +1673,6 @@ MipsTargetLowering::emitAtomicBinary(MachineInstr &MI,
   //     same processor to the block of synchornizable physical memory
   //     containing the word.
   //
-
 
   unsigned PtrCopy = RegInfo.createVirtualRegister(RegInfo.getRegClass(Ptr));
   unsigned IncrCopy = RegInfo.createVirtualRegister(RegInfo.getRegClass(Incr));
@@ -1918,15 +1918,22 @@ MipsTargetLowering::emitAtomicCmpSwap(MachineInstr &MI,
     llvm_unreachable("Unsupported atomic pseudo for EmitAtomicCmpSwap.");
   }
 
+  const unsigned Size = MI.getOpcode() == Mips::ATOMIC_CMP_SWAP_I32 ? 4 : 8;
+
   MachineFunction *MF = BB->getParent();
   MachineRegisterInfo &MRI = MF->getRegInfo();
   const TargetRegisterClass *RC = getRegClassFor(ScratchTy);
   const TargetInstrInfo *TII = Subtarget.getInstrInfo();
   DebugLoc DL = MI.getDebugLoc();
+
+  unsigned AtomicOp = MI.getOpcode() == Mips::ATOMIC_CMP_SWAP_I32
+                          ? Mips::ATOMIC_CMP_SWAP_I32_POSTRA
+                          : Mips::ATOMIC_CMP_SWAP_I64_POSTRA;
   unsigned Dest = MI.getOperand(0).getReg();
   unsigned Ptr = MI.getOperand(1).getReg();
   unsigned OldVal = MI.getOperand(2).getReg();
   unsigned NewVal = MI.getOperand(3).getReg();
+
   unsigned Scratch = MRI.createVirtualRegister(RC);
   MachineBasicBlock::iterator II(MI);
 

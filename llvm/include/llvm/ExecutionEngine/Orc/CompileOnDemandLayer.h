@@ -93,14 +93,7 @@ private:
   using StubManagersMap =
       std::map<const VSO *, std::unique_ptr<IndirectStubsManager>>;
 
-  using SymbolNameToDefinitionMap =
-      IRMaterializationUnit::SymbolNameToDefinitionMap;
-
   IndirectStubsManager &getStubsManager(const VSO &V);
-
-  std::unique_ptr<Module>
-  extractFunctions(Module &M, const SymbolNameSet &SymbolNames,
-                   const SymbolNameToDefinitionMap &SymbolToDefiniton);
 
   void emitExtractedFunctionsModule(MaterializationResponsibility R,
                                     std::unique_ptr<Module> M,
@@ -376,7 +369,7 @@ private:
     // simplifying symbol lookup.
     LD.StaticRenamer.rename(*SrcMPtr);
 
-    // Bump the linkage and rename any anonymous/privote members in SrcM to
+    // Bump the linkage and rename any anonymous/private members in SrcM to
     // ensure that everything will resolve properly after we partition SrcM.
     makeAllSymbolsExternallyAccessible(*SrcMPtr);
 

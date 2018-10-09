@@ -169,12 +169,19 @@ public:
   ~ASTWorker();
 
   void update(ParseInputs Inputs, WantDiagnostics,
-              UniqueFunction<void(std::vector<Diag>)> OnUpdated);
-  void runWithAST(llvm::StringRef Name,
-                  UniqueFunction<void(llvm::Expected<InputsAndAST>)> Action);
+              llvm::unique_function<void(std::vector<Diag>)> OnUpdated);
+  void
+  runWithAST(llvm::StringRef Name,
+             llvm::unique_function<void(llvm::Expected<InputsAndAST>)> Action);
   bool blockUntilIdle(Deadline Timeout) const;
 
   std::shared_ptr<const PreambleData> getPossiblyStalePreamble() const;
+  /// Wait for the first build of preamble to finish. Preamble itself can be
+  /// accessed via getPossibleStalePreamble(). Note that this function will
+  /// return after an unsuccessful build of the preamble too, i.e. result of
+  /// getPossiblyStalePreamble() can be null even after this function returns.
+  void waitForFirstPreamble() const;
+
   std::size_t getUsedBytes() const;
   bool isASTCached() const;
 
@@ -186,7 +193,7 @@ private:
   /// Signal that run() should finish processing pending requests and exit.
   void stop();
   /// Adds a new task to the end of the request queue.
-  void startTask(llvm::StringRef Name, UniqueFunction<void()> Task,
+  void startTask(llvm::StringRef Name, llvm::unique_function<void()> Task,
                  llvm::Optional<WantDiagnostics> UpdateType);
   /// Determines the next action to perform.
   /// All actions that should never run are disarded.
@@ -197,7 +204,7 @@ private:
   bool shouldSkipHeadLocked() const;
 
   struct Request {
-    UniqueFunction<void()> Action;
+    llvm::unique_function<void()> Action;
     std::string Name;
     steady_clock::time_point AddTime;
     Context Ctx;
@@ -225,6 +232,8 @@ private:
   /// Guards members used by both TUScheduler and the worker thread.
   mutable std::mutex Mutex;
   std::shared_ptr<const PreambleData> LastBuiltPreamble; /* GUARDED_BY(Mutex) */
+  /// Becomes ready when the first preamble build finishes.
+  Notification PreambleWasBuilt;
   /// Set to true to signal run() to finish processing.
   bool Done;                    /* GUARDED_BY(Mutex) */
   std::deque<Request> Requests; /* GUARDED_BY(Mutex) */
@@ -311,22 +320,26 @@ ASTWorker::~ASTWorker() {
 #endif
 }
 
-void ASTWorker::update(ParseInputs Inputs, WantDiagnostics WantDiags,
-                       UniqueFunction<void(std::vector<Diag>)> OnUpdated) {
+void ASTWorker::update(
+    ParseInputs Inputs, WantDiagnostics WantDiags,
+    llvm::unique_function<void(std::vector<Diag>)> OnUpdated) {
   auto Task = [=](decltype(OnUpdated) OnUpdated) mutable {
     tooling::CompileCommand OldCommand = std::move(FileInputs.CompileCommand);
     FileInputs = Inputs;
     // Remove the old AST if it's still in cache.
     IdleASTs.take(this);
 
-    log("Updating file " + FileName + " with command [" +
-        Inputs.CompileCommand.Directory + "] " +
+    log("Updating file {0} with command [{1}] {2}", FileName,
+        Inputs.CompileCommand.Directory,
         llvm::join(Inputs.CompileCommand.CommandLine, " "));
     // Rebuild the preamble and the AST.
     std::unique_ptr<CompilerInvocation> Invocation =
         buildCompilerInvocation(Inputs);
     if (!Invocation) {
-      log("Could not build CompilerInvocation for file " + FileName);
+      elog("Could not build CompilerInvocation for file {0}", FileName);
+      // Make sure anyone waiting for the preamble gets notified it could not
+      // be built.
+      PreambleWasBuilt.notify();
       return;
     }
 
@@ -338,6 +351,8 @@ void ASTWorker::update(ParseInputs Inputs, WantDiagnostics WantDiags,
       if (NewPreamble)
         LastBuiltPreamble = NewPreamble;
     }
+    PreambleWasBuilt.notify();
+
     // Build the AST for diagnostics.
     llvm::Optional<ParsedAST> AST =
         buildAST(FileName, std::move(Invocation), Inputs, NewPreamble, PCHs);
@@ -356,7 +371,7 @@ void ASTWorker::update(ParseInputs Inputs, WantDiagnostics WantDiags,
 
 void ASTWorker::runWithAST(
     llvm::StringRef Name,
-    UniqueFunction<void(llvm::Expected<InputsAndAST>)> Action) {
+    llvm::unique_function<void(llvm::Expected<InputsAndAST>)> Action) {
   auto Task = [=](decltype(Action) Action) {
     llvm::Optional<std::unique_ptr<ParsedAST>> AST = IdleASTs.take(this);
     if (!AST) {
@@ -390,6 +405,10 @@ ASTWorker::getPossiblyStalePreamble() const {
   return LastBuiltPreamble;
 }
 
+void ASTWorker::waitForFirstPreamble() const {
+  PreambleWasBuilt.wait();
+}
+
 std::size_t ASTWorker::getUsedBytes() const {
   // Note that we don't report the size of ASTs currently used for processing
   // the in-flight requests. We used this information for debugging purposes
@@ -411,7 +430,8 @@ void ASTWorker::stop() {
   RequestsCV.notify_all();
 }
 
-void ASTWorker::startTask(llvm::StringRef Name, UniqueFunction<void()> Task,
+void ASTWorker::startTask(llvm::StringRef Name,
+                          llvm::unique_function<void()> Task,
                           llvm::Optional<WantDiagnostics> UpdateType) {
   if (RunSync) {
     assert(!Done && "running a task after stop()");
@@ -586,9 +606,9 @@ bool TUScheduler::blockUntilIdle(Deadline D) const {
   return true;
 }
 
-void TUScheduler::update(PathRef File, ParseInputs Inputs,
-                         WantDiagnostics WantDiags,
-                         UniqueFunction<void(std::vector<Diag>)> OnUpdated) {
+void TUScheduler::update(
+    PathRef File, ParseInputs Inputs, WantDiagnostics WantDiags,
+    llvm::unique_function<void(std::vector<Diag>)> OnUpdated) {
   std::unique_ptr<FileData> &FD = Files[File];
   if (!FD) {
     // Create a new worker to process the AST-related tasks.
@@ -608,13 +628,13 @@ void TUScheduler::update(PathRef File, ParseInputs Inputs,
 void TUScheduler::remove(PathRef File) {
   bool Removed = Files.erase(File);
   if (!Removed)
-    log("Trying to remove file from TUScheduler that is not tracked. File:" +
-        File);
+    elog("Trying to remove file from TUScheduler that is not tracked: {0}",
+         File);
 }
 
 void TUScheduler::runWithAST(
     llvm::StringRef Name, PathRef File,
-    UniqueFunction<void(llvm::Expected<InputsAndAST>)> Action) {
+    llvm::unique_function<void(llvm::Expected<InputsAndAST>)> Action) {
   auto It = Files.find(File);
   if (It == Files.end()) {
     Action(llvm::make_error<llvm::StringError>(
@@ -628,7 +648,7 @@ void TUScheduler::runWithAST(
 
 void TUScheduler::runWithPreamble(
     llvm::StringRef Name, PathRef File,
-    UniqueFunction<void(llvm::Expected<InputsAndPreamble>)> Action) {
+    llvm::unique_function<void(llvm::Expected<InputsAndPreamble>)> Action) {
   auto It = Files.find(File);
   if (It == Files.end()) {
     Action(llvm::make_error<llvm::StringError>(
@@ -652,6 +672,11 @@ void TUScheduler::runWithPreamble(
                              std::string Contents,
                              tooling::CompileCommand Command, Context Ctx,
                              decltype(Action) Action) mutable {
+    // We don't want to be running preamble actions before the preamble was
+    // built for the first time. This avoids extra work of processing the
+    // preamble headers in parallel multiple times.
+    Worker->waitForFirstPreamble();
+
     std::lock_guard<Semaphore> BarrierLock(Barrier);
     WithContext Guard(std::move(Ctx));
     trace::Span Tracer(Name);
