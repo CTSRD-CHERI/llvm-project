@@ -108,7 +108,7 @@ cl::opt<bool>
 llvm::Relocations("r", cl::desc("Display the relocation entries in the file"));
 
 cl::opt<bool> llvm::CapRelocations(
-    "C", cl::desc("Display the capability relocation entries in the file"));
+    "cap-relocs", cl::desc("Display the capability relocation entries in the file"));
 
 cl::opt<bool>
 llvm::DynamicRelocations("dynamic-reloc",
