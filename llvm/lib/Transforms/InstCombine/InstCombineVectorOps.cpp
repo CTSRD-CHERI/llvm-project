@@ -1140,7 +1140,8 @@ static bool isShuffleExtractingFromLHS(ShuffleVectorInst &SVI,
   return true;
 }
 
-static Instruction *foldSelectShuffles(ShuffleVectorInst &Shuf) {
+static Instruction *foldSelectShuffle(ShuffleVectorInst &Shuf,
+                                      InstCombiner::BuilderTy &Builder) {
   // Folds under here require the equivalent of a vector select.
   if (!Shuf.isSelect())
     return nullptr;
@@ -1150,42 +1151,91 @@ static Instruction *foldSelectShuffles(ShuffleVectorInst &Shuf) {
       !match(Shuf.getOperand(1), m_BinOp(B1)))
     return nullptr;
 
-  // TODO: Fold the case with different variable operands (requires creating a
-  // new shuffle and checking number of uses).
-  Value *X;
+  Value *X, *Y;
   Constant *C0, *C1;
   bool ConstantsAreOp1;
   if (match(B0, m_BinOp(m_Value(X), m_Constant(C0))) &&
-      match(B1, m_BinOp(m_Specific(X), m_Constant(C1))))
+      match(B1, m_BinOp(m_Value(Y), m_Constant(C1))))
     ConstantsAreOp1 = true;
   else if (match(B0, m_BinOp(m_Constant(C0), m_Value(X))) &&
-           match(B1, m_BinOp(m_Constant(C1), m_Specific(X))))
+           match(B1, m_BinOp(m_Constant(C1), m_Value(Y))))
     ConstantsAreOp1 = false;
   else
     return nullptr;
 
-  // TODO: There are potential folds where the opcodes do not match (mul+shl).
-  if (B0->getOpcode() != B1->getOpcode())
+  // We need matching binops to fold the lanes together.
+  BinaryOperator::BinaryOps Opc0 = B0->getOpcode();
+  BinaryOperator::BinaryOps Opc1 = B1->getOpcode();
+  bool DropNSW = false;
+  if (ConstantsAreOp1 && Opc0 != Opc1) {
+    // If we have multiply and shift-left-by-constant, convert the shift:
+    // shl X, C --> mul X, 1 << C
+    // TODO: We drop "nsw" if shift is converted into multiply because it may
+    // not be correct when the shift amount is BitWidth - 1. We could examine
+    // each vector element to determine if it is safe to keep that flag.
+    if (Opc0 == Instruction::Mul && Opc1 == Instruction::Shl) {
+      C1 = ConstantExpr::getShl(ConstantInt::get(C1->getType(), 1), C1);
+      Opc1 = Instruction::Mul;
+      DropNSW = true;
+    } else if (Opc0 == Instruction::Shl && Opc1 == Instruction::Mul) {
+      C0 = ConstantExpr::getShl(ConstantInt::get(C0->getType(), 1), C0);
+      Opc0 = Instruction::Mul;
+      DropNSW = true;
+    }
+  }
+
+  if (Opc0 != Opc1)
     return nullptr;
 
-  // Remove a binop and the shuffle by rearranging the constant:
-  // shuffle (op X, C0), (op X, C1), M --> op X, C'
-  // shuffle (op C0, X), (op C1, X), M --> op C', X
+  // The opcodes must be the same. Use a new name to make that clear.
+  BinaryOperator::BinaryOps BOpc = Opc0;
+
+  Value *V;
+  if (X == Y) {
+    // Remove a binop and the shuffle by rearranging the constant:
+    // shuffle (op V, C0), (op V, C1), M --> op V, C'
+    // shuffle (op C0, V), (op C1, V), M --> op C', V
+    V = X;
+  } else if (!Instruction::isIntDivRem(BOpc) &&
+             (B0->hasOneUse() || B1->hasOneUse())) {
+    // If there are 2 different variable operands, we must create a new shuffle
+    // (select) first, so check uses to ensure that we don't end up with more
+    // instructions than we started with.
+    //
+    // Note: In general, we do not create new shuffles in InstCombine because we
+    // do not know if a target can lower an arbitrary shuffle optimally. In this
+    // case, the shuffle uses the existing mask, so there is no additional risk.
+    //
+    // TODO: We are disallowing div/rem because a shuffle with an undef mask
+    // element would propagate an undef value to the div/rem. That's not
+    // safe in general because div/rem allow for undefined behavior. We can
+    // loosen this restriction (eg, check if the mask has no undefs or replace
+    // undef elements).
+
+    // Select the variable vectors first, then perform the binop:
+    // shuffle (op X, C0), (op Y, C1), M --> op (shuffle X, Y, M), C'
+    // shuffle (op C0, X), (op C1, Y), M --> op C', (shuffle X, Y, M)
+    V = Builder.CreateShuffleVector(X, Y, Shuf.getMask());
+  } else {
+    return nullptr;
+  }
+
   Constant *NewC = ConstantExpr::getShuffleVector(C0, C1, Shuf.getMask());
 
   // If the shuffle mask contains undef elements, then the new constant
   // vector will have undefs in those lanes. This could cause the entire
   // binop to be undef.
-  if (B0->isIntDivRem())
+  if (Instruction::isIntDivRem(BOpc))
     NewC = getSafeVectorConstantForIntDivRem(NewC);
 
-  BinaryOperator::BinaryOps Opc = B0->getOpcode();
-  Instruction *NewBO = ConstantsAreOp1 ? BinaryOperator::Create(Opc, X, NewC) :
-                                         BinaryOperator::Create(Opc, NewC, X);
+  Instruction *NewBO = ConstantsAreOp1 ? BinaryOperator::Create(BOpc, V, NewC) :
+                                         BinaryOperator::Create(BOpc, NewC, V);
 
   // Flags are intersected from the 2 source binops.
   NewBO->copyIRFlags(B0);
   NewBO->andIRFlags(B1);
+  if (DropNSW)
+    NewBO->setHasNoSignedWrap(false);
   return NewBO;
 }
 
@@ -1199,7 +1249,7 @@ Instruction *InstCombiner::visitShuffleVectorInst(ShuffleVectorInst &SVI) {
           LHS, RHS, SVI.getMask(), SVI.getType(), SQ.getWithInstruction(&SVI)))
     return replaceInstUsesWith(SVI, V);
 
-  if (Instruction *I = foldSelectShuffles(SVI))
+  if (Instruction *I = foldSelectShuffle(SVI, Builder))
     return I;
 
   bool MadeChange = false;

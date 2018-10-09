@@ -1766,6 +1766,8 @@ public:
     CFITCK_DerivedCast,
     CFITCK_UnrelatedCast,
     CFITCK_ICall,
+    CFITCK_NVMFCall,
+    CFITCK_VMFCall,
   };
 
   /// Derived is the presumed address of an object of type T after a

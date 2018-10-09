@@ -1602,9 +1602,6 @@ public:
     return false;
   }
 
-  /// Returns true if the target implements the MachineOutliner.
-  virtual bool useMachineOutliner() const { return false; }
-
   /// Returns a \p outliner::TargetCostInfo struct containing target-specific
   /// information for a set of outlining candidates.
   virtual outliner::TargetCostInfo getOutlininingCandidateInfo(
@@ -1653,6 +1650,11 @@ public:
                                            bool OutlineFromLinkOnceODRs) const {
     llvm_unreachable("Target didn't implement "
                      "TargetInstrInfo::isFunctionSafeToOutlineFrom!");
+  }
+
+  /// Return true if the function should be outlined from by default.
+  virtual bool shouldOutlineFromFunctionByDefault(MachineFunction &MF) const {
+    return false;
   }
 
 private:

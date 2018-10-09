@@ -15,6 +15,7 @@
 #if CAN_SANITIZE_UB
 #include "ubsan_handlers.h"
 #include "ubsan_diag.h"
+#include "ubsan_flags.h"
 #include "ubsan_monitor.h"
 
 #include "sanitizer_common/sanitizer_common.h"
@@ -116,6 +117,9 @@ static void handleIntegerOverflowImpl(OverflowData *Data, ValueHandle LHS,
                           : ErrorType::UnsignedIntegerOverflow;
 
   if (ignoreReport(Loc, Opts, ET))
+    return;
+
+  if (!IsSigned && flags()->silence_unsigned_overflow)
     return;
 
   ScopedReport R(Opts, Loc, ET);
@@ -637,7 +641,7 @@ void __ubsan::__ubsan_handle_pointer_overflow_abort(PointerOverflowData *Data,
 
 static void handleCFIBadIcall(CFICheckFailData *Data, ValueHandle Function,
                               ReportOptions Opts) {
-  if (Data->CheckKind != CFITCK_ICall)
+  if (Data->CheckKind != CFITCK_ICall && Data->CheckKind != CFITCK_NVMFCall)
     Die();
 
   SourceLocation Loc = Data->Loc.acquire();
@@ -648,16 +652,33 @@ static void handleCFIBadIcall(CFICheckFailData *Data, ValueHandle Function,
 
   ScopedReport R(Opts, Loc, ET);
 
+  const char *CheckKindStr = Data->CheckKind == CFITCK_NVMFCall
+                                 ? "non-virtual pointer to member function call"
+                                 : "indirect function call";
   Diag(Loc, DL_Error, ET,
-       "control flow integrity check for type %0 failed during "
-       "indirect function call")
-      << Data->Type;
+       "control flow integrity check for type %0 failed during %1")
+      << Data->Type << CheckKindStr;
 
   SymbolizedStackHolder FLoc(getSymbolizedLocation(Function));
   const char *FName = FLoc.get()->info.function;
   if (!FName)
     FName = "(unknown)";
   Diag(FLoc, DL_Note, ET, "%0 defined here") << FName;
+
+  // If the failure involved different DSOs for the check location and icall
+  // target, report the DSO names.
+  const char *DstModule = FLoc.get()->info.module;
+  if (!DstModule)
+    DstModule = "(unknown)";
+
+  const char *SrcModule = Symbolizer::GetOrInit()->GetModuleNameForPc(Opts.pc);
+  if (!SrcModule)
+    SrcModule = "(unknown)";
+
+  if (internal_strcmp(SrcModule, DstModule))
+    Diag(Loc, DL_Note, ET,
+         "check failed in %0, destination function located in %1")
+        << SrcModule << DstModule;
 }
 
 namespace __ubsan {
@@ -693,7 +714,7 @@ void __ubsan::__ubsan_handle_cfi_check_fail(CFICheckFailData *Data,
                                             ValueHandle Value,
                                             uptr ValidVtable) {
   GET_REPORT_OPTIONS(false);
-  if (Data->CheckKind == CFITCK_ICall)
+  if (Data->CheckKind == CFITCK_ICall || Data->CheckKind == CFITCK_NVMFCall)
     handleCFIBadIcall(Data, Value, Opts);
   else
     __ubsan_handle_cfi_bad_type(Data, Value, ValidVtable, Opts);
@@ -703,7 +724,7 @@ void __ubsan::__ubsan_handle_cfi_check_fail_abort(CFICheckFailData *Data,
                                                   ValueHandle Value,
                                                   uptr ValidVtable) {
   GET_REPORT_OPTIONS(true);
-  if (Data->CheckKind == CFITCK_ICall)
+  if (Data->CheckKind == CFITCK_ICall || Data->CheckKind == CFITCK_NVMFCall)
     handleCFIBadIcall(Data, Value, Opts);
   else
     __ubsan_handle_cfi_bad_type(Data, Value, ValidVtable, Opts);

@@ -7,6 +7,7 @@
 //
 //===---------------------------------------------------------------------===//
 #include "Quality.h"
+#include <cmath>
 #include "URI.h"
 #include "index/Index.h"
 #include "clang/AST/ASTContext.h"
@@ -147,8 +148,8 @@ float SymbolQualitySignals::evaluate() const {
 
   // This avoids a sharp gradient for tail symbols, and also neatly avoids the
   // question of whether 0 references means a bad symbol or missing data.
-  if (References >= 3)
-    Score *= std::log(References);
+  if (References >= 10)
+    Score *= std::log10(References);
 
   if (Deprecated)
     Score *= 0.1f;
@@ -156,8 +157,8 @@ float SymbolQualitySignals::evaluate() const {
     Score *= 0.1f;
 
   switch (Category) {
-    case Keyword:  // Usually relevant, but misses most signals.
-      Score *= 10;
+    case Keyword:  // Often relevant, but misses most signals.
+      Score *= 4;  // FIXME: important keywords should have specific boosts.
       break;
     case Type:
     case Function:
@@ -241,10 +242,14 @@ llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
 }
 
 static SymbolRelevanceSignals::AccessibleScope
-ComputeScope(const NamedDecl &D) {
+ComputeScope(const NamedDecl *D) {
+  // Injected "Foo" within the class "Foo" has file scope, not class scope.
+  const DeclContext *DC = D->getDeclContext();
+  if (auto *R = dyn_cast_or_null<RecordDecl>(D))
+    if (R->isInjectedClassName())
+      DC = DC->getParent();
   bool InClass = false;
-  for (const DeclContext *DC = D.getDeclContext(); !DC->isFileContext();
-       DC = DC->getParent()) {
+  for (; !DC->isFileContext(); DC = DC->getParent()) {
     if (DC->isFunctionOrMethod())
       return SymbolRelevanceSignals::FunctionScope;
     InClass = InClass || DC->isRecord();
@@ -252,7 +257,7 @@ ComputeScope(const NamedDecl &D) {
   if (InClass)
     return SymbolRelevanceSignals::ClassScope;
   // This threshold could be tweaked, e.g. to treat module-visible as global.
-  if (D.getLinkageInternal() < ExternalLinkage)
+  if (D->getLinkageInternal() < ExternalLinkage)
     return SymbolRelevanceSignals::FileScope;
   return SymbolRelevanceSignals::GlobalScope;
 }
@@ -280,7 +285,7 @@ void SymbolRelevanceSignals::merge(const CodeCompletionResult &SemaCCResult) {
 
   // Declarations are scoped, others (like macros) are assumed global.
   if (SemaCCResult.Declaration)
-    Scope = std::min(Scope, ComputeScope(*SemaCCResult.Declaration));
+    Scope = std::min(Scope, ComputeScope(SemaCCResult.Declaration));
 }
 
 float SymbolRelevanceSignals::evaluate() const {

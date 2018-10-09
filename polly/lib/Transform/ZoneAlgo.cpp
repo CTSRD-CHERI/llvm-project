@@ -315,6 +315,13 @@ static bool onlySameValueWrites(ScopStmt *Stmt) {
   return true;
 }
 
+/// Is @p InnerLoop nested inside @p OuterLoop?
+static bool isInsideLoop(Loop *OuterLoop, Loop *InnerLoop) {
+  // If OuterLoop is nullptr, we cannot call its contains() method. In this case
+  // OuterLoop represents the 'top level' and therefore contains all loop.
+  return !OuterLoop || OuterLoop->contains(InnerLoop);
+}
+
 void ZoneAlgorithm::collectIncompatibleElts(ScopStmt *Stmt,
                                             isl::union_set &IncompatibleElts,
                                             isl::union_set &AllElts) {
@@ -469,6 +476,29 @@ void ZoneAlgorithm::addArrayWriteAccess(MemoryAccess *MA) {
   AllWriteValInst = AllWriteValInst.unite(EltWriteValInst);
 }
 
+/// For an llvm::Value defined in @p DefStmt, compute the RAW dependency for a
+/// use in every instance of @p UseStmt.
+///
+/// @param UseStmt Statement a scalar is used in.
+/// @param DefStmt Statement a scalar is defined in.
+///
+/// @return { DomainUse[] -> DomainDef[] }
+isl::map ZoneAlgorithm::computeUseToDefFlowDependency(ScopStmt *UseStmt,
+                                                      ScopStmt *DefStmt) {
+  // { DomainUse[] -> Scatter[] }
+  isl::map UseScatter = getScatterFor(UseStmt);
+
+  // { Zone[] -> DomainDef[] }
+  isl::map ReachDefZone = getScalarReachingDefinition(DefStmt);
+
+  // { Scatter[] -> DomainDef[] }
+  isl::map ReachDefTimepoints =
+      convertZoneToTimepoints(ReachDefZone, isl::dim::in, false, true);
+
+  // { DomainUse[] -> DomainDef[] }
+  return UseScatter.apply_range(ReachDefTimepoints);
+}
+
 /// Return whether @p PHI refers (also transitively through other PHIs) to
 /// itself.
 ///
@@ -611,6 +641,60 @@ isl::map ZoneAlgorithm::getAccessRelationFor(MemoryAccess *MA) const {
   return AccRel.intersect_domain(Domain);
 }
 
+isl::map ZoneAlgorithm::getDefToTarget(ScopStmt *DefStmt,
+                                       ScopStmt *TargetStmt) {
+  // No translation required if the definition is already at the target.
+  if (TargetStmt == DefStmt)
+    return isl::map::identity(
+        getDomainFor(TargetStmt).get_space().map_from_set());
+
+  isl::map &Result = DefToTargetCache[std::make_pair(TargetStmt, DefStmt)];
+
+  // This is a shortcut in case the schedule is still the original and
+  // TargetStmt is in the same or nested inside DefStmt's loop. With the
+  // additional assumption that operand trees do not cross DefStmt's loop
+  // header, then TargetStmt's instance shared coordinates are the same as
+  // DefStmt's coordinates. All TargetStmt instances with this prefix share
+  // the same DefStmt instance.
+  // Model:
+  //
+  //   for (int i < 0; i < N; i+=1) {
+  // DefStmt:
+  //    D = ...;
+  //    for (int j < 0; j < N; j+=1) {
+  // TargetStmt:
+  //      use(D);
+  //    }
+  //  }
+  //
+  // Here, the value used in TargetStmt is defined in the corresponding
+  // DefStmt, i.e.
+  //
+  //   { DefStmt[i] -> TargetStmt[i,j] }
+  //
+  // In practice, this should cover the majority of cases.
+  if (!Result && S->isOriginalSchedule() &&
+      isInsideLoop(DefStmt->getSurroundingLoop(),
+                   TargetStmt->getSurroundingLoop())) {
+    isl::set DefDomain = getDomainFor(DefStmt);
+    isl::set TargetDomain = getDomainFor(TargetStmt);
+    assert(DefDomain.dim(isl::dim::set) <= TargetDomain.dim(isl::dim::set));
+
+    Result = isl::map::from_domain_and_range(DefDomain, TargetDomain);
+    for (unsigned i = 0, DefDims = DefDomain.dim(isl::dim::set); i < DefDims;
+         i += 1)
+      Result = Result.equate(isl::dim::in, i, isl::dim::out, i);
+  }
+
+  if (!Result) {
+    // { DomainDef[] -> DomainTarget[] }
+    Result = computeUseToDefFlowDependency(TargetStmt, DefStmt).reverse();
+    simplify(Result);
+  }
+
+  return Result;
+}
+
 isl::map ZoneAlgorithm::getScalarReachingDefinition(ScopStmt *Stmt) {
   auto &Result = ScalarReachDefZone[Stmt];
   if (Result)
@@ -726,17 +810,8 @@ isl::map ZoneAlgorithm::makeValInst(Value *Val, ScopStmt *UserStmt, Loop *Scope,
     if (!ValStmt)
       return ::makeUnknownForDomain(DomainUse);
 
-    // { DomainDef[] }
-    auto DomainDef = getDomainFor(ValStmt);
-
-    // { Scatter[] -> DomainDef[] }
-    auto ReachDef = getScalarReachingDefinition(DomainDef);
-
-    // { DomainUse[] -> Scatter[] }
-    auto UserSched = getScatterFor(DomainUse);
-
     // { DomainUse[] -> DomainDef[] }
-    auto UsedInstance = UserSched.apply_range(ReachDef);
+    auto UsedInstance = getDefToTarget(ValStmt, UserStmt).reverse();
 
     // { llvm::Value }
     auto ValSet = makeValueSet(Val);
@@ -765,33 +840,31 @@ static isl::union_map normalizeValInst(isl::union_map Input,
                                        const DenseSet<PHINode *> &ComputedPHIs,
                                        isl::union_map NormalizeMap) {
   isl::union_map Result = isl::union_map::empty(Input.get_space());
-  Input.foreach_map(
-      [&Result, &ComputedPHIs, &NormalizeMap](isl::map Map) -> isl::stat {
-        isl::space Space = Map.get_space();
-        isl::space RangeSpace = Space.range();
+  for (isl::map Map : Input.get_map_list()) {
+    isl::space Space = Map.get_space();
+    isl::space RangeSpace = Space.range();
 
-        // Instructions within the SCoP are always wrapped. Non-wrapped tuples
-        // are therefore invariant in the SCoP and don't need normalization.
-        if (!RangeSpace.is_wrapping()) {
-          Result = Result.add_map(Map);
-          return isl::stat::ok;
-        }
+    // Instructions within the SCoP are always wrapped. Non-wrapped tuples
+    // are therefore invariant in the SCoP and don't need normalization.
+    if (!RangeSpace.is_wrapping()) {
+      Result = Result.add_map(Map);
+      continue;
+    }
 
-        auto *PHI = dyn_cast<PHINode>(static_cast<Value *>(
-            RangeSpace.unwrap().get_tuple_id(isl::dim::out).get_user()));
+    auto *PHI = dyn_cast<PHINode>(static_cast<Value *>(
+        RangeSpace.unwrap().get_tuple_id(isl::dim::out).get_user()));
 
-        // If no normalization is necessary, then the ValInst stands for itself.
-        if (!ComputedPHIs.count(PHI)) {
-          Result = Result.add_map(Map);
-          return isl::stat::ok;
-        }
+    // If no normalization is necessary, then the ValInst stands for itself.
+    if (!ComputedPHIs.count(PHI)) {
+      Result = Result.add_map(Map);
+      continue;
+    }
 
-        // Otherwise, apply the normalization.
-        isl::union_map Mapped = isl::union_map(Map).apply_range(NormalizeMap);
-        Result = Result.unite(Mapped);
-        NumPHINormialization++;
-        return isl::stat::ok;
-      });
+    // Otherwise, apply the normalization.
+    isl::union_map Mapped = isl::union_map(Map).apply_range(NormalizeMap);
+    Result = Result.unite(Mapped);
+    NumPHINormialization++;
+  }
   return Result;
 }
 

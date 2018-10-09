@@ -22,6 +22,9 @@
 namespace llvm {
 
 class SITargetLowering final : public AMDGPUTargetLowering {
+private:
+  const SISubtarget *Subtarget;
+
   SDValue lowerKernArgParameterPtr(SelectionDAG &DAG, const SDLoc &SL,
                                    SDValue Chain, uint64_t Offset) const;
   SDValue getImplicitArgPtr(SelectionDAG &DAG, const SDLoc &SL) const;
@@ -136,6 +139,7 @@ class SITargetLowering final : public AMDGPUTargetLowering {
   SDValue performSetCCCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performCvtF32UByteNCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performClampCombine(SDNode *N, DAGCombinerInfo &DCI) const;
+  SDValue performRcpCombine(SDNode *N, DAGCombinerInfo &DCI) const;
 
   bool isLegalFlatAddressingMode(const AddrMode &AM) const;
   bool isLegalGlobalAddressingMode(const AddrMode &AM) const;

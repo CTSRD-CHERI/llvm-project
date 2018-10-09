@@ -774,7 +774,13 @@ FormatStyle getGoogleStyle(FormatStyle::LanguageKind Language) {
               "PROTO",
           },
           /*EnclosingFunctionNames=*/
-          {},
+          {
+              "EqualsProto",
+              "EquivToProto",
+              "PARSE_TEST_PROTO",
+              "PARSE_TEXT_PROTO",
+              "ParseTextOrDie",
+          },
           /*CanonicalDelimiter=*/"",
           /*BasedOnStyle=*/"google",
       },

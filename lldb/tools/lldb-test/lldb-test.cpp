@@ -35,8 +35,8 @@
 #include "llvm/ADT/IntervalMap.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/CommandLine.h"
-#include "llvm/Support/MathExtras.h"
 #include "llvm/Support/ManagedStatic.h"
+#include "llvm/Support/MathExtras.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/PrettyStackTrace.h"
 #include "llvm/Support/Signals.h"
@@ -51,14 +51,15 @@ using namespace llvm;
 namespace opts {
 static cl::SubCommand BreakpointSubcommand("breakpoints",
                                            "Test breakpoint resolution");
-cl::SubCommand ModuleSubcommand("module-sections",
-                                "Display LLDB Module Information");
+cl::SubCommand ObjectFileSubcommand("object-file",
+                                    "Display LLDB object file information");
 cl::SubCommand SymbolsSubcommand("symbols", "Dump symbols for an object file");
 cl::SubCommand IRMemoryMapSubcommand("ir-memory-map", "Test IRMemoryMap");
 
 cl::opt<std::string> Log("log", cl::desc("Path to a log file"), cl::init(""),
                          cl::sub(BreakpointSubcommand),
-                         cl::sub(ModuleSubcommand), cl::sub(SymbolsSubcommand),
+                         cl::sub(ObjectFileSubcommand),
+                         cl::sub(SymbolsSubcommand),
                          cl::sub(IRMemoryMapSubcommand));
 
 /// Create a target using the file pointed to by \p Filename, or abort.
@@ -85,13 +86,14 @@ static std::string substitute(StringRef Cmd);
 static int evaluateBreakpoints(Debugger &Dbg);
 } // namespace breakpoint
 
-namespace module {
+namespace object {
 cl::opt<bool> SectionContents("contents",
                               cl::desc("Dump each section's contents"),
-                              cl::sub(ModuleSubcommand));
+                              cl::sub(ObjectFileSubcommand));
 cl::list<std::string> InputFilenames(cl::Positional, cl::desc("<input files>"),
-                                     cl::OneOrMore, cl::sub(ModuleSubcommand));
-} // namespace module
+                                     cl::OneOrMore,
+                                     cl::sub(ObjectFileSubcommand));
+} // namespace object
 
 namespace symbols {
 static cl::list<std::string> InputFilenames(cl::Positional,
@@ -108,8 +110,7 @@ enum class FindType {
 static cl::opt<FindType> Find(
     "find", cl::desc("Choose search type:"),
     cl::values(
-        clEnumValN(FindType::None, "none",
-                   "No search, just dump the module."),
+        clEnumValN(FindType::None, "none", "No search, just dump the module."),
         clEnumValN(FindType::Function, "function", "Find functions."),
         clEnumValN(FindType::Namespace, "namespace", "Find namespaces."),
         clEnumValN(FindType::Type, "type", "Find types."),
@@ -151,6 +152,8 @@ static cl::opt<bool> Verify("verify", cl::desc("Verify symbol information."),
 static cl::opt<std::string> File("file",
                                  cl::desc("File (compile unit) to search."),
                                  cl::sub(SymbolsSubcommand));
+static cl::opt<int> Line("line", cl::desc("Line to search."),
+                         cl::sub(SymbolsSubcommand));
 
 static Expected<CompilerDeclContext> getDeclContext(SymbolVendor &Vendor);
 
@@ -163,7 +166,7 @@ static Error verify(lldb_private::Module &Module);
 
 static Expected<Error (*)(lldb_private::Module &)> getAction();
 static int dumpSymbols(Debugger &Dbg);
-}
+} // namespace symbols
 
 namespace irmemorymap {
 static cl::opt<std::string> Target(cl::Positional, cl::desc("<target>"),
@@ -179,7 +182,7 @@ static cl::opt<bool> UseHostOnlyAllocationPolicy(
 
 using AllocationT = std::pair<addr_t, addr_t>;
 using AddrIntervalMap =
-      IntervalMap<addr_t, unsigned, 8, IntervalMapHalfOpenInfo<addr_t>>;
+    IntervalMap<addr_t, unsigned, 8, IntervalMapHalfOpenInfo<addr_t>>;
 
 struct IRMemoryMapTestState {
   TargetSP Target;
@@ -334,7 +337,32 @@ opts::symbols::getDeclContext(SymbolVendor &Vendor) {
 Error opts::symbols::findFunctions(lldb_private::Module &Module) {
   SymbolVendor &Vendor = *Module.GetSymbolVendor();
   SymbolContextList List;
-  if (Regex) {
+  if (!File.empty()) {
+    assert(Line != 0);
+
+    FileSpec src_file(File, false);
+    size_t cu_count = Module.GetNumCompileUnits();
+    for (size_t i = 0; i < cu_count; i++) {
+      lldb::CompUnitSP cu_sp = Module.GetCompileUnitAtIndex(i);
+      if (!cu_sp)
+        continue;
+
+      LineEntry le;
+      cu_sp->FindLineEntry(0, Line, &src_file, false, &le);
+      if (!le.IsValid())
+        continue;
+
+      auto addr = le.GetSameLineContiguousAddressRange().GetBaseAddress();
+      if (!addr.IsValid())
+        continue;
+
+      SymbolContext sc;
+      uint32_t resolved =
+          addr.CalculateSymbolContext(&sc, eSymbolContextFunction);
+      if (resolved & eSymbolContextFunction)
+        List.Append(sc);
+    }
+  } else if (Regex) {
     RegularExpression RE(Name);
     assert(RE.IsValid());
     Vendor.FindFunctions(RE, true, false, List);
@@ -346,7 +374,7 @@ Error opts::symbols::findFunctions(lldb_private::Module &Module) {
         ContextOr->IsValid() ? &*ContextOr : nullptr;
 
     Vendor.FindFunctions(ConstString(Name), ContextPtr, getFunctionNameFlags(),
-                          true, false, List);
+                         true, false, List);
   }
   outs() << formatv("Found {0} functions:\n", List.GetSize());
   StreamString Stream;
@@ -386,7 +414,7 @@ Error opts::symbols::findTypes(lldb_private::Module &Module) {
   DenseSet<SymbolFile *> SearchedFiles;
   TypeMap Map;
   Vendor.FindTypes(SC, ConstString(Name), ContextPtr, true, UINT32_MAX,
-                    SearchedFiles, Map);
+                   SearchedFiles, Map);
 
   outs() << formatv("Found {0} types:\n", Map.GetSize());
   StreamString Stream;
@@ -458,8 +486,8 @@ Error opts::symbols::verify(lldb_private::Module &Module) {
     if (!comp_unit)
       return make_string_error("Connot parse compile unit {0}.", i);
 
-    outs() << "Processing '" << comp_unit->GetFilename().AsCString() <<
-      "' compile unit.\n";
+    outs() << "Processing '" << comp_unit->GetFilename().AsCString()
+           << "' compile unit.\n";
 
     LineTable *lt = comp_unit->GetLineTable();
     if (!lt)
@@ -478,7 +506,7 @@ Error opts::symbols::verify(lldb_private::Module &Module) {
 
     for (uint32_t i = 1; i < count; i++) {
       lldb::addr_t curr_end =
-        le.range.GetBaseAddress().GetFileAddress() + le.range.GetByteSize();
+          le.range.GetBaseAddress().GetFileAddress() + le.range.GetByteSize();
 
       if (!lt->GetLineEntryAtIndex(i, le))
         return make_string_error("Can't get a line entry of a compile unit");
@@ -499,9 +527,11 @@ Expected<Error (*)(lldb_private::Module &)> opts::symbols::getAction() {
     if (Find != FindType::None)
       return make_string_error(
           "Cannot both search and verify symbol information.");
-    if (Regex || !Context.empty() || !Name.empty() || !File.empty())
-      return make_string_error("-regex, -context, -name and -file options are not "
-                               "applicable for symbol verification.");
+    if (Regex || !Context.empty() || !Name.empty() || !File.empty() ||
+        Line != 0)
+      return make_string_error(
+          "-regex, -context, -name, -file and -line options are not "
+          "applicable for symbol verification.");
     return verify;
   }
 
@@ -520,32 +550,38 @@ Expected<Error (*)(lldb_private::Module &)> opts::symbols::getAction() {
 
   switch (Find) {
   case FindType::None:
-    if (!Context.empty() || !Name.empty() || !File.empty())
+    if (!Context.empty() || !Name.empty() || !File.empty() || Line != 0)
       return make_string_error(
           "Specify search type (-find) to use search options.");
     return dumpModule;
 
   case FindType::Function:
-    if (!File.empty())
-      return make_string_error("Cannot search for functions by file name.");
-    if (Regex && getFunctionNameFlags() != 0)
-      return make_string_error("Cannot search for functions using both regular "
-                               "expressions and function-flags.");
+    if (!File.empty() + (Line != 0) == 1)
+      return make_string_error("Both file name and line number must be "
+                               "specified when searching a function "
+                               "by file position.");
+    if (Regex + (getFunctionNameFlags() != 0) + !File.empty() >= 2)
+      return make_string_error("Only one of regular expression, function-flags "
+                               "and file position may be used simultaneously "
+                               "when searching a function.");
     return findFunctions;
 
   case FindType::Namespace:
-    if (Regex || !File.empty())
+    if (Regex || !File.empty() || Line != 0)
       return make_string_error("Cannot search for namespaces using regular "
-                               "expressions or file names.");
+                               "expressions, file names or line numbers.");
     return findNamespaces;
 
   case FindType::Type:
-    if (Regex || !File.empty())
+    if (Regex || !File.empty() || Line != 0)
       return make_string_error("Cannot search for types using regular "
-                               "expressions or file names.");
+                               "expressions, file names or line numbers.");
     return findTypes;
 
   case FindType::Variable:
+    if (Line != 0)
+      return make_string_error("Cannot search for variables "
+                               "using line numbers.");
     return findVariables;
   }
 }
@@ -582,11 +618,11 @@ int opts::symbols::dumpSymbols(Debugger &Dbg) {
   return HadErrors;
 }
 
-static int dumpModules(Debugger &Dbg) {
+static int dumpObjectFiles(Debugger &Dbg) {
   LinePrinter Printer(4, llvm::outs());
 
   int HadErrors = 0;
-  for (const auto &File : opts::module::InputFilenames) {
+  for (const auto &File : opts::object::InputFilenames) {
     ModuleSpec Spec{FileSpec(File, false)};
 
     auto ModulePtr = std::make_shared<lldb_private::Module>(Spec);
@@ -600,6 +636,10 @@ static int dumpModules(Debugger &Dbg) {
       continue;
     }
 
+    Printer.formatLine("Architecture: {0}",
+                       ModulePtr->GetArchitecture().GetTriple().getTriple());
+    Printer.formatLine("UUID: {0}", ModulePtr->GetUUID().GetAsString());
+
     size_t Count = Sections->GetNumSections(0);
     Printer.formatLine("Showing {0} sections", Count);
     for (size_t I = 0; I < Count; ++I) {
@@ -612,7 +652,7 @@ static int dumpModules(Debugger &Dbg) {
       Printer.formatLine("VM size: {0}", S->GetByteSize());
       Printer.formatLine("File size: {0}", S->GetFileSize());
 
-      if (opts::module::SectionContents) {
+      if (opts::object::SectionContents) {
         DataExtractor Data;
         S->GetSectionData(Data);
         ArrayRef<uint8_t> Bytes = {Data.GetDataStart(), Data.GetDataEnd()};
@@ -807,8 +847,8 @@ int main(int argc, const char *argv[]) {
 
   if (opts::BreakpointSubcommand)
     return opts::breakpoint::evaluateBreakpoints(*Dbg);
-  if (opts::ModuleSubcommand)
-    return dumpModules(*Dbg);
+  if (opts::ObjectFileSubcommand)
+    return dumpObjectFiles(*Dbg);
   if (opts::SymbolsSubcommand)
     return opts::symbols::dumpSymbols(*Dbg);
   if (opts::IRMemoryMapSubcommand)

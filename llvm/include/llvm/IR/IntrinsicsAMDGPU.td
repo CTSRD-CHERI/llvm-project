@@ -360,6 +360,12 @@ def int_amdgcn_sffbh :
   [IntrNoMem, IntrSpeculatable]
 >;
 
+// v_mad_f32|f16/v_mac_f32|f16, selected regardless of denorm support.
+def int_amdgcn_fmad_ftz :
+  Intrinsic<[llvm_anyfloat_ty],
+            [LLVMMatchType<0>, LLVMMatchType<0>, LLVMMatchType<0>],
+            [IntrNoMem, IntrSpeculatable]
+>;
 
 // Fields should mirror atomicrmw
 class AMDGPUAtomicIncIntrin : Intrinsic<[llvm_anyint_ty],
