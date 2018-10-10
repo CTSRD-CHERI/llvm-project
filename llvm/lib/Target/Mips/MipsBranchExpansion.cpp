@@ -422,7 +422,7 @@ void MipsBranchExpansion::expandToLongBranch(MBBInfo &I) {
             : STI->inMicroMipsMode() ? Mips::BAL_BR_MM : Mips::BAL_BR;
 
     if (!ABI.IsN64()) {
-      assert (!ABI.IsCheriPureCap() && "This will generate broken code in the purecap ABI");
+      assert (!ABI.IsCheriPureCap() && "Only n64 base abi supported in purecap ABI");
       // Pre R6:
       // $longbr:
       //  addiu $sp, $sp, -8
@@ -577,19 +577,18 @@ void MipsBranchExpansion::expandToLongBranch(MBBInfo &I) {
 
       Pos = LongBrMBB->begin();
 
-      // CHERI (purecap):
-      // $longbr:
-      //  daddiu $at, $zero, %hi($tgt - $baltgt)
-      //  dsll $at, $at, 16
-      //  b $baltgt
-      //  daddiu $at, $at, %lo($tgt - $baltgt)
-      // $baltgt:
-      //  cgetpcc $c12
-      //  cincoffset $c12, $c12, $1
-      //  cjr $c12
-      // $fallthrough:
-
       if (ABI.IsCheriPureCap()) {
+        // CHERI (purecap):
+        // $longbr:
+        //  daddiu $at, $zero, %hi($tgt - $baltgt)
+        //  dsll $at, $at, 16
+        //  b $baltgt
+        //  daddiu $at, $at, %lo($tgt - $baltgt)
+        // $baltgt:
+        //  cgetpcc $c12
+        //  cincoffset $c12, $c12, $1
+        //  cjr $c12
+        // $fallthrough:
         BuildMI(*LongBrMBB, Pos, DL, TII->get(Mips::LONG_BRANCH_DADDiu),
               Mips::AT_64).addReg(Mips::ZERO_64)
                           .addMBB(TgtMBB, MipsII::MO_ABS_HI).addMBB(BalTgtMBB);
@@ -618,6 +617,47 @@ void MipsBranchExpansion::expandToLongBranch(MBBInfo &I) {
         goto finish;  // This allows avoiding lots of merge conflicts
       }
 
+      BuildMI(*LongBrMBB, Pos, DL, TII->get(Mips::DADDiu), Mips::SP_64)
+          .addReg(Mips::SP_64)
+          .addImm(-16);
+      BuildMI(*LongBrMBB, Pos, DL, TII->get(Mips::SD))
+          .addReg(Mips::RA_64)
+          .addReg(Mips::SP_64)
+          .addImm(0);
+      BuildMI(*LongBrMBB, Pos, DL, TII->get(Mips::LONG_BRANCH_DADDiu),
+              Mips::AT_64)
+          .addReg(Mips::ZERO_64)
+          .addMBB(TgtMBB, MipsII::MO_ABS_HI)
+          .addMBB(BalTgtMBB);
+      BuildMI(*LongBrMBB, Pos, DL, TII->get(Mips::DSLL), Mips::AT_64)
+          .addReg(Mips::AT_64)
+          .addImm(16);
+
+      MachineInstrBuilder BalInstr =
+          BuildMI(*MFp, DL, TII->get(BalOp)).addMBB(BalTgtMBB);
+      MachineInstrBuilder DADDiuInstr =
+          BuildMI(*MFp, DL, TII->get(Mips::LONG_BRANCH_DADDiu), Mips::AT_64)
+              .addReg(Mips::AT_64)
+              .addMBB(TgtMBB, MipsII::MO_ABS_LO)
+              .addMBB(BalTgtMBB);
+      if (STI->hasMips32r6()) {
+        LongBrMBB->insert(Pos, DADDiuInstr);
+        LongBrMBB->insert(Pos, BalInstr);
+      } else {
+        LongBrMBB->insert(Pos, BalInstr);
+        LongBrMBB->insert(Pos, DADDiuInstr);
+        LongBrMBB->rbegin()->bundleWithPred();
+      }
+
+      Pos = BalTgtMBB->begin();
+
+      BuildMI(*BalTgtMBB, Pos, DL, TII->get(Mips::DADDu), Mips::AT_64)
+          .addReg(Mips::RA_64)
+          .addReg(Mips::AT_64);
+      BuildMI(*BalTgtMBB, Pos, DL, TII->get(Mips::LD), Mips::RA_64)
+          .addReg(Mips::SP_64)
+          .addImm(0);
+
       bool hasDelaySlot = buildProperJumpMI(BalTgtMBB, Pos, DL);
       // If there is no delay slot, Insert stack adjustment before
       if (!hasDelaySlot) {
@@ -628,63 +668,8 @@ void MipsBranchExpansion::expandToLongBranch(MBBInfo &I) {
       } else {
         BuildMI(*BalTgtMBB, Pos, DL, TII->get(Mips::DADDiu), Mips::SP_64)
             .addReg(Mips::SP_64)
-            .addImm(-16);
-        BuildMI(*LongBrMBB, Pos, DL, TII->get(Mips::SD))
-            .addReg(Mips::RA_64)
-            .addReg(Mips::SP_64)
-            .addImm(0);
-        BuildMI(*LongBrMBB, Pos, DL, TII->get(Mips::LONG_BRANCH_DADDiu),
-                Mips::AT_64)
-            .addReg(Mips::ZERO_64)
-            .addMBB(TgtMBB, MipsII::MO_ABS_HI)
-            .addMBB(BalTgtMBB);
-        BuildMI(*LongBrMBB, Pos, DL, TII->get(Mips::DSLL), Mips::AT_64)
-            .addReg(Mips::AT_64)
             .addImm(16);
-
-        MachineInstrBuilder BalInstr =
-            BuildMI(*MFp, DL, TII->get(BalOp)).addMBB(BalTgtMBB);
-        MachineInstrBuilder DADDiuInstr =
-            BuildMI(*MFp, DL, TII->get(Mips::LONG_BRANCH_DADDiu), Mips::AT_64)
-                .addReg(Mips::AT_64)
-                .addMBB(TgtMBB, MipsII::MO_ABS_LO)
-                .addMBB(BalTgtMBB);
-        if (STI->hasMips32r6()) {
-          LongBrMBB->insert(Pos, DADDiuInstr);
-          LongBrMBB->insert(Pos, BalInstr);
-        } else {
-          LongBrMBB->insert(Pos, BalInstr);
-          LongBrMBB->insert(Pos, DADDiuInstr);
-          LongBrMBB->rbegin()->bundleWithPred();
-        }
-
-        Pos = BalTgtMBB->begin();
-
-        BuildMI(*BalTgtMBB, Pos, DL, TII->get(Mips::DADDu), Mips::AT_64)
-            .addReg(Mips::RA_64)
-            .addReg(Mips::AT_64);
-        BuildMI(*BalTgtMBB, Pos, DL, TII->get(Mips::LD), Mips::RA_64)
-            .addReg(Mips::SP_64)
-            .addImm(0);
-
-        if (STI->hasMips64r6() && !STI->useIndirectJumpsHazard()) {
-          BuildMI(*BalTgtMBB, Pos, DL, TII->get(Mips::DADDiu), Mips::SP_64)
-              .addReg(Mips::SP_64)
-              .addImm(16);
-          BuildMI(*BalTgtMBB, Pos, DL, TII->get(Mips::JIC64))
-              .addReg(Mips::AT_64)
-              .addImm(0);
-        } else {
-          unsigned JROp =
-              STI->useIndirectJumpsHazard()
-                  ? (STI->hasMips32r6() ? Mips::JR_HB64_R6 : Mips::JR_HB64)
-                  : Mips::JR64;
-          BuildMI(*BalTgtMBB, Pos, DL, TII->get(JROp)).addReg(Mips::AT_64);
-          BuildMI(*BalTgtMBB, Pos, DL, TII->get(Mips::DADDiu), Mips::SP_64)
-              .addReg(Mips::SP_64)
-              .addImm(16);
-          BalTgtMBB->rbegin()->bundleWithPred();
-        }
+        BalTgtMBB->rbegin()->bundleWithPred();
       }
     }
   } else { // Not PIC
