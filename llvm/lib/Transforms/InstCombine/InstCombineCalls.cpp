@@ -1151,44 +1151,13 @@ static Value *simplifyMinnumMaxnum(const IntrinsicInst &II) {
   Value *Arg0 = II.getArgOperand(0);
   Value *Arg1 = II.getArgOperand(1);
 
-  // fmin(x, x) -> x
-  if (Arg0 == Arg1)
-    return Arg0;
-
   const auto *C1 = dyn_cast<ConstantFP>(Arg1);
 
   // fmin(x, nan) -> x
   if (C1 && C1->isNaN())
     return Arg0;
 
-  // This is the value because if undef were NaN, we would return the other
-  // value and cannot return a NaN unless both operands are.
-  //
-  // fmin(undef, x) -> x
-  if (isa<UndefValue>(Arg0))
-    return Arg1;
-
-  // fmin(x, undef) -> x
-  if (isa<UndefValue>(Arg1))
-    return Arg0;
-
-  Value *X = nullptr;
-  Value *Y = nullptr;
   if (II.getIntrinsicID() == Intrinsic::minnum) {
-    // fmin(x, fmin(x, y)) -> fmin(x, y)
-    // fmin(y, fmin(x, y)) -> fmin(x, y)
-    if (match(Arg1, m_FMin(m_Value(X), m_Value(Y)))) {
-      if (Arg0 == X || Arg0 == Y)
-        return Arg1;
-    }
-
-    // fmin(fmin(x, y), x) -> fmin(x, y)
-    // fmin(fmin(x, y), y) -> fmin(x, y)
-    if (match(Arg0, m_FMin(m_Value(X), m_Value(Y)))) {
-      if (Arg1 == X || Arg1 == Y)
-        return Arg0;
-    }
-
     // TODO: fmin(nnan x, inf) -> x
     // TODO: fmin(nnan ninf x, flt_max) -> x
     if (C1 && C1->isInfinity()) {
@@ -1198,20 +1167,6 @@ static Value *simplifyMinnumMaxnum(const IntrinsicInst &II) {
     }
   } else {
     assert(II.getIntrinsicID() == Intrinsic::maxnum);
-    // fmax(x, fmax(x, y)) -> fmax(x, y)
-    // fmax(y, fmax(x, y)) -> fmax(x, y)
-    if (match(Arg1, m_FMax(m_Value(X), m_Value(Y)))) {
-      if (Arg0 == X || Arg0 == Y)
-        return Arg1;
-    }
-
-    // fmax(fmax(x, y), x) -> fmax(x, y)
-    // fmax(fmax(x, y), y) -> fmax(x, y)
-    if (match(Arg0, m_FMax(m_Value(X), m_Value(Y)))) {
-      if (Arg1 == X || Arg1 == Y)
-        return Arg0;
-    }
-
     // TODO: fmax(nnan x, -inf) -> x
     // TODO: fmax(nnan ninf x, -flt_max) -> x
     if (C1 && C1->isInfinity()) {

@@ -25,8 +25,8 @@ public:
       : BenchmarkRunner(State, InstructionBenchmark::Uops) {}
   ~UopsBenchmarkRunner() override;
 
-  llvm::Expected<SnippetPrototype>
-  generatePrototype(unsigned Opcode) const override;
+  llvm::Expected<CodeTemplate>
+  generateCodeTemplate(unsigned Opcode) const override;
 
   static constexpr const size_t kMinNumDifferentAddresses = 6;
 
@@ -62,7 +62,7 @@ private:
   //   mov eax, [rdi + 256]
   void
   instantiateMemoryOperands(unsigned ScratchSpaceReg,
-                            std::vector<InstructionInstance> &Snippet) const;
+                            std::vector<InstructionBuilder> &Snippet) const;
 };
 
 } // namespace exegesis

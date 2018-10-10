@@ -2,12 +2,6 @@
 
 # PR33944
 # XFAIL: windows
-# https://bugs.llvm.org/show_bug.cgi?id=35083
-
-# This seems to break in jenkins where we run with a per-test timeout of 4 minutes
-# if I add UNSUPPORTED here the junit xml ends up broken...
-# XFAIL: *
-# RUN: false
 
 # FIXME: This test is fragile because it relies on time which can
 # be affected by system performance. In particular we are currently

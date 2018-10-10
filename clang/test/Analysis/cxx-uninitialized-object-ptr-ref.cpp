@@ -1,6 +1,11 @@
-// RUN: %clang_analyze_cc1 -analyzer-checker=core,alpha.cplusplus.UninitializedObject -analyzer-config alpha.cplusplus.UninitializedObject:Pedantic=true -std=c++11 -DPEDANTIC -verify %s
+// RUN: %clang_analyze_cc1 -analyzer-checker=core,alpha.cplusplus.UninitializedObject \
+// RUN:   -analyzer-config alpha.cplusplus.UninitializedObject:Pedantic=true -DPEDANTIC \
+// RUN:   -analyzer-config alpha.cplusplus.UninitializedObject:CheckPointeeInitialization=true \
+// RUN:   -std=c++11 -verify  %s
 
-// RUN: %clang_analyze_cc1 -analyzer-checker=core,alpha.cplusplus.UninitializedObject -std=c++11 -verify %s
+// RUN: %clang_analyze_cc1 -analyzer-checker=core,alpha.cplusplus.UninitializedObject \
+// RUN:   -analyzer-config alpha.cplusplus.UninitializedObject:CheckPointeeInitialization=true \
+// RUN:   -std=c++11 -verify  %s
 
 //===----------------------------------------------------------------------===//
 // Concrete location tests.
@@ -191,7 +196,7 @@ void fCharPointerTest() {
 
 struct CyclicPointerTest {
   int *ptr;
-  CyclicPointerTest() : ptr(reinterpret_cast<int*>(&ptr)) {}
+  CyclicPointerTest() : ptr(reinterpret_cast<int *>(&ptr)) {}
 };
 
 void fCyclicPointerTest() {
@@ -280,11 +285,60 @@ struct CyclicVoidPointerTest {
   void *vptr; // no-crash
 
   CyclicVoidPointerTest() : vptr(&vptr) {}
-
 };
 
 void fCyclicVoidPointerTest() {
   CyclicVoidPointerTest();
+}
+
+struct IntDynTypedVoidPointerTest1 {
+  void *vptr; // expected-note{{uninitialized pointee 'this->vptr'}}
+  int dontGetFilteredByNonPedanticMode = 0;
+
+  IntDynTypedVoidPointerTest1(void *vptr) : vptr(vptr) {} // expected-warning{{1 uninitialized field}}
+};
+
+void fIntDynTypedVoidPointerTest1() {
+  int a;
+  IntDynTypedVoidPointerTest1 tmp(&a);
+}
+
+struct RecordDynTypedVoidPointerTest {
+  struct RecordType {
+    int x; // expected-note{{uninitialized field 'this->vptr->x'}}
+    int y; // expected-note{{uninitialized field 'this->vptr->y'}}
+  };
+
+  void *vptr;
+  int dontGetFilteredByNonPedanticMode = 0;
+
+  RecordDynTypedVoidPointerTest(void *vptr) : vptr(vptr) {} // expected-warning{{2 uninitialized fields}}
+};
+
+void fRecordDynTypedVoidPointerTest() {
+  RecordDynTypedVoidPointerTest::RecordType a;
+  RecordDynTypedVoidPointerTest tmp(&a);
+}
+
+struct NestedNonVoidDynTypedVoidPointerTest {
+  struct RecordType {
+    int x;      // expected-note{{uninitialized field 'this->vptr->x'}}
+    int y;      // expected-note{{uninitialized field 'this->vptr->y'}}
+    void *vptr; // expected-note{{uninitialized pointee 'this->vptr->vptr'}}
+  };
+
+  void *vptr;
+  int dontGetFilteredByNonPedanticMode = 0;
+
+  NestedNonVoidDynTypedVoidPointerTest(void *vptr, void *c) : vptr(vptr) {
+    static_cast<RecordType *>(vptr)->vptr = c; // expected-warning{{3 uninitialized fields}}
+  }
+};
+
+void fNestedNonVoidDynTypedVoidPointerTest() {
+  NestedNonVoidDynTypedVoidPointerTest::RecordType a;
+  char c;
+  NestedNonVoidDynTypedVoidPointerTest tmp(&a, &c);
 }
 
 //===----------------------------------------------------------------------===//

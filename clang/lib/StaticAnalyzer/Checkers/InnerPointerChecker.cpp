@@ -15,6 +15,7 @@
 
 #include "AllocationState.h"
 #include "ClangSACheckers.h"
+#include "InterCheckerAPI.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/CommonBugCategories.h"
 #include "clang/StaticAnalyzer/Core/Checker.h"
@@ -129,11 +130,11 @@ bool InnerPointerChecker::isCalledOnStringObject(
     return false;
 
   QualType ObjTy = ObjRegion->getValueType();
-  if (ObjTy.isNull() ||
-      ObjTy->getAsCXXRecordDecl()->getName() != "basic_string")
+  if (ObjTy.isNull())
     return false;
 
-  return true;
+  CXXRecordDecl *Decl = ObjTy->getAsCXXRecordDecl();
+  return Decl && Decl->getName() == "basic_string";
 }
 
 bool InnerPointerChecker::isInvalidatingMemberFunction(
@@ -313,6 +314,6 @@ std::unique_ptr<BugReporterVisitor> getInnerPointerBRVisitor(SymbolRef Sym) {
 } // end namespace clang
 
 void ento::registerInnerPointerChecker(CheckerManager &Mgr) {
-  registerNewDeleteChecker(Mgr);
+  registerInnerPointerCheckerAux(Mgr);
   Mgr.registerChecker<InnerPointerChecker>();
 }

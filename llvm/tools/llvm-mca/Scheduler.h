@@ -274,7 +274,7 @@ typedef std::pair<unsigned, unsigned> BufferUsageEntry;
 class ResourceManager {
   // The resource manager owns all the ResourceState.
   using UniqueResourceState = std::unique_ptr<ResourceState>;
-  llvm::SmallDenseMap<uint64_t, UniqueResourceState> Resources;
+  std::vector<UniqueResourceState> Resources;
 
   // Keeps track of which resources are busy, and how many cycles are left
   // before those become usable again.
@@ -283,46 +283,16 @@ class ResourceManager {
   // A table to map processor resource IDs to processor resource masks.
   llvm::SmallVector<uint64_t, 8> ProcResID2Mask;
 
-  // Adds a new resource state in Resources, as well as a new descriptor in
-  // ResourceDescriptor.
-  void addResource(const llvm::MCProcResourceDesc &Desc, unsigned Index,
-                   uint64_t Mask);
-
   // Populate resource descriptors.
   void initialize(const llvm::MCSchedModel &SM);
 
   // Returns the actual resource unit that will be used.
   ResourceRef selectPipe(uint64_t ResourceID);
 
-  void use(ResourceRef RR);
-  void release(ResourceRef RR);
+  void use(const ResourceRef &RR);
+  void release(const ResourceRef &RR);
 
-  unsigned getNumUnits(uint64_t ResourceID) const {
-    assert(Resources.find(ResourceID) != Resources.end());
-    return Resources.find(ResourceID)->getSecond()->getNumUnits();
-  }
-
-  // Reserve a specific Resource kind.
-  void reserveBuffer(uint64_t ResourceID) {
-    assert(isBufferAvailable(ResourceID) ==
-           ResourceStateEvent::RS_BUFFER_AVAILABLE);
-    ResourceState &Resource = *Resources[ResourceID];
-    Resource.reserveBuffer();
-  }
-
-  void releaseBuffer(uint64_t ResourceID) {
-    Resources[ResourceID]->releaseBuffer();
-  }
-
-  ResourceStateEvent isBufferAvailable(uint64_t ResourceID) const {
-    const ResourceState &Resource = *Resources.find(ResourceID)->second;
-    return Resource.isBufferAvailable();
-  }
-
-  bool isReady(uint64_t ResourceID, unsigned NumUnits) const {
-    const ResourceState &Resource = *Resources.find(ResourceID)->second;
-    return Resource.isReady(NumUnits);
-  }
+  unsigned getNumUnits(uint64_t ResourceID) const;
 
 public:
   ResourceManager(const llvm::MCSchedModel &SM)
@@ -335,9 +305,7 @@ public:
   ResourceStateEvent canBeDispatched(llvm::ArrayRef<uint64_t> Buffers) const;
 
   // Return the processor resource identifier associated to this Mask.
-  unsigned resolveResourceMask(uint64_t Mask) const {
-    return Resources.find(Mask)->second->getProcResourceID();
-  }
+  unsigned resolveResourceMask(uint64_t Mask) const;
 
   // Consume a slot in every buffered resource from array 'Buffers'. Resource
   // units that are dispatch hazards (i.e. BufferSize=0) are marked as reserved.
@@ -346,16 +314,12 @@ public:
   // Release buffer entries previously allocated by method reserveBuffers.
   void releaseBuffers(llvm::ArrayRef<uint64_t> Buffers);
 
-  void reserveResource(uint64_t ResourceID) {
-    ResourceState &Resource = *Resources[ResourceID];
-    assert(!Resource.isReserved());
-    Resource.setReserved();
-  }
+  // Reserve a processor resource. A reserved resource is not available for
+  // instruction issue until it is released. 
+  void reserveResource(uint64_t ResourceID);
 
-  void releaseResource(uint64_t ResourceID) {
-    ResourceState &Resource = *Resources[ResourceID];
-    Resource.clearReserved();
-  }
+  // Release a previously reserved processor resource.
+  void releaseResource(uint64_t ResourceID);
 
   // Returns true if all resources are in-order, and there is at least one
   // resource which is a dispatch hazard (BufferSize = 0).
@@ -371,37 +335,35 @@ public:
 
 #ifndef NDEBUG
   void dump() const {
-    for (const std::pair<uint64_t, UniqueResourceState> &Resource : Resources)
-      Resource.second->dump();
+    for (const UniqueResourceState &Resource : Resources)
+      Resource->dump();
   }
 #endif
 }; // namespace mca
 
 /// Class Scheduler is responsible for issuing instructions to pipeline
-/// resources. Internally, it delegates to a ResourceManager the management of
-/// processor resources.
-/// This class is also responsible for tracking the progress of instructions
-/// from the dispatch stage, until the write-back stage.
+/// resources.
 ///
-/// An nstruction dispatched to the Scheduler is initially placed into either
-/// the 'WaitQueue' or the 'ReadyQueue' depending on the availability of the
-/// input operands. Instructions in the WaitQueue are ordered by instruction
-/// index. An instruction is moved from the WaitQueue to the ReadyQueue when
-/// register operands become available, and all memory dependencies are met.
-/// Instructions that are moved from the WaitQueue to the ReadyQueue transition
-/// from state 'IS_AVAILABLE' to state 'IS_READY'.
+/// Internally, it delegates to a ResourceManager the management of processor
+/// resources. This class is also responsible for tracking the progress of
+/// instructions from the dispatch stage, until the write-back stage.
 ///
-/// At the beginning of each cycle, the Scheduler checks if there are
-/// instructions in the WaitQueue that can be moved to the ReadyQueue.  If the
-/// ReadyQueue is not empty, then older instructions from the queue are issued
-/// to the processor pipelines, and the underlying ResourceManager is updated
-/// accordingly.  The ReadyQueue is ordered by instruction index to guarantee
-/// that the first instructions in the set are also the oldest.
+/// An instruction dispatched to the Scheduler is initially placed into either
+/// the 'WaitSet' or the 'ReadySet' depending on the availability of the input
+/// operands.
 ///
-/// An Instruction is moved from the ReadyQueue the `IssuedQueue` when it is
-/// issued to a (one or more) pipeline(s). This event also causes an instruction
-/// state transition (i.e. from state IS_READY, to state IS_EXECUTING).
-/// An Instruction leaves the IssuedQueue when it reaches the write-back stage.
+/// An instruction is moved from the WaitSet to the ReadySet when register
+/// operands become available, and all memory dependencies are met.
+/// Instructions that are moved from the WaitSet to the ReadySet transition
+/// in state from 'IS_AVAILABLE' to 'IS_READY'.
+///
+/// On every cycle, the Scheduler checks if it can promote instructions from the
+/// WaitSet to the ReadySet.
+///
+/// An Instruction is moved from the ReadySet the `IssuedSet` when it is issued
+/// to a (one or more) pipeline(s). This event also causes an instruction state
+/// transition (i.e. from state IS_READY, to state IS_EXECUTING). An Instruction
+/// leaves the IssuedSet when it reaches the write-back stage.
 class Scheduler : public HardwareUnit {
   const llvm::MCSchedModel &SM;
 
@@ -409,10 +371,9 @@ class Scheduler : public HardwareUnit {
   std::unique_ptr<ResourceManager> Resources;
   std::unique_ptr<LSUnit> LSU;
 
-  using QueueEntryTy = std::pair<unsigned, Instruction *>;
-  std::map<unsigned, Instruction *> WaitQueue;
-  std::map<unsigned, Instruction *> ReadyQueue;
-  std::map<unsigned, Instruction *> IssuedQueue;
+  std::vector<InstRef> WaitSet;
+  std::vector<InstRef> ReadySet;
+  std::vector<InstRef> IssuedSet;
 
   /// Issue an instruction without updating the ready queue.
   void issueInstructionImpl(
@@ -448,7 +409,7 @@ public:
   /// zero-latency instructions).
   ///
   /// Returns true if the instruction is issued immediately.  If this does not
-  /// occur, then the instruction will be added to the Scheduler's ReadyQueue.
+  /// occur, then the instruction will be added to the Scheduler's ReadySet.
   bool issueImmediately(InstRef &IR);
 
   /// Reserve one entry in each buffered resource.
@@ -467,15 +428,15 @@ public:
   /// once they have been fully consumed.
   void reclaimSimulatedResources(llvm::SmallVectorImpl<ResourceRef> &Freed);
 
-  /// Move instructions from the WaitQueue to the ReadyQueue if input operands
+  /// Move instructions from the WaitSet to the ReadySet if input operands
   /// are all available.
-  void promoteToReadyQueue(llvm::SmallVectorImpl<InstRef> &Ready);
+  void promoteToReadySet(llvm::SmallVectorImpl<InstRef> &Ready);
 
   /// Update the ready queue.
   void updatePendingQueue(llvm::SmallVectorImpl<InstRef> &Ready);
 
   /// Update the issued queue.
-  void updateIssuedQueue(llvm::SmallVectorImpl<InstRef> &Executed);
+  void updateIssuedSet(llvm::SmallVectorImpl<InstRef> &Executed);
 
   /// Updates the Scheduler's resources to reflect that an instruction has just
   /// been executed.
@@ -492,7 +453,7 @@ public:
   /// execute the given instruction immediately.
   bool reserveResources(InstRef &IR);
 
-  /// Select the next instruction to issue from the ReadyQueue.
+  /// Select the next instruction to issue from the ReadySet.
   /// This method gives priority to older instructions.
   InstRef select();
 
@@ -503,10 +464,9 @@ public:
   // This routine performs a sanity check.  This routine should only be called
   // when we know that 'IR' is not in the scheduler's instruction queues.
   void sanityCheck(const InstRef &IR) const {
-    const unsigned Idx = IR.getSourceIndex();
-    assert(WaitQueue.find(Idx) == WaitQueue.end());
-    assert(ReadyQueue.find(Idx) == ReadyQueue.end());
-    assert(IssuedQueue.find(Idx) == IssuedQueue.end());
+    assert(llvm::find(WaitSet, IR) == WaitSet.end());
+    assert(llvm::find(ReadySet, IR) == ReadySet.end());
+    assert(llvm::find(IssuedSet, IR) == IssuedSet.end());
   }
 #endif // !NDEBUG
 };

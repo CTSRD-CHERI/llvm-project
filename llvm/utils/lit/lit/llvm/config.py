@@ -304,7 +304,9 @@ class LLVMConfig(object):
                                        extra_args=['-D\\$CAP_SIZE=' + default_cheri_size]))
         if not self.lit_config.quiet:
             self.lit_config.note('Running tests for CHERI_CAP_SIZE=' + default_cheri_size)
-        self.config.substitutions.append(('%python', sys.executable))
+
+        self.config.substitutions.append(('%python', '"%s"' % (sys.executable)))
+
         self.add_tool_substitutions(
             tool_patterns, [self.config.llvm_tools_dir])
 

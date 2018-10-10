@@ -1863,6 +1863,40 @@ static Value *SimplifyAndInst(Value *Op0, Value *Op1, const SimplifyQuery &Q,
                                       MaxRecurse))
       return V;
 
+  // Assuming the effective width of Y is not larger than A, i.e. all bits
+  // from X and Y are disjoint in (X << A) | Y,
+  // if the mask of this AND op covers all bits of X or Y, while it covers
+  // no bits from the other, we can bypass this AND op. E.g.,
+  // ((X << A) | Y) & Mask -> Y,
+  //     if Mask = ((1 << effective_width_of(Y)) - 1)
+  // ((X << A) | Y) & Mask -> X << A,
+  //     if Mask = ((1 << effective_width_of(X)) - 1) << A
+  // SimplifyDemandedBits in InstCombine can optimize the general case.
+  // This pattern aims to help other passes for a common case.
+  Value *Y, *XShifted;
+  if (match(Op1, m_APInt(Mask)) &&
+      match(Op0, m_c_Or(m_CombineAnd(m_NUWShl(m_Value(X), m_APInt(ShAmt)),
+                                     m_Value(XShifted)),
+                        m_Value(Y)))) {
+    const unsigned ShftCnt = ShAmt->getZExtValue();
+    const KnownBits YKnown = computeKnownBits(Y, Q.DL, 0, Q.AC, Q.CxtI, Q.DT);
+    const unsigned Width = Op0->getType()->getScalarSizeInBits();
+    const unsigned EffWidthY = Width - YKnown.countMinLeadingZeros();
+    if (EffWidthY <= ShftCnt) {
+      const KnownBits XKnown = computeKnownBits(X, Q.DL, 0, Q.AC, Q.CxtI,
+                                                Q.DT);
+      const unsigned EffWidthX = Width - XKnown.countMinLeadingZeros();
+      const APInt EffBitsY = APInt::getLowBitsSet(Width, EffWidthY);
+      const APInt EffBitsX = APInt::getLowBitsSet(Width, EffWidthX) << ShftCnt;
+      // If the mask is extracting all bits from X or Y as is, we can skip
+      // this AND op.
+      if (EffBitsY.isSubsetOf(*Mask) && !EffBitsX.intersects(*Mask))
+        return Y;
+      if (EffBitsX.isSubsetOf(*Mask) && !EffBitsY.intersects(*Mask))
+        return XShifted;
+    }
+  }
+
   return nullptr;
 }
 
@@ -4325,6 +4359,14 @@ static Value *SimplifyFAddInst(Value *Op0, Value *Op1, FastMathFlags FMF,
                        match(Op1, m_FSub(m_AnyZeroFP(), m_Specific(Op0)))))
     return ConstantFP::getNullValue(Op0->getType());
 
+  // (X - Y) + Y --> X
+  // Y + (X - Y) --> X
+  Value *X;
+  if (FMF.noSignedZeros() && FMF.allowReassoc() &&
+      (match(Op0, m_FSub(m_Value(X), m_Specific(Op1))) ||
+       match(Op1, m_FSub(m_Value(X), m_Specific(Op0)))))
+    return X;
+
   return nullptr;
 }
 
@@ -4361,6 +4403,13 @@ static Value *SimplifyFSubInst(Value *Op0, Value *Op1, FastMathFlags FMF,
   // fsub nnan x, x ==> 0.0
   if (FMF.noNaNs() && Op0 == Op1)
     return Constant::getNullValue(Op0->getType());
+
+  // Y - (Y - X) --> X
+  // (X + Y) - Y --> X
+  if (FMF.noSignedZeros() && FMF.allowReassoc() &&
+      (match(Op1, m_FSub(m_Specific(Op0), m_Value(X))) ||
+       match(Op0, m_c_FAdd(m_Specific(Op1), m_Value(X)))))
+    return X;
 
   return nullptr;
 }
@@ -4764,9 +4813,24 @@ static Value *simplifyBinaryIntrinsic(Function *F, Value *Op0, Value *Op1,
     break;
   case Intrinsic::maxnum:
   case Intrinsic::minnum:
-    // If one argument is NaN, return the other argument.
-    if (match(Op0, m_NaN())) return Op1;
-    if (match(Op1, m_NaN())) return Op0;
+    // If the arguments are the same, this is a no-op.
+    if (Op0 == Op1) return Op0;
+
+    // If one argument is NaN or undef, return the other argument.
+    if (match(Op0, m_CombineOr(m_NaN(), m_Undef()))) return Op1;
+    if (match(Op1, m_CombineOr(m_NaN(), m_Undef()))) return Op0;
+
+    // Min/max of the same operation with common operand:
+    // m(m(X, Y)), X --> m(X, Y) (4 commuted variants)
+    if (auto *M0 = dyn_cast<IntrinsicInst>(Op0))
+      if (M0->getIntrinsicID() == IID &&
+          (M0->getOperand(0) == Op1 || M0->getOperand(1) == Op1))
+        return Op0;
+    if (auto *M1 = dyn_cast<IntrinsicInst>(Op1))
+      if (M1->getIntrinsicID() == IID &&
+          (M1->getOperand(0) == Op0 || M1->getOperand(1) == Op0))
+        return Op1;
+
     break;
   default:
     break;

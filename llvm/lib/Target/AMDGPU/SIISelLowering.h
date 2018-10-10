@@ -81,7 +81,7 @@ private:
   SDValue LowerBRCOND(SDValue Op, SelectionDAG &DAG) const;
 
   SDValue adjustLoadValueType(unsigned Opcode, MemSDNode *M,
-                              SelectionDAG &DAG,
+                              SelectionDAG &DAG, ArrayRef<SDValue> Ops,
                               bool IsIntrinsic = false) const;
 
   SDValue handleD16VData(SDValue VData, SelectionDAG &DAG) const;
@@ -130,6 +130,8 @@ private:
   SDValue performXorCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performZeroExtendCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performClassCombine(SDNode *N, DAGCombinerInfo &DCI) const;
+  SDValue getCanonicalConstantFP(SelectionDAG &DAG, const SDLoc &SL, EVT VT,
+                                 const APFloat &C) const;
   SDValue performFCanonicalizeCombine(SDNode *N, DAGCombinerInfo &DCI) const;
 
   SDValue performFPMed3ImmCombine(SelectionDAG &DAG, const SDLoc &SL,
@@ -323,6 +325,10 @@ public:
 
   bool isSDNodeSourceOfDivergence(const SDNode *N,
     FunctionLoweringInfo *FLI, DivergenceAnalysis *DA) const override;
+
+  bool isCanonicalized(SelectionDAG &DAG, SDValue Op,
+                       unsigned MaxDepth = 5) const;
+  bool denormalsEnabledForType(EVT VT) const;
 };
 
 } // End namespace llvm

@@ -2339,15 +2339,7 @@ The default LLVM floating-point environment assumes that floating-point
 instructions do not have side effects. Results assume the round-to-nearest
 rounding mode. No floating-point exception state is maintained in this
 environment. Therefore, there is no attempt to create or preserve invalid
-operation (SNaN) or division-by-zero exceptions in these examples:
-
-.. code-block:: llvm
-
-      %A = fdiv 0x7ff0000000000001, %X  ; 64-bit SNaN hex value 
-      %B = fdiv %X, 0.0
-    Safe:
-      %A = NaN
-      %B = NaN
+operation (SNaN) or division-by-zero exceptions.
 
 The benefit of this exception-free assumption is that floating-point
 operations may be speculated freely without any other fast-math relaxations
@@ -4402,7 +4394,7 @@ DISubrange
 - ``count: !9`` describes the count with a :ref:`DILocalVariable`.
 - ``count: !11`` describes the count with a :ref:`DIGlobalVariable`.
 
-.. code-block:: llvm
+.. code-block:: text
 
     !0 = !DISubrange(count: 5, lowerBound: 0) ; array counting from 0
     !1 = !DISubrange(count: 5, lowerBound: 1) ; array counting from 1
@@ -4410,17 +4402,17 @@ DISubrange
 
     ; Scopes used in rest of example
     !6 = !DIFile(filename: "vla.c", directory: "/path/to/file")
-    !7 = distinct !DICompileUnit(language: DW_LANG_C99, ...
-    !8 = distinct !DISubprogram(name: "foo", scope: !7, file: !6, line: 5, ...
+    !7 = distinct !DICompileUnit(language: DW_LANG_C99, file: !6)
+    !8 = distinct !DISubprogram(name: "foo", scope: !7, file: !6, line: 5)
 
     ; Use of local variable as count value
     !9 = !DIBasicType(name: "int", size: 32, encoding: DW_ATE_signed)
     !10 = !DILocalVariable(name: "count", scope: !8, file: !6, line: 42, type: !9)
-    !11 = !DISubrange(count !10, lowerBound: 0)
+    !11 = !DISubrange(count: !10, lowerBound: 0)
 
     ; Use of global variable as count value
     !12 = !DIGlobalVariable(name: "count", scope: !8, file: !6, line: 22, type: !9)
-    !13 = !DISubrange(count !12, lowerBound: 0)
+    !13 = !DISubrange(count: !12, lowerBound: 0)
 
 .. _DIEnumerator:
 
@@ -4430,7 +4422,7 @@ DIEnumerator
 ``DIEnumerator`` nodes are the elements for ``DW_TAG_enumeration_type``
 variants of :ref:`DICompositeType`.
 
-.. code-block:: llvm
+.. code-block:: text
 
     !0 = !DIEnumerator(name: "SixKind", value: 7)
     !1 = !DIEnumerator(name: "SevenKind", value: 7)
@@ -4443,7 +4435,7 @@ DITemplateTypeParameter
 language constructs. They are used (optionally) in :ref:`DICompositeType` and
 :ref:`DISubprogram` ``templateParams:`` fields.
 
-.. code-block:: llvm
+.. code-block:: text
 
     !0 = !DITemplateTypeParameter(name: "Ty", type: !1)
 
@@ -4456,7 +4448,7 @@ but if specified can also be set to ``DW_TAG_GNU_template_template_param`` or
 ``DW_TAG_GNU_template_param_pack``. They are used (optionally) in
 :ref:`DICompositeType` and :ref:`DISubprogram` ``templateParams:`` fields.
 
-.. code-block:: llvm
+.. code-block:: text
 
     !0 = !DITemplateValueParameter(name: "Ty", type: !1, value: i32 7)
 
@@ -4465,7 +4457,7 @@ DINamespace
 
 ``DINamespace`` nodes represent namespaces in the source language.
 
-.. code-block:: llvm
+.. code-block:: text
 
     !0 = !DINamespace(name: "myawesomeproject", scope: !1, file: !2, line: 7)
 
@@ -4476,7 +4468,7 @@ DIGlobalVariable
 
 ``DIGlobalVariable`` nodes represent global variables in the source language.
 
-.. code-block:: llvm
+.. code-block:: text
 
     !0 = !DIGlobalVariable(name: "foo", linkageName: "foo", scope: !1,
                            file: !2, line: 7, type: !3, isLocal: true,
@@ -4547,7 +4539,7 @@ DILexicalBlockFile
 indicate textual inclusion, or the ``discriminator:`` field can be used to
 discriminate between control flow within a single block in the source language.
 
-.. code-block:: llvm
+.. code-block:: text
 
     !0 = !DILexicalBlock(scope: !3, file: !4, line: 7, column: 35)
     !1 = !DILexicalBlockFile(scope: !0, file: !4, discriminator: 0)
@@ -4562,7 +4554,7 @@ DILocation
 mandatory, and points at an :ref:`DILexicalBlockFile`, an
 :ref:`DILexicalBlock`, or an :ref:`DISubprogram`.
 
-.. code-block:: llvm
+.. code-block:: text
 
     !0 = !DILocation(line: 2900, column: 42, scope: !1, inlinedAt: !2)
 
@@ -4655,7 +4647,7 @@ DIObjCProperty
 
 ``DIObjCProperty`` nodes represent Objective-C property nodes.
 
-.. code-block:: llvm
+.. code-block:: text
 
     !3 = !DIObjCProperty(name: "foo", file: !1, line: 7, setter: "setFoo",
                          getter: "getFoo", attributes: 7, type: !2)
@@ -5843,7 +5835,7 @@ one module path entry per linked module with summary.
 
 Example:
 
-.. code-block:: llvm
+.. code-block:: text
 
     ^0 = module: (path: "/path/to/file.o", hash: (2468601609, 1329373163, 1565878005, 638838075, 3148790418))
 
@@ -5861,7 +5853,7 @@ referenced by a summarized module.
 
 Example:
 
-.. code-block:: llvm
+.. code-block:: text
 
     ^4 = gv: (name: "f"[, summaries: (Summary)[, (Summary)]*]?) ; guid = 14740650423002898831
 
@@ -5881,7 +5873,7 @@ Function Summary
 
 If the global value is a function, the ``Summary`` entry will look like:
 
-.. code-block:: llvm
+.. code-block:: text
 
     function: (module: ^0, flags: (linkage: external, notEligibleToImport: 0, live: 0, dsoLocal: 0), insts: 2[, FuncFlags]?[, Calls]?[, TypeIdInfo]?[, Refs]?
 
@@ -5902,7 +5894,7 @@ Global Variable Summary
 
 If the global value is a variable, the ``Summary`` entry will look like:
 
-.. code-block:: llvm
+.. code-block:: text
 
     variable: (module: ^0, flags: (linkage: external, notEligibleToImport: 0, live: 0, dsoLocal: 0)[, Refs]?
 
@@ -5916,7 +5908,7 @@ Alias Summary
 
 If the global value is an alias, the ``Summary`` entry will look like:
 
-.. code-block:: llvm
+.. code-block:: text
 
     alias: (module: ^0, flags: (linkage: external, notEligibleToImport: 0, live: 0, dsoLocal: 0), aliasee: ^2)
 
@@ -5931,7 +5923,7 @@ Function Flags
 
 The optional ``FuncFlags`` field looks like:
 
-.. code-block:: llvm
+.. code-block:: text
 
     funcFlags: (readNone: 0, readOnly: 0, noRecurse: 0, returnDoesNotAlias: 0)
 
@@ -5945,13 +5937,13 @@ Calls
 
 The optional ``Calls`` field looks like:
 
-.. code-block:: llvm
+.. code-block:: text
 
     calls: ((Callee)[, (Callee)]*)
 
 where each ``Callee`` looks like:
 
-.. code-block:: llvm
+.. code-block:: text
 
     callee: ^1[, hotness: None]?[, relbf: 0]?
 
@@ -5968,7 +5960,7 @@ Refs
 
 The optional ``Refs`` field looks like:
 
-.. code-block:: llvm
+.. code-block:: text
 
     refs: ((Ref)[, (Ref)]*)
 
@@ -5984,7 +5976,7 @@ The optional ``TypeIdInfo`` field, used for
 `Control Flow Integrity <http://clang.llvm.org/docs/ControlFlowIntegrity.html>`_,
 looks like:
 
-.. code-block:: llvm
+.. code-block:: text
 
     typeIdInfo: [(TypeTests)]?[, (TypeTestAssumeVCalls)]?[, (TypeCheckedLoadVCalls)]?[, (TypeTestAssumeConstVCalls)]?[, (TypeCheckedLoadConstVCalls)]?
 
@@ -5993,7 +5985,7 @@ These optional fields have the following forms:
 TypeTests
 """""""""
 
-.. code-block:: llvm
+.. code-block:: text
 
     typeTests: (TypeIdRef[, TypeIdRef]*)
 
@@ -6003,13 +5995,13 @@ by summary id or ``GUID``.
 TypeTestAssumeVCalls
 """"""""""""""""""""
 
-.. code-block:: llvm
+.. code-block:: text
 
     typeTestAssumeVCalls: (VFuncId[, VFuncId]*)
 
 Where each VFuncId has the format:
 
-.. code-block:: llvm
+.. code-block:: text
 
     vFuncId: (TypeIdRef, offset: 16)
 
@@ -6019,7 +6011,7 @@ by summary id or ``GUID`` preceeded by a ``guid:`` tag.
 TypeCheckedLoadVCalls
 """""""""""""""""""""
 
-.. code-block:: llvm
+.. code-block:: text
 
     typeCheckedLoadVCalls: (VFuncId[, VFuncId]*)
 
@@ -6028,13 +6020,13 @@ Where each VFuncId has the format described for ``TypeTestAssumeVCalls``.
 TypeTestAssumeConstVCalls
 """""""""""""""""""""""""
 
-.. code-block:: llvm
+.. code-block:: text
 
     typeTestAssumeConstVCalls: (ConstVCall[, ConstVCall]*)
 
 Where each ConstVCall has the format:
 
-.. code-block:: llvm
+.. code-block:: text
 
     VFuncId, args: (Arg[, Arg]*)
 
@@ -6044,7 +6036,7 @@ and each Arg is an integer argument number.
 TypeCheckedLoadConstVCalls
 """"""""""""""""""""""""""
 
-.. code-block:: llvm
+.. code-block:: text
 
     typeCheckedLoadConstVCalls: (ConstVCall[, ConstVCall]*)
 
@@ -6063,7 +6055,7 @@ so these are only present in a combined summary index.
 
 Example:
 
-.. code-block:: llvm
+.. code-block:: text
 
     ^4 = typeid: (name: "_ZTS1A", summary: (typeTestRes: (kind: allOnes, sizeM1BitWidth: 7[, alignLog2: 0]?[, sizeM1: 0]?[, bitMask: 0]?[, inlineBits: 0]?)[, WpdResolutions]?)) ; guid = 7004155349499253778
 
@@ -6073,14 +6065,14 @@ the ``size-1`` bit width. It is followed by optional flags, which default to 0,
 and an optional WpdResolutions (whole program devirtualization resolution)
 field that looks like:
 
-.. code-block:: llvm
+.. code-block:: text
 
     wpdResolutions: ((offset: 0, WpdRes)[, (offset: 1, WpdRes)]*
 
 where each entry is a mapping from the given byte offset to the whole-program
 devirtualization resolution WpdRes, that has one of the following formats:
 
-.. code-block:: llvm
+.. code-block:: text
 
     wpdRes: (kind: branchFunnel)
     wpdRes: (kind: singleImpl, singleImplName: "_ZN1A1nEi")
@@ -6089,13 +6081,13 @@ devirtualization resolution WpdRes, that has one of the following formats:
 Additionally, each wpdRes has an optional ``resByArg`` field, which
 describes the resolutions for calls with all constant integer arguments:
 
-.. code-block:: llvm
+.. code-block:: text
 
     resByArg: (ResByArg[, ResByArg]*)
 
 where ResByArg is:
 
-.. code-block:: llvm
+.. code-block:: text
 
     args: (Arg[, Arg]*), byArg: (kind: UniformRetVal[, info: 0][, byte: 0][, bit: 0])
 

@@ -312,6 +312,14 @@ public:
     }
   }
 
+  /// In the event this target uses the same number of fractional bits for its
+  /// unsigned types as it does with its signed counterparts, there will be
+  /// exactly one bit of padding.
+  /// Return true if unsigned fixed point types have padding for this target.
+  bool doUnsignedFixedPointTypesHavePadding() const {
+    return PaddingOnUnsignedFixedPoint;
+  }
+
   /// Return the width (in bits) of the specified integer type enum.
   ///
   /// For example, SignedInt -> getIntWidth().
@@ -1167,6 +1175,18 @@ public:
   }
 
   const LangASMap &getAddressSpaceMap() const { return *AddrSpaceMap; }
+
+  /// Map from the address space field in builtin description strings to the
+  /// language address space.
+  virtual LangAS getOpenCLBuiltinAddressSpace(unsigned AS) const {
+    return getLangASFromTargetAS(AS);
+  }
+
+  /// Map from the address space field in builtin description strings to the
+  /// language address space.
+  virtual LangAS getCUDABuiltinAddressSpace(unsigned AS) const {
+    return getLangASFromTargetAS(AS);
+  }
 
   /// Return an AST address space which can be used opportunistically
   /// for constant global memory. It must be possible to convert pointers into

@@ -1,6 +1,11 @@
-// RUN: %clang_analyze_cc1 -analyzer-checker=core,alpha.cplusplus.UninitializedObject -analyzer-config alpha.cplusplus.UninitializedObject:Pedantic=true -std=c++11 -DPEDANTIC -verify %s
+// RUN: %clang_analyze_cc1 -analyzer-checker=core,alpha.cplusplus.UninitializedObject \
+// RUN:   -analyzer-config alpha.cplusplus.UninitializedObject:Pedantic=true -DPEDANTIC \
+// RUN:   -analyzer-config alpha.cplusplus.UninitializedObject:CheckPointeeInitialization=true \
+// RUN:   -std=c++11 -verify  %s
 
-// RUN: %clang_analyze_cc1 -analyzer-checker=core,alpha.cplusplus.UninitializedObject -std=c++11 -verify %s
+// RUN: %clang_analyze_cc1 -analyzer-checker=core,alpha.cplusplus.UninitializedObject \
+// RUN:   -analyzer-config alpha.cplusplus.UninitializedObject:CheckPointeeInitialization=true \
+// RUN:   -std=c++11 -verify  %s
 
 //===----------------------------------------------------------------------===//
 // Default constructor test.
@@ -1035,13 +1040,12 @@ void assert(int b) {
 // While a singleton would make more sense as a static variable, that would zero
 // initialize all of its fields, hence the not too practical implementation.
 struct Singleton {
-  // TODO: we'd expect the note: {{uninitialized field 'this->i'}}
-  int i; // no-note
+  int i; // expected-note{{uninitialized field 'this->i'}}
+  int dontGetFilteredByNonPedanticMode = 0;
 
   Singleton() {
     assert(!isInstantiated);
-    // TODO: we'd expect the warning: {{1 uninitialized field}}
-    isInstantiated = true; // no-warning
+    isInstantiated = true; // expected-warning{{1 uninitialized field}}
   }
 
   ~Singleton() {

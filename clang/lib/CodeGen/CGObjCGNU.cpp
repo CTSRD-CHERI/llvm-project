@@ -510,8 +510,8 @@ protected:
 
   /// Returns a selector with the specified type encoding.  An empty string is
   /// used to return an untyped selector (with the types field set to NULL).
-  virtual llvm::Value *GetSelector(CodeGenFunction &CGF, Selector Sel,
-                           const std::string &TypeEncoding);
+  virtual llvm::Value *GetTypedSelector(CodeGenFunction &CGF, Selector Sel,
+                                        const std::string &TypeEncoding);
 
   /// Returns the name of ivar offset variables.  In the GNUstep v1 ABI, this
   /// contains the class and ivar names, in the v2 ABI this contains the type
@@ -1342,8 +1342,8 @@ class CGObjCGNUstep2 : public CGObjCGNUstep {
       return Val;
     return llvm::ConstantExpr::getBitCast(Val, Ty);
   }
-  llvm::Value *GetSelector(CodeGenFunction &CGF, Selector Sel,
-    const std::string &TypeEncoding) override {
+  llvm::Value *GetTypedSelector(CodeGenFunction &CGF, Selector Sel,
+                                const std::string &TypeEncoding) override {
     return GetConstantSelector(Sel, TypeEncoding);
   }
   llvm::Constant  *GetTypeString(llvm::StringRef TypeEncoding) {
@@ -2121,8 +2121,8 @@ llvm::Value *CGObjCGNU::EmitNSAutoreleasePoolClassRef(CodeGenFunction &CGF) {
   return Value;
 }
 
-llvm::Value *CGObjCGNU::GetSelector(CodeGenFunction &CGF, Selector Sel,
-                                    const std::string &TypeEncoding) {
+llvm::Value *CGObjCGNU::GetTypedSelector(CodeGenFunction &CGF, Selector Sel,
+                                         const std::string &TypeEncoding) {
   SmallVectorImpl<TypedSelector> &Types = SelectorTable[Sel];
   llvm::GlobalAlias *SelValue = nullptr;
 
@@ -2155,13 +2155,13 @@ Address CGObjCGNU::GetAddrOfSelector(CodeGenFunction &CGF, Selector Sel) {
 }
 
 llvm::Value *CGObjCGNU::GetSelector(CodeGenFunction &CGF, Selector Sel) {
-  return GetSelector(CGF, Sel, std::string());
+  return GetTypedSelector(CGF, Sel, std::string());
 }
 
 llvm::Value *CGObjCGNU::GetSelector(CodeGenFunction &CGF,
                                     const ObjCMethodDecl *Method) {
   std::string SelTypes = CGM.getContext().getObjCEncodingForMethodDecl(Method);
-  return GetSelector(CGF, Method->getSelector(), SelTypes);
+  return GetTypedSelector(CGF, Method->getSelector(), SelTypes);
 }
 
 llvm::Constant *CGObjCGNU::GetEHType(QualType T) {
@@ -3812,40 +3812,10 @@ llvm::GlobalVariable *CGObjCGNU::ObjCIvarOffsetVariable(
   // is.  This allows code compiled with non-fragile ivars to work correctly
   // when linked against code which isn't (most of the time).
   llvm::GlobalVariable *IvarOffsetPointer = TheModule.getNamedGlobal(Name);
-  if (!IvarOffsetPointer) {
-    // This will cause a run-time crash if we accidentally use it.  A value of
-    // 0 would seem more sensible, but will silently overwrite the isa pointer
-    // causing a great deal of confusion.
-    uint64_t Offset = -1;
-    // We can't call ComputeIvarBaseOffset() here if we have the
-    // implementation, because it will create an invalid ASTRecordLayout object
-    // that we are then stuck with forever, so we only initialize the ivar
-    // offset variable with a guess if we only have the interface.  The
-    // initializer will be reset later anyway, when we are generating the class
-    // description.
-    if (!CGM.getContext().getObjCImplementation(
-              const_cast<ObjCInterfaceDecl *>(ID)))
-      Offset = ComputeIvarBaseOffset(CGM, ID, Ivar);
-
-    llvm::ConstantInt *OffsetGuess = llvm::ConstantInt::get(Int32Ty, Offset,
-                             /*isSigned*/true);
-    // Don't emit the guess in non-PIC code because the linker will not be able
-    // to replace it with the real version for a library.  In non-PIC code you
-    // must compile with the fragile ABI if you want to use ivars from a
-    // GCC-compiled class.
-    if (CGM.getLangOpts().PICLevel) {
-      llvm::GlobalVariable *IvarOffsetGV = new llvm::GlobalVariable(TheModule,
-            Int32Ty, false,
-            llvm::GlobalValue::PrivateLinkage, OffsetGuess, Name+".guess");
-      IvarOffsetPointer = new llvm::GlobalVariable(TheModule,
-            IvarOffsetGV->getType(), false, llvm::GlobalValue::LinkOnceAnyLinkage,
-            IvarOffsetGV, Name);
-    } else {
-      IvarOffsetPointer = new llvm::GlobalVariable(TheModule,
-              llvm::Type::getInt32PtrTy(VMContext), false,
-              llvm::GlobalValue::ExternalLinkage, nullptr, Name);
-    }
-  }
+  if (!IvarOffsetPointer)
+    IvarOffsetPointer = new llvm::GlobalVariable(TheModule,
+            llvm::Type::getInt32PtrTy(VMContext), false,
+            llvm::GlobalValue::ExternalLinkage, nullptr, Name);
   return IvarOffsetPointer;
 }
 

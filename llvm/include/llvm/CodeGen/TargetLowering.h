@@ -2886,6 +2886,13 @@ public:
       SDValue Op, const APInt &DemandedElts, APInt &KnownUndef,
       APInt &KnownZero, TargetLoweringOpt &TLO, unsigned Depth = 0) const;
 
+  /// If \p SNaN is false, \returns true if \p Op is known to never be any
+  /// NaN. If \p sNaN is true, returns if \p Op is known to never be a signaling
+  /// NaN.
+  virtual bool isKnownNeverNaNForTargetNode(SDValue Op,
+                                            const SelectionDAG &DAG,
+                                            bool SNaN = false,
+                                            unsigned Depth = 0) const;
   struct DAGCombinerInfo {
     void *DC;  // The DAG Combiner object.
     CombineLevel Level;
@@ -3506,11 +3513,9 @@ public:
   //===--------------------------------------------------------------------===//
   // Div utility functions
   //
-  SDValue BuildSDIV(SDNode *N, const APInt &Divisor, SelectionDAG &DAG,
-                    bool IsAfterLegalization,
+  SDValue BuildSDIV(SDNode *N, SelectionDAG &DAG, bool IsAfterLegalization,
                     SmallVectorImpl<SDNode *> &Created) const;
-  SDValue BuildUDIV(SDNode *N, const APInt &Divisor, SelectionDAG &DAG,
-                    bool IsAfterLegalization,
+  SDValue BuildUDIV(SDNode *N, SelectionDAG &DAG, bool IsAfterLegalization,
                     SmallVectorImpl<SDNode *> &Created) const;
 
   /// Targets may override this function to provide custom SDIV lowering for

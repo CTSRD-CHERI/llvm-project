@@ -161,6 +161,7 @@ class MallocChecker : public Checker<check::DeadSymbols,
                                      check::PointerEscape,
                                      check::ConstPointerEscape,
                                      check::PreStmt<ReturnStmt>,
+                                     check::EndFunction,
                                      check::PreCall,
                                      check::PostStmt<CallExpr>,
                                      check::PostStmt<CXXNewExpr>,
@@ -193,6 +194,7 @@ public:
     CK_NewDeleteChecker,
     CK_NewDeleteLeaksChecker,
     CK_MismatchedDeallocatorChecker,
+    CK_InnerPointerChecker,
     CK_NumCheckKinds
   };
 
@@ -217,6 +219,7 @@ public:
   void checkPostStmt(const BlockExpr *BE, CheckerContext &C) const;
   void checkDeadSymbols(SymbolReaper &SymReaper, CheckerContext &C) const;
   void checkPreStmt(const ReturnStmt *S, CheckerContext &C) const;
+  void checkEndFunction(const ReturnStmt *S, CheckerContext &C) const;
   ProgramStateRef evalAssume(ProgramStateRef state, SVal Cond,
                             bool Assumption) const;
   void checkLocation(SVal l, bool isLoad, const Stmt *S,
@@ -353,7 +356,7 @@ private:
   static ProgramStateRef CallocMem(CheckerContext &C, const CallExpr *CE,
                                    ProgramStateRef State);
 
-  ///Check if the memory associated with this symbol was released.
+  /// Check if the memory associated with this symbol was released.
   bool isReleased(SymbolRef Sym, CheckerContext &C) const;
 
   bool checkUseAfterFree(SymbolRef Sym, CheckerContext &C, const Stmt *S) const;
@@ -377,12 +380,15 @@ private:
                                    ProgramStateRef State,
                                    SymbolRef &EscapingSymbol) const;
 
-  // Implementation of the checkPointerEscape callabcks.
+  // Implementation of the checkPointerEscape callbacks.
   ProgramStateRef checkPointerEscapeAux(ProgramStateRef State,
                                   const InvalidatedSymbols &Escaped,
                                   const CallEvent *Call,
                                   PointerEscapeKind Kind,
                                   bool(*CheckRefState)(const RefState*)) const;
+
+  // Implementation of the checkPreStmt and checkEndFunction callbacks.
+  void checkEscapeOnReturn(const ReturnStmt *S, CheckerContext &C) const;
 
   ///@{
   /// Tells if a given family/call/symbol is tracked by the current checker.
@@ -1657,13 +1663,10 @@ MallocChecker::getCheckIfTracked(AllocationFamily Family,
   case AF_IfNameIndex: {
     if (ChecksEnabled[CK_MallocChecker])
       return CK_MallocChecker;
-
-    return Optional<MallocChecker::CheckKind>();
+    return None;
   }
   case AF_CXXNew:
-  case AF_CXXNewArray:
-  // FIXME: Add new CheckKind for AF_InnerBuffer.
-  case AF_InnerBuffer: {
+  case AF_CXXNewArray: {
     if (IsALeakCheck) {
       if (ChecksEnabled[CK_NewDeleteLeaksChecker])
         return CK_NewDeleteLeaksChecker;
@@ -1672,7 +1675,12 @@ MallocChecker::getCheckIfTracked(AllocationFamily Family,
       if (ChecksEnabled[CK_NewDeleteChecker])
         return CK_NewDeleteChecker;
     }
-    return Optional<MallocChecker::CheckKind>();
+    return None;
+  }
+  case AF_InnerBuffer: {
+    if (ChecksEnabled[CK_InnerPointerChecker])
+      return CK_InnerPointerChecker;
+    return None;
   }
   case AF_None: {
     llvm_unreachable("no family");
@@ -1975,7 +1983,8 @@ void MallocChecker::ReportUseAfterFree(CheckerContext &C, SourceRange Range,
                                        SymbolRef Sym) const {
 
   if (!ChecksEnabled[CK_MallocChecker] &&
-      !ChecksEnabled[CK_NewDeleteChecker])
+      !ChecksEnabled[CK_NewDeleteChecker] &&
+      !ChecksEnabled[CK_InnerPointerChecker])
     return;
 
   Optional<MallocChecker::CheckKind> CheckKind = getCheckIfTracked(C, Sym);
@@ -2451,7 +2460,24 @@ void MallocChecker::checkPreCall(const CallEvent &Call,
   }
 }
 
-void MallocChecker::checkPreStmt(const ReturnStmt *S, CheckerContext &C) const {
+void MallocChecker::checkPreStmt(const ReturnStmt *S,
+                                 CheckerContext &C) const {
+  checkEscapeOnReturn(S, C);
+}
+
+// In the CFG, automatic destructors come after the return statement.
+// This callback checks for returning memory that is freed by automatic
+// destructors, as those cannot be reached in checkPreStmt().
+void MallocChecker::checkEndFunction(const ReturnStmt *S,
+                                     CheckerContext &C) const {
+  checkEscapeOnReturn(S, C);
+}
+
+void MallocChecker::checkEscapeOnReturn(const ReturnStmt *S,
+                                        CheckerContext &C) const {
+  if (!S)
+    return;
+
   const Expr *E = S->getRetValue();
   if (!E)
     return;
@@ -3085,6 +3111,18 @@ void ento::registerNewDeleteLeaksChecker(CheckerManager &mgr) {
     checker->CheckNames[MallocChecker::CK_NewDeleteChecker] =
         mgr.getCurrentCheckName();
   }
+}
+
+// Intended to be used in InnerPointerChecker to register the part of
+// MallocChecker connected to it.
+void ento::registerInnerPointerCheckerAux(CheckerManager &mgr) {
+    registerCStringCheckerBasic(mgr);
+    MallocChecker *checker = mgr.registerChecker<MallocChecker>();
+    checker->IsOptimistic = mgr.getAnalyzerOptions().getBooleanOption(
+        "Optimistic", false, checker);
+    checker->ChecksEnabled[MallocChecker::CK_InnerPointerChecker] = true;
+    checker->CheckNames[MallocChecker::CK_InnerPointerChecker] =
+        mgr.getCurrentCheckName();
 }
 
 #define REGISTER_CHECKER(name)                                                 \

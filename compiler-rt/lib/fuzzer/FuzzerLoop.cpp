@@ -38,6 +38,7 @@
 
 namespace fuzzer {
 static const size_t kMaxUnitSizeToPrint = 256;
+static const size_t kUpdateMutationWeightRuns = 10000;
 
 thread_local bool Fuzzer::IsMyThread;
 
@@ -465,16 +466,11 @@ void Fuzzer::CheckForUnstableCounters(const uint8_t *Data, size_t Size) {
 
   // First Rerun
   CBSetupAndRun();
-  TPC.UpdateUnstableCounters(Options.HandleUnstable);
-
-  // Second Rerun
-  CBSetupAndRun();
-  TPC.UpdateUnstableCounters(Options.HandleUnstable);
-
-  // Move minimum hit counts back to ModuleInline8bitCounters
-  if (Options.HandleUnstable == TracePC::MinUnstable ||
-      Options.HandleUnstable == TracePC::ZeroUnstable)
-    TPC.ApplyUnstableCounters();
+  if (TPC.UpdateUnstableCounters(Options.HandleUnstable)) {
+    // Second Rerun
+    CBSetupAndRun();
+    TPC.UpdateAndApplyUnstableCounters(Options.HandleUnstable);
+  }
 }
 
 bool Fuzzer::RunOne(const uint8_t *Data, size_t Size, bool MayDeleteFile,
@@ -554,6 +550,9 @@ static bool LooseMemeq(const uint8_t *A, const uint8_t *B, size_t Size) {
 
 void Fuzzer::ExecuteCallback(const uint8_t *Data, size_t Size) {
   TPC.RecordInitialStack();
+  if (Options.UseWeightedMutations &&
+      TotalNumberOfRuns % kUpdateMutationWeightRuns == 0)
+    MD.UpdateDistribution();
   TotalNumberOfRuns++;
   assert(InFuzzingThread());
   if (SMR.IsClient())

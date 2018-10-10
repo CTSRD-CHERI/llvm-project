@@ -71,6 +71,28 @@
 
 namespace clang {
 
+  unsigned ASTImporter::getFieldIndex(Decl *F) {
+    assert(F && (isa<FieldDecl>(*F) || isa<IndirectFieldDecl>(*F)) &&
+        "Try to get field index for non-field.");
+
+    auto *Owner = dyn_cast<RecordDecl>(F->getDeclContext());
+    if (!Owner)
+      return 0;
+
+    unsigned Index = 1;
+    for (const auto *D : Owner->decls()) {
+      if (D == F)
+        return Index;
+
+      if (isa<FieldDecl>(*D) || isa<IndirectFieldDecl>(*D))
+        ++Index;
+    }
+
+    llvm_unreachable("Field was not found in its parent context.");
+
+    return 0;
+  }
+
   template <class T>
   SmallVector<Decl*, 2>
   getCanonicalForwardRedeclChain(Redeclarable<T>* D) {
@@ -1147,15 +1169,21 @@ bool ASTNodeImporter::ImportDeclParts(NamedDecl *D, DeclContext *&DC,
   FunctionDecl *FunDecl;
   if (isa<RecordDecl>(D) && (FunDecl = dyn_cast<FunctionDecl>(OrigDC)) &&
       FunDecl->hasBody()) {
-    SourceRange RecR = D->getSourceRange();
-    SourceRange BodyR = FunDecl->getBody()->getSourceRange();
-    // If RecordDecl is not in Body (it is a param), we bail out.
-    if (RecR.isValid() && BodyR.isValid() &&
-        (RecR.getBegin() < BodyR.getBegin() ||
-         BodyR.getEnd() < RecR.getEnd())) {
-      Importer.FromDiag(D->getLocation(), diag::err_unsupported_ast_node)
-          << D->getDeclKindName();
-      return true;
+    auto getLeafPointeeType = [](const Type *T) {
+      while (T->isPointerType() || T->isArrayType()) {
+        T = T->getPointeeOrArrayElementType();
+      }
+      return T;
+    };
+    for (const ParmVarDecl *P : FunDecl->parameters()) {
+      const Type *LeafT =
+          getLeafPointeeType(P->getType().getCanonicalType().getTypePtr());
+      auto *RT = dyn_cast<RecordType>(LeafT);
+      if (RT && RT->getDecl() == D) {
+        Importer.FromDiag(D->getLocation(), diag::err_unsupported_ast_node)
+            << D->getDeclKindName();
+        return true;
+      }
     }
   }
 
@@ -2823,23 +2851,6 @@ Decl *ASTNodeImporter::VisitCXXConversionDecl(CXXConversionDecl *D) {
   return VisitCXXMethodDecl(D);
 }
 
-static unsigned getFieldIndex(Decl *F) {
-  auto *Owner = dyn_cast<RecordDecl>(F->getDeclContext());
-  if (!Owner)
-    return 0;
-
-  unsigned Index = 1;
-  for (const auto *D : Owner->noload_decls()) {
-    if (D == F)
-      return Index;
-
-    if (isa<FieldDecl>(*D) || isa<IndirectFieldDecl>(*D))
-      ++Index;
-  }
-
-  return Index;
-}
-
 Decl *ASTNodeImporter::VisitFieldDecl(FieldDecl *D) {
   // Import the major distinguishing characteristics of a variable.
   DeclContext *DC, *LexicalDC;
@@ -2857,7 +2868,9 @@ Decl *ASTNodeImporter::VisitFieldDecl(FieldDecl *D) {
   for (auto *FoundDecl : FoundDecls) {
     if (auto *FoundField = dyn_cast<FieldDecl>(FoundDecl)) {
       // For anonymous fields, match up by index.
-      if (!Name && getFieldIndex(D) != getFieldIndex(FoundField))
+      if (!Name &&
+          ASTImporter::getFieldIndex(D) !=
+          ASTImporter::getFieldIndex(FoundField))
         continue;
 
       if (Importer.IsStructurallyEquivalent(D->getType(),
@@ -2922,7 +2935,9 @@ Decl *ASTNodeImporter::VisitIndirectFieldDecl(IndirectFieldDecl *D) {
   for (unsigned I = 0, N = FoundDecls.size(); I != N; ++I) {
     if (auto *FoundField = dyn_cast<IndirectFieldDecl>(FoundDecls[I])) {
       // For anonymous indirect fields, match up by index.
-      if (!Name && getFieldIndex(D) != getFieldIndex(FoundField))
+      if (!Name &&
+          ASTImporter::getFieldIndex(D) !=
+          ASTImporter::getFieldIndex(FoundField))
         continue;
 
       if (Importer.IsStructurallyEquivalent(D->getType(),

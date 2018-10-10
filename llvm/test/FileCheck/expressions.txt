@@ -60,7 +60,7 @@
 // RUN: echo "22 -> 23" | not FileCheck -check-prefix=VAR-WRONG-EXPR %s 2>&1 | FileCheck -check-prefix VAR-WRONG-EXPR-MSG %s
 // VAR-WRONG-EXPR: [[FOO:[0-9]+]]
 // VAR-WRONG-EXPR: [[@EXPR FOO + 2]]
-// VAR-WRONG-EXPR-MSG: expressions.txt:[[@LINE-1]]:20: error: expected string not found in input
+// VAR-WRONG-EXPR-MSG: expressions.txt:[[@LINE-1]]:20: error: VAR-WRONG-EXPR: expected string not found in input
 // VAR-WRONG-EXPR-MSG: note: with expression "@EXPR FOO + 2" equal to "24"
 
 // RUN: echo "22 -> 23" | not FileCheck -check-prefix=VAR-RESERVED-NAME %s 2>&1 | FileCheck -check-prefix VAR-RESERVED-NAME-MSG %s
