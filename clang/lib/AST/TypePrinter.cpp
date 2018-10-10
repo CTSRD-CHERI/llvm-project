@@ -1433,6 +1433,7 @@ void TypePrinter::printAttributedAfter(const AttributedType *T,
 
   // Nothing to print after.
   if (T->getAttrKind() == AttributedType::attr_nonnull ||
+      T->getAttrKind() == AttributedType::attr_cheri_capability ||
       T->getAttrKind() == AttributedType::attr_nullable ||
       T->getAttrKind() == AttributedType::attr_null_unspecified)
     return printAfter(T->getModifiedType(), OS);
@@ -1477,6 +1478,7 @@ void TypePrinter::printAttributedAfter(const AttributedType *T,
   OS << " __attribute__((";
   switch (T->getAttrKind()) {
   case AttributedType::attr_lifetimebound:
+  case AttributedType::attr_cheri_capability:
   case AttributedType::attr_nonnull:
   case AttributedType::attr_nullable:
   case AttributedType::attr_null_unspecified:
