@@ -2,7 +2,7 @@
 
 // RUN: %cheri_purecap_clang %legacy_caprelocs_flag %S/simple-cap-reloc.c -c -o %t.o
 // RUN: llvm-readobj -s -r %t.o | FileCheck -check-prefix READOBJ %S/simple-cap-reloc-common.check
-// RUN: llvm-objdump -C -r %t.o | FileCheck -check-prefix DUMP-OBJ %S/simple-cap-reloc-common.check
+// RUN: llvm-objdump --cap-relocs -r %t.o | FileCheck -check-prefix DUMP-OBJ %S/simple-cap-reloc-common.check
 
 // We need the symbol table before the capabiilty relocation record -> dump it to a temporary file first
 // RUN: ld.lld -process-cap-relocs %t.o -static -o %t-static.exe
@@ -18,4 +18,4 @@
 // Look at shared libraries:
 // RUN: ld.lld -process-cap-relocs %t.o -shared -o %t.so
 // RUN: llvm-readobj -r -s %t.so | FileCheck -check-prefixes SHLIB,SHLIB-INTEGRATED %S/simple-cap-reloc-common.check
-// RUN: llvm-objdump -C -t %t.so | FileCheck -check-prefixes DUMP-SHLIB,DUMP-SHLIB-INTERNAL %S/simple-cap-reloc-common.check
+// RUN: llvm-objdump --cap-relocs -t %t.so | FileCheck -check-prefixes DUMP-SHLIB,DUMP-SHLIB-INTERNAL %S/simple-cap-reloc-common.check

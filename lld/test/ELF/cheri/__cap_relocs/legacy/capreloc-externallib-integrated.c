@@ -7,7 +7,7 @@
 // RUN: llvm-objdump -h -r -t -C %t-static.exe | FileCheck -check-prefixes DUMP-EXE,STATIC %s
 
 // RUN: ld.lld -process-cap-relocs %t-externs.o -shared -o %t-externs.so
-// RUN: llvm-objdump -C -t  %t-externs.so | FileCheck -check-prefixes DUMP-EXTERNALLIB %s
+// RUN: llvm-objdump --cap-relocs -t  %t-externs.so | FileCheck -check-prefixes DUMP-EXTERNALLIB %s
 
 // RUN: ld.lld -process-cap-relocs %t-externs.so %t.o -o %t-dynamic.exe -e entry
 // RUN: llvm-objdump -h -r -t -C %t-dynamic.exe | FileCheck -check-prefixes DUMP-EXE,DYNAMIC %s
@@ -16,7 +16,7 @@
 // See what it looks like as a shared library
 // RUN: ld.lld -process-cap-relocs %t-externs.so %t.o -shared -o %t.so
 // RUN: llvm-readobj -r -dyn-relocations -s %t.so | FileCheck -check-prefixes SHLIB %s
-// RUN: llvm-objdump -C -t %t.so | FileCheck -check-prefixes DUMP-SHLIB %s
+// RUN: llvm-objdump --cap-relocs -t %t.so | FileCheck -check-prefixes DUMP-SHLIB %s
 
 // check that we get an undefined symbol error:
 // RUN: not ld.lld -process-cap-relocs %t.o -Bdynamic -o /dev/null -e entry 2>&1 | FileCheck %s -check-prefix UNDEFINED

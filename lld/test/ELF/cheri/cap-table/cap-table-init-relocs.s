@@ -1,17 +1,17 @@
 # RUN: %cheri128_purecap_llvm-mc -filetype=obj %s -o %t.o
 # RUN: ld.lld -shared -o %t %t.o -preemptible-caprelocs=legacy -local-caprelocs=legacy
 # RUN: llvm-readobj -r %t | FileCheck %s -check-prefix LEGACY-BOTH-ELF-RELOCS
-# RUN: llvm-objdump -C -h -t %t | FileCheck %s -check-prefix LEGACY-BOTH-CAPRELOCS
+# RUN: llvm-objdump --cap-relocs -h -t %t | FileCheck %s -check-prefix LEGACY-BOTH-CAPRELOCS
 # RUN: ld.lld -shared -o %t %t.o -preemptible-caprelocs=elf -local-caprelocs=legacy
 # RUN: llvm-readobj -r %t | FileCheck %s -check-prefix ELF-PREEMPTIBLE-LEGACY-LOCAL-ELF-RELOCS
-# RUN: llvm-objdump -C -h -t %t | FileCheck %s -check-prefix ELF-PREEMPTIBLE-LEGACY-LOCAL-CAPRELOCS
+# RUN: llvm-objdump --cap-relocs -h -t %t | FileCheck %s -check-prefix ELF-PREEMPTIBLE-LEGACY-LOCAL-CAPRELOCS
 
 # TODO: ld.lld -o %t %t -preemptible-caprelocs=elf -local-caprelocs=cbuildcap
 
 # Not sure it makes sense to maintain the -local-caprelocs=elf codepath
 # RUN: ld.lld -shared -o %t %t.o -preemptible-caprelocs=elf -local-caprelocs=elf
 # RUN: llvm-readobj -r %t | FileCheck %s -check-prefix ELF-BOTH-ELF-RELOCS
-# RUN: llvm-objdump -C -h -t %t | FileCheck %s -check-prefix ELF-BOTH-CAPRELOCS
+# RUN: llvm-objdump --cap-relocs -h -t %t | FileCheck %s -check-prefix ELF-BOTH-CAPRELOCS
 
 .text
 .ent __start

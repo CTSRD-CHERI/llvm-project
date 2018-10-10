@@ -8,7 +8,7 @@
 // WARN: Could not find a real symbol for __cap_reloc against .data.rel.ro+0x60
 // WARN: warning: Linking old object files without CheriABI variant flag.
 // RUN: llvm-readobj -r %t.so | FileCheck %s -check-prefix DYNAMIC-RELOCS
-// RUN: llvm-objdump -C %t.so | FileCheck %s
+// RUN: llvm-objdump --cap-relocs %t.so | FileCheck %s
 
 // FIXME: it would be good if we could set bounds here instead of having it as -1
 

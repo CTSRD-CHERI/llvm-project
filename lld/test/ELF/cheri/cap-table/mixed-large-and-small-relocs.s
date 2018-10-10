@@ -4,7 +4,7 @@
 # RUN: %cheri128_llvm-mc -filetype=obj %s -o %t.o
 # RUN: %cheri128_llvm-mc -filetype=obj -defsym=TOO_MANY_SMALL_RELOCS=1 %s -o %t-bad.o
 # RUN: ld.lld %t.o -o %t.exe
-# RUN: llvm-objdump -C -t -d -D %t.exe | FileCheck %s -check-prefix EXE
+# RUN: llvm-objdump --cap-relocs -t -d -D %t.exe | FileCheck %s -check-prefix EXE
 # check that symbols with small immediates come first:
 # EXE-LABEL: Disassembly of section .cap_table:
 # EXE-NEXT: sym_small000@CAPTABLE:

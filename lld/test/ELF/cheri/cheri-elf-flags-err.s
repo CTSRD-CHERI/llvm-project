@@ -76,8 +76,8 @@ __start:
 # CHERI128-HYBRID-FLAGS-NEXT:    EF_MIPS_MACH_CHERI128 (0xC10000)
 # CHERI128-HYBRID-FLAGS-NEXT:  ]
 
-# CHERI256-vs-MIPS: target ABI 'purecap' is incompatible with 'n64': {{.*}}/cheri-elf-flags-err.s.tmp-mips64.o
-# CHERI128-vs-MIPS: target ABI 'purecap' is incompatible with 'n64': {{.*}}/cheri-elf-flags-err.s.tmp-mips64.o
+# CHERI256-vs-MIPS: {{.*}}/cheri-elf-flags-err.s.tmp-mips64.o: ABI 'n64' is incompatible with target ABI 'purecap'
+# CHERI128-vs-MIPS: s{{.*}}/cheri-elf-flags-err.s.tmp-mips64.o: ABI 'n64' is incompatible with target ABI 'purecap'
 # CHERI256-vs-CHERI128: incompatible target ISA:
 # CHERI256-vs-CHERI128-NEXT: {{.+}}-cheri256-main.o: mips4 (cheri256)
 # CHERI256-vs-CHERI128-NEXT: {{.+}}-cheri128-lib.o: mips4 (cheri128)

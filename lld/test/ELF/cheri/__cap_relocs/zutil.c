@@ -5,7 +5,7 @@
 // RUN: %cheri_purecap_clang %s -c -o %t.o
 // RUN: llvm-readobj -r %t.o | FileCheck -check-prefix OBJ-RELOCS %s
 // RUN: ld.lld -shared --enable-new-dtags -o %t.so --fatal-warnings %t.o
-// RUN: llvm-objdump -C -s -t %t.so | FileCheck %s
+// RUN: llvm-objdump --cap-relocs -s -t %t.so | FileCheck %s
 
 #define z_const const
 

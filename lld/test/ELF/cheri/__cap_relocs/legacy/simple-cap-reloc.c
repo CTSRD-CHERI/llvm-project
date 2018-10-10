@@ -2,7 +2,7 @@
 
 // RUN: %cheri_purecap_cc1 %legacy_caprelocs_flag_cc1 %s -emit-obj -o %t.o
 // RUN: llvm-readobj -s -r %t.o | FileCheck -check-prefix READOBJ %S/simple-cap-reloc-common.check
-// RUN: llvm-objdump -C -r %t.o | FileCheck -check-prefix DUMP-OBJ %S/simple-cap-reloc-common.check
+// RUN: llvm-objdump --cap-relocs -r %t.o | FileCheck -check-prefix DUMP-OBJ %S/simple-cap-reloc-common.check
 
 // We need the symbol table before the capabiilty relocation record -> dump it to a temporary file first
 // RUN: %clang_link_purecap -external-capsizefix -Wl,-no-process-cap-relocs %t.o -static -o %t-static.exe

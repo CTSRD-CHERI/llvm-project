@@ -2,7 +2,7 @@
 // RUN: %cheri128_purecap_cc1 -DGET_ORDINAL=1 -emit-obj -O0 -mllvm -cheri-cap-table-abi=plt %s -o %t-get_ordinal.o
 // RUN: %cheri128_purecap_cc1 -DMAIN=1 -emit-obj -O0 -mllvm -cheri-cap-table-abi=plt %s -o %t-main.o
 // RUN: ld.lld %t-get_number.o %t-get_ordinal.o %t-main.o -o %t.exe
-// RUN: llvm-objdump -C -d -t -s %t.exe | FileCheck %s
+// RUN: llvm-objdump --cap-relocs -d -t -s %t.exe | FileCheck %s
 
 struct table {
   int value;

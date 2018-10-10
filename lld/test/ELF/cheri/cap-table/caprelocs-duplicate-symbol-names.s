@@ -10,7 +10,7 @@
 
 # But duplicate locals are fine so we need to add sensible @CAPTABLE names:
 # RUN: ld.lld -preemptible-caprelocs=legacy %t1.o %t2.o -o %t.exe
-# RUN: llvm-objdump -C -d -r -t %t.exe | FileCheck %s
+# RUN: llvm-objdump --cap-relocs -d -r -t %t.exe | FileCheck %s
 
 # Check that we still have all the capability relocations:
 # See https://github.com/CTSRD-CHERI/lld/issues/19
