@@ -2483,8 +2483,7 @@ void CodeGenModule::emitCPUDispatchDefinition(GlobalDecl GD) {
 
   StringRef ResolverName = getMangledName(GD);
   llvm::Type *ResolverType = llvm::FunctionType::get(
-      llvm::PointerType::get(DeclTy,
-                             Context.getTargetAddressSpace(FD->getType())),
+      llvm::PointerType::get(DeclTy, getAddressSpaceForType(FD->getType())),
       false);
   auto *ResolverFunc = cast<llvm::Function>(
       GetOrCreateLLVMFunction(ResolverName, ResolverType, GlobalDecl{},

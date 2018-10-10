@@ -220,7 +220,6 @@ class ScalarExprEmitter
   CGBuilderTy &Builder;
   bool IgnoreResultAssign;
   llvm::LLVMContext &VMContext;
-
 public:
 
   ScalarExprEmitter(CodeGenFunction &cgf, bool ira=false)
@@ -1168,8 +1167,7 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
       bool Signed = DstType->isSignedIntegerOrEnumerationType();
       QualType ConvertedType =
           CGF.getContext().getIntTypeForBitwidth(BitWidth, Signed);
-      Src = EmitScalarConversion(Src, SrcType, ConvertedType, Loc,
-                                 TreatBooleanAsSigned);
+      Src = EmitScalarConversion(Src, SrcType, ConvertedType, Loc, Opts);
       SrcType = ConvertedType;
     }
     assert(SrcType->isIntegerType() && "Not ptr->ptr or int->ptr conversion?");
@@ -1177,7 +1175,7 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
     if (DstType->isCHERICapabilityType(CGF.getContext())) {
       Value *Null = llvm::ConstantPointerNull::get(DstPT);
       // Builder.CreateIntToPtr(llvm::ConstantInt::get(CGF.IntPtrTy, 0), DstPT);
-      if (SrcType->isBooleanType() && !TreatBooleanAsSigned)
+      if (SrcType->isBooleanType() && !Opts.TreatBooleanAsSigned)
         Src = Builder.CreateZExtOrTrunc(Src, CGF.Int64Ty);
       else
         Src = Builder.CreateSExtOrTrunc(Src, CGF.Int64Ty);

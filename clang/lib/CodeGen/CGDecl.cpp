@@ -1072,7 +1072,8 @@ static void emitStoresForConstant(CodeGenModule &CGM, const VarDecl &D,
                                   CGBuilderTy &Builder,
                                   llvm::Constant *constant, bool ContainsCaps) {
   auto *Int8Ty = llvm::IntegerType::getInt8Ty(CGM.getLLVMContext());
-  auto *IntPtrTy = CGM.getDataLayout().getIntPtrType(CGM.getLLVMContext());
+  auto *IntPtrTy = CGM.getDataLayout().getIntPtrType(
+      CGM.getLLVMContext(), CGM.getTargetCodeGenInfo().getDefaultAS());
 
   // If the initializer is all or mostly the same, codegen with bzero / memset
   // then do a few stores afterward.
