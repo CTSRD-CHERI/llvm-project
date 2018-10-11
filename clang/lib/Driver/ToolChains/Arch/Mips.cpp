@@ -46,11 +46,6 @@ void mips::getMipsCPUAndABI(const ArgList &Args, const llvm::Triple &Triple,
                      .Case("256", "cheri256")
                      .Default("cheri128");
   }
-  if (Triple.getArch() == llvm::Triple::cheri || ABIName == "purecap") {
-    DefMips32CPU = CHERICPU;
-    DefMips64CPU = CHERICPU;
-  }
-
   // MIPS64r6 is the default for Android MIPS64 (mips64el-linux-android).
   if (Triple.isAndroid()) {
     DefMips32CPU = "mips32";
@@ -66,6 +61,11 @@ void mips::getMipsCPUAndABI(const ArgList &Args, const llvm::Triple &Triple,
   if (Triple.getOS() == llvm::Triple::FreeBSD) {
     DefMips32CPU = "mips2";
     DefMips64CPU = "mips3";
+  }
+
+  if (Triple.getArch() == llvm::Triple::cheri || ABIName == "purecap") {
+    DefMips32CPU = CHERICPU;
+    DefMips64CPU = CHERICPU;
   }
 
   if (Arg *A = Args.getLastArg(clang::driver::options::OPT_march_EQ,
