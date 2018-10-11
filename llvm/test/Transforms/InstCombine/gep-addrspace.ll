@@ -26,10 +26,9 @@ define void @func(%myStruct addrspace(1)* nocapture %p) nounwind {
 ; Make sure that GEPs are not reordered to before addrspacecasts.
 define void @keep_necessary_addrspacecast(i64 %i, float** %out0, float** %out1) {
 ; CHECK-LABEL: @keep_necessary_addrspacecast(
-; CHECK-NEXT:    [[T01:%.*]] = getelementptr [256 x float], [256 x float] addrspace(3)* @array, i64 0, i64 [[I:%.*]]
-; CHECK-NEXT:    [[T0:%.*]] = addrspacecast float addrspace(3)* [[T01]] to float*
-; CHECK-NEXT:    [[TMP1:%.*]] = getelementptr float, float addrspace(3)* @scalar, i64 [[I]]
-; CHECK-NEXT:    [[T1:%.*]] = addrspacecast float addrspace(3)* [[TMP1]] to float*
+; XXXAR: these are different compared to upstream (they are in a single line instead of and additional addrspacecast instruction)
+; CHECK-NEXT:    [[T0:%.*]] = getelementptr [256 x float], [256 x float]* addrspacecast ([256 x float] addrspace(3)* @array to [256 x float]*), i64 0, i64 [[I:%.*]]
+; CHECK-NEXT:    [[T1:%.*]] = getelementptr [0 x float], [0 x float]* addrspacecast ([0 x float] addrspace(3)* bitcast (float addrspace(3)* @scalar to [0 x float] addrspace(3)*) to [0 x float]*), i64 0, i64 [[I]]
 ; CHECK-NEXT:    store float* [[T0]], float** [[OUT0:%.*]], align 4
 ; CHECK-NEXT:    store float* [[T1]], float** [[OUT1:%.*]], align 4
 ; CHECK-NEXT:    ret void
