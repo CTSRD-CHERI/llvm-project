@@ -84,8 +84,8 @@ __start:
 # CHERI128-vs-CHERI256: incompatible target ISA:
 # CHERI128-vs-CHERI256-NEXT: {{.+}}-cheri128-main.o: mips4 (cheri128)
 # CHERI128-vs-CHERI256-NEXT: {{.+}}-cheri256-lib.o: mips4 (cheri256)
-# CHERI256-vs-CHERI256-HYBRID: target ABI 'purecap' is incompatible with 'n64': {{.*}}/cheri-elf-flags-err.s.tmp-cheri256-hybrid-lib.o
-# CHERI128-vs-CHERI128-HYBRID: target ABI 'purecap' is incompatible with 'n64': {{.*}}/cheri-elf-flags-err.s.tmp-cheri128-hybrid-lib.o
+# CHERI256-vs-CHERI256-HYBRID: {{.*}}/cheri-elf-flags-err.s.tmp-cheri256-hybrid-lib.o: ABI 'n64' is incompatible with target ABI 'purecap'
+# CHERI128-vs-CHERI128-HYBRID: {{.*}}/cheri-elf-flags-err.s.tmp-cheri128-hybrid-lib.o: ABI 'n64' is incompatible with target ABI 'purecap'
 
 # TODO: should those files actually link?
 # CHERI256-HYBRID-vs-MIPS: target ISA 'cheri256' is incompatible with 'mips64': {{.*}}/cheri-elf-flags-err.s.tmp-mips64.o

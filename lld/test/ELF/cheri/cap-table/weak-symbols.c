@@ -31,7 +31,7 @@ TEST(_DYNAMIC)
 int __start(void) {
   return 0;
 }
-// DYNAMIC-EXE: 0000000000000238 .dynamic		 00000190 .hidden _DYNAMIC
+// DYNAMIC-EXE: 0000000000000230 .dynamic		 00000190 .hidden _DYNAMIC
 // DYNAMIC-EXE: 0000000000010000 .text 00000000 .hidden __init_array_end
 // DYNAMIC-EXE: 0000000000010000 .text 00000000 .hidden __init_array_start
 // STATIC-EXE: 0000000120010000 .text 00000000 .hidden __init_array_end
@@ -41,12 +41,12 @@ int __start(void) {
 // EXE: 0030000         .preinit_array		 00000008 .hidden __preinit_array_start
 // EXE: 0030010         .cap_table		 000000b0 _CHERI_CAPABILITY_TABLE_
 // STATIC-EXE: 0000000000000000  w      *UND*		 00000000 _DYNAMIC
-// EXE: 00100b0 g     F .text		 00000008 __start
+// EXE: 10108 g     F .text		 00000008 __start
 // DYNAMIC-EXE:  0030278         __cap_relocs		 00000000 _edata
 // STATIC-EXE: 00300c0         .cap_table		 00000000 _edata
 // EXE: 0040000         .bss		 00000000 _end
-// EXE: 00100b8         .text		 00000000 _etext
+// EXE: 10110         .text		 00000000 _etext
 // DYNAMIC-EXE: 0030278         __cap_relocs		 00000000 edata
 // STATIC-EXE: 00300c0         .cap_table		 00000000 edata
 // EXE: 0040000         .bss		 00000000 end
-// EXE: 00100b8         .text		 00000000 etext
+// EXE: 10110         .text		 00000000 etext
