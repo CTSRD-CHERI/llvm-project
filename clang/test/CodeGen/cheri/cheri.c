@@ -6,17 +6,17 @@
 #define inline 
 #include <cheri.h>
 
-// PTRS: define signext i32 @cheri_length_get(i8* nocapture readnone
+// PTRS: define i32 @cheri_length_get(i8* nocapture readnone
 // PTRS: ret i32 -1
-// PTRS: define signext i32 @cheri_base_get(i8* nocapture readnone
+// PTRS: define i32 @cheri_base_get(i8* nocapture readnone
 // PTRS: ret i32 -1
-// PTRS: define signext i32 @cheri_offset_get(i8* nocapture readnone
+// PTRS: define i32 @cheri_offset_get(i8* nocapture readnone
 // PTRS: ret i32 -1
 // PTRS: define i8* @cheri_offset_set(i8* readnone returned{{( %.+)?}}, i32
 // PTRS: ret i8*
-// PTRS: define signext i32 @cheri_type_get(i8* nocapture readnone
+// PTRS: define i32 @cheri_type_get(i8* nocapture readnone
 // PTRS: ret i32 0
-// PTRS: define  zeroext i16 @cheri_perms_get(i8* nocapture readnone
+// PTRS: define zeroext i16 @cheri_perms_get(i8* nocapture readnone
 // PTRS: ret i16 0
 // PTRS: define i8* @cheri_perms_and(i8* readnone returned{{( %.+)?}}, i16 zeroext
 // PTRS: ret i8*
