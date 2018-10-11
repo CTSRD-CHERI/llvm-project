@@ -11,7 +11,7 @@ void prefetch(void* arg) {
   __builtin_prefetch(arg);
 }
 
-// CHECK-LABEL: define i32 @fn1()
+// CHECK-LABEL: define signext i32 @fn1()
 // CHECK: call void @llvm.prefetch(
 // N64-SAME: i8* null,
 // PURECAP-SAME: i8* addrspacecast (i8 addrspace(200)* null to i8*),

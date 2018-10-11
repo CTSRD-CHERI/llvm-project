@@ -51,7 +51,7 @@ extern int procctl(idtype_t, pid_t, int, void *);
 // CHECK-NEXT:    [[ARRAYDECAY1:%.*]] = getelementptr inbounds [10 x %struct.procctl_reaper_pidinfo], [10 x %struct.procctl_reaper_pidinfo] addrspace(200)* [[INFO]], i32 0, i32 0
 // CHECK-NEXT:    store [[STRUCT_PROCCTL_REAPER_PIDINFO]] addrspace(200)* [[ARRAYDECAY1]], [[STRUCT_PROCCTL_REAPER_PIDINFO]] addrspace(200)* addrspace(200)* [[RP_PIDS]], align [[$CAP_SIZE]]
 // CHECK-NEXT:    [[TMP3:%.*]] = bitcast [[STRUCT_PROCCTL_REAPER_PIDS]] addrspace(200)* [[DOTCOMPOUNDLITERAL]] to i8 addrspace(200)*
-// CHECK-NEXT:    [[CALL:%.*]] = call i32 @procctl(i32 signext 0, i32 signext [[TMP1]], i32 signext 22, i8 addrspace(200)* [[TMP3]])
+// CHECK-NEXT:    [[CALL:%.*]] = call signext i32 @procctl(i32 signext 0, i32 signext [[TMP1]], i32 signext 22, i8 addrspace(200)* [[TMP3]])
 // CHECK-NEXT:    store i32 [[CALL]], i32 addrspace(200)* [[R]], align 4
 // CHECK-NEXT:    [[TMP4:%.*]] = load i32, i32 addrspace(200)* [[R]], align 4
 // CHECK-NEXT:    ret i32 [[TMP4]]
@@ -77,7 +77,7 @@ extern int procctl(idtype_t, pid_t, int, void *);
 // CCERI256-NEXT:    [[ARRAYDECAY1:%.*]] = getelementptr inbounds [10 x %struct.procctl_reaper_pidinfo], [10 x %struct.procctl_reaper_pidinfo] addrspace(200)* [[INFO]], i32 0, i32 0
 // CCERI256-NEXT:    store [[STRUCT_PROCCTL_REAPER_PIDINFO]] addrspace(200)* [[ARRAYDECAY1]], [[STRUCT_PROCCTL_REAPER_PIDINFO]] addrspace(200)* addrspace(200)* [[RP_PIDS]], align 32
 // CCERI256-NEXT:    [[TMP3:%.*]] = bitcast [[STRUCT_PROCCTL_REAPER_PIDS]] addrspace(200)* [[DOTCOMPOUNDLITERAL]] to i8 addrspace(200)*
-// CCERI256-NEXT:    [[CALL:%.*]] = call i32 @procctl(i32 signext 0, i32 signext [[TMP1]], i32 signext 22, i8 addrspace(200)* [[TMP3]])
+// CCERI256-NEXT:    [[CALL:%.*]] = call signext i32 @procctl(i32 signext 0, i32 signext [[TMP1]], i32 signext 22, i8 addrspace(200)* [[TMP3]])
 // CCERI256-NEXT:    store i32 [[CALL]], i32 addrspace(200)* [[R]], align 4
 // CCERI256-NEXT:    [[TMP4:%.*]] = load i32, i32 addrspace(200)* [[R]], align 4
 // CCERI256-NEXT:    ret i32 [[TMP4]]
