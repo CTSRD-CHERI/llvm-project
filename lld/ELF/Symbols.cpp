@@ -152,6 +152,9 @@ uint64_t Symbol::getSize() const {
     }
     return DR->Size;
   }
+  // FIXME: assuming it is always shared broke this
+  if (isa<Undefined>(this))
+    return 0;
   return cast<SharedSymbol>(this)->Size;
 }
 
