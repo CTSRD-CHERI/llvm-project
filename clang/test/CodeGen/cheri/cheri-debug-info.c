@@ -169,17 +169,17 @@ int foo(int* i) { // CHECK-IR:  call void @llvm.dbg.declare(metadata i32{{( addr
 // DEBUG-INFO-OPT-NEXT:                 DW_AT_external	(0x01)
 // DEBUG-INFO-OPT-EMPTY:
 // DEBUG-INFO-OPT-NEXT: 0x000000{{56|55}}: DW_TAG_formal_parameter
-// MIPS-DEBUG-INFO-OPT-NEXT:                    DW_AT_location  (0x00000000)
+// MIPS-DEBUG-INFO-OPT-NEXT:                    DW_AT_location  (DW_OP_reg4 A0_64)
 // CHERI-DEBUG-INFO-OPT-NEXT:                   DW_AT_location	(DW_OP_regx C3)
 // DEBUG-INFO-OPT-NEXT:                         DW_AT_name	("i")
 // DEBUG-INFO-OPT-NEXT:                         DW_AT_decl_file	("{{.+}}cheri-debug-info.c")
 // DEBUG-INFO-OPT-NEXT:                         DW_AT_decl_line	(20)
-// DEBUG-INFO-OPT-NEXT:                         DW_AT_type	(0x00000065 "int*")
+// DEBUG-INFO-OPT-NEXT:                         DW_AT_type	([[INT_PTR_INFO_LOC:0x0000006(3|5)]] "int*")
 // DEBUG-INFO-OPT-EMPTY:
-// DEBUG-INFO-OPT-NEXT: 0x00000064:     NULL
+// DEBUG-INFO-OPT-NEXT: 0x0000006{{2|4}}:     NULL
 // DEBUG-INFO-OPT-EMPTY:
-// DEBUG-INFO-OPT-NEXT: 0x00000065:   DW_TAG_pointer_type
+// DEBUG-INFO-OPT-NEXT: [[INT_PTR_INFO_LOC]]:   DW_TAG_pointer_type
 // DEBUG-INFO-OPT-NEXT:                 DW_AT_type	(0x0000002f "int")
 // CHERI-DEBUG-INFO-OPT-NEXT:           DW_AT_byte_size	(0x{{10|20}})
 // DEBUG-INFO-OPT-EMPTY:
-// DEBUG-INFO-OPT-NEXT: 0x0000006{{a|b}}:   NULL
+// DEBUG-INFO-OPT-NEXT: 0x0000006{{8|b}}:   NULL
