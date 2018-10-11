@@ -683,7 +683,7 @@ CGCallee ItaniumCXXABI::EmitLoadOfMemberFunctionPointer(
   }
 
   // Load the virtual function to call.
-  VFPAddr = Builder.CreateBitCast(VFPAddr, FTy->getPointerTo()->getPointerTo(DefaultAS));
+  VFPAddr = Builder.CreateBitCast(VFPAddr, FTy->getPointerTo(DefaultAS)->getPointerTo(DefaultAS));
   llvm::Value *VirtualFn = Builder.CreateAlignedLoad(
       VFPAddr, CGF.getPointerAlign(), "memptr.virtualfn");
   CGF.EmitBranch(FnEnd);
