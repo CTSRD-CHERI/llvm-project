@@ -148,7 +148,7 @@ bool data_ptr_not_equal(int A::* ptr1, int A::* ptr2) {
 
 int data_ptr_dereferece(A* a, int A::* ptr) {
   return a->*ptr;
-  // CHECK-LABEL: define i32 @_Z19data_ptr_derefereceU3capP1AMS_i(%class.A addrspace(200)*{{.*}}, i64{{.*}})
+  // CHECK-LABEL: define signext i32 @_Z19data_ptr_derefereceU3capP1AMS_i(%class.A addrspace(200)*{{.*}}, i64{{.*}})
   // CHECK: [[A_ADDR:%.+]] = alloca %class.A addrspace(200)*, align [[$CAP_SIZE]]
   // CHECK-NEXT: [[PTR_ADDR:%.+]] = alloca i64, align 8
   // CHECK-NEXT: store %class.A addrspace(200)* [[A:%.+]], %class.A addrspace(200)* addrspace(200)* [[A_ADDR]], align [[$CAP_SIZE]]
@@ -252,7 +252,7 @@ bool func_ptr_not_equal(AMemberFuncPtr ptr1, AMemberFuncPtr ptr2) {
 
 int func_ptr_dereference(A* a, AMemberFuncPtr ptr) {
   return (a->*ptr)();
-  // CHECK-LABEL: define i32 @_Z20func_ptr_dereferenceU3capP1AMS_FivE(%class.A addrspace(200)*{{.*}}, i8 addrspace(200)* inreg{{.*}}, i64 inreg{{.*}})
+  // CHECK-LABEL: define signext i32 @_Z20func_ptr_dereferenceU3capP1AMS_FivE(%class.A addrspace(200)*{{.*}}, i8 addrspace(200)* inreg{{.*}}, i64 inreg{{.*}})
   // CHECK: [[PTR:%.+]] = alloca { i8 addrspace(200)*, i64 }, align [[$CAP_SIZE]]
   // CHECK-NEXT: [[A_ADDR:%.+]] = alloca %class.A addrspace(200)*, align [[$CAP_SIZE]]
   // CHECK-NEXT: [[PTR_ADDR:%.+]] = alloca { i8 addrspace(200)*, i64 }, align [[$CAP_SIZE]]
@@ -283,7 +283,7 @@ int func_ptr_dereference(A* a, AMemberFuncPtr ptr) {
 
   // CHECK: [[MEMPTR_END_LABEL]]:                                       ; preds = %[[MEMPTR_NONVIRTUAL_LABEL]], %[[MEMPTR_VIRTUAL_LABEL]]
   // CHECK-NEXT: [[VAR8:%.+]] = phi i32 (%class.A addrspace(200)*) addrspace(200)* [ [[MEMPTR_VIRTUALFN]], %[[MEMPTR_VIRTUAL_LABEL]] ], [ [[MEMPTR_NONVIRTUALFN]], %[[MEMPTR_NONVIRTUAL_LABEL]] ]
-  // CHECK-NEXT: [[CALL:%.+]] = call i32 [[VAR8]](%class.A addrspace(200)* [[THIS_ADJUSTED]])
+  // CHECK-NEXT: [[CALL:%.+]] = call signext i32 [[VAR8]](%class.A addrspace(200)* [[THIS_ADJUSTED]])
   // CHECK-NEXT: ret i32 [[CALL]]
   // N64: [[MEMPTR_ADJ_SHIFTED:%.+]] = ashr i64 [[PTR_COERCE1:%.+]], 1
   // N64-NEXT: [[THIS_NOT_ADJUSTED:%.+]] = bitcast %class.A* [[A:%.+]] to i8*
@@ -307,7 +307,7 @@ int func_ptr_dereference(A* a, AMemberFuncPtr ptr) {
 
   // N64: [[MEMPTR_END_LABEL]]:
   // N64-NEXT: [[VAR4:%.+]] = phi i32 (%class.A*)* [ [[MEMPTR_VIRTUALFN]], %[[MEMPTR_VIRTUAL_LABEL]] ], [ [[MEMPTR_NONVIRTUALFN]], %[[MEMPTR_NONVIRTUAL_LABEL]] ]
-  // N64-NEXT: [[CALL:%.+]] = tail call i32 [[VAR4]](%class.A* [[THIS_ADJUSTED]])
+  // N64-NEXT: [[CALL:%.+]] = tail call signext i32 [[VAR4]](%class.A* [[THIS_ADJUSTED]])
   // N64-NEXT: ret i32 [[CALL]]
 
   // N64 ASM on entry: $4 = A* a, $5 = memptr.ptr, $6 = memptr.adj
