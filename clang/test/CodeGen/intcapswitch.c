@@ -10,7 +10,7 @@
 
 int x(__intcap_t y)
 {
-  // CHECK-LABEL: define i32 @x(i8 addrspace(200)*
+  // CHECK-LABEL: define signext i32 @x(i8 addrspace(200)*
   // CHECK: [[SWITCH_VAR:%.+]] = call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* {{%.+}})
   // CHECK: switch i64 [[SWITCH_VAR]], label {{%.+}} [
   switch (y)
@@ -34,7 +34,7 @@ int x(__intcap_t y)
 }
 
 int y(void) {
-  // CHECK-LABEL: define i32 @y()
+  // CHECK-LABEL: define signext i32 @y()
   __intcap_t foo = C;
   // CHECK: [[SWITCH_VAR:%.+]] = call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* {{%.+}})
   // CHECK: switch i64 [[SWITCH_VAR]], label {{%.+}} [
@@ -66,7 +66,7 @@ int y(void) {
 char buf[16];
 
 int z_long(void) {
-  // CHECK-OPT-LABEL: define i32 @z_long()
+  // CHECK-OPT-LABEL: define signext i32 @z_long()
   // CHECK-OPT:      [[SWITCHVAL:%.+]] = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* getelementptr inbounds ([16 x i8], [16 x i8] addrspace(200)* @buf, i64 0, i64 0))
   // CHECK-OPT-NEXT: switch i64 [[SWITCHVAL]], label {{%.+}} [
 
