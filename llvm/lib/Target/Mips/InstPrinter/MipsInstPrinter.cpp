@@ -290,4 +290,3 @@ printRegisterList(const MCInst *MI, int opNum, raw_ostream &O) {
     printRegName(O, MI->getOperand(i).getReg());
   }
 }
-

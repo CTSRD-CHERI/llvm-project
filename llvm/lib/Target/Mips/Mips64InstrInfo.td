@@ -944,12 +944,6 @@ let AdditionalPredicates = [NotInMicroMips] in {
 def : MipsInstAlias<"dsra $rd, $rt, $rs",
                     (DSRAV GPR64Opnd:$rd, GPR64Opnd:$rt, GPR32Opnd:$rs), 0>,
                     ISA_MIPS3;
-
-// def : MipsInstAlias<"bnez $rs,$offset",
-//                     (BNE64 GPR64Opnd:$rs, ZERO_64, brtarget:$offset), 0>;
-// def : MipsInstAlias<"beqz $rs,$offset",
-//                     (BEQ64 GPR64Opnd:$rs, ZERO_64, brtarget:$offset), 0>;
-
 let AdditionalPredicates = [NotInMicroMips] in {
   def : MipsInstAlias<"dsll $rd, $rt, $rs",
                       (DSLLV GPR64Opnd:$rd, GPR64Opnd:$rt, GPR32Opnd:$rs), 0>,
