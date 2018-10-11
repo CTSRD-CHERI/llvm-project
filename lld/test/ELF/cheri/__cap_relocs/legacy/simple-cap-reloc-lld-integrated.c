@@ -6,14 +6,14 @@
 
 // We need the symbol table before the capabiilty relocation record -> dump it to a temporary file first
 // RUN: ld.lld -process-cap-relocs %t.o -static -o %t-static.exe
-// RUN: llvm-objdump -h -r -t -C %t-static.exe | FileCheck -check-prefixes DUMP-EXE,STATIC %S/simple-cap-reloc-common.check
+// RUN: llvm-objdump -h -r -t  --cap-relocs %t-static.exe | FileCheck -check-prefixes DUMP-EXE,STATIC %S/simple-cap-reloc-common.check
 
 // same again for statically dynamically linked exe:
 // Create a dummy shared library otherwise we won't get a dynamic executable
 // RUN: %cheri_purecap_clang %legacy_caprelocs_flag %S/../Inputs/dummy_shlib.c -c -o %T/integrated_dummy_shlib.o
 // RUN: ld.lld -process-cap-relocs  %T/integrated_dummy_shlib.o -shared -o %T/libintegrated_dummy_shlib.so
 // RUN: ld.lld -process-cap-relocs -L%T -lintegrated_dummy_shlib %t.o -o %t-dynamic.exe
-// RUN: llvm-objdump -h -r -t -C %t-dynamic.exe | FileCheck -check-prefixes DUMP-EXE,DYNAMIC %S/simple-cap-reloc-common.check
+// RUN: llvm-objdump -h -r -t  --cap-relocs %t-dynamic.exe | FileCheck -check-prefixes DUMP-EXE,DYNAMIC %S/simple-cap-reloc-common.check
 
 // Look at shared libraries:
 // RUN: ld.lld -process-cap-relocs %t.o -shared -o %t.so

@@ -4,13 +4,13 @@
 // RUN: %cheri256_purecap_cc1 %legacy_caprelocs_flag_cc1 %S/../Inputs/external_lib.c -emit-obj -o %t-externs.o
 
 // RUN: ld.lld -process-cap-relocs %t.o %t-externs.o -static -o %t-static.exe -e entry
-// RUN: llvm-objdump -h -r -t -C %t-static.exe | FileCheck -check-prefixes DUMP-EXE,STATIC %s
+// RUN: llvm-objdump -h -r -t  --cap-relocs %t-static.exe | FileCheck -check-prefixes DUMP-EXE,STATIC %s
 
 // RUN: ld.lld -process-cap-relocs %t-externs.o -shared -o %t-externs.so
 // RUN: llvm-objdump --cap-relocs -t  %t-externs.so | FileCheck -check-prefixes DUMP-EXTERNALLIB %s
 
 // RUN: ld.lld -process-cap-relocs %t-externs.so %t.o -o %t-dynamic.exe -e entry
-// RUN: llvm-objdump -h -r -t -C %t-dynamic.exe | FileCheck -check-prefixes DUMP-EXE,DYNAMIC %s
+// RUN: llvm-objdump -h -r -t  --cap-relocs %t-dynamic.exe | FileCheck -check-prefixes DUMP-EXE,DYNAMIC %s
 // RUN: llvm-readobj -r %t-dynamic.exe | FileCheck -check-prefix DYNAMIC-EXE-RELOCS %s
 
 // See what it looks like as a shared library
