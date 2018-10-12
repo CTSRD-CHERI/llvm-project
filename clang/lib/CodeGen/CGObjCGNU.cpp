@@ -220,7 +220,6 @@ protected:
     auto *ConstStr = TheModule.getGlobalVariable(name);
     if (!ConstStr) {
       llvm::Constant *value = llvm::ConstantDataArray::getString(VMContext,Str);
-      unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
       auto *GV = new llvm::GlobalVariable(TheModule, value->getType(), true,
               llvm::GlobalValue::LinkOnceODRLinkage, value, name);
       GV->setComdat(TheModule.getOrInsertComdat(name));
