@@ -9,7 +9,7 @@
 // RUN: %clangxx -xc++ -target cheri-none-elf -fPIC -mabi=purecap %s -o %t -### 2>&1 | FileCheck %s -check-prefixes CHECK,CHERIABI
 
 
-// CHECK: "-cc1" "-triple" "{{(mips64|cheri)}}-none--elf" "-emit-obj"
+// CHECK: "-cc1" "-triple" "{{(mips64|cheri)}}-none-unknown-elf" "-emit-obj"
 // CHECK-NOT: "-no-integrated-as"
 // CHECK-SAME: "-target-abi" "[[ABI:(n64|purecap)]]"
 // CHECK-SAME: "-resource-dir" "[[RESOURCE_DIR:[^"]+]]"
