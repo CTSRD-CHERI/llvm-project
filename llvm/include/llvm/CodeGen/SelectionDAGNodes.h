@@ -2113,12 +2113,15 @@ public:
                         MachineMemOperand *MMO)
       : MemSDNode(NodeTy, Order, dl, VTs, MemVT, MMO) {}
 
-  // In the both nodes address is Op1, mask is Op2:
-  // MaskedLoadSDNode (Chain, ptr, mask, src0), src0 is a passthru value
-  // MaskedStoreSDNode (Chain, ptr, mask, data)
+  // MaskedLoadSDNode (Chain, ptr, mask, passthru)
+  // MaskedStoreSDNode (Chain, data, ptr, mask)
   // Mask is a vector of i1 elements
-  const SDValue &getBasePtr() const { return getOperand(1); }
-  const SDValue &getMask() const    { return getOperand(2); }
+  const SDValue &getBasePtr() const {
+    return getOperand(getOpcode() == ISD::MLOAD ? 1 : 2);
+  }
+  const SDValue &getMask() const {
+    return getOperand(getOpcode() == ISD::MLOAD ? 2 : 3);
+  }
 
   static bool classof(const SDNode *N) {
     return N->getOpcode() == ISD::MLOAD ||
@@ -2143,7 +2146,10 @@ public:
     return static_cast<ISD::LoadExtType>(LoadSDNodeBits.ExtTy);
   }
 
+  const SDValue &getBasePtr() const { return getOperand(1); }
+  const SDValue &getMask() const    { return getOperand(2); }
   const SDValue &getPassThru() const { return getOperand(3); }
+
   static bool classof(const SDNode *N) {
     return N->getOpcode() == ISD::MLOAD;
   }
@@ -2175,7 +2181,9 @@ public:
   /// memory at base_addr.
   bool isCompressingStore() const { return StoreSDNodeBits.IsCompressing; }
 
-  const SDValue &getValue() const { return getOperand(3); }
+  const SDValue &getValue() const   { return getOperand(1); }
+  const SDValue &getBasePtr() const { return getOperand(2); }
+  const SDValue &getMask() const    { return getOperand(3); }
 
   static bool classof(const SDNode *N) {
     return N->getOpcode() == ISD::MSTORE;
@@ -2434,6 +2442,18 @@ namespace ISD {
   inline bool isUNINDEXEDStore(const SDNode *N) {
     return isa<StoreSDNode>(N) &&
       cast<StoreSDNode>(N)->getAddressingMode() == ISD::UNINDEXED;
+  }
+
+  /// Return true if the node is a math/logic binary operator. This corresponds
+  /// to the IR function of the same name.
+  inline bool isBinaryOp(const SDNode *N) {
+    auto Op = N->getOpcode();
+    return (Op == ISD::ADD || Op == ISD::SUB || Op == ISD::MUL ||
+            Op == ISD::AND || Op == ISD::OR || Op == ISD::XOR ||
+            Op == ISD::SHL || Op == ISD::SRL || Op == ISD::SRA ||
+            Op == ISD::SDIV || Op == ISD::UDIV || Op == ISD::SREM ||
+            Op == ISD::UREM || Op == ISD::FADD || Op == ISD::FSUB ||
+            Op == ISD::FMUL || Op == ISD::FDIV || Op == ISD::FREM);
   }
 
   /// Attempt to match a unary predicate against a scalar/splat constant or

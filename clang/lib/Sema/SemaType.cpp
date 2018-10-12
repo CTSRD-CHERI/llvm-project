@@ -2887,6 +2887,7 @@ static QualType GetDeclSpecTypeForDeclarator(TypeProcessingState &state,
     // class template argument deduction)?
     bool IsCXXAutoType =
         (Auto && Auto->getKeyword() != AutoTypeKeyword::GNUAutoType);
+    bool IsDeducedReturnType = false;
 
     switch (D.getContext()) {
     case DeclaratorContext::LambdaExprContext:
@@ -2978,10 +2979,12 @@ static QualType GetDeclSpecTypeForDeclarator(TypeProcessingState &state,
     case DeclaratorContext::TrailingReturnVarContext:
       if (!SemaRef.getLangOpts().CPlusPlus14 || !IsCXXAutoType)
         Error = 13; // Function return type
+      IsDeducedReturnType = true;
       break;
     case DeclaratorContext::ConversionIdContext:
       if (!SemaRef.getLangOpts().CPlusPlus14 || !IsCXXAutoType)
         Error = 14; // conversion-type-id
+      IsDeducedReturnType = true;
       break;
     case DeclaratorContext::FunctionalCastContext:
       if (isa<DeducedTemplateSpecializationType>(Deduced))
@@ -3066,10 +3069,14 @@ static QualType GetDeclSpecTypeForDeclarator(TypeProcessingState &state,
                D.getContext() != DeclaratorContext::LambdaExprContext) {
       // If there was a trailing return type, we already got
       // warn_cxx98_compat_trailing_return_type in the parser.
-      // If this was a lambda, we already warned on that too.
       SemaRef.Diag(AutoRange.getBegin(),
-                   diag::warn_cxx98_compat_auto_type_specifier)
-        << AutoRange;
+                   D.getContext() ==
+                           DeclaratorContext::LambdaExprParameterContext
+                       ? diag::warn_cxx11_compat_generic_lambda
+                       : IsDeducedReturnType
+                             ? diag::warn_cxx11_compat_deduced_return_type
+                             : diag::warn_cxx98_compat_auto_type_specifier)
+          << AutoRange;
     }
   }
 
@@ -4445,14 +4452,18 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
         // trailing-return-type is only required if we're declaring a function,
         // and not, for instance, a pointer to a function.
         if (D.getDeclSpec().hasAutoTypeSpec() &&
-            !FTI.hasTrailingReturnType() && chunkIndex == 0 &&
-            !S.getLangOpts().CPlusPlus14) {
-          S.Diag(D.getDeclSpec().getTypeSpecTypeLoc(),
-                 D.getDeclSpec().getTypeSpecType() == DeclSpec::TST_auto
-                     ? diag::err_auto_missing_trailing_return
-                     : diag::err_deduced_return_type);
-          T = Context.IntTy;
-          D.setInvalidType(true);
+            !FTI.hasTrailingReturnType() && chunkIndex == 0) {
+          if (!S.getLangOpts().CPlusPlus14) {
+            S.Diag(D.getDeclSpec().getTypeSpecTypeLoc(),
+                   D.getDeclSpec().getTypeSpecType() == DeclSpec::TST_auto
+                       ? diag::err_auto_missing_trailing_return
+                       : diag::err_deduced_return_type);
+            T = Context.IntTy;
+            D.setInvalidType(true);
+          } else {
+            S.Diag(D.getDeclSpec().getTypeSpecTypeLoc(),
+                   diag::warn_cxx11_compat_deduced_return_type);
+          }
         } else if (FTI.hasTrailingReturnType()) {
           // T must be exactly 'auto' at this point. See CWG issue 681.
           if (isa<ParenType>(T)) {
@@ -4482,6 +4493,9 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
             T = Context.IntTy;
             D.setInvalidType(true);
           }
+        } else {
+          // This function type is not the type of the entity being declared,
+          // so checking the 'auto' is not the responsibility of this chunk.
         }
       }
 
@@ -5597,12 +5611,6 @@ GetTypeSourceInfoForDeclarator(TypeProcessingState &State,
   }
 
   for (unsigned i = 0, e = D.getNumTypeObjects(); i != e; ++i) {
-    if (DependentAddressSpaceTypeLoc DASTL =
-        CurrTL.getAs<DependentAddressSpaceTypeLoc>()) {
-      fillDependentAddressSpaceTypeLoc(DASTL, D.getTypeObject(i).getAttrs());
-      CurrTL = DASTL.getPointeeTypeLoc().getUnqualifiedLoc();
-    }
-
     // An AtomicTypeLoc might be produced by an atomic qualifier in this
     // declarator chunk.
     if (AtomicTypeLoc ATL = CurrTL.getAs<AtomicTypeLoc>()) {
@@ -5613,6 +5621,12 @@ GetTypeSourceInfoForDeclarator(TypeProcessingState &State,
     while (AttributedTypeLoc TL = CurrTL.getAs<AttributedTypeLoc>()) {
       fillAttributedTypeLoc(TL, State);
       CurrTL = TL.getNextTypeLoc().getUnqualifiedLoc();
+    }
+
+    while (DependentAddressSpaceTypeLoc TL =
+               CurrTL.getAs<DependentAddressSpaceTypeLoc>()) {
+      fillDependentAddressSpaceTypeLoc(TL, D.getTypeObject(i).getAttrs());
+      CurrTL = TL.getPointeeTypeLoc().getUnqualifiedLoc();
     }
 
     // FIXME: Ordering here?
@@ -5767,7 +5781,10 @@ QualType Sema::BuildAddressSpaceAttr(QualType &T, Expr *AddrSpace,
 /// specified type.  The attribute contains 1 argument, the id of the address
 /// space for the type.
 static void HandleAddressSpaceTypeAttribute(QualType &Type,
-                                            const ParsedAttr &Attr, Sema &S) {
+                                            const ParsedAttr &Attr,
+                                            TypeProcessingState &State) {
+  Sema &S = State.getSema();
+
   // ISO/IEC TR 18037 S5.3 (amending C99 6.7.3): "A function type shall not be
   // qualified by an address-space qualifier."
   if (Type->isFunctionType()) {
@@ -5809,10 +5826,15 @@ static void HandleAddressSpaceTypeAttribute(QualType &Type,
     // the type.
     QualType T = S.BuildAddressSpaceAttr(Type, ASArgExpr, Attr.getLoc());
 
-    if (!T.isNull())
-      Type = T;
-    else
+    if (!T.isNull()) {
+      ASTContext &Ctx = S.Context;
+      auto *ASAttr = ::new (Ctx) AddressSpaceAttr(
+          Attr.getRange(), Ctx, Attr.getAttributeSpellingListIndex(),
+          static_cast<unsigned>(T.getQualifiers().getAddressSpace()));
+      Type = State.getAttributedType(ASAttr, T, T);
+    } else {
       Attr.setInvalid();
+    }
   } else {
     // The keyword-based type attributes imply which address space to use.
     switch (Attr.getKind()) {
@@ -7282,7 +7304,7 @@ static void processTypeAttrs(TypeProcessingState &state, QualType &type,
     case ParsedAttr::AT_OpenCLConstantAddressSpace:
     case ParsedAttr::AT_OpenCLGenericAddressSpace:
     case ParsedAttr::AT_AddressSpace:
-      HandleAddressSpaceTypeAttribute(type, attr, state.getSema());
+      HandleAddressSpaceTypeAttribute(type, attr, state);
       attr.setUsedAsTypeAttr();
       break;
     OBJC_POINTER_TYPE_ATTRS_CASELIST:

@@ -358,6 +358,7 @@ protected:
   bool HasSDWAMac;
   bool HasSDWAOutModsVOPC;
   bool HasDPP;
+  bool HasR128A16;
   bool HasDLInsts;
   bool D16PreservesUnusedBits;
   bool FlatAddressSpace;
@@ -377,7 +378,6 @@ protected:
   bool FeatureDisable;
 
   SelectionDAGTargetInfo TSInfo;
-  AMDGPUAS AS;
 private:
   SIInstrInfo InstrInfo;
   SITargetLowering TLInfo;
@@ -444,10 +444,6 @@ public:
 
   unsigned getMaxPrivateElementSize() const {
     return MaxPrivateElementSize;
-  }
-
-  AMDGPUAS getAMDGPUAS() const {
-    return AS;
   }
 
   bool hasIntClamp() const {
@@ -791,6 +787,10 @@ public:
     return HasDPP;
   }
 
+  bool hasR128A16() const {
+    return HasR128A16;
+  }
+
   bool enableSIScheduler() const {
     return EnableSIScheduler;
   }
@@ -970,7 +970,6 @@ private:
   R600TargetLowering TLInfo;
   InstrItineraryData InstrItins;
   SelectionDAGTargetInfo TSInfo;
-  AMDGPUAS AS;
 
 public:
   R600Subtarget(const Triple &TT, StringRef CPU, StringRef FS,
@@ -1054,8 +1053,6 @@ public:
   bool hasVertexCache() const { return HasVertexCache; }
 
   short getTexVTXClauseSize() const { return TexVTXClauseSize; }
-
-  AMDGPUAS getAMDGPUAS() const { return AS; }
 
   bool enableMachineScheduler() const override {
     return true;

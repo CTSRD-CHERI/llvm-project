@@ -44,27 +44,13 @@ public:
     return Result;
   }
 
-  Expected<LookupFlagsResult> lookupFlags(const LookupSet &Symbols) {
-    auto &ES = MR.getTargetJITDylib().getExecutionSession();
+  Expected<LookupSet> getResponsibilitySet(const LookupSet &Symbols) {
+    LookupSet Result;
 
-    SymbolNameSet InternedSymbols;
-
-    for (auto &S : Symbols)
-      InternedSymbols.insert(ES.getSymbolStringPool().intern(S));
-
-    SymbolFlagsMap InternedResult;
-    MR.getTargetJITDylib().withSearchOrderDo([&](const JITDylibList &JDs) {
-      // An empty search order is pathalogical, but allowed.
-      if (JDs.empty())
-        return;
-
-      assert(JDs.front() && "VSOList entry can not be null");
-      InternedResult = JDs.front()->lookupFlags(InternedSymbols);
-    });
-
-    LookupFlagsResult Result;
-    for (auto &KV : InternedResult)
-      Result[*KV.first] = std::move(KV.second);
+    for (auto &KV : MR.getSymbols()) {
+      if (Symbols.count(*KV.first))
+        Result.insert(*KV.first);
+    }
 
     return Result;
   }
@@ -83,7 +69,7 @@ RTDyldObjectLinkingLayer2::RTDyldObjectLinkingLayer2(
     NotifyLoadedFunction NotifyLoaded, NotifyEmittedFunction NotifyEmitted)
     : ObjectLayer(ES), GetMemoryManager(GetMemoryManager),
       NotifyLoaded(std::move(NotifyLoaded)),
-      NotifyEmitted(std::move(NotifyEmitted)), ProcessAllSections(false) {}
+      NotifyEmitted(std::move(NotifyEmitted)) {}
 
 void RTDyldObjectLinkingLayer2::emit(MaterializationResponsibility R,
                                      VModuleKey K,
@@ -132,10 +118,38 @@ void RTDyldObjectLinkingLayer2::emit(MaterializationResponsibility R,
       }
     }
 
+    SymbolFlagsMap ExtraSymbolsToClaim;
     SymbolMap Symbols;
-    for (auto &KV : RTDyld->getSymbolTable())
-      if (!InternalSymbols.count(KV.first))
-        Symbols[ES.getSymbolStringPool().intern(KV.first)] = KV.second;
+    for (auto &KV : RTDyld->getSymbolTable()) {
+      // Scan the symbols and add them to the Symbols map for resolution.
+
+      // We never claim internal symbols.
+      if (InternalSymbols.count(KV.first))
+        continue;
+
+      auto InternedName = ES.getSymbolStringPool().intern(KV.first);
+      auto Flags = KV.second.getFlags();
+
+      // Override object flags and claim responsibility for symbols if
+      // requested.
+      if (OverrideObjectFlags || AutoClaimObjectSymbols) {
+        auto I = R.getSymbols().find(InternedName);
+
+        if (OverrideObjectFlags && I != R.getSymbols().end())
+          Flags = JITSymbolFlags::stripTransientFlags(I->second);
+        else if (AutoClaimObjectSymbols && I == R.getSymbols().end())
+          ExtraSymbolsToClaim[InternedName] = Flags;
+      }
+
+      Symbols[InternedName] = JITEvaluatedSymbol(KV.second.getAddress(), Flags);
+    }
+
+    if (!ExtraSymbolsToClaim.empty())
+      if (auto Err = R.defineMaterializing(ExtraSymbolsToClaim)) {
+        ES.reportError(std::move(Err));
+        R.failMaterialization();
+        return;
+      }
 
     R.resolve(Symbols);
   }

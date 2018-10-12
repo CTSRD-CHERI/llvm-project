@@ -76,7 +76,8 @@ std::unique_ptr<SymbolIndex> memIndex(std::vector<Symbol> Symbols) {
   SymbolSlab::Builder Slab;
   for (const auto &Sym : Symbols)
     Slab.insert(Sym);
-  return MemIndex::build(std::move(Slab).build());
+  return MemIndex::build(std::move(Slab).build(),
+                         SymbolOccurrenceSlab::createEmpty());
 }
 
 CodeCompleteResult completions(ClangdServer &Server, StringRef TestCode,
@@ -564,12 +565,10 @@ TEST(CompletionTest, IncludeInsertionPreprocessorIntegrationTests) {
 
   IgnoreDiagnostics DiagConsumer;
   ClangdServer Server(CDB, FS, DiagConsumer, ClangdServer::optsForTest());
-  Symbol::Details Scratch;
   auto BarURI = URI::createFile(BarHeader).toString();
   Symbol Sym = cls("ns::X");
   Sym.CanonicalDeclaration.FileURI = BarURI;
-  Scratch.IncludeHeader = BarURI;
-  Sym.Detail = &Scratch;
+  Sym.IncludeHeader = BarURI;
   // Shoten include path based on search dirctory and insert.
   auto Results = completions(Server,
                              R"cpp(
@@ -595,16 +594,14 @@ TEST(CompletionTest, NoIncludeInsertionWhenDeclFoundInFile) {
 
   IgnoreDiagnostics DiagConsumer;
   ClangdServer Server(CDB, FS, DiagConsumer, ClangdServer::optsForTest());
-  Symbol::Details Scratch;
   Symbol SymX = cls("ns::X");
   Symbol SymY = cls("ns::Y");
   std::string BarHeader = testPath("bar.h");
   auto BarURI = URI::createFile(BarHeader).toString();
   SymX.CanonicalDeclaration.FileURI = BarURI;
   SymY.CanonicalDeclaration.FileURI = BarURI;
-  Scratch.IncludeHeader = "<bar>";
-  SymX.Detail = &Scratch;
-  SymY.Detail = &Scratch;
+  SymX.IncludeHeader = "<bar>";
+  SymY.IncludeHeader = "<bar>";
   // Shoten include path based on search dirctory and insert.
   auto Results = completions(Server,
                              R"cpp(
@@ -825,8 +822,7 @@ TEST(CompletionTest, IgnoreCompleteInExcludedPPBranchWithRecoveryContext) {
 
   EXPECT_TRUE(Results.Completions.empty());
 }
-
-SignatureHelp signatures(StringRef Text,
+SignatureHelp signatures(StringRef Text, Position Point,
                          std::vector<Symbol> IndexSymbols = {}) {
   std::unique_ptr<SymbolIndex> Index;
   if (!IndexSymbols.empty())
@@ -840,9 +836,14 @@ SignatureHelp signatures(StringRef Text,
 
   ClangdServer Server(CDB, FS, DiagConsumer, Opts);
   auto File = testPath("foo.cpp");
+  runAddDocument(Server, File, Text);
+  return cantFail(runSignatureHelp(Server, File, Point));
+}
+
+SignatureHelp signatures(StringRef Text,
+                         std::vector<Symbol> IndexSymbols = {}) {
   Annotations Test(Text);
-  runAddDocument(Server, File, Test.code());
-  return cantFail(runSignatureHelp(Server, File, Test.point()));
+  return signatures(Test.code(), Test.point(), std::move(IndexSymbols));
 }
 
 MATCHER_P(ParamsAre, P, "") {
@@ -905,6 +906,54 @@ TEST(SignatureHelpTest, ActiveArg) {
                               {"int a", "int b", "int c"})));
   EXPECT_EQ(0, Results.activeSignature);
   EXPECT_EQ(1, Results.activeParameter);
+}
+
+TEST(SignatureHelpTest, OpeningParen) {
+  llvm::StringLiteral Tests[] = {// Recursive function call.
+                                 R"cpp(
+    int foo(int a, int b, int c);
+    int main() {
+      foo(foo $p^( foo(10, 10, 10), ^ )));
+    })cpp",
+                                 // Functional type cast.
+                                 R"cpp(
+    struct Foo {
+      Foo(int a, int b, int c);
+    };
+    int main() {
+      Foo $p^( 10, ^ );
+    })cpp",
+                                 // New expression.
+                                 R"cpp(
+    struct Foo {
+      Foo(int a, int b, int c);
+    };
+    int main() {
+      new Foo $p^( 10, ^ );
+    })cpp",
+                                 // Macro expansion.
+                                 R"cpp(
+    int foo(int a, int b, int c);
+    #define FOO foo(
+
+    int main() {
+      // Macro expansions.
+      $p^FOO 10, ^ );
+    })cpp",
+                                 // Macro arguments.
+                                 R"cpp(
+    int foo(int a, int b, int c);
+    int main() {
+    #define ID(X) X
+      ID(foo $p^( foo(10), ^ ))
+    })cpp"};
+
+  for (auto Test : Tests) {
+    Annotations Code(Test);
+    EXPECT_EQ(signatures(Code.code(), Code.point()).argListStart,
+              Code.point("p"))
+        << "Test source:" << Test;
+  }
 }
 
 class IndexRequestCollector : public SymbolIndex {
@@ -1127,11 +1176,9 @@ TEST(CompletionTest, OverloadBundling) {
       UnorderedElementsAre(Labeled("GFuncC(…)"), Labeled("GFuncD(int)")));
 
   // Differences in header-to-insert suppress bundling.
-  Symbol::Details Detail;
   std::string DeclFile = URI::createFile(testPath("foo")).toString();
   NoArgsGFunc.CanonicalDeclaration.FileURI = DeclFile;
-  Detail.IncludeHeader = "<foo>";
-  NoArgsGFunc.Detail = &Detail;
+  NoArgsGFunc.IncludeHeader = "<foo>";
   EXPECT_THAT(
       completions(Context + "int y = GFunc^", {NoArgsGFunc}, Opts).Completions,
       UnorderedElementsAre(AllOf(Named("GFuncC"), InsertInclude("<foo>")),
@@ -1612,13 +1659,10 @@ TEST(SignatureHelpTest, InstantiatedSignatures) {
 }
 
 TEST(SignatureHelpTest, IndexDocumentation) {
-  Symbol::Details DocDetails;
-  DocDetails.Documentation = "Doc from the index";
-
   Symbol Foo0 = sym("foo", index::SymbolKind::Function, "@F@\\0#");
-  Foo0.Detail = &DocDetails;
+  Foo0.Documentation = "Doc from the index";
   Symbol Foo1 = sym("foo", index::SymbolKind::Function, "@F@\\0#I#");
-  Foo1.Detail = &DocDetails;
+  Foo1.Documentation = "Doc from the index";
   Symbol Foo2 = sym("foo", index::SymbolKind::Function, "@F@\\0#I#I#");
 
   StringRef Sig0 = R"cpp(

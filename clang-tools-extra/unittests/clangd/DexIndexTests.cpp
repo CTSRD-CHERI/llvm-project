@@ -259,8 +259,8 @@ TEST(DexIndexIterators, StringRepresentation) {
                           createOr(create(L3), create(L4), create(L5)));
 
   EXPECT_EQ(llvm::to_string(*Nested),
-            "(& (& [{1}, 3, 5, 8, 9, END] [{1}, 5, 7, 9, END]) (| [0, {5}, "
-            "END] [0, {1}, 5, END] [{END}]))");
+            "(& (| [0, {5}, END] [0, {1}, 5, END] [{END}]) (& [{1}, 5, 7, 9, "
+            "END] [{1}, 3, 5, 8, 9, END]))");
 }
 
 TEST(DexIndexIterators, Limit) {
@@ -335,35 +335,34 @@ trigramsAre(std::initializer_list<std::string> Trigrams) {
 
 TEST(DexIndexTrigrams, IdentifierTrigrams) {
   EXPECT_THAT(generateIdentifierTrigrams("X86"),
-              trigramsAre({"x86", "x$$", "x8$", "$$$"}));
+              trigramsAre({"x86", "x$$", "x8$"}));
 
-  EXPECT_THAT(generateIdentifierTrigrams("nl"),
-              trigramsAre({"nl$", "n$$", "$$$"}));
+  EXPECT_THAT(generateIdentifierTrigrams("nl"), trigramsAre({"nl$", "n$$"}));
 
-  EXPECT_THAT(generateIdentifierTrigrams("n"), trigramsAre({"n$$", "$$$"}));
+  EXPECT_THAT(generateIdentifierTrigrams("n"), trigramsAre({"n$$"}));
 
   EXPECT_THAT(generateIdentifierTrigrams("clangd"),
-              trigramsAre({"c$$", "cl$", "cla", "lan", "ang", "ngd", "$$$"}));
+              trigramsAre({"c$$", "cl$", "cla", "lan", "ang", "ngd"}));
 
   EXPECT_THAT(generateIdentifierTrigrams("abc_def"),
               trigramsAre({"a$$", "abc", "abd", "ade", "bcd", "bde", "cde",
-                           "def", "ab$", "ad$", "$$$"}));
+                           "def", "ab$", "ad$"}));
 
   EXPECT_THAT(generateIdentifierTrigrams("a_b_c_d_e_"),
               trigramsAre({"a$$", "a_$", "a_b", "abc", "abd", "acd", "ace",
-                           "bcd", "bce", "bde", "cde", "ab$", "$$$"}));
+                           "bcd", "bce", "bde", "cde", "ab$"}));
 
   EXPECT_THAT(generateIdentifierTrigrams("unique_ptr"),
               trigramsAre({"u$$", "uni", "unp", "upt", "niq", "nip", "npt",
                            "iqu", "iqp", "ipt", "que", "qup", "qpt", "uep",
-                           "ept", "ptr", "un$", "up$", "$$$"}));
+                           "ept", "ptr", "un$", "up$"}));
 
-  EXPECT_THAT(generateIdentifierTrigrams("TUDecl"),
-              trigramsAre({"t$$", "tud", "tde", "ude", "dec", "ecl", "tu$",
-                           "td$", "$$$"}));
+  EXPECT_THAT(
+      generateIdentifierTrigrams("TUDecl"),
+      trigramsAre({"t$$", "tud", "tde", "ude", "dec", "ecl", "tu$", "td$"}));
 
   EXPECT_THAT(generateIdentifierTrigrams("IsOK"),
-              trigramsAre({"i$$", "iso", "iok", "sok", "is$", "io$", "$$$"}));
+              trigramsAre({"i$$", "iso", "iok", "sok", "is$", "io$"}));
 
   EXPECT_THAT(
       generateIdentifierTrigrams("abc_defGhij__klm"),
@@ -372,7 +371,7 @@ TEST(DexIndexTrigrams, IdentifierTrigrams) {
                    "cde", "cdg", "cdk", "cgh", "cgk", "def", "deg", "dek",
                    "dgh", "dgk", "dkl", "efg", "efk", "egh", "egk", "ekl",
                    "fgh", "fgk", "fkl", "ghi", "ghk", "gkl", "hij", "hik",
-                   "hkl", "ijk", "ikl", "jkl", "klm", "ab$", "ad$", "$$$"}));
+                   "hkl", "ijk", "ikl", "jkl", "klm", "ab$", "ad$"}));
 }
 
 TEST(DexIndexTrigrams, QueryTrigrams) {

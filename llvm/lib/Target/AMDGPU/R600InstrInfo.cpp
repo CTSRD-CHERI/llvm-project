@@ -1504,18 +1504,18 @@ unsigned R600InstrInfo::getAddressSpaceForPseudoSourceKind(
   switch (Kind) {
   case PseudoSourceValue::Stack:
   case PseudoSourceValue::FixedStack:
-    return ST.getAMDGPUAS().PRIVATE_ADDRESS;
+    return AMDGPUAS::PRIVATE_ADDRESS;
   case PseudoSourceValue::ConstantPool:
   case PseudoSourceValue::GOT:
   case PseudoSourceValue::JumpTable:
   case PseudoSourceValue::GlobalValueCallEntry:
   case PseudoSourceValue::ExternalSymbolCallEntry:
-  case PseudoSourceValue::TargetCustom:
   // CapTable is not used on AMDGPU but we still need to handle it to
   // avoid assertions during PseudoSourceValueManager ctor
   case PseudoSourceValue::CapTable:
-    return ST.getAMDGPUAS().CONSTANT_ADDRESS;
+  case PseudoSourceValue::TargetCustom:
+    return AMDGPUAS::CONSTANT_ADDRESS;
   }
+
   llvm_unreachable("Invalid pseudo source kind");
-  return ST.getAMDGPUAS().PRIVATE_ADDRESS;
 }

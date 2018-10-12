@@ -1531,6 +1531,10 @@ def fopenmp_cuda_mode : Flag<["-"], "fopenmp-cuda-mode">, Group<f_Group>,
   Flags<[CC1Option, NoArgumentUnused, HelpHidden]>;
 def fno_openmp_cuda_mode : Flag<["-"], "fno-openmp-cuda-mode">, Group<f_Group>,
   Flags<[NoArgumentUnused, HelpHidden]>;
+def fopenmp_cuda_force_full_runtime : Flag<["-"], "fopenmp-cuda-force-full-runtime">, Group<f_Group>,
+  Flags<[CC1Option, NoArgumentUnused, HelpHidden]>;
+def fno_openmp_cuda_force_full_runtime : Flag<["-"], "fno-openmp-cuda-force-full-runtime">, Group<f_Group>,
+  Flags<[NoArgumentUnused, HelpHidden]>;
 def fno_optimize_sibling_calls : Flag<["-"], "fno-optimize-sibling-calls">, Group<f_Group>;
 def foptimize_sibling_calls : Flag<["-"], "foptimize-sibling-calls">, Group<f_Group>;
 def fno_escaping_block_tail_calls : Flag<["-"], "fno-escaping-block-tail-calls">, Group<f_Group>, Flags<[CC1Option]>;
@@ -1773,6 +1777,8 @@ def g_Flag : Flag<["-"], "g">, Group<g_Group>,
   HelpText<"Generate source-level debug information">;
 def gline_tables_only : Flag<["-"], "gline-tables-only">, Group<gN_Group>,
   Flags<[CoreOption]>, HelpText<"Emit debug line number tables only">;
+def gline_directives_only : Flag<["-"], "gline-directives-only">, Group<gN_Group>,
+  Flags<[CoreOption]>, HelpText<"Emit debug line info directives only">;
 def gmlt : Flag<["-"], "gmlt">, Alias<gline_tables_only>;
 def g0 : Flag<["-"], "g0">, Group<gN_Group>;
 def g1 : Flag<["-"], "g1">, Group<gN_Group>, Alias<gline_tables_only>;

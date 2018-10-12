@@ -1,4 +1,4 @@
-//===-- hwasan_interceptors.cc ----------------------------------------------===//
+//===-- hwasan_interceptors.cc --------------------------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -50,18 +50,18 @@ DECLARE_REAL(void *, memcpy, void *dest, const void *src, uptr n)
 DECLARE_REAL(void *, memset, void *dest, int c, uptr n)
 
 bool IsInInterceptorScope() {
-  HwasanThread *t = GetCurrentThread();
+  Thread *t = GetCurrentThread();
   return t && t->InInterceptorScope();
 }
 
 struct InterceptorScope {
   InterceptorScope() {
-    HwasanThread *t = GetCurrentThread();
+    Thread *t = GetCurrentThread();
     if (t)
       t->EnterInterceptorScope();
   }
   ~InterceptorScope() {
-    HwasanThread *t = GetCurrentThread();
+    Thread *t = GetCurrentThread();
     if (t)
       t->LeaveInterceptorScope();
   }
@@ -132,7 +132,8 @@ static void *AllocateFromLocalPool(uptr size_in_bytes) {
   extern "C" SANITIZER_INTERFACE_ATTRIBUTE RET __sanitizer_##FN(ARGS) \
       ALIAS(WRAPPER_NAME(FN));
 
-SANITIZER_ALIAS(int, posix_memalign, void **memptr, SIZE_T alignment, SIZE_T size);
+SANITIZER_ALIAS(int, posix_memalign, void **memptr, SIZE_T alignment,
+                SIZE_T size);
 SANITIZER_ALIAS(void *, memalign, SIZE_T alignment, SIZE_T size);
 SANITIZER_ALIAS(void *, aligned_alloc, SIZE_T alignment, SIZE_T size);
 SANITIZER_ALIAS(void *, __libc_memalign, SIZE_T alignment, SIZE_T size);
@@ -293,26 +294,17 @@ extern "C" int pthread_attr_destroy(void *attr);
 
 static void *HwasanThreadStartFunc(void *arg) {
   __hwasan_thread_enter();
-  return ((HwasanThread *)arg)->ThreadStart();
+  ThreadStartArg *A = reinterpret_cast<ThreadStartArg*>(arg);
+  return A->callback(A->param);
 }
 
 INTERCEPTOR(int, pthread_create, void *th, void *attr, void *(*callback)(void*),
             void * param) {
-  ENSURE_HWASAN_INITED(); // for GetTlsSize()
-  __sanitizer_pthread_attr_t myattr;
-  if (!attr) {
-    pthread_attr_init(&myattr);
-    attr = &myattr;
-  }
-
-  AdjustStackSize(attr);
-
-  HwasanThread *t = HwasanThread::Create(callback, param);
-
-  int res = REAL(pthread_create)(th, attr, HwasanThreadStartFunc, t);
-
-  if (attr == &myattr)
-    pthread_attr_destroy(&myattr);
+  ScopedTaggingDisabler disabler;
+  ThreadStartArg *A = GetCurrentThread()->thread_start_arg();
+  *A = {callback, param};
+  int res = REAL(pthread_create)(UntagPtr(th), UntagPtr(attr),
+                                 &HwasanThreadStartFunc, A);
   return res;
 }
 #endif // HWASAN_WITH_INTERCEPTORS

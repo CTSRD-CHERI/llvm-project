@@ -994,7 +994,7 @@ SelectionDAG::SelectionDAG(const TargetMachine &tm, CodeGenOpt::Level OL)
 void SelectionDAG::init(MachineFunction &NewMF,
                         OptimizationRemarkEmitter &NewORE,
                         Pass *PassPtr, const TargetLibraryInfo *LibraryInfo,
-                        DivergenceAnalysis * Divergence) {
+                        LegacyDivergenceAnalysis * Divergence) {
   MF = &NewMF;
   SDAGISelPass = PassPtr;
   ORE = &NewORE;
@@ -6626,11 +6626,11 @@ SDValue SelectionDAG::getIndexedStore(SDValue OrigStore, const SDLoc &dl,
 }
 
 SDValue SelectionDAG::getMaskedLoad(EVT VT, const SDLoc &dl, SDValue Chain,
-                                    SDValue Ptr, SDValue Mask, SDValue Src0,
+                                    SDValue Ptr, SDValue Mask, SDValue PassThru,
                                     EVT MemVT, MachineMemOperand *MMO,
                                     ISD::LoadExtType ExtTy, bool isExpanding) {
   SDVTList VTs = getVTList(VT, MVT::Other);
-  SDValue Ops[] = { Chain, Ptr, Mask, Src0 };
+  SDValue Ops[] = { Chain, Ptr, Mask, PassThru };
   FoldingSetNodeID ID;
   AddNodeIDNode(ID, ISD::MLOAD, VTs, Ops);
   ID.AddInteger(VT.getRawBits());
@@ -6661,7 +6661,7 @@ SDValue SelectionDAG::getMaskedStore(SDValue Chain, const SDLoc &dl,
         "Invalid chain type");
   EVT VT = Val.getValueType();
   SDVTList VTs = getVTList(MVT::Other);
-  SDValue Ops[] = { Chain, Ptr, Mask, Val };
+  SDValue Ops[] = { Chain, Val, Ptr, Mask };
   FoldingSetNodeID ID;
   AddNodeIDNode(ID, ISD::MSTORE, VTs, Ops);
   ID.AddInteger(VT.getRawBits());
@@ -6710,7 +6710,7 @@ SDValue SelectionDAG::getMaskedGather(SDVTList VTs, EVT VT, const SDLoc &dl,
   assert(N->getMask().getValueType().getVectorNumElements() ==
              N->getValueType(0).getVectorNumElements() &&
          "Vector width mismatch between mask and data");
-  assert(N->getIndex().getValueType().getVectorNumElements() ==
+  assert(N->getIndex().getValueType().getVectorNumElements() >=
              N->getValueType(0).getVectorNumElements() &&
          "Vector width mismatch between index and data");
   assert(isa<ConstantSDNode>(N->getScale()) &&
@@ -6747,7 +6747,7 @@ SDValue SelectionDAG::getMaskedScatter(SDVTList VTs, EVT VT, const SDLoc &dl,
   assert(N->getMask().getValueType().getVectorNumElements() ==
              N->getValue().getValueType().getVectorNumElements() &&
          "Vector width mismatch between mask and data");
-  assert(N->getIndex().getValueType().getVectorNumElements() ==
+  assert(N->getIndex().getValueType().getVectorNumElements() >=
              N->getValue().getValueType().getVectorNumElements() &&
          "Vector width mismatch between index and data");
   assert(isa<ConstantSDNode>(N->getScale()) &&
@@ -7852,18 +7852,22 @@ void SelectionDAG::ReplaceAllUsesWith(SDNode *From, const SDValue *To) {
     // This node is about to morph, remove its old self from the CSE maps.
     RemoveNodeFromCSEMaps(User);
 
-    // A user can appear in a use list multiple times, and when this
-    // happens the uses are usually next to each other in the list.
-    // To help reduce the number of CSE recomputations, process all
-    // the uses of this user that we can find this way.
+    // A user can appear in a use list multiple times, and when this happens the
+    // uses are usually next to each other in the list.  To help reduce the
+    // number of CSE and divergence recomputations, process all the uses of this
+    // user that we can find this way.
+    bool To_IsDivergent = false;
     do {
       SDUse &Use = UI.getUse();
       const SDValue &ToOp = To[Use.getResNo()];
       ++UI;
       Use.set(ToOp);
-      if (To->getNode()->isDivergent() != From->isDivergent())
-        updateDivergence(User);
+      To_IsDivergent |= ToOp->isDivergent();
     } while (UI != UE && *UI == User);
+
+    if (To_IsDivergent != From->isDivergent())
+      updateDivergence(User);
+
     // Now that we have modified User, add it back to the CSE maps.  If it
     // already exists there, recursively merge the results together.
     AddModifiedNodeToCSEMaps(User);

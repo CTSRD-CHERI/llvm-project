@@ -322,6 +322,8 @@ public:
   }
 
   bool isSImm6() const {
+    if (!isImm())
+      return false;
     RISCVMCExpr::VariantKind VK;
     int64_t Imm;
     bool IsValid;
@@ -335,6 +337,8 @@ public:
   }
 
   bool isSImm6NonZero() const {
+    if (!isImm())
+      return false;
     RISCVMCExpr::VariantKind VK;
     int64_t Imm;
     bool IsValid;
@@ -348,6 +352,8 @@ public:
   }
 
   bool isCLUIImm() const {
+    if (!isImm())
+      return false;
     int64_t Imm;
     RISCVMCExpr::VariantKind VK;
     bool IsConstantImm = evaluateConstantImm(Imm, VK);
@@ -357,6 +363,8 @@ public:
   }
 
   bool isUImm7Lsb00() const {
+    if (!isImm())
+      return false;
     int64_t Imm;
     RISCVMCExpr::VariantKind VK;
     bool IsConstantImm = evaluateConstantImm(Imm, VK);
@@ -365,6 +373,8 @@ public:
   }
 
   bool isUImm8Lsb00() const {
+    if (!isImm())
+      return false;
     int64_t Imm;
     RISCVMCExpr::VariantKind VK;
     bool IsConstantImm = evaluateConstantImm(Imm, VK);
@@ -373,6 +383,8 @@ public:
   }
 
   bool isUImm8Lsb000() const {
+    if (!isImm())
+      return false;
     int64_t Imm;
     RISCVMCExpr::VariantKind VK;
     bool IsConstantImm = evaluateConstantImm(Imm, VK);
@@ -383,6 +395,8 @@ public:
   bool isSImm9Lsb0() const { return isBareSimmNLsb0<9>(); }
 
   bool isUImm9Lsb000() const {
+    if (!isImm())
+      return false;
     int64_t Imm;
     RISCVMCExpr::VariantKind VK;
     bool IsConstantImm = evaluateConstantImm(Imm, VK);
@@ -391,6 +405,8 @@ public:
   }
 
   bool isUImm10Lsb00NonZero() const {
+    if (!isImm())
+      return false;
     int64_t Imm;
     RISCVMCExpr::VariantKind VK;
     bool IsConstantImm = evaluateConstantImm(Imm, VK);
@@ -428,6 +444,8 @@ public:
   bool isSImm13Lsb0() const { return isBareSimmNLsb0<13>(); }
 
   bool isSImm10Lsb0000NonZero() const {
+    if (!isImm())
+      return false;
     int64_t Imm;
     RISCVMCExpr::VariantKind VK;
     bool IsConstantImm = evaluateConstantImm(Imm, VK);
@@ -666,7 +684,9 @@ bool RISCVAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
                                              bool MatchingInlineAsm) {
   MCInst Inst;
 
-  switch (MatchInstructionImpl(Operands, Inst, ErrorInfo, MatchingInlineAsm)) {
+  auto Result =
+    MatchInstructionImpl(Operands, Inst, ErrorInfo, MatchingInlineAsm);
+  switch (Result) {
   default:
     break;
   case Match_Success:
@@ -687,6 +707,20 @@ bool RISCVAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
     }
     return Error(ErrorLoc, "invalid operand for instruction");
   }
+  }
+
+  // Handle the case when the error message is of specific type
+  // other than the generic Match_InvalidOperand, and the
+  // corresponding operand is missing.
+  if (Result > FIRST_TARGET_MATCH_RESULT_TY) {
+    SMLoc ErrorLoc = IDLoc;
+    if (ErrorInfo != ~0U && ErrorInfo >= Operands.size())
+        return Error(ErrorLoc, "too few operands for instruction");
+  }
+
+  switch(Result) {
+  default:
+    break;
   case Match_InvalidImmXLen:
     if (isRV64()) {
       SMLoc ErrorLoc = ((RISCVOperand &)*Operands[ErrorInfo]).getStartLoc();

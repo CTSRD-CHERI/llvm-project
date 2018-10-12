@@ -15,6 +15,7 @@
 #include "hwasan.h"
 #include "hwasan_allocator.h"
 #include "hwasan_mapping.h"
+#include "hwasan_thread.h"
 #include "sanitizer_common/sanitizer_allocator_internal.h"
 #include "sanitizer_common/sanitizer_common.h"
 #include "sanitizer_common/sanitizer_flags.h"
@@ -41,45 +42,104 @@ class Decorator: public __sanitizer::SanitizerCommonDecorator {
   const char *Allocation() const { return Magenta(); }
   const char *Origin() const { return Magenta(); }
   const char *Name() const { return Green(); }
+  const char *Location() { return Green(); }
 };
 
-struct HeapAddressDescription {
-  uptr addr;
-  u32 alloc_stack_id;
-  u32 free_stack_id;
-
-  void Print() const {
-    Decorator d;
-    if (free_stack_id) {
-      Printf("%sfreed here:%s\n", d.Allocation(), d.Default());
-      GetStackTraceFromId(free_stack_id).Print();
-      Printf("%spreviously allocated here:%s\n", d.Allocation(), d.Default());
-    } else {
-      Printf("%sallocated here:%s\n", d.Allocation(), d.Default());
+bool FindHeapAllocation(HeapAllocationsRingBuffer *rb,
+                        uptr tagged_addr,
+                        HeapAllocationRecord *har) {
+  if (!rb) return false;
+  for (uptr i = 0, size = rb->size(); i < size; i++) {
+    auto h = (*rb)[i];
+    if (h.tagged_addr <= tagged_addr &&
+        h.tagged_addr + h.requested_size > tagged_addr) {
+      *har = h;
+      return true;
     }
-    GetStackTraceFromId(alloc_stack_id).Print();
   }
-};
-
-bool GetHeapAddressInformation(uptr addr, uptr access_size,
-                               HeapAddressDescription *description) {
-  HwasanChunkView chunk = FindHeapChunkByAddress(addr);
-  if (!chunk.IsValid())
-    return false;
-  description->addr = addr;
-  description->alloc_stack_id = chunk.GetAllocStackId();
-  description->free_stack_id = chunk.GetFreeStackId();
-  return true;
+  return false;
 }
 
-void PrintAddressDescription(uptr addr, uptr access_size) {
-  HeapAddressDescription heap_description;
-  if (GetHeapAddressInformation(addr, access_size, &heap_description)) {
-    heap_description.Print();
-    return;
+void PrintAddressDescription(uptr tagged_addr, uptr access_size) {
+  Decorator d;
+  int num_descriptions_printed = 0;
+  uptr untagged_addr = UntagAddr(tagged_addr);
+  // Check if this looks like a heap buffer overflow by scanning
+  // the shadow left and right and looking for the first adjacent
+  // object with a different memory tag. If that tag matches addr_tag,
+  // check the allocator if it has a live chunk there.
+  tag_t addr_tag = GetTagFromPointer(tagged_addr);
+  tag_t *tag_ptr = reinterpret_cast<tag_t*>(MemToShadow(untagged_addr));
+  if (*tag_ptr != addr_tag) { // should be true usually.
+    tag_t *left = tag_ptr, *right = tag_ptr;
+    // scan left.
+    for (int i = 0; i < 1000 && *left == *tag_ptr; i++, left--){}
+    // scan right.
+    for (int i = 0; i < 1000 && *right == *tag_ptr; i++, right++){}
+    // Chose the object that has addr_tag and that is closer to addr.
+    tag_t *candidate = nullptr;
+    if (*right == addr_tag && *left == addr_tag)
+      candidate = right - tag_ptr < tag_ptr - left ? right : left;
+    else if (*right == addr_tag)
+      candidate = right;
+    else if (*left == addr_tag)
+      candidate = left;
+
+    if (candidate) {
+      uptr mem = ShadowToMem(reinterpret_cast<uptr>(candidate));
+      HwasanChunkView chunk = FindHeapChunkByAddress(mem);
+      if (chunk.IsAllocated()) {
+        Printf("%s", d.Location());
+        Printf(
+            "%p is located %zd bytes to the %s of %zd-byte region [%p,%p)\n",
+            untagged_addr,
+            candidate == left ? untagged_addr - chunk.End()
+            : chunk.Beg() - untagged_addr,
+            candidate == right ? "left" : "right", chunk.UsedSize(),
+            chunk.Beg(), chunk.End());
+        Printf("%s", d.Allocation());
+        Printf("allocated here:\n");
+        Printf("%s", d.Default());
+        GetStackTraceFromId(chunk.GetAllocStackId()).Print();
+        num_descriptions_printed++;
+      }
+    }
   }
-  // We exhausted our possibilities. Bail out.
-  Printf("HWAddressSanitizer can not describe address in more detail.\n");
+
+  Thread::VisitAllLiveThreads([&](Thread *t) {
+    // Scan all threads' ring buffers to find if it's a heap-use-after-free.
+    HeapAllocationRecord har;
+    if (FindHeapAllocation(t->heap_allocations(), tagged_addr, &har)) {
+      Printf("%s", d.Location());
+      Printf("%p is located %zd bytes inside of %zd-byte region [%p,%p)\n",
+             untagged_addr, untagged_addr - UntagAddr(har.tagged_addr),
+             har.requested_size, UntagAddr(har.tagged_addr),
+             UntagAddr(har.tagged_addr) + har.requested_size);
+      Printf("%s", d.Allocation());
+      Printf("freed by thread %p here:\n", t);
+      Printf("%s", d.Default());
+      GetStackTraceFromId(har.free_context_id).Print();
+
+      Printf("%s", d.Allocation());
+      Printf("previously allocated here:\n", t);
+      Printf("%s", d.Default());
+      GetStackTraceFromId(har.alloc_context_id).Print();
+
+      num_descriptions_printed++;
+    }
+
+    // Very basic check for stack memory.
+    if (t->AddrIsInStack(untagged_addr)) {
+      Printf("%s", d.Location());
+      Printf("Address %p is located in stack of thread %p\n", untagged_addr, t);
+      Printf("%s", d.Default());
+      num_descriptions_printed++;
+    }
+  });
+
+  if (!num_descriptions_printed)
+    // We exhausted our possibilities. Bail out.
+    Printf("HWAddressSanitizer can not describe address in more detail.\n");
 }
 
 void ReportInvalidAccess(StackTrace *stack, u32 origin) {
@@ -131,25 +191,25 @@ static void PrintTagsAroundAddr(tag_t *tag_ptr) {
   }
 }
 
-void ReportInvalidFree(StackTrace *stack, uptr addr) {
+void ReportInvalidFree(StackTrace *stack, uptr tagged_addr) {
   ScopedErrorReportLock l;
-  uptr address = GetAddressFromPointer(addr);
-  tag_t ptr_tag = GetTagFromPointer(addr);
-  tag_t *tag_ptr = reinterpret_cast<tag_t*>(MEM_TO_SHADOW(address));
+  uptr untagged_addr = UntagAddr(tagged_addr);
+  tag_t ptr_tag = GetTagFromPointer(tagged_addr);
+  tag_t *tag_ptr = reinterpret_cast<tag_t*>(MemToShadow(untagged_addr));
   tag_t mem_tag = *tag_ptr;
   Decorator d;
   Printf("%s", d.Error());
   uptr pc = stack->size ? stack->trace[0] : 0;
   const char *bug_type = "invalid-free";
   Report("ERROR: %s: %s on address %p at pc %p\n", SanitizerToolName, bug_type,
-         address, pc);
+         untagged_addr, pc);
   Printf("%s", d.Access());
   Printf("tags: %02x/%02x (ptr/mem)\n", ptr_tag, mem_tag);
   Printf("%s", d.Default());
 
   stack->Print();
 
-  PrintAddressDescription(address, 0);
+  PrintAddressDescription(tagged_addr, 0);
 
   PrintTagsAroundAddr(tag_ptr);
 
@@ -157,30 +217,31 @@ void ReportInvalidFree(StackTrace *stack, uptr addr) {
   Die();
 }
 
-void ReportTagMismatch(StackTrace *stack, uptr addr, uptr access_size,
+void ReportTagMismatch(StackTrace *stack, uptr tagged_addr, uptr access_size,
                        bool is_store) {
   ScopedErrorReportLock l;
 
   Decorator d;
   Printf("%s", d.Error());
-  uptr address = GetAddressFromPointer(addr);
+  uptr untagged_addr = UntagAddr(tagged_addr);
   // TODO: when possible, try to print heap-use-after-free, etc.
   const char *bug_type = "tag-mismatch";
   uptr pc = stack->size ? stack->trace[0] : 0;
   Report("ERROR: %s: %s on address %p at pc %p\n", SanitizerToolName, bug_type,
-         address, pc);
+         untagged_addr, pc);
 
-  tag_t ptr_tag = GetTagFromPointer(addr);
-  tag_t *tag_ptr = reinterpret_cast<tag_t*>(MEM_TO_SHADOW(address));
+  tag_t ptr_tag = GetTagFromPointer(tagged_addr);
+  tag_t *tag_ptr = reinterpret_cast<tag_t*>(MemToShadow(untagged_addr));
   tag_t mem_tag = *tag_ptr;
   Printf("%s", d.Access());
   Printf("%s of size %zu at %p tags: %02x/%02x (ptr/mem)\n",
-         is_store ? "WRITE" : "READ", access_size, address, ptr_tag, mem_tag);
+         is_store ? "WRITE" : "READ", access_size, untagged_addr, ptr_tag,
+         mem_tag);
   Printf("%s", d.Default());
 
   stack->Print();
 
-  PrintAddressDescription(address, access_size);
+  PrintAddressDescription(tagged_addr, access_size);
 
   PrintTagsAroundAddr(tag_ptr);
 

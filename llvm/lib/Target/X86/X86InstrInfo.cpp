@@ -3112,9 +3112,9 @@ void X86InstrInfo::copyPhysReg(MachineBasicBlock &MBB,
   llvm_unreachable("Cannot emit physreg copy instruction");
 }
 
-bool X86InstrInfo::isCopyInstr(const MachineInstr &MI,
-                               const MachineOperand *&Src,
-                               const MachineOperand *&Dest) const {
+bool X86InstrInfo::isCopyInstrImpl(const MachineInstr &MI,
+                                   const MachineOperand *&Src,
+                                   const MachineOperand *&Dest) const {
   if (MI.isMoveReg()) {
     Dest = &MI.getOperand(0);
     Src = &MI.getOperand(1);
@@ -7402,7 +7402,8 @@ X86InstrInfo::getSerializableDirectMachineOperandTargetFlags() const {
       {MO_DARWIN_NONLAZY_PIC_BASE, "x86-darwin-nonlazy-pic-base"},
       {MO_TLVP, "x86-tlvp"},
       {MO_TLVP_PIC_BASE, "x86-tlvp-pic-base"},
-      {MO_SECREL, "x86-secrel"}};
+      {MO_SECREL, "x86-secrel"},
+      {MO_COFFSTUB, "x86-coffstub"}};
   return makeArrayRef(TargetFlags);
 }
 

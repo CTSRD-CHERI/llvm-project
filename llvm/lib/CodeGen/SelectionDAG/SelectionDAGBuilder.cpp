@@ -1057,7 +1057,7 @@ SDValue SelectionDAGBuilder::getControlRoot() {
 
 void SelectionDAGBuilder::visit(const Instruction &I) {
   // Set up outgoing PHI node register values before emitting the terminator.
-  if (isa<TerminatorInst>(&I)) {
+  if (I.isTerminator()) {
     HandlePHINodesInSuccessorBlocks(I.getParent());
   }
 
@@ -1085,7 +1085,7 @@ void SelectionDAGBuilder::visit(const Instruction &I) {
     }
   }
 
-  if (!isa<TerminatorInst>(&I) && !HasTailCall &&
+  if (!I.isTerminator() && !HasTailCall &&
       !isStatepoint(&I)) // statepoints handle their exports internally
     CopyToExportRegsIfNeeded(&I);
 
@@ -1181,7 +1181,8 @@ SDValue SelectionDAGBuilder::getCopyFromRegs(const Value *V, Type *Ty) {
     unsigned InReg = It->second;
 
     RegsForValue RFV(*DAG.getContext(), DAG.getTargetLoweringInfo(),
-                     DAG.getDataLayout(), InReg, Ty, getABIRegCopyCC(V));
+                     DAG.getDataLayout(), InReg, Ty,
+                     None); // This is not an ABI copy.
     SDValue Chain = DAG.getEntryNode();
     Result = RFV.getCopyFromRegs(DAG, FuncInfo, getCurSDLoc(), Chain, nullptr,
                                  V);
@@ -8728,7 +8729,7 @@ SelectionDAGBuilder::CopyValueToVirtualRegister(const Value *V, unsigned Reg) {
   // notional registers required by the type.
 
   RegsForValue RFV(V->getContext(), TLI, DAG.getDataLayout(), Reg, V->getType(),
-                   getABIRegCopyCC(V));
+                   None); // This is not an ABI copy.
   SDValue Chain = DAG.getEntryNode();
 
   ISD::NodeType ExtendType = (FuncInfo.PreferredExtendType.find(V) ==

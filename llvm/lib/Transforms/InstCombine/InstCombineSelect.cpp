@@ -56,7 +56,8 @@ static Value *createMinMax(InstCombiner::BuilderTy &Builder,
 
 /// Replace a select operand based on an equality comparison with the identity
 /// constant of a binop.
-static Instruction *foldSelectBinOpIdentity(SelectInst &Sel, const TargetLibraryInfo &TLI) {
+static Instruction *foldSelectBinOpIdentity(SelectInst &Sel,
+                                            const TargetLibraryInfo &TLI) {
   // The select condition must be an equality compare with a constant operand.
   Value *X;
   Constant *C;
@@ -1821,7 +1822,7 @@ Instruction *InstCombiner::visitSelectInst(SelectInst &SI) {
       // MIN(~a, ~b) -> ~MAX(a, b)
       Value *A, *B;
       if (match(LHS, m_Not(m_Value(A))) && match(RHS, m_Not(m_Value(B))) &&
-          (LHS->getNumUses() <= 2 || RHS->getNumUses() <= 2)) {
+          (!LHS->hasNUsesOrMore(3) || !RHS->hasNUsesOrMore(3))) {
         CmpInst::Predicate InvertedPred = getInverseMinMaxPred(SPF);
         Value *InvertedCmp = Builder.CreateICmp(InvertedPred, A, B);
         Value *NewSel = Builder.CreateSelect(InvertedCmp, A, B);

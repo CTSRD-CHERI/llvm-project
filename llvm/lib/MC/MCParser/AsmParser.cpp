@@ -1857,7 +1857,7 @@ bool AsmParser::parseStatement(ParseStatementInfo &Info,
   // Otherwise, we have a normal instruction or directive.
 
   // Directives start with "."
-  if (IDVal[0] == '.' && IDVal != ".") {
+  if (IDVal.startswith(".") && IDVal != ".") {
     // There are several entities interested in parsing directives:
     //
     // 1. The target-specific assembly parser. Some directives are target
@@ -3364,17 +3364,17 @@ bool AsmParser::parseDirectiveFile(SMLoc DirectiveLoc) {
     }
   }
 
-  // In case there is a -g option as well as debug info from directive .file,
-  // we turn off the -g option, directly use the existing debug info instead.
-  // Also reset any implicit ".file 0" for the assembler source.
-  if (Ctx.getGenDwarfForAssembly()) {
-    Ctx.getMCDwarfLineTable(0).resetRootFile();
-    Ctx.setGenDwarfForAssembly(false);
-  }
-
   if (FileNumber == -1)
     getStreamer().EmitFileDirective(Filename);
   else {
+    // In case there is a -g option as well as debug info from directive .file,
+    // we turn off the -g option, directly use the existing debug info instead.
+    // Also reset any implicit ".file 0" for the assembler source.
+    if (Ctx.getGenDwarfForAssembly()) {
+      Ctx.getMCDwarfLineTable(0).resetRootFile();
+      Ctx.setGenDwarfForAssembly(false);
+    }
+
     MD5::MD5Result *CKMem = nullptr;
     if (HasMD5) {
       CKMem = (MD5::MD5Result *)Ctx.allocate(sizeof(MD5::MD5Result), 1);
