@@ -826,11 +826,19 @@ TEST(CompletionTest, IgnoreCompleteInExcludedPPBranchWithRecoveryContext) {
   EXPECT_TRUE(Results.Completions.empty());
 }
 
-SignatureHelp signatures(StringRef Text) {
+SignatureHelp signatures(StringRef Text,
+                         std::vector<Symbol> IndexSymbols = {}) {
+  std::unique_ptr<SymbolIndex> Index;
+  if (!IndexSymbols.empty())
+    Index = memIndex(IndexSymbols);
+
   MockFSProvider FS;
   MockCompilationDatabase CDB;
   IgnoreDiagnostics DiagConsumer;
-  ClangdServer Server(CDB, FS, DiagConsumer, ClangdServer::optsForTest());
+  ClangdServer::Options Opts = ClangdServer::optsForTest();
+  Opts.StaticIndex = Index.get();
+
+  ClangdServer Server(CDB, FS, DiagConsumer, Opts);
   auto File = testPath("foo.cpp");
   Annotations Test(Text);
   runAddDocument(Server, File, Test.code());
@@ -845,6 +853,7 @@ MATCHER_P(ParamsAre, P, "") {
       return false;
   return true;
 }
+MATCHER_P(SigDoc, Doc, "") { return arg.documentation == Doc; }
 
 Matcher<SignatureInformation> Sig(std::string Label,
                                   std::vector<std::string> Params) {
@@ -914,7 +923,15 @@ public:
                        llvm::function_ref<void(const SymbolOccurrence &)>
                            Callback) const override {}
 
-  const std::vector<FuzzyFindRequest> allRequests() const { return Requests; }
+  // This is incorrect, but IndexRequestCollector is not an actual index and it
+  // isn't used in production code.
+  size_t estimateMemoryUsage() const override { return 0; }
+
+  const std::vector<FuzzyFindRequest> consumeRequests() const {
+    auto Reqs = std::move(Requests);
+    Requests = {};
+    return Reqs;
+  }
 
 private:
   mutable std::vector<FuzzyFindRequest> Requests;
@@ -925,7 +942,7 @@ std::vector<FuzzyFindRequest> captureIndexRequests(llvm::StringRef Code) {
   IndexRequestCollector Requests;
   Opts.Index = &Requests;
   completions(Code, {}, Opts);
-  return Requests.allRequests();
+  return Requests.consumeRequests();
 }
 
 TEST(CompletionTest, UnqualifiedIdQuery) {
@@ -1131,7 +1148,7 @@ TEST(CompletionTest, OverloadBundling) {
   // For now we just return one of the doc strings arbitrarily.
   EXPECT_THAT(A.Documentation, AnyOf(HasSubstr("Overload with int"),
                                      HasSubstr("Overload with bool")));
-  EXPECT_EQ(A.SnippetSuffix, "(${0})");
+  EXPECT_EQ(A.SnippetSuffix, "($0)");
 }
 
 TEST(CompletionTest, DocumentationFromChangedFileCrash) {
@@ -1592,6 +1609,177 @@ TEST(SignatureHelpTest, InstantiatedSignatures) {
 
   EXPECT_THAT(signatures(Sig3).signatures,
               ElementsAre(Sig("foo(T, U) -> void", {"T", "U"})));
+}
+
+TEST(SignatureHelpTest, IndexDocumentation) {
+  Symbol::Details DocDetails;
+  DocDetails.Documentation = "Doc from the index";
+
+  Symbol Foo0 = sym("foo", index::SymbolKind::Function, "@F@\\0#");
+  Foo0.Detail = &DocDetails;
+  Symbol Foo1 = sym("foo", index::SymbolKind::Function, "@F@\\0#I#");
+  Foo1.Detail = &DocDetails;
+  Symbol Foo2 = sym("foo", index::SymbolKind::Function, "@F@\\0#I#I#");
+
+  StringRef Sig0 = R"cpp(
+    int foo();
+    int foo(double);
+
+    void test() {
+      foo(^);
+    }
+  )cpp";
+
+  EXPECT_THAT(
+      signatures(Sig0, {Foo0}).signatures,
+      ElementsAre(AllOf(Sig("foo() -> int", {}), SigDoc("Doc from the index")),
+                  AllOf(Sig("foo(double) -> int", {"double"}), SigDoc(""))));
+
+  StringRef Sig1 = R"cpp(
+    int foo();
+    // Overriden doc from sema
+    int foo(int);
+    // Doc from sema
+    int foo(int, int);
+
+    void test() {
+      foo(^);
+    }
+  )cpp";
+
+  EXPECT_THAT(
+      signatures(Sig1, {Foo0, Foo1, Foo2}).signatures,
+      ElementsAre(AllOf(Sig("foo() -> int", {}), SigDoc("Doc from the index")),
+                  AllOf(Sig("foo(int) -> int", {"int"}),
+                        SigDoc("Overriden doc from sema")),
+                  AllOf(Sig("foo(int, int) -> int", {"int", "int"}),
+                        SigDoc("Doc from sema"))));
+}
+
+TEST(CompletionTest, CompletionFunctionArgsDisabled) {
+  CodeCompleteOptions Opts;
+  Opts.EnableSnippets = true;
+  Opts.EnableFunctionArgSnippets = false;
+  const std::string Header =
+      R"cpp(
+      void xfoo();
+      void xfoo(int x, int y);
+      void xbar();
+      void f() {
+    )cpp";
+  {
+    auto Results = completions(Header + "\nxfo^", {}, Opts);
+    EXPECT_THAT(
+        Results.Completions,
+        UnorderedElementsAre(AllOf(Named("xfoo"), SnippetSuffix("()")),
+                             AllOf(Named("xfoo"), SnippetSuffix("($0)"))));
+  }
+  {
+    auto Results = completions(Header + "\nxba^", {}, Opts);
+    EXPECT_THAT(Results.Completions, UnorderedElementsAre(AllOf(
+                                         Named("xbar"), SnippetSuffix("()"))));
+  }
+  {
+    Opts.BundleOverloads = true;
+    auto Results = completions(Header + "\nxfo^", {}, Opts);
+    EXPECT_THAT(
+        Results.Completions,
+        UnorderedElementsAre(AllOf(Named("xfoo"), SnippetSuffix("($0)"))));
+  }
+}
+
+TEST(CompletionTest, SuggestOverrides) {
+  constexpr const char *const Text(R"cpp(
+  class A {
+   public:
+    virtual void vfunc(bool param);
+    virtual void vfunc(bool param, int p);
+    void func(bool param);
+  };
+  class B : public A {
+  virtual void ttt(bool param) const;
+  void vfunc(bool param, int p) override;
+  };
+  class C : public B {
+   public:
+    void vfunc(bool param) override;
+    ^
+  };
+  )cpp");
+  const auto Results = completions(Text);
+  EXPECT_THAT(Results.Completions,
+              AllOf(Contains(Labeled("void vfunc(bool param, int p) override")),
+                    Contains(Labeled("void ttt(bool param) const override")),
+                    Not(Contains(Labeled("void vfunc(bool param) override")))));
+}
+
+TEST(SpeculateCompletionFilter, Filters) {
+  Annotations F(R"cpp($bof^
+      $bol^
+      ab$ab^
+      x.ab$dot^
+      x.$dotempty^
+      x::ab$scoped^
+      x::$scopedempty^
+
+  )cpp");
+  auto speculate = [&](StringRef PointName) {
+    auto Filter = speculateCompletionFilter(F.code(), F.point(PointName));
+    assert(Filter);
+    return *Filter;
+  };
+  EXPECT_EQ(speculate("bof"), "");
+  EXPECT_EQ(speculate("bol"), "");
+  EXPECT_EQ(speculate("ab"), "ab");
+  EXPECT_EQ(speculate("dot"), "ab");
+  EXPECT_EQ(speculate("dotempty"), "");
+  EXPECT_EQ(speculate("scoped"), "ab");
+  EXPECT_EQ(speculate("scopedempty"), "");
+}
+
+TEST(CompletionTest, EnableSpeculativeIndexRequest) {
+  MockFSProvider FS;
+  MockCompilationDatabase CDB;
+  IgnoreDiagnostics DiagConsumer;
+  ClangdServer Server(CDB, FS, DiagConsumer, ClangdServer::optsForTest());
+
+  auto File = testPath("foo.cpp");
+  Annotations Test(R"cpp(
+      namespace ns1 { int abc; }
+      namespace ns2 { int abc; }
+      void f() { ns1::ab$1^; ns1::ab$2^; }
+      void f() { ns2::ab$3^; }
+  )cpp");
+  runAddDocument(Server, File, Test.code());
+  clangd::CodeCompleteOptions Opts = {};
+
+  IndexRequestCollector Requests;
+  Opts.Index = &Requests;
+  Opts.SpeculativeIndexRequest = true;
+
+  auto CompleteAtPoint = [&](StringRef P) {
+    cantFail(runCodeComplete(Server, File, Test.point(P), Opts));
+    // Sleep for a while to make sure asynchronous call (if applicable) is also
+    // triggered before callback is invoked.
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  };
+
+  CompleteAtPoint("1");
+  auto Reqs1 = Requests.consumeRequests();
+  ASSERT_EQ(Reqs1.size(), 1u);
+  EXPECT_THAT(Reqs1[0].Scopes, UnorderedElementsAre("ns1::"));
+
+  CompleteAtPoint("2");
+  auto Reqs2 = Requests.consumeRequests();
+  // Speculation succeeded. Used speculative index result.
+  ASSERT_EQ(Reqs2.size(), 1u);
+  EXPECT_EQ(Reqs2[0], Reqs1[0]);
+
+  CompleteAtPoint("3");
+  // Speculation failed. Sent speculative index request and the new index
+  // request after sema.
+  auto Reqs3 = Requests.consumeRequests();
+  ASSERT_EQ(Reqs3.size(), 2u);
 }
 
 } // namespace

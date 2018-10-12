@@ -511,6 +511,10 @@ MacosVersion GetMacosVersionInternal() {
         case '2': return MACOS_VERSION_MOUNTAIN_LION;
         case '3': return MACOS_VERSION_MAVERICKS;
         case '4': return MACOS_VERSION_YOSEMITE;
+        case '5': return MACOS_VERSION_EL_CAPITAN;
+        case '6': return MACOS_VERSION_SIERRA;
+        case '7': return MACOS_VERSION_HIGH_SIERRA;
+        case '8': return MACOS_VERSION_MOJAVE;
         default:
           if (IsDigit(version[1]))
             return MACOS_VERSION_UNKNOWN_NEWER;
@@ -890,10 +894,10 @@ struct __sanitizer_task_vm_info {
     (sizeof(__sanitizer_task_vm_info) / sizeof(natural_t)))
 
 uptr GetTaskInfoMaxAddress() {
-  __sanitizer_task_vm_info vm_info = {};
+  __sanitizer_task_vm_info vm_info = {} /* zero initialize */;
   mach_msg_type_number_t count = __SANITIZER_TASK_VM_INFO_COUNT;
   int err = task_info(mach_task_self(), TASK_VM_INFO, (int *)&vm_info, &count);
-  if (err == 0) {
+  if (err == 0 && vm_info.max_address != 0) {
     return vm_info.max_address - 1;
   } else {
     // xnu cannot provide vm address limit
@@ -1060,14 +1064,16 @@ void CheckNoDeepBind(const char *filename, int flag) {
   // Do nothing.
 }
 
-// FIXME: implement on this platform.
 bool GetRandom(void *buffer, uptr length, bool blocking) {
-  UNIMPLEMENTED();
+  if (!buffer || !length || length > 256)
+    return false;
+  // arc4random never fails.
+  arc4random_buf(buffer, length);
+  return true;
 }
 
-// FIXME: implement on this platform.
 u32 GetNumberOfCPUs() {
-  UNIMPLEMENTED();
+  return (u32)sysconf(_SC_NPROCESSORS_ONLN);
 }
 
 }  // namespace __sanitizer

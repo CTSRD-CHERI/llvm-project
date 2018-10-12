@@ -255,6 +255,10 @@ struct PublishDiagnosticsClientCapabilities {
   /// Whether the client accepts diagnostics with fixes attached using the
   /// "clangd_fixes" extension.
   bool clangdFixSupport = false;
+
+  /// Whether the client accepts diagnostics with category attached to it
+  /// using the "category" extension.
+  bool categorySupport = false;
 };
 bool fromJSON(const llvm::json::Value &,
               PublishDiagnosticsClientCapabilities &);
@@ -866,6 +870,20 @@ struct DocumentHighlight {
 };
 llvm::json::Value toJSON(const DocumentHighlight &DH);
 llvm::raw_ostream &operator<<(llvm::raw_ostream &, const DocumentHighlight &);
+
+struct CancelParams {
+  /// The request id to cancel.
+  /// This can be either a number or string, if it is a number simply print it
+  /// out and always use a string.
+  std::string ID;
+};
+llvm::json::Value toJSON(const CancelParams &);
+llvm::raw_ostream &operator<<(llvm::raw_ostream &, const CancelParams &);
+bool fromJSON(const llvm::json::Value &, CancelParams &);
+
+/// Param can be either of type string or number. Returns the result as a
+/// string.
+llvm::Optional<std::string> parseNumberOrString(const llvm::json::Value *Param);
 
 } // namespace clangd
 } // namespace clang

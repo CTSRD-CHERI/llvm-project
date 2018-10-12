@@ -17,8 +17,10 @@
 #include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/Support/StringSaver.h"
 #include <array>
 #include <string>
+#include <tuple>
 
 namespace clang {
 namespace clangd {
@@ -257,6 +259,8 @@ public:
   // The frozen SymbolSlab will use less memory.
   class Builder {
   public:
+    Builder() : UniqueStrings(Arena) {}
+
     // Adds a symbol, overwriting any existing one with the same ID.
     // This is a deep copy: underlying strings will be owned by the slab.
     void insert(const Symbol &S);
@@ -273,7 +277,7 @@ public:
   private:
     llvm::BumpPtrAllocator Arena;
     // Intern table for strings. Contents are on the arena.
-    llvm::DenseSet<llvm::StringRef> Strings;
+    llvm::UniqueStringSaver UniqueStrings;
     std::vector<Symbol> Symbols;
     // Values are indices into Symbols vector.
     llvm::DenseMap<SymbolID, size_t> SymbolIndex;
@@ -340,6 +344,14 @@ struct FuzzyFindRequest {
   /// Contextually relevant files (e.g. the file we're code-completing in).
   /// Paths should be absolute.
   std::vector<std::string> ProximityPaths;
+
+  bool operator==(const FuzzyFindRequest &Req) const {
+    return std::tie(Query, Scopes, MaxCandidateCount, RestrictForCodeCompletion,
+                    ProximityPaths) ==
+           std::tie(Req.Query, Req.Scopes, Req.MaxCandidateCount,
+                    Req.RestrictForCodeCompletion, Req.ProximityPaths);
+  }
+  bool operator!=(const FuzzyFindRequest &Req) const { return !(*this == Req); }
 };
 
 struct LookupRequest {
@@ -382,6 +394,12 @@ public:
   virtual void findOccurrences(
       const OccurrencesRequest &Req,
       llvm::function_ref<void(const SymbolOccurrence &)> Callback) const = 0;
+
+  /// Returns estimated size of index (in bytes).
+  // FIXME(kbobyrev): Currently, this only returns the size of index itself
+  // excluding the size of actual symbol slab index refers to. We should include
+  // both.
+  virtual size_t estimateMemoryUsage() const = 0;
 };
 
 } // namespace clangd

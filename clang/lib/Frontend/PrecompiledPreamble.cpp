@@ -237,9 +237,6 @@ llvm::ErrorOr<PrecompiledPreamble> PrecompiledPreamble::Build(
     PreambleCallbacks &Callbacks) {
   assert(VFS && "VFS is null");
 
-  if (!Bounds.Size)
-    return BuildPreambleError::PreambleIsEmpty;
-
   auto PreambleInvocation = std::make_shared<CompilerInvocation>(Invocation);
   FrontendOptions &FrontendOpts = PreambleInvocation->getFrontendOpts();
   PreprocessorOptions &PreprocessorOpts =
@@ -423,17 +420,14 @@ bool PrecompiledPreamble::CanReuse(const CompilerInvocation &Invocation,
   PreprocessorOptions &PreprocessorOpts =
       PreambleInvocation->getPreprocessorOpts();
 
-  if (!Bounds.Size)
-    return false;
-
   // We've previously computed a preamble. Check whether we have the same
   // preamble now that we did before, and that there's enough space in
   // the main-file buffer within the precompiled preamble to fit the
   // new main file.
   if (PreambleBytes.size() != Bounds.Size ||
       PreambleEndsAtStartOfLine != Bounds.PreambleEndsAtStartOfLine ||
-      memcmp(PreambleBytes.data(), MainFileBuffer->getBufferStart(),
-             Bounds.Size) != 0)
+      !std::equal(PreambleBytes.begin(), PreambleBytes.end(),
+                  MainFileBuffer->getBuffer().begin()))
     return false;
   // The preamble has not changed. We may be able to re-use the precompiled
   // preamble.
@@ -758,8 +752,6 @@ const char *BuildPreambleErrorCategory::name() const noexcept {
 
 std::string BuildPreambleErrorCategory::message(int condition) const {
   switch (static_cast<BuildPreambleError>(condition)) {
-  case BuildPreambleError::PreambleIsEmpty:
-    return "Preamble is empty";
   case BuildPreambleError::CouldntCreateTempFile:
     return "Could not create temporary file for PCH";
   case BuildPreambleError::CouldntCreateTargetInfo:

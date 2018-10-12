@@ -6360,7 +6360,7 @@ static bool implicitObjectParamIsLifetimeBound(const FunctionDecl *FD) {
   for (TypeLoc TL = TSI->getTypeLoc();
        (ATL = TL.getAsAdjusted<AttributedTypeLoc>());
        TL = ATL.getModifiedLoc()) {
-    if (ATL.getAttrKind() == AttributedType::attr_lifetimebound)
+    if (ATL.getAttrAs<LifetimeBoundAttr>())
       return true;
   }
   return false;
@@ -6924,6 +6924,10 @@ void Sema::checkInitializerLifetime(const InitializedEntity &Entity,
       } else if (isa<BlockExpr>(L)) {
         Diag(DiagLoc, diag::err_ret_local_block) << DiagRange;
       } else if (isa<AddrLabelExpr>(L)) {
+        // Don't warn when returning a label from a statement expression.
+        // Leaving the scope doesn't end its lifetime.
+        if (LK == LK_StmtExprResult)
+          return false;
         Diag(DiagLoc, diag::warn_ret_addr_label) << DiagRange;
       } else {
         Diag(DiagLoc, diag::warn_ret_local_temp_addr_ref)

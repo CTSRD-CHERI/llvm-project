@@ -3237,7 +3237,7 @@ SDValue DAGCombiner::visitSDIVLike(SDValue N0, SDValue N1, SDNode *N) {
   // alternate sequence.  Targets may check function attributes for size/speed
   // trade-offs.
   AttributeList Attr = DAG.getMachineFunction().getFunction().getAttributes();
-  if (isConstantOrConstantVector(N1, /*NoOpaques*/ true) &&
+  if (isConstantOrConstantVector(N1) &&
       !TLI.isIntDivCheap(N->getValueType(0), Attr))
     if (SDValue Op = BuildSDIV(N))
       return Op;
@@ -3329,7 +3329,7 @@ SDValue DAGCombiner::visitUDIVLike(SDValue N0, SDValue N1, SDNode *N) {
 
   // fold (udiv x, c) -> alternate
   AttributeList Attr = DAG.getMachineFunction().getFunction().getAttributes();
-  if (isConstantOrConstantVector(N1, /*NoOpaques*/ true) &&
+  if (isConstantOrConstantVector(N1) &&
       !TLI.isIntDivCheap(N->getValueType(0), Attr))
     if (SDValue Op = BuildUDIV(N))
       return Op;
@@ -5294,9 +5294,9 @@ static SDValue extractShiftForRotate(SelectionDAG &DAG, SDValue OppShift,
 
   // Compute the shift amount we need to extract to complete the rotate.
   const unsigned VTWidth = ShiftedVT.getScalarSizeInBits();
-  APInt NeededShiftAmt = VTWidth - OppShiftCst->getAPIntValue();
-  if (NeededShiftAmt.isNegative())
+  if (OppShiftCst->getAPIntValue().ugt(VTWidth))
     return SDValue();
+  APInt NeededShiftAmt = VTWidth - OppShiftCst->getAPIntValue();
   // Normalize the bitwidth of the two mul/udiv/shift constant operands.
   APInt ExtractFromAmt = ExtractFromCst->getAPIntValue();
   APInt OppLHSAmt = OppLHSCst->getAPIntValue();
@@ -6608,31 +6608,30 @@ SDValue DAGCombiner::visitSRA(SDNode *N) {
   }
 
   // fold (sra (sra x, c1), c2) -> (sra x, (add c1, c2))
+  // clamp (add c1, c2) to max shift.
   if (N0.getOpcode() == ISD::SRA) {
     SDLoc DL(N);
     EVT ShiftVT = N1.getValueType();
+    EVT ShiftSVT = ShiftVT.getScalarType();
+    SmallVector<SDValue, 16> ShiftValues;
 
-    auto MatchOutOfRange = [OpSizeInBits](ConstantSDNode *LHS,
-                                          ConstantSDNode *RHS) {
+    auto SumOfShifts = [&](ConstantSDNode *LHS, ConstantSDNode *RHS) {
       APInt c1 = LHS->getAPIntValue();
       APInt c2 = RHS->getAPIntValue();
       zeroExtendToMatch(c1, c2, 1 /* Overflow Bit */);
-      return (c1 + c2).uge(OpSizeInBits);
+      APInt Sum = c1 + c2;
+      unsigned ShiftSum =
+          Sum.uge(OpSizeInBits) ? (OpSizeInBits - 1) : Sum.getZExtValue();
+      ShiftValues.push_back(DAG.getConstant(ShiftSum, DL, ShiftSVT));
+      return true;
     };
-    if (ISD::matchBinaryPredicate(N1, N0.getOperand(1), MatchOutOfRange))
-      return DAG.getNode(ISD::SRA, DL, VT, N0.getOperand(0),
-                         DAG.getConstant(OpSizeInBits - 1, DL, ShiftVT));
-
-    auto MatchInRange = [OpSizeInBits](ConstantSDNode *LHS,
-                                       ConstantSDNode *RHS) {
-      APInt c1 = LHS->getAPIntValue();
-      APInt c2 = RHS->getAPIntValue();
-      zeroExtendToMatch(c1, c2, 1 /* Overflow Bit */);
-      return (c1 + c2).ult(OpSizeInBits);
-    };
-    if (ISD::matchBinaryPredicate(N1, N0.getOperand(1), MatchInRange)) {
-      SDValue Sum = DAG.getNode(ISD::ADD, DL, ShiftVT, N1, N0.getOperand(1));
-      return DAG.getNode(ISD::SRA, DL, VT, N0.getOperand(0), Sum);
+    if (ISD::matchBinaryPredicate(N1, N0.getOperand(1), SumOfShifts)) {
+      SDValue ShiftValue;
+      if (VT.isVector())
+        ShiftValue = DAG.getBuildVector(ShiftVT, DL, ShiftValues);
+      else
+        ShiftValue = ShiftValues[0];
+      return DAG.getNode(ISD::SRA, DL, VT, N0.getOperand(0), ShiftValue);
     }
   }
 
@@ -7049,6 +7048,16 @@ SDValue DAGCombiner::visitCTPOP(SDNode *N) {
   return SDValue();
 }
 
+// FIXME: This should be checking for no signed zeros on individual operands, as
+// well as no nans.
+static bool isLegalToCombineMinNumMaxNum(SelectionDAG &DAG, SDValue LHS, SDValue RHS) {
+  const TargetOptions &Options = DAG.getTarget().Options;
+  EVT VT = LHS.getValueType();
+
+  return Options.NoSignedZerosFPMath && VT.isFloatingPoint() &&
+         DAG.isKnownNeverNaN(LHS) && DAG.isKnownNeverNaN(RHS);
+}
+
 /// Generate Min/Max node
 static SDValue combineMinNumMaxNum(const SDLoc &DL, EVT VT, SDValue LHS,
                                    SDValue RHS, SDValue True, SDValue False,
@@ -7065,7 +7074,7 @@ static SDValue combineMinNumMaxNum(const SDLoc &DL, EVT VT, SDValue LHS,
   case ISD::SETULT:
   case ISD::SETULE: {
     unsigned Opcode = (LHS == True) ? ISD::FMINNUM : ISD::FMAXNUM;
-    if (TLI.isOperationLegal(Opcode, VT))
+    if (TLI.isOperationLegalOrCustom(Opcode, VT))
       return DAG.getNode(Opcode, DL, VT, LHS, RHS);
     return SDValue();
   }
@@ -7076,7 +7085,7 @@ static SDValue combineMinNumMaxNum(const SDLoc &DL, EVT VT, SDValue LHS,
   case ISD::SETUGT:
   case ISD::SETUGE: {
     unsigned Opcode = (LHS == True) ? ISD::FMAXNUM : ISD::FMINNUM;
-    if (TLI.isOperationLegal(Opcode, VT))
+    if (TLI.isOperationLegalOrCustom(Opcode, VT))
       return DAG.getNode(Opcode, DL, VT, LHS, RHS);
     return SDValue();
   }
@@ -7309,12 +7318,7 @@ SDValue DAGCombiner::visitSELECT(SDNode *N) {
     // This is OK if we don't care about what happens if either operand is a
     // NaN.
     //
-
-    // FIXME: This should be checking for no signed zeros on individual
-    // operands, as well as no nans.
-    const TargetOptions &Options = DAG.getTarget().Options;
-    if (Options.NoSignedZerosFPMath && VT.isFloatingPoint() && N0.hasOneUse() &&
-        DAG.isKnownNeverNaN(N1) && DAG.isKnownNeverNaN(N2)) {
+    if (N0.hasOneUse() && isLegalToCombineMinNumMaxNum(DAG, N1, N2)) {
       ISD::CondCode CC = cast<CondCodeSDNode>(N0.getOperand(2))->get();
 
       if (SDValue FMinMax = combineMinNumMaxNum(
@@ -7787,6 +7791,20 @@ SDValue DAGCombiner::visitVSELECT(SDNode *N) {
       AddToWorklist(Shift.getNode());
       AddToWorklist(Add.getNode());
       return DAG.getNode(ISD::XOR, DL, VT, Add, Shift);
+    }
+
+    // vselect x, y (fcmp lt x, y) -> fminnum x, y
+    // vselect x, y (fcmp gt x, y) -> fmaxnum x, y
+    //
+    // This is OK if we don't care about what happens if either operand is a
+    // NaN.
+    //
+    EVT VT = N->getValueType(0);
+    if (N0.hasOneUse() && isLegalToCombineMinNumMaxNum(DAG, N0.getOperand(0), N0.getOperand(1))) {
+      ISD::CondCode CC = cast<CondCodeSDNode>(N0.getOperand(2))->get();
+      if (SDValue FMinMax = combineMinNumMaxNum(
+            DL, VT, N0.getOperand(0), N0.getOperand(1), N1, N2, CC, TLI, DAG))
+        return FMinMax;
     }
 
     // If this select has a condition (setcc) with narrower operands than the
@@ -9081,6 +9099,8 @@ SDValue DAGCombiner::ReduceLoadWidth(SDNode *N) {
   if (VT.isVector())
     return SDValue();
 
+  unsigned ShAmt = 0;
+  bool HasShiftedOffset = false;
   // Special case: SIGN_EXTEND_INREG is basically truncating to ExtVT then
   // extended to VT.
   if (Opc == ISD::SIGN_EXTEND_INREG) {
@@ -9108,15 +9128,25 @@ SDValue DAGCombiner::ReduceLoadWidth(SDNode *N) {
   } else if (Opc == ISD::AND) {
     // An AND with a constant mask is the same as a truncate + zero-extend.
     auto AndC = dyn_cast<ConstantSDNode>(N->getOperand(1));
-    if (!AndC || !AndC->getAPIntValue().isMask())
+    if (!AndC)
       return SDValue();
 
-    unsigned ActiveBits = AndC->getAPIntValue().countTrailingOnes();
+    const APInt &Mask = AndC->getAPIntValue();
+    unsigned ActiveBits = 0;
+    if (Mask.isMask()) {
+      ActiveBits = Mask.countTrailingOnes();
+    } else if (Mask.isShiftedMask()) {
+      ShAmt = Mask.countTrailingZeros();
+      APInt ShiftedMask = Mask.lshr(ShAmt);
+      ActiveBits = ShiftedMask.countTrailingOnes();
+      HasShiftedOffset = true;
+    } else
+      return SDValue();
+
     ExtType = ISD::ZEXTLOAD;
     ExtVT = EVT::getIntegerVT(*DAG.getContext(), ActiveBits);
   }
 
-  unsigned ShAmt = 0;
   if (N0.getOpcode() == ISD::SRL && N0.hasOneUse()) {
     SDValue SRL = N0;
     if (auto *ConstShift = dyn_cast<ConstantSDNode>(SRL.getOperand(1))) {
@@ -9185,13 +9215,16 @@ SDValue DAGCombiner::ReduceLoadWidth(SDNode *N) {
   if (!isLegalNarrowLdSt(LN0, ExtType, ExtVT, ShAmt))
     return SDValue();
 
-  // For big endian targets, we need to adjust the offset to the pointer to
-  // load the correct bytes.
-  if (DAG.getDataLayout().isBigEndian()) {
+  auto AdjustBigEndianShift = [&](unsigned ShAmt) {
     unsigned LVTStoreBits = LN0->getMemoryVT().getStoreSizeInBits();
     unsigned EVTStoreBits = ExtVT.getStoreSizeInBits();
-    ShAmt = LVTStoreBits - EVTStoreBits - ShAmt;
-  }
+    return LVTStoreBits - EVTStoreBits - ShAmt;
+  };
+
+  // For big endian targets, we need to adjust the offset to the pointer to
+  // load the correct bytes.
+  if (DAG.getDataLayout().isBigEndian())
+    ShAmt = AdjustBigEndianShift(ShAmt);
 
   EVT PtrType = N0.getOperand(1).getValueType();
   uint64_t PtrOff = ShAmt / 8;
@@ -9239,6 +9272,24 @@ SDValue DAGCombiner::ReduceLoadWidth(SDNode *N) {
                           Result, DAG.getConstant(ShLeftAmt, DL, ShImmTy));
   }
 
+  if (HasShiftedOffset) {
+    // Recalculate the shift amount after it has been altered to calculate
+    // the offset.
+    if (DAG.getDataLayout().isBigEndian())
+      ShAmt = AdjustBigEndianShift(ShAmt);
+
+    // We're using a shifted mask, so the load now has an offset. This means we
+    // now need to shift right the mask to match the new load and then shift
+    // right the result of the AND.
+    const APInt &Mask = cast<ConstantSDNode>(N->getOperand(1))->getAPIntValue();
+    APInt ShiftedMask = Mask.lshr(ShAmt);
+    DAG.UpdateNodeOperands(N, Result, DAG.getConstant(ShiftedMask, DL, VT));
+    SDValue ShiftC = DAG.getConstant(ShAmt, DL, VT);
+    SDValue Shifted = DAG.getNode(ISD::SHL, DL, VT, SDValue(N, 0),
+                                  ShiftC);
+    DAG.ReplaceAllUsesOfValueWith(SDValue(N, 0), Shifted);
+    DAG.UpdateNodeOperands(Shifted.getNode(), SDValue(N, 0), ShiftC);
+  }
   // Return the new loaded value.
   return Result;
 }
@@ -14667,7 +14718,7 @@ SDValue DAGCombiner::visitSTORE(SDNode *N) {
       ST->isUnindexed()) {
     EVT SVT = Value.getOperand(0).getValueType();
     if (((!LegalOperations && !ST->isVolatile()) ||
-         TLI.isOperationLegalOrCustom(ISD::STORE, SVT)) &&
+         TLI.isOperationLegal(ISD::STORE, SVT)) &&
         TLI.isStoreBitCastBeneficial(Value.getValueType(), SVT)) {
       unsigned OrigAlign = ST->getAlignment();
       bool Fast = false;

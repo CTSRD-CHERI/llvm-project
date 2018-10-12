@@ -1088,6 +1088,7 @@ void SelectionDAGLegalize::LegalizeOp(SDNode *Node) {
   case ISD::STRICT_FSUB:
   case ISD::STRICT_FMUL:
   case ISD::STRICT_FDIV:
+  case ISD::STRICT_FREM:
   case ISD::STRICT_FSQRT:
   case ISD::STRICT_FMA:
   case ISD::STRICT_FPOW:
@@ -4208,6 +4209,7 @@ void SelectionDAGLegalize::ConvertNodeToLibcall(SDNode *Node) {
                                       RTLIB::DIV_PPCF128));
     break;
   case ISD::FREM:
+  case ISD::STRICT_FREM:
     Results.push_back(ExpandFPLibCall(Node, RTLIB::REM_F32, RTLIB::REM_F64,
                                       RTLIB::REM_F80, RTLIB::REM_F128,
                                       RTLIB::REM_PPCF128));
@@ -4279,6 +4281,21 @@ void SelectionDAGLegalize::ConvertNodeToLibcall(SDNode *Node) {
                                        RTLIB::MUL_I8,
                                        RTLIB::MUL_I16, RTLIB::MUL_I32,
                                        RTLIB::MUL_I64, RTLIB::MUL_I128));
+    break;
+  case ISD::CTLZ_ZERO_UNDEF:
+    switch (Node->getSimpleValueType(0).SimpleTy) {
+    default:
+      llvm_unreachable("LibCall explicitly requested, but not available");
+    case MVT::i32:
+      Results.push_back(ExpandLibCall(RTLIB::CTLZ_I32, Node, false));
+      break;
+    case MVT::i64:
+      Results.push_back(ExpandLibCall(RTLIB::CTLZ_I64, Node, false));
+      break;
+    case MVT::i128:
+      Results.push_back(ExpandLibCall(RTLIB::CTLZ_I128, Node, false));
+      break;
+    }
     break;
   }
 

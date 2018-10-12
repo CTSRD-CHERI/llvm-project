@@ -49,6 +49,8 @@ def HasRDM           : Predicate<"Subtarget->hasRDM()">,
 def HasPerfMon       : Predicate<"Subtarget->hasPerfMon()">;
 def HasFullFP16      : Predicate<"Subtarget->hasFullFP16()">,
                                  AssemblerPredicate<"FeatureFullFP16", "fullfp16">;
+def HasFP16FML       : Predicate<"Subtarget->hasFP16FML()">,
+                                 AssemblerPredicate<"FeatureFP16FML", "fp16fml">;
 def HasSPE           : Predicate<"Subtarget->hasSPE()">,
                                  AssemblerPredicate<"FeatureSPE", "spe">;
 def HasFuseAES       : Predicate<"Subtarget->hasFuseAES()">,
@@ -174,6 +176,7 @@ def SDT_AArch64WrapperLarge : SDTypeProfile<1, 4,
 
 // Node definitions.
 def AArch64adrp          : SDNode<"AArch64ISD::ADRP", SDTIntUnaryOp, []>;
+def AArch64adr           : SDNode<"AArch64ISD::ADR", SDTIntUnaryOp, []>;
 def AArch64addlow        : SDNode<"AArch64ISD::ADDlow", SDTIntBinOp, []>;
 def AArch64LOADgot       : SDNode<"AArch64ISD::LOADgot", SDTIntUnaryOp>;
 def AArch64callseq_start : SDNode<"ISD::CALLSEQ_START",
@@ -1383,7 +1386,8 @@ def : InstAlias<"cneg $dst, $src, $cc",
 //===----------------------------------------------------------------------===//
 let isReMaterializable = 1 in {
 let hasSideEffects = 0, mayStore = 0, mayLoad = 0 in {
-def ADR  : ADRI<0, "adr", adrlabel, []>;
+def ADR  : ADRI<0, "adr", adrlabel,
+                [(set GPR64:$Xd, (AArch64adr tglobaladdr:$label))]>;
 } // hasSideEffects = 0
 
 def ADRP : ADRI<1, "adrp", adrplabel,
@@ -1391,6 +1395,10 @@ def ADRP : ADRI<1, "adrp", adrplabel,
 } // isReMaterializable = 1
 
 // page address of a constant pool entry, block address
+def : Pat<(AArch64adr tconstpool:$cp), (ADR tconstpool:$cp)>;
+def : Pat<(AArch64adr tblockaddress:$cp), (ADR tblockaddress:$cp)>;
+def : Pat<(AArch64adr texternalsym:$sym), (ADR texternalsym:$sym)>;
+def : Pat<(AArch64adr tjumptable:$sym), (ADR tjumptable:$sym)>;
 def : Pat<(AArch64adrp tconstpool:$cp), (ADRP tconstpool:$cp)>;
 def : Pat<(AArch64adrp tblockaddress:$cp), (ADRP tblockaddress:$cp)>;
 def : Pat<(AArch64adrp texternalsym:$sym), (ADRP texternalsym:$sym)>;
@@ -3298,6 +3306,24 @@ defm SQRDMLAH : SIMDThreeSameVectorSQRDMLxHTiedHS<1,0b10000,"sqrdmlah",
                                                   int_aarch64_neon_sqadd>;
 defm SQRDMLSH : SIMDThreeSameVectorSQRDMLxHTiedHS<1,0b10001,"sqrdmlsh",
                                                     int_aarch64_neon_sqsub>;
+
+// FP16FML
+def FMLAL_2S   : BaseSIMDThreeSameMult<0, 0, 1, 0b001, "fmlal", ".2s", ".2h">;
+def FMLSL_2S   : BaseSIMDThreeSameMult<0, 0, 1, 0b101, "fmlsl", ".2s", ".2h">;
+def FMLAL_4S   : BaseSIMDThreeSameMult<1, 0, 1, 0b001, "fmlal", ".4s", ".4h">;
+def FMLSL_4S   : BaseSIMDThreeSameMult<1, 0, 1, 0b101, "fmlsl", ".4s", ".4h">;
+def FMLAL2_2S  : BaseSIMDThreeSameMult<0, 1, 0, 0b001, "fmlal2", ".2s", ".2h">;
+def FMLSL2_2S  : BaseSIMDThreeSameMult<0, 1, 0, 0b101, "fmlsl2", ".2s", ".2h">;
+def FMLAL2_4S  : BaseSIMDThreeSameMult<1, 1, 0, 0b001, "fmlal2", ".4s", ".4h">;
+def FMLSL2_4S  : BaseSIMDThreeSameMult<1, 1, 0, 0b101, "fmlsl2", ".4s", ".4h">;
+def FMLALI_2s  : BaseSIMDThreeSameMultIndex<0, 0, 0b0000, "fmlal", ".2s", ".2h", ".h">;
+def FMLSLI_2s  : BaseSIMDThreeSameMultIndex<0, 0, 0b0100, "fmlsl", ".2s", ".2h", ".h">;
+def FMLALI_4s  : BaseSIMDThreeSameMultIndex<1, 0, 0b0000, "fmlal", ".4s", ".4h", ".h">;
+def FMLSLI_4s  : BaseSIMDThreeSameMultIndex<1, 0, 0b0100, "fmlsl", ".4s", ".4h", ".h">;
+def FMLALI2_2s : BaseSIMDThreeSameMultIndex<0, 1, 0b1000, "fmlal2", ".2s", ".2h", ".h">;
+def FMLSLI2_2s : BaseSIMDThreeSameMultIndex<0, 1, 0b1100, "fmlsl2", ".2s", ".2h", ".h">;
+def FMLALI2_4s : BaseSIMDThreeSameMultIndex<1, 1, 0b1000, "fmlal2", ".4s", ".4h", ".h">;
+def FMLSLI2_4s : BaseSIMDThreeSameMultIndex<1, 1, 0b1100, "fmlsl2", ".4s", ".4h", ".h">;
 
 defm AND : SIMDLogicalThreeVector<0, 0b00, "and", and>;
 defm BIC : SIMDLogicalThreeVector<0, 0b01, "bic",

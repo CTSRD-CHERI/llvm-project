@@ -204,7 +204,6 @@ unsigned Function::getInstructionCount() {
   return NumInstrs;
 }
 
-
 cl::opt<bool> IgnoreProgramASForFunctions(
     "ignore-program-as-for-functions", cl::Hidden, cl::init(false),
     cl::desc("This is a hack to keep the legacy CHERI ABI working"));

@@ -268,7 +268,11 @@ namespace llvm {
     bool ParseTLSModel(GlobalVariable::ThreadLocalMode &TLM);
     bool ParseOptionalThreadLocal(GlobalVariable::ThreadLocalMode &TLM);
     bool ParseOptionalUnnamedAddr(GlobalVariable::UnnamedAddr &UnnamedAddr);
-    bool ParseOptionalAddrSpace(unsigned &AddrSpace);
+    bool ParseOptionalAddrSpace(unsigned &AddrSpace, unsigned DefaultAS = 0);
+    bool ParseOptionalProgramAddrSpace(unsigned &AddrSpace) {
+      return ParseOptionalAddrSpace(
+          AddrSpace, M->getDataLayout().getProgramAddressSpace());
+    };
     bool ParseOptionalParamAttrs(AttrBuilder &B);
     bool ParseOptionalReturnAttrs(AttrBuilder &B);
     bool ParseOptionalLinkage(unsigned &Res, bool &HasLinkage,

@@ -39,13 +39,21 @@ public:
                        llvm::function_ref<void(const SymbolOccurrence &)>
                            Callback) const override;
 
+  size_t estimateMemoryUsage() const override;
+
 private:
+
   std::shared_ptr<std::vector<const Symbol *>> Symbols;
   // Index is a set of symbols that are deduplicated by symbol IDs.
   // FIXME: build smarter index structure.
   llvm::DenseMap<SymbolID, const Symbol *> Index;
   mutable std::mutex Mutex;
 };
+
+// Returns pointers to the symbols in given slab and bundles slab lifetime with
+// returned symbol pointers so that the pointers are never invalid.
+std::shared_ptr<std::vector<const Symbol *>>
+getSymbolsFromSlab(SymbolSlab Slab);
 
 } // namespace clangd
 } // namespace clang

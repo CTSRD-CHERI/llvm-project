@@ -4,6 +4,8 @@ Clang-Tidy Checks
 =================
 
 .. toctree::
+   abseil-duration-division
+   abseil-faster-strsplit-delimiter
    abseil-string-find-startswith
    android-cloexec-accept
    android-cloexec-accept4

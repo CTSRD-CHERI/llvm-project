@@ -114,6 +114,9 @@ struct MIToken {
     kw_successors,
     kw_floatpred,
     kw_intpred,
+    kw_pre_instr_symbol,
+    kw_post_instr_symbol,
+    kw_unknown_size,
 
     // Named metadata keywords
     md_tbaa,
@@ -133,6 +136,7 @@ struct MIToken {
     NamedGlobalValue,
     GlobalValue,
     ExternalSymbol,
+    MCSymbol,
 
     // Other tokens
     IntegerLiteral,

@@ -98,6 +98,7 @@ STATISTIC(NumPRELoad,   "Number of loads PRE'd");
 static cl::opt<bool> EnablePRE("enable-pre",
                                cl::init(true), cl::Hidden);
 static cl::opt<bool> EnableLoadPRE("enable-load-pre", cl::init(true));
+static cl::opt<bool> EnableMemDep("enable-gvn-memdep", cl::init(true));
 
 // Maximum allowed recursion depth.
 static cl::opt<uint32_t>
@@ -393,17 +394,12 @@ uint32_t GVN::ValueTable::lookupOrAddCall(CallInst *C) {
     uint32_t e = assignExpNewValueNum(exp).first;
     valueNumbering[C] = e;
     return e;
-  } else if (AA->onlyReadsMemory(C)) {
+  } else if (MD && AA->onlyReadsMemory(C)) {
     Expression exp = createExpr(C);
     auto ValNum = assignExpNewValueNum(exp);
     if (ValNum.second) {
       valueNumbering[C] = ValNum.first;
       return ValNum.first;
-    }
-    if (!MD) {
-      uint32_t e = assignExpNewValueNum(exp).first;
-      valueNumbering[C] = e;
-      return e;
     }
 
     MemDepResult local_dep = MD->getDependency(C);
@@ -2024,7 +2020,7 @@ bool GVN::runImpl(Function &F, AssumptionCache &RunAC, DominatorTree &RunDT,
   for (Function::iterator FI = F.begin(), FE = F.end(); FI != FE; ) {
     BasicBlock *BB = &*FI++;
 
-    bool removedBlock = MergeBlockIntoPredecessor(BB, &DTU, LI, MD);
+    bool removedBlock = MergeBlockIntoPredecessor(BB, &DTU, LI, nullptr, MD);
     if (removedBlock)
       ++NumGVNBlocks;
 
@@ -2489,6 +2485,8 @@ void GVN::addDeadBlock(BasicBlock *BB) {
         PHINode &Phi = cast<PHINode>(*II);
         Phi.setIncomingValue(Phi.getBasicBlockIndex(P),
                              UndefValue::get(Phi.getType()));
+        if (MD)
+          MD->invalidateCachedPointerInfo(&Phi);
       }
     }
   }
@@ -2548,8 +2546,8 @@ class llvm::gvn::GVNLegacyPass : public FunctionPass {
 public:
   static char ID; // Pass identification, replacement for typeid
 
-  explicit GVNLegacyPass(bool NoLoads = false)
-      : FunctionPass(ID), NoLoads(NoLoads) {
+  explicit GVNLegacyPass(bool NoMemDepAnalysis = !EnableMemDep)
+      : FunctionPass(ID), NoMemDepAnalysis(NoMemDepAnalysis) {
     initializeGVNLegacyPassPass(*PassRegistry::getPassRegistry());
   }
 
@@ -2564,7 +2562,7 @@ public:
         getAnalysis<DominatorTreeWrapperPass>().getDomTree(),
         getAnalysis<TargetLibraryInfoWrapperPass>().getTLI(),
         getAnalysis<AAResultsWrapperPass>().getAAResults(),
-        NoLoads ? nullptr
+        NoMemDepAnalysis ? nullptr
                 : &getAnalysis<MemoryDependenceWrapperPass>().getMemDep(),
         LIWP ? &LIWP->getLoopInfo() : nullptr,
         &getAnalysis<OptimizationRemarkEmitterWrapperPass>().getORE());
@@ -2574,7 +2572,7 @@ public:
     AU.addRequired<AssumptionCacheTracker>();
     AU.addRequired<DominatorTreeWrapperPass>();
     AU.addRequired<TargetLibraryInfoWrapperPass>();
-    if (!NoLoads)
+    if (!NoMemDepAnalysis)
       AU.addRequired<MemoryDependenceWrapperPass>();
     AU.addRequired<AAResultsWrapperPass>();
 
@@ -2585,7 +2583,7 @@ public:
   }
 
 private:
-  bool NoLoads;
+  bool NoMemDepAnalysis;
   GVN Impl;
 };
 
@@ -2602,6 +2600,6 @@ INITIALIZE_PASS_DEPENDENCY(OptimizationRemarkEmitterWrapperPass)
 INITIALIZE_PASS_END(GVNLegacyPass, "gvn", "Global Value Numbering", false, false)
 
 // The public interface to this file...
-FunctionPass *llvm::createGVNPass(bool NoLoads) {
-  return new GVNLegacyPass(NoLoads);
+FunctionPass *llvm::createGVNPass(bool NoMemDepAnalysis) {
+  return new GVNLegacyPass(NoMemDepAnalysis);
 }

@@ -23,18 +23,18 @@
 
 #include "CodeRegion.h"
 #include "Context.h"
-#include "DispatchStatistics.h"
 #include "FetchStage.h"
-#include "InstructionInfoView.h"
 #include "InstructionTables.h"
 #include "Pipeline.h"
 #include "PipelinePrinter.h"
-#include "RegisterFileStatistics.h"
-#include "ResourcePressureView.h"
-#include "RetireControlUnitStatistics.h"
-#include "SchedulerStatistics.h"
-#include "SummaryView.h"
-#include "TimelineView.h"
+#include "Views/DispatchStatistics.h"
+#include "Views/InstructionInfoView.h"
+#include "Views/RegisterFileStatistics.h"
+#include "Views/ResourcePressureView.h"
+#include "Views/RetireControlUnitStatistics.h"
+#include "Views/SchedulerStatistics.h"
+#include "Views/SummaryView.h"
+#include "Views/TimelineView.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCObjectFileInfo.h"
@@ -236,9 +236,9 @@ public:
   }
 };
 
-int AssembleInput(const char *ProgName, MCAsmParser &Parser,
-                  const Target *TheTarget, MCSubtargetInfo &STI,
-                  MCInstrInfo &MCII, MCTargetOptions &MCOptions) {
+int AssembleInput(MCAsmParser &Parser, const Target *TheTarget,
+                  MCSubtargetInfo &STI, MCInstrInfo &MCII,
+                  MCTargetOptions &MCOptions) {
   std::unique_ptr<MCTargetAsmParser> TAP(
       TheTarget->createMCAsmParser(STI, Parser, MCII, MCOptions));
 
@@ -424,7 +424,7 @@ int main(int argc, char **argv) {
   MCACommentConsumer CC(Regions);
   Lexer.setCommentConsumer(&CC);
 
-  if (AssembleInput(ProgName, *P, TheTarget, *STI, *MCII, MCOptions))
+  if (AssembleInput(*P, TheTarget, *STI, *MCII, MCOptions))
     return 1;
 
   if (Regions.empty()) {

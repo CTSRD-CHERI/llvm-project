@@ -107,6 +107,9 @@ class WriteState {
   // that we don't break the WAW, and the two writes can be merged together.
   const WriteState *DependentWrite;
 
+  // Number of writes that are in a WAW dependency with this write.
+  unsigned NumWriteUsers;
+
   // A list of dependent reads. Users is a set of dependent
   // reads. A dependent read is added to the set only if CyclesLeft
   // is "unknown". As soon as CyclesLeft is 'known', each user in the set
@@ -119,7 +122,8 @@ public:
   WriteState(const WriteDescriptor &Desc, unsigned RegID,
              bool clearsSuperRegs = false)
       : WD(Desc), CyclesLeft(UNKNOWN_CYCLES), RegisterID(RegID),
-        ClearsSuperRegs(clearsSuperRegs), DependentWrite(nullptr) {}
+        ClearsSuperRegs(clearsSuperRegs), DependentWrite(nullptr),
+        NumWriteUsers(0U) {}
   WriteState(const WriteState &Other) = delete;
   WriteState &operator=(const WriteState &Other) = delete;
 
@@ -129,11 +133,15 @@ public:
   unsigned getLatency() const { return WD.Latency; }
 
   void addUser(ReadState *Use, int ReadAdvance);
-  unsigned getNumUsers() const { return Users.size(); }
+
+  unsigned getNumUsers() const { return Users.size() + NumWriteUsers; }
   bool clearsSuperRegisters() const { return ClearsSuperRegs; }
 
   const WriteState *getDependentWrite() const { return DependentWrite; }
-  void setDependentWrite(const WriteState *Write) { DependentWrite = Write; }
+  void setDependentWrite(WriteState *Other) {
+    DependentWrite = Other;
+    ++Other->NumWriteUsers;
+  }
 
   // On every cycle, update CyclesLeft and notify dependent users.
   void cycleEvent();
@@ -330,6 +338,12 @@ public:
   unsigned getRCUTokenID() const { return RCUTokenID; }
   int getCyclesLeft() const { return CyclesLeft; }
 
+  bool hasDependentUsers() const {
+    return std::any_of(Defs.begin(), Defs.end(), [](const UniqueDef &Def) {
+      return Def->getNumUsers() > 0;
+    });
+  }
+
   bool isDependencyBreaking() const { return IsDepBreaking; }
   void setDependencyBreaking() { IsDepBreaking = true; }
 
@@ -423,9 +437,7 @@ public:
   bool isValid() const {
     return Data.first != INVALID_IID && Data.second != nullptr;
   }
-  bool operator==(const WriteRef &Other) const {
-    return Data == Other.Data;
-  }
+  bool operator==(const WriteRef &Other) const { return Data == Other.Data; }
 
 #ifndef NDEBUG
   void dump() const;

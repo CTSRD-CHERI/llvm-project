@@ -1336,8 +1336,8 @@ Value *LLParser::checkValidVariableType(LocTy Loc, const Twine &Name, Type *Ty,
                                         Value *Val, bool IsCall) {
   if (Val->getType() == Ty)
     return Val;
-  // For calls we also accept variables in the program address space
-  Type* SuggestedTy = Ty;
+  // For calls we also accept variables in the program address space.
+  Type *SuggestedTy = Ty;
   if (IsCall && isa<PointerType>(Ty)) {
     Type *TyInProgAS = cast<PointerType>(Ty)->getElementType()->getPointerTo(
         M->getDataLayout().getProgramAddressSpace());
@@ -1532,8 +1532,8 @@ bool LLParser::ParseOptionalThreadLocal(GlobalVariable::ThreadLocalMode &TLM) {
 /// ParseOptionalAddrSpace
 ///   := /*empty*/
 ///   := 'addrspace' '(' uint32 ')'
-bool LLParser::ParseOptionalAddrSpace(unsigned &AddrSpace) {
-  AddrSpace = 0;
+bool LLParser::ParseOptionalAddrSpace(unsigned &AddrSpace, unsigned DefaultAS) {
+  AddrSpace = DefaultAS;
   if (!EatIfPresent(lltok::kw_addrspace))
     return false;
   return ParseToken(lltok::lparen, "expected '(' in address space") ||
@@ -5093,8 +5093,8 @@ bool LLParser::ParseTypeAndBasicBlock(BasicBlock *&BB, LocTy &Loc,
 /// FunctionHeader
 ///   ::= OptionalLinkage OptionalPreemptionSpecifier OptionalVisibility
 ///       OptionalCallingConv OptRetAttrs OptUnnamedAddr Type GlobalName
-///       '(' ArgList ')' OptFuncAttrs OptSection OptionalAlign OptGC
-///       OptionalPrefix OptionalPrologue OptPersonalityFn
+///       '(' ArgList ')' OptAddrSpace OptFuncAttrs OptSection OptionalAlign
+///       OptGC OptionalPrefix OptionalPrologue OptPersonalityFn
 bool LLParser::ParseFunctionHeader(Function *&Fn, bool isDefine) {
   // Parse the linkage.
   LocTy LinkageLoc = Lex.getLoc();
@@ -5180,7 +5180,7 @@ bool LLParser::ParseFunctionHeader(Function *&Fn, bool isDefine) {
 
   if (ParseArgumentList(ArgList, isVarArg) ||
       ParseOptionalUnnamedAddr(UnnamedAddr) ||
-      ParseOptionalAddrSpace(AddrSpace) ||
+      ParseOptionalProgramAddrSpace(AddrSpace) ||
       ParseFnAttributeValuePairs(FuncAttrs, FwdRefAttrGrps, false,
                                  BuiltinLoc) ||
       (EatIfPresent(lltok::kw_section) &&
@@ -5245,9 +5245,9 @@ bool LLParser::ParseFunctionHeader(Function *&Fn, bool isDefine) {
         PFT->dump();
 #endif
         return Error(FRVI->second.second, "invalid forward reference to "
-                     "function '" + FunctionName + "' with wrong type!");
-      }
-
+                     "function '" + FunctionName + "' with wrong type: "
+                     "expected '" + getTypeString(PFT) + "' but was '" +
+                     getTypeString(Fn->getType()) + "'");
       ForwardRefVals.erase(FRVI);
     } else if ((Fn = M->getFunction(FunctionName))) {
       // Reject redefinitions.
@@ -5265,7 +5265,9 @@ bool LLParser::ParseFunctionHeader(Function *&Fn, bool isDefine) {
       Fn = cast<Function>(I->second.first);
       if (Fn->getType() != PFT)
         return Error(NameLoc, "type of definition and forward reference of '@" +
-                     Twine(NumberedVals.size()) + "' disagree");
+                     Twine(NumberedVals.size()) + "' disagree: "
+                     "expected '" + getTypeString(PFT) + "' but was '" +
+                     getTypeString(Fn->getType()) + "'");
       ForwardRefValIDs.erase(I);
     }
   }
@@ -5275,6 +5277,8 @@ bool LLParser::ParseFunctionHeader(Function *&Fn, bool isDefine) {
                           FunctionName, M);
   else // Move the forward-reference to the correct spot in the module.
     M->getFunctionList().splice(M->end(), M->getFunctionList(), Fn);
+
+  assert(Fn->getAddressSpace() == AddrSpace && "Created function in wrong AS");
 
   if (FunctionName.empty())
     NumberedVals.push_back(Fn);
@@ -5794,6 +5798,7 @@ bool LLParser::ParseInvoke(Instruction *&Inst, PerFunctionState &PFS) {
   std::vector<unsigned> FwdRefAttrGrps;
   LocTy NoBuiltinLoc;
   unsigned CC;
+  unsigned InvokeAddrSpace;
   Type *RetType = nullptr;
   LocTy RetTypeLoc;
   ValID CalleeID;
@@ -5802,6 +5807,7 @@ bool LLParser::ParseInvoke(Instruction *&Inst, PerFunctionState &PFS) {
 
   BasicBlock *NormalBB, *UnwindBB;
   if (ParseOptionalCallingConv(CC) || ParseOptionalReturnAttrs(RetAttrs) ||
+      ParseOptionalProgramAddrSpace(InvokeAddrSpace) ||
       ParseType(RetType, RetTypeLoc, true /*void allowed*/) ||
       ParseValID(CalleeID) || ParseParameterList(ArgList, PFS) ||
       ParseFnAttributeValuePairs(FnAttrs, FwdRefAttrGrps, false,
@@ -5833,8 +5839,8 @@ bool LLParser::ParseInvoke(Instruction *&Inst, PerFunctionState &PFS) {
 
   // Look up the callee.
   Value *Callee;
-  if (ConvertValIDToValue(PointerType::getUnqual(Ty), CalleeID, Callee, &PFS,
-                          /*IsCall=*/true))
+  if (ConvertValIDToValue(PointerType::get(Ty, InvokeAddrSpace), CalleeID,
+                          Callee, &PFS, /*IsCall=*/true))
     return true;
 
   // Set up the Attribute for the function.
@@ -6377,6 +6383,7 @@ bool LLParser::ParseCall(Instruction *&Inst, PerFunctionState &PFS,
   AttrBuilder RetAttrs, FnAttrs;
   std::vector<unsigned> FwdRefAttrGrps;
   LocTy BuiltinLoc;
+  unsigned CallAddrSpace;
   unsigned CC;
   Type *RetType = nullptr;
   LocTy RetTypeLoc;
@@ -6393,6 +6400,7 @@ bool LLParser::ParseCall(Instruction *&Inst, PerFunctionState &PFS,
   FastMathFlags FMF = EatFastMathFlagsIfPresent();
 
   if (ParseOptionalCallingConv(CC) || ParseOptionalReturnAttrs(RetAttrs) ||
+      ParseOptionalProgramAddrSpace(CallAddrSpace) ||
       ParseType(RetType, RetTypeLoc, true /*void allowed*/) ||
       ParseValID(CalleeID) ||
       ParseParameterList(ArgList, PFS, TCK == CallInst::TCK_MustTail,
@@ -6425,8 +6433,8 @@ bool LLParser::ParseCall(Instruction *&Inst, PerFunctionState &PFS,
 
   // Look up the callee.
   Value *Callee;
-  if (ConvertValIDToValue(PointerType::getUnqual(Ty), CalleeID, Callee, &PFS,
-                          /*IsCall=*/true))
+  if (ConvertValIDToValue(PointerType::get(Ty, CallAddrSpace), CalleeID, Callee,
+                          &PFS, /*IsCall=*/true))
     return true;
 
   // Set up the Attribute for the function.

@@ -1252,6 +1252,21 @@ static llvm::Value *dumpRecord(CodeGenFunction &CGF, QualType RType,
   return Res;
 }
 
+RValue CodeGenFunction::emitRotate(const CallExpr *E, bool IsRotateRight) {
+  llvm::Value *Src = EmitScalarExpr(E->getArg(0));
+  llvm::Value *ShiftAmt = EmitScalarExpr(E->getArg(1));
+
+  // The builtin's shift arg may have a different type than the source arg and
+  // result, but the LLVM intrinsic uses the same type for all values.
+  llvm::Type *Ty = Src->getType();
+  ShiftAmt = Builder.CreateIntCast(ShiftAmt, Ty, false);
+
+  // Rotate is a special case of LLVM funnel shift - 1st 2 args are the same.
+  unsigned IID = IsRotateRight ? Intrinsic::fshr : Intrinsic::fshl;
+  Value *F = CGM.getIntrinsic(IID, Ty);
+  return RValue::get(Builder.CreateCall(F, { Src, Src, ShiftAmt }));
+}
+
 RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
                                         unsigned BuiltinID, const CallExpr *E,
                                         ReturnValueSlot ReturnValue) {
@@ -1741,6 +1756,18 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
   case Builtin::BI__builtin_bitreverse64: {
     return RValue::get(emitUnaryBuiltin(*this, E, Intrinsic::bitreverse));
   }
+  case Builtin::BI__builtin_rotateleft8:
+  case Builtin::BI__builtin_rotateleft16:
+  case Builtin::BI__builtin_rotateleft32:
+  case Builtin::BI__builtin_rotateleft64:
+    return emitRotate(E, false);
+
+  case Builtin::BI__builtin_rotateright8:
+  case Builtin::BI__builtin_rotateright16:
+  case Builtin::BI__builtin_rotateright32:
+  case Builtin::BI__builtin_rotateright64:
+    return emitRotate(E, true);
+
   case Builtin::BI__builtin_object_size: {
     unsigned Type =
         E->getArg(1)->EvaluateKnownConstInt(getContext()).getZExtValue();
@@ -10440,6 +10467,27 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
     return Builder.CreateFence(llvm::AtomicOrdering::SequentiallyConsistent,
                                llvm::SyncScope::System);
   }
+  case X86::BI__shiftleft128:
+  case X86::BI__shiftright128: {
+    // FIXME: Once fshl/fshr no longer add an unneeded and and cmov, do this:
+    // llvm::Function *F = CGM.getIntrinsic(
+    //   BuiltinID == X86::BI__shiftleft128 ? Intrinsic::fshl : Intrinsic::fshr,
+    //   Int64Ty);
+    // Ops[2] = Builder.CreateZExt(Ops[2], Int64Ty);
+    // return Builder.CreateCall(F, Ops);
+    llvm::Type *Int128Ty = Builder.getInt128Ty();
+    Value *Val = Builder.CreateOr(
+        Builder.CreateShl(Builder.CreateZExt(Ops[1], Int128Ty), 64),
+        Builder.CreateZExt(Ops[0], Int128Ty));
+    Value *Amt = Builder.CreateAnd(Builder.CreateZExt(Ops[2], Int128Ty),
+                                   llvm::ConstantInt::get(Int128Ty, 0x3f));
+    Value *Res;
+    if (BuiltinID == X86::BI__shiftleft128)
+      Res = Builder.CreateLShr(Builder.CreateShl(Val, Amt), 64);
+    else
+      Res = Builder.CreateLShr(Val, Amt);
+    return Builder.CreateTrunc(Res, Int64Ty);
+  }
   case X86::BI_ReadWriteBarrier:
   case X86::BI_ReadBarrier:
   case X86::BI_WriteBarrier: {
@@ -10480,14 +10528,11 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
     llvm::Type *Int128PtrTy = Int128Ty->getPointerTo();
 
     Value *Destination =
-        Builder.CreateBitCast(EmitScalarExpr(E->getArg(0)), Int128PtrTy);
-    Value *ExchangeHigh128 =
-        Builder.CreateZExt(EmitScalarExpr(E->getArg(1)), Int128Ty);
-    Value *ExchangeLow128 =
-        Builder.CreateZExt(EmitScalarExpr(E->getArg(2)), Int128Ty);
-    Address ComparandResult(
-        Builder.CreateBitCast(EmitScalarExpr(E->getArg(3)), Int128PtrTy),
-        getContext().toCharUnitsFromBits(128));
+        Builder.CreateBitCast(Ops[0], Int128PtrTy);
+    Value *ExchangeHigh128 = Builder.CreateZExt(Ops[1], Int128Ty);
+    Value *ExchangeLow128 = Builder.CreateZExt(Ops[2], Int128Ty);
+    Address ComparandResult(Builder.CreateBitCast(Ops[3], Int128PtrTy),
+                            getContext().toCharUnitsFromBits(128));
 
     Value *Exchange = Builder.CreateOr(
         Builder.CreateShl(ExchangeHigh128, 64, "", false, false),
@@ -10538,8 +10583,8 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
   case X86::BI__readfsdword:
   case X86::BI__readfsqword: {
     llvm::Type *IntTy = ConvertType(E->getType());
-    Value *Ptr = Builder.CreateIntToPtr(EmitScalarExpr(E->getArg(0)),
-                                        llvm::PointerType::get(IntTy, 257));
+    Value *Ptr =
+        Builder.CreateIntToPtr(Ops[0], llvm::PointerType::get(IntTy, 257));
     LoadInst *Load = Builder.CreateAlignedLoad(
         IntTy, Ptr, getContext().getTypeAlignInChars(E->getType()));
     Load->setVolatile(true);
@@ -10550,8 +10595,8 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
   case X86::BI__readgsdword:
   case X86::BI__readgsqword: {
     llvm::Type *IntTy = ConvertType(E->getType());
-    Value *Ptr = Builder.CreateIntToPtr(EmitScalarExpr(E->getArg(0)),
-                                        llvm::PointerType::get(IntTy, 256));
+    Value *Ptr =
+        Builder.CreateIntToPtr(Ops[0], llvm::PointerType::get(IntTy, 256));
     LoadInst *Load = Builder.CreateAlignedLoad(
         IntTy, Ptr, getContext().getTypeAlignInChars(E->getType()));
     Load->setVolatile(true);

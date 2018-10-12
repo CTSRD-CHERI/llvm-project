@@ -447,45 +447,68 @@ void MachineInstr::cloneMergedMemRefs(MachineFunction &MF,
   setMemRefs(MF, MergedMMOs);
 }
 
-MCSymbol *MachineInstr::getOrCreatePreInstrTempSymbol(MCContext &MCCtx) {
-  MCSymbol *S = getPreInstrSymbol();
-  if (S)
-    return S;
+void MachineInstr::setPreInstrSymbol(MachineFunction &MF, MCSymbol *Symbol) {
+  MCSymbol *OldSymbol = getPreInstrSymbol();
+  if (OldSymbol == Symbol)
+    return;
+  if (OldSymbol && !Symbol) {
+    // We're removing a symbol rather than adding one. Try to clean up any
+    // extra info carried around.
+    if (Info.is<EIIK_PreInstrSymbol>()) {
+      Info.clear();
+      return;
+    }
 
-  // Create a new temp symbol.
-  S = MCCtx.createTempSymbol();
+    if (memoperands_empty()) {
+      assert(getPostInstrSymbol() &&
+             "Should never have only a single symbol allocated out-of-line!");
+      Info.set<EIIK_PostInstrSymbol>(getPostInstrSymbol());
+      return;
+    }
 
-  if (!Info) {
+    // Otherwise fallback on the generic update.
+  } else if (!Info || Info.is<EIIK_PreInstrSymbol>()) {
     // If we don't have any other extra info, we can store this inline.
-    Info.set<EIIK_PreInstrSymbol>(S);
-    return S;
+    Info.set<EIIK_PreInstrSymbol>(Symbol);
+    return;
   }
 
-  // Otherwise, allocate a fully set of extra info.
+  // Otherwise, allocate a full new set of extra info.
+  // FIXME: Maybe we should make the symbols in the extra info mutable?
   Info.set<EIIK_OutOfLine>(
-      getMF()->createMIExtraInfo(memoperands(), S, getPostInstrSymbol()));
-
-  return S;
+      MF.createMIExtraInfo(memoperands(), Symbol, getPostInstrSymbol()));
 }
 
-MCSymbol *MachineInstr::getOrCreatePostInstrTempSymbol(MCContext &MCCtx) {
-  MCSymbol *S = getPostInstrSymbol();
-  if (S)
-    return S;
+void MachineInstr::setPostInstrSymbol(MachineFunction &MF, MCSymbol *Symbol) {
+  MCSymbol *OldSymbol = getPostInstrSymbol();
+  if (OldSymbol == Symbol)
+    return;
+  if (OldSymbol && !Symbol) {
+    // We're removing a symbol rather than adding one. Try to clean up any
+    // extra info carried around.
+    if (Info.is<EIIK_PostInstrSymbol>()) {
+      Info.clear();
+      return;
+    }
 
-  // Create a new temp symbol.
-  S = MCCtx.createTempSymbol();
+    if (memoperands_empty()) {
+      assert(getPreInstrSymbol() &&
+             "Should never have only a single symbol allocated out-of-line!");
+      Info.set<EIIK_PreInstrSymbol>(getPreInstrSymbol());
+      return;
+    }
 
-  if (!Info) {
+    // Otherwise fallback on the generic update.
+  } else if (!Info || Info.is<EIIK_PostInstrSymbol>()) {
     // If we don't have any other extra info, we can store this inline.
-    Info.set<EIIK_PostInstrSymbol>(S);
-    return S;
+    Info.set<EIIK_PostInstrSymbol>(Symbol);
+    return;
   }
 
-  // Otherwise, allocate a fully set of extra info.
+  // Otherwise, allocate a full new set of extra info.
+  // FIXME: Maybe we should make the symbols in the extra info mutable?
   Info.set<EIIK_OutOfLine>(
-      getMF()->createMIExtraInfo(memoperands(), getPreInstrSymbol(), S));
-  return S;
+      MF.createMIExtraInfo(memoperands(), getPreInstrSymbol(), Symbol));
 }
 
 uint16_t MachineInstr::mergeFlagsWith(const MachineInstr &Other) const {
@@ -1156,10 +1179,13 @@ bool MachineInstr::mayAlias(AliasAnalysis *AA, MachineInstr &Other,
 
   int64_t OffsetA = MMOa->getOffset();
   int64_t OffsetB = MMOb->getOffset();
-
   int64_t MinOffset = std::min(OffsetA, OffsetB);
-  int64_t WidthA = MMOa->getSize();
-  int64_t WidthB = MMOb->getSize();
+
+  uint64_t WidthA = MMOa->getSize();
+  uint64_t WidthB = MMOb->getSize();
+  bool KnownWidthA = WidthA != MemoryLocation::UnknownSize;
+  bool KnownWidthB = WidthB != MemoryLocation::UnknownSize;
+
   const Value *ValA = MMOa->getValue();
   const Value *ValB = MMOb->getValue();
   bool SameVal = (ValA && ValB && (ValA == ValB));
@@ -1175,6 +1201,8 @@ bool MachineInstr::mayAlias(AliasAnalysis *AA, MachineInstr &Other,
   }
 
   if (SameVal) {
+    if (!KnownWidthA || !KnownWidthB)
+      return true;
     int64_t MaxOffset = std::max(OffsetA, OffsetB);
     int64_t LowWidth = (MinOffset == OffsetA) ? WidthA : WidthB;
     return (MinOffset + LowWidth > MaxOffset);
@@ -1189,13 +1217,15 @@ bool MachineInstr::mayAlias(AliasAnalysis *AA, MachineInstr &Other,
   assert((OffsetA >= 0) && "Negative MachineMemOperand offset");
   assert((OffsetB >= 0) && "Negative MachineMemOperand offset");
 
-  int64_t Overlapa = WidthA + OffsetA - MinOffset;
-  int64_t Overlapb = WidthB + OffsetB - MinOffset;
+  int64_t OverlapA = KnownWidthA ? WidthA + OffsetA - MinOffset
+                                 : MemoryLocation::UnknownSize;
+  int64_t OverlapB = KnownWidthB ? WidthB + OffsetB - MinOffset
+                                 : MemoryLocation::UnknownSize;
 
   AliasResult AAResult = AA->alias(
-      MemoryLocation(ValA, Overlapa,
+      MemoryLocation(ValA, OverlapA,
                      UseTBAA ? MMOa->getAAInfo() : AAMDNodes()),
-      MemoryLocation(ValB, Overlapb,
+      MemoryLocation(ValB, OverlapB,
                      UseTBAA ? MMOb->getAAInfo() : AAMDNodes()));
 
   return (AAResult != NoAlias);
@@ -1590,6 +1620,25 @@ void MachineInstr::print(raw_ostream &OS, ModuleSlotTracker &MST,
         MO.print(OS, MST, TypeToPrint, /*PrintDef=*/true, IsStandalone,
                  ShouldPrintRegisterTies, TiedOperandIdx, TRI, IntrinsicInfo);
     }
+  }
+
+  // Print any optional symbols attached to this instruction as-if they were
+  // operands.
+  if (MCSymbol *PreInstrSymbol = getPreInstrSymbol()) {
+    if (!FirstOp) {
+      FirstOp = false;
+      OS << ',';
+    }
+    OS << " pre-instr-symbol ";
+    MachineOperand::printSymbol(OS, *PreInstrSymbol);
+  }
+  if (MCSymbol *PostInstrSymbol = getPostInstrSymbol()) {
+    if (!FirstOp) {
+      FirstOp = false;
+      OS << ',';
+    }
+    OS << " post-instr-symbol ";
+    MachineOperand::printSymbol(OS, *PostInstrSymbol);
   }
 
   if (!SkipDebugLoc) {
