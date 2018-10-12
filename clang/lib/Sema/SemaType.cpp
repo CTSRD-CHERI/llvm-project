@@ -7328,8 +7328,9 @@ static bool HandleMemoryAddressAttr(QualType &T, TypeProcessingState &State,
     }
     underlyingType = underlyingType.getSingleStepDesugaredType();
   }
-  T = S.Context.getAttributedType(attr::MemoryAddress, T, T);
-  // llvm::errs() << "Modified type: "; T.dump();
+  T = State.getAttributedType(
+      createSimpleAttr<MemoryAddressAttr>(State.getSema().Context, Attr), T, T);
+  // llvm::errs() << __func__ << ": modified type: "; T.dump();
   return false;
 }
 
