@@ -1943,10 +1943,11 @@ static CastKind DiagnoseCapabilityToIntCast(Sema &Self, SourceRange OpRange,
   // bool IsMemAddressType = DestType->getDecl()->hasAttr<MemoryAddressAttr>();
   bool IsMemAddressType = false;
   QualType CurTy = DestType;
+#warning "I think this can now be simplified to hasAttr<>"
   while (!CurTy.isNull() && !CurTy.isCanonical()) {
     // llvm::errs() << "Checking if " << T.getAsString() << " is a memoryAddressType\n";
     if (auto AT = CurTy->getAs<AttributedType>()) {
-      if (AT->getAttrKind() == AttributedType::attr_memory_address) {
+      if (AT->getAttrKind() == attr::MemoryAddress) {
         // llvm::errs() << "Found attr_memory_address: " << CurTy.getAsString() << "\n";
         // llvm::errs() << DestType.getAsString() << " is a memoryAddressType!\n";
         IsMemAddressType = true;
@@ -2852,7 +2853,7 @@ void CastOperation::CheckCStyleCast() {
     }
   }
 
-  DiagnoseCHERICallback(Self, SrcExpr.get()->getLocStart(), SrcType, DestType);
+  DiagnoseCHERICallback(Self, SrcExpr.get()->getBeginLoc(), SrcType, DestType);
   DiagnoseCastOfObjCSEL(Self, SrcExpr, DestType);
   DiagnoseCallingConvCast(Self, SrcExpr, DestType, OpRange);
   DiagnoseBadFunctionCast(Self, SrcExpr, DestType);
@@ -2973,12 +2974,12 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc,
   if (IsToCap) {
     // __cheri_tocap
     if (!SrcTy->isPointerType()) {
-      Diag(SubExpr->getLocStart(), diag::err_cheri_to_from_cap_invalid_source_type)
+      Diag(SubExpr->getBeginLoc(), diag::err_cheri_to_from_cap_invalid_source_type)
         << SrcTy << IsToCap;
       return ExprError();
     }
     if (!DestIsCap) {
-      Diag(TSInfo->getTypeLoc().getLocStart(),
+      Diag(TSInfo->getTypeLoc().getBeginLoc(),
            diag::err_cheri_to_from_cap_invalid_target_type) << DestTy << IsToCap;
       return ExprError();
     }
@@ -2989,12 +2990,12 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc,
   } else {
     // __cheri_fromcap
     if (!SrcIsCap) {
-      Diag(SubExpr->getLocStart(), diag::err_cheri_to_from_cap_invalid_source_type)
+      Diag(SubExpr->getBeginLoc(), diag::err_cheri_to_from_cap_invalid_source_type)
         << SrcTy << IsToCap;
       return ExprError();
     }
     if (!DestTy->isPointerType()) {
-      Diag(TSInfo->getTypeLoc().getLocStart(),
+      Diag(TSInfo->getTypeLoc().getBeginLoc(),
            diag::err_cheri_to_from_cap_invalid_target_type) << DestTy << IsToCap;
       return ExprError();
     }
@@ -3012,7 +3013,7 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc,
   //  return !mergeTypes(LHS, RHS, false, CompareUnqualified).isNull();
 
   if (!CheckCHERIAssignCompatible(DestTy, SrcTy, SubExpr)) {
-    Diag(SubExpr->getLocStart(), diag::err_cheri_to_from_cap_unrelated_type)
+    Diag(SubExpr->getBeginLoc(), diag::err_cheri_to_from_cap_unrelated_type)
          << IsToCap << SrcTy << DestTy;
     return ExprError();
   }
@@ -3097,7 +3098,7 @@ ExprResult Sema::BuildCheriOffsetOrAddress(SourceLocation LParenLoc,
     // purecap mode. However, the offset cast only makes sense for capabilities!
     if (IsOffsetCast || (!SrcTy->isPointerType() && !SrcTy->isReferenceType())) {
       // XXXKG: What about functions?
-      Diag(SubExpr->getLocStart(),
+      Diag(SubExpr->getBeginLoc(),
            diag::err_cheri_offset_addr_invalid_source_type)
           << SrcTy << IsOffsetCast;
       return ExprError();
@@ -3113,7 +3114,7 @@ ExprResult Sema::BuildCheriOffsetOrAddress(SourceLocation LParenLoc,
   // integral pointer type
   if (!IsOffsetCast) {
     if (DestTy->isPointerType()) {
-      Diag(SubExpr->getLocStart(), diag::err_cheri_addr_ptr_type)
+      Diag(SubExpr->getBeginLoc(), diag::err_cheri_addr_ptr_type)
         << DestTy << (int)DestTy->getAs<PointerType>()->isCHERICapability();
       return ExprError();
     }
@@ -3121,7 +3122,7 @@ ExprResult Sema::BuildCheriOffsetOrAddress(SourceLocation LParenLoc,
   // Otherwise just check that it is a non-enum integer type
   bool DestIsInt = DestTy->isIntegerType() && !DestTy->isEnumeralType();
   if (!DestIsInt) {
-    Diag(SubExpr->getLocStart(), diag::err_cheri_offset_addr_invalid_target_type)
+    Diag(SubExpr->getBeginLoc(), diag::err_cheri_offset_addr_invalid_target_type)
       << DestTy << IsOffsetCast;
     return ExprError();
   }
@@ -3135,7 +3136,7 @@ ExprResult Sema::BuildCheriOffsetOrAddress(SourceLocation LParenLoc,
     const char *minTy = TI.getTypeName(
                           TI.getLeastIntTypeByWidth(PtrRange, DestIsSigned)
                         );
-    Diag(SubExpr->getLocStart(), diag::warn_cheri_offset_addr_smaller_target_type)
+    Diag(SubExpr->getBeginLoc(), diag::warn_cheri_offset_addr_smaller_target_type)
       << DestTy << minTy << IsOffsetCast;
   }
 

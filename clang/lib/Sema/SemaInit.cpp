@@ -1380,7 +1380,7 @@ bool InitListChecker::isCapNarrowing(Expr* expr, QualType DeclType,
      !DeclType->isCHERICapabilityType(SemaRef.Context)) {
     // TODO: allow for nullptr, etc.
     if (!VerifyOnly) {
-      SemaRef.Diag(expr->getLocStart(), diag::ext_init_list_type_narrowing)
+      SemaRef.Diag(expr->getBeginLoc(), diag::ext_init_list_type_narrowing)
           << ExprType << DeclType << expr->getSourceRange();
     }
     ++(*Index);

@@ -161,7 +161,7 @@ static bool SemaBuiltinCHERICapCreate(Sema &S, CallExpr *TheCall) {
   auto FnAttrType = FnType->getAs<AttributedType>();
 
   // FIXME: Proper error
-  if (FnAttrType->getAttrKind() != AttributedType::attr_cheri_ccallee) {
+  if (FnAttrType->getAttrKind() != attr::CHERICCallee) {
     fprintf(stderr, "Argument must be a cheri_ccallee thingy\n");
     return true;
   }
@@ -4781,7 +4781,7 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   bool IsCapabilityAtomicOp = false;
   if (pointerType->getPointeeType()->isCHERICapabilityType(Context)) {
     IsCapabilityAtomicOp = true;
-    Diag(DRE->getLocStart(), diag::err_sync_atomic_builtin_with_capability)
+    Diag(DRE->getBeginLoc(), diag::err_sync_atomic_builtin_with_capability)
       << pointerType->getPointeeType() << FirstArg->getSourceRange();
     return ExprError();
   }

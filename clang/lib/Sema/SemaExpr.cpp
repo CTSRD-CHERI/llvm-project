@@ -824,7 +824,7 @@ void Sema::checkVariadicArgument(const Expr *E, VariadicCallType CT) {
   if (Ty->isCHERICapabilityType(Context))
     if (Context.getTargetInfo().getTriple().isMIPS() &&
         !Context.getTargetInfo().areAllPointersCapabilities())
-      Diag(E->getLocStart(), diag::warn_capabilities_broken_in_hybrid_varargs)
+      Diag(E->getBeginLoc(), diag::warn_capabilities_broken_in_hybrid_varargs)
           << E->getSourceRange();
 
   // Complain about passing non-POD types through varargs.
@@ -5209,10 +5209,10 @@ static void checkDirectCallValidity(Sema &S, const Expr *Fn,
   if (S.Context.getTargetInfo().SupportsCapabilities()) {
     bool NoProto = !Callee->getBuiltinID() && Callee->getType()->isFunctionNoProtoType();
     if (NoProto && ArgExprs.size() > 0) {
-      S.Diag(Fn->getLocStart(), diag::warn_mips_cheri_call_no_func_proto) 
+      S.Diag(Fn->getBeginLoc(), diag::warn_mips_cheri_call_no_func_proto)
           << Callee->getName() << Fn->getSourceRange();
       S.Diag(Callee->getLocation(), diag::note_mips_cheri_func_decl_add_types);
-      S.Diag(Fn->getLocStart(), diag::note_mips_cheri_func_noproto_explanation);
+      S.Diag(Fn->getBeginLoc(), diag::note_mips_cheri_func_noproto_explanation);
       return;
     }
   }
@@ -13980,7 +13980,7 @@ static void diagnoseBadVariadicFunctionPointerAssignment(Sema &S,
                         << DstType;
     S.Diag(Loc, ExplainID);
     if (FuncDecl)
-      S.Diag(FuncDecl->getLocStart(), diag::note_callee_decl) << FuncDecl;
+      S.Diag(FuncDecl->getBeginLoc(), diag::note_callee_decl) << FuncDecl;
   }
 }
 
@@ -14152,7 +14152,7 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
                         : diag::err_typecheck_convert_cap_to_ptr;
     MayHaveConvFixit = true;
     isInvalid = true;
-    Hint = FixItHint::CreateInsertion(SrcExpr->getLocStart(), "(__cheri_" +
+    Hint = FixItHint::CreateInsertion(SrcExpr->getBeginLoc(), "(__cheri_" +
                                       std::string(PtrToCap ? "to" : "from") +
                                       "cap " + DstType.getAsString() + ")");
     Diag(Loc, DiagKind) << SrcType << DstType << false << Hint;
