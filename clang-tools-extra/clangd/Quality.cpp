@@ -1,11 +1,11 @@
-//===--- Quality.cpp --------------------------------------------*- C++-*-===//
+//===--- Quality.cpp ---------------------------------------------*- C++-*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
 // This file is distributed under the University of Illinois Open Source
 // License. See LICENSE.TXT for details.
 //
-//===---------------------------------------------------------------------===//
+//===----------------------------------------------------------------------===//
 #include "Quality.h"
 #include "FileDistance.h"
 #include "URI.h"
@@ -399,6 +399,18 @@ std::string sortText(float Score, llvm::StringRef Name) {
   OS << Name;
   OS.flush();
   return S;
+}
+
+llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
+                              const SignatureQualitySignals &S) {
+  OS << formatv("=== Signature Quality:\n");
+  OS << formatv("\tNumber of parameters: {0}\n", S.NumberOfParameters);
+  OS << formatv("\tNumber of optional parameters: {0}\n",
+                S.NumberOfOptionalParameters);
+  OS << formatv("\tContains active parameter: {0}\n",
+                S.ContainsActiveParameter);
+  OS << formatv("\tKind: {0}\n", S.Kind);
+  return OS;
 }
 
 } // namespace clangd

@@ -247,6 +247,18 @@ struct CompletionClientCapabilities {
 };
 bool fromJSON(const llvm::json::Value &, CompletionClientCapabilities &);
 
+struct PublishDiagnosticsClientCapabilities {
+  // Whether the client accepts diagnostics with related information.
+  // NOTE: not used by clangd at the moment.
+  // bool relatedInformation;
+
+  /// Whether the client accepts diagnostics with fixes attached using the
+  /// "clangd_fixes" extension.
+  bool clangdFixSupport = false;
+};
+bool fromJSON(const llvm::json::Value &,
+              PublishDiagnosticsClientCapabilities &);
+
 /// A symbol kind.
 enum class SymbolKind {
   File = 1,
@@ -313,6 +325,9 @@ bool fromJSON(const llvm::json::Value &, WorkspaceClientCapabilities &);
 struct TextDocumentClientCapabilities {
   /// Capabilities specific to the `textDocument/completion`
   CompletionClientCapabilities completion;
+
+  /// Capabilities specific to the 'textDocument/publishDiagnostics'
+  PublishDiagnosticsClientCapabilities publishDiagnostics;
 };
 bool fromJSON(const llvm::json::Value &, TextDocumentClientCapabilities &);
 
@@ -529,6 +544,12 @@ struct Diagnostic {
 
   /// The diagnostic's message.
   std::string message;
+
+  /// The diagnostic's category. Can be omitted.
+  /// An LSP extension that's used to send the name of the category over to the
+  /// client. The category typically describes the compilation stage during
+  /// which the issue was produced, e.g. "Semantic Issue" or "Parse Issue".
+  std::string category;
 };
 
 /// A LSP-specific comparator used to find diagnostic in a container like

@@ -2374,7 +2374,7 @@ void SelectionDAG::computeKnownBits(SDValue Op, KnownBits &Known,
     if (SubIdx && SubIdx->getAPIntValue().ule(NumSrcElts - NumElts)) {
       // Offset the demanded elts by the subvector index.
       uint64_t Idx = SubIdx->getZExtValue();
-      APInt DemandedSrc = DemandedElts.zext(NumSrcElts).shl(Idx);
+      APInt DemandedSrc = DemandedElts.zextOrSelf(NumSrcElts).shl(Idx);
       computeKnownBits(Src, Known, DemandedSrc, Depth + 1);
     } else {
       computeKnownBits(Src, Known, Depth + 1);
@@ -3533,7 +3533,7 @@ unsigned SelectionDAG::ComputeNumSignBits(SDValue Op, const APInt &DemandedElts,
     if (SubIdx && SubIdx->getAPIntValue().ule(NumSrcElts - NumElts)) {
       // Offset the demanded elts by the subvector index.
       uint64_t Idx = SubIdx->getZExtValue();
-      APInt DemandedSrc = DemandedElts.zext(NumSrcElts).shl(Idx);
+      APInt DemandedSrc = DemandedElts.zextOrSelf(NumSrcElts).shl(Idx);
       return ComputeNumSignBits(Src, DemandedSrc, Depth + 1);
     }
     return ComputeNumSignBits(Src, Depth + 1);
@@ -7091,6 +7091,27 @@ void SDNode::DropOperands() {
   }
 }
 
+void SelectionDAG::setNodeMemRefs(MachineSDNode *N,
+                                  ArrayRef<MachineMemOperand *> NewMemRefs) {
+  if (NewMemRefs.empty()) {
+    N->clearMemRefs();
+    return;
+  }
+
+  // Check if we can avoid allocating by storing a single reference directly.
+  if (NewMemRefs.size() == 1) {
+    N->MemRefs = NewMemRefs[0];
+    N->NumMemRefs = 1;
+    return;
+  }
+
+  MachineMemOperand **MemRefsBuffer =
+      Allocator.template Allocate<MachineMemOperand *>(NewMemRefs.size());
+  std::copy(NewMemRefs.begin(), NewMemRefs.end(), MemRefsBuffer);
+  N->MemRefs = MemRefsBuffer;
+  N->NumMemRefs = static_cast<int>(NewMemRefs.size());
+}
+
 /// SelectNodeTo - These are wrappers around MorphNodeTo that accept a
 /// machine opcode.
 ///
@@ -7233,7 +7254,7 @@ SDNode *SelectionDAG::MorphNodeTo(SDNode *N, unsigned Opc,
 
   // For MachineNode, initialize the memory references information.
   if (MachineSDNode *MN = dyn_cast<MachineSDNode>(N))
-    MN->setMemRefs(nullptr, nullptr);
+    MN->clearMemRefs();
 
   // Swap for an appropriately sized array from the recycler.
   removeOperands(N);

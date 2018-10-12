@@ -125,9 +125,11 @@ static std::tuple<ELFKind, uint16_t, uint8_t> parseEmulation(StringRef Emul) {
           .Case("elf32_x86_64", {ELF32LEKind, EM_X86_64})
           .Cases("elf32btsmip", "elf32btsmipn32", {ELF32BEKind, EM_MIPS})
           .Cases("elf32ltsmip", "elf32ltsmipn32", {ELF32LEKind, EM_MIPS})
+          .Case("elf32lriscv", {ELF32LEKind, EM_RISCV})
           .Case("elf32ppc", {ELF32BEKind, EM_PPC})
           .Case("elf64btsmip", {ELF64BEKind, EM_MIPS})
           .Case("elf64ltsmip", {ELF64LEKind, EM_MIPS})
+          .Case("elf64lriscv", {ELF64LEKind, EM_RISCV})
           .Case("elf64ppc", {ELF64BEKind, EM_PPC64})
           .Case("elf64lppc", {ELF64LEKind, EM_PPC64})
           .Cases("elf_amd64", "elf_x86_64", {ELF64LEKind, EM_X86_64})
@@ -448,9 +450,6 @@ static std::string getRpath(opt::InputArgList &Args) {
 // Determines what we should do if there are remaining unresolved
 // symbols after the name resolution.
 static UnresolvedPolicy getUnresolvedSymbolPolicy(opt::InputArgList &Args) {
-  if (Args.hasArg(OPT_relocatable))
-    return UnresolvedPolicy::IgnoreAll;
-
   UnresolvedPolicy ErrorOrWarn = Args.hasFlag(OPT_error_unresolved_symbols,
                                               OPT_warn_unresolved_symbols, true)
                                      ? UnresolvedPolicy::ReportError
@@ -986,7 +985,8 @@ static void setConfigs(opt::InputArgList &Args) {
   // ABI defines which one you need to use. The following expression expresses
   // that.
   Config->IsRela =
-      (Config->Is64 || IsX32 || Machine == EM_PPC) && Machine != EM_MIPS;
+      (Config->Is64 || IsX32 || Machine == EM_PPC || Machine == EM_RISCV) &&
+      Machine != EM_MIPS;
 
   // If the output uses REL relocations we must store the dynamic relocation
   // addends to the output sections. We also store addends for RELA relocations
@@ -1026,7 +1026,10 @@ void LinkerDriver::createFiles(opt::InputArgList &Args) {
       StringRef From;
       StringRef To;
       std::tie(From, To) = StringRef(Arg->getValue()).split('=');
-      readDefsym(From, MemoryBufferRef(To, "-defsym"));
+      if (From.empty() || To.empty())
+        error("-defsym: syntax error: " + StringRef(Arg->getValue()));
+      else
+        readDefsym(From, MemoryBufferRef(To, "-defsym"));
       break;
     }
     case OPT_script:
@@ -1212,6 +1215,21 @@ template <class ELFT> static void handleUndefined(StringRef Name) {
     Symtab->fetchLazy<ELFT>(Sym);
 }
 
+template <class ELFT> static void handleLibcall(StringRef Name) {
+  Symbol *Sym = Symtab->find(Name);
+  if (!Sym || !Sym->isLazy())
+    return;
+
+  MemoryBufferRef MB;
+  if (auto *LO = dyn_cast<LazyObject>(Sym))
+    MB = LO->File->MB;
+  else
+    MB = cast<LazyArchive>(Sym)->getMemberBuffer();
+
+  if (isBitcode(MB))
+    Symtab->fetchLazy<ELFT>(Sym);
+}
+
 template <class ELFT> static bool shouldDemote(Symbol &Sym) {
   // If all references to a DSO happen to be weak, the DSO is not added to
   // DT_NEEDED. If that happens, we need to eliminate shared symbols created
@@ -1388,11 +1406,20 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   // in a bitcode file in an archive member, we need to arrange to use LTO to
   // compile those archive members by adding them to the link beforehand.
   //
-  // With this the symbol table should be complete. After this, no new names
-  // except a few linker-synthesized ones will be added to the symbol table.
+  // However, adding all libcall symbols to the link can have undesired
+  // consequences. For example, the libgcc implementation of
+  // __sync_val_compare_and_swap_8 on 32-bit ARM pulls in an .init_array entry
+  // that aborts the program if the Linux kernel does not support 64-bit
+  // atomics, which would prevent the program from running even if it does not
+  // use 64-bit atomics.
+  //
+  // Therefore, we only add libcall symbols to the link before LTO if we have
+  // to, i.e. if the symbol's definition is in bitcode. Any other required
+  // libcall symbols will be added to the link after LTO when we add the LTO
+  // object file to the link.
   if (!BitcodeFiles.empty())
     for (const char *S : LibcallRoutineNames)
-      handleUndefined<ELFT>(S);
+      handleLibcall<ELFT>(S);
 
   // Return if there were name resolution errors.
   if (errorCount())
@@ -1434,6 +1461,9 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
 
   // Do link-time optimization if given files are LLVM bitcode files.
   // This compiles bitcode files into real object files.
+  //
+  // With this the symbol table should be complete. After this, no new names
+  // except a few linker-synthesized ones will be added to the symbol table.
   Symtab->addCombinedLTOObject<ELFT>();
   if (errorCount())
     return;

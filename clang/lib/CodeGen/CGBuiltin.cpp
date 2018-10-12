@@ -462,7 +462,7 @@ CodeGenFunction::emitBuiltinObjectSize(const Expr *E, unsigned Type,
       assert(DIter != LocalDeclMap.end());
 
       return EmitLoadOfScalar(DIter->second, /*volatile=*/false,
-                              getContext().getSizeType(), E->getLocStart());
+                              getContext().getSizeType(), E->getBeginLoc());
     }
   }
 
@@ -8994,6 +8994,33 @@ static Value *EmitX86SExtMask(CodeGenFunction &CGF, Value *Op,
   return CGF.Builder.CreateSExt(Mask, DstTy, "vpmovm2");
 }
 
+// Emit addition or subtraction with saturation.
+// Handles both signed and unsigned intrinsics.
+static Value *EmitX86AddSubSatExpr(CodeGenFunction &CGF, const CallExpr *E,
+                                   SmallVectorImpl<Value *> &Ops,
+                                   bool IsAddition) {
+
+  // Collect vector elements and type data.
+  llvm::Type *ResultType = CGF.ConvertType(E->getType());
+
+  Value *Res;
+  if (IsAddition) {
+    // ADDUS: a > (a+b) ? ~0 : (a+b)
+    // If Ops[0] > Add, overflow occured.
+    Value *Add = CGF.Builder.CreateAdd(Ops[0], Ops[1]);
+    Value *ICmp = CGF.Builder.CreateICmp(ICmpInst::ICMP_UGT, Ops[0], Add);
+    Value *Max = llvm::Constant::getAllOnesValue(ResultType);
+    Res = CGF.Builder.CreateSelect(ICmp, Max, Add);
+  } else {
+    // SUBUS: max(a, b) - b
+    Value *ICmp = CGF.Builder.CreateICmp(ICmpInst::ICMP_UGT, Ops[0], Ops[1]);
+    Value *Select = CGF.Builder.CreateSelect(ICmp, Ops[0], Ops[1]);
+    Res = CGF.Builder.CreateSub(Select, Ops[1]);
+  }
+
+  return Res;
+}
+
 Value *CodeGenFunction::EmitX86CpuIs(const CallExpr *E) {
   const Expr *CPUExpr = E->getArg(0)->IgnoreParenCasts();
   StringRef CPUStr = cast<clang::StringLiteral>(CPUExpr)->getString();
@@ -10620,6 +10647,20 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
     Load->setVolatile(true);
     return Load;
   }
+  case X86::BI__builtin_ia32_paddusb512:
+  case X86::BI__builtin_ia32_paddusw512:
+  case X86::BI__builtin_ia32_paddusb256:
+  case X86::BI__builtin_ia32_paddusw256:
+  case X86::BI__builtin_ia32_paddusb128:
+  case X86::BI__builtin_ia32_paddusw128:
+    return EmitX86AddSubSatExpr(*this, E, Ops, true /* IsAddition */);
+  case X86::BI__builtin_ia32_psubusb512:
+  case X86::BI__builtin_ia32_psubusw512:
+  case X86::BI__builtin_ia32_psubusb256:
+  case X86::BI__builtin_ia32_psubusw256:
+  case X86::BI__builtin_ia32_psubusb128:
+  case X86::BI__builtin_ia32_psubusw128:
+    return EmitX86AddSubSatExpr(*this, E, Ops, false /* IsAddition */);
   }
 }
 

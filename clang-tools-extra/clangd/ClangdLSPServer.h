@@ -5,7 +5,7 @@
 // This file is distributed under the University of Illinois Open Source
 // License. See LICENSE.TXT for details.
 //
-//===---------------------------------------------------------------------===//
+//===----------------------------------------------------------------------===//
 
 #ifndef LLVM_CLANG_TOOLS_EXTRA_CLANGD_CLANGDLSPSERVER_H
 #define LLVM_CLANG_TOOLS_EXTRA_CLANGD_CLANGDLSPSERVER_H
@@ -155,6 +155,8 @@ private:
   RealFileSystemProvider FSProvider;
   /// Options used for code completion
   clangd::CodeCompleteOptions CCOpts;
+  /// Options used for diagnostics.
+  ClangdDiagnosticOptions DiagOpts;
   /// The supported kinds of the client.
   SymbolKindBitset SupportedSymbolKinds;
 
@@ -170,4 +172,4 @@ private:
 } // namespace clangd
 } // namespace clang
 
-#endif
+#endif // LLVM_CLANG_TOOLS_EXTRA_CLANGD_CLANGDLSPSERVER_H

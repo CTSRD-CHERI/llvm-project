@@ -1,17 +1,18 @@
-//===--- CodeComplete.h -----------------------------------------*- C++-*-===//
+//===--- CodeComplete.h ------------------------------------------*- C++-*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
 // This file is distributed under the University of Illinois Open Source
 // License. See LICENSE.TXT for details.
 //
-//===---------------------------------------------------------------------===//
+//===----------------------------------------------------------------------===//
 //
 // Code completion provides suggestions for what the user might type next.
 // After "std::string S; S." we might suggest members of std::string.
 // Signature help describes the parameters of a function as you type them.
 //
-//===---------------------------------------------------------------------===//
+//===----------------------------------------------------------------------===//
+
 #ifndef LLVM_CLANG_TOOLS_EXTRA_CLANGD_CODECOMPLETE_H
 #define LLVM_CLANG_TOOLS_EXTRA_CLANGD_CODECOMPLETE_H
 
@@ -123,6 +124,9 @@ struct CodeCompletion {
   /// converting '->' to '.' on member access.
   std::vector<TextEdit> FixIts;
 
+  /// Holds the range of the token we are going to replace with this completion.
+  Range CompletionTokenRange;
+
   // Scores are used to rank completion items.
   struct Scores {
     // The score that items are ranked by.
@@ -189,4 +193,4 @@ bool isIndexedForCodeCompletion(const NamedDecl &ND, ASTContext &ASTCtx);
 } // namespace clangd
 } // namespace clang
 
-#endif
+#endif // LLVM_CLANG_TOOLS_EXTRA_CLANGD_CODECOMPLETE_H

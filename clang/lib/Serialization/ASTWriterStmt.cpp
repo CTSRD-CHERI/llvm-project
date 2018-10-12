@@ -223,7 +223,7 @@ void ASTStmtWriter::VisitReturnStmt(ReturnStmt *S) {
 
 void ASTStmtWriter::VisitDeclStmt(DeclStmt *S) {
   VisitStmt(S);
-  Record.AddSourceLocation(S->getStartLoc());
+  Record.AddSourceLocation(S->getBeginLoc());
   Record.AddSourceLocation(S->getEndLoc());
   DeclGroupRef DG = S->getDeclGroup();
   for (DeclGroupRef::iterator D = DG.begin(), DEnd = DG.end(); D != DEnd; ++D)
@@ -1823,8 +1823,8 @@ public:
 void OMPClauseWriter::writeClause(OMPClause *C) {
   Record.push_back(C->getClauseKind());
   Visit(C);
-  Record.AddSourceLocation(C->getLocStart());
-  Record.AddSourceLocation(C->getLocEnd());
+  Record.AddSourceLocation(C->getBeginLoc());
+  Record.AddSourceLocation(C->getEndLoc());
 }
 
 void OMPClauseWriter::VisitOMPClauseWithPreInit(OMPClauseWithPreInit *C) {
@@ -1898,7 +1898,12 @@ void OMPClauseWriter::VisitOMPScheduleClause(OMPScheduleClause *C) {
 }
 
 void OMPClauseWriter::VisitOMPOrderedClause(OMPOrderedClause *C) {
+  Record.push_back(C->getLoopNumIterations().size());
   Record.AddStmt(C->getNumForLoops());
+  for (Expr *NumIter : C->getLoopNumIterations())
+    Record.AddStmt(NumIter);
+  for (unsigned I = 0, E = C->getLoopNumIterations().size(); I <E; ++I)
+    Record.AddStmt(C->getLoopCunter(I));
   Record.AddSourceLocation(C->getLParenLoc());
 }
 
@@ -2102,13 +2107,15 @@ void OMPClauseWriter::VisitOMPFlushClause(OMPFlushClause *C) {
 
 void OMPClauseWriter::VisitOMPDependClause(OMPDependClause *C) {
   Record.push_back(C->varlist_size());
+  Record.push_back(C->getNumLoops());
   Record.AddSourceLocation(C->getLParenLoc());
   Record.push_back(C->getDependencyKind());
   Record.AddSourceLocation(C->getDependencyLoc());
   Record.AddSourceLocation(C->getColonLoc());
   for (auto *VE : C->varlists())
     Record.AddStmt(VE);
-  Record.AddStmt(C->getCounterValue());
+  for (unsigned I = 0, E = C->getNumLoops(); I < E; ++I)
+    Record.AddStmt(C->getLoopData(I));
 }
 
 void OMPClauseWriter::VisitOMPDeviceClause(OMPDeviceClause *C) {
@@ -2278,8 +2285,8 @@ void OMPClauseWriter::VisitOMPIsDevicePtrClause(OMPIsDevicePtrClause *C) {
 // OpenMP Directives.
 //===----------------------------------------------------------------------===//
 void ASTStmtWriter::VisitOMPExecutableDirective(OMPExecutableDirective *E) {
-  Record.AddSourceLocation(E->getLocStart());
-  Record.AddSourceLocation(E->getLocEnd());
+  Record.AddSourceLocation(E->getBeginLoc());
+  Record.AddSourceLocation(E->getEndLoc());
   OMPClauseWriter ClauseWriter(Record);
   for (unsigned i = 0; i < E->getNumClauses(); ++i) {
     ClauseWriter.writeClause(E->getClause(i));

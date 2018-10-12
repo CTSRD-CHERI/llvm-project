@@ -481,6 +481,33 @@ static uint64_t getARMStaticBase(const Symbol &Sym) {
   return OS->PtLoad->FirstSec->Addr;
 }
 
+// For R_RISCV_PC_INDIRECT (R_RISCV_PCREL_LO12_{I,S}), the symbol actually
+// points the corresponding R_RISCV_PCREL_HI20 relocation, and the target VA
+// is calculated using PCREL_HI20's symbol.
+//
+// This function returns the R_RISCV_PCREL_HI20 relocation from
+// R_RISCV_PCREL_LO12's symbol and addend.
+Relocation *lld::elf::getRISCVPCRelHi20(const Symbol *Sym, uint64_t Addend) {
+  const Defined *D = cast<Defined>(Sym);
+  InputSection *IS = cast<InputSection>(D->Section);
+
+  if (Addend != 0)
+    warn("Non-zero addend in R_RISCV_PCREL_LO12 relocation to " +
+         IS->getObjMsg(D->Value) + " is ignored");
+
+  // Relocations are sorted by offset, so we can use std::equal_range to do
+  // binary search.
+  auto Range = std::equal_range(IS->Relocations.begin(), IS->Relocations.end(),
+                                D->Value, RelocationOffsetComparator{});
+  for (auto It = std::get<0>(Range); It != std::get<1>(Range); ++It)
+    if (isRelExprOneOf<R_PC>(It->Expr))
+      return &*It;
+
+  error("R_RISCV_PCREL_LO12 relocation points to " + IS->getObjMsg(D->Value) +
+        " without an associated R_RISCV_PCREL_HI20 relocation");
+  return nullptr;
+}
+
 static uint64_t getRelocTargetVA(const InputFile *File, RelType Type, int64_t A,
                                  uint64_t P, const Symbol &Sym, RelExpr Expr) {
   switch (Expr) {
@@ -566,6 +593,13 @@ static uint64_t getRelocTargetVA(const InputFile *File, RelType Type, int64_t A,
     else
       Dest = getAArch64Page(Sym.getVA(A));
     return Dest - getAArch64Page(P);
+  }
+  case R_RISCV_PC_INDIRECT: {
+    const Relocation *HiRel = getRISCVPCRelHi20(&Sym, A);
+    if (!HiRel)
+      return 0;
+    return getRelocTargetVA(File, HiRel->Type, HiRel->Addend, Sym.getVA(),
+                            *HiRel->Sym, HiRel->Expr);
   }
   case R_PC: {
     uint64_t Dest;
@@ -894,9 +928,8 @@ void InputSectionBase::adjustSplitStackFunctionPrologues(uint8_t *Buf,
       continue;
 
     // Ignore calls into the split-stack api.
-    Defined *D = cast<Defined>(Rel.Sym);
-    if (D->getName().startswith("__morestack")) {
-      if (D->getName().equals("__morestack"))
+    if (Rel.Sym->getName().startswith("__morestack")) {
+      if (Rel.Sym->getName().equals("__morestack"))
         MorestackCalls.push_back(&Rel);
       continue;
     }
@@ -904,13 +937,18 @@ void InputSectionBase::adjustSplitStackFunctionPrologues(uint8_t *Buf,
     // A relocation to non-function isn't relevant. Sometimes
     // __morestack is not marked as a function, so this check comes
     // after the name check.
-    if (D->Type != STT_FUNC)
+    if (Rel.Sym->Type != STT_FUNC)
       continue;
 
-    // If the callee's-file was compiled with split stack, nothing to do.
-    auto *IS = cast_or_null<InputSection>(D->Section);
-    if (!IS || IS->getFile<ELFT>()->SplitStack)
-      continue;
+    // If the callee's-file was compiled with split stack, nothing to do.  In
+    // this context, a "Defined" symbol is one "defined by the binary currently
+    // being produced". So an "undefined" symbol might be provided by a shared
+    // library. It is not possible to tell how such symbols were compiled, so be
+    // conservative.
+    if (Defined *D = dyn_cast<Defined>(Rel.Sym))
+      if (InputSection *IS = cast_or_null<InputSection>(D->Section))
+        if (!IS || IS->getFile<ELFT>()->SplitStack)
+          continue;
 
     if (enclosingPrologueAttempted(Rel.Offset, Prologues))
       continue;
@@ -922,7 +960,7 @@ void InputSectionBase::adjustSplitStackFunctionPrologues(uint8_t *Buf,
         continue;
       if (!getFile<ELFT>()->SomeNoSplitStack)
         error(lld::toString(this) + ": " + F->getName() +
-              " (with -fsplit-stack) calls " + D->getName() +
+              " (with -fsplit-stack) calls " + Rel.Sym->getName() +
               " (without -fsplit-stack), but couldn't adjust its prologue");
     }
   }

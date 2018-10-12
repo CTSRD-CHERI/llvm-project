@@ -816,7 +816,7 @@ RValue CodeGenFunction::EmitAtomicExpr(AtomicExpr *E) {
       UseLibcall = true;
   }
   if (UseLibcall)
-    CGM.getDiags().Report(E->getLocStart(), diag::warn_atomic_op_misaligned);
+    CGM.getDiags().Report(E->getBeginLoc(), diag::warn_atomic_op_misaligned);
 
   llvm::Value *Order = EmitScalarExpr(E->getOrder());
   llvm::Value *Scope =

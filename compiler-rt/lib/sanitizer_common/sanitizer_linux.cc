@@ -55,6 +55,7 @@
 #include <sched.h>
 #include <signal.h>
 #include <sys/mman.h>
+#include <sys/param.h>
 #if !SANITIZER_SOLARIS
 #include <sys/ptrace.h>
 #endif
@@ -149,7 +150,11 @@ extern void internal_sigreturn();
 #if SANITIZER_OPENBSD
 # define SANITIZER_USE_GETENTROPY 1
 #else
-# define SANITIZER_USE_GETENTROPY 0
+# if SANITIZER_FREEBSD && __FreeBSD_version >= 1200000
+#   define SANITIZER_USE_GETENTROPY 1
+# else
+#   define SANITIZER_USE_GETENTROPY 0
+# endif
 #endif // SANITIZER_USE_GETENTROPY
 
 namespace __sanitizer {
@@ -478,6 +483,23 @@ tid_t GetTid() {
   return thr_self();
 #else
   return internal_syscall(SYSCALL(gettid));
+#endif
+}
+
+int TgKill(pid_t pid, tid_t tid, int sig) {
+#if SANITIZER_LINUX
+  return internal_syscall(SYSCALL(tgkill), pid, tid, sig);
+#elif SANITIZER_FREEBSD
+  return internal_syscall(SYSCALL(thr_kill2), pid, tid, sig);
+#elif SANITIZER_OPENBSD
+  (void)pid;
+  return internal_syscall(SYSCALL(thrkill), tid, sig, nullptr);
+#elif SANITIZER_NETBSD
+  (void)pid;
+  return _lwp_kill(tid, sig);
+#elif SANITIZER_SOLARIS
+  (void)pid;
+  return thr_kill(tid, sig);
 #endif
 }
 
@@ -1239,7 +1261,7 @@ uptr internal_clone(int (*fn)(void *), void *child_stack, int flags, void *arg,
                          "d"(parent_tidptr),
                          "r"(r8),
                          "r"(r10)
-                       : "rsp", "memory", "r11", "rcx");
+                       : "memory", "r11", "rcx");
   return res;
 }
 #elif defined(__mips__)

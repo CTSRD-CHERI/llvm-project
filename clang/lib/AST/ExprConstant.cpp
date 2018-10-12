@@ -832,7 +832,7 @@ namespace {
 
     bool nextStep(const Stmt *S) {
       if (!StepsLeft) {
-        FFDiag(S->getLocStart(), diag::note_constexpr_step_limit_exceeded);
+        FFDiag(S->getBeginLoc(), diag::note_constexpr_step_limit_exceeded);
         return false;
       }
       --StepsLeft;
@@ -2563,8 +2563,8 @@ static bool evaluateVarDeclInit(EvalInfo &Info, const Expr *E,
       if (Info.checkingPotentialConstantExpression())
         return false;
       // FIXME: implement capture evaluation during constant expr evaluation.
-      Info.FFDiag(E->getLocStart(),
-           diag::note_unimplemented_constexpr_lambda_feature_ast)
+      Info.FFDiag(E->getBeginLoc(),
+                  diag::note_unimplemented_constexpr_lambda_feature_ast)
           << "captures not currently allowed";
       return false;
     }
@@ -3854,8 +3854,8 @@ static bool EvaluateVarDecl(EvalInfo &Info, const VarDecl *VD) {
 
   const Expr *InitE = VD->getInit();
   if (!InitE) {
-    Info.FFDiag(VD->getLocStart(), diag::note_constexpr_uninitialized)
-      << false << VD->getType();
+    Info.FFDiag(VD->getBeginLoc(), diag::note_constexpr_uninitialized)
+        << false << VD->getType();
     Val = APValue();
     return false;
   }
@@ -4000,7 +4000,8 @@ static EvalStmtResult EvaluateSwitch(StmtResult &Result, EvalInfo &Info,
   case ESR_CaseNotFound:
     // This can only happen if the switch case is nested within a statement
     // expression. We have no intention of supporting that.
-    Info.FFDiag(Found->getLocStart(), diag::note_constexpr_stmt_expr_unsupported);
+    Info.FFDiag(Found->getBeginLoc(),
+                diag::note_constexpr_stmt_expr_unsupported);
     return ESR_Failed;
   }
   llvm_unreachable("Invalid EvalStmtResult!");
@@ -4091,7 +4092,7 @@ static EvalStmtResult EvaluateStmt(StmtResult &Result, EvalInfo &Info,
       return ESR_Succeeded;
     }
 
-    Info.FFDiag(S->getLocStart());
+    Info.FFDiag(S->getBeginLoc());
     return ESR_Failed;
 
   case Stmt::NullStmtClass:
@@ -4461,7 +4462,7 @@ static bool HandleFunctionCall(SourceLocation CallLoc,
   if (ESR == ESR_Succeeded) {
     if (Callee->getReturnType()->isVoidType())
       return true;
-    Info.FFDiag(Callee->getLocEnd(), diag::note_constexpr_no_return);
+    Info.FFDiag(Callee->getEndLoc(), diag::note_constexpr_no_return);
   }
   return ESR == ESR_Returned;
 }
@@ -5097,8 +5098,8 @@ public:
       if (BI + 1 == BE) {
         const Expr *FinalExpr = dyn_cast<Expr>(*BI);
         if (!FinalExpr) {
-          Info.FFDiag((*BI)->getLocStart(),
-                    diag::note_constexpr_stmt_expr_unsupported);
+          Info.FFDiag((*BI)->getBeginLoc(),
+                      diag::note_constexpr_stmt_expr_unsupported);
           return false;
         }
         return this->Visit(FinalExpr);
@@ -5112,8 +5113,8 @@ public:
         // 'break', or 'continue', it would be nice to propagate that to
         // the outer statement evaluation rather than bailing out.
         if (ESR != ESR_Failed)
-          Info.FFDiag((*BI)->getLocStart(),
-                    diag::note_constexpr_stmt_expr_unsupported);
+          Info.FFDiag((*BI)->getBeginLoc(),
+                      diag::note_constexpr_stmt_expr_unsupported);
         return false;
       }
     }
@@ -11065,7 +11066,7 @@ static ICEDiag CheckEvalInICE(const Expr* E, const ASTContext &Ctx) {
   Expr::EvalResult EVResult;
   if (!E->EvaluateAsRValue(EVResult, Ctx) || EVResult.HasSideEffects ||
       !EVResult.Val.isInt())
-    return ICEDiag(IK_NotICE, E->getLocStart());
+    return ICEDiag(IK_NotICE, E->getBeginLoc());
 
   return NoDiag();
 }
@@ -11073,7 +11074,7 @@ static ICEDiag CheckEvalInICE(const Expr* E, const ASTContext &Ctx) {
 static ICEDiag CheckICE(const Expr* E, const ASTContext &Ctx) {
   assert(!E->isValueDependent() && "Should not see value dependent exprs!");
   if (!E->getType()->isIntegralOrEnumerationType())
-    return ICEDiag(IK_NotICE, E->getLocStart());
+    return ICEDiag(IK_NotICE, E->getBeginLoc());
 
   switch (E->getStmtClass()) {
 #define ABSTRACT_STMT(Node)
@@ -11157,7 +11158,7 @@ static ICEDiag CheckICE(const Expr* E, const ASTContext &Ctx) {
   case Expr::CoawaitExprClass:
   case Expr::DependentCoawaitExprClass:
   case Expr::CoyieldExprClass:
-    return ICEDiag(IK_NotICE, E->getLocStart());
+    return ICEDiag(IK_NotICE, E->getBeginLoc());
 
   case Expr::InitListExprClass: {
     // C++03 [dcl.init]p13: If T is a scalar type, then a declaration of the
@@ -11167,7 +11168,7 @@ static ICEDiag CheckICE(const Expr* E, const ASTContext &Ctx) {
     if (E->isRValue())
       if (cast<InitListExpr>(E)->getNumInits() == 1)
         return CheckICE(cast<InitListExpr>(E)->getInit(0), Ctx);
-    return ICEDiag(IK_NotICE, E->getLocStart());
+    return ICEDiag(IK_NotICE, E->getBeginLoc());
   }
 
   case Expr::SizeOfPackExprClass:
@@ -11202,7 +11203,7 @@ static ICEDiag CheckICE(const Expr* E, const ASTContext &Ctx) {
     const CallExpr *CE = cast<CallExpr>(E);
     if (CE->getBuiltinCallee())
       return CheckEvalInICE(E, Ctx);
-    return ICEDiag(IK_NotICE, E->getLocStart());
+    return ICEDiag(IK_NotICE, E->getBeginLoc());
   }
   case Expr::DeclRefExprClass: {
     if (isa<EnumConstantDecl>(cast<DeclRefExpr>(E)->getDecl()))
@@ -11232,7 +11233,7 @@ static ICEDiag CheckICE(const Expr* E, const ASTContext &Ctx) {
           return ICEDiag(IK_NotICE, cast<DeclRefExpr>(E)->getLocation());
       }
     }
-    return ICEDiag(IK_NotICE, E->getLocStart());
+    return ICEDiag(IK_NotICE, E->getBeginLoc());
   }
   case Expr::UnaryOperatorClass: {
     const UnaryOperator *Exp = cast<UnaryOperator>(E);
@@ -11247,7 +11248,7 @@ static ICEDiag CheckICE(const Expr* E, const ASTContext &Ctx) {
       // C99 6.6/3 allows increment and decrement within unevaluated
       // subexpressions of constant expressions, but they can never be ICEs
       // because an ICE cannot contain an lvalue operand.
-      return ICEDiag(IK_NotICE, E->getLocStart());
+      return ICEDiag(IK_NotICE, E->getBeginLoc());
     case UO_Extension:
     case UO_LNot:
     case UO_Plus:
@@ -11274,7 +11275,7 @@ static ICEDiag CheckICE(const Expr* E, const ASTContext &Ctx) {
     const UnaryExprOrTypeTraitExpr *Exp = cast<UnaryExprOrTypeTraitExpr>(E);
     if ((Exp->getKind() ==  UETT_SizeOf) &&
         Exp->getTypeOfArgument()->isVariableArrayType())
-      return ICEDiag(IK_NotICE, E->getLocStart());
+      return ICEDiag(IK_NotICE, E->getBeginLoc());
     return NoDiag();
   }
   case Expr::BinaryOperatorClass: {
@@ -11296,7 +11297,7 @@ static ICEDiag CheckICE(const Expr* E, const ASTContext &Ctx) {
       // C99 6.6/3 allows assignments within unevaluated subexpressions of
       // constant expressions, but they can never be ICEs because an ICE cannot
       // contain an lvalue operand.
-      return ICEDiag(IK_NotICE, E->getLocStart());
+      return ICEDiag(IK_NotICE, E->getBeginLoc());
 
     case BO_Mul:
     case BO_Div:
@@ -11325,11 +11326,11 @@ static ICEDiag CheckICE(const Expr* E, const ASTContext &Ctx) {
         if (LHSResult.Kind == IK_ICE && RHSResult.Kind == IK_ICE) {
           llvm::APSInt REval = Exp->getRHS()->EvaluateKnownConstInt(Ctx);
           if (REval == 0)
-            return ICEDiag(IK_ICEIfUnevaluated, E->getLocStart());
+            return ICEDiag(IK_ICEIfUnevaluated, E->getBeginLoc());
           if (REval.isSigned() && REval.isAllOnesValue()) {
             llvm::APSInt LEval = Exp->getLHS()->EvaluateKnownConstInt(Ctx);
             if (LEval.isMinSignedValue())
-              return ICEDiag(IK_ICEIfUnevaluated, E->getLocStart());
+              return ICEDiag(IK_ICEIfUnevaluated, E->getBeginLoc());
           }
         }
       }
@@ -11338,10 +11339,10 @@ static ICEDiag CheckICE(const Expr* E, const ASTContext &Ctx) {
           // C99 6.6p3 introduces a strange edge case: comma can be in an ICE
           // if it isn't evaluated.
           if (LHSResult.Kind == IK_ICE && RHSResult.Kind == IK_ICE)
-            return ICEDiag(IK_ICEIfUnevaluated, E->getLocStart());
+            return ICEDiag(IK_ICEIfUnevaluated, E->getBeginLoc());
         } else {
           // In both C89 and C++, commas in ICEs are illegal.
-          return ICEDiag(IK_NotICE, E->getLocStart());
+          return ICEDiag(IK_NotICE, E->getBeginLoc());
         }
       }
       return Worst(LHSResult, RHSResult);
@@ -11386,7 +11387,7 @@ static ICEDiag CheckICE(const Expr* E, const ASTContext &Ctx) {
         if (FL->getValue().convertToInteger(IgnoredVal,
                                             llvm::APFloat::rmTowardZero,
                                             &Ignored) & APFloat::opInvalidOp)
-          return ICEDiag(IK_NotICE, E->getLocStart());
+          return ICEDiag(IK_NotICE, E->getBeginLoc());
         return NoDiag();
       }
     }
@@ -11399,7 +11400,7 @@ static ICEDiag CheckICE(const Expr* E, const ASTContext &Ctx) {
     case CK_IntegralCast:
       return CheckICE(SubExpr, Ctx);
     default:
-      return ICEDiag(IK_NotICE, E->getLocStart());
+      return ICEDiag(IK_NotICE, E->getBeginLoc());
     }
   }
   case Expr::BinaryConditionalOperatorClass: {

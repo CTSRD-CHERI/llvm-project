@@ -1312,7 +1312,7 @@ TryCastResult TryLValueToRValueCast(Sema &Self, Expr *SrcExpr,
   }
 
   Sema::ReferenceCompareResult RefResult = Self.CompareReferenceRelationship(
-      SrcExpr->getLocStart(), ToType, FromType, DerivedToBase, ObjCConversion,
+      SrcExpr->getBeginLoc(), ToType, FromType, DerivedToBase, ObjCConversion,
       ObjCLifetimeConversion);
   if (RefResult != Sema::Ref_Compatible) {
     if (CStyle || RefResult == Sema::Ref_Incompatible)
@@ -1329,7 +1329,7 @@ TryCastResult TryLValueToRValueCast(Sema &Self, Expr *SrcExpr,
     Kind = CK_DerivedToBase;
     CXXBasePaths Paths(/*FindAmbiguities=*/true, /*RecordPaths=*/true,
                        /*DetectVirtual=*/true);
-    if (!Self.IsDerivedFrom(SrcExpr->getLocStart(), SrcExpr->getType(),
+    if (!Self.IsDerivedFrom(SrcExpr->getBeginLoc(), SrcExpr->getType(),
                             R->getPointeeType(), Paths))
       return TC_NotApplicable;
 
@@ -2803,9 +2803,9 @@ void CastOperation::CheckCStyleCast() {
   } else if (!SrcType->isArithmeticType()) {
     if (!DestType->isIntegralType(Self.Context) &&
         DestType->isArithmeticType()) {
-      Self.Diag(SrcExpr.get()->getLocStart(),
-           diag::err_cast_pointer_to_non_pointer_int)
-        << DestType << SrcExpr.get()->getSourceRange();
+      Self.Diag(SrcExpr.get()->getBeginLoc(),
+                diag::err_cast_pointer_to_non_pointer_int)
+          << DestType << SrcExpr.get()->getSourceRange();
       SrcExpr = ExprError();
       return;
     }
@@ -2814,8 +2814,8 @@ void CastOperation::CheckCStyleCast() {
   if (Self.getLangOpts().OpenCL &&
       !Self.getOpenCLOptions().isEnabled("cl_khr_fp16")) {
     if (DestType->isHalfType()) {
-      Self.Diag(SrcExpr.get()->getLocStart(), diag::err_opencl_cast_to_half)
-        << DestType << SrcExpr.get()->getSourceRange();
+      Self.Diag(SrcExpr.get()->getBeginLoc(), diag::err_opencl_cast_to_half)
+          << DestType << SrcExpr.get()->getSourceRange();
       SrcExpr = ExprError();
       return;
     }
@@ -2835,18 +2835,18 @@ void CastOperation::CheckCStyleCast() {
         if (CastPtr->getPointeeType()->isObjCLifetimeType() &&
             ExprPtr->getPointeeType()->isObjCLifetimeType() &&
             !CastQuals.compatiblyIncludesObjCLifetime(ExprQuals)) {
-          Self.Diag(SrcExpr.get()->getLocStart(),
+          Self.Diag(SrcExpr.get()->getBeginLoc(),
                     diag::err_typecheck_incompatible_ownership)
-            << SrcType << DestType << Sema::AA_Casting
-            << SrcExpr.get()->getSourceRange();
+              << SrcType << DestType << Sema::AA_Casting
+              << SrcExpr.get()->getSourceRange();
           return;
         }
       }
     }
     else if (!Self.CheckObjCARCUnavailableWeakConversion(DestType, SrcType)) {
-      Self.Diag(SrcExpr.get()->getLocStart(),
+      Self.Diag(SrcExpr.get()->getBeginLoc(),
                 diag::err_arc_convesion_of_weak_unavailable)
-        << 1 << SrcType << DestType << SrcExpr.get()->getSourceRange();
+          << 1 << SrcType << DestType << SrcExpr.get()->getSourceRange();
       SrcExpr = ExprError();
       return;
     }
@@ -2897,10 +2897,10 @@ static void DiagnoseCastQual(Sema &Self, const ExprResult &SrcExpr,
   }
   // This is a variant of int **x; const int **y = (const int **)x;
   if (qualifiers == -1)
-    Self.Diag(SrcExpr.get()->getLocStart(), diag::warn_cast_qual2)
+    Self.Diag(SrcExpr.get()->getBeginLoc(), diag::warn_cast_qual2)
         << SrcType << DestType;
   else
-    Self.Diag(SrcExpr.get()->getLocStart(), diag::warn_cast_qual)
+    Self.Diag(SrcExpr.get()->getBeginLoc(), diag::warn_cast_qual)
         << TheOffendingSrcType << TheOffendingDestType << qualifiers;
 }
 
@@ -2910,7 +2910,7 @@ ExprResult Sema::BuildCStyleCastExpr(SourceLocation LPLoc,
                                      Expr *CastExpr) {
   CastOperation Op(*this, CastTypeInfo->getType(), CastExpr);
   Op.DestRange = CastTypeInfo->getTypeLoc().getSourceRange();
-  Op.OpRange = SourceRange(LPLoc, CastExpr->getLocEnd());
+  Op.OpRange = SourceRange(LPLoc, CastExpr->getEndLoc());
 
   if (getLangOpts().CPlusPlus) {
     Op.CheckCXXCStyleCast(/*FunctionalStyle=*/ false,
@@ -2938,7 +2938,7 @@ ExprResult Sema::BuildCXXFunctionalCastExpr(TypeSourceInfo *CastTypeInfo,
   assert(LPLoc.isValid() && "List-initialization shouldn't get here.");
   CastOperation Op(*this, Type, CastExpr);
   Op.DestRange = CastTypeInfo->getTypeLoc().getSourceRange();
-  Op.OpRange = SourceRange(Op.DestRange.getBegin(), CastExpr->getLocEnd());
+  Op.OpRange = SourceRange(Op.DestRange.getBegin(), CastExpr->getEndLoc());
 
   Op.CheckCXXCStyleCast(/*FunctionalStyle=*/true, /*ListInit=*/false);
   if (Op.SrcExpr.isInvalid())
