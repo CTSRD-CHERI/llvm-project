@@ -6705,11 +6705,11 @@ static Attr *getCCTypeAttr(ASTContext &Ctx, ParsedAttr &Attr) {
                                Attr.getAttributeSpellingListIndex());
   }
   case ParsedAttr::AT_CHERICCall:
-    return AttributedType::attr_cheri_ccall;
+    return createSimpleAttr<CHERICCallAttr>(Ctx, Attr);
   case ParsedAttr::AT_CHERICCallee:
-    return AttributedType::attr_cheri_ccallee;
+    return createSimpleAttr<CHERICCalleeAttr>(Ctx, Attr);
   case ParsedAttr::AT_CHERICCallback:
-    return AttributedType::attr_cheri_ccallback;
+    return createSimpleAttr<CHERICCallAttr>(Ctx, Attr);
   case ParsedAttr::AT_IntelOclBicc:
     return createSimpleAttr<IntelOclBiccAttr>(Ctx, Attr);
   case ParsedAttr::AT_MSABI:
@@ -7187,7 +7187,7 @@ static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &st
     StringRef Name = "__capability";
     S.Diag(attr.getLoc(), diag::err_attr_wrong_position) << Name
         << FixItHint::CreateRemoval(attr.getLoc())
-        << FixItHint::CreateInsertion(state.getDeclarator().getName().getLocStart(), Name);
+        << FixItHint::CreateInsertion(state.getDeclarator().getName().getBeginLoc(), Name);
     return;
   }
 
@@ -7301,7 +7301,7 @@ static bool HandleMemoryAddressAttr(QualType &T, TypeProcessingState &State,
     StringRef Name = Attr.getName()->getName();
     S.Diag(Attr.getLoc(), diag::err_attr_wrong_position) << Name
         << FixItHint::CreateRemoval(Attr.getLoc())
-        << FixItHint::CreateInsertion(State.getDeclarator().getDeclSpec().getLocStart(), Name);
+        << FixItHint::CreateInsertion(State.getDeclarator().getDeclSpec().getBeginLoc(), Name);
     return true;
   }
 
@@ -7313,13 +7313,14 @@ static bool HandleMemoryAddressAttr(QualType &T, TypeProcessingState &State,
 
   SplitQualType underlyingType = T.split();
   const Type *prevTy = nullptr;
+#warning "this can probably be simplified"
   while (!prevTy || prevTy != underlyingType.Ty) {
     prevTy = underlyingType.Ty;
     if (const AttributedType *AT = dyn_cast<AttributedType>(prevTy)) {
       AttributedType::Kind CurAttrKind = AT->getAttrKind();
       // You cannot specify duplicate type attributes, so if the attribute has
       // already been applied, flag it.
-      if (CurAttrKind == AttributedType::attr_memory_address) {
+      if (CurAttrKind == attr::MemoryAddress) {
         S.Diag(Attr.getLoc(), diag::warn_duplicate_attribute_exact)
           << Attr.getName();
         return true;
@@ -7327,7 +7328,7 @@ static bool HandleMemoryAddressAttr(QualType &T, TypeProcessingState &State,
     }
     underlyingType = underlyingType.getSingleStepDesugaredType();
   }
-  T = S.Context.getAttributedType(AttributedType::attr_memory_address, T, T);
+  T = S.Context.getAttributedType(attr::MemoryAddress, T, T);
   // llvm::errs() << "Modified type: "; T.dump();
   return false;
 }
