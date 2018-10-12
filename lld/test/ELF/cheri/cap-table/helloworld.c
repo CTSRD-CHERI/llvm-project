@@ -1,7 +1,7 @@
 // RUN: mkdir -p %T/helloworld_src
 // RUN: tar xJf %S/Inputs/helloworld.tar.xz -C %T/helloworld_src
 // RUN: cd %T/helloworld_src/reproduce && ld.lld @%T/helloworld_src/reproduce/response.txt -o %t.exe
-// RUN: llvm-objdump -t -C %t.exe | FileCheck %s
+// RUN: llvm-objdump -t -cap-relocs %t.exe | FileCheck %s
 
 // check that __libc_interposing table is initialized correctly
 // I can't generate a smaller test case because if I only link the individual files it works

@@ -61,7 +61,7 @@ void __start(void) {}
 
 // dynamic should have 10 relocations against the load address
 // DYNAMIC-RELOCS-LABEL: Relocations [
-// DYNAMIC-RELOCS-NEXT:   Section (8) .rel.dyn {
+// DYNAMIC-RELOCS-NEXT:   Section ({{.+}}) .rel.dyn {
 // DYNAMIC-RELOCS-NEXT:     0x30000 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 // DYNAMIC-RELOCS-NEXT:     0x30008 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 // DYNAMIC-RELOCS-NEXT:   }

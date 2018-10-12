@@ -35,18 +35,18 @@ __attribute__((noreturn)) void exit(int code) {
 }
 
 // CHECK-LABEL: CHERI __cap_relocs [
-// CHECK-NEXT:            0x12002{{.+}} (__progname)    Base: 0x1200001c8 (<unknown symbol>+0) Length: 1 Perms: Object
+// CHECK-NEXT:            0x12002{{.+}} (__progname)    Base: 0x120000220 (<unknown symbol>+0) Length: 1 Perms: Object
 // CHECK-NEXT:            0x12003{{.+}} (__cap_table_start) Base: 0x120040000 (__auxargs+0) Length: 16 Perms: Object
 // CHECK-NEXT:            0x12003{{.+}} (environ@CAPTABLE) Base: 0x120040020 (environ+0) Length: 16 Perms: Object
 // CHECK-NEXT:            0x12003{{.+}} (__progname@CAPTABLE) Base: 0x120020000 (__progname+0) Length: 16 Perms: Object
 // CHECK-NEXT:            0x12003{{.+}} (_DYNAMIC@CAPTABLE) Base: 0x0 (<unknown symbol>+0) Length: 0 Perms: Object
-// CHECK-NEXT:            0x12003{{.+}} (atexit@CAPTABLE) Base: 0x1200106c8 (atexit+0) Length: 8 Perms: Function
-// CHECK-NEXT:            0x12003{{.+}} (_init_tls@CAPTABLE) Base: 0x1200106d0 (_init_tls+0) Length: 8 Perms: Function
-// CHECK-NEXT:            0x12003{{.+}} (crt_call_constructors@CAPTABLE) Base: 0x120010570 (crt_call_constructors+0) Length: 128 Perms: Function
-// CHECK-NEXT:            0x12003{{.+}} (handle_static_init@CAPTABLE.7) Base: 0x1200102f8 (handle_static_init+0) Length: 432 Perms: Function
-// CHECK-NEXT:            0x12003{{.+}} (main@CAPTABLE) Base: 0x1200106c0 (main+0) Length: 8 Perms: Function
-// CHECK-NEXT:            0x12003{{.+}} (exit@CAPTABLE) Base: 0x1200106d8 (exit+0) Length: 4 Perms: Function
-// CHECK-NEXT:            0x12003{{.+}} (finalizer@CAPTABLE.10) Base: 0x1200104a8 (finalizer+0) Length: 192 Perms: Function
+// CHECK-NEXT:            0x12003{{.+}} (atexit@CAPTABLE) Base: 0x12001{{.+}} (atexit+0) Length: 8 Perms: Function
+// CHECK-NEXT:            0x12003{{.+}} (_init_tls@CAPTABLE) Base: 0x12001{{.+}} (_init_tls+0) Length: 8 Perms: Function
+// CHECK-NEXT:            0x12003{{.+}} (crt_call_constructors@CAPTABLE) Base: 0x12001{{.+}} (crt_call_constructors+0) Length: 128 Perms: Function
+// CHECK-NEXT:            0x12003{{.+}} (handle_static_init@CAPTABLE.7) Base: 0x12001{{.+}} (handle_static_init+0) Length: 432 Perms: Function
+// CHECK-NEXT:            0x12003{{.+}} (main@CAPTABLE) Base: 0x12001{{.+}} (main+0) Length: 8 Perms: Function
+// CHECK-NEXT:            0x12003{{.+}} (exit@CAPTABLE) Base: 0x12001{{.+}} (exit+0) Length: 4 Perms: Function
+// CHECK-NEXT:            0x12003{{.+}} (finalizer@CAPTABLE.10) Base: 0x12001{{.+}} (finalizer+0) Length: 192 Perms: Function
 // WITHOUT_CTORS-NEXT:    0x12003{{.+}} (__preinit_array_start@CAPTABLE) Base: 0x120010000 (__fini_array_end+0) Length: 0 Perms: Object
 // WITHOUT_CTORS-NEXT:    0x12003{{.+}} (__preinit_array_end@CAPTABLE) Base: 0x120010000 (__fini_array_end+0) Length: 0 Perms: Object
 // WITHOUT_CTORS-NEXT:    0x12003{{.+}} (__init_array_start@CAPTABLE) Base: 0x120010000 (__fini_array_end+0) Length: 0 Perms: Object
@@ -61,8 +61,8 @@ __attribute__((noreturn)) void exit(int code) {
 // WITH_CTORS-NEXT:       0x12003{{.+}} (__fini_array_end@CAPTABLE) Base: 0x120030030 (__cap_table_start+0) Length: 0 Perms: Object
 // CHECK-NEXT:            0x12003{{.+}} (__CTOR_LIST__@CAPTABLE.17) Base: 0x120030000 (__CTOR_LIST__+0) Length: 8 Perms: Object
 // CHECK-NEXT:            0x12003{{.+}} (__CTOR_END__@CAPTABLE) Base: 0x120030008 (__CTOR_END__+0) Length: 8 Perms: Object
-// CHECK-NEXT:            0x12003{{.+}} (__start___cap_relocs@CAPTABLE) Base: 0x120000210 (__start___cap_relocs+0) Length: 920 Perms: Object
-// CHECK-NEXT:            0x12003{{.+}} (__stop___cap_relocs@CAPTABLE) Base: 0x1200005a8 (crt_noinit_tag+0) Length: 0 Perms: Object
+// CHECK-NEXT:            0x12003{{.+}} (__start___cap_relocs@CAPTABLE) Base: 0x120000228 (__start___cap_relocs+0) Length: 920 Perms: Object
+// CHECK-NEXT:            0x12003{{.+}} (__stop___cap_relocs@CAPTABLE) Base: 0x1200005c0 (__stop___cap_relocs+0) Length: 0 Perms: Object
 // CHECK-NEXT:            0x12003{{.+}} (_int@CAPTABLE) Base: 0x120040010 (_int+0) Length: 4 Perms: Object
 // CHECK-NEXT: ]
 
@@ -79,5 +79,5 @@ __attribute__((noreturn)) void exit(int code) {
 // WITH_CTORS-SYMS:    0000000120030020       .init_array    00000008 .hidden __init_array_start
 // CHECK-SYMS:         0000000120010000       .text          00000000 .hidden __preinit_array_end
 // CHECK-SYMS:         0000000120010000       .text          00000000 .hidden __preinit_array_start
-// CHECK-SYMS:         0000000120000210         __cap_relocs		 00000398 __start___cap_relocs
-// CHECK-SYMS:         00000001200005a8         __cap_relocs		 00000000 __stop___cap_relocs
+// CHECK-SYMS:         0000000120000228         __cap_relocs		 00000398 __start___cap_relocs
+// CHECK-SYMS:         00000001200005c0         __cap_relocs		 00000000 __stop___cap_relocs

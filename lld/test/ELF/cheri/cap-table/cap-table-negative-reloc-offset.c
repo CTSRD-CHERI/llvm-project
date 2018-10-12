@@ -1,7 +1,7 @@
 // RUN: %cheri128_cc1 -emit-obj -O2 -target-abi purecap -mllvm -cheri-cap-table-abi=plt %s -o %t.o
 // RUN: llvm-readobj -r %t.o | FileCheck -check-prefix RELOCATIONS %s
 // RUN: ld.lld -o %t.exe %t.o -verbose 2>&1 | FileCheck %s -check-prefix WARN
-// RUN: llvm-objdump -d -r -C -t %t.exe | FileCheck %s
+// RUN: llvm-objdump -d -r --cap-relocs -t %t.exe | FileCheck %s
 
 enum roff_tok {
     ROFF_br = 0, ROFF_ce, ROFF_ft, ROFF_ll, ROFF_mc,

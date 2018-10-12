@@ -3,7 +3,7 @@
 // RUN: %cheri_purecap_cc1 -mllvm -mxcaptable -emit-obj -O2 -mllvm -cheri-cap-table-abi=plt %s -o %t.o
 // RUN: llvm-objdump -d -r -t %t.o | FileCheck %s -check-prefix OBJECT
 // RUN: ld.lld -o %t.exe %t.o
-// RUN: llvm-objdump -d -r -C -t %t.exe | %cheri_FileCheck %s -check-prefixes EXE
+// RUN: llvm-objdump -d -r -cap-relocs -t %t.exe | %cheri_FileCheck %s -check-prefixes EXE
 
 // OBJECT:      14:	3c 01 00 00 	lui	$1, 0
 // OBJECT-NEXT: 0000000000000014:  R_MIPS_CHERI_CAPTAB_HI16/R_MIPS_NONE/R_MIPS_NONE	.LJTI0_0
@@ -19,10 +19,10 @@
 
 // __cap_relocs should contain length:
 // EXE:      CAPABILITY RELOCATION RECORDS:
-// EXE-NEXT: 0x0000000120030000	Base: .LJTI0_0 (0x0000000120000190)	Offset: 0x0000000000000000	Length: 0x0000000000000024	Permissions: 0x00000000
+// EXE-NEXT: 0x0000000120030000	Base: .LJTI0_0 (0x00000001200001d0)	Offset: 0x0000000000000000	Length: 0x0000000000000024	Permissions: 0x00000000
 
 // EXE: SYMBOL TABLE:
-// EXE-DAG: 0000000120000190 .rodata		 00000024 .LJTI0_0
+// EXE-DAG: 00000001200001d0 .rodata		 00000024 .LJTI0_0
 // EXE-DAG: 0000000120030000 l       .cap_table		 000000{{1|2}}0 .LJTI0_0@CAPTABLE
 
 int __start(int i) {

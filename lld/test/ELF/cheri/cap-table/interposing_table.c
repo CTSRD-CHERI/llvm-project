@@ -1,6 +1,6 @@
 // RUN: %cheri256_cc1 -emit-obj -O2 -target-feature +soft-float -msoft-float -target-abi purecap -mllvm -cheri-cap-table-abi=plt %s -o %t.o
 // RUN: ld.lld %t.o %S/Inputs/interposing_table.o  -o %t.exe
-// RUN: llvm-objdump -t -C %t.exe | FileCheck %s
+// RUN: llvm-objdump -t -cap-relocs %t.exe | FileCheck %s
 
 #define SLOT_SYS(name) int __sys_##name(void) { return 0; }
 #define SLOT_LIBC(name) int __libc_##name(void) { return 0; }

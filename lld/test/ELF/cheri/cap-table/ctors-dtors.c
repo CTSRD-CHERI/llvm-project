@@ -1,8 +1,8 @@
 // RUN: %cheri128_purecap_cc1 -emit-obj -O2 -mllvm -cheri-cap-table-abi=plt %s -o %t.o
 // RUN: %cheri128_purecap_cc1 -emit-obj -DCRTEND -O2 -mllvm -cheri-cap-table-abi=plt %s -o %t-crtend.o
-// RUN: llvm-objdump -d -r -C -t %t.o
+// RUN: llvm-objdump -d -r -cap-relocs -t %t.o
 // RUN: ld.lld -o %t.exe %t.o %t-crtend.o
-// RUN: llvm-objdump -d -r -C -t %t.exe | FileCheck %s
+// RUN: llvm-objdump -d -r -cap-relocs -t %t.exe | FileCheck %s
 
 // Check that we add a symbol for __ctors_start and size it correctly
 

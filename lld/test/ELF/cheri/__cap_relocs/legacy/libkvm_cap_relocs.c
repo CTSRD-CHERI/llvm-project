@@ -7,8 +7,7 @@
 // WARN: Could not find a real symbol for __cap_reloc against .data.rel.ro+0x40
 // WARN: Could not find a real symbol for __cap_reloc against .data.rel.ro+0x60
 // WARN: warning: Linking old object files without CheriABI variant flag.
-// RUN: llvm-readobj -r %t.so | FileCheck %s -check-prefix DYNAMIC-RELOCS
-// RUN: llvm-objdump --cap-relocs %t.so | FileCheck %s
+// RUN: llvm-readobj -r --cap-relocs %t.so | FileCheck %s -check-prefixes CHECK,DYNAMIC-RELOCS
 
 // FIXME: it would be good if we could set bounds here instead of having it as -1
 
@@ -34,7 +33,7 @@
 
 // dynamic should have 14 relocations against the load address
 // DYNAMIC-RELOCS-LABEL: Relocations [
-// DYNAMIC-RELOCS-NEXT:   Section (8) .rel.dyn {
+// DYNAMIC-RELOCS-NEXT:   Section ({{.+}}) .rel.dyn {
 // DYNAMIC-RELOCS-NEXT:     0x300A0 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 // DYNAMIC-RELOCS-NEXT:     0x300A8 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 // DYNAMIC-RELOCS-NEXT:     0x300C8 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
@@ -53,11 +52,13 @@
 // DYNAMIC-RELOCS-NEXT: ]
 
 
-// CHECK: CAPABILITY RELOCATION RECORDS:
-// CHECK-NEXT: 0x0000000000020000      Base: <Unnamed symbol> (0x00000000000004da)     Offset: 0x0000000000000000  Length: 0x00000000000000bd       Permissions: 0x00000000
-// CHECK-NEXT: 0x0000000000020020      Base: <Unnamed symbol> (0x00000000000004a4)     Offset: 0x0000000000000000  Length: 0x00000000000000f3       Permissions: 0x00000000
-// CHECK-NEXT: 0x0000000000020040      Base: <Unnamed symbol> (0x000000000000058d)     Offset: 0x0000000000000000  Length: 0x000000000000000a       Permissions: 0x00000000
-// CHECK-NEXT: 0x0000000000030000      Base: <Unnamed symbol> (0x000000000000055b)     Offset: 0x0000000000000000  Length: 0x000000000000003c       Permissions: 0x00000000
-// CHECK-NEXT: 0x0000000000030020      Base: <Unnamed symbol> (0x00000000000004c9)     Offset: 0x0000000000000000  Length: 0x00000000000000ce       Permissions: 0x00000000
-// CHECK-NEXT: 0x0000000000030040      Base: <Unnamed symbol> (0x00000000000004b0)     Offset: 0x0000000000000000  Length: 0x00000000000000e7       Permissions: 0x00000000
-// CHECK-NEXT: 0x0000000000030060      Base: <Unnamed symbol> (0x00000000000004a4)     Offset: 0x0000000000000000  Length: 0x00000000000000f3       Permissions: 0x00000000
+// CHECK-LABEL: CHERI __cap_relocs [
+// CHECK-NEXT:    0x020000 (kvm_pcpu_nl)   Base: 0x7b2 (<unknown symbol>+0) Length: 189 Perms: Object
+// CHECK-NEXT:    0x020020 Base: 0x77c (<unknown symbol>+0) Length: 243 Perms: Object
+// CHECK-NEXT:    0x020040 Base: 0x865 (<unknown symbol>+0) Length: 10 Perms: Object
+// CHECK-NEXT:    0x030000 Base: 0x833 (<unknown symbol>+0) Length: 60 Perms: Object
+// CHECK-NEXT:    0x030020 Base: 0x7a1 (<unknown symbol>+0) Length: 206 Perms: Object
+// CHECK-NEXT:    0x030040 Base: 0x788 (<unknown symbol>+0) Length: 231 Perms: Object
+// CHECK-NEXT:    0x030060 Base: 0x77c (<unknown symbol>+0) Length: 243 Perms: Object
+// CHECK-NEXT: ]
+

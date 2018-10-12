@@ -66,7 +66,13 @@ struct option options_table[] = {
 
 // STATIC: Section {
 // STATIC: Name: .rodata (
-// STATIC: Address: [[$RODATA:0x120000198]]
+// STATIC-NEXT: Type: SHT_PROGBITS (0x1)
+// STATIC-NEXT: Flags [ (0x32)
+// STATIC-NEXT:   SHF_ALLOC (0x2)
+// STATIC-NEXT:   SHF_MERGE (0x10)
+// STATIC-NEXT:   SHF_STRINGS (0x20)
+// STATIC-NEXT: ]
+// STATIC-NEXT: Address: [[$RODATA:0x120000198]]
 
 // STATIC-LABEL: CHERI __cap_relocs [
 // STATIC-NEXT:    0x120010020 Base: 0x[[@EXPR tolower(hex($RODATA))]]      (<unknown symbol>+0) Length: 6 Perms: Object
@@ -79,8 +85,14 @@ struct option options_table[] = {
 
 
 // DYNAMIC: Section {
-// DYNAMIC: Name: .rodata (
-// DYNAMIC: Address: [[$RODATA:0x428]]
+// DYNAMIC:      Name: .rodata (
+// DYNAMIC-NEXT: Type: SHT_PROGBITS (0x1)
+// DYNAMIC-NEXT: Flags [ (0x32)
+// DYNAMIC-NEXT:   SHF_ALLOC (0x2)
+// DYNAMIC-NEXT:   SHF_MERGE (0x10)
+// DYNAMIC-NEXT:   SHF_STRINGS (0x20)
+// DYNAMIC-NEXT: ]
+// DYNAMIC-NEXT: Address: [[$RODATA:0x428]]
 
 // PIE exe amd shlib should have a dynamic relocations and only have the offset+length values filled in:
 // DYNAMIC-LABEL: CHERI __cap_relocs [
