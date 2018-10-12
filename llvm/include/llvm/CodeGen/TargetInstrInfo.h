@@ -846,13 +846,31 @@ public:
     llvm_unreachable("Target didn't implement TargetInstrInfo::copyPhysReg!");
   }
 
+protected:
+  /// Target-dependent implemenation for IsCopyInstr.
   /// If the specific machine instruction is a instruction that moves/copies
   /// value from one register to another register return true along with
   /// @Source machine operand and @Destination machine operand.
-  virtual bool isCopyInstr(const MachineInstr &MI,
-                           const MachineOperand *&SourceOpNum,
-                           const MachineOperand *&Destination) const {
+  virtual bool isCopyInstrImpl(const MachineInstr &MI,
+                               const MachineOperand *&Source,
+                               const MachineOperand *&Destination) const {
     return false;
+  }
+
+public:
+  /// If the specific machine instruction is a instruction that moves/copies
+  /// value from one register to another register return true along with
+  /// @Source machine operand and @Destination machine operand.
+  /// For COPY-instruction the method naturally returns true, for all other
+  /// instructions the method calls target-dependent implementation.
+  bool isCopyInstr(const MachineInstr &MI, const MachineOperand *&Source,
+                   const MachineOperand *&Destination) const {
+    if (MI.isCopy()) {
+      Destination = &MI.getOperand(0);
+      Source = &MI.getOperand(1);
+      return true;
+    }
+    return isCopyInstrImpl(MI, Source, Destination);
   }
 
   /// Store the specified register of the given register class to the specified
@@ -1063,7 +1081,7 @@ public:
   /// getAddressSpaceForPseudoSourceKind - Given the kind of memory
   /// (e.g. stack) the target returns the corresponding address space.
   virtual unsigned
-  getAddressSpaceForPseudoSourceKind(PseudoSourceValue::PSVKind Kind) const {
+  getAddressSpaceForPseudoSourceKind(unsigned Kind) const {
     return 0;
   }
 

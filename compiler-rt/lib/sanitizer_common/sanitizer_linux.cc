@@ -117,6 +117,9 @@ struct kernel_timeval {
 // <linux/futex.h> is broken on some linux distributions.
 const int FUTEX_WAIT = 0;
 const int FUTEX_WAKE = 1;
+const int FUTEX_PRIVATE_FLAG = 128;
+const int FUTEX_WAIT_PRIVATE = FUTEX_WAIT | FUTEX_PRIVATE_FLAG;
+const int FUTEX_WAKE_PRIVATE = FUTEX_WAKE | FUTEX_PRIVATE_FLAG;
 #endif  // SANITIZER_LINUX
 
 // Are we using 32-bit or 64-bit Linux syscalls?
@@ -645,10 +648,10 @@ void ReExec() {
     CTL_KERN, KERN_PROC_ARGS, -1, KERN_PROC_PATHNAME,
   };
   char path[400];
-  size_t len;
+  uptr len;
 
   len = sizeof(path);
-  if (sysctl(name, ARRAY_SIZE(name), path, &len, NULL, 0) != -1)
+  if (internal_sysctl(name, ARRAY_SIZE(name), path, &len, NULL, 0) != -1)
     pathname = path;
 #elif SANITIZER_SOLARIS
   pathname = getexecname();
@@ -686,7 +689,8 @@ void BlockingMutex::Lock() {
 #elif SANITIZER_NETBSD
     sched_yield(); /* No userspace futex-like synchronization */
 #else
-    internal_syscall(SYSCALL(futex), (uptr)m, FUTEX_WAIT, MtxSleeping, 0, 0, 0);
+    internal_syscall(SYSCALL(futex), (uptr)m, FUTEX_WAIT_PRIVATE, MtxSleeping,
+                     0, 0, 0);
 #endif
   }
 }
@@ -701,7 +705,7 @@ void BlockingMutex::Unlock() {
 #elif SANITIZER_NETBSD
                    /* No userspace futex-like synchronization */
 #else
-    internal_syscall(SYSCALL(futex), (uptr)m, FUTEX_WAKE, 1, 0, 0, 0);
+    internal_syscall(SYSCALL(futex), (uptr)m, FUTEX_WAKE_PRIVATE, 1, 0, 0, 0);
 #endif
   }
 }
@@ -810,6 +814,13 @@ int internal_fork() {
   return internal_syscall(SYSCALL(fork));
 #endif
 }
+
+#if SANITIZER_FREEBSD || SANITIZER_NETBSD || SANITIZER_OPENBSD
+int internal_sysctl(const int *name, unsigned int namelen, void *oldp,
+                    uptr *oldlenp, const void *newp, uptr newlen) {
+  return sysctl(name, namelen, oldp, (size_t *)oldlenp, newp, (size_t)newlen);
+}
+#endif
 
 #if SANITIZER_LINUX
 #define SA_RESTORER 0x04000000
@@ -1110,8 +1121,9 @@ uptr ReadBinaryName(/*out*/char *buf, uptr buf_len) {
   const int Mib[4] = {CTL_KERN, KERN_PROC_ARGS, -1, KERN_PROC_PATHNAME};
 #endif
   const char *default_module_name = "kern.proc.pathname";
-  size_t Size = buf_len;
-  bool IsErr = (sysctl(Mib, ARRAY_SIZE(Mib), buf, &Size, NULL, 0) != 0);
+  uptr Size = buf_len;
+  bool IsErr =
+      (internal_sysctl(Mib, ARRAY_SIZE(Mib), buf, &Size, NULL, 0) != 0);
   int readlink_error = IsErr ? errno : 0;
   uptr module_name_len = Size;
 #else
@@ -1976,13 +1988,13 @@ void CheckASLR() {
 #if SANITIZER_NETBSD
   int mib[3];
   int paxflags;
-  size_t len = sizeof(paxflags);
+  uptr len = sizeof(paxflags);
 
   mib[0] = CTL_PROC;
   mib[1] = internal_getpid();
   mib[2] = PROC_PID_PAXFLAGS;
 
-  if (UNLIKELY(sysctl(mib, 3, &paxflags, &len, NULL, 0) == -1)) {
+  if (UNLIKELY(internal_sysctl(mib, 3, &paxflags, &len, NULL, 0) == -1)) {
     Printf("sysctl failed\n");
     Die();
   }

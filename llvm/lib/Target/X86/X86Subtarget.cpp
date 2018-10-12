@@ -77,6 +77,8 @@ X86Subtarget::classifyLocalReference(const GlobalValue *GV) const {
     if (isTargetELF()) {
       switch (TM.getCodeModel()) {
       // 64-bit small code model is simple: All rip-relative.
+      case CodeModel::Tiny:
+        llvm_unreachable("Tiny codesize model not supported on X86");
       case CodeModel::Small:
       case CodeModel::Kernel:
         return X86II::MO_NO_FLAG;
@@ -135,6 +137,14 @@ unsigned char X86Subtarget::classifyGlobalReference(const GlobalValue *GV,
         return X86II::MO_NO_FLAG;
     }
   }
+
+  // For MinGW, if a data reference isn't marked as DSO local or DLLImport,
+  // and it's a pure declaration without a definition, it might potentially
+  // be automatically imported from another DLL, thus route accesses via a stub.
+  if (isTargetWindowsGNU() && GV && !GV->isDSOLocal() &&
+      !GV->hasDLLImportStorageClass() && GV->isDeclarationForLinker() &&
+      isa<GlobalVariable>(GV))
+    return X86II::MO_COFFSTUB;
 
   if (TM.shouldAssumeDSOLocal(M, GV))
     return classifyLocalReference(GV);
@@ -220,14 +230,22 @@ void X86Subtarget::initSubtargetFeatures(StringRef CPU, StringRef FS) {
   if (CPUName.empty())
     CPUName = "generic";
 
-  // Make sure 64-bit features are available in 64-bit mode. (But make sure
-  // SSE2 can be turned off explicitly.)
   std::string FullFS = FS;
   if (In64BitMode) {
+    // SSE2 should default to enabled in 64-bit mode, but can be turned off
+    // explicitly.
     if (!FullFS.empty())
-      FullFS = "+64bit,+sse2," + FullFS;
+      FullFS = "+sse2," + FullFS;
     else
-      FullFS = "+64bit,+sse2";
+      FullFS = "+sse2";
+
+    // If no CPU was specified, enable 64bit feature to satisy later check.
+    if (CPUName == "generic") {
+      if (!FullFS.empty())
+        FullFS = "+64bit," + FullFS;
+      else
+        FullFS = "+64bit";
+    }
   }
 
   // LAHF/SAHF are always supported in non-64-bit mode.
@@ -262,8 +280,9 @@ void X86Subtarget::initSubtargetFeatures(StringRef CPU, StringRef FS) {
   LLVM_DEBUG(dbgs() << "Subtarget features: SSELevel " << X86SSELevel
                     << ", 3DNowLevel " << X863DNowLevel << ", 64bit "
                     << HasX86_64 << "\n");
-  assert((!In64BitMode || HasX86_64) &&
-         "64-bit code requested on a subtarget that doesn't support it!");
+  if (In64BitMode && !HasX86_64)
+    report_fatal_error("64-bit code requested on a subtarget that doesn't "
+                       "support it!");
 
   // Stack alignment is 16 bytes on Darwin, Linux, kFreeBSD and Solaris (both
   // 32 and 64 bit) and for all 64-bit targets.

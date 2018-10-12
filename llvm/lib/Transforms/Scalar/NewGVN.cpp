@@ -657,8 +657,8 @@ public:
          TargetLibraryInfo *TLI, AliasAnalysis *AA, MemorySSA *MSSA,
          const DataLayout &DL)
       : F(F), DT(DT), TLI(TLI), AA(AA), MSSA(MSSA), DL(DL),
-        PredInfo(make_unique<PredicateInfo>(F, *DT, *AC)), SQ(DL, TLI, DT, AC) {
-  }
+        PredInfo(make_unique<PredicateInfo>(F, *DT, *AC)),
+        SQ(DL, TLI, DT, AC, /*CtxI=*/nullptr, /*UseInstrInfo=*/false) {}
 
   bool runGVN();
 
@@ -2925,7 +2925,7 @@ void NewGVN::initializeCongruenceClasses(Function &F) {
               PHINodeUses.insert(UInst);
       // Don't insert void terminators into the class. We don't value number
       // them, and they just end up sitting in TOP.
-      if (isa<TerminatorInst>(I) && I.getType()->isVoidTy())
+      if (I.isTerminator() && I.getType()->isVoidTy())
         continue;
       TOPClass->insert(&I);
       ValueToClass[&I] = TOPClass;
@@ -3174,10 +3174,7 @@ bool NewGVN::singleReachablePHIPath(
   SmallVector<const Value *, 32> OperandList;
   std::copy(FilteredPhiArgs.begin(), FilteredPhiArgs.end(),
             std::back_inserter(OperandList));
-  bool Okay = OperandList.size() == 1;
-  if (!Okay)
-    Okay =
-        std::equal(OperandList.begin(), OperandList.end(), OperandList.begin());
+  bool Okay = is_splat(OperandList);
   if (Okay)
     return singleReachablePHIPath(Visited, cast<MemoryAccess>(OperandList[0]),
                                   Second);
@@ -3272,8 +3269,7 @@ void NewGVN::verifyMemoryCongruency() const {
                        const MemoryDef *MD = cast<MemoryDef>(U);
                        return ValueToClass.lookup(MD->getMemoryInst());
                      });
-      assert(std::equal(PhiOpClasses.begin(), PhiOpClasses.end(),
-                        PhiOpClasses.begin()) &&
+      assert(is_splat(PhiOpClasses) &&
              "All MemoryPhi arguments should be in the same class");
     }
   }

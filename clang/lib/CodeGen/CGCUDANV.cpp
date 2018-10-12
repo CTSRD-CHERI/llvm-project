@@ -461,6 +461,8 @@ llvm::Function *CGNVCUDARuntime::makeModuleCtorFunction() {
         /*Initializer=*/llvm::ConstantPointerNull::get(VoidPtrPtrTy),
         "__hip_gpubin_handle");
     GpuBinaryHandle->setAlignment(CGM.getPointerAlign().getQuantity());
+    // Prevent the weak symbol in different shared libraries being merged.
+    GpuBinaryHandle->setVisibility(llvm::GlobalValue::HiddenVisibility);
     Address GpuBinaryAddr(
         GpuBinaryHandle,
         CharUnits::fromQuantity(GpuBinaryHandle->getAlignment()));

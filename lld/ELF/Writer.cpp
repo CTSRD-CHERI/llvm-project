@@ -399,6 +399,14 @@ template <class ELFT> static void createSyntheticSections() {
   InX::Iplt = make<PltSection>(true);
   Add(InX::Iplt);
 
+  // .note.GNU-stack is always added when we are creating a re-linkable
+  // object file. Other linkers are using the presence of this marker
+  // section to control the executable-ness of the stack area, but that
+  // is irrelevant these days. Stack area should always be non-executable
+  // by default. So we emit this section unconditionally.
+  if (Config->Relocatable)
+    Add(make<GnuStackSection>());
+
   if (!Config->Relocatable) {
     if (Config->EhFrameHdr) {
       InX::EhFrameHdr = make<EhFrameHeader>();
@@ -1166,7 +1174,7 @@ sortISDBySectionOrder(InputSectionDescription *ISD,
   // we effectively double the amount of code that could potentially call into
   // the hot code without a thunk.
   size_t InsPt = 0;
-  if (Target->ThunkSectionSpacing && !OrderedSections.empty()) {
+  if (Target->getThunkSectionSpacing() && !OrderedSections.empty()) {
     uint64_t UnorderedPos = 0;
     for (; InsPt != UnorderedSections.size(); ++InsPt) {
       UnorderedPos += UnorderedSections[InsPt]->getSize();

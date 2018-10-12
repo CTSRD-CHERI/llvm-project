@@ -177,3 +177,47 @@ r1:0=combine(r2,##_start);
 r_hex_32:
 .word _start
 # CHECK: 00011000
+
+# R_HEX_16_X has 4 relocation mask variations
+# 0x48000000
+memw(##_start) = r0
+# CHECK: 4880c000   memw(##69632) = r0 }
+
+# 0x49000000
+r0 = memw(##_start)
+# CHECK: 4980c000   r0 = memw(##69632)
+
+# 0x78000000
+r0 = ##_start
+# CHECK: 7800c000   r0 = ##69632 }
+
+# 0xb0000000
+r0 = add(r1, ##_start)
+# CHECK: b001c000   r0 = add(r1,##69632) }
+
+# R_HEX_B9_PCREL:
+{r0=#1 ; jump #_start}
+# CHECK: jump 0x11000
+
+# R_HEX_B9_PCREL_X:
+{r0=#1 ; jump ##_start}
+# CHECK: jump 0x11000
+
+# R_HEX_B13_PCREL
+if (r0 == #0) jump:t #_start
+# CHECK: if (r0==#0) jump:t 0x11000
+
+# R_HEX_9_X
+p0 = !cmp.gtu(r0, ##_start)
+# CHECK: p0 = !cmp.gtu(r0,##69632)
+
+# R_HEX_10_X
+p0 = !cmp.gt(r0, ##_start)
+# CHECK: p0 = !cmp.gt(r0,##69632)
+
+# R_HEX_11_X
+r0 = memw(r1+##_start)
+# CHECK: r0 = memw(r1+##69632)
+
+memw(r0+##_start) = r1
+# CHECK: memw(r0+##69632) = r1

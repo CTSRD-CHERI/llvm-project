@@ -616,6 +616,12 @@ public:
     return hasProperty(MCID::Return, Type);
   }
 
+  /// Return true if this is an instruction that marks the end of an EH scope,
+  /// i.e., a catchpad or a cleanuppad instruction.
+  bool isEHScopeReturn(QueryType Type = AnyInBundle) const {
+    return hasProperty(MCID::EHScopeReturn, Type);
+  }
+
   bool isCall(QueryType Type = AnyInBundle) const {
     return hasProperty(MCID::Call, Type);
   }
@@ -1493,17 +1499,19 @@ public:
   void cloneMergedMemRefs(MachineFunction &MF,
                           ArrayRef<const MachineInstr *> MIs);
 
-  /// Get or create a temporary symbol that will be emitted just prior to the
-  /// instruction itself.
+  /// Set a symbol that will be emitted just prior to the instruction itself.
+  ///
+  /// Setting this to a null pointer will remove any such symbol.
   ///
   /// FIXME: This is not fully implemented yet.
-  MCSymbol *getOrCreatePreInstrTempSymbol(MCContext &MCCtx);
+  void setPreInstrSymbol(MachineFunction &MF, MCSymbol *Symbol);
 
-  /// Get or create a temporary symbol that will be emitted just after the
-  /// instruction itself.
+  /// Set a symbol that will be emitted just after the instruction itself.
+  ///
+  /// Setting this to a null pointer will remove any such symbol.
   ///
   /// FIXME: This is not fully implemented yet.
-  MCSymbol *getOrCreatePostInstrTempSymbol(MCContext &MCCtx);
+  void setPostInstrSymbol(MachineFunction &MF, MCSymbol *Symbol);
 
   /// Return the MIFlags which represent both MachineInstrs. This
   /// should be used when merging two MachineInstrs into one. This routine does
@@ -1521,6 +1529,9 @@ public:
 
   /// Add all implicit def and use operands to this instruction.
   void addImplicitDefUseOperands(MachineFunction &MF);
+
+  /// Scan instructions following MI and collect any matching DBG_VALUEs.
+  void collectDebugValues(SmallVectorImpl<MachineInstr *> &DbgValues);
 
 private:
   /// If this instruction is embedded into a MachineFunction, return the

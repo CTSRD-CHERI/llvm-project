@@ -876,8 +876,8 @@ def err_protocol_has_circular_dependency : Error<
   "protocol has circular dependency">;
 def err_undeclared_protocol : Error<"cannot find protocol declaration for %0">;
 def warn_undef_protocolref : Warning<"cannot find protocol definition for %0">;
-def warn_atprotocol_protocol : Warning<
-  "@protocol is using a forward protocol declaration of %0">, InGroup<AtProtocol>;
+def err_atprotocol_protocol : Error<
+  "@protocol is using a forward protocol declaration of %0">;
 def warn_readonly_property : Warning<
   "attribute 'readonly' of property %0 restricts attribute "
   "'readwrite' of property inherited from %1">,
@@ -1854,6 +1854,10 @@ def err_destructor_expr_type_mismatch : Error<
 def note_destructor_type_here : Note<
   "type %0 is declared here">;
 
+def err_destroy_attr_on_non_static_var : Error<
+  "%select{no_destroy|always_destroy}0 attribute can only be applied to a"
+  " variable with static or thread storage duration">;
+
 def err_destructor_template : Error<
   "destructor cannot be declared as a template">;
 
@@ -2184,8 +2188,11 @@ def note_deduction_guide_template_access : Note<
   "member template declared %0 here">;
 def note_deduction_guide_access : Note<
   "deduction guide declared %0 by intervening access specifier">;
+def warn_cxx14_compat_class_template_argument_deduction : Warning<
+  "class template argument deduction is incompatible with C++ standards "
+  "before C++17">, InGroup<CXXPre17Compat>, DefaultIgnore;
 
-// C++1y deduced return types
+// C++14 deduced return types
 def err_auto_fn_deduction_failure : Error<
   "cannot deduce return type %0 from returned value of type %1">;
 def err_auto_fn_different_deductions : Error<
@@ -2201,6 +2208,9 @@ def err_auto_fn_return_init_list : Error<
   "cannot deduce return type from initializer list">;
 def err_auto_fn_virtual : Error<
   "function with deduced return type cannot be virtual">;
+def warn_cxx11_compat_deduced_return_type : Warning<
+  "return type deduction is incompatible with C++ standards before C++14">,
+  InGroup<CXXPre14Compat>, DefaultIgnore;
 
 // C++11 override control
 def override_keyword_only_allowed_on_virtual_member_functions : Error<
@@ -6648,7 +6658,7 @@ def warn_overaligned_type : Warning<
 def err_aligned_allocation_unavailable : Error<
   "aligned %select{allocation|deallocation}0 function of type '%1' is only "
   "available on %2 %3 or newer">;
-def note_silence_unligned_allocation_unavailable : Note<
+def note_silence_aligned_allocation_unavailable : Note<
   "if you supply your own aligned allocation functions, use "
   "-faligned-allocation to silence this diagnostic">;
 
@@ -6751,6 +6761,11 @@ let CategoryName = "Lambda Issue" in {
     "cannot deduce type for lambda capture %0 from initializer of type %2">;
   def err_init_capture_deduction_failure_from_init_list : Error<
     "cannot deduce type for lambda capture %0 from initializer list">;
+
+  // C++14 generic lambdas.
+  def warn_cxx11_compat_generic_lambda : Warning<
+    "generic lambdas are incompatible with C++11">,
+    InGroup<CXXPre14Compat>, DefaultIgnore;
 
   // C++17 '*this' captures.
   def warn_cxx14_compat_star_this_lambda_capture : Warning<

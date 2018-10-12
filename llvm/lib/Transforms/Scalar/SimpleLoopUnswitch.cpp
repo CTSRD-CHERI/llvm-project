@@ -302,10 +302,11 @@ static void hoistLoopToNewParent(Loop &L, BasicBlock &Preheader,
     formLCSSA(*OldContainingL, DT, &LI, nullptr);
 
     // We shouldn't need to form dedicated exits because the exit introduced
-    // here is the (just split by unswitching) preheader. As such, it is
-    // necessarily dedicated.
-    assert(OldContainingL->hasDedicatedExits() &&
-           "Unexpected predecessor of hoisted loop preheader!");
+    // here is the (just split by unswitching) preheader. However, after trivial
+    // unswitching it is possible to get new non-dedicated exits out of parent
+    // loop so let's conservatively form dedicated exit blocks and figure out
+    // if we can optimize later.
+    formDedicatedExitBlocks(OldContainingL, &DT, &LI, /*PreserveLCSSA*/ true);
   }
 }
 
@@ -482,6 +483,7 @@ static bool unswitchTrivialBranch(Loop &L, BranchInst &BI, DominatorTree &DT,
   if (FullUnswitch)
     hoistLoopToNewParent(L, *NewPH, DT, LI);
 
+  LLVM_DEBUG(dbgs() << "    done: unswitching trivial branch...\n");
   ++NumTrivial;
   ++NumBranches;
   return true;
@@ -539,7 +541,7 @@ static bool unswitchTrivialSwitch(Loop &L, SwitchInst &SI, DominatorTree &DT,
   else if (ExitCaseIndices.empty())
     return false;
 
-  LLVM_DEBUG(dbgs() << "    unswitching trivial cases...\n");
+  LLVM_DEBUG(dbgs() << "    unswitching trivial switch...\n");
 
   // We may need to invalidate SCEVs for the outermost loop reached by any of
   // the exits.
@@ -739,6 +741,7 @@ static bool unswitchTrivialSwitch(Loop &L, SwitchInst &SI, DominatorTree &DT,
 
   ++NumTrivial;
   ++NumSwitches;
+  LLVM_DEBUG(dbgs() << "    done: unswitching trivial switch...\n");
   return true;
 }
 
@@ -1377,12 +1380,20 @@ deleteDeadBlocksFromLoop(Loop &L,
                          DominatorTree &DT, LoopInfo &LI) {
   // Find all the dead blocks, and remove them from their successors.
   SmallVector<BasicBlock *, 16> DeadBlocks;
-  for (BasicBlock *BB : llvm::concat<BasicBlock *const>(L.blocks(), ExitBlocks))
+  for (BasicBlock *BB : ExitBlocks)
     if (!DT.isReachableFromEntry(BB)) {
       for (BasicBlock *SuccBB : successors(BB))
         SuccBB->removePredecessor(BB);
       DeadBlocks.push_back(BB);
     }
+
+  for (Loop *ParentL = &L; ParentL; ParentL = ParentL->getParentLoop())
+    for (BasicBlock *BB : ParentL->blocks())
+      if (!DT.isReachableFromEntry(BB)) {
+        for (BasicBlock *SuccBB : successors(BB))
+          SuccBB->removePredecessor(BB);
+        DeadBlocks.push_back(BB);
+      }
 
   SmallPtrSet<BasicBlock *, 16> DeadBlockSet(DeadBlocks.begin(),
                                              DeadBlocks.end());
@@ -1428,7 +1439,7 @@ deleteDeadBlocksFromLoop(Loop &L,
 
   // Actually delete the blocks now that they've been fully unhooked from the
   // IR.
-  for (auto *BB : DeadBlocks)
+  for (auto *BB : DeadBlockSet)
     BB->eraseFromParent();
 }
 

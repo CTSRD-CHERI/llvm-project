@@ -115,8 +115,9 @@ elimination and inlining), but you might lose the ability to modify the program
 and call functions which were optimized out of the program, or inlined away
 completely.
 
-The :ref:`LLVM test suite <test-suite-quickstart>` provides a framework to test
-optimizer's handling of debugging information.  It can be run like this:
+The :doc:`LLVM test-suite <TestSuiteMakefileGuide>` provides a framework to
+test the optimizer's handling of debugging information.  It can be run like
+this:
 
 .. code-block:: bash
 
@@ -384,7 +385,7 @@ scope information for the variable ``Z``.
   !19 = !DILocation(line: 5, column: 11, scope: !18)
 
 Here ``!19`` indicates that ``Z`` is declared at line number 5 and column
-number 0 inside of lexical scope ``!18``.  The lexical scope itself resides
+number 11 inside of lexical scope ``!18``.  The lexical scope itself resides
 inside of subprogram ``!4`` described above.
 
 The scope information attached with each instruction provides a straightforward

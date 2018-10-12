@@ -195,7 +195,6 @@ namespace {
     Value *createFSub(Value *Opnd0, Value *Opnd1);
     Value *createFAdd(Value *Opnd0, Value *Opnd1);
     Value *createFMul(Value *Opnd0, Value *Opnd1);
-    Value *createFDiv(Value *Opnd0, Value *Opnd1);
     Value *createFNeg(Value *V);
     Value *createNaryFAdd(const AddendVect& Opnds, unsigned InstrQuota);
     void createInstPostProc(Instruction *NewInst, bool NoNumber = false);
@@ -681,13 +680,6 @@ Value *FAddCombine::createFAdd(Value *Opnd0, Value *Opnd1) {
 
 Value *FAddCombine::createFMul(Value *Opnd0, Value *Opnd1) {
   Value *V = Builder.CreateFMul(Opnd0, Opnd1);
-  if (Instruction *I = dyn_cast<Instruction>(V))
-    createInstPostProc(I);
-  return V;
-}
-
-Value *FAddCombine::createFDiv(Value *Opnd0, Value *Opnd1) {
-  Value *V = Builder.CreateFDiv(Opnd0, Opnd1);
   if (Instruction *I = dyn_cast<Instruction>(V))
     createInstPostProc(I);
   return V;
@@ -1203,7 +1195,8 @@ Instruction *InstCombiner::visitAdd(BinaryOperator &I) {
   // integer add followed by a sext.
   if (SExtInst *LHSConv = dyn_cast<SExtInst>(LHS)) {
     // (add (sext x), cst) --> (sext (add x, cst'))
-    if (ConstantInt *RHSC = dyn_cast<ConstantInt>(RHS)) {
+    Constant *RHSC;
+    if (match(RHS, m_Constant(RHSC))) {
       if (LHSConv->hasOneUse()) {
         Constant *CI =
             ConstantExpr::getTrunc(RHSC, LHSConv->getOperand(0)->getType());
@@ -1239,7 +1232,8 @@ Instruction *InstCombiner::visitAdd(BinaryOperator &I) {
   // integer add followed by a zext.
   if (auto *LHSConv = dyn_cast<ZExtInst>(LHS)) {
     // (add (zext x), cst) --> (zext (add x, cst'))
-    if (ConstantInt *RHSC = dyn_cast<ConstantInt>(RHS)) {
+    Constant *RHSC;
+    if (match(RHS, m_Constant(RHSC))) {
       if (LHSConv->hasOneUse()) {
         Constant *CI =
             ConstantExpr::getTrunc(RHSC, LHSConv->getOperand(0)->getType());

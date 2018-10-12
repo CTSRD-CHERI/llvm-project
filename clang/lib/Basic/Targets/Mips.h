@@ -87,7 +87,7 @@ class LLVM_LIBRARY_VISIBILITY MipsTargetInfo : public TargetInfo {
   bool UseIndirectJumpHazard;
 
 protected:
-  bool HasFP64;
+  enum FPModeEnum { FPXX, FP32, FP64 } FPMode;
   std::string ABI;
   bool IsCHERI = false;
   int CapSize = -1;
@@ -98,7 +98,7 @@ public:
         IsNan2008(false), IsAbs2008(false), IsSingleFloat(false),
         IsNoABICalls(false), CanUseBSDABICalls(false), FloatABI(HardFloat),
         DspRev(NoDSP), HasMSA(false), DisableMadd4(false),
-        UseIndirectJumpHazard(false), HasFP64(false) {
+        UseIndirectJumpHazard(false), FPMode(FPXX) {
     TheCXXABI.set(TargetCXXABI::GenericMIPS);
 
     setABI(getTriple().isMIPS32() ? "o32" : "n64");
@@ -256,6 +256,8 @@ public:
     return TargetInfo::initFeatureMap(Features, Diags, CPU, FeaturesVec);
   }
 
+  unsigned getISARev() const;
+
   void getTargetDefines(const LangOptions &Opts,
                         MacroBuilder &Builder) const override;
 
@@ -395,7 +397,7 @@ public:
     IsSingleFloat = false;
     FloatABI = HardFloat;
     DspRev = NoDSP;
-    HasFP64 = isFP64Default();
+    FPMode = isFP64Default() ? FP64 : FPXX;
     bool CapSizeFeatureFound = false;
 
     for (const auto &Feature : Features) {
@@ -416,9 +418,11 @@ public:
       else if (Feature == "+nomadd4")
         DisableMadd4 = true;
       else if (Feature == "+fp64")
-        HasFP64 = true;
+        FPMode = FP64;
       else if (Feature == "-fp64")
-        HasFP64 = false;
+        FPMode = FP32;
+      else if (Feature == "+fpxx")
+        FPMode = FPXX;
       else if (Feature == "+nan2008")
         IsNan2008 = true;
       else if (Feature == "+chericap")

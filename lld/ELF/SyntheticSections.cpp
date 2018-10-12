@@ -1264,6 +1264,8 @@ template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
   uint32_t DtFlags1 = 0;
   if (Config->Bsymbolic)
     DtFlags |= DF_SYMBOLIC;
+  if (Config->ZGlobal)
+    DtFlags1 |= DF_1_GLOBAL;
   if (Config->ZInitfirst)
     DtFlags1 |= DF_1_INITFIRST;
   if (Config->ZNodelete)
@@ -1948,7 +1950,8 @@ static uint32_t getSymSectionIndex(Symbol *Sym) {
   if (!isa<Defined>(Sym) || Sym->NeedsPltAddr)
     return SHN_UNDEF;
   if (const OutputSection *OS = Sym->getOutputSection())
-    return OS->SectionIndex >= SHN_LORESERVE ? SHN_XINDEX : OS->SectionIndex;
+    return OS->SectionIndex >= SHN_LORESERVE ? (uint32_t)SHN_XINDEX
+                                             : OS->SectionIndex;
   return SHN_ABS;
 }
 
