@@ -3944,13 +3944,13 @@ ASTContext::getTypedefType(const TypedefNameDecl *Decl,
       // and whose underlying type is the cheri_capability qualified version of
       // the pointer type
       Canonical = getPointerType(PT->getPointeeType(), ASTContext::PIK_Capability);
-      TypeSourceInfo *TInfo = getTrivialTypeSourceInfo(Canonical, Decl->getLocStart());
+      TypeSourceInfo *TInfo = getTrivialTypeSourceInfo(Canonical, Decl->getBeginLoc());
       DeclContext *DC = const_cast<DeclContext *>(Decl->getDeclContext());
       std::string typedefName = "__chericap_" + Decl->getNameAsString();
       TypedefDecl *NewDecl = TypedefDecl::Create(
           const_cast<ASTContext &>(*this),
           DC,
-          Decl->getLocStart(),
+          Decl->getBeginLoc(),
           Decl->getLocation(),
           &Idents.get(typedefName), 
           TInfo);
