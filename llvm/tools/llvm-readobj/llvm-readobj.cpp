@@ -212,10 +212,13 @@ namespace opts {
                             cl::desc("Display the MIPS .MIPS.options section"));
 
   cl::opt<bool>
-      CheriCapRelocs("cheri-caprelocs",
+      CheriCapRelocs("cap-relocs",
                      cl::desc("Display the CHERI __cap_relocs section"));
   cl::alias CheriCapRelocsShort("C",
-    cl::desc("Alias for --cheri-caprelocs"),
+    cl::desc("Alias for --cap-relocs"),
+    cl::aliasopt(CheriCapRelocs));
+  cl::alias CheriCapRelocsOld("cheri-caprelocs",
+    cl::desc("Alias for --cap-relocs"),
     cl::aliasopt(CheriCapRelocs));
 
   // -coff-imports
