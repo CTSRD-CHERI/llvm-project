@@ -5,7 +5,7 @@
 // RUN: %cheri_purecap_clang %s -c -o %t.o
 // RUN: llvm-readobj -r %t.o | FileCheck -check-prefix OBJ-RELOCS %s
 // RUN: ld.lld -shared --enable-new-dtags -o %t.so --fatal-warnings %t.o
-// RUN: llvm-objdump --cap-relocs -s -t %t.so | FileCheck %s
+// RUN: llvm-objdump --cap-relocs -s -t --section=.rodata %t.so | FileCheck %s
 
 #define z_const const
 
@@ -33,10 +33,11 @@ z_const char * const z_errmsg[10] = {
 // OBJ-RELOCS-NEXT:  ]
 
 // CHECK-LABEL: CAPABILITY RELOCATION RECORDS:
-// CHECK-NEXT:  0x0000000000020000	Base: <Unnamed symbol> (0x0000000000000203)	Offset: 0x0000000000000000	Length: 0x0000000000000010	Permissions: 0x00000000
-// CHECK-NEXT:  0x00000000000200{{1|2}}0	Base: <Unnamed symbol> (0x0000000000000213)	Offset: 0x0000000000000000	Length: 0x000000000000000b	Permissions: 0x00000000
-// CHECK-NEXT:  0x00000000000200{{2|4}}0	Base: <Unnamed symbol> (0x0000000000000202)	Offset: 0x0000000000000000	Length: 0x0000000000000001	Permissions: 0x00000000
+// CHECK-NEXT:  0x0000000000020000	Base: <Unnamed symbol> (0x00000000000003f1)	Offset: 0x0000000000000000	Length: 0x0000000000000010	Permissions: 0x00000000
+// CHECK-NEXT:  0x00000000000200{{1|2}}0	Base: <Unnamed symbol> (0x0000000000000401)	Offset: 0x0000000000000000	Length: 0x000000000000000b	Permissions: 0x00000000
+// CHECK-NEXT:  0x00000000000200{{2|4}}0	Base: <Unnamed symbol> (0x000000000000[[RODATA_ADDR:03f0]])	Offset: 0x0000000000000000	Length: 0x0000000000000001	Permissions: 0x00000000
+// CHECK-EMPTY:
 
 // CHECK-LABEL:  Contents of section .rodata:
-// CHECK-NEXT:   006e6565 64206469 6374696f 6e617279  .need dictionary
-// CHECK-NEXT:   00737472 65616d20 656e6400           .stream end.
+// CHECK-NEXT:   [[RODATA_ADDR]] 006e6565 64206469 6374696f 6e617279  .need dictionary
+// CHECK-NEXT:                   00737472 65616d20 656e6400           .stream end.

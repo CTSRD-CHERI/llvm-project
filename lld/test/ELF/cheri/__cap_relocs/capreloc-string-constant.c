@@ -4,7 +4,7 @@
 // RUN: llvm-readobj -r %t.o | FileCheck -check-prefix READOBJ %s
 
 // RUN: ld.lld -preemptible-caprelocs=legacy %t.o -static -o %t-static.exe 2>&1 | FileCheck -check-prefixes UNKNOWN_LENGTH %s
-// RUN: llvm-readobj -C %t-static.exe | FileCheck -check-prefixes STATIC %s
+// RUN: llvm-readobj -C -s %t-static.exe | FileCheck -check-prefixes STATIC %s
 
 // same again for statically dynamically linked exe:
 // RUN: %cheri_purecap_clang %S/Inputs/dummy_shlib.c -c -o %T/integrated_dummy_shlib.o
@@ -50,7 +50,7 @@ struct option options_table[] = {
 
 // dynamic should have 10 relocations against the load address
 // DYNAMIC-RELOCS-LABEL: Relocations [
-// DYNAMIC-RELOCS-NEXT:   Section (8) .rel.dyn {
+// DYNAMIC-RELOCS-NEXT:   Section ({{.+}}) .rel.dyn {
 // DYNAMIC-RELOCS-NEXT:     0x20000 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 // DYNAMIC-RELOCS-NEXT:     0x20008 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 // DYNAMIC-RELOCS-NEXT:     0x20028 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
@@ -64,22 +64,31 @@ struct option options_table[] = {
 // DYNAMIC-RELOCS-NEXT:   }
 // DYNAMIC-RELOCS-NEXT: ]
 
+// STATIC: Section {
+// STATIC: Name: .rodata (
+// STATIC: Address: [[$RODATA:0x120000198]]
+
 // STATIC-LABEL: CHERI __cap_relocs [
-// STATIC-NEXT:    0x120010020 Base: 0x120000158 (<unknown symbol>+0) Length: 6 Perms: Object
-// STATIC-NEXT:    0x120010060 Base: 0x120000168 (<unknown symbol>+4) Length: 7 Perms: Object
-// STATIC-NEXT:    0x1200100a0 Base: 0x12000015e (<unknown symbol>+0) Length: 10 Perms: Object
-// STATIC-NEXT:    0x1200100e0 Base: 0x12000015e (<unknown symbol>+0) Length: 10 Perms: Object
-// STATIC-NEXT:    0x120010120 Base: 0x12000015e (<unknown symbol>+1) Length: 10 Perms: Object
+// STATIC-NEXT:    0x120010020 Base: 0x[[@EXPR tolower(hex($RODATA))]]      (<unknown symbol>+0) Length: 6 Perms: Object
+// STATIC-NEXT:    0x120010060 Base: 0x[[@EXPR tolower(hex($RODATA + 16))]] (<unknown symbol>+4) Length: 7 Perms: Object
+// STATIC-NEXT:    0x1200100a0 Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+0) Length: 10 Perms: Object
+// STATIC-NEXT:    0x1200100e0 Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+0) Length: 10 Perms: Object
+// STATIC-NEXT:    0x120010120 Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+1) Length: 10 Perms: Object
 // STATIC-NEXT: ]
 
 
+
+// DYNAMIC: Section {
+// DYNAMIC: Name: .rodata (
+// DYNAMIC: Address: [[$RODATA:0x428]]
+
 // PIE exe amd shlib should have a dynamic relocations and only have the offset+length values filled in:
 // DYNAMIC-LABEL: CHERI __cap_relocs [
-// DYNAMIC-NEXT:    0x010020 Base: 0x1e1 (<unknown symbol>+0) Length: 6 Perms: Object
-// DYNAMIC-NEXT:    0x010060 Base: 0x1f1 (<unknown symbol>+4) Length: 7 Perms: Object
-// DYNAMIC-NEXT:    0x0100a0 Base: 0x1e7 (<unknown symbol>+0) Length: 10 Perms: Object
-// DYNAMIC-NEXT:    0x0100e0 Base: 0x1e7 (<unknown symbol>+0) Length: 10 Perms: Object
-// DYNAMIC-NEXT:    0x010120 Base: 0x1e7 (<unknown symbol>+1) Length: 10 Perms: Object
+// DYNAMIC-NEXT:    0x010020 Base: 0x[[@EXPR tolower(hex($RODATA))]]      (<unknown symbol>+0) Length: 6 Perms: Object
+// DYNAMIC-NEXT:    0x010060 Base: 0x[[@EXPR tolower(hex($RODATA + 16))]] (<unknown symbol>+4) Length: 7 Perms: Object
+// DYNAMIC-NEXT:    0x0100a0 Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+0) Length: 10 Perms: Object
+// DYNAMIC-NEXT:    0x0100e0 Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+0) Length: 10 Perms: Object
+// DYNAMIC-NEXT:    0x010120 Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+1) Length: 10 Perms: Object
 // DYNAMIC-NEXT: ]
 
 
