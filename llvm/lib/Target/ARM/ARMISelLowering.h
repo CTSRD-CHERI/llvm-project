@@ -389,6 +389,9 @@ class VectorType;
                                        const SelectionDAG &DAG,
                                        unsigned Depth) const override;
 
+    bool targetShrinkDemandedConstant(SDValue Op, const APInt &Demanded,
+                                      TargetLoweringOpt &TLO) const override;
+
 
     bool ExpandInlineAsm(CallInst *CI) const override;
 
@@ -582,6 +585,9 @@ class VectorType;
     /// Return the correct alignment for the current calling convention.
     unsigned getABIAlignmentForCallingConv(Type *ArgTy,
                                            DataLayout DL) const override;
+
+    bool isDesirableToCommuteWithShift(const SDNode *N,
+                                       CombineLevel Level) const override;
 
   protected:
     std::pair<const TargetRegisterClass *, uint8_t>

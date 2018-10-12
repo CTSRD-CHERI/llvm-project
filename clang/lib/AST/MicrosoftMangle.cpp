@@ -445,7 +445,7 @@ void MicrosoftCXXNameMangler::mangle(const NamedDecl *D, StringRef Prefix) {
     mangleFunctionEncoding(FD, Context.shouldMangleDeclName(FD));
   else if (const VarDecl *VD = dyn_cast<VarDecl>(D))
     mangleVariableEncoding(VD);
-  else
+  else if (!isa<ObjCInterfaceDecl>(D))
     llvm_unreachable("Tried to mangle unexpected NamedDecl!");
 }
 
@@ -905,8 +905,14 @@ void MicrosoftCXXNameMangler::mangleUnqualifiedName(const NamedDecl *ND,
 
     case DeclarationName::ObjCZeroArgSelector:
     case DeclarationName::ObjCOneArgSelector:
-    case DeclarationName::ObjCMultiArgSelector:
-      llvm_unreachable("Can't mangle Objective-C selector names here!");
+    case DeclarationName::ObjCMultiArgSelector: {
+      // This is reachable only when constructing an outlined SEH finally
+      // block.  Nothing depends on this mangling and it's used only with
+      // functinos with internal linkage.
+      llvm::SmallString<64> Name;
+      mangleSourceName(Name.str());
+      break;
+    }
 
     case DeclarationName::CXXConstructorName:
       if (isStructorDecl(ND)) {
@@ -1884,13 +1890,13 @@ void MicrosoftCXXNameMangler::mangleType(const BuiltinType *T, Qualifiers,
     llvm_unreachable("placeholder types shouldn't get to name mangling");
 
   case BuiltinType::ObjCId:
-    mangleArtificalTagType(TTK_Struct, "objc_object");
+    mangleArtificalTagType(TTK_Struct, ".objc_object");
     break;
   case BuiltinType::ObjCClass:
-    mangleArtificalTagType(TTK_Struct, "objc_class");
+    mangleArtificalTagType(TTK_Struct, ".objc_class");
     break;
   case BuiltinType::ObjCSel:
-    mangleArtificalTagType(TTK_Struct, "objc_selector");
+    mangleArtificalTagType(TTK_Struct, ".objc_selector");
     break;
 
 #define IMAGE_TYPE(ImgType, Id, SingletonId, Access, Suffix) \
@@ -2570,9 +2576,10 @@ void MicrosoftCXXNameMangler::mangleType(const DependentAddressSpaceType *T,
 
 void MicrosoftCXXNameMangler::mangleType(const ObjCInterfaceType *T, Qualifiers,
                                          SourceRange) {
-  // ObjC interfaces have structs underlying them.
+  // ObjC interfaces are mangled as if they were structs with a name that is
+  // not a valid C/C++ identifier
   mangleTagTypeKind(TTK_Struct);
-  mangleName(T->getDecl());
+  mangle(T->getDecl(), ".objc_cls_");
 }
 
 void MicrosoftCXXNameMangler::mangleType(const ObjCObjectType *T, Qualifiers,
@@ -2590,11 +2597,11 @@ void MicrosoftCXXNameMangler::mangleType(const ObjCObjectType *T, Qualifiers,
 
   Out << "?$";
   if (T->isObjCId())
-    mangleSourceName("objc_object");
+    mangleSourceName(".objc_object");
   else if (T->isObjCClass())
-    mangleSourceName("objc_class");
+    mangleSourceName(".objc_class");
   else
-    mangleSourceName(T->getInterface()->getName());
+    mangleSourceName((".objc_cls_" + T->getInterface()->getName()).str());
 
   for (const auto &Q : T->quals())
     mangleObjCProtocol(Q);

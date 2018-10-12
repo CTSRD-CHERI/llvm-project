@@ -1606,6 +1606,8 @@ struct MDFieldPrinter {
   void printDwarfEnum(StringRef Name, IntTy Value, Stringifier toString,
                       bool ShouldSkipZero = true);
   void printEmissionKind(StringRef Name, DICompileUnit::DebugEmissionKind EK);
+  void printNameTableKind(StringRef Name,
+                          DICompileUnit::DebugNameTableKind NTK);
 };
 
 } // end anonymous namespace
@@ -1703,6 +1705,13 @@ void MDFieldPrinter::printEmissionKind(StringRef Name,
   Out << FS << Name << ": " << DICompileUnit::emissionKindString(EK);
 }
 
+void MDFieldPrinter::printNameTableKind(StringRef Name,
+                                        DICompileUnit::DebugNameTableKind NTK) {
+  if (NTK == DICompileUnit::DebugNameTableKind::Default)
+    return;
+  Out << FS << Name << ": " << DICompileUnit::nameTableKindString(NTK);
+}
+
 template <class IntTy, class Stringifier>
 void MDFieldPrinter::printDwarfEnum(StringRef Name, IntTy Value,
                                     Stringifier toString, bool ShouldSkipZero) {
@@ -1789,6 +1798,7 @@ static void writeDIBasicType(raw_ostream &Out, const DIBasicType *N,
   Printer.printInt("align", N->getAlignInBits());
   Printer.printDwarfEnum("encoding", N->getEncoding(),
                          dwarf::AttributeEncodingString);
+  Printer.printDIFlags("flags", N->getFlags());
   Out << ")";
 }
 
@@ -1892,7 +1902,7 @@ static void writeDICompileUnit(raw_ostream &Out, const DICompileUnit *N,
   Printer.printBool("splitDebugInlining", N->getSplitDebugInlining(), true);
   Printer.printBool("debugInfoForProfiling", N->getDebugInfoForProfiling(),
                     false);
-  Printer.printBool("gnuPubnames", N->getGnuPubnames(), false);
+  Printer.printNameTableKind("nameTableKind", N->getNameTableKind());
   Out << ")";
 }
 
@@ -2957,11 +2967,13 @@ void AssemblyWriter::printConstVCalls(
   FieldSeparator FS;
   for (auto &ConstVCall : VCallList) {
     Out << FS;
+    Out << "(";
     printVFuncId(ConstVCall.VFunc);
     if (!ConstVCall.Args.empty()) {
       Out << ", ";
       printArgs(ConstVCall.Args);
     }
+    Out << ")";
   }
   Out << ")";
 }

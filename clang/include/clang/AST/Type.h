@@ -45,6 +45,7 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/PointerLikeTypeTraits.h"
 #include "llvm/Support/type_traits.h"
+#include "llvm/Support/TrailingObjects.h"
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -1539,8 +1540,6 @@ protected:
     unsigned IsKindOf : 1;
   };
 
-  static_assert(NumTypeBits + 7 + 6 + 1 <= 32, "Does not fit in an unsigned");
-
   class ReferenceTypeBitfields {
     friend class ReferenceType;
 
@@ -1571,6 +1570,18 @@ protected:
 
     /// An ElaboratedTypeKeyword.  8 bits for efficient access.
     unsigned Keyword : 8;
+  };
+
+  enum { NumTypeWithKeywordBits = 8 };
+
+  class ElaboratedTypeBitfields {
+    friend class ElaboratedType;
+
+    unsigned : NumTypeBits;
+    unsigned : NumTypeWithKeywordBits;
+
+    /// Whether the ElaboratedType has a trailing OwnedTagDecl.
+    unsigned HasOwnedTagDecl : 1;
   };
 
   class VectorTypeBitfields {
@@ -1608,6 +1619,74 @@ protected:
     unsigned Keyword : 2;
   };
 
+  class SubstTemplateTypeParmPackTypeBitfields {
+    friend class SubstTemplateTypeParmPackType;
+
+    unsigned : NumTypeBits;
+
+    /// The number of template arguments in \c Arguments, which is
+    /// expected to be able to hold at least 1024 according to [implimits].
+    /// However as this limit is somewhat easy to hit with template
+    /// metaprogramming we'd prefer to keep it as large as possible.
+    /// At the moment it has been left as a non-bitfield since this type
+    /// safely fits in 64 bits as an unsigned, so there is no reason to
+    /// introduce the performance impact of a bitfield.
+    unsigned NumArgs;
+  };
+
+  class TemplateSpecializationTypeBitfields {
+    friend class TemplateSpecializationType;
+
+    unsigned : NumTypeBits;
+
+    /// Whether this template specialization type is a substituted type alias.
+    unsigned TypeAlias : 1;
+
+    /// The number of template arguments named in this class template
+    /// specialization, which is expected to be able to hold at least 1024
+    /// according to [implimits]. However, as this limit is somewhat easy to
+    /// hit with template metaprogramming we'd prefer to keep it as large
+    /// as possible. At the moment it has been left as a non-bitfield since
+    /// this type safely fits in 64 bits as an unsigned, so there is no reason
+    /// to introduce the performance impact of a bitfield.
+    unsigned NumArgs;
+  };
+
+  class DependentTemplateSpecializationTypeBitfields {
+    friend class DependentTemplateSpecializationType;
+
+    unsigned : NumTypeBits;
+    unsigned : NumTypeWithKeywordBits;
+
+    /// The number of template arguments named in this class template
+    /// specialization, which is expected to be able to hold at least 1024
+    /// according to [implimits]. However, as this limit is somewhat easy to
+    /// hit with template metaprogramming we'd prefer to keep it as large
+    /// as possible. At the moment it has been left as a non-bitfield since
+    /// this type safely fits in 64 bits as an unsigned, so there is no reason
+    /// to introduce the performance impact of a bitfield.
+    unsigned NumArgs;
+  };
+
+  class PackExpansionTypeBitfields {
+    friend class PackExpansionType;
+
+    unsigned : NumTypeBits;
+
+    /// The number of expansions that this pack expansion will
+    /// generate when substituted (+1), which is expected to be able to
+    /// hold at least 1024 according to [implimits]. However, as this limit
+    /// is somewhat easy to hit with template metaprogramming we'd prefer to
+    /// keep it as large as possible. At the moment it has been left as a
+    /// non-bitfield since this type safely fits in 64 bits as an unsigned, so
+    /// there is no reason to introduce the performance impact of a bitfield.
+    ///
+    /// This field will only have a non-zero value when some of the parameter
+    /// packs that occur within the pattern have been substituted but others
+    /// have not.
+    unsigned NumExpansions;
+  };
+
   union {
     TypeBitfields TypeBits;
     ArrayTypeBitfields ArrayTypeBits;
@@ -1618,7 +1697,47 @@ protected:
     ObjCObjectTypeBitfields ObjCObjectTypeBits;
     ReferenceTypeBitfields ReferenceTypeBits;
     TypeWithKeywordBitfields TypeWithKeywordBits;
+    ElaboratedTypeBitfields ElaboratedTypeBits;
     VectorTypeBitfields VectorTypeBits;
+    SubstTemplateTypeParmPackTypeBitfields SubstTemplateTypeParmPackTypeBits;
+    TemplateSpecializationTypeBitfields TemplateSpecializationTypeBits;
+    DependentTemplateSpecializationTypeBitfields
+      DependentTemplateSpecializationTypeBits;
+    PackExpansionTypeBitfields PackExpansionTypeBits;
+
+    static_assert(sizeof(TypeBitfields) <= 8,
+                  "TypeBitfields is larger than 8 bytes!");
+    static_assert(sizeof(ArrayTypeBitfields) <= 8,
+                  "ArrayTypeBitfields is larger than 8 bytes!");
+    static_assert(sizeof(AttributedTypeBitfields) <= 8,
+                  "AttributedTypeBitfields is larger than 8 bytes!");
+    static_assert(sizeof(AutoTypeBitfields) <= 8,
+                  "AutoTypeBitfields is larger than 8 bytes!");
+    static_assert(sizeof(BuiltinTypeBitfields) <= 8,
+                  "BuiltinTypeBitfields is larger than 8 bytes!");
+    static_assert(sizeof(FunctionTypeBitfields) <= 8,
+                  "FunctionTypeBitfields is larger than 8 bytes!");
+    static_assert(sizeof(ObjCObjectTypeBitfields) <= 8,
+                  "ObjCObjectTypeBitfields is larger than 8 bytes!");
+    static_assert(sizeof(ReferenceTypeBitfields) <= 8,
+                  "ReferenceTypeBitfields is larger than 8 bytes!");
+    static_assert(sizeof(TypeWithKeywordBitfields) <= 8,
+                  "TypeWithKeywordBitfields is larger than 8 bytes!");
+    static_assert(sizeof(ElaboratedTypeBitfields) <= 8,
+                  "ElaboratedTypeBitfields is larger than 8 bytes!");
+    static_assert(sizeof(VectorTypeBitfields) <= 8,
+                  "VectorTypeBitfields is larger than 8 bytes!");
+    static_assert(sizeof(SubstTemplateTypeParmPackTypeBitfields) <= 8,
+                  "SubstTemplateTypeParmPackTypeBitfields is larger"
+                  " than 8 bytes!");
+    static_assert(sizeof(TemplateSpecializationTypeBitfields) <= 8,
+                  "TemplateSpecializationTypeBitfields is larger"
+                  " than 8 bytes!");
+    static_assert(sizeof(DependentTemplateSpecializationTypeBitfields) <= 8,
+                  "DependentTemplateSpecializationTypeBitfields is larger"
+                  " than 8 bytes!");
+    static_assert(sizeof(PackExpansionTypeBitfields) <= 8,
+                  "PackExpansionTypeBitfields is larger than 8 bytes");
   };
 
 private:
@@ -4465,9 +4584,6 @@ class SubstTemplateTypeParmPackType : public Type, public llvm::FoldingSetNode {
   /// parameter pack is instantiated with.
   const TemplateArgument *Arguments;
 
-  /// The number of template arguments in \c Arguments.
-  unsigned NumArguments;
-
   SubstTemplateTypeParmPackType(const TemplateTypeParmType *Param,
                                 QualType Canon,
                                 const TemplateArgument &ArgPack);
@@ -4478,6 +4594,10 @@ public:
   /// Gets the template parameter that was substituted for.
   const TemplateTypeParmType *getReplacedParameter() const {
     return Replaced;
+  }
+
+  unsigned getNumArgs() const {
+    return SubstTemplateTypeParmPackTypeBits.NumArgs;
   }
 
   bool isSugared() const { return false; }
@@ -4650,13 +4770,6 @@ class alignas(8) TemplateSpecializationType
   /// replacement must, recursively, be one of these).
   TemplateName Template;
 
-  /// The number of template arguments named in this class template
-  /// specialization.
-  unsigned NumArgs : 31;
-
-  /// Whether this template specialization type is a substituted type alias.
-  unsigned TypeAlias : 1;
-
   TemplateSpecializationType(TemplateName T,
                              ArrayRef<TemplateArgument> Args,
                              QualType Canon,
@@ -4691,7 +4804,7 @@ public:
   ///   typedef A<Ts...> type; // not a type alias
   /// };
   /// \endcode
-  bool isTypeAlias() const { return TypeAlias; }
+  bool isTypeAlias() const { return TemplateSpecializationTypeBits.TypeAlias; }
 
   /// Get the aliased type, if this is a specialization of a type alias
   /// template.
@@ -4714,14 +4827,16 @@ public:
   }
 
   /// Retrieve the number of template arguments.
-  unsigned getNumArgs() const { return NumArgs; }
+  unsigned getNumArgs() const {
+    return TemplateSpecializationTypeBits.NumArgs;
+  }
 
   /// Retrieve a specific template argument as a type.
   /// \pre \c isArgType(Arg)
   const TemplateArgument &getArg(unsigned Idx) const; // in TemplateBase.h
 
   ArrayRef<TemplateArgument> template_arguments() const {
-    return {getArgs(), NumArgs};
+    return {getArgs(), getNumArgs()};
   }
 
   bool isSugared() const {
@@ -4927,8 +5042,12 @@ public:
 /// source code, including tag keywords and any nested-name-specifiers.
 /// The type itself is always "sugar", used to express what was written
 /// in the source code but containing no additional semantic information.
-class ElaboratedType : public TypeWithKeyword, public llvm::FoldingSetNode {
+class ElaboratedType final
+    : public TypeWithKeyword,
+      public llvm::FoldingSetNode,
+      private llvm::TrailingObjects<ElaboratedType, TagDecl *> {
   friend class ASTContext; // ASTContext creates these
+  friend TrailingObjects;
 
   /// The nested name specifier containing the qualifier.
   NestedNameSpecifier *NNS;
@@ -4936,26 +5055,29 @@ class ElaboratedType : public TypeWithKeyword, public llvm::FoldingSetNode {
   /// The type that this qualified name refers to.
   QualType NamedType;
 
-  /// The (re)declaration of this tag type owned by this occurrence, or nullptr
-  /// if none.
-  TagDecl *OwnedTagDecl;
+  /// The (re)declaration of this tag type owned by this occurrence is stored
+  /// as a trailing object if there is one. Use getOwnedTagDecl to obtain
+  /// it, or obtain a null pointer if there is none.
 
   ElaboratedType(ElaboratedTypeKeyword Keyword, NestedNameSpecifier *NNS,
                  QualType NamedType, QualType CanonType, TagDecl *OwnedTagDecl)
-    : TypeWithKeyword(Keyword, Elaborated, CanonType,
-                      NamedType->isDependentType(),
-                      NamedType->isInstantiationDependentType(),
-                      NamedType->isVariablyModifiedType(),
-                      NamedType->containsUnexpandedParameterPack()),
-      NNS(NNS), NamedType(NamedType), OwnedTagDecl(OwnedTagDecl) {
+      : TypeWithKeyword(Keyword, Elaborated, CanonType,
+                        NamedType->isDependentType(),
+                        NamedType->isInstantiationDependentType(),
+                        NamedType->isVariablyModifiedType(),
+                        NamedType->containsUnexpandedParameterPack()),
+        NNS(NNS), NamedType(NamedType) {
+    ElaboratedTypeBits.HasOwnedTagDecl = false;
+    if (OwnedTagDecl) {
+      ElaboratedTypeBits.HasOwnedTagDecl = true;
+      *getTrailingObjects<TagDecl *>() = OwnedTagDecl;
+    }
     assert(!(Keyword == ETK_None && NNS == nullptr) &&
            "ElaboratedType cannot have elaborated type keyword "
            "and name qualifier both null.");
   }
 
 public:
-  ~ElaboratedType();
-
   /// Retrieve the qualification on this type.
   NestedNameSpecifier *getQualifier() const { return NNS; }
 
@@ -4969,11 +5091,14 @@ public:
   bool isSugared() const { return true; }
 
   /// Return the (re)declaration of this type owned by this occurrence of this
-  /// type, or nullptr if none.
-  TagDecl *getOwnedTagDecl() const { return OwnedTagDecl; }
+  /// type, or nullptr if there is none.
+  TagDecl *getOwnedTagDecl() const {
+    return ElaboratedTypeBits.HasOwnedTagDecl ? *getTrailingObjects<TagDecl *>()
+                                              : nullptr;
+  }
 
   void Profile(llvm::FoldingSetNodeID &ID) {
-    Profile(ID, getKeyword(), NNS, NamedType, OwnedTagDecl);
+    Profile(ID, getKeyword(), NNS, NamedType, getOwnedTagDecl());
   }
 
   static void Profile(llvm::FoldingSetNodeID &ID, ElaboratedTypeKeyword Keyword,
@@ -4985,9 +5110,7 @@ public:
     ID.AddPointer(OwnedTagDecl);
   }
 
-  static bool classof(const Type *T) {
-    return T->getTypeClass() == Elaborated;
-  }
+  static bool classof(const Type *T) { return T->getTypeClass() == Elaborated; }
 };
 
 /// Represents a qualified type name for which the type name is
@@ -5065,10 +5188,6 @@ class alignas(8) DependentTemplateSpecializationType
   /// The identifier of the template.
   const IdentifierInfo *Name;
 
-  /// The number of template arguments named in this class template
-  /// specialization.
-  unsigned NumArgs;
-
   DependentTemplateSpecializationType(ElaboratedTypeKeyword Keyword,
                                       NestedNameSpecifier *NNS,
                                       const IdentifierInfo *Name,
@@ -5093,12 +5212,14 @@ public:
   }
 
   /// Retrieve the number of template arguments.
-  unsigned getNumArgs() const { return NumArgs; }
+  unsigned getNumArgs() const {
+    return DependentTemplateSpecializationTypeBits.NumArgs;
+  }
 
   const TemplateArgument &getArg(unsigned Idx) const; // in TemplateBase.h
 
   ArrayRef<TemplateArgument> template_arguments() const {
-    return {getArgs(), NumArgs};
+    return {getArgs(), getNumArgs()};
   }
 
   using iterator = const TemplateArgument *;
@@ -5110,7 +5231,7 @@ public:
   QualType desugar() const { return QualType(this, 0); }
 
   void Profile(llvm::FoldingSetNodeID &ID, const ASTContext &Context) {
-    Profile(ID, Context, getKeyword(), NNS, Name, {getArgs(), NumArgs});
+    Profile(ID, Context, getKeyword(), NNS, Name, {getArgs(), getNumArgs()});
   }
 
   static void Profile(llvm::FoldingSetNodeID &ID,
@@ -5153,22 +5274,16 @@ class PackExpansionType : public Type, public llvm::FoldingSetNode {
   /// The pattern of the pack expansion.
   QualType Pattern;
 
-  /// The number of expansions that this pack expansion will
-  /// generate when substituted (+1), or indicates that
-  ///
-  /// This field will only have a non-zero value when some of the parameter
-  /// packs that occur within the pattern have been substituted but others have
-  /// not.
-  unsigned NumExpansions;
-
   PackExpansionType(QualType Pattern, QualType Canon,
                     Optional<unsigned> NumExpansions)
       : Type(PackExpansion, Canon, /*Dependent=*/Pattern->isDependentType(),
              /*InstantiationDependent=*/true,
              /*VariablyModified=*/Pattern->isVariablyModifiedType(),
              /*ContainsUnexpandedParameterPack=*/false),
-        Pattern(Pattern),
-        NumExpansions(NumExpansions ? *NumExpansions + 1 : 0) {}
+        Pattern(Pattern) {
+    PackExpansionTypeBits.NumExpansions =
+        NumExpansions ? *NumExpansions + 1 : 0;
+  }
 
 public:
   /// Retrieve the pattern of this pack expansion, which is the
@@ -5179,9 +5294,8 @@ public:
   /// Retrieve the number of expansions that this pack expansion will
   /// generate, if known.
   Optional<unsigned> getNumExpansions() const {
-    if (NumExpansions)
-      return NumExpansions - 1;
-
+    if (PackExpansionTypeBits.NumExpansions)
+      return PackExpansionTypeBits.NumExpansions - 1;
     return None;
   }
 

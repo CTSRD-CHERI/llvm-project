@@ -257,6 +257,67 @@ Instruction *InstCombiner::SimplifyAnyMemSet(AnyMemSetInst *MI) {
   return nullptr;
 }
 
+static Value *simplifyX86AddsSubs(const IntrinsicInst &II,
+                                  InstCombiner::BuilderTy &Builder) {
+  bool IsAddition;
+
+  switch (II.getIntrinsicID()) {
+  default: llvm_unreachable("Unexpected intrinsic!");
+  case Intrinsic::x86_sse2_padds_b:
+  case Intrinsic::x86_sse2_padds_w:
+  case Intrinsic::x86_avx2_padds_b:
+  case Intrinsic::x86_avx2_padds_w:
+  case Intrinsic::x86_avx512_padds_b_512:
+  case Intrinsic::x86_avx512_padds_w_512:
+    IsAddition = true;
+    break;
+  case Intrinsic::x86_sse2_psubs_b:
+  case Intrinsic::x86_sse2_psubs_w:
+  case Intrinsic::x86_avx2_psubs_b:
+  case Intrinsic::x86_avx2_psubs_w:
+  case Intrinsic::x86_avx512_psubs_b_512:
+  case Intrinsic::x86_avx512_psubs_w_512:
+    IsAddition = false;
+    break;
+  }
+
+  auto *Arg0 = dyn_cast<Constant>(II.getOperand(0));
+  auto *Arg1 = dyn_cast<Constant>(II.getOperand(1));
+  auto VT = cast<VectorType>(II.getType());
+  auto SVT = VT->getElementType();
+  unsigned NumElems = VT->getNumElements();
+
+  if (!Arg0 || !Arg1)
+    return nullptr;
+
+  SmallVector<Constant *, 64> Result;
+
+  APInt MaxValue = APInt::getSignedMaxValue(SVT->getIntegerBitWidth());
+  APInt MinValue = APInt::getSignedMinValue(SVT->getIntegerBitWidth());
+  for (unsigned i = 0; i < NumElems; ++i) {
+    auto *Elt0 = Arg0->getAggregateElement(i);
+    auto *Elt1 = Arg1->getAggregateElement(i);
+    if (isa<UndefValue>(Elt0) || isa<UndefValue>(Elt1)) {
+      Result.push_back(UndefValue::get(SVT));
+      continue;
+    }
+
+    if (!isa<ConstantInt>(Elt0) || !isa<ConstantInt>(Elt1))
+      return nullptr;
+
+    const APInt &Val0 = cast<ConstantInt>(Elt0)->getValue();
+    const APInt &Val1 = cast<ConstantInt>(Elt1)->getValue();
+    bool Overflow = false;
+    APInt ResultElem = IsAddition ? Val0.sadd_ov(Val1, Overflow)
+                                  : Val0.ssub_ov(Val1, Overflow);
+    if (Overflow)
+      ResultElem = Val0.isNegative() ? MinValue : MaxValue;
+    Result.push_back(Constant::getIntegerValue(SVT, ResultElem));
+  }
+
+  return ConstantVector::get(Result);
+}
+
 static Value *simplifyX86immShift(const IntrinsicInst &II,
                                   InstCombiner::BuilderTy &Builder) {
   bool LogicalShift = false;
@@ -1147,37 +1208,6 @@ static Value *simplifyX86vpcom(const IntrinsicInst &II,
   return nullptr;
 }
 
-static Value *simplifyMinnumMaxnum(const IntrinsicInst &II) {
-  Value *Arg0 = II.getArgOperand(0);
-  Value *Arg1 = II.getArgOperand(1);
-
-  const auto *C1 = dyn_cast<ConstantFP>(Arg1);
-
-  // fmin(x, nan) -> x
-  if (C1 && C1->isNaN())
-    return Arg0;
-
-  if (II.getIntrinsicID() == Intrinsic::minnum) {
-    // TODO: fmin(nnan x, inf) -> x
-    // TODO: fmin(nnan ninf x, flt_max) -> x
-    if (C1 && C1->isInfinity()) {
-      // fmin(x, -inf) -> -inf
-      if (C1->isNegative())
-        return Arg1;
-    }
-  } else {
-    assert(II.getIntrinsicID() == Intrinsic::maxnum);
-    // TODO: fmax(nnan x, -inf) -> x
-    // TODO: fmax(nnan ninf x, -flt_max) -> x
-    if (C1 && C1->isInfinity()) {
-      // fmax(x, inf) -> inf
-      if (!C1->isNegative())
-        return Arg1;
-    }
-  }
-  return nullptr;
-}
-
 static bool maskIsAllOneOrUndef(Value *Mask) {
   auto *ConstMask = dyn_cast<Constant>(Mask);
   if (!ConstMask)
@@ -2014,10 +2044,6 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
       return II;
     }
 
-    // FIXME: Simplifications should be in instsimplify.
-    if (Value *V = simplifyMinnumMaxnum(*II))
-      return replaceInstUsesWith(*II, V);
-
     Value *X, *Y;
     if (match(Arg0, m_FNeg(m_Value(X))) && match(Arg1, m_FNeg(m_Value(Y))) &&
         (Arg0->hasOneUse() || Arg1->hasOneUse())) {
@@ -2573,6 +2599,23 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
       return replaceInstUsesWith(*II, V);
     break;
   }
+
+  // Constant fold add/sub with saturation intrinsics.
+  case Intrinsic::x86_sse2_padds_b:
+  case Intrinsic::x86_sse2_padds_w:
+  case Intrinsic::x86_sse2_psubs_b:
+  case Intrinsic::x86_sse2_psubs_w:
+  case Intrinsic::x86_avx2_padds_b:
+  case Intrinsic::x86_avx2_padds_w:
+  case Intrinsic::x86_avx2_psubs_b:
+  case Intrinsic::x86_avx2_psubs_w:
+  case Intrinsic::x86_avx512_padds_b_512:
+  case Intrinsic::x86_avx512_padds_w_512:
+  case Intrinsic::x86_avx512_psubs_b_512:
+  case Intrinsic::x86_avx512_psubs_w_512:
+    if (Value *V = simplifyX86AddsSubs(*II, Builder))
+      return replaceInstUsesWith(*II, V);
+    break;
 
   // Constant fold ashr( <A x Bi>, Ci ).
   // Constant fold lshr( <A x Bi>, Ci ).
@@ -3244,6 +3287,15 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
       return replaceInstUsesWith(*II, FCmp);
     }
 
+    if (Mask == (N_ZERO | P_ZERO)) {
+      // Equivalent of == 0.
+      Value *FCmp = Builder.CreateFCmpOEQ(
+        Src0, ConstantFP::get(Src0->getType(), 0.0));
+
+      FCmp->takeName(II);
+      return replaceInstUsesWith(*II, FCmp);
+    }
+
     const ConstantFP *CVal = dyn_cast<ConstantFP>(Src0);
     if (!CVal) {
       if (isa<UndefValue>(Src0))
@@ -3571,6 +3623,33 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
 
       Intrinsic::ID NewIID = CmpInst::isFPPredicate(SrcPred) ?
         Intrinsic::amdgcn_fcmp : Intrinsic::amdgcn_icmp;
+
+      Type *Ty = SrcLHS->getType();
+      if (auto *CmpType = dyn_cast<IntegerType>(Ty)) {
+        // Promote to next legal integer type.
+        unsigned Width = CmpType->getBitWidth();
+        unsigned NewWidth = Width;
+        if (Width <= 16)
+          NewWidth = 16;
+        else if (Width <= 32)
+          NewWidth = 32;
+        else if (Width <= 64)
+          NewWidth = 64;
+        else if (Width > 64)
+          break; // Can't handle this.
+
+        if (Width != NewWidth) {
+          IntegerType *CmpTy = Builder.getIntNTy(NewWidth);
+          if (CmpInst::isSigned(SrcPred)) {
+            SrcLHS = Builder.CreateSExt(SrcLHS, CmpTy);
+            SrcRHS = Builder.CreateSExt(SrcRHS, CmpTy);
+          } else {
+            SrcLHS = Builder.CreateZExt(SrcLHS, CmpTy);
+            SrcRHS = Builder.CreateZExt(SrcRHS, CmpTy);
+          }
+        }
+      } else if (!Ty->isFloatTy() && !Ty->isDoubleTy() && !Ty->isHalfTy())
+        break;
 
       Value *NewF = Intrinsic::getDeclaration(II->getModule(), NewIID,
                                               SrcLHS->getType());

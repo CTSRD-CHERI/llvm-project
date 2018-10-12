@@ -586,6 +586,8 @@ PPCTargetLowering::PPCTargetLowering(const PPCTargetMachine &TM,
       AddPromotedToType (ISD::LOAD  , VT, MVT::v4i32);
       setOperationAction(ISD::SELECT, VT, Promote);
       AddPromotedToType (ISD::SELECT, VT, MVT::v4i32);
+      setOperationAction(ISD::VSELECT, VT, Promote);
+      AddPromotedToType (ISD::VSELECT, VT, MVT::v4i32);
       setOperationAction(ISD::SELECT_CC, VT, Promote);
       AddPromotedToType (ISD::SELECT_CC, VT, MVT::v4i32);
       setOperationAction(ISD::STORE, VT, Promote);
@@ -626,7 +628,6 @@ PPCTargetLowering::PPCTargetLowering(const PPCTargetMachine &TM,
       setOperationAction(ISD::SCALAR_TO_VECTOR, VT, Expand);
       setOperationAction(ISD::FPOW, VT, Expand);
       setOperationAction(ISD::BSWAP, VT, Expand);
-      setOperationAction(ISD::VSELECT, VT, Expand);
       setOperationAction(ISD::SIGN_EXTEND_INREG, VT, Expand);
       setOperationAction(ISD::ROTL, VT, Expand);
       setOperationAction(ISD::ROTR, VT, Expand);
@@ -649,6 +650,7 @@ PPCTargetLowering::PPCTargetLowering(const PPCTargetMachine &TM,
     setOperationAction(ISD::LOAD  , MVT::v4i32, Legal);
     setOperationAction(ISD::SELECT, MVT::v4i32,
                        Subtarget.useCRBits() ? Legal : Expand);
+    setOperationAction(ISD::VSELECT, MVT::v4i32, Legal);
     setOperationAction(ISD::STORE , MVT::v4i32, Legal);
     setOperationAction(ISD::FP_TO_SINT, MVT::v4i32, Legal);
     setOperationAction(ISD::FP_TO_UINT, MVT::v4i32, Legal);
@@ -726,12 +728,6 @@ PPCTargetLowering::PPCTargetLowering(const PPCTargetMachine &TM,
 
       setOperationAction(ISD::FDIV, MVT::v2f64, Legal);
       setOperationAction(ISD::FSQRT, MVT::v2f64, Legal);
-
-      setOperationAction(ISD::VSELECT, MVT::v16i8, Legal);
-      setOperationAction(ISD::VSELECT, MVT::v8i16, Legal);
-      setOperationAction(ISD::VSELECT, MVT::v4i32, Legal);
-      setOperationAction(ISD::VSELECT, MVT::v4f32, Legal);
-      setOperationAction(ISD::VSELECT, MVT::v2f64, Legal);
 
       // Share the Altivec comparison restrictions.
       setCondCodeAction(ISD::SETUO, MVT::v2f64, Expand);
@@ -9968,10 +9964,6 @@ PPCTargetLowering::emitEHSjLjSetJmp(MachineInstr &MI,
   const BasicBlock *BB = MBB->getBasicBlock();
   MachineFunction::iterator I = ++MBB->getIterator();
 
-  // Memory Reference
-  MachineInstr::mmo_iterator MMOBegin = MI.memoperands_begin();
-  MachineInstr::mmo_iterator MMOEnd = MI.memoperands_end();
-
   unsigned DstReg = MI.getOperand(0).getReg();
   const TargetRegisterClass *RC = MRI.getRegClass(DstReg);
   assert(TRI->isTypeLegalForClass(*RC, MVT::i32) && "Invalid destination!");
@@ -10034,10 +10026,10 @@ PPCTargetLowering::emitEHSjLjSetJmp(MachineInstr &MI,
   if (Subtarget.isPPC64() && Subtarget.isSVR4ABI()) {
     setUsesTOCBasePtr(*MBB->getParent());
     MIB = BuildMI(*thisMBB, MI, DL, TII->get(PPC::STD))
-            .addReg(PPC::X2)
-            .addImm(TOCOffset)
-            .addReg(BufReg);
-    MIB.setMemRefs(MMOBegin, MMOEnd);
+              .addReg(PPC::X2)
+              .addImm(TOCOffset)
+              .addReg(BufReg)
+              .cloneMemRefs(MI);
   }
 
   // Naked functions never have a base pointer, and so we use r1. For all
@@ -10052,8 +10044,8 @@ PPCTargetLowering::emitEHSjLjSetJmp(MachineInstr &MI,
                 TII->get(Subtarget.isPPC64() ? PPC::STD : PPC::STW))
             .addReg(BaseReg)
             .addImm(BPOffset)
-            .addReg(BufReg);
-  MIB.setMemRefs(MMOBegin, MMOEnd);
+            .addReg(BufReg)
+            .cloneMemRefs(MI);
 
   // Setup
   MIB = BuildMI(*thisMBB, MI, DL, TII->get(PPC::BCLalways)).addMBB(mainMBB);
@@ -10086,8 +10078,7 @@ PPCTargetLowering::emitEHSjLjSetJmp(MachineInstr &MI,
             .addImm(LabelOffset)
             .addReg(BufReg);
   }
-
-  MIB.setMemRefs(MMOBegin, MMOEnd);
+  MIB.cloneMemRefs(MI);
 
   BuildMI(mainMBB, DL, TII->get(PPC::LI), mainDstReg).addImm(0);
   mainMBB->addSuccessor(sinkMBB);
@@ -10110,10 +10101,6 @@ PPCTargetLowering::emitEHSjLjLongJmp(MachineInstr &MI,
 
   MachineFunction *MF = MBB->getParent();
   MachineRegisterInfo &MRI = MF->getRegInfo();
-
-  // Memory Reference
-  MachineInstr::mmo_iterator MMOBegin = MI.memoperands_begin();
-  MachineInstr::mmo_iterator MMOEnd = MI.memoperands_end();
 
   MVT PVT = getPointerTy(MF->getDataLayout());
   assert((PVT == MVT::i64 || PVT == MVT::i32) &&
@@ -10152,7 +10139,7 @@ PPCTargetLowering::emitEHSjLjLongJmp(MachineInstr &MI,
             .addImm(0)
             .addReg(BufReg);
   }
-  MIB.setMemRefs(MMOBegin, MMOEnd);
+  MIB.cloneMemRefs(MI);
 
   // Reload IP
   if (PVT == MVT::i64) {
@@ -10164,7 +10151,7 @@ PPCTargetLowering::emitEHSjLjLongJmp(MachineInstr &MI,
             .addImm(LabelOffset)
             .addReg(BufReg);
   }
-  MIB.setMemRefs(MMOBegin, MMOEnd);
+  MIB.cloneMemRefs(MI);
 
   // Reload SP
   if (PVT == MVT::i64) {
@@ -10176,7 +10163,7 @@ PPCTargetLowering::emitEHSjLjLongJmp(MachineInstr &MI,
             .addImm(SPOffset)
             .addReg(BufReg);
   }
-  MIB.setMemRefs(MMOBegin, MMOEnd);
+  MIB.cloneMemRefs(MI);
 
   // Reload BP
   if (PVT == MVT::i64) {
@@ -10188,16 +10175,15 @@ PPCTargetLowering::emitEHSjLjLongJmp(MachineInstr &MI,
             .addImm(BPOffset)
             .addReg(BufReg);
   }
-  MIB.setMemRefs(MMOBegin, MMOEnd);
+  MIB.cloneMemRefs(MI);
 
   // Reload TOC
   if (PVT == MVT::i64 && Subtarget.isSVR4ABI()) {
     setUsesTOCBasePtr(*MBB->getParent());
     MIB = BuildMI(*MBB, MI, DL, TII->get(PPC::LD), PPC::X2)
-            .addImm(TOCOffset)
-            .addReg(BufReg);
-
-    MIB.setMemRefs(MMOBegin, MMOEnd);
+              .addImm(TOCOffset)
+              .addReg(BufReg)
+              .cloneMemRefs(MI);
   }
 
   // Jump
@@ -11996,10 +11982,15 @@ static SDValue combineBVOfVecSExt(SDNode *N, SelectionDAG &DAG) {
   auto isSExtOfVecExtract = [&](SDValue Op) -> bool {
     if (!Op)
       return false;
-    if (Op.getOpcode() != ISD::SIGN_EXTEND)
+    if (Op.getOpcode() != ISD::SIGN_EXTEND &&
+        Op.getOpcode() != ISD::SIGN_EXTEND_INREG)
       return false;
 
+    // A SIGN_EXTEND_INREG might be fed by an ANY_EXTEND to produce a value
+    // of the right width.
     SDValue Extract = Op.getOperand(0);
+    if (Extract.getOpcode() == ISD::ANY_EXTEND)
+      Extract = Extract.getOperand(0);
     if (Extract.getOpcode() != ISD::EXTRACT_VECTOR_ELT)
       return false;
 
@@ -12087,8 +12078,10 @@ SDValue PPCTargetLowering::DAGCombineBuildVector(SDNode *N,
     return Reduced;
 
   // If we're building a vector out of extended elements from another vector
-  // we have P9 vector integer extend instructions.
-  if (Subtarget.hasP9Altivec()) {
+  // we have P9 vector integer extend instructions. The code assumes legal
+  // input types (i.e. it can't handle things like v4i16) so do not run before
+  // legalization.
+  if (Subtarget.hasP9Altivec() && !DCI.isBeforeLegalize()) {
     Reduced = combineBVOfVecSExt(N, DAG);
     if (Reduced)
       return Reduced;

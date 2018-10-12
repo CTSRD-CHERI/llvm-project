@@ -47,6 +47,14 @@ using DocID = uint32_t;
 /// Contains sorted sequence of DocIDs all of which belong to symbols matching
 /// certain criteria, i.e. containing a Search Token. PostingLists are values
 /// for the inverted index.
+// FIXME(kbobyrev): Posting lists for incomplete trigrams (one/two symbols) are
+// likely to be very dense and hence require special attention so that the index
+// doesn't use too much memory. Possible solution would be to construct
+// compressed posting lists which consist of ranges of DocIDs instead of
+// distinct DocIDs. A special case would be the empty query: for that case
+// TrueIterator should be implemented - an iterator which doesn't actually store
+// any PostingList within itself, but "contains" all DocIDs in range
+// [0, IndexSize).
 using PostingList = std::vector<DocID>;
 /// Immutable reference to PostingList object.
 using PostingListRef = llvm::ArrayRef<DocID>;
@@ -91,7 +99,9 @@ public:
   ///
   /// Where Type is the iterator type representation: "&" for And, "|" for Or,
   /// ChildN is N-th iterator child. Raw iterators over PostingList are
-  /// represented as "[ID1, ID2, ...]" where IDN is N-th PostingList entry.
+  /// represented as "[ID1, ID2, ..., {IDN}, ... END]" where IDN is N-th
+  /// PostingList entry and the element which is pointed to by the PostingList
+  /// iterator is enclosed in {} braces.
   friend llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
                                        const Iterator &Iterator) {
     return Iterator.dump(OS);
@@ -101,9 +111,10 @@ private:
   virtual llvm::raw_ostream &dump(llvm::raw_ostream &OS) const = 0;
 };
 
-/// Exhausts given iterator and returns all processed DocIDs. The result
-/// contains sorted DocumentIDs.
-std::vector<DocID> consume(Iterator &It);
+/// Advances the iterator until it is either exhausted or the number of
+/// requested items is reached. The result contains sorted DocumentIDs.
+std::vector<DocID> consume(Iterator &It,
+                           size_t Limit = std::numeric_limits<size_t>::max());
 
 /// Returns a document iterator over given PostingList.
 std::unique_ptr<Iterator> create(PostingListRef Documents);
@@ -149,4 +160,4 @@ void populateChildren(std::vector<std::unique_ptr<Iterator>> &Children,
 } // namespace clangd
 } // namespace clang
 
-#endif
+#endif // LLVM_CLANG_TOOLS_EXTRA_CLANGD_INDEX_DEX_ITERATOR_H

@@ -3308,24 +3308,21 @@ void X86InstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
     .addReg(SrcReg, getKillRegState(isKill));
 }
 
-void X86InstrInfo::storeRegToAddr(MachineFunction &MF, unsigned SrcReg,
-                                  bool isKill,
-                                  SmallVectorImpl<MachineOperand> &Addr,
-                                  const TargetRegisterClass *RC,
-                                  MachineInstr::mmo_iterator MMOBegin,
-                                  MachineInstr::mmo_iterator MMOEnd,
-                                  SmallVectorImpl<MachineInstr*> &NewMIs) const {
+void X86InstrInfo::storeRegToAddr(
+    MachineFunction &MF, unsigned SrcReg, bool isKill,
+    SmallVectorImpl<MachineOperand> &Addr, const TargetRegisterClass *RC,
+    ArrayRef<MachineMemOperand *> MMOs,
+    SmallVectorImpl<MachineInstr *> &NewMIs) const {
   const TargetRegisterInfo &TRI = *MF.getSubtarget().getRegisterInfo();
   unsigned Alignment = std::max<uint32_t>(TRI.getSpillSize(*RC), 16);
-  bool isAligned = MMOBegin != MMOEnd &&
-                   (*MMOBegin)->getAlignment() >= Alignment;
+  bool isAligned = !MMOs.empty() && MMOs.front()->getAlignment() >= Alignment;
   unsigned Opc = getStoreRegOpcode(SrcReg, RC, isAligned, Subtarget);
   DebugLoc DL;
   MachineInstrBuilder MIB = BuildMI(MF, DL, get(Opc));
   for (unsigned i = 0, e = Addr.size(); i != e; ++i)
     MIB.add(Addr[i]);
   MIB.addReg(SrcReg, getKillRegState(isKill));
-  (*MIB).setMemRefs(MMOBegin, MMOEnd);
+  MIB.setMemRefs(MMOs);
   NewMIs.push_back(MIB);
 }
 
@@ -3345,22 +3342,20 @@ void X86InstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
   addFrameReference(BuildMI(MBB, MI, DL, get(Opc), DestReg), FrameIdx);
 }
 
-void X86InstrInfo::loadRegFromAddr(MachineFunction &MF, unsigned DestReg,
-                                 SmallVectorImpl<MachineOperand> &Addr,
-                                 const TargetRegisterClass *RC,
-                                 MachineInstr::mmo_iterator MMOBegin,
-                                 MachineInstr::mmo_iterator MMOEnd,
-                                 SmallVectorImpl<MachineInstr*> &NewMIs) const {
+void X86InstrInfo::loadRegFromAddr(
+    MachineFunction &MF, unsigned DestReg,
+    SmallVectorImpl<MachineOperand> &Addr, const TargetRegisterClass *RC,
+    ArrayRef<MachineMemOperand *> MMOs,
+    SmallVectorImpl<MachineInstr *> &NewMIs) const {
   const TargetRegisterInfo &TRI = *MF.getSubtarget().getRegisterInfo();
   unsigned Alignment = std::max<uint32_t>(TRI.getSpillSize(*RC), 16);
-  bool isAligned = MMOBegin != MMOEnd &&
-                   (*MMOBegin)->getAlignment() >= Alignment;
+  bool isAligned = !MMOs.empty() && MMOs.front()->getAlignment() >= Alignment;
   unsigned Opc = getLoadRegOpcode(DestReg, RC, isAligned, Subtarget);
   DebugLoc DL;
   MachineInstrBuilder MIB = BuildMI(MF, DL, get(Opc), DestReg);
   for (unsigned i = 0, e = Addr.size(); i != e; ++i)
     MIB.add(Addr[i]);
-  (*MIB).setMemRefs(MMOBegin, MMOEnd);
+  MIB.setMemRefs(MMOs);
   NewMIs.push_back(MIB);
 }
 
@@ -4267,9 +4262,14 @@ bool X86InstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
   case X86::VMOVUPSZ256mr_NOVLX:
     return expandNOVLXStore(MIB, &getRegisterInfo(), get(X86::VMOVUPSYmr),
                             get(X86::VEXTRACTF64x4Zmr), X86::sub_ymm);
-  case X86::MOV32ri64:
+  case X86::MOV32ri64: {
+    unsigned Reg = MIB->getOperand(0).getReg();
+    unsigned Reg32 = RI.getSubReg(Reg, X86::sub_32bit);
     MI.setDesc(get(X86::MOV32ri));
+    MIB->getOperand(0).setReg(Reg32);
+    MIB.addReg(Reg, RegState::ImplicitDefine);
     return true;
+  }
 
   // KNL does not recognize dependency-breaking idioms for mask registers,
   // so kxnor %k1, %k1, %k2 has a RAW dependence on %k1.
@@ -5353,6 +5353,54 @@ MachineInstr *X86InstrInfo::foldMemoryOperandImpl(
                                /*Size=*/0, Alignment, /*AllowCommute=*/true);
 }
 
+static SmallVector<MachineMemOperand *, 2>
+extractLoadMMOs(ArrayRef<MachineMemOperand *> MMOs, MachineFunction &MF) {
+  SmallVector<MachineMemOperand *, 2> LoadMMOs;
+
+  for (MachineMemOperand *MMO : MMOs) {
+    if (!MMO->isLoad())
+      continue;
+
+    if (!MMO->isStore()) {
+      // Reuse the MMO.
+      LoadMMOs.push_back(MMO);
+    } else {
+      // Clone the MMO and unset the store flag.
+      LoadMMOs.push_back(MF.getMachineMemOperand(
+          MMO->getPointerInfo(), MMO->getFlags() & ~MachineMemOperand::MOStore,
+          MMO->getSize(), MMO->getBaseAlignment(), MMO->getAAInfo(), nullptr,
+          MMO->getSyncScopeID(), MMO->getOrdering(),
+          MMO->getFailureOrdering()));
+    }
+  }
+
+  return LoadMMOs;
+}
+
+static SmallVector<MachineMemOperand *, 2>
+extractStoreMMOs(ArrayRef<MachineMemOperand *> MMOs, MachineFunction &MF) {
+  SmallVector<MachineMemOperand *, 2> StoreMMOs;
+
+  for (MachineMemOperand *MMO : MMOs) {
+    if (!MMO->isStore())
+      continue;
+
+    if (!MMO->isLoad()) {
+      // Reuse the MMO.
+      StoreMMOs.push_back(MMO);
+    } else {
+      // Clone the MMO and unset the load flag.
+      StoreMMOs.push_back(MF.getMachineMemOperand(
+          MMO->getPointerInfo(), MMO->getFlags() & ~MachineMemOperand::MOLoad,
+          MMO->getSize(), MMO->getBaseAlignment(), MMO->getAAInfo(), nullptr,
+          MMO->getSyncScopeID(), MMO->getOrdering(),
+          MMO->getFailureOrdering()));
+    }
+  }
+
+  return StoreMMOs;
+}
+
 bool X86InstrInfo::unfoldMemoryOperand(
     MachineFunction &MF, MachineInstr &MI, unsigned Reg, bool UnfoldLoad,
     bool UnfoldStore, SmallVectorImpl<MachineInstr *> &NewMIs) const {
@@ -5397,9 +5445,8 @@ bool X86InstrInfo::unfoldMemoryOperand(
 
   // Emit the load instruction.
   if (UnfoldLoad) {
-    std::pair<MachineInstr::mmo_iterator, MachineInstr::mmo_iterator> MMOs =
-        MF.extractLoadMemRefs(MI.memoperands_begin(), MI.memoperands_end());
-    loadRegFromAddr(MF, Reg, AddrOps, RC, MMOs.first, MMOs.second, NewMIs);
+    auto MMOs = extractLoadMMOs(MI.memoperands(), MF);
+    loadRegFromAddr(MF, Reg, AddrOps, RC, MMOs, NewMIs);
     if (UnfoldStore) {
       // Address operands cannot be marked isKill.
       for (unsigned i = 1; i != 1 + X86::AddrNumOperands; ++i) {
@@ -5464,9 +5511,8 @@ bool X86InstrInfo::unfoldMemoryOperand(
   // Emit the store instruction.
   if (UnfoldStore) {
     const TargetRegisterClass *DstRC = getRegClass(MCID, 0, &RI, MF);
-    std::pair<MachineInstr::mmo_iterator, MachineInstr::mmo_iterator> MMOs =
-        MF.extractStoreMemRefs(MI.memoperands_begin(), MI.memoperands_end());
-    storeRegToAddr(MF, Reg, true, AddrOps, DstRC, MMOs.first, MMOs.second, NewMIs);
+    auto MMOs = extractStoreMMOs(MI.memoperands(), MF);
+    storeRegToAddr(MF, Reg, true, AddrOps, DstRC, MMOs, NewMIs);
   }
 
   return true;
@@ -5511,26 +5557,21 @@ X86InstrInfo::unfoldMemoryOperand(SelectionDAG &DAG, SDNode *N,
   SDNode *Load = nullptr;
   if (FoldedLoad) {
     EVT VT = *TRI.legalclasstypes_begin(*RC);
-    std::pair<MachineInstr::mmo_iterator,
-              MachineInstr::mmo_iterator> MMOs =
-      MF.extractLoadMemRefs(cast<MachineSDNode>(N)->memoperands_begin(),
-                            cast<MachineSDNode>(N)->memoperands_end());
-    if (!(*MMOs.first) &&
-        RC == &X86::VR128RegClass &&
+    auto MMOs = extractLoadMMOs(cast<MachineSDNode>(N)->memoperands(), MF);
+    if (MMOs.empty() && RC == &X86::VR128RegClass &&
         Subtarget.isUnalignedMem16Slow())
       // Do not introduce a slow unaligned load.
       return false;
     // FIXME: If a VR128 can have size 32, we should be checking if a 32-byte
     // memory access is slow above.
     unsigned Alignment = std::max<uint32_t>(TRI.getSpillSize(*RC), 16);
-    bool isAligned = (*MMOs.first) &&
-                     (*MMOs.first)->getAlignment() >= Alignment;
+    bool isAligned = !MMOs.empty() && MMOs.front()->getAlignment() >= Alignment;
     Load = DAG.getMachineNode(getLoadRegOpcode(0, RC, isAligned, Subtarget), dl,
                               VT, MVT::Other, AddrOps);
     NewNodes.push_back(Load);
 
     // Preserve memory reference information.
-    cast<MachineSDNode>(Load)->setMemRefs(MMOs.first, MMOs.second);
+    DAG.setNodeMemRefs(cast<MachineSDNode>(Load), MMOs);
   }
 
   // Emit the data processing instruction.
@@ -5580,27 +5621,22 @@ X86InstrInfo::unfoldMemoryOperand(SelectionDAG &DAG, SDNode *N,
     AddrOps.pop_back();
     AddrOps.push_back(SDValue(NewNode, 0));
     AddrOps.push_back(Chain);
-    std::pair<MachineInstr::mmo_iterator,
-              MachineInstr::mmo_iterator> MMOs =
-      MF.extractStoreMemRefs(cast<MachineSDNode>(N)->memoperands_begin(),
-                             cast<MachineSDNode>(N)->memoperands_end());
-    if (!(*MMOs.first) &&
-        RC == &X86::VR128RegClass &&
+    auto MMOs = extractStoreMMOs(cast<MachineSDNode>(N)->memoperands(), MF);
+    if (MMOs.empty() && RC == &X86::VR128RegClass &&
         Subtarget.isUnalignedMem16Slow())
       // Do not introduce a slow unaligned store.
       return false;
     // FIXME: If a VR128 can have size 32, we should be checking if a 32-byte
     // memory access is slow above.
     unsigned Alignment = std::max<uint32_t>(TRI.getSpillSize(*RC), 16);
-    bool isAligned = (*MMOs.first) &&
-                     (*MMOs.first)->getAlignment() >= Alignment;
+    bool isAligned = !MMOs.empty() && MMOs.front()->getAlignment() >= Alignment;
     SDNode *Store =
         DAG.getMachineNode(getStoreRegOpcode(0, DstRC, isAligned, Subtarget),
                            dl, MVT::Other, AddrOps);
     NewNodes.push_back(Store);
 
     // Preserve memory reference information.
-    cast<MachineSDNode>(Store)->setMemRefs(MMOs.first, MMOs.second);
+    DAG.setNodeMemRefs(cast<MachineSDNode>(Store), MMOs);
   }
 
   return true;

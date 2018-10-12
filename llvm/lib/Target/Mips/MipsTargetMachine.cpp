@@ -285,7 +285,6 @@ public:
   bool addInstSelector() override;
   void addPreEmitPass() override;
   void addPreRegAlloc() override;
-  void addPreEmit2() ;
   bool addIRTranslator() override;
   bool addLegalizeMachineIR() override;
   bool addRegBankSelect() override;
@@ -343,9 +342,6 @@ MipsTargetMachine::getTargetTransformInfo(const Function &F) {
 
   LLVM_DEBUG(errs() << "Target Transform Info Pass Added\n");
   return TargetTransformInfo(BasicTTIImpl(this, F));
-}
-
-void MipsPassConfig::addPreEmit2() {
 }
 
 // Implemented by targets that want to run passes immediately before

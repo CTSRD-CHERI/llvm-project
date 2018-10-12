@@ -93,8 +93,8 @@ static bool inSubLoop(BasicBlock *BB, Loop *CurLoop, LoopInfo *LI);
 static bool isNotUsedOrFreeInLoop(const Instruction &I, const Loop *CurLoop,
                                   const LoopSafetyInfo *SafetyInfo,
                                   TargetTransformInfo *TTI, bool &FreeInLoop);
-static bool hoist(Instruction &I, const DominatorTree *DT, const Loop *CurLoop,
-                  const LoopSafetyInfo *SafetyInfo,
+static void hoist(Instruction &I, const DominatorTree *DT, const Loop *CurLoop,
+                  LoopSafetyInfo *SafetyInfo,
                   OptimizationRemarkEmitter *ORE);
 static bool sink(Instruction &I, LoopInfo *LI, DominatorTree *DT,
                  const Loop *CurLoop, LoopSafetyInfo *SafetyInfo,
@@ -105,9 +105,8 @@ static bool isSafeToExecuteUnconditionally(Instruction &Inst,
                                            const LoopSafetyInfo *SafetyInfo,
                                            OptimizationRemarkEmitter *ORE,
                                            const Instruction *CtxI = nullptr);
-static bool pointerInvalidatedByLoop(Value *V, uint64_t Size,
-                                     const AAMDNodes &AAInfo,
-                                     AliasSetTracker *CurAST);
+static bool isInvalidatedByLoop(const MemoryLocation &MemLoc,
+                                AliasSetTracker *CurAST);
 static Instruction *
 CloneInstructionInExitBlock(Instruction &I, BasicBlock &ExitBlock, PHINode &PN,
                             const LoopInfo *LI,
@@ -261,7 +260,7 @@ bool LoopInvariantCodeMotion::runOnLoop(
 
   // Compute loop safety information.
   LoopSafetyInfo SafetyInfo;
-  computeLoopSafetyInfo(&SafetyInfo, L);
+  SafetyInfo.computeLoopSafetyInfo(L);
 
   // We want to visit all of the instructions in this loop... that are not parts
   // of our subloops (they have already had their invariants hoisted out of
@@ -487,7 +486,8 @@ bool llvm::hoistRegion(DomTreeNode *N, AliasAnalysis *AA, LoopInfo *LI,
            isSafeToExecuteUnconditionally(
                I, DT, CurLoop, SafetyInfo, ORE,
                CurLoop->getLoopPreheader()->getTerminator()))) {
-        Changed |= hoist(I, DT, CurLoop, SafetyInfo, ORE);
+        hoist(I, DT, CurLoop, SafetyInfo, ORE);
+        Changed = true;
         continue;
       }
 
@@ -582,6 +582,7 @@ namespace {
 bool isHoistableAndSinkableInst(Instruction &I) {
   // Only these instructions are hoistable/sinkable.
   return (isa<LoadInst>(I) || isa<CallInst>(I) ||
+          isa<FenceInst>(I) ||
           isa<BinaryOperator>(I) || isa<CastInst>(I) ||
           isa<SelectInst>(I) || isa<GetElementPtrInst>(I) ||
           isa<CmpInst>(I) || isa<InsertElementInst>(I) ||
@@ -627,16 +628,7 @@ bool llvm::canSinkOrHoistInst(Instruction &I, AAResults *AA, DominatorTree *DT,
     if (isLoadInvariantInLoop(LI, DT, CurLoop))
       return true;
 
-    // Don't hoist loads which have may-aliased stores in loop.
-    uint64_t Size = 0;
-    if (LI->getType()->isSized())
-      Size = I.getModule()->getDataLayout().getTypeStoreSize(LI->getType());
-
-    AAMDNodes AAInfo;
-    LI->getAAMetadata(AAInfo);
-
-    bool Invalidated =
-        pointerInvalidatedByLoop(LI->getOperand(0), Size, AAInfo, CurAST);
+    bool Invalidated = isInvalidatedByLoop(MemoryLocation::get(LI), CurAST);
     // Check loop-invariant address because this may also be a sinkable load
     // whose address is not necessarily loop-invariant.
     if (ORE && Invalidated && CurLoop->isLoopInvariant(LI->getPointerOperand()))
@@ -657,6 +649,15 @@ bool llvm::canSinkOrHoistInst(Instruction &I, AAResults *AA, DominatorTree *DT,
     if (CI->mayThrow())
       return false;
 
+    if (Function *F = CI->getCalledFunction())
+        switch (F->getIntrinsicID()) {
+        default: break;
+        // TODO: support invariant.start, and experimental.guard here
+        case Intrinsic::assume:
+          // Assumes don't actually alias anything or throw
+          return true;
+        };
+    
     // Handle simple cases by querying alias analysis.
     FunctionModRefBehavior Behavior = AA->getModRefBehavior(CI);
     if (Behavior == FMRB_DoesNotAccessMemory)
@@ -668,8 +669,10 @@ bool llvm::canSinkOrHoistInst(Instruction &I, AAResults *AA, DominatorTree *DT,
       if (AliasAnalysis::onlyAccessesArgPointees(Behavior)) {
         for (Value *Op : CI->arg_operands())
           if (Op->getType()->isPointerTy() &&
-              pointerInvalidatedByLoop(Op, MemoryLocation::UnknownSize,
-                                       AAMDNodes(), CurAST))
+              isInvalidatedByLoop(MemoryLocation(Op,
+                                                 MemoryLocation::UnknownSize,
+                                                 AAMDNodes()),
+                                  CurAST))
             return false;
         return true;
       }
@@ -684,7 +687,24 @@ bool llvm::canSinkOrHoistInst(Instruction &I, AAResults *AA, DominatorTree *DT,
     // sink the call.
 
     return false;
+  } else if (auto *FI = dyn_cast<FenceInst>(&I)) {
+    // Fences alias (most) everything to provide ordering.  For the moment,
+    // just give up if there are any other memory operations in the loop.
+    auto Begin = CurAST->begin();
+    assert(Begin != CurAST->end() && "must contain FI");
+    if (std::next(Begin) != CurAST->end())
+      // constant memory for instance, TODO: handle better
+      return false;
+    auto *UniqueI = Begin->getUniqueInstruction();
+    if (!UniqueI)
+      // other memory op, give up
+      return false;
+    (void)FI; //suppress unused variable warning
+    assert(UniqueI == FI && "AS must contain FI");
+    return true;
   }
+
+  assert(!I.mayReadOrWriteMemory() && "unhandled aliasing");
 
   // We've established mechanical ability and aliasing, it's up to the caller
   // to check fault safety
@@ -1036,9 +1056,8 @@ static bool sink(Instruction &I, LoopInfo *LI, DominatorTree *DT,
 /// When an instruction is found to only use loop invariant operands that
 /// is safe to hoist, this instruction is called to do the dirty work.
 ///
-static bool hoist(Instruction &I, const DominatorTree *DT, const Loop *CurLoop,
-                  const LoopSafetyInfo *SafetyInfo,
-                  OptimizationRemarkEmitter *ORE) {
+static void hoist(Instruction &I, const DominatorTree *DT, const Loop *CurLoop,
+                  LoopSafetyInfo *SafetyInfo, OptimizationRemarkEmitter *ORE) {
   auto *Preheader = CurLoop->getLoopPreheader();
   LLVM_DEBUG(dbgs() << "LICM hoisting to " << Preheader->getName() << ": " << I
                     << "\n");
@@ -1074,7 +1093,6 @@ static bool hoist(Instruction &I, const DominatorTree *DT, const Loop *CurLoop,
   else if (isa<CallInst>(I))
     ++NumMovedCalls;
   ++NumHoisted;
-  return true;
 }
 
 /// Only sink or hoist an instruction if it is not a trapping instruction,
@@ -1283,7 +1301,7 @@ bool llvm::promoteLoopAccessesToScalars(
   const DataLayout &MDL = Preheader->getModule()->getDataLayout();
 
   bool IsKnownThreadLocalObject = false;
-  if (SafetyInfo->MayThrow) {
+  if (SafetyInfo->anyBlockMayThrow()) {
     // If a loop can throw, we have to insert a store along each unwind edge.
     // That said, we can't actually make the unwind edge explicit. Therefore,
     // we have to prove that the store is dead along the unwind edge.  We do
@@ -1554,11 +1572,10 @@ void LegacyLICMPass::deleteAnalysisLoop(Loop *L) {
 /// Return true if the body of this loop may store into the memory
 /// location pointed to by V.
 ///
-static bool pointerInvalidatedByLoop(Value *V, uint64_t Size,
-                                     const AAMDNodes &AAInfo,
-                                     AliasSetTracker *CurAST) {
+static bool isInvalidatedByLoop(const MemoryLocation &MemLoc,
+                                AliasSetTracker *CurAST) {
   // Check to see if any of the basic blocks in CurLoop invalidate *V.
-  return CurAST->getAliasSetForPointer(V, Size, AAInfo).isMod();
+  return CurAST->getAliasSetFor(MemLoc).isMod();
 }
 
 /// Little predicate that returns true if the specified basic block is in

@@ -169,18 +169,53 @@ class CheckAll<list<MCInstPredicate> Sequence>
 class CheckAny<list<MCInstPredicate> Sequence>
     : CheckPredicateSequence<Sequence>;
 
+
+// Used to expand the body of a function predicate. See the definition of
+// TIIPredicate below.
+class MCStatement;
+
+// Expands to a return statement. The return expression is a boolean expression
+// described by a MCInstPredicate.
+class MCReturnStatement<MCInstPredicate predicate> : MCStatement {
+  MCInstPredicate Pred = predicate;
+}
+
+// Used to automatically construct cases of a switch statement where the switch
+// variable is an instruction opcode. There is a 'case' for every opcode in the
+// `opcodes` list, and each case is associated with MCStatement `caseStmt`.
+class MCOpcodeSwitchCase<list<Instruction> opcodes, MCStatement caseStmt> {
+  list<Instruction> Opcodes = opcodes;
+  MCStatement CaseStmt = caseStmt;
+}
+
+// Expands to a switch statement. The switch variable is an instruction opcode.
+// The auto-generated switch is populated by a number of cases based on the
+// `cases` list in input. A default case is automatically generated, and it
+// evaluates to `default`.
+class MCOpcodeSwitchStatement<list<MCOpcodeSwitchCase> cases,
+                              MCStatement default> : MCStatement {
+  list<MCOpcodeSwitchCase> Cases = cases;
+  MCStatement DefaultCase = default;
+}
+
+// Base class for function predicates.
+class FunctionPredicateBase<string name, MCStatement body> {
+  string FunctionName = name;
+  MCStatement Body = body;
+}
+
 // Check that a call to method `Name` in class "XXXGenInstrInfo" (where XXX is
-// the `Target` name) returns true.
+// the name of a target) returns true.
 //
 // TIIPredicate definitions are used to model calls to the target-specific
 // InstrInfo. A TIIPredicate is treated specially by the InstrInfoEmitter
 // tablegen backend, which will use it to automatically generate a definition in
 // the target specific `GenInstrInfo` class.
-class TIIPredicate<string Target, string Name, MCInstPredicate P> : MCInstPredicate {
-  string TargetName = Target;
-  string FunctionName = Name;
-  MCInstPredicate Pred = P;
-}
+//
+// There cannot be multiple TIIPredicate definitions with the same name for the
+// same target.
+class TIIPredicate<string Name, MCStatement body>
+    : FunctionPredicateBase<Name, body>, MCInstPredicate;
 
 // A function predicate that takes as input a machine instruction, and returns
 // a boolean value.
