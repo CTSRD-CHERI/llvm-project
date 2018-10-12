@@ -1797,6 +1797,7 @@ llvm::Value* CodeGenFunction::EmitPointerCast(llvm::Value *From,
   else
     return Builder.CreateAddrSpaceCast(From, ToType);
 }
+
 llvm::Value* CodeGenFunction::EmitPointerCast(llvm::Value *From,
                                               QualType FromTy,
                                               QualType ToTy) {
@@ -1884,8 +1885,6 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
                                       CodeGenFunction::CFITCK_UnrelatedCast,
                                       CE->getLocStart());
     }
-    if (E->getType()->isPointerType() && DestTy->isPointerType())
-      return CGF.EmitPointerCast(Src, E->getType(), DestTy);
 
     if (CGF.CGM.getCodeGenOpts().StrictVTablePointers) {
       const QualType SrcType = E->getType();
@@ -1904,6 +1903,9 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
         Src = Builder.CreateStripInvariantGroup(Src);
       }
     }
+    // Handle CHERI pointers casts (e.g. __input+__output qualifiers, etc)
+    if (E->getType()->isPointerType() && DestTy->isPointerType())
+      return CGF.EmitPointerCast(Src, E->getType(), DestTy);
 
     return Builder.CreateBitCast(Src, DstTy);
   }
@@ -2115,17 +2117,21 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     llvm::Value* IntResult =
       Builder.CreateIntCast(Src, MiddleTy, InputSigned, "conv");
 
+
+    llvm::Value* IntToPtr = nullptr;
+
     if (IsPureCap && DestTy->isCHERICapabilityType(CGF.getContext()))
-      return CGF.setCapabilityIntegerValue(
+      IntToPtr = CGF.setCapabilityIntegerValue(
           llvm::ConstantPointerNull::get(cast<llvm::PointerType>(DestLLVMTy)),
           IntResult);
-    // assert(!SrcIsCheriCap);
-    // TODO: generate CFromPtr/CFromInt depending on value (for constants use
-    // CFromInt/otherwise CFromPtr)
-    // FIMXE: This should warn!
+    else {
+      // assert(!SrcIsCheriCap);
+      // TODO: generate CFromPtr/CFromInt depending on value (for constants use
+      // CFromInt/otherwise CFromPtr)
+      // FIMXE: This should warn!
 
-    auto *IntToPtr = Builder.CreateIntToPtr(IntResult, DestLLVMTy);
-
+      IntToPtr = Builder.CreateIntToPtr(IntResult, DestLLVMTy);
+    }
     if (CGF.CGM.getCodeGenOpts().StrictVTablePointers) {
       // Going from integer to pointer that could be dynamic requires reloading
       // dynamic information from invariant.group.
