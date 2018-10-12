@@ -1492,6 +1492,15 @@ void TypePrinter::printAttributedAfter(const AttributedType *T,
   case attr::CHERICapability:
   case attr::AddressSpace:
     llvm_unreachable("This attribute should have been handled already");
+  case attr::CHERIMethodClass:
+    OS << "cheri_method_class(" << "???" << ")"; break;
+  case attr::CHERIMethodSuffix:
+    OS << "cheri_method_suffix(" << "???" << ")";
+    break;
+  case attr::PointerInterpretationCaps:
+     OS << "pointer_interpretation_capabilities";
+     break;
+
 
   case attr::NSReturnsRetained:
     OS << "ns_returns_retained";
