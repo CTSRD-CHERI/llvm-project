@@ -5237,13 +5237,7 @@ bool LLParser::ParseFunctionHeader(Function *&Fn, bool isDefine) {
       if (!Fn)
         return Error(FRVI->second.second, "invalid forward reference to "
                      "function as global value!");
-      if (Fn->getType() != PFT) {
-#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
-        errs() << "FN TYPE: ";
-        Fn->getType()->dump();
-        errs() << "PFT: ";
-        PFT->dump();
-#endif
+      if (Fn->getType() != PFT)
         return Error(FRVI->second.second, "invalid forward reference to "
                      "function '" + FunctionName + "' with wrong type: "
                      "expected '" + getTypeString(PFT) + "' but was '" +
@@ -6744,8 +6738,7 @@ int LLParser::ParseAtomicRMW(Instruction *&Inst, PerFunctionState &PFS) {
     unsigned Size = Val->getType()->getPrimitiveSizeInBits();
     if (Size < 8 || (Size & (Size - 1)))
       return Error(ValLoc, "atomicrmw operand must be power-of-two byte-sized"
-                           " integer. " +
-                               Twine(Size) + " is invalid");
+                           " integer. " + Twine(Size) + " is invalid");
   }
 
   AtomicRMWInst *RMWI =

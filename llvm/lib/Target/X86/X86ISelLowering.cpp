@@ -33243,7 +33243,7 @@ static SDValue combineSelect(SDNode *N, SelectionDAG &DAG,
     SDValue Other;
     if (ISD::isBuildVectorAllOnes(LHS.getNode())) {
       Other = RHS;
-      CC = ISD::getSetCCInverse(CC, true);
+      CC = ISD::getSetCCInverse(CC, /*IsInteger = true */MVT::i64);
     } else if (ISD::isBuildVectorAllOnes(RHS.getNode())) {
       Other = LHS;
     }
