@@ -1941,31 +1941,7 @@ static CastKind DiagnoseCapabilityToIntCast(Sema &Self, SourceRange OpRange,
   // check if it is a valid type for memory addresses such as vaddr_t
   // FIXME: is there something simpler that I can do?
   // bool IsMemAddressType = DestType->getDecl()->hasAttr<MemoryAddressAttr>();
-  bool IsMemAddressType = false;
-  QualType CurTy = DestType;
-#warning "I think this can now be simplified to hasAttr<>"
-  while (!CurTy.isNull() && !CurTy.isCanonical()) {
-    // llvm::errs() << "Checking if " << T.getAsString() << " is a memoryAddressType\n";
-    if (auto AT = CurTy->getAs<AttributedType>()) {
-      if (AT->getAttrKind() == attr::MemoryAddress) {
-        // llvm::errs() << "Found attr_memory_address: " << CurTy.getAsString() << "\n";
-        // llvm::errs() << DestType.getAsString() << " is a memoryAddressType!\n";
-        IsMemAddressType = true;
-        break;
-      }
-    }
-    if (!CurTy->isIntegralType(Self.Context)) {
-      break; // Attribute can only be applied to integers
-    }
-    auto Desugared = CurTy.getSingleStepDesugaredType(Self.Context);
-    if (Desugared == CurTy) {
-      llvm::errs() << "isMemoryAddressType(): Desugared == CurTy -> Would cause an infinite loop:\n";
-      CurTy.dump("currently checked type");
-      DestType.dump("root type");
-      break;
-    }
-    CurTy = Desugared;
-  }
+  bool IsMemAddressType = DestType->hasAttr(attr::MemoryAddress);
   if (DestType->isPointerType() || DestType->isReferenceType()) {
     Self.Diag(OpRange.getBegin(), diag::warn_capability_pointer_cast)
         << SrcType << DestType << OpRange

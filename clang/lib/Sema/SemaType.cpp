@@ -7294,7 +7294,6 @@ static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &st
 static bool HandleMemoryAddressAttr(QualType &T, TypeProcessingState &State,
                                     TypeAttrLocation TAL, ParsedAttr& Attr) {
   Sema &S = State.getSema();
-
   assert(Attr.getKind() == ParsedAttr::AT_MemoryAddress);
   // XXXAR: FIXME: Why do I get an assertion later if I don't error out here?
   if (TAL == TAL_DeclName) {
@@ -7311,23 +7310,9 @@ static bool HandleMemoryAddressAttr(QualType &T, TypeProcessingState &State,
     return true;
   }
 
-  SplitQualType underlyingType = T.split();
-  const Type *prevTy = nullptr;
-#warning "this can probably be simplified"
-  while (!prevTy || prevTy != underlyingType.Ty) {
-    prevTy = underlyingType.Ty;
-    if (const AttributedType *AT = dyn_cast<AttributedType>(prevTy)) {
-      AttributedType::Kind CurAttrKind = AT->getAttrKind();
-      // You cannot specify duplicate type attributes, so if the attribute has
-      // already been applied, flag it.
-      if (CurAttrKind == attr::MemoryAddress) {
-        S.Diag(Attr.getLoc(), diag::warn_duplicate_attribute_exact)
-          << Attr.getName();
-        return true;
-      }
-    }
-    underlyingType = underlyingType.getSingleStepDesugaredType();
-  }
+  llvm::errs() << __func__ << ": hasAttr():" << T->hasAttr(attr::MemoryAddress) <<  " dump: "; T.dump();
+  if (T->hasAttr(attr::MemoryAddress))
+    S.Diag(Attr.getLoc(), diag::warn_duplicate_attribute_exact) << Attr.getName();
   T = State.getAttributedType(
       createSimpleAttr<MemoryAddressAttr>(State.getSema().Context, Attr), T, T);
   // llvm::errs() << __func__ << ": modified type: "; T.dump();
