@@ -24,6 +24,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/ADT/Twine.h"
+#include "llvm/Analysis/MemoryLocation.h"
 #include "llvm/AsmParser/Parser.h"
 #include "llvm/AsmParser/SlotMapping.h"
 #include "llvm/CodeGen/MIRPrinter.h"
@@ -54,6 +55,7 @@
 #include "llvm/IR/Value.h"
 #include "llvm/IR/ValueSymbolTable.h"
 #include "llvm/MC/LaneBitmask.h"
+#include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCDwarf.h"
 #include "llvm/MC/MCInstrDesc.h"
 #include "llvm/MC/MCRegisterInfo.h"
@@ -221,6 +223,7 @@ public:
   bool parseSubRegisterIndexOperand(MachineOperand &Dest);
   bool parseJumpTableIndexOperand(MachineOperand &Dest);
   bool parseExternalSymbolOperand(MachineOperand &Dest);
+  bool parseMCSymbolOperand(MachineOperand &Dest);
   bool parseMDNode(MDNode *&Node);
   bool parseDIExpression(MDNode *&Expr);
   bool parseMetadataOperand(MachineOperand &Dest);
@@ -250,6 +253,7 @@ public:
   bool parseOptionalScope(LLVMContext &Context, SyncScope::ID &SSID);
   bool parseOptionalAtomicOrdering(AtomicOrdering &Order);
   bool parseMachineMemoryOperand(MachineMemOperand *&Dest);
+  bool parsePreOrPostInstrSymbol(MCSymbol *&Symbol);
 
 private:
   /// Convert the integer literal in the current token into an unsigned integer.
@@ -345,6 +349,9 @@ private:
   ///
   /// Return true if the name isn't a name of a target MMO flag.
   bool getMMOTargetFlag(StringRef Name, MachineMemOperand::Flags &Flag);
+
+  /// Get or create an MCSymbol for a given name.
+  MCSymbol *getOrCreateMCSymbol(StringRef Name);
 
   /// parseStringConstant
   ///   ::= StringConstant
@@ -737,7 +744,9 @@ bool MIParser::parse(MachineInstr *&MI) {
     return true;
 
   // Parse the remaining machine operands.
-  while (!Token.isNewlineOrEOF() && Token.isNot(MIToken::kw_debug_location) &&
+  while (!Token.isNewlineOrEOF() && Token.isNot(MIToken::kw_pre_instr_symbol) &&
+         Token.isNot(MIToken::kw_post_instr_symbol) &&
+         Token.isNot(MIToken::kw_debug_location) &&
          Token.isNot(MIToken::coloncolon) && Token.isNot(MIToken::lbrace)) {
     auto Loc = Token.location();
     Optional<unsigned> TiedDefIdx;
@@ -752,6 +761,15 @@ bool MIParser::parse(MachineInstr *&MI) {
       return error("expected ',' before the next machine operand");
     lex();
   }
+
+  MCSymbol *PreInstrSymbol = nullptr;
+  if (Token.is(MIToken::kw_pre_instr_symbol))
+    if (parsePreOrPostInstrSymbol(PreInstrSymbol))
+      return true;
+  MCSymbol *PostInstrSymbol = nullptr;
+  if (Token.is(MIToken::kw_post_instr_symbol))
+    if (parsePreOrPostInstrSymbol(PostInstrSymbol))
+      return true;
 
   DebugLoc DebugLocation;
   if (Token.is(MIToken::kw_debug_location)) {
@@ -795,12 +813,12 @@ bool MIParser::parse(MachineInstr *&MI) {
     MI->addOperand(MF, Operand.Operand);
   if (assignRegisterTies(*MI, Operands))
     return true;
-  if (MemOperands.empty())
-    return false;
-  MachineInstr::mmo_iterator MemRefs =
-      MF.allocateMemRefsArray(MemOperands.size());
-  std::copy(MemOperands.begin(), MemOperands.end(), MemRefs);
-  MI->setMemRefs(MemRefs, MemRefs + MemOperands.size());
+  if (PreInstrSymbol)
+    MI->setPreInstrSymbol(MF, PreInstrSymbol);
+  if (PostInstrSymbol)
+    MI->setPostInstrSymbol(MF, PostInstrSymbol);
+  if (!MemOperands.empty())
+    MI->setMemRefs(MF, MemOperands);
   return false;
 }
 
@@ -1573,6 +1591,16 @@ bool MIParser::parseExternalSymbolOperand(MachineOperand &Dest) {
   return false;
 }
 
+bool MIParser::parseMCSymbolOperand(MachineOperand &Dest) {
+  assert(Token.is(MIToken::MCSymbol));
+  MCSymbol *Symbol = getOrCreateMCSymbol(Token.stringValue());
+  lex();
+  Dest = MachineOperand::CreateMCSymbol(Symbol);
+  if (parseOperandsOffset(Dest))
+    return true;
+  return false;
+}
+
 bool MIParser::parseSubRegisterIndexOperand(MachineOperand &Dest) {
   assert(Token.is(MIToken::SubRegisterIndex));
   StringRef Name = Token.stringValue();
@@ -2050,6 +2078,8 @@ bool MIParser::parseMachineOperand(MachineOperand &Dest,
     return parseJumpTableIndexOperand(Dest);
   case MIToken::ExternalSymbol:
     return parseExternalSymbolOperand(Dest);
+  case MIToken::MCSymbol:
+    return parseMCSymbolOperand(Dest);
   case MIToken::SubRegisterIndex:
     return parseSubRegisterIndexOperand(Dest);
   case MIToken::md_diexpr:
@@ -2423,7 +2453,7 @@ bool MIParser::parseOptionalAtomicOrdering(AtomicOrdering &Order) {
     return false;
   }
 
-  return error("expected an atomic scope, ordering or a size integer literal");
+  return error("expected an atomic scope, ordering or a size specification");
 }
 
 bool MIParser::parseMachineMemoryOperand(MachineMemOperand *&Dest) {
@@ -2462,11 +2492,17 @@ bool MIParser::parseMachineMemoryOperand(MachineMemOperand *&Dest) {
   if (parseOptionalAtomicOrdering(FailureOrder))
     return true;
 
-  if (Token.isNot(MIToken::IntegerLiteral))
-    return error("expected the size integer literal after memory operation");
+  if (Token.isNot(MIToken::IntegerLiteral) &&
+      Token.isNot(MIToken::kw_unknown_size))
+    return error("expected the size integer literal or 'unknown-size' after "
+                 "memory operation");
   uint64_t Size;
-  if (getUint64(Size))
-    return true;
+  if (Token.is(MIToken::IntegerLiteral)) {
+    if (getUint64(Size))
+      return true;
+  } else if (Token.is(MIToken::kw_unknown_size)) {
+    Size = MemoryLocation::UnknownSize;
+  }
   lex();
 
   MachinePointerInfo Ptr = MachinePointerInfo();
@@ -2483,7 +2519,7 @@ bool MIParser::parseMachineMemoryOperand(MachineMemOperand *&Dest) {
     if (parseMachinePointerInfo(Ptr))
       return true;
   }
-  unsigned BaseAlignment = Size;
+  unsigned BaseAlignment = (Size != MemoryLocation::UnknownSize ? Size : 1);
   AAMDNodes AAInfo;
   MDNode *Range = nullptr;
   while (consumeIfPresent(MIToken::comma)) {
@@ -2526,6 +2562,24 @@ bool MIParser::parseMachineMemoryOperand(MachineMemOperand *&Dest) {
     return true;
   Dest = MF.getMachineMemOperand(Ptr, Flags, Size, BaseAlignment, AAInfo, Range,
                                  SSID, Order, FailureOrder);
+  return false;
+}
+
+bool MIParser::parsePreOrPostInstrSymbol(MCSymbol *&Symbol) {
+  assert((Token.is(MIToken::kw_pre_instr_symbol) ||
+          Token.is(MIToken::kw_post_instr_symbol)) &&
+         "Invalid token for a pre- post-instruction symbol!");
+  lex();
+  if (Token.isNot(MIToken::MCSymbol))
+    return error("expected a symbol after 'pre-instr-symbol'");
+  Symbol = getOrCreateMCSymbol(Token.stringValue());
+  lex();
+  if (Token.isNewlineOrEOF() || Token.is(MIToken::coloncolon) ||
+      Token.is(MIToken::lbrace))
+    return false;
+  if (Token.isNot(MIToken::comma))
+    return error("expected ',' before the next machine operand");
+  lex();
   return false;
 }
 
@@ -2757,6 +2811,15 @@ bool MIParser::getMMOTargetFlag(StringRef Name,
     return true;
   Flag = FlagInfo->second;
   return false;
+}
+
+MCSymbol *MIParser::getOrCreateMCSymbol(StringRef Name) {
+  // FIXME: Currently we can't recognize temporary or local symbols and call all
+  // of the appropriate forms to create them. However, this handles basic cases
+  // well as most of the special aspects are recognized by a prefix on their
+  // name, and the input names should already be unique. For test cases, keeping
+  // the symbol name out of the symbol table isn't terribly important.
+  return MF.getContext().getOrCreateSymbol(Name);
 }
 
 bool MIParser::parseStringConstant(std::string &Result) {

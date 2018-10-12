@@ -35,6 +35,7 @@ enum NodeType : unsigned {
   // offset of a variable into X0, using the TLSDesc model.
   TLSDESC_CALLSEQ,
   ADRP,     // Page address of a TargetGlobalAddress operand.
+  ADR,      // ADR
   ADDlow,   // Add the low 12 bits of a TargetGlobalAddress operand.
   LOADgot,  // Load from automatically generated descriptor (e.g. Global
             // Offset Table, TLS record).
@@ -363,7 +364,8 @@ public:
   const MCPhysReg *getScratchRegisters(CallingConv::ID CC) const override;
 
   /// Returns false if N is a bit extraction pattern of (X >> C) & Mask.
-  bool isDesirableToCommuteWithShift(const SDNode *N) const override;
+  bool isDesirableToCommuteWithShift(const SDNode *N,
+                                     CombineLevel Level) const override;
 
   /// Returns true if it is beneficial to convert a load of a constant
   /// to just the constant itself.
@@ -586,6 +588,8 @@ private:
   SDValue getAddrLarge(NodeTy *N, SelectionDAG &DAG, unsigned Flags = 0) const;
   template <class NodeTy>
   SDValue getAddr(NodeTy *N, SelectionDAG &DAG, unsigned Flags = 0) const;
+  template <class NodeTy>
+  SDValue getAddrTiny(NodeTy *N, SelectionDAG &DAG, unsigned Flags = 0) const;
   SDValue LowerADDROFRETURNADDR(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const;

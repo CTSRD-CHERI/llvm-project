@@ -501,6 +501,33 @@ static uint64_t getARMStaticBase(const Symbol &Sym) {
   return OS->PtLoad->FirstSec->Addr;
 }
 
+// For R_RISCV_PC_INDIRECT (R_RISCV_PCREL_LO12_{I,S}), the symbol actually
+// points the corresponding R_RISCV_PCREL_HI20 relocation, and the target VA
+// is calculated using PCREL_HI20's symbol.
+//
+// This function returns the R_RISCV_PCREL_HI20 relocation from
+// R_RISCV_PCREL_LO12's symbol and addend.
+Relocation *lld::elf::getRISCVPCRelHi20(const Symbol *Sym, uint64_t Addend) {
+  const Defined *D = cast<Defined>(Sym);
+  InputSection *IS = cast<InputSection>(D->Section);
+
+  if (Addend != 0)
+    warn("Non-zero addend in R_RISCV_PCREL_LO12 relocation to " +
+         IS->getObjMsg(D->Value) + " is ignored");
+
+  // Relocations are sorted by offset, so we can use std::equal_range to do
+  // binary search.
+  auto Range = std::equal_range(IS->Relocations.begin(), IS->Relocations.end(),
+                                D->Value, RelocationOffsetComparator{});
+  for (auto It = std::get<0>(Range); It != std::get<1>(Range); ++It)
+    if (isRelExprOneOf<R_PC>(It->Expr))
+      return &*It;
+
+  error("R_RISCV_PCREL_LO12 relocation points to " + IS->getObjMsg(D->Value) +
+        " without an associated R_RISCV_PCREL_HI20 relocation");
+  return nullptr;
+}
+
 static uint64_t getRelocTargetVA(const InputFile *File, RelType Type, int64_t A,
                                  uint64_t P, const Symbol &Sym, RelExpr Expr) {
   switch (Expr) {
@@ -586,6 +613,13 @@ static uint64_t getRelocTargetVA(const InputFile *File, RelType Type, int64_t A,
     else
       Dest = getAArch64Page(Sym.getVA(A));
     return Dest - getAArch64Page(P);
+  }
+  case R_RISCV_PC_INDIRECT: {
+    const Relocation *HiRel = getRISCVPCRelHi20(&Sym, A);
+    if (!HiRel)
+      return 0;
+    return getRelocTargetVA(File, HiRel->Type, HiRel->Addend, Sym.getVA(),
+                            *HiRel->Sym, HiRel->Expr);
   }
   case R_PC: {
     uint64_t Dest;
@@ -1002,9 +1036,8 @@ void InputSectionBase::adjustSplitStackFunctionPrologues(uint8_t *Buf,
       continue;
 
     // Ignore calls into the split-stack api.
-    Defined *D = cast<Defined>(Rel.Sym);
-    if (D->getName().startswith("__morestack")) {
-      if (D->getName().equals("__morestack"))
+    if (Rel.Sym->getName().startswith("__morestack")) {
+      if (Rel.Sym->getName().equals("__morestack"))
         MorestackCalls.push_back(&Rel);
       continue;
     }
@@ -1012,13 +1045,18 @@ void InputSectionBase::adjustSplitStackFunctionPrologues(uint8_t *Buf,
     // A relocation to non-function isn't relevant. Sometimes
     // __morestack is not marked as a function, so this check comes
     // after the name check.
-    if (D->Type != STT_FUNC)
+    if (Rel.Sym->Type != STT_FUNC)
       continue;
 
-    // If the callee's-file was compiled with split stack, nothing to do.
-    auto *IS = cast_or_null<InputSection>(D->Section);
-    if (!IS || IS->getFile<ELFT>()->SplitStack)
-      continue;
+    // If the callee's-file was compiled with split stack, nothing to do.  In
+    // this context, a "Defined" symbol is one "defined by the binary currently
+    // being produced". So an "undefined" symbol might be provided by a shared
+    // library. It is not possible to tell how such symbols were compiled, so be
+    // conservative.
+    if (Defined *D = dyn_cast<Defined>(Rel.Sym))
+      if (InputSection *IS = cast_or_null<InputSection>(D->Section))
+        if (!IS || IS->getFile<ELFT>()->SplitStack)
+          continue;
 
     if (enclosingPrologueAttempted(Rel.Offset, Prologues))
       continue;
@@ -1030,7 +1068,7 @@ void InputSectionBase::adjustSplitStackFunctionPrologues(uint8_t *Buf,
         continue;
       if (!getFile<ELFT>()->SomeNoSplitStack)
         error(lld::toString(this) + ": " + F->getName() +
-              " (with -fsplit-stack) calls " + D->getName() +
+              " (with -fsplit-stack) calls " + Rel.Sym->getName() +
               " (without -fsplit-stack), but couldn't adjust its prologue");
     }
   }
@@ -1223,43 +1261,32 @@ static It fastUpperBound(It First, It Last, const T &Value, Compare Comp) {
   return Comp(Value, *First) ? First : First + 1;
 }
 
-// Do binary search to get a section piece at a given input offset.
-static SectionPiece *findSectionPiece(MergeInputSection *Sec, uint64_t Offset) {
-  if (Sec->Data.size() <= Offset)
-    fatal(toString(Sec) + ": entry is past the end of the section");
-
-  // Find the element this offset points to.
-  auto I = fastUpperBound(
-      Sec->Pieces.begin(), Sec->Pieces.end(), Offset,
-      [](const uint64_t &A, const SectionPiece &B) { return A < B.InputOff; });
-  --I;
-  return &*I;
-}
-
 SectionPiece *MergeInputSection::getSectionPiece(uint64_t Offset) {
+  if (this->Data.size() <= Offset)
+    fatal(toString(this) + ": offset is outside the section");
+
   // Find a piece starting at a given offset.
   auto It = OffsetMap.find(Offset);
   if (It != OffsetMap.end())
     return &Pieces[It->second];
 
   // If Offset is not at beginning of a section piece, it is not in the map.
-  // In that case we need to search from the original section piece vector.
-  return findSectionPiece(this, Offset);
+  // In that case we need to  do a binary search of the original section piece vector.
+  auto I = fastUpperBound(
+      Pieces.begin(), Pieces.end(), Offset,
+      [](const uint64_t &A, const SectionPiece &B) { return A < B.InputOff; });
+  --I;
+  return &*I;
 }
 
 // Returns the offset in an output section for a given input offset.
 // Because contents of a mergeable section is not contiguous in output,
 // it is not just an addition to a base output offset.
 uint64_t MergeInputSection::getParentOffset(uint64_t Offset) const {
-  // Find a string starting at a given offset.
-  auto It = OffsetMap.find(Offset);
-  if (It != OffsetMap.end())
-    return Pieces[It->second].OutputOff;
-
   // If Offset is not at beginning of a section piece, it is not in the map.
   // In that case we need to search from the original section piece vector.
   const SectionPiece &Piece =
-      *findSectionPiece(const_cast<MergeInputSection *>(this), Offset);
+      *(const_cast<MergeInputSection *>(this)->getSectionPiece (Offset));
   uint64_t Addend = Offset - Piece.InputOff;
   return Piece.OutputOff + Addend;
 }

@@ -136,6 +136,7 @@ AMDGPUSubtarget::AMDGPUSubtarget(const Triple &TT,
   HasVOP3PInsts(false),
   HasMulI24(true),
   HasMulU24(true),
+  HasInv2PiInlineImm(false),
   HasFminFmaxLegacy(true),
   EnablePromoteAlloca(false),
   LocalMemorySize(0),
@@ -190,13 +191,13 @@ GCNSubtarget::GCNSubtarget(const Triple &TT, StringRef GPU, StringRef FS,
     HasVGPRIndexMode(false),
     HasScalarStores(false),
     HasScalarAtomics(false),
-    HasInv2PiInlineImm(false),
     HasSDWAOmod(false),
     HasSDWAScalar(false),
     HasSDWASdst(false),
     HasSDWAMac(false),
     HasSDWAOutModsVOPC(false),
     HasDPP(false),
+    HasR128A16(false),
     HasDLInsts(false),
     D16PreservesUnusedBits(false),
     FlatAddressSpace(false),
@@ -212,7 +213,6 @@ GCNSubtarget::GCNSubtarget(const Triple &TT, StringRef GPU, StringRef FS,
     InstrInfo(initializeSubtargetDependencies(TT, GPU, FS)),
     TLInfo(TM, *this),
     FrameLowering(TargetFrameLowering::StackGrowsUp, getStackAlignment(), 0) {
-  AS = AMDGPU::getAMDGPUAS(TT);
   CallLoweringInfo.reset(new AMDGPUCallLowering(*getTargetLowering()));
   Legalizer.reset(new AMDGPULegalizerInfo(*this, TM));
   RegBankInfo.reset(new AMDGPURegisterBankInfo(*getRegisterInfo()));
@@ -461,8 +461,7 @@ R600Subtarget::R600Subtarget(const Triple &TT, StringRef GPU, StringRef FS,
   TexVTXClauseSize(0),
   Gen(R600),
   TLInfo(TM, initializeSubtargetDependencies(TT, GPU, FS)),
-  InstrItins(getInstrItineraryForCPU(GPU)),
-  AS (AMDGPU::getAMDGPUAS(TT)) { }
+  InstrItins(getInstrItineraryForCPU(GPU)) { }
 
 void GCNSubtarget::overrideSchedPolicy(MachineSchedPolicy &Policy,
                                       unsigned NumRegionInstrs) const {

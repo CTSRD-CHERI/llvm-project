@@ -54,34 +54,53 @@ static Value *createMinMax(InstCombiner::BuilderTy &Builder,
   return Builder.CreateSelect(Builder.CreateICmp(Pred, A, B), A, B);
 }
 
-/// Fold
-///   %A = icmp eq/ne i8 %x, 0
-///   %B = op i8 %x, %z
-///   %C = select i1 %A, i8 %B, i8 %y
-/// To
-///   %C = select i1 %A, i8 %z, i8 %y
-/// OP: binop with an identity constant
-/// TODO: support for non-commutative and FP opcodes
-static Instruction *foldSelectBinOpIdentity(SelectInst &Sel) {
-
-  Value *Cond = Sel.getCondition();
-  Value *X, *Z;
+/// Replace a select operand based on an equality comparison with the identity
+/// constant of a binop.
+static Instruction *foldSelectBinOpIdentity(SelectInst &Sel,
+                                            const TargetLibraryInfo &TLI) {
+  // The select condition must be an equality compare with a constant operand.
+  Value *X;
   Constant *C;
   CmpInst::Predicate Pred;
-  if (!match(Cond, m_ICmp(Pred, m_Value(X), m_Constant(C))) ||
-      !ICmpInst::isEquality(Pred))
+  if (!match(Sel.getCondition(), m_Cmp(Pred, m_Value(X), m_Constant(C))))
     return nullptr;
 
-  bool IsEq = Pred == ICmpInst::ICMP_EQ;
-  auto *BO =
-      dyn_cast<BinaryOperator>(IsEq ? Sel.getTrueValue() : Sel.getFalseValue());
-  // TODO: support for undefs
-  if (BO && match(BO, m_c_BinOp(m_Specific(X), m_Value(Z))) &&
-      ConstantExpr::getBinOpIdentity(BO->getOpcode(), X->getType()) == C) {
-    Sel.setOperand(IsEq ? 1 : 2, Z);
-    return &Sel;
-  }
-  return nullptr;
+  bool IsEq;
+  if (ICmpInst::isEquality(Pred))
+    IsEq = Pred == ICmpInst::ICMP_EQ;
+  else if (Pred == FCmpInst::FCMP_OEQ)
+    IsEq = true;
+  else if (Pred == FCmpInst::FCMP_UNE)
+    IsEq = false;
+  else
+    return nullptr;
+
+  // A select operand must be a binop, and the compare constant must be the
+  // identity constant for that binop.
+  BinaryOperator *BO;
+  if (!match(Sel.getOperand(IsEq ? 1 : 2), m_BinOp(BO)) ||
+      ConstantExpr::getBinOpIdentity(BO->getOpcode(), BO->getType(), true) != C)
+    return nullptr;
+
+  // Last, match the compare variable operand with a binop operand.
+  Value *Y;
+  if (!BO->isCommutative() && !match(BO, m_BinOp(m_Value(Y), m_Specific(X))))
+    return nullptr;
+  if (!match(BO, m_c_BinOp(m_Value(Y), m_Specific(X))))
+    return nullptr;
+
+  // +0.0 compares equal to -0.0, and so it does not behave as required for this
+  // transform. Bail out if we can not exclude that possibility.
+  if (isa<FPMathOperator>(BO))
+    if (!BO->hasNoSignedZeros() && !CannotBeNegativeZero(Y, &TLI))
+      return nullptr;
+
+  // BO = binop Y, X
+  // S = { select (cmp eq X, C), BO, ? } or { select (cmp ne X, C), ?, BO }
+  // =>
+  // S = { select (cmp eq X, C),  Y, ? } or { select (cmp ne X, C), ?,  Y }
+  Sel.setOperand(IsEq ? 1 : 2, Y);
+  return &Sel;
 }
 
 /// This folds:
@@ -349,7 +368,10 @@ Instruction *InstCombiner::foldSelectOpOp(SelectInst &SI, Instruction *TI,
   Value *Op0 = MatchIsOpZero ? MatchOp : NewSI;
   Value *Op1 = MatchIsOpZero ? NewSI : MatchOp;
   if (auto *BO = dyn_cast<BinaryOperator>(TI)) {
-    return BinaryOperator::Create(BO->getOpcode(), Op0, Op1);
+    BinaryOperator *NewBO = BinaryOperator::Create(BO->getOpcode(), Op0, Op1);
+    NewBO->copyIRFlags(TI);
+    NewBO->andIRFlags(FI);
+    return NewBO;
   }
   if (auto *TGEP = dyn_cast<GetElementPtrInst>(TI)) {
     auto *FGEP = cast<GetElementPtrInst>(FI);
@@ -1759,7 +1781,7 @@ Instruction *InstCombiner::visitSelectInst(SelectInst &SI) {
     if (Instruction *FoldI = foldSelectIntoOp(SI, TrueVal, FalseVal))
       return FoldI;
 
-    Value *LHS, *RHS, *LHS2, *RHS2;
+    Value *LHS, *RHS;
     Instruction::CastOps CastOp;
     SelectPatternResult SPR = matchSelectPattern(&SI, LHS, RHS, &CastOp);
     auto SPF = SPR.Flavor;
@@ -1800,7 +1822,7 @@ Instruction *InstCombiner::visitSelectInst(SelectInst &SI) {
       // MIN(~a, ~b) -> ~MAX(a, b)
       Value *A, *B;
       if (match(LHS, m_Not(m_Value(A))) && match(RHS, m_Not(m_Value(B))) &&
-          (LHS->getNumUses() <= 2 || RHS->getNumUses() <= 2)) {
+          (!LHS->hasNUsesOrMore(3) || !RHS->hasNUsesOrMore(3))) {
         CmpInst::Predicate InvertedPred = getInverseMinMaxPred(SPF);
         Value *InvertedCmp = Builder.CreateICmp(InvertedPred, A, B);
         Value *NewSel = Builder.CreateSelect(InvertedCmp, A, B);
@@ -1818,6 +1840,7 @@ Instruction *InstCombiner::visitSelectInst(SelectInst &SI) {
       // MIN(MAX(a, b), a) -> a
       // ABS(ABS(a)) -> ABS(a)
       // NABS(NABS(a)) -> NABS(a)
+      Value *LHS2, *RHS2;
       if (SelectPatternFlavor SPF2 = matchSelectPattern(LHS, LHS2, RHS2).Flavor)
         if (Instruction *R = foldSPFofSPF(cast<Instruction>(LHS),SPF2,LHS2,RHS2,
                                           SI, SPF, RHS))
@@ -1991,7 +2014,7 @@ Instruction *InstCombiner::visitSelectInst(SelectInst &SI) {
   if (Instruction *Select = foldSelectCmpXchg(SI))
     return Select;
 
-  if (Instruction *Select = foldSelectBinOpIdentity(SI))
+  if (Instruction *Select = foldSelectBinOpIdentity(SI, TLI))
     return Select;
 
   return nullptr;

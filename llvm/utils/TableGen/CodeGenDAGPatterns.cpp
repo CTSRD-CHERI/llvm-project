@@ -13,6 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "CodeGenDAGPatterns.h"
+#include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallSet.h"
@@ -99,22 +100,29 @@ bool TypeSetByHwMode::isPossible() const {
 
 bool TypeSetByHwMode::insert(const ValueTypeByHwMode &VVT) {
   bool Changed = false;
+  bool ContainsDefault = false;
+  MVT DT = MVT::Other;
+
   SmallDenseSet<unsigned, 4> Modes;
   for (const auto &P : VVT) {
     unsigned M = P.first;
     Modes.insert(M);
     // Make sure there exists a set for each specific mode from VVT.
     Changed |= getOrCreate(M).insert(P.second).second;
+    // Cache VVT's default mode.
+    if (DefaultMode == M) {
+      ContainsDefault = true;
+      DT = P.second;
+    }
   }
 
   // If VVT has a default mode, add the corresponding type to all
   // modes in "this" that do not exist in VVT.
-  if (Modes.count(DefaultMode)) {
-    MVT DT = VVT.getType(DefaultMode);
+  if (ContainsDefault)
     for (auto &I : *this)
       if (!Modes.count(I.first))
         Changed |= I.second.insert(DT).second;
-  }
+
   return Changed;
 }
 
@@ -198,15 +206,17 @@ void TypeSetByHwMode::writeToStream(const SetType &S, raw_ostream &OS) {
 }
 
 bool TypeSetByHwMode::operator==(const TypeSetByHwMode &VTS) const {
-  bool HaveDefault = hasDefault();
-  if (HaveDefault != VTS.hasDefault())
-    return false;
+  // The isSimple call is much quicker than hasDefault - check this first.
+  bool IsSimple = isSimple();
+  bool VTSIsSimple = VTS.isSimple();
+  if (IsSimple && VTSIsSimple)
+    return *begin() == *VTS.begin();
 
-  if (isSimple()) {
-    if (VTS.isSimple())
-      return *begin() == *VTS.begin();
+  // Speedup: We have a default if the set is simple.
+  bool HaveDefault = IsSimple || hasDefault();
+  bool VTSHaveDefault = VTSIsSimple || VTS.hasDefault();
+  if (HaveDefault != VTSHaveDefault)
     return false;
-  }
 
   SmallDenseSet<unsigned, 4> Modes;
   for (auto &I : *this)
@@ -731,17 +741,12 @@ bool TypeInfer::EnforceSameSize(TypeSetByHwMode &A, TypeSetByHwMode &B) {
 
 void TypeInfer::expandOverloads(TypeSetByHwMode &VTS) {
   ValidateOnExit _1(VTS, *this);
-  TypeSetByHwMode Legal = getLegalTypes();
-  bool HaveLegalDef = Legal.hasDefault();
+  const TypeSetByHwMode &Legal = getLegalTypes();
+  assert(Legal.isDefaultOnly() && "Default-mode only expected");
+  const TypeSetByHwMode::SetType &LegalTypes = Legal.get(DefaultMode);
 
-  for (auto &I : VTS) {
-    unsigned M = I.first;
-    if (!Legal.hasMode(M) && !HaveLegalDef) {
-      TP.error("Invalid mode " + Twine(M));
-      return;
-    }
-    expandOverloads(I.second, Legal.get(M));
-  }
+  for (auto &I : VTS)
+    expandOverloads(I.second, LegalTypes);
 }
 
 void TypeInfer::expandOverloads(TypeSetByHwMode::SetType &Out,
@@ -793,17 +798,17 @@ void TypeInfer::expandOverloads(TypeSetByHwMode::SetType &Out,
   }
 }
 
-TypeSetByHwMode TypeInfer::getLegalTypes() {
+const TypeSetByHwMode &TypeInfer::getLegalTypes() {
   if (!LegalTypesCached) {
+    TypeSetByHwMode::SetType &LegalTypes = LegalCache.getOrCreate(DefaultMode);
     // Stuff all types from all modes into the default mode.
     const TypeSetByHwMode &LTS = TP.getDAGPatterns().getLegalTypes();
     for (const auto &I : LTS)
-      LegalCache.insert(I.second);
+      LegalTypes.insert(I.second);
     LegalTypesCached = true;
   }
-  TypeSetByHwMode VTS;
-  VTS.getOrCreate(DefaultMode) = LegalCache;
-  return VTS;
+  assert(LegalCache.isDefaultOnly() && "Default-mode only expected");
+  return LegalCache;
 }
 
 #ifndef NDEBUG
@@ -1278,7 +1283,7 @@ static unsigned getPatternSize(const TreePatternNode *P,
   for (unsigned i = 0, e = P->getNumChildren(); i != e; ++i) {
     const TreePatternNode *Child = P->getChild(i);
     if (!Child->isLeaf() && Child->getNumTypes()) {
-      const TypeSetByHwMode &T0 = Child->getType(0);
+      const TypeSetByHwMode &T0 = Child->getExtType(0);
       // At this point, all variable type sets should be simple, i.e. only
       // have a default mode.
       if (T0.getMachineValueType() != MVT::Other) {
@@ -4473,6 +4478,13 @@ void CodeGenDAGPatterns::GenerateVariants() {
     LLVM_DEBUG(errs() << "FOUND VARIANTS OF: ";
                PatternsToMatch[i].getSrcPattern()->dump(); errs() << "\n");
 
+    // Cache matching predicates.
+    // TODO: Is it performant to pull this out of the loop entirely?
+    BitVector MatchedPredicates(PatternsToMatch.size(), false);
+    for (unsigned p = 0, e = PatternsToMatch.size(); p != e; ++p)
+      MatchedPredicates[p] = (i == p) || (PatternsToMatch[i].getPredicates() ==
+                                          PatternsToMatch[p].getPredicates());
+
     for (unsigned v = 0, e = Variants.size(); v != e; ++v) {
       TreePatternNodePtr Variant = Variants[v];
 
@@ -4483,8 +4495,7 @@ void CodeGenDAGPatterns::GenerateVariants() {
       bool AlreadyExists = false;
       for (unsigned p = 0, e = PatternsToMatch.size(); p != e; ++p) {
         // Skip if the top level predicates do not match.
-        if (PatternsToMatch[i].getPredicates() !=
-            PatternsToMatch[p].getPredicates())
+        if (!MatchedPredicates[p])
           continue;
         // Check to see if this variant already exists.
         if (Variant->isIsomorphicTo(PatternsToMatch[p].getSrcPattern(),
@@ -4503,6 +4514,8 @@ void CodeGenDAGPatterns::GenerateVariants() {
           Variant, PatternsToMatch[i].getDstPatternShared(),
           PatternsToMatch[i].getDstRegs(),
           PatternsToMatch[i].getAddedComplexity(), Record::getNewUID()));
+      MatchedPredicates.resize(PatternsToMatch.size());
+      MatchedPredicates[PatternsToMatch.size() - 1] = true;
     }
 
     LLVM_DEBUG(errs() << "\n");

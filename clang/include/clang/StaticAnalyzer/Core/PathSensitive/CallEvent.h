@@ -80,11 +80,27 @@ class CallDescription {
 
   mutable IdentifierInfo *II = nullptr;
   mutable bool IsLookupDone = false;
-  StringRef FuncName;
+  // The list of the qualified names used to identify the specified CallEvent,
+  // e.g. "{a, b}" represent the qualified names, like "a::b".
+  std::vector<StringRef> QualifiedName;
   unsigned RequiredArgs;
 
 public:
   const static unsigned NoArgRequirement = std::numeric_limits<unsigned>::max();
+
+  /// Constructs a CallDescription object.
+  ///
+  /// @param QualifiedName The list of the qualified names of the function that
+  /// will be matched. It does not require the user to provide the full list of
+  /// the qualified name. The more details provided, the more accurate the
+  /// matching.
+  ///
+  /// @param RequiredArgs The number of arguments that is expected to match a
+  /// call. Omit this parameter to match every occurrence of call with a given
+  /// name regardless the number of arguments.
+  CallDescription(std::vector<StringRef> QualifiedName,
+                  unsigned RequiredArgs = NoArgRequirement)
+      : QualifiedName(QualifiedName), RequiredArgs(RequiredArgs) {}
 
   /// Constructs a CallDescription object.
   ///
@@ -94,10 +110,11 @@ public:
   /// call. Omit this parameter to match every occurrence of call with a given
   /// name regardless the number of arguments.
   CallDescription(StringRef FuncName, unsigned RequiredArgs = NoArgRequirement)
-      : FuncName(FuncName), RequiredArgs(RequiredArgs) {}
+      : CallDescription(std::vector<StringRef>({FuncName}), NoArgRequirement) {
+  }
 
   /// Get the name of the function that this object matches.
-  StringRef getFunctionName() const { return FuncName; }
+  StringRef getFunctionName() const { return QualifiedName.back(); }
 };
 
 template<typename T = CallEvent>
@@ -428,21 +445,23 @@ public:
   bool isArgumentConstructedDirectly(unsigned Index) const {
     // This assumes that the object was not yet removed from the state.
     return ExprEngine::getObjectUnderConstruction(
-        getState(), {getOriginExpr(), Index}, getCalleeStackFrame()).hasValue();
+        getState(), {getOriginExpr(), Index}, getLocationContext()).hasValue();
   }
 
   /// Some calls have parameter numbering mismatched from argument numbering.
   /// This function converts an argument index to the corresponding
   /// parameter index. Returns None is the argument doesn't correspond
   /// to any parameter variable.
-  Optional<unsigned> getAdjustedParameterIndex(unsigned ArgumentIndex) const {
-    if (dyn_cast_or_null<CXXOperatorCallExpr>(getOriginExpr()) &&
-        dyn_cast_or_null<CXXMethodDecl>(getDecl())) {
-      // For member operator calls argument 0 on the expression corresponds
-      // to implicit this-parameter on the declaration.
-      return (ArgumentIndex > 0) ? Optional<unsigned>(ArgumentIndex - 1) : None;
-    }
-    return ArgumentIndex;
+  virtual Optional<unsigned>
+  getAdjustedParameterIndex(unsigned ASTArgumentIndex) const {
+    return ASTArgumentIndex;
+  }
+
+  /// Some call event sub-classes conveniently adjust mismatching AST indices
+  /// to match parameter indices. This function converts an argument index
+  /// as understood by CallEvent to the argument index as understood by the AST.
+  virtual unsigned getASTArgumentIndex(unsigned CallArgumentIndex) const {
+    return CallArgumentIndex;
   }
 
   // Iterator access to formal parameters and their types.
@@ -769,6 +788,20 @@ public:
   static bool classof(const CallEvent *CA) {
     return CA->getKind() == CE_CXXMemberOperator;
   }
+
+  Optional<unsigned>
+  getAdjustedParameterIndex(unsigned ASTArgumentIndex) const override {
+    // For member operator calls argument 0 on the expression corresponds
+    // to implicit this-parameter on the declaration.
+    return (ASTArgumentIndex > 0) ? Optional<unsigned>(ASTArgumentIndex - 1)
+                                  : None;
+  }
+
+  unsigned getASTArgumentIndex(unsigned CallArgumentIndex) const override {
+    // For member operator calls argument 0 on the expression corresponds
+    // to implicit this-parameter on the declaration.
+    return CallArgumentIndex + 1;
+  }
 };
 
 /// Represents an implicit call to a C++ destructor.
@@ -793,7 +826,7 @@ protected:
                     ProgramStateRef St, const LocationContext *LCtx)
       : CXXInstanceCall(DD, St, LCtx) {
     Data = DtorDataTy(Target, IsBaseDestructor).getOpaqueValue();
-    Location = Trigger->getLocEnd();
+    Location = Trigger->getEndLoc();
   }
 
   CXXDestructorCall(const CXXDestructorCall &Other) = default;

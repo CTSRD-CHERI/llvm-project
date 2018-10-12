@@ -128,13 +128,12 @@ determineClangStyle(const ClangHighlighter &highlighter,
   return HighlightStyle::ColorStyle();
 }
 
-std::size_t ClangHighlighter::Highlight(const HighlightStyle &options,
-                                        llvm::StringRef line,
-                                        llvm::StringRef previous_lines,
-                                        Stream &result) const {
+void ClangHighlighter::Highlight(const HighlightStyle &options,
+                                 llvm::StringRef line,
+                                 llvm::Optional<size_t> cursor_pos,
+                                 llvm::StringRef previous_lines,
+                                 Stream &result) const {
   using namespace clang;
-
-  std::size_t written_bytes = 0;
 
   FileSystemOptions file_opts;
   FileManager file_mgr(file_opts);
@@ -170,6 +169,8 @@ std::size_t ClangHighlighter::Highlight(const HighlightStyle &options,
   // True once we actually lexed the user provided line.
   bool found_user_line = false;
 
+  // True if we already highlighted the token under the cursor, false otherwise.
+  bool highlighted_cursor = false;
   Token token;
   bool exit = false;
   while (!exit) {
@@ -206,11 +207,22 @@ std::size_t ClangHighlighter::Highlight(const HighlightStyle &options,
     if (tok_str.empty())
       continue;
 
+    // If the cursor is inside this token, we have to apply the 'selected'
+    // highlight style before applying the actual token color.
+    llvm::StringRef to_print = tok_str;
+    StreamString storage;
+    auto end = start + token.getLength();
+    if (cursor_pos && end > *cursor_pos && !highlighted_cursor) {
+      highlighted_cursor = true;
+      options.selected.Apply(storage, tok_str);
+      to_print = storage.GetString();
+    }
+
     // See how we are supposed to highlight this token.
     HighlightStyle::ColorStyle color =
         determineClangStyle(*this, token, tok_str, options, in_pp_directive);
 
-    written_bytes += color.Apply(result, tok_str);
+    color.Apply(result, to_print);
   }
 
   // If we went over the whole file but couldn't find our own file, then
@@ -219,9 +231,6 @@ std::size_t ClangHighlighter::Highlight(const HighlightStyle &options,
   // debug mode we bail out with an assert as this should never happen.
   if (!found_user_line) {
     result << line;
-    written_bytes += line.size();
     assert(false && "We couldn't find the user line in the input file?");
   }
-
-  return written_bytes;
 }

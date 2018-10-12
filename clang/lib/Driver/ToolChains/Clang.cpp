@@ -493,6 +493,8 @@ static codegenoptions::DebugInfoKind DebugLevelToInfoKind(const Arg &A) {
   if (A.getOption().matches(options::OPT_gline_tables_only) ||
       A.getOption().matches(options::OPT_ggdb1))
     return codegenoptions::DebugLineTablesOnly;
+  if (A.getOption().matches(options::OPT_gline_directives_only))
+    return codegenoptions::DebugDirectivesOnly;
   return codegenoptions::LimitedDebugInfo;
 }
 
@@ -889,6 +891,9 @@ static void RenderDebugEnablingArgs(const ArgList &Args, ArgStringList &CmdArgs,
                                     unsigned DwarfVersion,
                                     llvm::DebuggerKind DebuggerTuning) {
   switch (DebugInfoKind) {
+  case codegenoptions::DebugDirectivesOnly:
+    CmdArgs.push_back("-debug-info-kind=line-directives-only");
+    break;
   case codegenoptions::DebugLineTablesOnly:
     CmdArgs.push_back("-debug-info-kind=line-tables-only");
     break;
@@ -1454,6 +1459,11 @@ void Clang::AddAArch64TargetArgs(const ArgList &Args,
       CmdArgs.push_back("-aarch64-enable-global-merge=false");
     else
       CmdArgs.push_back("-aarch64-enable-global-merge=true");
+  }
+
+  if (Arg *A = Args.getLastArg(options::OPT_msign_return_address)) {
+    CmdArgs.push_back(
+        Args.MakeArgString(Twine("-msign-return-address=") + A->getValue()));
   }
 }
 
@@ -2228,8 +2238,6 @@ static void RenderAnalyzerOptions(const ArgList &Args, ArgStringList &CmdArgs,
   // Treat blocks as analysis entry points.
   CmdArgs.push_back("-analyzer-opt-analyze-nested-blocks");
 
-  CmdArgs.push_back("-analyzer-eagerly-assume");
-
   // Add default argument set.
   if (!Args.hasArg(options::OPT__analyzer_no_default_checks)) {
     CmdArgs.push_back("-analyzer-checker=core");
@@ -2925,6 +2933,7 @@ static void RenderDebugOptions(const ToolChain &TC, const Driver &D,
         if (SplitDWARFArg) {
           if (A->getIndex() > SplitDWARFArg->getIndex()) {
             if (DebugInfoKind == codegenoptions::NoDebugInfo ||
+                DebugInfoKind == codegenoptions::DebugDirectivesOnly ||
                 (DebugInfoKind == codegenoptions::DebugLineTablesOnly &&
                  SplitDWARFInlining))
               SplitDWARFArg = nullptr;
@@ -2976,6 +2985,10 @@ static void RenderDebugOptions(const ToolChain &TC, const Driver &D,
       DebugInfoKind != codegenoptions::NoDebugInfo)
     DWARFVersion = TC.GetDefaultDwarfVersion();
 
+  // -gline-directives-only supported only for the DWARF debug info.
+  if (DWARFVersion == 0 && DebugInfoKind == codegenoptions::DebugDirectivesOnly)
+    DebugInfoKind = codegenoptions::NoDebugInfo;
+
   // We ignore flag -gstrict-dwarf for now.
   // And we handle flag -grecord-gcc-switches later with DWARFDebugFlags.
   Args.ClaimAllArgs(options::OPT_g_flags_Group);
@@ -2993,10 +3006,11 @@ static void RenderDebugOptions(const ToolChain &TC, const Driver &D,
     CmdArgs.push_back("-dwarf-column-info");
 
   // FIXME: Move backend command line options to the module.
-  // If -gline-tables-only is the last option it wins.
+  // If -gline-tables-only or -gline-directives-only is the last option it wins.
   if (const Arg *A = Args.getLastArg(options::OPT_gmodules))
     if (checkDebugInfoOption(A, Args, D, TC)) {
-      if (DebugInfoKind != codegenoptions::DebugLineTablesOnly) {
+      if (DebugInfoKind != codegenoptions::DebugLineTablesOnly &&
+          DebugInfoKind != codegenoptions::DebugDirectivesOnly) {
         DebugInfoKind = codegenoptions::LimitedDebugInfo;
         CmdArgs.push_back("-dwarf-ext-refs");
         CmdArgs.push_back("-fmodule-format=obj");
@@ -3055,11 +3069,18 @@ static void RenderDebugOptions(const ToolChain &TC, const Driver &D,
       CmdArgs.push_back("-debug-info-macro");
 
   // -ggnu-pubnames turns on gnu style pubnames in the backend.
-  if (Args.hasFlag(options::OPT_ggnu_pubnames, options::OPT_gno_gnu_pubnames,
-                   false))
-    if (checkDebugInfoOption(Args.getLastArg(options::OPT_ggnu_pubnames), Args,
-                             D, TC))
-      CmdArgs.push_back("-ggnu-pubnames");
+  const auto *PubnamesArg =
+      Args.getLastArg(options::OPT_ggnu_pubnames, options::OPT_gno_gnu_pubnames,
+                      options::OPT_gpubnames, options::OPT_gno_pubnames);
+  if (SplitDWARFArg ||
+      (PubnamesArg && checkDebugInfoOption(PubnamesArg, Args, D, TC)))
+    if (!PubnamesArg ||
+        (!PubnamesArg->getOption().matches(options::OPT_gno_gnu_pubnames) &&
+         !PubnamesArg->getOption().matches(options::OPT_gno_pubnames)))
+      CmdArgs.push_back(PubnamesArg && PubnamesArg->getOption().matches(
+                                           options::OPT_gpubnames)
+                            ? "-gpubnames"
+                            : "-ggnu-pubnames");
 
   // -gdwarf-aranges turns on the emission of the aranges section in the
   // backend.
@@ -3996,6 +4017,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   Args.AddLastArg(CmdArgs, options::OPT_fno_operator_names);
   Args.AddLastArg(CmdArgs, options::OPT_femulated_tls,
                   options::OPT_fno_emulated_tls);
+  Args.AddLastArg(CmdArgs, options::OPT_fkeep_static_consts);
 
   // AltiVec-like language extensions aren't relevant for assembling.
   if (!isa<PreprocessJobAction>(JA) || Output.getType() != types::TY_PP_Asm)
@@ -4028,8 +4050,16 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
 
       // When in OpenMP offloading mode with NVPTX target, forward
       // cuda-mode flag
-      Args.AddLastArg(CmdArgs, options::OPT_fopenmp_cuda_mode,
-                      options::OPT_fno_openmp_cuda_mode);
+      if (Args.hasFlag(options::OPT_fopenmp_cuda_mode,
+                       options::OPT_fno_openmp_cuda_mode, /*Default=*/false))
+        CmdArgs.push_back("-fopenmp-cuda-mode");
+
+      // When in OpenMP offloading mode with NVPTX target, check if full runtime
+      // is required.
+      if (Args.hasFlag(options::OPT_fopenmp_cuda_force_full_runtime,
+                       options::OPT_fno_openmp_cuda_force_full_runtime,
+                       /*Default=*/false))
+        CmdArgs.push_back("-fopenmp-cuda-force-full-runtime");
       break;
     default:
       // By default, if Clang doesn't know how to generate useful OpenMP code
@@ -4225,7 +4255,6 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
           options::OPT_fuse_cxa_atexit, options::OPT_fno_use_cxa_atexit,
           !RawTriple.isOSWindows() &&
               RawTriple.getOS() != llvm::Triple::Solaris &&
-              getToolChain().getArch() != llvm::Triple::hexagon &&
               getToolChain().getArch() != llvm::Triple::xcore &&
               ((RawTriple.getVendor() != llvm::Triple::MipsTechnologies) ||
                RawTriple.hasEnvironment())) ||
@@ -4821,6 +4850,10 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                    options::OPT_fno_complete_member_pointers, false))
     CmdArgs.push_back("-fcomplete-member-pointers");
 
+  if (!Args.hasFlag(options::OPT_fcxx_static_destructors,
+                    options::OPT_fno_cxx_static_destructors, true))
+    CmdArgs.push_back("-fno-c++-static-destructors");
+
   if (Arg *A = Args.getLastArg(options::OPT_moutline,
                                options::OPT_mno_outline)) {
     if (A->getOption().matches(options::OPT_moutline)) {
@@ -4841,7 +4874,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   }
 
   if (Args.hasFlag(options::OPT_faddrsig, options::OPT_fno_addrsig,
-                   getToolChain().getTriple().isOSBinFormatELF() &&
+                   (getToolChain().getTriple().isOSBinFormatELF() ||
+                    getToolChain().getTriple().isOSBinFormatCOFF()) &&
                        getToolChain().useIntegratedAs()))
     CmdArgs.push_back("-faddrsig");
 
@@ -4915,7 +4949,8 @@ ObjCRuntime Clang::AddObjCRuntimeArgs(const ArgList &args,
     }
     if ((runtime.getKind() == ObjCRuntime::GNUstep) &&
         (runtime.getVersion() >= VersionTuple(2, 0)))
-      if (!getToolChain().getTriple().isOSBinFormatELF()) {
+      if (!getToolChain().getTriple().isOSBinFormatELF() &&
+          !getToolChain().getTriple().isOSBinFormatCOFF()) {
         getToolChain().getDriver().Diag(
             diag::err_drv_gnustep_objc_runtime_incompatible_binary)
           << runtime.getVersion().getMajor();
@@ -5273,9 +5308,28 @@ void Clang::AddClangCLArgs(const ArgList &Args, types::ID InputType,
       CmdArgs.push_back("msvc");
   }
 
-  if (Args.hasArg(options::OPT__SLASH_Guard) &&
-      Args.getLastArgValue(options::OPT__SLASH_Guard).equals_lower("cf"))
-    CmdArgs.push_back("-cfguard");
+  if (Arg *A = Args.getLastArg(options::OPT__SLASH_guard)) {
+    SmallVector<StringRef, 1> SplitArgs;
+    StringRef(A->getValue()).split(SplitArgs, ",");
+    bool Instrument = false;
+    bool NoChecks = false;
+    for (StringRef Arg : SplitArgs) {
+      if (Arg.equals_lower("cf"))
+        Instrument = true;
+      else if (Arg.equals_lower("cf-"))
+        Instrument = false;
+      else if (Arg.equals_lower("nochecks"))
+        NoChecks = true;
+      else if (Arg.equals_lower("nochecks-"))
+        NoChecks = false;
+      else
+        D.Diag(diag::err_drv_invalid_value) << A->getSpelling() << Arg;
+    }
+    // Currently there's no support emitting CFG instrumentation; the flag only
+    // emits the table of address-taken functions.
+    if (Instrument || NoChecks)
+      CmdArgs.push_back("-cfguard");
+  }
 }
 
 visualstudio::Compiler *Clang::getCLFallback() const {

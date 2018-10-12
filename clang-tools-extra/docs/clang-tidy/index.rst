@@ -55,6 +55,7 @@ There are currently the following groups of checks:
 ====================== =========================================================
 Name prefix            Description
 ====================== =========================================================
+``abseil-``            Checks related to Abseil library.
 ``android-``           Checks related to Android.
 ``boost-``             Checks related to Boost library.
 ``bugprone-``          Checks that target bugprone code constructs.
@@ -650,7 +651,8 @@ clang-tidy tests.
 
 An additional check enabled by ``check_clang_tidy.py`` ensures that
 if `CHECK-MESSAGES:` is used in a file then every warning or error
-must have an associated CHECK in that file.
+must have an associated CHECK in that file. Or, you can use ``CHECK-NOTES:``
+instead, if you want to **also** ensure that all the notes are checked.
 
 To use the ``check_clang_tidy.py`` script, put a .cpp file with the
 appropriate ``RUN`` line in the ``test/clang-tidy`` directory. Use

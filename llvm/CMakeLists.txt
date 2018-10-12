@@ -2,21 +2,6 @@
 
 cmake_minimum_required(VERSION 3.4.3)
 
-cmake_policy(SET CMP0022 NEW)
-
-cmake_policy(SET CMP0048 NEW)
-
-# CMake 3.1 and higher include generator expressions of the form
-# $<TARGETLIB:obj> in the SOURCES property.  These need to be
-# stripped everywhere that access the SOURCES property, so we just
-# defer to the OLD behavior of not including generator expressions
-# in the output for now.
-cmake_policy(SET CMP0051 OLD)
-
-cmake_policy(SET CMP0056 NEW)
-
-cmake_policy(SET CMP0057 NEW)
-
 if(POLICY CMP0068)
   cmake_policy(SET CMP0068 NEW)
   set(CMAKE_BUILD_WITH_INSTALL_NAME_DIR ON)
@@ -244,28 +229,10 @@ include(CPack)
 # versions).
 if( CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_CURRENT_BINARY_DIR AND NOT MSVC_IDE )
   message(FATAL_ERROR "In-source builds are not allowed.
-CMake would overwrite the makefiles distributed with LLVM.
 Please create a directory and run cmake from there, passing the path
 to this source directory as the last argument.
 This process created the file `CMakeCache.txt' and the directory `CMakeFiles'.
 Please delete them.")
-endif()
-if( NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR )
-  file(GLOB_RECURSE
-    tablegenned_files_on_include_dir
-    "${CMAKE_CURRENT_SOURCE_DIR}/include/llvm/*.gen")
-  file(GLOB_RECURSE
-    tablegenned_files_on_lib_dir
-    "${CMAKE_CURRENT_SOURCE_DIR}/lib/Target/*.inc")
-  if( tablegenned_files_on_include_dir OR tablegenned_files_on_lib_dir)
-    message(FATAL_ERROR "Apparently there is a previous in-source build,
-probably as the result of running `configure' and `make' on
-${CMAKE_CURRENT_SOURCE_DIR}.
-This may cause problems. The suspicious files are:
-${tablegenned_files_on_lib_dir}
-${tablegenned_files_on_include_dir}
-Please clean the source directory.")
-  endif()
 endif()
 
 string(TOUPPER "${CMAKE_BUILD_TYPE}" uppercase_CMAKE_BUILD_TYPE)
@@ -345,6 +312,8 @@ option(LLVM_ENABLE_CRASH_OVERRIDES "Enable crash overrides." ON)
 if(LLVM_ENABLE_CRASH_OVERRIDES)
   set(ENABLE_CRASH_OVERRIDES 1)
 endif()
+
+option(LLVM_ENABLE_CRASH_DUMPS "Turn on memory dumps on crashes. Currently only implemented on Windows." OFF)
 
 option(LLVM_ENABLE_FFI "Use libffi to call external functions from the interpreter" OFF)
 set(FFI_LIBRARY_DIR "" CACHE PATH "Additional directory, where CMake should search for libffi.so")
@@ -524,6 +493,15 @@ option(LLVM_BUILD_TESTS
 option(LLVM_INCLUDE_TESTS "Generate build targets for the LLVM unit tests." ON)
 option(LLVM_INCLUDE_GO_TESTS "Include the Go bindings tests in test build targets." ON)
 
+option(LLVM_BUILD_BENCHMARKS "Add LLVM benchmark targets to the list of default
+targets. If OFF, benchmarks still could be built using Benchmarks target." OFF)
+option(LLVM_INCLUDE_BENCHMARKS "Generate benchmark targets. If OFF, benchmarks
+can't be built. This is set to OFF for Windows." ON)
+
+if (CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
+  set(LLVM_INCLUDE_BENCHMARKS OFF)
+endif()
+
 option (LLVM_BUILD_DOCS "Build the llvm documentation." OFF)
 option (LLVM_INCLUDE_DOCS "Generate build targets for llvm documentation." ON)
 option (LLVM_ENABLE_DOXYGEN "Use doxygen to generate llvm API documentation." OFF)
@@ -645,7 +623,7 @@ endif()
 #  - We generate the library table used by llvm-config.
 #
 #  - We generate the dependencies for the CMake fragment, so that we will
-#    automatically reconfigure outselves.
+#    automatically reconfigure ourselves.
 
 set(LLVMBUILDTOOL "${LLVM_MAIN_SRC_DIR}/utils/llvm-build/llvm-build")
 set(LLVMCONFIGLIBRARYDEPENDENCIESINC
@@ -1041,6 +1019,21 @@ if(LLVM_DISTRIBUTION_COMPONENTS)
 endif()
 
 # This allows us to deploy the Universal CRT DLLs by passing -DCMAKE_INSTALL_UCRT_LIBRARIES=ON to CMake
-if (MSVC AND CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
+if (MSVC AND CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows" AND CMAKE_INSTALL_UCRT_LIBRARIES)
   include(InstallRequiredSystemLibraries)
+endif()
+
+if (LLVM_INCLUDE_BENCHMARKS)
+  # Override benchmark defaults so that when the library itself is updated these
+  # modifications are not lost.
+  set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "Disable benchmark testing" FORCE)
+  set(BENCHMARK_ENABLE_EXCEPTIONS OFF CACHE BOOL "Disable benchmark exceptions" FORCE)
+  set(BENCHMARK_ENABLE_INSTALL OFF CACHE BOOL "Don't install benchmark" FORCE)
+  set(BENCHMARK_DOWNLOAD_DEPENDENCIES OFF CACHE BOOL "Don't download dependencies" FORCE)
+  set(BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "Disable Google Test in benchmark" FORCE)
+  # Since LLVM requires C++11 it is safe to assume that std::regex is available.
+  set(HAVE_STD_REGEX ON CACHE BOOL "OK" FORCE)
+
+  add_subdirectory(utils/benchmark)
+  add_subdirectory(benchmarks)
 endif()

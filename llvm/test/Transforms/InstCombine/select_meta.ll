@@ -12,7 +12,7 @@ define i32 @foo(i32) local_unnamed_addr #0  {
 ;
   %2 = icmp sgt i32 %0, 2
   %3 = add nsw i32 %0, 20
-  %4 = add nsw i32 %0, -20
+  %4 = add i32 %0, -20
   select i1 %2, i32 %3, i32 %4, !prof !1
   ret i32 %5
 }

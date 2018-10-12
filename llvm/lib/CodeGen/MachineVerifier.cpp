@@ -23,6 +23,7 @@
 // the verifier errors.
 //===----------------------------------------------------------------------===//
 
+#include "LiveRangeCalc.h"
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DenseSet.h"
@@ -1532,10 +1533,12 @@ void MachineVerifier::checkLiveness(const MachineOperand *MO, unsigned MONum) {
         // get a report for its operand.
         if (Bad) {
           for (const MachineOperand &MOP : MI->uses()) {
-            if (!MOP.isReg())
+            if (!MOP.isReg() || !MOP.isImplicit())
               continue;
-            if (!MOP.isImplicit())
+
+            if (!TargetRegisterInfo::isPhysicalRegister(MOP.getReg()))
               continue;
+
             for (MCSubRegIterator SubRegs(MOP.getReg(), TRI); SubRegs.isValid();
                  ++SubRegs) {
               if (*SubRegs == Reg) {
@@ -2116,6 +2119,13 @@ void MachineVerifier::verifyLiveRangeSegment(const LiveRange &LR,
     // Skip this block.
     ++MFI;
   }
+
+  SmallVector<SlotIndex, 4> Undefs;
+  if (LaneMask.any()) {
+    LiveInterval &OwnerLI = LiveInts->getInterval(Reg);
+    OwnerLI.computeSubRangeUndefs(Undefs, LaneMask, *MRI, *Indexes);
+  }
+
   while (true) {
     assert(LiveInts->isLiveInToMBB(LR, &*MFI));
     // We don't know how to track physregs into a landing pad.
@@ -2141,7 +2151,9 @@ void MachineVerifier::verifyLiveRangeSegment(const LiveRange &LR,
       // instruction with subregister intervals
       // only one of the subregisters (not necessarily the current one) needs to
       // be defined.
-      if (!PVNI && (LaneMask.none() || !IsPHI) ) {
+      if (!PVNI && (LaneMask.none() || !IsPHI)) {
+        if (LiveRangeCalc::isJointlyDominated(*PI, Undefs, *Indexes))
+          continue;
         report("Register not marked live out of predecessor", *PI);
         report_context(LR, Reg, LaneMask);
         report_context(*VNI);

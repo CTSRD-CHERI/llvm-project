@@ -186,8 +186,6 @@ namespace {
 
     Value *simplifyFAdd(AddendVect& V, unsigned InstrQuota);
 
-    Value *performFactorization(Instruction *I);
-
     /// Convert given addend to a Value
     Value *createAddendVal(const FAddend &A, bool& NeedNeg);
 
@@ -197,7 +195,6 @@ namespace {
     Value *createFSub(Value *Opnd0, Value *Opnd1);
     Value *createFAdd(Value *Opnd0, Value *Opnd1);
     Value *createFMul(Value *Opnd0, Value *Opnd1);
-    Value *createFDiv(Value *Opnd0, Value *Opnd1);
     Value *createFNeg(Value *V);
     Value *createNaryFAdd(const AddendVect& Opnds, unsigned InstrQuota);
     void createInstPostProc(Instruction *NewInst, bool NoNumber = false);
@@ -427,89 +424,6 @@ unsigned FAddend::drillAddendDownOneStep
   return BreakNum;
 }
 
-// Try to perform following optimization on the input instruction I. Return the
-// simplified expression if was successful; otherwise, return 0.
-//
-//   Instruction "I" is                Simplified into
-// -------------------------------------------------------
-//   (x * y) +/- (x * z)               x * (y +/- z)
-//   (y / x) +/- (z / x)               (y +/- z) / x
-Value *FAddCombine::performFactorization(Instruction *I) {
-  assert((I->getOpcode() == Instruction::FAdd ||
-          I->getOpcode() == Instruction::FSub) && "Expect add/sub");
-
-  Instruction *I0 = dyn_cast<Instruction>(I->getOperand(0));
-  Instruction *I1 = dyn_cast<Instruction>(I->getOperand(1));
-
-  if (!I0 || !I1 || I0->getOpcode() != I1->getOpcode())
-    return nullptr;
-
-  bool isMpy = false;
-  if (I0->getOpcode() == Instruction::FMul)
-    isMpy = true;
-  else if (I0->getOpcode() != Instruction::FDiv)
-    return nullptr;
-
-  Value *Opnd0_0 = I0->getOperand(0);
-  Value *Opnd0_1 = I0->getOperand(1);
-  Value *Opnd1_0 = I1->getOperand(0);
-  Value *Opnd1_1 = I1->getOperand(1);
-
-  //  Input Instr I       Factor   AddSub0  AddSub1
-  //  ----------------------------------------------
-  // (x*y) +/- (x*z)        x        y         z
-  // (y/x) +/- (z/x)        x        y         z
-  Value *Factor = nullptr;
-  Value *AddSub0 = nullptr, *AddSub1 = nullptr;
-
-  if (isMpy) {
-    if (Opnd0_0 == Opnd1_0 || Opnd0_0 == Opnd1_1)
-      Factor = Opnd0_0;
-    else if (Opnd0_1 == Opnd1_0 || Opnd0_1 == Opnd1_1)
-      Factor = Opnd0_1;
-
-    if (Factor) {
-      AddSub0 = (Factor == Opnd0_0) ? Opnd0_1 : Opnd0_0;
-      AddSub1 = (Factor == Opnd1_0) ? Opnd1_1 : Opnd1_0;
-    }
-  } else if (Opnd0_1 == Opnd1_1) {
-    Factor = Opnd0_1;
-    AddSub0 = Opnd0_0;
-    AddSub1 = Opnd1_0;
-  }
-
-  if (!Factor)
-    return nullptr;
-
-  FastMathFlags Flags;
-  Flags.setFast();
-  if (I0) Flags &= I->getFastMathFlags();
-  if (I1) Flags &= I->getFastMathFlags();
-
-  // Create expression "NewAddSub = AddSub0 +/- AddsSub1"
-  Value *NewAddSub = (I->getOpcode() == Instruction::FAdd) ?
-                      createFAdd(AddSub0, AddSub1) :
-                      createFSub(AddSub0, AddSub1);
-  if (ConstantFP *CFP = dyn_cast<ConstantFP>(NewAddSub)) {
-    const APFloat &F = CFP->getValueAPF();
-    if (!F.isNormal())
-      return nullptr;
-  } else if (Instruction *II = dyn_cast<Instruction>(NewAddSub))
-    II->setFastMathFlags(Flags);
-
-  if (isMpy) {
-    Value *RI = createFMul(Factor, NewAddSub);
-    if (Instruction *II = dyn_cast<Instruction>(RI))
-      II->setFastMathFlags(Flags);
-    return RI;
-  }
-
-  Value *RI = createFDiv(NewAddSub, Factor);
-  if (Instruction *II = dyn_cast<Instruction>(RI))
-    II->setFastMathFlags(Flags);
-  return RI;
-}
-
 Value *FAddCombine::simplify(Instruction *I) {
   assert(I->hasAllowReassoc() && I->hasNoSignedZeros() &&
          "Expected 'reassoc'+'nsz' instruction");
@@ -594,8 +508,7 @@ Value *FAddCombine::simplify(Instruction *I) {
       return R;
   }
 
-  // step 6: Try factorization as the last resort,
-  return performFactorization(I);
+  return nullptr;
 }
 
 Value *FAddCombine::simplifyFAdd(AddendVect& Addends, unsigned InstrQuota) {
@@ -767,13 +680,6 @@ Value *FAddCombine::createFAdd(Value *Opnd0, Value *Opnd1) {
 
 Value *FAddCombine::createFMul(Value *Opnd0, Value *Opnd1) {
   Value *V = Builder.CreateFMul(Opnd0, Opnd1);
-  if (Instruction *I = dyn_cast<Instruction>(V))
-    createInstPostProc(I);
-  return V;
-}
-
-Value *FAddCombine::createFDiv(Value *Opnd0, Value *Opnd1) {
-  Value *V = Builder.CreateFDiv(Opnd0, Opnd1);
   if (Instruction *I = dyn_cast<Instruction>(V))
     createInstPostProc(I);
   return V;
@@ -1289,7 +1195,8 @@ Instruction *InstCombiner::visitAdd(BinaryOperator &I) {
   // integer add followed by a sext.
   if (SExtInst *LHSConv = dyn_cast<SExtInst>(LHS)) {
     // (add (sext x), cst) --> (sext (add x, cst'))
-    if (ConstantInt *RHSC = dyn_cast<ConstantInt>(RHS)) {
+    Constant *RHSC;
+    if (match(RHS, m_Constant(RHSC))) {
       if (LHSConv->hasOneUse()) {
         Constant *CI =
             ConstantExpr::getTrunc(RHSC, LHSConv->getOperand(0)->getType());
@@ -1325,7 +1232,8 @@ Instruction *InstCombiner::visitAdd(BinaryOperator &I) {
   // integer add followed by a zext.
   if (auto *LHSConv = dyn_cast<ZExtInst>(LHS)) {
     // (add (zext x), cst) --> (zext (add x, cst'))
-    if (ConstantInt *RHSC = dyn_cast<ConstantInt>(RHS)) {
+    Constant *RHSC;
+    if (match(RHS, m_Constant(RHSC))) {
       if (LHSConv->hasOneUse()) {
         Constant *CI =
             ConstantExpr::getTrunc(RHSC, LHSConv->getOperand(0)->getType());
@@ -1389,6 +1297,45 @@ Instruction *InstCombiner::visitAdd(BinaryOperator &I) {
     return V;
 
   return Changed ? &I : nullptr;
+}
+
+/// Factor a common operand out of fadd/fsub of fmul/fdiv.
+static Instruction *factorizeFAddFSub(BinaryOperator &I,
+                                      InstCombiner::BuilderTy &Builder) {
+  assert((I.getOpcode() == Instruction::FAdd ||
+          I.getOpcode() == Instruction::FSub) && "Expecting fadd/fsub");
+  assert(I.hasAllowReassoc() && I.hasNoSignedZeros() &&
+         "FP factorization requires FMF");
+  Value *Op0 = I.getOperand(0), *Op1 = I.getOperand(1);
+  Value *X, *Y, *Z;
+  bool IsFMul;
+  if ((match(Op0, m_OneUse(m_FMul(m_Value(X), m_Value(Z)))) &&
+       match(Op1, m_OneUse(m_c_FMul(m_Value(Y), m_Specific(Z))))) ||
+      (match(Op0, m_OneUse(m_FMul(m_Value(Z), m_Value(X)))) &&
+       match(Op1, m_OneUse(m_c_FMul(m_Value(Y), m_Specific(Z))))))
+    IsFMul = true;
+  else if (match(Op0, m_OneUse(m_FDiv(m_Value(X), m_Value(Z)))) &&
+           match(Op1, m_OneUse(m_FDiv(m_Value(Y), m_Specific(Z)))))
+    IsFMul = false;
+  else
+    return nullptr;
+
+  // (X * Z) + (Y * Z) --> (X + Y) * Z
+  // (X * Z) - (Y * Z) --> (X - Y) * Z
+  // (X / Z) + (Y / Z) --> (X + Y) / Z
+  // (X / Z) - (Y / Z) --> (X - Y) / Z
+  bool IsFAdd = I.getOpcode() == Instruction::FAdd;
+  Value *XY = IsFAdd ? Builder.CreateFAddFMF(X, Y, &I)
+                     : Builder.CreateFSubFMF(X, Y, &I);
+
+  // Bail out if we just created a denormal constant.
+  // TODO: This is copied from a previous implementation. Is it necessary?
+  const APFloat *C;
+  if (match(XY, m_APFloat(C)) && !C->isNormal())
+    return nullptr;
+
+  return IsFMul ? BinaryOperator::CreateFMulFMF(XY, Z, &I)
+                : BinaryOperator::CreateFDivFMF(XY, Z, &I);
 }
 
 Instruction *InstCombiner::visitFAdd(BinaryOperator &I) {
@@ -1478,6 +1425,8 @@ Instruction *InstCombiner::visitFAdd(BinaryOperator &I) {
     return replaceInstUsesWith(I, V);
 
   if (I.hasAllowReassoc() && I.hasNoSignedZeros()) {
+    if (Instruction *F = factorizeFAddFSub(I, Builder))
+      return F;
     if (Value *V = FAddCombine(Builder).simplify(&I))
       return replaceInstUsesWith(I, V);
   }
@@ -1892,17 +1841,15 @@ Instruction *InstCombiner::visitFSub(BinaryOperator &I) {
 
   // Similar to above, but look through a cast of the negated value:
   // X - (fptrunc(-Y)) --> X + fptrunc(Y)
-  if (match(Op1, m_OneUse(m_FPTrunc(m_FNeg(m_Value(Y)))))) {
-    Value *TruncY = Builder.CreateFPTrunc(Y, I.getType());
-    return BinaryOperator::CreateFAddFMF(Op0, TruncY, &I);
-  }
-  // X - (fpext(-Y)) --> X + fpext(Y)
-  if (match(Op1, m_OneUse(m_FPExt(m_FNeg(m_Value(Y)))))) {
-    Value *ExtY = Builder.CreateFPExt(Y, I.getType());
-    return BinaryOperator::CreateFAddFMF(Op0, ExtY, &I);
-  }
+  Type *Ty = I.getType();
+  if (match(Op1, m_OneUse(m_FPTrunc(m_FNeg(m_Value(Y))))))
+    return BinaryOperator::CreateFAddFMF(Op0, Builder.CreateFPTrunc(Y, Ty), &I);
 
-  // Handle specials cases for FSub with selects feeding the operation
+  // X - (fpext(-Y)) --> X + fpext(Y)
+  if (match(Op1, m_OneUse(m_FPExt(m_FNeg(m_Value(Y))))))
+    return BinaryOperator::CreateFAddFMF(Op0, Builder.CreateFPExt(Y, Ty), &I);
+
+  // Handle special cases for FSub with selects feeding the operation
   if (Value *V = SimplifySelectsFeedingBinaryOp(I, Op0, Op1))
     return replaceInstUsesWith(I, V);
 
@@ -1915,6 +1862,20 @@ Instruction *InstCombiner::visitFSub(BinaryOperator &I) {
     // Y - (Y + X) --> -X
     if (match(Op1, m_c_FAdd(m_Specific(Op0), m_Value(X))))
       return BinaryOperator::CreateFNegFMF(X, &I);
+
+    // (X * C) - X --> X * (C - 1.0)
+    if (match(Op0, m_FMul(m_Specific(Op1), m_Constant(C)))) {
+      Constant *CSubOne = ConstantExpr::getFSub(C, ConstantFP::get(Ty, 1.0));
+      return BinaryOperator::CreateFMulFMF(Op1, CSubOne, &I);
+    }
+    // X - (X * C) --> X * (1.0 - C)
+    if (match(Op1, m_FMul(m_Specific(Op0), m_Constant(C)))) {
+      Constant *OneSubC = ConstantExpr::getFSub(ConstantFP::get(Ty, 1.0), C);
+      return BinaryOperator::CreateFMulFMF(Op0, OneSubC, &I);
+    }
+
+    if (Instruction *F = factorizeFAddFSub(I, Builder))
+      return F;
 
     // TODO: This performs reassociative folds for FP ops. Some fraction of the
     // functionality has been subsumed by simple pattern matching here and in

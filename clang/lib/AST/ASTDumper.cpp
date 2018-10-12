@@ -997,7 +997,7 @@ void ASTDumper::dumpTemplateArgument(const TemplateArgument &A, SourceRange R) {
       A.getAsTemplate().dump(OS);
       break;
     case TemplateArgument::TemplateExpansion:
-      OS << " template expansion";
+      OS << " template expansion ";
       A.getAsTemplateOrTemplatePattern().dump(OS);
       break;
     case TemplateArgument::Expression:
@@ -2032,7 +2032,7 @@ void ASTDumper::VisitOMPExecutableDirective(
            << ClauseName.drop_front() << "Clause";
       }
       dumpPointer(C);
-      dumpSourceRange(SourceRange(C->getLocStart(), C->getLocEnd()));
+      dumpSourceRange(SourceRange(C->getBeginLoc(), C->getEndLoc()));
       if (C->isImplicit())
         OS << " <implicit>";
       for (auto *S : C->children())

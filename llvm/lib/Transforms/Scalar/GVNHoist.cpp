@@ -155,6 +155,7 @@ struct CHIArg {
 
 using CHIIt = SmallVectorImpl<CHIArg>::iterator;
 using CHIArgs = iterator_range<CHIIt>;
+using CHICache = DenseMap<BasicBlock *, SmallPtrSet<Instruction *, 4>>;
 using OutValuesType = DenseMap<BasicBlock *, SmallVector<CHIArg, 2>>;
 using InValuesType =
     DenseMap<BasicBlock *, SmallVector<std::pair<VNType, Instruction *>, 2>>;
@@ -247,7 +248,7 @@ static void combineKnownMetadata(Instruction *ReplInst, Instruction *I) {
       LLVMContext::MD_noalias,        LLVMContext::MD_range,
       LLVMContext::MD_fpmath,         LLVMContext::MD_invariant_load,
       LLVMContext::MD_invariant_group};
-  combineMetadata(ReplInst, I, KnownIDs);
+  combineMetadata(ReplInst, I, KnownIDs, true);
 }
 
 // This pass hoists common computations across branches sharing common
@@ -365,7 +366,7 @@ private:
 
   // Return true when a successor of BB dominates A.
   bool successorDominate(const BasicBlock *BB, const BasicBlock *A) {
-    for (const BasicBlock *Succ : BB->getTerminator()->successors())
+    for (const BasicBlock *Succ : successors(BB))
       if (DT->dominates(Succ, A))
         return true;
 
@@ -584,8 +585,8 @@ private:
     for (auto CHI : C) {
       BasicBlock *Dest = CHI.Dest;
       // Find if all the edges have values flowing out of BB.
-      bool Found = llvm::any_of(TI->successors(), [Dest](const BasicBlock *BB) {
-          return BB == Dest; });
+      bool Found = llvm::any_of(
+          successors(TI), [Dest](const BasicBlock *BB) { return BB == Dest; });
       if (!Found)
         return false;
     }
@@ -766,6 +767,7 @@ private:
     ReverseIDFCalculator IDFs(*PDT);
     OutValuesType OutValue;
     InValuesType InValue;
+    CHICache CachedCHIs;
     for (const auto &R : Ranks) {
       const SmallVecInsn &V = Map.lookup(R);
       if (V.size() < 2)
@@ -792,11 +794,12 @@ private:
       }
       // Insert empty CHI node for this VN. This is used to factor out
       // basic blocks where the ANTIC can potentially change.
-      for (auto IDFB : IDFBlocks) { // TODO: Prune out useless CHI insertions.
+      for (auto IDFB : IDFBlocks) {
         for (unsigned i = 0; i < V.size(); ++i) {
           CHIArg C = {VN, nullptr, nullptr};
            // Ignore spurious PDFs.
-          if (DT->properlyDominates(IDFB, V[i]->getParent())) {
+          if (DT->properlyDominates(IDFB, V[i]->getParent()) &&
+              CachedCHIs[IDFB].insert(V[i]).second) {
             OutValue[IDFB].push_back(C);
             LLVM_DEBUG(dbgs() << "\nInsertion a CHI for BB: " << IDFB->getName()
                               << ", for Insn: " << *V[i]);
@@ -1100,7 +1103,7 @@ private:
           break;
 
         // Do not value number terminator instructions.
-        if (isa<TerminatorInst>(&I1))
+        if (I1.isTerminator())
           break;
 
         if (auto *Load = dyn_cast<LoadInst>(&I1))

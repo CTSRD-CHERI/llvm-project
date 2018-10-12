@@ -1079,19 +1079,20 @@ Instruction *InstCombiner::foldAllocaCmp(ICmpInst &ICI,
       ConstantInt::get(CmpTy, !CmpInst::isTrueWhenEqual(ICI.getPredicate())));
 }
 
-/// Fold "icmp pred (X+CI), X".
-Instruction *InstCombiner::foldICmpAddOpConst(Value *X, ConstantInt *CI,
+/// Fold "icmp pred (X+C), X".
+Instruction *InstCombiner::foldICmpAddOpConst(Value *X, const APInt &C,
                                               ICmpInst::Predicate Pred) {
   // From this point on, we know that (X+C <= X) --> (X+C < X) because C != 0,
   // so the values can never be equal.  Similarly for all other "or equals"
   // operators.
+  assert(!!C && "C should not be zero!");
 
   // (X+1) <u X        --> X >u (MAXUINT-1)        --> X == 255
   // (X+2) <u X        --> X >u (MAXUINT-2)        --> X > 253
   // (X+MAXUINT) <u X  --> X >u (MAXUINT-MAXUINT)  --> X != 0
   if (Pred == ICmpInst::ICMP_ULT || Pred == ICmpInst::ICMP_ULE) {
-    Value *R =
-      ConstantExpr::getSub(ConstantInt::getAllOnesValue(CI->getType()), CI);
+    Constant *R = ConstantInt::get(X->getType(),
+                                   APInt::getMaxValue(C.getBitWidth()) - C);
     return new ICmpInst(ICmpInst::ICMP_UGT, X, R);
   }
 
@@ -1099,11 +1100,10 @@ Instruction *InstCombiner::foldICmpAddOpConst(Value *X, ConstantInt *CI,
   // (X+2) >u X        --> X <u (0-2)        --> X <u 254
   // (X+MAXUINT) >u X  --> X <u (0-MAXUINT)  --> X <u 1  --> X == 0
   if (Pred == ICmpInst::ICMP_UGT || Pred == ICmpInst::ICMP_UGE)
-    return new ICmpInst(ICmpInst::ICMP_ULT, X, ConstantExpr::getNeg(CI));
+    return new ICmpInst(ICmpInst::ICMP_ULT, X,
+                        ConstantInt::get(X->getType(), -C));
 
-  unsigned BitWidth = CI->getType()->getPrimitiveSizeInBits();
-  ConstantInt *SMax = ConstantInt::get(X->getContext(),
-                                       APInt::getSignedMaxValue(BitWidth));
+  APInt SMax = APInt::getSignedMaxValue(C.getBitWidth());
 
   // (X+ 1) <s X       --> X >s (MAXSINT-1)          --> X == 127
   // (X+ 2) <s X       --> X >s (MAXSINT-2)          --> X >s 125
@@ -1112,7 +1112,8 @@ Instruction *InstCombiner::foldICmpAddOpConst(Value *X, ConstantInt *CI,
   // (X+ -2) <s X      --> X >s (MAXSINT- -2)        --> X >s 126
   // (X+ -1) <s X      --> X >s (MAXSINT- -1)        --> X != 127
   if (Pred == ICmpInst::ICMP_SLT || Pred == ICmpInst::ICMP_SLE)
-    return new ICmpInst(ICmpInst::ICMP_SGT, X, ConstantExpr::getSub(SMax, CI));
+    return new ICmpInst(ICmpInst::ICMP_SGT, X,
+                        ConstantInt::get(X->getType(), SMax - C));
 
   // (X+ 1) >s X       --> X <s (MAXSINT-(1-1))       --> X != 127
   // (X+ 2) >s X       --> X <s (MAXSINT-(2-1))       --> X <s 126
@@ -1122,8 +1123,8 @@ Instruction *InstCombiner::foldICmpAddOpConst(Value *X, ConstantInt *CI,
   // (X+ -1) >s X      --> X <s (MAXSINT-(-1-1))      --> X == -128
 
   assert(Pred == ICmpInst::ICMP_SGT || Pred == ICmpInst::ICMP_SGE);
-  Constant *C = Builder.getInt(CI->getValue() - 1);
-  return new ICmpInst(ICmpInst::ICMP_SLT, X, ConstantExpr::getSub(SMax, C));
+  return new ICmpInst(ICmpInst::ICMP_SLT, X,
+                      ConstantInt::get(X->getType(), SMax - (C - 1)));
 }
 
 /// Handle "(icmp eq/ne (ashr/lshr AP2, A), AP1)" ->
@@ -4598,6 +4599,26 @@ static Instruction *canonicalizeICmpBool(ICmpInst &I,
   }
 }
 
+static Instruction *foldVectorCmp(CmpInst &Cmp,
+                                  InstCombiner::BuilderTy &Builder) {
+  // If both arguments of the cmp are shuffles that use the same mask and
+  // shuffle within a single vector, move the shuffle after the cmp.
+  Value *LHS = Cmp.getOperand(0), *RHS = Cmp.getOperand(1);
+  Value *V1, *V2;
+  Constant *M;
+  if (match(LHS, m_ShuffleVector(m_Value(V1), m_Undef(), m_Constant(M))) &&
+      match(RHS, m_ShuffleVector(m_Value(V2), m_Undef(), m_Specific(M))) &&
+      V1->getType() == V2->getType() &&
+      (LHS->hasOneUse() || RHS->hasOneUse())) {
+    // cmp (shuffle V1, M), (shuffle V2, M) --> shuffle (cmp V1, V2), M
+    CmpInst::Predicate P = Cmp.getPredicate();
+    Value *NewCmp = isa<ICmpInst>(Cmp) ? Builder.CreateICmp(P, V1, V2)
+                                       : Builder.CreateFCmp(P, V1, V2);
+    return new ShuffleVectorInst(NewCmp, UndefValue::get(NewCmp->getType()), M);
+  }
+  return nullptr;
+}
+
 Instruction *InstCombiner::visitICmpInst(ICmpInst &I) {
   bool Changed = false;
   Value *Op0 = I.getOperand(0), *Op1 = I.getOperand(1);
@@ -4857,15 +4878,20 @@ Instruction *InstCombiner::visitICmpInst(ICmpInst &I) {
           return ExtractValueInst::Create(ACXI, 1);
 
   {
-    Value *X; ConstantInt *Cst;
+    Value *X;
+    const APInt *C;
     // icmp X+Cst, X
-    if (match(Op0, m_Add(m_Value(X), m_ConstantInt(Cst))) && Op1 == X)
-      return foldICmpAddOpConst(X, Cst, I.getPredicate());
+    if (match(Op0, m_Add(m_Value(X), m_APInt(C))) && Op1 == X)
+      return foldICmpAddOpConst(X, *C, I.getPredicate());
 
     // icmp X, X+Cst
-    if (match(Op1, m_Add(m_Value(X), m_ConstantInt(Cst))) && Op0 == X)
-      return foldICmpAddOpConst(X, Cst, I.getSwappedPredicate());
+    if (match(Op1, m_Add(m_Value(X), m_APInt(C))) && Op0 == X)
+      return foldICmpAddOpConst(X, *C, I.getSwappedPredicate());
   }
+
+  if (I.getType()->isVectorTy())
+    if (Instruction *Res = foldVectorCmp(I, Builder))
+      return Res;
 
   return Changed ? &I : nullptr;
 }
@@ -5153,11 +5179,11 @@ Instruction *InstCombiner::visitFCmpInst(FCmpInst &I) {
   // If we're just checking for a NaN (ORD/UNO) and have a non-NaN operand,
   // then canonicalize the operand to 0.0.
   if (Pred == CmpInst::FCMP_ORD || Pred == CmpInst::FCMP_UNO) {
-    if (!match(Op0, m_PosZeroFP()) && isKnownNeverNaN(Op0)) {
+    if (!match(Op0, m_PosZeroFP()) && isKnownNeverNaN(Op0, &TLI)) {
       I.setOperand(0, ConstantFP::getNullValue(Op0->getType()));
       return &I;
     }
-    if (!match(Op1, m_PosZeroFP()) && isKnownNeverNaN(Op1)) {
+    if (!match(Op1, m_PosZeroFP()) && isKnownNeverNaN(Op1, &TLI)) {
       I.setOperand(1, ConstantFP::getNullValue(Op0->getType()));
       return &I;
     }
@@ -5300,6 +5326,10 @@ Instruction *InstCombiner::visitFCmpInst(FCmpInst &I) {
     if (FPExtInst *RHSExt = dyn_cast<FPExtInst>(Op1))
       if (LHSExt->getSrcTy() == RHSExt->getSrcTy())
         return new FCmpInst(Pred, LHSExt->getOperand(0), RHSExt->getOperand(0));
+
+  if (I.getType()->isVectorTy())
+    if (Instruction *Res = foldVectorCmp(I, Builder))
+      return Res;
 
   return Changed ? &I : nullptr;
 }

@@ -15,11 +15,8 @@
 
 using namespace lldb_private;
 
-std::size_t HighlightStyle::ColorStyle::Apply(Stream &s,
-                                              llvm::StringRef value) const {
+void HighlightStyle::ColorStyle::Apply(Stream &s, llvm::StringRef value) const {
   s << m_prefix << value << m_suffix;
-  // Calculate how many bytes we have written.
-  return m_prefix.size() + value.size() + m_suffix.size();
 }
 
 void HighlightStyle::ColorStyle::Set(llvm::StringRef prefix,
@@ -28,13 +25,28 @@ void HighlightStyle::ColorStyle::Set(llvm::StringRef prefix,
   m_suffix = lldb_utility::ansi::FormatAnsiTerminalCodes(suffix);
 }
 
-std::size_t NoHighlighter::Highlight(const HighlightStyle &options,
-                                     llvm::StringRef line,
-                                     llvm::StringRef previous_lines,
-                                     Stream &s) const {
-  // We just forward the input to the output and do no highlighting.
-  s << line;
-  return line.size();
+void DefaultHighlighter::Highlight(const HighlightStyle &options,
+                                   llvm::StringRef line,
+                                   llvm::Optional<size_t> cursor_pos,
+                                   llvm::StringRef previous_lines,
+                                   Stream &s) const {
+  // If we don't have a valid cursor, then we just print the line as-is.
+  if (!cursor_pos || *cursor_pos >= line.size()) {
+    s << line;
+    return;
+  }
+
+  // If we have a valid cursor, we have to apply the 'selected' style around
+  // the character below the cursor.
+
+  // Split the line around the character which is below the cursor.
+  size_t column = *cursor_pos;
+  // Print the characters before the cursor.
+  s << line.substr(0, column);
+  // Print the selected character with the defined color codes.
+  options.selected.Apply(s, line.substr(column, 1));
+  // Print the rest of the line.
+  s << line.substr(column + 1U);
 }
 
 static HighlightStyle::ColorStyle GetColor(const char *c) {
@@ -55,14 +67,15 @@ HighlighterManager::getHighlighterFor(lldb::LanguageType language_type,
   Language *language = lldb_private::Language::FindPlugin(language_type, path);
   if (language && language->GetHighlighter())
     return *language->GetHighlighter();
-  return m_no_highlighter;
+  return m_default;
 }
 
 std::string Highlighter::Highlight(const HighlightStyle &options,
                                    llvm::StringRef line,
+                                   llvm::Optional<size_t> cursor_pos,
                                    llvm::StringRef previous_lines) const {
   StreamString s;
-  Highlight(options, line, previous_lines, s);
+  Highlight(options, line, cursor_pos, previous_lines, s);
   s.Flush();
   return s.GetString().str();
 }

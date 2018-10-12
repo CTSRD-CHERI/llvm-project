@@ -42,10 +42,10 @@
 #include "clang/StaticAnalyzer/Core/PathSensitive/MemRegion.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/ProgramState.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/ProgramState_Fwd.h"
+#include "clang/StaticAnalyzer/Core/PathSensitive/SMTConv.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/SValBuilder.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/SVals.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/SubEngine.h"
-#include "clang/StaticAnalyzer/Core/PathSensitive/SMTConstraintManager.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/None.h"
 #include "llvm/ADT/Optional.h"
@@ -682,7 +682,7 @@ public:
     if (auto Loc = matchAssignment(N, BRC)) {
       if (isFunctionMacroExpansion(*Loc, SMgr)) {
         std::string MacroName = getMacroName(*Loc, BRC);
-        SourceLocation BugLoc = BugPoint->getStmt()->getLocStart();
+        SourceLocation BugLoc = BugPoint->getStmt()->getBeginLoc();
         if (!BugLoc.isMacroID() || getMacroName(BugLoc, BRC) != MacroName)
           BR.markInvalid(getTag(), MacroName.c_str());
       }
@@ -730,12 +730,12 @@ private:
         if (const Expr *RHS = VD->getInit())
           if (RegionOfInterest->isSubRegionOf(
                   State->getLValue(VD, LCtx).getAsRegion()))
-            return RHS->getLocStart();
+            return RHS->getBeginLoc();
     } else if (const auto *BO = dyn_cast<BinaryOperator>(S)) {
       const MemRegion *R = N->getSVal(BO->getLHS()).getAsRegion();
       const Expr *RHS = BO->getRHS();
       if (BO->isAssignmentOp() && RegionOfInterest->isSubRegionOf(R)) {
-        return RHS->getLocStart();
+        return RHS->getBeginLoc();
       }
     }
     return None;
@@ -759,10 +759,14 @@ class ReturnVisitor : public BugReporterVisitor {
 
   bool EnableNullFPSuppression;
   bool ShouldInvalidate = true;
+  AnalyzerOptions& Options;
 
 public:
-  ReturnVisitor(const StackFrameContext *Frame, bool Suppressed)
-      : StackFrame(Frame), EnableNullFPSuppression(Suppressed) {}
+  ReturnVisitor(const StackFrameContext *Frame,
+                bool Suppressed,
+                AnalyzerOptions &Options)
+      : StackFrame(Frame), EnableNullFPSuppression(Suppressed),
+        Options(Options) {}
 
   static void *getTag() {
     static int Tag = 0;
@@ -790,10 +794,10 @@ public:
 
     // First, find when we processed the statement.
     do {
-      if (Optional<CallExitEnd> CEE = Node->getLocationAs<CallExitEnd>())
+      if (auto CEE = Node->getLocationAs<CallExitEnd>())
         if (CEE->getCalleeContext()->getCallSite() == S)
           break;
-      if (Optional<StmtPoint> SP = Node->getLocationAs<StmtPoint>())
+      if (auto SP = Node->getLocationAs<StmtPoint>())
         if (SP->getStmt() == S)
           break;
 
@@ -834,13 +838,8 @@ public:
 
     BR.markInteresting(CalleeContext);
     BR.addVisitor(llvm::make_unique<ReturnVisitor>(CalleeContext,
-                                                   EnableNullFPSuppression));
-  }
-
-  /// Returns true if any counter-suppression heuristics are enabled for
-  /// ReturnVisitor.
-  static bool hasCounterSuppression(AnalyzerOptions &Options) {
-    return Options.shouldAvoidSuppressingNullArgumentPaths();
+                                                   EnableNullFPSuppression,
+                                                   Options));
   }
 
   std::shared_ptr<PathDiagnosticPiece>
@@ -888,15 +887,6 @@ public:
 
     RetE = RetE->IgnoreParenCasts();
 
-    // If we can't prove the return value is 0, just mark it interesting, and
-    // make sure to track it into any further inner functions.
-    if (!State->isNull(V).isConstrainedTrue()) {
-      BR.markInteresting(V);
-      ReturnVisitor::addVisitorIfNecessary(N, RetE, BR,
-                                           EnableNullFPSuppression);
-      return nullptr;
-    }
-
     // If we're returning 0, we should track where that 0 came from.
     bugreporter::trackNullOrUndefValue(N, RetE, BR, /*IsArg*/ false,
                                        EnableNullFPSuppression);
@@ -905,20 +895,33 @@ public:
     SmallString<64> Msg;
     llvm::raw_svector_ostream Out(Msg);
 
-    if (V.getAs<Loc>()) {
-      // If we have counter-suppression enabled, make sure we keep visiting
-      // future nodes. We want to emit a path note as well, in case
-      // the report is resurrected as valid later on.
-      AnalyzerOptions &Options = BRC.getAnalyzerOptions();
-      if (EnableNullFPSuppression && hasCounterSuppression(Options))
-        Mode = MaybeUnsuppress;
+    if (State->isNull(V).isConstrainedTrue()) {
+      if (V.getAs<Loc>()) {
 
-      if (RetE->getType()->isObjCObjectPointerType())
-        Out << "Returning nil";
-      else
-        Out << "Returning null pointer";
+        // If we have counter-suppression enabled, make sure we keep visiting
+        // future nodes. We want to emit a path note as well, in case
+        // the report is resurrected as valid later on.
+        if (EnableNullFPSuppression &&
+            Options.shouldAvoidSuppressingNullArgumentPaths())
+          Mode = MaybeUnsuppress;
+
+        if (RetE->getType()->isObjCObjectPointerType()) {
+          Out << "Returning nil";
+        } else {
+          Out << "Returning null pointer";
+        }
+      } else {
+        Out << "Returning zero";
+      }
+
     } else {
-      Out << "Returning zero";
+      if (auto CI = V.getAs<nonloc::ConcreteInt>()) {
+        Out << "Returning the value " << CI->getValue();
+      } else if (V.getAs<Loc>()) {
+        Out << "Returning pointer";
+      } else {
+        Out << "Returning value";
+      }
     }
 
     if (LValue) {
@@ -947,8 +950,7 @@ public:
   visitNodeMaybeUnsuppress(const ExplodedNode *N, const ExplodedNode *PrevN,
                            BugReporterContext &BRC, BugReport &BR) {
 #ifndef NDEBUG
-    AnalyzerOptions &Options = BRC.getAnalyzerOptions();
-    assert(hasCounterSuppression(Options));
+    assert(Options.shouldAvoidSuppressingNullArgumentPaths());
 #endif
 
     // Are we at the entry node for this call?
@@ -1264,10 +1266,9 @@ FindLastStoreBRVisitor::VisitNode(const ExplodedNode *Succ,
         InitE = InitE->IgnoreParenCasts();
       bugreporter::trackNullOrUndefValue(StoreSite, InitE, BR, IsParam,
                                          EnableNullFPSuppression);
-    } else {
-      ReturnVisitor::addVisitorIfNecessary(StoreSite, InitE->IgnoreParenCasts(),
-                                           BR, EnableNullFPSuppression);
     }
+    ReturnVisitor::addVisitorIfNecessary(StoreSite, InitE->IgnoreParenCasts(),
+                                         BR, EnableNullFPSuppression);
   }
 
   // Okay, we've found the binding. Emit an appropriate message.
@@ -1468,7 +1469,7 @@ SuppressInlineDefensiveChecksVisitor::VisitNode(const ExplodedNode *Succ,
       CurTerminatorStmt = BE->getSrc()->getTerminator().getStmt();
     } else if (auto SP = CurPoint.getAs<StmtPoint>()) {
       const Stmt *CurStmt = SP->getStmt();
-      if (!CurStmt->getLocStart().isMacroID())
+      if (!CurStmt->getBeginLoc().isMacroID())
         return nullptr;
 
       CFGStmtMap *Map = CurLC->getAnalysisDeclContext()->getCFGStmtMap();
@@ -1480,9 +1481,9 @@ SuppressInlineDefensiveChecksVisitor::VisitNode(const ExplodedNode *Succ,
     if (!CurTerminatorStmt)
       return nullptr;
 
-    SourceLocation TerminatorLoc = CurTerminatorStmt->getLocStart();
+    SourceLocation TerminatorLoc = CurTerminatorStmt->getBeginLoc();
     if (TerminatorLoc.isMacroID()) {
-      SourceLocation BugLoc = BugPoint->getStmt()->getLocStart();
+      SourceLocation BugLoc = BugPoint->getStmt()->getBeginLoc();
 
       // Suppress reports unless we are in that same macro.
       if (!BugLoc.isMacroID() ||
@@ -1559,6 +1560,10 @@ static const Expr *peelOffOuterExpr(const Expr *Ex,
   if (auto *BO = dyn_cast<BinaryOperator>(Ex))
     if (const Expr *SubEx = peelOffPointerArithmetic(BO))
       return peelOffOuterExpr(SubEx, N);
+
+  if (auto *UO = dyn_cast<UnaryOperator>(Ex))
+    if (UO->getOpcode() == UO_LNot)
+      return peelOffOuterExpr(UO->getSubExpr(), N);
 
   return Ex;
 }
@@ -2026,8 +2031,8 @@ bool ConditionBRVisitor::patternMatch(const Expr *Ex,
 
   // Use heuristics to determine if Ex is a macro expending to a literal and
   // if so, use the macro's name.
-  SourceLocation LocStart = Ex->getLocStart();
-  SourceLocation LocEnd = Ex->getLocEnd();
+  SourceLocation LocStart = Ex->getBeginLoc();
+  SourceLocation LocEnd = Ex->getEndLoc();
   if (LocStart.isMacroID() && LocEnd.isMacroID() &&
       (isa<GNUNullExpr>(Ex) ||
        isa<ObjCBoolLiteralExpr>(Ex) ||
@@ -2041,10 +2046,10 @@ bool ConditionBRVisitor::patternMatch(const Expr *Ex,
     bool beginAndEndAreTheSameMacro = StartName.equals(EndName);
 
     bool partOfParentMacro = false;
-    if (ParentEx->getLocStart().isMacroID()) {
+    if (ParentEx->getBeginLoc().isMacroID()) {
       StringRef PName = Lexer::getImmediateMacroNameForDiagnostics(
-        ParentEx->getLocStart(), BRC.getSourceManager(),
-        BRC.getASTContext().getLangOpts());
+          ParentEx->getBeginLoc(), BRC.getSourceManager(),
+          BRC.getASTContext().getLangOpts());
       partOfParentMacro = PName.equals(StartName);
     }
 
@@ -2499,7 +2504,7 @@ void FalsePositiveRefutationBRVisitor::finalizeVisitor(
   VisitNode(EndPathNode, nullptr, BRC, BR);
 
   // Create a refutation manager
-  std::unique_ptr<SMTSolver> RefutationSolver = CreateZ3Solver();
+  SMTSolverRef RefutationSolver = CreateZ3Solver();
   ASTContext &Ctx = BRC.getASTContext();
 
   // Add constraints to the solver
@@ -2509,15 +2514,19 @@ void FalsePositiveRefutationBRVisitor::finalizeVisitor(
     SMTExprRef Constraints = RefutationSolver->fromBoolean(false);
     for (const auto &Range : I.second) {
       Constraints = RefutationSolver->mkOr(
-          Constraints,
-          RefutationSolver->getRangeExpr(Ctx, Sym, Range.From(), Range.To(),
-                                         /*InRange=*/true));
+          Constraints, SMTConv::getRangeExpr(RefutationSolver, Ctx, Sym,
+                                             Range.From(), Range.To(),
+                                             /*InRange=*/true));
     }
     RefutationSolver->addConstraint(Constraints);
   }
 
   // And check for satisfiability
-  if (RefutationSolver->check().isConstrainedFalse())
+  Optional<bool> isSat = RefutationSolver->check();
+  if (!isSat.hasValue())
+    return;
+
+  if (!isSat.getValue())
     BR.markInvalid("Infeasible constraints", EndPathNode->getLocationContext());
 }
 

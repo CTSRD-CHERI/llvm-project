@@ -583,17 +583,22 @@ std::error_code setPermissions(const Twine &Path, perms Permissions) {
   return std::error_code();
 }
 
-std::error_code setLastModificationAndAccessTime(int FD, TimePoint<> Time) {
+std::error_code setLastAccessAndModificationTime(int FD, TimePoint<> AccessTime,
+                                                 TimePoint<> ModificationTime) {
 #if defined(HAVE_FUTIMENS)
   timespec Times[2];
-  Times[0] = Times[1] = sys::toTimeSpec(Time);
+  Times[0] = sys::toTimeSpec(AccessTime);
+  Times[1] = sys::toTimeSpec(ModificationTime);
   if (::futimens(FD, Times))
     return std::error_code(errno, std::generic_category());
   return std::error_code();
 #elif defined(HAVE_FUTIMES)
   timeval Times[2];
-  Times[0] = Times[1] = sys::toTimeVal(
-      std::chrono::time_point_cast<std::chrono::microseconds>(Time));
+  Times[0] = sys::toTimeVal(
+      std::chrono::time_point_cast<std::chrono::microseconds>(AccessTime));
+  Times[1] =
+      sys::toTimeVal(std::chrono::time_point_cast<std::chrono::microseconds>(
+          ModificationTime));
   if (::futimes(FD, Times))
     return std::error_code(errno, std::generic_category());
   return std::error_code();
@@ -769,8 +774,10 @@ std::error_code openFile(const Twine &Name, int &ResultFD,
 
   SmallString<128> Storage;
   StringRef P = Name.toNullTerminatedStringRef(Storage);
-  if ((ResultFD = sys::RetryAfterSignal(-1, ::open, P.begin(), OpenFlags, Mode)) <
-      0)
+  // Call ::open in a lambda to avoid overload resolution in RetryAfterSignal
+  // when open is overloaded, such as in Bionic.
+  auto Open = [&]() { return ::open(P.begin(), OpenFlags, Mode); };
+  if ((ResultFD = sys::RetryAfterSignal(-1, Open)) < 0)
     return std::error_code(errno, std::generic_category());
 #ifndef O_CLOEXEC
   if (!(Flags & OF_ChildInherit)) {

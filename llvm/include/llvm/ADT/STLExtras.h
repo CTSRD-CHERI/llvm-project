@@ -677,18 +677,20 @@ class concat_iterator
   /// Note that something like iterator_range seems nice at first here, but the
   /// range properties are of little benefit and end up getting in the way
   /// because we need to do mutation on the current iterators.
-  std::tuple<std::pair<IterTs, IterTs>...> IterPairs;
+  std::tuple<IterTs...> Begins;
+  std::tuple<IterTs...> Ends;
 
   /// Attempts to increment a specific iterator.
   ///
   /// Returns true if it was able to increment the iterator. Returns false if
   /// the iterator is already at the end iterator.
   template <size_t Index> bool incrementHelper() {
-    auto &IterPair = std::get<Index>(IterPairs);
-    if (IterPair.first == IterPair.second)
+    auto &Begin = std::get<Index>(Begins);
+    auto &End = std::get<Index>(Ends);
+    if (Begin == End)
       return false;
 
-    ++IterPair.first;
+    ++Begin;
     return true;
   }
 
@@ -712,11 +714,12 @@ class concat_iterator
   /// dereferences the iterator and returns the address of the resulting
   /// reference.
   template <size_t Index> ValueT *getHelper() const {
-    auto &IterPair = std::get<Index>(IterPairs);
-    if (IterPair.first == IterPair.second)
+    auto &Begin = std::get<Index>(Begins);
+    auto &End = std::get<Index>(Ends);
+    if (Begin == End)
       return nullptr;
 
-    return &*IterPair.first;
+    return &*Begin;
   }
 
   /// Finds the first non-end iterator, dereferences, and returns the resulting
@@ -743,7 +746,7 @@ public:
   /// iterators.
   template <typename... RangeTs>
   explicit concat_iterator(RangeTs &&... Ranges)
-      : IterPairs({std::begin(Ranges), std::end(Ranges)}...) {}
+      : Begins(std::begin(Ranges)...), Ends(std::end(Ranges)...) {}
 
   using BaseT::operator++;
 
@@ -755,7 +758,7 @@ public:
   ValueT &operator*() const { return get(index_sequence_for<IterTs...>()); }
 
   bool operator==(const concat_iterator &RHS) const {
-    return IterPairs == RHS.IterPairs;
+    return Begins == RHS.Begins && Ends == RHS.Ends;
   }
 };
 
@@ -1005,6 +1008,18 @@ void DeleteContainerSeconds(Container &C) {
   C.clear();
 }
 
+/// Get the size of a range. This is a wrapper function around std::distance
+/// which is only enabled when the operation is O(1).
+template <typename R>
+auto size(R &&Range, typename std::enable_if<
+                         std::is_same<typename std::iterator_traits<decltype(
+                                          Range.begin())>::iterator_category,
+                                      std::random_access_iterator_tag>::value,
+                         void>::type * = nullptr)
+    -> decltype(std::distance(Range.begin(), Range.end())) {
+  return std::distance(Range.begin(), Range.end());
+}
+
 /// Provide wrappers to std::for_each which take ranges instead of having to
 /// pass begin/end explicitly.
 template <typename R, typename UnaryPredicate>
@@ -1115,6 +1130,15 @@ auto lower_bound(R &&Range, ForwardIt I) -> decltype(adl_begin(Range)) {
   return std::lower_bound(adl_begin(Range), adl_end(Range), I);
 }
 
+/// Wrapper function around std::equal to detect if all elements
+/// in a container are same.
+template <typename R> 
+bool is_splat(R &&Range) {
+  size_t range_size = size(Range);
+  return range_size != 0 && (range_size == 1 ||
+         std::equal(adl_begin(Range) + 1, adl_end(Range), adl_begin(Range)));
+}
+
 /// Given a range of type R, iterate the entire range and return a
 /// SmallVector with elements of the vector.  This is useful, for example,
 /// when you want to iterate a range and then sort the results.
@@ -1134,18 +1158,6 @@ to_vector(R &&Range) {
 template <typename Container, typename UnaryPredicate>
 void erase_if(Container &C, UnaryPredicate P) {
   C.erase(remove_if(C, P), C.end());
-}
-
-/// Get the size of a range. This is a wrapper function around std::distance
-/// which is only enabled when the operation is O(1).
-template <typename R>
-auto size(R &&Range, typename std::enable_if<
-                         std::is_same<typename std::iterator_traits<decltype(
-                                          Range.begin())>::iterator_category,
-                                      std::random_access_iterator_tag>::value,
-                         void>::type * = nullptr)
-    -> decltype(std::distance(Range.begin(), Range.end())) {
-  return std::distance(Range.begin(), Range.end());
 }
 
 //===----------------------------------------------------------------------===//

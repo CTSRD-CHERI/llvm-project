@@ -58,7 +58,8 @@ void WebAssemblyInstPrinter::printInst(const MCInst *MI, raw_ostream &OS,
       // we have an extra flags operand which is not currently printed, for
       // compatiblity reasons.
       if (i != 0 &&
-          (MI->getOpcode() != WebAssembly::CALL_INDIRECT_VOID ||
+          ((MI->getOpcode() != WebAssembly::CALL_INDIRECT_VOID &&
+            MI->getOpcode() != WebAssembly::CALL_INDIRECT_VOID_S) ||
            i != Desc.getNumOperands()))
         OS << ", ";
       printOperand(MI, i, OS);
@@ -73,20 +74,24 @@ void WebAssemblyInstPrinter::printInst(const MCInst *MI, raw_ostream &OS,
     switch (MI->getOpcode()) {
     default:
       break;
-    case WebAssembly::LOOP: {
+    case WebAssembly::LOOP:
+    case WebAssembly::LOOP_S: {
       printAnnotation(OS, "label" + utostr(ControlFlowCounter) + ':');
       ControlFlowStack.push_back(std::make_pair(ControlFlowCounter++, true));
       break;
     }
     case WebAssembly::BLOCK:
+    case WebAssembly::BLOCK_S:
       ControlFlowStack.push_back(std::make_pair(ControlFlowCounter++, false));
       break;
     case WebAssembly::END_LOOP:
+    case WebAssembly::END_LOOP_S:
       // Have to guard against an empty stack, in case of mismatched pairs
       // in assembly parsing.
       if (!ControlFlowStack.empty()) ControlFlowStack.pop_back();
       break;
     case WebAssembly::END_BLOCK:
+    case WebAssembly::END_BLOCK_S:
       if (!ControlFlowStack.empty()) printAnnotation(
           OS, "label" + utostr(ControlFlowStack.pop_back_val().first) + ':');
       break;

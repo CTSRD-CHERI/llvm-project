@@ -109,7 +109,7 @@ static std::string getSymbolLocations(ObjFile *File, uint32_t SymIndex) {
   }
 
   if (Locations.empty())
-    return "\n>>> referenced by " + toString(File) + "\n";
+    return "\n>>> referenced by " + toString(File);
 
   std::string Out;
   llvm::raw_string_ostream OS(Out);
@@ -122,8 +122,71 @@ static std::string getSymbolLocations(ObjFile *File, uint32_t SymIndex) {
     if (!Loc.SymName.empty())
       OS << ":(" << Loc.SymName << ')';
   }
-  OS << '\n';
   return OS.str();
+}
+
+void SymbolTable::loadMinGWAutomaticImports() {
+  for (auto &I : SymMap) {
+    Symbol *Sym = I.second;
+    auto *Undef = dyn_cast<Undefined>(Sym);
+    if (!Undef)
+      continue;
+    if (!Sym->IsUsedInRegularObj)
+      continue;
+
+    StringRef Name = Undef->getName();
+
+    if (Name.startswith("__imp_"))
+      continue;
+    // If we have an undefined symbol, but we have a Lazy representing a
+    // symbol we could load from file, make sure to load that.
+    Lazy *L = dyn_cast_or_null<Lazy>(find(("__imp_" + Name).str()));
+    if (!L || L->PendingArchiveLoad)
+      continue;
+
+    log("Loading lazy " + L->getName() + " from " + L->File->getName() +
+        " for automatic import");
+    L->PendingArchiveLoad = true;
+    L->File->addMember(&L->Sym);
+  }
+}
+
+bool SymbolTable::handleMinGWAutomaticImport(Symbol *Sym, StringRef Name) {
+  if (Name.startswith("__imp_"))
+    return false;
+  DefinedImportData *Imp =
+      dyn_cast_or_null<DefinedImportData>(find(("__imp_" + Name).str()));
+  if (!Imp)
+    return false;
+
+  log("Automatically importing " + Name + " from " + Imp->getDLLName());
+
+  // Replace the reference directly to a variable with a reference
+  // to the import address table instead. This obviously isn't right,
+  // but we mark the symbol as IsRuntimePseudoReloc, and a later pass
+  // will add runtime pseudo relocations for every relocation against
+  // this Symbol. The runtime pseudo relocation framework expects the
+  // reference itself to point at the IAT entry.
+  Sym->replaceKeepingName(Imp, sizeof(DefinedImportData));
+  cast<DefinedImportData>(Sym)->IsRuntimePseudoReloc = true;
+
+  // There may exist symbols named .refptr.<name> which only consist
+  // of a single pointer to <name>. If it turns out <name> is
+  // automatically imported, we don't need to keep the .refptr.<name>
+  // pointer at all, but redirect all accesses to it to the IAT entry
+  // for __imp_<name> instead, and drop the whole .refptr.<name> chunk.
+  DefinedRegular *Refptr =
+      dyn_cast_or_null<DefinedRegular>(find((".refptr." + Name).str()));
+  size_t PtrSize = Config->is64() ? 8 : 4;
+  if (Refptr && Refptr->getChunk()->getSize() == PtrSize) {
+    SectionChunk *SC = dyn_cast_or_null<SectionChunk>(Refptr->getChunk());
+    if (SC && SC->Relocs.size() == 1 && *SC->symbols().begin() == Sym) {
+        log("Replacing .refptr." + Name + " with " + Imp->getName());
+        Refptr->getChunk()->Live = false;
+        Refptr->replaceKeepingName(Imp, sizeof(DefinedImportData));
+    }
+  }
+  return true;
 }
 
 void SymbolTable::reportRemainingUndefines() {
@@ -168,6 +231,9 @@ void SymbolTable::reportRemainingUndefines() {
         continue;
       }
     }
+
+    if (Config->MinGW && handleMinGWAutomaticImport(Sym, Name))
+      continue;
 
     // Remaining undefined symbols are not fatal if /force is specified.
     // They are replaced with dummy defined symbols.

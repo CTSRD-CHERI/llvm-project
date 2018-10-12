@@ -61,6 +61,11 @@ def FeatureFullFP16       : SubtargetFeature<"fullfp16", "HasFullFP16", "true",
                                              "floating point",
                                              [FeatureFPARMv8]>;
 
+def FeatureFP16FML        : SubtargetFeature<"fp16fml", "HasFP16FML", "true",
+                                             "Enable full half-precision "
+                                             "floating point fml instructions",
+                                             [FeatureFullFP16]>;
+
 def FeatureVFPOnlySP      : SubtargetFeature<"fp-only-sp", "FPOnlySP", "true",
                                              "Floating point unit supports "
                                              "single precision only">;
@@ -193,6 +198,10 @@ def FeatureSlowOddRegister : SubtargetFeature<"slow-odd-reg", "SlowOddRegister",
 def FeatureSlowLoadDSubreg : SubtargetFeature<"slow-load-D-subreg",
                                               "SlowLoadDSubregister", "true",
                                               "Loading into D subregs is slow">;
+
+def FeatureUseWideStrideVFP : SubtargetFeature<"wide-stride-vfp",
+                                               "UseWideStrideVFP", "true",
+                                               "Use a wide stride when allocating VFP registers">;
 
 // Some targets (e.g. Cortex-A15) never want VMOVS to be widened to VMOVD.
 def FeatureDontWidenVMOVS : SubtargetFeature<"dont-widen-vmovs",
@@ -865,6 +874,7 @@ def : ProcessorModel<"swift",       SwiftModel,         [ARMv7a, ProcSwift,
                                                          FeatureHasRetAddrStack,
                                                          FeatureNEONForFP,
                                                          FeatureVFP4,
+                                                         FeatureUseWideStrideVFP,
                                                          FeatureMP,
                                                          FeatureHWDivThumb,
                                                          FeatureHWDivARM,
@@ -1018,26 +1028,70 @@ def : ProcessorModel<"cyclone",     SwiftModel,         [ARMv8a, ProcSwift,
                                                          FeatureNoPostRASched]>;
 
 def : ProcNoItin<"exynos-m1",                           [ARMv8a, ProcExynosM1,
+                                                         FeatureZCZeroing,
+                                                         FeatureUseWideStrideVFP,
+                                                         FeatureUseAA,
+                                                         FeatureSplatVFPToNeon,
+                                                         FeatureSlowVGETLNi32,
+                                                         FeatureSlowVDUP32,
+                                                         FeatureSlowFPBrcc,
+                                                         FeatureProfUnpredicate,
                                                          FeatureHWDivThumb,
                                                          FeatureHWDivARM,
+                                                         FeatureHasSlowFPVMLx,
+                                                         FeatureHasRetAddrStack,
+                                                         FeatureExpandMLx,
                                                          FeatureCrypto,
                                                          FeatureCRC]>;
 
 def : ProcNoItin<"exynos-m2",                           [ARMv8a, ProcExynosM1,
+                                                         FeatureZCZeroing,
+                                                         FeatureUseWideStrideVFP,
+                                                         FeatureUseAA,
+                                                         FeatureSplatVFPToNeon,
+                                                         FeatureSlowVGETLNi32,
+                                                         FeatureSlowVDUP32,
+                                                         FeatureSlowFPBrcc,
+                                                         FeatureProfUnpredicate,
                                                          FeatureHWDivThumb,
                                                          FeatureHWDivARM,
+                                                         FeatureHasSlowFPVMLx,
+                                                         FeatureHasRetAddrStack,
+                                                         FeatureExpandMLx,
                                                          FeatureCrypto,
                                                          FeatureCRC]>;
 
 def : ProcNoItin<"exynos-m3",                           [ARMv8a, ProcExynosM1,
+                                                         FeatureZCZeroing,
+                                                         FeatureUseWideStrideVFP,
+                                                         FeatureUseAA,
+                                                         FeatureSplatVFPToNeon,
+                                                         FeatureSlowVGETLNi32,
+                                                         FeatureSlowVDUP32,
+                                                         FeatureSlowFPBrcc,
+                                                         FeatureProfUnpredicate,
                                                          FeatureHWDivThumb,
                                                          FeatureHWDivARM,
+                                                         FeatureHasSlowFPVMLx,
+                                                         FeatureHasRetAddrStack,
+                                                         FeatureExpandMLx,
                                                          FeatureCrypto,
                                                          FeatureCRC]>;
 
 def : ProcNoItin<"exynos-m4",                           [ARMv8a, ProcExynosM1,
+                                                         FeatureZCZeroing,
+                                                         FeatureUseWideStrideVFP,
+                                                         FeatureUseAA,
+                                                         FeatureSplatVFPToNeon,
+                                                         FeatureSlowVGETLNi32,
+                                                         FeatureSlowVDUP32,
+                                                         FeatureSlowFPBrcc,
+                                                         FeatureProfUnpredicate,
                                                          FeatureHWDivThumb,
                                                          FeatureHWDivARM,
+                                                         FeatureHasSlowFPVMLx,
+                                                         FeatureHasRetAddrStack,
+                                                         FeatureExpandMLx,
                                                          FeatureCrypto,
                                                          FeatureCRC]>;
 

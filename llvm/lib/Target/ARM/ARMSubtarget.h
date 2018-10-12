@@ -227,6 +227,9 @@ protected:
   /// HasFullFP16 - True if subtarget supports half-precision FP operations
   bool HasFullFP16 = false;
 
+  /// HasFP16FML - True if subtarget supports half-precision FP fml operations
+  bool HasFP16FML = false;
+
   /// HasD16 - True if subtarget is limited to 16 double precision
   /// FP registers for VFPv3.
   bool HasD16 = false;
@@ -352,6 +355,9 @@ protected:
 
   /// If true, loading into a D subregister will be penalized.
   bool SlowLoadDSubregister = false;
+
+  /// If true, use a wider stride when allocating VFP registers.
+  bool UseWideStrideVFP = false;
 
   /// If true, the AGU and NEON/FPU units are multiplexed.
   bool HasMuxedUnits = false;
@@ -596,6 +602,7 @@ public:
   bool hasVMLxHazards() const { return HasVMLxHazards; }
   bool hasSlowOddRegister() const { return SlowOddRegister; }
   bool hasSlowLoadDSubregister() const { return SlowLoadDSubregister; }
+  bool useWideStrideVFP() const { return UseWideStrideVFP; }
   bool hasMuxedUnits() const { return HasMuxedUnits; }
   bool dontWidenVMOVS() const { return DontWidenVMOVS; }
   bool useSplatVFPToNeon() const { return SplatVFPToNeon; }
@@ -618,6 +625,7 @@ public:
   bool hasFP16() const { return HasFP16; }
   bool hasD16() const { return HasD16; }
   bool hasFullFP16() const { return HasFullFP16; }
+  bool hasFP16FML() const { return HasFP16FML; }
 
   bool hasFuseAES() const { return HasFuseAES; }
   bool hasFuseLiterals() const { return HasFuseLiterals; }

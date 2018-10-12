@@ -45,7 +45,7 @@
 #include "llvm/DebugInfo/PDB/PDBSymbolTypeTypedef.h"
 #include "llvm/DebugInfo/PDB/PDBSymbolTypeUDT.h"
 
-#include "Plugins/Language/CPlusPlus/CPlusPlusLanguage.h"
+#include "Plugins/Language/CPlusPlus/CPlusPlusLanguage.h" // For IsCPPMangledName
 #include "Plugins/SymbolFile/PDB/PDBASTParser.h"
 #include "Plugins/SymbolFile/PDB/PDBLocationToDWARFExpression.h"
 
@@ -459,10 +459,13 @@ size_t SymbolFilePDB::ParseTypes(const lldb_private::SymbolContext &sc) {
 
         // This should cause the type to get cached and stored in the `m_types`
         // lookup.
-        if (!ResolveTypeUID(symbol->getSymIndexId()))
-          continue;
-
-        ++num_added;
+        if (auto type = ResolveTypeUID(symbol->getSymIndexId())) {
+          // Resolve the type completely to avoid a completion
+          // (and so a list change, which causes an iterators invalidation)
+          // during a TypeList dumping
+          type->GetFullCompilerType();
+          ++num_added;
+        }
       }
     }
   };
@@ -568,8 +571,20 @@ lldb_private::Type *SymbolFilePDB::ResolveTypeUID(lldb::user_id_t type_uid) {
 }
 
 bool SymbolFilePDB::CompleteType(lldb_private::CompilerType &compiler_type) {
-  // TODO: Implement this
-  return false;
+  std::lock_guard<std::recursive_mutex> guard(
+      GetObjectFile()->GetModule()->GetMutex());
+
+  ClangASTContext *clang_ast_ctx = llvm::dyn_cast_or_null<ClangASTContext>(
+      GetTypeSystemForLanguage(lldb::eLanguageTypeC_plus_plus));
+  if (!clang_ast_ctx)
+    return false;
+
+  PDBASTParser *pdb =
+      llvm::dyn_cast<PDBASTParser>(clang_ast_ctx->GetPDBParser());
+  if (!pdb)
+    return false;
+
+  return pdb->CompleteTypeFromPDB(compiler_type);
 }
 
 lldb_private::CompilerDecl SymbolFilePDB::GetDeclForUID(lldb::user_id_t uid) {
@@ -614,7 +629,8 @@ SymbolFilePDB::ResolveSymbolContext(const lldb_private::Address &so_addr,
     lldbassert(sc.module_sp == cu_sp->GetModule());
   }
 
-  if (resolve_scope & eSymbolContextFunction) {
+  if (resolve_scope & eSymbolContextFunction ||
+      resolve_scope & eSymbolContextBlock) {
     addr_t file_vm_addr = so_addr.GetFileAddress();
     auto symbol_up =
         m_session_up->findSymbolByAddress(file_vm_addr, PDB_SymType::Function);
@@ -628,8 +644,11 @@ SymbolFilePDB::ResolveSymbolContext(const lldb_private::Address &so_addr,
       if (sc.function) {
         resolved_flags |= eSymbolContextFunction;
         if (resolve_scope & eSymbolContextBlock) {
-          Block &block = sc.function->GetBlock(true);
-          sc.block = block.FindBlockByID(sc.function->GetID());
+          auto block_symbol = m_session_up->findSymbolByAddress(
+              file_vm_addr, PDB_SymType::Block);
+          auto block_id = block_symbol ? block_symbol->getSymIndexId()
+                                       : sc.function->GetID();
+          sc.block = sc.function->GetBlock(true).FindBlockByID(block_id);
           if (sc.block)
             resolved_flags |= eSymbolContextBlock;
         }

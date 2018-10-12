@@ -72,6 +72,7 @@ protected:
   bool HasVOP3PInsts;
   bool HasMulI24;
   bool HasMulU24;
+  bool HasInv2PiInlineImm;
   bool HasFminFmaxLegacy;
   bool EnablePromoteAlloca;
   int LocalMemorySize;
@@ -168,6 +169,10 @@ public:
 
   bool hasMulU24() const {
     return HasMulU24;
+  }
+
+  bool hasInv2PiInlineImm() const {
+    return HasInv2PiInlineImm;
   }
 
   bool hasFminFmaxLegacy() const {
@@ -347,13 +352,13 @@ protected:
   bool HasVGPRIndexMode;
   bool HasScalarStores;
   bool HasScalarAtomics;
-  bool HasInv2PiInlineImm;
   bool HasSDWAOmod;
   bool HasSDWAScalar;
   bool HasSDWASdst;
   bool HasSDWAMac;
   bool HasSDWAOutModsVOPC;
   bool HasDPP;
+  bool HasR128A16;
   bool HasDLInsts;
   bool D16PreservesUnusedBits;
   bool FlatAddressSpace;
@@ -373,7 +378,6 @@ protected:
   bool FeatureDisable;
 
   SelectionDAGTargetInfo TSInfo;
-  AMDGPUAS AS;
 private:
   SIInstrInfo InstrInfo;
   SITargetLowering TLInfo;
@@ -440,10 +444,6 @@ public:
 
   unsigned getMaxPrivateElementSize() const {
     return MaxPrivateElementSize;
-  }
-
-  AMDGPUAS getAMDGPUAS() const {
-    return AS;
   }
 
   bool hasIntClamp() const {
@@ -782,12 +782,13 @@ public:
     return HasScalarAtomics;
   }
 
-  bool hasInv2PiInlineImm() const {
-    return HasInv2PiInlineImm;
-  }
 
   bool hasDPP() const {
     return HasDPP;
+  }
+
+  bool hasR128A16() const {
+    return HasR128A16;
   }
 
   bool enableSIScheduler() const {
@@ -969,7 +970,6 @@ private:
   R600TargetLowering TLInfo;
   InstrItineraryData InstrItins;
   SelectionDAGTargetInfo TSInfo;
-  AMDGPUAS AS;
 
 public:
   R600Subtarget(const Triple &TT, StringRef CPU, StringRef FS,
@@ -1053,8 +1053,6 @@ public:
   bool hasVertexCache() const { return HasVertexCache; }
 
   short getTexVTXClauseSize() const { return TexVTXClauseSize; }
-
-  AMDGPUAS getAMDGPUAS() const { return AS; }
 
   bool enableMachineScheduler() const override {
     return true;

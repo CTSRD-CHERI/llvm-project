@@ -29,6 +29,10 @@ template <typename T> bool MapASTVisitor::mapDecl(const T *D) {
   if (D->getASTContext().getSourceManager().isInSystemHeader(D->getLocation()))
     return true;
 
+  // Skip function-internal decls.
+  if (D->getParentFunctionOrMethod())
+    return true;
+
   llvm::SmallString<128> USR;
   // If there is an error generating a USR for the decl, skip this decl.
   if (index::generateUSRForDecl(D, USR))
@@ -78,13 +82,13 @@ MapASTVisitor::getComment(const NamedDecl *D, const ASTContext &Context) const {
 
 int MapASTVisitor::getLine(const NamedDecl *D,
                            const ASTContext &Context) const {
-  return Context.getSourceManager().getPresumedLoc(D->getLocStart()).getLine();
+  return Context.getSourceManager().getPresumedLoc(D->getBeginLoc()).getLine();
 }
 
 llvm::StringRef MapASTVisitor::getFile(const NamedDecl *D,
                                        const ASTContext &Context) const {
   return Context.getSourceManager()
-      .getPresumedLoc(D->getLocStart())
+      .getPresumedLoc(D->getBeginLoc())
       .getFilename();
 }
 

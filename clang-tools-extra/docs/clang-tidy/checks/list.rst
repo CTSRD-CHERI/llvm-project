@@ -4,7 +4,13 @@ Clang-Tidy Checks
 =================
 
 .. toctree::
+   abseil-duration-division
+   abseil-faster-strsplit-delimiter
+   abseil-no-internal-dependencies
+   abseil-no-namespace
+   abseil-redundant-strcat-calls
    abseil-string-find-startswith
+   abseil-str-cat-append
    android-cloexec-accept
    android-cloexec-accept4
    android-cloexec-creat
@@ -79,6 +85,7 @@ Clang-Tidy Checks
    cert-msc51-cpp
    cert-oop11-cpp (redirects to performance-move-constructor-init) <cert-oop11-cpp>
    cppcoreguidelines-avoid-goto
+   cppcoreguidelines-avoid-magic-numbers (redirects to readability-magic-numbers) <cppcoreguidelines-avoid-magic-numbers>
    cppcoreguidelines-c-copy-assignment-signature (redirects to misc-unconventional-assign-operator) <cppcoreguidelines-c-copy-assignment-signature>
    cppcoreguidelines-interfaces-global-init
    cppcoreguidelines-narrowing-conversions
@@ -218,6 +225,7 @@ Clang-Tidy Checks
    readability-identifier-naming
    readability-implicit-bool-conversion
    readability-inconsistent-declaration-parameter-name
+   readability-magic-numbers
    readability-misleading-indentation
    readability-misplaced-array-index
    readability-named-parameter

@@ -165,6 +165,56 @@ def V_FMA_MIXHI_F16 : VOP3_VOP3PInst<"v_fma_mixhi_f16", VOP3_Profile<VOP_F16_F16
 defm : MadFmaMixPats<fma, V_FMA_MIX_F32, V_FMA_MIXLO_F16, V_FMA_MIXHI_F16>;
 }
 
+class Srl<int N> : PatFrag<(ops node:$src),
+                           (srl node:$src, (i32 N))>;
+
+foreach Bits = [8, 16, 24] in {
+  def srl#Bits : Srl<Bits>;
+}
+
+def and_255 : PatFrag<
+  (ops node:$src0), (and node:$src0, (i32 255))
+>;
+
+class Extract_U8<int FromBitIndex> : PatFrag<(
+  ops node:$src),
+  !if (!eq (FromBitIndex, 24), // last element
+       (!cast<Srl>("srl"#FromBitIndex) node:$src),
+       !if (!eq (FromBitIndex, 0), // first element
+            (and_255 node:$src),
+            (and_255 (!cast<Srl>("srl"#FromBitIndex) node:$src))))>;
+
+// Defines patterns that extract each Index'ed 8bit from a 32bit scalar value;
+foreach Index = [1, 2, 3, 4] in {
+  def UElt#Index : Extract_U8<!shl(!add(Index, -1), 3)>;
+}
+
+// Defines multiplication patterns where the multiplication is happening on each
+// Index'ed 8bit of a 32bit scalar value.
+foreach Index = [1, 2, 3, 4] in {
+  def MulU_Elt#Index : PatFrag<
+    (ops node:$src0, node:$src1),
+    (AMDGPUmul_u24_oneuse (!cast<Extract_U8>("UElt"#Index) node:$src0),
+                          (!cast<Extract_U8>("UElt"#Index) node:$src1))>;
+}
+
+class UDot2Pat<Instruction Inst> : GCNPat <
+  (add (add_oneuse (AMDGPUmul_u24_oneuse (srl i32:$src0, (i32 16)),
+                                         (srl i32:$src1, (i32 16))), i32:$src2),
+       (AMDGPUmul_u24_oneuse (and i32:$src0, (i32 65535)),
+                             (and i32:$src1, (i32 65535)))
+   ),
+  (Inst (i32 8), $src0, (i32 8), $src1, (i32 8), $src2, (i1 0))
+>;
+
+class SDot2Pat<Instruction Inst> : GCNPat <
+  (add (add_oneuse (AMDGPUmul_i24_oneuse (sra i32:$src0, (i32 16)),
+                                         (sra i32:$src1, (i32 16))), i32:$src2),
+       (AMDGPUmul_i24_oneuse (sext_inreg i32:$src0, i16),
+                             (sext_inreg i32:$src1, i16))),
+  (Inst (i32 8), $src0, (i32 8), $src1, (i32 8), $src2, (i1 0))
+>;
+
 let SubtargetPredicate = HasDLInsts in {
 
 def V_DOT2_F32_F16 : VOP3PInst<"v_dot2_f32_f16", VOP3_Profile<VOP_F32_V2F16_V2F16_F32>>;
@@ -191,6 +241,15 @@ defm : DotPats<int_amdgcn_sdot4, V_DOT4_I32_I8>;
 defm : DotPats<int_amdgcn_udot4, V_DOT4_U32_U8>;
 defm : DotPats<int_amdgcn_sdot8, V_DOT8_I32_I4>;
 defm : DotPats<int_amdgcn_udot8, V_DOT8_U32_U4>;
+
+def : UDot2Pat<V_DOT2_U32_U16>;
+def : SDot2Pat<V_DOT2_I32_I16>;
+
+def : GCNPat <
+  !cast<dag>(!foldl((i32 i32:$src2), [1, 2, 3, 4], lhs, y,
+                    (add_oneuse lhs, (!cast<PatFrag>("MulU_Elt"#y) i32:$src0, i32:$src1)))),
+  (V_DOT4_U32_U8 (i32 8), $src0, (i32 8), $src1, (i32 8), $src2, (i1 0))
+>;
 
 } // End SubtargetPredicate = HasDLInsts
 

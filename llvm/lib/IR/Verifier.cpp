@@ -886,6 +886,8 @@ void Verifier::visitDIBasicType(const DIBasicType &N) {
   AssertDI(N.getTag() == dwarf::DW_TAG_base_type ||
                N.getTag() == dwarf::DW_TAG_unspecified_type,
            "invalid tag", &N);
+  AssertDI(!(N.isBigEndian() && N.isLittleEndian()) ,
+            "has conflicting flags", &N);
 }
 
 void Verifier::visitDIDerivedType(const DIDerivedType &N) {
@@ -2262,6 +2264,10 @@ void Verifier::visitFunction(const Function &F) {
       if (!Seen.insert(DL).second)
         continue;
 
+      Metadata *Parent = DL->getRawScope();
+      AssertDI(Parent && isa<DILocalScope>(Parent),
+               "DILocation's scope must be a DILocalScope", N, &F, &I, DL,
+               Parent);
       DILocalScope *Scope = DL->getInlinedAtScope();
       if (Scope && !Seen.insert(Scope).second)
         continue;

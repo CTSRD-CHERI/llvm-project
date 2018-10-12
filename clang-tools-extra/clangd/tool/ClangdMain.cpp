@@ -12,6 +12,7 @@
 #include "Path.h"
 #include "Trace.h"
 #include "index/SymbolYAML.h"
+#include "index/dex/DexIndex.h"
 #include "clang/Basic/Version.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FileSystem.h"
@@ -28,7 +29,14 @@
 using namespace clang;
 using namespace clang::clangd;
 
+// FIXME: remove this option when Dex is stable enough.
+static llvm::cl::opt<bool>
+    UseDex("use-dex-index",
+           llvm::cl::desc("Use experimental Dex static index."),
+           llvm::cl::init(true), llvm::cl::Hidden);
+
 namespace {
+
 enum class PCHStorageFlag { Disk, Memory };
 
 // Build an in-memory static index for global symbols from a YAML-format file.
@@ -45,8 +53,10 @@ std::unique_ptr<SymbolIndex> buildStaticIndex(llvm::StringRef YamlSymbolFile) {
   for (auto Sym : Slab)
     SymsBuilder.insert(Sym);
 
-  return MemIndex::build(std::move(SymsBuilder).build());
+  return UseDex ? dex::DexIndex::build(std::move(SymsBuilder).build())
+                : MemIndex::build(std::move(SymsBuilder).build());
 }
+
 } // namespace
 
 static llvm::cl::opt<Path> CompileCommandsDir(
@@ -147,7 +157,7 @@ static llvm::cl::opt<Path> InputMirrorFile(
 static llvm::cl::opt<bool> EnableIndex(
     "index",
     llvm::cl::desc("Enable index-based features such as global code completion "
-                   "and searching for symbols."
+                   "and searching for symbols. "
                    "Clang uses an index built from symbols in opened files"),
     llvm::cl::init(true));
 
@@ -160,7 +170,7 @@ static llvm::cl::opt<bool>
 static llvm::cl::opt<bool> HeaderInsertionDecorators(
     "header-insertion-decorators",
     llvm::cl::desc("Prepend a circular dot or space before the completion "
-                   "label, depending on wether "
+                   "label, depending on whether "
                    "an include line will be inserted or not."),
     llvm::cl::init(true));
 
@@ -250,6 +260,9 @@ int main(int argc, char *argv[]) {
   if (Tracer)
     TracingSession.emplace(*Tracer);
 
+  // Use buffered stream to stderr (we still flush each log message). Unbuffered
+  // stream can cause significant (non-deterministic) latency for the logger.
+  llvm::errs().SetBuffered();
   JSONOutput Out(llvm::outs(), llvm::errs(), LogLevel,
                  InputMirrorStream ? InputMirrorStream.getPointer() : nullptr,
                  PrettyPrint);
@@ -299,6 +312,7 @@ int main(int argc, char *argv[]) {
     CCOpts.IncludeIndicator.Insert.clear();
     CCOpts.IncludeIndicator.NoInsert.clear();
   }
+  CCOpts.SpeculativeIndexRequest = Opts.StaticIndex;
 
   // Initialize and run ClangdLSPServer.
   ClangdLSPServer LSPServer(

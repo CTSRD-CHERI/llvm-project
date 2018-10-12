@@ -10,7 +10,10 @@ add %eax, %eax
 # ALL:       Iterations:        100
 # ALL-NEXT:  Instructions:      100
 # ALL-NEXT:  Total Cycles:      103
-# ALL-NEXT:  Dispatch Width:    2
+# ALL-NEXT:  Total uOps:        100
+
+# ALL:       Dispatch Width:    2
+# ALL-NEXT:  uOps Per Cycle:    0.97
 # ALL-NEXT:  IPC:               0.97
 # ALL-NEXT:  Block RThroughput: 0.5
 
@@ -28,12 +31,12 @@ add %eax, %eax
 # FULL:      Dynamic Dispatch Stall Cycles:
 # FULL-NEXT: RAT     - Register unavailable:                      0
 # FULL-NEXT: RCU     - Retire tokens unavailable:                 0
-# FULL-NEXT: SCHEDQ  - Scheduler full:                            61
+# FULL-NEXT: SCHEDQ  - Scheduler full:                            61  (59.2%)
 # FULL-NEXT: LQ      - Load queue full:                           0
 # FULL-NEXT: SQ      - Store queue full:                          0
 # FULL-NEXT: GROUP   - Static restrictions on the dispatch group: 0
 
-# FULL:      Dispatch Logic - number of cycles where we saw N instructions dispatched:
+# FULL:      Dispatch Logic - number of cycles where we saw N micro opcodes dispatched:
 # FULL-NEXT: [# dispatched], [# cycles]
 # FULL-NEXT:  0,              22  (21.4%)
 # FULL-NEXT:  1,              62  (60.2%)
@@ -45,9 +48,15 @@ add %eax, %eax
 # FULL-NEXT:  1,          100  (97.1%)
 
 # FULL:      Scheduler's queue usage:
-# FULL-NEXT: JALU01,  20/20
-# FULL-NEXT: JFPU01,  0/18
-# FULL-NEXT: JLSAGU,  0/12
+# FULL-NEXT: [1] Resource name.
+# FULL-NEXT: [2] Average number of used buffer entries.
+# FULL-NEXT: [3] Maximum number of used buffer entries.
+# FULL-NEXT: [4] Total number of buffer entries.
+
+# FULL:       [1]            [2]        [3]        [4]
+# FULL-NEXT: JALU01           15         20         20
+# FULL-NEXT: JFPU01           0          0          18
+# FULL-NEXT: JLSAGU           0          0          12
 
 # FULL:      Retire Control Unit - number of cycles where we saw N instructions retired:
 # FULL-NEXT: [# retired], [# cycles]

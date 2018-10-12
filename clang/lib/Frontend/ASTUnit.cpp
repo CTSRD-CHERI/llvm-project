@@ -1363,7 +1363,6 @@ ASTUnit::getMainBufferWithPrecompiledPreamble(
     } else {
       switch (static_cast<BuildPreambleError>(NewPreamble.getError().value())) {
       case BuildPreambleError::CouldntCreateTempFile:
-      case BuildPreambleError::PreambleIsEmpty:
         // Try again next time.
         PreambleRebuildCounter = 1;
         return nullptr;
@@ -1912,8 +1911,10 @@ namespace {
 
     void ProcessOverloadCandidates(Sema &S, unsigned CurrentArg,
                                    OverloadCandidate *Candidates,
-                                   unsigned NumCandidates) override {
-      Next.ProcessOverloadCandidates(S, CurrentArg, Candidates, NumCandidates);
+                                   unsigned NumCandidates,
+                                   SourceLocation OpenParLoc) override {
+      Next.ProcessOverloadCandidates(S, CurrentArg, Candidates, NumCandidates,
+                                     OpenParLoc);
     }
 
     CodeCompletionAllocator &getAllocator() override {

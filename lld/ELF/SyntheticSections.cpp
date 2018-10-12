@@ -1301,6 +1301,8 @@ template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
   uint32_t DtFlags1 = 0;
   if (Config->Bsymbolic)
     DtFlags |= DF_SYMBOLIC;
+  if (Config->ZGlobal)
+    DtFlags1 |= DF_1_GLOBAL;
   if (Config->ZInitfirst)
     DtFlags1 |= DF_1_INITFIRST;
   if (Config->ZNodelete)
@@ -1910,8 +1912,10 @@ static bool sortMipsSymbols(const SymbolTableEntry &L,
 void SymbolTableBaseSection::finalizeContents() {
   getParent()->Link = StrTabSec.getParent()->SectionIndex;
 
-  if (this->Type != SHT_DYNSYM)
+  if (this->Type != SHT_DYNSYM) {
+    sortSymTabSymbols();
     return;
+  }
 
   // If it is a .dynsym, there should be no local symbols, but we need
   // to do a few things for the dynamic linker.
@@ -1939,9 +1943,7 @@ void SymbolTableBaseSection::finalizeContents() {
 // Aside from above, we put local symbols in groups starting with the STT_FILE
 // symbol. That is convenient for purpose of identifying where are local symbols
 // coming from.
-void SymbolTableBaseSection::postThunkContents() {
-  assert(this->Type == SHT_SYMTAB);
-
+void SymbolTableBaseSection::sortSymTabSymbols() {
   // Move all local symbols before global symbols.
   auto E = std::stable_partition(
       Symbols.begin(), Symbols.end(), [](const SymbolTableEntry &S) {
@@ -2013,7 +2015,8 @@ static uint32_t getSymSectionIndex(Symbol *Sym) {
   if (!isa<Defined>(Sym) || Sym->NeedsPltAddr)
     return SHN_UNDEF;
   if (const OutputSection *OS = Sym->getOutputSection())
-    return OS->SectionIndex >= SHN_LORESERVE ? SHN_XINDEX : OS->SectionIndex;
+    return OS->SectionIndex >= SHN_LORESERVE ? (uint32_t)SHN_XINDEX
+                                             : OS->SectionIndex;
   return SHN_ABS;
 }
 
@@ -2994,8 +2997,10 @@ void elf::mergeSections() {
 
     // We do not want to handle sections that are not alive, so just remove
     // them instead of trying to merge.
-    if (!MS->Live)
+    if (!MS->Live) {
+      S = nullptr;
       continue;
+    }
 
     StringRef OutsecName = getOutputSectionName(MS);
     uint32_t Alignment = std::max<uint32_t>(MS->Alignment, MS->Entsize);

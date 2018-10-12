@@ -398,7 +398,7 @@ Instruction *MemCpyOptPass::tryMergingIntoMemset(Instruction *StartInst,
   MemsetRanges Ranges(DL);
 
   BasicBlock::iterator BI(StartInst);
-  for (++BI; !isa<TerminatorInst>(BI); ++BI) {
+  for (++BI; !BI->isTerminator(); ++BI) {
     if (!isa<StoreInst>(BI) && !isa<MemSetInst>(BI)) {
       // If the instruction is readnone, ignore it, otherwise bail out.  We
       // don't even allow readonly here because we don't want something like:
@@ -994,7 +994,7 @@ bool MemCpyOptPass::performCallSlotOptzn(Instruction *cpy, Value *cpyDest,
   unsigned KnownIDs[] = {LLVMContext::MD_tbaa, LLVMContext::MD_alias_scope,
                          LLVMContext::MD_noalias,
                          LLVMContext::MD_invariant_group};
-  combineMetadata(C, cpy, KnownIDs);
+  combineMetadata(C, cpy, KnownIDs, true);
 
   // Remove the memcpy.
   MD->removeInstruction(cpy);

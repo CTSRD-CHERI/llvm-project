@@ -31,6 +31,7 @@
 #include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/Analysis/LazyValueInfo.h"
 #include "llvm/Analysis/MemoryBuiltins.h"
+#include "llvm/Analysis/MemorySSAUpdater.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/BinaryFormat/Dwarf.h"
@@ -234,7 +235,7 @@ bool llvm::ConstantFoldTerminator(BasicBlock *BB, bool DeleteDeadConditions,
         Updates.reserve(SI->getNumSuccessors() - 1);
 
       // Remove entries from PHI nodes which we no longer branch to...
-      for (BasicBlock *Succ : SI->successors()) {
+      for (BasicBlock *Succ : successors(SI)) {
         // Found case matching a constant operand?
         if (Succ == TheOnlyDest) {
           TheOnlyDest = nullptr; // Don't modify the first branch to TheOnlyDest
@@ -353,7 +354,7 @@ bool llvm::isInstructionTriviallyDead(Instruction *I,
 
 bool llvm::wouldInstructionBeTriviallyDead(Instruction *I,
                                            const TargetLibraryInfo *TLI) {
-  if (isa<TerminatorInst>(I))
+  if (I->isTerminator())
     return false;
 
   // We don't want the landingpad-like instructions removed by anything this
@@ -426,22 +427,22 @@ bool llvm::wouldInstructionBeTriviallyDead(Instruction *I,
 /// trivially dead instruction, delete it.  If that makes any of its operands
 /// trivially dead, delete them too, recursively.  Return true if any
 /// instructions were deleted.
-bool
-llvm::RecursivelyDeleteTriviallyDeadInstructions(Value *V,
-                                                 const TargetLibraryInfo *TLI) {
+bool llvm::RecursivelyDeleteTriviallyDeadInstructions(
+    Value *V, const TargetLibraryInfo *TLI, MemorySSAUpdater *MSSAU) {
   Instruction *I = dyn_cast<Instruction>(V);
   if (!I || !I->use_empty() || !isInstructionTriviallyDead(I, TLI))
     return false;
 
   SmallVector<Instruction*, 16> DeadInsts;
   DeadInsts.push_back(I);
-  RecursivelyDeleteTriviallyDeadInstructions(DeadInsts, TLI);
+  RecursivelyDeleteTriviallyDeadInstructions(DeadInsts, TLI, MSSAU);
 
   return true;
 }
 
 void llvm::RecursivelyDeleteTriviallyDeadInstructions(
-    SmallVectorImpl<Instruction *> &DeadInsts, const TargetLibraryInfo *TLI) {
+    SmallVectorImpl<Instruction *> &DeadInsts, const TargetLibraryInfo *TLI,
+    MemorySSAUpdater *MSSAU) {
   // Process the dead instruction list until empty.
   while (!DeadInsts.empty()) {
     Instruction &I = *DeadInsts.pop_back_val();
@@ -468,6 +469,8 @@ void llvm::RecursivelyDeleteTriviallyDeadInstructions(
         if (isInstructionTriviallyDead(OpI, TLI))
           DeadInsts.push_back(OpI);
     }
+    if (MSSAU)
+      MSSAU->removeMemoryAccess(&I);
 
     I.eraseFromParent();
   }
@@ -655,7 +658,7 @@ void llvm::RemovePredecessorAndSimplify(BasicBlock *BB, BasicBlock *Pred,
 }
 
 /// MergeBasicBlockIntoOnlyPred - DestBB is a block with one predecessor and its
-/// predecessor is known to have one successor (DestBB!).  Eliminate the edge
+/// predecessor is known to have one successor (DestBB!). Eliminate the edge
 /// between them, moving the instructions in the predecessor into DestBB and
 /// deleting the predecessor block.
 void llvm::MergeBasicBlockIntoOnlyPred(BasicBlock *DestBB,
@@ -2213,7 +2216,8 @@ void llvm::removeUnwindEdge(BasicBlock *BB, DomTreeUpdater *DTU) {
 /// otherwise. If `LVI` is passed, this function preserves LazyValueInfo
 /// after modifying the CFG.
 bool llvm::removeUnreachableBlocks(Function &F, LazyValueInfo *LVI,
-                                   DomTreeUpdater *DTU) {
+                                   DomTreeUpdater *DTU,
+                                   MemorySSAUpdater *MSSAU) {
   SmallPtrSet<BasicBlock*, 16> Reachable;
   bool Changed = markAliveBlocks(F, Reachable, DTU);
 
@@ -2224,15 +2228,23 @@ bool llvm::removeUnreachableBlocks(Function &F, LazyValueInfo *LVI,
   assert(Reachable.size() < F.size());
   NumRemoved += F.size()-Reachable.size();
 
-  // Loop over all of the basic blocks that are not reachable, dropping all of
-  // their internal references. Update DTU and LVI if available.
-  std::vector <DominatorTree::UpdateType> Updates;
+  SmallPtrSet<BasicBlock *, 16> DeadBlockSet;
   for (Function::iterator I = ++F.begin(), E = F.end(); I != E; ++I) {
     auto *BB = &*I;
     if (Reachable.count(BB))
       continue;
+    DeadBlockSet.insert(BB);
+  }
+
+  if (MSSAU)
+    MSSAU->removeBlocks(DeadBlockSet);
+
+  // Loop over all of the basic blocks that are not reachable, dropping all of
+  // their internal references. Update DTU and LVI if available.
+  std::vector<DominatorTree::UpdateType> Updates;
+  for (auto *BB : DeadBlockSet) {
     for (BasicBlock *Successor : successors(BB)) {
-      if (Reachable.count(Successor))
+      if (!DeadBlockSet.count(Successor))
         Successor->removePredecessor(BB);
       if (DTU)
         Updates.push_back({DominatorTree::Delete, BB, Successor});
@@ -2241,7 +2253,6 @@ bool llvm::removeUnreachableBlocks(Function &F, LazyValueInfo *LVI,
       LVI->eraseBlock(BB);
     BB->dropAllReferences();
   }
-  SmallVector<BasicBlock *, 8> ToDeleteBBs;
   for (Function::iterator I = ++F.begin(); I != F.end();) {
     auto *BB = &*I;
     if (Reachable.count(BB)) {
@@ -2249,8 +2260,6 @@ bool llvm::removeUnreachableBlocks(Function &F, LazyValueInfo *LVI,
       continue;
     }
     if (DTU) {
-      ToDeleteBBs.push_back(BB);
-
       // Remove the TerminatorInst of BB to clear the successor list of BB.
       if (BB->getTerminator())
         BB->getInstList().pop_back();
@@ -2266,7 +2275,7 @@ bool llvm::removeUnreachableBlocks(Function &F, LazyValueInfo *LVI,
   if (DTU) {
     DTU->applyUpdates(Updates, /*ForceRemoveDuplicates*/ true);
     bool Deleted = false;
-    for (auto *BB : ToDeleteBBs) {
+    for (auto *BB : DeadBlockSet) {
       if (DTU->isBBPendingDeletion(BB))
         --NumRemoved;
       else
@@ -2345,7 +2354,8 @@ void llvm::combineMetadata(Instruction *K, const Instruction *J,
       K->setMetadata(LLVMContext::MD_invariant_group, JMD);
 }
 
-void llvm::combineMetadataForCSE(Instruction *K, const Instruction *J) {
+void llvm::combineMetadataForCSE(Instruction *K, const Instruction *J,
+                                 bool KDominatesJ) {
   unsigned KnownIDs[] = {
       LLVMContext::MD_tbaa,            LLVMContext::MD_alias_scope,
       LLVMContext::MD_noalias,         LLVMContext::MD_range,
@@ -2353,7 +2363,7 @@ void llvm::combineMetadataForCSE(Instruction *K, const Instruction *J) {
       LLVMContext::MD_invariant_group, LLVMContext::MD_align,
       LLVMContext::MD_dereferenceable,
       LLVMContext::MD_dereferenceable_or_null};
-  combineMetadata(K, J, KnownIDs);
+  combineMetadata(K, J, KnownIDs, KDominatesJ);
 }
 
 void llvm::patchReplacementInstruction(Instruction *I, Value *Repl) {

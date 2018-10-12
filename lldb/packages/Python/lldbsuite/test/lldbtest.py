@@ -740,6 +740,11 @@ class Base(unittest2.TestCase):
         else:
             self.lldbMiExec = None
 
+        if "LLDBVSCODE_EXEC" in os.environ:
+            self.lldbVSCodeExec = os.environ["LLDBVSCODE_EXEC"]
+        else:
+            self.lldbVSCodeExec = None
+
         # If we spawn an lldb process for test (via pexpect), do not load the
         # init file unless told otherwise.
         if "NO_LLDBINIT" in os.environ and "NO" == os.environ["NO_LLDBINIT"]:
@@ -1875,18 +1880,15 @@ class TestBase(Base):
         # decorators.
         Base.setUp(self)
 
-        if self.child:
-            # Set the clang modules cache path.
-            assert(self.getDebugInfo() == 'default')
-            mod_cache = os.path.join(self.getBuildDir(), "module-cache")
-            self.runCmd('settings set symbols.clang-modules-cache-path "%s"'
-                        % mod_cache)
+        # Set the clang modules cache path.
+        mod_cache = os.path.join(self.getBuildDir(), "module-cache-lldb")
+        self.runCmd('settings set symbols.clang-modules-cache-path "%s"'
+                    % mod_cache)
 
-            # Disable Spotlight lookup. The testsuite creates
-            # different binaries with the same UUID, because they only
-            # differ in the debug info, which is not being hashed.
-            self.runCmd('settings set symbols.enable-external-lookup false')
-
+        # Disable Spotlight lookup. The testsuite creates
+        # different binaries with the same UUID, because they only
+        # differ in the debug info, which is not being hashed.
+        self.runCmd('settings set symbols.enable-external-lookup false')
 
         if "LLDB_MAX_LAUNCH_COUNT" in os.environ:
             self.maxLaunchCount = int(os.environ["LLDB_MAX_LAUNCH_COUNT"])
@@ -2074,8 +2076,17 @@ class TestBase(Base):
                     print("Command '" + cmd + "' failed!", file=sbuf)
 
         if check:
+            output = ""
+            if self.res.GetOutput():
+              output += "\nCommand output:\n" + self.res.GetOutput()
+            if self.res.GetError():
+              output += "\nError output:\n" + self.res.GetError()
+            if msg:
+              msg += output
+            if cmd:
+              cmd += output
             self.assertTrue(self.res.Succeeded(),
-                            msg if msg else CMD_MSG(cmd))
+                            msg if (msg) else CMD_MSG(cmd))
 
     def match(
             self,
@@ -2133,6 +2144,46 @@ class TestBase(Base):
                         msg if msg else EXP_MSG(str, output, exe))
 
         return match_object
+
+
+    def complete_exactly(self, str_input, patterns):
+        self.complete_from_to(str_input, patterns, True)
+
+    def complete_from_to(self, str_input, patterns, turn_off_re_match=False):
+        """Test that the completion mechanism completes str_input to patterns,
+        where patterns could be a pattern-string or a list of pattern-strings"""
+        # Patterns should not be None in order to proceed.
+        self.assertFalse(patterns is None)
+        # And should be either a string or list of strings.  Check for list type
+        # below, if not, make a list out of the singleton string.  If patterns
+        # is not a string or not a list of strings, there'll be runtime errors
+        # later on.
+        if not isinstance(patterns, list):
+            patterns = [patterns]
+
+        interp = self.dbg.GetCommandInterpreter()
+        match_strings = lldb.SBStringList()
+        num_matches = interp.HandleCompletion(str_input, len(str_input), 0, -1, match_strings)
+        common_match = match_strings.GetStringAtIndex(0)
+        if num_matches == 0:
+            compare_string = str_input
+        else:
+            if common_match != None and len(common_match) > 0:
+                compare_string = str_input + common_match
+            else:
+                compare_string = ""
+                for idx in range(1, num_matches+1):
+                    compare_string += match_strings.GetStringAtIndex(idx) + "\n"
+
+        for p in patterns:
+            if turn_off_re_match:
+                self.expect(
+                    compare_string, msg=COMPLETION_MSG(
+                        str_input, p, match_strings), exe=False, substrs=[p])
+            else:
+                self.expect(
+                    compare_string, msg=COMPLETION_MSG(
+                        str_input, p, match_strings), exe=False, patterns=[p])
 
     def expect(
             self,

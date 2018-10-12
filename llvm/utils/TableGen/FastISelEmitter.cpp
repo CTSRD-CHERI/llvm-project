@@ -39,11 +39,12 @@ struct InstructionMemo {
   std::vector<std::string> PhysRegs;
   std::string PredicateCheck;
 
-  InstructionMemo(std::string Name, const CodeGenRegisterClass *RC,
+  InstructionMemo(StringRef Name, const CodeGenRegisterClass *RC,
                   std::string SubRegNo, std::vector<std::string> PhysRegs,
                   std::string PredicateCheck)
-    : Name(Name), RC(RC), SubRegNo(SubRegNo), PhysRegs(PhysRegs),
-      PredicateCheck(PredicateCheck) {}
+      : Name(Name), RC(RC), SubRegNo(std::move(SubRegNo)),
+        PhysRegs(std::move(PhysRegs)),
+        PredicateCheck(std::move(PredicateCheck)) {}
 
   // Make sure we do not copy InstructionMemo.
   InstructionMemo(const InstructionMemo &Other) = delete;

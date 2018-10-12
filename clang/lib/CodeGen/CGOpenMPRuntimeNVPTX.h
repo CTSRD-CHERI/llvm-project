@@ -72,10 +72,11 @@ private:
   void emitNonSPMDEntryFooter(CodeGenFunction &CGF, EntryFunctionState &EST);
 
   /// Helper for generic variables globalization prolog.
-  void emitGenericVarsProlog(CodeGenFunction &CGF, SourceLocation Loc);
+  void emitGenericVarsProlog(CodeGenFunction &CGF, SourceLocation Loc,
+                             bool WithSPMDCheck = false);
 
   /// Helper for generic variables globalization epilog.
-  void emitGenericVarsEpilog(CodeGenFunction &CGF);
+  void emitGenericVarsEpilog(CodeGenFunction &CGF, bool WithSPMDCheck = false);
 
   /// Helper for SPMD mode target directive's entry function.
   void emitSPMDEntryHeader(CodeGenFunction &CGF, EntryFunctionState &EST,
@@ -374,6 +375,7 @@ private:
     llvm::SmallVector<llvm::Value *, 4> EscapedVariableLengthDeclsAddrs;
     const RecordDecl *GlobalRecord = nullptr;
     llvm::Value *GlobalRecordAddr = nullptr;
+    llvm::Value *IsInSPMDModeFlag = nullptr;
     std::unique_ptr<CodeGenFunction::OMPMapVars> MappedParams;
   };
   /// Maps the function to the list of the globalized variables with their

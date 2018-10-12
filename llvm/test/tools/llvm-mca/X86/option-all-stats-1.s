@@ -6,12 +6,15 @@
 
 add %eax, %eax
 
-# FULLREPORT:      Iterations:        100
-# FULLREPORT-NEXT: Instructions:      100
-# FULLREPORT-NEXT: Total Cycles:      103
-# FULLREPORT-NEXT: Dispatch Width:    2
-# FULLREPORT-NEXT: IPC:               0.97
-# FULLREPORT-NEXT: Block RThroughput: 0.5
+# ALL:             Iterations:        100
+# ALL-NEXT:        Instructions:      100
+# ALL-NEXT:        Total Cycles:      103
+# ALL-NEXT:        Total uOps:        100
+
+# ALL:             Dispatch Width:    2
+# ALL-NEXT:        uOps Per Cycle:    0.97
+# ALL-NEXT:        IPC:               0.97
+# ALL-NEXT:        Block RThroughput: 0.5
 
 # ALL:             Instruction Info:
 # ALL-NEXT:        [1]: #uOps
@@ -27,12 +30,12 @@ add %eax, %eax
 # FULLREPORT:      Dynamic Dispatch Stall Cycles:
 # FULLREPORT-NEXT: RAT     - Register unavailable:                      0
 # FULLREPORT-NEXT: RCU     - Retire tokens unavailable:                 0
-# FULLREPORT-NEXT: SCHEDQ  - Scheduler full:                            61
+# FULLREPORT-NEXT: SCHEDQ  - Scheduler full:                            61  (59.2%)
 # FULLREPORT-NEXT: LQ      - Load queue full:                           0
 # FULLREPORT-NEXT: SQ      - Store queue full:                          0
 # FULLREPORT-NEXT: GROUP   - Static restrictions on the dispatch group: 0
 
-# FULLREPORT:      Dispatch Logic - number of cycles where we saw N instructions dispatched:
+# FULLREPORT:      Dispatch Logic - number of cycles where we saw N micro opcodes dispatched:
 # FULLREPORT-NEXT: [# dispatched], [# cycles]
 # FULLREPORT-NEXT:  0,              22  (21.4%)
 # FULLREPORT-NEXT:  1,              62  (60.2%)
@@ -44,9 +47,15 @@ add %eax, %eax
 # FULLREPORT-NEXT:  1,          100  (97.1%)
 
 # FULLREPORT:      Scheduler's queue usage:
-# FULLREPORT-NEXT: JALU01,  20/20
-# FULLREPORT-NEXT: JFPU01,  0/18
-# FULLREPORT-NEXT: JLSAGU,  0/12
+# FULLREPORT-NEXT: [1] Resource name.
+# FULLREPORT-NEXT: [2] Average number of used buffer entries.
+# FULLREPORT-NEXT: [3] Maximum number of used buffer entries.
+# FULLREPORT-NEXT: [4] Total number of buffer entries.
+
+# FULLREPORT:       [1]            [2]        [3]        [4]
+# FULLREPORT-NEXT: JALU01           15         20         20
+# FULLREPORT-NEXT: JFPU01           0          0          18
+# FULLREPORT-NEXT: JLSAGU           0          0          12
 
 # FULLREPORT:      Retire Control Unit - number of cycles where we saw N instructions retired:
 # FULLREPORT-NEXT: [# retired], [# cycles]

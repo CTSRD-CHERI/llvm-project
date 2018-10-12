@@ -14,7 +14,7 @@
 #include "llvm/IR/DebugInfoMetadata.h"
 #include "LLVMContextImpl.h"
 #include "MetadataImpl.h"
-#include "llvm/ADT/SmallPtrSet.h"
+#include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/IR/DIBuilder.h"
 #include "llvm/IR/Function.h"
@@ -69,28 +69,45 @@ DILocation *DILocation::getImpl(LLVMContext &Context, unsigned Line,
 }
 
 const DILocation *DILocation::getMergedLocation(const DILocation *LocA,
-                                                const DILocation *LocB,
-                                                bool GenerateLocation) {
+                                                const DILocation *LocB) {
   if (!LocA || !LocB)
     return nullptr;
 
-  if (LocA == LocB || !LocA->canDiscriminate(*LocB))
+  if (LocA == LocB)
     return LocA;
-
-  if (!GenerateLocation)
-    return nullptr;
 
   SmallPtrSet<DILocation *, 5> InlinedLocationsA;
   for (DILocation *L = LocA->getInlinedAt(); L; L = L->getInlinedAt())
     InlinedLocationsA.insert(L);
-  const DILocation *Result = LocB;
-  for (DILocation *L = LocB->getInlinedAt(); L; L = L->getInlinedAt()) {
-    Result = L;
-    if (InlinedLocationsA.count(L))
-      break;
+  SmallSet<std::pair<DIScope *, DILocation *>, 5> Locations;
+  DIScope *S = LocA->getScope();
+  DILocation *L = LocA->getInlinedAt();
+  while (S) {
+    Locations.insert(std::make_pair(S, L));
+    S = S->getScope().resolve();
+    if (!S && L) {
+      S = L->getScope();
+      L = L->getInlinedAt();
+    }
   }
-  return DILocation::get(Result->getContext(), 0, 0, Result->getScope(),
-                         Result->getInlinedAt());
+  const DILocation *Result = LocB;
+  S = LocB->getScope();
+  L = LocB->getInlinedAt();
+  while (S) {
+    if (Locations.count(std::make_pair(S, L)))
+      break;
+    S = S->getScope().resolve();
+    if (!S && L) {
+      S = L->getScope();
+      L = L->getInlinedAt();
+    }
+  }
+
+  // If the two locations are irreconsilable, just pick one. This is misleading,
+  // but on the other hand, it's a "line 0" location.
+  if (!S || !isa<DILocalScope>(S))
+    S = LocA->getScope();
+  return DILocation::get(Result->getContext(), 0, 0, S, L);
 }
 
 DINode::DIFlags DINode::getFlag(StringRef Flag) {
@@ -274,13 +291,14 @@ DIEnumerator *DIEnumerator::getImpl(LLVMContext &Context, int64_t Value,
 DIBasicType *DIBasicType::getImpl(LLVMContext &Context, unsigned Tag,
                                   MDString *Name, uint64_t SizeInBits,
                                   uint32_t AlignInBits, unsigned Encoding,
-                                  StorageType Storage, bool ShouldCreate) {
+                                  DIFlags Flags, StorageType Storage,
+                                  bool ShouldCreate) {
   assert(isCanonical(Name) && "Expected canonical MDString");
   DEFINE_GETIMPL_LOOKUP(DIBasicType,
-                        (Tag, Name, SizeInBits, AlignInBits, Encoding));
+                        (Tag, Name, SizeInBits, AlignInBits, Encoding, Flags));
   Metadata *Ops[] = {nullptr, nullptr, Name};
-  DEFINE_GETIMPL_STORE(DIBasicType, (Tag, SizeInBits, AlignInBits, Encoding),
-                       Ops);
+  DEFINE_GETIMPL_STORE(DIBasicType, (Tag, SizeInBits, AlignInBits, Encoding,
+                      Flags), Ops);
 }
 
 Optional<DIBasicType::Signedness> DIBasicType::getSignedness() const {
@@ -449,7 +467,7 @@ DICompileUnit *DICompileUnit::getImpl(
     unsigned EmissionKind, Metadata *EnumTypes, Metadata *RetainedTypes,
     Metadata *GlobalVariables, Metadata *ImportedEntities, Metadata *Macros,
     uint64_t DWOId, bool SplitDebugInlining, bool DebugInfoForProfiling,
-    bool GnuPubnames, StorageType Storage, bool ShouldCreate) {
+    unsigned NameTableKind, StorageType Storage, bool ShouldCreate) {
   assert(Storage != Uniqued && "Cannot unique DICompileUnit");
   assert(isCanonical(Producer) && "Expected canonical MDString");
   assert(isCanonical(Flags) && "Expected canonical MDString");
@@ -462,7 +480,7 @@ DICompileUnit *DICompileUnit::getImpl(
   return storeImpl(new (array_lengthof(Ops)) DICompileUnit(
                        Context, Storage, SourceLanguage, IsOptimized,
                        RuntimeVersion, EmissionKind, DWOId, SplitDebugInlining,
-                       DebugInfoForProfiling, GnuPubnames, Ops),
+                       DebugInfoForProfiling, NameTableKind, Ops),
                    Storage);
 }
 
@@ -476,12 +494,33 @@ DICompileUnit::getEmissionKind(StringRef Str) {
       .Default(None);
 }
 
+Optional<DICompileUnit::DebugNameTableKind>
+DICompileUnit::getNameTableKind(StringRef Str) {
+  return StringSwitch<Optional<DebugNameTableKind>>(Str)
+      .Case("Default", DebugNameTableKind::Default)
+      .Case("GNU", DebugNameTableKind::GNU)
+      .Case("None", DebugNameTableKind::None)
+      .Default(None);
+}
+
 const char *DICompileUnit::emissionKindString(DebugEmissionKind EK) {
   switch (EK) {
   case NoDebug:        return "NoDebug";
   case FullDebug:      return "FullDebug";
   case LineTablesOnly: return "LineTablesOnly";
-  case DebugDirectivesOnly: return "DebugDirectviesOnly";
+  case DebugDirectivesOnly: return "DebugDirectivesOnly";
+  }
+  return nullptr;
+}
+
+const char *DICompileUnit::nameTableKindString(DebugNameTableKind NTK) {
+  switch (NTK) {
+  case DebugNameTableKind::Default:
+    return nullptr;
+  case DebugNameTableKind::GNU:
+    return "GNU";
+  case DebugNameTableKind::None:
+    return "None";
   }
   return nullptr;
 }

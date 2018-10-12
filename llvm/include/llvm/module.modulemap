@@ -59,6 +59,7 @@ module LLVM_BinaryFormat {
     textual header "BinaryFormat/ELFRelocs/SystemZ.def"
     textual header "BinaryFormat/ELFRelocs/x86_64.def"
     textual header "BinaryFormat/WasmRelocs.def"
+    textual header "BinaryFormat/MsgPack.def"
 }
 
 module LLVM_Config { requires cplusplus umbrella "Config" module * { export * } }
@@ -192,6 +193,7 @@ module LLVM_intrinsic_gen {
 
   // Intrinsics.h
   module IR_CFG { header "IR/CFG.h" export * }
+  module IR_CFGDiff { header "IR/CFGDiff.h" export * }
   module IR_ConstantRange { header "IR/ConstantRange.h" export * }
   module IR_Dominators { header "IR/Dominators.h" export * }
   module Analysis_PostDominators { header "Analysis/PostDominators.h" export * }

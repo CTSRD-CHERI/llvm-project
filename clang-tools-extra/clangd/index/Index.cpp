@@ -77,16 +77,10 @@ SymbolSlab::const_iterator SymbolSlab::find(const SymbolID &ID) const {
 }
 
 // Copy the underlying data of the symbol into the owned arena.
-static void own(Symbol &S, DenseSet<StringRef> &Strings,
+static void own(Symbol &S, llvm::UniqueStringSaver &Strings,
                 BumpPtrAllocator &Arena) {
   // Intern replaces V with a reference to the same string owned by the arena.
-  auto Intern = [&](StringRef &V) {
-    auto R = Strings.insert(V);
-    if (R.second) { // New entry added to the table, copy the string.
-      *R.first = V.copy(Arena);
-    }
-    V = *R.first;
-  };
+  auto Intern = [&](StringRef &V) { V = Strings.save(V); };
 
   // We need to copy every StringRef field onto the arena.
   Intern(S.Name);
@@ -96,28 +90,19 @@ static void own(Symbol &S, DenseSet<StringRef> &Strings,
 
   Intern(S.Signature);
   Intern(S.CompletionSnippetSuffix);
-
-  if (S.Detail) {
-    // Copy values of StringRefs into arena.
-    auto *Detail = Arena.Allocate<Symbol::Details>();
-    *Detail = *S.Detail;
-    // Intern the actual strings.
-    Intern(Detail->Documentation);
-    Intern(Detail->ReturnType);
-    Intern(Detail->IncludeHeader);
-    // Replace the detail pointer with our copy.
-    S.Detail = Detail;
-  }
+  Intern(S.Documentation);
+  Intern(S.ReturnType);
+  Intern(S.IncludeHeader);
 }
 
 void SymbolSlab::Builder::insert(const Symbol &S) {
   auto R = SymbolIndex.try_emplace(S.ID, Symbols.size());
   if (R.second) {
     Symbols.push_back(S);
-    own(Symbols.back(), Strings, Arena);
+    own(Symbols.back(), UniqueStrings, Arena);
   } else {
     auto &Copy = Symbols[R.first->second] = S;
-    own(Copy, Strings, Arena);
+    own(Copy, UniqueStrings, Arena);
   }
 }
 
@@ -128,10 +113,53 @@ SymbolSlab SymbolSlab::Builder::build() && {
             [](const Symbol &L, const Symbol &R) { return L.ID < R.ID; });
   // We may have unused strings from overwritten symbols. Build a new arena.
   BumpPtrAllocator NewArena;
-  DenseSet<StringRef> Strings;
+  llvm::UniqueStringSaver Strings(NewArena);
   for (auto &S : Symbols)
     own(S, Strings, NewArena);
   return SymbolSlab(std::move(NewArena), std::move(Symbols));
+}
+
+raw_ostream &operator<<(raw_ostream &OS, SymbolOccurrenceKind K) {
+  if (K == SymbolOccurrenceKind::Unknown)
+    return OS << "Unknown";
+  static const std::vector<const char *> Messages = {"Decl", "Def", "Ref"};
+  bool VisitedOnce = false;
+  for (unsigned I = 0; I < Messages.size(); ++I) {
+    if (static_cast<uint8_t>(K) & 1u << I) {
+      if (VisitedOnce)
+        OS << ", ";
+      OS << Messages[I];
+      VisitedOnce = true;
+    }
+  }
+  return OS;
+}
+
+llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
+                              const SymbolOccurrence &Occurrence) {
+  OS << Occurrence.Location << ":" << Occurrence.Kind;
+  return OS;
+}
+
+void SymbolOccurrenceSlab::insert(const SymbolID &SymID,
+                                  const SymbolOccurrence &Occurrence) {
+  assert(!Frozen &&
+         "Can't insert a symbol occurrence after the slab has been frozen!");
+  auto &SymOccurrences = Occurrences[SymID];
+  SymOccurrences.push_back(Occurrence);
+  SymOccurrences.back().Location.FileURI =
+      UniqueStrings.save(Occurrence.Location.FileURI);
+}
+
+void SymbolOccurrenceSlab::freeze() {
+  // Deduplicate symbol occurrenes.
+  for (auto &IDAndOccurrence : Occurrences) {
+    auto &Occurrence = IDAndOccurrence.getSecond();
+    std::sort(Occurrence.begin(), Occurrence.end());
+    Occurrence.erase(std::unique(Occurrence.begin(), Occurrence.end()),
+                     Occurrence.end());
+  }
+  Frozen = true;
 }
 
 } // namespace clangd

@@ -29,7 +29,7 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/Analysis/DivergenceAnalysis.h"
+#include "llvm/Analysis/LegacyDivergenceAnalysis.h"
 #include "llvm/CodeGen/DAGCombine.h"
 #include "llvm/CodeGen/ISDOpcodes.h"
 #include "llvm/CodeGen/RuntimeLibcalls.h"
@@ -545,6 +545,12 @@ public:
     return false;
   }
 
+  /// Return true if inserting a scalar into a variable element of an undef
+  /// vector is more efficiently handled by splatting the scalar instead.
+  virtual bool shouldSplatInsEltVarIndex(EVT) const {
+    return false;
+  }
+
   /// Return true if target supports floating point exceptions.
   bool hasFloatingPointExceptions() const {
     return HasFloatingPointExceptions;
@@ -798,6 +804,7 @@ public:
       case ISD::STRICT_FSUB: EqOpc = ISD::FSUB; break;
       case ISD::STRICT_FMUL: EqOpc = ISD::FMUL; break;
       case ISD::STRICT_FDIV: EqOpc = ISD::FDIV; break;
+      case ISD::STRICT_FREM: EqOpc = ISD::FREM; break;
       case ISD::STRICT_FSQRT: EqOpc = ISD::FSQRT; break;
       case ISD::STRICT_FPOW: EqOpc = ISD::FPOW; break;
       case ISD::STRICT_FPOWI: EqOpc = ISD::FPOWI; break;
@@ -2648,7 +2655,7 @@ public:
 
   virtual bool isSDNodeSourceOfDivergence(const SDNode *N,
                                           FunctionLoweringInfo *FLI,
-                                          DivergenceAnalysis *DA) const {
+                                          LegacyDivergenceAnalysis *DA) const {
     return false;
   }
 
@@ -2942,12 +2949,16 @@ public:
   ///
   virtual SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const;
 
-  /// Return true if it is profitable to move a following shift through this
-  //  node, adjusting any immediate operands as necessary to preserve semantics.
-  //  This transformation may not be desirable if it disrupts a particularly
-  //  auspicious target-specific tree (e.g. bitfield extraction in AArch64).
-  //  By default, it returns true.
-  virtual bool isDesirableToCommuteWithShift(const SDNode *N) const {
+  /// Return true if it is profitable to move this shift by a constant amount
+  /// though its operand, adjusting any immediate operands as necessary to
+  /// preserve semantics. This transformation may not be desirable if it
+  /// disrupts a particularly auspicious target-specific tree (e.g. bitfield
+  /// extraction in AArch64). By default, it returns true.
+  ///
+  /// @param N the shift node
+  /// @param Level the current DAGCombine legalization level.
+  virtual bool isDesirableToCommuteWithShift(const SDNode *N,
+                                             CombineLevel Level) const {
     return true;
   }
 

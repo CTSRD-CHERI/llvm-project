@@ -194,14 +194,27 @@ void fCharPointerTest() {
   CharPointerTest();
 }
 
-struct CyclicPointerTest {
+struct CyclicPointerTest1 {
   int *ptr;
-  CyclicPointerTest() : ptr(reinterpret_cast<int *>(&ptr)) {}
+  CyclicPointerTest1() : ptr(reinterpret_cast<int *>(&ptr)) {}
 };
 
-void fCyclicPointerTest() {
-  CyclicPointerTest();
+void fCyclicPointerTest1() {
+  CyclicPointerTest1();
 }
+
+// TODO: Currently, the checker ends up in an infinite loop for the following
+// test case.
+/*
+struct CyclicPointerTest2 {
+  int **pptr;
+  CyclicPointerTest2() : pptr(reinterpret_cast<int **>(&pptr)) {}
+};
+
+void fCyclicPointerTest2() {
+  CyclicPointerTest2();
+}
+*/
 
 //===----------------------------------------------------------------------===//
 // Void pointer tests.
@@ -292,7 +305,7 @@ void fCyclicVoidPointerTest() {
 }
 
 struct IntDynTypedVoidPointerTest1 {
-  void *vptr; // expected-note{{uninitialized pointee 'this->vptr'}}
+  void *vptr; // expected-note{{uninitialized pointee 'static_cast<int *>(this->vptr)'}}
   int dontGetFilteredByNonPedanticMode = 0;
 
   IntDynTypedVoidPointerTest1(void *vptr) : vptr(vptr) {} // expected-warning{{1 uninitialized field}}
@@ -305,8 +318,8 @@ void fIntDynTypedVoidPointerTest1() {
 
 struct RecordDynTypedVoidPointerTest {
   struct RecordType {
-    int x; // expected-note{{uninitialized field 'this->vptr->x'}}
-    int y; // expected-note{{uninitialized field 'this->vptr->y'}}
+    int x; // expected-note{{uninitialized field 'static_cast<struct RecordDynTypedVoidPointerTest::RecordType *>(this->vptr)->x'}}
+    int y; // expected-note{{uninitialized field 'static_cast<struct RecordDynTypedVoidPointerTest::RecordType *>(this->vptr)->y'}}
   };
 
   void *vptr;
@@ -322,9 +335,9 @@ void fRecordDynTypedVoidPointerTest() {
 
 struct NestedNonVoidDynTypedVoidPointerTest {
   struct RecordType {
-    int x;      // expected-note{{uninitialized field 'this->vptr->x'}}
-    int y;      // expected-note{{uninitialized field 'this->vptr->y'}}
-    void *vptr; // expected-note{{uninitialized pointee 'this->vptr->vptr'}}
+    int x;      // expected-note{{uninitialized field 'static_cast<struct NestedNonVoidDynTypedVoidPointerTest::RecordType *>(this->vptr)->x'}}
+    int y;      // expected-note{{uninitialized field 'static_cast<struct NestedNonVoidDynTypedVoidPointerTest::RecordType *>(this->vptr)->y'}}
+    void *vptr; // expected-note{{uninitialized pointee 'static_cast<char *>(static_cast<struct NestedNonVoidDynTypedVoidPointerTest::RecordType *>(this->vptr)->vptr)'}}
   };
 
   void *vptr;

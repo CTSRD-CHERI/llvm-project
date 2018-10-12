@@ -1321,6 +1321,23 @@ define <16 x i8> @trunc_sub_v16i16_v16i8(<16 x i16> %a0, <16 x i16> %a1) nounwin
   ret <16 x i8> %2
 }
 
+define <16 x i8> @trunc_ext_sub_v16i16_v16i8(<16 x i8> %x, <16 x i8> %y) {
+; SSE-LABEL: trunc_ext_sub_v16i16_v16i8:
+; SSE:       # %bb.0:
+; SSE-NEXT:    psubb %xmm1, %xmm0
+; SSE-NEXT:    retq
+;
+; AVX-LABEL: trunc_ext_sub_v16i16_v16i8:
+; AVX:       # %bb.0:
+; AVX-NEXT:    vpsubb %xmm1, %xmm0, %xmm0
+; AVX-NEXT:    retq
+  %a = zext <16 x i8> %x to <16 x i16>
+  %b = zext <16 x i8> %y to <16 x i16>
+  %c = sub <16 x i16> %a, %b
+  %d = trunc <16 x i16> %c to <16 x i8>
+  ret <16 x i8> %d
+}
+
 ;
 ; sub to constant
 ;
@@ -1768,6 +1785,41 @@ define <16 x i8> @trunc_sub_const_v16i16_v16i8(<16 x i16> %a0) nounwind {
   %1 = sub <16 x i16> %a0, <i16 0, i16 1, i16 2, i16 3, i16 4, i16 5, i16 6, i16 7, i16 8, i16 9, i16 10, i16 11, i16 12, i16 13, i16 14, i16 15>
   %2 = trunc <16 x i16> %1 to <16 x i8>
   ret <16 x i8> %2
+}
+
+define <16 x i8> @trunc_ext_sub_const_rhs_v16i16_v16i8(<16 x i8> %x) {
+; SSE-LABEL: trunc_ext_sub_const_rhs_v16i16_v16i8:
+; SSE:       # %bb.0:
+; SSE-NEXT:    psubb {{.*}}(%rip), %xmm0
+; SSE-NEXT:    retq
+;
+; AVX-LABEL: trunc_ext_sub_const_rhs_v16i16_v16i8:
+; AVX:       # %bb.0:
+; AVX-NEXT:    vpsubb {{.*}}(%rip), %xmm0, %xmm0
+; AVX-NEXT:    retq
+  %a = zext <16 x i8> %x to <16 x i16>
+  %b = sub <16 x i16> %a, <i16 0, i16 1, i16 2, i16 3, i16 4, i16 5, i16 6, i16 7, i16 8, i16 9, i16 10, i16 11, i16 12, i16 13, i16 14, i16 15>
+  %c = trunc <16 x i16> %b to <16 x i8>
+  ret <16 x i8> %c
+}
+
+define <16 x i8> @trunc_ext_sub_const_lhs_v16i16_v16i8(<16 x i8> %x) {
+; SSE-LABEL: trunc_ext_sub_const_lhs_v16i16_v16i8:
+; SSE:       # %bb.0:
+; SSE-NEXT:    movdqa {{.*#+}} xmm1 = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
+; SSE-NEXT:    psubb %xmm0, %xmm1
+; SSE-NEXT:    movdqa %xmm1, %xmm0
+; SSE-NEXT:    retq
+;
+; AVX-LABEL: trunc_ext_sub_const_lhs_v16i16_v16i8:
+; AVX:       # %bb.0:
+; AVX-NEXT:    vmovdqa {{.*#+}} xmm1 = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]
+; AVX-NEXT:    vpsubb %xmm0, %xmm1, %xmm0
+; AVX-NEXT:    retq
+  %a = zext <16 x i8> %x to <16 x i16>
+  %b = sub <16 x i16> <i16 0, i16 1, i16 2, i16 3, i16 4, i16 5, i16 6, i16 7, i16 8, i16 9, i16 10, i16 11, i16 12, i16 13, i16 14, i16 15>, %a
+  %c = trunc <16 x i16> %b to <16 x i8>
+  ret <16 x i8> %c
 }
 
 ;
@@ -5510,32 +5562,20 @@ define <16 x i8> @trunc_or_const_v16i16_v16i8(<16 x i16> %a0) nounwind {
 define <4 x i32> @mul_add_const_v4i64_v4i32(<4 x i32> %a0, <4 x i32> %a1) nounwind {
 ; SSE-LABEL: mul_add_const_v4i64_v4i32:
 ; SSE:       # %bb.0:
-; SSE-NEXT:    movdqa %xmm0, %xmm2
-; SSE-NEXT:    pshufd {{.*#+}} xmm0 = xmm0[0,1,1,3]
-; SSE-NEXT:    pshufd {{.*#+}} xmm2 = xmm2[2,1,3,3]
-; SSE-NEXT:    pshufd {{.*#+}} xmm3 = xmm1[0,1,1,3]
+; SSE-NEXT:    pshufd {{.*#+}} xmm2 = xmm0[0,1,1,3]
+; SSE-NEXT:    pshufd {{.*#+}} xmm3 = xmm0[2,1,3,3]
+; SSE-NEXT:    pshufd {{.*#+}} xmm4 = xmm1[0,1,1,3]
 ; SSE-NEXT:    pshufd {{.*#+}} xmm1 = xmm1[2,1,3,3]
-; SSE-NEXT:    movdqa %xmm2, %xmm4
-; SSE-NEXT:    psrlq $32, %xmm4
-; SSE-NEXT:    pmuludq %xmm1, %xmm4
-; SSE-NEXT:    movdqa %xmm1, %xmm5
-; SSE-NEXT:    psrlq $32, %xmm5
-; SSE-NEXT:    pmuludq %xmm2, %xmm5
-; SSE-NEXT:    paddq %xmm4, %xmm5
-; SSE-NEXT:    psllq $32, %xmm5
-; SSE-NEXT:    pmuludq %xmm1, %xmm2
-; SSE-NEXT:    paddq %xmm5, %xmm2
-; SSE-NEXT:    movdqa %xmm0, %xmm1
-; SSE-NEXT:    psrlq $32, %xmm1
-; SSE-NEXT:    pmuludq %xmm3, %xmm1
-; SSE-NEXT:    movdqa %xmm3, %xmm4
-; SSE-NEXT:    psrlq $32, %xmm4
-; SSE-NEXT:    pmuludq %xmm0, %xmm4
-; SSE-NEXT:    paddq %xmm1, %xmm4
-; SSE-NEXT:    psllq $32, %xmm4
-; SSE-NEXT:    pmuludq %xmm3, %xmm0
-; SSE-NEXT:    paddq %xmm4, %xmm0
-; SSE-NEXT:    shufps {{.*#+}} xmm0 = xmm0[0,2],xmm2[0,2]
+; SSE-NEXT:    pmuludq %xmm1, %xmm3
+; SSE-NEXT:    pxor %xmm0, %xmm0
+; SSE-NEXT:    pmuludq %xmm0, %xmm1
+; SSE-NEXT:    psllq $32, %xmm1
+; SSE-NEXT:    paddq %xmm3, %xmm1
+; SSE-NEXT:    pmuludq %xmm4, %xmm2
+; SSE-NEXT:    pmuludq %xmm4, %xmm0
+; SSE-NEXT:    psllq $32, %xmm0
+; SSE-NEXT:    paddq %xmm2, %xmm0
+; SSE-NEXT:    shufps {{.*#+}} xmm0 = xmm0[0,2],xmm1[0,2]
 ; SSE-NEXT:    paddd {{.*}}(%rip), %xmm0
 ; SSE-NEXT:    retq
 ;
@@ -5559,37 +5599,34 @@ define <4 x i32> @mul_add_self_v4i64_v4i32(<4 x i32> %a0, <4 x i32> %a1) nounwin
 ; SSE-NEXT:    movdqa %xmm2, %xmm3
 ; SSE-NEXT:    psrad $31, %xmm3
 ; SSE-NEXT:    punpckldq {{.*#+}} xmm2 = xmm2[0],xmm3[0],xmm2[1],xmm3[1]
-; SSE-NEXT:    movdqa %xmm0, %xmm3
-; SSE-NEXT:    psrad $31, %xmm3
-; SSE-NEXT:    punpckldq {{.*#+}} xmm0 = xmm0[0],xmm3[0],xmm0[1],xmm3[1]
-; SSE-NEXT:    pshufd {{.*#+}} xmm3 = xmm1[2,3,0,1]
-; SSE-NEXT:    movdqa %xmm3, %xmm4
-; SSE-NEXT:    psrad $31, %xmm4
-; SSE-NEXT:    punpckldq {{.*#+}} xmm3 = xmm3[0],xmm4[0],xmm3[1],xmm4[1]
-; SSE-NEXT:    movdqa %xmm1, %xmm4
-; SSE-NEXT:    psrad $31, %xmm4
-; SSE-NEXT:    punpckldq {{.*#+}} xmm1 = xmm1[0],xmm4[0],xmm1[1],xmm4[1]
-; SSE-NEXT:    movdqa %xmm0, %xmm4
-; SSE-NEXT:    psrlq $32, %xmm4
-; SSE-NEXT:    pmuludq %xmm1, %xmm4
-; SSE-NEXT:    movdqa %xmm1, %xmm5
-; SSE-NEXT:    psrlq $32, %xmm5
-; SSE-NEXT:    pmuludq %xmm0, %xmm5
-; SSE-NEXT:    paddq %xmm4, %xmm5
-; SSE-NEXT:    psllq $32, %xmm5
+; SSE-NEXT:    movdqa %xmm0, %xmm6
+; SSE-NEXT:    psrad $31, %xmm6
+; SSE-NEXT:    punpckldq {{.*#+}} xmm0 = xmm0[0],xmm6[0],xmm0[1],xmm6[1]
+; SSE-NEXT:    pshufd {{.*#+}} xmm4 = xmm1[2,3,0,1]
+; SSE-NEXT:    movdqa %xmm4, %xmm5
+; SSE-NEXT:    psrad $31, %xmm5
+; SSE-NEXT:    punpckldq {{.*#+}} xmm4 = xmm4[0],xmm5[0],xmm4[1],xmm5[1]
+; SSE-NEXT:    movdqa %xmm1, %xmm7
+; SSE-NEXT:    psrad $31, %xmm7
+; SSE-NEXT:    punpckldq {{.*#+}} xmm1 = xmm1[0],xmm7[0],xmm1[1],xmm7[1]
+; SSE-NEXT:    pxor %xmm8, %xmm8
+; SSE-NEXT:    punpckldq {{.*#+}} xmm6 = xmm6[0],xmm8[0],xmm6[1],xmm8[1]
+; SSE-NEXT:    pmuludq %xmm1, %xmm6
+; SSE-NEXT:    punpckldq {{.*#+}} xmm7 = xmm7[0],xmm8[0],xmm7[1],xmm8[1]
+; SSE-NEXT:    pmuludq %xmm0, %xmm7
+; SSE-NEXT:    paddq %xmm6, %xmm7
+; SSE-NEXT:    psllq $32, %xmm7
 ; SSE-NEXT:    pmuludq %xmm0, %xmm1
-; SSE-NEXT:    paddq %xmm5, %xmm1
-; SSE-NEXT:    movdqa %xmm2, %xmm0
-; SSE-NEXT:    psrlq $32, %xmm0
-; SSE-NEXT:    pmuludq %xmm3, %xmm0
-; SSE-NEXT:    movdqa %xmm3, %xmm4
-; SSE-NEXT:    psrlq $32, %xmm4
+; SSE-NEXT:    paddq %xmm7, %xmm1
+; SSE-NEXT:    punpckldq {{.*#+}} xmm3 = xmm3[0],xmm8[0],xmm3[1],xmm8[1]
+; SSE-NEXT:    pmuludq %xmm4, %xmm3
+; SSE-NEXT:    punpckldq {{.*#+}} xmm5 = xmm5[0],xmm8[0],xmm5[1],xmm8[1]
+; SSE-NEXT:    pmuludq %xmm2, %xmm5
+; SSE-NEXT:    paddq %xmm3, %xmm5
+; SSE-NEXT:    psllq $32, %xmm5
 ; SSE-NEXT:    pmuludq %xmm2, %xmm4
-; SSE-NEXT:    paddq %xmm0, %xmm4
-; SSE-NEXT:    psllq $32, %xmm4
-; SSE-NEXT:    pmuludq %xmm2, %xmm3
-; SSE-NEXT:    paddq %xmm4, %xmm3
-; SSE-NEXT:    shufps {{.*#+}} xmm1 = xmm1[0,2],xmm3[0,2]
+; SSE-NEXT:    paddq %xmm5, %xmm4
+; SSE-NEXT:    shufps {{.*#+}} xmm1 = xmm1[0,2],xmm4[0,2]
 ; SSE-NEXT:    paddd %xmm1, %xmm1
 ; SSE-NEXT:    movdqa %xmm1, %xmm0
 ; SSE-NEXT:    retq
@@ -5614,28 +5651,17 @@ define <4 x i32> @mul_add_multiuse_v4i64_v4i32(<4 x i32> %a0, <4 x i32> %a1) nou
 ; SSE-NEXT:    pshufd {{.*#+}} xmm3 = xmm0[2,1,3,3]
 ; SSE-NEXT:    pshufd {{.*#+}} xmm4 = xmm1[0,1,1,3]
 ; SSE-NEXT:    pshufd {{.*#+}} xmm1 = xmm1[2,1,3,3]
-; SSE-NEXT:    movdqa %xmm3, %xmm5
-; SSE-NEXT:    psrlq $32, %xmm5
-; SSE-NEXT:    pmuludq %xmm1, %xmm5
-; SSE-NEXT:    movdqa %xmm1, %xmm6
-; SSE-NEXT:    psrlq $32, %xmm6
-; SSE-NEXT:    pmuludq %xmm3, %xmm6
-; SSE-NEXT:    paddq %xmm5, %xmm6
-; SSE-NEXT:    psllq $32, %xmm6
 ; SSE-NEXT:    pmuludq %xmm1, %xmm3
-; SSE-NEXT:    paddq %xmm6, %xmm3
-; SSE-NEXT:    movdqa %xmm2, %xmm1
-; SSE-NEXT:    psrlq $32, %xmm1
-; SSE-NEXT:    pmuludq %xmm4, %xmm1
-; SSE-NEXT:    movdqa %xmm4, %xmm5
-; SSE-NEXT:    psrlq $32, %xmm5
-; SSE-NEXT:    pmuludq %xmm2, %xmm5
-; SSE-NEXT:    paddq %xmm1, %xmm5
-; SSE-NEXT:    psllq $32, %xmm5
+; SSE-NEXT:    pxor %xmm5, %xmm5
+; SSE-NEXT:    pmuludq %xmm5, %xmm1
+; SSE-NEXT:    psllq $32, %xmm1
+; SSE-NEXT:    paddq %xmm3, %xmm1
 ; SSE-NEXT:    pmuludq %xmm4, %xmm2
-; SSE-NEXT:    paddq %xmm5, %xmm2
-; SSE-NEXT:    shufps {{.*#+}} xmm2 = xmm2[0,2],xmm3[0,2]
-; SSE-NEXT:    paddd %xmm2, %xmm0
+; SSE-NEXT:    pmuludq %xmm4, %xmm5
+; SSE-NEXT:    psllq $32, %xmm5
+; SSE-NEXT:    paddq %xmm2, %xmm5
+; SSE-NEXT:    shufps {{.*#+}} xmm5 = xmm5[0,2],xmm1[0,2]
+; SSE-NEXT:    paddd %xmm5, %xmm0
 ; SSE-NEXT:    retq
 ;
 ; AVX-LABEL: mul_add_multiuse_v4i64_v4i32:

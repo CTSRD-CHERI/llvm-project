@@ -12,6 +12,7 @@ add_lldb_unittest(UtilityTests
   JSONTest.cpp
   LogTest.cpp
   NameMatchesTest.cpp
+  PredicateTest.cpp
   RegisterValueTest.cpp
   ScalarTest.cpp
   StateTest.cpp
@@ -19,6 +20,7 @@ add_lldb_unittest(UtilityTests
   StreamTeeTest.cpp
   StreamTest.cpp
   StringExtractorTest.cpp
+  StringLexerTest.cpp
   StringListTest.cpp
   StructuredDataTest.cpp
   TildeExpressionResolverTest.cpp

@@ -565,7 +565,7 @@ bool CursorVisitor::VisitChildren(CXCursor Cursor) {
     if (const ObjCObjectType *ObjT = A->getInterface()->getAs<ObjCObjectType>())
       return Visit(cxcursor::MakeCursorObjCClassRef(
           ObjT->getInterface(),
-          A->getInterfaceLoc()->getTypeLoc().getLocStart(), TU));
+          A->getInterfaceLoc()->getTypeLoc().getBeginLoc(), TU));
   }
 
   // If pointing inside a macro definition, check if the token is an identifier
@@ -993,7 +993,7 @@ static void addRangedDeclsInContainer(DeclIt *DI_current, DeclIt DE_current,
     Decl *D_next = *next;
     if (!D_next)
       break;
-    SourceLocation L = D_next->getLocStart();
+    SourceLocation L = D_next->getBeginLoc();
     if (!L.isValid())
       break;
     if (SM.isBeforeInTranslationUnit(L, EndLoc)) {
@@ -1038,7 +1038,7 @@ bool CursorVisitor::VisitObjCContainerDecl(ObjCContainerDecl *D) {
   // additional ones we've collected.  Then visit them.
   for (auto *SubDecl : D->decls()) {
     if (!SubDecl || SubDecl->getLexicalDeclContext() != D ||
-        SubDecl->getLocStart().isInvalid())
+        SubDecl->getBeginLoc().isInvalid())
       continue;
     DeclsInContainer.push_back(SubDecl);
   }
@@ -1046,12 +1046,12 @@ bool CursorVisitor::VisitObjCContainerDecl(ObjCContainerDecl *D) {
   // Now sort the Decls so that they appear in lexical order.
   llvm::sort(DeclsInContainer.begin(), DeclsInContainer.end(),
              [&SM](Decl *A, Decl *B) {
-    SourceLocation L_A = A->getLocStart();
-    SourceLocation L_B = B->getLocStart();
-    return L_A != L_B ?
-           SM.isBeforeInTranslationUnit(L_A, L_B) :
-           SM.isBeforeInTranslationUnit(A->getLocEnd(), B->getLocEnd());
-  });
+               SourceLocation L_A = A->getBeginLoc();
+               SourceLocation L_B = B->getBeginLoc();
+               return L_A != L_B ? SM.isBeforeInTranslationUnit(L_A, L_B)
+                                 : SM.isBeforeInTranslationUnit(A->getEndLoc(),
+                                                                B->getEndLoc());
+             });
 
   // Now visit the decls.
   for (SmallVectorImpl<Decl*>::iterator I = DeclsInContainer.begin(),
@@ -1578,7 +1578,7 @@ bool CursorVisitor::VisitObjCInterfaceTypeLoc(ObjCInterfaceTypeLoc TL) {
 }
 
 bool CursorVisitor::VisitObjCTypeParamTypeLoc(ObjCTypeParamTypeLoc TL) {
-  if (Visit(MakeCursorTypeRef(TL.getDecl(), TL.getLocStart(), TU)))
+  if (Visit(MakeCursorTypeRef(TL.getDecl(), TL.getBeginLoc(), TU)))
     return true;
   for (unsigned I = 0, N = TL.getNumProtocols(); I != N; ++I) {
     if (Visit(MakeCursorObjCProtocolRef(TL.getProtocol(I), TL.getProtocolLoc(I),
@@ -4342,8 +4342,8 @@ static SourceLocation getLocationFromExpr(const Expr *E) {
     return SizeOfPack->getPackLoc();
   if (const ObjCPropertyRefExpr *PropRef = dyn_cast<ObjCPropertyRefExpr>(E))
     return PropRef->getLocation();
-  
-  return E->getLocStart();
+
+  return E->getBeginLoc();
 }
 
 extern "C" {
@@ -5790,9 +5790,9 @@ CXSourceLocation clang_getCursorLocation(CXCursor C) {
       if (TypeSourceInfo *TSInfo = BaseSpec->getTypeSourceInfo())
         return cxloc::translateSourceLocation(getCursorContext(C),
                                             TSInfo->getTypeLoc().getBeginLoc());
-      
+
       return cxloc::translateSourceLocation(getCursorContext(C),
-                                        BaseSpec->getLocStart());
+                                            BaseSpec->getBeginLoc());
     }
 
     case CXCursor_LabelRef: {
@@ -5816,7 +5816,7 @@ CXSourceLocation clang_getCursorLocation(CXCursor C) {
 
   if (clang_isStatement(C.kind))
     return cxloc::translateSourceLocation(getCursorContext(C),
-                                          getCursorStmt(C)->getLocStart());
+                                          getCursorStmt(C)->getBeginLoc());
 
   if (C.kind == CXCursor_PreprocessingDirective) {
     SourceLocation L = cxcursor::getCursorPreprocessingDirective(C).getBegin();
@@ -6016,10 +6016,10 @@ static SourceRange getFullCursorExtent(CXCursor C, SourceManager &SrcMgr) {
     SourceLocation StartLoc;
     if (const DeclaratorDecl *DD = dyn_cast<DeclaratorDecl>(D)) {
       if (TypeSourceInfo *TI = DD->getTypeSourceInfo())
-        StartLoc = TI->getTypeLoc().getLocStart();
+        StartLoc = TI->getTypeLoc().getBeginLoc();
     } else if (const TypedefDecl *Typedef = dyn_cast<TypedefDecl>(D)) {
       if (TypeSourceInfo *TI = Typedef->getTypeSourceInfo())
-        StartLoc = TI->getTypeLoc().getLocStart();
+        StartLoc = TI->getTypeLoc().getBeginLoc();
     }
 
     if (StartLoc.isValid() && R.getBegin().isValid() &&
@@ -6794,11 +6794,18 @@ class AnnotateTokensWorker {
   SourceManager &SrcMgr;
   bool HasContextSensitiveKeywords;
 
+  struct PostChildrenAction {
+    CXCursor cursor;
+    enum Action { Invalid, Ignore, Postpone } action;
+  };
+  using PostChildrenActions = SmallVector<PostChildrenAction, 0>;
+
   struct PostChildrenInfo {
     CXCursor Cursor;
     SourceRange CursorRange;
     unsigned BeforeReachingCursorIdx;
     unsigned BeforeChildrenTokenIdx;
+    PostChildrenActions ChildActions;
   };
   SmallVector<PostChildrenInfo, 8> PostChildrenInfos;
 
@@ -6844,7 +6851,13 @@ public:
 
   void VisitChildren(CXCursor C) { AnnotateVis.VisitChildren(C); }
   enum CXChildVisitResult Visit(CXCursor cursor, CXCursor parent);
+  bool IsIgnoredChildCursor(CXCursor cursor) const;
+  PostChildrenActions DetermineChildActions(CXCursor Cursor) const;
+
   bool postVisitChildren(CXCursor cursor);
+  void HandlePostPonedChildCursors(const PostChildrenInfo &Info);
+  void HandlePostPonedChildCursor(CXCursor Cursor, unsigned StartTokenIndex);
+
   void AnnotateTokens();
   
   /// Determine whether the annotator saw any cursors that have 
@@ -6863,6 +6876,67 @@ void AnnotateTokensWorker::AnnotateTokens() {
   // Walk the AST within the region of interest, annotating tokens
   // along the way.
   AnnotateVis.visitFileRegion();
+}
+
+bool AnnotateTokensWorker::IsIgnoredChildCursor(CXCursor cursor) const {
+  if (PostChildrenInfos.empty())
+    return false;
+
+  for (const auto &ChildAction : PostChildrenInfos.back().ChildActions) {
+    if (ChildAction.cursor == cursor &&
+        ChildAction.action == PostChildrenAction::Ignore) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+const CXXOperatorCallExpr *GetSubscriptOrCallOperator(CXCursor Cursor) {
+  if (!clang_isExpression(Cursor.kind))
+    return nullptr;
+
+  const Expr *E = getCursorExpr(Cursor);
+  if (const auto *OCE = dyn_cast<CXXOperatorCallExpr>(E)) {
+    const OverloadedOperatorKind Kind = OCE->getOperator();
+    if (Kind == OO_Call || Kind == OO_Subscript)
+      return OCE;
+  }
+
+  return nullptr;
+}
+
+AnnotateTokensWorker::PostChildrenActions
+AnnotateTokensWorker::DetermineChildActions(CXCursor Cursor) const {
+  PostChildrenActions actions;
+
+  // The DeclRefExpr of CXXOperatorCallExpr refering to the custom operator is
+  // visited before the arguments to the operator call. For the Call and
+  // Subscript operator the range of this DeclRefExpr includes the whole call
+  // expression, so that all tokens in that range would be mapped to the
+  // operator function, including the tokens of the arguments. To avoid that,
+  // ensure to visit this DeclRefExpr as last node.
+  if (const auto *OCE = GetSubscriptOrCallOperator(Cursor)) {
+    const Expr *Callee = OCE->getCallee();
+    if (const ImplicitCastExpr *ICE = dyn_cast<ImplicitCastExpr>(Callee)) {
+      const Expr *SubExpr = ICE->getSubExpr();
+      if (const DeclRefExpr *DRE = dyn_cast<DeclRefExpr>(SubExpr)) {
+        const Decl *parentDecl = getCursorParentDecl(Cursor);
+        CXTranslationUnit TU = clang_Cursor_getTranslationUnit(Cursor);
+
+        // Visit the DeclRefExpr as last.
+        CXCursor cxChild = MakeCXCursor(DRE, parentDecl, TU);
+        actions.push_back({cxChild, PostChildrenAction::Postpone});
+
+        // The parent of the DeclRefExpr, an ImplicitCastExpr, has an equally
+        // wide range as the DeclRefExpr. We can skip visiting this entirely.
+        cxChild = MakeCXCursor(ICE, parentDecl, TU);
+        actions.push_back({cxChild, PostChildrenAction::Ignore});
+      }
+    }
+  }
+
+  return actions;
 }
 
 static inline void updateCursorAnnotation(CXCursor &Cursor,
@@ -6941,7 +7015,10 @@ AnnotateTokensWorker::Visit(CXCursor cursor, CXCursor parent) {
   SourceRange cursorRange = getRawCursorExtent(cursor);
   if (cursorRange.isInvalid())
     return CXChildVisit_Recurse;
-      
+
+  if (IsIgnoredChildCursor(cursor))
+    return CXChildVisit_Continue;
+
   if (!HasContextSensitiveKeywords) {
     // Objective-C properties can have context-sensitive keywords.
     if (cursor.kind == CXCursor_ObjCPropertyDecl) {
@@ -7069,9 +7146,9 @@ AnnotateTokensWorker::Visit(CXCursor cursor, CXCursor parent) {
     const Expr *E = getCursorExpr(cursor);
     if (const Decl *D = getCursorParentDecl(cursor)) {
       const unsigned I = NextToken();
-      if (E->getLocStart().isValid() && D->getLocation().isValid() &&
-          E->getLocStart() == D->getLocation() &&
-          E->getLocStart() == GetTokenLoc(I)) {
+      if (E->getBeginLoc().isValid() && D->getLocation().isValid() &&
+          E->getBeginLoc() == D->getLocation() &&
+          E->getBeginLoc() == GetTokenLoc(I)) {
         updateCursorAnnotation(Cursors[I], updateC);
         AdvanceToken();
       }
@@ -7089,6 +7166,7 @@ AnnotateTokensWorker::Visit(CXCursor cursor, CXCursor parent) {
   Info.CursorRange = cursorRange;
   Info.BeforeReachingCursorIdx = BeforeReachingCursorIdx;
   Info.BeforeChildrenTokenIdx = NextToken();
+  Info.ChildActions = DetermineChildActions(cursor);
   PostChildrenInfos.push_back(Info);
 
   return CXChildVisit_Recurse;
@@ -7100,6 +7178,8 @@ bool AnnotateTokensWorker::postVisitChildren(CXCursor cursor) {
   const PostChildrenInfo &Info = PostChildrenInfos.back();
   if (!clang_equalCursors(Info.Cursor, cursor))
     return false;
+
+  HandlePostPonedChildCursors(Info);
 
   const unsigned BeforeChildren = Info.BeforeChildrenTokenIdx;
   const unsigned AfterChildren = NextToken();
@@ -7125,6 +7205,56 @@ bool AnnotateTokensWorker::postVisitChildren(CXCursor cursor) {
 
   PostChildrenInfos.pop_back();
   return false;
+}
+
+void AnnotateTokensWorker::HandlePostPonedChildCursors(
+    const PostChildrenInfo &Info) {
+  for (const auto &ChildAction : Info.ChildActions) {
+    if (ChildAction.action == PostChildrenAction::Postpone) {
+      HandlePostPonedChildCursor(ChildAction.cursor,
+                                 Info.BeforeChildrenTokenIdx);
+    }
+  }
+}
+
+void AnnotateTokensWorker::HandlePostPonedChildCursor(
+    CXCursor Cursor, unsigned StartTokenIndex) {
+  const auto flags = CXNameRange_WantQualifier | CXNameRange_WantQualifier;
+  unsigned I = StartTokenIndex;
+
+  // The bracket tokens of a Call or Subscript operator are mapped to
+  // CallExpr/CXXOperatorCallExpr because we skipped visiting the corresponding
+  // DeclRefExpr. Remap these tokens to the DeclRefExpr cursors.
+  for (unsigned RefNameRangeNr = 0; I < NumTokens; RefNameRangeNr++) {
+    const CXSourceRange CXRefNameRange =
+        clang_getCursorReferenceNameRange(Cursor, flags, RefNameRangeNr);
+    if (clang_Range_isNull(CXRefNameRange))
+      break; // All ranges handled.
+
+    SourceRange RefNameRange = cxloc::translateCXSourceRange(CXRefNameRange);
+    while (I < NumTokens) {
+      const SourceLocation TokenLocation = GetTokenLoc(I);
+      if (!TokenLocation.isValid())
+        break;
+
+      // Adapt the end range, because LocationCompare() reports
+      // RangeOverlap even for the not-inclusive end location.
+      const SourceLocation fixedEnd =
+          RefNameRange.getEnd().getLocWithOffset(-1);
+      RefNameRange = SourceRange(RefNameRange.getBegin(), fixedEnd);
+
+      const RangeComparisonResult ComparisonResult =
+          LocationCompare(SrcMgr, TokenLocation, RefNameRange);
+
+      if (ComparisonResult == RangeOverlap) {
+        Cursors[I++] = Cursor;
+      } else if (ComparisonResult == RangeBefore) {
+        ++I; // Not relevant token, check next one.
+      } else if (ComparisonResult == RangeAfter) {
+        break; // All tokens updated for current range, check next.
+      }
+    }
+  }
 }
 
 static enum CXChildVisitResult AnnotateTokensVisitor(CXCursor cursor,
