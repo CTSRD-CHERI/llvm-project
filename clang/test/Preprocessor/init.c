@@ -5048,6 +5048,7 @@
 // CHERI-COMMON-NEXT: #define __mips_abicalls 1
 // CHERI-COMMON-NEXT: #define __mips_fpr 64
 // CHERI-COMMON-NEXT: #define __mips_hard_float 1
+// CHERI-COMMON-NEXT: #define __mips_isa_rev 0
 // CHERI-COMMON-NEXT: #define __mips_n64 1
 // CHERI-COMMON-NEXT: #define _mips 1
 // CHERI-COMMON-NEXT: #define mips 1

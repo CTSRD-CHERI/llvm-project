@@ -135,7 +135,7 @@ void do_unlock(void);
 // BOTH-NEXT:    [[CMP:%.*]] = icmp eq i8 addrspace(200)* [[TMP2]], [[TMP0]]
 // BOTH-NEXT:    br i1 [[CMP]], label [[IF_THEN:%.*]], label [[IF_END:%.*]]
 // BOTH:       if.then:
-// BOTH-NEXT:    tail call void @do_unlock() #5
+// BOTH-NEXT:    tail call void @do_unlock()
 // BOTH-NEXT:    br label [[IF_END]]
 // BOTH:       if.end:
 // BOTH-NEXT:    ret void

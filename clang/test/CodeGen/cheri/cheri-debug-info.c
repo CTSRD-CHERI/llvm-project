@@ -60,11 +60,10 @@ int foo(int* i) { // CHECK-IR:  call void @llvm.dbg.declare(metadata i32{{( addr
 // DEBUG-INFO-NEXT:               DW_AT_name	("
 // DEBUG-INFO-NEXT:               DW_AT_stmt_list	(0x00000000)
 // DEBUG-INFO-NEXT:               DW_AT_comp_dir	("
-// DEBUG-INFO-NEXT:               DW_AT_GNU_pubnames	(0x01)
 // DEBUG-INFO-NEXT:               DW_AT_low_pc	(0x0000000000000000)
 // DEBUG-INFO-NEXT:               DW_AT_high_pc	(0x00000000000{{.+}})
 // DEBUG-INFO-EMPTY:
-// DEBUG-INFO-NEXT: [[INT_TYPE_INFO_ADDR:0x0000002f]]: DW_TAG_base_type
+// DEBUG-INFO-NEXT: [[INT_TYPE_INFO_ADDR:0x0000002e]]: DW_TAG_base_type
 // DEBUG-INFO-NEXT:                 DW_AT_name	("int")
 // DEBUG-INFO-NEXT:                 DW_AT_encoding	(DW_ATE_signed)
 // DEBUG-INFO-NEXT:                 DW_AT_byte_size	(0x04)
@@ -143,18 +142,17 @@ int foo(int* i) { // CHECK-IR:  call void @llvm.dbg.declare(metadata i32{{( addr
 // DEBUG-INFO-OPT-NEXT:               DW_AT_name	("{{.+}}/test/CodeGen/cheri/<stdin>")
 // DEBUG-INFO-OPT-NEXT:               DW_AT_stmt_list	(0x00000000)
 // DEBUG-INFO-OPT-NEXT:               DW_AT_comp_dir	("{{.+}}")
-// DEBUG-INFO-OPT-NEXT:               DW_AT_GNU_pubnames	(0x01)
 // DEBUG-INFO-OPT-NEXT:               DW_AT_low_pc	(0x0000000000000000)
 // MIPS has one instruction less
 // CHERI-DEBUG-INFO-OPT-NEXT:         DW_AT_high_pc	(0x000000000000000c)
 // MIPS-DEBUG-INFO-OPT-NEXT:          DW_AT_high_pc	(0x0000000000000008)
 // DEBUG-INFO-OPT-EMPTY:
-// DEBUG-INFO-OPT-NEXT: 0x0000002f:   DW_TAG_base_type
+// DEBUG-INFO-OPT-NEXT: [[INT_ADDR:0x0000002e]]:   DW_TAG_base_type
 // DEBUG-INFO-OPT-NEXT:                 DW_AT_name	("int")
 // DEBUG-INFO-OPT-NEXT:                 DW_AT_encoding	(DW_ATE_signed)
 // DEBUG-INFO-OPT-NEXT:                 DW_AT_byte_size	(0x04)
 // DEBUG-INFO-OPT-EMPTY:
-// DEBUG-INFO-OPT-NEXT: 0x00000036:   DW_TAG_subprogram
+// DEBUG-INFO-OPT-NEXT: 0x00000035:   DW_TAG_subprogram
 // DEBUG-INFO-OPT-NEXT:                 DW_AT_low_pc	(0x0000000000000000)
 // MIPS has one instruction less
 // CHERI-DEBUG-INFO-OPT-NEXT:           DW_AT_high_pc	(0x000000000000000c)
@@ -165,21 +163,21 @@ int foo(int* i) { // CHECK-IR:  call void @llvm.dbg.declare(metadata i32{{( addr
 // DEBUG-INFO-OPT-NEXT:                 DW_AT_decl_file	("{{.+}}cheri-debug-info.c")
 // DEBUG-INFO-OPT-NEXT:                 DW_AT_decl_line	(20)
 // DEBUG-INFO-OPT-NEXT:                 DW_AT_prototyped	(0x01)
-// DEBUG-INFO-OPT-NEXT:                 DW_AT_type	(0x0000002f "int")
+// DEBUG-INFO-OPT-NEXT:                 DW_AT_type	([[INT_ADDR]] "int")
 // DEBUG-INFO-OPT-NEXT:                 DW_AT_external	(0x01)
 // DEBUG-INFO-OPT-EMPTY:
-// DEBUG-INFO-OPT-NEXT: 0x000000{{56|55}}: DW_TAG_formal_parameter
+// DEBUG-INFO-OPT-NEXT: 0x000000{{.+}}: DW_TAG_formal_parameter
 // MIPS-DEBUG-INFO-OPT-NEXT:                    DW_AT_location  (DW_OP_reg4 A0_64)
 // CHERI-DEBUG-INFO-OPT-NEXT:                   DW_AT_location	(DW_OP_regx C3)
 // DEBUG-INFO-OPT-NEXT:                         DW_AT_name	("i")
 // DEBUG-INFO-OPT-NEXT:                         DW_AT_decl_file	("{{.+}}cheri-debug-info.c")
 // DEBUG-INFO-OPT-NEXT:                         DW_AT_decl_line	(20)
-// DEBUG-INFO-OPT-NEXT:                         DW_AT_type	([[INT_PTR_INFO_LOC:0x0000006(3|5)]] "int*")
+// DEBUG-INFO-OPT-NEXT:                         DW_AT_type	([[INT_PTR_INFO_LOC:0x0000006(2|4)]] "int*")
 // DEBUG-INFO-OPT-EMPTY:
-// DEBUG-INFO-OPT-NEXT: 0x0000006{{2|4}}:     NULL
+// DEBUG-INFO-OPT-NEXT: 0x000000{{.+}}:     NULL
 // DEBUG-INFO-OPT-EMPTY:
 // DEBUG-INFO-OPT-NEXT: [[INT_PTR_INFO_LOC]]:   DW_TAG_pointer_type
-// DEBUG-INFO-OPT-NEXT:                 DW_AT_type	(0x0000002f "int")
+// DEBUG-INFO-OPT-NEXT:                 DW_AT_type	([[INT_ADDR]] "int")
 // CHERI-DEBUG-INFO-OPT-NEXT:           DW_AT_byte_size	(0x{{10|20}})
 // DEBUG-INFO-OPT-EMPTY:
-// DEBUG-INFO-OPT-NEXT: 0x0000006{{8|b}}:   NULL
+// DEBUG-INFO-OPT-NEXT: 0x0000006{{.+}}:   NULL
