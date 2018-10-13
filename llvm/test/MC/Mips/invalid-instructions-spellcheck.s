@@ -58,8 +58,8 @@ culE.d  $fcc7, $f24, $f18
 
 swk $3, $4
 
-# MMR2: error: unknown instruction, did you mean: sw, swl, swm, swp, swr, usw?
-# MMR6: error: unknown instruction, did you mean: sw, swm, swp, usw?
-# MIPS32R6: error: unknown instruction, did you mean: sw, usw?
+# MMR2: error: unknown instruction, did you mean: csw, sw, swl, swm, swp, swr, usw?
+# MMR6: error: unknown instruction, did you mean: csw, sw, swm, swp, usw?
+# MIPS32R6: error: unknown instruction, did you mean: csw, sw, usw?
 # ALL:      swk $3, $4
 # ALL-NEXT: ^
