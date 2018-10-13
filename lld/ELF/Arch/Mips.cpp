@@ -183,10 +183,8 @@ RelExpr MIPS<ELFT>::getRelExpr(RelType Type, const Symbol &S,
     return R_MIPS_TLSLD;
   case R_MIPS_NONE:
     return R_NONE;
-// Allow compiling this code with the master branch of LLVM:
   case R_MIPS_CHERI_CAPABILITY:
     return R_CHERI_CAPABILITY;
-#if HAVE_CHERI_CAPTABLE_RELOCATIONS
   case R_MIPS_CHERI_CAPTAB_LO16:
   case R_MIPS_CHERI_CAPTAB_HI16:
   case R_MIPS_CHERI_CAPCALL_LO16:
@@ -206,7 +204,6 @@ RelExpr MIPS<ELFT>::getRelExpr(RelType Type, const Symbol &S,
   case R_MIPS_CHERI_CAPTAB_TLS_TPREL_LO16:
   case R_MIPS_CHERI_CAPTAB_TLS_TPREL_HI16:
     return R_MIPS_CHERI_CAPTAB_TPREL;
-#endif
   default:
     return R_INVALID;
   }
