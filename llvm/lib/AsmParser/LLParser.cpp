@@ -1318,13 +1318,7 @@ bool LLParser::ParseFnAttributeValuePairs(AttrBuilder &B,
 //===----------------------------------------------------------------------===//
 
 static inline GlobalValue *createGlobalFwdRef(Module *M, PointerType *PTy,
-                                              const std::string &Name,
-                                              bool IsCall) {
-  // Create forward-refs for calls in the program AS
-  if (IsCall)
-    PTy = PTy->getElementType()->getPointerTo(
-        M->getDataLayout().getProgramAddressSpace());
-
+                                              const std::string &Name) {
   if (auto *FT = dyn_cast<FunctionType>(PTy->getElementType()))
     return Function::Create(FT, GlobalValue::ExternalWeakLinkage,
                             PTy->getAddressSpace(), Name, M);
@@ -1394,7 +1388,7 @@ GlobalValue *LLParser::GetGlobalVal(const std::string &Name, Type *Ty,
         checkValidVariableType(Loc, "@" + Name, Ty, Val, IsCall));
 
   // Otherwise, create a new forward reference for this value and remember it.
-  GlobalValue *FwdVal = createGlobalFwdRef(M, PTy, Name, IsCall);
+  GlobalValue *FwdVal = createGlobalFwdRef(M, PTy, Name);
   ForwardRefVals[Name] = std::make_pair(FwdVal, Loc);
   return FwdVal;
 }
@@ -1423,7 +1417,7 @@ GlobalValue *LLParser::GetGlobalVal(unsigned ID, Type *Ty, LocTy Loc,
         checkValidVariableType(Loc, "@" + Twine(ID), Ty, Val, IsCall));
 
   // Otherwise, create a new forward reference for this value and remember it.
-  GlobalValue *FwdVal = createGlobalFwdRef(M, PTy, "", IsCall);
+  GlobalValue *FwdVal = createGlobalFwdRef(M, PTy, "");
   ForwardRefValIDs[ID] = std::make_pair(FwdVal, Loc);
   return FwdVal;
 }
