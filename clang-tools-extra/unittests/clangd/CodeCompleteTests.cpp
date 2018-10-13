@@ -657,6 +657,22 @@ TEST(CompletionTest, IndexSuppressesPreambleCompletions) {
               UnorderedElementsAre(Named("local"), Named("preamble")));
 }
 
+// This verifies that we get normal preprocessor completions in the preamble.
+// This is a regression test for an old bug: if we override the preamble and
+// try to complete inside it, clang kicks our completion point just outside the
+// preamble, resulting in always getting top-level completions.
+TEST(CompletionTest, CompletionInPreamble) {
+  auto Results = completions(R"cpp(
+    #ifnd^ef FOO_H_
+    #define BAR_H_
+    #include <bar.h>
+    int foo() {}
+    #endif
+    )cpp")
+                     .Completions;
+  EXPECT_THAT(Results, ElementsAre(Named("ifndef")));
+}
+
 TEST(CompletionTest, DynamicIndexMultiFile) {
   MockFSProvider FS;
   MockCompilationDatabase CDB;
@@ -1915,6 +1931,95 @@ TEST(CompletionTest, DeprecatedResults) {
       completions(Body + "int main() { TestClang^ }").Completions,
       UnorderedElementsAre(AllOf(Named("TestClangd"), Not(Deprecated())),
                            AllOf(Named("TestClangc"), Deprecated())));
+}
+
+TEST(SignatureHelpTest, InsideArgument) {
+  {
+    const auto Results = signatures(R"cpp(
+      void foo(int x);
+      void foo(int x, int y);
+      int main() { foo(1+^); }
+    )cpp");
+    EXPECT_THAT(
+        Results.signatures,
+        ElementsAre(Sig("foo(int x) -> void", {"int x"}),
+                    Sig("foo(int x, int y) -> void", {"int x", "int y"})));
+    EXPECT_EQ(0, Results.activeParameter);
+  }
+  {
+    const auto Results = signatures(R"cpp(
+      void foo(int x);
+      void foo(int x, int y);
+      int main() { foo(1^); }
+    )cpp");
+    EXPECT_THAT(
+        Results.signatures,
+        ElementsAre(Sig("foo(int x) -> void", {"int x"}),
+                    Sig("foo(int x, int y) -> void", {"int x", "int y"})));
+    EXPECT_EQ(0, Results.activeParameter);
+  }
+  {
+    const auto Results = signatures(R"cpp(
+      void foo(int x);
+      void foo(int x, int y);
+      int main() { foo(1^0); }
+    )cpp");
+    EXPECT_THAT(
+        Results.signatures,
+        ElementsAre(Sig("foo(int x) -> void", {"int x"}),
+                    Sig("foo(int x, int y) -> void", {"int x", "int y"})));
+    EXPECT_EQ(0, Results.activeParameter);
+  }
+  {
+    const auto Results = signatures(R"cpp(
+      void foo(int x);
+      void foo(int x, int y);
+      int bar(int x, int y);
+      int main() { bar(foo(2, 3^)); }
+    )cpp");
+    EXPECT_THAT(Results.signatures, ElementsAre(Sig("foo(int x, int y) -> void",
+                                                    {"int x", "int y"})));
+    EXPECT_EQ(1, Results.activeParameter);
+  }
+}
+
+TEST(SignatureHelpTest, ConstructorInitializeFields) {
+  {
+    const auto Results = signatures(R"cpp(
+      struct A {
+        A(int);
+      };
+      struct B {
+        B() : a_elem(^) {}
+        A a_elem;
+      };
+    )cpp");
+    EXPECT_THAT(Results.signatures, UnorderedElementsAre(
+            Sig("A(int)", {"int"}),
+            Sig("A(A &&)", {"A &&"}),
+            Sig("A(const A &)", {"const A &"})
+        ));
+  }
+  {
+    const auto Results = signatures(R"cpp(
+      struct A {
+        A(int);
+      };
+      struct C {
+        C(int);
+        C(A);
+      };
+      struct B {
+        B() : c_elem(A(1^)) {}
+        C c_elem;
+      };
+    )cpp");
+    EXPECT_THAT(Results.signatures, UnorderedElementsAre(
+            Sig("A(int)", {"int"}),
+            Sig("A(A &&)", {"A &&"}),
+            Sig("A(const A &)", {"const A &"})
+        ));
+  }
 }
 
 } // namespace

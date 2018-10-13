@@ -175,6 +175,29 @@ std::shared_ptr<SymbolIndex> SwapIndex::snapshot() const {
   return Index;
 }
 
+bool fromJSON(const llvm::json::Value &Parameters, FuzzyFindRequest &Request) {
+  json::ObjectMapper O(Parameters);
+  int64_t Limit;
+  bool OK =
+      O && O.map("Query", Request.Query) && O.map("Scopes", Request.Scopes) &&
+      O.map("Limit", Limit) &&
+      O.map("RestrictForCodeCompletion", Request.RestrictForCodeCompletion) &&
+      O.map("ProximityPaths", Request.ProximityPaths);
+  if (OK && Limit <= std::numeric_limits<uint32_t>::max())
+    Request.Limit = Limit;
+  return OK;
+}
+
+llvm::json::Value toJSON(const FuzzyFindRequest &Request) {
+  return json::Object{
+      {"Query", Request.Query},
+      {"Scopes", json::Array{Request.Scopes}},
+      {"Limit", Request.Limit},
+      {"RestrictForCodeCompletion", Request.RestrictForCodeCompletion},
+      {"ProximityPaths", json::Array{Request.ProximityPaths}},
+  };
+}
+
 bool SwapIndex::fuzzyFind(const FuzzyFindRequest &R,
                           llvm::function_ref<void(const Symbol &)> CB) const {
   return snapshot()->fuzzyFind(R, CB);

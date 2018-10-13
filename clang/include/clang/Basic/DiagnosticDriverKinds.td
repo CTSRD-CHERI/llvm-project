@@ -151,9 +151,6 @@ def warn_drv_unknown_argument_clang_cl_with_suggestion : Warning<
   "unknown argument ignored in clang-cl '%0' (did you mean '%1'?)">,
   InGroup<UnknownArgument>;
 
-def warn_drv_ycyu_no_arg_clang_cl : Warning<
-  "support for '%0' without a filename not implemented yet; flag ignored">,
-  InGroup<ClangClPch>;
 def warn_drv_ycyu_different_arg_clang_cl : Warning<
   "support for '/Yc' and '/Yu' with different filenames not implemented yet; flags ignored">,
   InGroup<ClangClPch>;
@@ -299,6 +296,9 @@ def warn_drv_vectorize_needs_hvx : Warning<
   "auto-vectorization requires HVX, use -mhvx to enable it">,
   InGroup<OptionIgnored>;
 
+def err_drv_module_header_wrong_kind : Error<
+  "header file '%0' input type '%1' does not match type of prior input "
+  "in module compilation; use '-x %2' to override">;
 def err_drv_modules_validate_once_requires_timestamp : Error<
   "option '-fmodules-validate-once-per-build-session' requires "
   "'-fbuild-session-timestamp=<seconds since Epoch>' or '-fbuild-session-file=<file>'">;

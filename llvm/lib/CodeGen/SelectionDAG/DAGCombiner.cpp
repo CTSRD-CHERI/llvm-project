@@ -7324,27 +7324,25 @@ SDValue DAGCombiner::visitSELECT(SDNode *N) {
       return DAG.getNode(ISD::SELECT, DL, VT, N0->getOperand(0), N2, N1);
   }
 
-  // fold selects based on a setcc into other things, such as min/max/abs
+  // Fold selects based on a setcc into other things, such as min/max/abs.
   if (N0.getOpcode() == ISD::SETCC) {
-    // select x, y (fcmp lt x, y) -> fminnum x, y
-    // select x, y (fcmp gt x, y) -> fmaxnum x, y
-    //
-    // This is OK if we don't care about what happens if either operand is a
-    // NaN.
-    //
-    if (N0.hasOneUse() && isLegalToCombineMinNumMaxNum(DAG, N1, N2)) {
-      ISD::CondCode CC = cast<CondCodeSDNode>(N0.getOperand(2))->get();
+    SDValue Cond0 = N0.getOperand(0), Cond1 = N0.getOperand(1);
+    ISD::CondCode CC = cast<CondCodeSDNode>(N0.getOperand(2))->get();
 
-      if (SDValue FMinMax = combineMinNumMaxNum(
-              DL, VT, N0.getOperand(0), N0.getOperand(1), N1, N2, CC, TLI, DAG))
+    // select (fcmp lt x, y), x, y -> fminnum x, y
+    // select (fcmp gt x, y), x, y -> fmaxnum x, y
+    //
+    // This is OK if we don't care what happens if either operand is a NaN.
+    if (N0.hasOneUse() && isLegalToCombineMinNumMaxNum(DAG, N1, N2))
+      if (SDValue FMinMax = combineMinNumMaxNum(DL, VT, Cond0, Cond1, N1, N2,
+                                                CC, TLI, DAG))
         return FMinMax;
-    }
 
-    if ((!LegalOperations &&
-         TLI.isOperationLegalOrCustom(ISD::SELECT_CC, VT)) ||
-        TLI.isOperationLegal(ISD::SELECT_CC, VT))
-      return DAG.getNode(ISD::SELECT_CC, DL, VT, N0.getOperand(0),
-                         N0.getOperand(1), N1, N2, N0.getOperand(2));
+    if (TLI.isOperationLegal(ISD::SELECT_CC, VT) ||
+        (!LegalOperations && TLI.isOperationLegalOrCustom(ISD::SELECT_CC, VT)))
+      return DAG.getNode(ISD::SELECT_CC, DL, VT, Cond0, Cond1, N1, N2,
+                         N0.getOperand(2));
+
     return SimplifySelect(DL, N0, N1, N2);
   }
 
@@ -11590,6 +11588,34 @@ SDValue DAGCombiner::visitFPOW(SDNode *N) {
   if (!ExponentC)
     return SDValue();
 
+  // Try to convert x ** (1/3) into cube root.
+  // TODO: Handle the various flavors of long double.
+  // TODO: Since we're approximating, we don't need an exact 1/3 exponent.
+  //       Some range near 1/3 should be fine.
+  EVT VT = N->getValueType(0);
+  if ((VT == MVT::f32 && ExponentC->getValueAPF().isExactlyValue(1.0f/3.0f)) ||
+      (VT == MVT::f64 && ExponentC->getValueAPF().isExactlyValue(1.0/3.0))) {
+    // pow(-0.0, 1/3) = +0.0; cbrt(-0.0) = -0.0.
+    // pow(-inf, 1/3) = +inf; cbrt(-inf) = -inf.
+    // pow(-val, 1/3) =  nan; cbrt(-val) = -num.
+    // For regular numbers, rounding may cause the results to differ.
+    // Therefore, we require { nsz ninf nnan afn } for this transform.
+    // TODO: We could select out the special cases if we don't have nsz/ninf.
+    SDNodeFlags Flags = N->getFlags();
+    if (!Flags.hasNoSignedZeros() || !Flags.hasNoInfs() || !Flags.hasNoNaNs() ||
+        !Flags.hasApproximateFuncs())
+      return SDValue();
+
+    // Do not create a cbrt() libcall if the target does not have it, and do not
+    // turn a pow that has lowering support into a cbrt() libcall.
+    if (!DAG.getLibInfo().has(LibFunc_cbrt) ||
+        (!DAG.getTargetLoweringInfo().isOperationExpand(ISD::FPOW, VT) &&
+         DAG.getTargetLoweringInfo().isOperationExpand(ISD::FCBRT, VT)))
+      return SDValue();
+
+    return DAG.getNode(ISD::FCBRT, SDLoc(N), VT, N->getOperand(0), Flags);
+  }
+
   // Try to convert x ** (1/4) into square roots.
   // x ** (1/2) is canonicalized to sqrt, so we do not bother with that case.
   // TODO: This could be extended (using a target hook) to handle smaller
@@ -11606,7 +11632,6 @@ SDValue DAGCombiner::visitFPOW(SDNode *N) {
       return SDValue();
 
     // Don't double the number of libcalls. We are trying to inline fast code.
-    EVT VT = N->getValueType(0);
     if (!DAG.getTargetLoweringInfo().isOperationLegalOrCustom(ISD::FSQRT, VT))
       return SDValue();
 

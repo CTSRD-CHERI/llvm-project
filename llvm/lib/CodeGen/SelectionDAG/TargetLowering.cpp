@@ -1534,12 +1534,20 @@ bool TargetLowering::SimplifyDemandedVectorElts(
     break;
   }
   case ISD::VSELECT: {
-    APInt DemandedLHS(DemandedElts);
-    APInt DemandedRHS(DemandedElts);
-
-    // TODO - add support for constant vselect masks.
+    // Try to transform the select condition based on the current demanded
+    // elements.
+    // TODO: If a condition element is undef, we can choose from one arm of the
+    //       select (and if one arm is undef, then we can propagate that to the
+    //       result).
+    // TODO - add support for constant vselect masks (see IR version of this).
+    APInt UnusedUndef, UnusedZero;
+    if (SimplifyDemandedVectorElts(Op.getOperand(0), DemandedElts, UnusedUndef,
+                                   UnusedZero, TLO, Depth + 1))
+      return true;
 
     // See if we can simplify either vselect operand.
+    APInt DemandedLHS(DemandedElts);
+    APInt DemandedRHS(DemandedElts);
     APInt UndefLHS, ZeroLHS;
     APInt UndefRHS, ZeroRHS;
     if (SimplifyDemandedVectorElts(Op.getOperand(1), DemandedLHS, UndefLHS,
@@ -4149,7 +4157,8 @@ TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
   if (VT.isFloatingPoint() || VT.isVector()) {
     EVT intVT = EVT::getIntegerVT(*DAG.getContext(), LoadedVT.getSizeInBits());
     if (isTypeLegal(intVT) && isTypeLegal(LoadedVT)) {
-      if (!isOperationLegalOrCustom(ISD::LOAD, intVT)) {
+      if (!isOperationLegalOrCustom(ISD::LOAD, intVT) &&
+          LoadedVT.isVector()) {
         // Scalarize the load and let the individual components be handled.
         SDValue Scalarized = scalarizeVectorLoad(LD, DAG);
         if (Scalarized->getOpcode() == ISD::MERGE_VALUES)
@@ -4299,13 +4308,14 @@ SDValue TargetLowering::expandUnalignedStore(StoreSDNode *ST,
   EVT VT = Val.getValueType();
   int Alignment = ST->getAlignment();
   auto &MF = DAG.getMachineFunction();
+  EVT MemVT = ST->getMemoryVT();
 
   SDLoc dl(ST);
-  if (ST->getMemoryVT().isFloatingPoint() ||
-      ST->getMemoryVT().isVector()) {
+  if (MemVT.isFloatingPoint() || MemVT.isVector()) {
     EVT intVT = EVT::getIntegerVT(*DAG.getContext(), VT.getSizeInBits());
     if (isTypeLegal(intVT)) {
-      if (!isOperationLegalOrCustom(ISD::STORE, intVT)) {
+      if (!isOperationLegalOrCustom(ISD::STORE, intVT) &&
+          MemVT.isVector()) {
         // Scalarize the store and let the individual components be handled.
         SDValue Result = scalarizeVectorStore(ST, DAG);
 

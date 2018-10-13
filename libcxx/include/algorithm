@@ -646,6 +646,7 @@ template <class BidirectionalIterator, class Compare>
 #include <iterator>
 #include <cstddef>
 #include <bit>
+#include <version>
 
 #include <__debug>
 
@@ -2987,7 +2988,8 @@ random_shuffle(_RandomAccessIterator __first, _RandomAccessIterator __last,
         for (--__last; __first < __last; ++__first, --__d)
         {
             difference_type __i = __rand(__d);
-            swap(*__first, *(__first + __i));
+            if (__i != difference_type(0))
+	            swap(*__first, *(__first + __i));
         }
     }
 }

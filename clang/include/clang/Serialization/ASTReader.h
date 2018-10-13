@@ -18,6 +18,7 @@
 #include "clang/AST/DeclObjC.h"
 #include "clang/AST/DeclarationName.h"
 #include "clang/AST/NestedNameSpecifier.h"
+#include "clang/AST/OpenMPClause.h"
 #include "clang/AST/TemplateBase.h"
 #include "clang/AST/TemplateName.h"
 #include "clang/AST/Type.h"
@@ -232,7 +233,7 @@ public:
 
   /// If needsImportVisitation returns \c true, this is called for each
   /// AST file imported by this AST file.
-  virtual void visitImport(StringRef Filename) {}
+  virtual void visitImport(StringRef ModuleName, StringRef Filename) {}
 
   /// Indicates that a particular module file extension has been read.
   virtual void readModuleFileExtension(
@@ -2676,6 +2677,21 @@ private:
 inline void PCHValidator::Error(const char *Msg) {
   Reader.Error(Msg);
 }
+
+class OMPClauseReader : public OMPClauseVisitor<OMPClauseReader> {
+  ASTRecordReader &Record;
+  ASTContext &Context;
+
+public:
+  OMPClauseReader(ASTRecordReader &Record)
+      : Record(Record), Context(Record.getContext()) {}
+
+#define OPENMP_CLAUSE(Name, Class) void Visit##Class(Class *C);
+#include "clang/Basic/OpenMPKinds.def"
+  OMPClause *readClause();
+  void VisitOMPClauseWithPreInit(OMPClauseWithPreInit *C);
+  void VisitOMPClauseWithPostUpdate(OMPClauseWithPostUpdate *C);
+};
 
 } // namespace clang
 

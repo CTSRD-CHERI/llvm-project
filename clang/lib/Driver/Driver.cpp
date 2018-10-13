@@ -2982,22 +2982,9 @@ void Driver::BuildActions(Compilation &C, DerivedArgList &Args,
     }
   }
 
-  // Diagnose unsupported forms of /Yc /Yu. Ignore /Yc/Yu for now if:
-  // * no filename after it
-  // * both /Yc and /Yu passed but with different filenames
-  // * corresponding file not also passed as /FI
+  // Ignore /Yc/Yu if both /Yc and /Yu passed but with different filenames.
   Arg *YcArg = Args.getLastArg(options::OPT__SLASH_Yc);
   Arg *YuArg = Args.getLastArg(options::OPT__SLASH_Yu);
-  if (YcArg && YcArg->getValue()[0] == '\0') {
-    Diag(clang::diag::warn_drv_ycyu_no_arg_clang_cl) << YcArg->getSpelling();
-    Args.eraseArg(options::OPT__SLASH_Yc);
-    YcArg = nullptr;
-  }
-  if (YuArg && YuArg->getValue()[0] == '\0') {
-    Diag(clang::diag::warn_drv_ycyu_no_arg_clang_cl) << YuArg->getSpelling();
-    Args.eraseArg(options::OPT__SLASH_Yu);
-    YuArg = nullptr;
-  }
   if (YcArg && YuArg && strcmp(YcArg->getValue(), YuArg->getValue()) != 0) {
     Diag(clang::diag::warn_drv_ycyu_different_arg_clang_cl);
     Args.eraseArg(options::OPT__SLASH_Yc);
@@ -3023,6 +3010,7 @@ void Driver::BuildActions(Compilation &C, DerivedArgList &Args,
   OffloadingActionBuilder OffloadBuilder(C, Args, Inputs);
 
   // Construct the actions to perform.
+  HeaderModulePrecompileJobAction *HeaderModuleAction = nullptr;
   ActionList LinkerInputs;
 
   llvm::SmallVector<phases::ID, phases::MaxNumberOfPhases> PL;
@@ -3119,12 +3107,28 @@ void Driver::BuildActions(Compilation &C, DerivedArgList &Args,
         break;
       }
 
+      // Each precompiled header file after a module file action is a module
+      // header of that same module file, rather than being compiled to a
+      // separate PCH.
+      if (Phase == phases::Precompile && HeaderModuleAction &&
+          getPrecompiledType(InputType) == types::TY_PCH) {
+        HeaderModuleAction->addModuleHeaderInput(Current);
+        Current = nullptr;
+        break;
+      }
+
+      // FIXME: Should we include any prior module file outputs as inputs of
+      // later actions in the same command line?
+
       // Otherwise construct the appropriate action.
-      auto *NewCurrent = ConstructPhaseAction(C, Args, Phase, Current);
+      Action *NewCurrent = ConstructPhaseAction(C, Args, Phase, Current);
 
       // We didn't create a new action, so we will just move to the next phase.
       if (NewCurrent == Current)
         continue;
+
+      if (auto *HMA = dyn_cast<HeaderModulePrecompileJobAction>(NewCurrent))
+        HeaderModuleAction = HMA;
 
       Current = NewCurrent;
 
@@ -3205,10 +3209,25 @@ Action *Driver::ConstructPhaseAction(
     types::ID OutputTy = getPrecompiledType(Input->getType());
     assert(OutputTy != types::TY_INVALID &&
            "Cannot precompile this input type!");
+
+    // If we're given a module name, precompile header file inputs as a
+    // module, not as a precompiled header.
+    const char *ModName = nullptr;
+    if (OutputTy == types::TY_PCH) {
+      if (Arg *A = Args.getLastArg(options::OPT_fmodule_name_EQ))
+        ModName = A->getValue();
+      if (ModName)
+        OutputTy = types::TY_ModuleFile;
+    }
+
     if (Args.hasArg(options::OPT_fsyntax_only)) {
       // Syntax checks should not emit a PCH file
       OutputTy = types::TY_Nothing;
     }
+
+    if (ModName)
+      return C.MakeAction<HeaderModulePrecompileJobAction>(Input, OutputTy,
+                                                           ModName);
     return C.MakeAction<PrecompileJobAction>(Input, OutputTy);
   }
   case phases::Compile: {
@@ -3461,7 +3480,7 @@ class ToolSelector final {
   ///  - Backend + Compile.
   const Tool *
   combineAssembleBackendCompile(ArrayRef<JobActionInfo> ActionInfo,
-                                const ActionList *&Inputs,
+                                ActionList &Inputs,
                                 ActionList &CollapsedOffloadAction) {
     if (ActionInfo.size() < 3 || !canCollapseAssembleAction())
       return nullptr;
@@ -3487,13 +3506,13 @@ class ToolSelector final {
     if (!T->hasIntegratedAssembler())
       return nullptr;
 
-    Inputs = &CJ->getInputs();
+    Inputs = CJ->getInputs();
     AppendCollapsedOffloadAction(CollapsedOffloadAction, ActionInfo,
                                  /*NumElements=*/3);
     return T;
   }
   const Tool *combineAssembleBackend(ArrayRef<JobActionInfo> ActionInfo,
-                                     const ActionList *&Inputs,
+                                     ActionList &Inputs,
                                      ActionList &CollapsedOffloadAction) {
     if (ActionInfo.size() < 2 || !canCollapseAssembleAction())
       return nullptr;
@@ -3520,13 +3539,13 @@ class ToolSelector final {
     if (!T->hasIntegratedAssembler())
       return nullptr;
 
-    Inputs = &BJ->getInputs();
+    Inputs = BJ->getInputs();
     AppendCollapsedOffloadAction(CollapsedOffloadAction, ActionInfo,
                                  /*NumElements=*/2);
     return T;
   }
   const Tool *combineBackendCompile(ArrayRef<JobActionInfo> ActionInfo,
-                                    const ActionList *&Inputs,
+                                    ActionList &Inputs,
                                     ActionList &CollapsedOffloadAction) {
     if (ActionInfo.size() < 2)
       return nullptr;
@@ -3558,7 +3577,7 @@ class ToolSelector final {
     if (T->canEmitIR() && ((SaveTemps && !InputIsBitcode) || EmbedBitcode))
       return nullptr;
 
-    Inputs = &CJ->getInputs();
+    Inputs = CJ->getInputs();
     AppendCollapsedOffloadAction(CollapsedOffloadAction, ActionInfo,
                                  /*NumElements=*/2);
     return T;
@@ -3568,22 +3587,28 @@ class ToolSelector final {
   /// preprocessor action, and the current input is indeed a preprocessor
   /// action. If combining results in the collapse of offloading actions, those
   /// are appended to \a CollapsedOffloadAction.
-  void combineWithPreprocessor(const Tool *T, const ActionList *&Inputs,
+  void combineWithPreprocessor(const Tool *T, ActionList &Inputs,
                                ActionList &CollapsedOffloadAction) {
     if (!T || !canCollapsePreprocessorAction() || !T->hasIntegratedCPP())
       return;
 
     // Attempt to get a preprocessor action dependence.
     ActionList PreprocessJobOffloadActions;
-    auto *PJ = getPrevDependentAction(*Inputs, PreprocessJobOffloadActions);
-    if (!PJ || !isa<PreprocessJobAction>(PJ))
-      return;
+    ActionList NewInputs;
+    for (Action *A : Inputs) {
+      auto *PJ = getPrevDependentAction({A}, PreprocessJobOffloadActions);
+      if (!PJ || !isa<PreprocessJobAction>(PJ)) {
+        NewInputs.push_back(A);
+        continue;
+      }
 
-    // This is legal to combine. Append any offload action we found and set the
-    // current inputs to preprocessor inputs.
-    CollapsedOffloadAction.append(PreprocessJobOffloadActions.begin(),
-                                  PreprocessJobOffloadActions.end());
-    Inputs = &PJ->getInputs();
+      // This is legal to combine. Append any offload action we found and add the
+      // current input to preprocessor inputs.
+      CollapsedOffloadAction.append(PreprocessJobOffloadActions.begin(),
+                                    PreprocessJobOffloadActions.end());
+      NewInputs.append(PJ->input_begin(), PJ->input_end());
+    }
+    Inputs = NewInputs;
   }
 
 public:
@@ -3601,7 +3626,7 @@ public:
   /// connected to collapsed actions are updated accordingly. The latter enables
   /// the caller of the selector to process them afterwards instead of just
   /// dropping them. If no suitable tool is found, null will be returned.
-  const Tool *getTool(const ActionList *&Inputs,
+  const Tool *getTool(ActionList &Inputs,
                       ActionList &CollapsedOffloadAction) {
     //
     // Get the largest chain of actions that we could combine.
@@ -3637,7 +3662,7 @@ public:
     if (!T)
       T = combineBackendCompile(ActionChain, Inputs, CollapsedOffloadAction);
     if (!T) {
-      Inputs = &BaseAction->getInputs();
+      Inputs = BaseAction->getInputs();
       T = TC.SelectTool(*BaseAction);
     }
 
@@ -3782,7 +3807,7 @@ InputInfo Driver::BuildJobsForActionNoCache(
   }
 
 
-  const ActionList *Inputs = &A->getInputs();
+  ActionList Inputs = A->getInputs();
 
   const JobAction *JA = cast<JobAction>(A);
   ActionList CollapsedOffloadActions;
@@ -3808,7 +3833,7 @@ InputInfo Driver::BuildJobsForActionNoCache(
 
   // Only use pipes when there is exactly one input.
   InputInfoList InputInfos;
-  for (const Action *Input : *Inputs) {
+  for (const Action *Input : Inputs) {
     // Treat dsymutil and verify sub-jobs as being at the top-level too, they
     // shouldn't get temporary output names.
     // FIXME: Clean this up.
@@ -3826,6 +3851,10 @@ InputInfo Driver::BuildJobsForActionNoCache(
   // input.
   if (JA->getType() == types::TY_dSYM)
     BaseInput = InputInfos[0].getFilename();
+
+  // ... and in header module compilations, which use the module name.
+  if (auto *ModuleJA = dyn_cast<HeaderModulePrecompileJobAction>(JA))
+    BaseInput = ModuleJA->getModuleName();
 
   // Append outputs of offload device jobs to the input list
   if (!OffloadDependencesInputInfo.empty())
@@ -4165,16 +4194,24 @@ const char *Driver::GetNamedOutputPath(Compilation &C, const JobAction &JA,
 }
 
 std::string Driver::GetFilePath(StringRef Name, const ToolChain &TC) const {
-  // Respect a limited subset of the '-Bprefix' functionality in GCC by
-  // attempting to use this prefix when looking for file paths.
-  for (const std::string &Dir : PrefixDirs) {
-    if (Dir.empty())
-      continue;
-    SmallString<128> P(Dir[0] == '=' ? SysRoot + Dir.substr(1) : Dir);
-    llvm::sys::path::append(P, Name);
-    if (llvm::sys::fs::exists(Twine(P)))
-      return P.str();
-  }
+  // Seach for Name in a list of paths.
+  auto SearchPaths = [&](const llvm::SmallVectorImpl<std::string> &P)
+      -> llvm::Optional<std::string> {
+    // Respect a limited subset of the '-Bprefix' functionality in GCC by
+    // attempting to use this prefix when looking for file paths.
+    for (const auto &Dir : P) {
+      if (Dir.empty())
+        continue;
+      SmallString<128> P(Dir[0] == '=' ? SysRoot + Dir.substr(1) : Dir);
+      llvm::sys::path::append(P, Name);
+      if (llvm::sys::fs::exists(Twine(P)))
+        return P.str().str();
+    }
+    return None;
+  };
+
+  if (auto P = SearchPaths(PrefixDirs))
+    return *P;
 
   SmallString<128> R(ResourceDir);
   llvm::sys::path::append(R, Name);
@@ -4186,14 +4223,11 @@ std::string Driver::GetFilePath(StringRef Name, const ToolChain &TC) const {
   if (llvm::sys::fs::exists(Twine(P)))
     return P.str();
 
-  for (const std::string &Dir : TC.getFilePaths()) {
-    if (Dir.empty())
-      continue;
-    SmallString<128> P(Dir[0] == '=' ? SysRoot + Dir.substr(1) : Dir);
-    llvm::sys::path::append(P, Name);
-    if (llvm::sys::fs::exists(Twine(P)))
-      return P.str();
-  }
+  if (auto P = SearchPaths(TC.getLibraryPaths()))
+    return *P;
+
+  if (auto P = SearchPaths(TC.getFilePaths()))
+    return *P;
 
   return Name;
 }
@@ -4279,11 +4313,11 @@ std::string Driver::GetClPchPath(Compilation &C, StringRef BaseName) const {
     // extension of .pch is assumed. "
     if (!llvm::sys::path::has_extension(Output))
       Output += ".pch";
-  } else if (Arg *YcArg = C.getArgs().getLastArg(options::OPT__SLASH_Yc)) {
-    Output = YcArg->getValue();
-    llvm::sys::path::replace_extension(Output, ".pch");
   } else {
-    Output = BaseName;
+    if (Arg *YcArg = C.getArgs().getLastArg(options::OPT__SLASH_Yc))
+      Output = YcArg->getValue();
+    if (Output.empty())
+      Output = BaseName;
     llvm::sys::path::replace_extension(Output, ".pch");
   }
   return Output.str();

@@ -46,7 +46,7 @@
 #include "lldb/Utility/Timer.h"
 #include "lldb/Utility/UUID.h"
 
-#include "lldb/Utility/SafeMachO.h"
+#include "lldb/Host/SafeMachO.h"
 
 #include "llvm/Support/MemoryBuffer.h"
 
@@ -1197,6 +1197,7 @@ AddressClass ObjectFileMachO::GetAddressClass(lldb::addr_t file_addr) {
           case eSectionTypeDWARFDebugFrame:
           case eSectionTypeDWARFDebugInfo:
           case eSectionTypeDWARFDebugLine:
+          case eSectionTypeDWARFDebugLineStr:
           case eSectionTypeDWARFDebugLoc:
           case eSectionTypeDWARFDebugMacInfo:
           case eSectionTypeDWARFDebugMacro:

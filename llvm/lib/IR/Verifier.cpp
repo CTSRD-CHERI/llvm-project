@@ -4755,9 +4755,10 @@ struct VerifierLegacyPass : public FunctionPass {
   }
 
   bool runOnFunction(Function &F) override {
-    if (!V->verify(F) && FatalErrors)
+    if (!V->verify(F) && FatalErrors) {
+      errs() << "in function " << F.getName() << '\n'; 
       report_fatal_error("Broken function found, compilation aborted!");
-
+    }
     return false;
   }
 

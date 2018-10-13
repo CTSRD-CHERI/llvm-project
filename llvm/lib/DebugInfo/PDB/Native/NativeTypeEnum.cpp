@@ -24,12 +24,9 @@ using namespace llvm::codeview;
 using namespace llvm::pdb;
 
 NativeTypeEnum::NativeTypeEnum(NativeSession &Session, SymIndexId Id,
-                               const codeview::CVType &CVT)
-    : NativeRawSymbol(Session, PDB_SymType::Enum, Id), CV(CVT),
-      Record(codeview::TypeRecordKind::Enum) {
-  assert(CV.kind() == codeview::TypeLeafKind::LF_ENUM);
-  cantFail(visitTypeRecord(CV, *this));
-}
+                               TypeIndex Index, EnumRecord Record)
+    : NativeRawSymbol(Session, PDB_SymType::Enum, Id), Index(Index),
+      Record(std::move(Record)) {}
 
 NativeTypeEnum::~NativeTypeEnum() {}
 
@@ -57,10 +54,6 @@ void NativeTypeEnum::dump(raw_ostream &OS, int Indent) const {
   dumpSymbolField(OS, "unalignedType", isUnalignedType(), Indent);
   dumpSymbolField(OS, "isValueUdt", isValueUdt(), Indent);
   dumpSymbolField(OS, "volatileType", isVolatileType(), Indent);
-}
-
-std::unique_ptr<NativeRawSymbol> NativeTypeEnum::clone() const {
-  return llvm::make_unique<NativeTypeEnum>(Session, SymbolId, CV);
 }
 
 std::unique_ptr<IPDBEnumSymbols>
@@ -155,7 +148,7 @@ PDB_BuiltinType NativeTypeEnum::getBuiltinType() const {
   llvm_unreachable("Unreachable");
 }
 
-uint32_t NativeTypeEnum::getUnmodifiedTypeId() const {
+SymIndexId NativeTypeEnum::getUnmodifiedTypeId() const {
   // FIXME: If this is const, volatile, or unaligned, we should return the
   // SymIndexId of the unmodified type here.
   return 0;
@@ -212,7 +205,7 @@ bool NativeTypeEnum::isScoped() const {
   return bool(Record.getOptions() & codeview::ClassOptions::Scoped);
 }
 
-uint32_t NativeTypeEnum::getTypeId() const {
+SymIndexId NativeTypeEnum::getTypeId() const {
   return Session.getSymbolCache().findSymbolByTypeIndex(
       Record.getUnderlyingType());
 }
