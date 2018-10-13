@@ -1,5 +1,5 @@
 // RUN: %cheri_cc1 -o - %s -fsyntax-only -verify
-// RUN: not %cheri_cc1 -o - %s -fsyntax-only -verify -ast-dump | FileCheck %s -check-prefix AST
+// RUN: %cheri_cc1 -o - %s -fsyntax-only -verify -ast-dump | FileCheck %s -check-prefix AST
 // RUN: %cheri_purecap_cc1 -o - %s -fsyntax-only -verify
 
 #pragma clang diagnostic warning "-Wcapability-to-integer-cast"
