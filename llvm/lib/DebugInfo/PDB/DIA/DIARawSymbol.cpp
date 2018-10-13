@@ -141,6 +141,26 @@ PrivateGetDIAValue(IDiaSymbol *Symbol,
   return IdResult;
 }
 
+template <typename PrintType, typename ArgType>
+void DumpDIAValueAs(llvm::raw_ostream &OS, int Indent, StringRef Name,
+                    IDiaSymbol *Symbol,
+                    HRESULT (__stdcall IDiaSymbol::*Method)(ArgType *)) {
+  ArgType Value;
+  if (S_OK == (Symbol->*Method)(&Value))
+    dumpSymbolField(OS, Name, static_cast<PrintType>(Value), Indent);
+}
+
+void DumpDIAIdValue(llvm::raw_ostream &OS, int Indent, StringRef Name,
+                    IDiaSymbol *Symbol,
+                    HRESULT (__stdcall IDiaSymbol::*Method)(DWORD *),
+                    const IPDBSession &Session, PdbSymbolIdField FieldId,
+                    PdbSymbolIdField ShowFlags, PdbSymbolIdField RecurseFlags) {
+  DWORD Value;
+  if (S_OK == (Symbol->*Method)(&Value))
+    dumpSymbolIdField(OS, Name, Value, Indent, Session, FieldId, ShowFlags,
+                      RecurseFlags);
+}
+
 template <typename ArgType>
 void DumpDIAValue(llvm::raw_ostream &OS, int Indent, StringRef Name,
                   IDiaSymbol *Symbol,
@@ -190,13 +210,26 @@ DIARawSymbol::DIARawSymbol(const DIASession &PDBSession,
                            CComPtr<IDiaSymbol> DiaSymbol)
     : Session(PDBSession), Symbol(DiaSymbol) {}
 
+#define RAW_ID_METHOD_DUMP(Stream, Method, Session, FieldId, ShowFlags,        \
+                           RecurseFlags)                                       \
+  DumpDIAIdValue(Stream, Indent, StringRef{#Method}, Symbol,                   \
+                 &IDiaSymbol::get_##Method, Session, FieldId, ShowFlags,       \
+                 RecurseFlags);
+
 #define RAW_METHOD_DUMP(Stream, Method)                                        \
   DumpDIAValue(Stream, Indent, StringRef{#Method}, Symbol,                     \
                &IDiaSymbol::get_##Method);
 
-void DIARawSymbol::dump(raw_ostream &OS, int Indent) const {
-  RAW_METHOD_DUMP(OS, symIndexId);
-  RAW_METHOD_DUMP(OS, symTag);
+#define RAW_METHOD_DUMP_AS(Stream, Method, Type)                               \
+  DumpDIAValueAs<Type>(Stream, Indent, StringRef{#Method}, Symbol,             \
+                       &IDiaSymbol::get_##Method);
+
+void DIARawSymbol::dump(raw_ostream &OS, int Indent,
+                        PdbSymbolIdField ShowIdFields,
+                        PdbSymbolIdField RecurseIdFields) const {
+  RAW_ID_METHOD_DUMP(OS, symIndexId, Session, PdbSymbolIdField::SymIndexId,
+                     ShowIdFields, RecurseIdFields);
+  RAW_METHOD_DUMP_AS(OS, symTag, PDB_SymType);
 
   RAW_METHOD_DUMP(OS, access);
   RAW_METHOD_DUMP(OS, addressOffset);
@@ -210,10 +243,11 @@ void DIARawSymbol::dump(raw_ostream &OS, int Indent) const {
   RAW_METHOD_DUMP(OS, baseDataOffset);
   RAW_METHOD_DUMP(OS, baseDataSlot);
   RAW_METHOD_DUMP(OS, baseSymbolId);
-  RAW_METHOD_DUMP(OS, baseType);
+  RAW_METHOD_DUMP_AS(OS, baseType, PDB_BuiltinType);
   RAW_METHOD_DUMP(OS, bitPosition);
-  RAW_METHOD_DUMP(OS, callingConvention);
-  RAW_METHOD_DUMP(OS, classParentId);
+  RAW_METHOD_DUMP_AS(OS, callingConvention, PDB_CallingConv);
+  RAW_ID_METHOD_DUMP(OS, classParentId, Session, PdbSymbolIdField::ClassParent,
+                     ShowIdFields, RecurseIdFields);
   RAW_METHOD_DUMP(OS, compilerName);
   RAW_METHOD_DUMP(OS, count);
   RAW_METHOD_DUMP(OS, countLiveRanges);
@@ -221,7 +255,9 @@ void DIARawSymbol::dump(raw_ostream &OS, int Indent) const {
   RAW_METHOD_DUMP(OS, frontEndMinor);
   RAW_METHOD_DUMP(OS, frontEndBuild);
   RAW_METHOD_DUMP(OS, frontEndQFE);
-  RAW_METHOD_DUMP(OS, lexicalParentId);
+  RAW_ID_METHOD_DUMP(OS, lexicalParentId, Session,
+                     PdbSymbolIdField::LexicalParent, ShowIdFields,
+                     RecurseIdFields);
   RAW_METHOD_DUMP(OS, libraryName);
   RAW_METHOD_DUMP(OS, liveRangeStartAddressOffset);
   RAW_METHOD_DUMP(OS, liveRangeStartAddressSection);
@@ -259,26 +295,29 @@ void DIARawSymbol::dump(raw_ostream &OS, int Indent) const {
   RAW_METHOD_DUMP(OS, textureSlot);
   RAW_METHOD_DUMP(OS, timeStamp);
   RAW_METHOD_DUMP(OS, token);
-  RAW_METHOD_DUMP(OS, typeId);
+  RAW_ID_METHOD_DUMP(OS, typeId, Session, PdbSymbolIdField::Type, ShowIdFields,
+                     RecurseIdFields);
   RAW_METHOD_DUMP(OS, uavSlot);
   RAW_METHOD_DUMP(OS, undecoratedName);
-  RAW_METHOD_DUMP(OS, unmodifiedTypeId);
+  RAW_ID_METHOD_DUMP(OS, unmodifiedTypeId, Session,
+                     PdbSymbolIdField::UnmodifiedType, ShowIdFields,
+                     RecurseIdFields);
   RAW_METHOD_DUMP(OS, upperBoundId);
   RAW_METHOD_DUMP(OS, virtualBaseDispIndex);
   RAW_METHOD_DUMP(OS, virtualBaseOffset);
   RAW_METHOD_DUMP(OS, virtualTableShapeId);
-  RAW_METHOD_DUMP(OS, dataKind);
+  RAW_METHOD_DUMP_AS(OS, dataKind, PDB_DataKind);
   RAW_METHOD_DUMP(OS, guid);
   RAW_METHOD_DUMP(OS, offset);
   RAW_METHOD_DUMP(OS, thisAdjust);
   RAW_METHOD_DUMP(OS, virtualBasePointerOffset);
-  RAW_METHOD_DUMP(OS, locationType);
+  RAW_METHOD_DUMP_AS(OS, locationType, PDB_LocType);
   RAW_METHOD_DUMP(OS, machineType);
   RAW_METHOD_DUMP(OS, thunkOrdinal);
   RAW_METHOD_DUMP(OS, length);
   RAW_METHOD_DUMP(OS, liveRangeLength);
   RAW_METHOD_DUMP(OS, virtualAddress);
-  RAW_METHOD_DUMP(OS, udtKind);
+  RAW_METHOD_DUMP_AS(OS, udtKind, PDB_UdtType);
   RAW_METHOD_DUMP(OS, constructor);
   RAW_METHOD_DUMP(OS, customCallingConvention);
   RAW_METHOD_DUMP(OS, farReturn);

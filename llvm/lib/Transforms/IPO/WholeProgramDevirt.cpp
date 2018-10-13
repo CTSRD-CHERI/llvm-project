@@ -665,7 +665,7 @@ void DevirtModule::buildTypeIdentifierMap(
   for (GlobalVariable &GV : M.globals()) {
     Types.clear();
     GV.getMetadata(LLVMContext::MD_type, Types);
-    if (Types.empty())
+    if (GV.isDeclaration() || Types.empty())
       continue;
 
     VTableBits *&BitsPtr = GVToBits[&GV];
@@ -1325,15 +1325,14 @@ void DevirtModule::rebuildGlobal(VTableBits &B) {
 
 bool DevirtModule::areRemarksEnabled() {
   const auto &FL = M.getFunctionList();
-  if (FL.empty())
-    return false;
-  const Function &Fn = FL.front();
-
-  const auto &BBL = Fn.getBasicBlockList();
-  if (BBL.empty())
-    return false;
-  auto DI = OptimizationRemark(DEBUG_TYPE, "", DebugLoc(), &BBL.front());
-  return DI.isEnabled();
+  for (const Function &Fn : FL) {
+    const auto &BBL = Fn.getBasicBlockList();
+    if (BBL.empty())
+      continue;
+    auto DI = OptimizationRemark(DEBUG_TYPE, "", DebugLoc(), &BBL.front());
+    return DI.isEnabled();
+  }
+  return false;
 }
 
 void DevirtModule::scanTypeTestUsers(Function *TypeTestFunc,

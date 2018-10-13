@@ -39,12 +39,23 @@ enum XFormOpcd {
 
 enum DFormOpcd {
   LBZ = 34,
+  LBZU = 35,
   LHZ = 40,
+  LHZU = 41,
+  LHAU = 43,
   LWZ = 32,
+  LWZU = 33,
+  LFSU = 49,
   LD = 58,
+  LFDU = 51,
   STB = 38,
+  STBU = 39,
   STH = 44,
+  STHU = 45,
   STW = 36,
+  STWU = 37,
+  STFSU = 53,
+  STFDU = 55,
   STD = 62,
   ADDI = 14
 };
@@ -61,6 +72,32 @@ uint64_t elf::getPPC64TocBase() {
   // code (crt1.o) assumes that you can get from the TOC base to the
   // start of the .toc section with only a single (signed) 16-bit relocation.
   return TocVA + PPC64TocOffset;
+}
+
+
+unsigned elf::getPPC64GlobalEntryToLocalEntryOffset(uint8_t StOther) {
+  // The offset is encoded into the 3 most significant bits of the st_other
+  // field, with some special values described in section 3.4.1 of the ABI:
+  // 0   --> Zero offset between the GEP and LEP, and the function does NOT use
+  //         the TOC pointer (r2). r2 will hold the same value on returning from
+  //         the function as it did on entering the function.
+  // 1   --> Zero offset between the GEP and LEP, and r2 should be treated as a
+  //         caller-saved register for all callers.
+  // 2-6 --> The  binary logarithm of the offset eg:
+  //         2 --> 2^2 = 4 bytes -->  1 instruction.
+  //         6 --> 2^6 = 64 bytes --> 16 instructions.
+  // 7   --> Reserved.
+  uint8_t GepToLep = (StOther >> 5) & 7;
+  if (GepToLep < 2)
+    return 0;
+
+  // The value encoded in the st_other bits is the
+  // log-base-2(offset).
+  if (GepToLep < 7)
+    return 1 << GepToLep;
+
+  error("reserved value of 7 in the 3 most-significant-bits of st_other");
+  return 0;
 }
 
 namespace {
@@ -114,6 +151,43 @@ static bool isDQFormInstruction(uint32_t Encoding) {
     // The DS 'XO' bits being set to 01 is restricted to DQ form.
     return (Encoding & 3) == 0x1;
   }
+}
+
+static bool isInstructionUpdateForm(uint32_t Encoding) {
+  switch (getPrimaryOpCode(Encoding)) {
+  default:
+    return false;
+  case LBZU:
+  case LHAU:
+  case LHZU:
+  case LWZU:
+  case LFSU:
+  case LFDU:
+  case STBU:
+  case STHU:
+  case STWU:
+  case STFSU:
+  case STFDU:
+    return true;
+    // LWA has the same opcode as LD, and the DS bits is what differentiates
+    // between LD/LDU/LWA
+  case LD:
+  case STD:
+    return (Encoding & 3) == 1;
+  }
+}
+
+// There are a number of places when we either want to read or write an
+// instruction when handling a half16 relocation type. On big-endian the buffer
+// pointer is pointing into the middle of the word we want to extract, and on
+// little-endian it is pointing to the start of the word. These 2 helpers are to
+// simplify reading and writing in that context.
+static void writeInstrFromHalf16(uint8_t *Loc, uint32_t Instr) {
+  write32(Loc - (Config->EKind == ELF64BEKind ? 2 : 0), Instr);
+}
+
+static uint32_t readInstrFromHalf16(const uint8_t *Loc) {
+  return read32(Loc - (Config->EKind == ELF64BEKind ? 2 : 0));
 }
 
 PPC64::PPC64() {
@@ -191,26 +265,28 @@ void PPC64::relaxTlsGdToLe(uint8_t *Loc, RelType Type, uint64_t Val) const {
   // bl __tls_get_addr(x@tlsgd)      into      nop
   // nop                             into      addi r3, r3, x@tprel@l
 
-  uint32_t EndianOffset = Config->EKind == ELF64BEKind ? 2U : 0U;
-
   switch (Type) {
   case R_PPC64_GOT_TLSGD16_HA:
-    write32(Loc - EndianOffset, 0x60000000); // nop
+    writeInstrFromHalf16(Loc, 0x60000000); // nop
     break;
+  case R_PPC64_GOT_TLSGD16:
   case R_PPC64_GOT_TLSGD16_LO:
-    write32(Loc - EndianOffset, 0x3c6d0000); // addis r3, r13
+    writeInstrFromHalf16(Loc, 0x3c6d0000); // addis r3, r13
     relocateOne(Loc, R_PPC64_TPREL16_HA, Val);
     break;
   case R_PPC64_TLSGD:
     write32(Loc, 0x60000000);     // nop
     write32(Loc + 4, 0x38630000); // addi r3, r3
-    relocateOne(Loc + 4 + EndianOffset, R_PPC64_TPREL16_LO, Val);
+    // Since we are relocating a half16 type relocation and Loc + 4 points to
+    // the start of an instruction we need to advance the buffer by an extra
+    // 2 bytes on BE.
+    relocateOne(Loc + 4 + (Config->EKind == ELF64BEKind ? 2 : 0),
+                R_PPC64_TPREL16_LO, Val);
     break;
   default:
     llvm_unreachable("unsupported relocation for TLS GD to LE relaxation");
   }
 }
-
 
 void PPC64::relaxTlsLdToLe(uint8_t *Loc, RelType Type, uint64_t Val) const {
   // Reference: 3.7.4.3 of the 64-bit ELF V2 abi supplement.
@@ -228,13 +304,12 @@ void PPC64::relaxTlsLdToLe(uint8_t *Loc, RelType Type, uint64_t Val) const {
   // bl __tls_get_addr(x@tlsgd)     into      nop
   // nop                            into      addi r3, r3, 4096
 
-  uint32_t EndianOffset = Config->EKind == ELF64BEKind ? 2U : 0U;
   switch (Type) {
   case R_PPC64_GOT_TLSLD16_HA:
-    write32(Loc - EndianOffset, 0x60000000); // nop
+    writeInstrFromHalf16(Loc, 0x60000000); // nop
     break;
   case R_PPC64_GOT_TLSLD16_LO:
-    write32(Loc - EndianOffset, 0x3c6d0000); // addis r3, r13, 0
+    writeInstrFromHalf16(Loc, 0x3c6d0000); // addis r3, r13, 0
     break;
   case R_PPC64_TLSLD:
     write32(Loc, 0x60000000);     // nop
@@ -505,9 +580,15 @@ static std::pair<RelType, uint64_t> toAddr16Rel(RelType Type, uint64_t Val) {
   }
 }
 
+static bool isTocRelType(RelType Type) {
+  return Type == R_PPC64_TOC16_HA || Type == R_PPC64_TOC16_LO_DS ||
+         Type == R_PPC64_TOC16_LO;
+}
+
 void PPC64::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
   // For a TOC-relative relocation, proceed in terms of the corresponding
   // ADDR16 relocation type.
+  bool IsTocRelType = isTocRelType(Type);
   std::tie(Type, Val) = toAddr16Rel(Type, Val);
 
   switch (Type) {
@@ -528,15 +609,17 @@ void PPC64::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
     checkInt(Loc, Val, 16, Type);
     // DQ-form instructions use bits 28-31 as part of the instruction encoding
     // DS-form instructions only use bits 30-31.
-    uint32_t EndianOffset = Config->EKind == ELF64BEKind ? 2U : 0U;
-    uint16_t Mask = isDQFormInstruction(read32(Loc - EndianOffset)) ? 0xF : 0x3;
+    uint16_t Mask = isDQFormInstruction(readInstrFromHalf16(Loc)) ? 0xF : 0x3;
     checkAlignment(Loc, lo(Val), Mask + 1, Type);
     write16(Loc, (read16(Loc) & Mask) | lo(Val));
   } break;
   case R_PPC64_ADDR16_HA:
   case R_PPC64_REL16_HA:
   case R_PPC64_TPREL16_HA:
-    write16(Loc, ha(Val));
+    if (Config->TocOptimize && IsTocRelType && ha(Val) == 0)
+      writeInstrFromHalf16(Loc, 0x60000000);
+    else
+      write16(Loc, ha(Val));
     break;
   case R_PPC64_ADDR16_HI:
   case R_PPC64_REL16_HI:
@@ -562,15 +645,38 @@ void PPC64::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
   case R_PPC64_ADDR16_LO:
   case R_PPC64_REL16_LO:
   case R_PPC64_TPREL16_LO:
+    // When the high-adjusted part of a toc relocation evalutes to 0, it is
+    // changed into a nop. The lo part then needs to be updated to use the
+    // toc-pointer register r2, as the base register.
+    if (Config->TocOptimize && IsTocRelType && ha(Val) == 0) {
+      uint32_t Instr = readInstrFromHalf16(Loc);
+      if (isInstructionUpdateForm(Instr))
+        error(getErrorLocation(Loc) +
+              "can't toc-optimize an update instruction: 0x" +
+              utohexstr(Instr));
+      Instr = (Instr & 0xFFE00000) | 0x00020000;
+      writeInstrFromHalf16(Loc, Instr);
+    }
     write16(Loc, lo(Val));
     break;
   case R_PPC64_ADDR16_LO_DS:
   case R_PPC64_TPREL16_LO_DS: {
     // DQ-form instructions use bits 28-31 as part of the instruction encoding
     // DS-form instructions only use bits 30-31.
-    uint32_t EndianOffset = Config->EKind == ELF64BEKind ? 2U : 0U;
-    uint16_t Mask = isDQFormInstruction(read32(Loc - EndianOffset)) ? 0xF : 0x3;
+    uint32_t Inst = readInstrFromHalf16(Loc);
+    uint16_t Mask = isDQFormInstruction(Inst) ? 0xF : 0x3;
     checkAlignment(Loc, lo(Val), Mask + 1, Type);
+    if (Config->TocOptimize && IsTocRelType && ha(Val) == 0) {
+      // When the high-adjusted part of a toc relocation evalutes to 0, it is
+      // changed into a nop. The lo part then needs to be updated to use the toc
+      // pointer register r2, as the base register.
+      if (isInstructionUpdateForm(Inst))
+        error(getErrorLocation(Loc) +
+              "Can't toc-optimize an update instruction: 0x" +
+              Twine::utohexstr(Inst));
+      Inst = (Inst & 0xFFE0000F) | 0x00020000;
+      writeInstrFromHalf16(Loc, Inst);
+    }
     write16(Loc, (read16(Loc) & Mask) | lo(Val));
   } break;
   case R_PPC64_ADDR32:
@@ -640,9 +746,8 @@ void PPC64::relaxTlsGdToIe(uint8_t *Loc, RelType Type, uint64_t Val) const {
   case R_PPC64_GOT_TLSGD16_LO: {
     // Relax from addi  r3, rA, sym@got@tlsgd@l to
     //            ld r3, sym@got@tprel@l(rA)
-    uint32_t EndianOffset = Config->EKind == ELF64BEKind ? 2U : 0U;
-    uint32_t InputRegister = (read32(Loc - EndianOffset) & (0x1f << 16));
-    write32(Loc - EndianOffset, 0xE8600000 | InputRegister);
+    uint32_t InputRegister = (readInstrFromHalf16(Loc) & (0x1f << 16));
+    writeInstrFromHalf16(Loc, 0xE8600000 | InputRegister);
     relocateOne(Loc, R_PPC64_GOT_TPREL16_LO_DS, Val);
     return;
   }

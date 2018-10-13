@@ -1,5 +1,4 @@
-//===- NativeTypePointer.h - info about pointer type ------------------*- C++
-//-*-===//
+//===- NativeTypePointer.h - info about pointer type -------------*- C++-*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -11,6 +10,7 @@
 #ifndef LLVM_DEBUGINFO_PDB_NATIVE_NATIVETYPEPOINTER_H
 #define LLVM_DEBUGINFO_PDB_NATIVE_NATIVETYPEPOINTER_H
 
+#include "llvm/ADT/Optional.h"
 #include "llvm/DebugInfo/CodeView/CodeView.h"
 #include "llvm/DebugInfo/CodeView/TypeRecord.h"
 #include "llvm/DebugInfo/PDB/Native/NativeRawSymbol.h"
@@ -21,11 +21,17 @@ namespace pdb {
 
 class NativeTypePointer : public NativeRawSymbol {
 public:
+  // Create a pointer record for a simple type.
+  NativeTypePointer(NativeSession &Session, SymIndexId Id,
+                    codeview::TypeIndex TI);
+
+  // Create a pointer record for a non-simple type.
   NativeTypePointer(NativeSession &Session, SymIndexId Id,
                     codeview::TypeIndex TI, codeview::PointerRecord PR);
   ~NativeTypePointer() override;
 
-  void dump(raw_ostream &OS, int Indent) const override;
+  void dump(raw_ostream &OS, int Indent, PdbSymbolIdField ShowIdFields,
+            PdbSymbolIdField RecurseIdFields) const override;
 
   bool isConstType() const override;
   uint64_t getLength() const override;
@@ -40,7 +46,7 @@ public:
 
 protected:
   codeview::TypeIndex TI;
-  codeview::PointerRecord Record;
+  Optional<codeview::PointerRecord> Record;
 };
 
 } // namespace pdb

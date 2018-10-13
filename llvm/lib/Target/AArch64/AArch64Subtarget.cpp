@@ -153,6 +153,7 @@ AArch64Subtarget::AArch64Subtarget(const Triple &TT, const std::string &CPU,
                                    const TargetMachine &TM, bool LittleEndian)
     : AArch64GenSubtargetInfo(TT, CPU, FS),
       ReserveXRegister(AArch64::GPR64commonRegClass.getNumRegs()),
+      CustomCallSavedXRegs(AArch64::GPR64commonRegClass.getNumRegs()),
       IsLittle(LittleEndian),
       TargetTriple(TT), FrameLowering(),
       InstrInfo(initializeSubtargetDependencies(FS, CPU)), TSInfo(),
@@ -273,7 +274,7 @@ void AArch64Subtarget::mirFileLoaded(MachineFunction &MF) const {
   // We usually compute max call frame size after ISel. Do the computation now
   // if the .mir file didn't specify it. Note that this will probably give you
   // bogus values after PEI has eliminated the callframe setup/destroy pseudo
-  // instructions, specify explicitely if you need it to be correct.
+  // instructions, specify explicitly if you need it to be correct.
   MachineFrameInfo &MFI = MF.getFrameInfo();
   if (!MFI.isMaxCallFrameSizeComputed())
     MFI.computeMaxCallFrameSize(MF);

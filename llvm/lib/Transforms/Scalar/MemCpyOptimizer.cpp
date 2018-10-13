@@ -413,7 +413,10 @@ Instruction *MemCpyOptPass::tryMergingIntoMemset(Instruction *StartInst,
       if (!NextStore->isSimple()) break;
 
       // Check to see if this stored value is of the same byte-splattable value.
-      if (ByteVal != isBytewiseValue(NextStore->getOperand(0)))
+      Value *StoredByte = isBytewiseValue(NextStore->getOperand(0));
+      if (isa<UndefValue>(ByteVal) && StoredByte)
+        ByteVal = StoredByte;
+      if (ByteVal != StoredByte)
         break;
 
       // Check that the pointer is in address space 0

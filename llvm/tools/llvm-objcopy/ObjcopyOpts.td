@@ -67,6 +67,8 @@ def strip_all : Flag<["-", "--"], "strip-all">,
                 HelpText<"Remove non-allocated sections other than .gnu.warning* sections">;
 def strip_all_gnu : Flag<["-", "--"], "strip-all-gnu">,
                     HelpText<"Compaitable with GNU objcopy's --strip-all">;
+def S : Flag<["-"], "S">,
+        Alias<strip_all_gnu>;
 def strip_debug : Flag<["-", "--"], "strip-debug">,
                   HelpText<"Remove all debug information">;
 def strip_dwo : Flag<["-", "--"], "strip-dwo">,
@@ -104,6 +106,9 @@ defm keep_global_symbols
 	  "contains one symbol per line and may contain comments beginning "
 	  "with '#'. Leading and trailing whitespace is stripped from each "
 	  "line. May be repeated to read symbols from many files.">;
+
+def version : Flag<[ "-", "--" ], "version">,
+              HelpText<"Print the version and exit.">;
 
 defm weaken_symbol : Eq<"weaken-symbol">,
                        MetaVarName<"symbol">,

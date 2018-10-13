@@ -42,7 +42,7 @@
 using namespace llvm;
 
 static cl::opt<bool>
-DisableCGP("arm-disable-cgp", cl::Hidden, cl::init(false),
+DisableCGP("arm-disable-cgp", cl::Hidden, cl::init(true),
            cl::desc("Disable ARM specific CodeGenPrepare pass"));
 
 static cl::opt<bool>
@@ -257,8 +257,19 @@ static bool isSafeOverflow(Instruction *I) {
       return false;
 
     auto *CI = cast<ICmpInst>(*I->user_begin());
+    
+    // Don't support an icmp that deals with sign bits, including negative
+    // immediates
     if (CI->isSigned())
       return false;
+
+    if (auto *Const = dyn_cast<ConstantInt>(CI->getOperand(0)))
+      if (Const->isNegative())
+        return false;
+
+    if (auto *Const = dyn_cast<ConstantInt>(CI->getOperand(1)))
+      if (Const->isNegative())
+        return false;
 
     bool NegImm = cast<ConstantInt>(I->getOperand(1))->isNegative();
     bool IsDecreasing = ((Opc == Instruction::Sub) && !NegImm) ||

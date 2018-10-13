@@ -287,7 +287,13 @@ void ARMSubtarget::initSubtargetFeatures(StringRef CPU, StringRef FS) {
   case CortexR7:
   case CortexM3:
   case CortexR52:
-  case ExynosM1:
+    break;
+  case Exynos:
+    LdStMultipleTiming = SingleIssuePlusExtras;
+    MaxInterleaveFactor = 4;
+    if (!isThumb())
+      PrefLoopAlignment = 3;
+    break;
   case Kryo:
     break;
   case Krait:

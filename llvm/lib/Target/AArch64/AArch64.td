@@ -104,6 +104,10 @@ foreach i = {1-7,18,20} in
                                              "Reserve X"#i#", making it unavailable "
                                              "as a GPR">;
 
+foreach i = {8-15,18} in
+    def FeatureCallSavedX#i : SubtargetFeature<"call-saved-x"#i,
+         "CustomCallSavedXRegs["#i#"]", "true", "Make X"#i#" callee saved.">;
+
 def FeatureUseAA : SubtargetFeature<"use-aa", "UseAA", "true",
                                     "Use alias analysis during codegen">;
 
@@ -155,6 +159,10 @@ def FeatureFuseAddress : SubtargetFeature<
 def FeatureFuseAES : SubtargetFeature<
     "fuse-aes", "HasFuseAES", "true",
     "CPU fuses AES crypto operations">;
+
+def FeatureFuseCryptoEOR : SubtargetFeature<
+    "fuse-crypto-eor", "HasFuseCryptoEOR", "true",
+    "CPU fuses AES/PMULL and EOR operations">;
 
 def FeatureFuseCCSelect : SubtargetFeature<
     "fuse-csel", "HasFuseCCSelect", "true",
@@ -343,6 +351,7 @@ def ProcCyclone : SubtargetFeature<"cyclone", "ARMProcFamily", "Cyclone",
                                    FeatureDisableLatencySchedHeuristic,
                                    FeatureFPARMv8,
                                    FeatureFuseAES,
+                                   FeatureFuseCryptoEOR,
                                    FeatureNEON,
                                    FeaturePerfMon,
                                    FeatureZCRegMove,
