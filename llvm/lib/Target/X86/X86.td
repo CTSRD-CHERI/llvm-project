@@ -400,6 +400,10 @@ def FeatureMOVDIRI  : SubtargetFeature<"movdiri", "HasMOVDIRI", "true",
 def FeatureMOVDIR64B : SubtargetFeature<"movdir64b", "HasMOVDIR64B", "true",
                                         "Support movdir64b instruction">;
 
+def FeatureFastBEXTR : SubtargetFeature<"fast-bextr", "HasFastBEXTR", "true",
+          "Indicates that the BEXTR instruction is implemented as a single uop "
+          "with good throughput.">;
+
 //===----------------------------------------------------------------------===//
 // Register File Description
 //===----------------------------------------------------------------------===//
@@ -589,7 +593,6 @@ class SilvermontProc<string Name> : ProcessorModel<Name, SLMModel, [
   FeatureMOVBE,
   FeaturePOPCNT,
   FeaturePCLMUL,
-  FeatureAES,
   FeatureSlowDivide64,
   FeatureSlowTwoMemOps,
   FeaturePRFCHW,
@@ -702,7 +705,6 @@ class WestmereProc<string Name> : ProcessorModel<Name, SandyBridgeModel, [
   Feature64Bit,
   FeatureCMPXCHG16B,
   FeaturePOPCNT,
-  FeatureAES,
   FeaturePCLMUL,
   FeatureLAHFSAHF,
   FeatureMacroFusion
@@ -721,7 +723,6 @@ def SNBFeatures : ProcessorFeatures<[], [
   Feature64Bit,
   FeatureCMPXCHG16B,
   FeaturePOPCNT,
-  FeatureAES,
   FeatureSlowDivide64,
   FeaturePCLMUL,
   FeatureXSAVE,
@@ -791,6 +792,7 @@ class BroadwellProc<string Name> : ProcModel<Name, BroadwellModel,
 def : BroadwellProc<"broadwell">;
 
 def SKLFeatures : ProcessorFeatures<BDWFeatures.Value, [
+  FeatureAES,
   FeatureMPX,
   FeatureRTM,
   FeatureXSAVEC,
@@ -989,6 +991,7 @@ def : ProcessorModel<"btver2", BtVer2Model, [
   FeatureSlowSHLD,
   FeatureLAHFSAHF,
   FeatureFast15ByteNOP,
+  FeatureFastBEXTR,
   FeatureFastPartialYMMorZMMWrite
 ]>;
 
@@ -1044,6 +1047,7 @@ def : Proc<"bdver2", [
   FeatureSlowSHLD,
   FeatureLAHFSAHF,
   FeatureFast11ByteNOP,
+  FeatureFastBEXTR,
   FeatureMacroFusion
 ]>;
 
@@ -1076,6 +1080,7 @@ def : Proc<"bdver3", [
   FeatureFSGSBase,
   FeatureLAHFSAHF,
   FeatureFast11ByteNOP,
+  FeatureFastBEXTR,
   FeatureMacroFusion
 ]>;
 
@@ -1107,6 +1112,7 @@ def : Proc<"bdver4", [
   FeatureSlowSHLD,
   FeatureFSGSBase,
   FeatureLAHFSAHF,
+  FeatureFastBEXTR,
   FeatureFast11ByteNOP,
   FeatureMWAITX,
   FeatureMacroFusion
@@ -1132,6 +1138,7 @@ def: ProcessorModel<"znver1", Znver1Model, [
   FeatureFastLZCNT,
   FeatureLAHFSAHF,
   FeatureLZCNT,
+  FeatureFastBEXTR,
   FeatureFast15ByteNOP,
   FeatureMacroFusion,
   FeatureMMX,

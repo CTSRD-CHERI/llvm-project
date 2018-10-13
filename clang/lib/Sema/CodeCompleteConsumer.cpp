@@ -80,6 +80,7 @@ bool CodeCompletionContext::wantConstructorResults() const {
   case CCC_ObjCClassMessage:
   case CCC_ObjCInterfaceName:
   case CCC_ObjCCategoryName:
+  case CCC_IncludedFile:
     return false;
   }
 
@@ -155,6 +156,8 @@ StringRef clang::getCompletionKindString(CodeCompletionContext::Kind Kind) {
     return "ObjCInterfaceName";
   case CCKind::CCC_ObjCCategoryName:
     return "ObjCCategoryName";
+  case CCKind::CCC_IncludedFile:
+    return "IncludedFile";
   case CCKind::CCC_Recovery:
     return "Recovery";
   }
@@ -522,7 +525,8 @@ bool PrintingCodeCompleteConsumer::isResultFilteredOut(StringRef Filter,
   case CodeCompletionResult::RK_Macro:
     return !Result.Macro->getName().startswith(Filter);
   case CodeCompletionResult::RK_Pattern:
-    return !StringRef(Result.Pattern->getAsString()).startswith(Filter);
+    return !(Result.Pattern->getTypedText() &&
+             StringRef(Result.Pattern->getTypedText()).startswith(Filter));
   }
   llvm_unreachable("Unknown code completion result Kind.");
 }
@@ -617,6 +621,10 @@ static std::string getOverloadAsString(const CodeCompletionString &CCS) {
 
     case CodeCompletionString::CK_CurrentParameter:
       OS << "<#" << C.Text << "#>";
+      break;
+
+    // FIXME: We can also print optional parameters of an overload.
+    case CodeCompletionString::CK_Optional:
       break;
 
     default: OS << C.Text; break;

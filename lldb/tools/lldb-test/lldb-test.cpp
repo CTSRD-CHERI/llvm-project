@@ -148,6 +148,10 @@ static FunctionNameType getFunctionNameFlags() {
   return Result;
 }
 
+static cl::opt<bool> DumpAST("dump-ast",
+                             cl::desc("Dump AST restored from symbols."),
+                             cl::sub(SymbolsSubcommand));
+
 static cl::opt<bool> Verify("verify", cl::desc("Verify symbol information."),
                             cl::sub(SymbolsSubcommand));
 
@@ -165,6 +169,7 @@ static Error findNamespaces(lldb_private::Module &Module);
 static Error findTypes(lldb_private::Module &Module);
 static Error findVariables(lldb_private::Module &Module);
 static Error dumpModule(lldb_private::Module &Module);
+static Error dumpAST(lldb_private::Module &Module);
 static Error verify(lldb_private::Module &Module);
 
 static Expected<Error (*)(lldb_private::Module &)> getAction();
@@ -217,10 +222,9 @@ static Error make_string_error(const char *Format, Args &&... args) {
 
 TargetSP opts::createTarget(Debugger &Dbg, const std::string &Filename) {
   TargetSP Target;
-  Status ST =
-      Dbg.GetTargetList().CreateTarget(Dbg, Filename, /*triple*/ "",
-                                       /*get_dependent_modules*/ false,
-                                       /*platform_options*/ nullptr, Target);
+  Status ST = Dbg.GetTargetList().CreateTarget(
+      Dbg, Filename, /*triple*/ "", eLoadDependentsNo,
+      /*platform_options*/ nullptr, Target);
   if (ST.Fail()) {
     errs() << formatv("Failed to create target '{0}: {1}\n", Filename, ST);
     exit(1);
@@ -509,6 +513,34 @@ Error opts::symbols::dumpModule(lldb_private::Module &Module) {
   return Error::success();
 }
 
+Error opts::symbols::dumpAST(lldb_private::Module &Module) {
+  SymbolVendor &plugin = *Module.GetSymbolVendor();
+
+  auto symfile = plugin.GetSymbolFile();
+  if (!symfile)
+    return make_string_error("Module has no symbol file.");
+
+  auto clang_ast_ctx = llvm::dyn_cast_or_null<ClangASTContext>(
+      symfile->GetTypeSystemForLanguage(eLanguageTypeC_plus_plus));
+  if (!clang_ast_ctx)
+    return make_string_error("Can't retrieve Clang AST context.");
+
+  auto ast_ctx = clang_ast_ctx->getASTContext();
+  if (!ast_ctx)
+    return make_string_error("Can't retrieve AST context.");
+
+  auto tu = ast_ctx->getTranslationUnitDecl();
+  if (!tu)
+    return make_string_error("Can't retrieve translation unit declaration.");
+
+  symfile->ParseDeclsForContext(CompilerDeclContext(
+      clang_ast_ctx, static_cast<clang::DeclContext *>(tu)));
+
+  tu->print(outs());
+
+  return Error::success();
+}
+
 Error opts::symbols::verify(lldb_private::Module &Module) {
   SymbolVendor &plugin = *Module.GetSymbolVendor();
 
@@ -562,6 +594,10 @@ Error opts::symbols::verify(lldb_private::Module &Module) {
 }
 
 Expected<Error (*)(lldb_private::Module &)> opts::symbols::getAction() {
+  if (Verify && DumpAST)
+    return make_string_error(
+        "Cannot both verify symbol information and dump AST.");
+
   if (Verify) {
     if (Find != FindType::None)
       return make_string_error(
@@ -572,6 +608,18 @@ Expected<Error (*)(lldb_private::Module &)> opts::symbols::getAction() {
           "-regex, -context, -name, -file and -line options are not "
           "applicable for symbol verification.");
     return verify;
+  }
+
+  if (DumpAST) {
+    if (Find != FindType::None)
+      return make_string_error(
+          "Cannot both search and dump AST.");
+    if (Regex || !Context.empty() || !Name.empty() || !File.empty() ||
+        Line != 0)
+      return make_string_error(
+          "-regex, -context, -name, -file and -line options are not "
+          "applicable for dumping AST.");
+    return dumpAST;
   }
 
   if (Regex && !Context.empty())
@@ -632,6 +680,8 @@ Expected<Error (*)(lldb_private::Module &)> opts::symbols::getAction() {
                                "using line numbers.");
     return findVariables;
   }
+
+  llvm_unreachable("Unsupported symbol action.");
 }
 
 int opts::symbols::dumpSymbols(Debugger &Dbg) {

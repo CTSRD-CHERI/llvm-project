@@ -516,6 +516,18 @@ bool LoopVectorizationLegality::canVectorizeOuterLoop() {
       return false;
   }
 
+  // Check whether we are able to set up outer loop induction.
+  if (!setupOuterLoopInductions()) {
+    LLVM_DEBUG(
+        dbgs() << "LV: Not vectorizing: Unsupported outer loop Phi(s).\n");
+    ORE->emit(createMissedAnalysis("UnsupportedPhi")
+              << "Unsupported outer loop Phi(s)");
+    if (DoExtraAnalysis)
+      Result = false;
+    else
+      return false;
+  }
+
   return Result;
 }
 
@@ -569,6 +581,32 @@ void LoopVectorizationLegality::addInductionPhi(
   }
 
   LLVM_DEBUG(dbgs() << "LV: Found an induction variable.\n");
+}
+
+bool LoopVectorizationLegality::setupOuterLoopInductions() {
+  BasicBlock *Header = TheLoop->getHeader();
+
+  // Returns true if a given Phi is a supported induction.
+  auto isSupportedPhi = [&](PHINode &Phi) -> bool {
+    InductionDescriptor ID;
+    if (InductionDescriptor::isInductionPHI(&Phi, TheLoop, PSE, ID) &&
+        ID.getKind() == InductionDescriptor::IK_IntInduction) {
+      addInductionPhi(&Phi, ID, AllowedExit);
+      return true;
+    } else {
+      // Bail out for any Phi in the outer loop header that is not a supported
+      // induction.
+      LLVM_DEBUG(
+          dbgs()
+          << "LV: Found unsupported PHI for outer loop vectorization.\n");
+      return false;
+    }
+  };
+
+  if (llvm::all_of(Header->phis(), isSupportedPhi))
+    return true;
+  else
+    return false;
 }
 
 bool LoopVectorizationLegality::canVectorizeInstrs() {
@@ -751,6 +789,10 @@ bool LoopVectorizationLegality::canVectorizeInstrs() {
       ORE->emit(createMissedAnalysis("NoInductionVariable")
                 << "loop induction variable could not be identified");
       return false;
+    } else if (!WidestIndTy) {
+      ORE->emit(createMissedAnalysis("NoIntegerInductionVariable")
+                << "integer loop induction variable could not be identified");
+      return false;
     }
   }
 
@@ -775,9 +817,10 @@ bool LoopVectorizationLegality::canVectorizeMemory() {
   if (!LAI->canVectorizeMemory())
     return false;
 
-  if (LAI->hasStoreToLoopInvariantAddress()) {
+  if (LAI->hasVariantStoreToLoopInvariantAddress()) {
     ORE->emit(createMissedAnalysis("CantVectorizeStoreToLoopInvariantAddress")
-              << "write to a loop invariant address could not be vectorized");
+              << "write of variant value to a loop invariant address could not "
+                 "be vectorized");
     LLVM_DEBUG(dbgs() << "LV: We don't allow storing to uniform addresses\n");
     return false;
   }

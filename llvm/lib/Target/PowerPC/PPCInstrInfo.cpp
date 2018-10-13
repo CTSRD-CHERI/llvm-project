@@ -1822,7 +1822,8 @@ bool PPCInstrInfo::optimizeCompareInstr(MachineInstr &CmpInstr, unsigned SrcReg,
 
   int NewOpC = -1;
   int MIOpC = MI->getOpcode();
-  if (MIOpC == PPC::ANDIo || MIOpC == PPC::ANDIo8)
+  if (MIOpC == PPC::ANDIo || MIOpC == PPC::ANDIo8 ||
+      MIOpC == PPC::ANDISo || MIOpC == PPC::ANDISo8)
     NewOpC = MIOpC;
   else {
     NewOpC = PPC::getRecordFormOpcode(MIOpC);
@@ -1912,14 +1913,36 @@ bool PPCInstrInfo::optimizeCompareInstr(MachineInstr &CmpInstr, unsigned SrcReg,
     // compare).
 
     // Rotates are expensive instructions. If we're emitting a record-form
-    // rotate that can just be an andi, we should just emit the andi.
-    if ((MIOpC == PPC::RLWINM || MIOpC == PPC::RLWINM8) &&
-        MI->getOperand(2).getImm() == 0) {
+    // rotate that can just be an andi/andis, we should just emit that.
+    if (MIOpC == PPC::RLWINM || MIOpC == PPC::RLWINM8) {
+      unsigned GPRRes = MI->getOperand(0).getReg();
+      int64_t SH = MI->getOperand(2).getImm();
       int64_t MB = MI->getOperand(3).getImm();
       int64_t ME = MI->getOperand(4).getImm();
-      if (MB < ME && MB >= 16) {
-        uint64_t Mask = ((1LLU << (32 - MB)) - 1) & ~((1LLU << (31 - ME)) - 1);
-        NewOpC = MIOpC == PPC::RLWINM ? PPC::ANDIo : PPC::ANDIo8;
+      // We can only do this if both the start and end of the mask are in the
+      // same halfword.
+      bool MBInLoHWord = MB >= 16;
+      bool MEInLoHWord = ME >= 16;
+      uint64_t Mask = ~0LLU;
+
+      if (MB <= ME && MBInLoHWord == MEInLoHWord && SH == 0) {
+        Mask = ((1LLU << (32 - MB)) - 1) & ~((1LLU << (31 - ME)) - 1);
+        // The mask value needs to shift right 16 if we're emitting andis.
+        Mask >>= MBInLoHWord ? 0 : 16;
+        NewOpC = MIOpC == PPC::RLWINM ?
+          (MBInLoHWord ? PPC::ANDIo : PPC::ANDISo) :
+          (MBInLoHWord ? PPC::ANDIo8 :PPC::ANDISo8);
+      } else if (MRI->use_empty(GPRRes) && (ME == 31) &&
+                 (ME - MB + 1 == SH) && (MB >= 16)) {
+        // If we are rotating by the exact number of bits as are in the mask
+        // and the mask is in the least significant bits of the register,
+        // that's just an andis. (as long as the GPR result has no uses).
+        Mask = ((1LLU << 32) - 1) & ~((1LLU << (32 - SH)) - 1);
+        Mask >>= 16;
+        NewOpC = MIOpC == PPC::RLWINM ? PPC::ANDISo :PPC::ANDISo8;
+      }
+      // If we've set the mask, we can transform.
+      if (Mask != ~0LLU) {
         MI->RemoveOperand(4);
         MI->RemoveOperand(3);
         MI->getOperand(2).setImm(Mask);
@@ -3125,6 +3148,14 @@ bool PPCInstrInfo::isImmElgibleForForwarding(const MachineOperand &ImmMO,
     // Check if the instruction met the requirement.
     if (III.ImmMustBeMultipleOf > 4 ||
        III.TruncateImmTo || III.ImmWidth != 16)
+      return false;
+
+    // Going from XForm to DForm loads means that the displacement needs to be
+    // not just an immediate but also a multiple of 4, or 16 depending on the
+    // load. A DForm load cannot be represented if it is a multiple of say 2.
+    // XForm loads do not have this restriction.
+    if (ImmMO.isGlobal() &&
+        ImmMO.getGlobal()->getAlignment() < III.ImmMustBeMultipleOf)
       return false;
 
     return true;

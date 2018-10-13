@@ -2227,6 +2227,52 @@ define <2 x i1> @icmp_xor_neg4_X_uge_4_vec(<2 x i32> %X) {
   ret <2 x i1> %cmp
 }
 
+define <2 x i1> @xor_ult(<2 x i8> %x) {
+; CHECK-LABEL: @xor_ult(
+; CHECK-NEXT:    [[R:%.*]] = icmp ugt <2 x i8> [[X:%.*]], <i8 3, i8 3>
+; CHECK-NEXT:    ret <2 x i1> [[R]]
+;
+  %xor = xor <2 x i8> %x, <i8 -4, i8 -4>
+  %r = icmp ult <2 x i8> %xor, <i8 -4, i8 -4>
+  ret <2 x i1> %r
+}
+
+define i1 @xor_ult_extra_use(i8 %x, i8* %p) {
+; CHECK-LABEL: @xor_ult_extra_use(
+; CHECK-NEXT:    [[XOR:%.*]] = xor i8 [[X:%.*]], -32
+; CHECK-NEXT:    store i8 [[XOR]], i8* [[P:%.*]], align 1
+; CHECK-NEXT:    [[R:%.*]] = icmp ugt i8 [[X]], 31
+; CHECK-NEXT:    ret i1 [[R]]
+;
+  %xor = xor i8 %x, -32
+  store i8 %xor, i8* %p
+  %r = icmp ult i8 %xor, -32
+  ret i1 %r
+}
+
+define <2 x i1> @xor_ugt(<2 x i8> %x) {
+; CHECK-LABEL: @xor_ugt(
+; CHECK-NEXT:    [[R:%.*]] = icmp ugt <2 x i8> [[X:%.*]], <i8 7, i8 7>
+; CHECK-NEXT:    ret <2 x i1> [[R]]
+;
+  %xor = xor <2 x i8> %x, <i8 7, i8 7>
+  %r = icmp ugt <2 x i8> %xor, <i8 7, i8 7>
+  ret <2 x i1> %r
+}
+
+define i1 @xor_ugt_extra_use(i8 %x, i8* %p) {
+; CHECK-LABEL: @xor_ugt_extra_use(
+; CHECK-NEXT:    [[XOR:%.*]] = xor i8 [[X:%.*]], 63
+; CHECK-NEXT:    store i8 [[XOR]], i8* [[P:%.*]], align 1
+; CHECK-NEXT:    [[R:%.*]] = icmp ugt i8 [[X]], 63
+; CHECK-NEXT:    ret i1 [[R]]
+;
+  %xor = xor i8 %x, 63
+  store i8 %xor, i8* %p
+  %r = icmp ugt i8 %xor, 63
+  ret i1 %r
+}
+
 define i1 @icmp_swap_operands_for_cse(i32 %X, i32 %Y) {
 ; CHECK-LABEL: @icmp_swap_operands_for_cse(
 ; CHECK-NEXT:  entry:
@@ -2381,14 +2427,31 @@ define i1 @icmp_and_or_lshr(i32 %x, i32 %y) {
 
 define <2 x i1> @icmp_and_or_lshr_vec(<2 x i32> %x, <2 x i32> %y) {
 ; CHECK-LABEL: @icmp_and_or_lshr_vec(
-; CHECK-NEXT:    [[SHF1:%.*]] = shl nuw <2 x i32> <i32 1, i32 1>, %y
+; CHECK-NEXT:    [[SHF1:%.*]] = shl nuw <2 x i32> <i32 1, i32 1>, [[Y:%.*]]
 ; CHECK-NEXT:    [[OR2:%.*]] = or <2 x i32> [[SHF1]], <i32 1, i32 1>
-; CHECK-NEXT:    [[AND3:%.*]] = and <2 x i32> [[OR2]], %x
+; CHECK-NEXT:    [[AND3:%.*]] = and <2 x i32> [[OR2]], [[X:%.*]]
 ; CHECK-NEXT:    [[RET:%.*]] = icmp ne <2 x i32> [[AND3]], zeroinitializer
 ; CHECK-NEXT:    ret <2 x i1> [[RET]]
 ;
   %shf = lshr <2 x i32> %x, %y
   %or = or <2 x i32> %shf, %x
+  %and = and <2 x i32> %or, <i32 1, i32 1>
+  %ret = icmp ne <2 x i32> %and, zeroinitializer
+  ret <2 x i1> %ret
+}
+
+define <2 x i1> @icmp_and_or_lshr_vec_commute(<2 x i32> %xp, <2 x i32> %y) {
+; CHECK-LABEL: @icmp_and_or_lshr_vec_commute(
+; CHECK-NEXT:    [[X:%.*]] = srem <2 x i32> [[XP:%.*]], <i32 42, i32 42>
+; CHECK-NEXT:    [[SHF:%.*]] = lshr <2 x i32> [[X]], [[Y:%.*]]
+; CHECK-NEXT:    [[OR:%.*]] = or <2 x i32> [[X]], [[SHF]]
+; CHECK-NEXT:    [[AND:%.*]] = and <2 x i32> [[OR]], <i32 1, i32 1>
+; CHECK-NEXT:    [[RET:%.*]] = icmp ne <2 x i32> [[AND]], zeroinitializer
+; CHECK-NEXT:    ret <2 x i1> [[RET]]
+;
+  %x = srem <2 x i32> %xp, <i32 42, i32 -42> ; prevent complexity-based canonicalization
+  %shf = lshr <2 x i32> %x, %y
+  %or = or <2 x i32> %x, %shf
   %and = and <2 x i32> %or, <i32 1, i32 1>
   %ret = icmp ne <2 x i32> %and, zeroinitializer
   ret <2 x i1> %ret
@@ -2409,12 +2472,29 @@ define i1 @icmp_and_or_lshr_cst(i32 %x) {
 
 define <2 x i1> @icmp_and_or_lshr_cst_vec(<2 x i32> %x) {
 ; CHECK-LABEL: @icmp_and_or_lshr_cst_vec(
-; CHECK-NEXT:    [[AND1:%.*]] = and <2 x i32> %x, <i32 3, i32 3>
+; CHECK-NEXT:    [[AND1:%.*]] = and <2 x i32> [[X:%.*]], <i32 3, i32 3>
 ; CHECK-NEXT:    [[RET:%.*]] = icmp ne <2 x i32> [[AND1]], zeroinitializer
 ; CHECK-NEXT:    ret <2 x i1> [[RET]]
 ;
   %shf = lshr <2 x i32> %x, <i32 1, i32 1>
   %or = or <2 x i32> %shf, %x
+  %and = and <2 x i32> %or, <i32 1, i32 1>
+  %ret = icmp ne <2 x i32> %and, zeroinitializer
+  ret <2 x i1> %ret
+}
+
+define <2 x i1> @icmp_and_or_lshr_cst_vec_commute(<2 x i32> %xp) {
+; CHECK-LABEL: @icmp_and_or_lshr_cst_vec_commute(
+; CHECK-NEXT:    [[X:%.*]] = srem <2 x i32> [[XP:%.*]], <i32 42, i32 42>
+; CHECK-NEXT:    [[SHF:%.*]] = lshr <2 x i32> [[X]], <i32 1, i32 1>
+; CHECK-NEXT:    [[OR:%.*]] = or <2 x i32> [[X]], [[SHF]]
+; CHECK-NEXT:    [[AND:%.*]] = and <2 x i32> [[OR]], <i32 1, i32 1>
+; CHECK-NEXT:    [[RET:%.*]] = icmp ne <2 x i32> [[AND]], zeroinitializer
+; CHECK-NEXT:    ret <2 x i1> [[RET]]
+;
+  %x = srem <2 x i32> %xp, <i32 42, i32 -42> ; prevent complexity-based canonicalization
+  %shf = lshr <2 x i32> %x, <i32 1, i32 1>
+  %or = or <2 x i32> %x, %shf
   %and = and <2 x i32> %or, <i32 1, i32 1>
   %ret = icmp ne <2 x i32> %and, zeroinitializer
   ret <2 x i1> %ret

@@ -226,7 +226,6 @@ SDValue VectorLegalizer::LegalizeOp(SDValue Op) {
   SDValue Result = SDValue(DAG.UpdateNodeOperands(Op.getNode(), Ops),
                            Op.getResNo());
 
-  bool HasVectorValue = false;
   if (Op.getOpcode() == ISD::LOAD) {
     LoadSDNode *LD = cast<LoadSDNode>(Op.getNode());
     ISD::LoadExtType ExtType = LD->getExtensionType();
@@ -240,17 +239,9 @@ SDValue VectorLegalizer::LegalizeOp(SDValue Op) {
         return TranslateLegalizeResults(Op, Result);
       case TargetLowering::Custom:
         if (SDValue Lowered = TLI.LowerOperation(Result, DAG)) {
-          if (Lowered == Result)
-            return TranslateLegalizeResults(Op, Lowered);
-          Changed = true;
-          if (Lowered->getNumValues() != Op->getNumValues()) {
-            // This expanded to something other than the load. Assume the
-            // lowering code took care of any chain values, and just handle the
-            // returned value.
-            assert(Result.getValue(1).use_empty() &&
-                   "There are still live users of the old chain!");
-            return LegalizeOp(Lowered);
-          }
+          assert(Lowered->getNumValues() == Op->getNumValues() &&
+                 "Unexpected number of results");
+          Changed = Lowered != Result;
           return TranslateLegalizeResults(Op, Lowered);
         }
         LLVM_FALLTHROUGH;
@@ -280,9 +271,9 @@ SDValue VectorLegalizer::LegalizeOp(SDValue Op) {
         return LegalizeOp(ExpandStore(Op));
       }
     }
-  } else if (Op.getOpcode() == ISD::MSCATTER || Op.getOpcode() == ISD::MSTORE)
-    HasVectorValue = true;
+  }
 
+  bool HasVectorValue = false;
   for (SDNode::value_iterator J = Node->value_begin(), E = Node->value_end();
        J != E;
        ++J)
@@ -405,14 +396,6 @@ SDValue VectorLegalizer::LegalizeOp(SDValue Op) {
   case ISD::UINT_TO_FP:
     Action = TLI.getOperationAction(Node->getOpcode(),
                                     Node->getOperand(0).getValueType());
-    break;
-  case ISD::MSCATTER:
-    Action = TLI.getOperationAction(Node->getOpcode(),
-               cast<MaskedScatterSDNode>(Node)->getValue().getValueType());
-    break;
-  case ISD::MSTORE:
-    Action = TLI.getOperationAction(Node->getOpcode(),
-               cast<MaskedStoreSDNode>(Node)->getValue().getValueType());
     break;
   }
 
@@ -1185,7 +1168,7 @@ SDValue VectorLegalizer::ExpandStrictFPOp(SDValue Op) {
   AddLegalizedOperand(Op.getValue(0), Result);
   AddLegalizedOperand(Op.getValue(1), NewChain);
 
-  return NewChain;
+  return Op.getResNo() ? NewChain : Result;
 }
 
 SDValue VectorLegalizer::UnrollVSETCC(SDValue Op) {

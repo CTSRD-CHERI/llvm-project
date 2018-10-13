@@ -19,7 +19,6 @@
 #include "sanitizer_common/sanitizer_flags.h"
 #include "xray/xray_interface.h"
 #include "xray/xray_log_interface.h"
-
 #include "xray_flags.h"
 #include "xray_profile_collector.h"
 #include "xray_profiling_flags.h"
@@ -69,7 +68,7 @@ static ProfilingData &getThreadLocalData() XRAY_NEVER_INSTRUMENT {
   }();
   (void)ThreadOnce;
 
-  auto &TLD = *reinterpret_cast<ProfilingData*>(&ThreadStorage);
+  auto &TLD = *reinterpret_cast<ProfilingData *>(&ThreadStorage);
 
   if (UNLIKELY(TLD.Allocators == nullptr || TLD.FCT == nullptr)) {
     auto *Allocators =
@@ -167,11 +166,13 @@ namespace {
 
 thread_local atomic_uint8_t ReentranceGuard{0};
 
-static void postCurrentThreadFCT(ProfilingData &TLD) {
+static void postCurrentThreadFCT(ProfilingData &TLD) XRAY_NEVER_INSTRUMENT {
   if (TLD.Allocators == nullptr || TLD.FCT == nullptr)
     return;
 
-  profileCollectorService::post(*TLD.FCT, GetTid());
+  if (!TLD.FCT->getRoots().empty())
+    profileCollectorService::post(*TLD.FCT, GetTid());
+
   cleanupTLD();
 }
 
@@ -241,15 +242,8 @@ XRayLogInitStatus profilingFinalize() XRAY_NEVER_INSTRUMENT {
 }
 
 XRayLogInitStatus
-profilingLoggingInit(size_t BufferSize, size_t BufferMax, void *Options,
-                     size_t OptionsSize) XRAY_NEVER_INSTRUMENT {
-  if (BufferSize != 0 || BufferMax != 0) {
-    if (Verbosity())
-      Report("__xray_log_init() being used, and is unsupported. Use "
-             "__xray_log_init_mode(...) instead. Bailing out.");
-    return XRayLogInitStatus::XRAY_LOG_UNINITIALIZED;
-  }
-
+profilingLoggingInit(UNUSED size_t BufferSize, UNUSED size_t BufferMax,
+                     void *Options, size_t OptionsSize) XRAY_NEVER_INSTRUMENT {
   s32 CurrentStatus = XRayLogInitStatus::XRAY_LOG_UNINITIALIZED;
   if (!atomic_compare_exchange_strong(&ProfilerLogStatus, &CurrentStatus,
                                       XRayLogInitStatus::XRAY_LOG_INITIALIZING,

@@ -63,6 +63,7 @@ using namespace llvm;
 using namespace llvm::ELF;
 using namespace llvm::object;
 using namespace llvm::sys;
+using namespace llvm::support;
 
 using namespace lld;
 using namespace lld::elf;
@@ -87,7 +88,6 @@ bool elf::link(ArrayRef<const char *> Args, bool CanExitEarly,
 
   InputSections.clear();
   OutputSections.clear();
-  Tar = nullptr;
   BinaryFiles.clear();
   BitcodeFiles.clear();
   ObjectFiles.clear();
@@ -97,6 +97,10 @@ bool elf::link(ArrayRef<const char *> Args, bool CanExitEarly,
   Driver = make<LinkerDriver>();
   Script = make<LinkerScript>();
   Symtab = make<SymbolTable>();
+
+  Tar = nullptr;
+  memset(&In, 0, sizeof(In));
+
   Config->ProgName = Args[0];
 
   Driver->main(Args);
@@ -284,6 +288,9 @@ static void checkOptions(opt::InputArgList &Args) {
   if (Config->FixCortexA53Errata843419 && Config->EMachine != EM_AARCH64)
     error("--fix-cortex-a53-843419 is only supported on AArch64 targets.");
 
+  if (Config->TocOptimize && Config->EMachine != EM_PPC64)
+      error("--toc-optimize is only supported on the PowerPC64 target.");
+
   if (Config->Pie && Config->Shared)
     error("-shared and -pie may not be used together");
 
@@ -345,12 +352,13 @@ static bool getZFlag(opt::InputArgList &Args, StringRef K1, StringRef K2,
   return Default;
 }
 
-static bool isKnown(StringRef S) {
+static bool isKnownZFlag(StringRef S) {
   return S == "combreloc" || S == "copyreloc" || S == "defs" ||
          S == "execstack" || S == "global" || S == "hazardplt" ||
-         S == "initfirst" || S == "keep-text-section-prefix" || S == "lazy" ||
-         S == "muldefs" || S == "nocombreloc" || S == "nocopyreloc" ||
-         S == "nodelete" || S == "nodlopen" || S == "noexecstack" ||
+         S == "initfirst" || S == "interpose" ||
+         S == "keep-text-section-prefix" || S == "lazy" || S == "muldefs" ||
+         S == "nocombreloc" || S == "nocopyreloc" || S == "nodelete" ||
+         S == "nodlopen" || S == "noexecstack" ||
          S == "nokeep-text-section-prefix" || S == "norelro" || S == "notext" ||
          S == "now" || S == "origin" || S == "relro" || S == "retpolineplt" ||
          S == "rodynamic" || S == "text" || S == "wxneeded" ||
@@ -360,7 +368,7 @@ static bool isKnown(StringRef S) {
 // Report an error for an unknown -z option.
 static void checkZOptions(opt::InputArgList &Args) {
   for (auto *Arg : Args.filtered(OPT_z))
-    if (!isKnown(Arg->getValue()))
+    if (!isKnownZFlag(Arg->getValue()))
       error("unknown -z value: " + StringRef(Arg->getValue()));
 }
 
@@ -710,6 +718,27 @@ static void readCallGraph(MemoryBufferRef MB) {
   }
 }
 
+template <class ELFT> static void readCallGraphsFromObjectFiles() {
+  auto FindSection = [&](const Symbol *Sym) -> const InputSectionBase * {
+    warnUnorderableSymbol(Sym);
+    if (const auto *SymD = dyn_cast<Defined>(Sym))
+      return dyn_cast_or_null<InputSectionBase>(SymD->Section);
+    return nullptr;
+  };
+
+  for (auto File : ObjectFiles) {
+    auto *Obj = cast<ObjFile<ELFT>>(File);
+    for (const Elf_CGProfile_Impl<ELFT> &CGPE : Obj->CGProfile) {
+      const InputSectionBase *FromSB =
+          FindSection(&Obj->getSymbol(CGPE.cgp_from));
+      const InputSectionBase *ToSB = FindSection(&Obj->getSymbol(CGPE.cgp_to));
+      if (!FromSB || !ToSB)
+        continue;
+      Config->CallGraphProfile[{FromSB, ToSB}] += CGPE.cgp_weight;
+    }
+  }
+}
+
 static bool getCompressDebugSections(opt::InputArgList &Args) {
   StringRef S = Args.getLastArgValue(OPT_compress_debug_sections, "none");
   if (S == "none")
@@ -876,6 +905,8 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
   Config->WarnBackrefs =
       Args.hasFlag(OPT_warn_backrefs, OPT_no_warn_backrefs, false);
   Config->WarnCommon = Args.hasFlag(OPT_warn_common, OPT_no_warn_common, false);
+  Config->WarnIfuncTextrel =
+      Args.hasFlag(OPT_warn_ifunc_textrel, OPT_no_warn_ifunc_textrel, false);
   Config->WarnSymbolOrdering =
       Args.hasFlag(OPT_warn_symbol_ordering, OPT_no_warn_symbol_ordering, true);
   Config->ZCombreloc = getZFlag(Args, "combreloc", "nocombreloc", true);
@@ -884,6 +915,7 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
   Config->ZGlobal = hasZOption(Args, "global");
   Config->ZHazardplt = hasZOption(Args, "hazardplt");
   Config->ZInitfirst = hasZOption(Args, "initfirst");
+  Config->ZInterpose = hasZOption(Args, "interpose");
   Config->ZKeepTextSectionPrefix = getZFlag(
       Args, "keep-text-section-prefix", "nokeep-text-section-prefix", false);
   Config->ZNodelete = hasZOption(Args, "nodelete");
@@ -1007,21 +1039,16 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
 // This function initialize such members. See Config.h for the details
 // of these values.
 static void setConfigs(opt::InputArgList &Args) {
-  ELFKind Kind = Config->EKind;
-  uint16_t Machine = Config->EMachine;
+  ELFKind K = Config->EKind;
+  uint16_t M = Config->EMachine;
 
   Config->CopyRelocs = (Config->Relocatable || Config->EmitRelocs);
-  Config->Is64 = (Kind == ELF64LEKind || Kind == ELF64BEKind);
-  Config->IsLE = (Kind == ELF32LEKind || Kind == ELF64LEKind);
-  Config->Endianness =
-      Config->IsLE ? support::endianness::little : support::endianness::big;
-  Config->IsMips64EL = (Kind == ELF64LEKind && Machine == EM_MIPS);
+  Config->Is64 = (K == ELF64LEKind || K == ELF64BEKind);
+  Config->IsLE = (K == ELF32LEKind || K == ELF64LEKind);
+  Config->Endianness = Config->IsLE ? endianness::little : endianness::big;
+  Config->IsMips64EL = (K == ELF64LEKind && M == EM_MIPS);
   Config->Pic = Config->Pie || Config->Shared;
   Config->Wordsize = Config->Is64 ? 8 : 4;
-
-  // There is an ILP32 ABI for x86-64, although it's not very popular.
-  // It is called the x32 ABI.
-  bool IsX32 = (Kind == ELF32LEKind && Machine == EM_X86_64);
 
   // ELF defines two different ways to store relocation addends as shown below:
   //
@@ -1036,9 +1063,9 @@ static void setConfigs(opt::InputArgList &Args) {
   // You cannot choose which one, Rel or Rela, you want to use. Instead each
   // ABI defines which one you need to use. The following expression expresses
   // that.
-  Config->IsRela =
-      (Config->Is64 || IsX32 || Machine == EM_PPC || Machine == EM_RISCV) &&
-      Machine != EM_MIPS;
+  Config->IsRela = M == EM_AARCH64 || M == EM_AMDGPU || M == EM_HEXAGON ||
+                   M == EM_PPC || M == EM_PPC64 || M == EM_RISCV ||
+                   M == EM_X86_64;
 
   // If the output uses REL relocations we must store the dynamic relocation
   // addends to the output sections. We also store addends for RELA relocations
@@ -1048,6 +1075,9 @@ static void setConfigs(opt::InputArgList &Args) {
   Config->WriteAddends = Args.hasFlag(OPT_apply_dynamic_relocs,
                                       OPT_no_apply_dynamic_relocs, false) ||
                          !Config->IsRela;
+
+  Config->TocOptimize =
+      Args.hasFlag(OPT_toc_optimize, OPT_no_toc_optimize, M == EM_PPC64);
 }
 
 // Returns a value of "-format" option.
@@ -1285,33 +1315,19 @@ template <class ELFT> static void handleLibcall(StringRef Name) {
     Symtab->fetchLazy<ELFT>(Sym);
 }
 
-template <class ELFT> static bool shouldDemote(Symbol &Sym) {
-  // If all references to a DSO happen to be weak, the DSO is not added to
-  // DT_NEEDED. If that happens, we need to eliminate shared symbols created
-  // from the DSO. Otherwise, they become dangling references that point to a
-  // non-existent DSO.
-  if (auto *S = dyn_cast<SharedSymbol>(&Sym))
-    return !S->getFile<ELFT>().IsNeeded;
-
-  // We are done processing archives, so lazy symbols that were used but not
-  // found can be converted to undefined. We could also just delete the other
-  // lazy symbols, but that seems to be more work than it is worth.
-  return Sym.isLazy() && Sym.IsUsedInRegularObj;
-}
-
-// Some files, such as .so or files between -{start,end}-lib may be removed
-// after their symbols are added to the symbol table. If that happens, we
-// need to remove symbols that refer files that no longer exist, so that
-// they won't appear in the symbol table of the output file.
-//
-// We remove symbols by demoting them to undefined symbol.
-template <class ELFT> static void demoteSymbols() {
+// If all references to a DSO happen to be weak, the DSO is not added
+// to DT_NEEDED. If that happens, we need to eliminate shared symbols
+// created from the DSO. Otherwise, they become dangling references
+// that point to a non-existent DSO.
+template <class ELFT> static void demoteSharedSymbols() {
   for (Symbol *Sym : Symtab->getSymbols()) {
-    if (shouldDemote<ELFT>(*Sym)) {
-      bool Used = Sym->Used;
-      replaceSymbol<Undefined>(Sym, nullptr, Sym->getName(), Sym->Binding,
-                               Sym->StOther, Sym->Type);
-      Sym->Used = Used;
+    if (auto *S = dyn_cast<SharedSymbol>(Sym)) {
+      if (!S->getFile<ELFT>().IsNeeded) {
+        bool Used = S->Used;
+        replaceSymbol<Undefined>(S, nullptr, S->getName(), STB_WEAK, S->StOther,
+                                 S->Type);
+        S->Used = Used;
+      }
     }
   }
 }
@@ -1464,6 +1480,9 @@ static const char *LibcallRoutineNames[] = {
 // all linker scripts have already been parsed.
 template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   Target = getTarget();
+  InX<ELFT>::VerSym = nullptr;
+  InX<ELFT>::VerNeed = nullptr;
+  InX<ELFT>::CheriCapRelocsSection = nullptr;
 
   Config->MaxPageSize = getMaxPageSize(Args);
   Config->ImageBase = getImageBase(Args);
@@ -1649,17 +1668,15 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
     assert(Config->CapabilitySize > 0);
 
   // This adds a .comment section containing a version string. We have to add it
-  // before decompressAndMergeSections because the .comment section is a
-  // mergeable section.
+  // before mergeSections because the .comment section is a mergeable section.
   if (!Config->Relocatable)
     InputSections.push_back(createCommentSection());
 
   // Do size optimizations: garbage collection, merging of SHF_MERGE sections
   // and identical code folding.
-  decompressSections();
   splitSections<ELFT>();
   markLive<ELFT>();
-  demoteSymbols<ELFT>();
+  demoteSharedSymbols<ELFT>();
   mergeSections();
   if (Config->ICF != ICFLevel::None) {
     findKeepUniqueSections<ELFT>(Args);
@@ -1670,6 +1687,7 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   if (auto *Arg = Args.getLastArg(OPT_call_graph_ordering_file))
     if (Optional<MemoryBufferRef> Buffer = readFile(Arg->getValue()))
       readCallGraph(*Buffer);
+  readCallGraphsFromObjectFiles<ELFT>();
 
   // Write the result to the file.
   writeResult<ELFT>();

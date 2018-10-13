@@ -231,6 +231,8 @@ enum class FrameProcedureOptions : uint32_t {
   Inlined = 0x00000800,
   StrictSecurityChecks = 0x00001000,
   SafeBuffers = 0x00002000,
+  EncodedLocalBasePointerMask = 0x0000C000,
+  EncodedParamBasePointerMask = 0x00030000,
   ProfileGuidedOptimization = 0x00040000,
   ValidProfileCounts = 0x00080000,
   OptimizedForSpeed = 0x00100000,
@@ -509,6 +511,19 @@ enum class RegisterId : uint16_t {
 #include "CodeViewRegisters.def"
 #undef CV_REGISTER
 };
+
+/// Two-bit value indicating which register is the designated frame pointer
+/// register. Appears in the S_FRAMEPROC record flags.
+enum class EncodedFramePtrReg : uint8_t {
+  None = 0,
+  StackPtr = 1,
+  FramePtr = 2,
+  BasePtr = 3,
+};
+
+RegisterId decodeFramePtrReg(EncodedFramePtrReg EncodedReg, CPUType CPU);
+
+EncodedFramePtrReg encodeFramePtrReg(RegisterId Reg, CPUType CPU);
 
 /// These values correspond to the THUNK_ORDINAL enumeration.
 enum class ThunkOrdinal : uint8_t {

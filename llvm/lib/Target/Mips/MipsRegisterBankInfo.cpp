@@ -57,7 +57,10 @@ const RegisterBank &MipsRegisterBankInfo::getRegBankFromRegClass(
   switch (RC.getID()) {
   case Mips::GPR32RegClassID:
   case Mips::CPU16Regs_and_GPRMM16ZeroRegClassID:
+  case Mips::GPRMM16MovePPairFirstRegClassID:
+  case Mips::CPU16Regs_and_GPRMM16MovePPairSecondRegClassID:
   case Mips::GPRMM16MoveP_and_CPU16Regs_and_GPRMM16ZeroRegClassID:
+  case Mips::GPRMM16MovePPairFirst_and_GPRMM16MovePPairSecondRegClassID:
   case Mips::SP32RegClassID:
     return getRegBank(Mips::GPRBRegBankID);
   default:
@@ -97,6 +100,12 @@ MipsRegisterBankInfo::getInstrMapping(const MachineInstr &MI) const {
   case G_GLOBAL_VALUE:
     OperandsMapping =
         getOperandsMapping({&Mips::ValueMappings[Mips::GPRIdx], nullptr});
+    break;
+  case G_ICMP:
+    OperandsMapping =
+        getOperandsMapping({&Mips::ValueMappings[Mips::GPRIdx], nullptr,
+                            &Mips::ValueMappings[Mips::GPRIdx],
+                            &Mips::ValueMappings[Mips::GPRIdx]});
     break;
   default:
     return getInvalidInstructionMapping();

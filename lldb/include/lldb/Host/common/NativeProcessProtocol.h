@@ -84,8 +84,8 @@ public:
   virtual Status ReadMemory(lldb::addr_t addr, void *buf, size_t size,
                             size_t &bytes_read) = 0;
 
-  virtual Status ReadMemoryWithoutTrap(lldb::addr_t addr, void *buf,
-                                       size_t size, size_t &bytes_read) = 0;
+  Status ReadMemoryWithoutTrap(lldb::addr_t addr, void *buf, size_t size,
+                               size_t &bytes_read);
 
   virtual Status WriteMemory(lldb::addr_t addr, const void *buf, size_t size,
                              size_t &bytes_written) = 0;
@@ -448,10 +448,19 @@ protected:
   // -----------------------------------------------------------
   Status SetSoftwareBreakpoint(lldb::addr_t addr, uint32_t size_hint);
 
-  virtual Status
-  GetSoftwareBreakpointTrapOpcode(size_t trap_opcode_size_hint,
-                                  size_t &actual_opcode_size,
-                                  const uint8_t *&trap_opcode_bytes) = 0;
+  virtual llvm::Expected<llvm::ArrayRef<uint8_t>>
+  GetSoftwareBreakpointTrapOpcode(size_t size_hint);
+
+  /// Return the offset of the PC relative to the software breakpoint that was hit. If an
+  /// architecture (e.g. arm) reports breakpoint hits before incrementing the PC, this offset
+  /// will be 0. If an architecture (e.g. intel) reports breakpoints hits after incrementing the
+  /// PC, this offset will be the size of the breakpoint opcode.
+  virtual size_t GetSoftwareBreakpointPCOffset();
+
+  // Adjust the thread's PC after hitting a software breakpoint. On
+  // architectures where the PC points after the breakpoint instruction, this
+  // resets it to point to the breakpoint itself.
+  void FixupBreakpointPCAsNeeded(NativeThreadProtocol &thread);
 
   // -----------------------------------------------------------
   /// Notify the delegate that an exec occurred.

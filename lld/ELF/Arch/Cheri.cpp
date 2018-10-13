@@ -210,7 +210,7 @@ void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
     case Symbol::DefinedKind:
       break;
     case Symbol::SharedKind:
-      if (!Config->Shared && !InX::Interp) {
+      if (!Config->Shared && !In.Interp) {
         error("cannot create a capability relocation against a shared symbol"
               " when linking statically");
         continue;
@@ -304,7 +304,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
     // full Elf_Rel/Elf_Rela
     // The addend is zero here since it will be written in writeTo()
     assert(!Config->IsRela);
-    InX::RelaDyn->addReloc({elf::Target->RelativeRel, this, CurrentEntryOffset,
+    In.RelaDyn->addReloc({elf::Target->RelativeRel, this, CurrentEntryOffset,
                             true, nullptr, 0});
     ContainsDynamicRelocations = true;
   }
@@ -333,7 +333,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
     int64_t Addend = Target.Offset;
     // Capability target is the second field -> offset + 8
     assert((CurrentEntryOffset + 8) < getSize());
-    InX::RelaDyn->addReloc({RelocKind, this, CurrentEntryOffset + 8,
+    In.RelaDyn->addReloc({RelocKind, this, CurrentEntryOffset + 8,
                             RelativeToLoadAddress, Target.Sym, Addend});
     ContainsDynamicRelocations = true;
     if (!RelativeToLoadAddress) {
@@ -342,7 +342,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
       RelType Size64Rel = R_MIPS_CHERI_SIZE | (R_MIPS_64 << 8);
       // Capability size is the fourth field -> offset + 24
       assert((CurrentEntryOffset + 24) < getSize());
-      InX::RelaDyn->addReloc(Size64Rel, this, CurrentEntryOffset + 24,
+      In.RelaDyn->addReloc(Size64Rel, this, CurrentEntryOffset + 24,
                              Target.Sym);
     }
   }
@@ -696,7 +696,7 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
                          Config->CapabilitySize, STB_LOCAL, this, nullptr);
     }
     addCapabilityRelocation<ELFT>(
-        *TargetSym, ElfCapabilityReloc, InX::CheriCapTable, Off,
+        *TargetSym, ElfCapabilityReloc, In.CheriCapTable, Off,
         R_CHERI_CAPABILITY, 0,
         [&]() { return "\n>>> referenced by " + RefName; });
   }
@@ -717,7 +717,7 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
     if (S == nullptr) {
       if (!Config->Pic)
         continue;
-      InX::RelaDyn->addReloc(Target->TlsModuleIndexRel, this, Offset, S);
+      In.RelaDyn->addReloc(Target->TlsModuleIndexRel, this, Offset, S);
     } else {
       // When building a shared library we still need a dynamic relocation
       // for the module index. Therefore only checking for
@@ -725,13 +725,13 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
       // thread-locals that have been marked as local through a linker script)
       if (!S->IsPreemptible && !Config->Pic)
         continue;
-      InX::RelaDyn->addReloc(Target->TlsModuleIndexRel, this, Offset, S);
+      In.RelaDyn->addReloc(Target->TlsModuleIndexRel, this, Offset, S);
       // However, we can skip writing the TLS offset reloc for non-preemptible
       // symbols since it is known even in shared libraries
       if (!S->IsPreemptible)
         continue;
       Offset += Config->Wordsize;
-      InX::RelaDyn->addReloc(Target->TlsOffsetRel, this, Offset, S);
+      In.RelaDyn->addReloc(Target->TlsOffsetRel, this, Offset, S);
     }
   }
 
@@ -742,13 +742,13 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
     Symbol *S = it.first;
     uint64_t Offset = CTI.Index.getValue() * Config->Wordsize;
     if (S->IsPreemptible)
-      InX::RelaDyn->addReloc(Target->TlsGotRel, this, Offset, S);
+      In.RelaDyn->addReloc(Target->TlsGotRel, this, Offset, S);
   }
 
   ValuesAssigned = true;
 }
 
-CheriCapTableSection *InX::CheriCapTable;
+CheriCapTableSection *In.CheriCapTable;
 
 template class elf::CheriCapRelocsSection<ELF32LE>;
 template class elf::CheriCapRelocsSection<ELF32BE>;

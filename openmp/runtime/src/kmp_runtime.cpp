@@ -539,12 +539,20 @@ static void __kmp_print_team_storage_map(const char *header, kmp_team_t *team,
                                team_id);
 }
 
-static void __kmp_init_allocator() {}
-static void __kmp_fini_allocator() {}
+static void __kmp_init_allocator() {
+#if OMP_50_ENABLED
+  __kmp_init_memkind();
+#endif
+}
+static void __kmp_fini_allocator() {
+#if OMP_50_ENABLED
+  __kmp_fini_memkind();
+#endif
+}
 
 /* ------------------------------------------------------------------------ */
 
-#ifdef KMP_DYNAMIC_LIB
+#if KMP_DYNAMIC_LIB
 #if KMP_OS_WINDOWS
 
 static void __kmp_reset_lock(kmp_bootstrap_lock_t *lck) {
@@ -1201,8 +1209,7 @@ void __kmp_serialized_parallel(ident_t *loc, kmp_int32 global_tid) {
 #endif /* OMP_40_ENABLED */
 
 #if OMPT_SUPPORT
-  ompt_data_t ompt_parallel_data;
-  ompt_parallel_data.ptr = NULL;
+  ompt_data_t ompt_parallel_data = ompt_data_none;
   ompt_data_t *implicit_task_data;
   void *codeptr = OMPT_LOAD_RETURN_ADDRESS(global_tid);
   if (ompt_enabled.enabled &&
@@ -1217,7 +1224,8 @@ void __kmp_serialized_parallel(ident_t *loc, kmp_int32 global_tid) {
 
       ompt_callbacks.ompt_callback(ompt_callback_parallel_begin)(
           &(parent_task_info->task_data), &(parent_task_info->frame),
-          &ompt_parallel_data, team_size, ompt_invoker_program, codeptr);
+          &ompt_parallel_data, team_size, ompt_parallel_invoker_program,
+          codeptr);
     }
   }
 #endif // OMPT_SUPPORT
@@ -1318,6 +1326,9 @@ void __kmp_serialized_parallel(ident_t *loc, kmp_int32 global_tid) {
 
     serial_team->t.t_level = serial_team->t.t_parent->t.t_level + 1;
     serial_team->t.t_active_level = serial_team->t.t_parent->t.t_active_level;
+#if OMP_50_ENABLED
+    serial_team->t.t_def_allocator = this_thr->th.th_def_allocator; // save
+#endif
 
     propagateFPControl(serial_team);
 
@@ -1465,8 +1476,7 @@ int __kmp_fork_call(ident_t *loc, int gtid,
     master_set_numthreads = master_th->th.th_set_nproc;
 
 #if OMPT_SUPPORT
-    ompt_data_t ompt_parallel_data;
-    ompt_parallel_data.ptr = NULL;
+    ompt_data_t ompt_parallel_data = ompt_data_none;
     ompt_data_t *parent_task_data;
     omp_frame_t *ompt_frame;
     ompt_data_t *implicit_task_data;
@@ -1608,6 +1618,9 @@ int __kmp_fork_call(ident_t *loc, int gtid,
       KMP_ATOMIC_INC(&root->r.r_in_parallel);
       parent_team->t.t_active_level++;
       parent_team->t.t_level++;
+#if OMP_50_ENABLED
+      parent_team->t.t_def_allocator = master_th->th.th_def_allocator; // save
+#endif
 
       /* Change number of threads in the team if requested */
       if (master_set_numthreads) { // The parallel has num_threads clause
@@ -2073,6 +2086,9 @@ int __kmp_fork_call(ident_t *loc, int gtid,
 #if OMP_40_ENABLED
     KMP_CHECK_UPDATE(team->t.t_cancel_request, cancel_noreq);
 #endif
+#if OMP_50_ENABLED
+    KMP_CHECK_UPDATE(team->t.t_def_allocator, master_th->th.th_def_allocator);
+#endif
 
     // Update the floating point rounding in the team if required.
     propagateFPControl(team);
@@ -2514,6 +2530,9 @@ void __kmp_join_call(ident_t *loc, int gtid
   master_th->th.th_first_place = team->t.t_first_place;
   master_th->th.th_last_place = team->t.t_last_place;
 #endif /* OMP_40_ENABLED */
+#if OMP_50_ENABLED
+  master_th->th.th_def_allocator = team->t.t_def_allocator;
+#endif
 
   updateHWFPControl(team);
 
@@ -3524,7 +3543,7 @@ static int __kmp_expand_threads(int nNeed) {
 // resizing __kmp_threads does not need additional protection if foreign
 // threads are present
 
-#if KMP_OS_WINDOWS && !defined KMP_DYNAMIC_LIB
+#if KMP_OS_WINDOWS && !KMP_DYNAMIC_LIB
   /* only for Windows static library */
   /* reclaim array entries for root threads that are already dead */
   added = __kmp_reclaim_dead_roots();
@@ -3705,7 +3724,7 @@ int __kmp_register_root(int initial_thread) {
     }
     root_thread->th.th_info.ds.ds_gtid = gtid;
 #if OMPT_SUPPORT
-    root_thread->th.ompt_thread_info.thread_data.ptr = NULL;
+    root_thread->th.ompt_thread_info.thread_data = ompt_data_none;
 #endif
     root_thread->th.th_root = root;
     if (__kmp_env_consistency_check) {
@@ -3791,18 +3810,20 @@ int __kmp_register_root(int initial_thread) {
   root_thread->th.th_first_place = KMP_PLACE_UNDEFINED;
   root_thread->th.th_last_place = KMP_PLACE_UNDEFINED;
 #endif
-
   if (TCR_4(__kmp_init_middle)) {
     __kmp_affinity_set_init_mask(gtid, TRUE);
   }
 #endif /* KMP_AFFINITY_SUPPORTED */
+#if OMP_50_ENABLED
+  root_thread->th.th_def_allocator = __kmp_def_allocator;
+#endif
 
   __kmp_root_counter++;
 
 #if OMPT_SUPPORT
   if (!initial_thread && ompt_enabled.enabled) {
 
-    ompt_thread_t *root_thread = ompt_get_thread();
+    kmp_info_t *root_thread = ompt_get_thread();
 
     ompt_set_thread_state(root_thread, omp_state_overhead);
 
@@ -4333,6 +4354,9 @@ kmp_info_t *__kmp_allocate_thread(kmp_root_t *root, kmp_team_t *team,
   new_thr->th.th_new_place = KMP_PLACE_UNDEFINED;
   new_thr->th.th_first_place = KMP_PLACE_UNDEFINED;
   new_thr->th.th_last_place = KMP_PLACE_UNDEFINED;
+#endif
+#if OMP_50_ENABLED
+  new_thr->th.th_def_allocator = __kmp_def_allocator;
 #endif
 
   TCW_4(new_thr->th.th_in_pool, FALSE);
@@ -5575,7 +5599,7 @@ void *__kmp_launch_thread(kmp_info_t *this_thr) {
   ompt_data_t *thread_data;
   if (ompt_enabled.enabled) {
     thread_data = &(this_thr->th.ompt_thread_info.thread_data);
-    thread_data->ptr = NULL;
+    *thread_data = ompt_data_none;
 
     this_thr->th.ompt_thread_info.state = omp_state_overhead;
     this_thr->th.ompt_thread_info.wait_id = 0;
@@ -6170,7 +6194,7 @@ void __kmp_internal_end_thread(int gtid_req) {
       return;
     }
   }
-#if defined KMP_DYNAMIC_LIB
+#if KMP_DYNAMIC_LIB
   // AC: lets not shutdown the Linux* OS dynamic library at the exit of uber
   // thread, because we will better shutdown later in the library destructor.
   // The reason of this change is performance problem when non-openmp thread in
@@ -6620,7 +6644,7 @@ static void __kmp_do_serial_initialize(void) {
   __kmp_register_atfork();
 #endif
 
-#if !defined KMP_DYNAMIC_LIB
+#if !KMP_DYNAMIC_LIB
   {
     /* Invoke the exit handler when the program finishes, only for static
        library. For dynamic library, we already have _fini and DllMain. */

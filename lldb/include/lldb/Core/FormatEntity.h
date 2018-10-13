@@ -88,6 +88,7 @@ public:
       FrameRegisterFP,
       FrameRegisterFlags,
       FrameRegisterByName,
+      FrameIsArtificial,
       ScriptFrame,
       FunctionID,
       FunctionDidChange,
@@ -104,6 +105,7 @@ public:
       FunctionIsOptimized,
       LineEntryFile,
       LineEntryLineNumber,
+      LineEntryColumn,
       LineEntryStartAddress,
       LineEntryEndAddress,
       CurrentPCArrow

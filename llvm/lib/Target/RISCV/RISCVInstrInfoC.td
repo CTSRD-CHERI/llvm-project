@@ -167,7 +167,7 @@ def uimm10_lsb00nonzero : Operand<XLenVT>,
                           [{return isShiftedUInt<8, 2>(Imm) && (Imm != 0);}]> {
   let ParserMatchClass = UImmAsmOperand<10, "Lsb00NonZero">;
   let EncoderMethod = "getImmOpValue";
-  let DecoderMethod = "decodeUImmOperand<10>";
+  let DecoderMethod = "decodeUImmNonZeroOperand<10>";
   let MCOperandPredicate = [{
     int64_t Imm;
     if (!MCOp.evaluateAsConstantImm(Imm))
@@ -182,7 +182,7 @@ def simm10_lsb0000nonzero : Operand<XLenVT>,
                             [{return (Imm != 0) && isShiftedInt<6, 4>(Imm);}]> {
   let ParserMatchClass = SImmAsmOperand<10, "Lsb0000NonZero">;
   let EncoderMethod = "getImmOpValue";
-  let DecoderMethod = "decodeSImmOperand<10>";
+  let DecoderMethod = "decodeSImmNonZeroOperand<10>";
   let MCOperandPredicate = [{
     int64_t Imm;
     if (!MCOp.evaluateAsConstantImm(Imm))
@@ -625,6 +625,8 @@ def : CompressPat<(AND GPRC:$rs1, GPRC:$rs2, GPRC:$rs1),
 } //  Predicates = [HasStdExtC]
 
 let Predicates = [HasStdExtC, IsRV64] in {
+def : CompressPat<(ADDIW GPRNoX0:$rd, X0, simm6:$imm),
+                  (C_LI GPRNoX0:$rd, simm6:$imm)>;
 def : CompressPat<(SUBW GPRC:$rs1, GPRC:$rs1, GPRC:$rs2),
                   (C_SUBW GPRC:$rs1, GPRC:$rs2)>;
 def : CompressPat<(ADDW GPRC:$rs1, GPRC:$rs1, GPRC:$rs2),

@@ -18,6 +18,7 @@
 #define LLVM_TOOLS_LLVM_MCA_REGISTER_FILE_H
 
 #include "HardwareUnits/HardwareUnit.h"
+#include "llvm/ADT/APInt.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSchedule.h"
@@ -34,10 +35,13 @@ class WriteRef;
 class RegisterFile : public HardwareUnit {
   const llvm::MCRegisterInfo &MRI;
 
-  // Each register file is associated with an instance of
-  // RegisterMappingTracker.
-  // A RegisterMappingTracker keeps track of the number of physical registers
-  // which have been dynamically allocated by the simulator.
+  // class RegisterMappingTracker is a  physical register file (PRF) descriptor.
+  // There is one RegisterMappingTracker for every PRF definition in the
+  // scheduling model.
+  //
+  // An instance of RegisterMappingTracker tracks the number of physical
+  // registers available for renaming. It also tracks  the number of register
+  // moves eliminated per cycle.
   struct RegisterMappingTracker {
     // The total number of physical registers that are available in this
     // register file for register renaming purpouses.  A value of zero for this
@@ -47,8 +51,26 @@ class RegisterFile : public HardwareUnit {
     // Number of physical registers that are currently in use.
     unsigned NumUsedPhysRegs;
 
-    RegisterMappingTracker(unsigned NumPhysRegisters)
-        : NumPhysRegs(NumPhysRegisters), NumUsedPhysRegs(0) {}
+    // Maximum number of register moves that can be eliminated by this PRF every
+    // cycle. A value of zero means that there is no limit in the number of
+    // moves which can be eliminated every cycle.
+    const unsigned MaxMoveEliminatedPerCycle;
+
+    // Number of register moves eliminated during this cycle.
+    //
+    // This value is increased by one every time a register move is eliminated.
+    // Every new cycle, this value is reset to zero.
+    // A move can be eliminated only if MaxMoveEliminatedPerCycle is zero, or if
+    // NumMoveEliminated is less than MaxMoveEliminatedPerCycle.
+    unsigned NumMoveEliminated;
+
+    // If set, move elimination is restricted to zero-register moves only.
+    bool AllowZeroMoveEliminationOnly;
+
+    RegisterMappingTracker(unsigned NumPhysRegisters,
+                           unsigned MaxMoveEliminated = 0U)
+        : NumPhysRegs(NumPhysRegisters), NumUsedPhysRegs(0),
+          MaxMoveEliminatedPerCycle(MaxMoveEliminated), NumMoveEliminated(0U) {}
   };
 
   // A vector of register file descriptors.  This set always contains at least
@@ -71,20 +93,36 @@ class RegisterFile : public HardwareUnit {
   // registers. So, the cost of allocating a YMM register in BtVer2 is 2.
   using IndexPlusCostPairTy = std::pair<unsigned, unsigned>;
 
-  // Struct RegisterRenamingInfo maps registers to register files.
-  // There is a RegisterRenamingInfo object for every register defined by
-  // the target. RegisteRenamingInfo objects are stored into vector
-  // RegisterMappings, and register IDs can be used to reference them.
+  // Struct RegisterRenamingInfo is used to map logical registers to register
+  // files.
+  //
+  // There is a RegisterRenamingInfo object for every logical register defined
+  // by the target. RegisteRenamingInfo objects are stored into vector
+  // `RegisterMappings`, and llvm::MCPhysReg IDs can be used to reference
+  // elements in that vector.
+  //
+  // Each RegisterRenamingInfo is owned by a PRF, and field `IndexPlusCost`
+  // specifies both the owning PRF, as well as the number of physical registers
+  // consumed at register renaming stage.
+  //
+  // Field `AllowMoveElimination` is set for registers that are used as
+  // destination by optimizable register moves.
   struct RegisterRenamingInfo {
     IndexPlusCostPairTy IndexPlusCost;
     llvm::MCPhysReg RenameAs;
+    bool AllowMoveElimination;
+    RegisterRenamingInfo()
+        : IndexPlusCost(std::make_pair(0U, 1U)), RenameAs(0U),
+          AllowMoveElimination(false) {}
   };
 
   // RegisterMapping objects are mainly used to track physical register
-  // definitions. There is a RegisterMapping for every register defined by the
-  // Target. For each register, a RegisterMapping pair contains a descriptor of
-  // the last register write (in the form of a WriteRef object), as well as a
-  // RegisterRenamingInfo to quickly identify owning register files.
+  // definitions and resolve data dependencies.
+  //
+  // Every register declared by the Target is associated with an instance of
+  // RegisterMapping. RegisterMapping objects keep track of writes to a logical
+  // register.  That information is used by class RegisterFile to resolve data
+  // dependencies, and correctly set latencies for register uses.
   //
   // This implementation does not allow overlapping register files. The only
   // register file that is allowed to overlap with other register files is
@@ -92,8 +130,12 @@ class RegisterFile : public HardwareUnit {
   // at most one register file.
   using RegisterMapping = std::pair<WriteRef, RegisterRenamingInfo>;
 
-  // This map contains one entry for each register defined by the target.
+  // There is one entry per each register defined by the target.
   std::vector<RegisterMapping> RegisterMappings;
+
+  // Used to track zero registers. There is one bit for each register defined by
+  // the target. Bits are set for registers that are known to be zero.
+  llvm::APInt ZeroRegisters;
 
   // This method creates a new register file descriptor.
   // The new register file owns all of the registers declared by register
@@ -136,16 +178,22 @@ public:
   // This method updates the register mappings inserting a new register
   // definition. This method is also responsible for updating the number of
   // allocated physical registers in each register file modified by the write.
-  // No physical regiser is allocated when flag ShouldAllocatePhysRegs is set.
+  // No physical regiser is allocated if this write is from a zero-idiom.
   void addRegisterWrite(WriteRef Write,
-                        llvm::MutableArrayRef<unsigned> UsedPhysRegs,
-                        bool ShouldAllocatePhysRegs = true);
+                        llvm::MutableArrayRef<unsigned> UsedPhysRegs);
 
   // Removes write \param WS from the register mappings.
   // Physical registers may be released to reflect this update.
+  // No registers are released if this write is from a zero-idiom.
   void removeRegisterWrite(const WriteState &WS,
-                           llvm::MutableArrayRef<unsigned> FreedPhysRegs,
-                           bool ShouldFreePhysRegs = true);
+                           llvm::MutableArrayRef<unsigned> FreedPhysRegs);
+
+  // Returns true if a move from RS to WS can be eliminated.
+  // On success, it updates WriteState by setting flag `WS.isEliminated`.
+  // If RS is a read from a zero register, and WS is eliminated, then
+  // `WS.WritesZero` is also set, so that method addRegisterWrite() would not
+  // reserve a physical register for it.
+  bool tryEliminateMove(WriteState &WS, const ReadState &RS);
 
   // Checks if there are enough physical registers in the register files.
   // Returns a "response mask" where each bit represents the response from a
@@ -160,6 +208,9 @@ public:
   void collectWrites(llvm::SmallVectorImpl<WriteRef> &Writes,
                      unsigned RegID) const;
   unsigned getNumRegisterFiles() const { return RegisterFiles.size(); }
+
+  // Notify each PRF that a new cycle just started.
+  void cycleStart();
 
 #ifndef NDEBUG
   void dump() const;

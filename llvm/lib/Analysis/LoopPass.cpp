@@ -194,8 +194,14 @@ bool LPPassManager::runOnFunction(Function &F) {
   }
 
   // Walk Loops
-  unsigned InstrCount = 0;
+  unsigned InstrCount, FunctionSize = 0;
+  StringMap<std::pair<unsigned, unsigned>> FunctionToInstrCount;
   bool EmitICRemark = M.shouldEmitInstrCountChangedRemark();
+  // Collect the initial size of the module and the function we're looking at.
+  if (EmitICRemark) {
+    InstrCount = initSizeRemarkInfo(M, FunctionToInstrCount);
+    FunctionSize = F.getInstructionCount();
+  }
   while (!LQ.empty()) {
     CurrentLoopDeleted = false;
     CurrentLoop = LQ.back();
@@ -213,11 +219,20 @@ bool LPPassManager::runOnFunction(Function &F) {
       {
         PassManagerPrettyStackEntry X(P, *CurrentLoop->getHeader());
         TimeRegion PassTimer(getPassTimer(P));
-        if (EmitICRemark)
-          InstrCount = initSizeRemarkInfo(M);
         Changed |= P->runOnLoop(CurrentLoop, *this);
-        if (EmitICRemark)
-          emitInstrCountChangedRemark(P, M, InstrCount);
+        if (EmitICRemark) {
+          unsigned NewSize = F.getInstructionCount();
+          // Update the size of the function, emit a remark, and update the
+          // size of the module.
+          if (NewSize != FunctionSize) {
+            int64_t Delta = static_cast<int64_t>(NewSize) -
+                            static_cast<int64_t>(FunctionSize);
+            emitInstrCountChangedRemark(P, M, Delta, InstrCount,
+                                        FunctionToInstrCount, &F);
+            InstrCount = static_cast<int64_t>(InstrCount) + Delta;
+            FunctionSize = NewSize;
+          }
+        }
       }
 
       if (Changed)

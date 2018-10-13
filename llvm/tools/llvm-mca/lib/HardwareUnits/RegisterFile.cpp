@@ -24,10 +24,11 @@ using namespace llvm;
 
 namespace mca {
 
-RegisterFile::RegisterFile(const llvm::MCSchedModel &SM,
-                           const llvm::MCRegisterInfo &mri, unsigned NumRegs)
-    : MRI(mri), RegisterMappings(mri.getNumRegs(),
-                                 {WriteRef(), {IndexPlusCostPairTy(0, 1), 0}}) {
+RegisterFile::RegisterFile(const MCSchedModel &SM, const MCRegisterInfo &mri,
+                           unsigned NumRegs)
+    : MRI(mri),
+      RegisterMappings(mri.getNumRegs(), {WriteRef(), RegisterRenamingInfo()}),
+      ZeroRegisters(mri.getNumRegs(), false) {
   initialize(SM, NumRegs);
 }
 
@@ -57,6 +58,11 @@ void RegisterFile::initialize(const MCSchedModel &SM, unsigned NumRegs) {
     addRegisterFile(ArrayRef<MCRegisterCostEntry>(FirstElt, Length),
                     RF.NumPhysRegs);
   }
+}
+
+void RegisterFile::cycleStart() {
+  for (RegisterMappingTracker &RMT : RegisterFiles)
+    RMT.NumMoveEliminated = 0;
 }
 
 void RegisterFile::addRegisterFile(ArrayRef<MCRegisterCostEntry> Entries,
@@ -139,8 +145,7 @@ void RegisterFile::freePhysRegs(const RegisterRenamingInfo &Entry,
 }
 
 void RegisterFile::addRegisterWrite(WriteRef Write,
-                                    MutableArrayRef<unsigned> UsedPhysRegs,
-                                    bool ShouldAllocatePhysRegs) {
+                                    MutableArrayRef<unsigned> UsedPhysRegs) {
   WriteState &WS = *Write.getWriteState();
   unsigned RegID = WS.getRegisterID();
   assert(RegID && "Adding an invalid register definition?");
@@ -163,7 +168,10 @@ void RegisterFile::addRegisterWrite(WriteRef Write,
   // a false dependency on RenameAs. The only exception is for when the write
   // implicitly clears the upper portion of the underlying register.
   // If a write clears its super-registers, then it is renamed as `RenameAs`.
+  bool IsWriteZero = WS.isWriteZero();
+  bool ShouldAllocatePhysRegs = !IsWriteZero;
   const RegisterRenamingInfo &RRI = RegisterMappings[RegID].second;
+
   if (RRI.RenameAs && RRI.RenameAs != RegID) {
     RegID = RRI.RenameAs;
     WriteRef &OtherWrite = RegisterMappings[RegID].first;
@@ -182,6 +190,19 @@ void RegisterFile::addRegisterWrite(WriteRef Write,
     }
   }
 
+  // Update zero registers.
+  unsigned ZeroRegisterID =
+      WS.clearsSuperRegisters() ? RegID : WS.getRegisterID();
+  if (IsWriteZero) {
+    ZeroRegisters.setBit(ZeroRegisterID);
+    for (MCSubRegIterator I(ZeroRegisterID, &MRI); I.isValid(); ++I)
+      ZeroRegisters.setBit(*I);
+  } else {
+    ZeroRegisters.clearBit(ZeroRegisterID);
+    for (MCSubRegIterator I(ZeroRegisterID, &MRI); I.isValid(); ++I)
+      ZeroRegisters.clearBit(*I);
+  }
+
   // Update the mapping for register RegID including its sub-registers.
   RegisterMappings[RegID].first = Write;
   for (MCSubRegIterator I(RegID, &MRI); I.isValid(); ++I)
@@ -196,13 +217,17 @@ void RegisterFile::addRegisterWrite(WriteRef Write,
   if (!WS.clearsSuperRegisters())
     return;
 
-  for (MCSuperRegIterator I(RegID, &MRI); I.isValid(); ++I)
+  for (MCSuperRegIterator I(RegID, &MRI); I.isValid(); ++I) {
     RegisterMappings[*I].first = Write;
+    if (IsWriteZero)
+      ZeroRegisters.setBit(*I);
+    else
+      ZeroRegisters.clearBit(*I);
+  }
 }
 
-void RegisterFile::removeRegisterWrite(const WriteState &WS,
-                                       MutableArrayRef<unsigned> FreedPhysRegs,
-                                       bool ShouldFreePhysRegs) {
+void RegisterFile::removeRegisterWrite(
+    const WriteState &WS, MutableArrayRef<unsigned> FreedPhysRegs) {
   unsigned RegID = WS.getRegisterID();
 
   assert(RegID != 0 && "Invalidating an already invalid register?");
@@ -210,6 +235,7 @@ void RegisterFile::removeRegisterWrite(const WriteState &WS,
          "Invalidating a write of unknown cycles!");
   assert(WS.getCyclesLeft() <= 0 && "Invalid cycles left for this write!");
 
+  bool ShouldFreePhysRegs = !WS.isWriteZero();
   unsigned RenameAs = RegisterMappings[RegID].second.RenameAs;
   if (RenameAs && RenameAs != RegID) {
     RegID = RenameAs;
@@ -243,6 +269,55 @@ void RegisterFile::removeRegisterWrite(const WriteState &WS,
   }
 }
 
+bool RegisterFile::tryEliminateMove(WriteState &WS, const ReadState &RS) {
+  const RegisterMapping &RMFrom = RegisterMappings[RS.getRegisterID()];
+  const RegisterMapping &RMTo = RegisterMappings[WS.getRegisterID()];
+
+  // Early exit if the PRF doesn't support move elimination for this register.
+  if (!RMTo.second.AllowMoveElimination)
+    return false;
+
+  // From and To must be owned by the same PRF.
+  const RegisterRenamingInfo &RRIFrom = RMFrom.second;
+  const RegisterRenamingInfo &RRITo = RMTo.second;
+  unsigned RegisterFileIndex = RRIFrom.IndexPlusCost.first;
+  if (RegisterFileIndex != RRITo.IndexPlusCost.first)
+    return false;
+
+  // We only allow move elimination for writes that update a full physical
+  // register. On X86, move elimination is possible with 32-bit general purpose
+  // registers because writes to those registers are not partial writes.  If a
+  // register move is a partial write, then we conservatively assume that move
+  // elimination fails, since it would either trigger a partial update, or the
+  // issue of a merge opcode.
+  //
+  // Note that this constraint may be lifted in future.  For example, we could
+  // make this model more flexible, and let users customize the set of registers
+  // (i.e. register classes) that allow move elimination.
+  //
+  // For now, we assume that there is a strong correlation between registers
+  // that allow move elimination, and how those same registers are renamed in
+  // hardware.
+  if (RRITo.RenameAs && RRITo.RenameAs != WS.getRegisterID())
+    if (!WS.clearsSuperRegisters())
+      return false;
+
+  RegisterMappingTracker &RMT = RegisterFiles[RegisterFileIndex];
+  if (RMT.MaxMoveEliminatedPerCycle &&
+      RMT.NumMoveEliminated == RMT.MaxMoveEliminatedPerCycle)
+    return false;
+
+  bool IsZeroMove = ZeroRegisters[RS.getRegisterID()];
+  if (RMT.AllowZeroMoveEliminationOnly && !IsZeroMove)
+    return false;
+
+  RMT.NumMoveEliminated++;
+  if (IsZeroMove)
+    WS.setWriteZero();
+  WS.setEliminated();
+  return true;
+}
+
 void RegisterFile::collectWrites(SmallVectorImpl<WriteRef> &Writes,
                                  unsigned RegID) const {
   assert(RegID && RegID < RegisterMappings.size());
@@ -260,10 +335,9 @@ void RegisterFile::collectWrites(SmallVectorImpl<WriteRef> &Writes,
   }
 
   // Remove duplicate entries and resize the input vector.
-  llvm::sort(Writes.begin(), Writes.end(),
-             [](const WriteRef &Lhs, const WriteRef &Rhs) {
-               return Lhs.getWriteState() < Rhs.getWriteState();
-             });
+  sort(Writes, [](const WriteRef &Lhs, const WriteRef &Rhs) {
+    return Lhs.getWriteState() < Rhs.getWriteState();
+  });
   auto It = std::unique(Writes.begin(), Writes.end());
   Writes.resize(std::distance(Writes.begin(), It));
 
@@ -271,7 +345,7 @@ void RegisterFile::collectWrites(SmallVectorImpl<WriteRef> &Writes,
     for (const WriteRef &WR : Writes) {
       const WriteState &WS = *WR.getWriteState();
       dbgs() << "[PRF] Found a dependent use of Register "
-             << MRI.getName(WS.getRegisterID()) << " (defined by intruction #"
+             << MRI.getName(WS.getRegisterID()) << " (defined by instruction #"
              << WR.getSourceIndex() << ")\n";
     }
   });
@@ -328,14 +402,16 @@ unsigned RegisterFile::isAvailable(ArrayRef<unsigned> Regs) const {
 void RegisterFile::dump() const {
   for (unsigned I = 0, E = MRI.getNumRegs(); I < E; ++I) {
     const RegisterMapping &RM = RegisterMappings[I];
-    if (!RM.first.getWriteState())
-      continue;
     const RegisterRenamingInfo &RRI = RM.second;
-    dbgs() << MRI.getName(I) << ", " << I << ", PRF=" << RRI.IndexPlusCost.first
-           << ", Cost=" << RRI.IndexPlusCost.second
-           << ", RenameAs=" << RRI.RenameAs << ", ";
-    RM.first.dump();
-    dbgs() << '\n';
+    if (ZeroRegisters[I]) {
+      dbgs() << MRI.getName(I) << ", " << I
+             << ", PRF=" << RRI.IndexPlusCost.first
+             << ", Cost=" << RRI.IndexPlusCost.second
+             << ", RenameAs=" << RRI.RenameAs << ", IsZero=" << ZeroRegisters[I]
+             << ",";
+      RM.first.dump();
+      dbgs() << '\n';
+    }
   }
 
   for (unsigned I = 0, E = getNumRegisterFiles(); I < E; ++I) {

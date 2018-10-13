@@ -1115,6 +1115,14 @@ void SelectionDAGLegalize::LegalizeOp(SDNode *Node) {
     Action = TLI.getStrictFPOperationAction(Node->getOpcode(),
                                             Node->getValueType(0));
     break;
+  case ISD::MSCATTER:
+    Action = TLI.getOperationAction(Node->getOpcode(),
+                    cast<MaskedScatterSDNode>(Node)->getValue().getValueType());
+    break;
+  case ISD::MSTORE:
+    Action = TLI.getOperationAction(Node->getOpcode(),
+                    cast<MaskedStoreSDNode>(Node)->getValue().getValueType());
+    break;
   default:
     if (Node->getOpcode() >= ISD::BUILTIN_OP_END) {
       Action = TargetLowering::Legal;
@@ -1248,6 +1256,7 @@ SDValue SelectionDAGLegalize::ExpandExtractFromVectorThroughStack(SDValue Op) {
   // Caches for hasPredecessorHelper
   SmallPtrSet<const SDNode *, 32> Visited;
   SmallVector<const SDNode *, 16> Worklist;
+  Visited.insert(Op.getNode());
   Worklist.push_back(Idx.getNode());
   SDValue StackPtr, Ch;
   for (SDNode::use_iterator UI = Vec.getNode()->use_begin(),
@@ -2300,9 +2309,11 @@ SelectionDAGLegalize::ExpandSinCosLibCall(SDNode *Node,
 SDValue SelectionDAGLegalize::ExpandLegalINT_TO_FP(bool isSigned, SDValue Op0,
                                                    EVT DestVT,
                                                    const SDLoc &dl) {
+  EVT SrcVT = Op0.getValueType();
+
   // TODO: Should any fast-math-flags be set for the created nodes?
   LLVM_DEBUG(dbgs() << "Legalizing INT_TO_FP\n");
-  if (Op0.getValueType() == MVT::i32 && TLI.isTypeLegal(MVT::f64)) {
+  if (SrcVT == MVT::i32 && TLI.isTypeLegal(MVT::f64)) {
     LLVM_DEBUG(dbgs() << "32-bit [signed|unsigned] integer to float/double "
                          "expansion\n");
 
@@ -2347,17 +2358,7 @@ SDValue SelectionDAGLegalize::ExpandLegalINT_TO_FP(bool isSigned, SDValue Op0,
     // subtract the bias
     SDValue Sub = DAG.getNode(ISD::FSUB, dl, MVT::f64, Load, Bias);
     // final result
-    SDValue Result;
-    // handle final rounding
-    if (DestVT == MVT::f64) {
-      // do nothing
-      Result = Sub;
-    } else if (DestVT.bitsLT(MVT::f64)) {
-      Result = DAG.getNode(ISD::FP_ROUND, dl, DestVT, Sub,
-                           DAG.getIntPtrConstant(0, dl));
-    } else if (DestVT.bitsGT(MVT::f64)) {
-      Result = DAG.getNode(ISD::FP_EXTEND, dl, DestVT, Sub);
-    }
+    SDValue Result = DAG.getFPExtendOrRound(Sub, dl, DestVT);
     return Result;
   }
   assert(!isSigned && "Legalize cannot Expand SINT_TO_FP for i64 yet");
@@ -2368,7 +2369,7 @@ SDValue SelectionDAGLegalize::ExpandLegalINT_TO_FP(bool isSigned, SDValue Op0,
   // of performing rounding correctly, both in the default rounding mode
   // and in all alternate rounding modes.
   // TODO: Generalize this for use with other types.
-  if (Op0.getValueType() == MVT::i64 && DestVT == MVT::f64) {
+  if (SrcVT == MVT::i64 && DestVT == MVT::f64) {
     LLVM_DEBUG(dbgs() << "Converting unsigned i64 to f64\n");
     SDValue TwoP52 =
       DAG.getConstant(UINT64_C(0x4330000000000000), dl, MVT::i64);
@@ -2391,7 +2392,7 @@ SDValue SelectionDAGLegalize::ExpandLegalINT_TO_FP(bool isSigned, SDValue Op0,
   }
 
   // TODO: Generalize this for use with other types.
-  if (Op0.getValueType() == MVT::i64 && DestVT == MVT::f32) {
+  if (SrcVT == MVT::i64 && DestVT == MVT::f32) {
     LLVM_DEBUG(dbgs() << "Converting unsigned i64 to f32\n");
     // For unsigned conversions, convert them to signed conversions using the
     // algorithm from the x86_64 __floatundidf in compiler_rt.
@@ -2399,7 +2400,7 @@ SDValue SelectionDAGLegalize::ExpandLegalINT_TO_FP(bool isSigned, SDValue Op0,
       SDValue Fast = DAG.getNode(ISD::SINT_TO_FP, dl, MVT::f32, Op0);
 
       SDValue ShiftConst = DAG.getConstant(
-          1, dl, TLI.getShiftAmountTy(Op0.getValueType(), DAG.getDataLayout()));
+          1, dl, TLI.getShiftAmountTy(SrcVT, DAG.getDataLayout()));
       SDValue Shr = DAG.getNode(ISD::SRL, dl, MVT::i64, Op0, ShiftConst);
       SDValue AndConst = DAG.getConstant(1, dl, MVT::i64);
       SDValue And = DAG.getNode(ISD::AND, dl, MVT::i64, Op0, AndConst);
@@ -2453,10 +2454,8 @@ SDValue SelectionDAGLegalize::ExpandLegalINT_TO_FP(bool isSigned, SDValue Op0,
 
   SDValue Tmp1 = DAG.getNode(ISD::SINT_TO_FP, dl, DestVT, Op0);
 
-  SDValue SignSet = DAG.getSetCC(dl, getSetCCResultType(Op0.getValueType()),
-                                 Op0,
-                                 DAG.getConstant(0, dl, Op0.getValueType()),
-                                 ISD::SETLT);
+  SDValue SignSet = DAG.getSetCC(dl, getSetCCResultType(SrcVT), Op0,
+                                 DAG.getConstant(0, dl, SrcVT), ISD::SETLT);
   SDValue Zero = DAG.getIntPtrConstant(0, dl),
           Four = DAG.getIntPtrConstant(4, dl);
   SDValue CstOffset = DAG.getSelect(dl, Zero.getValueType(),
@@ -2466,7 +2465,7 @@ SDValue SelectionDAGLegalize::ExpandLegalINT_TO_FP(bool isSigned, SDValue Op0,
   // as a negative number.  To counteract this, the dynamic code adds an
   // offset depending on the data type.
   uint64_t FF;
-  switch (Op0.getSimpleValueType().SimpleTy) {
+  switch (SrcVT.getSimpleVT().SimpleTy) {
   default: llvm_unreachable("Unsupported integer type!");
   case MVT::i8 : FF = 0x43800000ULL; break;  // 2^8  (as a float)
   case MVT::i16: FF = 0x47800000ULL; break;  // 2^16 (as a float)
@@ -3959,7 +3958,7 @@ bool SelectionDAGLegalize::ExpandNode(SDNode *Node) {
     return false;
   }
 
-  LLVM_DEBUG(dbgs() << "Succesfully expanded node\n");
+  LLVM_DEBUG(dbgs() << "Successfully expanded node\n");
   ReplaceNode(Node, Results.data());
   return true;
 }
@@ -4046,6 +4045,11 @@ void SelectionDAGLegalize::ConvertNodeToLibcall(SDNode *Node) {
     Results.push_back(ExpandFPLibCall(Node, RTLIB::SQRT_F32, RTLIB::SQRT_F64,
                                       RTLIB::SQRT_F80, RTLIB::SQRT_F128,
                                       RTLIB::SQRT_PPCF128));
+    break;
+  case ISD::FCBRT:
+    Results.push_back(ExpandFPLibCall(Node, RTLIB::CBRT_F32, RTLIB::CBRT_F64,
+                                      RTLIB::CBRT_F80, RTLIB::CBRT_F128,
+                                      RTLIB::CBRT_PPCF128));
     break;
   case ISD::FSIN:
   case ISD::STRICT_FSIN:

@@ -480,6 +480,10 @@ void UnwrappedLineParser::calculateBraceTypes(bool ExpectClassBody) {
       }
       LBraceStack.pop_back();
       break;
+    case tok::identifier:
+      if (!Tok->is(TT_StatementMacro))
+          break;
+      LLVM_FALLTHROUGH;
     case tok::at:
     case tok::semi:
     case tok::kw_if:
@@ -992,13 +996,6 @@ void UnwrappedLineParser::parseStructuralElement() {
   case tok::kw_namespace:
     parseNamespace();
     return;
-  case tok::kw_inline:
-    nextToken();
-    if (FormatTok->Tok.is(tok::kw_namespace)) {
-      parseNamespace();
-      return;
-    }
-    break;
   case tok::kw_public:
   case tok::kw_protected:
   case tok::kw_private:
@@ -1066,6 +1063,16 @@ void UnwrappedLineParser::parseStructuralElement() {
       parseJavaScriptEs6ImportExport();
       return;
     }
+    if (!Style.isCpp())
+      break;
+    // Handle C++ "(inline|export) namespace".
+    LLVM_FALLTHROUGH;
+  case tok::kw_inline:
+    nextToken();
+    if (FormatTok->Tok.is(tok::kw_namespace)) {
+      parseNamespace();
+      return;
+    }
     break;
   case tok::identifier:
     if (FormatTok->is(TT_ForEachMacro)) {
@@ -1104,6 +1111,10 @@ void UnwrappedLineParser::parseStructuralElement() {
         addUnwrappedLine();
         return;
       }
+    }
+    if (Style.isCpp() && FormatTok->is(TT_StatementMacro)) {
+      parseStatementMacro();
+      return;
     }
     // In all other cases, parse the declaration.
     break;
@@ -1263,6 +1274,8 @@ void UnwrappedLineParser::parseStructuralElement() {
       break;
     case tok::kw_try:
       // We arrive here when parsing function-try blocks.
+      if (Style.BraceWrapping.AfterFunction)
+        addUnwrappedLine();
       parseTryCatch();
       return;
     case tok::identifier: {
@@ -1301,6 +1314,11 @@ void UnwrappedLineParser::parseStructuralElement() {
         }
         parseRecord();
         addUnwrappedLine();
+        return;
+      }
+
+      if (Style.isCpp() && FormatTok->is(TT_StatementMacro)) {
+        parseStatementMacro();
         return;
       }
 
@@ -2321,6 +2339,16 @@ void UnwrappedLineParser::parseJavaScriptEs6ImportExport() {
       nextToken();
     }
   }
+}
+
+void UnwrappedLineParser::parseStatementMacro()
+{
+  nextToken();
+  if (FormatTok->is(tok::l_paren))
+    parseParens();
+  if (FormatTok->is(tok::semi))
+    nextToken();
+  addUnwrappedLine();
 }
 
 LLVM_ATTRIBUTE_UNUSED static void printDebugInfo(const UnwrappedLine &Line,

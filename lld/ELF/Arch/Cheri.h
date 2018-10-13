@@ -261,11 +261,11 @@ inline void addCapabilityRelocation(Symbol &Sym, RelType Type,
     // We don't use a R_MIPS_CHERI_CAPABILITY relocation for the input but
     // instead need to use an absolute pointer size relocation to write
     // the offset addend
-    InX::RelaDyn->addReloc(Type, Sec, Offset, &Sym, Addend, Expr,
+    In.RelaDyn->addReloc(Type, Sec, Offset, &Sym, Addend, Expr,
                            *Target->AbsPointerRel);
     // in the case that -local-caprelocs=elf is passed we need to ensure that
     // the target symbol is included in the dynamic symbol table
-    if (!InX::DynSymTab) {
+    if (!In.DynSymTab) {
       error("R_CHERI_CAPABILITY relocations need a dynamic symbol table");
       return;
     }
@@ -282,7 +282,7 @@ inline void addCapabilityRelocation(Symbol &Sym, RelType Type,
       if (Sym.isLocal() && !llvm::is_contained(AddedToDynSymTab, &Sym)) {
         Sym.Binding = llvm::ELF::STB_GLOBAL;
         Sym.Visibility = llvm::ELF::STV_INTERNAL;
-        InX::DynSymTab->addSymbol(&Sym);
+        In.DynSymTab->addSymbol(&Sym);
       }
     }
     if (!Sym.includeInDynsym()) {
@@ -292,7 +292,7 @@ inline void addCapabilityRelocation(Symbol &Sym, RelType Type,
       return;
     }
   } else if (CapRelocMode == CapRelocsMode::Legacy) {
-    In<ELFT>::CapRelocs->addCapReloc({Sec, Offset, Config->Pic}, {&Sym, 0u},
+    InX<ELFT>::CapRelocs->addCapReloc({Sec, Offset, Config->Pic}, {&Sym, 0u},
                                      Sym.IsPreemptible, Addend);
   } else {
     assert(Config->LocalCapRelocsMode == CapRelocsMode::CBuildCap);

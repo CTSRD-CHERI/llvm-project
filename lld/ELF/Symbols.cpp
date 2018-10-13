@@ -92,10 +92,15 @@ static uint64_t getSymVA(const Symbol &Sym, int64_t &Addend) {
     uint64_t VA = IS->getVA(Offset);
 
     if (D.isTls() && !Config->Relocatable) {
-      if (!Out::TlsPhdr)
+      // Use the address of the TLS segment's first section rather than the
+      // segment's address, because segment addresses aren't initialized until
+      // after sections are finalized. (e.g. Measuring the size of .rela.dyn
+      // for Android relocation packing requires knowing TLS symbol addresses
+      // during section finalization.)
+      if (!Out::TlsPhdr || !Out::TlsPhdr->FirstSec)
         fatal(toString(D.File) +
               " has an STT_TLS symbol but doesn't have an SHF_TLS section");
-      return VA - Out::TlsPhdr->p_vaddr;
+      return VA - Out::TlsPhdr->FirstSec->Addr;
     }
     return VA;
   }
@@ -104,7 +109,8 @@ static uint64_t getSymVA(const Symbol &Sym, int64_t &Addend) {
     return 0;
   case Symbol::LazyArchiveKind:
   case Symbol::LazyObjectKind:
-    llvm_unreachable("lazy symbol reached writer");
+    assert(Sym.IsUsedInRegularObj && "lazy symbol reached writer");
+    return 0;
   }
   llvm_unreachable("invalid symbol kind");
 }
@@ -114,7 +120,7 @@ uint64_t Symbol::getVA(int64_t Addend) const {
   return OutVA + Addend;
 }
 
-uint64_t Symbol::getGotVA() const { return InX::Got->getVA() + getGotOffset(); }
+uint64_t Symbol::getGotVA() const { return In.Got->getVA() + getGotOffset(); }
 
 uint64_t Symbol::getGotOffset() const {
   return GotIndex * Target->GotEntrySize;
@@ -122,8 +128,8 @@ uint64_t Symbol::getGotOffset() const {
 
 uint64_t Symbol::getGotPltVA() const {
   if (this->IsInIgot)
-    return InX::IgotPlt->getVA() + getGotPltOffset();
-  return InX::GotPlt->getVA() + getGotPltOffset();
+    return In.IgotPlt->getVA() + getGotPltOffset();
+  return In.GotPlt->getVA() + getGotPltOffset();
 }
 
 uint64_t Symbol::getGotPltOffset() const {
@@ -134,8 +140,8 @@ uint64_t Symbol::getGotPltOffset() const {
 
 uint64_t Symbol::getPltVA() const {
   if (this->IsInIplt)
-    return InX::Iplt->getVA() + PltIndex * Target->PltEntrySize;
-  return InX::Plt->getVA() + Target->getPltEntryOffset(PltIndex);
+    return In.Iplt->getVA() + PltIndex * Target->PltEntrySize;
+  return In.Plt->getVA() + Target->getPltEntryOffset(PltIndex);
 }
 
 uint64_t Symbol::getPltOffset() const {
@@ -230,7 +236,7 @@ uint8_t Symbol::computeBinding() const {
     return Binding;
   if (Visibility != STV_DEFAULT && Visibility != STV_PROTECTED)
     return STB_LOCAL;
-  if (VersionId == VER_NDX_LOCAL && isDefined())
+  if (VersionId == VER_NDX_LOCAL && isDefined() && !IsPreemptible)
     return STB_LOCAL;
   if (!Config->GnuUnique && Binding == STB_GNU_UNIQUE)
     return STB_GLOBAL;

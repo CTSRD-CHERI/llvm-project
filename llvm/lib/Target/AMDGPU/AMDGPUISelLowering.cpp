@@ -471,6 +471,7 @@ AMDGPUTargetLowering::AMDGPUTargetLowering(const TargetMachine &TM,
     setOperationAction(ISD::FCOPYSIGN, VT, Expand);
     setOperationAction(ISD::VECTOR_SHUFFLE, VT, Expand);
     setOperationAction(ISD::SETCC, VT, Expand);
+    setOperationAction(ISD::FCANONICALIZE, VT, Expand);
   }
 
   // This causes using an unrolled select operation rather than expansion with
@@ -4475,4 +4476,11 @@ bool AMDGPUTargetLowering::isKnownNeverNaNForTargetNode(SDValue Op,
   default:
     return false;
   }
+}
+
+TargetLowering::AtomicExpansionKind
+AMDGPUTargetLowering::shouldExpandAtomicRMWInIR(AtomicRMWInst *RMW) const {
+  if (RMW->getOperation() == AtomicRMWInst::Nand)
+    return AtomicExpansionKind::CmpXChg;
+  return AtomicExpansionKind::None;
 }

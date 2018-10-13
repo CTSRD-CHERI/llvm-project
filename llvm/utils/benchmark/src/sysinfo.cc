@@ -15,10 +15,10 @@
 #include "internal_macros.h"
 
 #ifdef BENCHMARK_OS_WINDOWS
-#include <Shlwapi.h>
+#include <shlwapi.h>
 #undef StrCat  // Don't let StrCat in string_util.h be renamed to lstrcatA
-#include <VersionHelpers.h>
-#include <Windows.h>
+#include <versionhelpers.h>
+#include <windows.h>
 #else
 #include <fcntl.h>
 #ifndef BENCHMARK_OS_FUCHSIA
@@ -288,7 +288,7 @@ std::vector<CPUInfo::CacheInfo> GetCacheSizesMacOSX() {
     std::string name;
     std::string type;
     int level;
-    size_t num_sharing;
+    uint64_t num_sharing;
   } Cases[] = {{"hw.l1dcachesize", "Data", 1, CacheCounts[1]},
                {"hw.l1icachesize", "Instruction", 1, CacheCounts[1]},
                {"hw.l2cachesize", "Unified", 2, CacheCounts[2]},

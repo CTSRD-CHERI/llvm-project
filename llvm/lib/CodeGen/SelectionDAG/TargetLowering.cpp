@@ -55,10 +55,12 @@ bool TargetLowering::isInTailCallPosition(SelectionDAG &DAG, SDNode *Node,
   const Function &F = DAG.getMachineFunction().getFunction();
 
   // Conservatively require the attributes of the call to match those of
-  // the return. Ignore noalias because it doesn't affect the call sequence.
+  // the return. Ignore NoAlias and NonNull because they don't affect the
+  // call sequence.
   AttributeList CallerAttrs = F.getAttributes();
   if (AttrBuilder(CallerAttrs, AttributeList::ReturnIndex)
           .removeAttribute(Attribute::NoAlias)
+          .removeAttribute(Attribute::NonNull)
           .hasAttributes())
     return false;
 
@@ -1177,29 +1179,64 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
     Known.Zero |= ~InMask;
     break;
   }
-  case ISD::BITCAST:
+  case ISD::BITCAST: {
+    SDValue Src = Op.getOperand(0);
+    EVT SrcVT = Src.getValueType();
+    unsigned NumSrcEltBits = SrcVT.getScalarSizeInBits();
+
     // If this is an FP->Int bitcast and if the sign bit is the only
     // thing demanded, turn this into a FGETSIGN.
-    if (!TLO.LegalOperations() && !VT.isVector() &&
-        !Op.getOperand(0).getValueType().isVector() &&
+    if (!TLO.LegalOperations() && !VT.isVector() && !SrcVT.isVector() &&
         NewMask == APInt::getSignMask(Op.getValueSizeInBits()) &&
-        Op.getOperand(0).getValueType().isFloatingPoint()) {
+        SrcVT.isFloatingPoint()) {
       bool OpVTLegal = isOperationLegalOrCustom(ISD::FGETSIGN, VT);
-      bool i32Legal  = isOperationLegalOrCustom(ISD::FGETSIGN, MVT::i32);
-      if ((OpVTLegal || i32Legal) && VT.isSimple() &&
-           Op.getOperand(0).getValueType() != MVT::f16 &&
-           Op.getOperand(0).getValueType() != MVT::f128) {
+      bool i32Legal = isOperationLegalOrCustom(ISD::FGETSIGN, MVT::i32);
+      if ((OpVTLegal || i32Legal) && VT.isSimple() && SrcVT != MVT::f16 &&
+          SrcVT != MVT::f128) {
         // Cannot eliminate/lower SHL for f128 yet.
         EVT Ty = OpVTLegal ? VT : MVT::i32;
         // Make a FGETSIGN + SHL to move the sign bit into the appropriate
         // place.  We expect the SHL to be eliminated by other optimizations.
-        SDValue Sign = TLO.DAG.getNode(ISD::FGETSIGN, dl, Ty, Op.getOperand(0));
+        SDValue Sign = TLO.DAG.getNode(ISD::FGETSIGN, dl, Ty, Src);
         unsigned OpVTSizeInBits = Op.getValueSizeInBits();
         if (!OpVTLegal && OpVTSizeInBits > 32)
           Sign = TLO.DAG.getNode(ISD::ZERO_EXTEND, dl, VT, Sign);
         unsigned ShVal = Op.getValueSizeInBits() - 1;
         SDValue ShAmt = TLO.DAG.getConstant(ShVal, dl, VT);
-        return TLO.CombineTo(Op, TLO.DAG.getNode(ISD::SHL, dl, VT, Sign, ShAmt));
+        return TLO.CombineTo(Op,
+                             TLO.DAG.getNode(ISD::SHL, dl, VT, Sign, ShAmt));
+      }
+    }
+    // If bitcast from a vector and the mask covers entire elements, see if we
+    // can use SimplifyDemandedVectorElts.
+    // TODO - bigendian once we have test coverage.
+    // TODO - bool vectors once SimplifyDemandedVectorElts has SETCC support.
+    if (SrcVT.isVector() && NumSrcEltBits > 1 &&
+        (BitWidth % NumSrcEltBits) == 0 &&
+        TLO.DAG.getDataLayout().isLittleEndian()) {
+      unsigned Scale = BitWidth / NumSrcEltBits;
+      auto GetDemandedSubMask = [&](APInt &DemandedSubElts) -> bool {
+        DemandedSubElts = APInt::getNullValue(Scale);
+        for (unsigned i = 0; i != Scale; ++i) {
+          unsigned Offset = i * NumSrcEltBits;
+          APInt Sub = NewMask.extractBits(NumSrcEltBits, Offset);
+          if (Sub.isAllOnesValue())
+            DemandedSubElts.setBit(i);
+          else if (!Sub.isNullValue())
+            return false;
+        }
+        return true;
+      };
+
+      APInt DemandedSubElts;
+      if (GetDemandedSubMask(DemandedSubElts)) {
+        unsigned NumSrcElts = SrcVT.getVectorNumElements();
+        APInt DemandedElts = APInt::getSplat(NumSrcElts, DemandedSubElts);
+
+        APInt KnownUndef, KnownZero;
+        if (SimplifyDemandedVectorElts(Src, DemandedElts, KnownUndef, KnownZero,
+                                       TLO, Depth + 1))
+          return true;
       }
     }
     // If this is a bitcast, let computeKnownBits handle it.  Only do this on a
@@ -1209,6 +1246,7 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
       return false;
     }
     break;
+  }
   case ISD::ADD:
   case ISD::MUL:
   case ISD::SUB: {
@@ -1481,22 +1519,20 @@ bool TargetLowering::SimplifyDemandedVectorElts(
     break;
   }
   case ISD::EXTRACT_SUBVECTOR: {
-    if (!isa<ConstantSDNode>(Op.getOperand(1)))
-      break;
     SDValue Src = Op.getOperand(0);
+    ConstantSDNode *SubIdx = dyn_cast<ConstantSDNode>(Op.getOperand(1));
     unsigned NumSrcElts = Src.getValueType().getVectorNumElements();
-    const APInt& Idx = cast<ConstantSDNode>(Op.getOperand(1))->getAPIntValue();
-    if (Idx.uge(NumSrcElts - NumElts))
-      break;
-    // Offset the demanded elts by the subvector index.
-    uint64_t SubIdx = Idx.getZExtValue();
-    APInt SrcElts = DemandedElts.zext(NumSrcElts).shl(SubIdx);
-    APInt SrcUndef, SrcZero;
-    if (SimplifyDemandedVectorElts(Src, SrcElts, SrcUndef, SrcZero, TLO,
-                                   Depth + 1))
-      return true;
-    KnownUndef = SrcUndef.extractBits(NumElts, SubIdx);
-    KnownZero = SrcZero.extractBits(NumElts, SubIdx);
+    if (SubIdx && SubIdx->getAPIntValue().ule(NumSrcElts - NumElts)) {
+      // Offset the demanded elts by the subvector index.
+      uint64_t Idx = SubIdx->getZExtValue();
+      APInt SrcElts = DemandedElts.zextOrSelf(NumSrcElts).shl(Idx);
+      APInt SrcUndef, SrcZero;
+      if (SimplifyDemandedVectorElts(Src, SrcElts, SrcUndef, SrcZero, TLO,
+                                     Depth + 1))
+        return true;
+      KnownUndef = SrcUndef.extractBits(NumElts, Idx);
+      KnownZero = SrcZero.extractBits(NumElts, Idx);
+    }
     break;
   }
   case ISD::INSERT_VECTOR_ELT: {
@@ -1534,12 +1570,20 @@ bool TargetLowering::SimplifyDemandedVectorElts(
     break;
   }
   case ISD::VSELECT: {
-    APInt DemandedLHS(DemandedElts);
-    APInt DemandedRHS(DemandedElts);
-
-    // TODO - add support for constant vselect masks.
+    // Try to transform the select condition based on the current demanded
+    // elements.
+    // TODO: If a condition element is undef, we can choose from one arm of the
+    //       select (and if one arm is undef, then we can propagate that to the
+    //       result).
+    // TODO - add support for constant vselect masks (see IR version of this).
+    APInt UnusedUndef, UnusedZero;
+    if (SimplifyDemandedVectorElts(Op.getOperand(0), DemandedElts, UnusedUndef,
+                                   UnusedZero, TLO, Depth + 1))
+      return true;
 
     // See if we can simplify either vselect operand.
+    APInt DemandedLHS(DemandedElts);
+    APInt DemandedRHS(DemandedElts);
     APInt UndefLHS, ZeroLHS;
     APInt UndefRHS, ZeroRHS;
     if (SimplifyDemandedVectorElts(Op.getOperand(1), DemandedLHS, UndefLHS,
@@ -1914,10 +1958,24 @@ SDValue TargetLowering::optimizeSetCCOfSignedTruncationCheck(
   } else
     return SDValue();
 
-  const APInt &I01 = C01->getAPIntValue();
-  // Both of them must be power-of-two, and the constant from setcc is bigger.
-  if (!(I1.ugt(I01) && I1.isPowerOf2() && I01.isPowerOf2()))
-    return SDValue();
+  APInt I01 = C01->getAPIntValue();
+
+  auto checkConstants = [&I1, &I01]() -> bool {
+    // Both of them must be power-of-two, and the constant from setcc is bigger.
+    return I1.ugt(I01) && I1.isPowerOf2() && I01.isPowerOf2();
+  };
+
+  if (checkConstants()) {
+    // Great, e.g. got  icmp ult i16 (add i16 %x, 128), 256
+  } else {
+    // What if we invert constants? (and the target predicate)
+    I1.negate();
+    I01.negate();
+    NewCond = getSetCCInverse(NewCond, /*isInteger=*/true);
+    if (!checkConstants())
+      return SDValue();
+    // Great, e.g. got  icmp uge i16 (add i16 %x, -128), -256
+  }
 
   // They are power-of-two, so which bit is set?
   const unsigned KeptBits = I1.logBase2();
@@ -4133,7 +4191,8 @@ TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
   if (VT.isFloatingPoint() || VT.isVector()) {
     EVT intVT = EVT::getIntegerVT(*DAG.getContext(), LoadedVT.getSizeInBits());
     if (isTypeLegal(intVT) && isTypeLegal(LoadedVT)) {
-      if (!isOperationLegalOrCustom(ISD::LOAD, intVT)) {
+      if (!isOperationLegalOrCustom(ISD::LOAD, intVT) &&
+          LoadedVT.isVector()) {
         // Scalarize the load and let the individual components be handled.
         SDValue Scalarized = scalarizeVectorLoad(LD, DAG);
         if (Scalarized->getOpcode() == ISD::MERGE_VALUES)
@@ -4283,13 +4342,14 @@ SDValue TargetLowering::expandUnalignedStore(StoreSDNode *ST,
   EVT VT = Val.getValueType();
   int Alignment = ST->getAlignment();
   auto &MF = DAG.getMachineFunction();
+  EVT MemVT = ST->getMemoryVT();
 
   SDLoc dl(ST);
-  if (ST->getMemoryVT().isFloatingPoint() ||
-      ST->getMemoryVT().isVector()) {
+  if (MemVT.isFloatingPoint() || MemVT.isVector()) {
     EVT intVT = EVT::getIntegerVT(*DAG.getContext(), VT.getSizeInBits());
     if (isTypeLegal(intVT)) {
-      if (!isOperationLegalOrCustom(ISD::STORE, intVT)) {
+      if (!isOperationLegalOrCustom(ISD::STORE, intVT) &&
+          MemVT.isVector()) {
         // Scalarize the store and let the individual components be handled.
         SDValue Result = scalarizeVectorStore(ST, DAG);
 

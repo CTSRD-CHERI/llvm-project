@@ -138,7 +138,7 @@ def error_unresolved_symbols: F<"error-unresolved-symbols">,
 defm exclude_libs: Eq<"exclude-libs", "Exclude static libraries from automatic export">;
 
 defm execute_only: B<"execute-only",
-    "Do not mark executable sections readable",
+    "Mark executable sections unreadable",
     "Mark executable sections readable (default)">;
 
 defm export_dynamic: B<"export-dynamic",
@@ -321,6 +321,10 @@ defm threads: B<"threads",
     "Run the linker multi-threaded (default)",
     "Do not run the linker multi-threaded">;
 
+defm toc_optimize : B<"toc-optimize",
+    "(PowerPC64) Enable TOC related optimizations (default)",
+    "(PowerPC64) Disable TOC related optimizations">;
+
 def trace: F<"trace">, HelpText<"Print the names of the input files">;
 
 defm trace_symbol: Eq<"trace-symbol", "Trace references to symbols">;
@@ -353,6 +357,10 @@ defm warn_backrefs: B<"warn-backrefs",
 defm warn_common: B<"warn-common",
     "Warn about duplicate common symbols",
     "Do not warn about duplicate common symbols (default)">;
+
+defm warn_ifunc_textrel: B<"warn-ifunc-textrel",
+    "Warn about using ifunc symbols with text relocations",
+    "Do not warn about using ifunc symbols with text relocations (default)">;
 
 defm warn_symbol_ordering: B<"warn-symbol-ordering",
     "Warn about problems with the symbol ordering file (default)",

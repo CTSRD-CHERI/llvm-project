@@ -308,16 +308,15 @@ define <4 x i32> @combine_vec_srem_by_pow2b(<4 x i32> %x) {
 ; SSE-NEXT:    pblendw {{.*#+}} xmm1 = xmm1[0,1],xmm3[2,3],xmm1[4,5],xmm3[6,7]
 ; SSE-NEXT:    paddd %xmm0, %xmm1
 ; SSE-NEXT:    movdqa %xmm1, %xmm2
+; SSE-NEXT:    psrad $3, %xmm2
 ; SSE-NEXT:    movdqa %xmm1, %xmm3
-; SSE-NEXT:    psrad $2, %xmm3
-; SSE-NEXT:    pblendw {{.*#+}} xmm3 = xmm1[0,1,2,3],xmm3[4,5,6,7]
-; SSE-NEXT:    psrad $3, %xmm1
-; SSE-NEXT:    psrad $1, %xmm2
-; SSE-NEXT:    pblendw {{.*#+}} xmm2 = xmm2[0,1,2,3],xmm1[4,5,6,7]
-; SSE-NEXT:    pblendw {{.*#+}} xmm3 = xmm3[0,1],xmm2[2,3],xmm3[4,5],xmm2[6,7]
-; SSE-NEXT:    pblendw {{.*#+}} xmm3 = xmm0[0,1],xmm3[2,3,4,5,6,7]
-; SSE-NEXT:    pmulld {{.*}}(%rip), %xmm3
-; SSE-NEXT:    psubd %xmm3, %xmm0
+; SSE-NEXT:    psrad $1, %xmm3
+; SSE-NEXT:    pblendw {{.*#+}} xmm3 = xmm3[0,1,2,3],xmm2[4,5,6,7]
+; SSE-NEXT:    psrad $2, %xmm1
+; SSE-NEXT:    pblendw {{.*#+}} xmm1 = xmm1[0,1],xmm3[2,3],xmm1[4,5],xmm3[6,7]
+; SSE-NEXT:    pblendw {{.*#+}} xmm1 = xmm0[0,1],xmm1[2,3,4,5,6,7]
+; SSE-NEXT:    pmulld {{.*}}(%rip), %xmm1
+; SSE-NEXT:    psubd %xmm1, %xmm0
 ; SSE-NEXT:    retq
 ;
 ; AVX1-LABEL: combine_vec_srem_by_pow2b:
@@ -334,8 +333,7 @@ define <4 x i32> @combine_vec_srem_by_pow2b(<4 x i32> %x) {
 ; AVX1-NEXT:    vpsrad $3, %xmm1, %xmm2
 ; AVX1-NEXT:    vpsrad $1, %xmm1, %xmm3
 ; AVX1-NEXT:    vpblendw {{.*#+}} xmm2 = xmm3[0,1,2,3],xmm2[4,5,6,7]
-; AVX1-NEXT:    vpsrad $2, %xmm1, %xmm3
-; AVX1-NEXT:    vpblendw {{.*#+}} xmm1 = xmm1[0,1,2,3],xmm3[4,5,6,7]
+; AVX1-NEXT:    vpsrad $2, %xmm1, %xmm1
 ; AVX1-NEXT:    vpblendw {{.*#+}} xmm1 = xmm1[0,1],xmm2[2,3],xmm1[4,5],xmm2[6,7]
 ; AVX1-NEXT:    vpblendw {{.*#+}} xmm1 = xmm0[0,1],xmm1[2,3,4,5,6,7]
 ; AVX1-NEXT:    vpmulld {{.*}}(%rip), %xmm1, %xmm1
@@ -459,4 +457,84 @@ define i32 @ossfuzz6883() {
   %B10 = udiv i32 %L6, %B14
   %B6 = and i32 %B16, %B10
   ret i32 %B6
+}
+
+define i1 @bool_srem(i1 %x, i1 %y) {
+; CHECK-LABEL: bool_srem:
+; CHECK:       # %bb.0:
+; CHECK-NEXT:    movl %edi, %eax
+; CHECK-NEXT:    andb $1, %al
+; CHECK-NEXT:    negb %al
+; CHECK-NEXT:    # kill: def $al killed $al killed $eax
+; CHECK-NEXT:    cbtw
+; CHECK-NEXT:    andb $1, %sil
+; CHECK-NEXT:    negb %sil
+; CHECK-NEXT:    idivb %sil
+; CHECK-NEXT:    movsbl %ah, %eax
+; CHECK-NEXT:    # kill: def $al killed $al killed $eax
+; CHECK-NEXT:    retq
+  %r = srem i1 %x, %y
+  ret i1 %r
+}
+define <4 x i1> @boolvec_srem(<4 x i1> %x, <4 x i1> %y) {
+; SSE-LABEL: boolvec_srem:
+; SSE:       # %bb.0:
+; SSE-NEXT:    pslld $31, %xmm1
+; SSE-NEXT:    psrad $31, %xmm1
+; SSE-NEXT:    pslld $31, %xmm0
+; SSE-NEXT:    psrad $31, %xmm0
+; SSE-NEXT:    pextrd $1, %xmm0, %eax
+; SSE-NEXT:    pextrd $1, %xmm1, %ecx
+; SSE-NEXT:    cltd
+; SSE-NEXT:    idivl %ecx
+; SSE-NEXT:    movl %edx, %ecx
+; SSE-NEXT:    movd %xmm0, %eax
+; SSE-NEXT:    movd %xmm1, %esi
+; SSE-NEXT:    cltd
+; SSE-NEXT:    idivl %esi
+; SSE-NEXT:    movd %edx, %xmm2
+; SSE-NEXT:    pinsrd $1, %ecx, %xmm2
+; SSE-NEXT:    pextrd $2, %xmm0, %eax
+; SSE-NEXT:    pextrd $2, %xmm1, %ecx
+; SSE-NEXT:    cltd
+; SSE-NEXT:    idivl %ecx
+; SSE-NEXT:    pinsrd $2, %edx, %xmm2
+; SSE-NEXT:    pextrd $3, %xmm0, %eax
+; SSE-NEXT:    pextrd $3, %xmm1, %ecx
+; SSE-NEXT:    cltd
+; SSE-NEXT:    idivl %ecx
+; SSE-NEXT:    pinsrd $3, %edx, %xmm2
+; SSE-NEXT:    movdqa %xmm2, %xmm0
+; SSE-NEXT:    retq
+;
+; AVX-LABEL: boolvec_srem:
+; AVX:       # %bb.0:
+; AVX-NEXT:    vpslld $31, %xmm1, %xmm1
+; AVX-NEXT:    vpsrad $31, %xmm1, %xmm1
+; AVX-NEXT:    vpslld $31, %xmm0, %xmm0
+; AVX-NEXT:    vpsrad $31, %xmm0, %xmm0
+; AVX-NEXT:    vpextrd $1, %xmm0, %eax
+; AVX-NEXT:    vpextrd $1, %xmm1, %ecx
+; AVX-NEXT:    cltd
+; AVX-NEXT:    idivl %ecx
+; AVX-NEXT:    movl %edx, %ecx
+; AVX-NEXT:    vmovd %xmm0, %eax
+; AVX-NEXT:    vmovd %xmm1, %esi
+; AVX-NEXT:    cltd
+; AVX-NEXT:    idivl %esi
+; AVX-NEXT:    vmovd %edx, %xmm2
+; AVX-NEXT:    vpinsrd $1, %ecx, %xmm2, %xmm2
+; AVX-NEXT:    vpextrd $2, %xmm0, %eax
+; AVX-NEXT:    vpextrd $2, %xmm1, %ecx
+; AVX-NEXT:    cltd
+; AVX-NEXT:    idivl %ecx
+; AVX-NEXT:    vpinsrd $2, %edx, %xmm2, %xmm2
+; AVX-NEXT:    vpextrd $3, %xmm0, %eax
+; AVX-NEXT:    vpextrd $3, %xmm1, %ecx
+; AVX-NEXT:    cltd
+; AVX-NEXT:    idivl %ecx
+; AVX-NEXT:    vpinsrd $3, %edx, %xmm2, %xmm0
+; AVX-NEXT:    retq
+  %r = srem <4 x i1> %x, %y
+  ret <4 x i1> %r
 }

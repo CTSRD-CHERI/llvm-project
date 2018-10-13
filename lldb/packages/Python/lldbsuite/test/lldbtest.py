@@ -2145,6 +2145,35 @@ class TestBase(Base):
 
         return match_object
 
+    def check_completion_with_desc(self, str_input, match_desc_pairs):
+        interp = self.dbg.GetCommandInterpreter()
+        match_strings = lldb.SBStringList()
+        description_strings = lldb.SBStringList()
+        num_matches = interp.HandleCompletionWithDescriptions(str_input, len(str_input), 0, -1, match_strings, description_strings)
+        self.assertEqual(len(description_strings), len(match_strings))
+
+        missing_pairs = []
+        for pair in match_desc_pairs:
+            found_pair = False
+            for i in range(num_matches + 1):
+                match_candidate = match_strings.GetStringAtIndex(i)
+                description_candidate = description_strings.GetStringAtIndex(i)
+                if match_candidate == pair[0] and description_candidate == pair[1]:
+                    found_pair = True
+                    break
+            if not found_pair:
+                missing_pairs.append(pair)
+
+        if len(missing_pairs):
+            error_msg = "Missing pairs:\n"
+            for pair in missing_pairs:
+                error_msg += " [" + pair[0] + ":" + pair[1] + "]\n"
+            error_msg += "Got the following " + str(num_matches) + " completions back:\n"
+            for i in range(num_matches + 1):
+                match_candidate = match_strings.GetStringAtIndex(i)
+                description_candidate = description_strings.GetStringAtIndex(i)
+                error_msg += "[" + match_candidate + ":" + description_candidate + "]\n"
+            self.assertEqual(0, len(missing_pairs), error_msg)
 
     def complete_exactly(self, str_input, patterns):
         self.complete_from_to(str_input, patterns, True)
@@ -2184,6 +2213,55 @@ class TestBase(Base):
                 self.expect(
                     compare_string, msg=COMPLETION_MSG(
                         str_input, p, match_strings), exe=False, patterns=[p])
+
+    def filecheck(
+            self,
+            command,
+            check_file,
+            filecheck_options = ''):
+        # Run the command.
+        self.runCmd(
+                command,
+                msg="FileCheck'ing result of `{0}`".format(command))
+
+        # Get the error text if there was an error, and the regular text if not.
+        output = self.res.GetOutput() if self.res.Succeeded() \
+                else self.res.GetError()
+
+        # Assemble the absolute path to the check file. As a convenience for
+        # LLDB inline tests, assume that the check file is a relative path to
+        # a file within the inline test directory.
+        if check_file.endswith('.pyc'):
+            check_file = check_file[:-1]
+        check_file_abs = os.path.abspath(check_file)
+
+        # Run FileCheck.
+        filecheck_bin = configuration.get_filecheck_path()
+        filecheck_args = [filecheck_bin, check_file_abs]
+        if filecheck_options:
+            filecheck_args.append(filecheck_options)
+        subproc = Popen(filecheck_args, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+        cmd_stdout, cmd_stderr = subproc.communicate(input=output)
+        cmd_status = subproc.returncode
+
+        filecheck_cmd = " ".join(filecheck_args)
+        filecheck_trace = """
+--- FileCheck trace (code={0}) ---
+{1}
+
+FileCheck input:
+{2}
+
+FileCheck output:
+{3}
+{4}
+""".format(cmd_status, filecheck_cmd, output, cmd_stdout, cmd_stderr)
+
+        trace = cmd_status != 0 or traceAlways
+        with recording(self, trace) as sbuf:
+            print(filecheck_trace, file=sbuf)
+
+        self.assertTrue(cmd_status == 0)
 
     def expect(
             self,

@@ -347,35 +347,6 @@ TEST(Support, HomeDirectoryWithNoEnv) {
 }
 #endif
 
-TEST(Support, UserCacheDirectory) {
-  SmallString<13> CacheDir;
-  SmallString<20> CacheDir2;
-  auto Status = path::user_cache_directory(CacheDir, "");
-  EXPECT_TRUE(Status ^ CacheDir.empty());
-
-  if (Status) {
-    EXPECT_TRUE(path::user_cache_directory(CacheDir2, "")); // should succeed
-    EXPECT_EQ(CacheDir, CacheDir2); // and return same paths
-
-    EXPECT_TRUE(path::user_cache_directory(CacheDir, "A", "B", "file.c"));
-    auto It = path::rbegin(CacheDir);
-    EXPECT_EQ("file.c", *It);
-    EXPECT_EQ("B", *++It);
-    EXPECT_EQ("A", *++It);
-    auto ParentDir = *++It;
-
-    // Test Unicode: "<user_cache_dir>/(pi)r^2/aleth.0"
-    EXPECT_TRUE(path::user_cache_directory(CacheDir2, "\xCF\x80r\xC2\xB2",
-                                           "\xE2\x84\xB5.0"));
-    auto It2 = path::rbegin(CacheDir2);
-    EXPECT_EQ("\xE2\x84\xB5.0", *It2);
-    EXPECT_EQ("\xCF\x80r\xC2\xB2", *++It2);
-    auto ParentDir2 = *++It2;
-
-    EXPECT_EQ(ParentDir, ParentDir2);
-  }
-}
-
 TEST(Support, TempDirectory) {
   SmallString<32> TempDir;
   path::system_temp_directory(false, TempDir);
@@ -912,87 +883,62 @@ TEST_F(FileSystemTest, BrokenSymlinkDirectoryIteration) {
   v_t VisitedNonBrokenSymlinks;
   v_t VisitedBrokenSymlinks;
   std::error_code ec;
+  using testing::UnorderedElementsAre;
+  using testing::UnorderedElementsAreArray;
 
   // Broken symbol links are expected to throw an error.
   for (fs::directory_iterator i(Twine(TestDirectory) + "/symlink", ec), e;
        i != e; i.increment(ec)) {
-    if (ec == std::make_error_code(std::errc::no_such_file_or_directory)) {
+    ASSERT_NO_ERROR(ec);
+    if (i->status().getError() ==
+        std::make_error_code(std::errc::no_such_file_or_directory)) {
       VisitedBrokenSymlinks.push_back(path::filename(i->path()));
       continue;
     }
-
-    ASSERT_NO_ERROR(ec);
     VisitedNonBrokenSymlinks.push_back(path::filename(i->path()));
   }
-  llvm::sort(VisitedNonBrokenSymlinks.begin(), VisitedNonBrokenSymlinks.end());
-  llvm::sort(VisitedBrokenSymlinks.begin(), VisitedBrokenSymlinks.end());
-  v_t ExpectedNonBrokenSymlinks = {"b", "d"};
-  ASSERT_EQ(ExpectedNonBrokenSymlinks.size(), VisitedNonBrokenSymlinks.size());
-  ASSERT_TRUE(std::equal(VisitedNonBrokenSymlinks.begin(),
-                         VisitedNonBrokenSymlinks.end(),
-                         ExpectedNonBrokenSymlinks.begin()));
+  EXPECT_THAT(VisitedNonBrokenSymlinks, UnorderedElementsAre("b", "d"));
   VisitedNonBrokenSymlinks.clear();
 
-  v_t ExpectedBrokenSymlinks = {"a", "c", "e"};
-  ASSERT_EQ(ExpectedBrokenSymlinks.size(), VisitedBrokenSymlinks.size());
-  ASSERT_TRUE(std::equal(VisitedBrokenSymlinks.begin(),
-                         VisitedBrokenSymlinks.end(),
-                         ExpectedBrokenSymlinks.begin()));
+  EXPECT_THAT(VisitedBrokenSymlinks, UnorderedElementsAre("a", "c", "e"));
   VisitedBrokenSymlinks.clear();
 
   // Broken symbol links are expected to throw an error.
   for (fs::recursive_directory_iterator i(
       Twine(TestDirectory) + "/symlink", ec), e; i != e; i.increment(ec)) {
-    if (ec == std::make_error_code(std::errc::no_such_file_or_directory)) {
+    ASSERT_NO_ERROR(ec);
+    if (i->status().getError() ==
+        std::make_error_code(std::errc::no_such_file_or_directory)) {
       VisitedBrokenSymlinks.push_back(path::filename(i->path()));
       continue;
     }
-
-    ASSERT_NO_ERROR(ec);
     VisitedNonBrokenSymlinks.push_back(path::filename(i->path()));
   }
-  llvm::sort(VisitedNonBrokenSymlinks.begin(), VisitedNonBrokenSymlinks.end());
-  llvm::sort(VisitedBrokenSymlinks.begin(), VisitedBrokenSymlinks.end());
-  ExpectedNonBrokenSymlinks = {"b", "bb", "d", "da", "dd", "ddd", "ddd"};
-  ASSERT_EQ(ExpectedNonBrokenSymlinks.size(), VisitedNonBrokenSymlinks.size());
-  ASSERT_TRUE(std::equal(VisitedNonBrokenSymlinks.begin(),
-                         VisitedNonBrokenSymlinks.end(),
-                         ExpectedNonBrokenSymlinks.begin()));
+  EXPECT_THAT(VisitedNonBrokenSymlinks,
+              UnorderedElementsAre("b", "bb", "d", "da", "dd", "ddd", "ddd"));
   VisitedNonBrokenSymlinks.clear();
 
-  ExpectedBrokenSymlinks = {"a", "ba", "bc", "c", "e"};
-  ASSERT_EQ(ExpectedBrokenSymlinks.size(), VisitedBrokenSymlinks.size());
-  ASSERT_TRUE(std::equal(VisitedBrokenSymlinks.begin(),
-                         VisitedBrokenSymlinks.end(),
-                         ExpectedBrokenSymlinks.begin()));
+  EXPECT_THAT(VisitedBrokenSymlinks,
+              UnorderedElementsAre("a", "ba", "bc", "c", "e"));
   VisitedBrokenSymlinks.clear();
 
   for (fs::recursive_directory_iterator i(
       Twine(TestDirectory) + "/symlink", ec, /*follow_symlinks=*/false), e;
        i != e; i.increment(ec)) {
-    if (ec == std::make_error_code(std::errc::no_such_file_or_directory)) {
+    ASSERT_NO_ERROR(ec);
+    if (i->status().getError() ==
+        std::make_error_code(std::errc::no_such_file_or_directory)) {
       VisitedBrokenSymlinks.push_back(path::filename(i->path()));
       continue;
     }
-
-    ASSERT_NO_ERROR(ec);
     VisitedNonBrokenSymlinks.push_back(path::filename(i->path()));
   }
-  llvm::sort(VisitedNonBrokenSymlinks.begin(), VisitedNonBrokenSymlinks.end());
-  llvm::sort(VisitedBrokenSymlinks.begin(), VisitedBrokenSymlinks.end());
-  ExpectedNonBrokenSymlinks = {"a", "b", "ba", "bb", "bc", "c", "d", "da", "dd",
-                               "ddd", "e"};
-  ASSERT_EQ(ExpectedNonBrokenSymlinks.size(), VisitedNonBrokenSymlinks.size());
-  ASSERT_TRUE(std::equal(VisitedNonBrokenSymlinks.begin(),
-                         VisitedNonBrokenSymlinks.end(),
-                         ExpectedNonBrokenSymlinks.begin()));
+  EXPECT_THAT(VisitedNonBrokenSymlinks,
+              UnorderedElementsAreArray({"a", "b", "ba", "bb", "bc", "c", "d",
+                                         "da", "dd", "ddd", "e"}));
   VisitedNonBrokenSymlinks.clear();
 
-  ExpectedBrokenSymlinks = {};
-  ASSERT_EQ(ExpectedBrokenSymlinks.size(), VisitedBrokenSymlinks.size());
-  ASSERT_TRUE(std::equal(VisitedBrokenSymlinks.begin(),
-                         VisitedBrokenSymlinks.end(),
-                         ExpectedBrokenSymlinks.begin()));
+  EXPECT_THAT(VisitedBrokenSymlinks, UnorderedElementsAre());
   VisitedBrokenSymlinks.clear();
 
   ASSERT_NO_ERROR(fs::remove_directories(Twine(TestDirectory) + "/symlink"));

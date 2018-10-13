@@ -7,16 +7,16 @@
 # RUN: llvm-mc %s -triple=riscv64 \
 # RUN:     | FileCheck -check-prefixes=CHECK-S,CHECK-S-OBJ %s
 # RUN: llvm-mc -filetype=obj -triple riscv32 < %s \
-# RUN:     | llvm-objdump -d -riscv-no-aliases - \
+# RUN:     | llvm-objdump -d -r -riscv-no-aliases - \
 # RUN:     | FileCheck -check-prefixes=CHECK-OBJ-NOALIAS,CHECK-S-OBJ-NOALIAS %s
 # RUN: llvm-mc -filetype=obj -triple riscv32 < %s \
-# RUN:     | llvm-objdump -d - \
+# RUN:     | llvm-objdump -d -r - \
 # RUN:     | FileCheck -check-prefixes=CHECK-OBJ,CHECK-S-OBJ %s
 # RUN: llvm-mc -filetype=obj -triple riscv64 < %s \
-# RUN:     | llvm-objdump -d -riscv-no-aliases - \
+# RUN:     | llvm-objdump -d -r -riscv-no-aliases - \
 # RUN:     | FileCheck -check-prefixes=CHECK-OBJ-NOALIAS,CHECK-S-OBJ-NOALIAS %s
 # RUN: llvm-mc -filetype=obj -triple riscv64 < %s \
-# RUN:     | llvm-objdump -d - \
+# RUN:     | llvm-objdump -d -r - \
 # RUN:     | FileCheck -check-prefixes=CHECK-OBJ,CHECK-S-OBJ %s
 
 # The following check prefixes are used in this test:
@@ -105,9 +105,33 @@ bleu x18, x19, 32
 # CHECK-S-OBJ-NOALIAS: jal zero, 2044
 # CHECK-S-OBJ: j 2044
 j 2044
+# CHECK-S-NOALIAS: jal zero, foo
+# CHECK-S: j foo
+# CHECK-OBJ-NOALIAS: jal zero, 0
+# CHECK-OBJ: j 0
+# CHECK-OBJ: R_RISCV_JAL foo
+j foo
+# CHECK-S-NOALIAS: jal zero, a0
+# CHECK-S: j a0
+# CHECK-OBJ-NOALIAS: jal zero, 0
+# CHECK-OBJ: j 0
+# CHECK-OBJ: R_RISCV_JAL a0
+j a0
 # CHECK-S-OBJ-NOALIAS: jal ra, 2040
 # CHECK-S-OBJ: jal 2040
 jal 2040
+# CHECK-S-NOALIAS: jal ra, foo
+# CHECK-S: jal foo
+# CHECK-OBJ-NOALIAS: jal ra, 0
+# CHECK-OBJ: jal 0
+# CHECK-OBJ: R_RISCV_JAL foo
+jal foo
+# CHECK-S-NOALIAS: jal ra, a0
+# CHECK-S: jal a0
+# CHECK-OBJ-NOALIAS: jal ra, 0
+# CHECK-OBJ: jal 0
+# CHECK-OBJ: R_RISCV_JAL a0
+jal a0
 # CHECK-S-OBJ-NOALIAS: jalr zero, s4, 0
 # CHECK-S-OBJ: jr s4
 jr x20
@@ -124,21 +148,21 @@ ret
 # CHECK-S-OBJ: fence
 fence
 
-# CHECK-S-OBJ-NOALIAS: csrrs s10, 3074, zero
+# CHECK-S-OBJ-NOALIAS: csrrs s10, instret, zero
 # CHECK-S-OBJ: rdinstret s10
 rdinstret x26
-# CHECK-S-OBJ-NOALIAS: csrrs s8, 3072, zero
+# CHECK-S-OBJ-NOALIAS: csrrs s8, cycle, zero
 # CHECK-S-OBJ: rdcycle s8
 rdcycle x24
-# CHECK-S-OBJ-NOALIAS: csrrs s9, 3073, zero
+# CHECK-S-OBJ-NOALIAS: csrrs s9, time, zero
 # CHECK-S-OBJ: rdtime s9
 rdtime x25
 
 # CHECK-S-OBJ-NOALIAS: csrrs  s0, 336, zero
 # CHECK-S-OBJ: csrr s0, 336
 csrr x8, 0x150
-# CHECK-S-OBJ-NOALIAS: csrrw zero, 320, s1
-# CHECK-S-OBJ: csrw 320, s1
+# CHECK-S-OBJ-NOALIAS: csrrw zero, sscratch, s1
+# CHECK-S-OBJ: csrw sscratch, s1
 csrw 0x140, x9
 # CHECK-S-OBJ-NOALIAS: csrrs zero, 4095, s6
 # CHECK-S-OBJ: csrs 4095, s6
@@ -153,8 +177,8 @@ csrwi 0x150, 0xf
 # CHECK-S-OBJ-NOALIAS: csrrsi zero, 4095, 16
 # CHECK-S-OBJ: csrsi 4095, 16
 csrsi 0xfff, 0x10
-# CHECK-S-OBJ-NOALIAS: csrrci zero, 320, 17
-# CHECK-S-OBJ: csrci 320, 17
+# CHECK-S-OBJ-NOALIAS: csrrci zero, sscratch, 17
+# CHECK-S-OBJ: csrci sscratch, 17
 csrci 0x140, 0x11
 
 # CHECK-S-OBJ-NOALIAS: sfence.vma zero, zero

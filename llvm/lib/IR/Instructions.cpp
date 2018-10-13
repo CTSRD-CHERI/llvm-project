@@ -1336,6 +1336,37 @@ AtomicRMWInst::AtomicRMWInst(BinOp Operation, Value *Ptr, Value *Val,
   Init(Operation, Ptr, Val, Ordering, SSID);
 }
 
+StringRef AtomicRMWInst::getOperationName(BinOp Op) {
+  switch (Op) {
+  case AtomicRMWInst::Xchg:
+    return "xchg";
+  case AtomicRMWInst::Add:
+    return "add";
+  case AtomicRMWInst::Sub:
+    return "sub";
+  case AtomicRMWInst::And:
+    return "and";
+  case AtomicRMWInst::Nand:
+    return "nand";
+  case AtomicRMWInst::Or:
+    return "or";
+  case AtomicRMWInst::Xor:
+    return "xor";
+  case AtomicRMWInst::Max:
+    return "max";
+  case AtomicRMWInst::Min:
+    return "min";
+  case AtomicRMWInst::UMax:
+    return "umax";
+  case AtomicRMWInst::UMin:
+    return "umin";
+  case AtomicRMWInst::BAD_BINOP:
+    return "<invalid operation>";
+  }
+
+  llvm_unreachable("invalid atomicrmw operation");
+}
+
 //===----------------------------------------------------------------------===//
 //                       FenceInst Implementation
 //===----------------------------------------------------------------------===//
@@ -1799,6 +1830,23 @@ bool ShuffleVectorInst::isIdentityWithExtract() const {
     return false;
 
   return isIdentityMaskImpl(getShuffleMask(), NumOpElts);
+}
+
+bool ShuffleVectorInst::isConcat() const {
+  // Vector concatenation is differentiated from identity with padding.
+  if (isa<UndefValue>(Op<0>()) || isa<UndefValue>(Op<1>()))
+    return false;
+
+  int NumOpElts = Op<0>()->getType()->getVectorNumElements();
+  int NumMaskElts = getType()->getVectorNumElements();
+  if (NumMaskElts != NumOpElts * 2)
+    return false;
+
+  // Use the mask length rather than the operands' vector lengths here. We
+  // already know that the shuffle returns a vector twice as long as the inputs,
+  // and neither of the inputs are undef vectors. If the mask picks consecutive
+  // elements from both inputs, then this is a concatenation of the inputs.
+  return isIdentityMaskImpl(getShuffleMask(), NumMaskElts);
 }
 
 //===----------------------------------------------------------------------===//

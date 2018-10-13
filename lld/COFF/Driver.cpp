@@ -430,26 +430,35 @@ StringRef LinkerDriver::findDefaultEntry() {
   assert(Config->Subsystem != IMAGE_SUBSYSTEM_UNKNOWN &&
          "must handle /subsystem before calling this");
 
-  // As a special case, if /nodefaultlib is given, we directly look for an
-  // entry point. This is because, if no default library is linked, users
-  // need to define an entry point instead of a "main".
-  bool FindMain = !Config->NoDefaultLibAll;
+  if (Config->MinGW)
+    return mangle(Config->Subsystem == IMAGE_SUBSYSTEM_WINDOWS_GUI
+                      ? "WinMainCRTStartup"
+                      : "mainCRTStartup");
+
   if (Config->Subsystem == IMAGE_SUBSYSTEM_WINDOWS_GUI) {
-    if (findUnderscoreMangle(FindMain ? "WinMain" : "WinMainCRTStartup"))
-      return mangle("WinMainCRTStartup");
-    if (findUnderscoreMangle(FindMain ? "wWinMain" : "wWinMainCRTStartup"))
-      return mangle("wWinMainCRTStartup");
+    if (findUnderscoreMangle("wWinMain")) {
+      if (!findUnderscoreMangle("WinMain"))
+        return mangle("wWinMainCRTStartup");
+      warn("found both wWinMain and WinMain; using latter");
+    }
+    return mangle("WinMainCRTStartup");
   }
-  if (findUnderscoreMangle(FindMain ? "main" : "mainCRTStartup"))
-    return mangle("mainCRTStartup");
-  if (findUnderscoreMangle(FindMain ? "wmain" : "wmainCRTStartup"))
-    return mangle("wmainCRTStartup");
-  return "";
+  if (findUnderscoreMangle("wmain")) {
+    if (!findUnderscoreMangle("main"))
+      return mangle("wmainCRTStartup");
+    warn("found both wmain and main; using latter");
+  }
+  return mangle("mainCRTStartup");
 }
 
 WindowsSubsystem LinkerDriver::inferSubsystem() {
   if (Config->DLL)
     return IMAGE_SUBSYSTEM_WINDOWS_GUI;
+  if (Config->MinGW)
+    return IMAGE_SUBSYSTEM_WINDOWS_CUI;
+  // Note that link.exe infers the subsystem from the presence of these
+  // functions even if /entry: or /nodefaultlib are passed which causes them
+  // to not be called.
   bool HaveMain = findUnderscoreMangle("main");
   bool HaveWMain = findUnderscoreMangle("wmain");
   bool HaveWinMain = findUnderscoreMangle("WinMain");
@@ -508,26 +517,65 @@ static std::string createResponseFile(const opt::InputArgList &Args,
   return Data.str();
 }
 
-static unsigned getDefaultDebugType(const opt::InputArgList &Args) {
-  unsigned DebugTypes = static_cast<unsigned>(DebugType::CV);
+enum class DebugKind { Unknown, None, Full, FastLink, GHash, Dwarf, Symtab };
+
+static DebugKind parseDebugKind(const opt::InputArgList &Args) {
+  auto *A = Args.getLastArg(OPT_debug, OPT_debug_opt);
+  if (!A)
+    return DebugKind::None;
+  if (A->getNumValues() == 0)
+    return DebugKind::Full;
+
+  DebugKind Debug = StringSwitch<DebugKind>(A->getValue())
+                     .CaseLower("none", DebugKind::None)
+                     .CaseLower("full", DebugKind::Full)
+                     .CaseLower("fastlink", DebugKind::FastLink)
+                     // LLD extensions
+                     .CaseLower("ghash", DebugKind::GHash)
+                     .CaseLower("dwarf", DebugKind::Dwarf)
+                     .CaseLower("symtab", DebugKind::Symtab)
+                     .Default(DebugKind::Unknown);
+
+  if (Debug == DebugKind::FastLink) {
+    warn("/debug:fastlink unsupported; using /debug:full");
+    return DebugKind::Full;
+  }
+  if (Debug == DebugKind::Unknown) {
+    error("/debug: unknown option: " + Twine(A->getValue()));
+    return DebugKind::None;
+  }
+  return Debug;
+}
+
+static unsigned parseDebugTypes(const opt::InputArgList &Args) {
+  unsigned DebugTypes = static_cast<unsigned>(DebugType::None);
+
+  if (auto *A = Args.getLastArg(OPT_debugtype)) {
+    SmallVector<StringRef, 3> Types;
+    A->getSpelling().split(Types, ',', /*KeepEmpty=*/false);
+
+    for (StringRef Type : Types) {
+      unsigned V = StringSwitch<unsigned>(Type.lower())
+                       .Case("cv", static_cast<unsigned>(DebugType::CV))
+                       .Case("pdata", static_cast<unsigned>(DebugType::PData))
+                       .Case("fixup", static_cast<unsigned>(DebugType::Fixup))
+                       .Default(0);
+      if (V == 0) {
+        warn("/debugtype: unknown option: " + Twine(A->getValue()));
+        continue;
+      }
+      DebugTypes |= V;
+    }
+    return DebugTypes;
+  }
+
+  // Default debug types
+  DebugTypes = static_cast<unsigned>(DebugType::CV);
   if (Args.hasArg(OPT_driver))
     DebugTypes |= static_cast<unsigned>(DebugType::PData);
   if (Args.hasArg(OPT_profile))
     DebugTypes |= static_cast<unsigned>(DebugType::Fixup);
-  return DebugTypes;
-}
 
-static unsigned parseDebugType(StringRef Arg) {
-  SmallVector<StringRef, 3> Types;
-  Arg.split(Types, ',', /*KeepEmpty=*/false);
-
-  unsigned DebugTypes = static_cast<unsigned>(DebugType::None);
-  for (StringRef Type : Types)
-    DebugTypes |= StringSwitch<unsigned>(Type.lower())
-                      .Case("cv", static_cast<unsigned>(DebugType::CV))
-                      .Case("pdata", static_cast<unsigned>(DebugType::PData))
-                      .Case("fixup", static_cast<unsigned>(DebugType::Fixup))
-                      .Default(0);
   return DebugTypes;
 }
 
@@ -888,20 +936,26 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
 
   // Handle /force or /force:unresolved
   if (Args.hasArg(OPT_force, OPT_force_unresolved))
-    Config->Force = true;
+    Config->ForceUnresolved = true;
+
+  // Handle /force or /force:multiple
+  if (Args.hasArg(OPT_force, OPT_force_multiple))
+    Config->ForceMultiple = true;
 
   // Handle /debug
-  if (Args.hasArg(OPT_debug, OPT_debug_dwarf, OPT_debug_ghash)) {
+  DebugKind Debug = parseDebugKind(Args);
+  if (Debug == DebugKind::Full || Debug == DebugKind::Dwarf ||
+      Debug == DebugKind::GHash) {
     Config->Debug = true;
     Config->Incremental = true;
-    if (auto *Arg = Args.getLastArg(OPT_debugtype))
-      Config->DebugTypes = parseDebugType(Arg->getValue());
-    else
-      Config->DebugTypes = getDefaultDebugType(Args);
   }
 
+  // Handle /debugtype
+  Config->DebugTypes = parseDebugTypes(Args);
+
   // Handle /pdb
-  bool ShouldCreatePDB = Args.hasArg(OPT_debug, OPT_debug_ghash);
+  bool ShouldCreatePDB =
+      (Debug == DebugKind::Full || Debug == DebugKind::GHash);
   if (ShouldCreatePDB) {
     if (auto *Arg = Args.getLastArg(OPT_pdb))
       Config->PDBPath = Arg->getValue();
@@ -1022,7 +1076,7 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
     Config->Implib = Arg->getValue();
 
   // Handle /opt.
-  bool DoGC = !Args.hasArg(OPT_debug) || Args.hasArg(OPT_profile);
+  bool DoGC = Debug == DebugKind::None || Args.hasArg(OPT_profile);
   unsigned ICFLevel =
       Args.hasArg(OPT_profile) ? 0 : 1; // 0: off, 1: limited, 2: on
   unsigned TailMerge = 1;
@@ -1166,9 +1220,9 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   Config->NxCompat = Args.hasFlag(OPT_nxcompat, OPT_nxcompat_no, true);
   Config->TerminalServerAware =
       !Config->DLL && Args.hasFlag(OPT_tsaware, OPT_tsaware_no, true);
-  Config->DebugDwarf = Args.hasArg(OPT_debug_dwarf);
-  Config->DebugGHashes = Args.hasArg(OPT_debug_ghash);
-  Config->DebugSymtab = Args.hasArg(OPT_debug_symtab);
+  Config->DebugDwarf = Debug == DebugKind::Dwarf;
+  Config->DebugGHashes = Debug == DebugKind::GHash;
+  Config->DebugSymtab = Debug == DebugKind::Symtab;
 
   Config->MapFile = getMapFile(Args);
 
@@ -1198,10 +1252,14 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
     return;
 
   std::set<sys::fs::UniqueID> WholeArchives;
-  for (auto *Arg : Args.filtered(OPT_wholearchive_file))
-    if (Optional<StringRef> Path = doFindFile(Arg->getValue()))
+  AutoExporter Exporter;
+  for (auto *Arg : Args.filtered(OPT_wholearchive_file)) {
+    if (Optional<StringRef> Path = doFindFile(Arg->getValue())) {
       if (Optional<sys::fs::UniqueID> ID = getUniqueID(*Path))
         WholeArchives.insert(*ID);
+      Exporter.addWholeArchive(*Path);
+    }
+  }
 
   // A predicate returning true if a given path is an argument for
   // /wholearchive:, or /wholearchive is enabled globally.
@@ -1231,6 +1289,9 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
 
   // Read all input files given via the command line.
   run();
+
+  if (errorCount())
+    return;
 
   // We should have inferred a machine type by now from the input files, but if
   // not we assume x64.
@@ -1376,6 +1437,8 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   if (Config->MinGW) {
     Symtab->addAbsolute(mangle("__RUNTIME_PSEUDO_RELOC_LIST__"), 0);
     Symtab->addAbsolute(mangle("__RUNTIME_PSEUDO_RELOC_LIST_END__"), 0);
+    Symtab->addAbsolute(mangle("__CTOR_LIST__"), 0);
+    Symtab->addAbsolute(mangle("__DTOR_LIST__"), 0);
   }
 
   // This code may add new undefined symbols to the link, which may enqueue more
@@ -1458,7 +1521,7 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   // are chosen to be exported.
   if (Config->DLL && ((Config->MinGW && Config->Exports.empty()) ||
                       Args.hasArg(OPT_export_all_symbols))) {
-    AutoExporter Exporter;
+    Exporter.initSymbolExcludes();
 
     Symtab->forEachSymbol([=](Symbol *S) {
       auto *Def = dyn_cast<Defined>(S);

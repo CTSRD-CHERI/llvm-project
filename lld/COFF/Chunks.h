@@ -64,6 +64,13 @@ public:
   // before calling this function.
   virtual void writeTo(uint8_t *Buf) const {}
 
+  // Called by the writer once before assigning addresses and writing
+  // the output.
+  virtual void readRelocTargets() {}
+
+  // Called if restarting thunk addition.
+  virtual void resetRelocTargets() {}
+
   // Called by the writer after an RVA is assigned, but before calling
   // getSize().
   virtual void finalizeContents() {}
@@ -145,6 +152,8 @@ public:
 
   SectionChunk(ObjFile *File, const coff_section *Header);
   static bool classof(const Chunk *C) { return C->kind() == SectionKind; }
+  void readRelocTargets() override;
+  void resetRelocTargets() override;
   size_t getSize() const override { return Header->SizeOfRawData; }
   ArrayRef<uint8_t> getContents() const;
   void writeTo(uint8_t *Buf) const override;
@@ -194,10 +203,13 @@ public:
   // Allow iteration over the associated child chunks for this section.
   ArrayRef<SectionChunk *> children() const { return AssocChildren; }
 
+  // The section ID this chunk belongs to in its Obj.
+  uint32_t getSectionNumber() const;
+
   // A pointer pointing to a replacement for this chunk.
   // Initially it points to "this" object. If this chunk is merged
   // with other chunk by ICF, it points to another chunk,
-  // and this chunk is considrered as dead.
+  // and this chunk is considered as dead.
   SectionChunk *Repl;
 
   // The CRC of the contents as described in the COFF spec 4.5.5.
@@ -216,6 +228,10 @@ public:
 
   // Used by the garbage collector.
   bool Live;
+
+  // When inserting a thunk, we need to adjust a relocation to point to
+  // the thunk instead of the actual original target Symbol.
+  std::vector<Symbol *> RelocTargets;
 
 private:
   StringRef SectionName;
@@ -251,6 +267,7 @@ public:
 
 private:
   llvm::StringTableBuilder Builder;
+  bool Finalized = false;
 };
 
 // A chunk for common symbols. Common chunks don't have actual data.
@@ -336,6 +353,15 @@ public:
 
 private:
   Defined *ImpSymbol;
+};
+
+class RangeExtensionThunk : public Chunk {
+public:
+  explicit RangeExtensionThunk(Defined *T) : Target(T) {}
+  size_t getSize() const override;
+  void writeTo(uint8_t *Buf) const override;
+
+  Defined *Target;
 };
 
 // Windows-specific.
@@ -458,8 +484,25 @@ public:
   int Flags;
 };
 
+// MinGW specific. A Chunk that contains one pointer-sized absolute value.
+class AbsolutePointerChunk : public Chunk {
+public:
+  AbsolutePointerChunk(uint64_t Value) : Value(Value) {
+    Alignment = getSize();
+  }
+  size_t getSize() const override;
+  void writeTo(uint8_t *Buf) const override;
+
+private:
+  uint64_t Value;
+};
+
 void applyMOV32T(uint8_t *Off, uint32_t V);
 void applyBranch24T(uint8_t *Off, int32_t V);
+
+void applyArm64Addr(uint8_t *Off, uint64_t S, uint64_t P, int Shift);
+void applyArm64Imm(uint8_t *Off, uint64_t Imm, uint32_t RangeLimit);
+void applyArm64Branch26(uint8_t *Off, int64_t V);
 
 } // namespace coff
 } // namespace lld

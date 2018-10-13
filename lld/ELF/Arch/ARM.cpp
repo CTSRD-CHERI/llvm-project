@@ -51,6 +51,7 @@ ARM::ARM() {
   RelativeRel = R_ARM_RELATIVE;
   IRelativeRel = R_ARM_IRELATIVE;
   GotRel = R_ARM_GLOB_DAT;
+  NoneRel = R_ARM_NONE;
   PltRel = R_ARM_JUMP_SLOT;
   TlsGotRel = R_ARM_TLS_TPOFF32;
   TlsModuleIndexRel = R_ARM_TLS_DTPMOD32;
@@ -147,7 +148,7 @@ RelType ARM::getDynRel(RelType Type) const {
 }
 
 void ARM::writeGotPlt(uint8_t *Buf, const Symbol &) const {
-  write32le(Buf, InX::Plt->getVA());
+  write32le(Buf, In.Plt->getVA());
 }
 
 void ARM::writeIgotPlt(uint8_t *Buf, const Symbol &S) const {
@@ -168,8 +169,8 @@ static void writePltHeaderLong(uint8_t *Buf) {
       0xd4, 0xd4, 0xd4, 0xd4, //     Pad to 32-byte boundary
       0xd4, 0xd4, 0xd4, 0xd4};
   memcpy(Buf, PltData, sizeof(PltData));
-  uint64_t GotPlt = InX::GotPlt->getVA();
-  uint64_t L1 = InX::Plt->getVA() + 8;
+  uint64_t GotPlt = In.GotPlt->getVA();
+  uint64_t L1 = In.Plt->getVA() + 8;
   write32le(Buf + 16, GotPlt - L1 - 8);
 }
 
@@ -187,7 +188,7 @@ void ARM::writePltHeader(uint8_t *Buf) const {
       0xe5bef000, //     ldr pc, [lr, #0x00000NNN] &(.got.plt -L1 - 4)
   };
 
-  uint64_t Offset = InX::GotPlt->getVA() - InX::Plt->getVA() - 4;
+  uint64_t Offset = In.GotPlt->getVA() - In.Plt->getVA() - 4;
   if (!llvm::isUInt<27>(Offset)) {
     // We cannot encode the Offset, use the long form.
     writePltHeaderLong(Buf);

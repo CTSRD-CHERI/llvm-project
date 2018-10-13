@@ -179,6 +179,10 @@ private:
 
   DebugStringTableSubsectionRef CVStringTable;
 
+  /// Track the compilation CPU type. S_COMPILE3 symbol records typically come
+  /// first, but if we don't see one, just assume an X64 CPU type. It is common.
+  CPUType CompilationCPUType = CPUType::X64;
+
   ScopedPrinter &Writer;
   BinaryByteStream TypeContents;
   LazyRandomTypeCollection Types;
@@ -609,8 +613,7 @@ void COFFDumper::cacheRelocations() {
       RelocMap[Section].push_back(Reloc);
 
     // Sort relocations by address.
-    llvm::sort(RelocMap[Section].begin(), RelocMap[Section].end(),
-               relocAddressLess);
+    llvm::sort(RelocMap[Section], relocAddressLess);
   }
 }
 
@@ -751,7 +754,7 @@ void COFFDumper::printCOFFDebugDirectory() {
         W.printNumber("PDBAge", DebugInfo->PDB70.Age);
         W.printString("PDBFileName", PDBFileName);
       }
-    } else {
+    } else if (D.SizeOfData != 0) {
       // FIXME: Type values of 12 and 13 are commonly observed but are not in
       // the documented type enum.  Figure out what they mean.
       ArrayRef<uint8_t> RawData;
@@ -1062,10 +1065,28 @@ void COFFDumper::printCodeViewSymbolSection(StringRef SectionName,
         W.printHex("LocalSize", FD.LocalSize);
         W.printHex("ParamsSize", FD.ParamsSize);
         W.printHex("MaxStackSize", FD.MaxStackSize);
-        W.printString("FrameFunc", FrameFunc);
         W.printHex("PrologSize", FD.PrologSize);
         W.printHex("SavedRegsSize", FD.SavedRegsSize);
         W.printFlags("Flags", FD.Flags, makeArrayRef(FrameDataFlags));
+
+        // The FrameFunc string is a small RPN program. It can be broken up into
+        // statements that end in the '=' operator, which assigns the value on
+        // the top of the stack to the previously pushed variable. Variables can
+        // be temporary values ($T0) or physical registers ($esp). Print each
+        // assignment on its own line to make these programs easier to read.
+        {
+          ListScope FFS(W, "FrameFunc");
+          while (!FrameFunc.empty()) {
+            size_t EqOrEnd = FrameFunc.find('=');
+            if (EqOrEnd == StringRef::npos)
+              EqOrEnd = FrameFunc.size();
+            else
+              ++EqOrEnd;
+            StringRef Stmt = FrameFunc.substr(0, EqOrEnd);
+            W.printString(Stmt);
+            FrameFunc = FrameFunc.drop_front(EqOrEnd).trim();
+          }
+        }
       }
       break;
     }
@@ -1132,7 +1153,7 @@ void COFFDumper::printCodeViewSymbolsSubsection(StringRef Subsection,
   auto CODD = llvm::make_unique<COFFObjectDumpDelegate>(*this, Section, Obj,
                                                         SectionContents);
   CVSymbolDumper CVSD(W, Types, CodeViewContainer::ObjectFile, std::move(CODD),
-                      opts::CodeViewSubsectionBytes);
+                      CompilationCPUType, opts::CodeViewSubsectionBytes);
   CVSymbolArray Symbols;
   BinaryStreamReader Reader(BinaryData, llvm::support::little);
   if (auto EC = Reader.readArray(Symbols, Reader.getLength())) {
@@ -1145,6 +1166,7 @@ void COFFDumper::printCodeViewSymbolsSubsection(StringRef Subsection,
     W.flush();
     error(std::move(EC));
   }
+  CompilationCPUType = CVSD.getCompilationCPUType();
   W.flush();
 }
 

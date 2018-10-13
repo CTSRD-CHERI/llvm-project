@@ -69,6 +69,10 @@ Pass *createAMDGPUAnnotateKernelFeaturesPass();
 void initializeAMDGPUAnnotateKernelFeaturesPass(PassRegistry &);
 extern char &AMDGPUAnnotateKernelFeaturesID;
 
+FunctionPass *createAMDGPUAtomicOptimizerPass();
+void initializeAMDGPUAtomicOptimizerPass(PassRegistry &);
+extern char &AMDGPUAtomicOptimizerID;
+
 ModulePass *createAMDGPULowerIntrinsicsPass();
 void initializeAMDGPULowerIntrinsicsPass(PassRegistry &);
 extern char &AMDGPULowerIntrinsicsID;
@@ -267,6 +271,6 @@ namespace AMDGPUAS {
     // Some places use this if the address space can't be determined.
     UNKNOWN_ADDRESS_SPACE = ~0u,
   };
-};
+}
 
 #endif

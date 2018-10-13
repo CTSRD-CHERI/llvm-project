@@ -39,6 +39,7 @@
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/MC/MCTargetOptions.h"
 #include "llvm/MC/SubtargetFeature.h"
+#include "llvm/MC/MCValue.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -200,6 +201,7 @@ private:
   template <bool IsSVEPrefetch = false>
   OperandMatchResultTy tryParsePrefetch(OperandVector &Operands);
   OperandMatchResultTy tryParsePSBHint(OperandVector &Operands);
+  OperandMatchResultTy tryParseBTIHint(OperandVector &Operands);
   OperandMatchResultTy tryParseAdrpLabel(OperandVector &Operands);
   OperandMatchResultTy tryParseAdrLabel(OperandVector &Operands);
   template<bool AddFPZeroAsLiteral>
@@ -282,6 +284,7 @@ private:
     k_FPImm,
     k_Barrier,
     k_PSBHint,
+    k_BTIHint,
   } Kind;
 
   SMLoc StartLoc, EndLoc;
@@ -385,6 +388,12 @@ private:
     unsigned Val;
   };
 
+  struct BTIHintOp {
+    const char *Data;
+    unsigned Length;
+    unsigned Val;
+  };
+
   struct ExtendOp {
     unsigned Val;
   };
@@ -403,6 +412,7 @@ private:
     struct SysCRImmOp SysCRImm;
     struct PrefetchOp Prefetch;
     struct PSBHintOp PSBHint;
+    struct BTIHintOp BTIHint;
     struct ShiftExtendOp ShiftExtend;
   };
 
@@ -456,6 +466,9 @@ public:
       break;
     case k_PSBHint:
       PSBHint = o.PSBHint;
+      break;
+    case k_BTIHint:
+      BTIHint = o.BTIHint;
       break;
     case k_ShiftExtend:
       ShiftExtend = o.ShiftExtend;
@@ -568,6 +581,16 @@ public:
     return StringRef(PSBHint.Data, PSBHint.Length);
   }
 
+  unsigned getBTIHint() const {
+    assert(Kind == k_BTIHint && "Invalid access!");
+    return BTIHint.Val;
+  }
+
+  StringRef getBTIHintName() const {
+    assert(Kind == k_BTIHint && "Invalid access!");
+    return StringRef(BTIHint.Data, BTIHint.Length);
+  }
+
   StringRef getPrefetchName() const {
     assert(Kind == k_Prefetch && "Invalid access!");
     return StringRef(Prefetch.Data, Prefetch.Length);
@@ -658,7 +681,7 @@ public:
     return DiagnosticPredicateTy::NearMatch;
   }
 
-  bool isSymbolicUImm12Offset(const MCExpr *Expr, unsigned Scale) const {
+  bool isSymbolicUImm12Offset(const MCExpr *Expr) const {
     AArch64MCExpr::VariantKind ELFRefKind;
     MCSymbolRefExpr::VariantKind DarwinRefKind;
     int64_t Addend;
@@ -683,7 +706,7 @@ public:
       // Note that we don't range-check the addend. It's adjusted modulo page
       // size when converted, so there is no "out of range" condition when using
       // @pageoff.
-      return Addend >= 0 && (Addend % Scale) == 0;
+      return true;
     } else if (DarwinRefKind == MCSymbolRefExpr::VK_GOTPAGEOFF ||
                DarwinRefKind == MCSymbolRefExpr::VK_TLVPPAGEOFF) {
       // @gotpageoff/@tlvppageoff can only be used directly, not with an addend.
@@ -699,7 +722,7 @@ public:
 
     const MCConstantExpr *MCE = dyn_cast<MCConstantExpr>(getImm());
     if (!MCE)
-      return isSymbolicUImm12Offset(getImm(), Scale);
+      return isSymbolicUImm12Offset(getImm());
 
     int64_t Val = MCE->getValue();
     return (Val % Scale) == 0 && Val >= 0 && (Val / Scale) < 0x1000;
@@ -901,7 +924,7 @@ public:
 
     for (unsigned i = 0; i != AllowedModifiers.size(); ++i) {
       if (ELFRefKind == AllowedModifiers[i])
-        return Addend == 0;
+        return true;
     }
 
     return false;
@@ -996,7 +1019,8 @@ public:
     if (!isSysReg()) return false;
     return (SysReg.PStateField == AArch64PState::PAN ||
             SysReg.PStateField == AArch64PState::DIT ||
-            SysReg.PStateField == AArch64PState::UAO);
+            SysReg.PStateField == AArch64PState::UAO ||
+            SysReg.PStateField == AArch64PState::SSBS);
   }
 
   bool isSystemPStateFieldWithImm0_15() const {
@@ -1185,6 +1209,7 @@ public:
   bool isSysCR() const { return Kind == k_SysCR; }
   bool isPrefetch() const { return Kind == k_Prefetch; }
   bool isPSBHint() const { return Kind == k_PSBHint; }
+  bool isBTIHint() const { return Kind == k_BTIHint; }
   bool isShiftExtend() const { return Kind == k_ShiftExtend; }
   bool isShifter() const {
     if (!isShiftExtend())
@@ -1702,6 +1727,11 @@ public:
     Inst.addOperand(MCOperand::createImm(getPSBHint()));
   }
 
+  void addBTIHintOperands(MCInst &Inst, unsigned N) const {
+    assert(N == 1 && "Invalid number of operands!");
+    Inst.addOperand(MCOperand::createImm(getBTIHint()));
+  }
+
   void addShifterOperands(MCInst &Inst, unsigned N) const {
     assert(N == 1 && "Invalid number of operands!");
     unsigned Imm =
@@ -1950,6 +1980,19 @@ public:
     return Op;
   }
 
+  static std::unique_ptr<AArch64Operand> CreateBTIHint(unsigned Val,
+                                                       StringRef Str,
+                                                       SMLoc S,
+                                                       MCContext &Ctx) {
+    auto Op = make_unique<AArch64Operand>(k_BTIHint, Ctx);
+    Op->BTIHint.Val = Val << 1 | 32;
+    Op->BTIHint.Data = Str.data();
+    Op->BTIHint.Length = Str.size();
+    Op->StartLoc = S;
+    Op->EndLoc = S;
+    return Op;
+  }
+
   static std::unique_ptr<AArch64Operand>
   CreateShiftExtend(AArch64_AM::ShiftExtendType ShOp, unsigned Val,
                     bool HasExplicitAmount, SMLoc S, SMLoc E, MCContext &Ctx) {
@@ -2030,6 +2073,9 @@ void AArch64Operand::print(raw_ostream &OS) const {
     if (!getShiftExtendAmount() && !hasShiftExtendAmount())
       break;
     LLVM_FALLTHROUGH;
+  case k_BTIHint:
+    OS << getBTIHintName();
+    break;
   case k_ShiftExtend:
     OS << "<" << AArch64_AM::getShiftExtendName(getShiftExtendType()) << " #"
        << getShiftExtendAmount();
@@ -2395,6 +2441,29 @@ AArch64AsmParser::tryParsePSBHint(OperandVector &Operands) {
   return MatchOperand_Success;
 }
 
+/// tryParseBTIHint - Try to parse a BTI operand, mapped to Hint command
+OperandMatchResultTy
+AArch64AsmParser::tryParseBTIHint(OperandVector &Operands) {
+  MCAsmParser &Parser = getParser();
+  SMLoc S = getLoc();
+  const AsmToken &Tok = Parser.getTok();
+  if (Tok.isNot(AsmToken::Identifier)) {
+    TokError("invalid operand for instruction");
+    return MatchOperand_ParseFail;
+  }
+
+  auto BTI = AArch64BTIHint::lookupBTIByName(Tok.getString());
+  if (!BTI) {
+    TokError("invalid operand for instruction");
+    return MatchOperand_ParseFail;
+  }
+
+  Parser.Lex(); // Eat identifier token.
+  Operands.push_back(AArch64Operand::CreateBTIHint(
+      BTI->Encoding, Tok.getString(), S, getContext()));
+  return MatchOperand_Success;
+}
+
 /// tryParseAdrpLabel - Parse and validate a source label for the ADRP
 /// instruction.
 OperandMatchResultTy
@@ -2740,6 +2809,32 @@ AArch64AsmParser::tryParseOptionalShiftExtend(OperandVector &Operands) {
   return MatchOperand_Success;
 }
 
+static const struct Extension {
+  const char *Name;
+  const FeatureBitset Features;
+} ExtensionMap[] = {
+  { "crc",  {AArch64::FeatureCRC} },
+  { "sm4",  {AArch64::FeatureSM4} },
+  { "sha3", {AArch64::FeatureSHA3} },
+  { "sha2", {AArch64::FeatureSHA2} },
+  { "aes",  {AArch64::FeatureAES} },
+  { "crypto", {AArch64::FeatureCrypto} },
+  { "fp", {AArch64::FeatureFPARMv8} },
+  { "simd", {AArch64::FeatureNEON} },
+  { "ras", {AArch64::FeatureRAS} },
+  { "lse", {AArch64::FeatureLSE} },
+  { "predctrl", {AArch64::FeaturePredCtrl} },
+  { "ccdp", {AArch64::FeatureCacheDeepPersist} },
+  { "mte", {AArch64::FeatureMTE} },
+
+  // FIXME: Unsupported extensions
+  { "pan", {} },
+  { "lor", {} },
+  { "rdma", {} },
+  { "profile", {} },
+};
+
+
 static void setRequiredFeatureString(FeatureBitset FBS, std::string &Str) {
   if (FBS[AArch64::HasV8_1aOps])
     Str += "ARMv8.1a";
@@ -2749,8 +2844,18 @@ static void setRequiredFeatureString(FeatureBitset FBS, std::string &Str) {
     Str += "ARMv8.3a";
   else if (FBS[AArch64::HasV8_4aOps])
     Str += "ARMv8.4a";
-  else
-    Str += "(unknown)";
+  else if (FBS[AArch64::HasV8_5aOps])
+    Str += "ARMv8.5a";
+  else {
+    auto ext = std::find_if(std::begin(ExtensionMap),
+      std::end(ExtensionMap),
+      [&](const Extension& e)
+      // Use & in case multiple features are enabled
+      { return (FBS & e.Features) != FeatureBitset(); }
+    );
+
+    Str += ext != std::end(ExtensionMap) ? ext->Name : "(unknown)";
+  }
 }
 
 void AArch64AsmParser::createSysAlias(uint16_t Encoding, OperandVector &Operands,
@@ -2829,6 +2934,23 @@ bool AArch64AsmParser::parseSysAlias(StringRef Name, SMLoc NameLoc,
       return TokError(Str.c_str());
     }
     createSysAlias(TLBI->Encoding, Operands, S);
+  } else if (Mnemonic == "cfp" || Mnemonic == "dvp" || Mnemonic == "cpp") {
+    const AArch64PRCTX::PRCTX *PRCTX = AArch64PRCTX::lookupPRCTXByName(Op);
+    if (!PRCTX)
+      return TokError("invalid operand for prediction restriction instruction");
+    else if (!PRCTX->haveFeatures(getSTI().getFeatureBits())) {
+      std::string Str(
+          Mnemonic.upper() + std::string(PRCTX->Name) + " requires ");
+      setRequiredFeatureString(PRCTX->getRequiredFeatures(), Str);
+      return TokError(Str.c_str());
+    }
+    uint16_t PRCTX_Op2 =
+      Mnemonic == "cfp" ? 4 :
+      Mnemonic == "dvp" ? 5 :
+      Mnemonic == "cpp" ? 7 :
+      0;
+    assert(PRCTX_Op2 && "Invalid mnemonic for prediction restriction instruction");
+    createSysAlias(PRCTX->Encoding << 3 | PRCTX_Op2 , Operands, S);
   }
 
   Parser.Lex(); // Eat operand.
@@ -3647,8 +3769,10 @@ bool AArch64AsmParser::ParseInstruction(ParseInstructionInfo &Info,
   size_t Start = 0, Next = Name.find('.');
   StringRef Head = Name.slice(Start, Next);
 
-  // IC, DC, AT, and TLBI instructions are aliases for the SYS instruction.
-  if (Head == "ic" || Head == "dc" || Head == "at" || Head == "tlbi")
+  // IC, DC, AT, TLBI and Prediction invalidation instructions are aliases for
+  // the SYS instruction.
+  if (Head == "ic" || Head == "dc" || Head == "at" || Head == "tlbi" ||
+      Head == "cfp" || Head == "dvp" || Head == "cpp")
     return parseSysAlias(Head, NameLoc, Operands);
 
   Operands.push_back(
@@ -3702,13 +3826,9 @@ bool AArch64AsmParser::ParseInstruction(ParseInstructionInfo &Info,
 
   // Read the remaining operands.
   if (getLexer().isNot(AsmToken::EndOfStatement)) {
-    // Read the first operand.
-    if (parseOperand(Operands, false, false)) {
-      return true;
-    }
 
-    unsigned N = 2;
-    while (parseOptionalToken(AsmToken::Comma)) {
+    unsigned N = 1;
+    do {
       // Parse and remember the operand.
       if (parseOperand(Operands, (N == 4 && condCodeFourthOperand) ||
                                      (N == 3 && condCodeThirdOperand) ||
@@ -3736,7 +3856,7 @@ bool AArch64AsmParser::ParseInstruction(ParseInstructionInfo &Info,
             AArch64Operand::CreateToken("!", false, ELoc, getContext()));
 
       ++N;
-    }
+    } while (parseOptionalToken(AsmToken::Comma));
   }
 
   if (parseToken(AsmToken::EndOfStatement, "unexpected token in argument list"))
@@ -3973,6 +4093,15 @@ bool AArch64AsmParser::validateInstruction(MCInst &Inst, SMLoc &IDLoc,
                    "unpredictable STXP instruction, status is also a source");
     break;
   }
+  case AArch64::LDGV: {
+    unsigned Rt = Inst.getOperand(0).getReg();
+    unsigned Rn = Inst.getOperand(1).getReg();
+    if (RI->isSubRegisterEq(Rt, Rn)) {
+      return Error(Loc[0],
+                  "unpredictable LDGV instruction, writeback register is also "
+                  "the target register");
+    }
+  }
   }
 
 
@@ -4107,6 +4236,8 @@ bool AArch64AsmParser::showMatchError(SMLoc Loc, unsigned ErrCode,
     return Error(Loc, "index must be an integer in range [-128, 127].");
   case Match_InvalidMemoryIndexedSImm9:
     return Error(Loc, "index must be an integer in range [-256, 255].");
+  case Match_InvalidMemoryIndexed16SImm9:
+    return Error(Loc, "index must be a multiple of 16 in range [-4096, 4080].");
   case Match_InvalidMemoryIndexed8SImm10:
     return Error(Loc, "index must be a multiple of 8 in range [-4096, 4088].");
   case Match_InvalidMemoryIndexed4SImm7:
@@ -4123,6 +4254,8 @@ bool AArch64AsmParser::showMatchError(SMLoc Loc, unsigned ErrCode,
     return Error(Loc, "index must be a multiple of 2 in range [0, 62].");
   case Match_InvalidMemoryIndexed8UImm6:
     return Error(Loc, "index must be a multiple of 8 in range [0, 504].");
+  case Match_InvalidMemoryIndexed16UImm6:
+    return Error(Loc, "index must be a multiple of 16 in range [0, 1008].");
   case Match_InvalidMemoryIndexed4UImm6:
     return Error(Loc, "index must be a multiple of 4 in range [0, 252].");
   case Match_InvalidMemoryIndexed2UImm6:
@@ -4759,10 +4892,12 @@ bool AArch64AsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
   case Match_InvalidMemoryIndexed2UImm6:
   case Match_InvalidMemoryIndexed4UImm6:
   case Match_InvalidMemoryIndexed8UImm6:
+  case Match_InvalidMemoryIndexed16UImm6:
   case Match_InvalidMemoryIndexedSImm6:
   case Match_InvalidMemoryIndexedSImm5:
   case Match_InvalidMemoryIndexedSImm8:
   case Match_InvalidMemoryIndexedSImm9:
+  case Match_InvalidMemoryIndexed16SImm9:
   case Match_InvalidMemoryIndexed8SImm10:
   case Match_InvalidImm0_1:
   case Match_InvalidImm0_7:
@@ -4901,28 +5036,6 @@ bool AArch64AsmParser::ParseDirective(AsmToken DirectiveID) {
   return false;
 }
 
-static const struct {
-  const char *Name;
-  const FeatureBitset Features;
-} ExtensionMap[] = {
-  { "crc",  {AArch64::FeatureCRC} },
-  { "sm4",  {AArch64::FeatureSM4} },
-  { "sha3", {AArch64::FeatureSHA3} },
-  { "sha2", {AArch64::FeatureSHA2} },
-  { "aes",  {AArch64::FeatureAES} },
-  { "crypto", {AArch64::FeatureCrypto} },
-  { "fp", {AArch64::FeatureFPARMv8} },
-  { "simd", {AArch64::FeatureNEON} },
-  { "ras", {AArch64::FeatureRAS} },
-  { "lse", {AArch64::FeatureLSE} },
-
-  // FIXME: Unsupported extensions
-  { "pan", {} },
-  { "lor", {} },
-  { "rdma", {} },
-  { "profile", {} },
-};
-
 static void ExpandCryptoAEK(AArch64::ArchKind ArchKind,
                             SmallVector<StringRef, 4> &RequestedExtensions) {
   const bool NoCrypto =
@@ -4944,6 +5057,7 @@ static void ExpandCryptoAEK(AArch64::ArchKind ArchKind,
       RequestedExtensions.push_back("aes");
       break;
     case AArch64::ArchKind::ARMV8_4A:
+    case AArch64::ArchKind::ARMV8_5A:
       RequestedExtensions.push_back("sm4");
       RequestedExtensions.push_back("sha3");
       RequestedExtensions.push_back("sha2");
@@ -4962,6 +5076,7 @@ static void ExpandCryptoAEK(AArch64::ArchKind ArchKind,
       RequestedExtensions.push_back("noaes");
       break;
     case AArch64::ArchKind::ARMV8_4A:
+    case AArch64::ArchKind::ARMV8_5A:
       RequestedExtensions.push_back("nosm4");
       RequestedExtensions.push_back("nosha3");
       RequestedExtensions.push_back("nosha2");
@@ -5305,28 +5420,14 @@ AArch64AsmParser::classifySymbolRef(const MCExpr *Expr,
     return true;
   }
 
-  const MCBinaryExpr *BE = dyn_cast<MCBinaryExpr>(Expr);
-  if (!BE)
+  // Check that it looks like a symbol + an addend
+  MCValue Res;
+  bool Relocatable = Expr->evaluateAsRelocatable(Res, nullptr, nullptr);
+  if (!Relocatable || !Res.getSymA() || Res.getSymB())
     return false;
 
-  SE = dyn_cast<MCSymbolRefExpr>(BE->getLHS());
-  if (!SE)
-    return false;
-  DarwinRefKind = SE->getKind();
-
-  if (BE->getOpcode() != MCBinaryExpr::Add &&
-      BE->getOpcode() != MCBinaryExpr::Sub)
-    return false;
-
-  // See if the addend is a constant, otherwise there's more going
-  // on here than we can deal with.
-  auto AddendExpr = dyn_cast<MCConstantExpr>(BE->getRHS());
-  if (!AddendExpr)
-    return false;
-
-  Addend = AddendExpr->getValue();
-  if (BE->getOpcode() == MCBinaryExpr::Sub)
-    Addend = -Addend;
+  DarwinRefKind = Res.getSymA()->getKind();
+  Addend = Res.getConstant();
 
   // It's some symbol reference + a constant addend, but really
   // shouldn't use both Darwin and ELF syntax.

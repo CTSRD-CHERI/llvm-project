@@ -61,6 +61,8 @@ CreateFrontendBaseAction(CompilerInstance &CI) {
     return llvm::make_unique<GenerateModuleFromModuleMapAction>();
   case GenerateModuleInterface:
     return llvm::make_unique<GenerateModuleInterfaceAction>();
+  case GenerateHeaderModule:
+    return llvm::make_unique<GenerateHeaderModuleAction>();
   case GeneratePCH:            return llvm::make_unique<GeneratePCHAction>();
   case GeneratePTH:            return llvm::make_unique<GeneratePTHAction>();
   case InitOnly:               return llvm::make_unique<InitOnlyAction>();
@@ -88,7 +90,6 @@ CreateFrontendBaseAction(CompilerInstance &CI) {
     return nullptr;
   }
 
-  case PrintDeclContext:       return llvm::make_unique<DeclContextPrintAction>();
   case PrintPreamble:          return llvm::make_unique<PrintPreambleAction>();
   case PrintPreprocessedInput: {
     if (CI.getPreprocessorOutputOpts().RewriteIncludes ||

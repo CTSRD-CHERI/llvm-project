@@ -214,19 +214,24 @@ public:
   static CompilerType GetTypeForDecl(clang::ObjCInterfaceDecl *objc_decl);
 
   template <typename RecordDeclType>
-  CompilerType GetTypeForIdentifier(const ConstString &type_name) {
+  CompilerType
+  GetTypeForIdentifier(const ConstString &type_name,
+                       clang::DeclContext *decl_context = nullptr) {
     CompilerType compiler_type;
 
     if (type_name.GetLength()) {
       clang::ASTContext *ast = getASTContext();
       if (ast) {
+        if (!decl_context)
+          decl_context = ast->getTranslationUnitDecl();
+
         clang::IdentifierInfo &myIdent =
             ast->Idents.get(type_name.GetCString());
         clang::DeclarationName myName =
             ast->DeclarationNames.getIdentifier(&myIdent);
 
         clang::DeclContext::lookup_result result =
-            ast->getTranslationUnitDecl()->lookup(myName);
+            decl_context->lookup(myName);
 
         if (!result.empty()) {
           clang::NamedDecl *named_decl = result[0];
@@ -372,13 +377,32 @@ public:
                                          const CompilerType &result_type,
                                          const CompilerType *args,
                                          unsigned num_args, bool is_variadic,
-                                         unsigned type_quals);
+                                         unsigned type_quals,
+                                         clang::CallingConv cc);
+
+  static CompilerType CreateFunctionType(clang::ASTContext *ast,
+                                         const CompilerType &result_type,
+                                         const CompilerType *args,
+                                         unsigned num_args, bool is_variadic,
+                                         unsigned type_quals) {
+    return ClangASTContext::CreateFunctionType(
+        ast, result_type, args, num_args, is_variadic, type_quals, clang::CC_C);
+  }
 
   CompilerType CreateFunctionType(const CompilerType &result_type,
                                   const CompilerType *args, unsigned num_args,
                                   bool is_variadic, unsigned type_quals) {
     return ClangASTContext::CreateFunctionType(
         getASTContext(), result_type, args, num_args, is_variadic, type_quals);
+  }
+
+  CompilerType CreateFunctionType(const CompilerType &result_type,
+                                  const CompilerType *args, unsigned num_args,
+                                  bool is_variadic, unsigned type_quals,
+                                  clang::CallingConv cc) {
+    return ClangASTContext::CreateFunctionType(getASTContext(), result_type,
+                                               args, num_args, is_variadic,
+                                               type_quals, cc);
   }
 
   clang::ParmVarDecl *CreateParameterDeclaration(const char *name,
@@ -881,7 +905,7 @@ public:
   //----------------------------------------------------------------------
   // Modifying Enumeration types
   //----------------------------------------------------------------------
-  bool AddEnumerationValueToEnumerationType(
+  clang::EnumConstantDecl *AddEnumerationValueToEnumerationType(
       lldb::opaque_compiler_type_t type,
       const CompilerType &enumerator_qual_type, const Declaration &decl,
       const char *name, int64_t enum_value, uint32_t enum_value_bit_size);
@@ -936,6 +960,8 @@ public:
   static clang::RecordDecl *GetAsRecordDecl(const CompilerType &type);
 
   static clang::TagDecl *GetAsTagDecl(const CompilerType &type);
+
+  static clang::TypedefNameDecl *GetAsTypedefDecl(const CompilerType &type);
 
   clang::CXXRecordDecl *GetAsCXXRecordDecl(lldb::opaque_compiler_type_t type);
 

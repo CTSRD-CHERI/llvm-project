@@ -34,6 +34,9 @@ class ExecuteStage final : public Stage {
   // instructions to the underlying pipelines.
   llvm::Error issueReadyInstructions();
 
+  // Used to notify instructions eliminated at register renaming stage.
+  llvm::Error handleInstructionEliminated(InstRef &IR);
+
   ExecuteStage(const ExecuteStage &Other) = delete;
   ExecuteStage &operator=(const ExecuteStage &Other) = delete;
 
@@ -59,15 +62,15 @@ public:
   llvm::Error cycleStart() override;
   llvm::Error execute(InstRef &IR) override;
 
-  void
-  notifyInstructionIssued(const InstRef &IR,
-                          llvm::ArrayRef<std::pair<ResourceRef, double>> Used);
-  void notifyInstructionExecuted(const InstRef &IR);
-  void notifyInstructionReady(const InstRef &IR);
-  void notifyResourceAvailable(const ResourceRef &RR);
+  void notifyInstructionIssued(
+      const InstRef &IR,
+      llvm::ArrayRef<std::pair<ResourceRef, ResourceCycles>> Used) const;
+  void notifyInstructionExecuted(const InstRef &IR) const;
+  void notifyInstructionReady(const InstRef &IR) const;
+  void notifyResourceAvailable(const ResourceRef &RR) const;
 
   // Notify listeners that buffered resources have been consumed or freed.
-  void notifyReservedOrReleasedBuffers(const InstRef &IR, bool Reserved);
+  void notifyReservedOrReleasedBuffers(const InstRef &IR, bool Reserved) const;
 };
 
 } // namespace mca

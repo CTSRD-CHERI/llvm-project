@@ -101,6 +101,7 @@ private:
   raw_ostream &error() const;
   raw_ostream &warn() const;
   raw_ostream &note() const;
+  raw_ostream &dump(const DWARFDie &Die, unsigned indent = 0) const;
 
   /// Verifies the abbreviations section.
   ///
@@ -147,13 +148,13 @@ private:
   ///  - That the root DIE is a unit DIE.
   ///  - If a unit type is provided, that the unit DIE matches the unit type.
   ///  - The DIE ranges.
+  ///  - That call site entries are only nested within subprograms with a
+  ///    DW_AT_call attribute.
   ///
   /// \param Unit      The DWARF Unit to verify.
-  /// \param UnitType  An optional unit type which will be used to verify the
-  ///                  type of the unit DIE.
   ///
   /// \returns The number of errors that occurred during verification.
-  unsigned verifyUnitContents(DWARFUnit &Unit, uint8_t UnitType = 0);
+  unsigned verifyUnitContents(DWARFUnit &Unit);
 
   /// Verifies the unit headers and contents in a .debug_info or .debug_types
   /// section.
@@ -164,6 +165,12 @@ private:
   /// \returns The number of errors that occurred during verification.
   unsigned verifyUnitSection(const DWARFSection &S,
                              DWARFSectionKind SectionKind);
+
+  /// Verifies that a call site entry is nested within a subprogram with a
+  /// DW_AT_call attribute.
+  ///
+  /// \returns Number of errors that occurred during verification.
+  unsigned verifyDebugInfoCallSite(const DWARFDie &Die);
 
   /// Verify that all Die ranges are valid.
   ///

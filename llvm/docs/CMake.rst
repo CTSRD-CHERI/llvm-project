@@ -254,8 +254,7 @@ LLVM-specific variables
   Adds benchmarks to the list of default targets. Defaults to OFF.
 
 **LLVM_INCLUDE_BENCHMARKS**:BOOL
-  Generate build targets for the LLVM benchmarks. Defaults to ON, but is set
-  to OFF on Windows.
+  Generate build targets for the LLVM benchmarks. Defaults to ON.
 
 **LLVM_APPEND_VC_REV**:BOOL
   Embed version control revision info (svn revision number or Git revision id).
@@ -609,8 +608,8 @@ A few notes about CMake Caches:
 For more information about some of the advanced build configurations supported
 via Cache files see :doc:`AdvancedBuilds`.
 
-Executing the test suite
-========================
+Executing the Tests
+===================
 
 Testing is performed when the *check-all* target is built. For instance, if you are
 using Makefiles, execute this command in the root of your build directory:

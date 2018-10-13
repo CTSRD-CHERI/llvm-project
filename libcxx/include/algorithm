@@ -646,6 +646,7 @@ template <class BidirectionalIterator, class Compare>
 #include <iterator>
 #include <cstddef>
 #include <bit>
+#include <version>
 
 #include <__debug>
 
@@ -2951,7 +2952,7 @@ public:
 _LIBCPP_FUNC_VIS __rs_default __rs_get();
 
 template <class _RandomAccessIterator>
-void
+_LIBCPP_DEPRECATED_IN_CXX14 void
 random_shuffle(_RandomAccessIterator __first, _RandomAccessIterator __last)
 {
     typedef typename iterator_traits<_RandomAccessIterator>::difference_type difference_type;
@@ -2972,7 +2973,7 @@ random_shuffle(_RandomAccessIterator __first, _RandomAccessIterator __last)
 }
 
 template <class _RandomAccessIterator, class _RandomNumberGenerator>
-void
+_LIBCPP_DEPRECATED_IN_CXX14 void
 random_shuffle(_RandomAccessIterator __first, _RandomAccessIterator __last,
 #ifndef _LIBCPP_CXX03_LANG
                _RandomNumberGenerator&& __rand)
@@ -2987,7 +2988,8 @@ random_shuffle(_RandomAccessIterator __first, _RandomAccessIterator __last,
         for (--__last; __first < __last; ++__first, --__d)
         {
             difference_type __i = __rand(__d);
-            swap(*__first, *(__first + __i));
+            if (__i != difference_type(0))
+	            swap(*__first, *(__first + __i));
         }
     }
 }

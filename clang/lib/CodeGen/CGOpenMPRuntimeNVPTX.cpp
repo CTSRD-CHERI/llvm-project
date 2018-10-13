@@ -179,6 +179,54 @@ enum NamedBarrier : unsigned {
   NB_Parallel = 1,
 };
 
+typedef std::pair<CharUnits /*Align*/, const ValueDecl *> VarsDataTy;
+static bool stable_sort_comparator(const VarsDataTy P1, const VarsDataTy P2) {
+  return P1.first > P2.first;
+}
+
+static RecordDecl *buildRecordForGlobalizedVars(
+    ASTContext &C, ArrayRef<const ValueDecl *> EscapedDecls,
+    llvm::SmallDenseMap<const ValueDecl *, const FieldDecl *>
+        &MappedDeclsFields) {
+  if (EscapedDecls.empty())
+    return nullptr;
+  SmallVector<VarsDataTy, 4> GlobalizedVars;
+  for (const ValueDecl *D : EscapedDecls)
+    GlobalizedVars.emplace_back(C.getDeclAlign(D), D);
+  std::stable_sort(GlobalizedVars.begin(), GlobalizedVars.end(),
+                   stable_sort_comparator);
+  // Build struct _globalized_locals_ty {
+  //         /*  globalized vars  */
+  //       };
+  RecordDecl *GlobalizedRD = C.buildImplicitRecord("_globalized_locals_ty");
+  GlobalizedRD->startDefinition();
+  for (const auto &Pair : GlobalizedVars) {
+    const ValueDecl *VD = Pair.second;
+    QualType Type = VD->getType();
+    if (Type->isLValueReferenceType())
+      Type = C.getPointerType(Type.getNonReferenceType());
+    else
+      Type = Type.getNonReferenceType();
+    SourceLocation Loc = VD->getLocation();
+    auto *Field =
+        FieldDecl::Create(C, GlobalizedRD, Loc, Loc, VD->getIdentifier(), Type,
+                          C.getTrivialTypeSourceInfo(Type, SourceLocation()),
+                          /*BW=*/nullptr, /*Mutable=*/false,
+                          /*InitStyle=*/ICIS_NoInit);
+    Field->setAccess(AS_public);
+    GlobalizedRD->addDecl(Field);
+    if (VD->hasAttrs()) {
+      for (specific_attr_iterator<AlignedAttr> I(VD->getAttrs().begin()),
+           E(VD->getAttrs().end());
+           I != E; ++I)
+        Field->addAttr(*I);
+    }
+    MappedDeclsFields.try_emplace(VD, Field);
+  }
+  GlobalizedRD->completeDefinition();
+  return GlobalizedRD;
+}
+
 /// Get the list of variables that can escape their declaration context.
 class CheckVarsEscapingDeclContext final
     : public ConstStmtVisitor<CheckVarsEscapingDeclContext> {
@@ -292,51 +340,11 @@ class CheckVarsEscapingDeclContext final
     }
   }
 
-  typedef std::pair<CharUnits /*Align*/, const ValueDecl *> VarsDataTy;
-  static bool stable_sort_comparator(const VarsDataTy P1, const VarsDataTy P2) {
-    return P1.first > P2.first;
-  }
-
   void buildRecordForGlobalizedVars() {
     assert(!GlobalizedRD &&
            "Record for globalized variables is built already.");
-    if (EscapedDecls.empty())
-      return;
-    ASTContext &C = CGF.getContext();
-    SmallVector<VarsDataTy, 4> GlobalizedVars;
-    for (const ValueDecl *D : EscapedDecls)
-      GlobalizedVars.emplace_back(C.getDeclAlign(D), D);
-    std::stable_sort(GlobalizedVars.begin(), GlobalizedVars.end(),
-                     stable_sort_comparator);
-    // Build struct _globalized_locals_ty {
-    //         /*  globalized vars  */
-    //       };
-    GlobalizedRD = C.buildImplicitRecord("_globalized_locals_ty");
-    GlobalizedRD->startDefinition();
-    for (const auto &Pair : GlobalizedVars) {
-      const ValueDecl *VD = Pair.second;
-      QualType Type = VD->getType();
-      if (Type->isLValueReferenceType())
-        Type = C.getPointerType(Type.getNonReferenceType());
-      else
-        Type = Type.getNonReferenceType();
-      SourceLocation Loc = VD->getLocation();
-      auto *Field = FieldDecl::Create(
-          C, GlobalizedRD, Loc, Loc, VD->getIdentifier(), Type,
-          C.getTrivialTypeSourceInfo(Type, SourceLocation()),
-          /*BW=*/nullptr, /*Mutable=*/false,
-          /*InitStyle=*/ICIS_NoInit);
-      Field->setAccess(AS_public);
-      GlobalizedRD->addDecl(Field);
-      if (VD->hasAttrs()) {
-        for (specific_attr_iterator<AlignedAttr> I(VD->getAttrs().begin()),
-             E(VD->getAttrs().end());
-             I != E; ++I)
-          Field->addAttr(*I);
-      }
-      MappedDeclsFields.try_emplace(VD, Field);
-    }
-    GlobalizedRD->completeDefinition();
+    GlobalizedRD = ::buildRecordForGlobalizedVars(
+        CGF.getContext(), EscapedDecls.getArrayRef(), MappedDeclsFields);
   }
 
 public:
@@ -672,13 +680,6 @@ static bool hasParallelIfNumThreadsClause(ASTContext &Ctx,
   return false;
 }
 
-/// Checks if the directive is the distribute clause with the lastprivate
-/// clauses. This construct does not support SPMD execution mode.
-static bool hasDistributeWithLastprivateClauses(const OMPExecutableDirective &D) {
-  return isOpenMPDistributeDirective(D.getDirectiveKind()) &&
-         D.hasClausesOfKind<OMPLastprivateClause>();
-}
-
 /// Check for inner (nested) SPMD construct, if any
 static bool hasNestedSPMDDirective(ASTContext &Ctx,
                                    const OMPExecutableDirective &D) {
@@ -692,8 +693,7 @@ static bool hasNestedSPMDDirective(ASTContext &Ctx,
     switch (D.getDirectiveKind()) {
     case OMPD_target:
       if (isOpenMPParallelDirective(DKind) &&
-          !hasParallelIfNumThreadsClause(Ctx, *NestedDir) &&
-          !hasDistributeWithLastprivateClauses(*NestedDir))
+          !hasParallelIfNumThreadsClause(Ctx, *NestedDir))
         return true;
       if (DKind == OMPD_teams) {
         Body = NestedDir->getInnermostCapturedStmt()->IgnoreContainers(
@@ -704,16 +704,14 @@ static bool hasNestedSPMDDirective(ASTContext &Ctx,
         if (const auto *NND = dyn_cast<OMPExecutableDirective>(ChildStmt)) {
           DKind = NND->getDirectiveKind();
           if (isOpenMPParallelDirective(DKind) &&
-              !hasParallelIfNumThreadsClause(Ctx, *NND) &&
-              !hasDistributeWithLastprivateClauses(*NND))
+              !hasParallelIfNumThreadsClause(Ctx, *NND))
             return true;
         }
       }
       return false;
     case OMPD_target_teams:
       return isOpenMPParallelDirective(DKind) &&
-             !hasParallelIfNumThreadsClause(Ctx, *NestedDir) &&
-             !hasDistributeWithLastprivateClauses(*NestedDir);
+             !hasParallelIfNumThreadsClause(Ctx, *NestedDir);
     case OMPD_target_simd:
     case OMPD_target_parallel:
     case OMPD_target_parallel_for:
@@ -764,6 +762,7 @@ static bool hasNestedSPMDDirective(ASTContext &Ctx,
     case OMPD_declare_reduction:
     case OMPD_taskloop:
     case OMPD_taskloop_simd:
+    case OMPD_requires:
     case OMPD_unknown:
       llvm_unreachable("Unexpected directive.");
     }
@@ -782,12 +781,9 @@ static bool supportsSPMDExecutionMode(ASTContext &Ctx,
   case OMPD_target_parallel:
   case OMPD_target_parallel_for:
   case OMPD_target_parallel_for_simd:
-    return !hasParallelIfNumThreadsClause(Ctx, D);
   case OMPD_target_teams_distribute_parallel_for:
   case OMPD_target_teams_distribute_parallel_for_simd:
-    // Distribute with lastprivates requires non-SPMD execution mode.
-    return !hasParallelIfNumThreadsClause(Ctx, D) &&
-           !hasDistributeWithLastprivateClauses(D);
+    return !hasParallelIfNumThreadsClause(Ctx, D);
   case OMPD_target_simd:
   case OMPD_target_teams_distribute:
   case OMPD_target_teams_distribute_simd:
@@ -834,6 +830,7 @@ static bool supportsSPMDExecutionMode(ASTContext &Ctx,
   case OMPD_declare_reduction:
   case OMPD_taskloop:
   case OMPD_taskloop_simd:
+  case OMPD_requires:
   case OMPD_unknown:
     break;
   }
@@ -983,6 +980,7 @@ static bool hasNestedLightweightDirective(ASTContext &Ctx,
     case OMPD_declare_reduction:
     case OMPD_taskloop:
     case OMPD_taskloop_simd:
+    case OMPD_requires:
     case OMPD_unknown:
       llvm_unreachable("Unexpected directive.");
     }
@@ -1055,6 +1053,7 @@ static bool supportsLightweightRuntime(ASTContext &Ctx,
   case OMPD_declare_reduction:
   case OMPD_taskloop:
   case OMPD_taskloop_simd:
+  case OMPD_requires:
   case OMPD_unknown:
     break;
   }
@@ -1084,12 +1083,15 @@ void CGOpenMPRuntimeNVPTX::emitNonSPMDKernel(const OMPExecutableDirective &D,
                          CGOpenMPRuntimeNVPTX::WorkerFunctionState &WST)
         : EST(EST), WST(WST) {}
     void Enter(CodeGenFunction &CGF) override {
-      static_cast<CGOpenMPRuntimeNVPTX &>(CGF.CGM.getOpenMPRuntime())
-          .emitNonSPMDEntryHeader(CGF, EST, WST);
+      auto &RT = static_cast<CGOpenMPRuntimeNVPTX &>(CGF.CGM.getOpenMPRuntime());
+      RT.emitNonSPMDEntryHeader(CGF, EST, WST);
+      // Skip target region initialization.
+      RT.setLocThreadIdInsertPt(CGF, /*AtCurrentPoint=*/true);
     }
     void Exit(CodeGenFunction &CGF) override {
-      static_cast<CGOpenMPRuntimeNVPTX &>(CGF.CGM.getOpenMPRuntime())
-          .emitNonSPMDEntryFooter(CGF, EST);
+      auto &RT = static_cast<CGOpenMPRuntimeNVPTX &>(CGF.CGM.getOpenMPRuntime());
+      RT.clearLocThreadIdInsertPt(CGF);
+      RT.emitNonSPMDEntryFooter(CGF, EST);
     }
   } Action(EST, WST);
   CodeGen.setAction(Action);
@@ -1198,8 +1200,11 @@ void CGOpenMPRuntimeNVPTX::emitSPMDKernel(const OMPExecutableDirective &D,
         : RT(RT), EST(EST), D(D) {}
     void Enter(CodeGenFunction &CGF) override {
       RT.emitSPMDEntryHeader(CGF, EST, D);
+      // Skip target region initialization.
+      RT.setLocThreadIdInsertPt(CGF, /*AtCurrentPoint=*/true);
     }
     void Exit(CodeGenFunction &CGF) override {
+      RT.clearLocThreadIdInsertPt(CGF);
       RT.emitSPMDEntryFooter(CGF, EST);
     }
   } Action(*this, EST, D);
@@ -1207,6 +1212,10 @@ void CGOpenMPRuntimeNVPTX::emitSPMDKernel(const OMPExecutableDirective &D,
   emitTargetOutlinedFunctionHelper(D, ParentName, OutlinedFn, OutlinedFnID,
                                    IsOffloadEntry, CodeGen);
 }
+
+static void
+getDistributeLastprivateVars(const OMPExecutableDirective &D,
+                             llvm::SmallVectorImpl<const ValueDecl *> &Vars);
 
 void CGOpenMPRuntimeNVPTX::emitSPMDEntryHeader(
     CodeGenFunction &CGF, EntryFunctionState &EST,
@@ -1220,11 +1229,33 @@ void CGOpenMPRuntimeNVPTX::emitSPMDEntryHeader(
   // Initialize the OMP state in the runtime; called by all active threads.
   bool RequiresFullRuntime = CGM.getLangOpts().OpenMPCUDAForceFullRuntime ||
                              !supportsLightweightRuntime(CGF.getContext(), D);
+  // Check if we have inner distribute + lastprivate|reduction clauses.
+  bool RequiresDatasharing = RequiresFullRuntime;
+  if (!RequiresDatasharing) {
+    const OMPExecutableDirective *TD = &D;
+    if (!isOpenMPTeamsDirective(TD->getDirectiveKind()) &&
+        !isOpenMPParallelDirective(TD->getDirectiveKind())) {
+      const Stmt *S = getSingleCompoundChild(
+          TD->getInnermostCapturedStmt()->getCapturedStmt()->IgnoreContainers(
+              /*IgnoreCaptured=*/true));
+      TD = cast<OMPExecutableDirective>(S);
+    }
+    if (!isOpenMPDistributeDirective(TD->getDirectiveKind()) &&
+        !isOpenMPParallelDirective(TD->getDirectiveKind())) {
+      const Stmt *S = getSingleCompoundChild(
+          TD->getInnermostCapturedStmt()->getCapturedStmt()->IgnoreContainers(
+              /*IgnoreCaptured=*/true));
+      TD = cast<OMPExecutableDirective>(S);
+    }
+    if (isOpenMPDistributeDirective(TD->getDirectiveKind()))
+      RequiresDatasharing = TD->hasClausesOfKind<OMPLastprivateClause>() ||
+                            TD->hasClausesOfKind<OMPReductionClause>();
+  }
   llvm::Value *Args[] = {
       getThreadLimit(CGF, /*IsInSPMDExecutionMode=*/true),
       /*RequiresOMPRuntime=*/
       Bld.getInt16(RequiresFullRuntime ? 1 : 0),
-      /*RequiresDataSharing=*/Bld.getInt16(RequiresFullRuntime ? 1 : 0)};
+      /*RequiresDataSharing=*/Bld.getInt16(RequiresDatasharing ? 1 : 0)};
   CGF.EmitRuntimeCall(
       createNVPTXRuntimeFunction(OMPRTL_NVPTX__kmpc_spmd_kernel_init), Args);
 
@@ -1799,28 +1830,88 @@ llvm::Value *CGOpenMPRuntimeNVPTX::emitParallelOutlinedFunction(
   return OutlinedFun;
 }
 
+/// Get list of lastprivate variables from the teams distribute ... or
+/// teams {distribute ...} directives.
+static void
+getDistributeLastprivateVars(const OMPExecutableDirective &D,
+                             llvm::SmallVectorImpl<const ValueDecl *> &Vars) {
+  assert(isOpenMPTeamsDirective(D.getDirectiveKind()) &&
+         "expected teams directive.");
+  const OMPExecutableDirective *Dir = &D;
+  if (!isOpenMPDistributeDirective(D.getDirectiveKind())) {
+    if (const Stmt *S = getSingleCompoundChild(
+            D.getInnermostCapturedStmt()->getCapturedStmt()->IgnoreContainers(
+                /*IgnoreCaptured=*/true))) {
+      Dir = dyn_cast<OMPExecutableDirective>(S);
+      if (Dir && !isOpenMPDistributeDirective(Dir->getDirectiveKind()))
+        Dir = nullptr;
+    }
+  }
+  if (!Dir)
+    return;
+  for (const OMPLastprivateClause *C :
+       Dir->getClausesOfKind<OMPLastprivateClause>()) {
+    for (const Expr *E : C->getVarRefs()) {
+      const auto *DE = cast<DeclRefExpr>(E->IgnoreParens());
+      Vars.push_back(cast<ValueDecl>(DE->getDecl()->getCanonicalDecl()));
+    }
+  }
+}
+
 llvm::Value *CGOpenMPRuntimeNVPTX::emitTeamsOutlinedFunction(
     const OMPExecutableDirective &D, const VarDecl *ThreadIDVar,
     OpenMPDirectiveKind InnermostKind, const RegionCodeGenTy &CodeGen) {
   SourceLocation Loc = D.getBeginLoc();
 
+  const RecordDecl *GlobalizedRD = nullptr;
+  llvm::SmallVector<const ValueDecl *, 4> LastPrivates;
+  llvm::SmallDenseMap<const ValueDecl *, const FieldDecl *> MappedDeclsFields;
+  if (getExecutionMode() == CGOpenMPRuntimeNVPTX::EM_SPMD) {
+    getDistributeLastprivateVars(D, LastPrivates);
+    if (!LastPrivates.empty())
+      GlobalizedRD = buildRecordForGlobalizedVars(
+          CGM.getContext(), LastPrivates, MappedDeclsFields);
+  }
+
   // Emit target region as a standalone region.
   class NVPTXPrePostActionTy : public PrePostActionTy {
     SourceLocation &Loc;
+    const RecordDecl *GlobalizedRD;
+    llvm::SmallDenseMap<const ValueDecl *, const FieldDecl *>
+        &MappedDeclsFields;
 
   public:
-    NVPTXPrePostActionTy(SourceLocation &Loc) : Loc(Loc) {}
+    NVPTXPrePostActionTy(
+        SourceLocation &Loc, const RecordDecl *GlobalizedRD,
+        llvm::SmallDenseMap<const ValueDecl *, const FieldDecl *>
+            &MappedDeclsFields)
+        : Loc(Loc), GlobalizedRD(GlobalizedRD),
+          MappedDeclsFields(MappedDeclsFields) {}
     void Enter(CodeGenFunction &CGF) override {
-      static_cast<CGOpenMPRuntimeNVPTX &>(CGF.CGM.getOpenMPRuntime())
-          .emitGenericVarsProlog(CGF, Loc);
+      auto &Rt =
+          static_cast<CGOpenMPRuntimeNVPTX &>(CGF.CGM.getOpenMPRuntime());
+      if (GlobalizedRD) {
+        auto I = Rt.FunctionGlobalizedDecls.try_emplace(CGF.CurFn).first;
+        I->getSecond().GlobalRecord = GlobalizedRD;
+        I->getSecond().MappedParams =
+            llvm::make_unique<CodeGenFunction::OMPMapVars>();
+        DeclToAddrMapTy &Data = I->getSecond().LocalVarData;
+        for (const auto &Pair : MappedDeclsFields) {
+          assert(Pair.getFirst()->isCanonicalDecl() &&
+                 "Expected canonical declaration");
+          Data.insert(std::make_pair(
+              Pair.getFirst(),
+              std::make_pair(Pair.getSecond(), Address::invalid())));
+        }
+      }
+      Rt.emitGenericVarsProlog(CGF, Loc);
     }
     void Exit(CodeGenFunction &CGF) override {
       static_cast<CGOpenMPRuntimeNVPTX &>(CGF.CGM.getOpenMPRuntime())
           .emitGenericVarsEpilog(CGF);
     }
-  } Action(Loc);
-  if (getExecutionMode() != CGOpenMPRuntimeNVPTX::EM_SPMD)
-    CodeGen.setAction(Action);
+  } Action(Loc, GlobalizedRD, MappedDeclsFields);
+  CodeGen.setAction(Action);
   llvm::Value *OutlinedFunVal = CGOpenMPRuntime::emitTeamsOutlinedFunction(
       D, ThreadIDVar, InnermostKind, CodeGen);
   llvm::Function *OutlinedFun = cast<llvm::Function>(OutlinedFunVal);
@@ -1834,7 +1925,8 @@ llvm::Value *CGOpenMPRuntimeNVPTX::emitTeamsOutlinedFunction(
 void CGOpenMPRuntimeNVPTX::emitGenericVarsProlog(CodeGenFunction &CGF,
                                                  SourceLocation Loc,
                                                  bool WithSPMDCheck) {
-  if (getDataSharingMode(CGM) != CGOpenMPRuntimeNVPTX::Generic)
+  if (getDataSharingMode(CGM) != CGOpenMPRuntimeNVPTX::Generic &&
+      getExecutionMode() != CGOpenMPRuntimeNVPTX::EM_SPMD)
     return;
 
   CGBuilderTy &Bld = CGF.Builder;
@@ -1892,8 +1984,6 @@ void CGOpenMPRuntimeNVPTX::emitGenericVarsProlog(CodeGenFunction &CGF,
       I->getSecond().GlobalRecordAddr = Phi;
       I->getSecond().IsInSPMDModeFlag = IsSPMD;
     } else {
-      assert(getExecutionMode() == CGOpenMPRuntimeNVPTX::EM_NonSPMD &&
-             "Expected Non-SPMD construct.");
       // TODO: allow the usage of shared memory to be controlled by
       // the user, for now, default to global.
       llvm::Value *GlobalRecordSizeArg[] = {
@@ -1967,7 +2057,8 @@ void CGOpenMPRuntimeNVPTX::emitGenericVarsProlog(CodeGenFunction &CGF,
 
 void CGOpenMPRuntimeNVPTX::emitGenericVarsEpilog(CodeGenFunction &CGF,
                                                  bool WithSPMDCheck) {
-  if (getDataSharingMode(CGM) != CGOpenMPRuntimeNVPTX::Generic)
+  if (getDataSharingMode(CGM) != CGOpenMPRuntimeNVPTX::Generic &&
+      getExecutionMode() != CGOpenMPRuntimeNVPTX::EM_SPMD)
     return;
 
   const auto I = FunctionGlobalizedDecls.find(CGF.CurFn);
@@ -1997,8 +2088,6 @@ void CGOpenMPRuntimeNVPTX::emitGenericVarsEpilog(CodeGenFunction &CGF,
             CGF.EmitCastToVoidPtr(I->getSecond().GlobalRecordAddr));
         CGF.EmitBlock(ExitBB);
       } else {
-        assert(getExecutionMode() == CGOpenMPRuntimeNVPTX::EM_NonSPMD &&
-               "Expected Non-SPMD mode.");
         CGF.EmitRuntimeCall(createNVPTXRuntimeFunction(
                                 OMPRTL_NVPTX__kmpc_data_sharing_pop_stack),
                             I->getSecond().GlobalRecordAddr);
@@ -2150,30 +2239,24 @@ void CGOpenMPRuntimeNVPTX::emitNonSPMDParallelCall(
     Work.emplace_back(WFn);
   };
 
-  auto &&LNParallelGen = [this, Loc, &SeqGen, &L0ParallelGen, &CodeGen,
-                          &ThreadIDAddr](CodeGenFunction &CGF,
-                                         PrePostActionTy &Action) {
-    RegionCodeGenTy RCG(CodeGen);
+  auto &&LNParallelGen = [this, Loc, &SeqGen, &L0ParallelGen](
+                             CodeGenFunction &CGF, PrePostActionTy &Action) {
     if (IsInParallelRegion) {
       SeqGen(CGF, Action);
     } else if (IsInTargetMasterThreadRegion) {
       L0ParallelGen(CGF, Action);
-    } else if (getExecutionMode() == CGOpenMPRuntimeNVPTX::EM_NonSPMD) {
-      RCG(CGF);
     } else {
       // Check for master and then parallelism:
       // if (__kmpc_is_spmd_exec_mode() || __kmpc_parallel_level(loc, gtid)) {
-      //  Serialized execution.
-      // } else if (master) {
-      //   Worker call.
+      //   Serialized execution.
       // } else {
-      //   Outlined function call.
+      //   Worker call.
       // }
       CGBuilderTy &Bld = CGF.Builder;
       llvm::BasicBlock *ExitBB = CGF.createBasicBlock(".exit");
       llvm::BasicBlock *SeqBB = CGF.createBasicBlock(".sequential");
       llvm::BasicBlock *ParallelCheckBB = CGF.createBasicBlock(".parcheck");
-      llvm::BasicBlock *MasterCheckBB = CGF.createBasicBlock(".mastercheck");
+      llvm::BasicBlock *MasterBB = CGF.createBasicBlock(".master");
       llvm::Value *IsSPMD = Bld.CreateIsNotNull(CGF.EmitNounwindRuntimeCall(
           createNVPTXRuntimeFunction(OMPRTL_NVPTX__kmpc_is_spmd_exec_mode)));
       Bld.CreateCondBr(IsSPMD, SeqBB, ParallelCheckBB);
@@ -2186,27 +2269,15 @@ void CGOpenMPRuntimeNVPTX::emitNonSPMDParallelCall(
           createNVPTXRuntimeFunction(OMPRTL_NVPTX__kmpc_parallel_level),
           {RTLoc, ThreadID});
       llvm::Value *Res = Bld.CreateIsNotNull(PL);
-      Bld.CreateCondBr(Res, SeqBB, MasterCheckBB);
+      Bld.CreateCondBr(Res, SeqBB, MasterBB);
       CGF.EmitBlock(SeqBB);
       SeqGen(CGF, Action);
       CGF.EmitBranch(ExitBB);
       // There is no need to emit line number for unconditional branch.
       (void)ApplyDebugLocation::CreateEmpty(CGF);
-      CGF.EmitBlock(MasterCheckBB);
-      llvm::BasicBlock *MasterThenBB = CGF.createBasicBlock("master.then");
-      llvm::BasicBlock *ElseBlock = CGF.createBasicBlock("omp_if.else");
-      llvm::Value *IsMaster =
-          Bld.CreateICmpEQ(getNVPTXThreadID(CGF), getMasterThreadID(CGF));
-      Bld.CreateCondBr(IsMaster, MasterThenBB, ElseBlock);
-      CGF.EmitBlock(MasterThenBB);
+      CGF.EmitBlock(MasterBB);
       L0ParallelGen(CGF, Action);
       CGF.EmitBranch(ExitBB);
-      // There is no need to emit line number for unconditional branch.
-      (void)ApplyDebugLocation::CreateEmpty(CGF);
-      CGF.EmitBlock(ElseBlock);
-      // In the worker need to use the real thread id.
-      ThreadIDAddr = emitThreadIDAddress(CGF, Loc);
-      RCG(CGF);
       // There is no need to emit line number for unconditional branch.
       (void)ApplyDebugLocation::CreateEmpty(CGF);
       // Emit the continuation block for code after the if.
@@ -3950,6 +4021,9 @@ void CGOpenMPRuntimeNVPTX::emitFunctionProlog(CodeGenFunction &CGF,
   } else if (const auto *CD = dyn_cast<CapturedDecl>(D)) {
     Body = CD->getBody();
     NeedToDelayGlobalization = CGF.CapturedStmtInfo->getKind() == CR_OpenMP;
+    if (NeedToDelayGlobalization &&
+        getExecutionMode() == CGOpenMPRuntimeNVPTX::EM_SPMD)
+      return;
   }
   if (!Body)
     return;
@@ -4018,4 +4092,27 @@ Address CGOpenMPRuntimeNVPTX::getAddressOfLocalVariable(CodeGenFunction &CGF,
 void CGOpenMPRuntimeNVPTX::functionFinished(CodeGenFunction &CGF) {
   FunctionGlobalizedDecls.erase(CGF.CurFn);
   CGOpenMPRuntime::functionFinished(CGF);
+}
+
+void CGOpenMPRuntimeNVPTX::getDefaultDistScheduleAndChunk(
+    CodeGenFunction &CGF, const OMPLoopDirective &S,
+    OpenMPDistScheduleClauseKind &ScheduleKind,
+    llvm::Value *&Chunk) const {
+  if (getExecutionMode() == CGOpenMPRuntimeNVPTX::EM_SPMD) {
+    ScheduleKind = OMPC_DIST_SCHEDULE_static;
+    Chunk = CGF.EmitScalarConversion(getNVPTXNumThreads(CGF),
+        CGF.getContext().getIntTypeForBitwidth(32, /*Signed=*/0),
+        S.getIterationVariable()->getType(), S.getBeginLoc());
+  }
+}
+
+void CGOpenMPRuntimeNVPTX::getDefaultScheduleAndChunk(
+    CodeGenFunction &CGF, const OMPLoopDirective &S,
+    OpenMPScheduleClauseKind &ScheduleKind,
+    llvm::Value *&Chunk) const {
+  if (getExecutionMode() == CGOpenMPRuntimeNVPTX::EM_SPMD) {
+    ScheduleKind = OMPC_SCHEDULE_static;
+    Chunk = CGF.Builder.getIntN(CGF.getContext().getTypeSize(
+        S.getIterationVariable()->getType()), 1);
+  }
 }

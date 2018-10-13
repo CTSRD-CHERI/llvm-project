@@ -21,32 +21,27 @@ extern __device__
     omptarget_nvptx_Queue<omptarget_nvptx_ThreadPrivateContext, OMP_STATE_COUNT>
         omptarget_nvptx_device_State[MAX_SM];
 
-extern __device__ __shared__
-    omptarget_nvptx_ThreadPrivateContext *omptarget_nvptx_threadPrivateContext;
-
 extern __device__ omptarget_nvptx_Queue<
     omptarget_nvptx_SimpleThreadPrivateContext, OMP_STATE_COUNT>
     omptarget_nvptx_device_simpleState[MAX_SM];
 
-extern __device__ __shared__ omptarget_nvptx_SimpleThreadPrivateContext
-    *omptarget_nvptx_simpleThreadPrivateContext;
-
-//
-// The team master sets the outlined function and its arguments in these
-// variables to communicate with the workers.  Since they are in shared memory,
-// there is one copy of these variables for each kernel, instance, and team.
-//
-extern volatile __device__ __shared__ omptarget_nvptx_WorkFn
-    omptarget_nvptx_workFn;
-extern __device__ __shared__ uint32_t execution_param;
+extern __device__ __shared__ void *omptarget_nvptx_simpleGlobalData;
 
 ////////////////////////////////////////////////////////////////////////////////
 // init entry points
 ////////////////////////////////////////////////////////////////////////////////
 
+INLINE unsigned nsmid() {
+  unsigned n;
+  asm("mov.u32 %0, %%nsmid;" : "=r"(n));
+  return n;
+}
+
 INLINE unsigned smid() {
   unsigned id;
   asm("mov.u32 %0, %%smid;" : "=r"(id));
+  ASSERT0(LT_FUSSY, nsmid() <= MAX_SM,
+          "Expected number of SMs is less than reported.");
   return id;
 }
 
@@ -123,6 +118,10 @@ EXTERN void __kmpc_spmd_kernel_init(int ThreadLimit, int16_t RequiresOMPRuntime,
       int slot = smid() % MAX_SM;
       omptarget_nvptx_simpleThreadPrivateContext =
           omptarget_nvptx_device_simpleState[slot].Dequeue();
+      // Reuse the memory allocated for the full runtime as the preallocated
+      // global memory buffer for the lightweight runtime.
+      omptarget_nvptx_simpleGlobalData =
+          omptarget_nvptx_device_State[slot].Dequeue();
     }
     __syncthreads();
     omptarget_nvptx_simpleThreadPrivateContext->Init();
@@ -146,8 +145,6 @@ EXTERN void __kmpc_spmd_kernel_init(int ThreadLimit, int16_t RequiresOMPRuntime,
     omptarget_nvptx_WorkDescr &workDescr = getMyWorkDescriptor();
     // init team context
     currTeamDescr.InitTeamDescr();
-    // init counters (copy start to init)
-    workDescr.CounterGroup().Reset();
   }
   __syncthreads();
 
@@ -168,8 +165,6 @@ EXTERN void __kmpc_spmd_kernel_init(int ThreadLimit, int16_t RequiresOMPRuntime,
                                                              newTaskDescr);
 
   // init thread private from init value
-  workDescr.CounterGroup().Init(
-      omptarget_nvptx_threadPrivateContext->Priv(threadId));
   PRINT(LD_PAR,
         "thread will execute parallel region with id %d in a team of "
         "%d threads\n",
@@ -196,8 +191,12 @@ EXTERN void __kmpc_spmd_kernel_deinit() {
       int slot = smid() % MAX_SM;
       omptarget_nvptx_device_simpleState[slot].Enqueue(
           omptarget_nvptx_simpleThreadPrivateContext);
-      return;
+      // Enqueue global memory back.
+      omptarget_nvptx_device_State[slot].Enqueue(
+          reinterpret_cast<omptarget_nvptx_ThreadPrivateContext *>(
+              omptarget_nvptx_simpleGlobalData));
     }
+    return;
   }
   if (threadId == 0) {
     // Enqueue omp state object for use by another team.

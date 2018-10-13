@@ -50,6 +50,7 @@
 
 #if defined(_WIN32)
 #include "lldb/Host/windows/PosixApi.h" // for PATH_MAX
+#include "lldb/Host/windows/windows.h"
 #endif
 
 #include "llvm/ADT/None.h"      // for None
@@ -58,6 +59,7 @@
 #include "llvm/ADT/iterator.h" // for iterator_facade_...
 #include "llvm/Support/DynamicLibrary.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/Process.h"
 #include "llvm/Support/Threading.h"
 #include "llvm/Support/raw_ostream.h" // for raw_fd_ostream
 
@@ -89,7 +91,7 @@ static std::recursive_mutex *g_debugger_list_mutex_ptr =
 static DebuggerList *g_debugger_list_ptr =
     nullptr; // NOTE: intentional leak to avoid issues with C++ destructor chain
 
-OptionEnumValueElement g_show_disassembly_enum_values[] = {
+static constexpr OptionEnumValueElement g_show_disassembly_enum_values[] = {
     {Debugger::eStopDisassemblyTypeNever, "never",
      "Never show disassembly when displaying a stop context."},
     {Debugger::eStopDisassemblyTypeNoDebugInfo, "no-debuginfo",
@@ -98,16 +100,14 @@ OptionEnumValueElement g_show_disassembly_enum_values[] = {
      "Show disassembly when there is no source information, or the source file "
      "is missing when displaying a stop context."},
     {Debugger::eStopDisassemblyTypeAlways, "always",
-     "Always show disassembly when displaying a stop context."},
-    {0, nullptr, nullptr}};
+     "Always show disassembly when displaying a stop context."} };
 
-OptionEnumValueElement g_language_enumerators[] = {
+static constexpr OptionEnumValueElement g_language_enumerators[] = {
     {eScriptLanguageNone, "none", "Disable scripting languages."},
     {eScriptLanguagePython, "python",
      "Select python as the default scripting language."},
     {eScriptLanguageDefault, "default",
-     "Select the lldb default as the default scripting language."},
-    {0, nullptr, nullptr}};
+     "Select the lldb default as the default scripting language."} };
 
 #define MODULE_WITH_FUNC                                                       \
   "{ "                                                                         \
@@ -119,8 +119,11 @@ OptionEnumValueElement g_language_enumerators[] = {
   "${module.file.basename}{`${function.name-without-args}"                     \
   "{${frame.no-debug}${function.pc-offset}}}}"
 
-#define FILE_AND_LINE "{ at ${line.file.basename}:${line.number}}"
+#define FILE_AND_LINE                                                          \
+  "{ at ${line.file.basename}:${line.number}{:${line.column}}}"
 #define IS_OPTIMIZED "{${function.is-optimized} [opt]}"
+
+#define IS_ARTIFICIAL "{${frame.is-artificial} [artificial]}"
 
 #define DEFAULT_THREAD_FORMAT                                                  \
   "thread #${thread.index}: tid = ${thread.id%tid}"                            \
@@ -146,11 +149,11 @@ OptionEnumValueElement g_language_enumerators[] = {
 
 #define DEFAULT_FRAME_FORMAT                                                   \
   "frame #${frame.index}: ${frame.pc}" MODULE_WITH_FUNC FILE_AND_LINE          \
-      IS_OPTIMIZED "\\n"
+      IS_OPTIMIZED IS_ARTIFICIAL "\\n"
 
 #define DEFAULT_FRAME_FORMAT_NO_ARGS                                           \
   "frame #${frame.index}: ${frame.pc}" MODULE_WITH_FUNC_NO_ARGS FILE_AND_LINE  \
-      IS_OPTIMIZED "\\n"
+      IS_OPTIMIZED IS_ARTIFICIAL "\\n"
 
 // Three parts to this disassembly format specification:
 //   1. If this is a new function/symbol (no previous symbol/function), print
@@ -162,8 +165,8 @@ OptionEnumValueElement g_language_enumerators[] = {
 //      address <+offset>:
 #define DEFAULT_DISASSEMBLY_FORMAT                                             \
   "{${function.initial-function}{${module.file.basename}`}{${function.name-"   \
-  "without-args}}:\n}{${function.changed}\n{${module.file.basename}`}{${"      \
-  "function.name-without-args}}:\n}{${current-pc-arrow} "                      \
+  "without-args}}:\\n}{${function.changed}\\n{${module.file.basename}`}{${"    \
+  "function.name-without-args}}:\\n}{${current-pc-arrow} "                     \
   "}${addr-file-or-load}{ "                                                    \
   "<${function.concrete-only-addr-offset-no-padding}>}: "
 
@@ -177,7 +180,7 @@ OptionEnumValueElement g_language_enumerators[] = {
 // args}}:\n}{${function.changed}\n{${module.file.basename}`}{${function.name-
 // without-args}}:\n}{${current-pc-arrow} }{${addr-file-or-load}}:
 
-static OptionEnumValueElement s_stop_show_column_values[] = {
+static constexpr OptionEnumValueElement s_stop_show_column_values[] = {
     {eStopShowColumnAnsiOrCaret, "ansi-or-caret",
      "Highlight the stop column with ANSI terminal codes when color/ANSI mode "
      "is enabled; otherwise, fall back to using a text-only caret (^) as if "
@@ -189,100 +192,95 @@ static OptionEnumValueElement s_stop_show_column_values[] = {
      "Highlight the stop column with a caret character (^) underneath the stop "
      "column. This method introduces a new line in source listings that "
      "display thread stop locations."},
-    {eStopShowColumnNone, "none", "Do not highlight the stop column."},
-    {0, nullptr, nullptr}};
+    {eStopShowColumnNone, "none", "Do not highlight the stop column."}};
 
-static PropertyDefinition g_properties[] = {
-    {"auto-confirm", OptionValue::eTypeBoolean, true, false, nullptr, nullptr,
+static constexpr PropertyDefinition g_properties[] = {
+    {"auto-confirm", OptionValue::eTypeBoolean, true, false, nullptr, {},
      "If true all confirmation prompts will receive their default reply."},
     {"disassembly-format", OptionValue::eTypeFormatEntity, true, 0,
-     DEFAULT_DISASSEMBLY_FORMAT, nullptr,
+     DEFAULT_DISASSEMBLY_FORMAT, {},
      "The default disassembly format "
      "string to use when disassembling "
      "instruction sequences."},
     {"frame-format", OptionValue::eTypeFormatEntity, true, 0,
-     DEFAULT_FRAME_FORMAT, nullptr,
+     DEFAULT_FRAME_FORMAT, {},
      "The default frame format string to use "
      "when displaying stack frame information "
      "for threads."},
-    {"notify-void", OptionValue::eTypeBoolean, true, false, nullptr, nullptr,
+    {"notify-void", OptionValue::eTypeBoolean, true, false, nullptr, {},
      "Notify the user explicitly if an expression returns void (default: "
      "false)."},
     {"prompt", OptionValue::eTypeString, true,
-     OptionValueString::eOptionEncodeCharacterEscapeSequences, "(lldb) ",
-     nullptr, "The debugger command line prompt displayed for the user."},
+     OptionValueString::eOptionEncodeCharacterEscapeSequences, "(lldb) ", {},
+     "The debugger command line prompt displayed for the user."},
     {"script-lang", OptionValue::eTypeEnum, true, eScriptLanguagePython,
-     nullptr, g_language_enumerators,
+     nullptr, OptionEnumValues(g_language_enumerators),
      "The script language to be used for evaluating user-written scripts."},
-    {"stop-disassembly-count", OptionValue::eTypeSInt64, true, 4, nullptr,
-     nullptr,
+    {"stop-disassembly-count", OptionValue::eTypeSInt64, true, 4, nullptr, {},
      "The number of disassembly lines to show when displaying a "
      "stopped context."},
     {"stop-disassembly-display", OptionValue::eTypeEnum, true,
      Debugger::eStopDisassemblyTypeNoDebugInfo, nullptr,
-     g_show_disassembly_enum_values,
+     OptionEnumValues(g_show_disassembly_enum_values),
      "Control when to display disassembly when displaying a stopped context."},
-    {"stop-line-count-after", OptionValue::eTypeSInt64, true, 3, nullptr,
-     nullptr,
+    {"stop-line-count-after", OptionValue::eTypeSInt64, true, 3, nullptr, {},
      "The number of sources lines to display that come after the "
      "current source line when displaying a stopped context."},
-    {"stop-line-count-before", OptionValue::eTypeSInt64, true, 3, nullptr,
-     nullptr,
+    {"stop-line-count-before", OptionValue::eTypeSInt64, true, 3, nullptr, {},
      "The number of sources lines to display that come before the "
      "current source line when displaying a stopped context."},
-    {"highlight-source", OptionValue::eTypeBoolean, true, true, nullptr,
-     nullptr, "If true, LLDB will highlight the displayed source code."},
+    {"highlight-source", OptionValue::eTypeBoolean, true, true, nullptr, {},
+     "If true, LLDB will highlight the displayed source code."},
     {"stop-show-column", OptionValue::eTypeEnum, false,
-     eStopShowColumnAnsiOrCaret, nullptr, s_stop_show_column_values,
+     eStopShowColumnAnsiOrCaret, nullptr, OptionEnumValues(s_stop_show_column_values),
      "If true, LLDB will use the column information from the debug info to "
      "mark the current position when displaying a stopped context."},
     {"stop-show-column-ansi-prefix", OptionValue::eTypeString, true, 0,
-     "${ansi.underline}", nullptr,
+     "${ansi.underline}", {},
      "When displaying the column marker in a color-enabled (i.e. ANSI) "
      "terminal, use the ANSI terminal code specified in this format at the "
      "immediately before the column to be marked."},
     {"stop-show-column-ansi-suffix", OptionValue::eTypeString, true, 0,
-     "${ansi.normal}", nullptr,
+     "${ansi.normal}", {},
      "When displaying the column marker in a color-enabled (i.e. ANSI) "
      "terminal, use the ANSI terminal code specified in this format "
      "immediately after the column to be marked."},
-    {"term-width", OptionValue::eTypeSInt64, true, 80, nullptr, nullptr,
+    {"term-width", OptionValue::eTypeSInt64, true, 80, nullptr, {},
      "The maximum number of columns to use for displaying text."},
     {"thread-format", OptionValue::eTypeFormatEntity, true, 0,
-     DEFAULT_THREAD_FORMAT, nullptr,
+     DEFAULT_THREAD_FORMAT, {},
      "The default thread format string to use "
      "when displaying thread information."},
     {"thread-stop-format", OptionValue::eTypeFormatEntity, true, 0,
-     DEFAULT_THREAD_STOP_FORMAT, nullptr,
+     DEFAULT_THREAD_STOP_FORMAT, {},
      "The default thread format  "
      "string to use when displaying thread "
      "information as part of the stop display."},
-    {"use-external-editor", OptionValue::eTypeBoolean, true, false, nullptr,
-     nullptr, "Whether to use an external editor or not."},
-    {"use-color", OptionValue::eTypeBoolean, true, true, nullptr, nullptr,
+    {"use-external-editor", OptionValue::eTypeBoolean, true, false, nullptr, {},
+     "Whether to use an external editor or not."},
+    {"use-color", OptionValue::eTypeBoolean, true, true, nullptr, {},
      "Whether to use Ansi color codes or not."},
     {"auto-one-line-summaries", OptionValue::eTypeBoolean, true, true, nullptr,
-     nullptr,
+     {},
      "If true, LLDB will automatically display small structs in "
      "one-liner format (default: true)."},
-    {"auto-indent", OptionValue::eTypeBoolean, true, true, nullptr, nullptr,
+    {"auto-indent", OptionValue::eTypeBoolean, true, true, nullptr, {},
      "If true, LLDB will auto indent/outdent code. Currently only supported in "
      "the REPL (default: true)."},
-    {"print-decls", OptionValue::eTypeBoolean, true, true, nullptr, nullptr,
+    {"print-decls", OptionValue::eTypeBoolean, true, true, nullptr, {},
      "If true, LLDB will print the values of variables declared in an "
      "expression. Currently only supported in the REPL (default: true)."},
-    {"tab-size", OptionValue::eTypeUInt64, true, 4, nullptr, nullptr,
+    {"tab-size", OptionValue::eTypeUInt64, true, 4, nullptr, {},
      "The tab size to use when indenting code in multi-line input mode "
      "(default: 4)."},
     {"escape-non-printables", OptionValue::eTypeBoolean, true, true, nullptr,
-     nullptr,
+     {},
      "If true, LLDB will automatically escape non-printable and "
      "escape characters when formatting strings."},
     {"frame-format-unique", OptionValue::eTypeFormatEntity, true, 0,
-     DEFAULT_FRAME_FORMAT_NO_ARGS, nullptr,
+     DEFAULT_FRAME_FORMAT_NO_ARGS, {},
      "The default frame format string to use when displaying stack frame"
-     "information for threads from thread backtrace unique."},
-    {nullptr, OptionValue::eTypeInvalid, true, 0, nullptr, nullptr, nullptr}};
+     "information for threads from thread backtrace unique."}};
 
 enum {
   ePropertyAutoConfirm = 0,
@@ -804,6 +802,12 @@ Debugger::Debugger(lldb::LogOutputCallback log_callback, void *baton)
   // Turn off use-color if we don't write to a terminal with color support.
   if (!m_output_file_sp->GetFile().GetIsTerminalWithColors())
     SetUseColor(false);
+
+#if defined(_WIN32) && defined(ENABLE_VIRTUAL_TERMINAL_PROCESSING)
+  // Enabling use of ANSI color codes because LLDB is using them to highlight
+  // text.
+  llvm::sys::Process::UseANSIEscapeCodes(true);
+#endif
 }
 
 Debugger::~Debugger() { Clear(); }

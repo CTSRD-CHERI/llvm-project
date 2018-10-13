@@ -4217,6 +4217,13 @@ static EvalStmtResult EvaluateStmt(StmtResult &Result, EvalInfo &Info,
     const CXXForRangeStmt *FS = cast<CXXForRangeStmt>(S);
     BlockScopeRAII Scope(Info);
 
+    // Evaluate the init-statement if present.
+    if (FS->getInit()) {
+      EvalStmtResult ESR = EvaluateStmt(Result, Info, FS->getInit());
+      if (ESR != ESR_Succeeded)
+        return ESR;
+    }
+
     // Initialize the __range variable.
     EvalStmtResult ESR = EvaluateStmt(Result, Info, FS->getRangeStmt());
     if (ESR != ESR_Succeeded)
@@ -4323,10 +4330,13 @@ static bool CheckConstexprFunction(EvalInfo &Info, SourceLocation CallLoc,
       Declaration->isConstexpr())
     return false;
 
-  // Bail out with no diagnostic if the function declaration itself is invalid.
-  // We will have produced a relevant diagnostic while parsing it.
-  if (Declaration->isInvalidDecl())
+  // Bail out if the function declaration itself is invalid.  We will
+  // have produced a relevant diagnostic while parsing it, so just
+  // note the problematic sub-expression.
+  if (Declaration->isInvalidDecl()) {
+    Info.FFDiag(CallLoc, diag::note_invalid_subexpr_in_const_expr);
     return false;
+  }
 
   // Can we evaluate this function call?
   if (Definition && Definition->isConstexpr() &&
@@ -5854,11 +5864,7 @@ bool PointerExprEvaluator::VisitCastExpr(const CastExpr *E) {
     // permitted in constant expressions in C++11. Bitcasts from cv void* are
     // also static_casts, but we disallow them as a resolution to DR1312.
     if (!E->getType()->isVoidPointerType()) {
-      // If we changed anything other than cvr-qualifiers, we can't use this
-      // value for constant folding. FIXME: Qualification conversions should
-      // always be CK_NoOp, but we get this wrong in C.
-      if (!Info.Ctx.hasCvrSimilarType(E->getType(), E->getSubExpr()->getType()))
-        Result.Designator.setInvalid();
+      Result.Designator.setInvalid();
       if (SubExpr->getType()->isVoidPointerType())
         CCEDiag(E, diag::note_constexpr_invalid_cast)
           << 3 << SubExpr->getType();
@@ -6191,12 +6197,12 @@ bool PointerExprEvaluator::VisitBuiltinCallExpr(const CallExpr *E,
                 BuiltinOp == Builtin::BI__builtin_wmemmove;
 
     // The result of mem* is the first argument.
-    if (!Visit(E->getArg(0)) || Result.Designator.Invalid)
+    if (!Visit(E->getArg(0)))
       return false;
     LValue Dest = Result;
 
     LValue Src;
-    if (!EvaluatePointer(E->getArg(1), Src, Info) || Src.Designator.Invalid)
+    if (!EvaluatePointer(E->getArg(1), Src, Info))
       return false;
 
     APSInt N;
@@ -6209,6 +6215,20 @@ bool PointerExprEvaluator::VisitBuiltinCallExpr(const CallExpr *E,
     if (!N)
       return true;
 
+    // Otherwise, if either of the operands is null, we can't proceed. Don't
+    // try to determine the type of the copied objects, because there aren't
+    // any.
+    if (!Src.Base || !Dest.Base) {
+      APValue Val;
+      (!Src.Base ? Src : Dest).moveInto(Val);
+      Info.FFDiag(E, diag::note_constexpr_memcpy_null)
+          << Move << WChar << !!Src.Base
+          << Val.getAsString(Info.Ctx, E->getArg(0)->getType());
+      return false;
+    }
+    if (Src.Designator.Invalid || Dest.Designator.Invalid)
+      return false;
+
     // We require that Src and Dest are both pointers to arrays of
     // trivially-copyable type. (For the wide version, the designator will be
     // invalid if the designated object is not a wchar_t.)
@@ -6216,6 +6236,10 @@ bool PointerExprEvaluator::VisitBuiltinCallExpr(const CallExpr *E,
     QualType SrcT = Src.Designator.getType(Info.Ctx);
     if (!Info.Ctx.hasSameUnqualifiedType(T, SrcT)) {
       Info.FFDiag(E, diag::note_constexpr_memcpy_type_pun) << Move << SrcT << T;
+      return false;
+    }
+    if (T->isIncompleteType()) {
+      Info.FFDiag(E, diag::note_constexpr_memcpy_incomplete_type) << Move << T;
       return false;
     }
     if (!T.isTriviallyCopyableType(Info.Ctx)) {

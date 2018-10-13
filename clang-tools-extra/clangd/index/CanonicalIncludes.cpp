@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "CanonicalIncludes.h"
-#include "../Headers.h"
+#include "Headers.h"
 #include "clang/Driver/Types.h"
 #include "llvm/Support/Path.h"
 #include <algorithm>
@@ -46,12 +46,11 @@ CanonicalIncludes::mapHeader(llvm::ArrayRef<std::string> Headers,
     return SE->second;
   // Find the first header such that the extension is not '.inc', and isn't a
   // recognized non-header file
-  auto I =
-      std::find_if(Headers.begin(), Headers.end(), [](llvm::StringRef Include) {
-        // Skip .inc file whose including header file should
-        // be #included instead.
-        return !Include.endswith(".inc");
-      });
+  auto I = llvm::find_if(Headers, [](llvm::StringRef Include) {
+    // Skip .inc file whose including header file should
+    // be #included instead.
+    return !Include.endswith(".inc");
+  });
   if (I == Headers.end())
     return Headers[0]; // Fallback to the declaring header.
   StringRef Header = *I;
@@ -143,6 +142,7 @@ void addSystemHeadersMapping(CanonicalIncludes *Includes) {
       {"std::basic_stringstream", "<sstream>"},
       {"std::istringstream", "<sstream>"},
       {"std::ostringstream", "<sstream>"},
+      {"std::string", "<string>"},
       {"std::stringbuf", "<sstream>"},
       {"std::stringstream", "<sstream>"},
       {"std::wistringstream", "<sstream>"},

@@ -177,8 +177,8 @@ private:
                     lldb::addr_t struct_address,
                     DiagnosticManager &diagnostic_manager) override;
 
-  llvm::Optional<lldb::LanguageType> GetLanguageForExpr(
-      DiagnosticManager &diagnostic_manager, ExecutionContext &exe_ctx);
+  void UpdateLanguageForExpr(DiagnosticManager &diagnostic_manager,
+                             ExecutionContext &exe_ctx);
   bool SetupPersistentState(DiagnosticManager &diagnostic_manager,
                                    ExecutionContext &exe_ctx);
   bool PrepareForParsing(DiagnosticManager &diagnostic_manager,
@@ -201,10 +201,13 @@ private:
     lldb::TargetSP m_target_sp;
   };
 
+  /// The language type of the current expression.
+  lldb::LanguageType m_expr_lang = lldb::eLanguageTypeUnknown;
+
   /// The absolute character position in the transformed source code where the
   /// user code (as typed by the user) starts. If the variable is empty, then we
   /// were not able to calculate this position.
-  llvm::Optional<unsigned> m_user_expression_start_pos;
+  llvm::Optional<size_t> m_user_expression_start_pos;
   ResultDelegate m_result_delegate;
 };
 

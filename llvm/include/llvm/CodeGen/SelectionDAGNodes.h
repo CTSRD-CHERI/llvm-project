@@ -1589,15 +1589,23 @@ bool isAllOnesConstant(SDValue V);
 /// Returns true if \p V is a constant integer one.
 bool isOneConstant(SDValue V);
 
+/// Return the non-bitcasted source operand of \p V if it exists.
+/// If \p V is not a bitcasted value, it is returned as-is.
+SDValue peekThroughBitcasts(SDValue V);
+
+/// Return the non-bitcasted and one-use source operand of \p V if it exists.
+/// If \p V is not a bitcasted one-use value, it is returned as-is.
+SDValue peekThroughOneUseBitcasts(SDValue V);
+
 /// Returns true if \p V is a bitwise not operation. Assumes that an all ones
 /// constant is canonicalized to be operand 1.
 bool isBitwiseNot(SDValue V);
 
 /// Returns the SDNode if it is a constant splat BuildVector or constant int.
-ConstantSDNode *isConstOrConstSplat(SDValue N);
+ConstantSDNode *isConstOrConstSplat(SDValue N, bool AllowUndefs = false);
 
 /// Returns the SDNode if it is a constant splat BuildVector or constant float.
-ConstantFPSDNode *isConstOrConstSplatFP(SDValue N);
+ConstantFPSDNode *isConstOrConstSplatFP(SDValue N, bool AllowUndefs = false);
 
 class GlobalAddressSDNode : public SDNode {
   friend class SelectionDAG;

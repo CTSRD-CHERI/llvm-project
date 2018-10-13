@@ -2298,6 +2298,34 @@ The thread model to use, e.g. posix, single (posix by default)
 
 AARCH64
 -------
+.. option:: -ffixed-x1
+
+Reserve the x1 register (AArch64 only)
+
+.. option:: -ffixed-x2
+
+Reserve the x2 register (AArch64 only)
+
+.. option:: -ffixed-x3
+
+Reserve the x3 register (AArch64 only)
+
+.. option:: -ffixed-x4
+
+Reserve the x4 register (AArch64 only)
+
+.. option:: -ffixed-x5
+
+Reserve the x5 register (AArch64 only)
+
+.. option:: -ffixed-x6
+
+Reserve the x6 register (AArch64 only)
+
+.. option:: -ffixed-x7
+
+Reserve the x7 register (AArch64 only)
+
 .. option:: -ffixed-x18
 
 Reserve the x18 register (AArch64 only)
@@ -2305,6 +2333,42 @@ Reserve the x18 register (AArch64 only)
 .. option:: -ffixed-x20
 
 Reserve the x20 register (AArch64 only)
+
+.. option:: -fcall-saved-x8
+
+Make the x8 register call-saved (AArch64 only)
+
+.. option:: -fcall-saved-x9
+
+Make the x9 register call-saved (AArch64 only)
+
+.. option:: -fcall-saved-x10
+
+Make the x10 register call-saved (AArch64 only)
+
+.. option:: -fcall-saved-x11
+
+Make the x11 register call-saved (AArch64 only)
+
+.. option:: -fcall-saved-x12
+
+Make the x12 register call-saved (AArch64 only)
+
+.. option:: -fcall-saved-x13
+
+Make the x13 register call-saved (AArch64 only)
+
+.. option:: -fcall-saved-x14
+
+Make the x14 register call-saved (AArch64 only)
+
+.. option:: -fcall-saved-x15
+
+Make the x15 register call-saved (AArch64 only)
+
+.. option:: -fcall-saved-x18
+
+Make the x18 register call-saved (AArch64 only)
 
 .. option:: -mfix-cortex-a53-835769, -mno-fix-cortex-a53-835769
 

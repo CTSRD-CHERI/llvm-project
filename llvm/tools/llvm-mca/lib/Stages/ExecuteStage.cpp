@@ -53,11 +53,11 @@ bool ExecuteStage::isAvailable(const InstRef &IR) const {
 }
 
 Error ExecuteStage::issueInstruction(InstRef &IR) {
-  SmallVector<std::pair<ResourceRef, double>, 4> Used;
+  SmallVector<std::pair<ResourceRef, ResourceCycles>, 4> Used;
   SmallVector<InstRef, 4> Ready;
   HWS.issueInstruction(IR, Used, Ready);
 
-  notifyReservedOrReleasedBuffers(IR, /* Reserved */false);
+  notifyReservedOrReleasedBuffers(IR, /* Reserved */ false);
   notifyInstructionIssued(IR, Used);
   if (IR.getInstruction()->isExecuted()) {
     notifyInstructionExecuted(IR);
@@ -85,9 +85,9 @@ Error ExecuteStage::issueReadyInstructions() {
 }
 
 Error ExecuteStage::cycleStart() {
-  llvm::SmallVector<ResourceRef, 8> Freed;
-  llvm::SmallVector<InstRef, 4> Executed;
-  llvm::SmallVector<InstRef, 4> Ready;
+  SmallVector<ResourceRef, 8> Freed;
+  SmallVector<InstRef, 4> Executed;
+  SmallVector<InstRef, 4> Ready;
 
   HWS.cycleEvent(Freed, Executed, Ready);
 
@@ -107,6 +107,32 @@ Error ExecuteStage::cycleStart() {
   return issueReadyInstructions();
 }
 
+
+#ifndef NDEBUG
+static void verifyInstructionEliminated(const InstRef &IR) {
+  const Instruction &Inst = *IR.getInstruction();
+  assert(Inst.isEliminated() && "Instruction was not eliminated!");
+  assert(Inst.isReady() && "Instruction in an inconsistent state!");
+
+  // Ensure that instructions eliminated at register renaming stage are in a
+  // consistent state.
+  const InstrDesc &Desc = Inst.getDesc();
+  assert(!Desc.MayLoad && !Desc.MayStore && "Cannot eliminate a memory op!");
+}
+#endif
+
+
+Error ExecuteStage::handleInstructionEliminated(InstRef &IR) {
+#ifndef NDEBUG
+  verifyInstructionEliminated(IR);
+#endif
+  notifyInstructionReady(IR);
+  notifyInstructionIssued(IR, {});
+  IR.getInstruction()->forceExecuted();
+  notifyInstructionExecuted(IR);
+  return moveToTheNextStage(IR);
+}
+
 // Schedule the instruction for execution on the hardware.
 Error ExecuteStage::execute(InstRef &IR) {
   assert(isAvailable(IR) && "Scheduler is not available!");
@@ -115,12 +141,16 @@ Error ExecuteStage::execute(InstRef &IR) {
   // Ensure that the HWS has not stored this instruction in its queues.
   HWS.sanityCheck(IR);
 #endif
+
+  if (IR.getInstruction()->isEliminated())
+    return handleInstructionEliminated(IR);
+
   // Reserve a slot in each buffered resource. Also, mark units with
   // BufferSize=0 as reserved. Resources with a buffer size of zero will only
   // be released after MCIS is issued, and all the ResourceCycles for those
   // units have been consumed.
   HWS.dispatch(IR);
-  notifyReservedOrReleasedBuffers(IR, /* Reserved */true);
+  notifyReservedOrReleasedBuffers(IR, /* Reserved */ true);
   if (!HWS.isReady(IR))
     return ErrorSuccess();
 
@@ -136,19 +166,19 @@ Error ExecuteStage::execute(InstRef &IR) {
   return issueInstruction(IR);
 }
 
-void ExecuteStage::notifyInstructionExecuted(const InstRef &IR) {
+void ExecuteStage::notifyInstructionExecuted(const InstRef &IR) const {
   LLVM_DEBUG(dbgs() << "[E] Instruction Executed: #" << IR << '\n');
   notifyEvent<HWInstructionEvent>(
       HWInstructionEvent(HWInstructionEvent::Executed, IR));
 }
 
-void ExecuteStage::notifyInstructionReady(const InstRef &IR) {
+void ExecuteStage::notifyInstructionReady(const InstRef &IR) const {
   LLVM_DEBUG(dbgs() << "[E] Instruction Ready: #" << IR << '\n');
   notifyEvent<HWInstructionEvent>(
       HWInstructionEvent(HWInstructionEvent::Ready, IR));
 }
 
-void ExecuteStage::notifyResourceAvailable(const ResourceRef &RR) {
+void ExecuteStage::notifyResourceAvailable(const ResourceRef &RR) const {
   LLVM_DEBUG(dbgs() << "[E] Resource Available: [" << RR.first << '.'
                     << RR.second << "]\n");
   for (HWEventListener *Listener : getListeners())
@@ -156,10 +186,11 @@ void ExecuteStage::notifyResourceAvailable(const ResourceRef &RR) {
 }
 
 void ExecuteStage::notifyInstructionIssued(
-    const InstRef &IR, ArrayRef<std::pair<ResourceRef, double>> Used) {
+    const InstRef &IR,
+    ArrayRef<std::pair<ResourceRef, ResourceCycles>> Used) const {
   LLVM_DEBUG({
     dbgs() << "[E] Instruction Issued: #" << IR << '\n';
-    for (const std::pair<ResourceRef, unsigned> &Resource : Used) {
+    for (const std::pair<ResourceRef, ResourceCycles> &Resource : Used) {
       dbgs() << "[E] Resource Used: [" << Resource.first.first << '.'
              << Resource.first.second << "], ";
       dbgs() << "cycles: " << Resource.second << '\n';
@@ -169,7 +200,7 @@ void ExecuteStage::notifyInstructionIssued(
 }
 
 void ExecuteStage::notifyReservedOrReleasedBuffers(const InstRef &IR,
-                                                   bool Reserved) {
+                                                   bool Reserved) const {
   const InstrDesc &Desc = IR.getInstruction()->getDesc();
   if (Desc.Buffers.empty())
     return;

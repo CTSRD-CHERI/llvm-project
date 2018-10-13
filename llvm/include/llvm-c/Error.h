@@ -18,6 +18,8 @@
 extern "C" {
 #endif
 
+#define LLVMErrorSuccess 0
+
 /**
  * Opaque reference to an error instance. Null serves as the 'success' value.
  */
@@ -45,6 +47,8 @@ void LLVMConsumeError(LLVMErrorRef Err);
 /**
  * Returns the given string's error message. This operation consumes the error,
  * and the given LLVMErrorRef value is not usable once this call returns.
+ * The caller is responsible for disposing of the string by calling
+ * LLVMDisposeErrorMessage.
  */
 char *LLVMGetErrorMessage(LLVMErrorRef Err);
 

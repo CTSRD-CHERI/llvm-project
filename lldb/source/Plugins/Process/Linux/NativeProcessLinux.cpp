@@ -759,9 +759,7 @@ void NativeProcessLinux::MonitorBreakpoint(NativeThreadLinux &thread) {
 
   // Mark the thread as stopped at breakpoint.
   thread.SetStoppedByBreakpoint();
-  Status error = FixupBreakpointPCAsNeeded(thread);
-  if (error.Fail())
-    LLDB_LOG(log, "pid = {0} fixup: {1}", thread.GetID(), error);
+  FixupBreakpointPCAsNeeded(thread);
 
   if (m_threads_stepping_with_breakpoint.find(thread.GetID()) !=
       m_threads_stepping_with_breakpoint.end())
@@ -1502,40 +1500,6 @@ size_t NativeProcessLinux::UpdateThreads() {
   return m_threads.size();
 }
 
-Status NativeProcessLinux::GetSoftwareBreakpointPCOffset(
-    uint32_t &actual_opcode_size) {
-  // FIXME put this behind a breakpoint protocol class that can be
-  // set per architecture.  Need ARM, MIPS support here.
-  static const uint8_t g_i386_opcode[] = {0xCC};
-  static const uint8_t g_s390x_opcode[] = {0x00, 0x01};
-
-  switch (m_arch.GetMachine()) {
-  case llvm::Triple::x86:
-  case llvm::Triple::x86_64:
-    actual_opcode_size = static_cast<uint32_t>(sizeof(g_i386_opcode));
-    return Status();
-
-  case llvm::Triple::systemz:
-    actual_opcode_size = static_cast<uint32_t>(sizeof(g_s390x_opcode));
-    return Status();
-
-  case llvm::Triple::arm:
-  case llvm::Triple::aarch64:
-  case llvm::Triple::mips64:
-  case llvm::Triple::mips64el:
-  case llvm::Triple::mips:
-  case llvm::Triple::mipsel:
-  case llvm::Triple::ppc64le:
-    // On these architectures the PC don't get updated for breakpoint hits
-    actual_opcode_size = 0;
-    return Status();
-
-  default:
-    assert(false && "CPU type not supported!");
-    return Status("CPU type not supported");
-  }
-}
-
 Status NativeProcessLinux::SetBreakpoint(lldb::addr_t addr, uint32_t size,
                                          bool hardware) {
   if (hardware)
@@ -1551,74 +1515,26 @@ Status NativeProcessLinux::RemoveBreakpoint(lldb::addr_t addr, bool hardware) {
     return NativeProcessProtocol::RemoveBreakpoint(addr);
 }
 
-Status NativeProcessLinux::GetSoftwareBreakpointTrapOpcode(
-    size_t trap_opcode_size_hint, size_t &actual_opcode_size,
-    const uint8_t *&trap_opcode_bytes) {
-  // FIXME put this behind a breakpoint protocol class that can be set per
-  // architecture.  Need MIPS support here.
-  static const uint8_t g_aarch64_opcode[] = {0x00, 0x00, 0x20, 0xd4};
+llvm::Expected<llvm::ArrayRef<uint8_t>>
+NativeProcessLinux::GetSoftwareBreakpointTrapOpcode(size_t size_hint) {
   // The ARM reference recommends the use of 0xe7fddefe and 0xdefe but the
   // linux kernel does otherwise.
-  static const uint8_t g_arm_breakpoint_opcode[] = {0xf0, 0x01, 0xf0, 0xe7};
-  static const uint8_t g_i386_opcode[] = {0xCC};
-  static const uint8_t g_mips64_opcode[] = {0x00, 0x00, 0x00, 0x0d};
-  static const uint8_t g_mips64el_opcode[] = {0x0d, 0x00, 0x00, 0x00};
-  static const uint8_t g_s390x_opcode[] = {0x00, 0x01};
-  static const uint8_t g_thumb_breakpoint_opcode[] = {0x01, 0xde};
-  static const uint8_t g_ppc64le_opcode[] = {0x08, 0x00, 0xe0, 0x7f}; // trap
+  static const uint8_t g_arm_opcode[] = {0xf0, 0x01, 0xf0, 0xe7};
+  static const uint8_t g_thumb_opcode[] = {0x01, 0xde};
 
-  switch (m_arch.GetMachine()) {
-  case llvm::Triple::aarch64:
-    trap_opcode_bytes = g_aarch64_opcode;
-    actual_opcode_size = sizeof(g_aarch64_opcode);
-    return Status();
-
+  switch (GetArchitecture().GetMachine()) {
   case llvm::Triple::arm:
-    switch (trap_opcode_size_hint) {
+    switch (size_hint) {
     case 2:
-      trap_opcode_bytes = g_thumb_breakpoint_opcode;
-      actual_opcode_size = sizeof(g_thumb_breakpoint_opcode);
-      return Status();
+      return llvm::makeArrayRef(g_thumb_opcode);
     case 4:
-      trap_opcode_bytes = g_arm_breakpoint_opcode;
-      actual_opcode_size = sizeof(g_arm_breakpoint_opcode);
-      return Status();
+      return llvm::makeArrayRef(g_arm_opcode);
     default:
-      assert(false && "Unrecognised trap opcode size hint!");
-      return Status("Unrecognised trap opcode size hint!");
+      return llvm::createStringError(llvm::inconvertibleErrorCode(),
+                                     "Unrecognised trap opcode size hint!");
     }
-
-  case llvm::Triple::x86:
-  case llvm::Triple::x86_64:
-    trap_opcode_bytes = g_i386_opcode;
-    actual_opcode_size = sizeof(g_i386_opcode);
-    return Status();
-
-  case llvm::Triple::mips:
-  case llvm::Triple::mips64:
-    trap_opcode_bytes = g_mips64_opcode;
-    actual_opcode_size = sizeof(g_mips64_opcode);
-    return Status();
-
-  case llvm::Triple::mipsel:
-  case llvm::Triple::mips64el:
-    trap_opcode_bytes = g_mips64el_opcode;
-    actual_opcode_size = sizeof(g_mips64el_opcode);
-    return Status();
-
-  case llvm::Triple::systemz:
-    trap_opcode_bytes = g_s390x_opcode;
-    actual_opcode_size = sizeof(g_s390x_opcode);
-    return Status();
-
-  case llvm::Triple::ppc64le:
-    trap_opcode_bytes = g_ppc64le_opcode;
-    actual_opcode_size = sizeof(g_ppc64le_opcode);
-    return Status();
-
   default:
-    assert(false && "CPU type not supported!");
-    return Status("CPU type not supported");
+    return NativeProcessProtocol::GetSoftwareBreakpointTrapOpcode(size_hint);
   }
 }
 
@@ -1675,15 +1591,6 @@ Status NativeProcessLinux::ReadMemory(lldb::addr_t addr, void *buf, size_t size,
     dst += k_ptrace_word_size;
   }
   return Status();
-}
-
-Status NativeProcessLinux::ReadMemoryWithoutTrap(lldb::addr_t addr, void *buf,
-                                                 size_t size,
-                                                 size_t &bytes_read) {
-  Status error = ReadMemory(addr, buf, size, bytes_read);
-  if (error.Fail())
-    return error;
-  return m_breakpoint_list.RemoveTrapsFromBuffer(addr, buf, size);
 }
 
 Status NativeProcessLinux::WriteMemory(lldb::addr_t addr, const void *buf,
@@ -1808,83 +1715,6 @@ NativeThreadLinux &NativeProcessLinux::AddThread(lldb::tid_t thread_id) {
   }
 
   return static_cast<NativeThreadLinux &>(*m_threads.back());
-}
-
-Status
-NativeProcessLinux::FixupBreakpointPCAsNeeded(NativeThreadLinux &thread) {
-  Log *log(ProcessPOSIXLog::GetLogIfAllCategoriesSet(POSIX_LOG_BREAKPOINTS));
-
-  Status error;
-
-  // Find out the size of a breakpoint (might depend on where we are in the
-  // code).
-  NativeRegisterContext &context = thread.GetRegisterContext();
-
-  uint32_t breakpoint_size = 0;
-  error = GetSoftwareBreakpointPCOffset(breakpoint_size);
-  if (error.Fail()) {
-    LLDB_LOG(log, "GetBreakpointSize() failed: {0}", error);
-    return error;
-  } else
-    LLDB_LOG(log, "breakpoint size: {0}", breakpoint_size);
-
-  // First try probing for a breakpoint at a software breakpoint location: PC -
-  // breakpoint size.
-  const lldb::addr_t initial_pc_addr = context.GetPCfromBreakpointLocation();
-  lldb::addr_t breakpoint_addr = initial_pc_addr;
-  if (breakpoint_size > 0) {
-    // Do not allow breakpoint probe to wrap around.
-    if (breakpoint_addr >= breakpoint_size)
-      breakpoint_addr -= breakpoint_size;
-  }
-
-  // Check if we stopped because of a breakpoint.
-  NativeBreakpointSP breakpoint_sp;
-  error = m_breakpoint_list.GetBreakpoint(breakpoint_addr, breakpoint_sp);
-  if (!error.Success() || !breakpoint_sp) {
-    // We didn't find one at a software probe location.  Nothing to do.
-    LLDB_LOG(log,
-             "pid {0} no lldb breakpoint found at current pc with "
-             "adjustment: {1}",
-             GetID(), breakpoint_addr);
-    return Status();
-  }
-
-  // If the breakpoint is not a software breakpoint, nothing to do.
-  if (!breakpoint_sp->IsSoftwareBreakpoint()) {
-    LLDB_LOG(
-        log,
-        "pid {0} breakpoint found at {1:x}, not software, nothing to adjust",
-        GetID(), breakpoint_addr);
-    return Status();
-  }
-
-  //
-  // We have a software breakpoint and need to adjust the PC.
-  //
-
-  // Sanity check.
-  if (breakpoint_size == 0) {
-    // Nothing to do!  How did we get here?
-    LLDB_LOG(log,
-             "pid {0} breakpoint found at {1:x}, it is software, but the "
-             "size is zero, nothing to do (unexpected)",
-             GetID(), breakpoint_addr);
-    return Status();
-  }
-
-  // Change the program counter.
-  LLDB_LOG(log, "pid {0} tid {1}: changing PC from {2:x} to {3:x}", GetID(),
-           thread.GetID(), initial_pc_addr, breakpoint_addr);
-
-  error = context.SetPC(breakpoint_addr);
-  if (error.Fail()) {
-    LLDB_LOG(log, "pid {0} tid {1}: failed to set PC: {2}", GetID(),
-             thread.GetID(), error);
-    return error;
-  }
-
-  return error;
 }
 
 Status NativeProcessLinux::GetLoadedModuleFileSpec(const char *module_path,

@@ -63,6 +63,7 @@ void clangd::registerCallbackHandlers(JSONRPCDispatcher &Dispatcher,
   Register("textDocument/completion", &ProtocolCallbacks::onCompletion);
   Register("textDocument/signatureHelp", &ProtocolCallbacks::onSignatureHelp);
   Register("textDocument/definition", &ProtocolCallbacks::onGoToDefinition);
+  Register("textDocument/references", &ProtocolCallbacks::onReference);
   Register("textDocument/switchSourceHeader",
            &ProtocolCallbacks::onSwitchSourceHeader);
   Register("textDocument/rename", &ProtocolCallbacks::onRename);
@@ -75,5 +76,4 @@ void clangd::registerCallbackHandlers(JSONRPCDispatcher &Dispatcher,
   Register("workspace/didChangeConfiguration",
            &ProtocolCallbacks::onChangeConfiguration);
   Register("workspace/symbol", &ProtocolCallbacks::onWorkspaceSymbol);
-  Register("$/cancelRequest", &ProtocolCallbacks::onCancelRequest);
 }

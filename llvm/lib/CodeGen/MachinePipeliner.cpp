@@ -886,10 +886,7 @@ void SwingSchedulerDAG::schedule() {
   Topo.InitDAGTopologicalSorting();
   postprocessDAG();
   changeDependences();
-  LLVM_DEBUG({
-    for (unsigned su = 0, e = SUnits.size(); su != e; ++su)
-      SUnits[su].dumpAll(this);
-  });
+  LLVM_DEBUG(dump());
 
   NodeSetType NodeSets;
   findCircuits(NodeSets);
@@ -1638,8 +1635,8 @@ void SwingSchedulerDAG::computeNodeFunctions(NodeSetType &NodeSets) {
     for (ScheduleDAGTopologicalSort::const_iterator I = Topo.begin(),
                                                     E = Topo.end();
          I != E; ++I) {
-      SUnit *SU = &SUnits[*I];
-      SU->dump(this);
+      const SUnit &SU = SUnits[*I];
+      dumpNode(SU);
     }
   });
 
@@ -1864,8 +1861,7 @@ void SwingSchedulerDAG::registerPressureFilter(NodeSetType &NodeSets) {
     RecRPTracker.closeBottom();
 
     std::vector<SUnit *> SUnits(NS.begin(), NS.end());
-    llvm::sort(SUnits.begin(), SUnits.end(),
-               [](const SUnit *A, const SUnit *B) {
+    llvm::sort(SUnits, [](const SUnit *A, const SUnit *B) {
       return A->NodeNum > B->NodeNum;
     });
 
@@ -3984,7 +3980,7 @@ void SwingSchedulerDAG::checkValidNodeOrder(const NodeSetType &Circuits) const {
   };
 
   // sort, so that we can perform a binary search
-  llvm::sort(Indices.begin(), Indices.end(), CompareKey);
+  llvm::sort(Indices, CompareKey);
 
   bool Valid = true;
   (void)Valid;

@@ -735,6 +735,8 @@ public:
     return static_cast<BinOp>(getSubclassDataFromInstruction() >> 5);
   }
 
+  static StringRef getOperationName(BinOp Op);
+
   void setOperation(BinOp Operation) {
     unsigned short SubclassData = getSubclassDataFromInstruction();
     setInstructionSubclassData((SubclassData & 31) |
@@ -2457,11 +2459,21 @@ public:
 
   /// Return true if this shuffle returns a vector with a different number of
   /// elements than its source vectors.
-  /// Example: shufflevector <4 x n> A, <4 x n> B, <1,2>
+  /// Examples: shufflevector <4 x n> A, <4 x n> B, <1,2,3>
+  ///           shufflevector <4 x n> A, <4 x n> B, <1,2,3,4,5>
   bool changesLength() const {
     unsigned NumSourceElts = Op<0>()->getType()->getVectorNumElements();
     unsigned NumMaskElts = getMask()->getType()->getVectorNumElements();
     return NumSourceElts != NumMaskElts;
+  }
+
+  /// Return true if this shuffle returns a vector with a greater number of
+  /// elements than its source vectors.
+  /// Example: shufflevector <2 x n> A, <2 x n> B, <1,2,3>
+  bool increasesLength() const {
+    unsigned NumSourceElts = Op<0>()->getType()->getVectorNumElements();
+    unsigned NumMaskElts = getMask()->getType()->getVectorNumElements();
+    return NumSourceElts < NumMaskElts;
   }
 
   /// Return true if this shuffle mask chooses elements from exactly one source
@@ -2512,6 +2524,11 @@ public:
   /// Return true if this shuffle extracts the first N elements of exactly one
   /// source vector.
   bool isIdentityWithExtract() const;
+
+  /// Return true if this shuffle concatenates its 2 source vectors. This
+  /// returns false if either input is undefined. In that case, the shuffle is
+  /// is better classified as an identity with padding operation.
+  bool isConcat() const;
 
   /// Return true if this shuffle mask chooses elements from its source vectors
   /// without lane crossings. A shuffle using this mask would be
@@ -5329,6 +5346,25 @@ inline Value *getPointerOperand(Value *V) {
   if (auto *Gep = dyn_cast<GetElementPtrInst>(V))
     return Gep->getPointerOperand();
   return nullptr;
+}
+
+/// A helper function that returns the alignment of load or store instruction.
+inline unsigned getLoadStoreAlignment(Value *I) {
+  assert((isa<LoadInst>(I) || isa<StoreInst>(I)) &&
+         "Expected Load or Store instruction");
+  if (auto *LI = dyn_cast<LoadInst>(I))
+    return LI->getAlignment();
+  return cast<StoreInst>(I)->getAlignment();
+}
+
+/// A helper function that returns the address space of the pointer operand of
+/// load or store instruction.
+inline unsigned getLoadStoreAddressSpace(Value *I) {
+  assert((isa<LoadInst>(I) || isa<StoreInst>(I)) &&
+         "Expected Load or Store instruction");
+  if (auto *LI = dyn_cast<LoadInst>(I))
+    return LI->getPointerAddressSpace();
+  return cast<StoreInst>(I)->getPointerAddressSpace();
 }
 
 } // end namespace llvm

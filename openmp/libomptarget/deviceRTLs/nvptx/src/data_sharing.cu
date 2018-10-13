@@ -378,12 +378,25 @@ EXTERN void __kmpc_data_sharing_init_stack_spmd() {
 // as long as the size requested fits the pre-allocated size.
 EXTERN void* __kmpc_data_sharing_push_stack(size_t DataSize,
     int16_t UseSharedMemory) {
+  if (isRuntimeUninitialized()) {
+    ASSERT0(LT_FUSSY, isSPMDMode(),
+            "Expected SPMD mode with uninitialized runtime.");
+    return omptarget_nvptx_SimpleThreadPrivateContext::Allocate(DataSize);
+  }
+
+  // Add worst-case padding to DataSize so that future stack allocations are
+  // correctly aligned.
+  const size_t Alignment = 8;
+  if (DataSize % Alignment != 0) {
+    DataSize += (Alignment - DataSize % Alignment);
+  }
+
   // Frame pointer must be visible to all workers in the same warp.
   unsigned WID = getWarpId();
   void *&FrameP = DataSharingState.FramePtr[WID];
 
   // Only warp active master threads manage the stack.
-  if (IsWarpMasterActiveThread()) {
+  if (getThreadId() % WARPSIZE == 0) {
     // SlotP will point to either the shared memory slot or an existing
     // global memory slot.
     __kmpc_data_sharing_slot *&SlotP = DataSharingState.SlotPtr[WID];
@@ -456,7 +469,13 @@ EXTERN void* __kmpc_data_sharing_push_stack(size_t DataSize,
 // reclaim all outstanding global memory slots since it is
 // likely we have reached the end of the kernel.
 EXTERN void __kmpc_data_sharing_pop_stack(void *FrameStart) {
-  if (IsWarpMasterActiveThread()) {
+  if (isRuntimeUninitialized()) {
+    ASSERT0(LT_FUSSY, isSPMDMode(),
+            "Expected SPMD mode with uninitialized runtime.");
+    return omptarget_nvptx_SimpleThreadPrivateContext::Deallocate(FrameStart);
+  }
+
+  if (getThreadId() % WARPSIZE == 0) {
     unsigned WID = getWarpId();
 
     // Current slot
@@ -465,12 +484,12 @@ EXTERN void __kmpc_data_sharing_pop_stack(void *FrameStart) {
     // Pointer to next available stack.
     void *&StackP = DataSharingState.StackPtr[WID];
 
+    // Pop the frame.
+    StackP = FrameStart;
+
     // If the current slot is empty, we need to free the slot after the
     // pop.
     bool SlotEmpty = (StackP == &SlotP->Data[0]);
-
-    // Pop the frame.
-    StackP = FrameStart;
 
     if (SlotEmpty && SlotP->Prev) {
       // Before removing the slot we need to reset StackP.

@@ -47,7 +47,7 @@ public:
   using NotifyEmittedFunction = std::function<void(VModuleKey)>;
 
   using GetMemoryManagerFunction =
-      std::function<std::shared_ptr<RuntimeDyld::MemoryManager>(VModuleKey)>;
+      std::function<std::unique_ptr<RuntimeDyld::MemoryManager>(VModuleKey)>;
 
   /// Construct an ObjectLinkingLayer with the given NotifyLoaded,
   ///        and NotifyEmitted functors.
@@ -59,11 +59,6 @@ public:
   /// Emit the object.
   void emit(MaterializationResponsibility R, VModuleKey K,
             std::unique_ptr<MemoryBuffer> O) override;
-
-  /// Map section addresses for the object associated with the
-  ///        VModuleKey K.
-  void mapSectionAddress(VModuleKey K, const void *LocalAddress,
-                         JITTargetAddress TargetAddr) const;
 
   /// Set the 'ProcessAllSections' flag.
   ///
@@ -108,6 +103,14 @@ public:
   }
 
 private:
+  Error onObjLoad(VModuleKey K, MaterializationResponsibility &R,
+                  object::ObjectFile &Obj,
+                  std::unique_ptr<RuntimeDyld::LoadedObjectInfo> LoadedObjInfo,
+                  std::map<StringRef, JITEvaluatedSymbol> Resolved,
+                  std::set<StringRef> &InternalSymbols);
+
+  void onObjEmit(VModuleKey K, MaterializationResponsibility &R, Error Err);
+
   mutable std::mutex RTDyldLayerMutex;
   GetMemoryManagerFunction GetMemoryManager;
   NotifyLoadedFunction NotifyLoaded;
@@ -115,7 +118,6 @@ private:
   bool ProcessAllSections = false;
   bool OverrideObjectFlags = false;
   bool AutoClaimObjectSymbols = false;
-  std::map<VModuleKey, RuntimeDyld *> ActiveRTDylds;
   std::map<VModuleKey, std::shared_ptr<RuntimeDyld::MemoryManager>> MemMgrs;
 };
 
@@ -209,7 +211,7 @@ private:
     }
 
     ~ConcreteLinkedObject() override {
-      if (this->Parent.NotifyFreed)
+      if (this->Parent.NotifyFreed && ObjForNotify.getBinary())
         this->Parent.NotifyFreed(K, *ObjForNotify.getBinary());
 
       MemMgr->deregisterEHFrames();

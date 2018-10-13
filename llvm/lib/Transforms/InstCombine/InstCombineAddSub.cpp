@@ -1041,7 +1041,7 @@ Instruction *InstCombiner::visitAdd(BinaryOperator &I) {
   if (SimplifyAssociativeOrCommutative(I))
     return &I;
 
-  if (Instruction *X = foldShuffledBinop(I))
+  if (Instruction *X = foldVectorBinop(I))
     return X;
 
   // (A*B)+(A*C) -> A*(B+C) etc
@@ -1191,79 +1191,8 @@ Instruction *InstCombiner::visitAdd(BinaryOperator &I) {
     }
   }
 
-  // Check for (add (sext x), y), see if we can merge this into an
-  // integer add followed by a sext.
-  if (SExtInst *LHSConv = dyn_cast<SExtInst>(LHS)) {
-    // (add (sext x), cst) --> (sext (add x, cst'))
-    Constant *RHSC;
-    if (match(RHS, m_Constant(RHSC))) {
-      if (LHSConv->hasOneUse()) {
-        Constant *CI =
-            ConstantExpr::getTrunc(RHSC, LHSConv->getOperand(0)->getType());
-        if (ConstantExpr::getSExt(CI, Ty) == RHSC &&
-            willNotOverflowSignedAdd(LHSConv->getOperand(0), CI, I)) {
-          // Insert the new, smaller add.
-          Value *NewAdd =
-              Builder.CreateNSWAdd(LHSConv->getOperand(0), CI, "addconv");
-          return new SExtInst(NewAdd, Ty);
-        }
-      }
-    }
-
-    // (add (sext x), (sext y)) --> (sext (add int x, y))
-    if (SExtInst *RHSConv = dyn_cast<SExtInst>(RHS)) {
-      // Only do this if x/y have the same type, if at least one of them has a
-      // single use (so we don't increase the number of sexts), and if the
-      // integer add will not overflow.
-      if (LHSConv->getOperand(0)->getType() ==
-              RHSConv->getOperand(0)->getType() &&
-          (LHSConv->hasOneUse() || RHSConv->hasOneUse()) &&
-          willNotOverflowSignedAdd(LHSConv->getOperand(0),
-                                   RHSConv->getOperand(0), I)) {
-        // Insert the new integer add.
-        Value *NewAdd = Builder.CreateNSWAdd(LHSConv->getOperand(0),
-                                             RHSConv->getOperand(0), "addconv");
-        return new SExtInst(NewAdd, Ty);
-      }
-    }
-  }
-
-  // Check for (add (zext x), y), see if we can merge this into an
-  // integer add followed by a zext.
-  if (auto *LHSConv = dyn_cast<ZExtInst>(LHS)) {
-    // (add (zext x), cst) --> (zext (add x, cst'))
-    Constant *RHSC;
-    if (match(RHS, m_Constant(RHSC))) {
-      if (LHSConv->hasOneUse()) {
-        Constant *CI =
-            ConstantExpr::getTrunc(RHSC, LHSConv->getOperand(0)->getType());
-        if (ConstantExpr::getZExt(CI, Ty) == RHSC &&
-            willNotOverflowUnsignedAdd(LHSConv->getOperand(0), CI, I)) {
-          // Insert the new, smaller add.
-          Value *NewAdd =
-              Builder.CreateNUWAdd(LHSConv->getOperand(0), CI, "addconv");
-          return new ZExtInst(NewAdd, Ty);
-        }
-      }
-    }
-
-    // (add (zext x), (zext y)) --> (zext (add int x, y))
-    if (auto *RHSConv = dyn_cast<ZExtInst>(RHS)) {
-      // Only do this if x/y have the same type, if at least one of them has a
-      // single use (so we don't increase the number of zexts), and if the
-      // integer add will not overflow.
-      if (LHSConv->getOperand(0)->getType() ==
-              RHSConv->getOperand(0)->getType() &&
-          (LHSConv->hasOneUse() || RHSConv->hasOneUse()) &&
-          willNotOverflowUnsignedAdd(LHSConv->getOperand(0),
-                                     RHSConv->getOperand(0), I)) {
-        // Insert the new integer add.
-        Value *NewAdd = Builder.CreateNUWAdd(
-            LHSConv->getOperand(0), RHSConv->getOperand(0), "addconv");
-        return new ZExtInst(NewAdd, Ty);
-      }
-    }
-  }
+  if (Instruction *Ext = narrowMathIfNoOverflow(I))
+    return Ext;
 
   // (add (xor A, B) (and A, B)) --> (or A, B)
   // (add (and A, B) (xor A, B)) --> (or A, B)
@@ -1347,7 +1276,7 @@ Instruction *InstCombiner::visitFAdd(BinaryOperator &I) {
   if (SimplifyAssociativeOrCommutative(I))
     return &I;
 
-  if (Instruction *X = foldShuffledBinop(I))
+  if (Instruction *X = foldVectorBinop(I))
     return X;
 
   if (Instruction *FoldedFAdd = foldBinOpIntoSelectOrPhi(I))
@@ -1526,7 +1455,7 @@ Instruction *InstCombiner::visitSub(BinaryOperator &I) {
                                  SQ.getWithInstruction(&I)))
     return replaceInstUsesWith(I, V);
 
-  if (Instruction *X = foldShuffledBinop(I))
+  if (Instruction *X = foldVectorBinop(I))
     return X;
 
   // (A*B)-(A*C) -> A*(B-C) etc
@@ -1733,6 +1662,39 @@ Instruction *InstCombiner::visitSub(BinaryOperator &I) {
     }
   }
 
+  {
+    // ~A - Min/Max(~A, O) -> Max/Min(A, ~O) - A
+    // ~A - Min/Max(O, ~A) -> Max/Min(A, ~O) - A
+    // Min/Max(~A, O) - ~A -> A - Max/Min(A, ~O)
+    // Min/Max(O, ~A) - ~A -> A - Max/Min(A, ~O)
+    // So long as O here is freely invertible, this will be neutral or a win.
+    Value *LHS, *RHS, *A;
+    Value *NotA = Op0, *MinMax = Op1;
+    SelectPatternFlavor SPF = matchSelectPattern(MinMax, LHS, RHS).Flavor;
+    if (!SelectPatternResult::isMinOrMax(SPF)) {
+      NotA = Op1;
+      MinMax = Op0;
+      SPF = matchSelectPattern(MinMax, LHS, RHS).Flavor;
+    }
+    if (SelectPatternResult::isMinOrMax(SPF) &&
+        match(NotA, m_Not(m_Value(A))) && (NotA == LHS || NotA == RHS)) {
+      if (NotA == LHS)
+        std::swap(LHS, RHS);
+      // LHS is now O above and expected to have at least 2 uses (the min/max)
+      // NotA is epected to have 2 uses from the min/max and 1 from the sub.
+      if (IsFreeToInvert(LHS, !LHS->hasNUsesOrMore(3)) &&
+          !NotA->hasNUsesOrMore(4)) {
+        // Note: We don't generate the inverse max/min, just create the not of
+        // it and let other folds do the rest.
+        Value *Not = Builder.CreateNot(MinMax);
+        if (NotA == Op0)
+          return BinaryOperator::CreateSub(Not, A);
+        else
+          return BinaryOperator::CreateSub(A, Not);
+      }
+    }
+  }
+
   // Optimize pointer differences into the same array into a size.  Consider:
   //  &A[10] - &A[0]: we should compile this to "10".
   Value *LHSOp, *RHSOp;
@@ -1768,6 +1730,9 @@ Instruction *InstCombiner::visitSub(BinaryOperator &I) {
     return SelectInst::Create(Cmp, Neg, A);
   }
 
+  if (Instruction *Ext = narrowMathIfNoOverflow(I))
+    return Ext;
+
   bool Changed = false;
   if (!I.hasNoSignedWrap() && willNotOverflowSignedSub(Op0, Op1, I)) {
     Changed = true;
@@ -1787,7 +1752,7 @@ Instruction *InstCombiner::visitFSub(BinaryOperator &I) {
                                   SQ.getWithInstruction(&I)))
     return replaceInstUsesWith(I, V);
 
-  if (Instruction *X = foldShuffledBinop(I))
+  if (Instruction *X = foldVectorBinop(I))
     return X;
 
   // Subtraction from -0.0 is the canonical form of fneg.

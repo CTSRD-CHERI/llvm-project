@@ -220,11 +220,15 @@ def NullableReturnedFromNonnullChecker : Checker<"NullableReturnedFromNonnull">,
 
 let ParentPackage = APIModeling in {
 
+def StdCLibraryFunctionsChecker : Checker<"StdCLibraryFunctions">,
+  HelpText<"Improve modeling of the C standard library functions">,
+  DescFile<"StdLibraryFunctionsChecker.cpp">;
+
 def TrustNonnullChecker : Checker<"TrustNonnull">,
   HelpText<"Trust that returns from framework methods annotated with _Nonnull are not null">,
   DescFile<"TrustNonnullChecker.cpp">;
 
-}
+} // end "apiModeling"
 
 //===----------------------------------------------------------------------===//
 // Evaluate "builtin" functions.
@@ -309,12 +313,16 @@ def DeleteWithNonVirtualDtorChecker : Checker<"DeleteWithNonVirtualDtor">,
            "destructor in their base class">,
   DescFile<"DeleteWithNonVirtualDtorChecker.cpp">;
 
+def InvalidatedIteratorChecker : Checker<"InvalidatedIterator">,
+  HelpText<"Check for use of invalidated iterators">,
+  DescFile<"IteratorChecker.cpp">;
+
 def IteratorRangeChecker : Checker<"IteratorRange">,
   HelpText<"Check for iterators used outside their valid ranges">,
   DescFile<"IteratorChecker.cpp">;
 
-def InvalidatedIteratorChecker : Checker<"InvalidatedIterator">,
-  HelpText<"Check for use of invalidated iterators">,
+def MismatchedIteratorChecker : Checker<"MismatchedIterator">,
+  HelpText<"Check for use of iterators of different containers where iterators of the same container are expected">,
   DescFile<"IteratorChecker.cpp">;
 
 def MisusedMovedObjectChecker: Checker<"MisusedMovedObject">,
@@ -489,10 +497,6 @@ def MismatchedDeallocatorChecker : Checker<"MismatchedDeallocator">,
 def VforkChecker : Checker<"Vfork">,
   HelpText<"Check for proper usage of vfork">,
   DescFile<"VforkChecker.cpp">;
-
-def StdCLibraryFunctionsChecker : Checker<"StdCLibraryFunctions">,
-  HelpText<"Improve modeling of the C standard library functions">,
-  DescFile<"StdLibraryFunctionsChecker.cpp">;
 
 } // end "unix"
 

@@ -17,6 +17,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/BinaryFormat/ELF.h"
+#include "llvm/MC/MCTargetOptions.h"
 #include "llvm/Object/Archive.h"
 #include "llvm/Object/ArchiveWriter.h"
 #include "llvm/Object/Binary.h"
@@ -29,6 +30,7 @@
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Compiler.h"
+#include "llvm/Support/Compression.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/ErrorOr.h"
@@ -128,6 +130,7 @@ struct SectionRename {
   Optional<uint64_t> NewFlags;
 };
 
+// Configuration for copying/stripping a single file.
 struct CopyConfig {
   // Main input/output options
   StringRef InputFilename;
@@ -175,6 +178,15 @@ struct CopyConfig {
   bool StripSections = false;
   bool StripUnneeded = false;
   bool Weaken = false;
+  bool DecompressDebugSections = false;
+  DebugCompressionType CompressionType = DebugCompressionType::None;
+};
+
+// Configuration for the overall invocation of this tool. When invoked as
+// objcopy, will always contain exactly one CopyConfig. When invoked as strip,
+// will contain one or more CopyConfigs.
+struct DriverConfig {
+  SmallVector<CopyConfig, 1> CopyConfigs;
 };
 
 using SectionPred = std::function<bool(const SectionBase &Sec)>;
@@ -290,12 +302,12 @@ static SectionRename parseRenameSectionValue(StringRef FlagValue) {
 }
 
 static bool isDebugSection(const SectionBase &Sec) {
-  return Sec.Name.startswith(".debug") || Sec.Name.startswith(".zdebug") ||
-         Sec.Name == ".gdb_index";
+  return StringRef(Sec.Name).startswith(".debug") ||
+         StringRef(Sec.Name).startswith(".zdebug") || Sec.Name == ".gdb_index";
 }
 
 static bool isDWOSection(const SectionBase &Sec) {
-  return Sec.Name.endswith(".dwo");
+  return StringRef(Sec.Name).endswith(".dwo");
 }
 
 static bool onlyKeepDWOPred(const Object &Obj, const SectionBase &Sec) {
@@ -403,6 +415,51 @@ static Error dumpSectionToFile(StringRef SecName, StringRef Filename,
   }
   return make_error<StringError>("Section not found",
                                  object_error::parse_failed);
+}
+
+static bool isCompressed(const SectionBase &Section) {
+  const char *Magic = "ZLIB";
+  return StringRef(Section.Name).startswith(".zdebug") ||
+         (Section.OriginalData.size() > strlen(Magic) &&
+          !strncmp(reinterpret_cast<const char *>(Section.OriginalData.data()),
+                   Magic, strlen(Magic))) ||
+         (Section.Flags & ELF::SHF_COMPRESSED);
+}
+
+static bool isCompressable(const SectionBase &Section) {
+  return !isCompressed(Section) && isDebugSection(Section) &&
+         Section.Name != ".gdb_index";
+}
+
+static void replaceDebugSections(
+    const CopyConfig &Config, Object &Obj, SectionPred &RemovePred,
+    function_ref<bool(const SectionBase &)> shouldReplace,
+    function_ref<SectionBase *(const SectionBase *)> addSection) {
+  SmallVector<SectionBase *, 13> ToReplace;
+  SmallVector<RelocationSection *, 13> RelocationSections;
+  for (auto &Sec : Obj.sections()) {
+    if (RelocationSection *R = dyn_cast<RelocationSection>(&Sec)) {
+      if (shouldReplace(*R->getSection()))
+        RelocationSections.push_back(R);
+      continue;
+    }
+
+    if (shouldReplace(Sec))
+      ToReplace.push_back(&Sec);
+  }
+
+  for (SectionBase *S : ToReplace) {
+    SectionBase *NewSection = addSection(S);
+
+    for (RelocationSection *RS : RelocationSections) {
+      if (RS->getSection() == S)
+        RS->setSection(NewSection);
+    }
+  }
+
+  RemovePred = [shouldReplace, RemovePred](const SectionBase &Sec) {
+    return shouldReplace(Sec) || RemovePred(Sec);
+  };
 }
 
 // This function handles the high level operations of GNU objcopy including
@@ -564,7 +621,7 @@ static void handleArgs(const CopyConfig &Config, Object &Obj,
         return true;
       if (&Sec == Obj.SectionNames)
         return false;
-      if (Sec.Name.startswith(".gnu.warning"))
+      if (StringRef(Sec.Name).startswith(".gnu.warning"))
         return false;
       return (Sec.Flags & SHF_ALLOC) == 0;
     };
@@ -615,6 +672,21 @@ static void handleArgs(const CopyConfig &Config, Object &Obj,
       return RemovePred(Sec);
     };
   }
+
+  if (Config.CompressionType != DebugCompressionType::None)
+    replaceDebugSections(Config, Obj, RemovePred, isCompressable,
+                         [&Config, &Obj](const SectionBase *S) {
+                           return &Obj.addSection<CompressedSection>(
+                               *S, Config.CompressionType);
+                         });
+  else if (Config.DecompressDebugSections)
+    replaceDebugSections(
+        Config, Obj, RemovePred,
+        [](const SectionBase &S) { return isa<CompressedSection>(&S); },
+        [&Obj](const SectionBase *S) {
+          auto CS = cast<CompressedSection>(S);
+          return &Obj.addSection<DecompressedSection>(*CS);
+        });
 
   Obj.removeSections(RemovePred);
 
@@ -818,7 +890,7 @@ static void addGlobalSymbolsFromFile(std::vector<std::string> &Symbols,
 // ParseObjcopyOptions returns the config and sets the input arguments. If a
 // help flag is set then ParseObjcopyOptions will print the help messege and
 // exit.
-static CopyConfig parseObjcopyOptions(ArrayRef<const char *> ArgsArr) {
+static DriverConfig parseObjcopyOptions(ArrayRef<const char *> ArgsArr) {
   ObjcopyOptTable T;
   unsigned MissingArgumentIndex, MissingArgumentCount;
   llvm::opt::InputArgList InputArgs =
@@ -831,6 +903,11 @@ static CopyConfig parseObjcopyOptions(ArrayRef<const char *> ArgsArr) {
 
   if (InputArgs.hasArg(OBJCOPY_help)) {
     T.PrintHelp(outs(), "llvm-objcopy <input> [ <output> ]", "objcopy tool");
+    exit(0);
+  }
+
+  if (InputArgs.hasArg(OBJCOPY_version)) {
+    cl::PrintVersionMessage();
     exit(0);
   }
 
@@ -858,6 +935,25 @@ static CopyConfig parseObjcopyOptions(ArrayRef<const char *> ArgsArr) {
     if (BinaryArch.empty())
       error("Specified binary input without specifiying an architecture");
     Config.BinaryArch = getMachineInfo(BinaryArch);
+  }
+
+  if (auto Arg = InputArgs.getLastArg(OBJCOPY_compress_debug_sections,
+                                      OBJCOPY_compress_debug_sections_eq)) {
+    Config.CompressionType = DebugCompressionType::Z;
+
+    if (Arg->getOption().getID() == OBJCOPY_compress_debug_sections_eq) {
+      Config.CompressionType =
+          StringSwitch<DebugCompressionType>(
+              InputArgs.getLastArgValue(OBJCOPY_compress_debug_sections_eq))
+              .Case("zlib-gnu", DebugCompressionType::GNU)
+              .Case("zlib", DebugCompressionType::Z)
+              .Default(DebugCompressionType::None);
+      if (Config.CompressionType == DebugCompressionType::None)
+        error("Invalid or unsupported --compress-debug-sections format: " +
+              InputArgs.getLastArgValue(OBJCOPY_compress_debug_sections_eq));
+      if (!zlib::isAvailable())
+        error("LLVM was not compiled with LLVM_ENABLE_ZLIB: can not compress.");
+    }
   }
 
   Config.SplitDWO = InputArgs.getLastArgValue(OBJCOPY_split_dwo);
@@ -901,6 +997,8 @@ static CopyConfig parseObjcopyOptions(ArrayRef<const char *> ArgsArr) {
   Config.DiscardAll = InputArgs.hasArg(OBJCOPY_discard_all);
   Config.OnlyKeepDebug = InputArgs.hasArg(OBJCOPY_only_keep_debug);
   Config.KeepFileSymbols = InputArgs.hasArg(OBJCOPY_keep_file_symbols);
+  Config.DecompressDebugSections =
+      InputArgs.hasArg(OBJCOPY_decompress_debug_sections);
   for (auto Arg : InputArgs.filtered(OBJCOPY_localize_symbol))
     Config.SymbolsToLocalize.push_back(Arg->getValue());
   for (auto Arg : InputArgs.filtered(OBJCOPY_keep_global_symbol))
@@ -918,13 +1016,24 @@ static CopyConfig parseObjcopyOptions(ArrayRef<const char *> ArgsArr) {
 
   Config.PreserveDates = InputArgs.hasArg(OBJCOPY_preserve_dates);
 
-  return Config;
+  DriverConfig DC;
+  DC.CopyConfigs.push_back(std::move(Config));
+  if (Config.DecompressDebugSections &&
+      Config.CompressionType != DebugCompressionType::None) {
+    error("Cannot specify --compress-debug-sections at the same time as "
+          "--decompress-debug-sections at the same time");
+  }
+
+  if (Config.DecompressDebugSections && !zlib::isAvailable())
+    error("LLVM was not compiled with LLVM_ENABLE_ZLIB: cannot decompress.");
+
+  return DC;
 }
 
 // ParseStripOptions returns the config and sets the input arguments. If a
 // help flag is set then ParseStripOptions will print the help messege and
 // exit.
-static CopyConfig parseStripOptions(ArrayRef<const char *> ArgsArr) {
+static DriverConfig parseStripOptions(ArrayRef<const char *> ArgsArr) {
   StripOptTable T;
   unsigned MissingArgumentIndex, MissingArgumentCount;
   llvm::opt::InputArgList InputArgs =
@@ -940,6 +1049,11 @@ static CopyConfig parseStripOptions(ArrayRef<const char *> ArgsArr) {
     exit(0);
   }
 
+  if (InputArgs.hasArg(STRIP_version)) {
+    cl::PrintVersionMessage();
+    exit(0);
+  }
+
   SmallVector<const char *, 2> Positional;
   for (auto Arg : InputArgs.filtered(STRIP_UNKNOWN))
     error("unknown argument '" + Arg->getAsString(InputArgs) + "'");
@@ -949,14 +1063,10 @@ static CopyConfig parseStripOptions(ArrayRef<const char *> ArgsArr) {
   if (Positional.empty())
     error("No input file specified");
 
-  if (Positional.size() > 1)
-    error("Support for multiple input files is not implemented yet");
+  if (Positional.size() > 1 && InputArgs.hasArg(STRIP_output))
+    error("Multiple input files cannot be used in combination with -o");
 
   CopyConfig Config;
-  Config.InputFilename = Positional[0];
-  Config.OutputFilename =
-      InputArgs.getLastArgValue(STRIP_output, Positional[0]);
-
   Config.StripDebug = InputArgs.hasArg(STRIP_strip_debug);
 
   Config.DiscardAll = InputArgs.hasArg(STRIP_discard_all);
@@ -974,16 +1084,31 @@ static CopyConfig parseStripOptions(ArrayRef<const char *> ArgsArr) {
 
   Config.PreserveDates = InputArgs.hasArg(STRIP_preserve_dates);
 
-  return Config;
+  DriverConfig DC;
+  if (Positional.size() == 1) {
+    Config.InputFilename = Positional[0];
+    Config.OutputFilename =
+        InputArgs.getLastArgValue(STRIP_output, Positional[0]);
+    DC.CopyConfigs.push_back(std::move(Config));
+  } else {
+    for (const char *Filename : Positional) {
+      Config.InputFilename = Filename;
+      Config.OutputFilename = Filename;
+      DC.CopyConfigs.push_back(Config);
+    }
+  }
+
+  return DC;
 }
 
 int main(int argc, char **argv) {
   InitLLVM X(argc, argv);
   ToolName = argv[0];
-  CopyConfig Config;
+  DriverConfig DriverConfig;
   if (sys::path::stem(ToolName).endswith_lower("strip"))
-    Config = parseStripOptions(makeArrayRef(argv + 1, argc));
+    DriverConfig = parseStripOptions(makeArrayRef(argv + 1, argc));
   else
-    Config = parseObjcopyOptions(makeArrayRef(argv + 1, argc));
-  executeElfObjcopy(Config);
+    DriverConfig = parseObjcopyOptions(makeArrayRef(argv + 1, argc));
+  for (const CopyConfig &CopyConfig : DriverConfig.CopyConfigs)
+    executeElfObjcopy(CopyConfig);
 }

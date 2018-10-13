@@ -166,7 +166,11 @@ static int DiskFilesOrDirectories(const llvm::Twine &partial_name,
   size_t FullPrefixLen = CompletionBuffer.size();
 
   PartialItem = path::filename(CompletionBuffer);
-  if (PartialItem == ".")
+
+  // path::filename() will return "." when the passed path ends with a
+  // directory separator. We have to filter those out, but only when the
+  // "." doesn't come from the completion request itself.
+  if (PartialItem == "." && path::is_separator(CompletionBuffer.back()))
     PartialItem = llvm::StringRef();
 
   if (SearchDir.empty()) {
@@ -362,8 +366,8 @@ CommandCompletions::SourceFileCompleter::SourceFileCompleter(
   m_dir_name = partial_spec.GetDirectory().GetCString();
 }
 
-Searcher::Depth CommandCompletions::SourceFileCompleter::GetDepth() {
-  return eDepthCompUnit;
+lldb::SearchDepth CommandCompletions::SourceFileCompleter::GetDepth() {
+  return lldb::eSearchDepthCompUnit;
 }
 
 Searcher::CallbackReturn
@@ -454,8 +458,8 @@ CommandCompletions::SymbolCompleter::SymbolCompleter(
   m_regex.Compile(regex_str);
 }
 
-Searcher::Depth CommandCompletions::SymbolCompleter::GetDepth() {
-  return eDepthModule;
+lldb::SearchDepth CommandCompletions::SymbolCompleter::GetDepth() {
+  return lldb::eSearchDepthModule;
 }
 
 Searcher::CallbackReturn CommandCompletions::SymbolCompleter::SearchCallback(
@@ -502,8 +506,8 @@ CommandCompletions::ModuleCompleter::ModuleCompleter(
   m_dir_name = partial_spec.GetDirectory().GetCString();
 }
 
-Searcher::Depth CommandCompletions::ModuleCompleter::GetDepth() {
-  return eDepthModule;
+lldb::SearchDepth CommandCompletions::ModuleCompleter::GetDepth() {
+  return lldb::eSearchDepthModule;
 }
 
 Searcher::CallbackReturn CommandCompletions::ModuleCompleter::SearchCallback(

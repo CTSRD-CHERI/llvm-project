@@ -240,6 +240,7 @@ public:
   const lldb_private::DWARFDataExtractor &get_debug_frame_data();
   const lldb_private::DWARFDataExtractor &get_debug_info_data();
   const lldb_private::DWARFDataExtractor &get_debug_line_data();
+  const lldb_private::DWARFDataExtractor &get_debug_line_str_data();
   const lldb_private::DWARFDataExtractor &get_debug_macro_data();
   const lldb_private::DWARFDataExtractor &get_debug_loc_data();
   const lldb_private::DWARFDataExtractor &get_debug_ranges_data();
@@ -315,6 +316,9 @@ public:
   static bool
   DIEInDeclContext(const lldb_private::CompilerDeclContext *parent_decl_ctx,
                    const DWARFDIE &die);
+
+  std::vector<lldb_private::CallEdge>
+  ParseCallEdgesInFunction(UserID func_id) override;
 
   void Dump(lldb_private::Stream &s) override;
 
@@ -466,6 +470,7 @@ protected:
   DWARFDataSegment m_data_debug_frame;
   DWARFDataSegment m_data_debug_info;
   DWARFDataSegment m_data_debug_line;
+  DWARFDataSegment m_data_debug_line_str;
   DWARFDataSegment m_data_debug_macro;
   DWARFDataSegment m_data_debug_loc;
   DWARFDataSegment m_data_debug_ranges;

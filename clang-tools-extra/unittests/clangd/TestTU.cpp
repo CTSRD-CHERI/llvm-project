@@ -45,11 +45,15 @@ ParsedAST TestTU::build() const {
 
 SymbolSlab TestTU::headerSymbols() const {
   auto AST = build();
-  return indexAST(AST.getASTContext(), AST.getPreprocessorPtr());
+  return indexHeaderSymbols(AST.getASTContext(), AST.getPreprocessorPtr());
 }
 
 std::unique_ptr<SymbolIndex> TestTU::index() const {
-  return MemIndex::build(headerSymbols());
+  auto AST = build();
+  auto Idx = llvm::make_unique<FileIndex>();
+  Idx->updatePreamble(Filename, AST.getASTContext(), AST.getPreprocessorPtr());
+  Idx->updateMain(Filename, AST);
+  return std::move(Idx);
 }
 
 const Symbol &findSymbol(const SymbolSlab &Slab, llvm::StringRef QName) {

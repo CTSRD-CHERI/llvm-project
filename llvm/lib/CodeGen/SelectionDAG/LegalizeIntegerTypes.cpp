@@ -994,7 +994,7 @@ void DAGTypeLegalizer::PromoteSetCCOperands(SDValue &NewLHS,SDValue &NewRHS,
     // We would prefer to promote the comparison operand with sign extension.
     // If the width of OpL/OpR excluding the duplicated sign bits is no greater
     // than the width of NewLHS/NewRH, we can avoid inserting real truncate
-    // instruction, which is redudant eventually.
+    // instruction, which is redundant eventually.
     unsigned OpLEffectiveBits =
         OpL.getScalarValueSizeInBits() - DAG.ComputeNumSignBits(OpL) + 1;
     unsigned OpREffectiveBits =
@@ -1260,14 +1260,7 @@ SDValue DAGTypeLegalizer::PromoteIntOp_MGATHER(MaskedGatherSDNode *N,
   } else
     NewOps[OpNo] = GetPromotedInteger(N->getOperand(OpNo));
 
-  SDValue Res = SDValue(DAG.UpdateNodeOperands(N, NewOps), 0);
-  // updated in place.
-  if (Res.getNode() == N)
-    return Res;
-
-  ReplaceValueWith(SDValue(N, 0), Res.getValue(0));
-  ReplaceValueWith(SDValue(N, 1), Res.getValue(1));
-  return SDValue();
+  return SDValue(DAG.UpdateNodeOperands(N, NewOps), 0);
 }
 
 SDValue DAGTypeLegalizer::PromoteIntOp_MSCATTER(MaskedScatterSDNode *N,

@@ -22,44 +22,6 @@ class CoreAPIsStandardTest : public CoreAPIsBasedStandardTest {};
 
 namespace {
 
-class SimpleMaterializationUnit : public MaterializationUnit {
-public:
-  using MaterializeFunction =
-      std::function<void(MaterializationResponsibility)>;
-  using DiscardFunction =
-      std::function<void(const JITDylib &, SymbolStringPtr)>;
-  using DestructorFunction = std::function<void()>;
-
-  SimpleMaterializationUnit(
-      SymbolFlagsMap SymbolFlags, MaterializeFunction Materialize,
-      DiscardFunction Discard = DiscardFunction(),
-      DestructorFunction Destructor = DestructorFunction())
-      : MaterializationUnit(std::move(SymbolFlags)),
-        Materialize(std::move(Materialize)), Discard(std::move(Discard)),
-        Destructor(std::move(Destructor)) {}
-
-  ~SimpleMaterializationUnit() override {
-    if (Destructor)
-      Destructor();
-  }
-
-  void materialize(MaterializationResponsibility R) override {
-    Materialize(std::move(R));
-  }
-
-  void discard(const JITDylib &JD, SymbolStringPtr Name) override {
-    if (Discard)
-      Discard(JD, std::move(Name));
-    else
-      llvm_unreachable("Discard not supported");
-  }
-
-private:
-  MaterializeFunction Materialize;
-  DiscardFunction Discard;
-  DestructorFunction Destructor;
-};
-
 TEST_F(CoreAPIsStandardTest, BasicSuccessfulLookup) {
   bool OnResolutionRun = false;
   bool OnReadyRun = false;
@@ -143,6 +105,94 @@ TEST_F(CoreAPIsStandardTest, EmptyLookup) {
 
   EXPECT_TRUE(OnResolvedRun) << "OnResolved was not run for empty query";
   EXPECT_TRUE(OnReadyRun) << "OnReady was not run for empty query";
+}
+
+TEST_F(CoreAPIsStandardTest, RemoveSymbolsTest) {
+  // Test that:
+  // (1) Missing symbols generate a SymbolsNotFound error.
+  // (2) Materializing symbols generate a SymbolCouldNotBeRemoved error.
+  // (3) Removal of unmaterialized symbols triggers discard on the
+  //     materialization unit.
+  // (4) Removal of symbols destroys empty materialization units.
+  // (5) Removal of materialized symbols works.
+
+  // Foo will be fully materialized.
+  cantFail(JD.define(absoluteSymbols({{Foo, FooSym}})));
+
+  // Bar will be unmaterialized.
+  bool BarDiscarded = false;
+  bool BarMaterializerDestructed = false;
+  cantFail(JD.define(llvm::make_unique<SimpleMaterializationUnit>(
+      SymbolFlagsMap({{Bar, BarSym.getFlags()}}),
+      [this](MaterializationResponsibility R) {
+        ADD_FAILURE() << "Unexpected materialization of \"Bar\"";
+        R.resolve({{Bar, BarSym}});
+        R.emit();
+      },
+      [&](const JITDylib &JD, const SymbolStringPtr &Name) {
+        EXPECT_EQ(Name, Bar) << "Expected \"Bar\" to be discarded";
+        if (Name == Bar)
+          BarDiscarded = true;
+      },
+      [&]() { BarMaterializerDestructed = true; })));
+
+  // Baz will be in the materializing state initially, then
+  // materialized for the final removal attempt.
+  Optional<MaterializationResponsibility> BazR;
+  cantFail(JD.define(llvm::make_unique<SimpleMaterializationUnit>(
+      SymbolFlagsMap({{Baz, BazSym.getFlags()}}),
+      [&](MaterializationResponsibility R) { BazR.emplace(std::move(R)); },
+      [](const JITDylib &JD, const SymbolStringPtr &Name) {
+        ADD_FAILURE() << "\"Baz\" discarded unexpectedly";
+      })));
+
+  bool OnResolvedRun = false;
+  bool OnReadyRun = false;
+  ES.lookup({&JD}, {Foo, Baz},
+            [&](Expected<SymbolMap> Result) {
+              EXPECT_TRUE(!!Result) << "OnResolved failed unexpectedly";
+              consumeError(Result.takeError());
+              OnResolvedRun = true;
+            },
+            [&](Error Err) {
+              EXPECT_FALSE(!!Err) << "OnReady failed unexpectedly";
+              consumeError(std::move(Err));
+              OnReadyRun = true;
+            },
+            NoDependenciesToRegister);
+
+  {
+    // Attempt 1: Search for a missing symbol, Qux.
+    auto Err = JD.remove({Foo, Bar, Baz, Qux});
+    EXPECT_TRUE(!!Err) << "Expected failure";
+    EXPECT_TRUE(Err.isA<SymbolsNotFound>())
+        << "Expected a SymbolsNotFound error";
+    consumeError(std::move(Err));
+  }
+
+  {
+    // Attempt 2: Search for a symbol that is still materializing, Baz.
+    auto Err = JD.remove({Foo, Bar, Baz});
+    EXPECT_TRUE(!!Err) << "Expected failure";
+    EXPECT_TRUE(Err.isA<SymbolsCouldNotBeRemoved>())
+        << "Expected a SymbolsNotFound error";
+    consumeError(std::move(Err));
+  }
+
+  BazR->resolve({{Baz, BazSym}});
+  BazR->emit();
+  {
+    // Attempt 3: Search now that all symbols are fully materialized
+    // (Foo, Baz), or not yet materialized (Bar).
+    auto Err = JD.remove({Foo, Bar, Baz});
+    EXPECT_FALSE(!!Err) << "Expected failure";
+  }
+
+  EXPECT_TRUE(BarDiscarded) << "\"Bar\" should have been discarded";
+  EXPECT_TRUE(BarMaterializerDestructed)
+      << "\"Bar\"'s materializer should have been destructed";
+  EXPECT_TRUE(OnResolvedRun) << "OnResolved should have been run";
+  EXPECT_TRUE(OnReadyRun) << "OnReady should have been run";
 }
 
 TEST_F(CoreAPIsStandardTest, ChainedJITDylibLookup) {
@@ -533,8 +583,7 @@ TEST_F(CoreAPIsStandardTest, AddAndMaterializeLazySymbol) {
 
 TEST_F(CoreAPIsStandardTest, TestBasicWeakSymbolMaterialization) {
   // Test that weak symbols are materialized correctly when we look them up.
-  BarSym.setFlags(static_cast<JITSymbolFlags::FlagNames>(BarSym.getFlags() |
-                                                         JITSymbolFlags::Weak));
+  BarSym.setFlags(BarSym.getFlags() | JITSymbolFlags::Weak);
 
   bool BarMaterialized = false;
   auto MU1 = llvm::make_unique<SimpleMaterializationUnit>(
@@ -814,6 +863,16 @@ TEST_F(CoreAPIsStandardTest, TestMaterializeWeakSymbol) {
 
   FooResponsibility->resolve(SymbolMap({{Foo, FooSym}}));
   FooResponsibility->emit();
+}
+
+TEST_F(CoreAPIsStandardTest, TestMainJITDylibAndDefaultLookupOrder) {
+  cantFail(ES.getMainJITDylib().define(absoluteSymbols({{Foo, FooSym}})));
+  auto Results = cantFail(ES.lookup({Foo}));
+
+  EXPECT_EQ(Results.size(), 1U) << "Incorrect number of results";
+  EXPECT_EQ(Results.count(Foo), 1U) << "Expected result for 'Foo'";
+  EXPECT_EQ(Results[Foo].getAddress(), FooSym.getAddress())
+      << "Expected result address to match Foo's address";
 }
 
 } // namespace

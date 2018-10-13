@@ -139,6 +139,8 @@ void Symtab::Dump(Stream *s, Target *target, SortOrder sort_order) {
       }
       break;
     }
+  } else {
+    s->PutCString("\n");
   }
 }
 
@@ -249,6 +251,7 @@ static bool lldb_skip_name(llvm::StringRef mangled,
   case Mangled::eManglingSchemeNone:
     return true;
   }
+  llvm_unreachable("unknown scheme!");
 }
 
 void Symtab::InitNameIndexes() {

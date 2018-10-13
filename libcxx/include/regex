@@ -769,6 +769,7 @@ typedef regex_token_iterator<wstring::const_iterator> wsregex_token_iterator;
 #include <memory>
 #include <vector>
 #include <deque>
+#include <version>
 
 #if !defined(_LIBCPP_HAS_NO_PRAGMA_SYSTEM_HEADER)
 #pragma GCC system_header
@@ -1351,9 +1352,9 @@ public:
     virtual ~__node() {}
 
     _LIBCPP_INLINE_VISIBILITY
-    virtual void __exec(__state&) const {};
+    virtual void __exec(__state&) const {}
     _LIBCPP_INLINE_VISIBILITY
-    virtual void __exec_split(bool, __state&) const {};
+    virtual void __exec_split(bool, __state&) const {}
 };
 
 // __end_state

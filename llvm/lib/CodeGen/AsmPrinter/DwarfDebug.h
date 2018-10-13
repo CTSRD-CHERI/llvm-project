@@ -406,8 +406,7 @@ class DwarfDebug : public DebugHandlerBase {
     return InfoHolder.getUnits();
   }
 
-  using InlinedVariable = DbgValueHistoryMap::InlinedVariable;
-  using InlinedLabel = DbgLabelInstrMap::InlinedLabel;
+  using InlinedEntity = DbgValueHistoryMap::InlinedEntity;
 
   void ensureAbstractEntityIsCreated(DwarfCompileUnit &CU,
                                      const DINode *Node,
@@ -424,6 +423,10 @@ class DwarfDebug : public DebugHandlerBase {
 
   /// Construct a DIE for this abstract scope.
   void constructAbstractSubprogramScopeDIE(DwarfCompileUnit &SrcCU, LexicalScope *Scope);
+
+  /// Construct DIEs for call site entries describing the calls in \p MF.
+  void constructCallSiteEntryDIEs(const DISubprogram &SP, DwarfCompileUnit &CU,
+                                  DIE &ScopeDIE, const MachineFunction &MF);
 
   template <typename DataT>
   void addAccelNameImpl(const DICompileUnit &CU, AccelTable<DataT> &AppleAccel,
@@ -550,7 +553,7 @@ class DwarfDebug : public DebugHandlerBase {
 
   /// Populate LexicalScope entries with variables' info.
   void collectEntityInfo(DwarfCompileUnit &TheCU, const DISubprogram *SP,
-                         DenseSet<InlinedVariable> &ProcessedVars);
+                         DenseSet<InlinedEntity> &ProcessedVars);
 
   /// Build the location list for all DBG_VALUEs in the
   /// function that describe the same variable.
@@ -559,7 +562,7 @@ class DwarfDebug : public DebugHandlerBase {
 
   /// Collect variable information from the side table maintained by MF.
   void collectVariableInfoFromMFTable(DwarfCompileUnit &TheCU,
-                                      DenseSet<InlinedVariable> &P);
+                                      DenseSet<InlinedEntity> &P);
 
   /// Emit the reference to the section.
   void emitSectionReference(const DwarfCompileUnit &CU);
@@ -720,6 +723,9 @@ public:
   bool tuneForLLDB() const { return DebuggerTuning == DebuggerKind::LLDB; }
   bool tuneForSCE() const { return DebuggerTuning == DebuggerKind::SCE; }
   /// @}
+
+private:
+  void emitDebugLoc(const DebugLoc &DL);
 };
 
 } // end namespace llvm

@@ -22,6 +22,8 @@ def HasV8_3a         : Predicate<"Subtarget->hasV8_3aOps()">,
                                  AssemblerPredicate<"HasV8_3aOps", "armv8.3a">;
 def HasV8_4a         : Predicate<"Subtarget->hasV8_4aOps()">,
                                  AssemblerPredicate<"HasV8_4aOps", "armv8.4a">;
+def HasV8_5a         : Predicate<"Subtarget->hasV8_5aOps()">,
+                                 AssemblerPredicate<"HasV8_5aOps", "armv8.5a">;
 def HasFPARMv8       : Predicate<"Subtarget->hasFPARMv8()">,
                                AssemblerPredicate<"FeatureFPARMv8", "fp-armv8">;
 def HasNEON          : Predicate<"Subtarget->hasNEON()">,
@@ -60,7 +62,20 @@ def HasSVE           : Predicate<"Subtarget->hasSVE()">,
                                  AssemblerPredicate<"FeatureSVE", "sve">;
 def HasRCPC          : Predicate<"Subtarget->hasRCPC()">,
                                  AssemblerPredicate<"FeatureRCPC", "rcpc">;
-
+def HasAltNZCV       : Predicate<"Subtarget->hasAlternativeNZCV()">,
+                       AssemblerPredicate<"FeatureAltFPCmp", "altnzcv">;
+def HasFRInt3264     : Predicate<"Subtarget->hasFRInt3264()">,
+                       AssemblerPredicate<"FeatureFRInt3264", "frint3264">;
+def HasSpecCtrl      : Predicate<"Subtarget->hasSpecCtrl()">,
+                       AssemblerPredicate<"FeatureSpecCtrl", "specctrl">;
+def HasPredCtrl      : Predicate<"Subtarget->hasPredCtrl()">,
+                       AssemblerPredicate<"FeaturePredCtrl", "predctrl">;
+def HasCCDP          : Predicate<"Subtarget->hasCCDP()">,
+                       AssemblerPredicate<"FeatureCacheDeepPersist", "ccdp">;
+def HasBTI           : Predicate<"Subtarget->hasBTI()">,
+                       AssemblerPredicate<"FeatureBranchTargetId", "bti">;
+def HasMTE           : Predicate<"Subtarget->hasMTE()">,
+                       AssemblerPredicate<"FeatureMTE", "mte">;
 def IsLE             : Predicate<"Subtarget->isLittleEndian()">;
 def IsBE             : Predicate<"!Subtarget->isLittleEndian()">;
 def UseAlternateSExtLoadCVTF32
@@ -345,6 +360,9 @@ let RecomputePerFunction = 1 in {
   def NotForCodeSize   : Predicate<"!MF->getFunction().optForSize()">;
   // Avoid generating STRQro if it is slow, unless we're optimizing for code size.
   def UseSTRQro : Predicate<"!Subtarget->isSTRQroSlow() || MF->getFunction().optForSize()">;
+
+  def UseBTI : Predicate<[{ MF->getFunction().hasFnAttribute("branch-target-enforcement") }]>;
+  def NotUseBTI : Predicate<[{ !MF->getFunction().hasFnAttribute("branch-target-enforcement") }]>;
 }
 
 include "AArch64InstrFormats.td"
@@ -443,6 +461,8 @@ def : InstAlias<"sev",  (HINT 0b100)>;
 def : InstAlias<"sevl", (HINT 0b101)>;
 def : InstAlias<"esb",  (HINT 0b10000)>, Requires<[HasRAS]>;
 def : InstAlias<"csdb", (HINT 20)>;
+def : InstAlias<"bti",  (HINT 32)>, Requires<[HasBTI]>;
+def : InstAlias<"bti $op", (HINT btihint_op:$op)>, Requires<[HasBTI]>;
 
 // v8.2a Statistical Profiling extension
 def : InstAlias<"psb $op",  (HINT psbhint_op:$op)>, Requires<[HasSPE]>;
@@ -606,8 +626,37 @@ def RMIF   : FlagRotate<(ins GPR64:$Rn, uimm6:$imm, imm0_15:$mask), "rmif",
                         "{\t$Rn, $imm, $mask}">;
 } // HasV8_4a
 
+// v8.5 flag manipulation instructions
+let Predicates = [HasAltNZCV], Uses = [NZCV], Defs = [NZCV] in {
+
+def XAFLAG : PstateWriteSimple<(ins), "xaflag", "">, Sched<[WriteSys]> {
+  let Inst{18-16} = 0b000;
+  let Inst{11-8} = 0b0000;
+  let Unpredictable{11-8} = 0b1111;
+  let Inst{7-5} = 0b001;
+}
+
+def AXFLAG : PstateWriteSimple<(ins), "axflag", "">, Sched<[WriteSys]> {
+  let Inst{18-16} = 0b000;
+  let Inst{11-8} = 0b0000;
+  let Unpredictable{11-8} = 0b1111;
+  let Inst{7-5} = 0b010;
+}
+} // HasAltNZCV
+
+
+// Armv8.5-A speculation barrier
+def SB : SimpleSystemI<0, (ins), "sb", "">, Sched<[]> {
+  let Inst{20-5} = 0b0001100110000111;
+  let Unpredictable{11-8} = 0b1111;
+  let Predicates = [HasSpecCtrl];
+  let hasSideEffects = 1;
+}
+
 def : InstAlias<"clrex", (CLREX 0xf)>;
 def : InstAlias<"isb", (ISB 0xf)>;
+def : InstAlias<"ssbb", (DSB 0)>;
+def : InstAlias<"pssbb", (DSB 4)>;
 
 def MRS    : MRSI;
 def MSR    : MSRI;
@@ -1078,6 +1127,50 @@ defm : STOPregister<"stsmax","LDSMAX">;// STSMAXx
 defm : STOPregister<"stsmin","LDSMIN">;// STSMINx
 defm : STOPregister<"stumax","LDUMAX">;// STUMAXx
 defm : STOPregister<"stumin","LDUMIN">;// STUMINx
+
+// v8.5 Memory Tagging Extension
+let Predicates = [HasMTE] in {
+
+def IRG   : BaseTwoOperand<0b0100, GPR64sp, "irg", null_frag, GPR64sp, GPR64>,
+            Sched<[]>{
+  let Inst{31} = 1;
+}
+def GMI   : BaseTwoOperand<0b0101, GPR64, "gmi", null_frag, GPR64sp>, Sched<[]>{
+  let Inst{31} = 1;
+  let isNotDuplicable = 1;
+}
+def ADDG  : AddSubG<0, "addg", null_frag>;
+def SUBG  : AddSubG<1, "subg", null_frag>;
+
+def : InstAlias<"irg $dst, $src", (IRG GPR64sp:$dst, GPR64sp:$src, XZR), 1>;
+
+def SUBP : SUBP<0, "subp", null_frag>, Sched<[]>;
+def SUBPS : SUBP<1, "subps", null_frag>, Sched<[]>{
+  let Defs = [NZCV];
+}
+
+def : InstAlias<"cmpp $lhs, $rhs", (SUBPS XZR, GPR64sp:$lhs, GPR64sp:$rhs), 0>;
+
+def LDG : MemTagLoad<"ldg", "\t$Rt, [$Rn, $offset]">;
+def : InstAlias<"ldg $Rt, [$Rn]", (LDG GPR64:$Rt, GPR64sp:$Rn, 0), 1>;
+
+def LDGV : MemTagVector<1, "ldgv", "\t$Rt, [$Rn]!",
+                   (outs GPR64sp:$wback, GPR64:$Rt), (ins GPR64sp:$Rn)> {
+  let DecoderMethod = "DecodeLoadAllocTagArrayInstruction";
+}
+def STGV : MemTagVector<0, "stgv", "\t$Rt, [$Rn]!",
+                   (outs GPR64sp:$wback), (ins GPR64:$Rt, GPR64sp:$Rn)>;
+
+defm STG   : MemTagStore<0b00, "stg">;
+defm STZG  : MemTagStore<0b01, "stzg">;
+defm ST2G  : MemTagStore<0b10, "st2g">;
+defm STZ2G : MemTagStore<0b11, "stz2g">;
+
+defm STGP     : StorePairOffset <0b01, 0, GPR64z, simm7s16, "stgp">;
+def  STGPpre  : StorePairPreIdx <0b01, 0, GPR64z, simm7s16, "stgp">;
+def  STGPpost : StorePairPostIdx<0b01, 0, GPR64z, simm7s16, "stgp">;
+
+} // Predicates = [HasMTE]
 
 //===----------------------------------------------------------------------===//
 // Logical instructions.
@@ -2917,6 +3010,13 @@ let SchedRW = [WriteFDiv] in {
 defm FSQRT  : SingleOperandFPData<0b0011, "fsqrt", fsqrt>;
 }
 
+let Predicates = [HasFRInt3264] in {
+  defm FRINT32Z : FRIntNNT<0b00, "frint32z">;
+  defm FRINT64Z : FRIntNNT<0b10, "frint64z">;
+  defm FRINT32X : FRIntNNT<0b01, "frint32x">;
+  defm FRINT64X : FRIntNNT<0b11, "frint64x">;
+} // HasFRInt3264
+
 //===----------------------------------------------------------------------===//
 // Floating point two operand instructions.
 //===----------------------------------------------------------------------===//
@@ -3135,6 +3235,14 @@ defm FRINTN : SIMDTwoVectorFP<0, 0, 0b11000, "frintn", int_aarch64_neon_frintn>;
 defm FRINTP : SIMDTwoVectorFP<0, 1, 0b11000, "frintp", fceil>;
 defm FRINTX : SIMDTwoVectorFP<1, 0, 0b11001, "frintx", frint>;
 defm FRINTZ : SIMDTwoVectorFP<0, 1, 0b11001, "frintz", ftrunc>;
+
+let Predicates = [HasFRInt3264] in {
+  defm FRINT32Z : FRIntNNTVector<0, 0, "frint32z">;
+  defm FRINT64Z : FRIntNNTVector<0, 1, "frint64z">;
+  defm FRINT32X : FRIntNNTVector<1, 0, "frint32x">;
+  defm FRINT64X : FRIntNNTVector<1, 1, "frint64x">;
+} // HasFRInt3264
+
 defm FRSQRTE: SIMDTwoVectorFP<1, 1, 0b11101, "frsqrte", int_aarch64_neon_frsqrte>;
 defm FSQRT  : SIMDTwoVectorFP<1, 1, 0b11111, "fsqrt", fsqrt>;
 defm NEG    : SIMDTwoVectorBHSD<1, 0b01011, "neg",
@@ -6530,10 +6638,24 @@ let isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [SP] in {
                    Sched<[WriteBrReg]>;
   def TCRETURNri : Pseudo<(outs), (ins tcGPR64:$dst, i32imm:$FPDiff), []>,
                    Sched<[WriteBrReg]>;
+  // Indirect tail-call with any register allowed, used by MachineOutliner when
+  // this is proven safe.
+  // FIXME: If we have to add any more hacks like this, we should instead relax
+  // some verifier checks for outlined functions.
+  def TCRETURNriALL : Pseudo<(outs), (ins GPR64:$dst, i32imm:$FPDiff), []>,
+                      Sched<[WriteBrReg]>;
+  // Indirect tail-call limited to only use registers (x16 and x17) which are
+  // allowed to tail-call a "BTI c" instruction.
+  def TCRETURNriBTI : Pseudo<(outs), (ins rtcGPR64:$dst, i32imm:$FPDiff), []>,
+                      Sched<[WriteBrReg]>;
 }
 
 def : Pat<(AArch64tcret tcGPR64:$dst, (i32 timm:$FPDiff)),
-          (TCRETURNri tcGPR64:$dst, imm:$FPDiff)>;
+          (TCRETURNri tcGPR64:$dst, imm:$FPDiff)>,
+      Requires<[NotUseBTI]>;
+def : Pat<(AArch64tcret rtcGPR64:$dst, (i32 timm:$FPDiff)),
+          (TCRETURNriBTI rtcGPR64:$dst, imm:$FPDiff)>,
+      Requires<[UseBTI]>;
 def : Pat<(AArch64tcret tglobaladdr:$dst, (i32 timm:$FPDiff)),
           (TCRETURNdi texternalsym:$dst, imm:$FPDiff)>;
 def : Pat<(AArch64tcret texternalsym:$dst, (i32 timm:$FPDiff)),

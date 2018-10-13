@@ -61,13 +61,20 @@ Error RecordInitializer::visit(NewCPUIDRecord &R) {
     return createStringError(std::make_error_code(std::errc::bad_address),
                              "Invalid offset for a new cpu id record (%d).",
                              OffsetPtr);
+  auto BeginOffset = OffsetPtr;
   auto PreReadOffset = OffsetPtr;
   R.CPUId = E.getU16(&OffsetPtr);
   if (OffsetPtr == PreReadOffset)
     return createStringError(std::make_error_code(std::errc::bad_message),
                              "Cannot read CPU id at offset %d.", OffsetPtr);
 
-  OffsetPtr += MetadataRecord::kMetadataBodySize - (OffsetPtr - PreReadOffset);
+  PreReadOffset = OffsetPtr;
+  R.TSC = E.getU64(&OffsetPtr);
+  if (OffsetPtr == PreReadOffset)
+    return createStringError(std::make_error_code(std::errc::bad_message),
+                             "Cannot read CPU TSC at offset %d.", OffsetPtr);
+
+  OffsetPtr += MetadataRecord::kMetadataBodySize - (OffsetPtr - BeginOffset);
   return Error::success();
 }
 
@@ -157,7 +164,7 @@ Error RecordInitializer::visit(PIDRecord &R) {
                              OffsetPtr);
 
   auto PreReadOffset = OffsetPtr;
-  R.PID = E.getU64(&OffsetPtr);
+  R.PID = E.getSigned(&OffsetPtr, 4);
   if (PreReadOffset == OffsetPtr)
     return createStringError(std::make_error_code(std::errc::bad_message),
                              "Cannot read a process ID record at offset %d.",

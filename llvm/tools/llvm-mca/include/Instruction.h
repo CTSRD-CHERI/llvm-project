@@ -102,6 +102,15 @@ class WriteState {
   // super-registers.
   bool ClearsSuperRegs;
 
+  // True if this write is from a dependency breaking zero-idiom instruction.
+  bool WritesZero;
+
+  // True if this write has been eliminated at register renaming stage.
+  // Example: a register move doesn't consume scheduler/pipleline resources if
+  // it is eliminated at register renaming stage. It still consumes
+  // decode bandwidth, and ROB entries.
+  bool IsEliminated;
+
   // This field is set if this is a partial register write, and it has a false
   // dependency on any previous write of the same register (or a portion of it).
   // DependentWrite must be able to complete before this write completes, so
@@ -121,10 +130,10 @@ class WriteState {
 
 public:
   WriteState(const WriteDescriptor &Desc, unsigned RegID,
-             bool clearsSuperRegs = false)
+             bool clearsSuperRegs = false, bool writesZero = false)
       : WD(Desc), CyclesLeft(UNKNOWN_CYCLES), RegisterID(RegID),
-        ClearsSuperRegs(clearsSuperRegs), DependentWrite(nullptr),
-        NumWriteUsers(0U) {}
+        ClearsSuperRegs(clearsSuperRegs), WritesZero(writesZero),
+        IsEliminated(false), DependentWrite(nullptr), NumWriteUsers(0U) {}
   WriteState(const WriteState &Other) = delete;
   WriteState &operator=(const WriteState &Other) = delete;
 
@@ -137,11 +146,22 @@ public:
 
   unsigned getNumUsers() const { return Users.size() + NumWriteUsers; }
   bool clearsSuperRegisters() const { return ClearsSuperRegs; }
+  bool isWriteZero() const { return WritesZero; }
+  bool isEliminated() const { return IsEliminated; }
+  bool isExecuted() const {
+    return CyclesLeft != UNKNOWN_CYCLES && CyclesLeft <= 0;
+  }
 
   const WriteState *getDependentWrite() const { return DependentWrite; }
   void setDependentWrite(WriteState *Other) {
     DependentWrite = Other;
     ++Other->NumWriteUsers;
+  }
+  void setWriteZero() { WritesZero = true; }
+  void setEliminated() {
+    assert(Users.empty() && "Write is in an inconsistent state.");
+    CyclesLeft = 0;
+    IsEliminated = true;
   }
 
   // On every cycle, update CyclesLeft and notify dependent users.
@@ -177,11 +197,14 @@ class ReadState {
   // This field is set to true only if there are no dependent writes, and
   // there are no `CyclesLeft' to wait.
   bool IsReady;
+  // True if this register read is from a dependency-breaking instruction.
+  bool IndependentFromDef;
 
 public:
   ReadState(const ReadDescriptor &Desc, unsigned RegID)
       : RD(Desc), RegisterID(RegID), DependentWrites(0),
-        CyclesLeft(UNKNOWN_CYCLES), TotalCycles(0), IsReady(true) {}
+        CyclesLeft(UNKNOWN_CYCLES), TotalCycles(0), IsReady(true),
+        IndependentFromDef(false) {}
   ReadState(const ReadState &Other) = delete;
   ReadState &operator=(const ReadState &Other) = delete;
 
@@ -191,6 +214,9 @@ public:
 
   bool isReady() const { return IsReady; }
   bool isImplicitRead() const { return RD.isImplicitRead(); }
+
+  bool isIndependentFromDef() const { return IndependentFromDef; }
+  void setIndependentFromDef() { IndependentFromDef = true; }
 
   void cycleEvent();
   void writeStartEvent(unsigned Cycles);
@@ -233,7 +259,7 @@ public:
 
   bool isValid() const { return Begin <= End; }
   unsigned size() const { return End - Begin; };
-  void Subtract(unsigned Cycles) {
+  void subtract(unsigned Cycles) {
     assert(End >= Cycles);
     End -= Cycles;
   }
@@ -281,6 +307,10 @@ struct InstrDesc {
 
   // A zero latency instruction doesn't consume any scheduler resources.
   bool isZeroLatency() const { return !MaxLatency && Resources.empty(); }
+
+  InstrDesc() = default;
+  InstrDesc(const InstrDesc &Other) = delete;
+  InstrDesc &operator=(const InstrDesc &Other) = delete;
 };
 
 /// An instruction propagated through the simulated instruction pipeline.
@@ -309,7 +339,12 @@ class Instruction {
   // Retire Unit token ID for this instruction.
   unsigned RCUTokenID;
 
-  bool IsDepBreaking;
+  // This field is set for instructions that are candidates for move
+  // elimination. For more information about move elimination, see the
+  // definition of RegisterMappingTracker in RegisterFile.h
+  //
+  // TODO: Teach subtargets how to describe optimizable register moves.
+  bool IsOptimizableMove;
 
   using UniqueDef = std::unique_ptr<WriteState>;
   using UniqueUse = std::unique_ptr<ReadState>;
@@ -327,7 +362,7 @@ class Instruction {
 public:
   Instruction(const InstrDesc &D)
       : Desc(D), Stage(IS_INVALID), CyclesLeft(UNKNOWN_CYCLES), RCUTokenID(0),
-        IsDepBreaking(false) {}
+        IsOptimizableMove(false) {}
   Instruction(const Instruction &Other) = delete;
   Instruction &operator=(const Instruction &Other) = delete;
 
@@ -340,13 +375,9 @@ public:
   int getCyclesLeft() const { return CyclesLeft; }
 
   bool hasDependentUsers() const {
-    return llvm::any_of(Defs, [](const UniqueDef &Def) {
-      return Def->getNumUsers() > 0;
-    });
+    return llvm::any_of(
+        Defs, [](const UniqueDef &Def) { return Def->getNumUsers() > 0; });
   }
-
-  bool isDependencyBreaking() const { return IsDepBreaking; }
-  void setDependencyBreaking() { IsDepBreaking = true; }
 
   unsigned getNumUsers() const {
     unsigned NumUsers = 0;
@@ -378,6 +409,18 @@ public:
   bool isExecuted() const { return Stage == IS_EXECUTED; }
   bool isRetired() const { return Stage == IS_RETIRED; }
 
+  // Returns true if this instruction is a candidate for move elimination.
+  bool isOptimizableMove() const { return IsOptimizableMove; }
+  void setOptimizableMove() { IsOptimizableMove = true; }
+  bool isEliminated() const {
+    return isReady() && Defs.size() &&
+           llvm::all_of(Defs,
+                        [](const UniqueDef &D) { return D->isEliminated(); });
+  }
+
+  // Forces a transition from state IS_AVAILABLE to state IS_EXECUTED.
+  void forceExecuted();
+
   void retire() {
     assert(isExecuted() && "Instruction is in an invalid state!");
     Stage = IS_RETIRED;
@@ -389,21 +432,24 @@ public:
 /// An InstRef contains both a SourceMgr index and Instruction pair.  The index
 /// is used as a unique identifier for the instruction.  MCA will make use of
 /// this index as a key throughout MCA.
-class InstRef : public std::pair<unsigned, Instruction *> {
-public:
-  InstRef() : std::pair<unsigned, Instruction *>(0, nullptr) {}
-  InstRef(unsigned Index, Instruction *I)
-      : std::pair<unsigned, Instruction *>(Index, I) {}
+class InstRef {
+  std::pair<unsigned, Instruction *> Data;
 
-  unsigned getSourceIndex() const { return first; }
-  Instruction *getInstruction() { return second; }
-  const Instruction *getInstruction() const { return second; }
+public:
+  InstRef() : Data(std::make_pair(0, nullptr)) {}
+  InstRef(unsigned Index, Instruction *I) : Data(std::make_pair(Index, I)) {}
+
+  bool operator==(const InstRef &Other) const { return Data == Other.Data; }
+
+  unsigned getSourceIndex() const { return Data.first; }
+  Instruction *getInstruction() { return Data.second; }
+  const Instruction *getInstruction() const { return Data.second; }
 
   /// Returns true if this references a valid instruction.
-  bool isValid() const { return second != nullptr; }
+  bool isValid() const { return Data.second; }
 
   /// Invalidate this reference.
-  void invalidate() { second = nullptr; }
+  void invalidate() { Data.second = nullptr; }
 
 #ifndef NDEBUG
   void print(llvm::raw_ostream &OS) const { OS << getSourceIndex(); }
@@ -433,11 +479,22 @@ public:
   unsigned getSourceIndex() const { return Data.first; }
   const WriteState *getWriteState() const { return Data.second; }
   WriteState *getWriteState() { return Data.second; }
-  void invalidate() { Data = std::make_pair(INVALID_IID, nullptr); }
-
-  bool isValid() const {
-    return Data.first != INVALID_IID && Data.second != nullptr;
+  void invalidate() { Data.second = nullptr; }
+  bool isWriteZero() const {
+    assert(isValid() && "Invalid null WriteState found!");
+    return getWriteState()->isWriteZero();
   }
+
+  /// Returns true if this register write has been executed, and the new
+  /// register value is therefore available to users.
+  bool isAvailable() const {
+    if (getSourceIndex() == INVALID_IID)
+      return false;
+    const WriteState *WS = getWriteState();
+    return !WS || WS->isExecuted();
+  }
+
+  bool isValid() const { return Data.first != INVALID_IID && Data.second; }
   bool operator==(const WriteRef &Other) const { return Data == Other.Data; }
 
 #ifndef NDEBUG

@@ -20,7 +20,6 @@
 
 #include <cassert>
 #include <vector>
-#include <mutex>
 
 #ifdef OMPTARGET_DEBUG
 int DebugLevel = 0;
@@ -419,13 +418,15 @@ int target_data_end(DeviceTy &Device, int32_t arg_num, void **args_base,
       uintptr_t ub = (uintptr_t) HstPtrBegin + data_size;
       Device.ShadowMtx.lock();
       for (ShadowPtrListTy::iterator it = Device.ShadowPtrMap.begin();
-          it != Device.ShadowPtrMap.end(); ++it) {
+           it != Device.ShadowPtrMap.end();) {
         void **ShadowHstPtrAddr = (void**) it->first;
 
         // An STL map is sorted on its keys; use this property
         // to quickly determine when to break out of the loop.
-        if ((uintptr_t) ShadowHstPtrAddr < lb)
+        if ((uintptr_t) ShadowHstPtrAddr < lb) {
+          ++it;
           continue;
+        }
         if ((uintptr_t) ShadowHstPtrAddr >= ub)
           break;
 
@@ -439,7 +440,9 @@ int target_data_end(DeviceTy &Device, int32_t arg_num, void **args_base,
         // If the struct is to be deallocated, remove the shadow entry.
         if (DelEntry) {
           DP("Removing shadow pointer " DPxMOD "\n", DPxPTR(ShadowHstPtrAddr));
-          Device.ShadowPtrMap.erase(it);
+          it = Device.ShadowPtrMap.erase(it);
+        } else {
+          ++it;
         }
       }
       Device.ShadowMtx.unlock();

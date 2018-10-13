@@ -196,6 +196,21 @@ StringRef sys::detail::getHostCPUNameForARM(StringRef ProcCpuinfoContent) {
             .Default("generic");
   }
 
+  if (Implementer == "0x42" || Implementer == "0x43") { // Broadcom | Cavium.
+    for (unsigned I = 0, E = Lines.size(); I != E; ++I) {
+      if (Lines[I].startswith("CPU part")) {
+        return StringSwitch<const char *>(Lines[I].substr(8).ltrim("\t :"))
+          .Case("0x516", "thunderx2t99")
+          .Case("0x0516", "thunderx2t99")
+          .Case("0xaf", "thunderx2t99")
+          .Case("0x0af", "thunderx2t99")
+          .Case("0xa1", "thunderxt88")
+          .Case("0x0a1", "thunderxt88")
+          .Default("generic");
+      }
+    }
+  }
+
   if (Implementer == "0x51") // Qualcomm Technologies, Inc.
     // Look for the CPU part line.
     for (unsigned I = 0, E = Lines.size(); I != E; ++I)
@@ -1022,8 +1037,10 @@ StringRef sys::getHostCPUName() {
   mach_msg_type_number_t infoCount;
 
   infoCount = HOST_BASIC_INFO_COUNT;
-  host_info(mach_host_self(), HOST_BASIC_INFO, (host_info_t)&hostInfo,
+  mach_port_t hostPort = mach_host_self();
+  host_info(hostPort, HOST_BASIC_INFO, (host_info_t)&hostInfo,
             &infoCount);
+  mach_port_deallocate(mach_task_self(), hostPort);
 
   if (hostInfo.cpu_type != CPU_TYPE_POWERPC)
     return "generic";
@@ -1214,6 +1231,8 @@ bool sys::getHostCPUFeatures(StringMap<bool> &Features) {
   Features["fma4"]   = HasExtLeaf1 && ((ECX >> 16) & 1) && HasAVXSave;
   Features["tbm"]    = HasExtLeaf1 && ((ECX >> 21) & 1);
   Features["mwaitx"] = HasExtLeaf1 && ((ECX >> 29) & 1);
+
+  Features["64bit"]  = HasExtLeaf1 && ((EDX >> 29) & 1);
 
   // Miscellaneous memory related features, detected by
   // using the 0x80000008 leaf of the CPUID instruction

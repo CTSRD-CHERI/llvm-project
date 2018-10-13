@@ -372,6 +372,128 @@ Status NativeProcessProtocol::SetSoftwareBreakpoint(lldb::addr_t addr,
       });
 }
 
+llvm::Expected<llvm::ArrayRef<uint8_t>>
+NativeProcessProtocol::GetSoftwareBreakpointTrapOpcode(size_t size_hint) {
+  static const uint8_t g_aarch64_opcode[] = {0x00, 0x00, 0x20, 0xd4};
+  static const uint8_t g_i386_opcode[] = {0xCC};
+  static const uint8_t g_mips64_opcode[] = {0x00, 0x00, 0x00, 0x0d};
+  static const uint8_t g_mips64el_opcode[] = {0x0d, 0x00, 0x00, 0x00};
+  static const uint8_t g_s390x_opcode[] = {0x00, 0x01};
+  static const uint8_t g_ppc64le_opcode[] = {0x08, 0x00, 0xe0, 0x7f}; // trap
+
+  switch (GetArchitecture().GetMachine()) {
+  case llvm::Triple::aarch64:
+    return llvm::makeArrayRef(g_aarch64_opcode);
+
+  case llvm::Triple::x86:
+  case llvm::Triple::x86_64:
+    return llvm::makeArrayRef(g_i386_opcode);
+
+  case llvm::Triple::mips:
+  case llvm::Triple::mips64:
+    return llvm::makeArrayRef(g_mips64_opcode);
+
+  case llvm::Triple::mipsel:
+  case llvm::Triple::mips64el:
+    return llvm::makeArrayRef(g_mips64el_opcode);
+
+  case llvm::Triple::systemz:
+    return llvm::makeArrayRef(g_s390x_opcode);
+
+  case llvm::Triple::ppc64le:
+    return llvm::makeArrayRef(g_ppc64le_opcode);
+
+  default:
+    return llvm::createStringError(llvm::inconvertibleErrorCode(),
+                                   "CPU type not supported!");
+  }
+}
+
+size_t NativeProcessProtocol::GetSoftwareBreakpointPCOffset() {
+  switch (GetArchitecture().GetMachine()) {
+  case llvm::Triple::x86:
+  case llvm::Triple::x86_64:
+  case llvm::Triple::systemz:
+    // These architectures report increment the PC after breakpoint is hit.
+    return cantFail(GetSoftwareBreakpointTrapOpcode(0)).size();
+
+  case llvm::Triple::arm:
+  case llvm::Triple::aarch64:
+  case llvm::Triple::mips64:
+  case llvm::Triple::mips64el:
+  case llvm::Triple::mips:
+  case llvm::Triple::mipsel:
+  case llvm::Triple::ppc64le:
+    // On these architectures the PC doesn't get updated for breakpoint hits.
+    return 0;
+
+  default:
+    llvm_unreachable("CPU type not supported!");
+  }
+}
+
+void NativeProcessProtocol::FixupBreakpointPCAsNeeded(
+    NativeThreadProtocol &thread) {
+  Log *log = GetLogIfAnyCategoriesSet(LIBLLDB_LOG_BREAKPOINTS);
+
+  Status error;
+
+  // Find out the size of a breakpoint (might depend on where we are in the
+  // code).
+  NativeRegisterContext &context = thread.GetRegisterContext();
+
+  uint32_t breakpoint_size = GetSoftwareBreakpointPCOffset();
+  LLDB_LOG(log, "breakpoint size: {0}", breakpoint_size);
+  if (breakpoint_size == 0)
+    return;
+
+  // First try probing for a breakpoint at a software breakpoint location: PC -
+  // breakpoint size.
+  const lldb::addr_t initial_pc_addr = context.GetPCfromBreakpointLocation();
+  lldb::addr_t breakpoint_addr = initial_pc_addr;
+  // Do not allow breakpoint probe to wrap around.
+  if (breakpoint_addr >= breakpoint_size)
+    breakpoint_addr -= breakpoint_size;
+
+  // Check if we stopped because of a breakpoint.
+  NativeBreakpointSP breakpoint_sp;
+  error = m_breakpoint_list.GetBreakpoint(breakpoint_addr, breakpoint_sp);
+  if (!error.Success() || !breakpoint_sp) {
+    // We didn't find one at a software probe location.  Nothing to do.
+    LLDB_LOG(log,
+             "pid {0} no lldb breakpoint found at current pc with "
+             "adjustment: {1}",
+             GetID(), breakpoint_addr);
+    return;
+  }
+
+  // If the breakpoint is not a software breakpoint, nothing to do.
+  if (!breakpoint_sp->IsSoftwareBreakpoint()) {
+    LLDB_LOG(
+        log,
+        "pid {0} breakpoint found at {1:x}, not software, nothing to adjust",
+        GetID(), breakpoint_addr);
+    return;
+  }
+
+  //
+  // We have a software breakpoint and need to adjust the PC.
+  //
+
+  // Change the program counter.
+  LLDB_LOG(log, "pid {0} tid {1}: changing PC from {2:x} to {3:x}", GetID(),
+           thread.GetID(), initial_pc_addr, breakpoint_addr);
+
+  error = context.SetPC(breakpoint_addr);
+  if (error.Fail()) {
+    // This can happen in case the process was killed between the time we read
+    // the PC and when we are updating it. There's nothing better to do than to
+    // swallow the error.
+    LLDB_LOG(log, "pid {0} tid {1}: failed to set PC: {2}", GetID(),
+             thread.GetID(), error);
+  }
+}
+
 Status NativeProcessProtocol::RemoveBreakpoint(lldb::addr_t addr,
                                                bool hardware) {
   if (hardware)
@@ -391,6 +513,15 @@ Status NativeProcessProtocol::DisableBreakpoint(lldb::addr_t addr) {
 lldb::StateType NativeProcessProtocol::GetState() const {
   std::lock_guard<std::recursive_mutex> guard(m_state_mutex);
   return m_state;
+}
+
+Status NativeProcessProtocol::ReadMemoryWithoutTrap(lldb::addr_t addr,
+                                                    void *buf, size_t size,
+                                                    size_t &bytes_read) {
+  Status error = ReadMemory(addr, buf, size, bytes_read);
+  if (error.Fail())
+    return error;
+  return m_breakpoint_list.RemoveTrapsFromBuffer(addr, buf, size);
 }
 
 void NativeProcessProtocol::SetState(lldb::StateType state,

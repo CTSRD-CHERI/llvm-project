@@ -187,7 +187,8 @@ bool DIASession::addressForRVA(uint32_t RVA, uint32_t &Section,
   return false;
 }
 
-std::unique_ptr<PDBSymbol> DIASession::getSymbolById(uint32_t SymbolId) const {
+std::unique_ptr<PDBSymbol>
+DIASession::getSymbolById(SymIndexId SymbolId) const {
   CComPtr<IDiaSymbol> LocatedSymbol;
   if (S_OK != Session->symbolById(SymbolId, &LocatedSymbol))
     return nullptr;
@@ -406,7 +407,7 @@ DIASession::getInjectedSources() const {
   if (!Files)
     return nullptr;
 
-  return llvm::make_unique<DIAEnumInjectedSources>(*this, Files);
+  return llvm::make_unique<DIAEnumInjectedSources>(Files);
 }
 
 std::unique_ptr<IPDBEnumSectionContribs>

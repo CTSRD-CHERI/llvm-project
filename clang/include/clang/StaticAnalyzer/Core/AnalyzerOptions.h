@@ -140,6 +140,9 @@ public:
 
   std::string AnalyzeSpecificFunction;
 
+  /// File path to which the exploded graph should be dumped.
+  std::string DumpExplodedGraphTo;
+
   /// Store full compiler invocation for reproducible instructions in the
   /// generated report.
   std::string FullCompilerInvocation;
@@ -164,7 +167,6 @@ public:
 
   unsigned TrimGraph : 1;
   unsigned visualizeExplodedGraphWithGraphViz : 1;
-  unsigned visualizeExplodedGraphWithUbiGraph : 1;
   unsigned UnoptimizedCFG : 1;
   unsigned PrintStats : 1;
 
@@ -361,7 +363,7 @@ public:
         AnalyzerDisplayProgress(false), AnalyzeNestedBlocks(false),
         eagerlyAssumeBinOpBifurcation(false), TrimGraph(false),
         visualizeExplodedGraphWithGraphViz(false),
-        visualizeExplodedGraphWithUbiGraph(false), UnoptimizedCFG(false),
+        UnoptimizedCFG(false),
         PrintStats(false), NoRetryExhausted(false), CXXMemberInliningMode() {}
 
   /// Interprets an option's string value as a boolean. The "true" string is

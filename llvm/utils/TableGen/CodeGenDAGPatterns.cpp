@@ -1318,7 +1318,7 @@ std::string PatternToMatch::getPredicateCheck() const {
   SmallVector<const Predicate*,4> PredList;
   for (const Predicate &P : Predicates)
     PredList.push_back(&P);
-  llvm::sort(PredList.begin(), PredList.end(), deref<llvm::less>());
+  llvm::sort(PredList, deref<llvm::less>());
 
   std::string Check;
   for (unsigned i = 0, e = PredList.size(); i != e; ++i) {
@@ -3037,13 +3037,6 @@ void CodeGenDAGPatterns::ParsePatternFragments(bool OutFrags) {
       P->error("Operands list does not contain an entry for operand '" +
                *OperandsSet.begin() + "'!");
 
-    // If there is a code init for this fragment, keep track of the fact that
-    // this fragment uses it.
-    TreePredicateFn PredFn(P);
-    if (!PredFn.isAlwaysTrue())
-      for (auto T : P->getTrees())
-        T->addPredicateFn(PredFn);
-
     // If there is a node transformation corresponding to this, keep track of
     // it.
     Record *Transform = Frag->getValueAsDef("OperandTransform");
@@ -3742,7 +3735,7 @@ std::vector<Predicate> CodeGenDAGPatterns::makePredList(ListInit *L) {
   }
 
   // Sort so that different orders get canonicalized to the same string.
-  llvm::sort(Preds.begin(), Preds.end());
+  llvm::sort(Preds);
   return Preds;
 }
 
@@ -4461,8 +4454,18 @@ void CodeGenDAGPatterns::GenerateVariants() {
   // intentionally do not reconsider these.  Any variants of added patterns have
   // already been added.
   //
-  for (unsigned i = 0, e = PatternsToMatch.size(); i != e; ++i) {
-    MultipleUseVarSet             DepVars;
+  const unsigned NumOriginalPatterns = PatternsToMatch.size();
+  BitVector MatchedPatterns(NumOriginalPatterns);
+  std::vector<BitVector> MatchedPredicates(NumOriginalPatterns,
+                                           BitVector(NumOriginalPatterns));
+
+  typedef std::pair<MultipleUseVarSet, std::vector<TreePatternNodePtr>>
+      DepsAndVariants;
+  std::map<unsigned, DepsAndVariants> PatternsWithVariants;
+
+  // Collect patterns with more than one variant.
+  for (unsigned i = 0; i != NumOriginalPatterns; ++i) {
+    MultipleUseVarSet DepVars;
     std::vector<TreePatternNodePtr> Variants;
     FindDepVars(PatternsToMatch[i].getSrcPattern(), DepVars);
     LLVM_DEBUG(errs() << "Dependent/multiply used variables: ");
@@ -4472,21 +4475,46 @@ void CodeGenDAGPatterns::GenerateVariants() {
                        *this, DepVars);
 
     assert(!Variants.empty() && "Must create at least original variant!");
-    if (Variants.size() == 1)  // No additional variants for this pattern.
+    if (Variants.size() == 1) // No additional variants for this pattern.
       continue;
 
     LLVM_DEBUG(errs() << "FOUND VARIANTS OF: ";
                PatternsToMatch[i].getSrcPattern()->dump(); errs() << "\n");
 
+    PatternsWithVariants[i] = std::make_pair(DepVars, Variants);
+
     // Cache matching predicates.
-    // TODO: Is it performant to pull this out of the loop entirely?
-    BitVector MatchedPredicates(PatternsToMatch.size(), false);
-    for (unsigned p = 0, e = PatternsToMatch.size(); p != e; ++p)
-      MatchedPredicates[p] = (i == p) || (PatternsToMatch[i].getPredicates() ==
-                                          PatternsToMatch[p].getPredicates());
+    if (MatchedPatterns[i])
+      continue;
+
+    const std::vector<Predicate> &Predicates =
+        PatternsToMatch[i].getPredicates();
+
+    BitVector &Matches = MatchedPredicates[i];
+    MatchedPatterns.set(i);
+    Matches.set(i);
+
+    // Don't test patterns that have already been cached - it won't match.
+    for (unsigned p = 0; p != NumOriginalPatterns; ++p)
+      if (!MatchedPatterns[p])
+        Matches[p] = (Predicates == PatternsToMatch[p].getPredicates());
+
+    // Copy this to all the matching patterns.
+    for (int p = Matches.find_first(); p != -1; p = Matches.find_next(p))
+      if (p != (int)i) {
+        MatchedPatterns.set(p);
+        MatchedPredicates[p] = Matches;
+      }
+  }
+
+  for (auto it : PatternsWithVariants) {
+    unsigned i = it.first;
+    const MultipleUseVarSet &DepVars = it.second.first;
+    const std::vector<TreePatternNodePtr> &Variants = it.second.second;
 
     for (unsigned v = 0, e = Variants.size(); v != e; ++v) {
       TreePatternNodePtr Variant = Variants[v];
+      BitVector &Matches = MatchedPredicates[i];
 
       LLVM_DEBUG(errs() << "  VAR#" << v << ": "; Variant->dump();
                  errs() << "\n");
@@ -4495,7 +4523,7 @@ void CodeGenDAGPatterns::GenerateVariants() {
       bool AlreadyExists = false;
       for (unsigned p = 0, e = PatternsToMatch.size(); p != e; ++p) {
         // Skip if the top level predicates do not match.
-        if (!MatchedPredicates[p])
+        if (!Matches[p])
           continue;
         // Check to see if this variant already exists.
         if (Variant->isIsomorphicTo(PatternsToMatch[p].getSrcPattern(),
@@ -4514,8 +4542,11 @@ void CodeGenDAGPatterns::GenerateVariants() {
           Variant, PatternsToMatch[i].getDstPatternShared(),
           PatternsToMatch[i].getDstRegs(),
           PatternsToMatch[i].getAddedComplexity(), Record::getNewUID()));
-      MatchedPredicates.resize(PatternsToMatch.size());
-      MatchedPredicates[PatternsToMatch.size() - 1] = true;
+      MatchedPredicates.push_back(Matches);
+
+      // Add a new match the same as this pattern.
+      for (auto &P : MatchedPredicates)
+        P.push_back(P[i]);
     }
 
     LLVM_DEBUG(errs() << "\n");

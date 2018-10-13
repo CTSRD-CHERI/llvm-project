@@ -160,6 +160,9 @@ DIE *DwarfCompileUnit::getOrCreateGlobalVariableDIE(
     addUInt(*VariableDIE, dwarf::DW_AT_alignment, dwarf::DW_FORM_udata,
             AlignInBytes);
 
+  if (MDTuple *TP = GV->getTemplateParams())
+    addTemplateParams(*VariableDIE, DINodeArray(TP));
+
   // Add location.
   bool addToAccelTable = false;
   DIELoc *Loc = nullptr;
@@ -727,7 +730,8 @@ DIE *DwarfCompileUnit::createScopeChildrenDIE(LexicalScope *Scope,
   return ObjectPointer;
 }
 
-void DwarfCompileUnit::constructSubprogramScopeDIE(const DISubprogram *Sub, LexicalScope *Scope) {
+DIE &DwarfCompileUnit::constructSubprogramScopeDIE(const DISubprogram *Sub,
+                                                   LexicalScope *Scope) {
   DIE &ScopeDIE = updateSubprogramScopeDIE(Sub);
 
   if (Scope) {
@@ -750,6 +754,8 @@ void DwarfCompileUnit::constructSubprogramScopeDIE(const DISubprogram *Sub, Lexi
       !includeMinimalInlineScopes())
     ScopeDIE.addChild(
         DIE::get(DIEValueAllocator, dwarf::DW_TAG_unspecified_parameters));
+
+  return ScopeDIE;
 }
 
 DIE *DwarfCompileUnit::createAndAddScopeChildren(LexicalScope *Scope,
@@ -802,6 +808,32 @@ void DwarfCompileUnit::constructAbstractSubprogramScopeDIE(
     ContextCU->addUInt(*AbsDef, dwarf::DW_AT_inline, None, dwarf::DW_INL_inlined);
   if (DIE *ObjectPointer = ContextCU->createAndAddScopeChildren(Scope, *AbsDef))
     ContextCU->addDIEEntry(*AbsDef, dwarf::DW_AT_object_pointer, *ObjectPointer);
+}
+
+DIE &DwarfCompileUnit::constructCallSiteEntryDIE(DIE &ScopeDIE,
+                                                 const DISubprogram &CalleeSP,
+                                                 bool IsTail,
+                                                 const MCSymbol *ReturnPC) {
+  // Insert a call site entry DIE within ScopeDIE.
+  DIE &CallSiteDIE =
+      createAndAddDIE(dwarf::DW_TAG_call_site, ScopeDIE, nullptr);
+
+  // For the purposes of showing tail call frames in backtraces, a key piece of
+  // information is DW_AT_call_origin, a pointer to the callee DIE.
+  DIE *CalleeDIE = getOrCreateSubprogramDIE(&CalleeSP);
+  assert(CalleeDIE && "Could not create DIE for call site entry origin");
+  addDIEEntry(CallSiteDIE, dwarf::DW_AT_call_origin, *CalleeDIE);
+
+  if (IsTail) {
+    // Attach DW_AT_call_tail_call to tail calls for standards compliance.
+    addFlag(CallSiteDIE, dwarf::DW_AT_call_tail_call);
+  } else {
+    // Attach the return PC to allow the debugger to disambiguate call paths
+    // from one function to another.
+    assert(ReturnPC && "Missing return PC information for a call");
+    addLabelAddress(CallSiteDIE, dwarf::DW_AT_call_return_pc, ReturnPC);
+  }
+  return CallSiteDIE;
 }
 
 DIE *DwarfCompileUnit::constructImportedEntityDIE(
@@ -865,10 +897,9 @@ void DwarfCompileUnit::finishEntityDefinition(const DbgEntity *Entity) {
       llvm_unreachable("DbgEntity must be DbgVariable or DbgLabel.");
   }
 
-  if (Label) {
-    const MCSymbol *Sym = Label->getSymbol();
-    addLabelAddress(*Die, dwarf::DW_AT_low_pc, Sym);
-  }
+  if (Label)
+    if (const auto *Sym = Label->getSymbol())
+      addLabelAddress(*Die, dwarf::DW_AT_low_pc, Sym);
 }
 
 DbgEntity *DwarfCompileUnit::getExistingAbstractEntity(const DINode *Node) {
@@ -978,8 +1009,6 @@ void DwarfCompileUnit::addVariableAddress(const DbgVariable &DV, DIE &Die,
          "block byref variable without a complex expression");
   if (DV.hasComplexAddress())
     addComplexAddress(DV, Die, dwarf::DW_AT_location, Location);
-  else if (DV.isBlockByrefVariable())
-    addBlockByrefAddress(DV, Die, dwarf::DW_AT_location, Location);
   else
     addAddress(Die, dwarf::DW_AT_location, Location);
 }

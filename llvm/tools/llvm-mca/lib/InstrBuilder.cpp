@@ -64,16 +64,15 @@ static void initializeUsedResources(InstrDesc &ID,
 
   // Sort elements by mask popcount, so that we prioritize resource units over
   // resource groups, and smaller groups over larger groups.
-  llvm::sort(Worklist.begin(), Worklist.end(),
-             [](const ResourcePlusCycles &A, const ResourcePlusCycles &B) {
-               unsigned popcntA = countPopulation(A.first);
-               unsigned popcntB = countPopulation(B.first);
-               if (popcntA < popcntB)
-                 return true;
-               if (popcntA > popcntB)
-                 return false;
-               return A.first < B.first;
-             });
+  sort(Worklist, [](const ResourcePlusCycles &A, const ResourcePlusCycles &B) {
+    unsigned popcntA = countPopulation(A.first);
+    unsigned popcntB = countPopulation(B.first);
+    if (popcntA < popcntB)
+      return true;
+    if (popcntA > popcntB)
+      return false;
+    return A.first < B.first;
+  });
 
   uint64_t UsedResourceUnits = 0;
 
@@ -99,7 +98,7 @@ static void initializeUsedResources(InstrDesc &ID,
     for (unsigned J = I + 1; J < E; ++J) {
       ResourcePlusCycles &B = Worklist[J];
       if ((NormalizedMask & B.first) == NormalizedMask) {
-        B.second.CS.Subtract(A.second.size() - SuperResources[A.first]);
+        B.second.CS.subtract(A.second.size() - SuperResources[A.first]);
         if (countPopulation(B.first) > 1)
           B.second.NumUnits++;
       }
@@ -322,6 +321,36 @@ Error InstrBuilder::populateReads(InstrDesc &ID, const MCInst &MCI,
   return ErrorSuccess();
 }
 
+Error InstrBuilder::verifyInstrDesc(const InstrDesc &ID,
+                                    const MCInst &MCI) const {
+  if (ID.NumMicroOps != 0)
+    return ErrorSuccess();
+
+  bool UsesMemory = ID.MayLoad || ID.MayStore;
+  bool UsesBuffers = !ID.Buffers.empty();
+  bool UsesResources = !ID.Resources.empty();
+  if (!UsesMemory && !UsesBuffers && !UsesResources)
+    return ErrorSuccess();
+
+  std::string ToString;
+  raw_string_ostream OS(ToString);
+  if (UsesMemory) {
+    WithColor::error() << "found an inconsistent instruction that decodes "
+                       << "into zero opcodes and that consumes load/store "
+                       << "unit resources.\n";
+  } else {
+    WithColor::error() << "found an inconsistent instruction that decodes"
+                       << " to zero opcodes and that consumes scheduler "
+                       << "resources.\n";
+  }
+
+  MCIP.printInst(&MCI, OS, "", STI);
+  OS.flush();
+  WithColor::note() << "instruction: " << ToString << '\n';
+  return make_error<StringError>("Invalid instruction definition found",
+                                 inconvertibleErrorCode());
+}
+
 Expected<const InstrDesc &>
 InstrBuilder::createInstrDescImpl(const MCInst &MCI) {
   assert(STI.getSchedModel().hasInstrSchedModel() &&
@@ -351,7 +380,7 @@ InstrBuilder::createInstrDescImpl(const MCInst &MCI) {
   const MCSchedClassDesc &SCDesc = *SM.getSchedClassDesc(SchedClassID);
   if (SCDesc.NumMicroOps == MCSchedClassDesc::InvalidNumMicroOps) {
     std::string ToString;
-    llvm::raw_string_ostream OS(ToString);
+    raw_string_ostream OS(ToString);
     WithColor::error() << "found an unsupported instruction in the input"
                        << " assembly sequence.\n";
     MCIP.printInst(&MCI, OS, "", STI);
@@ -393,6 +422,10 @@ InstrBuilder::createInstrDescImpl(const MCInst &MCI) {
   LLVM_DEBUG(dbgs() << "\t\tMaxLatency=" << ID->MaxLatency << '\n');
   LLVM_DEBUG(dbgs() << "\t\tNumMicroOps=" << ID->NumMicroOps << '\n');
 
+  // Sanity check on the instruction descriptor.
+  if (Error Err = verifyInstrDesc(*ID, MCI))
+    return std::move(Err);
+
   // Now add the new descriptor.
   SchedClassID = MCDesc.getSchedClass();
   if (!SM.getSchedClassDesc(SchedClassID)->isVariant()) {
@@ -423,6 +456,14 @@ InstrBuilder::createInstruction(const MCInst &MCI) {
   const InstrDesc &D = *DescOrErr;
   std::unique_ptr<Instruction> NewIS = llvm::make_unique<Instruction>(D);
 
+  // Check if this is a dependency breaking instruction.
+  APInt Mask;
+
+  unsigned ProcID = STI.getSchedModel().getProcessorID();
+  bool IsZeroIdiom = MCIA.isZeroIdiom(MCI, Mask, ProcID);
+  bool IsDepBreaking =
+      IsZeroIdiom || MCIA.isDependencyBreaking(MCI, Mask, ProcID);
+
   // Initialize Reads first.
   for (const ReadDescriptor &RD : D.Reads) {
     int RegID = -1;
@@ -444,7 +485,28 @@ InstrBuilder::createInstruction(const MCInst &MCI) {
 
     // Okay, this is a register operand. Create a ReadState for it.
     assert(RegID > 0 && "Invalid register ID found!");
-    NewIS->getUses().emplace_back(llvm::make_unique<ReadState>(RD, RegID));
+    auto RS = llvm::make_unique<ReadState>(RD, RegID);
+
+    if (IsDepBreaking) {
+      // A mask of all zeroes means: explicit input operands are not
+      // independent.
+      if (Mask.isNullValue()) {
+        if (!RD.isImplicitRead())
+          RS->setIndependentFromDef();
+      } else {
+        // Check if this register operand is independent according to `Mask`.
+        // Note that Mask may not have enough bits to describe all explicit and
+        // implicit input operands. If this register operand doesn't have a
+        // corresponding bit in Mask, then conservatively assume that it is
+        // dependent.
+        if (Mask.getBitWidth() > RD.UseIndex) {
+          // Okay. This map describe register use `RD.UseIndex`.
+          if (Mask[RD.UseIndex])
+            RS->setIndependentFromDef();
+        }
+      }
+    }
+    NewIS->getUses().emplace_back(std::move(RS));
   }
 
   // Early exit if there are no writes.
@@ -459,10 +521,6 @@ InstrBuilder::createInstruction(const MCInst &MCI) {
   // register writes implicitly clear the upper portion of a super-register.
   MCIA.clearsSuperRegisters(MRI, MCI, WriteMask);
 
-  // Check if this is a dependency breaking instruction.
-  if (MCIA.isDependencyBreaking(STI, MCI))
-    NewIS->setDependencyBreaking();
-
   // Initialize writes.
   unsigned WriteIndex = 0;
   for (const WriteDescriptor &WD : D.Writes) {
@@ -476,7 +534,8 @@ InstrBuilder::createInstruction(const MCInst &MCI) {
 
     assert(RegID && "Expected a valid register ID!");
     NewIS->getDefs().emplace_back(llvm::make_unique<WriteState>(
-        WD, RegID, /* ClearsSuperRegs */ WriteMask[WriteIndex]));
+        WD, RegID, /* ClearsSuperRegs */ WriteMask[WriteIndex],
+        /* WritesZero */ IsZeroIdiom));
     ++WriteIndex;
   }
 

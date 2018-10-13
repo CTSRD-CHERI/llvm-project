@@ -23,7 +23,8 @@
 using namespace llvm;
 
 DILocation::DILocation(LLVMContext &C, StorageType Storage, unsigned Line,
-                       unsigned Column, ArrayRef<Metadata *> MDs)
+                       unsigned Column, ArrayRef<Metadata *> MDs,
+                       bool ImplicitCode)
     : MDNode(C, DILocationKind, Storage, MDs) {
   assert((MDs.size() == 1 || MDs.size() == 2) &&
          "Expected a scope and optional inlined-at");
@@ -33,6 +34,8 @@ DILocation::DILocation(LLVMContext &C, StorageType Storage, unsigned Line,
 
   SubclassData32 = Line;
   SubclassData16 = Column;
+
+  setImplicitCode(ImplicitCode);
 }
 
 static void adjustColumn(unsigned &Column) {
@@ -43,15 +46,15 @@ static void adjustColumn(unsigned &Column) {
 
 DILocation *DILocation::getImpl(LLVMContext &Context, unsigned Line,
                                 unsigned Column, Metadata *Scope,
-                                Metadata *InlinedAt, StorageType Storage,
-                                bool ShouldCreate) {
+                                Metadata *InlinedAt, bool ImplicitCode,
+                                StorageType Storage, bool ShouldCreate) {
   // Fixup column.
   adjustColumn(Column);
 
   if (Storage == Uniqued) {
-    if (auto *N =
-            getUniqued(Context.pImpl->DILocations,
-                       DILocationInfo::KeyTy(Line, Column, Scope, InlinedAt)))
+    if (auto *N = getUniqued(Context.pImpl->DILocations,
+                             DILocationInfo::KeyTy(Line, Column, Scope,
+                                                   InlinedAt, ImplicitCode)))
       return N;
     if (!ShouldCreate)
       return nullptr;
@@ -63,8 +66,8 @@ DILocation *DILocation::getImpl(LLVMContext &Context, unsigned Line,
   Ops.push_back(Scope);
   if (InlinedAt)
     Ops.push_back(InlinedAt);
-  return storeImpl(new (Ops.size())
-                       DILocation(Context, Storage, Line, Column, Ops),
+  return storeImpl(new (Ops.size()) DILocation(Context, Storage, Line, Column,
+                                               Ops, ImplicitCode),
                    Storage, Context.pImpl->DILocations);
 }
 
@@ -650,19 +653,24 @@ DIGlobalVariable::getImpl(LLVMContext &Context, Metadata *Scope, MDString *Name,
                           MDString *LinkageName, Metadata *File, unsigned Line,
                           Metadata *Type, bool IsLocalToUnit, bool IsDefinition,
                           Metadata *StaticDataMemberDeclaration,
-                          uint32_t AlignInBits, StorageType Storage,
-                          bool ShouldCreate) {
+                          Metadata *TemplateParams, uint32_t AlignInBits,
+                          StorageType Storage, bool ShouldCreate) {
   assert(isCanonical(Name) && "Expected canonical MDString");
   assert(isCanonical(LinkageName) && "Expected canonical MDString");
-  DEFINE_GETIMPL_LOOKUP(DIGlobalVariable,
-                        (Scope, Name, LinkageName, File, Line, Type,
-                         IsLocalToUnit, IsDefinition,
-                         StaticDataMemberDeclaration, AlignInBits));
-  Metadata *Ops[] = {
-      Scope, Name, File, Type, Name, LinkageName, StaticDataMemberDeclaration};
+  DEFINE_GETIMPL_LOOKUP(DIGlobalVariable, (Scope, Name, LinkageName, File, Line,
+                                           Type, IsLocalToUnit, IsDefinition,
+                                           StaticDataMemberDeclaration,
+                                           TemplateParams, AlignInBits));
+  Metadata *Ops[] = {Scope,
+                     Name,
+                     File,
+                     Type,
+                     Name,
+                     LinkageName,
+                     StaticDataMemberDeclaration,
+                     TemplateParams};
   DEFINE_GETIMPL_STORE(DIGlobalVariable,
-                       (Line, IsLocalToUnit, IsDefinition, AlignInBits),
-                       Ops);
+                       (Line, IsLocalToUnit, IsDefinition, AlignInBits), Ops);
 }
 
 DILocalVariable *DILocalVariable::getImpl(LLVMContext &Context, Metadata *Scope,

@@ -58,6 +58,7 @@ AArch64::AArch64() {
   RelativeRel = R_AARCH64_RELATIVE;
   IRelativeRel = R_AARCH64_IRELATIVE;
   GotRel = R_AARCH64_GLOB_DAT;
+  NoneRel = R_AARCH64_NONE;
   PltRel = R_AARCH64_JUMP_SLOT;
   TlsDescRel = R_AARCH64_TLSDESC;
   TlsGotRel = R_AARCH64_TLS_TPREL64;
@@ -66,6 +67,10 @@ AArch64::AArch64() {
   PltEntrySize = 16;
   PltHeaderSize = 32;
   DefaultMaxPageSize = 65536;
+
+  // Align to the 2 MiB page size (known as a superpage or huge page).
+  // FreeBSD automatically promotes 2 MiB-aligned allocations.
+  DefaultImageBase = 0x200000;
 
   // It doesn't seem to be documented anywhere, but tls on aarch64 uses variant
   // 1 of the tls structures and the tcb size is 16.
@@ -152,7 +157,7 @@ RelType AArch64::getDynRel(RelType Type) const {
 }
 
 void AArch64::writeGotPlt(uint8_t *Buf, const Symbol &) const {
-  write64le(Buf, InX::Plt->getVA());
+  write64le(Buf, In.Plt->getVA());
 }
 
 void AArch64::writePltHeader(uint8_t *Buf) const {
@@ -168,8 +173,8 @@ void AArch64::writePltHeader(uint8_t *Buf) const {
   };
   memcpy(Buf, PltData, sizeof(PltData));
 
-  uint64_t Got = InX::GotPlt->getVA();
-  uint64_t Plt = InX::Plt->getVA();
+  uint64_t Got = In.GotPlt->getVA();
+  uint64_t Plt = In.Plt->getVA();
   relocateOne(Buf + 4, R_AARCH64_ADR_PREL_PG_HI21,
               getAArch64Page(Got + 16) - getAArch64Page(Plt + 4));
   relocateOne(Buf + 8, R_AARCH64_LDST64_ABS_LO12_NC, Got + 16);
@@ -341,7 +346,7 @@ void AArch64::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
     or32le(Loc, (Val & 0xFFFC) << 3);
     break;
   case R_AARCH64_TLSLE_ADD_TPREL_HI12:
-    checkInt(Loc, Val, 24, Type);
+    checkUInt(Loc, Val, 24, Type);
     or32AArch64Imm(Loc, Val >> 12);
     break;
   case R_AARCH64_TLSLE_ADD_TPREL_LO12_NC:

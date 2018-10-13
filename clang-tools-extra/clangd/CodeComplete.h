@@ -16,6 +16,7 @@
 #ifndef LLVM_CLANG_TOOLS_EXTRA_CLANGD_CODECOMPLETE_H
 #define LLVM_CLANG_TOOLS_EXTRA_CLANGD_CODECOMPLETE_H
 
+#include "ClangdUnit.h"
 #include "Headers.h"
 #include "Logger.h"
 #include "Path.h"
@@ -26,6 +27,7 @@
 #include "clang/Sema/CodeCompleteOptions.h"
 #include "clang/Tooling/CompilationDatabase.h"
 #include "llvm/ADT/Optional.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Error.h"
 #include <future>
@@ -100,6 +102,13 @@ struct CodeCompleteOptions {
   /// Whether to generate snippets for function arguments on code-completion.
   /// Needs snippets to be enabled as well.
   bool EnableFunctionArgSnippets = true;
+
+  /// Whether to include index symbols that are not defined in the scopes
+  /// visible from the code completion point. This applies in contexts without
+  /// explicit scope qualifiers.
+  ///
+  /// Such completions can insert scope qualifiers.
+  bool AllScopes = false;
 };
 
 // Semi-structured representation of a code-complete suggestion for our C++ API.
@@ -131,12 +140,20 @@ struct CodeCompletion {
   // Other fields should apply equally to all bundled completions.
   unsigned BundleSize = 1;
   SymbolOrigin Origin = SymbolOrigin::Unknown;
-  // The header through which this symbol could be included.
-  // Quoted string as expected by an #include directive, e.g. "<memory>".
-  // Empty for non-symbol completions, or when not known.
-  std::string Header;
-  // Present if Header is set and should be inserted to use this item.
-  llvm::Optional<TextEdit> HeaderInsertion;
+
+  struct IncludeCandidate {
+    // The header through which this symbol could be included.
+    // Quoted string as expected by an #include directive, e.g. "<memory>".
+    // Empty for non-symbol completions, or when not known.
+    std::string Header;
+    // Present if Header should be inserted to use this item.
+    llvm::Optional<TextEdit> Insertion;
+  };
+  // All possible include headers ranked by preference. By default, the first
+  // include is used.
+  // If we've bundled together overloads that have different sets of includes,
+  // thse includes may not be accurate for all of them.
+  llvm::SmallVector<IncludeCandidate, 1> Includes;
 
   /// Holds information about small corrections that needs to be done. Like
   /// converting '->' to '.' on member access.
@@ -167,6 +184,9 @@ struct CodeCompletion {
     float Relevance = 0.f;
   };
   Scores Score;
+
+  /// Indicates if this item is deprecated.
+  bool Deprecated = false;
 
   // Serialize this to an LSP completion item. This is a lossy operation.
   CompletionItem render(const CodeCompleteOptions &) const;
@@ -202,8 +222,7 @@ struct SpeculativeFuzzyFind {
 /// destroyed when the async request finishes.
 CodeCompleteResult codeComplete(PathRef FileName,
                                 const tooling::CompileCommand &Command,
-                                PrecompiledPreamble const *Preamble,
-                                const IncludeStructure &PreambleInclusions,
+                                const PreambleData *Preamble,
                                 StringRef Contents, Position Pos,
                                 IntrusiveRefCntPtr<vfs::FileSystem> VFS,
                                 std::shared_ptr<PCHContainerOperations> PCHs,
@@ -211,11 +230,13 @@ CodeCompleteResult codeComplete(PathRef FileName,
                                 SpeculativeFuzzyFind *SpecFuzzyFind = nullptr);
 
 /// Get signature help at a specified \p Pos in \p FileName.
-SignatureHelp
-signatureHelp(PathRef FileName, const tooling::CompileCommand &Command,
-              PrecompiledPreamble const *Preamble, StringRef Contents,
-              Position Pos, IntrusiveRefCntPtr<vfs::FileSystem> VFS,
-              std::shared_ptr<PCHContainerOperations> PCHs, SymbolIndex *Index);
+SignatureHelp signatureHelp(PathRef FileName,
+                            const tooling::CompileCommand &Command,
+                            const PreambleData *Preamble, StringRef Contents,
+                            Position Pos,
+                            IntrusiveRefCntPtr<vfs::FileSystem> VFS,
+                            std::shared_ptr<PCHContainerOperations> PCHs,
+                            const SymbolIndex *Index);
 
 // For index-based completion, we only consider:
 //   * symbols in namespaces or translation unit scopes (e.g. no class

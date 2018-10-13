@@ -35,10 +35,10 @@ void DefaultResourceStrategy::skipMask(uint64_t Mask) {
 
 uint64_t DefaultResourceStrategy::select(uint64_t ReadyMask) {
   // This method assumes that ReadyMask cannot be zero.
-  uint64_t CandidateMask = llvm::PowerOf2Floor(NextInSequenceMask);
+  uint64_t CandidateMask = PowerOf2Floor(NextInSequenceMask);
   while (!(ReadyMask & CandidateMask)) {
     skipMask(CandidateMask);
-    CandidateMask = llvm::PowerOf2Floor(NextInSequenceMask);
+    CandidateMask = PowerOf2Floor(NextInSequenceMask);
   }
   return CandidateMask;
 }
@@ -55,8 +55,8 @@ ResourceState::ResourceState(const MCProcResourceDesc &Desc, unsigned Index,
                              uint64_t Mask)
     : ProcResourceDescIndex(Index), ResourceMask(Mask),
       BufferSize(Desc.BufferSize) {
-  if (llvm::countPopulation(ResourceMask) > 1)
-    ResourceSizeMask = ResourceMask ^ llvm::PowerOf2Floor(ResourceMask);
+  if (countPopulation(ResourceMask) > 1)
+    ResourceSizeMask = ResourceMask ^ PowerOf2Floor(ResourceMask);
   else
     ResourceSizeMask = (1ULL << Desc.NumUnits) - 1;
   ReadyMask = ResourceSizeMask;
@@ -66,7 +66,7 @@ ResourceState::ResourceState(const MCProcResourceDesc &Desc, unsigned Index,
 
 bool ResourceState::isReady(unsigned NumUnits) const {
   return (!isReserved() || isADispatchHazard()) &&
-         llvm::countPopulation(ReadyMask) >= NumUnits;
+         countPopulation(ReadyMask) >= NumUnits;
 }
 
 ResourceStateEvent ResourceState::isBufferAvailable() const {
@@ -87,7 +87,7 @@ void ResourceState::dump() const {
 #endif
 
 static unsigned getResourceStateIndex(uint64_t Mask) {
-  return std::numeric_limits<uint64_t>::digits - llvm::countLeadingZeros(Mask);
+  return std::numeric_limits<uint64_t>::digits - countLeadingZeros(Mask);
 }
 
 static std::unique_ptr<ResourceStrategy>
@@ -247,7 +247,7 @@ bool ResourceManager::mustIssueImmediately(const InstrDesc &Desc) const {
 
 void ResourceManager::issueInstruction(
     const InstrDesc &Desc,
-    SmallVectorImpl<std::pair<ResourceRef, double>> &Pipes) {
+    SmallVectorImpl<std::pair<ResourceRef, ResourceCycles>> &Pipes) {
   for (const std::pair<uint64_t, ResourceUsage> &R : Desc.Resources) {
     const CycleSegment &CS = R.second.CS;
     if (!CS.size()) {
@@ -263,8 +263,8 @@ void ResourceManager::issueInstruction(
       // Replace the resource mask with a valid processor resource index.
       const ResourceState &RS = *Resources[getResourceStateIndex(Pipe.first)];
       Pipe.first = RS.getProcResourceID();
-      Pipes.emplace_back(
-          std::pair<ResourceRef, double>(Pipe, static_cast<double>(CS.size())));
+      Pipes.emplace_back(std::pair<ResourceRef, ResourceCycles>(
+          Pipe, ResourceCycles(CS.size())));
     } else {
       assert((countPopulation(R.first) > 1) && "Expected a group!");
       // Mark this group as reserved.

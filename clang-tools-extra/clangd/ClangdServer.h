@@ -45,15 +45,25 @@ public:
                                   std::vector<Diag> Diagnostics) = 0;
 };
 
-/// Provides API to manage ASTs for a collection of C++ files and request
-/// various language features.
-/// Currently supports async diagnostics, code completion, formatting and goto
-/// definition.
+/// Manages a collection of source files and derived data (ASTs, indexes),
+/// and provides language-aware features such as code completion.
+///
+/// The primary client is ClangdLSPServer which exposes these features via
+/// the Language Server protocol. ClangdServer may also be embedded directly,
+/// though its API is not stable over time.
+///
+/// ClangdServer should be used from a single thread. Many potentially-slow
+/// operations have asynchronous APIs and deliver their results on another
+/// thread.
+/// Such operations support cancellation: if the caller sets up a cancelable
+/// context, many operations will notice cancellation and fail early.
+/// (ClangdLSPServer uses this to implement $/cancelRequest).
 class ClangdServer {
 public:
   struct Options {
     /// To process requests asynchronously, ClangdServer spawns worker threads.
-    /// If 0, all requests are processed on the calling thread.
+    /// If this is zero, no threads are spawned. All work is done on the calling
+    /// thread, and callbacks are invoked before "async" functions return.
     unsigned AsyncThreadsCount = getDefaultAsyncThreadsCount();
 
     /// AST caching policy. The default is to keep up to 3 ASTs in memory.
@@ -101,7 +111,6 @@ public:
   /// synchronize access to shared state.
   ClangdServer(GlobalCompilationDatabase &CDB, FileSystemProvider &FSProvider,
                DiagnosticsConsumer &DiagConsumer, const Options &Opts);
-  ~ClangdServer();
 
   /// Set the root path of the workspace.
   void setRootPath(PathRef RootPath);
@@ -125,9 +134,9 @@ public:
   /// while returned future is not yet ready.
   /// A version of `codeComplete` that runs \p Callback on the processing thread
   /// when codeComplete results become available.
-  TaskHandle codeComplete(PathRef File, Position Pos,
-                          const clangd::CodeCompleteOptions &Opts,
-                          Callback<CodeCompleteResult> CB);
+  void codeComplete(PathRef File, Position Pos,
+                    const clangd::CodeCompleteOptions &Opts,
+                    Callback<CodeCompleteResult> CB);
 
   /// Provide signature help for \p File at \p Pos.  This method should only be
   /// called for tracked files.
@@ -156,6 +165,10 @@ public:
   /// Retrieve the symbols within the specified file.
   void documentSymbols(StringRef File,
                        Callback<std::vector<SymbolInformation>> CB);
+
+  /// Retrieve locations for symbol references.
+  void findReferences(PathRef File, Position Pos,
+                      Callback<std::vector<Location>> CB);
 
   /// Run formatting for \p Rng inside \p File with content \p Code.
   llvm::Expected<tooling::Replacements> formatRange(StringRef Code,
@@ -191,6 +204,10 @@ public:
   /// FIXME: those metrics might be useful too, we should add them.
   std::vector<std::pair<Path, std::size_t>> getUsedBytesPerFile() const;
 
+  /// Returns the active dynamic index if one was built.
+  /// This can be useful for testing, debugging, or observing memory usage.
+  const SymbolIndex *dynamicIndex() const { return DynamicIdx.get(); }
+
   // Blocks the main thread until the server is idle. Only for use in tests.
   // Returns false if the timeout expires.
   LLVM_NODISCARD bool
@@ -203,7 +220,6 @@ private:
   formatCode(llvm::StringRef Code, PathRef File,
              ArrayRef<tooling::Range> Ranges);
 
-  class DynamicIndex;
   typedef uint64_t DocVersion;
 
   void consumeDiagnostics(PathRef File, DocVersion Version,
@@ -224,12 +240,11 @@ private:
   //   - the dynamic index owned by ClangdServer (DynamicIdx)
   //   - the static index passed to the constructor
   //   - a merged view of a static and dynamic index (MergedIndex)
-  SymbolIndex *Index;
-  /// If present, an up-to-date of symbols in open files. Read via Index.
-  std::unique_ptr<DynamicIndex> DynamicIdx;
-  // If present, a merged view of DynamicIdx and an external index. Read via
-  // Index.
-  std::unique_ptr<SymbolIndex> MergedIndex;
+  const SymbolIndex *Index;
+  // If present, an index of symbols in open files. Read via *Index.
+  std::unique_ptr<FileIndex> DynamicIdx;
+  // If present, storage for the merged static/dynamic index. Read via *Index.
+  std::unique_ptr<SymbolIndex> MergedIdx;
 
   // GUARDED_BY(CachedCompletionFuzzyFindRequestMutex)
   llvm::StringMap<llvm::Optional<FuzzyFindRequest>>

@@ -111,17 +111,14 @@ using namespace lldb_private;
 
 namespace {
 
-PropertyDefinition g_properties[] = {
+static constexpr PropertyDefinition g_properties[] = {
     {"comp-dir-symlink-paths", OptionValue::eTypeFileSpecList, true, 0, nullptr,
-     nullptr,
+     {},
      "If the DW_AT_comp_dir matches any of these paths the symbolic "
      "links will be resolved at DWARF parse time."},
-    {"ignore-file-indexes", OptionValue::eTypeBoolean, true, 0, nullptr,
-     nullptr,
+    {"ignore-file-indexes", OptionValue::eTypeBoolean, true, 0, nullptr, {},
      "Ignore indexes present in the object files and always index DWARF "
-     "manually."},
-    {nullptr, OptionValue::eTypeInvalid, false, 0, nullptr, nullptr, nullptr},
-};
+     "manually."}};
 
 enum {
   ePropertySymLinkPaths,
@@ -494,7 +491,7 @@ void SymbolFileDWARF::InitializeObject() {
 }
 
 bool SymbolFileDWARF::SupportedVersion(uint16_t version) {
-  return version == 2 || version == 3 || version == 4;
+  return version >= 2 && version <= 5;
 }
 
 uint32_t SymbolFileDWARF::CalculateAbilities() {
@@ -643,6 +640,10 @@ const DWARFDataExtractor &SymbolFileDWARF::get_debug_info_data() {
 
 const DWARFDataExtractor &SymbolFileDWARF::get_debug_line_data() {
   return GetCachedSectionData(eSectionTypeDWARFDebugLine, m_data_debug_line);
+}
+
+const DWARFDataExtractor &SymbolFileDWARF::get_debug_line_str_data() {
+ return GetCachedSectionData(eSectionTypeDWARFDebugLineStr, m_data_debug_line_str);
 }
 
 const DWARFDataExtractor &SymbolFileDWARF::get_debug_macro_data() {
@@ -933,7 +934,7 @@ bool SymbolFileDWARF::ParseCompileUnitSupportFiles(
         support_files.Append(*sc.comp_unit);
         return DWARFDebugLine::ParseSupportFiles(
             sc.comp_unit->GetModule(), get_debug_line_data(), cu_comp_dir,
-            stmt_list, support_files);
+            stmt_list, support_files, dwarf_cu);
       }
     }
   }
@@ -1070,7 +1071,7 @@ bool SymbolFileDWARF::ParseCompileUnitLineTable(const SymbolContext &sc) {
           lldb::offset_t offset = cu_line_offset;
           DWARFDebugLine::ParseStatementTable(get_debug_line_data(), &offset,
                                               ParseDWARFLineTableCallback,
-                                              &info);
+                                              &info, dwarf_cu);
           SymbolFileDWARFDebugMap *debug_map_symfile = GetDebugMapSymfile();
           if (debug_map_symfile) {
             // We have an object file that has a line table with addresses that
@@ -3436,6 +3437,11 @@ VariableSP SymbolFileDWARF::ParseVariableDIE(const SymbolContext &sc,
             is_static_lifetime = true;
         }
         SymbolFileDWARFDebugMap *debug_map_symfile = GetDebugMapSymfile();
+        if (debug_map_symfile)
+          // Set the module of the expression to the linked module
+          // instead of the oject file so the relocated address can be
+          // found there.
+          location.SetModule(debug_map_symfile->GetObjectFile()->GetModule());
 
         if (is_static_lifetime) {
           if (is_external)
@@ -3734,6 +3740,60 @@ size_t SymbolFileDWARF::ParseVariables(const SymbolContext &sc,
       die.Clear();
   }
   return vars_added;
+}
+
+/// Collect call graph edges present in a function DIE.
+static std::vector<lldb_private::CallEdge>
+CollectCallEdges(DWARFDIE function_die) {
+  // Check if the function has a supported call site-related attribute.
+  // TODO: In the future it may be worthwhile to support call_all_source_calls.
+  uint64_t has_call_edges =
+      function_die.GetAttributeValueAsUnsigned(DW_AT_call_all_calls, 0);
+  if (!has_call_edges)
+    return {};
+
+  Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_STEP));
+  LLDB_LOG(log, "CollectCallEdges: Found call site info in {0}",
+           function_die.GetPubname());
+
+  // Scan the DIE for TAG_call_site entries.
+  // TODO: A recursive scan of all blocks in the subprogram is needed in order
+  // to be DWARF5-compliant. This may need to be done lazily to be performant.
+  // For now, assume that all entries are nested directly under the subprogram
+  // (this is the kind of DWARF LLVM produces) and parse them eagerly.
+  std::vector<CallEdge> call_edges;
+  for (DWARFDIE child = function_die.GetFirstChild(); child.IsValid();
+       child = child.GetSibling()) {
+    if (child.Tag() != DW_TAG_call_site)
+      continue;
+
+    // Extract DW_AT_call_origin (the call target's DIE).
+    DWARFDIE call_origin = child.GetReferencedDIE(DW_AT_call_origin);
+    if (!call_origin.IsValid()) {
+      LLDB_LOG(log, "CollectCallEdges: Invalid call origin in {0}",
+               function_die.GetPubname());
+      continue;
+    }
+
+    // Extract DW_AT_call_return_pc (the PC the call returns to) if it's
+    // available. It should only ever be unavailable for tail call edges, in
+    // which case use LLDB_INVALID_ADDRESS.
+    addr_t return_pc = child.GetAttributeValueAsAddress(DW_AT_call_return_pc,
+                                                        LLDB_INVALID_ADDRESS);
+
+    LLDB_LOG(log, "CollectCallEdges: Found call origin: {0} (retn-PC: {1:x})",
+             call_origin.GetPubname(), return_pc);
+    call_edges.emplace_back(call_origin.GetMangledName(), return_pc);
+  }
+  return call_edges;
+}
+
+std::vector<lldb_private::CallEdge>
+SymbolFileDWARF::ParseCallEdgesInFunction(UserID func_id) {
+  DWARFDIE func_die = GetDIEFromUID(func_id.GetID());
+  if (func_die.IsValid())
+    return CollectCallEdges(func_die);
+  return {};
 }
 
 //------------------------------------------------------------------

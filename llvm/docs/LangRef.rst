@@ -1636,6 +1636,28 @@ example:
     This attribute indicates that HWAddressSanitizer checks
     (dynamic address safety analysis based on tagged pointers) are enabled for
     this function.
+``speculative_load_hardening``
+    This attribute indicates that
+    `Speculative Load Hardening <https://llvm.org/docs/SpeculativeLoadHardening.html>`_
+    should be enabled for the function body. This is a best-effort attempt to
+    mitigate all known speculative execution information leak vulnerabilities
+    that are based on the fundamental principles of modern processors'
+    speculative execution. These vulnerabilities are classified as "Spectre
+    variant #1" vulnerabilities typically. Notably, this does not attempt to
+    mitigate any vulnerabilities where the speculative execution and/or
+    prediction devices of specific processors can be *completely* undermined
+    (such as "Branch Target Injection", a.k.a, "Spectre variant #2"). Instead,
+    this is a target-independent request to harden against the completely
+    generic risk posed by speculative execution to incorrectly load secret data,
+    making it available to some micro-architectural side-channel for information
+    leak. For a processor without any speculative execution or predictors, this
+    is expected to be a no-op.
+
+    When inlining, the attribute is sticky. Inlining a function that carries
+    this attribute will cause the caller to gain the attribute. This is intended
+    to provide a maximally conservative model where the code in a function
+    annotated with this attribute will always (even after inlining) end up
+    hardened.
 ``speculatable``
     This function attribute indicates that the function does not have any
     effects besides calculating its result and does not have undefined behavior.
@@ -5805,19 +5827,19 @@ causes the building of a compact summary of the module that is emitted into
 the bitcode. The summary is emitted into the LLVM assembly and identified
 in syntax by a caret ('``^``').
 
-*Note that temporarily the summary entries are skipped when parsing the
-assembly, although the parsing support is actively being implemented. The
-following describes when the summary entries will be parsed once implemented.*
-The summary will be parsed into a ModuleSummaryIndex object under the
-same conditions where summary index is currently built from bitcode.
-Specifically, tools that test the Thin Link portion of a ThinLTO compile
-(i.e. llvm-lto and llvm-lto2), or when parsing a combined index
-for a distributed ThinLTO backend via clang's "``-fthinlto-index=<>``" flag.
-Additionally, it will be parsed into a bitcode output, along with the Module
+The summary is parsed into a bitcode output, along with the Module
 IR, via the "``llvm-as``" tool. Tools that parse the Module IR for the purposes
 of optimization (e.g. "``clang -x ir``" and "``opt``"), will ignore the
 summary entries (just as they currently ignore summary entries in a bitcode
 input file).
+
+Eventually, the summary will be parsed into a ModuleSummaryIndex object under
+the same conditions where summary index is currently built from bitcode.
+Specifically, tools that test the Thin Link portion of a ThinLTO compile
+(i.e. llvm-lto and llvm-lto2), or when parsing a combined index
+for a distributed ThinLTO backend via clang's "``-fthinlto-index=<>``" flag
+(this part is not yet implemented, use llvm-as to create a bitcode object
+before feeding into thin link tools for now).
 
 There are currently 3 types of summary entries in the LLVM assembly:
 :ref:`module paths<module_path_summary>`,
@@ -6029,7 +6051,7 @@ Where each ConstVCall has the format:
 
 .. code-block:: text
 
-    VFuncId, args: (Arg[, Arg]*)
+    (VFuncId, args: (Arg[, Arg]*))
 
 and where each VFuncId has the format described for ``TypeTestAssumeVCalls``,
 and each Arg is an integer argument number.

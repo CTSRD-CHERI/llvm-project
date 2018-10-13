@@ -20,7 +20,6 @@
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/Analysis/TargetFolder.h"
-#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/BasicBlock.h"
@@ -33,6 +32,7 @@
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Intrinsics.h"
+#include "llvm/IR/PatternMatch.h"
 #include "llvm/IR/Use.h"
 #include "llvm/IR/Value.h"
 #include "llvm/Support/Casting.h"
@@ -41,10 +41,13 @@
 #include "llvm/Support/KnownBits.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/InstCombine/InstCombineWorklist.h"
+#include "llvm/Transforms/Utils/Local.h"
 #include <cassert>
 #include <cstdint>
 
 #define DEBUG_TYPE "instcombine"
+
+using namespace llvm::PatternMatch;
 
 namespace llvm {
 
@@ -174,6 +177,10 @@ static inline bool IsFreeToInvert(Value *V, bool WillInvertAllUses) {
         BO->getOpcode() == Instruction::Sub)
       if (isa<Constant>(BO->getOperand(0)) || isa<Constant>(BO->getOperand(1)))
         return WillInvertAllUses;
+
+  // Selects with invertible operands are freely invertible
+  if (match(V, m_Select(m_Value(), m_Not(m_Value()), m_Not(m_Value()))))
+    return WillInvertAllUses;
 
   return false;
 }
@@ -496,6 +503,12 @@ private:
            OverflowResult::NeverOverflows;
   }
 
+  bool willNotOverflowAdd(const Value *LHS, const Value *RHS,
+                          const Instruction &CxtI, bool IsSigned) const {
+    return IsSigned ? willNotOverflowSignedAdd(LHS, RHS, CxtI)
+                    : willNotOverflowUnsignedAdd(LHS, RHS, CxtI);
+  }
+
   bool willNotOverflowSignedSub(const Value *LHS, const Value *RHS,
                                 const Instruction &CxtI) const {
     return computeOverflowForSignedSub(LHS, RHS, &CxtI) ==
@@ -506,6 +519,12 @@ private:
                                   const Instruction &CxtI) const {
     return computeOverflowForUnsignedSub(LHS, RHS, &CxtI) ==
            OverflowResult::NeverOverflows;
+  }
+
+  bool willNotOverflowSub(const Value *LHS, const Value *RHS,
+                          const Instruction &CxtI, bool IsSigned) const {
+    return IsSigned ? willNotOverflowSignedSub(LHS, RHS, CxtI)
+                    : willNotOverflowUnsignedSub(LHS, RHS, CxtI);
   }
 
   bool willNotOverflowSignedMul(const Value *LHS, const Value *RHS,
@@ -520,12 +539,29 @@ private:
            OverflowResult::NeverOverflows;
   }
 
+  bool willNotOverflowMul(const Value *LHS, const Value *RHS,
+                          const Instruction &CxtI, bool IsSigned) const {
+    return IsSigned ? willNotOverflowSignedMul(LHS, RHS, CxtI)
+                    : willNotOverflowUnsignedMul(LHS, RHS, CxtI);
+  }
+
+  bool willNotOverflow(BinaryOperator::BinaryOps Opcode, const Value *LHS,
+                       const Value *RHS, const Instruction &CxtI,
+                       bool IsSigned) const {
+    switch (Opcode) {
+    case Instruction::Add: return willNotOverflowAdd(LHS, RHS, CxtI, IsSigned);
+    case Instruction::Sub: return willNotOverflowSub(LHS, RHS, CxtI, IsSigned);
+    case Instruction::Mul: return willNotOverflowMul(LHS, RHS, CxtI, IsSigned);
+    default: llvm_unreachable("Unexpected opcode for overflow query");
+    }
+  }
+
   Value *EmitGEPOffset(User *GEP);
   Instruction *scalarizePHI(ExtractElementInst &EI, PHINode *PN);
-  Value *EvaluateInDifferentElementOrder(Value *V, ArrayRef<int> Mask);
   Instruction *foldCastedBitwiseLogic(BinaryOperator &I);
   Instruction *narrowBinOp(TruncInst &Trunc);
   Instruction *narrowMaskedBinOp(BinaryOperator &And);
+  Instruction *narrowMathIfNoOverflow(BinaryOperator &I);
   Instruction *narrowRotate(TruncInst &Trunc);
   Instruction *optimizeBitCastFromPhi(CastInst &CI, PHINode *PN);
 
@@ -769,7 +805,7 @@ private:
                                     APInt &UndefElts, unsigned Depth = 0);
 
   /// Canonicalize the position of binops relative to shufflevector.
-  Instruction *foldShuffledBinop(BinaryOperator &Inst);
+  Instruction *foldVectorBinop(BinaryOperator &Inst);
 
   /// Given a binary operator, cast instruction, or select which has a PHI node
   /// as operand #0, see if we can fold the instruction into the PHI (which is

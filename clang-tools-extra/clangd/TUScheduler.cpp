@@ -18,7 +18,7 @@
 // preamble. However, unlike AST, the same preamble can be read concurrently, so
 // we run each of async preamble reads on its own thread.
 //
-// To limit the concurrent load that clangd produces we mantain a semaphore that
+// To limit the concurrent load that clangd produces we maintain a semaphore that
 // keeps more than a fixed number of threads from running concurrently.
 //
 // Rationale for cancelling updates.
@@ -128,8 +128,7 @@ private:
   using KVPair = std::pair<Key, std::unique_ptr<ParsedAST>>;
 
   std::vector<KVPair>::iterator findByKey(Key K) {
-    return std::find_if(LRU.begin(), LRU.end(),
-                        [K](const KVPair &P) { return P.first == K; });
+    return llvm::find_if(LRU, [K](const KVPair &P) { return P.first == K; });
   }
 
   std::mutex Mut;
@@ -165,7 +164,7 @@ public:
   /// The processing thread is spawned using \p Tasks. However, when \p Tasks
   /// is null, all requests will be processed on the calling thread
   /// synchronously instead. \p Barrier is acquired when processing each
-  /// request, it is be used to limit the number of actively running threads.
+  /// request, it is used to limit the number of actively running threads.
   static ASTWorkerHandle create(PathRef FileName,
                                 TUScheduler::ASTCache &IdleASTs,
                                 AsyncTaskRunner *Tasks, Semaphore &Barrier,
@@ -188,7 +187,7 @@ public:
   void getCurrentPreamble(
       llvm::unique_function<void(std::shared_ptr<const PreambleData>)>);
   /// Wait for the first build of preamble to finish. Preamble itself can be
-  /// accessed via getPossibleStalePreamble(). Note that this function will
+  /// accessed via getPossiblyStalePreamble(). Note that this function will
   /// return after an unsuccessful build of the preamble too, i.e. result of
   /// getPossiblyStalePreamble() can be null even after this function returns.
   void waitForFirstPreamble() const;
@@ -207,7 +206,7 @@ private:
   void startTask(llvm::StringRef Name, llvm::unique_function<void()> Task,
                  llvm::Optional<WantDiagnostics> UpdateType);
   /// Determines the next action to perform.
-  /// All actions that should never run are disarded.
+  /// All actions that should never run are discarded.
   /// Returns a deadline for the next action. If it's expired, run now.
   /// scheduleLocked() is called again at the deadline, or if requests arrive.
   Deadline scheduleLocked();
@@ -227,7 +226,7 @@ private:
   const bool RunSync;
   /// Time to wait after an update to see whether another update obsoletes it.
   const steady_clock::duration UpdateDebounce;
-  /// File that ASTWorker is reponsible for.
+  /// File that ASTWorker is responsible for.
   const Path FileName;
   /// Whether to keep the built preambles in memory or on disk.
   const bool StorePreambleInMemory;
@@ -365,13 +364,12 @@ void ASTWorker::update(
 
     std::shared_ptr<const PreambleData> OldPreamble =
         getPossiblyStalePreamble();
-    std::shared_ptr<const PreambleData> NewPreamble =
-        buildPreamble(FileName, *Invocation, OldPreamble, OldCommand, Inputs,
-                      PCHs, StorePreambleInMemory,
-                      [this](PathRef Path, ASTContext &Ctx,
-                             std::shared_ptr<clang::Preprocessor> PP) {
-                        Callbacks.onPreambleAST(FileName, Ctx, std::move(PP));
-                      });
+    std::shared_ptr<const PreambleData> NewPreamble = buildPreamble(
+        FileName, *Invocation, OldPreamble, OldCommand, Inputs, PCHs,
+        StorePreambleInMemory,
+        [this](ASTContext &Ctx, std::shared_ptr<clang::Preprocessor> PP) {
+          Callbacks.onPreambleAST(FileName, Ctx, std::move(PP));
+        });
 
     bool CanReuseAST = InputsAreTheSame && (OldPreamble == NewPreamble);
     {
@@ -418,7 +416,7 @@ void ASTWorker::update(
     // We want to report the diagnostics even if this update was cancelled.
     // It seems more useful than making the clients wait indefinitely if they
     // spam us with updates.
-    // Note *AST can be still be null if buildAST fails.
+    // Note *AST can still be null if buildAST fails.
     if (*AST) {
       OnUpdated((*AST)->getDiagnostics());
       trace::Span Span("Running main AST callback");
@@ -654,11 +652,6 @@ unsigned getDefaultAsyncThreadsCount() {
   return HardwareConcurrency;
 }
 
-ParsingCallbacks &noopParsingCallbacks() {
-  static ParsingCallbacks *Instance = new ParsingCallbacks;
-  return *Instance;
-}
-
 struct TUScheduler::FileData {
   /// Latest inputs, passed to TUScheduler::update().
   std::string Contents;
@@ -668,11 +661,13 @@ struct TUScheduler::FileData {
 
 TUScheduler::TUScheduler(unsigned AsyncThreadsCount,
                          bool StorePreamblesInMemory,
-                         ParsingCallbacks &Callbacks,
+                         std::unique_ptr<ParsingCallbacks> Callbacks,
                          std::chrono::steady_clock::duration UpdateDebounce,
                          ASTRetentionPolicy RetentionPolicy)
     : StorePreamblesInMemory(StorePreamblesInMemory),
-      PCHOps(std::make_shared<PCHContainerOperations>()), Callbacks(Callbacks),
+      PCHOps(std::make_shared<PCHContainerOperations>()),
+      Callbacks(Callbacks ? move(Callbacks)
+                          : llvm::make_unique<ParsingCallbacks>()),
       Barrier(AsyncThreadsCount),
       IdleASTs(llvm::make_unique<ASTCache>(RetentionPolicy.MaxRetainedASTs)),
       UpdateDebounce(UpdateDebounce) {
@@ -711,7 +706,7 @@ void TUScheduler::update(
     // Create a new worker to process the AST-related tasks.
     ASTWorkerHandle Worker = ASTWorker::create(
         File, *IdleASTs, WorkerThreads ? WorkerThreads.getPointer() : nullptr,
-        Barrier, UpdateDebounce, PCHOps, StorePreamblesInMemory, Callbacks);
+        Barrier, UpdateDebounce, PCHOps, StorePreamblesInMemory, *Callbacks);
     FD = std::unique_ptr<FileData>(new FileData{
         Inputs.Contents, Inputs.CompileCommand, std::move(Worker)});
   } else {

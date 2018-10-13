@@ -119,15 +119,18 @@ public:
 
 class NewCPUIDRecord : public MetadataRecord {
   uint16_t CPUId = 0;
+  uint64_t TSC = 0;
   friend class RecordInitializer;
 
 public:
   NewCPUIDRecord() = default;
-  explicit NewCPUIDRecord(uint16_t C) : MetadataRecord(), CPUId(C) {}
+  NewCPUIDRecord(uint16_t C, uint64_t T) : MetadataRecord(), CPUId(C), TSC(T) {}
 
   MetadataType metadataType() const override { return MetadataType::NewCPUId; }
 
   uint16_t cpuid() const { return CPUId; }
+
+  uint64_t tsc() const { return TSC; }
 
   Error apply(RecordVisitor &V) override;
 };
@@ -185,16 +188,16 @@ public:
 };
 
 class PIDRecord : public MetadataRecord {
-  uint64_t PID = 0;
+  int32_t PID = 0;
   friend class RecordInitializer;
 
 public:
   PIDRecord() = default;
-  explicit PIDRecord(uint64_t P) : MetadataRecord(), PID(P) {}
+  explicit PIDRecord(int32_t P) : MetadataRecord(), PID(P) {}
 
   MetadataType metadataType() const override { return MetadataType::PIDEntry; }
 
-  uint64_t pid() const { return PID; }
+  int32_t pid() const { return PID; }
 
   Error apply(RecordVisitor &V) override;
 };
@@ -244,7 +247,7 @@ public:
   // properties.
   RecordTypes recordType() const { return Kind; }
   int32_t functionId() const { return FuncId; }
-  uint64_t delta() const { return Delta; }
+  uint32_t delta() const { return Delta; }
 
   Error apply(RecordVisitor &V) override;
 };

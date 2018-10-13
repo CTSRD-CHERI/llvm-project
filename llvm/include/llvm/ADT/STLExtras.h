@@ -977,6 +977,10 @@ inline void sort(IteratorTy Start, IteratorTy End) {
   std::sort(Start, End);
 }
 
+template <typename Container> inline void sort(Container &&C) {
+  llvm::sort(adl_begin(C), adl_end(C));
+}
+
 template <typename IteratorTy, typename Compare>
 inline void sort(IteratorTy Start, IteratorTy End, Compare Comp) {
 #ifdef EXPENSIVE_CHECKS
@@ -984,6 +988,11 @@ inline void sort(IteratorTy Start, IteratorTy End, Compare Comp) {
   std::shuffle(Start, End, Generator);
 #endif
   std::sort(Start, End, Comp);
+}
+
+template <typename Container, typename Compare>
+inline void sort(Container &&C, Compare Comp) {
+  llvm::sort(adl_begin(C), adl_end(C), Comp);
 }
 
 //===----------------------------------------------------------------------===//
@@ -1130,9 +1139,27 @@ auto lower_bound(R &&Range, ForwardIt I) -> decltype(adl_begin(Range)) {
   return std::lower_bound(adl_begin(Range), adl_end(Range), I);
 }
 
+template <typename R, typename ForwardIt, typename Compare>
+auto lower_bound(R &&Range, ForwardIt I, Compare C)
+    -> decltype(adl_begin(Range)) {
+  return std::lower_bound(adl_begin(Range), adl_end(Range), I, C);
+}
+
+/// Provide wrappers to std::upper_bound which take ranges instead of having to
+/// pass begin/end explicitly.
+template <typename R, typename ForwardIt>
+auto upper_bound(R &&Range, ForwardIt I) -> decltype(adl_begin(Range)) {
+  return std::upper_bound(adl_begin(Range), adl_end(Range), I);
+}
+
+template <typename R, typename ForwardIt, typename Compare>
+auto upper_bound(R &&Range, ForwardIt I, Compare C)
+    -> decltype(adl_begin(Range)) {
+  return std::upper_bound(adl_begin(Range), adl_end(Range), I, C);
+}
 /// Wrapper function around std::equal to detect if all elements
 /// in a container are same.
-template <typename R> 
+template <typename R>
 bool is_splat(R &&Range) {
   size_t range_size = size(Range);
   return range_size != 0 && (range_size == 1 ||

@@ -79,8 +79,9 @@ TEST(DiagnosticsTest, DiagnosticRanges) {
     int main() {
       $typo[[go\
 o]]();
-      foo()$semicolon[[]]
+      foo()$semicolon[[]]//with comments
       $unk[[unknown]]();
+      double bar = $type[["foo"]];
     }
   )cpp");
   EXPECT_THAT(
@@ -93,11 +94,16 @@ o]]();
                     Fix(Test.range("typo"), "foo", "change 'go\\ o' to 'foo'")),
                 // This is a pretty normal range.
                 WithNote(Diag(Test.range("decl"), "'foo' declared here"))),
-          // This range is zero-width, and at the end of a line.
+          // This range is zero-width and insertion. Therefore make sure we are
+          // not expanding it into other tokens. Since we are not going to
+          // replace those.
           AllOf(Diag(Test.range("semicolon"), "expected ';' after expression"),
                 WithFix(Fix(Test.range("semicolon"), ";", "insert ';'"))),
           // This range isn't provided by clang, we expand to the token.
-          Diag(Test.range("unk"), "use of undeclared identifier 'unknown'")));
+          Diag(Test.range("unk"), "use of undeclared identifier 'unknown'"),
+          Diag(Test.range("type"),
+               "cannot initialize a variable of type 'double' with an lvalue "
+               "of type 'const char [4]'")));
 }
 
 TEST(DiagnosticsTest, FlagsMatter) {
@@ -199,8 +205,13 @@ main.cpp:2:3: error: something terrible happened)");
 }
 
 TEST(ClangdUnitTest, GetBeginningOfIdentifier) {
+  std::string Preamble = R"cpp(
+struct Bar { int func(); };
+#define MACRO(X) void f() { X; }
+Bar* bar;
+  )cpp";
   // First ^ is the expected beginning, last is the search position.
-  for (const char *Text : {
+  for (std::string Text : std::vector<std::string>{
            "int ^f^oo();", // inside identifier
            "int ^foo();",  // beginning of identifier
            "int ^foo^();", // end of identifier
@@ -208,14 +219,26 @@ TEST(ClangdUnitTest, GetBeginningOfIdentifier) {
            "^int foo();",  // beginning of file (can't back up)
            "int ^f0^0();", // after a digit (lexing at N-1 is wrong)
            "int ^λλ^λ();", // UTF-8 handled properly when backing up
+
+           // identifier in macro arg
+           "MACRO(bar->^func())",  // beginning of identifier
+           "MACRO(bar->^fun^c())", // inside identifier
+           "MACRO(bar->^func^())", // end of identifier
+           "MACRO(^bar->func())",  // begin identifier
+           "MACRO(^bar^->func())", // end identifier
+           "^MACRO(bar->func())",  // beginning of macro name
+           "^MAC^RO(bar->func())", // inside macro name
+           "^MACRO^(bar->func())", // end of macro name
        }) {
-    Annotations TestCase(Text);
+    std::string WithPreamble = Preamble + Text;
+    Annotations TestCase(WithPreamble);
     auto AST = TestTU::withCode(TestCase.code()).build();
     const auto &SourceMgr = AST.getASTContext().getSourceManager();
     SourceLocation Actual = getBeginningOfIdentifier(
         AST, TestCase.points().back(), SourceMgr.getMainFileID());
-    Position ActualPos =
-        offsetToPosition(TestCase.code(), SourceMgr.getFileOffset(Actual));
+    Position ActualPos = offsetToPosition(
+        TestCase.code(),
+        SourceMgr.getFileOffset(SourceMgr.getSpellingLoc(Actual)));
     EXPECT_EQ(TestCase.points().front(), ActualPos) << Text;
   }
 }
