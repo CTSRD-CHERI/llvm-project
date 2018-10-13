@@ -775,6 +775,11 @@ static uint64_t getRelocTargetVA(const InputFile *File, RelType Type, int64_t A,
     assert(A == 0 && "capability table index relocs should not have addends");
     return Config->CapabilitySize * In.CheriCapTable->getIndex(Sym);
   case R_CHERI_CAPABILITY_TABLE_REL:
+    if (!ElfSym::CheriCapabilityTable) {
+      error("cannot compute difference between non-existent "
+            "CheriCapabilityTable and symbol " + toString(Sym));
+      return Sym.getVA(A);
+    }
     return Sym.getVA(A) - ElfSym::CheriCapabilityTable->getVA();
   case R_MIPS_CHERI_CAPTAB_TLSGD:
     assert(A == 0 && "capability table index relocs should not have addends");
@@ -900,6 +905,11 @@ void InputSectionBase::relocateAlloc(uint8_t *Buf, uint8_t *BufEnd) {
 
     uint64_t AddrLoc = getOutputSection()->Addr + Offset;
     RelExpr Expr = Rel.Expr;
+    // FIXME: this should not be happening
+    if (!Rel.Sym) {
+      error(getErrorLocation(BufLoc) + "cannot create relocation against NULL symbol");
+      continue;
+    }
     uint64_t TargetVA = SignExtend64(
         getRelocTargetVA(File, Type, Rel.Addend, AddrLoc, *Rel.Sym, Expr),
         Bits);
