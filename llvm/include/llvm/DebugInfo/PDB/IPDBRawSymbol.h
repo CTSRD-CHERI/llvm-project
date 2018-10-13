@@ -11,6 +11,7 @@
 #define LLVM_DEBUGINFO_PDB_IPDBRAWSYMBOL_H
 
 #include "PDBTypes.h"
+#include "llvm/ADT/BitmaskEnum.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/DebugInfo/CodeView/CodeView.h"
@@ -21,15 +22,25 @@ class raw_ostream;
 
 namespace pdb {
 
+class IPDBSession;
 class PDBSymbolTypeVTable;
 class PDBSymbolTypeVTableShape;
 
-template <typename T>
-void dumpSymbolField(raw_ostream &OS, StringRef Name, T Value, int Indent) {
-  OS << "\n";
-  OS.indent(Indent);
-  OS << Name << ": " << Value;
-}
+enum class PdbSymbolIdField : uint32_t {
+  None = 0,
+  SymIndexId = 1 << 0,
+  LexicalParent = 1 << 1,
+  ClassParent = 1 << 2,
+  Type = 1 << 3,
+  UnmodifiedType = 1 << 4,
+  All = 0xFFFFFFFF,
+  LLVM_MARK_AS_BITMASK_ENUM(/* LargestValue = */ All)
+};
+
+void dumpSymbolIdField(raw_ostream &OS, StringRef Name, SymIndexId Value,
+                       int Indent, const IPDBSession &Session,
+                       PdbSymbolIdField FieldId, PdbSymbolIdField ShowFlags,
+                       PdbSymbolIdField RecurseFlags);
 
 /// IPDBRawSymbol defines an interface used to represent an arbitrary symbol.
 /// It exposes a monolithic interface consisting of accessors for the union of
@@ -40,7 +51,8 @@ class IPDBRawSymbol {
 public:
   virtual ~IPDBRawSymbol();
 
-  virtual void dump(raw_ostream &OS, int Indent) const = 0;
+  virtual void dump(raw_ostream &OS, int Indent, PdbSymbolIdField ShowIdFields,
+                    PdbSymbolIdField RecurseIdFields) const = 0;
 
   virtual std::unique_ptr<IPDBEnumSymbols>
   findChildren(PDB_SymType Type) const = 0;
@@ -243,6 +255,8 @@ public:
   virtual bool wasInlined() const = 0;
   virtual std::string getUnused() const = 0;
 };
+
+LLVM_ENABLE_BITMASK_ENUMS_IN_NAMESPACE();
 
 } // namespace pdb
 } // namespace llvm

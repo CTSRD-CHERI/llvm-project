@@ -9,6 +9,7 @@
 
 #include "llvm/DebugInfo/PDB/Native/NativeRawSymbol.h"
 #include "llvm/DebugInfo/PDB/IPDBLineNumber.h"
+#include "llvm/DebugInfo/PDB/Native/NativeSession.h"
 #include "llvm/DebugInfo/PDB/PDBSymbolTypeBuiltin.h"
 #include "llvm/Support/FormatVariadic.h"
 
@@ -19,75 +20,79 @@ NativeRawSymbol::NativeRawSymbol(NativeSession &PDBSession, PDB_SymType Tag,
                                  SymIndexId SymbolId)
     : Session(PDBSession), Tag(Tag), SymbolId(SymbolId) {}
 
-void NativeRawSymbol::dump(raw_ostream &OS, int Indent) const {
-  dumpSymbolField(OS, "symIndexId", SymbolId, Indent);
-  dumpSymbolField(OS, "symTag", static_cast<uint32_t>(Tag), Indent);
+void NativeRawSymbol::dump(raw_ostream &OS, int Indent,
+                           PdbSymbolIdField ShowIdFields,
+                           PdbSymbolIdField RecurseIdFields) const {
+  dumpSymbolIdField(OS, "symIndexId", SymbolId, Indent, Session,
+                    PdbSymbolIdField::SymIndexId, ShowIdFields,
+                    RecurseIdFields);
+  dumpSymbolField(OS, "symTag", Tag, Indent);
 }
 
 std::unique_ptr<IPDBEnumSymbols>
 NativeRawSymbol::findChildren(PDB_SymType Type) const {
-  return nullptr;
+  return llvm::make_unique<NullEnumerator<PDBSymbol>>();
 }
 
 std::unique_ptr<IPDBEnumSymbols>
 NativeRawSymbol::findChildren(PDB_SymType Type, StringRef Name,
     PDB_NameSearchFlags Flags) const {
-  return nullptr;
+  return llvm::make_unique<NullEnumerator<PDBSymbol>>();
 }
 
 std::unique_ptr<IPDBEnumSymbols>
 NativeRawSymbol::findChildrenByAddr(PDB_SymType Type, StringRef Name,
     PDB_NameSearchFlags Flags, uint32_t Section, uint32_t Offset) const {
-  return nullptr;
+  return llvm::make_unique<NullEnumerator<PDBSymbol>>();
 }
 
 std::unique_ptr<IPDBEnumSymbols>
 NativeRawSymbol::findChildrenByVA(PDB_SymType Type, StringRef Name,
    PDB_NameSearchFlags Flags, uint64_t VA) const {
-  return nullptr;
+  return llvm::make_unique<NullEnumerator<PDBSymbol>>();
 }
 
 std::unique_ptr<IPDBEnumSymbols>
 NativeRawSymbol::findChildrenByRVA(PDB_SymType Type, StringRef Name,
     PDB_NameSearchFlags Flags, uint32_t RVA) const {
-  return nullptr;
+  return llvm::make_unique<NullEnumerator<PDBSymbol>>();
 }
 
 std::unique_ptr<IPDBEnumSymbols>
 NativeRawSymbol::findInlineFramesByAddr(uint32_t Section,
                                         uint32_t Offset) const {
-  return nullptr;
+  return llvm::make_unique<NullEnumerator<PDBSymbol>>();
 }
 
 std::unique_ptr<IPDBEnumSymbols>
 NativeRawSymbol::findInlineFramesByRVA(uint32_t RVA) const {
-  return nullptr;
+  return llvm::make_unique<NullEnumerator<PDBSymbol>>();
 }
 
 std::unique_ptr<IPDBEnumSymbols>
 NativeRawSymbol::findInlineFramesByVA(uint64_t VA) const {
-  return nullptr;
+  return llvm::make_unique<NullEnumerator<PDBSymbol>>();
 }
 
 std::unique_ptr<IPDBEnumLineNumbers>
 NativeRawSymbol::findInlineeLines() const {
-  return nullptr;
+  return llvm::make_unique<NullEnumerator<IPDBLineNumber>>();
 }
 
 std::unique_ptr<IPDBEnumLineNumbers>
 NativeRawSymbol::findInlineeLinesByAddr(uint32_t Section, uint32_t Offset,
                                         uint32_t Length) const {
-  return nullptr;
+  return llvm::make_unique<NullEnumerator<IPDBLineNumber>>();
 }
 
 std::unique_ptr<IPDBEnumLineNumbers>
 NativeRawSymbol::findInlineeLinesByRVA(uint32_t RVA, uint32_t Length) const {
-  return nullptr;
+  return llvm::make_unique<NullEnumerator<IPDBLineNumber>>();
 }
 
 std::unique_ptr<IPDBEnumLineNumbers>
 NativeRawSymbol::findInlineeLinesByVA(uint64_t VA, uint32_t Length) const {
-  return nullptr;
+  return llvm::make_unique<NullEnumerator<IPDBLineNumber>>();
 }
 
 void NativeRawSymbol::getDataBytes(SmallVector<uint8_t, 32> &bytes) const {

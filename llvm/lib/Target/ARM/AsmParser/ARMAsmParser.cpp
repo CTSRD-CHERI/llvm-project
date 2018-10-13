@@ -631,6 +631,8 @@ public:
   void ReportNearMisses(SmallVectorImpl<NearMissInfo> &NearMisses, SMLoc IDLoc,
                         OperandVector &Operands);
 
+  void doBeforeLabelEmit(MCSymbol *Symbol) override;
+
   void onLabelParsed(MCSymbol *Symbol) override;
 };
 
@@ -6839,6 +6841,15 @@ bool ARMAsmParser::validateInstruction(MCInst &Inst,
                    "destination operands must be sequential");
     break;
   }
+  case ARM::VLDMDIA:
+  case ARM::VSTMDIA: {
+    ARMOperand &Op = static_cast<ARMOperand&>(*Operands[3]);
+    auto &RegList = Op.getRegList();
+    if (RegList.size() < 1 || RegList.size() > 16)
+      return Error(Operands[3]->getStartLoc(),
+                   "list of registers must be at least 1 and at most 16");
+    break;
+  }
   }
 
   return false;
@@ -9443,10 +9454,13 @@ bool ARMAsmParser::parseDirectiveARM(SMLoc L) {
   return false;
 }
 
-void ARMAsmParser::onLabelParsed(MCSymbol *Symbol) {
+void ARMAsmParser::doBeforeLabelEmit(MCSymbol *Symbol) {
   // We need to flush the current implicit IT block on a label, because it is
   // not legal to branch into an IT block.
   flushPendingInstructions(getStreamer());
+}
+
+void ARMAsmParser::onLabelParsed(MCSymbol *Symbol) {
   if (NextSymbolIsThumb) {
     getParser().getStreamer().EmitThumbFunc(Symbol);
     NextSymbolIsThumb = false;

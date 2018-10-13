@@ -16,6 +16,7 @@
 
 #include "clang/AST/AttrIterator.h"
 #include "clang/AST/DeclarationName.h"
+#include "clang/Basic/IdentifierTable.h"
 #include "clang/Basic/LLVM.h"
 #include "clang/Basic/SourceLocation.h"
 #include "clang/Basic/Specifiers.h"
@@ -481,13 +482,7 @@ public:
 
   const AttrVec &getAttrs() const;
   void dropAttrs();
-
-  void addAttr(Attr *A) {
-    if (hasAttrs())
-      getAttrs().push_back(A);
-    else
-      setAttrs(AttrVec(1, A));
-  }
+  void addAttr(Attr *A);
 
   using attr_iterator = AttrVec::const_iterator;
   using attr_range = llvm::iterator_range<attr_iterator>;
@@ -1557,13 +1552,6 @@ class DeclContext {
   /// methods in ObjCMethodDecl should be updated appropriately.
   class ObjCMethodDeclBitfields {
     friend class ObjCMethodDecl;
-
-    /// This is needed for the bitwidth of Family below but
-    /// is defined in Basic/IdentifierTable.h which we do not include.
-    /// To avoid mismatches between the two definitions we have
-    /// a static_assert in the ctor of ObjCMethodDecl which checks
-    /// that these two ObjCMethodFamilyBitWidth are equal.
-    enum { ObjCMethodFamilyBitWidth = 4 };
 
     /// For the bits in DeclContextBitfields.
     uint64_t : NumDeclContextBits;

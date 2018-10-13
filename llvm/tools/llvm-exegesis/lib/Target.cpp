@@ -89,6 +89,12 @@ namespace {
 // Default implementation.
 class ExegesisDefaultTarget : public ExegesisTarget {
 private:
+  std::vector<llvm::MCInst> setRegTo(const llvm::MCSubtargetInfo &STI,
+                                     unsigned Reg,
+                                     const llvm::APInt &Value) const override {
+    llvm_unreachable("Not yet implemented");
+  }
+
   bool matchesArch(llvm::Triple::ArchType Arch) const override {
     llvm_unreachable("never called");
     return false;

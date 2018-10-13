@@ -77,7 +77,6 @@ private:
   void addRelIpltSymbols();
   void addStartEndSymbols();
   void addStartStopSymbols(OutputSection *Sec);
-  uint64_t getEntryAddr();
 
   std::vector<PhdrEntry *> Phdrs;
 
@@ -1656,6 +1655,12 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     Phdrs = Script->hasPhdrsCommands() ? Script->createPhdrs() : createPhdrs();
     addPtArmExid(Phdrs);
     Out::ProgramHeaders->Size = sizeof(Elf_Phdr) * Phdrs.size();
+
+    // Find the TLS segment. This happens before the section layout loop so that
+    // Android relocation packing can look up TLS symbol addresses.
+    for (PhdrEntry *P : Phdrs)
+      if (P->p_type == PT_TLS)
+        Out::TlsPhdr = P;
   }
 
   // Some symbols are defined in term of program headers. Now that we
@@ -2093,13 +2098,11 @@ template <class ELFT> void Writer<ELFT>::setPhdrs() {
       P->p_memsz = alignTo(P->p_memsz, Target->PageSize);
     }
 
-    // The TLS pointer goes after PT_TLS. At least glibc will align it,
-    // so round up the size to make sure the offsets are correct.
-    if (P->p_type == PT_TLS) {
-      Out::TlsPhdr = P;
-      if (P->p_memsz)
-        P->p_memsz = alignTo(P->p_memsz, P->p_align);
-    }
+    // The TLS pointer goes after PT_TLS for variant 2 targets. At least glibc
+    // will align it, so round up the size to make sure the offsets are
+    // correct.
+    if (P->p_type == PT_TLS && P->p_memsz)
+      P->p_memsz = alignTo(P->p_memsz, P->p_align);
   }
 }
 
@@ -2202,7 +2205,7 @@ template <class ELFT> void Writer<ELFT>::checkSections() {
 // 4. the number represented by the entry symbol, if it is a number;
 // 5. the address of the first byte of the .text section, if present;
 // 6. the address 0.
-template <class ELFT> uint64_t Writer<ELFT>::getEntryAddr() {
+static uint64_t getEntryAddr() {
   // Case 1, 2 or 3
   if (Symbol *B = Symtab->find(Config->Entry))
     return B->getVA();

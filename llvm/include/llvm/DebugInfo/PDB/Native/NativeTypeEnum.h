@@ -10,6 +10,7 @@
 #ifndef LLVM_DEBUGINFO_PDB_NATIVE_NATIVETYPEENUM_H
 #define LLVM_DEBUGINFO_PDB_NATIVE_NATIVETYPEENUM_H
 
+#include "llvm/ADT/Optional.h"
 #include "llvm/DebugInfo/CodeView/CodeView.h"
 #include "llvm/DebugInfo/CodeView/TypeVisitorCallbacks.h"
 #include "llvm/DebugInfo/PDB/Native/NativeRawSymbol.h"
@@ -18,22 +19,23 @@
 namespace llvm {
 namespace pdb {
 
-class NativeTypeEnum : public NativeRawSymbol,
-                       public codeview::TypeVisitorCallbacks {
+class NativeTypeBuiltin;
+
+class NativeTypeEnum : public NativeRawSymbol {
 public:
   NativeTypeEnum(NativeSession &Session, SymIndexId Id, codeview::TypeIndex TI,
                  codeview::EnumRecord Record);
+
+  NativeTypeEnum(NativeSession &Session, SymIndexId Id,
+                 NativeTypeEnum &UnmodifiedType,
+                 codeview::ModifierRecord Modifier);
   ~NativeTypeEnum() override;
 
-  void dump(raw_ostream &OS, int Indent) const override;
+  void dump(raw_ostream &OS, int Indent, PdbSymbolIdField ShowIdFields,
+            PdbSymbolIdField RecurseIdFields) const override;
 
   std::unique_ptr<IPDBEnumSymbols>
   findChildren(PDB_SymType Type) const override;
-
-  Error visitKnownRecord(codeview::CVType &CVR,
-                         codeview::EnumRecord &Record) override;
-  Error visitKnownMember(codeview::CVMemberRecord &CVM,
-                         codeview::EnumeratorRecord &Record) override;
 
   PDB_BuiltinType getBuiltinType() const override;
   PDB_SymType getSymTag() const override;
@@ -43,6 +45,9 @@ public:
   bool hasCastOperator() const override;
   uint64_t getLength() const override;
   std::string getName() const override;
+  bool isConstType() const override;
+  bool isVolatileType() const override;
+  bool isUnalignedType() const override;
   bool isNested() const override;
   bool hasOverloadedOperator() const override;
   bool hasNestedTypes() const override;
@@ -54,9 +59,14 @@ public:
   bool isValueUdt() const override;
   bool isInterfaceUdt() const override;
 
+  const NativeTypeBuiltin &getUnderlyingBuiltinType() const;
+  const codeview::EnumRecord &getEnumRecord() const { return *Record; }
+
 protected:
   codeview::TypeIndex Index;
-  codeview::EnumRecord Record;
+  Optional<codeview::EnumRecord> Record;
+  NativeTypeEnum *UnmodifiedType = nullptr;
+  Optional<codeview::ModifierRecord> Modifiers;
 };
 
 } // namespace pdb

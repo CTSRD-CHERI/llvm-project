@@ -26,6 +26,7 @@
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DebugLoc.h"
 #include "llvm/IR/Dominators.h"
+#include "llvm/IR/IRPrintingPasses.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Metadata.h"
@@ -213,26 +214,21 @@ bool Loop::isSafeToClone() const {
 
 MDNode *Loop::getLoopID() const {
   MDNode *LoopID = nullptr;
-  if (BasicBlock *Latch = getLoopLatch()) {
-    LoopID = Latch->getTerminator()->getMetadata(LLVMContext::MD_loop);
-  } else {
-    assert(!getLoopLatch() &&
-           "The loop should have no single latch at this point");
-    // Go through the latch blocks and check the terminator for the metadata.
-    SmallVector<BasicBlock *, 4> LatchesBlocks;
-    getLoopLatches(LatchesBlocks);
-    for (BasicBlock *BB : LatchesBlocks) {
-      TerminatorInst *TI = BB->getTerminator();
-      MDNode *MD = TI->getMetadata(LLVMContext::MD_loop);
 
-      if (!MD)
-        return nullptr;
+  // Go through the latch blocks and check the terminator for the metadata.
+  SmallVector<BasicBlock *, 4> LatchesBlocks;
+  getLoopLatches(LatchesBlocks);
+  for (BasicBlock *BB : LatchesBlocks) {
+    TerminatorInst *TI = BB->getTerminator();
+    MDNode *MD = TI->getMetadata(LLVMContext::MD_loop);
 
-      if (!LoopID)
-        LoopID = MD;
-      else if (MD != LoopID)
-        return nullptr;
-    }
+    if (!MD)
+      return nullptr;
+
+    if (!LoopID)
+      LoopID = MD;
+    else if (MD != LoopID)
+      return nullptr;
   }
   if (!LoopID || LoopID->getNumOperands() == 0 ||
       LoopID->getOperand(0) != LoopID)

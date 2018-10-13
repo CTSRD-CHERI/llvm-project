@@ -2705,7 +2705,8 @@ SDValue PPCTargetLowering::LowerBlockAddress(SDValue Op,
 
   // 64-bit SVR4 ABI code is always position-independent.
   // The actual BlockAddress is stored in the TOC.
-  if (Subtarget.isSVR4ABI() && isPositionIndependent()) {
+  if (Subtarget.isSVR4ABI() &&
+      (Subtarget.isPPC64() || isPositionIndependent())) {
     if (Subtarget.isPPC64())
       setUsesTOCBasePtr(DAG);
     SDValue GA = DAG.getTargetBlockAddress(BA, PtrVT, BASDN->getOffset());
@@ -11900,7 +11901,8 @@ static SDValue combineBVOfConsecutiveLoads(SDNode *N, SelectionDAG &DAG) {
     IsRoundOfExtLoad = LD->getExtensionType() == ISD::EXTLOAD;
   }
   // Not a build vector of (possibly fp_rounded) loads.
-  if (!IsRoundOfExtLoad && FirstInput.getOpcode() != ISD::LOAD)
+  if ((!IsRoundOfExtLoad && FirstInput.getOpcode() != ISD::LOAD) ||
+      N->getNumOperands() == 1)
     return SDValue();
 
   for (int i = 1, e = N->getNumOperands(); i < e; ++i) {

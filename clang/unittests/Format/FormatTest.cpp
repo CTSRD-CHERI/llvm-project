@@ -1241,6 +1241,30 @@ TEST_F(FormatTest, ShortCaseLabels) {
                    "  return false;\n"
                    "}",
                    Style));
+  Style.AllowShortCaseLabelsOnASingleLine = true;
+  Style.BreakBeforeBraces = FormatStyle::BS_Custom;
+  Style.BraceWrapping.AfterControlStatement = true;
+  EXPECT_EQ("switch (n)\n"
+            "{\n"
+            "  case 0:\n"
+            "  {\n"
+            "    return false;\n"
+            "  }\n"
+            "  default:\n"
+            "  {\n"
+            "    return true;\n"
+            "  }\n"
+            "}",
+            format("switch (n) {\n"
+                   "  case 0: {\n"
+                   "    return false;\n"
+                   "  }\n"
+                   "  default:\n"
+                   "  {\n"
+                   "    return true;\n"
+                   "  }\n"
+                   "}",
+                   Style));
 }
 
 TEST_F(FormatTest, FormatsLabels) {
@@ -4557,6 +4581,40 @@ TEST_F(FormatTest, FormatsBuilderPattern) {
   verifyFormat("aaaa.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(\n"
                "        aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)\n"
                "    .aaaaaa(aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa);");
+
+  // Dont break if only closing statements before member call
+  verifyFormat("test() {\n"
+               "  ([]() -> {\n"
+               "    int b = 32;\n"
+               "    return 3;\n"
+               "  }).foo();\n"
+               "}");
+  verifyFormat("test() {\n"
+               "  (\n"
+               "      []() -> {\n"
+               "        int b = 32;\n"
+               "        return 3;\n"
+               "      },\n"
+               "      foo, bar)\n"
+               "      .foo();\n"
+               "}");
+  verifyFormat("test() {\n"
+               "  ([]() -> {\n"
+               "    int b = 32;\n"
+               "    return 3;\n"
+               "  })\n"
+               "      .foo()\n"
+               "      .bar();\n"
+               "}");
+  verifyFormat("test() {\n"
+               "  ([]() -> {\n"
+               "    int b = 32;\n"
+               "    return 3;\n"
+               "  })\n"
+               "      .foo(\"aaaaaaaaaaaaaaaaa\"\n"
+               "           \"bbbb\");\n"
+               "}",
+               getLLVMStyleWithColumns(30));
 }
 
 TEST_F(FormatTest, BreaksAccordingToOperatorPrecedence) {

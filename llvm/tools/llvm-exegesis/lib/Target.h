@@ -36,14 +36,14 @@ public:
   virtual void addTargetSpecificPasses(llvm::PassManagerBase &PM) const {}
 
   // Generates code to move a constant into a the given register.
+  // Precondition: Value must fit into Reg.
   virtual std::vector<llvm::MCInst>
-  setRegToConstant(const llvm::MCSubtargetInfo &STI, unsigned Reg) const {
-    return {};
-  }
+  setRegTo(const llvm::MCSubtargetInfo &STI, unsigned Reg,
+           const llvm::APInt &Value) const = 0;
 
-  // Returns the register pointing to scratch memory, or 0 if this target does
-  // not support memory operands. The benchmark function uses the default
-  // calling convention.
+  // Returns the register pointing to scratch memory, or 0 if this target
+  // does not support memory operands. The benchmark function uses the
+  // default calling convention.
   virtual unsigned getScratchMemoryRegister(const llvm::Triple &) const {
     return 0;
   }
@@ -51,6 +51,7 @@ public:
   // Fills memory operands with references to the address at [Reg] + Offset.
   virtual void fillMemoryOperands(InstructionBuilder &IB, unsigned Reg,
                                   unsigned Offset) const {
+
     llvm_unreachable(
         "fillMemoryOperands() requires getScratchMemoryRegister() > 0");
   }
