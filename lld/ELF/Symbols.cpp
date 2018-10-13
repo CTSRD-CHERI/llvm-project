@@ -162,6 +162,9 @@ uint64_t Symbol::getSize() const {
   // FIXME: assuming it is always shared broke this
   if (isa<Undefined>(this))
     return 0;
+  if (isUndefWeak())
+    return 0;
+  // errs() << "Should be a Shared symbol " << toString(*this) << ":" << this->kind() << "\n";
   return cast<SharedSymbol>(this)->Size;
 }
 
