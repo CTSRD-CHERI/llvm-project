@@ -170,40 +170,23 @@ static llvm::MCInst releaseStackSpace(unsigned Bytes) {
 // Reserves some space on the stack, fills it with the content of the provided
 // constant and provide methods to load the stack value into a register.
 struct ConstantInliner {
-  explicit ConstantInliner(const llvm::APInt &Constant)
-      : StackSize(Constant.getBitWidth() / 8) {
-    assert(Constant.getBitWidth() % 8 == 0 && "Must be a multiple of 8");
-    add(allocateStackSpace(StackSize));
-    size_t ByteOffset = 0;
-    for (; StackSize - ByteOffset >= 4; ByteOffset += 4)
-      add(fillStackSpace(
-          llvm::X86::MOV32mi, ByteOffset,
-          Constant.extractBits(32, ByteOffset * 8).getZExtValue()));
-    if (StackSize - ByteOffset >= 2) {
-      add(fillStackSpace(
-          llvm::X86::MOV16mi, ByteOffset,
-          Constant.extractBits(16, ByteOffset * 8).getZExtValue()));
-      ByteOffset += 2;
-    }
-    if (StackSize - ByteOffset >= 1)
-      add(fillStackSpace(
-          llvm::X86::MOV8mi, ByteOffset,
-          Constant.extractBits(8, ByteOffset * 8).getZExtValue()));
-  }
+  explicit ConstantInliner(const llvm::APInt &Constant) : Constant_(Constant) {}
 
   std::vector<llvm::MCInst> loadAndFinalize(unsigned Reg, unsigned RegBitWidth,
                                             unsigned Opcode) {
-    assert(StackSize * 8 == RegBitWidth &&
-           "Value does not have the correct size");
+    assert((RegBitWidth & 7) == 0 &&
+           "RegBitWidth must be a multiple of 8 bits");
+    initStack(RegBitWidth / 8);
     add(loadToReg(Reg, Opcode));
-    add(releaseStackSpace(StackSize));
+    add(releaseStackSpace(RegBitWidth / 8));
     return std::move(Instructions);
   }
 
   std::vector<llvm::MCInst>
   loadX87AndFinalize(unsigned Reg, unsigned RegBitWidth, unsigned Opcode) {
-    assert(StackSize * 8 == RegBitWidth &&
-           "Value does not have the correct size");
+    assert((RegBitWidth & 7) == 0 &&
+           "RegBitWidth must be a multiple of 8 bits");
+    initStack(RegBitWidth / 8);
     add(llvm::MCInstBuilder(Opcode)
             .addReg(llvm::X86::RSP) // BaseReg
             .addImm(1)              // ScaleAmt
@@ -212,12 +195,12 @@ struct ConstantInliner {
             .addReg(0));            // Segment
     if (Reg != llvm::X86::ST0)
       add(llvm::MCInstBuilder(llvm::X86::ST_Frr).addReg(Reg));
-    add(releaseStackSpace(StackSize));
+    add(releaseStackSpace(RegBitWidth / 8));
     return std::move(Instructions);
   }
 
   std::vector<llvm::MCInst> popFlagAndFinalize() {
-    assert(StackSize * 8 == 64 && "Value does not have the correct size");
+    initStack(8);
     add(llvm::MCInstBuilder(llvm::X86::POPF64));
     return std::move(Instructions);
   }
@@ -228,7 +211,31 @@ private:
     return *this;
   }
 
-  const size_t StackSize;
+  void initStack(unsigned Bytes) {
+    assert(Constant_.getBitWidth() <= Bytes * 8 &&
+           "Value does not have the correct size");
+    const llvm::APInt WideConstant = Constant_.getBitWidth() < Bytes * 8
+                                         ? Constant_.sext(Bytes * 8)
+                                         : Constant_;
+    add(allocateStackSpace(Bytes));
+    size_t ByteOffset = 0;
+    for (; Bytes - ByteOffset >= 4; ByteOffset += 4)
+      add(fillStackSpace(
+          llvm::X86::MOV32mi, ByteOffset,
+          WideConstant.extractBits(32, ByteOffset * 8).getZExtValue()));
+    if (Bytes - ByteOffset >= 2) {
+      add(fillStackSpace(
+          llvm::X86::MOV16mi, ByteOffset,
+          WideConstant.extractBits(16, ByteOffset * 8).getZExtValue()));
+      ByteOffset += 2;
+    }
+    if (Bytes - ByteOffset >= 1)
+      add(fillStackSpace(
+          llvm::X86::MOV8mi, ByteOffset,
+          WideConstant.extractBits(8, ByteOffset * 8).getZExtValue()));
+  }
+
+  llvm::APInt Constant_;
   std::vector<llvm::MCInst> Instructions;
 };
 
@@ -249,32 +256,32 @@ class ExegesisX86Target : public ExegesisTarget {
 
   unsigned getMaxMemoryAccessSize() const override { return 64; }
 
-  void fillMemoryOperands(InstructionBuilder &IB, unsigned Reg,
+  void fillMemoryOperands(InstructionTemplate &IT, unsigned Reg,
                           unsigned Offset) const override {
     // FIXME: For instructions that read AND write to memory, we use the same
     // value for input and output.
-    for (size_t I = 0, E = IB.Instr.Operands.size(); I < E; ++I) {
-      const Operand *Op = &IB.Instr.Operands[I];
+    for (size_t I = 0, E = IT.Instr.Operands.size(); I < E; ++I) {
+      const Operand *Op = &IT.Instr.Operands[I];
       if (Op->IsExplicit && Op->IsMem) {
         // Case 1: 5-op memory.
         assert((I + 5 <= E) && "x86 memory references are always 5 ops");
-        IB.getValueFor(*Op) = llvm::MCOperand::createReg(Reg); // BaseReg
-        Op = &IB.Instr.Operands[++I];
+        IT.getValueFor(*Op) = llvm::MCOperand::createReg(Reg); // BaseReg
+        Op = &IT.Instr.Operands[++I];
         assert(Op->IsMem);
         assert(Op->IsExplicit);
-        IB.getValueFor(*Op) = llvm::MCOperand::createImm(1); // ScaleAmt
-        Op = &IB.Instr.Operands[++I];
+        IT.getValueFor(*Op) = llvm::MCOperand::createImm(1); // ScaleAmt
+        Op = &IT.Instr.Operands[++I];
         assert(Op->IsMem);
         assert(Op->IsExplicit);
-        IB.getValueFor(*Op) = llvm::MCOperand::createReg(0); // IndexReg
-        Op = &IB.Instr.Operands[++I];
+        IT.getValueFor(*Op) = llvm::MCOperand::createReg(0); // IndexReg
+        Op = &IT.Instr.Operands[++I];
         assert(Op->IsMem);
         assert(Op->IsExplicit);
-        IB.getValueFor(*Op) = llvm::MCOperand::createImm(Offset); // Disp
-        Op = &IB.Instr.Operands[++I];
+        IT.getValueFor(*Op) = llvm::MCOperand::createImm(Offset); // Disp
+        Op = &IT.Instr.Operands[++I];
         assert(Op->IsMem);
         assert(Op->IsExplicit);
-        IB.getValueFor(*Op) = llvm::MCOperand::createReg(0); // Segment
+        IT.getValueFor(*Op) = llvm::MCOperand::createReg(0); // Segment
         // Case2: segment:index addressing. We assume that ES is 0.
       }
     }

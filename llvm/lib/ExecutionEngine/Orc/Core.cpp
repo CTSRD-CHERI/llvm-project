@@ -11,6 +11,7 @@
 #include "llvm/Config/llvm-config.h"
 #include "llvm/ExecutionEngine/Orc/OrcError.h"
 #include "llvm/IR/Mangler.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Format.h"
 
@@ -19,6 +20,116 @@
 #endif
 
 #define DEBUG_TYPE "orc"
+
+using namespace llvm;
+
+namespace {
+
+#ifndef NDEBUG
+
+cl::opt<bool> PrintHidden("debug-orc-print-hidden", cl::init(false),
+                          cl::desc("debug print hidden symbols defined by "
+                                   "materialization units"),
+                          cl::Hidden);
+
+cl::opt<bool> PrintCallable("debug-orc-print-callable", cl::init(false),
+                            cl::desc("debug print callable symbols defined by "
+                                     "materialization units"),
+                            cl::Hidden);
+
+cl::opt<bool> PrintData("debug-orc-print-data", cl::init(false),
+                        cl::desc("debug print data symbols defined by "
+                                 "materialization units"),
+                        cl::Hidden);
+
+#endif // NDEBUG
+
+// SetPrinter predicate that prints every element.
+template <typename T> struct PrintAll {
+  bool operator()(const T &E) { return true; }
+};
+
+bool anyPrintSymbolOptionSet() {
+#ifndef NDEBUG
+  return PrintHidden || PrintCallable || PrintData;
+#else
+  return false;
+#endif // NDEBUG
+}
+
+bool flagsMatchCLOpts(const JITSymbolFlags &Flags) {
+#ifndef NDEBUG
+  // Bail out early if this is a hidden symbol and we're not printing hiddens.
+  if (!PrintHidden && !Flags.isExported())
+    return false;
+
+  // Return true if this is callable and we're printing callables.
+  if (PrintCallable && Flags.isCallable())
+    return true;
+
+  // Return true if this is data and we're printing data.
+  if (PrintData && !Flags.isCallable())
+    return true;
+
+  // otherwise return false.
+  return false;
+#else
+  return false;
+#endif // NDEBUG
+}
+
+// Prints a set of items, filtered by an user-supplied predicate.
+template <typename Set, typename Pred = PrintAll<typename Set::value_type>>
+class SetPrinter {
+public:
+  SetPrinter(const Set &S, Pred ShouldPrint = Pred())
+      : S(S), ShouldPrint(std::move(ShouldPrint)) {}
+
+  void printTo(llvm::raw_ostream &OS) const {
+    bool PrintComma = false;
+    OS << "{";
+    for (auto &E : S) {
+      if (ShouldPrint(E)) {
+        if (PrintComma)
+          OS << ',';
+        OS << ' ' << E;
+        PrintComma = true;
+      }
+    }
+    OS << " }";
+  }
+
+private:
+  const Set &S;
+  mutable Pred ShouldPrint;
+};
+
+template <typename Set, typename Pred>
+SetPrinter<Set, Pred> printSet(const Set &S, Pred P = Pred()) {
+  return SetPrinter<Set, Pred>(S, std::move(P));
+}
+
+// Render a SetPrinter by delegating to its printTo method.
+template <typename Set, typename Pred>
+llvm::raw_ostream &operator<<(llvm::raw_ostream &OS,
+                              const SetPrinter<Set, Pred> &Printer) {
+  Printer.printTo(OS);
+  return OS;
+}
+
+struct PrintSymbolFlagsMapElemsMatchingCLOpts {
+  bool operator()(const orc::SymbolFlagsMap::value_type &KV) {
+    return flagsMatchCLOpts(KV.second);
+  }
+};
+
+struct PrintSymbolMapElemsMatchingCLOpts {
+  bool operator()(const orc::SymbolMap::value_type &KV) {
+    return flagsMatchCLOpts(KV.second.getFlags());
+  }
+};
+
+} // end anonymous namespace
 
 namespace llvm {
 namespace orc {
@@ -30,6 +141,14 @@ RegisterDependenciesFunction NoDependenciesToRegister =
     RegisterDependenciesFunction();
 
 void MaterializationUnit::anchor() {}
+
+raw_ostream &operator<<(raw_ostream &OS, const SymbolStringPtr &Sym) {
+  return OS << *Sym;
+}
+
+raw_ostream &operator<<(raw_ostream &OS, const SymbolNameSet &Symbols) {
+  return OS << printSet(Symbols, PrintAll<SymbolStringPtr>());
+}
 
 raw_ostream &operator<<(raw_ostream &OS, const JITSymbolFlags &Flags) {
   if (Flags.isCallable())
@@ -48,60 +167,39 @@ raw_ostream &operator<<(raw_ostream &OS, const JITSymbolFlags &Flags) {
 }
 
 raw_ostream &operator<<(raw_ostream &OS, const JITEvaluatedSymbol &Sym) {
-  OS << format("0x%016x", Sym.getAddress()) << " " << Sym.getFlags();
-  return OS;
+  return OS << format("0x%016x", Sym.getAddress()) << " " << Sym.getFlags();
+}
+
+raw_ostream &operator<<(raw_ostream &OS, const SymbolFlagsMap::value_type &KV) {
+  return OS << "(\"" << KV.first << "\", " << KV.second << ")";
 }
 
 raw_ostream &operator<<(raw_ostream &OS, const SymbolMap::value_type &KV) {
-  OS << "\"" << *KV.first << "\": " << KV.second;
-  return OS;
-}
-
-raw_ostream &operator<<(raw_ostream &OS, const SymbolNameSet &Symbols) {
-  OS << "{";
-  if (!Symbols.empty()) {
-    OS << " \"" << **Symbols.begin() << "\"";
-    for (auto &Sym : make_range(std::next(Symbols.begin()), Symbols.end()))
-      OS << ", \"" << *Sym << "\"";
-  }
-  OS << " }";
-  return OS;
-}
-
-raw_ostream &operator<<(raw_ostream &OS, const SymbolMap &Symbols) {
-  OS << "{";
-  if (!Symbols.empty()) {
-    OS << " {" << *Symbols.begin() << "}";
-    for (auto &Sym : make_range(std::next(Symbols.begin()), Symbols.end()))
-      OS << ", {" << Sym << "}";
-  }
-  OS << " }";
-  return OS;
+  return OS << "(\"" << KV.first << "\": " << KV.second << ")";
 }
 
 raw_ostream &operator<<(raw_ostream &OS, const SymbolFlagsMap &SymbolFlags) {
-  OS << "{";
-  if (!SymbolFlags.empty()) {
-    OS << " {\"" << *SymbolFlags.begin()->first
-       << "\": " << SymbolFlags.begin()->second << "}";
-    for (auto &KV :
-         make_range(std::next(SymbolFlags.begin()), SymbolFlags.end()))
-      OS << ", {\"" << *KV.first << "\": " << KV.second << "}";
-  }
-  OS << " }";
-  return OS;
+  return OS << printSet(SymbolFlags, PrintSymbolFlagsMapElemsMatchingCLOpts());
+}
+
+raw_ostream &operator<<(raw_ostream &OS, const SymbolMap &Symbols) {
+  return OS << printSet(Symbols, PrintSymbolMapElemsMatchingCLOpts());
+}
+
+raw_ostream &operator<<(raw_ostream &OS,
+                        const SymbolDependenceMap::value_type &KV) {
+  return OS << "(" << KV.first << ", " << KV.second << ")";
 }
 
 raw_ostream &operator<<(raw_ostream &OS, const SymbolDependenceMap &Deps) {
-  OS << "{";
-  if (!Deps.empty()) {
-    OS << " { " << Deps.begin()->first->getName() << ": "
-       << Deps.begin()->second << " }";
-    for (auto &KV : make_range(std::next(Deps.begin()), Deps.end()))
-      OS << ", { " << KV.first->getName() << ": " << KV.second << " }";
-  }
-  OS << " }";
-  return OS;
+  return OS << printSet(Deps, PrintAll<SymbolDependenceMap::value_type>());
+}
+
+raw_ostream &operator<<(raw_ostream &OS, const MaterializationUnit &MU) {
+  OS << "MU@" << &MU << " (\"" << MU.getName() << "\"";
+  if (anyPrintSymbolOptionSet())
+    OS << ", " << MU.getSymbols();
+  return OS << ")";
 }
 
 raw_ostream &operator<<(raw_ostream &OS, const JITDylibList &JDs) {
@@ -269,11 +367,13 @@ MaterializationResponsibility::~MaterializationResponsibility() {
          "All symbols should have been explicitly materialized or failed");
 }
 
-SymbolNameSet MaterializationResponsibility::getRequestedSymbols() {
+SymbolNameSet MaterializationResponsibility::getRequestedSymbols() const {
   return JD.getRequestedSymbols(SymbolFlags);
 }
 
 void MaterializationResponsibility::resolve(const SymbolMap &Symbols) {
+  LLVM_DEBUG(dbgs() << "In " << JD.getName() << " resolving " << Symbols
+                    << "\n");
 #ifndef NDEBUG
   for (auto &KV : Symbols) {
     auto I = SymbolFlags.find(KV.first);
@@ -336,7 +436,10 @@ void MaterializationResponsibility::replace(
   for (auto &KV : MU->getSymbols())
     SymbolFlags.erase(KV.first);
 
-  LLVM_DEBUG(dbgs() << "For " << JD.getName() << " replacing " << MU->getSymbols() << "\n");
+  LLVM_DEBUG(JD.getExecutionSession().runSessionLocked([&]() {
+    dbgs() << "In " << JD.getName() << " replacing symbols with " << *MU
+           << "\n";
+  }););
 
   JD.replace(std::move(MU));
 }
@@ -375,6 +478,10 @@ AbsoluteSymbolsMaterializationUnit::AbsoluteSymbolsMaterializationUnit(
     SymbolMap Symbols)
     : MaterializationUnit(extractFlags(Symbols)), Symbols(std::move(Symbols)) {}
 
+StringRef AbsoluteSymbolsMaterializationUnit::getName() const {
+  return "<Absolute Symbols>";
+}
+
 void AbsoluteSymbolsMaterializationUnit::materialize(
     MaterializationResponsibility R) {
   R.resolve(Symbols);
@@ -399,6 +506,10 @@ ReExportsMaterializationUnit::ReExportsMaterializationUnit(
     JITDylib *SourceJD, SymbolAliasMap Aliases)
     : MaterializationUnit(extractFlags(Aliases)), SourceJD(SourceJD),
       Aliases(std::move(Aliases)) {}
+
+StringRef ReExportsMaterializationUnit::getName() const {
+  return "<Reexports>";
+}
 
 void ReExportsMaterializationUnit::materialize(
     MaterializationResponsibility R) {
@@ -666,13 +777,14 @@ void JITDylib::replace(std::unique_ptr<MaterializationUnit> MU) {
     ES.dispatchMaterialization(*this, std::move(MustRunMU));
 }
 
-SymbolNameSet JITDylib::getRequestedSymbols(const SymbolFlagsMap &SymbolFlags) {
+SymbolNameSet
+JITDylib::getRequestedSymbols(const SymbolFlagsMap &SymbolFlags) const {
   return ES.runSessionLocked([&]() {
     SymbolNameSet RequestedSymbols;
 
     for (auto &KV : SymbolFlags) {
       assert(Symbols.count(KV.first) && "JITDylib does not cover this symbol?");
-      assert(Symbols[KV.first].getFlags().isMaterializing() &&
+      assert(Symbols.find(KV.first)->second.getFlags().isMaterializing() &&
              "getRequestedSymbols can only be called for materializing "
              "symbols");
       auto I = MaterializingInfos.find(KV.first);
@@ -1516,7 +1628,7 @@ Expected<SymbolMap> ExecutionSession::legacyLookup(
 }
 
 void ExecutionSession::lookup(
-    const JITDylibList &JDs, const SymbolNameSet &Symbols,
+    const JITDylibList &JDs, SymbolNameSet Symbols,
     SymbolsResolvedCallback OnResolve, SymbolsReadyCallback OnReady,
     RegisterDependenciesFunction RegisterDependencies) {
 
@@ -1528,7 +1640,7 @@ void ExecutionSession::lookup(
   auto Unresolved = std::move(Symbols);
   std::map<JITDylib *, MaterializationUnitList> MUsMap;
   auto Q = std::make_shared<AsynchronousSymbolQuery>(
-      Symbols, std::move(OnResolve), std::move(OnReady));
+      Unresolved, std::move(OnResolve), std::move(OnReady));
   bool QueryIsFullyResolved = false;
   bool QueryIsFullyReady = false;
   bool QueryFailed = false;
@@ -1702,6 +1814,13 @@ ExecutionSession::lookup(const JITDylibList &JDs, const SymbolNameSet &Symbols,
 #endif
 }
 
+void ExecutionSession::dump(raw_ostream &OS) {
+  runSessionLocked([this, &OS]() {
+    for (auto &JD : JDs)
+      JD->dump(OS);
+  });
+}
+
 void ExecutionSession::runOutstandingMUs() {
   while (1) {
     std::pair<JITDylib *, std::unique_ptr<MaterializationUnit>> JITDylibAndMU;
@@ -1754,7 +1873,7 @@ SymbolStringPtr MangleAndInterner::operator()(StringRef Name) {
     raw_string_ostream MangledNameStream(MangledName);
     Mangler::getNameWithPrefix(MangledNameStream, Name, DL);
   }
-  return ES.getSymbolStringPool().intern(MangledName);
+  return ES.intern(MangledName);
 }
 
 } // End namespace orc.

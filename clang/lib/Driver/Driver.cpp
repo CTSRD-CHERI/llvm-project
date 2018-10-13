@@ -37,7 +37,7 @@
 #include "ToolChains/NetBSD.h"
 #include "ToolChains/OpenBSD.h"
 #include "ToolChains/PS4CPU.h"
-#include "ToolChains/RISCV.h"
+#include "ToolChains/RISCVToolchain.h"
 #include "ToolChains/RTEMS.h"
 #include "ToolChains/Solaris.h"
 #include "ToolChains/TCE.h"
@@ -494,6 +494,16 @@ static llvm::Triple computeTargetTriple(const Driver &D,
     Target.setVendor(llvm::Triple::UnknownVendor);
     Target.setVendorName("intel");
   }
+
+  // If target is MIPS adjust the target triple
+  // accordingly to provided ABI name.
+  A = Args.getLastArg(options::OPT_mabi_EQ);
+  if (A && Target.isMIPS())
+    Target = llvm::StringSwitch<llvm::Triple>(A->getValue())
+                 .Case("32", Target.get32BitArchVariant())
+                 .Case("n32", Target.get64BitArchVariant())
+                 .Case("64", Target.get64BitArchVariant())
+                 .Default(Target);
 
   return Target;
 }
@@ -1530,12 +1540,11 @@ void Driver::HandleAutocompletions(StringRef PassedFlags) const {
   // deterministic order. We could sort in any way, but we chose
   // case-insensitive sorting for consistency with the -help option
   // which prints out options in the case-insensitive alphabetical order.
-  llvm::sort(SuggestedCompletions.begin(), SuggestedCompletions.end(),
-             [](StringRef A, StringRef B) {
-               if (int X = A.compare_lower(B))
-                 return X < 0;
-               return A.compare(B) > 0;
-            });
+  llvm::sort(SuggestedCompletions, [](StringRef A, StringRef B) {
+    if (int X = A.compare_lower(B))
+      return X < 0;
+    return A.compare(B) > 0;
+  });
 
   llvm::outs() << llvm::join(SuggestedCompletions, "\n") << '\n';
 }
@@ -2573,6 +2582,8 @@ class OffloadingActionBuilder final {
     getDeviceDependences(OffloadAction::DeviceDependences &DA,
                          phases::ID CurPhase, phases::ID FinalPhase,
                          PhasesTy &Phases) override {
+      if (OpenMPDeviceActions.empty())
+        return ABRT_Inactive;
 
       // We should always have an action for each input.
       assert(OpenMPDeviceActions.size() == ToolChains.size() &&
@@ -2616,6 +2627,17 @@ class OffloadingActionBuilder final {
       // If this is an unbundling action use it as is for each OpenMP toolchain.
       if (auto *UA = dyn_cast<OffloadUnbundlingJobAction>(HostAction)) {
         OpenMPDeviceActions.clear();
+        auto *IA = cast<InputAction>(UA->getInputs().back());
+        std::string FileName = IA->getInputArg().getAsString(Args);
+        // Check if the type of the file is the same as the action. Do not
+        // unbundle it if it is not. Do not unbundle .so files, for example,
+        // which are not object files.
+        if (IA->getType() == types::TY_Object &&
+            (!llvm::sys::path::has_extension(FileName) ||
+             types::lookupTypeForExtension(
+                 llvm::sys::path::extension(FileName).drop_front()) !=
+                 types::TY_Object))
+          return ABRT_Inactive;
         for (unsigned I = 0; I < ToolChains.size(); ++I) {
           OpenMPDeviceActions.push_back(UA);
           UA->registerDependentActionInfo(
@@ -2859,6 +2881,11 @@ public:
       if (RetCode != DeviceActionBuilder::ABRT_Inactive)
         OffloadKind |= SB->getAssociatedOffloadKind();
     }
+
+    // Do not use unbundler if the Host does not depend on device action.
+    if (OffloadKind == Action::OFK_None && CanUseBundler)
+      if (auto *UA = dyn_cast<OffloadUnbundlingJobAction>(HostAction))
+        HostAction = UA->getInputs().back();
 
     return false;
   }

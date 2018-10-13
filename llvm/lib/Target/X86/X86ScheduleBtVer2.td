@@ -100,7 +100,8 @@ def : ReadAdvance<ReadAfterLd, 3>;
 // folded loads.
 multiclass JWriteResIntPair<X86FoldableSchedWrite SchedRW,
                             list<ProcResourceKind> ExePorts,
-                            int Lat, list<int> Res = [], int UOps = 1> {
+                            int Lat, list<int> Res = [], int UOps = 1,
+                            int LoadUOps = 0> {
   // Register variant is using a single cycle on ExePort.
   def : WriteRes<SchedRW, ExePorts> {
     let Latency = Lat;
@@ -113,13 +114,14 @@ multiclass JWriteResIntPair<X86FoldableSchedWrite SchedRW,
   def : WriteRes<SchedRW.Folded, !listconcat([JLAGU], ExePorts)> {
     let Latency = !add(Lat, 3);
     let ResourceCycles = !if(!empty(Res), [], !listconcat([1], Res));
-    let NumMicroOps = UOps;
+    let NumMicroOps = !add(UOps, LoadUOps);
   }
 }
 
 multiclass JWriteResFpuPair<X86FoldableSchedWrite SchedRW,
                             list<ProcResourceKind> ExePorts,
-                            int Lat, list<int> Res = [], int UOps = 1> {
+                            int Lat, list<int> Res = [], int UOps = 1,
+                            int LoadUOps = 0> {
   // Register variant is using a single cycle on ExePort.
   def : WriteRes<SchedRW, ExePorts> {
     let Latency = Lat;
@@ -132,13 +134,14 @@ multiclass JWriteResFpuPair<X86FoldableSchedWrite SchedRW,
   def : WriteRes<SchedRW.Folded, !listconcat([JLAGU], ExePorts)> {
     let Latency = !add(Lat, 5);
     let ResourceCycles = !if(!empty(Res), [], !listconcat([1], Res));
-    let NumMicroOps = UOps;
+    let NumMicroOps = !add(UOps, LoadUOps);
   }
 }
 
 multiclass JWriteResYMMPair<X86FoldableSchedWrite SchedRW,
                             list<ProcResourceKind> ExePorts,
-                            int Lat, list<int> Res = [2], int UOps = 2> {
+                            int Lat, list<int> Res = [2], int UOps = 2,
+                            int LoadUOps = 0> {
   // Register variant is using a single cycle on ExePort.
   def : WriteRes<SchedRW, ExePorts> {
     let Latency = Lat;
@@ -151,7 +154,7 @@ multiclass JWriteResYMMPair<X86FoldableSchedWrite SchedRW,
   def : WriteRes<SchedRW.Folded, !listconcat([JLAGU], ExePorts)> {
     let Latency = !add(Lat, 5);
     let ResourceCycles = !listconcat([2], Res);
-    let NumMicroOps = UOps;
+    let NumMicroOps = !add(UOps, LoadUOps);
   }
 }
 
@@ -200,21 +203,27 @@ defm : X86WriteRes<WriteFCMOV, [JFPU0, JFPA], 3, [1,1], 1>; // x87 conditional m
 def  : WriteRes<WriteSETCC, [JALU01]>; // Setcc.
 def  : WriteRes<WriteSETCCStore, [JALU01,JSAGU]>;
 def  : WriteRes<WriteLAHFSAHF, [JALU01]>;
-def  : WriteRes<WriteBitTest,[JALU01]>;
+
+defm : X86WriteRes<WriteBitTest,         [JALU01], 1, [1], 1>;
+defm : X86WriteRes<WriteBitTestImmLd,    [JALU01,JLAGU], 4, [1,1], 1>;
+defm : X86WriteRes<WriteBitTestRegLd,    [JALU01,JLAGU], 4, [1,1], 5>;
+defm : X86WriteRes<WriteBitTestSet,      [JALU01], 1, [1], 2>;
+defm : X86WriteRes<WriteBitTestSetImmLd, [JALU01,JLAGU], 4, [1,1], 3>;
+defm : X86WriteRes<WriteBitTestSetRegLd, [JALU01,JLAGU], 4, [1,1], 7>;
 
 // This is for simple LEAs with one or two input operands.
 def : WriteRes<WriteLEA, [JALU01]>;
 
 // Bit counts.
-defm : JWriteResIntPair<WriteBSF, [JALU01], 5, [4], 8>;
-defm : JWriteResIntPair<WriteBSR, [JALU01], 5, [4], 8>;
+defm : JWriteResIntPair<WriteBSF, [JALU01], 4, [8], 7>;
+defm : JWriteResIntPair<WriteBSR, [JALU01], 5, [8], 8>;
 defm : JWriteResIntPair<WritePOPCNT,         [JALU01], 1>;
 defm : JWriteResIntPair<WriteLZCNT,          [JALU01], 1>;
-defm : JWriteResIntPair<WriteTZCNT,          [JALU01], 2, [2]>;
+defm : JWriteResIntPair<WriteTZCNT,          [JALU01], 2, [2], 2>;
 
 // BMI1 BEXTR/BLS, BMI2 BZHI
 defm : JWriteResIntPair<WriteBEXTR, [JALU01], 1>;
-defm : JWriteResIntPair<WriteBLS,   [JALU01], 2, [2]>;
+defm : JWriteResIntPair<WriteBLS,   [JALU01], 2, [2], 2>;
 defm : X86WriteResPairUnsupported<WriteBZHI>;
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -285,8 +294,8 @@ defm : X86WriteRes<WriteFLDC,          [JFPU1, JSTC], 3, [1,1], 1>;
 defm : X86WriteRes<WriteFLoad,         [JLAGU, JFPU01, JFPX], 5, [1, 1, 1], 1>;
 defm : X86WriteRes<WriteFLoadX,        [JLAGU, JFPU01, JFPX], 5, [1, 1, 1], 1>;
 defm : X86WriteRes<WriteFLoadY,        [JLAGU, JFPU01, JFPX], 5, [1, 1, 1], 1>;
-defm : X86WriteRes<WriteFMaskedLoad,   [JLAGU, JFPU01, JFPX], 6, [1, 1, 2], 1>;
-defm : X86WriteRes<WriteFMaskedLoadY,  [JLAGU, JFPU01, JFPX], 6, [2, 2, 4], 2>;
+defm : X86WriteRes<WriteFMaskedLoad,   [JLAGU, JFPU01, JFPX], 6, [1, 2, 2], 1>;
+defm : X86WriteRes<WriteFMaskedLoadY,  [JLAGU, JFPU01, JFPX], 6, [2, 4, 4], 2>;
 
 defm : X86WriteRes<WriteFStore,        [JSAGU, JFPU1,  JSTC], 2, [1, 1, 1], 1>;
 defm : X86WriteRes<WriteFStoreX,       [JSAGU, JFPU1,  JSTC], 1, [1, 1, 1], 1>;
@@ -390,11 +399,11 @@ defm : X86WriteResPairUnsupported<WriteFVarShuffle256>;
 // Conversions.
 ////////////////////////////////////////////////////////////////////////////////
 
-defm : JWriteResFpuPair<WriteCvtSS2I,      [JFPU1, JSTC, JFPA, JALU0], 7, [1,1,1,1], 2>;
+defm : JWriteResFpuPair<WriteCvtSS2I,      [JFPU1, JSTC, JFPU0, JFPA, JALU0], 7, [1,1,1,1,1], 2>;
 defm : JWriteResFpuPair<WriteCvtPS2I,      [JFPU1, JSTC], 3, [1,1], 1>;
 defm : JWriteResYMMPair<WriteCvtPS2IY,     [JFPU1, JSTC], 3, [2,2], 2>;
 defm : X86WriteResPairUnsupported<WriteCvtPS2IZ>;
-defm : JWriteResFpuPair<WriteCvtSD2I,      [JFPU1, JSTC, JFPA, JALU0], 7, [1,1,1,1], 2>;
+defm : JWriteResFpuPair<WriteCvtSD2I,      [JFPU1, JSTC, JFPU0, JFPA, JALU0], 7, [1,1,1,1,1], 2>;
 defm : JWriteResFpuPair<WriteCvtPD2I,      [JFPU1, JSTC], 3, [1,1], 1>;
 defm : JWriteResYMMPair<WriteCvtPD2IY,     [JFPU1, JSTC, JFPX], 6, [2,2,4], 3>;
 defm : X86WriteResPairUnsupported<WriteCvtPD2IZ>;
@@ -439,8 +448,8 @@ defm : X86WriteRes<WriteVecLoadX,         [JLAGU, JFPU01, JVALU], 5, [1, 1, 1], 
 defm : X86WriteRes<WriteVecLoadY,         [JLAGU, JFPU01, JVALU], 5, [1, 1, 1], 1>;
 defm : X86WriteRes<WriteVecLoadNT,        [JLAGU, JFPU01, JVALU], 5, [1, 1, 1], 1>;
 defm : X86WriteRes<WriteVecLoadNTY,       [JLAGU, JFPU01, JVALU], 5, [1, 1, 1], 1>;
-defm : X86WriteRes<WriteVecMaskedLoad,    [JLAGU, JFPU01, JVALU], 6, [1, 1, 2], 1>;
-defm : X86WriteRes<WriteVecMaskedLoadY,   [JLAGU, JFPU01, JVALU], 6, [2, 2, 4], 2>;
+defm : X86WriteRes<WriteVecMaskedLoad,    [JLAGU, JFPU01, JVALU], 6, [1, 2, 2], 1>;
+defm : X86WriteRes<WriteVecMaskedLoadY,   [JLAGU, JFPU01, JVALU], 6, [2, 4, 4], 2>;
 
 defm : X86WriteRes<WriteVecStore,         [JSAGU, JFPU1,   JSTC], 2, [1, 1, 1], 1>;
 defm : X86WriteRes<WriteVecStoreX,        [JSAGU, JFPU1,   JSTC], 1, [1, 1, 1], 1>;
@@ -478,14 +487,14 @@ defm : X86WriteResPairUnsupported<WriteVecIMulZ>;
 defm : JWriteResFpuPair<WritePMULLD,      [JFPU0, JFPU01, JVIMUL, JVALU], 4, [2, 1, 2, 1], 3>;
 defm : X86WriteResPairUnsupported<WritePMULLDY>;
 defm : X86WriteResPairUnsupported<WritePMULLDZ>;
-defm : JWriteResFpuPair<WriteMPSAD,       [JFPU0, JVIMUL], 3, [1, 2]>;
+defm : JWriteResFpuPair<WriteMPSAD,       [JFPU0, JVIMUL], 3, [1, 2], 3>;
 defm : X86WriteResPairUnsupported<WriteMPSADY>;
 defm : X86WriteResPairUnsupported<WriteMPSADZ>;
 defm : JWriteResFpuPair<WritePSADBW,      [JFPU01, JVALU], 2>;
 defm : JWriteResFpuPair<WritePSADBWX,     [JFPU01, JVALU], 2>;
 defm : X86WriteResPairUnsupported<WritePSADBWY>;
 defm : X86WriteResPairUnsupported<WritePSADBWZ>;
-defm : JWriteResFpuPair<WritePHMINPOS,    [JFPU0,  JVALU], 2>;
+defm : JWriteResFpuPair<WritePHMINPOS,    [JFPU01, JVALU], 2>;
 defm : JWriteResFpuPair<WriteShuffle,     [JFPU01, JVALU], 1>;
 defm : JWriteResFpuPair<WriteShuffleX,    [JFPU01, JVALU], 1>;
 defm : X86WriteResPairUnsupported<WriteShuffleY>;
@@ -523,8 +532,8 @@ defm : X86WriteRes<WriteVecExtractSt,   [JFPU1, JSTC, JSAGU], 3, [1,1,1], 1>;
 // SSE42 String instructions.
 ////////////////////////////////////////////////////////////////////////////////
 
-defm : JWriteResFpuPair<WritePCmpIStrI, [JFPU1, JVALU1, JFPA, JALU0], 7, [1, 2, 1, 1], 3>;
-defm : JWriteResFpuPair<WritePCmpIStrM, [JFPU1, JVALU1, JFPA, JALU0], 8, [1, 2, 1, 1], 3>;
+defm : JWriteResFpuPair<WritePCmpIStrI, [JFPU1, JVALU1, JFPU0, JFPA, JALU0], 7, [2, 2, 1, 1, 1], 3>;
+defm : JWriteResFpuPair<WritePCmpIStrM, [JFPU1, JVALU1, JFPU0, JFPA, JALU0], 8, [2, 2, 1, 1, 1], 3>;
 defm : JWriteResFpuPair<WritePCmpEStrI, [JFPU1, JSAGU, JLAGU, JVALU, JVALU1, JFPA, JALU0], 14, [1, 2, 2, 6, 4, 1, 1], 9>;
 defm : JWriteResFpuPair<WritePCmpEStrM, [JFPU1, JSAGU, JLAGU, JVALU, JVALU1, JFPA, JALU0], 14, [1, 2, 2, 6, 4, 1, 1], 9>;
 
@@ -661,6 +670,8 @@ def JWriteVZeroIdiomALU : SchedWriteVariant<[
 ]>;
 def : InstRW<[JWriteVZeroIdiomALU], (instrs MMX_PSUBBirr, MMX_PSUBDirr,
                                             MMX_PSUBQirr, MMX_PSUBWirr,
+                                            MMX_PSUBSBirr, MMX_PSUBSWirr,
+                                            MMX_PSUBUSBirr, MMX_PSUBUSWirr,
                                             MMX_PCMPGTBirr, MMX_PCMPGTDirr,
                                             MMX_PCMPGTWirr)>;
 
@@ -672,10 +683,20 @@ def : InstRW<[JWriteVZeroIdiomALUX], (instrs PSUBBrr, VPSUBBrr,
                                              PSUBDrr, VPSUBDrr,
                                              PSUBQrr, VPSUBQrr,
                                              PSUBWrr, VPSUBWrr,
+                                             PSUBSBrr, VPSUBSBrr,
+                                             PSUBSWrr, VPSUBSWrr,
+                                             PSUBUSBrr, VPSUBUSBrr,
+                                             PSUBUSWrr, VPSUBUSWrr,
                                              PCMPGTBrr, VPCMPGTBrr,
                                              PCMPGTDrr, VPCMPGTDrr,
                                              PCMPGTQrr, VPCMPGTQrr,
                                              PCMPGTWrr, VPCMPGTWrr)>;
+
+def JWriteVPERM2F128 : SchedWriteVariant<[
+  SchedVar<MCSchedPredicate<ZeroIdiomVPERMPredicate>, [JWriteZeroIdiomYmm]>,
+  SchedVar<NoSchedPred,                               [WriteFShuffle256]>
+]>;
+def : InstRW<[JWriteVPERM2F128], (instrs VPERM2F128rr)>;
 
 // This write is used for slow LEA instructions.
 def JWrite3OpsLEA : SchedWriteRes<[JALU1, JSAGU]> {
@@ -722,6 +743,7 @@ def : IsZeroIdiomFunction<[
   DepBreakingClass<[
     MMX_PXORirr, MMX_PANDNirr, MMX_PSUBBirr,
     MMX_PSUBDirr, MMX_PSUBQirr, MMX_PSUBWirr,
+    MMX_PSUBSBirr, MMX_PSUBSWirr, MMX_PSUBUSBirr, MMX_PSUBUSWirr,
     MMX_PCMPGTBirr, MMX_PCMPGTDirr, MMX_PCMPGTWirr
   ], ZeroIdiomPredicate>,
 
@@ -733,6 +755,7 @@ def : IsZeroIdiomFunction<[
     // int variants.
     PXORrr, PANDNrr,
     PSUBBrr, PSUBWrr, PSUBDrr, PSUBQrr,
+    PSUBSBrr, PSUBSWrr, PSUBUSBrr, PSUBUSWrr,
     PCMPGTBrr, PCMPGTDrr, PCMPGTQrr, PCMPGTWrr
   ], ZeroIdiomPredicate>,
 
@@ -744,11 +767,14 @@ def : IsZeroIdiomFunction<[
     // xmm int variants.
     VPXORrr, VPANDNrr,
     VPSUBBrr, VPSUBWrr, VPSUBDrr, VPSUBQrr,
+    VPSUBSBrr, VPSUBSWrr, VPSUBUSBrr, VPSUBUSWrr,
     VPCMPGTBrr, VPCMPGTWrr, VPCMPGTDrr, VPCMPGTQrr,
 
     // ymm variants.
     VXORPSYrr, VXORPDYrr, VANDNPSYrr, VANDNPDYrr
-  ], ZeroIdiomPredicate>
+  ], ZeroIdiomPredicate>,
+
+  DepBreakingClass<[ VPERM2F128rr ], ZeroIdiomVPERMPredicate>
 ]>;
 
 def : IsDepBreakingFunction<[

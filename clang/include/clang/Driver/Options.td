@@ -646,6 +646,8 @@ def hip_device_lib_EQ : Joined<["--"], "hip-device-lib=">, Group<Link_Group>,
   HelpText<"HIP device library">;
 def fhip_dump_offload_linker_script : Flag<["-"], "fhip-dump-offload-linker-script">,
   Group<f_Group>, Flags<[NoArgumentUnused, HelpHidden]>;
+def libomptarget_nvptx_path_EQ : Joined<["--"], "libomptarget-nvptx-path=">, Group<i_Group>,
+  HelpText<"Path to libomptarget-nvptx libraries">;
 def dA : Flag<["-"], "dA">, Group<d_Group>;
 def dD : Flag<["-"], "dD">, Group<d_Group>, Flags<[CC1Option]>,
   HelpText<"Print macro definitions in -E mode in addition to normal output">;
@@ -2103,6 +2105,10 @@ def mno_fix_cortex_a53_835769 : Flag<["-"], "mno-fix-cortex-a53-835769">,
 foreach i = {1-7,18,20} in
   def ffixed_x#i : Flag<["-"], "ffixed-x"#i>, Group<m_aarch64_Features_Group>,
     HelpText<"Reserve the "#i#" register (AArch64 only)">;
+
+foreach i = {8-15,18} in
+  def fcall_saved_x#i : Flag<["-"], "fcall-saved-x"#i>, Group<m_aarch64_Features_Group>,
+    HelpText<"Make the x"#i#" register call-saved (AArch64 only)">;
 
 def msign_return_address : Joined<["-"], "msign-return-address=">,
   Flags<[CC1Option]>, Group<m_Group>,

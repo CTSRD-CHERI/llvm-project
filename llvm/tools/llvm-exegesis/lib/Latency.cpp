@@ -62,17 +62,17 @@ LatencySnippetGenerator::generateTwoInstructionPrototype(
     const AliasingConfigurations Back(OtherInstr, Instr);
     if (Forward.empty() || Back.empty())
       continue;
-    InstructionBuilder ThisIB(Instr);
-    InstructionBuilder OtherIB(OtherInstr);
+    InstructionTemplate ThisIT(Instr);
+    InstructionTemplate OtherIT(OtherInstr);
     if (!Forward.hasImplicitAliasing())
-      setRandomAliasing(Forward, ThisIB, OtherIB);
+      setRandomAliasing(Forward, ThisIT, OtherIT);
     if (!Back.hasImplicitAliasing())
-      setRandomAliasing(Back, OtherIB, ThisIB);
+      setRandomAliasing(Back, OtherIT, ThisIT);
     CodeTemplate CT;
     CT.Info = llvm::formatv("creating cycle through {0}.",
                             State.getInstrInfo().getName(OtherOpcode));
-    CT.Instructions.push_back(std::move(ThisIB));
-    CT.Instructions.push_back(std::move(OtherIB));
+    CT.Instructions.push_back(std::move(ThisIT));
+    CT.Instructions.push_back(std::move(OtherIT));
     return std::move(CT);
   }
   return llvm::make_error<BenchmarkFailure>(
@@ -109,8 +109,7 @@ LatencyBenchmarkRunner::~LatencyBenchmarkRunner() = default;
 
 std::vector<BenchmarkMeasure>
 LatencyBenchmarkRunner::runMeasurements(const ExecutableFunction &Function,
-                                        ScratchSpace &Scratch,
-                                        const unsigned NumRepetitions) const {
+                                        ScratchSpace &Scratch) const {
   // Cycle measurements include some overhead from the kernel. Repeat the
   // measure several times and take the minimum value.
   constexpr const int NumMeasurements = 30;
@@ -131,7 +130,7 @@ LatencyBenchmarkRunner::runMeasurements(const ExecutableFunction &Function,
     if (Value < MinLatency)
       MinLatency = Value;
   }
-  return {{"latency", static_cast<double>(MinLatency) / NumRepetitions, ""}};
+  return {BenchmarkMeasure::Create("latency", MinLatency)};
 }
 
 } // namespace exegesis

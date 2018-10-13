@@ -1,4 +1,4 @@
-// RUN: %clang_builtins %s %librt -lm -o %t && %run %t
+// RUN: %clang_builtins %s %librt -o %t && %run %t
 //===-- compiler_rt_logb_test.c - Test __compiler_rt_logb -----------------===//
 //
 //                     The LLVM Compiler Infrastructure

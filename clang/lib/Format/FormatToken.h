@@ -188,10 +188,6 @@ struct FormatToken {
   bool ClosesTemplateDeclaration = false;
 
   /// Number of parameters, if this is "(", "[" or "<".
-  ///
-  /// This is initialized to 1 as we don't need to distinguish functions with
-  /// 0 parameters from functions with 1 parameter. Thus, we can simply count
-  /// the number of commas.
   unsigned ParameterCount = 0;
 
   /// Number of parameters that are nested blocks,
@@ -268,7 +264,7 @@ struct FormatToken {
   /// \c true if this token ends a binary expression.
   bool EndsBinaryExpression = false;
 
-  /// Is this is an operator (or "."/"->") in a sequence of operators
+  /// If this is an operator (or "."/"->") in a sequence of operators
   /// with the same precedence, contains the 0-based operator index.
   unsigned OperatorIndex = 0;
 
@@ -680,6 +676,7 @@ struct AdditionalKeywords {
     kw_function = &IdentTable.get("function");
     kw_get = &IdentTable.get("get");
     kw_import = &IdentTable.get("import");
+    kw_infer = &IdentTable.get("infer");
     kw_is = &IdentTable.get("is");
     kw_let = &IdentTable.get("let");
     kw_module = &IdentTable.get("module");
@@ -751,6 +748,7 @@ struct AdditionalKeywords {
   IdentifierInfo *kw_function;
   IdentifierInfo *kw_get;
   IdentifierInfo *kw_import;
+  IdentifierInfo *kw_infer;
   IdentifierInfo *kw_is;
   IdentifierInfo *kw_let;
   IdentifierInfo *kw_module;

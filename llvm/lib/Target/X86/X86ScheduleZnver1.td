@@ -213,7 +213,13 @@ defm : ZnWriteResPair<WriteCMOV2,  [ZnALU], 1>;
 def  : WriteRes<WriteSETCC,  [ZnALU]>;
 def  : WriteRes<WriteSETCCStore,  [ZnALU, ZnAGU]>;
 defm : X86WriteRes<WriteLAHFSAHF, [ZnALU], 2, [1], 2>;
-def  : WriteRes<WriteBitTest,[ZnALU]>;
+
+defm : X86WriteRes<WriteBitTest,         [ZnALU], 1, [1], 1>;
+defm : X86WriteRes<WriteBitTestImmLd,    [ZnALU,ZnAGU], 5, [1,1], 2>;
+defm : X86WriteRes<WriteBitTestRegLd,    [ZnALU,ZnAGU], 5, [1,1], 2>;
+defm : X86WriteRes<WriteBitTestSet,      [ZnALU], 2, [1], 2>;
+defm : X86WriteRes<WriteBitTestSetImmLd, [ZnALU,ZnAGU], 5, [1,1], 2>;
+defm : X86WriteRes<WriteBitTestSetRegLd, [ZnALU,ZnAGU], 5, [1,1], 2>;
 
 // Bit counts.
 defm : ZnWriteResPair<WriteBSF, [ZnALU], 3>;
@@ -710,18 +716,7 @@ def ZnWriteALULat2Ld : SchedWriteRes<[ZnAGU, ZnALU]> {
   let Latency = 6;
 }
 
-// BT.
-// m,i.
-def : InstRW<[WriteShiftLd], (instregex "BT(16|32|64)mi8")>;
-
 // BTR BTS BTC.
-// r,r,i.
-def ZnWriteBTRSC : SchedWriteRes<[ZnALU]> {
-  let Latency = 2;
-  let NumMicroOps = 2;
-}
-def : InstRW<[ZnWriteBTRSC], (instregex "BT(R|S|C)(16|32|64)r(r|i8)")>;
-
 // m,r,i.
 def ZnWriteBTRSCm : SchedWriteRes<[ZnAGU, ZnALU]> {
   let Latency = 6;

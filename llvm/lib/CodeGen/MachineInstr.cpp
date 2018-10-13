@@ -1466,7 +1466,7 @@ void MachineInstr::print(raw_ostream &OS, ModuleSlotTracker &MST,
     assert(getNumOperands() == 1 && "Expected 1 operand in CFI instruction");
 
   SmallBitVector PrintedTypes(8);
-  bool ShouldPrintRegisterTies = hasComplexRegisterTies();
+  bool ShouldPrintRegisterTies = IsStandalone || hasComplexRegisterTies();
   auto getTiedOperandIdx = [&](unsigned OpIdx) {
     if (!ShouldPrintRegisterTies)
       return 0U;
@@ -2091,4 +2091,14 @@ void MachineInstr::collectDebugValues(
         DI->getOperand(0).getReg() == MI.getOperand(0).getReg())
       DbgValues.push_back(&*DI);
   }
+}
+
+void MachineInstr::changeDebugValuesDefReg(unsigned Reg) {
+  // Collect matching debug values.
+  SmallVector<MachineInstr *, 2> DbgValues;
+  collectDebugValues(DbgValues);
+
+  // Propagate Reg to debug value instructions.
+  for (auto *DBI : DbgValues)
+    DBI->getOperand(0).setReg(Reg);
 }

@@ -467,6 +467,12 @@ void OMPClauseProfiler::VisitOMPDefaultClause(const OMPDefaultClause *C) { }
 
 void OMPClauseProfiler::VisitOMPProcBindClause(const OMPProcBindClause *C) { }
 
+void OMPClauseProfiler::VisitOMPUnifiedAddressClause(
+    const OMPUnifiedAddressClause *C) {}
+
+void OMPClauseProfiler::VisitOMPUnifiedSharedMemoryClause(
+    const OMPUnifiedSharedMemoryClause *C) {}
+
 void OMPClauseProfiler::VisitOMPScheduleClause(const OMPScheduleClause *C) {
   VistOMPClauseWithPreInit(C);
   if (auto *S = C->getChunkSize())

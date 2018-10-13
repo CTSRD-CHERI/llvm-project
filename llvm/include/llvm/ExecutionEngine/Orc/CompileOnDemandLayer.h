@@ -16,6 +16,7 @@
 #define LLVM_EXECUTIONENGINE_ORC_COMPILEONDEMANDLAYER_H
 
 #include "llvm/ADT/APInt.h"
+#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
@@ -23,6 +24,7 @@
 #include "llvm/ExecutionEngine/Orc/IndirectionUtils.h"
 #include "llvm/ExecutionEngine/Orc/LambdaResolver.h"
 #include "llvm/ExecutionEngine/Orc/Layer.h"
+#include "llvm/ExecutionEngine/Orc/LazyReexports.h"
 #include "llvm/ExecutionEngine/Orc/Legacy.h"
 #include "llvm/ExecutionEngine/Orc/OrcError.h"
 #include "llvm/ExecutionEngine/RuntimeDyld.h"
@@ -61,41 +63,72 @@ namespace orc {
 class ExtractingIRMaterializationUnit;
 
 class CompileOnDemandLayer2 : public IRLayer {
-  friend class ExtractingIRMaterializationUnit;
+  friend class PartitioningIRMaterializationUnit;
 
 public:
   /// Builder for IndirectStubsManagers.
   using IndirectStubsManagerBuilder =
       std::function<std::unique_ptr<IndirectStubsManager>()>;
 
-  using GetAvailableContextFunction = std::function<LLVMContext &()>;
+  using GlobalValueSet = std::set<const GlobalValue *>;
 
+  /// Partitioning function.
+  using PartitionFunction =
+      std::function<Optional<GlobalValueSet>(GlobalValueSet Requested)>;
+
+  /// Off-the-shelf partitioning which compiles all requested symbols (usually
+  /// a single function at a time).
+  static Optional<GlobalValueSet> compileRequested(GlobalValueSet Requested);
+
+  /// Off-the-shelf partitioning which compiles whole modules whenever any
+  /// symbol in them is requested.
+  static Optional<GlobalValueSet> compileWholeModule(GlobalValueSet Requested);
+
+  /// Construct a CompileOnDemandLayer2.
   CompileOnDemandLayer2(ExecutionSession &ES, IRLayer &BaseLayer,
-                        JITCompileCallbackManager &CCMgr,
-                        IndirectStubsManagerBuilder BuildIndirectStubsManager,
-                        GetAvailableContextFunction GetAvailableContext);
+                        LazyCallThroughManager &LCTMgr,
+                        IndirectStubsManagerBuilder BuildIndirectStubsManager);
 
-  Error add(JITDylib &V, VModuleKey K, std::unique_ptr<Module> M) override;
+  /// Sets the partition function.
+  void setPartitionFunction(PartitionFunction Partition);
 
+  /// Emits the given module. This should not be called by clients: it will be
+  /// called by the JIT when a definition added via the add method is requested.
   void emit(MaterializationResponsibility R, VModuleKey K,
-            std::unique_ptr<Module> M) override;
+            ThreadSafeModule TSM) override;
 
 private:
-  using StubManagersMap =
-      std::map<const JITDylib *, std::unique_ptr<IndirectStubsManager>>;
+  struct PerDylibResources {
+  public:
+    PerDylibResources(JITDylib &ImplD,
+                      std::unique_ptr<IndirectStubsManager> ISMgr)
+        : ImplD(ImplD), ISMgr(std::move(ISMgr)) {}
+    JITDylib &getImplDylib() { return ImplD; }
+    IndirectStubsManager &getISManager() { return *ISMgr; }
 
-  IndirectStubsManager &getStubsManager(const JITDylib &JD);
+  private:
+    JITDylib &ImplD;
+    std::unique_ptr<IndirectStubsManager> ISMgr;
+  };
 
-  void emitExtractedFunctionsModule(MaterializationResponsibility R,
-                                    std::unique_ptr<Module> M);
+  using PerDylibResourcesMap = std::map<const JITDylib *, PerDylibResources>;
+
+  PerDylibResources &getPerDylibResources(JITDylib &TargetD);
+
+  void cleanUpModule(Module &M);
+
+  void expandPartition(GlobalValueSet &Partition);
+
+  void emitPartition(MaterializationResponsibility R, ThreadSafeModule TSM,
+                     IRMaterializationUnit::SymbolNameToDefinitionMap Defs);
 
   mutable std::mutex CODLayerMutex;
 
   IRLayer &BaseLayer;
-  JITCompileCallbackManager &CCMgr;
+  LazyCallThroughManager &LCTMgr;
   IndirectStubsManagerBuilder BuildIndirectStubsManager;
-  StubManagersMap StubsMgrs;
-  GetAvailableContextFunction GetAvailableContext;
+  PerDylibResourcesMap DylibResources;
+  PartitionFunction Partition = compileRequested;
 };
 
 /// Compile-on-demand layer.
@@ -158,25 +191,6 @@ private:
     return llvm::make_unique<RO>(std::move(ResourcePtr));
   }
 
-  class StaticGlobalRenamer {
-  public:
-    StaticGlobalRenamer() = default;
-    StaticGlobalRenamer(StaticGlobalRenamer &&) = default;
-    StaticGlobalRenamer &operator=(StaticGlobalRenamer &&) = default;
-
-    void rename(Module &M) {
-      for (auto &F : M)
-        if (F.hasLocalLinkage())
-          F.setName("$static." + Twine(NextId++));
-      for (auto &G : M.globals())
-        if (G.hasLocalLinkage())
-          G.setName("$static." + Twine(NextId++));
-    }
-
-  private:
-    unsigned NextId = 0;
-  };
-
   struct LogicalDylib {
     struct SourceModuleEntry {
       std::unique_ptr<Module> SourceMod;
@@ -230,7 +244,7 @@ private:
     VModuleKey K;
     std::shared_ptr<SymbolResolver> BackingResolver;
     std::unique_ptr<IndirectStubsMgrT> StubsMgr;
-    StaticGlobalRenamer StaticRenamer;
+    SymbolLinkagePromoter PromoteSymbols;
     SourceModulesList SourceModules;
     std::vector<VModuleKey> BaseLayerVModuleKeys;
   };
@@ -352,14 +366,9 @@ public:
 private:
   Error addLogicalModule(LogicalDylib &LD, std::unique_ptr<Module> SrcMPtr) {
 
-    // Rename all static functions / globals to $static.X :
-    // This will unique the names across all modules in the logical dylib,
-    // simplifying symbol lookup.
-    LD.StaticRenamer.rename(*SrcMPtr);
-
-    // Bump the linkage and rename any anonymous/private members in SrcM to
-    // ensure that everything will resolve properly after we partition SrcM.
-    makeAllSymbolsExternallyAccessible(*SrcMPtr);
+    // Rename anonymous globals and promote linkage to ensure that everything
+    // will resolve properly after we partition SrcM.
+    LD.PromoteSymbols(*SrcMPtr);
 
     // Create a logical module handle for SrcM within the logical dylib.
     Module &SrcM = *SrcMPtr;

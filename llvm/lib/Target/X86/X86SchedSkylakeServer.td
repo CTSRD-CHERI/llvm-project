@@ -83,7 +83,7 @@ def : ReadAdvance<ReadAfterLd, 5>;
 multiclass SKXWriteResPair<X86FoldableSchedWrite SchedRW,
                           list<ProcResourceKind> ExePorts,
                           int Lat, list<int> Res = [1], int UOps = 1,
-                          int LoadLat = 5, int LoadUOps = 1> {
+                          int LoadLat = 5> {
   // Register variant is using a single cycle on ExePort.
   def : WriteRes<SchedRW, ExePorts> {
     let Latency = Lat;
@@ -96,7 +96,7 @@ multiclass SKXWriteResPair<X86FoldableSchedWrite SchedRW,
   def : WriteRes<SchedRW.Folded, !listconcat([SKXPort23], ExePorts)> {
     let Latency = !add(Lat, LoadLat);
     let ResourceCycles = !listconcat([1], Res);
-    let NumMicroOps = !add(UOps, LoadUOps);
+    let NumMicroOps = !add(UOps, 1);
   }
 }
 
@@ -159,14 +159,19 @@ def  : WriteRes<WriteSETCCStore, [SKXPort06,SKXPort4,SKXPort237]> {
   let Latency = 2;
   let NumMicroOps = 3;
 }
-def  : WriteRes<WriteLAHFSAHF, [SKXPort06]>;
-def  : WriteRes<WriteBitTest,  [SKXPort06]>; //
+defm : X86WriteRes<WriteLAHFSAHF,        [SKXPort06], 1, [1], 1>;
+defm : X86WriteRes<WriteBitTest,         [SKXPort06], 1, [1], 1>;
+defm : X86WriteRes<WriteBitTestImmLd,    [SKXPort06,SKXPort23], 6, [1,1], 2>;
+defm : X86WriteRes<WriteBitTestRegLd,    [SKXPort0156,SKXPort23], 6, [1,1], 2>;
+defm : X86WriteRes<WriteBitTestSet,      [SKXPort06], 1, [1], 1>;
+defm : X86WriteRes<WriteBitTestSetImmLd, [SKXPort06,SKXPort23], 6, [1,1], 2>;
+defm : X86WriteRes<WriteBitTestSetRegLd, [SKXPort0156,SKXPort23], 5, [1,1], 2>;
 
 // Integer shifts and rotates.
-defm : SKXWriteResPair<WriteShift,    [SKXPort06], 1>;
-defm : SKXWriteResPair<WriteShiftCL,  [SKXPort06], 3, [3], 3, 5, 2>;
-defm : SKXWriteResPair<WriteRotate,   [SKXPort06], 2, [2], 2>;
-defm : SKXWriteResPair<WriteRotateCL, [SKXPort06], 3, [3], 3, 5, 2>;
+defm : SKXWriteResPair<WriteShift,    [SKXPort06],  1>;
+defm : SKXWriteResPair<WriteShiftCL,  [SKXPort06],  3, [3], 3>;
+defm : SKXWriteResPair<WriteRotate,   [SKXPort06],  2, [2], 2>;
+defm : SKXWriteResPair<WriteRotateCL, [SKXPort06],  3, [3], 3>;
 
 // SHLD/SHRD.
 defm : X86WriteRes<WriteSHDrri, [SKXPort1], 3, [1], 1>;
@@ -1174,13 +1179,6 @@ def SKXWriteResGroup76 : SchedWriteRes<[SKXPort6,SKXPort23]> {
 def: InstRW<[SKXWriteResGroup76], (instrs FARJMP64)>;
 def: InstRW<[SKXWriteResGroup76], (instregex "JMP(16|32|64)m")>;
 
-def SKXWriteResGroup78 : SchedWriteRes<[SKXPort23,SKXPort06]> {
-  let Latency = 6;
-  let NumMicroOps = 2;
-  let ResourceCycles = [1,1];
-}
-def: InstRW<[SKXWriteResGroup78], (instregex "BT(16|32|64)mi8")>;
-
 def SKXWriteResGroup79 : SchedWriteRes<[SKXPort23,SKXPort15]> {
   let Latency = 6;
   let NumMicroOps = 2;
@@ -1598,6 +1596,17 @@ def SKXWriteResGroup127 : SchedWriteRes<[SKXPort23,SKXPort237,SKXPort06,SKXPort0
 }
 def: InstRW<[SKXWriteResGroup127], (instregex "RCL(8|16|32|64)m(1|i)",
                                               "RCR(8|16|32|64)m(1|i)")>;
+
+def SKXWriteResGroup128 : SchedWriteRes<[SKXPort4,SKXPort23,SKXPort237,SKXPort06]> {
+  let Latency = 8;
+  let NumMicroOps = 6;
+  let ResourceCycles = [1,1,1,3];
+}
+def: InstRW<[SKXWriteResGroup128], (instregex "ROL(8|16|32|64)mCL",
+                                              "ROR(8|16|32|64)mCL",
+                                              "SAR(8|16|32|64)mCL",
+                                              "SHL(8|16|32|64)mCL",
+                                              "SHR(8|16|32|64)mCL")>;
 
 def SKXWriteResGroup130 : SchedWriteRes<[SKXPort4,SKXPort23,SKXPort237,SKXPort06,SKXPort0156]> {
   let Latency = 8;
@@ -2074,10 +2083,10 @@ def SKXWriteResGroup199 : SchedWriteRes<[SKXPort4,SKXPort23,SKXPort237,SKXPort06
 }
 def: InstRW<[SKXWriteResGroup199], (instrs CMPXCHG8B)>;
 
-def SKXWriteResGroup200 : SchedWriteRes<[SKXPort0156]> {
-  let Latency = 16;
-  let NumMicroOps = 16;
-  let ResourceCycles = [16];
+def SKXWriteResGroup200 : SchedWriteRes<[SKXPort1, SKXPort05, SKXPort6]> {
+  let Latency = 12;
+  let NumMicroOps = 34;
+  let ResourceCycles = [1, 4, 5];
 }
 def: InstRW<[SKXWriteResGroup200], (instrs VZEROALL)>;
 

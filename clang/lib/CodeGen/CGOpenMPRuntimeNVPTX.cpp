@@ -762,6 +762,7 @@ static bool hasNestedSPMDDirective(ASTContext &Ctx,
     case OMPD_declare_reduction:
     case OMPD_taskloop:
     case OMPD_taskloop_simd:
+    case OMPD_requires:
     case OMPD_unknown:
       llvm_unreachable("Unexpected directive.");
     }
@@ -780,10 +781,8 @@ static bool supportsSPMDExecutionMode(ASTContext &Ctx,
   case OMPD_target_parallel:
   case OMPD_target_parallel_for:
   case OMPD_target_parallel_for_simd:
-    return !hasParallelIfNumThreadsClause(Ctx, D);
   case OMPD_target_teams_distribute_parallel_for:
   case OMPD_target_teams_distribute_parallel_for_simd:
-    // Distribute with lastprivates requires non-SPMD execution mode.
     return !hasParallelIfNumThreadsClause(Ctx, D);
   case OMPD_target_simd:
   case OMPD_target_teams_distribute:
@@ -831,6 +830,7 @@ static bool supportsSPMDExecutionMode(ASTContext &Ctx,
   case OMPD_declare_reduction:
   case OMPD_taskloop:
   case OMPD_taskloop_simd:
+  case OMPD_requires:
   case OMPD_unknown:
     break;
   }
@@ -980,6 +980,7 @@ static bool hasNestedLightweightDirective(ASTContext &Ctx,
     case OMPD_declare_reduction:
     case OMPD_taskloop:
     case OMPD_taskloop_simd:
+    case OMPD_requires:
     case OMPD_unknown:
       llvm_unreachable("Unexpected directive.");
     }
@@ -1052,6 +1053,7 @@ static bool supportsLightweightRuntime(ASTContext &Ctx,
   case OMPD_declare_reduction:
   case OMPD_taskloop:
   case OMPD_taskloop_simd:
+  case OMPD_requires:
   case OMPD_unknown:
     break;
   }
@@ -1205,6 +1207,10 @@ void CGOpenMPRuntimeNVPTX::emitSPMDKernel(const OMPExecutableDirective &D,
                                    IsOffloadEntry, CodeGen);
 }
 
+static void
+getDistributeLastprivateVars(const OMPExecutableDirective &D,
+                             llvm::SmallVectorImpl<const ValueDecl *> &Vars);
+
 void CGOpenMPRuntimeNVPTX::emitSPMDEntryHeader(
     CodeGenFunction &CGF, EntryFunctionState &EST,
     const OMPExecutableDirective &D) {
@@ -1217,11 +1223,33 @@ void CGOpenMPRuntimeNVPTX::emitSPMDEntryHeader(
   // Initialize the OMP state in the runtime; called by all active threads.
   bool RequiresFullRuntime = CGM.getLangOpts().OpenMPCUDAForceFullRuntime ||
                              !supportsLightweightRuntime(CGF.getContext(), D);
+  // Check if we have inner distribute + lastprivate|reduction clauses.
+  bool RequiresDatasharing = RequiresFullRuntime;
+  if (!RequiresDatasharing) {
+    const OMPExecutableDirective *TD = &D;
+    if (!isOpenMPTeamsDirective(TD->getDirectiveKind()) &&
+        !isOpenMPParallelDirective(TD->getDirectiveKind())) {
+      const Stmt *S = getSingleCompoundChild(
+          TD->getInnermostCapturedStmt()->getCapturedStmt()->IgnoreContainers(
+              /*IgnoreCaptured=*/true));
+      TD = cast<OMPExecutableDirective>(S);
+    }
+    if (!isOpenMPDistributeDirective(TD->getDirectiveKind()) &&
+        !isOpenMPParallelDirective(TD->getDirectiveKind())) {
+      const Stmt *S = getSingleCompoundChild(
+          TD->getInnermostCapturedStmt()->getCapturedStmt()->IgnoreContainers(
+              /*IgnoreCaptured=*/true));
+      TD = cast<OMPExecutableDirective>(S);
+    }
+    if (isOpenMPDistributeDirective(TD->getDirectiveKind()))
+      RequiresDatasharing = TD->hasClausesOfKind<OMPLastprivateClause>() ||
+                            TD->hasClausesOfKind<OMPReductionClause>();
+  }
   llvm::Value *Args[] = {
       getThreadLimit(CGF, /*IsInSPMDExecutionMode=*/true),
       /*RequiresOMPRuntime=*/
       Bld.getInt16(RequiresFullRuntime ? 1 : 0),
-      /*RequiresDataSharing=*/Bld.getInt16(RequiresFullRuntime ? 1 : 0)};
+      /*RequiresDataSharing=*/Bld.getInt16(RequiresDatasharing ? 1 : 0)};
   CGF.EmitRuntimeCall(
       createNVPTXRuntimeFunction(OMPRTL_NVPTX__kmpc_spmd_kernel_init), Args);
 
@@ -4082,4 +4110,27 @@ Address CGOpenMPRuntimeNVPTX::getAddressOfLocalVariable(CodeGenFunction &CGF,
 void CGOpenMPRuntimeNVPTX::functionFinished(CodeGenFunction &CGF) {
   FunctionGlobalizedDecls.erase(CGF.CurFn);
   CGOpenMPRuntime::functionFinished(CGF);
+}
+
+void CGOpenMPRuntimeNVPTX::getDefaultDistScheduleAndChunk(
+    CodeGenFunction &CGF, const OMPLoopDirective &S,
+    OpenMPDistScheduleClauseKind &ScheduleKind,
+    llvm::Value *&Chunk) const {
+  if (getExecutionMode() == CGOpenMPRuntimeNVPTX::EM_SPMD) {
+    ScheduleKind = OMPC_DIST_SCHEDULE_static;
+    Chunk = CGF.EmitScalarConversion(getNVPTXNumThreads(CGF),
+        CGF.getContext().getIntTypeForBitwidth(32, /*Signed=*/0),
+        S.getIterationVariable()->getType(), S.getBeginLoc());
+  }
+}
+
+void CGOpenMPRuntimeNVPTX::getDefaultScheduleAndChunk(
+    CodeGenFunction &CGF, const OMPLoopDirective &S,
+    OpenMPScheduleClauseKind &ScheduleKind,
+    llvm::Value *&Chunk) const {
+  if (getExecutionMode() == CGOpenMPRuntimeNVPTX::EM_SPMD) {
+    ScheduleKind = OMPC_SCHEDULE_static;
+    Chunk = CGF.Builder.getIntN(CGF.getContext().getTypeSize(
+        S.getIterationVariable()->getType()), 1);
+  }
 }

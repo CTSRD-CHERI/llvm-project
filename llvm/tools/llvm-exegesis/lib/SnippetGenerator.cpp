@@ -35,17 +35,18 @@ llvm::Expected<std::vector<BenchmarkCode>>
 SnippetGenerator::generateConfigurations(unsigned Opcode) const {
   if (auto E = generateCodeTemplate(Opcode)) {
     CodeTemplate &CT = E.get();
+    const llvm::BitVector &ForbiddenRegs =
+        CT.ScratchSpacePointerInReg
+            ? RATC.getRegister(CT.ScratchSpacePointerInReg).aliasedBits()
+            : RATC.emptyRegisters();
     std::vector<BenchmarkCode> Output;
     // TODO: Generate as many BenchmarkCode as needed.
     {
       BenchmarkCode BC;
       BC.Info = CT.Info;
-      for (InstructionBuilder &IB : CT.Instructions) {
-        IB.randomizeUnsetVariables(
-            CT.ScratchSpacePointerInReg
-                ? RATC.getRegister(CT.ScratchSpacePointerInReg).aliasedBits()
-                : RATC.emptyRegisters());
-        BC.Instructions.push_back(IB.build());
+      for (InstructionTemplate &IT : CT.Instructions) {
+        randomizeUnsetVariables(ForbiddenRegs, IT);
+        BC.Instructions.push_back(IT.build());
       }
       if (CT.ScratchSpacePointerInReg)
         BC.LiveIns.push_back(CT.ScratchSpacePointerInReg);
@@ -58,27 +59,27 @@ SnippetGenerator::generateConfigurations(unsigned Opcode) const {
 }
 
 std::vector<RegisterValue> SnippetGenerator::computeRegisterInitialValues(
-    const std::vector<InstructionBuilder> &Instructions) const {
+    const std::vector<InstructionTemplate> &Instructions) const {
   // Collect all register uses and create an assignment for each of them.
   // Ignore memory operands which are handled separately.
   // Loop invariant: DefinedRegs[i] is true iif it has been set at least once
   // before the current instruction.
   llvm::BitVector DefinedRegs = RATC.emptyRegisters();
   std::vector<RegisterValue> RIV;
-  for (const InstructionBuilder &IB : Instructions) {
+  for (const InstructionTemplate &IT : Instructions) {
     // Returns the register that this Operand sets or uses, or 0 if this is not
     // a register.
-    const auto GetOpReg = [&IB](const Operand &Op) -> unsigned {
+    const auto GetOpReg = [&IT](const Operand &Op) -> unsigned {
       if (Op.IsMem)
         return 0;
       if (Op.ImplicitReg)
         return *Op.ImplicitReg;
-      if (Op.IsExplicit && IB.getValueFor(Op).isReg())
-        return IB.getValueFor(Op).getReg();
+      if (Op.IsExplicit && IT.getValueFor(Op).isReg())
+        return IT.getValueFor(Op).getReg();
       return 0;
     };
     // Collect used registers that have never been def'ed.
-    for (const Operand &Op : IB.Instr.Operands) {
+    for (const Operand &Op : IT.Instr.Operands) {
       if (!Op.IsDef) {
         const unsigned Reg = GetOpReg(Op);
         if (Reg > 0 && !DefinedRegs.test(Reg)) {
@@ -88,7 +89,7 @@ std::vector<RegisterValue> SnippetGenerator::computeRegisterInitialValues(
       }
     }
     // Mark defs as having been def'ed.
-    for (const Operand &Op : IB.Instr.Operands) {
+    for (const Operand &Op : IT.Instr.Operands) {
       if (Op.IsDef) {
         const unsigned Reg = GetOpReg(Op);
         if (Reg > 0)
@@ -106,16 +107,16 @@ llvm::Expected<CodeTemplate> SnippetGenerator::generateSelfAliasingCodeTemplate(
     return llvm::make_error<SnippetGeneratorFailure>("empty self aliasing");
   }
   CodeTemplate CT;
-  InstructionBuilder IB(Instr);
+  InstructionTemplate IT(Instr);
   if (SelfAliasing.hasImplicitAliasing()) {
     CT.Info = "implicit Self cycles, picking random values.";
   } else {
     CT.Info = "explicit self cycles, selecting one aliasing Conf.";
     // This is a self aliasing instruction so defs and uses are from the same
-    // instance, hence twice IB in the following call.
-    setRandomAliasing(SelfAliasing, IB, IB);
+    // instance, hence twice IT in the following call.
+    setRandomAliasing(SelfAliasing, IT, IT);
   }
-  CT.Instructions.push_back(std::move(IB));
+  CT.Instructions.push_back(std::move(IT));
   return std::move(CT);
 }
 
@@ -127,4 +128,90 @@ SnippetGenerator::generateUnconstrainedCodeTemplate(const Instruction &Instr,
   CT.Instructions.emplace_back(Instr);
   return std::move(CT);
 }
+
+std::mt19937 &randomGenerator() {
+  static std::random_device RandomDevice;
+  static std::mt19937 RandomGenerator(RandomDevice());
+  return RandomGenerator;
+}
+
+static size_t randomIndex(size_t Size) {
+  assert(Size > 0);
+  std::uniform_int_distribution<> Distribution(0, Size - 1);
+  return Distribution(randomGenerator());
+}
+
+template <typename C>
+static auto randomElement(const C &Container) -> decltype(Container[0]) {
+  return Container[randomIndex(Container.size())];
+}
+
+static void randomize(const Instruction &Instr, const Variable &Var,
+                      llvm::MCOperand &AssignedValue,
+                      const llvm::BitVector &ForbiddenRegs) {
+  assert(!Var.TiedOperands.empty());
+  const Operand &Op = Instr.Operands[Var.TiedOperands.front()];
+  assert(Op.Info != nullptr);
+  const auto &OpInfo = *Op.Info;
+  switch (OpInfo.OperandType) {
+  case llvm::MCOI::OperandType::OPERAND_IMMEDIATE:
+    // FIXME: explore immediate values too.
+    AssignedValue = llvm::MCOperand::createImm(1);
+    break;
+  case llvm::MCOI::OperandType::OPERAND_REGISTER: {
+    assert(Op.Tracker);
+    auto AllowedRegs = Op.Tracker->sourceBits();
+    assert(AllowedRegs.size() == ForbiddenRegs.size());
+    for (auto I : ForbiddenRegs.set_bits())
+      AllowedRegs.reset(I);
+    AssignedValue = llvm::MCOperand::createReg(randomBit(AllowedRegs));
+    break;
+  }
+  default:
+    break;
+  }
+}
+
+static void setRegisterOperandValue(const RegisterOperandAssignment &ROV,
+                                    InstructionTemplate &IB) {
+  assert(ROV.Op);
+  if (ROV.Op->IsExplicit) {
+    auto &AssignedValue = IB.getValueFor(*ROV.Op);
+    if (AssignedValue.isValid()) {
+      assert(AssignedValue.isReg() && AssignedValue.getReg() == ROV.Reg);
+      return;
+    }
+    AssignedValue = llvm::MCOperand::createReg(ROV.Reg);
+  } else {
+    assert(ROV.Op->ImplicitReg != nullptr);
+    assert(ROV.Reg == *ROV.Op->ImplicitReg);
+  }
+}
+
+size_t randomBit(const llvm::BitVector &Vector) {
+  assert(Vector.any());
+  auto Itr = Vector.set_bits_begin();
+  for (size_t I = randomIndex(Vector.count()); I != 0; --I)
+    ++Itr;
+  return *Itr;
+}
+
+void setRandomAliasing(const AliasingConfigurations &AliasingConfigurations,
+                       InstructionTemplate &DefIB, InstructionTemplate &UseIB) {
+  assert(!AliasingConfigurations.empty());
+  assert(!AliasingConfigurations.hasImplicitAliasing());
+  const auto &RandomConf = randomElement(AliasingConfigurations.Configurations);
+  setRegisterOperandValue(randomElement(RandomConf.Defs), DefIB);
+  setRegisterOperandValue(randomElement(RandomConf.Uses), UseIB);
+}
+
+void randomizeUnsetVariables(const llvm::BitVector &ForbiddenRegs,
+                             InstructionTemplate &IT) {
+  for (const Variable &Var : IT.Instr.Variables) {
+    llvm::MCOperand &AssignedValue = IT.getValueFor(Var);
+    if (!AssignedValue.isValid())
+      randomize(IT.Instr, Var, AssignedValue, ForbiddenRegs);
+  }
+}
+
 } // namespace exegesis

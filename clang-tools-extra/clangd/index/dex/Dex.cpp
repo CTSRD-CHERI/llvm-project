@@ -12,6 +12,9 @@
 #include "FuzzyMatch.h"
 #include "Logger.h"
 #include "Quality.h"
+#include "Trace.h"
+#include "index/Index.h"
+#include "index/dex/Iterator.h"
 #include "llvm/ADT/StringSet.h"
 #include <algorithm>
 #include <queue>
@@ -23,7 +26,7 @@ namespace dex {
 namespace {
 
 // Mark symbols which are can be used for code completion.
-static const Token RestrictedForCodeCompletion =
+const Token RestrictedForCodeCompletion =
     Token(Token::Kind::Sentinel, "Restricted For Code Completion");
 
 // Returns the tokens which are given symbol's characteristics. Currently, the
@@ -128,11 +131,8 @@ void Dex::buildIndex() {
 
   // Convert lists of items to posting lists.
   for (const auto &TokenToPostingList : TempInvertedIndex)
-    InvertedIndex.insert({TokenToPostingList.first,
-                          PostingList(move(TokenToPostingList.second))});
-
-  vlog("Built Dex with estimated memory usage {0} bytes.",
-       estimateMemoryUsage());
+    InvertedIndex.insert(
+        {TokenToPostingList.first, PostingList(TokenToPostingList.second)});
 }
 
 /// Constructs iterators over tokens extracted from the query and exhausts it
@@ -142,11 +142,13 @@ bool Dex::fuzzyFind(const FuzzyFindRequest &Req,
                     llvm::function_ref<void(const Symbol &)> Callback) const {
   assert(!StringRef(Req.Query).contains("::") &&
          "There must be no :: in query.");
+  // FIXME: attach the query tree to the trace span.
+  trace::Span Tracer("Dex fuzzyFind");
   FuzzyMatcher Filter(Req.Query);
   bool More = false;
 
   std::vector<std::unique_ptr<Iterator>> TopLevelChildren;
-  const auto TrigramTokens = generateIdentifierTrigrams(Req.Query);
+  const auto TrigramTokens = generateQueryTrigrams(Req.Query);
 
   // Generate query trigrams and construct AND iterator over all query
   // trigrams.
@@ -166,6 +168,10 @@ bool Dex::fuzzyFind(const FuzzyFindRequest &Req,
     if (It != InvertedIndex.end())
       ScopeIterators.push_back(It->second.iterator());
   }
+  if (Req.AnyScope)
+    ScopeIterators.push_back(createBoost(createTrue(Symbols.size()),
+                                         ScopeIterators.empty() ? 1.0 : 0.2));
+
   // Add OR iterator for scopes if there are any Scope Iterators.
   if (!ScopeIterators.empty())
     TopLevelChildren.push_back(createOr(move(ScopeIterators)));
@@ -231,6 +237,7 @@ bool Dex::fuzzyFind(const FuzzyFindRequest &Req,
 
 void Dex::lookup(const LookupRequest &Req,
                  llvm::function_ref<void(const Symbol &)> Callback) const {
+  trace::Span Tracer("Dex lookup");
   for (const auto &ID : Req.IDs) {
     auto I = LookupTable.find(ID);
     if (I != LookupTable.end())
@@ -240,6 +247,7 @@ void Dex::lookup(const LookupRequest &Req,
 
 void Dex::refs(const RefsRequest &Req,
                llvm::function_ref<void(const Ref &)> Callback) const {
+  trace::Span Tracer("Dex refs");
   log("refs is not implemented.");
 }
 
@@ -248,8 +256,8 @@ size_t Dex::estimateMemoryUsage() const {
   Bytes += SymbolQuality.size() * sizeof(float);
   Bytes += LookupTable.getMemorySize();
   Bytes += InvertedIndex.getMemorySize();
-  for (const auto &P : InvertedIndex)
-    Bytes += P.second.bytes();
+  for (const auto &TokenToPostingList : InvertedIndex)
+    Bytes += TokenToPostingList.second.bytes();
   return Bytes + BackingDataSize;
 }
 

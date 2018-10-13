@@ -396,8 +396,8 @@ static bool checkTargetOptions(const TargetOptions &TargetOpts,
                                              ExistingTargetOpts.FeaturesAsWritten.end());
   SmallVector<StringRef, 4> ReadFeatures(TargetOpts.FeaturesAsWritten.begin(),
                                          TargetOpts.FeaturesAsWritten.end());
-  llvm::sort(ExistingFeatures.begin(), ExistingFeatures.end());
-  llvm::sort(ReadFeatures.begin(), ReadFeatures.end());
+  llvm::sort(ExistingFeatures);
+  llvm::sort(ReadFeatures);
 
   // We compute the set difference in both directions explicitly so that we can
   // diagnose the differences differently.
@@ -9196,8 +9196,7 @@ void ASTReader::ReadComments() {
   NextCursor:
     // De-serialized SourceLocations get negative FileIDs for other modules,
     // potentially invalidating the original order. Sort it again.
-    llvm::sort(Comments.begin(), Comments.end(),
-               BeforeThanCompare<RawComment>(SourceMgr));
+    llvm::sort(Comments, BeforeThanCompare<RawComment>(SourceMgr));
     Context.Comments.addDeserializedComments(Comments);
   }
 }
@@ -11727,6 +11726,12 @@ OMPClause *OMPClauseReader::readClause() {
   case OMPC_nogroup:
     C = new (Context) OMPNogroupClause();
     break;
+  case OMPC_unified_address:
+    C = new (Context) OMPUnifiedAddressClause();
+    break;
+  case OMPC_unified_shared_memory:
+    C = new (Context) OMPUnifiedSharedMemoryClause();
+    break;
   case OMPC_private:
     C = OMPPrivateClause::CreateEmpty(Context, Record.readInt());
     break;
@@ -11954,6 +11959,11 @@ void OMPClauseReader::VisitOMPThreadsClause(OMPThreadsClause *) {}
 void OMPClauseReader::VisitOMPSIMDClause(OMPSIMDClause *) {}
 
 void OMPClauseReader::VisitOMPNogroupClause(OMPNogroupClause *) {}
+
+void OMPClauseReader::VisitOMPUnifiedAddressClause(OMPUnifiedAddressClause *) {}
+
+void OMPClauseReader::VisitOMPUnifiedSharedMemoryClause(
+    OMPUnifiedSharedMemoryClause *) {}
 
 void OMPClauseReader::VisitOMPPrivateClause(OMPPrivateClause *C) {
   C->setLParenLoc(Record.readSourceLocation());

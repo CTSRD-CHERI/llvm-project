@@ -85,7 +85,6 @@ bool elf::link(ArrayRef<const char *> Args, bool CanExitEarly,
 
   InputSections.clear();
   OutputSections.clear();
-  Tar = nullptr;
   BinaryFiles.clear();
   BitcodeFiles.clear();
   ObjectFiles.clear();
@@ -95,6 +94,10 @@ bool elf::link(ArrayRef<const char *> Args, bool CanExitEarly,
   Driver = make<LinkerDriver>();
   Script = make<LinkerScript>();
   Symtab = make<SymbolTable>();
+
+  Tar = nullptr;
+  memset(&In, 0, sizeof(In));
+
   Config->ProgName = Args[0];
 
   Driver->main(Args);
@@ -986,8 +989,9 @@ static void setConfigs(opt::InputArgList &Args) {
   // You cannot choose which one, Rel or Rela, you want to use. Instead each
   // ABI defines which one you need to use. The following expression expresses
   // that.
-  Config->IsRela = M == EM_AARCH64 || M == EM_AMDGPU || M == EM_PPC ||
-                   M == EM_PPC64 || M == EM_RISCV || M == EM_X86_64;
+  Config->IsRela = M == EM_AARCH64 || M == EM_AMDGPU || M == EM_HEXAGON ||
+                   M == EM_PPC || M == EM_PPC64 || M == EM_RISCV ||
+                   M == EM_X86_64;
 
   // If the output uses REL relocations we must store the dynamic relocation
   // addends to the output sections. We also store addends for RELA relocations
@@ -1399,6 +1403,8 @@ static const char *LibcallRoutineNames[] = {
 // all linker scripts have already been parsed.
 template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   Target = getTarget();
+  InX<ELFT>::VerSym = nullptr;
+  InX<ELFT>::VerNeed = nullptr;
 
   Config->MaxPageSize = getMaxPageSize(Args);
   Config->ImageBase = getImageBase(Args);
