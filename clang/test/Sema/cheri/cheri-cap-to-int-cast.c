@@ -1,5 +1,5 @@
 // RUN: %cheri_cc1 -o - %s -fsyntax-only -verify
-// RUN: not %cheri_cc1 -o - %s -fsyntax-only -ast-dump | FileCheck %s -check-prefix AST
+// RUN: not %cheri_cc1 -o - %s -fsyntax-only -verify -ast-dump | FileCheck %s -check-prefix AST
 // RUN: %cheri_purecap_cc1 -o - %s -fsyntax-only -verify
 
 #pragma clang diagnostic warning "-Wcapability-to-integer-cast"
@@ -157,7 +157,7 @@ void test_cheri_to_from_cap(void) {
 #ifdef __CHERI_PURE_CAPABILITY__
   // expected-warning@-2 {{__cheri_tocap from 'int * __capability' to 'int * __capability' is a no-op}}
 #endif
-  // AST: ImplicitCastExpr {{.+}} 'const int * __capability' <BitCast>
+  // AST: ImplicitCastExpr {{.+}} 'const int * __capability' <NoOp>
   // AST-NEXT: CStyleCastExpr {{.+}} 'int * __capability' <PointerToCHERICapability>
   (__cheri_tocap int* __capability)const_intcap; // expected-error{{invalid __cheri_tocap from 'const int * __capability' to unrelated type 'int * __capability'}}
   (__cheri_fromcap int* __capability)const_intcap; // expected-error{{invalid __cheri_fromcap from 'const int * __capability' to unrelated type 'int * __capability'}}
