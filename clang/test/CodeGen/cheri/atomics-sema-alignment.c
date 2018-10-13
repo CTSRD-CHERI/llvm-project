@@ -81,10 +81,10 @@ void func2(int *__capability *p) {
 
   int *__capability res;
   int *__capability res2;
-  __atomic_load(p, &res, 5);                          // hybrid-warning {{misaligned or large atomic operation may incur significant performance penalty}}
-  __atomic_store(p, &res, 5);                         // hybrid-warning {{misaligned or large atomic operation may incur significant performance penalty}}
-  __atomic_exchange(p, &res, &res2, 5);               // hybrid-warning {{misaligned or large atomic operation may incur significant performance penalty}}
-  __atomic_compare_exchange(p, &res, &res2, 0, 5, 5); // hybrid-warning {{misaligned or large atomic operation may incur significant performance penalty}}
+  __atomic_load(p, &res, 5);                          // hybrid-warning {{large atomic operation may incur significant performance penalty}}
+  __atomic_store(p, &res, 5);                         // hybrid-warning {{large atomic operation may incur significant performance penalty}}
+  __atomic_exchange(p, &res, &res2, 5);               // hybrid-warning {{large atomic operation may incur significant performance penalty}}
+  __atomic_compare_exchange(p, &res, &res2, 0, 5, 5); // hybrid-warning {{large atomic operation may incur significant performance penalty}}
 
   // ASM-LABEL: func2:
   // Use libcalls for all these:
@@ -128,10 +128,10 @@ void func3(__uintcap_t *p) {
 
   __uintcap_t res;
   __uintcap_t res2;
-  __atomic_load(p, &res, 5);                          // hybrid-warning {{misaligned or large atomic operation may incur significant performance penalty}}
-  __atomic_store(p, &res, 5);                         // hybrid-warning {{misaligned or large atomic operation may incur significant performance penalty}}
-  __atomic_exchange(p, &res, &res2, 5);               // hybrid-warning {{misaligned or large atomic operation may incur significant performance penalty}}
-  __atomic_compare_exchange(p, &res, &res2, 0, 5, 5); // hybrid-warning {{misaligned or large atomic operation may incur significant performance penalty}}
+  __atomic_load(p, &res, 5);                          // hybrid-warning {{large atomic operation may incur significant performance penalty}}
+  __atomic_store(p, &res, 5);                         // hybrid-warning {{large atomic operation may incur significant performance penalty}}
+  __atomic_exchange(p, &res, &res2, 5);               // hybrid-warning {{large atomic operation may incur significant performance penalty}}
+  __atomic_compare_exchange(p, &res, &res2, 0, 5, 5); // hybrid-warning {{large atomic operation may incur significant performance penalty}}
 
   // ASM-LABEL: func3:
   // Use libcalls for all these:

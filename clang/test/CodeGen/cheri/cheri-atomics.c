@@ -15,10 +15,10 @@ int main(void) {
   // CHECK: [[P_AS_I8_PTRPTR:%.+]] = bitcast i32 addrspace(200)* addrspace(200)* %p to i8 addrspace(200)* addrspace(200)*
   // CHECK: store i8 addrspace(200)* [[INITVAL]], i8 addrspace(200)* addrspace(200)* [[P_AS_I8_PTRPTR]], align
 
-  __c11_atomic_fetch_add(&p, 1, __ATOMIC_SEQ_CST); // expected-warning {{misaligned or large atomic operation may incur significant performance penalty}}
+  __c11_atomic_fetch_add(&p, 1, __ATOMIC_SEQ_CST); // expected-warning {{misaligned atomic operation may incur significant performance penalty}}
   // CHECK: [[INC:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 4)
   // CHECK: call i8 addrspace(200)* @__atomic_fetch_add_cap(i8 addrspace(200)* nonnull [[P_AS_I8]], i8 addrspace(200)* [[INC]], i32 signext 5)
-  __c11_atomic_fetch_sub(&p, 2, __ATOMIC_SEQ_CST); // expected-warning {{misaligned or large atomic operation may incur significant performance penalty}}
+  __c11_atomic_fetch_sub(&p, 2, __ATOMIC_SEQ_CST); // expected-warning {{misaligned atomic operation may incur significant performance penalty}}
   // CHECK: [[INC2:%.+]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 8)
   // CHECK: call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8 addrspace(200)* nonnull [[P_AS_I8]], i8 addrspace(200)* [[INC2]], i32 signext 5)
   int *c = __c11_atomic_load(&p, __ATOMIC_SEQ_CST);
@@ -79,11 +79,11 @@ int __atomic_stuff(int** p, int* expected, int* newval) {
 int uint128(void) {
   _Atomic(__uint128_t) p;
 
-  __c11_atomic_fetch_add(&p, 1, __ATOMIC_SEQ_CST);  // not-expected-warning {{misaligned or large atomic operation may incur significant performance penalty}}
+  __c11_atomic_fetch_add(&p, 1, __ATOMIC_SEQ_CST);  // not-expected-warning {{misaligned atomic operation may incur significant performance penalty}}
   // CHECK: atomicrmw add i128 addrspace(200)* %p, i128 1 seq_cst
-  __uint128_t c = __c11_atomic_load(&p, __ATOMIC_SEQ_CST);  // not-xpected-warning {{misaligned or large atomic operation may incur significant performance penalty}}
+  __uint128_t c = __c11_atomic_load(&p, __ATOMIC_SEQ_CST);  // not-xpected-warning {{misaligned atomic operation may incur significant performance penalty}}
   // CHECK: load atomic i128, i128 addrspace(200)* %p seq_cst
-  __c11_atomic_store(&p, 0, __ATOMIC_SEQ_CST);  // not-expected-warning {{misaligned or large atomic operation may incur significant performance penalty}}
+  __c11_atomic_store(&p, 0, __ATOMIC_SEQ_CST);  // not-expected-warning {{misaligned atomic operation may incur significant performance penalty}}
   // CHECK: store atomic i128 0, i128 addrspace(200)* %p seq_cst
   __uint128_t expected = 0;
   __c11_atomic_compare_exchange_strong(&p, &expected, c, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);  // not-expected-warning {{misaligned or large atomic operation may incur significant performance penalty}}
