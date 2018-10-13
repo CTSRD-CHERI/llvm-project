@@ -757,6 +757,24 @@ static void sortAndPrintSymbolList(SymbolicFile &Obj, bool printName,
     }
   }
 
+  auto writeFileName = [&](raw_ostream &S) {
+    if (!ArchitectureName.empty())
+      S << "(for architecture " << ArchitectureName << "):";
+    if (OutputFormat == posix && !ArchiveName.empty())
+      S << ArchiveName << "[" << CurrentFilename << "]: ";
+    else {
+      if (!ArchiveName.empty())
+        S << ArchiveName << ":";
+      S << CurrentFilename << ": ";
+    }
+  };
+
+  if (SymbolList.empty()) {
+    if (PrintFileName)
+      writeFileName(errs());
+    errs() << "no symbols\n";
+  }
+
   for (SymbolListT::iterator I = SymbolList.begin(), E = SymbolList.end();
        I != E; ++I) {
     uint32_t SymFlags;
@@ -778,17 +796,8 @@ static void sortAndPrintSymbolList(SymbolicFile &Obj, bool printName,
         (!Global && ExternalOnly) || (SizeSort && !PrintAddress) ||
         (Weak && NoWeakSymbols))
       continue;
-    if (PrintFileName) {
-      if (!ArchitectureName.empty())
-        outs() << "(for architecture " << ArchitectureName << "):";
-      if (OutputFormat == posix && !ArchiveName.empty())
-        outs() << ArchiveName << "[" << CurrentFilename << "]: ";
-      else {
-        if (!ArchiveName.empty())
-          outs() << ArchiveName << ":";
-        outs() << CurrentFilename << ": ";
-      }
-    }
+    if (PrintFileName)
+      writeFileName(outs());
     if ((JustSymbolName ||
          (UndefinedOnly && MachO && OutputFormat != darwin)) &&
         OutputFormat != posix) {

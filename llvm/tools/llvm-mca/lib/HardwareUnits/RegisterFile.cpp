@@ -60,6 +60,11 @@ void RegisterFile::initialize(const MCSchedModel &SM, unsigned NumRegs) {
   }
 }
 
+void RegisterFile::cycleStart() {
+  for (RegisterMappingTracker &RMT : RegisterFiles)
+    RMT.NumMoveEliminated = 0;
+}
+
 void RegisterFile::addRegisterFile(ArrayRef<MCRegisterCostEntry> Entries,
                                    unsigned NumPhysRegs) {
   // A default register file is always allocated at index #0. That register file
@@ -262,6 +267,55 @@ void RegisterFile::removeRegisterWrite(
     if (OtherWR.getWriteState() == &WS)
       OtherWR.invalidate();
   }
+}
+
+bool RegisterFile::tryEliminateMove(WriteState &WS, const ReadState &RS) {
+  const RegisterMapping &RMFrom = RegisterMappings[RS.getRegisterID()];
+  const RegisterMapping &RMTo = RegisterMappings[WS.getRegisterID()];
+
+  // Early exit if the PRF doesn't support move elimination for this register.
+  if (!RMTo.second.AllowMoveElimination)
+    return false;
+
+  // From and To must be owned by the same PRF.
+  const RegisterRenamingInfo &RRIFrom = RMFrom.second;
+  const RegisterRenamingInfo &RRITo = RMTo.second;
+  unsigned RegisterFileIndex = RRIFrom.IndexPlusCost.first;
+  if (RegisterFileIndex != RRITo.IndexPlusCost.first)
+    return false;
+
+  // We only allow move elimination for writes that update a full physical
+  // register. On X86, move elimination is possible with 32-bit general purpose
+  // registers because writes to those registers are not partial writes.  If a
+  // register move is a partial write, then we conservatively assume that move
+  // elimination fails, since it would either trigger a partial update, or the
+  // issue of a merge opcode.
+  //
+  // Note that this constraint may be lifted in future.  For example, we could
+  // make this model more flexible, and let users customize the set of registers
+  // (i.e. register classes) that allow move elimination.
+  //
+  // For now, we assume that there is a strong correlation between registers
+  // that allow move elimination, and how those same registers are renamed in
+  // hardware.
+  if (RRITo.RenameAs && RRITo.RenameAs != WS.getRegisterID())
+    if (!WS.clearsSuperRegisters())
+      return false;
+
+  RegisterMappingTracker &RMT = RegisterFiles[RegisterFileIndex];
+  if (RMT.MaxMoveEliminatedPerCycle &&
+      RMT.NumMoveEliminated == RMT.MaxMoveEliminatedPerCycle)
+    return false;
+
+  bool IsZeroMove = ZeroRegisters[RS.getRegisterID()];
+  if (RMT.AllowZeroMoveEliminationOnly && !IsZeroMove)
+    return false;
+
+  RMT.NumMoveEliminated++;
+  if (IsZeroMove)
+    WS.setWriteZero();
+  WS.setEliminated();
+  return true;
 }
 
 void RegisterFile::collectWrites(SmallVectorImpl<WriteRef> &Writes,

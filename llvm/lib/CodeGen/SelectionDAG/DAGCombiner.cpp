@@ -9851,7 +9851,7 @@ static SDValue foldBitcastedFPLogic(SDNode *N, SelectionDAG &DAG,
   // Fold (bitcast int (and (bitcast fp X to int), 0x7fff...) to fp) -> fabs X
   // Fold (bitcast int (xor (bitcast fp X to int), 0x8000...) to fp) -> fneg X
   SDValue LogicOp0 = N0.getOperand(0);
-  ConstantSDNode *LogicOp1 = isConstOrConstSplat(N0.getOperand(1));
+  ConstantSDNode *LogicOp1 = isConstOrConstSplat(N0.getOperand(1), true);
   if (LogicOp1 && LogicOp1->getAPIntValue() == SignMask &&
       LogicOp0.getOpcode() == ISD::BITCAST &&
       LogicOp0.getOperand(0).getValueType() == VT)
@@ -10865,7 +10865,7 @@ SDValue DAGCombiner::visitFADD(SDNode *N) {
     return DAG.getNode(ISD::FADD, DL, VT, N1, N0, Flags);
 
   // N0 + -0.0 --> N0 (also allowed with +0.0 and fast-math)
-  ConstantFPSDNode *N1C = isConstOrConstSplatFP(N1);
+  ConstantFPSDNode *N1C = isConstOrConstSplatFP(N1, true);
   if (N1C && N1C->isZero())
     if (N1C->isNegative() || Options.UnsafeFPMath || Flags.hasNoSignedZeros())
       return N0;
@@ -11011,8 +11011,8 @@ SDValue DAGCombiner::visitFADD(SDNode *N) {
 SDValue DAGCombiner::visitFSUB(SDNode *N) {
   SDValue N0 = N->getOperand(0);
   SDValue N1 = N->getOperand(1);
-  ConstantFPSDNode *N0CFP = isConstOrConstSplatFP(N0);
-  ConstantFPSDNode *N1CFP = isConstOrConstSplatFP(N1);
+  ConstantFPSDNode *N0CFP = isConstOrConstSplatFP(N0, true);
+  ConstantFPSDNode *N1CFP = isConstOrConstSplatFP(N1, true);
   EVT VT = N->getValueType(0);
   SDLoc DL(N);
   const TargetOptions &Options = DAG.getTarget().Options;
@@ -11044,9 +11044,10 @@ SDValue DAGCombiner::visitFSUB(SDNode *N) {
       return DAG.getConstantFP(0.0f, DL, VT);
   }
 
-  // (fsub 0, B) -> -B
+  // (fsub -0.0, N1) -> -N1
   if (N0CFP && N0CFP->isZero()) {
-    if (Options.NoSignedZerosFPMath || Flags.hasNoSignedZeros()) {
+    if (N0CFP->isNegative() ||
+        (Options.NoSignedZerosFPMath || Flags.hasNoSignedZeros())) {
       if (isNegatibleForFree(N1, LegalOperations, TLI, &Options))
         return GetNegatedExpression(N1, DAG, LegalOperations);
       if (!LegalOperations || TLI.isOperationLegal(ISD::FNEG, VT))
@@ -11082,8 +11083,8 @@ SDValue DAGCombiner::visitFSUB(SDNode *N) {
 SDValue DAGCombiner::visitFMUL(SDNode *N) {
   SDValue N0 = N->getOperand(0);
   SDValue N1 = N->getOperand(1);
-  ConstantFPSDNode *N0CFP = isConstOrConstSplatFP(N0);
-  ConstantFPSDNode *N1CFP = isConstOrConstSplatFP(N1);
+  ConstantFPSDNode *N0CFP = isConstOrConstSplatFP(N0, true);
+  ConstantFPSDNode *N1CFP = isConstOrConstSplatFP(N1, true);
   EVT VT = N->getValueType(0);
   SDLoc DL(N);
   const TargetOptions &Options = DAG.getTarget().Options;
@@ -11121,26 +11122,16 @@ SDValue DAGCombiner::visitFMUL(SDNode *N) {
 
   if (Options.UnsafeFPMath || Flags.hasAllowReassociation()) {
     // fmul (fmul X, C1), C2 -> fmul X, C1 * C2
-    if (N0.getOpcode() == ISD::FMUL) {
-      // Fold scalars or any vector constants (not just splats).
-      // This fold is done in general by InstCombine, but extra fmul insts
-      // may have been generated during lowering.
+    if (isConstantFPBuildVectorOrConstantFP(N1) &&
+        N0.getOpcode() == ISD::FMUL) {
       SDValue N00 = N0.getOperand(0);
       SDValue N01 = N0.getOperand(1);
-      auto *BV1 = dyn_cast<BuildVectorSDNode>(N1);
-      auto *BV00 = dyn_cast<BuildVectorSDNode>(N00);
-      auto *BV01 = dyn_cast<BuildVectorSDNode>(N01);
-
-      // Check 1: Make sure that the first operand of the inner multiply is NOT
-      // a constant. Otherwise, we may induce infinite looping.
-      if (!(isConstOrConstSplatFP(N00) || (BV00 && BV00->isConstant()))) {
-        // Check 2: Make sure that the second operand of the inner multiply and
-        // the second operand of the outer multiply are constants.
-        if ((N1CFP && isConstOrConstSplatFP(N01)) ||
-            (BV1 && BV01 && BV1->isConstant() && BV01->isConstant())) {
-          SDValue MulConsts = DAG.getNode(ISD::FMUL, DL, VT, N01, N1, Flags);
-          return DAG.getNode(ISD::FMUL, DL, VT, N00, MulConsts, Flags);
-        }
+      // Avoid an infinite loop by making sure that N00 is not a constant
+      // (the inner multiply has not been constant folded yet).
+      if (isConstantFPBuildVectorOrConstantFP(N01) &&
+          !isConstantFPBuildVectorOrConstantFP(N00)) {
+        SDValue MulConsts = DAG.getNode(ISD::FMUL, DL, VT, N01, N1, Flags);
+        return DAG.getNode(ISD::FMUL, DL, VT, N00, MulConsts, Flags);
       }
     }
 
@@ -12161,11 +12152,8 @@ SDValue DAGCombiner::visitFABS(SDNode *N) {
   if (N0.getOpcode() == ISD::FNEG || N0.getOpcode() == ISD::FCOPYSIGN)
     return DAG.getNode(ISD::FABS, SDLoc(N), VT, N0.getOperand(0));
 
-  // Transform fabs(bitconvert(x)) -> bitconvert(x & ~sign) to avoid loading
-  // constant pool values.
-  if (!TLI.isFAbsFree(VT) &&
-      N0.getOpcode() == ISD::BITCAST &&
-      N0.getNode()->hasOneUse()) {
+  // fabs(bitcast(x)) -> bitcast(x & ~sign) to avoid constant pool loads.
+  if (!TLI.isFAbsFree(VT) && N0.getOpcode() == ISD::BITCAST && N0.hasOneUse()) {
     SDValue Int = N0.getOperand(0);
     EVT IntVT = Int.getValueType();
     if (IntVT.isInteger() && !IntVT.isVector()) {

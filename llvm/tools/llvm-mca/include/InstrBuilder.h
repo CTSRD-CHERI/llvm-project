@@ -26,8 +26,6 @@
 
 namespace mca {
 
-class DispatchUnit;
-
 /// A builder class that knows how to construct Instruction objects.
 ///
 /// Every llvm-mca Instruction is described by an object of class InstrDesc.
@@ -62,6 +60,8 @@ class InstrBuilder {
                              unsigned SchedClassID);
   llvm::Error populateReads(InstrDesc &ID, const llvm::MCInst &MCI,
                             unsigned SchedClassID);
+  llvm::Error verifyInstrDesc(const InstrDesc &ID,
+                              const llvm::MCInst &MCI) const;
 
 public:
   InstrBuilder(const llvm::MCSubtargetInfo &sti, const llvm::MCInstrInfo &mcii,

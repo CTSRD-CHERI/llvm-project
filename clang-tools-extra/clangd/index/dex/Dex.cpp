@@ -16,12 +16,22 @@
 #include "index/Index.h"
 #include "index/dex/Iterator.h"
 #include "llvm/ADT/StringSet.h"
+#include "llvm/Support/ScopedPrinter.h"
 #include <algorithm>
 #include <queue>
 
 namespace clang {
 namespace clangd {
 namespace dex {
+
+std::unique_ptr<SymbolIndex>
+Dex::build(SymbolSlab Symbols, RefSlab Refs,
+           llvm::ArrayRef<std::string> URISchemes) {
+  auto Size = Symbols.bytes() + Refs.bytes();
+  auto Data = std::make_pair(std::move(Symbols), std::move(Refs));
+  return llvm::make_unique<Dex>(Data.first, Data.second, std::move(Data), Size,
+                                std::move(URISchemes));
+}
 
 namespace {
 
@@ -52,10 +62,11 @@ std::vector<Token> generateSearchTokens(const Symbol &Sym) {
 }
 
 // Constructs BOOST iterators for Path Proximities.
-std::vector<std::unique_ptr<Iterator>> createFileProximityIterators(
+std::unique_ptr<Iterator> createFileProximityIterator(
     llvm::ArrayRef<std::string> ProximityPaths,
     llvm::ArrayRef<std::string> URISchemes,
-    const llvm::DenseMap<Token, PostingList> &InvertedIndex) {
+    const llvm::DenseMap<Token, PostingList> &InvertedIndex,
+    const Corpus &Corpus) {
   std::vector<std::unique_ptr<Iterator>> BoostingIterators;
   // Deduplicate parent URIs extracted from the ProximityPaths.
   llvm::StringSet<> ParentURIs;
@@ -85,21 +96,23 @@ std::vector<std::unique_ptr<Iterator>> createFileProximityIterators(
   // ProximityPaths. Boosting factor should depend on the distance to the
   // Proximity Path: the closer processed path is, the higher boosting factor.
   for (const auto &ParentURI : ParentURIs.keys()) {
-    const auto It =
-        InvertedIndex.find(Token(Token::Kind::ProximityURI, ParentURI));
+    Token Tok(Token::Kind::ProximityURI, ParentURI);
+    const auto It = InvertedIndex.find(Tok);
     if (It != InvertedIndex.end()) {
       // FIXME(kbobyrev): Append LIMIT on top of every BOOST iterator.
       PathProximitySignals.SymbolURI = ParentURI;
-      BoostingIterators.push_back(
-          createBoost(It->second.iterator(), PathProximitySignals.evaluate()));
+      BoostingIterators.push_back(Corpus.boost(
+          It->second.iterator(&It->first), PathProximitySignals.evaluate()));
     }
   }
-  return BoostingIterators;
+  BoostingIterators.push_back(Corpus.all());
+  return Corpus.unionOf(std::move(BoostingIterators));
 }
 
 } // namespace
 
 void Dex::buildIndex() {
+  this->Corpus = dex::Corpus(Symbols.size());
   std::vector<std::pair<float, const Symbol *>> ScoredSymbols(Symbols.size());
 
   for (size_t I = 0; I < Symbols.size(); ++I) {
@@ -110,8 +123,7 @@ void Dex::buildIndex() {
 
   // Symbols are sorted by symbol qualities so that items in the posting lists
   // are stored in the descending order of symbol quality.
-  std::sort(begin(ScoredSymbols), end(ScoredSymbols),
-            std::greater<std::pair<float, const Symbol *>>());
+  llvm::sort(ScoredSymbols, std::greater<std::pair<float, const Symbol *>>());
 
   // SymbolQuality was empty up until now.
   SymbolQuality.resize(Symbols.size());
@@ -135,6 +147,12 @@ void Dex::buildIndex() {
         {TokenToPostingList.first, PostingList(TokenToPostingList.second)});
 }
 
+std::unique_ptr<Iterator> Dex::iterator(const Token &Tok) const {
+  auto It = InvertedIndex.find(Tok);
+  return It == InvertedIndex.end() ? Corpus.none()
+                                   : It->second.iterator(&It->first);
+}
+
 /// Constructs iterators over tokens extracted from the query and exhausts it
 /// while applying Callback to each symbol in the order of decreasing quality
 /// of the matched symbols.
@@ -142,67 +160,48 @@ bool Dex::fuzzyFind(const FuzzyFindRequest &Req,
                     llvm::function_ref<void(const Symbol &)> Callback) const {
   assert(!StringRef(Req.Query).contains("::") &&
          "There must be no :: in query.");
-  // FIXME: attach the query tree to the trace span.
   trace::Span Tracer("Dex fuzzyFind");
   FuzzyMatcher Filter(Req.Query);
-  bool More = false;
+  // For short queries we use specialized trigrams that don't yield all results.
+  // Prevent clients from postfiltering them for longer queries.
+  bool More = !Req.Query.empty() && Req.Query.size() < 3;
 
-  std::vector<std::unique_ptr<Iterator>> TopLevelChildren;
+  std::vector<std::unique_ptr<Iterator>> Criteria;
   const auto TrigramTokens = generateQueryTrigrams(Req.Query);
 
   // Generate query trigrams and construct AND iterator over all query
   // trigrams.
   std::vector<std::unique_ptr<Iterator>> TrigramIterators;
-  for (const auto &Trigram : TrigramTokens) {
-    const auto It = InvertedIndex.find(Trigram);
-    if (It != InvertedIndex.end())
-      TrigramIterators.push_back(It->second.iterator());
-  }
-  if (!TrigramIterators.empty())
-    TopLevelChildren.push_back(createAnd(move(TrigramIterators)));
+  for (const auto &Trigram : TrigramTokens)
+    TrigramIterators.push_back(iterator(Trigram));
+  Criteria.push_back(Corpus.intersect(move(TrigramIterators)));
 
   // Generate scope tokens for search query.
   std::vector<std::unique_ptr<Iterator>> ScopeIterators;
-  for (const auto &Scope : Req.Scopes) {
-    const auto It = InvertedIndex.find(Token(Token::Kind::Scope, Scope));
-    if (It != InvertedIndex.end())
-      ScopeIterators.push_back(It->second.iterator());
-  }
-  if (Req.AnyScope)
-    ScopeIterators.push_back(createBoost(createTrue(Symbols.size()),
-                                         ScopeIterators.empty() ? 1.0 : 0.2));
+  for (const auto &Scope : Req.Scopes)
+    ScopeIterators.push_back(iterator(Token(Token::Kind::Scope, Scope)));
+  if (Req.AnyScope || /*legacy*/ Req.Scopes.empty())
+    ScopeIterators.push_back(
+        Corpus.boost(Corpus.all(), ScopeIterators.empty() ? 1.0 : 0.2));
+  Criteria.push_back(Corpus.unionOf(move(ScopeIterators)));
 
-  // Add OR iterator for scopes if there are any Scope Iterators.
-  if (!ScopeIterators.empty())
-    TopLevelChildren.push_back(createOr(move(ScopeIterators)));
-
-  // Add proximity paths boosting.
-  auto BoostingIterators = createFileProximityIterators(
-      Req.ProximityPaths, URISchemes, InvertedIndex);
-  // Boosting iterators do not actually filter symbols. In order to preserve
-  // the validity of resulting query, TRUE iterator should be added along
-  // BOOSTs.
-  if (!BoostingIterators.empty()) {
-    BoostingIterators.push_back(createTrue(Symbols.size()));
-    TopLevelChildren.push_back(createOr(move(BoostingIterators)));
-  }
+  // Add proximity paths boosting (all symbols, some boosted).
+  Criteria.push_back(createFileProximityIterator(Req.ProximityPaths, URISchemes,
+                                                 InvertedIndex, Corpus));
 
   if (Req.RestrictForCodeCompletion)
-    TopLevelChildren.push_back(
-        InvertedIndex.find(RestrictedForCodeCompletion)->second.iterator());
+    Criteria.push_back(iterator(RestrictedForCodeCompletion));
 
   // Use TRUE iterator if both trigrams and scopes from the query are not
   // present in the symbol index.
-  auto QueryIterator = TopLevelChildren.empty()
-                           ? createTrue(Symbols.size())
-                           : createAnd(move(TopLevelChildren));
+  auto Root = Corpus.intersect(move(Criteria));
   // Retrieve more items than it was requested: some of  the items with high
   // final score might not be retrieved otherwise.
-  // FIXME(kbobyrev): Pre-scoring retrieval threshold should be adjusted as
-  // using 100x of the requested number might not be good in practice, e.g.
-  // when the requested number of items is small.
-  auto Root = Req.Limit ? createLimit(move(QueryIterator), *Req.Limit * 100)
-                        : move(QueryIterator);
+  // FIXME(kbobyrev): Tune this ratio.
+  if (Req.Limit)
+    Root = Corpus.limit(move(Root), *Req.Limit * 100);
+  SPAN_ATTACH(Tracer, "query", llvm::to_string(*Root));
+  vlog("Dex query tree: {0}", *Root);
 
   using IDAndScore = std::pair<DocID, float>;
   std::vector<IDAndScore> IDAndScores = consume(*Root);
@@ -248,7 +247,10 @@ void Dex::lookup(const LookupRequest &Req,
 void Dex::refs(const RefsRequest &Req,
                llvm::function_ref<void(const Ref &)> Callback) const {
   trace::Span Tracer("Dex refs");
-  log("refs is not implemented.");
+  for (const auto &ID : Req.IDs)
+    for (const auto &Ref : Refs.lookup(ID))
+      if (static_cast<int>(Req.Filter & Ref.Kind))
+        Callback(Ref);
 }
 
 size_t Dex::estimateMemoryUsage() const {
@@ -258,6 +260,7 @@ size_t Dex::estimateMemoryUsage() const {
   Bytes += InvertedIndex.getMemorySize();
   for (const auto &TokenToPostingList : InvertedIndex)
     Bytes += TokenToPostingList.second.bytes();
+  Bytes += Refs.getMemorySize();
   return Bytes + BackingDataSize;
 }
 

@@ -74,6 +74,8 @@ def HasCCDP          : Predicate<"Subtarget->hasCCDP()">,
                        AssemblerPredicate<"FeatureCacheDeepPersist", "ccdp">;
 def HasBTI           : Predicate<"Subtarget->hasBTI()">,
                        AssemblerPredicate<"FeatureBranchTargetId", "bti">;
+def HasMTE           : Predicate<"Subtarget->hasMTE()">,
+                       AssemblerPredicate<"FeatureMTE", "mte">;
 def IsLE             : Predicate<"Subtarget->isLittleEndian()">;
 def IsBE             : Predicate<"!Subtarget->isLittleEndian()">;
 def UseAlternateSExtLoadCVTF32
@@ -358,6 +360,9 @@ let RecomputePerFunction = 1 in {
   def NotForCodeSize   : Predicate<"!MF->getFunction().optForSize()">;
   // Avoid generating STRQro if it is slow, unless we're optimizing for code size.
   def UseSTRQro : Predicate<"!Subtarget->isSTRQroSlow() || MF->getFunction().optForSize()">;
+
+  def UseBTI : Predicate<[{ MF->getFunction().hasFnAttribute("branch-target-enforcement") }]>;
+  def NotUseBTI : Predicate<[{ !MF->getFunction().hasFnAttribute("branch-target-enforcement") }]>;
 }
 
 include "AArch64InstrFormats.td"
@@ -1122,6 +1127,50 @@ defm : STOPregister<"stsmax","LDSMAX">;// STSMAXx
 defm : STOPregister<"stsmin","LDSMIN">;// STSMINx
 defm : STOPregister<"stumax","LDUMAX">;// STUMAXx
 defm : STOPregister<"stumin","LDUMIN">;// STUMINx
+
+// v8.5 Memory Tagging Extension
+let Predicates = [HasMTE] in {
+
+def IRG   : BaseTwoOperand<0b0100, GPR64sp, "irg", null_frag, GPR64sp, GPR64>,
+            Sched<[]>{
+  let Inst{31} = 1;
+}
+def GMI   : BaseTwoOperand<0b0101, GPR64, "gmi", null_frag, GPR64sp>, Sched<[]>{
+  let Inst{31} = 1;
+  let isNotDuplicable = 1;
+}
+def ADDG  : AddSubG<0, "addg", null_frag>;
+def SUBG  : AddSubG<1, "subg", null_frag>;
+
+def : InstAlias<"irg $dst, $src", (IRG GPR64sp:$dst, GPR64sp:$src, XZR), 1>;
+
+def SUBP : SUBP<0, "subp", null_frag>, Sched<[]>;
+def SUBPS : SUBP<1, "subps", null_frag>, Sched<[]>{
+  let Defs = [NZCV];
+}
+
+def : InstAlias<"cmpp $lhs, $rhs", (SUBPS XZR, GPR64sp:$lhs, GPR64sp:$rhs), 0>;
+
+def LDG : MemTagLoad<"ldg", "\t$Rt, [$Rn, $offset]">;
+def : InstAlias<"ldg $Rt, [$Rn]", (LDG GPR64:$Rt, GPR64sp:$Rn, 0), 1>;
+
+def LDGV : MemTagVector<1, "ldgv", "\t$Rt, [$Rn]!",
+                   (outs GPR64sp:$wback, GPR64:$Rt), (ins GPR64sp:$Rn)> {
+  let DecoderMethod = "DecodeLoadAllocTagArrayInstruction";
+}
+def STGV : MemTagVector<0, "stgv", "\t$Rt, [$Rn]!",
+                   (outs GPR64sp:$wback), (ins GPR64:$Rt, GPR64sp:$Rn)>;
+
+defm STG   : MemTagStore<0b00, "stg">;
+defm STZG  : MemTagStore<0b01, "stzg">;
+defm ST2G  : MemTagStore<0b10, "st2g">;
+defm STZ2G : MemTagStore<0b11, "stz2g">;
+
+defm STGP     : StorePairOffset <0b01, 0, GPR64z, simm7s16, "stgp">;
+def  STGPpre  : StorePairPreIdx <0b01, 0, GPR64z, simm7s16, "stgp">;
+def  STGPpost : StorePairPostIdx<0b01, 0, GPR64z, simm7s16, "stgp">;
+
+} // Predicates = [HasMTE]
 
 //===----------------------------------------------------------------------===//
 // Logical instructions.
@@ -6589,10 +6638,24 @@ let isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [SP] in {
                    Sched<[WriteBrReg]>;
   def TCRETURNri : Pseudo<(outs), (ins tcGPR64:$dst, i32imm:$FPDiff), []>,
                    Sched<[WriteBrReg]>;
+  // Indirect tail-call with any register allowed, used by MachineOutliner when
+  // this is proven safe.
+  // FIXME: If we have to add any more hacks like this, we should instead relax
+  // some verifier checks for outlined functions.
+  def TCRETURNriALL : Pseudo<(outs), (ins GPR64:$dst, i32imm:$FPDiff), []>,
+                      Sched<[WriteBrReg]>;
+  // Indirect tail-call limited to only use registers (x16 and x17) which are
+  // allowed to tail-call a "BTI c" instruction.
+  def TCRETURNriBTI : Pseudo<(outs), (ins rtcGPR64:$dst, i32imm:$FPDiff), []>,
+                      Sched<[WriteBrReg]>;
 }
 
 def : Pat<(AArch64tcret tcGPR64:$dst, (i32 timm:$FPDiff)),
-          (TCRETURNri tcGPR64:$dst, imm:$FPDiff)>;
+          (TCRETURNri tcGPR64:$dst, imm:$FPDiff)>,
+      Requires<[NotUseBTI]>;
+def : Pat<(AArch64tcret rtcGPR64:$dst, (i32 timm:$FPDiff)),
+          (TCRETURNriBTI rtcGPR64:$dst, imm:$FPDiff)>,
+      Requires<[UseBTI]>;
 def : Pat<(AArch64tcret tglobaladdr:$dst, (i32 timm:$FPDiff)),
           (TCRETURNdi texternalsym:$dst, imm:$FPDiff)>;
 def : Pat<(AArch64tcret texternalsym:$dst, (i32 timm:$FPDiff)),

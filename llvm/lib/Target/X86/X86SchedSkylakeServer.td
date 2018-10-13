@@ -71,9 +71,15 @@ def SKXPortAny : ProcResGroup<[SKXPort0, SKXPort1, SKXPort2, SKXPort3, SKXPort4,
   let BufferSize=60;
 }
 
-// Loads are 5 cycles, so ReadAfterLd registers needn't be available until 5
+// Integer loads are 5 cycles, so ReadAfterLd registers needn't be available until 5
 // cycles after the memory operand.
 def : ReadAdvance<ReadAfterLd, 5>;
+
+// Vector loads are 5/6/7 cycles, so ReadAfterVec*Ld registers needn't be available
+// until 5/6/7 cycles after the memory operand.
+def : ReadAdvance<ReadAfterVecLd, 5>;
+def : ReadAdvance<ReadAfterVecXLd, 6>;
+def : ReadAdvance<ReadAfterVecYLd, 7>;
 
 // Many SchedWrites are defined in pairs with and without a folded load.
 // Instructions with folded loads are usually micro-fused, so they only appear
@@ -164,7 +170,7 @@ defm : X86WriteRes<WriteBitTest,         [SKXPort06], 1, [1], 1>;
 defm : X86WriteRes<WriteBitTestImmLd,    [SKXPort06,SKXPort23], 6, [1,1], 2>;
 defm : X86WriteRes<WriteBitTestRegLd,    [SKXPort0156,SKXPort23], 6, [1,1], 2>;
 defm : X86WriteRes<WriteBitTestSet,      [SKXPort06], 1, [1], 1>;
-defm : X86WriteRes<WriteBitTestSetImmLd, [SKXPort06,SKXPort23], 6, [1,1], 2>;
+defm : X86WriteRes<WriteBitTestSetImmLd, [SKXPort06,SKXPort23], 5, [1,1], 3>;
 defm : X86WriteRes<WriteBitTestSetRegLd, [SKXPort0156,SKXPort23], 5, [1,1], 2>;
 
 // Integer shifts and rotates.
@@ -1224,10 +1230,7 @@ def SKXWriteResGroup86 : SchedWriteRes<[SKXPort4,SKXPort23,SKXPort237,SKXPort06]
   let NumMicroOps = 4;
   let ResourceCycles = [1,1,1,1];
 }
-def: InstRW<[SKXWriteResGroup86], (instregex "BTC(16|32|64)mi8",
-                                             "BTR(16|32|64)mi8",
-                                             "BTS(16|32|64)mi8",
-                                             "SAR(8|16|32|64)m(1|i)",
+def: InstRW<[SKXWriteResGroup86], (instregex "SAR(8|16|32|64)m(1|i)",
                                              "SHL(8|16|32|64)m(1|i)",
                                              "SHR(8|16|32|64)m(1|i)")>;
 

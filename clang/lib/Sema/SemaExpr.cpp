@@ -5901,8 +5901,9 @@ CastKind Sema::PrepareScalarCast(ExprResult &Src, QualType DestTy) {
         return CK_PointerToCHERICapability;
       else if (SrcTy->isCHERICapabilityType(Context) && !DestTy->isCHERICapabilityType(Context))
         return CK_CHERICapabilityToPointer;
-      else
-        return CK_BitCast;
+      else if (Context.hasCvrSimilarType(SrcTy, DestTy))
+        return CK_NoOp;
+      return CK_BitCast;
     }
     case Type::STK_BlockPointer:
       return (SrcKind == Type::STK_BlockPointer
@@ -7851,7 +7852,10 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
         return RHSPointer->isCHERICapability() ? CHERICapabilityToPointer :
                                                  PointerToCHERICapability;
       } else {
-        Kind = CK_BitCast;
+        if (Context.hasCvrSimilarType(RHSType, LHSType))
+          Kind = CK_NoOp;
+        else
+          Kind = CK_BitCast;
         if (RHSPointer->isCHERICapability() && isa<PointerType>(OrigRHSType) &&
             RHSPointer->getPointeeType()->isVoidType())
           if (auto *TT = dyn_cast<TypedefType>(

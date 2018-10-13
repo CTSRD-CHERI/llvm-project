@@ -769,12 +769,18 @@ SDValue WebAssemblyTargetLowering::LowerFormalArguments(
     MFI->addParam(PtrVT);
   }
 
-  // Record the number and types of results.
+  // Record the number and types of arguments and results.
   SmallVector<MVT, 4> Params;
   SmallVector<MVT, 4> Results;
-  ComputeSignatureVTs(MF.getFunction(), DAG.getTarget(), Params, Results);
+  ComputeSignatureVTs(MF.getFunction().getFunctionType(), MF.getFunction(),
+                      DAG.getTarget(), Params, Results);
   for (MVT VT : Results)
     MFI->addResult(VT);
+  // TODO: Use signatures in WebAssemblyMachineFunctionInfo too and unify
+  // the param logic here with ComputeSignatureVTs
+  assert(MFI->getParams().size() == Params.size() &&
+         std::equal(MFI->getParams().begin(), MFI->getParams().end(),
+                    Params.begin()));
 
   return Chain;
 }
@@ -959,6 +965,44 @@ WebAssemblyTargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op,
   switch (IntNo) {
   default:
     return {}; // Don't custom lower most intrinsics.
+
+  case Intrinsic::wasm_add_saturate_signed:
+  case Intrinsic::wasm_add_saturate_unsigned:
+  case Intrinsic::wasm_sub_saturate_signed:
+  case Intrinsic::wasm_sub_saturate_unsigned: {
+    unsigned OpCode;
+    switch (IntNo) {
+    case Intrinsic::wasm_add_saturate_signed:
+      OpCode = WebAssemblyISD::ADD_SAT_S;
+      break;
+    case Intrinsic::wasm_add_saturate_unsigned:
+      OpCode = WebAssemblyISD::ADD_SAT_U;
+      break;
+    case Intrinsic::wasm_sub_saturate_signed:
+      OpCode = WebAssemblyISD::SUB_SAT_S;
+      break;
+    case Intrinsic::wasm_sub_saturate_unsigned:
+      OpCode = WebAssemblyISD::SUB_SAT_U;
+      break;
+    default:
+      llvm_unreachable("unexpected intrinsic id");
+      break;
+    }
+    return DAG.getNode(OpCode, DL, Op.getValueType(), Op.getOperand(1),
+                       Op.getOperand(2));
+  }
+
+  case Intrinsic::wasm_bitselect:
+    return DAG.getNode(WebAssemblyISD::BITSELECT, DL, Op.getValueType(),
+                       Op.getOperand(1), Op.getOperand(2), Op.getOperand(3));
+
+  case Intrinsic::wasm_anytrue:
+  case Intrinsic::wasm_alltrue: {
+    unsigned OpCode = IntNo == Intrinsic::wasm_anytrue
+                          ? WebAssemblyISD::ANYTRUE
+                          : WebAssemblyISD::ALLTRUE;
+    return DAG.getNode(OpCode, DL, Op.getValueType(), Op.getOperand(1));
+  }
 
   case Intrinsic::wasm_lsda:
     // TODO For now, just return 0 not to crash

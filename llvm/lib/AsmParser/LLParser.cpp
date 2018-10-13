@@ -4664,7 +4664,8 @@ bool LLParser::ParseDITemplateValueParameter(MDNode *&Result, bool IsDistinct) {
 /// ParseDIGlobalVariable:
 ///   ::= !DIGlobalVariable(scope: !0, name: "foo", linkageName: "foo",
 ///                         file: !1, line: 7, type: !2, isLocal: false,
-///                         isDefinition: true, declaration: !3, align: 8)
+///                         isDefinition: true, templateParams: !3,
+///                         declaration: !4, align: 8)
 bool LLParser::ParseDIGlobalVariable(MDNode *&Result, bool IsDistinct) {
 #define VISIT_MD_FIELDS(OPTIONAL, REQUIRED)                                    \
   REQUIRED(name, MDStringField, (/* AllowEmpty */ false));                     \
@@ -4675,15 +4676,17 @@ bool LLParser::ParseDIGlobalVariable(MDNode *&Result, bool IsDistinct) {
   OPTIONAL(type, MDField, );                                                   \
   OPTIONAL(isLocal, MDBoolField, );                                            \
   OPTIONAL(isDefinition, MDBoolField, (true));                                 \
+  OPTIONAL(templateParams, MDField, );                                         \
   OPTIONAL(declaration, MDField, );                                            \
   OPTIONAL(align, MDUnsignedField, (0, UINT32_MAX));
   PARSE_MD_FIELDS();
 #undef VISIT_MD_FIELDS
 
-  Result = GET_OR_DISTINCT(DIGlobalVariable,
-                           (Context, scope.Val, name.Val, linkageName.Val,
-                            file.Val, line.Val, type.Val, isLocal.Val,
-                            isDefinition.Val, declaration.Val, align.Val));
+  Result =
+      GET_OR_DISTINCT(DIGlobalVariable,
+                      (Context, scope.Val, name.Val, linkageName.Val, file.Val,
+                       line.Val, type.Val, isLocal.Val, isDefinition.Val,
+                       declaration.Val, templateParams.Val, align.Val));
   return false;
 }
 
@@ -6724,8 +6727,13 @@ int LLParser::ParseAtomicRMW(Instruction *&Inst, PerFunctionState &PFS) {
     return Error(PtrLoc, "atomicrmw operand must be a pointer");
   if (cast<PointerType>(Ptr->getType())->getElementType() != Val->getType())
     return Error(ValLoc, "atomicrmw value and pointer type do not match");
-  if (!Val->getType()->isIntegerTy())
-    return Error(ValLoc, "atomicrmw operand must be an integer");
+
+  if (!Val->getType()->isIntegerTy()) {
+    return Error(ValLoc, "atomicrmw " +
+                 AtomicRMWInst::getOperationName(Operation) +
+                 " operand must be an integer");
+  }
+
   unsigned Size = Val->getType()->getPrimitiveSizeInBits();
   if (Size < 8 || (Size & (Size - 1)))
     return Error(ValLoc, "atomicrmw operand must be power-of-two byte-sized"

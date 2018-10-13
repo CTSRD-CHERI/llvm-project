@@ -2463,7 +2463,7 @@ bool VarDecl::isKnownToBeDefined() const {
   //
   // With CUDA relocatable device code enabled, these variables don't get
   // special handling; they're treated like regular extern variables.
-  if (LangOpts.CUDA && !LangOpts.CUDARelocatableDeviceCode &&
+  if (LangOpts.CUDA && !LangOpts.GPURelocatableDeviceCode &&
       hasExternalStorage() && hasAttr<CUDASharedAttr>() &&
       isa<IncompleteArrayType>(getType()))
     return true;
