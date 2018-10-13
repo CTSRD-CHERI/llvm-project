@@ -696,8 +696,11 @@ Value *HWAddressSanitizer::emitPrologue(IRBuilder<> &IRB,
     // Prepare ring buffer data.
     Function *F = IRB.GetInsertBlock()->getParent();
     auto PC = IRB.CreatePtrToInt(F, IntptrTy);
-    auto GetStackPointerFn =
-        Intrinsic::getDeclaration(F->getParent(), Intrinsic::frameaddress);
+    auto ProgramASPtr = Type::getInt8PtrTy(
+        F->getParent()->getContext(),
+        F->getParent()->getDataLayout().getProgramAddressSpace());
+    auto GetStackPointerFn = Intrinsic::getDeclaration(
+        F->getParent(), Intrinsic::frameaddress, ProgramASPtr);
     Value *SP = IRB.CreatePtrToInt(
         IRB.CreateCall(GetStackPointerFn,
                        {Constant::getNullValue(IRB.getInt32Ty())}),
