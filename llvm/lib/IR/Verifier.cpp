@@ -1478,6 +1478,7 @@ static bool isFuncOnlyAttr(Attribute::AttrKind Kind) {
   case Attribute::InaccessibleMemOnly:
   case Attribute::InaccessibleMemOrArgMemOnly:
   case Attribute::AllocSize:
+  case Attribute::SpeculativeLoadHardening:
   case Attribute::Speculatable:
   case Attribute::StrictFP:
     return true;
@@ -4532,6 +4533,14 @@ void Verifier::visitDbgIntrinsic(StringRef Kind, DbgVariableIntrinsic &DII) {
                                " variable and !dbg attachment",
            &DII, BB, F, Var, Var->getScope()->getSubprogram(), Loc,
            Loc->getScope()->getSubprogram());
+
+  // This check is redundant with one in visitLocalVariable().
+  AssertDI(isType(Var->getRawType()), "invalid type ref", Var,
+           Var->getRawType());
+  if (auto *Type = dyn_cast_or_null<DIType>(Var->getRawType()))
+    if (Type->isBlockByrefStruct())
+      AssertDI(DII.getExpression() && DII.getExpression()->getNumElements(),
+               "BlockByRef variable without complex expression", Var, &DII);
 
   verifyFnArgs(DII);
 }

@@ -698,7 +698,8 @@ def warn_assume_side_effects : Warning<
   InGroup<DiagGroup<"assume">>;
 
 def warn_memcpy_chk_overflow : Warning<
-  "%0 will always overflow destination buffer">,
+  "'%0' will always overflow; destination buffer has size %1,"
+  " but size argument is %2">,
   InGroup<DiagGroup<"builtin-memcpy-chk-size">>;
 
 /// main()
@@ -1091,6 +1092,9 @@ def err_objc_property_attr_mutually_exclusive : Error<
   "property attributes '%0' and '%1' are mutually exclusive">;
 def err_objc_property_requires_object : Error<
   "property with '%0' attribute must be of object type">;
+def warn_objc_property_assign_on_object : Warning<
+  "'assign' property of object type may become a dangling reference; consider using 'unsafe_unretained'">,
+  InGroup<ObjCPropertyAssignOnObjectType>, DefaultIgnore;
 def warn_objc_property_no_assignment_attribute : Warning<
   "no 'assign', 'retain', or 'copy' attribute is specified - "
   "'assign' is assumed">,
@@ -1509,6 +1513,10 @@ def err_noexcept_needs_constant_expression : Error<
   "argument to noexcept specifier must be a constant expression">;
 def err_exception_spec_not_parsed : Error<
   "exception specification is not available until end of class definition">;
+def err_exception_spec_cycle : Error<
+  "exception specification of %0 uses itself">;
+def err_exception_spec_incomplete_type : Error<
+  "exception specification needed for member of incomplete class %0">;
 
 // C++ access checking
 def err_class_redeclared_with_different_access : Error<
@@ -2567,6 +2575,8 @@ def err_attribute_argument_type : Error<
   "constant|a string|an identifier}1">;
 def err_attribute_argument_outof_range : Error<
   "%0 attribute requires integer constant between %1 and %2 inclusive">;
+def err_attribute_argument_negative : Error<
+  "negative argument is not allowed for %0 attribute">;
 def err_init_priority_object_attr : Error<
   "can only use 'init_priority' attribute on file-scope definitions "
   "of objects of class type">;
@@ -2657,6 +2667,8 @@ def err_arg_with_address_space : Error<
   "parameter may not be qualified with an address space">;
 def err_field_with_address_space : Error<
   "field may not be qualified with an address space">;
+def err_compound_literal_with_address_space : Error<
+  "compound literal in function scope may not be qualified with an address space">;
 def err_attr_objc_ownership_redundant : Error<
   "the type %0 is already explicitly ownership-qualified">;
 def err_invalid_nsnumber_type : Error<
@@ -4326,6 +4338,8 @@ def note_forward_template_decl : Note<
 def note_inst_declaration_hint : Note<"add an explicit instantiation "
   "declaration to suppress this warning if %q0 is explicitly instantiated in "
   "another translation unit">;
+def note_evaluating_exception_spec_here : Note<
+  "in evaluation of exception specification for %q0 needed here">;
 
 def note_default_arg_instantiation_here : Note<
   "in instantiation of default argument for '%0' required here">;
@@ -7266,8 +7280,8 @@ def warn_atomic_op_has_invalid_memory_order : Warning<
 def err_atomic_op_has_invalid_synch_scope : Error<
   "synchronization scope argument to atomic operation is invalid">;
 def warn_atomic_op_misaligned : Warning<
-  "misaligned or large atomic operation may incur significant performance penalty">,
-  InGroup<DiagGroup<"atomic-alignment">>;
+  "%select{large|misaligned}0 atomic operation may incur "
+  "significant performance penalty">, InGroup<DiagGroup<"atomic-alignment">>;
 
 def err_overflow_builtin_must_be_int : Error<
   "operand argument to overflow builtin must be an integer (%0 invalid)">;
@@ -7653,8 +7667,6 @@ def note_in_class_initializer_not_yet_parsed : Note<
   "default member initializer declared here">;
 def err_in_class_initializer_cycle
     : Error<"default member initializer for %0 uses itself">;
-def err_exception_spec_cycle
-    : Error<"exception specification of %0 uses itself">;
 
 def ext_in_class_initializer_non_constant : Extension<
   "in-class initializer for static data member is not a constant expression; "

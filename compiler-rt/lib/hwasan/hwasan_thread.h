@@ -19,23 +19,17 @@
 
 namespace __hwasan {
 
-struct ThreadStartArg {
-  thread_callback_t callback;
-  void *param;
-};
-
 class Thread {
  public:
-  static Thread *Create(thread_callback_t start_routine, void *arg);
+  static void Create();  // Must be called from the thread itself.
   void Destroy();
-
-  void Init();
 
   uptr stack_top() { return stack_top_; }
   uptr stack_bottom() { return stack_bottom_; }
+  uptr stack_size() { return stack_top() - stack_bottom(); }
   uptr tls_begin() { return tls_begin_; }
   uptr tls_end() { return tls_end_; }
-  bool IsMainThread() { return start_routine_ == nullptr; }
+  bool IsMainThread() { return unique_id_ == 0; }
 
   bool AddrIsInStack(uptr addr) {
     return addr >= stack_bottom_ && addr < stack_top_;
@@ -53,7 +47,7 @@ class Thread {
   void EnterInterceptorScope() { in_interceptor_scope_++; }
   void LeaveInterceptorScope() { in_interceptor_scope_--; }
 
-  HwasanThreadLocalMallocStorage &malloc_storage() { return malloc_storage_; }
+  AllocatorCache *allocator_cache() { return &allocator_cache_; }
   HeapAllocationsRingBuffer *heap_allocations() {
     return heap_allocations_;
   }
@@ -68,24 +62,38 @@ class Thread {
   template <class CB>
   static void VisitAllLiveThreads(CB cb) {
     SpinMutexLock l(&thread_list_mutex);
-    Thread *t = main_thread;
+    Thread *t = thread_list_head;
     while (t) {
       cb(t);
       t = t->next_;
     }
   }
 
-  // Return a scratch ThreadStartArg object to be used in
-  // pthread_create interceptor.
-  ThreadStartArg *thread_start_arg() { return &thread_start_arg_; }
+  u64 unique_id() const { return unique_id_; }
+  void Announce() {
+    if (announced_) return;
+    announced_ = true;
+    Print("Thread: ");
+  }
+
+  struct ThreadStats {
+    uptr n_live_threads;
+    uptr total_stack_size;
+  };
+
+  static ThreadStats GetThreadStats() {
+    SpinMutexLock l(&thread_list_mutex);
+    return thread_stats;
+  }
+
+  static uptr MemoryUsedPerThread();
 
  private:
   // NOTE: There is no Thread constructor. It is allocated
   // via mmap() and *must* be valid in zero-initialized state.
-  void SetThreadStackAndTls();
+  void Init();
   void ClearShadowForThreadStackAndTLS();
-  thread_callback_t start_routine_;
-  void *arg_;
+  void Print(const char *prefix);
   uptr stack_top_;
   uptr stack_bottom_;
   uptr tls_begin_;
@@ -98,18 +106,21 @@ class Thread {
   u32 random_state_;
   u32 random_buffer_;
 
-  HwasanThreadLocalMallocStorage malloc_storage_;
+  AllocatorCache allocator_cache_;
   HeapAllocationsRingBuffer *heap_allocations_;
 
   static void InsertIntoThreadList(Thread *t);
   static void RemoveFromThreadList(Thread *t);
   Thread *next_;  // All live threads form a linked list.
   static SpinMutex thread_list_mutex;
-  static Thread *main_thread;
+  static Thread *thread_list_head;
+  static ThreadStats thread_stats;
+
+  u64 unique_id_;  // counting from zero.
 
   u32 tagging_disabled_;  // if non-zero, malloc uses zero tag in this thread.
 
-  ThreadStartArg thread_start_arg_;
+  bool announced_;
 };
 
 Thread *GetCurrentThread();

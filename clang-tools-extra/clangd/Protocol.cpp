@@ -517,6 +517,8 @@ json::Value toJSON(const CompletionItem &CI) {
     Result["textEdit"] = *CI.textEdit;
   if (!CI.additionalTextEdits.empty())
     Result["additionalTextEdits"] = json::Array(CI.additionalTextEdits);
+  if (CI.deprecated)
+    Result["deprecated"] = CI.deprecated;
   return std::move(Result);
 }
 
@@ -614,6 +616,11 @@ bool fromJSON(const json::Value &Params,
   json::ObjectMapper O(Params);
   return O && O.map("compilationDatabasePath", CCPC.compilationDatabasePath) &&
          O.map("compilationDatabaseChanges", CCPC.compilationDatabaseChanges);
+}
+
+bool fromJSON(const json::Value &Params, ReferenceParams &R) {
+  TextDocumentPositionParams &Base = R;
+  return fromJSON(Params, Base);
 }
 
 json::Value toJSON(const CancelParams &CP) {

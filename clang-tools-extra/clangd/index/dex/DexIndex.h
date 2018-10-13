@@ -20,12 +20,12 @@
 #ifndef LLVM_CLANG_TOOLS_EXTRA_CLANGD_INDEX_DEX_DEXINDEX_H
 #define LLVM_CLANG_TOOLS_EXTRA_CLANGD_INDEX_DEX_DEXINDEX_H
 
-#include "../Index.h"
-#include "../MemIndex.h"
 #include "Iterator.h"
 #include "Token.h"
 #include "Trigram.h"
-#include <mutex>
+#include "index/Index.h"
+#include "index/MemIndex.h"
+#include "index/SymbolCollector.h"
 
 namespace clang {
 namespace clangd {
@@ -39,12 +39,34 @@ namespace dex {
 // index on disk and then load it if available.
 class DexIndex : public SymbolIndex {
 public:
-  /// \brief (Re-)Build index for `Symbols`. All symbol pointers must remain
-  /// accessible as long as `Symbols` is kept alive.
-  void build(std::shared_ptr<std::vector<const Symbol *>> Syms);
+  // All symbols must outlive this index.
+  template <typename Range>
+  DexIndex(Range &&Symbols, llvm::ArrayRef<std::string> Schemes)
+      : URISchemes(Schemes) {
+    // If Schemes don't contain any items, fall back to SymbolCollector's
+    // default URI schemes.
+    if (URISchemes.empty()) {
+      SymbolCollector::Options Opts;
+      URISchemes = Opts.URISchemes;
+    }
+    for (auto &&Sym : Symbols)
+      this->Symbols.push_back(&Sym);
+    buildIndex();
+  }
+  // Symbols are owned by BackingData, Index takes ownership.
+  template <typename Range, typename Payload>
+  DexIndex(Range &&Symbols, Payload &&BackingData,
+           llvm::ArrayRef<std::string> URISchemes)
+      : DexIndex(std::forward<Range>(Symbols), URISchemes) {
+    KeepAlive = std::shared_ptr<void>(
+        std::make_shared<Payload>(std::move(BackingData)), nullptr);
+  }
 
-  /// \brief Build index from a symbol slab.
-  static std::unique_ptr<SymbolIndex> build(SymbolSlab Slab);
+  /// Builds an index from a slab. The index takes ownership of the slab.
+  static std::unique_ptr<SymbolIndex>
+  build(SymbolSlab Slab, llvm::ArrayRef<std::string> URISchemes) {
+    return llvm::make_unique<DexIndex>(Slab, std::move(Slab), URISchemes);
+  }
 
   bool
   fuzzyFind(const FuzzyFindRequest &Req,
@@ -53,30 +75,39 @@ public:
   void lookup(const LookupRequest &Req,
               llvm::function_ref<void(const Symbol &)> Callback) const override;
 
-  void findOccurrences(const OccurrencesRequest &Req,
-                       llvm::function_ref<void(const SymbolOccurrence &)>
-                           Callback) const override;
+  void refs(const RefsRequest &Req,
+            llvm::function_ref<void(const Ref &)> Callback) const override;
 
   size_t estimateMemoryUsage() const override;
 
 private:
+  void buildIndex();
 
-  mutable std::mutex Mutex;
+  /// Stores symbols sorted in the descending order of symbol quality..
+  std::vector<const Symbol *> Symbols;
+  /// SymbolQuality[I] is the quality of Symbols[I].
+  std::vector<float> SymbolQuality;
+  llvm::DenseMap<SymbolID, const Symbol *> LookupTable;
+  /// Inverted index is a mapping from the search token to the posting list,
+  /// which contains all items which can be characterized by such search token.
+  /// For example, if the search token is scope "std::", the corresponding
+  /// posting list would contain all indices of symbols defined in namespace
+  /// std. Inverted index is used to retrieve posting lists which are processed
+  /// during the fuzzyFind process.
+  llvm::DenseMap<Token, PostingList> InvertedIndex;
+  std::shared_ptr<void> KeepAlive; // poor man's move-only std::any
 
-  std::shared_ptr<std::vector<const Symbol *>> Symbols /*GUARDED_BY(Mutex)*/;
-  llvm::DenseMap<SymbolID, const Symbol *> LookupTable /*GUARDED_BY(Mutex)*/;
-  llvm::DenseMap<const Symbol *, float> SymbolQuality /*GUARDED_BY(Mutex)*/;
-  // Inverted index is a mapping from the search token to the posting list,
-  // which contains all items which can be characterized by such search token.
-  // For example, if the search token is scope "std::", the corresponding
-  // posting list would contain all indices of symbols defined in namespace std.
-  // Inverted index is used to retrieve posting lists which are processed during
-  // the fuzzyFind process.
-  llvm::DenseMap<Token, PostingList> InvertedIndex /*GUARDED_BY(Mutex)*/;
+  std::vector<std::string> URISchemes;
 };
+
+/// Returns Search Token for a number of parent directories of given Path.
+/// Should be used within the index build process.
+///
+/// This function is exposed for testing only.
+std::vector<std::string> generateProximityURIs(llvm::StringRef URIPath);
 
 } // namespace dex
 } // namespace clangd
 } // namespace clang
 
-#endif
+#endif // LLVM_CLANG_TOOLS_EXTRA_CLANGD_INDEX_DEX_DEXINDEX_H

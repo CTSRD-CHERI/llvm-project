@@ -1029,10 +1029,9 @@ void Sema::ActOnEndOfTranslationUnit() {
 
   // All delayed member exception specs should be checked or we end up accepting
   // incompatible declarations.
-  // FIXME: This is wrong for TUKind == TU_Prefix. In that case, we need to
-  // write out the lists to the AST file (if any).
+  assert(DelayedOverridingExceptionSpecChecks.empty());
+  assert(DelayedEquivalentExceptionSpecChecks.empty());
   assert(DelayedDefaultedMemberExceptionSpecs.empty());
-  assert(DelayedExceptionSpecChecks.empty());
 
   // All dllexport classes should have been processed already.
   assert(DelayedDllExportClasses.empty());
@@ -1506,10 +1505,64 @@ void Sema::RecordParsingTemplateParameterDepth(unsigned Depth) {
       "Remove assertion if intentionally called in a non-lambda context.");
 }
 
+// Check that the type of the VarDecl has an accessible copy constructor and
+// resolve its destructor's exception spefication.
+static void checkEscapingByref(VarDecl *VD, Sema &S) {
+  QualType T = VD->getType();
+  EnterExpressionEvaluationContext scope(
+      S, Sema::ExpressionEvaluationContext::PotentiallyEvaluated);
+  SourceLocation Loc = VD->getLocation();
+  Expr *VarRef = new (S.Context) DeclRefExpr(VD, false, T, VK_LValue, Loc);
+  ExprResult Result = S.PerformMoveOrCopyInitialization(
+      InitializedEntity::InitializeBlock(Loc, T, false), VD, VD->getType(),
+      VarRef, /*AllowNRVO=*/true);
+  if (!Result.isInvalid()) {
+    Result = S.MaybeCreateExprWithCleanups(Result);
+    Expr *Init = Result.getAs<Expr>();
+    S.Context.setBlockVarCopyInit(VD, Init, S.canThrow(Init));
+  }
+
+  // The destructor's exception spefication is needed when IRGen generates
+  // block copy/destroy functions. Resolve it here.
+  if (const CXXRecordDecl *RD = T->getAsCXXRecordDecl())
+    if (CXXDestructorDecl *DD = RD->getDestructor()) {
+      auto *FPT = DD->getType()->getAs<FunctionProtoType>();
+      S.ResolveExceptionSpec(Loc, FPT);
+    }
+}
+
+static void markEscapingByrefs(const FunctionScopeInfo &FSI, Sema &S) {
+  // Set the EscapingByref flag of __block variables captured by
+  // escaping blocks.
+  for (const BlockDecl *BD : FSI.Blocks) {
+    if (BD->doesNotEscape())
+      continue;
+    for (const BlockDecl::Capture &BC : BD->captures()) {
+      VarDecl *VD = BC.getVariable();
+      if (VD->hasAttr<BlocksAttr>())
+        VD->setEscapingByref();
+    }
+  }
+
+  for (VarDecl *VD : FSI.ByrefBlockVars) {
+    // __block variables might require us to capture a copy-initializer.
+    if (!VD->isEscapingByref())
+      continue;
+    // It's currently invalid to ever have a __block variable with an
+    // array type; should we diagnose that here?
+    // Regardless, we don't want to ignore array nesting when
+    // constructing this copy.
+    if (VD->getType()->isStructureOrClassType())
+      checkEscapingByref(VD, S);
+  }
+}
+
 void Sema::PopFunctionScopeInfo(const AnalysisBasedWarnings::Policy *WP,
                                 const Decl *D, const BlockExpr *blkExpr) {
   assert(!FunctionScopes.empty() && "mismatched push/pop!");
   FunctionScopeInfo *Scope = FunctionScopes.pop_back_val();
+
+  markEscapingByrefs(*Scope, *this);
 
   if (LangOpts.OpenMP)
     popOpenMPFunctionRegion(Scope);
@@ -1996,6 +2049,14 @@ bool Sema::checkOpenCLDisabledTypeDeclSpec(const DeclSpec &DS, QualType QT) {
   if (auto TagT = dyn_cast<TagType>(QT.getCanonicalType().getTypePtr()))
     Decl = TagT->getDecl();
   auto Loc = DS.getTypeSpecTypeLoc();
+
+  // Check extensions for vector types.
+  // e.g. double4 is not allowed when cl_khr_fp64 is absent.
+  if (QT->isExtVectorType()) {
+    auto TypePtr = QT->castAs<ExtVectorType>()->getElementType().getTypePtr();
+    return checkOpenCLDisabledTypeOrDecl(TypePtr, Loc, QT, OpenCLTypeExtMap);
+  }
+
   if (checkOpenCLDisabledTypeOrDecl(Decl, Loc, QT, OpenCLDeclExtMap))
     return true;
 
