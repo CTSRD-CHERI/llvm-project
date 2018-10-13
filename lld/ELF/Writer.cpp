@@ -344,9 +344,9 @@ template <class ELFT> static void createSyntheticSections() {
       In.MipsRldMap = make<MipsRldMapSection>();
       Add(In.MipsRldMap);
     }
-    In<ELFT>::MipsAbiFlags = MipsAbiFlagsSection<ELFT>::create();
-    if (In<ELFT>::MipsAbiFlags)
-      Add(In<ELFT>::MipsAbiFlags);
+    InX<ELFT>::MipsAbiFlags = MipsAbiFlagsSection<ELFT>::create();
+    if (InX<ELFT>::MipsAbiFlags)
+      Add(InX<ELFT>::MipsAbiFlags);
     if (auto *Sec = MipsOptionsSection<ELFT>::create())
       Add(Sec);
     if (auto *Sec = MipsReginfoSection<ELFT>::create())

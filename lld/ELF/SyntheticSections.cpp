@@ -1453,8 +1453,8 @@ template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
     }
     if (Config->isCheriABI()) {
       uint32_t CheriFlags = 0;
-      if (In<ELFT>::MipsAbiFlags)
-        if (auto ABI = In<ELFT>::MipsAbiFlags->getCheriAbiVariant())
+      if (InX<ELFT>::MipsAbiFlags)
+        if (auto ABI = InX<ELFT>::MipsAbiFlags->getCheriAbiVariant())
           CheriFlags |= *ABI;
       addInt(DT_MIPS_CHERI_FLAGS, CheriFlags);
     }

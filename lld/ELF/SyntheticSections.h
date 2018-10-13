@@ -1023,11 +1023,13 @@ template <class ELFT> struct InX {
   static CheriCapRelocsSection<ELFT> *CapRelocs;
   static VersionTableSection<ELFT> *VerSym;
   static VersionNeedSection<ELFT> *VerNeed;
+  static MipsAbiFlagsSection<ELFT> *MipsAbiFlags;
 };
 
 template <class ELFT> CheriCapRelocsSection<ELFT> *InX<ELFT>::CapRelocs;
 template <class ELFT> VersionTableSection<ELFT> *InX<ELFT>::VerSym;
 template <class ELFT> VersionNeedSection<ELFT> *InX<ELFT>::VerNeed;
+template <class ELFT> MipsAbiFlagsSection<ELFT> *InX<ELFT>::MipsAbiFlags;
 } // namespace elf
 } // namespace lld
 

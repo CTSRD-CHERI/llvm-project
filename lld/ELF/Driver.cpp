@@ -1482,7 +1482,8 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   Target = getTarget();
   InX<ELFT>::VerSym = nullptr;
   InX<ELFT>::VerNeed = nullptr;
-  InX<ELFT>::CheriCapRelocsSection = nullptr;
+  InX<ELFT>::CapRelocs = nullptr;
+  InX<ELFT>::MipsAbiFlags = nullptr;
 
   Config->MaxPageSize = getMaxPageSize(Args);
   Config->ImageBase = getImageBase(Args);

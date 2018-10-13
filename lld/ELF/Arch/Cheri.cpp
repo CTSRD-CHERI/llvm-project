@@ -182,7 +182,7 @@ void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
     //           << Twine((int)LocationSym.Type) << " against "
     //           << toString(TargetSym) << "\n";
     auto *RawInput = reinterpret_cast<const InMemoryCapRelocEntry<E> *>(
-        S->Data.begin() + CapRelocsOffset);
+        S->data().begin() + CapRelocsOffset);
     int64_t TargetCapabilityOffset = (int64_t)RawInput->offset;
     assert(RawInput->size == 0 && "Clang should not have set size in __cap_relocs");
     if (!isa<Defined>(LocationSym)) {
@@ -747,8 +747,6 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
 
   ValuesAssigned = true;
 }
-
-CheriCapTableSection *In.CheriCapTable;
 
 template class elf::CheriCapRelocsSection<ELF32LE>;
 template class elf::CheriCapRelocsSection<ELF32BE>;
