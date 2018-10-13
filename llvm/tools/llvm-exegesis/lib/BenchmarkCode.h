@@ -10,6 +10,7 @@
 #ifndef LLVM_TOOLS_LLVM_EXEGESIS_BENCHMARKCODE_H
 #define LLVM_TOOLS_LLVM_EXEGESIS_BENCHMARKCODE_H
 
+#include "RegisterValue.h"
 #include "llvm/MC/MCInst.h"
 #include <string>
 #include <vector>

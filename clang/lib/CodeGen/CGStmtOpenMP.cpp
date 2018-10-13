@@ -2310,6 +2310,10 @@ bool CodeGenFunction::EmitOMPWorksharingLoop(
                                        S.getIterationVariable()->getType(),
                                        S.getBeginLoc());
         }
+      } else {
+        // Default behaviour for schedule clause.
+        CGM.getOpenMPRuntime().getDefaultScheduleAndChunk(
+            *this, S, ScheduleKind.Schedule, Chunk);
       }
       const unsigned IVSize = getContext().getTypeSize(IVExpr->getType());
       const bool IVSigned = IVExpr->getType()->hasSignedIntegerRepresentation();
@@ -3325,6 +3329,10 @@ void CodeGenFunction::EmitOMPDistributeLoop(const OMPLoopDirective &S,
                                        S.getIterationVariable()->getType(),
                                        S.getBeginLoc());
         }
+      } else {
+        // Default behaviour for dist_schedule clause.
+        CGM.getOpenMPRuntime().getDefaultDistScheduleAndChunk(
+            *this, S, ScheduleKind, Chunk);
       }
       const unsigned IVSize = getContext().getTypeSize(IVExpr->getType());
       const bool IVSigned = IVExpr->getType()->hasSignedIntegerRepresentation();
@@ -3903,6 +3911,8 @@ static void emitOMPAtomicExpr(CodeGenFunction &CGF, OpenMPClauseKind Kind,
   case OMPC_from:
   case OMPC_use_device_ptr:
   case OMPC_is_device_ptr:
+  case OMPC_unified_address:
+  case OMPC_unified_shared_memory:
     llvm_unreachable("Clause is not allowed in 'omp atomic'.");
   }
 }

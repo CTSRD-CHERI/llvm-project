@@ -384,12 +384,19 @@ EXTERN void* __kmpc_data_sharing_push_stack(size_t DataSize,
     return omptarget_nvptx_SimpleThreadPrivateContext::Allocate(DataSize);
   }
 
+  // Add worst-case padding to DataSize so that future stack allocations are
+  // correctly aligned.
+  const size_t Alignment = 8;
+  if (DataSize % Alignment != 0) {
+    DataSize += (Alignment - DataSize % Alignment);
+  }
+
   // Frame pointer must be visible to all workers in the same warp.
   unsigned WID = getWarpId();
   void *&FrameP = DataSharingState.FramePtr[WID];
 
   // Only warp active master threads manage the stack.
-  if (IsWarpMasterActiveThread()) {
+  if (getThreadId() % WARPSIZE == 0) {
     // SlotP will point to either the shared memory slot or an existing
     // global memory slot.
     __kmpc_data_sharing_slot *&SlotP = DataSharingState.SlotPtr[WID];
@@ -468,7 +475,7 @@ EXTERN void __kmpc_data_sharing_pop_stack(void *FrameStart) {
     return omptarget_nvptx_SimpleThreadPrivateContext::Deallocate(FrameStart);
   }
 
-  if (IsWarpMasterActiveThread()) {
+  if (getThreadId() % WARPSIZE == 0) {
     unsigned WID = getWarpId();
 
     // Current slot
@@ -477,12 +484,12 @@ EXTERN void __kmpc_data_sharing_pop_stack(void *FrameStart) {
     // Pointer to next available stack.
     void *&StackP = DataSharingState.StackPtr[WID];
 
+    // Pop the frame.
+    StackP = FrameStart;
+
     // If the current slot is empty, we need to free the slot after the
     // pop.
     bool SlotEmpty = (StackP == &SlotP->Data[0]);
-
-    // Pop the frame.
-    StackP = FrameStart;
 
     if (SlotEmpty && SlotP->Prev) {
       // Before removing the slot we need to reset StackP.

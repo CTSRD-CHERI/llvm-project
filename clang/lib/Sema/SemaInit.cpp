@@ -964,6 +964,14 @@ void InitListChecker::CheckImplicitInitList(const InitializedEntity &Entity,
                      StructuredSubobjectInitList->getEndLoc()),
                  "}");
     }
+
+    // Warn if this type won't be an aggregate in future versions of C++.
+    auto *CXXRD = T->getAsCXXRecordDecl();
+    if (CXXRD && CXXRD->hasUserDeclaredConstructor()) {
+      SemaRef.Diag(StructuredSubobjectInitList->getBeginLoc(),
+                   diag::warn_cxx2a_compat_aggregate_init_with_ctors)
+          << StructuredSubobjectInitList->getSourceRange() << T;
+    }
   }
 }
 
@@ -1106,9 +1114,30 @@ void InitListChecker::CheckExplicitInitList(const InitializedEntity &Entity,
     }
   }
 
-  if (!VerifyOnly && T->isScalarType() &&
-      IList->getNumInits() == 1 && !isa<InitListExpr>(IList->getInit(0)))
-    warnBracedScalarInit(SemaRef, Entity, IList->getSourceRange());
+  if (!VerifyOnly) {
+    if (T->isScalarType() && IList->getNumInits() == 1 &&
+        !isa<InitListExpr>(IList->getInit(0)))
+      warnBracedScalarInit(SemaRef, Entity, IList->getSourceRange());
+
+    // Warn if this is a class type that won't be an aggregate in future
+    // versions of C++.
+    auto *CXXRD = T->getAsCXXRecordDecl();
+    if (CXXRD && CXXRD->hasUserDeclaredConstructor()) {
+      // Don't warn if there's an equivalent default constructor that would be
+      // used instead.
+      bool HasEquivCtor = false;
+      if (IList->getNumInits() == 0) {
+        auto *CD = SemaRef.LookupDefaultConstructor(CXXRD);
+        HasEquivCtor = CD && !CD->isDeleted();
+      }
+
+      if (!HasEquivCtor) {
+        SemaRef.Diag(IList->getBeginLoc(),
+                     diag::warn_cxx2a_compat_aggregate_init_with_ctors)
+            << IList->getSourceRange() << T;
+      }
+    }
+  }
 }
 
 void InitListChecker::CheckListElementTypes(const InitializedEntity &Entity,
@@ -9126,8 +9155,11 @@ QualType Sema::DeduceTemplateSpecializationFromInitializer(
       TSInfo->getType()->getContainedDeducedType());
   assert(DeducedTST && "not a deduced template specialization type");
 
-  // We can only perform deduction for class templates.
   auto TemplateName = DeducedTST->getTemplateName();
+  if (TemplateName.isDependent())
+    return Context.DependentTy;
+
+  // We can only perform deduction for class templates.
   auto *Template =
       dyn_cast_or_null<ClassTemplateDecl>(TemplateName.getAsTemplateDecl());
   if (!Template) {

@@ -19,6 +19,7 @@
 #include "ProtocolHandlers.h"
 #include "clang/Tooling/Core/Replacement.h"
 #include "llvm/ADT/Optional.h"
+#include <memory>
 
 namespace clang {
 namespace clangd {
@@ -163,6 +164,8 @@ private:
   ClangdDiagnosticOptions DiagOpts;
   /// The supported kinds of the client.
   SymbolKindBitset SupportedSymbolKinds;
+  /// The supported completion item kinds of the client.
+  CompletionItemKindBitset SupportedCompletionItemKinds;
 
   // Store of the current versions of the open documents.
   DraftStore DraftMgr;
@@ -170,7 +173,9 @@ private:
   // Server must be the last member of the class to allow its destructor to exit
   // the worker thread that may otherwise run an async callback on partially
   // destructed instance of ClangdLSPServer.
-  ClangdServer Server;
+  // Set in construtor and destroyed when run() finishes. To ensure all worker
+  // threads exit before run() returns.
+  std::unique_ptr<ClangdServer> Server;
 };
 } // namespace clangd
 } // namespace clang

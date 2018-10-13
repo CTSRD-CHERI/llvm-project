@@ -362,7 +362,7 @@ void MachineBasicBlock::print(raw_ostream &OS, ModuleSlotTracker &MST,
       // Print human readable probabilities as comments.
       OS << "; ";
       for (auto I = succ_begin(), E = succ_end(); I != E; ++I) {
-        const BranchProbability &BP = *getProbabilityIterator(I);
+        const BranchProbability &BP = getSuccProbability(I);
         if (I != succ_begin())
           OS << ", ";
         OS << printMBBReference(**I) << '('
@@ -461,7 +461,7 @@ bool MachineBasicBlock::isLiveIn(MCPhysReg Reg, LaneBitmask LaneMask) const {
 }
 
 void MachineBasicBlock::sortUniqueLiveIns() {
-  llvm::sort(LiveIns.begin(), LiveIns.end(),
+  llvm::sort(LiveIns,
              [](const RegisterMaskPair &LI0, const RegisterMaskPair &LI1) {
                return LI0.PhysReg < LI1.PhysReg;
              });
@@ -1404,9 +1404,8 @@ MachineBasicBlock::computeRegisterLiveness(const TargetRegisterInfo *TRI,
   // no successor has it live in.
   if (I == end()) {
     for (MachineBasicBlock *S : successors()) {
-      for (MCSubRegIterator SubReg(Reg, TRI, /*IncludeSelf*/true);
-           SubReg.isValid(); ++SubReg) {
-        if (S->isLiveIn(*SubReg))
+      for (const MachineBasicBlock::RegisterMaskPair &LI : S->liveins()) {
+        if (TRI->regsOverlap(LI.PhysReg, Reg))
           return LQR_Live;
       }
     }
@@ -1460,9 +1459,8 @@ MachineBasicBlock::computeRegisterLiveness(const TargetRegisterInfo *TRI,
   // Did we get to the start of the block?
   if (I == begin()) {
     // If so, the register's state is definitely defined by the live-in state.
-    for (MCRegAliasIterator RAI(Reg, TRI, /*IncludeSelf=*/true); RAI.isValid();
-         ++RAI)
-      if (isLiveIn(*RAI))
+    for (const MachineBasicBlock::RegisterMaskPair &LI : liveins())
+      if (TRI->regsOverlap(LI.PhysReg, Reg))
         return LQR_Live;
 
     return LQR_Dead;

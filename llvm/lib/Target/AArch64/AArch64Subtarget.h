@@ -67,6 +67,7 @@ protected:
   bool HasV8_2aOps = false;
   bool HasV8_3aOps = false;
   bool HasV8_4aOps = false;
+  bool HasV8_5aOps = false;
 
   bool HasFPARMv8 = false;
   bool HasNEON = false;
@@ -93,11 +94,23 @@ protected:
   bool HasRCPC = false;
   bool HasAggressiveFMA = false;
 
+  // Armv8.5-A Extensions
+  bool HasAlternativeNZCV = false;
+  bool HasFRInt3264 = false;
+  bool HasSpecRestrict = false;
+  bool HasSpecCtrl = false;
+  bool HasPredCtrl = false;
+  bool HasCCDP = false;
+  bool HasBTI = false;
+  bool HasRandGen = false;
+
   // HasZeroCycleRegMove - Has zero-cycle register mov instructions.
   bool HasZeroCycleRegMove = false;
 
   // HasZeroCycleZeroing - Has zero-cycle zeroing instructions.
   bool HasZeroCycleZeroing = false;
+  bool HasZeroCycleZeroingGP = false;
+  bool HasZeroCycleZeroingFP = false;
   bool HasZeroCycleZeroingFPWorkaround = false;
 
   // StrictAlign - Disallow unaligned memory accesses.
@@ -213,10 +226,13 @@ public:
   bool hasV8_2aOps() const { return HasV8_2aOps; }
   bool hasV8_3aOps() const { return HasV8_3aOps; }
   bool hasV8_4aOps() const { return HasV8_4aOps; }
+  bool hasV8_5aOps() const { return HasV8_5aOps; }
 
   bool hasZeroCycleRegMove() const { return HasZeroCycleRegMove; }
 
-  bool hasZeroCycleZeroing() const { return HasZeroCycleZeroing; }
+  bool hasZeroCycleZeroingGP() const { return HasZeroCycleZeroingGP; }
+
+  bool hasZeroCycleZeroingFP() const { return HasZeroCycleZeroingFP; }
 
   bool hasZeroCycleZeroingFPWorkaround() const {
     return HasZeroCycleZeroingFPWorkaround;
@@ -304,6 +320,14 @@ public:
   bool hasSVE() const { return HasSVE; }
   bool hasRCPC() const { return HasRCPC; }
   bool hasAggressiveFMA() const { return HasAggressiveFMA; }
+  bool hasAlternativeNZCV() const { return HasAlternativeNZCV; }
+  bool hasFRInt3264() const { return HasFRInt3264; }
+  bool hasSpecRestrict() { return HasSpecRestrict; }
+  bool hasSpecCtrl() { return HasSpecCtrl; }
+  bool hasPredCtrl() { return HasPredCtrl; }
+  bool hasCCDP() { return HasCCDP; }
+  bool hasBTI() { return HasBTI; }
+  bool hasRandGen() { return HasRandGen; }
 
   bool isLittleEndian() const { return IsLittle; }
 

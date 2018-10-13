@@ -84,7 +84,7 @@ def : ReadAdvance<ReadAfterLd, 5>;
 multiclass BWWriteResPair<X86FoldableSchedWrite SchedRW,
                           list<ProcResourceKind> ExePorts,
                           int Lat, list<int> Res = [1], int UOps = 1,
-                          int LoadLat = 5, int LoadUOps = 1> {
+                          int LoadLat = 5> {
   // Register variant is using a single cycle on ExePort.
   def : WriteRes<SchedRW, ExePorts> {
     let Latency = Lat;
@@ -97,7 +97,7 @@ multiclass BWWriteResPair<X86FoldableSchedWrite SchedRW,
   def : WriteRes<SchedRW.Folded, !listconcat([BWPort23], ExePorts)> {
     let Latency = !add(Lat, LoadLat);
     let ResourceCycles = !listconcat([1], Res);
-    let NumMicroOps = !add(UOps, LoadUOps);
+    let NumMicroOps = !add(UOps, 1);
   }
 }
 
@@ -161,8 +161,14 @@ def  : WriteRes<WriteSETCCStore, [BWPort06,BWPort4,BWPort237]> {
   let Latency = 2;
   let NumMicroOps = 3;
 }
-def  : WriteRes<WriteLAHFSAHF, [BWPort06]>;
-def  : WriteRes<WriteBitTest,[BWPort06]>; // Bit Test instrs
+
+defm : X86WriteRes<WriteLAHFSAHF,        [BWPort06], 1, [1], 1>;
+defm : X86WriteRes<WriteBitTest,         [BWPort06], 1, [1], 1>; // Bit Test instrs
+defm : X86WriteRes<WriteBitTestImmLd,    [BWPort06,BWPort23], 6, [1,1], 2>;
+defm : X86WriteRes<WriteBitTestRegLd,    [BWPort0156,BWPort23], 6, [1,1], 2>;
+defm : X86WriteRes<WriteBitTestSet,      [BWPort06], 1, [1], 1>; // Bit Test + Set instrs
+defm : X86WriteRes<WriteBitTestSetImmLd, [BWPort06,BWPort23], 6, [1,1], 2>;
+defm : X86WriteRes<WriteBitTestSetRegLd, [BWPort0156,BWPort23], 5, [1,1], 2>;
 
 // Bit counts.
 defm : BWWriteResPair<WriteBSF, [BWPort1], 3>;
@@ -173,9 +179,9 @@ defm : BWWriteResPair<WritePOPCNT,         [BWPort1], 3>;
 
 // Integer shifts and rotates.
 defm : BWWriteResPair<WriteShift,    [BWPort06],  1>;
-defm : BWWriteResPair<WriteShiftCL,  [BWPort06,BWPort0156], 3, [2,1], 3, 5, 2>;
+defm : BWWriteResPair<WriteShiftCL,  [BWPort06,BWPort0156],  3, [2,1], 3>;
 defm : BWWriteResPair<WriteRotate,   [BWPort06],  2, [2], 2>;
-defm : BWWriteResPair<WriteRotateCL, [BWPort06,BWPort0156], 3, [2,1], 3, 5, 2>;
+defm : BWWriteResPair<WriteRotateCL, [BWPort06,BWPort0156],  3, [2,1], 3>;
 
 // SHLD/SHRD.
 defm : X86WriteRes<WriteSHDrri, [BWPort1], 3, [1], 1>;
@@ -974,13 +980,6 @@ def BWWriteResGroup62 : SchedWriteRes<[BWPort6,BWPort23]> {
 def: InstRW<[BWWriteResGroup62], (instrs FARJMP64)>;
 def: InstRW<[BWWriteResGroup62], (instregex "JMP(16|32|64)m")>;
 
-def BWWriteResGroup63 : SchedWriteRes<[BWPort23,BWPort06]> {
-  let Latency = 6;
-  let NumMicroOps = 2;
-  let ResourceCycles = [1,1];
-}
-def: InstRW<[BWWriteResGroup63], (instregex "BT(16|32|64)mi8")>;
-
 def BWWriteResGroup64 : SchedWriteRes<[BWPort23,BWPort15]> {
   let Latency = 6;
   let NumMicroOps = 2;
@@ -1167,6 +1166,11 @@ def BWWriteResGroup100 : SchedWriteRes<[BWPort4,BWPort23,BWPort237,BWPort06,BWPo
   let ResourceCycles = [1,1,1,2,1];
 }
 def : SchedAlias<WriteADCRMW, BWWriteResGroup100>;
+def: InstRW<[BWWriteResGroup100], (instregex "ROL(8|16|32|64)mCL",
+                                             "ROR(8|16|32|64)mCL",
+                                             "SAR(8|16|32|64)mCL",
+                                             "SHL(8|16|32|64)mCL",
+                                             "SHR(8|16|32|64)mCL")>;
 
 def BWWriteResGroup101 : SchedWriteRes<[BWPort1,BWPort23]> {
   let Latency = 9;
@@ -1368,10 +1372,10 @@ def BWWriteResGroup153 : SchedWriteRes<[BWPort4,BWPort23,BWPort237,BWPort06,BWPo
 }
 def: InstRW<[BWWriteResGroup153], (instrs CMPXCHG8B)>;
 
-def BWWriteResGroup154 : SchedWriteRes<[BWPort5]> {
-  let Latency = 16;
-  let NumMicroOps = 16;
-  let ResourceCycles = [16];
+def BWWriteResGroup154 : SchedWriteRes<[BWPort5,BWPort6]> {
+  let Latency = 8;
+  let NumMicroOps = 20;
+  let ResourceCycles = [1,1];
 }
 def: InstRW<[BWWriteResGroup154], (instrs VZEROALL)>;
 

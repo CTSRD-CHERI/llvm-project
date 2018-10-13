@@ -65,7 +65,7 @@ uint64_t elf::getPPC64TocBase() {
   // TOC starts where the first of these sections starts. We always create a
   // .got when we see a relocation that uses it, so for us the start is always
   // the .got.
-  uint64_t TocVA = InX::Got->getVA();
+  uint64_t TocVA = In.Got->getVA();
 
   // Per the ppc64-elf-linux ABI, The TOC base is TOC value plus 0x8000
   // thus permitting a full 64 Kbytes segment. Note that the glibc startup
@@ -192,6 +192,7 @@ static uint32_t readInstrFromHalf16(const uint8_t *Loc) {
 
 PPC64::PPC64() {
   GotRel = R_PPC64_GLOB_DAT;
+  NoneRel = R_PPC64_NONE;
   PltRel = R_PPC64_JMP_SLOT;
   RelativeRel = R_PPC64_RELATIVE;
   IRelativeRel = R_PPC64_IRELATIVE;
@@ -502,7 +503,7 @@ void PPC64::writePltHeader(uint8_t *Buf) const {
   // The 'bcl' instruction will set the link register to the address of the
   // following instruction ('mflr r11'). Here we store the offset from that
   // instruction  to the first entry in the GotPlt section.
-  int64_t GotPltOffset = InX::GotPlt->getVA() - (InX::Plt->getVA() + 8);
+  int64_t GotPltOffset = In.GotPlt->getVA() - (In.Plt->getVA() + 8);
   write64(Buf + 52, GotPltOffset);
 }
 

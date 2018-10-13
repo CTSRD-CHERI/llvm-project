@@ -89,7 +89,7 @@ def : ReadAdvance<ReadAfterLd, 5>;
 multiclass HWWriteResPair<X86FoldableSchedWrite SchedRW,
                           list<ProcResourceKind> ExePorts,
                           int Lat, list<int> Res = [1], int UOps = 1,
-                          int LoadLat = 5, int LoadUOps = 1> {
+                          int LoadLat = 5> {
   // Register variant is using a single cycle on ExePort.
   def : WriteRes<SchedRW, ExePorts> {
     let Latency = Lat;
@@ -102,7 +102,7 @@ multiclass HWWriteResPair<X86FoldableSchedWrite SchedRW,
   def : WriteRes<SchedRW.Folded, !listconcat([HWPort23], ExePorts)> {
     let Latency = !add(Lat, LoadLat);
     let ResourceCycles = !listconcat([1], Res);
-    let NumMicroOps = !add(UOps, LoadUOps);
+    let NumMicroOps = !add(UOps, 1);
   }
 }
 
@@ -144,9 +144,9 @@ defm : X86WriteRes<WriteXCHG, [HWPort0156], 2, [3], 3>;
 
 // Integer shifts and rotates.
 defm : HWWriteResPair<WriteShift,    [HWPort06],  1>;
-defm : HWWriteResPair<WriteShiftCL,  [HWPort06, HWPort0156], 3, [2,1], 3, 6, 2>;
+defm : HWWriteResPair<WriteShiftCL,  [HWPort06, HWPort0156],  3, [2,1], 3>;
 defm : HWWriteResPair<WriteRotate,   [HWPort06],  2, [2], 2>;
-defm : HWWriteResPair<WriteRotateCL, [HWPort06, HWPort0156], 3, [2,1], 3, 6, 2>;
+defm : HWWriteResPair<WriteRotateCL, [HWPort06, HWPort0156],  3, [2,1], 3>;
 
 // SHLD/SHRD.
 defm : X86WriteRes<WriteSHDrri, [HWPort1], 3, [1], 1>;
@@ -165,8 +165,14 @@ def  : WriteRes<WriteSETCCStore, [HWPort06,HWPort4,HWPort237]> {
   let Latency = 2;
   let NumMicroOps = 3;
 }
-def  : WriteRes<WriteLAHFSAHF, [HWPort06]>;
-def  : WriteRes<WriteBitTest,[HWPort06]>;
+
+defm : X86WriteRes<WriteLAHFSAHF,        [HWPort06], 1, [1], 1>;
+defm : X86WriteRes<WriteBitTest,         [HWPort06], 1, [1], 1>;
+defm : X86WriteRes<WriteBitTestImmLd,    [HWPort06,HWPort23], 6, [1,1], 2>;
+defm : X86WriteRes<WriteBitTestRegLd,    [], 1, [], 10>;
+defm : X86WriteRes<WriteBitTestSet,      [HWPort06], 1, [1], 1>;
+defm : X86WriteRes<WriteBitTestSetImmLd, [HWPort06,HWPort23], 6, [1,1], 2>;
+defm : X86WriteRes<WriteBitTestSetRegLd, [], 1, [], 11>;
 
 // This is for simple LEAs with one or two input operands.
 // The complex ones can only execute on port 1, and they require two cycles on
@@ -641,13 +647,6 @@ def : InstRW<[HWWritePopA], (instregex "POPA(16|32)")>;
 
 //-- Arithmetic instructions --//
 
-// BT.
-// m,r.
-def HWWriteBTmr : SchedWriteRes<[]> {
-  let NumMicroOps = 10;
-}
-def : InstRW<[HWWriteBTmr], (instregex "BT(16|32|64)mr")>;
-
 // BTR BTS BTC.
 // m,r.
 def HWWriteBTRSCmr : SchedWriteRes<[]> {
@@ -990,13 +989,6 @@ def HWWriteResGroup14 : SchedWriteRes<[HWPort6,HWPort23]> {
 def: InstRW<[HWWriteResGroup14], (instrs FARJMP64)>;
 def: InstRW<[HWWriteResGroup14], (instregex "JMP(16|32|64)m")>;
 
-def HWWriteResGroup15 : SchedWriteRes<[HWPort23,HWPort06]> {
-  let Latency = 6;
-  let NumMicroOps = 2;
-  let ResourceCycles = [1,1];
-}
-def: InstRW<[HWWriteResGroup15], (instregex "BT(16|32|64)mi8")>;
-
 def HWWriteResGroup16 : SchedWriteRes<[HWPort23,HWPort15]> {
   let Latency = 6;
   let NumMicroOps = 2;
@@ -1306,6 +1298,11 @@ def HWWriteResGroup69 : SchedWriteRes<[HWPort4,HWPort23,HWPort237,HWPort06,HWPor
   let NumMicroOps = 6;
   let ResourceCycles = [1,1,1,2,1];
 }
+def: InstRW<[HWWriteResGroup69], (instregex "ROL(8|16|32|64)mCL",
+                                            "ROR(8|16|32|64)mCL",
+                                            "SAR(8|16|32|64)mCL",
+                                            "SHL(8|16|32|64)mCL",
+                                            "SHR(8|16|32|64)mCL")>;
 def: SchedAlias<WriteADCRMW, HWWriteResGroup69>;
 
 def HWWriteResGroup70 : SchedWriteRes<[HWPort0,HWPort1]> {
@@ -1611,10 +1608,10 @@ def HWWriteResGroup144 : SchedWriteRes<[HWPort4,HWPort5,HWPort6,HWPort23,HWPort2
 }
 def: InstRW<[HWWriteResGroup144], (instrs INSB, INSL, INSW)>;
 
-def HWWriteResGroup145 : SchedWriteRes<[HWPort5]> {
-  let Latency = 16;
-  let NumMicroOps = 16;
-  let ResourceCycles = [16];
+def HWWriteResGroup145 : SchedWriteRes<[HWPort5, HWPort6]> {
+  let Latency = 8;
+  let NumMicroOps = 20;
+  let ResourceCycles = [1,1];
 }
 def: InstRW<[HWWriteResGroup145], (instrs VZEROALL)>;
 
