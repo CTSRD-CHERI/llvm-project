@@ -2677,7 +2677,7 @@ LValue CodeGenFunction::EmitDeclRefLValue(const DeclRefExpr *E) {
       }
 
       assert(isa<BlockDecl>(CurCodeDecl));
-      Address addr = GetAddrOfBlockDecl(VD);
+      Address addr = GetAddrOfBlockDecl(VD, VD->hasAttr<BlocksAttr>());
       return MakeAddrLValue(addr, T, AlignmentSource::Decl);
     }
   }
@@ -2729,7 +2729,7 @@ LValue CodeGenFunction::EmitDeclRefLValue(const DeclRefExpr *E) {
     }
 
     // Drill into block byref variables.
-    bool isBlockByref = VD->isEscapingByref();
+    bool isBlockByref = VD->hasAttr<BlocksAttr>();
     if (isBlockByref) {
       addr = emitBlockByrefAddress(addr, VD);
     }

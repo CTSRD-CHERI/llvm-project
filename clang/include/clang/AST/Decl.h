@@ -965,8 +965,6 @@ protected:
     /// Defines kind of the ImplicitParamDecl: 'this', 'self', 'vtt', '_cmd' or
     /// something else.
     unsigned ImplicitParamKind : 3;
-
-    unsigned EscapingByref : 1;
   };
 
   union {
@@ -1407,19 +1405,6 @@ public:
   void setPreviousDeclInSameBlockScope(bool Same) {
     assert(!isa<ParmVarDecl>(this));
     NonParmVarDeclBits.PreviousDeclInSameBlockScope = Same;
-  }
-
-  /// Indicates the capture is a __block variable that is captured by a block
-  /// that can potentially escape (a block for which BlockDecl::doesNotEscape
-  /// returns false).
-  bool isEscapingByref() const;
-
-  /// Indicates the capture is a __block variable that is never captured by an
-  /// escaping block.
-  bool isNonEscapingByref() const;
-
-  void setEscapingByref() {
-    NonParmVarDeclBits.EscapingByref = true;
   }
 
   /// Retrieve the variable declaration from which this variable could
@@ -2284,8 +2269,7 @@ public:
   unsigned getMinRequiredArguments() const;
 
   QualType getReturnType() const {
-    assert(getType()->getAs<FunctionType>() && "Expected a FunctionType!");
-    return getType()->getAs<FunctionType>()->getReturnType();
+    return getType()->castAs<FunctionType>()->getReturnType();
   }
 
   /// Attempt to compute an informative source range covering the
@@ -2293,14 +2277,22 @@ public:
   /// limited representation in the AST.
   SourceRange getReturnTypeSourceRange() const;
 
+  /// Get the declared return type, which may differ from the actual return
+  /// type if the return type is deduced.
+  QualType getDeclaredReturnType() const {
+    auto *TSI = getTypeSourceInfo();
+    QualType T = TSI ? TSI->getType() : getType();
+    return T->castAs<FunctionType>()->getReturnType();
+  }
+
   /// Attempt to compute an informative source range covering the
   /// function exception specification, if any.
   SourceRange getExceptionSpecSourceRange() const;
 
   /// Determine the type of an expression that calls this function.
   QualType getCallResultType() const {
-    assert(getType()->getAs<FunctionType>() && "Expected a FunctionType!");
-    return getType()->getAs<FunctionType>()->getCallResultType(getASTContext());
+    return getType()->castAs<FunctionType>()->getCallResultType(
+        getASTContext());
   }
 
   /// Returns the WarnUnusedResultAttr that is either declared on this
@@ -3884,14 +3876,6 @@ public:
     /// Whether this is a "by ref" capture, i.e. a capture of a __block
     /// variable.
     bool isByRef() const { return VariableAndFlags.getInt() & flag_isByRef; }
-
-    bool isEscapingByref() const {
-      return getVariable()->isEscapingByref();
-    }
-
-    bool isNonEscapingByref() const {
-      return getVariable()->isNonEscapingByref();
-    }
 
     /// Whether this is a nested capture, i.e. the variable captured
     /// is not from outside the immediately enclosing function/block.

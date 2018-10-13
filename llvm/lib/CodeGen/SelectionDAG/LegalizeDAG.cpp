@@ -3959,7 +3959,7 @@ bool SelectionDAGLegalize::ExpandNode(SDNode *Node) {
     return false;
   }
 
-  LLVM_DEBUG(dbgs() << "Succesfully expanded node\n");
+  LLVM_DEBUG(dbgs() << "Successfully expanded node\n");
   ReplaceNode(Node, Results.data());
   return true;
 }
@@ -4046,6 +4046,11 @@ void SelectionDAGLegalize::ConvertNodeToLibcall(SDNode *Node) {
     Results.push_back(ExpandFPLibCall(Node, RTLIB::SQRT_F32, RTLIB::SQRT_F64,
                                       RTLIB::SQRT_F80, RTLIB::SQRT_F128,
                                       RTLIB::SQRT_PPCF128));
+    break;
+  case ISD::FCBRT:
+    Results.push_back(ExpandFPLibCall(Node, RTLIB::CBRT_F32, RTLIB::CBRT_F64,
+                                      RTLIB::CBRT_F80, RTLIB::CBRT_F128,
+                                      RTLIB::CBRT_PPCF128));
     break;
   case ISD::FSIN:
   case ISD::STRICT_FSIN:

@@ -13,7 +13,6 @@
 #include "RIFF.h"
 #include "Trace.h"
 #include "index/SymbolYAML.h"
-#include "index/dex/DexIndex.h"
 #include "clang/Basic/Version.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FileSystem.h"
@@ -131,10 +130,11 @@ static llvm::cl::opt<Path> InputMirrorFile(
 
 static llvm::cl::opt<bool> EnableIndex(
     "index",
-    llvm::cl::desc("Enable index-based features such as global code completion "
-                   "and searching for symbols. "
-                   "Clang uses an index built from symbols in opened files"),
-    llvm::cl::init(true));
+    llvm::cl::desc(
+        "Enable index-based features. By default, clangd maintains an index "
+        "built from symbols in opened files. Global index support needs to "
+        "enabled separatedly."),
+    llvm::cl::init(true), llvm::cl::Hidden);
 
 static llvm::cl::opt<bool>
     ShowOrigins("debug-origin",
@@ -271,14 +271,17 @@ int main(int argc, char *argv[]) {
     Opts.ResourceDir = ResourceDir;
   Opts.BuildDynamicSymbolIndex = EnableIndex;
   std::unique_ptr<SymbolIndex> StaticIdx;
+  std::future<void> AsyncIndexLoad; // Block exit while loading the index.
   if (EnableIndex && !YamlSymbolFile.empty()) {
     // Load the index asynchronously. Meanwhile SwapIndex returns no results.
     SwapIndex *Placeholder;
     StaticIdx.reset(Placeholder = new SwapIndex(llvm::make_unique<MemIndex>()));
-    runAsync<void>([Placeholder, &Opts] {
+    AsyncIndexLoad = runAsync<void>([Placeholder, &Opts] {
       if (auto Idx = loadIndex(YamlSymbolFile, Opts.URISchemes, UseDex))
         Placeholder->reset(std::move(Idx));
     });
+    if (RunSynchronously)
+      AsyncIndexLoad.wait();
   }
   Opts.StaticIndex = StaticIdx.get();
   Opts.AsyncThreadsCount = WorkerThreadsCount;

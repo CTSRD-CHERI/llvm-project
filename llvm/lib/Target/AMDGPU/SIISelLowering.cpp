@@ -718,9 +718,7 @@ MVT SITargetLowering::getRegisterTypeForCallingConv(LLVMContext &Context,
     if (Size == 64)
       return MVT::i32;
 
-    if (Size == 16 &&
-        Subtarget->has16BitInsts() &&
-        isPowerOf2_32(VT.getVectorNumElements()))
+    if (Size == 16 && Subtarget->has16BitInsts())
       return VT.isInteger() ? MVT::v2i16 : MVT::v2f16;
   }
 
@@ -741,9 +739,8 @@ unsigned SITargetLowering::getNumRegistersForCallingConv(LLVMContext &Context,
     if (Size == 64)
       return 2 * NumElts;
 
-    // FIXME: Fails to break down as we want with v3.
-    if (Size == 16 && Subtarget->has16BitInsts() && isPowerOf2_32(NumElts))
-      return VT.getVectorNumElements() / 2;
+    if (Size == 16 && Subtarget->has16BitInsts())
+      return (VT.getVectorNumElements() + 1) / 2;
   }
 
   return TargetLowering::getNumRegistersForCallingConv(Context, CC, VT);
@@ -774,10 +771,10 @@ unsigned SITargetLowering::getVectorTypeBreakdownForCallingConv(
     // FIXME: We should fix the ABI to be the same on targets without 16-bit
     // support, but unless we can properly handle 3-vectors, it will be still be
     // inconsistent.
-    if (Size == 16 && Subtarget->has16BitInsts() && isPowerOf2_32(NumElts)) {
+    if (Size == 16 && Subtarget->has16BitInsts()) {
       RegisterVT = VT.isInteger() ? MVT::v2i16 : MVT::v2f16;
       IntermediateVT = RegisterVT;
-      NumIntermediates = NumElts / 2;
+      NumIntermediates = (NumElts + 1) / 2;
       return NumIntermediates;
     }
   }
@@ -1123,8 +1120,7 @@ EVT SITargetLowering::getOptimalMemOpType(uint64_t Size, unsigned DstAlign,
 static bool isFlatGlobalAddrSpace(unsigned AS) {
   return AS == AMDGPUAS::GLOBAL_ADDRESS ||
          AS == AMDGPUAS::FLAT_ADDRESS ||
-         AS == AMDGPUAS::CONSTANT_ADDRESS ||
-         AS == AMDGPUAS::CONSTANT_ADDRESS_32BIT;
+         AS == AMDGPUAS::CONSTANT_ADDRESS;
 }
 
 bool SITargetLowering::isNoopAddrSpaceCast(unsigned SrcAS,
@@ -2522,11 +2518,16 @@ SDValue SITargetLowering::LowerCall(CallLoweringInfo &CLI,
       int32_t Offset = LocMemOffset;
 
       SDValue PtrOff = DAG.getConstant(Offset, DL, PtrVT);
+      unsigned Align = 0;
 
       if (IsTailCall) {
         ISD::ArgFlagsTy Flags = Outs[realArgIdx].Flags;
         unsigned OpSize = Flags.isByVal() ?
           Flags.getByValSize() : VA.getValVT().getStoreSize();
+
+        // FIXME: We can have better than the minimum byval required alignment.
+        Align = Flags.isByVal() ? Flags.getByValAlign() :
+          MinAlign(Subtarget->getStackAlignment(), Offset);
 
         Offset = Offset + FPDiff;
         int FI = MFI.CreateFixedObject(OpSize, Offset, true);
@@ -2545,6 +2546,7 @@ SDValue SITargetLowering::LowerCall(CallLoweringInfo &CLI,
       } else {
         DstAddr = PtrOff;
         DstInfo = MachinePointerInfo::getStack(MF, LocMemOffset);
+        Align = MinAlign(Subtarget->getStackAlignment(), LocMemOffset);
       }
 
       if (Outs[i].Flags.isByVal()) {
@@ -2559,7 +2561,7 @@ SDValue SITargetLowering::LowerCall(CallLoweringInfo &CLI,
 
         MemOpChains.push_back(Cpy);
       } else {
-        SDValue Store = DAG.getStore(Chain, DL, Arg, DstAddr, DstInfo);
+        SDValue Store = DAG.getStore(Chain, DL, Arg, DstAddr, DstInfo, Align);
         MemOpChains.push_back(Store);
       }
     }
@@ -4422,18 +4424,15 @@ SDValue SITargetLowering::LowerGlobalAddress(AMDGPUMachineFunction *MFI,
                                              SelectionDAG &DAG) const {
   GlobalAddressSDNode *GSD = cast<GlobalAddressSDNode>(Op);
   const GlobalValue *GV = GSD->getGlobal();
-
-  if (GSD->getAddressSpace() != AMDGPUAS::CONSTANT_ADDRESS &&
-      GSD->getAddressSpace() != AMDGPUAS::CONSTANT_ADDRESS_32BIT &&
-      GSD->getAddressSpace() != AMDGPUAS::GLOBAL_ADDRESS &&
-      // FIXME: It isn't correct to rely on the type of the pointer. This should
-      // be removed when address space 0 is 64-bit.
-      !GV->getType()->getElementType()->isFunctionTy())
+  if (GSD->getAddressSpace() == AMDGPUAS::LOCAL_ADDRESS ||
+      GSD->getAddressSpace() == AMDGPUAS::REGION_ADDRESS ||
+      GSD->getAddressSpace() == AMDGPUAS::PRIVATE_ADDRESS)
     return AMDGPUTargetLowering::LowerGlobalAddress(MFI, Op, DAG);
 
   SDLoc DL(GSD);
   EVT PtrVT = Op.getValueType();
 
+  // FIXME: Should not make address space based decisions here.
   if (shouldEmitFixup(GV))
     return buildPCRelGlobalAddress(DAG, GV, DL, GSD->getOffset(), PtrVT);
   else if (shouldEmitPCReloc(GV))
@@ -4447,8 +4446,8 @@ SDValue SITargetLowering::LowerGlobalAddress(AMDGPUMachineFunction *MFI,
   PointerType *PtrTy = PointerType::get(Ty, AMDGPUAS::CONSTANT_ADDRESS);
   const DataLayout &DataLayout = DAG.getDataLayout();
   unsigned Align = DataLayout.getABITypeAlignment(PtrTy);
-  // FIXME: Use a PseudoSourceValue once those can be assigned an address space.
-  MachinePointerInfo PtrInfo(UndefValue::get(PtrTy));
+  MachinePointerInfo PtrInfo
+    = MachinePointerInfo::getGOT(DAG.getMachineFunction());
 
   return DAG.getLoad(PtrVT, DL, DAG.getEntryNode(), GOTAddr, PtrInfo, Align,
                      MachineMemOperand::MODereferenceable |
@@ -6653,17 +6652,24 @@ SDValue SITargetLowering::LowerTrig(SDValue Op, SelectionDAG &DAG) const {
   SDLoc DL(Op);
   EVT VT = Op.getValueType();
   SDValue Arg = Op.getOperand(0);
+  SDValue TrigVal;
+
   // TODO: Should this propagate fast-math-flags?
-  SDValue FractPart = DAG.getNode(AMDGPUISD::FRACT, DL, VT,
-                                  DAG.getNode(ISD::FMUL, DL, VT, Arg,
-                                              DAG.getConstantFP(0.5/M_PI, DL,
-                                                                VT)));
+
+  SDValue OneOver2Pi = DAG.getConstantFP(0.5 / M_PI, DL, VT);
+
+  if (Subtarget->hasTrigReducedRange()) {
+    SDValue MulVal = DAG.getNode(ISD::FMUL, DL, VT, Arg, OneOver2Pi);
+    TrigVal = DAG.getNode(AMDGPUISD::FRACT, DL, VT, MulVal);
+  } else {
+    TrigVal = DAG.getNode(ISD::FMUL, DL, VT, Arg, OneOver2Pi);
+  }
 
   switch (Op.getOpcode()) {
   case ISD::FCOS:
-    return DAG.getNode(AMDGPUISD::COS_HW, SDLoc(Op), VT, FractPart);
+    return DAG.getNode(AMDGPUISD::COS_HW, SDLoc(Op), VT, TrigVal);
   case ISD::FSIN:
-    return DAG.getNode(AMDGPUISD::SIN_HW, SDLoc(Op), VT, FractPart);
+    return DAG.getNode(AMDGPUISD::SIN_HW, SDLoc(Op), VT, TrigVal);
   default:
     llvm_unreachable("Wrong trig opcode");
   }

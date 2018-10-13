@@ -16,8 +16,11 @@ namespace clang {
 namespace clangd {
 
 std::unique_ptr<SymbolIndex> MemIndex::build(SymbolSlab Slab, RefSlab Refs) {
+  // Store Slab size before it is moved.
+  const auto BackingDataSize = Slab.bytes() + Refs.bytes();
   auto Data = std::make_pair(std::move(Slab), std::move(Refs));
-  return llvm::make_unique<MemIndex>(Data.first, Data.second, std::move(Data));
+  return llvm::make_unique<MemIndex>(Data.first, Data.second, std::move(Data),
+                                     BackingDataSize);
 }
 
 bool MemIndex::fuzzyFind(
@@ -26,7 +29,8 @@ bool MemIndex::fuzzyFind(
   assert(!StringRef(Req.Query).contains("::") &&
          "There must be no :: in query.");
 
-  TopN<std::pair<float, const Symbol *>> Top(Req.MaxCandidateCount);
+  TopN<std::pair<float, const Symbol *>> Top(
+      Req.Limit ? *Req.Limit : std::numeric_limits<size_t>::max());
   FuzzyMatcher Filter(Req.Query);
   bool More = false;
   for (const auto Pair : Index) {
@@ -70,7 +74,7 @@ void MemIndex::refs(const RefsRequest &Req,
 }
 
 size_t MemIndex::estimateMemoryUsage() const {
-  return Index.getMemorySize();
+  return Index.getMemorySize() + Refs.getMemorySize() + BackingDataSize;
 }
 
 } // namespace clangd

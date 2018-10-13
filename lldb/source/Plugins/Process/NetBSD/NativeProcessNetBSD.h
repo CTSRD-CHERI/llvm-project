@@ -58,9 +58,6 @@ public:
   Status ReadMemory(lldb::addr_t addr, void *buf, size_t size,
                     size_t &bytes_read) override;
 
-  Status ReadMemoryWithoutTrap(lldb::addr_t addr, void *buf, size_t size,
-                               size_t &bytes_read) override;
-
   Status WriteMemory(lldb::addr_t addr, const void *buf, size_t size,
                      size_t &bytes_written) override;
 
@@ -92,16 +89,6 @@ public:
   // ---------------------------------------------------------------------
   static Status PtraceWrapper(int req, lldb::pid_t pid, void *addr = nullptr,
                               int data = 0, int *result = nullptr);
-
-protected:
-  // ---------------------------------------------------------------------
-  // NativeProcessProtocol protected interface
-  // ---------------------------------------------------------------------
-
-  Status
-  GetSoftwareBreakpointTrapOpcode(size_t trap_opcode_size_hint,
-                                  size_t &actual_opcode_size,
-                                  const uint8_t *&trap_opcode_bytes) override;
 
 private:
   MainLoop::SignalHandleUP m_sigchld_handle;

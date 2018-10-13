@@ -1479,6 +1479,12 @@ void MachineInstr::print(raw_ostream &OS, ModuleSlotTracker &MST,
     OS << "afn ";
   if (getFlag(MachineInstr::FmReassoc))
     OS << "reassoc ";
+  if (getFlag(MachineInstr::NoUWrap))
+    OS << "nuw ";
+  if (getFlag(MachineInstr::NoSWrap))
+    OS << "nsw ";
+  if (getFlag(MachineInstr::IsExact))
+    OS << "exact ";
 
   // Print the opcode name.
   if (TII)
@@ -1760,7 +1766,8 @@ bool MachineInstr::addRegisterKilled(unsigned IncomingReg,
   // Trim unneeded kill operands.
   while (!DeadOps.empty()) {
     unsigned OpIdx = DeadOps.back();
-    if (getOperand(OpIdx).isImplicit())
+    if (getOperand(OpIdx).isImplicit() &&
+        (!isInlineAsm() || findInlineAsmFlagIdx(OpIdx) < 0))
       RemoveOperand(OpIdx);
     else
       getOperand(OpIdx).setIsKill(false);
@@ -1824,7 +1831,8 @@ bool MachineInstr::addRegisterDead(unsigned Reg,
   // Trim unneeded dead operands.
   while (!DeadOps.empty()) {
     unsigned OpIdx = DeadOps.back();
-    if (getOperand(OpIdx).isImplicit())
+    if (getOperand(OpIdx).isImplicit() &&
+        (!isInlineAsm() || findInlineAsmFlagIdx(OpIdx) < 0))
       RemoveOperand(OpIdx);
     else
       getOperand(OpIdx).setIsDead(false);

@@ -1260,15 +1260,35 @@ Value *InstCombiner::SimplifyDemandedVectorElts(Value *V, APInt DemandedElts,
     break;
   }
   case Instruction::Select: {
+    // If this is a vector select, try to transform the select condition based
+    // on the current demanded elements.
+    SelectInst *Sel = cast<SelectInst>(I);
+    if (Sel->getCondition()->getType()->isVectorTy()) {
+      // TODO: We are not doing anything with UndefElts based on this call.
+      // It is overwritten below based on the other select operands. If an
+      // element of the select condition is known undef, then we are free to
+      // choose the output value from either arm of the select. If we know that
+      // one of those values is undef, then the output can be undef.
+      if (Value *V = SimplifyDemandedVectorElts(Sel->getCondition(),
+                                                DemandedElts, UndefElts,
+                                                Depth + 1)) {
+        Sel->setCondition(V);
+        MadeChange = true;
+      }
+    }
+
+    // Next, see if we can transform the arms of the select.
     APInt DemandedLHS(DemandedElts), DemandedRHS(DemandedElts);
-    if (auto *CV = dyn_cast<ConstantVector>(I->getOperand(0))) {
+    if (auto *CV = dyn_cast<ConstantVector>(Sel->getCondition())) {
       for (unsigned i = 0; i < VWidth; i++) {
+        // isNullValue() always returns false when called on a ConstantExpr.
+        // Skip constant expressions to avoid propagating incorrect information.
         Constant *CElt = CV->getAggregateElement(i);
-        // Method isNullValue always returns false when called on a
-        // ConstantExpr. If CElt is a ConstantExpr then skip it in order to
-        // to avoid propagating incorrect information.
         if (isa<ConstantExpr>(CElt))
           continue;
+        // TODO: If a select condition element is undef, we can demand from
+        // either side. If one side is known undef, choosing that side would
+        // propagate undef.
         if (CElt->isNullValue())
           DemandedLHS.clearBit(i);
         else
@@ -1276,19 +1296,20 @@ Value *InstCombiner::SimplifyDemandedVectorElts(Value *V, APInt DemandedElts,
       }
     }
 
-    if (Value *V = SimplifyDemandedVectorElts(I->getOperand(1), DemandedLHS,
+    if (Value *V = SimplifyDemandedVectorElts(Sel->getTrueValue(), DemandedLHS,
                                               UndefElts2, Depth + 1)) {
-      I->setOperand(1, V);
+      Sel->setTrueValue(V);
       MadeChange = true;
     }
 
-    if (Value *V = SimplifyDemandedVectorElts(I->getOperand(2), DemandedRHS,
+    if (Value *V = SimplifyDemandedVectorElts(Sel->getFalseValue(), DemandedRHS,
                                               UndefElts3, Depth + 1)) {
-      I->setOperand(2, V);
+      Sel->setFalseValue(V);
       MadeChange = true;
     }
 
     // Output elements are undefined if the element from each arm is undefined.
+    // TODO: This can be improved. See comment in select condition handling.
     UndefElts = UndefElts2 & UndefElts3;
     break;
   }

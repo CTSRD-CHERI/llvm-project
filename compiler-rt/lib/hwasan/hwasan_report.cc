@@ -46,19 +46,21 @@ class Decorator: public __sanitizer::SanitizerCommonDecorator {
   const char *Thread() { return Green(); }
 };
 
-bool FindHeapAllocation(HeapAllocationsRingBuffer *rb,
+// Returns the index of the rb element that matches tagged_addr (plus one),
+// or zero if found nothing.
+uptr FindHeapAllocation(HeapAllocationsRingBuffer *rb,
                         uptr tagged_addr,
                         HeapAllocationRecord *har) {
-  if (!rb) return false;
+  if (!rb) return 0;
   for (uptr i = 0, size = rb->size(); i < size; i++) {
     auto h = (*rb)[i];
     if (h.tagged_addr <= tagged_addr &&
         h.tagged_addr + h.requested_size > tagged_addr) {
       *har = h;
-      return true;
+      return i + 1;
     }
   }
-  return false;
+  return 0;
 }
 
 void PrintAddressDescription(uptr tagged_addr, uptr access_size) {
@@ -110,7 +112,7 @@ void PrintAddressDescription(uptr tagged_addr, uptr access_size) {
   Thread::VisitAllLiveThreads([&](Thread *t) {
     // Scan all threads' ring buffers to find if it's a heap-use-after-free.
     HeapAllocationRecord har;
-    if (FindHeapAllocation(t->heap_allocations(), tagged_addr, &har)) {
+    if (uptr D = FindHeapAllocation(t->heap_allocations(), tagged_addr, &har)) {
       Printf("%s", d.Location());
       Printf("%p is located %zd bytes inside of %zd-byte region [%p,%p)\n",
              untagged_addr, untagged_addr - UntagAddr(har.tagged_addr),
@@ -126,6 +128,11 @@ void PrintAddressDescription(uptr tagged_addr, uptr access_size) {
       Printf("%s", d.Default());
       GetStackTraceFromId(har.alloc_context_id).Print();
       t->Announce();
+
+      // Print a developer note: the index of this heap object
+      // in the thread's deallocation ring buffer.
+      Printf("hwasan_dev_note_heap_rb_distance: %zd %zd\n", D,
+             flags()->heap_history_size);
 
       num_descriptions_printed++;
     }
@@ -185,14 +192,17 @@ static void PrintTagsAroundAddr(tag_t *tag_ptr) {
       RoundDownTo(reinterpret_cast<uptr>(tag_ptr), row_len));
   tag_t *beg_row = center_row_beg - row_len * (num_rows / 2);
   tag_t *end_row = center_row_beg + row_len * (num_rows / 2);
+  InternalScopedString s(GetPageSizeCached());
   for (tag_t *row = beg_row; row < end_row; row += row_len) {
-    Printf("%s", row == center_row_beg ? "=>" : "  ");
+    s.append("%s", row == center_row_beg ? "=>" : "  ");
     for (uptr i = 0; i < row_len; i++) {
-      Printf("%s", row + i == tag_ptr ? "[" : " ");
-      Printf("%02x", row[i]);
-      Printf("%s", row + i == tag_ptr ? "]" : " ");
+      s.append("%s", row + i == tag_ptr ? "[" : " ");
+      s.append("%02x", row[i]);
+      s.append("%s", row + i == tag_ptr ? "]" : " ");
     }
-    Printf("%s\n", row == center_row_beg ? "<=" : "  ");
+    s.append("%s\n", row == center_row_beg ? "<=" : "  ");
+    Printf("%s", s.data());
+    s.clear();
   }
 }
 

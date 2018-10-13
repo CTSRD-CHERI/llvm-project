@@ -501,6 +501,9 @@ cl::opt<bool>
                        cl::desc("dump CodeView symbol record raw bytes"),
                        cl::cat(SymbolOptions), cl::sub(DumpSubcommand));
 
+cl::opt<bool> DumpFpo("fpo", cl::desc("dump FPO records"),
+                      cl::cat(SymbolOptions), cl::sub(DumpSubcommand));
+
 // MODULE & FILE OPTIONS
 cl::opt<bool> DumpModules("modules", cl::desc("dump compiland information"),
                           cl::cat(FileOptions), cl::sub(DumpSubcommand));
@@ -800,7 +803,8 @@ static void yamlToPdb(StringRef Path) {
 
   Builder.getStringTableBuilder().setStrings(*Strings.strings());
 
-  ExitOnErr(Builder.commit(opts::yaml2pdb::YamlPdbOutputFile));
+  codeview::GUID IgnoredOutGuid;
+  ExitOnErr(Builder.commit(opts::yaml2pdb::YamlPdbOutputFile, &IgnoredOutGuid));
 }
 
 static PDBFile &loadPDB(StringRef Path, std::unique_ptr<IPDBSession> &Session) {
@@ -1260,7 +1264,9 @@ static void mergePdbs() {
     OutFile = opts::merge::InputFilenames[0];
     llvm::sys::path::replace_extension(OutFile, "merged.pdb");
   }
-  ExitOnErr(Builder.commit(OutFile));
+
+  codeview::GUID IgnoredOutGuid;
+  ExitOnErr(Builder.commit(OutFile, &IgnoredOutGuid));
 }
 
 static void explain() {
@@ -1372,6 +1378,7 @@ int main(int Argc, const char **Argv) {
   if (opts::DumpSubcommand) {
     if (opts::dump::RawAll) {
       opts::dump::DumpGlobals = true;
+      opts::dump::DumpFpo = true;
       opts::dump::DumpInlineeLines = true;
       opts::dump::DumpIds = true;
       opts::dump::DumpIdExtras = true;

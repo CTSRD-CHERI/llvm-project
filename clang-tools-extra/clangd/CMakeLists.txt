@@ -46,8 +46,9 @@ add_clang_library(clangDaemon
   index/SymbolCollector.cpp
   index/SymbolYAML.cpp
 
-  index/dex/DexIndex.cpp
+  index/dex/Dex.cpp
   index/dex/Iterator.cpp
+  index/dex/PostingList.cpp
   index/dex/Trigram.cpp
 
   LINK_LIBS
@@ -73,4 +74,9 @@ if( LLVM_LIB_FUZZING_ENGINE OR LLVM_USE_SANITIZE_COVERAGE )
   add_subdirectory(fuzzer)
 endif()
 add_subdirectory(tool)
-add_subdirectory(global-symbol-builder)
+add_subdirectory(indexer)
+add_subdirectory(index/dex/dexp)
+
+if (LLVM_INCLUDE_BENCHMARKS)
+  add_subdirectory(benchmarks)
+endif()

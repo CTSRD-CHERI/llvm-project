@@ -21,13 +21,11 @@ namespace pdb {
 
 class NativeTypePointer : public NativeRawSymbol {
 public:
-  NativeTypePointer(NativeSession &Session, SymIndexId Id, codeview::CVType CV);
   NativeTypePointer(NativeSession &Session, SymIndexId Id,
-                    codeview::PointerRecord PR);
+                    codeview::TypeIndex TI, codeview::PointerRecord PR);
   ~NativeTypePointer() override;
 
   void dump(raw_ostream &OS, int Indent) const override;
-  std::unique_ptr<NativeRawSymbol> clone() const override;
 
   bool isConstType() const override;
   uint64_t getLength() const override;
@@ -35,12 +33,13 @@ public:
   bool isRValueReference() const override;
   bool isPointerToDataMember() const override;
   bool isPointerToMemberFunction() const override;
-  uint32_t getTypeId() const override;
+  SymIndexId getTypeId() const override;
   bool isRestrictedType() const override;
   bool isVolatileType() const override;
   bool isUnalignedType() const override;
 
 protected:
+  codeview::TypeIndex TI;
   codeview::PointerRecord Record;
 };
 
