@@ -7330,7 +7330,7 @@ static bool HandleMemoryAddressAttr(QualType &T, TypeProcessingState &State,
     return true;
   }
 
-  llvm::errs() << __func__ << ": hasAttr():" << T->hasAttr(attr::MemoryAddress) <<  " dump: "; T.dump();
+  // llvm::errs() << __func__ << ": hasAttr():" << T->hasAttr(attr::MemoryAddress) <<  " dump: "; T.dump();
   if (T->hasAttr(attr::MemoryAddress))
     S.Diag(Attr.getLoc(), diag::warn_duplicate_attribute_exact) << Attr.getName();
   T = State.getAttributedType(
