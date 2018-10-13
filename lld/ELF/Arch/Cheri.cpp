@@ -553,17 +553,34 @@ void CheriCapTableSection::writeTo(uint8_t* Buf) {
           it.first->IsPreemptible ? 0 : -0x7000);
 }
 
-void CheriCapTableSection::addEntry(Symbol &Sym, bool SmallImm) {
+void CheriCapTableSection::addEntry(Symbol &Sym, bool SmallImm, RelType Type) {
   // FIXME: can this be called from multiple threads?
   CapTableIndex Idx;
   Idx.NeedsSmallImm = SmallImm;
+  Idx.UsedAsFunctionPointer = true;
+  // If the symbol is only ever referenced by the CAP*CALL* relocations we can
+  // emit a R_MIPS_CHERI_CAPABILITY_CALL instead of a R_MIPS_CHERI_CAPABILITY
+  // relocation. This indicates to the runtime linker that the capability is not
+  // used as a function pointer and therefore does not need a unique address
+  // (plt stub) across all DSOs.
+  switch (Type) {
+  case R_MIPS_CHERI_CAPCALL20:
+  case R_MIPS_CHERI_CAPCALL_CLC11:
+  case R_MIPS_CHERI_CAPCALL_HI16:
+  case R_MIPS_CHERI_CAPCALL_LO16:
+    Idx.UsedAsFunctionPointer = false;
+    break;
+  default:
+    break;
+  }
   auto it = Entries.insert(std::make_pair(&Sym, Idx));
   if (!it.second) {
     // If it is references by a small immediate relocation we need to update
     // the small immediate flag
-    if (SmallImm) {
+    if (SmallImm)
       it.first->second.NeedsSmallImm = true;
-    }
+    if (Idx.UsedAsFunctionPointer)
+      it.first->second.UsedAsFunctionPointer = true;
   }
 #ifdef DEBUG_CAP_TABLE
   llvm::errs() << "Added symbol " << toString(Sym)
@@ -616,7 +633,6 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
   // FIXME: we should not be hardcoding architecture specific relocation numbers
   // here
   assert(Config->EMachine == EM_MIPS);
-  RelType ElfCapabilityReloc = R_MIPS_CHERI_CAPABILITY;
 
   uint64_t SmallEntryCount = 0;
   for (auto &it : Entries) {
@@ -695,6 +711,15 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
       Symtab->addRegular(Saver.save(RefName), STV_HIDDEN, STT_OBJECT, Off,
                          Config->CapabilitySize, STB_LOCAL, this, nullptr);
     }
+    // If the symbol is used as a function pointer the runtime linker has to
+    // ensure that all pointers to that function compare equal. This is done
+    // by ensuring that they all point to the same PLT stub.
+    // If it is not used as a function pointer we can use
+    // R_MIPS_CHERI_CAPABILITY_CALL instead which allows the runtime linker to
+    // create non-unique plt stubs.
+    RelType ElfCapabilityReloc = it.second.UsedAsFunctionPointer
+                                     ? R_MIPS_CHERI_CAPABILITY
+                                     : R_MIPS_CHERI_CAPABILITY_CALL;
     addCapabilityRelocation<ELFT>(
         *TargetSym, ElfCapabilityReloc, In.CheriCapTable, Off,
         R_CHERI_CAPABILITY, 0,

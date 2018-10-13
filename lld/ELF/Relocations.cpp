@@ -1083,7 +1083,7 @@ static void scanReloc(InputSectionBase &Sec, OffsetGetter &GetOffset, RelTy *&I,
     assert(Config->ProcessCapRelocs);
     bool SmallImmediate =
         Expr == R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE;
-    In.CheriCapTable->addEntry(Sym, SmallImmediate);
+    In.CheriCapTable->addEntry(Sym, SmallImmediate, Type);
     // Write out the index into the instruction
     Sec.Relocations.push_back({Expr, Type, Offset, Addend, &Sym});
     return;

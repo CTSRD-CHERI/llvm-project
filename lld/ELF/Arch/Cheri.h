@@ -145,7 +145,7 @@ private:
 class CheriCapTableSection : public SyntheticSection {
 public:
   CheriCapTableSection();
-  void addEntry(Symbol &Sym, bool NeedsSmallImm);
+  void addEntry(Symbol &Sym, bool NeedsSmallImm, RelType Type);
   void addDynTlsEntry(Symbol &Sym);
   void addTlsIndex();
   void addTlsEntry(Symbol &Sym);
@@ -176,6 +176,7 @@ private:
     // int64_t Index = -1;
     llvm::Optional<uint32_t> Index;
     bool NeedsSmallImm = false;
+    bool UsedAsFunctionPointer = true;
   };
   llvm::MapVector<Symbol *, CapTableIndex> Entries;
   llvm::MapVector<Symbol *, CapTableIndex> DynTlsEntries;
