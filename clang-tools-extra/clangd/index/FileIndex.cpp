@@ -128,8 +128,8 @@ std::unique_ptr<SymbolIndex> FileSymbols::buildMemIndex() {
     for (auto &Sym : MergedRefs) {
       auto &SymRefs = Sym.second;
       // Sorting isn't required, but yields more stable results over rebuilds.
-      std::sort(SymRefs.begin(), SymRefs.end());
-      std::copy(SymRefs.begin(), SymRefs.end(), back_inserter(RefsStorage));
+      llvm::sort(SymRefs);
+      llvm::copy(SymRefs, back_inserter(RefsStorage));
       AllRefs.try_emplace(
           Sym.first,
           ArrayRef<Ref>(&RefsStorage[RefsStorage.size() - SymRefs.size()],
@@ -152,10 +152,10 @@ std::unique_ptr<SymbolIndex> FileSymbols::buildMemIndex() {
 }
 
 FileIndex::FileIndex(std::vector<std::string> URISchemes)
-    : URISchemes(std::move(URISchemes)),
+    : MergedIndex(&MainFileIndex, &PreambleIndex),
+      URISchemes(std::move(URISchemes)),
       PreambleIndex(PreambleSymbols.buildMemIndex()),
-      MainFileIndex(MainFileSymbols.buildMemIndex()),
-      MergedIndex(mergeIndex(&MainFileIndex, &PreambleIndex)) {}
+      MainFileIndex(MainFileSymbols.buildMemIndex()) {}
 
 void FileIndex::updatePreamble(PathRef Path, ASTContext &AST,
                                std::shared_ptr<Preprocessor> PP) {

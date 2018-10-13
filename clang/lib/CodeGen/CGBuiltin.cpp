@@ -2999,7 +2999,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
   case Builtin::BI_InterlockedExchangePointer:
     return RValue::get(
         EmitMSVCBuiltinExpr(MSVCIntrin::_InterlockedExchange, E));
-  case Builtin::BI_InterlockedCompareExchangePointer: {
+  case Builtin::BI_InterlockedCompareExchangePointer:
+  case Builtin::BI_InterlockedCompareExchangePointer_nf: {
     llvm::Type *RTy;
     llvm::IntegerType *IntType =
       IntegerType::get(getLLVMContext(),
@@ -3016,10 +3017,12 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     llvm::Value *Comparand =
       Builder.CreatePtrToInt(EmitScalarExpr(E->getArg(2)), IntType);
 
-    auto Result =
-        Builder.CreateAtomicCmpXchg(Destination, Comparand, Exchange,
-                                    AtomicOrdering::SequentiallyConsistent,
-                                    AtomicOrdering::SequentiallyConsistent);
+    auto Ordering =
+      BuiltinID == Builtin::BI_InterlockedCompareExchangePointer_nf ?
+      AtomicOrdering::Monotonic : AtomicOrdering::SequentiallyConsistent;
+
+    auto Result = Builder.CreateAtomicCmpXchg(Destination, Comparand, Exchange,
+                                              Ordering, Ordering);
     Result->setVolatile(true);
 
     return RValue::get(Builder.CreateIntToPtr(Builder.CreateExtractValue(Result,
@@ -6576,10 +6579,31 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
     return Builder.CreateCall(F, {StoreVal, StoreAddr}, "stxr");
   }
 
+  if (BuiltinID == AArch64::BI__getReg) {
+    APSInt Value;
+    if (!E->getArg(0)->EvaluateAsInt(Value, CGM.getContext()))
+      llvm_unreachable("Sema will ensure that the parameter is constant");
+
+    LLVMContext &Context = CGM.getLLVMContext();
+    std::string Reg = Value == 31 ? "sp" : "x" + Value.toString(10);
+
+    llvm::Metadata *Ops[] = {llvm::MDString::get(Context, Reg)};
+    llvm::MDNode *RegName = llvm::MDNode::get(Context, Ops);
+    llvm::Value *Metadata = llvm::MetadataAsValue::get(Context, RegName);
+
+    llvm::Value *F =
+        CGM.getIntrinsic(llvm::Intrinsic::read_register, {Int64Ty});
+    return Builder.CreateCall(F, Metadata);
+  }
+
   if (BuiltinID == AArch64::BI__builtin_arm_clrex) {
     Function *F = CGM.getIntrinsic(Intrinsic::aarch64_clrex);
     return Builder.CreateCall(F);
   }
+
+  if (BuiltinID == AArch64::BI_ReadWriteBarrier)
+    return Builder.CreateFence(llvm::AtomicOrdering::SequentiallyConsistent,
+                               llvm::SyncScope::SingleThread);
 
   // CRC32
   Intrinsic::ID CRCIntrinsicID = Intrinsic::not_intrinsic;
@@ -8493,6 +8517,15 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
     return EmitMSVCBuiltinExpr(MSVCIntrin::_InterlockedDecrement, E);
   case AArch64::BI_InterlockedIncrement64:
     return EmitMSVCBuiltinExpr(MSVCIntrin::_InterlockedIncrement, E);
+
+  case AArch64::BI_InterlockedAdd: {
+    Value *Arg0 = EmitScalarExpr(E->getArg(0));
+    Value *Arg1 = EmitScalarExpr(E->getArg(1));
+    AtomicRMWInst *RMWI = Builder.CreateAtomicRMW(
+      AtomicRMWInst::Add, Arg0, Arg1,
+      llvm::AtomicOrdering::SequentiallyConsistent);
+    return Builder.CreateAdd(RMWI, Arg1);
+  }
   }
 }
 
@@ -12422,6 +12455,139 @@ Value *CodeGenFunction::EmitWebAssemblyBuiltinExpr(unsigned BuiltinID,
     Value *Count = EmitScalarExpr(E->getArg(1));
     Value *Callee = CGM.getIntrinsic(Intrinsic::wasm_atomic_notify);
     return Builder.CreateCall(Callee, {Addr, Count});
+  }
+  case WebAssembly::BI__builtin_wasm_extract_lane_s_i8x16:
+  case WebAssembly::BI__builtin_wasm_extract_lane_u_i8x16:
+  case WebAssembly::BI__builtin_wasm_extract_lane_s_i16x8:
+  case WebAssembly::BI__builtin_wasm_extract_lane_u_i16x8:
+  case WebAssembly::BI__builtin_wasm_extract_lane_i32x4:
+  case WebAssembly::BI__builtin_wasm_extract_lane_i64x2:
+  case WebAssembly::BI__builtin_wasm_extract_lane_f32x4:
+  case WebAssembly::BI__builtin_wasm_extract_lane_f64x2: {
+    llvm::APSInt LaneConst;
+    if (!E->getArg(1)->isIntegerConstantExpr(LaneConst, getContext()))
+      llvm_unreachable("Constant arg isn't actually constant?");
+    Value *Vec = EmitScalarExpr(E->getArg(0));
+    Value *Lane = llvm::ConstantInt::get(getLLVMContext(), LaneConst);
+    Value *Extract = Builder.CreateExtractElement(Vec, Lane);
+    switch (BuiltinID) {
+    case WebAssembly::BI__builtin_wasm_extract_lane_s_i8x16:
+    case WebAssembly::BI__builtin_wasm_extract_lane_s_i16x8:
+      return Builder.CreateSExt(Extract, ConvertType(E->getType()));
+    case WebAssembly::BI__builtin_wasm_extract_lane_u_i8x16:
+    case WebAssembly::BI__builtin_wasm_extract_lane_u_i16x8:
+      return Builder.CreateZExt(Extract, ConvertType(E->getType()));
+    case WebAssembly::BI__builtin_wasm_extract_lane_i32x4:
+    case WebAssembly::BI__builtin_wasm_extract_lane_i64x2:
+    case WebAssembly::BI__builtin_wasm_extract_lane_f32x4:
+    case WebAssembly::BI__builtin_wasm_extract_lane_f64x2:
+      return Extract;
+    default:
+      llvm_unreachable("unexpected builtin ID");
+    }
+  }
+  case WebAssembly::BI__builtin_wasm_replace_lane_i8x16:
+  case WebAssembly::BI__builtin_wasm_replace_lane_i16x8:
+  case WebAssembly::BI__builtin_wasm_replace_lane_i32x4:
+  case WebAssembly::BI__builtin_wasm_replace_lane_i64x2:
+  case WebAssembly::BI__builtin_wasm_replace_lane_f32x4:
+  case WebAssembly::BI__builtin_wasm_replace_lane_f64x2: {
+    llvm::APSInt LaneConst;
+    if (!E->getArg(1)->isIntegerConstantExpr(LaneConst, getContext()))
+      llvm_unreachable("Constant arg isn't actually constant?");
+    Value *Vec = EmitScalarExpr(E->getArg(0));
+    Value *Lane = llvm::ConstantInt::get(getLLVMContext(), LaneConst);
+    Value *Val = EmitScalarExpr(E->getArg(2));
+    switch (BuiltinID) {
+    case WebAssembly::BI__builtin_wasm_replace_lane_i8x16:
+    case WebAssembly::BI__builtin_wasm_replace_lane_i16x8: {
+      llvm::Type *ElemType = ConvertType(E->getType())->getVectorElementType();
+      Value *Trunc = Builder.CreateTrunc(Val, ElemType);
+      return Builder.CreateInsertElement(Vec, Trunc, Lane);
+    }
+    case WebAssembly::BI__builtin_wasm_replace_lane_i32x4:
+    case WebAssembly::BI__builtin_wasm_replace_lane_i64x2:
+    case WebAssembly::BI__builtin_wasm_replace_lane_f32x4:
+    case WebAssembly::BI__builtin_wasm_replace_lane_f64x2:
+      return Builder.CreateInsertElement(Vec, Val, Lane);
+    default:
+      llvm_unreachable("unexpected builtin ID");
+    }
+  }
+  case WebAssembly::BI__builtin_wasm_add_saturate_s_i8x16:
+  case WebAssembly::BI__builtin_wasm_add_saturate_u_i8x16:
+  case WebAssembly::BI__builtin_wasm_add_saturate_s_i16x8:
+  case WebAssembly::BI__builtin_wasm_add_saturate_u_i16x8:
+  case WebAssembly::BI__builtin_wasm_sub_saturate_s_i8x16:
+  case WebAssembly::BI__builtin_wasm_sub_saturate_u_i8x16:
+  case WebAssembly::BI__builtin_wasm_sub_saturate_s_i16x8:
+  case WebAssembly::BI__builtin_wasm_sub_saturate_u_i16x8: {
+    unsigned IntNo;
+    switch (BuiltinID) {
+    case WebAssembly::BI__builtin_wasm_add_saturate_s_i8x16:
+    case WebAssembly::BI__builtin_wasm_add_saturate_s_i16x8:
+      IntNo = Intrinsic::wasm_add_saturate_signed;
+      break;
+    case WebAssembly::BI__builtin_wasm_add_saturate_u_i8x16:
+    case WebAssembly::BI__builtin_wasm_add_saturate_u_i16x8:
+      IntNo = Intrinsic::wasm_add_saturate_unsigned;
+      break;
+    case WebAssembly::BI__builtin_wasm_sub_saturate_s_i8x16:
+    case WebAssembly::BI__builtin_wasm_sub_saturate_s_i16x8:
+      IntNo = Intrinsic::wasm_sub_saturate_signed;
+      break;
+    case WebAssembly::BI__builtin_wasm_sub_saturate_u_i8x16:
+    case WebAssembly::BI__builtin_wasm_sub_saturate_u_i16x8:
+      IntNo = Intrinsic::wasm_sub_saturate_unsigned;
+      break;
+    default:
+      llvm_unreachable("unexpected builtin ID");
+    }
+    Value *LHS = EmitScalarExpr(E->getArg(0));
+    Value *RHS = EmitScalarExpr(E->getArg(1));
+    Value *Callee = CGM.getIntrinsic(IntNo, ConvertType(E->getType()));
+    return Builder.CreateCall(Callee, {LHS, RHS});
+  }
+  case WebAssembly::BI__builtin_wasm_any_true_i8x16:
+  case WebAssembly::BI__builtin_wasm_any_true_i16x8:
+  case WebAssembly::BI__builtin_wasm_any_true_i32x4:
+  case WebAssembly::BI__builtin_wasm_any_true_i64x2:
+  case WebAssembly::BI__builtin_wasm_all_true_i8x16:
+  case WebAssembly::BI__builtin_wasm_all_true_i16x8:
+  case WebAssembly::BI__builtin_wasm_all_true_i32x4:
+  case WebAssembly::BI__builtin_wasm_all_true_i64x2: {
+    unsigned IntNo;
+    switch (BuiltinID) {
+    case WebAssembly::BI__builtin_wasm_any_true_i8x16:
+    case WebAssembly::BI__builtin_wasm_any_true_i16x8:
+    case WebAssembly::BI__builtin_wasm_any_true_i32x4:
+    case WebAssembly::BI__builtin_wasm_any_true_i64x2:
+      IntNo = Intrinsic::wasm_anytrue;
+      break;
+    case WebAssembly::BI__builtin_wasm_all_true_i8x16:
+    case WebAssembly::BI__builtin_wasm_all_true_i16x8:
+    case WebAssembly::BI__builtin_wasm_all_true_i32x4:
+    case WebAssembly::BI__builtin_wasm_all_true_i64x2:
+      IntNo = Intrinsic::wasm_alltrue;
+      break;
+    default:
+      llvm_unreachable("unexpected builtin ID");
+    }
+    Value *Vec = EmitScalarExpr(E->getArg(0));
+    Value *Callee = CGM.getIntrinsic(IntNo, Vec->getType());
+    return Builder.CreateCall(Callee, {Vec});
+  }
+  case WebAssembly::BI__builtin_wasm_abs_f32x4:
+  case WebAssembly::BI__builtin_wasm_abs_f64x2: {
+    Value *Vec = EmitScalarExpr(E->getArg(0));
+    Value *Callee = CGM.getIntrinsic(Intrinsic::fabs, Vec->getType());
+    return Builder.CreateCall(Callee, {Vec});
+  }
+  case WebAssembly::BI__builtin_wasm_sqrt_f32x4:
+  case WebAssembly::BI__builtin_wasm_sqrt_f64x2: {
+    Value *Vec = EmitScalarExpr(E->getArg(0));
+    Value *Callee = CGM.getIntrinsic(Intrinsic::sqrt, Vec->getType());
+    return Builder.CreateCall(Callee, {Vec});
   }
 
   default:

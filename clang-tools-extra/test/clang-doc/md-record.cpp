@@ -39,6 +39,8 @@ class X {
   class Y {};
 };
 
+class G;
+
 // RUN: clang-doc --format=md --doxygen --public --extra-arg=-fmodules-ts -p %t %t/test.cpp -output=%t/docs
 
 
@@ -54,7 +56,8 @@ class X {
 // RUN: cat %t/docs/./GlobalNamespace.md | FileCheck %s --check-prefix CHECK-2
 // CHECK-2: # Global Namespace
 // CHECK-2: ## Functions
-// CHECK-2: ### void H()
+// CHECK-2: ### H
+// CHECK-2: *void H()*
 // CHECK-2: *Defined at line 11 of test*
 // CHECK-2: ## Enums
 // CHECK-2: | enum B |
@@ -72,11 +75,14 @@ class X {
 // CHECK-3: # class E
 // CHECK-3: *Defined at line 25 of test*
 // CHECK-3: ## Functions
-// CHECK-3: ### void E()
+// CHECK-3: ### E
+// CHECK-3: *void E()*
 // CHECK-3: *Defined at line 27 of test*
-// CHECK-3: ### void ~E()
+// CHECK-3: ### ~E
+// CHECK-3: *void ~E()*
 // CHECK-3: *Defined at line 28 of test*
-// CHECK-3: ### void ProtectedMethod()
+// CHECK-3: ### ProtectedMethod
+// CHECK-3: *void ProtectedMethod()*
 // CHECK-3: *Defined at line 34 of test*
 
 // RUN: cat %t/docs/./C.md | FileCheck %s --check-prefix CHECK-4
@@ -95,3 +101,6 @@ class X {
 // CHECK-6: ## Members
 // CHECK-6: int X
 // CHECK-6: int Y
+
+// RUN: cat %t/docs/./G.md | FileCheck %s --check-prefix CHECK-7
+// CHECK-7: # class G

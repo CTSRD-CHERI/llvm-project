@@ -70,15 +70,16 @@ TEST(DexIterators, DocumentIterator) {
 }
 
 TEST(DexIterators, AndTwoLists) {
+  Corpus C{10000};
   const PostingList L0({0, 5, 7, 10, 42, 320, 9000});
   const PostingList L1({0, 4, 7, 10, 30, 60, 320, 9000});
 
-  auto And = createAnd(L1.iterator(), L0.iterator());
+  auto And = C.intersect(L1.iterator(), L0.iterator());
 
   EXPECT_FALSE(And->reachedEnd());
   EXPECT_THAT(consumeIDs(*And), ElementsAre(0U, 7U, 10U, 320U, 9000U));
 
-  And = createAnd(L0.iterator(), L1.iterator());
+  And = C.intersect(L0.iterator(), L1.iterator());
 
   And->advanceTo(0);
   EXPECT_EQ(And->peek(), 0U);
@@ -94,11 +95,12 @@ TEST(DexIterators, AndTwoLists) {
 }
 
 TEST(DexIterators, AndThreeLists) {
+  Corpus C{10000};
   const PostingList L0({0, 5, 7, 10, 42, 320, 9000});
   const PostingList L1({0, 4, 7, 10, 30, 60, 320, 9000});
   const PostingList L2({1, 4, 7, 11, 30, 60, 320, 9000});
 
-  auto And = createAnd(L0.iterator(), L1.iterator(), L2.iterator());
+  auto And = C.intersect(L0.iterator(), L1.iterator(), L2.iterator());
   EXPECT_EQ(And->peek(), 7U);
   And->advanceTo(300);
   EXPECT_EQ(And->peek(), 320U);
@@ -107,11 +109,24 @@ TEST(DexIterators, AndThreeLists) {
   EXPECT_TRUE(And->reachedEnd());
 }
 
+TEST(DexIterators, AndEmpty) {
+  Corpus C{10000};
+  const PostingList L1{1};
+  const PostingList L2{2};
+  // These iterators are empty, but the optimizer can't tell.
+  auto Empty1 = C.intersect(L1.iterator(), L2.iterator());
+  auto Empty2 = C.intersect(L1.iterator(), L2.iterator());
+  // And syncs iterators on construction, and used to fail on empty children.
+  auto And = C.intersect(std::move(Empty1), std::move(Empty2));
+  EXPECT_TRUE(And->reachedEnd());
+}
+
 TEST(DexIterators, OrTwoLists) {
+  Corpus C{10000};
   const PostingList L0({0, 5, 7, 10, 42, 320, 9000});
   const PostingList L1({0, 4, 7, 10, 30, 60, 320, 9000});
 
-  auto Or = createOr(L0.iterator(), L1.iterator());
+  auto Or = C.unionOf(L0.iterator(), L1.iterator());
 
   EXPECT_FALSE(Or->reachedEnd());
   EXPECT_EQ(Or->peek(), 0U);
@@ -134,18 +149,19 @@ TEST(DexIterators, OrTwoLists) {
   Or->advanceTo(9001);
   EXPECT_TRUE(Or->reachedEnd());
 
-  Or = createOr(L0.iterator(), L1.iterator());
+  Or = C.unionOf(L0.iterator(), L1.iterator());
 
   EXPECT_THAT(consumeIDs(*Or),
               ElementsAre(0U, 4U, 5U, 7U, 10U, 30U, 42U, 60U, 320U, 9000U));
 }
 
 TEST(DexIterators, OrThreeLists) {
+  Corpus C{10000};
   const PostingList L0({0, 5, 7, 10, 42, 320, 9000});
   const PostingList L1({0, 4, 7, 10, 30, 60, 320, 9000});
   const PostingList L2({1, 4, 7, 11, 30, 60, 320, 9000});
 
-  auto Or = createOr(L0.iterator(), L1.iterator(), L2.iterator());
+  auto Or = C.unionOf(L0.iterator(), L1.iterator(), L2.iterator());
 
   EXPECT_FALSE(Or->reachedEnd());
   EXPECT_EQ(Or->peek(), 0U);
@@ -194,17 +210,18 @@ TEST(DexIterators, QueryTree) {
   //                  |1, 5, 7, 9|                |1, 5|    |0, 3, 5|
   //                  +----------+                +----+    +-------+
   //
+  Corpus C{10};
   const PostingList L0({1, 3, 5, 8, 9});
   const PostingList L1({1, 5, 7, 9});
   const PostingList L2({1, 5});
   const PostingList L3({0, 3, 5});
 
   // Root of the query tree: [1, 5]
-  auto Root = createAnd(
+  auto Root = C.intersect(
       // Lower And Iterator: [1, 5, 9]
-      createAnd(L0.iterator(), createBoost(L1.iterator(), 2U)),
+      C.intersect(L0.iterator(), C.boost(L1.iterator(), 2U)),
       // Lower Or Iterator: [0, 1, 5]
-      createOr(createBoost(L2.iterator(), 3U), createBoost(L3.iterator(), 4U)));
+      C.unionOf(C.boost(L2.iterator(), 3U), C.boost(L3.iterator(), 4U)));
 
   EXPECT_FALSE(Root->reachedEnd());
   EXPECT_EQ(Root->peek(), 1U);
@@ -226,66 +243,63 @@ TEST(DexIterators, QueryTree) {
 }
 
 TEST(DexIterators, StringRepresentation) {
-  const PostingList L0({4, 7, 8, 20, 42, 100});
-  const PostingList L1({1, 3, 5, 8, 9});
-  const PostingList L2({1, 5, 7, 9});
-  const PostingList L3({0, 5});
-  const PostingList L4({0, 1, 5});
+  Corpus C{10};
+  const PostingList L1({1, 3, 5});
+  const PostingList L2({1, 7, 9});
 
-  EXPECT_EQ(llvm::to_string(*(L0.iterator())), "[4 ...]");
-  auto It = L0.iterator();
-  It->advanceTo(19);
-  EXPECT_EQ(llvm::to_string(*It), "[... 20 ...]");
-  It->advanceTo(9000);
-  EXPECT_EQ(llvm::to_string(*It), "[... END]");
+  // No token given, prints full posting list.
+  auto I1 = L1.iterator();
+  EXPECT_EQ(llvm::to_string(*I1), "[1 3 5]");
+
+  // Token given, uses token's string representation.
+  Token Tok(Token::Kind::Trigram, "L2");
+  auto I2 = L1.iterator(&Tok);
+  EXPECT_EQ(llvm::to_string(*I2), "T=L2");
+
+  auto Tree = C.limit(C.intersect(move(I1), move(I2)), 10);
+  EXPECT_EQ(llvm::to_string(*Tree), "(LIMIT 10 (& [1 3 5] T=L2))");
 }
 
 TEST(DexIterators, Limit) {
+  Corpus C{10000};
   const PostingList L0({3, 6, 7, 20, 42, 100});
   const PostingList L1({1, 3, 5, 6, 7, 30, 100});
   const PostingList L2({0, 3, 5, 7, 8, 100});
 
-  auto DocIterator = createLimit(L0.iterator(), 42);
+  auto DocIterator = C.limit(L0.iterator(), 42);
   EXPECT_THAT(consumeIDs(*DocIterator), ElementsAre(3, 6, 7, 20, 42, 100));
 
-  DocIterator = createLimit(L0.iterator(), 3);
+  DocIterator = C.limit(L0.iterator(), 3);
   EXPECT_THAT(consumeIDs(*DocIterator), ElementsAre(3, 6, 7));
 
-  DocIterator = createLimit(L0.iterator(), 0);
+  DocIterator = C.limit(L0.iterator(), 0);
   EXPECT_THAT(consumeIDs(*DocIterator), ElementsAre());
 
-  auto AndIterator = createAnd(
-      createLimit(createTrue(9000), 343), createLimit(L0.iterator(), 2),
-      createLimit(L1.iterator(), 3), createLimit(L2.iterator(), 42));
+  auto AndIterator =
+      C.intersect(C.limit(C.all(), 343), C.limit(L0.iterator(), 2),
+                  C.limit(L1.iterator(), 3), C.limit(L2.iterator(), 42));
   EXPECT_THAT(consumeIDs(*AndIterator), ElementsAre(3, 7));
 }
 
 TEST(DexIterators, True) {
-  auto TrueIterator = createTrue(0U);
-  EXPECT_TRUE(TrueIterator->reachedEnd());
-  EXPECT_THAT(consumeIDs(*TrueIterator), ElementsAre());
-
-  const PostingList L0({1, 2, 5, 7});
-  TrueIterator = createTrue(7U);
-  EXPECT_THAT(TrueIterator->peek(), 0);
-  auto AndIterator = createAnd(L0.iterator(), move(TrueIterator));
-  EXPECT_FALSE(AndIterator->reachedEnd());
-  EXPECT_THAT(consumeIDs(*AndIterator), ElementsAre(1, 2, 5));
+  EXPECT_TRUE(Corpus{0}.all()->reachedEnd());
+  EXPECT_THAT(consumeIDs(*Corpus{4}.all()), ElementsAre(0, 1, 2, 3));
 }
 
 TEST(DexIterators, Boost) {
-  auto BoostIterator = createBoost(createTrue(5U), 42U);
+  Corpus C{5};
+  auto BoostIterator = C.boost(C.all(), 42U);
   EXPECT_FALSE(BoostIterator->reachedEnd());
   auto ElementBoost = BoostIterator->consume();
   EXPECT_THAT(ElementBoost, 42U);
 
   const PostingList L0({2, 4});
   const PostingList L1({1, 4});
-  auto Root = createOr(createTrue(5U), createBoost(L0.iterator(), 2U),
-                       createBoost(L1.iterator(), 3U));
+  auto Root = C.unionOf(C.all(), C.boost(L0.iterator(), 2U),
+                        C.boost(L1.iterator(), 3U));
 
   ElementBoost = Root->consume();
-  EXPECT_THAT(ElementBoost, Iterator::DEFAULT_BOOST_SCORE);
+  EXPECT_THAT(ElementBoost, 1);
   Root->advance();
   EXPECT_THAT(Root->peek(), 1U);
   ElementBoost = Root->consume();
@@ -299,6 +313,38 @@ TEST(DexIterators, Boost) {
   Root->advanceTo(4);
   ElementBoost = Root->consume();
   EXPECT_THAT(ElementBoost, 3);
+}
+
+TEST(DexIterators, Optimizations) {
+  Corpus C{5};
+  const PostingList L1{1};
+  const PostingList L2{2};
+  const PostingList L3{3};
+
+  // empty and/or yield true/false
+  EXPECT_EQ(llvm::to_string(*C.intersect()), "true");
+  EXPECT_EQ(llvm::to_string(*C.unionOf()), "false");
+
+  // true/false inside and/or short-circuit
+  EXPECT_EQ(llvm::to_string(*C.intersect(L1.iterator(), C.all())), "[1]");
+  EXPECT_EQ(llvm::to_string(*C.intersect(L1.iterator(), C.none())), "false");
+  // Not optimized to avoid breaking boosts.
+  EXPECT_EQ(llvm::to_string(*C.unionOf(L1.iterator(), C.all())),
+            "(| [1] true)");
+  EXPECT_EQ(llvm::to_string(*C.unionOf(L1.iterator(), C.none())), "[1]");
+
+  // and/or nested inside and/or are flattened
+  EXPECT_EQ(llvm::to_string(*C.intersect(
+                L1.iterator(), C.intersect(L1.iterator(), L1.iterator()))),
+            "(& [1] [1] [1])");
+  EXPECT_EQ(llvm::to_string(*C.unionOf(
+                L1.iterator(), C.unionOf(L2.iterator(), L3.iterator()))),
+            "(| [1] [2] [3])");
+
+  // optimizations combine over multiple levels
+  EXPECT_EQ(llvm::to_string(*C.intersect(
+                C.intersect(L1.iterator(), C.intersect()), C.unionOf(C.all()))),
+            "[1]");
 }
 
 //===----------------------------------------------------------------------===//
@@ -321,53 +367,51 @@ trigramsAre(std::initializer_list<std::string> Trigrams) {
 
 TEST(DexTrigrams, IdentifierTrigrams) {
   EXPECT_THAT(generateIdentifierTrigrams("X86"),
-              trigramsAre({"x86", "x$$", "x8$"}));
+              trigramsAre({"x86", "x", "x8"}));
 
-  EXPECT_THAT(generateIdentifierTrigrams("nl"), trigramsAre({"nl$", "n$$"}));
+  EXPECT_THAT(generateIdentifierTrigrams("nl"), trigramsAre({"nl", "n"}));
 
-  EXPECT_THAT(generateIdentifierTrigrams("n"), trigramsAre({"n$$"}));
+  EXPECT_THAT(generateIdentifierTrigrams("n"), trigramsAre({"n"}));
 
   EXPECT_THAT(generateIdentifierTrigrams("clangd"),
-              trigramsAre({"c$$", "cl$", "cla", "lan", "ang", "ngd"}));
+              trigramsAre({"c", "cl", "cla", "lan", "ang", "ngd"}));
 
   EXPECT_THAT(generateIdentifierTrigrams("abc_def"),
-              trigramsAre({"a$$", "abc", "abd", "ade", "bcd", "bde", "cde",
-                           "def", "ab$", "ad$"}));
+              trigramsAre({"a", "ab", "ad", "abc", "abd", "ade", "bcd", "bde",
+                           "cde", "def"}));
 
   EXPECT_THAT(generateIdentifierTrigrams("a_b_c_d_e_"),
-              trigramsAre({"a$$", "a_$", "a_b", "abc", "abd", "acd", "ace",
-                           "bcd", "bce", "bde", "cde", "ab$"}));
+              trigramsAre({"a", "a_", "ab", "abc", "bcd", "cde"}));
 
   EXPECT_THAT(generateIdentifierTrigrams("unique_ptr"),
-              trigramsAre({"u$$", "uni", "unp", "upt", "niq", "nip", "npt",
-                           "iqu", "iqp", "ipt", "que", "qup", "qpt", "uep",
-                           "ept", "ptr", "un$", "up$"}));
+              trigramsAre({"u", "un", "up", "uni", "unp", "upt", "niq", "nip",
+                           "npt", "iqu", "iqp", "ipt", "que", "qup", "qpt",
+                           "uep", "ept", "ptr"}));
 
   EXPECT_THAT(
       generateIdentifierTrigrams("TUDecl"),
-      trigramsAre({"t$$", "tud", "tde", "ude", "dec", "ecl", "tu$", "td$"}));
+      trigramsAre({"t", "tu", "td", "tud", "tde", "ude", "dec", "ecl"}));
 
   EXPECT_THAT(generateIdentifierTrigrams("IsOK"),
-              trigramsAre({"i$$", "iso", "iok", "sok", "is$", "io$"}));
+              trigramsAre({"i", "is", "io", "iso", "iok", "sok"}));
 
   EXPECT_THAT(
       generateIdentifierTrigrams("abc_defGhij__klm"),
-      trigramsAre({"a$$", "abc", "abd", "abg", "ade", "adg", "adk", "agh",
-                   "agk", "bcd", "bcg", "bde", "bdg", "bdk", "bgh", "bgk",
-                   "cde", "cdg", "cdk", "cgh", "cgk", "def", "deg", "dek",
-                   "dgh", "dgk", "dkl", "efg", "efk", "egh", "egk", "ekl",
-                   "fgh", "fgk", "fkl", "ghi", "ghk", "gkl", "hij", "hik",
-                   "hkl", "ijk", "ikl", "jkl", "klm", "ab$", "ad$"}));
+      trigramsAre({"a",   "ab",  "ad",  "abc", "abd", "ade", "adg", "bcd",
+                   "bde", "bdg", "cde", "cdg", "def", "deg", "dgh", "dgk",
+                   "efg", "egh", "egk", "fgh", "fgk", "ghi", "ghk", "gkl",
+                   "hij", "hik", "hkl", "ijk", "ikl", "jkl", "klm"}));
 }
 
 TEST(DexTrigrams, QueryTrigrams) {
-  EXPECT_THAT(generateQueryTrigrams("c"), trigramsAre({"c$$"}));
-  EXPECT_THAT(generateQueryTrigrams("cl"), trigramsAre({"cl$"}));
+  EXPECT_THAT(generateQueryTrigrams("c"), trigramsAre({"c"}));
+  EXPECT_THAT(generateQueryTrigrams("cl"), trigramsAre({"cl"}));
   EXPECT_THAT(generateQueryTrigrams("cla"), trigramsAre({"cla"}));
 
-  EXPECT_THAT(generateQueryTrigrams("_"), trigramsAre({"_$$"}));
-  EXPECT_THAT(generateQueryTrigrams("__"), trigramsAre({"__$"}));
-  EXPECT_THAT(generateQueryTrigrams("___"), trigramsAre({"___"}));
+  EXPECT_THAT(generateQueryTrigrams(""), trigramsAre({}));
+  EXPECT_THAT(generateQueryTrigrams("_"), trigramsAre({"_"}));
+  EXPECT_THAT(generateQueryTrigrams("__"), trigramsAre({"__"}));
+  EXPECT_THAT(generateQueryTrigrams("___"), trigramsAre({}));
 
   EXPECT_THAT(generateQueryTrigrams("X86"), trigramsAre({"x86"}));
 
@@ -411,7 +455,8 @@ TEST(DexSearchTokens, SymbolPath) {
 //===----------------------------------------------------------------------===//
 
 TEST(Dex, Lookup) {
-  auto I = Dex::build(generateSymbols({"ns::abc", "ns::xyz"}), URISchemes);
+  auto I = Dex::build(generateSymbols({"ns::abc", "ns::xyz"}), RefSlab(),
+                      URISchemes);
   EXPECT_THAT(lookup(*I, SymbolID("ns::abc")), UnorderedElementsAre("ns::abc"));
   EXPECT_THAT(lookup(*I, {SymbolID("ns::abc"), SymbolID("ns::xyz")}),
               UnorderedElementsAre("ns::abc", "ns::xyz"));
@@ -424,7 +469,7 @@ TEST(Dex, FuzzyFind) {
   auto Index =
       Dex::build(generateSymbols({"ns::ABC", "ns::BCD", "::ABC",
                                   "ns::nested::ABC", "other::ABC", "other::A"}),
-                 URISchemes);
+                 RefSlab(), URISchemes);
   FuzzyFindRequest Req;
   Req.Query = "ABC";
   Req.Scopes = {"ns::"};
@@ -454,13 +499,13 @@ TEST(DexTest, DexDeduplicate) {
                                  symbol("2") /* duplicate */};
   FuzzyFindRequest Req;
   Req.Query = "2";
-  Dex I(Symbols, URISchemes);
+  Dex I(Symbols, RefSlab(), URISchemes);
   EXPECT_FALSE(Req.Limit);
   EXPECT_THAT(match(I, Req), ElementsAre("2", "2"));
 }
 
 TEST(DexTest, DexLimitedNumMatches) {
-  auto I = Dex::build(generateNumSymbols(0, 100), URISchemes);
+  auto I = Dex::build(generateNumSymbols(0, 100), RefSlab(), URISchemes);
   FuzzyFindRequest Req;
   Req.Query = "5";
   Req.Limit = 3;
@@ -474,7 +519,7 @@ TEST(DexTest, DexLimitedNumMatches) {
 TEST(DexTest, FuzzyMatch) {
   auto I = Dex::build(
       generateSymbols({"LaughingOutLoud", "LionPopulation", "LittleOldLady"}),
-      URISchemes);
+      RefSlab(), URISchemes);
   FuzzyFindRequest Req;
   Req.Query = "lol";
   Req.Limit = 2;
@@ -482,15 +527,39 @@ TEST(DexTest, FuzzyMatch) {
               UnorderedElementsAre("LaughingOutLoud", "LittleOldLady"));
 }
 
+TEST(DexTest, ShortQuery) {
+  auto I =
+      Dex::build(generateSymbols({"OneTwoThreeFour"}), RefSlab(), URISchemes);
+  FuzzyFindRequest Req;
+  bool Incomplete;
+
+  EXPECT_THAT(match(*I, Req, &Incomplete), ElementsAre("OneTwoThreeFour"));
+  EXPECT_FALSE(Incomplete) << "Empty string is not a short query";
+
+  Req.Query = "t";
+  EXPECT_THAT(match(*I, Req, &Incomplete), ElementsAre());
+  EXPECT_TRUE(Incomplete) << "Short queries have different semantics";
+
+  Req.Query = "tt";
+  EXPECT_THAT(match(*I, Req, &Incomplete), ElementsAre());
+  EXPECT_TRUE(Incomplete) << "Short queries have different semantics";
+
+  Req.Query = "ttf";
+  EXPECT_THAT(match(*I, Req, &Incomplete), ElementsAre("OneTwoThreeFour"));
+  EXPECT_FALSE(Incomplete) << "3-char string is not a short query";
+}
+
 TEST(DexTest, MatchQualifiedNamesWithoutSpecificScope) {
-  auto I = Dex::build(generateSymbols({"a::y1", "b::y2", "y3"}), URISchemes);
+  auto I = Dex::build(generateSymbols({"a::y1", "b::y2", "y3"}), RefSlab(),
+                      URISchemes);
   FuzzyFindRequest Req;
   Req.Query = "y";
   EXPECT_THAT(match(*I, Req), UnorderedElementsAre("a::y1", "b::y2", "y3"));
 }
 
 TEST(DexTest, MatchQualifiedNamesWithGlobalScope) {
-  auto I = Dex::build(generateSymbols({"a::y1", "b::y2", "y3"}), URISchemes);
+  auto I = Dex::build(generateSymbols({"a::y1", "b::y2", "y3"}), RefSlab(),
+                      URISchemes);
   FuzzyFindRequest Req;
   Req.Query = "y";
   Req.Scopes = {""};
@@ -498,8 +567,9 @@ TEST(DexTest, MatchQualifiedNamesWithGlobalScope) {
 }
 
 TEST(DexTest, MatchQualifiedNamesWithOneScope) {
-  auto I = Dex::build(
-      generateSymbols({"a::y1", "a::y2", "a::x", "b::y2", "y3"}), URISchemes);
+  auto I =
+      Dex::build(generateSymbols({"a::y1", "a::y2", "a::x", "b::y2", "y3"}),
+                 RefSlab(), URISchemes);
   FuzzyFindRequest Req;
   Req.Query = "y";
   Req.Scopes = {"a::"};
@@ -508,7 +578,7 @@ TEST(DexTest, MatchQualifiedNamesWithOneScope) {
 
 TEST(DexTest, MatchQualifiedNamesWithMultipleScopes) {
   auto I = Dex::build(
-      generateSymbols({"a::y1", "a::y2", "a::x", "b::y3", "y3"}), URISchemes);
+      generateSymbols({"a::y1", "a::y2", "a::x", "b::y3", "y3"}), RefSlab(), URISchemes);
   FuzzyFindRequest Req;
   Req.Query = "y";
   Req.Scopes = {"a::", "b::"};
@@ -516,7 +586,7 @@ TEST(DexTest, MatchQualifiedNamesWithMultipleScopes) {
 }
 
 TEST(DexTest, NoMatchNestedScopes) {
-  auto I = Dex::build(generateSymbols({"a::y1", "a::b::y2"}), URISchemes);
+  auto I = Dex::build(generateSymbols({"a::y1", "a::b::y2"}), RefSlab(), URISchemes);
   FuzzyFindRequest Req;
   Req.Query = "y";
   Req.Scopes = {"a::"};
@@ -525,7 +595,7 @@ TEST(DexTest, NoMatchNestedScopes) {
 
 TEST(DexTest, WildcardScope) {
   auto I =
-      Dex::build(generateSymbols({"a::y1", "a::b::y2", "c::y3"}), URISchemes);
+      Dex::build(generateSymbols({"a::y1", "a::b::y2", "c::y3"}), RefSlab(), URISchemes);
   FuzzyFindRequest Req;
   Req.Query = "y";
   Req.Scopes = {"a::"};
@@ -535,15 +605,24 @@ TEST(DexTest, WildcardScope) {
 }
 
 TEST(DexTest, IgnoreCases) {
-  auto I = Dex::build(generateSymbols({"ns::ABC", "ns::abc"}), URISchemes);
+  auto I = Dex::build(generateSymbols({"ns::ABC", "ns::abc"}), RefSlab(), URISchemes);
   FuzzyFindRequest Req;
   Req.Query = "AB";
   Req.Scopes = {"ns::"};
   EXPECT_THAT(match(*I, Req), UnorderedElementsAre("ns::ABC", "ns::abc"));
 }
 
+TEST(DexTest, UnknownPostingList) {
+  // Regression test: we used to ignore unknown scopes and accept any symbol.
+  auto I = Dex::build(generateSymbols({"ns::ABC", "ns::abc"}), RefSlab(),
+                      URISchemes);
+  FuzzyFindRequest Req;
+  Req.Scopes = {"ns2::"};
+  EXPECT_THAT(match(*I, Req), UnorderedElementsAre());
+}
+
 TEST(DexTest, Lookup) {
-  auto I = Dex::build(generateSymbols({"ns::abc", "ns::xyz"}), URISchemes);
+  auto I = Dex::build(generateSymbols({"ns::abc", "ns::xyz"}), RefSlab(), URISchemes);
   EXPECT_THAT(lookup(*I, SymbolID("ns::abc")), UnorderedElementsAre("ns::abc"));
   EXPECT_THAT(lookup(*I, {SymbolID("ns::abc"), SymbolID("ns::xyz")}),
               UnorderedElementsAre("ns::abc", "ns::xyz"));
@@ -558,7 +637,7 @@ TEST(DexTest, SymbolIndexOptionsFilter) {
   CodeCompletionSymbol.Flags = Symbol::SymbolFlag::IndexedForCodeCompletion;
   NonCodeCompletionSymbol.Flags = Symbol::SymbolFlag::None;
   std::vector<Symbol> Symbols{CodeCompletionSymbol, NonCodeCompletionSymbol};
-  Dex I(Symbols, URISchemes);
+  Dex I(Symbols, RefSlab(), URISchemes);
   FuzzyFindRequest Req;
   Req.RestrictForCodeCompletion = false;
   EXPECT_THAT(match(I, Req), ElementsAre("Completion", "NoCompletion"));
@@ -573,7 +652,7 @@ TEST(DexTest, ProximityPathsBoosting) {
   CloseSymbol.CanonicalDeclaration.FileURI = "unittest:///a/b/c/d/e/f/file.h";
 
   std::vector<Symbol> Symbols{CloseSymbol, RootSymbol};
-  Dex I(Symbols, URISchemes);
+  Dex I(Symbols, RefSlab(), URISchemes);
 
   FuzzyFindRequest Req;
   Req.Query = "abc";
@@ -589,6 +668,31 @@ TEST(DexTest, ProximityPathsBoosting) {
   // RootSymbol to come out.
   Req.ProximityPaths = {testPath("file.h")};
   EXPECT_THAT(match(I, Req), ElementsAre("root::abc"));
+}
+
+TEST(DexTests, Refs) {
+  DenseMap<SymbolID, std::vector<Ref>> Refs;
+  auto AddRef = [&](const Symbol& Sym, StringRef Filename, RefKind Kind) {
+    auto& SymbolRefs = Refs[Sym.ID];
+    SymbolRefs.emplace_back();
+    SymbolRefs.back().Kind = Kind;
+    SymbolRefs.back().Location.FileURI = Filename;
+  };
+  auto Foo = symbol("foo");
+  auto Bar = symbol("bar");
+  AddRef(Foo, "foo.h", RefKind::Declaration);
+  AddRef(Foo, "reffoo.h", RefKind::Reference);
+  AddRef(Bar, "bar.h", RefKind::Declaration);
+
+  std::vector<std::string> Files;
+  RefsRequest Req;
+  Req.IDs.insert(Foo.ID);
+  Req.Filter = RefKind::Declaration | RefKind::Definition;
+  Dex(std::vector<Symbol>{Foo, Bar}, Refs, {}).refs(Req, [&](const Ref &R) {
+    Files.push_back(R.Location.FileURI);
+  });
+
+  EXPECT_THAT(Files, ElementsAre("foo.h"));
 }
 
 } // namespace

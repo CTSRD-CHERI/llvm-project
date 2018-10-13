@@ -679,6 +679,27 @@ static void readCallGraph(MemoryBufferRef MB) {
   }
 }
 
+template <class ELFT> static void readCallGraphsFromObjectFiles() {
+  auto FindSection = [&](const Symbol *Sym) -> const InputSectionBase * {
+    warnUnorderableSymbol(Sym);
+    if (const auto *SymD = dyn_cast<Defined>(Sym))
+      return dyn_cast_or_null<InputSectionBase>(SymD->Section);
+    return nullptr;
+  };
+
+  for (auto File : ObjectFiles) {
+    auto *Obj = cast<ObjFile<ELFT>>(File);
+    for (const Elf_CGProfile_Impl<ELFT> &CGPE : Obj->CGProfile) {
+      const InputSectionBase *FromSB =
+          FindSection(&Obj->getSymbol(CGPE.cgp_from));
+      const InputSectionBase *ToSB = FindSection(&Obj->getSymbol(CGPE.cgp_to));
+      if (!FromSB || !ToSB)
+        continue;
+      Config->CallGraphProfile[{FromSB, ToSB}] += CGPE.cgp_weight;
+    }
+  }
+}
+
 static bool getCompressDebugSections(opt::InputArgList &Args) {
   StringRef S = Args.getLastArgValue(OPT_compress_debug_sections, "none");
   if (S == "none")
@@ -836,6 +857,8 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
   Config->WarnBackrefs =
       Args.hasFlag(OPT_warn_backrefs, OPT_no_warn_backrefs, false);
   Config->WarnCommon = Args.hasFlag(OPT_warn_common, OPT_no_warn_common, false);
+  Config->WarnIfuncTextrel =
+      Args.hasFlag(OPT_warn_ifunc_textrel, OPT_no_warn_ifunc_textrel, false);
   Config->WarnSymbolOrdering =
       Args.hasFlag(OPT_warn_symbol_ordering, OPT_no_warn_symbol_ordering, true);
   Config->ZCombreloc = getZFlag(Args, "combreloc", "nocombreloc", true);
@@ -1577,14 +1600,12 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   }
 
   // This adds a .comment section containing a version string. We have to add it
-  // before decompressAndMergeSections because the .comment section is a
-  // mergeable section.
+  // before mergeSections because the .comment section is a mergeable section.
   if (!Config->Relocatable)
     InputSections.push_back(createCommentSection());
 
   // Do size optimizations: garbage collection, merging of SHF_MERGE sections
   // and identical code folding.
-  decompressSections();
   splitSections<ELFT>();
   markLive<ELFT>();
   demoteSharedSymbols<ELFT>();
@@ -1598,6 +1619,7 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   if (auto *Arg = Args.getLastArg(OPT_call_graph_ordering_file))
     if (Optional<MemoryBufferRef> Buffer = readFile(Arg->getValue()))
       readCallGraph(*Buffer);
+  readCallGraphsFromObjectFiles<ELFT>();
 
   // Write the result to the file.
   writeResult<ELFT>();

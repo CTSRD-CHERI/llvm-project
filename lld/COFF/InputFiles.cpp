@@ -54,8 +54,16 @@ std::vector<BitcodeFile *> BitcodeFile::Instances;
 static void checkAndSetWeakAlias(SymbolTable *Symtab, InputFile *F,
                                  Symbol *Source, Symbol *Target) {
   if (auto *U = dyn_cast<Undefined>(Source)) {
-    if (U->WeakAlias && U->WeakAlias != Target)
+    if (U->WeakAlias && U->WeakAlias != Target) {
+      // Weak aliases as produced by GCC are named in the form
+      // .weak.<weaksymbol>.<othersymbol>, where <othersymbol> is the name
+      // of another symbol emitted near the weak symbol.
+      // Just use the definition from the first object file that defined
+      // this weak symbol.
+      if (Config->MinGW)
+        return;
       Symtab->reportDuplicate(Source, F);
+    }
     U->WeakAlias = Target;
   }
 }
@@ -272,6 +280,13 @@ Symbol *ObjFile::createRegular(COFFSymbolRef Sym) {
     COFFObj->getSymbolName(Sym, Name);
     if (SC)
       return Symtab->addRegular(this, Name, Sym.getGeneric(), SC);
+    // For MinGW symbols named .weak.* that point to a discarded section,
+    // don't create an Undefined symbol. If nothing ever refers to the symbol,
+    // everything should be fine. If something actually refers to the symbol
+    // (e.g. the undefined weak alias), linking will fail due to undefined
+    // references at the end.
+    if (Config->MinGW && Name.startswith(".weak."))
+      return nullptr;
     return Symtab->addUndefined(Name, this, false);
   }
   if (SC)

@@ -46,6 +46,7 @@ FunctionPass *createAArch64A57FPLoadBalancing();
 FunctionPass *createAArch64A53Fix835769();
 FunctionPass *createFalkorHWPFFixPass();
 FunctionPass *createFalkorMarkStridedAccessesPass();
+FunctionPass *createAArch64BranchTargetsPass();
 
 FunctionPass *createAArch64CleanupLocalDynamicTLSPass();
 
@@ -53,10 +54,12 @@ FunctionPass *createAArch64CollectLOHPass();
 InstructionSelector *
 createAArch64InstructionSelector(const AArch64TargetMachine &,
                                  AArch64Subtarget &, AArch64RegisterBankInfo &);
+FunctionPass *createAArch64PreLegalizeCombiner();
 
 void initializeAArch64A53Fix835769Pass(PassRegistry&);
 void initializeAArch64A57FPLoadBalancingPass(PassRegistry&);
 void initializeAArch64AdvSIMDScalarPass(PassRegistry&);
+void initializeAArch64BranchTargetsPass(PassRegistry&);
 void initializeAArch64CollectLOHPass(PassRegistry&);
 void initializeAArch64CondBrTuningPass(PassRegistry &);
 void initializeAArch64ConditionalComparesPass(PassRegistry&);
@@ -65,6 +68,7 @@ void initializeAArch64DeadRegisterDefinitionsPass(PassRegistry&);
 void initializeAArch64ExpandPseudoPass(PassRegistry&);
 void initializeAArch64LoadStoreOptPass(PassRegistry&);
 void initializeAArch64SIMDInstrOptPass(PassRegistry&);
+void initializeAArch64PreLegalizerCombinerPass(PassRegistry&);
 void initializeAArch64PromoteConstantPass(PassRegistry&);
 void initializeAArch64RedundantCopyEliminationPass(PassRegistry&);
 void initializeAArch64StorePairSuppressPass(PassRegistry&);

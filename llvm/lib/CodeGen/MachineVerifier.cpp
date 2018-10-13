@@ -109,6 +109,7 @@ namespace {
     using RegMap = DenseMap<unsigned, const MachineInstr *>;
     using BlockSet = SmallPtrSet<const MachineBasicBlock *, 8>;
 
+    const MachineInstr *FirstNonPHI;
     const MachineInstr *FirstTerminator;
     BlockSet FunctionBlocks;
 
@@ -364,6 +365,13 @@ unsigned MachineVerifier::verify(MachineFunction &MF) {
 
   const bool isFunctionFailedISel = MF.getProperties().hasProperty(
       MachineFunctionProperties::Property::FailedISel);
+
+  // If we're mid-GlobalISel and we already triggered the fallback path then
+  // it's expected that the MIR is somewhat broken but that's ok since we'll
+  // reset it and clear the FailedISel attribute in ResetMachineFunctions.
+  if (isFunctionFailedISel)
+    return foundErrors;
+
   isFunctionRegBankSelected =
       !isFunctionFailedISel &&
       MF.getProperties().hasProperty(
@@ -601,6 +609,7 @@ static bool matchPair(MachineBasicBlock::const_succ_iterator i,
 void
 MachineVerifier::visitMachineBasicBlockBefore(const MachineBasicBlock *MBB) {
   FirstTerminator = nullptr;
+  FirstNonPHI = nullptr;
 
   if (!MF->getProperties().hasProperty(
       MachineFunctionProperties::Property::NoPHIs) && MRI->tracksLiveness()) {
@@ -882,9 +891,15 @@ void MachineVerifier::visitMachineInstrBefore(const MachineInstr *MI) {
            << MI->getNumOperands() << " given.\n";
   }
 
-  if (MI->isPHI() && MF->getProperties().hasProperty(
-                         MachineFunctionProperties::Property::NoPHIs))
-    report("Found PHI instruction with NoPHIs property set", MI);
+  if (MI->isPHI()) {
+    if (MF->getProperties().hasProperty(
+            MachineFunctionProperties::Property::NoPHIs))
+      report("Found PHI instruction with NoPHIs property set", MI);
+
+    if (FirstNonPHI)
+      report("Found PHI instruction after non-PHI", MI);
+  } else if (FirstNonPHI == nullptr)
+    FirstNonPHI = MI;
 
   // Check the tied operands.
   if (MI->isInlineAsm())

@@ -145,6 +145,30 @@
     # CHECK: i64x2.neg # encoding: [0xfd,0x27]
     i64x2.neg
 
+    # CHECK: i8x16.add_saturate_s # encoding: [0xfd,0x28]
+    i8x16.add_saturate_s
+
+    # CHECK: i8x16.add_saturate_u # encoding: [0xfd,0x29]
+    i8x16.add_saturate_u
+
+    # CHECK: i16x8.add_saturate_s # encoding: [0xfd,0x2a]
+    i16x8.add_saturate_s
+
+    # CHECK: i16x8.add_saturate_u # encoding: [0xfd,0x2b]
+    i16x8.add_saturate_u
+
+    # CHECK: i8x16.sub_saturate_s # encoding: [0xfd,0x2c]
+    i8x16.sub_saturate_s
+
+    # CHECK: i8x16.sub_saturate_u # encoding: [0xfd,0x2d]
+    i8x16.sub_saturate_u
+
+    # CHECK: i16x8.sub_saturate_s # encoding: [0xfd,0x2e]
+    i16x8.sub_saturate_s
+
+    # CHECK: i16x8.sub_saturate_u # encoding: [0xfd,0x2f]
+    i16x8.sub_saturate_u
+
     # CHECK: i8x16.shl # encoding: [0xfd,0x30]
     i8x16.shl
 
@@ -192,6 +216,33 @@
 
     # CHECK: v128.not # encoding: [0xfd,0x3f]
     v128.not
+
+    # CHECK: v128.bitselect # encoding: [0xfd,0x40]
+    v128.bitselect
+
+    # CHECK: i8x16.any_true # encoding: [0xfd,0x41]
+    i8x16.any_true
+
+    # CHECK: i16x8.any_true # encoding: [0xfd,0x42]
+    i16x8.any_true
+
+    # CHECK: i32x4.any_true # encoding: [0xfd,0x43]
+    i32x4.any_true
+
+    # CHECK: i64x2.any_true # encoding: [0xfd,0x44]
+    i64x2.any_true
+
+    # CHECK: i8x16.all_true # encoding: [0xfd,0x45]
+    i8x16.all_true
+
+    # CHECK: i16x8.all_true # encoding: [0xfd,0x46]
+    i16x8.all_true
+
+    # CHECK: i32x4.all_true # encoding: [0xfd,0x47]
+    i32x4.all_true
+
+    # CHECK: i64x2.all_true # encoding: [0xfd,0x48]
+    i64x2.all_true
 
     # CHECK: i8x16.eq # encoding: [0xfd,0x49]
     i8x16.eq
@@ -361,28 +412,28 @@
     # CHECK: f64x2.sqrt # encoding: [0xfd,0x8e]
     f64x2.sqrt
 
-    # CHECK: f32x4.convert_s?i32x4 # encoding: [0xfd,0x8f]
-    f32x4.convert_s?i32x4
+    # CHECK: f32x4.convert_s/i32x4 # encoding: [0xfd,0x8f]
+    f32x4.convert_s/i32x4
 
-    # CHECK: f32x4.convert_u?i32x4 # encoding: [0xfd,0x90]
-    f32x4.convert_u?i32x4
+    # CHECK: f32x4.convert_u/i32x4 # encoding: [0xfd,0x90]
+    f32x4.convert_u/i32x4
 
-    # CHECK: f64x2.convert_s?i64x2 # encoding: [0xfd,0x91]
-    f64x2.convert_s?i64x2
+    # CHECK: f64x2.convert_s/i64x2 # encoding: [0xfd,0x91]
+    f64x2.convert_s/i64x2
 
-    # CHECK: f64x2.convert_u?i64x2 # encoding: [0xfd,0x92]
-    f64x2.convert_u?i64x2
+    # CHECK: f64x2.convert_u/i64x2 # encoding: [0xfd,0x92]
+    f64x2.convert_u/i64x2
 
-    # CHECK? i32x4.trunc_saturating_s?f32x4 # encoding: [0xfd,0x93]
-    i32x4.trunc_saturating_s?f32x4
+    # CHECK: i32x4.trunc_sat_s/f32x4 # encoding: [0xfd,0x93]
+    i32x4.trunc_sat_s/f32x4
 
-    # CHECK? i32x4.trunc_saturating_u?f32x4 # encoding: [0xfd,0x94]
-    i32x4.trunc_saturating_u?f32x4
+    # CHECK: i32x4.trunc_sat_u/f32x4 # encoding: [0xfd,0x94]
+    i32x4.trunc_sat_u/f32x4
 
-    # CHECK? i64x2.trunc_saturating_s?f64x2 # encoding: [0xfd,0x95]
-    i64x2.trunc_saturating_s?f64x2
+    # CHECK: i64x2.trunc_sat_s/f64x2 # encoding: [0xfd,0x95]
+    i64x2.trunc_sat_s/f64x2
 
-    # CHECK? i64x2.trunc_saturating_u?f64x2 # encoding: [0xfd,0x96]
-    i64x2.trunc_saturating_u?f64x2
+    # CHECK: i64x2.trunc_sat_u/f64x2 # encoding: [0xfd,0x96]
+    i64x2.trunc_sat_u/f64x2
 
     end_function

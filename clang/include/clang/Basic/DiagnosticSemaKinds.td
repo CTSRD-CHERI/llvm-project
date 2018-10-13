@@ -192,7 +192,9 @@ def ext_flexible_array_init : Extension<
   "flexible array initialization is a GNU extension">, InGroup<GNUFlexibleArrayInitializer>;
 
 // Declarations.
-def ext_duplicate_declspec : ExtWarn<"duplicate '%0' declaration specifier">,
+def ext_duplicate_declspec : Extension<"duplicate '%0' declaration specifier">,
+  InGroup<DuplicateDeclSpecifier>;
+def ext_warn_duplicate_declspec : ExtWarn<"duplicate '%0' declaration specifier">,
   InGroup<DuplicateDeclSpecifier>;
 def warn_duplicate_declspec : Warning<"duplicate '%0' declaration specifier">,
   InGroup<DuplicateDeclSpecifier>;
@@ -3197,6 +3199,12 @@ def warn_impcast_integer_sign_conditional : Warning<
 def warn_impcast_integer_precision : Warning<
   "implicit conversion loses integer precision: %0 to %1">,
   InGroup<Conversion>, DefaultIgnore;
+def warn_impcast_high_order_zero_bits : Warning<
+  "higher order bits are zeroes after implicit conversion">,
+  InGroup<Conversion>, DefaultIgnore;
+def warn_impcast_nonnegative_result : Warning<
+  "the resulting value is always non-negative after implicit conversion">,
+  InGroup<SignConversion>, DefaultIgnore;
 def warn_impcast_integer_64_32 : Warning<
   "implicit conversion loses integer precision: %0 to %1">,
   InGroup<Shorten64To32>, DefaultIgnore;

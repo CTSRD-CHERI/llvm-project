@@ -22,6 +22,7 @@ add_llvm_target(AArch64CodeGen
   AArch64A57FPLoadBalancing.cpp
   AArch64AdvSIMDScalarPass.cpp
   AArch64AsmPrinter.cpp
+  AArch64BranchTargets.cpp
   AArch64CallLowering.cpp
   AArch64CleanupLocalDynamicTLSPass.cpp
   AArch64CollectLOH.cpp
@@ -43,6 +44,7 @@ add_llvm_target(AArch64CodeGen
   AArch64LoadStoreOptimizer.cpp
   AArch64MacroFusion.cpp
   AArch64MCInstLower.cpp
+  AArch64PreLegalizerCombiner.cpp
   AArch64PromoteConstant.cpp
   AArch64PBQPRegAlloc.cpp
   AArch64RegisterBankInfo.cpp

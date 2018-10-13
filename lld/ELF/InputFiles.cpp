@@ -412,6 +412,11 @@ void ObjFile<ELFT>::initializeSections(
       continue;
     const Elf_Shdr &Sec = ObjSections[I];
 
+    if (Sec.sh_type == ELF::SHT_LLVM_CALL_GRAPH_PROFILE)
+      CGProfile = check(
+          this->getObj().template getSectionContentsAsArray<Elf_CGProfile>(
+              &Sec));
+
     // SHF_EXCLUDE'ed sections are discarded by the linker. However,
     // if -r is given, we'll let the final link discard such sections.
     // This is compatible with GNU.
@@ -600,7 +605,7 @@ InputSectionBase *ObjFile<ELFT>::getRelocTarget(const Elf_Shdr &Sec) {
 // as a given section.
 static InputSection *toRegularSection(MergeInputSection *Sec) {
   return make<InputSection>(Sec->File, Sec->Flags, Sec->Type, Sec->Alignment,
-                            Sec->Data, Sec->Name);
+                            Sec->data(), Sec->Name);
 }
 
 template <class ELFT>
@@ -994,22 +999,22 @@ template <class ELFT> void SharedFile<ELFT>::parseRest() {
   for (size_t I = 0; I < Syms.size(); ++I) {
     const Elf_Sym &Sym = Syms[I];
 
+    // ELF spec requires that all local symbols precede weak or global
+    // symbols in each symbol table, and the index of first non-local symbol
+    // is stored to sh_info. If a local symbol appears after some non-local
+    // symbol, that's a violation of the spec.
     StringRef Name = CHECK(Sym.getName(this->StringTable), this);
+    if (Sym.getBinding() == STB_LOCAL) {
+      warn("found local symbol '" + Name +
+           "' in global part of symbol table in file " + toString(this));
+      continue;
+    }
+
     if (Sym.isUndefined()) {
       Symbol *S = Symtab->addUndefined<ELFT>(Name, Sym.getBinding(),
                                              Sym.st_other, Sym.getType(),
                                              /*CanOmitFromDynSym=*/false, this);
       S->ExportDynamic = true;
-      continue;
-    }
-
-    // ELF spec requires that all local symbols precede weak or global
-    // symbols in each symbol table, and the index of first non-local symbol
-    // is stored to sh_info. If a local symbol appears after some non-local
-    // symbol, that's a violation of the spec.
-    if (Sym.getBinding() == STB_LOCAL) {
-      warn("found local symbol '" + Name +
-           "' in global part of symbol table in file " + toString(this));
       continue;
     }
 

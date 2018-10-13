@@ -1749,6 +1749,9 @@ bool Sema::CheckAArch64BuiltinFunctionCall(unsigned BuiltinID,
       BuiltinID == AArch64::BI__builtin_arm_wsrp)
     return SemaBuiltinARMSpecialReg(BuiltinID, TheCall, 0, 5, true);
 
+  if (BuiltinID == AArch64::BI__getReg)
+    return SemaBuiltinConstantArgRange(TheCall, 0, 0, 31);
+
   if (CheckNeonBuiltinFunctionCall(BuiltinID, TheCall))
     return true;
 
@@ -10894,6 +10897,19 @@ CheckImplicitConversion(Sema &S, Expr *E, QualType T, SourceLocation CC,
       return DiagnoseImpCast(S, E, T, CC, diag::warn_impcast_integer_64_32,
                              /* pruneControlFlow */ true);
     return DiagnoseImpCast(S, E, T, CC, diag::warn_impcast_integer_precision);
+  }
+
+  if (TargetRange.Width > SourceRange.Width) {
+    if (auto *UO = dyn_cast<UnaryOperator>(E))
+      if (UO->getOpcode() == UO_Minus)
+        if (Source->isUnsignedIntegerType()) {
+          if (Target->isUnsignedIntegerType())
+            return DiagnoseImpCast(S, E, T, CC,
+                                   diag::warn_impcast_high_order_zero_bits);
+          if (Target->isSignedIntegerType())
+            return DiagnoseImpCast(S, E, T, CC,
+                                   diag::warn_impcast_nonnegative_result);
+        }
   }
 
   if (TargetRange.Width == SourceRange.Width && !TargetRange.NonNegative &&
