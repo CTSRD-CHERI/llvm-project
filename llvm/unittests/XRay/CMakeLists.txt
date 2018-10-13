@@ -4,10 +4,12 @@ set(LLVM_LINK_COMPONENTS
   )
 
 add_llvm_unittest(XRayTests
+  ProfileTest.cpp
+  FDRBlockIndexerTest.cpp
   FDRProducerConsumerTest.cpp
+  FDRRecordPrinterTest.cpp
   FDRTraceWriterTest.cpp
   GraphTest.cpp
-	ProfileTest.cpp
   )
 
 add_dependencies(XRayTests intrinsics_gen)

@@ -24,26 +24,35 @@ static u32 RandomSeed() {
   return seed;
 }
 
-Thread *Thread::main_thread;
+Thread *Thread::thread_list_head;
 SpinMutex Thread::thread_list_mutex;
+Thread::ThreadStats Thread::thread_stats;
 
 void Thread::InsertIntoThreadList(Thread *t) {
   CHECK(!t->next_);
-  if (!main_thread) {
-    main_thread = t;
+  SpinMutexLock l(&thread_list_mutex);
+  thread_stats.n_live_threads++;
+  thread_stats.total_stack_size += t->stack_size();
+  if (!thread_list_head) {
+    thread_list_head = t;
     return;
   }
-  SpinMutexLock l(&thread_list_mutex);
-  Thread *last = main_thread;
+  Thread *last = thread_list_head;
   while (last->next_)
     last = last->next_;
   last->next_ = t;
 }
 
 void Thread::RemoveFromThreadList(Thread *t) {
-  CHECK_NE(t, main_thread);
   SpinMutexLock l(&thread_list_mutex);
-  Thread *prev = main_thread;
+  thread_stats.n_live_threads--;
+  thread_stats.total_stack_size -= t->stack_size();
+  if (t == thread_list_head) {
+    thread_list_head = t->next_;
+    t->next_ = nullptr;
+    return;
+  }
+  Thread *prev = thread_list_head;
   Thread *cur = prev->next_;
   CHECK(cur);
   while (cur) {
@@ -57,22 +66,33 @@ void Thread::RemoveFromThreadList(Thread *t) {
   CHECK(0 && "RemoveFromThreadList: thread not found");
 }
 
-Thread *Thread::Create(thread_callback_t start_routine,
-                               void *arg) {
+void Thread::Create() {
+  static u64 unique_id;
   uptr PageSize = GetPageSizeCached();
   uptr size = RoundUpTo(sizeof(Thread), PageSize);
   Thread *thread = (Thread*)MmapOrDie(size, __func__);
-  thread->start_routine_ = start_routine;
-  thread->arg_ = arg;
   thread->destructor_iterations_ = GetPthreadDestructorIterations();
-  thread->random_state_ = flags()->random_tags ? RandomSeed() : 0;
+  thread->unique_id_ = unique_id++;
+  thread->random_state_ =
+      flags()->random_tags ? RandomSeed() : thread->unique_id_;
   if (auto sz = flags()->heap_history_size)
-    thread->heap_allocations_ = RingBuffer<HeapAllocationRecord>::New(sz);
+    thread->heap_allocations_ = HeapAllocationsRingBuffer::New(sz);
+  SetCurrentThread(thread);
+  thread->Init();
   InsertIntoThreadList(thread);
-  return thread;
 }
 
-void Thread::SetThreadStackAndTls() {
+uptr Thread::MemoryUsedPerThread() {
+  uptr res = sizeof(Thread);
+  if (auto sz = flags()->heap_history_size)
+    res += HeapAllocationsRingBuffer::SizeInBytes(sz);
+  return res;
+}
+
+void Thread::Init() {
+  // GetPthreadDestructorIterations may call malloc, so disable the tagging.
+  ScopedTaggingDisabler disabler;
+
   // If this process is "init" (pid 1), /proc may not be mounted yet.
   if (IsMainThread() && !FileExists("/proc/self/maps")) {
     stack_top_ = stack_bottom_ = 0;
@@ -91,13 +111,17 @@ void Thread::SetThreadStackAndTls() {
   CHECK(AddrIsInStack((uptr)&local));
   CHECK(MemIsApp(stack_bottom_));
   CHECK(MemIsApp(stack_top_ - 1));
-}
 
-void Thread::Init() {
-  SetThreadStackAndTls();
   if (stack_bottom_) {
     CHECK(MemIsApp(stack_bottom_));
     CHECK(MemIsApp(stack_top_ - 1));
+  }
+  if (flags()->verbose_threads) {
+    if (IsMainThread()) {
+      Printf("sizeof(Thread): %zd sizeof(RB): %zd\n", sizeof(Thread),
+             heap_allocations_->SizeInBytes());
+    }
+    Print("Creating  : ");
   }
 }
 
@@ -109,7 +133,9 @@ void Thread::ClearShadowForThreadStackAndTLS() {
 }
 
 void Thread::Destroy() {
-  malloc_storage().CommitBack();
+  if (flags()->verbose_threads)
+    Print("Destroying: ");
+  AllocatorSwallowThreadLocalCache(allocator_cache());
   ClearShadowForThreadStackAndTLS();
   RemoveFromThreadList(this);
   uptr size = RoundUpTo(sizeof(Thread), GetPageSizeCached());
@@ -117,6 +143,13 @@ void Thread::Destroy() {
     heap_allocations_->Delete();
   UnmapOrDie(this, size);
   DTLS_Destroy();
+}
+
+void Thread::Print(const char *Prefix) {
+  Printf("%sT%zd %p stack: [%p,%p) sz: %zd tls: [%p,%p)\n", Prefix,
+         unique_id_, this, stack_bottom(), stack_top(),
+         stack_top() - stack_bottom(),
+         tls_begin(), tls_end());
 }
 
 static u32 xorshift(u32 state) {
@@ -128,6 +161,7 @@ static u32 xorshift(u32 state) {
 
 // Generate a (pseudo-)random non-zero tag.
 tag_t Thread::GenerateRandomTag() {
+  if (tagging_disabled_) return 0;
   tag_t tag;
   do {
     if (flags()->random_tags) {

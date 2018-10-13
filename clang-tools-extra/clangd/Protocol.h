@@ -768,6 +768,9 @@ struct CompletionItem {
   /// themselves.
   std::vector<TextEdit> additionalTextEdits;
 
+  /// Indicates if this item is deprecated.
+  bool deprecated = false;
+
   // TODO(krasimir): The following optional fields defined by the language
   // server protocol are unsupported:
   //
@@ -877,6 +880,11 @@ struct DocumentHighlight {
 };
 llvm::json::Value toJSON(const DocumentHighlight &DH);
 llvm::raw_ostream &operator<<(llvm::raw_ostream &, const DocumentHighlight &);
+
+struct ReferenceParams : public TextDocumentPositionParams {
+  // For now, no options like context.includeDeclaration are supported.
+};
+bool fromJSON(const llvm::json::Value &, ReferenceParams &);
 
 struct CancelParams {
   /// The request id to cancel.
