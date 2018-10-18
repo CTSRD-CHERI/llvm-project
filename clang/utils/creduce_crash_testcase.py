@@ -472,8 +472,17 @@ class Reducer(object):
             command = shlex.split(line)
             if "clang" not in command[0]:
                 die("Executed program should contain 'clang', but was", command[0])
-            source_file_name = command[-1]
-            source_file = infile.with_name(source_file_name)
+            source_file_index = -1
+            source_file_name = command[source_file_index]
+            while source_file_name.startswith("-"):
+                print("WARNING: crash reproducer command line probably does not end with the input file",
+                      "name: got", blue(source_file_name), "which is probably not a file!")
+                source_file_index = source_file_index - 1
+                source_file_name = command[source_file_index]
+                source_file = infile.with_name(source_file_name)
+                if not source_file.exists():
+                    continue
+
             if not source_file.exists():
                 die("Reproducer input file", source_file, "does not exist!")
             real_in_file = source_file
