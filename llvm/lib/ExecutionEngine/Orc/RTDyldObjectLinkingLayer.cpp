@@ -52,7 +52,7 @@ public:
 
     MR.getTargetJITDylib().withSearchOrderDo([&](const JITDylibList &JDs) {
       ES.lookup(JDs, InternedSymbols, OnResolvedWithUnwrap, OnReady,
-                RegisterDependencies);
+                RegisterDependencies, &MR.getTargetJITDylib());
     });
   }
 
@@ -76,16 +76,15 @@ private:
 namespace llvm {
 namespace orc {
 
-RTDyldObjectLinkingLayer2::RTDyldObjectLinkingLayer2(
+RTDyldObjectLinkingLayer::RTDyldObjectLinkingLayer(
     ExecutionSession &ES, GetMemoryManagerFunction GetMemoryManager,
     NotifyLoadedFunction NotifyLoaded, NotifyEmittedFunction NotifyEmitted)
     : ObjectLayer(ES), GetMemoryManager(GetMemoryManager),
       NotifyLoaded(std::move(NotifyLoaded)),
       NotifyEmitted(std::move(NotifyEmitted)) {}
 
-void RTDyldObjectLinkingLayer2::emit(MaterializationResponsibility R,
-                                     VModuleKey K,
-                                     std::unique_ptr<MemoryBuffer> O) {
+void RTDyldObjectLinkingLayer::emit(MaterializationResponsibility R,
+                                    std::unique_ptr<MemoryBuffer> O) {
   assert(O && "Object must not be null");
 
   // This method launches an asynchronous link step that will fulfill our
@@ -121,15 +120,9 @@ void RTDyldObjectLinkingLayer2::emit(MaterializationResponsibility R,
     }
   }
 
-  auto MemoryManager = GetMemoryManager(K);
-  auto &MemMgr = *MemoryManager;
-  {
-    std::lock_guard<std::mutex> Lock(RTDyldLayerMutex);
-
-    assert(!MemMgrs.count(K) &&
-           "A memory manager already exists for this key?");
-    MemMgrs[K] = std::move(MemoryManager);
-  }
+  auto K = R.getVModuleKey();
+  MemMgrs.push_back(GetMemoryManager());
+  auto &MemMgr = *MemMgrs.back();
 
   JITDylibSearchOrderResolver Resolver(*SharedR);
 
@@ -153,7 +146,7 @@ void RTDyldObjectLinkingLayer2::emit(MaterializationResponsibility R,
       });
 }
 
-Error RTDyldObjectLinkingLayer2::onObjLoad(
+Error RTDyldObjectLinkingLayer::onObjLoad(
     VModuleKey K, MaterializationResponsibility &R, object::ObjectFile &Obj,
     std::unique_ptr<RuntimeDyld::LoadedObjectInfo> LoadedObjInfo,
     std::map<StringRef, JITEvaluatedSymbol> Resolved,
@@ -196,7 +189,7 @@ Error RTDyldObjectLinkingLayer2::onObjLoad(
   return Error::success();
 }
 
-void RTDyldObjectLinkingLayer2::onObjEmit(VModuleKey K,
+void RTDyldObjectLinkingLayer::onObjEmit(VModuleKey K,
                                           MaterializationResponsibility &R,
                                           Error Err) {
   if (Err) {

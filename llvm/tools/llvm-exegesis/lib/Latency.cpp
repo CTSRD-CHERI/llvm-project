@@ -20,31 +20,11 @@
 
 namespace exegesis {
 
-static bool hasUnknownOperand(const llvm::MCOperandInfo &OpInfo) {
-  return OpInfo.OperandType == llvm::MCOI::OPERAND_UNKNOWN;
-}
-
-// FIXME: Handle memory, see PR36905.
-static bool hasMemoryOperand(const llvm::MCOperandInfo &OpInfo) {
-  return OpInfo.OperandType == llvm::MCOI::OPERAND_MEMORY;
-}
-
 LatencySnippetGenerator::~LatencySnippetGenerator() = default;
 
-llvm::Error LatencySnippetGenerator::isInfeasible(
-    const llvm::MCInstrDesc &MCInstrDesc) const {
-  if (llvm::any_of(MCInstrDesc.operands(), hasUnknownOperand))
-    return llvm::make_error<BenchmarkFailure>(
-        "Infeasible : has unknown operands");
-  if (llvm::any_of(MCInstrDesc.operands(), hasMemoryOperand))
-    return llvm::make_error<BenchmarkFailure>(
-        "Infeasible : has memory operands");
-  return llvm::Error::success();
-}
-
-llvm::Expected<CodeTemplate>
-LatencySnippetGenerator::generateTwoInstructionPrototype(
-    const Instruction &Instr) const {
+llvm::Expected<std::vector<CodeTemplate>>
+generateTwoInstructionPrototypes(const LLVMState &State,
+                                 const Instruction &Instr) {
   std::vector<unsigned> Opcodes;
   Opcodes.resize(State.getInstrInfo().getNumOpcodes());
   std::iota(Opcodes.begin(), Opcodes.end(), 0U);
@@ -52,12 +32,9 @@ LatencySnippetGenerator::generateTwoInstructionPrototype(
   for (const unsigned OtherOpcode : Opcodes) {
     if (OtherOpcode == Instr.Description->Opcode)
       continue;
-    const auto &OtherInstrDesc = State.getInstrInfo().get(OtherOpcode);
-    if (auto E = isInfeasible(OtherInstrDesc)) {
-      llvm::consumeError(std::move(E));
+    const Instruction OtherInstr(State, OtherOpcode);
+    if (OtherInstr.hasMemoryOperands())
       continue;
-    }
-    const Instruction OtherInstr(OtherInstrDesc, RATC);
     const AliasingConfigurations Forward(Instr, OtherInstr);
     const AliasingConfigurations Back(OtherInstr, Instr);
     if (Forward.empty() || Back.empty())
@@ -73,24 +50,23 @@ LatencySnippetGenerator::generateTwoInstructionPrototype(
                             State.getInstrInfo().getName(OtherOpcode));
     CT.Instructions.push_back(std::move(ThisIT));
     CT.Instructions.push_back(std::move(OtherIT));
-    return std::move(CT);
+    return getSingleton(CT);
   }
   return llvm::make_error<BenchmarkFailure>(
       "Infeasible : Didn't find any scheme to make the instruction serial");
 }
 
-llvm::Expected<CodeTemplate>
-LatencySnippetGenerator::generateCodeTemplate(unsigned Opcode) const {
-  const auto &InstrDesc = State.getInstrInfo().get(Opcode);
-  if (auto E = isInfeasible(InstrDesc))
-    return std::move(E);
-  const Instruction Instr(InstrDesc, RATC);
-  if (auto CT = generateSelfAliasingCodeTemplate(Instr))
-    return CT;
-  else
-    llvm::consumeError(CT.takeError());
-  // No self aliasing, trying to create a dependency through another opcode.
-  return generateTwoInstructionPrototype(Instr);
+llvm::Expected<std::vector<CodeTemplate>>
+LatencySnippetGenerator::generateCodeTemplates(const Instruction &Instr) const {
+  if (Instr.hasMemoryOperands())
+    return llvm::make_error<BenchmarkFailure>(
+        "Infeasible : has memory operands");
+  return llvm::handleExpected( //
+      generateSelfAliasingCodeTemplates(Instr),
+      [this, &Instr]() {
+        return generateTwoInstructionPrototypes(State, Instr);
+      },
+      [](const BenchmarkFailure &) { /*Consume Error*/ });
 }
 
 const char *LatencyBenchmarkRunner::getCounterName() const {

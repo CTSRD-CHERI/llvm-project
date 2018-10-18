@@ -563,7 +563,7 @@ private:
 
   // getFeasibleSuccessors - Return a vector of booleans to indicate which
   // successors are reachable from a given terminator instruction.
-  void getFeasibleSuccessors(TerminatorInst &TI, SmallVectorImpl<bool> &Succs);
+  void getFeasibleSuccessors(Instruction &TI, SmallVectorImpl<bool> &Succs);
 
   // OperandChangedState - This method is invoked on all of the users of an
   // instruction that was just changed state somehow.  Based on this
@@ -604,7 +604,7 @@ private:
   // Terminators
 
   void visitReturnInst(ReturnInst &I);
-  void visitTerminatorInst(TerminatorInst &TI);
+  void visitTerminator(Instruction &TI);
 
   void visitCastInst(CastInst &I);
   void visitSelectInst(SelectInst &I);
@@ -615,7 +615,7 @@ private:
 
   void visitCatchSwitchInst(CatchSwitchInst &CPI) {
     markOverdefined(&CPI);
-    visitTerminatorInst(CPI);
+    visitTerminator(CPI);
   }
 
   // Instructions that cannot be folded away.
@@ -630,12 +630,12 @@ private:
 
   void visitInvokeInst    (InvokeInst &II) {
     visitCallSite(&II);
-    visitTerminatorInst(II);
+    visitTerminator(II);
   }
 
   void visitCallSite      (CallSite CS);
-  void visitResumeInst    (TerminatorInst &I) { /*returns void*/ }
-  void visitUnreachableInst(TerminatorInst &I) { /*returns void*/ }
+  void visitResumeInst    (ResumeInst &I) { /*returns void*/ }
+  void visitUnreachableInst(UnreachableInst &I) { /*returns void*/ }
   void visitFenceInst     (FenceInst &I) { /*returns void*/ }
 
   void visitInstruction(Instruction &I) {
@@ -650,7 +650,7 @@ private:
 
 // getFeasibleSuccessors - Return a vector of booleans to indicate which
 // successors are reachable from a given terminator instruction.
-void SCCPSolver::getFeasibleSuccessors(TerminatorInst &TI,
+void SCCPSolver::getFeasibleSuccessors(Instruction &TI,
                                        SmallVectorImpl<bool> &Succs) {
   Succs.resize(TI.getNumSuccessors());
   if (auto *BI = dyn_cast<BranchInst>(&TI)) {
@@ -837,7 +837,7 @@ void SCCPSolver::visitReturnInst(ReturnInst &I) {
   }
 }
 
-void SCCPSolver::visitTerminatorInst(TerminatorInst &TI) {
+void SCCPSolver::visitTerminator(Instruction &TI) {
   SmallVector<bool, 16> SuccFeasible;
   getFeasibleSuccessors(TI, SuccFeasible);
 
@@ -1017,8 +1017,9 @@ void SCCPSolver::visitBinaryOperator(Instruction &I) {
 
 // Handle ICmpInst instruction.
 void SCCPSolver::visitCmpInst(CmpInst &I) {
-  LatticeVal &IV = ValueState[&I];
-  if (IV.isOverdefined()) return;
+  // Do not cache this lookup, getValueState calls later in the function might
+  // invalidate the reference.
+  if (ValueState[&I].isOverdefined()) return;
 
   Value *Op1 = I.getOperand(0);
   Value *Op2 = I.getOperand(1);
@@ -1046,7 +1047,8 @@ void SCCPSolver::visitCmpInst(CmpInst &I) {
   }
 
   // If operands are still unknown, wait for it to resolve.
-  if (!V1State.isOverdefined() && !V2State.isOverdefined() && !IV.isConstant())
+  if (!V1State.isOverdefined() && !V2State.isOverdefined() &&
+      !ValueState[&I].isConstant())
     return;
 
   markOverdefined(&I);
@@ -1612,7 +1614,7 @@ bool SCCPSolver::ResolvedUndefsIn(Function &F) {
     // Check to see if we have a branch or switch on an undefined value.  If so
     // we force the branch to go one way or the other to make the successor
     // values live.  It doesn't really matter which way we force it.
-    TerminatorInst *TI = BB.getTerminator();
+    Instruction *TI = BB.getTerminator();
     if (auto *BI = dyn_cast<BranchInst>(TI)) {
       if (!BI->isConditional()) continue;
       if (!getValueState(BI->getCondition()).isUnknown())

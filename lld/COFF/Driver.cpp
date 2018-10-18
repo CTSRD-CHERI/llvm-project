@@ -371,13 +371,30 @@ Optional<StringRef> LinkerDriver::findFile(StringRef Filename) {
   return Path;
 }
 
+// MinGW specific. If an embedded directive specified to link to
+// foo.lib, but it isn't found, try libfoo.a instead.
+StringRef LinkerDriver::doFindLibMinGW(StringRef Filename) {
+  if (Filename.contains('/') || Filename.contains('\\'))
+    return Filename;
+
+  SmallString<128> S = Filename;
+  sys::path::replace_extension(S, ".a");
+  StringRef LibName = Saver.save("lib" + S.str());
+  return doFindFile(LibName);
+}
+
 // Find library file from search path.
 StringRef LinkerDriver::doFindLib(StringRef Filename) {
   // Add ".lib" to Filename if that has no file extension.
   bool HasExt = Filename.contains('.');
   if (!HasExt)
     Filename = Saver.save(Filename + ".lib");
-  return doFindFile(Filename);
+  StringRef Ret = doFindFile(Filename);
+  // For MinGW, if the find above didn't turn up anything, try
+  // looking for a MinGW formatted library name.
+  if (Config->MinGW && Ret == Filename)
+    return doFindLibMinGW(Filename);
+  return Ret;
 }
 
 // Resolves a library path. /nodefaultlib options are taken into
@@ -828,6 +845,57 @@ static void findKeepUniqueSections() {
         markAddrsig(S);
     }
   }
+}
+
+// link.exe replaces each %foo% in AltPath with the contents of environment
+// variable foo, and adds the two magic env vars _PDB (expands to the basename
+// of pdb's output path) and _EXT (expands to the extension of the output
+// binary).
+// lld only supports %_PDB% and %_EXT% and warns on references to all other env
+// vars.
+static void parsePDBAltPath(StringRef AltPath) {
+  SmallString<128> Buf;
+  StringRef PDBBasename =
+      sys::path::filename(Config->PDBPath, sys::path::Style::windows);
+  StringRef BinaryExtension =
+      sys::path::extension(Config->OutputFile, sys::path::Style::windows);
+  if (!BinaryExtension.empty())
+    BinaryExtension = BinaryExtension.substr(1); // %_EXT% does not include '.'.
+
+  // Invariant:
+  //   +--------- Cursor ('a...' might be the empty string).
+  //   |   +----- FirstMark
+  //   |   |   +- SecondMark
+  //   v   v   v
+  //   a...%...%...
+  size_t Cursor = 0;
+  while (Cursor < AltPath.size()) {
+    size_t FirstMark, SecondMark;
+    if ((FirstMark = AltPath.find('%', Cursor)) == StringRef::npos ||
+        (SecondMark = AltPath.find('%', FirstMark + 1)) == StringRef::npos) {
+      // Didn't find another full fragment, treat rest of string as literal.
+      Buf.append(AltPath.substr(Cursor));
+      break;
+    }
+
+    // Found a full fragment. Append text in front of first %, and interpret
+    // text between first and second % as variable name.
+    Buf.append(AltPath.substr(Cursor, FirstMark - Cursor));
+    StringRef Var = AltPath.substr(FirstMark, SecondMark - FirstMark + 1);
+    if (Var.equals_lower("%_pdb%"))
+      Buf.append(PDBBasename);
+    else if (Var.equals_lower("%_ext%"))
+      Buf.append(BinaryExtension);
+    else {
+      warn("only %_PDB% and %_EXT% supported in /pdbaltpath:, keeping " +
+           Var + " as literal");
+      Buf.append(Var);
+    }
+
+    Cursor = SecondMark + 1;
+  }
+
+  Config->PDBAltPath = Buf;
 }
 
 void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
@@ -1299,6 +1367,7 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
     warn("/machine is not specified. x64 is assumed");
     Config->Machine = AMD64;
   }
+  Config->Wordsize = Config->is64() ? 8 : 4;
 
   // Input files can be Windows resource files (.res files). We use
   // WindowsResource to convert resource files to a regular COFF file,
@@ -1411,6 +1480,9 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
       // tools won't work correctly if these assumptions are not held.
       sys::fs::make_absolute(Config->PDBAltPath);
       sys::path::remove_dots(Config->PDBAltPath);
+    } else {
+      // Don't do this earlier, so that Config->OutputFile is ready.
+      parsePDBAltPath(Config->PDBAltPath);
     }
   }
 

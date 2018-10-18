@@ -382,10 +382,13 @@ bool parse(llvm::ArrayRef<const char *> args, MachOLinkingContext &ctx) {
     if (arch == MachOLinkingContext::arch_unknown &&
         !parsedArgs.getLastArg(OPT_test_file_usage)) {
       // If no -arch and no options at all, print usage message.
-      if (parsedArgs.size() == 0)
-        table.PrintHelp(llvm::outs(), args[0], "LLVM Linker", false);
-      else
+      if (parsedArgs.size() == 0) {
+        table.PrintHelp(llvm::outs(),
+                        (std::string(args[0]) + " [options] file...").c_str(),
+                        "LLVM Linker", false);
+      } else {
         error("-arch not specified and could not be inferred");
+      }
       return false;
     }
   }

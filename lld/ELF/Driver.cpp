@@ -396,13 +396,6 @@ void LinkerDriver::main(ArrayRef<const char *> ArgsArr) {
   if (Args.hasArg(OPT_v) || Args.hasArg(OPT_version))
     message(getLLDVersion() + " (compatible with GNU linkers)");
 
-  // The behavior of -v or --version is a bit strange, but this is
-  // needed for compatibility with GNU linkers.
-  if (Args.hasArg(OPT_v) && !Args.hasArg(OPT_INPUT))
-    return;
-  if (Args.hasArg(OPT_version))
-    return;
-
   if (const char *Path = getReproduceOption(Args)) {
     // Note that --reproduce is a debug option so you can ignore it
     // if you are trying to understand the whole picture of the code.
@@ -421,6 +414,14 @@ void LinkerDriver::main(ArrayRef<const char *> ArgsArr) {
 
   readConfigs(Args);
   checkZOptions(Args);
+
+  // The behavior of -v or --version is a bit strange, but this is
+  // needed for compatibility with GNU linkers.
+  if (Args.hasArg(OPT_v) && !Args.hasArg(OPT_INPUT))
+    return;
+  if (Args.hasArg(OPT_version))
+    return;
+
   initLLVM();
   createFiles(Args);
   if (errorCount())
@@ -828,6 +829,7 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
   Config->SingleRoRx = Args.hasArg(OPT_no_rosegment);
   Config->SoName = Args.getLastArgValue(OPT_soname);
   Config->SortSection = getSortSection(Args);
+  Config->SplitStackAdjustSize = args::getInteger(Args, OPT_split_stack_adjust_size, 16384);
   Config->Strip = getStrip(Args);
   Config->Sysroot = Args.getLastArgValue(OPT_sysroot);
   Config->Target1Rel = Args.hasFlag(OPT_target1_rel, OPT_target1_abs, false);
@@ -899,6 +901,9 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
     error("--lto-partitions: number of threads must be > 0");
   if (Config->ThinLTOJobs == 0)
     error("--thinlto-jobs: number of threads must be > 0");
+
+  if (Config->SplitStackAdjustSize < 0)
+    error("--split-stack-adjust-size: size must be >= 0");
 
   // Parse ELF{32,64}{LE,BE} and CPU type.
   if (auto *Arg = Args.getLastArg(OPT_m)) {
@@ -1342,6 +1347,11 @@ static void findKeepUniqueSections(opt::InputArgList &Args) {
   }
 }
 
+template <class ELFT> static Symbol *addUndefined(StringRef Name) {
+  return Symtab->addUndefined<ELFT>(Name, STB_GLOBAL, STV_DEFAULT, 0, false,
+                                    nullptr);
+}
+
 // The --wrap option is a feature to rename symbols so that you can write
 // wrappers for existing functions. If you pass `-wrap=foo`, all
 // occurrences of symbol `foo` are resolved to `wrap_foo` (so, you are
@@ -1375,8 +1385,8 @@ static std::vector<WrappedSymbol> addWrappedSymbols(opt::InputArgList &Args) {
     if (!Sym)
       continue;
 
-    Symbol *Real = Symtab->addUndefined<ELFT>(Saver.save("__real_" + Name));
-    Symbol *Wrap = Symtab->addUndefined<ELFT>(Saver.save("__wrap_" + Name));
+    Symbol *Real = addUndefined<ELFT>(Saver.save("__real_" + Name));
+    Symbol *Wrap = addUndefined<ELFT>(Saver.save("__wrap_" + Name));
     V.push_back({Sym, Real, Wrap});
 
     // We want to tell LTO not to inline symbols to be overwritten
@@ -1483,8 +1493,8 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
 
   // Some symbols (such as __ehdr_start) are defined lazily only when there
   // are undefined symbols for them, so we add these to trigger that logic.
-  for (StringRef Sym : Script->ReferencedSymbols)
-    Symtab->addUndefined<ELFT>(Sym);
+  for (StringRef Name : Script->ReferencedSymbols)
+    addUndefined<ELFT>(Name);
 
   // Handle the `--undefined <sym>` options.
   for (StringRef S : Config->Undefined)

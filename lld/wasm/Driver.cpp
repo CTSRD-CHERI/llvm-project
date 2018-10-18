@@ -349,7 +349,9 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
 
   // Handle --help
   if (Args.hasArg(OPT_help)) {
-    Parser.PrintHelp(outs(), ArgsArr[0], "LLVM Linker", false);
+    Parser.PrintHelp(outs(),
+                     (std::string(ArgsArr[0]) + " [options] file...").c_str(),
+                     "LLVM Linker", false);
     return;
   }
 

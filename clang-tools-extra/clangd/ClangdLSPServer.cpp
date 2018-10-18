@@ -81,8 +81,16 @@ CompletionItemKindBitset defaultCompletionItemKinds() {
 } // namespace
 
 void ClangdLSPServer::onInitialize(InitializeParams &Params) {
-  if (Params.initializationOptions)
-    applyConfiguration(*Params.initializationOptions);
+  if (Params.initializationOptions) {
+    const ClangdInitializationOptions &Opts = *Params.initializationOptions;
+
+    // Explicit compilation database path.
+    if (Opts.compilationDatabasePath.hasValue()) {
+      CDB.setCompileCommandsDir(Opts.compilationDatabasePath.getValue());
+    }
+
+    applyConfiguration(Opts.ParamsChange);
+  }
 
   if (Params.rootUri && *Params.rootUri)
     Server->setRootPath(Params.rootUri->file());
@@ -95,6 +103,8 @@ void ClangdLSPServer::onInitialize(InitializeParams &Params) {
       Params.capabilities.textDocument.publishDiagnostics.clangdFixSupport;
   DiagOpts.SendDiagnosticCategory =
       Params.capabilities.textDocument.publishDiagnostics.categorySupport;
+  SupportsCodeAction =
+      Params.capabilities.textDocument.codeActionLiteralSupport;
 
   if (Params.capabilities.workspace && Params.capabilities.workspace->symbol &&
       Params.capabilities.workspace->symbol->symbolKind &&
@@ -331,28 +341,53 @@ void ClangdLSPServer::onDocumentSymbol(DocumentSymbolParams &Params) {
       });
 }
 
+static Optional<Command> asCommand(const CodeAction &Action) {
+  Command Cmd;
+  if (Action.command && Action.edit)
+    return llvm::None; // Not representable. (We never emit these anyway).
+  if (Action.command) {
+    Cmd = *Action.command;
+  } else if (Action.edit) {
+    Cmd.command = Command::CLANGD_APPLY_FIX_COMMAND;
+    Cmd.workspaceEdit = *Action.edit;
+  } else {
+    return llvm::None;
+  }
+  Cmd.title = Action.title;
+  if (Action.kind && *Action.kind == CodeAction::QUICKFIX_KIND)
+    Cmd.title = "Apply fix: " + Cmd.title;
+  return Cmd;
+}
+
 void ClangdLSPServer::onCodeAction(CodeActionParams &Params) {
-  // We provide a code action for each diagnostic at the requested location
-  // which has FixIts available.
-  auto Code = DraftMgr.getDraft(Params.textDocument.uri.file());
-  if (!Code)
+  // We provide a code action for Fixes on the specified diagnostics.
+  if (!DraftMgr.getDraft(Params.textDocument.uri.file()))
     return replyError(ErrorCode::InvalidParams,
                       "onCodeAction called for non-added file");
 
-  json::Array Commands;
+  std::vector<CodeAction> Actions;
   for (Diagnostic &D : Params.context.diagnostics) {
     for (auto &F : getFixes(Params.textDocument.uri.file(), D)) {
-      WorkspaceEdit WE;
-      std::vector<TextEdit> Edits(F.Edits.begin(), F.Edits.end());
-      WE.changes = {{Params.textDocument.uri.uri(), std::move(Edits)}};
-      Commands.push_back(json::Object{
-          {"title", llvm::formatv("Apply fix: {0}", F.Message)},
-          {"command", ExecuteCommandParams::CLANGD_APPLY_FIX_COMMAND},
-          {"arguments", {WE}},
-      });
+      Actions.emplace_back();
+      Actions.back().title = F.Message;
+      Actions.back().kind = CodeAction::QUICKFIX_KIND;
+      Actions.back().diagnostics = {D};
+      Actions.back().edit.emplace();
+      Actions.back().edit->changes.emplace();
+      (*Actions.back().edit->changes)[Params.textDocument.uri.uri()] = {
+          F.Edits.begin(), F.Edits.end()};
     }
   }
-  reply(std::move(Commands));
+
+  if (SupportsCodeAction)
+    reply(json::Array(Actions));
+  else {
+    std::vector<Command> Commands;
+    for (const auto &Action : Actions)
+      if (auto Command = asCommand(Action))
+        Commands.push_back(std::move(*Command));
+    reply(json::Array(Commands));
+  }
 }
 
 void ClangdLSPServer::onCompletion(TextDocumentPositionParams &Params) {
@@ -424,17 +459,10 @@ void ClangdLSPServer::onHover(TextDocumentPositionParams &Params) {
 }
 
 void ClangdLSPServer::applyConfiguration(
-    const ClangdConfigurationParamsChange &Settings) {
-  // Compilation database change.
-  if (Settings.compilationDatabasePath.hasValue()) {
-    CDB.setCompileCommandsDir(Settings.compilationDatabasePath.getValue());
-
-    reparseOpenedFiles();
-  }
-
-  // Update to the compilation database.
-  if (Settings.compilationDatabaseChanges) {
-    const auto &CompileCommandUpdates = *Settings.compilationDatabaseChanges;
+    const ClangdConfigurationParamsChange &Params) {
+  // Per-file update to the compilation database.
+  if (Params.compilationDatabaseChanges) {
+    const auto &CompileCommandUpdates = *Params.compilationDatabaseChanges;
     bool ShouldReparseOpenFiles = false;
     for (auto &Entry : CompileCommandUpdates) {
       /// The opened files need to be reparsed only when some existing
