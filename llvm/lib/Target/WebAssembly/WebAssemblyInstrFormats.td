@@ -30,6 +30,7 @@ class NI<dag oops, dag iops, list<dag> pattern, bit stack, string asmstr = "",
   dag OutOperandList = oops;
   dag InOperandList  = iops;
   let Pattern        = pattern;
+  let Defs           = [ARGUMENTS];
 }
 
 // Generates both register and stack based versions of one actual instruction.
@@ -57,13 +58,4 @@ multiclass I<dag oops_r, dag iops_r, dag oops_s, dag iops_s,
 multiclass NRI<dag oops, dag iops, list<dag> pattern, string asmstr = "",
                bits<32> inst = -1> {
   defm "": I<oops, iops, oops, iops, pattern, asmstr, asmstr, inst>;
-}
-
-// Instructions requiring HasSIMD128 and the simd128 prefix byte
-multiclass SIMD_I<dag oops_r, dag iops_r, dag oops_s, dag iops_s,
-                  list<dag> pattern_r, string asmstr_r = "",
-                  string asmstr_s = "", bits<32> simdop = -1> {
-  defm "" : I<oops_r, iops_r, oops_s, iops_s, pattern_r, asmstr_r, asmstr_s,
-              !or(0xfd00, !and(0xff, simdop))>,
-            Requires<[HasSIMD128]>;
 }

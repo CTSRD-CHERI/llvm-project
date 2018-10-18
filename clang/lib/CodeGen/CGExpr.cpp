@@ -4369,6 +4369,7 @@ LValue CodeGenFunction::EmitCastLValue(const CastExpr *E) {
   case CK_CHERICapabilityToOffset:
   case CK_CHERICapabilityToAddress:
   case CK_IntToOCLSampler:
+  case CK_FixedPointCast:
     return EmitUnsupportedLValue(E, "unexpected cast lvalue");
 
   case CK_Dependent:

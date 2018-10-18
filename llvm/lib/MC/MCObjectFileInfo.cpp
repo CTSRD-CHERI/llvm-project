@@ -291,11 +291,11 @@ void MCObjectFileInfo::initELFMCObjectFileInfo(const Triple &T, bool Large) {
   switch (T.getArch()) {
   case Triple::mips:
   case Triple::mipsel:
-    FDECFIEncoding = dwarf::DW_EH_PE_sdata4;
-    break;
   case Triple::mips64:
   case Triple::mips64el:
-    FDECFIEncoding = dwarf::DW_EH_PE_sdata8;
+    FDECFIEncoding = Ctx->getAsmInfo()->getCodePointerSize() == 4
+                         ? dwarf::DW_EH_PE_sdata4
+                         : dwarf::DW_EH_PE_sdata8;
     break;
   case Triple::ppc64:
   case Triple::ppc64le:
@@ -742,6 +742,12 @@ void MCObjectFileInfo::initWasmMCObjectFileInfo(const Triple &T) {
   DwarfFrameSection = Ctx->getWasmSection(".debug_frame", SectionKind::getMetadata());
   DwarfPubNamesSection = Ctx->getWasmSection(".debug_pubnames", SectionKind::getMetadata());
   DwarfPubTypesSection = Ctx->getWasmSection(".debug_pubtypes", SectionKind::getMetadata());
+
+  // Wasm use data section for LSDA.
+  // TODO Consider putting each function's exception table in a separate
+  // section, as in -function-sections, to facilitate lld's --gc-section.
+  LSDASection = Ctx->getWasmSection(".rodata.gcc_except_table",
+                                    SectionKind::getReadOnlyWithRel());
 
   // TODO: Define more sections.
 }

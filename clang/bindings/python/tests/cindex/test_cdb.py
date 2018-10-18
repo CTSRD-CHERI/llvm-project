@@ -1,3 +1,8 @@
+import os
+from clang.cindex import Config
+if 'CLANG_LIBRARY_PATH' in os.environ:
+    Config.set_library_path(os.environ['CLANG_LIBRARY_PATH'])
+
 from clang.cindex import CompilationDatabase
 from clang.cindex import CompilationDatabaseError
 from clang.cindex import CompileCommands
@@ -25,11 +30,6 @@ class TestCDB(unittest.TestCase):
     def test_create(self):
         """Check we can load a compilation database"""
         cdb = CompilationDatabase.fromDirectory(kInputsDir)
-
-    def test_lookup_fail(self):
-        """Check file lookup failure"""
-        cdb = CompilationDatabase.fromDirectory(kInputsDir)
-        self.assertIsNone(cdb.getCompileCommands('file_do_not_exist.cpp'))
 
     def test_lookup_succeed(self):
         """Check we get some results if the file exists in the db"""

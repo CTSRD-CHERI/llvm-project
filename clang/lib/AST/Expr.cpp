@@ -1658,6 +1658,7 @@ bool CastExpr::CastConsistency() const {
   case CK_ZeroToOCLEvent:
   case CK_ZeroToOCLQueue:
   case CK_IntToOCLSampler:
+  case CK_FixedPointCast:
     assert(!getType()->isBooleanType() && "unheralded conversion to bool");
     goto CheckNoBasePath;
 

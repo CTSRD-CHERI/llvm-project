@@ -275,21 +275,21 @@ define void @avg_v48i8(<48 x i8>* %a, <48 x i8>* %b) nounwind {
 ; AVX1-NEXT:    vextractf128 $1, %ymm2, %xmm3
 ; AVX1-NEXT:    vpshufd {{.*#+}} xmm4 = xmm3[2,3,0,1]
 ; AVX1-NEXT:    vpmovzxbd {{.*#+}} xmm7 = xmm4[0],zero,zero,zero,xmm4[1],zero,zero,zero,xmm4[2],zero,zero,zero,xmm4[3],zero,zero,zero
-; AVX1-NEXT:    vpshufd {{.*#+}} xmm4 = xmm3[3,1,2,3]
+; AVX1-NEXT:    vpshufd {{.*#+}} xmm4 = xmm3[3,3,0,1]
 ; AVX1-NEXT:    vpmovzxbd {{.*#+}} xmm4 = xmm4[0],zero,zero,zero,xmm4[1],zero,zero,zero,xmm4[2],zero,zero,zero,xmm4[3],zero,zero,zero
 ; AVX1-NEXT:    vpshufd {{.*#+}} xmm6 = xmm3[1,1,2,3]
 ; AVX1-NEXT:    vpmovzxbd {{.*#+}} xmm6 = xmm6[0],zero,zero,zero,xmm6[1],zero,zero,zero,xmm6[2],zero,zero,zero,xmm6[3],zero,zero,zero
 ; AVX1-NEXT:    vpmovzxbd {{.*#+}} xmm11 = xmm3[0],zero,zero,zero,xmm3[1],zero,zero,zero,xmm3[2],zero,zero,zero,xmm3[3],zero,zero,zero
 ; AVX1-NEXT:    vpshufd {{.*#+}} xmm3 = xmm2[2,3,0,1]
 ; AVX1-NEXT:    vpmovzxbd {{.*#+}} xmm12 = xmm3[0],zero,zero,zero,xmm3[1],zero,zero,zero,xmm3[2],zero,zero,zero,xmm3[3],zero,zero,zero
-; AVX1-NEXT:    vpshufd {{.*#+}} xmm3 = xmm2[3,1,2,3]
+; AVX1-NEXT:    vpshufd {{.*#+}} xmm3 = xmm2[3,3,0,1]
 ; AVX1-NEXT:    vpmovzxbd {{.*#+}} xmm13 = xmm3[0],zero,zero,zero,xmm3[1],zero,zero,zero,xmm3[2],zero,zero,zero,xmm3[3],zero,zero,zero
 ; AVX1-NEXT:    vpshufd {{.*#+}} xmm3 = xmm2[1,1,2,3]
 ; AVX1-NEXT:    vpmovzxbd {{.*#+}} xmm3 = xmm3[0],zero,zero,zero,xmm3[1],zero,zero,zero,xmm3[2],zero,zero,zero,xmm3[3],zero,zero,zero
 ; AVX1-NEXT:    vpmovzxbd {{.*#+}} xmm15 = xmm2[0],zero,zero,zero,xmm2[1],zero,zero,zero,xmm2[2],zero,zero,zero,xmm2[3],zero,zero,zero
 ; AVX1-NEXT:    vpshufd {{.*#+}} xmm2 = xmm5[2,3,0,1]
 ; AVX1-NEXT:    vpmovzxbd {{.*#+}} xmm14 = xmm2[0],zero,zero,zero,xmm2[1],zero,zero,zero,xmm2[2],zero,zero,zero,xmm2[3],zero,zero,zero
-; AVX1-NEXT:    vpshufd {{.*#+}} xmm2 = xmm5[3,1,2,3]
+; AVX1-NEXT:    vpshufd {{.*#+}} xmm2 = xmm5[3,3,0,1]
 ; AVX1-NEXT:    vpmovzxbd {{.*#+}} xmm10 = xmm2[0],zero,zero,zero,xmm2[1],zero,zero,zero,xmm2[2],zero,zero,zero,xmm2[3],zero,zero,zero
 ; AVX1-NEXT:    vpshufd {{.*#+}} xmm2 = xmm5[1,1,2,3]
 ; AVX1-NEXT:    vpmovzxbd {{.*#+}} xmm2 = xmm2[0],zero,zero,zero,xmm2[1],zero,zero,zero,xmm2[2],zero,zero,zero,xmm2[3],zero,zero,zero
@@ -301,7 +301,7 @@ define void @avg_v48i8(<48 x i8>* %a, <48 x i8>* %b) nounwind {
 ; AVX1-NEXT:    vpmovzxbd {{.*#+}} xmm5 = xmm5[0],zero,zero,zero,xmm5[1],zero,zero,zero,xmm5[2],zero,zero,zero,xmm5[3],zero,zero,zero
 ; AVX1-NEXT:    vpaddd %xmm5, %xmm7, %xmm5
 ; AVX1-NEXT:    vmovdqa %xmm5, {{[-0-9]+}}(%r{{[sb]}}p) # 16-byte Spill
-; AVX1-NEXT:    vpshufd {{.*#+}} xmm7 = xmm2[3,1,2,3]
+; AVX1-NEXT:    vpshufd {{.*#+}} xmm7 = xmm2[3,3,0,1]
 ; AVX1-NEXT:    vpmovzxbd {{.*#+}} xmm7 = xmm7[0],zero,zero,zero,xmm7[1],zero,zero,zero,xmm7[2],zero,zero,zero,xmm7[3],zero,zero,zero
 ; AVX1-NEXT:    vpaddd %xmm7, %xmm4, %xmm9
 ; AVX1-NEXT:    vpshufd {{.*#+}} xmm7 = xmm2[1,1,2,3]
@@ -312,7 +312,7 @@ define void @avg_v48i8(<48 x i8>* %a, <48 x i8>* %b) nounwind {
 ; AVX1-NEXT:    vpshufd {{.*#+}} xmm7 = xmm1[2,3,0,1]
 ; AVX1-NEXT:    vpmovzxbd {{.*#+}} xmm7 = xmm7[0],zero,zero,zero,xmm7[1],zero,zero,zero,xmm7[2],zero,zero,zero,xmm7[3],zero,zero,zero
 ; AVX1-NEXT:    vpaddd %xmm7, %xmm12, %xmm12
-; AVX1-NEXT:    vpshufd {{.*#+}} xmm5 = xmm1[3,1,2,3]
+; AVX1-NEXT:    vpshufd {{.*#+}} xmm5 = xmm1[3,3,0,1]
 ; AVX1-NEXT:    vpmovzxbd {{.*#+}} xmm5 = xmm5[0],zero,zero,zero,xmm5[1],zero,zero,zero,xmm5[2],zero,zero,zero,xmm5[3],zero,zero,zero
 ; AVX1-NEXT:    vpaddd %xmm5, %xmm13, %xmm13
 ; AVX1-NEXT:    vpshufd {{.*#+}} xmm4 = xmm1[1,1,2,3]
@@ -323,7 +323,7 @@ define void @avg_v48i8(<48 x i8>* %a, <48 x i8>* %b) nounwind {
 ; AVX1-NEXT:    vpshufd {{.*#+}} xmm4 = xmm0[2,3,0,1]
 ; AVX1-NEXT:    vpmovzxbd {{.*#+}} xmm4 = xmm4[0],zero,zero,zero,xmm4[1],zero,zero,zero,xmm4[2],zero,zero,zero,xmm4[3],zero,zero,zero
 ; AVX1-NEXT:    vpaddd %xmm4, %xmm14, %xmm4
-; AVX1-NEXT:    vpshufd {{.*#+}} xmm6 = xmm0[3,1,2,3]
+; AVX1-NEXT:    vpshufd {{.*#+}} xmm6 = xmm0[3,3,0,1]
 ; AVX1-NEXT:    vpmovzxbd {{.*#+}} xmm6 = xmm6[0],zero,zero,zero,xmm6[1],zero,zero,zero,xmm6[2],zero,zero,zero,xmm6[3],zero,zero,zero
 ; AVX1-NEXT:    vpaddd %xmm6, %xmm10, %xmm6
 ; AVX1-NEXT:    vpshufd {{.*#+}} xmm2 = xmm0[1,1,2,3]
@@ -1256,7 +1256,8 @@ define void @avg_v32i8_const(<32 x i8>* %a) nounwind {
 ; AVX1:       # %bb.0:
 ; AVX1-NEXT:    vmovdqa (%rdi), %ymm0
 ; AVX1-NEXT:    vextractf128 $1, %ymm0, %xmm1
-; AVX1-NEXT:    vmovddup {{.*#+}} xmm2 = mem[0,0]
+; AVX1-NEXT:    vmovddup {{.*#+}} xmm2 = [7.9499288951273625E-275,7.9499288951273625E-275]
+; AVX1-NEXT:    # xmm2 = mem[0,0]
 ; AVX1-NEXT:    vpavgb %xmm2, %xmm1, %xmm1
 ; AVX1-NEXT:    vpavgb %xmm2, %xmm0, %xmm0
 ; AVX1-NEXT:    vinsertf128 $1, %xmm1, %ymm0, %ymm0
@@ -1310,7 +1311,8 @@ define void @avg_v64i8_const(<64 x i8>* %a) nounwind {
 ; AVX1-NEXT:    vmovdqa (%rdi), %ymm0
 ; AVX1-NEXT:    vmovdqa 32(%rdi), %ymm1
 ; AVX1-NEXT:    vextractf128 $1, %ymm0, %xmm2
-; AVX1-NEXT:    vmovddup {{.*#+}} xmm3 = mem[0,0]
+; AVX1-NEXT:    vmovddup {{.*#+}} xmm3 = [7.9499288951273625E-275,7.9499288951273625E-275]
+; AVX1-NEXT:    # xmm3 = mem[0,0]
 ; AVX1-NEXT:    vpavgb %xmm3, %xmm2, %xmm2
 ; AVX1-NEXT:    vpavgb %xmm3, %xmm0, %xmm0
 ; AVX1-NEXT:    vinsertf128 $1, %xmm2, %ymm0, %ymm0

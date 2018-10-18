@@ -23,6 +23,7 @@
 #include <string>
 #include <vector>
 
+using ::testing::AnyOf;
 using ::testing::ElementsAre;
 using ::testing::UnorderedElementsAre;
 using namespace llvm;
@@ -257,7 +258,9 @@ TEST(DexIterators, StringRepresentation) {
   EXPECT_EQ(llvm::to_string(*I2), "T=L2");
 
   auto Tree = C.limit(C.intersect(move(I1), move(I2)), 10);
-  EXPECT_EQ(llvm::to_string(*Tree), "(LIMIT 10 (& [1 3 5] T=L2))");
+  // AND reorders its children, we don't care which order it prints.
+  EXPECT_THAT(llvm::to_string(*Tree), AnyOf("(LIMIT 10 (& [1 3 5] T=L2))",
+                                            "(LIMIT 10 (& T=L2 [1 3 5]))"));
 }
 
 TEST(DexIterators, Limit) {
@@ -489,19 +492,13 @@ TEST(Dex, FuzzyFind) {
                                    "other::A"));
 }
 
-// FIXME(kbobyrev): This test is different for Dex and MemIndex: while
-// MemIndex manages response deduplication, Dex simply returns all matched
-// symbols which means there might be equivalent symbols in the response.
-// Before drop-in replacement of MemIndex with Dex happens, FileIndex
-// should handle deduplication instead.
 TEST(DexTest, DexDeduplicate) {
   std::vector<Symbol> Symbols = {symbol("1"), symbol("2"), symbol("3"),
                                  symbol("2") /* duplicate */};
   FuzzyFindRequest Req;
   Req.Query = "2";
   Dex I(Symbols, RefSlab(), URISchemes);
-  EXPECT_FALSE(Req.Limit);
-  EXPECT_THAT(match(I, Req), ElementsAre("2", "2"));
+  EXPECT_THAT(match(I, Req), ElementsAre("2"));
 }
 
 TEST(DexTest, DexLimitedNumMatches) {

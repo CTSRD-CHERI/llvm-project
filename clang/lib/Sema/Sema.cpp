@@ -640,6 +640,8 @@ CastKind Sema::ScalarTypeToBooleanCastKind(QualType ScalarTy) {
   case Type::STK_Floating: return CK_FloatingToBoolean;
   case Type::STK_IntegralComplex: return CK_IntegralComplexToBoolean;
   case Type::STK_FloatingComplex: return CK_FloatingComplexToBoolean;
+  case Type::STK_FixedPoint:
+    llvm_unreachable("Unknown cast from FixedPoint to boolean");
   }
   llvm_unreachable("unknown scalar type kind");
 }
@@ -2019,6 +2021,34 @@ void Sema::setCurrentOpenCLExtensionForDecl(Decl *D) {
   if (CurrOpenCLExtension.empty())
     return;
   setOpenCLExtensionForDecl(D, CurrOpenCLExtension);
+}
+
+std::string Sema::getOpenCLExtensionsFromDeclExtMap(FunctionDecl *FD) {
+  if (!OpenCLDeclExtMap.empty())
+    return getOpenCLExtensionsFromExtMap(FD, OpenCLDeclExtMap);
+
+  return "";
+}
+
+std::string Sema::getOpenCLExtensionsFromTypeExtMap(FunctionType *FT) {
+  if (!OpenCLTypeExtMap.empty())
+    return getOpenCLExtensionsFromExtMap(FT, OpenCLTypeExtMap);
+
+  return "";
+}
+
+template <typename T, typename MapT>
+std::string Sema::getOpenCLExtensionsFromExtMap(T *FDT, MapT &Map) {
+  std::string ExtensionNames = "";
+  auto Loc = Map.find(FDT);
+
+  for (auto const& I : Loc->second) {
+    ExtensionNames += I;
+    ExtensionNames += " ";
+  }
+  ExtensionNames.pop_back();
+
+  return ExtensionNames;
 }
 
 bool Sema::isOpenCLDisabledDecl(Decl *FD) {

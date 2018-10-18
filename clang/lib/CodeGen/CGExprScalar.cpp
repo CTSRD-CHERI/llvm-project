@@ -11,11 +11,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "CodeGenFunction.h"
-#include "CGCleanup.h"
 #include "CGCXXABI.h"
+#include "CGCleanup.h"
 #include "CGDebugInfo.h"
 #include "CGObjCRuntime.h"
+#include "CodeGenFunction.h"
 #include "CodeGenModule.h"
 #include "TargetInfo.h"
 #include "clang/AST/ASTContext.h"
@@ -23,6 +23,7 @@
 #include "clang/AST/Expr.h"
 #include "clang/AST/RecordLayout.h"
 #include "clang/AST/StmtVisitor.h"
+#include "clang/Basic/FixedPoint.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Frontend/CodeGenOptions.h"
 #include "clang/Sema/SemaDiagnostic.h"
@@ -306,7 +307,9 @@ public:
   /// Known implicit conversion check kinds.
   /// Keep in sync with the enum of the same name in ubsan_handlers.h
   enum ImplicitConversionCheckKind : unsigned char {
-    ICCK_IntegerTruncation = 0,
+    ICCK_IntegerTruncation = 0, // Legacy, was only used by clang 7.
+    ICCK_UnsignedIntegerTruncation = 1,
+    ICCK_SignedIntegerTruncation = 2,
   };
 
   /// Emit a check that an [implicit] truncation of an integer  does not
@@ -328,6 +331,9 @@ public:
   EmitScalarConversion(Value *Src, QualType SrcTy, QualType DstTy,
                        SourceLocation Loc,
                        ScalarConversionOpts Opts = ScalarConversionOpts());
+
+  Value *EmitFixedPointConversion(Value *Src, QualType SrcTy, QualType DstTy,
+                                  SourceLocation Loc);
 
   /// Emit a conversion from the specified complex type to the specified
   /// destination type, where the destination type is an LLVM scalar type.
@@ -1055,7 +1061,7 @@ void ScalarExprEmitter::EmitFloatConversionCheck(
 void ScalarExprEmitter::EmitIntegerTruncationCheck(Value *Src, QualType SrcType,
                                                    Value *Dst, QualType DstType,
                                                    SourceLocation Loc) {
-  if (!CGF.SanOpts.has(SanitizerKind::ImplicitIntegerTruncation))
+  if (!CGF.SanOpts.hasOneOf(SanitizerKind::ImplicitIntegerTruncation))
     return;
 
   llvm::Type *SrcTy = Src->getType();
@@ -1077,13 +1083,31 @@ void ScalarExprEmitter::EmitIntegerTruncationCheck(Value *Src, QualType SrcType,
 
   assert(!DstType->isBooleanType() && "we should not get here with booleans.");
 
+  bool SrcSigned = SrcType->isSignedIntegerOrEnumerationType();
+  bool DstSigned = DstType->isSignedIntegerOrEnumerationType();
+
+  // If both (src and dst) types are unsigned, then it's an unsigned truncation.
+  // Else, it is a signed truncation.
+  ImplicitConversionCheckKind Kind;
+  SanitizerMask Mask;
+  if (!SrcSigned && !DstSigned) {
+    Kind = ICCK_UnsignedIntegerTruncation;
+    Mask = SanitizerKind::ImplicitUnsignedIntegerTruncation;
+  } else {
+    Kind = ICCK_SignedIntegerTruncation;
+    Mask = SanitizerKind::ImplicitSignedIntegerTruncation;
+  }
+
+  // Do we care about this type of truncation?
+  if (!CGF.SanOpts.has(Mask))
+    return;
+
   CodeGenFunction::SanitizerScope SanScope(&CGF);
 
   llvm::Value *Check = nullptr;
 
   // 1. Extend the truncated value back to the same width as the Src.
-  bool InputSigned = DstType->isSignedIntegerOrEnumerationType();
-  Check = Builder.CreateIntCast(Dst, SrcTy, InputSigned, "anyext");
+  Check = Builder.CreateIntCast(Dst, SrcTy, DstSigned, "anyext");
   // 2. Equality-compare with the original source value
   Check = Builder.CreateICmpEQ(Check, Src, "truncheck");
   // If the comparison result is 'i1 false', then the truncation was lossy.
@@ -1091,8 +1115,8 @@ void ScalarExprEmitter::EmitIntegerTruncationCheck(Value *Src, QualType SrcType,
   llvm::Constant *StaticArgs[] = {
       CGF.EmitCheckSourceLocation(Loc), CGF.EmitCheckTypeDescriptor(SrcType),
       CGF.EmitCheckTypeDescriptor(DstType),
-      llvm::ConstantInt::get(Builder.getInt8Ty(), ICCK_IntegerTruncation)};
-  CGF.EmitCheck(std::make_pair(Check, SanitizerKind::ImplicitIntegerTruncation),
+      llvm::ConstantInt::get(Builder.getInt8Ty(), Kind)};
+  CGF.EmitCheck(std::make_pair(Check, Mask),
                 SanitizerHandler::ImplicitConversion, StaticArgs, {Src, Dst});
 }
 
@@ -1102,6 +1126,10 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
                                                QualType DstType,
                                                SourceLocation Loc,
                                                ScalarConversionOpts Opts) {
+  assert(!SrcType->isFixedPointType() && !DstType->isFixedPointType() &&
+         "Use the ScalarExprEmitter::EmitFixedPoint family functions for "
+         "handling conversions involving fixed point types.");
+
   QualType NoncanonicalSrcType = SrcType;
   QualType NoncanonicalDstType = DstType;
 
@@ -1333,6 +1361,101 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
                                NoncanonicalDstType, Loc);
 
   return Res;
+}
+
+Value *ScalarExprEmitter::EmitFixedPointConversion(Value *Src, QualType SrcTy,
+                                                   QualType DstTy,
+                                                   SourceLocation Loc) {
+  using llvm::APInt;
+  using llvm::ConstantInt;
+  using llvm::Value;
+
+  assert(SrcTy->isFixedPointType());
+  assert(DstTy->isFixedPointType());
+
+  FixedPointSemantics SrcFPSema =
+      CGF.getContext().getFixedPointSemantics(SrcTy);
+  FixedPointSemantics DstFPSema =
+      CGF.getContext().getFixedPointSemantics(DstTy);
+  unsigned SrcWidth = SrcFPSema.getWidth();
+  unsigned DstWidth = DstFPSema.getWidth();
+  unsigned SrcScale = SrcFPSema.getScale();
+  unsigned DstScale = DstFPSema.getScale();
+  bool IsSigned = SrcFPSema.isSigned();
+
+  Value *Result = Src;
+  unsigned ResultWidth = SrcWidth;
+
+  if (!DstFPSema.isSaturated()) {
+    // Downscale
+    if (DstScale < SrcScale) {
+      if (IsSigned)
+        Result = Builder.CreateAShr(Result, SrcScale - DstScale);
+      else
+        Result = Builder.CreateLShr(Result, SrcScale - DstScale);
+    }
+
+    // Resize
+    llvm::Type *DstIntTy = Builder.getIntNTy(DstWidth);
+    if (IsSigned)
+      Result = Builder.CreateSExtOrTrunc(Result, DstIntTy);
+    else
+      Result = Builder.CreateZExtOrTrunc(Result, DstIntTy);
+
+    // Upscale
+    if (DstScale > SrcScale)
+      Result = Builder.CreateShl(Result, DstScale - SrcScale);
+  } else {
+    if (DstScale > SrcScale) {
+      // Need to extend first before scaling up
+      ResultWidth = SrcWidth + DstScale - SrcScale;
+      llvm::Type *UpscaledTy = Builder.getIntNTy(ResultWidth);
+
+      if (IsSigned)
+        Result = Builder.CreateSExt(Result, UpscaledTy);
+      else
+        Result = Builder.CreateZExt(Result, UpscaledTy);
+
+      Result = Builder.CreateShl(Result, DstScale - SrcScale);
+    } else if (DstScale < SrcScale) {
+      if (IsSigned)
+        Result = Builder.CreateAShr(Result, SrcScale - DstScale);
+      else
+        Result = Builder.CreateLShr(Result, SrcScale - DstScale);
+    }
+
+    if (DstFPSema.getIntegralBits() < SrcFPSema.getIntegralBits()) {
+      auto Max = ConstantInt::get(
+          CGF.getLLVMContext(),
+          APFixedPoint::getMax(DstFPSema).getValue().extOrTrunc(ResultWidth));
+      Value *TooHigh = IsSigned ? Builder.CreateICmpSGT(Result, Max)
+                                : Builder.CreateICmpUGT(Result, Max);
+      Result = Builder.CreateSelect(TooHigh, Max, Result);
+
+      if (IsSigned) {
+        // Cannot overflow min to dest type is src is unsigned since all fixed
+        // point types can cover the unsigned min of 0.
+        auto Min = ConstantInt::get(
+            CGF.getLLVMContext(),
+            APFixedPoint::getMin(DstFPSema).getValue().extOrTrunc(ResultWidth));
+        Value *TooLow = Builder.CreateICmpSLT(Result, Min);
+        Result = Builder.CreateSelect(TooLow, Min, Result);
+      }
+    } else if (IsSigned && !DstFPSema.isSigned()) {
+      llvm::Type *ResultTy = Builder.getIntNTy(ResultWidth);
+      Value *Zero = ConstantInt::getNullValue(ResultTy);
+      Value *LTZero = Builder.CreateICmpSLT(Result, Zero);
+      Result = Builder.CreateSelect(LTZero, Zero, Result);
+    }
+
+    // Final resizing to dst width
+    llvm::Type *DstIntTy = Builder.getIntNTy(DstWidth);
+    if (IsSigned)
+      Result = Builder.CreateSExtOrTrunc(Result, DstIntTy);
+    else
+      Result = Builder.CreateZExtOrTrunc(Result, DstIntTy);
+  }
+  return Result;
 }
 
 /// Emit a conversion from the specified complex type to the specified
@@ -2196,9 +2319,13 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     return Builder.CreateVectorSplat(NumElements, Elt, "splat");
   }
 
+  case CK_FixedPointCast:
+    return EmitFixedPointConversion(Visit(E), E->getType(), DestTy,
+                                    CE->getExprLoc());
+
   case CK_IntegralCast: {
     ScalarConversionOpts Opts;
-    if (CGF.SanOpts.has(SanitizerKind::ImplicitIntegerTruncation)) {
+    if (CGF.SanOpts.hasOneOf(SanitizerKind::ImplicitIntegerTruncation)) {
       if (auto *ICE = dyn_cast<ImplicitCastExpr>(CE))
         Opts.EmitImplicitIntegerTruncationChecks = !ICE->isPartOfExplicitCast();
     }

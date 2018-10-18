@@ -515,6 +515,7 @@ ComplexPairTy ComplexExprEmitter::EmitCast(CastKind CK, Expr *Op,
   case CK_CHERICapabilityToOffset:
   case CK_CHERICapabilityToAddress:
   case CK_IntToOCLSampler:
+  case CK_FixedPointCast:
     llvm_unreachable("invalid cast kind for complex value");
 
   case CK_FloatingRealToComplex:

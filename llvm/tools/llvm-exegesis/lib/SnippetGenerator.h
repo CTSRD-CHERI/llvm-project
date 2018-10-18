@@ -30,6 +30,17 @@
 
 namespace exegesis {
 
+std::vector<CodeTemplate> getSingleton(CodeTemplate &CT);
+
+// Generates code templates that has a self-dependency.
+llvm::Expected<std::vector<CodeTemplate>>
+generateSelfAliasingCodeTemplates(const Instruction &Instr);
+
+// Generates code templates without assignment constraints.
+llvm::Expected<std::vector<CodeTemplate>>
+generateUnconstrainedCodeTemplates(const Instruction &Instr,
+                                   llvm::StringRef Msg);
+
 // A class representing failures that happened during Benchmark, they are used
 // to report informations to the user.
 class SnippetGeneratorFailure : public llvm::StringError {
@@ -46,7 +57,7 @@ public:
 
   // Calls generateCodeTemplate and expands it into one or more BenchmarkCode.
   llvm::Expected<std::vector<BenchmarkCode>>
-  generateConfigurations(unsigned Opcode) const;
+  generateConfigurations(const Instruction &Instr) const;
 
   // Given a snippet, computes which registers the setup code needs to define.
   std::vector<RegisterValue> computeRegisterInitialValues(
@@ -54,20 +65,11 @@ public:
 
 protected:
   const LLVMState &State;
-  const RegisterAliasingTrackerCache RATC;
-
-  // Generates a single code template that has a self-dependency.
-  llvm::Expected<CodeTemplate>
-  generateSelfAliasingCodeTemplate(const Instruction &Instr) const;
-  // Generates a single code template without assignment constraints.
-  llvm::Expected<CodeTemplate>
-  generateUnconstrainedCodeTemplate(const Instruction &Instr,
-                                    llvm::StringRef Msg) const;
 
 private:
   // API to be implemented by subclasses.
-  virtual llvm::Expected<CodeTemplate>
-  generateCodeTemplate(unsigned Opcode) const = 0;
+  virtual llvm::Expected<std::vector<CodeTemplate>>
+  generateCodeTemplates(const Instruction &Instr) const = 0;
 };
 
 // A global Random Number Generator to randomize configurations.

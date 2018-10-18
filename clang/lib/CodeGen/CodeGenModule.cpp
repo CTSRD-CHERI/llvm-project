@@ -168,7 +168,7 @@ CodeGenModule::CodeGenModule(ASTContext &C, const HeaderSearchOptions &HSO,
 
   if (CodeGenOpts.hasProfileClangUse()) {
     auto ReaderOrErr = llvm::IndexedInstrProfReader::create(
-        CodeGenOpts.ProfileInstrumentUsePath);
+        CodeGenOpts.ProfileInstrumentUsePath, CodeGenOpts.ProfileRemappingFile);
     if (auto E = ReaderOrErr.takeError()) {
       unsigned DiagID = Diags.getCustomDiagID(DiagnosticsEngine::Error,
                                               "Could not read profile %0: %1");
@@ -345,8 +345,6 @@ void CodeGenModule::checkAliases() {
       assert(FTy);
       if (!FTy->getReturnType()->isPointerTy())
         Diags.Report(Location, diag::err_ifunc_resolver_return);
-      if (FTy->getNumParams())
-        Diags.Report(Location, diag::err_ifunc_resolver_params);
     }
 
     llvm::Constant *Aliasee = Alias->getIndirectSymbol();
