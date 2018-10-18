@@ -487,7 +487,7 @@ class Reducer(object):
                 die("Reproducer input file", source_file, "does not exist!")
             real_in_file = source_file
             verbose_print("Real input file is", real_in_file)
-            command[-1] = "%s"
+            command[source_file_index] = "%s"
             # output to stdout
             if "-o" not in command:
                 print("Adding '-o -' to the compiler invocation")
