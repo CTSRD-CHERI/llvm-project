@@ -94,10 +94,26 @@ enum RelExpr {
   R_CHERI_CAPABILITY_TABLE_INDEX,
   R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE,
   R_CHERI_CAPABILITY_TABLE_REL, // relative offset to _CHERI_CAPABILITY_TABLE_
+
+  // We use a single 64-bit masking operation to quickly check if a relocation
+  // expression matches one on many possible options. This initially worked
+  // for all members of RelExpr, but lately we have come close to the limit of
+  // 64 entries in the RelExpr enum. If a given RelExpr is not used in a
+  // isRelExprOneOf() check with many possibly options, it should be placed
+  // after REL_EXPR_NOT_USED_IN_isRelExprOneOf so that the available 64 bits can
+  // be used by other more common expressions.
+  // TODO: If we end up neededing many more expressions we could also start
+  // using two 64-bit masking operations
+  LAST_REL_EXPR_USED_IN_isRelExprOneOf = R_CHERI_CAPABILITY_TABLE_REL,
+  REL_EXPR_NOT_USED_IN_isRelExprOneOf = 128,
+
   R_MIPS_CHERI_CAPTAB_TLSGD,
   R_MIPS_CHERI_CAPTAB_TLSLD,
   R_MIPS_CHERI_CAPTAB_TPREL
 };
+
+static_assert(LAST_REL_EXPR_USED_IN_isRelExprOneOf < 64,
+              "RelExpr is too large for 64-bit mask!");
 
 // Build a bitmask with one bit set for each RelExpr.
 //
@@ -124,6 +140,8 @@ struct RelExprMaskBuilder<Head, Tail...> {
 // RelExpr's as a constant bit mask and test for membership with a
 // couple cheap bitwise operations.
 template <RelExpr... Exprs> bool isRelExprOneOf(RelExpr Expr) {
+  if (Expr >= REL_EXPR_NOT_USED_IN_isRelExprOneOf)
+    return false;
   assert(0 <= Expr && (int)Expr < 64 &&
          "RelExpr is too large for 64-bit mask!");
   return (uint64_t(1) << Expr) & RelExprMaskBuilder<Exprs...>::build();
