@@ -120,7 +120,7 @@ fi
 CMAKE_ARGS+=("-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}" "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}" "-DLLVM_ENABLE_LLD=ON")
 '''
     if (TEST_RELEASE_BUILD) {
-         buildScript += '''CMAKE_ARGS+=("-DCMAKE_BUILD_TYPE=Release" "-DLLVM_ENABLE_ASSERTIONS=OFF" "-DBUILD_SHARED_LIBS=OFF")'''
+         buildScript += '''CMAKE_ARGS+=("-DCMAKE_BUILD_TYPE=Release" "-DLLVM_ENABLE_ASSERTIONS=OFF" "-DBUILD_SHARED_LIBS=OFF" "-DLLVM_ENABLE_EXPENSIVE_CHECKS=OFF")'''
     } else {
         // Release build with assertions is a bit faster than a debug build and A LOT smaller
         buildScript += '''CMAKE_ARGS+=("-DCMAKE_BUILD_TYPE=Release" "-DLLVM_ENABLE_ASSERTIONS=ON")'''
