@@ -104,14 +104,15 @@ git -C "${WORKSPACE}/llvm/tools/clang" rev-parse HEAD
 git -C "${WORKSPACE}/llvm/tools/lld" rev-parse HEAD
 
 cd "${WORKSPACE}" || exit 1
+rm -rf llvm-build
 mkdir -p llvm-build
 
 # run cmake
 cd llvm-build || exit 1
 CMAKE_ARGS=("-DCMAKE_INSTALL_PREFIX=${SDKROOT_DIR}" "-DLLVM_OPTIMIZED_TABLEGEN=OFF")
 if [ "$label" == "linux" ] ; then
-    export CMAKE_CXX_COMPILER=clang++-4.0
-    export CMAKE_C_COMPILER=clang-4.0
+    export CMAKE_CXX_COMPILER=clang++-6.0
+    export CMAKE_C_COMPILER=clang-6.0
 else
     export CMAKE_CXX_COMPILER=clang++40
     export CMAKE_C_COMPILER=clang40
@@ -119,7 +120,7 @@ fi
 CMAKE_ARGS+=("-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}" "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}" "-DLLVM_ENABLE_LLD=ON")
 '''
     if (TEST_RELEASE_BUILD) {
-         buildScript += '''CMAKE_ARGS+=("-DCMAKE_BUILD_TYPE=Release" "-DLLVM_ENABLE_ASSERTIONS=OFF")'''
+         buildScript += '''CMAKE_ARGS+=("-DCMAKE_BUILD_TYPE=Release" "-DLLVM_ENABLE_ASSERTIONS=OFF" "-DBUILD_SHARED_LIBS=OFF")'''
     } else {
         // Release build with assertions is a bit faster than a debug build and A LOT smaller
         buildScript += '''CMAKE_ARGS+=("-DCMAKE_BUILD_TYPE=Release" "-DLLVM_ENABLE_ASSERTIONS=ON")'''
