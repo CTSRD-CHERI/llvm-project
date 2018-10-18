@@ -699,17 +699,17 @@ AsmToken AsmLexer::LexToken() {
               .StartsWith("captab_hi", {AsmToken::PercentCapTab_Hi, 10})
               .StartsWith("captab_rel", {AsmToken::PercentCapTab_Rel, 11})
               .StartsWith("captab20", {AsmToken::PercentCapTab20, 9})
-              .StartsWith("captab", {AsmToken::PercentCapTab11, 7})
-              .StartsWith("capcall_hi", {AsmToken::PercentCapTabCall_Hi, 11})
-              .StartsWith("capcall_lo", {AsmToken::PercentCapTabCall_Lo, 11})
-              .StartsWith("capcall20", {AsmToken::PercentCapTabCall20, 10})
-              .StartsWith("capcall", {AsmToken::PercentCapTabCall11, 8})
               .StartsWith("captab_tlsgd_hi", {AsmToken::PercentCapTabTlsgd_Hi, 16})
               .StartsWith("captab_tlsgd_lo", {AsmToken::PercentCapTabTlsgd_Lo, 16})
               .StartsWith("captab_tlsldm_hi", {AsmToken::PercentCapTabTlsldm_Hi, 17})
               .StartsWith("captab_tlsldm_lo", {AsmToken::PercentCapTabTlsldm_Lo, 17})
               .StartsWith("captab_tprel_hi", {AsmToken::PercentCapTabTprel_Hi, 16})
               .StartsWith("captab_tprel_lo", {AsmToken::PercentCapTabTprel_Lo, 16})
+              .StartsWith("captab", {AsmToken::PercentCapTab11, 7})
+              .StartsWith("capcall_hi", {AsmToken::PercentCapTabCall_Hi, 11})
+              .StartsWith("capcall_lo", {AsmToken::PercentCapTabCall_Lo, 11})
+              .StartsWith("capcall20", {AsmToken::PercentCapTabCall20, 10})
+              .StartsWith("capcall", {AsmToken::PercentCapTabCall11, 8})
             .Default({AsmToken::Percent, 1});
 
       if (Operator != AsmToken::Percent) {
