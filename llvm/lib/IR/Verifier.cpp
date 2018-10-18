@@ -67,6 +67,7 @@
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/CallingConv.h"
+#include "llvm/IR/Cheri.h"
 #include "llvm/IR/Comdat.h"
 #include "llvm/IR/Constant.h"
 #include "llvm/IR/ConstantRange.h"
@@ -638,10 +639,17 @@ void Verifier::visitGlobalVariable(const GlobalVariable &GV) {
     // visitGlobalValue will complain on appending non-array.
     if (ArrayType *ATy = dyn_cast<ArrayType>(GV.getValueType())) {
       StructType *STy = dyn_cast<StructType>(ATy->getElementType());
-      // For initializers/destructors the code pointer is always in AS0
+      // For initializers/destructors the code pointer is in the program address space
+      auto CtorPointerAS = DL.getProgramAddressSpace();
+      if (isCheriPointer(CtorPointerAS, &DL)) {
+        // However, for CHERI we must ensure that the ctors/init_array section
+        // is only filled with virtual addresses and not capabilities
+        // FIXME: we should emit ptrdiff objects instead
+        CtorPointerAS = 0;
+      }
       PointerType *FuncPtrTy =
           FunctionType::get(Type::getVoidTy(Context), false)->
-          getPointerTo(DL.getProgramAddressSpace());
+          getPointerTo(CtorPointerAS);
       // FIXME: Reject the 2-field form in LLVM 4.0.
       Assert(STy &&
                  (STy->getNumElements() == 2 || STy->getNumElements() == 3) &&
