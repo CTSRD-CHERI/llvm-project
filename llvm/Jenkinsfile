@@ -14,6 +14,7 @@ properties([disableConcurrentBuilds(),
 llvmRepo = null
 clangRepo = null
 lldRepo = null
+TEST_RELEASE_BUILD = false
 
 def updateGithubStatus(String message) {
     for (repo in [llvmRepo, clangRepo, lldRepo])  {
@@ -84,7 +85,7 @@ def doBuild() {
     }
     stage("Build") {
         updateGithubStatus('Compiling...')
-        sh '''#!/usr/bin/env bash 
+        buildScript = '''#!/usr/bin/env bash
 set -xe
 
 #remove old artifacts
@@ -116,9 +117,14 @@ else
     export CMAKE_C_COMPILER=clang40
 fi
 CMAKE_ARGS+=("-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}" "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}" "-DLLVM_ENABLE_LLD=ON")
-
-# Release build with assertions is a bit faster than a debug build and A LOT smaller
-CMAKE_ARGS+=("-DCMAKE_BUILD_TYPE=Release" "-DLLVM_ENABLE_ASSERTIONS=ON")
+'''
+    if (TEST_RELEASE_BUILD) {
+         buildScript += '''CMAKE_ARGS+=("-DCMAKE_BUILD_TYPE=Release" "-DLLVM_ENABLE_ASSERTIONS=OFF")'''
+    } else {
+        // Release build with assertions is a bit faster than a debug build and A LOT smaller
+        buildScript += '''CMAKE_ARGS+=("-DCMAKE_BUILD_TYPE=Release" "-DLLVM_ENABLE_ASSERTIONS=ON")'''
+    }
+        buildScript += '''
 # Also don't set the default target or default sysroot when running tests as it breaks quite a few
 # max 1 hour total and max 2 minutes per test
 CMAKE_ARGS+=("-DLLVM_LIT_ARGS=--xunit-xml-output ${WORKSPACE}/llvm-test-output.xml --max-time 3600 --timeout 240 ${JFLAG}")
@@ -135,10 +141,14 @@ ninja install
 # Remove all old JUnit XML files:
 rm -fv ${WORKSPACE}/llvm-test-*.xml
 '''
+        sh buildScript
     }
     runTests('all')
     // No need to rerun the full test suite, only run CHERI-specific  tests for 256
     runTests('all-cheri256-only')
+
+    if (TEST_RELEASE_BUILD)
+      return;
 
     stage("Archive artifacts") {
         updateGithubStatus("Archiving artifacts...")
@@ -204,6 +214,12 @@ if (env.JOB_NAME.toLowerCase().contains("linux")) {
 } else {
     error("Invalid job name: ${env.JOB_NAME}")
 }
+
+if (env.JOB_NAME.toLowerCase().contains("nodebug")) {
+    TEST_RELEASE_BUILD = true
+}
+
+
 
 node(nodeLabel) {
     try {
