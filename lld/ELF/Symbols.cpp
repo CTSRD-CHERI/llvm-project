@@ -111,6 +111,8 @@ static uint64_t getSymVA(const Symbol &Sym, int64_t &Addend) {
   case Symbol::LazyObjectKind:
     assert(Sym.IsUsedInRegularObj && "lazy symbol reached writer");
     return 0;
+  case Symbol::PlaceholderKind:
+    llvm_unreachable("placeholder symbol reached writer");
   }
   llvm_unreachable("invalid symbol kind");
 }
@@ -278,6 +280,15 @@ void elf::printTraceSymbol(Symbol *Sym) {
 
 void elf::warnUnorderableSymbol(const Symbol *Sym) {
   if (!Config->WarnSymbolOrdering)
+    return;
+
+  // If UnresolvedPolicy::Ignore is used, no "undefined symbol" error/warning
+  // is emitted. It makes sense to not warn on undefined symbols.
+  //
+  // Note, ld.bfd --symbol-ordering-file= does not warn on undefined symbols,
+  // but we don't have to be compatible here.
+  if (Sym->isUndefined() &&
+      Config->UnresolvedSymbols == UnresolvedPolicy::Ignore)
     return;
 
   const InputFile *File = Sym->File;

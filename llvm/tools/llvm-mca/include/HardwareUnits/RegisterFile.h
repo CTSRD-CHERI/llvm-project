@@ -68,9 +68,11 @@ class RegisterFile : public HardwareUnit {
     bool AllowZeroMoveEliminationOnly;
 
     RegisterMappingTracker(unsigned NumPhysRegisters,
-                           unsigned MaxMoveEliminated = 0U)
+                           unsigned MaxMoveEliminated = 0U,
+                           bool AllowZeroMoveElimOnly = false)
         : NumPhysRegs(NumPhysRegisters), NumUsedPhysRegs(0),
-          MaxMoveEliminatedPerCycle(MaxMoveEliminated), NumMoveEliminated(0U) {}
+          MaxMoveEliminatedPerCycle(MaxMoveEliminated), NumMoveEliminated(0U),
+          AllowZeroMoveEliminationOnly(AllowZeroMoveElimOnly) {}
   };
 
   // A vector of register file descriptors.  This set always contains at least
@@ -107,12 +109,18 @@ class RegisterFile : public HardwareUnit {
   //
   // Field `AllowMoveElimination` is set for registers that are used as
   // destination by optimizable register moves.
+  //
+  // Field `AliasRegID` is set by writes from register moves that have been
+  // eliminated at register renaming stage. A move eliminated at register
+  // renaming stage is effectively bypassed, and its write aliases the source
+  // register definition.
   struct RegisterRenamingInfo {
     IndexPlusCostPairTy IndexPlusCost;
     llvm::MCPhysReg RenameAs;
+    llvm::MCPhysReg AliasRegID;
     bool AllowMoveElimination;
     RegisterRenamingInfo()
-        : IndexPlusCost(std::make_pair(0U, 1U)), RenameAs(0U),
+        : IndexPlusCost(std::make_pair(0U, 1U)), RenameAs(0U), AliasRegID(0U),
           AllowMoveElimination(false) {}
   };
 
@@ -151,9 +159,8 @@ class RegisterFile : public HardwareUnit {
   // Here FPRegisterFile contains all the registers defined by register class
   // VR128RegClass and VR256RegClass. FPRegisterFile implements 60
   // registers which can be used for register renaming purpose.
-  void
-  addRegisterFile(llvm::ArrayRef<llvm::MCRegisterCostEntry> RegisterClasses,
-                  unsigned NumPhysRegs);
+  void addRegisterFile(const llvm::MCRegisterFileDesc &RF,
+                       llvm::ArrayRef<llvm::MCRegisterCostEntry> Entries);
 
   // Consumes physical registers in each register file specified by the
   // `IndexPlusCostPairTy`. This method is called from `addRegisterMapping()`.

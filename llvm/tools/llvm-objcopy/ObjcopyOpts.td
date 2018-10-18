@@ -10,6 +10,10 @@ defm binary_architecture : Eq<"binary-architecture">,
                            HelpText<"Used when transforming an architecture-less format (such as binary) to another format">;
 def B : JoinedOrSeparate<["-"], "B">,
         Alias<binary_architecture>;
+defm target : Eq<"target">,
+              HelpText<"Format of the input and output file">,
+              Values<"binary">;
+def F : JoinedOrSeparate<[ "-" ], "F">, Alias<target>;
 defm input_target : Eq<"input-target">,
                     HelpText<"Format of the input file">,
                     Values<"binary">;
@@ -67,10 +71,10 @@ defm add_section : Eq<"add-section">,
                    HelpText<"Make a section named <section> with the contents of <file>.">;
 def strip_all : Flag<["-", "--"], "strip-all">,
                 HelpText<"Remove non-allocated sections other than .gnu.warning* sections">;
+def S : Flag<["-"], "S">,
+        Alias<strip_all>;
 def strip_all_gnu : Flag<["-", "--"], "strip-all-gnu">,
                     HelpText<"Compaitable with GNU objcopy's --strip-all">;
-def S : Flag<["-"], "S">,
-        Alias<strip_all_gnu>;
 def strip_debug : Flag<["-", "--"], "strip-debug">,
                   HelpText<"Remove all debug information">;
 def strip_dwo : Flag<["-", "--"], "strip-dwo">,

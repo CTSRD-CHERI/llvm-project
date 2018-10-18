@@ -284,7 +284,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
                                   Filename).str();
     auto LocationSym = Symtab->find(SymbolHackName);
     if (!LocationSym) {
-        Symtab->addRegular<ELFT>(Saver.save(SymbolHackName), STV_DEFAULT,
+        Symtab->addDefined<ELFT>(Saver.save(SymbolHackName), STV_DEFAULT,
                                  STT_OBJECT, Loc.Offset, Config->CapabilitySize,
                                  STB_GLOBAL, Loc.Section, Loc.Section->File);
         LocationSym = Symtab->find(SymbolHackName);
@@ -708,7 +708,7 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
     }
     uint64_t Off = Index * Config->CapabilitySize;
     if (ShouldAddAtCaptableSymbols) {
-      Symtab->addRegular(Saver.save(RefName), STV_HIDDEN, STT_OBJECT, Off,
+      Symtab->addDefined(Saver.save(RefName), STV_HIDDEN, STT_OBJECT, Off,
                          Config->CapabilitySize, STB_LOCAL, this, nullptr);
     }
     // If the symbol is used as a function pointer the runtime linker has to

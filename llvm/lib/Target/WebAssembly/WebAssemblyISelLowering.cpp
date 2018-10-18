@@ -21,6 +21,7 @@
 #include "llvm/CodeGen/CallingConvLower.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineJumpTableInfo.h"
+#include "llvm/CodeGen/MachineModuleInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/IR/DiagnosticInfo.h"
@@ -966,47 +967,17 @@ WebAssemblyTargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op,
   default:
     return {}; // Don't custom lower most intrinsics.
 
-  case Intrinsic::wasm_add_saturate_signed:
-  case Intrinsic::wasm_add_saturate_unsigned:
-  case Intrinsic::wasm_sub_saturate_signed:
-  case Intrinsic::wasm_sub_saturate_unsigned: {
-    unsigned OpCode;
-    switch (IntNo) {
-    case Intrinsic::wasm_add_saturate_signed:
-      OpCode = WebAssemblyISD::ADD_SAT_S;
-      break;
-    case Intrinsic::wasm_add_saturate_unsigned:
-      OpCode = WebAssemblyISD::ADD_SAT_U;
-      break;
-    case Intrinsic::wasm_sub_saturate_signed:
-      OpCode = WebAssemblyISD::SUB_SAT_S;
-      break;
-    case Intrinsic::wasm_sub_saturate_unsigned:
-      OpCode = WebAssemblyISD::SUB_SAT_U;
-      break;
-    default:
-      llvm_unreachable("unexpected intrinsic id");
-      break;
-    }
-    return DAG.getNode(OpCode, DL, Op.getValueType(), Op.getOperand(1),
-                       Op.getOperand(2));
+  case Intrinsic::wasm_lsda: {
+    MachineFunction &MF = DAG.getMachineFunction();
+    EVT VT = Op.getValueType();
+    const TargetLowering &TLI = DAG.getTargetLoweringInfo();
+    MVT PtrVT = TLI.getPointerTy(DAG.getDataLayout());
+    auto &Context = MF.getMMI().getContext();
+    MCSymbol *S = Context.getOrCreateSymbol(Twine("GCC_except_table") +
+                                            Twine(MF.getFunctionNumber()));
+    return DAG.getNode(WebAssemblyISD::Wrapper, DL, VT,
+                       DAG.getMCSymbol(S, PtrVT));
   }
-
-  case Intrinsic::wasm_bitselect:
-    return DAG.getNode(WebAssemblyISD::BITSELECT, DL, Op.getValueType(),
-                       Op.getOperand(1), Op.getOperand(2), Op.getOperand(3));
-
-  case Intrinsic::wasm_anytrue:
-  case Intrinsic::wasm_alltrue: {
-    unsigned OpCode = IntNo == Intrinsic::wasm_anytrue
-                          ? WebAssemblyISD::ANYTRUE
-                          : WebAssemblyISD::ALLTRUE;
-    return DAG.getNode(OpCode, DL, Op.getValueType(), Op.getOperand(1));
-  }
-
-  case Intrinsic::wasm_lsda:
-    // TODO For now, just return 0 not to crash
-    return DAG.getConstant(0, DL, Op.getValueType());
   }
 }
 

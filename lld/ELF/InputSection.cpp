@@ -208,6 +208,9 @@ OutputSection *SectionBase::getOutputSection() {
 // by zlib-compressed data. This function parses a header to initialize
 // `UncompressedSize` member and remove the header from `RawData`.
 void InputSectionBase::parseCompressedHeader() {
+  typedef typename ELF64LE::Chdr Chdr64;
+  typedef typename ELF32LE::Chdr Chdr32;
+
   // Old-style header
   if (Name.startswith(".zdebug")) {
     if (!toStringRef(RawData).startswith("ZLIB")) {
@@ -235,35 +238,35 @@ void InputSectionBase::parseCompressedHeader() {
 
   // New-style 64-bit header
   if (Config->Is64) {
-    if (RawData.size() < sizeof(Elf64_Chdr)) {
+    if (RawData.size() < sizeof(Chdr64)) {
       error(toString(this) + ": corrupted compressed section");
       return;
     }
 
-    auto *Hdr = reinterpret_cast<const Elf64_Chdr *>(RawData.data());
-    if (read32(&Hdr->ch_type) != ELFCOMPRESS_ZLIB) {
+    auto *Hdr = reinterpret_cast<const Chdr64 *>(RawData.data());
+    if (Hdr->ch_type != ELFCOMPRESS_ZLIB) {
       error(toString(this) + ": unsupported compression type");
       return;
     }
 
-    UncompressedSize = read64(&Hdr->ch_size);
+    UncompressedSize = Hdr->ch_size;
     RawData = RawData.slice(sizeof(*Hdr));
     return;
   }
 
   // New-style 32-bit header
-  if (RawData.size() < sizeof(Elf32_Chdr)) {
+  if (RawData.size() < sizeof(Chdr32)) {
     error(toString(this) + ": corrupted compressed section");
     return;
   }
 
-  auto *Hdr = reinterpret_cast<const Elf32_Chdr *>(RawData.data());
-  if (read32(&Hdr->ch_type) != ELFCOMPRESS_ZLIB) {
+  auto *Hdr = reinterpret_cast<const Chdr32 *>(RawData.data());
+  if (Hdr->ch_type != ELFCOMPRESS_ZLIB) {
     error(toString(this) + ": unsupported compression type");
     return;
   }
 
-  UncompressedSize = read32(&Hdr->ch_size);
+  UncompressedSize = Hdr->ch_size;
   RawData = RawData.slice(sizeof(*Hdr));
 }
 
@@ -1124,7 +1127,7 @@ void InputSectionBase::adjustSplitStackFunctionPrologues(uint8_t *Buf,
     if (Defined *F = getEnclosingFunction<ELFT>(Rel.Offset)) {
       Prologues.insert(F);
       if (Target->adjustPrologueForCrossSplitStack(Buf + getOffset(F->Value),
-                                                   End))
+                                                   End, F->StOther))
         continue;
       if (!getFile<ELFT>()->SomeNoSplitStack)
         error(lld::toString(this) + ": " + F->getName() +
@@ -1132,7 +1135,9 @@ void InputSectionBase::adjustSplitStackFunctionPrologues(uint8_t *Buf,
               " (without -fsplit-stack), but couldn't adjust its prologue");
     }
   }
-  switchMorestackCallsToMorestackNonSplit(Prologues, MorestackCalls);
+
+  if (Target->NeedsMoreStackNonSplit)
+    switchMorestackCallsToMorestackNonSplit(Prologues, MorestackCalls);
 }
 
 template <class ELFT> void InputSection::writeTo(uint8_t *Buf) {
