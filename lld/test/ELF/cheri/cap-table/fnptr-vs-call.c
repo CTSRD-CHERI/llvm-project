@@ -65,7 +65,7 @@
 // ALL-NEXT:    0x30000 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE extern1 0x0 (real addend unknown)
 // Since this is a data symbol we have to eagerly resolve it to a stub
 // ALL-NEXT:    0x20000 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE extern2 0x0 (real addend unknown)
-// ALL-NEXT:    0x30010 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern2 0x0 (real addend unknown)
+// ALL-NEXT:    0x300{{1|2}}0 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern2 0x0 (real addend unknown)
 // ALL-NEXT:  }
 
 extern void* extern1(void);
