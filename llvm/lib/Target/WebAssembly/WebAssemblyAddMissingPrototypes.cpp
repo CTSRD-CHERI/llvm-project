@@ -96,7 +96,8 @@ bool WebAssemblyAddMissingPrototypes::runOnModule(Module &M) {
 
         // Create a new function with the correct type
         NewType = DestType;
-        NewF = Function::Create(NewType, F.getLinkage(), F.getName(), M);
+        NewF = Function::Create(NewType, F.getLinkage(), F.getAddressSpace(),
+                                F.getName());
         NewF->setAttributes(F.getAttributes());
         NewF->removeFnAttr("no-prototype");
         break;
