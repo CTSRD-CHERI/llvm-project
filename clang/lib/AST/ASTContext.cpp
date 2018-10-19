@@ -5247,6 +5247,14 @@ bool ASTContext::hasCvrSimilarType(QualType T1, QualType T2) {
     if (Quals1 != Quals2)
       return false;
 
+    // We also need to check if the capability qualifier matches since otherwise
+    // we return true for `int*__capability*` and `int**` and then generate
+    // CK_NoOp casts that will crash during CodeGen
+    if (T1->isCHERICapabilityType(*this, false) !=
+        T2->isCHERICapabilityType(*this, false)) {
+      return false;
+    }
+
     if (hasSameType(T1, T2))
       return true;
 
