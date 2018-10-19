@@ -104,7 +104,6 @@ git -C "${WORKSPACE}/llvm/tools/clang" rev-parse HEAD
 git -C "${WORKSPACE}/llvm/tools/lld" rev-parse HEAD
 
 cd "${WORKSPACE}" || exit 1
-rm -rf llvm-build
 mkdir -p llvm-build
 
 # run cmake
