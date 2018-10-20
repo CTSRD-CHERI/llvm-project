@@ -149,10 +149,11 @@ void cast_ptr() {
   using voidp = void*;
   DO_ALL_CASTS(voidp, a);
 #ifndef __CHERI_PURE_CAPABILITY__
-  // expected-error@-2 5 {{cast from capability type 'void * __capability' to non-capability type 'voidp' (aka 'void *') is most likely an error}}
+  // expected-error@-2 4 {{cast from capability type 'void * __capability' to non-capability type 'voidp' (aka 'void *') is most likely an error}}
   // expected-error@-3 {{type 'void * __capability' cannot be narrowed to 'voidp' (aka 'void *') in initializer list}}
+  // expected-error@-4 {{const_cast from 'void * __capability' to 'voidp' (aka 'void *') is not allowed}}
 #endif
-  // expected-error@-5 {{'void' is not a class}}
+  // expected-error@-6 {{'void' is not a class}}
 
 
   using wordp = word*;
@@ -174,9 +175,10 @@ void cast_ptr() {
   test_class* __capability b = nullptr;
   DO_ALL_CASTS(test_class_ptr, b);
 #ifndef __CHERI_PURE_CAPABILITY__
-  // expected-error@-2 5 {{cast from capability type 'test_class * __capability' to non-capability type 'test_class_ptr' (aka 'test_class *') is most likely an error}}
+  // expected-error@-2 4 {{cast from capability type 'test_class * __capability' to non-capability type 'test_class_ptr' (aka 'test_class *') is most likely an error}}
   // expected-error@-3 {{test_class * __capability' cannot be narrowed to 'test_class_ptr' (aka 'test_class *') in initializer list}}
   // expected-error@-4 {{static_cast from 'test_class * __capability' to 'test_class_ptr' (aka 'test_class *'), which are not related by inheritance, is not allowed}} // TODO: this should be a better error message
+  // expected-error@-5 {{const_cast from 'test_class * __capability' to 'test_class_ptr' (aka 'test_class *') is not allowed}}
 #endif
 }
 
