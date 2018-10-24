@@ -126,18 +126,16 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       static_cast<const toolchains::FreeBSD &>(getToolChain());
   const Driver &D = ToolChain.getDriver();
   const llvm::Triple::ArchType Arch = ToolChain.getArch();
-  const bool IsPIE =
-      !Args.hasArg(options::OPT_shared) &&
-      (Args.hasArg(options::OPT_pie) || ToolChain.isPIEDefault());
-  ArgStringList CmdArgs;
-
   bool IsCHERIPureCapABI = false;
-  if (ToolChain.getArch() == llvm::Triple::cheri ||
-      ToolChain.getArch() == llvm::Triple::mips64)
-    if (Args.hasArg(options::OPT_mabi_EQ)) {
-      auto A = Args.getLastArg(options::OPT_mabi_EQ);
-      IsCHERIPureCapABI = StringRef(A->getValue()).lower() == "purecap";
-    }
+  if (ToolChain.getTriple().isMIPS())
+    IsCHERIPureCapABI = tools::mips::hasMipsAbiArg(Args, "purecap");
+  const bool CheriAbiPieDefault = IsCHERIPureCapABI &&
+                                  !Args.hasArg(options::OPT_static) &&
+                                  !Args.hasArg(options::OPT_r);
+  const bool IsPIE = !Args.hasArg(options::OPT_shared) &&
+                     (Args.hasArg(options::OPT_pie) ||
+                      ToolChain.isPIEDefault() || CheriAbiPieDefault);
+  ArgStringList CmdArgs;
 
   // Silence warning for -cheri=NNN
   Args.ClaimAllArgs(options::OPT_cheri_EQ);
@@ -154,7 +152,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   if (!D.SysRoot.empty())
     CmdArgs.push_back(Args.MakeArgString("--sysroot=" + D.SysRoot));
 
-  if (IsPIE)
+  if (IsPIE && !Args.hasArg(options::OPT_r))
     CmdArgs.push_back("-pie");
 
   CmdArgs.push_back("--eh-frame-hdr");
