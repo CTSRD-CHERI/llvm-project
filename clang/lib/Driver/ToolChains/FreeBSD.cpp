@@ -129,12 +129,26 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   bool IsCHERIPureCapABI = false;
   if (ToolChain.getTriple().isMIPS())
     IsCHERIPureCapABI = tools::mips::hasMipsAbiArg(Args, "purecap");
-  const bool CheriAbiPieDefault = IsCHERIPureCapABI &&
-                                  !Args.hasArg(options::OPT_static) &&
-                                  !Args.hasArg(options::OPT_r);
-  const bool IsPIE = !Args.hasArg(options::OPT_shared) &&
-                     (Args.hasArg(options::OPT_pie) ||
-                      ToolChain.isPIEDefault() || CheriAbiPieDefault);
+  // For CheriABI default to -pie unless -static is also passed
+  // TODO: enable static PIE?
+  const bool CheriAbiPIEDefault =
+      IsCHERIPureCapABI && !Args.hasArg(options::OPT_static);
+  const bool IsPIEDefault = ToolChain.isPIEDefault() || CheriAbiPIEDefault;
+  // We can't pass -pie to the linker if any of -shared,-r,-no-pie,-no-pie are
+  // set
+  Arg *CanUsePIEArg = Args.getLastArgNoClaim(
+      options::OPT_pie, options::OPT_no_pie, options::OPT_nopie, options::OPT_r,
+      options::OPT_shared);
+  const bool CanUsePIE =
+      (!CanUsePIEArg || CanUsePIEArg->getOption().matches(options::OPT_pie));
+  // Have to negate here to handle the no-pie and nopie aliases
+  Arg *LastPIEArg = Args.getLastArg(options::OPT_pie, options::OPT_no_pie,
+                                    options::OPT_nopie);
+  const bool IsPIE =
+      CanUsePIE &&
+      (LastPIEArg ? LastPIEArg->getOption().matches(options::OPT_pie)
+                  : IsPIEDefault);
+
   ArgStringList CmdArgs;
 
   // Silence warning for -cheri=NNN
@@ -152,7 +166,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   if (!D.SysRoot.empty())
     CmdArgs.push_back(Args.MakeArgString("--sysroot=" + D.SysRoot));
 
-  if (IsPIE && !Args.hasArg(options::OPT_r))
+  if (IsPIE)
     CmdArgs.push_back("-pie");
 
   CmdArgs.push_back("--eh-frame-hdr");
