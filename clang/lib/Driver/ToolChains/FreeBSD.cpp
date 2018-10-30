@@ -150,10 +150,6 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   const bool IsPIE =
       (LastPIEArg ? ExplicitPIE : IsPIEDefault) && !ConflictsWithPie;
 
-  llvm::errs() << "CanUsePie = " << (ConflictsWithPie == nullptr) << "\n";
-  llvm::errs() << "IsPIEDefault = " << IsPIEDefault << "\n";
-  llvm::errs() << "IsPIE = " << IsPIE << "\n";
-
   ArgStringList CmdArgs;
 
   // Silence warning for -cheri=NNN
