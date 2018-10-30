@@ -93,11 +93,13 @@ def int_cheri_cap_unseal  :
 def int_cheri_cap_perms_check :
   GCCBuiltinAlias<"__builtin_mips_cheri_check_perms">,
   GCCBuiltin<"__builtin_cheri_perms_check">,
-  Intrinsic<[], [llvm_fatptr_ty, llvm_i64_ty], []>;
+  Intrinsic<[], [llvm_fatptr_ty, llvm_i64_ty],
+            [IntrNoMem, IntrHasSideEffects]>;
 def int_cheri_cap_type_check :
   GCCBuiltinAlias<"__builtin_mips_cheri_check_type">,
   GCCBuiltin<"__builtin_cheri_type_check">,
-  Intrinsic<[], [llvm_fatptr_ty, llvm_fatptr_ty], []>;
+  Intrinsic<[], [llvm_fatptr_ty, llvm_fatptr_ty],
+            [IntrNoMem, IntrHasSideEffects]>;
 def int_cheri_cap_subset_test:
   GCCBuiltin<"__builtin_cheri_subset_test">,
   Intrinsic<[llvm_i64_ty], [llvm_fatptr_ty, llvm_fatptr_ty], [IntrNoMem]>;
