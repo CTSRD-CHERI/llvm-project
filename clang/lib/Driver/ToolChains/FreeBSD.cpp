@@ -13,6 +13,7 @@
 #include "Arch/Sparc.h"
 #include "CommonArgs.h"
 #include "clang/Driver/Compilation.h"
+#include "clang/Driver/DriverDiagnostic.h"
 #include "clang/Driver/Options.h"
 #include "clang/Driver/SanitizerArgs.h"
 #include "llvm/Option/ArgList.h"
@@ -136,18 +137,22 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   const bool IsPIEDefault = ToolChain.isPIEDefault() || CheriAbiPIEDefault;
   // We can't pass -pie to the linker if any of -shared,-r,-no-pie,-no-pie are
   // set
-  Arg *CanUsePIEArg = Args.getLastArgNoClaim(
-      options::OPT_pie, options::OPT_no_pie, options::OPT_nopie, options::OPT_r,
-      options::OPT_shared);
-  const bool CanUsePIE =
-      (!CanUsePIEArg || CanUsePIEArg->getOption().matches(options::OPT_pie));
+  Arg *ConflictsWithPie = Args.getLastArg(options::OPT_r, options::OPT_shared);
   // Have to negate here to handle the no-pie and nopie aliases
   Arg *LastPIEArg = Args.getLastArg(options::OPT_pie, options::OPT_no_pie,
                                     options::OPT_nopie);
+  const bool ExplicitPIE =
+      LastPIEArg && LastPIEArg->getOption().matches(options::OPT_pie);
+  if (ExplicitPIE && ConflictsWithPie) {
+    getToolChain().getDriver().Diag(diag::err_drv_argument_not_allowed_with)
+        << LastPIEArg->getAsString(Args) << ConflictsWithPie->getAsString(Args);
+  }
   const bool IsPIE =
-      CanUsePIE &&
-      (LastPIEArg ? LastPIEArg->getOption().matches(options::OPT_pie)
-                  : IsPIEDefault);
+      (LastPIEArg ? ExplicitPIE : IsPIEDefault) && !ConflictsWithPie;
+
+  llvm::errs() << "CanUsePie = " << (ConflictsWithPie == nullptr) << "\n";
+  llvm::errs() << "IsPIEDefault = " << IsPIEDefault << "\n";
+  llvm::errs() << "IsPIE = " << IsPIE << "\n";
 
   ArgStringList CmdArgs;
 
