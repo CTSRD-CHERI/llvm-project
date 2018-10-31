@@ -11,8 +11,8 @@
 // same a gain for statically dynamically linked exe:
 // Create a dummy shared library otherwise bfd won't create a dynamic executable
 // RUN: %cheri_purecap_clang %legacy_caprelocs_flag %S/../Inputs/dummy_shlib.c -c -o %T/dummy_shlib.o
-// RUN: %clang_link_purecap -external-capsizefix -Wl,-no-process-cap-relocs %T/dummy_shlib.o -shared -o %T/libdummy_shlib.so
-// RUN: %clang_link_purecap -external-capsizefix -Wl,-no-process-cap-relocs -L%T -ldummy_shlib %t.o -o %t-dynamic.exe
+// RUN: %clang_link_purecap -no-pie -external-capsizefix -Wl,-no-process-cap-relocs %T/dummy_shlib.o -shared -o %T/libdummy_shlib.so
+// RUN: %clang_link_purecap -no-pie -external-capsizefix -Wl,-no-process-cap-relocs -L%T -ldummy_shlib %t.o -o %t-dynamic.exe
 // RUN: llvm-objdump -h -r -t  --cap-relocs %t-dynamic.exe | FileCheck -check-prefixes DUMP-EXE,DYNAMIC %S/simple-cap-reloc-common.check
 
 // now invoke lld directly and check whether it matches:
