@@ -1724,8 +1724,10 @@ public:
                   RegIdx.RegInfo->getRegClass(Mips::CheriGPROrCNullRegClassID)
                       .contains(RegIdx.RealRegister);
     LLVM_DEBUG(dbgs() << __func__ << " CheriGPROrCNullRegClassID contains("
-                      << RegIdx.RegInfo->getName(RegIdx.RealRegister) << "="
-                      << RegIdx.RealRegister << "): " << Result << "\n");
+                      << (RegIdx.RealRegister
+                              ? RegIdx.RegInfo->getName(RegIdx.RealRegister)
+                              : "<NULL>")
+                      << "=" << RegIdx.RealRegister << "): " << Result << "\n");
     return Result;
   }
   bool isCheriAsmReg0IsDDC() const {
@@ -5977,16 +5979,26 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name,
   MCAsmParser &Parser = getParser();
 
   int CC = -1;
-  if (ABI.IsCheriPureCap()) {
-    CC = StringSwitch<unsigned>(Name)
-             .Case("cbp", ABI.GetBasePtr())
-             .Case("cfp", ABI.GetFramePtr())
-             .Case("cgp", ABI.GetGlobalCapability())
-             .Case("cra", ABI.GetReturnAddress())
-             .Case("csp", ABI.GetStackPtr())
-             .Case("ddc", ABI.GetDefaultDataCapability())
-             .Default(-1);
+  LLVM_DEBUG(dbgs() << "DECODING '" << Name << "' (ABI.IsCheriPureCap()="
+                    << ABI.IsCheriPureCap() << ")\n");
+  CC = StringSwitch<unsigned>(Name)
+           .Case("cbp", ABI.GetBasePtr())
+           .Case("cfp", ABI.GetFramePtr())
+           .Case("cgp", ABI.GetGlobalCapability())
+           .Case("cra", ABI.GetReturnAddress())
+           .Case("csp", ABI.GetStackPtr())
+           .Case("ddc", ABI.GetDefaultDataCapability())
+           .Default(-1);
+  if (!ABI.IsCheriPureCap() && CC != -1) {
+    // symbolic capability register names other than $ddc are not available
+    // when targeting hybrid mode.
+    if ((unsigned)CC != ABI.GetDefaultDataCapability())
+      ErrorIfNotPending(Parser.getTok().getLoc(),
+                        "Register name $" + Name +
+                            " can only be used in the pure-capability ABI");
+    return -1;
   }
+
   if (CC == -1) {
     if (Name[0] == 'c') {
       if (Name == "cnull") {
