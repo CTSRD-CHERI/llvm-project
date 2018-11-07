@@ -3956,6 +3956,9 @@ bool AsmParser::parseRegisterOrRegisterNumber(int64_t &Register,
     if (getTargetParser().ParseRegister(RegNo, DirectiveLoc, DirectiveLoc))
       return true;
     Register = getContext().getRegisterInfo()->getDwarfRegNum(RegNo, true);
+    if (Register == -1 && RegNo != 0) {
+      Warning(DirectiveLoc, "could not get dwarf register number for register " + Twine(RegNo));
+    }
   } else
     return parseAbsoluteExpression(Register);
 
@@ -4135,8 +4138,14 @@ bool AsmParser::parseDirectiveCFISameValue(SMLoc DirectiveLoc) {
 /// ::= .cfi_restore register
 bool AsmParser::parseDirectiveCFIRestore(SMLoc DirectiveLoc) {
   int64_t Register = 0;
-  if (parseRegisterOrRegisterNumber(Register, DirectiveLoc))
+  if (parseRegisterOrRegisterNumber(Register, DirectiveLoc)) {
+    Warning(DirectiveLoc, "Failed to parse .cfi_restore register");
     return true;
+  }
+
+  if (Register == -1) {
+    Warning(DirectiveLoc, "Failed to parse get DWARF regnum for .cfi_restore");
+  }
 
   getStreamer().EmitCFIRestore(Register);
   return false;

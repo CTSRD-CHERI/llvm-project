@@ -6275,9 +6275,14 @@ bool MipsAsmParser::ParseRegister(unsigned &RegNo, SMLoc &StartLoc,
     // directives.
     // Don't worry about eating tokens before failing. Using an unrecognised
     // register is a parse error.
+    RegNo = -1;
     if (Operand.isGPRAsmReg()) {
       // Resolve to GPR32 or GPR64 appropriately.
       RegNo = isGP64bit() ? Operand.getGPR64Reg() : Operand.getGPR32Reg();
+    } else if (Operand.isCheriAsmReg()) {
+      RegNo = Operand.getCheriReg();
+    } else {
+      llvm_unreachable("Got non-GPR register in .cfi directive!");
     }
 
     return (RegNo == (unsigned)-1);
