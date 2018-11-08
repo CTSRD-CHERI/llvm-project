@@ -5992,11 +5992,12 @@ int MipsAsmParser::matchCheriRegisterName(StringRef Name,
   if (!ABI.IsCheriPureCap() && CC != -1) {
     // symbolic capability register names other than $ddc are not available
     // when targeting hybrid mode.
-    if ((unsigned)CC != ABI.GetDefaultDataCapability())
+    if ((unsigned)CC != ABI.GetDefaultDataCapability()) {
       ErrorIfNotPending(Parser.getTok().getLoc(),
                         "Register name $" + Name +
                             " can only be used in the pure-capability ABI");
-    return -1;
+      return -1;
+    }
   }
 
   if (CC == -1) {
