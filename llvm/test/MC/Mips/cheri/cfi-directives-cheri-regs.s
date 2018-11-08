@@ -43,7 +43,6 @@ b:
 # CHECK-NEXT:   DW_CFA_advance_loc: 4
 # CHECK-NEXT:   DW_CFA_offset_extended: reg90 -32
 # CHECK-NEXT:   DW_CFA_advance_loc: 4
-# FIXME: this should be 89 and not 25!
-# CHECK-NEXT:   DW_CFA_restore: reg25
+# CHECK-NEXT:   DW_CFA_restore_extended: reg89
 # CHECK-NEXT:   DW_CFA_nop:
-# CHECK-NEXT:   DW_CFA_nop:
+# CHECK-EMPTY:
