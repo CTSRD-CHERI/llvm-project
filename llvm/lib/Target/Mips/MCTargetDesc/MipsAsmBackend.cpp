@@ -376,6 +376,25 @@ Optional<MCFixupKind> MipsAsmBackend::getFixupKind(StringRef Name) const {
             (MCFixupKind)Mips::fixup_MICROMIPS_TLS_TPREL_HI16)
       .Case("R_MICROMIPS_TLS_TPREL_LO16",
             (MCFixupKind)Mips::fixup_MICROMIPS_TLS_TPREL_LO16)
+
+      .Case("R_MIPS_CHERI_CAPABILITY", (MCFixupKind)Mips::fixup_CHERI_CAPABILITY)
+      .Case("R_MIPS_CHERI_CAPCALL11", (MCFixupKind)Mips::fixup_CHERI_CAPCALL11)
+      .Case("R_MIPS_CHERI_CAPCALL20", (MCFixupKind)Mips::fixup_CHERI_CAPCALL20)
+      .Case("R_MIPS_CHERI_CAPCALL_HI16", (MCFixupKind)Mips::fixup_CHERI_CAPCALL_HI16)
+      .Case("R_MIPS_CHERI_CAPCALL_LO16", (MCFixupKind)Mips::fixup_CHERI_CAPCALL_LO16)
+      .Case("R_MIPS_CHERI_CAPTABLE11", (MCFixupKind)Mips::fixup_CHERI_CAPTABLE11)
+      .Case("R_MIPS_CHERI_CAPTABLE20", (MCFixupKind)Mips::fixup_CHERI_CAPTABLE20)
+      .Case("R_MIPS_CHERI_CAPTABLE_HI16", (MCFixupKind)Mips::fixup_CHERI_CAPTABLE_HI16)
+      .Case("R_MIPS_CHERI_CAPTABLE_LO16", (MCFixupKind)Mips::fixup_CHERI_CAPTABLE_LO16)
+      // CHERI TLS:
+      .Case("R_MIPS_CHERI_CAPTAB_TLSGD_HI16", (MCFixupKind)Mips::fixup_CHERI_CAPTAB_TLSGD_HI16)
+      .Case("R_MIPS_CHERI_CAPTAB_TLSGD_LO16", (MCFixupKind)Mips::fixup_CHERI_CAPTAB_TLSGD_LO16)
+      .Case("R_MIPS_CHERI_CAPTAB_TLSDM_HI16", (MCFixupKind)Mips::fixup_CHERI_CAPTAB_TLSLDM_HI16)
+      .Case("R_MIPS_CHERI_CAPTAB_TLSDM_LO16", (MCFixupKind)Mips::fixup_CHERI_CAPTAB_TLSLDM_LO16)
+      .Case("R_MIPS_CHERI_CAPTAB_TPREL_HI16", (MCFixupKind)Mips::fixup_CHERI_CAPTAB_TPREL_HI16)
+      .Case("R_MIPS_CHERI_CAPTAB_TPREL_LO16", (MCFixupKind)Mips::fixup_CHERI_CAPTAB_TPREL_LO16)
+
+
       .Default(MCAsmBackend::getFixupKind(Name));
 }
 
