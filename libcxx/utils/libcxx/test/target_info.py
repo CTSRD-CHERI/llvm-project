@@ -203,7 +203,8 @@ class CheriBSDRemoteTI(DefaultTargetInfo):
             flags += ['-mabi=purecap']
 
     # def configure_env(self, env): pass
-    # def allow_cxxabi_link(self): return True
+    def allow_cxxabi_link(self):
+        return False # should either be included or using libcxxrt
     # def add_sanitizer_features(self, sanitizer_type, features): pass
     # def use_lit_shell_default(self): return False
 
