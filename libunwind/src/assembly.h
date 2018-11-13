@@ -66,21 +66,29 @@
 
 #endif
 
+#if defined(__mips__) && defined(__ELF__)
+#define FUNCTION_ENTRY_DIRECTIVE(name) .ent name
+#define FUNCTION_END_DIRECTIVE(name) .end name
+#else
+#define FUNCTION_ENTRY_DIRECTIVE(name)
+#define FUNCTION_END_DIRECTIVE(name)
+#endif
+
 #define DEFINE_LIBUNWIND_FUNCTION(name)                   \
   .globl SYMBOL_NAME(name) SEPARATOR                      \
-  .ent SYMBOL_NAME(name) SEPARATOR                        \
+  FUNCTION_ENTRY_DIRECTIVE(SYMBOL_NAME(name)) SEPARATOR   \
   SYMBOL_IS_FUNC(SYMBOL_NAME(name)) SEPARATOR             \
   SYMBOL_NAME(name):
 
 #define DEFINE_LIBUNWIND_PRIVATE_FUNCTION(name)           \
   .globl SYMBOL_NAME(name) SEPARATOR                      \
-  .ent SYMBOL_NAME(name) SEPARATOR                        \
+  FUNCTION_ENTRY_DIRECTIVE(SYMBOL_NAME(name)) SEPARATOR   \
   HIDDEN_DIRECTIVE SYMBOL_NAME(name) SEPARATOR            \
   SYMBOL_IS_FUNC(SYMBOL_NAME(name)) SEPARATOR             \
   SYMBOL_NAME(name):
 
 #define END_LIBUNWIND_FUNCTION(name)                      \
-  .end SYMBOL_NAME(name)
+  FUNCTION_END_DIRECTIVE(SYMBOL_NAME(name))
 
 #if defined(__arm__)
 #if !defined(__ARM_ARCH)
