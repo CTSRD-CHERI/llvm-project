@@ -1891,9 +1891,7 @@ void UnwindCursor<A, R>::setInfoBasedOnIPRegister(bool isReturnAddress) {
         // If unwind table has entry, but entry says there is no unwind info,
         // record that we have no unwind info.
         if (_info.format == 0)
-		{
           _unwindInfoMissing = true;
-		}
         return;
       }
     }

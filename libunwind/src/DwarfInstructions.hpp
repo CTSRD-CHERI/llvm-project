@@ -68,9 +68,9 @@ private:
 #if defined(__mips__) && defined(__CHERI_PURE_CAPABILITY__)
       // This is an ugly hack that's required because DWARF assumes that
       // there's a single register for the stack.
-      return registers.getRegister(UNW_MIPS_C11) +
-          registers.getRegister((int)prolog.cfaRegister) +
-             prolog.cfaRegisterOffset;
+      return (pint_t)((sint_t)registers.getRegister(UNW_MIPS_C11) +
+          (sint_t)registers.getRegister((int)prolog.cfaRegister) +
+             prolog.cfaRegisterOffset);
 #else
       return (pint_t)((sint_t)registers.getRegister((int)prolog.cfaRegister) +
              prolog.cfaRegisterOffset);
