@@ -182,17 +182,13 @@ struct UnwindInfoSections {
 /// making local unwinds fast.
 class _LIBUNWIND_HIDDEN LocalAddressSpace {
 public:
-#ifdef __CHERI_PURE_CAPABILITY__
   typedef uintptr_t pint_t;
   typedef intptr_t  sint_t;
+#ifdef __CHERI_PURE_CAPABILITY__
   typedef uint64_t addr_t;
 #elif defined(__LP64__)
-  typedef uint64_t pint_t;
-  typedef int64_t  sint_t;
   typedef uint64_t addr_t;
 #else
-  typedef uint32_t pint_t;
-  typedef int32_t  sint_t;
   typedef uint32_t addr_t;
 #endif
   template<typename T>
@@ -491,8 +487,9 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
         assert(cbdata);
         assert(cbdata->sects);
 
-        if (cbdata->targetAddr < pinfo->dlpi_addr)
+        if (cbdata->targetAddr < pinfo->dlpi_addr) {
           return false;
+        }
 
 #if !defined(Elf_Half)
         typedef ElfW(Half) Elf_Half;
